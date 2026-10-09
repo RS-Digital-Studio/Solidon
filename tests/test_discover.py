@@ -1560,3 +1560,55 @@ def test_the_suite_takes_a_remembered_program_as_the_real_search_does(
 
     assert not host.is_file(), "Gegenprobe: der Sandkasten sieht den Host-Pfad nicht"
     assert discover.find_program("slicer", ("orca-slicer",)) == host
+
+
+def test_only_slicers_solidon_works_with_are_found(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """„erste schritte und druckdialog sollten auch nur die unterstützen slicer anzeigen“
+    (Robert, 08.10.2026).
+
+    ``find_programs`` stellt den gemerkten Pfad vorn hin, gleich was er ist; er
+    stand dann in jeder Slicerliste, und Export, Grundlage und Filamentübernahme
+    rechneten mit ihm. Es bleiben die Slicer, deren Familie Solidon übersetzt,
+    und Resin-Slicer, die die Datei in ihr Fenster bekommen. Ein AppImage mit
+    Unterstrich im Namen ist ein Slicer wie jeder andere (Review RM-601):
+    Bambu Studio verteilt seins so.
+    """
+    from app.core import tools
+    from app.core.export import slicer_keys
+
+    foreign = tmp_path / "notepad.exe"
+    orca = tmp_path / "OrcaSlicer.exe"
+    lychee = tmp_path / "Lychee Slicer.exe"
+    bambu = tmp_path / "Bambu_Studio_linux_ubuntu_v02.02.02.56.AppImage"
+    for program in (foreign, orca, lychee, bambu):
+        program.write_bytes(b"")
+    monkeypatch.setattr(discover, "find_programs", lambda *_args: (foreign, orca, lychee, bambu))
+    monkeypatch.setattr(
+        discover, "find_program", lambda *_args, remembered=True: foreign if remembered else orca
+    )
+
+    assert tools.slicer_programs() == (orca, lychee, bambu)
+    assert tools.slicer_program() == orca, "das gemerkte fremde Programm rechnet nicht"
+    assert slicer_keys.flavour_of(bambu.name) == "orca"
+    assert slicer_keys.flavour_of("Orca_Slicer_Linux_AppImage_Ubuntu2404_V2.3.1.AppImage") == "orca"
+    assert not tools.is_supported_slicer(foreign)
+
+
+def test_the_refusal_names_every_slicer_solidon_works_with() -> None:
+    """Die Absage in „Programm wählen …“ nennt die Slicer beim Namen (Review RM-601).
+
+    Die Namen stehen in ``tools.SLICER_TITLES``; jeder gesuchte Programmname
+    steckt in einem davon, sonst fehlte ein neuer Slicer im Satz, der Kunden zu
+    ihm schickt. Resin-Slicer gelten mit ihrem Produktnamen.
+    """
+    from app.core import tools
+
+    titles = [discover.plain_name(title) for title in tools.SLICER_TITLES]
+    for name in tools.SLICERS:
+        assert any(title in discover.plain_name(name) for title in titles), name
+    for title in tools.SLICER_TITLES:
+        assert tools.is_supported_slicer(title), title
+    for resin in ("CHITUBOX.exe", "Lychee Slicer.exe", "PreForm.exe", "NovaMaker.exe"):
+        assert tools.is_supported_slicer(resin), resin

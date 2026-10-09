@@ -283,6 +283,8 @@ class PlateComparison:
     die Schichtanalyse sie selbst für nötig hält."""
     channels_blocked: bool = False
     """Ob auf dieser Platte eine Kanalsperre hinausging."""
+    ledges_blocked: bool = False
+    """Ob auf dieser Platte eine Sperre unter Rändern hinausging (RM-582)."""
     tree_supports: bool = False
     """Ob der Slicer hier Baumstützen setzt — deren Fahrten trägt das Zeitmodell
     noch nicht (:func:`time_comparison_blocked`, RM-281)."""
@@ -292,13 +294,13 @@ def support_floor(profile: Profile) -> float:
     """Wie viel Stützmaterial in mm³ „keine Stütze“ heißt (§28.1).
 
     Ein Strang im Querschnitt der Düse, so lang wie die kürzeste Brücke, für
-    die Solidon Stützen verlangt (``advise.SPAN_INTERESTING``): Weniger trägt
+    die Solidon Stützen verlangt (``analysis.SPAN_INTERESTING``): Weniger trägt
     keine Decke, die Solidon gestützt haben will. Gemessen am Querschnitt und
     nicht als Bahnlänge, damit dieselbe Grenze an einer 0,25er und an einer
     0,8er Düse dasselbe heißt — die größere legt für dieselbe Stütze nur einen
     Bruchteil der Meter.
     """
-    from app.core.slice.advise import SPAN_INTERESTING
+    from app.core.slice.analysis import SPAN_INTERESTING
 
     radius = profile.printer.nozzle_diameter / 2.0
     return SPAN_INTERESTING * math.pi * radius * radius
@@ -323,7 +325,7 @@ def plate_comparison(
     erlauben dagegen keine gemeinsame Stützmenge. Modelllagen bleiben prüfbar.
     """
     from app.core.knowledge import profiles
-    from app.core.slice.analysis import model_support
+    from app.core.slice.analysis import channel_space, ledge_space, model_support
     from app.core.slice.findings import analysed
 
     if cancelled is not None:
@@ -454,6 +456,7 @@ def plate_comparison(
             a.style == b.style
             and a.placement == b.placement
             and a.block_channels == b.block_channels
+            and a.spare_ledges == b.spare_ledges
             and a.interface_layers == b.interface_layers
             and all(
                 is_close(getattr(a, key), getattr(b, key))
@@ -474,7 +477,7 @@ def plate_comparison(
     # Stützmenge mit Sperre unbekannt ist, sagte die Gegenprobe darunter nur
     # „unvollständig“. Die Untergrenze gilt unabhängig von den Begrenzungen,
     # aber nur, wo Solidon selbst Stützen für nötig hält
-    # (:func:`advise.support_need`, ohne Kanaldecken): Wer an einem Tunnel
+    # (:func:`advise.support_need`, ohne Kanaldecken und Ränder): Wer an einem Tunnel
     # ohne weiteren Überhang Stützen samt Sperre einschaltet, bekommt zu Recht
     # keine (:func:`plate_findings`).
     from app.core.slice.advise import support_need
@@ -482,11 +485,21 @@ def plate_comparison(
     supported_groups = [entry for entry in groups if entry[1].support.style != "none"]
     floor_mm3 = (
         support_floor(profile)
-        if any(support_need(result).needed for result, _settings in supported_groups)
+        if any(
+            support_need(result, cancelled=cancelled).needed
+            for result, _settings in supported_groups
+        )
         else None
     )
     blocked = any(
-        settings.support.block_channels and bool(model_support(result).channels)
+        settings.support.block_channels
+        and bool(channel_space(result, model_support(result), settings.layers.line_width))
+        for result, settings in supported_groups
+    )
+    # Ebenso die Sperre unter Rändern (RM-582): Unter ihnen druckt der Slicer
+    # keine Stütze, die Säulen der Zeitrechnung stünden aber da.
+    spared = any(
+        settings.support.spare_ledges and bool(ledge_space(result, settings.layers.line_width))
         for result, settings in supported_groups
     )
     from app.core.slice.print_time import uses_tree_supports
@@ -503,6 +516,7 @@ def plate_comparison(
             seconds=seconds,
             support_floor_mm3=floor_mm3,
             channels_blocked=blocked,
+            ledges_blocked=spared,
             tree_supports=tree,
         )
     if not uniform:
@@ -521,22 +535,37 @@ def plate_comparison(
                         seconds=seconds,
                         support_floor_mm3=floor_mm3,
                         channels_blocked=blocked,
+                        ledges_blocked=spared,
                         tree_supports=tree,
                     )
     support = 0.0
     for result, settings in groups:
         if settings.support.style == "none":
             continue
-        if settings.support.placement == "build_plate" or settings.support.block_channels:
+        if (
+            settings.support.placement == "build_plate"
+            or settings.support.block_channels
+            or settings.support.spare_ledges
+        ):
             supported = model_support(result)
             if (
-                settings.support.placement == "build_plate"
-                and (
-                    supported.open_area > EPS_GEOM
-                    or supported.channels
-                    or supported.island_on_model
+                (
+                    settings.support.placement == "build_plate"
+                    and (
+                        supported.open_area > EPS_GEOM
+                        or supported.channels
+                        or supported.island_on_model
+                    )
                 )
-            ) or (settings.support.block_channels and supported.channels):
+                or (
+                    settings.support.block_channels
+                    and bool(channel_space(result, supported, settings.layers.line_width))
+                )
+                or (
+                    settings.support.spare_ledges
+                    and bool(ledge_space(result, settings.layers.line_width))
+                )
+            ):
                 return PlateComparison(
                     plate,
                     None,
@@ -545,6 +574,7 @@ def plate_comparison(
                     seconds=seconds,
                     support_floor_mm3=floor_mm3,
                     channels_blocked=blocked,
+                    ledges_blocked=spared,
                     tree_supports=tree,
                 )
         if motion is not None:
@@ -563,6 +593,7 @@ def plate_comparison(
         seconds=seconds,
         support_floor_mm3=floor_mm3,
         channels_blocked=blocked,
+        ledges_blocked=spared,
         tree_supports=tree,
     )
 
@@ -676,7 +707,8 @@ def _support_missing(expected: PlateComparison, printed: float, estimated: float
 
     Mit Kanalsperre ist sie der erste Verdacht: Am Wedge-Lock nahm sie dem
     übernommenen Vorschlag jede Stütze. Der Weg führt in die
-    Druckeinstellungen, wo „Kanäle frei halten“ steht.
+    Druckeinstellungen, wo „Kanäle frei halten“ steht; mit der Sperre unter
+    Rändern allein zu „Ränder ohne Stütze“ (RM-582).
     """
     values: dict[str, float | str | TranslatableText] = {
         "plate": expected.plate + 1,
@@ -696,6 +728,12 @@ def _support_missing(expected: PlateComparison, printed: float, estimated: float
             plate=expected.plate + 1,
         )
         if expected.channels_blocked
+        else _(
+            "Platte {plate}: Stützen sind eingeschaltet, aber im G-Code steht keine. "
+            "„Ränder ohne Stütze“ ausschalten und neu slicen.",
+            plate=expected.plate + 1,
+        )
+        if expected.ledges_blocked
         else _(
             "Platte {plate}: Stützen sind eingeschaltet, aber im G-Code steht keine. "
             "Die Stützeinstellungen prüfen und neu slicen.",

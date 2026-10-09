@@ -472,7 +472,7 @@ def stays(
         cancelled=cancelled,
         support_volume=False,
     )
-    kept = not advise.support_need(result).needed
+    kept = not advise.support_need(result, cancelled=cancelled).needed
     if cache is not None:
         cache[name] = kept
     return kept

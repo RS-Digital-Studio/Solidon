@@ -282,6 +282,7 @@ PRUSA: Final[tuple[Row, ...]] = (
     ("cooling.bridge_fan_speed", "bridge_fan_speed", _percent),
     ("cooling.disable_first_layers", "disable_fan_first_layers", _integer),
     ("cooling.minimum_layer_time", "slowdown_below_layer_time", _integer),
+    ("cooling.minimum_speed", "min_print_speed", _number),
     ("speed.outer_wall", "external_perimeter_speed", _number),
     ("speed.inner_wall", "perimeter_speed", _number),
     ("speed.infill", "infill_speed", _number),
@@ -431,6 +432,7 @@ ORCA: Final[tuple[Row, ...]] = (
     ("cooling.bridge_fan_speed", "overhang_fan_speed", _percent, "filament"),
     ("cooling.disable_first_layers", "close_fan_the_first_x_layers", _integer, "filament"),
     ("cooling.minimum_layer_time", "slow_down_layer_time", _integer, "filament"),
+    ("cooling.minimum_speed", "slow_down_min_speed", _number, "filament"),
     ("speed.outer_wall", "outer_wall_speed", _number),
     ("speed.inner_wall", "inner_wall_speed", _number),
     ("speed.infill", "sparse_infill_speed", _number),
@@ -571,6 +573,7 @@ CURA: Final[tuple[Row, ...]] = (
     ("cooling.fan_below_layer_time", "cool_min_layer_time_fan_speed_max", _integer),
     ("cooling.bridge_fan_speed", "bridge_fan_speed", _percent),
     ("cooling.minimum_layer_time", "cool_min_layer_time", _integer),
+    ("cooling.minimum_speed", "cool_min_speed", _number),
     ("speed.outer_wall", "speed_wall_0", _number),
     ("speed.inner_wall", "speed_wall_x", _number),
     # Curas Sammelgeschwindigkeit. Solidon hat keine — aber alles, was Cura
@@ -1006,10 +1009,16 @@ def flavour_of(name: str) -> SlicerFlavour | None:
     läuft auch, wenn das Programm gerade nicht startbar ist, und ein
     umbenanntes Programm ist ein Fall für die Einstellungen, nicht für eine
     Rateroutine.
+
+    **Auch ohne Trenner verglichen**, wie :func:`program_of`: Bambu Studio
+    verteilt sein AppImage als „Bambu_Studio_linux_….AppImage“, und mit dem
+    Unterstrich fand keiner der Namen oben es — die Suche bot es an, gerechnet
+    hat es nie (Review RM-601, 08.10.2026).
     """
     lowered = name.casefold()
+    plain = "".join(character for character in lowered if character.isalnum())
     for fragment, flavour in FLAVOUR_BY_NAME:
-        if fragment in lowered:
+        if fragment in lowered or fragment.replace("-", "") in plain:
             return flavour
     return None
 
@@ -1050,11 +1059,12 @@ NOT_TAKEN_BY: Final[dict[SlicerFlavour, frozenset[str]]] = {
 
 #: Einstellungen, die nicht als Wert reisen, sondern als **Geometrie**
 #: (``writer.write_assembly``) — die Messung über ``values_for`` sieht sie
-#: deshalb nicht. ``support.block_channels`` wird die Stützsperre: in der
+#: deshalb nicht. ``support.block_channels`` und ``support.spare_ledges``
+#: werden die Stützsperre: in der
 #: 3MF-Baugruppe für PrusaSlicer und die Orca-Familie (:func:`helpers_as_parts`),
 #: für CuraEngine als eigenes Netz mit ``anti_overhang_mesh``
 #: (:func:`takes_mesh_settings`).
-AS_GEOMETRY: Final[frozenset[str]] = frozenset({"support.block_channels"})
+AS_GEOMETRY: Final[frozenset[str]] = frozenset({"support.block_channels", "support.spare_ledges"})
 
 #: Die Namen, unter denen diese Geometrie im Slicer steht: die Teilart der
 #: Orca-Familie, die Bereichsart von PrusaSlicer und Curas Netzwert. Die
@@ -1066,6 +1076,7 @@ PRUSA_SUPPORT_BLOCKER: Final = "SupportBlocker"
 CURA_SUPPORT_BLOCKER: Final = "anti_overhang_mesh"
 GEOMETRY_KEYS: Final[dict[str, tuple[str, ...]]] = {
     "support.block_channels": (ORCA_SUPPORT_BLOCKER, CURA_SUPPORT_BLOCKER),
+    "support.spare_ledges": (ORCA_SUPPORT_BLOCKER, CURA_SUPPORT_BLOCKER),
 }
 
 

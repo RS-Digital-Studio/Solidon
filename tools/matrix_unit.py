@@ -660,7 +660,11 @@ def support_ways(results: dict) -> dict[str, Any]:
     Lauf ``stuetzen_auto`` zeigt, was der Slicer stützt, das hier, warum Solidon
     es verlangt.
     """
-    from app.core.slice.analysis import largest_overhang_patch, total_overhang
+    from app.core.slice.analysis import (
+        SPAN_INTERESTING,
+        largest_overhang_patch,
+        total_overhang,
+    )
 
     ways: dict[str, Any] = {}
     for body_id, (angle, wall, result) in results.items():
@@ -668,8 +672,7 @@ def support_ways(results: dict) -> dict[str, Any]:
         bridges = [
             round(layer.bridge_width, 1)
             for index, layer in enumerate(result.layers)
-            if layer.bridge_width > advise.SPAN_INTERESTING
-            and index not in need.model.channel_layers
+            if layer.bridge_width > SPAN_INTERESTING and index not in need.quiet_layers
         ]
         ways[str(body_id)] = {
             "needed": need.needed,
