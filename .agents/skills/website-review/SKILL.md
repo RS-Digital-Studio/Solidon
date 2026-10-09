@@ -43,7 +43,9 @@ Bei einem eingegrenzten Fehler die betroffenen Tests; gehören Changelog,
 Handbuch oder Aktivierung zum Auftrag, deren Tests dazu. Die Aussagen der Tests
 lesen, bevor daraus geprüfte Eigenschaften werden. Aufruf, Exit-Code und
 Ergebniszahlen festhalten; ein abgebrochener Lauf ist kein bestandenes
-Ergebnis. Reparaturen und das Tor vor dem Commit laufen nach `.agents/skills/pruefen/SKILL.md`.
+Ergebnis. Reparaturen und Prüfungen laufen nach `.agents/skills/pruefen/SKILL.md`: auf Paket- und
+Fixzweigen die betroffenen Tests mit ruff, format, mypy, das Entwicklungstor vor
+jedem Stand, der nach main geht.
 
 ## Browser und Vorschau
 

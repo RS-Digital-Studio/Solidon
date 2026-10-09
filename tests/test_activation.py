@@ -1016,8 +1016,8 @@ def test_the_shipped_sale_policy_offers_no_trial(shipped_trial_from: object) -> 
 def test_the_shipped_deadline_has_not_passed(shipped_demo_until: object) -> None:
     """Der Wecker: läuft die ausgelieferte Demo noch?
 
-    Wird dieser Test rot, ist nichts kaputt — es ist der 31.10.2026 oder
-    später. Dann trägt die nächste Version entweder einen neuen Stichtag
+    Wird dieser Test rot, ist nichts kaputt — es ist der Tag nach
+    ``store.DEMO_UNTIL`` oder später. Dann trägt die nächste Version entweder einen neuen Stichtag
     (zweite Demo) oder keinen mehr (Verkaufsversion, §6 des Demo-Konzepts).
     Ein Bau in diesem Zustand ließe sich beim Nutzer nicht starten.
     """

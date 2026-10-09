@@ -19,6 +19,7 @@ it into `website/version.json`.
 
 ### Operation and system
 
+- The demo now runs until 30 November 2026. Solidon3D 1.0 is planned for 1 December, and your projects are kept.
 - On the Mac, Solidon now needs macOS 14 or later. Every Mac from 2018 on can install it for free.
 - Solidon now starts on Intel Macs with macOS 26. Version 0.5.3 hung there at startup.
 - On the Mac, *Cancel* stops a running answer from the local model at once.
@@ -88,6 +89,7 @@ it into `website/version.json`.
 - In the print dialog, printer, filaments and quality stay fully visible even with enlarged text. Long labels wrap instead.
 - The report calculates faster and needs less memory.
 - On Linux with Flatpak, Solidon now reports a slicer crash as a crash instead of only saying that no print file was made.
+- Even on a fully loaded computer, Solidon gives the real reason after stopping a slicer instead of a timeout. A finished print file is used.
 
 ### Threads, holes and standard parts
 

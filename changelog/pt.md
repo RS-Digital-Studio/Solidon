@@ -19,6 +19,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 
 ### Utilização e sistema
 
+- A demo funciona agora até 30 de novembro de 2026. O Solidon3D 1.0 está previsto para 1 de dezembro e os seus projetos mantêm-se.
 - No Mac, o Solidon precisa agora do macOS 14 ou mais recente. Qualquer Mac a partir de 2018 pode instalá-lo gratuitamente.
 - O Solidon arranca agora nos Mac Intel com macOS 26. A versão 0.5.3 ficava aí bloqueada no arranque.
 - No Mac, *Cancelar* interrompe de imediato uma resposta em curso do modelo local.
@@ -88,6 +89,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - No diálogo de impressão, impressora, filamentos e qualidade ficam totalmente visíveis também com letra ampliada. As legendas longas passam para a linha seguinte.
 - O relatório de verificação calcula mais depressa e precisa de menos memória.
 - No Linux com Flatpak, o Solidon indica agora que o slicer encerrou inesperadamente, em vez de dizer apenas que não foi criado nenhum ficheiro.
+- Mesmo com o computador em plena carga, o Solidon indica o motivo real ao parar um slicer, em vez de um tempo esgotado. Um ficheiro de impressão terminado é aproveitado.
 
 ### Roscas, furos e peças normalizadas
 
