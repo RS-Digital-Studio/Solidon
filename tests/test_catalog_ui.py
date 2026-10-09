@@ -2039,7 +2039,10 @@ def test_every_locked_button_says_its_reason_to_a_screen_reader(qt_app: QApplica
 
         for knopf, wort in (
             (catalog.save_part, "gerechnet"),
-            (catalog.share_part, "weitergeben"),
+            # Den Grund der Weitergabe bestimmt der Katalog selbst neu, sobald er
+            # seine Einzelheiten zeigt; ohne eigenen Baustein heißt er „…, um
+            # ihn weiterzugeben" (RM-680). Beide Sätze nennen das Weitergeben.
+            (catalog.share_part, "weiter"),
             (catalog._insert, "Körper"),
         ):
             assert knopf is not None
