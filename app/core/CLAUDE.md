@@ -30,7 +30,7 @@ laden für jede Datei hier; diese Karte sagt, **was wo liegt**. Das Warum:
 
 | Datei | Rolle |
 |---|---|
-| `types.py` | Die Verträge (§9): `Mesh`, `Scene`, `SceneObject`, `OpContext`, `OpResult`, `Feature`, `Profile` — Signaturen stehen fest, bevor ein Modul entsteht. Die zwei Fragen, die an einem Merkmal nur einmal beantwortet werden: `is_a_cavity` und `thread_is_left_handed` (links heißt gesetzt, nativ gelesen oder an den Kanten gemessen; die Schätzung `fit` sperrt nicht) |
+| `types.py` | Die Verträge (§9): `Mesh`, `Scene`, `SceneObject`, `OpContext`, `OpResult`, `Feature`, `Profile`, `SliceContour` (Konturen der Schichtanalyse als Felder) — Signaturen stehen fest, bevor ein Modul entsteht. Die zwei Fragen, die an einem Merkmal nur einmal beantwortet werden: `is_a_cavity` und `thread_is_left_handed` (links heißt gesetzt, nativ gelesen oder an den Kanten gemessen; die Schätzung `fit` sperrt nicht) |
 | `units.py` | Millimeter, doppelte Genauigkeit, die drei benannten Toleranzen (§11); `is_close`/`is_zero` statt `==`; Winkelfunktionen, die auf jeder Maschine dieselbe Zahl geben (`circle_point`, `inscribed_ratio`, `exact_cos`/`exact_sin`, über `decimal`); `format_length_bound` formatiert Schranken gerichtet (untere nach unten, obere nach oben); die gemeinsamen Gewindegrenzen `SMALLEST_THREAD`, `LARGEST_THREAD`, `FINEST_PITCH`, `COARSEST_PITCH`, `THREAD_MIN_CORE_SHARE` |
 | `errors.py` | Die Ausnahmen-Hierarchie (§33.1); jede trägt mindestens eine `Action` |
 | `action_effects.py` | Was jede angebotene Handlung außer ihrem Zweck verändert (`SIDE_EFFECTS`, `side_effect`; Befundkarte des Produktkompasses, Abschnitt 4.3); jede `Action`-Kennung des Kerns steht dort (`tests/test_action_effects.py`) |

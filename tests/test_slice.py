@@ -2510,3 +2510,75 @@ def test_oriented_nested_rings_do_not_need_a_boolean_union(monkeypatch) -> None:
     assert section is not None and section.is_valid
     assert len(section.interiors) == 1
     assert section.area == pytest.approx(mesh.volume / 10.0, abs=1e-5)
+
+
+def test_the_contours_of_an_analysis_are_frozen_float_fields() -> None:
+    """Konturen als Felder, nicht als Tupel aus Punkt-Tupeln (RM-595).
+
+    Eine gemerkte Analyse hielt 121 Byte je Punkt, am Eiffelturm 168 MB; als
+    Feld sind es 16. Die Zahlen sind dieselben, die Shapely liefert.
+    """
+    import numpy as np
+    import shapely
+
+    from app.core.memory import held_bytes
+    from app.core.types import SliceContour
+
+    body = trimesh.creation.annulus(r_min=10.0, r_max=20.0, height=10.0, sections=256)
+    body.apply_translation((0.0, 0.0, 5.0))
+    result = slice_body(MeshData.of(body), 0.5)
+    points = 0
+    for layer in result.layers:
+        for contour in layer.contours:
+            assert isinstance(contour, SliceContour)
+            for ring in (contour.outline, *contour.holes):
+                assert ring.dtype == np.float64 and ring.shape[1] == 2
+                assert not ring.flags.writeable
+                assert np.array_equal(ring[0], ring[-1]), "closed like the rings before"
+                points += len(ring)
+            shape = shapely.Polygon(contour.outline, contour.holes)
+            assert shape.is_valid and shape.area > 0.0
+    assert points > 1000
+    per_point = held_bytes(result) / points
+    assert per_point < 40, f"{per_point:.0f} B per point"
+    first = result.layers[0].contours[0]
+    twin = SliceContour(first.outline.copy(), tuple(hole.copy() for hole in first.holes))
+    assert twin == first and hash(twin) == hash(first)
+    assert twin != SliceContour(first.outline[::-1].copy(), first.holes)
+
+
+def test_the_rings_of_a_section_read_in_one_call_are_the_rings_one_by_one() -> None:
+    """Ringe gesammelt über Shapely statt je Ring über ``interiors`` — bitgleich (RM-595)."""
+    import manifold3d
+    import numpy as np
+    from shapely.geometry import MultiPolygon
+    from shapely.geometry import Polygon as ShapelyPolygon
+
+    from app.core.slice import analysis
+
+    def holed(x: float, holes: int) -> ShapelyPolygon:
+        rings = [
+            [(x + 2 + 3 * i, 2), (x + 3 + 3 * i, 2), (x + 3 + 3 * i, 3 + i * 1e-9)]
+            for i in range(holes)
+        ]
+        return ShapelyPolygon(
+            [(x, 0), (x + 3 * holes + 4, 0), (x + 3 * holes + 4, 6), (x, 6)], rings
+        )
+
+    shape = MultiPolygon([holed(0.0, 3), holed(30.0, 0), holed(60.0, 5)])
+    oriented = __import__("shapely").orient_polygons(shape, exterior_cw=False)
+    expected: list[np.ndarray] = []
+    for part in analysis._areas_of(oriented):
+        expected.append(np.asarray(part.exterior.coords, dtype=np.float64)[:-1])
+        expected.extend(np.asarray(ring.coords, dtype=np.float64)[:-1] for ring in part.interiors)
+    built = analysis._material_cross(shape)
+    reference = manifold3d.CrossSection(expected, manifold3d.FillRule.Positive)
+    assert built.area() == reference.area()
+    assert [np.asarray(ring).tobytes() for ring in built.to_polygons()] == [
+        np.asarray(ring).tobytes() for ring in reference.to_polygons()
+    ]
+    part = holed(0.0, 3)
+    assert [ring.wkb for ring in analysis._real_holes(part)] == [
+        ring.wkb for ring in part.interiors
+    ]
+    assert analysis._without_slits(shape).equals_exact(shape, 0.0)

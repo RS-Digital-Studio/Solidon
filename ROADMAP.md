@@ -53,7 +53,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-107 — Ubuntu-Workerabbruch mit aktuellem Testbestand zuordnen](#rm-107) | Plattformen, Pakete und Grafik | Der Arbeiter stirbt nach dem Overlay-Ziehtest, die Overlay-Datei allein ist grün; nächster Schritt: die Testfolge des abgestürzten Arbeiters nachstellen und halbieren |
 | [RM-187 — Dieselbe Geometrie auf jeder Plattform](#rm-187) | Plattformen, Pakete und Grafik | Paket A ist auf main: Bausteine, Muster, Skizzenbögen, Teilen und *Merkmal drehen* rechnen plattformgleich, der Wächter sieht durch den Merker der Erkennung; offen: Einpassungen in `perceive` (eigener Kern), Formen in `shapes.py` und Potenzen `**` im Kern (Liste am Punkt) |
 | [RM-468 — CPython 3.14.8 bringt Sicherheitskorrekturen in die ausgelieferte Laufzeit](#rm-468) | Plattformen, Pakete und Grafik | Pakete 0.5.2 und 0.5.3 mit 3.14.8 gebaut, die Stückliste des Windows-Pakets 0.5.3 nennt CPython 3.14.8 und OpenSSL 3.5.9; offen die drei Arbeitsplätze |
-| [RM-567 — Weniger Arbeitsspeicher: messen, wo er bleibt, und den Bedarf senken](#rm-567) | Plattformen, Pakete und Grafik | Cache-Bytegrenze, ein BLAS-Faden, Grenzen unter dem Rechner und Abräumen losgelassener Netze gebaut (Paket L, 08./09.10.); offen: Renderer am echten Fenster, die Schichtanalyse als Felder statt Tupel (RM-595) |
+| [RM-567 — Weniger Arbeitsspeicher: messen, wo er bleibt, und den Bedarf senken](#rm-567) | Plattformen, Pakete und Grafik | Cache-Bytegrenze, ein BLAS-Faden, Grenzen unter dem Rechner und Abräumen losgelassener Netze gebaut (Paket L, 08./09.10.); offen: Renderer am echten Fenster |
 | [RM-549 — Ein frisch installiertes Orca-AppImage unter Linux hat keine lesbaren Herstellerprofile](#rm-549) | Plattformen, Pakete und Grafik | Gefunden mit der Slicerauswahl (07.10.): ohne Vorwahl des Herstellerprofils lehnt die Orca-Familie den Auftrag ab; offen, ob der Druckdialog dann mit Grund und Weg endet |
 | [RM-022 — Nachbau als Operationsfolge](#rm-022) | Geometrie, Erkennung und Druckvorbereitung | Profilkörper am Netz gebaut (05.10.), Besenhalter angenommen; offen der Korpuslauf über diesen Stand samt fünf Teilen über 600 s, die Fensterabnahme beim Release und die Wiederholung der berichtigten Zahlenanzeige am Fenster |
 | [RM-188 — CAD-Ausbau, Bedienung und Resin für 0.5.x](#rm-188) | Geometrie, Erkennung und Druckvorbereitung | Nächster Schritt P0.8: die vier Konzepte je Anforderung dem Code oder einem Paket zuordnen; daneben P4.1 unter RM-022, P8.1, P9.1 und Zeichnen Z2. Reste der gebauten Pakete und Fragen an Robert stehen am Punkt; Abschluss mit P5.3 |
@@ -99,8 +99,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-541 — Der Skizzenlöser landet auf dem Intel-Mac im anderen Zweig einer Winkelbedingung](#rm-541) | Geometrie, Erkennung und Druckvorbereitung | Gefunden mit RM-531 (06.10.): 135° statt 45° unter macOS Intel; offen die Rechnung in Verschiebungen und ihre Wirkung auf unterbestimmte Skizzen |
 | [RM-542 — Die fünf offenen Entscheidungen der Erstkonfiguration](#rm-542) | Geometrie, Erkennung und Druckvorbereitung | Gefunden beim Umräumen der Konzepte (RM-099, 06.10.): nur im Konzept geführt; offen der Abgleich mit RM-281 und Roberts Entscheidung |
 | [RM-552 — *Stift für Bohrung* liest die Kette an einer Bausteinbohrung mit Senkung nicht](#rm-552) | Geometrie, Erkennung und Druckvorbereitung | Gefunden in der Nachprüfung von P2 (07.10.): Schraubenloch und Einpressbuchse sagen über Menü und Palette `chain_unreadable`, weil die Bausteinbohrung durch ihre Senkung läuft; die Karte bietet den Stift dort nicht mehr an. Offen: `bore_pin._following` liest eine überlappende Kette |
-| [RM-568 — Merkmalerkennung und die übrigen langen Wege schneller machen](#rm-568) | Geometrie, Erkennung und Druckvorbereitung | Selbstschnittsuche, Zuordnung, Ringvereinfachung, 3MF und gemerkte Zuordnungsschritte gebaut (Paket L, 08./09.10.); offen: Prüfbericht und Schnitt (RM-595), Kandidatensuche der Selbstschnitte, örtliche Neuerkennung nach Booleschen Operationen |
-| [RM-595 — Prüfbericht schneller: Schichtanalyse (Leistungspaket Runde 2)](#rm-595) | Geometrie, Erkennung und Druckvorbereitung | Nach Abstimmung mit der Drachen-Sitzung; Änderungsliste mit Prototypmessung am Punkt |
+| [RM-568 — Merkmalerkennung und die übrigen langen Wege schneller machen](#rm-568) | Geometrie, Erkennung und Druckvorbereitung | Selbstschnittsuche, Zuordnung, Ringvereinfachung, 3MF und gemerkte Zuordnungsschritte gebaut (Paket L, 08./09.10.); offen: Kandidatensuche der Selbstschnitte, örtliche Neuerkennung nach Booleschen Operationen |
 | [RM-070 — SpaceMouse auf macOS und Linux am echten Gerät abnehmen](#rm-070) | Bedienung und Darstellung | Die Rampe ist stetig und getestet, die Bildrate an 815 104 Dreiecken gemessen (`7ff34c67`: 16,7 → 8,7 ms im Median); offen bleiben Linux, die 3DxWare-Mausemulation, das Gerät selbst und die Rampe im Skizzenmodus (aus RM-183) |
 | [RM-204 — Ein Merkmalklick baut alle Handlungen des Fensters neu](#rm-204) | Bedienung und Darstellung | Abnahme am echten Fenster beim Release (RM-213) |
 | [RM-547 — Nach „Reparieren und erneut versuchen“ heißt ein weiterrechnender Schritt „gelöscht“](#rm-547) | Bedienung und Darstellung | Entschieden (Claude, Produktabwägung): wie ein beim Umbau neu gefasster Schritt behandeln, in Verlauf und Steckbrief |
@@ -902,8 +901,8 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   Tessellierung und Form und werden schlank; `physical_memory` nimmt die kleinste Grenze aus
   Rechner, cgroup, Windows-Job und Adressraum. Ein schlankes Netz behält Teile und
   Dreiecksflächen, die der Bericht nach dem Zurücknehmen fragt (RM-594 und RM-593 im Archiv).
-  **Offen:** der Renderer am echten Fenster (offscreen nicht messbar), die Schichtanalyse
-  als Felder statt Tupel (114–168 MB je gemerkter Analyse, RM-595).
+  Die Schichtanalyse hält ihre Konturen als Felder (RM-595, Archiv).
+  **Offen:** der Renderer am echten Fenster (offscreen nicht messbar).
 
 ## Geometrie, Erkennung und Druckvorbereitung
 
@@ -3307,29 +3306,11 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   (3,45 → 0,48 s je Eiffel-Erkennung), 3MF-Geometrie über Listen (Murmelbrett 6,2 → 4 s);
   Abdrücke aller Merkmale an acht Korpusmodellen unverändert, neue Leistungsmarken.
   **Offen:** Prüfbericht, Schichtanalyse und Orientierung liegen zu über 90 % in
-  `slice/analysis.py` — eigener Punkt RM-595. Das Restwachstum je Verlaufsschritt ist mit
+  `slice/analysis.py` — mit RM-595 schneller (Archiv). Das Restwachstum je Verlaufsschritt ist mit
   RM-593 behoben (Archiv). Die Kandidatensuche der Selbstschnitte (`_candidates`, am Riser
   9,7 von 11,5 s) und die Erkennung am ganzen Körper nach jeder Booleschen Operation (Riser,
   Ø-6-Zylinder abziehen: 11,6 s; eine örtliche Neuerkennung wäre eine Architekturfrage an
   §21.2) bleiben hier offen.
-
-<a id="rm-595"></a>
-
-- [ ] **RM-595 — Prüfbericht schneller: Schichtanalyse (Leistungspaket Runde 2, nach Abstimmung
-  mit der Drachen-Sitzung).** Prüfbericht, Schichtanalyse und Orientierungssuche liegen zu über
-  90 % in `slice/analysis.py` (dazu `advise.support_need`). Gemessen im Prototyp (Paket L,
-  Patch `output/konsolidierung-2026-10-07/paket-l/vorschlag-analysis.patch`, Befund- und
-  Ergebnisabdrücke gleich):
-  `_model_support.descend` vergleicht vor `column - below` die Hüllrechtecke und lässt getrennte
-  Säulen ohne Clipper-Aufruf (Prüfbericht Riser CPU 178 → 114 s und 131 → 86 s; Flächen
-  innerhalb `EPS_GEOM`, an der Toleranz zu prüfen); `_real_holes`, `_without_slits` und
-  `_material_cross` lesen Ringe über `shapely.get_num_interior_rings`/`get_rings`/
-  `get_coordinates` statt Python-Iteration (Schnitt Eiffel 74,5 → 67,3 s, Orientierung
-  117 → 111 s, Schnitt Riser 25,0 → 22,5 s); `SliceResult`-Konturen in `types.py` als
-  `float64`-Felder statt Tupel (eine gemerkte Analyse 114–168 MB, als Felder 15–22 MB);
-  `_model_support.material_at` außerhalb des Schlosses (64 s Wartezeit im Profil, Gewinn nur an
-  der Wand). **Abnahme:** gleiche Befunde und Kennzahlen an Riser, Eiffelturm, Spiderman und
-  den analytischen Körpern, Messbericht vorher und nachher, Leistungsmarken für den Prüfbericht.
 
 ## Bedienung und Darstellung
 

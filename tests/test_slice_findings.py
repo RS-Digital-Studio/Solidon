@@ -2381,3 +2381,59 @@ def test_a_ceiling_footprint_without_any_held_edge_does_not_close(
     monkeypatch.setattr(ceilings, "_gap", lambda _name: 0.35)
 
     assert not ceilings.closes(frozenset({(1, 0)}))
+
+
+def test_separate_columns_keep_their_answer_without_the_subtraction(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Liegt eine Säule neben dem Material darunter, nimmt der Abzug nichts weg (RM-595).
+
+    Der Prüfbericht rechnete jeden Abzug in Clipper, auch für Säulen, deren
+    Hüllrechteck das Material der Schicht darunter nicht berührt — am Riser
+    zwei Drittel aller Abzüge. Übersprungen ist die Antwort dieselbe wie
+    gerechnet (Gegenprobe: jeder Abzug erzwungen).
+    """
+    from app.core.slice import analysis
+
+    skipped: list[bool] = []
+    real = analysis._apart
+
+    def counted(one: tuple[float, ...], other: tuple[float, ...]) -> bool:
+        apart = real(one, other)
+        skipped.append(apart)
+        return apart
+
+    bodies = [tunnels_side_by_side(5), tunnel_block(65.0), table()]
+    results = [slice_body(body, 0.5) for body in bodies]
+    monkeypatch.setattr(analysis, "_apart", counted)
+    quick = [analysis._model_support(result, analysis.CHANNEL_WIDTH, None) for result in results]
+    assert any(skipped), "Voraussetzung: getrennte Säulen kommen vor"
+    monkeypatch.setattr(analysis, "_apart", lambda one, other: False)
+    full = [analysis._model_support(result, analysis.CHANNEL_WIDTH, None) for result in results]
+    assert quick == full
+
+
+def test_each_layer_material_is_built_once_by_parallel_columns(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Ein Schloss je Schicht: Jede Schicht wird genau einmal gebaut, auch von vier Arbeitern."""
+    import sys
+    from collections import Counter
+
+    from app.core.slice import analysis
+
+    built: Counter[int] = Counter()
+    real = analysis._material
+
+    def counted(layer: object) -> object:
+        # Nur der gemeinsame Speicher der Säulen; die Ränder halten ihren eigenen.
+        if sys._getframe(1).f_code.co_name == "material_at":
+            built[id(layer)] += 1
+        return real(layer)  # type: ignore[arg-type]
+
+    result = slice_body(tunnels_side_by_side(5), 0.2)
+    assert len(result.layers) >= analysis.PARALLEL_FROM, "Voraussetzung: der parallele Weg"
+    monkeypatch.setattr(analysis, "_workers", lambda limit: 4)
+    monkeypatch.setattr(analysis, "_material", counted)
+    analysis._model_support(result, analysis.CHANNEL_WIDTH, None)
+    assert built and max(built.values()) == 1

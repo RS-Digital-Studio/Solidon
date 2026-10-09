@@ -31,6 +31,7 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-09 | [RM-595: Prüfbericht und Schichtanalyse schneller, ihre Konturen als Felder (09.10.2026)](#rm-595-prüfbericht-und-schichtanalyse-schneller-ihre-konturen-als-felder-09102026) |
 | 2026-10-09 | [RM-593 und RM-594: Auswertung wächst nicht mehr je Schritt, losgelassene Netze werden frei (09.10.2026)](#rm-593-und-rm-594-auswertung-wächst-nicht-mehr-je-schritt-losgelassene-netze-werden-frei-09102026) |
 | 2026-10-08 | [RM-602: Der Druckdialog ordnet die Profile in einem Lesedurchgang zu (08.10.2026)](#rm-602-der-druckdialog-ordnet-die-profile-in-einem-lesedurchgang-zu-08102026) |
 | 2026-10-08 | [RM-601: Die Slicerwahl im Druckdialog geht wie in Erste Schritte, und überall stehen nur unterstützte Slicer (08.10.2026)](#rm-601-die-slicerwahl-im-druckdialog-geht-wie-in-erste-schritte-und-überall-stehen-nur-unterstützte-slicer-08102026) |
@@ -44535,3 +44536,25 @@ Verschieben, 8 GB nachgestellt, achtmal Zurück im Wechsel mit main (`g9_run.sh`
 `test_leash.py::test_released_meshes_reach_the_oldest_generation` (Gegenprobe ohne Meldung),
 `test_cache.py::test_trimming_reports_what_waits_for_the_collector`,
 `…a_lean_mesh_keeps_what_the_report_asks_after_undo`.
+
+## RM-595: Prüfbericht und Schichtanalyse schneller, ihre Konturen als Felder (09.10.2026)
+
+<a id="rm-595-prüfbericht-und-schichtanalyse-schneller-ihre-konturen-als-felder-09102026"></a>
+<a id="rm-595"></a>
+
+**RM-595 — Prüfbericht schneller: Schichtanalyse (Leistungspaket Runde 2).** Prüfbericht,
+Schichtanalyse und Orientierungssuche lagen zu über 90 % in `slice/analysis.py`. **Umsetzung**
+(Zweig `paket/l-leistung`): `_model_support.descend` lässt Säulen ohne Clipper-Abzug, deren
+Hüllrechteck das Material darunter nicht berührt (`_apart`); `_material_cross`, `_real_holes`
+und `_without_slits` lesen Ringe gesammelt über Shapely; `material_at` baut unter einem Schloss
+je Schicht statt einem für alle; `LayerInfo` trägt `SliceContour` (`types.py`) mit
+schreibgeschützten `float64`-Feldern statt Tupeln aus Punkt-Tupeln, Gleichheit und Hash über
+die Bytes; `piece_area` rechnet dieselbe Schleife über die Liste des Felds. `SliceResult.bridge_from`
+bleibt, wie es ist. **Nachweis** (CPU, im Wechsel, Abdrücke aus Befundcodes und -werten bzw.
+aus allen Konturzahlen gleich, `report_ab2.py`): Prüfbericht Riser 181/187 → 127/127 s,
+Eiffelturm 206 → 195 s; Schnitt Eiffelturm 68,8 → 62,1 s, Orientierung 105 → 107 s (Schritt 1
+allein 99,8 s, Rauschen); eine gemerkte Analyse 114 → 17 MB (Riser), 164 → 24 MB (Spiderman),
+168 → 31 MB (Eiffelturm, `slice_size.py`). Tests: `test_slice_findings.py::
+test_separate_columns_keep_their_answer_without_the_subtraction` (Gegenprobe: jeder Abzug
+erzwungen), `…each_layer_material_is_built_once_by_parallel_columns`, `test_slice.py::
+test_the_contours_of_an_analysis_are_frozen_float_fields`, `…rings_of_a_section_read_in_one_call…`.
