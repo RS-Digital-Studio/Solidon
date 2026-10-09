@@ -20,6 +20,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 
 ### Manejo y sistema
 
+- En el Mac, Solidon necesita ahora macOS 14 o más reciente. Cualquier Mac desde 2018 puede instalarlo gratis.
 - Solidon ya arranca en los Mac con Intel y macOS 26. La versión 0.5.3 se quedaba colgada allí al iniciar.
 - En el Mac, *Cancelar* detiene al instante una respuesta en curso del modelo local.
 - En el Mac, Retorno abre la entrada seleccionada en la pantalla de inicio, en *Buscar función* y en el informe de comprobación.

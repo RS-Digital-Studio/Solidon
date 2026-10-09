@@ -110,5 +110,10 @@ PART_FILE_MIME_TYPE: Final = "application/vnd.solidon.part+json"
 #: zusammen.
 APP_VERSION: Final = "0.5.3"
 
+#: Die älteste macOS-Version, auf der die mitgelieferten Qt-Räder laufen
+#: (PySide6 6.12: ``macosx_14_0``). Plist, Installer und Startseiten nennen
+#: sie; macOS 14 trägt jeden Mac ab 2018.
+MACOS_MINIMUM: Final = "14.0"
+
 #: Copyright-Zeile für LICENSE, Über-Dialog und Installer.
 COPYRIGHT: Final = f"Copyright © 2026 {APP_VENDOR}"
