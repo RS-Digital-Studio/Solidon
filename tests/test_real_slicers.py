@@ -262,3 +262,39 @@ def test_a_slicer_never_opened_offers_the_printers_of_its_maker(
         record_testsuite_property(f"{program}_profile", count)
         record_testsuite_property(f"{program}_kopie_sekunden", seconds)
         record_testsuite_property(f"{program}_drucker", len(found))
+
+
+@pytest.mark.slicer("cura")
+def test_curas_printers_are_read_from_its_appimage_without_starting_it(
+    installed_slicer: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    record_testsuite_property: Callable[[str, object], None],
+) -> None:
+    """RM-599: Unter Linux liest Solidon Curas Drucker aus dem Abbild, mit leerem
+    Cache und ohne einen Prozess zu starten; ob CuraEngine samt Lader darin
+    vollständig ist, beantwortet dasselbe Lesen. Andernorts (Mac-Bündel) liegt der
+    Bestand neben dem Programm, und der Fall prüft nur, dass er gelesen wird."""
+    monkeypatch.setattr(cura_linux, "_cache_root", lambda: tmp_path / "cache")
+    monkeypatch.setattr(cura_linux, "_resources", {})
+    monkeypatch.setattr(cura_linux, "_failed", {})
+
+    def forbidden(*_args: object, **_kwargs: object) -> None:
+        pytest.fail("Zum Lesen der Drucker startet kein Programm")
+
+    monkeypatch.setattr(subprocess, "Popen", forbidden)
+    monkeypatch.setattr(subprocess, "run", forbidden)
+
+    started = time.perf_counter()
+    root = slicer_profiles.install_root(installed_slicer)
+    seconds = round(time.perf_counter() - started, 2)
+
+    assert root is not None, installed_slicer
+    assert (slicer_profiles.cura_resources(root) / "definitions" / "fdmprinter.def.json").is_file()
+    if cura_linux.is_appimage(installed_slicer):
+        assert root.is_relative_to(tmp_path / "cache"), root
+        assert not cura_linux.engine_missing(installed_slicer)
+        record_testsuite_property("cura_kopie_sekunden", seconds)
+        record_testsuite_property(
+            "cura_dateien", sum(1 for path in root.rglob("*") if path.is_file())
+        )
