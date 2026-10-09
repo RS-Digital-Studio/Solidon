@@ -2902,8 +2902,11 @@ def prusa_values(
     liest. Die 3MF behält das binäre Format des Herstellers.
 
     **Ohne Drucker des Bestands** bleibt es bei Solidons vollständigem Satz
-    samt Maschine (:func:`_machine_keys`), und der Filamenttyp geht mit: Ohne
-    ihn ging PETG als PLA hinaus (Prüfbericht Prusa, B11).
+    samt Maschine (:func:`_machine_keys`), Zeitschätzung
+    (:func:`_prusa_time_estimate`) und dem, was Prusas Bündel jedem Prozess
+    mitgibt (:data:`PRUSA_WITHOUT_BUNDLE`). Der Filamenttyp der Spule geht mit
+    (:func:`_spool_filament_type`): Ohne ihn ging PETG als PLA hinaus
+    (Prüfbericht Prusa, B11).
 
     **Beides nur mit Schlüsseln, die das Programm lesen kann**
     (:func:`slicer_keys.for_program`): SuperSlicer stürzte an der Schrägnaht
@@ -2942,7 +2945,7 @@ def _prusa_values(
         flat.update(_speed_roles({}, flat, "prusa", program=program))
         flat.update(PRUSA_WITHOUT_BUNDLE)
         flat.update(_prusa_time_estimate(flat))
-        flat["filament_type"] = _prusa_filament_type(profile, slots)
+        flat["filament_type"] = _spool_filament_type(slots[0] if slots else None, profile, "prusa")
         return flat, flat
     foundation = manufacturer.base_settings(profile, settings.quality, setup)
     preserve_native_adhesion = effective.adhesion.kind == "auto" and foundation.has_profile
@@ -2980,7 +2983,9 @@ def _prusa_values(
     if chain.filament:
         document["filament_settings_id"] = chain.filament
     else:
-        document["filament_type"] = _prusa_filament_type(profile, slots)
+        document["filament_type"] = _spool_filament_type(
+            slots[0] if slots else None, profile, "prusa"
+        )
     document["printer_settings_id"] = chain.printer
     document["print_settings_id"] = chain.process
     if console:
@@ -2992,16 +2997,19 @@ def _prusa_values(
     return document, expected
 
 
-def _prusa_filament_type(profile: Profile, slots: Sequence[MaterialSlot]) -> str:
-    """Die Materialart der Spule, die bei PrusaSlicer den Satz fährt.
+def _spool_filament_type(
+    slot: MaterialSlot | None, profile: Profile, flavour: SlicerFlavour
+) -> str:
+    """Die Materialart, unter der eine Spule beim Slicer ankommt.
 
-    Das ist die erste (:func:`settings_for_shared_slicer`); ihre Temperaturen
-    und ihre Dichte stehen schon im Satz. Ohne Spule oder ohne Art gilt das
-    Material des Projekts — wie in der Orca-Familie (:func:`_orca_filament`).
+    Die Art der Spule, ohne Spule oder ohne Art das Material des Projekts, in
+    der Schreibweise der Familie. Die Orca-Familie fragt es je Spule
+    (:func:`_orca_filament`), PrusaSlicer für die erste, die seinen einen Satz
+    fährt (:func:`settings_for_shared_slicer`) — deren Temperaturen und Dichte
+    stehen dann schon darin.
     """
-    if slots and slots[0].material_type:
-        return slicer_keys.filament_type(slots[0].material_type, "prusa")
-    return slicer_keys.filament_type(profile.material.id, "prusa")
+    material = slot.material_type if slot is not None and slot.material_type else ""
+    return slicer_keys.filament_type(material or profile.material.id, flavour)
 
 
 def write_config(
@@ -4156,11 +4164,7 @@ def _orca_filament(
         "name": f"Solidon {brand or settings.title}",
         "from": "User",
         "instantiation": "true",
-        "filament_type": [
-            slicer_keys.filament_type(slot.material_type, "orca")
-            if slot is not None and slot.material_type
-            else slicer_keys.filament_type(profile.material.id)
-        ],
+        "filament_type": [_spool_filament_type(slot, profile, "orca")],
         "filament_is_support": ["0"],
         # Neutraler Slicerstandard, bis eine Herstellerunterlage ihn ersetzt.
         # Bambu indiziert diese Liste ohne Längenprüfung für jedes Filament;
@@ -4234,7 +4238,7 @@ def _orca_filament(
     # hat einen Typ, aber kein eigenes Herstellerprofil. Ein geerbter
     # ``filament_type`` darf die sichtbare Wahl nicht überschreiben.
     if slot is not None and slot.material_type:
-        document["filament_type"] = [slicer_keys.filament_type(slot.material_type, "orca")]
+        document["filament_type"] = [_spool_filament_type(slot, profile, "orca")]
     # Die Farbe gehört dem Slot, nicht der Einstellung: sie ist der Grund,
     # warum es diesen Slot überhaupt gibt (§20). Ein Schriftzug in Weiß auf
     # schwarzem Gehäuse sind zwei Spulen, und beide bekämen sonst die eine

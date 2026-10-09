@@ -99,7 +99,8 @@ Grenze. `marlin2` wäre falsch: Es schreibt `M204 P` ohne `T`, und das
 übergeht Klipper. Dazu `PRUSA_WITHOUT_BUNDLE` — was Prusas Bestand in
 `[print:*common*]` für jeden Prozess setzt (`extra_perimeters = 0`,
 `solid_infill_below_area = 0`) — und die Materialart der ersten Spule statt
-der des Projekts (`_prusa_filament_type`). Gewürzregal am Centauri Carbon 2:
+der des Projekts, nach derselben Regel wie bei der Orca-Familie
+(`_spool_filament_type`). Gewürzregal am Centauri Carbon 2:
 407 → 292 min bei 153,7 g; ElegooSlicer mit denselben Wänden, Bodenschichten
 und Füllmuster 280 min und 160,6 g. Der Abstand zu Elegoos eigenem
 Standardprozess (232 min, 127,9 g) ist Solidons Tabelle: drei Wände und vier

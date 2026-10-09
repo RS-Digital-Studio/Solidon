@@ -3683,14 +3683,23 @@ def test_every_key_solidon_writes_for_superslicer_is_one_its_reader_knows() -> N
     """Wächter zu RM-459: jede Zeile der Prusa-Tabelle, die SuperSlicer nach
     :func:`slicer_keys.for_program` bekommt, gegen den gemessenen Bestand seines
     3MF-Lesers (``tests/data/superslicer_3mf_keys.json``). Eine neue Zeile, die
-    er nicht kennt, macht den Test rot, bevor ein Kunde den Absturz sieht."""
+    er nicht kennt, macht den Test rot, bevor ein Kunde den Absturz sieht.
+
+    Dazu jeder Schlüssel, den der Satz ohne Drucker des Bündels neben der
+    Tabelle schreibt — Maschine, Zeitschätzung, ``PRUSA_WITHOUT_BUNDLE`` —,
+    denn auch der reist in der Beilage (RM-191)."""
     measured = json.loads(
         (Path(__file__).parent / "data" / "superslicer_3mf_keys.json").read_text(encoding="utf-8")
+    )
+    unbundled = profiles.make_profile("centauri-carbon-2", "pla")
+    without_bundle, _expected = handover.prusa_values(
+        print_settings.resolve(unbundled), unbundled, None, console=False
     )
     written = dict.fromkeys(
         {entry.key for entry in slicer_keys.TABLES["prusa"]}
         | {key for keys in slicer_keys.ADHESION_KEYS["prusa"].values() for key in keys}
-        | {"external_fill_pattern"},
+        | {"external_fill_pattern"}
+        | set(without_bundle),
         "1",
     )
 
@@ -4889,20 +4898,27 @@ def test_prusa_without_a_bundle_estimates_with_the_accelerations_the_file_reques
     mit ``marlin`` und den angeforderten Beschleunigungen als Grenze — bei
     Byte für Byte demselben G-Code ohne Kommentare. Grenzen gehen dabei keine
     in die Druckdatei (``time_estimate_only``).
+
+    Die Grenze ist die schnellste Anforderung, gleich an welchem Schlüssel sie
+    steht. Deshalb hier die Außenwand schneller als die Grundbeschleunigung
+    und die Füllung schneller als die Leerfahrt: Eine Grenze aus nur einem
+    Schlüssel bremste die übrigen in der Schätzung.
     """
-    settings = print_settings.resolve(profile)
+    base = print_settings.resolve(profile)
+    fastest = base.speed.acceleration + 2000.0
+    quickest = base.speed.travel + 100.0
+    settings = print_settings.with_choice(base, "speed.outer_wall_acceleration", fastest)
+    settings = print_settings.with_choice(settings, "speed.infill", quickest)
     setup = handover.SlicerSetup(tmp_path / "prusa-slicer-console.exe", "prusa")
 
     written = handover.write_config(settings, profile, setup, tmp_path).written
 
-    fastest = max(settings.speed.acceleration, settings.speed.outer_wall_acceleration)
     assert written["gcode_flavor"] == "marlin", "M204 S, und die Zeitrechnung liest es"
     assert written["machine_limits_usage"] == "time_estimate_only"
     for axis in ("extruding", "travel", "x", "y"):
         assert written[f"machine_max_acceleration_{axis}"] == f"{fastest:g},{fastest:g}"
-    travel = settings.speed.travel
-    assert written["machine_max_feedrate_x"] == f"{travel:g},{travel:g}"
-    assert written["machine_max_feedrate_y"] == f"{travel:g},{travel:g}"
+    assert written["machine_max_feedrate_x"] == f"{quickest:g},{quickest:g}"
+    assert written["machine_max_feedrate_y"] == f"{quickest:g},{quickest:g}"
 
 
 def test_prusa_without_a_bundle_prints_solidons_walls_and_no_more(

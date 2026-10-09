@@ -103,7 +103,7 @@ Die Maße je Art stehen einmal in `print_settings.ADHESION_PATHS`.
 
 **Ohne Herstellerprofil bekommt jede Rolle Solidons Wert**: PrusaSlicer volle
 Füllung und Lücken (`solid_infill_speed`, `gap_fill_speed`),
-`PRUSA_WITHOUT_BUNDLE`, `_prusa_filament_type`, `_prusa_time_estimate`, die
+`PRUSA_WITHOUT_BUNDLE`, `_spool_filament_type`, `_prusa_time_estimate`, die
 Orca-Familie dieselben Tempi und die Bahnbreite aller fünf Rollen. Bambus
 Absage liest `_result_reason` aus `result.json`, nur vom letzten Lauf;
 `_result_written` fragt, ob der Lauf sie abgelegt hat, und `slice_model` gibt
