@@ -159,12 +159,23 @@ def test_the_pdf_links_nowhere_outside_itself_but_the_website(language: str) -> 
     )
 
 
-def test_written_manual_covers_the_current_demo_and_visible_controls() -> None:
+def test_written_manual_covers_the_current_demo_and_visible_controls(
+    shipped_demo_until: object,
+) -> None:
     """Die handgeschriebenen Kapitel nennen den ausgelieferten Zustand."""
+    from datetime import date
+
     pages = {page.key: str(page.body) for page in manual.pages()}
 
     activation = pages["activation"]
-    assert "30. Oktober 2026" in activation
+    # Der Stichtag der ausgelieferten Demo, nicht ein getippter: Mit dem
+    # Verkaufsstart am 1. Dezember rückte er vom 30. Oktober auf den 30. November.
+    assert isinstance(shipped_demo_until, date)
+    months = ("Januar", "Februar", "März", "April", "Mai", "Juni", "Juli", "August")
+    months += ("September", "Oktober", "November", "Dezember")
+    day = shipped_demo_until
+    last_day = f"{day.day}. {months[day.month - 1]} {day.year}"
+    assert last_day in activation, last_day
     assert "vollständig freigeschaltet" in activation
     assert "startet diese Demo nicht mehr" in activation
 
