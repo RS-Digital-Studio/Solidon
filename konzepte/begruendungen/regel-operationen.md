@@ -1354,9 +1354,10 @@ sperrt weiter.
 
 **Ein Dreieck zählt mit dem Stück, das zwischen den Mündungen liegt, nicht
 mit seiner Mitte** (`_reaching_in`, RM-253, 09.10.2026). Am Laptop-Ständer
-steckt in vier Plattenbohrungen Ø 5,33 eine geschlitzte Hülse von 43 mm; jedes
-ihrer Manteldreiecke läuft über die ganze Länge, und alle Mitten lagen 9 bis
-23 mm vor der Bohrungsmitte, hinter den Mündungen bei ±4,93 mm. Ebenso stecken
+stecken in vier Plattenbohrungen Ø 5,33 zwei geschlitzte Hülsen von 43 mm, jede
+durch zwei; jedes ihrer Manteldreiecke läuft über die ganze Länge, und alle
+Mitten lagen 9 bis 23 mm vor der Bohrungsmitte, hinter den Mündungen bei
+±4,93 mm. Ebenso stecken
 Schraubenschäfte mit Streifen von 8 mm in Scheiben von 0,9 mm. Neun von 28
 Bohrungen galten so als frei: *Versetzen* und *Drehen* rechneten durch die
 Hülse (−127 mm³, „geht nicht mehr durch“, um y gedreht 84 statt 22 Teile),
@@ -1366,7 +1367,13 @@ Grenzen, quer zur Achse projiziert, an seinem kleinsten Achsabstand — das fän
 auch den Querstift, dessen Mitten neben der Bohrung liegen. Grenze ist die
 eigene Wand, mit derselben Rechnung gemessen: Ein grobes Vieleck liegt mit
 seinen Seitenmitten innerhalb des Radius, und die Wand einer Querbohrung endet
-auf der Bohrungswand (Gegenfall `test_a_cross_bore_alone_leaves_the_bore_free`).
+auf der Bohrungswand (Gegenfall `test_a_coarse_bore_with_a_cross_bore_stays_free`,
+gegen den Radius gemessen rot). Beschnitten wird, weil ein Keil, der mit einer
+Kante in der Platte steckt, die Achse erst über ihr überdeckt
+(`test_a_wedge_over_the_mouth_leaves_the_bore_free`); gefragt wird auch, ob die
+Achse durch das Stück geht, weil ein Blech die Bohrung mit einem einzigen
+Dreieck queren kann, dessen Mitte und Kanten daneben liegen
+(`test_a_sheet_whose_one_triangle_covers_the_axis_stands_in_the_bore`).
 Die Dreiecksmitten bleiben die erste Frage; die zweite fügt nur hinzu.
 
 **Und was für eine runde Bohrung an ihrer Mitte gefragt wird, wird an einem
