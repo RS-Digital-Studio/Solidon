@@ -3034,6 +3034,110 @@ def test_triangles_lying_in_a_mouth_plane_do_not_break_the_clipping() -> None:
     assert len(_closest_to_the_axis(polygons, counts, unit((0.0, 0.0, 1.0)))) == len(lying)
 
 
+def _plate_with_a_sheet(kernel: str) -> SceneObject:
+    """Platte 60 x 50 x 10 mit Bohrung Ø 6 längs z und ein getrenntes Blech von
+    0,2 mm, das auf halber Höhe in ihr steckt: ein Prisma über dem Dreieck
+    (−15, −12), (25, −12), (5, 22), dessen Deckflächen je ein Dreieck sind."""
+    exact_kernel()
+    from OCP.BRep import BRep_Builder
+    from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeFace, BRepBuilderAPI_MakePolygon
+    from OCP.BRepPrimAPI import BRepPrimAPI_MakePrism
+    from OCP.gp import gp_Pnt, gp_Vec
+    from OCP.TopoDS import TopoDS_Compound
+
+    from app.core.brep import edit
+    from app.core.brep.features import features_of
+    from app.core.brep.kernel import Solid
+
+    plate = edit.cut_bore(
+        edit.box(60.0, 50.0, 10.0),
+        position=(0.0, 0.0, 5.0),
+        direction=(0.0, 0.0, 1.0),
+        diameter=6.0,
+        depth=12.0,
+    )
+    outline = BRepBuilderAPI_MakePolygon(
+        gp_Pnt(-15.0, -12.0, 4.9), gp_Pnt(25.0, -12.0, 4.9), gp_Pnt(5.0, 22.0, 4.9), True
+    )
+    sheet = BRepPrimAPI_MakePrism(
+        BRepBuilderAPI_MakeFace(outline.Wire()).Face(), gp_Vec(0.0, 0.0, 0.2)
+    ).Shape()
+    compound = TopoDS_Compound()
+    builder = BRep_Builder()
+    builder.MakeCompound(compound)
+    builder.Add(compound, plate.shape)
+    builder.Add(compound, sheet)
+    solid = Solid(compound)
+    if kernel == "brep":
+        return SceneObject(
+            id="obj_1", name="Platte", mesh=solid, kind="brep", features=features_of(solid)
+        )
+    mesh = MeshData.of(as_mesh_data(solid).raw.copy())
+    return SceneObject(id="obj_1", name="Platte", mesh=mesh, features=detect(mesh))
+
+
+@pytest.mark.parametrize("kernel", ["mesh", "brep"])
+def test_a_sheet_whose_one_triangle_covers_the_axis_stands_in_the_bore(
+    profile: Profile, kernel: str
+) -> None:
+    """Ein Blech quer durch die Bohrung steht darin, auch mit einem einzigen Dreieck
+    über der Achse (Review RM-253).
+
+    Ineinandersteckende Teile wie am Laptop-Ständer: Ein Blech von 0,2 mm steckt
+    auf halber Höhe in der Platte und läuft quer durch ihre Bohrung. Seine
+    Unterseite ist ein Dreieck, dessen Mitte 5 mm neben der Achse liegt und dessen
+    Kanten 6,8 bis 15,5 mm. Die Achse geht trotzdem durch das Stück zwischen den
+    Mündungen — das sieht nur die Umlaufprobe in ``_closest_to_the_axis``; ohne
+    sie und am Stand vor RM-253 galt die Bohrung als frei.
+    """
+    entry = _plate_with_a_sheet(kernel)
+    feature = entry.features[_bore_in(entry, "hole")]
+    mesh = as_mesh_data(entry.mesh)
+    assert mesh.component_count == 2, "Voraussetzung: Platte und Blech"
+    centres = np.asarray(mesh.raw.triangles_center, dtype=np.float64)
+    within = (np.hypot(centres[:, 0], centres[:, 1]) < 2.94) & (
+        (centres[:, 2] > 0.0) & (centres[:, 2] < 10.0)
+    )
+    assert not within.any(), "Voraussetzung: keine Dreiecksmitte steht in der Bohrung"
+    assert np.count_nonzero(np.abs(centres[:, 2] - 4.9) < 1e-6) == 1, (
+        "Voraussetzung: die Unterseite des Blechs ist ein einziges Dreieck"
+    )
+
+    _names_the_other_part(entry, feature, profile)
+
+
+def test_a_wedge_over_the_mouth_leaves_the_bore_free() -> None:
+    """Gegenfall zum Beschnitt an den Mündungen: Ein Keil, der mit einer Kante 0,1 mm
+    in der Platte steckt und schräg über die Bohrung steigt, steht nicht darin.
+
+    Seine Flächen reichen mit dieser Kante zwischen die Mündungen, 15 mm neben der
+    Achse, und überdecken die Achse erst 2 mm über der Platte. Gezählt wird nur das
+    Stück zwischen den Mündungen (``_clipped_by``); das ganze Dreieck hätte die
+    Bohrung gefüllt.
+    """
+    from app.core.geom.prepare_ops import hole_is_clear
+
+    plate = trimesh.creation.box(extents=(40.0, 20.0, 10.0))
+    plate.apply_translation((0.0, 0.0, 5.0))
+    bore = trimesh.creation.cylinder(radius=3.0, height=14.0, sections=48)
+    bore.apply_translation((0.0, 0.0, 5.0))
+    body = boolean("difference", [MeshData.of(plate), MeshData.of(bore)]).mesh
+    wedge = trimesh.convex.convex_hull(
+        np.array([(-15.0, -8.0, 9.9), (-15.0, 8.0, 9.9), (15.0, 0.0, 14.0), (-15.0, 0.0, 12.0)])
+    )
+    assert wedge.is_watertight and len(wedge.faces) == 4, (
+        "Voraussetzung: ein Keil aus vier Dreiecken"
+    )
+    mesh = MeshData.of(trimesh.util.concatenate((body.raw, wedge)))
+    holes = [
+        feature
+        for feature in detect(mesh).values()
+        if feature.kind == "hole" and abs(float(feature.params["diameter"]) - 6.0) < 0.1
+    ]
+    assert len(holes) == 1, "Voraussetzung: die Bohrung ist erkannt"
+    assert hole_is_clear(mesh, holes[0])
+
+
 @pytest.mark.parametrize("kernel", ["mesh", "brep"])
 def test_pulling_a_bore_preserves_a_second_body_beyond_the_measured_depth(
     profile: Profile, kernel: str
