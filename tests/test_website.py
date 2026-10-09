@@ -1261,55 +1261,91 @@ def test_download_technical_notes_stay_collapsible(page: str) -> None:
     )
 
 
-#: Die erste Windows-Version mit Signatur. Ein Signaturhinweis nennt nur sie —
-#: „ab 0.5.0“ bleibt bei jeder späteren Version wahr; jede andere Nummer
-#: hieße, die angebotene Version wäre es nicht oder erst später (RM-351).
+#: Die erste Windows-Version mit Signatur und die erste notarisierte für den
+#: Mac. Ein Hinweis nennt nur sie, und nur mit „ab“ davor — „ab 0.5.0“ bleibt
+#: bei jeder späteren Version wahr. Ohne „ab“ oder mit einer anderen Nummer
+#: hieße er, die angebotene Version sei es nicht (RM-351).
 FIRST_SIGNED_WINDOWS = "0.5.0"
+FIRST_NOTARISED_MAC = "0.4.1"
 
-#: Woran ein Satz als Aussage über die Signatur zu erkennen ist, je Sprache.
-SIGNED_STEMS = ("signiert", "signed", "firmad", "signé", "firmat", "assinatura")
+#: Das „ab“ der Sprache vor der Versionsnummer.
+SINCE_WORDS = {
+    "de": r"ab(?: Version)?",
+    "en": r"from(?: version)?",
+    "es": r"desde la(?: versión)?",
+    "fr": r"depuis la(?: version)?",
+    "it": r"dalla(?: versione)?",
+    "pt": r"a partir da(?: versão)?",
+}
 
-#: Eine vollständige Versionsnummer — „Windows 10“ und „macOS 13“ sind keine.
-#: Ein Datum wie 24.09.2026 auch nicht: Kein Teil einer Version hat vier Stellen.
+#: Eine vollständige Versionsnummer — „Windows 10“, „macOS 13“ und ein Datum
+#: wie 24.09.2026 sind keine.
 FULL_VERSION = re.compile(r"(?<![\d.])\d{1,3}\.\d{1,3}\.\d{1,3}(?!\d)")
 
 
-def _visible_sentences(markup: str) -> list[str]:
-    """Der lesbare Text einer Seite, in Sätze zerlegt.
-
-    Ein Block — Absatz, Zelle, Listenpunkt — endet auch ohne Punkt: Sonst
-    liefe eine Zeitleiste ohne Satzzeichen mit dem nächsten Satz zusammen.
-    """
+def _visible_text(fragment: str) -> str:
     import html
 
-    text = re.sub(r"<(script|style)\b.*?</\1>", " ", markup, flags=re.DOTALL)
-    text = re.sub(r"</?(?:p|li|td|th|div|h\d|br|dt|dd|summary)\b[^>]*>", "\x00", text)
-    text = html.unescape(re.sub(r"<[^>]+>", " ", text))
-    sentences = []
-    for block in text.split("\x00"):
-        sentences.extend(re.split(r"(?<=[.!?])\s+", " ".join(block.split())))
-    return [sentence for sentence in sentences if sentence]
+    return " ".join(html.unescape(re.sub(r"<[^>]+>", " ", fragment)).split())
 
 
-def _windows_signature_problems(markup: str, published: str) -> list[str]:
-    """Was ein Signaturhinweis zu Windows an Versionen nennt und nicht nennen darf.
+def _version_tuple(version: str) -> tuple[int, ...]:
+    return tuple(int(part) for part in version.split("."))
 
-    Geprüft wird jeder Satz der Seite, der Windows und die Signatur nennt — der
-    Hinweis im Windows-Reiter und sein Zwilling in den Systemvoraussetzungen.
+
+def _since_problems(
+    place: str, text: str, language: str, allowed: tuple[str, ...], published: str
+) -> list[str]:
+    """Jede volle Versionsnummer an dieser Stelle ist eine erlaubte, mit „ab“ davor.
+
+    Und die erste erlaubte steht wirklich da — sonst wäre der Hinweis weg oder
+    umformuliert, und eine Prüfung über nichts bestünde.
     """
-    tab = re.search(r'<div data-tab="Windows"[^>]*>(.*?)</div>', markup, re.DOTALL)
-    if tab is None or not any(stem in tab.group(1).lower() for stem in SIGNED_STEMS):
-        return ["der Windows-Reiter trägt keinen Signaturhinweis mehr"]
-    limit = tuple(int(part) for part in published.split("."))
+    since = re.compile(rf"(?i)(?:^|\s){SINCE_WORDS[language]}\s+$")
     problems = []
-    for sentence in _visible_sentences(markup):
-        if "Windows" not in sentence or not any(s in sentence.lower() for s in SIGNED_STEMS):
+    seen = False
+    for match in FULL_VERSION.finditer(text):
+        version = match.group()
+        if version not in allowed:
+            problems.append(f"{place}: nennt {version}, erlaubt sind nur {allowed}")
+        elif not since.search(text[: match.start()]):
+            problems.append(
+                f"{place}: {version} steht ohne „ab“ davor — eine Aussage über eine Version"
+            )
+        elif version == allowed[0]:
+            seen = True
+        if _version_tuple(version) > _version_tuple(published):
+            problems.append(f"{place}: nennt {version}, veröffentlicht ist {published}")
+    if not seen:
+        problems.append(f"{place}: der Hinweis „ab {allowed[0]}“ fehlt — nichts geprüft")
+    return problems
+
+
+def _signature_hint_problems(markup: str, language: str, published: str) -> list[str]:
+    """Die Signatur- und Notarisierungshinweise an den Stellen, an denen sie stehen.
+
+    Gelesen wird die Stelle, nicht ein Wortfilter: der Windows-Reiter, der
+    macOS-Reiter und die Zeile „Betriebssystem“ der Systemvoraussetzungen.
+    """
+    places = {
+        "Windows-Reiter": (
+            r'<div data-tab="Windows"[^>]*>(.*?)</div>',
+            (FIRST_SIGNED_WINDOWS,),
+        ),
+        "macOS-Reiter": (r'<div data-tab="macOS"[^>]*>(.*?)</div>', (FIRST_NOTARISED_MAC,)),
+        "Systemvoraussetzungen": (
+            r'<table class="req">\s*<tr><td>[^<]*</td><td>(.*?)</td></tr>',
+            (FIRST_SIGNED_WINDOWS, FIRST_NOTARISED_MAC),
+        ),
+    }
+    problems = []
+    for place, (pattern, allowed) in places.items():
+        found = re.search(pattern, markup, re.DOTALL)
+        if found is None:
+            problems.append(f"{place}: nicht gefunden")
             continue
-        for version in FULL_VERSION.findall(sentence):
-            if version != FIRST_SIGNED_WINDOWS:
-                problems.append(f"nennt {version} statt {FIRST_SIGNED_WINDOWS}: {sentence}")
-            if tuple(int(part) for part in version.split(".")) > limit:
-                problems.append(f"nennt {version}, veröffentlicht ist {published}: {sentence}")
+        text = _visible_text(found.group(1))
+        problems += _since_problems(place, text, language, allowed, published)
     return problems
 
 
@@ -1318,39 +1354,84 @@ def _published_version() -> str:
 
 
 @pytest.mark.parametrize("page", START_PAGES)
-def test_the_windows_signature_hint_names_only_the_first_signed_version(page: str) -> None:
-    """Der Hinweis sagt, seit wann signiert wird — nie eine andere Version (RM-351).
+def test_the_signature_hints_name_only_the_first_signed_version(page: str) -> None:
+    """Die Hinweise sagen, seit wann signiert wird — nie eine andere Version (RM-351).
 
     Er stand einmal als „Die Windows-Version 0.5.0 ist digital signiert“
     direkt unter „Version 0.5.1“, und ein Kunde las daraus, die angebotene sei
     es nicht. Der Satz ist von Hand geschrieben; nur dieser Wächter merkt,
-    wenn er wieder eine Nummer bekommt, die mit dem Angebot altert — oder eine
-    über der veröffentlichten verspricht.
+    wenn er wieder eine Nummer bekommt, die mit dem Angebot altert, das „ab“
+    verliert — oder eine über der veröffentlichten verspricht.
     """
     markup = (WEBSITE / page).read_text(encoding="utf-8")
 
-    assert not _windows_signature_problems(markup, _published_version()), page
+    assert not _signature_hint_problems(markup, _language_of(page), _published_version())
 
 
 @pytest.mark.parametrize(
-    ("old", "new", "published", "expected"),
+    ("page", "old", "new", "published", "expected"),
     [
-        ("ab 0.5.0 digital", "ab 0.5.1 digital", None, "nennt 0.5.1 statt"),
-        ("Version 0.5.0 digital", "Version 9.9.9 digital", None, "veröffentlicht ist"),
-        ("ab 0.5.0 digital", "ab 0.5.0 digital", "0.4.9", "veröffentlicht ist 0.4.9"),
-        ("digital signiert. Die Signatur", "geprüft. Die Signatur", None, "keinen Signatur"),
+        (
+            "index.html",
+            "Die Windows-Version ist ab 0.5.0 digital signiert.",
+            "Die Windows-Version 0.5.0 ist digital signiert.",
+            None,
+            "ohne „ab“",
+        ),
+        (
+            "en/index.html",
+            "The Windows version is digitally signed from 0.5.0 on.",
+            "The Windows version 0.5.0 is digitally signed.",
+            None,
+            "ohne „ab“",
+        ),
+        (
+            "index.html",
+            "Die Windows-Version ist ab 0.5.0 digital signiert.",
+            "Anwendung und Setup sind ab 0.5.3 digital signiert.",
+            None,
+            "nennt 0.5.3",
+        ),
+        (
+            "pt/index.html",
+            "A versão para Windows tem assinatura digital a partir da 0.5.0.",
+            "A versão para Windows está assinada digitalmente a partir da 0.5.3.",
+            None,
+            "nennt 0.5.3",
+        ),
+        ("index.html", "ab 0.5.0 digital", "ab 0.5.1 digital", None, "nennt 0.5.1"),
+        ("index.html", "Version 0.5.0 digital", "Version 9.9.9 digital", None, "nennt 9.9.9"),
+        ("es/index.html", "desde la 0.5.0", "desde la 0.5.0", "0.4.9", "veröffentlicht ist 0.4.9"),
+        (
+            "fr/index.html",
+            "est signée numériquement depuis la 0.5.0.",
+            "est signée numériquement.",
+            None,
+            "Windows-Reiter: der Hinweis",
+        ),
+        ("it/index.html", "Dalla versione 0.4.1", "La versione 0.4.1", None, "ohne „ab“"),
     ],
-    ids=["andere-version", "zwilling-ueber-veroeffentlicht", "vor-der-ersten", "ohne-hinweis"],
+    ids=[
+        "ausgangssatz-de",
+        "ausgangssatz-en",
+        "ohne-windows-mitalternd",
+        "pt-partizip",
+        "andere-version",
+        "zwilling-ueber-veroeffentlicht",
+        "vor-der-ersten",
+        "ohne-hinweis",
+        "mac-ohne-ab",
+    ],
 )
 def test_the_signature_guard_catches_a_manipulated_copy(
-    old: str, new: str, published: str | None, expected: str
+    page: str, old: str, new: str, published: str | None, expected: str
 ) -> None:
-    """Gegenprobe an einer veränderten Kopie der deutschen Startseite."""
-    markup = (WEBSITE / "index.html").read_text(encoding="utf-8")
+    """Gegenprobe an veränderten Kopien der Startseiten, auch mit dem Satz, der RM-351 auslöste."""
+    markup = (WEBSITE / page).read_text(encoding="utf-8")
     assert old in markup, f"die Vorlage für die Gegenprobe fehlt: {old}"
 
-    problems = _windows_signature_problems(
-        markup.replace(old, new), published or _published_version()
+    problems = _signature_hint_problems(
+        markup.replace(old, new), _language_of(page), published or _published_version()
     )
 
     assert any(expected in problem for problem in problems), problems
