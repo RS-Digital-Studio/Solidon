@@ -39,12 +39,13 @@ from app.ui.tool_strip import strip_title
 #: Es sind fünf, und sie fehlten der Übersicht vollständig: Escape schließt das
 #: offene Werkzeug, ``Strg+Tab`` blättert die Auswahl durch, und die
 #: Zoom-Tasten sind der Weg durch den Viewport ohne Zeigegerät. Sie sind
-#: ``QShortcut`` am Fenster (``MainWindow._install_shortcuts``), und ein
-#: ``QShortcut`` trägt keinen Titel — deshalb steht er hier.
+#: Aktionen am Fenster (``MainWindow._window_shortcut``) ohne Menüeintrag, und
+#: die Übersicht liest keine Fensteraktionen — deshalb stehen sie hier.
 #:
 #: Eine Tabelle von Hand ist der Preis, und sie driftet. Dagegen steht ein Test:
-#: ``tests/test_interface_limits.py`` vergleicht sie mit den ``QShortcut``-Kindern
-#: des gebauten Fensters und wird rot, sobald einer dazukommt, der hier fehlt.
+#: ``tests/test_interface_limits.py`` vergleicht sie mit den Tasten der
+#: Fensteraktionen (und etwaiger ``QShortcut``-Kinder) des gebauten Fensters und
+#: wird rot, sobald eine dazukommt, die hier fehlt.
 #: Das ist der Unterschied zu vorher — vorher fehlten dreizehn, und nichts sagte
 #: es.
 WINDOW_KEYS: Final[tuple[tuple[str, TranslatableText], ...]] = (

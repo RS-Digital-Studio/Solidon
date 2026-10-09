@@ -6581,10 +6581,14 @@ def test_a_slicer_with_endless_output_is_stopped(
 
     monkeypatch.setattr(handover, "SLICER_OUTPUT_LIMIT", 1024)
     setup = handover.SlicerSetup(executable=Path(sys.executable), flavour="orca")
-    command = [sys.executable, "-c", "import os, time; os.write(1, b'x' * 2048); time.sleep(5)"]
+    # Die Zeitgrenze schützt nur vor Hängern: Sie zählt ab dem Start, und ein
+    # Interpreter brauchte unter Last länger als 4 s bis zu seiner Ausgabe — dann
+    # griff sie statt der Ausgabegrenze (RM-635). Ohne Ausgabegrenze käme sie
+    # nach 120 s, lange bevor das Kind von selbst fertig würde.
+    command = [sys.executable, "-c", "import os, time; os.write(1, b'x' * 2048); time.sleep(240)"]
 
     with pytest.raises(ExternalToolError) as caught:
-        handover._run_slicer(command, tmp_path, 4.0, setup, None)
+        handover._run_slicer(command, tmp_path, 120.0, setup, None)
 
     assert caught.value.suggestions
 
@@ -6640,10 +6644,14 @@ def test_a_slicer_that_says_too_much_is_not_an_error_code(
 
     monkeypatch.setattr(handover, "SLICER_OUTPUT_LIMIT", 1024)
     setup = handover.SlicerSetup(executable=Path(sys.executable), flavour="orca")
-    command = [sys.executable, "-c", "import os, time; os.write(1, b'x' * 2048); time.sleep(5)"]
+    # Die Zeitgrenze schützt nur vor Hängern: Sie zählt ab dem Start, und ein
+    # Interpreter brauchte unter Last länger als 4 s bis zu seiner Ausgabe — dann
+    # griff sie statt der Ausgabegrenze (RM-635). Ohne Ausgabegrenze käme sie
+    # nach 120 s, lange bevor das Kind von selbst fertig würde.
+    command = [sys.executable, "-c", "import os, time; os.write(1, b'x' * 2048); time.sleep(240)"]
 
     with pytest.raises(ExternalToolError) as caught:
-        handover._run_slicer(command, tmp_path, 4.0, setup, None)
+        handover._run_slicer(command, tmp_path, 120.0, setup, None)
 
     said = str(caught.value.detail)
     assert "Fehlercode" not in said, f"der Satz spricht vom falschen Grund: {said}"
