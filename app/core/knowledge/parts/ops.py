@@ -21,7 +21,7 @@ from __future__ import annotations
 
 import dataclasses
 import math
-from collections.abc import Container, Iterable, Mapping
+from collections.abc import Container, Iterable, Mapping, Sequence
 from typing import TYPE_CHECKING, Any, Final, cast, overload
 
 from app.core.errors import (
@@ -261,10 +261,90 @@ def op_name(part: str) -> str:
     return f"{_PREFIX}{part}"
 
 
+def creator_name(part: str) -> str:
+    """``wall_hook`` wird ``create_wall_hook`` — der Name des Erzeugers, ob es ihn
+    gibt oder nicht. Welche Operation den Baustein anlegt, sagt
+    :func:`creation_name`; welche ihm gehören, :func:`operation_names`.
+    """
+    return f"create_{part}"
+
+
 def creation_name(part: str) -> str:
-    """Der Katalog erzeugt eigenständige Prüfkörper und setzt alle übrigen Bausteine ein."""
+    """Die Operation, die diesen Baustein ohne Träger anlegt — sonst die, die ihn einsetzt."""
     spec = PARTS.get(part)
-    return f"create_{part}" if spec.standalone else op_name(part)
+    return creator_name(part) if spec.standalone else op_name(part)
+
+
+#: Welche Merkmalsart als welche Stelle zählt. Eine gerundete Seite trägt einen
+#: Flächenbaustein, wie das Handbuch es verspricht (Review M3); der Einsetzweg
+#: nimmt jedes Merkmal mit Mitte und Richtung.
+_PLACES: Final = {"face": "face", "curved_face": "face", "hole": "hole"}
+
+
+def catalog_operation(part: str, *, at: Sequence[str] = ()) -> str:
+    """Was der Katalog für diesen Baustein ausführt (RM-562).
+
+    ``at`` sind die Arten der gewählten Merkmale (``face``, ``hole`` …), eine
+    je markierter Zeile. Ein eigenständiger Baustein setzt sich an, wenn
+    **jede** gewählte Stelle zu ihm passt (:func:`fitting_places`) — vier
+    markierte Seitenflächen ergeben vier Rippen in einem Schritt (Review M2);
+    sonst entsteht er als eigener Körper, eine Schraube an einer Fläche also
+    frei. **Ein gewählter Körper allein zählt nicht als Stelle**: Jeder
+    Erzeugerschritt wählt seinen neuen Körper, und der zweite Kabelclip hinge
+    sonst am ersten. Die übrigen Bausteine werden immer eingesetzt.
+    """
+    spec = PARTS.get(part)
+    fits = fitting_places(part)
+    if not spec.standalone or (at and all(_PLACES.get(kind) in fits for kind in at)):
+        return op_name(part)
+    return creation_name(part)
+
+
+def fitting_places(part: str) -> tuple[str, ...]:
+    """Die Arten von Stellen, an die dieser Baustein gehört — ``face``, ``hole``."""
+    return tuple(_applies_to(PARTS.get(part)))
+
+
+def footprint_at_once(part: str) -> bool:
+    """Ob der Umriss eines Bausteins ohne nennenswerte Rechnung da ist (Review N3).
+
+    Die Bibliothek baut ihre Vorgaben in höchstens 0,36 s (Gewindebolzen,
+    gemessen über alle eigenständigen). Ein Rezept rechnet dafür seinen ganzen
+    Stapel, mit dem Rezept wachsend — das gehört nicht vor einen Dialog in den
+    Hauptthread.
+    """
+    return PARTS.get(part).source == "shipped"
+
+
+def free_spot_for(
+    part: str, objects: Sequence[SceneObject], profile: Profile, *, rough: bool = False
+) -> dict[str, float]:
+    """Wohin ein eigenständiger Baustein aus dem Katalog kommt, wenn schon Körper stehen.
+
+    Ohne Lage entsteht ein Erzeuger im Ursprung — dort, wo meist der erste
+    Grundkörper steht, und eine Rippe lag dann ganz in ihm (Review M1). Die
+    Stelle sucht dieselbe Regel wie beim Laden eines weiteren Modells
+    (``prepare.first_free_spot``), für den Umriss mit den Vorgaben; gibt der
+    Baustein ohne Zeichnung keinen Umriss her, gilt ein kleiner Platzhalter.
+    ``rough`` nimmt den Platzhalter ohne zu rechnen: die erste Antwort, bis ein
+    Arbeiter den echten Umriss hat (:func:`footprint_at_once`).
+    Zurück kommen die Ortsfelder des Erzeugers, leer ohne vorhandene Körper.
+    """
+    from app.core.geom.prepare import first_free_spot
+    from app.core.types import BoundingBox
+
+    if not objects:
+        return {}
+    spec = PARTS.get(part)
+    if rough or any(entry.required for entry in spec.params.spec()):
+        footprint = BoundingBox(minimum=(-5.0, -5.0, 0.0), maximum=(5.0, 5.0, 10.0))
+    else:
+        footprint = placement_tools(spec, {}, profile, standalone=True)[0].bounds
+    shift, _plate, _crowded = first_free_spot(
+        footprint, profile, [(entry.mesh.bounds, entry.plate) for entry in objects]
+    )
+    fields = placement_fields(build_params(spec, standalone=True))
+    return {fields["x"]: float(shift[0]), fields["y"]: float(shift[1])}
 
 
 def part_of(operation: str) -> PartSpec | None:
@@ -288,7 +368,13 @@ def part_of(operation: str) -> PartSpec | None:
 def build_params(spec: PartSpec, *, standalone: bool = False) -> type[BaseParams]:
     """Die Parameter des Bausteins plus den Ort, an den er gehört, als ein
     Schema (§10).
+
+    Der Erzeuger (``standalone``) hat keinen Träger, von dem etwas abzutragen
+    wäre: Die abtragende Wahl (``subtractive_on``) fehlt in seinem Schema, und
+    der Baustein baut mit ihrer Vorgabe, der aufgesetzten Form — das Register
+    stellt sicher, dass es genau eine gibt.
     """
+    cutting = cuts_by_parameter(spec.params) if standalone else None
     normal = ("nx", "ny", "nz")
     owned = {entry.name for entry in spec.params.fields()}
     while owned.intersection(normal):
@@ -309,6 +395,8 @@ def build_params(spec: PartSpec, *, standalone: bool = False) -> type[BaseParams
         "_placement_fields": names,
     }
     for entry in spec.params.fields():
+        if cutting is not None and entry.name == cutting[0]:
+            continue
         namespace["__annotations__"][entry.name] = entry.type
         namespace[entry.name] = (
             dataclasses.field(default=entry.default, metadata=entry.metadata)
@@ -318,6 +406,24 @@ def build_params(spec: PartSpec, *, standalone: bool = False) -> type[BaseParams
     for name, annotation, declaration in (*_PLACEMENT, *_SURFACE_BINDING):
         if standalone and name == "at_feature":
             continue
+        if standalone and name == "at_features":
+            # Ein Erzeuger setzt an kein Merkmal. Das Feld bleibt, damit ein
+            # gespeicherter Schritt mit einer Liste darin weiter lädt, steht aber
+            # weder im Dialog noch beim Agenten und fällt bei der nächsten
+            # Änderung weg (Review B, Feld ohne Wirkung).
+            declaration = param(
+                title=_("An mehreren Merkmalen"),
+                kind="features",
+                default=(),
+                placement="advanced",
+                internal=True,
+                dropped_on_change=True,
+                doc=_(
+                    "Mehrere erkannte Merkmale auf einmal. Der Baustein wird an jedes "
+                    "davon gesetzt — ein Schritt im Verlauf, ein Strg+Z. Leer heißt: "
+                    "es gilt das einzelne Merkmal darüber."
+                ),
+            )
         name = names.get(name, name)
         namespace["__annotations__"][name] = annotation
         # Dataclass setzt Field.name beim Aufbau. Geteilte Deklarationen
@@ -412,9 +518,9 @@ def register_all(
         if not target.has(name):
             _register_one(spec, build_params(spec), registry)
             made.append(name)
-        if spec.standalone and not target.has(f"create_{spec.name}"):
+        if spec.standalone and not target.has(creator_name(spec.name)):
             _register_creator(spec, registry)
-            made.append(f"create_{spec.name}")
+            made.append(creator_name(spec.name))
     _log.info("registered %d part operations", len(made))
     return tuple(made)
 
@@ -477,8 +583,34 @@ def _applies_to(spec: PartSpec) -> list[str]:
 
 def register_one(spec: PartSpec, registry: Registry | None = None) -> None:
     """Einen einzelnen Baustein als Operation registrieren — der Weg der
-    Rezepte. ``register_all`` bleibt der der Bibliothek; beide enden hier."""
+    Rezepte. ``register_all`` bleibt der der Bibliothek; beide enden hier.
+
+    Ein eigenständiger Baustein bekommt auch hier seinen Erzeuger: Ein Rezept
+    ist genau ein Körper (RM-574). Scheitert der Erzeuger, geht das Einsetzen
+    mit zurück — halb registriert wäre ein Katalogknopf ohne Rechnung.
+    """
     _register_one(spec, build_params(spec), registry)
+    if spec.standalone:
+        try:
+            _register_creator(spec, registry)
+        except Exception:
+            (registry or _default_registry()).remove(op_name(spec.name))
+            raise
+
+
+def operation_names(part: str, parts: PartRegistry | None = None) -> tuple[str, ...]:
+    """Die Operationen, die diesem Baustein gehören — Einsetzen immer, Erzeugen,
+    wenn er für sich steht (RM-574).
+
+    Wer einen Baustein abmeldet oder ersetzt, nimmt genau diese. Den Erzeuger
+    nur nach dem Namen zu nehmen träfe bei einem Rezept „box“ den Quader
+    ``create_box``, der keinem Baustein gehört — dieselbe Zugehörigkeit, die
+    :func:`part_of` liest. Deshalb vor dem Abmelden des Katalogeintrags fragen.
+    """
+    source = parts or PARTS
+    if source.has(part) and source.get(part).standalone:
+        return op_name(part), creator_name(part)
+    return (op_name(part),)
 
 
 def _register_one(spec: PartSpec, params: type[BaseParams], registry: Registry | None) -> None:
@@ -533,14 +665,15 @@ def _creates_exactly(spec: PartSpec) -> bool:
 
 
 def _register_creator(spec: PartSpec, registry: Registry | None) -> None:
-    """Erzeugt einen erklärten Prüfkörper ohne einen künstlichen Träger im Projekt."""
+    """Legt einen eigenständigen Baustein ohne Träger an — kein künstlicher Körper im Projekt."""
     schema = build_params(spec, standalone=True)
     # exact:1 — eine Vorlage entsteht exakt, wo der Kern da ist (RM-443); ein
     # Ergebnis von davor wäre ein Netz.
-    version = f"{_result_version(spec)}:guards:2" + (":exact:1" if _creates_exactly(spec) else "")
+    # guards:3 — ohne Träger steht er auf dem Bett, ein Mündungsbaustein kopfüber (RM-562).
+    version = f"{_result_version(spec)}:guards:3" + (":exact:1" if _creates_exactly(spec) else "")
 
     @register_op(
-        name=f"create_{spec.name}",
+        name=creator_name(spec.name),
         title=spec.title,
         category="parts",
         params=schema,
@@ -563,14 +696,25 @@ def _register_creator(spec: PartSpec, registry: Registry | None) -> None:
             kernel="brep" if exact else "mesh",
         )
         direction = _free_direction(ctx.params)
-        solid = _solid_of(produced.mesh) if exact else None
+        turned, sink = _on_its_own_bed(spec, ctx.params, produced.mesh, direction)
+        # Ein Rezept rechnet seinen Ausschnitt mit dem Auswerter und bringt einen
+        # exakten Körper mit, wenn sein Stapel exakt rechnet (RM-574); der bleibt
+        # exakt. Am Netz gebaut kommt hier nie ein exakter Körper an.
+        solid = _solid_of(produced.mesh)
+        # **Das Netz rollt hier ohne ``keeps_up``, die Merkmale mit** — so rechnete
+        # der Erzeuger schon immer. Der einzige eigenständige Baustein mit
+        # ``keeps_up`` ist die Rohrschelle, und sie ist unter der halben Drehung
+        # symmetrisch; rollte das Netz mit, tauschten ihre erkannten Flächen in
+        # alten Projekten die Kennung, und ein Schritt an ``face_1`` träfe die
+        # Gegenseite (Review G1, Entscheidung des Koordinators).
+        # ``test_every_creator_keeps_its_old_placement`` hält beides fest.
         placed: Mesh = (
-            _place_solid(solid, ctx.params, direction=direction, cancelled=ctx.cancelled)
+            _place_solid(solid, ctx.params, sink=sink, direction=turned, cancelled=ctx.cancelled)
             if solid is not None
-            else _place(as_mesh_data(produced.mesh), ctx.params, direction=direction)
+            else _place(as_mesh_data(produced.mesh), ctx.params, sink=sink, direction=turned)
         )
         features = _placed_features(
-            produced, spec, ctx.params, (0.0, 0.0, 0.0), 0.0, direction, spec.keeps_up, False
+            produced, spec, ctx.params, (0.0, 0.0, 0.0), sink, turned, spec.keeps_up, False
         )
         from app.i18n import source_text
 
@@ -1644,6 +1788,7 @@ EXACT_PARTS: Final = frozenset(
         "printed_thread",
         "printed_screw",
         "printed_nut",
+        "threaded_rod",
         # Mechanik
         "barrel_hinge",
         "bayonet",
@@ -2516,6 +2661,26 @@ def _builds_upward_on_a_face(source: SceneObject, params: Any, built: Mesh) -> b
     if feature is None or feature.kind != "face":
         return False
     return _extends_above_mouth(built)
+
+
+def _on_its_own_bed(
+    spec: PartSpec, params: Any, built: Mesh, direction: Vec3 | None
+) -> tuple[Vec3 | None, float]:
+    """Richtung und Einsenken eines Bausteins ohne Träger (RM-562).
+
+    Am Träger beginnt ein Baustein an der Mündung: Eine Schraube hat den Kopf
+    darüber und den Schaft darunter, eine lösbare Mutter steht um das Spiel
+    über der Fläche (``separate_from_host``). Ohne Träger hinge der Schaft unter
+    dem Druckbett und die Mutter schwebte. Hier steht die Unterseite auf der
+    Ebene des Ursprungs, und was an einer Mündung sitzt (``at_hole_mouth``),
+    steht auf dem Kopf, wie man eine Schraube druckt. Eine eingetragene
+    Richtung oder Achse gilt, wie sie ist.
+    """
+    low = float(built.bounds.minimum[2])
+    upright = direction is None and _placement_value(params, "axis", "z") == "z"
+    if spec.at_hole_mouth and upright:
+        return (0.0, 0.0, -1.0), float(built.bounds.maximum[2])
+    return direction, low if abs(low) > EPS_GEOM else 0.0
 
 
 def _extends_above_mouth(built: Mesh) -> bool:

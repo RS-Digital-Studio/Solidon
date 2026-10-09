@@ -20,6 +20,7 @@ import trimesh
 from app.core.bootstrap import load_operations
 from app.core.geom.mesh import MeshData, as_mesh_data
 from app.core.knowledge.parts import builtin
+from app.core.knowledge.parts import ops as part_ops
 from app.core.registry import REGISTRY, OperationSpec, Registry
 from app.core.scene import History, OperationDraft, evaluate
 from app.core.scene.project import Project, ProjectSources, new_project
@@ -815,11 +816,17 @@ CASES = [
 # Fachmaße und Wirkung je Baustein, ausdrücklich statt beliebiger Feldvorgaben.
 # Die Gesamthöhe schließt Füße, Zapfen und bei der Einlage den Flansch ein.
 PART_CASES = {
-    "barrel_hinge": ({"pin": 4.0, "width": 24.0, "reach": 12.0, "wall": 2.5}, "greater", None),
+    # Eigenständig gesetzt (RM-562) steht jeder auf dem Bett, so hoch, wie seine Maße sagen:
+    # das Scharnier Bolzen, zweimal Spiel (PETG 0,25) und zweimal Wand.
+    "barrel_hinge": (
+        {"pin": 4.0, "width": 24.0, "reach": 12.0, "wall": 2.5},
+        "greater",
+        4.0 + 2 * 0.25 + 2 * 2.5,
+    ),
     # Der Kragen des Bajonetts: Einstecktiefe und Nockenhöhe, unabhängig vom Spiel.
     "bayonet": ({"kind": "plug", "diameter": 24.0, "lugs": 3}, "greater", 6.0 + 3.5),
     "bearing_seat": ({"size": "608", "removable": False}, "less", None),
-    "cable_clip": ({"size": "cable-5", "width": 8.0, "wall": 2.0}, "greater", None),
+    "cable_clip": ({"size": "cable-5", "width": 8.0, "wall": 2.0}, "greater", 5.0 + 2 * 2.0),
     "cable_gland": ({"size": "cable-5", "wall": 3.0, "strain_relief": False}, "less", None),
     # Die Hülse der Kanalnaht steht auf ihrem Boden: Nahtwand und Kanalhöhe.
     "channel_joint": (
@@ -829,14 +836,14 @@ PART_CASES = {
     ),
     # Die Drehscheibe mit ihrem Griffsteg: zwei Scheibendicken.
     "detent_disc": ({"kind": "disc", "diameter": 32.0, "thickness": 3.0}, "greater", 6.0),
-    "dowel": ({"diameter": 4.0, "length": 8.0, "kind": "pin", "chamfer": 0.6}, "greater", None),
+    "dowel": ({"diameter": 4.0, "length": 8.0, "kind": "pin", "chamfer": 0.6}, "greater", 8.0),
     "fit_ladder": (
         {"diameter": 6.0, "steps": 3, "height": 8.0, "first": 0.1, "step": 0.05},
         "greater",
         8.0 + 3.0,
     ),
-    "foot": ({"kind": "foot", "diameter": 10.0, "height": 3.0}, "greater", None),
-    "gusset": ({"legs": 12.0, "thickness": 2.0, "wall": 2.0}, "greater", None),
+    "foot": ({"kind": "foot", "diameter": 10.0, "height": 3.0}, "greater", 3.0),
+    "gusset": ({"legs": 12.0, "thickness": 2.0, "wall": 2.0}, "greater", 12.0),
     "heatset_m4": ({"size": "M3", "lead_in": True, "extra_depth": 0.5}, "less", None),
     "hinge_eye": ({"pin": 3.0, "width": 8.0, "reach": 8.0, "wall": 2.0}, "greater", None),
     # Die Tülle wächst mehr auf, als ihr Durchgang aus der Wand nimmt.
@@ -872,7 +879,7 @@ PART_CASES = {
     "living_hinge": (
         {"width": 30.0, "leaf": 15.0, "thickness": 2.0, "film": 0.4, "gap": 1.5},
         "greater",
-        None,
+        2.0,
     ),
     "lug": ({"size": "M4", "width": 0.0, "length": 0.0, "thickness": 4.0}, "greater", None),
     "magnet_pocket": ({"size": "8x3", "cover": 0.0, "press_lip": False}, "less", None),
@@ -910,9 +917,12 @@ PART_CASES = {
         # Wänden) und darüber die Unterlegscheibe M4 (9,0).
         3.0 + (22.25 + 2.0 * 3.0) + 9.0,
     ),
-    "printed_nut": ({"size": "M5"}, "greater", None),
-    "printed_screw": ({"size": "M5", "length": 12.0, "countersunk": False}, "greater", None),
+    # Mutter M5 nach ISO 4032 4,7 hoch; die Schraube Kopf (Tabelle 5,0) und Länge, kopfüber.
+    "printed_nut": ({"size": "M5"}, "greater", 4.7),
+    "printed_screw": ({"size": "M5", "length": 12.0, "countersunk": False}, "greater", 5.0 + 12.0),
     "printed_thread": ({"size": "M6", "length": 8.0, "internal": False}, "greater", None),
+    # Der Bolzen steht so hoch, wie er lang ist (Gewindebolzen, Robert 08.10.2026).
+    "threaded_rod": ({"size": "M6", "length": 20.0, "thread_length": 6.0}, "greater", 20.0),
     "profile_clamp_liner": (
         {"counter_sketch": _circle(16.0), "depth": 20.0, "liner_thickness": 2.0, "half": "lower"},
         "greater",
@@ -927,7 +937,7 @@ PART_CASES = {
     "rib": (
         {"length": 20.0, "height": 10.0, "wall": 2.0, "thickness": 2.0, "fillet": 1.0},
         "greater",
-        None,
+        10.0,
     ),
     # Die Steckhülse: Boden und Einstecktiefe, unabhängig vom Spiel.
     "rod_connector": (
@@ -960,32 +970,43 @@ PART_CASES = {
     "wall_mount": (
         {"width": 30.0, "height": 25.0, "thickness": 3.0, "size": "M4", "holes": 2, "lip": 12.0},
         "greater",
-        None,
+        25.0,
     ),
 }
 STANDALONE = (
+    "barrel_hinge",
     "bayonet",
+    "cable_clip",
     "channel_joint",
     "detent_disc",
+    "dowel",
     "fit_ladder",
+    "foot",
+    "gusset",
     "holder_fork",
     "holder_ring",
     "holder_shelf",
     "holder_u",
+    "living_hinge",
     "organizer_divider",
     "organizer_foot",
     "organizer_rim",
     "organizer_tray",
     "overhang_fan",
     "pipe_clamp",
+    "printed_nut",
+    "printed_screw",
     "profile_clamp_liner",
     "profile_clamp_shell",
+    "rib",
     "rod_connector",
     "room_floor",
     "room_pane",
     "room_wall",
     "seal_gasket",
+    "threaded_rod",
     "wall_ladder",
+    "wall_mount",
 )
 # **Jeder Baustein baut an einem exakten Träger exakt** (P2.7, abgenommen für
 # alle 35). Bis zum 21.09.2026 stand hier eine Liste ``EXACT_PARTS`` mit genau
@@ -1008,11 +1029,17 @@ for _part, (_dimensions, _effect, _height) in PART_CASES.items():
 # die übrigen Erzeuger bleiben beim Netz, wie ihre gespeicherten Schritte rechnen.
 for _part in STANDALONE:
     _dimensions, _effect, _height = PART_CASES[_part]
+    # Der Erzeuger kennt die abtragende Wahl nicht (``ops.build_params``, RM-562).
+    _cutting = part_ops.cuts_by_parameter(builtin.load().get(_part).params)
     CASES.append(
         Case(
             f"create_{_part}",
             "none",
-            dict(_dimensions),
+            {
+                key: value
+                for key, value in _dimensions.items()
+                if not _cutting or key != _cutting[0]
+            },
             CREATE_EXACT if builtin.load().get(_part).template else CREATE_MESH,
             "height" if _height is not None else "overhang",
             _height,

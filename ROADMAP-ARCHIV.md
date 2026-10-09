@@ -59,6 +59,10 @@ entfernt hat.
 | 2026-10-07 | [RM-532: Gewinde, Schrauben und Muttern gibt es in jeder Größe (07.10.2026)](#rm-532-gewinde-schrauben-und-muttern-gibt-es-in-jeder-größe-07102026) |
 | 2026-10-07 | [RM-099: Erledigte und abgelöste Konzepte liegen in konzepte/archiv/ (07.10.2026)](#rm-099-erledigte-und-abgelöste-konzepte-liegen-in-konzeptearchiv-07102026) |
 | 2026-10-07 | [RM-543: Die gelöschte Zeile hielt der Test, nicht das Fenster (07.10.2026)](#rm-543-die-gelöschte-zeile-hielt-der-test-nicht-das-fenster-07102026) |
+| 2026-10-08 | [RM-562: Bausteine, die für sich ein Teil sind, entstehen ohne Auswahl als eigener Körper (08.10.2026)](#rm-562-bausteine-die-für-sich-ein-teil-sind-entstehen-ohne-auswahl-als-eigener-körper-08102026) |
+| 2026-10-08 | [RM-565: *Auswahl als Baustein speichern* nimmt den gewählten Körper (08.10.2026)](#rm-565-auswahl-als-baustein-speichern-nimmt-den-gewählten-körper-08102026) |
+| 2026-10-09 | [RM-578: Mitgelieferte Bausteine nehmen jede Normgröße der Tabelle, die 512er-Grenze gilt nur für eigene Bausteine (09.10.2026)](#rm-578-mitgelieferte-bausteine-nehmen-jede-normgröße-der-tabelle-die-512er-grenze-gilt-nur-für-eigene-bausteine-09102026) |
+| 2026-10-09 | [RM-574: Ein eigener Baustein entsteht als eigener Körper, mit Namensschutz gegen Operationen (09.10.2026)](#rm-574-ein-eigener-baustein-entsteht-als-eigener-körper-mit-namensschutz-gegen-operationen-09102026) |
 | 2026-10-06 | [RM-114: Die Zielreihe der Hohlkugel ist auf drei Plattformen gleich (06.10.2026)](#rm-114-die-zielreihe-der-hohlkugel-ist-auf-drei-plattformen-gleich-06102026) |
 | 2026-10-06 | [RM-038: Der Mailentwurf kommt aus dem Flatpak unverändert an (06.10.2026)](#rm-038-der-mailentwurf-kommt-aus-dem-flatpak-unverändert-an-06102026) |
 | 2026-10-06 | [RM-040: Ein Kundenbericht aus 0.5.3 führte über Ausnahme und Stapel zur Behebung (06.10.2026)](#rm-040-ein-kundenbericht-aus-053-führte-über-ausnahme-und-stapel-zur-behebung-06102026) |
@@ -44889,3 +44893,162 @@ zurück, Satz mit „3 Stellen“, beide Knöpfe; nach *Reparieren* genau ein ge
   (N5). Chatleiste auf einem PC mit erkannter Karte ohne Bedingungssatz (N10); Sätze nennen
   „NVIDIA-Karte“ (N11); `PROGRAMFILES` hat einen Wächter (N6); die Ansicht von *Chat
   einrichten* folgt dem Prüfergebnis nur, bis der Kunde selbst rollt (N12).
+
+## RM-562: Bausteine, die für sich ein Teil sind, entstehen ohne Auswahl als eigener Körper (08.10.2026)
+
+<a id="rm-562-bausteine-die-für-sich-ein-teil-sind-entstehen-ohne-auswahl-als-eigener-körper-08102026"></a>
+<a id="rm-562"></a>
+
+**RM-562 — Bausteine, die für sich ein Teil sind, als eigenen Körper einsetzen.** Kunden-E-Mail
+vom 07.10.2026 und Robert, 08.10.2026: Kabelclip, Eckwinkel, Versteifungsrippe, Standfuß,
+Wandhalter und weitere ließen sich nur an einen gewählten Körper anfügen.
+
+**Umsetzung** (Zweig `paket/b-bausteine`, Commit `4fb961ff7`): Die Quelle ist
+`PartSpec.standalone` am Baustein. Neu eigenständig: Bolzenscharnier, Kabelclip, Passstift (nur der
+Stift), Standfuß (nur der gedruckte Fuß), Eckwinkel, Filmscharnier, Gedruckte Mutter, Schraube,
+Versteifungsrippe, Wandhalter — jeder erfüllt ohne Träger seine Aufgabe. Nicht eigenständig, mit
+Grund: Rastnase, Schnappverbindung, Schnappverbinder, Scharnierauge, Lasche mit Loch, Nutfeder,
+Lochwand-Einhänger (wirken nur am Träger), Druckbares Gewinde (sitzt in einer Bohrung oder auf
+einer Fläche), alle abtragenden. Der Katalog nimmt den Erzeuger, solange keine Stelle gewählt
+ist, an die er gehört (`ops.catalog_operation`, eine Schraube an einer Fläche entsteht frei; ein gewählter Körper allein zählt nicht, weil jeder
+Erzeugerschritt seinen Körper wählt), und sagt das am Knopf. Das Register weist einen
+eigenständigen abtragenden Baustein ab und verlangt bei einer abtragenden Wahl genau die Vorgabe
+als aufgesetzte Form; der Erzeuger lässt diese Wahl weg (`build_params`). Ohne Träger steht der
+Körper auf der Ebene seines Ursprungs, die Schraube kopfüber (`_on_its_own_bed`, sonst hing der
+Schaft unter dem Bett und die Mutter schwebte um ihr Spiel), Erzeuger `cache_version`
+`guards:3`. Keine Maßänderung, `LIBRARY_VERSION` bleibt.
+Agent: zehn Werkzeuge mehr, Grundlast neu gezählt (8 822 Token bei 199 Werkzeugen, qwen3:14b).
+
+**Nachweis:** `tests/test_parts.py::test_every_standalone_part_makes_a_watertight_body_without_a_selection`
+über alle 32 eigenständigen (wasserdicht, erklärte Teilezahl, auf dem Bett; Gegenprobe ohne
+`_on_its_own_bed` rot an Kabelclip, Mutter, Schraube), `test_the_parts_customers_print_on_their_own_stand_alone`
+(am alten Stand rot), `test_a_standalone_creator_offers_only_the_form_that_is_a_body`,
+`test_a_part_that_only_cuts_cannot_stand_alone`, `test_the_catalogue_attaches_at_a_chosen_place_and_creates_without_one`;
+Fenstertest `tests/test_catalog_ui.py::test_a_standalone_part_becomes_its_own_body_and_attaches_only_at_a_chosen_face`
+(Gegenprobe: Rippe ohne `standalone` rot). Paritätstabelle mit Sollhöhen. Bereichsnachweis für die
+32 Bausteine der berührten Dateien neu gefahren (Bezugsprofil Spiel 0,2 mm, Übermaß −0,05 mm,
+Mindestwand 0,84 mm): alle bestanden, 49 von 49 passen. Handbuch „Die Bausteine“ in sechs
+Sprachen.
+
+**Review-Fixes** (Commit `e8d70a1d4`): Aus dem Katalog kommt ein eigenständiger Baustein auf eine
+freie Stelle der Platte (`ops.free_spot_for` über `prepare.first_free_spot`), nicht in den
+Grundkörper im Ursprung (M1). `catalog_operation` nimmt die Arten aller markierten Stellen: vier
+Seitenflächen ergeben vier Rippen in einem Schritt (M2), eine gerundete Seite trägt einen
+Flächenbaustein, und der Satz am Knopf nennt die passende Art und beim Passstift die eine Form
+(M3). Das Netz eines Erzeugers rollt wieder ohne `keeps_up`; die frei gesetzte Rohrschelle
+behält ihre Flächenkennungen, `tests/data/creators_before_rm562.json` hält die 22 alten Erzeuger
+in fünf Lagen am Ausgangsstand fest (G1). Die Regel sagt, dass das Bett nur aufrecht gilt (G3),
+die Absage eines abhängigen Felds hat einen Test (G4), das Erzeugerfeld „An mehreren Merkmalen“
+ist intern. Dazu, auf Roberts Zusatz, der **Gewindebolzen** (`threaded_rod`): Gewindestange oder
+Stiftschraube ohne Kopf aus demselben Gewindekern wie das druckbare Gewinde, mit kegeligen Kuppen
+als Fase; 496 Ecken, Bereichsnachweis bestanden. Grundlast 8 886 Token bei 201 Werkzeugen.
+
+Changelog: ja — Kabelclip, Eckwinkel, Rippe, Standfuß, Wandhalter, Passstift, Gewindebolzen,
+Scharniere, Schraube und Mutter entstehen ohne gewählte Stelle als eigenes Teil auf einer freien
+Stelle der Platte; Organizer-Wanne, -Rand und -Trennwand, Rohrschelle, Profilklemmen, Bajonett,
+Stangenverbinder und Dichtung setzen sich aus dem Katalog an eine gewählte Fläche. Neu: der
+Gewindebolzen als Gewindestange oder Stiftschraube.
+
+## RM-565: *Auswahl als Baustein speichern* nimmt den gewählten Körper (08.10.2026)
+
+<a id="rm-565-auswahl-als-baustein-speichern-nimmt-den-gewählten-körper-08102026"></a>
+<a id="rm-565"></a>
+
+**RM-565 — *Auswahl als Baustein speichern* nimmt den gewählten Körper.** Robert, 07.10.2026:
+Körper wählen, Bausteinkatalog öffnen, *Speichern* — ohne Umweg über die Verlaufsschritte. Bis
+dahin nahm das Speichern eine Verlaufsauswahl oder den ganzen Verlauf; mit einem zweiten Körper
+im Projekt hieß das „Dieses Rezept ergibt nicht genau einen Körper“.
+
+**Umsetzung** (Zweig `paket/b-bausteine`, Commits `3005be535`, Review-Fixes `e8d70a1d4`):
+`recipe.steps_of` geht rückwärts über die Kanten aus `revision.step_needs` (dieselbe Quelle wie
+Umsortieren und Ausschalten): jeder Schritt, der den Körper ausgibt und verändert, und was er
+brauchte — ein Werkzeug, das im Körper aufging, gehört dazu, ein Nachbar nicht. Berichte
+(*Überschneidungen prüfen*) und das Durchreichen beim *Duplizieren* zählen nicht, ein Schritt über
+die ganze Szene folgt nur dem gewählten Körper, und `capture` verengt ihn auf den Ausschnitt
+(Review H1, G6). Bleibt mehr als ein Körper (Kopie, Bezug auf eine Fläche eines anderen Körpers),
+nennt die Kopfzeile ihn samt Schritt und sperrt *Baustein anlegen* (`recipe.slice_bodies`). `MainWindow._save_as_part`: eine Verlaufsauswahl geht vor (sie ist gezielt, der Körper ist
+nach jedem Erzeugerschritt ohnehin gewählt), sonst der gewählte Körper, sonst der ganze Verlauf;
+eine alte Markierung, etwa vom Klick auf einen Befund, schlägt einen danach gewählten Körper nicht
+(G7).
+Der Dialog zeigt nur die Merkmale dieses Körpers und nennt ihn in der Kopfzeile. Ein Rezept bleibt
+Daten (Regel 13), es reist wie bisher als Liste von Schritten.
+
+**Nachweis:** `tests/test_recipes.py::test_a_chosen_body_takes_exactly_the_steps_it_came_from`
+(Kern, Volumen gegen Analytik), `test_a_chosen_body_saves_after_a_step_over_the_whole_scene`
+(Anordnen, Prüfen, Ausrichten, Duplizieren; Gegenprobe rot),
+`test_a_slice_that_brings_a_second_body_says_so_before_saving`, Fenstertest
+`tests/test_recipe_dialog.py::test_a_chosen_body_is_saved_from_the_catalogue_and_comes_back_as_itself`:
+Körper wählen (nach *Anordnen* und mit einer alten Markierung im Verlauf), Katalog, *Speichern*,
+Baustein an die Fläche des Nachbarn einsetzen — er wächst genau um das Volumen des gespeicherten
+Körpers, und der Dialog zeigt genau die Merkmale des Klotzes (Zeilenzahl, M4). Gegenprobe ohne Körperauswahl rot mit „ergibt
+nicht genau einen Körper“. Handbuch „Eigene Bausteine“ und „Der Verlauf“ in sechs Sprachen.
+Changelog: ja — Einen gewählten Körper als eigenen Baustein speichern, ohne Schritte im Verlauf
+zu markieren.
+
+## RM-578: Mitgelieferte Bausteine nehmen jede Normgröße der Tabelle, die 512er-Grenze gilt nur für eigene Bausteine (09.10.2026)
+
+<a id="rm-578-mitgelieferte-bausteine-nehmen-jede-normgröße-der-tabelle-die-512er-grenze-gilt-nur-für-eigene-bausteine-09102026"></a>
+<a id="rm-578"></a>
+
+**RM-578 — Mitgelieferte Bausteine bekommen alle Normgrößen.** Entscheidung Robert, 08.10.2026:
+„wenn wir mehr liefern können, wollen wir das“. Bis dahin begrenzte `range_check.MAX_CORNERS`
+(512) jede Größenreihe: Wandhalter M2–M27, Rohrschelle M3–M6, Klemmschale M3–M33, die Halter mit
+fester Schraube M4.
+
+**Umsetzung** (Zweig `paket/b-bausteine`, Commit siehe Paketbericht): Zwei Grenzen nach Herkunft
+(`range_check.corner_limit`): eigene Bausteine des Kunden 512, die mitgelieferte Bibliothek 4096
+(`LIBRARY_MAX_CORNERS`). Begründung aus der Rechenzeit, gemessen mit sechs Prozessen: Bausteine
+ohne Gewinde 0,02–0,3 s je Ecke, 4096 Ecken also höchstens rund zwanzig Minuten, so lange wie das
+druckbare Gewinde heute; Gewindebausteine (4–8 s je Ecke) bleiben durch ihre Kosten darunter. Der
+Rezeptdialog nennt vor der ersten Ecke Kombinationen und geschätzte Dauer (aus der Zeit der Probe
+mal der Eckenzahl). Größenreihen: Wandhalter M2–M64 (832 Ecken), Rohrschelle M3–M64 mit Mutter
+und Scheibe (3072, Schellenbreite bis 120 mm, damit auch die Scheibe von M64 aufliegt), Klemmschale
+M3–M64 (768, Klemmtiefe bis 120 mm an Schale, Einlage und Klemmenpaar), Halter mit wählbarer
+Laschenschraube M2–M64 (U und Ablage 1920, rund und Gabel 960). Wo eine große Schraube an einem
+kleinen Teil keinen Platz hat, lehnt der Bau mit Vorschlag ab (`_clamp_reason`, `_shell_reason`).
+Der Stangenverbinder bleibt bei M5: Die Schraube schneidet ihr Gewinde in eine Wand von 1,2 bis 8
+mm. Kein bestehendes Maß geändert, `LIBRARY_VERSION` bleibt. Die Halter bleiben vier Bausteine,
+weil der Kunde sie am Vorschaubild erkennt.
+
+**Nachweis:** `test_the_library_checks_up_to_4096_corners_and_an_own_part_512`,
+`test_every_offered_screw_size_is_buildable_up_to_m64` (jede angebotene Größe baut an einer Ecke,
+M64 wasserdicht), `test_a_holder_takes_every_screw_of_the_wall_mount_and_its_tabs_grow`,
+`test_the_range_check_names_its_size_and_duration_before_the_first_corner`; Bibliothek 16 814
+Ecken. Voller Bereichsnachweis aller 50 Bausteine mit `--jobs 6`: 35 Minuten (23:27–00:03),
+alle bestanden. Handbuch „Die Bausteine“ und „Eigene Bausteine“ in sechs Sprachen; die
+Website-Zusage „zur gewählten Normgröße“ stimmt unverändert. Changelog: ja — Wandhalter,
+Rohrschelle, Profilklemmen und die Laschen der Halter nehmen jede Schraubengröße bis M64; ein
+eigener Baustein nennt vor dem Prüfen, wie lange es dauert.
+
+## RM-574: Ein eigener Baustein entsteht als eigener Körper, mit Namensschutz gegen Operationen (09.10.2026)
+
+<a id="rm-574-ein-eigener-baustein-entsteht-als-eigener-körper-mit-namensschutz-gegen-operationen-09102026"></a>
+<a id="rm-574"></a>
+
+**RM-574 — Eigene Bausteine als eigener Körper einsetzen.** Review zu RM-565, Entscheidung
+Robert („wenn wir mehr liefern können, wollen wir das“): Ein gespeichertes Rezept ließ sich nur
+einsetzen; in einem leeren Projekt gar nicht, mit einem einzigen Körper hing es an diesem.
+
+**Umsetzung** (Zweig `paket/b-bausteine`, Commit siehe Paketbericht): `recipe.register` gibt jedem
+Rezept `standalone` und damit über `ops.register_one` einen Erzeuger `create_<name>`; der Katalog
+setzt es wie jeden eigenständigen Baustein ohne passende Stelle als eigenen Körper auf eine freie
+Stelle. Binden, Ersetzen, Entfernen, Wiederherstellen, Beilagen und `part_file` nehmen beide
+Operationsnamen (`ops.operation_names`); die Standwahl eines mitgereisten Rezepts trifft auch den
+Erzeugerschritt (`history._part_state_target`, nie einen Grundkörper). **Namensschutz:** Gehört
+`create_<name>` einer anderen Operation (`create_box`), bleibt ein vorhandenes Rezept beim
+Einsetzen, und ein neues wird beim Speichern abgewiesen (`recipe.reserved_name`, Dialog sperrt
+*Baustein anlegen* mit Grund). Dabei gefunden und behoben: Ein Rezept „box“ mit dem Quader
+`create_box` in seinem Stapel galt sonst als Zirkel auf sich selbst (`_recipe_creator`). Ein
+exaktes Rezeptergebnis bleibt beim Erzeugen exakt. Regel 13 unverändert: Das Rezept bleibt eine
+Liste registrierter Operationen mit Werten und reist mit dem Projekt, auch als Erzeugerschritt.
+Bereichstest beim Anlegen unverändert (512 Ecken, Dauer vorher).
+
+**Nachweis:** `tests/test_recipes.py::test_an_own_part_arises_as_its_own_body_with_or_without_a_body_there`
+(leeres Projekt, neben einem Quader, der unverändert bleibt; Projekt speichern, lokales Rezept
+entfernen, öffnen und rechnen), `test_an_own_part_named_like_an_operation_keeps_inserting_and_a_new_one_is_refused`
+(vor der Korrektur rot mit dem Zirkel), `test_replacing_and_removing_an_own_part_takes_its_creator_along`,
+`test_choosing_a_travelled_state_maps_a_recipe_creator_but_never_a_primitive`; Fenstertest
+`tests/test_catalog_ui.py::test_an_own_part_arises_as_its_own_body_from_the_catalogue` (leere
+Szene, dann neben einem gewählten Körper auf freier Stelle). Gegenprobe ohne Erzeuger: alle rot.
+Handbuch „Eigene Bausteine“ in sechs Sprachen. Changelog: ja — Ein eigener Baustein entsteht auch
+im leeren Projekt als eigenes Teil.

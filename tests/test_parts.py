@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import dataclasses
 import itertools
+import json
 from pathlib import Path
 from typing import Any
 from unittest import mock
@@ -95,9 +96,12 @@ def corners(spec: PartSpec) -> list[dict[str, Any]]:
     :func:`app.core.knowledge.parts.range_check.corners` — dort läuft sie
     beim Kunden, wenn er ein Rezept anlegt (§24.5), hier läuft sie in der
     Suite. Eine Regel, ein Ort; die Kopie, die hier stand, wäre beim
-    nächsten Nachbessern auseinandergelaufen.
+    nächsten Nachbessern auseinandergelaufen. Die Grenze kommt aus der Herkunft
+    (``corner_limit``, RM-578).
     """
-    return core_corners(spec.params)
+    from app.core.knowledge.parts.range_check import corner_limit
+
+    return core_corners(spec.params, corner_limit(spec.source))
 
 
 def required_defaults(spec: PartSpec) -> dict[str, Any]:
@@ -148,6 +152,7 @@ def test_registered_range_check_uses_every_declared_requirement(profile: Profile
         wall=spec.wall,
         features=spec.feature_requirements,
         feasible=spec.feasible,
+        limit=range_check.LIBRARY_MAX_CORNERS,
     )
 
 
@@ -246,10 +251,14 @@ def test_the_library_has_the_first_set_from_the_plan() -> None:
     ``rod_connector`` (Steckhülse und Zwei- bis Vierwegeverbinder),
     ``hose_barb`` und ``channel_joint`` (Schlauchtülle und Kanalnaht) und
     ``room_floor``, ``room_wall`` und ``room_pane`` (Raum- und Plattenvorlage).
+
+    ``threaded_rod`` kam am 08.10.2026 dazu (Robert zu RM-562: „Beim Baustein
+    Schraube und Bolzen sind schon Unterschiede“): Gewindestange oder
+    Stiftschraube als eigenes Teil, aus demselben Gewindekern wie das Gewinde.
     """
     building = [spec for spec in PARTS.all() if spec.group != "calibration"]
 
-    assert len(building) == 46
+    assert len(building) == 47
     assert len([spec for spec in PARTS.all() if spec.group == "calibration"]) == 3
 
 
@@ -309,7 +318,7 @@ def test_range_corners_are_the_complete_cartesian_boundary() -> None:
     assert len({tuple(entry.items()) for entry in plan}) == len(plan)
 
 
-def test_the_library_really_has_8382_cartesian_boundaries() -> None:
+def test_the_library_really_has_16814_cartesian_boundaries() -> None:
     """Vollständige Grenzen einschließlich der 120 Organizer-Kombinationen.
 
     Die 312 seit dem 16.09.2026 sind die Klemmschale (32), ihre Einlage (256),
@@ -334,9 +343,86 @@ def test_the_library_really_has_8382_cartesian_boundaries() -> None:
     eigenes Maß, Wandhalter und Klemmschale nehmen je sechzehn Größen; zugleich zählt ein
     Feld ohne Wirkung keine Ecken mehr (Gewinde 768 → 216, Schraubenloch 1536 →
     400, auch Lagersitz, Kanalnaht, die Halter, Raumboden und Dichtung).
+    Seit dem 08.10.2026 kommen 496 dazu: der Gewindebolzen, 27 Größen mal
+    Länge, Gewindelänge, Fase und Spiel an je zwei Grenzen, dazu das eigene
+    Maß mit Durchmesser und Steigung. Mit RM-578 (Grenze der Bibliothek 4096)
+    7936 mehr: Wandhalter bis M64 (512 → 832), Rohrschelle bis M64 (512 →
+    3072), Klemmschale bis M64 (512 → 768), die Halter mit wählbarer Schraube
+    (U und Ablage 320 → 1920, rund und Gabel 160 → 960).
     """
 
-    assert sum(len(corners(spec)) for spec in PARTS.all()) == 8382
+    assert sum(len(corners(spec)) for spec in PARTS.all()) == 16814
+
+
+def test_the_library_checks_up_to_4096_corners_and_an_own_part_512() -> None:
+    """RM-578: Die 512er-Grenze gilt nur noch für eigene Bausteine des Kunden.
+
+    Die mitgelieferte Bibliothek wird einmal bei uns nachgewiesen; ihre Grenze
+    richtet sich nach der Rechenzeit des Nachweises. Ein Bereich mit 1024 Ecken
+    ist für ein Rezept zu groß und für die Bibliothek nicht — voll geprüft in
+    beiden Fällen, ohne Stichprobe.
+    """
+    from app.core.errors import ValidationError
+    from app.core.knowledge.parts.range_check import (
+        LIBRARY_MAX_CORNERS,
+        MAX_CORNERS,
+        corner_limit,
+    )
+
+    assert (MAX_CORNERS, LIBRARY_MAX_CORNERS) == (512, 4096)
+    assert corner_limit("shipped") == LIBRARY_MAX_CORNERS
+    assert {corner_limit(source) for source in ("recipe", "imported", "user")} == {MAX_CORNERS}
+
+    @op_params
+    class Wide(BaseParams):
+        a: float = param(title="a", default=1.0, minimum=1.0, maximum=2.0)
+        b: float = param(title="b", default=1.0, minimum=1.0, maximum=2.0)
+        c: float = param(title="c", default=1.0, minimum=1.0, maximum=2.0)
+        d: float = param(title="d", default=1.0, minimum=1.0, maximum=2.0)
+        e: float = param(title="e", default=1.0, minimum=1.0, maximum=2.0)
+        f: float = param(title="f", default=1.0, minimum=1.0, maximum=2.0)
+        g: float = param(title="g", default=1.0, minimum=1.0, maximum=2.0)
+        h: float = param(title="h", default=1.0, minimum=1.0, maximum=2.0)
+        i: float = param(title="i", default=1.0, minimum=1.0, maximum=2.0)
+        j: float = param(title="j", default=1.0, minimum=1.0, maximum=2.0)
+
+    with pytest.raises(ValidationError):
+        core_corners(Wide)
+    assert len(core_corners(Wide, LIBRARY_MAX_CORNERS)) == 1024
+
+
+def test_every_offered_screw_size_is_buildable_up_to_m64() -> None:
+    """RM-578: Wandhalter, Rohrschelle, Klemmschale und Halter nehmen die Tabelle bis M64.
+
+    Bis dahin endeten sie bei M27, M6 und M33, weil 512 Ecken nicht mehr Größen
+    trugen. Angeboten wird nur, was an einer Ecke des Bereichs baut: Schellenbreite
+    und Klemmtiefe reichen für die Scheibe und Mutter der größten Größe, sonst
+    stünde der Vorschlag „größer wählen“ ins Leere.
+    """
+    from app.core.knowledge.parts.mounting import _CLAMP_SCREWS, WALL_SCREWS
+    from app.core.knowledge.parts.profile_clamps import CLAMP_DEPTH_LIMIT, SCREW_SIZES
+    from app.core.sketch import shapes as sketch_shapes
+    from app.core.sketch.serialize import sketch_to_text
+
+    assert WALL_SCREWS[0] == "M2" and WALL_SCREWS[-1] == "M64"
+    assert _CLAMP_SCREWS[0] == "M3" and _CLAMP_SCREWS[-1] == "M64"
+    assert SCREW_SIZES[0] == "M3" and SCREW_SIZES[-1] == "M64"
+    pipe = PARTS.get("pipe_clamp")
+    widest = next(entry.maximum for entry in pipe.params.spec() if entry.name == "width")
+    for size in _CLAMP_SCREWS:
+        assert pipe.feasible(pipe.params(screw_size=size, width=widest, play=0.2)) is None, size
+    shell = PARTS.get("profile_clamp_shell")
+    seat = sketch_to_text(sketch_shapes.circle(20.0))
+    for size in SCREW_SIZES:
+        values = shell.params(seat_sketch=seat, screw_size=size, depth=CLAMP_DEPTH_LIMIT, play=0.2)
+        assert shell.feasible(values) is None, size
+    for name, values in (
+        ("wall_mount", {"size": "M64"}),
+        ("pipe_clamp", {"screw_size": "M64", "width": widest, "play": 0.2}),
+    ):
+        spec = PARTS.get(name)
+        built = as_mesh_data(spec.fn(spec.params(**values)).mesh)
+        assert built.is_watertight and built.component_count == 1, name
 
 
 def test_a_field_without_effect_does_not_multiply_the_corners() -> None:
@@ -7618,6 +7704,282 @@ def test_a_template_without_a_creator_is_refused() -> None:
             raise AssertionError
 
 
+#: Was ein Kunde für sich druckt (RM-562, Kunden-E-Mail 07.10.2026): Kabelclip,
+#: Eckwinkel, Rippe, Standfuß, Wandhalter und die Teile, die wie sie ohne Träger
+#: ihre Aufgabe erfüllen. Die Quelle ist ``standalone`` am Baustein; diese Liste
+#: hält nur fest, dass die genannten dabei sind.
+ON_THEIR_OWN = (
+    "barrel_hinge",
+    "cable_clip",
+    "dowel",
+    "foot",
+    "gusset",
+    "living_hinge",
+    "printed_nut",
+    "printed_screw",
+    "rib",
+    "threaded_rod",
+    "wall_mount",
+)
+
+
+def test_the_parts_customers_print_on_their_own_stand_alone() -> None:
+    """RM-562: Diese Bausteine ließen sich nur an einen gewählten Körper anfügen."""
+    assert [name for name in ON_THEIR_OWN if not PARTS.get(name).standalone] == []
+
+
+@pytest.mark.parametrize(
+    "name", [spec.name for spec in PARTS.all() if spec.standalone], ids=lambda name: name
+)
+def test_every_standalone_part_makes_a_watertight_body_without_a_selection(
+    name: str, profile: Profile
+) -> None:
+    """Ein eigenständiger Baustein braucht keinen Körper: leeres Projekt, ein Schritt, ein Teil.
+
+    Mit den Vorgaben seines Erzeugers, so wie der Katalog ihn ohne Auswahl
+    anlegt — wasserdicht, mit den erklärten Teilen und ohne Fehler. Wo der
+    Kunde eine Kontur zeichnen muss, steht hier ein Kreis.
+    """
+    from app.core.sketch import shapes as sketch_shapes
+    from app.core.sketch.serialize import sketch_to_text
+
+    spec = PARTS.get(name)
+    creator = REGISTRY.get(part_ops.creation_name(name))
+    assert (creator.consumes, creator.produces) == (0, 1)
+    drawn = {
+        entry.name: sketch_to_text(sketch_shapes.circle(20.0))
+        for entry in creator.params.spec()
+        if entry.kind == "sketch" and entry.required
+    }
+    project = new_project("centauri-carbon-2", "petg")
+    History(project.document).apply(spec.name, [OperationDraft(op=creator.name, params=drawn)])
+    result = evaluate(project.document, profile, sources=ProjectSources(project))
+    assert result.complete
+    assert len(result.scene.objects) == 1
+    body = as_mesh_data(next(iter(result.scene.objects.values())).mesh)
+    assert body.is_watertight
+    assert body.component_count == spec.bodies
+    assert float(body.raw.bounds[0][2]) == pytest.approx(0.0, abs=1e-6), "er steht auf dem Bett"
+
+
+#: Die 22 Erzeuger von vor RM-562 in fünf Lagen, gemessen am Ausgangsstand
+#: ``3d900b428`` (Review B). Ein altes Projekt mit einem dieser Schritte muss
+#: gleich rechnen — Hülle, Volumen und jede Merkmalskennung samt Mitte.
+_CREATORS_BEFORE: dict[str, Any] = json.loads(
+    (Path(__file__).parent / "data" / "creators_before_rm562.json").read_text(encoding="utf-8")
+)
+
+
+def _created(name: str, values: dict[str, Any], profile: Profile) -> Any:
+    """Der Körper des Erzeugers in einer Lage, Zeichnungen als Kreis."""
+    from app.core.sketch import shapes as sketch_shapes
+    from app.core.sketch.serialize import sketch_to_text
+
+    creator = REGISTRY.get(f"create_{name}")
+    fields = part_ops.placement_fields(creator.params)
+    params: dict[str, Any] = {
+        entry.name: sketch_to_text(sketch_shapes.circle(20.0))
+        for entry in creator.params.spec()
+        if entry.kind == "sketch" and entry.required
+    }
+    params.update({fields.get(key, key): value for key, value in values.items()})
+    project = new_project("centauri-carbon-2", "petg")
+    History(project.document).apply(name, [OperationDraft(op=creator.name, params=params)])
+    result = evaluate(project.document, profile, sources=ProjectSources(project))
+    assert result.complete
+    (body,) = result.scene.objects.values()
+    return body
+
+
+@pytest.mark.parametrize("name", sorted(_CREATORS_BEFORE["parts"]))
+def test_every_creator_keeps_its_old_placement(name: str, profile: Profile) -> None:
+    """Review G1: Ein alter Erzeugerschritt rechnet nach RM-562 wie vorher.
+
+    Rollte das Netz der frei gesetzten Rohrschelle mit ``keeps_up``, tauschten
+    ihre erkannten Flächen die Kennung — Hülle und Volumen blieben gleich, und
+    ein Schritt an ``face_1`` eines alten Projekts träfe die Gegenseite. Geprüft
+    werden alle 22 Erzeuger von damals in fünf Lagen.
+    """
+    for case, values in _CREATORS_BEFORE["cases"].items():
+        before = _CREATORS_BEFORE["parts"][name][case]
+        body = _created(name, values, profile)
+        mesh = as_mesh_data(body.mesh)
+        low, high = mesh.raw.bounds
+        assert [float(v) for v in low] == pytest.approx(before["lo"], abs=2e-3), case
+        assert [float(v) for v in high] == pytest.approx(before["hi"], abs=2e-3), case
+        assert float(mesh.volume) == pytest.approx(before["volume"], rel=1e-5), case
+        centres = {
+            key: [float(v) for v in (feature.params.get("centre") or ())]
+            for key, feature in body.features.items()
+        }
+        assert sorted(centres) == sorted(before["centres"]), case
+        for key, centre in centres.items():
+            assert centre == pytest.approx(before["centres"][key], abs=2e-3), (case, key)
+
+
+@pytest.mark.parametrize(
+    "name", [spec.name for spec in PARTS.all() if spec.standalone], ids=lambda name: name
+)
+def test_every_creator_keeps_its_declared_features_on_its_body(name: str, profile: Profile) -> None:
+    """In jeder der fünf Lagen liegen die erklärten Merkmale am Körper, nicht daneben.
+
+    Netz und Merkmale werden getrennt gesetzt (``_place`` und ``_placed_features``);
+    rollte nur eines von beiden, stünde ein Merkmal neben dem Teil. Die
+    Rohrschelle trifft das nur nicht, weil sie unter der halben Drehung
+    symmetrisch ist — ein neuer eigenständiger Baustein mit ``keeps_up`` fiele
+    hier auf.
+    """
+    for case, values in _CREATORS_BEFORE["cases"].items():
+        body = _created(name, values, profile)
+        low, high = as_mesh_data(body.mesh).raw.bounds
+        for key, feature in body.features.items():
+            centre = feature.params.get("centre")
+            if not key.startswith(f"{name}_") or centre is None:
+                continue
+            for axis in range(3):
+                assert low[axis] - 1e-3 <= float(centre[axis]) <= high[axis] + 1e-3, (case, key)
+
+
+@pytest.mark.parametrize("name", ["printed_screw", "printed_nut", "rib"])
+def test_the_bed_rule_holds_upright_and_turns_with_a_chosen_axis(
+    name: str, profile: Profile
+) -> None:
+    """Review G3: Die Unterseite liegt auf der Ebene des Ursprungs — das Bett nur aufrecht.
+
+    Ohne Richtung und mit Achse Z steht der Körper auf z = 0, die Schraube mit
+    dem Kopf unten. Mit Achse X dreht die Ebene mit: Die Unterseite des
+    Bausteins liegt dann auf x = 0, und unter dem Bett kann etwas hängen, wie
+    bei jedem Erzeuger vor RM-562. Genau das sagt die Regel in ``bausteine.md``.
+    """
+    upright = as_mesh_data(_created(name, {}, profile).mesh)
+    assert float(upright.raw.bounds[0][2]) == pytest.approx(0.0, abs=1e-6)
+    lying = as_mesh_data(_created(name, {"axis": "x"}, profile).mesh)
+    low, high = lying.raw.bounds
+    assert min(abs(float(low[0])), abs(float(high[0]))) == pytest.approx(0.0, abs=1e-6), (
+        "die Unterseite liegt auf der gedrehten Ebene x = 0"
+    )
+    assert float(low[2]) < -1e-3, "das Bett gilt nur aufrecht"
+
+
+def test_a_creator_offers_no_place_list_but_an_old_step_with_one_still_loads() -> None:
+    """Review B: „An mehreren Merkmalen“ stand am Erzeuger und wirkte nicht.
+
+    Ein Erzeuger setzt an kein Merkmal; die Auswahl belegte das Feld trotzdem
+    vor. Jetzt ist es ein interner Marker — nicht im Dialog, nicht beim Agenten
+    —, und ein gespeicherter Schritt, der eine Liste trägt, lädt weiter.
+    """
+    from app.core.agent.tools import tool_schemas
+    from app.core.registry import validate
+
+    creator = REGISTRY.get("create_pipe_clamp")
+    entry = next(item for item in creator.params.spec() if item.name == "at_features")
+    assert entry.internal
+    assert (
+        next(
+            item
+            for item in REGISTRY.get("insert_pipe_clamp").params.spec()
+            if item.name == "at_features"
+        ).internal
+        is False
+    )
+    validate(creator.params, {"at_features": ("face_1",)})
+    schema = next(tool for tool in tool_schemas() if tool["name"] == "create_pipe_clamp")
+    assert "at_features" not in str(schema)
+
+
+@pytest.mark.parametrize("name", ["foot", "dowel"])
+def test_a_standalone_creator_offers_only_the_form_that_is_a_body(name: str) -> None:
+    """Ein Fuß als Tasche, ein Stift als Bohrung trägt ab — ohne Träger gibt es nichts abzutragen.
+
+    Der Erzeuger lässt die Wahl deshalb weg, statt sie anzubieten und danach
+    abzuweisen; das Einsetzen an einer Fläche behält sie.
+    """
+    created = {entry.name for entry in REGISTRY.get(f"create_{name}").params.spec()}
+    inserted = {entry.name for entry in REGISTRY.get(f"insert_{name}").params.spec()}
+    assert "kind" in inserted
+    assert "kind" not in created
+    assert not part_ops.cuts(PARTS.get(name), PARTS.get(name).params())
+
+
+def test_a_part_that_only_cuts_cannot_stand_alone() -> None:
+    """Eine Bohrung als eigenes Objekt wäre ein Zylinder, der nichts bohrt."""
+    from app.core.errors import InternalError
+
+    @op_params
+    class Params(BaseParams):
+        size: float = param(title="x", default=1.0)
+
+    @op_params
+    class Choice(BaseParams):
+        kind: str = param(
+            title="x", default="hole", choices=("hole", "pin"), subtractive_on=("hole",)
+        )
+
+    @op_params
+    class Hanging(BaseParams):
+        kind: str = param(
+            title="x", default="pin", choices=("pin", "hole"), subtractive_on=("hole",)
+        )
+        chamfer: float = param(title="x", default=0.5, depends_on=("kind", ("pin",)))
+
+    @op_params
+    class Fine(BaseParams):
+        kind: str = param(
+            title="x", default="pin", choices=("pin", "hole"), subtractive_on=("hole",)
+        )
+        chamfer: float = param(title="x", default=0.5)
+
+    # Review G4: Der Erzeuger lässt ``kind`` weg; ein Feld, das an ihm hängt,
+    # stünde dort ohne seine Bedingung.
+    for params, subtractive in ((Params, True), (Choice, False), (Hanging, False)):
+        with pytest.raises(InternalError):
+
+            @register_part(
+                name="pit",
+                title="x",
+                group="mounting",
+                params=params,
+                features=["pit"],
+                standalone=True,
+                subtractive=subtractive,
+                registry=PartRegistry(),
+            )
+            def pit(raw: BaseParams) -> PartResult:  # pragma: no cover - läuft nie
+                raise AssertionError
+
+    @register_part(
+        name="pit",
+        title="x",
+        group="mounting",
+        params=Fine,
+        features=["pit"],
+        standalone=True,
+        registry=PartRegistry(),
+    )
+    def fine(raw: BaseParams) -> PartResult:  # pragma: no cover - läuft nie
+        raise AssertionError
+
+
+def test_the_catalogue_attaches_at_a_chosen_place_and_creates_without_one() -> None:
+    """RM-562: Ohne gewählte Fläche entsteht ein eigenständiger Baustein als eigener Körper.
+
+    Mit einer gewählten Stelle setzt er sich dort an, wie bisher — auch an
+    mehreren zugleich (Review M2) und an einer gerundeten Seite (M3). Was nur an
+    einem Träger wirkt, bleibt beim Einsetzen; ein Prüfkörper bleibt frei.
+    """
+    choose = part_ops.catalog_operation
+    assert choose("rib", at=()) == "create_rib"
+    assert choose("rib", at=("face",)) == "insert_rib"
+    assert choose("rib", at=("face", "face", "face", "face")) == "insert_rib", "vier Flächen"
+    assert choose("rib", at=("curved_face",)) == "insert_rib", "die gerundete Seite trägt ihn"
+    assert choose("rib", at=("face", "edge")) == "create_rib", "nur wenn jede Stelle passt"
+    assert choose("rib", at=("edge",)) == "create_rib"
+    assert choose("printed_screw", at=("hole",)) == "insert_printed_screw"
+    assert choose("printed_screw", at=("face",)) == "create_printed_screw", "an einer Fläche frei"
+    assert choose("screw_hole", at=()) == "insert_screw_hole"
+    assert choose("fit_ladder", at=("face",)) == "create_fit_ladder"
+
+
 def test_a_u_holder_arises_in_one_step_and_the_parameter_bar_turns_its_inner_width(
     profile: Profile,
 ) -> None:
@@ -7807,6 +8169,36 @@ def test_the_holder_plate_holds_the_whole_countersink_and_the_keyhole() -> None:
     assert holders._thickness("keyhole", 3.0) == pytest.approx(3.0 + holders.KEYHOLE.depth)
     assert holders._thickness("pegboard", 3.0) == pytest.approx(3.0)
     assert holders._thickness("clamp", 3.0) == pytest.approx(3.0)
+
+
+@pytest.mark.parametrize("size", ["M2", "M12", "M64"])
+def test_a_holder_takes_every_screw_of_the_wall_mount_and_its_tabs_grow(size: str) -> None:
+    """RM-578: Die Schraube der Laschen ist wählbar wie beim Wandhalter, bis M64.
+
+    Bis dahin stand sie fest auf M4, weil 512 Ecken je Halter für eine Wahl nicht
+    reichten. Die Laschen wachsen mit der Senkung, die Bohrung hat das
+    Durchgangsloch der Tabelle.
+    """
+    from app.core.knowledge.parts import holders
+    from app.core.knowledge.parts.mounting import WALL_SCREWS
+
+    assert size in WALL_SCREWS
+    wall = 3.0
+    produced = _holder(
+        "holder_u",
+        mount="screws",
+        screw_size=size,
+        width=40.0,
+        depth=30.0,
+        height=40.0,
+        wall=wall,
+        floor=True,
+    )
+    screw = standards.screw(size)
+    tab = screw.countersink + 2.0 * wall
+    assert produced.mesh.bounds.size[0] == pytest.approx(40.2 + 2.0 * wall + 2.0 * tab)
+    assert produced.features["bore_1"].params["diameter"] == pytest.approx(screw.clearance)
+    assert holders._thickness("screws", wall, size) > wall
 
 
 def test_the_screw_holes_sit_in_tabs_beside_the_holder_with_the_countersink_in_front() -> None:

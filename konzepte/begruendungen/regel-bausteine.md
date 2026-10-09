@@ -48,6 +48,32 @@ Warum der Deckel bis über die Ebene der Fläche angehoben wird:
 Seitdem gilt: „`profile_clamp_ops` gibt `build_shell` die Bundhöhe als
 `lift`, die Schale selbst kennt das Maß nicht mehr."
 
+## Was für sich ein Teil ist, steht frei
+
+> Kunden-E-Mail vom 07.10.2026 (RM-562): Kabelclip, Eckwinkel, Rippe,
+> Standfuß und Wandhalter ließen sich nur an einen gewählten Körper anfügen.
+> Nach *Quader anlegen* ist der Quader gewählt; der Katalog setzte die Rippe
+> deshalb an ihn statt neben ihn.
+
+Darum zählt nur eine gewählte Stelle, an die der Baustein gehört, und eine
+gerundete Seite trägt einen Flächenbaustein, wie das Handbuch es verspricht.
+Am Träger beginnt eine Schraube an der Mündung, der Schaft darunter; ohne
+Träger hing er unter dem Druckbett, und die lösbare Mutter schwebte um ihr
+Spiel darüber. Im Ursprung lag ein neuer Körper ganz im ersten Grundkörper
+(Review B, M1), deshalb die freie Stelle wie beim Laden. Ausgelassen wurden
+Rastnase, Schnappverbindung, Schnappverbinder, Scharnierauge, Lasche, Nutfeder
+und Lochwand-Einhänger (sie wirken nur am Träger) und das druckbare Gewinde,
+das in einer Bohrung oder auf einer Fläche sitzt. Der freie Bolzen ist ein
+eigenes Teil (Robert, 08.10.2026: „Beim Baustein Schraube und Bolzen sind
+schon Unterschiede“): der *Gewindebolzen* aus demselben Gewindekern, mit
+Gesamtlänge, Gewinden an den Enden und Fase. Die Fase schneidet nicht durch die
+Gänge; ein Kegel quer durch die Wendel tessellierte am exakten Kern undicht.
+
+Das Netz eines frei gesetzten Erzeugers rollt nicht mit ``keeps_up``, nur seine
+Merkmale. So rechnete er schon immer; rollte das Netz, tauschten die erkannten
+Flächen der symmetrischen Rohrschelle in alten Projekten die Kennung (Review B,
+G1, Entscheidung des Koordinators).
+
 ## Was vereinigt wird, kann nur weiter werden
 
 > Die Haltelippe der Magnettasche stand als eigener Kegel neben dem

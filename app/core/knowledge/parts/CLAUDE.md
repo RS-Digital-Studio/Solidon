@@ -146,8 +146,14 @@ Ein Baustein sagt nur, **was** er ist; den Kern wählt der Aufrufer
 
 ### Rezepte und Dateien
 
-- **Rezept** (Regel 13, `bausteine.md`): `recipe.draft` ist der Gegenweg zu
-  `capture`, `Session.open_draft` merkt sich die Herkunft. Ein Ausschnitt trägt
+- **Rezept** (Regel 13, `bausteine.md`): eigenständig mit Erzeuger und Namensschutz
+  (`reserved_name`, `_recipe_creator`, RM-574). `recipe.draft` ist der Gegenweg zu
+  `capture`, `Session.open_draft` merkt sich die Herkunft. `steps_of` schneidet
+  den Ausschnitt eines gewählten Körpers aus dem Stapel, rückwärts über die
+  Kanten aus `revision.step_needs`; Berichte, durchgereichte Körper und
+  ausgeschaltete Schritte zählen nicht, Ganzszenen-Schritte verengt
+  `_narrowed`, und `slice_bodies` nennt die
+  Körper eines Ausschnitts ohne Rechnung. Ein Ausschnitt trägt
   keine Auftragseinstellungen; Abhängigkeiten sammelt der Container transitiv,
   Namenskonflikte bekommen freie Namen, vorhandene Fassungen bleiben.
 - **Format v2**: flache `dependencies` (v1 migriert, Quelldaten bleiben);
@@ -172,7 +178,8 @@ Ein Baustein sagt nur, **was** er ist; den Kern wählt der Aufrufer
 ### Bereichstest und Versionen
 
 - **Der Bereichstest zählt das kartesische Produkt vor jedem Bau**
-  (`range_check.corner_count`, über `MAX_CORNERS` eine Absage mit Anzahl);
+  (`range_check.corner_count`, über `corner_limit` — 512 für eigene, 4096 für
+  mitgelieferte Bausteine — eine Absage mit Anzahl);
   Stichproben ersetzen den Vertrag nicht, `recipe.capture` begrenzt die Felder
   (`shared.MAX_EXPOSED`), der Dialog zeigt die Prüfmenge. Jede Phase einer Ecke
   gehört in ihren Bericht; nur eine erklärte Ablehnung beim Bau ist ein
@@ -220,7 +227,12 @@ Ein Baustein sagt nur, **was** er ist; den Kern wählt der Aufrufer
   deklariert es über `ParamSpec.subtractive_on` (`cuts`, `cuts_by_parameter`).
 - **`standalone`** erzeugt zusätzlich `create_<name>` ohne Eingang
   (`creation_name()`), `insert_<name>` bleibt lesbar; Erzeuger übernehmen die
-  freie Normale und sinken ohne Träger nicht ein. **`template`** (nur mit
+  freie Normale und sinken ohne Träger nicht ein. Der Katalog nimmt den
+  Erzeuger, solange keine Stelle gewählt ist, an die er gehört
+  (`catalog_operation` über `fitting_places`, eine gerundete Seite zählt als
+  Fläche), und legt ihn auf eine freie Stelle (`free_spot_for`); `build_params(standalone=True)` lässt die abtragende
+  Wahl weg, `_on_its_own_bed` stellt den Körper auf die Ebene seines
+  Ursprungs (Mündungsbausteine kopfüber). **`template`** (nur mit
   `standalone`) lässt den Erzeuger *Maße als Parameter anlegen* anbieten wie
   einen Grundkörper (`offers_naming`, Regel in `grenzen.md`) und baut ihn wie einen
   Grundkörper exakt, wo der Kern da ist (`ops._creates_exactly`). Die Toleranzleiter erklärt

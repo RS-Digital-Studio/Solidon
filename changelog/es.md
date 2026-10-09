@@ -70,6 +70,14 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Con *Ajustado al taladro*, *Pasador para taladro* construye la contrapieza: una cabeza avellanada enrasada para un avellanado, una rosca exterior del mismo tamaño y paso para una interior.
 - En una rosca interior impresa, la selección ofrece directamente *Pasador para taladro*.
 - Si en un taladro hay una pieza separada, como un pasador, las acciones del taladro lo dicen y ofrecen *Dividir en piezas sueltas*. Antes, el pasador se fundía en silencio con la placa.
+- Nuevo: el *Perno roscado*, una varilla roscada o espárrago sin cabeza, con chaflán en ambos extremos y la misma rosca imprimible que el tornillo y la tuerca.
+
+### Bloques
+
+- Los bloques que son una pieza por sí solos, como clips para cable, nervaduras o tuercas, se crean sin selección como cuerpo propio en un sitio libre de la placa, también en un proyecto vacío.
+- Sus propios bloques también se crean así como cuerpo propio y no se unen a un cuerpo que ya está en el proyecto.
+- Con *Guardar la selección como bloque* se guarda el cuerpo seleccionado con exactamente los pasos que lo construyen. Si viniera un segundo cuerpo, el diálogo lo indica antes.
+- Soportes de pared, abrazaderas de tubo y de perfil y soportes admiten cualquier tornillo de M3 a M64. Si un tamaño no encaja con las demás medidas, el bloque indica qué cambiar.
 
 ### Editar y dibujar
 

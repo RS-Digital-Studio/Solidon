@@ -408,6 +408,44 @@ def test_printed_nut_exact_carries_the_internal_thread_through() -> None:
     _roundtrip(body)
 
 
+@pytest.mark.parametrize("thread_length", [0.0, 6.0])
+def test_threaded_rod_exact_is_the_thread_core_with_a_chamfer(thread_length: float) -> None:
+    """Der Gewindebolzen ist derselbe Gewindekern wie *Druckbares Gewinde*, mit Fase.
+
+    Durchgehend liegt sein Volumen zwischen dem Gewinde über die ganze Länge und
+    dem über die Länge ohne die beiden Fasen; mit Gewinden an den Enden kommt
+    der glatte Schaft dazu. Am Netz dasselbe auf zwei Prozent.
+    """
+    exact_kernel()
+    screw, play, length = standards.screw("M6"), 0.2, 20.0
+    produced = _built(
+        "threaded_rod", True, size="M6", length=length, thread_length=thread_length, play=play
+    )
+    body = _sound(produced.mesh)
+    crest = screw.nominal - play
+    chamfer = screw.pitch * shapes.RIDGE_SHARE
+    if thread_length:
+        full = 2.0 * thread_volume(crest, screw.pitch, thread_length, internal=False)
+        full += math.pi * (crest / 2.0) ** 2 * (length - 2.0 * thread_length)
+        least = full - 2.0 * math.pi * (crest / 2.0) ** 2 * chamfer
+        assert set(produced.features) == {"thread_1", "thread_2"}
+    else:
+        full = thread_volume(crest, screw.pitch, length, internal=False)
+        least = thread_volume(crest, screw.pitch, length - 2.0 * chamfer, internal=False)
+        assert set(produced.features) == {"thread_1"}
+    assert least < body.volume < full
+    assert all(feature.id == key for key, feature in produced.features.items()), (
+        "jedes Gewinde trägt seine eigene Kennung"
+    )
+    assert body.bounds.minimum[2] == pytest.approx(0.0, abs=1e-6)
+    assert body.bounds.maximum[2] == pytest.approx(length, abs=1e-6)
+    mesh = _built(
+        "threaded_rod", False, size="M6", length=length, thread_length=thread_length, play=play
+    )
+    assert abs(mesh.mesh.volume / body.volume - 1.0) < 0.02
+    _roundtrip(body)
+
+
 # --- der Weg durch die Operation: ein exakter Träger bleibt exakt --------------------------
 
 

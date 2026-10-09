@@ -1,8 +1,8 @@
 """Bausteine für Schrauben (Bauplan §24.1, Gruppe „Verbindungen").
 
 Hier liegen: das Schraubenloch mit seiner Senkung, die Bohrung für die
-Einpressbuchse, die Mutternfalle von der Seite oder von unten, und ein
-druckbares Gewinde.
+Einpressbuchse, die Mutternfalle von der Seite oder von unten, ein
+druckbares Gewinde und, aus demselben Gewindekern, der Gewindebolzen.
 
 Jedes Maß kommt aus der Normteiltabelle (§24.2) — „Loch für eine
 M4-Einpressbuchse" ist ein Nachschlagen, keine Vermutung. Ein eigenes Maß
@@ -41,7 +41,7 @@ from app.core.knowledge.parts.registry import (
     register_part,
 )
 from app.core.registry import op_params, param, play_param
-from app.core.registry.params import ZERO_AUTOMATIC, ZERO_NONE
+from app.core.registry.params import ZERO_AUTOMATIC, ZERO_NONE, ZERO_THROUGH
 from app.core.types import (
     BaseParams,
     Feature,
@@ -1603,6 +1603,7 @@ class PrintedScrewParams(BaseParams):
 
 @register_part(
     name="printed_screw",
+    standalone=True,
     title=_("Schraube"),
     group="fasteners",
     params=PrintedScrewParams,
@@ -1741,6 +1742,7 @@ class PrintedNutParams(BaseParams):
 
 @register_part(
     name="printed_nut",
+    standalone=True,
     title=_("Gedruckte Mutter"),
     group="fasteners",
     params=PrintedNutParams,
@@ -1797,3 +1799,230 @@ def printed_nut(raw: BaseParams) -> PartResult:
         ),
     )
     return _derived(made, params.size, params.diameter)
+
+
+#: Das kürzeste Gewinde an einem Bolzenende — dieselbe Untergrenze wie die Länge
+#: von *Druckbares Gewinde* (``ThreadParams.length``).
+_SHORTEST_ROD_THREAD: Final = 2.0
+
+THREADED_ROD_ADDED: Final = PartChange(
+    version="1",
+    date="2026-10-08",
+    reason=(
+        "Gewindebolzen als eigenes Teil (Robert, 08.10.2026, zu RM-562): Gewindestange oder "
+        "Stiftschraube ohne Kopf, aus dem Katalog als eigener Körper."
+    ),
+)
+
+
+@op_params
+class ThreadedRodParams(BaseParams):
+    size: str = param(
+        title=_("Größe"),
+        default="M6",
+        choices=(*_SCREWS, CUSTOM_SIZE),
+        doc=_("Nenndurchmesser und Steigung des passenden gedruckten Gewindes."),
+    )
+    diameter: float = _nominal_param(
+        _(
+            "Der Durchmesser über die Gänge, wie die Zahl hinter dem M. Ein Innengewinde "
+            "nimmt einen Bolzen dieses Durchmessers auf."
+        ),
+        placement="advanced",
+    )
+    pitch: float = param(
+        title=_("Steigung"),
+        default=0.0,
+        unit="mm",
+        minimum=0.0,
+        maximum=COARSEST_PITCH,
+        placement="advanced",
+        depends_on=("size", (CUSTOM_SIZE,)),
+        doc=_(
+            "Höhenzuwachs je Umdrehung, null nimmt die Regelsteigung des Durchmessers. Eine "
+            "feinere Steigung schneidet nur mit kleinerem Nenndurchmesser weniger tief in die "
+            "Wand."
+        ),
+        zero_text=ZERO_AUTOMATIC,
+    )
+    length: float = param(
+        title=_("Länge"),
+        default=30.0,
+        unit="mm",
+        minimum=4.0,
+        maximum=200.0,
+        doc=_("Länge des ganzen Bolzens, von Ende zu Ende."),
+    )
+    thread_length: float = param(
+        title=_("Gewindelänge"),
+        default=0.0,
+        unit="mm",
+        minimum=0.0,
+        maximum=90.0,
+        doc=_(
+            "Länge des Gewindes an jedem Ende, mit glattem Schaft dazwischen wie bei einer "
+            "Stiftschraube. Null heißt: durchgehend wie eine Gewindestange."
+        ),
+        zero_text=ZERO_THROUGH,
+    )
+    chamfer: float = param(
+        title=_("Fase"),
+        default=0.0,
+        unit="mm",
+        minimum=0.0,
+        maximum=3.0,
+        placement="advanced",
+        doc=_(
+            "Höhe der Kuppe an beiden Enden, unter 45 Grad bis auf den Kern. Null heißt: so "
+            "hoch, wie ein Gang tief ist."
+        ),
+        zero_text=ZERO_AUTOMATIC,
+    )
+    play: float = play_param()
+
+
+def _rod_chamfer(chosen: float, pitch: float) -> float:
+    """Die Höhe der Kuppe: eingetragen, sonst so hoch, wie ein Gang tief ist."""
+    return chosen or pitch * shapes.RIDGE_SHARE
+
+
+def _rod_problem(params: ThreadedRodParams) -> tuple[str, TranslatableText | str] | None:
+    """Was zwischen den Maßen des Bolzens nicht geht, mit dem Feld, an dem es liegt.
+
+    Dieselben Regeln wie im Bau. Das Feld ist das, dessen Änderung hilft
+    (Review G-a): Eine zu kurze Gewindestange liegt an der Länge, eine zu kurze
+    Stiftschraube an ihrer Gewindelänge, eine automatische Fase an Größe und
+    Spiel, nicht an einem Feld, das auf Null steht.
+    """
+    nominal, pitch = thread_measure(params.size, params.diameter, params.pitch)
+    problem = thread_problem(nominal, pitch, params.play)
+    if problem is not None:
+        detail = problem.detail if problem.detail is not None else str(problem)
+        return problem.field or "pitch", detail
+    chamfer = _rod_chamfer(params.chamfer, pitch)
+    core = nominal - params.play - 2.0 * pitch * shapes.RIDGE_SHARE
+    if chamfer > core / 4.0:
+        if not params.chamfer:
+            return "play", _(
+                "Für die Kuppe dieses Bolzens bleibt zu wenig Kern. Wählen Sie eine größere "
+                "Größe oder weniger Spiel."
+            )
+        return "chamfer", _(
+            "Die Fase von {chamfer} ist für diesen Bolzen zu groß. Wählen Sie eine kleinere Fase.",
+            chamfer=format_length(chamfer),
+        )
+    if params.thread_length and 2.0 * params.thread_length >= params.length:
+        return "thread_length", _(
+            "Zwei Gewinde von je {thread} passen nicht in einen Bolzen von {length}. Kürzen "
+            "Sie die Gewinde oder verlängern Sie den Bolzen.",
+            thread=format_length(params.thread_length),
+            length=format_length(params.length),
+        )
+    if params.thread_length:
+        if params.thread_length - chamfer < _SHORTEST_ROD_THREAD:
+            return "thread_length", _(
+                "Neben der Fase bleibt weniger als {shortest} Gewinde. Wählen Sie eine längere "
+                "Gewindelänge oder null für ein durchgehendes Gewinde.",
+                shortest=format_length(_SHORTEST_ROD_THREAD),
+            )
+    elif params.length - 2.0 * chamfer < _SHORTEST_ROD_THREAD:
+        # Durchgehend ist es **ein** Gewinde zwischen zwei Kuppen, wie der Bau es
+        # legt; je halbe Länge gezählt baute die Mindestlänge nie (Review G-a).
+        return "length", _(
+            "Zwischen den Fasen bleibt weniger als {shortest} Gewinde. Wählen Sie einen "
+            "längeren Bolzen oder eine kleinere Fase.",
+            shortest=format_length(_SHORTEST_ROD_THREAD),
+        )
+    return None
+
+
+def _rod_reason(raw: BaseParams) -> TranslatableText | str | None:
+    """Die erklärte Bedingung des Bolzens (``feasible``) — der Satz aus :func:`_rod_problem`."""
+    found = _rod_problem(cast(ThreadedRodParams, raw))
+    return found[1] if found is not None else None
+
+
+@register_part(
+    name="threaded_rod",
+    standalone=True,
+    title=_("Gewindebolzen"),
+    group="fasteners",
+    params=ThreadedRodParams,
+    at_face=False,
+    features=["thread"],
+    wall=WallRequirement.not_applicable("Die Gewindekämme werden vom massiven Kern getragen."),
+    doc=_(
+        "Gewindestange oder Stiftschraube ohne Kopf, mit Fase an beiden Enden. Dasselbe "
+        "druckbare Profil wie Gewinde und Mutter."
+    ),
+    caveat=_(
+        "Für hohe Lasten oder häufiges Lösen. Dafür halten Metallschrauben mit Mutternfalle oder "
+        "Heat-Set-Buchse besser."
+    ),
+    changes=[THREADED_ROD_ADDED],
+    feasible=_rod_reason,
+)
+def threaded_rod(raw: BaseParams) -> PartResult:
+    """Ein Bolzen ohne Kopf aus demselben Gewindekern wie *Druckbares Gewinde*.
+
+    Die Gänge baut :func:`_printed_thread` — derselbe Kamm, dasselbe Spiel,
+    dieselbe Phase wie beim Gewinde auf einer Fläche und bei der Mutter, die
+    darauf passt; die Normmaße kommen aus :func:`thread_measure`. Eigen ist nur,
+    was einen Bolzen ausmacht: die Gesamtlänge, ein glatter Schaft zwischen zwei
+    Gewinden und an beiden Enden eine kegelige Kuppe bis auf den Kern.
+
+    **Die Fase schneidet nicht durch die Gänge.** Ein Kegel quer durch die
+    Wendel tessellierte am exakten Kern je nach Größe undicht (M6, M12, M24
+    gemessen); die Kuppe sitzt deshalb vor dem Gewinde und geht knapp unter dem
+    Kerndurchmesser in den Kern über.
+    """
+    params = cast(ThreadedRodParams, raw)
+    problem = _rod_problem(params)
+    if problem is not None:
+        raise ValidationError(
+            field=problem[0],
+            detail=problem[1],
+            suggestions=(CHANGE_THIS_STEP,),
+        )
+    nominal, pitch = thread_measure(params.size, params.diameter, params.pitch)
+    chamfer = _rod_chamfer(params.chamfer, pitch)
+    crest = nominal - params.play
+    length = params.length
+    if not params.thread_length:
+        runs: tuple[tuple[float, float], ...] = ((chamfer, length - 2.0 * chamfer),)
+        body = form_of(
+            _printed_thread(nominal, pitch, runs[0][1], False, params.play, bottom=chamfer)
+        )
+    else:
+        reach = params.thread_length
+        runs = ((chamfer, reach - chamfer), (length - reach, reach - chamfer))
+        lower, upper = (
+            form_of(_printed_thread(nominal, pitch, run, False, params.play, bottom=bottom))
+            for bottom, run in runs
+        )
+        shank = shapes.moved(
+            shapes.cylinder(crest, length - 2.0 * reach + 2.0 * BOOLEAN_OVERLAP),
+            (0.0, 0.0, reach - BOOLEAN_OVERLAP),
+        )
+        body = union(lower, shank, upper)
+    inner = crest - 2.0 * pitch * shapes.RIDGE_SHARE - 2.0 * BOOLEAN_OVERLAP
+    tip = inner - 2.0 * chamfer
+    rise = chamfer + BOOLEAN_OVERLAP
+    body = union(
+        shapes.cone(tip, inner, rise),
+        body,
+        shapes.moved(shapes.cone(inner, tip, rise), (0.0, 0.0, length - rise)),
+    )
+    features = [
+        (
+            f"thread_{index}",
+            replace(
+                _thread_feature(
+                    nominal, pitch, params.play, (0.0, 0.0, bottom + run / 2.0), False, run
+                )[1],
+                id=f"thread_{index}",
+            ),
+        )
+        for index, (bottom, run) in enumerate(runs, start=1)
+    ]
+    return result(body, *features)

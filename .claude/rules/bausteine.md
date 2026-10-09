@@ -110,6 +110,30 @@ Bausteins (`oberflaeche.md`: „Ein Feld ohne Wirkung steht nicht da").
 aufgesetzter Baustein verbindet sich mit seinem Träger, und ein Rahmen, der
 das nicht hergibt, gehört nicht in den Katalog.
 
+## Was für sich ein Teil ist, steht frei
+
+`standalone` sagt der Baustein selbst, die eine Quelle für Katalog,
+Erzeuger und Agent: gesetzt, wo er ohne Träger seine Aufgabe erfüllt
+(Kabelclip, Rippe, Standfuß, Mutter), nicht, wo er nur am Träger wirkt
+(Rastnase, Federarm, Lasche, Auge, Nutfeder, Lochwand-Haken) oder nur
+abträgt — Letzteres weist das Register ab. **Eine gewählte Stelle, an die er
+gehört, setzt an, ein gewählter Körper nicht** (`ops.catalog_operation`): Jeder Erzeuger wählt
+seinen Körper, und der zweite Clip hinge sonst am ersten. Ohne Träger gibt es
+nur die aufgesetzte Form; eine abtragende Wahl muss genau ihre Vorgabe als
+aufgesetzte Form übrig lassen, und kein Feld darf an ihr hängen. Seine
+Unterseite liegt auf der Ebene seines Ursprungs (`_on_its_own_bed`); **nur
+ohne Richtung und mit Achse Z ist das das Bett**, und ein Mündungsbaustein
+steht dann kopfüber. Mit Achse X oder einer Richtung dreht diese Ebene mit,
+wie bei jedem Erzeuger zuvor; aufs Bett bringt ihn *Auf das Bett setzen*. Ein alter Erzeugerschritt rechnet gleich, samt Flächenkennungen
+(`test_every_creator_keeps_its_old_placement`). Aus dem Katalog kommt er auf
+eine freie Stelle der Platte (`ops.free_spot_for`). **Den Umriss eines eigenen
+Bausteins rechnet nie der Hauptthread:** Ein Rezept baut dafür seinen ganzen
+Stapel, also öffnet der Dialog mit der Stelle für den Platzhalter (`rough=True`),
+und `_FreeSpotWorker` reicht die echte nach, solange der Kunde die Lage nicht
+geändert hat (`ops.footprint_at_once`).
+`test_every_standalone_part_makes_a_watertight_body_without_a_selection`
+prüft jeden.
+
 ## Was vereinigt wird, kann nur weiter werden
 
 Ein Baustein ist **ein** Körper, seine Teile entstehen mit `union`. Eine
@@ -160,20 +184,28 @@ Abdruck des gefahrenen Stands (`parts/range_proof.py`).
   `test_self_intersections.py`).
 - **Der Bereichstest läuft auch in der Anwendung**: `range_check.check` hängt
   am Rezeptdialog, ein Kunde sieht ihn für eigene Rezepte.
-- **Mehr Wahl heißt mehr Bausteine, nicht mehr Ecken**: Über
-  `range_check.MAX_CORNERS` (512) lehnt der Bereichstest ab, bevor er rechnet.
-  Eine Vorlage mit vielen Formen wird ein Baustein je Form mit gemeinsamem
-  Unterbau (`holders.py`: vier Halter, je 256 oder 512 Ecken), keine
-  Formwahl, die das Produkt sprengt.
+- **Zwei Grenzen, je nach Herkunft** (`range_check.corner_limit`): Ein
+  eigener Baustein des Kunden prüft bis `MAX_CORNERS` (512), auf seinem
+  Rechner, und der Dialog nennt vorher Kombinationen und geschätzte Dauer. Die
+  mitgelieferte Bibliothek prüft bis `LIBRARY_MAX_CORNERS` (4096), einmal bei
+  uns; die Grenze richtet sich nach der Rechenzeit des Nachweises (Begründung
+  am Wert). Darüber lehnt der Bereichstest ab, bevor er rechnet. Eine Vorlage
+  mit vielen Formen bleibt ein Baustein je Form, wo der Kunde sie im Katalog
+  am Bild erkennt (`holders.py`), nicht der Grenze wegen.
 - **Ein Feld ohne Wirkung zählt keine Ecken**: Wo die Bedingung eines Feldes
   (`depends_on`) in einer Ecke nicht erfüllt ist, steht es dort auf seiner
   Vorgabe (`range_check.corners`). Das setzt voraus, dass der Baustein den
   Wert dann wirklich verwirft; wer ein verstecktes Feld trotzdem liest, bricht
   den Vertrag und den Nachweis zugleich.
-- **Eine Größenreihe passt in den Bereichstest oder wird begrenzt, mit
-  Grund**: Wandhalter (M2–M27), Klemmschale (M3–M33), Rohrschelle (M3–M6)
-  und Stangenverbinder (M3–M5) nehmen so viele Normgrößen, wie 512 Ecken oder
-  ihre Wand tragen; die Befestigungsbausteine nehmen alle und ein eigenes Maß.
+- **Eine Größenreihe nimmt, was die Tabelle hergibt** (RM-578, Robert: „wenn
+  wir mehr liefern können, wollen wir das“): Wandhalter und Halterlaschen
+  M2–M64, Klemmschale M3–M64, Rohrschelle M3–M64 (soweit Mutter und Scheibe in
+  der Tabelle stehen), die Befestigungsbausteine alle und ein eigenes Maß. Wo
+  eine große Größe an einem kleinen Teil nicht trägt, sagt der Bau es mit
+  Vorschlag (`feasible`, etwa `_clamp_reason`, `_shell_reason`), statt sie zu
+  verbieten. Begrenzt bleibt nur, was die Wand nicht trägt: der
+  Stangenverbinder bei M5, weil die Schraube ihr Gewinde in die dünne Hülse
+  schneidet.
 - **Ein Maß ohne Obergrenze ist ein Bereich ohne Rand**: Ohne `maximum` fährt
   der Test nur die Untergrenze. Jedes Längenmaß eines Bausteins trägt beide
   Grenzen; ausgenommen Winkel und Versatz der Trennebene an den Profilklemmen —
@@ -280,6 +312,20 @@ Daten in `<Nutzerdaten>/parts/recipes/*.json` (`parts/recipe.py`,
   §24.3): dieselben Ecken wie in der Suite, mit Fortschritt und Abbruch; das
   Ergebnis steht als `PartSpec.range_passed` am Katalogeintrag (§24.5 verlangt
   den Warnhinweis, kein Verbot).
+- **Ein Rezept ist genau ein Körper und steht deshalb für sich** (RM-574):
+  `register` gibt ihm `standalone` und einen Erzeuger `create_<name>`, der
+  Katalog setzt es ohne passende Stelle als eigenen Körper. Wer ein Rezept
+  bindet, ersetzt, entfernt oder als Beilage auflöst, nimmt die Operationen,
+  die ihm gehören (`ops.operation_names`, gefragt **vor** dem Abmelden des
+  Katalogeintrags) — nie alles, was nach ihm heißt: Ein Anhang „box“ nähme
+  sonst den Quader mit. **Namensschutz:** Gehört
+  `create_<name>` einer anderen Operation (`create_box`), bleibt es beim
+  Einsetzen, und ein neuer Baustein dieses Namens wird beim Speichern
+  abgewiesen (`recipe.reserved_name`); auch Beilagenfolge und Entwurf lesen
+  diesen Namen dann nicht als Rezept (`_recipe_creator`). Gefragt wird die
+  Zugehörigkeit (`part_of`), nie die Kategorie: `create_lid` steht unter den
+  Bausteinen und gehört keinem. Wer Schritte eines Bausteins zählt (*Schritt
+  zeigen*, Quelltextsperre), zählt beide Namen.
 - **`travelling_parts` warnt nur vor `.py`s** — ein Rezept reist als Daten,
   sein `source` ist `recipe`. **`own` heißt „gehört dem Kunden"** und umfasst
   beide Gestalten; wer nur die `.py` meint, fragt `source == "user"`.

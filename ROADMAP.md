@@ -157,9 +157,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-533 — Entf tut an der Auswahl still nichts](#rm-533) | Kundenrückmeldungen | Auf main mit `377069520` (Merge `f4960774a`): Entf im Reiter *Auswahl*, Felder behalten die Taste, bei Halt oder Sperre der Grund mit dem Titel aus `_removal_entry`; offen allein die Fensterabnahme beim Release (RM-213) |
 | [RM-538 — Rechtsklick mit Entfernen und Vereinigen, Entf an mehreren Körpern, Aushöhlen an der Fläche, verschiebbare Karten](#rm-538) | Kundenrückmeldungen | Auf main mit `377069520` (Merge `f4960774a`), drei Durchsichten; offen allein die Fensterabnahme beim Release (RM-213) |
 | [RM-544 — Zoll- und Rohrgewinde: G/BSP, UNC und UNF in jedem Gewindeweg](#rm-544) | Kundenrückmeldungen | Entschieden (Robert, 06.10.): alle Gewindearten samt Einstellung der Auswahllisten; baut auf RM-532 (jedes Maß) und RM-536 (Stift für Bohrung) auf |
-| [RM-562 — Bausteine, die für sich ein Teil sind, als eigenen Körper einsetzen](#rm-562) | Kundenrückmeldungen | Kunden-E-Mail 07.10. und Robert 08.10.: Kabelclip, Eckwinkel, Rippe, Standfuß, Wandhalter ohne Trägerkörper |
 | [RM-563 — Verrunden an mehreren Kanten zugleich wählen](#rm-563) | Kundenrückmeldungen | Kunden-E-Mail 07.10.: Mehrfachauswahl von Kanten und Ecken fand der Kunde nicht; Bestand prüfen, Weg bauen oder zeigen |
-| [RM-565 — *Auswahl als Baustein speichern* nimmt den gewählten Körper](#rm-565) | Kundenrückmeldungen | Robert, 07.10.: Körper wählen, Bausteinkatalog öffnen, *Speichern* |
 | [RM-072 — Zusagen an den Dental-Kunden zum Verkaufsstart erfüllen](#rm-072) | Kundenrückmeldungen | Kaufweg und belastbare 3D-Maus-Unterstützung zum zugesagten Anlass mitteilen |
 
 ## Filamentlager
@@ -5345,16 +5343,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   UNC 1/4-20 gegen ASME B1.1; Bereichsnachweis, Tor, Texte in sechs Sprachen, Handbuchabsatz;
   die zweite Stufe mit eigener Abnahme.
 
-<a id="rm-562"></a>
-
-- [ ] **RM-562 — Bausteine, die für sich ein Teil sind, als eigenen Körper einsetzen.**
-  Kunden-E-Mail vom 07.10.2026 und Robert, 08.10.2026: Kabelclip, Eckwinkel, Versteifungsrippe,
-  Standfuß, Wandhalter und weitere sind eigenständige Teile, lassen sich aber nur an einen
-  gewählten Körper anfügen. **Soll:** Jeder Baustein, der allein ein Körper sein kann, wird
-  ohne Auswahl als neues Objekt eingesetzt; welche das sind, sagt der Baustein selbst.
-  **Abnahme:** Liste je Baustein mit Begründung; Test: jeder eigenständige setzt ohne Auswahl
-  ein wasserdichtes Objekt; Fenstertest im Bausteinkatalog; Handbuch.
-
 <a id="rm-563"></a>
 
 - [ ] **RM-563 — Verrunden an mehreren Kanten zugleich wählen.** Kunden-E-Mail vom
@@ -5363,9 +5351,3 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   **Abnahme:** Strg- oder Umschalt-Klick wählt mehrere Kanten, *Verrunden* nimmt alle als einen
   Schritt, am Netz wie am exakten Körper; Handbuch nennt den Weg; Fenstertest.
 
-<a id="rm-565"></a>
-
-- [ ] **RM-565 — *Auswahl als Baustein speichern* nimmt den gewählten Körper.** Robert,
-  07.10.2026: Körper wählen, Bausteinkatalog öffnen, *Speichern* — ohne Umweg über die
-  Verlaufsschritte. **Abnahme:** Fenstertest; der gespeicherte Baustein setzt denselben Körper
-  wieder ein; Handbuch „Eigene Bausteine“ nachgezogen.

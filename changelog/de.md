@@ -94,6 +94,14 @@ Nutzen da und sonst nichts.
 - Mit *Passend zur Bohrung* baut *Stift für Bohrung* das Gegenstück: in eine Senkung einen bündigen Senkkopf, in ein Innengewinde ein Außengewinde gleicher Größe und Steigung.
 - An einem gedruckten Innengewinde bietet die Auswahl *Stift für Bohrung* direkt an.
 - Liegt in einer Bohrung ein getrenntes Teil wie ein Stift, sagen die Handlungen an der Bohrung das und bieten *In Einzelteile aufteilen* an. Bisher verschmolz der Stift still mit der Platte.
+- Neu ist der *Gewindebolzen*, eine Gewindestange oder Stiftschraube ohne Kopf, mit Fase an beiden Enden und demselben druckbaren Gewinde wie Schraube und Mutter.
+
+### Bausteine
+
+- Bausteine, die für sich ein Teil sind, etwa Kabelclip, Rippe oder Mutter, entstehen ohne Auswahl als eigener Körper auf einer freien Stelle der Druckplatte, auch im leeren Projekt.
+- Auch eigene Bausteine entstehen so als eigener Körper und hängen nicht an einem Körper, der schon im Projekt liegt.
+- Mit *Auswahl als Baustein speichern* kommt der gewählte Körper mit genau den Schritten, die ihn bauen. Käme ein zweiter Körper mit, sagt der Dialog es vor dem Speichern.
+- Wandhalter, Rohrschellen, Profilklemmen und Halter nehmen jede Schraube von M3 bis M64. Passt eine Größe nicht zu den übrigen Maßen, sagt der Baustein, was zu ändern ist.
 
 ### Bearbeiten und Zeichnen
 

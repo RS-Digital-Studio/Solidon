@@ -2586,7 +2586,18 @@ GPU_PROMPT_TOKENS_PER_SECOND: Final = 100.0
 #: ohne neue Operation derselbe Aufruf: **8 511 Token bei 189 Werkzeugen**,
 #: 26,0 % des Fensters; SHA-256
 #: ``4d29895bd0d4dc34a8829d920a3deb3590385e051c21926147b7e931d564f67c``.
-PROMPT_TOKENS: Final = 8511
+#: Am 08.10.2026 mit den zehn eigenständigen Bausteinen (RM-562: Erzeugen für
+#: Kabelclip, Eckwinkel, Rippe, Standfuß, Wandhalter, Passstift, beide
+#: Scharniere, Schraube und Mutter) derselbe Aufruf: **8 822 Token bei 199
+#: Werkzeugen**, 26,9 % des Fensters — qwen3:14b (bdbd181c33f2), Ollama 0.35.1,
+#: ``num_ctx`` 32 768, ein Ausgabetoken. SHA-256 der Anfrage:
+#: ``2d17f9b6ec21bbffb1aaa3ebef2b80a743953a233d72aff164681456e8eefee7``.
+#: Mit dem *Gewindebolzen* (Einsetzen und Erzeugen) und ohne das wirkungslose
+#: „An mehreren Merkmalen“ an den Erzeugern (Review zu RM-562) derselbe Aufruf:
+#: **8 886 Token bei 201 Werkzeugen**, 27,1 % des Fensters — qwen3:14b, Ollama
+#: 0.35.1, ``num_ctx`` 32 768, ein Ausgabetoken. SHA-256 der Anfrage:
+#: ``cb3edea0c35a2eb2e3c0f51f6d3aaa326594d0e28fb57bb5b26efb622050d27d``.
+PROMPT_TOKENS: Final = 8886
 
 #: Wie viele Token der **erste Schritt eines üblichen Zugs** einliest — die
 #: Zahl, mit der die Wartezeit auf dem Prozessor geschätzt wird
@@ -2598,7 +2609,11 @@ PROMPT_TOKENS: Final = 8511
 #: Suite (qwen3:14b, Endstand ``2c34c2a7``, 39 Fälle): Median des ersten
 #: Schritts 9 061, höchstens 10 886 (Durchsicht 0.5.1). Mit der Grundlast
 #: geschätzt, sagte der Prozessorhinweis rund ein Viertel zu wenig Minuten.
-TURN_TOKENS: Final = 9061
+#: Am 08.10.2026 mit 201 Werkzeugen (Review zu RM-562, Zweig
+#: ``paket/b-bausteine``) derselbe Lauf, jetzt mit eigener Ausgabe von
+#: ``tools/run_agent_suite.py --backend ollama --model qwen3:14b``: Median
+#: 11 126, höchstens 12 009, 39 Fälle, Ollama 0.35.1.
+TURN_TOKENS: Final = 11126
 
 #: Werkzeugzahl derselben Messung. Der Test macht eine neue Operation zum
 #: bewussten Anlass für eine neue Messung, statt die Zeitangabe still altern zu
@@ -2613,9 +2628,9 @@ TURN_TOKENS: Final = 9061
 #: ist, sagt der nächste echte Lauf gegen qwen3:14b; bis dahin ist sie eine
 #: Untergrenze und als solche benannt.
 #:
-#: Die Zählung vom 04.10.2026 mit *Verschluss ändern* enthält genau diese 189
+#: Die Zählung vom 08.10.2026 mit dem Gewindebolzen enthält genau diese 201
 #: Werkzeuge; Modell, Kontext und Anfragebeleg stehen bei :data:`PROMPT_TOKENS`.
-PROMPT_TOOL_COUNT: Final = 189
+PROMPT_TOOL_COUNT: Final = 201
 
 #: Unter diesem Anteil der Mindestzahl aus :func:`least_tokens` gilt eine
 #: Antwort als gekürzt (:func:`prompt_was_cut`). Die Mindestzahl ist schon

@@ -69,6 +69,14 @@ it into `website/version.json`.
 - With *To fit the hole*, *Pin for hole* builds the counterpart: a flush countersunk head for a countersink, an external thread of the same size and pitch for an internal thread.
 - On a printed internal thread, the selection offers *Pin for hole* directly.
 - If a separate part such as a pin sits in a hole, the actions on the hole say so and offer *Split into separate parts*. Until now the pin was silently merged with the plate.
+- New is the *Threaded stud*, a headless threaded rod or stud with a chamfer at both ends and the same printable thread as screw and nut.
+
+### Parts
+
+- Parts that are a piece on their own, such as cable clips, ribs or nuts, are created without a selection as a body of their own on a free spot of the build plate, even in an empty project.
+- Your own parts are created as a body of their own in the same way and do not attach to a body already in the project.
+- With *Save selection as a part*, the selected body comes with exactly the steps that build it. If a second body would come along, the dialog says so before saving.
+- Wall mounts, pipe clamps, profile clamps and holders take every screw from M3 to M64. If a size does not fit the other dimensions, the part says what to change.
 
 ### Editing and sketching
 

@@ -12,6 +12,7 @@ from urllib.request import Request, urlopen
 
 import pytest
 
+from tests.helpers import clean_recipe_globals
 from tests.php_probe import WITHOUT_OPCACHE, free_port, php_executable
 
 ROOT = Path(__file__).parent.parent
@@ -132,7 +133,6 @@ def test_local_part_file_runs_through_the_ui_buttons(
     from app.core.knowledge.parts import PARTS
     from app.core.knowledge.parts import recipe as recipe_module
     from app.core.knowledge.parts.recipe import Recipe, register, save
-    from app.core.registry import REGISTRY
     from app.core.scene.migrations import FORMAT_VERSION
     from app.core.types import Document, Operation
     from app.ui import main_window as main_window_module
@@ -142,7 +142,6 @@ def test_local_part_file_runs_through_the_ui_buttons(
     from app.ui.settings import UiSettings
 
     name = "local_part_file_ui_probe"
-    operation_name = f"insert_{name}"
     storage = tmp_path / "user-parts"
     monkeypatch.setattr(recipe_module, "user_parts_dir", lambda: storage)
 
@@ -215,8 +214,7 @@ def test_local_part_file_runs_through_the_ui_buttons(
         assert not troubles
         assert exported.is_file()
 
-        PARTS.remove(name)
-        REGISTRY.remove(operation_name)
+        clean_recipe_globals(name)
         source.unlink()
 
         catalog.adopt_part.click()
@@ -234,8 +232,7 @@ def test_local_part_file_runs_through_the_ui_buttons(
             "die geprüfte Herkunft muss beim lokalen Weiterexport erhalten bleiben"
         )
     finally:
-        PARTS.remove(name)
-        REGISTRY.remove(operation_name)
+        clean_recipe_globals(name)
         window.close()
 
 
