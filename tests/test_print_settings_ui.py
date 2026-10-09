@@ -11178,30 +11178,35 @@ def test_the_contact_rows_settle_in_the_dialog(
     assert rows(settings) == {}, "nach dem Übernehmen keine Gegenzeile"
 
 
-@pytest.mark.parametrize("tower", [True, False])
+@pytest.mark.parametrize("case", ["tower", "trees", "free"])
 def test_beside_a_tower_the_dialog_proposes_the_gap_the_file_gets(
-    qt_app: QApplication, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, tower: bool
+    qt_app: QApplication, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, case: str
 ) -> None:
     """Neben einem Reinigungsturm rät der Druckdialog den Stützabstand in ganzen
     Schichten wie der Export (RM-622): PLA und PETG bei 0,08er Schichten
     bekommen 0,16 mm, die Zeile nennt beide Tische und nicht den Block ohne
     Stütze daneben, und die Datei trägt an jedem Tisch genau den Wert der Zeile.
-    Ohne Turm nennt die Zeile 0,12 am PETG-Tisch, und dieser bekommt ihn. Nach
-    dem Übernehmen nennt das Feld dieselben Teile (``accepted_parts``)."""
+    Ebenso unter „automatisch“, wenn das Herstellerprofil mit Bäumen stützt.
+    Frei nennt die Zeile 0,12 am PETG-Tisch, und dieser bekommt ihn. Nach dem
+    Übernehmen nennt das Feld dieselben Teile (``accepted_parts``)."""
     import trimesh
 
     from app.core.types import PrintSettings
     from tests.helpers import object_values, supported_table
 
-    monkeypatch.setattr(
-        handover,
-        "_native_process",
-        lambda _setup: {"enable_prime_tower": "1" if tower else "0"},
-    )
+    native = {
+        "tower": {"enable_prime_tower": "1"},
+        "trees": {"enable_prime_tower": "0", "support_type": "tree(auto)"},
+        "free": {"enable_prime_tower": "0"},
+    }[case]
+    monkeypatch.setattr(handover, "_native_process", lambda _setup: native)
+    tower = case != "free"
     profile = profiles.make_profile("centauri-carbon-2", "pla")
     settings = print_settings.with_choice(
         print_settings.with_choice(
-            print_settings.resolve(profile, "standard"), "support.style", "grid"
+            print_settings.resolve(profile, "standard"),
+            "support.style",
+            "auto" if case == "trees" else "grid",
         ),
         "layers.layer_height",
         0.08,
@@ -11250,6 +11255,113 @@ def test_beside_a_tower_the_dialog_proposes_the_gap_the_file_gets(
     written = object_values(path, "Metadata/model_settings.config")
     for name in tables:
         assert float(written[name]["support_top_z_distance"]) == pytest.approx(row.value), name
+
+
+@pytest.mark.parametrize(
+    ("program", "offered"), [("bambu-studio.exe", False), ("elegoo-slicer.exe", True)]
+)
+def test_the_dialog_skips_a_bottom_interface_the_program_does_not_print_under_trees(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch, program: str, offered: bool
+) -> None:
+    """Unter Bäumen drucken Bambu Studio, Creality Print, Anycubic Slicer Next und
+    PrusaSlicer keine untere Trennschicht (RM-622); der Druckdialog bietet sie dort
+    nicht an, wie der Export je Teil (``handover.ignored_under_trees``)."""
+    from tests.test_slice_findings import chin_over_chest
+
+    monkeypatch.setattr(handover, "_native_process", lambda _setup: {})
+    profile = profiles.make_profile("centauri-carbon-2", "pla")
+    settings = print_settings.resolve(profile, "standard")
+    for path, value in (("support.style", "tree"), ("support.bottom_interface_layers", 0)):
+        settings = print_settings.with_choice(settings, path, value)
+    objects = (SceneObject(id="obj_1", name="Figur", mesh=chin_over_chest(), material="pla"),)
+    setup = handover.SlicerSetup(executable=Path(program), flavour="orca")
+    found: list[list[SettingAdvice]] = []
+    worker = print_dialog._AdviceWorker(
+        objects, settings, profile, setup, {}, (), (), {}, flavour="orca"
+    )
+    worker.done.connect(lambda entries, _measured: found.append(entries))
+    worker.work()
+
+    assert found, "der Arbeiter liefert"
+    paths = {entry.path for entry in found[-1]}
+    assert ("support.bottom_interface_layers" in paths) is offered
+
+
+def test_the_dialog_filters_the_bottom_interface_per_body(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Je Körper, nicht für die Platte (RM-622, Review M2): Bei Creality Print
+    unter eigenem Gitter verlangt der Tisch eine untere Trennschicht, das Kinn
+    bekommt Bäume vorgeschlagen und braucht keine, weil Creality sie unter Bäumen
+    nicht druckt. Die Zeile bleibt für den Tisch."""
+    from tests.test_slice_findings import chin_over_chest, table
+
+    monkeypatch.setattr(handover, "_native_process", lambda _setup: {})
+    profile = profiles.make_profile("centauri-carbon-2", "pla")
+    settings = print_settings.resolve(profile, "standard")
+    for path, value in (("support.style", "grid"), ("support.bottom_interface_layers", 0)):
+        settings = print_settings.with_choice(settings, path, value)
+    objects = (
+        SceneObject(id="obj_1", name="Tisch", mesh=table(), material="pla"),
+        SceneObject(id="obj_2", name="Kinn", mesh=chin_over_chest(), material="pla"),
+    )
+    setup = handover.SlicerSetup(executable=Path("CrealityPrint.exe"), flavour="orca")
+    found: list[list[SettingAdvice]] = []
+    worker = print_dialog._AdviceWorker(
+        objects, settings, profile, setup, {}, (), (), {}, flavour="orca"
+    )
+    worker.done.connect(lambda entries, _measured: found.append(entries))
+    worker.work()
+
+    assert found, "der Arbeiter liefert"
+    assert "support.bottom_interface_layers" in {entry.path for entry in found[-1]}
+
+
+def test_an_accepted_tree_gets_the_same_gap_in_dialog_and_file(
+    qt_app: QApplication, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Elegoos Prozess stützt unter „automatisch“ mit organischen Bäumen, die
+    Grundlage hat Stützen aus, „Baum“ ist übernommen (RM-622, Review M1). Der
+    Dialog nennt den Abstand für PETG bei 0,2er Schichten in ganzen Schichten,
+    und die Datei trägt an beiden Körpern genau diesen Wert — gefragt mit der
+    Art, die jedes Teil wirklich bekommt."""
+    from app.core.types import PrintSettings
+    from tests.helpers import object_values, supported_table
+    from tests.test_slice_findings import chin_over_chest
+
+    monkeypatch.setattr(handover, "_native_process", lambda _setup: {"support_type": "tree(auto)"})
+    profile = profiles.make_profile("centauri-carbon-2", "petg")
+    settings: PrintSettings = print_settings.with_choice(
+        print_settings.resolve(profile, "standard"), "support.z_gap", 0.3
+    )
+    settings = print_settings.with_accepted(settings, "support.style", "tree")
+    objects = (
+        SceneObject(id="obj_1", name="Kinn", mesh=chin_over_chest(), material="petg"),
+        SceneObject(id="obj_2", name="Tisch", mesh=MeshData(supported_table(3)), material="petg"),
+    )
+    setup = handover.SlicerSetup(executable=Path("elegoo-slicer.exe"), flavour="orca")
+    found: list[list[SettingAdvice]] = []
+    worker = print_dialog._AdviceWorker(
+        objects, settings, profile, setup, {}, (), (), {}, flavour="orca"
+    )
+    worker.done.connect(lambda entries, _measured: found.append(entries))
+    worker.work()
+    assert found, "der Arbeiter liefert"
+    row = next(entry for entry in found[-1] if entry.path == "support.z_gap")
+    assert row.value == pytest.approx(0.2)
+
+    path, _findings = writer.write_assembly(
+        list(objects),
+        tmp_path,
+        project_name="baum",
+        profile=profile,
+        settings=print_settings.with_accepted(settings, "support.z_gap", row.value),
+        flavour="orca",
+        setup=setup,
+    )
+    written = object_values(path, "Metadata/model_settings.config")
+    for name in getattr(row, "parts", ()) or ("Kinn", "Tisch"):
+        assert float(written[name]["support_top_z_distance"]) == pytest.approx(0.2), name
 
 
 def test_the_field_says_which_parts_get_a_suggestion_and_what_the_rest_prints(

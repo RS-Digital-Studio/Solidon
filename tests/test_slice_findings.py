@@ -1409,6 +1409,7 @@ def _support_advice(
         "cooling.support_interface_cooling",
     ),
     whole_layers: bool = False,
+    organic: frozenset[str] = frozenset(),
 ) -> dict[str, object]:
     """Die Vorschläge zu Abstand und Trennschicht für einen Körper (RM-583)."""
     settings = print_settings.resolve(profile)
@@ -1420,6 +1421,7 @@ def _support_advice(
         slice_body(body, 0.2),
         flavour=flavour,  # type: ignore[arg-type]
         whole_layers=whole_layers,
+        organic=organic,
     )
     return {entry.path: entry.value for entry in entries if entry.path in paths}
 
@@ -1527,6 +1529,64 @@ def test_beside_a_prime_tower_the_gap_comes_in_whole_layers(
     assert _support_advice(table(), profile, asked, flavour="orca", paths=(gap,)) == {
         gap: pytest.approx(free)
     }
+
+
+@pytest.mark.parametrize(
+    ("layer", "style", "organic", "gap"),
+    [
+        (0.2, "tree", {"tree"}, 0.2),
+        (0.2, "auto", {"tree", "auto"}, 0.2),
+        (0.2, "grid", {"tree", "auto"}, 0.28),
+        (0.2, "tree", set(), 0.28),
+        (0.1, "tree", {"tree"}, 0.2),
+        (0.1, "grid", {"tree"}, 0.14),
+    ],
+)
+def test_under_organic_trees_the_gap_comes_in_whole_layers(
+    layer: float, style: str, organic: set[str], gap: float
+) -> None:
+    """Organische Bäume legen alle sechs Programme der Orca-Familie und
+    PrusaSlicer auf die Schichten des Modells, auch mit eigener
+    Stützschichthöhe (RM-622): PETG bekam 0,28 mm geschrieben und 0,2 gedruckt.
+    Unter den Arten, die das Programm organisch druckt (``organic``, auch
+    „automatisch“ bei Elegoo und Bambu), rät Solidon ganze Schichten — bei 0,1er
+    Schichten zwei statt 0,14, das gerundet unter das Minimum fiele. Unter
+    Gitter und wo „Baum“ keiner ist (SuperSlicer), bleibt der freie Wert."""
+    profile = petg()
+    asked: dict[str, object] = {
+        "layers.layer_height": layer,
+        "support.style": style,
+        "support.z_gap": 0.6,
+    }
+    assert _support_advice(
+        table(),
+        profile,
+        asked,
+        flavour="orca",
+        paths=("support.z_gap",),
+        organic=frozenset(organic),
+    ) == {"support.z_gap": pytest.approx(gap)}
+
+
+def test_proposed_trees_bring_whole_layers_along() -> None:
+    """Schlägt der Rat selbst Bäume vor (Stützen auf dem Modell, RM-581), fragt
+    er den Abstand mit ihnen (RM-622): PETG am Kinn bei 0,1er Schichten mit
+    0,14 mm, dem freien Wert, bekommt 0,2 vorgeschlagen — gerundet lägen die
+    0,14 unter dem Minimum."""
+    profile = petg()
+    settings = print_settings.resolve(profile)
+    for path, value in (("layers.layer_height", 0.1), ("support.z_gap", 0.14)):
+        settings = print_settings.with_path(settings, path, value)
+    entries = advise.advise(
+        settings,
+        profile,
+        slice_body(chin_over_chest(), 0.1),
+        flavour="orca",
+        organic=frozenset({"tree"}),
+    )
+    proposed = {entry.path: entry.value for entry in entries}
+    assert proposed.get("support.style") == "tree"
+    assert proposed.get("support.z_gap") == pytest.approx(0.2)
 
 
 @pytest.mark.parametrize(("flavour", "whole_layers"), [("orca", True), ("cura", False)])

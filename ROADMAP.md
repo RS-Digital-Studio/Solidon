@@ -73,6 +73,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-587 — Lange Brücken und steile Überhänge drucken sauber](#rm-587) | Geometrie, Erkennung und Druckvorbereitung | Dicke Brücke und Fluss über langen Brücken, Zusatzwände an steilen Überhängen |
 | [RM-588 — Die Naht liegt hinten, und große Oberseiten werden gebügelt](#rm-588) | Geometrie, Erkennung und Druckvorbereitung | Naht hinten bei Figuren, Bügeln der obersten Fläche |
 | [RM-589 — Bohrungen und Stifte passen ohne Nacharbeit](#rm-589) | Geometrie, Erkennung und Druckvorbereitung | Loch- und Elefantenfußausgleich aus dem Spiel des Materialprofils |
+| [RM-623 — Die Fensterübergabe ohne Maschinen- und Prozesswahl trägt keine Herstellergrundlage](#rm-623) | Geometrie, Erkennung und Druckvorbereitung | Grundlage auch ohne gewählte Maschine, Druckername in der 3MF gegen den Absturz der ElegooSlicer-Konsole |
 | [RM-218 — Am exakten Körper heißen Bohrungen nach ihrer Lage, und der Verlauf lässt sich dort nicht umbauen](#rm-218) | Geometrie, Erkennung und Druckvorbereitung | Code und Tor mit `d907d6036` in v0.5.2; offen allein die Fensterabnahme beim Release (RM-213) |
 | [RM-230 — Variable Verrundung und Formschräge: fünf Grenzen, die der Kunde merkt](#rm-230) | Geometrie, Erkennung und Druckvorbereitung | Grenzen 1 bis 3 gebaut oder benannt (06.10.: Mischecke exakt geprüft, Ring-Anfang und Zwischenstellen in den Feldhilfen); Tray: beide Kerne nennen die Fußrundung vor der Rechnung, aber der Weg über *Merkmal entfernen* trägt dort nicht; offen: Fußrundung als Kette entfernen, Netzschräge 2,3× langsamer, Fase am Fuß, B-Spline-Ecke und zweites Anstellen am Netz mit Kernen uneins |
 | [RM-253 — Am Laptop-Ständer tragen Kippen und Verdoppeln einer Bohrung falsch ab](#rm-253) | Geometrie, Erkennung und Druckvorbereitung | 14 von 28 Bohrungen tragen ein fremdes Teil und sagen das jetzt mit Weg, statt es still zu verschmelzen (RM-413, 06.10.); offen an den freien `hole_1`/`hole_2`/`hole_4`: Verdoppeln ohne Wirkung, −127 mm³ bzw. +1,4–1,9 mm³ beim Versetzen und Kippen — gegen einen Sollwert ohne Boolesche an der kaputten Schale messen |
@@ -938,6 +939,14 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   (`tree_hybrid`), Prusa „snug“; dazu brechen hohe Bäume ohne zweite Wand und Fuß, und eine
   Baumspitze unter der Stützbahn hinterlässt Punkte (Recherche Nr. 4, 5, 6). Abnahme: Stil
   je Deckenform in allen Familien, Baumstabilität an einem hohen Körper im Slicer gemessen.
+  **Rückstände an Baumspitzen** (Roberts Drachendruck vom 08.10.2026, PLA am CC2): An Kinn
+  (64 Bartstacheln, Inseldecken unter 1 mm²) und Kopfstacheln steht jede Spitze eine Schicht
+  unter dem Modell, ohne Trennschicht (unter 1 mm² baut der Slicer keine,
+  `TreeSupport3D.cpp:1151`), 22 Punkte angedruckt. Zwei Schichten Abstand (0,4 mm) senken die
+  Kontaktfläche am Kinn von 59,4 auf 6,9 mm², an den Stacheln von 92,4 auf 3,6 mm², für 1 min
+  und 0,7 g; große Decken verlieren dabei ihre Trennschicht. Bericht:
+  `output/drache-2026-10-09/rueckstaende/bericht.md`. Abnahme: Erkennung an der Größe der
+  Inseldecken, Schwelle am Korpus, Rat in ganzen Schichten über dem Materialhöchstwert.
 
 <a id="rm-585"></a>
 
@@ -980,6 +989,18 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   rechnet Solidon über das Spiel im Materialprofil (Recherche Nr. 13). Offen ist, wie beides
   zusammenwirkt, ohne doppelt auszugleichen. Abnahme: ein Passungsteil aus dem Korpus im
   Slicer gemessen, mit und ohne Ausgleich.
+
+<a id="rm-623"></a>
+
+- [ ] **RM-623 — Die Fensterübergabe ohne Maschinen- und Prozesswahl trägt keine
+  Herstellergrundlage.**
+  In Roberts Einstellungen für den Drachendruck vom 08.10.2026 waren `slicer_machine_profile`
+  und `slicer_base_process` leer, das Basisfilament zeigte auf ein Profil der 0,2-mm-Düse. Die
+  Übergabe schrieb nur Solidons Werte (5 KB), und ElegooSlicer füllte den Rest mit
+  Orca-Vorgaben statt mit Elegoos Prozess; dieselbe Datei bringt die ElegooSlicer-Konsole zum
+  Absturz, weil der Druckername fehlt (`ElegooSlicer.cpp:1697`). Gesicherte Übergabe:
+  `output/drache-2026-10-09/rueckstaende/robert/Drache.3mf`. Abnahme: Ursache der leeren Wahl
+  gefunden, Übergabe mit der Grundlage des erkannten Druckers, Konsole schneidet die Datei.
 
 <a id="rm-504"></a>
 

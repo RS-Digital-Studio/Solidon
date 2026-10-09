@@ -1149,6 +1149,18 @@ NOT_TAKEN_BY_PROGRAM: Final[dict[str, frozenset[str]]] = {
     "bambustudio": frozenset({"cooling.support_interface_cooling"}),
 }
 
+#: Was ein Programm unter Baumstützen nicht druckt (RM-622): Bambu Studio,
+#: Creality Print, Anycubic Slicer Next und PrusaSlicer legen unter organischen
+#: Bäumen keine untere Trennschicht, auch wenn sie geschrieben ist — gemessen an
+#: zwei gestützten Körpern aus PETG (09.10.2026): unter Gitter mit unteren
+#: Lagen, unter organischen Bäumen ohne; ElegooSlicer und OrcaSlicer drucken sie
+#: auch dort.
+IGNORED_UNDER_TREES_BY_PROGRAM: Final[dict[str, frozenset[str]]] = {
+    program: frozenset({"support.bottom_interface_layers"})
+    for program in ("bambustudio", "crealityprint", "anycubicslicernext", "prusaslicer")
+}
+
+
 #: Diese Programme lesen die Werte nur für die Platte. Gemessen mit zwei
 #: Körpern, unverändertem Herstellerprofil und getrennten Bahnen (RM-317).
 #: Ein fehlender Rollenwert ist keine fehlende Objektfähigkeit.
@@ -1652,6 +1664,29 @@ def limitation(
             setting=field.title if field is not None else path,
             layer=format_length(layer),
         )
+    # Unter organischen Bäumen liegt die Stütze auf den Schichten des Modells
+    # (RM-622, ``handover.organic_styles``); gewählt ist hier ``tree``, was die
+    # Orca-Familie und PrusaSlicer organisch drucken, SuperSlicer nicht.
+    trees = (
+        settings is not None
+        and settings.support.style == "tree"
+        and flavour in ("orca", "prusa")
+        and substitute("support.style", "tree", program) is None
+    )
+    if trees and path == "support.z_gap":
+        from app.core.slice import advise
+
+        layer = settings.layers.layer_height if settings is not None else 0.0
+        if settings is None or advise.in_whole_layers(settings.support.z_gap, layer):
+            return None
+        field = print_fields.field_of(path)
+        return _(
+            "Unter Baumstützen rechnet der Slicer „{setting}“ in ganzen Schichten zu {layer}.",
+            setting=field.title if field is not None else path,
+            layer=format_length(layer),
+        )
+    if trees and path in IGNORED_UNDER_TREES_BY_PROGRAM.get(program, frozenset()):
+        return _("Unter Baumstützen druckt dieses Programm keine untere Trennschicht.")
     return None
 
 

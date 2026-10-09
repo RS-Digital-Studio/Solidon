@@ -228,6 +228,7 @@ def advise(
     connectors: Sequence[float] = (),
     flavour: SlicerFlavour | None = None,
     whole_layers: bool = False,
+    organic: Collection[str] = (),
 ) -> list[SettingAdvice]:
     """Was an diesen Einstellungen für dieses Teil nicht passt (§29).
 
@@ -242,8 +243,9 @@ def advise(
     gegen die Bahnbreite rechnen.
 
     ``whole_layers`` sagt, dass der Slicer den Stützabstand auf der Platte
-    dieses Teils auf ganze Schichten rundet, weil dort ein Reinigungsturm steht
-    (:func:`support_gap_target`, RM-622).
+    dieses Teils auf ganze Schichten rundet, weil dort ein Reinigungsturm steht;
+    ``organic`` sind die Stützarten, die das Programm als organische Bäume auf
+    den Schichten des Modells druckt (:func:`rounds_to_whole_layers`, RM-622).
 
     **Für einen Resin-Drucker bleibt die Liste leer.** Jede Regel hier spricht
     über Düse, Bahn, Bett, Lüfter oder Rückzug — für Resin nicht falsch
@@ -257,7 +259,7 @@ def advise(
     advice += _from_machine(settings, profile)
     advice += _from_material(settings, profile)
     if result is not None:
-        advice += _from_geometry(settings, profile, result, bounds, flavour, whole_layers)
+        advice += _from_geometry(settings, profile, result, bounds, flavour, whole_layers, organic)
     if fit_kinds:
         advice += _from_fits(settings, fit_kinds)
     # Erst nach den Regeln oben, und gegen deren Stand gerechnet: Die
@@ -931,15 +933,23 @@ BOTTOM_INTERFACE_LAYERS: Final = 2
 #: CuraEngine (``support_top_distance`` je Schicht). Die Orca-Familie nur,
 #: solange die Stütze die Schichthöhe des Modells hat; die eigene Höhe schaltet
 #: die Übergabe dann ein (``slicer_keys.has_independent_support_layers``) — außer
-#: auf einer Platte mit Reinigungsturm, dort sagt es der Aufrufer
-#: (``whole_layers``, RM-622).
+#: neben einem Reinigungsturm (``whole_layers``) und unter organischen Bäumen
+#: (``organic``), das sagt der Aufrufer (RM-622).
 WHOLE_LAYER_GAP_FLAVOURS: Final[frozenset[SlicerFlavour]] = frozenset({"cura"})
 
 
-def rounds_to_whole_layers(flavour: SlicerFlavour | None, whole_layers: bool = False) -> bool:
-    """Rechnet der Slicer den Stützabstand hier in ganzen Schichten — Cura immer,
-    die Orca-Familie neben einem Reinigungsturm (``whole_layers``, RM-622)?"""
-    return whole_layers or flavour in WHOLE_LAYER_GAP_FLAVOURS
+def rounds_to_whole_layers(
+    flavour: SlicerFlavour | None,
+    whole_layers: bool = False,
+    style: str = "",
+    organic: Collection[str] = (),
+) -> bool:
+    """Rechnet der Slicer den Stützabstand hier in ganzen Schichten (RM-622)? Cura
+    immer; die Orca-Familie neben einem Reinigungsturm (``whole_layers``); jedes
+    Programm unter organischen Bäumen, also wenn ``style`` zu den Arten gehört,
+    die es so druckt (``organic``, :func:`handover.organic_styles`): Sie liegen
+    auf den Schichten des Modells, auch mit eigener Stützschichthöhe."""
+    return whole_layers or flavour in WHOLE_LAYER_GAP_FLAVOURS or style in organic
 
 
 def in_whole_layers(gap: float, layer: float) -> bool:
@@ -954,6 +964,8 @@ def support_gap_target(
     flavour: SlicerFlavour | None = None,
     *,
     whole_layers: bool = False,
+    style: str = "",
+    organic: Collection[str] = (),
 ) -> float | None:
     """Der Stützabstand, mit dem sich die Stütze von diesem Material sauber löst
     (RM-583): ein Vielfaches der Schichthöhe, begrenzt nach dem Materialprofil.
@@ -966,11 +978,12 @@ def support_gap_target(
     nur ohne eigene Stützschichthöhe; die schaltet die Übergabe ein
     (``handover.frees_support_layers``).
 
-    **Mit Reinigungsturm rundet auch die Orca-Familie** (``whole_layers``,
-    RM-622): Sie legt die Stütze dann auf die Schichten des Modells und rundet
-    auf die nächste (``SupportMaterial.cpp``). PLA bei 0,08er Schichten bekäme
-    aus 0,10 mm eine Schicht, also 0,08 — unter dem Minimum; in ganzen
-    Schichten gerechnet sind es 0,16."""
+    **Mit Reinigungsturm und unter organischen Bäumen rundet auch die
+    Orca-Familie** (:func:`rounds_to_whole_layers`, RM-622): Sie legt die Stütze
+    dann auf die Schichten des Modells und rundet auf die nächste
+    (``SupportMaterial.cpp``). PLA bei 0,08er Schichten bekäme aus 0,10 mm eine
+    Schicht, also 0,08 — unter dem Minimum; in ganzen Schichten gerechnet sind
+    es 0,16."""
     factor, low, high = (
         material.support_gap_factor,
         material.support_gap_min,
@@ -979,7 +992,7 @@ def support_gap_target(
     if factor is None or low is None or high is None or layer <= 0.0:
         return None
     target = min(max(layer * factor, low), high)
-    if not rounds_to_whole_layers(flavour, whole_layers):
+    if not rounds_to_whole_layers(flavour, whole_layers, style, organic):
         return target
     first = max(1, math.ceil(low / layer - EPS_GEOM))
     last = math.floor(high / layer + EPS_GEOM)
@@ -996,15 +1009,17 @@ def _support_contact(
     on_model: bool,
     flavour: SlicerFlavour | None,
     whole_layers: bool = False,
+    style: str = "",
+    organic: Collection[str] = (),
 ) -> list[SettingAdvice]:
     """Abstand und Trennschicht der Stütze nach Material, Schichthöhe und
     Fläche (RM-583) — die häufigsten Ursachen für Narben und festsitzende Stützen
     (``konzepte/recherche-slicer-einstellungen-2026-10.md``, Nr. 1, 2, 3, 7).
 
     Der Abstand oben ist ein Vielfaches der Schichthöhe aus dem Materialprofil,
-    begrenzt nach unten und oben (Regel 7); Cura und die Orca-Familie neben
-    einem Reinigungsturm (``whole_layers``) rechnen ihn in ganzen
-    Schichten. Dort passt auch ein Abstand im Band nicht, der keine ganze
+    begrenzt nach unten und oben (Regel 7); wo der Slicer in ganzen Schichten
+    rechnet (:func:`rounds_to_whole_layers`, mit der Art ``style``, die der Rat
+    hinterlässt), das Vielfache. Dort passt auch ein Abstand im Band nicht, der keine ganze
     Schicht ist: Der Slicer rundet ihn selbst, Cura auf, die Orca-Familie zur
     nächsten (0,2 mm sind bei 0,08er Schichten zweieinhalb). Unter einer großen
     flachen Decke (ein Stück über ``OVERHANG_LAYER_WORTH_SUPPORT``) wird die
@@ -1015,12 +1030,18 @@ def _support_contact(
     advice: list[SettingAdvice] = []
     material = profile.material
     layer = settings.layers.layer_height
-    target = support_gap_target(layer, material, flavour, whole_layers=whole_layers)
+    style = style or settings.support.style
+    target = support_gap_target(
+        layer, material, flavour, whole_layers=whole_layers, style=style, organic=organic
+    )
     low, high = SUPPORT_GAP_BAND
     gap = settings.support.z_gap
     if target is not None and (
         not low * target <= gap <= high * target
-        or (rounds_to_whole_layers(flavour, whole_layers) and not in_whole_layers(gap, layer))
+        or (
+            rounds_to_whole_layers(flavour, whole_layers, style, organic)
+            and not in_whole_layers(gap, layer)
+        )
     ):
         advice.append(
             _advice(
@@ -1079,6 +1100,7 @@ def _from_geometry(
     bounds: BoundingBox | None,
     flavour: SlicerFlavour | None = None,
     whole_layers: bool = False,
+    organic: Collection[str] = (),
 ) -> list[SettingAdvice]:
     """Der eigentliche Gewinn: das Teil bestimmt seine Einstellungen mit."""
     advice: list[SettingAdvice] = []
@@ -1239,7 +1261,15 @@ def _from_geometry(
             )
         )
     if needs_support:
-        advice += _support_contact(settings, profile, need, on_model, flavour, whole_layers)
+        # Gefragt mit der Stützart, die dieser Rat hinterlässt: Schlägt er Bäume
+        # vor, liegt die Stütze auf den Schichten des Modells (RM-622).
+        style = next(
+            (str(entry.value) for entry in advice if entry.path == "support.style"),
+            settings.support.style,
+        )
+        advice += _support_contact(
+            settings, profile, need, on_model, flavour, whole_layers, style, organic
+        )
 
     # **Über „automatisch“ nur, wo der Slicer nichts rechnet** (Entscheidung J,
     # :func:`_unanchored`): Orcas Auto-Brim fragt Höhe und Grundfläche selbst
@@ -1783,6 +1813,7 @@ def for_part(
     connectors: Sequence[float] = (),
     flavour: SlicerFlavour | None = None,
     whole_layers: bool = False,
+    organic: Collection[str] = (),
 ) -> list[SettingAdvice]:
     """Was dieses eine Teil anders braucht als die Platte (§29).
 
@@ -1812,6 +1843,7 @@ def for_part(
                 connectors=connectors,
                 flavour=flavour,
                 whole_layers=whole_layers,
+                organic=organic,
             )
             if entry.path in PART_PATHS
         ]

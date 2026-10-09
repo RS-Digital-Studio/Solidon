@@ -1451,6 +1451,9 @@ class _AdviceWorker(Worker):
         self.towers: frozenset[int] = frozenset()
         """Die Platten mit Reinigungsturm (:func:`writer.tower_plates`), je Lauf
         einmal gefragt."""
+        self.organic: frozenset[str] = frozenset()
+        """Die Stützarten, die das Programm als organische Bäume druckt
+        (:func:`handover.organic_styles`), je Lauf einmal gefragt."""
 
     def cancel(self) -> None:
         """Auch innerhalb eines großen Körpers kann die Schichtanalyse aufhören."""
@@ -1496,9 +1499,12 @@ class _AdviceWorker(Worker):
         separate, asking = handover.asked_for_contact(
             self.settings, self.profile, self.setup, self.flavour
         )
-        # Neben einem Reinigungsturm rundet die Orca-Familie den Stützabstand;
-        # der Rat rechnet dort in ganzen Schichten, wie im Export (RM-622).
+        # Neben einem Reinigungsturm und unter organischen Bäumen rundet der
+        # Slicer den Stützabstand; der Rat rechnet dort in ganzen Schichten, wie
+        # im Export (RM-622).
         self.towers = tower_plates(self.objects, self.setup)
+        self.organic = handover.organic_styles(self.setup, self.profile)
+        program = slicer_keys.program_of(self.setup.executable) if self.setup else ""
         for index, body in enumerate(self.objects):
             self.cancelled.raise_if_cancelled()
             self.progressed.emit(index + 1, len(self.objects), str(body.name))
@@ -1567,7 +1573,15 @@ class _AdviceWorker(Worker):
                     connectors=self.connectors,
                     flavour=self.flavour,
                     whole_layers=body.plate in self.towers,
+                    organic=self.organic,
                 )
+                # Was das Programm unter den Bäumen dieses Körpers nicht druckt,
+                # schlägt der Dialog nicht vor — je Körper wie der Export
+                # (``writer.part_advice``, RM-622).
+                under_trees = handover.ignored_under_trees(
+                    advise.apply(process.settings, entries), self.organic, program
+                )
+                entries = [entry for entry in entries if entry.path not in under_trees]
                 own.append(
                     (
                         process.settings,
@@ -1677,6 +1691,7 @@ class _AdviceWorker(Worker):
                 flavour=self.flavour,
                 accepted=chain,
                 whole_layers=body.plate in self.towers,
+                organic=self.organic,
             ):
                 if entry.path in wanted and print_settings.same_value(
                     entry.value, print_settings.read_path(self.settings, entry.path)
@@ -1730,6 +1745,7 @@ class _AdviceWorker(Worker):
                 flavour=self.flavour,
                 accepted=chain,
                 whole_layers=body.plate in self.towers,
+                organic=self.organic,
             ):
                 # Beim Stützkontakt bekommt jedes Teil seinen Wert; die Zeile nennt
                 # nur die Teile, die ihren bekommen (RM-583).

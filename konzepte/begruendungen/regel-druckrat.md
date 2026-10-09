@@ -491,7 +491,27 @@ Slicer ihn nicht so druckt. Gemessen im ElegooSlicer mit PLA und PETG bei
 0,08 mm: vorher 0,08 am PLA- und 0,16 am PETG-Teil (geschrieben 0,10 und
 0,12), nachher an beiden 0,16 wie geschrieben, oben und unten. Für einen
 eigenen Wert zwischen zwei Schichten sagt der Export die Rundung, statt still
-zu runden, und dann nur das: Dass die eigene Höhe gilt, stimmt mit Turm nicht. Der Schalter richtet sich nach den
+zu runden, und dann nur das: Dass die eigene Höhe gilt, stimmt mit Turm nicht.
+
+**Unter Bäumen ebenso** (RM-622): Am PETG-Drachen kamen die geschriebenen 0,28 mm
+in keinem Programm an — alle Ebenen lagen auf dem 0,2-mm-Raster. Gegenprobe an zwei
+gestützten Körpern aus PETG (`output/drache-2026-10-08/kontakt-stil`): Mit Gitter
+druckten ElegooSlicer, OrcaSlicer, Bambu Studio, Creality Print, Anycubic Slicer
+Next und PrusaSlicer 0,28 mit eigenen Zwischenebenen, mit organischen Bäumen alle
+sechs 0,2 ohne eine. Bäume liegen auf den Schichten des Modells, auch mit
+`independent_support_layer_height`; Solidon rät unter ihnen ganze Schichten, auch
+unter „automatisch“, wenn der Herstellerprozess mit Bäumen stützt (Elegoo, Bambu),
+und sagt bei einem eigenen Wert die Rundung. Bambu Studio, Creality Print, Anycubic
+Slicer Next und PrusaSlicer druckten unter Bäumen auch keine untere Trennschicht
+(unter Gitter druckten sie untere Lagen, unter Bäumen keine), ElegooSlicer und
+OrcaSlicer zwei; dort schlägt
+Solidon sie unter Bäumen nicht vor. Organisch heißt der Generator `TreeSupport3D`,
+dessen Ebenen auf dem Raster des Modells liegen (`TreeSupportCommon.hpp:610` und
+`:289`, gleich in Orca, Bambu, Creality und Anycubic); `tree_hybrid`, `tree_slim`
+und `tree_strong` planen eigene Stützebenen (`TreeSupport.cpp:1756–1759`,
+`:3349–3408`). Deshalb fragt `handover.organic_styles` den Stil des
+Herstellerprozesses, und SuperSlicer, der statt Bäumen Gitter druckt, rundet nicht.
+Der Schalter richtet sich nach den
 geschriebenen Abständen, nicht nach den Zielen aller Spulen, und steht er gegen
 den Herstellerprozess, sagt es ein Befund: Die Stütze liegt dann auch auf
 eigenen Höhen (0,47, 0,75, 1,02 mm statt nur auf denen des Modells). Cura

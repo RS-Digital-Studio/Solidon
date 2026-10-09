@@ -79,11 +79,16 @@ offenem Drucker. Übernommen wird auf Klick, nie von allein.
   `support_gap_target`; ohne Werte kein Rat), vorgeschlagen außerhalb
   `SUPPORT_GAP_BAND`; wo der Slicer in ganzen Schichten rechnet — Cura, die
   Orca-Familie neben einem Reinigungsturm (`writer.tower_plates`,
-  `whole_layers`, Dialog und Export gleich) —, das Vielfache innerhalb der
+  `whole_layers`), jedes Programm unter organischen Bäumen mit der Art, die der
+  Rat hinterlässt (`handover.organic_styles`, `organic`; Dialog und Export
+  fragen dieselbe Auskunft) —, das Vielfache innerhalb der
   Materialgrenzen, auch statt eines Werts in `SUPPORT_GAP_BAND`, der zwischen
-  zwei Schichten liegt (`in_whole_layers`). Unter einem flachen Stück über `OVERHANG_LAYER_WORTH_SUPPORT` eine
-  dichte Trennschicht, sonst eine lockere; steht die Stütze auf dem Modell,
-  auch unten (`BOTTOM_INTERFACE_LAYERS`). Volle Kühlung an der Trennschicht,
+  zwei Schichten liegt (`in_whole_layers`); einen eigenen solchen Wert nennt
+  der Export gerundet (`export.support_gap_rounded`). Unter einem flachen Stück über
+  `OVERHANG_LAYER_WORTH_SUPPORT` eine dichte Trennschicht, sonst eine lockere;
+  steht die Stütze auf dem Modell, auch unten (`BOTTOM_INTERFACE_LAYERS`) —
+  nicht, wo das Programm sie unter Bäumen nicht druckt
+  (`handover.ignored_under_trees`). Volle Kühlung an der Trennschicht,
   wo das Material sie verlangt (`support_interface_cooling`), je Spule.
   Abstand und Trennschichten gehen je Teil (`PART_PATHS`), gefragt mit dem
   Material der Spule. Der Druckdialog fragt sie wie der Export gegen die

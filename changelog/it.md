@@ -56,6 +56,7 @@ scrive in `website/version.json`.
 - I bordi stretti che si reggono da soli restano liberi con *Bordi senza supporto*. La stampa richiede così molto meno supporto.
 - I supporti si staccano più facilmente: lo spazio segue materiale e altezza dello strato di ogni pezzo, anche con più materiali su un piatto. L'interfaccia segue la superficie sopra.
 - Se un supporto poggia sul pezzo, Solidon suggerisce anche uno strato di interfaccia sotto, così il suo piede non lascia segni.
+- Con i supporti ad albero e accanto a una torre di spurgo, Solidon propone lo spazio del supporto in strati interi, come lo stampa lo slicer.
 - Per il PETG Solidon suggerisce il raffreddamento pieno sul supporto. Così si stacca più facilmente dal pezzo.
 - Nuovo nelle impostazioni di stampa: *Strati di interfaccia inferiori*, *Spazio nell'interfaccia* e *Raffreddamento pieno sul supporto*.
 - Il campo *Spazio verso l'alto* ora si chiama *Spazio sopra e sotto* e vale per entrambi i lati del supporto.

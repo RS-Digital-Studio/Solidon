@@ -27,7 +27,7 @@ import subprocess
 import tempfile
 import time
 import zipfile
-from collections.abc import Callable, Iterable, Mapping, Sequence
+from collections.abc import Callable, Collection, Iterable, Mapping, Sequence
 from contextlib import ExitStack, suppress
 from dataclasses import dataclass, field, replace
 from pathlib import Path
@@ -3101,6 +3101,79 @@ def tower_cause(
     if filaments > 1 and not (by_object and objects > 1):
         return "filaments"
     return None
+
+
+#: Stile der Orca-Familie, unter denen ``tree(…)`` ein organischer Baum ist
+#: (``TreeSupport.cpp``: nur ``smsTreeOrganic`` geht in den organischen Generator;
+#: ``default`` heißt beim Baum organisch). ``tree_hybrid``, ``tree_slim`` und
+#: ``tree_strong`` planen eigene Stützebenen (``plan_layer_heights``).
+_ORGANIC_ORCA_STYLES: Final = frozenset({"", "default", "organic"})
+
+
+def organic_styles(
+    setup: SlicerSetup | None, profile: Profile | None = None, program: str = ""
+) -> frozenset[str]:
+    """Welche Stützarten Solidons dieses Programm als organische Bäume druckt —
+    die eine Auskunft für Rat, Übergabe und Befund (RM-622).
+
+    Organische Bäume liegen auf den Schichten des Modells, auch mit
+    ``independent_support_layer_height``: An zwei Körpern aus PETG schrieben
+    ElegooSlicer, OrcaSlicer, Bambu Studio, Creality Print, Anycubic Slicer Next
+    und PrusaSlicer 0,28 mm und druckten 0,2, ohne eine Zwischenebene; mit
+    Gitter 0,28. Der Stützabstand rundet dort auf ganze Schichten, und Bambu,
+    Creality, Anycubic und PrusaSlicer drucken darunter keine untere
+    Trennschicht (:func:`ignored_under_trees`).
+
+    Gefragt wird, was das Programm aus der Art macht: ``tree`` ist in der
+    Orca-Familie organisch, solange der Herstellerprozess keinen anderen Baumstil
+    führt; „automatisch“ ist es, wenn sein ``support_type`` ein Baum ist (Elegoo,
+    Bambu). PrusaSlicer schreibt ``tree`` als ``organic``, „automatisch“ nach dem
+    Stil seines Prozesses. SuperSlicer kennt keine Bäume (Ersatz Gitter), Cura
+    rundet ohnehin (:data:`advise.WHOLE_LAYER_GAP_FLAVOURS`). Ohne Programm gilt
+    die Familie: Orca und Prusa schreiben ``tree`` organisch.
+    """
+    flavour = setup.flavour if setup is not None else ""
+    if setup is None or flavour not in ("orca", "prusa"):
+        return frozenset()
+    program = program or slicer_keys.program_of(setup.executable)
+    if slicer_keys.substitute("support.style", "tree", program) is not None:
+        return frozenset()
+    if flavour == "prusa":
+        styles = {"tree"}
+        if profile is not None and _prusa_process_style(setup, profile) == "organic":
+            styles.add("auto")
+        return frozenset(styles)
+    native = _native_process(setup)
+    style = str(_printed(native.get("support_style", ""))).strip().casefold()
+    if style not in _ORGANIC_ORCA_STYLES:
+        return frozenset()
+    kind = str(_printed(native.get("support_type", ""))).strip()
+    return frozenset({"tree", "auto"} if kind.startswith("tree") else {"tree"})
+
+
+def _prusa_process_style(setup: SlicerSetup, profile: Profile) -> str:
+    """``support_material_style`` des gewählten Prusa-Prozesses, leer ohne Kette."""
+    try:
+        chain = manufacturer.prusa_chain(profile, setup)
+    except ExternalToolError:
+        return ""
+    if chain is None:
+        return ""
+    return str(chain.values.get("support_material_style", "")).strip().casefold()
+
+
+def ignored_under_trees(
+    settings: PrintSettings, organic: Collection[str], program: str
+) -> frozenset[str]:
+    """Pfade, die dieses Programm unter den Bäumen dieser Einstellungen nicht
+    druckt (:data:`slicer_keys.IGNORED_UNDER_TREES_BY_PROGRAM`) — leer, wo die Art
+    keine organischen Bäume sind (``organic``, :func:`organic_styles`). Ein
+    Vorschlag darauf änderte nichts am Druck. Druckdialog und Export fragen hier
+    je Körper (RM-622)."""
+    ignored = slicer_keys.IGNORED_UNDER_TREES_BY_PROGRAM.get(program, frozenset())
+    if not ignored or settings.support.style not in organic:
+        return frozenset()
+    return ignored
 
 
 def support_layers_findings(setup: SlicerSetup | None, free: bool) -> list[Finding]:
