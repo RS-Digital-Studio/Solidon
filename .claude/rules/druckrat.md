@@ -105,16 +105,18 @@ offenem Drucker. Übernommen wird auf Klick, nie von allein.
   Gegenzeile wieder. Die Zeile nennt nur Teile mit ihrem Wert. Übergabe:
   `dateiformat.md`.
 - **Was das Modell schon ausgleicht, gleicht der Slicer nicht noch einmal aus**
-  (`_from_allowances`, RM-589): Trägt ein Körper eine Bohrung mit
-  Materialzugabe oder einen bauenden Passungsschritt (`scene.fits.allowances_for`,
-  `"holes"`), heißt der Vorschlag *Löcher weiten* null; zieht *Elefantenfuß
-  ausgleichen* seine ersten Schichten ein (`"foot"`), *Erste Schicht einziehen*
-  null — je Teil, nur wo der Slicer ausgleicht. Eine nur eingetragene Passung
-  ändert keine Geometrie und zählt nicht, ein Stift ohne Bohrung
-  (`subtractive_on`) auch nicht. Ohne Herstellerprofil kommt der Einzug aus
-  dem Material (`elephant_foot`); den Lochausgleich führt Solidon dort nicht.
-  Die Orca-Familie bekommt zur Fußkorrektur null den Brim-Abstand des Teils
-  mit, sonst rückt der Brim um den Einzug näher (`object_keys`).
+  (`_from_allowances`, RM-589): Legt ein Schritt des Körpers Spiel in eine
+  Innenkontur (`scene.fits.allowances_for`, `"holes"`), heißt der Vorschlag
+  *Löcher weiten* null; zieht *Elefantenfuß ausgleichen* seine ersten
+  Schichten ein (`"foot"`), *Erste Schicht einziehen* null — je Teil, nur wo
+  der Slicer ausgleicht. Gefragt wird am Körper: ein Baustein über
+  `parts.ops.cuts` oder `PartSpec.play_inside`, eine gebohrte Bohrung am
+  Merkmal, das noch steht, Deckel, Drehdeckel und Teilen nur am Ergebnis mit
+  dem Spiel innen (`_play_outputs`). Eine nur eingetragene Passung ändert
+  keine Geometrie und zählt nicht, ein Stift, Haken oder Bolzen auch nicht.
+  **Ein kalibriertes Material bekommt keinen Vorschlag**: Sein Prüfkörper ging
+  durch den Slicer mit dessen Ausgleich, gemessen ist der Rest dahinter.
+  Übergabe (eigener Satz nur auf Wahl, Brim am Fuß): `dateiformat.md`.
 - **Die kleine Standfläche wird auch je Fuß gefragt** (`advise._on_small_feet`):
   Erreicht keine von mehreren Inseln `SMALL_FOOTPRINT`, heißt es Brim — nur
   als Vorschlag. `for_part` fragt mit Profil jede Regel für `PART_PATHS`;

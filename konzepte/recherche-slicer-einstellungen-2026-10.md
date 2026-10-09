@@ -2,9 +2,11 @@
 
 > **Stand 08.10.2026, datierte Ausgangsbefunde.** Daraus gebaut sind RM-580
 > (Mindesttempo für Spitzen), RM-581 (Bäume, wo kleine Überhänge auf dem Modell
-> ansetzen) und RM-582 (Ränder ohne Stütze); die übrigen Lücken stehen als
-> RM-583 bis RM-589 im Register von `ROADMAP.md` und verweisen auf die Nummern
-> unten. Die Spalte „Solidon“ beschreibt den Code vor diesen drei Punkten.
+> ansetzen), RM-582 (Ränder ohne Stütze), RM-583 (Stützkontakt je Material)
+> und RM-589 (kein doppelter Loch- und Fußausgleich, Nr. 13); die übrigen
+> Lücken stehen als RM-584 bis RM-588 im Register von `ROADMAP.md` und
+> verweisen auf die Nummern unten. Die Spalte „Solidon“ beschreibt den Code vor
+> diesen Punkten.
 
 Auftrag: Welche Slicerwerte verlangt die Geometrie anders, als der
 Hersteller sie vorgibt, und welche davon schreibt Solidon heute? Schwerpunkt Stützen

@@ -46262,20 +46262,35 @@ gab in der ersten Schicht 0,3 statt 0,2 mm je Seite am Centauri Carbon 2 (Elegoo
 0,1), 0,4 statt 0,2 am MK4S (PrusaSlicer, 0,2), 0,275 am Kobra 2 (Anycubic Slicer Next,
 0,075); eine Bohrung mit Materialzugabe wurde zusätzlich je Seite um 0,02 mm (Kobra 2) und
 0,025 mm (Ender-3 V3 KE, beide OrcaSlicer) geweitet. Polyholes führt kein Herstellerprofil;
-Cura glich weder Fuß noch Loch aus. Eingelesene Löcher ohne Zugabe bekamen den Ausgleich des
-Herstellers allein, dort war nichts doppelt.
+CuraEngine mit den sieben Druckerdefinitionen der Solidon-Drucker glich weder Fuß noch Loch
+aus (75 andere der 706 Definitionen in Cura 5.13 setzen einen der beiden Werte). Eingelesene
+Löcher ohne Zugabe bekamen den Ausgleich des Herstellers allein, dort war nichts doppelt.
 
 **Behoben:** Zwei neue Druckeinstellungen, *Erste Schicht einziehen* (`layers.elephant_foot`:
-Orca und Prusa `elefant_foot_compensation`, Cura `xy_offset_layer_0` negativ) und *Löcher
-weiten* (`shell.hole_offset`: Orca `xy_hole_compensation`, Cura `hole_xy_offset`;
-PrusaSlicer kennt keinen, SuperSlicer bekommt den Einzug nicht), zurückgelesen aus dem
-Herstellerprofil. Ohne Herstellerprofil kommt der Einzug aus dem Materialprofil.
-`scene.fits.allowances_for` sagt je Körper, was sein Modell schon ausgleicht: Löcher aus
-*Bohrung setzen*, *Bohrung ändern*, Langloch und Lochfeld mit Haken und aus den bauenden
-Passungsschritten (ein Stift ohne Bohrung nicht), den Fuß aus *Elefantenfuß ausgleichen*.
-Der Druckrat (`advise._from_allowances`) schlägt dort null vor, je Teil (`PART_PATHS`, Cura
-je Netz); die Orca-Familie bekommt dazu den Brim-Abstand des Teils, damit der Brim am Fuß
-bleibt. Druckdialog und Export fragen dieselbe Auskunft.
+Orca und Prusa `elefant_foot_compensation`, SuperSlicer `first_layer_size_compensation`
+negativ, Cura `xy_offset_layer_0` negativ) und *Löcher weiten* (`shell.hole_offset`: Orca
+`xy_hole_compensation`, SuperSlicer `hole_size_compensation` negativ, Cura `hole_xy_offset`;
+PrusaSlicer kennt keinen), zurückgelesen aus dem Herstellerprofil. Ohne eigene Wahl schreibt
+kein Satz einen der beiden, auch Solidons eigener nicht (`slicer_keys.MAKER_OWNED`); es gilt
+der Wert des Slicers. `scene.fits.allowances_for` sagt je Körper, was sein Modell schon
+ausgleicht: Löcher, wo ein Schritt Spiel in eine Innenkontur legt (Bausteine über
+`parts.ops.cuts` oder `PartSpec.play_inside`, gebohrte Löcher mit Haken am Merkmal, das noch
+steht, von Deckel, Drehdeckel und Teilen nur das Ergebnis mit dem Spiel innen), den Fuß aus
+*Elefantenfuß ausgleichen*. Der Druckrat (`advise._from_allowances`) schlägt dort null vor, je
+Teil (`PART_PATHS`, Cura je Netz), nicht bei kalibriertem Material; die Orca-Familie bekommt
+dazu den Brim-Abstand des Teils, damit der Brim am Fuß bleibt. Druckdialog und Export fragen
+dieselbe Auskunft.
+
+**Review (`review_rm589.md`) behoben:** S1 Solidons eigener Satz schrieb Einzug und
+Lochausgleich ungefragt (Cura zog ein Teil mit *Elefantenfuß ausgleichen* doppelt ein, Curas
+Fenster überschrieb Maschinenwerte): nur noch auf Wahl, der Rat je Teil gilt als übernommen.
+M1 kalibriertes Material ohne Vorschlag, denn sein Prüfkörper ging durch den Ausgleich des
+Slicers. M2 Schraube, Haken und Wärmeeinsatz zählen nicht mehr, Rastnase, Stecker, Fußtasche,
+Mutter, Scharniere und Stangenverbinder zählen, Deckel und Teilen nur am richtigen Ergebnis
+(gegen `e8c785abd` 16 von 24 Fällen falsch, jetzt 0). M3 Fenstertest über den Dialogweg. L1
+Programmvorgaben null für die fünf Programme der Orca-Familie, gemessen. L3 Suche unter den
+Wörtern der Slicer in sechs Sprachen. L5 SuperSlicer bekommt beides unter eigenem Namen; eine
+Prusa-3MF ohne Programm schreibt den Lochausgleich in seinem Vorzeichen (neuer Fund).
 
 **Gemessen nachher:** Mit dem Rat übernommen dieselben Teile ohne doppelten Ausgleich: CC2
 39,10 statt 38,90 mm Bahnbreite in Schicht 1, MK4S 39,10 statt 38,70, Kobra 2 in Anycubic
@@ -46284,6 +46299,13 @@ Slicer Next 39,10, Cura 39,14; Loch am Kobra 2 6,635 statt 6,675, am KE 6,636 st
 Bohrplatten, die Platte des Slicers mit 0,1 mm Lochausgleich und 0,15 mm Einzug, die
 ausgleichende mit Objektwert null — in OrcaSlicer, PrusaSlicer, Cura, Bambu Studio,
 ElegooSlicer, Creality Print und Anycubic Slicer Next Loch 0,199 bis 0,208 mm und Einzug
-0,300 mm Unterschied (PrusaSlicer ohne Lochausgleich: 0,000), sieben grün. Begründung:
+0,300 mm Unterschied (PrusaSlicer ohne Lochausgleich: 0,000), sieben grün. Nach dem Review
+dieselben Bohrplatten in allen acht Programmen samt SuperSlicer (MINI), je ohne Klick, mit
+Rat, mit Wahl und mit Solidons eigenem Satz: Ohne Herstellerprozess und bei Cura schreibt
+die Übergabe keinen der beiden Werte, die Programme drucken mit ihrer Vorgabe null
+(Konfigurationsblock), Cura zieht A nur um den Modelleinzug ein (39,14 gegen B 39,54 mm);
+mit Rat zieht A nirgends doppelt ein (Orca-Familie und PrusaSlicer 39,10, SuperSlicer 39,18
+wie B), mit Wahl Loch 0,198 bis 0,208 und Einzug 0,300 mm Unterschied in allen acht.
+Begründung:
 `konzepte/begruendungen/regel-druckrat.md`, Regel: `.claude/rules/druckrat.md`. Umgesetzt von
 Claude (Worktree `F:/sl-loecher`).

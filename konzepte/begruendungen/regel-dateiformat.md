@@ -623,7 +623,9 @@ mehr (Gesamtprüfung, 27.09.2026).
 > selbst ein Herstellerprofil, das es richtig gelesen hatte.
 
 Zum Schalter eines Anteils: „Ohne `reduce_fan_stop_start_freq` schaltete der
-ElegooSlicer den Lüfter bei jeder PLA-Schicht über 60 s ganz ab."
+ElegooSlicer den Lüfter bei jeder PLA-Schicht über 60 s ganz ab." Curas
+Kontaktlüfter steht neben dem Lüfter der Stütze, weil er die Haut über der
+Stütze kühlt, zum selben Zweck (aus der Regel hierher verschoben).
 
 Warum der alte eine Wert das obere Ende bleibt: „(Entscheidung der
 Durchsicht, 23.09.2026: Der Mindestwert war nie eine Wahl des Kunden, sondern
@@ -633,6 +635,11 @@ mit alten Zeilennummern; er steht jetzt im zweiten Absatz dieses Abschnitts
 der Regel.
 
 ## Wie eine Zuordnung geprüft wird
+
+Einen falschen Schlüsselnamen meldet kein Slicer; deshalb vergleicht Solidon
+selbst. Ein Prusa-Bündelabschnitt wird am Namen erkannt, weil
+`PrusaResearch.ini` über neuntausend Profile trägt (beides aus der Regel
+hierher verschoben).
 
 > `verify()` vergleicht sie gegen das Geschriebene: 53 von 53 beim einen, 56
 > von 56 beim anderen. […] **CuraEngine schreibt dort nichts** — null von 47.

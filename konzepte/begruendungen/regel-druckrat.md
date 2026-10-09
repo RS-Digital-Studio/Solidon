@@ -579,10 +579,49 @@ der Wert je Teil ankommt (Loch 0,20, Einzug 0,30 mm Unterschied bei 0,1 und
 Vorschlag statt Automatik, weil auf dem Herstellerprofil nur Gewähltes und
 Übernommenes geschrieben wird; je Teil, weil ein eingelesenes Loch daneben den
 Ausgleich des Herstellers weiter braucht. Eine nur eingetragene Passung baut
-kein Spiel ins Modell und zählt deshalb nicht. Den Einzug des Herstellers
-ersetzt das Materialprofil nicht: Sein Kalibrierkörper wird durch den Slicer
-mit dessen Einzug gedruckt, sein Wert wäre der Rest, nicht der ganze Fuß. Wo
-Solidon den Satz selbst schreibt (Cura, PrusaSlicer ohne Drucker im Bündel),
-kommt der Einzug aus dem Material; Lochausgleich führt Solidon dort keinen,
-denn die Zugabe steckt in der Bohrung. SuperSlicer heißt den Einzug
-`first_layer_size_compensation` mit umgekehrtem Vorzeichen und bekommt ihn nicht.
+kein Spiel ins Modell und zählt deshalb nicht.
+
+Gezählt wird, was Spiel in eine **Innenkontur** legt (Review M2): ein
+abtragender Baustein mit Spiel oder Übermaß (`parts.ops.cuts`, dieselbe
+Auskunft wie Operation und Vorschau), ein aufgesetzter mit Bohrung, die das
+Spiel trägt (`PartSpec.play_inside`: Mutter, Scharnierauge, Stangenverbinder),
+eine gebohrte Bohrung mit Haken, die am fertigen Körper noch steht (ein
+gestopftes oder ohne Haken nachgebohrtes Loch nicht, ein Sechseck aus dem
+Lochfeld nicht), und von Deckel, Drehdeckel und Teilen nur das Ergebnis mit
+dem Spiel innen (Kappe, Hälfte mit Bohrungen, Scharnieraugen). Ein Stift, ein
+Schnapphaken, ein Gewindebolzen, *Schraube erstellen* und der Wärmeeinsatz
+tragen kein Spiel innen; bis zum Review bekam die Schraube „Löcher weiten 0“,
+und der Haken des Drehdeckels nahm auch dem Hals den Lochausgleich.
+
+**Solidons eigener Satz schreibt beides nur auf Wahl** (Review S1). Wo kein
+Herstellerprozess darunter liegt — Cura, PrusaSlicer ohne Drucker im Bündel,
+die Orca-Familie ohne lesbaren Prozess, eine 3MF ohne Slicer —, gilt der Wert
+des Slicers. Zuerst kam dort der Einzug aus dem Material; dann zog Cura ein
+Teil mit *Elefantenfuß ausgleichen* ungefragt doppelt ein (0,4 statt 0,2 mm je
+Seite bei PETG), und Curas Fenster überschrieb, was 75 der 706
+Druckerdefinitionen und 70 Qualitätsstufen setzen (AnkerMake M5 0,2 mm
+Lochausgleich, VzBot −0,3 mm Einzug). `slicer_keys.MAKER_OWNED` lässt beide
+Pfade aus jedem Satz, solange sie weder gewählt noch übernommen sind, wie
+Curas Lüfterkurve (RM-228); der Rat je Teil schreibt sie als übernommen. Die
+sieben Cura-Definitionen der Solidon-Drucker setzen keinen der beiden
+Schlüssel, die Grundlage 0 stimmt dort mit dem, was Cura druckt.
+
+**Ein kalibriertes Material bekommt keinen Vorschlag** (Review M1). Der
+Toleranz-Testkörper geht durch denselben Slicer mit dessen Ausgleich (er
+selbst trägt keinen Modellausgleich, `allowances_for` ist leer); was der Kunde
+misst und einträgt, ist der Rest hinter dem Slicer. Modell und Slicer treffen
+das Maß dann nur zusammen, und „null“ machte das Loch um die Lochkorrektur des
+Slicers enger und ließe den Fuß um dessen Einzug stehen. Erwogen war der
+andere Weg: den Prüfkörper ohne Slicer-Ausgleich drucken, damit das Material
+den ganzen Fehler trägt. Verworfen, weil dann jedes Teil mit Modellausgleich
+nur nach einem Klick richtig druckt (ohne Klick doppelt), weil jede
+Kalibrierung aus 0.5.x ungültig würde, ohne dass der Kunde es merkt, und weil
+Dialog und Handbuch eine zweite Druckvorschrift für den Prüfkörper bräuchten.
+So druckt ein kalibriertes Material ohne Klick richtig, und die Startwerte
+der Tabelle, die den ganzen Fuß meinen, bekommen den Vorschlag.
+
+SuperSlicer heißt Einzug und Lochausgleich `first_layer_size_compensation`
+und `hole_size_compensation`, beide als Materialzugabe mit umgekehrtem
+Vorzeichen (`slicer_keys.PROGRAM_KEYS`, `PROGRAM_NEGATED`); seine Bündel
+setzen −0,05 bis −0,3 mm Einzug und −0,03 bis −0,05 mm Lochausgleich, die die
+Grundlage zurückliest. PrusaSlicer kennt keinen Lochausgleich.

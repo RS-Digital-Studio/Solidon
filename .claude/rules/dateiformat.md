@@ -278,8 +278,11 @@ Herstellers, Solidon schreibt darüber nur die Abweichung.
   gehört zum Projekt. Nur wo der Hersteller keinen nennt (Creality Print heißt
   jeden Prozess „Standard"), liegen `STAGE_PATHS` über dem Standardprozess;
   ein selbst gewählter Prozess ist die Stufe.
-- **Die Lüfterkurve bleibt beim Hersteller** (RM-228): bei Cura unteres Ende
-  und Schwelle aus der Druckerdefinition (`manufacturer.cura_fan_curve`).
+- **Was die Maschine setzt, bleibt beim Hersteller**: Curas Lüfterkurve unten
+  und Schwelle (RM-228, `manufacturer.cura_fan_curve`); Fuß- und Lochausgleich
+  schreibt jeder Satz nur gewählt oder übernommen (`slicer_keys.MAKER_OWNED`,
+  RM-589), der Rat je Teil gilt als übernommen (`handover._applied`), in der
+  Orca-Familie mit Brim-Abstand (`object_keys`).
 - **Was ohne Partner nicht wirkt, geht mit ihm** (`handover.COUPLED_PATHS`):
   Haftungsart mit den Maßen aller Arten, Lüfter-Obergrenze mit dem unteren
   Ende; eine gewählte Haftungsart bringt ihr Maß mit, wenn es null ist
@@ -360,8 +363,7 @@ Herstellers, Solidon schreibt darüber nur die Abweichung.
   keine der drei Ketten nennt, liest die Grundlage aus PrusaSlicers
   eingebauten Vorgaben (`PRUSA_PROGRAM_DEFAULTS`, gemessen mit `--save`).
 - **Ein Prusa-Bündelabschnitt wird am Namen erkannt, nicht am Pfad**
-  (`slicer_profiles.identity`; `PrusaResearch.ini` trägt über neuntausend
-  Profile) — Auswahlen über Profile nehmen diese Kennung. Den gelesenen
+  (`slicer_profiles.identity`) — Auswahlen über Profile nehmen diese Kennung. Den gelesenen
   Bestand hält `slicer_profiles._prusa_store`, geprüft an Größe und
   Zeitstempel jeder Datei.
 - **Bei PrusaSlicer erst der Hersteller, dann Liste und Bedingung**
@@ -480,8 +482,7 @@ der Slicer einen Gegenwert (Minimum zum Maximum, Schwelle zur Kurve, Schalter
 zum Anteil), braucht Solidon ein eigenes Feld, eine Zeile je Familie, eine in
 den Rücklesetabellen und einen Wert im Materialprofil. Ein Anteil, der nur mit
 einem Schalter wirkt, schreibt den Schalter mit (`_positive_switch`, etwa
-`reduce_fan_stop_start_freq`). Curas Kontaktlüfter kühlt die Haut über der
-Stütze, zum selben Zweck.
+`reduce_fan_stop_start_freq`).
 
 Kennt eine ältere Datei ein solches Feld nicht, ist es keine
 Dataclass-Vorgabe, sondern eine Frage an dieselbe Stelle wie bei einem neuen
@@ -493,7 +494,7 @@ wie vorher.
 
 ## Wie eine Zuordnung geprüft wird
 
-Einen falschen Schlüsselnamen meldet kein Slicer. Prusa und Orca schreiben
+Prusa und Orca schreiben
 ihre Konfiguration in den G-Code — `verify()` vergleicht sie gegen das
 Geschriebene. CuraEngine schreibt dort nichts; für es nennt
 `fdmprinter.def.json` jeden gültigen Schlüssel der installierten Version:
@@ -501,8 +502,6 @@ Geschriebene. CuraEngine schreibt dort nichts; für es nennt
 beim Bauen.
 
 ## Einstellungen reisen mit der exportierten Datei
-
-Eine 3MF soll man drucken können, nicht erst einrichten:
 
 | Slicer | Beilage | Format |
 |---|---|---|
