@@ -305,7 +305,20 @@ def fitting_places(part: str) -> tuple[str, ...]:
     return tuple(_applies_to(PARTS.get(part)))
 
 
-def free_spot_for(part: str, objects: Sequence[SceneObject], profile: Profile) -> dict[str, float]:
+def footprint_at_once(part: str) -> bool:
+    """Ob der Umriss eines Bausteins ohne nennenswerte Rechnung da ist (Review N3).
+
+    Die Bibliothek baut ihre Vorgaben in höchstens 0,36 s (Gewindebolzen,
+    gemessen über alle eigenständigen). Ein Rezept rechnet dafür seinen ganzen
+    Stapel, mit dem Rezept wachsend — das gehört nicht vor einen Dialog in den
+    Hauptthread.
+    """
+    return PARTS.get(part).source == "shipped"
+
+
+def free_spot_for(
+    part: str, objects: Sequence[SceneObject], profile: Profile, *, rough: bool = False
+) -> dict[str, float]:
     """Wohin ein eigenständiger Baustein aus dem Katalog kommt, wenn schon Körper stehen.
 
     Ohne Lage entsteht ein Erzeuger im Ursprung — dort, wo meist der erste
@@ -313,6 +326,8 @@ def free_spot_for(part: str, objects: Sequence[SceneObject], profile: Profile) -
     Stelle sucht dieselbe Regel wie beim Laden eines weiteren Modells
     (``prepare.first_free_spot``), für den Umriss mit den Vorgaben; gibt der
     Baustein ohne Zeichnung keinen Umriss her, gilt ein kleiner Platzhalter.
+    ``rough`` nimmt den Platzhalter ohne zu rechnen: die erste Antwort, bis ein
+    Arbeiter den echten Umriss hat (:func:`footprint_at_once`).
     Zurück kommen die Ortsfelder des Erzeugers, leer ohne vorhandene Körper.
     """
     from app.core.geom.prepare import first_free_spot
@@ -321,7 +336,7 @@ def free_spot_for(part: str, objects: Sequence[SceneObject], profile: Profile) -
     if not objects:
         return {}
     spec = PARTS.get(part)
-    if any(entry.required for entry in spec.params.spec()):
+    if rough or any(entry.required for entry in spec.params.spec()):
         footprint = BoundingBox(minimum=(-5.0, -5.0, 0.0), maximum=(5.0, 5.0, 10.0))
     else:
         footprint = placement_tools(spec, {}, profile, standalone=True)[0].bounds

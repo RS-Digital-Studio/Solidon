@@ -1800,10 +1800,15 @@ def test_a_slice_with_a_second_body_says_so_and_locks_before_filling_in(
     from app.core.knowledge.parts import recipe as recipes
     from app.core.scene import History, OperationDraft
     from app.core.scene.revision import dependencies, step_needs
+    from app.core.types import step_numbers
 
     document = new_project().document
     document.parameters["w"] = Parameter(name="w", value=10.0, unit="mm", title="Breite")
     history = History(document)
+    # Ein gelöschter Schritt davor: Kennung und sichtbare Nummer gehen
+    # auseinander, und der Satz nennt die Nummer im Verlauf (Review N5).
+    history.apply("Weg damit", [OperationDraft(op="create_cylinder", params={})])
+    history.remove_operations([document.ops[0].id])
     history.apply("Quader", [OperationDraft(op="create_box", params={"width": "@w"})])
     (original,) = document.ops[0].outputs
     history.apply(
@@ -1813,6 +1818,7 @@ def test_a_slice_with_a_second_body_says_so_and_locks_before_filling_in(
     needs = step_needs(document, dependencies(document, None))
     steps = recipes.steps_of(document, (copy,), needs)
     assert steps == (document.ops[0].id, document.ops[1].id)
+    assert step_numbers(document.ops)[document.ops[1].id] == 2 != document.ops[1].id
     names = {original: "Quader", copy: "Quader 2"}
     dialog = RecipeDialog(
         document, {}, steps, (_feature("hole_1"),), None, bodies={copy: "Quader 2"}, names=names
@@ -1822,12 +1828,19 @@ def test_a_slice_with_a_second_body_says_so_and_locks_before_filling_in(
         dialog._features[0].take.setChecked(True)
         text = dialog.scope.text()
         assert "„Quader 2“" in text, "der gewählte Körper steht oben"
-        assert f"„Quader“ aus Schritt {document.ops[1].id}" in text, "und der, der mitkäme"
+        assert "„Quader“ aus Schritt 2." in text, "und der, der mitkäme, mit seiner Nummer"
         assert not dialog._save.isEnabled()
         assert "„Quader“" in dialog._save.toolTip(), "der Knopf sagt denselben Grund"
     finally:
         dialog.release()
         dialog.deleteLater()
+    # Von Hand gewählte Schritte nennt die Kopfzeile ebenso mit ihrer Nummer.
+    by_hand = RecipeDialog(document, {}, (document.ops[0].id,), (_feature("hole_1"),), None)  # type: ignore[arg-type]
+    try:
+        assert by_hand.scope.text().endswith(": 1"), by_hand.scope.text()
+    finally:
+        by_hand.release()
+        by_hand.deleteLater()
 
 
 def test_the_range_check_names_its_size_and_duration_before_the_first_corner(
@@ -1841,8 +1854,13 @@ def test_the_range_check_names_its_size_and_duration_before_the_first_corner(
     import app.ui.recipe_dialog as module
     from app.ui.recipe_dialog import estimate_text
 
-    assert estimate_text(4, 0.5) == "Geprüft werden 4 Kombinationen, etwa 2 Sekunden."
+    assert estimate_text(4, 0.5) == "Geprüft werden 4 Kombinationen, das dauert wenige Sekunden."
+    assert estimate_text(4, 5.0) == "Geprüft werden 4 Kombinationen, etwa 20 Sekunden."
     assert estimate_text(512, 2.0).endswith("etwa 18 Minuten.")
+    # Einzahl und kurze Läufe haben eigene Sätze (Review G-b: „etwa 1 Sekunden“).
+    assert estimate_text(1, 0.3) == "Geprüft wird eine Kombination, das dauert wenige Sekunden."
+    assert estimate_text(1, 30.0) == "Geprüft wird eine Kombination, etwa 30 Sekunden."
+    assert estimate_text(1, 200.0) == "Geprüft wird eine Kombination, etwa 4 Minuten."
 
     heard: list[tuple[str, object]] = []
     recipe = SimpleNamespace(
@@ -1853,8 +1871,16 @@ def test_the_range_check_names_its_size_and_duration_before_the_first_corner(
     )
     monkeypatch.setattr(module.recipes, "range_size", lambda exposed: 4)
 
-    def checking(*args: object, **kwargs: object) -> object:
+    clock = [100.0]
+    monkeypatch.setattr(module.time, "monotonic", lambda: clock[0])
+
+    def checking(*args: object, progress: Any = None, **kwargs: object) -> object:
         heard.append(("check", None))
+        # Vier Ecken zu je 30 s, gemeldet wie ``range_check``: vier Phasen je Ecke.
+        for corner in range(4):
+            for phase in range(4):
+                progress((corner * 4 + phase) / 16, "Ecke")
+            clock[0] += 30.0
         return recipe
 
     monkeypatch.setattr(module.recipes, "range_check", checking)
@@ -1862,10 +1888,15 @@ def test_the_range_check_names_its_size_and_duration_before_the_first_corner(
     worker.planned.connect(lambda text: heard.append(("plan", text)))
     try:
         worker.work()
-        assert [kind for kind, _text in heard] == ["plan", "check"], (
-            "erst die Ansage, dann die Ecken"
-        )
-        assert "4 Kombinationen" in str(heard[0][1])
+        kinds = [kind for kind, _text in heard]
+        assert kinds[:2] == ["plan", "check"], "erst die Ansage, dann die Ecken"
+        assert heard[0][1] == "Geprüft werden 4 Kombinationen, das dauert wenige Sekunden."
+        # Nach der ersten Ecke zieht das gemessene Mittel nach (Review G-b).
+        assert heard[2:] == [
+            ("plan", "Geprüft werden 4 Kombinationen, etwa 2 Minuten."),
+            ("plan", "Geprüft werden 4 Kombinationen, etwa 2 Minuten."),
+            ("plan", "Geprüft werden 4 Kombinationen, etwa 2 Minuten."),
+        ]
     finally:
         worker.deleteLater()
 

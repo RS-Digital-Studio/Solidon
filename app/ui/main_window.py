@@ -167,10 +167,11 @@ from app.core.knowledge.parts.ops import (
     catalog_operation,
     creation_name,
     direction_of,
+    footprint_at_once,
     free_spot_for,
+    operation_names,
     part_of,
 )
-from app.core.knowledge.parts.ops import op_name as part_op_name
 from app.core.knowledge.parts.recipe import steps_of
 from app.core.log import get_logger
 from app.core.perceive import maps
@@ -1295,6 +1296,29 @@ class _OllamaSizeWorker(Worker):
 
     def work(self) -> None:
         self.done.emit(llm.ollama_size_warning(self._model))
+
+
+class _FreeSpotWorker(Worker):
+    """Die freie Stelle für einen eigenen Baustein, mit seinem echten Umriss (Review N3).
+
+    Ein Rezept rechnet für den Umriss seinen ganzen Stapel; im Hauptthread
+    stand das Fenster dafür Sekunden, bevor der Dialog aufging. Der Dialog
+    öffnet deshalb mit der Stelle für den Platzhalter, und dieser Arbeiter
+    reicht die echte nach. Kein Abbruch: Die Rechnung ist ein Bausteinaufbau
+    mit Vorgaben, endet von selbst, und ihr Ergebnis verfällt, wenn der Dialog
+    nicht mehr steht.
+    """
+
+    done = Signal(object)
+
+    def __init__(self, part: str, objects: tuple[Any, ...], profile: Profile) -> None:
+        super().__init__()
+        self._part = part
+        self._objects = objects
+        self._profile = profile
+
+    def work(self) -> None:
+        self.done.emit(free_spot_for(self._part, self._objects, self._profile))
 
 
 class _FoundationWorker(Worker):
@@ -2698,6 +2722,7 @@ class MainWindow(QMainWindow):
         """Die ausgelaufene Abfrage, festgehalten bis zur nächsten — dieselbe
         Halteleine wie bei den Arbeitern der Sitzung."""
         self._ollama_size_worker: Any = None
+        self._free_spot_worker: _FreeSpotWorker | None = None
         """Die Modellgrößen-Frage an Ollama (§27), aus demselben Grund."""
         self._backend_probe: Any = None
         """Der laufende Arbeiter der Modellfrage (:class:`_BackendProbe`)."""
@@ -10114,13 +10139,20 @@ class MainWindow(QMainWindow):
                     self.object_tree.select_object(lone)
                 # Ein eigener Körper kommt auf eine freie Stelle der Platte, nicht
                 # in den Grundkörper im Ursprung (Review M1).
+                # Ein eigener Baustein rechnet für seinen Umriss den ganzen
+                # Stapel: Der Dialog geht mit dem Platzhalter auf, die echte
+                # Stelle reicht ein Arbeiter nach (Review N3).
                 result = self.session.last_result
+                bodies = tuple(result.scene.objects.values()) if result is not None else ()
+                later = bool(bodies) and not spec.consumes and not footprint_at_once(name)
                 spot = (
-                    free_spot_for(name, tuple(result.scene.objects.values()), self.session.profile)
-                    if not spec.consumes and result is not None
+                    free_spot_for(name, bodies, self.session.profile, rough=later)
+                    if not spec.consumes
                     else {}
                 )
                 self.run_operation(spec, spot or None)
+                if later:
+                    self._settle_free_spot(name, bodies, spot)
         finally:
             # Die sechs Lambdas aus :meth:`_make_catalog` fangen das Fenster,
             # und der Katalog ist sein Kind: Ohne Freigeben hält jede Öffnung
@@ -10149,6 +10181,52 @@ class MainWindow(QMainWindow):
         if not self.object_tree.selected_objects() and self._lone_body() is None:
             return False, _needs_objects(1)
         return True, ""
+
+    def _settle_free_spot(
+        self, part: str, bodies: tuple[Any, ...], rough: Mapping[str, float]
+    ) -> None:
+        """Die echte freie Stelle im Arbeiter rechnen und in den offenen Dialog geben."""
+        dialog = self._op_dialog
+        if dialog is None:
+            return
+        worker = _FreeSpotWorker(part, bodies, self.session.profile)
+        worker.done.connect(
+            lambda spot, for_dialog=dialog: self._free_spot_arrived(for_dialog, rough, spot)
+        )
+        worker.crashed.connect(lambda detail: _log.warning("free spot crashed: %s", detail))
+        self._retire(self._free_spot_worker)
+        self._free_spot_worker = worker
+        worker.finished.connect(lambda done=worker: self._free_spot_worker_done(done))
+        self._leash.start(worker)
+
+    def _free_spot_arrived(
+        self, dialog: OperationDialog, rough: Mapping[str, float], spot: Mapping[str, float]
+    ) -> None:
+        """Ein nachgereichter Vorschlag überschreibt keine Wahl (``wartezeit.md``).
+
+        Übernommen wird nur, solange derselbe Dialog steht und seine Lagefelder
+        noch die erste, grobe Stelle tragen.
+        """
+        if self._op_dialog is not dialog or not isValid(dialog):
+            return
+        values = dialog.values()
+        if any(
+            not math.isclose(float(values.get(field, value)), value, abs_tol=1e-9)
+            for field, value in rough.items()
+        ):
+            return
+        for field, value in spot.items():
+            dialog.take_value(field, value)
+
+    def _free_spot_worker_done(self, worker: Any) -> None:
+        if self._free_spot_worker is worker:
+            self._free_spot_worker = None
+        self._hold_until_done(worker)
+
+    def wait_for_free_spot(self, milliseconds: int = 60_000) -> bool:
+        """Auf die nachgereichte freie Stelle warten — für Tests."""
+        worker = self._free_spot_worker
+        return worker.wait(milliseconds) if worker is not None else True
 
     def _lone_body(self) -> ObjectId | None:
         """Der einzige Körper der Szene — ``None`` bei keinem oder mehreren.
@@ -10680,11 +10758,15 @@ class MainWindow(QMainWindow):
             catalog.show_file_result("")
 
     def _part_usage(self, name: str) -> tuple[int, ...]:
-        """Schritte des offenen Dokuments, die den Bibliotheksbaustein verwenden."""
+        """Schritte des offenen Dokuments, die den Bibliotheksbaustein verwenden.
 
-        operation = part_op_name(name)
+        Einsetzen und Erzeugen (RM-574, Review N2); gefragt vor dem Abmelden,
+        denn danach gehört dem Namen kein Erzeuger mehr.
+        """
+
+        operations = set(operation_names(name))
         return tuple(
-            entry.id for entry in self.session.project.document.ops if entry.op == operation
+            entry.id for entry in self.session.project.document.ops if entry.op in operations
         )
 
     @staticmethod
@@ -27649,6 +27731,7 @@ class MainWindow(QMainWindow):
             self._update_worker,
             self._finished_update_worker,
             self._ollama_size_worker,
+            self._free_spot_worker,
             # Der Download fehlte hier. Er folgt dem Muster mit ``retire`` und
             # ``hold_until_done`` sauber — aber die Halteleine bekommt ihn erst,
             # wenn er fertig ist. Solange er läuft, hält ihn allein dieses Feld,

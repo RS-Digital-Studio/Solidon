@@ -427,13 +427,16 @@ def _recipe_creator(name: str) -> tuple[str, ...]:
 
     Ein Rezept „box“ aus der Zeit vor dem Erzeuger trägt in seinem Stapel den
     Quader ``create_box``; als eigener Erzeuger gelesen, wäre das ein Zirkel auf
-    sich selbst und die Umbenennung im Entwurf träfe den Grundkörper.
+    sich selbst und die Umbenennung im Entwurf träfe den Grundkörper. Gefragt
+    wird die Zugehörigkeit wie bei :func:`~app.core.knowledge.parts.ops.part_of`,
+    nicht die Kategorie: ``create_lid`` steht unter den Bausteinen und gehört
+    doch keinem.
     """
-    from app.core.knowledge.parts.ops import creator_name
+    from app.core.knowledge.parts.ops import creator_name, part_of
     from app.core.registry import REGISTRY
 
     creator = creator_name(name)
-    if REGISTRY.has(creator) and REGISTRY.get(creator).category != "parts":
+    if REGISTRY.has(creator) and part_of(creator) is None:
         return ()
     return (creator,)
 
@@ -1986,7 +1989,12 @@ def steps_of(
 
 
 def _changes(operation: Operation, body: ObjectId, registry: Registry) -> bool:
-    """Ob dieser Schritt den Körper verändert, statt ihn nur zu prüfen oder durchzureichen."""
+    """Ob dieser Schritt den Körper verändert, statt ihn nur zu prüfen oder durchzureichen.
+
+    Ein ausgeschalteter Schritt rechnet nicht und verändert nichts (Review N4).
+    """
+    if operation.suppressed is not None:
+        return False
     if not registry.has(operation.op):
         return True
     spec = registry.get(operation.op)
@@ -2001,7 +2009,8 @@ def _narrowed(operations: Iterable[Operation], registry: Registry | None = None)
     *Anordnen* und *Ausrichten* tragen alle Körper ihres Projekts als Ein- und
     Ausgang; im Ausschnitt fehlen die übrigen, und ihr Schritt nähme Körper,
     die es dort nicht gibt. Ein Schritt ohne einen Körper des Ausschnitts
-    fällt weg.
+    fällt weg, ein ausgeschalteter auch: Er rechnet nicht, und seine erklärten
+    Ausgänge nähmen Körper weg, die bleiben (Review N4).
     """
     from app.core.registry import REGISTRY
 
@@ -2009,6 +2018,8 @@ def _narrowed(operations: Iterable[Operation], registry: Registry | None = None)
     living: set[ObjectId] = set()
     kept: list[Operation] = []
     for entry in operations:
+        if entry.suppressed is not None:
+            continue
         whole = source.has(entry.op) and source.get(entry.op).takes_whole_scene
         if whole and entry.outputs == entry.inputs:
             inside = tuple(name for name in entry.inputs if name in living)

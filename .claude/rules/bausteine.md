@@ -126,7 +126,11 @@ ohne Richtung und mit Achse Z ist das das Bett**, und ein Mündungsbaustein
 steht dann kopfüber. Mit Achse X oder einer Richtung dreht diese Ebene mit,
 wie bei jedem Erzeuger zuvor; aufs Bett bringt ihn *Auf das Bett setzen*. Ein alter Erzeugerschritt rechnet gleich, samt Flächenkennungen
 (`test_every_creator_keeps_its_old_placement`). Aus dem Katalog kommt er auf
-eine freie Stelle der Platte (`ops.free_spot_for`).
+eine freie Stelle der Platte (`ops.free_spot_for`). **Den Umriss eines eigenen
+Bausteins rechnet nie der Hauptthread:** Ein Rezept baut dafür seinen ganzen
+Stapel, also öffnet der Dialog mit der Stelle für den Platzhalter (`rough=True`),
+und `_FreeSpotWorker` reicht die echte nach, solange der Kunde die Lage nicht
+geändert hat (`ops.footprint_at_once`).
 `test_every_standalone_part_makes_a_watertight_body_without_a_selection`
 prüft jeden.
 
@@ -318,7 +322,10 @@ Daten in `<Nutzerdaten>/parts/recipes/*.json` (`parts/recipe.py`,
   `create_<name>` einer anderen Operation (`create_box`), bleibt es beim
   Einsetzen, und ein neuer Baustein dieses Namens wird beim Speichern
   abgewiesen (`recipe.reserved_name`); auch Beilagenfolge und Entwurf lesen
-  diesen Namen dann nicht als Rezept (`_recipe_creator`).
+  diesen Namen dann nicht als Rezept (`_recipe_creator`). Gefragt wird die
+  Zugehörigkeit (`part_of`), nie die Kategorie: `create_lid` steht unter den
+  Bausteinen und gehört keinem. Wer Schritte eines Bausteins zählt (*Schritt
+  zeigen*, Quelltextsperre), zählt beide Namen.
 - **`travelling_parts` warnt nur vor `.py`s** — ein Rezept reist als Daten,
   sein `source` ist `recipe`. **`own` heißt „gehört dem Kunden"** und umfasst
   beide Gestalten; wer nur die `.py` meint, fragt `source == "user"`.

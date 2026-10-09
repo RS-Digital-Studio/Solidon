@@ -9,6 +9,7 @@ der Weg vom Ordner bis ins Register.
 
 from __future__ import annotations
 
+import copy
 import dataclasses
 import errno
 import json
@@ -1074,6 +1075,45 @@ def test_a_chosen_body_saves_after_a_step_over_the_whole_scene(step: str, profil
     assert as_mesh_data(built.mesh).volume == pytest.approx(expected)
 
 
+def test_a_switched_off_step_neither_joins_the_slice_nor_brings_a_body(profile: Profile) -> None:
+    """Review N4: Ein ausgeschaltetes *Vereinen* rechnet nicht, B bleibt eigener Körper.
+
+    Als Veränderung gezählt, zog es B in den Ausschnitt; ``slice_bodies`` las die
+    erklärten Ausgänge und meldete einen Körper, und ``capture`` wies erst nach
+    dem Ausfüllen ab. Gemeint ist nur A, und das ist ohne den ruhenden Schritt
+    speicherbar.
+    """
+    from app.core.scene import History, evaluate
+
+    document, _result, first, _second = _two_boxes_and("union_objects", profile)
+    union_id = document.ops[-1].id
+    history = History(document)
+    history.commit(history.plan_suppress((union_id,)))
+    assert document.ops[-1].suppressed is not None
+    result = evaluate(document, profile)
+    steps = recipe.steps_of(document, (first,), _needs(document, result))
+    assert steps == (document.ops[0].id,)
+    assert list(recipe.slice_bodies(document, steps)) == [first]
+    assert list(recipe.slice_bodies(document, (*steps, union_id))) == [first], (
+        "auch von Hand mitgenommen bringt der ruhende Schritt nichts"
+    )
+    made = recipe.capture(
+        document,
+        {},
+        name="klotz_ohne_vereinen",
+        title="Klotz",
+        group="structure",
+        op_ids=steps,
+        exposed=(
+            recipe.ExposedParam(name="w", title="Breite", default=12.0, minimum=8.0, maximum=20.0),
+        ),
+        features={"stelle": next(iter(result.scene.objects[first].features))},
+        profile=profile,
+    )
+    expected = as_mesh_data(result.scene.objects[first].mesh).volume
+    assert as_mesh_data(recipe.build(made, profile=profile).mesh).volume == pytest.approx(expected)
+
+
 @pytest.mark.parametrize("step", ["duplicate_object", "align_to_feature"])
 def test_a_slice_that_brings_a_second_body_says_so_before_saving(
     step: str, profile: Profile
@@ -1180,6 +1220,74 @@ def test_an_own_part_named_like_an_operation_keeps_inserting_and_a_new_one_is_re
         recipe.replace(_recipe(profile, "box"), PartRegistry(), registry)
     assert refused.value.constraint == "reserved"
     assert refused.value.suggestions
+
+
+def _with_step(made: recipe.Recipe, operation: str) -> recipe.Recipe:
+    """Das Rezept mit einem weiteren Schritt ``operation`` im Stapel, als Daten gebaut."""
+    data = recipe.to_data(made)
+    steps = data["document"]["ops"]
+    extra = copy.deepcopy(steps[0])
+    extra["op"] = operation
+    extra["id"] = max(int(entry["id"]) for entry in steps) + 1
+    steps.append(extra)
+    return recipe.from_data(data)
+
+
+@pytest.mark.parametrize(("name", "operation"), [("box", "create_box"), ("lid", "create_lid")])
+def test_an_old_recipe_named_like_a_foreign_creator_loads_and_keeps_that_step(
+    profile: Profile, name: str, operation: str
+) -> None:
+    """Namensschutz (RM-574, N1): ``create_lid`` gehört keinem Baustein, obwohl es
+    in der Kategorie der Bausteine steht.
+
+    Gefragt wird die Zugehörigkeit (``part_of``), nicht die Kategorie: Ein
+    vorhandenes Rezept „lid“, das selbst einen Deckel anlegt, ist kein Zirkel auf
+    sich selbst, und der Entwurf benennt den echten Deckelschritt nicht auf den
+    Erzeuger eines mitgereisten „lid“ um.
+    """
+    from app.core.registry import REGISTRY
+
+    old = _with_step(_recipe(profile, name), operation)
+    assert recipe.from_data(recipe.to_data(old)).name == name, "das Rezept lädt"
+
+    parts, registry = PartRegistry(), Registry()
+    for entry in REGISTRY.all():
+        registry.register(entry)
+    foreign = registry.get(operation)
+    recipe.register(_recipe(profile, name), parts, registry)
+    assert not parts.get(name).standalone
+    assert registry.get(operation) is foreign
+    assert recipe.reserved_name(name, PartRegistry(), registry)
+
+    # Eine abweichende Beilage gleichen Namens reist unter einem freien Namen mit.
+    travelled = dataclasses.replace(
+        _recipe(profile, name), document=recipe_document_seed(70), dependencies={}
+    )
+    document = recipe_document_seed(150)
+    document.ops.append(
+        Operation(
+            id=2, op=f"insert_{name}", inputs=("obj_1",), outputs=("obj_1",), params={"z": 8.0}
+        )
+    )
+    outer = _with_step(
+        recipe.Recipe(
+            name="rm574_mit_deckel",
+            title="Mit Deckel",
+            group="structure",
+            document=document,
+            dependencies={name: recipe.to_data(travelled)},
+            features={"top": f"{name}_top"},
+        ),
+        operation,
+    )
+    try:
+        project = recipe.draft(outer, parts, registry)
+        steps = [entry.op for entry in project.document.ops]
+        assert operation in steps, "der eigene Schritt bleibt, wie er war"
+        assert f"insert_{name}" not in steps, "die Beilage zeigt auf ihren freien Namen"
+    finally:
+        for travelled_name in [entry.name for entry in parts.all() if entry.name != name]:
+            parts.remove(travelled_name)
 
 
 def test_replacing_and_removing_an_own_part_takes_its_creator_along(

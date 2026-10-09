@@ -1748,10 +1748,33 @@ def test_an_own_part_arises_as_its_own_body_from_the_catalogue(
         assert volume == pytest.approx(40.0 * 30.0 * 12.0)
 
         # Mit einem Körper, gewählt, ohne Fläche: ein zweiter, nicht an ihm.
+        # Den Umriss des Rezepts rechnet nicht der Hauptthread, bevor der
+        # Dialog aufgeht (Review N3); die echte Stelle kommt danach.
+        import threading
+
+        from app.core.knowledge.parts import ops as part_ops
+
+        built_on_main: list[bool] = []
+        original_tools = part_ops.placement_tools
+
+        def counted_tools(*args, **kwargs):
+            built_on_main.append(threading.current_thread() is threading.main_thread())
+            return original_tools(*args, **kwargs)
+
+        monkeypatch.setattr(part_ops, "placement_tools", counted_tools)
         window.object_tree.select_object(first)
         window.action_catalog()
         dialog = window._op_dialog
         assert dialog is not None and dialog.spec.name == f"create_{name}"
+        assert True not in built_on_main, "der Dialog wartete auf den Umriss des Rezepts"
+        assert window.wait_for_free_spot()
+        QApplication.processEvents()
+        assert built_on_main == [False], "der Arbeiter rechnete die echte Stelle"
+        expected = part_ops.free_spot_for(
+            name, tuple(result.scene.objects.values()), window.session.profile
+        )
+        values = dialog.values()
+        assert {field: values[field] for field in expected} == pytest.approx(expected)
         dialog.accept()
         assert window.session.wait_for_idle(60_000)
         QApplication.processEvents()
@@ -1768,6 +1791,14 @@ def test_an_own_part_arises_as_its_own_body_from_the_catalogue(
         assert np.any(high_a[:2] <= low_b[:2]) or np.any(high_b[:2] <= low_a[:2]), (
             "auf freier Stelle"
         )
+        # Entfernen und Hinzufügen zählen auch die Erzeugerschritte (Review N2).
+        created = tuple(
+            entry.id
+            for entry in window.session.project.document.ops
+            if entry.op == f"create_{name}"
+        )
+        assert len(created) == 2
+        assert window._part_usage(name) == created
     finally:
         window.close()
         clean_recipe_globals(name)

@@ -150,8 +150,9 @@ Ein Baustein sagt nur, **was** er ist; den Kern wählt der Aufrufer
   (`reserved_name`, `_recipe_creator`, RM-574). `recipe.draft` ist der Gegenweg zu
   `capture`, `Session.open_draft` merkt sich die Herkunft. `steps_of` schneidet
   den Ausschnitt eines gewählten Körpers aus dem Stapel, rückwärts über die
-  Kanten aus `revision.step_needs`; Berichte und durchgereichte Körper zählen
-  nicht, Ganzszenen-Schritte verengt `_narrowed`, und `slice_bodies` nennt die
+  Kanten aus `revision.step_needs`; Berichte, durchgereichte Körper und
+  ausgeschaltete Schritte zählen nicht, Ganzszenen-Schritte verengt
+  `_narrowed`, und `slice_bodies` nennt die
   Körper eines Ausschnitts ohne Rechnung. Ein Ausschnitt trägt
   keine Auftragseinstellungen; Abhängigkeiten sammelt der Container transitiv,
   Namenskonflikte bekommen freie Namen, vorhandene Fassungen bleiben.

@@ -30,7 +30,7 @@ import time
 import unicodedata
 from collections.abc import Callable, Mapping
 from itertools import pairwise
-from typing import Any
+from typing import Any, Final
 
 from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtGui import QShowEvent
@@ -54,7 +54,7 @@ from app.core.errors import AppError, FileWriteError, InternalError
 from app.core.knowledge.parts import GROUPS, PARTS
 from app.core.knowledge.parts import recipe as recipes
 from app.core.log import get_logger
-from app.core.types import Document, Feature, ObjectId, Profile, measure_status
+from app.core.types import Document, Feature, ObjectId, Profile, measure_status, step_numbers
 from app.i18n import tr
 from app.ui.dialogs import problem_text
 from app.ui.labels import (
@@ -101,13 +101,41 @@ PLACE_FRONT = "front"
 PLACE_ADVANCED = "advanced"
 
 
-def estimate_text(count: int, one: float) -> str:
-    """Der Satz vor dem Bereichstest: Kombinationen und geschätzte Dauer (RM-578).
+#: Darunter sagt der Satz „wenige Sekunden“ statt einer Zahl: Eine Schätzung
+#: aus einer einzigen Probe trifft so kurze Läufe nicht auf die Sekunde, und
+#: „etwa 1 Sekunden“ stand schon einmal da (Review G-b).
+FEW_SECONDS: Final = 10
 
-    ``one`` ist die Zeit des einen Schnitts mit seiner Probe; jede Ecke kostet
-    etwa eine solche Auswertung. Ohne Fenster prüfbar.
+
+def estimate_text(count: int, one: float) -> str:
+    """Der Satz zum Bereichstest: Kombinationen und geschätzte Dauer (RM-578).
+
+    ``one`` ist die Zeit je Ecke: vor der ersten die des einen Schnitts mit
+    seiner Probe, danach das Mittel der schon geprüften Ecken (``_CheckWorker``
+    zieht nach). Einzahl und kurze Läufe haben eigene Sätze. Ohne Fenster
+    prüfbar.
     """
     seconds = max(1, math.ceil(count * one))
+    if count == 1:
+        if seconds < FEW_SECONDS:
+            return str(tr("Geprüft wird eine Kombination, das dauert wenige Sekunden."))
+        if seconds < 90:
+            return str(
+                tr("Geprüft wird eine Kombination, etwa {seconds} Sekunden.").format(
+                    seconds=seconds
+                )
+            )
+        return str(
+            tr("Geprüft wird eine Kombination, etwa {minutes} Minuten.").format(
+                minutes=math.ceil(seconds / 60)
+            )
+        )
+    if seconds < FEW_SECONDS:
+        return str(
+            tr("Geprüft werden {count} Kombinationen, das dauert wenige Sekunden.").format(
+                count=count
+            )
+        )
     if seconds < 90:
         return str(
             tr("Geprüft werden {count} Kombinationen, etwa {seconds} Sekunden.").format(
@@ -189,15 +217,23 @@ class _CheckWorker(Worker):
             recipe = self._cut()
             if self.is_cancelled:
                 return
-            self.planned.emit(
-                estimate_text(recipes.range_size(recipe.exposed), time.monotonic() - started)
-            )
-            checked = recipes.range_check(
-                recipe,
-                self._profile,
-                progress=lambda share, note: self.step.emit(float(share), str(note)),
-                cancelled=self,
-            )
+            total = recipes.range_size(recipe.exposed)
+            self.planned.emit(estimate_text(total, time.monotonic() - started))
+            checking = time.monotonic()
+            done_before = 0
+
+            def report(share: float, note: str) -> None:
+                # **Nach jeder fertigen Ecke zählt das gemessene Mittel** (Review
+                # G-b): Der Schnitt trifft die Ecken schlecht — ein Quader
+                # schätzte 6 s für 0,2 s, eine Platte mit Bolzen 6 s für 9,3 s.
+                nonlocal done_before
+                self.step.emit(float(share), str(note))
+                done = int(share * total + 1e-9)
+                if done_before < done < total:
+                    done_before = done
+                    self.planned.emit(estimate_text(total, (time.monotonic() - checking) / done))
+
+            checked = recipes.range_check(recipe, self._profile, progress=report, cancelled=self)
         except AppError as error:
             # Schnitt und Bereichsplanung tragen beide einen konkreten
             # Handlungsvorschlag; er gehört unverändert in den Dialog.
@@ -503,7 +539,7 @@ def place_label(feature: Feature) -> str:
 SCOPE_NUMBERS_SHOWN = 8
 
 
-def scope_text(op_ids: tuple[int, ...], total: int, bodies: tuple[str, ...] = ()) -> str:
+def scope_text(numbers: tuple[int, ...], total: int, bodies: tuple[str, ...] = ()) -> str:
     """Der Satz über dem Dialog: welche Schritte in den Baustein wandern.
 
     Reine Rechnung über zwei Zahlen und deshalb ohne Fenster prüfbar.
@@ -513,13 +549,14 @@ def scope_text(op_ids: tuple[int, ...], total: int, bodies: tuple[str, ...] = ()
     steht aber trotzdem da — eine Vorgabe, die stillschweigend greift, ist
     eine Vermutung des Kunden (§2.4). Kamen die Schritte aus einem gewählten
     Körper (RM-565), nennt der Satz ihn statt der Schrittnummern.
+    ``numbers`` sind die Nummern, die der Verlauf zeigt (``step_numbers``).
     """
-    if not op_ids:
+    if not numbers:
         return str(tr("Kein Schritt gewählt — der Baustein bliebe leer."))
     # Dieselben zwei Schlüssel, mit denen der Chat seine Züge zählt
     # (``chat.py``): „alle 1 Schritte" wäre die Art Satz, die eine Anwendung
     # billig aussehen lässt, und übersetzt sind beide längst.
-    count = len(op_ids)
+    count = len(numbers)
     steps = tr("1 Schritt") if count == 1 else tr("{n} Schritte").format(n=count)
     if len(bodies) == 1:
         return str(
@@ -531,12 +568,12 @@ def scope_text(op_ids: tuple[int, ...], total: int, bodies: tuple[str, ...] = ()
         return str(tr("Der Baustein bekommt die gewählten Körper: {steps}.").format(steps=steps))
     if count >= total:
         return str(tr("Der Baustein bekommt den ganzen Verlauf: {steps}.").format(steps=steps))
-    numbers = ", ".join(str(op_id) for op_id in op_ids[:SCOPE_NUMBERS_SHOWN])
+    listed = ", ".join(str(number) for number in numbers[:SCOPE_NUMBERS_SHOWN])
     if count > SCOPE_NUMBERS_SHOWN:
-        numbers = f"{numbers} …"
+        listed = f"{listed} …"
     return str(
         tr("Der Baustein bekommt {steps} von {total}: {numbers}").format(
-            steps=steps, total=total, numbers=numbers
+            steps=steps, total=total, numbers=listed
         )
     )
 
@@ -550,14 +587,21 @@ def slice_problem(
     """Der Satz, wenn der Ausschnitt nicht genau einen Körper ergibt — sonst leer.
 
     Genannt wird jeder weitere Körper mit dem Schritt, aus dem er kommt; ist
-    ein Körper gewählt, sind es die anderen. Ohne Fenster prüfbar.
+    ein Körper gewählt, sind es die anderen. Der Schritt steht mit der Nummer,
+    die der Verlauf zeigt, nicht mit seiner Kennung (Review N5). Ohne Fenster
+    prüfbar.
     """
     bodies = recipes.slice_bodies(document, op_ids)
     if len(bodies) <= 1:
         return ""
+    shown = step_numbers(document.ops)
     others = [name for name in bodies if name not in chosen] or list(bodies)[1:]
     listed = ", ".join(
-        str(tr("„{name}“ aus Schritt {step}").format(name=names.get(name, name), step=bodies[name]))
+        str(
+            tr("„{name}“ aus Schritt {step}").format(
+                name=names.get(name, name), step=shown.get(bodies[name], bodies[name])
+            )
+        )
         for name in others
     )
     return str(
@@ -700,7 +744,13 @@ class RecipeDialog(QDialog):
         # Baustein ist genau einer. Vorher kam die Absage nach dem Ausfüllen,
         # unter einer Kopfzeile, die „den gewählten Körper“ versprach.
         self._slice_problem = slice_problem(document, op_ids, chosen, names or {})
-        shown = scope_text(op_ids, len(document.ops), tuple(chosen.values()))
+        # Die Nummern, die der Verlauf zeigt, nicht die Kennungen (Review N5).
+        positions = step_numbers(document.ops)
+        shown = scope_text(
+            tuple(sorted(positions.get(op_id, op_id) for op_id in op_ids)),
+            len(document.ops),
+            tuple(chosen.values()),
+        )
         self.scope = QLabel(
             f"{shown} {self._slice_problem}" if self._slice_problem else shown, self
         )
