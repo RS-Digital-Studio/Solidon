@@ -1,0 +1,9 @@
+Zustände in beiden Läufen: 3069
+davon anders: 0  {}
+nur mit: 0, nur ohne: 0
+je Schritt: {'0_geladen': 551, '1_bohren_1': 229, '1_bohren_2': 223, '1_bohren_3': 202, '2_versetzen': 192, '3_aufweiten': 188, '4_entfernen': 187, '5_quader': 267, '6_zapfen': 267, '7_abschneiden': 267, '8_verschieben': 267, '9_bohren': 229}
+fernes Merkmal lebt: 2121 von 2365
+Zuordnungen mit/ohne: 7548/7548, Fragen 1/1
+Fälle: 219, mit anderer Zahl der Zuordnungen oder Fragen: 0
+Fallende (mit): {'fertig': 219}
+CPU Erkennung nach den Schritten mit/ohne: 3195.0/4205.8 s
