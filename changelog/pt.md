@@ -57,6 +57,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Mesmo num histórico longo, um passo novo quase não demora mais a calcular do que o primeiro.
 - Desfazer e refazer são mais rápidos, e a memória que já não é precisa fica logo livre.
 - Resolver sobreposições e exportar em 3MF é bastante mais rápido.
+- Ao reparar, o Solidon encontra sobreposições em modelos grandes até um quarto mais depressa.
 - A área de trabalho aparece mais depressa ao abrir ficheiros 3MF grandes.
 - Um modelo adicionado passa a ficar à vista, mesmo quando aparece ao lado de um modelo em que a vista estava ampliada.
 - No catálogo de blocos, *Gerir blocos* aparece aberto enquanto ainda não existir nenhum bloco próprio.
