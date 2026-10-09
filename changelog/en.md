@@ -90,6 +90,7 @@ it into `website/version.json`.
 - In the print dialog, printer, filaments and quality stay fully visible even with enlarged text. Long labels wrap instead.
 - The report calculates faster and needs less memory.
 - On Linux with Flatpak, Solidon now reports a slicer crash as a crash instead of only saying that no print file was made.
+- Even on a fully loaded computer, Solidon gives the real reason after stopping a slicer instead of a timeout. A finished print file is used.
 
 ### Threads, holes and standard parts
 
