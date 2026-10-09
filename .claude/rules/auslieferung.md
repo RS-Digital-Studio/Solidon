@@ -18,7 +18,8 @@ dabei **einzuhalten** ist; das Warum steht unter denselben Überschriften in
 
 Die CI-Prüfjobs folgen `konzepte/konzept-ci-testlaufzeiten-2026-09.md`. Der
 Paketbau wartet auf Qualität, jeden Teil der Kernmatrix auf jeder Plattform,
-die plattformübergreifenden Fensterverträge und jede Windows-Fenstergruppe;
+die Fensterverträge mit den Rendererfällen auf allen vier Paketplattformen und
+jede Windows-Fenstergruppe;
 ein übersprungener, abgebrochener oder roter Pflichtjob ergibt keine
 Paketfreigabe. Signierung und Veröffentlichung behalten ihre eigenen Grenzen.
 

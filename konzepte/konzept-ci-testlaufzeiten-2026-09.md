@@ -1,6 +1,7 @@
 # Kürzere CI-Läufe bei unverändertem Prüfvertrag
 
-Stand: 24.09.2026, Nachweis in §7 vom 06.10.2026, CI-09 vom 07.10.2026. Von Robert beauftragt: erst dieses Konzept, danach die
+Stand: 24.09.2026, Nachweis in §7 vom 06.10.2026, CI-09 vom 07.10.2026, Rendererfälle auf
+allen Paketplattformen (CI-03, CI-04) vom 09.10.2026. Von Robert beauftragt: erst dieses Konzept, danach die
 vollständige Umsetzung. Der laufende Umsetzungs- und Abnahmestand gehört in
 `ROADMAP.md`; dieses Dokument beschreibt Entscheidungen und Nachweise.
 
@@ -43,8 +44,8 @@ Kernjob frühestens fertig ist, gleich wie viele Worker er hat.
 |---|---|---|
 | CI-01 | Kein Test fällt durch die Aufteilung weg oder läuft in zwei Gruppen — weder bei Fenster-/Renderergruppen noch bei den Teilen der Kernsuite. Neue Dateien werden automatisch aufgenommen. | Partitionstests mit unbekannten Dateien, vollständiger Vereinigung und leeren Schnittmengen; `--ci-shard` gegen die echte Sammlung; Teilmatrix gleich `0 … N−1` |
 | CI-02 | Jeder Fenster- oder Rendererdateilauf erhält einen frischen Prozess; Qt-Abbau und Garbage Collection bleiben erhalten. | Prüfung der gestarteten Befehle und Prozessausgänge |
-| CI-03 | Fenster und echte Renderer laufen nur im bisherigen Release-Umfang; Leistung bleibt lokal beim Release, `rendered` bleibt aus CI ausgeschlossen. | Workflow- und Marker-Verträge, einschließlich `tests_only` |
-| CI-04 | Kernmatrix und native Typprüfung bleiben auf den bisherigen Plattformen. Die zwei speziellen Fensterverträge bleiben auf Windows, Linux und macOS. | Prüfung der tatsächlichen Jobmatrix und Aufrufe |
+| CI-03 | Fenster und echte Renderer laufen nur in Releasejobs: die Fensterdateien unter Windows, jeder `rendering`-Fall ohne Fenster auf jeder Paketplattform (Windows, Linux, Apple Silicon, Intel-Mac) und im Versionswächter unter Linux (Entscheidung Robert, 06.10.2026, RM-344). Leistung bleibt lokal beim Release, `rendered` bleibt aus CI ausgeschlossen. | Workflow- und Marker-Verträge, einschließlich `tests_only`; die Abdeckung je Plattform leitet `test_every_rendering_case_runs_on_every_platform_in_a_release_job` aus Workflow und Markerwahl ab |
+| CI-04 | Kernmatrix und native Typprüfung bleiben auf den bisherigen Plattformen. Die zwei speziellen Fensterverträge laufen auf allen vier Paketplattformen, außerhalb von Windows zusammen mit den Rendererfällen. | Prüfung der tatsächlichen Jobmatrix und Aufrufe |
 | CI-05 | Paketbau braucht sämtliche erforderlichen erfolgreichen Qualitäts-, Kern- und Fensterjobs. Abbruch, leere Auswahl, Sammlungsfehler oder fehlender Bericht ergeben kein Grün. | Negative Fälle des Runners und Prüfung der Paketabhängigkeiten |
 | CI-06 | Berichte nennen Auswahl, echte Prozessausgänge, Testzahlen und Zeiten; auch bei Fehlern werden vorhandene Berichte hochgeladen. | Berichtstests und `always()`-Artefaktschritte |
 | CI-07 | Gemeinsame Vorbereitung verändert keine Eingabe eines anderen Tests. Determinismus vergleicht weiterhin zwei unabhängig gebaute Ergebnisse. | Kopien für veränderliche Daten, unveränderte Zusicherungen und gezielte Gegenproben |
@@ -62,9 +63,17 @@ beim Release die Fensterjobs. Ruff und Format werden einmal ausgeführt;
 mypy bleibt auf jeder Plattform, weil es Plattformzweige unterschiedlich
 prüft — einmal je Plattform, nicht je Teil.
 
-Die zwei plattformübergreifenden Fensterverträge bekommen eine eigene Matrix.
-Die übrigen Windows-Dateien mit Fenstern oder echten Renderern werden in drei Gruppen verteilt, jeweils seriell
-mit einem Prozess je Datei. Die Kernsuite läuft je Plattform in drei Teilen:
+Die zwei plattformübergreifenden Fensterverträge bekommen eine eigene Matrix
+über alle vier Paketplattformen. Die übrigen Windows-Dateien mit Fenstern oder echten Renderern werden in drei Gruppen verteilt, jeweils seriell
+mit einem Prozess je Datei. Unter Linux und auf beiden Macs fährt die Matrix
+der Fensterverträge danach die Gruppe `rendering`: die Rendererfälle ohne
+Fenster aus allen übrigen Dateien, je Datei ein Prozess, mit
+`-m "rendering and not windowed and not performance and not rendered"`. Unter
+Windows trägt die Fenstergruppe dieselben Fälle; so läuft jeder Fall je
+Plattform genau einmal. Ein eigener Rendererjob entsteht nicht, weil
+macOS-Läufer der Engpass sind; der Intel-Mac kommt dafür als einziger
+Prüfjob seiner Plattform in diese Matrix (RM-344). Der Versionswächter fährt
+unter Linux dieselben zwei Gruppen gegen die neuesten Fassungen. Die Kernsuite läuft je Plattform in drei Teilen:
 Jeder Teil sammelt die ganze Suite und behält mit `--ci-shard I/N` nach der
 Markerwahl seine Dateien; mypy läuft einmal je Plattform im Teil 0. Die
 Worker eines Teils verteilen mit `--dist worksteal`: lokal an Teil 0/3 mit

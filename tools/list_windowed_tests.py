@@ -92,6 +92,8 @@ class WindowedCollector:
         self.files: set[Path] = set()
         self.plain_files: set[Path] = set()
         self.window_counts: dict[Path, int] = {}
+        #: Je Datei die Rendererfälle ohne Fenster (CI-Gruppe ``rendering``).
+        self.rendering_counts: dict[Path, int] = {}
         #: Je Datei die Programme ihrer Slicertests (``pytest.mark.slicer``).
         self.slicer_programs: dict[Path, set[str]] = {}
         self.include_rendered = include_rendered
@@ -110,6 +112,8 @@ class WindowedCollector:
         if needs_release_isolation(item):
             self.files.add(path)
             self.window_counts[path] = self.window_counts.get(path, 0) + 1
+            if not needs_a_window(item):
+                self.rendering_counts[path] = self.rendering_counts.get(path, 0) + 1
         else:
             self.plain_files.add(path)
 
@@ -186,6 +190,14 @@ def collect_ci_window_counts(
     """Zählt Fenster- und Rendererfälle ohne Leistung und Erzeugnisvergleiche."""
     collector = _collect(paths, confcutdir=confcutdir)
     return dict(sorted(collector.window_counts.items()))
+
+
+def collect_ci_rendering_counts(
+    paths: Sequence[Path], *, confcutdir: Path | None = None
+) -> dict[Path, int]:
+    """Zählt Rendererfälle ohne Fenster, Leistung und Erzeugnisvergleiche."""
+    collector = _collect(paths, confcutdir=confcutdir)
+    return dict(sorted(collector.rendering_counts.items()))
 
 
 def collect_ci_selection(

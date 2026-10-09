@@ -117,6 +117,59 @@ def test_partition_is_complete_disjoint_and_independent_of_collection_order() ->
     assert sum(file.expected_tests for shard in (*shards, *contracts) for file in shard) == 11
 
 
+def test_the_rendering_group_takes_every_file_but_the_contracts_with_its_own_marker() -> None:
+    """Fensterverträge und Rendererfälle ergeben zusammen jeden Rendererfall, keinen doppelt.
+
+    Die Gruppe ``rendering`` sammelt nur Rendererfälle ohne Fenster; die zwei
+    Vertragsdateien fährt ``contracts`` auf jeder Plattform schon mit (RM-344).
+    """
+    counts = {
+        "tests/test_render_factory.py": 3,
+        "tests/test_render_contract.py": 24,
+        "tests/test_new_renderer.py": 2,
+    }
+    (planned,) = runner.plan_shards(counts, {}, 5, group="rendering", shard_count=1)
+    assert sorted(file.path for file in planned) == [
+        "tests/test_new_renderer.py",
+        "tests/test_render_contract.py",
+    ]
+    assert {file.marker for file in planned} == {runner.RENDERING_MARKER}
+    command = runner.pytest_command(planned[0], Path("x.xml"))
+    assert command[command.index("-m", 6) + 1] == runner.RENDERING_MARKER
+    assert not any(runner.takes_file("rendering", path) for path in runner.CONTRACT_FILES)
+    assert all(runner.takes_file("contracts", path) for path in runner.CONTRACT_FILES)
+    (contracts,) = runner.plan_shards(_counts(), {}, 5, group="contracts", shard_count=1)
+    assert {file.marker for file in contracts} == {runner.CI_MARKER}
+    for broken, size in (({"tests/test_render_factory.py": 3}, 1), (counts, 2)):
+        with pytest.raises(ValueError):
+            runner.plan_shards(broken, {}, 5, group="rendering", shard_count=size)
+
+
+def test_the_rendering_group_plans_from_its_own_collection(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """``--ci-group rendering`` zählt Rendererfälle ohne Fenster und nennt seine Auswahl."""
+    monkeypatch.setattr(
+        list_windowed_tests,
+        "collect_ci_window_counts",
+        lambda _: pytest.fail("die Rendergruppe zählte Fensterfälle"),
+    )
+    monkeypatch.setattr(
+        list_windowed_tests,
+        "collect_ci_rendering_counts",
+        lambda _: {
+            runner.ROOT / "tests/test_render_factory.py": 3,
+            runner.ROOT / "tests/test_a.py": 2,
+        },
+    )
+    arguments = ["--ci-group", "rendering", "--report-dir", str(tmp_path), "--plan-only"]
+    assert runner.main(arguments) == 0
+    summary = json.loads((tmp_path / "summary.json").read_text(encoding="utf-8"))
+    assert summary["marker"] == runner.RENDERING_MARKER
+    assert [file["path"] for file in summary["selected"]] == ["tests/test_a.py"]
+    assert runner.RENDERING_MARKER in (tmp_path / "summary.md").read_text(encoding="utf-8")
+
+
 def test_tied_durations_use_the_path_and_then_the_shard_index() -> None:
     """Dasselbe vollständige Eingangsmaterial erzeugt auf beiden Runnern denselben Plan."""
     counts = _counts(**{f"tests/test_{name}.py": 1 for name in "dcba"})
@@ -180,7 +233,8 @@ def test_the_documented_table_command_covers_every_windows_report() -> None:
     assert "ci_shards.py windows" in documentation
     command = documentation.split("ci_shards.py windows", 1)[1].split("\n\n", 1)[0]
     assert "berichte/tests-windows-*/tests__*.xml" in command
-    assert "berichte/tests-contracts-windows-latest/tests__*.xml" in command
+    # Das Artefakt der Fensterverträge trägt seit RM-344 je Gruppe einen Ordner.
+    assert "berichte/tests-contracts-windows-latest/contracts/tests__*.xml" in command
 
 
 @pytest.mark.parametrize("value", [0, -1, True, "4", float("nan"), float("inf")])
@@ -238,6 +292,11 @@ def test_ci_collection_excludes_generated_and_performance_cases_but_keeps_mixed_
     )
     assert list_windowed_tests.collect_ci_window_counts((tmp_path,), confcutdir=tmp_path) == {
         mixed.resolve(): 8
+    }
+    # Die Gruppe ``rendering``: echte Grafik ohne Fenster, also die zwei Fälle über
+    # die geerbte Fixture und der direkt markierte (RM-344).
+    assert list_windowed_tests.collect_ci_rendering_counts((tmp_path,), confcutdir=tmp_path) == {
+        mixed.resolve(): 3
     }
 
 

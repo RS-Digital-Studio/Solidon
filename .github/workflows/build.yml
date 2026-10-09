@@ -5,7 +5,8 @@
 # Paketierung wartet auf alle Pflichtjobs, und nur was grün ist, wird
 # veröffentlicht. Kern und Fenster laufen in Teilen: Die aktuelle
 # Pytest-Sammlung bestimmt die vollständige Menge, Laufzeittabellen verteilen
-# sie nur. Fenster und Renderer laufen je Datei in einem frischen Prozess. Leistung wird
+# sie nur. Fenster und Renderer laufen je Datei in einem frischen Prozess, die
+# Fensterdateien unter Windows, die Rendererfälle auf jeder Paketplattform. Leistung wird
 # beim Release lokal gemessen, erzeugte Vergleiche bleiben dort. Die
 # Baujobs arbeiten gegen `constraints.txt`; der Versionswächter daneben (Job
 # `latest`) löst frei auf und meldet, was eine neue Version bricht — auf
@@ -108,13 +109,11 @@ jobs:
         # Import in jedem UI-Test. Dazu Xvfb — die Begründung steht unten beim
         # Testschritt.
         #
-        # **Und Vulkan, seit die Ansicht mit pygfx über wgpu zeichnet**
-        # (06.09.2026): ``libvulkan1`` ist der Loader, ``mesa-vulkan-drivers``
-        # bringt lavapipe mit — den Software-Adapter, den ein Runner ohne
-        # Grafikkarte braucht. Ohne beides findet ``factory.available()``
-        # nichts, und jeder Renderertest überspringt sich mit Grund: Der
-        # Lauf bleibt grün und misst den Renderer trotzdem nie. Genau so
-        # war es zwischen dem Ausbau und diesem Schritt.
+        # Dazu Vulkan (``libvulkan1``, ``mesa-vulkan-drivers``): Die
+        # Rendererfälle wählt dieser Job ab, sie laufen in `window-contracts`
+        # und `windows`; die Pakete bleiben, damit Kern und Renderer auf
+        # demselben Systemstand prüfen. Warum sie dort Pflicht sind, steht
+        # beim selben Schritt in `window-contracts`.
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
@@ -195,14 +194,20 @@ jobs:
           retention-days: 14
 
   window-contracts:
-    name: Fensterverträge (${{ matrix.os }})
+    name: Fensterverträge und Renderer (${{ matrix.os }})
+    # Die zwei Fensterverträge auf jeder Paketplattform, dazu unter Linux und
+    # auf beiden Macs die Rendererfälle ohne Fenster (RM-344, Entscheidung
+    # Robert 06.10.2026); unter Windows trägt sie der Job `windows`. Kein
+    # eigener Rendererjob: macOS-Läufer sind knapp, und dieser hat
+    # Abhängigkeiten, Konturkern und Vulkan schon. Der Intel-Mac ist der
+    # einzige Prüfjob seiner Plattform.
     if: inputs.tests_only != true && (startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch')
     runs-on: ${{ matrix.os }}
     timeout-minutes: 120
     strategy:
       fail-fast: false
       matrix:
-        os: [windows-latest, ubuntu-24.04, macos-latest]
+        os: [windows-latest, ubuntu-24.04, macos-latest, macos-26-intel]
     env:
       QT_QPA_PLATFORM: offscreen
     steps:
@@ -254,22 +259,33 @@ jobs:
         # Compiler sind auf allen Zielplattformen vorhanden.
         run: python tools/build_slice_core.py
 
-      - name: Plattformübergreifende Fensterverträge
+      - name: Fensterverträge und Rendererfälle
+        # Beide Gruppen laufen, auch wenn die erste rot ist, und der Schritt
+        # endet mit dem ersten roten Ausgang. Unter Windows liefen die
+        # Rendererfälle hier doppelt (CI-01).
         shell: bash
         run: |
           set -euo pipefail
-          if [ "$RUNNER_OS" = "Linux" ]; then
-            xvfb-run -a --server-args="-screen 0 1920x1080x24" python tools/run_suite_isolated.py --release --ci-group contracts --report-dir reports/contracts
-          else
-            python tools/run_suite_isolated.py --release --ci-group contracts --report-dir reports/contracts
+          run_group() {
+            if [ "$RUNNER_OS" = "Linux" ]; then
+              xvfb-run -a --server-args="-screen 0 1920x1080x24" python tools/run_suite_isolated.py --release --ci-group "$1" --report-dir "reports/$1"
+            else
+              python tools/run_suite_isolated.py --release --ci-group "$1" --report-dir "reports/$1"
+            fi
+          }
+          status=0
+          run_group contracts || status=$?
+          if [ "$RUNNER_OS" != "Windows" ]; then
+            run_group rendering || { code=$?; [ "$status" -ne 0 ] || status=$code; }
           fi
-      - name: Fenstervertragsberichte sichern
+          exit "$status"
+      - name: Fenstervertrags- und Rendererberichte sichern
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: tests-contracts-${{ matrix.os }}
           overwrite: true
-          path: reports/contracts/
+          path: reports/
           if-no-files-found: error
           retention-days: 14
 
@@ -278,7 +294,9 @@ jobs:
     # Nur Windows (Entscheidung Robert, 08.09.2026): Unter jedem Unix misst
     # offscreen die Schriftmetrik von fontconfig, und acht Tests je Plattform
     # prüften damit Breiten, die kein Kunde sieht (ROADMAP-ARCHIV.md). Die
-    # zwei Verträge darüber laufen dagegen auf allen drei Plattformen.
+    # zwei Verträge darüber laufen dagegen auf allen vier Paketplattformen,
+    # und dort unter Linux und auf beiden Macs auch die Rendererfälle ohne
+    # Fenster, die hier mit den Fensterdateien laufen.
     if: inputs.tests_only != true && (startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch')
     runs-on: windows-latest
     timeout-minutes: 120
@@ -1636,18 +1654,34 @@ jobs:
           python -m mypy
 
       - name: Tests
+        id: tests
         env:
           QT_QPA_PLATFORM: offscreen
-        # Der Versionswächter prüft reguläre Verträge. Fenster-, Renderer- und
-        # Leistungsprüfungen bleiben dem Release vorbehalten.
+        # Wie im Suite-Job wählt der Marker Fenster, Renderer und Leistung ab,
+        # den conftest.py aus dem Fixture-Graphen setzt; alle übrigen laufen.
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p reports/latest
-          # Wie im Suite-Job: Fenster und Renderer wählt der Marker ab, den
-          # conftest.py aus dem Fixture-Graphen setzt; alle übrigen laufen.
           run() { xvfb-run -a --server-args="-screen 0 1920x1080x24" python -m pytest -q "$@"; }
           run -n auto -m "not performance and not rendered and not windowed and not rendering" --durations=30 --durations-min=1 --junitxml=reports/latest/junit.xml
+
+      - name: Fensterverträge und Rendererfälle
+        # Was `window-contracts` unter Linux fährt, hier gegen die neuesten
+        # Fassungen: Ein neues pygfx, wgpu oder PySide6 zeigt sich zuerst an
+        # Bildern und Fenstern (RM-344). Je Datei ein frischer Prozess (CI-02);
+        # ein rotes Ergebnis der Kerntests verdeckt diese Gruppen nicht.
+        if: success() || steps.tests.outcome == 'failure'
+        env:
+          QT_QPA_PLATFORM: offscreen
+        shell: bash
+        run: |
+          set -euo pipefail
+          run_group() { xvfb-run -a --server-args="-screen 0 1920x1080x24" python tools/run_suite_isolated.py --release --ci-group "$1" --report-dir "reports/latest/$1"; }
+          status=0
+          run_group contracts || status=$?
+          run_group rendering || { code=$?; [ "$status" -ne 0 ] || status=$code; }
+          exit "$status"
 
       - name: Versionsprüfbericht sichern
         if: always()
