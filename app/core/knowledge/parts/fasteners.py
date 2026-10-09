@@ -1828,7 +1828,9 @@ def thread_points(
 #: dreimal so viele Punkte je Station; dieselbe Ecke wären 7,3 Millionen Dreiecke,
 #: gemessen 286 s und 12 GB ohne Abbruch — mehr, als ein Rechner mit 8 GB hat. Es
 #: baut deshalb bis zu derselben Größe des Netzes: G-Größen und Whitworth mit der
-#: Regelsteigung in jeder Länge, Ø 1000 mit 101,6 Gängen je Zoll bis 72 mm.
+#: Regelsteigung in jeder Länge, Ø 1000 mit 101,6 Gängen je Zoll bis 72 mm. Der
+#: gebündelte Gang (``shapes.thread_body``) rechnet ein Fünftel der Zeit, die Spitze
+#: aber entsteht in Vereinigung und Schnitt und sank nur um 2 %; die Grenze bleibt.
 MOST_THREAD_POINTS: Final = thread_points(
     LARGEST_THREAD, FINEST_PITCH, LONGEST_PRINTED_THREAD + FINEST_PITCH
 )

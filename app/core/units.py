@@ -16,9 +16,13 @@ import fractions
 import functools
 import math
 from collections.abc import Sequence
-from typing import Any, Final, Literal, Protocol
+from typing import TYPE_CHECKING, Any, Final, Literal, Protocol
 
 from app.i18n import Figure, TranslatableText, _
+
+if TYPE_CHECKING:
+    import numpy as np
+    from numpy.typing import NDArray
 
 # --- Die drei benannten Toleranzen (§11.2) -------------------------------------
 
@@ -648,6 +652,213 @@ def _exact_pair(angle: float) -> tuple[float, float]:
         context.prec = EXACT_DIGITS
         reduced = _reduced(decimal.Decimal(angle))
         return (float(_cos_series(reduced)), float(_sin_series(reduced)))
+
+
+#: Wie weit ein Wert aus :func:`exact_cos_sin_array` höchstens vom wahren liegt:
+#: dieser Anteil seines Betrags plus :data:`_ROUNDING_FLOOR`. Gerechnet sind es
+#: anteilig 2⁻⁹⁹ (sechzehn Hornerschritte je Reihe, jeder auf 2⁻¹⁰⁴ genau) und
+#: absolut 2⁻¹¹² aus der Zerlegung des Winkels (ein Rest von 2⁻¹⁰⁵ an einem
+#: Zwischenwert bis k · 2⁻²⁹, dazu π/2 abgeschnitten, k · 2⁻¹⁴²); beide Schranken
+#: lassen das Achtfache und mehr Luft. Eine zu weite Schranke kostet nur
+#: Rückfälle über die Reihe, eine zu enge änderte Bits.
+_ROUNDING_DOUBT: Final = math.ldexp(1.0, -94)
+_ROUNDING_FLOOR: Final = math.ldexp(1.0, -108)
+
+#: Bis zu welcher Zahl von Vierteldrehungen die Zerlegung exakt ist: ``k`` mit
+#: 23 Bit mal einem Teil von π/2 mit 30 Bit passt in die 53 eines ``float``.
+_MOST_QUARTERS: Final = math.ldexp(1.0, 22)
+
+#: Kleinere Winkel gehen über die Reihe — dort bliebe vom Quadrat nichts übrig.
+_SMALLEST_ANGLE: Final = math.ldexp(1.0, -60)
+
+#: Nur die Wahl der Vierteldrehung hängt daran, nicht das Ergebnis; ein Literal,
+#: damit sie auf jeder Maschine dieselbe ist.
+_TWO_OVER_PI: Final = 0.6366197723675814
+
+#: Veltkamps Teiler: zerlegt ein ``float`` in zwei Hälften mit je 26 Bit.
+_SPLITTER: Final = 134217729.0
+
+#: Wie viele Winkel zusammen rechnen. Die Zwischenfelder eines Blocks bleiben
+#: so im Cache; 300 000 Winkel am Stück brauchten siebenmal so lange.
+_ANGLE_BLOCK: Final = 4096
+
+
+def exact_cos_sin_array(angles: NDArray[np.float64]) -> tuple[NDArray[np.float64], ...]:
+    """Kosinus und Sinus vieler Winkel auf einmal — Bit für Bit :func:`exact_cos`/:func:`exact_sin`.
+
+    Die Reihe in ``decimal`` kostet je Winkel ein Zehntel einer Millisekunde, und
+    ein Gewinde Ø 1000 mit 0,25 mm Steigung hat 190 000 Stationen
+    (``shapes.thread_body``). Hier rechnen ``numpy``-Felder doppelt-doppelt
+    genau — zwei ``float`` je Zahl, rund 106 Bit — mit nichts als Addition und
+    Multiplikation. Beide rundet IEEE 754 auf jeder Maschine gleich; ``np.cos``
+    tut das nicht (:func:`circle_point`).
+
+    **Warum es dieselben Bits sind:** Die Reihe rechnet mit fünfzig Stellen und
+    rundet erst dann; sie trifft den korrekt gerundeten Wert, solange der wahre
+    nicht näher als 10⁻⁴⁰ an der Mitte zwischen zwei ``float`` liegt. Hier steht
+    neben jedem Wert seine Fehlerschranke (:data:`_ROUNDING_DOUBT`). Nur wo sie
+    keine Mitte berührt, ist die Rundung sicher dieselbe; jeder andere Winkel —
+    und null, ein winziger, ein sehr großer oder kein endlicher — geht durch
+    :func:`_exact_pair`. Das trifft an einem Gewinde rund einen Winkel von
+    zehntausend.
+    """
+    import numpy as np
+
+    shape = np.shape(angles)
+    angle = np.array(angles, dtype=np.float64).reshape(-1)
+    cos = np.empty_like(angle)
+    sin = np.empty_like(angle)
+    for start in range(0, angle.size, _ANGLE_BLOCK):
+        block = slice(start, start + _ANGLE_BLOCK)
+        cos[block], sin[block] = _cos_sin_block(angle[block])
+    return cos.reshape(shape), sin.reshape(shape)
+
+
+def _cos_sin_block(angle: NDArray[np.float64]) -> tuple[NDArray[np.float64], ...]:
+    """:func:`exact_cos_sin_array` für einen Block, dessen Zwischenfelder im Cache bleiben."""
+    import numpy as np
+
+    with np.errstate(all="ignore"):
+        usable = (
+            np.isfinite(angle)
+            & (np.abs(angle) >= _SMALLEST_ANGLE)
+            & (np.abs(np.rint(angle * _TWO_OVER_PI)) <= _MOST_QUARTERS)
+        )
+    angle_used = np.where(usable, angle, 1.0)
+    quarter = np.rint(angle_used * _TWO_OVER_PI)
+    first, second, third, fourth = _half_pi_parts()
+    # r = Winkel - k · π/2 doppelt-doppelt: Die ersten drei Produkte sind exakt.
+    high, low = _two_sum(angle_used, -(quarter * first))
+    high, low = _pair_add(high, low, -(quarter * second), 0.0)
+    high, low = _pair_add(high, low, -(quarter * third), 0.0)
+    product, error = _two_product(quarter, fourth)
+    high, low = _pair_add(high, low, -product, -error)
+
+    cos_terms, sin_terms = _taylor_terms()
+    square_high, square_low = _pair_mul(high, low, high, low)
+    cos_high, cos_low = _horner(cos_terms, square_high, square_low)
+    rest_high, rest_low = _horner(sin_terms, square_high, square_low)
+    sin_high, sin_low = _pair_mul(high, low, rest_high, rest_low)
+
+    turn = np.mod(quarter, 4.0).astype(np.int64)
+    cos = np.choose(turn, (cos_high, -sin_high, -cos_high, sin_high))
+    sin = np.choose(turn, (sin_high, cos_high, -sin_high, -cos_high))
+    sure = usable & _surely_rounded(cos_high, cos_low) & _surely_rounded(sin_high, sin_low)
+    for index in np.flatnonzero(~sure):
+        cos[index], sin[index] = _exact_pair(float(angle[index]))
+    return cos, sin
+
+
+def _surely_rounded(high: NDArray[np.float64], low: NDArray[np.float64]) -> NDArray[np.bool_]:
+    """Ob ``high`` der gerundete wahre Wert ist: ``low`` samt Schranke diesseits beider Mitten.
+
+    ``high`` ist schon die Rundung von ``high + low`` (:func:`_fast_two_sum`);
+    die Abstände zu den Nachbarn sind exakt, und über einer Zweierpotenz ist der
+    obere doppelt so groß wie der untere. Die Schranke steht doppelt, damit die
+    Rundung von ``low ± Schranke`` selbst nicht zählt.
+    """
+    import numpy as np
+
+    doubt = 2.0 * (_ROUNDING_DOUBT * np.abs(high) + _ROUNDING_FLOOR)
+    above = np.nextafter(high, np.inf) - high
+    below = high - np.nextafter(high, -np.inf)
+    result: NDArray[np.bool_] = (low + doubt < 0.5 * above) & (low - doubt > -0.5 * below)
+    return result
+
+
+@functools.cache
+def _half_pi_parts() -> tuple[float, float, float, float]:
+    """π/2 als Summe von vier ``float``: drei mit 30 Bit, damit ``k · Teil`` exakt ist.
+
+    Der vierte ist der Rest; was danach bleibt, liegt unter 2⁻¹⁴², mal ``k`` unter 2⁻¹²⁰.
+    """
+    parts: list[float] = []
+    with decimal.localcontext() as context:
+        context.prec = 2 * EXACT_DIGITS
+        rest = _PI / 2
+        for _ in range(3):
+            mantissa, exponent = math.frexp(float(rest))
+            part = math.ldexp(math.floor(mantissa * 2**30), exponent - 30)
+            parts.append(part)
+            rest -= decimal.Decimal(part)
+        parts.append(float(rest))
+    return parts[0], parts[1], parts[2], parts[3]
+
+
+@functools.cache
+def _taylor_terms() -> tuple[tuple[tuple[float, float], ...], tuple[tuple[float, float], ...]]:
+    """Die Glieder von Kosinus und Sinus/r in u = r², doppelt-doppelt, bis r³⁰ und r³¹.
+
+    Für |r| ≤ 0,8 liegt das erste fehlende Glied unter 10⁻³⁸.
+    """
+
+    def pair(value: fractions.Fraction) -> tuple[float, float]:
+        high = float(value)
+        return high, float(value - fractions.Fraction(high))
+
+    cos_terms = tuple(pair(fractions.Fraction((-1) ** n, math.factorial(2 * n))) for n in range(16))
+    sin_terms = tuple(
+        pair(fractions.Fraction((-1) ** n, math.factorial(2 * n + 1))) for n in range(16)
+    )
+    return cos_terms, sin_terms
+
+
+def _horner(
+    terms: tuple[tuple[float, float], ...],
+    square_high: NDArray[np.float64],
+    square_low: NDArray[np.float64],
+) -> tuple[NDArray[np.float64], NDArray[np.float64]]:
+    """Das Polynom in u nach Horner, doppelt-doppelt."""
+    import numpy as np
+
+    high = np.full_like(square_high, terms[-1][0])
+    low = np.full_like(square_high, terms[-1][1])
+    for term_high, term_low in reversed(terms[:-1]):
+        high, low = _pair_mul(high, low, square_high, square_low)
+        high, low = _pair_add(high, low, term_high, term_low)
+    return high, low
+
+
+def _two_sum(first: Any, second: Any) -> tuple[Any, Any]:
+    """Summe und ihr exakter Rundungsrest (Knuth)."""
+    total = first + second
+    virtual = total - first
+    return total, (first - (total - virtual)) + (second - virtual)
+
+
+def _fast_two_sum(larger: Any, smaller: Any) -> tuple[Any, Any]:
+    """Summe und exakter Rest, wenn der erste Summand der betragsgrößere ist (Dekker)."""
+    total = larger + smaller
+    return total, smaller - (total - larger)
+
+
+def _two_product(first: Any, second: Any) -> tuple[Any, Any]:
+    """Produkt und sein exakter Rundungsrest, ohne FMA über Veltkamps Zerlegung."""
+    product = first * second
+    first_high, first_low = _halves(first)
+    second_high, second_low = _halves(second)
+    error = (
+        (first_high * second_high - product) + first_high * second_low + first_low * second_high
+    ) + first_low * second_low
+    return product, error
+
+
+def _halves(value: Any) -> tuple[Any, Any]:
+    scaled = _SPLITTER * value
+    high = scaled - (scaled - value)
+    return high, value - high
+
+
+def _pair_add(high: Any, low: Any, other_high: Any, other_low: Any) -> tuple[Any, Any]:
+    """Zwei doppelt-doppelte Zahlen addiert."""
+    total, error = _two_sum(high, other_high)
+    return _fast_two_sum(total, error + (low + other_low))
+
+
+def _pair_mul(high: Any, low: Any, other_high: Any, other_low: Any) -> tuple[Any, Any]:
+    """Zwei doppelt-doppelte Zahlen multipliziert; das Produkt der Reste fällt unter 2⁻¹⁰⁶."""
+    product, error = _two_product(high, other_high)
+    return _fast_two_sum(product, error + (high * other_low + low * other_high))
 
 
 @functools.lru_cache(maxsize=256)

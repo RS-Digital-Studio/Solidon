@@ -28,7 +28,7 @@ from app.core.errors import InternalError
 from app.core.geom import lathe, transform
 from app.core.geom.mesh import MeshData
 from app.core.types import Finding, Point2, Vec3
-from app.core.units import EPS_GEOM, MAX_FACET_SAG, exact_cos, exact_sin
+from app.core.units import EPS_GEOM, MAX_FACET_SAG, exact_cos, exact_cos_sin_array
 
 if TYPE_CHECKING:
     from app.core.brep.kernel import Solid
@@ -285,8 +285,10 @@ def rounded_box(width: float, depth: float, height: float, radius: float) -> For
         count += 1
     vertices: list[tuple[float, float]] = []
     for quadrant, (cx, cy) in enumerate(rounded_corners(width, depth, radius)):
-        for angle in np.linspace(quadrant * math.pi / 2, (quadrant + 1) * math.pi / 2, count + 1):
-            point = (cx + radius * exact_cos(angle), cy + radius * exact_sin(angle))
+        cos, sin = exact_cos_sin_array(
+            np.linspace(quadrant * math.pi / 2, (quadrant + 1) * math.pi / 2, count + 1)
+        )
+        for point in zip((cx + radius * cos).tolist(), (cy + radius * sin).tolist(), strict=True):
             if not vertices or math.dist(point, vertices[-1]) > EPS_GEOM:
                 vertices.append(point)
     built = manifold3d.CrossSection([vertices]).extrude(height).to_mesh64()
@@ -645,74 +647,80 @@ def thread_body(
     lead = starts * pitch
     steps = max(round(height / lead), 1) * segments
     outline = ridge_profile(diameter, pitch, depth=depth, internal=internal, profile=profile)
-
-    angles = np.linspace(0.0, 2.0 * math.pi * height / lead, steps + 1)
-    up = np.array([0.0, 0.0, 1.0])
-    blocks: list[np.ndarray] = []
-    for course in range(starts):
-        heights = np.linspace(0.0, height, steps + 1) + course * pitch
-        rings = []
-        for angle, level in zip(angles, heights, strict=True):
-            direction = np.array([exact_cos(angle), exact_sin(angle), 0.0])
-            if taper:
-                rings.append(
-                    [
-                        direction * (radial + taper * (level + axial - reference))
-                        + up * (level + axial)
-                        for radial, axial in outline
-                    ]
-                )
-            else:
-                rings.append(
-                    [direction * radial + up * (level + axial) for radial, axial in outline]
-                )
-        blocks.append(np.array([point for ring in rings for point in ring], dtype=float))
-
+    radial = np.array([point[0] for point in outline])
+    axial = np.array([point[1] for point in outline])
     per_ring = len(outline)
     ring_count = steps + 1
-    block = ring_count * per_ring + (0 if per_ring == 4 else 2)
-    vertices_list: list[np.ndarray] = []
-    faces: list[list[int]] = []
-    for course, points in enumerate(blocks):
-        offset = course * block
-        if per_ring != 4:
-            # Die Stirnflächen eines Profils mit mehr als vier Punkten sind ein
-            # Fächer um ihre Mitte; das Profil ist von dort aus ganz zu sehen.
-            first_ring = points[:per_ring]
-            last_ring = points[-per_ring:]
-            points = np.vstack([points, first_ring.mean(axis=0), last_ring.mean(axis=0)])
-        vertices_list.append(points)
-        for index in range(ring_count - 1):
-            base = offset + index * per_ring
-            following = base + per_ring
-            for corner in range(per_ring):
-                first = base + corner
-                second = base + (corner + 1) % per_ring
-                third = following + (corner + 1) % per_ring
-                fourth = following + corner
-                faces.append([first, second, third])
-                faces.append([first, third, fourth])
+
+    # **Gebündelt, Bit für Bit wie Ring für Ring** (RM-544): Jede Ecke ist
+    # ``Richtung · Radius + oben · Höhe`` in genau dieser Folge der Rechenschritte,
+    # nur für alle Stationen zugleich; die Winkel kommen aus
+    # ``exact_cos_sin_array``, die Bits aus ``exact_cos``/``exact_sin``.
+    # ``tests/test_threads.py`` hält das Netz gegen den alten Weg fest.
+    cos, sin = exact_cos_sin_array(np.linspace(0.0, 2.0 * math.pi * height / lead, steps + 1))
+    direction = np.stack([cos, sin, np.zeros_like(cos)], axis=1)[:, np.newaxis, :]
+    del cos, sin
+    up = np.array([0.0, 0.0, 1.0])
+    side = _ridge_sides(ring_count, per_ring)
+    vertex_blocks: list[np.ndarray] = []
+    face_blocks: list[np.ndarray] = []
+    for course in range(starts):
+        offset = sum(len(points) for points in vertex_blocks)
+        levels = (np.linspace(0.0, height, steps + 1) + course * pitch)[:, np.newaxis] + axial
+        reach = radial + taper * (levels - reference) if taper else radial[np.newaxis, :]
+        points = (direction * reach[:, :, np.newaxis] + up * levels[:, :, np.newaxis]).reshape(
+            -1, 3
+        )
+        del levels, reach
         start_ring = [offset + corner for corner in range(per_ring)]
         last = offset + (ring_count - 1) * per_ring
         end_ring = [last + corner for corner in range(per_ring)]
         if per_ring == 4:
-            faces.extend(_cap(start_ring, flip=True))
-            faces.extend(_cap(end_ring, flip=False))
+            caps = _cap(start_ring, flip=True) + _cap(end_ring, flip=False)
         else:
+            # Die Stirnflächen eines Profils mit mehr als vier Punkten sind ein
+            # Fächer um ihre Mitte; das Profil ist von dort aus ganz zu sehen.
             centres = offset + ring_count * per_ring
-            faces.extend(_fan(start_ring, centres, flip=True))
-            faces.extend(_fan(end_ring, centres + 1, flip=False))
+            caps = _fan(start_ring, centres, flip=True) + _fan(end_ring, centres + 1, flip=False)
+            first_ring = points[:per_ring]
+            last_ring = points[-per_ring:]
+            points = np.vstack([points, first_ring.mean(axis=0), last_ring.mean(axis=0)])
+        vertex_blocks.append(points)
+        face_blocks += [side + offset, np.array(caps, dtype=np.int64)]
+    del direction, side
 
-    vertices = np.vstack(vertices_list) if len(vertices_list) > 1 else vertices_list[0]
+    vertices = np.vstack(vertex_blocks) if len(vertex_blocks) > 1 else vertex_blocks[0]
+    faces = np.vstack(face_blocks)
+    del vertex_blocks, face_blocks
     if left:
         # Gespiegelt an der Ebene y = 0: Die Gänge bei Winkel null bleiben, wo
         # sie sind, und ihr Drehsinn kehrt sich um. Die Spiegelung dreht auch
         # jedes Dreieck um, deshalb die umgekehrte Eckenfolge.
         vertices = vertices * np.array([1.0, -1.0, 1.0])
-        faces = [list(reversed(face)) for face in faces]
-    body = trimesh.Trimesh(vertices=vertices, faces=np.array(faces, dtype=np.int64), process=True)
+        faces = np.ascontiguousarray(faces[:, ::-1])
+    body = trimesh.Trimesh(vertices=vertices, faces=faces, process=True)
     trimesh.repair.fix_normals(body, multibody=starts > 1)
     return MeshData.of(body)
+
+
+def _ridge_sides(ring_count: int, per_ring: int) -> np.ndarray:
+    """Die Mantelfläche des Gangs: je Ring und Profilecke zwei Dreiecke zum nächsten Ring.
+
+    Reihenfolge wie Ring für Ring: Ring, dann Ecke, dann die zwei Dreiecke
+    ``(erste, zweite, dritte)`` und ``(erste, dritte, vierte)``.
+    """
+    corner = np.arange(per_ring, dtype=np.int64)
+    following = (corner + 1) % per_ring
+    base = np.arange(ring_count - 1, dtype=np.int64)[:, np.newaxis] * per_ring
+    first = base + corner
+    second = base + following
+    third = base + per_ring + following
+    fourth = base + per_ring + corner
+    pairs = np.stack(
+        [np.stack([first, second, third], axis=-1), np.stack([first, third, fourth], axis=-1)],
+        axis=2,
+    )
+    return pairs.reshape(-1, 3)
 
 
 def _cap(indices: list[int], flip: bool) -> list[list[int]]:

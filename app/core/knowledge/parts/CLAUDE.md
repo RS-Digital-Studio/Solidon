@@ -60,8 +60,9 @@ Ein Baustein sagt nur, **was** er ist; den Kern wählt der Aufrufer
 ## Stolperfallen
 
 - `shapes.cylinder`, `box` und `moved` verschieben über `transform.moved`;
-  `rounded_box` und `thread_body` verwenden die exakten Winkelfunktionen.
-  Auch reine Verschiebungen über `trimesh` können BLAS aufrufen. Die
+  `rounded_box` und `thread_body` rechnen gebündelt über Felder, die Winkel
+  aus `units.exact_cos_sin_array`; ihr Netz bleibt Bit für Bit das der alten
+  Schleife (`tests/test_bundled_shapes.py`). Auch reine Verschiebungen über `trimesh` können BLAS aufrufen. Die
   Sehnenzahl der Ecke wird am tatsächlichen Pfeilmaß geprüft.
 
 ### Merkmale und Maße

@@ -60,7 +60,7 @@ beides ist eine randomisierte Prozedur falsch, auch wenn sie funktioniert.
 Text, den der Kern **fertig** ausliefert (eine Frage über `ctx.ask`), schreibt
 Zahlen wie die Oberfläche: `format_decimal` bzw. `decimal_separator()` und
 Längen in `app.i18n.display_unit()` — sonst liest der Kunde „177.80 mm“ in
-einem auf Zoll gestellten deutschen Fenster (`unit_question`).
+einem deutschen Fenster in Zoll (`unit_question`).
 
 Eine Zahl als **Platzhalterwert** eines Satzes (`_("… unter {largest}", largest=…)`)
 geht als `format_length`/`format_volume`/`format_area` (sie liefern eine
@@ -83,8 +83,8 @@ entscheidet, rechnet ohne Wege, deren letzte Stelle an der Plattform hängt:
 - `trimesh`s `apply_translation` rechnet exakt, sieht für das Rauschen aber
   wie ein Matrixprodukt aus — in Wegen unter dem Rauschtest `mesh.shift_body`;
 - keine Winkel- und Exponentialfunktion aus NumPy oder `math` (Winkel über
-  `units.exact_cos`/`exact_sin`, viele auf einmal über
-  `mesh.periodic_sin_cos`), keine Potenz `**` auf Gleitkommazahlen: Das `pow`
+  `units.exact_cos`/`exact_sin`, gebündelt mit denselben Bits über
+  `exact_cos_sin_array`, sonst `mesh.periodic_sin_cos`), keine Potenz `**` auf Gleitkommazahlen: Das `pow`
   der Plattform rundet nicht immer korrekt, und das Rauschen sieht es nicht —
   `x * x`, `math.sqrt`;
 - Zufall nur aus Rohbits (`Generator.random`, `integers`), nie `normal` oder
