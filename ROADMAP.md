@@ -78,6 +78,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-230 — Variable Verrundung und Formschräge: fünf Grenzen, die der Kunde merkt](#rm-230) | Geometrie, Erkennung und Druckvorbereitung | Grenzen 1 bis 3 gebaut oder benannt (06.10.: Mischecke exakt geprüft, Ring-Anfang und Zwischenstellen in den Feldhilfen); Tray: beide Kerne nennen die Fußrundung vor der Rechnung, aber der Weg über *Merkmal entfernen* trägt dort nicht; offen: Fußrundung als Kette entfernen, Netzschräge 2,3× langsamer, Fase am Fuß, B-Spline-Ecke und zweites Anstellen am Netz mit Kernen uneins |
 | [RM-253 — Am Laptop-Ständer tragen Kippen und Verdoppeln einer Bohrung falsch ab](#rm-253) | Geometrie, Erkennung und Druckvorbereitung | In Arbeit: Claude (Worktree `F:/solidon-claude-b`). 23 von 28 Bohrungen tragen ein fremdes Teil und sagen das mit Weg, statt es still zu verschmelzen (RM-413, 06.10.; seit 09.10. auch Teile, deren lange Dreiecke durch die Bohrung laufen, darunter `hole_1` und `hole_11`); offen an den freien `hole_2`/`hole_4`: Verdoppeln ohne Wirkung, +1,4–1,9 mm³ beim Versetzen und Kippen — gegen einen Sollwert ohne Boolesche an der kaputten Schale messen |
 | [RM-660 — Die Teilefrage an Langloch, Senkung, Pfanne, Kehle und Gewinde sieht lange Dreiecke nicht](#rm-660) | Geometrie, Erkennung und Druckvorbereitung | Gefunden mit RM-253 (09.10.): Auf `paket/g-geometrie` misst `_inside_and_radial` nur Dreiecksmitten; beim Zusammenführen `_reaching_in` für alle Hohlraumarten übernehmen und die Changelog-Punkte zu getrennten Teilen in Hohlräumen zu einem fassen |
+| [RM-661 — Ein eng sitzender Stift gilt in seiner Bohrung als frei](#rm-661) | Geometrie, Erkennung und Druckvorbereitung | Gefunden im Review von RM-253 (09.10., F8): Spiel unter 2 % des Radius und Enden an oder hinter den Mündungen, an beiden Kernen; `_CLEARANCE_MARGIN` neu abwägen und am Korpus prüfen |
 | [RM-545 — Über Senkung, Langloch und Baustein Schraube verschmilzt ein getrenntes Teil still](#rm-545) | Geometrie, Erkennung und Druckvorbereitung | Gefunden im Review von RM-413: Die Absage hängt an `kind == "hole"`; an der Senkung einer Kette, am Langloch und am gesenkten Baustein *Schraube* rechnen Versetzen, Entfernen, Kippen und Ändern weiter und verschmelzen oder beschneiden das Teil, exakt teils mit falschem Grund — die Frage an den Hohlraum hängen, auch an Kegeln ohne Kette |
 | [RM-247 — Die Waschschüssel ließ sich nach Solidons Übergabe nicht drucken](#rm-247) | Geometrie, Erkennung und Druckvorbereitung | Kanaldecken, Gitter als Gitter, Leerfahrt und Tempo vom Drucker, Kanalsperre je Slicerfamilie, Brim auf Füßen — gebaut und im ElegooSlicer und PrusaSlicer belegt; offen: Probedruck am Centauri |
 | [RM-281 — Die Übergabe auf dem Herstellerprofil: Stufen C bis F](#rm-281) | Geometrie, Erkennung und Druckvorbereitung | Paket 3 und Reste D abgenommen, Stützvorschlag für Brücken über dem Modell und Absturz der Schichtanalyse behoben, Matrixwerkzeug auf Dialogcode umgestellt (04.10.); Zeitschätzung rechnet mit dem, was der Slicer aus dem Profil macht, Stützmenge aus den Säulen der Zeit (07.10., Seitenablage Orca-Familie −18 → −3 bis −12 %, Stützmenge Prusa/Cura 0,94 bis 1,14 der Druckdatei); offen die Gesamtabnahme jedes Modell × jeder Slicer und die Zeitreste: Creality Prints Mindestschichtzeit über Bogensehnen, Auto-Brim, Lückenfüllung, Curas Leerfahrt, Prusa-Stützen auf eigenen Schichthöhen, Baumstützen, Rechenzeit am Reiniger — bis Curas Leerfahrt und die Baumstützen gebaut sind, prüft die Zeitgegenprobe dort mit Grund nicht (`estimate.time_comparison_blocked`, Review P2 Rest Z1), danach die Sperren wieder lösen |
@@ -2428,6 +2429,20 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   Schale. Frei bleiben `hole_2`, `hole_4`, `hole_13`, `hole_24` und `hole_26`. **Offen** an
   `hole_2`/`hole_4`: Verdoppeln 8 mm quer ohne Wirkung, Versetzen und Kippen nehmen 1,4–1,9 mm³
   zu — Sollwert wie oben.
+
+<a id="rm-661"></a>
+
+- [ ] **RM-661 — Ein eng sitzender Stift gilt in seiner Bohrung als frei.**
+  Gefunden im Review von RM-253 (09.10.2026, Fund F8, Bericht im Scratchpad der Sitzung
+  `review-b.md`): Ein getrennter Stift Ø 5,9 in einer Bohrung Ø 6, dessen Enden an oder hinter den
+  Mündungen sitzen, gilt an beiden Kernen als frei — sein Spiel liegt unter 2 % des Radius, und
+  `hole_is_clear` lässt diesen Saum als eigene Wand gelten (`_CLEARANCE_MARGIN`). Die Handlungen
+  verschmelzen dann den Stift still, wie RM-413 und RM-253 es verhindern sollen; vor RM-253
+  genauso. **Weg:** die Grenze der eigenen Wand aus der Wand selbst messen statt mit einem Saum
+  um den Radius, oder den Saum an der Vernetzung der Bohrung bemessen; am Korpus prüfen, dass
+  keine freie Bohrung kippt. **Abnahme:** Stift Ø 5,9 und Ø 5,98 in Ø 6 an beiden Kernen als
+  getrenntes Teil erkannt, Menü und Handlungen sagen ab; die freien Bohrungen am Laptop-Ständer
+  und am Korpus bleiben frei.
 
 <a id="rm-660"></a>
 
