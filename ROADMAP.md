@@ -3282,8 +3282,8 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   das Erreichte; Ergebnisse unverändert (Korpustests grün, gleiche Merkmale).
   **Fund aus RM-493 (03.10., Thread „Bedienung und KI“):** *Bohrung ändern* am pegboard-STEP
   dauert allein rund 2,3 s, im Profil fast ganz im Gewindelesen von `features_of` am Ergebnis,
-  obwohl das Teil kein Gewinde trägt (v0.4.1: ganze Auswertung 0,47 s); an einem Netz mit
-  392 612 Dreiecken (`garden-hose-holder.3mf`) rund 11 s.
+  obwohl das Teil kein Gewinde trägt; an einem Netz mit 392 612 Dreiecken
+  (`garden-hose-holder.3mf`) rund 11 s.
 
 ## Bedienung und Darstellung
 
@@ -5393,14 +5393,18 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   Kunden-E-Mail vom 07.10.2026 und Robert, 08.10.2026: Kabelclip, Eckwinkel, Versteifungsrippe,
   Standfuß, Wandhalter und weitere sind eigenständige Teile, lassen sich aber nur an einen
   gewählten Körper anfügen. **Soll:** Jeder Baustein, der allein ein Körper sein kann, wird
-  ohne Auswahl als neues Objekt eingesetzt; welche das sind, sagt der Baustein selbst.
+  ohne Auswahl als neues Objekt eingesetzt; welche das sind, sagt der Baustein selbst. Er
+  kommt an die freie Stelle nächst der Plattenmitte und bleibt dort, wie jedes weitere Modell.
   **Abnahme:** Liste je Baustein mit Begründung; Test: jeder eigenständige setzt ohne Auswahl
-  ein wasserdichtes Objekt; Fenstertest im Bausteinkatalog; Handbuch.
-  **Fund aus RM-306 (03.10., Thread „Bedienung und KI“):** Eigenständige Bausteine (`create_*`)
-  nutzen die freie Stelle nicht; sie liegen an ihren x/y/z-Werten und damit neben einem mittig
-  liegenden Modell vermutlich in ihm. Ein weiteres Modell kommt seit RM-306 an die freie Stelle
-  nächst der Plattenmitte (`prepare.first_free_spot`); ein eigenständig eingesetzter Baustein
-  sollte denselben Weg nehmen.
+  ein wasserdichtes Objekt an die freie Stelle, und eine Änderung an einem Schritt davor lässt
+  ihn liegen; Fenstertest im Bausteinkatalog; Handbuch.
+  **Fund aus RM-306 (03.10., Thread „Bedienung und KI“):** `create_<baustein>` legt über
+  `_place(..., ctx.params)` (`knowledge/parts/ops.py`) mit der x/y/z-Vorgabe 0, und der Katalog
+  ruft es mit diesen Vorgaben; ein eigenständiger Baustein landet damit in der Plattenmitte,
+  mitten in einem dort liegenden Modell. Ein weiteres Modell kommt seit RM-306 über
+  `prepare.placed_at_free_spot` an die freie Stelle nächst der Mitte, die der Schritt festhält
+  (`spot_x`, `spot_y`, `spot_plate`, Bauplan §17.1 Schritt 6); derselbe Weg gehört zum
+  Baustein — ein direkter Aufruf von `first_free_spot` legte ihn bei jeder Auswertung neu.
 
 <a id="rm-563"></a>
 
