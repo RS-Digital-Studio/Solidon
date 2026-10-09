@@ -46383,8 +46383,10 @@ jede Absage stimmt. Auf dem Weg, den die Absage nennt — *In Einzelteile auftei
 behalten*, 22 Objekte —, rechnen die Handlungen am abgetrennten Teil (das in einer Bohrung Ø 5,33
 eines anderen steckt) gegen einen Sollwert aus manifold3d, (Teil ∪ alter Zylinder) − neuer
 Zylinder: Versetzen um 1,5 mm und Kippen um 15° tragen außerhalb des Werkzeugs nichts ab
-(Zuwenig 0,000 mm³), lassen an seinen Rändern, wo die Bohrung die 1-mm-Wand durchbricht,
-0,72–1,07 mm³ stehen (0,2 % des Teils) und sagen `bore.over_the_edge`; Verdoppeln 8 mm in die
+(Zuwenig 0,000 mm³) und lassen 0,72–1,07 mm³ mehr stehen (0,2 % des Teils), in Häuten von
+höchstens 0,011 mm: Der Stopfen greift um die Zugabe `FEATURE_OVERLAP` (0,01 mm am Radius) über
+die alte Wand, wo das Teil dort offen ist, dazu die Facetten des neuen Werkzeugs. Beide sagen
+`bore.over_the_edge`, weil die Bohrung die 1-mm-Wand durchbricht; Verdoppeln 8 mm in die
 Luft bleibt ohne Wirkung und sagt es (`boolean.without_effect`, `duplicate_feature.feature_lost`).
 Ohne *Splitter behalten* verwirft die Zerlegung diese Teile als Splitter unter 1 % des größten.
 Damit gilt die Abnahme: Kippen trägt nur ab, was sein Werkzeug überstreicht, eine Kopie trägt ab
