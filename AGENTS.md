@@ -164,7 +164,8 @@ Dialoge.
   weniger gibt (Größen, Formen, Bereiche), wird gehoben, sobald sie nicht nötig
   ist. Jede gefundene Leistungs- oder Speicherverbesserung wird umgesetzt,
   solange das Ergebnis **druckgleich** bleibt (Bauplan §11.2; Messung vorher
-  und nachher, Test). Das gilt in jeder Sitzung und für jeden Agenten auch
+  und nachher, Test); Schleifen je Element werden dabei als Feldrechnung
+  gebündelt, nach den Plattformregeln in `kern.md`. Das gilt in jeder Sitzung und für jeden Agenten auch
   für Funde unterwegs: im eigenen Gebiet gleich umsetzen, sonst als neuer
   Punkt melden.
 - **Kleine Schritte, je Schritt nur die betroffenen Tests**

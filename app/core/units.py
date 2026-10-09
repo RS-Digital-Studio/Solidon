@@ -62,7 +62,8 @@ MAX_FACET_SAG: Final[float] = 0.05
 
 # --- Woran eine Beschleunigung gemessen wird (§11.2, druckgleich) -------------------
 
-#: Die kleinste Düse, die der Druckdialog annimmt.
+#: Die kleinste Düse, die Solidon annimmt — Ersteinrichtung
+#: (`first_run.printer_nozzle`) und Druckdialog (`_NOZZLE_RANGE_MM`) lesen sie.
 SMALLEST_NOZZLE: Final[float] = 0.1
 
 #: Wie weit Maße und Positionen nach einer Beschleunigung oder Ersparnis vom
