@@ -2375,12 +2375,9 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   `_inside_and_radial` übernehmen, je Art mit ihrem Abstand (Achsstück am Langloch, Kegelwand je
   Höhe an der Senkung, Mitte bzw. Mittelkreis an Pfanne und Kehle, Kern am Innengewinde) und der
   Grenze der eigenen Wand. **Abnahme:** je Art ein Fall mit langem Stift, am Stand davor rot;
-  `test_a_long_pin_in_the_bore_is_seen_beyond_its_mouths`,
-  `test_a_cross_pin_through_the_bore_is_seen_although_its_middles_lie_beside_it`,
-  `test_a_coarse_bore_with_a_cross_bore_stays_free`,
-  `test_a_sheet_whose_one_triangle_covers_the_axis_stands_in_the_bore`,
-  `test_a_wedge_over_the_mouth_leaves_the_bore_free` und
-  `test_triangles_lying_in_a_mouth_plane_do_not_break_the_clipping` bleiben grün.
+  die Fälle zu RM-253 in `tests/test_slot_features.py`, von
+  `test_a_long_pin_in_the_bore_is_seen_beyond_its_mouths` bis
+  `test_pulling_a_slot_shortens_a_long_pin_only_inside_the_old_bore`, bleiben grün.
 
 <a id="rm-545"></a>
 
