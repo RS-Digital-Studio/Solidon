@@ -261,8 +261,14 @@ ENTRY_WEIGHT: Final = 4.0
 _MAX_KEY: Final = 2.0**40
 
 
-def _entries(low: np.ndarray, high: np.ndarray, plan: _Plan) -> _Entries | None:
-    """Die Einträge eines Plans — ``None``, wenn sein Schlüssel zu groß würde."""
+def _keys(
+    low: np.ndarray, high: np.ndarray, plan: _Plan
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, float] | None:
+    """Je Eintrag eines Plans Dreieck, Scheibe, Anfang und Ende auf der Sweep-Achse.
+
+    Ungeordnet, in der Folge der Dreiecke und je Dreieck seiner Scheiben; das
+    Ende trägt schon ``EPS_GEOM``. ``None``, wenn der Schlüssel zu groß würde.
+    """
     count = len(low)
     if plan.bins is None:
         triangle = np.arange(count)
@@ -282,14 +288,44 @@ def _entries(low: np.ndarray, high: np.ndarray, plan: _Plan) -> _Entries | None:
     size = float(high[:, axis].max()) - base + 1.0
     if float(slab.max(initial=0) + 1) * size > _MAX_KEY:
         return None
-    key = slab * size + (low[triangle, axis] - base)
+    start = slab * size
+    key = start + (low[triangle, axis] - base)
+    end = start + (high[triangle, axis] - base) + EPS_GEOM
+    return triangle, slab, key, end, origin
+
+
+def _entries(low: np.ndarray, high: np.ndarray, plan: _Plan) -> _Entries | None:
+    """Die Einträge eines Plans — ``None``, wenn sein Schlüssel zu groß würde."""
+    keys = _keys(low, high, plan)
+    if keys is None:
+        return None
+    triangle, slab, key, end, origin = keys
     order = np.argsort(key, kind="stable")
     triangle, slab, key = triangle[order], slab[order], key[order]
-    reach = np.searchsorted(
-        key, slab * size + (high[triangle, axis] - base) + EPS_GEOM, side="right"
-    )
+    reach = np.searchsorted(key, end[order], side="right")
     counts = np.maximum(reach - np.arange(len(key)) - 1, 0)
     return _Entries(triangle=triangle, slab=slab, counts=counts, origin=origin)
+
+
+def _pair_count(low: np.ndarray, high: np.ndarray, plan: _Plan) -> tuple[int, int] | None:
+    """Wie viele Sweep-Paare und Einträge ein Plan bildet — die Paare als Summe
+    der ``counts`` von :func:`_entries`, ohne die Einträge zu ordnen.
+
+    Ein Eintrag überdeckt die Einträge hinter ihm bis zu seinem Ende, und sein
+    Ende liegt nie vor seinem Anfang (Rundung ist monoton, ``EPS_GEOM`` nicht
+    negativ): Das Ende findet in den geordneten Anfängen mindestens den Platz
+    hinter dem Eintrag selbst. Die Summe der ``counts`` ist darum die Summe
+    dieser Plätze weniger ``1 + 2 + … + n``, und die hängt nicht an der Folge.
+    Der Plan wählt so dieselbe Teilung; das stabile Ordnen der Einträge
+    kostete die Wahl am Laptop-Ständer zwei Drittel ihrer Zeit (RM-568).
+    """
+    keys = _keys(low, high, plan)
+    if keys is None:
+        return None
+    _triangle, _slab, key, end, _origin = keys
+    count = len(key)
+    reach = np.searchsorted(np.sort(key), end, side="right")
+    return int(reach.sum()) - count * (count + 1) // 2, count
 
 
 def _plan(low: np.ndarray, high: np.ndarray) -> _Plan:
@@ -317,12 +353,11 @@ def _plan(low: np.ndarray, high: np.ndarray) -> _Plan:
             plans.extend(_Plan(axis, bins, middle * factor) for factor in SLAB_FACTORS)
     best: tuple[float, _Plan] | None = None
     for plan in plans:
-        entries = _entries(sample_low, sample_high, plan)
-        if entries is None:
+        counted = _pair_count(sample_low, sample_high, plan)
+        if counted is None:
             continue
-        work = float(entries.counts.sum()) * stride * stride + (
-            ENTRY_WEIGHT * len(entries.triangle) * stride
-        )
+        pairs, entries = counted
+        work = float(pairs) * stride * stride + ENTRY_WEIGHT * entries * stride
         if best is None or work < best[0]:
             best = (work, plan)
     return best[1] if best is not None else _Plan(0)
@@ -430,22 +465,25 @@ def _separated(
     # Ohne gemeinsame Ecke zuerst die Ebenen; mit einer kann keine trennen.
     alone = np.flatnonzero(count == 0)
     if len(alone):
+        # Die Ebene des zweiten fragt nur, wen die des ersten nicht trennt —
+        # jede Zahl entsteht wie zuvor, nur für weniger Paare (RM-568).
         one, other = surface.triangles[first[alone]], surface.triangles[second[alone]]
-        one_normal, other_normal = surface.normal[first[alone]], surface.normal[second[alone]]
         other_side = (
-            _dot_rows(other - one[:, 0, None, :], one_normal)
+            _dot_rows(other - one[:, 0, None, :], surface.normal[first[alone]])
             / (surface.normal_length[first[alone], None])
         )
-        one_side = (
-            _dot_rows(one - other[:, 0, None, :], other_normal)
-            / (surface.normal_length[second[alone], None])
-        )
-        by_plane = (
-            np.all(other_side > margin, axis=1)
-            | np.all(other_side < -margin, axis=1)
-            | np.all(one_side > margin, axis=1)
-            | np.all(one_side < -margin, axis=1)
-        )
+        by_plane = np.all(other_side > margin, axis=1) | np.all(other_side < -margin, axis=1)
+        open_rows = np.flatnonzero(~by_plane)
+        if len(open_rows):
+            partner = second[alone[open_rows]]
+            one, other = one[open_rows], other[open_rows]
+            one_side = (
+                _dot_rows(one - other[:, 0, None, :], surface.normal[partner])
+                / (surface.normal_length[partner, None])
+            )
+            by_plane[open_rows] = np.all(one_side > margin, axis=1) | np.all(
+                one_side < -margin, axis=1
+            )
         result[alone[by_plane]] = True
         alone = alone[~by_plane]
     # Mit gemeinsamer Ecke: schräg zueinander die Nachbarprüfung der örtlichen
@@ -459,11 +497,12 @@ def _separated(
     touching = np.flatnonzero((count == 1) | (count == 2))
     charged = np.zeros(len(first), dtype=bool)
     if len(touching):
-        apart = _touching_apart(surface, first[touching], second[touching])
+        apart, tilt = _touching_apart_tilted(
+            surface, first[touching], second[touching], np.swapaxes(same[touching], 1, 2)
+        )
         result[touching[apart]] = True
         charged[touching[apart]] = True
-        direction = np.cross(surface.normal[first[touching]], surface.normal[second[touching]])
-        parallel = np.linalg.norm(direction, axis=1) <= (
+        parallel = tilt <= (
             0.5
             * EPS_GEOM
             * surface.normal_length[first[touching]]
@@ -561,7 +600,29 @@ def _candidates(
     counts = entries.counts
     total = np.cumsum(counts)
     overall = float(total[-1]) if len(total) else 0.0
-    positions = np.arange(len(counts))
+    # Plätze in 32 Bit, solange sie hineinpassen: Die Paarfelder sind die
+    # größten der Suche, und halb so breit liest und schreibt sie halb so viel.
+    positions = np.arange(len(counts), dtype=np.int32 if len(counts) < 2**31 else np.int64)
+    # **Je Eintrag, was seine Paare fragen, in der Folge der Einträge**
+    # (RM-568): Die Grenzen der beiden übrigen Achsen und die Heimatscheibe
+    # liegen als zusammenhängende Felder da, und ein Paar liest sie über die
+    # Plätze seiner Einträge statt über die Dreiecksnummern aus den
+    # Hüllquadern. Der linke Eintrag eines Blocks wiederholt sich, also
+    # wiederholt er auch seine Werte, statt sie je Paar zu lesen. Jeder
+    # Vergleich bleibt derselbe Ausdruck auf denselben Zahlen. Die Heimat der
+    # gemeinsamen Hülle ist ``floor((max(a, b) - origin) / width)`` — das ist
+    # das Größere der Heimaten beider Dreiecke, denn Abziehen, Teilen durch
+    # eine positive Breite und Abrunden sind in Gleitkommarechnung monoton.
+    # Am Laptop-Ständer bildet der Sweep 51,6 Millionen Paare für 3,6 Millionen
+    # Kandidaten, und das Bilden kostete die Hälfte der Suche.
+    order = entries.triangle
+    side_low = [np.ascontiguousarray(low[order, dimension]) for dimension in others]
+    side_reach = [high[order, dimension] + EPS_GEOM for dimension in others]
+    home = (
+        np.floor((low[order, plan.bins] - entries.origin) / plan.width).astype(np.int64)
+        if plan.bins is not None
+        else None
+    )
     counted = 0.0
     begin = 0
     while begin < len(counts):
@@ -579,20 +640,22 @@ def _candidates(
         amount = int(size.sum())
         if not amount:
             continue
-        left = np.repeat(block, size)
-        steps = np.arange(amount) - np.repeat(np.cumsum(size) - size, size)
-        right = left + 1 + steps
-        first, second = entries.triangle[left], entries.triangle[right]
-        apart = np.zeros(len(first), dtype=bool)
-        for dimension in others:
-            apart |= low[second, dimension] > high[first, dimension] + EPS_GEOM
-            apart |= low[first, dimension] > high[second, dimension] + EPS_GEOM
-        if plan.bins is not None:
+        left: np.ndarray = np.repeat(block, size)
+        right: np.ndarray = np.arange(amount, dtype=block.dtype) + np.repeat(
+            block + 1 - (np.cumsum(size) - size).astype(block.dtype), size
+        )
+        apart = np.zeros(amount, dtype=bool)
+        for lows, reaches in zip(side_low, side_reach, strict=True):
+            apart |= lows[right] > np.repeat(reaches[block], size)
+            apart |= np.repeat(lows[block], size) > reaches[right]
+        if home is not None:
             # Nur die Scheibe der unteren Ecke der gemeinsamen Hülle zählt.
-            corner = np.maximum(low[first, plan.bins], low[second, plan.bins])
-            home = np.floor((corner - entries.origin) / plan.width).astype(np.int64)
-            apart |= home != entries.slab[left]
-        first, second, left = first[~apart], second[~apart], left[~apart]
+            apart |= np.maximum(np.repeat(home[block], size), home[right]) != np.repeat(
+                entries.slab[block], size
+            )
+        near = ~apart
+        left, right = left[near], right[near]
+        first, second = order[left], order[right]
         open_pairs: np.ndarray | None = None
         cost: np.ndarray | None = None
         if separate:
@@ -1173,6 +1236,27 @@ def box_groups(
 def _touching_apart(surface: _Surface, first: np.ndarray, second: np.ndarray) -> np.ndarray:
     """Welche Paare beweisbar höchstens an ihren gemeinsamen Ecken anliegen.
 
+    Die Regel steht bei :func:`_touching_apart_tilted`.
+    """
+    apart, _tilt = _touching_apart_tilted(
+        surface,
+        first,
+        second,
+        surface.faces[first][:, :, None] == surface.faces[second][:, None, :],
+    )
+    return apart
+
+
+def _touching_apart_tilted(
+    surface: _Surface, first: np.ndarray, second: np.ndarray, same: np.ndarray
+) -> tuple[np.ndarray, np.ndarray]:
+    """:func:`_touching_apart` mit den gemeinsamen Ecken des Aufrufers, dazu je Paar
+    die Länge des Kreuzprodukts beider Normalen.
+
+    ``same[k, i, j]``: Ecke ``i`` des ersten trägt dieselbe Nummer wie Ecke
+    ``j`` des zweiten. :func:`_separated` hat beides schon gerechnet und fragt
+    es hier nicht ein zweites Mal (RM-568).
+
     Schräg zueinander gingen Nachbarn an die genaue Prüfung — an einer
     glatten Fläche sind das fast alle Kandidaten, und an einem Formschritt
     kostete das Sekunden (RM-419); seit RM-568 fragt auch :func:`_separated`
@@ -1201,12 +1285,12 @@ def _touching_apart(surface: _Surface, first: np.ndarray, second: np.ndarray) ->
     rechnet — elementweise, ohne ``einsum`` (RM-187).
     """
     one, other = surface.triangles[first], surface.triangles[second]
-    same = surface.faces[first][:, :, None] == surface.faces[second][:, None, :]
     one_normal, other_normal = surface.normal[first], surface.normal[second]
     one_length = surface.normal_length[first]
     other_length = surface.normal_length[second]
     direction = np.cross(one_normal, other_normal)
-    steep = np.linalg.norm(direction, axis=1) > EPS_GEOM * one_length * other_length
+    tilt = np.linalg.norm(direction, axis=1)
+    steep = tilt > EPS_GEOM * one_length * other_length
     margin = surface.margin
     one_side = _dot_rows(one - other[:, 0, None, :], other_normal) / other_length[:, None]
     other_side = _dot_rows(other - one[:, 0, None, :], one_normal) / one_length[:, None]
@@ -1233,7 +1317,7 @@ def _touching_apart(surface: _Surface, first: np.ndarray, second: np.ndarray) ->
             direction[saddle],
             margin,
         )
-    return np.asarray(beside & steep, dtype=bool)
+    return np.asarray(beside & steep, dtype=bool), tilt
 
 
 def _ray_from_the_corner(

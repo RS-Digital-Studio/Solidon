@@ -601,6 +601,208 @@ def test_every_plan_finds_exactly_the_overlapping_boxes_once() -> None:
             assert set(found) == expected, f"{plan}: {len(set(found))} statt {len(expected)}"
 
 
+def _sweep_before(
+    surface: intersections._Surface,
+    plan: intersections._Plan,
+    search: intersections._Search,
+    *,
+    separate: bool,
+) -> list[tuple[np.ndarray, np.ndarray]]:
+    """Die Kandidatensuche, wie sie bis zum 09.10.2026 ihre Paare bildete (RM-568).
+
+    Je Paar über die Dreiecksnummern aus den Hüllquadern gelesen, die Heimat
+    der gemeinsamen Hülle je Paar gerechnet — die Vorgabe für die Suche, die
+    dieselben Paare über die Plätze ihrer Einträge bildet.
+    """
+    low, high = surface.low, surface.high
+    entries = intersections._entries(low, high, plan) or intersections._entries(
+        low, high, intersections._Plan(plan.axis)
+    )
+    assert entries is not None
+    others = [dimension for dimension in range(3) if dimension != plan.axis]
+    counts = entries.counts
+    total = np.cumsum(counts)
+    positions = np.arange(len(counts))
+    counted = 0.0
+    begin = 0
+    found: list[tuple[np.ndarray, np.ndarray]] = []
+    while begin < len(counts):
+        before = int(total[begin - 1]) if begin else 0
+        end = int(np.searchsorted(total, before + intersections.SWEEP_PAIRS, side="right"))
+        end = min(max(end, begin + 1), len(counts))
+        block, size = positions[begin:end], counts[begin:end]
+        begin = end
+        amount = int(size.sum())
+        if not amount:
+            continue
+        left = np.repeat(block, size)
+        right = left + 1 + np.arange(amount) - np.repeat(np.cumsum(size) - size, size)
+        first, second = entries.triangle[left], entries.triangle[right]
+        apart = np.zeros(len(first), dtype=bool)
+        for dimension in others:
+            apart |= low[second, dimension] > high[first, dimension] + EPS_GEOM
+            apart |= low[first, dimension] > high[second, dimension] + EPS_GEOM
+        if plan.bins is not None:
+            corner = np.maximum(low[first, plan.bins], low[second, plan.bins])
+            home = np.floor((corner - entries.origin) / plan.width).astype(np.int64)
+            apart |= home != entries.slab[left]
+        first, second, left = first[~apart], second[~apart], left[~apart]
+        open_pairs = np.ones(len(first), dtype=bool)
+        cost = np.ones(len(first))
+        if separate:
+            separated, charge = intersections._separated(surface, first, second)
+            open_pairs = ~separated
+            cost = charge + open_pairs
+        spent = float(cost.sum())
+        if search.max_pairs is not None and counted + spent > search.max_pairs:
+            search.complete = False
+            allowed = max(search.max_pairs - counted, 0.0)
+            fitting = int(np.searchsorted(np.cumsum(cost), allowed, side="right"))
+            cut = int(left[fitting]) if fitting < len(left) else end
+            keep = (left < cut) & open_pairs
+            search.unchecked = np.unique(entries.triangle[cut:])
+            found.append((first[keep], second[keep]))
+            return found
+        counted += spent
+        found.append((first[open_pairs], second[open_pairs]))
+    return found
+
+
+def _plan_before(low: np.ndarray, high: np.ndarray) -> intersections._Plan:
+    """Die Planwahl mit geordneten Einträgen, wie bis zum 09.10.2026 (RM-568)."""
+    stride = max(1, len(low) // intersections.PLAN_SAMPLE)
+    sample_low, sample_high = low[::stride], high[::stride]
+    plans = [intersections._Plan(axis) for axis in range(3)]
+    for axis in range(3):
+        for bins in range(3):
+            middle = float(np.median(sample_high[:, bins] - sample_low[:, bins]))
+            if bins != axis and middle > EPS_GEOM:
+                plans.extend(
+                    intersections._Plan(axis, bins, middle * factor)
+                    for factor in intersections.SLAB_FACTORS
+                )
+    best: tuple[float, intersections._Plan] | None = None
+    for plan in plans:
+        entries = intersections._entries(sample_low, sample_high, plan)
+        if entries is None:
+            continue
+        work = float(entries.counts.sum()) * stride * stride + (
+            intersections.ENTRY_WEIGHT * len(entries.triangle) * stride
+        )
+        if best is None or work < best[0]:
+            best = (work, plan)
+    return best[1] if best is not None else intersections._Plan(0)
+
+
+def _sweep_meshes() -> list[tuple[np.ndarray, np.ndarray]]:
+    """Kugel, Kette, bündige Quader, Wendel, zwei Kugeln im Schnitt und lange Splitter."""
+    sphere = trimesh.creation.icosphere(subdivisions=3)
+    chain = trimesh.util.concatenate(
+        [
+            trimesh.creation.box(extents=(1.0, 1.0, 1.0)).apply_translation((0.0, 2.0 * k, 0.0))
+            for k in range(20)
+        ]
+    )
+    left = trimesh.creation.box(extents=(1.0, 1.0, 1.0))
+    touching = trimesh.util.concatenate([left, left.copy().apply_translation((1.0, 0.0, 0.0))])
+    turns = np.linspace(0.0, 12.0 * np.pi, 1200)
+    path = np.column_stack((np.cos(turns), np.sin(turns), 0.05 * turns))
+    helix = trimesh.creation.sweep_polygon(
+        trimesh.path.polygons.Polygon([(0.0, 0.0), (0.2, 0.0), (0.1, 0.15)]), path
+    )
+    # Lange Splitter quer durch viele Scheiben, dazu kurze, fern vom Ursprung.
+    source = np.random.default_rng(9102026)
+    corners = source.uniform(-5.0, 5.0, size=(600, 3))
+    reach = source.uniform(-0.3, 0.3, size=(600, 2, 3))
+    reach[:200, 0, 2] = source.uniform(-8.0, 8.0, size=200)
+    soup = np.concatenate((corners[:, None, :], corners[:, None, :] + reach), axis=1) + 1.0e4
+    meshes = [
+        (np.asarray(mesh.vertices), np.asarray(mesh.faces))
+        for mesh in (sphere, chain, touching, helix)
+    ]
+    meshes.append(_crossed_spheres())
+    meshes.append((soup.reshape(-1, 3), np.arange(len(soup) * 3).reshape(-1, 3)))
+    return meshes
+
+
+def test_the_sweep_gives_the_pairs_of_the_old_sweep_in_the_same_order(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Dieselben Paare in derselben Folge, dasselbe Budgetende, dieselben geprüften Dreiecke.
+
+    Die Suche bildet ihre Paare seit RM-568 über die Plätze der Einträge, liest
+    die Hüllquader dafür in deren Folge und die Heimatscheibe als das Größere
+    der Heimaten beider Dreiecke. Die Vorgabe ist die Suche davor
+    (:func:`_sweep_before`), für jeden Plan jeder Achse und Breite, mit und
+    ohne Trennprüfung und mit Budgets, die mitten in einem Block enden — auch
+    über mehrere Blöcke (``SWEEP_PAIRS`` klein).
+    """
+    monkeypatch.setattr(intersections, "SWEEP_PAIRS", 2_000)
+    for vertices, faces in _sweep_meshes():
+        surface = intersections._surface(vertices, faces)
+        assert surface is not None
+        plans = [intersections._Plan(axis) for axis in range(3)]
+        for axis in range(3):
+            for bins in range(3):
+                if bins != axis:
+                    plans.extend(
+                        intersections._Plan(axis, bins, width) for width in (0.05, 0.5, 1.0, 7.0)
+                    )
+        for plan in plans:
+            for separate in (False, True):
+                for budget in (None, 500, 5_000):
+                    before = intersections._Search(max_pairs=budget)
+                    expected = _sweep_before(surface, plan, before, separate=separate)
+                    now = intersections._Search(max_pairs=budget)
+                    blocks = list(
+                        intersections._candidates(surface, None, now, plan, separate=separate)
+                    )
+                    for index in (0, 1):
+                        np.testing.assert_array_equal(
+                            np.concatenate([b[index] for b in blocks] or [np.zeros(0, int)]),
+                            np.concatenate([e[index] for e in expected] or [np.zeros(0, int)]),
+                            err_msg=f"{plan}, separate={separate}, budget={budget}",
+                        )
+                    assert now.complete == before.complete, plan
+                    if before.unchecked is None:
+                        assert now.unchecked is None, plan
+                    else:
+                        assert now.unchecked is not None, plan
+                        np.testing.assert_array_equal(now.unchecked, before.unchecked)
+
+
+def test_the_plan_is_chosen_as_with_ordered_entries() -> None:
+    """Die Planwahl zählt die Sweep-Paare ohne die Einträge zu ordnen — und wählt gleich.
+
+    Gezählt wird über die Plätze der Enden in den geordneten Anfängen
+    (:func:`intersections._pair_count`); die Vorgabe ist die Summe der
+    ``counts`` geordneter Einträge, für jeden Plan, an Netzen über und unter der
+    Stichprobengrenze.
+    """
+    for vertices, faces in _sweep_meshes():
+        surface = intersections._surface(vertices, faces)
+        assert surface is not None
+        assert intersections._plan(surface.low, surface.high) == _plan_before(
+            surface.low, surface.high
+        )
+        for axis in range(3):
+            for plan in (
+                intersections._Plan(axis),
+                *(intersections._Plan(axis, (axis + 1) % 3, w) for w in (0.01, 0.3, 4.0)),
+            ):
+                entries = intersections._entries(surface.low, surface.high, plan)
+                counted = intersections._pair_count(surface.low, surface.high, plan)
+                if entries is None:
+                    assert counted is None
+                else:
+                    assert counted == (int(entries.counts.sum()), len(entries.triangle))
+    big = trimesh.creation.icosphere(subdivisions=6)
+    big.apply_translation((3.0e3, -2.0e3, 1.0e3))
+    surface = intersections._surface(np.asarray(big.vertices), np.asarray(big.faces))
+    assert surface is not None and len(surface.low) > intersections.PLAN_SAMPLE
+    assert intersections._plan(surface.low, surface.high) == _plan_before(surface.low, surface.high)
+
+
 def test_a_long_helix_is_searched_in_slabs() -> None:
     """Ein langes Gewinde überdeckt sich quer zur Achse Umlauf um Umlauf.
 
