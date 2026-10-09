@@ -140,7 +140,7 @@ class MeshData:
     def slot_indices(self) -> tuple[int, ...]:
         return self.slots
 
-    def held_bytes(self, seen: set[int] | None = None) -> int:
+    def held_bytes(self, seen: set[int] | None = None, freeable: list[int] | None = None) -> int:
         """Was dieses Netz im Arbeitsspeicher hält, in Bytes (RM-567).
 
         Ecken und Dreiecke, dazu alles, was ``trimesh``, die Erkennung und
@@ -150,19 +150,35 @@ class MeshData:
         Grunddaten und 608 für den Cache nach dem Laden (08.10.2026). Gelesen
         wird am rohen Speicher von ``trimesh``, ohne dessen Prüfsumme: Die
         Frage darf nichts rechnen. ``seen`` zählt geteilte Felder einmal.
+
+        ``freeable`` bekommt in seinem ersten Element dazugezählt, was
+        :meth:`lean` losließe: die Ableitungen aus :data:`RELEASABLE`, soweit
+        nicht schon gezählt. Erst wird gezählt, was bliebe, dann das Lösbare —
+        ein Feld, das beide tragen, bleibt.
         """
         from app.core.memory import held_bytes
 
         known = set() if seen is None else seen
         raw = self.raw
         total = held_bytes(self.slots, known)
+        loose: list[object] = []
         for holder in (raw, getattr(raw, "visual", None)):
             store = getattr(getattr(holder, "_data", None), "data", None)
             cache = getattr(getattr(holder, "_cache", None), "cache", None)
-            total += held_bytes(store, known) + held_bytes(cache, known)
+            total += held_bytes(store, known)
+            if not isinstance(cache, dict):
+                continue
+            snapshot = dict(cache)
+            total += held_bytes(
+                {key: value for key, value in snapshot.items() if not _releasable(key)}, known
+            )
+            loose.extend(value for key, value in snapshot.items() if _releasable(key))
         if self.cavity is not None:
-            total += self.cavity.held_bytes(known)
-        return total
+            total += self.cavity.held_bytes(known, freeable)
+        released = sum(held_bytes(value, known) for value in loose)
+        if freeable is not None:
+            freeable[0] += released
+        return total + released
 
     def lean(self) -> MeshData:
         """Dieselben Ecken und Dreiecke ohne das, was sich aus ihnen neu rechnen lässt (RM-567).
@@ -985,16 +1001,21 @@ _EDGE_TABLE_KEY: Final = "solidon_edge_table"
 #: Was :meth:`MeshData.lean` nicht mitnimmt: was
 #: ``trimesh`` aus Ecken und Dreiecken ableitet und groß ist, und Solidons
 #: eigene Ableitungen — Kantentabelle, Nachbarindex, Eckenfächer und -rang,
-#: Normalen, Komponenten, Fleckennachbarschaft — samt der Schichtanalyse des
+#: Normalen, Fleckennachbarschaft — samt der Schichtanalyse des
 #: Prüfberichts (``slice.findings``, Schlüssel mit diesem Anfang). Nicht
 #: darin: ``face_normals`` und ``vertex_normals``, die eine Datei mitbringen
-#: kann, und alles, was ein Netz über seine Herkunft trägt.
+#: kann, und alles, was ein Netz über seine Herkunft trägt. Ebenfalls nicht
+#: darin, obwohl ableitbar: die Teile (:func:`face_components`) und
+#: ``area_faces``, je 8 Byte je Dreieck. Nach jedem Zurücknehmen fragt der
+#: Bericht am gezeigten Stand nach kleinen Teilen
+#: (``repair.small_components``); ohne beide rechnete er am Spiderman
+#: Kantentabelle, Dreiecke, Kreuzprodukte und Flächen neu, 0,4 s je Schritt
+#: (Review L, G9).
 RELEASABLE: Final = frozenset(
     {
         "triangles",
         "triangles_cross",
         "triangles_center",
-        "area_faces",
         "face_angles",
         "edges",
         "edges_face",
@@ -1024,7 +1045,6 @@ RELEASABLE: Final = frozenset(
         "solidon_vertex_rank",
         "solidon_vertex_faces",
         "solidon_stable_normals",
-        "solidon_face_components",
         "solidon_patch_adjacency",
     }
 )

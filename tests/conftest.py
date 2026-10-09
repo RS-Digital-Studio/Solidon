@@ -680,13 +680,18 @@ def _remembered_features_stay_out_of_it() -> None:
     oben (§38).
 
     Dasselbe gilt für die gemerkten örtlichen Nachmessungen
-    (``local.forget_known``) und Zuordnungen (``matching.forget_matches``):
+    (``local.forget_known``), Zuordnungen (``matching.forget_matches``) und
+    Zuordnungsschritte der Auswertung (``evaluate.forget_remembered_steps``):
     Ein Test, der die Suche zählt oder abklemmt, bekäme sonst das Ergebnis
     eines Vorgängers mit denselben Merkmalen.
     """
+    import importlib
+
     features.forget_cache()
     local.forget_known()
     matching.forget_matches()
+    # Über das Modul: ``app.core.scene.evaluate`` ist im Paket die Funktion.
+    importlib.import_module("app.core.scene.evaluate").forget_remembered_steps()
 
 
 @pytest.fixture(autouse=True)

@@ -55,6 +55,7 @@ from PySide6.QtCore import QEvent, QMetaMethod, QObject, QThread, QTimer, Signal
 from shiboken6 import isValid
 
 from app.core.log import get_logger
+from app.core.memory import forget_released, released_bytes
 
 _log = get_logger(__name__)
 
@@ -646,6 +647,12 @@ COLLECT_EVERY_MS: Final = 500
 #: Aufruf den ersten.
 COLLECTOR_NAME: Final = "mainThreadCollector"
 
+#: Ab wie vielen losgelassenen Bytes der Sammler die älteste Generation
+#: abräumt, auch wenn ihre Schwelle nicht erreicht ist (RM-594,
+#: ``memory.note_released``). Ein Viertel der kleinsten Speicherebene
+#: (``scene.cache.MEMORY_FLOOR``): Mehr wartet nicht auf die Bereinigung.
+COLLECT_AFTER_RELEASED: Final = 128 * 1024 * 1024
+
 
 class _MainThreadCollector(QObject):
     """Räumt Ringe im Hauptfaden ab, sobald die Schwellen der Automatik erreicht sind."""
@@ -667,6 +674,8 @@ class _MainThreadCollector(QObject):
         """
         if _undisturbed_count:
             return
+        if _collect_released():
+            return
         young, middle, old = gc.get_count()
         first, second, third = self._threshold
         if young <= first:
@@ -676,6 +685,21 @@ class _MainThreadCollector(QObject):
             gc.collect(1)
             if old > third:
                 gc.collect(2)
+
+
+def _collect_released() -> bool:
+    """Räumt alle Generationen ab, wenn genug losgelassen wurde (RM-594).
+
+    Losgelassene Netze hängen in Ringen, überleben die jungen Generationen
+    und werden erst frei, wenn die älteste abgeräumt wird; deren Schwelle
+    erreichte der Sammler selten. Nur im Hauptfaden rufen, wie
+    :meth:`_MainThreadCollector.collect_if_due`.
+    """
+    if released_bytes() < COLLECT_AFTER_RELEASED:
+        return False
+    gc.collect()
+    forget_released()
+    return True
 
 
 def collect_in_main_thread(application: QObject) -> None:

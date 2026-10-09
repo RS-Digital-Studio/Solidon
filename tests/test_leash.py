@@ -180,6 +180,62 @@ def test_the_main_thread_waits_while_events_are_delivered(qt_app: QApplication) 
         gc.callbacks.remove(note)
 
 
+class _OldRing:
+    """Ein Ring wie ein losgelassenes ``trimesh``-Netz: frei erst durch die Bereinigung."""
+
+    def __init__(self) -> None:
+        self.me = self
+
+
+def test_released_meshes_reach_the_oldest_generation(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Genug losgelassene Bytes räumen alle Generationen ab, auch unter ihren Schwellen (RM-594).
+
+    Am Spiderman warteten im Fenster bis zu 735 MB schlanker gemachter Netze
+    auf die Bereinigung: Sie überlebten die jungen Generationen, und die
+    älteste erreichte der Sammler im Hauptfaden selten. Gegenprobe: ohne
+    Meldung bleibt der Ring.
+    """
+    import app.ui.leash as leash_module
+    from app.core import memory
+
+    enabled = gc.isenabled()
+    gc.disable()
+    try:
+        memory.forget_released()
+        ring = _OldRing()
+        dropped = weakref.ref(ring)
+        gc.collect()
+        # In die älteste Generation befördert, wie ein Netz, das lange im
+        # Cache lag; danach zählt keine Schwelle mehr für ihn.
+        gc.collect(1)
+        gc.collect(1)
+        del ring
+        assert not leash_module._collect_released(), "nothing reported, nothing collected"
+        assert dropped() is not None
+        memory.note_released(leash_module.COLLECT_AFTER_RELEASED // 2)
+        assert not leash_module._collect_released()
+        assert dropped() is not None, "below the bound the ring waits"
+        memory.note_released(leash_module.COLLECT_AFTER_RELEASED // 2)
+        assert leash_module._collect_released()
+        assert dropped() is None, "the oldest generation was collected"
+        assert memory.released_bytes() == 0
+    finally:
+        memory.forget_released()
+        if enabled:
+            gc.enable()
+
+
+def test_the_main_thread_collector_asks_for_released_meshes_first() -> None:
+    """Der Sammler fragt nach losgelassenen Netzen, bevor er die Schwellen liest (RM-594)."""
+    import inspect
+
+    from app.ui.leash import _MainThreadCollector
+
+    source = inspect.getsource(_MainThreadCollector.collect_if_due)
+    assert source.index("_undisturbed_count") < source.index("_collect_released()")
+    assert source.index("_collect_released()") < source.index("gc.get_count()")
+
+
 def test_the_application_hands_the_collection_to_its_main_thread() -> None:
     """``main`` und ``build_application`` schalten den Sammler ein, vor jedem Arbeiter.
 

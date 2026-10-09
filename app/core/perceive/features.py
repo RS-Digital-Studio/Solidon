@@ -6745,7 +6745,7 @@ def _gap_distance(
     for index in inside:
         point_x, point_y = xs[index], ys[index]
         share = ((point_x - start_x) * along_x + (point_y - start_y) * along_y) / denominator
-        share = min(max(share, 0.0), 1.0) if share == share else share
+        share = share if math.isnan(share) else min(max(share, 0.0), 1.0)
         off_x = point_x - (start_x + share * along_x)
         off_y = point_y - (start_y + share * along_y)
         distance = math.sqrt(off_x * off_x + off_y * off_y)

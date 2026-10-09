@@ -233,7 +233,16 @@ def _candidate_costs(
     radius: float,
     check: Callable[[], None] | None,
 ) -> Iterator[tuple[int, np.ndarray, np.ndarray]]:
-    """Alle räumlich möglichen Paare ohne Nachbarlimit; Kosten nur in kleinen Blöcken."""
+    """Alle räumlich möglichen Paare ohne Nachbarlimit; Kosten in Paketen.
+
+    **Die Kosten mehrerer Zeilen in einem Aufruf** (RM-568): Je Zeile einzeln
+    gerechnet, waren es am Eiffelturm 30 656 Aufrufe über eine Handvoll
+    Spalten und 2,2 s je Zuordnung. Gesammelt wird, bis ein Paket
+    :data:`COST_PAIRS` Paare erreicht — so bleibt die Spitze beim Rechnen
+    begrenzt wie vorher in den Blöcken je Zeile, und ein Abbruch greift nach
+    jedem Paket (Review L, G1). Die Formel rechnet elementweise; welche Paare
+    nebeneinanderstehen, ändert keine Zahl.
+    """
     kinds = np.asarray([entry.kind for entry in second], dtype=object)
     for start in range(0, len(first), VECTOR_ROWS):
         if check is not None:
@@ -243,37 +252,57 @@ def _candidate_costs(
         )
         if check is not None:
             check()
-        # **Die Kosten aller Paare dieser Zeilen in einem Aufruf** (RM-568):
-        # Je Zeile einzeln gerechnet, waren es am Eiffelturm 30 656 Aufrufe
-        # über eine Handvoll Spalten und 2,2 s je Zuordnung. Die Formel rechnet
-        # elementweise; welche Paare nebeneinanderstehen, ändert keine Zahl.
         rows: list[int] = []
         found: list[np.ndarray] = []
+        gathered = 0
         for offset, nearby in enumerate(neighbours):
             row = start + offset
             indices = np.asarray(nearby, dtype=np.intp)
+            indices = indices[kinds[indices] == first[row].kind]
+            if gathered and gathered + len(indices) > COST_PAIRS:
+                yield from _costed(first, one, two, rows, found, check)
+                rows, found, gathered = [], [], 0
             rows.append(row)
-            found.append(indices[kinds[indices] == first[row].kind])
-        sizes = np.fromiter((len(indices) for indices in found), dtype=np.intp, count=len(found))
-        if not sizes.sum():
-            continue
-        pair_rows = np.repeat(np.asarray(rows, dtype=np.intp), sizes)
-        pair_columns = np.concatenate(found)
-        signless = np.repeat(
-            np.fromiter(("axis" in first[row].params for row in rows), dtype=bool, count=len(rows)),
-            sizes,
-        )
-        costs = _vector_costs(one[pair_rows], two[pair_columns], signless)
-        ends = np.cumsum(sizes)
-        for row, indices, end, size in zip(rows, found, ends.tolist(), sizes.tolist(), strict=True):
-            values_of_row = costs[end - size : end]
-            for block in range(0, size, VECTOR_ROWS):
-                if check is not None:
-                    check()
-                columns = indices[block : block + VECTOR_ROWS]
-                values = values_of_row[block : block + VECTOR_ROWS]
-                accepted = values <= MATCH_THRESHOLD
-                yield row, columns[accepted], values[accepted]
+            found.append(indices)
+            gathered += len(indices)
+        if rows:
+            yield from _costed(first, one, two, rows, found, check)
+
+
+#: Wie viele Paare :func:`_candidate_costs` höchstens in einem Aufruf bewertet —
+#: so viele, wie früher ein Block aus Zeilen trug (``VECTOR_ROWS`` Spalten).
+COST_PAIRS: Final = 65_536
+
+
+def _costed(
+    first: list[Feature],
+    one: np.ndarray,
+    two: np.ndarray,
+    rows: list[int],
+    found: list[np.ndarray],
+    check: Callable[[], None] | None,
+) -> Iterator[tuple[int, np.ndarray, np.ndarray]]:
+    """Ein Paket Zeilen bewerten und zeilenweise in Blöcken ausgeben."""
+    sizes = np.fromiter((len(indices) for indices in found), dtype=np.intp, count=len(found))
+    if not sizes.sum():
+        return
+    pair_rows = np.repeat(np.asarray(rows, dtype=np.intp), sizes)
+    pair_columns = np.concatenate(found)
+    signless = np.repeat(
+        np.fromiter(("axis" in first[row].params for row in rows), dtype=bool, count=len(rows)),
+        sizes,
+    )
+    costs = _vector_costs(one[pair_rows], two[pair_columns], signless)
+    ends = np.cumsum(sizes)
+    for row, indices, end, size in zip(rows, found, ends.tolist(), sizes.tolist(), strict=True):
+        values_of_row = costs[end - size : end]
+        for block in range(0, size, VECTOR_ROWS):
+            if check is not None:
+                check()
+            columns = indices[block : block + VECTOR_ROWS]
+            values = values_of_row[block : block + VECTOR_ROWS]
+            accepted = values <= MATCH_THRESHOLD
+            yield row, columns[accepted], values[accepted]
 
 
 @dataclass(slots=True)
@@ -710,22 +739,56 @@ def match(
     ):
         return _copied(known[1])
     result = _matched(old_ids, first, new_ids, second, (before, centre, diagonal), check_cancelled)
+    from app.core.memory import held_bytes
+
+    stored = _copied(result)
+    weight = (_identifiers(stored), held_bytes(stored))
     with _MATCHES_LOCK:
-        _MATCHES[key] = (ways, _copied(result))
-        while len(_MATCHES) > MATCHES_KEPT:
-            _MATCHES.popitem(last=False)
+        global _MATCHED_IDS, _MATCHED_BYTES
+        replaced = _MATCHES.pop(key, None)
+        if replaced is not None:
+            _MATCHED_IDS -= replaced[2][0]
+            _MATCHED_BYTES -= replaced[2][1]
+        _MATCHES[key] = (ways, stored, weight)
+        _MATCHED_IDS += weight[0]
+        _MATCHED_BYTES += weight[1]
+        while len(_MATCHES) > 1 and _MATCHED_IDS > MATCHED_IDS_KEPT:
+            _old_key, (_ways, _dropped, dropped) = _MATCHES.popitem(last=False)
+            _MATCHED_IDS -= dropped[0]
+            _MATCHED_BYTES -= dropped[1]
     return result
 
 
-#: Wie viele Zuordnungen :func:`match` sich merkt. Eine Auswertung geht den
-#: ganzen Verlauf durch und ordnet nach jedem Schritt neu zu, auch wenn er aus
-#: dem Cache kommt — am Eiffelturm 4,7 s je Schritt und je Auswertung, das
-#: dritte Verschieben kostete so 16 statt 6 s (08.10.2026, RM-568). Die
-#: Zuordnung hängt nur an Kennungen, Arten und Merkmalsvektoren; dieselben
-#: Eingänge geben dieselbe Antwort. Eine Antwort ist ein paar Wörterbücher
-#: aus Kennungen, und 256 decken einen langen Verlauf mit mehreren Körpern.
-MATCHES_KEPT: Final = 256
-_MATCHES: OrderedDict[bytes, tuple[tuple[Any, ...], MatchResult]] = OrderedDict()
+def _identifiers(result: MatchResult) -> int:
+    """Wie viele Kennungen eine gemerkte Antwort trägt — ihr Gewicht im Merker."""
+    return len(result.mapping) + len(result.orphaned) + len(result.ambiguous) + len(result.fresh)
+
+
+def matched_bytes() -> int:
+    """Was die gemerkten Antworten halten, in Bytes — für die Bytegrenze des Ergebniscaches.
+
+    Gezählt einmal beim Ablegen (``memory.held_bytes`` je Antwort); die Frage
+    rechnet nichts und kann deshalb bei jedem ``ResultCache.trim`` kommen.
+    """
+    with _MATCHES_LOCK:
+        return _MATCHED_BYTES
+
+
+#: Wie viele Kennungen die gemerkten Zuordnungen von :func:`match` zusammen
+#: tragen. Eine Auswertung geht den ganzen Verlauf durch und ordnet nach jedem
+#: Schritt neu zu, auch wenn er aus dem Cache kommt — am Eiffelturm 4,7 s je
+#: Schritt und je Auswertung, das dritte Verschieben kostete so 16 statt 6 s
+#: (08.10.2026, RM-568). Die Zuordnung hängt nur an Kennungen, Arten und
+#: Merkmalsvektoren; dieselben Eingänge geben dieselbe Antwort. Begrenzt
+#: über die Kennungen und nicht über die Zahl der Antworten: Eine Antwort mit
+#: 5 000 Merkmalen wiegt 309 KiB (Review L, G3); zwei Millionen Kennungen
+#: sind rund 120 MB, und die Bytegrenze des Ergebniscaches zählt sie mit
+#: (:func:`matched_bytes`).
+MATCHED_IDS_KEPT: Final = 2_000_000
+#: Je Schlüssel die Rechenwege, die Antwort und ihr Gewicht (Kennungen, Bytes).
+_MATCHES: OrderedDict[bytes, tuple[tuple[Any, ...], MatchResult, tuple[int, int]]] = OrderedDict()
+_MATCHED_IDS = 0
+_MATCHED_BYTES = 0
 _MATCHES_LOCK = threading.Lock()
 
 
@@ -739,7 +802,8 @@ def _match_key(
 ) -> bytes:
     """Alles, was die Zuordnung liest: Kennungen in ihrer Folge, Arten, Achsenart, Vektoren.
 
-    Dazu die Grenzen der Kostenformel. Die Rechenwege selbst (:data:`_MATCH_WAYS`)
+    Dazu die Grenzen der Kostenformel und der Mehrdeutigkeit und die
+    Paketgrößen. Die Rechenwege selbst (:data:`_MATCH_WAYS`)
     vergleicht :func:`match` beim Nachschlagen: Ein Test, der eine Grenze
     verstellt oder einen Rechenweg ersetzt, bekommt keine Antwort, die vorher
     unter anderen Regeln entstand.
@@ -751,6 +815,10 @@ def _match_key(
         DIAMETER_TOLERANCE,
         MATCH_THRESHOLD,
         KIND_PENALTY,
+        AMBIGUITY_MARGIN,
+        AMBIGUITY_FLOOR,
+        VECTOR_ROWS,
+        COST_PAIRS,
     )
     digest.update(repr(rules).encode("ascii"))
     for ids, features, vectors in ((old_ids, first, one), (new_ids, second, two)):
@@ -766,13 +834,27 @@ def _match_key(
     return digest.digest()
 
 
-#: Die Rechenwege, an denen die Antwort von :func:`match` hängt.
+#: Die Rechenwege, an denen die Antwort von :func:`match` hängt — jede Stufe,
+#: die ein Test ersetzen kann (Review L, G2).
 _MATCH_WAYS: Final = (
-    "_assignment",
-    "_open_claims",
-    "_cost_matrix",
-    "_candidate_costs",
+    "feature_vector",
+    "_vector_norm",
     "_vector_costs",
+    "_vectors",
+    "_cost_matrix",
+    "_query_radius",
+    "_candidate_costs",
+    "_costed",
+    "_matrix_pairs",
+    "_not_finite",
+    "_assignment",
+    "_hull_limits",
+    "_accepted_components",
+    "_reachable",
+    "_strong_components",
+    "_global_support",
+    "_open_claims",
+    "_close_claims",
     "linear_sum_assignment",
     "cKDTree",
 )
@@ -780,8 +862,11 @@ _MATCH_WAYS: Final = (
 
 def forget_matches() -> None:
     """Vergisst die gemerkten Zuordnungen — für Tests und Messungen."""
+    global _MATCHED_IDS, _MATCHED_BYTES
     with _MATCHES_LOCK:
         _MATCHES.clear()
+        _MATCHED_IDS = 0
+        _MATCHED_BYTES = 0
 
 
 def _copied(result: MatchResult) -> MatchResult:
@@ -947,6 +1032,14 @@ def surface_places(
     (``geom.transform.moved_points``, ohne BLAS — der Ort entscheidet zwischen
     Zwillingen). Ein Merkmal ohne Dreiecke oder mit Nummern, die dieses Netz
     nicht hat, bekommt keinen Ort.
+
+    Mittelpunkte und Flächen kommen aus dem Cache des Netzes, wenn er sie
+    hat; sonst rechnet diese Frage sie nur für die gefragten Dreiecke, mit
+    denselben Formeln wie ``trimesh`` und ohne sie abzulegen. Gefragt wird
+    auch nach Treffern aus dem Ergebniscache, und dessen ältere Netze sind
+    schlank (``MeshData.lean``) — für das ganze Netz gerechnet, wuchsen sie
+    bei jeder Auswertung um vier Felder nach, die ``trim`` wieder freigab
+    (Review L, M2).
     """
     from app.core.geom.mesh import MeshData
     from app.core.geom.transform import moved_points
@@ -955,9 +1048,7 @@ def surface_places(
         return {}
     body = mesh.raw
     count = len(body.faces)
-    centres = np.asarray(body.triangles_center, dtype=float)
-    areas = np.asarray(body.area_faces, dtype=float)
-    places: dict[FeatureId, Any] = {}
+    wanted: dict[FeatureId, np.ndarray] = {}
     for name in names:
         feature = features.get(name)
         if feature is None or not feature.face_indices:
@@ -965,15 +1056,51 @@ def surface_places(
         faces = np.asarray(feature.face_indices, dtype=np.int64)
         if int(faces.min()) < 0 or int(faces.max()) >= count:
             continue
-        weights = areas[faces]
+        wanted[name] = faces
+    if not wanted:
+        return {}
+    centres, areas, rows = _face_centres_and_areas(body, wanted.values())
+    places: dict[FeatureId, Any] = {}
+    for name, faces in wanted.items():
+        at = faces if rows is None else np.searchsorted(rows, faces)
+        weights = areas[at]
         total = float(weights.sum())
         if not total > 0.0:
             continue
-        place = (centres[faces] * weights[:, None]).sum(axis=0) / total
+        place = (centres[at] * weights[:, None]).sum(axis=0) / total
         if movement is not None:
             place = moved_points(place.reshape(1, 3), np.asarray(movement, dtype=float))[0]
         places[name] = place
     return places
+
+
+def _face_centres_and_areas(
+    body: Any, groups: Collection[np.ndarray]
+) -> tuple[np.ndarray, np.ndarray, np.ndarray | None]:
+    """Mittelpunkte und Flächen der Dreiecke in ``groups`` und ihre Zeilen.
+
+    Ohne Zeilen (``None``) sind es die Felder des ganzen Netzes aus seinem
+    Cache, gelesen über die Dreiecksnummer. Sonst gilt für jede gefragte
+    Nummer die Zeile ``searchsorted(rows, nummer)``; jede Zeile rechnet
+    elementweise wie ``trimesh.Trimesh.triangles_center`` und ``area_faces``
+    und ist deshalb bitgleich.
+    """
+    body._cache.verify()
+    held = body._cache.cache
+    if "triangles_center" in held and "area_faces" in held:
+        return (
+            np.asarray(held["triangles_center"], dtype=float),
+            np.asarray(held["area_faces"], dtype=float),
+            None,
+        )
+    rows = np.unique(np.concatenate(list(groups)))
+    corners = body.vertices.view(np.ndarray)[body.faces.view(np.ndarray)[rows]]
+    centres = corners.mean(axis=1)
+    # trimesh.triangles.cross und .area, Schritt für Schritt
+    edges = corners[:, 1:, :] - corners[:, :2, :]
+    crosses = np.cross(edges[:, 0], edges[:, 1])
+    areas = np.sqrt((crosses**2).sum(axis=1)) / 2.0
+    return np.asarray(centres, dtype=float), np.asarray(areas, dtype=float), rows
 
 
 def settled_twins(

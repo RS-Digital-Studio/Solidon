@@ -6,6 +6,7 @@ from __future__ import annotations
 
 from dataclasses import replace
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 import pytest
@@ -2818,6 +2819,9 @@ def test_evaluation_proves_each_moved_mesh_only_once(profile, monkeypatch, step,
     cache = ResultCache()
     for _ in range(2):
         features.forget_cache()
+        # Sonst kommt der zweite Lauf ganz aus dem Merker der Auswertung und
+        # prüft gar nichts (RM-593); gefragt ist der Cachetreffer.
+        importlib.import_module("app.core.scene.evaluate").forget_remembered_steps()
         calls.clear()
         result = evaluate(project.document, profile, sources=sources, cache=cache)
         assert result.complete, result.scene.report.findings
@@ -2882,7 +2886,10 @@ def _candidates_row_by_row(first, second, one, two, tree, radius):  # type: igno
                 yield row, columns[accepted], values[accepted]
 
 
-def test_candidate_costs_in_one_call_per_block_are_the_row_by_row_costs() -> None:
+@pytest.mark.parametrize("packet", [65_536, 97], ids=["paket", "viele-pakete"])
+def test_candidate_costs_in_one_call_per_block_are_the_row_by_row_costs(
+    packet: int, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """Alle Paare eines Zeilenblocks in einem Aufruf — dieselben Paare, Bit für Bit (RM-568).
 
     Am Eiffelturm kostete die Zuordnung nach einem Verschieben 30 656
@@ -2915,6 +2922,17 @@ def test_candidate_costs_in_one_call_per_block_are_the_row_by_row_costs() -> Non
             )
         return found
 
+    from app.core.perceive import matching
+
+    monkeypatch.setattr(matching, "COST_PAIRS", packet)
+    largest: list[int] = []
+    real = matching._vector_costs
+
+    def counted(one_: Any, two_: Any, signless: Any) -> Any:
+        largest.append(len(np.atleast_2d(two_)))
+        return real(one_, two_, signless)
+
+    monkeypatch.setattr(matching, "_vector_costs", counted)
     first, second = made(700, "alt"), made(650, "neu")
     one = _vectors(first, (0.0, 0.0, 0.0), 40.0, None)
     two = _vectors(second, (0.1, 0.0, 0.0), 40.0, None)
@@ -2930,6 +2948,10 @@ def test_candidate_costs_in_one_call_per_block_are_the_row_by_row_costs() -> Non
         assert row == row_now
         assert np.array_equal(columns, columns_now)
         assert np.array_equal(values, values_now)
+    # Ein Paket trägt höchstens COST_PAIRS Paare — außer eine einzelne Zeile
+    # hat allein mehr (Review L, G1).
+    widest_row = max(len(columns) for _row, columns, _values in expected)
+    assert max(largest) <= max(packet, widest_row) + 650
 
 
 def test_the_same_question_is_matched_once(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -3025,3 +3047,144 @@ def test_a_long_history_matches_only_its_new_step(monkeypatch: pytest.MonkeyPatc
         "face",
         "hole",
     }
+
+
+def test_surface_places_of_a_lean_mesh_are_bit_identical_and_grow_nothing() -> None:
+    """Ein schlankes Netz bekommt dieselben Orte und behält seinen schmalen Cache (Review L, M2)."""
+    from app.core.perceive.matching import surface_places
+
+    rng = np.random.default_rng(7)
+    body = trimesh.creation.icosphere(subdivisions=4)
+    body.vertices = body.vertices * rng.uniform(0.5, 30.0, size=3) + rng.normal(size=3) * 1e3
+    full = MeshData.of(body)
+    count = len(body.faces)
+    features = {
+        f"f{index}": Feature(
+            f"f{index}",
+            "face",
+            "generated",
+            {},
+            face_indices=tuple(int(face) for face in rng.choice(count, size=size, replace=False)),
+        )
+        for index, size in enumerate((1, 3, 40, 900))
+    }
+    # Mit den Feldern von trimesh im Cache rechnet die Frage wie bisher.
+    assert body.triangles_center is not None and body.area_faces is not None
+    expected = surface_places(features, set(features), full, None)
+    lean = full.lean()
+    assert "triangles_center" not in lean.raw._cache.cache
+    held = set(lean.raw._cache.cache)
+    placed = surface_places(features, set(features), lean, None)
+    assert set(placed) == set(expected) == set(features)
+    for name, place in expected.items():
+        assert np.asarray(placed[name]).tobytes() == np.asarray(place).tobytes(), name
+    assert set(lean.raw._cache.cache) == held, "the lean mesh grows nothing back"
+    lean.raw._cache.cache.pop("area_faces", None)
+    again = surface_places(features, set(features), lean, None)
+    for name, place in expected.items():
+        assert np.asarray(again[name]).tobytes() == np.asarray(place).tobytes(), name
+    assert set(lean.raw._cache.cache) == held - {"area_faces"}
+
+
+def _six_bores(shift: float) -> dict[str, Feature]:
+    return {
+        f"hole_{index}": Feature(
+            id=f"hole_{index}",
+            kind="hole",
+            provenance="detected",
+            params={
+                "centre": (index * 10.0 + shift, 0.0, 0.0),
+                "axis": (0.0, 0.0, 1.0),
+                "diameter": 5.0,
+            },
+        )
+        for index in range(6)
+    }
+
+
+@pytest.mark.parametrize(
+    "rule",
+    ["AMBIGUITY_MARGIN", "AMBIGUITY_FLOOR", "VECTOR_ROWS", "COST_PAIRS", "KIND_PENALTY"],
+)
+def test_every_bound_the_matching_reads_asks_anew(
+    monkeypatch: pytest.MonkeyPatch, rule: str
+) -> None:
+    """Eine verstellte Grenze bekommt keine Antwort, die unter der alten entstand (Review L, G2)."""
+    from app.core.perceive import matching
+
+    calls: list[int] = []
+    real = matching._matched
+
+    def counted(*args: Any, **kwargs: Any) -> Any:
+        calls.append(1)
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(matching, "_matched", counted)
+    matching.forget_matches()
+    matching.match(_six_bores(0.0), _six_bores(0.5), (0.0, 0.0, 0.0), 100.0)
+    matching.match(_six_bores(0.0), _six_bores(0.5), (0.0, 0.0, 0.0), 100.0)
+    assert len(calls) == 1, "Voraussetzung: dieselbe Frage kommt aus dem Merker"
+    value = getattr(matching, rule)
+    monkeypatch.setattr(matching, rule, value + 1 if isinstance(value, int) else value * 0.5)
+    matching.match(_six_bores(0.0), _six_bores(0.5), (0.0, 0.0, 0.0), 100.0)
+    assert len(calls) == 2, f"{rule} is part of the question"
+
+
+def test_every_stage_the_matching_runs_is_part_of_the_question(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Jede Stufe, die ein Test ersetzen kann, entwertet den Merker (Review L, G2)."""
+    from app.core.perceive import matching
+
+    stages = (
+        "_global_support",
+        "_hull_limits",
+        "_reachable",
+        "_strong_components",
+        "_close_claims",
+        "_open_claims",
+        "_matrix_pairs",
+        "_query_radius",
+        "_candidate_costs",
+        "_assignment",
+    )
+    assert set(stages) <= set(matching._MATCH_WAYS)
+    calls: list[int] = []
+    real = matching._matched
+
+    def counted(*args: Any, **kwargs: Any) -> Any:
+        calls.append(1)
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(matching, "_matched", counted)
+    matching.forget_matches()
+    matching.match(_six_bores(0.0), _six_bores(0.5), (0.0, 0.0, 0.0), 100.0)
+    for count, stage in enumerate(stages, start=2):
+        original = getattr(matching, stage)
+
+        def replaced(*args: Any, __original: Any = original, **kwargs: Any) -> Any:
+            return __original(*args, **kwargs)
+
+        monkeypatch.setattr(matching, stage, replaced)
+        matching.match(_six_bores(0.0), _six_bores(0.5), (0.0, 0.0, 0.0), 100.0)
+        assert len(calls) == count, f"{stage} is part of the question"
+
+
+def test_the_matching_memory_is_bounded_by_identifiers_and_counted_in_bytes(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Der Merker hält höchstens ``MATCHED_IDS_KEPT`` Kennungen und nennt seine Bytes (G3)."""
+    from app.core.memory import held_bytes
+    from app.core.perceive import matching
+
+    matching.forget_matches()
+    assert matching.matched_bytes() == 0
+    monkeypatch.setattr(matching, "MATCHED_IDS_KEPT", 30)
+    for step in range(8):
+        matching.match(_six_bores(0.0), _six_bores(0.1 * (step + 1)), (0.0, 0.0, 0.0), 100.0)
+    answers = [answer for _ways, answer, _weight in matching._MATCHES.values()]
+    assert 1 < len(answers) < 8, "the oldest answers gave way"
+    assert sum(matching._identifiers(answer) for answer in answers) <= 30
+    assert matching.matched_bytes() == sum(held_bytes(answer) for answer in answers)
+    matching.forget_matches()
+    assert matching.matched_bytes() == 0

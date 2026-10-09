@@ -8,6 +8,7 @@ import json
 import logging
 import os
 import shutil
+import sys
 import time
 from collections.abc import Mapping
 from pathlib import Path
@@ -426,7 +427,7 @@ def test_arrays_two_entries_share_count_once() -> None:
     cache = ResultCache(memory_budget=separately - 1)
     cache.put("a", source)
     cache.put("b", moved)
-    exact = sum(cache._exact([], set()).values())
+    exact = cache._exact([], set())[2]
     assert exact < separately - 1
     cache.trim()
     assert cache.get("a") is source, "nothing to shrink when every array counts once"
@@ -564,8 +565,68 @@ def test_what_recognition_remembers_for_a_body_counts_with_it() -> None:
     body = trimesh.creation.cylinder(radius=8.0, height=20.0, sections=96)
     mesh = MeshData.of(body)
     detect(mesh)
-    assert held_answers(body), "Voraussetzung: die Erkennung hat sich etwas gemerkt"
-    assert _mesh_bytes(mesh, set()) > mesh.held_bytes(set())
+    answers = held_answers(body)
+    assert answers, "Voraussetzung: die Erkennung hat sich etwas gemerkt"
+    from app.core.memory import held_bytes
+
+    seen: set[int] = set()
+    own = mesh.held_bytes(seen)
+    each = sum(held_bytes(answer, seen) for answer in answers)
+    assert _mesh_bytes(mesh, set()) == own + each, "every memo counted once, none estimated"
+
+
+def test_a_mixed_list_is_counted_without_a_sample() -> None:
+    """Hundert kleine Felder und ein großes, in beiden Reihenfolgen — dieselbe Summe.
+
+    Die Merker der Erkennung kommen als gemischte Liste in der Folge einer
+    Menge; eine Stichprobe traf sie je nach Hash mit 0,7 oder 39 statt 33 MB
+    (Review L, M1).
+    """
+    import numpy as np
+
+    from app.core.memory import held_bytes
+
+    small = [np.zeros(10) for _ in range(99)]
+    big = np.zeros(1_000_000)
+    exact = sum(item.nbytes for item in small) + big.nbytes
+    for items in ([*small, big], [big, *small], [{"fit": item} for item in (*small, big)]):
+        assert 0.95 * exact <= held_bytes(items) <= 1.1 * exact + 200_000
+
+
+def test_recognition_memos_count_the_same_under_every_hash_seed() -> None:
+    """Dieselbe Zahl in jedem Prozess — die Folge der Merker hängt am Hash (Review L, M1)."""
+    import subprocess
+    import sys
+
+    script = "; ".join(
+        (
+            "import sys",
+            "sys.path.insert(0, sys.argv[1])",
+            "import trimesh",
+            "from app.core.geom.mesh import MeshData",
+            "from app.core.perceive.features import detect",
+            "from app.core.scene.cache import _mesh_bytes",
+            "body = trimesh.creation.cylinder(radius=8.0, height=20.0, sections=96)",
+            "mesh = MeshData.of(body)",
+            "detect(mesh)",
+            "print(_mesh_bytes(mesh, set()))",
+        )
+    )
+    root = str(Path(__file__).resolve().parents[1])
+    counted = set()
+    for seed in ("1", "2", "3", "4"):
+        environment = dict(os.environ, PYTHONHASHSEED=seed, PYTHONUTF8="1")
+        finished = subprocess.run(
+            [sys.executable, "-c", script, root],
+            capture_output=True,
+            text=True,
+            env=environment,
+            cwd=root,
+            timeout=300,
+            check=True,
+        )
+        counted.add(int(finished.stdout.split()[-1]))
+    assert len(counted) == 1, counted
 
 
 def test_the_installed_memory_is_read_from_the_system() -> None:
@@ -574,6 +635,104 @@ def test_the_installed_memory_is_read_from_the_system() -> None:
     installed = physical_memory()
     assert installed is not None
     assert 2**30 <= installed <= 2**44
+
+
+def test_a_smaller_limit_of_the_process_wins_over_the_installed_memory(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Eine Grenze unter dem Rechner bemisst die Speicherebene, nicht der Wirt (Review L, G4)."""
+    from app.core import memory
+
+    monkeypatch.setattr(memory, "_installed_memory", lambda: 64 * 2**30)
+    monkeypatch.setattr(memory, "_process_limits", lambda: [None, 2 * 2**30])
+    assert memory.physical_memory() == 2 * 2**30
+    monkeypatch.setattr(memory, "_process_limits", lambda: [None, 128 * 2**30])
+    assert memory.physical_memory() == 64 * 2**30
+    monkeypatch.setattr(memory, "_installed_memory", lambda: None)
+    monkeypatch.setattr(memory, "_process_limits", lambda: [None])
+    assert memory.physical_memory() is None
+
+
+def test_the_cgroup_limit_is_read_from_the_own_group_and_above(tmp_path: Path) -> None:
+    """cgroup v2 über die eigene Gruppe und jede darüber, v1 über die eigene (G4).
+
+    Rein über Dateien, auf jeder Plattform: ``max`` ist keine Grenze, die
+    kleinste Zahl gilt, ohne Dateien gibt es keine.
+    """
+    from app.core.memory import _cgroup_limit
+
+    root = tmp_path / "cgroup"
+    own = tmp_path / "self_cgroup"
+    assert _cgroup_limit(root, own) is None
+    scope = root / "user.slice" / "app.scope"
+    scope.mkdir(parents=True)
+    (root / "memory.max").write_text("max\n", encoding="ascii")
+    (root / "user.slice" / "memory.max").write_text("4294967296\n", encoding="ascii")
+    (scope / "memory.max").write_text("max\n", encoding="ascii")
+    own.write_text("0::/user.slice/app.scope\n", encoding="ascii")
+    assert _cgroup_limit(root, own) == 4 * 2**30
+    (scope / "memory.max").write_text("1073741824\n", encoding="ascii")
+    assert _cgroup_limit(root, own) == 2**30
+
+    legacy = tmp_path / "legacy"
+    group = legacy / "memory" / "docker" / "abc"
+    group.mkdir(parents=True)
+    (group / "memory.limit_in_bytes").write_text("2147483648\n", encoding="ascii")
+    own.write_text("12:cpu,cpuacct:/docker/abc\n4:memory:/docker/abc\n", encoding="ascii")
+    assert _cgroup_limit(legacy, own) == 2 * 2**30
+    # Im Container sieht der Prozess seine Gruppe als Wurzel.
+    inside = tmp_path / "inside"
+    inside.mkdir()
+    (inside / "memory.max").write_text("3221225472\n", encoding="ascii")
+    own.write_text("0::/\n", encoding="ascii")
+    assert _cgroup_limit(inside, own) == 3 * 2**30
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="Jobs gibt es nur unter Windows")
+def test_a_windows_job_limit_bounds_the_memory() -> None:
+    """Ein Prozess in einem Job mit Speichergrenze nennt diese Grenze (G4)."""
+    import subprocess
+
+    script = "\n".join(
+        [
+            "import ctypes, sys",
+            "from ctypes import wintypes",
+            "sys.path.insert(0, sys.argv[1])",
+            "from app.core import memory",
+            "class Basic(ctypes.Structure):",
+            "    _fields_ = [('a', ctypes.c_int64), ('b', ctypes.c_int64),",
+            "        ('flags', wintypes.DWORD), ('c', ctypes.c_size_t), ('d', ctypes.c_size_t),",
+            "        ('e', wintypes.DWORD), ('f', ctypes.c_size_t), ('g', wintypes.DWORD),",
+            "        ('h', wintypes.DWORD)]",
+            "class Extended(ctypes.Structure):",
+            "    _fields_ = [('basic', Basic), ('io', ctypes.c_ulonglong * 6),",
+            "        ('process', ctypes.c_size_t), ('job', ctypes.c_size_t),",
+            "        ('i', ctypes.c_size_t), ('j', ctypes.c_size_t)]",
+            "kernel = ctypes.WinDLL('kernel32', use_last_error=True)",
+            "kernel.CreateJobObjectW.restype = wintypes.HANDLE",
+            "kernel.GetCurrentProcess.restype = wintypes.HANDLE",
+            "kernel.SetInformationJobObject.argtypes = (wintypes.HANDLE, ctypes.c_int,",
+            "    ctypes.c_void_p, wintypes.DWORD)",
+            "kernel.AssignProcessToJobObject.argtypes = (wintypes.HANDLE, wintypes.HANDLE)",
+            "job = kernel.CreateJobObjectW(None, None)",
+            "info = Extended()",
+            "info.basic.flags = 0x100",
+            "info.process = 3 * 2**30",
+            "size = ctypes.sizeof(info)",
+            "assert kernel.SetInformationJobObject(job, 9, ctypes.byref(info), size)",
+            "assert kernel.AssignProcessToJobObject(job, kernel.GetCurrentProcess())",
+            "print(memory.physical_memory())",
+        ]
+    )
+    done = subprocess.run(
+        [sys.executable, "-c", script, str(Path(__file__).resolve().parent.parent)],
+        capture_output=True,
+        text=True,
+        timeout=120,
+        check=False,
+    )
+    assert done.returncode == 0, done.stderr
+    assert int(done.stdout.strip()) == 3 * 2**30
 
 
 def test_a_long_history_on_a_large_body_stays_inside_the_memory_level(profile: Profile) -> None:
@@ -625,7 +784,7 @@ def test_a_long_history_on_a_large_body_stays_inside_the_memory_level(profile: P
     def beyond(result: Any) -> int:
         """Was der Cache über die Netze der Szene hinaus hält, jedes Feld einmal."""
         meshes = [body.mesh for body in result.scene.objects.values()]
-        return sum(cache._exact(meshes, {id(mesh) for mesh in meshes}).values())
+        return cache._exact(meshes, {id(mesh) for mesh in meshes})[2]
 
     for _step in range(8):
         history.apply(
@@ -647,6 +806,180 @@ def test_a_long_history_on_a_large_body_stays_inside_the_memory_level(profile: P
         reported(result)
     assert cache.statistics.misses == misses, "undoing reads every step from memory"
     assert cache.statistics.evictions == 0, "older steps shrank instead of giving way"
+
+
+def test_trimming_counts_once_and_a_lean_entry_stays_lean(
+    profile: Profile, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Zehn Verschieben unter knapper Grenze: je ``trim`` eine genaue Zählung (Review L, M2).
+
+    Nach jedem Schrumpfen und Verdrängen alles neu zu zählen, kostete am Riser
+    unter 150 MB Grenze 3 s je Auswertung, quadratisch mit dem Verlauf. Und
+    eine Auswertung aus Treffern rechnete an jedem schlanken Netz Mittelpunkte
+    und Flächen neu, die ``trim`` danach wieder freigab — zwei Läufe ohne
+    Änderung schrumpften dieselben Einträge zweimal.
+    """
+    import numpy as np
+
+    from app.core.bootstrap import load_operations
+    from app.core.scene import History, OperationDraft, evaluate
+    from app.core.scene import cache as cache_module
+    from app.core.scene.cache import held_by
+    from app.core.scene.project import ProjectSources, new_project
+    from app.core.types import Source
+    from tests.test_matching import ridged_ring
+
+    load_operations()
+    # Drei Verrundungen um denselben Kreis: Zwillinge, die jede Zuordnung
+    # nach dem Ort ihrer Oberfläche am alten Netz trennt
+    # (``matching.surface_places``) — auch wenn es aus dem Cache kommt.
+    project = new_project("centauri-carbon-2", "petg")
+    project.document.sources["src_1"] = Source(
+        id="src_1", kind="import", path="sources/ring.stl", sha256=""
+    )
+    project.sources["src_1"] = ridged_ring()
+    history = History(project.document)
+    history.apply("Laden", [OperationDraft(op="load", params={"source": "src_1", "unit": "mm"})])
+    sources = ProjectSources(project)
+    probe = ResultCache()
+    first = evaluate(project.document, profile, sources=sources, cache=probe)
+    budget = int(max(held_by(entry) for entry in probe._entries.values()) * 1.5)
+    cache = ResultCache(memory_budget=budget)
+    target = next(iter(first.scene.objects))
+    counted: list[int] = []
+    leaned: list[int] = []
+    real_exact = ResultCache._exact
+    real_leaner = cache_module._leaner
+
+    def exact(self: ResultCache, *args: Any) -> Any:
+        counted[-1] += 1
+        return real_exact(self, *args)
+
+    def leaner(result: CachedResult, kept: Any) -> CachedResult:
+        lean = real_leaner(result, kept)
+        leaned[-1] += lean is not result
+        return lean
+
+    monkeypatch.setattr(ResultCache, "_exact", exact)
+    monkeypatch.setattr(cache_module, "_leaner", leaner)
+    real_trim = ResultCache.trim
+
+    def trim(self: ResultCache, keep: Any = ()) -> None:
+        counted.append(0)
+        leaned.append(0)
+        real_trim(self, keep)
+
+    monkeypatch.setattr(ResultCache, "trim", trim)
+    for _step in range(10):
+        history.apply(
+            "Verschieben",
+            [OperationDraft(op="translate_object", inputs=(target,), params={"dx": 1.0})],
+        )
+        result = evaluate(project.document, profile, sources=sources, cache=cache)
+        # Was der Prüfbericht am gezeigten Netz ablegt, eine Schichtanalyse.
+        for shown in result.scene.objects.values():
+            raw = cast(Any, shown.mesh).raw
+            raw._cache.verify()
+            raw._cache.cache["solidon_print_findings|probe"] = np.ones(200_000)
+    assert max(counted) <= 1, f"one exact count per trim, got {counted}"
+    assert sum(leaned) > 0, "Voraussetzung: die Grenze schrumpft ältere Einträge"
+    leaned.clear()
+    for _again in range(2):
+        evaluate(project.document, profile, sources=sources, cache=cache)
+    assert leaned == [0, 0], f"an unchanged run shrinks nothing again, got {leaned}"
+
+
+def test_the_matching_memory_counts_inside_the_byte_bound(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Was der Merker der Zuordnung hält, zählt in derselben Grenze (Review L, G3)."""
+    from app.core.scene import cache as cache_module
+    from app.core.scene.cache import held_by
+
+    old, new = sphere_result("obj_1"), sphere_result("obj_2")
+    _grown(old)
+    _grown(new)
+    budget = held_by(old) + held_by(new) + 1_000
+    cache = ResultCache(memory_budget=budget)
+    cache.put("old", old)
+    cache.put("new", new)
+    cache.trim()
+    assert cache._entries["old"] is old, "Voraussetzung: beide passen ohne den Merker"
+    monkeypatch.setattr(cache_module, "_memo_bytes", lambda: 2_000)
+    cache.trim()
+    shrunk = cache._entries["old"]
+    assert shrunk is not old, "the older entry made room for the memo"
+    assert cache._entries["new"] is new
+
+
+def test_an_exact_body_counts_its_tessellation_and_shape_and_turns_lean() -> None:
+    """Ein exakter Körper zählt Tessellierung, Merker und Form und wird schlank (Review L, G5).
+
+    Vorher zählte er 36 Byte je Dreieck und wurde nie schlank — ein langer
+    B-Rep-Verlauf hielt die Grenze der Speicherebene nicht.
+    """
+    from app.core.brep import edit
+    from app.core.brep.kernel import SHAPE_BYTES_PER_ENTITY
+    from app.core.scene.cache import FALLBACK_BYTES_PER_TRIANGLE, held_by
+
+    body = edit.boolean("difference", [edit.box(40.0, 40.0, 10.0), edit.cylinder(8.0, 30.0)])
+    mesh = body.mesh
+    raw = mesh.raw
+    _ = raw.face_adjacency, raw.edges_unique, raw.triangles_center
+    entry = CachedResult(objects=(SceneObject(id="obj_1", name="Platte", mesh=body),))
+    shape = SHAPE_BYTES_PER_ENTITY * (body.face_count + body.edge_count)
+    counted = held_by(entry)
+    assert counted >= mesh.held_bytes() + shape
+    assert counted > 4 * body.triangle_count * FALLBACK_BYTES_PER_TRIANGLE
+    lean = body.lean()
+    assert lean is not body and lean.shape is body.shape, "the shape is shared, not copied"
+    assert lean.mesh.raw.vertices is raw.vertices
+    assert "face_adjacency" not in lean.mesh.raw._cache.cache
+    assert lean.volume == body.volume and lean.face_count == body.face_count
+    assert held_by(CachedResult(objects=(SceneObject(id="obj_1", name="P", mesh=lean),))) < counted
+    assert lean.lean() is lean, "nothing left to release"
+
+
+def test_trimming_reports_what_waits_for_the_collector() -> None:
+    """Was ``trim`` loslässt, meldet es der Speicherbereinigung (RM-594)."""
+    from app.core import memory
+
+    old, new = sphere_result("obj_1"), sphere_result("obj_2")
+    _grown(old)
+    _grown(new)
+    cache = ResultCache(memory_budget=1)
+    cache.put("old", old)
+    cache.put("new", new)
+    memory.forget_released()
+    try:
+        cache.trim()
+        assert cache._entries.get("old") is not old
+        assert memory.released_bytes() > 5_120 * 36, "the leaned or evicted arrays are reported"
+        memory.forget_released()
+        cache.trim()
+        assert memory.released_bytes() == 0, "nothing more to release"
+    finally:
+        memory.forget_released()
+
+
+def test_a_lean_mesh_keeps_what_the_report_asks_after_undo() -> None:
+    """Nach dem Zurücknehmen fragt der Bericht nach kleinen Teilen — ein schlankes Netz rechnet
+    dafür nichts neu (Review L, G9).
+
+    Ohne Teile und Flächen im schlanken Netz rechnete es am Spiderman
+    Kantentabelle, Dreiecke, Kreuzprodukte und Flächen neu, 0,4 s je Schritt.
+    """
+    from app.core.geom.mesh import MeshData, face_components
+    from app.core.geom.repair import small_components
+
+    old = sphere_result("obj_1")
+    raw = _grown(old)
+    face_components(raw)
+    _ = raw.area_faces
+    lean = cast(Any, old.objects[0].mesh).lean()
+    assert isinstance(lean, MeshData) and lean is not old.objects[0].mesh
+    held = set(lean.raw._cache.cache)
+    assert "face_adjacency" not in held, "Voraussetzung: das Netz ist schlank"
+    assert small_components(lean.raw) == []
+    assert set(lean.raw._cache.cache) == held, "nothing was computed again"
 
 
 def test_secondary_material_calibration_and_role_are_part_of_the_hash(profile: Profile) -> None:

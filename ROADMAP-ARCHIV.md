@@ -31,6 +31,7 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-09 | [RM-593 und RM-594: Auswertung wächst nicht mehr je Schritt, losgelassene Netze werden frei (09.10.2026)](#rm-593-und-rm-594-auswertung-wächst-nicht-mehr-je-schritt-losgelassene-netze-werden-frei-09102026) |
 | 2026-10-08 | [RM-570: Eine schräge Unterseite ist ein Feld, und ein Kinn bekommt seine Stützen (08.10.2026)](#rm-570-eine-schräge-unterseite-ist-ein-feld-und-ein-kinn-bekommt-seine-stützen-08102026) |
 | 2026-10-08 | [RM-566: Der Drache bekommt seine Stützen, und die Kanalsperre sperrt nur Raum, an den man nicht hinkommt (08.10.2026)](#rm-566-der-drache-bekommt-seine-stützen-und-die-kanalsperre-sperrt-nur-raum-an-den-man-nicht-hinkommt-08102026) |
 | 2026-10-06 | [RM-104 (Teil): Abbruch des lokalen Modells auf macOS und HiDPI-Test unter Xvfb (06.10.2026)](#rm-104-teil-abbruch-des-lokalen-modells-auf-macos-und-hidpi-test-unter-xvfb-06102026) |
@@ -44286,3 +44287,41 @@ unverändert; `test_evaluation.py::test_a_pin_whose_plate_is_removed_says_nothin
 mit Gegenprobe (ohne `object_ids` rot). Die zwölf Beispielprojekte und `example_v48.p3d` tragen
 Format 48 und Bibliotheksversion 24. Changelog: ja — Stift für Bohrung baut Senkkopf,
 Zylinderkopf und Gewinde passend zur Bohrung.
+
+## RM-593 und RM-594: Auswertung wächst nicht mehr je Schritt, losgelassene Netze werden frei (09.10.2026)
+
+<a id="rm-593-und-rm-594-auswertung-wächst-nicht-mehr-je-schritt-losgelassene-netze-werden-frei-09102026"></a>
+<a id="rm-593"></a>
+
+**RM-593 — Auswertung wächst je Verlaufsschritt (`transformed_features`, `object_hash`).**
+Gefunden in Paket L (RM-568): Eine Auswertung ging den ganzen Verlauf durch und ordnete nach
+jedem Schritt neu zu, auch aus dem Cache — bewegte Merkmale, Zuordnung, Teilhashes. Jedes
+Verschieben kostete am Eiffelturm (4 878 Merkmale) gut eine Sekunde mehr als das vorige.
+**Umsetzung** (Zweig `paket/l-leistung`): `scene/evaluate.py` merkt die Antwort von
+`_with_features` je Schritt (`_remembered_step`), geschlüsselt über den Ergebnisschlüssel und
+alles, was die Zuordnung sonst liest, nur aus demselben Operationsergebnis (Objekt der Merkmale)
+und unter denselben Rechenwegen; nicht gemerkt wird, was gefragt, eine Antwort festgehalten,
+eine fremde Ladewahl geändert oder die Erkennung ausgelassen hat. Die Teilhashes reisen mit dem
+Schritt. Begrenzt auf 256 MB, gezählt in der Bytegrenze des Ergebniscaches; verdrängt wird, was
+die laufende Auswertung nicht braucht, und vor einem Cacheeintrag, wenn das reicht.
+**Nachweis:** Eiffelturm, sechs Verschieben, CPU je Auswertung im Wechsel: vorher
+5,2/6,7/7,1/8,6/9,9/10,5 und 4,6/5,8/6,6/8,0/9,1/9,7 s, nachher 4,9/4,8/5,1/5,1/4,9/4,7 und
+4,6/4,9/4,8/4,9/5,0/5,1 s, Abdruck aller Merkmale gleich (`move_ab.py`). Unveränderte
+Auswertung nach acht Schritten bei 1 GB Grenze 9,5 → 0,5 s, Riser 1,5 → 0,03 s.
+`test_evaluation.py::test_an_unchanged_history_is_matched_once_across_evaluations`,
+`…matched_again`, `…keeps_what_this_evaluation_uses`, rot am Stand davor.
+
+<a id="rm-594"></a>
+
+**RM-594 — Verworfene Zwischennetze warten auf die Speicherbereinigung.** Ein `trimesh`-Netz
+hängt in Ringen an sich selbst; was der Ergebniscache schlank machte oder verdrängte, wurde erst
+frei, wenn die älteste Generation abgeräumt wurde — im Fenster selten, am Spiderman warteten bis
+zu 735 MB. **Umsetzung:** `ResultCache.trim` meldet die losgelassenen Bytes
+(`memory.note_released`), der Sammler im Hauptfaden räumt ab 128 MB alle Generationen ab
+(`ui/leash._collect_released`). Ein schlankes Netz behält Teile und Dreiecksflächen, die der
+Bericht nach dem Zurücknehmen fragt. **Nachweis:** Fenster offscreen, Spiderman, acht
+Verschieben, 8 GB nachgestellt, achtmal Zurück im Wechsel mit main (`g9_run.sh`): main
+4,8/6,1/5,7 s CPU, Zusage 4,1 → 5,6 GB; nachher 2,7/2,9/2,6 s, Zusage 2,0 GB ohne Anstieg.
+`test_leash.py::test_released_meshes_reach_the_oldest_generation` (Gegenprobe ohne Meldung),
+`test_cache.py::test_trimming_reports_what_waits_for_the_collector`,
+`…a_lean_mesh_keeps_what_the_report_asks_after_undo`.

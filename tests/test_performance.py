@@ -2117,27 +2117,22 @@ def test_a_third_step_costs_what_the_first_did(profile: Profile) -> None:
     first = evaluate(project.document, profile, sources=sources, cache=cache)
     target = next(iter(first.scene.objects))
     assert len(first.scene.objects[target].features) > 200, "Voraussetzung: viele Merkmale"
-    times = []
     for _step in range(3):
         history.apply(
             _("Verschieben"),
             [OperationDraft(op="translate_object", inputs=(target,), params={"dx": 2.0})],
         )
-        started = time.perf_counter()
         evaluate(project.document, profile, sources=sources, cache=cache)
-        times.append(time.perf_counter() - started)
     history.apply(
         _("Verschieben"),
         [OperationDraft(op="translate_object", inputs=(target,), params={"dx": 2.0})],
     )
-    taken = measure(
-        "evaluate_fourth_move_326_features",
-        lambda: evaluate(project.document, profile, sources=sources, cache=cache),
-    )
     # Gemessen am 08.10.2026: 0,20, 0,25, 0,34 und 0,43 s; vorher 0,30, 0,47,
     # 0,57 und 0,83 s. Den Zuordnungsmerker selbst hält
-    # ``test_matching.test_a_long_history_matches_only_its_new_step``; hier die
-    # Größenordnung und die 25-%-Marke.
-    assert taken < 3.0 * times[0] + 0.2, (
-        f"the fourth step took {taken:.2f} s, the first {times[0]:.2f} s"
+    # ``test_matching.test_a_long_history_matches_only_its_new_step`` über die
+    # Zahl der Zuordnungen; ein Verhältnis der Zeiten hielte auch am Stand ohne
+    # Merker (Review L, G6). Hier steht die 25-%-Marke.
+    measure(
+        "evaluate_fourth_move_326_features",
+        lambda: evaluate(project.document, profile, sources=sources, cache=cache),
     )
