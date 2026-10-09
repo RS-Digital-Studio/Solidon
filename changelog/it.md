@@ -38,6 +38,12 @@ scrive in `website/version.json`.
 - In modalità disegno la linguetta *Selezione* è nascosta. L'elenco dei vincoli mostra quelli dei punti e delle linee selezionati, più ogni conflitto.
 - Nella scheda dei parametri, una misura mostra «Non utilizzato» solo quando è così. Il pulsante dice quanti numeri fissi si possono collegare alle misure.
 - La segnalazione di errore allega un registro di arresto anomalo solo dopo un vero arresto anomalo di Solidon.
+- La scheda del tour è alta quanto i suoi passi. Un passo si apre con un clic o con la barra spaziatrice, e nessun fumetto copre più la vista.
+- Quando un passo del tour indica il rapporto di verifica, il tour resta visibile. La linguetta è incorniciata e il passo dice quale aprire.
+- Un clic sulla i accanto a un'azione nella linguetta *Selezione* apre il manuale nel punto in cui è spiegata.
+- Ogni quota di un blocco si può legare con fx a una quota del progetto, anche se non contiene ancora un'espressione.
+- Dopo aver trascinato la maniglia di un'anteprima, nessun numero resta sopra la vista. Un numero digitato durante il trascinamento sposta l'anteprima, non il corpo scelto.
+- Dopo *Ripara e riprova* e percorsi simili, la cronologia non chiama più «eliminato» un passaggio che continua a calcolare. Se la catena si ferma di nuovo, il passaggio è segnato.
 
 ### Stampare e passare allo slicer
 

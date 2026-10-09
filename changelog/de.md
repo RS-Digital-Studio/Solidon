@@ -63,6 +63,12 @@ Nutzen da und sonst nichts.
 - Im Zeichenmodus ist der Reiter *Auswahl* ausgeblendet. Die Liste der Bedingungen zeigt die der gewählten Punkte und Linien und jeden Widerspruch.
 - In der Parameterkarte steht unter einem Maß nur noch „Nicht verwendet“, wo das zutrifft. Wie viele feste Zahlen sich an Maße binden lassen, sagt der Knopf.
 - Der Fehlerbericht hängt ein Absturzprotokoll nur noch an, wenn Solidon wirklich abgestürzt ist.
+- Die Karte der Tour ist so hoch wie ihre Schritte. Ein Schritt klappt per Klick oder Leertaste auf, und keine Sprechblase liegt mehr über der Ansicht.
+- Zeigt ein Tourschritt auf den Prüfbericht, bleibt die Tour sichtbar. Der Reiter ist gerahmt, und der Schritt sagt, welchen Reiter Sie öffnen.
+- Ein Klick auf das i neben einer Handlung im Reiter *Auswahl* öffnet das Handbuch an der Stelle, die sie erklärt.
+- Jedes Maß eines Bausteins lässt sich über fx an ein Projektmaß binden, auch wenn noch kein Ausdruck darin steht.
+- Nach dem Ziehen am Griff einer Vorschau bleibt keine Zahl über der Ansicht stehen. Eine dabei getippte Zahl verschiebt die Vorschau, nicht den gewählten Körper.
+- Nach *Reparieren und erneut versuchen* und verwandten Wegen heißt im Verlauf kein weiterrechnender Schritt mehr „gelöscht“. Hält die Kette erneut an, ist der Schritt markiert.
 
 ### Drucken und Übergabe an den Slicer
 

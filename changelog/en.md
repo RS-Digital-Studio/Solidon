@@ -38,6 +38,12 @@ it into `website/version.json`.
 - In sketch mode the *Selection* tab is hidden. The list of constraints shows those of the selected points and lines, plus any conflict.
 - In the parameter card, a dimension shows “Not used” only where that is true. The button says how many fixed numbers can be bound to dimensions.
 - The error report attaches a crash log only when Solidon actually crashed.
+- The tour card is as tall as its steps. A step unfolds with a click or the space bar, and no tooltip bubble covers the view any more.
+- When a tour step points at the report, the tour stays visible. The tab is framed, and the step tells you which tab to open.
+- Clicking the i next to an action in the *Selection* tab opens the manual where that action is explained.
+- Every dimension of a part can be bound to a project dimension with fx, even before it holds an expression.
+- After dragging the handle of a preview, no number stays above the view. A number typed during the drag moves the preview, not the selected body.
+- After *Repair and try again* and similar ways, the history no longer calls a step that keeps working “deleted”. If the chain stops again, that step is marked.
 
 ### Printing and slicer handover
 
