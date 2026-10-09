@@ -1597,9 +1597,10 @@ def has_independent_support_layers(flavour: SlicerFlavour | None) -> bool:
     zwei Schichten gilt (``independent_support_layer_height``, RM-583)?
 
     Nur die Orca-Familie: Ohne den Schalter rundet sie auf ganze Schichten
-    (``Slicing.cpp``). PrusaSlicer legt die Kontaktschicht ohnehin in den
-    gewünschten Abstand, Cura rechnet in Schichten
-    (:func:`support_gap_in_whole_layers`).
+    (``Slicing.cpp``). PrusaSlicer legt die Kontaktschicht unter Gitter ohnehin
+    in den gewünschten Abstand, Cura rechnet in Schichten
+    (:func:`support_gap_in_whole_layers`). Unter organischen Bäumen rundet jedes
+    Programm, auch mit eigener Höhe (``handover.organic_styles``, RM-622).
     """
     return flavour == "orca"
 
@@ -1620,7 +1621,11 @@ def caps_volumetric_speed(flavour: SlicerFlavour) -> bool:
 
 
 def limitation(
-    flavour: SlicerFlavour, path: str, settings: PrintSettings | None = None, program: str = ""
+    flavour: SlicerFlavour,
+    path: str,
+    settings: PrintSettings | None = None,
+    program: str = "",
+    organic: Collection[str] = (),
 ) -> TranslatableText | None:
     """Eine abweichende Bedeutung, die ein gleich benannter Wert verdecken würde.
 
@@ -1634,6 +1639,10 @@ def limitation(
 
     Ebenso eine Wahl, die das Programm nicht kennt und ersetzt
     (:data:`NOT_OFFERED_BY_PROGRAM`) — der Satz kommt nur, solange sie steht.
+
+    Unter organischen Bäumen gilt die Auskunft, mit der auch der Rat fragt
+    (``organic``, ``handover.organic_styles``, RM-622): Feld und Vorschlag
+    daneben sagen dasselbe.
     """
     if settings is not None and program:
         group, name = path.split(".", 1)
@@ -1665,14 +1674,8 @@ def limitation(
             layer=format_length(layer),
         )
     # Unter organischen Bäumen liegt die Stütze auf den Schichten des Modells
-    # (RM-622, ``handover.organic_styles``); gewählt ist hier ``tree``, was die
-    # Orca-Familie und PrusaSlicer organisch drucken, SuperSlicer nicht.
-    trees = (
-        settings is not None
-        and settings.support.style == "tree"
-        and flavour in ("orca", "prusa")
-        and substitute("support.style", "tree", program) is None
-    )
+    # (RM-622): welche Art das ist, sagt ``organic``, eine Quelle für Feld und Rat.
+    trees = settings is not None and settings.support.style in organic
     if trees and path == "support.z_gap":
         from app.core.slice import advise
 

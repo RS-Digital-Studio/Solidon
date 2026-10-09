@@ -46,6 +46,7 @@ import pytest
 import trimesh
 
 from app.core.geom.mesh import MeshData, as_mesh_data
+from app.core.geom.transform import place_on_bed
 from app.core.scene import History, OperationDraft
 from app.core.scene.project import Project, new_project
 from app.core.types import (
@@ -2082,3 +2083,52 @@ def supported_table(index: int) -> trimesh.Trimesh:
         brick.apply_translation([index * 45.0, 0.0, z])
         parts.append(brick)
     return trimesh.boolean.union(parts, engine="manifold")
+
+
+def on_bed(*parts: trimesh.Trimesh) -> MeshData:
+    """Die Teile vereint und auf das Bett gestellt."""
+    body = parts[0] if len(parts) == 1 else trimesh.boolean.union(list(parts))
+    return place_on_bed(MeshData.of(body))
+
+
+def brick(x: float, y: float, z: float, at: tuple[float, float, float]) -> trimesh.Trimesh:
+    """Ein Quader der Kanten ``x``, ``y``, ``z`` mit der Mitte in ``at``."""
+    body: trimesh.Trimesh = trimesh.creation.box(extents=(x, y, z))
+    body.apply_translation(at)
+    return body
+
+
+def column_table() -> MeshData:
+    """Bodenplatte 40 auf 40, darauf eine Säule 10 auf 10, darauf eine Platte.
+
+    Keine Insel, 1 500 mm² Überhang auf einer Schicht — und jede Stütze
+    darunter endet auf der Bodenplatte, nicht auf dem Bett.
+    """
+    return on_bed(
+        brick(40.0, 40.0, 5.0, (0.0, 0.0, 2.5)),
+        brick(10.0, 10.0, 20.0, (0.0, 0.0, 15.0)),
+        brick(40.0, 40.0, 5.0, (0.0, 0.0, 27.5)),
+    )
+
+
+def chin(underside_at_wall: float) -> trimesh.Trimesh:
+    """Der Kopf mit schräger Unterseite: an der Rückwand auf ``underside_at_wall``,
+    an der Spitze 18 mm davor auf 50 mm."""
+    return trimesh.convex.convex_hull(
+        [
+            (x, y, z)
+            for x in (-8.0, 8.0)
+            for y, z in ((15.0, underside_at_wall), (-3.0, 50.0), (15.0, 56.0), (-3.0, 56.0))
+        ]
+    )
+
+
+def chin_over_chest() -> MeshData:
+    """Eine Figur im Kleinen: ein Kinn mit schräger Unterseite über der Brust,
+    dessen Streifen auf dem Modell aufsetzen — kleine, gewölbte Überhänge."""
+    return on_bed(
+        brick(80.0, 60.0, 4.0, (0.0, 0.0, 2.0)),
+        brick(40.0, 10.0, 60.0, (0.0, 20.0, 34.0)),
+        brick(60.0, 30.0, 20.0, (0.0, 0.0, 14.0)),
+        chin(44.0),
+    )

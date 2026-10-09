@@ -41,20 +41,10 @@ from app.core.slice.analysis import (
     worth_support,
 )
 from app.core.types import PrintSettings, Profile, SettingAdvice, SliceResult
+from tests.helpers import brick, chin, chin_over_chest, column_table, on_bed
 
 #: Die Bahnbreite der Vorgabe: Zuschlag und Mindestbreite des Kanalraums.
 LINE = print_settings.resolve(profiles.make_profile()).layers.line_width
-
-
-def on_bed(*parts: trimesh.Trimesh) -> MeshData:
-    body = parts[0] if len(parts) == 1 else trimesh.boolean.union(list(parts))
-    return place_on_bed(MeshData.of(body))
-
-
-def brick(x: float, y: float, z: float, at: tuple[float, float, float]) -> trimesh.Trimesh:
-    body: trimesh.Trimesh = trimesh.creation.box(extents=(x, y, z))
-    body.apply_translation(at)
-    return body
 
 
 def petg() -> Profile:
@@ -198,19 +188,6 @@ def test_a_shoulder_over_a_real_hollow_still_speaks() -> None:
 # --- Stützen enden nicht überall auf dem Bett ----------------------------------
 
 
-def table() -> MeshData:
-    """Bodenplatte 40 auf 40, darauf eine Säule 10 auf 10, darauf eine Platte.
-
-    Keine Insel, 1 500 mm² Überhang auf einer Schicht — und jede Stütze
-    darunter endet auf der Bodenplatte, nicht auf dem Bett.
-    """
-    return on_bed(
-        brick(40.0, 40.0, 5.0, (0.0, 0.0, 2.5)),
-        brick(10.0, 10.0, 20.0, (0.0, 0.0, 15.0)),
-        brick(40.0, 40.0, 5.0, (0.0, 0.0, 27.5)),
-    )
-
-
 def bracket() -> MeshData:
     """Ein Kragarm: eine Wand vom Bett hoch, oben eine Platte quer darauf.
 
@@ -224,7 +201,7 @@ def bracket() -> MeshData:
 
 
 def test_a_column_that_lands_on_the_model_is_seen() -> None:
-    result = slice_body(table(), 0.5)
+    result = slice_body(column_table(), 0.5)
 
     assert not result.layers[0].islands, "der Tisch hat keine Insel — das war der Trugschluss"
     assert support_on_model(result), "die Säule endet auf der Bodenplatte"
@@ -250,7 +227,7 @@ def test_the_table_keeps_supports_everywhere() -> None:
     „keine Insel" geschlossen, und das ist etwas anderes als „alles erreicht
     das Bett".
     """
-    assert placement_advice(table()) is None, "everywhere bleibt stehen"
+    assert placement_advice(column_table()) is None, "everywhere bleibt stehen"
 
 
 def test_the_cantilever_may_stay_on_the_plate() -> None:
@@ -793,7 +770,7 @@ def test_supports_above_a_base_plate_must_be_allowed_on_the_model(style: str) ->
     """Eingeschaltete Stützen allein erreichen den Tischdeckel noch nicht."""
     settings = print_settings.with_path(print_settings.resolve(petg()), "support.style", style)
     settings = print_settings.with_path(settings, "support.placement", "build_plate")
-    entries = advise.advise(settings, petg(), slice_body(table(), 0.5))
+    entries = advise.advise(settings, petg(), slice_body(column_table(), 0.5))
     changed = advise.apply(settings, entries)
     assert changed.support.style != "none"
     assert changed.support.placement == "everywhere"
@@ -896,7 +873,7 @@ def test_combined_advice_preserves_support_needed_by_another_body() -> None:
     """Ein Würfel darf die schon nötigen Stützen seines Nachbarn nicht abschalten."""
     settings = print_settings.with_path(print_settings.resolve(petg()), "support.style", "grid")
     cube = slice_body(on_bed(brick(20.0, 20.0, 20.0, (0.0, 0.0, 10.0))), 0.5)
-    top = slice_body(table(), 0.5)
+    top = slice_body(column_table(), 0.5)
     groups = [(settings, advise.advise(settings, petg(), result)) for result in (cube, top)]
     entries = advise.combine(settings, groups)
     assert "support.style" not in {entry.path for entry in entries}
@@ -1277,18 +1254,6 @@ def jaw_in_a_pocket(underside_at_wall: float | None = None) -> MeshData:
     )
 
 
-def chin(underside_at_wall: float) -> trimesh.Trimesh:
-    """Der Kopf mit schräger Unterseite: an der Rückwand auf ``underside_at_wall``,
-    an der Spitze 18 mm davor auf 50 mm."""
-    return trimesh.convex.convex_hull(
-        [
-            (x, y, z)
-            for x in (-8.0, 8.0)
-            for y, z in ((15.0, underside_at_wall), (-3.0, 50.0), (15.0, 56.0), (-3.0, 56.0))
-        ]
-    )
-
-
 def test_a_sloped_chin_over_the_chest_keeps_its_supports_everywhere() -> None:
     """RM-570 schaltete am Kinn die Stützen ein, aber der Stützort fragte weiter
     das einzelne Stück: Im Schnitt zerfällt die Unterseite in Streifen unter
@@ -1362,7 +1327,7 @@ def test_trees_where_small_overhangs_rest_on_the_model_not_under_a_flat_ceiling(
 
     figure = chin_over_chest()
     assert style(figure) == "tree", "das Kinn setzt in Streifen auf der Brust auf"
-    assert style(table()) == "auto", "die Tischplatte ist eine flache Decke"
+    assert style(column_table()) == "auto", "die Tischplatte ist eine flache Decke"
     # Auch wenn die flache Decke über dem Bett hängt und nur das Kinn auf dem
     # Modell aufsetzt: Gefragt ist die Deckenform am Körper (Review vom 08.10.2026).
     with_arm = on_bed(
@@ -1381,18 +1346,7 @@ def test_trees_where_small_overhangs_rest_on_the_model_not_under_a_flat_ceiling(
         return [entry.value for entry in entries if entry.path == "support.style"]
 
     assert changed(figure, "grid") == ["tree"], "auch über einem gewählten Gitter"
-    assert changed(table(), "grid") == [], "die flache Decke behält ihr Gitter"
-
-
-def chin_over_chest() -> MeshData:
-    """Eine Figur im Kleinen: ein Kinn mit schräger Unterseite über der Brust,
-    dessen Streifen auf dem Modell aufsetzen — kleine, gewölbte Überhänge."""
-    return on_bed(
-        brick(80.0, 60.0, 4.0, (0.0, 0.0, 2.0)),
-        brick(40.0, 10.0, 60.0, (0.0, 20.0, 34.0)),
-        brick(60.0, 30.0, 20.0, (0.0, 0.0, 14.0)),
-        chin(44.0),
-    )
+    assert changed(column_table(), "grid") == [], "die flache Decke behält ihr Gitter"
 
 
 def _support_advice(
@@ -1438,7 +1392,9 @@ def test_the_support_gap_follows_layer_height_and_material() -> None:
         profile: Profile, layer: float, z_gap: float, flavour: str | None = None
     ) -> object:
         values = {"layers.layer_height": layer, gap: z_gap}
-        return _support_advice(table(), profile, values, flavour=flavour, paths=(gap,)).get(gap)
+        return _support_advice(column_table(), profile, values, flavour=flavour, paths=(gap,)).get(
+            gap
+        )
 
     assert proposed(pla, 0.2, 0.2) is None, "eine Schicht bei PLA ist richtig"
     assert proposed(pla, 0.2, 0.22) is None, "0,22 liegt im Band"
@@ -1473,7 +1429,7 @@ def test_whole_layers_stay_inside_the_material_band(
     target = advise.support_gap_target(layer, profile.material, flavour)  # type: ignore[arg-type]
     assert target == pytest.approx(gap)
     proposed = _support_advice(
-        table(),
+        column_table(),
         profile,
         {"layers.layer_height": layer, "support.z_gap": 0.6},
         flavour=flavour,
@@ -1524,9 +1480,9 @@ def test_beside_a_prime_tower_the_gap_comes_in_whole_layers(
     ) == pytest.approx(beside_a_tower)
     asked: dict[str, object] = {"layers.layer_height": layer, gap: 0.6}
     assert _support_advice(
-        table(), profile, asked, flavour="orca", paths=(gap,), whole_layers=True
+        column_table(), profile, asked, flavour="orca", paths=(gap,), whole_layers=True
     ) == {gap: pytest.approx(beside_a_tower)}
-    assert _support_advice(table(), profile, asked, flavour="orca", paths=(gap,)) == {
+    assert _support_advice(column_table(), profile, asked, flavour="orca", paths=(gap,)) == {
         gap: pytest.approx(free)
     }
 
@@ -1559,7 +1515,7 @@ def test_under_organic_trees_the_gap_comes_in_whole_layers(
         "support.z_gap": 0.6,
     }
     assert _support_advice(
-        table(),
+        column_table(),
         profile,
         asked,
         flavour="orca",
@@ -1604,11 +1560,11 @@ def test_a_gap_between_two_layers_is_proposed_where_the_slicer_rounds(
     whole: dict[str, object] = {"layers.layer_height": 0.08, gap: 0.16}
 
     assert _support_advice(
-        table(), pla, between, flavour=flavour, paths=(gap,), whole_layers=whole_layers
+        column_table(), pla, between, flavour=flavour, paths=(gap,), whole_layers=whole_layers
     ) == {gap: pytest.approx(0.16)}
     # 0,2 liegt genau auf der Bandgrenze (1,25-mal 0,16), 0,18 mitten darin.
     assert _support_advice(
-        table(),
+        column_table(),
         pla,
         {**between, gap: 0.18},
         flavour=flavour,
@@ -1617,12 +1573,13 @@ def test_a_gap_between_two_layers_is_proposed_where_the_slicer_rounds(
     ) == {gap: pytest.approx(0.16)}
     assert (
         _support_advice(
-            table(), pla, whole, flavour=flavour, paths=(gap,), whole_layers=whole_layers
+            column_table(), pla, whole, flavour=flavour, paths=(gap,), whole_layers=whole_layers
         )
         == {}
     )
     assert (
-        _support_advice(table(), pla, {**between, gap: 0.11}, flavour="orca", paths=(gap,)) == {}
+        _support_advice(column_table(), pla, {**between, gap: 0.11}, flavour="orca", paths=(gap,))
+        == {}
     ), "ohne Turm gilt 0,11 genau und liegt im Band um 0,10"
 
 
@@ -1644,7 +1601,7 @@ def test_the_interface_follows_the_ceiling_and_where_supports_stand() -> None:
         "support.bottom_interface_layers": 2,
     }
 
-    assert _support_advice(table(), pla, elegoo_like) == {
+    assert _support_advice(column_table(), pla, elegoo_like) == {
         "support.interface_spacing": 0.2,
         "support.interface_layers": 3,
     }, "die Tischplatte ist eine flache Decke"
@@ -1666,11 +1623,11 @@ def test_without_material_values_the_gap_stays_with_the_maker() -> None:
     gap, cooling = "support.z_gap", "cooling.support_interface_cooling"
 
     assert advise.support_gap_target(0.2, tpu.material) is None
-    assert gap not in _support_advice(table(), tpu, {gap: 0.6}, paths=(gap,))
-    assert _support_advice(table(), abs_profile, {gap: 0.6}, paths=(gap,)) == {
+    assert gap not in _support_advice(column_table(), tpu, {gap: 0.6}, paths=(gap,))
+    assert _support_advice(column_table(), abs_profile, {gap: 0.6}, paths=(gap,)) == {
         gap: pytest.approx(0.2)
     }
-    assert cooling not in _support_advice(table(), abs_profile, {}, paths=(cooling,))
+    assert cooling not in _support_advice(column_table(), abs_profile, {}, paths=(cooling,))
     assert petg().material.support_interface_cooling
 
 
@@ -1686,7 +1643,7 @@ def test_supports_on_the_bed_need_no_interface_below() -> None:
     below = "support.bottom_interface_layers"
 
     assert below not in _support_advice(mushroom, pla, bare, paths=(below,))
-    assert _support_advice(table(), pla, bare, paths=(below,)) == {below: 2}
+    assert _support_advice(column_table(), pla, bare, paths=(below,)) == {below: 2}
 
 
 def test_sticky_material_gets_a_cool_interface() -> None:
@@ -1694,8 +1651,8 @@ def test_sticky_material_gets_a_cool_interface() -> None:
     Stütze leichter (RM-583, Recherche Nr. 7). PLA kühlt ohnehin voll."""
     cooling = "cooling.support_interface_cooling"
     pla = profiles.make_profile("centauri-carbon-2", "pla")
-    assert _support_advice(table(), petg(), {}, paths=(cooling,)) == {cooling: True}
-    assert _support_advice(table(), pla, {}, paths=(cooling,)) == {}
+    assert _support_advice(column_table(), petg(), {}, paths=(cooling,)) == {cooling: True}
+    assert _support_advice(column_table(), pla, {}, paths=(cooling,)) == {}
 
 
 def _contact_advice(
@@ -1716,7 +1673,10 @@ def test_a_body_that_differs_keeps_its_contact_row() -> None:
     seinen Wert (RM-583, Review). Getrennt zusammengeführt bleibt sie."""
     pla = profiles.make_profile("centauri-carbon-2", "pla")
     fine = {"layers.layer_height": 0.15, "support.z_gap": 0.2}
-    groups = [_contact_advice(table(), pla, fine), _contact_advice(table(), petg(), fine)]
+    groups = [
+        _contact_advice(column_table(), pla, fine),
+        _contact_advice(column_table(), petg(), fine),
+    ]
 
     def rows(**options: object) -> dict[str, object]:
         merged = advise.combine(groups[0][0], groups, **options)  # type: ignore[arg-type]
@@ -1730,7 +1690,10 @@ def test_a_body_that_differs_keeps_its_contact_row() -> None:
         "support.interface_layers": 3,
         "support.bottom_interface_layers": 2,
     }
-    groups = [_contact_advice(table(), pla, dense), _contact_advice(chin_over_chest(), pla, dense)]
+    groups = [
+        _contact_advice(column_table(), pla, dense),
+        _contact_advice(chin_over_chest(), pla, dense),
+    ]
     together = rows(separate=advise.CONTACT_PATHS)
     assert together["support.interface_spacing"] == pytest.approx(0.5)
     assert together["support.interface_layers"] == 2
@@ -1752,14 +1715,14 @@ def test_the_contact_rows_settle_after_one_round(flavour: str, case: str) -> Non
     executable = "orca-slicer.exe" if flavour == "orca" else "CuraEngine.exe"
     setup = handover.SlicerSetup(executable=Path(executable), flavour=flavour)  # type: ignore[arg-type]
     if case == "ceilings":
-        bodies = [(table(), pla), (chin_over_chest(), pla)]
+        bodies = [(column_table(), pla), (chin_over_chest(), pla)]
         values: dict[str, object] = {
             "support.interface_spacing": 0.2,
             "support.interface_layers": 3,
             "support.bottom_interface_layers": 2,
         }
     else:
-        bodies = [(table(), pla), (table(), petg())]
+        bodies = [(column_table(), pla), (column_table(), petg())]
         values = {"layers.layer_height": 0.15, "support.z_gap": 0.2}
     settings = print_settings.resolve(pla)
     for path, value in values.items():
@@ -1791,7 +1754,7 @@ def test_each_part_gets_the_contact_of_its_own_material() -> None:
 
     profile = profiles.make_profile("centauri-carbon-2", "pla")
     settings = print_settings.resolve(profile)
-    body = table()
+    body = column_table()
     result = slice_body(body, 0.2)
 
     def gap(material: str) -> object:

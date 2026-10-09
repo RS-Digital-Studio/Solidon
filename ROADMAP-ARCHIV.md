@@ -31,6 +31,7 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-09 | [RM-622: Neben einem Reinigungsturm und unter organischen Bäumen rät Solidon den Stützabstand in ganzen Schichten (09.10.2026)](#rm-622-neben-einem-reinigungsturm-und-unter-organischen-bäumen-rät-solidon-den-stützabstand-in-ganzen-schichten-09102026) |
 | 2026-10-08 | [RM-602: Der Druckdialog ordnet die Profile in einem Lesedurchgang zu (08.10.2026)](#rm-602-der-druckdialog-ordnet-die-profile-in-einem-lesedurchgang-zu-08102026) |
 | 2026-10-08 | [RM-601: Die Slicerwahl im Druckdialog geht wie in Erste Schritte, und überall stehen nur unterstützte Slicer (08.10.2026)](#rm-601-die-slicerwahl-im-druckdialog-geht-wie-in-erste-schritte-und-überall-stehen-nur-unterstützte-slicer-08102026) |
 | 2026-10-08 | [RM-600: Ein Drucker, eingebaut und aus dem Slicer übernommen, ist ein Gerät (08.10.2026)](#rm-600-ein-drucker-eingebaut-und-aus-dem-slicer-übernommen-ist-ein-gerät-08102026) |
@@ -44090,6 +44091,44 @@ Grenze), Randsperre mit Aussparung, Scheibe aus reinem Zuschlag, Befund nur übe
 Ränder ihrer Höhe, eingeschränkte Frage, Abbruch, Merker, Sperre in allen drei Familien,
 Plattengegenprobe auch bei gemischten Teilen; 14 Gegenproben rot. Korpus: 45 von 242 Körpern bekommen „Ränder ohne Stütze“, 7 brauchen keine Stützen mehr (Besteck-Organizer, Carcassonne-Gitter, Herz-Deko-Sockel, CC2-Werkzeugkiste, drei Teile aus `chufang`), sonst ändern sich nur Folgevorschläge. Tor
 grün (24 839 bestanden, 116 übersprungen); Durchsicht sechs Runden `solidon3d-review`, die letzte ohne Befund.
+
+## RM-622: Neben einem Reinigungsturm und unter organischen Bäumen rät Solidon den Stützabstand in ganzen Schichten (09.10.2026)
+
+<a id="rm-622-neben-einem-reinigungsturm-und-unter-organischen-bäumen-rät-solidon-den-stützabstand-in-ganzen-schichten-09102026"></a>
+<a id="rm-622"></a>
+
+**Befund (Abnahme RM-583, 09.10.2026):** Mit zwei Filamenten baut die Orca-Familie einen
+Reinigungsturm, schaltet die eigene Stützschichthöhe ab und rundet den Stützabstand zur
+nächsten Schicht (`PrintConfig.cpp`, `SupportMaterial.cpp`): Im ElegooSlicer bekam PLA bei
+0,08er Schichten aus 0,10 mm eine Schicht, 0,08, unter dem Minimum des Materials. Am
+PETG-Drachen kamen die geschriebenen 0,28 mm in keinem Programm an. Gegenprobe an zwei
+gestützten PETG-Körpern (`output/drache-2026-10-08/kontakt-stil`): Mit Gitter druckten
+ElegooSlicer, OrcaSlicer, Bambu Studio, Creality Print, Anycubic Slicer Next und PrusaSlicer
+0,28 mit eigenen Zwischenebenen, mit organischen Bäumen alle sechs 0,2 ohne eine; Bambu,
+Creality, Anycubic und PrusaSlicer druckten unter Bäumen auch keine untere Trennschicht.
+
+**Behoben:** `writer.tower_plates` nennt die Platten mit Turm, `handover.organic_styles` je
+Programm die Arten, die es organisch druckt (ohne Programm die Familie der Datei); Rat,
+Druckdialog, Feldsatz und Export fragen dieselbe Auskunft und raten dort ganze Schichten
+innerhalb der Materialgrenzen (`advise.rounds_to_whole_layers`). Gefragt wird mit der Art,
+mit der das Teil druckt (`advise.printed_style`): Ein abgewählter oder nicht übernommener
+Baum nimmt dem Gitter weder Abstand noch untere Trennschicht, und der Dialog fragt die
+Stützart je Teil gegen die Grundlage wie der Export (`handover.asked_for_contact`). Die
+untere Trennschicht fällt nur weg, wo das Programm sie unter Bäumen nicht druckt
+(`handover.ignored_under_trees`). Die eigene Stützschichthöhe schaltet der Export nur für
+Teile außerhalb organischer Bäume ein (`handover.support_gaps_by_style`); einen eigenen
+Abstand zwischen zwei Schichten nennt er gerundet (`export.support_gap_rounded`), auch für
+PrusaSlicer.
+
+**Nachweis (09.10.2026):** ElegooSlicer mit PLA und PETG bei 0,08 mm neben einem Turm:
+vorher 0,08 am PLA- und 0,16 am PETG-Teil (geschrieben 0,10 und 0,12), nachher an beiden
+0,16 wie geschrieben, oben und unten. Tests in `test_slice_findings.py`,
+`test_print_settings.py` und `test_print_settings_ui.py`: Turm je Platte und Auftrag,
+Bäume je Programm samt Prusa-Kette und ohne Programm, Rat und Feldsatz gleich, Zeile und
+Datei gleich nach Übernehmen in jeder Reihenfolge, abgewählter Baum, Schalter und Befund je
+Teil; jede Gegenprobe rot. Die Messung der Programme steht in
+`.claude/.state/drache-2026-10-08/kontakt_je_teil.py`. Tor grün (TOR-ZAHL); Durchsicht drei
+Runden `solidon3d-review`, Befunde behoben.
 
 ## RM-104 (Teil): Abbruch des lokalen Modells auf macOS und HiDPI-Test unter Xvfb (06.10.2026)
 

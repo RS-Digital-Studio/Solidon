@@ -73,7 +73,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-587 — Lange Brücken und steile Überhänge drucken sauber](#rm-587) | Geometrie, Erkennung und Druckvorbereitung | Dicke Brücke und Fluss über langen Brücken, Zusatzwände an steilen Überhängen |
 | [RM-588 — Die Naht liegt hinten, und große Oberseiten werden gebügelt](#rm-588) | Geometrie, Erkennung und Druckvorbereitung | Naht hinten bei Figuren, Bügeln der obersten Fläche |
 | [RM-589 — Bohrungen und Stifte passen ohne Nacharbeit](#rm-589) | Geometrie, Erkennung und Druckvorbereitung | Loch- und Elefantenfußausgleich aus dem Spiel des Materialprofils |
-| [RM-623 — Die Fensterübergabe ohne Maschinen- und Prozesswahl trägt keine Herstellergrundlage](#rm-623) | Geometrie, Erkennung und Druckvorbereitung | Grundlage auch ohne gewählte Maschine, Druckername in der 3MF gegen den Absturz der ElegooSlicer-Konsole |
+| [RM-624 — Ein Slicertest misst Kontaktabstand und untere Trennschicht in allen Programmen](#rm-624) | Geometrie, Erkennung und Druckvorbereitung | Messung aus `kontakt_je_teil.py` als Testhilfe, sechs Programme |
 | [RM-218 — Am exakten Körper heißen Bohrungen nach ihrer Lage, und der Verlauf lässt sich dort nicht umbauen](#rm-218) | Geometrie, Erkennung und Druckvorbereitung | Code und Tor mit `d907d6036` in v0.5.2; offen allein die Fensterabnahme beim Release (RM-213) |
 | [RM-230 — Variable Verrundung und Formschräge: fünf Grenzen, die der Kunde merkt](#rm-230) | Geometrie, Erkennung und Druckvorbereitung | Grenzen 1 bis 3 gebaut oder benannt (06.10.: Mischecke exakt geprüft, Ring-Anfang und Zwischenstellen in den Feldhilfen); Tray: beide Kerne nennen die Fußrundung vor der Rechnung, aber der Weg über *Merkmal entfernen* trägt dort nicht; offen: Fußrundung als Kette entfernen, Netzschräge 2,3× langsamer, Fase am Fuß, B-Spline-Ecke und zweites Anstellen am Netz mit Kernen uneins |
 | [RM-253 — Am Laptop-Ständer tragen Kippen und Verdoppeln einer Bohrung falsch ab](#rm-253) | Geometrie, Erkennung und Druckvorbereitung | 14 von 28 Bohrungen tragen ein fremdes Teil und sagen das jetzt mit Weg, statt es still zu verschmelzen (RM-413, 06.10.); offen an den freien `hole_1`/`hole_2`/`hole_4`: Verdoppeln ohne Wirkung, −127 mm³ bzw. +1,4–1,9 mm³ beim Versetzen und Kippen — gegen einen Sollwert ohne Boolesche an der kaputten Schale messen |
@@ -990,17 +990,17 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   zusammenwirkt, ohne doppelt auszugleichen. Abnahme: ein Passungsteil aus dem Korpus im
   Slicer gemessen, mit und ohne Ausgleich.
 
-<a id="rm-623"></a>
+<a id="rm-624"></a>
 
-- [ ] **RM-623 — Die Fensterübergabe ohne Maschinen- und Prozesswahl trägt keine
-  Herstellergrundlage.**
-  In Roberts Einstellungen für den Drachendruck vom 08.10.2026 waren `slicer_machine_profile`
-  und `slicer_base_process` leer, das Basisfilament zeigte auf ein Profil der 0,2-mm-Düse. Die
-  Übergabe schrieb nur Solidons Werte (5 KB), und ElegooSlicer füllte den Rest mit
-  Orca-Vorgaben statt mit Elegoos Prozess; dieselbe Datei bringt die ElegooSlicer-Konsole zum
-  Absturz, weil der Druckername fehlt (`ElegooSlicer.cpp:1697`). Gesicherte Übergabe:
-  `output/drache-2026-10-09/rueckstaende/robert/Drache.3mf`. Abnahme: Ursache der leeren Wahl
-  gefunden, Übergabe mit der Grundlage des erkannten Druckers, Konsole schneidet die Datei.
+- [ ] **RM-624 — Ein Slicertest misst Kontaktabstand und untere Trennschicht in allen
+  Programmen.**
+  Was RM-622 über die Programme sagt — organische Bäume runden den Abstand auf die Schichten
+  des Modells, Bambu Studio, Creality Print, Anycubic Slicer Next und PrusaSlicer drucken
+  unter Bäumen keine untere Trennschicht —, ist mit
+  `.claude/.state/drache-2026-10-08/kontakt_je_teil.py` gemessen, aber kein Test hält es; der
+  vorhandene Slicertest prüft nur, dass ein Würfel Druckbewegungen bekommt. Abnahme: die
+  Messung als Testhilfe in `tests/`, ein Slicertest je Programm mit Gitter und Baum, der bei
+  einem neuen Slicerstand rot wird, wenn sich eine der Eigenschaften ändert.
 
 <a id="rm-504"></a>
 

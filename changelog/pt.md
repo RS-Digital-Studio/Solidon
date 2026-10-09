@@ -55,7 +55,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Em pontas pequenas, o Solidon sugere uma *Velocidade mínima ao abrandar* mais baixa para que não amoleçam. A definição chega a qualquer slicer.
 - Os rebordos estreitos que se sustentam sozinhos ficam livres com *Rebordos sem suporte*. Assim a impressão precisa de bem menos suporte.
 - Os suportes saem com mais facilidade: a distância segue o material e a altura de camada de cada peça, também com vários materiais numa placa. A camada de separação segue a superfície acima.
-- Se um suporte assenta na peça, o Solidon sugere também uma camada de separação por baixo, para que o seu pé não deixe marcas.
+- Se um suporte assenta na peça, o Solidon sugere também uma camada de separação por baixo, para que o seu pé não deixe marcas. Com suportes em árvore, só nos slicers que a imprimem aí.
 - Com suportes em árvore e junto a uma torre de purga, o Solidon propõe a distância do suporte em camadas inteiras, tal como o slicer a imprime.
 - Para PETG, o Solidon sugere arrefecimento total no suporte. Assim solta-se mais facilmente da peça.
 - Novo nas definições de impressão: *Camadas de separação inferiores*, *Folga na camada de separação* e *Arrefecimento total no suporte*.

@@ -79,9 +79,11 @@ offenem Drucker. Übernommen wird auf Klick, nie von allein.
   `support_gap_target`; ohne Werte kein Rat), vorgeschlagen außerhalb
   `SUPPORT_GAP_BAND`; wo der Slicer in ganzen Schichten rechnet — Cura, die
   Orca-Familie neben einem Reinigungsturm (`writer.tower_plates`,
-  `whole_layers`), jedes Programm unter organischen Bäumen mit der Art, die der
-  Rat hinterlässt (`handover.organic_styles`, `organic`; Dialog und Export
-  fragen dieselbe Auskunft) —, das Vielfache innerhalb der
+  `whole_layers`), jedes Programm unter organischen Bäumen mit der Art, mit
+  der das Teil druckt (`printed_style`: der Vorschlag, außer der Kunde lehnt
+  ihn ab, `declined` — im Dialog abgewählt, dann fragt er neu, im Export nicht
+  übernommen; `handover.organic_styles`, ohne Programm die Familie; Rat,
+  Feldsatz und Export fragen dieselbe Auskunft) —, das Vielfache innerhalb der
   Materialgrenzen, auch statt eines Werts in `SUPPORT_GAP_BAND`, der zwischen
   zwei Schichten liegt (`in_whole_layers`); einen eigenen solchen Wert nennt
   der Export gerundet (`export.support_gap_rounded`). Unter einem flachen Stück über
@@ -92,7 +94,8 @@ offenem Drucker. Übernommen wird auf Klick, nie von allein.
   wo das Material sie verlangt (`support_interface_cooling`), je Spule.
   Abstand und Trennschichten gehen je Teil (`PART_PATHS`), gefragt mit dem
   Material der Spule. Der Druckdialog fragt sie wie der Export gegen die
-  Grundlage (`handover.asked_for_contact`), führt erst je Körper über die
+  Grundlage, auch die Stützart, die je Teil geht
+  (`handover.asked_for_contact`), führt erst je Körper über die
   Spulen zusammen und dann nur die verlangenden Körper (`combine` mit
   `separate`); gegen die Übernahme gefragt, kam jede Zeile mit ihrer
   Gegenzeile wieder. Die Zeile nennt nur Teile mit ihrem Wert. Übergabe:

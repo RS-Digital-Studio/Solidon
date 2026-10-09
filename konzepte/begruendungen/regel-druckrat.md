@@ -484,7 +484,7 @@ druckten das PETG-Teil neben PLA mit 0,2, PrusaSlicer mit 0,28. Mit Turm legt
 die Orca-Familie die Stütze auf die Schichten des Modells und rundet zur
 nächsten (`SupportMaterial.cpp`); PLA bei 0,08 mm Schicht bekam so aus 0,10
 eine Schicht, 0,08, unter dem Minimum. Neben einem Turm rät Solidon deshalb
-wie bei Cura gleich ganze Schichten im Band (RM-622, `writer.tower_plates`,
+wie bei Cura gleich ganze Schichten innerhalb der Materialgrenzen (RM-622, `writer.tower_plates`,
 Dialog und Export aus derselben Frage), und ein Wert im Band zwischen zwei
 Schichten bekommt dort wie bei Cura die ganze Schicht vorgeschlagen, weil der
 Slicer ihn nicht so druckt. Gemessen im ElegooSlicer mit PLA und PETG bei
@@ -503,20 +503,35 @@ sechs 0,2 ohne eine. Bäume liegen auf den Schichten des Modells, auch mit
 unter „automatisch“, wenn der Herstellerprozess mit Bäumen stützt (Elegoo, Bambu),
 und sagt bei einem eigenen Wert die Rundung. Bambu Studio, Creality Print, Anycubic
 Slicer Next und PrusaSlicer druckten unter Bäumen auch keine untere Trennschicht
-(unter Gitter druckten sie untere Lagen, unter Bäumen keine), ElegooSlicer und
-OrcaSlicer zwei; dort schlägt
-Solidon sie unter Bäumen nicht vor. Organisch heißt der Generator `TreeSupport3D`,
+(unter Gitter druckten sie untere Lagen, unter Bäumen keine); in diesen vier
+schlägt Solidon sie unter Bäumen nicht vor, ElegooSlicer und OrcaSlicer druckten
+zwei und bekommen sie. Organisch heißt der Generator `TreeSupport3D`,
 dessen Ebenen auf dem Raster des Modells liegen (`TreeSupportCommon.hpp:610` und
 `:289`, gleich in Orca, Bambu, Creality und Anycubic); `tree_hybrid`, `tree_slim`
 und `tree_strong` planen eigene Stützebenen (`TreeSupport.cpp:1756–1759`,
 `:3349–3408`). Deshalb fragt `handover.organic_styles` den Stil des
 Herstellerprozesses, und SuperSlicer, der statt Bäumen Gitter druckt, rundet nicht.
-Der Schalter richtet sich nach den
-geschriebenen Abständen, nicht nach den Zielen aller Spulen, und steht er gegen
-den Herstellerprozess, sagt es ein Befund: Die Stütze liegt dann auch auf
-eigenen Höhen (0,47, 0,75, 1,02 mm statt nur auf denen des Modells). Cura
-rechnet immer in ganzen Schichten, deshalb rät Solidon dort das Vielfache im
-Band des Materials — bei 0,08 mm Schicht für PLA zwei Schichten statt einer
+Ohne gefundenes Programm gilt die Familie der Datei: „Baum“ ist organisch, denn alle
+sechs gemessenen Programme drucken ihn so, und eine ganze Schicht gilt unter jeder
+Stütze genau. Gefragt wird mit der Art, mit der das Teil druckt
+(`advise.printed_style`): Lehnt der Kunde den vorgeschlagenen Baum ab — im Dialog
+abgewählt, im Export nicht übernommen —, druckt das Teil das Gitter der Platte, und
+Abstand wie untere Trennschicht gelten ihm. Mit dem abgelehnten Baum gefragt, bekam
+das Kinn bei Bambu Studio weder 0,28 mm noch eine untere Trennschicht. Ebenso fragt
+der Dialog die Stützart gegen die Grundlage wie der Export, der einen übernommenen
+Baum nur dem Teil gibt, das ihn verlangt; sonst verschwanden die Zeilen des Tischs,
+sobald der Baum des Kinns übernommen war. Feldsatz und Rat lesen dieselbe Auskunft:
+Leitete das Feld „organisch“ selbst her, sagte es unter `tree_hybrid` „gerundet“
+neben einem Rat, der nicht rundete.
+
+Der Schalter `independent_support_layer_height` richtet sich nach den
+geschriebenen Abständen der Teile, die nicht unter organischen Bäumen drucken
+(`handover.support_gaps_by_style`), nicht nach den Zielen aller Spulen; unter
+Bäumen wirkte er nicht und wäre eine Abweichung vom Herstellerprofil ohne Grund.
+Steht er gegen den Herstellerprozess, sagt es ein Befund: Die Stütze liegt dann
+auch auf eigenen Höhen (0,47, 0,75, 1,02 mm statt nur auf denen des Modells). Cura
+rechnet immer in ganzen Schichten, deshalb rät Solidon dort das Vielfache
+innerhalb der Materialgrenzen — bei 0,08 mm Schicht für PLA zwei Schichten statt einer
 unter dem Minimum —, und die Cura-Grundlage trägt es auch: Solidons 0,2 war
 bei 0,28 und 0,12 mm Schicht keines, und jede Übergabe in Entwurf und Fein
 warnte, auch ohne Stützen. Über mehrere Körper führt der Druckdialog den

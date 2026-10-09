@@ -1325,7 +1325,9 @@ def part_advice(
     Brim selbst rechnet (:data:`advise.AUTO_BRIM_FLAVOURS`), ``whole_layers``,
     ob seine Platte einen Reinigungsturm trägt (:func:`tower_plates`), ``organic``,
     welche Stützarten das Programm als organische Bäume druckt
-    (:func:`handover.organic_styles`).
+    (:func:`handover.organic_styles`). Ist die Stützart nicht übernommen,
+    druckt das Teil die der Platte, und Abstand wie Trennschicht fragen mit ihr
+    (``declined``, :func:`advise.printed_style`).
 
     **Eine Regel kann einen Wert je Teil voraussetzen** (``accepted``, die
     übernommenen Werte je Teil aus :meth:`handover.PartSplit.accepted_per_part`):
@@ -1373,6 +1375,11 @@ def part_advice(
             cache[name] = _PartAdviceMemo(inputs, result, tuple(advice))
         return advice
 
+    # Eine Stützart, die der Kunde nicht übernommen hat, bekommt kein Teil:
+    # Abstand und Trennschicht fragen dann mit der Art der Platte (RM-622).
+    # Übernommen bekommt jedes Teil seinen eigenen Vorschlag (``applied``).
+    declined = frozenset({"support.style"}) - frozenset(accepted or {})
+
     def asked(current: PrintSettings) -> list[SettingAdvice]:
         groups = [
             (
@@ -1388,6 +1395,7 @@ def part_advice(
                     flavour=flavour,
                     whole_layers=whole_layers,
                     organic=organic,
+                    declined=declined,
                 ),
             )
             for process in (
@@ -1407,7 +1415,9 @@ def part_advice(
         entries = [item for item in asked(current) if item.path not in unknown]
         # Unter Bäumen druckt manches Programm keine untere Trennschicht; ein
         # Vorschlag darauf änderte nichts (RM-622, wie der Druckdialog).
-        under_trees = handover.ignored_under_trees(advise.apply(current, entries), organic, program)
+        under_trees = handover.ignored_under_trees(
+            advise.printed_style(current, entries, declined), organic, program
+        )
         return slicer_keys.offered(
             [item for item in entries if item.path not in under_trees], program
         )
@@ -2525,7 +2535,11 @@ def write_assembly(
     # Herstellerprozess mehrfach.
     with slicer_profiles.single_read():
         towers = tower_plates(every, setup) if split is not None else frozenset()
-        organic = handover.organic_styles(setup, profile) if split is not None else frozenset()
+        organic = (
+            handover.organic_styles(setup, profile, flavour=flavour)
+            if split is not None
+            else frozenset()
+        )
         part_values = {
             entry.id: _part_values(
                 entry,
@@ -2778,14 +2792,20 @@ def write_assembly(
     free_support_layers = False
     if settings is not None:
         from app.core.export import handover
+        from app.core.slice import advise
 
         configured_slots = handover.configured_slots(merged_slots, settings)
-        # Gefragt an dem, was geschrieben wird: Platte und Objektwerte (RM-583).
-        free_support_layers = handover.frees_support_layers(
-            handover.written_support_gaps(settings, [part.settings for part in parts]),
-            settings.layers.layer_height,
-            flavour,
+        # Gefragt an dem, was geschrieben wird: Platte und Objektwerte (RM-583),
+        # je Teil mit der Art, mit der es stützt. Unter organischen Bäumen rundet
+        # jedes Programm, dort schaltete die eigene Stützschichthöhe nur gegen
+        # den Hersteller um (RM-622).
+        under_trees, elsewhere = handover.support_gaps_by_style(
+            settings,
+            [(part_values[entry.id].keys, part_values[entry.id].effective) for entry in chosen],
+            organic,
         )
+        layer = settings.layers.layer_height
+        free_support_layers = handover.frees_support_layers(elsewhere, layer, flavour)
         known_setup = setup if setup is not None else handover.SlicerSetup(Path(flavour), flavour)
         findings += handover.unreachable_overrides(
             settings, known_setup, configured_slots, profile=profile
@@ -2804,16 +2824,9 @@ def write_assembly(
             cause = _tower_cause(parts, setup) if free_support_layers else None
             # Mit Turm gilt die eigene Stützschichthöhe nicht, also nur der eine
             # Satz: Der Abstand wird gerundet (RM-583). Sonst je Teil: unter
-            # organischen Bäumen rundet er, unter Gitter gilt die eigene Höhe —
-            # gemischt beide Sätze (RM-622).
-            rounded, exact = (False, free_support_layers)
-            if free_support_layers and cause is None:
-                rounded, exact = _gaps_between_layers(
-                    [values.effective for values in part_values.values()],
-                    settings.layers.layer_height,
-                    organic,
-                )
-            if rounded:
+            # organischen Bäumen rundet er in jedem Programm, auch in PrusaSlicer,
+            # unter Gitter gilt die eigene Höhe — gemischt beide Sätze (RM-622).
+            if cause is None and any(not advise.in_whole_layers(gap, layer) for gap in under_trees):
                 findings.append(
                     Finding(
                         code="export.support_gap_rounded",
@@ -2827,8 +2840,7 @@ def write_assembly(
                     )
                 )
             if cause is None:
-                if exact:
-                    findings += handover.support_layers_findings(setup, free_support_layers)
+                findings += handover.support_layers_findings(setup, free_support_layers)
             else:
                 findings.append(
                     Finding(
@@ -2923,27 +2935,6 @@ def _tower_cause(
     if "filaments" in causes:
         return "filaments"
     return "process" if "process" in causes else None
-
-
-def _gaps_between_layers(
-    effective: Iterable[PrintSettings | None], layer: float, organic: Collection[str]
-) -> tuple[bool, bool]:
-    """Wie die Teile einen Stützabstand zwischen zwei Schichten drucken (RM-622):
-    gerundet unter organischen Bäumen (``organic``), genau mit eigener
-    Stützschichthöhe sonst — je Teil an dem, womit es gedruckt wird."""
-    from app.core.slice import advise
-
-    rounded = exact = False
-    for settings in effective:
-        if settings is None or settings.support.style == "none":
-            continue
-        if advise.in_whole_layers(settings.support.z_gap, layer):
-            continue
-        if settings.support.style in organic:
-            rounded = True
-        else:
-            exact = True
-    return rounded, exact
 
 
 def tower_plates(bodies: Sequence[SceneObject], setup: SlicerSetup | None) -> frozenset[int]:
