@@ -1694,3 +1694,38 @@ def test_a_moved_body_does_not_lend_its_carried_reading_to_a_fresh_twin() -> Non
         assert answer.digest == own.digest, "die Lesung des frischen Netzes, nicht die getragene"
         differs += held.digest != own.digest
     assert differs, "die Bewegung trägt Flächen mit, die nicht den Ecken folgen"
+
+
+def test_a_patch_known_only_by_its_print_is_read_inside_its_round() -> None:
+    """Im Stapel steht für einen bekannten Fleck nur der Abdruck — gelesen wird trotzdem.
+
+    Am Stand von P2 fragte die Lesung des Abdrucks den Stapel, und der Stapel
+    gab denselben Abdruck zurück: ``RecursionError``, und an der Messbank hielt
+    jede Auswertung beim Vereinigen an (``post_with_fillet``, Torus, Figur).
+    """
+    raw = _rounded_box().raw
+    body = trimesh.Trimesh(np.array(raw.vertices), np.array(raw.faces), process=False)
+    patches = [
+        patch
+        for patch in features_module._connected_patches(body, list(range(len(body.faces))))
+        if features_module._face_count(body, patch) >= features_module.MIN_PATCH_FACES
+    ]
+    forget_cache()
+    for patch in patches:
+        features_module._support_handle(body, patch)
+    twin = _twin(body)
+    handles = {}
+    for patch in patches:
+        handle = features_module._support_handle(twin, patch)
+        assert isinstance(handle, features_module._SupportPrint)
+        handles[features_module._patch_key(patch)] = handle
+    # Der Stapel hält nur die Abdrücke, ungelesen — wie für einen Fleck, dessen
+    # Kegel und Ring schon über die Körpergrenze beantwortet sind.
+    token = features_module._SCREENED.set(features_module._Screened(twin, {}, handles, {}))
+    try:
+        for patch in patches:
+            read = features_module._surface_support(twin, patch)
+            assert read is not None
+            assert read.digest == handles[features_module._patch_key(patch)].digest
+    finally:
+        features_module._SCREENED.reset(token)

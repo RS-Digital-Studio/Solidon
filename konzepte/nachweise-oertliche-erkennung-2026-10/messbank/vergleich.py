@@ -17,7 +17,7 @@ import sys
 from collections import Counter
 from pathlib import Path
 
-FIELDS = ("erkennung", "neben", "namen", "object_hash", "fern", "dreiecke")
+FIELDS = ("erkennung", "neben", "namen", "object_hash", "fern", "dreiecke", "netz")
 
 
 def read(path: Path) -> tuple[dict[tuple[str, str, str], dict], dict[str, dict]]:

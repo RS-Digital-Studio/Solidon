@@ -334,6 +334,11 @@ class Case:
         mesh = as_mesh_data(entry.mesh)
         raw = feats.known_detection(mesh)
         line["dreiecke"] = mesh.triangle_count
+        line["netz"] = hashlib.blake2b(
+            np.ascontiguousarray(mesh.raw.vertices, dtype=np.float64).tobytes()
+            + np.ascontiguousarray(mesh.raw.faces, dtype=np.int64).tobytes(),
+            digest_size=12,
+        ).hexdigest()
         line["erkennung"] = detection_print(raw)
         line["neben"] = [
             feats.freeform_dropped(mesh),

@@ -8104,8 +8104,23 @@ def _surface_support(
     screened = _SCREENED.get()
     if screened is not None and screened.body is body:
         known = screened.supports.get(_patch_key(patch))
-        if known is not None:
-            return known.read()
+        if isinstance(known, _SurfaceSupport):
+            return known
+    return _remembered_support(body, patch, check_cancelled)
+
+
+def _remembered_support(
+    body: trimesh.Trimesh,
+    patch: list[int],
+    check_cancelled: Callable[[], None] | None = None,
+) -> _SurfaceSupport | None:
+    """Die Lesung aus dem Merker des Körpers oder gerechnet — ohne den Stapel zu fragen.
+
+    :class:`_SupportPrint` liest hier: Der Stapel hält für denselben Fleck
+    womöglich genau diesen Abdruck, und ihn nach der Lesung zu fragen, fragte
+    den Abdruck nach sich selbst (am Stand von P2 ein ``RecursionError`` beim
+    Vereinigen, Messbank A1).
+    """
     support: _SurfaceSupport | None = remembered(
         "support",
         body,
@@ -8144,7 +8159,7 @@ class _SupportPrint:
     def read(self) -> _SurfaceSupport:
         """Die Lesung selbst — am selben Körper aus seinem Merker (:func:`_surface_support`)."""
         if self._support is None:
-            support = _surface_support(self._body, self._patch, self._check_cancelled)
+            support = _remembered_support(self._body, self._patch, self._check_cancelled)
             if support is None:
                 from app.core.errors import InternalError
 
