@@ -146,7 +146,8 @@ Ein Baustein sagt nur, **was** er ist; den Kern wählt der Aufrufer
 
 ### Rezepte und Dateien
 
-- **Rezept** (Regel 13, `bausteine.md`): `recipe.draft` ist der Gegenweg zu
+- **Rezept** (Regel 13, `bausteine.md`): eigenständig mit Erzeuger und Namensschutz
+  (`reserved_name`, `_recipe_creator`, RM-574). `recipe.draft` ist der Gegenweg zu
   `capture`, `Session.open_draft` merkt sich die Herkunft. `steps_of` schneidet
   den Ausschnitt eines gewählten Körpers aus dem Stapel, rückwärts über die
   Kanten aus `revision.step_needs`; Berichte und durchgereichte Körper zählen

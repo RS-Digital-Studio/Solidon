@@ -261,10 +261,18 @@ def op_name(part: str) -> str:
     return f"{_PREFIX}{part}"
 
 
+def creator_name(part: str) -> str:
+    """``wall_hook`` wird ``create_wall_hook`` — der Name des Erzeugers, ob es ihn
+    gibt oder nicht. Welche Operation den Baustein anlegt, sagt
+    :func:`creation_name`; welche ihm gehören, :func:`operation_names`.
+    """
+    return f"create_{part}"
+
+
 def creation_name(part: str) -> str:
     """Die Operation, die diesen Baustein ohne Träger anlegt — sonst die, die ihn einsetzt."""
     spec = PARTS.get(part)
-    return f"create_{part}" if spec.standalone else op_name(part)
+    return creator_name(part) if spec.standalone else op_name(part)
 
 
 #: Welche Merkmalsart als welche Stelle zählt. Eine gerundete Seite trägt einen
@@ -495,9 +503,9 @@ def register_all(
         if not target.has(name):
             _register_one(spec, build_params(spec), registry)
             made.append(name)
-        if spec.standalone and not target.has(f"create_{spec.name}"):
+        if spec.standalone and not target.has(creator_name(spec.name)):
             _register_creator(spec, registry)
-            made.append(f"create_{spec.name}")
+            made.append(creator_name(spec.name))
     _log.info("registered %d part operations", len(made))
     return tuple(made)
 
@@ -560,8 +568,34 @@ def _applies_to(spec: PartSpec) -> list[str]:
 
 def register_one(spec: PartSpec, registry: Registry | None = None) -> None:
     """Einen einzelnen Baustein als Operation registrieren — der Weg der
-    Rezepte. ``register_all`` bleibt der der Bibliothek; beide enden hier."""
+    Rezepte. ``register_all`` bleibt der der Bibliothek; beide enden hier.
+
+    Ein eigenständiger Baustein bekommt auch hier seinen Erzeuger: Ein Rezept
+    ist genau ein Körper (RM-574). Scheitert der Erzeuger, geht das Einsetzen
+    mit zurück — halb registriert wäre ein Katalogknopf ohne Rechnung.
+    """
     _register_one(spec, build_params(spec), registry)
+    if spec.standalone:
+        try:
+            _register_creator(spec, registry)
+        except Exception:
+            (registry or _default_registry()).remove(op_name(spec.name))
+            raise
+
+
+def operation_names(part: str, parts: PartRegistry | None = None) -> tuple[str, ...]:
+    """Die Operationen, die diesem Baustein gehören — Einsetzen immer, Erzeugen,
+    wenn er für sich steht (RM-574).
+
+    Wer einen Baustein abmeldet oder ersetzt, nimmt genau diese. Den Erzeuger
+    nur nach dem Namen zu nehmen träfe bei einem Rezept „box“ den Quader
+    ``create_box``, der keinem Baustein gehört — dieselbe Zugehörigkeit, die
+    :func:`part_of` liest. Deshalb vor dem Abmelden des Katalogeintrags fragen.
+    """
+    source = parts or PARTS
+    if source.has(part) and source.get(part).standalone:
+        return op_name(part), creator_name(part)
+    return (op_name(part),)
 
 
 def _register_one(spec: PartSpec, params: type[BaseParams], registry: Registry | None) -> None:
@@ -624,7 +658,7 @@ def _register_creator(spec: PartSpec, registry: Registry | None) -> None:
     version = f"{_result_version(spec)}:guards:3" + (":exact:1" if _creates_exactly(spec) else "")
 
     @register_op(
-        name=f"create_{spec.name}",
+        name=creator_name(spec.name),
         title=spec.title,
         category="parts",
         params=schema,
@@ -648,7 +682,10 @@ def _register_creator(spec: PartSpec, registry: Registry | None) -> None:
         )
         direction = _free_direction(ctx.params)
         turned, sink = _on_its_own_bed(spec, ctx.params, produced.mesh, direction)
-        solid = _solid_of(produced.mesh) if exact else None
+        # Ein Rezept rechnet seinen Ausschnitt mit dem Auswerter und bringt einen
+        # exakten Körper mit, wenn sein Stapel exakt rechnet (RM-574); der bleibt
+        # exakt. Am Netz gebaut kommt hier nie ein exakter Körper an.
+        solid = _solid_of(produced.mesh)
         # **Das Netz rollt hier ohne ``keeps_up``, die Merkmale mit** — so rechnete
         # der Erzeuger schon immer. Der einzige eigenständige Baustein mit
         # ``keeps_up`` ist die Rohrschelle, und sie ist unter der halben Drehung

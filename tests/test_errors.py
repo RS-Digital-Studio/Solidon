@@ -352,6 +352,9 @@ _NOT_A_RANGE = frozenset(
         # Eine Verbrauchsbuchung, die sich seit dem Druckauftrag geändert hat
         # (knowledge/filaments.py): ein Zustand des Bestands, keine Zahl.
         "booking_history_changed",
+        # Ein Bausteinname, dessen Erzeuger einer anderen Operation gehört
+        # (RM-574): ein Name, keine Zahl.
+        "reserved",
         "checksum", "choices",
         # Ein getrenntes Teil in der Bohrung (geom/prepare_ops.py): die Form, keine Zahl.
         "separate_bore_contents",

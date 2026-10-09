@@ -421,6 +421,23 @@ def migrate_format(data: dict[str, Any]) -> dict[str, Any]:
     return converted
 
 
+def _recipe_creator(name: str) -> tuple[str, ...]:
+    """Der Erzeugername eines Rezepts — leer, wo ``create_<name>`` einer anderen
+    Operation gehört (RM-574).
+
+    Ein Rezept „box“ aus der Zeit vor dem Erzeuger trägt in seinem Stapel den
+    Quader ``create_box``; als eigener Erzeuger gelesen, wäre das ein Zirkel auf
+    sich selbst und die Umbenennung im Entwurf träfe den Grundkörper.
+    """
+    from app.core.knowledge.parts.ops import creator_name
+    from app.core.registry import REGISTRY
+
+    creator = creator_name(name)
+    if REGISTRY.has(creator) and REGISTRY.get(creator).category != "parts":
+        return ()
+    return (creator,)
+
+
 def dependency_order(data: dict[str, Any]) -> list[str]:
     """Prüft den flachen Graphen und zählt die tatsächlich expandierten Schritte."""
     from app.core.knowledge.parts.ops import op_name
@@ -446,7 +463,12 @@ def dependency_order(data: dict[str, Any]) -> list[str]:
     visiting: set[str] = set()
     costs: dict[str, int] = {}
     ordered: list[str] = []
-    names_by_op = {op_name(name): name for name in documents if isinstance(name, str)}
+    names_by_op = {
+        operation: name
+        for name in documents
+        if isinstance(name, str)
+        for operation in (op_name(name), *_recipe_creator(name))
+    }
 
     def visit(name: str) -> int:
         if name in visiting:
@@ -567,7 +589,8 @@ def dependency_registry(part: Recipe, base: Registry | None = None) -> Registry:
     for name in dependency_order(file_data(part)):
         require_dependency_name(name)
         child = from_data(part.dependencies[name])
-        operations.remove(part_ops.op_name(name))
+        for bound in part_ops.operation_names(name):
+            operations.remove(bound)
         register(child, parts, operations)
     return operations
 
@@ -879,8 +902,16 @@ def register(
     """
     from app.core.knowledge.parts import ops as part_ops
     from app.core.knowledge.parts.registry import PARTS
+    from app.core.registry import REGISTRY as _OPERATIONS
 
     params_cls = _params_class(recipe.exposed, recipe.name)
+    # **Ein Rezept ist genau ein Körper und steht damit für sich** (RM-574): Es
+    # bekommt einen Erzeuger und entsteht ohne passende Stelle als eigener
+    # Körper. **Namensschutz:** Trägt schon eine andere Operation den Namen
+    # ``create_<name>`` (``create_box``, ``create_lid`` …), bleibt es beim
+    # Einsetzen — ein Erzeuger träte sonst still an ihre Stelle. Neue Namen
+    # dieser Art weist das Speichern ab (:func:`reserved_name`).
+    standalone = not (registry or _OPERATIONS).has(part_ops.creator_name(recipe.name))
 
     def build_with_profile(
         params: BaseParams, profile: Profile | None, quality: Quality = "fine"
@@ -914,6 +945,7 @@ def register(
         features=tuple(recipe.features),
         doc=recipe.doc or recipe.title,
         source=source,
+        standalone=standalone,
         range_passed=(recipe.range_report.passed if recipe.range_report is not None else None),
         # Für die Reise: Das Speichern eines Projekts, das diesen Baustein
         # benutzt, bettet genau diese Daten in den Container ein — ohne die
@@ -1226,6 +1258,33 @@ def save(recipe: Recipe, directory: Path | None = None, *, overwrite: bool = Fal
         return folder / f"{recipe.name}.json"
 
 
+def reserved_name(
+    name: str, parts: PartRegistry | None = None, registry: Registry | None = None
+) -> bool:
+    """Ob ein **neuer** Baustein so nicht heißen darf: Sein Erzeugername gehört schon
+    einer anderen Operation (``create_box`` für „box“, RM-574).
+
+    Ein vorhandenes Rezept dieses Namens bleibt ersetzbar; es setzt dann nur ein.
+    """
+    from app.core.knowledge.parts.ops import creator_name
+    from app.core.knowledge.parts.registry import PARTS
+    from app.core.registry import REGISTRY
+
+    return not (parts or PARTS).has(name) and (registry or REGISTRY).has(creator_name(name))
+
+
+def _reserved_name_error(name: str) -> ValidationError:
+    return ValidationError(
+        field="name",
+        detail=_(
+            "Diesen Namen trägt schon eine Operation. Geben Sie dem Baustein einen anderen Namen."
+        ),
+        values={"name": name},
+        constraint="reserved",
+        suggestions=(CORRECT_INPUT, CANCEL),
+    )
+
+
 def _existing_recipe_error(name: str, filename: str, *, suggested: str = "") -> ValidationError:
     """Der gemeinsame, handlungsfähige Befund für eine Namenskollision."""
 
@@ -1265,6 +1324,7 @@ def available_name(
         return (
             not source.has(candidate)
             and not operations.has(part_ops.op_name(candidate))
+            and not operations.has(part_ops.creator_name(candidate))
             and not (folder / f"{candidate}.json").exists()
         )
 
@@ -1299,7 +1359,10 @@ def _prepare_binding(
 
     from app.core.knowledge.parts import ops as part_ops
 
-    operation_name = part_ops.op_name(recipe.name)
+    # Die Operationen des alten Stands, wenn es ihn gibt: Einsetzen und, an
+    # einem eigenständigen Rezept, Erzeugen. ``create_box`` gehört keinem Rezept
+    # und bleibt (Namensschutz, :func:`register`).
+    owned = set(part_ops.operation_names(recipe.name, parts))
     prepared_parts = PartRegistry()
     prepared_operations = Registry()
     for part_spec in parts.all():
@@ -1307,7 +1370,7 @@ def _prepare_binding(
             continue
         prepared_parts.register(part_spec)
     for operation_spec in operations.all():
-        if replace_existing and operation_spec.name == operation_name:
+        if replace_existing and operation_spec.name in owned:
             continue
         prepared_operations.register(operation_spec)
     register(
@@ -1331,13 +1394,14 @@ def _prepare_removal(
     operation_name = part_ops.op_name(name)
     if not parts.has(name) or not operations.has(operation_name):
         raise ValueError("recipe_binding_missing")
+    owned = set(part_ops.operation_names(name, parts))
     prepared_parts = PartRegistry()
     prepared_operations = Registry()
     for part_spec in parts.all():
         if part_spec.name != name:
             prepared_parts.register(part_spec)
     for operation_spec in operations.all():
-        if operation_spec.name != operation_name:
+        if operation_spec.name not in owned:
             prepared_operations.register(operation_spec)
     return _PreparedBinding(prepared_parts, prepared_operations)
 
@@ -2136,7 +2200,7 @@ def draft(
     gespeicherten Undo-Seiten. Verschachtelte Beilagen behalten ihre eigenen
     eingebetteten Versionen; Speichern und erneutes Erfassen nehmen sie mit.
     """
-    from app.core.knowledge.parts.ops import op_name
+    from app.core.knowledge.parts.ops import creator_name, op_name
     from app.core.knowledge.parts.registry import PARTS, used_parts
     from app.core.registry import REGISTRY
 
@@ -2172,6 +2236,8 @@ def draft(
         if not known.has(arrived.name):
             register(arrived, known, registry or REGISTRY, source=TRAVELLED_SOURCE)
         names[op_name(name)] = op_name(arrived.name)
+        for creator in _recipe_creator(name):
+            names[creator] = creator_name(arrived.name)
 
     operations = list(data["ops"])
     for transaction in data.get("transactions", []):
@@ -2380,6 +2446,8 @@ def replace(
 
     source = parts or PARTS
     operations = registry or REGISTRY
+    if reserved_name(recipe.name, source, operations):
+        raise _reserved_name_error(recipe.name)
     with _FILE_LOCK:
         prepared = _prepare_binding(
             recipe,

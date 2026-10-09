@@ -52,6 +52,7 @@ entfernt hat.
 | 2026-10-08 | [RM-562: Bausteine, die für sich ein Teil sind, entstehen ohne Auswahl als eigener Körper (08.10.2026)](#rm-562-bausteine-die-für-sich-ein-teil-sind-entstehen-ohne-auswahl-als-eigener-körper-08102026) |
 | 2026-10-08 | [RM-565: *Auswahl als Baustein speichern* nimmt den gewählten Körper (08.10.2026)](#rm-565-auswahl-als-baustein-speichern-nimmt-den-gewählten-körper-08102026) |
 | 2026-10-09 | [RM-578: Mitgelieferte Bausteine nehmen jede Normgröße der Tabelle, die 512er-Grenze gilt nur für eigene Bausteine (09.10.2026)](#rm-578-mitgelieferte-bausteine-nehmen-jede-normgröße-der-tabelle-die-512er-grenze-gilt-nur-für-eigene-bausteine-09102026) |
+| 2026-10-09 | [RM-574: Ein eigener Baustein entsteht als eigener Körper, mit Namensschutz gegen Operationen (09.10.2026)](#rm-574-ein-eigener-baustein-entsteht-als-eigener-körper-mit-namensschutz-gegen-operationen-09102026) |
 | 2026-10-06 | [RM-114: Die Zielreihe der Hohlkugel ist auf drei Plattformen gleich (06.10.2026)](#rm-114-die-zielreihe-der-hohlkugel-ist-auf-drei-plattformen-gleich-06102026) |
 | 2026-10-06 | [RM-038: Der Mailentwurf kommt aus dem Flatpak unverändert an (06.10.2026)](#rm-038-der-mailentwurf-kommt-aus-dem-flatpak-unverändert-an-06102026) |
 | 2026-10-06 | [RM-040: Ein Kundenbericht aus 0.5.3 führte über Ausnahme und Stapel zur Behebung (06.10.2026)](#rm-040-ein-kundenbericht-aus-053-führte-über-ausnahme-und-stapel-zur-behebung-06102026) |
@@ -44625,3 +44626,36 @@ alle bestanden. Handbuch „Die Bausteine“ und „Eigene Bausteine“ in sechs
 Website-Zusage „zur gewählten Normgröße“ stimmt unverändert. Changelog: ja — Wandhalter,
 Rohrschelle, Profilklemmen und die Laschen der Halter nehmen jede Schraubengröße bis M64; ein
 eigener Baustein nennt vor dem Prüfen, wie lange es dauert.
+
+## RM-574: Ein eigener Baustein entsteht als eigener Körper, mit Namensschutz gegen Operationen (09.10.2026)
+
+<a id="rm-574-ein-eigener-baustein-entsteht-als-eigener-körper-mit-namensschutz-gegen-operationen-09102026"></a>
+<a id="rm-574"></a>
+
+**RM-574 — Eigene Bausteine als eigener Körper einsetzen.** Review zu RM-565, Entscheidung
+Robert („wenn wir mehr liefern können, wollen wir das“): Ein gespeichertes Rezept ließ sich nur
+einsetzen; in einem leeren Projekt gar nicht, mit einem einzigen Körper hing es an diesem.
+
+**Umsetzung** (Zweig `paket/b-bausteine`, Commit siehe Paketbericht): `recipe.register` gibt jedem
+Rezept `standalone` und damit über `ops.register_one` einen Erzeuger `create_<name>`; der Katalog
+setzt es wie jeden eigenständigen Baustein ohne passende Stelle als eigenen Körper auf eine freie
+Stelle. Binden, Ersetzen, Entfernen, Wiederherstellen, Beilagen und `part_file` nehmen beide
+Operationsnamen (`ops.operation_names`); die Standwahl eines mitgereisten Rezepts trifft auch den
+Erzeugerschritt (`history._part_state_target`, nie einen Grundkörper). **Namensschutz:** Gehört
+`create_<name>` einer anderen Operation (`create_box`), bleibt ein vorhandenes Rezept beim
+Einsetzen, und ein neues wird beim Speichern abgewiesen (`recipe.reserved_name`, Dialog sperrt
+*Baustein anlegen* mit Grund). Dabei gefunden und behoben: Ein Rezept „box“ mit dem Quader
+`create_box` in seinem Stapel galt sonst als Zirkel auf sich selbst (`_recipe_creator`). Ein
+exaktes Rezeptergebnis bleibt beim Erzeugen exakt. Regel 13 unverändert: Das Rezept bleibt eine
+Liste registrierter Operationen mit Werten und reist mit dem Projekt, auch als Erzeugerschritt.
+Bereichstest beim Anlegen unverändert (512 Ecken, Dauer vorher).
+
+**Nachweis:** `tests/test_recipes.py::test_an_own_part_arises_as_its_own_body_with_or_without_a_body_there`
+(leeres Projekt, neben einem Quader, der unverändert bleibt; Projekt speichern, lokales Rezept
+entfernen, öffnen und rechnen), `test_an_own_part_named_like_an_operation_keeps_inserting_and_a_new_one_is_refused`
+(vor der Korrektur rot mit dem Zirkel), `test_replacing_and_removing_an_own_part_takes_its_creator_along`,
+`test_choosing_a_travelled_state_maps_a_recipe_creator_but_never_a_primitive`; Fenstertest
+`tests/test_catalog_ui.py::test_an_own_part_arises_as_its_own_body_from_the_catalogue` (leere
+Szene, dann neben einem gewählten Körper auf freier Stelle). Gegenprobe ohne Erzeuger: alle rot.
+Handbuch „Eigene Bausteine“ in sechs Sprachen. Changelog: ja — Ein eigener Baustein entsteht auch
+im leeren Projekt als eigenes Teil.

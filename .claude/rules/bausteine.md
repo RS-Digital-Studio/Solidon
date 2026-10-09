@@ -308,6 +308,17 @@ Daten in `<Nutzerdaten>/parts/recipes/*.json` (`parts/recipe.py`,
   §24.3): dieselben Ecken wie in der Suite, mit Fortschritt und Abbruch; das
   Ergebnis steht als `PartSpec.range_passed` am Katalogeintrag (§24.5 verlangt
   den Warnhinweis, kein Verbot).
+- **Ein Rezept ist genau ein Körper und steht deshalb für sich** (RM-574):
+  `register` gibt ihm `standalone` und einen Erzeuger `create_<name>`, der
+  Katalog setzt es ohne passende Stelle als eigenen Körper. Wer ein Rezept
+  bindet, ersetzt, entfernt oder als Beilage auflöst, nimmt die Operationen,
+  die ihm gehören (`ops.operation_names`, gefragt **vor** dem Abmelden des
+  Katalogeintrags) — nie alles, was nach ihm heißt: Ein Anhang „box“ nähme
+  sonst den Quader mit. **Namensschutz:** Gehört
+  `create_<name>` einer anderen Operation (`create_box`), bleibt es beim
+  Einsetzen, und ein neuer Baustein dieses Namens wird beim Speichern
+  abgewiesen (`recipe.reserved_name`); auch Beilagenfolge und Entwurf lesen
+  diesen Namen dann nicht als Rezept (`_recipe_creator`).
 - **`travelling_parts` warnt nur vor `.py`s** — ein Rezept reist als Daten,
   sein `source` ist `recipe`. **`own` heißt „gehört dem Kunden"** und umfasst
   beide Gestalten; wer nur die `.py` meint, fragt `source == "user"`.

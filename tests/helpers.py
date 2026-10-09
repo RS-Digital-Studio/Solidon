@@ -1927,8 +1927,10 @@ def clean_recipe_globals(*names: str) -> None:
     from app.core.registry import REGISTRY
 
     for name in names:
+        # Erst fragen, dann abmelden: Ohne Katalogeintrag gehört dem Namen kein Erzeuger.
+        for operation in part_ops.operation_names(name):
+            REGISTRY._ops.pop(operation, None)
         PARTS._parts.pop(name, None)
-        REGISTRY._ops.pop(part_ops.op_name(name), None)
 
 
 def recipe_with_halter(width_default: float, profile: Profile) -> Any:

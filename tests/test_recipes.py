@@ -1096,6 +1096,191 @@ def test_a_slice_that_brings_a_second_body_says_so_before_saving(
     assert bodies[foreign] in steps
 
 
+def _volume_of(result: object, name: str) -> float:
+    return float(as_mesh_data(result.scene.objects[name].mesh).volume)  # type: ignore[attr-defined]
+
+
+def test_an_own_part_arises_as_its_own_body_with_or_without_a_body_there(
+    profile: Profile, tmp_path: Path
+) -> None:
+    """RM-574: Ein gespeichertes Rezept ist genau ein Körper und steht für sich.
+
+    Es bekommt einen Erzeuger wie die eigenständigen mitgelieferten Bausteine:
+    im leeren Projekt ein Körper, neben einem vorhandenen ein zweiter, der
+    nicht an ihm hängt. Das Rezept bleibt Daten (Regel 13) und reist mit dem
+    Projekt, auch als Erzeugerschritt.
+    """
+    from app.core.registry import REGISTRY
+    from app.core.scene import History, OperationDraft, evaluate
+    from app.core.scene.project import ProjectSources, load, new_project, save
+
+    name = "rm574_klotz"
+    try:
+        made = _recipe(profile, name)
+        recipe.register(made)
+        from app.core.knowledge.parts.registry import PARTS
+
+        spec = PARTS.get(name)
+        assert spec.standalone
+        creator = REGISTRY.get(f"create_{name}")
+        assert (creator.consumes, creator.produces) == (0, 1)
+        expected = recipe.build(made, profile=profile).mesh.volume
+
+        empty = new_project("centauri-carbon-2", "petg")
+        History(empty.document).apply("Klotz", [OperationDraft(op=creator.name, params={})])
+        alone = evaluate(empty.document, profile, sources=ProjectSources(empty))
+        assert alone.complete and len(alone.scene.objects) == 1
+        (body,) = alone.scene.objects
+        assert as_mesh_data(alone.scene.objects[body].mesh).is_watertight
+        assert _volume_of(alone, body) == pytest.approx(expected)
+
+        beside = new_project("centauri-carbon-2", "petg")
+        history = History(beside.document)
+        history.apply("Quader", [OperationDraft(op="create_box", params={})])
+        (box,) = beside.document.ops[0].outputs
+        before = evaluate(beside.document, profile, sources=ProjectSources(beside))
+        history.apply("Klotz", [OperationDraft(op=creator.name, params={"x": 80.0, "y": 0.0})])
+        after = evaluate(beside.document, profile, sources=ProjectSources(beside))
+        assert after.complete and len(after.scene.objects) == 2, "ein eigenes Teil"
+        assert _volume_of(after, box) == pytest.approx(_volume_of(before, box))
+        (made_body,) = beside.document.ops[-1].outputs
+        assert _volume_of(after, made_body) == pytest.approx(expected)
+
+        path = save(beside, tmp_path / "eigen.solidon")
+        clean_recipe_globals(name)
+        reopened = load(path)
+        again = evaluate(reopened.document, profile, sources=ProjectSources(reopened))
+        assert again.complete, "das Rezept reiste mit, auch für den Erzeuger"
+        assert len(again.scene.objects) == 2
+    finally:
+        clean_recipe_globals(name, f"{name}_travelled")
+
+
+def test_an_own_part_named_like_an_operation_keeps_inserting_and_a_new_one_is_refused(
+    profile: Profile,
+) -> None:
+    """Namensschutz (RM-574): ``create_box`` bleibt der Quader.
+
+    Ein Rezept „box“ aus der Zeit vor dem Erzeuger setzt weiter ein; ein neues
+    unter diesem Namen weist das Speichern mit Grund ab.
+    """
+    from app.core.registry import REGISTRY
+
+    parts, registry = PartRegistry(), Registry()
+    for operation in REGISTRY.all():
+        registry.register(operation)
+    box_creator = registry.get("create_box")
+    old = _recipe(profile, "box")
+    recipe.register(old, parts, registry)
+    assert not parts.get("box").standalone
+    assert registry.get("create_box") is box_creator
+    assert recipe.reserved_name("box", PartRegistry(), registry)
+    assert not recipe.reserved_name("box", parts, registry), "ein vorhandenes bleibt ersetzbar"
+    with pytest.raises(ValidationError) as refused:
+        recipe.replace(_recipe(profile, "box"), PartRegistry(), registry)
+    assert refused.value.constraint == "reserved"
+    assert refused.value.suggestions
+
+
+def test_replacing_and_removing_an_own_part_takes_its_creator_along(
+    profile: Profile, tmp_path: Path
+) -> None:
+    """Ersetzen bindet Einsetzen **und** Erzeugen neu, Entfernen nimmt beide."""
+    from app.core.knowledge.parts import ops as part_ops
+
+    parts, registry = PartRegistry(), Registry()
+    name = "rm574_ersatz"
+    recipe.replace(_recipe(profile, name), parts, registry, tmp_path)
+    first = registry.get(f"create_{name}")
+    changed = dataclasses.replace(_recipe(profile, name), document=recipe_document_seed(50))
+    recipe.replace(changed, parts, registry, tmp_path)
+    assert registry.get(f"create_{name}") is not first, "der Erzeuger rechnet mit dem neuen Stand"
+    assert part_ops.operation_names(name, parts) == (f"insert_{name}", f"create_{name}")
+    recipe.remove_installed(name, parts, registry, tmp_path)
+    assert not registry.has(f"insert_{name}") and not registry.has(f"create_{name}")
+
+
+def test_an_attached_recipe_named_like_an_operation_leaves_that_operation_alone(
+    profile: Profile,
+) -> None:
+    """Ein Anhang „box“ setzt ein und nimmt der Datei nicht den Quader ``create_box``.
+
+    Abgemeldet wird, was dem Baustein gehört (``operation_names``), nicht alles,
+    was nach ihm heißt — sonst rechnete das private Register mit dem Rezept als
+    Quader, und die Bausteindatei ließe sich nicht mehr einlesen.
+    """
+    from app.core.knowledge.parts.part_file import PartFileIO
+    from app.core.registry import REGISTRY
+
+    document = recipe_document_seed(150)
+    document.ops.append(
+        Operation(id=2, op="insert_box", inputs=("obj_1",), outputs=("obj_1",), params={"z": 8.0})
+    )
+    outer = recipe.Recipe(
+        name="rm574_aussen",
+        title="Außen",
+        group="structure",
+        document=document,
+        dependencies={"box": recipe.to_data(_recipe(profile, "box"))},
+        features={"top": "box_top"},
+    )
+
+    private = recipe.dependency_registry(outer)
+
+    assert private.get("create_box") is REGISTRY.get("create_box")
+    assert private.has("insert_box")
+    payload = json.dumps(recipe.file_data(outer)).encode("utf-8")
+    assert PartFileIO()._validated_recipe(payload).name == "rm574_aussen"
+
+
+def test_the_creator_of_a_loaded_recipe_counts_among_the_user_operations(
+    profile: Profile, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Die Menüleiste lässt aus, was aus dem Nutzerordner kam — den Erzeuger mit.
+
+    Ein Rezept „box“ steht nicht für sich; ``create_box`` bleibt der Quader und
+    keine Nutzeroperation.
+    """
+    from app.core import bootstrap
+    from app.core.knowledge.parts import user
+
+    monkeypatch.setattr(user, "user_parts_dir", lambda: tmp_path)
+    monkeypatch.setattr(recipe, "user_parts_dir", lambda: tmp_path)
+    monkeypatch.setattr(bootstrap, "_user_loaded", False)
+    monkeypatch.setattr(bootstrap, "_user_findings", ())
+    monkeypatch.setattr(bootstrap, "_user_operations", ())
+    name = "rm574_start"
+    recipe.save(_recipe(profile, name))
+    recipe.save(_recipe(profile, "box"))
+    try:
+        bootstrap.load_user_parts()
+        assert set(bootstrap.user_operations()) == {
+            f"insert_{name}",
+            f"create_{name}",
+            "insert_box",
+        }
+    finally:
+        clean_recipe_globals(name, "box")
+
+
+def test_choosing_a_travelled_state_maps_a_recipe_creator_but_never_a_primitive() -> None:
+    """Die Wahl des mitgereisten Stands trifft auch ``create_<rezept>`` — und nie ``create_box``."""
+    from app.core.knowledge.parts.registry import PARTS
+    from app.core.scene.history import _part_state_target
+
+    profile_ = profiles.make_profile("centauri-carbon-2", "petg")
+    name = "rm574_stand"
+    try:
+        recipe.register(_recipe(profile_, name))
+        assert PARTS.get(name).standalone
+        states = {name: f"{name}_travelled", "box": "box_travelled"}
+        assert _part_state_target(f"create_{name}", states) == f"create_{name}_travelled"
+        assert _part_state_target(f"insert_{name}", states) == f"insert_{name}_travelled"
+        assert _part_state_target("create_box", states) is None
+    finally:
+        clean_recipe_globals(name)
+
+
 # --- RM-147 E6: das Rezept als bearbeitbarer Entwurf ------------------------------
 
 
@@ -1653,7 +1838,6 @@ def test_the_whole_way_from_an_imported_model_to_a_reused_and_changed_part(
     #    Katalog hängt auch der Stempel beim Speichern (§24.4). Der Ausbau am
     #    Ende ist Pflicht: Die Bausteinsweeps anderer Tests parametrisieren
     #    über denselben Katalog und dürfen dieses Rezept nicht erben.
-    from app.core.knowledge.parts.registry import PARTS
     from app.core.registry import REGISTRY
 
     loaded = recipe.load_all(tmp_path, None, None)
@@ -1665,8 +1849,7 @@ def test_the_whole_way_from_an_imported_model_to_a_reused_and_changed_part(
         _run_the_second_project(profile, tmp_path, made, op_name)
     finally:
         # Der Ausbau: die zwei globalen Einträge, die Schritt 3 angelegt hat.
-        PARTS._parts.pop("mein_klotz", None)
-        REGISTRY._ops.pop(op_name, None)
+        clean_recipe_globals("mein_klotz")
 
 
 def _run_the_second_project(

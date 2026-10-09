@@ -1048,6 +1048,7 @@ class RecipeDialog(QDialog):
         taken = bool(title) and taken_name(_identifier(title))
         self._save.setEnabled(
             bool(title)
+            and not (bool(title) and recipes.reserved_name(_identifier(title)))
             and not self._slice_problem
             and named
             and adjustable
@@ -1110,6 +1111,15 @@ class RecipeDialog(QDialog):
             return self._slice_problem
         if not self.title.text().strip():
             return str(tr("Der Baustein braucht einen Namen."))
+        if recipes.reserved_name(_identifier(self.title.text().strip())):
+            # Namensschutz (RM-574): Der Erzeuger ``create_<name>`` gehört schon
+            # einer anderen Operation, etwa „Box“ dem Quader.
+            return str(
+                tr(
+                    "Diesen Namen trägt schon eine Operation. Geben Sie dem Baustein einen "
+                    "anderen Namen."
+                )
+            )
         if not adjustable:
             if self._params and all(row.derived for row in self._params):
                 # **Der häufige Fall seit der Umstellung.** Trägt jeder

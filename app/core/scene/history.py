@@ -479,17 +479,30 @@ def _copy_operation_matches(
 
 
 #: Der Namensraum eingesetzter Bausteine im Stapel (``knowledge.parts.ops``).
-#: Nur er: Einen Stand zum Wählen haben allein Rezepte, und ein Rezept wird
-#: immer eingesetzt — ``create_`` teilt es sich mit den Grundkörpern.
 _PART_PREFIX: Final = "insert_"
+
+#: Der Namensraum der Erzeuger. Einen Stand zum Wählen haben allein Rezepte,
+#: und seit RM-574 entsteht ein Rezept auch als eigener Körper. ``create_``
+#: teilt es sich mit den Grundkörpern; gilt also nur, wo ein Baustein dahinter
+#: steht (``part_of``).
+_CREATOR_PREFIX: Final = "create_"
 
 
 def _part_state_target(op_name: str, states: Mapping[str, str]) -> str | None:
     """Der Operationsname desselben Schritts mit dem Baustein aus ``states``."""
-    if not op_name.startswith(_PART_PREFIX):
-        return None
-    wanted = states.get(op_name[len(_PART_PREFIX) :])
-    return f"{_PART_PREFIX}{wanted}" if wanted else None
+    for prefix in (_PART_PREFIX, _CREATOR_PREFIX):
+        if not op_name.startswith(prefix):
+            continue
+        wanted = states.get(op_name[len(prefix) :])
+        if not wanted:
+            return None
+        if prefix == _CREATOR_PREFIX:
+            from app.core.knowledge.parts.ops import part_of
+
+            if part_of(op_name) is None:
+                return None
+        return f"{prefix}{wanted}"
+    return None
 
 
 def restore(document: Document, state: DocumentState) -> None:

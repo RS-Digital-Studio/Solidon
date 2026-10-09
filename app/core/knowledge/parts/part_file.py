@@ -415,7 +415,8 @@ class PartFileIO:
                         child_payload, _registry=active_registry, _build=False
                     )
                     normalized["dependencies"][name] = recipe.file_data(child)
-                    active_registry.remove(part_ops.op_name(name))
+                    for bound in part_ops.operation_names(name):
+                        active_registry.remove(bound)
                     recipe.register(child, private_parts, active_registry)
             document = raw.get("document")
             if isinstance(document, dict):
