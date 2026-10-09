@@ -264,6 +264,35 @@ def test_the_separation_never_drops_a_pair_that_crosses() -> None:
     assert separated[flat_fan].all(), np.flatnonzero(flat_fan & ~separated)[:10]
 
 
+def test_the_plane_of_the_second_triangle_separates_as_well() -> None:
+    """Ohne gemeinsame Ecke trennt auch die Ebene des zweiten Dreiecks (RM-568).
+
+    Das waagrechte Dreieck liegt ganz vor der Ebene des steilen
+    (``x − z = 12``, die nächste Ecke 1,4 mm davor). Das steile reicht durch
+    die Ebene des waagrechten, und in der Draufsicht liegt seine Ecke
+    ``(3, 3)`` im waagrechten: Nur die Ebene des zweiten trennt das Paar.
+    :func:`intersections._separated` fragt sie seit RM-568 nur für die Paare,
+    die die erste offen lässt — dieses ist eines davon. Umgekehrt trennt schon
+    die erste Ebene. Beide Male kostet das Paar eine Trennprüfung und keine
+    genaue; fiele die zweite Ebene weg, ginge es durch die genaue Prüfung, und
+    das Budget endete früher.
+    """
+    flat = [[0.0, 0.0, 0.0], [10.0, 0.0, 0.0], [0.0, 10.0, 0.0]]
+    steep = [[11.0, 2.0, -1.0], [13.0, 2.0, 1.0], [3.0, 3.0, -9.0]]
+    surface, first, second = _shared_surface(np.asarray([flat, steep]), np.asarray([steep, flat]))
+    separated, cost = intersections._separated(surface, first, second)
+    crossed = intersections.crossing_pairs(
+        surface.triangles[first],
+        surface.triangles[second],
+        surface.faces[first],
+        surface.faces[second],
+    )
+
+    assert isinstance(crossed, np.ndarray) and not crossed.any(), "die beiden schneiden sich nicht"
+    assert separated.tolist() == [True, True]
+    assert cost.tolist() == [intersections.SEPARATION_COST] * 2
+
+
 @pytest.mark.parametrize("offset", [0.0, 1e7], ids=["ursprung", "weit-verschoben"])
 def test_a_shallow_crossing_survives_translation_at_representable_precision(
     offset: float,
@@ -565,6 +594,28 @@ def _found(surface: object, plan: object) -> list[tuple[int, int]]:
     return found
 
 
+def _boxes_a_hair_apart() -> trimesh.Trimesh:
+    """Ein Würfel und drei Nachbarn, je auf einer Achse einen halben ``EPS_GEOM`` entfernt.
+
+    Ihre Hüllquader überdecken sich nicht, die genaue Prüfung legt aber Ecken
+    bis ``EPS_GEOM`` zusammen: Zwei Flächen, die bis auf Rundung
+    aufeinanderliegen, sind der Fall, für den sie da ist. Die Suche muss
+    solche Paare liefern — auf der Sweep-Achse über das Ende der Einträge
+    (``_keys``), auf den übrigen über die Reichweite der Seiten
+    (``side_reach``). Die Lücke liegt um ``1 − EPS_GEOM``, und dort beginnt
+    bei den Breiten 0,05, 0,5 und 1 eine Scheibe: Das letzte Dreieck vor der
+    Lücke muss mit seiner Zugabe auch in sie reichen.
+    """
+    side = 1.0 - 1.25 * EPS_GEOM
+    gap = 0.5 * EPS_GEOM
+    cubes = []
+    for step in ((0, 0, 0), (1, 0, 0), (0, 1, 0), (0, 0, 1)):
+        cube = trimesh.creation.box(extents=(side, side, side))
+        cube.apply_translation([0.5 * side + k * (side + gap) for k in step])
+        cubes.append(cube)
+    return trimesh.util.concatenate(cubes)
+
+
 def test_every_plan_finds_exactly_the_overlapping_boxes_once() -> None:
     """Sweep oder Scheiben, jede Achse, jede Breite: dieselben Paare, keines doppelt.
 
@@ -572,6 +623,9 @@ def test_every_plan_finds_exactly_the_overlapping_boxes_once() -> None:
     gemeinsamen Hülle. Ein Fehler in dieser Regel verlöre Paare an der
     Scheibengrenze oder zählte sie zweimal — geprüft an einer Kugel, einer
     Kette entlang Y und zwei Quadern, deren Flächen genau auf einer Grenze liegen.
+    Dazu Würfel, die einen halben ``EPS_GEOM`` auseinanderliegen
+    (:func:`_boxes_a_hair_apart`): Ohne die Zugabe von ``EPS_GEOM`` an einem
+    der drei Enden fehlten ihre Paare.
     """
     sphere = trimesh.creation.icosphere(subdivisions=3)
     links = []
@@ -584,10 +638,20 @@ def test_every_plan_finds_exactly_the_overlapping_boxes_once() -> None:
     right = left.copy()
     right.apply_translation((1.0, 0.0, 0.0))
     touching = trimesh.util.concatenate([left, right])
-    for mesh in (sphere, chain, touching):
+    apart = _boxes_a_hair_apart()
+    for mesh in (sphere, chain, touching, apart):
         surface = intersections._surface(mesh.vertices, mesh.faces)
         assert surface is not None
         expected = _overlapping_pairs(surface.low, surface.high)
+        if mesh is apart:
+            # Voraussetzung: auf jeder Achse Paare, deren Hüllquader eine echte
+            # Lücke unter EPS_GEOM trennt.
+            one, other = (np.asarray(side) for side in zip(*sorted(expected), strict=True))
+            gaps = np.maximum(surface.low[one], surface.low[other]) - np.minimum(
+                surface.high[one], surface.high[other]
+            )
+            beside = (gaps > 0.0) & (gaps <= EPS_GEOM)
+            assert beside.any(axis=0).all(), "auf jeder Achse liegen Paare knapp auseinander"
         plans = [intersections._Plan(axis) for axis in range(3)]
         for axis in range(3):
             for bins in range(3):
@@ -1038,16 +1102,42 @@ def test_the_neighbour_separation_changes_no_answer_of_the_search(
     """Dieselben Paare, dieselbe Vollständigkeit, dieselben geprüften Dreiecke — mit Budget.
 
     Die Gegenprobe ist der Stand davor: ohne Nachbarprüfung in der Trennung.
+    Ersetzt wird :func:`intersections._touching_apart_tilted`, die
+    :func:`intersections._separated` seit RM-568 fragt: Sie trennt dann keinen
+    Nachbarn, die Neigung bleibt die echte, und jeder schräge Nachbar geht
+    durch die genaue Prüfung. Ein Ersatz an ``_touching_apart`` erreichte die
+    Trennung nicht mehr, und der Test verglich die Suche mit sich selbst —
+    deshalb zählt er, dass die Nachbarprüfung in beiden Läufen gefragt wird
+    und im echten trennt.
     """
     vertices, faces = _crossed_spheres()
-    now = intersections.crossing_face_pairs(vertices, faces, max_pairs=budget)
+    original = intersections._touching_apart_tilted
+    separated_now = 0
+    calls_before = 0
+
+    def counted(
+        surface: intersections._Surface, first: np.ndarray, second: np.ndarray, same: np.ndarray
+    ) -> tuple[np.ndarray, np.ndarray]:
+        nonlocal separated_now
+        apart, tilt = original(surface, first, second, same)
+        separated_now += int(apart.sum())
+        return apart, tilt
+
+    def never_apart(
+        surface: intersections._Surface, first: np.ndarray, second: np.ndarray, same: np.ndarray
+    ) -> tuple[np.ndarray, np.ndarray]:
+        nonlocal calls_before
+        calls_before += 1
+        return np.zeros(len(first), dtype=bool), original(surface, first, second, same)[1]
+
     with monkeypatch.context() as patched:
-        patched.setattr(
-            intersections,
-            "_touching_apart",
-            lambda surface, first, second: np.zeros(len(first), dtype=bool),
-        )
+        patched.setattr(intersections, "_touching_apart_tilted", counted)
+        now = intersections.crossing_face_pairs(vertices, faces, max_pairs=budget)
+    with monkeypatch.context() as patched:
+        patched.setattr(intersections, "_touching_apart_tilted", never_apart)
         before = intersections.crossing_face_pairs(vertices, faces, max_pairs=budget)
+    assert separated_now > 1000, "Voraussetzung: die Nachbarprüfung trennt hier Nachbarn"
+    assert calls_before > 0, "die Gegenprobe erreicht die Trennprüfung"
     assert len(before.first) > 100 or budget is not None, "Voraussetzung: echte Schnitte"
     np.testing.assert_array_equal(now.first, before.first)
     np.testing.assert_array_equal(now.second, before.second)
