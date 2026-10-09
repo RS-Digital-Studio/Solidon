@@ -2844,13 +2844,24 @@ def test_a_click_with_a_trembling_hand_moves_nothing(qt_app: QApplication) -> No
     die Form danach ein Zehntelmillimeter daneben — eine Änderung, die niemand
     gewollt und niemand bemerkt hat, bis das Maß nicht mehr stimmt. Die Zahl
     kommt von Qt, es ist dieselbe, die ein Ziehen überall sonst auslöst.
+
+    **Das Rechteck ist bemaßt, aber nicht fest**, sonst bewegte es auch ein
+    Zug über die Schwelle nicht. Mit festem Eckpunkt sah der Test die Bewegung
+    bis RM-541 nur im Rundungsrest, den der Zug an den zurückgekehrten Punkten
+    hinterließ; seither bleibt ein Zug, der nichts bewegen kann, bitgleich.
     """
     from PySide6.QtCore import QPointF
     from PySide6.QtWidgets import QApplication as App
 
     canvas = SketchCanvas()
     canvas.resize(600, 600)
-    canvas.insert_shape(shapes.rectangle(40.0, 20.0))
+    measured = shapes.rectangle(40.0, 20.0)
+    canvas.insert_shape(
+        replace(
+            measured,
+            constraints=tuple(entry for entry in measured.constraints if entry.kind != "fixed"),
+        )
+    )
     canvas._select(("line", (0,)), False)
     before = canvas.points()
 
