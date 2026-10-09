@@ -210,6 +210,7 @@ def check_summary(
         "scene.placement": tr("Lage im Bauraum"),
         "scene.coincident_bodies": tr("Deckungsgleiche Körper"),
         "scene.thin_walls": tr("Wände an erkannten Bohrungen"),
+        "scene.thin_skins": tr("Dicke erzeugter Modelle"),
         "scene.form_deviation": tr("Abweichung erkannter Formen"),
         "slice.settings": tr("Grundlage der Schichtanalyse"),
         "slice.print_findings": tr("Schichtanalyse"),

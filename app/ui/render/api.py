@@ -229,20 +229,16 @@ class Item(ABC):
     def colour(self) -> Colour: ...
 
     @abstractmethod
-    def set_face_colours_visible(self, visible: bool) -> None:
-        """Ob die Farben je Dreieck gelten oder die eine Körperfarbe.
+    def set_face_tint(self, tint: Colour | None, share: float = 0.0) -> None:
+        """Legt ``tint`` mit dem Anteil ``share`` über die Farben je Dreieck.
 
-        **Ohne das bleibt ein Körper mit Filament ungefärbt wählbar.** Wer
-        Slots hat, bekommt beim Anlegen ``cell_colours``, und damit steht der
-        Werkstoff je Dreieck fest; :meth:`set_colour` schreibt dann in eine
-        Farbe, die niemand mehr liest. Genau so verschwand die
-        Auswahlhervorhebung, sobald einem Teil ein Filament zugewiesen war
-        (Befund Robert, 08.09.2026) — im Objektbaum markiert, im Bild grau wie
-        alle anderen.
-
-        Ein Aufruf mit ``False`` schaltet auf die Körperfarbe um und macht
-        :meth:`set_colour` wieder wirksam; ``True`` gibt die Dreiecksfarben
-        zurück. Ein Körper ohne Zellfarben lässt beides unberührt.
+        Wer Slots hat, bekommt beim Anlegen ``cell_colours``; :meth:`set_colour`
+        schreibt dann in eine Farbe, die niemand liest. Die Auswahl eines
+        Körpers mit Filament zeigt sich deshalb als Ton über seinen Farben
+        (Befund Robert, 08.09.2026: sonst grau wie alle anderen) — und das
+        Filament bleibt sichtbar, auch gleich nach einem Wechsel (RM-557).
+        ``None`` gibt die Farben ungetönt zurück; ein Körper ohne Zellfarben
+        bleibt unberührt.
         """
 
     @abstractmethod

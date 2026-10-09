@@ -920,11 +920,15 @@ def test_the_clamp_offers_every_table_screw_and_sizes_its_ears_by_it(profile):
     """
     from app.core.errors import ValidationError
     from app.core.geom.profile_clamp_ops import ProfileClampSetParams, create_profile_clamp_set
-    from app.core.knowledge.parts.profile_clamps import SCREW_SIZES, ProfileClampShellParams
+    from app.core.knowledge.parts.profile_clamps import (
+        CLAMP_DEPTH_LIMIT,
+        SCREW_SIZES,
+        ProfileClampShellParams,
+    )
 
-    # Seit Tabellenversion 13 M3 bis M33 — sechzehn Größen, so viele, wie der
-    # Bereichstest der Schale trägt; eine größere Größe braucht mehr Klemmtiefe.
-    assert SCREW_SIZES[0] == "M3" and SCREW_SIZES[-1] == "M33" and len(SCREW_SIZES) == 16
+    # Seit RM-578 jede Größe ab M3 mit Mutter in der Tabelle, bis M64; eine große
+    # Größe braucht mehr Klemmtiefe, und die größte reicht für jede.
+    assert SCREW_SIZES[0] == "M3" and SCREW_SIZES[-1] == "M64"
     for schema in (ProfileClampSetParams, ProfileClampShellParams):
         choices = next(entry.choices for entry in schema.spec() if entry.name == "screw_size")
         assert tuple(choices) == SCREW_SIZES
@@ -938,7 +942,7 @@ def test_the_clamp_offers_every_table_screw_and_sizes_its_ears_by_it(profile):
             # größten Klemmtiefe geht es.
             assert refused.suggestions, size
             built = create_profile_clamp_set(
-                _context(ProfileClampSetParams(**values, depth=80.0), profile)
+                _context(ProfileClampSetParams(**values, depth=CLAMP_DEPTH_LIMIT), profile)
             )
         shell = built.outputs[0].mesh
         assert shell.is_watertight and shell.component_count == 1, size

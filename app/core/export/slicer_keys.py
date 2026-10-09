@@ -1171,6 +1171,45 @@ NOT_TAKEN_BY_PROGRAM: Final[dict[str, frozenset[str]]] = {
     "bambustudio": frozenset({"cooling.support_interface_cooling"}),
 }
 
+#: Was ein Programm unter Baumstützen nicht druckt (RM-622): Bambu Studio,
+#: Creality Print, Anycubic Slicer Next und PrusaSlicer legen unter organischen
+#: Bäumen keine untere Trennschicht, auch wenn sie geschrieben ist — gemessen an
+#: zwei gestützten Körpern aus PETG (09.10.2026): unter Gitter mit unteren
+#: Lagen, unter organischen Bäumen ohne; ElegooSlicer und OrcaSlicer drucken sie
+#: auch dort.
+#:
+#: **Und die Wandzahl der Bäume liest die Orca-Familie unter organischen Bäumen
+#: nicht** (RM-584): ``tree_support_wall_count`` gilt für ``tree_hybrid``,
+#: ``tree_slim`` und ``tree_strong``. Gemessen am ElegooSlicer an einem 120 mm
+#: hohen Turm mit Insel: organisch mit einer und zwei Wänden derselbe G-Code,
+#: Hybrid mit zwei Wänden 14 % mehr Stützmaterial. PrusaSlicer verdoppelt die
+#: Wand organischer Äste über einen Durchmesser und bleibt außen vor.
+_NO_BOTTOM_INTERFACE_UNDER_TREES: Final = (
+    "bambustudio",
+    "crealityprint",
+    "anycubicslicernext",
+    "prusaslicer",
+)
+_NO_WALLS_UNDER_TREES: Final = (
+    "elegooslicer",
+    "orcaslicer",
+    "bambustudio",
+    "crealityprint",
+    "anycubicslicernext",
+)
+IGNORED_UNDER_TREES_BY_PROGRAM: Final[dict[str, frozenset[str]]] = {
+    program: frozenset(
+        (
+            {"support.bottom_interface_layers"}
+            if program in _NO_BOTTOM_INTERFACE_UNDER_TREES
+            else set()
+        )
+        | ({"support.tree_walls"} if program in _NO_WALLS_UNDER_TREES else set())
+    )
+    for program in (*_NO_BOTTOM_INTERFACE_UNDER_TREES, *_NO_WALLS_UNDER_TREES)
+}
+
+
 #: Diese Programme lesen die Werte nur für die Platte. Gemessen mit zwei
 #: Körpern, unverändertem Herstellerprofil und getrennten Bahnen (RM-317).
 #: Ein fehlender Rollenwert ist keine fehlende Objektfähigkeit.
@@ -1609,7 +1648,7 @@ def support_gap_in_whole_layers(flavour: SlicerFlavour | None) -> bool:
     """
     from app.core.slice import advise
 
-    return flavour in advise.WHOLE_LAYER_GAP_FLAVOURS
+    return advise.rounds_to_whole_layers(flavour)
 
 
 def has_independent_support_layers(flavour: SlicerFlavour | None) -> bool:
@@ -1617,9 +1656,10 @@ def has_independent_support_layers(flavour: SlicerFlavour | None) -> bool:
     zwei Schichten gilt (``independent_support_layer_height``, RM-583)?
 
     Nur die Orca-Familie: Ohne den Schalter rundet sie auf ganze Schichten
-    (``Slicing.cpp``). PrusaSlicer legt die Kontaktschicht ohnehin in den
-    gewünschten Abstand, Cura rechnet in Schichten
-    (:func:`support_gap_in_whole_layers`).
+    (``Slicing.cpp``). PrusaSlicer legt die Kontaktschicht unter Gitter ohnehin
+    in den gewünschten Abstand, Cura rechnet in Schichten
+    (:func:`support_gap_in_whole_layers`). Unter organischen Bäumen rundet jedes
+    Programm, auch mit eigener Höhe (``handover.organic_styles``, RM-622).
     """
     return flavour == "orca"
 
@@ -1640,7 +1680,11 @@ def caps_volumetric_speed(flavour: SlicerFlavour) -> bool:
 
 
 def limitation(
-    flavour: SlicerFlavour, path: str, settings: PrintSettings | None = None, program: str = ""
+    flavour: SlicerFlavour,
+    path: str,
+    settings: PrintSettings | None = None,
+    program: str = "",
+    organic: Collection[str] = (),
 ) -> TranslatableText | None:
     """Eine abweichende Bedeutung, die ein gleich benannter Wert verdecken würde.
 
@@ -1654,6 +1698,10 @@ def limitation(
 
     Ebenso eine Wahl, die das Programm nicht kennt und ersetzt
     (:data:`NOT_OFFERED_BY_PROGRAM`) — der Satz kommt nur, solange sie steht.
+
+    Unter organischen Bäumen gilt die Auskunft, mit der auch der Rat fragt
+    (``organic``, ``handover.organic_styles``, RM-622): Feld und Vorschlag
+    daneben sagen dasselbe.
     """
     if settings is not None and program:
         group, name = path.split(".", 1)
@@ -1670,12 +1718,13 @@ def limitation(
         )
     # Ein Stützabstand zwischen zwei Schichten wird in Cura eine ganze (RM-583).
     if support_gap_in_whole_layers(flavour) and path == "support.z_gap":
+        from app.core.slice import advise
+
         layer = settings.layers.layer_height if settings is not None else 0.0
         # Ohne Stützen druckt der Abstand nichts; ein Satz dazu wäre Lärm.
         if settings is None or layer <= 0.0 or settings.support.style == "none":
             return None
-        steps = settings.support.z_gap / layer
-        if math.isclose(steps, round(steps), abs_tol=1e-6):
+        if advise.in_whole_layers(settings.support.z_gap, layer):
             return None
         field = print_fields.field_of(path)
         return _(
@@ -1683,6 +1732,25 @@ def limitation(
             setting=field.title if field is not None else path,
             layer=format_length(layer),
         )
+    # Unter organischen Bäumen liegt die Stütze auf den Schichten des Modells
+    # (RM-622): welche Art das ist, sagt ``organic``, eine Quelle für Feld und Rat.
+    trees = settings is not None and settings.support.style in organic
+    if trees and path == "support.z_gap":
+        from app.core.slice import advise
+
+        layer = settings.layers.layer_height if settings is not None else 0.0
+        if settings is None or advise.in_whole_layers(settings.support.z_gap, layer):
+            return None
+        field = print_fields.field_of(path)
+        return _(
+            "Unter Baumstützen rechnet der Slicer „{setting}“ in ganzen Schichten zu {layer}.",
+            setting=field.title if field is not None else path,
+            layer=format_length(layer),
+        )
+    if trees and path in IGNORED_UNDER_TREES_BY_PROGRAM.get(program, frozenset()):
+        if path == "support.tree_walls":
+            return _("Unter organischen Bäumen liest dieses Programm die Wandzahl nicht.")
+        return _("Unter Baumstützen druckt dieses Programm keine untere Trennschicht.")
     return None
 
 

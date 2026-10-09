@@ -27,7 +27,7 @@ import subprocess
 import tempfile
 import time
 import zipfile
-from collections.abc import Callable, Iterable, Mapping, Sequence
+from collections.abc import Callable, Collection, Iterable, Mapping, Sequence
 from contextlib import ExitStack, suppress
 from dataclasses import dataclass, field, replace
 from pathlib import Path
@@ -53,6 +53,7 @@ from app.core.errors import (
     SHOW_LOCATIONS,
     SHOW_SLICER_OUTPUT,
     SPLIT_MODEL,
+    AppError,
     ExternalToolError,
     FileWriteError,
     OperationCancelled,
@@ -334,8 +335,17 @@ def profile_file(chosen: str, setup: SlicerSetup, kind: slicer_profiles.ProfileK
     return source.path if isinstance(source, slicer_profiles.SlicerProfile) else source
 
 
-def machine_for(setup: SlicerSetup, profile: Profile) -> str:
+def machine_for(
+    setup: SlicerSetup,
+    profile: Profile,
+    *,
+    available: list[slicer_profiles.SlicerProfile] | None = None,
+) -> str:
     """Das Maschinenprofil dieser Übergabe — gewählt, sonst das des Slicers.
+
+    ``available`` sind die schon gelesenen Maschinen dieses Slicers; wer sie
+    hat, reicht sie mit, sonst liest die Düsenfrage den Bestand ein zweites
+    Mal (:func:`standard_choice`, RM-623).
 
     **Warum es diesen Rückfall gibt.** Prozess und Filament schreibt Solidon
     selbst aus; die Maschine schreibt es **nicht**. Startcode,
@@ -377,7 +387,10 @@ def machine_for(setup: SlicerSetup, profile: Profile) -> str:
     """
     if setup.machine_profile:
         if setup.flavour == "orca" and profile.printer.id.startswith("slicer-orca-"):
-            available = slicer_profiles.find_profiles(setup.executable, setup.flavour, ("machine",))
+            if available is None:
+                available = slicer_profiles.find_profiles(
+                    setup.executable, setup.flavour, ("machine",)
+                )
             source_machine = slicer_profiles.machine_for_name(available, profile.printer.title)
             selected_machine = slicer_profiles.machine_for_name(available, setup.machine_profile)
             if source_machine is None or selected_machine is None:
@@ -423,7 +436,11 @@ def machine_for(setup: SlicerSetup, profile: Profile) -> str:
         if not _fits_the_printer(setup.machine_profile, profile):
             return ""
         return slicer_profiles.machine_with_nozzle(
-            setup.machine_profile, setup.flavour, setup.executable, profile.printer
+            setup.machine_profile,
+            setup.flavour,
+            setup.executable,
+            profile.printer,
+            available=available,
         )
     chosen = slicer_profiles.chosen_machine(setup.flavour, setup.executable)
     if not chosen:
@@ -446,7 +463,7 @@ def machine_for(setup: SlicerSetup, profile: Profile) -> str:
         )
         return ""
     fitting = slicer_profiles.machine_with_nozzle(
-        chosen, setup.flavour, setup.executable, profile.printer
+        chosen, setup.flavour, setup.executable, profile.printer, available=available
     )
     if fitting != chosen:
         _log.info(
@@ -494,6 +511,136 @@ def _fits_the_printer(machine_profile: str, profile: Profile) -> bool:
         slicer_profiles.related_printer(machine_profile, known)
         or slicer_profiles.related_printer(Path(machine_profile).stem, known)
     )
+
+
+def standard_choice(
+    setup: SlicerSetup, profile: Profile, *, cancelled: CancelToken | None = None
+) -> SlicerSetup | None:
+    """Maschine, Prozess und Filament, die der Druckdialog ohne gemerkte Maschine vorbelegt.
+
+    Für alle, die ohne gemerkte Maschine eine Grundlage brauchen —
+    Hauptfenster und Export über ``remembered_setup``. Ohne sie ging eine
+    Datei ohne Herstellerprozess hinaus, und der Slicer füllte, was Solidon
+    nicht schreibt, mit seinen eigenen Vorgaben statt mit denen des
+    Herstellers (RM-623).
+
+    **Dieselbe Wahl wie der Dialog** (``_take_profiles``, ``_fill_processes``,
+    ``_fill_filaments``); ``test_the_dialog_and_the_standard_choice_pick_alike``
+    hält beide auf einem Bestand mit je zwei Maschinen, Prozessen und
+    Filamenten zusammen. Die Maschine: die im Slicer eingestellte, wenn sie
+    dieser Drucker ist (:func:`machine_for`), sonst die zugeordnete
+    (:func:`slicer_profiles.match`), sonst die einzige des Bestands — die nur,
+    wenn sie diesem Drucker zugeordnet ist. ``base_process``,
+    ``base_filament`` und ``plate`` aus ``setup`` sind der Vorzug, wie im
+    Dialog die gemerkte Wahl: Prozess und Filament gelten, wenn sie zur
+    Maschine passen, sonst der Standardprozess der Maschine und das Filament
+    der Materialart (:func:`slicer_profiles.match_filament`); die Platte bleibt.
+    ``None``, wo kein Bestand den Drucker kennt — eine fremde Maschine wäre
+    geraten (Regel 21) —, und wo der Bestand sich nicht lesen lässt.
+
+    Zwei Abweichungen vom Dialog sind entschieden. **Die Düse bleibt die des
+    Projekts**: Steht der Slicer auf derselben Maschine mit anderer Düse,
+    übernimmt der Dialog sie in den Drucker, hier gilt die Schwestervariante
+    (:func:`slicer_profiles.machine_with_nozzle`) — eine Grundlage ändert das
+    Projekt nicht. **Ohne Standardprozess kein Prozess**: Der Dialog zeigt
+    dann den ersten der Liste, und der Kunde sieht ihn; hier wäre er
+    ungesehen geraten.
+
+    **Kosten:** Erst nur die Maschinen (ein Sechstel des Bestands), Prozesse
+    und Filamente nur, wenn eine Maschine feststeht, alle Folgefragen in einem
+    Lesedurchgang (:func:`slicer_profiles.single_read`). ``cancelled`` greift
+    zwischen den Schritten; ein begonnenes Lesen der Prozesse und Filamente
+    endet erst mit ihm, weil :func:`slicer_profiles.find_profiles` keinen
+    Abbruch kennt.
+    """
+    if setup.flavour not in ("orca", "prusa"):
+        return None
+    try:
+        with slicer_profiles.single_read():
+            return _standard_choice(setup, profile, cancelled)
+    except (AppError, OSError) as problem:
+        # Der Bestand ist eine Zugabe: Ein fremdes, kaputtes Profil kostet die
+        # Grundlage, nie den Export (wie ``filament_picker.slicer_filaments``).
+        _log.warning("slicer stock unreadable, no standard choice: %s", problem)
+        return None
+
+
+def _standard_choice(
+    setup: SlicerSetup, profile: Profile, cancelled: CancelToken | None
+) -> SlicerSetup | None:
+    """Die Schritte von :func:`standard_choice`, ohne Fehlerfang."""
+
+    def step() -> None:
+        if cancelled is not None:
+            cancelled.raise_if_cancelled()
+
+    available = slicer_profiles.find_profiles(setup.executable, setup.flavour, ("machine",))
+    step()
+    current = machine_for(replace(setup, machine_profile=""), profile, available=available)
+    matched, _process = slicer_profiles.match(
+        available, profile.printer, source=discover.program_mark(setup.executable.name)
+    )
+    machine = (slicer_profiles.machine_for_name(available, current) if current else None) or matched
+    machines = slicer_profiles.machines(available)
+    if machine is None and len(machines) == 1 and _assigned_to(machines[0], profile):
+        machine = machines[0]
+    if machine is None or not _fits_the_printer(machine.name, profile):
+        return None
+    # Die Zuordnung darf die nächste Düse finden; die Grundlage braucht
+    # dagegen die Projektdüse, bevor sie deren Prozess und Filament liest.
+    fitting_machine = machine_for(
+        replace(setup, machine_profile=slicer_profiles.identity(machine)),
+        profile,
+        available=available,
+    )
+    machine = (
+        slicer_profiles.machine_for_name(available, fitting_machine) if fitting_machine else None
+    )
+    if machine is None:
+        return None
+    step()
+    found = slicer_profiles.find_profiles(setup.executable, setup.flavour, ("process", "filament"))
+    step()
+    fitting = slicer_profiles.processes(found, machine)
+    process = _preferred(fitting, setup.base_process) or slicer_profiles.standard_process(
+        fitting, machine, profile.printer
+    )
+    filament = _preferred(slicer_profiles.filaments(found, machine), setup.base_filament)
+    if filament is None:
+        filament = slicer_profiles.match_filament(
+            found, machine, slicer_keys.filament_type(profile.material.id), _profile_roots(setup)
+        )
+    return replace(
+        setup,
+        machine_profile=slicer_profiles.identity(machine),
+        base_process=slicer_profiles.identity(process) if process is not None else "",
+        base_filament=slicer_profiles.identity(filament) if filament is not None else "",
+    )
+
+
+def _assigned_to(machine: slicer_profiles.SlicerProfile, profile: Profile) -> bool:
+    """Ordnet der Name diese Maschine dem Drucker des Projekts zu?
+
+    Strenger als :func:`_fits_the_printer`, das Unerkanntes durchlässt: Die
+    einzige Maschine eines Bestands („Mein Drucker") zeigt der Dialog, und der
+    Kunde sieht, was er nimmt. Hier sähe sie niemand, und ein MK4S- oder
+    Resin-Projekt bekäme sie samt Prozess (Regel 21, §29).
+    """
+    known = {**profiles.printer_profiles(), profile.printer.id: profile.printer}
+    mine = profile.printer.id
+    return slicer_profiles.printer_for(machine.name, known, prefer=mine) == mine
+
+
+def _preferred(
+    entries: Sequence[slicer_profiles.SlicerProfile], wanted: str
+) -> slicer_profiles.SlicerProfile | None:
+    """Der gemerkte Eintrag, wenn er unter den passenden steht — nach Kennung,
+    sonst nach Namen, wie ein Projekt ihn trägt (Regel 12)."""
+    if not wanted:
+        return None
+    return next(
+        (entry for entry in entries if slicer_profiles.identity(entry) == wanted), None
+    ) or next((entry for entry in entries if entry.name == wanted), None)
 
 
 def foundation_findings(
@@ -1479,6 +1626,14 @@ def asked_for_contact(
     der je Teil gegen ``split_for_parts(...).base`` fragt. Gegen die Übernahme
     gefragt, brachte jedes Übernehmen die Gegenzeile: Der Tisch wollte 0,2 gegen
     die übernommenen 0,5 des Kinns, das Kinn danach wieder 0,5.
+
+    **Die Stützart steht ebenso auf der Grundlage**, wo sie je Teil geht
+    (RM-622): Der Export gibt einen übernommenen Baum nur dem Teil, das ihn
+    verlangt, und Abstand wie untere Trennschicht hängen an der Art, mit der
+    ein Teil druckt. Gegen die Übernahme gefragt, rechnete der Dialog den Tisch
+    unter dem Gitter der Platte als Baum, und seine Zeilen verschwanden.
+    ``advise.combine`` vergleicht weiter mit der Übernahme, eine Gegenzeile zur
+    Stützart entsteht nicht.
     """
     from app.core.slice import advise
 
@@ -1486,12 +1641,13 @@ def asked_for_contact(
         return frozenset(), settings
     # Ohne gefundenen Slicer trennt der Export ebenso, für die Familie der Datei.
     program = slicer_keys.program_of(setup.executable) if setup is not None else ""
-    separate = advise.CONTACT_PATHS & _part_paths(flavour, program)
+    per_part = _part_paths(flavour, program)
+    separate = advise.CONTACT_PATHS & per_part
     if not separate:
         return separate, settings
     base = split_for_parts(settings, profile, setup, flavour).base
     asking = settings
-    for path in sorted(separate):
+    for path in sorted(separate | (per_part & {"support.style"})):
         asking = with_path(asking, path, read_path(base, path))
     return separate, asking
 
@@ -3031,11 +3187,38 @@ def written_support_gaps(
     der Hersteller es eingestellt hat."""
     gaps = [plate.support.z_gap] if "support.z_gap" in plate.chosen | plate.accepted else []
     for keys in parts:
-        for key in _SUPPORT_GAP_KEYS:
-            number = _as_float(keys.get(key))
-            if number is not None:
-                gaps.append(number)
+        gaps += _object_gaps(keys)
     return gaps
+
+
+def _object_gaps(keys: Mapping[str, str]) -> list[float]:
+    """Die Stützabstände unter den Objektwerten eines Teils."""
+    return [number for key in _SUPPORT_GAP_KEYS if (number := _as_float(keys.get(key))) is not None]
+
+
+def support_gaps_by_style(
+    plate: PrintSettings,
+    parts: Sequence[tuple[Mapping[str, str], PrintSettings | None]] = (),
+    organic: Collection[str] = (),
+) -> tuple[list[float], list[float]]:
+    """Die geschriebenen Stützabstände (:func:`written_support_gaps`), getrennt nach
+    der Art, mit der jedes Teil stützt: unter organischen Bäumen (``organic``,
+    :func:`organic_styles`) und sonst (RM-622).
+
+    ``parts`` sind je Teil seine Objektwerte und die Einstellungen, mit denen es
+    druckt; ohne eigenen Abstand druckt es den der Platte, ohne Teile gilt die
+    Platte allein. Unter organischen Bäumen rundet jedes Programm den Abstand,
+    dort hilft keine eigene Stützschichthöhe (:func:`frees_support_layers`) —
+    sie wäre eine Abweichung vom Herstellerprofil ohne Wirkung."""
+    common = written_support_gaps(plate)
+    trees: list[float] = []
+    others: list[float] = []
+    for keys, effective in parts or (({}, None),):
+        style = (effective or plate).support.style
+        if style == "none":
+            continue
+        (trees if style in organic else others).extend(_object_gaps(keys) or common)
+    return trees, others
 
 
 def frees_support_layers(gaps: Iterable[float], layer: float, flavour: SlicerFlavour) -> bool:
@@ -3049,19 +3232,31 @@ def frees_support_layers(gaps: Iterable[float], layer: float, flavour: SlicerFla
     (:func:`written_support_gaps`). Mit Reinigungsturm schaltet die
     Orca-Familie die eigene Höhe selbst wieder ab (:func:`tower_cause`).
     """
+    from app.core.slice import advise
+
     if not slicer_keys.has_independent_support_layers(flavour) or layer <= 0.0:
         return False
-    return any(not is_close(gap / layer, round(gap / layer)) for gap in gaps if gap > 0.0)
+    return any(not advise.in_whole_layers(gap, layer) for gap in gaps if gap > 0.0)
 
 
 def _native_process(setup: SlicerSetup | None) -> Mapping[str, object]:
-    """Der aufgelöste Herstellerprozess der Orca-Familie, ohne Solidons Werte."""
+    """Der aufgelöste Herstellerprozess der Orca-Familie, ohne Solidons Werte.
+
+    Eine Kette, die sich nicht auflösen lässt, sagt hier nichts: Gefragt wird
+    nach Turm und Stützschichthöhe, und der Druckdialog verlor sonst seinen
+    ganzen Rat (Review RM-622). Was an der Kette fehlt, meldet die Grundlage
+    (``manufacturer.base_settings``).
+    """
     if setup is None or setup.flavour != "orca" or not setup.base_process:
         return {}
     source = profile_file(setup.base_process, setup, "process")
     if source is None:
         return {}
-    return slicer_profiles.resolve_values(source, roots=_profile_roots(setup))
+    try:
+        return slicer_profiles.resolve_values(source, roots=_profile_roots(setup))
+    except ExternalToolError as problem:
+        _log.warning("cannot resolve the process %s: %s", setup.base_process, problem.title)
+        return {}
 
 
 def _switched_on(value: object) -> bool:
@@ -3090,6 +3285,88 @@ def tower_cause(
     if filaments > 1 and not (by_object and objects > 1):
         return "filaments"
     return None
+
+
+#: Stile der Orca-Familie, unter denen ``tree(…)`` ein organischer Baum ist
+#: (``TreeSupport.cpp``: nur ``smsTreeOrganic`` geht in den organischen Generator;
+#: ``default`` heißt beim Baum organisch). ``tree_hybrid``, ``tree_slim`` und
+#: ``tree_strong`` planen eigene Stützebenen (``plan_layer_heights``).
+_ORGANIC_ORCA_STYLES: Final = frozenset({"", "default", "organic"})
+
+
+def organic_styles(
+    setup: SlicerSetup | None,
+    profile: Profile | None = None,
+    program: str = "",
+    *,
+    flavour: SlicerFlavour | None = None,
+) -> frozenset[str]:
+    """Welche Stützarten Solidons dieses Programm als organische Bäume druckt —
+    die eine Auskunft für Rat, Übergabe und Befund (RM-622).
+
+    Organische Bäume liegen auf den Schichten des Modells, auch mit
+    ``independent_support_layer_height``: An zwei Körpern aus PETG schrieben
+    ElegooSlicer, OrcaSlicer, Bambu Studio, Creality Print, Anycubic Slicer Next
+    und PrusaSlicer 0,28 mm und druckten 0,2, ohne eine Zwischenebene; mit
+    Gitter 0,28. Der Stützabstand rundet dort auf ganze Schichten, und Bambu,
+    Creality, Anycubic und PrusaSlicer drucken darunter keine untere
+    Trennschicht (:func:`ignored_under_trees`).
+
+    Gefragt wird, was das Programm aus der Art macht: ``tree`` ist in der
+    Orca-Familie organisch, solange der Herstellerprozess keinen anderen Baumstil
+    führt; „automatisch“ ist es, wenn sein ``support_type`` ein Baum ist (Elegoo,
+    Bambu). PrusaSlicer schreibt ``tree`` als ``organic``, „automatisch“ nach dem
+    Stil seines Prozesses. SuperSlicer kennt keine Bäume (Ersatz Gitter), Cura
+    rundet ohnehin (:data:`advise.WHOLE_LAYER_GAP_FLAVOURS`).
+
+    **Ohne Programm gilt die Familie** (``flavour``, die der Datei): Alle
+    gemessenen Programme der Orca-Familie und PrusaSlicer drucken ``tree``
+    organisch, ohne Prozess bleibt „automatisch“ offen. Ein Abstand in ganzen
+    Schichten gilt unter jeder Stütze genau, einer dazwischen nur mit Gitter.
+    """
+    family = setup.flavour if setup is not None else flavour
+    if family not in ("orca", "prusa"):
+        return frozenset()
+    if setup is None:
+        return frozenset({"tree"})
+    program = program or slicer_keys.program_of(setup.executable)
+    if slicer_keys.substitute("support.style", "tree", program) is not None:
+        return frozenset()
+    if family == "prusa":
+        styles = {"tree"}
+        if profile is not None and _prusa_process_style(setup, profile) == "organic":
+            styles.add("auto")
+        return frozenset(styles)
+    native = _native_process(setup)
+    style = str(_printed(native.get("support_style", ""))).strip().casefold()
+    if style not in _ORGANIC_ORCA_STYLES:
+        return frozenset()
+    kind = str(_printed(native.get("support_type", ""))).strip()
+    return frozenset({"tree", "auto"} if kind.startswith("tree") else {"tree"})
+
+
+def _prusa_process_style(setup: SlicerSetup, profile: Profile) -> str:
+    """``support_material_style`` des gewählten Prusa-Prozesses, leer ohne Kette."""
+    try:
+        chain = manufacturer.prusa_chain(profile, setup)
+    except ExternalToolError:
+        return ""
+    if chain is None:
+        return ""
+    return str(chain.values.get("support_material_style", "")).strip().casefold()
+
+
+def ignored_under_trees(style: str, organic: Collection[str], program: str) -> frozenset[str]:
+    """Pfade, die dieses Programm unter Bäumen nicht druckt
+    (:data:`slicer_keys.IGNORED_UNDER_TREES_BY_PROGRAM`) — leer, wo die Stützart
+    ``style``, mit der das Teil druckt (:func:`advise.printed_style`), keine
+    organischen Bäume sind (``organic``, :func:`organic_styles`). Ein Vorschlag
+    darauf änderte nichts am Druck. Druckdialog und Export fragen hier je Körper
+    (RM-622)."""
+    ignored = slicer_keys.IGNORED_UNDER_TREES_BY_PROGRAM.get(program, frozenset())
+    if not ignored or style not in organic:
+        return frozenset()
+    return ignored
 
 
 def support_layers_findings(setup: SlicerSetup | None, free: bool) -> list[Finding]:
@@ -3155,7 +3432,8 @@ def write_config(
     Profilnamen (``MaterialSlot.material``), wird der als Unterlage genommen;
     sonst gilt für alle das eine aus dem ``setup``. ``free_support_layers``
     sagt :func:`frees_support_layers` an den geschriebenen Abständen von Platte
-    und Teilen (:func:`written_support_gaps`), beim Konsolenlauf aus der Beilage.
+    und Teilen außerhalb organischer Bäume (:func:`support_gaps_by_style`), beim
+    Konsolenlauf aus der Beilage.
     """
     _refuse_untranslated(setup)
     setup = replace(setup, machine_profile=machine_for(setup, profile))
@@ -6700,7 +6978,8 @@ def slice_model(
     # trägt das Modell aus ``write_assembly`` als Objektwert oder Netzwert.
     settings = split_for_parts(settings, profile, setup, setup.flavour).plate
     # Die eigene Stützschichthöhe hat der Export aus den Werten der Teile
-    # entschieden; ohne seine Beilage gilt der Abstand der Platte (RM-583).
+    # entschieden; ohne seine Beilage gilt der Abstand der Platte (RM-583),
+    # unter organischen Bäumen keiner (RM-622).
     free_support_layers = (
         _frees_in_project(models)
         if slicer_keys.has_independent_support_layers(setup.flavour)
@@ -6708,7 +6987,9 @@ def slice_model(
     )
     if free_support_layers is None:
         free_support_layers = frees_support_layers(
-            written_support_gaps(settings), settings.layers.layer_height, setup.flavour
+            support_gaps_by_style(settings, organic=organic_styles(setup, profile))[1],
+            settings.layers.layer_height,
+            setup.flavour,
         )
     # Ein Slicer als Flatpak sieht unser ``/tmp`` nicht
     # (``discover.workspace_for``).
@@ -6761,7 +7042,7 @@ def slice_model(
         # den Grund. Gemerkt je Programm und Sitzung, damit die zweite Platte
         # nicht wieder zweimal läuft.
         wanted_arrangement = keep_arrangement and setup.executable not in _REFUSES_THE_ARRANGE_FLAG
-        # Ab wann eine Ergebnisdatei zu diesem Lauf gehört (``_result_reason``).
+        # Ab wann eine Ergebnisdatei zu diesem Lauf gehört (``_result_refusal``).
         result_started_at = time.time()
         # **Bambu Studio endet manchmal nicht** nach seiner ``result.json``:
         # Druckdatei geschrieben, Prozess steht (Gesamtprüfung, 27.09.2026).
@@ -6788,6 +7069,7 @@ def slice_model(
             if setup.flavour == "cura":
                 command = _prepare_cura_cli(command, workspace, cancelled)
             outputs_before = _output_files(target)
+            result_before = _result_signature(target)
             completed = _run_slicer(
                 command,
                 workspace,
@@ -6811,6 +7093,7 @@ def slice_model(
             # auf der Konsole (:func:`_creality_cli`).
             _REFUSES_THE_CLI_FLAG.add(setup.executable)
             outputs_before = _output_files(target)
+            result_before = _result_signature(target)
             completed = _run_slicer(
                 _command(setup, cli_models, config, target, wanted_arrangement),
                 workspace,
@@ -6838,6 +7121,11 @@ def slice_model(
             and wanted_arrangement
             and setup.flavour == "orca"
             and not _creality_cli(setup)
+            # Die Temperaturprüfung hängt nicht an der Anordnung (RM-620).
+            and not orca_refused(
+                _exit_code(completed, _result_refusal(target, result_started_at, result_before)),
+                ORCA_MIXED_TEMPERATURES,
+            )
         ):
             refused_flag = _refuses_option(_tail(completed.stdout, completed.stderr), "arrange")
             # Die Rückfallstufe: einmal ohne die Anordnungsvorgabe — dieselbe
@@ -6846,6 +7134,7 @@ def slice_model(
             # auch so nichts schreibt, läuft in die Fehlerbehandlung darunter,
             # mit derselben Meldung wie bisher.
             outputs_before = _output_files(target)
+            result_before = _result_signature(target)
             completed = _run_slicer(
                 _command(setup, cli_models, config, target, False),
                 workspace,
@@ -6871,7 +7160,11 @@ def slice_model(
             # lässt stderr leer. Nur stderr zu zeigen hieße, einen Fehler
             # ohne Text zu melden — und das ist schlimmer als keiner.
             output = _tail(completed.stdout, completed.stderr)
-            reason = _result_reason(target, result_started_at)
+            # Eine Absage in ``result.json`` ist kein Absturz, auch wenn Solidon
+            # den Slicer danach beenden musste (:func:`_exit_code`).
+            refusal = _result_refusal(target, result_started_at, result_before)
+            reason = _result_reason(refusal)
+            exit_code = _exit_code(completed, refusal)
             if reason:
                 _log.info("%s refused the job: %s", setup.name, reason)
                 output = "\n".join(part for part in (output, reason) if part)
@@ -6882,11 +7175,11 @@ def slice_model(
             _log.info(
                 "%s ended without a print file, exit code %d",
                 setup.name,
-                signed_exit_code(completed.returncode),
+                signed_exit_code(exit_code),
             )
             if _says_outside_the_volume(output):
                 raise _outside_the_volume(setup, profile, output, model_height)
-            if crashed(completed.returncode):
+            if refusal is None and crashed(exit_code, wrapped=_wrapped(setup)):
                 raise ExternalToolError(
                     tool=setup.name,
                     title=SLICER_FAILED,
@@ -6905,10 +7198,7 @@ def slice_model(
                     # keiner Vermutung (§2.1).
                     suggestions=(CHOOSE_SLICER, RETRY, SHOW_SLICER_OUTPUT, EXPORT_ONLY),
                 )
-            if (
-                setup.flavour == "orca"
-                and signed_exit_code(completed.returncode) == ORCA_OFF_THE_PLATE
-            ):
+            if setup.flavour == "orca" and orca_refused(exit_code, ORCA_OFF_THE_PLATE):
                 # **Die Orca-Familie sagt es nur mit einer Zahl** (-50,
                 # „found error, exit"): Nicht jedes Teil liegt ganz auf ihrer
                 # Platte. Gemessen am ElegooSlicer (26.09.2026): halb neben der
@@ -6927,10 +7217,7 @@ def slice_model(
                     values={"output": output},
                     suggestions=(SPLIT_MODEL, SCALE_TO_FIT, ARRANGE_ON_BED, SHOW_SLICER_OUTPUT),
                 )
-            if (
-                setup.flavour == "orca"
-                and signed_exit_code(completed.returncode) == ORCA_PATHS_CROSS
-            ):
+            if setup.flavour == "orca" and orca_refused(exit_code, ORCA_PATHS_CROSS):
                 # OrcaSlicer sagt dazu auf der Konsole nur „found error“, Creality
                 # Print nennt im Protokoll Turm und Teil, Bambu Studio den Turm in
                 # ``result.json``. Der Turm ist der häufigste Fall, nicht der
@@ -6945,6 +7232,22 @@ def slice_model(
                     ),
                     values={"output": output},
                     suggestions=(ARRANGE_ON_BED, EXPORT_ONLY, SHOW_SLICER_OUTPUT),
+                )
+            if setup.flavour == "orca" and orca_refused(exit_code, ORCA_MIXED_TEMPERATURES):
+                # Anycubic Slicer Next sagt auf der Konsole nichts dazu; die Zahl
+                # allein ließ den Kunden „keine Druckdatei“ lesen (RM-620).
+                raise ExternalToolError(
+                    tool=setup.name,
+                    title=SLICER_FAILED,
+                    detail=_(
+                        "Der Slicer druckt diese Filamente nicht zusammen, ihre "
+                        "Temperaturbereiche passen in seinen Profilen nicht. Verteilen Sie "
+                        "die Teile auf Platten oder wählen Sie andere Filamente."
+                    ),
+                    values={"output": output},
+                    # Anordnen legt verschiedene Filamente auf eigene Platten, wo der
+                    # Drucker sie nicht zusammen druckt (``prepare.filament_groups``).
+                    suggestions=(ARRANGE_ON_BED, CHOOSE_SLICER, EXPORT_ONLY, SHOW_SLICER_OUTPUT),
                 )
             if setup.flavour == "cura" and "failed to load model" in output.casefold():
                 raise ExternalToolError(
@@ -7732,6 +8035,14 @@ ORCA_OFF_THE_PLATE: Final = -50
 #: Gemessen an chufang.3mf (Slicer-Matrix RM-312): OrcaSlicer 2.4 und Creality
 #: Print 7.3 nach eigener Anordnung, Reinigungsturm gegen ein Teil.
 ORCA_PATHS_CROSS: Final = -101
+#: Der Rückgabewert, mit dem die Orca-Familie Filamente mit zu weit
+#: auseinanderliegenden Temperaturen auf einer Platte ablehnt (Orcas
+#: ``CLI_FILAMENTS_DIFFERENT_TEMP``). Gemessen an Anycubic Slicer Next 2.0 mit
+#: PLA und PETG am Kobra 2 (RM-620); ElegooSlicer, OrcaSlicer, Bambu Studio und
+#: Creality Print rechneten dieselbe Platte. Ab OrcaSlicer 2.4.2 heißt derselbe
+#: Code auch „ungültiger empfohlener Düsentemperaturbereich“ — das Urteil
+#: gehört dem Slicer und seinen Profilen.
+ORCA_MIXED_TEMPERATURES: Final = -62
 #: Der Titel, wenn der Slicer gelaufen ist und keine brauchbare Druckdatei
 #: hinterließ. ``ExternalToolError`` sagt sonst „hat nicht geantwortet" — der
 #: Slicer hat aber geantwortet, nur mit einem Fehler.
@@ -7920,12 +8231,28 @@ def _says_no_layers(output: str) -> bool:
     return any(phrase in lowered for phrase in NO_LAYERS)
 
 
+def orca_refused(exit_code: int, code: int) -> bool:
+    """Hat die Orca-Familie mit diesem Fehlercode abgelehnt — auf jeder Plattform?
+
+    Ihr Programm endet mit ``return CLI().run(...)``: Windows liefert den
+    Rückgabewert als DWORD (-62 als 4294967234), Linux und macOS als Byte (194).
+    Mit :func:`signed_exit_code` allein griff die Erkennung dort nie (RM-620).
+    """
+    return exit_code in {code, code & 0xFFFFFFFF, code & 0xFF}
+
+
 def signed_exit_code(exit_code: int) -> int:
     """Ein Rückgabewert mit Vorzeichen — Windows liefert ``-50`` als DWORD 4294967246."""
     return exit_code - (1 << 32) if exit_code >= (1 << 31) else exit_code
 
 
-def crashed(exit_code: int) -> bool:
+#: Signale, an denen ein Programm stirbt, statt aufzugeben: SIGILL, SIGABRT,
+#: SIGBUS, SIGFPE, SIGKILL und SIGSEGV in Linux' Zählung — einen Starter, der
+#: einen Signaltod als 128 + Signal meldet, gibt es nur dort.
+_FATAL_SIGNALS: Final = frozenset({4, 6, 7, 8, 9, 11})
+
+
+def crashed(exit_code: int, *, wrapped: bool = False) -> bool:
     """Ist der Slicer abgestürzt, statt ordentlich aufzugeben?
 
     Ein Absturz und ein abgelehnter Auftrag sehen für den Aufrufer gleich aus —
@@ -7944,12 +8271,37 @@ def crashed(exit_code: int) -> bool:
     ``NTSTATUS`` mit Fehlerschwere und freiem reserviertem Bit 28. Eigene
     negative Windows-Rückgabewerte kommen dagegen als unsigned DWORD an:
     Bambus ``-100`` ist ``0xFFFFFF9C`` und kein gültiger NTSTATUS.
+
+    **Hinter einem Starter** (``wrapped``, :func:`_wrapped`) kommt ein
+    Signaltod als 128 + Signal an: ``flatpak run`` endet in bwrap
+    (``bubblewrap.c``, ``propagate_exit_status``), ``flatpak-spawn --host``
+    ebenso (``flatpak-spawn.c``). Ein SIGSEGV käme dort als 139 an, und der
+    Kunde läse „keine Druckdatei geschrieben“ (RM-621, am Quelltext
+    hergeleitet). **Gezählt werden nur die Signale, an denen ein Programm
+    stirbt** (:data:`_FATAL_SIGNALS`): Die Orca-Absagen reichen von -1 bis -105
+    (``src/libslic3r/Utils.hpp`` der fünf Programme), in Byteform 151 bis 255,
+    und manche davon sind genau 128 + Signal — -100 kommt als 156, also
+    128 + SIGWINCH.
     """
     if exit_code < 0:
+        return True
+    if wrapped and exit_code - 128 in _FATAL_SIGNALS:
         return True
     # MS-ERREF §2.3: Schwere 11, N-Bit 0; das Customer-Bit bleibt frei,
     # damit auch nicht abgefangene C++-Ausnahmen (0xE06D7363) erkannt werden.
     return exit_code <= 0xFFFFFFFF and exit_code & 0xD0000000 == 0xC0000000
+
+
+def _wrapped(setup: SlicerSetup) -> bool:
+    """Startet der Slicer hinter ``flatpak run`` oder ``flatpak-spawn --host``?
+
+    Dann meldet der Starter einen Signaltod als 128 + Signal
+    (:func:`crashed`): ein Slicer als Flatpak oder Solidon selbst im Flatpak,
+    das jeden Start über :func:`discover.on_host` nach draußen reicht. Das
+    ist dieselbe Frage wie die nach der Sandbox (:func:`discover.sandboxed`):
+    Ein Flatpak auf einer der beiden Seiten ist zugleich Sandbox und Starter.
+    """
+    return discover.sandboxed(setup.executable)
 
 
 #: Die Datei, in die Bambu Studio neben die Druckdatei schreibt, wie der Lauf
@@ -7966,7 +8318,7 @@ _RESULT_LIMIT: Final = 1 << 20
 _MTIME_SLACK_S: Final = 2.0
 
 
-def _result_reason(directory: Path, since: float) -> str:
+def _result_reason(refusal: tuple[int, str] | None) -> str:
     """Was der Slicer in ``result.json`` über einen gescheiterten Lauf sagt.
 
     **Bambu Studio sagt seine Absage nicht auf der Konsole.** Gemessen an
@@ -7978,26 +8330,60 @@ def _result_reason(directory: Path, since: float) -> str:
     leeres Feld. Orca und Elegoo schrieben die Datei bei denselben Fehlern
     nicht; für sie ändert sich nichts.
 
+    Gelesen von :func:`_result_refusal`; ohne Grund im Text sagt sie nichts.
+    """
+    if refusal is None or not refusal[1]:
+        return ""
+    code, text = refusal
+    return f"{text} (return_code {code})"
+
+
+def _result_refusal(
+    directory: Path, since: float, before: tuple[int, int] | None
+) -> tuple[int, str] | None:
+    """Rückgabewert und Grund einer Absage aus der ``result.json`` dieses Laufs
+    (:func:`_result_reason`); ``None`` ohne Absage.
+
     Nur eine Datei dieses Laufs zählt (Änderungszeit ab ``since``) — der
     Zielordner kann der des Kunden sein, mit dem Ergebnis eines älteren
-    Laufs —, und nur eine Absage (``return_code`` ungleich null). Was sich
-    nicht lesen lässt, sagt nichts.
+    Laufs —, und nur eine, die dieser Versuch geschrieben hat: ``before`` ist
+    ihre Signatur vor seinem Start (:func:`_result_signature`). Beim zweiten
+    Versuch ohne Anordnungsvorgabe liegt sonst die Absage des ersten daneben
+    und gälte für ihn. Nur eine Absage zählt (``return_code`` ungleich null);
+    was sich nicht lesen lässt, sagt nichts.
     """
     path = directory / RESULT_FILE
+    if _result_signature(directory) == before:
+        return None
     try:
         info = path.stat()
         if info.st_mtime < since - _MTIME_SLACK_S or info.st_size > _RESULT_LIMIT:
-            return ""
+            return None
         data = json.loads(path.read_bytes())
     except OSError, ValueError:
-        return ""
+        return None
     if not isinstance(data, dict):
-        return ""
+        return None
     code = data.get("return_code")
     text = data.get("error_string")
-    if not isinstance(code, int) or code == 0 or not isinstance(text, str) or not text.strip():
-        return ""
-    return f"{text.strip()} (return_code {code})"
+    if not isinstance(code, int) or isinstance(code, bool) or code == 0:
+        return None
+    return code, text.strip() if isinstance(text, str) else ""
+
+
+def _exit_code(
+    completed: subprocess.CompletedProcess[bytes], refusal: tuple[int, str] | None
+) -> int:
+    """Der Rückgabewert, nach dem ein Lauf ohne Druckdatei beurteilt wird.
+
+    Steht eine Absage in der ``result.json`` dieses Laufs
+    (:func:`_result_refusal`), zählt ihr Code, und ein Absturz ist es nicht:
+    Endet der Slicer danach nicht, beendet Solidon ihn
+    (``process.FINISHED_LINGER_SECONDS``), und der Prozess meldet Solidons
+    Signal — :func:`crashed` hielt das für einen Absturz, und die Absage ging
+    unter.
+    """
+    return completed.returncode if refusal is None else refusal[0]
 
 
 def _result_written(directory: Path) -> Callable[[], bool]:
@@ -8011,18 +8397,10 @@ def _result_written(directory: Path) -> Callable[[], bool]:
     nicht — erst, wenn sie sich als JSON mit ``return_code`` lesen lässt.
     """
     path = directory / RESULT_FILE
-
-    def signature() -> tuple[int, int] | None:
-        try:
-            info = path.stat()
-        except OSError:
-            return None
-        return info.st_mtime_ns, info.st_size
-
-    before = signature()
+    before = _result_signature(directory)
 
     def written() -> bool:
-        now = signature()
+        now = _result_signature(directory)
         if now is None or now == before or not 0 < now[1] <= _RESULT_LIMIT:
             return False
         try:
@@ -8032,6 +8410,15 @@ def _result_written(directory: Path) -> Callable[[], bool]:
         return isinstance(data, dict) and isinstance(data.get("return_code"), int)
 
     return written
+
+
+def _result_signature(directory: Path) -> tuple[int, int] | None:
+    """Änderungszeit und Größe der ``result.json`` in diesem Ordner, ``None`` ohne sie."""
+    try:
+        info = (directory / RESULT_FILE).stat()
+    except OSError:
+        return None
+    return info.st_mtime_ns, info.st_size
 
 
 def _warning_boundary(line: str) -> bool:

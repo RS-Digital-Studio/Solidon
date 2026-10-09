@@ -21,13 +21,14 @@ from app.core.slice import advise
 from app.core.slice.analysis import OVERHANG_LAYER_WORTH_SUPPORT, WIDTH_INTERESTING, slice_body
 from app.core.types import (
     LayerInfo,
-    Polygon,
     PrintSettings,
     Profile,
     SettingAdvice,
+    SliceContour,
     SliceResult,
     SpeedSettings,
 )
+from tests.helpers import slice_contour
 
 SQUARE = ((0.0, 0.0), (10.0, 0.0), (10.0, 10.0), (0.0, 10.0))
 
@@ -95,7 +96,7 @@ def result_with(
     layers = tuple(
         LayerInfo(
             z=float(index) * 0.2,
-            contours=(Polygon(outline=SQUARE),),
+            contours=(slice_contour(SQUARE),),
             area=area,
             overhang_area=overhang,
             islands=(),
@@ -698,11 +699,11 @@ def test_the_taper_rule_stays_quiet_where_it_would_not_help() -> None:
 # --- Stützen: an einem Stück, nicht auf einer Schicht (§22.2) --------------------
 
 
-def _pieces(count: int, side: float) -> tuple[Polygon, ...]:
+def _pieces(count: int, side: float) -> tuple[SliceContour, ...]:
     """``count`` getrennte Quadrate mit Kantenlänge ``side`` auf einer Schicht."""
     return tuple(
-        Polygon(
-            outline=(
+        slice_contour(
+            (
                 (x, 0.0),
                 (x + side, 0.0),
                 (x + side, side),
@@ -713,7 +714,7 @@ def _pieces(count: int, side: float) -> tuple[Polygon, ...]:
     )
 
 
-def _overhang_layers(pieces: tuple[Polygon, ...], layers: int = 20) -> SliceResult:
+def _overhang_layers(pieces: tuple[SliceContour, ...], layers: int = 20) -> SliceResult:
     """Ein Körper, dessen Schichten alle dieselben Überhangstücke tragen.
 
     Das Material jeder Schicht ist ein Steg, an dem die Stücke hängen, wie im
@@ -737,7 +738,7 @@ def _overhang_layers(pieces: tuple[Polygon, ...], layers: int = 20) -> SliceResu
     stack = tuple(
         LayerInfo(
             z=float(index) * 0.2,
-            contours=(Polygon(outline=web),),
+            contours=(slice_contour(web),),
             area=5000.0,
             overhang_area=area,
             islands=(),
@@ -757,8 +758,8 @@ def _slope(width: float, length: float, count: int) -> SliceResult:
         LayerInfo(
             z=float(index) * 0.2,
             contours=(
-                Polygon(
-                    outline=(
+                slice_contour(
+                    (
                         (-10.0, 0.0),
                         ((index + 1) * width, 0.0),
                         ((index + 1) * width, length),
@@ -771,8 +772,8 @@ def _slope(width: float, length: float, count: int) -> SliceResult:
             islands=(),
             min_width=5.0,
             overhangs=(
-                Polygon(
-                    outline=(
+                slice_contour(
+                    (
                         (index * width, 0.0),
                         ((index + 1) * width, 0.0),
                         ((index + 1) * width, length),
@@ -833,7 +834,9 @@ def test_one_ceiling_of_the_same_area_still_gets_supports() -> None:
 
     Vorgeschlagen wird „Stützen an", die Art bestimmt das Profil des Slicers
     (Konzept Herstellerprofil, Entscheidung J) — bis zum 27.09.2026 hieß das
-    Gitter, auch über Elegoos und Bambus Baum.
+    Gitter, auch über Elegoos und Bambus Baum. **Unter einer großen flachen
+    Decke wieder Gitter** (RM-584): Zwischen Baumspitzen hängt sie durch, und
+    „automatisch“ heißt bei Elegoo und Bambu Baum.
     """
     profile = profiles.make_profile()
     settings = print_settings.resolve(profile)
@@ -842,7 +845,7 @@ def test_one_ceiling_of_the_same_area_still_gets_supports() -> None:
     entries = advise.advise(settings, profile, ceiling)
 
     chosen = next(entry for entry in entries if entry.path == "support.style")
-    assert chosen.value == "auto"
+    assert chosen.value == "grid"
 
 
 # --- Die Leerfahrt gehört dem Drucker -------------------------------------------

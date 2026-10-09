@@ -322,19 +322,18 @@ Herstellers, Solidon schreibt darüber nur die Abweichung.
   Betttemperatur der Grundlage kommt nur aus dem Schlüssel der aufliegenden
   Platte; 0 °C beim Hersteller sperrt sie für das Filament — die Grundlage
   liest dort nichts, `slicer.plate_refuses_filament` führt in die
-  Druckeinstellungen. Eine eigene Betttemperatur geht trotzdem in den
-  Schlüssel dieser Platte.
+  Druckeinstellungen. Eine eigene Betttemperatur geht trotzdem dorthin.
 - **Gedruckt wird, was der Slicer liest**: die Düsenart-Fassung der
   Maschinendüse, ein eigener Wert in jeder (`slicer_keys.NOZZLE_KIND_KEYS`);
   wo gestützt wird, keine Baumspitze unter der Stützbahn
   (`handover.organic_tree_fitted`); passt der genannte Standardprozess nicht,
   der seiner Schichthöhe, ohne Prozess `slicer.process_missing`; was die
   Konsole ablehnt, als Programmvorgabe (`slicer_keys.CONSOLE_LIMITS`); ein
-  Stützabstand zwischen zwei Schichten mit eigener Stützschichthöhe
-  (`handover.frees_support_layers`).
+  Stützabstand zwischen zwei Schichten mit eigener Stützschichthöhe, außer
+  unter organischen Bäumen (`handover.support_gaps_by_style`).
 - **Was sich nicht übersetzen lässt, wird nicht umgedeutet**
-  (`Foundation.foreign`): `crosshatch` bleibt, wird nicht geschrieben, und der
-  Dialog zeigt „Hersteller: crosshatch".
+  (`Foundation.foreign`): `crosshatch` bleibt ungeschrieben, der Dialog zeigt
+  „Hersteller: crosshatch".
 - **Ein mitbedienter Schlüssel wird nie schneller als beim Hersteller**
   (`handover._followers_not_faster`): Innenwand schreibt auch die
   Lückenfüllung, Füllung auch die innere Vollfüllung (Solidons eigener Satz
@@ -404,9 +403,8 @@ Temperaturbefehle), nicht in `values_for`.
 ## CuraEngine rechnet keine Formeln
 
 In `fdmprinter.def.json` trägt jede abgeleitete Einstellung `value` und
-`default_value`; das Fenster rechnet den Ausdruck, die Rechenmaschine nimmt den
-Vorgabewert — ein geschriebener Wert erreicht die Schlüssel nicht, die aus ihm
-gerechnet werden. Die Erbkette (auch einer Druckerdefinition) löst CuraEngine
+`default_value`; CuraEngine nimmt den Vorgabewert, ein geschriebener Wert
+erreicht die aus ihm gerechneten Schlüssel nicht. Die Erbkette (auch einer Druckerdefinition) löst CuraEngine
 selbst auf und lädt Extruderzüge aus `machine_extruder_trains`, sofern `-d`
 den Ordner `extruders` nennt (mit `os.pathsep`).
 
@@ -436,7 +434,7 @@ Platzhalter, deshalb `handover._filled`:
 Setzt der Startcode selbst eine Temperatur (Platzhalter auf
 `material_bed_temperature…` oder eine Düsentemperatur, Kommentare
 ausgenommen), stehen `material_bed_temp_prepend`/`material_print_temp_prepend`
-auf `false`, wie Curas `StartSliceJob` im Fenster. Ohne Definition: `fdmprinter` und der Befund
+auf `false`, wie Curas `StartSliceJob`. Ohne Definition: `fdmprinter` und der Befund
 `slicer.cura_printer_unknown`, kein stiller Rückfall.
 
 ## Das Cura-Profil gehört dem Drucker, der in Cura aktiv ist
@@ -458,20 +456,20 @@ die **Horizontale** — für sie rechnet `_angle_from_horizontal` `90 − Wert`.
 
 Exit 0 und eine Datei sagen nicht, dass der Auftrag darin steht: **Nach** dem
 Lauf wird geprüft, was hineingehörte (`spools_left_out`). Jede neue Zusage an
-den Slicer braucht ein Merkmal, an dem man ihr Einlösen in der fertigen Datei
-erkennt. Gezählt werden **Flächen, nicht die Deklaration**.
+den Slicer braucht ein Merkmal, das ihr Einlösen in der fertigen Datei zeigt. Gezählt werden **Flächen, nicht die Deklaration**.
 
 ## Ein Absturz ist keine Absage
 
-`crashed()` trennt beide am Rückgabewert (POSIX: negative Signale; Windows:
-`NTSTATUS` ab `0xC0000000`) und steht **vor** den Ausgabeprüfungen.
+`crashed()` trennt beide am Rückgabewert (POSIX: negatives Signal, hinter
+Flatpak 128 + Absturzsignal; Windows: `NTSTATUS` ab `0xC0000000`) und steht
+**vor** den Ausgabeprüfungen; eine Absage in `result.json` zählt vor dem
+Prozess. Orca-Absagen kommen als DWORD oder Byte (`orca_refused`).
 
 ## Über Erfolg entscheidet die Druckdatei, nicht das Prozessende
 
 Läufe der Orca-Familie bekommen `finished=handover._result_written(target)`, und `process.run_limited`
 beendet den Baum `FINISHED_LINGER_SECONDS` nach dem gemeldeten Ergebnis.
-Gezählt wird nur eine **neue**, lesbare `result.json` dieses Laufs — eine
-ältere im Ordner des Kunden oder die des ersten Versuchs zählt nicht. Ein
+Gezählt wird nur eine **neue**, lesbare `result.json` dieses Laufs. Ein
 Slicer, der sein Ende sonst anzeigt, bekommt dieselbe Frage mit.
 
 ## Ein Wert gehört an einen Schlüssel, der dasselbe meint

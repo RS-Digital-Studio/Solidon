@@ -109,20 +109,29 @@ def _recipe_steps(name: str, parts: PartRegistry | None) -> tuple[Any, ...]:
 
     Leer für alles, was kein Rezept ist: Ein Baustein ohne Rezeptdaten rechnet
     gegen ``manifold3d`` und trägt keinen Quelltext (Checkliste „neuer
-    Baustein"). Der Präfix kommt aus ``ops.op_name`` selbst — eine zweite
-    Kopie von ``"insert_"`` wäre eine zweite Wahrheit.
+    Baustein"). Die Präfixe kommen aus ``ops.op_name`` und ``ops.creator_name``
+    selbst — eine zweite Kopie wäre eine zweite Wahrheit. Ein Rezept hat seit
+    RM-574 zwei Namen; der Erzeuger zählt, wo er dem Rezept gehört, dieselbe
+    Frage wie ``ops.operation_names`` (Review G-e).
     """
-    from app.core.knowledge.parts.ops import op_name
+    from app.core.knowledge.parts.ops import creator_name, op_name
     from app.core.knowledge.parts.registry import PARTS
 
     source = parts if parts is not None else PARTS
-    prefix = op_name("")
-    if not name.startswith(prefix):
+    part = next(
+        (
+            name[len(prefix) :]
+            for prefix in (op_name(""), creator_name(""))
+            if name.startswith(prefix)
+        ),
+        None,
+    )
+    if part is None or not source.has(part):
         return ()
-    part = name[len(prefix) :]
-    if not source.has(part):
+    spec = source.get(part)
+    if name == creator_name(part) and not spec.standalone:
         return ()
-    data = source.get(part).recipe_data
+    data = spec.recipe_data
     if data is None:
         return ()
     steps = dict(data).get("document", {}).get("ops", ())

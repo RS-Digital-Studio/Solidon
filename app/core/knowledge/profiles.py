@@ -332,6 +332,7 @@ def _material_from_table(
             support_gap_min=_optional_float(table, "support_gap_min"),
             support_gap_max=_optional_float(table, "support_gap_max"),
             support_interface_cooling=bool(table.get("support_interface_cooling", False)),
+            support_tip_gap=_optional_float(table, "support_tip_gap"),
             minimum_wall=(float(table["minimum_wall"]) if "minimum_wall" in table else None),
             overhang_angle=(float(table["overhang_angle"]) if "overhang_angle" in table else None),
             calibration_printer=str(table.get("calibration_printer", "")),

@@ -221,7 +221,7 @@ def test_file_worker_can_cancel_during_part_advice_without_a_window(
         "OperationCancelled": OperationCancelled,
         "write_assembly": write_assembly,
         "check_before_export": check_before_export,
-        "remembered_setup": lambda *_: None,
+        "remembered_setup": lambda *_, **__: None,
         "tools": SimpleNamespace(SLICERS=(), slicer_program=lambda: None),
         "manufacturer": manufacturer,
         "prepare_usage": lambda *_: (),
@@ -264,6 +264,7 @@ def test_file_worker_can_cancel_during_part_advice_without_a_window(
         _document=None,
         _checked=[],
         _evaluated=(),
+        _chosen=None,
         cancelled=CancelSignal(),
         _phase_lock=Lock(),
         _writing=False,
@@ -5822,3 +5823,26 @@ def test_cura_gets_parts_without_a_blocker_when_none_is_taken(
         ("t-part-1.stl", {})
     ]
     assert "export.support_blocker" not in {finding.code for finding in findings}
+
+
+@pytest.mark.parametrize("block", [262_144, 97], ids=["ein-block", "viele-bloecke"])
+def test_the_binary_stl_is_byte_for_byte_what_trimesh_writes(
+    block: int, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Blockweise in einen Puffer statt über trimesh — dieselben Bytes (RM-567).
+
+    trimesh baute das gepackte Feld und kopierte es danach zweimal.
+    """
+    import numpy as np
+    import trimesh as _trimesh
+
+    from app.core.geom import mesh as mesh_module
+
+    monkeypatch.setattr(mesh_module, "_STL_BLOCK", block)
+    for body in (
+        _trimesh.creation.icosphere(subdivisions=3, radius=7.25),
+        _trimesh.creation.box(extents=(1.0e-3, 2.5, 4.0e4)),
+        _trimesh.Trimesh(vertices=np.zeros((0, 3)), faces=np.zeros((0, 3), dtype=int)),
+    ):
+        expected = _trimesh.exchange.stl.export_stl(body)
+        assert mesh_module.MeshData.of(body).to_stl() == expected

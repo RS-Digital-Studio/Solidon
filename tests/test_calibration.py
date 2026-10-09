@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import dataclasses
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -177,6 +178,7 @@ def test_an_older_calibration_keeps_the_shipped_support_values(
     assert calibrated.support_gap_min == pytest.approx(shipped.support_gap_min)
     assert calibrated.support_gap_max == pytest.approx(shipped.support_gap_max)
     assert calibrated.support_interface_cooling is shipped.support_interface_cooling
+    assert calibrated.support_tip_gap == shipped.support_tip_gap
 
 
 @pytest.mark.parametrize("stage", ["write", "fsync", "replace"])
@@ -558,6 +560,44 @@ def test_four_variants_come_out_of_one_call(profile: Profile) -> None:
     assert [entry.value for entry in made.variants] == pytest.approx([0.10, 0.15, 0.20, 0.25])
     scene = made.scene(profile)
     assert len(scene.objects) == 4
+
+
+def test_the_variants_leave_no_remembered_step_behind(
+    profile: Profile, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Der eigene Cache der Varianten geht mit ihnen, samt seinen gemerkten Schritten.
+
+    Ein gemerkter Zuordnungsschritt zählt die Merkmale seines Eintrags nicht
+    mit (Nachprüfung L, M-3) und trifft nur an ihnen. Verfiele der Cache der
+    Varianten still, hielte der Schritt sie fest, ungezählt und ohne je wieder
+    zu treffen.
+    """
+    from importlib import import_module
+
+    module = import_module("app.core.scene.evaluate")
+    kept: list[int] = []
+    real = module._keep_steps
+
+    def counted(fresh: Any, generation: int, held: Any, parts_of: Any) -> None:
+        real(fresh, generation, held, parts_of)
+        kept.append(len(module._REMEMBERED_STEPS))
+
+    monkeypatch.setattr(module, "_keep_steps", counted)
+    project = project_with_parameter()
+    made = variants.build(
+        project.document,
+        profile,
+        parameter="spiel",
+        first=0.10,
+        step=0.05,
+        count=2,
+        mark=False,
+        sources=ProjectSources(project),
+    )
+    assert made.complete
+    assert max(kept) > 0, "Voraussetzung: die Läufe merken Schritte"
+    assert not module._REMEMBERED_STEPS, "the steps went with the cache of the variants"
+    assert module.remembered_bytes() == 0
 
 
 def test_the_steps_before_the_parameter_are_computed_once(

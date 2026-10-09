@@ -406,7 +406,7 @@ def _plate_object(mesh, features):
 
 @pytest.mark.parametrize("painted", [False, True])
 def test_native_surface_snapshot_keeps_exact_normals_and_owns_its_caches(profile, painted):
-    """Die vorhandene Attributkopie hält Topologie, Merkmalsdreiecke und Arbeitercache getrennt."""
+    """Die Arbeiterkopie (``Solid.detached``) hält Topologie, Dreiecke und Merker getrennt."""
     from dataclasses import replace
 
     from app.core.brep.kernel import Solid
@@ -429,7 +429,7 @@ def test_native_surface_snapshot_keeps_exact_normals_and_owns_its_caches(profile
             tuple(int(index) % 2 for index in body.raw.face_attributes["solidon_brep_face"])
         )
         source = replace(source, mesh=body)
-    snapshot = replace(source, mesh=body.with_triangle_slots(tuple(body.slot_indices)))
+    snapshot = replace(source, mesh=body.detached())
     assert isinstance(snapshot.mesh, Solid)
     assert snapshot.mesh._cache is not body._cache
     assert snapshot.mesh.raw._cache is not body.raw._cache

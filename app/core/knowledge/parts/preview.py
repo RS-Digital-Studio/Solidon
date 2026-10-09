@@ -56,8 +56,12 @@ def render(
     ``around`` und ``down`` drehen die Kamera, falls die Vorgabe gerade das
     Merkmal verdeckt, auf das es bei diesem Teil ankommt.
     """
+    from app.core.knowledge.parts.through import with_shown_bores
+
     values = params or spec.params()
-    mesh = as_mesh_data(spec.fn(values).mesh)
+    produced = spec.fn(values)
+    # Eine Bohrung durch den Träger liegt sonst ganz im Baustein (RM-632).
+    mesh = as_mesh_data(with_shown_bores(spec, produced, as_mesh_data(produced.mesh)))
     addition = spec.host_add(values) if spec.host_add is not None else None
     if addition is not None:
         from app.core.knowledge.parts.build import subtract, union

@@ -20,10 +20,17 @@ from __future__ import annotations
 import math
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
-from typing import Any, Final, Literal, Protocol, get_args, runtime_checkable
+from typing import TYPE_CHECKING, Any, Final, Literal, Protocol, get_args, runtime_checkable
 
 from app.core.knowledge.rules import OVERHANG_LIMIT_DEGREES
 from app.i18n import TranslatableText, _
+
+if TYPE_CHECKING:
+    import numpy as np
+    from numpy.typing import NDArray
+
+    Points2 = NDArray[np.float64]
+    """Punkte einer Kontur der Schichtanalyse, Form (n, 2) — nur für Annotationen."""
 
 # --- Bezeichner ----------------------------------------------------------------
 
@@ -213,11 +220,43 @@ class BoundingBox:
 
 @dataclass(frozen=True, slots=True)
 class Polygon:
-    """Eine geschlossene Kontur mit optionalen Löchern, benutzt von der
-    Schichtanalyse (§22)."""
+    """Eine geschlossene Kontur mit optionalen Löchern aus Punkt-Tupeln.
+
+    Die Schichtanalyse liefert ihre Konturen als :class:`SliceContour` (RM-595)."""
 
     outline: Ring
     holes: tuple[Ring, ...] = ()
+
+
+@dataclass(frozen=True, slots=True, eq=False)
+class SliceContour:
+    """Eine Kontur der Schichtanalyse (§22): Umriss und Löcher als schreibgeschützte
+    ``float64``-Felder der Form (n, 2), geschlossen wie die Ringe von :class:`Polygon`.
+
+    **Felder statt Tupel aus Punkt-Tupeln** (RM-595): Eine Analyse liegt im
+    Cache des Netzes, solange es lebt (``slice.findings.remembered_analysis``),
+    und hielt als Tupel 121 Byte je Punkt — am Laptop-Riser 114 MB, am
+    Eiffelturm 168 MB je gemerkter Analyse. Als Feld sind es 16 Byte. Wer die
+    Kontur liest, gibt sie an Shapely oder NumPy; beide nehmen das Feld, wie
+    es ist. Gleich sind zwei Konturen mit denselben Zahlen, Bit für Bit.
+    """
+
+    outline: Points2
+    holes: tuple[Points2, ...] = ()
+    _area: float | None = field(default=None, init=False, repr=False, compare=False)
+    """Die Fläche, einmal gerechnet (``slice.analysis.piece_area``); nicht Teil der
+    Gleichheit (Nachprüfung L, G-2)."""
+
+    def _key(self) -> tuple[tuple[tuple[int, ...], bytes], ...]:
+        return tuple((tuple(ring.shape), ring.tobytes()) for ring in (self.outline, *self.holes))
+
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, SliceContour):
+            return NotImplemented
+        return self._key() == other._key()
+
+    def __hash__(self) -> int:
+        return hash(self._key())
 
 
 @runtime_checkable
@@ -980,6 +1019,11 @@ class MaterialProfile:
     support_interface_cooling: bool = False
     """Ob sich die Stütze von diesem Material mit voller Kühlung an der
     Trennschicht leichter löst (RM-583, Recherche Nr. 7: PETG)."""
+    support_tip_gap: float | None = None
+    """Luft über Baumspitzen ohne Trennschicht in mm (RM-584): Unter kleinen
+    Inseln baut der Slicer keine, und eine Schicht Abstand schweißt die Spitze
+    an. **None heißt nicht gemessen**: Dann gilt der Abstand aus
+    :attr:`support_gap_factor`."""
     minimum_wall: float | None = None
     """Gemessene druckbare Mindestwand in mm, ausschließlich für den gespeicherten Prozess."""
     overhang_angle: float | None = None
@@ -2221,7 +2265,9 @@ RevisionKind = Literal["insert", "move", "suppress", "reactivate"]
 
 ``insert`` und ``move`` planen den Suffix ab der ersten geänderten Stelle mit
 neuen Kennungen neu — die Reihenfolge des Stapels **ist** die seiner Kennungen
-(§15). ``suppress`` und ``reactivate`` wechseln nur die Fassung der Schritte."""
+(§15). ``insert`` tragen auch die Wege „… und erneut versuchen“, die einen
+Schritt vor den angehaltenen setzen (RM-547). ``suppress`` und ``reactivate``
+wechseln nur die Fassung der Schritte."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -2650,18 +2696,24 @@ def step_numbers(operations: Sequence[Operation]) -> dict[OpId, int]:
 
 
 def replanned_steps(document: Document) -> frozenset[OpId]:
-    """Schritte, die ein Einfügen oder Verschieben neu gefasst hat (P7).
+    """Schritte, die ein Einfügen, Verschieben oder erneuter Versuch neu gefasst hat (P7).
 
     Ihre alten Zeilen sind nicht gelöscht: Derselbe Schritt steht unter neuer
     Kennung an seiner neuen Stelle. Verlaufsfeld und Steckbrief blenden sie
     deshalb aus, statt sie wie einen gelöschten Schritt zu nennen (§15.4 gilt
     dem Löschen). Gelesen wird ``Transaction.revision``, das alte Projekte seit
     Format 32 tragen — ``renumbered`` kam erst mit Format 45 (Review RM-529).
+
+    **Und die Wege „… und erneut versuchen“** (RM-547): Sie schreiben seither
+    ``insert``. Ältere Dateien tragen bei ihnen keine Revision; erkannt werden
+    sie an ihrer Gestalt, denn nur sie entfernen Schritte und bringen zugleich
+    eigene mit — eine Löschung bringt keine (``ops`` leer).
     """
     found: set[OpId] = set()
     for transaction in document.transactions:
         changes = transaction.changes
-        if transaction.revision not in ("insert", "move") or changes is None:
+        retried = transaction.revision is None and bool(transaction.ops)
+        if changes is None or not (transaction.revision in ("insert", "move") or retried):
             continue
         found.update(
             op_id for op_id, version in (changes.after.edited_ops or {}).items() if version is None
@@ -2677,12 +2729,12 @@ class LayerInfo:
     """Kennzahlen einer Schnittebene."""
 
     z: float
-    contours: tuple[Polygon, ...]
+    contours: tuple[SliceContour, ...]
     area: float
     overhang_area: float
-    islands: tuple[Polygon, ...]
+    islands: tuple[SliceContour, ...]
     min_width: float
-    overhangs: tuple[Polygon, ...] = ()
+    overhangs: tuple[SliceContour, ...] = ()
     """*Wo* die ungestützte Fläche dieser Schicht liegt, nicht nur wie viel.
 
     Aufgehoben, weil Stützkarte (§18.4) und Schichtvorschau (§18.10) auf die
@@ -2880,6 +2932,10 @@ Etappe."""
 #: Werkzeuge, die den Zustand vor sich lesen und deshalb eine Etappe beginnen.
 ORDERED_TOOLS: Final[frozenset[str]] = frozenset({"smooth", "inflate", "flatten"})
 
+#: Werkzeuge, die in Pinselfassung 2 auf ein Ziel zulaufen (Mittel der
+#: Nachbarn, Ebene, Strichmitte) und es nie überschreiten (RM-560, H3).
+CONVERGENT_TOOLS: Final[frozenset[str]] = frozenset({"smooth", "flatten", "pinch"})
+
 
 @dataclass(frozen=True, slots=True)
 class Stroke:
@@ -2921,7 +2977,15 @@ class Stroke:
     die ganze Sitzung zu verlangsamen."""
     gesture: int = 0
     """Gemeinsame Kennung aller Proben eines Mauszuges. Null bezeichnet
-    einen einzeln rücknehmbaren Altzug; die Kennung verändert keine Geometrie."""
+    einen einzeln rücknehmbaren Altzug. In Pinselfassung 1 verändert die
+    Kennung keine Geometrie, in Fassung 2 ist jede Geste eine Etappe."""
+    brush: int = 1
+    """Die Pinselfassung (RM-560). 1 rechnet wie bis Format 48: Stärke in
+    Millimetern je Probe, Etappen nach Werkzeug, Wirkungen aufsummiert. 2:
+    Stärke als Stufe 1 bis 10, jede Geste eine Etappe, Auftragen gesättigt,
+    Glätten und Flachziehen höchstens bis zum Ziel. Am Zug und nicht an der
+    Operation, damit ein wieder geöffneter alter Schritt seine alten Züge
+    unverändert rechnet und neue daneben nach der neuen Fassung."""
 
 
 @dataclass(frozen=True, slots=True)

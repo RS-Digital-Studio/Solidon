@@ -121,7 +121,8 @@ class CancelAfter:
 
 #: Der Kegel eines 90-Grad-Senkkopfs Ø 8,4: πr²h/3 mit h = r, als 48-Eck
 #: gerechnet also etwas weniger als die 77,6 der exakten Kreisform.
-SINK_VOLUME = 76.81
+#: Die Überlappung verlängert die Flanke, sie verkleinert nicht das Nennmaß.
+SINK_VOLUME = 48 * math.sin(math.tau / 48) * (8.4 / 2.0) ** 3 / 6.0
 
 
 @pytest.mark.parametrize(

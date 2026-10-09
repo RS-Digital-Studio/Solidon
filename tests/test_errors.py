@@ -352,9 +352,16 @@ _NOT_A_RANGE = frozenset(
         # Eine Verbrauchsbuchung, die sich seit dem Druckauftrag geändert hat
         # (knowledge/filaments.py): ein Zustand des Bestands, keine Zahl.
         "booking_history_changed",
+        # Ein Bausteinname, dessen Erzeuger einer anderen Operation gehört
+        # (RM-574): ein Name, keine Zahl.
+        "reserved",
         "checksum", "choices",
         # Ein getrenntes Teil in der Bohrung (geom/prepare_ops.py): die Form, keine Zahl.
         "separate_bore_contents",
+        # Stift für Bohrung an einer Stelle ohne Hohlraum im Körper und an einer
+        # Einführfase (geom/bore_pin.py, geom/lid_hinge.py, Review G): die Lage
+        # und die Art der gewählten Bohrung, keine Zahl im Feld.
+        "not_in_the_body", "lead_in",
         # Eine Berührlinie hängt von der Modellform ab, nicht von einer Zahlenspanne.
         "cut_surface_contact",
         # Die Zeichenfläche als Ziel von „Bis zur Fläche" (sketch/ops.py): eine
@@ -499,7 +506,8 @@ _NOT_A_RANGE = frozenset(
         "no_shapes", "no_size", "no_sources", "no_split", "no_split_target", "no_triangles",
         "not_a_face", "not_a_hole", "not_a_mesh", "not_a_number", "not_an_archive",
         "not_a_project", "private_destination",
-        "left_handed", "not_a_twin", "not_movable", "not_outline", "not_step", "not_upright",
+        "left_handed", "not_a_twin", "not_a_drawing", "not_movable", "not_outline", "not_step",
+        "not_upright",
         "one_body", "multi_start", "not_a_thread", "needs_exact",
         # Ein Gewinde außerhalb dessen, was ein Bausteingewinde baut, und eine
         # Achse, die keine der drei ist: ein Merkmal und eine Größe außerhalb

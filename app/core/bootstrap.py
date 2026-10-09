@@ -127,7 +127,10 @@ def load_user_parts() -> tuple[Finding, ...]:
     recipes = importlib.import_module(f"{_PART_MODULE}.recipe").load_all()
     if recipes.loaded:
         ops = importlib.import_module(f"{_PART_MODULE}.ops")
-        _user_operations = _user_operations + tuple(ops.op_name(name) for name in recipes.loaded)
+        # Mit dem Erzeuger, wo das Rezept für sich steht (RM-574).
+        _user_operations = _user_operations + tuple(
+            operation for name in recipes.loaded for operation in ops.operation_names(name)
+        )
     _user_loaded = True
     _user_findings = (*result.findings, *recipes.findings)
     return _user_findings

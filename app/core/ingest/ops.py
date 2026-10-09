@@ -220,7 +220,9 @@ class LoadParams(BaseParams):
     # 7: Das Schließen offener Netze ruft ``repair(holes=True)``, und das
     # verdoppelt seit RM-550 Berührkanten, statt Flächen zu streichen — andere
     # Netze und Befunde aus derselben Datei (``repair`` 5).
-    cache_version="7",
+    # 8: Eine Berührkante, die die erste Paarung nicht trennt, trennt die
+    # andere (``repair`` 6, RM-550).
+    cache_version="8",
     # Heißt wie der Knopf in Werkzeugleiste und Datei-Menü — zwei Namen für
     # dieselbe Handlung ließen den Kunden einen Unterschied suchen.
     title=_("Modell einfügen"),

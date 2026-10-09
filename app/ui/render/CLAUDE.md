@@ -52,8 +52,8 @@ Messwerte, Anlässe und die Begründung der Renderer-Wahl stehen in
   (`PointerEvent.delta`, Winkel durch 120, ungerundet) und ist im Navigator
   der Exponent des Zoomfaktors. Verlassen des Bildes nimmt eine
   Griffhervorhebung zurück und zeichnet sofort; ein laufender Zug behält sie.
-* **Farben je Dreieck aus heißt `color_mode = "uniform"`, nie `"auto"`**
-  (`set_face_colours_visible`): `"auto"` multipliziert die Körperfarbe mit
+* **Ein Ton über Farben je Dreieck wird in den Puffer gemischt, nie `"auto"`**
+  (`set_face_tint`): `"auto"` multipliziert die Körperfarbe mit
   `geometry.colors`, gelesen je Ecke.
 * **pygfx' Ereignissystem ist aus** (`enable_events=False`): Es läse für jedes
   Zeigerereignis den Pickpuffer zurück, und niemand hört darauf.

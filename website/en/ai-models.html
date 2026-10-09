@@ -77,7 +77,7 @@
         <p class="hero-act">
           <a class="btn hero-btn" href="/en/#download">Download for free now</a>
         </p>
-        <p class="hero-kauf">From 1 November, buy once: <a href="/en/#pricing">private licence from €69</a>, no subscription.</p>
+        <p class="hero-kauf">From 1 December, buy once: <a href="/en/#pricing">private licence from €69</a>, no subscription.</p>
         </div>
 
       </div>
@@ -140,6 +140,7 @@
       paints a picture (<b>Apache-2.0</b>). Solidon3D sets this route up in
       your ComfyUI only at your request and downloads nothing unasked;
       external GLB and STL files remain fully usable regardless.</p>
+      <p class="sub">About 10&nbsp;GB should be free, about 18&nbsp;GB with the route from text, and before downloading Solidon3D names what is needed and whether your computer has it. On an NVIDIA RTX 4080 with 16&nbsp;GB the first job after starting ComfyUI takes about 4 minutes from a picture, about 5 from text, each further one 35 to 160 seconds, depending on what else the computer is doing. On a Mac the route has not been measured yet.</p>
 
       <h2>Local chat: which model for which card</h2>
       <p class="sub">The chat runs free of charge through Ollama on your own computer. The model has to fit entirely into graphics memory — otherwise the processor joins in and every answer takes many times as long. These four models were tested with Solidon's tools. The table shows success rates, response times and limitations:</p>
@@ -155,6 +156,7 @@
         </tbody>
       </table>
       <p class="footnote">Measured on 25 September 2026 on an NVIDIA RTX 4080 with 16&nbsp;GB under Ollama 0.34.3. The check is eight requests that each call for one tool; for one that is deliberately unclear, asking back is the right answer. The suite is 39 everyday tasks, from moving a part to a bracket with parts; with the whole tool set in the same window instead of the offer, qwen3:14b scored 14 there; with a window of 40&nbsp;960 tokens 24, but in three times the time and no longer entirely on the card. For a local model, Solidon3D sends the intended tools with all their fields and all others in short form with each request — which makes the task a quarter as long as before. After an answer the model stays loaded for three minutes, so the next question does not wait for it to start. <b>Not recommended</b>, although measured: gemma4:12b (answers without end), granite4.1:8b and llama3.1:8b (guess on an unclear request instead of asking), mistral-nemo and qwen2.5-coder:14b (write the calls out as text). During setup, Solidon3D shows whether Ollama is really using the graphics card.</p>
+      <p class="sub"><b>On a Mac with Apple Silicon</b> graphics and processor share the RAM, and macOS leaves about two thirds of it to the graphics. That is why qwen3.5:9b should run entirely on the graphics from 16&nbsp;GB of RAM, qwen3:14b and gpt-oss:20b from 24&nbsp;GB, qwen3:30b-a3b from 32&nbsp;GB — calculated from the measurement on an RTX 4080, not yet measured on a Mac. A model that is too large partly runs on the processor, and every request takes minutes. During setup Solidon3D names under every model what it needs and whether your Mac has it, preselects the one that fits and shows the download size and free space before anything is downloaded. How fast a Mac answers has not been measured yet.</p>
     </div>
   </section>
 
@@ -162,7 +164,7 @@
     <div class="wrap">
       <div class="closing">
         <h2>Turn the shape into a part</h2>
-        <p>The demo is here and runs until 30 October 2026 — free
+        <p>The demo is here and runs until 30 November 2026 — free
         and complete.</p>
         <a class="btn" href="/en/#pricing">To the demo</a>
         <a class="btn ghost" href="/en/features.html">All features</a>

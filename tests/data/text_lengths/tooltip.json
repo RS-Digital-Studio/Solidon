@@ -1,5 +1,4 @@
 [
   "Mit Haken tragen eine gespeicherte 3MF und die Übergabe an den Slicer diese Werte. Ohne Haken geht nur die Geometrie hinaus, und Ihr Slicer arbeitet mit seinem eigenen Profil. Beim direkten Slicen aus Solidon gelten diese Werte immer, unabhängig vom Haken.",
-  "Setzt Stifte in die eine Hälfte und die passenden Löcher in die andere. Die Teile finden dann beim Kleben von selbst zusammen; das Spiel kommt aus dem Materialprofil.",
-  "Zeichnet die Skizze dort, wo sie liegt — mit Ziehgriff, Maßeingabe im Bild und den Ebenen des Körpers. Dieser Dialog geht dabei zu; die übrigen Werte bleiben am Schritt."
+  "Setzt Stifte in die eine Hälfte und die passenden Löcher in die andere. Die Teile finden dann beim Kleben von selbst zusammen; das Spiel kommt aus dem Materialprofil."
 ]

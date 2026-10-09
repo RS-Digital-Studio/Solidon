@@ -52,9 +52,17 @@ offenem Drucker. Übernommen wird auf Klick, nie von allein.
   Brücke, die selbst dort hängt (`open_bridge_width`); über dem Bett bleibt
   „nur vom Bett“.
 - **Bäume, wo kleine Überhänge auf dem Modell ansetzen** (`branching`): Ein
-  Baum setzt mit wenigen Füßen auf, ein Gitter mit jeder Säule. Nicht unter
-  einem flachen Stück über `OVERHANG_LAYER_WORTH_SUPPORT` — dort bleibt die
-  Art des Herstellers.
+  Baum setzt mit wenigen Füßen auf, ein Gitter mit jeder Säule. **Unter einem
+  flachen Stück über `OVERHANG_LAYER_WORTH_SUPPORT` Gitter**, auch statt
+  „automatisch“ (Elegoo und Bambu stützen damit mit Bäumen); setzen dazu kleine
+  Stücke auf dem Modell auf oder beginnen viele Inseln, **Hybrid**
+  (`tree_hybrid`; Prusa und Cura bekommen dafür Gitter, `NOT_TAKEN_BY_PROGRAM`).
+  Mehrere Körper mit Gitter und Baum ergeben Hybrid (`combine`).
+- **Zwei Wände für hohe Bäume** (`support.tree_walls`): ab `TALL_TREE_HEIGHT`
+  Säulenhöhe (`ModelSupport.tallest_column`), gefragt mit `printed_style`. Die
+  Orca-Familie liest die Wandzahl unter organischen Bäumen nicht
+  (`IGNORED_UNDER_TREES_BY_PROGRAM`); Dialog und Export filtern dort wie bei der
+  unteren Trennschicht.
 - **`support.block_channels`**, weil „nur vom Bett“ Kanäle nicht freihält:
   `analysis.channel_space` sperrt um Decken, die sonst Stütze bräuchten
   (`worth_support` je Stück, im Zweifel Stütze), nur unerreichbaren Raum (eng
@@ -79,14 +87,27 @@ offenem Drucker. Übernommen wird auf Klick, nie von allein.
   `support_gap_target`; ohne Werte kein Rat), vorgeschlagen außerhalb
   `SUPPORT_GAP_BAND`; wo der Slicer in ganzen Schichten rechnet — Cura, die
   Orca-Familie neben einem Reinigungsturm (`writer.tower_plates`,
-  `whole_layers`, Dialog und Export gleich) —, das Vielfache im Band, auch
-  statt eines Werts im Band zwischen zwei Schichten. Unter einem flachen Stück über `OVERHANG_LAYER_WORTH_SUPPORT` eine
-  dichte Trennschicht, sonst eine lockere; steht die Stütze auf dem Modell,
-  auch unten (`BOTTOM_INTERFACE_LAYERS`). Volle Kühlung an der Trennschicht,
+  `whole_layers`), jedes Programm unter organischen Bäumen mit der Art, mit
+  der das Teil druckt (`printed_style`: der Vorschlag, außer der Kunde lehnt
+  ihn ab, `declined` — im Dialog abgewählt, dann fragt er neu, im Export nicht
+  übernommen; `handover.organic_styles`, ohne Programm die Familie; Rat,
+  Feldsatz und Export fragen dieselbe Auskunft) —, das Vielfache innerhalb der
+  Materialgrenzen, auch statt eines Werts in `SUPPORT_GAP_BAND`, der zwischen
+  zwei Schichten liegt (`in_whole_layers`); einen eigenen solchen Wert nennt
+  der Export gerundet (`export.support_gap_rounded`). **Über Baumspitzen ohne
+  Trennschicht** (ab `TIP_ISLANDS` Inseln unter `TIP_ROOF_AREA`, `tip_islands`)
+  gilt unter organischen und Curas Bäumen `support_tip_gap` des Materials in
+  ganzen Schichten, mindestens `TIP_GAP_LAYERS`, auch über `support_gap_max`
+  (`tip_gap`); ohne gemessenen Wert nicht. Unter einem flachen Stück über
+  `OVERHANG_LAYER_WORTH_SUPPORT` eine dichte Trennschicht, sonst eine lockere;
+  steht die Stütze auf dem Modell, auch unten (`BOTTOM_INTERFACE_LAYERS`) —
+  nicht, wo das Programm sie unter Bäumen nicht druckt
+  (`handover.ignored_under_trees`). Volle Kühlung an der Trennschicht,
   wo das Material sie verlangt (`support_interface_cooling`), je Spule.
   Abstand und Trennschichten gehen je Teil (`PART_PATHS`), gefragt mit dem
   Material der Spule. Der Druckdialog fragt sie wie der Export gegen die
-  Grundlage (`handover.asked_for_contact`), führt erst je Körper über die
+  Grundlage, auch die Stützart, die je Teil geht
+  (`handover.asked_for_contact`), führt erst je Körper über die
   Spulen zusammen und dann nur die verlangenden Körper (`combine` mit
   `separate`); gegen die Übernahme gefragt, kam jede Zeile mit ihrer
   Gegenzeile wieder. Die Zeile nennt nur Teile mit ihrem Wert. Übergabe:

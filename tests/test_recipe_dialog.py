@@ -1335,7 +1335,8 @@ def test_a_range_error_reaches_the_dialog_as_a_correctable_error(
         raise problem
 
     monkeypatch.setattr(module.recipes, "range_check", reject_range)
-    worker = module._CheckWorker(lambda: object(), None)
+    # Ein Schnitt ohne freigegebene Maße: Die Dauerschätzung davor liest ``exposed``.
+    worker = module._CheckWorker(lambda: SimpleNamespace(exposed=()), None)  # type: ignore[arg-type]
     heard: list[object] = []
     worker.failed.connect(heard.append)
     try:
@@ -1628,8 +1629,8 @@ def test_the_chosen_steps_reach_the_recipe(qt_app: QApplication, monkeypatch: An
     window = MainWindow(Session(), UiSettings())
     try:
         monkeypatch.setattr("app.ui.main_window.RecipeDialog", _Spy)
-        monkeypatch.setattr(window, "_result_features", lambda: ())
-        window.session.last_result = SimpleNamespace()  # type: ignore[assignment]
+        monkeypatch.setattr(window, "_result_features", lambda *_bodies: ())
+        window.session.last_result = SimpleNamespace(scene=SimpleNamespace(objects={}))  # type: ignore[assignment]
         window.session.project = replace(window.session.project, document=_history_document())
         window.history_panel.show_document(window.session.project.document)
         # Der Katalog wird nur als Elternteil gereicht und bekommt ``refresh``
@@ -1647,6 +1648,257 @@ def test_the_chosen_steps_reach_the_recipe(qt_app: QApplication, monkeypatch: An
         window.session._dirty = False
         window.close()
         window.deleteLater()
+
+
+def test_a_chosen_body_is_saved_from_the_catalogue_and_comes_back_as_itself(
+    qt_app: QApplication, monkeypatch: Any
+) -> None:
+    """RM-565: Körper wählen, Bausteinkatalog öffnen, *Speichern* — ohne den Verlauf.
+
+    Bis dahin nahm das Speichern eine Verlaufsauswahl oder den ganzen Verlauf;
+    mit einem zweiten Körper im Projekt ergab das zwei Körper, und der Baustein
+    wurde abgewiesen. Jetzt nimmt es die Schritte des gewählten Körpers samt
+    dem Werkzeug, das in ihm aufging, und nur seine Merkmale. Eingesetzt
+    bringt der neue Baustein genau diesen Körper wieder mit.
+
+    Review: *Auf dem Bett anordnen* über alle Körper holte den Nachbarn mit
+    (H1); die Merkmale des Nachbarn hatten dieselben Kennungen wie die des
+    Klotzes, und die Prüfung „nur seine Merkmale“ hielt auch ungefiltert (M4,
+    deshalb ein Zylinder und die Zeilenzahl); und eine alte Markierung im
+    Verlauf schlug den danach gewählten Körper (G7).
+    """
+    from PySide6.QtCore import Qt
+
+    from app.core.geom.mesh import as_mesh_data
+    from app.core.knowledge.parts import recipe as recipes
+    from app.core.knowledge.parts.registry import PARTS
+    from app.core.scene import OperationDraft
+    from tests.helpers import clean_recipe_globals
+
+    title = "Klotz mit Aussparung"
+    name = _identifier(title)
+    window = MainWindow(Session(), UiSettings())
+    try:
+        monkeypatch.setattr(window, "_wire_preview", lambda *args, **kwargs: None)
+        monkeypatch.setattr(window, "_may_discard", lambda: True)
+        session = window.session
+        assert session.add_parameter(Parameter(name="w", value=30.0, unit="mm"))
+        assert session.wait_for_idle(60_000)
+
+        def box(width: object, x: float, *, depth: float = 20.0, height: float = 8.0) -> Any:
+            values = {"width": width, "depth": depth, "height": height, "anchor": "corner"}
+            place = {"x": x, "y": -1.0, "z": -1.0} if depth > 20.0 else {"x": x}
+            return OperationDraft(op="create_box", params={**values, **place})
+
+        assert session.apply("Klotz", [box("@w", 0.0)])
+        assert session.apply("Werkzeug", [box(5.0, 5.0, depth=22.0, height=20.0)])
+        assert session.apply("Nachbar", [box(40.0, 100.0)])
+        assert session.apply("Rolle", [OperationDraft(op="create_cylinder", params={"x": 200.0})])
+        assert session.wait_for_idle(60_000)
+        ops = session.project.document.ops
+        block, tool, neighbour, roll = (entry.outputs[0] for entry in ops)
+        assert session.apply(
+            "Abziehen", [OperationDraft(op="subtract_objects", inputs=(block, tool))]
+        )
+        assert session.apply(
+            "Anordnen", [OperationDraft(op="arrange_bed", inputs=(block, neighbour, roll))]
+        )
+        assert session.wait_for_idle(60_000)
+        QApplication.processEvents()
+        result = session.last_result
+        assert result is not None and set(result.scene.objects) == {block, neighbour, roll}
+        block_volume = as_mesh_data(result.scene.objects[block].mesh).volume
+        neighbour_volume = as_mesh_data(result.scene.objects[neighbour].mesh).volume
+        top = next(
+            feature_id
+            for feature_id, feature in result.scene.objects[neighbour].features.items()
+            if tuple(feature.params.get("normal") or ()) == pytest.approx((0.0, 0.0, 1.0))
+        )
+
+        # Eine Markierung von früher, etwa vom Klick auf einen Befund (G7) …
+        assert window.history_panel.point_at(ops[2].id)
+        assert window.history_panel.selected_operations() == (ops[2].id,)
+        # … und danach der Körper im Baum: gemeint ist der Körper.
+        window.object_tree.select_object(block)
+        # Was der Dialog zeigt und wie er endet, wird hier gesammelt und erst
+        # nach dem Katalog geprüft: Eine Zusicherung in einem Qt-Slot verschluckt
+        # Qt, der Test liefe weiter.
+        seen: dict[str, Any] = {}
+
+        def store(dialog: RecipeDialog) -> int:
+            seen["scope"] = dialog.scope.text()
+            seen["features"] = [row.feature_id for row in dialog._features]
+            dialog.title.setText(title)
+            dialog._features[0].take.setChecked(True)
+            dialog._store()
+            for _ in range(600):
+                if dialog.result() or not dialog._checking:
+                    break
+                QApplication.processEvents()
+                qt_app.thread().msleep(50)
+            seen["stored"] = (dialog.result(), dialog.report.text())
+            return int(dialog.result())
+
+        monkeypatch.setattr(RecipeDialog, "exec", store)
+
+        def save_then_insert(catalog: PartCatalog) -> int:
+            seen["can_save"] = (catalog.save_part.isEnabled(), catalog.save_hint.text())
+            catalog.save_part.click()
+            # Eingesetzt wird an die Oberseite des Nachbarn.
+            window.object_tree.select_feature(neighbour, top)
+            found = [
+                item
+                for row in range(catalog.list.count())
+                if (item := catalog.list.item(row)) is not None
+                and item.data(Qt.ItemDataRole.UserRole) == name
+            ]
+            if not found:
+                return int(PartCatalog.DialogCode.Rejected)
+            catalog.list.setCurrentItem(found[0])
+            return int(PartCatalog.DialogCode.Accepted)
+
+        monkeypatch.setattr(PartCatalog, "exec", save_then_insert)
+        window.action_catalog()
+
+        assert seen["can_save"][0], seen["can_save"]
+        own = set(result.scene.objects[block].features)
+        foreign = set(result.scene.objects[roll].features) - own
+        assert foreign, "der Zylinder hat Merkmale, die der Klotz nicht hat"
+        assert len(seen["features"]) == len(own), "je Merkmal des Klotzes eine Zeile, nicht mehr"
+        assert set(seen["features"]) == own and not foreign & set(seen["features"])
+        assert seen["stored"][0], seen["stored"]
+        assert str(result.scene.objects[block].name) in seen["scope"], seen["scope"]
+        assert PARTS.has(name), "der Baustein steht im Katalog"
+        dialog = window._op_dialog
+        assert dialog is not None and dialog.spec.name == f"insert_{name}"
+        dialog.accept()
+        assert session.wait_for_idle(60_000)
+        QApplication.processEvents()
+
+        after = session.last_result
+        assert after is not None and after.complete
+        grown = as_mesh_data(after.scene.objects[neighbour].mesh).volume - neighbour_volume
+        assert grown == pytest.approx(block_volume, rel=1e-2), "derselbe Körper, nicht mehr"
+    finally:
+        session._dirty = False
+        window.close()
+        window.deleteLater()
+        clean_recipe_globals(name)
+        (recipes.recipes_dir() / f"{name}.json").unlink(missing_ok=True)
+
+
+def test_a_slice_with_a_second_body_says_so_and_locks_before_filling_in(
+    qt_app: QApplication,
+) -> None:
+    """Review H1: Die Kopfzeile versprach „den gewählten Körper“, die Absage kam danach.
+
+    Gewählt ist die Kopie aus *Objekt duplizieren*; ohne ihr Original ist sie
+    nicht zu bauen, und das Original käme als zweiter Körper mit. Der Dialog
+    sagt das oben, mit Körper und Schritt, und sperrt *Baustein anlegen* mit
+    demselben Satz, bevor jemand ein Feld ausfüllt.
+    """
+    from app.core.knowledge.parts import recipe as recipes
+    from app.core.scene import History, OperationDraft
+    from app.core.scene.revision import dependencies, step_needs
+    from app.core.types import step_numbers
+
+    document = new_project().document
+    document.parameters["w"] = Parameter(name="w", value=10.0, unit="mm", title="Breite")
+    history = History(document)
+    # Ein gelöschter Schritt davor: Kennung und sichtbare Nummer gehen
+    # auseinander, und der Satz nennt die Nummer im Verlauf (Review N5).
+    history.apply("Weg damit", [OperationDraft(op="create_cylinder", params={})])
+    history.remove_operations([document.ops[0].id])
+    history.apply("Quader", [OperationDraft(op="create_box", params={"width": "@w"})])
+    (original,) = document.ops[0].outputs
+    history.apply(
+        "Kopie", [OperationDraft(op="duplicate_object", inputs=(original,), params={"count": 2})]
+    )
+    copy = next(name for name in document.ops[-1].outputs if name != original)
+    needs = step_needs(document, dependencies(document, None))
+    steps = recipes.steps_of(document, (copy,), needs)
+    assert steps == (document.ops[0].id, document.ops[1].id)
+    assert step_numbers(document.ops)[document.ops[1].id] == 2 != document.ops[1].id
+    names = {original: "Quader", copy: "Quader 2"}
+    dialog = RecipeDialog(
+        document, {}, steps, (_feature("hole_1"),), None, bodies={copy: "Quader 2"}, names=names
+    )  # type: ignore[arg-type]
+    try:
+        dialog.title.setText("Kopie")
+        dialog._features[0].take.setChecked(True)
+        text = dialog.scope.text()
+        assert "„Quader 2“" in text, "der gewählte Körper steht oben"
+        assert "„Quader“ aus Schritt 2." in text, "und der, der mitkäme, mit seiner Nummer"
+        assert not dialog._save.isEnabled()
+        assert "„Quader“" in dialog._save.toolTip(), "der Knopf sagt denselben Grund"
+    finally:
+        dialog.release()
+        dialog.deleteLater()
+    # Von Hand gewählte Schritte nennt die Kopfzeile ebenso mit ihrer Nummer.
+    by_hand = RecipeDialog(document, {}, (document.ops[0].id,), (_feature("hole_1"),), None)  # type: ignore[arg-type]
+    try:
+        assert by_hand.scope.text().endswith(": 1"), by_hand.scope.text()
+    finally:
+        by_hand.release()
+        by_hand.deleteLater()
+
+
+def test_the_range_check_names_its_size_and_duration_before_the_first_corner(
+    qt_app: QApplication, monkeypatch: Any
+) -> None:
+    """RM-578: Ein eigener Baustein prüft bis 512 Ecken, und der Dialog sagt vorher, wie lange.
+
+    Geschätzt aus dem Schnitt, der den Ausschnitt ohnehin einmal rechnet, mal der
+    Zahl der Ecken; gesagt, bevor die erste Ecke läuft.
+    """
+    import app.ui.recipe_dialog as module
+    from app.ui.recipe_dialog import estimate_text
+
+    assert estimate_text(4, 0.5) == "Geprüft werden 4 Kombinationen, das dauert wenige Sekunden."
+    assert estimate_text(4, 5.0) == "Geprüft werden 4 Kombinationen, etwa 20 Sekunden."
+    assert estimate_text(512, 2.0).endswith("etwa 18 Minuten.")
+    # Einzahl und kurze Läufe haben eigene Sätze (Review G-b: „etwa 1 Sekunden“).
+    assert estimate_text(1, 0.3) == "Geprüft wird eine Kombination, das dauert wenige Sekunden."
+    assert estimate_text(1, 30.0) == "Geprüft wird eine Kombination, etwa 30 Sekunden."
+    assert estimate_text(1, 200.0) == "Geprüft wird eine Kombination, etwa 4 Minuten."
+
+    heard: list[tuple[str, object]] = []
+    recipe = SimpleNamespace(
+        exposed=(
+            SimpleNamespace(name="a", minimum=1.0, maximum=2.0),
+            SimpleNamespace(name="b", minimum=1.0, maximum=2.0),
+        )
+    )
+    monkeypatch.setattr(module.recipes, "range_size", lambda exposed: 4)
+
+    clock = [100.0]
+    monkeypatch.setattr(module.time, "monotonic", lambda: clock[0])
+
+    def checking(*args: object, progress: Any = None, **kwargs: object) -> object:
+        heard.append(("check", None))
+        # Vier Ecken zu je 30 s, gemeldet wie ``range_check``: vier Phasen je Ecke.
+        for corner in range(4):
+            for phase in range(4):
+                progress((corner * 4 + phase) / 16, "Ecke")
+            clock[0] += 30.0
+        return recipe
+
+    monkeypatch.setattr(module.recipes, "range_check", checking)
+    worker = module._CheckWorker(lambda: recipe, None)  # type: ignore[arg-type]
+    worker.planned.connect(lambda text: heard.append(("plan", text)))
+    try:
+        worker.work()
+        kinds = [kind for kind, _text in heard]
+        assert kinds[:2] == ["plan", "check"], "erst die Ansage, dann die Ecken"
+        assert heard[0][1] == "Geprüft werden 4 Kombinationen, das dauert wenige Sekunden."
+        # Nach der ersten Ecke zieht das gemessene Mittel nach (Review G-b).
+        assert heard[2:] == [
+            ("plan", "Geprüft werden 4 Kombinationen, etwa 2 Minuten."),
+            ("plan", "Geprüft werden 4 Kombinationen, etwa 2 Minuten."),
+            ("plan", "Geprüft werden 4 Kombinationen, etwa 2 Minuten."),
+        ]
+    finally:
+        worker.deleteLater()
 
 
 def test_the_dialog_says_what_it_takes(qt_app: QApplication) -> None:

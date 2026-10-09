@@ -74,10 +74,13 @@ MATERIALS = dict(
 LAYER = float(os.environ.get("SONDE_SCHICHT", "0") or 0.0)
 #: Der Stand vor RM-622: Der Rat weiß nichts vom Reinigungsturm.
 WITHOUT_TOWER = os.environ.get("SONDE_OHNE_TURM") == "1"
+#: Die Stützart statt ``grid`` (``tree``: organische Bäume des Programms).
+STYLE = os.environ.get("SONDE_STIL", "grid")
 RUN = (
     ("natuerlich-" + "-".join(MATERIALS.values()) if NATURAL else MATERIAL)
     + (f"-{LAYER:g}" if LAYER else "")
     + ("-ohne-turm" if WITHOUT_TOWER else "")
+    + (f"-{STYLE}" if STYLE != "grid" else "")
 )
 PATHS = (
     "support.z_gap",
@@ -224,7 +227,7 @@ def run(name: str) -> dict[str, object]:
         row["profile"] = info
         settings = standard
         for path, value in (
-            ("support.style", "grid"),
+            ("support.style", STYLE),
             ("support.placement", "everywhere"),
             ("adhesion.kind", "skirt"),
         ):
@@ -351,10 +354,32 @@ def run(name: str) -> dict[str, object]:
     return row
 
 
+def off_grid_levels(gcode: Path) -> int:
+    """Wie viele Ebenen nicht auf dem Raster der Modellschichten liegen — die
+    eigenen Höhen der Stütze (``independent_support_layer_height``)."""
+    levels: set[float] = set()
+    with gcode.open(encoding="utf-8", errors="replace") as handle:
+        for line in handle:
+            if line.startswith((";Z:", "; Z_HEIGHT:")):
+                levels.add(round(float(line.split(":", 1)[1]), 4))
+    ordered = sorted(levels)
+    if len(ordered) < 3:
+        return 0
+    steps = sorted(round(b - a, 4) for a, b in itertools.pairwise(ordered))
+    layer = max(set(steps), key=steps.count)
+    first = ordered[0]
+    return sum(
+        1
+        for level in ordered
+        if abs((level - first) / layer - round((level - first) / layer)) > 1e-3
+    )
+
+
 def measured(gcode: Path) -> dict[str, object]:
     target, reference, split = areas(gcode)
     return {
         "split": split,
+        "off_grid_levels": off_grid_levels(gcode),
         "ziel": gcode_kontakt.measure(gcode, target),
         "bezug": gcode_kontakt.measure(gcode, reference),
     }
@@ -388,6 +413,7 @@ if __name__ == "__main__":
         if result.get("ok"):
             print(name, "Werte", result["controls"], "je Teil", result["per_part"], flush=True)
             print("  Teilung", result["split"], flush=True)
+            print("  Zwischenebenen", result.get("off_grid_levels"), flush=True)
             print("  ziel ", short(result["ziel"]), flush=True)  # type: ignore[arg-type]
             print("  bezug", short(result["bezug"]), flush=True)  # type: ignore[arg-type]
         else:

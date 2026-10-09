@@ -786,10 +786,10 @@ def test_a_window_does_not_open_a_dialog_by_itself(qt_app: QApplication) -> None
 def test_first_steps_refreshes_the_existing_filament_rack_when_skipped(
     qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Über Hilfe → Erste Schritte bleibt das vorhandene Filamentpanel aktuell.
+    """Über Hilfe → Erste Schritte bleiben die Lageranzeigen aktuell.
 
-    Auch „Später einstellen“ aktualisiert seine Anzeige, ohne das Dokument
-    neu auszuwerten oder gelesene Slicerprofile in den Bestand zu übernehmen.
+    Auch „Später einstellen“ aktualisiert sie, ohne das Dokument neu
+    auszuwerten oder gelesene Slicerprofile in den Bestand zu übernehmen.
     """
     from app.ui import main_window
 
@@ -809,7 +809,7 @@ def test_first_steps_refreshes_the_existing_filament_rack_when_skipped(
     window = MainWindow(Session(), settings)
     refreshed = mock.Mock()
     monkeypatch.setattr(first_run, "FirstRunDialog", LaterDialog)
-    monkeypatch.setattr(window.filaments, "refresh_catalogue", refreshed)
+    monkeypatch.setattr(window, "_refresh_inventory", refreshed)
     monkeypatch.setattr(main_window, "save_settings", lambda _settings: None)
     monkeypatch.setattr(type(window.session), "set_agent_backend", lambda *_args: None)
     monkeypatch.setattr(window, "_refresh_chat_availability", lambda **_kwargs: None)
@@ -1257,10 +1257,9 @@ def test_flatpak_mail_composer_receives_plain_text(
     portal_error: bool,
 ) -> None:
     """Der Mailentwurf erhält Satzzeichen und Zeilenwechsel ohne Prozentkodierung."""
-    from PySide6.QtTest import QTest
-
     from app.core.support import Ticket
     from app.ui import support_dialog as module
+    from tests.ui_helpers import wait_until
 
     bus = mail_portal_bus
     bus.error = portal_error
@@ -1272,7 +1271,13 @@ def test_flatpak_mail_composer_receives_plain_text(
     monkeypatch.setattr(dialog, "ticket", lambda: ticket)
 
     dialog._open_mail()
-    QTest.qWait(10)
+    # Die Antwort des Portals kommt über die Ereignisschleife; zehn feste
+    # Millisekunden reichten dem Intel-Mac-Läufer nicht (Fensterauswahl
+    # 37887289131).
+    wait_until(
+        qt_app,
+        lambda: dialog.by_mail.isEnabled() if portal_error else bool(dialog.state.text()),
+    )
 
     assert len(bus.calls) == 1
     assert bus.calls[0].interface() == "org.freedesktop.portal.Email"

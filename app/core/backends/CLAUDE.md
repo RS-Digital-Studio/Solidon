@@ -14,6 +14,8 @@ außer dem Chat benutzbar. Einzuhalten ist `.claude/rules/agentenschicht.md`
 | `llm.py` | Das Sprachmodell hinter dem Agenten — gehostet oder lokal (Ollama); `OLLAMA_CONTEXT_TOKENS`, `OLLAMA_ANSWER_TOKENS`, `prompt_was_cut`, `PROMPT_TOKENS`/`PROMPT_TOOL_COUNT` |
 | `mesh.py` | Mesh-Erzeugung für Weg 3, lokal oder gehostet (Säule B) |
 | `resources.py` | Gemeinsame Schwerlastspur für lokale KI auf derselben Grafikkarte (`local_ai_slot`, `keep_warm`) |
+| `machine.py` | Was dieser Rechner mitbringt: Apple Silicon und Arbeitsspeicher über das System (`this_machine`, ohne Prozess), eine NVIDIA-Karte über `nvidia-smi` im Arbeiter (`probe_card`), `Machine.graphics_gb` |
+| `needs.py` | Die eine Quelle für Voraussetzungen vor dem Laden: was ein Modell bzw. Weg 3 braucht, ob dieser Rechner es hat, und der Ausweg (`chat_needs`, `graphics_verdict`, `chat_disk_need`, `pull_space_problem`, `generator_needs`, `duration_text`) |
 | `keys.py` | Wo der eigene Schlüssel des Nutzers liegt |
 | `comfy_setup.py` | Ein fremdes ComfyUI für Weg 3 einrichten (§36): Fassung prüfen (`check_version`), Modelldateien laden (`ModelFile`: Repo, Revision, Byte, SHA-256, Zielordner, Rolle) — TRELLIS.2 und BiRefNet für den Bildweg, auf Wunsch FLUX.2 [klein] 4B für den Textweg —, Reste der TripoSG-Einrichtung räumen (`remove_legacy`) |
 | `data/text_to_image.json`, `data/image_to_mesh.json` | Die ComfyUI-Abläufe: Bild aus Text und Netz aus Bild; der Weg aus Text fährt beide nacheinander (`mesh.WORKFLOW_STAGES`), nur aus eingebauten Knoten (ab ComfyUI 0.35); geprüft gegen `tests/data/comfyui/object_info.json`, erzeugt mit `tools/comfy_node_info.py` |
@@ -51,6 +53,21 @@ Messung ist die Agenten-Suite.
   Ein `shutdown` aus dem wartenden Thread weckte das `recv` unter macOS nicht
   sicher, und über Ungelesenem setzt er die Verbindung unter Windows zurück.
   Die Verbindung baut `_local_connection`; Tests setzen dort ihre Attrappe ein.
+- **Vor dem Laden die Voraussetzungen** (RM-564, Entscheidung Robert):
+  `Machine.graphics_gb` ist auf Apple Silicon der Anteil, den macOS der
+  Grafik lässt, sonst eine erkannte Karte abzüglich `CARD_RESERVE_GB`.
+  `recommended_ollama_model` wählt das beste gemessene Modell, das ganz
+  hineinpasst, nur wenn Ollama hier rechnet (`ollama_runs_here`). Vorgabe
+  wird es nur auf Apple Silicon (sonst das kleinste); auf einem PC bleibt
+  `DEFAULT_OLLAMA_MODEL`, die Karte bestimmt dort nur den Satz. Die Sätze
+  stehen in `needs.py`; Mac-Werte sind gerechnet und sagen es.
+- **`nvidia-smi` nie im Hauptthread:** `machine.this_machine()` startet keinen
+  Prozess und nennt die Karte erst, wenn ein Arbeiter `probe_card()` gefahren
+  hat (Chat einrichten, ComfyUI einrichten, Chatleiste); vorher sagt
+  `Machine.card_asked` „nicht gefragt“, und kein Satz behauptet „keine Karte“.
+  Im eigenen Flatpak über `discover.on_host`; den Modellordner von Ollama
+  kennt Solidon dort nicht. Die Suite setzt einen neutralen Rechner ein und
+  lässt `run_limited` scheitern.
 - **`PROMPT_TOKENS` und `PROMPT_TOOL_COUNT`** stehen in `llm.py` und gehören
   zu derselben gezählten Anfrage; gezählt wird mit
   `tools/measure_local_model.py --count-tokens` (ein Antworttoken, JSON mit
@@ -118,6 +135,11 @@ Revisionen, Byte und SHA-256 stehen an `comfy_setup.SHAPE_FILES`,
   (`generate.GENERATED_REPAIR`). Begründung im Docstring von `mesh.py`. Nach
   `DecimateMesh` füllt ein zweites `FillHoles` die kleinen Vierecklöcher, die
   das Ausdünnen offen lässt.
+- **Platz, Karte und Dauer stehen vor dem Laden da** (RM-564,
+  `needs.generator_needs`): die gewählten Dateien plus `HEADROOM_GIGABYTES`
+  gegen `free_gigabytes`, die Karte gegen `MEASURED_GRAPHICS_GB`, die
+  gemessene Dauer (`FIRST_*_SECONDS`, `WARM_SECONDS_*`, RTX 4080); auf
+  Apple Silicon als gerechnet bzw. nicht gemessen.
 
 ## Grenzen
 

@@ -39,7 +39,7 @@ from app.core.types import (
     SettingAdvice,
     SliceResult,
 )
-from tests.helpers import object_values, supported_table
+from tests.helpers import object_values, slice_contour, supported_table
 
 MESHES = Path(__file__).parent / "data" / "meshes"
 
@@ -398,10 +398,10 @@ def _layers(
     layers = tuple(
         LayerInfo(
             z=float(index) * 0.2,
-            contours=(Polygon(outline=square),),
+            contours=(slice_contour(square),),
             area=area,
             overhang_area=overhang,
-            islands=(square,) if islands and index > 0 else (),
+            islands=(Polygon(outline=square),) if islands and index > 0 else (),
             min_width=min_width,
         )
         for index, area in enumerate(areas)
@@ -795,8 +795,8 @@ def _standing_on(*feet: float) -> SliceResult:
     # das Bett des Druckers — ein Brim wird nur so breit vorgeschlagen, wie es
     # dort Platz hat (``advise.brim_room``).
     contours = tuple(
-        Polygon(
-            outline=(
+        slice_contour(
+            (
                 (20.0 * index, 0.0),
                 (20.0 * index + area**0.5, 0.0),
                 (20.0 * index + area**0.5, area**0.5),
@@ -816,7 +816,7 @@ def _standing_on(*feet: float) -> SliceResult:
     above = replace(
         first,
         z=0.3,
-        contours=(Polygon(outline=((0.0, 0.0), (200.0, 0.0), (200.0, 50.0), (0.0, 50.0))),),
+        contours=(slice_contour(((0.0, 0.0), (200.0, 0.0), (200.0, 50.0), (0.0, 50.0))),),
     )
     return SliceResult(
         layers=(first, above), support_volume=0.0, first_layer_area=sum(feet), source="internal"
@@ -3186,8 +3186,9 @@ def test_an_empty_print_from_creality_says_what_the_family_says(
     assert raised.value.suggestions, "Regel 17"
 
 
+@pytest.mark.parametrize("returncode", [4294967246, 206])
 def test_an_orca_refusal_for_parts_off_the_plate_says_so(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, returncode: int
 ) -> None:
     """KUNDE-09: Der Laptop-Ständer (205 × 272 mm) passt nicht auf den Centauri
     Carbon 2. Der ElegooSlicer lehnt mit -50 und „found error, exit" ab —
@@ -3202,7 +3203,7 @@ def test_an_orca_refusal_for_parts_off_the_plate_says_so(
     executable = tmp_path / "elegoo-slicer.exe"
     executable.write_bytes(b"")
     finished = _Finished(b"Slic3r::CLI::run found error, exit\n")
-    finished.returncode = 4294967246
+    finished.returncode = returncode  # Windows als DWORD, Linux und macOS als Byte
     monkeypatch.setattr(handover, "_run_slicer", lambda *args, **kwargs: finished)
     setup = handover.SlicerSetup(executable=executable, flavour="orca")
 
@@ -3229,8 +3230,9 @@ def test_an_orca_refusal_for_parts_off_the_plate_says_so(
         ),
     ],
 )
+@pytest.mark.parametrize("returncode", [4294967195, 155])
 def test_an_orca_refusal_for_crossing_paths_says_so(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, program: str, log: bytes
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, program: str, log: bytes, returncode: int
 ) -> None:
     """In der Slicer-Matrix (RM-312) endete chufang.3mf, Platte 2 (sieben Teile,
     sechs Farben), an OrcaSlicer und Creality Print mit -101: Der Reinigungsturm
@@ -3243,7 +3245,7 @@ def test_an_orca_refusal_for_crossing_paths_says_so(
     executable = tmp_path / program
     executable.write_bytes(b"")
     finished = _Finished(log)
-    finished.returncode = 4294967195
+    finished.returncode = returncode
     monkeypatch.setattr(handover, "_run_slicer", lambda *args, **kwargs: finished)
     setup = handover.SlicerSetup(executable=executable, flavour="orca")
 
@@ -3255,6 +3257,46 @@ def test_an_orca_refusal_for_crossing_paths_says_so(
     assert "kreuzen" in str(problem.detail)
     assert "keine Druckdatei" not in str(problem.detail)
     assert {action.id for action in problem.suggestions} >= {"export_only", "show_output"}
+    assert problem.values.get("exit_code") is None, "die Zahl gehört ins Protokoll"
+
+
+@pytest.mark.parametrize("returncode", [4294967234, 194])
+def test_an_orca_refusal_for_mixed_temperatures_says_so(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, returncode: int
+) -> None:
+    """Anycubic Slicer Next lehnte eine Platte mit PLA und PETG am Kobra 2 mit −62
+    ab (``CLI_FILAMENTS_DIFFERENT_TEMP``), ohne ein Wort auf der Konsole; der
+    Kunde las „Der Slicer hat keine Druckdatei geschrieben“ (RM-620)."""
+    profile = profiles.make_profile()
+    model = tmp_path / "model.stl"
+    model.write_bytes(b"solid x\nendsolid x\n")
+    executable = tmp_path / "AnycubicSlicerNext.exe"
+    executable.write_bytes(b"")
+    finished = _Finished(b"")
+    finished.returncode = returncode
+    runs: list[object] = []
+
+    def run(*args: object, **kwargs: object) -> _Finished:
+        runs.append(args)
+        return finished
+
+    monkeypatch.setattr(handover, "_run_slicer", run)
+    setup = handover.SlicerSetup(executable=executable, flavour="orca")
+
+    with pytest.raises(ExternalToolError) as raised:
+        # Mit Anordnungsvorgabe wie aus dem Druckdialog: Nur dort fragt der
+        # zweite Lauf ohne sie, und den gibt es bei -62 nicht.
+        handover.slice_model(
+            model, print_settings.resolve(profile), profile, setup, keep_arrangement=True
+        )
+
+    problem = raised.value
+    assert handover.signed_exit_code(4294967234) == -62
+    assert "Temperaturbereiche" in str(problem.detail)
+    assert "keine Druckdatei" not in str(problem.detail)
+    assert problem.suggestions[0].id == "arrange_on_bed", "Anordnen trennt nach Filament"
+    assert "open_print_settings" not in {action.id for action in problem.suggestions}
+    assert len(runs) == 1, "die Temperaturprüfung hängt nicht an der Anordnung"
     assert problem.values.get("exit_code") is None, "die Zahl gehört ins Protokoll"
 
 
@@ -3314,6 +3356,49 @@ def test_bambus_refusal_in_its_result_file_reaches_the_slicer_output(
             model, print_settings.resolve(profile), profile, setup, output_dir=output_dir
         )
     assert "alt" not in raised.value.values["output"]
+
+
+def test_a_refusal_in_the_result_file_is_no_crash_after_solidon_stopped_the_slicer(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Endet ein Slicer der Orca-Familie nach seiner ``result.json`` nicht, beendet
+    Solidon ihn (``process.FINISHED_LINGER_SECONDS``), und unter Linux und macOS
+    meldet der Prozess dann Solidons SIGTERM als -15. ``crashed`` hielt das für
+    einen Absturz, und die Absage in der Datei — hier -50, ein Teil neben der
+    Platte — ging unter (RM-621, Review). Ihr Code zählt."""
+    profile = profiles.make_profile()
+    model = tmp_path / "model.stl"
+    model.write_bytes(b"solid x\nendsolid x\n")
+    executable = tmp_path / "bambu-studio"
+    executable.write_bytes(b"")
+
+    def run(command: list[str], *args: object, **kwargs: object) -> _Finished:
+        target = Path(command[command.index("--outputdir") + 1])
+        (target / "result.json").write_text(
+            json.dumps({"error_string": "Some objects are outside the plate.", "return_code": -50}),
+            encoding="utf-8",
+        )
+        stopped = _Finished(b"")
+        stopped.returncode = -15
+        return stopped
+
+    monkeypatch.setattr(handover, "_run_slicer", run)
+    setup = handover.SlicerSetup(executable=executable, flavour="orca")
+
+    with pytest.raises(ExternalToolError) as raised:
+        handover.slice_model(
+            model,
+            print_settings.resolve(profile),
+            profile,
+            setup,
+            output_dir=tmp_path / "ausgabe",
+            keep_arrangement=False,
+        )
+
+    detail = str(raised.value.detail)
+    assert "abgestürzt" not in detail, detail
+    assert "Druckplatte" in detail, detail
+    assert "outside the plate" in raised.value.values["output"]
 
 
 def test_bambus_result_file_is_this_runs_or_none(tmp_path: Path) -> None:
@@ -4533,6 +4618,101 @@ def test_a_crash_is_told_apart_from_a_refusal(code: int, expected: bool) -> None
     """Beide enden ohne Druckdatei, aber sie verlangen verschiedene Antworten:
     „Prüfen Sie Ihr Profil" hilft bei einem Absturz niemandem."""
     assert handover.crashed(code) is expected
+
+
+@pytest.mark.parametrize(
+    ("code", "expected"),
+    [
+        # bwrap meldet einen Signaltod als 128 + Signal (``bubblewrap.c``):
+        # SIGSEGV, SIGABRT, SIGBUS, SIGILL, SIGFPE, SIGKILL.
+        (139, True),
+        (134, True),
+        (135, True),
+        (132, True),
+        (136, True),
+        (137, True),
+        # Die Byteform der Orca-Absagen bleibt eine Absage (RM-620): -62, -50,
+        # -101; manche sind genau 128 + Signal, an dem kein Slicer stirbt.
+        (194, False),
+        (206, False),
+        # -101 (CLI_GCODE_PATH_CONFLICTS) = 128 + SIGPROF
+        (155, False),
+        # -100 (CLI_SLICING_ERROR) = 128 + SIGWINCH
+        (156, False),
+        # -102 bis -104 = 128 + SIGVTALRM, SIGXFSZ, SIGXCPU
+        (154, False),
+        (153, False),
+        (152, False),
+        (1, False),
+        (0, False),
+    ],
+)
+def test_a_crash_behind_flatpak_is_a_crash(code: int, expected: bool) -> None:
+    """Hinter ``flatpak run`` oder ``flatpak-spawn`` kommt ein Signaltod als
+    128 + Signal an, nicht als negative Zahl (RM-621, am Quelltext von bwrap
+    und flatpak-spawn hergeleitet): Ein SIGSEGV käme als 139 an, und der Kunde
+    läse „keine Druckdatei geschrieben“ statt „abgestürzt“. Nur die Signale,
+    an denen ein Programm stirbt, zählen; ohne Starter bleibt 139 ein
+    gewöhnlicher Rückgabewert."""
+    assert handover.crashed(code, wrapped=True) is expected
+    assert handover.crashed(code) is False
+
+
+def test_a_flatpak_slicer_that_crashes_says_so(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Die Kette bis zum Kunden: Orca als Flatpak stirbt an SIGSEGV (RM-621)."""
+    from app.core import discover
+
+    class _Crashed:
+        returncode = 139
+        stdout = b""
+        stderr = b""
+
+    model = tmp_path / "model.stl"
+    model.write_bytes(b"solid x\nendsolid x\n")
+    executable = tmp_path / "io.github.softfever.OrcaSlicer"
+    executable.write_bytes(b"")
+    monkeypatch.setattr(handover, "_run_slicer", lambda *args, **kwargs: _Crashed())
+    monkeypatch.setattr(
+        discover,
+        "flatpak_app",
+        lambda program: "io.github.softfever.OrcaSlicer" if Path(program) == executable else "",
+    )
+    profile = profiles.make_profile()
+    setup = handover.SlicerSetup(executable=executable, flavour="orca")
+
+    with pytest.raises(ExternalToolError) as raised:
+        handover.slice_model(model, print_settings.resolve(profile), profile, setup)
+
+    assert "abgestürzt" in str(raised.value.detail), str(raised.value.detail)
+    assert raised.value.suggestions[0].id == "choose_slicer"
+
+
+@pytest.mark.parametrize(
+    ("slicer_app", "inside", "expected"),
+    [
+        ("io.github.softfever.OrcaSlicer", False, True),
+        ("", True, True),
+        ("", False, False),
+    ],
+)
+def test_both_flatpak_starters_count_as_a_wrapper(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    slicer_app: str,
+    inside: bool,
+    expected: bool,
+) -> None:
+    """Ein Slicer als Flatpak und Solidon selbst im Flatpak (``flatpak-spawn
+    --host``) reichen den Signaltod beide als 128 + Signal weiter (RM-621)."""
+    from app.core import discover
+
+    monkeypatch.setattr(discover, "flatpak_app", lambda program: slicer_app)
+    monkeypatch.setattr(discover, "in_flatpak", lambda: inside)
+    setup = handover.SlicerSetup(executable=tmp_path / "orca-slicer", flavour="orca")
+
+    assert handover._wrapped(setup) is expected
 
 
 def test_a_crashed_slicer_says_so_instead_of_blaming_the_profile(
@@ -8098,6 +8278,7 @@ def test_without_a_slicer_the_dialog_advises_for_its_actual_export(
         _fits_in_play=lambda: (),
         _connector_diameters=lambda: (),
         _part_fits=dict,
+        _declined_advice=frozenset,
         _advice_ready=lambda _worker, _context, _analysis, entries, _results: received.extend(
             entries
         ),
@@ -8370,7 +8551,7 @@ def test_the_file_export_of_a_selection_asks_the_whole_job(
         print_settings.resolve(profile, "standard"), "support.style", "auto"
     )
     setup = handover.SlicerSetup(tmp_path / "elegoo-slicer.exe", "orca")
-    monkeypatch.setattr(main_window, "remembered_setup", lambda *args: setup)
+    monkeypatch.setattr(main_window, "remembered_setup", lambda *_args, **_kwargs: setup)
 
     def export(job: tuple[Any, ...]) -> tuple[set[str], set[str]]:
         folder = tmp_path / f"auftrag_{len(job)}"
@@ -8387,6 +8568,7 @@ def test_the_file_export_of_a_selection_asks_the_whole_job(
             _scene=None,
             _document=None,
             _checked=None,
+            _chosen=None,
             cancelled=None,
             _begin_write=lambda: None,
         )
@@ -9048,7 +9230,8 @@ def test_a_mixed_plate_says_that_the_gap_is_rounded(
     monkeypatch.setattr(handover, "_native_process", lambda _setup: native)
     profile = profiles.make_profile("centauri-carbon-2", "pla")
     base = print_settings.with_choice(print_settings.resolve(profile), "support.style", "grid")
-    # Übernommen, was der Dialog anbietet: 0,28 nur, wo ein Teil PETG ist.
+    # Übernommen 0,28 — ohne Turm der Wert, den der Dialog am PETG-Teil anbietet;
+    # neben dem Turm rät er ganze Schichten, und 0,28 gilt dann beiden Teilen.
     settings = (
         print_settings.with_accepted(base, "support.z_gap", 0.28) if "petg" in materials else base
     )
@@ -9158,6 +9341,518 @@ def test_beside_a_tower_each_part_gets_its_gap_in_whole_layers(
     with zipfile.ZipFile(path) as archive:
         project = json.loads(archive.read(threemf.PROJECT_SETTINGS_PATH))
     assert (project.get("independent_support_layer_height") == "1") is freed
+
+
+@pytest.mark.parametrize("tower", [True, False])
+def test_another_plate_beside_a_tower_is_asked_in_whole_layers(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, tower: bool
+) -> None:
+    """*Slicen* schreibt je Platte eine Datei und fragt die Teile der übrigen
+    Platten, ob sie einen übernommenen Wert für sich verlangen
+    (``writer._served_elsewhere``). Auch dort zählt der Turm (RM-622): Platte 0
+    trägt PLA- und PETG-Tisch bei 0,08er Schichten mit eigener Wahl 0,16, Platte
+    1 einen Block ohne Stütze, übernommen sind 0,24. Neben dem Turm verlangt
+    keiner der Tische etwas, und der Block bekommt die 0,24 mit dem Satz „gilt
+    für alle Teile“; ohne Turm verlangen die Tische 0,10 und 0,12, und der Block
+    bleibt still."""
+    import trimesh
+
+    from app.core.export import writer
+    from app.core.geom.mesh import MeshData
+    from app.core.types import SceneObject
+
+    monkeypatch.setattr(
+        handover, "_native_process", lambda _setup: _TOWER if tower else {"enable_prime_tower": "0"}
+    )
+    profile = profiles.make_profile("centauri-carbon-2", "pla")
+    settings = print_settings.resolve(profile)
+    for path, value in (
+        ("support.style", "grid"),
+        ("layers.layer_height", 0.08),
+        ("support.z_gap", 0.16),
+    ):
+        settings = print_settings.with_choice(settings, path, value)
+    settings = print_settings.with_accepted(settings, "support.z_gap", 0.24)
+    cube = trimesh.creation.box(extents=(10.0, 10.0, 10.0))
+    cube.apply_translation([0.0, 0.0, 5.0])
+    job = [
+        *(
+            SceneObject(
+                id=f"tisch-{index}",
+                name=f"{material.upper()}-Tisch",
+                mesh=MeshData(supported_table(index)),
+                material=material,
+                plate=0,
+            )
+            for index, material in enumerate(("pla", "petg"))
+        ),
+        SceneObject(id="block", name="Block", mesh=MeshData(cube), material="pla", plate=1),
+    ]
+    setup = handover.SlicerSetup(executable=Path("orca-slicer.exe"), flavour="orca")
+
+    path, findings = writer.write_assembly(
+        job,
+        tmp_path,
+        project_name="auftrag",
+        profile=profile,
+        plate=1,
+        settings=settings,
+        flavour="orca",
+        setup=setup,
+        job=job,
+    )
+
+    block = object_values(path, "Metadata/model_settings.config")["Block"]
+    said = {
+        entry.values.get("setting") for entry in findings if entry.code == "export.part_setting_all"
+    }
+    if tower:
+        assert block.get("support_top_z_distance") == "0.24"
+        assert "support.z_gap" in said
+    else:
+        assert "support_top_z_distance" not in block
+        assert "support.z_gap" not in said
+
+
+def test_a_process_that_does_not_resolve_builds_no_tower(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Lässt sich die Kette des Herstellerprozesses nicht auflösen, fragt die
+    Turmfrage nichts (Review RM-622): Vorher scheiterte daran der ganze Rat des
+    Druckdialogs. Was an der Kette fehlt, sagt die Grundlage."""
+    from app.core.errors import ExternalToolError
+    from app.core.export import slicer_profiles, writer
+    from app.core.geom.mesh import MeshData
+    from app.core.types import SceneObject
+
+    def broken(*_args: object, **_kwargs: object) -> dict[str, object]:
+        raise ExternalToolError(tool="OrcaSlicer", title="kaputt", detail="fehlt")
+
+    monkeypatch.setattr(handover, "profile_file", lambda *_args: Path("kaputt.json"))
+    monkeypatch.setattr(slicer_profiles, "resolve_values", broken)
+    setup = handover.SlicerSetup(
+        executable=Path("orca-slicer.exe"), flavour="orca", base_process="kaputt"
+    )
+    bodies = [
+        SceneObject(id="tisch", name="Tisch", mesh=MeshData(supported_table(0)), material="pla")
+    ]
+
+    assert handover.tower_cause(setup, filaments=2, objects=1) is None
+    assert writer.tower_plates(bodies, setup) == frozenset()
+
+
+@pytest.mark.parametrize(
+    ("executable", "flavour", "native", "organic"),
+    [
+        ("elegoo-slicer.exe", "orca", {"support_type": "tree(auto)"}, {"tree", "auto"}),
+        ("orca-slicer.exe", "orca", {"support_type": "normal(auto)"}, {"tree"}),
+        (
+            "elegoo-slicer.exe",
+            "orca",
+            {"support_type": "tree(auto)", "support_style": "tree_hybrid"},
+            set(),
+        ),
+        ("orca-slicer.exe", "orca", {"support_style": "organic"}, {"tree"}),
+        ("prusa-slicer.exe", "prusa", {}, {"tree"}),
+        ("superslicer.exe", "prusa", {}, set()),
+        ("CuraEngine.exe", "cura", {}, set()),
+    ],
+)
+def test_organic_trees_are_known_per_program(
+    monkeypatch: pytest.MonkeyPatch,
+    executable: str,
+    flavour: str,
+    native: dict[str, str],
+    organic: set[str],
+) -> None:
+    """Welche Stützarten ein Programm als organische Bäume auf den Schichten des
+    Modells druckt (RM-622): „Baum“ in der Orca-Familie, solange der
+    Herstellerprozess keinen anderen Baumstil führt (``tree_hybrid`` plant eigene
+    Stützebenen, ``TreeSupport.cpp``), „automatisch“ dazu, wo er mit Bäumen
+    stützt (Elegoo, Bambu); PrusaSlicer schreibt „Baum“ organisch; SuperSlicer
+    kennt keine Bäume, Cura rundet ohnehin."""
+    monkeypatch.setattr(handover, "_native_process", lambda _setup: native)
+    setup = handover.SlicerSetup(executable=Path(executable), flavour=flavour)  # type: ignore[arg-type]
+
+    assert handover.organic_styles(setup) == frozenset(organic)
+
+
+@pytest.mark.parametrize(
+    ("chain", "organic"),
+    [("organic", {"tree", "auto"}), ("snug", {"tree"}), (None, {"tree"}), ("kaputt", {"tree"})],
+)
+def test_prusaslicer_prints_automatic_supports_as_trees_where_its_process_does(
+    monkeypatch: pytest.MonkeyPatch, chain: str | None, organic: set[str]
+) -> None:
+    """PrusaSlicer druckt „automatisch“ nach dem Stil seines Prozesses
+    (``support_material_style``): organisch dort als Baum, sonst als Gitter
+    (RM-622, Review L4). Ohne Kette oder mit einer, die sich nicht auflösen
+    lässt, bleibt „Baum“ allein."""
+    from app.core.export import manufacturer
+
+    def prusa_chain(*_args: object) -> object:
+        if chain == "kaputt":
+            raise ExternalToolError(tool="PrusaSlicer", title="kaputt", detail="fehlt")
+        if chain is None:
+            return None
+        return SimpleNamespace(values={"support_material_style": chain})
+
+    monkeypatch.setattr(manufacturer, "prusa_chain", prusa_chain)
+    setup = handover.SlicerSetup(executable=Path("prusa-slicer.exe"), flavour="prusa")
+
+    assert handover.organic_styles(setup, profiles.make_profile()) == frozenset(organic)
+
+
+@pytest.mark.parametrize(
+    ("flavour", "organic"), [("orca", {"tree"}), ("prusa", {"tree"}), ("cura", set())]
+)
+def test_without_a_program_the_family_says_which_trees_are_organic(
+    flavour: str, organic: set[str]
+) -> None:
+    """Ohne gefundenen Slicer gilt die Familie der Datei (RM-622, Review M3): Alle
+    gemessenen Programme der Orca-Familie und PrusaSlicer drucken „Baum“
+    organisch; „automatisch“ hängt am Prozess und bleibt offen, Cura rundet
+    ohnehin."""
+    assert handover.organic_styles(None, flavour=flavour) == frozenset(organic)  # type: ignore[arg-type]
+
+
+def test_a_gap_between_two_layers_under_trees_is_said_to_round(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Wählt der Kunde unter Bäumen einen Abstand zwischen zwei Schichten, rundet
+    der Slicer ihn; der Export sagt es, statt zu behaupten, die eigene
+    Stützschichthöhe lasse ihn gelten (RM-622). Die schaltet er dort auch nicht
+    gegen den Herstellerprozess ein: Unter Bäumen wirkt sie nicht (Review L1)."""
+    from app.core.export import writer
+    from app.core.geom.mesh import MeshData
+    from app.core.types import SceneObject
+
+    native = {"enable_prime_tower": "0", "independent_support_layer_height": "0"}
+    monkeypatch.setattr(handover, "_native_process", lambda _setup: native)
+    profile = profiles.make_profile("centauri-carbon-2", "petg")
+    settings = print_settings.with_choice(print_settings.resolve(profile), "support.style", "tree")
+    settings = print_settings.with_choice(settings, "support.z_gap", 0.28)
+    objects = [SceneObject(id="tisch", name="Tisch", mesh=MeshData(supported_table(0)))]
+    setup = handover.SlicerSetup(executable=Path("orca-slicer.exe"), flavour="orca")
+
+    path, findings = writer.write_assembly(
+        objects,
+        tmp_path,
+        project_name="baum",
+        profile=profile,
+        settings=settings,
+        flavour="orca",
+        setup=setup,
+    )
+
+    rounded = [entry for entry in findings if entry.code == "export.support_gap_rounded"]
+    assert [str(entry.message) for entry in rounded] == [
+        f"{setup.name} legt Baumstützen auf die Modellschichten und rundet den *Abstand oben "
+        "und unten*. Mit Gitter gilt er genau."
+    ]
+    assert "slicer.support_layers_freed" not in {entry.code for entry in findings}
+    with zipfile.ZipFile(path) as archive:
+        project = json.loads(archive.read(threemf.PROJECT_SETTINGS_PATH))
+    assert project.get("independent_support_layer_height", "0") == "0", "wie der Hersteller"
+
+
+@pytest.mark.parametrize(
+    ("style", "rounded", "freed"),
+    [("auto", True, False), ("grid", False, True)],
+)
+def test_the_gap_finding_follows_what_the_part_prints(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, style: str, rounded: bool, freed: bool
+) -> None:
+    """Der Satz zum Abstand zwischen zwei Schichten folgt dem, womit das Teil
+    gedruckt wird (RM-622, Review M3): Elegoos Prozess stützt unter
+    „automatisch“ mit organischen Bäumen, und der Abstand rundet; unter Gitter
+    gilt die eigene Stützschichthöhe, und der Export sagt, dass Solidon sie
+    gegen das Herstellerprofil einschaltet — nur dann schreibt er sie auch."""
+    from app.core.export import writer
+    from app.core.geom.mesh import MeshData
+    from app.core.types import SceneObject
+
+    native = {"support_type": "tree(auto)", "independent_support_layer_height": "0"}
+    monkeypatch.setattr(handover, "_native_process", lambda _setup: native)
+    profile = profiles.make_profile("centauri-carbon-2", "petg")
+    settings = print_settings.with_choice(print_settings.resolve(profile), "support.style", style)
+    settings = print_settings.with_choice(settings, "support.z_gap", 0.28)
+    objects = [SceneObject(id="tisch", name="Tisch", mesh=MeshData(supported_table(0)))]
+    setup = handover.SlicerSetup(executable=Path("elegoo-slicer.exe"), flavour="orca")
+
+    path, findings = writer.write_assembly(
+        objects,
+        tmp_path,
+        project_name="tisch",
+        profile=profile,
+        settings=settings,
+        flavour="orca",
+        setup=setup,
+    )
+
+    codes = {entry.code for entry in findings}
+    assert ("export.support_gap_rounded" in codes) is rounded
+    assert ("slicer.support_layers_freed" in codes) is freed
+    with zipfile.ZipFile(path) as archive:
+        project = json.loads(archive.read(threemf.PROJECT_SETTINGS_PATH))
+    assert (project.get("independent_support_layer_height") == "1") is freed
+
+
+def test_prusaslicer_says_the_gap_rounds_under_trees(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Auch PrusaSlicer legt organische Bäume auf die Modellschichten und rundet
+    einen Abstand zwischen zwei Schichten (RM-622, Review L2); der Export sagt
+    es wie bei der Orca-Familie."""
+    from app.core.export import manufacturer, writer
+    from app.core.geom.mesh import MeshData
+    from app.core.types import SceneObject
+
+    monkeypatch.setattr(manufacturer, "prusa_chain", lambda *_args: None)
+    profile = profiles.make_profile("centauri-carbon-2", "petg")
+    settings = print_settings.with_choice(print_settings.resolve(profile), "support.style", "tree")
+    settings = print_settings.with_choice(settings, "support.z_gap", 0.28)
+    objects = [SceneObject(id="tisch", name="Tisch", mesh=MeshData(supported_table(0)))]
+    setup = handover.SlicerSetup(executable=Path("prusa-slicer.exe"), flavour="prusa")
+
+    _path, findings = writer.write_assembly(
+        objects,
+        tmp_path,
+        project_name="prusa",
+        profile=profile,
+        settings=settings,
+        flavour="prusa",
+        setup=setup,
+    )
+
+    assert "export.support_gap_rounded" in {entry.code for entry in findings}
+
+
+def test_only_gaps_outside_organic_trees_free_the_support_layers() -> None:
+    """Die geschriebenen Abstände je Teil nach der Art, mit der es stützt
+    (RM-622, Review L1): Unter organischen Bäumen rundet jedes Programm, dort
+    hilft keine eigene Stützschichthöhe. Ein Teil ohne eigenen Abstand druckt
+    den der Platte, eines ohne Stützen keinen."""
+    profile = profiles.make_profile("centauri-carbon-2", "petg")
+    plate = print_settings.with_accepted(print_settings.resolve(profile), "support.z_gap", 0.28)
+    trees = print_settings.with_path(plate, "support.style", "tree")
+    grid = print_settings.with_path(plate, "support.style", "grid")
+    bare = print_settings.with_path(plate, "support.style", "none")
+    own = {"support_top_z_distance": "0.3", "support_bottom_z_distance": "0.3"}
+    split = handover.support_gaps_by_style
+
+    assert split(trees, organic={"tree"}) == ([pytest.approx(0.28)], [])
+    assert split(grid, organic={"tree"}) == ([], [pytest.approx(0.28)])
+    assert split(plate, [({}, trees), (own, grid), ({}, bare)], {"tree"}) == (
+        [pytest.approx(0.28)],
+        [pytest.approx(0.3), pytest.approx(0.3)],
+    )
+
+
+def test_a_declined_tree_keeps_gap_and_bottom_interface_for_the_grid(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Der Kunde wählt „Baum“ ab und übernimmt Abstand und untere Trennschicht
+    (RM-622, Review M1): Das Kinn druckt dann das Gitter der Platte und bekommt
+    beide wie der Tisch — gefragt mit der Art, mit der es druckt. Vorher fragte
+    der Export mit dem abgelehnten Baum, und das Kinn bekam bei Bambu Studio
+    weder 0,28 mm noch eine untere Trennschicht."""
+    from app.core.export import writer
+    from app.core.types import SceneObject
+    from tests.helpers import chin_over_chest, column_table
+
+    monkeypatch.setattr(handover, "_native_process", lambda _setup: {})
+    profile = profiles.make_profile("centauri-carbon-2", "petg")
+    settings = print_settings.resolve(profile, "standard")
+    for path, value in (("support.style", "grid"), ("support.bottom_interface_layers", 0)):
+        settings = print_settings.with_choice(settings, path, value)
+    for path, value in (("support.z_gap", 0.28), ("support.bottom_interface_layers", 2)):
+        settings = print_settings.with_accepted(settings, path, value)
+    objects = [
+        SceneObject(id="obj_1", name="Kinn", mesh=chin_over_chest(), material="petg"),
+        SceneObject(id="obj_2", name="Tisch", mesh=column_table(), material="petg"),
+    ]
+    setup = handover.SlicerSetup(executable=Path("bambu-studio.exe"), flavour="orca")
+
+    path, _findings = writer.write_assembly(
+        objects,
+        tmp_path,
+        project_name="abgewaehlt",
+        profile=profile,
+        settings=settings,
+        flavour="orca",
+        setup=setup,
+    )
+
+    written = object_values(path, "Metadata/model_settings.config")
+    for name in ("Kinn", "Tisch"):
+        assert float(written[name]["support_top_z_distance"]) == pytest.approx(0.28), name
+        assert written[name]["support_interface_bottom_layers"] == "2", name
+        assert "support_type" not in written[name], name
+
+
+@pytest.mark.parametrize(
+    ("executable", "native", "style", "rounds"),
+    [
+        (
+            "elegoo-slicer.exe",
+            {"support_type": "tree(auto)", "support_style": "tree_hybrid"},
+            "tree",
+            False,
+        ),
+        (
+            "elegoo-slicer.exe",
+            {"support_type": "normal(auto)", "support_style": "tree_slim"},
+            "tree",
+            False,
+        ),
+        ("elegoo-slicer.exe", {"support_type": "tree(auto)"}, "auto", True),
+        ("orca-slicer.exe", {"support_type": "normal(auto)"}, "auto", False),
+        (None, {}, "tree", True),
+    ],
+)
+def test_field_and_advice_agree_on_trees(
+    monkeypatch: pytest.MonkeyPatch,
+    executable: str | None,
+    native: dict[str, str],
+    style: str,
+    rounds: bool,
+) -> None:
+    """Feldsatz und Rat fragen dieselbe Auskunft (RM-622, Review M3): Ein
+    Prozess mit ``tree_hybrid`` oder ``tree_slim`` plant eigene Stützebenen, der
+    Abstand von 0,28 mm für PETG bleibt, und das Feld schweigt; unter Elegoos
+    „automatisch“ mit Bäumen und ohne gefundenen Slicer unter „Baum“ rät Solidon
+    0,2, und das Feld sagt, dass der Slicer rundet."""
+    from app.core.slice.analysis import slice_body
+
+    monkeypatch.setattr(handover, "_native_process", lambda _setup: native)
+    profile = profiles.make_profile("centauri-carbon-2", "petg")
+    settings = print_settings.resolve(profile, "standard")
+    for path, value in (("support.style", style), ("support.z_gap", 0.28)):
+        settings = print_settings.with_choice(settings, path, value)
+    setup = (
+        handover.SlicerSetup(executable=Path(executable), flavour="orca") if executable else None
+    )
+    program = slicer_keys.program_of(setup.executable) if setup is not None else ""
+    organic = handover.organic_styles(setup, profile, flavour="orca")
+
+    advice = advise.advise(
+        settings,
+        profile,
+        slice_body(MeshData(supported_table(0)), 0.2),
+        flavour="orca",
+        organic=organic,
+        # Die eigene Stützart gilt; unter der Tischplatte schlüge der Rat Hybrid vor (RM-584).
+        declined=frozenset({"support.style"}),
+    )
+    gap = next((entry.value for entry in advice if entry.path == "support.z_gap"), None)
+    note = slicer_keys.limitation("orca", "support.z_gap", settings, program, organic)
+
+    assert gap == (pytest.approx(0.2) if rounds else None)
+    assert (note is not None) is rounds, note
+
+
+@pytest.mark.parametrize(
+    ("program", "offered"), [("bambu-studio.exe", False), ("elegoo-slicer.exe", True)]
+)
+def test_under_trees_no_bottom_interface_where_the_program_skips_it(
+    monkeypatch: pytest.MonkeyPatch, program: str, offered: bool
+) -> None:
+    """Bambu Studio, Creality Print, Anycubic Slicer Next und PrusaSlicer drucken
+    unter Bäumen keine untere Trennschicht, ElegooSlicer und OrcaSlicer schon
+    (RM-622, gemessen an zwei Körpern aus PETG). Der Rat je Teil schlägt sie dort
+    nicht vor; der Druckdialog fragt dieselbe Stelle."""
+    from app.core.export import writer
+    from app.core.slice.analysis import slice_body
+    from app.core.types import SceneObject
+    from tests.helpers import chin_over_chest
+
+    monkeypatch.setattr(handover, "_native_process", lambda _setup: {})
+    profile = profiles.make_profile("centauri-carbon-2", "pla")
+    settings = print_settings.resolve(profile)
+    for path, value in (("support.style", "tree"), ("support.bottom_interface_layers", 0)):
+        settings = print_settings.with_choice(settings, path, value)
+    mesh = chin_over_chest()
+    entry = SceneObject(id="figur", name="Figur", mesh=mesh, material="pla")
+    setup = handover.SlicerSetup(executable=Path(program), flavour="orca")
+
+    advice = writer.part_advice(
+        entry,
+        mesh,
+        settings,
+        profile,
+        setup,
+        {},
+        result=slice_body(mesh, 0.2),
+        fit_kinds=(),
+        flavour="orca",
+        organic=handover.organic_styles(setup),
+    )
+
+    assert ("support.bottom_interface_layers" in {item.path for item in advice}) is offered
+
+
+@pytest.mark.parametrize(
+    ("flavour", "path", "executable", "said"),
+    [
+        ("orca", "support.z_gap", "elegoo-slicer.exe", True),
+        ("prusa", "support.z_gap", "prusa-slicer.exe", True),
+        ("prusa", "support.z_gap", "superslicer.exe", False),
+        ("orca", "support.bottom_interface_layers", "bambu-studio.exe", True),
+        ("orca", "support.bottom_interface_layers", "elegoo-slicer.exe", False),
+        ("orca", "support.tree_walls", "elegoo-slicer.exe", True),
+        ("prusa", "support.tree_walls", "prusa-slicer.exe", False),
+    ],
+)
+def test_the_field_says_what_trees_do_to_it(
+    monkeypatch: pytest.MonkeyPatch, flavour: str, path: str, executable: str, said: bool
+) -> None:
+    """Am Feld steht, was organische Bäume daraus machen (RM-622, Review L1): ein
+    Abstand zwischen zwei Schichten wird gerundet, und Bambu, Creality, Anycubic
+    und PrusaSlicer drucken darunter keine untere Trennschicht. SuperSlicer
+    druckt statt Bäumen Gitter, ElegooSlicer die untere Trennschicht. Welche
+    Art organisch ist, sagt dieselbe Auskunft wie dem Rat (Review M3)."""
+    monkeypatch.setattr(handover, "_native_process", lambda _setup: {})
+    settings = print_settings.resolve(profiles.make_profile())
+    for setting, value in (("support.style", "tree"), ("support.z_gap", 0.28)):
+        settings = print_settings.with_choice(settings, setting, value)
+    setup = handover.SlicerSetup(executable=Path(executable), flavour=flavour)  # type: ignore[arg-type]
+    program = slicer_keys.program_of(setup.executable)
+
+    note = slicer_keys.limitation(
+        flavour,  # type: ignore[arg-type]
+        path,
+        settings,
+        program,
+        handover.organic_styles(setup),
+    )
+    assert (note is not None) is said, note
+
+
+@pytest.mark.parametrize(
+    ("style", "executable", "dropped"),
+    [
+        ("tree", "elegoo-slicer.exe", True),
+        ("hybrid", "elegoo-slicer.exe", False),
+        ("tree", "prusa-slicer.exe", False),
+    ],
+)
+def test_tree_walls_count_only_where_the_program_reads_them(
+    style: str, executable: str, dropped: bool
+) -> None:
+    """Die Orca-Familie liest ``tree_support_wall_count`` unter organischen
+    Bäumen nicht (RM-584, gemessen am ElegooSlicer: derselbe G-Code mit einer
+    und zwei Wänden, unter Hybrid 14 % mehr Stütze). Dialog und Export filtern
+    den Rat dort wie die untere Trennschicht; PrusaSlicer verdoppelt organische
+    Äste über einen Durchmesser und behält ihn."""
+    flavour = "prusa" if executable.startswith("prusa") else "orca"
+    setup = handover.SlicerSetup(executable=Path(executable), flavour=flavour)  # type: ignore[arg-type]
+    organic = handover.organic_styles(setup)
+    program = slicer_keys.program_of(setup.executable)
+
+    ignored = handover.ignored_under_trees(style, organic, program)
+
+    assert ("support.tree_walls" in ignored) is dropped
 
 
 def test_the_part_advice_memo_knows_the_tower() -> None:

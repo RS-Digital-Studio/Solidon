@@ -52,8 +52,10 @@ from app.core.errors import (
     InternalError,
     OperationCancelled,
 )
-from app.core.generate import working_volume
+from app.core.generate import fell_apart, skin_thickness, working_volume
+from app.core.geom.mesh import only_a_skin
 from app.core.log import get_logger
+from app.core.types import Mesh
 from app.i18n import format_decimal, tr
 from app.ui.ai_disclosure import DisclosureResult, ensure_ai_disclosure
 from app.ui.dialogs import align_to_the_front, show_error, spoken_values
@@ -235,6 +237,12 @@ class _Worker(Worker):
         except AppError as problem:
             self.failed.emit(problem)
             return
+        # Hier fragen, nicht in der Liste: An einem zerfallenen Netz kostet die
+        # Antwort Sekunden, die Dicke eine; das Netz merkt sich beides, und die
+        # Liste liest es nur noch (``generate.fell_apart``, RM-550, Review K H1;
+        # ``generate.skin_thickness``, RM-577).
+        fell_apart(result.mesh)
+        skin_thickness(result.mesh)
         self.done.emit(result)
 
     def _progress(self, fraction: float, text: str) -> None:
@@ -386,6 +394,12 @@ class GenerateDialog(QDialog):
         Halt, Lizenz), bleibt der Dialog mit allen Versuchen offen, statt mit
         dem minutenlang erzeugten Netz zu schließen. Ohne ihn gibt der Dialog
         den Versuch nur über :attr:`result_mesh` heraus."""
+        self.minimum_wall: Callable[[], float | None] | None = None
+        """Die dünnste Wand, die der Drucker legt, in mm — gesetzt vom Fenster aus
+        dem Profil (Regel 7). Ohne sie urteilt die Liste nicht über eine Haut."""
+        self._state_speaks_of_tries = False
+        """Ob die Zustandszeile gerade vom gewählten Versuch spricht — nach einem
+        Fehlschlag gehört sie der Meldung, bis der nächste Wurf endet (Review K G8)."""
         self._busy = False
         # Der letzte Fehlschlag nannte die Einrichtung als Ausweg (RM-362, W3-3).
         self._failure_offers_setup = False
@@ -535,6 +549,7 @@ class GenerateDialog(QDialog):
         self.taken.setWordWrap(True)
         self.taken.setVisible(False)
         self.attempts.currentRowChanged.connect(self._show_what_is_taken)
+        self.attempts.currentRowChanged.connect(self._say_about_the_chosen)
         # Wohin *Übernehmen* das Modell legt, wenn das nicht mehr das Projekt
         # vom Start ist — gesetzt vom Fenster (:meth:`set_destination`).
         self.destination = QLabel(self)
@@ -1186,7 +1201,16 @@ class GenerateDialog(QDialog):
         self.attempts.clear()
         for index, entry in enumerate(self.tries, start=1):
             mesh = entry.mesh
-            closed = tr("geschlossen") if mesh.is_watertight else tr("offen")
+            verdict = self._verdict(mesh)
+            closed = (
+                tr("zerfallen")
+                if verdict == "fell_apart"
+                else tr("nur eine Haut")
+                if verdict is not None
+                else tr("geschlossen")
+                if mesh.is_watertight
+                else tr("offen")
+            )
             origin = self._origin_at(index - 1)
             item = QListWidgetItem(
                 f"{index}. {mesh.triangle_count} {tr('Dreiecke', context='Anzahl')} · "
@@ -1215,14 +1239,74 @@ class GenerateDialog(QDialog):
         # Bildschirm das Wachsen begrenzt hat.
         self._grow_explicit_soon()
         QTimer.singleShot(0, self, self._show_the_tries_in_view)
-        self.state.setText(
-            tr(
-                "Ein weiterer Versuch kann eine andere Form ergeben. Prüfen Sie das "
-                "Ergebnis vor dem Übernehmen."
-            )
-        )
+        self._state_speaks_of_tries = True
+        self._say_about_the_chosen()
         self.buttons.button(QDialogButtonBox.StandardButton.Ok).setText(tr("Übernehmen"))
         self._show_what_is_taken()
+
+    def _say_about_the_chosen(self) -> None:
+        """Was zum gewählten Versuch zu sagen ist — bei einem zerfallenen der Ausweg.
+
+        **Ein zerfallenes Rohnetz repariert keine Kette** (RM-550): Manche
+        Startwerte liefern ein Knäuel aus Hunderten Teilen, und übernommen
+        stand danach ein offener Körper mit „1206 offene Stellen“ im Bericht.
+        Hilfe ist ein anderer Startwert (Regel 17), und den gibt „Noch ein
+        Versuch“.
+        """
+        row = self.attempts.currentRow()
+        if (
+            self._busy
+            or not self._state_speaks_of_tries
+            or not self.tries
+            or not 0 <= row < len(self.tries)
+        ):
+            # Während eines Wurfs gehört die Zeile seinem Fortschritt, nach
+            # einem Fehlschlag seiner Meldung.
+            return
+        mesh = self.tries[row].mesh
+        verdict = self._verdict(mesh)
+        if isinstance(verdict, float):
+            least = self.minimum_wall() if self.minimum_wall is not None else None
+            self.state.setText(
+                tr(
+                    "Versuch {number} ist nur eine Haut von rund {thickness} mm um einen "
+                    "Hohlraum, der Drucker druckt Wände erst ab {least} mm. „Noch ein Versuch“ "
+                    "erzeugt das Modell neu und anders.",
+                    number=row + 1,
+                    thickness=format_decimal(verdict, 1),
+                    least=format_decimal(least or 0.0, 1),
+                )
+            )
+            return
+        if verdict is None:
+            self.state.setText(
+                tr(
+                    "Ein weiterer Versuch kann eine andere Form ergeben. Prüfen Sie das "
+                    "Ergebnis vor dem Übernehmen."
+                )
+            )
+            return
+        self.state.setText(
+            tr(
+                "Versuch {number} ist schon beim Erzeugen zerfallen, daraus wird kein "
+                "geschlossener Körper. „Noch ein Versuch“ erzeugt das Modell neu und anders.",
+                number=row + 1,
+            )
+        )
+
+    def _verdict(self, mesh: Mesh) -> str | float | None:
+        """``"fell_apart"``, die Dicke einer zu dünnen Haut in mm, oder ``None``.
+
+        Beides hat der Arbeiter schon gerechnet; hier wird nur gelesen
+        (:meth:`_Worker.work`).
+        """
+        if fell_apart(mesh):
+            return "fell_apart"
+        least = self.minimum_wall() if self.minimum_wall is not None else None
+        thickness = skin_thickness(mesh)
+        if least is not None and thickness is not None and only_a_skin(thickness, least):
+            return thickness
+        return None
 
     def _origin_of_the_run(self, result: GeneratedMesh) -> _Origin:
         """Woraus das gerade gelieferte Ergebnis entstand."""
@@ -1333,6 +1417,7 @@ class GenerateDialog(QDialog):
 
     def _say_failure(self, problem: object) -> None:
         """Den Fehlschlag in die Zustandszeile schreiben, samt Ausweg."""
+        self._state_speaks_of_tries = False
         if not isinstance(problem, AppError):
             self.state.setText(str(problem))
             return

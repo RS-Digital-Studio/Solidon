@@ -103,6 +103,21 @@ Aus der Durchsicht zu RM-538 (`output/review/punkte-0.5.3-2026-10-06/`):
 
 ## Rückfragen
 
+*Aus `fenster.md` verschoben (Ladelast von `main_window.py`, 09.10.2026):*
+
+**Die lange Merkmalserkennung ist kein abgebrochener Import und keine
+Sackgasse.** Die Wahl gehört dem Körper, deshalb trägt `perceive.too_large`
+*Alle Merkmale erkennen* auch an jedem Folgeschritt (Oberfläche:
+`panels._recognition_reopenable`; Kommandozeile: `recognize`). An einer
+Sammelzeile kommt die Frage mit derselben Schätzung wieder. Am Speicherfehler
+steht die Handlung zuletzt und nicht hervorgehoben: Vorn steht, was der Satz
+nennt.
+
+**Wer nur hinsieht, wird nicht gefragt**, gemessen über
+`ingest.plan.is_only_imported`. `Session.modified` bleibt, weil die Sicherung
+daran hängt; nur das bewusste Schließen fragt nicht. Verlustfrei ist das, weil
+ein eingelesenes Modell in „Zuletzt geöffnet“ steht.
+
 *Bis zur Verdichtung in `oberflaeche.md`:*
 
 **Eine weitere Ausnahme verlässt das Dokument** (§29, RM-140): Eine
@@ -704,6 +719,12 @@ andere** — ein grüner Klicktest sagt nichts über sein Bild.
 (Vorfall: ROADMAP-ARCHIV.md, 04.09.2026)
 
 ## Ein Dialog, der höher ist als sein Inhalt
+
+*Aus `fenster.md` verschoben (Ladelast von `main_window.py`, 09.10.2026):*
+Ob von Hand gezogen oder beim Öffnen an den Inhalt angepasst — ohne die eine
+Stelle verteilt Qt überschüssigen Raum als Lücken zwischen Widgets fester
+Höhe. `style.WrappedNote` misst Statusmeldungen ohne die gepinnte Höhe, denn
+`QLabel.heightForWidth` meldet nie weniger als die Mindesthöhe.
 
 ### Slicer vor Drucker, überall
 

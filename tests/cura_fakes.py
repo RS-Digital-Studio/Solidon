@@ -3,7 +3,9 @@
 Eine Installation nach Cura 5.13 (``share/cura/resources/definitions`` und
 ``extruders``) mit ``fdmprinter``, einem K1 Max und seinem Extruderzug; dazu
 Curas AppDir, wie Flathub und das AppImage es tragen, ein Flatpak-Starter und
-ein AppImage, dessen Einhängen ein Skript nachstellt.
+ein AppImage: ein echtes Abbild dieses AppDir (``tests.squashfs_fakes``), aus
+dem Solidon die Drucker liest, und ein Skript, das für den Lauf das Einhängen
+nachstellt.
 """
 
 from __future__ import annotations
@@ -12,12 +14,14 @@ import json
 import shutil
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 import pytest
 
 from app.core import discover
 from app.core.export import cura_linux
+from tests.squashfs_fakes import appimage_file, tree_of
 
 #: Der Startcode des K1 Max in Cura 5.13 (``creality_k1max.def.json``), wörtlich.
 K1_MAX_START = (
@@ -173,13 +177,17 @@ def appimage_cura(
     *,
     name: str = "UltiMaker-Cura-5.13.0-linux-X64.AppImage",
     delay: float = 0.0,
+    copies: list[Path] | None = None,
     **parts: bool,
 ) -> tuple[Path, Path]:
-    """Ein Cura-AppImage, dessen Einhängen ein Skript nachstellt; ``mounts`` zählt mit."""
+    """Ein Cura-AppImage: Abbild des AppDir, gzip wie Cura 5.13.
+
+    Für einen Lauf stellt ein Skript das Einhängen nach, ``mounts`` zählt mit;
+    jedes Lesen der Drucker aus dem Abbild zählt ``copies``. ``delay`` hält
+    beides auf, wie ein langsamer Datenträger."""
     appimage = tmp_path / "Applications" / name
-    appimage.parent.mkdir(parents=True, exist_ok=True)
-    appimage.write_bytes(b"AppImage")
     point = cura_appdir(tmp_path / "tmp" / f".mount_{appimage.stem[:10]}", tmp_path, **parts)
+    appimage_file(appimage, tree_of(point), compression="gzip")
     script = tmp_path / "einhaengen.py"
     script.write_text(MOUNT_SCRIPT, encoding="utf-8")
 
@@ -187,7 +195,17 @@ def appimage_cura(
         mounts.append(image)
         return [sys.executable, str(script), str(point), str(delay)]
 
+    reading = getattr(cura_linux._read_resources, "__wrapped__", cura_linux._read_resources)
+
+    def read(image: Path, target: Path) -> bool | None:
+        if copies is not None:
+            copies.append(image)
+        time.sleep(delay)
+        return reading(image, target)
+
+    read.__wrapped__ = reading  # type: ignore[attr-defined]
     monkeypatch.setattr(cura_linux, "mount_command", command)
+    monkeypatch.setattr(cura_linux, "_read_resources", read)
     return appimage, point
 
 

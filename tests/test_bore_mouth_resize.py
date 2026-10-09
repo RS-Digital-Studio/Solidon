@@ -5,7 +5,6 @@ from __future__ import annotations
 import io
 import math
 from pathlib import Path
-from typing import Any
 
 import numpy as np
 import pytest
@@ -17,12 +16,13 @@ from app.core.geom.mesh import MeshData
 from app.core.perceive.features import detect
 from app.core.perceive.relations import cavity_chain_at
 from app.core.registry import REGISTRY
-from app.core.scene import History, OperationDraft, evaluate
+from app.core.scene import OperationDraft, evaluate
 from app.core.scene.cancel import NeverCancelled
-from app.core.scene.project import ProjectSources, new_project
+from app.core.scene.project import ProjectSources
 from app.core.types import Feature, OpContext, OpResult, Profile, Quality, Scene, SceneObject
 from app.core.units import EPS_GEOM
 from tests.helpers import contains as _contains
+from tests.helpers import countersunk_project as _countersunk_plate
 from tests.helpers import feature_operation as _operation
 from tests.helpers import sloping_bore, two_bores
 
@@ -1659,42 +1659,6 @@ def test_a_pocket_with_a_lip_says_why_it_stays_straight(
 
 
 # --- Eine Senkung auf ihrer Bohrung ändern (Durchsicht 0.5.1, rest-lippe) ----------
-
-
-def _countersunk_plate(kind: str, sink: float) -> tuple[Any, History]:
-    """Platte 40 × 40 × 10, Bohrung Ø 5,2 ganz durch, oben gesenkt auf ``sink`` —
-    über die Operationen des Kunden, am Netz oder am exakten Körper."""
-    from app.core.bootstrap import load_operations
-
-    load_operations()
-    project = new_project("centauri-carbon-2", "petg")
-    history = History(project.document)
-    box = "create_brep_box" if kind == "brep" else "create_box"
-    history.apply(
-        "Quader",
-        [OperationDraft(op=box, params={"width": 40.0, "depth": 40.0, "height": 10.0})],
-    )
-    history.apply(
-        "Bohren",
-        [
-            OperationDraft(
-                op="drill_hole",
-                inputs=("obj_1",),
-                params={"diameter": 5.2, "x": 0.0, "y": 0.0, "z": 10.0, "axis": "z", "depth": 0.0},
-            )
-        ],
-    )
-    history.apply(
-        "Senken",
-        [
-            OperationDraft(
-                op="countersink_hole",
-                inputs=("obj_1",),
-                params={"diameter": sink, "x": 0.0, "y": 0.0, "z": 10.0, "axis": "z"},
-            )
-        ],
-    )
-    return project, history
 
 
 @pytest.mark.parametrize("kind", ["mesh", "brep"])
