@@ -14,7 +14,7 @@ außer dem Chat benutzbar. Einzuhalten ist `.claude/rules/agentenschicht.md`
 | `llm.py` | Das Sprachmodell hinter dem Agenten — gehostet oder lokal (Ollama); `OLLAMA_CONTEXT_TOKENS`, `OLLAMA_ANSWER_TOKENS`, `prompt_was_cut`, `PROMPT_TOKENS`/`PROMPT_TOOL_COUNT` |
 | `mesh.py` | Mesh-Erzeugung für Weg 3, lokal oder gehostet (Säule B) |
 | `resources.py` | Gemeinsame Schwerlastspur für lokale KI auf derselben Grafikkarte (`local_ai_slot`, `keep_warm`) |
-| `machine.py` | Was dieser Rechner mitbringt: Apple Silicon und Arbeitsspeicher über das System, eine NVIDIA-Karte über `nvidia-smi` (`this_machine`, `Machine.graphics_gb`) |
+| `machine.py` | Was dieser Rechner mitbringt: Apple Silicon und Arbeitsspeicher über das System (`this_machine`, ohne Prozess), eine NVIDIA-Karte über `nvidia-smi` im Arbeiter (`probe_card`), `Machine.graphics_gb` |
 | `needs.py` | Die eine Quelle für Voraussetzungen vor dem Laden: was ein Modell bzw. Weg 3 braucht, ob dieser Rechner es hat, und der Ausweg (`chat_needs`, `graphics_verdict`, `chat_disk_need`, `pull_space_problem`, `generator_needs`, `duration_text`) |
 | `keys.py` | Wo der eigene Schlüssel des Nutzers liegt |
 | `comfy_setup.py` | Ein fremdes ComfyUI für Weg 3 einrichten (§36): Fassung prüfen (`check_version`), Modelldateien laden (`ModelFile`: Repo, Revision, Byte, SHA-256, Zielordner, Rolle) — TRELLIS.2 und BiRefNet für den Bildweg, auf Wunsch FLUX.2 [klein] 4B für den Textweg —, Reste der TripoSG-Einrichtung räumen (`remove_legacy`) |
@@ -57,11 +57,17 @@ Messung ist die Agenten-Suite.
   `Machine.graphics_gb` ist auf Apple Silicon der Anteil, den macOS der
   Grafik lässt, sonst eine erkannte Karte abzüglich `CARD_RESERVE_GB`.
   `recommended_ollama_model` wählt das beste gemessene Modell, das ganz
-  hineinpasst, `default_ollama_model` sonst das kleinste — beide nur, wenn
-  Ollama hier rechnet (`ollama_runs_here`). Die Sätze stehen in `needs.py`;
-  Mac-Werte sind gerechnet und sagen es. Gefragt wird nur über
-  `machine.this_machine()`, erhoben im Arbeiter — die Suite setzt dort einen
-  neutralen Rechner ein.
+  hineinpasst, nur wenn Ollama hier rechnet (`ollama_runs_here`). Vorgabe
+  wird es nur auf Apple Silicon (sonst das kleinste); auf einem PC bleibt
+  `DEFAULT_OLLAMA_MODEL`, die Karte bestimmt dort nur den Satz. Die Sätze
+  stehen in `needs.py`; Mac-Werte sind gerechnet und sagen es.
+- **`nvidia-smi` nie im Hauptthread:** `machine.this_machine()` startet keinen
+  Prozess und nennt die Karte erst, wenn ein Arbeiter `probe_card()` gefahren
+  hat (Chat einrichten, ComfyUI einrichten, Chatleiste); vorher sagt
+  `Machine.card_asked` „nicht gefragt“, und kein Satz behauptet „keine Karte“.
+  Im eigenen Flatpak über `discover.on_host`; den Modellordner von Ollama
+  kennt Solidon dort nicht. Die Suite setzt einen neutralen Rechner ein und
+  lässt `run_limited` scheitern.
 - **`PROMPT_TOKENS` und `PROMPT_TOOL_COUNT`** stehen in `llm.py` und gehören
   zu derselben gezählten Anfrage; gezählt wird mit
   `tools/measure_local_model.py --count-tokens` (ein Antworttoken, JSON mit

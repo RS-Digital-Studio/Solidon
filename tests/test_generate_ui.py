@@ -1970,7 +1970,7 @@ def test_the_setup_dialog_names_space_and_duration_before_loading(
         alone = dialog.needs.text()
         single = comfy_setup.WEIGHT_GIGABYTES + headroom
         assert f"{format_decimal(single, 1)} GB freier Platz" in alone, alone
-        assert "Frei sind 12,0 GB, das reicht." in alone, "eines passt"
+        assert "Frei: 12,0 GB." in alone, "eines passt"
     finally:
         dialog.release()
         dialog.deleteLater()

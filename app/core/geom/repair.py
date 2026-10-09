@@ -4614,8 +4614,9 @@ def smooth_folds(
     (:func:`_close_corners`): Mit allen sechs rückten an einem Zapfen auf
     einem Block Blockecken 30 mm von der Falte entfernt (Review K, M6).
     Zuerst rücken die Ecken in die Mitte ihrer Nachbarn, bis zu
-    :data:`FOLD_ROUNDS`-mal und je Ecke höchstens um die längste Kante ihres
-    Fächers — das Netz behält jede Fläche. Trägt das nicht, fallen die
+    :data:`FOLD_ROUNDS`-mal und je Ecke höchstens um die längste Kante der
+    kreuzenden Dreiecke an ihr (:func:`_fold_reach`) — das Netz behält jede
+    Fläche. Trägt das nicht, fallen die
     Dreiecke um sie, und der Ringfüller schließt die Löcher neu.
     **Übernommen wird nur ein voller Erfolg:** geschlossen, einheitlich
     ausgerichtet, dieselbe Teilezahl, keine Kreuzung mehr und das Volumen fast
@@ -4638,10 +4639,15 @@ def smooth_folds(
             corners |= {other[i] for i in np.flatnonzero(near.any(axis=0)).tolist()}
             continue
         corners |= _close_corners(points, one, other) | _close_corners(points, other, one)
+    if not corners:
+        # Ohne Ecke keine Stelle, an der etwas rückt — und kein „An einer Stelle
+        # …“ für null Stellen (Nachprüfung K, N9).
+        return None
+    reach = _fold_reach(points, np.concatenate([first, second]), corners)
     around = np.isin(faces, np.fromiter(corners, dtype=np.int64)).any(axis=1)
     regions = _fold_regions(mesh, faces[around])
     attempts: tuple[Callable[[], MeshData | None], ...] = (
-        lambda: _relaxed(mesh, sorted(corners), regions, cancelled),
+        lambda: _relaxed(mesh, reach, regions, cancelled),
         lambda: _refilled(mesh, around, cancelled),
     )
     for attempt in attempts:
@@ -4687,28 +4693,45 @@ def _close_corners(points: np.ndarray, own: Sequence[int], other: Sequence[int])
 FOLD_ROUNDS: Final = 5
 
 
+def _fold_reach(points: np.ndarray, crossing: np.ndarray, corners: set[int]) -> dict[int, float]:
+    """Wie weit jede Ecke einer Falte höchstens rücken darf: die längste Kante der
+    kreuzenden Dreiecke, an denen sie liegt.
+
+    **Nicht die ihres Fächers** (Nachprüfung K, N9): An einem CAD-Netz reicht
+    ein Fächer bis zur Blockecke, Dutzende Millimeter, und die Grenze band
+    nicht — am Zapfen auf dem Block rückte eine Ecke 10 mm, und nur die
+    Volumenwache hielt. Eine Falte von TRELLIS.2 klappt ein Dreieck über
+    seinen Nachbarn; ihre Ecke kommt um höchstens die Länge des geklappten
+    Dreiecks zurück (Kugel: 6,9 mm bei 9,3 mm Kante).
+    """
+    reach: dict[int, float] = {}
+    for face in crossing.tolist():
+        at = points[face]
+        longest = float(np.linalg.norm(at - np.roll(at, 1, axis=0), axis=1).max())
+        for corner in face:
+            if corner in corners:
+                reach[corner] = max(reach.get(corner, 0.0), longest)
+    return reach
+
+
 def _relaxed(
     mesh: MeshData,
-    corners: Sequence[int],
+    reach: dict[int, float],
     regions: Sequence[tuple[np.ndarray, np.ndarray]],
     cancelled: CancelToken | None,
 ) -> MeshData | None:
     """Die Ecken einer Falte in die Mitte ihrer Nachbarn, bis nichts mehr kreuzt.
 
-    Je Ecke höchstens um die längste Kante ihres Fächers vom Ausgangsort —
+    Je Ecke höchstens um ``reach`` vom Ausgangsort (:func:`_fold_reach`) —
     weiter weg ist es keine Falte mehr, sondern eine andere Form.
     """
     start = np.asarray(mesh.raw.vertices, dtype=np.float64)
     points = start.copy()
     neighbours = mesh.raw.vertex_neighbors
-    reach = {
-        corner: float(np.linalg.norm(start[neighbours[corner]] - start[corner], axis=1).max())
-        for corner in corners
-        if len(neighbours[corner])
-    }
+    corners = sorted(reach)
     for _round in range(FOLD_ROUNDS):
         for corner in corners:
-            if corner not in reach:
+            if not len(neighbours[corner]):
                 return None
             points[corner] = points[neighbours[corner]].mean(axis=0)
             if float(np.linalg.norm(points[corner] - start[corner])) > reach[corner]:

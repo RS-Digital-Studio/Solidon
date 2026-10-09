@@ -51,7 +51,16 @@ def ollama_models_folder() -> Path | None:
     andere Platte legt), sonst das Zuhause des Dienstes oder ``~/.ollama``.
     Gibt es weder den Ordner noch seinen ``.ollama``-Ordner, ist der Ort
     unbekannt, und geraten wird nicht (Review K, M5).
+
+    **Im eigenen Flatpak ist er unbekannt** (Nachprüfung K, N3): Umgebung, Unit
+    und Dienstordner wären die des Sandkastens, und Ollama läuft auf dem
+    Rechner. Der Satz sagt dann „Freier Platz unbekannt.“ statt eines
+    falschen Laufwerks.
     """
+    from app.core import discover
+
+    if discover.in_flatpak():
+        return None
     configured = os.environ.get("OLLAMA_MODELS", "").strip()
     if configured:
         return Path(configured)
@@ -87,30 +96,30 @@ def _models_from_units() -> Path | None:
     return found
 
 
-def _loaded_gigabytes(folder: Path, model: str) -> tuple[bool, float]:
-    """Ob das Modell schon ganz da ist, und wie viel ein abgebrochener Download hinterließ.
+def _already_there(folder: Path, model: str) -> bool:
+    """Ob das Modell schon ganz da ist: Sein Manifest liegt bei Ollama.
 
-    Ganz da heißt: Sein Manifest liegt bei Ollama. Halb geladene Teile heißen
-    ``…-partial``; Ollama setzt dort fort, also zählen sie als schon geladen
-    — wie ``comfy_setup._gigabytes_in`` es für ComfyUI tut.
+    **Ein abgebrochener Download zählt nicht als geladen** (Nachprüfung K, N5).
+    Ollama legt jede ``…-partial``-Datei beim Start auf die volle Größe des
+    Teils an (``server/download.go``: ``file.Truncate(b.Total)``), ihre Größe
+    sagt also nichts über das Geladene, und welchem Modell sie gehört, steht
+    erst im Manifest am Ende. Lieber den ganzen Download nennen als zu wenig.
     """
     name, _colon, tag = llm.normalised_model_name(model).partition(":")
     manifest = folder / "manifests" / "registry.ollama.ai" / "library" / name / (tag or "latest")
     try:
-        if manifest.is_file():
-            json.loads(manifest.read_text(encoding="utf-8"))
-            return True, 0.0
-        blobs = folder / "blobs"
-        partial = sum(entry.stat().st_size for entry in blobs.glob("*-partial*") if entry.is_file())
+        if not manifest.is_file():
+            return False
+        json.loads(manifest.read_text(encoding="utf-8"))
     except OSError, ValueError:
-        return False, 0.0
-    return False, partial / 1_000_000_000
+        return False
+    return True
 
 
 def chat_disk_need(model: str) -> tuple[float, float | None] | None:
     """Wie viel Platz das Modell noch braucht und wie viel frei ist — ``None`` ohne Größe.
 
-    Gebraucht wird der Download abzüglich des schon Geladenen plus dieselbe
+    Gebraucht wird der ganze Download plus dieselbe
     Luft wie bei ComfyUI (``comfy_setup.HEADROOM_GIGABYTES``); frei ist
     ``None``, wenn der Ort unbekannt ist oder Ollama woanders rechnet.
     """
@@ -120,10 +129,9 @@ def chat_disk_need(model: str) -> tuple[float, float | None] | None:
     folder = ollama_models_folder() if llm.ollama_runs_here() else None
     if folder is None:
         return suggestion[0] + comfy_setup.HEADROOM_GIGABYTES, None
-    there, partial = _loaded_gigabytes(folder, model)
-    if there:
+    if _already_there(folder, model):
         return 0.0, None
-    needed = max(0.0, suggestion[0] - partial) + comfy_setup.HEADROOM_GIGABYTES
+    needed = suggestion[0] + comfy_setup.HEADROOM_GIGABYTES
     try:
         free = comfy_setup.free_gigabytes(folder)
     except OSError:
@@ -216,13 +224,17 @@ def chat_needs(model: str, machine: Machine | None = None) -> str | None:
         )
     )
     verdict = graphics_verdict(model, found)
-    parts.append(
-        verdict
-        if verdict is not None
-        else str(
-            _("Eine Grafikkarte erkennt Solidon hier nicht, ohne sie dauert jede Anfrage Minuten.")
+    if verdict is not None:
+        parts.append(verdict)
+    elif found.card_asked:
+        parts.append(
+            str(
+                _(
+                    "Eine NVIDIA-Karte erkennt Solidon hier nicht. Rechnet keine Grafikkarte, "
+                    "dauert jede Anfrage Minuten."
+                )
+            )
         )
-    )
     if needed <= 0.0:
         parts.append(str(_("Das Modell liegt schon hier.")))
     elif free is None:
@@ -344,12 +356,12 @@ def generator_needs(
                 )
             )
         )
-    else:
+    elif found.card_asked:
         short = True
         parts.append(
             str(
                 _(
-                    "Eine Grafikkarte erkennt Solidon hier nicht, ohne sie rechnet ComfyUI um "
+                    "Eine NVIDIA-Karte erkennt Solidon hier nicht. Ohne sie rechnet ComfyUI um "
                     "ein Vielfaches länger. Ein Modell aus einem anderen Generator lässt sich "
                     "jederzeit als GLB- oder STL-Datei einfügen."
                 )

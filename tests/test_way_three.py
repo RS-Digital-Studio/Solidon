@@ -820,6 +820,51 @@ def test_a_generated_body_that_is_only_a_skin_is_reported(
         assert "{" not in str(skins[0].message)
 
 
+def test_the_skin_limit_is_the_wall_of_the_profile_not_a_number(
+    project: Project, profile: Profile, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Regel 7: Druckt das Material Wände ab 0,2 mm, ist ein Becher mit 0,3 mm
+    keine Haut — mit einer festen Grenze im Code bliebe der Befund (Nachprüfung K, N8)."""
+    import importlib
+
+    checks = importlib.import_module("app.core.scene.evaluate")
+    from_text(project, ScriptedMeshBackend(fallback=_cup(0.3), suffix=".stl"), "Becher", seed=1)
+    monkeypatch.setattr(checks, "analysis_limits", lambda _profile, _entry: (0.2, 45.0))
+
+    scene = evaluated(project, profile)
+
+    assert "scene.thin_skin" not in {f.code for f in scene.scene.report.findings}
+
+
+def _thick_cube_beside_a_wide_thin_plate() -> trimesh.Trimesh:
+    """Zwei Schalen: ein Würfel von 15 mm mit gut einem Zehntel der Fläche und eine
+    Platte von 75 × 75 × 0,05 mm, die den Rest trägt."""
+    cube = trimesh.creation.box(extents=(15.0, 15.0, 15.0))
+    plate = trimesh.creation.box(extents=(75.0, 75.0, 0.05))
+    plate.apply_translation((0.0, 0.0, 30.0))
+    return trimesh.util.concatenate([cube, plate])
+
+
+def test_the_dialog_and_the_report_judge_a_skin_alike(project: Project, profile: Profile) -> None:
+    """Eine dicke Schale neben einer großen dünnen ist an beiden Orten kein Hautkörper —
+    eine Herleitung für Dialog und Bericht (Nachprüfung K, N7). Über den ganzen
+    Körper gerechnet hätte der Bericht hier eine Haut von 0,6 mm genannt."""
+    from app.core.generate import skin_thickness
+    from app.core.geom.mesh import MeshData, only_a_skin
+
+    body = _thick_cube_beside_a_wide_thin_plate()
+    least = profile.minimum_wall_thickness
+    whole = 2.0 * body.volume / body.area
+    assert only_a_skin(whole, least), "die alte Rechnung hätte eine Haut gemeldet"
+    assert not only_a_skin(skin_thickness(MeshData.of(body)), least)
+
+    payload = bytes(trimesh.exchange.export.export_mesh(body, None, file_type="stl"))
+    from_text(project, ScriptedMeshBackend(fallback=payload, suffix=".stl"), "Zwei", seed=1)
+    scene = evaluated(project, profile)
+
+    assert "scene.thin_skin" not in {f.code for f in scene.scene.report.findings}
+
+
 def test_a_thin_imported_body_is_not_called_a_generated_skin(
     project: Project, profile: Profile
 ) -> None:

@@ -53,6 +53,7 @@ from app.core.errors import (
     OperationCancelled,
 )
 from app.core.generate import fell_apart, skin_thickness, working_volume
+from app.core.geom.mesh import only_a_skin
 from app.core.log import get_logger
 from app.core.types import Mesh
 from app.i18n import format_decimal, tr
@@ -1269,8 +1270,8 @@ class GenerateDialog(QDialog):
             self.state.setText(
                 tr(
                     "Versuch {number} ist nur eine Haut von rund {thickness} mm um einen "
-                    "Hohlraum, dünner als die Wand, die der Drucker legt ({least} mm). „Noch ein "
-                    "Versuch“ erzeugt das Modell neu und anders.",
+                    "Hohlraum, der Drucker druckt Wände erst ab {least} mm. „Noch ein Versuch“ "
+                    "erzeugt das Modell neu und anders.",
                     number=row + 1,
                     thickness=format_decimal(verdict, 1),
                     least=format_decimal(least or 0.0, 1),
@@ -1303,7 +1304,7 @@ class GenerateDialog(QDialog):
             return "fell_apart"
         least = self.minimum_wall() if self.minimum_wall is not None else None
         thickness = skin_thickness(mesh)
-        if least is not None and thickness is not None and thickness < least:
+        if least is not None and thickness is not None and only_a_skin(thickness, least):
             return thickness
         return None
 

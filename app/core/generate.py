@@ -27,9 +27,8 @@ from typing import Final, cast
 
 from app.core import activation
 from app.core.backends.mesh import CancelledFn, GeneratedMesh, MeshBackend
-from app.core.deferred import trimesh
 from app.core.errors import AppError
-from app.core.geom.mesh import MeshData, edge_table, face_components, signed_volume
+from app.core.geom.mesh import MeshData, edge_table, shell_thickness
 from app.core.geom.repair import branching_edge_count, separate_touching_sheets
 from app.core.log import get_logger
 from app.core.scene.history import History, OperationDraft
@@ -170,42 +169,22 @@ def fell_apart(mesh: Mesh) -> bool:
     return bool(_remembered(mesh, "solidon_fell_apart", judge))
 
 
-#: Welcher Anteil der Oberfläche eine Schale haben muss, damit ihre Dicke zählt
-#: (:func:`skin_thickness`) — darunter sind es Krümel.
-SKIN_SHELL_SHARE: Final = 0.1
-
-
 def skin_thickness(mesh: Mesh) -> float | None:
-    """Die mittlere Dicke der dicksten großen Schale, auf Arbeitsgröße gerechnet (RM-577).
+    """Die Dicke der dicksten großen Schale eines Rohnetzes auf Arbeitsgröße (RM-577).
 
-    Je Schale mit positivem Volumen und mindestens :data:`SKIN_SHELL_SHARE`
-    der Fläche ``2·V/A`` in Millimetern bei :data:`WORKING_SIZE_MM` — für eine
-    dünne Wand ist das ihre Dicke. Ein heiles Rohnetz von TRELLIS.2 (Außen- und
-    Innenhülle getrennt) hat eine Außenhülle von 2,1 bis 7,7 mm, eine Haut um
-    einen Hohlraum, bei der beide Hüllen zusammenhängen, 0,26 bis 0,30 mm
-    (Messung 08.10.2026). ``None`` ohne Netz oder ohne eine solche Schale.
-    Die Zahl merkt sich das Netz.
+    Dieselbe Herleitung wie im Prüfbericht (``geom.mesh.shell_thickness``),
+    nur bei :data:`WORKING_SIZE_MM` statt in echter Größe: Das Rohnetz kommt in
+    Generatoreinheiten und wird beim Übernehmen auf diese Größe gebracht. Ein
+    heiles Rohnetz von TRELLIS.2 hat eine Außenhülle von 2,1 bis 7,7 mm, eine
+    Haut 0,26 bis 0,30 mm (Messung 08.10.2026). ``None`` ohne Netz oder ohne
+    eine solche Schale.
     """
     if not isinstance(mesh, MeshData) or not mesh.triangle_count:
         return None
-
-    def measure() -> float:
-        raw = mesh.raw
-        longest = float(max(raw.extents))
-        total = float(raw.area)
-        if longest <= EPS_GEOM or total <= 0.0:
-            return -1.0
-        best = -1.0
-        for faces in face_components(raw):
-            shell = cast("trimesh.Trimesh", raw.submesh([faces], append=True, repair=False))
-            area = float(shell.area)
-            volume = signed_volume(shell)
-            if area >= SKIN_SHELL_SHARE * total and volume > 0.0:
-                best = max(best, 2.0 * volume / area * WORKING_SIZE_MM / longest)
-        return best
-
-    found = float(_remembered(mesh, "solidon_skin_thickness", measure))
-    return None if found < 0.0 else found
+    longest = float(max(mesh.raw.extents))
+    if longest <= EPS_GEOM:
+        return None
+    return shell_thickness(mesh, WORKING_SIZE_MM / longest)
 
 
 def _remembered(mesh: MeshData, key: str, compute: Callable[[], float | bool]) -> float | bool:

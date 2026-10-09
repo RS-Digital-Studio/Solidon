@@ -1365,14 +1365,22 @@ def configured_ollama_model() -> str:
 
 
 def default_ollama_model() -> str:
-    """Die Vorgabe für diesen Rechner: das beste Modell, das ganz über die Grafik
-    läuft (:func:`recommended_ollama_model`).
+    """Die Vorgabe für diesen Rechner.
 
-    Auf einem MacBook mit 16 GB war die feste Vorgabe qwen3:14b zu groß, und
-    der Chat rechnete zur Hälfte auf dem Prozessor (RM-564). Passt keines, ist
-    es das kleinste — nie das größte (Review K, M3) —, und der Satz unter der
-    Auswahl nennt den Schlüssel (``needs.chat_needs``).
+    **Auf Apple Silicon** das beste Modell, das ganz über die Grafik läuft
+    (:func:`recommended_ollama_model`): Auf einem MacBook mit 16 GB war die
+    feste Vorgabe qwen3:14b zu groß, und der Chat rechnete zur Hälfte auf dem
+    Prozessor (RM-564). Passt keines, ist es das kleinste — nie das größte
+    (Review K, M3) —, und der Satz unter der Auswahl nennt den Schlüssel
+    (``needs.chat_needs``).
+
+    **Auf einem PC bleibt es** :data:`DEFAULT_OLLAMA_MODEL` (Entscheidung
+    Robert, „Voraussetzungen nennen, ansonsten so lassen“; Nachprüfung K, N4):
+    Die Karte bestimmt dort nur den Satz. Ein Kunde ohne gemerktes Modell, der
+    qwen3:14b geholt hat, fände nach einem Wechsel ein nicht installiertes vor.
     """
+    if not _machine.this_machine().apple_silicon:
+        return DEFAULT_OLLAMA_MODEL
     return recommended_ollama_model() or smallest_recommended_model()
 
 
@@ -2308,14 +2316,22 @@ def local_model_expectation(model: str | None = None) -> TranslatableText:
             "Minuten ohne Antwort bricht Solidon ab.",
             measured=f"{measured!s} {fit}" if fit else measured,
         )
-    said: object = measured if fit is None else f"{measured!s} {fit}"
+    if fit is not None:
+        # Das Kartenurteil sagt schon, ob es reicht, und nennt den Ausweg; der
+        # Bedingungssatz und der Rat zur Grafikkarte widersprächen ihm
+        # (Nachprüfung K, N10).
+        return _(
+            "{measured} Nach zehn Minuten ohne Antwort bricht Solidon ab, und welcher Weg hier "
+            "rechnet, sagt „Werkzeuge prüfen“ unter „Bearbeiten → Chat einrichten“.",
+            measured=f"{measured!s} {fit}",
+        )
     return _(
         "{measured} Passt das Modell nicht ganz in den Grafikspeicher, rechnet der Prozessor mit "
         "7,8 Token je Sekunde beim Einlesen mit, und nach zehn Minuten ohne Antwort bricht "
         "Solidon ab. Für zügige Antworten braucht es eine geeignete Grafikkarte oder einen "
         "Schlüssel für ein gehostetes Modell, und welcher Weg hier rechnet, sagt „Werkzeuge "
         "prüfen“ unter „Bearbeiten → Chat einrichten“.",
-        measured=said,
+        measured=measured,
     )
 
 

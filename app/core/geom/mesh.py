@@ -1266,6 +1266,58 @@ def signed_volume(body: trimesh.Trimesh) -> float:
     return math.fsum(triple_products(triangles - triangles[0, 0]).tolist()) / 6.0
 
 
+#: Welcher Anteil der Oberfläche eine Schale haben muss, damit ihre Dicke zählt
+#: (:func:`shell_thickness`) — darunter sind es Krümel.
+SKIN_SHELL_SHARE: Final = 0.1
+
+
+def shell_thickness(mesh: MeshData, scale: float = 1.0) -> float | None:
+    """Die mittlere Dicke der dicksten großen Schale, mal ``scale`` (RM-577).
+
+    Je Schale ohne offenen Rand, mit positivem Volumen und mindestens
+    :data:`SKIN_SHELL_SHARE` der Fläche ``2·V/A`` — für eine dünne Wand ist das
+    ihre Dicke; eine offene Schale hat kein Volumen, das etwas sagt. **Die eine
+    Herleitung von „nur eine Haut“** (Nachprüfung K, N7): Der Dialog fragt das
+    Rohnetz auf Arbeitsgröße (``generate.skin_thickness``), der Prüfbericht den
+    Körper in seiner Größe (``evaluate.check_thin_skins``). Eine dicke Schale
+    neben einer großen dünnen ist so an beiden Orten kein Hautkörper.
+
+    Eine Außenhülle mit getrennter, umgekehrter Innenhülle zählt mit der
+    Außenhülle; eine Haut, bei der beide zusammenhängen, ist eine Schale von
+    0,26 bis 0,30 mm auf Arbeitsgröße (Messung 08.10.2026). ``None`` ohne eine
+    solche Schale. Die Zahl merkt sich das Netz.
+    """
+    if not mesh.triangle_count:
+        return None
+    raw = mesh.raw
+    cache = getattr(raw, "_cache", None)
+    if cache is not None:
+        cache.verify()
+    if cache is not None and "solidon_shell_thickness" in cache:
+        best = float(cache["solidon_shell_thickness"])
+    else:
+        total = float(raw.area)
+        best = -1.0
+        if total > 0.0:
+            for faces in face_components(raw):
+                shell = cast("trimesh.Trimesh", raw.submesh([faces], append=True, repair=False))
+                area = float(shell.area)
+                if area < SKIN_SHELL_SHARE * total or edge_table(shell).counts.min() < 2:
+                    continue
+                volume = signed_volume(shell)
+                if volume > 0.0:
+                    best = max(best, 2.0 * volume / area)
+        if cache is not None:
+            cache["solidon_shell_thickness"] = best
+    return None if best < 0.0 else best * scale
+
+
+def only_a_skin(thickness: float | None, least: float) -> bool:
+    """Ob eine Schalendicke (:func:`shell_thickness`) unter der dünnsten Wand liegt,
+    die der Drucker druckt — dieselbe Grenze im Dialog und im Prüfbericht."""
+    return thickness is not None and thickness < least - EPS_GEOM
+
+
 def on_surface(
     body: trimesh.Trimesh, points: np.ndarray, *, index: _SurfaceIndex | None = None
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:

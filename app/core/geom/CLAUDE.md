@@ -28,6 +28,7 @@ plattformabhängig ist, sagt `kern.md`. Die Werkzeuge:
 | Normalen und Flächen je Dreieck, Eckennormalen | `mesh.stable_normals`, `mesh.stable_areas` (einzelne Dreiecke), `mesh.stable_vertex_normals` |
 | Summen, deren Gleichstand eine Lage entscheidet | `mesh.IntegerGrid` |
 | Spatprodukte, eingeschlossenes Volumen mit Vorzeichen | `mesh.triple_products`, `mesh.signed_volume` (körpernah) |
+| Nur eine Haut? | `mesh.shell_thickness`, `only_a_skin` |
 | Zufall (Stufe 3 der Kette) | `Generator.random` aus den Rohbits, nie `normal` |
 | Drehkörper, Kreispunkte | `lathe.cylinder`, `annulus`, `revolve`, `circle_points` |
 
@@ -283,9 +284,8 @@ Die reine Schnittansicht darf die unveränderte Berührung zeigen.
   über Ohren (`_loop_triangles`), zuletzt als Fächer — **nie eine Fläche auf
   eine Kante, die schon zwei trägt**; Slot und Farbe vom Rand, eine Fläche
   ohne Dicke bleibt offen (`_flat_fills`).
-- Berührkanten trennt `separate_touching_sheets`, die übrigen mit der
-  anderen Paarung; kleine Falten glättet `smooth_folds` nur mit
-  *Überschneidungen auflösen* und nur ganz (RM-550).
+- `separate_touching_sheets` trennt Berührkanten, Rest mit anderer Paarung;
+  Falten glättet `smooth_folds` nur mit *Überschneidungen auflösen* (RM-550).
 - Die Schnittsuche läuft einmal je Netz (`crossings_of`); ihr Budget zählt
   genaue Paarprüfungen, am offenen Netz und über `MAP_LIMIT_TRIANGLES` nur der
   Sockel. Vereinigt werden nur verschiedene Schalen und Überlagerungen

@@ -111,7 +111,7 @@ from app.core.agent.tools import (
     SET_PRINT_TARGET,
     UNDO_TRANSACTION,
 )
-from app.core.backends import llm
+from app.core.backends import llm, machine
 from app.core.backends.mesh import GeneratedMesh
 from app.core.errors import (
     CANCEL,
@@ -1287,6 +1287,9 @@ class _OllamaSizeWorker(Worker):
         self._model = model
 
     def work(self) -> None:
+        # Die Grafikkarte hier erheben, nicht im Hauptthread: Der Satz in der
+        # Chatleiste nennt sie danach (Nachprüfung K, N2).
+        machine.probe_card()
         self.done.emit(llm.ollama_size_warning(self._model))
 
 
@@ -7722,7 +7725,9 @@ class MainWindow(QMainWindow):
         # *Übernehmen* geht über das Fenster: Sagt die Sitzung ab, bleibt der
         # Dialog mit seinen Versuchen offen (:meth:`_take_generated`).
         dialog.take = partial(self._take_generated, dialog)
-        dialog.minimum_wall = lambda: self.session.profile.minimum_wall_thickness
+        # Dieselbe Mindestwand wie der Prüfbericht für ein frisch erzeugtes
+        # Objekt ohne eigenes Material (``evaluate.check_thin_skins``).
+        dialog.minimum_wall = lambda: self.session.evaluation_profile.minimum_wall_thickness
         # Regel 17: „Es läuft kein Generator" bot nichts an. Von hier führt der
         # Weg in die Liste der zusätzlichen Programme, und danach sieht der
         # Dialog noch einmal nach — wer ComfyUI gerade gestartet hat, soll

@@ -44286,6 +44286,11 @@ Zylinderkopf und Gewinde passend zur Bohrung.
   die unverformte Kugel, rot ohne Volumenwache (M6). Endstand mit dem Review-Stand:
   `messung-ki/weg3-paket-k/endstand-review.log`.
 
+  **Nachprüfung K (08.10.2026), behoben:** Die Grenze je Ecke ist jetzt die längste Kante der
+  kreuzenden Dreiecke an ihr (`_fold_reach`), nicht die ihres Fächers — die band an CAD-Netzen
+  nicht (Zapfen: 10,1 mm, +2 %); der Zapfen bleibt jetzt auch ohne Volumenwache unverändert,
+  die Kugel glättet weiter. Ohne Ecke gibt es keine Stelle und keinen Befund (N9).
+
 
 ## RM-577: Ein erzeugter Körper, der nur eine dünne Haut um einen Hohlraum ist, wird erkannt und gemeldet (08.10.2026)
 
@@ -44306,6 +44311,12 @@ Zylinderkopf und Gewinde passend zur Bohrung.
   (heil 2,1 bis 7,7 mm, Haut 0,26 bis 0,30 mm) und schreibt „nur eine Haut“ in die Zeile, mit
   *Noch ein Versuch*. Korpus `generated_skin.npz` (Text, Startwert 14). Am echten Endstand
   meldet der Prüfbericht alle fünf Häute (`endstand-review.log`).
+
+  **Nachprüfung K (08.10.2026), behoben:** Dialog und Prüfbericht leiten „nur eine Haut“ aus
+  einer Funktion her (`geom.mesh.shell_thickness`, dickste große geschlossene Schale; Grenze
+  `only_a_skin`), der Dialog mit der Mindestwand des Auswertungsprofils (N7); ein Test belegt die
+  Grenze aus dem Profil (N8); Satz „druckt Wände erst ab“ (N11). `generated_skin.npz` geschlossen
+  ausgedünnt, 1,94 MB → 0,47 MB, Dicke unverändert 0,26 mm (N13).
 
 
 ## RM-564: Vor dem Herunterladen nennt Solidon die Voraussetzungen eines Modells und ob dieser Rechner sie erfüllt (08.10.2026)
@@ -44357,3 +44368,13 @@ Zylinderkopf und Gewinde passend zur Bohrung.
   160 s), Luft und Dauersatz aus einer Quelle (G1), Chatleiste auf dem Mac ohne PC-Rat (G3),
   Website mit freiem Platz statt Download (G4). Tests in `test_backends.py`, `test_chat_ui.py`,
   `test_generate_ui.py`.
+
+  **Nachprüfung K (08.10.2026), behoben:** `nvidia-smi` lief beim ersten Fragen im Hauptthread;
+  jetzt erhebt nur ein Arbeiter die Karte (`machine.probe_card`), `this_machine()` startet keinen
+  Prozess, und vor der Antwort sagt kein Satz „keine Karte“ (N2, Test mit der echten Auskunft).
+  Im Flatpak über `discover.on_host`, Modellordner dort unbekannt (N3). Auf einem PC bleibt die
+  Vorgabe qwen3:14b, die Karte bestimmt nur den Satz (N4, Entscheidung Robert). Abgebrochene
+  Downloads zählen nicht mehr als geladen — Ollama legt `-partial` gleich in voller Größe an
+  (N5). Chatleiste auf einem PC mit erkannter Karte ohne Bedingungssatz (N10); Sätze nennen
+  „NVIDIA-Karte“ (N11); `PROGRAMFILES` hat einen Wächter (N6); die Ansicht von *Chat
+  einrichten* folgt dem Prüfergebnis nur, bis der Kunde selbst rollt (N12).

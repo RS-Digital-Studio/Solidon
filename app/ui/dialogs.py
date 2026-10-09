@@ -1087,9 +1087,10 @@ class _Look(Worker):
 
     def work(self) -> None:
         tool = tools.by_id("ollama")
-        # Grafikkarte und Speicher hier erheben (``nvidia-smi`` ist ein Prozess),
-        # damit der Satz unter dem Modell sie danach nur liest (RM-564).
-        machine.this_machine()
+        # Die Grafikkarte hier erheben (``nvidia-smi`` ist ein Prozess), nie im
+        # Hauptthread; der Satz unter dem Modell nennt sie erst danach
+        # (Nachprüfung K, N2).
+        machine.probe_card()
         self.done.emit(
             ChatState(
                 answers=_what_answers(),
@@ -1273,6 +1274,11 @@ class KeyDialog(QDialog):
         self._scroll = DialogScrollArea(self)
         self._scroll.setWidget(content)
         self._scroll.contentSizeChanged.connect(self._fit_key_content_soon)
+        # Rollt der Kunde selbst, gehört die Ansicht ihm: Ein späteres Wachsen
+        # einer Notiz zieht sie nicht mehr zum Prüfergebnis zurück (Nachprüfung
+        # K, N12). ``actionTriggered`` kommt nur von Rad, Tasten und Schieber,
+        # nicht von ``ensureWidgetVisible``.
+        self._scroll.verticalScrollBar().actionTriggered.connect(self._reader_scrolled)
         outer = QVBoxLayout(self)
         outer.setContentsMargins(WIDE, WIDE, WIDE, WIDE)
         outer.setSpacing(NORMAL)
@@ -1327,6 +1333,10 @@ class KeyDialog(QDialog):
         if self._probe_result_in_view:
             QCoreApplication.sendPostedEvents(None, QEvent.Type.LayoutRequest)
             self._scroll.ensureWidgetVisible(self.probe_result)
+
+    def _reader_scrolled(self, _action: int) -> None:
+        """Der Kunde rollt selbst — das Prüfergebnis wird nicht mehr nachgeführt."""
+        self._probe_result_in_view = False
 
     def _set_tab_order(self) -> None:
         """Die Tab-Taste folgt Cloud, lokalem Modell und erst dann den Aktionen."""

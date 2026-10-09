@@ -137,9 +137,9 @@ def _probe_folder(generation: int, entered: str, results: Queue[_FolderProbeResu
             free: float | None = comfy_setup.free_gigabytes(found / "models")
         except OSError:
             free = None
-        # Den Rechner hier erheben (``nvidia-smi`` ist ein Prozess), nicht im
-        # Hauptthread (RM-564).
-        machine.this_machine()
+        # Die Grafikkarte hier erheben (``nvidia-smi`` ist ein Prozess), nie im
+        # Hauptthread (Nachprüfung K, N2).
+        machine.probe_card()
     except comfy_setup.SetupFailed as problem:
         results.put(_FolderProbeResult(generation, entered, reason=str(problem)))
     except Exception as problem:

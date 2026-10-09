@@ -1604,7 +1604,10 @@ schließt. Ein zweiter Durchgang nimmt für die übrigen Kanten die andere
 Paarung. Falten — 2 bis 24 Dreieckspaare unter einem Millimeter, meist mit
 gemeinsamer Ecke — löst keine Vereinigung; `smooth_folds` rückt die Ecken in
 die Mitte ihrer Nachbarn (an Startwert 13 nach drei Runden kreuzungsfrei) und
-füllt sonst die Stelle neu. Übernommen wird nur, was danach geschlossen,
+füllt sonst die Stelle neu. Jede Ecke darf nur so weit, wie die kreuzenden
+Dreiecke an ihr lang sind: Mit der längsten Kante ihres Fächers rückte am
+Zapfen auf einem Block eine Ecke 10 mm, denn ein CAD-Fächer reicht bis zur
+Blockecke, und gehalten hat nur die Volumenwache. Übernommen wird nur, was danach geschlossen,
 gleich ausgerichtet, gleich viele Teile, fast gleiches Volumen und frei von
 Kreuzungen ist; geprüft wird nur an den Stellen (`_crosses_near`).
 

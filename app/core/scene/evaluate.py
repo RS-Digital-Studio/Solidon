@@ -6644,15 +6644,18 @@ def _generated_objects(document: Document) -> frozenset[ObjectId]:
 def check_thin_skins(scene: Scene, generated: Iterable[ObjectId]) -> list[Finding]:
     """Ein erzeugter Körper, der im Mittel dünner ist als die dünnste Wand des Druckers (RM-577).
 
-    Gemessen wird die mittlere Dicke ``2·V/A`` des geschlossenen Körpers — für
-    eine dünne Wand ist das ihre Dicke. Eine Haut um einen Hohlraum, wie sie
-    TRELLIS.2 an fünf von 17 Läufen lieferte, liegt bei 0,26 bis 0,30 mm, ein
-    voller Körper bei Millimetern. Die Grenze ist die des Materials
-    (``analysis_limits``, Regel 7); ohne Profil gibt es keine Aussage. Gefragt
+    Gemessen wird die mittlere Dicke ``2·V/A`` der dicksten großen geschlossenen
+    Schale in echter Größe — dieselbe Herleitung wie im Dialog vor dem
+    Übernehmen (``geom.mesh.shell_thickness``, Nachprüfung K, N7). Eine Haut um
+    einen Hohlraum, wie sie TRELLIS.2 an fünf von 17 Läufen lieferte, liegt bei
+    0,26 bis 0,30 mm, ein voller Körper bei Millimetern. Die Grenze ist die des
+    Materials (``analysis_limits``, Regel 7) — für ein frisch erzeugtes Objekt
+    ohne eigenes Material dieselbe Mindestwand, die der Dialog nimmt. Ohne
+    Profil gibt es keine Aussage. Gefragt
     wird nur an erzeugten Körpern: Ein konstruiertes dünnes Teil hat seine
     Wand mit Absicht, und dort sagt es ``check_thin_walls``.
     """
-    from app.core.geom.mesh import as_mesh_data
+    from app.core.geom.mesh import as_mesh_data, only_a_skin, shell_thickness
 
     profile = scene.profile
     if profile is None:
@@ -6662,21 +6665,17 @@ def check_thin_skins(scene: Scene, generated: Iterable[ObjectId]) -> list[Findin
         entry = scene.objects.get(object_id)
         if entry is None:
             continue
-        mesh = as_mesh_data(entry.mesh)
-        area = mesh.area
-        if not mesh.is_watertight or area <= 0.0:
-            continue
-        thickness = 2.0 * mesh.volume / area
+        thickness = shell_thickness(as_mesh_data(entry.mesh))
         least, _overhang = analysis_limits(profile, entry)
-        if thickness >= least - EPS_GEOM:
+        if thickness is None or not only_a_skin(thickness, least):
             continue
         findings.append(
             Finding(
                 code="scene.thin_skin",
                 severity="warning",
                 message=_(
-                    "Das erzeugte Modell ist nur eine Haut von {thickness} mm, der Drucker legt "
-                    "Wände ab {least} mm.",
+                    "Das erzeugte Modell ist nur eine Haut von {thickness} mm, der Drucker druckt "
+                    "Wände erst ab {least} mm.",
                     thickness=format_decimal(thickness, 1),
                     least=format_decimal(least, 1),
                 ),

@@ -22,7 +22,8 @@ import platform
 import shutil
 import subprocess
 import sys
-from dataclasses import dataclass
+import threading
+from dataclasses import dataclass, replace
 from functools import cache
 from typing import Final
 
@@ -57,6 +58,10 @@ class Machine:
     """Die NVIDIA-Karte, wie ``nvidia-smi`` sie nennt — leer, wenn keine erkannt ist."""
     card_gb: float | None = None
     """Ihr Grafikspeicher in GB."""
+    card_asked: bool = True
+    """Ob nach der Karte gefragt ist. ``False``, bevor ein Arbeiter
+    :func:`probe_card` gefahren hat — dann sagt Solidon über sie nichts, statt
+    „keine erkannt“ zu melden."""
 
     @property
     def graphics_gb(self) -> float | None:
@@ -128,23 +133,24 @@ def _is_apple_silicon() -> bool:
     return found == 0 and value.value == 1
 
 
-def this_machine() -> Machine:
-    """Dieser Rechner — der einzige Weg, auf dem Solidon danach fragt.
-
-    Die Suite setzt hier einen neutralen Rechner ein (``tests/conftest.py``):
-    Ein Mac mit 16 GB bekäme sonst eine andere Chat-Vorgabe als der Bauserver.
-    """
-    return detect()
-
-
 def _nvidia_card() -> tuple[str, float] | None:
-    """Name und Speicher der ersten NVIDIA-Karte — ``None`` ohne Treiber oder Antwort."""
-    program = shutil.which("nvidia-smi")
-    if program is None:
-        return None
+    """Name und Speicher der ersten NVIDIA-Karte — ``None`` ohne Treiber oder Antwort.
+
+    Im eigenen Flatpak auf dem Rechner, nicht im Sandkasten (``discover.on_host``,
+    Regel ``kern.md``): Dort liegt ``nvidia-smi`` nicht, und ein Kunde mit Karte
+    läse „keine erkannt“ (Nachprüfung K, N3).
+    """
+    from app.core import discover
+
+    query = ["nvidia-smi", "--query-gpu=name,memory.total", "--format=csv,noheader,nounits"]
+    if not discover.in_flatpak():
+        program = shutil.which("nvidia-smi")
+        if program is None:
+            return None
+        query[0] = program
     try:
         answer = run_limited(
-            [program, "--query-gpu=name,memory.total", "--format=csv,noheader,nounits"],
+            discover.on_host(query),
             cwd=trusted_cwd(),
             timeout=5.0,
             output_limit=16 * 1024,
@@ -164,24 +170,53 @@ def _nvidia_card() -> tuple[str, float] | None:
     return printable[:60], gigabytes
 
 
+def this_machine() -> Machine:
+    """Dieser Rechner — der einzige Weg, auf dem Solidon danach fragt.
+
+    **Startet nie einen Prozess** und darf deshalb im Hauptthread stehen: die
+    Karte nur, wenn ein Arbeiter sie schon erhoben hat (:func:`probe_card`),
+    sonst ohne (Nachprüfung K, N2). Die Suite setzt hier einen neutralen
+    Rechner ein (``tests/conftest.py``).
+    """
+    found = detect()
+    with _CARD_LOCK:
+        if not _CARD:
+            return replace(found, card_asked=found.apple_silicon)
+        card = _CARD[0]
+    if card is None:
+        return found
+    return replace(found, card_name=card[0], card_gb=card[1])
+
+
+#: Die erhobene Karte: leer heißt noch nicht gefragt, ``[None]`` keine erkannt.
+_CARD: list[tuple[str, float] | None] = []
+_CARD_LOCK: Final = threading.Lock()
+
+
+def probe_card() -> None:
+    """Die Grafikkarte erheben — einmal je Prozess, **nur in einem Arbeiter** (ein
+    ``nvidia-smi``-Aufruf, bis 5 s bei einem hängenden Treiber)."""
+    with _CARD_LOCK:
+        if _CARD:
+            return
+    card = None if detect().apple_silicon else _nvidia_card()
+    with _CARD_LOCK:
+        if not _CARD:
+            _CARD.append(card)
+            _log.info("graphics card: %s", card)
+
+
+def forget_card() -> None:
+    """Die erhobene Karte vergessen — für Tests."""
+    with _CARD_LOCK:
+        _CARD.clear()
+
+
 @cache
 def detect() -> Machine:
-    """Dieser Rechner, einmal je Prozess erhoben — mit ``nvidia-smi`` einmal
-    ein Prozess, deshalb im Arbeiter fragen (Einrichtungsdialoge)."""
+    """Prozessorart und Arbeitsspeicher, einmal je Prozess — ohne Prozess, also
+    überall erlaubt. Die Karte erhebt :func:`probe_card`."""
     memory = _memory_bytes()
-    apple = _is_apple_silicon()
-    card = None if apple else _nvidia_card()
-    found = Machine(
-        apple_silicon=apple,
-        memory_gb=memory / 2**30 if memory else None,
-        card_name=card[0] if card else "",
-        card_gb=card[1] if card else None,
-    )
-    _log.info(
-        "machine: apple_silicon=%s memory_gb=%s card=%s %s",
-        found.apple_silicon,
-        found.memory_gb,
-        found.card_name,
-        found.card_gb,
-    )
+    found = Machine(apple_silicon=_is_apple_silicon(), memory_gb=memory / 2**30 if memory else None)
+    _log.info("machine: apple_silicon=%s memory_gb=%s", found.apple_silicon, found.memory_gb)
     return found

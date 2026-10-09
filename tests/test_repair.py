@@ -4203,6 +4203,46 @@ def test_a_crossing_that_would_reshape_the_body_stays_a_warning() -> None:
     assert np.array_equal(np.asarray(looked.mesh.raw.vertices), np.asarray(folded.raw.vertices))
 
 
+def test_the_local_bound_alone_keeps_the_pin_on_the_block(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Auch ohne Volumenwache rückt am Zapfen auf dem Block nichts: Jede Ecke darf
+    nur so weit, wie die kreuzenden Dreiecke an ihr lang sind (Nachprüfung K, N9).
+
+    Mit der Grenze am Fächer rückte eine Ecke 10,1 mm, und der Körper wuchs um
+    2 % — gehalten hat allein ``FOLD_VOLUME_SHARE``.
+    """
+    from app.core.geom import repair as repairing
+
+    monkeypatch.setattr(repairing, "FOLD_VOLUME_SHARE", 1.0)
+    folded = _folded_pin_on_a_block()
+
+    looked = repair(folded, self_intersections=True)
+
+    codes = {finding.code for finding in looked.findings}
+    assert "repair.self_crossing" in codes and "repair.folds_smoothed" not in codes, codes
+    assert np.array_equal(np.asarray(looked.mesh.raw.vertices), np.asarray(folded.raw.vertices))
+
+
+def test_crossings_without_a_corner_of_a_fold_are_no_places() -> None:
+    """Liefert kein Paar eine Ecke, gibt es keine Stelle — und keinen Befund
+    „An einer Stelle …“ für null Stellen (Nachprüfung K, N9)."""
+    from app.core.geom.intersections import Crossings
+    from app.core.geom.repair import smooth_folds
+
+    ball = MeshData.of(trimesh.creation.icosphere(subdivisions=3, radius=20.0))
+    centres = np.asarray(ball.raw.triangles_center)
+    top, bottom = int(np.argmax(centres[:, 2])), int(np.argmin(centres[:, 2]))
+    far_apart = Crossings(
+        first=np.array([top]),
+        second=np.array([bottom]),
+        coplanar=np.array([False]),
+        complete=True,
+    )
+
+    assert smooth_folds(ball, far_apart) is None
+
+
 def test_a_fold_stays_reported_when_only_asked_to_look() -> None:
     """Ohne *Überschneidungen auflösen* ändert die Reparatur an der Falte nichts.
 

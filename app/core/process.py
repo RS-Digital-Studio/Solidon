@@ -190,7 +190,9 @@ def trusted_environment(
 
     Im eigenen Flatpak kommen die zwei Namen dazu, ohne die kein Aufruf den
     Sandkasten verlässt (:data:`_SANDBOX_BRIDGE_NAMES`). Adressen werden dabei
-    von Zugangsdaten befreit (:func:`_without_credentials`).
+    von Zugangsdaten befreit (:func:`_without_credentials`). Der Programmordner
+    reist mit, weil ``nvidia-smi`` ohne ihn seine NVML nicht findet und jeder
+    Windows-Rechner „keine Grafikkarte“ hätte (``machine.probe_card``).
     """
     available = os.environ if source is None else source
     names = _ENVIRONMENT_NAMES + (_GRAPHICAL_ENVIRONMENT_NAMES if graphical else ())
