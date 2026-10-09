@@ -103,6 +103,7 @@ Nutzen da und sonst nichts.
 ### Gewinde, Bohrungen und Normteile
 
 - Gewinde gibt es jetzt in jedem Durchmesser bis 1000 mm, ob mit *Druckbares Gewinde*, in einer Bohrung, mit *Schraube erstellen* oder *Drehdeckel erzeugen*.
+- Auch normale Bohrungen lassen sich jetzt bis 1000 mm Durchmesser anlegen und wieder verschließen. Große Bohrungen und Senkungen behalten ihre runde Form.
 - Schrauben, Muttern und Scheiben gibt es nach ISO von M1,6 bis M64. Für andere Größen leitet *Eigenes Maß* die Maße aus den Nachbargrößen ab und sagt das.
 - Mit *Passend zur Bohrung* baut *Stift für Bohrung* das Gegenstück: in eine Senkung einen bündigen Senkkopf, in ein Innengewinde ein Außengewinde gleicher Größe und Steigung.
 - An einem gedruckten Innengewinde bietet die Auswahl *Stift für Bohrung* direkt an.

@@ -78,6 +78,7 @@ it into `website/version.json`.
 ### Threads, holes and standard parts
 
 - Threads now come in any diameter up to 1000 mm, whether with *Printable thread*, in a hole, with *Create screw* or *Create screw lid*.
+- Regular holes can now be created and plugged again at diameters up to 1000 mm. Large holes and countersinks keep their round shape.
 - Screws, nuts and washers are available to ISO from M1.6 to M64. For other sizes, *Custom size* derives the dimensions from the neighbouring sizes and says so.
 - With *To fit the hole*, *Pin for hole* builds the counterpart: a flush countersunk head for a countersink, an external thread of the same size and pitch for an internal thread.
 - On a printed internal thread, the selection offers *Pin for hole* directly.

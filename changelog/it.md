@@ -78,6 +78,7 @@ scrive in `website/version.json`.
 ### Filettature, fori e componenti normalizzati
 
 - Le filettature accettano ora qualsiasi diametro fino a 1000 mm, con *Filettatura stampabile*, in un foro, con *Crea vite* o *Crea coperchio a vite*.
+- Anche i fori normali possono essere creati e richiusi con diametri fino a 1000 mm. I fori grandi e le svasature mantengono la forma rotonda.
 - Viti, dadi e rondelle ci sono secondo ISO da M1,6 a M64. Per altre misure, *Misura personalizzata* ricava le dimensioni dalle misure vicine e lo dice.
 - Con *Adatto al foro*, *Perno per foro* costruisce la controparte: una testa svasata a filo per una svasatura, una filettatura esterna di pari misura e passo per una interna.
 - Su una filettatura interna stampata, la selezione offre direttamente *Perno per foro*.

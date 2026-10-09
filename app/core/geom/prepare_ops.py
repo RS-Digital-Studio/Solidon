@@ -450,7 +450,7 @@ class DrillParams(BaseParams):
         default=5.0,
         unit="mm",
         minimum=0.2,
-        maximum=200.0,
+        maximum=units.LARGEST_THREAD,
         doc=_(
             "Nenndurchmesser der Bohrung. Für eine Schraube gibt es den Baustein "
             "„Schraubenloch mit Senkung“, dort kommen die Maße aus der Normteiltabelle."
@@ -719,7 +719,7 @@ def bore_shape(params: DrillParams, *, within: Mesh | None = None) -> BoreShape:
     # Zugabe hinaus (RM-274).
     # 2: ein Langloch zählt seinen Winkel gegen ``prepare.slot_frame`` (30.09.2026).
     # 3: alte Winkel bleiben gebunden und werden anhand der aktuellen Achse umgerechnet (RM-323).
-    cache_version="3",
+    cache_version="4",
     title=_("Bohrung setzen"),
     category="holes",
     params=DrillParams,
@@ -18850,6 +18850,7 @@ class CountersinkParams(BaseParams):
 
 @register_op(
     name="countersink_hole",
+    cache_version="1",
     title=_("Senken"),
     category="holes",
     params=CountersinkParams,
@@ -18903,7 +18904,7 @@ class PlugParams(BaseParams):
         default=5.0,
         unit="mm",
         minimum=0.2,
-        maximum=200.0,
+        maximum=units.LARGEST_THREAD,
         doc=_("Durchmesser des Stopfens, der die Bohrung füllt."),
     )
     x: float = param(
@@ -18966,7 +18967,7 @@ class PlugParams(BaseParams):
     # sagt ab (RM-596).
     # +1: ein unentscheidbarer Punkt im Lufteinschluss fragt daneben nach
     # (``point_in_shell``, Nachprüfung G, N-4).
-    cache_version="10",
+    cache_version="11",
     title=_("Bohrung verschließen"),
     category="holes",
     params=PlugParams,
@@ -19062,9 +19063,8 @@ def _exact_countersink(ctx: OpContext, source: SceneObject, params: CountersinkP
     Netz-Zwilling — dieselbe Antwort wie am Netz. Der Kegel selbst ist exakt
     und trägt seinen Durchmesser **an der Mündung**: Über sie hinaus geht er
     um ``FEATURE_OVERLAP`` mit derselben Flanke weiter, damit keine Fläche mit
-    der Oberfläche zusammenfällt; am Netz wird er stattdessen angehoben, und
-    dort ist die Mündung um den Überstand mal Flanke enger — das ist der
-    Sehnenfehler des Netzwegs, nicht das Maß.
+    der Oberfläche zusammenfällt. Der Netzweg verlängert seinen Kegel ebenso;
+    dessen Sehnen halten die gemeinsame Abweichungsgrenze ein.
     """
     from app.core.brep import edit
     from app.core.brep.edit import _oriented_cone

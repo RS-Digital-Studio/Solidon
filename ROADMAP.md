@@ -3552,19 +3552,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   bis zur Vernetzungsabweichung, ohne gemeinsames Volumen mit dem Träger und
   mit dem halben Profilspiel; Regression über beide Halter und beide Bohrungen.
 
-<a id="rm-691"></a>
-- [ ] **RM-691 — Stift am Schlüsselloch der Halter hat je Kern eine andere Form.**
-  Nachprüfung von Paket G, N-4 (09.10.2026): Auf einem Quader 40 × 40 × 12 mm
-  `holder_ring` oder `holder_shelf` bei z = 12 setzen, dann *Stift für Bohrung*
-  an `holder_ring_bore_1/2` beziehungsweise `holder_shelf_bore_1/2` aufrufen.
-  Bei PETG entsteht am Netz ein glatter Stift mit 67,19 mm³, exakt ein Stift
-  mit Kopf mit 90,82 mm³. Beide stehen lose und innerhalb der Trägerhülle;
-  die Kopfform ist verschieden. Der Unterschied besteht schon vor Paket G.
-  Offen: Die gelesene Hohlraumkette beider Kerne vergleichen und den Kopf aus
-  derselben Geometrie ableiten. Abnahme: beide Kerne liefern dieselbe Form
-  bis zur Vernetzungsabweichung, ohne gemeinsames Volumen mit dem Träger und
-  mit dem halben Profilspiel; Regression über beide Halter und beide Bohrungen.
-
 ## Bedienung und Darstellung
 
 <a id="rm-283"></a>

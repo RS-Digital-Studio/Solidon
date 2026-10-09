@@ -214,6 +214,7 @@ Rundung, Radius aus `measured_radius`)
   (`PLACE_BOUND_FINDINGS`); exakt trägt der Neuschnitt die übrige Topologie
   (`_exact_rest_carried`). Ob ein Wert die Bohrung ändert, sagen
   `bore_is_unchanged` und `bore_depth_is_unchanged` für Op und Fenster.
+- `DrillParams`/`PlugParams`: `LARGEST_THREAD`; Sehnen: `shapes.turn_segments`.
 - **Maße und Nachprüfung**: `_with_nominal_bore` hält bekannte Maße nur, wenn
   alle Wandpunkte im Sehnenband liegen; `voxel` und `jittered` behaupten
   keine. Über `FEATURE_LIMIT_TRIANGLES` prüft `detect_known` im Radius des

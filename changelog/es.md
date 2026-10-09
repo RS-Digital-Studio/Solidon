@@ -79,6 +79,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 ### Roscas, taladros y piezas normalizadas
 
 - Las roscas admiten ahora cualquier diámetro hasta 1000 mm, ya sea con *Rosca imprimible*, en un taladro, con *Crear tornillo* o *Generar tapa roscada*.
+- Los taladros normales también se pueden crear y volver a tapar con diámetros de hasta 1000 mm. Los taladros grandes y los avellanados mantienen su forma redonda.
 - Tornillos, tuercas y arandelas están disponibles según ISO de M1,6 a M64. Para otros tamaños, *Medida propia* deriva las medidas de los tamaños vecinos y lo indica.
 - Con *Ajustado al taladro*, *Pasador para taladro* construye la contrapieza: una cabeza avellanada enrasada para un avellanado, una rosca exterior del mismo tamaño y paso para una interior.
 - En una rosca interior impresa, la selección ofrece directamente *Pasador para taladro*.

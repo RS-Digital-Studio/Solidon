@@ -78,6 +78,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 ### Roscas, furos e peças normalizadas
 
 - As roscas aceitam agora qualquer diâmetro até 1000 mm, com *Rosca imprimível*, num furo, com *Criar parafuso* ou *Criar tampa de rosca*.
+- Os furos normais também podem ser criados e novamente tapados com diâmetros até 1000 mm. Os furos grandes e os escareados mantêm a forma redonda.
 - Parafusos, porcas e anilhas existem segundo ISO de M1,6 a M64. Para outros tamanhos, *Medida própria* deriva as medidas dos tamanhos vizinhos e indica-o.
 - Com *Ajustado ao furo*, *Pino para furo* constrói a contrapeça: uma cabeça escareada à face para um escareamento, uma rosca externa do mesmo tamanho e passo para uma interna.
 - Numa rosca interna impressa, a seleção oferece diretamente *Pino para furo*.

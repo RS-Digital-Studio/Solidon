@@ -132,7 +132,7 @@ date = "2026-10-09"
 [[parts]]
 name = "heatset_m4"
 version = "17"
-fingerprint = "058c10a1973dcfb1f50a71a7a4dcb873f20561c18c5ffe67b043562af37f463b"
+fingerprint = "dbd8ac91e48e0e7a4cd302de9a3caeafa01279ecf3222e70610992a07b71c1ca"
 corners = 64
 checked = 64
 excluded = 0
@@ -264,7 +264,7 @@ date = "2026-10-09"
 [[parts]]
 name = "nut_trap"
 version = "26"
-fingerprint = "180ddae18a9863718414f6ccb44b3eba98d7ad3667544caa0fd4ac51ed97b7b5"
+fingerprint = "a829feb8544fe22d94a0b67fa3a3c9b998d073b0d9378aa2520107dbdad3db0f"
 corners = 464
 checked = 464
 excluded = 120
@@ -352,7 +352,7 @@ date = "2026-10-09"
 [[parts]]
 name = "printed_nut"
 version = "24"
-fingerprint = "8dea94d1ed41654cf2f48f5061697f1fe7c8c473e5c4bdaa9cee2c2d4aed32ac"
+fingerprint = "4e9e3d18cc57fc7e4410aaf7a7697e17fd86907e88a6769d79c21bf5be826b8d"
 corners = 58
 checked = 58
 excluded = 0
@@ -473,7 +473,7 @@ date = "2026-10-09"
 [[parts]]
 name = "screw_hole"
 version = "15"
-fingerprint = "ccdd1caab39231317f87471572a5162233819412f2947286c84076375e96ab88"
+fingerprint = "2f333a5e75a1e91ec51d29f48c0affc51d86e24d75e01c6b7308f09766f7cf58"
 corners = 464
 checked = 464
 excluded = 0

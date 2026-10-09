@@ -79,6 +79,7 @@ dans `website/version.json`.
 ### Filetages, perçages et pièces normalisées
 
 - Les filetages acceptent désormais tout diamètre jusqu'à 1000 mm, avec *Filetage imprimable*, dans un perçage, avec *Créer une vis* ou *Créer un couvercle vissé*.
+- Les perçages ordinaires peuvent aussi être créés et rebouchés jusqu’à 1000 mm de diamètre. Les grands perçages et fraisures conservent leur forme ronde.
 - Vis, écrous et rondelles existent selon ISO de M1,6 à M64. Pour d'autres tailles, *Taille personnalisée* déduit les cotes des tailles voisines et le signale.
 - Avec *Ajustée au perçage*, *Goupille pour perçage* construit la contrepartie : une tête fraisée affleurante pour une fraisure, un filetage extérieur de même taille et même pas pour un intérieur.
 - Sur un filetage intérieur imprimé, la sélection propose directement *Goupille pour perçage*.
