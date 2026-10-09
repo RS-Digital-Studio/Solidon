@@ -44,8 +44,9 @@ Durchsicht (`/regelcheck`, Agent `solidon3d-review`).
    entsteht.
 
 **Zahlen**
-6. **Der Kern rechnet in Millimetern und doppelter Genauigkeit.** Gerundet wird
-   nur in der Anzeige. Fließkommavergleich nie mit `==`.
+6. **Der Kern rechnet in Millimetern und doppelter Genauigkeit.** Gehaltene
+   Netze dürfen einfach genau sein, wo es druckgleich bleibt (§11.1). Gerundet
+   wird nur in der Anzeige. Fließkommavergleich nie mit `==`.
 7. **Keine Zahlenkonstante für Toleranzen** — Verweis ins Materialprofil
    (`auto:<material>`).
 8. **Keine Streuzahl, wo ein Projektparameter passt.**
@@ -163,7 +164,11 @@ Dialoge.
 - **Mehr liefern, wo es geht.** Eine selbst gesetzte Grenze, die dem Kunden
   weniger gibt (Größen, Formen, Bereiche), wird gehoben, sobald sie nicht nötig
   ist. Jede gefundene Leistungs- oder Speicherverbesserung wird umgesetzt,
-  solange die Ergebnisse gleich bleiben (Messung vorher und nachher, Test).
+  solange das Ergebnis **druckgleich** bleibt (Bauplan §11.2: diskret gleich,
+  höchstens 5 µm, Netze sauber, Import und Export wie vorher; Messung vorher
+  und nachher, Test) — gebündelt als Feldrechnung statt je Element. Das gilt
+  in jeder Sitzung und für jeden Agenten auch für Funde unterwegs: im eigenen
+  Gebiet gleich umsetzen, sonst als Punkt ins Register.
 - **Kleine Schritte, je Schritt nur die betroffenen Tests**
   (`tools/affected_tests.py` leitet sie aus dem Importgraphen ab), auf Paket-
   und Fixzweigen auch vor dem Commit, dazu ruff, format, mypy. Das

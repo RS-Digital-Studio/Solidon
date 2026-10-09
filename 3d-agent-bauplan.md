@@ -845,7 +845,10 @@ Dialog, Kommandozeile und Agentenaufruf.
 
 ### 11.1 Einheiten
 Der Kern rechnet **ausschließlich in Millimetern** und in doppelter
-Genauigkeit. Eine andere Anzeigeeinheit ist reine Oberflächensache und
+Genauigkeit. Gehaltene Netze — Verlauf, Cache, Platte, Hilfsprozesse — dürfen
+einfach genau sein (Ecken `float32`, Dreiecksindizes `int32`), solange das
+Ergebnis druckgleich bleibt (§11.2); Kundendaten aus STL kommen ohnehin so.
+Eine andere Anzeigeeinheit ist reine Oberflächensache und
 erreicht den Kern nie. Umrechnungen passieren genau zweimal: beim Import
 (§17.1) und in der Anzeige.
 
@@ -865,6 +868,16 @@ Toleranz in diesem Sinn, sondern die Auflösung, mit der beide Kerne Rundungen
 in Facetten zerlegen (§25, §30). Die Merkmalszuordnung aus
 §21.3 nutzt eigene, geprüfte Kosten und Annahmeschwellen in
 `app/core/perceive/matching.py`; diese Funktion steuert sie nicht.
+
+**Druckgleich** ist der Maßstab für jede Beschleunigung und Ersparnis
+(Entscheidung Robert): Jedes diskrete Ergebnis bleibt gleich — Merkmale,
+Arten, Namen, Befunde, Objektzahl, Fragen an den Nutzer; Maße und Lagen
+weichen höchstens um die Druckgrenze ab, ein Vierzigstel der kleinsten
+angebotenen Düse (`COMMON_NOZZLE_SIZES`, 0,2 mm → 5 µm, unter einem
+Motor-Mikroschritt); die Netze bleiben sauber — wasserdicht, mannigfaltig,
+ohne Selbstdurchdringung und entartete Dreiecke —, und Import und Export
+laufen in jedem Format wie vorher. Bitgleich bleibt, was §11.3, Cache-Schlüssel
+und Projektdateien verlangen.
 
 Numerische Genauigkeit, Erkennungsunsicherheit und Fertigungsspiel sind
 verschiedene Größen. Fertigungstoleranzen kommen aus dem Materialprofil,
