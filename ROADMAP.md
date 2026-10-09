@@ -23,7 +23,9 @@ stehen mit Nachweis im Archiv.
 
 Priorität: Kundenabstürze und blockierte Hauptwege, danach falsche Ergebnisse
 und Bedienfehler, danach Ausbau und interne Verbesserungen. Fristgebundene
-Auflagen werden daneben rechtzeitig bearbeitet. **Als Nächstes:** die Kundenblocker nach
+Auflagen werden daneben rechtzeitig bearbeitet. Die nächste Version ist **0.6.0**, ein
+0.5.4 gibt es nicht (Entscheidung Robert, `tools/bump_version.py --minor`).
+**Als Nächstes:** die Kundenblocker nach
 0.5.3 — das signierte Paket startet auf echten Intel-Macs nicht (RM-104; Ursache eingegrenzt,
 am Kundengerät von Hand gegengeprobt, Signierschritt korrigiert, kommt mit dem nächsten Tag),
 Cura unter Linux (RM-521, gebaut, Abnahme beim Kunden mit dem nächsten Paket) — und die mit
