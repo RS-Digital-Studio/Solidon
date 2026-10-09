@@ -4829,6 +4829,8 @@ def _reaching_in(
     # es kommt der Achse zwischen den Mündungen nicht so nah. Ein Durchgang über
     # die Dreiecke mit einem Byte je Ecke — Reduktionen über eine Achse der
     # Länge drei kosteten am Laptop-Ständer (173 592 Dreiecke) 60 ms je Bohrung.
+    # Mehr als acht Schranken bekommen ein breiteres Muster; im Byte fand die
+    # Vorauswahl ab fünf Grenzen still nichts mehr (Review RM-253).
     first = np.cross(axis, (1.0, 0.0, 0.0))
     if math.hypot(*(float(value) for value in first)) < 0.5:
         first = np.cross(axis, (0.0, 1.0, 0.0))
@@ -4845,7 +4847,8 @@ def _reaching_in(
         checks.append((bounds[0][0], ((bounds[0][1], False), (-bounds[1][1], True))))
     else:
         checks += [(normal, ((offset, False),)) for normal, offset in bounds]
-    pattern = np.zeros(len(points), dtype=np.uint8)
+    flags = sum(len(conditions) for _direction, conditions in checks)
+    pattern = np.zeros(len(points), dtype=np.min_scalar_type((1 << flags) - 1))
     bit = 0
     for direction, conditions in checks:
         values = points[:, 0] * direction[0] + points[:, 1] * direction[1]
@@ -4853,7 +4856,7 @@ def _reaching_in(
         shift = units.dot3(direction, centre)
         for threshold, above in conditions:
             hit = values > threshold + shift if above else values < threshold + shift
-            pattern |= hit.astype(np.uint8) << bit
+            pattern |= hit.astype(pattern.dtype) << bit
             bit += 1
     reached_by = pattern[faces[:, 0]] | pattern[faces[:, 1]] | pattern[faces[:, 2]]
     candidates = np.flatnonzero(reached_by == (1 << bit) - 1)

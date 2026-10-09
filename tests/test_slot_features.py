@@ -3034,6 +3034,45 @@ def test_triangles_lying_in_a_mouth_plane_do_not_break_the_clipping() -> None:
     assert len(_closest_to_the_axis(polygons, counts, unit((0.0, 0.0, 1.0)))) == len(lying)
 
 
+def test_bounds_that_cut_nothing_do_not_change_what_reaches_in() -> None:
+    """Grenzen, die nichts beschneiden, ändern die Antwort nicht — auch fünf und mehr.
+
+    ``_reaching_in`` nimmt beliebig viele Halbräume. Die Vorauswahl setzt je
+    Grenze ein Bit, und mit einem Byte je Ecke war nach acht Bits Schluss: Ab
+    fünf Grenzen neben den vier Bits quer zur Achse fand sie nichts mehr, und
+    ein Streifen 1 mm neben der Achse galt still als fern (Review RM-253). Hier
+    kommen zum Mündungspaar vier Ebenen 100 mm entfernt dazu, eine nach der
+    anderen.
+    """
+    from app.core.geom.prepare_ops import _reaching_in
+
+    def unit(values: tuple[float, float, float]) -> np.ndarray:
+        vector = np.asarray(values, dtype=np.float64)
+        return vector / math.sqrt(float((vector * vector).sum()))
+
+    strip = trimesh.Trimesh(
+        vertices=[(-30.0, 1.0, -20.0), (30.0, 1.0, -20.0), (0.0, 1.0, 20.0)],
+        faces=[(0, 1, 2)],
+        process=False,
+    )
+    axis = unit((0.0, 0.0, 1.0))
+    mouths = [(axis, 5.0), (-axis, 5.0)]
+    far = [
+        (unit(normal), 100.0)
+        for normal in ((1.0, 0.0, 0.2), (-1.0, 0.0, 0.2), (0.0, 1.0, -0.2), (0.0, -1.0, -0.2))
+    ]
+    own = np.zeros(0, dtype=np.int64)
+
+    reached = [
+        float(
+            _reaching_in(MeshData.of(strip), np.zeros(3), axis, mouths + far[:count], 3.0, own)[0]
+        )
+        for count in range(len(far) + 1)
+    ]
+
+    assert reached == pytest.approx([1.0] * (len(far) + 1))
+
+
 def _plate_with_a_sheet(kernel: str) -> SceneObject:
     """Platte 60 x 50 x 10 mit Bohrung Ø 6 längs z und ein getrenntes Blech von
     0,2 mm, das auf halber Höhe in ihr steckt: ein Prisma über dem Dreieck
