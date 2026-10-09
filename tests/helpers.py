@@ -2039,3 +2039,17 @@ def first_start(executable: Path) -> Path | None:
     )
     shutil.rmtree(unpacked, ignore_errors=True)
     return system
+
+
+def plate_on_a_sloped_foot(angle: float) -> MeshData:
+    """Eine Platte 60 mm im Quadrat, deren untere 4 mm ringsum unter ``angle``
+    gegen die Senkrechte nach außen laufen — die Bodenkante des Bahnteils
+    ``Gövde59`` aus dem Minigolf-Satz (``F:\\3D Dateien``, 27.09.2026):
+    2 mm Bodenplatte mit gut 50 Grad Fase, darüber 45 bis 50 Grad nach außen
+    geneigte Wände, zusammen 320 mm² Überhang über 45 Grad in Stücken bis
+    25 mm², darüber nichts. Rat und Randfrage messen ihn beide."""
+    reach = 4.0 * math.tan(math.radians(angle))
+    foot = [(x, y, 0.0) for x in (-30.0, 30.0) for y in (-30.0, 30.0)]
+    wide = 30.0 + reach
+    top = [(x, y, z) for x in (-wide, wide) for y in (-wide, wide) for z in (4.0, 10.0)]
+    return MeshData.of(trimesh.convex.convex_hull(np.array(foot + top)))

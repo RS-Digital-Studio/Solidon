@@ -688,6 +688,7 @@ SUPPORT_DETAILS: Final = (
     "support.density",
     "support.interface_layers",
     "support.block_channels",
+    "support.spare_ledges",
 )
 
 #: Alle Haftungsmaße, in der Reihenfolge des Dialogs — abgeleitet aus

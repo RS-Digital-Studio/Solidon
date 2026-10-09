@@ -139,12 +139,14 @@ from app.ui.first_run import (
     PrinterComboBox,
     _PrinterSurvey,
     add_printer_choices,
+    ask_slicer_program,
     keep_slicer_printer,
     known_printers,
     printers_on_offer,
     valid_printer_choice,
 )
 from app.ui.header import filament_names
+from app.ui.icons import icon
 from app.ui.labels import (
     BoundedLengthSpin,
     BoundedSpin,
@@ -409,7 +411,7 @@ def remembered_setup(
     """
     if not settings.slicer_machine_profile:
         return None
-    found = discover.find_program("slicer", tools.SLICERS)
+    found = tools.slicer_program()
     if not _remembered_profiles_match(settings, printer_id, found):
         return None
     assert found is not None
@@ -2310,7 +2312,7 @@ class _SlicerWorker(Worker):
 
     def work(self) -> None:
         try:
-            self.done.emit(discover.find_programs("slicer", tools.SLICERS))
+            self.done.emit(tools.slicer_programs())
         except OSError as problem:
             # Ein unlesbarer Ordner im Suchweg ist kein Grund, den Dialog zu
             # verlieren — dann bleibt die Liste eben leer, und der Zustand
@@ -2673,6 +2675,9 @@ class PrintSettingsDialog(QDialog):
         :meth:`_settle`)."""
         self._settling = False
         """Ob ein Schließwunsch bereits Auswahl und Abbruch festgehalten hat."""
+        self._placing_machine = False
+        """Setzt :meth:`_take_profiles` gerade die Maschine? Dann füllt es die
+        Prozesse selbst (:meth:`_machine_chosen`)."""
         self._finish_result: int | None = None
         """Der Dialogausgang, der nach den laufenden Arbeitern zugestellt wird."""
         self._settle_timer = QTimer(self)
@@ -2755,6 +2760,7 @@ class PrintSettingsDialog(QDialog):
         # beim Aufbau), steht aber in ihr: Die Tabulatortaste folgt dem Auge.
         head_chain = [
             self.slicer_choice,
+            self.slicer_file,
             self.printer_choice,
             self.adopt_printer,
             self.nozzle_choice,
@@ -2875,9 +2881,12 @@ class PrintSettingsDialog(QDialog):
         # Slicer wechselt, trifft die erste Entscheidung; alles darunter folgt
         # ihr.
         #
-        # Bei mehreren eine Auswahl; bei einem sein Name — ein Auswahlfeld mit
-        # einem Eintrag wäre eine Frage ohne Antwortmöglichkeit (§2.4), welcher
-        # Slicer rechnet, bleibt trotzdem eine Auskunft.
+        # **Wie in den Ersten Schritten** (Robert, 08.10.2026: „das soll wie in
+        # erste Schritte hier gehen", RM-601): ein Auswahlfeld, sobald ein
+        # Slicer bekannt ist, und daneben „Programm wählen …" für einen, den
+        # die Suche nicht findet. Bis dahin stand bei einem Slicer nur sein
+        # Name und während der Suche ebenso — tauschen ließ er sich dann
+        # nicht, und ein portabler Slicer ließ sich hier nie wählen.
         self.slicer_choice = QComboBox(self)
         self.slicer_choice.activated.connect(self._slicer_chosen)
         slicer_note = tr(
@@ -2887,9 +2896,11 @@ class PrintSettingsDialog(QDialog):
         self.slicer_choice.setToolTip(slicer_note)
         self.slicer_choice.setAccessibleDescription(slicer_note)
         self.slicer_choice.setAccessibleName(tr("Slicer"))
-        self.slicer_single = QLabel("", self)
-        self.slicer_single.setToolTip(slicer_note)
-        self.slicer_single.setAccessibleDescription(slicer_note)
+        self.slicer_file = QPushButton(tr("Programm wählen …"), self)
+        self.slicer_file.setIcon(icon("open", self.slicer_file))
+        self.slicer_file.setToolTip(tr("Slicer-Programm auswählen"))
+        self.slicer_file.setAccessibleDescription(self.slicer_file.toolTip())
+        self.slicer_file.clicked.connect(self._choose_slicer_file)
         # Der Satz gehört an beide Hälften der Zeile: Wer eine Zeile nicht
         # versteht, zeigt auf das Wort davor und nicht auf den Kasten daneben.
         self.slicer_label = QLabel(tr("Slicer"), self)
@@ -2897,8 +2908,6 @@ class PrintSettingsDialog(QDialog):
         self.slicer_label.setAccessibleDescription(slicer_note)
         self.slicer_label.setBuddy(self.slicer_choice)
         self.slicer_choice.setVisible(False)
-        self.slicer_single.setVisible(False)
-        self.slicer_label.setVisible(False)
 
         self.quality = QComboBox(self)
         for key, title in print_settings.quality_presets().items():
@@ -3110,7 +3119,11 @@ class PrintSettingsDialog(QDialog):
         slicer_field = QHBoxLayout()
         slicer_field.setContentsMargins(0, 0, 0, 0)
         slicer_field.addWidget(self.slicer_choice, 1)
-        slicer_field.addWidget(self.slicer_single, 1)
+        slicer_field.addWidget(self.slicer_file)
+        # Ohne Slicer bleibt nur der Knopf, und ohne diesen Abschluss zog er sich
+        # über die ganze Zeile (Review RM-601). Mit Auswahlfeld nimmt das Feld
+        # den Platz, denn nur es trägt einen Dehnfaktor.
+        slicer_field.addStretch(0)
         head.addRow(self.slicer_label, slicer_field)
         head.addRow(self.printer_label, self.printer_choice)
         head.addRow(self._printer_state_label, self.printer_state)
@@ -4632,7 +4645,7 @@ class PrintSettingsDialog(QDialog):
         known["show_output"] = self._show_slicer_output
         known["check_profile"] = lambda _error: self._open_slicer_section()
         known["choose_printer"] = self._open_printer_choice
-        known["choose_slicer"] = lambda _error: self._open_slicer_section()
+        known["choose_slicer"] = lambda error: self._open_slicer_choice(error)
         previous_print_settings = known.get("open_print_settings")
 
         def open_raft_gap_settings(error: AppError) -> None:
@@ -4656,6 +4669,18 @@ class PrintSettingsDialog(QDialog):
     def _open_printer_choice(self, _error: AppError) -> None:
         """Die Druckerwahl dieses Dialogs öffnen, statt einen zweiten anzulegen."""
         self.printer_choice.showPopup()
+
+    def _open_slicer_choice(self, _error: AppError) -> None:
+        """*Einen anderen Slicer auswählen* öffnet die Slicerwahl oben.
+
+        Hier stand der Profilkasten — wer einen anderen Slicer wählen sollte,
+        fand dort dessen Druckerprofile und keine Slicerwahl (Review RM-601).
+        Ohne gefundenen Slicer bleibt die Programmwahl.
+        """
+        if self._slicers:
+            self.slicer_choice.showPopup()
+        else:
+            self._choose_slicer_file()
 
     def _show_slicer_output(self, error: AppError) -> None:
         """Was der Slicer geschrieben hat — als Text, nicht als Wertzeile.
@@ -4984,10 +5009,21 @@ class PrintSettingsDialog(QDialog):
         known = dict(profiles.printer_profiles())
         known[current.id] = current
         return machine, slicer_profiles.chosen_printer(
-            flavour, self._slicer_path, known
+            flavour, self._slicer_path, known, prefer=current.id
         ) == current.id
 
     def _profiles_found(self, found: list[slicer_profiles.SlicerProfile]) -> None:
+        """Die Profile sind da — zugeordnet in einem Lesedurchgang.
+
+        Was danach folgt, fragt ein Dutzend Mal nach Prozessen, Filamenten,
+        Modell und Grundlage; im Durchgang (:func:`slicer_profiles.single_read`)
+        liest es jede Datei einmal statt je Frage neu. Gemessen an Roberts
+        ElegooSlicer (08.10.2026) stand der Dialog sonst 2,5 s.
+        """
+        with slicer_profiles.single_read():
+            self._take_profiles(found)
+
+    def _take_profiles(self, found: list[slicer_profiles.SlicerProfile]) -> None:
         if isinstance(self.sender(), _ProfileWorker) and self.sender() is not self._profile_worker:
             return
         if self._settling:
@@ -5152,7 +5188,14 @@ class PrintSettingsDialog(QDialog):
         # zusätzlicher Klick ohne Entscheidung.
         if index < 0 and len(machines) == 1:
             index = 0
-        self.machine_choice.setCurrentIndex(index)
+        # Die Prozesse füllt die Zeile darunter, mit dem passenden Profil. Über
+        # ``_machine_chosen`` liefen sie sonst vorher ein zweites Mal, und das
+        # kostete am ElegooSlicer 0,7 s im Fenster-Thread (08.10.2026).
+        self._placing_machine = True
+        try:
+            self.machine_choice.setCurrentIndex(index)
+        finally:
+            self._placing_machine = False
         self._fill_processes(process)
 
         self._profile_unmatched = chosen is None
@@ -5246,10 +5289,12 @@ class PrintSettingsDialog(QDialog):
             return ""
         machine = slicer_profiles.chosen_machine(flavour, self._slicer_path)
         # Erst die gespeicherten und eingebauten Drucker — steht das Projekt
-        # schon auf dem Gerät des Slicers, gibt es nichts zu übernehmen —,
-        # dann die gelesenen: Den Kobra S1 kennt nur Anycubic Slicer Next.
+        # schon auf dem Gerät des Slicers, gibt es nichts zu übernehmen, auch
+        # nicht unter dem Namen seines übernommenen Zwillings —, dann die
+        # gelesenen: Den Kobra S1 kennt nur Anycubic Slicer Next.
+        mine = self.session.profile.printer.id
         found = (
-            slicer_profiles.printer_for(machine, profiles.printer_profiles())
+            slicer_profiles.printer_for(machine, profiles.printer_profiles(), prefer=mine)
             or slicer_profiles.printer_for(machine, self._slicer_printers.discovered)
             if machine
             else ""
@@ -5315,7 +5360,7 @@ class PrintSettingsDialog(QDialog):
         self._printer_picked(index)
 
     def _machine_chosen(self) -> None:
-        if self._profiles:
+        if self._profiles and not self._placing_machine:
             self._fill_processes(None)
         self._show_slicer_state()
 
@@ -5515,10 +5560,13 @@ class PrintSettingsDialog(QDialog):
         # bekannte Maschine eines anderen Druckers ist dagegen keine Vorgabe
         # für einen gerade neu gewählten Drucker.
         remembered = self.ui_settings.slicer_machine_profile
+        # ``prefer``: Ein aus dem Slicer übernommener Zwilling des Projektdruckers
+        # nahm ihm sonst die Maschine seines eigenen Namens weg — beim Centauri
+        # Carbon 2 genau die 0,4er, mit der er druckt (RM-600).
         fitting = [
             entry
             for entry in machines
-            if slicer_profiles.printer_for(entry.name, known) == mine
+            if slicer_profiles.printer_for(entry.name, known, prefer=mine) == mine
             or (
                 slicer_profiles.identity(entry) == remembered
                 and not slicer_profiles.printer_for(entry.name, known)
@@ -6412,9 +6460,12 @@ class PrintSettingsDialog(QDialog):
         """
         flavour = self._current_flavour()
         program = slicer_keys.program_of(self._slicer_path) if self._slicer_path else ""
+        # Einmal und nicht je Feld: Der Name sieht im Dateisystem nach, ob ein
+        # Flatpak dahintersteht, und kostete je Profilantwort 0,27 s (932 Aufrufe
+        # an Roberts ElegooSlicer, 08.10.2026).
+        name = _slicer_title(self._slicer_path) if self._slicer_path else ""
         for path, editor in self._editors.items():
             ignored = flavour is not None and not slicer_keys.takes(flavour, path, program)
-            name = _slicer_title(self._slicer_path) if self._slicer_path else ""
             reason = (
                 str(
                     tr("{slicer} kennt diese Einstellung nicht — der Wert bleibt ohne Wirkung.")
@@ -6694,7 +6745,7 @@ class PrintSettingsDialog(QDialog):
         """
         remembered = discover.remembered_path("slicer")
         chosen = Path(remembered) if remembered else None
-        if chosen is not None and chosen.is_file():
+        if chosen is not None and chosen.is_file() and tools.is_supported_slicer(chosen):
             self._slicers = (chosen,)
             return chosen
         self._slicers = ()
@@ -6750,8 +6801,18 @@ class PrintSettingsDialog(QDialog):
         if self._settling:
             return
         self._slicers_pending = False
-        self._slicers = tuple(found)
         before = self._slicer_path
+        # Ein Slicer, den die Suche nicht kennt (über „Programm wählen …"),
+        # bleibt in der Liste und damit gewählt — sonst nahm die Antwort ihm
+        # den Platz, und der erste Fund galt (RM-601).
+        kept = (
+            (before,)
+            if before is not None
+            and before.is_file()
+            and not any(discover.same_program(str(entry), str(before)) for entry in found)
+            else ()
+        )
+        self._slicers = (*found, *kept)
         before_flavour = self._current_flavour()
         self._slicer_path = self._choose_slicer(self._slicers)
         self._fill_slicer_choice()
@@ -6840,12 +6901,14 @@ class PrintSettingsDialog(QDialog):
         return self._slicer_printers.survey is None
 
     def _fill_slicer_choice(self) -> None:
-        """Die Auswahl füllen — als Auswahl nur, wenn es etwas zu wählen gibt.
+        """Die Auswahl füllen — ein Feld, sobald ein Slicer bekannt ist.
 
-        Eine Zeile mit einem einzigen Eintrag ist eine Frage ohne
-        Antwortmöglichkeit (§2.4); bei einem Slicer steht sein Name, bei
-        keinem nichts. Der volle Pfad steht im Tooltip: Zwei Installationen
-        desselben Programms unterscheiden sich am Ordner, nicht am Namen.
+        Wie in den Ersten Schritten (RM-601): Der gemerkte steht schon beim
+        Öffnen darin, die Suche ergänzt die übrigen, und „Programm wählen …"
+        daneben ist auch bei einem einzigen Slicer die zweite Antwort. Ohne
+        Slicer bleibt nur der Knopf. Der volle Pfad steht im Tooltip: Zwei
+        Installationen desselben Programms unterscheiden sich am Ordner,
+        nicht am Namen.
         """
         with QSignalBlocker(self.slicer_choice):
             self.slicer_choice.clear()
@@ -6856,14 +6919,33 @@ class PrintSettingsDialog(QDialog):
                 )
             if self._slicer_path is not None and self._slicer_path in self._slicers:
                 self.slicer_choice.setCurrentIndex(self._slicers.index(self._slicer_path))
+        self.slicer_choice.setVisible(bool(self._slicers))
 
-        several = len(self._slicers) > 1
-        self.slicer_choice.setVisible(several)
-        single = self._slicers[0] if len(self._slicers) == 1 else None
-        self.slicer_single.setText(_slicer_title(single) if single is not None else "")
-        self.slicer_single.setToolTip(str(single) if single is not None else "")
-        self.slicer_single.setVisible(single is not None)
-        self.slicer_label.setVisible(bool(self._slicers))
+    def _choose_slicer_file(self) -> None:
+        """Ein Slicer, den die Suche nicht findet — portabel oder an eigenem Ort.
+
+        Derselbe Weg wie in den Ersten Schritten und den Einstellungen
+        (:func:`app.ui.first_run.ask_slicer_program`); danach gilt er wie eine
+        Wahl aus der Liste (:meth:`_slicer_chosen`) und bleibt gemerkt.
+        """
+        filename = ask_slicer_program(self)
+        if not filename:
+            return
+        index = next(
+            (
+                position
+                for position, entry in enumerate(self._slicers)
+                if discover.same_program(str(entry), filename)
+            ),
+            None,
+        )
+        if index is None:
+            self._slicers = (*self._slicers, Path(filename))
+            index = len(self._slicers) - 1
+        self._fill_slicer_choice()
+        with QSignalBlocker(self.slicer_choice):
+            self.slicer_choice.setCurrentIndex(index)
+        self._slicer_chosen(index)
 
     def _slicer_chosen(self, index: int) -> None:
         """Ein anderer Slicer: merken und die Profile neu durchsehen.

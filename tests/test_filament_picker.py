@@ -1357,8 +1357,7 @@ def test_profile_choice_reports_an_empty_search_beside_an_existing_profile(
     from app.ui import filament_picker as module
 
     executable = Path("prusa-slicer.exe")
-    monkeypatch.setattr(module.discover, "find_programs", lambda *_args: [executable])
-    monkeypatch.setattr(module.discover, "remembered_path", lambda *_args: str(executable))
+    monkeypatch.setattr(module.tools, "slicer_program", lambda: executable)
     monkeypatch.setattr(module, "detect", lambda _path: handover.SlicerSetup(executable, "prusa"))
 
     def find(*_args, **_kwargs):
