@@ -830,7 +830,6 @@ def orca_motion(
     retraction = _amount(machine.get("retraction_speed"))
     return Motion(
         nozzle=nozzle,
-        minimum_speed=minimum,
         first_layer_wall_speed=_amount(process.get("initial_layer_speed")),
         first_layer_infill_speed=_amount(process.get("initial_layer_infill_speed")),
         solid_infill_speed=_amount(
@@ -949,7 +948,6 @@ def prusa_motion(values: Mapping[str, Any], nozzle: float) -> Motion | None:
     )
     return Motion(
         nozzle=nozzle,
-        minimum_speed=minimum,
         first_layer_wall_speed=first_wall,
         first_layer_infill_speed=_amount(values.get("first_layer_infill_speed"), first_wall),
         solid_infill_speed=_amount(
@@ -1035,7 +1033,6 @@ def cura_motion(setup: SlicerSetup, profile: Profile) -> Motion | None:
     interface = _cura_number(chain.get("support_interface_density"))
     return Motion(
         nozzle=profile.printer.nozzle_diameter,
-        minimum_speed=minimum,
         jerk=jerk if jerk is not None and jerk > 0.0 else None,
         acceleration_limit=limit if limit is not None and limit > 0.0 else None,
         # Stütztempo und Beschleunigung folgen dem, was Solidon schreibt
@@ -1438,6 +1435,7 @@ PRUSA_PROGRAM_DEFAULTS: Final[Mapping[str, str]] = {
     "layer_height": "0.3",
     "max_fan_speed": "100",
     "min_fan_speed": "35",
+    "min_print_speed": "10",
     "perimeter_acceleration": "0",
     "perimeter_generator": "arachne",
     "perimeter_speed": "60",

@@ -435,9 +435,15 @@ def _remembered_program(tool_id: str) -> Path | None:
     return None
 
 
-def find_program(tool_id: str, names: Iterable[str]) -> Path | None:
-    """Wo dieses Programm liegt, oder ``None``. Reihenfolge siehe Modulkopf."""
-    chosen = _remembered_program(tool_id)
+def find_program(tool_id: str, names: Iterable[str], *, remembered: bool = True) -> Path | None:
+    """Wo dieses Programm liegt, oder ``None``. Reihenfolge siehe Modulkopf.
+
+    ``remembered=False`` übergeht den gemerkten Pfad — für den, der ihn schon
+    gefragt und abgelehnt hat (``tools.ExternalTool.accepts``); die Suche danach
+    ist zwischengespeichert, die über alle Fassungen (:func:`find_programs`)
+    kostete je Aufruf zwei Sekunden.
+    """
+    chosen = _remembered_program(tool_id) if remembered else None
     if chosen is not None:
         return chosen
 
