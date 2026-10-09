@@ -65,6 +65,7 @@ it into `website/version.json`.
 - Screws, nuts and washers are available to ISO from M1.6 to M64. For other sizes, *Custom size* derives the dimensions from the neighbouring sizes and says so.
 - With *To fit the hole*, *Pin for hole* builds the counterpart: a flush countersunk head for a countersink, an external thread of the same size and pitch for an internal thread.
 - On a printed internal thread, the selection offers *Pin for hole* directly.
+- If a sleeve sticks far out of a hole or a pin crosses it, the actions on the hole name the separate part and offer *Split into separate parts*.
 - If a separate part such as a pin sits in a hole, the actions on the hole say so and offer *Split into separate parts*. Until now the pin was silently merged with the plate.
 
 ### Editing and sketching

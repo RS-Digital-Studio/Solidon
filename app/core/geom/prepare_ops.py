@@ -4122,8 +4122,9 @@ OTHER_PART_IN_THE_BORE: Final = _(
 FILLED_BORE_REASONS: Final = (HOLE_IS_NOT_EMPTY, OTHER_PART_IN_THE_BORE)
 
 #: Wie weit innerhalb des gemessenen Radius :func:`hole_is_clear` nach
-#: Dreiecksmitten sucht — die eigene Wand liegt auf dem Radius, ein Steg,
-#: eine Nabe oder ein Zapfen deutlich darunter.
+#: Dreiecksmitten sucht, und wie weit innerhalb der eigenen Wand
+#: :func:`_reaching_in` nach dem Stück eines Dreiecks — die eigene Wand liegt
+#: auf dem Radius, ein Steg, eine Nabe oder ein Zapfen deutlich darunter.
 _CLEARANCE_MARGIN: Final = 0.02
 
 #: Wie viele Punkte :func:`_without_cavities` entlang der Achse eines fremden
@@ -4146,6 +4147,11 @@ def hole_is_clear(mesh: MeshData, feature: Feature) -> bool:
     Winkeln durchgelassen (3 719 mm³ Material im Zylinder, gemessen
     15.09.2026); die Dreiecksmitten übersehen keinen Steg, und sie kosten
     eine Rechnung über das Netz statt einer Suche je Punkt.
+
+    **Ein langes Dreieck zählt mit dem Stück, das darin steht** (RM-253,
+    :func:`_reaching_in`): Die Mantelstreifen einer Hülse, die weit aus der
+    Platte ragt, und eines Querstifts haben ihre Mitten außerhalb, und am
+    Laptop-Ständer galten so vier Bohrungen mit einer Spannhülse darin als frei.
 
     Ohne Maße gilt die Bohrung als leer — dann entscheidet der Körper aus
     ihren Flächen.
@@ -4176,7 +4182,7 @@ def hole_is_clear(mesh: MeshData, feature: Feature) -> bool:
 
 
 def _hole_is_clear_read(mesh: MeshData, feature: Feature, radius: float, depth: float) -> bool:
-    """Der Rumpf von :func:`hole_is_clear` — die Rechnung über die Dreiecksmitten."""
+    """Der Rumpf von :func:`hole_is_clear` — die Rechnung über die Dreiecke im Zylinder."""
     return not len(_inside_the_bore(mesh, feature, radius, depth))
 
 
@@ -4717,7 +4723,12 @@ def _inside_the_bore(
     mesh: MeshData, feature: Feature, radius: float, depth: float
 ) -> NDArray[np.float64]:
     """Der Abstand von der Achse je Dreieck, das im Zylinder der Bohrung liegt
-    und nicht zu ihr gehört — leer, wo sie leer ist (:func:`hole_is_clear`)."""
+    und nicht zu ihr gehört — leer, wo sie leer ist (:func:`hole_is_clear`).
+
+    Gefragt wird zuerst die Mitte jedes Dreiecks, dann jedes übrige Dreieck an
+    dem Stück, das zwischen den Mündungen liegt (:func:`_reaching_in`): Ein
+    langes Dreieck hat seine Mitte draußen und steht trotzdem darin (RM-253).
+    """
     centre = np.asarray(feature.params["centre"], dtype=np.float64)
     axis = np.asarray(feature.params.get("axis", (0.0, 0.0, 1.0)), dtype=np.float64)
     axis /= max(float(math.hypot(*axis)), EPS_GEOM)
@@ -4725,8 +4736,10 @@ def _inside_the_bore(
     middles = np.asarray(raw.triangles_center, dtype=np.float64) - centre
     along = transform.along(middles, axis)
     low, high = -depth / 2.0, depth / 2.0
+    own = np.zeros(0, dtype=np.int64)
     if feature.face_indices:
         chosen = np.asarray(feature.face_indices, dtype=np.int64)
+        own = chosen[(chosen >= 0) & (chosen < len(raw.faces))]
         if chosen.size and int(chosen.max()) < len(raw.faces):
             rim = transform.along(
                 np.asarray(raw.vertices, dtype=np.float64)[np.unique(np.asarray(raw.faces)[chosen])]
@@ -4741,18 +4754,254 @@ def _inside_the_bore(
         & (along < high - slack)
         & (radial < radius * (1.0 - _CLEARANCE_MARGIN))
     )
+    # Dieselben Grenzen als Halbräume, relativ zur Mitte: Punkte ``p`` mit
+    # ``n · p ≤ Abstand`` liegen zwischen den Mündungen.
+    bounds: list[tuple[NDArray[np.float64], float]] = [
+        (axis, high - slack),
+        (-axis, -(low + slack)),
+    ]
     planes = _bore_end_planes(mesh, feature, {feature.id: feature}, grows=False)
     if planes:
         inside = radial < radius * (1.0 - _CLEARANCE_MARGIN)
+        bounds = []
         for plane in planes:
+            normal = np.asarray(plane.normal, dtype=np.float64)
             inside &= (
-                transform.along(np.asarray(raw.triangles_center), np.asarray(plane.normal))
-                < plane.position - slack
+                transform.along(np.asarray(raw.triangles_center), normal) < plane.position - slack
             )
-    if feature.face_indices:
-        own = np.asarray(feature.face_indices, dtype=np.int64)
-        inside[own[own < len(inside)]] = False
+            bounds.append((normal, plane.position - slack - units.dot3(normal, centre)))
+    reach = _reaching_in(mesh, centre, axis, bounds, radius, own)
+    reaching = ~inside & np.isfinite(reach)
+    inside |= reaching
+    radial = np.where(reaching, reach, radial)
+    if len(own):
+        inside[own] = False
     return np.asarray(radial[inside], dtype=np.float64)
+
+
+def _reaching_in(
+    mesh: MeshData,
+    centre: NDArray[np.float64],
+    axis: NDArray[np.float64],
+    bounds: Sequence[tuple[NDArray[np.float64], float]],
+    radius: float,
+    own: NDArray[np.int64],
+) -> NDArray[np.float64]:
+    """Je Dreieck der kleinste Achsabstand seines Stücks zwischen den Mündungen —
+    ``inf``, wo es nicht diesseits der eigenen Wand liegt.
+
+    **Ein Dreieck steht im Zylinder, wenn ein Stück von ihm darin steht** (RM-253).
+    Am Laptop-Ständer steckt in der Bohrung einer 10,27 mm starken Platte eine
+    geschlitzte Hülse von 43 mm; jedes ihrer Manteldreiecke läuft über die ganze
+    Länge, und alle Mitten lagen 9 bis 23 mm vor der Bohrungsmitte, hinter den
+    Mündungen. Ebenso quert ein Querstift die Bohrung mit Dreiecken, deren Mitten
+    neben ihr liegen. Gemessen wird deshalb das Stück zwischen den Grenzen
+    (``bounds``, Halbräume ``n · p ≤ Abstand`` relativ zu ``centre``), quer zur
+    Achse projiziert: sein kleinster Abstand von ihr, null, wo die Achse
+    hindurchgeht.
+
+    **Die Grenze ist die eigene Wand**, mit derselben Rechnung an ihren eigenen
+    Dreiecken (``own``) gemessen, und davon der Saum aus
+    :data:`_CLEARANCE_MARGIN`: Ein grobes Vieleck liegt mit seinen Seitenmitten
+    innerhalb des Radius, und eine Querbohrung endet auf der Wand, nicht davor.
+    Ohne eigene Dreiecke gilt der Radius (:func:`_own_wall_limit`). Die eigenen
+    Dreiecke selbst stehen nie darin — ihr Stück kommt der Achse höchstens so
+    nahe wie die Wand, die sie bestimmen —, und sie werden nicht gefragt. Ohne
+    Achse gibt es keinen Zylinder und nichts, was hineinreicht — die Absage dafür
+    sagt die Operation (``FEATURE_WITHOUT_AXIS``), nicht diese Frage.
+    """
+    raw = mesh.raw
+    found = np.full(len(raw.faces), np.inf, dtype=np.float64)
+    if not len(raw.faces) or math.hypot(*(float(value) for value in axis)) <= EPS_GEOM:
+        return found
+    points = np.asarray(raw.vertices, dtype=np.float64)
+    faces = np.asarray(raw.faces, dtype=np.int64)
+    widest = radius * (1.0 - _CLEARANCE_MARGIN)
+    # **Die Vorauswahl als Bitmuster je Ecke**: welche Seite jeder Grenze sie
+    # erreicht — quer zur Achse über ``-widest`` und unter ``widest`` in zwei
+    # Richtungen, diesseits jeder Mündung. Ein Dreieck bleibt, wenn seine drei
+    # Ecken zusammen jede Bedingung erfüllen; sonst liegt es ganz jenseits einer
+    # Grenze oder sein Quader quer zur Achse neben dem Quadrat ±``widest``, und
+    # es kommt der Achse zwischen den Mündungen nicht so nah. Ein Durchgang über
+    # die Dreiecke mit einem Byte je Ecke — Reduktionen über eine Achse der
+    # Länge drei kosteten am Laptop-Ständer (173 592 Dreiecke) 60 ms je Bohrung.
+    # Mehr als acht Schranken bekommen ein breiteres Muster; im Byte fand die
+    # Vorauswahl ab fünf Grenzen still nichts mehr (Review RM-253).
+    first = np.cross(axis, (1.0, 0.0, 0.0))
+    if math.hypot(*(float(value) for value in first)) < 0.5:
+        first = np.cross(axis, (0.0, 1.0, 0.0))
+    first /= math.hypot(*(float(value) for value in first))
+    second = np.cross(axis, first)
+    # Je Richtung eine Projektion, je Schranke ein Bit: ``True`` heißt „eine Ecke
+    # darüber“, ``False`` „eine Ecke darunter“. Zwei Mündungen mit
+    # entgegengesetzter Normale teilen sich eine Projektion.
+    checks: list[tuple[NDArray[np.float64], tuple[tuple[float, bool], ...]]] = [
+        (first, ((-widest, True), (widest, False))),
+        (second, ((-widest, True), (widest, False))),
+    ]
+    if len(bounds) == 2 and np.array_equal(bounds[1][0], -bounds[0][0]):
+        checks.append((bounds[0][0], ((bounds[0][1], False), (-bounds[1][1], True))))
+    else:
+        checks += [(normal, ((offset, False),)) for normal, offset in bounds]
+    flags = sum(len(conditions) for _direction, conditions in checks)
+    pattern = np.zeros(len(points), dtype=np.min_scalar_type((1 << flags) - 1))
+    bit = 0
+    for direction, conditions in checks:
+        values = points[:, 0] * direction[0] + points[:, 1] * direction[1]
+        values = values + points[:, 2] * direction[2]
+        shift = units.dot3(direction, centre)
+        for threshold, above in conditions:
+            hit = values > threshold + shift if above else values < threshold + shift
+            pattern |= hit.astype(pattern.dtype) << bit
+            bit += 1
+    reached_by = pattern[faces[:, 0]] | pattern[faces[:, 1]] | pattern[faces[:, 2]]
+    complete = reached_by == (1 << bit) - 1
+    complete[own] = False
+    candidates = np.flatnonzero(complete)
+    if not len(candidates):
+        return found
+    closest = _closest_to_the_axis(*_clipped_by(points[faces[candidates]] - centre, bounds), axis)
+    limit = _own_wall_limit(
+        points, faces, own, centre, bounds, axis, radius, closest, (first, second)
+    )
+    found[candidates] = np.where(closest < limit, closest, np.inf)
+    return found
+
+
+def _own_wall_limit(
+    points: NDArray[np.float64],
+    faces: NDArray[np.int64],
+    own: NDArray[np.int64],
+    centre: NDArray[np.float64],
+    bounds: Sequence[tuple[NDArray[np.float64], float]],
+    axis: NDArray[np.float64],
+    radius: float,
+    closest: NDArray[np.float64],
+    across: tuple[NDArray[np.float64], NDArray[np.float64]],
+) -> float:
+    """Wie nah ein Stück der Achse kommen muss, um in der Bohrung zu stehen: der
+    Saum aus :data:`_CLEARANCE_MARGIN` unter der eigenen Wand (``own``), höchstens
+    unter dem Radius.
+
+    **Gemessen wird die Wand nur, wo sie entscheidet** (Review RM-253): Jedes
+    eigene Dreieck zu beschneiden kostete an einer Bohrung mit 200 000 eigenen
+    Dreiecken 2,1 s und 268 MB je Frage statt 0,25 s und 77 MB. Kommt kein Stück
+    (``closest``) näher als der Saum unter dem Radius, entscheidet die Wand nichts.
+    Sonst reicht meist eine untere Schranke aus den Quadern der eigenen Dreiecke
+    quer zur Achse (``across``, zwei Richtungen), um ``EPS_GEOM`` gegen Rundung
+    gesenkt; erst ein Stück zwischen ihr und dem Radius verlangt die Wand selbst.
+    Die Antwort bleibt dieselbe.
+    """
+    widest = radius * (1.0 - _CLEARANCE_MARGIN)
+    near = closest < widest
+    if not len(own) or not near.any():
+        return widest
+    corners = points[faces[own]] - centre
+    gaps: list[NDArray[np.float64]] = []
+    for direction in across:
+        values = corners[..., 0] * direction[0] + corners[..., 1] * direction[1]
+        values = values + corners[..., 2] * direction[2]
+        low = np.minimum(np.minimum(values[:, 0], values[:, 1]), values[:, 2])
+        high = np.maximum(np.maximum(values[:, 0], values[:, 1]), values[:, 2])
+        gaps.append(np.maximum(np.maximum(low, -high), 0.0))
+    floor = float(np.sqrt(gaps[0] * gaps[0] + gaps[1] * gaps[1]).min()) - EPS_GEOM
+    sure = min(radius, floor) * (1.0 - _CLEARANCE_MARGIN)
+    if not (near & (closest >= sure)).any():
+        return sure
+    reached = _closest_to_the_axis(*_clipped_by(corners, bounds), axis)
+    reached = reached[np.isfinite(reached)]
+    wall = min(radius, float(reached.min())) if len(reached) else radius
+    return wall * (1.0 - _CLEARANCE_MARGIN)
+
+
+def _clipped_by(
+    triangles: NDArray[np.float64], bounds: Sequence[tuple[NDArray[np.float64], float]]
+) -> tuple[NDArray[np.float64], NDArray[np.int64]]:
+    """Jedes Dreieck auf die Halbräume ``n · p ≤ Abstand`` beschnitten — je Zeile ein
+    konvexes Vieleck (Ecken in Folge) und seine Eckenzahl, null, wo nichts bleibt.
+
+    Sutherland-Hodgman je Halbraum, über alle Zeilen zugleich: Jede Kante gibt
+    ihre Anfangsecke, wenn sie drinnen liegt, und ihren Schnittpunkt, wenn sie
+    die Grenze kreuzt. Ein Halbraum macht aus einem konvexen ``k``-Eck höchstens
+    ein ``k+1``-Eck.
+    """
+    polygons = np.asarray(triangles, dtype=np.float64)
+    counts = np.full(len(polygons), 3, dtype=np.int64)
+    rows = np.arange(len(polygons))[:, None]
+    for normal, offset in bounds:
+        width = polygons.shape[1]
+        index = np.arange(width)[None, :]
+        valid = index < counts[:, None]
+        following = np.where(index + 1 < counts[:, None], index + 1, 0)
+        inward = offset - (
+            polygons[..., 0] * normal[0]
+            + polygons[..., 1] * normal[1]
+            + polygons[..., 2] * normal[2]
+        )
+        ahead = inward[rows, following]
+        inner = inward >= 0.0
+        kept = valid & inner
+        crossing = valid & (inner != (ahead >= 0.0))
+        share = inward / np.where(crossing, inward - ahead, 1.0)
+        cut = polygons + share[..., None] * (polygons[rows, following] - polygons)
+        out = np.stack((polygons, cut), axis=2).reshape(len(polygons), 2 * width, 3)
+        mask = np.stack((kept, crossing), axis=2).reshape(len(polygons), 2 * width)
+        order = np.argsort(~mask, axis=1, kind="stable")[:, : width + 1]
+        polygons = np.take_along_axis(out, order[..., None], axis=1)
+        # **Mehr Ecken gibt es nur im Rundungsrauschen** (Review RM-253): Liegt ein
+        # Vieleck in der Grenzebene, wechselt das Vorzeichen reihum, jede Kante
+        # kreuzt, und die Zählung überstieg die Spalten — die nächste Rechnung
+        # griff dahinter. Was bleibt, sind Randpunkte in Folge, konvex wie zuvor.
+        counts = np.minimum(mask.sum(axis=1), width + 1).astype(np.int64)
+    return polygons, counts
+
+
+def _closest_to_the_axis(
+    polygons: NDArray[np.float64], counts: NDArray[np.int64], axis: NDArray[np.float64]
+) -> NDArray[np.float64]:
+    """Der kleinste Abstand jedes konvexen Vielecks von der Achse durch den Nullpunkt.
+
+    Quer zur Achse projiziert: null, wo die Achse durch das Vieleck geht (alle
+    Kanten drehen gleichsinnig um sie, wie in ``perceive.features._cylinder_band``),
+    sonst der nächste Punkt auf einer Kante; ``inf`` ohne Ecken. Elementweise, ohne
+    BLAS (``kern.md``).
+    """
+    if not len(polygons):
+        return np.zeros(0, dtype=np.float64)
+    width = polygons.shape[1]
+    rows = np.arange(len(polygons))[:, None]
+    index = np.arange(width)[None, :]
+    valid = index < counts[:, None]
+    following = np.where(index + 1 < counts[:, None], index + 1, 0)
+    along = polygons[..., 0] * axis[0] + polygons[..., 1] * axis[1] + polygons[..., 2] * axis[2]
+    lateral = polygons - along[..., None] * axis
+    ahead = lateral[rows, following]
+    edge = ahead - lateral
+    square = edge[..., 0] * edge[..., 0] + edge[..., 1] * edge[..., 1] + edge[..., 2] * edge[..., 2]
+    toward = -(
+        lateral[..., 0] * edge[..., 0]
+        + lateral[..., 1] * edge[..., 1]
+        + lateral[..., 2] * edge[..., 2]
+    )
+    share = np.where(
+        square > 0.0, np.clip(toward / np.where(square > 0.0, square, 1.0), 0.0, 1.0), 0.0
+    )
+    nearest = lateral + share[..., None] * edge
+    distance = np.sqrt(
+        nearest[..., 0] * nearest[..., 0]
+        + nearest[..., 1] * nearest[..., 1]
+        + nearest[..., 2] * nearest[..., 2]
+    )
+    closest = np.where(valid, distance, np.inf).min(axis=1)
+    turned = np.cross(lateral, ahead)
+    turn = np.where(
+        valid,
+        turned[..., 0] * axis[0] + turned[..., 1] * axis[1] + turned[..., 2] * axis[2],
+        0.0,
+    )
+    flat = np.abs(turn.sum(axis=1)) <= EPS_GEOM * EPS_GEOM
+    around = ~flat & (counts >= 3) & (np.all(turn >= 0.0, axis=1) | np.all(turn <= 0.0, axis=1))
+    return np.asarray(np.where(around, 0.0, closest), dtype=np.float64)
 
 
 def only_a_rim_inside(mesh: MeshData, feature: Feature) -> bool:
@@ -4853,7 +5102,8 @@ _NO_MOUTH_TO_GRIP: Final = _(
     # 14: „liegt schon dort“ öffnet den Schritt (RM-441).
     # 15: starr versetzt reist das Material, wie es ist; Karte und Operation
     # fragen dieselbe Funktion (RM-535).
-    cache_version="15",
+    # 16: ein Teil, dessen lange Dreiecke durch die Bohrung laufen, steht darin (RM-253).
+    cache_version="16",
     title=_("Merkmal verschieben"),
     category="holes",
     params=MoveFeatureParams,
@@ -5235,7 +5485,8 @@ class DuplicateFeatureParams(FeaturePlacementParams):
     # 12: exakt findet sich eine Senkung über ihre Spitze wieder (RM-226).
     # 13: „dasselbe Merkmal“ öffnet den Schritt (RM-441).
     # 14: im Weg mit freier Richtung „nichts verdoppelt“ statt „nichts zu versetzen“.
-    cache_version="14",
+    # 15: ein Teil, dessen lange Dreiecke durch die Bohrung laufen, steht darin (RM-253).
+    cache_version="15",
     title=_("Merkmal verdoppeln"),
     category="holes",
     params=DuplicateFeatureParams,
@@ -5652,7 +5903,8 @@ class _PatternPlace:
     # 8: eine Senkung unter einer Haut ist nicht „über die Kante“ (RM-226).
     # 9: am Netz findet eine Kopie nicht ihre Vorlage wieder (RM-226).
     # 10: exakt findet sich eine Senkung über ihre Spitze wieder (RM-226).
-    cache_version="10",
+    # 11: ein Teil, dessen lange Dreiecke durch die Bohrung laufen, steht darin (RM-253).
+    cache_version="11",
     title=_("Merkmal vervielfachen"),
     category="holes",
     params=PatternFeatureParams,
@@ -6443,7 +6695,8 @@ class RemoveFeatureParams(BaseParams):
     # Ecken, und der Stopfen endet in der Stirnfläche (RM-404).
     # 17: ein getrenntes Teil in der Bohrung hält mit Weg an, statt still zu
     # verschmelzen (RM-413).
-    cache_version="17",
+    # 18: ein Teil, dessen lange Dreiecke durch die Bohrung laufen, steht darin (RM-253).
+    cache_version="18",
     title=_("Merkmal entfernen"),
     category="holes",
     params=RemoveFeatureParams,
@@ -6672,7 +6925,8 @@ class RotateFeatureParams(BaseParams):
     # 8: eine fehlerhafte Vorvereinigung bindet die Handlung an den Ursprungskörper.
     # 9: beim Schließen verbinden auch Ketten und der exakte Kern berührende Körper (RM-386).
     # 10: „ohne Winkel“ öffnet den Schritt (RM-441).
-    cache_version="10",
+    # 11: ein Teil, dessen lange Dreiecke durch die Bohrung laufen, steht darin (RM-253).
+    cache_version="11",
     title=_("Merkmal drehen"),
     category="holes",
     params=RotateFeatureParams,
@@ -8040,7 +8294,8 @@ class ResizeFeatureParams(BaseParams):
     # 20: Das neue Gewinde kommt aus ``build.threaded`` mit den Sehnen der
     # Facettenregel (``shapes.turn_segments``), über ganze Umläufe und mit einem
     # Kern, der den Gang auch in der Sehnenmitte überdeckt (Review RM-532, R1/R4).
-    cache_version="20",
+    # 21: ein Teil, dessen lange Dreiecke durch die Bohrung laufen, steht darin (RM-253).
+    cache_version="21",
     title=_("Merkmal ändern"),
     category="holes",
     params=ResizeFeatureParams,
@@ -8885,7 +9140,8 @@ OPEN_BODY_DETAIL: Final = _(
     # 16: exakt fragt die Kante am gefüllten Körper, wo gefüllt wurde (RM-411).
     # 17: „hat bereits diesen Durchmesser“ öffnet den Schritt (RM-441).
     # 18: „geht bereits ganz durch“ öffnet den Schritt an der Tiefe (Review RM-441).
-    cache_version="18",
+    # 19: ein Teil, dessen lange Dreiecke durch die Bohrung laufen, steht darin (RM-253).
+    cache_version="19",
     title=_("Bohrung ändern"),
     category="holes",
     params=ResizeHoleParams,
@@ -9607,7 +9863,8 @@ SLOT_FEATURE_RENAMED: Final = _(
     #     (RM-411).
     # 18: gefragt werden nur Teile am Träger; ferne Teile kommen unverändert
     #     zurück (RM-413).
-    cache_version="18",
+    # 19: ein Teil, dessen lange Dreiecke durch die Bohrung laufen, steht darin (RM-253).
+    cache_version="19",
     # **Kein „Bohrung zum Langloch".** Der Titel stand so, solange die
     # Operation nur an einer Bohrung galt; seit die Erkennung Langlöcher findet
     # (:mod:`app.core.perceive.slots`), gilt sie auch an einem und hieße dort
@@ -17933,7 +18190,8 @@ class PlugParams(BaseParams):
     # 6: beim Schließen verbinden auch Ketten und der exakte Kern berührende Körper (RM-386).
     # 7: ein getrenntes Teil in der Bohrung hält mit Weg an, statt still zu
     # verschmelzen (RM-413).
-    cache_version="7",
+    # 8: ein Teil, dessen lange Dreiecke durch die Bohrung laufen, steht darin (RM-253).
+    cache_version="8",
     title=_("Bohrung verschließen"),
     category="holes",
     params=PlugParams,

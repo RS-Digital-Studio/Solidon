@@ -65,6 +65,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Parafusos, porcas e anilhas existem segundo ISO de M1,6 a M64. Para outros tamanhos, *Medida própria* deriva as medidas dos tamanhos vizinhos e indica-o.
 - Com *Ajustado ao furo*, *Pino para furo* constrói a contrapeça: uma cabeça escareada à face para um escareamento, uma rosca externa do mesmo tamanho e passo para uma interna.
 - Numa rosca interna impressa, a seleção oferece diretamente *Pino para furo*.
+- Se um casquilho sobressai muito de um furo ou um pino o atravessa, as ações no furo indicam a peça separada e oferecem *Dividir em peças soltas*.
 - Se num furo estiver uma peça separada, como um pino, as ações no furo dizem-no e oferecem *Dividir em peças soltas*. Até agora, o pino fundia-se em silêncio com a placa.
 
 ### Editar e esboçar

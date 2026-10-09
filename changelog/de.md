@@ -90,6 +90,7 @@ Nutzen da und sonst nichts.
 - Schrauben, Muttern und Scheiben gibt es nach ISO von M1,6 bis M64. Für andere Größen leitet *Eigenes Maß* die Maße aus den Nachbargrößen ab und sagt das.
 - Mit *Passend zur Bohrung* baut *Stift für Bohrung* das Gegenstück: in eine Senkung einen bündigen Senkkopf, in ein Innengewinde ein Außengewinde gleicher Größe und Steigung.
 - An einem gedruckten Innengewinde bietet die Auswahl *Stift für Bohrung* direkt an.
+- Ragt eine Hülse weit aus einer Bohrung oder quert ein Stift sie, nennen die Handlungen an der Bohrung das getrennte Teil und bieten *In Einzelteile aufteilen* an.
 - Liegt in einer Bohrung ein getrenntes Teil wie ein Stift, sagen die Handlungen an der Bohrung das und bieten *In Einzelteile aufteilen* an. Bisher verschmolz der Stift still mit der Platte.
 
 ### Bearbeiten und Zeichnen
