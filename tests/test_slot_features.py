@@ -5514,6 +5514,41 @@ def test_a_void_takes_its_loose_ball_along_and_fills_it_on_purpose(
     assert _parts_of(removed) == [pytest.approx(18000.0, rel=1e-3)], "Kammer samt Kugel gefüllt"
 
 
+@pytest.mark.parametrize("kernel", ["mesh", "brep"])
+def test_turning_a_shaft_half_does_not_swallow_the_loose_ring_in_its_groove(
+    profile: Profile, kernel: str
+) -> None:
+    """RM-596: *Merkmal drehen* an einer Wellenhälfte verschmolz den losen O-Ring in der Kehle.
+
+    Welle Ø 20 × 40 mit Kehle (Ring Ø 20, Rohr Ø 4), darin lose ein O-Ring mit
+    Rohr Ø 3. Die obere Hälfte der Welle — ein Zapfen, kein Hohlraum — fragte
+    niemand nach dem Ring daneben: Um 10° um X gekippt fährt ihr unterer Rand
+    1,7 mm in die Kehle und in den Ring, und beide Kerne lieferten ein Teil
+    statt zwei (12 717 mm³ am Netz), ohne Befund. Soll: Absage mit dem Weg über
+    die Einzelteile. Um 1° gekippt bleibt der Rand über dem Ring; dann rechnet
+    sie, und der Ring bleibt ein loses Teil mit seinem Volumen.
+    """
+    from app.core.geom import prepare_ops
+
+    load_operations()
+    entry, _groove = _loose_part_case("kehle", kernel, profile)
+    before = _parts_of(entry)
+    assert len(before) == 2, before
+    upper = max(
+        (name for name, feature in entry.features.items() if feature.kind == "pin"),
+        key=lambda name: float(entry.features[name].params["centre"][2]),
+    )
+    with pytest.raises(ValidationError) as caught:
+        run_op("rotate_feature", entry, profile, at_feature=upper, axis="x", angle=10.0)
+    assert caught.value.detail == prepare_ops.ANOTHER_PART_IN_THE_WAY
+    assert [action.id for action in caught.value.suggestions] == ["split_bodies", "cancel"]
+
+    turned = run_op("rotate_feature", entry, profile, at_feature=upper, axis="x", angle=1.0)
+    after = _parts_of(turned)
+    assert len(after) == 2, after
+    assert after[0] == pytest.approx(before[0], abs=0.2), "der Ring bleibt, wie er war"
+
+
 def test_the_ball_in_its_socket_stays_a_loose_ball(profile: Profile) -> None:
     """Das Kugelgelenk aus dem Korpus (``ball_in_socket.stl``, Review G F1).
 

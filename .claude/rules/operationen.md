@@ -43,8 +43,7 @@ weiter aus dem Bericht.
 
 `SceneObject.kind` wählt den Rechenweg (`geom/edge_ops.py`), kein `MENU_TWINS`-
 Paar oder Haken. Das gilt auch für `drill_brep_hole`/`shell_exact`, Erzeuger am
-Träger samt neuem Teil; Netz-Zwillinge der Grundkörper sind über das
-Kontextmenü ihres Verlaufsschritts erreichbar.
+Träger samt neuem Teil.
 Alles bleibt bearbeitbar (Robert). `caveat` erklärt Sehnenzug bis
 `units.MAX_FACET_SAG` und wann der andere Kern nötig ist.
 
@@ -284,7 +283,9 @@ eine dünner gewordene unter der Mindestwand meldet `thread.thin_wall`.
   über jede Oberfläche, `HOLE_IS_NOT_EMPTY`); ob man hindurchsieht, sagt die
   ganze Mündung. Getrennte Teile fragt `separate_part_reason` an jedem
   Hohlraum außer dem Einschluss, der seine Insel mitnimmt, und in jedem
-  fremden; nur `slot_hole` schneidet ein freies mit.
+  fremden; nur `slot_hole` schneidet ein freies mit. Danach steht jedes fremde
+  Teil unverändert da (`_leaves_other_parts_alone`).
+- **Exakt gesetzt sagt eine Berührung auf Linie oder Punkt ab** (`_exact_placed_holds`).
 - **Jeder Weg, der eine Bohrung neu setzt, fragt nach der Kante**
   (`prepare_ops._edge_findings`, am gefüllten Körper vor dem Schnitt, über die
   Schnittlänge; den Zerfall gegen den Körper davor, `_split_counted_from`):
@@ -317,10 +318,9 @@ wieder ausgeschnitten wird exakt das Merkmal, ohne Zugabe.
 
 ## Ein Vieleck aus einem gemessenen Durchmesser ist enger als er
 
-`trimesh.creation.cylinder` ist eingeschrieben. Wiederhergestellt wird mit dem
-gemessenen Konturmaß und dem Wandmantel (`_tool_for`, `_placing_tool`); nur der
-Stopfen, der umschreiben muss, bekommt `units.inscribed_ratio`. Falle:
-`FEATURE_OVERLAP` verdeckt den Vieleckverlust.
+Wiederhergestellt wird mit dem gemessenen Konturmaß und dem Wandmantel
+(`_tool_for`, `_placing_tool`); nur der Stopfen, der umschreiben muss, bekommt
+`units.inscribed_ratio`.
 
 ## Toleranzen sind Durchmessermaße
 

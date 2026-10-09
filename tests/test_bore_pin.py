@@ -1073,3 +1073,49 @@ def test_a_bore_that_is_not_in_the_body_gets_no_pin(profile: Profile, kind: str)
             "change_selection",
             "cancel",
         ]
+
+
+@pytest.mark.parametrize("kind", ["mesh", "brep"])
+def test_the_screw_bore_of_a_nut_trap_ends_in_the_body_and_takes_a_pin(
+    profile: Profile, kind: str
+) -> None:
+    """RM-598: Die erklärte Schraubenbohrung der Mutternfalle reichte 10 mm in die Luft.
+
+    Der Baustein schneidet sein Schraubenloch 10 mm über die Tasche hinaus,
+    damit es durch jede Wand geht, und erklärte die Bohrung über diese ganze
+    Länge: auf der Deckfläche des 12 mm dicken Quaders von z = -0,5 bis
+    z = 22, fast die Hälfte in der Luft. *Stift für Bohrung* sagte deshalb ab,
+    an der Stelle sei kein Hohlraum im Körper (Review G). Soll: Die erklärte
+    Bohrung endet an den Grenzen des Körpers, von z = 0 bis z = 12, und der
+    Stift steht lose in ihr, innerhalb des Körpers.
+    """
+    from app.core.knowledge.profiles import for_object
+
+    carrier = _box(
+        kind,
+        profile,
+        OperationDraft(op="insert_nut_trap", inputs=("obj_1",), params={"z": 12.0}),
+    )
+    bore = carrier.features["nut_trap_bore_1"]
+    axis = np.asarray(bore.params["axis"], dtype=float)
+    axis /= float(np.linalg.norm(axis))
+    centre = np.asarray(bore.params["centre"], dtype=float)
+    ends = sorted(
+        float(value)
+        for value in (
+            (centre + axis * float(bore.params["depth"]) / 2.0)[2],
+            (centre - axis * float(bore.params["depth"]) / 2.0)[2],
+        )
+    )
+    assert ends == pytest.approx([0.0, 12.0], abs=TOLERANCE), ends
+
+    clearance = for_object(profile, carrier).material.clearance
+    result = run("pin_for_bore", carrier, profile, at_feature="nut_trap_bore_1")
+    pin = result.outputs[1]
+    _loose(pin, carrier, clearance)
+    made = as_mesh_data(pin.mesh)
+    body = as_mesh_data(carrier.mesh)
+    lowest = np.asarray(body.bounds.minimum, dtype=float) - TOLERANCE
+    highest = np.asarray(body.bounds.maximum, dtype=float) + TOLERANCE
+    assert (np.asarray(made.bounds.minimum, dtype=float) >= lowest).all()
+    assert (np.asarray(made.bounds.maximum, dtype=float) <= highest).all()

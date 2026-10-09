@@ -946,6 +946,154 @@ def _keeps_the_saved_slot_tool(
     return run
 
 
+#: Wenn eine Merkmalshandlung ein getrenntes Teil träfe, das nicht zum Merkmal
+#: gehört (:func:`_leaves_other_parts_alone`, RM-596).
+ANOTHER_PART_IN_THE_WAY: Final = _(
+    "Diese Handlung träfe ein getrenntes Teil daneben und veränderte es mit. Teilen Sie den "
+    "Körper in Einzelteile auf, dann lässt sich das Merkmal allein bearbeiten."
+)
+
+
+def _leaves_other_parts_alone(
+    fn: Callable[[OpContext], OpResult],
+) -> Callable[[OpContext], OpResult]:
+    """Sagt ab, wenn eine Merkmalshandlung ein getrenntes Teil verändert, zu dem das
+    Merkmal nicht gehört (RM-596).
+
+    Die Teilefrage vorab (:func:`separate_part_reason`) kennt zwei Lagen: ein
+    Teil im Hohlraum des Merkmals und das Merkmal selbst im Hohlraum eines
+    anderen. Wohin die Handlung das Werkzeug bringt, weiß sie nicht — das hängt
+    an den eingegebenen Zahlen. An einer Welle mit losem O-Ring in der Kehle
+    kippte *Merkmal drehen* die obere Hälfte um 10° in den Ring, und beide
+    Kerne lieferten ein Teil statt zwei, ohne Befund. Gefragt wird deshalb das
+    Ergebnis: Jedes Teil, das nicht zum Merkmal gehört, steht danach unverändert
+    und für sich da (:func:`_another_part_changed`). Wo die Handlung berührende
+    Teile mit Befund vereinigt (``boolean.parts_united``, RM-386), gilt der
+    Befund. *Zum Langloch ziehen* fragt hier nicht: Es schneidet ein freies
+    Teil in seiner Bohrung mit Absicht mit (:func:`hole_has_separate_contents`).
+    """
+
+    @wraps(fn)
+    def run(ctx: OpContext) -> OpResult:
+        result = fn(ctx)
+        _refuse_if_another_part_changed(ctx, result)
+        return result
+
+    return run
+
+
+def _refuse_if_another_part_changed(ctx: OpContext, result: OpResult) -> None:
+    """Die Prüfung hinter :func:`_leaves_other_parts_alone`."""
+    if not ctx.inputs or not result.outputs:
+        return
+    source, output = ctx.inputs[0], result.outputs[0]
+    if output.id != source.id or output.mesh is source.mesh:
+        return
+    if any(finding.code == "boolean.parts_united" for finding in result.findings):
+        return
+    before = as_mesh_data(source.mesh)
+    if before.component_count < 2:
+        return
+    named = getattr(ctx.params, "at_features", None) or (getattr(ctx.params, "at_feature", ""),)
+    features = [source.features[name] for name in named if name in source.features]
+    if not features:
+        return
+    after = as_mesh_data(output.mesh)
+    if not _another_part_changed(before, after, features, source.features, ctx.cancelled):
+        return
+    raise ValidationError(
+        field="at_feature",
+        detail=ANOTHER_PART_IN_THE_WAY,
+        values={"feature": features[0].id},
+        constraint="not_movable",
+        suggestions=(SPLIT_BODIES, CANCEL),
+    )
+
+
+def _another_part_changed(
+    before: MeshData,
+    after: MeshData,
+    features: Sequence[Feature],
+    known: Mapping[FeatureId, Feature],
+    cancelled: CancelToken | None,
+) -> bool:
+    """Ob ein Teil, zu dem keines dieser Merkmale gehört, danach anders dasteht.
+
+    Ein Teil ist eine Materialfamilie — eine Schale mit ihren Innenhäuten
+    (``repair.material_part_families``). Zum Merkmal gehört jede Familie, die
+    eine seiner Flächen trägt, die seiner Kette und seines Einschlusses samt
+    Insel mit (:func:`_cavity_scope`, :func:`_with_walls`). Jede Schale der
+    übrigen muss danach mit demselben Rauminhalt und demselben Hüllquader für
+    sich stehen, auf die Verschweißweite genau. Ohne sicheren Beleg der
+    Familien gibt es keine Aussage und keine Absage.
+    """
+    from app.core.geom.repair import material_part_families
+    from app.core.units import weld_tolerance
+
+    families = material_part_families(before.raw, cancelled=cancelled)
+    if families is None or len(families) < 2:
+        return False
+    family_of = np.full(before.triangle_count, -1, dtype=np.int64)
+    for number, family in enumerate(families):
+        family_of[np.asarray(family, dtype=np.int64)] = number
+    own_faces: list[int] = []
+    for feature in features:
+        walled = _with_walls(before, feature)
+        own_faces.extend(int(index) for index in walled.face_indices)
+        for member in _cavity_scope(before, walled, known):
+            own_faces.extend(int(index) for index in member.face_indices)
+    chosen = np.asarray(
+        [index for index in own_faces if 0 <= index < before.triangle_count], dtype=np.int64
+    )
+    if not chosen.size:
+        return False
+    own = {int(number) for number in family_of[chosen] if number >= 0}
+    foreign = np.flatnonzero(~np.isin(family_of, np.asarray(sorted(own), dtype=np.int64)))
+    foreign = foreign[family_of[foreign] >= 0]
+    if not foreign.size:
+        return False
+    tolerance = weld_tolerance(float(before.bounds.diagonal))
+    labels, _groups = _part_labels(before)
+    wanted = _shell_prints(before, labels, np.unique(labels[foreign]))
+    after_labels, _after_groups = _part_labels(after)
+    present = _shell_prints(after, after_labels, np.unique(after_labels))
+    for volume, area, low, high in wanted:
+        if not any(
+            abs(volume - other_volume) <= tolerance * max(area, other_area)
+            and np.all(np.abs(low - other_low) <= tolerance)
+            and np.all(np.abs(high - other_high) <= tolerance)
+            for other_volume, other_area, other_low, other_high in present
+        ):
+            return True
+    return False
+
+
+def _shell_prints(
+    mesh: MeshData, labels: NDArray[np.int64], chosen: NDArray[np.int64]
+) -> list[tuple[float, float, NDArray[np.float64], NDArray[np.float64]]]:
+    """Rauminhalt mit Vorzeichen, Fläche und Hüllquader je Schale ``chosen``."""
+    triangles = np.asarray(mesh.raw.triangles, dtype=np.float64)
+    signed = np.einsum("ij,ij->i", triangles[:, 0], np.cross(triangles[:, 1], triangles[:, 2]))
+    volumes = np.bincount(labels, weights=signed / 6.0, minlength=int(labels.max()) + 1)
+    areas = np.bincount(
+        labels,
+        weights=np.asarray(mesh.raw.area_faces, dtype=np.float64),
+        minlength=int(labels.max()) + 1,
+    )
+    prints = []
+    for label in chosen:
+        corners = triangles[labels == label].reshape(-1, 3)
+        prints.append(
+            (
+                float(volumes[label]),
+                float(areas[label]),
+                corners.min(axis=0),
+                corners.max(axis=0),
+            )
+        )
+    return prints
+
+
 def _slot_angle_in_frame(feature: Feature, direction: Any) -> float:
     """Die Richtung eines erkannten Langlochs, gezählt gegen seinen Rahmen.
 
@@ -5524,7 +5672,9 @@ _NO_MOUTH_TO_GRIP: Final = _(
     # 16: ein getrenntes Teil fragt den Hohlraum, nicht die Art (RM-545).
     # 17: jeder Hohlraum fragt nach einem getrennten Teil, auch Kugelpfanne, Kehle und
     # Innengewinde, und jede Zeile der Karte gilt ohne Ausnahme (Review G).
-    cache_version="17",
+    # 18: ein getrenntes Teil daneben bleibt, wie es war, oder die Handlung
+    # sagt ab (RM-596); exakt sagt eine Berührung auf Linie oder Punkt ab (RM-597).
+    cache_version="18",
     title=_("Merkmal verschieben"),
     category="holes",
     params=MoveFeatureParams,
@@ -5539,6 +5689,7 @@ _NO_MOUTH_TO_GRIP: Final = _(
     ),
 )
 @_keeps_the_saved_slot_tool
+@_leaves_other_parts_alone
 def move_feature(ctx: OpContext) -> OpResult:
     """Ein erkanntes Merkmal an eine andere Stelle — in einem Schritt.
 
@@ -5899,7 +6050,9 @@ class DuplicateFeatureParams(FeaturePlacementParams):
     # 16: ein getrenntes Teil fragt den Hohlraum, nicht die Art (RM-545).
     # 17: jeder Hohlraum fragt nach einem getrennten Teil, auch Kugelpfanne, Kehle und
     # Innengewinde, und jede Zeile der Karte gilt ohne Ausnahme (Review G).
-    cache_version="17",
+    # 18: ein getrenntes Teil daneben bleibt, wie es war, oder die Handlung
+    # sagt ab (RM-596); exakt sagt eine Berührung auf Linie oder Punkt ab (RM-597).
+    cache_version="18",
     title=_("Merkmal verdoppeln"),
     category="holes",
     params=DuplicateFeatureParams,
@@ -5916,6 +6069,7 @@ class DuplicateFeatureParams(FeaturePlacementParams):
     ),
 )
 @_keeps_the_saved_slot_tool
+@_leaves_other_parts_alone
 def duplicate_feature(ctx: OpContext) -> OpResult:
     """Ein erkanntes Merkmal ein zweites Mal — die halbe Bewegung des Versetzens.
 
@@ -6317,7 +6471,9 @@ class _PatternPlace:
     # 8: eine Senkung unter einer Haut ist nicht „über die Kante“ (RM-226).
     # 9: am Netz findet eine Kopie nicht ihre Vorlage wieder (RM-226).
     # 10: exakt findet sich eine Senkung über ihre Spitze wieder (RM-226).
-    cache_version="10",
+    # 11: ein getrenntes Teil daneben bleibt, wie es war, oder die Handlung
+    # sagt ab (RM-596).
+    cache_version="11",
     title=_("Merkmal vervielfachen"),
     category="holes",
     params=PatternFeatureParams,
@@ -6332,6 +6488,7 @@ class _PatternPlace:
     ),
 )
 @_keeps_the_saved_slot_tool
+@_leaves_other_parts_alone
 def pattern_feature(ctx: OpContext) -> OpResult:
     """Merkmale linear, kreisförmig oder gespiegelt wiederholen — ein Schritt (P6.7).
 
@@ -7112,7 +7269,9 @@ class RemoveFeatureParams(BaseParams):
     # 19: ein getrenntes Teil fragt den Hohlraum, nicht die Art (RM-545).
     # 20: jeder Hohlraum fragt nach einem getrennten Teil, auch Kugelpfanne, Kehle und
     # Innengewinde, und jede Zeile der Karte gilt ohne Ausnahme (Review G).
-    cache_version="20",
+    # 21: ein getrenntes Teil daneben bleibt, wie es war, oder die Handlung
+    # sagt ab (RM-596).
+    cache_version="21",
     title=_("Merkmal entfernen"),
     category="holes",
     params=RemoveFeatureParams,
@@ -7128,6 +7287,7 @@ class RemoveFeatureParams(BaseParams):
     ),
 )
 @_keeps_the_saved_slot_tool
+@_leaves_other_parts_alone
 def remove_feature(ctx: OpContext) -> OpResult:
     """Ein erkanntes Merkmal wegnehmen — die halbe Bewegung des Versetzens.
 
@@ -7349,7 +7509,9 @@ class RotateFeatureParams(BaseParams):
     # 14: jeder Hohlraum fragt nach einem getrennten Teil, auch Kugelpfanne, Kehle und
     # Innengewinde, und jede Zeile der Karte gilt ohne Ausnahme (Review G).
     # Und eine Drehung auf sich selbst fragt am Winkel, nicht am Kosinus (Review G, F3).
-    cache_version="14",
+    # 15: ein getrenntes Teil daneben bleibt, wie es war, oder die Handlung
+    # sagt ab (RM-596); exakt sagt eine Berührung auf Linie oder Punkt ab (RM-597).
+    cache_version="15",
     title=_("Merkmal drehen"),
     category="holes",
     params=RotateFeatureParams,
@@ -7368,6 +7530,7 @@ class RotateFeatureParams(BaseParams):
     ),
 )
 @_keeps_the_saved_slot_tool
+@_leaves_other_parts_alone
 def rotate_feature(ctx: OpContext) -> OpResult:
     """Ein erkanntes Merkmal kippen — dieselbe Maschine, eine Matrix dazwischen.
 
@@ -8789,7 +8952,9 @@ class ResizeFeatureParams(BaseParams):
     # 22: ein getrenntes Teil fragt den Hohlraum, nicht die Art (RM-545).
     # 23: jeder Hohlraum fragt nach einem getrennten Teil, auch Kugelpfanne, Kehle und
     # Innengewinde, und jede Zeile der Karte gilt ohne Ausnahme (Review G).
-    cache_version="23",
+    # 24: ein getrenntes Teil daneben bleibt, wie es war, oder die Handlung
+    # sagt ab (RM-596); exakt sagt eine Berührung auf Linie oder Punkt ab (RM-597).
+    cache_version="24",
     title=_("Merkmal ändern"),
     category="holes",
     params=ResizeFeatureParams,
@@ -8809,6 +8974,7 @@ class ResizeFeatureParams(BaseParams):
         "Teilung, Zellbreite und Tiefe."
     ),
 )
+@_leaves_other_parts_alone
 def resize_feature(ctx: OpContext) -> OpResult:
     """Den Durchmesser eines erkannten Merkmals ändern — Zapfen, Kegel, Kugel.
 
@@ -9640,7 +9806,9 @@ OPEN_BODY_DETAIL: Final = _(
     # 20: ein getrenntes Teil fragt den Hohlraum, nicht die Art (RM-545).
     # 21: jeder Hohlraum fragt nach einem getrennten Teil, auch Kugelpfanne, Kehle und
     # Innengewinde, und jede Zeile der Karte gilt ohne Ausnahme (Review G).
-    cache_version="21",
+    # 22: ein getrenntes Teil daneben bleibt, wie es war, oder die Handlung
+    # sagt ab (RM-596).
+    cache_version="22",
     title=_("Bohrung ändern"),
     category="holes",
     params=ResizeHoleParams,
@@ -9659,6 +9827,7 @@ OPEN_BODY_DETAIL: Final = _(
     ),
 )
 @_keeps_the_saved_slot_tool
+@_leaves_other_parts_alone
 def resize_hole(ctx: OpContext) -> OpResult:
     """Der gemeinsame Kundenweg für STL-Netze und exakte STEP-Körper."""
     params = cast(ResizeHoleParams, ctx.params)
@@ -15654,6 +15823,61 @@ def _exact_pin_tool(feature: Feature, centre: Vec3, axis: Vec3, *, reach_below: 
     )
 
 
+#: Wenn ein exakt gesetztes Merkmal den Körper offen ließe (:func:`_exact_placed_holds`).
+LEFT_OPEN_HERE: Final = _(
+    "An dieser Stelle bliebe der Körper offen, etwa weil das Merkmal anderes Material nur auf "
+    "einer Linie oder in einem Punkt berührt. Setzen Sie es ein Stück weiter weg oder so, dass "
+    "es eindringt."
+)
+
+
+def _exact_placed_holds(before: Any, placed: Any) -> Any:
+    """Das Ergebnis eines exakt gesetzten Merkmals — oder eine Absage, wo das Merkmal
+    anderes Material nur auf einer Linie oder in einem Punkt berührt (RM-597).
+
+    Der Schnittweg fragt die Dichtheit längst (:func:`_exact_chain_cut_holding`).
+    Am Weg aus den Flächen fehlte die Frage: Eine Zapfenkopie, die das Original
+    auf einer Mantellinie berührt, lieferte einen Körper mit offenem Zwilling —
+    an der Tasche mit Zapfen 18 560,8 mm³ —, ohne Befund; ebenso der an die
+    Taschenwand versetzte und der auf den Taschenboden gekippte Zapfen.
+
+    **Abgesagt wird bei einer Berührung, nicht bei einer Lücke im Netz**
+    (:func:`_touches_along_a_line`). Ist der Körper gültig und nur sein Netz an
+    einer Naht offen — an einer um 1° gekippten Wellenhälfte über ihrer Kehle —,
+    kommt er heraus wie jeder andere: ein Befund über ein grobes Netz ist besser
+    als eine Absage über einen gelungenen Körper (§30, ``brep.kernel``).
+    Gefragt wird nur, wo der Körper vorher dicht war: Ein schon offenes
+    eingelesenes Modell bleibt bearbeitbar.
+    """
+    if not as_mesh_data(before).is_watertight or as_mesh_data(placed).is_watertight:
+        return placed
+    if not _touches_along_a_line(placed):
+        return placed
+    raise GeometryError(
+        title=_("Das Merkmal lässt sich an dieser Stelle nicht sauber setzen."),
+        detail=LEFT_OPEN_HERE,
+        suggestions=(CORRECT_INPUT, CANCEL),
+    )
+
+
+def _touches_along_a_line(solid: Any) -> bool:
+    """Ob ein exakter Körper ungültig ist oder sein Zwilling eine Berührung zeigt.
+
+    Eine Berührung auf einer Linie macht Kanten, an denen mehr als zwei Dreiecke
+    hängen, und reißt keine Lücke: gemessen an der Zapfenkopie eine solche
+    Kante und keine offene, am an die Wand versetzten Zapfen zwei. Eine
+    Vernetzung, die an einer Naht nicht schließt, lässt dagegen offene Kanten
+    stehen — an der gekippten Wellenhälfte fünf neben vier mehrfachen.
+    """
+    from OCP.BRepCheck import BRepCheck_Analyzer
+
+    if not BRepCheck_Analyzer(solid.shape).IsValid():
+        return True
+    edges = np.sort(np.asarray(as_mesh_data(solid).raw.edges_sorted, dtype=np.int64), axis=1)
+    _unique, counts = np.unique(edges, axis=0, return_counts=True)
+    return not bool((counts == 1).any()) and bool((counts > 2).any())
+
+
 def _exact_move_by_faces(
     ctx: OpContext,
     source: SceneObject,
@@ -15685,8 +15909,11 @@ def _exact_move_by_faces(
     base, closing_findings = _exact_closing_base(ctx, source) if cavity else (solid, [])
     cleared = edit.unified(edit.boolean("union" if cavity else "difference", [base, body]))
     ctx.progress(0.6, str(_("Das Merkmal wird an seiner neuen Stelle gesetzt …")))
-    placed = edit.unified(
-        edit.boolean("difference" if cavity else "union", [cleared, edit.moved(body, travel)])
+    placed = _exact_placed_holds(
+        solid,
+        edit.unified(
+            edit.boolean("difference" if cavity else "union", [cleared, edit.moved(body, travel)])
+        ),
     )
     expected = dataclasses.replace(
         feature, params={**feature.params, "centre": target}, provenance="generated"
@@ -15717,7 +15944,9 @@ def _exact_duplicate_by_faces(
     travel: Vec3 = (target[0] - centre[0], target[1] - centre[1], target[2] - centre[2])
     change: BooleanKind = "difference" if cavity else "union"
     ctx.progress(0.2, str(_("Das Merkmal wird an der neuen Stelle angelegt …")))
-    placed = edit.unified(edit.boolean(change, [solid, edit.moved(body, travel)]))
+    placed = _exact_placed_holds(
+        solid, edit.unified(edit.boolean(change, [solid, edit.moved(body, travel)]))
+    )
     copy = dataclasses.replace(
         feature,
         id=_free_feature_id(source, feature.kind),
@@ -15792,7 +16021,9 @@ def _exact_resize_by_faces(
         tool = edit.transformed(
             body, as_transform(transform.scaling((scale, scale, scale), about=centre))
         )
-    placed = edit.unified(edit.boolean("difference" if cavity else "union", [cleared, tool]))
+    placed = _exact_placed_holds(
+        solid, edit.unified(edit.boolean("difference" if cavity else "union", [cleared, tool]))
+    )
     changed = dataclasses.replace(
         feature, params={**feature.params, "diameter": diameter}, provenance="generated"
     )
@@ -17959,7 +18190,7 @@ def _exact_rotate_pin(
     cleared = edit.unified(edit.boolean("difference", [solid, body]))
     ctx.progress(0.6, str(_("Das Merkmal wird gedreht gesetzt …")))
     tool = _exact_pin_tool(feature, centre, turned_axis, reach_below=reach)
-    placed = edit.unified(edit.boolean("union", [cleared, tool]))
+    placed = _exact_placed_holds(solid, edit.unified(edit.boolean("union", [cleared, tool])))
     # Sichtbar bleibt vom gekippten Zylinder, was über der Grundfläche steht:
     # von der Spitze (``depth/2`` über der Mitte) bis zum tiefsten Punkt der
     # schrägen Schnittellipse (``reach`` darunter). Die native Erkennung nennt
@@ -18068,7 +18299,7 @@ def _exact_rotate_cone(
         # dichtem Zwilling, sonst sagt die Handlung ab.
         placed, _held = _exact_chain_cut_holding(cleared, lambda _overlap: tool, overlaps=(1.0,))
     else:
-        placed = edit.unified(edit.boolean("union", [cleared, tool]))
+        placed = _exact_placed_holds(solid, edit.unified(edit.boolean("union", [cleared, tool])))
     expected = dataclasses.replace(
         feature,
         params={
@@ -18694,7 +18925,9 @@ class PlugParams(BaseParams):
     # verschmelzen (RM-413).
     # 8: die Kette einer Senkung und jeder andere Hohlraum fragen nach einem getrennten Teil
     # (RM-545, Review G).
-    cache_version="8",
+    # 9: ein getrenntes Teil daneben bleibt, wie es war, oder die Handlung
+    # sagt ab (RM-596).
+    cache_version="9",
     title=_("Bohrung verschließen"),
     category="holes",
     params=PlugParams,
@@ -18703,6 +18936,7 @@ class PlugParams(BaseParams):
     applies_to=["hole"],
     doc=_("Füllt eine Bohrung wieder auf — etwa wenn ein fremdes Teil eine zu viel hat."),
 )
+@_leaves_other_parts_alone
 def plug_hole(ctx: OpContext) -> OpResult:
     """Eine Bohrung wieder auffüllen — am erkannten Merkmal oder an Zahlen.
 

@@ -2715,6 +2715,15 @@ _EXACT_CASES: Final = (
 )
 
 
+def _pocket_with_pin(*, pin_height: float) -> Any:
+    """Quader 40 × 40 × 12, Tasche Ø 14 und 6 mm tief, darin ein Zapfen Ø 6 — exakt."""
+    edit = exact_kernel()
+    body = edit.box(40.0, 40.0, 12.0)
+    body = edit.bore(body, position=(0.0, 0.0, 12.0), axis="z", diameter=14.0, depth=6.0)
+    pin = edit.moved(edit.cylinder(6.0, pin_height), (0.0, 0.0, 6.0))
+    return edit.boolean("union", [body, pin])
+
+
 @functools.cache
 def _exact_case(name: str) -> SceneObject:
     """Der exakte Körper ``name`` aus :data:`_EXACT_CASES`, mit seinen nativen Merkmalen."""
@@ -2738,10 +2747,10 @@ def _exact_case(name: str) -> SceneObject:
         body = edit.bore(body, position=(0.0, 0.0, 8.0), axis="z", diameter=6.0, depth=4.0)
         body = edit.bore(body, position=(18.0, 0.0, 8.0), axis="z", diameter=8.0)
     elif name == "pocket_with_pin":
-        body = edit.box(40.0, 40.0, 12.0)
-        body = edit.bore(body, position=(0.0, 0.0, 12.0), axis="z", diameter=14.0, depth=6.0)
-        pin = edit.moved(edit.cylinder(6.0, 6.0), (0.0, 0.0, 6.0))
-        body = edit.boolean("union", [body, pin])
+        # Der Zapfen 5 mm hoch, nicht 6: Bei Höhe gleich Durchmesser legt die
+        # Vorgabe der Karte (90° um X) ihn genau auf den Taschenboden, und das
+        # ist der Fall von RM-597 (``test_an_exact_pin_that_only_touches_…``).
+        body = _pocket_with_pin(pin_height=5.0)
     elif name == "sphere_socket":
         ball = edit.moved(edit.sphere(12.0), (0.0, 0.0, 12.0))
         body = edit.boolean("difference", [edit.box(30.0, 30.0, 12.0), ball])
@@ -2769,6 +2778,50 @@ def test_the_card_offers_each_handling_exactly_where_the_operation_computes_on_e
     (``test_partial_bores``).
     """
     assert _card_against_operation(_exact_case(name), profile, op), name
+
+
+@pytest.mark.parametrize("op", ["duplicate_feature", "move_feature", "rotate_feature"])
+def test_an_exact_pin_that_only_touches_material_says_so(profile: Profile, op: str) -> None:
+    """RM-597: Eine exakte Zapfenkopie, die das Original auf einer Linie berührt, war undicht.
+
+    Tasche Ø 14 mit Zapfen Ø 6 × 6: Verdoppelt um genau einen Durchmesser
+    daneben berührt die Kopie das Original auf einer Mantellinie. Der exakte
+    Kern lieferte einen Körper mit offenem Zwilling (18 560,8 mm³), ohne
+    Befund; der Schnittweg sagt in derselben Lage längst ab. Versetzt an die
+    Taschenwand — die Mitte 4 mm neben der Achse — und um 90° gekippt, sodass
+    er auf dem Taschenboden liegt, gilt dasselbe. Soll: eine Absage mit dem
+    Weg, die Eingabe zu ändern; anderthalb Durchmesser daneben rechnet es,
+    dicht und als ein Teil.
+    """
+    from app.core.brep.features import features_of
+    from app.core.errors import GeometryError
+
+    load_operations()
+    body = _pocket_with_pin(pin_height=6.0)
+    entry = SceneObject("obj_1", "Tasche", body, kind="brep", features=features_of(body))
+    pin = next(name for name, feature in entry.features.items() if feature.kind == "pin")
+    centre = [float(value) for value in entry.features[pin].params["centre"]]
+    width = float(entry.features[pin].params["diameter"])
+    values = {
+        "duplicate_feature": {"x": centre[0] + width, "y": centre[1], "z": centre[2]},
+        "move_feature": {"x": centre[0] + 4.0, "y": centre[1], "z": centre[2]},
+        "rotate_feature": {"axis": "x", "angle": 90.0},
+    }[op]
+    with pytest.raises(GeometryError) as caught:
+        _raw(op, entry, profile, at_feature=pin, **values)
+    assert [action.id for action in caught.value.suggestions] == ["correct_input", "cancel"]
+
+    beside = _raw(
+        "duplicate_feature",
+        entry,
+        profile,
+        at_feature=pin,
+        x=centre[0] + 1.5 * width,
+        y=centre[1],
+        z=centre[2],
+    ).outputs[0]
+    made = as_mesh_data(beside.mesh)
+    assert made.is_watertight and made.component_count == 1
 
 
 @pytest.mark.parametrize("kernel", ["mesh", "brep"])

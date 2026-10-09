@@ -22,6 +22,7 @@ from __future__ import annotations
 import dataclasses
 import math
 from collections.abc import Container, Iterable, Mapping
+from itertools import pairwise
 from typing import TYPE_CHECKING, Any, Final, cast, overload
 
 from app.core.errors import (
@@ -495,8 +496,10 @@ def _register_one(spec: PartSpec, params: type[BaseParams], registry: Registry |
         # öffnet bis über seine Fläche (``_opened_to_the_face``): Ein Ergebnis
         # von davor trüge weder den Satz noch die freie Öffnung. targets:7 —
         # in einer Bohrung, die schon weiter ist, sagt er das statt „neben
-        # dem Körper“ (``parts.bore_too_wide``).
-        cache_version=f"{_result_version(spec)}:targets:7",
+        # dem Körper“ (``parts.bore_too_wide``). targets:8 — eine erklärte
+        # Durchgangsbohrung endet an den Grenzen des Körpers
+        # (:func:`_through_bores_in_the_body`, RM-598).
+        cache_version=f"{_result_version(spec)}:targets:8",
         params=params,
         consumes=1,
         produces=1,
@@ -1251,6 +1254,9 @@ def _insert_at(ctx: OpContext, spec: PartSpec) -> OpResult:
         host_features,
         added_features,
     )
+    features = _through_bores_in_the_body(
+        features, set(features) - set(source.features), as_mesh_data(body)
+    )
 
     # Und die Gegenprobe zu „hat nichts bewirkt": Er hat etwas hinzugefügt, nur
     # nicht **am** Teil. Ein lösbares Teil fragt stattdessen, ob sein Träger
@@ -1571,6 +1577,106 @@ def _spring_finding(name: str, params: BaseParams, profile: Profile | None) -> F
     )
 
 
+def _through_bores_in_the_body(
+    features: dict[str, Feature], fresh: Iterable[str], host: MeshData
+) -> dict[str, Feature]:
+    """Eine erklärte Durchgangsbohrung endet an den Grenzen des Körpers (RM-598).
+
+    Ein Baustein schneidet sein Durchgangsloch über die eigene Form hinaus,
+    damit es durch jede Wand geht — die Mutternfalle 10 mm über die Tasche
+    hinaus nach beiden Seiten —, und erklärte die Bohrung über diese ganze
+    Länge. Auf der Deckfläche eines 12 mm dicken Quaders lag sie von z = -0,5
+    bis z = 22, fast zur Hälfte in der Luft, und *Stift für Bohrung* sagte ab,
+    dort sei kein Hohlraum im Körper. Gemessen wird am Träger vor dem Schnitt,
+    entlang der Achse: Wo sie im Material liegt, wird gebohrt
+    (:func:`_material_span`). Liegt sie nirgends im Material oder ist der
+    Träger nicht dicht, bleibt die Erklärung, wie sie war.
+    """
+    import numpy as np
+
+    from app.core.perceive.features import _triangle_bounds
+
+    triangles = np.asarray(host.raw.triangles, dtype=np.float64)
+    if not len(triangles) or not host.is_watertight:
+        return features
+    bounds = _triangle_bounds(triangles)
+    result = dict(features)
+    for name in sorted(fresh):
+        feature = features.get(name)
+        if feature is None or feature.kind != "hole" or not feature.params.get("through"):
+            continue
+        depth = float(feature.params.get("depth") or 0.0)
+        axis = np.asarray(feature.params.get("axis") or (0.0, 0.0, 1.0), dtype=np.float64)
+        length = float(np.linalg.norm(axis))
+        if depth <= EPS_GEOM or length <= 0.0:
+            continue
+        axis /= length
+        centre = np.asarray(feature.params["centre"], dtype=np.float64)
+        span = _material_span(host, triangles, bounds, centre, axis, depth / 2.0)
+        if span is None:
+            continue
+        low, high = span
+        middle = centre + axis * (low + high) / 2.0
+        result[name] = dataclasses.replace(
+            feature,
+            params={
+                **feature.params,
+                "centre": (float(middle[0]), float(middle[1]), float(middle[2])),
+                "depth": high - low,
+            },
+        )
+    return result
+
+
+def _material_span(
+    host: MeshData,
+    triangles: Any,
+    bounds: Any,
+    centre: Any,
+    axis: Any,
+    reach: float,
+) -> tuple[float, float] | None:
+    """Von wo bis wo die Achse innerhalb ``±reach`` um ``centre`` im Material liegt —
+    oder ``None``, wo sie es nirgends tut.
+
+    Die Treffer eines Strahls entlang der Achse teilen die Strecke; ob ein Stück
+    im Material liegt, fragt seine Mitte (``_point_inside_shell``, sicherer als
+    das Zählen der Treffer an geteilten Kanten). **Unentschieden fragt es eine
+    Facettenhöhe daneben nach** (:data:`~app.core.units.MAX_FACET_SAG`): Auf
+    der Achse eines mittig gesetzten Bausteins liegt jede Mitte über der
+    Diagonale der Deckflächen, und dort kann der Strahl nicht zählen.
+    """
+    import numpy as np
+
+    from app.core.geom.mesh import ray_hit_distances
+    from app.core.perceive.features import _point_inside_shell
+
+    lead = reach + float(host.bounds.diagonal)
+    hits = ray_hit_distances(triangles, centre - axis * lead, axis)
+    along = sorted({float(distance) - lead for distance in np.asarray(hits, dtype=np.float64)})
+    cuts = [-reach, *(value for value in along if -reach < value < reach), reach]
+    helper = (1.0, 0.0, 0.0) if abs(float(axis[0])) < math.sqrt(0.5) else (0.0, 1.0, 0.0)
+    across = np.cross(axis, np.asarray(helper, dtype=np.float64))
+    across /= float(np.linalg.norm(across))
+    beside = np.cross(axis, across)
+
+    def material(point: Any) -> bool:
+        for offset in (0.0 * across, across, beside, -across, -beside):
+            answer = _point_inside_shell(point + offset * MAX_FACET_SAG, triangles, bounds)
+            if answer is not None:
+                return answer
+        return False
+
+    inside = [
+        (low, high)
+        for low, high in pairwise(cuts)
+        if high - low > EPS_GEOM and material(centre + axis * (low + high) / 2.0)
+    ]
+    if not inside:
+        return None
+    return inside[0][0], inside[-1][1]
+
+
 def _merged_features(
     source: SceneObject,
     produced: PartResult,
@@ -1869,6 +1975,9 @@ def _insert_at_exact(
         flip,
         host_features,
         added_features,
+    )
+    features = _through_bores_in_the_body(
+        features, set(features) - set(source.features), as_mesh_data(body)
     )
     loose = (
         _host_split(original_body, prepared, spec, source)
