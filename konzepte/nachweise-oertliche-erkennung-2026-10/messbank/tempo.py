@@ -97,6 +97,38 @@ STAGES = (
     "narrowings_marked",
     "detect_curved_faces",
 )
+#: Mit ``--tief`` zusätzlich die Fragen der Einpassungsrunden, der Langlöcher und des
+#: Flächenabschlusses (P3, P4) — für die Leseanalyse, nicht für den Vergleich mit P0.
+DEEP = (
+    "classify",
+    "fit_cylinder",
+    "fit_cone",
+    "fit_sphere",
+    "fit_torus",
+    "_fits_in_the_body",
+    "_cylinder_precludes_a_cone",
+    "_rigid_key",
+    "_cone_is_recognisable",
+    "_sphere_is_recognisable",
+    "_torus_is_recognisable",
+    "fit_stadium",
+    "_arcs_of_a_prism",
+    "_exactly_an_arc",
+    "_pieces_at_a_seam",
+    "_cylinder_beside_a_torus",
+    "_wandering_outline",
+    "_merged_cones",
+    "_merged_tori",
+    "_split_off_fillets",
+    "_in_numbering_order",
+    "_in_size_order",
+    "_support_handle",
+    "_patch_print",
+    "is_a_freeform",
+    "detect_slots",
+)
+if "--tief" in ARGS:
+    STAGES = STAGES + DEEP
 SPENT: dict[str, float] = {}
 CALLS: Counter[str] = Counter()
 STACK: list[str] = []

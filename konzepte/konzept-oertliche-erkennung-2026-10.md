@@ -328,9 +328,13 @@ mit 5.6, weil dort die Ausgabe ihre Darstellung ändert); die Oberfläche; das L
   dieser Ebene gemerkt. Der Stapel (`refine.exhausted`) muss je Zeile unabhängig von
   seiner Zusammensetzung antworten — schon heute Voraussetzung von RM-261, in P3 eigens
   geprüft (ein Fleck allein und im Stapel, dasselbe Urteil).
-- **R3 Dreiecksfolge des Kerns.** `manifold3d` behält die relative Folge unberührter
-  Dreiecke, sonst träfe RM-261 nicht. Ändert eine neue Fassung das, verfehlt alles —
-  langsamer, nie falsch; die Messbank meldet die Trefferquote je Lauf.
+- **R3 Dreiecksfolge des Kerns.** ~~`manifold3d` behält die relative Folge unberührter
+  Dreiecke.~~ Hält nicht (Nachtrag P2): Der Kern legt Unberührtes auch untereinander um,
+  am Ständer verfehlten deshalb 245 von 1 574 Trennungen. Seit P2 legt
+  `attributes.in_source_layout` die übernommenen Dreiecke auf die Plätze des Kerns in der
+  Folge ihres Eingangs, und die Trennung liest ohnehin nicht mehr nach Nummern. Ändert
+  eine neue Fassung des Kerns mehr, verfehlt das Gedächtnis — langsamer, nie falsch; die
+  Messbank meldet die Trefferquote je Lauf.
 - **R4 Ergebniscache.** Die Antworten gehören den Abstammungen der Körper, die sie
   fragten. Der Körper der aktuellen Szene lebt, also trifft der nächste Schritt. Ein vom
   Cache verschlanktes oder verdrängtes älteres Netz verliert seine Antworten; ein Schritt
@@ -496,3 +500,25 @@ Messbank nach.
   Spiderman jeweils GLEICH (Logs `floor_*.txt`). Der Prototyp hält die Lesungen ganz; P2 hält nur ihre
   Abdrücke und muss dieselbe Ersparnis ohne diesen Speicher zeigen (A5). Er prüft keine
   Hüllrückfrage, weil die Hülle beim Vertauschen gleich bleibt — das ist P2 vorbehalten.
+
+## Nachtrag P1 und P2 (Umsetzung, 09.10.2026)
+
+- **P1** wie 5.6. `CACHE_FORMAT_VERSION` steht nach dem Zusammenführen mit Welle 2 auf 55
+  (G belegte 53, der gemeinsame Stand 54).
+- **P2, Fleckabdruck**: Teile `ecken`, `eckennummern`, `ring`, `ursprung`
+  (`features.PATCH_PRINT_PARTS`), Körperzahlen `dicht`, `umlauf`, `deckungsgleich` für die
+  Lesung, `diagonale` für die Trennung (`BODY_NUMBERS`). Die in 5.2 Punkt 4 vorgesehene
+  Folge der inneren Nähte und die Folge der Dreiecksnummern stehen **nicht** im Abdruck:
+  Die tangentiale Trennung las ihre Bänder und Keime nach Dreiecksnummern und hing damit
+  an der Dreiecksfolge der Datei (gegen RM-210, Test mit gemischten Dreiecken); sie liest
+  jetzt in der Ordnung des Körpers (`in_body_order`), gleich lange Nähte in der Folge
+  ihrer Kanten, und die folgt den Eckennummern. Was die Rechnung nicht liest, gehört
+  nicht in den Schlüssel.
+- **G1** `_support_handle`: Kennt das Gedächtnis Fleckabdruck und Körperzahlen, steht der
+  Abdruck der Lesung fest (`_SupportPrint`), die Felder liest erst, wer rechnet — auch im
+  Stapel `_screened_fits`.
+- **G3** `_tangential_pieces`: Stücke als Lagen im Ziel, Rückfrage an die Hülle
+  (`_HULL_QUESTIONS`, das Rechteck über alle Ecken je Körper und Achse gemerkt), nichts
+  gemerkt, wenn `_without_notches` über das Ziel hinaus sucht (`_Patches.beyond`).
+- Testhaken `remember_across_bodies` (Konzept §9.4), `forget_cache` leert die neue
+  Ablage mit (R8).

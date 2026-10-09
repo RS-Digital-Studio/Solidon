@@ -101,7 +101,9 @@ Frage; der Aufrufer legt fest, welche Antwort ohne eindeutigen Beleg schützt.
   Körpergrenze** (`_by_geometry`, `GEOMETRY_KEYED_ANSWERS`), bitgleich
   geschlüsselt nach Stützpunktlesung (`_SurfaceSupport.digest`), Toleranz vom
   Aufrufer, Fit und Löserbudgets, gehalten von den fragenden Abstammungen
-  (`_Lineage.geometric`). Das trifft, weil eine Boolesche Unberührtes in der
+  (`_Lineage.geometric`). Lesung (`_support_handle`, nur ihr Abdruck) und
+  tangentiale Trennung antworten unter dem Fleckabdruck (`_patch_print`,
+  `PRINT_KEYED_ANSWERS`). Das trifft, weil eine Boolesche Unberührtes in der
   Darstellung des Eingangs zurückgibt (`geom.attributes.in_source_layout`).
 - **Je Körper merkt `remembered`** (`_BodyMemory`, ein Schloss
   `_MEMORY_LOCK`; ein abgebrochener Auftrag bekommt keine Antwort); eine Kopie

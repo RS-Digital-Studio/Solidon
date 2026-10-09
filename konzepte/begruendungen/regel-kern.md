@@ -211,6 +211,26 @@ Ungeschnittenes in der Darstellung ihres Eingangs zurücklegen muss:
 > 2 605, und die Erkennung nach dem Versetzen einer Bohrung sank von 27 auf 6
 > bis 8 s unter Last.
 
+Was „nur über ihre Lesung“ heißt: Normalen und Flächen des Flecks sind Felder der
+Lesung, Mitten folgen aus den Dreiecken, Ecken in Nummernfolge gehen nur in Minimum
+oder Maximum ein. Die Antwort gehört den Abstammungen, die sie rechneten oder lasen,
+und geht mit der letzten.
+
+**Gedächtnis je Fleck (RM-592).** Der Fleckabdruck trägt, was eine Frage an einen
+Fleck vom Körper liest: die Ecken seiner Dreiecke in Fleck- und Eckenfolge, welche
+Ecken dieselben sind (in der Folge ihrer Nummern, daraus auch die Folge der Kanten,
+denn `face_adjacency` ordnet nach Ecken), den ersten Nachbarring und den Ursprung vor
+*Kanten verfeinern*. Körperzahlen — Verschweißtoleranz aus der Diagonale, Dichtheit,
+Umlauf, deckungsgleiche Ecken — gibt der Aufrufer ausdrücklich mit; im Rumpf vom
+Körper gelesen, fehlten sie im Schlüssel (Konzept R1). Die Hülle gehört dem ganzen
+Körper: Was eine Rechnung `cylinder_fits_in_the_body` fragte, wird am neuen Körper
+noch einmal gefragt, das Rechteck über alle Ecken je Körper und Achse gemerkt, sonst
+kostete die Rückfrage so viel wie die Frage. Die Folge der Dreiecksnummern steht
+nicht im Abdruck: Die tangentiale Trennung las ihre Bänder nach Nummern und hing damit
+an der Dreiecksfolge der Datei; sie liest jetzt in der Ordnung des Körpers. Und die
+Boolesche legt seit RM-592 auch die Dreiecksfolge zurück — der Kern legt Unberührtes
+untereinander um, am Laptop-Ständer verfehlten deshalb 245 von 1 574 Trennungen.
+
 ## Fehler
 
 ### Ein Zeitlimit ist keine Frist

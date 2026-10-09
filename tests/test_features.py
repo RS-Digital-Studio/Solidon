@@ -2935,6 +2935,13 @@ def test_every_question_across_bodies_is_named_and_shared() -> None:
     assert len(asked) >= 7, "die Suche findet die Fragen über die Körpergrenze"
     assert asked == module.GEOMETRY_KEYED_ANSWERS, sorted(asked ^ module.GEOMETRY_KEYED_ANSWERS)
     assert module.GEOMETRY_KEYED_ANSWERS <= module.SHARED_ANSWERS
+    # RM-592: Was unter dem Fleckabdruck abgelegt wird, steht in PRINT_KEYED_ANSWERS.
+    kept = {
+        getattr(module, constant)
+        for constant in re.findall(r"\b_keep_across\(\s*(_[A-Z_]+)", source)
+    }
+    assert kept == module.PRINT_KEYED_ANSWERS, sorted(kept ^ module.PRINT_KEYED_ANSWERS)
+    assert not module.PRINT_KEYED_ANSWERS & module.GEOMETRY_KEYED_ANSWERS
 
 
 def test_recognition_selects_triangles_and_corners_through_plain_arrays() -> None:
@@ -7482,7 +7489,7 @@ def test_the_round_screening_reports_progress_while_planning(
         observed_before_read.append(reported[-1] if reported else 0.0)
         return None
 
-    monkeypatch.setattr(features_module, "_surface_support", no_support)
+    monkeypatch.setattr(features_module, "_support_handle", no_support)
     features_module._screened_fits(body, patches, share=features_module._Share(reported.append))
 
     assert len(observed_before_read) == len(patches)

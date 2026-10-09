@@ -274,10 +274,14 @@ def in_source_layout(result: MeshData, sources: Sequence[MeshData]) -> MeshData:
 
     Hier bekommt jedes übernommene Dreieck die Eckenfolge seines Vorbilds, und
     die übernommenen Ecken stehen in der Reihenfolge ihres Eingangs; neue
-    Ecken folgen dahinter in der Reihenfolge des Kerns. **Die Dreiecksfolge
-    bleibt die des Kerns** — an ihr hängen die Nummern der Merkmale —, und
-    keine Koordinate ändert sich: Es wird nur umnummeriert und gedreht, wie
-    der Eingang es vorgab. Zwischen zwei Ergebnissen des Kerns blieb die
+    Ecken folgen dahinter in der Reihenfolge des Kerns. **Die Plätze der
+    Dreiecke bleiben die des Kerns, die übernommenen besetzen ihre Plätze in
+    der Folge ihres Eingangs** (RM-592): Der Kern legt Unberührtes auch
+    untereinander um, und die tangentiale Trennung der Erkennung liest diese
+    Folge (am Laptop-Ständer 245 von 1 574 Zielen nach einer Bohrung). Neue
+    Dreiecke bleiben, wo der Kern sie hinlegte, und keine Koordinate ändert
+    sich: Es wird nur umnummeriert, umgestellt und gedreht, wie der Eingang
+    es vorgab. Zwischen zwei Ergebnissen des Kerns blieb die
     Darstellung auch vorher schon stehen (gemessen: jede Ecke, jede
     Eckenfolge, jede Stützpunktlesung gleich); neu ist sie ab dem ersten
     Schritt nach dem Laden. Weil der Kern danach die Darstellung des Eingangs
@@ -307,7 +311,9 @@ def in_source_layout(result: MeshData, sources: Sequence[MeshData]) -> MeshData:
     unset = np.iinfo(np.int64).max
     rank = np.full(len(body.vertices), unset, dtype=np.int64)
     taken = np.zeros(len(faces), dtype=bool)
+    origin = np.zeros(len(faces), dtype=np.int64)
     offset = 0
+    face_offset = 0
     turns = np.arange(3)
     for source in sources:
         raw = source.raw
@@ -338,18 +344,28 @@ def in_source_layout(result: MeshData, sources: Sequence[MeshData]) -> MeshData:
             corners[rows] = faces[rows][np.arange(len(rows))[:, None], (turns + turn[:, None]) % 3]
             np.minimum.at(rank, corners[rows].ravel(), model[match[rows]].ravel() + offset)
             taken[rows] = True
+            origin[rows] = match[rows] + face_offset
         offset += len(raw.vertices)
+        face_offset += len(model)
     if not taken.any():
         return result
     order = np.argsort(
         np.where(rank < unset, rank, offset + np.arange(len(rank), dtype=np.int64)), kind="stable"
     )
+    places = np.flatnonzero(taken)
+    sequence = np.arange(len(faces))
+    sequence[places] = places[np.argsort(origin[places], kind="stable")]
+    corners = corners[sequence]
     if np.array_equal(order, np.arange(len(order))) and np.array_equal(corners, faces):
         return result
     renumbered = np.empty(len(order), dtype=np.int64)
     renumbered[order] = np.arange(len(order))
     vertices = np.asarray(body.vertices, dtype=np.float64)[order]
-    return result.replacing(trimesh.Trimesh(vertices, renumbered[corners], process=False))
+    slots = tuple(result.slots[index] for index in sequence.tolist()) if result.slots else ()
+    laid = trimesh.Trimesh(vertices, renumbered[corners], process=False)
+    if np.array_equal(sequence, np.arange(len(faces))):
+        return result.replacing(laid)
+    return MeshData(raw=laid, slots=slots if len(slots) == len(faces) else ())
 
 
 def with_slot(mesh: MeshData, slot: int) -> MeshData:

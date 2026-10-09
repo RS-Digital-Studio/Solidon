@@ -239,25 +239,27 @@ vergleicht beide an Korpusnetzen, ungeteilt und nach *Kanten verfeinern*.
 Die Vollerkennung nach jedem Schritt (§21.1) bleibt; ein bitgleich gelesener
 Fleck bekommt auch an einem neuen Körper dieselbe Antwort
 (`features._by_geometry`). Schlüssel: der Abdruck der Stützpunktlesung
-(`_SurfaceSupport.digest`: jedes Feld, die Dreiecke des Flecks), die Zahlen,
-die die Frage sonst vom Körper liest (Toleranz aus seiner Diagonale,
-geprüfter Fit), die Löserbudgets. **Kein Toleranzvergleich** — eine Normale,
-die in der letzten Stelle abweicht, ist eine andere Frage.
+(`_SurfaceSupport.digest`), die Zahlen, die die Frage sonst vom Körper liest
+(Toleranz aus seiner Diagonale, geprüfter Fit), die Löserbudgets. **Kein
+Toleranzvergleich** — eine Normale, die in der letzten Stelle abweicht, ist
+eine andere Frage.
 
 - **Eine Frage in `GEOMETRY_KEYED_ANSWERS` liest den Körper nur über ihre
   Lesung und Zahlen ihres Aufrufers** (Toleranz als Argument, in Rechnung und
-  Schlüssel): Normalen und Flächen des Flecks sind Felder der Lesung, Mitten
-  folgen aus den Dreiecken, Ecken in Nummernfolge gehen nur in Minimum oder
-  Maximum ein. Die Antwort ist unveränderlich (Fit, Wahrheitswert), nie eine
+  Schlüssel). Die Antwort ist unveränderlich (Fit, Wahrheitswert), nie eine
   Dreiecksnummer;
   `tests/test_features.py::test_every_question_across_bodies_is_named_and_shared`
   verlangt den Eintrag.
-- Grenze wie jede kleine Frage (`CACHE_LIMIT_PER_QUESTION`), Lebensdauer wie
-  der Merker je Körper: Die Antwort gehört den Abstammungen, die sie rechneten
-  oder lasen, und geht mit der letzten; `forget_cache` leert auch sie.
-- Treffen kann sie nur bei derselben Darstellung (Eckenfolge, Reihenfolge der
-  Ecken); deshalb legt eine Boolesche Ungeschnittenes zurück
-  (`attributes.in_source_layout`, `operationen.md`).
+- **Eine Frage in `PRINT_KEYED_ANSWERS` schlüsselt nach dem Fleckabdruck**
+  (`_patch_print`) und den Körperzahlen, die sie liest, als Argument
+  (`_body_numbers`). Eine Ganzkörperfrage unterwegs wird Rückfrage
+  (`_HULL_QUESTIONS`), Stücke sind Lagen im Fleck; wer über den Ring hinaus
+  liest, merkt nichts. Nie nach Dreiecksnummern (RM-210).
+- Grenze `CACHE_LIMIT_PER_QUESTION`, Lebensdauer wie der Merker je Körper;
+  `forget_cache` leert auch sie.
+- Treffen kann sie nur bei derselben Darstellung; deshalb legt eine Boolesche
+  Ungeschnittenes in Ecken- und Dreiecksfolge des Eingangs zurück
+  (`attributes.in_source_layout`).
 
 ## Fehler
 

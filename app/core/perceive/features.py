@@ -3218,6 +3218,31 @@ def cylinder_fits_in_the_body(mesh: MeshData, axis: Sequence[float], radius: flo
     Vernetzung** (``brep.features._oversized_rounds_dropped``, RM-226). Ohne
     sie hieß ein Bogen R 382 über 6 Grad auf einem 40 mm breiten Quader exakt
     „Verrundung R 382“ und am Netzzwilling „gekrümmte Fläche“.
+
+    **Wer die Antwort in eine Frage über die Körpergrenze einrechnet, merkt
+    sie sich als Rückfrage** (:func:`_tangential_pieces`, RM-592): Die Hülle
+    gehört dem ganzen Körper und steht nicht im Schlüssel; die gemerkte Antwort
+    gilt nur, wenn jede Rückfrage am neuen Körper gleich ausfällt.
+    """
+    answer = _cylinder_fits(mesh, axis, radius)
+    asked = _HULL_QUESTIONS.get()
+    if asked is not None:
+        asked.append((tuple(float(value) for value in axis), float(radius), answer))
+    return answer
+
+
+#: Die Rückfragen an die Hülle, die eine Rechnung über die Körpergrenze stellt
+#: (:func:`cylinder_fits_in_the_body`) — nur während dieser Rechnung gesetzt.
+_HULL_QUESTIONS: ContextVar[list[tuple[tuple[float, ...], float, bool]] | None] = ContextVar(
+    "solidon_hull_questions", default=None
+)
+
+
+def _cylinder_fits(mesh: MeshData, axis: Sequence[float], radius: float) -> bool:
+    """Die Rechnung von :func:`cylinder_fits_in_the_body`.
+
+    Das Rechteck über alle Ecken merkt sich der Körper je Achse — sonst
+    kostete die Rückfrage einer gemerkten Antwort so viel wie die Frage.
     """
     direction = np.asarray(axis, dtype=float)
     if float(np.max(np.abs(direction))) <= EPS_GEOM:
@@ -3236,9 +3261,26 @@ def cylinder_fits_in_the_body(mesh: MeshData, axis: Sequence[float], radius: flo
     if radius * 2.0 <= float(distance.max()) + EPS_GEOM:
         return True
 
+    across: float = remembered(
+        "rectangle_across",
+        mesh.raw,
+        [],
+        lambda: _rectangle_across(vertices, extreme[0], first, second, float(distance.max())),
+        extra=direction.tobytes(),
+    )
+    return radius * 2.0 <= across + EPS_GEOM
+
+
+def _rectangle_across(
+    vertices: np.ndarray, anchor: np.ndarray, first: np.ndarray, second: np.ndarray, reach: float
+) -> float:
+    """Die Diagonale des kleinsten Rechtecks um die quer projizierte Hülle (:func:`_cylinder_fits`).
+
+    Gerechnet wie dort, damit die gemerkte Antwort je Achse dieselbe ist.
+    """
     from shapely import multipoints
 
-    relative = vertices - extreme[0]
+    relative = vertices - anchor
     flat = np.column_stack((relative @ first, relative @ second))
     # **GEOS setzt an entarteten Punktmengen Gleitkomma-Merker** — doppelte
     # oder auf einer Linie liegende Ecken, wie sie jeder Quader liefert. numpy
@@ -3254,8 +3296,8 @@ def cylinder_fits_in_the_body(mesh: MeshData, axis: Sequence[float], radius: flo
     else:
         across = float(rectangle.length)
     if not np.isfinite(across):
-        across = float(distance.max())
-    return radius * 2.0 <= across + EPS_GEOM
+        across = reach
+    return across
 
 
 #: Ein Dreieck, das mehr Ringkandidaten trägt, als die Karte Plätze hat.
@@ -4236,14 +4278,14 @@ def _sphere_is_recognisable_read(
     check_cancelled: Callable[[], None] | None = None,
 ) -> bool:
     """Der Rumpf von :func:`_sphere_is_recognisable` — die Antwort merkt sich die Hülle."""
-    support = _surface_support(body, patch, check_cancelled)
+    support = _support_handle(body, patch, check_cancelled)
     if support is None:
         return False
     result: bool = _by_geometry(
         "_sphere_is_recognisable",
         body,
         support,
-        lambda: _sphere_is_recognisable_measured(body, fit, patch, support, check_cancelled),
+        lambda: _sphere_is_recognisable_measured(body, fit, patch, support.read(), check_cancelled),
         fit,
     )
     return result
@@ -6885,7 +6927,7 @@ def _fit_cylinder_read(
     check_cancelled: Callable[[], None] | None = None,
 ) -> CylinderFit | None:
     """Der Rumpf von :func:`fit_cylinder` — die Antwort merkt sich die Hülle."""
-    support = _surface_support(body, patch, check_cancelled)
+    support = _support_handle(body, patch, check_cancelled)
     if support is None:
         return None
     tolerance = max(weld_tolerance(float(np.linalg.norm(body.extents))), ROUND_WALL_TOLERANCE)
@@ -6893,7 +6935,7 @@ def _fit_cylinder_read(
         "fit_cylinder",
         body,
         support,
-        lambda: _fit_cylinder_measured(body, patch, support, tolerance, check_cancelled),
+        lambda: _fit_cylinder_measured(body, patch, support.read(), tolerance, check_cancelled),
         tolerance,
     )
     return result
@@ -7259,6 +7301,10 @@ class _SurfaceSupport(NamedTuple):
     directions: np.ndarray
     digest: bytes = b""
 
+    def read(self) -> _SurfaceSupport:
+        """Die Lesung selbst — sie ist es schon (Gegenstück zu :meth:`_SupportPrint.read`)."""
+        return self
+
 
 def _one_vertex_fan(
     points: np.ndarray,
@@ -7502,6 +7548,8 @@ SHARED_ANSWERS: Final[frozenset[str]] = frozenset(
         "has_own_body",
         "moved_twin",
         "voids",
+        "patch_print",
+        "rectangle_across",
     }
 )
 
@@ -7854,6 +7902,13 @@ GEOMETRY_KEYED_ANSWERS: Final[frozenset[str]] = frozenset(
     }
 )
 
+#: Die Fragen, die über die Körpergrenze unter dem Fleckabdruck antworten
+#: (RM-592, :func:`_patch_print`): der Abdruck der Stützpunktlesung und die
+#: tangentiale Trennung. Was eine davon vom Körper liest, steht an ihrer Stelle
+#: (:func:`_support_handle`, :func:`_tangential_pieces`); ihre Antwort ist ein
+#: Abdruck oder Lagen im Fleck, nie eine Dreiecksnummer.
+PRINT_KEYED_ANSWERS: Final[frozenset[str]] = frozenset({"support_digest", "tangential_pieces"})
+
 #: Die Antworten über die Körpergrenze, je Frage unter ihrem Inhaltsschlüssel.
 #: Dieselbe Grenze wie jede kleine Frage (:data:`CACHE_LIMIT_PER_QUESTION`),
 #: und dieselbe Lebensdauer wie :func:`remembered`: Eine Antwort gehört den
@@ -7868,7 +7923,7 @@ _GEOMETRY_HOLDERS: dict[tuple[str, bytes], int] = {}
 def _by_geometry(
     name: str,
     body: trimesh.Trimesh,
-    support: _SurfaceSupport,
+    support: _SurfaceSupport | _SupportPrint,
     compute: Callable[[], Any],
     *read: Any,
 ) -> Any:
@@ -7883,9 +7938,21 @@ def _by_geometry(
     Normale unterscheidet, sind zwei Fragen. Was :data:`GEOMETRY_KEYED_ANSWERS`
     für eine Frage verlangt, steht dort. Gerechnet wird außerhalb des
     Schlosses, wie in :func:`remembered`. ``body`` bestimmt nur, wer die
-    Antwort mithält (:attr:`_Lineage.geometric`).
+    Antwort mithält (:attr:`_Lineage.geometric`). ``support`` darf ein
+    Fleckabdruck sein (:class:`_SupportPrint`): Der Schlüssel braucht nur den
+    Abdruck der Lesung, die Rechnung liest sie erst, wenn sie rechnet.
     """
-    key = _geometry_key(support, *read)
+    if not _ACROSS_BODIES[0]:
+        return compute()
+    return _across(name, body, _geometry_key(support, *read), compute)
+
+
+def _across(name: str, body: trimesh.Trimesh, key: bytes, compute: Callable[[], Any]) -> Any:
+    """Die Ablage über die Körpergrenze unter einem fertigen Schlüssel (:func:`_by_geometry`).
+
+    Gerechnet wird außerhalb des Schlosses; ein Abbruch in ``compute`` legt
+    nichts ab. ``body`` hält die Antwort mit (:attr:`_Lineage.geometric`).
+    """
     with _MEMORY_LOCK:
         lineage = _memory_of(body).lineage
         answers = _BY_GEOMETRY.setdefault(name, OrderedDict())
@@ -7894,17 +7961,55 @@ def _by_geometry(
             _held_geometric(lineage, name, key)
             return answers[key]
     value = compute()
+    _keep_across(name, body, key, value)
+    return value
+
+
+def _keep_across(name: str, body: trimesh.Trimesh, key: bytes, value: Any) -> None:
+    """Eine fertige Antwort über die Körpergrenze ablegen, gehalten von ``body``."""
     with _MEMORY_LOCK:
+        lineage = _memory_of(body).lineage
         answers = _BY_GEOMETRY.setdefault(name, OrderedDict())
         answers[key] = value
         answers.move_to_end(key)
         _held_geometric(lineage, name, key)
         while len(answers) > CACHE_LIMIT_PER_QUESTION:
             answers.popitem(last=False)
-    return value
 
 
-def _geometry_key(support: _SurfaceSupport, *read: Any) -> bytes:
+def _known_across(name: str, body: trimesh.Trimesh, key: bytes) -> Any:
+    """Die abgelegte Antwort über die Körpergrenze — oder :data:`_UNKNOWN`, ohne zu rechnen."""
+    if not _ACROSS_BODIES[0]:
+        return _UNKNOWN
+    with _MEMORY_LOCK:
+        answers = _BY_GEOMETRY.get(name)
+        if answers is None or key not in answers:
+            return _UNKNOWN
+        answers.move_to_end(key)
+        _held_geometric(_memory_of(body).lineage, name, key)
+        return answers[key]
+
+
+#: Ob Fragen über die Körpergrenze antworten (RM-261, RM-592). Abschalten kann
+#: es nur der Testhaken :func:`remember_across_bodies` — für Messbank und Suite,
+#: kein Schalter für Kunden (Konzept §9.4).
+_ACROSS_BODIES: list[bool] = [True]
+
+
+def remember_across_bodies(enabled: bool) -> bool:
+    """Testhaken: das Gedächtnis über die Körpergrenze an- oder abschalten.
+
+    Abgeschaltet rechnet jede Frage an jedem Körper neu, wie die Vollerkennung
+    ohne Merker — die Gegenseite, gegen die Messbank und Suite Bit für Bit
+    vergleichen. Zurück kommt der vorige Zustand.
+    """
+    with _MEMORY_LOCK:
+        before = _ACROSS_BODIES[0]
+        _ACROSS_BODIES[0] = bool(enabled)
+    return before
+
+
+def _geometry_key(support: _SurfaceSupport | _SupportPrint, *read: Any) -> bytes:
     """Der Schlüssel von :func:`_by_geometry`: Lesung, was die Frage sonst liest, Löserbudgets."""
     return hashlib.blake2b(
         support.digest + _exact_bytes((read, ROUND_FIT_EVALUATIONS, FIT_SOLVER_POINTS)),
@@ -7912,8 +8017,10 @@ def _geometry_key(support: _SurfaceSupport, *read: Any) -> bytes:
     ).digest()
 
 
-def _answered_by_geometry(name: str, support: _SurfaceSupport, *read: Any) -> bool:
+def _answered_by_geometry(name: str, support: _SurfaceSupport | _SupportPrint, *read: Any) -> bool:
     """Ob :func:`_by_geometry` diese Frage an dieser Lesung schon beantwortet hat, ohne Rechnung."""
+    if not _ACROSS_BODIES[0]:
+        return False
     key = _geometry_key(support, *read)
     with _MEMORY_LOCK:
         answers = _BY_GEOMETRY.get(name)
@@ -7998,7 +8105,7 @@ def _surface_support(
     if screened is not None and screened.body is body:
         known = screened.supports.get(_patch_key(patch))
         if known is not None:
-            return known
+            return known.read()
     support: _SurfaceSupport | None = remembered(
         "support",
         body,
@@ -8007,6 +8114,190 @@ def _surface_support(
         check_cancelled=check_cancelled,
     )
     return support
+
+
+class _SupportPrint:
+    """Eine Stützpunktlesung, von der nur ihr Abdruck feststeht (RM-592, Konzept §5.2, G1).
+
+    Hat ein früherer Körper denselben Fleck gelesen — derselbe Fleckabdruck
+    (:func:`_patch_print`) und dieselben Körperzahlen —, ist die Lesung Bit für
+    Bit dieselbe, also auch ihr Abdruck (``digest``). Der reicht als Schlüssel
+    jeder Frage über die Körpergrenze (:func:`_by_geometry`); die Felder liest
+    erst, wer wirklich rechnet (:meth:`read`), und dann einmal.
+    """
+
+    __slots__ = ("_body", "_check_cancelled", "_patch", "_support", "digest")
+
+    def __init__(
+        self,
+        body: trimesh.Trimesh,
+        patch: list[int],
+        digest: bytes,
+        check_cancelled: Callable[[], None] | None,
+    ) -> None:
+        self._body = body
+        self._patch = patch
+        self.digest = digest
+        self._check_cancelled = check_cancelled
+        self._support: _SurfaceSupport | None = None
+
+    def read(self) -> _SurfaceSupport:
+        """Die Lesung selbst — am selben Körper aus seinem Merker (:func:`_surface_support`)."""
+        if self._support is None:
+            support = _surface_support(self._body, self._patch, self._check_cancelled)
+            if support is None:
+                from app.core.errors import InternalError
+
+                raise InternalError(detail="a remembered surface reading vanished")
+            self._support = support
+        return self._support
+
+
+#: Unter diesem Namen hält :func:`_across` je Fleckabdruck und Körperzahlen den
+#: Abdruck der Lesung — ``None``, wo die Lesung nichts ergab.
+_SUPPORT_DIGEST: Final = "support_digest"
+
+
+def _support_handle(
+    body: trimesh.Trimesh,
+    patch: list[int],
+    check_cancelled: Callable[[], None] | None = None,
+) -> _SurfaceSupport | _SupportPrint | None:
+    """Die Lesung eines Flecks für eine Frage über die Körpergrenze — gelesen nur, wenn nötig.
+
+    Dieselbe Antwort wie :func:`_surface_support`, nur kann sie ein Abdruck
+    sein (:class:`_SupportPrint`): Kennt das Gedächtnis den Fleckabdruck samt
+    Körperzahlen schon, steht der Abdruck der Lesung fest, ohne sie zu rechnen —
+    am Spiderman die Hälfte der Erkennung nach einem Schritt. ``None`` heißt
+    wie dort: keine Lesung.
+
+    **Was die Lesung vom Körper liest** (:func:`_read_surface_support`): die
+    Ecken, Normalen und Flächen der Dreiecke des Flecks, welche Ecken dieselben
+    sind und ihre Folge, die Kantennachbarn im Fleck (:func:`_fan_arcs`), den
+    Ursprung je Dreieck (:func:`_face_count`), ob das Netz dicht und gleich
+    umlaufend ist und ob es deckungsgleiche Ecken trägt — und deren Rang folgt
+    allein den Koordinaten (:func:`vertex_rank`). Normalen und Flächen rechnet
+    trimesh aus den Ecken; der Abdruck trägt die Ecken. Das sind
+    :func:`_patch_print` und die drei Körperzahlen hier.
+    """
+    if check_cancelled is not None:
+        check_cancelled()
+    if _face_count(body, patch) < MIN_PATCH_FACES:
+        return None
+    screened = _SCREENED.get()
+    if screened is not None and screened.body is body:
+        known = screened.supports.get(_patch_key(patch))
+        if known is not None:
+            return known
+    if not _ACROSS_BODIES[0]:
+        return _surface_support(body, patch, check_cancelled)
+    key = hashlib.blake2b(
+        _patch_print(body, patch)
+        + _body_numbers(
+            dicht=bool(body.is_watertight),
+            umlauf=bool(body.is_winding_consistent),
+            deckungsgleich=_coincident_vertices(body),
+        ),
+        digest_size=16,
+    ).digest()
+    digest = _known_across(_SUPPORT_DIGEST, body, key)
+    if digest is None:
+        return None
+    if digest is not _UNKNOWN:
+        return _SupportPrint(body, patch, digest, check_cancelled)
+    support = _surface_support(body, patch, check_cancelled)
+    _keep_across(_SUPPORT_DIGEST, body, key, None if support is None else support.digest)
+    return support
+
+
+#: Die Teile des Fleckabdrucks (Konzept §5.2), je mit seinem Namen. Die
+#: Messbank lässt für ihre Gegenprobe einen davon weg (``folge.py --weglassen``).
+PATCH_PRINT_PARTS: Final = ("ecken", "eckennummern", "ring", "ursprung")
+
+#: Die Körperzahlen, die eine Frage liest und die der Aufrufer mitgibt (§5.2).
+BODY_NUMBERS: Final = ("dicht", "umlauf", "deckungsgleich", "diagonale")
+
+
+def _body_numbers(**numbers: Any) -> bytes:
+    """Körperzahlen für einen Schlüssel, Bit für Bit und mit ihrem Namen."""
+    return _exact_bytes(
+        tuple((name, numbers[name]) for name in sorted(numbers) if name not in _LEFT_OUT)
+    )
+
+
+def _patch_print(body: trimesh.Trimesh, patch: Sequence[int]) -> bytes:
+    """Der Fleckabdruck (Konzept §5.2), einmal je Körper und Fleck gerechnet.
+
+    Ändert sich ein Dreieck im Fleck oder in seinem ersten Nachbarring, ändert
+    sich der Abdruck, und jede Frage an diesen Fleck rechnet.
+    """
+    printed: bytes = remembered(
+        "patch_print", body, patch, lambda: _print_of(_patch_print_parts(body, patch))
+    )
+    return printed
+
+
+def _print_of(parts: Sequence[tuple[str, bytes]]) -> bytes:
+    """Die Teile eines Fleckabdrucks als sechzehn Bytes, jedes mit Namen und Länge."""
+    digest = hashlib.blake2b(digest_size=16)
+    for name, data in parts:
+        digest.update(name.encode("ascii"))
+        digest.update(len(data).to_bytes(8, "little"))
+        digest.update(data)
+    return digest.digest()
+
+
+def _patch_print_parts(body: trimesh.Trimesh, patch: Sequence[int]) -> list[tuple[str, bytes]]:
+    """Was eine Frage an einen Fleck vom Körper liest, als Bytes ohne Arithmetik.
+
+    1. ``ecken``: die Ecken seiner Dreiecke in Fleckfolge und Eckenfolge;
+    2. ``eckennummern``: welche Ecken dieselben sind, nummeriert in der Folge
+       ihrer Nummern im Körper (``np.unique``, wie die Lesung sie ordnet) —
+       darüber auch, welche Kanten zwei Dreiecke teilen und in welcher Folge
+       die Kanten des Flecks stehen (``face_adjacency`` ordnet nach Ecken);
+    3. ``ring``: je Dreieck seine Kantennachbarn — die Lage im Fleck, sonst
+       „außen“; eine Kante ohne Nachbarn (offen oder mit drei Dreiecken) trägt
+       keinen;
+    4. ``ursprung``: welche Dreiecke vor *Kanten verfeinern* eines waren.
+
+    Nicht darin steht die Folge der Dreiecksnummern: Lesung und Trennung lesen
+    den Fleck in seiner Folge und in der Ordnung des Körpers, nie nach Nummern
+    (:func:`_tangential_cylinders`, RM-210).
+    """
+    index = np.asarray(patch, dtype=np.int64)
+    faces = np.asarray(body.faces, dtype=np.int64)[index]
+    corners = np.asarray(body.vertices, dtype=np.float64)[faces]
+    _used, local = np.unique(faces.ravel(), return_inverse=True)
+    order = np.argsort(index, kind="stable")
+    parts = [
+        ("ecken", np.ascontiguousarray(corners).tobytes()),
+        ("eckennummern", np.asarray(local, dtype=np.int64).tobytes()),
+    ]
+    neighbours, _pair_rows = _neighbour_index(body)
+    if len(index) and neighbours.shape[1]:
+        ranked = index[order]
+        around = neighbours[index]
+        spot = np.minimum(np.searchsorted(ranked, np.maximum(around, 0)), len(index) - 1)
+        inside = (around >= 0) & (ranked[spot] == around)
+        place = np.where(inside, order[spot], np.where(around >= 0, -1, -2))
+        place = -np.sort(-place, axis=1)
+        width = int((place > -2).sum(axis=1).max())
+        parts.append(("ring", np.ascontiguousarray(place[:, :width]).tobytes()))
+    else:
+        parts.append(("ring", b""))
+    units = refined_units(body)
+    if units is not None:
+        own_units = units[index]
+        kept = own_units >= 0
+        pattern = np.full(len(index), -1, dtype=np.int64)
+        if kept.any():
+            pattern[kept] = np.unique(own_units[kept], return_inverse=True)[1]
+        parts.append(("ursprung", pattern.tobytes()))
+    return [(name, data) for name, data in parts if name not in _LEFT_OUT]
+
+
+#: Die Teile, die die Gegenprobe der Messbank weglässt — im Betrieb immer leer.
+_LEFT_OUT: set[str] = set()
 
 
 def _coincident_vertices(body: trimesh.Trimesh) -> bool:
@@ -8519,12 +8810,13 @@ class _Screened:
     beim Kegel dazu die Linientoleranz), ``supports`` und ``shapes`` nach dem
     Abdruck der Dreiecksliste (:func:`_patch_key`) — für ``body`` und nur für
     ihn. Die Lesungen hält der Stapel ohnehin, solange die Runde läuft: Jeder
-    Plan trägt die seine.
+    Plan trägt die seine. Wo das Gedächtnis jede Frage an einen Fleck schon
+    beantwortet hat, steht statt der Lesung nur ihr Abdruck (:class:`_SupportPrint`).
     """
 
     body: trimesh.Trimesh
     fits: dict[tuple[Any, ...], tuple[Any, bool]]
-    supports: dict[bytes, _SurfaceSupport]
+    supports: dict[bytes, _SurfaceSupport | _SupportPrint]
     shapes: dict[bytes, tuple[Any, ...] | None]
 
 
@@ -8579,7 +8871,7 @@ def _screened_fits(
     planning = share.part(0.0, 0.5)
     solving = share.part(0.5, 1.0)
     entries: dict[tuple[Any, ...], tuple[Any, bool]] = {}
-    supports: dict[bytes, _SurfaceSupport] = {}
+    supports: dict[bytes, _SurfaceSupport | _SupportPrint] = {}
     rigid: dict[bytes, tuple[Any, ...] | None] = {}
     asked: list[tuple[tuple[Any, ...], refine.Problem]] = []
     seen = None if shapes is None else set(shapes)
@@ -8589,7 +8881,7 @@ def _screened_fits(
         weight = _fit_weight(patch)
         if check_cancelled is not None:
             check_cancelled()
-        support = _surface_support(body, patch, check_cancelled)
+        support = _support_handle(body, patch, check_cancelled)
         if support is not None and seen is not None:
             # Die Klassifikation fragt zuerst den vollständigen Zylindernachweis.
             # Für einen belegten Zylinder wird daher auch kein konkurrierender
@@ -8618,13 +8910,13 @@ def _screened_fits(
                     seen.add(shape)
                 key: tuple[Any, ...] = ("fit_cone", support.digest, tolerance)
                 if key not in entries and not _answered_by_geometry("fit_cone", support, tolerance):
-                    cone = _cone_plan(support, tolerance, check_cancelled)
+                    cone = _cone_plan(support.read(), tolerance, check_cancelled)
                     entries[key] = (cone, False)
                     if cone is not None:
                         asked.append((key, cone.problem()))
             key = ("fit_torus", support.digest)
             if key not in entries and not _answered_by_geometry("fit_torus", support):
-                ring = _torus_plan(support)
+                ring = _torus_plan(support.read())
                 entries[key] = (ring, False)
                 if ring is not None:
                     asked.append((key, ring.problem()))
@@ -8709,7 +9001,7 @@ def _fit_cone_read(
     check_cancelled: Callable[[], None] | None = None,
 ) -> ConeFit | None:
     """Der Rumpf von :func:`fit_cone` — die Antwort merkt sich die Hülle."""
-    support = _surface_support(body, patch, check_cancelled)
+    support = _support_handle(body, patch, check_cancelled)
     if support is None:
         return None
     # Eine gerade Naht zweier Mantelfacetten ist nur dann eine zusätzliche
@@ -8720,7 +9012,7 @@ def _fit_cone_read(
         "fit_cone",
         body,
         support,
-        lambda: _fit_cone_measured(support, line_tolerance, check_cancelled),
+        lambda: _fit_cone_measured(support.read(), line_tolerance, check_cancelled),
         line_tolerance,
     )
     return result
@@ -9112,11 +9404,11 @@ def _fit_sphere_read(
     check_cancelled: Callable[[], None] | None = None,
 ) -> SphereFit | None:
     """Der Rumpf von :func:`fit_sphere` — die Antwort merkt sich die Hülle."""
-    support = _surface_support(body, patch, check_cancelled)
+    support = _support_handle(body, patch, check_cancelled)
     if support is None:
         return None
     result: SphereFit | None = _by_geometry(
-        "fit_sphere", body, support, lambda: _fit_sphere_measured(support, check_cancelled)
+        "fit_sphere", body, support, lambda: _fit_sphere_measured(support.read(), check_cancelled)
     )
     return result
 
@@ -9203,11 +9495,11 @@ def _fit_torus_read(
     check_cancelled: Callable[[], None] | None = None,
 ) -> TorusFit | None:
     """Der Rumpf von :func:`fit_torus` — die Antwort merkt sich die Hülle."""
-    support = _surface_support(body, patch, check_cancelled)
+    support = _support_handle(body, patch, check_cancelled)
     if support is None:
         return None
     result: TorusFit | None = _by_geometry(
-        "fit_torus", body, support, lambda: _fit_torus_measured(support, check_cancelled)
+        "fit_torus", body, support, lambda: _fit_torus_measured(support.read(), check_cancelled)
     )
     return result
 
@@ -9475,7 +9767,7 @@ def _torus_is_recognisable_read(
     check_cancelled: Callable[[], None] | None = None,
 ) -> bool:
     """Der Rumpf von :func:`_torus_is_recognisable` — die Antwort merkt sich die Hülle."""
-    support = _surface_support(body, patch, check_cancelled)
+    support = _support_handle(body, patch, check_cancelled)
     if support is None:
         return False
     weld = weld_tolerance(float(np.linalg.norm(body.extents)))
@@ -9483,7 +9775,9 @@ def _torus_is_recognisable_read(
         "_torus_is_recognisable",
         body,
         support,
-        lambda: _torus_is_recognisable_measured(body, fit, patch, support, weld, check_cancelled),
+        lambda: _torus_is_recognisable_measured(
+            body, fit, patch, support.read(), weld, check_cancelled
+        ),
         fit,
         weld,
     )
@@ -9621,7 +9915,7 @@ def _cone_is_recognisable_read(
     Ohne Lesung ist kein Kegel belegt (:func:`_cone_vertices_are_consistent`
     fragt sie zuletzt und sagt dann nein).
     """
-    support = _surface_support(body, patch, check_cancelled)
+    support = _support_handle(body, patch, check_cancelled)
     if support is None:
         return False
     tolerance = max(weld_tolerance(float(np.linalg.norm(body.extents))), ROUND_WALL_TOLERANCE)
@@ -11096,6 +11390,102 @@ def _tangential_pieces(
     patch: Sequence[int],
     check_cancelled: Callable[[], None] | None = None,
 ) -> list[list[int]]:
+    """Die tangentiale Trennung eines Ziels — auch aus dem Gedächtnis eines früheren Körpers.
+
+    **Gemerkt über die Körpergrenze** (RM-592, Konzept §5.4, G3): Nach einem
+    Schritt fragt die sechste Runde dieselben unberührten Ziele noch einmal —
+    am Eiffelturm 8,4 s der Erkennung. Geschlüsselt nach dem Fleckabdruck
+    (:func:`_patch_print`), der Körperdiagonale, aus der die Rechnung
+    Verschweißtoleranz und Größengrenze nimmt, und den Schwellen der Trennung
+    (:func:`_tangential_settings`). Die Stücke stehen als Lagen im Ziel, wie
+    der Aufrufer es reicht, nie als Dreiecksnummern.
+
+    Die Hülle des Körpers steht nicht im Schlüssel: Was die Rechnung
+    :func:`cylinder_fits_in_the_body` fragte, wird am neuen Körper noch einmal
+    gefragt, und nur wenn jede Antwort gleich ausfällt, gilt die gemerkte.
+    Liest die Rechnung über den Ring hinaus — schließt :func:`_without_notches`
+    eine Kerbe mit Dreiecken außerhalb —, wird nichts gemerkt.
+    """
+    if not _ACROSS_BODIES[0]:
+        return _tangential_pieces_read(body, mesh, patch, check_cancelled)
+    extents = np.asarray(body.extents, dtype=float)
+    diagonal = math.sqrt(float((extents * extents).sum()))
+    key = hashlib.blake2b(
+        _patch_print(body, patch)
+        + _body_numbers(diagonale=diagonal)
+        + _exact_bytes(_tangential_settings()),
+        digest_size=16,
+    ).digest()
+    given = np.asarray(list(patch), dtype=np.int64)
+    known = _known_across(_TANGENTIAL, body, key)
+    if known is not _UNKNOWN:
+        places, asked = known
+        if "rueckfrage" in _LEFT_OUT or all(
+            _cylinder_fits(mesh, axis, radius) == answer for axis, radius, answer in asked
+        ):
+            return [given[place].tolist() for place in places]
+    questions: list[tuple[tuple[float, ...], float, bool]] = []
+    beyond: list[bool] = []
+    asking = _HULL_QUESTIONS.set(questions)
+    reading = _BEYOND.set(beyond)
+    try:
+        pieces = _tangential_pieces_read(body, mesh, patch, check_cancelled)
+    finally:
+        _HULL_QUESTIONS.reset(asking)
+        _BEYOND.reset(reading)
+    if beyond or len(np.unique(given)) != len(given):
+        return pieces
+    order = np.argsort(given, kind="stable")
+    ranked = given[order]
+    places = []
+    for piece in pieces:
+        wanted = np.asarray(piece, dtype=np.int64)
+        spot = np.minimum(np.searchsorted(ranked, wanted), len(ranked) - 1)
+        if not np.array_equal(ranked[spot], wanted):
+            # Ein Stück außerhalb des Ziels hat keine Lage im Fleck.
+            return pieces
+        places.append(order[spot].astype(np.int32))
+    _keep_across(_TANGENTIAL, body, key, (tuple(places), tuple(questions)))
+    return pieces
+
+
+#: Unter diesem Namen hält :func:`_across` die tangentialen Trennungen.
+_TANGENTIAL: Final = "tangential_pieces"
+
+#: Ob eine Rechnung über die Körpergrenze über den ersten Nachbarring hinaus
+#: liest (:func:`_without_notches`) — dann merkt sie sich nichts.
+_BEYOND: ContextVar[list[bool] | None] = ContextVar("solidon_reads_beyond", default=None)
+
+
+def _tangential_settings() -> tuple[Any, ...]:
+    """Die Schwellen, die die tangentiale Trennung liest — im Schlüssel, weil Tests sie drehen."""
+    return (
+        MIN_PATCH_FACES,
+        MIN_ROUND_ARC,
+        UPRIGHT_TO_AXIS,
+        FLAT_ANGLE,
+        CURVATURE_LIMIT,
+        ROUND_WALL_TOLERANCE,
+        TANGENTIAL_MIN_LENGTH,
+        TANGENTIAL_FIRST_SEEDS,
+        TANGENTIAL_FUTILE_SEEDS,
+        EPS_GEOM,
+        EPS_ANGLE,
+        MIN_SURFACE_WIDTH,
+        MIN_CYLINDER_DIAMETER,
+        NOTCH_AT_MOST,
+        _SEED_REACH,
+        _SHARPEN_STEPS,
+        _SHARPEN_TILT,
+    )
+
+
+def _tangential_pieces_read(
+    body: trimesh.Trimesh,
+    mesh: MeshData,
+    patch: Sequence[int],
+    check_cancelled: Callable[[], None] | None = None,
+) -> list[list[int]]:
     """Die Stücke eines tangentialen Verbunds aus Rundungen (RM-226) — oder nichts.
 
     Gefragt wird nur für ein Stück, auf das keine Form passt und das weder
@@ -11128,11 +11518,7 @@ def _tangential_pieces(
     taken = np.zeros(len(body.faces), dtype=bool)
     for piece in cylinders:
         taken[np.asarray(piece, dtype=np.intp)] = True
-    rest = [
-        int(index)
-        for index in np.unique(np.asarray(list(patch), dtype=np.intp))
-        if not taken[index]
-    ]
+    rest = [index for index in dict.fromkeys(int(index) for index in patch) if not taken[index]]
     remainder = _connected_patches(body, rest, check_cancelled) if rest else []
     return in_body_order(body, [*cylinders, *remainder])
 
@@ -11327,8 +11713,7 @@ def _tangential_cylinders(
     member[indices] = True
     # Die Nähte des Flecks über den Nachbarindex des Körpers, nicht über alle
     # Paare des Netzes: Ein Durchgang über ``face_adjacency`` je Fleck wäre bei
-    # vielen Flecken ein Ganznetz-Durchlauf je Fleck. Jede Naht einmal, von
-    # ihrem Dreieck mit der kleineren Nummer aus gesehen.
+    # vielen Flecken ein Ganznetz-Durchlauf je Fleck. Jede Naht einmal.
     neighbours, rows = _neighbour_index(body)
     if not neighbours.shape[1]:
         return []
@@ -11341,7 +11726,19 @@ def _tangential_cylinders(
     if not bends.any():
         return []
     bending = rows_of_seams[bends]
-    sides = np.column_stack((own[inner][bends], beside[inner][bends]))
+    # **Die Ordnung des Körpers, nicht die der Datei** (RM-210, RM-592): Keime,
+    # Bänder und Stücke folgen dem Platz ihrer Dreiecke in :func:`in_body_order`,
+    # und jede Naht wird von ihrem Dreieck mit dem kleineren Platz aus gesehen.
+    # Nach der Dreiecksnummer summierten die Kreise der Keime in anderer Folge,
+    # sobald die Datei anders ordnete — andere letzte Stellen an den Schwellen
+    # der Trennung, und ein Gedächtnis je Fleck müsste die Folge mitschlüsseln.
+    # Deckungsgleiche Dreiecke ordnet :func:`in_body_order` nach ihrer Folge im
+    # Fleck, nicht nach ihrer Nummer.
+    place = np.zeros(count, dtype=np.int64)
+    in_order = in_body_order(body, [list(dict.fromkeys(int(index) for index in patch))])[0]
+    place[np.asarray(in_order, dtype=np.intp)] = np.arange(len(in_order))
+    pairs = np.column_stack((own[inner][bends], beside[inner][bends]))
+    sides = np.where((place[pairs[:, 0]] > place[pairs[:, 1]])[:, None], pairs[:, ::-1], pairs)
     vertices = np.asarray(body.vertices, dtype=float)
     faces = np.asarray(body.faces, dtype=np.intp)
     normals = np.asarray(body.face_normals, dtype=float)
@@ -11363,6 +11760,10 @@ def _tangential_cylinders(
     seams = np.asarray(body.face_adjacency_edges, dtype=np.intp)[bending]
     along_seam = vertices[seams[:, 1]] - vertices[seams[:, 0]]
     seam_lengths = np.sqrt((along_seam * along_seam).sum(axis=1))
+    # Gleich lange Nähte in der Folge ihrer Kanten, und die folgt den
+    # Eckennummern — wie die Nummern gleich großer Flächen (:func:`_largest_first`)
+    # nicht der Dreiecksfolge und nicht der Lage, also keine Wahl nach der
+    # Ordnung des Körpers (``kern.md``).
     order = np.lexsort((bending, -seam_lengths))
     order = order[carries_a_band[order]]
     extents = np.asarray(body.extents, dtype=float)
@@ -11407,7 +11808,8 @@ def _tangential_cylinders(
                 break
             front = around[accept(around)]
             taken.append(front)
-        return [int(triangle) for triangle in np.sort(np.concatenate(taken))]
+        merged = np.concatenate(taken)
+        return [int(triangle) for triangle in merged[np.argsort(place[merged], kind="stable")]]
 
     def upright_to(axis: np.ndarray) -> Callable[[np.ndarray], np.ndarray]:
         """Ob die Normale bis :data:`FLAT_ANGLE` quer zur Achse steht."""
@@ -12546,7 +12948,27 @@ def _connected_patches(
         lambda: _connected_patches_read(body, faces, check_cancelled),
         check_cancelled=check_cancelled,
     )
+    beyond = _BEYOND.get()
+    if beyond is not None and getattr(result, "beyond", False):
+        beyond.append(True)
     return result
+
+
+class _Patches(list[list[int]]):
+    """Flecken, die wissen, ob ihre Bildung über die gegebenen Dreiecke hinaus las.
+
+    ``beyond``: :func:`_without_notches` hat an einem fransigen Rand nach
+    freien Dreiecken gesucht — auch solchen außerhalb. Eine Rechnung über die
+    Körpergrenze, die solche Flecken bildet, merkt sich nichts (:data:`_BEYOND`);
+    die Angabe reist mit der gemerkten Antwort, damit auch ein Treffer im
+    Merker des Körpers sie sagt.
+    """
+
+    __slots__ = ("beyond",)
+
+    def __init__(self, patches: Iterable[list[int]], beyond: bool) -> None:
+        super().__init__(patches)
+        self.beyond = beyond
 
 
 def _connected_patches_read(
@@ -12608,7 +13030,7 @@ def _connected_patches_read(
     if check_cancelled is not None:
         check_cancelled()
     if not len(adjacency):
-        return in_body_order(body, [[index] for index in faces])
+        return _Patches(in_body_order(body, [[index] for index in faces]), beyond=False)
     if local is not None:
         # Der Zusammenhang in eigener, aufsteigender Nummerierung: Die Suche
         # legt sonst einen Graphen über alle Dreiecke des Netzes an. Die
@@ -12625,10 +13047,11 @@ def _connected_patches_read(
         )
     if check_cancelled is not None:
         check_cancelled()
-    closed = _without_notches(body, [group.tolist() for group in groups])
+    looked: list[bool] = []
+    closed = _without_notches(body, [group.tolist() for group in groups], looked=looked)
     if check_cancelled is not None:
         check_cancelled()
-    return in_body_order(body, closed)
+    return _Patches(in_body_order(body, closed), beyond=bool(looked))
 
 
 def in_body_order(body: trimesh.Trimesh, groups: Sequence[Sequence[int]]) -> list[list[int]]:
@@ -12935,7 +13358,11 @@ NOTCH_AT_MOST: Final = 2
 
 
 def _without_notches(
-    body: trimesh.Trimesh, patches: list[list[int]], *, belongs: np.ndarray | None = None
+    body: trimesh.Trimesh,
+    patches: list[list[int]],
+    *,
+    belongs: np.ndarray | None = None,
+    looked: list[bool] | None = None,
 ) -> list[list[int]]:
     """Fransige Ränder schließen, solange die Menge dafür frei, klein und eindeutig ist.
 
@@ -12968,6 +13395,9 @@ def _without_notches(
         if rim is None or not rim.frayed:
             healed.append(patch)
             continue
+        if looked is not None:
+            # Gesucht wird auch außerhalb der gegebenen Dreiecke (RM-592).
+            looked.append(True)
         candidates = sorted(
             face
             for face in _candidates_at(body, patch, rim.frayed)
