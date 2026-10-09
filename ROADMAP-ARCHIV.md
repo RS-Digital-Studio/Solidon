@@ -44514,8 +44514,9 @@ Zustand nach dem ersten Start an (`tests.helpers.first_start`).
 **Behoben:** `app/core/export/appimage.py` liest das Abbild als Datei — Typ-2-Laufzeit,
 SquashFS 4.0, gzip, xz und zstd aus der Standardbibliothek — und legt die Profile je Fassung im
 Nutzer-Cache ab; gestartet wird nichts (Regel 11). `slicer_profiles.install_root` fragt dort für
-jedes AppImage der Orca-Familie, der Fensterfaden wartet nie (`cura_linux.may_wait`). Unlesbare
-Abbilder lassen die Liste leer wie bisher, der Druckdialog rät dann zum ersten Öffnen.
+jedes AppImage der Orca-Familie, der Fensterfaden wartet nie (`appimage.never_wait_in`).
+Unlesbare Abbilder lassen den mitgelieferten Bestand leer wie bisher, der Druckdialog rät dann
+zum ersten Öffnen.
 `first_start` ist entfernt; die Slicertests laufen auf frischen AppImages.
 
 **Nachweis (09.10.2026):** Lokal an den vier Fassungen der Slicerauswahl (OrcaSlicer 2.4.2,
@@ -44554,3 +44555,13 @@ der Kopie). Slicerauswahl 37879205882 (Cura) grün auf Linux, Apple Silicon und 
 unter Linux mit leerem Cache und ohne Prozessstart 9 944 Dateien in 1,19 s, Rechenmaschine
 erkannt (`test_real_slicers.py::test_curas_printers_are_read_from_its_appimage_without_starting_it`),
 der Würfel aus Curas AppImage gesliced. Changelog: nein, Cura als AppImage ist als Ganzes neu in 0.6.0.
+
+**Nach der Durchsicht (Review 1, 09.10.2026), für RM-549 und RM-599:** Ein beschädigter
+gzip-Block entkam als `zlib.error` und kostete die ganze Profilliste samt eigener Profile; jetzt
+übersetzt ein Entpacker für alle Kompressionen jeden Entpackfehler in ein unlesbares Abbild, die
+Absage gilt je Fassung bis *Neu suchen*, und kein Zwischenordner bleibt liegen. Die Kopie-Verwaltung
+war ein auseinandergelaufener Zwilling (Curas Merker nannte nach geleertem Cache einen gelöschten
+Ordner); beide nutzen jetzt `appimage.ImageCopies`. Die Grenzen greifen vor der Allokation (§32).
+Gegenprobe am Zweigstand `09c2941c8`: neun neue Fälle rot (`zlib.error`, Zwischenordner,
+34,6 MB Spitze bei 1 MiB Grenze, Curas Drucker fehlen nach dem Leeren), die übrigen über
+Mutationen; der Fensterfadentest wird mit eingebauter Sperre rot.

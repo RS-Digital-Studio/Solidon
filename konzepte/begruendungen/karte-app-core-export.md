@@ -483,13 +483,36 @@ byte-gleich mit dem Auszug von 7-Zip. Lesen aller Profile 0,2 s; die Kopie
 dauert unter Windows 6 bis 17 s, fast ganz im Anlegen der Dateien. Die
 Erhebung findet danach 997, 997, 491 und 202 Drucker.
 
-Die Kopie folgt Curas Muster (`stamp.json` mit Pfad, Änderungszeit, Größe und
-Fassung des Kopierers, Austausch über einen Zwischenordner, Räumen
-verschwundener AppImages); eine gelöschte Kopie wird neu angelegt, weil der
-Nutzer-Cache jederzeit geleert werden darf. Ist das Abbild unlesbar (andere
-Kompression, beschädigt), bleibt `install_root` leer wie zuvor; der
-Druckdialog rät dann, den Slicer einmal zu öffnen (`_profiles_found`), und
-danach gilt `system/`.
+Die Kopie folgte zuerst Curas Muster als Abschrift (`stamp.json` mit Pfad,
+Änderungszeit, Größe und Fassung des Kopierers, Austausch über einen
+Zwischenordner, Räumen verschwundener AppImages). Die Durchsicht fand den
+Zwilling schon auseinandergelaufen: Nur die Orca-Seite legte eine gelöschte
+Kopie neu an; Curas Merker nannte nach einem geleerten Nutzer-Cache den
+gelöschten Ordner weiter, und Curas Drucker fehlten bis zum Neustart, auch
+nach *Neu suchen*. Seitdem verwaltet `ImageCopies` beide Kopien; jeder Slicer
+bringt nur Cache-Ordner, Fassung und seinen Leser mit (`_fill_profiles`,
+`cura_linux._fill_printers`). Dort liegt auch `never_wait_in`, damit
+`cura_linux` `appimage` importiert und nicht umgekehrt.
+
+Ist das Abbild unlesbar (andere Kompression, beschädigt), bleibt
+`install_root` leer wie zuvor; die eigenen Profile bleiben in der Liste, ohne
+Profil rät der Druckdialog, den Slicer einmal zu öffnen (`_profiles_found`),
+und danach gilt `system/`. Bis zur Durchsicht übersetzte nur der xz- und der
+zstd-Zweig ihren Entpackfehler; ein gekipptes Bit in einem gzip-Block (Curas
+Kompression) entkam als `zlib.error`, kostete die ganze Profilliste, ließ
+einen Zwischenordner liegen und wurde bei jeder Frage neu gelesen. Jetzt
+übersetzt ein Entpacker für alle Kompressionen (`_inflater`), und die Kopie
+räumt ihren Zwischenordner auch bei einem unerwarteten Abbruch. Die Grenzen
+greifen vor der Allokation (§32): `read` prüft die angegebene Dateigröße vor
+dem ersten Block (eine Lücke kostet im Abbild vier Byte und entpackt einen
+ganzen Block; gemessen: 16 MiB Lückendatei bei 1 MiB Grenze belegten vorher
+34,6 MB), `entries` eine Verzeichnisgröße über `MAX_LISTING`, und der
+xz-/lzma-Entpacker bekommt höchstens `MAX_INFLATER_MEMORY`.
+
+Unter Windows verweigerte das Umbenennen des fertigen Zwischenordners in
+der Testsuite gelegentlich mit `WinError 5`, weil ein Scanner die frisch
+geschriebenen Dateien kurz offen hält (zwei von vier Läufen der Testdatei);
+`_rename` versucht es fünfmal im Abstand von 0,1 s.
 
 ## Curas Jerk-Steuerung
 

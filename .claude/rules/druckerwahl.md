@@ -93,12 +93,17 @@ Rechenmaschine da ist, liest `export/squashfs.py` aus dem Abbild; je Fassung
 liegt eine Kopie im Nutzer-Cache (`appimage.profiles`,
 `cura_linux.appimage_resources`) — kein `--appimage-extract`, kein Einhängen.
 Eingehängt wird nur, um Cura rechnen zu lassen. Sonst sähe ein Kunde, der den
-Slicer nie geöffnet hat, keinen Herstellerdrucker. Der Fensterfaden wartet nie
-auf die Kopie (`cura_linux.may_wait`), Arbeiter legen sie an. Alles aus dem
-Abbild ist fremde Eingabe: Längen gegen die Datei geprüft, Blöcke nur bis zur
-Blockgröße entpackt, Namen mit Trennern verworfen, Verknüpfungen nur innerhalb
-des Abbilds gefolgt. Ob das Paket gzip und zstd entpackt, prüft der Starttest
-unter Linux (`image_compressions`). Ist ein Orca-Abbild unlesbar, bleibt
-die Liste leer, der Druckdialog rät, den Slicer einmal zu öffnen, und danach
-gilt `system/`. Ein Slicertest simuliert keinen ersten Start; wer einen braucht,
+Slicer nie geöffnet hat, keinen Herstellerdrucker. Beide Kopien verwaltet
+`appimage.ImageCopies` — eine Stelle, weil die zwei Fassungen schon
+auseinanderliefen: Ein geleerter Cache wird neu gelesen, eine Absage gilt je
+Fassung bis *Neu suchen*, kein Zwischenordner bleibt liegen. Der Fensterfaden
+wartet nie auf die Kopie (`appimage.never_wait_in`), Arbeiter legen sie an.
+Alles aus dem Abbild ist fremde Eingabe: Längen gegen die Datei geprüft, Blöcke
+nur bis zur Blockgröße entpackt, Namen mit Trennern verworfen, Verknüpfungen
+nur innerhalb des Abbilds gefolgt, Größen vor dem Lesen begrenzt; was ein
+Entpacker als beschädigt meldet, ist ein unlesbares Abbild wie jeder andere
+Bruch. Ob das Paket gzip und zstd entpackt, prüft der Starttest
+unter Linux (`image_compressions`). Ist ein Orca-Abbild unlesbar, fehlt nur
+der mitgelieferte Bestand: Eigene Profile bleiben, ohne Profil rät der
+Druckdialog, den Slicer einmal zu öffnen, und danach gilt `system/`. Ein Slicertest simuliert keinen ersten Start; wer einen braucht,
 legt ihn im Test selbst an.
