@@ -356,9 +356,22 @@ Bahnbreite, die sein Überhang an der Wand nicht mitzählt). An der Schüssel in
 Drucklage (50°, 55°, 60°) und in Dateilage (55°) berührt keines der 4 bis 32
 Überhangstücke im Sperrraum ihn — auch nicht die Stücke an der Mündung, die
 unter dem Dach des Ausgusses hängen —, und ihr Sperrraum bleibt gleich
-(169 243, 186 704 und 53 009 mm³). Der Himmel über dem Saum entsteht je Säule
+(169 243, 186 704 und 53 009 mm³). Im Slicer, Vorschläge übernommen, Stützbahn
+unter dem Sims vorher und nachher, in Klammern der Slicer ohne Sperre:
+ElegooSlicer CC2 2,41 → 6,06 m (6,07), OrcaSlicer Kobra 2 2,62 → 4,35 m (4,35),
+PrusaSlicer MK4S 1,95 → 4,64 m (4,67), Cura SV06 2,57 → 4,40 m (4,40); im
+Tunnel in allen vier 0,0 m (ohne Sperre 2,2 bis 6,6 m). Die Schüssel in
+Drucklage behält in allen vier ihren Sperrkörper (gleiches Volumen) und 0,0 m
+Stütze im Wasserkanal, ihre Stützbahn ist dieselbe wie vorher; über den Korpus
+`F:\3D Dateien` (243 Körper) ändert sich kein Vorschlag und kein
+Sperrvolumen. Der Himmel über dem Saum entsteht je Säule
 einmal von oben nach unten (`_sky_above`); je Scheibe von unten gefragt, kostete
-der Becher jede Schicht über dem Sims einmal je Scheibe. Der
+der Becher jede Schicht über dem Sims einmal je Scheibe. Gekostet hat die
+Frage am Becher 0,08 → 0,17 s für den Sperrraum (Median aus acht Läufen im
+Wechsel, Wandzeit); an Schüssel, Drache und Eiffelturm, wo keine ausgesparte
+Säule im Umschlossenen steht, nichts — gefragt werden nur Säulen, die den
+Sperrraum schneiden, und die Schüssel in Dateilage wird damit schneller
+(5,6 → 2,9 s). Der
 Zuschlag einer Bahnbreite kommt vor dem Aussparen; ein Loch, in dem keine Bahn
 samt Abstand Platz hat, schließt sich (ein Krümel von 0,33 mm² im Kanal,
 ausgespart mit Zuschlag: 1,5 m Stütze im OrcaSlicer). Vorgeschlagen wird die
