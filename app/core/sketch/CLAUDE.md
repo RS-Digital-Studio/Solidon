@@ -87,10 +87,13 @@ reichen `ctx.cancelled` an `brep.features.features_of` weiter.
   (`_part_size`: Streuung aller Punkte, die er liest, gehaltene
   eingeschlossen, mindestens sein größter Längenrest — nie ein Nulltest),
   die dichte Rechnung höchstens `DENSE_FIRST_STEP`. So hängt der erste
-  Schritt weder am Nullpunkt noch an anderen Teilen; ein Teil ohne Spannung
-  bleibt, einer, der weiter als `FARTHEST_MOVE` liefe, auch. Im Zug rechnet
-  ein kleiner Teil über `dogbox` (kürzester Gauß-Newton-Schritt), nie über
-  `lsmr` und nie über dichtes TRF; `DRAG_STIFFNESS` ist dort die Box.
+  Schritt weder am Nullpunkt noch an anderen Teilen; ein Teil, der schon bis
+  `_TOL` gilt, bleibt, einer, der weiter als `FARTHEST_MOVE` liefe oder
+  dessen Rest sich in `STALL_WINDOW` Auswertungen nicht halbiert, auch
+  (`_watchdog`). Ein kleiner Teil rechnet beim Lösen wie im Zug über
+  `dogbox` (kürzester Gauß-Newton-Schritt), nie über `lsmr` und nie über
+  dichtes TRF, das bei Unterbestimmtheit jeden Schritt auf den Rand setzt;
+  `DRAG_STIFFNESS` ist dort die Box.
 - **Der Löser rechnet über scipy mit BLAS und LAPACK** (SVD, `lstsq`,
   `lsmr`) — die Ausnahme von „kein BLAS" in `.claude/rules/kern.md`.
   Zugesagt ist dieselbe Lage bis `_TOL` an jedem Ort, gehalten von den
@@ -104,7 +107,9 @@ reichen `ctx.cancelled` an `brep.features.features_of` weiter.
   `SKETCH_SOLVER` samt Migration; die Fassung steht im Cache-Schlüssel jeder
   Skizze.
 - **Feste Punkte kosten die Zerlegung nichts** (`_matrix_rank` schält
-  Einerzeilen dünn ab, `_solve` gibt die `csr_matrix`) und zählen nicht ins
+  Einerzeilen dünn ab, `_solve` gibt die `csr_matrix`; der Rest zerlegt
+  sich in getrennten Blöcken mit der Schranke der ganzen Matrix,
+  `_blockwise_rank`) und zählen nicht ins
   Budget der dichten Matrix (`MAX_JACOBIAN_BYTES`), das sonst alle dichten
   Zeilen samt Kreis-Eichzeilen zählt; `_losses` macht im Fehlerfall alles dicht
   und prüft dasselbe Budget.

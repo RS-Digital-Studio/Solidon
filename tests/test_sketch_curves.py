@@ -1153,6 +1153,53 @@ def test_a_line_and_an_arc_cannot_share_their_curvature_and_it_says_which() -> N
     assert {caught.value.first, caught.value.second} == {1, 2}
 
 
+def test_a_curvature_that_cannot_hold_stops_early_in_a_long_chain(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Derselbe Widerspruch am Ende einer Kette aus zwanzig bemaßten Linien:
+    Der Löser hört auf, wenn der Rest nicht mehr fällt (RM-541).
+
+    Die Kette rechnet über ``lsmr``, und der Lauf kroch bis zur Vorgabe von
+    scipy, hundert Auswertungen je Unbekannte — an vierzig Linien 16 600
+    Auswertungen und 143 Sekunden im Qt-Hauptthread, von 0,0256 auf 0,0246
+    Rest. Gezählt wird die Arbeit; genannt wird die Krümmung.
+    """
+    count = 20
+    elements = [
+        SketchElement("line", ((i * 5.0, 0.2 * (i % 2)), (i * 5.0 + 5.0, 0.2 * ((i + 1) % 2))))
+        for i in range(count)
+    ]
+    end = (count * 5.0, 0.0)
+    elements.append(SketchElement("arc", ((end[0], 10.0), end, (end[0] + 10.0, 10.0))))
+    arc = 2 * count
+    line = 2 * (count - 1)
+    constraints = [
+        *(SketchConstraint("coincident", (2 * i + 1, 2 * i + 2)) for i in range(count - 1)),
+        *(SketchConstraint("distance", (2 * i, 2 * i + 1), "5") for i in range(count)),
+        SketchConstraint("coincident", (2 * count - 1, arc + 1)),
+        SketchConstraint("smooth", (2 * count - 1, line, arc + 1, arc)),
+        SketchConstraint("curvature", (2 * count - 1, line, arc + 1, arc)),
+        SketchConstraint("fixed", (0,)),
+    ]
+    sketch = Sketch(plane="plane:xy", elements=tuple(elements), constraints=tuple(constraints))
+    points = sum(len(element.points) for element in elements)
+    assert 2 * points > solver.EXACT_UP_TO, "die Kette rechnet über lsmr"
+    evaluations: list[int] = []
+    real = solver.least_squares
+
+    def counted(*args: object, **kwargs: object) -> object:
+        result = real(*args, **kwargs)  # type: ignore[arg-type]
+        evaluations.append(int(result.nfev))
+        return result
+
+    monkeypatch.setattr(solver, "least_squares", counted)
+    with pytest.raises(SketchConflictError) as caught:
+        solve_sketch(sketch)
+
+    assert sum(evaluations) <= 3 * solver.STALL_WINDOW, evaluations
+    assert len(constraints) - 2 in {caught.value.first, caught.value.second}, "die Krümmung"
+
+
 def test_curvature_belongs_to_the_end_of_a_spline() -> None:
     """Innen ist ein Catmull-Rom-Spline nur tangentenstetig — links und rechts
     eines Stützpunkts haben verschiedene Krümmung, also gibt es dort keine."""

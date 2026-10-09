@@ -1559,16 +1559,28 @@ def _jacobian(equations: Sequence[_Equation], x: np.ndarray) -> csr_matrix:
 #: Teil bleibt dann, wo er war, und die Prüfung danach nennt den Widerspruch.
 FARTHEST_MOVE: Final[float] = 100_000.0
 
-#: Wie weit der erste Schritt einer **dichten** Rechnung höchstens reicht, in
+#: In wie vielen Auswertungen sich der Rest eines Laufs beim Lösen
+#: mindestens halbieren muss, sonst hört er auf (:func:`_watchdog`).
+#:
+#: Ein Widerspruch in einem großen Teil lief bis zur Vorgabe von scipy,
+#: hundert Auswertungen je Unbekannte: Eine Kette aus vierzig Linien, deren
+#: Ende ein Bogen mit gleicher Krümmung fortsetzen soll, kroch 16 600
+#: Auswertungen lang von 0,0256 auf 0,0246 Rest — 143 Sekunden im
+#: Qt-Hauptthread. Gelöste Läufe des Korpus brauchen höchstens elf
+#: Auswertungen; der langsamste Lauf überhaupt (ein Bogen, der ins
+#: Unendliche kriecht) halbiert seinen Rest in hundert noch, schlechtestes
+#: Verhältnis 0,375. Der Zug hat eigene Grenzen darunter.
+STALL_WINDOW: Final = 100
+
+#: Wie weit der erste Schritt beim **dichten** Lösen höchstens reicht, in
 #: Millimetern — kleiner, wenn der Teil kleiner ist (:func:`_solve_part`).
 #:
-#: Eine unterbestimmte Skizze hat einen Jacobi-Rang unter ihren Unbekannten,
-#: und dort setzt TRF jeden Schritt auf den Rand des Vertrauensbereichs. Mit
-#: der Streuung des Teils als Radius war der erste Schritt so groß wie die
-#: Zeichnung: Zwei Splines mit gleicher Krümmung trafen sich danach mit
-#: entgegengesetzter Tangente, eine Spitze statt eines Übergangs. Ein
-#: Millimeter ist der Schritt, mit dem scipy ab null beginnt; die dichte
-#: Rechnung kostet je Schritt Mikrosekunden und wächst von dort in Stufen.
+#: Ein erster Schritt so groß wie die Zeichnung sprang über die nächste
+#: Lösung: Zwei Splines mit gleicher Krümmung trafen sich danach mit
+#: entgegengesetzter Tangente, eine Spitze statt eines Übergangs. ``dogbox``
+#: nimmt den kürzesten Gauß-Newton-Schritt, solange er in die Box passt; ein
+#: Millimeter ist der Schritt, mit dem scipy ab null beginnt, und die Box
+#: wächst von dort in Stufen.
 DENSE_FIRST_STEP: Final[float] = 1.0
 
 
@@ -1670,6 +1682,33 @@ def _part_size(part: _Part, solution: np.ndarray, weight: np.ndarray, rest: np.n
     return max(_spread(solution[part.read], weight[part.read]), longest)
 
 
+def _watchdog() -> Callable[[Any], None]:
+    """Hält einen Lauf an, der ins Weite läuft oder nicht mehr vorankommt.
+
+    Weiter als :data:`FARTHEST_MOVE` ist keine Lösung (der Teil bleibt danach
+    stehen), und ein Rest, der sich in :data:`STALL_WINDOW` Auswertungen
+    nicht halbiert, wird nicht mehr null: Was bleibt, ist ein Widerspruch,
+    und die Prüfung nach dem Lauf nennt ihn. scipy ruft das je Schritt mit
+    dem Stand (``nfev``, ``cost``, ``x``); ``StopIteration`` beendet den Lauf
+    am letzten angenommenen Stand.
+    """
+    history: list[tuple[int, float]] = []
+
+    def watch(intermediate_result: Any) -> None:
+        if float(np.max(np.abs(intermediate_result.x))) > FARTHEST_MOVE:
+            raise StopIteration
+        count = int(intermediate_result.nfev)
+        cost = float(intermediate_result.cost)
+        history.append((count, cost))
+        while len(history) > 1 and history[1][0] <= count - STALL_WINDOW:
+            history.pop(0)
+        then, before = history[0]
+        if count - then >= STALL_WINDOW and cost > before / 2.0:
+            raise StopIteration
+
+    return watch
+
+
 def _solve_part(
     part: _Part,
     solution: np.ndarray,
@@ -1708,27 +1747,30 @@ def _solve_part(
     Linien warf die Linien so bis zu vier Meter weit. Allein ist das
     Linienpaar klein genug für die dichte Rechnung.
 
-    **Im Zug** (``dragging``) rechnet ein kleiner Teil über ``dogbox``: Sein
-    Schritt ist der kürzeste Gauß-Newton-Schritt, solange er in die Box aus
-    der Streuung passt — die kleinste Bewegung, die der Zug verspricht. Über
-    ``lsmr`` blieb nach dem gezogenen Punkt oft genau eine gespannte
-    Gleichung übrig, und zwei Linien mit einer Bedingung standen nach zehn
-    Mausschritten tausend Millimeter daneben bis 38 mm woanders, jeder
-    Schritt nach allen :data:`DRAG_REACH_TRIES`. Dichtes TRF taugt dafür
+    **Ein kleiner Teil rechnet über ``dogbox``**, beim Lösen wie im Zug: Sein
+    Schritt ist der kürzeste Gauß-Newton-Schritt, solange er in die Box
+    passt — die kleinste Bewegung, die der Löser verspricht. Über ``lsmr``
+    blieb nach dem gezogenen Punkt oft genau eine gespannte Gleichung übrig,
+    und zwei Linien mit einer Bedingung standen nach zehn Mausschritten
+    tausend Millimeter daneben bis 38 mm woanders. Dichtes TRF taugt dafür
     nicht: Hat ein Teil weniger Gleichungen als Unbekannte, setzt scipy jeden
-    Schritt auf den Rand des Vertrauensbereichs, und ein Zugschritt am
-    Rechteck brauchte alle 25 statt 2 Auswertungen. Die Zähigkeit gezogener
-    Punkte (:data:`DRAG_STIFFNESS`) formt in ``dogbox`` die Box, nicht den
-    Schritt.
+    Schritt auf den Rand des Vertrauensbereichs. Ein Zugschritt am Rechteck
+    brauchte so alle 25 statt 2 Auswertungen, ein Kreis mit Durchmesser beim
+    Lösen 57 statt 3, und zweihundert getrennte Kreise kosteten 2,8 Sekunden
+    statt der 100 ms aus §31. Die Zähigkeit gezogener Punkte
+    (:data:`DRAG_STIFFNESS`) formt die Box, nicht den Schritt.
 
-    Ein Teil, dessen Gleichungen am Start exakt null sind, bleibt stehen —
-    TRF täte dort keinen Schritt. Ein Lauf weiter als :data:`FARTHEST_MOVE`
-    auch.
+    **Ein Teil, dessen Gleichungen am Start schon bis ``_TOL`` gelten, bleibt
+    stehen**: Gelöst heißt bis ``_TOL``, und die Prüfung danach misst
+    dasselbe. Mit der Genauigkeit von 10⁻¹⁴ rechnete ein schon gelöster Teil
+    sonst im Rundungsrauschen nach, bis zu 49 Auswertungen — bei zweihundert
+    gelösten Kreisen dreitausend je Lösung. Ein Lauf weiter als
+    :data:`FARTHEST_MOVE` bleibt auch stehen.
     """
     columns = part.columns
     origin = solution[columns].copy()
     rest = _residuals_at(part.equations, solution)
-    if not np.any(rest):
+    if float(np.max(np.abs(rest))) <= _TOL:
         return
     scale = weight[columns]
     full = solution.copy()
@@ -1747,8 +1789,8 @@ def _solve_part(
     # Unterschied zwischen 700 ms und dem Budget aus §31 — nachgemessen.
     # **Kleine Teile rechnen dicht** (:data:`EXACT_UP_TO`): Mit ``lsmr`` löst
     # TRF den Schritt im Zweierraum aus Gradient und Gauß-Newton-Schritt, und
-    # der entartet bei einer einzelnen Bedingung (oben) — beim Lösen über TRF
-    # mit kleinem ersten Schritt, im Zug über ``dogbox`` (Docstring).
+    # der entartet bei einer einzelnen Bedingung (oben) — dicht über
+    # ``dogbox``, beim Lösen mit kleinem ersten Schritt (Docstring).
     dense = columns.size <= EXACT_UP_TO
     reach = _part_size(part, solution, weight, rest)
     first = min(reach, DENSE_FIRST_STEP) if dense and not dragging else reach
@@ -1757,7 +1799,7 @@ def _solve_part(
         residuals,
         np.zeros(columns.size),
         jac=(lambda z: jacobian(z).toarray()) if dense else jacobian,
-        method="dogbox" if dense and dragging else "trf",
+        method="dogbox" if dense else "trf",
         tr_solver="exact" if dense else "lsmr",
         x_scale=scale * first,
         # Ohne Grenze läuft LSMR hier bis zur kleineren Matrixkante. Bei der
@@ -1772,6 +1814,7 @@ def _solve_part(
         ftol=1e-14 if precise else 1e-10,
         gtol=1e-14 if precise else 1e-10,
         max_nfev=tries,
+        callback=_watchdog(),
     )
     moved = np.asarray(result.x, dtype=float)
     if float(np.max(np.abs(moved))) > FARTHEST_MOVE:
@@ -2372,4 +2415,41 @@ def _matrix_rank(matrix: Any) -> int:
     rest = table[np.flatnonzero(row_alive)][:, np.flatnonzero(column_alive)]
     if not rest.shape[0] or not rest.shape[1]:
         return peeled
-    return peeled + int(np.linalg.matrix_rank(rest.toarray()))
+    return peeled + _blockwise_rank(rest)
+
+
+def _blockwise_rank(matrix: Any) -> int:
+    """Der Rang einer dünnen Matrix aus ihren getrennten Blöcken — derselbe wie
+    ``np.linalg.matrix_rank`` über die ganze, ohne sie ganz zu zerlegen.
+
+    Zeilen und Spalten, die kein Eintrag verbindet, bilden getrennte Blöcke,
+    und die Singulärwerte der Matrix sind die ihrer Blöcke. Gezählt wird mit
+    derselben Schranke wie über die ganze Matrix: größter Singulärwert mal
+    größere Kante mal Maschinengenauigkeit. Die Zerlegung im Ganzen wuchs mit
+    der dritten Potenz: hundertfünfzig getrennte Rechtecke kosteten so rund
+    zehn Sekunden je Lösung, schon gelöst.
+    """
+    from scipy.sparse.csgraph import connected_components
+
+    height, width = matrix.shape
+    entries = matrix.tocoo()
+    links = csr_matrix(
+        (np.ones(entries.nnz), (entries.row, entries.col + height)),
+        shape=(height + width, height + width),
+    )
+    _count, found = connected_components(links, directed=False)
+    labels = np.asarray(found, dtype=np.int64)
+    order = np.argsort(labels, kind="stable")
+    bounds = np.flatnonzero(np.diff(labels[order])) + 1
+    values: list[np.ndarray] = []
+    for group in np.split(order, bounds):
+        rows = group[group < height]
+        columns = group[group >= height] - height
+        if rows.size and columns.size:
+            block = matrix[rows][:, columns].toarray()
+            values.append(np.linalg.svd(block, compute_uv=False))
+    if not values:
+        return 0
+    singular = np.concatenate(values)
+    bound = float(np.max(singular)) * max(height, width) * float(np.finfo(float).eps)
+    return int(np.count_nonzero(singular > bound))

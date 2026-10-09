@@ -2661,14 +2661,14 @@ def test_fixed_points_leave_the_decomposition_only_what_the_drawing_decides(
             SketchConstraint("diameter", (rim - 1, rim), "6"),
         ),
     )
-    real = np.linalg.matrix_rank
+    real = np.linalg.svd
     shapes: list[tuple[int, ...]] = []
 
     def recorded(matrix: np.ndarray, *args: object, **kwargs: object) -> object:
         shapes.append(np.shape(matrix))
         return real(matrix, *args, **kwargs)
 
-    monkeypatch.setattr(np.linalg, "matrix_rank", recorded)
+    monkeypatch.setattr(np.linalg, "svd", recorded)
     solved = solve_sketch(sketch)
 
     assert solved.free_dof == 0, "Kontur fest, Kreis an ihr, Durchmesser bemaßt"
@@ -2700,6 +2700,129 @@ def test_the_peeled_rank_is_the_rank(seed: int) -> None:
     from scipy.sparse import csr_matrix
 
     assert _matrix_rank(csr_matrix(matrix)) == int(np.linalg.matrix_rank(matrix)), "auch dünn"
+
+
+def _separate_circles(count: int) -> Sketch:
+    """``count`` getrennte Kreise mit Durchmesser 4, gezeichnet zu klein."""
+    elements = []
+    constraints = []
+    for index in range(count):
+        x, y = 12.0 * (index % 20), 12.0 * (index // 20)
+        rim = (x + 2.0 + 0.3 * (index % 4), y + 0.2)
+        elements.append(SketchElement("circle", ((x, y), rim)))
+        constraints.append(SketchConstraint("diameter", (2 * index, 2 * index + 1), "4"))
+    return Sketch(plane="plane:xy", elements=tuple(elements), constraints=tuple(constraints))
+
+
+def test_many_separate_parts_solve_in_few_steps_each(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Zweihundert getrennte Kreise mit Durchmesser: wenige Auswertungen je
+    Kreis, und eine schon gelöste Zeichnung rechnet gar nicht nach (RM-541).
+
+    Seit je Teil gerechnet wird, lief jeder Kreis allein — über dichtes TRF,
+    das bei weniger Gleichungen als Unbekannten jeden Schritt auf den Rand
+    des Vertrauensbereichs setzt: 57 Auswertungen je Kreis, zusammen
+    2,8 Sekunden statt der 100 ms aus §31. Schon gelöst rechnete jeder Kreis
+    mit der Genauigkeit 10⁻¹⁴ im Rundungsrauschen nach, bis zu 49
+    Auswertungen. Gezählt wird die Arbeit, sie ist auf jeder Maschine
+    dieselbe.
+    """
+    sketch = _separate_circles(200)
+    evaluations = _counting_evaluations(monkeypatch)
+
+    solved = solve_sketch(sketch)
+
+    assert len(evaluations) == 200, "je Kreis ein Lauf"
+    assert max(evaluations) <= 6, max(evaluations)
+    for element in solved.elements:
+        assert span(*element.points) == pytest.approx(2.0, abs=1e-9)
+
+    evaluations.clear()
+    solve_sketch(_placed(sketch, _flat(solved)))
+    assert evaluations == [], "gelöst ist gelöst"
+
+
+def test_separate_rectangles_are_decomposed_one_by_one(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Die Rangprüfung zerlegt getrennte Teile einzeln (RM-541): Hundertfünfzig
+    bemaßte Rechtecke kosteten im Ganzen rund zehn Sekunden je Lösung, auch
+    schon gelöst — die Zerlegung wächst mit der dritten Potenz."""
+    sketch = Sketch(
+        plane="plane:xy",
+        elements=tuple(
+            SketchElement("line", (a, b))
+            for index in range(150)
+            for a, b in pairwise(
+                [
+                    (30.0 * (index % 15) + x, 30.0 * (index // 15) + y)
+                    for x, y in ((0.0, 0.0), (20.0, 0.0), (20.0, 10.0), (0.0, 10.0), (0.0, 0.0))
+                ]
+            )
+        ),
+        constraints=tuple(
+            constraint
+            for index in range(150)
+            for base in (8 * index,)
+            for constraint in (
+                *(
+                    SketchConstraint("coincident", (base + 2 * k + 1, base + (2 * k + 2) % 8))
+                    for k in range(4)
+                ),
+                SketchConstraint("horizontal", (base, base + 1)),
+                SketchConstraint("vertical", (base + 2, base + 3)),
+                SketchConstraint("horizontal", (base + 4, base + 5)),
+                SketchConstraint("vertical", (base + 6, base + 7)),
+                SketchConstraint("distance", (base, base + 1), "20"),
+                SketchConstraint("distance", (base + 2, base + 3), "10"),
+            )
+        ),
+    )
+    shapes: list[tuple[int, ...]] = []
+    for name in ("svd", "matrix_rank"):
+        real = getattr(np.linalg, name)
+
+        def recorded(
+            matrix: np.ndarray, *args: object, _real: object = real, **kwargs: object
+        ) -> object:
+            shapes.append(np.shape(matrix))
+            return _real(matrix, *args, **kwargs)  # type: ignore[operator]
+
+        monkeypatch.setattr(np.linalg, name, recorded)
+    solved = solve_sketch(sketch)
+
+    assert solved.free_dof == 2 * 150, "jedes Rechteck darf noch wandern"
+    assert shapes, "zerlegt wird"
+    assert max(rows for rows, _columns in shapes) <= 14, "höchstens ein Rechteck je Zerlegung"
+
+
+@pytest.mark.parametrize("seed", range(6))
+def test_a_rank_taken_block_by_block_counts_like_the_whole(seed: int) -> None:
+    """Getrennte Blöcke werden einzeln zerlegt, gezählt wird mit der Schranke
+    der ganzen Matrix (RM-541): Ein Block, dessen kleinster Singulärwert nur
+    neben einem viel größeren Block verschwindet, zählt wie in
+    ``matrix_rank`` über alles — einzeln zerlegt hätte er eigene Maßstäbe.
+
+    Zerlegt im Ganzen kosteten hundertfünfzig getrennte Rechtecke rund zehn
+    Sekunden je Lösung."""
+    from scipy.linalg import block_diag
+
+    from app.core.sketch.solver import _matrix_rank
+
+    generator = np.random.default_rng(seed)
+    blocks = []
+    for index in range(5):
+        height, width = int(generator.integers(2, 6)), int(generator.integers(2, 7))
+        block = generator.random((height, width)) * 2.0 - 1.0
+        if index == 1:
+            block *= 1000.0
+        if index == 3:
+            # Fast abhängig: neben dem großen Block unter der Schranke, allein nicht.
+            block[-1] = block[0] + 1e-13 * (generator.random(width) * 2.0 - 1.0)
+        blocks.append(block)
+    whole = block_diag(*blocks)
+    rows = generator.permutation(whole.shape[0])
+    columns = generator.permutation(whole.shape[1])
+    mixed = whole[rows][:, columns]
+
+    assert _matrix_rank(mixed) == int(np.linalg.matrix_rank(mixed))
 
 
 def test_an_arc_with_all_three_points_fixed_is_determined_not_redundant() -> None:
