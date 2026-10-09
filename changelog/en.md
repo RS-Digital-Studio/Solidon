@@ -19,6 +19,7 @@ it into `website/version.json`.
 
 ### Operation and system
 
+- On the Mac, Solidon now needs macOS 14 or later. Every Mac from 2018 on can install it for free.
 - Solidon now starts on Intel Macs with macOS 26. Version 0.5.3 hung there at startup.
 - On the Mac, *Cancel* stops a running answer from the local model at once.
 - On the Mac, Return opens the selected entry on the start screen, in *Search functions* and in the report.
@@ -60,6 +61,7 @@ it into `website/version.json`.
 - New in the print settings: *Interface layers below*, *Interface gap* and *Full cooling at the support*.
 - The *Gap above* field is now called *Gap above and below* and applies to both sides of the support.
 - If the slicer refuses filaments whose temperatures are too far apart on one plate, Solidon now names the reason and the way out instead of only saying that no print file was made.
+- On Linux with Flatpak, Solidon now reports a slicer crash as a crash instead of only saying that no print file was made.
 
 ### Threads, holes and standard parts
 

@@ -44,6 +44,7 @@ Nutzen da und sonst nichts.
 
 ### Bedienung und System
 
+- Am Mac braucht Solidon jetzt macOS 14 oder neuer. Jeder Mac ab 2018 kann es kostenlos installieren.
 - Auf Intel-Macs mit macOS 26 startet Solidon jetzt. Version 0.5.3 blieb dort beim Start hängen.
 - Am Mac bricht *Abbrechen* eine laufende Antwort des lokalen Modells sofort ab.
 - Am Mac öffnet Return den gewählten Eintrag im Startbildschirm, in *Funktion suchen* und im Prüfbericht.
@@ -85,6 +86,7 @@ Nutzen da und sonst nichts.
 - Neu in den Druckeinstellungen: *Trennschichten unten*, *Lücke in der Trennschicht* und *Volle Kühlung an der Stütze*.
 - Das Feld *Abstand nach oben* heißt jetzt *Abstand oben und unten* und gilt für beide Seiten der Stütze.
 - Lehnt der Slicer Filamente mit zu verschiedenen Temperaturen auf einer Platte ab, nennt Solidon jetzt Grund und Ausweg, statt nur zu melden, dass keine Druckdatei entstand.
+- Unter Linux mit Flatpak meldet Solidon einen Absturz des Slicers jetzt als Absturz, statt nur zu sagen, dass keine Druckdatei entstand.
 
 ### Gewinde, Bohrungen und Normteile
 

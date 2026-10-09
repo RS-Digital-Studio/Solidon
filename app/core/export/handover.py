@@ -6760,7 +6760,7 @@ def slice_model(
         # den Grund. Gemerkt je Programm und Sitzung, damit die zweite Platte
         # nicht wieder zweimal läuft.
         wanted_arrangement = keep_arrangement and setup.executable not in _REFUSES_THE_ARRANGE_FLAG
-        # Ab wann eine Ergebnisdatei zu diesem Lauf gehört (``_result_reason``).
+        # Ab wann eine Ergebnisdatei zu diesem Lauf gehört (``_result_refusal``).
         result_started_at = time.time()
         # **Bambu Studio endet manchmal nicht** nach seiner ``result.json``:
         # Druckdatei geschrieben, Prozess steht (Gesamtprüfung, 27.09.2026).
@@ -6787,6 +6787,7 @@ def slice_model(
             if setup.flavour == "cura":
                 command = _prepare_cura_cli(command, workspace, cancelled)
             outputs_before = _output_files(target)
+            result_before = _result_signature(target)
             completed = _run_slicer(
                 command,
                 workspace,
@@ -6810,6 +6811,7 @@ def slice_model(
             # auf der Konsole (:func:`_creality_cli`).
             _REFUSES_THE_CLI_FLAG.add(setup.executable)
             outputs_before = _output_files(target)
+            result_before = _result_signature(target)
             completed = _run_slicer(
                 _command(setup, cli_models, config, target, wanted_arrangement),
                 workspace,
@@ -6838,7 +6840,10 @@ def slice_model(
             and setup.flavour == "orca"
             and not _creality_cli(setup)
             # Die Temperaturprüfung hängt nicht an der Anordnung (RM-620).
-            and not orca_refused(completed.returncode, ORCA_MIXED_TEMPERATURES)
+            and not orca_refused(
+                _exit_code(completed, _result_refusal(target, result_started_at, result_before)),
+                ORCA_MIXED_TEMPERATURES,
+            )
         ):
             refused_flag = _refuses_option(_tail(completed.stdout, completed.stderr), "arrange")
             # Die Rückfallstufe: einmal ohne die Anordnungsvorgabe — dieselbe
@@ -6847,6 +6852,7 @@ def slice_model(
             # auch so nichts schreibt, läuft in die Fehlerbehandlung darunter,
             # mit derselben Meldung wie bisher.
             outputs_before = _output_files(target)
+            result_before = _result_signature(target)
             completed = _run_slicer(
                 _command(setup, cli_models, config, target, False),
                 workspace,
@@ -6872,7 +6878,11 @@ def slice_model(
             # lässt stderr leer. Nur stderr zu zeigen hieße, einen Fehler
             # ohne Text zu melden — und das ist schlimmer als keiner.
             output = _tail(completed.stdout, completed.stderr)
-            reason = _result_reason(target, result_started_at)
+            # Eine Absage in ``result.json`` ist kein Absturz, auch wenn Solidon
+            # den Slicer danach beenden musste (:func:`_exit_code`).
+            refusal = _result_refusal(target, result_started_at, result_before)
+            reason = _result_reason(refusal)
+            exit_code = _exit_code(completed, refusal)
             if reason:
                 _log.info("%s refused the job: %s", setup.name, reason)
                 output = "\n".join(part for part in (output, reason) if part)
@@ -6883,11 +6893,11 @@ def slice_model(
             _log.info(
                 "%s ended without a print file, exit code %d",
                 setup.name,
-                signed_exit_code(completed.returncode),
+                signed_exit_code(exit_code),
             )
             if _says_outside_the_volume(output):
                 raise _outside_the_volume(setup, profile, output, model_height)
-            if crashed(completed.returncode):
+            if refusal is None and crashed(exit_code, wrapped=_wrapped(setup)):
                 raise ExternalToolError(
                     tool=setup.name,
                     title=SLICER_FAILED,
@@ -6906,7 +6916,7 @@ def slice_model(
                     # keiner Vermutung (§2.1).
                     suggestions=(CHOOSE_SLICER, RETRY, SHOW_SLICER_OUTPUT, EXPORT_ONLY),
                 )
-            if setup.flavour == "orca" and orca_refused(completed.returncode, ORCA_OFF_THE_PLATE):
+            if setup.flavour == "orca" and orca_refused(exit_code, ORCA_OFF_THE_PLATE):
                 # **Die Orca-Familie sagt es nur mit einer Zahl** (-50,
                 # „found error, exit"): Nicht jedes Teil liegt ganz auf ihrer
                 # Platte. Gemessen am ElegooSlicer (26.09.2026): halb neben der
@@ -6925,7 +6935,7 @@ def slice_model(
                     values={"output": output},
                     suggestions=(SPLIT_MODEL, SCALE_TO_FIT, ARRANGE_ON_BED, SHOW_SLICER_OUTPUT),
                 )
-            if setup.flavour == "orca" and orca_refused(completed.returncode, ORCA_PATHS_CROSS):
+            if setup.flavour == "orca" and orca_refused(exit_code, ORCA_PATHS_CROSS):
                 # OrcaSlicer sagt dazu auf der Konsole nur „found error“, Creality
                 # Print nennt im Protokoll Turm und Teil, Bambu Studio den Turm in
                 # ``result.json``. Der Turm ist der häufigste Fall, nicht der
@@ -6941,9 +6951,7 @@ def slice_model(
                     values={"output": output},
                     suggestions=(ARRANGE_ON_BED, EXPORT_ONLY, SHOW_SLICER_OUTPUT),
                 )
-            if setup.flavour == "orca" and orca_refused(
-                completed.returncode, ORCA_MIXED_TEMPERATURES
-            ):
+            if setup.flavour == "orca" and orca_refused(exit_code, ORCA_MIXED_TEMPERATURES):
                 # Anycubic Slicer Next sagt auf der Konsole nichts dazu; die Zahl
                 # allein ließ den Kunden „keine Druckdatei“ lesen (RM-620).
                 raise ExternalToolError(
@@ -7956,7 +7964,13 @@ def signed_exit_code(exit_code: int) -> int:
     return exit_code - (1 << 32) if exit_code >= (1 << 31) else exit_code
 
 
-def crashed(exit_code: int) -> bool:
+#: Signale, an denen ein Programm stirbt, statt aufzugeben: SIGILL, SIGABRT,
+#: SIGBUS, SIGFPE, SIGKILL und SIGSEGV in Linux' Zählung — einen Starter, der
+#: einen Signaltod als 128 + Signal meldet, gibt es nur dort.
+_FATAL_SIGNALS: Final = frozenset({4, 6, 7, 8, 9, 11})
+
+
+def crashed(exit_code: int, *, wrapped: bool = False) -> bool:
     """Ist der Slicer abgestürzt, statt ordentlich aufzugeben?
 
     Ein Absturz und ein abgelehnter Auftrag sehen für den Aufrufer gleich aus —
@@ -7975,12 +7989,37 @@ def crashed(exit_code: int) -> bool:
     ``NTSTATUS`` mit Fehlerschwere und freiem reserviertem Bit 28. Eigene
     negative Windows-Rückgabewerte kommen dagegen als unsigned DWORD an:
     Bambus ``-100`` ist ``0xFFFFFF9C`` und kein gültiger NTSTATUS.
+
+    **Hinter einem Starter** (``wrapped``, :func:`_wrapped`) kommt ein
+    Signaltod als 128 + Signal an: ``flatpak run`` endet in bwrap
+    (``bubblewrap.c``, ``propagate_exit_status``), ``flatpak-spawn --host``
+    ebenso (``flatpak-spawn.c``). Ein SIGSEGV käme dort als 139 an, und der
+    Kunde läse „keine Druckdatei geschrieben“ (RM-621, am Quelltext
+    hergeleitet). **Gezählt werden nur die Signale, an denen ein Programm
+    stirbt** (:data:`_FATAL_SIGNALS`): Die Orca-Absagen reichen von -1 bis -105
+    (``src/libslic3r/Utils.hpp`` der fünf Programme), in Byteform 151 bis 255,
+    und manche davon sind genau 128 + Signal — -100 kommt als 156, also
+    128 + SIGWINCH.
     """
     if exit_code < 0:
+        return True
+    if wrapped and exit_code - 128 in _FATAL_SIGNALS:
         return True
     # MS-ERREF §2.3: Schwere 11, N-Bit 0; das Customer-Bit bleibt frei,
     # damit auch nicht abgefangene C++-Ausnahmen (0xE06D7363) erkannt werden.
     return exit_code <= 0xFFFFFFFF and exit_code & 0xD0000000 == 0xC0000000
+
+
+def _wrapped(setup: SlicerSetup) -> bool:
+    """Startet der Slicer hinter ``flatpak run`` oder ``flatpak-spawn --host``?
+
+    Dann meldet der Starter einen Signaltod als 128 + Signal
+    (:func:`crashed`): ein Slicer als Flatpak oder Solidon selbst im Flatpak,
+    das jeden Start über :func:`discover.on_host` nach draußen reicht. Das
+    ist dieselbe Frage wie die nach der Sandbox (:func:`discover.sandboxed`):
+    Ein Flatpak auf einer der beiden Seiten ist zugleich Sandbox und Starter.
+    """
+    return discover.sandboxed(setup.executable)
 
 
 #: Die Datei, in die Bambu Studio neben die Druckdatei schreibt, wie der Lauf
@@ -7997,7 +8036,7 @@ _RESULT_LIMIT: Final = 1 << 20
 _MTIME_SLACK_S: Final = 2.0
 
 
-def _result_reason(directory: Path, since: float) -> str:
+def _result_reason(refusal: tuple[int, str] | None) -> str:
     """Was der Slicer in ``result.json`` über einen gescheiterten Lauf sagt.
 
     **Bambu Studio sagt seine Absage nicht auf der Konsole.** Gemessen an
@@ -8009,26 +8048,60 @@ def _result_reason(directory: Path, since: float) -> str:
     leeres Feld. Orca und Elegoo schrieben die Datei bei denselben Fehlern
     nicht; für sie ändert sich nichts.
 
+    Gelesen von :func:`_result_refusal`; ohne Grund im Text sagt sie nichts.
+    """
+    if refusal is None or not refusal[1]:
+        return ""
+    code, text = refusal
+    return f"{text} (return_code {code})"
+
+
+def _result_refusal(
+    directory: Path, since: float, before: tuple[int, int] | None
+) -> tuple[int, str] | None:
+    """Rückgabewert und Grund einer Absage aus der ``result.json`` dieses Laufs
+    (:func:`_result_reason`); ``None`` ohne Absage.
+
     Nur eine Datei dieses Laufs zählt (Änderungszeit ab ``since``) — der
     Zielordner kann der des Kunden sein, mit dem Ergebnis eines älteren
-    Laufs —, und nur eine Absage (``return_code`` ungleich null). Was sich
-    nicht lesen lässt, sagt nichts.
+    Laufs —, und nur eine, die dieser Versuch geschrieben hat: ``before`` ist
+    ihre Signatur vor seinem Start (:func:`_result_signature`). Beim zweiten
+    Versuch ohne Anordnungsvorgabe liegt sonst die Absage des ersten daneben
+    und gälte für ihn. Nur eine Absage zählt (``return_code`` ungleich null);
+    was sich nicht lesen lässt, sagt nichts.
     """
     path = directory / RESULT_FILE
+    if _result_signature(directory) == before:
+        return None
     try:
         info = path.stat()
         if info.st_mtime < since - _MTIME_SLACK_S or info.st_size > _RESULT_LIMIT:
-            return ""
+            return None
         data = json.loads(path.read_bytes())
     except OSError, ValueError:
-        return ""
+        return None
     if not isinstance(data, dict):
-        return ""
+        return None
     code = data.get("return_code")
     text = data.get("error_string")
-    if not isinstance(code, int) or code == 0 or not isinstance(text, str) or not text.strip():
-        return ""
-    return f"{text.strip()} (return_code {code})"
+    if not isinstance(code, int) or isinstance(code, bool) or code == 0:
+        return None
+    return code, text.strip() if isinstance(text, str) else ""
+
+
+def _exit_code(
+    completed: subprocess.CompletedProcess[bytes], refusal: tuple[int, str] | None
+) -> int:
+    """Der Rückgabewert, nach dem ein Lauf ohne Druckdatei beurteilt wird.
+
+    Steht eine Absage in der ``result.json`` dieses Laufs
+    (:func:`_result_refusal`), zählt ihr Code, und ein Absturz ist es nicht:
+    Endet der Slicer danach nicht, beendet Solidon ihn
+    (``process.FINISHED_LINGER_SECONDS``), und der Prozess meldet Solidons
+    Signal — :func:`crashed` hielt das für einen Absturz, und die Absage ging
+    unter.
+    """
+    return completed.returncode if refusal is None else refusal[0]
 
 
 def _result_written(directory: Path) -> Callable[[], bool]:
@@ -8042,18 +8115,10 @@ def _result_written(directory: Path) -> Callable[[], bool]:
     nicht — erst, wenn sie sich als JSON mit ``return_code`` lesen lässt.
     """
     path = directory / RESULT_FILE
-
-    def signature() -> tuple[int, int] | None:
-        try:
-            info = path.stat()
-        except OSError:
-            return None
-        return info.st_mtime_ns, info.st_size
-
-    before = signature()
+    before = _result_signature(directory)
 
     def written() -> bool:
-        now = signature()
+        now = _result_signature(directory)
         if now is None or now == before or not 0 < now[1] <= _RESULT_LIMIT:
             return False
         try:
@@ -8063,6 +8128,15 @@ def _result_written(directory: Path) -> Callable[[], bool]:
         return isinstance(data, dict) and isinstance(data.get("return_code"), int)
 
     return written
+
+
+def _result_signature(directory: Path) -> tuple[int, int] | None:
+    """Änderungszeit und Größe der ``result.json`` in diesem Ordner, ``None`` ohne sie."""
+    try:
+        info = (directory / RESULT_FILE).stat()
+    except OSError:
+        return None
+    return info.st_mtime_ns, info.st_size
 
 
 def _warning_boundary(line: str) -> bool:

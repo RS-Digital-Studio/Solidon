@@ -461,10 +461,10 @@ den Slicer braucht ein Merkmal, das ihr Einlösen in der fertigen Datei zeigt. G
 
 ## Ein Absturz ist keine Absage
 
-`crashed()` trennt beide am Rückgabewert (POSIX: negative Signale; Windows:
-`NTSTATUS` ab `0xC0000000`) und steht **vor** den Ausgabeprüfungen.
-Absagecodes der Orca-Familie kommen unter Windows als DWORD, sonst als Byte
-(−62: 4294967234 oder 194); verglichen wird über `orca_refused`.
+`crashed()` trennt beide am Rückgabewert (POSIX: negatives Signal, hinter
+Flatpak 128 + Absturzsignal; Windows: `NTSTATUS` ab `0xC0000000`) und steht
+**vor** den Ausgabeprüfungen; eine Absage in `result.json` zählt vor dem
+Prozess. Orca-Absagen kommen als DWORD oder Byte (`orca_refused`).
 
 ## Über Erfolg entscheidet die Druckdatei, nicht das Prozessende
 

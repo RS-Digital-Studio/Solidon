@@ -19,6 +19,7 @@ scrive in `website/version.json`.
 
 ### Uso e sistema
 
+- Su Mac, Solidon richiede ora macOS 14 o successivo. Ogni Mac dal 2018 in poi può installarlo gratuitamente.
 - Solidon ora si avvia sui Mac Intel con macOS 26. La versione 0.5.3 vi si bloccava all'avvio.
 - Su Mac, *Annulla* interrompe subito una risposta in corso del modello locale.
 - Su Mac, Invio apre la voce selezionata nella schermata iniziale, in *Cerca funzione* e nel rapporto di verifica.
@@ -60,6 +61,7 @@ scrive in `website/version.json`.
 - Nuovo nelle impostazioni di stampa: *Strati di interfaccia inferiori*, *Spazio nell'interfaccia* e *Raffreddamento pieno sul supporto*.
 - Il campo *Spazio verso l'alto* ora si chiama *Spazio sopra e sotto* e vale per entrambi i lati del supporto.
 - Se lo slicer rifiuta filamenti con temperature troppo diverse su un piatto, Solidon ora indica il motivo e la via d'uscita, invece di dire solo che non è stato creato alcun file.
+- Su Linux con Flatpak, Solidon ora segnala un arresto anomalo dello slicer come tale, invece di dire solo che non è stato creato alcun file.
 
 ### Filettature, fori e componenti normalizzati
 

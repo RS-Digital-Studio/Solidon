@@ -19,6 +19,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 
 ### Utilização e sistema
 
+- No Mac, o Solidon precisa agora do macOS 14 ou mais recente. Qualquer Mac a partir de 2018 pode instalá-lo gratuitamente.
 - O Solidon arranca agora nos Mac Intel com macOS 26. A versão 0.5.3 ficava aí bloqueada no arranque.
 - No Mac, *Cancelar* interrompe de imediato uma resposta em curso do modelo local.
 - No Mac, Return abre a entrada selecionada no ecrã inicial, em *Pesquisar função* e no relatório de verificação.
@@ -60,6 +61,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Novo nas definições de impressão: *Camadas de separação inferiores*, *Folga na camada de separação* e *Arrefecimento total no suporte*.
 - O campo *Distância acima* chama-se agora *Distância acima e abaixo* e vale para os dois lados do suporte.
 - Se o slicer recusar filamentos com temperaturas demasiado diferentes numa placa, o Solidon indica agora o motivo e o que fazer, em vez de dizer apenas que não foi criado nenhum ficheiro.
+- No Linux com Flatpak, o Solidon indica agora que o slicer encerrou inesperadamente, em vez de dizer apenas que não foi criado nenhum ficheiro.
 
 ### Roscas, furos e peças normalizadas
 
