@@ -27,7 +27,8 @@ Temp-Ordner um (§38) — eigene Bausteine des Entwicklers laden so nicht mit.
 Exit-Code 0, wenn jeder gefahrene Baustein bestanden hat (bei ``--check``:
 wenn der Nachweis zu jedem Baustein passt); 1 sonst. Die Datei wird auch bei
 Fehlschlägen geschrieben — ein gebrochener Baustein steht dann als gebrochen
-darin, und der Katalog warnt.
+darin, und der Katalog warnt. Geschrieben wird nach jedem fertigen Baustein; ein
+abgebrochener Lauf behält so das Fertige, und der nächste fährt nur den Rest.
 """
 
 from __future__ import annotations
@@ -138,6 +139,36 @@ def _merged(pieces: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
+def _written(
+    results: dict[str, dict[str, Any]],
+    proofs: dict[str, Any],
+    shipped: dict[str, Any],
+    profile: Any,
+) -> Path:
+    """Schreibt den Nachweis mit allen bisher fertigen Bausteinen und gibt die Datei zurück."""
+    from app.core.knowledge.parts import range_proof
+
+    today = datetime.datetime.now(datetime.UTC).date().isoformat()
+    entries = {name: entry for name, entry in proofs.items() if name in shipped}
+    for name, outcome in results.items():
+        entries[name] = range_proof.ProofEntry(
+            name=name,
+            version=str(outcome["version"]),
+            fingerprint=str(outcome["fingerprint"]),
+            corners=int(outcome["corners"]),
+            checked=int(outcome["checked"]),
+            excluded=int(outcome["excluded"]),
+            failures=len(outcome["failures"]),
+            passed=bool(outcome["passed"]),
+            date=today,
+        )
+    target = range_proof.PROOF_FILE
+    temporary = target.with_suffix(".toml.tmp")
+    temporary.write_text(range_proof.render(entries, profile), encoding="utf-8", newline="\n")
+    temporary.replace(target)
+    return Path(target)
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=(__doc__ or "").splitlines()[0])
     parser.add_argument("names", nargs="*", help="Bausteine; ohne Angabe alle, die nicht passen")
@@ -224,25 +255,12 @@ def _run(args: argparse.Namespace, profile_root: Path) -> int:
             )
             for values, reason in outcome["failures"][:10]:
                 print(f"      {values}: {reason}")
+            # Nach jedem fertigen Baustein geschrieben: Bricht der Lauf später ab
+            # — ein Arbeiter stirbt nativ, jemand beendet die Prozesse —, bleibt
+            # das Fertige nachgewiesen, und der nächste Lauf fährt nur den Rest.
+            _written(results, proofs, shipped, profile)
 
-    today = datetime.datetime.now(datetime.UTC).date().isoformat()
-    entries = {name: entry for name, entry in proofs.items() if name in shipped}
-    for name, outcome in results.items():
-        entries[name] = range_proof.ProofEntry(
-            name=name,
-            version=str(outcome["version"]),
-            fingerprint=str(outcome["fingerprint"]),
-            corners=int(outcome["corners"]),
-            checked=int(outcome["checked"]),
-            excluded=int(outcome["excluded"]),
-            failures=len(outcome["failures"]),
-            passed=bool(outcome["passed"]),
-            date=today,
-        )
-    target = range_proof.PROOF_FILE
-    temporary = target.with_suffix(".toml.tmp")
-    temporary.write_text(range_proof.render(entries, profile), encoding="utf-8", newline="\n")
-    temporary.replace(target)
+    target = _written(results, proofs, shipped, profile)
     broken = sorted(name for name, outcome in results.items() if not outcome["passed"])
     print(f"Nachweis geschrieben: {target.relative_to(ROOT).as_posix()}")
     if broken:
