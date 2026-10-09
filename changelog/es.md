@@ -60,6 +60,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Para PETG, Solidon sugiere refrigeración total en el soporte. Así se suelta más fácil de la pieza.
 - Nuevo en los ajustes de impresión: *Capas de separación inferiores*, *Hueco en la capa de separación* y *Refrigeración total en el soporte*.
 - El campo *Espacio superior* se llama ahora *Espacio arriba y abajo* y vale para ambos lados del soporte.
+- Si el slicer rechaza filamentos con temperaturas demasiado distintas en una placa, Solidon indica ahora el motivo y qué hacer, en lugar de decir solo que no se creó ningún archivo.
 
 ### Roscas, taladros y piezas normalizadas
 

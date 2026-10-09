@@ -583,6 +583,12 @@ keines seiner Dreiecke benutzt.
 `crashed()` steht vor den Ausgabeprüfungen, weil ein abgestürztes Programm
 keinen Satz schreibt; der Rat, das Slicer-Profil zu prüfen, führte ins Leere.
 
+Zu `orca_refused` (RM-620): `signed_exit_code` liest nur die Windows-Form. Unter
+Linux und macOS kommt der Rückgabewert als Byte an, und alle drei Absagen der
+Orca-Familie (−50, −101, −62) endeten dort als „keine Druckdatei geschrieben“.
+Die ältere Fassung der Erkennung entfiel nur auf einer Plattform, also sah es
+niemand.
+
 ## Über Erfolg entscheidet die Druckdatei, nicht das Prozessende
 
 Bambu Studio legt Druckdatei und `result.json` ab und endet manchmal nicht

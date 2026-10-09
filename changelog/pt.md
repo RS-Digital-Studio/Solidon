@@ -59,6 +59,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Para PETG, o Solidon sugere arrefecimento total no suporte. Assim solta-se mais facilmente da peça.
 - Novo nas definições de impressão: *Camadas de separação inferiores*, *Folga na camada de separação* e *Arrefecimento total no suporte*.
 - O campo *Distância acima* chama-se agora *Distância acima e abaixo* e vale para os dois lados do suporte.
+- Se o slicer recusar filamentos com temperaturas demasiado diferentes numa placa, o Solidon indica agora o motivo e o que fazer, em vez de dizer apenas que não foi criado nenhum ficheiro.
 
 ### Roscas, furos e peças normalizadas
 
