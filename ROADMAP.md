@@ -104,6 +104,8 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-685 — *Druckoptimal ausrichten* behält eine stehende Lage mit dem Satz „braucht keine Stütze“, während die Schichtanalyse Stützraum zählt](#rm-685) | Geometrie, Erkennung und Druckvorbereitung | Regression gegenüber v0.5.0 im Stützraum (gewollt seit v0.5.1): Satz und Kennzahl widersprechen sich |
 | [RM-690 — Angeboten, aber mit den Vorgaben nicht ausführbar: Textur, Merkmal drehen, Formschräge, Einzelteile, Drehkörper](#rm-690) | Geometrie, Erkennung und Druckvorbereitung | Fünf Handlungen halten mit ihren eigenen Vorgaben an oder werden an Stellen angeboten, wo sie nicht gelten |
 | [RM-691 — Stift am Schlüsselloch der Halter hat je Kern eine andere Form](#rm-691) | Geometrie, Erkennung und Druckvorbereitung | Ringhalter und Ablage: am Netz glatt, exakt mit Kopf; Hohlraumkette angleichen und beide Kerne geometrisch gegenprüfen |
+| [RM-636 — Jeder Anwendungsfall schnell: Verschieben, Filament, Normalisieren, Auswahlkarte](#rm-636) | Geometrie, Erkennung und Druckvorbereitung | In Arbeit: Paket L3 (Worktree `F:/sl-l3`). Rangliste gemessen; offen: Zuordnung bei gleicher Geometrie abkürzen, Normalisieren am großen Netz, Auswahlkarte, Fensterabnahme |
+| [RM-695 — Ein gespeichertes Projekt erkennt nach jedem Neustart alle Merkmale neu](#rm-695) | Geometrie, Erkennung und Druckvorbereitung | Nach Paket E: Erkennungsergebnis bitgleich im Plattencache ablegen (Format, `cache_version`) |
 | [RM-070 — SpaceMouse auf macOS und Linux am echten Gerät abnehmen](#rm-070) | Bedienung und Darstellung | Die Rampe ist stetig und getestet, die Bildrate an 815 104 Dreiecken gemessen (`7ff34c67`: 16,7 → 8,7 ms im Median); offen bleiben Linux, die 3DxWare-Mausemulation, das Gerät selbst und die Rampe im Skizzenmodus (aus RM-183) |
 | [RM-204 — Ein Merkmalklick baut alle Handlungen des Fensters neu](#rm-204) | Bedienung und Darstellung | Abnahme am echten Fenster beim Release (RM-213) |
 | [RM-559 — Körper in der Szene mit drei Klicks aufziehen, als Körper oder als Ausschnitt](#rm-559) | Bedienung und Darstellung | Gebaut (Paket Z1, 08.10.): Werkzeug *Zeichnen*, Strg+Umschalt+E; offen die Abnahme am echten Fenster und die Nachzählung durch bedienlogik |
@@ -3543,6 +3545,36 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   derselben Geometrie ableiten. Abnahme: beide Kerne liefern dieselbe Form
   bis zur Vernetzungsabweichung, ohne gemeinsames Volumen mit dem Träger und
   mit dem halben Profilspiel; Regression über beide Halter und beide Bohrungen.
+
+<a id="rm-636"></a>
+- [~] **RM-636 — Jeder Anwendungsfall schnell: Verschieben, Filament, Normalisieren, Auswahlkarte.**
+  Robert, 08.10.2026: alle Anwendungsfälle messen und die teuren schneller machen (Paket L3).
+  Rangliste im Kernweg wie die Anwendung (Plattencache), CPU-Zeit unter Volllast, je ein Lauf:
+  Rang 1 bis 6 sind die Merkmalserkennung beim Laden und Öffnen (Eiffelturm 313 000 Dreiecke
+  47–49 s, Spiderman 886 000 Dreiecke 32–33 s für null Merkmale, Laptop-Ständer 19–20 s,
+  Besteckkasten 16–18 s); sie gehören zu [RM-568](#rm-568) und [RM-695](#rm-695). Rang 7 und 8
+  liegen hier: *Verschieben* am Eiffelturm 7,1 s, das erste *Filament zuweisen* 6,0 s, obwohl
+  die Geometrie gleich bleibt — die Merkmale werden voll zugeordnet (`matching.match` 4,4 s),
+  `memory.held_parts`/`trim` 2,1 s und `object_hash` 1,1 s je Schritt. Dazu *Normalisieren* am
+  großen Netz (Spiderman 7,6 s: Komponenten, Verschweißen, Schalen zweimal aufgebaut) und der
+  Ops-Durchlauf der Auswahlkarte. **Vorgehen:** die Zuordnung bei unveränderter Geometrie nur
+  abkürzen, wenn Bitgleichheit gegen den vollen Weg über Korpus und Beispielprojekte belegt ist;
+  Doppelrechnungen je Schritt entfernen; ohne Formatänderung am Plattencache. **Abnahme:** je
+  Stelle Messung im Wechsel alt/neu in CPU-Zeit oder gezählten Aufrufen, Gleichheitstest grün,
+  am echten Fenster die Standzeit der Fortschrittstexte und das erste Bild (RM-258). Bauplan §31.
+
+<a id="rm-695"></a>
+- [ ] **RM-695 — Ein gespeichertes Projekt erkennt nach jedem Neustart alle Merkmale neu.**
+  Messung Paket L3 (09.10.2026, Kernweg mit `disk_backed_cache` wie die Anwendung, CPU-Zeit
+  unter Volllast, je ein Lauf): Der Plattencache hält Netze, aber keine Erkennung; jedes Öffnen
+  nach einem Neustart rechnet sie ganz neu. Eiffelturm (313 000 Dreiecke) 57 s, davon `detect`
+  47 s; Spiderman (886 000 Dreiecke, null Merkmale) 45 s, davon `detect` 33 s; Laptop-Ständer
+  19 s, Besteckkasten 16 s `detect`. Dazu `face_components` 1,1 bzw. 4,1 s neu.
+  **Weg:** das Erkennungsergebnis Bit für Bit im Plattencache ablegen (Format und
+  `cache_version`). Gebiet der Erkennung (Paket E ändert `perceive/` und das Format von
+  `scene/cache.py`), deshalb nach Paket E. **Abnahme:** zweites Öffnen nach Neustart ohne
+  `detect`, Merkmale und IDs bitgleich zum frischen Öffnen über Korpus und Beispielprojekte,
+  ein veralteter Eintrag wird verworfen und neu erkannt. Bauplan §21.2, §31.
 
 ## Bedienung und Darstellung
 
