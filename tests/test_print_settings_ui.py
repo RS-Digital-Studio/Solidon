@@ -7520,15 +7520,19 @@ def test_the_search_also_knows_the_name_from_the_slicer(
     # steht auch wirklich in der Übergabetabelle dieses Feldes.
     assert set(keys_for("shell.wall_count")) == {"perimeters", "wall_loops", "wall_line_count"}
 
-    # Ein Schlüssel darf nicht das halbe Fenster treffen — dieselbe Grenze, an
-    # der die Einheit „mm" gescheitert ist (22 von 56). Gemessen ist der
-    # breiteste `support_material` mit sieben: sechs Stützzeilen und die
-    # Bahnbreite, die seit den Rollenbreiten auch
-    # `support_material_extrusion_width` schreibt (3e501baaf).
-    breiteste = max(
-        len(dialog.search_hits(schluessel)) for feld in FIELDS for schluessel in keys_for(feld.path)
+    # Ein Schlüssel darf nicht das halbe Fenster treffen — die Einheit „mm"
+    # traf 22 von 56 Zeilen. Die Grenze ist ein Viertel der Zeilen und keine
+    # gemessene Zahl: `support_material` trifft jede Stützzeile, die PrusaSlicer
+    # unter diesem Namen führt, und jede neue Stützeinstellung zöge eine feste
+    # Zahl mit, ohne dass die Suche schlechter würde.
+    breiteste, schluessel = max(
+        (len(dialog.search_hits(schluessel)), schluessel)
+        for feld in FIELDS
+        for schluessel in keys_for(feld.path)
     )
-    assert breiteste <= 7, f"ein Schlüssel trifft {breiteste} von {len(FIELDS)} Zeilen"
+    assert breiteste * 4 <= len(FIELDS), (
+        f"„{schluessel}“ trifft {breiteste} von {len(FIELDS)} Zeilen"
+    )
 
     # Und die Abdeckung: Ohne sie wäre der Test grün, wenn die Tabelle
     # zusammenschrumpft — ein Filter über eine leere Menge findet nie etwas.
@@ -7801,8 +7805,16 @@ def test_every_group_holds_one_subject(qt_app: QApplication, session: Session) -
     assert not abweichung, f"Reiter und Bereich laufen auseinander: {abweichung}"
     assert "other" not in GROUPS, "die Sammelgruppe ist aufgelöst"
 
-    groesste = max(sum(1 for f in FIELDS if f.group == g and not f.front) for g in GROUPS)
-    assert groesste <= 9, f"die größte Gruppe trägt {groesste} Felder"
+    # Die Größe misst sich am Schnitt, an dem die Sammelgruppe scheiterte: fast
+    # dreimal so viele. Ein Thema darf doppelt so viele Zeilen tragen — die
+    # Stützen kommen mit den Trennschichten auf zehn, und keine davon gehört in
+    # einen anderen Reiter.
+    je_gruppe = {g: sum(1 for f in FIELDS if f.group == g and not f.front) for g in GROUPS}
+    groesste = max(je_gruppe, key=je_gruppe.__getitem__)
+    schnitt = sum(je_gruppe.values()) / len(je_gruppe)
+    assert je_gruppe[groesste] <= 2 * schnitt, (
+        f"„{groesste}“ trägt {je_gruppe[groesste]} Felder, der Schnitt {schnitt:.1f}"
+    )
 
 
 def test_the_spool_colour_is_big_enough_to_read(qt_app: QApplication) -> None:
