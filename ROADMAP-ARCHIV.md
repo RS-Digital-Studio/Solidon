@@ -27350,7 +27350,9 @@ ein anderer Überhang liegt.**
 `open_bridge_width`); steht kein Stück der Schicht darin, gilt `bridge_width` unverändert, eine
 Schicht nur aus Rändern spannt 0. `_may_need_support` fragt damit die Kanaldecken und Ränder aus
 `support_need`, `_from_spans` die Ränder; Weite und Ort der Warnung kommen aus derselben Fläche.
-`_quiet_layers` und `SupportNeed.quiet_layers` entfallen, sie hatten keinen Leser mehr. Kinn mit
+`_quiet_layers` und `SupportNeed.quiet_layers` entfallen; ihr letzter Leser,
+`tools/matrix_unit.support_ways` (Tabelle „Stützbedarf gegen das Urteil des Slicers“), warf danach
+`AttributeError` und zählt die Brücken jetzt mit `span_beside` wie der Stützbedarf (Review). Kinn mit
 Kragen: keine lange Brücke mehr, der Befund über kleine Überhänge bleibt (z 44,55, 119,3 mm²), der
 Rat unverändert (Stützen über den Flächenweg). Wand mit U-Kragen und Sporn: kein Stützbedarf,
 kein Stützvorschlag; Kragen allein wie vorher. Tests
