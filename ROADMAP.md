@@ -57,7 +57,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-549 — Ein frisch installiertes Orca-AppImage unter Linux hat keine lesbaren Herstellerprofile](#rm-549) | Plattformen, Pakete und Grafik | Gefunden mit der Slicerauswahl (07.10.): ohne Vorwahl des Herstellerprofils lehnt die Orca-Familie den Auftrag ab; offen, ob der Druckdialog dann mit Grund und Weg endet |
 | [RM-022 — Nachbau als Operationsfolge](#rm-022) | Geometrie, Erkennung und Druckvorbereitung | Profilkörper am Netz gebaut (05.10.), Besenhalter angenommen; offen der Korpuslauf über diesen Stand samt fünf Teilen über 600 s, die Fensterabnahme beim Release und die Wiederholung der berichtigten Zahlenanzeige am Fenster |
 | [RM-188 — CAD-Ausbau, Bedienung und Resin für 0.5.x](#rm-188) | Geometrie, Erkennung und Druckvorbereitung | Nächster Schritt P0.8: die vier Konzepte je Anforderung dem Code oder einem Paket zuordnen; daneben P4.1 unter RM-022, P8.1, P9.1 und Zeichnen Z2. Reste der gebauten Pakete und Fragen an Robert stehen am Punkt; Abschluss mit P5.3 |
-| [RM-191 — PrusaSlicer braucht für dieselbe Übergabe länger als die Orca-Familie](#rm-191) | Geometrie, Erkennung und Druckvorbereitung | In Arbeit: Claude (Worktree `F:/solidon-claude-c`). Nachgemessen am Gewürzregal (`56f70000`): Material innerhalb von 3 %, Zeit Prusa 1,93× Orca — behoben bis 1,19× (volle Füllung und Lückenfüllung für Prusa und Orca, Bahnbreite je Orca-Rolle, `machine_limits_usage = ignore`); der Rest ist die Bauweise des Slicers (Füllanker, Zusatzwände). Mit Herstellerbündel neu gemessen (06.10.): am MK4S ist PrusaSlicer schneller als Orca (218 gegen 345 min, Material gleich); langsamer bleibt PrusaSlicer ohne Bündel am CC2 (407 gegen 232 min, +20 % Material), weil Solidons Satz die Wandzahl nicht setzt (`perimeters = 3`, `extra_perimeters = 1`); nächster Schritt: im Prusa-Zweig für Drucker ohne Bündel Wandzahl und `extra_perimeters = 0` setzen, dann prusa:CC2 gegen elegoo:CC2 |
+| [RM-191 — PrusaSlicer braucht für dieselbe Übergabe länger als die Orca-Familie](#rm-191) | Geometrie, Erkennung und Druckvorbereitung | Restentscheidung offen. Gelöst (09.10., Claude): PrusaSlicer ohne Bündel schätzte mit 1500 mm/s² (`ignore` und Dialekt `reprap`), jetzt `marlin` mit den angeforderten Werten als Grenze, dazu `extra_perimeters`/`solid_infill_below_area = 0` und die Materialart der Spule; Gewürzregal am CC2 407 → 292 min, gegen ElegooSlicer mit denselben Wänden 280 min (+4,5 %, Material −4,2 %), SuperSlicer 527 → 381 min. Offen: Solidons Tabelle druckt „Standard“ mit drei Wänden und vier Bodenschichten, die Standardprozesse von Elegoo, Bambu, Creality und Prusa (MK4S) mit zwei und drei (232 gegen 292 min, 128 gegen 154 g) — Entscheidung, ob die Tabelle dem Standardprozess des Druckers folgt |
 | [RM-209 — Die Rundform-Einpassung an Gittermodellen](#rm-209) | Geometrie, Erkennung und Druckvorbereitung | Stapelumbau (0.5.1) und bitgleiche Vektornorm im Löser gebaut; Kumiko-Schale 18,6–20,2 s unter Last, §31 (unter 5 s) nicht erreicht; offen: Aufbereitung großer Flecken und Fits beschleunigen, danach ruhige Vergleichsläufe |
 | [RM-132 — Freiformerkennung am Ein-Sekunden-Ziel messen](#rm-132) | Geometrie, Erkennung und Druckvorbereitung | Ziel neu gefasst (Bauplan §31, Robert 06.10.: mechanisch unter 1 s, organisch unter 2 s am Referenzrechner); offen die Messung am neuen Ziel |
 | [RM-166 — Ergebnisnetze aus Mesh-Ops an einer STL überstehen keinen Weld](#rm-166) | Geometrie, Erkennung und Druckvorbereitung | Die Werkzeuge und der Eckanschluss rechnen plattformgleich (`9bc3d354e`, Ecke in `test_platform_identity._WAYS`); Marke `xfail(linux)` gefallen (acht Linux-Läufe in Folge grün, 06.10.); offen allein das Beispielarchiv der Werkstattfilme mit der nächsten Filmrunde |
@@ -1838,6 +1838,37 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   Vorgabe. Nächster Schritt: im Prusa-Zweig für Drucker ohne Bündel Wandzahl und
   `extra_perimeters = 0` aus der Familie des Druckers setzen, dann prusa:CC2 gegen elegoo:CC2
   neu schneiden.
+
+  **Nachgemessen und behoben (09.10.2026, Claude)**, Gewürzregal, Matrixwerkzeug und
+  Zerlegung Schlüssel für Schlüssel in PrusaSlicer 2.9 (Sonden im Bericht des Laufs). Die
+  Ursache vom 06.10. war falsch zugeordnet: Solidon schreibt die Wandzahl (`perimeters = 3`
+  ist Solidons Stufe „Standard“), und `extra_perimeters = 1` ändert an dieser Platte nichts.
+  Zwei Dinge trugen den Unterschied. **Die Zeitschätzung:** Mit `machine_limits_usage =
+  ignore` nimmt PrusaSlicers `GCodeProcessor` die eingebauten Grenzen (1500 mm/s²), und im
+  Dialekt `reprap` liest er gar keine — die Datei forderte 10 000. Jetzt `gcode_flavor =
+  marlin` (dasselbe `M204 S`, Byte für Byte derselbe G-Code ohne Kommentare) und
+  `time_estimate_only` mit der schnellsten angeforderten Beschleunigung und dem schnellsten
+  Tempo als Grenze; in die Druckdatei gehen keine Grenzen. **Solidons Tabelle:** drei Wände
+  und vier Bodenschichten gegen zwei und drei in Elegoos Standardprozess. Dazu
+  `extra_perimeters` und `solid_infill_below_area` auf null wie in Prusas
+  `[print:*common*]`, und `filament_type` von der Spule (PETG ging als PLA hinaus).
+
+  | Lauf (Standard, ohne Vorschläge) | vorher | nachher |
+  |---|---|---|
+  | prusa : CC2 (ohne Bündel) | 407,2 min, 153,9 g | 292,1 min, 153,7 g |
+  | superslicer : CC2 | 527,0 min, 142,5 g | 380,8 min, 142,5 g |
+  | prusa : Bambu P1S / Creality K1 | 407,2 / 408,0 min | 292,1 / 293,0 min |
+  | elegoo : CC2 mit Bündel | 231,9 min, 127,9 g | unverändert |
+  | elegoo : CC2, Wände/Boden/Muster wie Solidons Tabelle | — | 279,6 min, 160,6 g |
+
+  **Abnahme für dieselbe Platte erreicht:** PrusaSlicer gegen ElegooSlicer mit Solidons
+  Wänden +4,5 % Zeit, −4,2 % Material; mit zwei Wänden in beiden 230,7 gegen 231,9 min. Der
+  Rest bei SuperSlicer (381 min) ist seine Bauweise: ohne Z-Hub 331 min, bei PrusaSlicer
+  kostet derselbe Hub 8 min. Offen ist allein die Tabelle: „Standard“ druckt mit drei Wänden
+  und vier Bodenschichten, die Standardprozesse von Elegoo (CC2), Bambu (P1S), Creality (K1)
+  und Prusas „0.20mm SPEED“ am MK4S mit zwei Wänden und drei Bodenschichten. Ob Solidons
+  Tabelle für Drucker ohne Herstellerprofil dem Standardprozess des Druckers folgt wie
+  schon bei den Tempi (`printers.toml`), wirkt auch auf Cura und ist eine Entscheidung.
 
 <a id="rm-193"></a>
 

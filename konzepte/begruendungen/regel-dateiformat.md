@@ -432,6 +432,17 @@ Solidons Abweichung als „geändert“; Prusas Vorgabe stützt nur an gemalten
 Verstärkern, daher `support_material_auto = 1`; ohne `filament_retract_*`
 überstimmt das Filament den Rückzug.
 
+Warum der Bündelabschnitt am Namen erkannt wird: `PrusaResearch.ini` trägt
+über neuntausend Profile in einer Datei. `PRUSA_PROGRAM_DEFAULTS` ist mit
+`--save` gemessen.
+
+**PrusaSlicer ohne Bündel (RM-191, 09.10.2026).** Die Zeitschätzung braucht
+den Dialekt `marlin` und Grenzen aus den angeforderten Werten: Mit `ignore`
+nimmt `GCodeProcessor` die eingebauten 1500 mm/s², im Dialekt `reprap` liest
+er gar keine. `marlin` schreibt wie `reprap` `M204 S` (Gewürzregal: derselbe
+G-Code ohne Kommentare); `marlin2` schriebe `M204 P` ohne `T`, das Klipper
+übergeht. Messung und Zerlegung stehen in `ROADMAP.md` unter RM-191.
+
 **Die Lüfterkurve bleibt beim Hersteller (RM-228, Konsolidierung 03.10.2026).**
 Orca und PrusaSlicer lesen sie aus dem Filamentprofil des Herstellers und
 schreiben sie nur auf eigene Wahl; Hilfs-, Kammer-, Überhang- und Bügellüfter

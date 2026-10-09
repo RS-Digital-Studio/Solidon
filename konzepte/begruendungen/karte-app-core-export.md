@@ -81,13 +81,29 @@ Export.
 
 **Ohne Herstellerprofil bekommt jede Rolle Solidons Wert** (RM-191):
 PrusaSlicer schreibt Solidon
-volle Füllung und Lücken (`solid_infill_speed`, `gap_fill_speed`) und setzt
-`machine_limits_usage = ignore`, damit die Zeitschätzung nicht mit
-erfundenen 1 500 mm/s² rechnet; die Orca-Familie bekommt dieselben zwei
+volle Füllung und Lücken (`solid_infill_speed`, `gap_fill_speed`); die
+Orca-Familie bekommt dieselben zwei
 Geschwindigkeiten und die Bahnbreite für alle fünf Rollen. Bambu Studio sagt
 seine Absage nicht auf der Konsole, sondern in `result.json` neben der
 Druckdatei (`return_code`, `error_string`); `_result_reason` hängt sie an die
 Ausgabe, nur aus dem Lauf, der gerade war.
+
+**PrusaSlicer ohne Bündel schätzt, was die Datei fordert** (RM-191, 09.10.2026).
+`machine_limits_usage = ignore` half nicht, wie hier zuvor stand: Ohne
+Grenzen nimmt `GCodeProcessor` die eingebauten aus `MachineEnvelopeConfig`
+(1 500 mm/s²), und im Dialekt `reprap` liest er gar keine.
+`_prusa_time_estimate` schreibt `gcode_flavor = marlin` (dasselbe `M204 S`,
+Byte für Byte derselbe G-Code ohne Kommentare) und `time_estimate_only` mit
+der schnellsten angeforderten Beschleunigung und dem schnellsten Tempo als
+Grenze. `marlin2` wäre falsch: Es schreibt `M204 P` ohne `T`, und das
+übergeht Klipper. Dazu `PRUSA_WITHOUT_BUNDLE` — was Prusas Bestand in
+`[print:*common*]` für jeden Prozess setzt (`extra_perimeters = 0`,
+`solid_infill_below_area = 0`) — und die Materialart der ersten Spule statt
+der des Projekts (`_prusa_filament_type`). Gewürzregal am Centauri Carbon 2:
+407 → 292 min bei 153,7 g; ElegooSlicer mit denselben Wänden, Bodenschichten
+und Füllmuster 280 min und 160,6 g. Der Abstand zu Elegoos eigenem
+Standardprozess (232 min, 127,9 g) ist Solidons Tabelle: drei Wände und vier
+Bodenschichten gegen zwei und drei.
 
 ## Stützsperre und Cura
 
