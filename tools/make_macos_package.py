@@ -35,7 +35,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from app.branding import APP_ID, APP_NAME, APP_VENDOR, APP_VERSION, WEBSITE_URL
+from app.branding import APP_ID, APP_NAME, APP_VENDOR, APP_VERSION, MACOS_MINIMUM, WEBSITE_URL
 from tools import asset_rights
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -93,10 +93,9 @@ def distribution(architecture: str) -> str:
         ' hostArchitectures="' + architecture + '" />\n'
         '    <domains enable_anywhere="true" enable_currentUserHome="true"'
         ' enable_localSystem="true" />\n'
-        # Das Volume muss die Systemversion tragen, die auch die Plist nennt
-        # (LSMinimumSystemVersion in packaging/solidon3d.spec).
+        # Das Volume trägt dieselbe Systemversion wie die Plist (MACOS_MINIMUM).
         "    <volume-check>\n"
-        '        <allowed-os-versions><os-version min="13.0" /></allowed-os-versions>\n'
+        f'        <allowed-os-versions><os-version min="{MACOS_MINIMUM}" /></allowed-os-versions>\n'
         "    </volume-check>\n"
         f'    <pkg-ref id="{APP_ID}" version="{APP_VERSION}">component.pkg</pkg-ref>\n'
         "    <choices-outline>\n"

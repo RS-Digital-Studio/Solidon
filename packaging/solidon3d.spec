@@ -25,7 +25,7 @@ ROOT = Path(SPECPATH).resolve().parent
 # Solidon3D.exe, die es nicht gab.
 sys.path.insert(0, str(ROOT))
 from app.branding import APP_ID, APP_NAME, APP_VERSION, COPYRIGHT, PROJECT_SUFFIX  # noqa: E402
-from app.branding import PART_FILE_MIME_TYPE, PART_FILE_SUFFIX  # noqa: E402
+from app.branding import MACOS_MINIMUM, PART_FILE_MIME_TYPE, PART_FILE_SUFFIX  # noqa: E402
 from tools import asset_rights, build_slice_core, make_linux_packages, make_sbom  # noqa: E402
 
 # Bilder, Symbole und Schriften sind Teil des Kundenpakets und brauchen vor
@@ -373,7 +373,7 @@ if sys.platform == "darwin":
             # die niemand in einer Plist sucht.
             "NSHighResolutionCapable": True,
             # Die älteste Version, auf der die mitgelieferten Qt-Räder laufen.
-            "LSMinimumSystemVersion": "13.0",
+            "LSMinimumSystemVersion": MACOS_MINIMUM,
             # Die eigene Projektdatei, damit ein Doppelklick im Finder hier
             # ankommt. Zwei Einträge, und beide werden gebraucht: die
             # Deklaration sagt dem System, dass es den Typ überhaupt gibt und

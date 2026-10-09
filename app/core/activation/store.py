@@ -1,7 +1,7 @@
 """Wo der Lizenzschlüssel liegt und wie Demo oder Testlauf gezählt werden (§38).
 
 **Stand dieser Fassung:** Die öffentliche Demo läuft bis einschließlich
-30.10.2026. Die Verkaufsversion ab 01.11.2026 wird mit
+``DEMO_UNTIL``. Die Verkaufsversion ab ``branding.PLANNED_SALE_START`` wird mit
 ``DEMO_UNTIL = None`` und ``TRIAL_FROM = None`` gebaut und bietet damit keinen
 Testlauf an. Der unten beschriebene Markerpfad bleibt für ein späteres,
 ausdrücklich per neuem ``TRIAL_FROM`` freigeschaltetes Angebot erhalten.
@@ -76,7 +76,7 @@ _log = get_logger(__name__)
 TRIAL_DAYS: Final = 14
 
 #: Frühester Tag eines angebotenen Testlaufs. ``None`` heißt: Diese Fassung
-#: bietet keinen Testlauf an. Die Verkaufsversion ab 01.11.2026 startet genau
+#: bietet keinen Testlauf an. Die Verkaufsversion startet genau
 #: so; ein späteres Angebot braucht einen neuen, bewusst gebauten Release.
 TRIAL_FROM: Final[date | None] = None
 
@@ -93,7 +93,12 @@ TRIAL_FROM: Final[date | None] = None
 #: Cython übersetzt ausgeliefert wird: der Stichtag reist in der Erweiterung
 #: statt als lesbare Zeile daneben. Öffnen kann er ohnehin nichts, was ein
 #: Schlüssel nicht öffnete — er kann nur sperren.
-DEMO_UNTIL: Final[date | None] = date(2026, 10, 30)
+#:
+#: **Die eine Stelle für das Demo-Ende.** Die Fassungen bis 0.5.3 trugen den
+#: 30.10.2026; mit dem Verkaufsstart am 01.12.2026 läuft die Demo ab 0.6.0 bis
+#: zum 30.11.2026 (Robert, 09.10.2026). Statuszeile, Abschiedstext und Tests
+#: lesen den Wert von hier.
+DEMO_UNTIL: Final[date | None] = date(2026, 11, 30)
 
 #: Der Tag, an dem die Demo erschienen ist — die Untergrenze jeder Zählung.
 #:
@@ -461,9 +466,9 @@ def days_left(today: date | None = None) -> int:
         # Ein fehlender Ort ist ein Schreibgrund — wie im Testlauf-Zweig.
         if (first_run, effective) != stored or not _places_complete():
             _write_trial(first_run, effective)
-    # Der Stichtag selbst gehört noch dazu: am 30.10. bleibt ein Tag übrig,
-    # am 31.10. keiner. Die freundliche Richtung, und die, die auf der Website
-    # steht („bis zum 30.10.").
+    # Der Stichtag selbst gehört noch dazu: an ihm bleibt ein Tag übrig, am
+    # Tag danach keiner. Die freundliche Richtung, und die, die auf der
+    # Website steht („bis zum 30.11.").
     return max(0, (DEMO_UNTIL - effective).days + 1)
 
 
