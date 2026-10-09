@@ -34,6 +34,7 @@ entfernt hat.
 | 2026-10-09 | [RM-650: Ein eingefügtes Modell kommt in den Ausschnitt (09.10.2026)](#rm-650-ein-eingefügtes-modell-kommt-in-den-ausschnitt-09102026) |
 | 2026-10-09 | [RM-467: Zweiter Bibliothekslauf, Qt 6.12 und macOS 14 (09.10.2026)](#rm-467-zweiter-bibliothekslauf-qt-612-und-macos-14-09102026) |
 | 2026-10-09 | [RM-496: Am echten Fenster laden reale Modelle so schnell wie in v0.5.1 (09.10.2026)](#rm-496-am-echten-fenster-laden-reale-modelle-so-schnell-wie-in-v051-09102026) |
+| 2026-10-09 | [RM-623: Ohne gemerkte Profilwahl kommt die Grundlage trotzdem vom Hersteller (09.10.2026)](#rm-623-ohne-gemerkte-profilwahl-kommt-die-grundlage-trotzdem-vom-hersteller-09102026) |
 | 2026-10-09 | [RM-621: Ein Slicer, der hinter Flatpak abstürzt, heißt abgestürzt (09.10.2026)](#rm-621-ein-slicer-der-hinter-flatpak-abstürzt-heißt-abgestürzt-09102026) |
 | 2026-10-09 | [RM-528: Eine Installation kennt mehrere Release-Schlüssel, und der Wechsel hat einen Ablauf (09.10.2026)](#rm-528-eine-installation-kennt-mehrere-release-schlüssel-und-der-wechsel-hat-einen-ablauf-09102026) |
 | 2026-10-09 | [RM-351: Der Signaturhinweis zu Windows nennt nur die erste signierte Version (09.10.2026)](#rm-351-der-signaturhinweis-zu-windows-nennt-nur-die-erste-signierte-version-09102026) |
@@ -44207,6 +44208,44 @@ zwei Runden (zwei mittlere, dann zwei leichte Befunde, behoben), Entwicklungstor
   Hilfsprozesses; die Fensterprüfung mit Qt 6.12 auf allen Plattformen übernimmt das Release-Tor.
   **Offen:** Der Paketbau auf vier Plattformen mit Qt 6.12 und den beiden neuen Rädern belegt
   sich im vollen CI-Lauf, zusammen mit RM-468 und RM-469.
+## RM-623: Ohne gemerkte Profilwahl kommt die Grundlage trotzdem vom Hersteller (09.10.2026)
+
+<a id="rm-623-ohne-gemerkte-profilwahl-kommt-die-grundlage-trotzdem-vom-hersteller-09102026"></a>
+<a id="rm-623"></a>
+
+**Befund (09.10.2026, an Roberts Drachendruck vom 08.10.2026):** Die Fensterdatei trug 5 KB
+nur mit Solidons Werten, ohne `printer_settings_id` und ohne Elegoos Prozess; ElegooSlicer
+füllte den Rest mit Orca-Vorgaben (`independent_support_layer_height` 1 statt 0, keine untere
+Trennschicht), und die Konsole stürzte an derselben Datei ab (`ElegooSlicer.cpp:1697`). In
+Roberts `settings.json` waren Maschine und Prozess leer. **Ursache, am Stand des Drucks
+(190a9e1a8) nachgestellt:** Das Projekt druckte auf dem eingebauten `centauri-carbon-2`,
+daneben lag sein Zwilling aus ElegooSlicer; die 0,4er Maschine wurde dem Zwilling zugeschlagen
+und fehlte in der Liste des Dialogs, Maschine und Prozess blieben leer, und das Öffnen im
+Fenster verlangt keine Maschine. RM-600 hat die Liste behoben (am heutigen Stand belegt der
+Dialog CC2 0.4, „0.20mm Standard“ und „Elegoo PLA @ECC2“ vor). Offen blieb
+`remembered_setup`: Ohne passende gemerkte Wahl gab es kein Setup, das Hauptfenster rechnete
+mit Solidons Tabelle, und der Menüexport schrieb keinen Herstellerprozess.
+
+**Behoben:** `handover.standard_choice` wählt ohne gemerkte Wahl, was der Dialog vorbelegt —
+die im Slicer eingestellte Maschine, wenn sie dieser Drucker ist, sonst die zugeordnete, sonst
+die einzige, aber nie die eines anderen bekannten Druckers; dazu ihren Standardprozess und das
+Filament der Materialart. `remembered_setup` nimmt sie, wo keine passende Wahl gemerkt ist.
+
+**Nachweis (09.10.2026):** Sonde mit Roberts Einstellungen: `remembered_setup` liefert CC2 0.4,
+„0.20mm Standard @Elegoo CC2 0.4 nozzle“ und „Elegoo PLA @ECC2“; der Menüexport eines Würfels
+trägt `printer_settings_id`, 289 Schlüssel und Elegoos Stützwerte, und die ElegooSlicer-Konsole
+schneidet ihn (Exit 0). Tests `test_without_a_choice_the_stock_names_machine_process_and_filament`,
+`test_the_standard_choice_takes_no_machine_of_another_printer` (Gegenprobe ohne Schutz rot),
+`test_without_a_fitting_choice_the_export_takes_the_dialogs_choice`. Changelog: ja (Behebung).
+
+**Abschlussprüfung (09.10.2026):** Die Vorwahl prüft die konkrete Maschine auch gegen die
+Projektdüse, bevor sie Prozess und Filament liest. Fehlt etwa die 0,8-mm-Schwester, gibt es
+keine Herstellergrundlage aus der 0,4-mm-Maschine; der Regressionstest war vor dem Fix rot.
+Die gemeinsame Einrichtung wird stufenunabhängig wiederverwendet, abgelöste Arbeiter werden
+abgesagt. Zweite Durchsicht: verbleibende Düsenlücke und Qt-Abbau im Verdrahtungstest behoben.
+Entwicklungstor auf dem reparierten Stand: 24.909 bestanden, 118 übersprungen, Exit 0;
+ruff, Format und mypy ebenfalls Exit 0. Die verpflichtenden Plattformauswahlen und der
+Abgleich mit dem aktuellen Hauptzweig gehören zur gemeinsamen Integration.
 
 ## RM-621: Ein Slicer, der hinter Flatpak abstürzt, heißt abgestürzt (09.10.2026)
 

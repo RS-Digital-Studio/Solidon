@@ -8432,7 +8432,7 @@ def test_the_file_export_of_a_selection_asks_the_whole_job(
         print_settings.resolve(profile, "standard"), "support.style", "auto"
     )
     setup = handover.SlicerSetup(tmp_path / "elegoo-slicer.exe", "orca")
-    monkeypatch.setattr(main_window, "remembered_setup", lambda *args: setup)
+    monkeypatch.setattr(main_window, "remembered_setup", lambda *_args, **_kwargs: setup)
 
     def export(job: tuple[Any, ...]) -> tuple[set[str], set[str]]:
         folder = tmp_path / f"auftrag_{len(job)}"
@@ -8449,6 +8449,7 @@ def test_the_file_export_of_a_selection_asks_the_whole_job(
             _scene=None,
             _document=None,
             _checked=None,
+            _chosen=None,
             cancelled=None,
             _begin_write=lambda: None,
         )

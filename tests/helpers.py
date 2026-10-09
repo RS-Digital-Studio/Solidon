@@ -2036,6 +2036,101 @@ class LoopbackServer(http.server.HTTPServer):
         self.server_port = int(port)
 
 
+# --- Ein Slicerbestand, an dem jede falsche Vorwahlregel eine andere Datei trifft -----
+
+#: Die Maschinen des Bestands aus :func:`cc2_stock`, beim Namen.
+CC2_MACHINE = "Elegoo Centauri Carbon 2 0.4 nozzle"
+CC2_FINE_NOZZLE = "Elegoo Centauri Carbon 2 0.2 nozzle"
+CC2_HIGH_FLOW = "Elegoo Centauri Carbon 2 HF0.4 nozzle"
+
+
+def cc2_stock(folder: Path) -> Path:
+    """Ein ElegooSlicer-Bestand für den Centauri Carbon 2 mit je zwei
+    Maschinen, Prozessen und Filamenten; gibt die Programmdatei zurück (RM-623).
+
+    Jede falsche Regel der Vorwahl träfe eine andere Datei: Die alphabetisch
+    erste Maschine ist die 0,2er Düse (``cc2-02.json``), der erste Prozess
+    „0.12mm Fine“ (``fine.json``) statt des Standards (``standard.json``),
+    das erste Filament PETG (``petg.json``) statt PLA (``pla.json``). Die
+    High-Flow-Variante mit 0,4 (``cc2-hf.json``) ist nur die Wahl, wenn der
+    Slicer auf ihr steht — die Zuordnung nimmt den kürzeren Namen. Der
+    Prozess trägt zwei Wände (``wall_loops``), Solidons Tabelle drei.
+    """
+
+    def write(path: Path, document: dict[str, object]) -> None:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(document), encoding="utf-8")
+
+    root = folder / "ElegooSlicer" / "resources" / "profiles" / "Elegoo"
+    write(
+        root / "machine" / "fdm_machine_common.json",
+        {"type": "machine", "name": "fdm_machine_common", "nozzle_diameter": ["0.4"]},
+    )
+    for file, name, nozzle in (
+        ("cc2.json", CC2_MACHINE, "0.4"),
+        ("cc2-02.json", CC2_FINE_NOZZLE, "0.2"),
+        ("cc2-hf.json", CC2_HIGH_FLOW, "0.4"),
+    ):
+        write(
+            root / "machine" / "ECC2" / file,
+            {
+                "type": "machine",
+                "name": name,
+                "inherits": "fdm_machine_common",
+                "instantiation": "true",
+                "printer_model": "Elegoo Centauri Carbon 2",
+                "nozzle_diameter": [nozzle],
+                "default_print_profile": "0.20mm Standard @CC2",
+            },
+        )
+    both = [CC2_MACHINE, CC2_HIGH_FLOW]
+    write(
+        root / "process" / "fdm_process_common.json",
+        {
+            "type": "process",
+            "name": "fdm_process_common",
+            "layer_height": "0.2",
+            "initial_layer_print_height": "0.2",
+            "line_width": "0.42",
+            "wall_loops": "2",
+            "sparse_infill_density": "15%",
+        },
+    )
+    for file, name, layer in (
+        ("standard.json", "0.20mm Standard @CC2", "0.2"),
+        ("fine.json", "0.12mm Fine @CC2", "0.12"),
+    ):
+        write(
+            root / "process" / "ECC2" / file,
+            {
+                "type": "process",
+                "name": name,
+                "inherits": "fdm_process_common",
+                "instantiation": "true",
+                "layer_height": layer,
+                "compatible_printers": both,
+            },
+        )
+    for file, name, kind, temperature in (
+        ("pla.json", "Elegoo PLA @ECC2", "PLA", "210"),
+        ("petg.json", "Elegoo PETG @ECC2", "PETG", "240"),
+    ):
+        write(
+            root / "filament" / "ECC2" / file,
+            {
+                "type": "filament",
+                "name": name,
+                "instantiation": "true",
+                "filament_type": [kind],
+                "nozzle_temperature": [temperature],
+                "compatible_printers": both,
+            },
+        )
+    executable = folder / "ElegooSlicer" / "elegoo-slicer.exe"
+    executable.write_bytes(b"")
+    return executable
+
+
 def plate_on_a_sloped_foot(angle: float) -> MeshData:
     """Eine Platte 60 mm im Quadrat, deren untere 4 mm ringsum unter ``angle``
     gegen die Senkrechte nach außen laufen — die Bodenkante des Bahnteils

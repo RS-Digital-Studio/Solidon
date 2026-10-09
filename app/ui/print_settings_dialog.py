@@ -376,7 +376,11 @@ def _remembered_profiles_match(settings: UiSettings, printer_id: str, slicer: Pa
 
 
 def remembered_setup(
-    settings: UiSettings, material: str = "", printer_id: str = ""
+    settings: UiSettings,
+    material: str = "",
+    printer_id: str = "",
+    *,
+    cancelled: CancelToken | None = None,
 ) -> handover.SlicerSetup | None:
     """Der Slicer, wie er hier zuletzt eingestellt war (§29).
 
@@ -404,17 +408,21 @@ def remembered_setup(
     vermerkten ab, gelten die Profile nicht — sie stammen aus dem Bestand
     eines anderen Programms. Auch hier gilt: ohne Vermerk kein Vergleich.
 
-    ``None``, solange kein Druckerprofil gemerkt ist: Die Suche nach dem
-    Programm geht über PATH, Registry und die üblichen Orte und kostet eine
-    halbe Sekunde. Wer den Slicer nie eingerichtet hat, bekäme dafür ein Setup
-    ohne Maschine — also nichts, was die Kette auflösen könnte.
+    **Gilt keine gemerkte Maschine, gilt die Vorwahl des Dialogs** (RM-623,
+    :func:`handover.standard_choice`): Maschine, Prozess und Filament, die er
+    für diesen Drucker vorbelegt, mit gemerktem Prozess, Filament und — für
+    denselben Drucker und Slicer — Platte als Vorzug wie dort. Ohne sie ging
+    die Datei ohne Herstellerprozess hinaus, und die Grundlage im Hauptfenster
+    war Solidons Tabelle statt des Profils, mit dem gedruckt wird. ``None``
+    bleibt es, wo kein Slicer da ist oder sein Bestand den Drucker nicht
+    kennt. Gerufen wird nur aus Arbeitern: Die Programmsuche kostet eine halbe
+    Sekunde, der Bestand eines großen Slicers Sekunden CPU-Zeit; ein
+    unbekannter Drucker endet nach dem Lesen der Maschinen. ``cancelled``
+    sagt die Vorwahl zwischen ihren Schritten ab.
     """
-    if not settings.slicer_machine_profile:
-        return None
     found = tools.slicer_program()
-    if not _remembered_profiles_match(settings, printer_id, found):
+    if found is None:
         return None
-    assert found is not None
     setup = handover.detect(found)
     if handover.only_opens(setup):
         # Ein Programm ohne Familie ist hier kein Fehler, sondern eine
@@ -425,6 +433,25 @@ def remembered_setup(
         if material
         else settings.slicer_base_filament
     )
+    remembered = _remembered_profiles_match(settings, printer_id, found)
+    if not settings.slicer_machine_profile or not remembered:
+        # Wie der Dialog: Prozess und Filament gelten, wenn sie zur gewählten
+        # Maschine passen (``_fill_processes``, ``_fill_filaments``), die
+        # Platte nur für denselben Drucker und Slicer
+        # (``_refresh_bed_plate_context``).
+        return handover.standard_choice(
+            replace(
+                setup,
+                base_process=settings.slicer_base_process,
+                base_filament=filament,
+                plate=settings.slicer_bed_plate if remembered else "",
+            ),
+            profiles.scene_profile(
+                printer_id or settings.printer or profiles.DEFAULT_PRINTER,
+                material or settings.material or profiles.DEFAULT_MATERIAL,
+            ),
+            cancelled=cancelled,
+        )
     return replace(
         setup,
         machine_profile=settings.slicer_machine_profile,

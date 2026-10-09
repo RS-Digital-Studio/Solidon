@@ -87,6 +87,7 @@ Nutzen da und sonst nichts.
 - Der Druckdialog bietet die Drucker des gewählten Slicers an, wie *Erste Schritte* und *Einstellungen*. Ein so übernommener Drucker bleibt bei seinem Slicer.
 - Im Druckdialog lässt sich der Slicer wechseln wie in *Erste Schritte*, auch über *Programm wählen …* für einen, den Solidon nicht selbst findet.
 - Ein Drucker aus Solidons Liste und derselbe aus dem Slicer gelten als ein Gerät. Der Druckdialog wählt das Slicerprofil mit der richtigen Düse, und die Druckdatei trägt den Startcode.
+- Ohne gemerktes Slicerprofil nehmen Export und Hauptfenster, was der Druckdialog für den Drucker vorschlägt, samt Maschine und Prozess des Herstellers.
 - Zur Wahl stehen nur noch Slicer, mit denen Solidon arbeitet, dazu Resin-Slicer wie ChituBox und Lychee. Bambu Studio als AppImage zählt jetzt dazu.
 - Startcode und Bauraum kommen nur noch von genau Ihrem Drucker, nicht von einem anderen Modell derselben Reihe.
 - Der Druckdialog ordnet die Profile des Slicers deutlich schneller zu, beim Öffnen und nach jedem Slicerwechsel.

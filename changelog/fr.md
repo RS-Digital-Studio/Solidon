@@ -63,6 +63,7 @@ dans `website/version.json`.
 - La boîte de dialogue d'impression propose les imprimantes du slicer choisi, comme *Premiers pas* et *Réglages*. Une imprimante reprise ainsi reste liée à son slicer.
 - Dans la boîte de dialogue d'impression, le slicer se change comme dans *Premiers pas*, aussi via *Choisir le programme …* pour un slicer que Solidon ne trouve pas seul.
 - Une imprimante de la liste de Solidon et la même issue du slicer sont un seul appareil. La boîte de dialogue choisit le profil à la bonne buse, et le fichier contient le code de démarrage.
+- Sans profil du slicer mémorisé, l'export et la fenêtre principale prennent ce que la boîte d'impression propose pour l'imprimante, machine et processus du fabricant compris.
 - Seuls les slicers avec lesquels Solidon fonctionne sont proposés, plus les slicers pour résine comme ChituBox et Lychee. Bambu Studio en AppImage en fait désormais partie.
 - Le code de démarrage et le volume d'impression viennent uniquement de votre imprimante, pas d'un autre modèle de la même gamme.
 - La boîte de dialogue d'impression attribue les profils du slicer bien plus vite, à l'ouverture et après chaque changement de slicer.
