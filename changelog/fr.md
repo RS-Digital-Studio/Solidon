@@ -55,6 +55,7 @@ dans `website/version.json`.
 - Annuler et rétablir vont plus vite, et la mémoire devenue inutile est libérée aussitôt.
 - Résoudre les recouvrements et exporter en 3MF va nettement plus vite.
 - Un modèle ajouté est ensuite visible, même s'il se pose à côté d'un modèle sur lequel la vue était zoomée.
+- Dans le catalogue de blocs, *Gérer les blocs* est ouvert tant qu'il n'y a pas encore de bloc personnel.
 
 ### Imprimer et transmettre au slicer
 

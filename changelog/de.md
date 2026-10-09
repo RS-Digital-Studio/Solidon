@@ -79,6 +79,7 @@ Nutzen da und sonst nichts.
 - Rückgängig und Wiederholen gehen schneller, und nicht mehr gebrauchter Arbeitsspeicher wird gleich wieder frei.
 - Das Auflösen von Überschneidungen und der Export als 3MF gehen deutlich schneller.
 - Ein eingefügtes Modell steht danach im Bild, auch wenn es neben einem herangezoomten Modell landet.
+- Im Bausteinkatalog steht *Bausteine verwalten* offen, solange es noch keinen eigenen Baustein gibt.
 
 ### Drucken und Übergabe an den Slicer
 

@@ -54,6 +54,7 @@ it into `website/version.json`.
 - Undo and redo are faster, and memory that is no longer needed is freed right away.
 - Resolving overlaps and exporting as 3MF are considerably faster.
 - An added model is in view afterwards, even when it lands next to a model you zoomed in on.
+- In the part catalogue, *Manage parts* is open as long as there is no part of your own yet.
 
 ### Printing and slicer handover
 

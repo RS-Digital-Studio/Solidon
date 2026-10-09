@@ -54,6 +54,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Desfazer e refazer são mais rápidos, e a memória que já não é precisa fica logo livre.
 - Resolver sobreposições e exportar em 3MF é bastante mais rápido.
 - Um modelo adicionado passa a ficar à vista, mesmo quando aparece ao lado de um modelo em que a vista estava ampliada.
+- No catálogo de blocos, *Gerir blocos* aparece aberto enquanto ainda não existir nenhum bloco próprio.
 
 ### Imprimir e entregar ao slicer
 

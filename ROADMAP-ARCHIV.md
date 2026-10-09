@@ -31,6 +31,7 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-09 | [RM-680: Bausteine verwalten steht ohne eigenen Baustein offen (09.10.2026)](#rm-680-bausteine-verwalten-steht-ohne-eigenen-baustein-offen-09102026) |
 | 2026-10-09 | [RM-650: Ein eingefügtes Modell kommt in den Ausschnitt (09.10.2026)](#rm-650-ein-eingefügtes-modell-kommt-in-den-ausschnitt-09102026) |
 | 2026-10-09 | [RM-584 (Teil): Über Baumspitzen rät Solidon zwei Schichten Luft (09.10.2026)](#rm-584-teil-über-baumspitzen-rät-solidon-zwei-schichten-luft-09102026) |
 | 2026-10-09 | [RM-622: Neben einem Reinigungsturm und unter organischen Bäumen rät Solidon den Stützabstand in ganzen Schichten (09.10.2026)](#rm-622-neben-einem-reinigungsturm-und-unter-organischen-bäumen-rät-solidon-den-stützabstand-in-ganzen-schichten-09102026) |
@@ -46211,3 +46212,33 @@ englisch, ein Satz ohne „Windows“ mit mitalternder Nummer, das portugiesisch
 der Mac-Hinweis ohne „ab“ werden je erkannt; die ersten vier ließ die erste Fassung des
 Wächters durch (Review S, M-1). Live am 09.10.2026 nachgesehen: auf solidon3d.de steht in allen
 sechs Sprachen „ab 0.5.0“ neben „Version 0.5.3“, wie im Repository. Changelog: nein.
+
+## RM-680: Bausteine verwalten steht ohne eigenen Baustein offen (09.10.2026)
+
+<a id="rm-680-bausteine-verwalten-steht-ohne-eigenen-baustein-offen-09102026"></a>
+<a id="rm-680"></a>
+
+**RM-680 — Der Bausteinkatalog beginnt mit zugeklapptem Verwaltungsabschnitt, auch wenn noch kein eigener Baustein existiert.**
+  Nachprüfung RM-455 (03.10.2026, `09d8e9485`, Befund 3.1). Im frisch geöffneten Katalog stehen
+  *Auswahl als Baustein speichern …*, *Baustein aus Datei hinzufügen …*, *Als OpenSCAD-Datei
+  schreiben …*, *Baustein als Datei weitergeben …* und die beiden Sperrgründe hinter der
+  zugeklappten Kopfzeile *Bausteine verwalten*, solange kein eigener Baustein gewählt ist; in
+  v0.5.1 und v0.5.0 standen sie offen (**Regression gegenüber v0.5.1**, Ursache `48ffcf145`). RM-455
+  klappt den Abschnitt nur an einem eigenen Baustein auf. Die beiden Hinweistests klappen ihn selbst
+  auf und prüfen „der Grund steht sichtbar da“ (§2.7) nur im offenen Zustand. Auf `paket/b-bausteine`
+  beginnt der Abschnitt weiter zu (`open_now=False`, `app/ui/catalog.py:609–611`); die Kopfzeile
+  nennt seit `dd7e1e923` im Untertitel „Eigene Bausteine speichern, aus Datei hinzufügen, …“; aufgeklappt
+  wird nur an einem eigenen Baustein (`:1223`).
+  **Stellen:** `app/ui/catalog.py:599–602` und `:1200` (origin/main), `:609–611` und `:1223`
+  (`paket/b-bausteine`), die
+  Hinweistests in `tests/test_catalog_ui.py`.
+  **Fix (allgemein):** Der Abschnitt beginnt offen, solange ein Sperrgrund steht oder noch kein
+  eigener Baustein existiert; oder *Speichern* und *Hinzufügen* stehen außerhalb der Klappe. Die
+  Hinweistests prüfen den Grund ohne vorheriges Aufklappen.
+  **Abnahme:** Fenstertest: frischer Katalog ohne eigene Bausteine zeigt *Speichern*, *Hinzufügen*
+  und beide Sperrgründe ohne Klick; mit eigenem Baustein und gewähltem eingebautem Baustein bleibt
+  das heutige Verhalten; die Handbuchseiten `own-parts` und `exchange` nennen den Abschnitt.
+  Bauplan §2.7, §24.
+  Belege: `F:\solidon-review-reports\verif-09d8e9485.md` (Abschnitt 3).
+
+**Abschluss:** Der Abschnitt *Bausteine verwalten* beginnt offen, solange der eigene Bausteinordner nichts hält (`PartCatalog`, `_own_library_is_empty`). Gezählt werden gespeicherte Rezepte und hinzugefügte Bausteine, dieselbe Frage wie für Weitergabe, *Bearbeiten* und *Entfernen* (`_in_own_library`, vorher dreimal hergeleitet); ein mitgereister und ein `.py`-Baustein zählen nicht, `PartSpec.own` zählte anders. Danach gilt der Merker (`remember`, RM-491), und ein eigener Baustein klappt den Abschnitt wie bisher auf (RM-455; dass dieses Aufklappen gemerkt wird, steht in [RM-658](ROADMAP.md#rm-658)). Damit stehen *Auswahl als Baustein speichern …*, *Baustein aus Datei hinzufügen …* und beide Sperrgründe ohne Klick da, wie in 0.5.1 (Rückschritt seit `48ffcf145`, in 0.5.2 und 0.5.3). Weil der Weitergabegrund jetzt vorn steht, sagt er ohne eigenen Baustein „Speichern Sie zuerst einen eigenen Baustein, um ihn weiterzugeben.“ statt zum Wählen aufzufordern, das bei einem eingebauten in die nächste Absage führte. Die Hinweistests prüfen den Grund ohne vorheriges Aufklappen und stellen die Bibliothek ohne eigene Bausteine selbst her (`no_own_parts`); `test_the_closed_management_names_what_it_holds` prüft den zugeklappten Zustand nach einem Klick; neu `test_a_fresh_catalogue_shows_its_management_without_a_click` und `test_only_a_part_in_the_own_library_closes_the_management` (Rezept und hinzugefügt zu, mitgereist und `.py` offen). Gegenprobe über ein Plugin, je Mutation von acht Tests rot: immer zu 6, immer offen 2, Prädikat über `PartSpec.own` 2, alter Weitergabegrund 3; Katalogtests 52 grün, Handbuch-, Katalog-, Wortlaut- und Changelogtests 539 grün. Die Handbuchseiten *Eigene Bausteine* und *Bausteindateien austauschen* nennen Abschnitt und Knopf in allen sechs Sprachen, der eingefrorene Musterbestand trägt die neuen Seitenschlüssel; Changelog 0.6.0. Fenstersonde am echten Fenster, frischer Nutzerordner: 4 von 4, *Speichern*, *Hinzufügen* und beide Sperrgründe ohne Klick sichtbar, der Weitergabegrund schickt zum Speichern. Umgesetzt von Claude (Thread „Bedienung und KI“).

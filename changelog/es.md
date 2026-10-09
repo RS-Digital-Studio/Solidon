@@ -55,6 +55,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Deshacer y rehacer son más rápidos, y la memoria que ya no se necesita se libera enseguida.
 - Resolver solapamientos y exportar a 3MF es bastante más rápido.
 - Un modelo añadido queda después a la vista, aunque se coloque junto a otro sobre el que se había hecho zoom.
+- En el catálogo de bloques, *Gestionar bloques* aparece abierto mientras aún no haya ningún bloque propio.
 
 ### Imprimir y entregar al slicer
 
