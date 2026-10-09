@@ -117,8 +117,9 @@ def single_read() -> Iterator[None]:
     um (:data:`ProfileIndexes`). Ausdrücklich übergebene Indizes und Dokumente
     gehen vor; verschachtelt gilt der äußere Durchgang. Die Signatur des
     gemerkten Bestands (:func:`_holding_signature`) erhebt ein Durchgang
-    einmal je Slicer, die Modelldatei einer Maschine (:func:`machine_model`)
-    einmal je Maschine.
+    einmal je Slicer; was aus dem gelesenen Bestand folgt — die Modelldatei
+    einer Maschine, die Grundlage eines Exports —, rechnet er einmal
+    (:func:`once_per_read`).
     """
     if getattr(_SINGLE_READ, "documents", None) is not None:
         yield
@@ -127,7 +128,7 @@ def single_read() -> Iterator[None]:
     _SINGLE_READ.indexes = {}
     _SINGLE_READ.signatures = {}
     _SINGLE_READ.listings = {}
-    _SINGLE_READ.models = {}
+    _SINGLE_READ.once = {}
     try:
         yield
     finally:
@@ -135,7 +136,27 @@ def single_read() -> Iterator[None]:
         _SINGLE_READ.indexes = None
         _SINGLE_READ.signatures = None
         _SINGLE_READ.listings = None
-        _SINGLE_READ.models = None
+        _SINGLE_READ.once = None
+
+
+def once_per_read[T](key: object, compute: Callable[[], T]) -> T:
+    """Was ``compute`` im laufenden Lesedurchgang unter ``key`` ergab, einmal gerechnet.
+
+    Außerhalb eines Durchgangs (:func:`single_read`) rechnet es jedes Mal.
+    Nur für Ergebnisse, die allein aus dem Schlüssel und dem Bestand folgen,
+    den der Durchgang liest — mit ihm verfallen sie. Ein Fehler wird nicht
+    gemerkt: Die nächste Frage rechnet neu. Das Ergebnis teilen sich alle
+    Fragenden, verändert wird es nicht.
+    """
+    shared: dict[object, Any] | None = getattr(_SINGLE_READ, "once", None)
+    if shared is None:
+        return compute()
+    if key in shared:
+        found: T = shared[key]
+        return found
+    computed = compute()
+    shared[key] = computed
+    return computed
 
 
 def _json_files(root: Path) -> list[Path]:
@@ -4694,16 +4715,10 @@ def machine_model(
     """
     if not model_name:
         return {}
-    shared: dict[tuple[Path, str, tuple[Path, ...]], dict[str, Any]] | None = getattr(
-        _SINGLE_READ, "models", None
+    return once_per_read(
+        ("machine_model", machine_file, model_name, tuple(roots)),
+        lambda: _machine_model_in(machine_file, model_name, tuple(roots)),
     )
-    key = (machine_file, model_name, tuple(roots))
-    if shared is not None and key in shared:
-        return shared[key]
-    found = _machine_model_in(machine_file, model_name, roots)
-    if shared is not None:
-        shared[key] = found
-    return found
 
 
 def _machine_model_in(

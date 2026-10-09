@@ -2287,7 +2287,22 @@ def base_settings(
     das Herstellerprofil, zurückgelesen in Solidons Felder. Sonst ist sie
     Solidons Tabelle (:func:`app.core.knowledge.print_settings.resolve`) —
     und die Übergabe schreibt sie dann vollständig.
+
+    **Im Lesedurchgang einmal** (:func:`slicer_profiles.once_per_read`): Ein
+    3MF-Export fragt viermal — für die Datei, die Befunde, den Stützfuß und
+    die Projekteinstellungen —, und jedes Mal liefen Erbketten, Variante und
+    Modelldatei neu (RM-670).
     """
+    return slicer_profiles.once_per_read(
+        ("base_settings", profile, quality, setup),
+        lambda: _base_settings(profile, quality, setup),
+    )
+
+
+def _base_settings(
+    profile: Profile, quality: QualityPreset, setup: SlicerSetup | None
+) -> Foundation:
+    """:func:`base_settings`, ohne den Lesedurchgang."""
     fallback = cura_fan_curve(settings_table.resolve(profile, quality), profile, setup)
     if setup is not None and setup.flavour == "cura":
         from app.core.slice import advise

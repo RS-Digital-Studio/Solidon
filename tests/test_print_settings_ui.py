@@ -10217,48 +10217,194 @@ def test_an_empty_choice_expires_when_the_printer_is_created_in_the_slicer(
     assert renewed.current()
 
 
-def test_a_3mf_export_searches_the_machine_model_once(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """RM-670: Die Grundlage entsteht je Export viermal — für die Datei, die
-    Befunde, den Stützfuß und die Platte —, und jedes Mal suchte
-    ``machine_model`` rekursiv im ganzen Bestand nach der Modelldatei. Am
-    ElegooSlicer war das rund die Hälfte der Rechenzeit eines Exports. Im
-    Lesedurchgang des Exports geschieht die Suche jetzt einmal."""
-    from app.core import tools
+def _family_stock(
+    flavour: str, folder: Path, monkeypatch: pytest.MonkeyPatch
+) -> tuple[Profile, handover.SlicerSetup]:
+    """Ein Bestand je Familie, die die Grundlage unterscheidet, mit der Wahl,
+    die der Export dafür bekommt: Orca (Erbketten und Modelldatei), Prusa
+    (Bündel) und Cura (Definitionen). Die eigenen Profile bleiben leer, und
+    der Bestand ist älter als :data:`slicer_profiles.SETTLE_NS` — sonst
+    merkte ihn niemand."""
+    import os
+
     from app.core.export import slicer_profiles
+    from tests.cura_fakes import cura_installation
+    from tests.helpers import CC2_MACHINE
 
-    executable = cc2_stock(tmp_path)
-    monkeypatch.setattr(tools, "slicer_program", lambda: executable)
-    profile = profiles.make_profile("centauri-carbon-2", "pla")
-    chosen = _foundation_choice(profile)
-    assert chosen.setup is not None
-    asked: list[object] = []
-    searched: list[object] = []
-    for name, calls in (("machine_model", asked), ("_machine_model_in", searched)):
-        original = getattr(slicer_profiles, name)
+    monkeypatch.setattr(slicer_profiles, "user_roots", lambda *_args: [])
+    if flavour == "orca":
+        executable = cc2_stock(folder)
+        profile = profiles.make_profile("centauri-carbon-2", "pla")
+        setup = handover.SlicerSetup(
+            executable,
+            "orca",
+            machine_profile=CC2_MACHINE,
+            base_process="0.20mm Standard @CC2",
+            base_filament="Elegoo PLA @ECC2",
+        )
+    elif flavour == "prusa":
+        executable = folder / "PrusaSlicer" / "prusa-slicer-console.exe"
+        root = executable.parent / "resources" / "profiles"
+        root.mkdir(parents=True)
+        (root / "PrusaResearch.ini").write_text(_PRUSA_BUNDLE, encoding="utf-8")
+        executable.write_bytes(b"")
+        profile = profiles.make_profile("prusa-mk4s", "pla")
+        setup = handover.SlicerSetup(
+            executable,
+            "prusa",
+            machine_profile="Original Prusa MK4S HF0.4 nozzle",
+            base_process="0.20mm SPEED @MK4S HF0.4",
+            base_filament="Prusament PLA @MK4S HF0.4",
+        )
+    else:
+        executable = cura_installation(folder)
+        profile = profiles.make_profile("creality-k1-max", "pla")
+        setup = handover.SlicerSetup(executable, "cura")
+    past = 1_767_225_600.0
+    for path in folder.rglob("*"):
+        os.utime(path, (past, past))
+    return profile, setup
 
-        def counted(*args: Any, original: Any = original, calls: list[object] = calls) -> Any:
-            calls.append(args[1])
-            return original(*args)
 
-        monkeypatch.setattr(slicer_profiles, name, counted)
+def _change_family_stock(flavour: str, executable: Path) -> None:
+    """Ein Wert des Bestands aus :func:`_family_stock` ändert sich, wie bei
+    einem Update des Slicers: Die Programmdatei ist neu, und ein Wert der
+    Grundlage ist ein anderer — die Wände des Prozesses, bei Cura das
+    Mindesttempo, aus dem die Druckzeit rechnet."""
+    if flavour == "orca":
+        process = executable.parent / "resources/profiles/Elegoo/process/ECC2/standard.json"
+        document = json.loads(process.read_text(encoding="utf-8"))
+        process.write_text(json.dumps({**document, "wall_loops": "4"}), encoding="utf-8")
+    elif flavour == "prusa":
+        bundle = executable.parent / "resources/profiles/PrusaResearch.ini"
+        text = bundle.read_text(encoding="utf-8")
+        section = "[print:0.20mm SPEED @MK4S HF0.4]\n"
+        bundle.write_text(text.replace(section, section + "perimeters = 4\n"), encoding="utf-8")
+    else:
+        machine = executable.parent / "share/cura/resources/definitions/creality_k1max.def.json"
+        document = json.loads(machine.read_text(encoding="utf-8"))
+        document["overrides"]["cool_min_speed"] = {"default_value": 10}
+        machine.write_text(json.dumps(document), encoding="utf-8")
+    executable.write_bytes(b"neu")
+
+
+def _family_export(
+    profile: Profile,
+    setup: handover.SlicerSetup,
+    target: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> tuple[bytes, Any, list[Finding]]:
+    """Ein 3MF-Export über den Arbeiter des Fensters, mit ``setup`` als
+    gemerkter Wahl; zurück kommen die geschriebene Datei, die Grundlage, mit
+    der er zuletzt rechnete, und die Befunde."""
+    from app.core.export import manufacturer
+
+    used: list[Any] = []
+    original = manufacturer.base_settings
+
+    def recorded(*args: Any) -> Any:
+        used.append(original(*args))
+        return used[-1]
+
+    monkeypatch.setattr(manufacturer, "base_settings", recorded)
+    monkeypatch.setattr(preflight_main, "remembered_setup", lambda *_args, **_kwargs: setup)
+    target.parent.mkdir(parents=True, exist_ok=True)
     worker = preflight_main._ExportWorker(
         [_cube_object()],
-        tmp_path / "modell.3mf",
+        target,
         "3mf",
         profile=profile,
         sources={},
         settings=print_settings.resolve(profile),
         ui_settings=UiSettings(),
-        material="pla",
-        chosen=chosen,
+        material=profile.material.id,
     )
+    written, findings = worker._assembly()
+    monkeypatch.setattr(manufacturer, "base_settings", original)
+    assert used, "der Export fragt die Grundlage"
+    return written[0].read_bytes(), used[-1], findings
 
-    worker._assembly()
+
+@pytest.mark.parametrize("flavour", ["orca", "prusa", "cura"])
+def test_a_3mf_export_derives_the_foundation_once(
+    flavour: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """RM-670: Ein 3MF-Export fragt die Grundlage viermal — für die Datei, die
+    Befunde, den Stützfuß und die Projekteinstellungen —, und jedes Mal liefen
+    Erbketten, Variante und die rekursive Suche nach der Modelldatei neu; am
+    ElegooSlicer war allein diese Suche rund die Hälfte der Rechenzeit eines
+    Exports. Im Lesedurchgang des Exports entsteht die Grundlage einmal, und
+    die Modelldatei sucht nur die Orca-Familie — einmal."""
+    from app.core.export import manufacturer, slicer_profiles
+
+    profile, setup = _family_stock(flavour, tmp_path / "programme", monkeypatch)
+    asked: list[object] = []
+    derived: list[object] = []
+    searched: list[object] = []
+    for module, name, calls, argument in (
+        (manufacturer, "base_settings", asked, 2),
+        (manufacturer, "_base_settings", derived, 2),
+        (slicer_profiles, "_machine_model_in", searched, 1),
+    ):
+        original = getattr(module, name)
+
+        def counted(
+            *args: Any, original: Any = original, calls: list[object] = calls, at: int = argument
+        ) -> Any:
+            calls.append(args[at])
+            return original(*args)
+
+        monkeypatch.setattr(module, name, counted)
+
+    _family_export(profile, setup, tmp_path / "modell.3mf", monkeypatch)
 
     assert len(asked) > 1, "mehrere Fragen je Export — sonst prüfte der Test nichts"
-    assert searched == ["Elegoo Centauri Carbon 2"], "gesucht wird einmal"
+    assert len(derived) == 1, f"hergeleitet {len(derived)}-mal bei {len(asked)} Fragen"
+    assert searched == (["Elegoo Centauri Carbon 2"] if flavour == "orca" else []), (
+        "die Modelldatei sucht nur die Orca-Familie, und einmal"
+    )
+
+
+@pytest.mark.parametrize("flavour", ["orca", "prusa", "cura"])
+def test_the_remembered_stock_writes_the_file_a_fresh_read_writes(
+    flavour: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """RM-670: Gemerkter Bestand, ein Lesedurchgang und die einmal hergeleitete
+    Grundlage sparen Zeit und ändern an der Datei kein Byte, an Grundlage und
+    Befunden nichts. Verglichen wird der erste und der zweite Export mit einem,
+    der ohne jeden Merker liest: nichts beruhigt sich
+    (:data:`slicer_profiles.SETTLE_NS`), kein Lesedurchgang. Die Uhr der
+    ZIP-Einträge steht fest — sie ist die einzige Zeitangabe der Datei.
+
+    Ändert sich danach der Bestand, ändert sich die Grundlage, und bei Orca und
+    Prusa auch die Datei — sonst verglich der Test nichts. Curas Datei trägt
+    beim Export keine Profilwerte; dort zählt die Grundlage."""
+    import contextlib
+    import zipfile
+
+    from app.core.export import slicer_profiles
+
+    profile, setup = _family_stock(flavour, tmp_path / "programme", monkeypatch)
+    monkeypatch.setattr(
+        zipfile, "time", SimpleNamespace(time=lambda: 1_767_225_600.0, localtime=time.localtime)
+    )
+    with monkeypatch.context() as unremembered:
+        unremembered.setattr(slicer_profiles, "SETTLE_NS", 10**30)
+        unremembered.setattr(slicer_profiles, "single_read", contextlib.nullcontext)
+        fresh = _family_export(profile, setup, tmp_path / "frisch" / "modell.3mf", monkeypatch)
+    slicer_profiles.forget_holdings()
+
+    first = _family_export(profile, setup, tmp_path / "erster" / "modell.3mf", monkeypatch)
+    second = _family_export(profile, setup, tmp_path / "zweiter" / "modell.3mf", monkeypatch)
+
+    assert first[0] == fresh[0], "der erste Export mit Merker"
+    assert second[0] == fresh[0], "der zweite Export aus dem gemerkten Bestand"
+    assert first[1:] == fresh[1:] and second[1:] == fresh[1:], "Grundlage und Befunde"
+
+    _change_family_stock(flavour, setup.executable)
+    changed = _family_export(profile, setup, tmp_path / "geaendert" / "modell.3mf", monkeypatch)
+    assert changed[1] != fresh[1], "der nächste Export sieht den geänderten Bestand"
+    assert (changed[0] != fresh[0]) == (flavour != "cura"), "die Datei trägt die Änderung"
 
 
 def test_the_export_hands_a_renewed_choice_back_to_the_window(
