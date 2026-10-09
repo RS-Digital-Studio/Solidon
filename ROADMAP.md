@@ -136,6 +136,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-680 — Der Bausteinkatalog beginnt mit zugeklapptem Verwaltungsabschnitt, auch wenn noch kein eigener Baustein existiert](#rm-680) | Bedienung und Darstellung | Speichern, Hinzufügen und die Sperrgründe stehen hinter einer Kopfzeile, die man erst öffnen muss (seit `48ffcf145`) |
 | [RM-681 — Schriftzug: Zeichen, die die Schrift nicht hat, und Steuerzeichen werden still als Kasten gedruckt](#rm-681) | Bedienung und Darstellung | Nachprüfung RM-471 09.10.: fehlende Glyphe und Steuerzeichen ablehnen und eine Schrift vorschlagen, die die Zeichen hat |
 | [RM-679 — Kommandozeile und Agent nennen bei Befunden keinen Ausweg mehr](#rm-679) | Bedienung und Darstellung | Regression gegenüber v0.5.1 (in v0.5.3): RM-509 nahm die Handlung aus 118 Sätzen, Knöpfe gibt es nur im Fenster |
+| [RM-683 — Ein in 0.5.x gewählter fremder Slicer verschwindet nach dem Update ohne Hinweis](#rm-683) | Bedienung und Darstellung | Regression gegenüber v0.5.3: ein gemerkter, nicht mehr unterstützter Slicer wird still übergangen, der Druckdialog nimmt einen anderen |
 | [RM-003 — Lizenzkette der Generatoren klären und TripoSG ersetzen](#rm-003) | KI und Generatoren | Weg 3 auf TRELLIS.2-4B und FLUX.2 [klein] 4B umgebaut, alte Einrichtung wird mit Ansage entfernt (Robert, 07.10.); offen die Kanzleifragen (DINOv3-Lizenz, Trainingsdaten, Apache-Hinweise), bis dahin nennt die Startseite den Prüfvorbehalt |
 | [RM-004 — Echte Text- und Bildgenerierung über alle Zielplattformen abnehmen](#rm-004) | KI und Generatoren | Windows mit TRELLIS.2 gefahren (07.10.): Text- und Bildweg bis zum Export, nach RM-550 5 von 7 Körpern geschlossen, Auswertung 15–60 s; offen RM-550-Rest, Linux und macOS |
 | [RM-550 — Erzeugte Körper aus Weg 3 bleiben nach der Reparatur offen](#rm-550) | KI und Generatoren | Ursachen behoben (07.10.): berührende Stücke, Textweg über das Bild, 200 000 Dreiecke, beide UDF-Hüllen; 5 von 7 Läufen geschlossen; offen die Warnung „kreuzt sich selbst“ und zerfallene Rohnetze einzelner Startwerte |
@@ -4700,6 +4701,29 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   Knopf und keinen doppelten Satz; ein Wächter prüft, dass jeder Code mit Handlung im Fenster sie
   auch im Kern hat. Bauplan §2.7, §26.1, Regel 17.
   Belege: `F:\solidon-review-reports\commits-0910\befunde.md` (R-3).
+
+<a id="rm-683"></a>
+
+- [ ] **RM-683 — Ein in 0.5.x gewählter fremder Slicer verschwindet nach dem Update ohne Hinweis.**
+  Commit-Review `09d8e9485..1b0c70948` (09.10.2026, R-5). **Regression gegenüber v0.5.3 und
+  v0.5.1** im Übergang: Seit RM-601 (Entscheidung Robert, 08.10.) bietet Solidon nur noch Slicer an,
+  deren Familie es übersetzt, und Resin-Slicer (`tools.is_supported_slicer`); bis v0.5.3 bekam
+  jedes gewählte Programm die Datei ins Fenster. Die Einschränkung ist gewollt und steht im
+  Changelog 0.6.0. Offen ist der Übergang: Ein gemerkter fremder Slicer (etwa `IdeaMaker.exe`) wird
+  in Erste Schritte, Einstellungen und Druckdialog ohne Satz übergangen, der Druckdialog nimmt
+  still den ersten gefundenen unterstützten Slicer. Nur die neue Wahl über *Programm wählen …*
+  sagt ab. Am Stand origin/main und auf `origin/welle2` unverändert.
+  **Stellen:** `app/ui/first_run.py:390`, `app/ui/settings_dialog.py:381`,
+  `app/ui/print_settings_dialog.py:6748` (jeweils `tools.is_supported_slicer(...)` ohne Ansage);
+  die Absage der neuen Wahl `app/ui/first_run.py:1441–1458` (`_another_program`).
+  **Fix (allgemein):** Ist der gemerkte Slicer ein Programm, das Solidon nicht mehr anbietet, sagt
+  das erste Öffnen von Druckdialog oder Einstellungen einmal, warum er fehlt und welche Slicer gehen
+  (derselbe Satz wie bei *Programm wählen …*, mit `tools.SLICER_TITLES`), und merkt sich danach,
+  dass es gesagt ist. Der gemerkte Pfad bleibt, bis der Kunde einen anderen wählt.
+  **Abnahme:** Gemerkter `IdeaMaker.exe` → der Druckdialog nennt den Grund einmal und bietet die
+  unterstützten an; dasselbe in den Einstellungen; gemerkter unterstützter Slicer → kein Satz;
+  nach dem Bestätigen beim nächsten Start kein Satz mehr (Fenstertests). Bauplan §2.7, §29.
+  Belege: `F:\solidon-review-reports\commits-0910\befunde.md` (R-5).
 
 ## KI und Generatoren
 
