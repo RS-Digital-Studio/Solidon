@@ -7113,11 +7113,11 @@ class PrintSettingsDialog(QDialog):
         Zustandszeile; alles andere im Dialog bleibt bedienbar. Was dann
         gefunden wird, übernimmt :meth:`_slicers_found`.
         """
+        # Mit dem Stand der Suche verfällt auch der gemerkte Profilbestand
+        # (``slicer_profiles._holdings``, RM-670): Wer den Slicer eben neu
+        # eingerichtet hat, sieht seine Profile, ohne dass sich eine Datei im
+        # Bestand geändert haben muss.
         discover.forget_cache()
-        # Auch den gemerkten Profilbestand (RM-670): Wer den Slicer eben neu
-        # eingerichtet hat, soll seine Profile sehen, ohne dass sich eine
-        # Datei im Bestand geändert haben muss.
-        slicer_profiles.forget_holdings()
         self._start_slicer_search()
         self._refresh_advice()
 

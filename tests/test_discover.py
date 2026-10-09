@@ -1669,3 +1669,52 @@ def test_an_empty_answer_of_the_path_is_kept_too(
     assert find("slicer", ("orca-slicer",)) is None
     assert find("slicer", ("orca-slicer",)) is None
     assert asked == ["orca-slicer"]
+
+
+def test_a_slicer_the_list_finds_ends_the_remembered_no_of_the_path(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, isolated_search: None
+) -> None:
+    """Review RM-670 N7: Unter Linux legt der Paketverwalter den Slicer in einen
+    Ordner, der schon im PATH steht. Das gemerkte Nein blieb, und der Export
+    schrieb ohne den Slicer, den der Druckdialog daneben zeigte — bis zum
+    Neustart. Findet die Liste aller Fassungen ihn, gilt das Nein nicht mehr,
+    und der Stand der Suche ändert sich mit."""
+    program = tmp_path / "bin" / "orca-slicer"
+    program.parent.mkdir()
+    monkeypatch.setattr(
+        discover.shutil,
+        "which",
+        lambda name: str(program) if name == "orca-slicer" and program.exists() else None,
+    )
+    names = ("orca-slicer",)
+    find = discover.unpatched_find_program
+    assert find("slicer", names) is None
+    program.write_text("")
+    assert find("slicer", names) is None, "das Nein ist gemerkt"
+    generation = discover.cache_generation()
+
+    assert discover.unpatched_find_programs("slicer", names) == (program,)
+
+    assert discover.cache_generation() != generation, "wer eine Wahl hält, leitet neu her"
+    assert find("slicer", names) == program
+
+
+def test_a_slicer_the_list_finds_ends_the_remembered_no_of_the_folders(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, isolated_search: None
+) -> None:
+    """Dasselbe für die Ordnersuche, auf jeder Plattform."""
+    roots = (tmp_path / "Programme",)
+    monkeypatch.setattr(discover, "_install_roots", lambda: roots)
+    names = ("orca-slicer",)
+    program = discover._below(roots[0] / "OrcaSlicer", names)[0]
+    find = discover.unpatched_find_program
+    assert find("slicer", names) is None
+    program.parent.mkdir(parents=True)
+    program.write_text("")
+    assert find("slicer", names) is None, "das Nein ist gemerkt"
+    generation = discover.cache_generation()
+
+    assert discover.unpatched_find_programs("slicer", names) == (program,)
+
+    assert discover.cache_generation() != generation
+    assert find("slicer", names) == program

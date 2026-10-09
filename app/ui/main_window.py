@@ -129,6 +129,7 @@ from app.core.errors import (
 from app.core.export import handover, manufacturer, readback, slicer_profiles
 from app.core.export.handover import GCODE_SUFFIXES as _CORE_GCODE_SUFFIXES
 from app.core.export.handover import SliceOutcome, override_for, with_slot_override
+from app.core.export.slicer_keys import SlicerFlavour
 from app.core.export.writer import (
     ExportFormat,
     ExportPlan,
@@ -1474,17 +1475,54 @@ class _ChosenSetup:
     signature: object = None
     """Die Signatur des Profilbestands, aus dem die Wahl kam
     (:func:`slicer_profiles.stock_signature`). Legt der Kunde im Slicer ein
-    Profil an oder benennt das gewählte um, passt sie nicht mehr, und der
-    Export leitet die Wahl neu her (Review RM-670)."""
+    Profil an oder benennt das gewählte um, passt sie nicht mehr, und Export
+    und Grundlage leiten die Wahl neu her (Review RM-670)."""
+    stock: tuple[Path, SlicerFlavour] | None = None
+    """Wessen Bestand gefragt wurde — auch, wenn die Wahl ``None`` ergab: Der
+    Slicer ist da und kennt den Drucker nicht. Legt der Kunde ihn dort an, wie
+    Solidon es ihm rät, muss der nächste Export das sehen (Review RM-670 N1).
+    ``None`` nur ohne Slicer, dessen Bestand Solidon liest; einen neu
+    gefundenen meldet der Stand der Programmsuche im Schlüssel."""
 
     def current(self) -> bool:
         """Gilt die Wahl noch für den Bestand, wie er jetzt ist?"""
-        if self.setup is None or self.signature is None:
+        if self.stock is None or self.signature is None:
             return True
-        return (
-            slicer_profiles.stock_signature(self.setup.flavour, self.setup.executable)
-            == self.signature
-        )
+        executable, flavour = self.stock
+        return slicer_profiles.stock_signature(flavour, executable) == self.signature
+
+
+def _stock_now() -> tuple[tuple[Path, SlicerFlavour] | None, object]:
+    """Der Slicer, dessen Bestand eine Wahl befragt, und dessen Signatur — vor
+    dem Lesen erhoben, damit eine Änderung währenddessen die Wahl verwirft.
+
+    Derselbe Slicer wie in :func:`remembered_setup`; im Lesedurchgang teilen
+    sich Merker und Wahl die Signatur, sie kostet dann nichts.
+    """
+    program = tools.slicer_program()
+    if program is None:
+        return None, None
+    setup = handover.detect(program)
+    if handover.only_opens(setup):
+        return None, None
+    return (
+        (setup.executable, setup.flavour),
+        slicer_profiles.stock_signature(setup.flavour, setup.executable),
+    )
+
+
+def _chosen_with_stock(
+    key: tuple[object, ...],
+    ui_settings: Any,
+    material: str,
+    printer: str,
+    cancelled: CancelSignal,
+) -> _ChosenSetup:
+    """Die Wahl aus :func:`remembered_setup` mit dem Stand des Bestands, aus dem
+    sie kam — für den Grundlagenarbeiter und den Export, der sie erneuert."""
+    stock, signature = _stock_now()
+    setup = remembered_setup(ui_settings, material, printer, cancelled=cancelled)
+    return _ChosenSetup(key, setup, signature, stock)
 
 
 def _without_stage(key: tuple[object, ...]) -> tuple[object, ...]:
@@ -1504,8 +1542,9 @@ class _FoundationWorker(Worker):
     Slicersuche im Druckdialog läuft aus demselben Grund seit dem 13.09.2026
     in ``_SlicerWorker``.
 
-    Ist die Einrichtung für diesen Schlüssel schon bekannt (``chosen``), wird
-    sie nicht neu hergeleitet: Ein Stufenwechsel kostet dann nur die Grundlage.
+    Ist die Einrichtung für diesen Schlüssel schon bekannt (``chosen``) und ihr
+    Bestand unverändert (:meth:`_ChosenSetup.current`), wird sie nicht neu
+    hergeleitet: Ein Stufenwechsel kostet dann nur die Grundlage.
     Abgelöst oder beim Schließen sagt das Fenster den Arbeiter ab
     (:meth:`cancel`); die Vorwahl hält zwischen ihren Schritten an, ein
     begonnenes Lesen des Bestands läuft zu Ende.
@@ -1543,23 +1582,19 @@ class _FoundationWorker(Worker):
 
     def _in_one_read(self) -> None:
         chosen = self._chosen
-        if chosen is None:
+        # Eine Wahl aus einem Bestand, der sich seitdem geändert hat, gilt
+        # nicht mehr — auch nicht für einen Stufenwechsel (Review RM-670 N2).
+        if chosen is None or not chosen.current():
             try:
-                setup = remembered_setup(
+                chosen = _chosen_with_stock(
+                    _without_stage(self._key),
                     self._ui,
                     self._profile.material.id,
                     self._profile.printer.id,
-                    cancelled=self.cancelled,
+                    self.cancelled,
                 )
             except OperationCancelled:
                 return
-            chosen = _ChosenSetup(
-                _without_stage(self._key),
-                setup,
-                slicer_profiles.stock_signature(setup.flavour, setup.executable)
-                if setup is not None
-                else None,
-            )
         # Die Stufe wählt den Prozess des Herstellers (Entscheidung I) — hier wie
         # im Druckdialog und beim Export, sonst rechnete die Zahlenzeile mit
         # einem anderen Prozess, als gedruckt wird.
@@ -1793,6 +1828,9 @@ class _ExportWorker(Worker):
         self._phase_lock = Lock()
         self._writing = False
         self.receipt: Finding | None = None
+        self.renewed: _ChosenSetup | None = None
+        """Die Wahl, die dieser Export neu hergeleitet hat, weil sich der Bestand
+        seit ``chosen`` geändert hatte (:meth:`_assembly_in_one_read`)."""
 
     def cancel(self) -> bool:
         """Nimmt einen Abbruch nur vor dem gemeinsam geschützten Schreibbeginn an."""
@@ -1939,17 +1977,34 @@ class _ExportWorker(Worker):
             return self._assembly_in_one_read()
 
     def _assembly_in_one_read(self) -> tuple[list[Path], list[Finding]]:
-        """Der Export aus :meth:`_assembly`, in dessen Lesedurchgang."""
-        setup = (
-            self._chosen.setup
-            if self._chosen is not None and self._chosen.current()
-            else remembered_setup(
+        """Der Export aus :meth:`_assembly`, in dessen Lesedurchgang.
+
+        Hat sich der Bestand seit der Wahl des Hauptfensters geändert, leitet
+        er sie neu her und gibt sie als :attr:`renewed` zurück: Das Fenster
+        übernimmt sie, damit Zahlenzeile, Prüfbericht und der nächste Export
+        mit derselben Wahl rechnen wie diese Datei (Review RM-670 N2).
+        """
+        chosen = self._chosen
+        setup: handover.SlicerSetup | None
+        if chosen is not None and chosen.current():
+            setup = chosen.setup
+        elif chosen is not None:
+            renewed = _chosen_with_stock(
+                chosen.key,
+                self._ui_settings,
+                self._material,
+                self._profile.printer.id,
+                self.cancelled,
+            )
+            self.renewed = renewed
+            setup = renewed.setup
+        else:
+            setup = remembered_setup(
                 self._ui_settings,
                 self._material,
                 self._profile.printer.id,
                 cancelled=self.cancelled,
             )
-        )
         if setup is None:
             found = tools.slicer_program()
             if found is not None:
@@ -10469,8 +10524,30 @@ class MainWindow(QMainWindow):
             if isValid(self) and not self._close_requested:
                 self._progress_idle()
                 self._update_actions()
+                self._adopt_renewed_choice(worker)
                 self._print_findings_after_export_ended()
         self._hold_until_done(worker)
+
+    def _adopt_renewed_choice(self, worker: Any) -> None:
+        """Die Wahl übernehmen, die der Export neu hergeleitet hat (Review RM-670 N2).
+
+        Hat sich der Bestand im Slicer geändert, schreibt der Export mit der
+        neuen Wahl. Behielte das Fenster die alte, rechneten Zahlenzeile und
+        Prüfbericht mit einem anderen Prozess als die Datei, und jeder weitere
+        Export leitete neu her — am ElegooSlicer 0,5 bis 0,7 s CPU je Export.
+        Übernommen wird nur, was zum jetzigen Drucker, Material und zur
+        Profilwahl gehört; die Grundlage rechnet danach neu.
+
+        ``getattr``: Auch ein Arbeiter ohne Export-Rumpf endet hier.
+        """
+        renewed = getattr(worker, "renewed", None)
+        if not isinstance(renewed, _ChosenSetup):
+            return
+        if renewed.key != _without_stage(self._foundation_key(print_settings.DEFAULT_QUALITY)):
+            return
+        self._chosen_setup = renewed
+        quality = self.effective_print_settings().quality
+        self._start_foundation(self._foundation_key(quality), quality)
 
     def action_catalog(self) -> None:
         """§24.3: die Bibliothek, die man sehen kann. Einen Baustein zu wählen

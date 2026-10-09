@@ -27337,12 +27337,29 @@ Bestand nach dem Start im Hintergrund vor (`_warm_the_slicer`), der Export warte
 eine laufende Auswertung, und Vorwahl, Stufe, Grundlage und Datei teilen einen
 Lesedurchgang (`_assembly`, `_FoundationWorker`).
 
+**Nach Review und Nachprüfung (09.10.2026):** Die Signatur zählt nur, was der Leser ansieht
+(`_READ_BELOW`: Artordner der Orca-Familie in jeder Schreibweise, Curas Ordner der ersten
+Ebene aus `_CURA_STOCK_FOLDERS`, Prusa über `_prusa_files` ohne `cache/` und ohne
+`PrusaSlicer.ini`) — Telemetrie, `cura.cfg` und Programmeinstellungen verwerfen den Merker
+nicht mehr. Die Vorwahl des Hauptfensters (`_ChosenSetup`) trägt Bestand und Signatur, auch
+leer; Grundlage und Export leiten nach einer Änderung neu her, das Fenster übernimmt die
+erneuerte Wahl (`_ExportWorker.renewed`, `_adopt_renewed_choice`). Jedes Profil liegt einmal
+im Merker (Ausschnitt eines Eintrags mit mehr Arten), ein zweiter Fragender wartet auf ein
+laufendes Lesen, alle Merker messen die Beruhigung vor dem Lesen, auch `_prusa_store`, und
+verfallen mit `discover.cache_generation()`; `find_programs` verwirft ein veraltetes Nein der
+Einzelsuche.
+
 **Nachweis (09.10.2026):** Am ElegooSlicer mit Roberts Einstellungen, Würfel, CPU-Zeit
 unter Fremdlast: zweiter Export im Fensterweg 0,41–0,53 s (ohne gemeinsamen Lesedurchgang
-1,7 s). Tests `test_slicer_profiles.py` (Merker, neues, umbenanntes und gelöschtes Profil),
-`test_discover.py`, `test_export_background.py`,
-`test_the_3mf_export_reads_the_slicer_stock_in_one_pass`. Offen im Register: die Abnahme mit
-Orca, PrusaSlicer, Cura, Figur und Beispielprojekt am echten Fenster. Changelog: ja.
+1,7 s); nach einer Änderung im Slicer leitete vorher jeder Export neu her (0,72–1,13 s), mit
+übernommener Wahl 0,42–0,52 s. Gehalten nach Export, Grundlage, Druckdialog und
+Filamentauswahl 34 statt 72 MiB, die Filamentauswahl danach 0,19 statt 5,9 s. Tests
+`test_slicer_profiles.py` (Merker, neues, umbenanntes und gelöschtes Profil, Telemetrie, Cura
+und Prusa, Ausschnitt, Warten, Suchstand), `test_discover.py`, `test_export_background.py`,
+`test_print_settings_ui.py` (leere Wahl, erneuerte Wahl), `test_ui_export.py`
+(`test_the_3mf_export_reads_the_slicer_stock_in_one_pass` mit echtem Bestand: jede Datei
+einmal je Faden); jede Behebung mit Gegenprobe. Offen im Register: die Abnahme mit Orca,
+PrusaSlicer, Cura, Figur und Beispielprojekt am echten Fenster. Changelog: ja.
 
 ## RM-027 entfällt mit dem privaten Index (09.09.2026)
 

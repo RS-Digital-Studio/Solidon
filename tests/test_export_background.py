@@ -88,7 +88,37 @@ def _window(monkeypatch: pytest.MonkeyPatch) -> Any:
     window._print_findings_after_export_ended = lambda: (
         MainWindow._print_findings_after_export_ended(window)
     )
+    window._adopt_renewed_choice = lambda worker: MainWindow._adopt_renewed_choice(window, worker)
     return window
+
+
+def test_the_window_adopts_the_choice_an_export_renewed(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Review RM-670 N2: Hat der Export die Wahl neu hergeleitet, weil sich der
+    Bestand im Slicer geändert hatte, übernimmt das Fenster sie und rechnet die
+    Grundlage nach — sonst rechneten Zahlenzeile und Prüfbericht mit dem alten
+    Prozess, die Datei mit dem neuen, und jeder weitere Export leitete wieder her.
+    Eine Wahl für einen anderen Drucker oder ein anderes Material bleibt liegen."""
+    window = _window(monkeypatch)
+    window._foundation_key = lambda quality: ("drucker", quality, "wahl")
+    window.effective_print_settings = lambda: SimpleNamespace(quality="fine")
+    started: list[tuple[object, ...]] = []
+    window._start_foundation = lambda key, quality: started.append((key, quality))
+    old = main_window._ChosenSetup(("drucker", "wahl"), None)
+    window._chosen_setup = old
+    renewed = main_window._ChosenSetup(("drucker", "wahl"), None, ("nachher",))
+    worker = SimpleNamespace(renewed=renewed)
+    window._exporting = True
+    window._export_worker = worker
+
+    MainWindow._export_worker_done(window, worker)
+
+    assert window._chosen_setup is renewed
+    assert started == [(("drucker", "fine", "wahl"), "fine")], "die Grundlage rechnet nach"
+
+    foreign = SimpleNamespace(renewed=main_window._ChosenSetup(("anderer", "wahl"), None))
+    window._export_worker = foreign
+    MainWindow._export_worker_done(window, foreign)
+    assert window._chosen_setup is renewed and len(started) == 1, "gehört zu einer anderen Wahl"
 
 
 def test_print_findings_wait_for_the_export_and_follow_it(monkeypatch: pytest.MonkeyPatch) -> None:

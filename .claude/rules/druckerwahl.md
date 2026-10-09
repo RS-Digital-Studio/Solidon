@@ -95,15 +95,24 @@ einmal gelesen, danach verworfen. Über Aufrufe hinweg hält nur, was vor jeder
 Antwort seine Signatur prüft, denn der Kunde ändert seine Profile im Slicer:
 `_prusa_store` und der Bestand je Slicer und Profilarten (`_holdings`, jeder
 3MF-Export fragt ihn, RM-670). Eigene Profile und der `system`-Bestand gehen
-Datei für Datei mit Größe und Zeitstempel hinein, die Installation nur mit
-Programmdatei und oberster Ebene — sie ändert sich nur mit einer neuen
-Fassung, und zwölftausend Dateien je Export anzusehen kostete so viel wie das
-Lesen. Gemerkt wird erst, was älter ist als `SETTLE_NS` (zwei Änderungen im
+Datei für Datei mit Größe und Zeitstempel hinein, aber nur, was der Leser
+ansieht (`_READ_BELOW`, Curas Ordner in `_CURA_STOCK_FOLDERS`, Prusa über
+`_prusa_files`) — Telemetrie, `cura.cfg` und `PrusaSlicer.ini` ändern sich je
+Sitzung. Die Installation geht nur mit Programmdatei und oberster Ebene ein —
+sie ändert sich nur mit einer neuen Fassung, und zwölftausend Dateien je
+Export anzusehen kostete so viel wie das Lesen. Gemerkt wird erst, was älter
+ist als `SETTLE_NS`, gemessen an der Uhr vor dem Lesen (zwei Änderungen im
 selben Takt der Dateisystemuhr tragen denselben Stempel); den Zeitstempel
 eines Unterordners aus einer Auflistung nimmt keine Signatur, NTFS schreibt
-ihn dort spät nach. Die Suite leert die Merker je Test (`forget_holdings`).
-Die PATH-Antwort der Programmsuche merkt `discover._from_path` je PATH und
-PATHEXT, bis `forget_cache` nach einer Installation neu fragen lässt.
+ihn dort spät nach. Jeder Merker trägt `discover.cache_generation()`: Wer den
+Slicer im Druckdialog neu wählt oder installiert, bekommt den Bestand neu
+gelesen. Wenige Arten kommen als Ausschnitt eines Eintrags mit mehr Arten,
+damit jedes Profil einmal im Speicher liegt. Wer eine aus dem Bestand
+gewonnene Wahl hält (`_ChosenSetup` im Hauptfenster), hält auch dessen
+`stock_signature`, eine leere Wahl ebenso. Die Suite leert die Merker je Test
+(`forget_holdings`). Die PATH-Antwort der Programmsuche merkt
+`discover._from_path` je PATH und PATHEXT; findet `find_programs` den Slicer
+doch, verwirft es das Nein.
 
 ## Herstellerdrucker ohne ersten Start
 

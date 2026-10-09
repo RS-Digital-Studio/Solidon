@@ -352,7 +352,8 @@ def forget_cache() -> None:
 
 
 def cache_generation() -> int:
-    """Der Stand der Suche; ändert sich mit jedem :func:`forget_cache`."""
+    """Der Stand der Suche; ändert sich mit jedem :func:`forget_cache` und wenn
+    :func:`find_programs` ein gemerktes Nein verwirft."""
     return _generation
 
 
@@ -479,21 +480,32 @@ def _from_path(candidates: tuple[str, ...]) -> Path | None:
     PATHEXT zu prüfen, kostete unter Windows je Aufruf 0,4 s Rechenzeit und
     unter Last drei Sekunden Wartezeit — und jeder 3MF-Export fragte (RM-670).
     Ein Fund gilt, solange die Datei dasteht; ein neuer Ordner im PATH
-    (:func:`refresh_path`) oder :func:`forget_cache` fragt neu.
+    (:func:`refresh_path`), :func:`forget_cache` oder ein Fund von
+    :func:`find_programs` fragt neu.
     """
-    key = (candidates, os.environ.get("PATH", ""), os.environ.get("PATHEXT", ""))
+    key = _path_key(candidates)
     if key in _on_path:
-        known = _on_path[key]
+        known = _on_path.get(key)
         if known is None or known.is_file():
             return known
     found = next((Path(hit) for name in candidates if (hit := shutil.which(name))), None)
     # **Auch ein Nein bleibt** (Review RM-670 L5, entschieden): Unter Windows
     # steht der Slicer fast nie im PATH, und ohne Merker suchte jeder Export
     # wieder 0,4 s. Ein Installationsprogramm ändert den PATH des laufenden
-    # Prozesses nicht; einen neuen Ordner im PATH sieht der Schlüssel, und
-    # *Erneut suchen* fragt über :func:`forget_cache` neu.
+    # Prozesses nicht; einen neuen Ordner im PATH sieht der Schlüssel.
+    # Unter Linux legt der Paketverwalter den Slicer dagegen in einen Ordner,
+    # der schon im PATH steht, und der Schlüssel bleibt gleich: Dann findet ihn
+    # die Liste aller Fassungen, die der Druckdialog und die Einstellungen
+    # zeigen, und :func:`find_programs` verwirft das veraltete Nein. Sonst
+    # fragt :func:`forget_cache` neu — nach einer Installation über Solidon
+    # und wenn der Kunde ein Programm wählt.
     _on_path[key] = found
     return found
+
+
+def _path_key(candidates: tuple[str, ...]) -> tuple[tuple[str, ...], str, str]:
+    """Woran :data:`_on_path` eine Antwort des PATH wiedererkennt."""
+    return (candidates, os.environ.get("PATH", ""), os.environ.get("PATHEXT", ""))
 
 
 def find_programs(tool_id: str, names: Iterable[str]) -> tuple[Path, ...]:
@@ -525,11 +537,14 @@ def find_programs(tool_id: str, names: Iterable[str]) -> tuple[Path, ...]:
 
     keep(_remembered_program(tool_id))
 
+    on_path = False
     for name in candidates:
         located = shutil.which(name)
         if located:
+            on_path = True
             keep(Path(located))
 
+    elsewhere = False
     for search in (
         _all_from_registry,
         _all_from_flatpak,
@@ -538,8 +553,36 @@ def find_programs(tool_id: str, names: Iterable[str]) -> tuple[Path, ...]:
         _all_from_host,
     ):
         for entry in search(candidates):
+            elsewhere = True
             keep(entry)
+    _correct_the_no(tool_id, candidates, on_path=on_path, elsewhere=elsewhere)
     return _one_per_installation(found, candidates)
+
+
+def _correct_the_no(
+    tool_id: str, candidates: tuple[str, ...], *, on_path: bool, elsewhere: bool
+) -> None:
+    """Ein gemerktes Nein der Einzelsuche verwerfen, wo die Liste es besser weiß
+    (Review RM-670 N7).
+
+    Unter Linux installiert der Paketverwalter den Slicer in einen Ordner, der
+    schon im PATH steht; das Nein aus :func:`_from_path` blieb, und der Export
+    schrieb ohne den Slicer, den der Druckdialog daneben zeigte — bis zum
+    Neustart. Für die Ordnersuche (:data:`_cache`) galt dasselbe auf jeder
+    Plattform. Mit dem Nein ändert sich der Stand der Suche
+    (:func:`cache_generation`), und wer eine Wahl daraus hält, leitet sie neu her.
+    """
+    global _generation
+    corrected = False
+    key = _path_key(candidates)
+    if on_path and key in _on_path and _on_path.get(key) is None:
+        del _on_path[key]
+        corrected = True
+    if elsewhere and tool_id in _cache and _cache.get(tool_id) is None:
+        del _cache[tool_id]
+        corrected = True
+    if corrected:
+        _generation += 1
 
 
 def _one_per_installation(found: list[Path], names: tuple[str, ...]) -> tuple[Path, ...]:

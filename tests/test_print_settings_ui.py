@@ -9988,6 +9988,10 @@ def test_the_foundation_worker_reuses_the_chosen_setup_and_stops_when_cancelled(
     assert reads == [("machine",), ("process", "filament")], "erst die Maschinen, dann der Rest"
     chosen = first[0][2]
     assert Path(chosen.setup.machine_profile).name == "cc2.json"
+    assert chosen.stock == (executable, "orca"), "die Wahl weiß, wessen Bestand sie befragt hat"
+    assert chosen.signature == slicer_profiles.stock_signature("orca", executable), (
+        "und in welchem Stand (Review RM-670 N2)"
+    )
 
     staged = answers(
         preflight_main._FoundationWorker(("p", "fine", "w"), UiSettings(), profile, "fine", chosen)
@@ -10106,6 +10110,172 @@ def test_the_export_writes_with_the_chosen_setup_without_deriving_it(
 
     with zipfile.ZipFile(paths[0]) as archive:
         assert "Metadata/Slic3r_PE.config" in archive.namelist(), "geschrieben mit der Wahl"
+    assert worker.renewed is None, "nichts neu hergeleitet"
+
+
+def _a_cc2_the_slicer_does_not_know(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> tuple[Path, Path]:
+    """Ein ElegooSlicer, dessen Bestand den Centauri Carbon 2 nicht kennt, mit
+    einem Kontoordner ohne eigene Drucker — der Slicer lief schon einmal.
+    Gibt Programmdatei und Maschinenordner des Kontos zurück."""
+    from app.core import tools
+    from app.core.export import slicer_profiles
+
+    executable = cc2_stock(tmp_path / "programme")
+    known = executable.parent / "resources" / "profiles" / "Elegoo" / "machine" / "ECC2"
+    for file in known.glob("*.json"):
+        file.unlink()
+    account = tmp_path / "konto" / "ElegooSlicer" / "user" / "default"
+    (account / "machine").mkdir(parents=True)
+    monkeypatch.setattr(tools, "slicer_program", lambda: executable)
+    monkeypatch.setattr(slicer_profiles, "user_roots", lambda _flavour, _executable: [account])
+    return executable, account / "machine"
+
+
+def _the_customer_creates_the_cc2(machines: Path) -> None:
+    """Der Kunde legt den Drucker im Slicer an, wie Solidon es ihm rät."""
+    from tests.helpers import CC2_MACHINE
+
+    (machines / "Mein CC2.json").write_text(
+        json.dumps(
+            {
+                "type": "machine",
+                "name": CC2_MACHINE,
+                "from": "User",
+                "inherits": "fdm_machine_common",
+                "printer_model": "Elegoo Centauri Carbon 2",
+                "nozzle_diameter": ["0.4"],
+                "default_print_profile": "0.20mm Standard @CC2",
+            }
+        ),
+        encoding="utf-8",
+    )
+
+
+def _foundation_choice(profile: Profile) -> Any:
+    """Die Wahl, die der Grundlagenarbeiter dem Fenster meldet."""
+    given: list[tuple[Any, ...]] = []
+    worker = preflight_main._FoundationWorker(
+        ("p", "standard", "w"), UiSettings(), profile, "standard"
+    )
+    worker.done.connect(lambda *args: given.append(args))
+    worker.work()
+    return given[0][2]
+
+
+def test_an_empty_choice_expires_when_the_printer_is_created_in_the_slicer(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Review RM-670 N1: Ergab die Vorwahl ``None``, weil der Slicer den Drucker
+    nicht kennt, trug sie keine Signatur und galt für immer. Legte der Kunde
+    den Drucker im Slicer an — der Weg, den Solidon ihm weist —, ging jede
+    Datei weiter ohne Herstellerprozess und -filament hinaus. Jetzt trägt auch
+    die leere Wahl den Stand ihres Bestands, und der Export leitet neu her."""
+    import zipfile
+
+    from app.core.export import slicer_profiles
+
+    executable, machines = _a_cc2_the_slicer_does_not_know(tmp_path, monkeypatch)
+    profile = profiles.make_profile("centauri-carbon-2", "pla")
+    chosen = _foundation_choice(profile)
+    assert chosen.setup is None, "der Slicer kennt den Drucker nicht"
+    assert chosen.stock == (executable, "orca") and chosen.signature is not None
+    assert chosen.current()
+
+    _the_customer_creates_the_cc2(machines)
+    assert not chosen.current(), "ein angelegter Drucker verlangt eine neue Wahl"
+
+    given: list[tuple[Any, ...]] = []
+    staged = preflight_main._FoundationWorker(
+        ("p", "fine", "w"), UiSettings(), profile, "fine", chosen
+    )
+    staged.done.connect(lambda *args: given.append(args))
+    staged.work()
+    assert given[0][2].setup is not None, "auch ein Stufenwechsel leitet dann neu her"
+
+    worker = preflight_main._ExportWorker(
+        [_cube_object()],
+        tmp_path / "neu.3mf",
+        "3mf",
+        profile=profile,
+        sources={},
+        settings=print_settings.resolve(profile),
+        ui_settings=UiSettings(),
+        material="pla",
+        chosen=chosen,
+    )
+    paths, _findings = worker._assembly()
+
+    with zipfile.ZipFile(paths[0]) as archive:
+        values = json.loads(archive.read("Metadata/project_settings.config"))
+    assert values.get("wall_loops") == "2", "der Herstellerprozess, nicht Solidons drei Wände"
+    renewed = worker.renewed
+    assert renewed is not None and renewed.key == chosen.key
+    assert renewed.setup is not None and Path(renewed.setup.machine_profile).name == "Mein CC2.json"
+    assert renewed.signature == slicer_profiles.stock_signature("orca", executable)
+    assert renewed.current()
+
+
+def test_the_export_hands_a_renewed_choice_back_to_the_window(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Review RM-670 N2: Der Export leitete nach einer Änderung im Slicer neu
+    her und behielt die Wahl für sich — Zahlenzeile und Prüfbericht rechneten
+    mit der alten, und jeder weitere Export leitete wieder her. Die neue Wahl
+    reist jetzt mit dem Arbeiter zurück, samt Signatur."""
+    from app.core.export import slicer_profiles
+
+    old = handover.SlicerSetup(tmp_path / "slicer.exe", "orca", machine_profile="alt.json")
+    new = handover.SlicerSetup(tmp_path / "slicer.exe", "orca", machine_profile="neu.json")
+    stock = {"now": (("vorher", 0, 0),)}
+    monkeypatch.setattr(slicer_profiles, "stock_signature", lambda *_args: stock["now"])
+    monkeypatch.setattr(
+        preflight_main, "_stock_now", lambda: ((tmp_path / "slicer.exe", "orca"), stock["now"])
+    )
+    asked: list[object] = []
+
+    def derived(*_args: object, **_kwargs: object) -> handover.SlicerSetup:
+        asked.append(True)
+        return new
+
+    monkeypatch.setattr(preflight_main, "remembered_setup", derived)
+    written: list[object] = []
+
+    def write(*_args: object, setup: object, **_kwargs: object) -> tuple[Path, list[object]]:
+        written.append(setup)
+        return tmp_path / "x.3mf", []
+
+    monkeypatch.setattr(preflight_main, "write_assembly", write)
+    profile = profiles.make_profile("centauri-carbon-2", "pla")
+
+    def export(chosen: Any) -> Any:
+        worker = preflight_main._ExportWorker(
+            [_cube_object()],
+            tmp_path / "x.3mf",
+            "3mf",
+            profile=profile,
+            sources={},
+            settings=None,
+            ui_settings=UiSettings(),
+            material="pla",
+            chosen=chosen,
+        )
+        worker._assembly()
+        return worker
+
+    chosen = preflight_main._ChosenSetup(
+        ("p", "w"), old, (("vorher", 0, 0),), (tmp_path / "slicer.exe", "orca")
+    )
+    assert export(chosen).renewed is None and written == [old] and not asked
+
+    stock["now"] = (("nachher", 0, 0),)
+    worker = export(chosen)
+    assert asked, "ein geänderter Bestand verlangt eine neue Wahl"
+    assert written[-1] == new, "die Datei trägt die neue Wahl"
+    assert worker.renewed == preflight_main._ChosenSetup(
+        ("p", "w"), new, (("nachher", 0, 0),), (tmp_path / "slicer.exe", "orca")
+    )
 
 
 @pytest.mark.parametrize("language", ["en", "es", "fr", "it", "pt"])

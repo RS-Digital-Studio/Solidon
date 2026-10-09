@@ -3255,13 +3255,18 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
 
 - [ ] **RM-670 — Jeder 3MF-Export sucht den Slicer und liest dessen Profilbündel neu.**
   Gebaut (Archiv, RM-670 Teil): Bestand je Slicer gemerkt mit Signatur, Programmsuche gemerkt,
-  Vorwärmen nach dem Start, ein Lesedurchgang je Export; am ElegooSlicer zweiter Export eines
-  Quaders 0,41–0,53 s CPU unter Fremdlast. **Offen ist die Abnahme:** mit Orca, PrusaSlicer und
-  Cura je ein Quader, die Figur aus Weg 4 und ein Beispielprojekt am echten Fenster: zweiter
-  3MF-Export unter 0,5 s, erster höchstens 0,2 s über dem STL-Export (nach dem Vorwärmen);
-  Restkosten liegen im wiederholten Durchsuchen der Profilordner (`machine_model`,
-  `_names_in`). Belege: `F:\solidon-review-reports\regression-0.5.2\weg2\befunde.md` (W2-1),
-  `weg4\befunde.md` (W4-2).
+  Vorwärmen nach dem Start, ein Lesedurchgang je Export; die Vorwahl des Hauptfensters trägt den
+  Stand ihres Bestands, auch leer, und übernimmt, was ein Export neu herleitet. **Offen ist die
+  Abnahme:** mit Orca, PrusaSlicer und Cura je ein Quader, die Figur aus Weg 4 und ein
+  Beispielprojekt am echten Fenster: zweiter 3MF-Export unter 0,5 s, erster höchstens 0,2 s über dem STL-Export;
+  die Maschinenbefunde beim *Slicen* unverändert (Tests über den echten Exportweg); ein im
+  Slicer neu angelegtes Druckerprofil kennt der nächste Export. Bauplan §29, §31. Am ElegooSlicer
+  (Würfel, ohne Fenster) liegt der zweite Export bei 0,39–0,52 s CPU, Ausreißer bis 0,77, unter
+  Fremdlast — die Schwelle also knapp. Die Restkosten liegen im wiederholten Durchsuchen der Profilordner:
+  `manufacturer.base_settings` läuft je Export viermal (Datei, `foundation_findings`,
+  `support_foot_for`, `project_settings`), jedes Mal mit `machine_model` (rekursives `glob`,
+  im Profil rund die Hälfte der Zeit), dazu `_names_in` je Art. Belege:
+  `F:\solidon-review-reports\regression-0.5.2\weg2\befunde.md` (W2-1), `weg4\befunde.md` (W4-2).
 
 <a id="rm-671"></a>
 
@@ -3319,6 +3324,11 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   Rest heute ist, ist offen. Der Docstring von `_yield_to_the_window` nennt als Preis 10–30 %;
   RM-298 (d) nennt die fehlende Prüfung der Priorität. Beim Kunden genügt ein Slicer, ein Rendering
   oder ein Spiel nebenher; das Fenster bleibt bedienbar, das Modell kommt nicht.
+  (c) **Das Vorauslesen des Slicerbestands** (RM-670, `app/ui/main_window.py` `_warm_slicer`)
+  fragt `session.busy` nur, wenn es zwei Sekunden nach dem Start auslöst. Öffnet der Kunde danach
+  ein Modell, teilt sich das Laden den Rechner mit dem Lesen der Maschinen (am ElegooSlicer 1 001
+  Profile, 1,6 s CPU); Grundlage und Export warten seit RM-670 auf dieses Lesen, statt selbst zu
+  lesen. Nicht gemessen; Abnahme mit und ohne Vorwärmen wie unten (Review RM-670 L4).
   **Stellen:** `app/core/geom/kernel_jobs.py:742` (`_yield_to_the_window`), `:587–588`
   (`PREPARATIONS`), `:889–893` (je Rechnung zurückgestellt), `app/core/geom/kernel_process.py:70`
   (`OFFLOAD_ABOVE`), `:363` (`_receive`), `:721` (`run`), `app/core/geom/mesh.py:1099`
