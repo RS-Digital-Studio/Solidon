@@ -3522,10 +3522,10 @@ def test_cura_takes_supports_back_where_a_part_does_not_need_them(
     """CuraEngine nimmt ob gestützt wird je Netz an (``support_enable``), die
     Stützart aber nur für die Platte (``support_structure``, Cura 5.13). Die
     Übernahme bleibt deshalb auf der Platte, und der Klotz bekommt sie je Netz
-    zurückgenommen; der Pilz verlangt automatische Stützen und erhält die
-    Stützart der Platte. Je Netz steht nur, was Cura dort liest."""
+    zurückgenommen; der Pilz verlangt unter seinem flachen Hut Gitter (RM-584)
+    und erhält es. Je Netz steht nur, was Cura dort liest."""
     settings = print_settings.with_accepted(
-        print_settings.resolve(profile, "standard"), "support.style", "tree"
+        print_settings.resolve(profile, "standard"), "support.style", "grid"
     )
 
     written, findings = write_assembly(
@@ -3544,7 +3544,7 @@ def test_cura_takes_supports_back_where_a_part_does_not_need_them(
     }
     treffer = [finding for finding in findings if finding.code == "export.part_setting"]
     assert [(finding.object_id, finding.values["value"]) for finding in treffer] == [
-        ("obj_1", "tree")
+        ("obj_1", "grid")
     ]
 
 

@@ -102,6 +102,13 @@ def _integer(value: object) -> str:
     return str(int(value))  # type: ignore[call-overload]
 
 
+def _double_wall(value: object) -> str:
+    """PrusaSlicer zählt keine Baumwände: Zwei heißt Doppelwand ab 3 mm
+    Astquerschnitt (``support_tree_branch_diameter_double_wall``, Prusas
+    Vorgabe; das MK4S-Profil führt 8), eine heißt nie (RM-584)."""
+    return "3" if int(value) >= 2 else "0"  # type: ignore[call-overload]
+
+
 def _number_or_silent(value: object) -> str:
     """Wie :func:`_number`, aber Null heißt „unbekannt" und wird nicht
     geschrieben.
@@ -233,10 +240,16 @@ _PRUSA_INFILL: Final = {
     "triangles": "triangles",
 }
 
+#: Das Kreuzmuster für normale Stütze — bei Gitter und unter Hybrid (siehe
+#: ``support_material_pattern``).
+_CROSS_PATTERN: Final = {"grid": "rectilinear-grid", "hybrid": "rectilinear-grid"}
+
 #: Nur die ausdrücklichen Arten. ``auto`` und ``none`` schweigen: Dann gilt
 #: der Stil des Prusa-Profils (``snug``), und ausgeschaltete Stützen haben
 #: keinen Stil, den jemand gewählt hätte (Entscheidung J, 27.09.2026).
-_PRUSA_SUPPORT_STYLE: Final = {"grid": "grid", "tree": "organic"}
+#: PrusaSlicer kennt keine Hybridstütze; sie geht als Gitter hinaus, wie der Rat
+#: sie dort anbietet (:data:`NOT_OFFERED_BY_PROGRAM`, RM-584).
+_PRUSA_SUPPORT_STYLE: Final = {"grid": "grid", "tree": "organic", "hybrid": "grid"}
 
 PRUSA: Final[tuple[Row, ...]] = (
     ("layers.layer_height", "layer_height", _number),
@@ -312,7 +325,7 @@ PRUSA: Final[tuple[Row, ...]] = (
     # Einzellinien im Abstand von 2,8 mm, und im Druck verschoben sie sich.
     # ``rectilinear-grid`` wechselt die Richtung je Schicht und steht. Für
     # Bäume schweigt die Zeile: Dort gilt das Muster des Herstellers.
-    ("support.style", "support_material_pattern", _only({"grid": "rectilinear-grid"})),
+    ("support.style", "support_material_pattern", _only(_CROSS_PATTERN)),
     ("support.placement", "support_material_buildplate_only", _mapped({"build_plate": "1"}, "0")),
     ("support.threshold_angle", "support_material_threshold", _angle_from_horizontal),
     ("support.z_gap", "support_material_contact_distance", _number),
@@ -327,6 +340,7 @@ PRUSA: Final[tuple[Row, ...]] = (
         _integer,
     ),
     ("support.interface_spacing", "support_material_interface_spacing", _number),
+    ("support.tree_walls", "support_tree_branch_diameter_double_wall", _double_wall),
     # Den Kontaktlüfter kennt SuperSlicer, PrusaSlicer nicht (RM-583).
     (
         "cooling.support_interface_cooling",
@@ -373,6 +387,7 @@ _ORCA_INFILL: Final = {
 _ORCA_SUPPORT_TYPE: Final = {
     "grid": "normal(auto)",
     "tree": "tree(auto)",
+    "hybrid": "tree(auto)",
 }
 
 _ORCA_SEAM: Final = {
@@ -472,8 +487,12 @@ ORCA: Final[tuple[Row, ...]] = (
     # wirkungslos — der Slicer meldet nichts, er stützt bloß nicht.
     ("support.style", "enable_support", _support_on),
     ("support.style", "support_type", _only(_ORCA_SUPPORT_TYPE)),
-    # Dasselbe Kreuzmuster wie bei PrusaSlicer, siehe dort.
-    ("support.style", "support_base_pattern", _only({"grid": "rectilinear-grid"})),
+    # Bäume für die Details, normale Stütze unter großen flachen Decken (RM-584);
+    # die übrigen Arten lassen den Stil des Herstellers.
+    ("support.style", "support_style", _only({"hybrid": "tree_hybrid"})),
+    # Dasselbe Kreuzmuster wie bei PrusaSlicer, siehe dort; Hybrid legt es unter
+    # die flachen Decken.
+    ("support.style", "support_base_pattern", _only(_CROSS_PATTERN)),
     ("support.placement", "support_on_build_plate_only", _mapped({"build_plate": "1"}, "0")),
     ("support.threshold_angle", "support_threshold_angle", _angle_from_horizontal),
     ("support.z_gap", "support_top_z_distance", _number),
@@ -489,6 +508,8 @@ ORCA: Final[tuple[Row, ...]] = (
     # Die untere Trennschicht hat eine eigene Lücke; alle fünf Programme der
     # Familie führen sie (Konfigurationsblöcke vom 08.10.2026).
     ("support.interface_spacing", "support_bottom_interface_spacing", _number),
+    # Gilt nur Bäumen; 0 heißt beim Programm „automatisch“, Bambu -1 (RM-584).
+    ("support.tree_walls", "tree_support_wall_count", _integer),
     # -1 heißt „wie die übrige Schicht“, die Vorgabe aller gemessenen Profile.
     # Ein Filamentwert in der Orca-Familie (Filamentprofile der Hersteller).
     (
@@ -1141,7 +1162,8 @@ LIMITED: Final[dict[SlicerFlavour, frozenset[str]]] = {
 #: 2.9 nicht, und sein 3MF-Leser stürzt ab zwei unbekannten Schlüsseln mit
 #: 0xC0000005 ab (RM-459, gemessen je Schlüssel der Beilage).
 NOT_TAKEN_BY_PROGRAM: Final[dict[str, frozenset[str]]] = {
-    "superslicer": frozenset({"shell.scarf_seam"}),
+    # Bäume kennt SuperSlicer nicht (RM-480), also auch keine Baumwände.
+    "superslicer": frozenset({"shell.scarf_seam", "support.tree_walls"}),
     # Den Kontaktlüfter führt nur SuperSlicer (``--help-fff`` von 2.9.6).
     "prusaslicer": frozenset({"cooling.support_interface_cooling"}),
     # Bambu Studio führt ``support_material_interface_fan_speed`` nicht; sein
@@ -1466,6 +1488,13 @@ class Substitute(NamedTuple):
     reason: TranslatableText
 
 
+#: Hybridstützen kennt nur die Orca-Familie (``tree_hybrid``, RM-584); die
+#: übrigen bekommen Gitter, das die flache Decke trägt.
+_NO_HYBRID: Final = Substitute(
+    "grid", _("Dieser Slicer kennt keine Hybridstütze und stützt mit Gitter.")
+)
+
+
 #: Wahlen in Solidon, die ein **Programm** nicht kennt, mit dem, was es
 #: stattdessen bekommt. Der Druckdialog bietet sie dort nicht an, der Rat
 #: schlägt den Ersatz vor, und eine schon getroffene Wahl geht als Ersatz
@@ -1479,8 +1508,11 @@ NOT_OFFERED_BY_PROGRAM: Final[dict[str, dict[str, dict[object, Substitute]]]] = 
             "tree": Substitute(
                 "grid", _("SuperSlicer kennt keine Baumstützen und stützt mit Gitter.")
             ),
+            "hybrid": _NO_HYBRID,
         },
     },
+    "prusaslicer": {"support.style": {"hybrid": _NO_HYBRID}},
+    "cura": {"support.style": {"hybrid": _NO_HYBRID}},
 }
 
 

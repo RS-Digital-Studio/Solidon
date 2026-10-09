@@ -362,6 +362,24 @@ def _count(text: str, _context: _Context) -> object:
     return int(number)
 
 
+def _tree_walls(text: str, _context: _Context) -> object:
+    """Die Wände der Baumstämme (RM-584): 0 heißt bei Orca „automatisch“, Bambu
+    schreibt -1 — beides eine Wand, wie der Baum sie ohne Angabe druckt."""
+    number = _float(text)
+    if number is None or not number.is_integer():
+        return Foreign(text)
+    return max(int(number), 1)
+
+
+def _prusa_tree_walls(text: str, _context: _Context) -> object:
+    """PrusaSlicers Doppelwand ab einem Astquerschnitt (RM-584): bis 3 mm zählt
+    als zwei Wände, darüber oder 0 als eine — das MK4S-Profil führt 8."""
+    number = _float(text)
+    if number is None or number < 0.0:
+        return Foreign(text)
+    return 2 if 0.0 < number <= 3.0 else 1
+
+
 def _fraction(text: str, _context: _Context) -> object:
     """„15%" als Anteil 0,15."""
     number = _float(text.rstrip("%").strip())
@@ -464,6 +482,7 @@ ORCA_PROCESS: Final[tuple[tuple[str, str, Reader], ...]] = (
     ("support.z_gap", "support_top_z_distance", _number),
     ("support.interface_layers", "support_interface_top_layers", _count),
     ("support.interface_spacing", "support_interface_spacing", _number),
+    ("support.tree_walls", "tree_support_wall_count", _tree_walls),
     ("adhesion.skirt_loops", "skirt_loops", _count),
     ("adhesion.skirt_distance", "skirt_distance", _number),
     ("adhesion.brim_width", "brim_width", _number),
@@ -935,6 +954,7 @@ def _orca_support_motion(
         if spacing is not None and spacing >= 0.0
         else None,
         "support_tree": (_text(process.get("support_type")) or "").startswith("tree"),
+        "support_hybrid": True,
         # Fest in ``SupportMaterial.cpp`` (``support_closing_radius(2.0)``).
         "support_closing": ORCA_SUPPORT_CLOSING,
         "support_skips_bridges": (_text(process.get("bridge_no_support")) or "0") in ("1", "true"),
@@ -1119,7 +1139,8 @@ def _support_style(values: Mapping[str, Any]) -> str | None:
         return "none"
     kind = (_text(values.get("support_type")) or "").casefold()
     if kind.startswith("tree"):
-        return "tree"
+        style = (_text(values.get("support_style")) or "").casefold()
+        return "hybrid" if style == "tree_hybrid" else "tree"
     if kind.startswith("normal"):
         return "grid"
     return "auto"
@@ -1404,6 +1425,7 @@ PRUSA_PROCESS: Final[tuple[tuple[str, str, Reader], ...]] = (
     ("support.z_gap", "support_material_contact_distance", _number),
     ("support.interface_layers", "support_material_interface_layers", _count),
     ("support.interface_spacing", "support_material_interface_spacing", _number),
+    ("support.tree_walls", "support_tree_branch_diameter_double_wall", _prusa_tree_walls),
     ("adhesion.skirt_loops", "skirts", _count),
     ("adhesion.skirt_distance", "skirt_distance", _number),
     ("adhesion.brim_width", "brim_width", _number),

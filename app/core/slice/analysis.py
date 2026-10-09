@@ -3295,6 +3295,10 @@ class ModelSupport:
     bed_columns: tuple[tuple[Polygon, float, float], ...] = ()
     """Ebenso die Stücke, deren Säule das Bett erreicht: Grundriss, Höhe der
     untersten Schicht, Höhe des Stücks."""
+    tallest_column: float = 0.0
+    """Die längste Stützsäule in mm: vom Stück bis zum Bett oder bis dorthin, wo
+    sie zuerst auf dem Modell aufsetzt (RM-584: ab 100 mm brauchen Bäume zwei
+    Wände)."""
 
 
 def overhang_outline(result: SliceResult) -> ShapelyPolygon | MultiPolygon | None:
@@ -4033,9 +4037,18 @@ def _model_support(
     # zuerst fertig war.
     landed = {owner: share[owner] for share in shares for owner in share}
     landed = {owner: landed[owner] for owner in sorted(landed)}
+    tallest = max(
+        (
+            float(layers[names[owner][0]].z)
+            - (float(layers[landed[owner][0]].z) if owner in landed else 0.0)
+            for owner in range(len(names))
+            if only is None or names[owner] in only
+        ),
+        default=0.0,
+    )
 
     if not landed:
-        return ModelSupport()
+        return ModelSupport(tallest_column=tallest)
     islands: set[int] = set()
     channels: set[int] = set()
     places: dict[int, Any] = {}
@@ -4208,6 +4221,7 @@ def _model_support(
 
     spared = set() if not columns else {owner for owner in range(len(names)) if needs_own(owner)}
     return ModelSupport(
+        tallest_column=tallest,
         open_patch=open_patch,
         open_area=open_area,
         open_field=open_field,

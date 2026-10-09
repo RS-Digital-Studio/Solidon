@@ -122,6 +122,14 @@ TAPERED_LAYERS_SHARE = 0.2
 #: verteilte Ansatzpunkte sind genau der Fall, für den Bäume gebaut wurden.
 TREE_FROM_ISLANDS = 8
 
+#: Ab welcher Höhe über dem Bett, in mm, Baumstämme zwei Wände brauchen (RM-584,
+#: Recherche Nr. 5): Mit einer brechen oder kippen hohe Bäume, und ein
+#: abgerissener Ast lässt den Überhang darüber in die Luft drucken.
+TALL_TREE_HEIGHT: Final = 100.0
+
+#: Zwei Wände je Baumstamm für hohe Bäume.
+TALL_TREE_WALLS: Final = 2
+
 #: Kleinste Schichtfläche in mm², unter der eine Schicht so schnell durch ist,
 #: dass die vorige noch weich liegt.
 THIN_LAYER_AREA = 120.0
@@ -407,12 +415,17 @@ def _combined_value(path: str, values: Sequence[object]) -> object:
     ranks = {
         # ``auto`` steht über „aus" und unter jeder ausdrücklichen Art: Wo ein
         # Körper Bäume verlangt, schließt das den ein, der nur Stützen will.
-        "support.style": ("none", "auto", "grid", "tree"),
+        # Hybrid schließt Bäume und Gitter ein (RM-584).
+        "support.style": ("none", "auto", "grid", "tree", "hybrid"),
         "support.placement": ("build_plate", "everywhere"),
         # Der Auto-Brim des Slicers kann einen Brim legen, ein Skirt nie.
         "adhesion.kind": ("none", "skirt", "auto", "brim", "raft"),
         "shell.wall_generator": ("classic", "arachne"),
     }
+    if path == "support.style" and {"grid", "tree"} <= {str(value) for value in values}:
+        # Ein Körper mit flacher Decke und einer mit Details auf einer Platte:
+        # Hybrid gibt beiden, was sie verlangen (RM-584).
+        return "hybrid"
     if path in ranks:
         return max(values, key=lambda value: ranks[path].index(str(value)))
     if all(isinstance(value, bool) for value in values):
@@ -1129,11 +1142,22 @@ def _from_geometry(
     # ``OVERHANG_LAYER_WORTH_SUPPORT`` auf einer Schicht; Schuppen, Kinn und
     # Flügel einer Figur zerfallen in kleine Stücke.
     branching = on_model and need.piece <= OVERHANG_LAYER_WORTH_SUPPORT
+    # **Unter einer großen flachen Decke keine Bäume** (RM-584, Recherche Nr. 4):
+    # Zwischen den Baumspitzen hängt die Unterseite durch, und Elegoo wie Bambu
+    # stützen unter „automatisch“ mit Bäumen. Dort trägt Gitter; setzen
+    # Stützen auf dem Modell an oder beginnen viele Inseln in der Luft, Hybrid —
+    # Bäume für die Details, normale Stütze unter der Decke.
+    flat = need.piece > OVERHANG_LAYER_WORTH_SUPPORT
+    many_islands = len(islands) >= TREE_FROM_ISLANDS
+    if flat:
+        wanted = "hybrid" if on_model or many_islands else "grid"
+    else:
+        wanted = "tree" if many_islands or branching else "auto"
     if needs_support and settings.support.style == "none":
         # **Stützen an, die Art des Slicers** — außer das Modell verlangt eine
         # (Entscheidung J, 27.09.2026). Hier stand ``grid``, und Elegoo wie
         # Bambu, deren Standardprozess Bäume stützt, bekamen Gitter.
-        style = "tree" if len(islands) >= TREE_FROM_ISLANDS or branching else "auto"
+        style = wanted
         advice.append(
             _advice(
                 settings,
@@ -1152,6 +1176,30 @@ def _from_geometry(
                 path="support.style",
                 value="tree",
                 reason=_("Bäume hinterlassen auf dem Modell weniger Spuren."),
+            )
+        )
+    elif (
+        needs_support and wanted == "grid" and settings.support.style in ("auto", "tree", "hybrid")
+    ):
+        advice.append(
+            _advice(
+                settings,
+                path="support.style",
+                value="grid",
+                reason=_(
+                    "Zwischen Baumspitzen hinge die große flache Decke durch; Gitter trägt sie."
+                ),
+            )
+        )
+    elif needs_support and wanted == "hybrid" and settings.support.style in ("auto", "tree"):
+        # Über einem gewählten Gitter nicht: Es trägt die flache Decke, und ob
+        # daneben kleine Stücke auf dem Modell aufsetzen, sagt ``on_model`` nicht.
+        advice.append(
+            _advice(
+                settings,
+                path="support.style",
+                value="hybrid",
+                reason=_("Bäume schonen die Details, unter der großen flachen Decke trägt Gitter."),
             )
         )
     elif not needs_support and settings.support.style != "none":
@@ -1229,6 +1277,23 @@ def _from_geometry(
         )
     if needs_support:
         advice += _support_contact(settings, profile, need, on_model, flavour, whole_layers)
+        style = next(
+            (str(entry.value) for entry in advice if entry.path == "support.style"),
+            settings.support.style,
+        )
+        if (
+            style in ("tree", "hybrid")
+            and settings.support.tree_walls < TALL_TREE_WALLS
+            and need.model.tallest_column >= TALL_TREE_HEIGHT
+        ):
+            advice.append(
+                _advice(
+                    settings,
+                    path="support.tree_walls",
+                    value=TALL_TREE_WALLS,
+                    reason=_("Hohe Bäume brechen mit einer Wand; zwei tragen sie."),
+                )
+            )
 
     # **Über „automatisch“ nur, wo der Slicer nichts rechnet** (Entscheidung J,
     # :func:`_unanchored`): Orcas Auto-Brim fragt Höhe und Grundfläche selbst

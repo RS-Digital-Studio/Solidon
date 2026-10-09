@@ -1876,7 +1876,7 @@ def _for_supports(written: dict[str, str], settings: PrintSettings, profile: Pro
     tree = settings.support.style == "tree"
     if width:
         # Curas Formel: Der Baum trägt keine Füllung, nur seine Wand
-        # (``support_infill_rate`` 0 beim Baum, ``support_wall_count`` 1).
+        # (``support_infill_rate`` 0 beim Baum, ``support_wall_count``).
         distance = width / density if density > 0.0 and not tree else 0.0
         written["support_line_distance"] = f"{distance:g}"
         # Auf den eben gerechneten Abstand, nicht noch einmal auf die Breite:
@@ -1900,7 +1900,8 @@ def _for_supports(written: dict[str, str], settings: PrintSettings, profile: Pro
         # Die Stütze wächst um eine Bahnbreite plus Curas festen Zuschlag —
         # beim Baum um nichts.
         written["support_offset"] = "0" if tree else f"{width + _SUPPORT_GROWTH:g}"
-        written["support_wall_count"] = "1" if tree else "0"
+        # Beim Baum die Wände der Stämme (RM-584), normale Stütze ohne Wand.
+        written["support_wall_count"] = str(settings.support.tree_walls) if tree else "0"
     # Krümel unter 2 mm² bekommen keine eigene Stütze (Creality in Cura).
     written["minimum_support_area"] = f"{_MINIMUM_SUPPORT_AREA:g}"
 

@@ -1332,7 +1332,9 @@ def _with_context(
     if needed is not None:
         settings = print_settings.with_path(settings, "adhesion.kind", needed)
     if path.startswith("support.") and path != "support.style":
-        settings = print_settings.with_path(settings, "support.style", "grid")
+        # Die Wände gehören den Baumstämmen (RM-584); Cura schreibt sie nur dort.
+        style = "tree" if path == "support.tree_walls" else "grid"
+        settings = print_settings.with_path(settings, "support.style", style)
     return settings
 
 
@@ -1675,6 +1677,48 @@ def test_support_on_actually_reaches_the_slicer() -> None:
     # fdmprinter-Definition — ohne den Schlüssel druckte Cura Gitterstützen,
     # wo Baumstützen eingestellt waren, und `verify()` sah nichts.
     assert cura["support_structure"] == "tree"
+
+
+def test_hybrid_supports_reach_each_family_as_what_it_knows() -> None:
+    """Hybrid (RM-584): Bäume an den Details, normale Stütze unter großen flachen
+    Decken. Die Orca-Familie kennt es als ``tree_hybrid`` und legt unter die
+    Decken das Kreuzmuster wie bei Gitter; PrusaSlicer, SuperSlicer und Cura
+    kennen es nicht und bekommen Gitter, als Ersatz angeboten und geschrieben."""
+    settings = print_settings.with_path(
+        print_settings.resolve(profiles.make_profile()), "support.style", "hybrid"
+    )
+
+    orca = handover.as_mapping(settings, "orca")
+    assert orca["enable_support"] == "1"
+    assert orca["support_type"] == "tree(auto)"
+    assert orca["support_style"] == "tree_hybrid"
+    assert orca["support_base_pattern"] == "rectilinear-grid"
+    prusa = handover.as_mapping(settings, "prusa")
+    assert prusa["support_material_style"] == "grid"
+    assert prusa["support_material_pattern"] == "rectilinear-grid"
+    assert handover.as_mapping(settings, "cura")["support_structure"] == "normal"
+    for program in ("prusaslicer", "superslicer", "cura"):
+        replaced = slicer_keys.substitute("support.style", "hybrid", program)
+        assert replaced is not None and replaced.value == "grid", program
+    for program in ("orcaslicer", "elegooslicer", "bambustudio", "crealityprint"):
+        assert slicer_keys.substitute("support.style", "hybrid", program) is None, program
+
+
+def test_tree_walls_reach_each_family() -> None:
+    """Zwei Wände für hohe Baumstämme (RM-584): die Orca-Familie zählt sie
+    (``tree_support_wall_count``), PrusaSlicer legt Doppelwände ab 3 mm
+    Astquerschnitt, Cura gibt dem Baum seine Wandzahl."""
+    profile = profiles.make_profile()
+    settings = print_settings.resolve(profile)
+    for path, value in (("support.style", "tree"), ("support.tree_walls", 2)):
+        settings = print_settings.with_choice(settings, path, value)
+
+    assert handover.as_mapping(settings, "orca")["tree_support_wall_count"] == "2"
+    assert handover.as_mapping(settings, "prusa")["support_tree_branch_diameter_double_wall"] == "3"
+    assert handover.values_for(settings, profile, "cura")["support_wall_count"] == "2"
+    single = print_settings.with_choice(settings, "support.tree_walls", 1)
+    assert handover.as_mapping(single, "prusa")["support_tree_branch_diameter_double_wall"] == "0"
+    assert not slicer_keys.takes("prusa", "support.tree_walls", program="superslicer")
 
 
 def test_grid_supports_reach_every_slicer_as_a_grid() -> None:
@@ -7133,6 +7177,9 @@ def test_every_setting_reaches_every_slicer_or_stands_in_the_list() -> None:
         }.get(field.path.partition(".")[2] if field.path.startswith("adhesion.") else "")
         if art:
             start = _with_value(base, "adhesion.kind", art)
+        if field.path == "support.tree_walls":
+            # Die Wände gehören den Baumstämmen (RM-584).
+            start = _with_value(base, "support.style", "tree")
         changed = _with_value(start, field.path, value)
         for flavour in ("prusa", "orca", "cura"):
             if handover.values_for(start, profile, flavour) == handover.values_for(

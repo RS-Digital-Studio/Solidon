@@ -567,13 +567,14 @@ FIELDS: tuple[Field, ...] = (
         _("Stützen"),
         "support",
         kind="enum",
-        choices=("none", "auto", "grid", "tree"),
+        choices=("none", "auto", "grid", "tree", "hybrid"),
         front=True,
         choice_notes=(("auto", _("Stützen an. Welche Art, bestimmt das Profil Ihres Slicers.")),),
         note=_(
             "Ob und wie gestützt wird. Automatisch nimmt die Art aus dem Profil Ihres Slicers. "
             "Baum braucht weniger Material und lässt sich leichter abnehmen, Gitter trägt "
-            "schwere Überhänge sicherer."
+            "schwere Überhänge und flache Decken sicherer. Hybrid stützt Details mit Bäumen "
+            "und große flache Decken mit Gitter."
         ),
     ),
     Field(
@@ -678,6 +679,15 @@ FIELDS: tuple[Field, ...] = (
             "Abstand der Linien in der Trennschicht. Eng gibt glatte flache Unterseiten, weit "
             "löst sich an kleinen und runden Flächen leichter."
         ),
+    ),
+    Field(
+        "support.tree_walls",
+        _("Wände der Bäume"),
+        "support",
+        kind="int",
+        minimum=1,
+        maximum=2,
+        note=_("Wände der Baumstämme. Hohe Bäume stehen mit zweien stabil, kosten aber Material."),
     ),
     Field(
         "support.block_channels",

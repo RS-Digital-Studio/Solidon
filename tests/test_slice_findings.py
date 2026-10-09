@@ -1349,12 +1349,40 @@ def test_only_what_rests_on_the_model_counts_as_its_field() -> None:
     assert placement == ["build_plate"], "die Stützen erreichen das Kinn vom Bett"
 
 
+@pytest.mark.parametrize(("height", "walls"), [(120.0, [2]), (40.0, [])])
+def test_tall_trees_get_two_walls(height: float, walls: list[int]) -> None:
+    """Ab 100 mm Stützhöhe brechen Bäume mit einer Wand oder kippen; zwei tragen
+    sie (RM-584, Recherche Nr. 5). Eine Insel neben einer Säule, deren Baum vom
+    Bett aus so hoch reicht wie sie hängt: auf 115 mm zwei Wände, auf 35 mm eine."""
+    tower = on_bed(
+        brick(10.0, 10.0, height, (0.0, 0.0, height / 2.0)),
+        brick(6.0, 6.0, 4.0, (20.0, 0.0, height - 3.0)),
+    )
+    settings = print_settings.with_path(print_settings.resolve(petg()), "support.style", "tree")
+    result = slice_body(tower, 0.5)
+    entries = advise.advise(settings, petg(), result)
+    assert [entry.value for entry in entries if entry.path == "support.tree_walls"] == walls
+    tallest = advise.support_need(result).model.tallest_column
+    assert tallest == pytest.approx(height - 5.0, abs=1.0)
+
+
+def test_a_flat_ceiling_and_details_on_one_plate_combine_to_hybrid() -> None:
+    """Verlangt ein Körper Gitter unter seiner flachen Decke und ein anderer Bäume
+    an seinen Details, gibt Hybrid beiden, was sie brauchen (RM-584)."""
+    settings = print_settings.resolve(petg())
+    grid = SettingAdvice(path="support.style", value="grid", was="none", reason="Decke")
+    tree = SettingAdvice(path="support.style", value="tree", was="none", reason="Details")
+    combined = advise.combine(settings, [(settings, [grid]), (settings, [tree])])
+    assert [entry.value for entry in combined if entry.path == "support.style"] == ["hybrid"]
+
+
 def test_trees_where_small_overhangs_rest_on_the_model_not_under_a_flat_ceiling() -> None:
     """Wo Stützen auf dem Modell ansetzen, hinterlässt ein Gitter mit jeder Säule
     eine Narbe; ein Baum setzt mit wenigen Füßen auf (Drache, 08.10.2026: 212 bis
     324 mm² Auflage der Herstellergitter, 4 bis 66 mm² mit Bäumen). Unter einer
     großen flachen Decke hängt die Unterseite zwischen den Baumspitzen durch —
-    dort bleibt die Art des Herstellers (Recherche vom 08.10.2026)."""
+    dort trägt Gitter, und wo Stützen auch auf dem Modell ansetzen, Hybrid:
+    Bäume für die Details, Gitter unter der Decke (RM-584, Recherche Nr. 4)."""
 
     def style(body: MeshData) -> object:
         entries = advise.advise(print_settings.resolve(petg()), petg(), slice_body(body, 0.2))
@@ -1362,7 +1390,11 @@ def test_trees_where_small_overhangs_rest_on_the_model_not_under_a_flat_ceiling(
 
     figure = chin_over_chest()
     assert style(figure) == "tree", "das Kinn setzt in Streifen auf der Brust auf"
-    assert style(table()) == "auto", "die Tischplatte ist eine flache Decke"
+    assert style(table()) == "hybrid", "die Tischplatte ist eine flache Decke auf dem Sockel"
+    mushroom = on_bed(
+        brick(8.0, 8.0, 12.0, (0.0, 0.0, 6.0)), brick(40.0, 40.0, 2.0, (0.0, 0.0, 13.0))
+    )
+    assert style(mushroom) == "grid", "der Hut des Pilzes ist eine flache Decke über dem Bett"
     # Auch wenn die flache Decke über dem Bett hängt und nur das Kinn auf dem
     # Modell aufsetzt: Gefragt ist die Deckenform am Körper (Review vom 08.10.2026).
     with_arm = on_bed(
@@ -1373,7 +1405,7 @@ def test_trees_where_small_overhangs_rest_on_the_model_not_under_a_flat_ceiling(
         brick(28.0, 30.0, 3.0, (54.0, 0.0, 40.0)),
         brick(4.0, 30.0, 40.0, (38.0, 0.0, 20.0)),
     )
-    assert style(with_arm) == "auto", "der flache Arm über dem Bett bleibt beim Hersteller"
+    assert style(with_arm) == "hybrid", "Arm über dem Bett und Kinn auf dem Modell"
 
     def changed(body: MeshData, before: str) -> list[object]:
         settings = print_settings.with_path(print_settings.resolve(petg()), "support.style", before)
@@ -1382,6 +1414,10 @@ def test_trees_where_small_overhangs_rest_on_the_model_not_under_a_flat_ceiling(
 
     assert changed(figure, "grid") == ["tree"], "auch über einem gewählten Gitter"
     assert changed(table(), "grid") == [], "die flache Decke behält ihr Gitter"
+    assert changed(table(), "tree") == ["hybrid"], "Bäume allein ließen die Decke durchhängen"
+    assert changed(mushroom, "tree") == ["grid"], "unter dem Hut keine Baumspitzen"
+    assert changed(mushroom, "auto") == ["grid"], "Elegoo und Bambu stützen automatisch mit Bäumen"
+    assert changed(figure, "hybrid") == [], "Hybrid stützt die Details schon mit Bäumen"
 
 
 def chin_over_chest() -> MeshData:

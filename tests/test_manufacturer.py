@@ -3570,3 +3570,43 @@ def test_prusas_bottom_contact_layers_are_read_back() -> None:
     assert manufacturer._read_prusa(none, context)[0]["support.bottom_interface_layers"] == 0
     spacing = {"support_material_interface_spacing": "0"}
     assert manufacturer._read_prusa(spacing, context)[0]["support.interface_spacing"] == 0.0
+
+
+@pytest.mark.parametrize(
+    ("values", "style"),
+    [
+        (
+            {"enable_support": "1", "support_type": "tree(auto)", "support_style": "tree_hybrid"},
+            "hybrid",
+        ),
+        ({"enable_support": "1", "support_type": "tree(auto)", "support_style": "default"}, "tree"),
+        ({"enable_support": "1", "support_type": "normal(auto)"}, "grid"),
+    ],
+)
+def test_a_hybrid_process_is_read_back_as_hybrid(values: dict[str, str], style: str) -> None:
+    """Ein Herstellerprozess mit ``tree_hybrid`` ist Hybrid (RM-584), sonst Baum
+    oder Gitter wie bisher."""
+    read, _foreign = manufacturer._read_process(values, manufacturer._Context(nozzle=0.4), {})
+    assert read["support.style"] == style
+
+
+@pytest.mark.parametrize(("walls", "read_as"), [("2", 2), ("0", 1), ("-1", 1)])
+def test_the_tree_walls_are_read_back(walls: str, read_as: int) -> None:
+    """Orca 0 und Bambu -1 heißen „automatisch“ — eine Wand (RM-584)."""
+    read, foreign = manufacturer._read_process(
+        {"tree_support_wall_count": walls}, manufacturer._Context(nozzle=0.4), {}
+    )
+    assert read["support.tree_walls"] == read_as
+    assert not foreign
+
+
+@pytest.mark.parametrize(("threshold", "walls"), [("3", 2), ("8", 1), ("0", 1)])
+def test_prusas_double_wall_threshold_is_read_as_tree_walls(threshold: str, walls: int) -> None:
+    """PrusaSlicer legt Doppelwände ab einem Astquerschnitt; bis 3 mm (Prusas
+    Vorgabe) zählt das als zwei Wände, das MK4S-Profil mit 8 und 0 als eine
+    (RM-584)."""
+    read, _foreign = manufacturer._read_prusa(
+        {"support_tree_branch_diameter_double_wall": threshold},
+        manufacturer._Context(nozzle=0.4),
+    )
+    assert read["support.tree_walls"] == walls
