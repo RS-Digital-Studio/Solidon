@@ -31,6 +31,7 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-09 | [RM-344: Die Release-CI fährt jeden Rendererfall auf allen vier Paketplattformen (09.10.2026)](#rm-344-die-release-ci-fährt-jeden-rendererfall-auf-allen-vier-paketplattformen-09102026) |
 | 2026-10-09 | [RM-620: Ein Slicer, der Filamente mit zu verschiedenen Temperaturen ablehnt, sagt es (09.10.2026)](#rm-620-ein-slicer-der-filamente-mit-zu-verschiedenen-temperaturen-ablehnt-sagt-es-09102026) |
 | 2026-10-08 | [RM-602: Der Druckdialog ordnet die Profile in einem Lesedurchgang zu (08.10.2026)](#rm-602-der-druckdialog-ordnet-die-profile-in-einem-lesedurchgang-zu-08102026) |
 | 2026-10-08 | [RM-601: Die Slicerwahl im Druckdialog geht wie in Erste Schritte, und überall stehen nur unterstützte Slicer (08.10.2026)](#rm-601-die-slicerwahl-im-druckdialog-geht-wie-in-erste-schritte-und-überall-stehen-nur-unterstützte-slicer-08102026) |
@@ -45205,3 +45206,30 @@ dass er geladen ist. Gegenprobe: `align_forms` ohne `at_most` macht fr und pt ro
 und die Spalten unverändert. Mit 150 % Schrift reichen die Felder bis 527 px statt 531 px.
 Changelog: ja, unter *Drucken und Übergabe an den Slicer* — mit vergrößerter Schrift hatte
 `v0.5.3` den Fehler.
+
+## RM-344: Die Release-CI fährt jeden Rendererfall auf allen vier Paketplattformen (09.10.2026)
+
+<a id="rm-344-die-release-ci-fährt-jeden-rendererfall-auf-allen-vier-paketplattformen-09102026"></a>
+<a id="rm-344"></a>
+
+**Befund (Review seit 0.5.1, E-M1, Commit `6f0be89df`):** Kernmatrix und Versionswächter wählten
+`rendering` ab; von den Rendererfällen ohne Fenster (113 am 09.10.2026) liefen nur die drei aus
+`test_render_factory.py` außerhalb von Windows, die übrigen 110 nur in der Windows-Fenstergruppe.
+Der Vulkan-Wächter prüfte feste Jobnamen, darunter drei ohne Bildtest, und ließ sich von einem
+Kommentar erfüllen. Entschieden (Robert, 06.10.2026): die Rendererfälle auch unter Linux und macOS.
+
+**Behoben:** CI-Gruppe `rendering` in `tools/run_suite_isolated.py` (Rendererfälle ohne Fenster,
+alle Dateien außer den zwei Vertragsdateien, je Datei ein Prozess). Der Job `window-contracts`
+läuft jetzt auch auf dem Intel-Mac und fährt außerhalb von Windows nach den Verträgen diese
+Gruppe; kein neuer macOS-Job. Der Versionswächter `latest` fährt beide Gruppen unter Linux.
+Konzept CI-03/CI-04, `.claude/rules/tests.md`, `auslieferung.md`, Karten und README nachgezogen.
+
+**Nachweis:** `test_every_rendering_case_runs_on_every_platform_in_a_release_job` leitet aus
+Workflow und Markerwahl ab, dass jeder Rendererfall auf jeder Paketplattform in einem Pflichtjob
+des Pakets läuft, mit fünf Gegenproben (Markerwahl zurückgedreht, nur Linux, Intel-Mac fehlt,
+Gruppe fest auf contracts, Versionswächter ohne Renderer) und einer in die andere Richtung. Der
+Vulkan-Wächter liest die zeichnenden Linux-Jobs aus ihren Aufrufen und die Pakete aus den
+apt-Zeilen. Rendererprobe auf dem Wegwerfzweig `wegwerf/renderer-probe`, Lauf 37894162728, alle
+grün, 0 übersprungen außer den drei nativen Fällen von `test_render_factory` auf dem Intel-Mac
+(gewollt): Linux 6:40 min (Renderer 110 Fälle in 54 s), macOS ARM 8:15 min (91 s), Intel-Mac
+11:10 min (74 s), Windows unverändert 9:08 min, `latest` 5:48 min. Changelog: nein.

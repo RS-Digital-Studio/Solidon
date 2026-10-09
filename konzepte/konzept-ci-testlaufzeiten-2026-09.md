@@ -73,7 +73,11 @@ Windows trägt die Fenstergruppe dieselben Fälle; so läuft jeder Fall je
 Plattform genau einmal. Ein eigener Rendererjob entsteht nicht, weil
 macOS-Läufer der Engpass sind; der Intel-Mac kommt dafür als einziger
 Prüfjob seiner Plattform in diese Matrix (RM-344). Der Versionswächter fährt
-unter Linux dieselben zwei Gruppen gegen die neuesten Fassungen. Die Kernsuite läuft je Plattform in drei Teilen:
+unter Linux dieselben zwei Gruppen gegen die neuesten Fassungen. Gemessen in
+der Probe 37894162728 (09.10.2026, je Job mit Einrichtung): Linux 6:40 min,
+davon Renderer 54 s; Apple Silicon 8:15 min, Renderer 91 s; Intel-Mac
+11:10 min, Renderer 74 s; Windows unverändert 9:08 min; Versionswächter ohne
+Kerntests 5:48 min. Die Kernsuite läuft je Plattform in drei Teilen:
 Jeder Teil sammelt die ganze Suite und behält mit `--ci-shard I/N` nach der
 Markerwahl seine Dateien; mypy läuft einmal je Plattform im Teil 0. Die
 Worker eines Teils verteilen mit `--dist worksteal`: lokal an Teil 0/3 mit

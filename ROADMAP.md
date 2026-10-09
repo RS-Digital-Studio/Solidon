@@ -127,7 +127,6 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-288 — Ein Einzelprozess über die ganze Suite hängt im Sammler](#rm-288) | Tests und Entwicklungswerkzeuge | Nachstellversuch als Einzelprozess lief ohne Hänger durch (3:33 h); offen: Ursache, und ob die Anwendung betroffen ist |
 | [RM-314 — Rechtenachweis der Stimme für die englischen Werkstattfilme](#rm-314) | Tests und Entwicklungswerkzeuge | Stimme mit Prüfsummen in `licences.toml` dokumentiert; offen: `/legal-review` zur Werbenutzung, Eintrag in `ASSET-RIGHTS.toml` und ein Test, der die Stimme prüft |
 | [RM-316 — Zwillinge und Nur-Test-Wege: der Rest aus dem Code-Bericht des Aufräumens](#rm-316) | Tests und Entwicklungswerkzeuge | (a) bis (d) bis auf zwei Namen erledigt (07.10.); offen `ai_disclosure._fit_content_height` (gewollt mit Fenstertest oder in `ContentHeight`) und `slice.analysis._opening_loss` ohne Produktionsaufrufer |
-| [RM-344 — Renderertests laufen in der CI nur noch unter Windows](#rm-344) | Tests und Entwicklungswerkzeuge | Entschieden (Robert, 06.10.): `rendering`-Fälle in der Release-CI auch unter Linux und macOS, dazu der Wächter in `test_packaging.py` |
 | [RM-467 — Bibliotheken alle drei Tage auf neue Versionen prüfen und aktualisieren](#rm-467) | Tests und Entwicklungswerkzeuge | Erster Lauf 02.10. im Archiv; der zweite war am 05.10. fällig und steht aus (bekannt: cadquery-ocp-novtk 8.0.1.1.0); Paketbeleg der Bauplattform unter RM-468 |
 | [RM-531 — Fenstertests und echte Slicer auch unter Linux und macOS in der CI](#rm-531) | Tests und Entwicklungswerkzeuge | Entschieden (Robert, 06.10.): Fenster- und Renderergruppe auf vier Plattformen am Tag, per Handstart und bei jedem Push auf main. 14 der 23 roten Fenstertests außerhalb von Windows behoben, auf allen vier grün (07.10.); offen acht Fälle, `build.yml`, die Wächter und der Slicer-Job |
 | [RM-002 — netcup-AVV und Freigabe der Rechtstexte belegen](#rm-002) | Veröffentlichung, Betrieb und Vertrieb | netcup-AVV belegen und zugehörige Rechtstexte fachlich abgleichen |
@@ -4693,37 +4692,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   (`.claude/rules/zwillinge.md`); `slice.analysis._opening_loss` hat keinen
   Produktionsaufrufer, nur Tests — als Prüfweg dokumentieren oder entfernen.
 
-<a id="rm-344"></a>
-
-- [ ] **RM-344 — Renderertests laufen in der CI nur noch unter Windows.**
-  Review seit 0.5.1, Befund E-M1, Commit `6f0be89df` (Codex).
-  Der Marker `rendering` wird in der Kernmatrix (`.github/workflows/build.yml:185`) und im Job
-  `latest` (am 06.10. `:1616`) abgewählt und nur noch von der Gruppe `windowed` (Job `windows`) und
-  `window-contracts` getragen (`tools/run_suite_isolated.py:80–81`).
-  `pytest --collect-only -m "rendering and not windowed and not performance and not rendered"`
-  am 06.10.2026: 112 Fälle (`test_render_gfx_regressions` 69, `test_render_contract` 24,
-  `test_render_gizmo` 14, `test_render_factory` 3, `test_feature_label_layout` 2), vorher in der
-  Kernmatrix auf drei Plattformen; `test_render_factory.py` läuft über `CONTRACT_FILES` in den
-  Fensterverträgen aller drei Plattformen, die übrigen 109 nur auf Windows beim Release. Linux-
-  und Mac-Pakete zeichnen über Vulkan/Metal, RM-051 ist offen, neue pygfx-/wgpu-Fassungen prüft
-  `latest` nicht mehr. Widerspricht CI-03/CI-04 aus `konzepte/konzept-ci-testlaufzeiten-2026-09.md`;
-  eine Entscheidung Roberts dafür ist nicht festgehalten.
-  Hohl geworden: `test_every_linux_ci_path_that_uses_pygfx_has_a_vulkan_adapter`
-  (am 06.10. `tests/test_packaging.py:899ff.`) bleibt grün über Jobs ohne Bildtest; veraltet
-  der Kommentar `build.yml:110–116`. Die damals genannte Stelle `README.md:170–178` ist
-  umgeschrieben; am 06.10. nennt `README.md` „Fenster-, Renderer- und Leistungsprüfungen“ nur
-  für das lokale Tor.
-  **Fix:** Die `rendering`-Fälle in der Release-CI zusätzlich auf Linux und macOS fahren (etwa in
-  `window-contracts` mit `-m "rendering and not windowed …"`) und in `latest` wieder mitnehmen —
-  oder, wenn Robert die Windows-Grenze will, die Entscheidung im Konzept festhalten.
-  **Abnahme:** Wächter in `test_packaging.py`, dass jeder `rendering`-Fall auf jeder Plattform in
-  mindestens einem Releasejob läuft; Vulkan-Wächter, Kommentar und README auf dem Stand.
-  Bauplan §35, §38. Beleg: `bericht-E.md` (M1), `sonden\e_collect_rendering_only.txt`,
-  `e_collect_render_core.txt`.
-  Nachprüfung am Stand `6ce767031`: besteht noch. Von 110 Renderfällen laufen 107 nur in der Windows-Release-CI; Wächter fehlt, Kommentar und README veraltet. Belege `F:\solidon-review-reports\verif-E.md`.
-  **Entschieden (Robert, 06.10.2026):** Die Release-CI fährt die `rendering`-Fälle auch
-  unter Linux und macOS.
-
 <a id="rm-467"></a>
 
 - [~] **RM-467 — Bibliotheken alle drei Tage auf neue Versionen prüfen und aktualisieren.**
@@ -4763,7 +4731,8 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   macOS) und Erkennung, Druckerlisten aus Erststart, Einstellungen und Druckdialog sowie das
   Slicen eines Würfels prüft — die beiden Sonden als Grundlage, nach `tools/` gezogen (RM-530).
   Ausgelöst am Tag und per Handstart, im Vertrag der CI-Aufteilung
-  (`konzepte/konzept-ci-testlaufzeiten-2026-09.md`); die Renderertests stehen in RM-344.
+  (`konzepte/konzept-ci-testlaufzeiten-2026-09.md`); die Rendererfälle laufen seit RM-344 auf
+  allen vier Plattformen.
   **Abnahme:** Ein Tag-Lauf zeigt die Fenstergruppe auf drei Plattformen grün und je Plattform
   jeden installierbaren Slicer mit Druckerliste und Druckdatei; `test_packaging.py` hält die
   neuen Jobs im Vertrag.
@@ -4790,7 +4759,7 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   900 px Fensterhöhe), `test_chat_setup_follows_late_status_text…` (AI, der Text des
   Schlüsseldialogs ist 105 statt 120 px hoch und rollt nicht) und
   `test_black_lit_surfaces_still_show_their_shape` (I, Kontrast genau 10 bei verlangten mehr
-  als 10; Renderer, RM-344). Jeder Fall wird zuerst am Paket seiner Plattform nachgestellt:
+  als 10; in der Rendererprobe von RM-344 am 09.10. auf dem Intel-Mac grün, Lauf 37894162728). Jeder Fall wird zuerst am Paket seiner Plattform nachgestellt:
   ob der Test irrt oder der Kunde es sieht. Die Winkelbedingung auf dem Intel-Mac führt
   [RM-541](#rm-541). Danach die Umstellung in `build.yml`, die Wächter in
   `test_packaging.py`, der Slicer-Job und die Unterlagen.

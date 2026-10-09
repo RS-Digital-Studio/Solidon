@@ -976,12 +976,13 @@ def _calls_of(
     """Fährt die Schritte mit Attrappen und liefert je Schritt seine Python-Aufrufe.
 
     Eine Shell für alle, je Schritt eine Subshell mit dem ``RUNNER_OS`` seines
-    Läufers: Unter Windows kostet jeder Start der bash aus Git Sekunden.
+    Läufers: Unter Windows kostet jeder Start der bash aus Git Sekunden, im
+    vollen Tor mit acht Arbeitern über eine Minute für alle Schritte zusammen.
     """
     calls = folder / "calls.txt"
     calls.unlink(missing_ok=True)
     parts = [
-        f"printf '\\036{index}\\n' >> \"$CALLS\"\n"
+        f"printf '\\036%s\\n' {index} >> \"$CALLS\"\n"
         f"(\nexport RUNNER_OS={_runner_os(label)}\n{script}\n) || "
         f'{{ echo "Schritt {index} ({job}, {label}): Exit $?" >&2; exit 1; }}'
         for index, (job, label, script) in enumerate(scripts)
@@ -1005,7 +1006,7 @@ def _calls_of(
         ),
         capture_output=True,
         text=True,
-        timeout=60,
+        timeout=300,
     )
     assert done.returncode == 0, done.stdout + done.stderr
     found: list[list[list[str]]] = [[] for _ in scripts]
