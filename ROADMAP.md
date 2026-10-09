@@ -67,7 +67,6 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-217 — Die Zuordnungsfrage zeigt das alte Merkmal nicht im Bild](#rm-217) | Geometrie, Erkennung und Druckvorbereitung | Altmerkmal und Kandidat werden gemeinsam markiert; Kern-, Ansichts- und Regressionstests grün. Offen: echter Fensterbeleg im Release unter RM-213 |
 | [RM-571 — Ein Sims im offenen Becher neben einem gesperrten Kanal verliert Stütze](#rm-571) | Geometrie, Erkennung und Druckvorbereitung | In Arbeit: Claude (Worktree `F:/solidon-claude-a`). Ein Maß für „von oben erreichbar“ finden, das den offenen Becher vom Rohrbogen der Schüssel trennt |
 | [RM-572 — Der Prüfbericht nennt keine Stelle, wo viele kleine Überhänge Stützen verlangen](#rm-572) | Geometrie, Erkennung und Druckvorbereitung | Text für „viele kleine Überhänge zusammen“ und eine Feldfrage im Budget §31 |
-| [RM-583 — Stützabstand und Kontaktlagen passen zu Material, Schichthöhe und Auflage](#rm-583) | Geometrie, Erkennung und Druckvorbereitung | Abstand und Kontaktlagen je Material und Schichthöhe, unten wie oben auf dem Modell, Kontaktlüfter |
 | [RM-584 — Die Stützart folgt der Deckenform, und hohe Bäume stehen stabil](#rm-584) | Geometrie, Erkennung und Druckvorbereitung | Hybrid oder normal unter flachen Decken, Baumwände und Fuß ab etwa 100 mm, Spitzenabstand weiterer Materialien |
 | [RM-585 — Bögen, die sich zwischen ihren Beinen schließen, tragen sich selbst](#rm-585) | Geometrie, Erkennung und Druckvorbereitung | Schließfrage für weite Bögen, Brückenregel für die letzte Spanne |
 | [RM-586 — Feine Schichten, wo das Modell feine Formen hat](#rm-586) | Geometrie, Erkennung und Druckvorbereitung | Variable Schichthöhe über die 3MF, Deckschichten mindestens 0,8 mm |
@@ -960,19 +959,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   der Bericht darf sie nicht ungefragt stellen (§31). Abnahme: Kinn und Drache bekommen
   einen Befund mit Ort, der Gitterbecher keinen, die Berichtszeit bleibt im Budget.
 
-<a id="rm-583"></a>
-
-- [ ] **RM-583 — Stützabstand und Kontaktlagen passen zu Material, Schichthöhe und Auflage.**
-  Solidon lässt Z-Abstand, Kontaktlagen, deren Abstand und Muster beim Hersteller
-  (`support.z_gap` hat ein Feld, aber keine Regel). Die Recherche vom 08.10.2026
-  (`konzepte/recherche-slicer-einstellungen-2026-10.md`, Nr. 1, 2, 3, 7) nennt die
-  häufigsten Ursachen für Narben und verschweißte Stützen: oberer Abstand nicht auf die
-  Schichthöhe abgestimmt (PLA etwa eine Schicht, PETG 1,25 bis 1,5), unten 0 Lagen und 0 mm,
-  wo Stützen auf dem Modell stehen (MK4S-Profil), Kontaktlagen zu dicht unter kleinen
-  gewölbten Flächen, Kontaktlüfter aus (alle Orca-Profile −1). Abnahme: je Material und
-  Schichthöhe ein Vorschlag mit Grund, gemessen am G-Code des Drachen (Abstand und Lagen an
-  der Kontaktfläche) in allen Slicerfamilien.
-
 <a id="rm-584"></a>
 
 - [ ] **RM-584 — Die Stützart folgt der Deckenform, und hohe Bäume stehen stabil.**
@@ -1039,6 +1025,10 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   vorhandene Slicertest prüft nur, dass ein Würfel Druckbewegungen bekommt. Abnahme: die
   Messung als Testhilfe in `tests/`, ein Slicertest je Programm mit Gitter und Baum, der bei
   einem neuen Slicerstand rot wird, wenn sich eine der Eigenschaften ändert.
+  Die historischen Messleser berücksichtigen `G92 E…` noch nicht; unter absoluten
+  Extrusionswerten verfälscht ein Rücksetzen deshalb die gezählte Bahnlänge. Ihre Mengen
+  sind kein neu bestätigter Abnahmenachweis. Die Testhilfe muss dieselbe Bahn mit und ohne
+  Extrusionsrücksetzung gleich messen und Rasterbeschreibung und Rasterwert zusammenhalten.
 
 <a id="rm-504"></a>
 

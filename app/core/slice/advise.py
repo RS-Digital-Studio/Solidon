@@ -1115,10 +1115,7 @@ def _support_contact(
     tips = tip_gap(layer, material, need, flavour, style, organic)
     if tips is not None and (target is None or tips > target):
         target = tips
-        reason = _(
-            "Viele kleine Inseln stehen auf Baumspitzen ohne Trennschicht. Mit diesem "
-            "Abstand schweißen sie nicht an."
-        )
+        reason = _("Feine Spitzen brauchen mehr Luft über den Baumstützen.")
     low, high = SUPPORT_GAP_BAND
     gap = settings.support.z_gap
     if target is not None and (
