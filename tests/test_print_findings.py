@@ -196,6 +196,37 @@ def test_the_small_overhangs_are_not_shown_on_a_self_supporting_collar(petg) -> 
     assert y == pytest.approx(-3.0 + 3.0 * (50.0 - z), abs=1.1)
 
 
+def test_a_small_island_beside_the_chin_keeps_the_field_of_the_advice(petg) -> None:
+    """Kinn und eine schwebende Insel von 3 mm zugleich: Kein Stück trägt den
+    Flächenweg (Insel 9 mm², Kinnstreifen unter 10 mm², zusammen 128 mm²), die
+    schräge Unterseite als Feld schon. Ohne Inselstücke wird der Weg neu
+    gefragt, mit dem Feld des Rats — gefragt nach dem größten Stück allein
+    schwiege der Bericht am Kinn. Die Insel hat ihre eigene Zeile und zählt
+    nicht in die Fläche (Review RM-572)."""
+    profile, settings = petg
+    alone = print_findings(_scene(chin_over_chest()), profile, settings)
+    body = on_bed(
+        brick(80.0, 60.0, 4.0, (0.0, 0.0, 2.0)),
+        brick(40.0, 10.0, 60.0, (0.0, 20.0, 34.0)),
+        brick(60.0, 30.0, 20.0, (0.0, 0.0, 14.0)),
+        chin(44.0),
+        brick(3.0, 3.0, 3.0, (35.0, -20.0, 30.0)),
+    )
+
+    found = print_findings(_scene(body), profile, settings)
+
+    assert _slice_codes(found) == ["slice.island_needs_support", "slice.small_overhangs"]
+    island, small = (entry for entry in found if entry.code.startswith("slice."))
+    assert island.location is not None and island.location[0] == pytest.approx(35.0, abs=1.0)
+    assert small.location is not None
+    x, y, _z = small.location
+    assert -8.0 < x < 8.0 and -3.0 < y < 15.0, "unter dem Kinn, nicht an der Insel"
+    (before,) = (entry for entry in alone if entry.code == "slice.small_overhangs")
+    assert small.values["area_mm2"] == pytest.approx(before.values["area_mm2"], abs=0.1), (
+        "die Insel zählt nicht in die Fläche"
+    )
+
+
 @pytest.mark.parametrize("size", [12.0, 20.0])
 def test_a_larger_floating_cube_is_only_an_island(petg, size: float) -> None:
     """Ein schwebender Würfel ist ein Überhangstück über 100 mm², und der
