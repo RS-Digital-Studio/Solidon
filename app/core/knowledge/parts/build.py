@@ -307,19 +307,28 @@ def bore(
     depth: float = 0.0,
     axis: Vec3 = (0.0, 0.0, 1.0),
     through: bool = False,
+    lead_in: bool = False,
 ) -> tuple[FeatureId, Feature]:
-    """Eine benannte Bohrung, so wie der Baustein sie verspricht (§24.1)."""
+    """Eine benannte Bohrung, so wie der Baustein sie verspricht (§24.1).
+
+    ``lead_in`` kennzeichnet die Einführfase einer Bohrung darunter: Sie ist als
+    Bohrung erklärt, damit die Bausteinfelder sie führen, aber kein Hohlraum für
+    sich — *Stift für Bohrung* baute dort eine Scheibe (Review G, F2).
+    """
+    params: dict[str, Any] = {
+        "diameter": diameter,
+        "centre": centre,
+        "axis": axis,
+        "depth": depth,
+        "through": through,
+    }
+    if lead_in:
+        params["lead_in"] = True
     return identifier, Feature(
         id=identifier,
         kind="hole",
         provenance="generated",
-        params={
-            "diameter": diameter,
-            "centre": centre,
-            "axis": axis,
-            "depth": depth,
-            "through": through,
-        },
+        params=params,
         measure_sources=dict.fromkeys(("diameter", "centre", "axis", "depth"), "parameter"),
     )
 

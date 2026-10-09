@@ -384,6 +384,19 @@ def _width(text: str, context: _Context) -> object:
     return number if number > 0.0 else None
 
 
+def _bottom_layers(text: str | None, top: object) -> object:
+    """Untere Kontaktlagen; -1 heißt in der Orca-Familie und bei PrusaSlicer
+    „wie oben“ und wird zur oberen Zahl (RM-583)."""
+    if text is None:
+        return None
+    number = _float(text)
+    if number is None or not number.is_integer():
+        return Foreign(text)
+    if number < 0.0:
+        return top if isinstance(top, int) else None
+    return int(number)
+
+
 def _flag(text: str, _context: _Context) -> object:
     lowered = text.casefold()
     if lowered in ("1", "true"):
@@ -450,6 +463,7 @@ ORCA_PROCESS: Final[tuple[tuple[str, str, Reader], ...]] = (
     ),
     ("support.z_gap", "support_top_z_distance", _number),
     ("support.interface_layers", "support_interface_top_layers", _count),
+    ("support.interface_spacing", "support_interface_spacing", _number),
     ("adhesion.skirt_loops", "skirt_loops", _count),
     ("adhesion.skirt_distance", "skirt_distance", _number),
     ("adhesion.brim_width", "brim_width", _number),
@@ -708,6 +722,15 @@ def _read_process(
     density = _support_density(values, read, context)
     if density is not None:
         read["support.density"] = density
+    bottom_text = _text(values.get("support_interface_bottom_layers"))
+    bottom = _bottom_layers(
+        bottom_text if bottom_text is not None else defaults.get("support_interface_bottom_layers"),
+        read.get("support.interface_layers"),
+    )
+    if isinstance(bottom, Foreign):
+        foreign["support.bottom_interface_layers"] = bottom.raw
+    elif bottom is not None:
+        read["support.bottom_interface_layers"] = bottom
     return read, foreign
 
 
@@ -1030,17 +1053,14 @@ def cura_motion(setup: SlicerSetup, profile: Profile) -> Motion | None:
         return None
     jerk = _cura_number(chain.get("machine_max_jerk_xy"))
     limit = _cura_number(chain.get("machine_max_acceleration_x"))
-    interface = _cura_number(chain.get("support_interface_density"))
     return Motion(
         nozzle=profile.printer.nozzle_diameter,
         jerk=jerk if jerk is not None and jerk > 0.0 else None,
         acceleration_limit=limit if limit is not None and limit > 0.0 else None,
-        # Stütztempo und Beschleunigung folgen dem, was Solidon schreibt
-        # (``speed_print``, ``print_time._roles``); die Kontaktdichte steht in
-        # der Definition, in Prozent.
-        support_interface_density=interface / 100.0
-        if interface is not None and interface > 0.0
-        else None,
+        # Stütztempo, Beschleunigung und Kontaktdichte folgen dem, was Solidon
+        # schreibt (``speed_print``, ``print_time._roles``,
+        # ``slicer_keys.CURA_INTERFACE_LINES``), nicht der Definition.
+        support_interface_density=1.0 / slicer_keys.CURA_INTERFACE_LINES,
         support_closing=_cura_number(chain.get("support_join_distance")),
     )
 
@@ -1297,7 +1317,9 @@ def _read_filament(
             continue
         if solidon in slicer_profiles._AS_FRACTION:
             number /= 100.0
-        read[solidon] = kind(number)
+        value = kind(number)
+        if value is not None:
+            read[solidon] = value
     refuses = False
     key = PLATE_TEMPERATURES.get(plate)
     if key is not None:
@@ -1381,6 +1403,7 @@ PRUSA_PROCESS: Final[tuple[tuple[str, str, Reader], ...]] = (
     ),
     ("support.z_gap", "support_material_contact_distance", _number),
     ("support.interface_layers", "support_material_interface_layers", _count),
+    ("support.interface_spacing", "support_material_interface_spacing", _number),
     ("adhesion.skirt_loops", "skirts", _count),
     ("adhesion.skirt_distance", "skirt_distance", _number),
     ("adhesion.brim_width", "brim_width", _number),
@@ -1456,8 +1479,10 @@ PRUSA_PROGRAM_DEFAULTS: Final[Mapping[str, str]] = {
     "support_material": "0",
     "support_material_auto": "1",
     "support_material_buildplate_only": "0",
+    "support_material_bottom_interface_layers": "-1",
     "support_material_contact_distance": "0.2",
     "support_material_interface_layers": "3",
+    "support_material_interface_spacing": "0",
     "support_material_spacing": "2.5",
     "support_material_style": "grid",
     "support_material_threshold": "0",
@@ -1622,6 +1647,13 @@ def _read_prusa(
     take("support.xy_gap", _prusa_support_gap(values, outer_width))
     take("support.density", _prusa_support_density(values, read, context))
     take("adhesion.kind", _prusa_adhesion(values))
+    take(
+        "support.bottom_interface_layers",
+        _bottom_layers(
+            _prusa_first(values.get("support_material_bottom_interface_layers")),
+            read.get("support.interface_layers"),
+        ),
+    )
     read.update(_prusa_retraction(values))
     read.update(_prusa_material(values))
     return read, foreign
@@ -1858,7 +1890,9 @@ def _prusa_material(values: Mapping[str, Any]) -> dict[str, object]:
             continue
         if solidon in slicer_profiles._AS_FRACTION:
             number /= 100.0
-        read[solidon] = kind(number)
+        value = kind(number)
+        if value is not None:
+            read[solidon] = value
     always = (_prusa_first(values.get("fan_always_on")) or "0").casefold()
     if always in ("0", "false") and "cooling.minimum_fan_speed" in read:
         read["cooling.minimum_fan_speed"] = 0.0
@@ -2238,6 +2272,12 @@ def _without_process(setup: SlicerSetup | None) -> str:
     return handover._profile_name(setup.machine_profile)
 
 
+def cura_interface_gap(stage: PrintSettings) -> float:
+    """Die Lücke, die Cura ohne Wahl druckt: drei Bahnbreiten der Stufe
+    Linienabstand, wie Creality und Elegoo in Cura (RM-583)."""
+    return (slicer_keys.CURA_INTERFACE_LINES - 1.0) * stage.layers.line_width
+
+
 def base_settings(
     profile: Profile, quality: QualityPreset, setup: SlicerSetup | None
 ) -> Foundation:
@@ -2249,6 +2289,23 @@ def base_settings(
     und die Übergabe schreibt sie dann vollständig.
     """
     fallback = cura_fan_curve(settings_table.resolve(profile, quality), profile, setup)
+    if setup is not None and setup.flavour == "cura":
+        from app.core.slice import advise
+
+        # Cura rechnet den Abstand in ganzen Schichten: Die Grundlage trägt das
+        # Vielfache, das zum Material passt, sonst das nächste (RM-583).
+        layer = fallback.layers.layer_height
+        gap = advise.support_gap_target(layer, profile.material, "cura")
+        if gap is None and layer > 0.0:
+            gap = max(1, round(fallback.support.z_gap / layer)) * layer
+        fallback = replace(
+            fallback,
+            support=replace(
+                fallback.support,
+                interface_spacing=cura_interface_gap(fallback),
+                z_gap=fallback.support.z_gap if gap is None else gap,
+            ),
+        )
     if setup is None or setup.flavour not in ("orca", "prusa") or not setup.base_process:
         return _table_foundation(
             profile,

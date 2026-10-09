@@ -126,14 +126,27 @@ class _StepScroller(ContentScroller):
     """
 
     contentResized = Signal()
-    """Die Schritte haben ihre neue Höhe — erst jetzt stimmt die Lage einer Zeile."""
+    """Die Schritte haben ihre neue Höhe — erst jetzt stimmt die Lage einer Zeile.
+
+    **Gemeldet nach der Größenänderung, nicht in ihr.** Das Ereignis kommt mitten
+    aus Qts eigener Rechnung, die den Inhalt vergrößert und erst danach den
+    Rollbereich nachzieht: Wer dort rollte, stieß an die alte Grenze, und ein
+    hoher Schritt stand unter dem Rand statt oben (macOS, 46 Punkte).
+    Mehrere Änderungen einer Runde melden sich einmal."""
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self._settled = QTimer(self)
+        self._settled.setSingleShot(True)
+        self._settled.setInterval(0)
+        self._settled.timeout.connect(self.contentResized)
 
     def eventFilter(self, watched: QObject, event: QEvent) -> bool:  # noqa: N802 — Qt-Name
         if watched is self.widget():
             if event.type() == QEvent.Type.LayoutRequest:
                 tell_the_zone(self)
             elif event.type() == QEvent.Type.Resize:
-                self.contentResized.emit()
+                self._settled.start()
         return super().eventFilter(watched, event)
 
 

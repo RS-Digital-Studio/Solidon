@@ -160,6 +160,10 @@ Dialoge.
 
 ## Arbeitsweise
 
+- **Mehr liefern, wo es geht.** Eine selbst gesetzte Grenze, die dem Kunden
+  weniger gibt (Größen, Formen, Bereiche), wird gehoben, sobald sie nicht nötig
+  ist. Jede gefundene Leistungs- oder Speicherverbesserung wird umgesetzt,
+  solange die Ergebnisse gleich bleiben (Messung vorher und nachher, Test).
 - **Kleine Schritte, je Schritt nur die betroffenen Tests**
   (`tools/affected_tests.py` leitet sie aus dem Importgraphen ab). Das
   Entwicklungstor — alle Tests ohne Fenster, Renderer und Leistung, ruff, format, mypy —

@@ -35,6 +35,15 @@ Handlungen steht, sagt `grenzen.md`. Warum:
   die letzte Geste, *Fertig* ohne Dialog (RM-561). Formen/Skelett haben
   denselben lokalen Undo-Weg für Menü und Strg+Z, Zeichnen deaktiviert die
   globale Aktion. Leerer Editor nimmt keinen Dokument-Schritt zurück.
+- Reiter können in eigene OS-Fenster wechseln. `DetachableTabs` hält ihren
+  Platz als Hülle im Stapel; `widget`, `indexOf` und `currentWidget` beziehen
+  sich weiter auf den echten Inhalt. Schließen und *Zurück in Solidon* hängen
+  denselben Inhalt zurück. Sichtbarkeit und Meldungsmarken folgen dem Reiter,
+  nicht seiner Nummer. Die Anordnung liegt nur in `UiSettings.tab_layout`;
+  fehlende Monitore begrenzen Fenster auf vorhandene Bildschirmflächen.
+- Karten rasten auch unten links, unten rechts und am unteren Rand ein.
+  `CardPlace` speichert den waagrechten Anteil am unteren Rand; die Unterkante
+  bleibt beim Wechsel der Inhaltshöhe erhalten. Die Werkzeugzeile bleibt frei.
 - Drei Zonen: links Baum/Parameter/Verlauf, Mitte Viewport, rechts eine Karte
   mit den Reitern Auswahl, Prüfbericht, Chat (F9 blendet sie aus). Keine
   Betriebsarten. Die Karte misst die vordere Seite (`CurrentPageTabs`).
@@ -315,8 +324,8 @@ Ansichtsseite steht in `griffe.md`.
   `_commit_slot_change`) und legt keinen zweiten obenauf. Wer eine Operation
   baut, die ein Merkmal aus ihrem früheren Schritt noch einmal anfasst, fragt
   zuerst `created_by`.
-- **Karte:** nur `perceive.actions.OFFERED_AT_A_PART` (*Stift für Bohrung* am
-  Innengewinde, an keiner anderen Art), danach `not_offered_at`.
+- **Karte:** nur `perceive.actions.OFFERED_AT_A_PART` (*Stift für Bohrung* an
+  Innengewinde und Bohrung), danach `not_offered_at`.
 
 ## Der Hauptknopf
 

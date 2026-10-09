@@ -1351,7 +1351,13 @@ def heatset_insert(raw: BaseParams) -> PartResult:
         lead = shapes.cone(hole, hole + 2.0 * chamfer, chamfer)
         parts.append(shapes.moved(lead, (0.0, 0.0, -chamfer)))
         features.append(
-            bore("chamfer_1", hole + 2.0 * chamfer, (0.0, 0.0, -chamfer / 2.0), depth=chamfer)
+            bore(
+                "chamfer_1",
+                hole + 2.0 * chamfer,
+                (0.0, 0.0, -chamfer / 2.0),
+                depth=chamfer,
+                lead_in=True,
+            )
         )
 
     return result(union(*parts), *features)
@@ -1412,6 +1418,58 @@ class NutTrapParams(BaseParams):
     )
 
 
+NUT_TRAP_BORES_THROUGH_THE_PART = PartChange(
+    version="26",
+    date="2026-10-09",
+    reason=(
+        "Das Schraubenloch reichte fest 10 mm über die Tasche hinaus: In einem dickeren Träger "
+        "blieb es ein Sackloch und hieß Durchgang, über einem Spalt bohrte es den Backen darüber "
+        "an. Von unten eingelegt saß die Tasche mittig auf der Fläche, der Schlitz führte von "
+        "ihr weg ins Material, und Tasche und Bohrung waren entlang Z erklärt (RM-631)."
+    ),
+    effect=_(
+        "Das Schraubenloch reicht genau durch das Teil, und von unten eingelegt liegt die Tasche "
+        "unter der Fläche."
+    ),
+)
+
+
+NUT_TRAP_SINKS_WITHOUT_A_FACE = PartChange(
+    version="25",
+    date="2026-10-08",
+    reason=(
+        "Von Hand auf eine Oberfläche gesetzt, ohne Fläche und ohne Richtung, baute die "
+        "Mutternfalle ihre Tasche nach oben in die Luft über der Stelle und trug nur das "
+        "Schraubenloch ab (RM-591)."
+    ),
+    effect=_(
+        "Von Hand auf eine Oberfläche gesetzt, liegt die Tasche jetzt im Material statt darüber."
+    ),
+)
+
+
+def _nut_trap_above_the_face(params: NutTrapParams) -> TranslatableText | None:
+    """Von unten eingelegt muss die Tasche ganz unter der Mündung liegen (Nachprüfung G, N-5).
+
+    Ihre Mitte liegt so tief wie der Einschubweg, und die Ecken des Sechskants
+    reichen die halbe Eckweite darüber hinaus. Kürzer ragte die Tasche über die
+    Fläche, bei null lag die Schraube in ihr — das Bild, das RM-631 beheben
+    sollte. Die erklärte Bedingung steht am Vertrag, der Bereichstest fährt diese
+    Ecken als Ausschluss.
+    """
+    if params.direction != "bottom":
+        return None
+    entry = _nut_of(params.size, params.diameter)
+    corner = (entry.width + params.play) / math.sqrt(3.0)
+    if params.slide >= corner - EPS_GEOM:
+        return None
+    return _(
+        "Von unten eingelegt braucht die Mutter einen Einschubweg von mindestens {length}, "
+        "sonst ragt die Tasche über die Fläche.",
+        length=format_length(corner),
+    )
+
+
 @register_part(
     name="nut_trap",
     title=_("Mutternfalle"),
@@ -1422,6 +1480,8 @@ class NutTrapParams(BaseParams):
     at_hole_values=size_for_nut_trap,
     at_hole_advice=nut_trap_advice,
     features=["pocket", "bore"],
+    reaches_through=("bore_1",),
+    feasible=lambda raw: _nut_trap_above_the_face(cast(NutTrapParams, raw)),
     wall=WallRequirement.not_applicable("Der Baustein ist ein abtragender Werkzeugkörper."),
     feature_requirements=(
         FeatureRequirement("pocket"),
@@ -1442,39 +1502,51 @@ class NutTrapParams(BaseParams):
         NUT_HEIGHT_FROM_ISO,
         NUT_TRAP_SINKS_ON_A_FACE,
         MATERIAL_OF_TARGET,
+        NUT_TRAP_SINKS_WITHOUT_A_FACE,
+        NUT_TRAP_BORES_THROUGH_THE_PART,
     ],
 )
 def nut_trap(raw: BaseParams) -> PartResult:
     params = cast(NutTrapParams, raw)
+    problem = _nut_trap_above_the_face(params)
+    if problem is not None:
+        raise ValidationError("slide", problem, constraint="feasible")
     entry = _nut_of(params.size, params.diameter)
     width = entry.width + params.play
     height = entry.height + params.play / 2.0
 
     pocket = shapes.hexagon(width, height)
     parts = [pocket]
-    features = [
-        bore("pocket_1", width, (0.0, 0.0, height / 2.0), depth=height),
-    ]
 
     if params.slide > 0.0:
         # Der Schlitz, durch den die Mutter eingeschoben wird, entlang +Y zeigend.
         channel = shapes.box(width, params.slide, height)
         parts.append(shapes.moved(channel, (0.0, params.slide / 2.0, 0.0)))
 
-    if params.screw_hole:
-        screw = _screw_of(params.size, params.diameter)
-        length = height + 20.0
-        shaft = shapes.cylinder(screw.clearance, length)
-        parts.append(shapes.moved(shaft, (0.0, 0.0, -10.0)))
-        features.append(
-            bore("bore_1", screw.clearance, (0.0, 0.0, height / 2.0), depth=length, through=True)
-        )
-
+    # **Das Schraubenloch baut die Operation, nicht der Baustein** (RM-631). Es
+    # reichte hier fest 10 mm über die Tasche hinaus: in einem 40-mm-Quader ein
+    # Sackloch, das Durchgang hieß, auf dem Boden eines Spalts 10 mm in den
+    # Backen darüber. Erklärt wird es über die Tasche, wo es ohnehin liegt; wie
+    # weit der Träger entlang der Achse Material hat, misst der Schritt und
+    # bohrt bis dorthin (``reaches_through``, ``ops._reaching_through``).
+    centre: Vec3 = (0.0, 0.0, height / 2.0)
+    axis: Vec3 = (0.0, 0.0, 1.0)
     body = union(*parts)
     if params.direction == "bottom":
-        # Gedreht, sodass die Öffnung nach unten schaut — von unten eingelegt
-        # statt von der Seite eingeschoben.
-        body = shapes.turned(body, 90.0, (1.0, 0.0, 0.0))
+        # Von unten eingelegt: Die Mutter fällt durch den Schlitz von der
+        # Mündung (z = 0) in die Tasche, so tief, wie der Einschubweg reicht;
+        # die Schraube liegt quer. Der Schlitz zeigte vorher von der Tasche weg
+        # tiefer ins Material, und die Tasche saß mittig auf der Fläche — die
+        # Schraubenachse in der Fläche selbst.
+        body = shapes.moved(shapes.turned(body, -90.0, (1.0, 0.0, 0.0)), (0.0, 0.0, params.slide))
+        centre = (0.0, height / 2.0, params.slide)
+        axis = (0.0, 1.0, 0.0)
+    features = [bore("pocket_1", width, centre, depth=height, axis=axis)]
+    if params.screw_hole:
+        screw = _screw_of(params.size, params.diameter)
+        features.append(
+            bore("bore_1", screw.clearance, centre, depth=height, axis=axis, through=True)
+        )
     return _derived(result(body, *features), params.size, params.diameter)
 
 

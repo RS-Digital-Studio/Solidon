@@ -1252,6 +1252,54 @@ die 15,6-ms-Wartezeit je GIL-Griff nie. Gemessen wird mit einem groben Takt ab
 25 ms. (Aus der Regel hierher verschoben, weil sie die Sonde betrifft, nicht
 den Code.)
 
+**Zugeordnet wird eine Lücke über Abzüge, die ohne GIL laufen** —
+`faulthandler`, `py-spy dump` —, nicht über einen Python-Faden, der in
+derselben Lücke steht: Der wartet auf denselben GIL. Ebenso tragfähig ist die
+CPU-Zeit je Faden (`GetThreadTimes`): Rechnet der Hauptfaden in einer Lücke
+kaum und der Arbeiter viel, wartete das Fenster auf den GIL; rechnen beide
+kaum, fehlte dem Prozess die CPU. (Aus der Regel hierher verschoben.)
+
+**Was ein Griff kostet, hängt am Aufruf** (RM-258, gemessen neben einem Faden,
+der reines Python rechnet, 1 ms Umschaltintervall): Einfache Abfragen wie
+`QEvent.type`, `text`, `isHidden`, `setText`, `QPixmapCache.find` behalten den
+GIL, unter 1 µs. `QToolButton.sizeHint` gibt ihn her (4 µs → 1,5 ms),
+`QPixmap.fromImage` ebenso (1 µs → 0,2 bis 1,8 ms), ein SVG rastern
+(37 µs → 0,7 bis 4,6 ms). Dazu jeder Einstieg aus Qt in Python. Am
+Mausoleum-Drachen hatte das erste Bild der Arbeitsfläche rund 500 Einstiege
+und das Bild vor der Frage nach der Vollerkennung rund 900; der Hauptfaden
+rechnete darin 0,03 bis 0,09 s, die Lücken waren 0,3 bis 1,4 s lang, und der
+Arbeiter rechnete in ihnen 0,22 bis 0,94 s. Mit dem Vortritt rechnet er dort
+nicht mehr (0,000 bis 0,016 s).
+
+**Den Anwendungsfilter in C++ filtern lassen geht nicht.** PySide hat keinen
+Filter, der nach Ereignisart vorsortiert; ein Python-`eventFilter` an der
+Anwendung bekommt jedes Ereignis jedes Objekts. Ohne ihn
+(`application.removeEventFilter`, nur zum Messen) fielen die zwei Lücken des
+ersten Bildes von 0,35 und 0,39 s auf 0,23 und 0,27 s — der größte einzelne
+Hebel, allein nicht genug. Ihn zu ersetzen hieße, sieben Zuhörer (Zeiger,
+Fensterchrom, Tasten, Fokus, Fragebogenuhr, Vergleich, Dateiempfang) auf
+eigene Wege umzubauen; das ist ein eigener Umbau, kein Teil von RM-258.
+
+**Deshalb der Vortritt** (`leash.RightOfWay`): An den zwei Stellen, an denen
+eine Meldung des Arbeiters ein großes Bild auslöst — Start des Ladewegs und
+das Bild vor der Erkennung —, hält er an, bis die Ereignisschleife zwei Runden
+gedreht hat. Der Arbeiter verliert dabei kaum etwas, denn den GIL hätte er für
+jeden Griff abgeben müssen. Freigegeben wird über einen 1-ms-Zeitgeber, nicht
+über `singleShot(0)`: Ein Nullzeitgeber kommt als eingereihtes Ereignis
+normaler Priorität vor dem `UpdateRequest`, der mit niedriger Priorität
+wartet — die Freigabe käme vor dem Zeichnen. `wait_for_idle` gibt sofort frei,
+denn wer synchron wartet, zeichnet nicht; ohne das stand jede Auswertung im
+Test bis zur Frist.
+
+**Ein Symbol rastert einmal.** `QIcon` fragt seine Engine bei jedem
+Neuzeichnen eines Knopfes; `ThemedIcon.pixmap` rasterte jedes Mal das SVG
+(sechzehn Symbole im ersten Bild, neben dem Arbeiter 30 bis 170 ms). Gemerkt
+wird im `QPixmapCache` mit der Farbe im Schlüssel. Eine Farbtabelle von drei
+Millionen Einträgen kostete `threemf._outside_meshes` 0,8 s CPU, jetzt nichts.
+Und `Thread.start` wartet, bis der neue Faden läuft — der Suchfaden der
+3D-Maus startet deshalb mit dem Fenster, nicht 1,5 s danach mitten in einem
+Import (unter Volllast bis 0,43 s).
+
 ### Ein Blick auf eine Datei ist eine Netzfrage
 
 „Zuletzt geöffnet" fragte beim Fensteraufbau jede gemerkte Datei nach ihrer

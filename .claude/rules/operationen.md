@@ -11,7 +11,7 @@ paths:
 
 Eine Operation ist die einzige Stelle, an der Geometrie entsteht oder sich
 ändert (Regel 2, §30.1). Messwerte und Anlässe, gegliedert wie hier:
-`konzepte/begruendungen/regel-operationen.md`.
+`konzepte/begruendungen/regel-operationen.md`; Kantengruppen: `kanten.md`.
 
 ## Vollständig oder gar nicht
 
@@ -43,8 +43,7 @@ weiter aus dem Bericht.
 
 `SceneObject.kind` wählt den Rechenweg (`geom/edge_ops.py`), kein `MENU_TWINS`-
 Paar oder Haken. Das gilt auch für `drill_brep_hole`/`shell_exact`, Erzeuger am
-Träger samt neuem Teil; Netz-Zwillinge der Grundkörper sind über das
-Kontextmenü ihres Verlaufsschritts erreichbar.
+Träger samt neuem Teil.
 Alles bleibt bearbeitbar (Robert). `caveat` erklärt Sehnenzug bis
 `units.MAX_FACET_SAG` und wann der andere Kern nötig ist.
 
@@ -94,10 +93,6 @@ Ring: Punkt kleinster Lage (`LOOP_START`), Richtung `LOOP_WAY` — nie
 Knotennummer oder erster Punkt; beide Kerne und jeder Verbraucher fragen
 dieselben Funktionen. Ohne Form (Ring mit verschiedenen Endradien, verschiedene
 Radien an einer Ecke) eine Absage mit Weg (Regel 21).
-
-### Kantengruppen und gebogene Züge
-
-Stehen in `kanten.md`.
 
 ### Eine angestellte Fläche darf nicht durch fremdes Material laufen
 
@@ -189,8 +184,8 @@ Grund (`CavityState.reason`: `NO_OWN_BODY` oder `CAVITY_TOPOLOGY_UNKNOWN`, im
 Gruppenweg `cavity_topology_unavailable`), und wer den Zustand liest, liest ihn
 mit. Geteilt steht einmal (`relations.cavity_is_shared`). Was einen geteilten
 Hohlraum nicht nehmen kann, sagt ab statt still ein Stück zu bearbeiten — nur
-noch *Zum Langloch ziehen* (`NEEDS_A_PLAIN_BORE`, derselbe Satz im
-Merkmalfenster); Versetzen, Drehen und Verdoppeln nehmen die ganze Kette mit.
+*Zum Langloch ziehen* (`NEEDS_A_PLAIN_BORE`, wie die Karte); Versetzen, Drehen
+und Verdoppeln nehmen die ganze Kette mit.
 
 ## Gekippt wird bis zur alten Randebene
 
@@ -285,9 +280,12 @@ eine dünner gewordene unter der Mindestwand meldet `thread.thin_wall`.
 - **Eine Kopie, die es nicht gibt**, an beiden Kernen: wiedergefunden heißt neu
   und seitlich auf der gesetzten Achse bis zur Facettengrenze.
 - **Eine Bohrung, in deren Zylinder Material steht, ist keine** (`hole_is_clear`
-  über jede Oberfläche, `HOLE_IS_NOT_EMPTY`, fremde Teile
-  `OTHER_PART_IN_THE_BORE`); ob man hindurchsieht, sagt die ganze Mündung. Nur
-  `slot_hole` schneidet ein freies Teil mit (`_near_the_carrier`).
+  über jede Oberfläche, `HOLE_IS_NOT_EMPTY`); ob man hindurchsieht, sagt die
+  ganze Mündung. Getrennte Teile fragt `separate_part_reason` an jedem
+  Hohlraum außer dem Einschluss, der seine Insel mitnimmt, und in jedem
+  fremden; nur `slot_hole` schneidet ein freies mit. Danach steht jedes fremde
+  Teil unverändert da (`_leaves_other_parts_alone`).
+- **Exakt gesetzt sagt eine Berührung auf Linie oder Punkt ab** (`_exact_placed_holds`).
 - **Jeder Weg, der eine Bohrung neu setzt, fragt nach der Kante**
   (`prepare_ops._edge_findings`, am gefüllten Körper vor dem Schnitt, über die
   Schnittlänge; den Zerfall gegen den Körper davor, `_split_counted_from`):
@@ -320,17 +318,16 @@ wieder ausgeschnitten wird exakt das Merkmal, ohne Zugabe.
 
 ## Ein Vieleck aus einem gemessenen Durchmesser ist enger als er
 
-`trimesh.creation.cylinder` ist eingeschrieben. Wiederhergestellt wird mit dem
-gemessenen Konturmaß und dem Wandmantel (`_tool_for`, `_placing_tool`); nur der
-Stopfen, der umschreiben muss, bekommt `units.inscribed_ratio`. Falle:
-`FEATURE_OVERLAP` verdeckt den Vieleckverlust.
+Wiederhergestellt wird mit dem gemessenen Konturmaß und dem Wandmantel
+(`_tool_for`, `_placing_tool`); nur der Stopfen, der umschreiben muss, bekommt
+`units.inscribed_ratio`.
 
 ## Toleranzen sind Durchmessermaße
 
 `clearance` und `press` gelten im Durchmesser (`diameter + play`,
 `hole_diameter - pin_diameter`); wer einzieht, nimmt die Hälfte, im Hohlraum
-senkrecht zur Wand (`geom.bore_pin`). Keine Konstante als Fertigungszugabe
-(Regel 7).
+senkrecht zur Wand und vor dem Boden (`geom.bore_pin`, nur im Körper). Keine
+Konstante als Fertigungszugabe (Regel 7).
 
 ## Ein Langloch in neuer Richtung ist ein gedrehtes Langloch
 
@@ -493,8 +490,8 @@ vergibt der Plan (`first_pin`), ein gleichnamiges Merkmal weicht aus
   bewegt, nimmt `apply` (Vermerk `note_movement`), wer nur teilt, meldet die
   Herkunft (`note_refinement`); übertragen wird unter Beleg, nie auf Zusage. Ein
   einzeln bewegter Körper meldet seine Matrix in `OpResult.transform`; bei
-  mehreren Körpern reist sie je Netz über `note_movement`. Alle Verbraucher
-  teilen den einmal gemessenen `moved_twin`-Beleg für Netzpaar und Matrix.
+  mehreren Körpern reist sie je Netz über `note_movement` (Beleg `moved_twin`,
+  `perceive/CLAUDE.md`).
 - **Die Live-Vorschau erkennt nur, was jemand braucht**
   (`detect_features=False`); ihre Szene ist nie Dokumentstand, Merkmale liest
   der Agent über den genauen Weg.

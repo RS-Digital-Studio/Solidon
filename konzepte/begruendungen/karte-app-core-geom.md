@@ -15,6 +15,14 @@ sind der Hintergrund.
 
 ## Vorspann
 
+### Große Bohrungen und Senkungen
+
+Die Obergrenze für neue Bohrungen und ihren manuellen Verschluss folgt dem
+größten Gewindedurchmesser (`units.LARGEST_THREAD`). Vorschau und Netzwerkzeug
+leiten ihre Sehnenzahl aus `shapes.turn_segments` ab. Eine feste Zahl von 48
+Segmenten genügt für große Durchmesser nicht; auch Senkungen halten deshalb
+`MAX_FACET_SAG` ein und verlängern die Flanke über die Mündung hinaus.
+
 *Früher unter „Grenzen“, HEAD-Fassung — die Regel dazu steht heute in `operationen.md` (der `caveat`).*
 
 - **Der Sehnenzug wird benannt, nicht versteckt.** Eine Verrundung am Netz

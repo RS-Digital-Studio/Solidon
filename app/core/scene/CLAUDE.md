@@ -49,9 +49,9 @@ Merkmalen. Der Empfänger ordnet Callbackmeldungen der Auftragsrevision zu.
 | `revision.py` | Den Verlauf umbauen: `dependencies`, `step_needs`, `revise`, `verdict`, `commit`; `searched_at_the_end` lässt Eingefügtes seine freie Stelle am Endstand suchen |
 | `rebuild.py` | Nachbau (§42): P4.0/Netzfits, Formvergleich, benannte Maße, atomare Übernahme |
 | `bundling.py` | Welche Züge zu einem Schritt verschmelzen (§15.5), **opt-in je Operation** |
-| `evaluate.py` | Die Auswertung (§15.1); `EvaluationResult.question_reference` trägt bei einer offenen Zuordnungsfrage den bisherigen Bezug mit Ansichtsdreiecken nur vorübergehend zur Ansicht |
+| `evaluate.py` | Die Auswertung (§15.1); `EvaluationResult.question_reference` trägt bei einer offenen Zuordnungsfrage den bisherigen Bezug mit Ansichtsdreiecken nur vorübergehend zur Ansicht; gemerkte Zuordnungsschritte (RM-593) |
 | `edge_binding.py` | Gewählte Kanten **vor** dem Verbrauchercache binden (§21.3) |
-| `cache.py` | Ergebnis-Cache über dem Operations-Hash, Speicher und Platte |
+| `cache.py` | Ergebnis-Cache über dem Operations-Hash, Speicher und Platte; Speicherebene in Bytes begrenzt samt Merkern, ältere Einträge schrumpfen vor dem Verdrängen (RM-567) |
 | `hashing.py` | `operation_hash()`, `object_hash()`, `profile_key()`, `feature_digest` |
 | `parameter_usage.py` | Direkte und abgeleitete Parameterverwendung je Operationsfeld (§13) |
 | `parameter_binding.py` | Feste Zahlen, die zu Projektmaßen passen, und ihre Bindung (`projektmasse.md`) |

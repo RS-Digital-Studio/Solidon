@@ -833,8 +833,15 @@ def test_the_wall_check_does_not_hold_the_window(
     window._check_sculpted_walls()
     assert window._sculpt_wall_number > stale
 
+    # Wie Qt auf macOS und Linux zustellt: Eine Übergabe der Vorschau (RM-576),
+    # die beim Start der Prüfung noch wartet, käme nach deren Antwort und
+    # schrieb die Zeile leer. Windows stellt sie vorher zu; hier für alle gleich.
+    display_waits = window._sculpt_display.isActive()
+    window._sculpt_display.stop()
     release.set()
     assert window.wait_for_sculpt_check()
+    if display_waits:
+        window._show_sculpt_display()
     text = window.sculpt_bar.warning.text()
     assert any(char.isdigit() for char in text), f"the latest answer must stand: {text!r}"
 

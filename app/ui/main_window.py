@@ -51,7 +51,6 @@ from PySide6.QtGui import (
     QDropEvent,
     QKeyEvent,
     QKeySequence,
-    QShortcut,
     QShowEvent,
     QStandardItemModel,
 )
@@ -75,7 +74,6 @@ from PySide6.QtWidgets import (
     QPushButton,
     QSizePolicy,
     QStackedWidget,
-    QTabWidget,
     QTextEdit,
     QToolBar,
     QToolButton,
@@ -85,7 +83,7 @@ from PySide6.QtWidgets import (
 from shiboken6 import isValid
 
 from app.branding import APP_NAME, APP_VERSION, PART_FILE_SUFFIX, PROJECT_SUFFIX
-from app.core import activation, bootstrap, examples, feedback, manual, tools, updates
+from app.core import activation, bootstrap, discover, examples, feedback, manual, tools, updates
 from app.core.agent import apply as agent_apply
 from app.core.agent.analysis import ANALYSIS_KINDS, analysis_text, unknown_analysis
 from app.core.agent.remote import Deferred as RemoteDeferred
@@ -264,7 +262,7 @@ from app.core.types import (
     vec3_or_none,
 )
 from app.core.units import EPS_DISPLAY, EPS_GEOM, is_close, match_tolerance
-from app.i18n import TranslatableText, _, format_decimal, key_platform, tr
+from app.i18n import TranslatableText, _, format_decimal, tr
 from app.ui import app_events, first_run
 from app.ui import settings as settings_module
 from app.ui.ai_disclosure import (
@@ -315,6 +313,7 @@ from app.ui.labels import (
     BoundedLengthSpin,
     BoundedSpin,
     LengthSpin,
+    adding_key,
     body_facts,
     body_requirement,
     circle_measure,
@@ -894,7 +893,7 @@ class _SelectionPage(QWidget):
 
     def __init__(
         self,
-        tabs: QTabWidget,
+        tabs: CurrentPageTabs,
         fallback: QWidget,
         parent: QWidget | None = None,
         *,
@@ -911,6 +910,7 @@ class _SelectionPage(QWidget):
         self._was_current = False
         self._held = 0
         tabs.currentChanged.connect(self._current_changed)
+        tabs.pageVisibilityChanged.connect(self._current_changed)
 
     @contextmanager
     def held(self) -> Iterator[None]:
@@ -935,7 +935,7 @@ class _SelectionPage(QWidget):
 
     def is_current(self) -> bool:
         """Ob der Reiter vorn ist."""
-        return self._tabs.currentWidget() is self
+        return self._tabs.page_is_visible(self)
 
     def reveal(self) -> None:
         """Holt den Reiter nach vorn, es sei denn, der Kunde hat ihn verlassen.
@@ -944,6 +944,10 @@ class _SelectionPage(QWidget):
         nicht über eine laufende Tour, die vorn steht.
         """
         if not self._workspace_visible or self.dismissed or self._held:
+            return
+        if self._tabs.is_detached(self):
+            # Die sichtbaren Felder werden passiv erneuert. Eine neue Auswahl
+            # darf dem gerade benutzten Fenster nicht den Fokus stehlen.
             return
         if not self._tabs.isTabVisible(self._tabs.indexOf(self)):
             # Verborgen im Zeichenmodus (RM-519): Eine Auswahl dort holt
@@ -1453,19 +1457,49 @@ class _FreeSpotWorker(Worker):
         self.done.emit(free_spot_for(self._part, self._objects, self._profile))
 
 
+@dataclass(frozen=True, slots=True)
+class _ChosenSetup:
+    """Die Einrichtung aus :func:`remembered_setup` und wofür — auch ``None`` ist
+    eine Antwort.
+
+    Sie hängt nicht an der Stufe (``manufacturer.for_stage`` legt die erst
+    danach auf), kostet ohne gemerkte Maschine aber den Profilbestand des
+    Slicers (RM-623). Gemerkt je Schlüssel ohne Stufe
+    (:func:`_without_stage`), rechnen Stufenwechsel und Export mit ihr, statt
+    sie neu herzuleiten — und Zahlenzeile und Datei sicher mit derselben Wahl.
+    """
+
+    key: tuple[object, ...]
+    setup: handover.SlicerSetup | None
+
+
+def _without_stage(key: tuple[object, ...]) -> tuple[object, ...]:
+    """Der Grundlagenschlüssel ohne die Stufe (``MainWindow._foundation_key``)."""
+    return (key[0], *key[2:])
+
+
 class _FoundationWorker(Worker):
     """Die Grundlage aus dem gemerkten Slicerprofil, abseits des Oberflächen-Threads.
 
     Die Slicersuche in :func:`remembered_setup` kostet eine halbe Sekunde, auf
-    einer Maschine mit mehreren Slicern Sekunden, die Auflösung der Profile
-    ein Zehntel. Gefragt wurde nach jeder Auswertung, und bei jedem Wechsel
-    von Drucker, Material, Stufe oder Profilwahl stand das Fenster so lange
-    (Review Stufe A+B, R7). Die Slicersuche im Druckdialog läuft aus demselben
-    Grund seit dem 13.09.2026 in ``_SlicerWorker``.
+    einer Maschine mit mehreren Slicern Sekunden; ohne gemerkte Maschine kommt
+    die Vorwahl aus dem Profilbestand dazu (:func:`handover.standard_choice`),
+    an einem großen Bestand Sekunden CPU-Zeit. Gefragt wurde nach jeder
+    Auswertung, und bei jedem Wechsel von Drucker, Material, Stufe oder
+    Profilwahl stand das Fenster so lange (Review Stufe A+B, R7). Die
+    Slicersuche im Druckdialog läuft aus demselben Grund seit dem 13.09.2026
+    in ``_SlicerWorker``.
+
+    Ist die Einrichtung für diesen Schlüssel schon bekannt (``chosen``), wird
+    sie nicht neu hergeleitet: Ein Stufenwechsel kostet dann nur die Grundlage.
+    Abgelöst oder beim Schließen sagt das Fenster den Arbeiter ab
+    (:meth:`cancel`); die Vorwahl hält zwischen ihren Schritten an, ein
+    begonnenes Lesen des Bestands läuft zu Ende.
     """
 
-    done = Signal(object, object)
-    """Der Schlüssel, für den gerechnet wurde, und die Grundlage."""
+    done = Signal(object, object, object)
+    """Der Schlüssel, für den gerechnet wurde, die Grundlage und die Einrichtung
+    dazu (:class:`_ChosenSetup`)."""
 
     def __init__(
         self,
@@ -1473,23 +1507,41 @@ class _FoundationWorker(Worker):
         ui_settings: UiSettings,
         profile: Profile,
         quality: QualityPreset,
+        chosen: _ChosenSetup | None = None,
     ) -> None:
         super().__init__()
         self._key = key
         self._ui = ui_settings
         self._profile = profile
         self._quality = quality
+        self._chosen = chosen if chosen is not None and chosen.key == _without_stage(key) else None
+        self.cancelled = CancelSignal()
+
+    def cancel(self) -> None:
+        self.cancelled.cancel()
 
     def work(self) -> None:
+        chosen = self._chosen
+        if chosen is None:
+            try:
+                chosen = _ChosenSetup(
+                    _without_stage(self._key),
+                    remembered_setup(
+                        self._ui,
+                        self._profile.material.id,
+                        self._profile.printer.id,
+                        cancelled=self.cancelled,
+                    ),
+                )
+            except OperationCancelled:
+                return
         # Die Stufe wählt den Prozess des Herstellers (Entscheidung I) — hier wie
         # im Druckdialog und beim Export, sonst rechnete die Zahlenzeile mit
         # einem anderen Prozess, als gedruckt wird.
-        setup = manufacturer.for_stage(
-            remembered_setup(self._ui, self._profile.material.id, self._profile.printer.id),
-            self._profile,
-            self._quality,
+        setup = manufacturer.for_stage(chosen.setup, self._profile, self._quality)
+        self.done.emit(
+            self._key, manufacturer.base_settings(self._profile, self._quality, setup), chosen
         )
-        self.done.emit(self._key, manufacturer.base_settings(self._profile, self._quality, setup))
 
 
 class _DownloadWorker(Worker):
@@ -1655,10 +1707,14 @@ class _ExportWorker(Worker):
         document: Any = None,
         checked: list[Finding] | None = None,
         evaluated: Sequence[Finding] = (),
+        chosen: _ChosenSetup | None = None,
     ) -> None:
         super().__init__()
         self._objects = objects
         self._target = target
+        self._chosen = chosen
+        """Die Einrichtung, mit der das Hauptfenster schon rechnet — dann wird
+        sie nicht neu hergeleitet (:class:`_ChosenSetup`)."""
         self._format = export_format
         self._profile = profile
         self._sources = sources
@@ -1714,6 +1770,7 @@ class _ExportWorker(Worker):
             document=self._document,
             checked=list(findings),
             evaluated=self._evaluated,
+            chosen=self._chosen,
         )
 
     def work(self) -> None:
@@ -1809,9 +1866,23 @@ class _ExportWorker(Worker):
 
         Die Slicer-Suche in ``remembered_setup`` läuft hier mit: sie kostet
         eine knappe halbe Sekunde und hatte im Hauptthread einen Wartezeiger
-        über sich. Hier braucht sie keinen.
+        über sich. Hier braucht sie keinen. Ohne gemerkte Maschine kommt die
+        Vorwahl aus dem Profilbestand dazu (:func:`handover.standard_choice`),
+        an einem großen Bestand Sekunden CPU-Zeit — es sei denn, das
+        Hauptfenster hat sie für denselben Drucker, dasselbe Material und
+        dieselbe Profilwahl schon (``chosen``). Abbrechbar ist sie wie die
+        Vorbereitung über ``cancelled``, zwischen ihren Schritten.
         """
-        setup = remembered_setup(self._ui_settings, self._material, self._profile.printer.id)
+        setup = (
+            self._chosen.setup
+            if self._chosen is not None
+            else remembered_setup(
+                self._ui_settings,
+                self._material,
+                self._profile.printer.id,
+                cancelled=self.cancelled,
+            )
+        )
         if setup is None:
             found = tools.slicer_program()
             if found is not None:
@@ -2460,10 +2531,7 @@ def _needs_objects(count: int) -> str:
     """
     if count <= 1:
         return tr("Wählen Sie zuerst ein Objekt im Objektbaum.")
-    # Am Mac nimmt ⌘ und Klick dazu, nicht Control: „Strg“ ist für Qt dort die
-    # Befehlstaste (``app.i18n.keys``). ``native_keys`` wandelt nur Kürzel mit
-    # „+“, „Strg und Klick“ bliebe stehen — die Taste kommt als Wert.
-    key = "⌘" if key_platform() == "darwin" else tr("Strg", context="Taste")
+    key = adding_key()
     if count == 2:
         return tr(
             "Diese Operation braucht zwei Objekte. Das zweite dazu mit Umschalt oder {key}"
@@ -2820,6 +2888,8 @@ class MainWindow(QMainWindow):
         self._foundation_worker: Any = None
         self._foundation_pending: tuple[object, ...] | None = None
         """Wofür der laufende Arbeiter rechnet — ``None``, wenn keiner rechnet."""
+        self._chosen_setup: _ChosenSetup | None = None
+        """Die zuletzt hergeleitete Slicerwahl, je Schlüssel ohne Stufe (RM-623)."""
         self._map_cache: dict[tuple[Any, ...], Any] = {}
         self._finding_awaiting_map: tuple[Finding, _MapRequest] | None = None
         """Der angeklickte Befund, dessen Analysekarte noch gerechnet wird.
@@ -3120,6 +3190,8 @@ class MainWindow(QMainWindow):
         # Nach dem Zentrum, das Karte, Bericht und Tour baut: Der Reiter
         # *Auswahl* setzt sich dort vor sie (RM-511).
         self._build_feature_dock()
+        self.right.layoutChanged.connect(self._remember_tab_layout)
+        QTimer.singleShot(0, self, self._restore_tab_layout)
         # Nach den Menüs, denn die Kopfzeile entsteht in der Werkzeugleiste:
         # ein Aufruf aus ``_build_central`` heraus fände sie noch nicht.
         self._apply_card_style(self.settings.theme)
@@ -3129,7 +3201,7 @@ class MainWindow(QMainWindow):
 
         # §2.6: das offene Werkzeug schließen. ``close_tool`` gab es dafür seit
         # jeher und niemanden, der es rief — Escape tat nichts.
-        QShortcut(QKeySequence(Qt.Key.Key_Escape), self, self._escape)
+        self._window_shortcut(QKeySequence(Qt.Key.Key_Escape), weak_slot(self, MainWindow._escape))
 
         # §19.2: der Viewport ist mit der Tastatur navigierbar. Die
         # Achsansichten waren es, Zoom und Durchblättern nicht — wer ohne
@@ -3138,15 +3210,15 @@ class MainWindow(QMainWindow):
             (QKeySequence.StandardKey.ZoomIn, 1.25),
             (QKeySequence.StandardKey.ZoomOut, 0.8),
         ):
-            QShortcut(sequence, self, weak_slot(self, lambda view, f: view.viewport.zoom(f), step))
-        QShortcut(
+            self._window_shortcut(
+                QKeySequence(sequence), weak_slot(self, lambda view, f: view.viewport.zoom(f), step)
+            )
+        self._window_shortcut(
             QKeySequence("Ctrl+Tab"),
-            self,
             weak_slot(self, lambda view: view.object_tree.step_selection(True)),
         )
-        QShortcut(
+        self._window_shortcut(
             QKeySequence("Ctrl+Shift+Tab"),
-            self,
             weak_slot(self, lambda view: view.object_tree.step_selection(False)),
         )
 
@@ -3171,9 +3243,8 @@ class MainWindow(QMainWindow):
         # und in der Kürzelübersicht; geraten werden muss es nicht.
         for index, key in enumerate(self.tools.tools(), start=1):
             self.tools.set_shortcut(key, f"Alt+{index}")
-            QShortcut(
+            self._window_shortcut(
                 QKeySequence(f"Alt+{index}"),
-                self,
                 weak_slot(self, lambda view, name: view.tools.toggle(name), key),
             )
 
@@ -3494,6 +3565,13 @@ class MainWindow(QMainWindow):
 
         Dieselbe Bauart wie die Hälften darüber: gemerkt werden die Ausgaben,
         gewählt wird, sobald sie im Bild stehen (:meth:`_choose_the_created`).
+        """
+        self._placed_to_frame: ObjectId | None = None
+        """Der Körper eines eben eingefügten Modells, bis ein Aufbau ihn trägt (RM-650).
+
+        Dieselbe Bauart: gemerkt wird der Körper, nicht der Zeitpunkt. Eine
+        Bitte an die Ansicht gleich beim Einfügen verbrauchte der nächste
+        Aufbau, auch einer der alten Szene (Schichtansicht, Ausblenden).
         """
 
         # §2.4: eine Zeile Umschalter statt sieben Dauerleisten. Wie ein
@@ -8781,6 +8859,32 @@ class MainWindow(QMainWindow):
         self._store_settings()
         self.announce(tr("Druckplatte wieder da.") if visible else tr("Druckplatte ausgeblendet."))
 
+    def _window_shortcut(self, sequence: QKeySequence, invoke: Callable[[], None]) -> None:
+        """Eine Fensteraktion, die auch herausgezogene Reiter unverändert teilen."""
+        action = QAction(self)
+        action.setShortcut(sequence)
+        action.setShortcutContext(Qt.ShortcutContext.WindowShortcut)
+        action.triggered.connect(lambda _checked=False: invoke())
+        self.addAction(action)
+
+    def _restore_tab_layout(self) -> None:
+        """Eigene Fenster erst nach dem vollständigen Aufbau wieder öffnen."""
+        self.right.configure_pages(
+            {
+                "selection": self.feature_dock,
+                "report": self.report,
+                "chat": self.chat,
+                "tour": self.tour,
+                "constraints": self._constraints_room,
+            },
+            self.settings.tab_layout,
+        )
+
+    def _remember_tab_layout(self, state: dict[str, object]) -> None:
+        """Die Reiteranordnung über denselben verzögerten Schreibweg merken."""
+        self.settings.tab_layout = state
+        self._card_places_save.start()
+
     def _remember_card_places(self, places: dict[str, str]) -> None:
         """Wo die Seitenkarten liegen, für den nächsten Start (:class:`CardPlace`).
 
@@ -9930,6 +10034,9 @@ class MainWindow(QMainWindow):
             # Und was die Auswertung schon fand: Ein durchstochener Formzug
             # stand im Prüfbericht und nicht vor dem Schreiben (RM-419).
             evaluated=result.scene.report.findings,
+            # Dieselbe Slicerwahl wie die Zahlenzeile, ohne den Bestand ein
+            # zweites Mal zu lesen (RM-623).
+            chosen=self._chosen_setup_now(),
         )
         self._run_export(worker)
 
@@ -14108,6 +14215,12 @@ class MainWindow(QMainWindow):
         einem echten Modell, und währenddessen formt man weiter. Ein neuer
         Zug stößt eine neue Prüfung an; die Antwort einer älteren verfällt.
         """
+        # Erst die wartende Übergabe der Vorschau (RM-576), dann die Prüfung: Die
+        # Übergabe schreibt die Warnzeile neu und löschte sonst die Antwort, wo
+        # Qt sie nach ihr zustellt (macOS, Linux).
+        if self._sculpt_display.isActive():
+            self._sculpt_display.stop()
+            self._show_sculpt_display()
         if self._sculpt_preview_worker is not None:
             return
         target = self._sculpt_target or self._armature_target or self._pose_report_target
@@ -18593,8 +18706,18 @@ class MainWindow(QMainWindow):
 
         Bis hierher gab es die Kantenwahl nur als Liste im Dialog: Der
         Renderer pickte Flächen und Merkmale, keine Kanten.
+
+        **Mehrere Kanten sind eine Wahl** (RM-563): Strg- oder Umschalt-Klick
+        sammelt sie in der Ansicht (:meth:`Viewport.highlighted_edges`), und
+        jede Handlung im Fenster nimmt alle als einen Schritt. Ging mit Taste
+        die letzte heraus, steht die Auswahl wieder auf dem Körper, wie nach
+        Escape.
         """
-        title = self.viewport.edge_title(object_id, key)
+        keys = self.viewport.highlighted_edges()
+        if not keys:
+            self.object_tree.select_object(object_id)
+            return
+        title = self.viewport.edge_title(object_id, keys[-1])
         if not title:
             # **Die Kante gibt es nicht mehr** — und dann bleibt sie auch
             # nicht hervorgehoben stehen. Ein leeres Fenster über einer
@@ -18625,18 +18748,24 @@ class MainWindow(QMainWindow):
         # nichts, und dann kostet die Kantenwahl keinen Umweg.
         if self.object_tree.selected_features():
             self.object_tree.select_object(object_id)
-            self.viewport.select_edge(object_id, key)
+            self.viewport.select_edges(object_id, keys)
         self._feature_shown = None
         # Die Statuszeile nennt die Kante, denn im Bild trägt sie nur Farbe
         # und Strichstärke — für einen Bildschirmleser wäre sie sonst allein
         # an der Fensterüberschrift zu erkennen (Regel 18).
-        self.measurements.setText(title)
+        heading = said = title
+        if len(keys) > 1:
+            heading = tr("{count} Kanten", count=len(keys))
+            said = tr("{count} Kanten, zuletzt {edge}", count=len(keys), edge=title)
+        self.measurements.setText(said)
         # Zugemacht heißt „bei diesem Merkmal nicht", nicht „in dieser
         # Sitzung nie wieder" — dieselbe Zeile wie bei der Merkmalsauswahl.
         # Ohne sie leuchtete die Kante, und die beiden Handlungen dazu waren
         # über keinen Weg mehr erreichbar.
         self.feature_dock.forget_dismissal()
-        self.feature_panel.show_edge(key, title, parameter_values=self._parameter_values())
+        self.feature_panel.show_edge(
+            " ".join(keys), heading, parameter_values=self._parameter_values()
+        )
         self.feature_dock.reveal()
         self._start_feature_preview()
         # **Und die Karte rechts erfährt davon** — dieselbe Zeile wie bei der
@@ -18851,17 +18980,17 @@ class MainWindow(QMainWindow):
         Merkmalspanel (:func:`~app.core.perceive.actions.edge_actions`): Welche
         Operation an einer Kante ansetzt, ist eine Aussage über Geometrie und
         keine über die Oberfläche. Zwei Listen liefen auseinander, und dann
-        stünde im Menü eine Handlung, die das Panel nicht kennt.
+        stünde im Menü eine Handlung, die das Panel nicht kennt. Sind mehrere
+        Kanten gewählt, gilt jeder Eintrag allen (RM-563).
         """
         from app.core.perceive.actions import edge_actions
 
-        chosen = self.viewport.highlighted_edge()
-        if chosen is None:
+        keys = self.viewport.highlighted_edges()
+        if not keys:
             return None
-        _object_id, key = chosen
         menu = QMenu(self)
         menu.setToolTipsVisible(True)
-        for action in edge_actions(key):
+        for action in edge_actions(" ".join(keys)):
             if action.op is None:
                 continue
             entry = menu.addAction(str(action.title))
@@ -21411,6 +21540,7 @@ class MainWindow(QMainWindow):
         values.update(self._spacing_for(spec))
         values.update(self._plane_through(spec, chosen[0] if chosen else None, values))
         values.update(self._measured_from_body(spec, chosen[0] if chosen else None))
+        values.update(self._edges_from_view(spec, chosen[0] if chosen else None))
         # **Zwei gewählte Teile einer Passung** (RM-184): Das Prüfstück sitzt
         # dort, wo sie sich am nächsten kommen — die Oberseite des ersten
         # träfe beim Deckel die Öffnung und beim Zapfen nur ihn.
@@ -24142,10 +24272,10 @@ class MainWindow(QMainWindow):
         Operation selbst ist an einem Netz ohnehin gesperrt
         (``requires_kind="brep"``), und dort steht der Grund.
 
-        **Bis auf die Kante, die im Bild gewählt ist**: Sie steht auch an einem
-        Netz mit ihrer Beschriftung da. *Abschneiden* durch eine Kante nimmt
-        sie an beiden Kernen (RM-400), und ohne sie stünde im Dialog ihr
-        Schlüssel statt Lage und Länge.
+        **Bis auf die Kanten, die im Bild gewählt sind**: Sie stehen auch an
+        einem Netz mit ihrer Beschriftung da. *Abschneiden* durch eine Kante
+        nimmt sie an beiden Kernen (RM-400), *Verrunden* mehrere (RM-563), und
+        ohne sie stünde im Dialog ihr Schlüssel statt Lage und Länge.
         """
         from app.core.brep import edit as brep_edit
         from app.core.brep.kernel import Solid, available
@@ -24158,9 +24288,9 @@ class MainWindow(QMainWindow):
         highlighted = self.viewport.highlighted_edge()
         picked: dict[str, str] = {}
         if highlighted is not None and highlighted[0] == chosen:
-            title = self.viewport.edge_title(chosen, highlighted[1])
-            if title:
-                picked[highlighted[1]] = title
+            for key in self.viewport.highlighted_edges():
+                if title := self.viewport.edge_title(chosen, key):
+                    picked[key] = title
         if not available():
             return picked
         # **Der exakte Körper steht in ``mesh``**, und das ist keine Feinheit:
@@ -24172,6 +24302,32 @@ class MainWindow(QMainWindow):
         if not isinstance(body, Solid):
             return picked
         return {brep_edit.edge_key(edge): edge_label(edge) for edge in brep_edit.edges_of(body)}
+
+    def _edges_from_view(self, spec: OperationSpec, selected: ObjectId | None) -> dict[str, Any]:
+        """Die im Bild gewählten Kanten als Vorgabe jedes Kantenfelds (RM-563).
+
+        Wer Kanten anklickt und *Verrunden* aus Menü oder Befehlspalette holt,
+        meint diese Kanten und nicht die Vorgabegruppe des Dialogs — sonst
+        rundete ein Klick auf OK alle senkrechten. Belegt wird bei den
+        Handlungen einer Kante (``EDGE_OPERATIONS``) jedes Feld der Art
+        ``edges`` und die Wahl, von der es abhängt (``edges="named"``);
+        *Abschneiden* durch eine Kante legt :meth:`_plane_through` fest.
+        """
+        from app.core.perceive.actions import EDGE_OPERATIONS
+
+        highlighted = self.viewport.highlighted_edge()
+        if highlighted is None or highlighted[0] != selected:
+            return {}
+        if spec.name not in {name for name, _measure in EDGE_OPERATIONS}:
+            return {}
+        values: dict[str, Any] = {}
+        for entry in spec.params.spec():
+            if entry.kind != "edges":
+                continue
+            values[entry.name] = " ".join(self.viewport.highlighted_edges())
+            if entry.depends_on is not None:
+                values[entry.depends_on[0]] = entry.depends_on[1][0]
+        return values
 
     def _spacing_for(self, spec: OperationSpec) -> dict[str, Any]:
         """Der Abstand beim Anordnen kennt Druckbetthaftung und Stützen
@@ -24907,6 +25063,7 @@ class MainWindow(QMainWindow):
         self.viewport.show_build_volume(self.session.profile)
         self.viewport.show_protected(self.session.project.document.protected)
         self._frame_after_resizing()
+        self._frame_the_placed(picture)
         gesture = self.sculpting() or self.setting_armature()
         self.viewport.show_scene(
             replace(picture, scene=self._gesture_scene)
@@ -25021,9 +25178,29 @@ class MainWindow(QMainWindow):
         Derselbe Weg für Datei, Download und erzeugtes Modell. Bis 0.5.1
         wechselte nur eine Datei vom Pfad die Platte, und das über den
         letzten Schritt des Stapels — an der Einfügemarke ist das ein fremder.
+
+        **Und es kommt ins Bild**, wenn es über den eingepassten Rahmen
+        hinausragt (:meth:`_frame_the_placed`, RM-650).
         """
         self._plate_of_import = body
+        self._placed_to_frame = body
         self._show_the_plate_of_the_import()
+
+    def _frame_the_placed(self, picture: EvaluationResult) -> None:
+        """Trägt dieser Aufbau das eben eingefügte Modell, rahmt die Ansicht einmal nach (RM-650).
+
+        Derselbe Weg wie nach einem Größenschritt (:meth:`Viewport.frame_if_beyond`):
+        gerahmt wird nur, wenn die Körper über den zuletzt eingepassten Rahmen
+        hinausreichen. Neben ein herangezoomtes Modell gesetzt, stand das neue
+        außerhalb des Bilds, und nur der Objektbaum verriet, dass es da war.
+        Gefragt wird unmittelbar vor dem Aufbau, der es trägt — ein Aufbau der
+        alten Szene dazwischen verbrauchte sonst die Bitte.
+        """
+        body = self._placed_to_frame
+        if body is None or body not in picture.scene.objects:
+            return
+        self._placed_to_frame = None
+        self.viewport.frame_if_beyond()
 
     def _on_import_confirmed(self) -> None:
         """Das eingelesene Modell steht — die Datei kommt nach „Zuletzt geöffnet“."""
@@ -25049,6 +25226,7 @@ class MainWindow(QMainWindow):
         self._recent_candidate = None
         self._recent_batch = ()
         self._plate_of_import = None
+        self._placed_to_frame = None
         if not self.session.project.document.ops and self.session.path is None:
             self._show_start_screen(True)
         self.status_message.setText(self._announcement)
@@ -25117,6 +25295,8 @@ class MainWindow(QMainWindow):
             self._pending_split_reveal = frozenset()
         if self._created_to_choose and not set(self._created_to_choose) <= produced:
             self._created_to_choose = ()
+        if self._placed_to_frame is not None and self._placed_to_frame not in produced:
+            self._placed_to_frame = None
         # Wer auf dem Startbildschirm etwas ins Dokument bringt — Einfügen,
         # Generieren, ein Baustein aus dem Katalog —, will es auch sehen. Von
         # acht Wegen wechselten sieben einzeln von Hand, und der achte war der
@@ -25299,7 +25479,9 @@ class MainWindow(QMainWindow):
         return manufacturer.base_settings(self.session.profile, quality, None)
 
     def _foundation_key(self, quality: QualityPreset) -> tuple[object, ...]:
-        """Woraus die Grundlage entsteht — Drucker und Material, Stufe, Profilwahl."""
+        """Woraus die Grundlage entsteht — Drucker und Material, Stufe, Profilwahl,
+        und der Stand der Programmsuche: Ein anderer Slicer in den Einstellungen
+        heißt ein anderer Bestand (``discover.cache_generation``)."""
         profile = self.session.profile
         ui = self.settings
         return (
@@ -25311,27 +25493,54 @@ class MainWindow(QMainWindow):
             ui.slicer_profile_printer,
             ui.slicer_profile_slicer,
             ui.slicer_bed_plate,
+            discover.cache_generation(),
         )
 
+    def _chosen_setup_now(self) -> _ChosenSetup | None:
+        """Die gemerkte Slicerwahl, wenn sie zum jetzigen Stand gehört — sonst
+        ``None``, und wer sie braucht, leitet sie selbst her."""
+        chosen = self._chosen_setup
+        if chosen is None:
+            return None
+        current = _without_stage(self._foundation_key(print_settings.DEFAULT_QUALITY))
+        return chosen if chosen.key == current else None
+
     def _start_foundation(self, key: tuple[object, ...], quality: QualityPreset) -> None:
-        """Die Grundlage für ``key`` im Arbeiter rechnen lassen."""
+        """Die Grundlage für ``key`` im Arbeiter rechnen lassen.
+
+        Der abgelöste Arbeiter wird abgesagt: Seine Antwort gälte einem
+        Schlüssel, nach dem niemand mehr fragt, und schnelle Wechsel stapelten
+        sonst volle Lesedurchgänge des Profilbestands (RM-623).
+        """
         if self._close_requested:
             return
-        worker = _FoundationWorker(key, deepcopy(self.settings), self.session.profile, quality)
+        worker = _FoundationWorker(
+            key, deepcopy(self.settings), self.session.profile, quality, self._chosen_setup
+        )
         worker.done.connect(self._foundation_found)
         # Ein Absturz kostet die Herstellergrundlage, nicht das Fenster: Dann
         # rechnet es mit Solidons Tabelle weiter, und der Grund steht im Protokoll.
         worker.crashed.connect(self._foundation_crashed)
+        if self._foundation_worker is not None:
+            self._foundation_worker.cancel()
         self._retire(self._foundation_worker)
         self._foundation_worker = worker
         self._foundation_pending = key
         worker.finished.connect(lambda done=worker: self._foundation_worker_done(done))
         self._leash.start(worker)
 
-    def _foundation_found(self, key: tuple[object, ...], foundation: object) -> None:
-        """Die Grundlage ist da: merken, und was mit ihr rechnet, neu zeigen."""
+    def _foundation_found(
+        self, key: tuple[object, ...], foundation: object, chosen: object = None
+    ) -> None:
+        """Die Grundlage ist da: merken, und was mit ihr rechnet, neu zeigen.
+
+        Mit ihr die Slicerwahl (:class:`_ChosenSetup`), für die nächste Stufe
+        und den Export.
+        """
         if not isinstance(foundation, manufacturer.Foundation):
             return
+        if isinstance(chosen, _ChosenSetup):
+            self._chosen_setup = chosen
         self._foundation_cache = (key, foundation)
         if self._foundation_pending == key:
             self._foundation_pending = None
@@ -28606,6 +28815,10 @@ class MainWindow(QMainWindow):
         self._cancel_gcode()
         self._cancel_export()
         self._cancel_sculpt_check()
+        # Die Vorwahl aus dem Profilbestand hält zwischen ihren Schritten an,
+        # statt das Schließen Sekunden warten zu lassen (RM-623).
+        if self._foundation_worker is not None:
+            self._foundation_worker.cancel()
         if self._slice_worker is not None:
             self._slice_worker.cancel.cancel()
         # Der Erzeugen-Dialog ist nichtmodal und kann neben dem Fenster einen
@@ -28902,6 +29115,8 @@ class MainWindow(QMainWindow):
         # Wie das Fenster verlassen wird, so kommt es wieder — maximiert ist
         # nur die Vorgabe für den ersten Start.
         self.settings.window_geometry = bytes(self.saveGeometry().toHex().data()).decode("ascii")
+        self.settings.tab_layout = self.right.layout_state()
+        self.right.shutdown_windows()
         self.settings.circle_measure = circle_measure()
         # Eine gebündelte Kartenlage geht mit dieser Zeile in die Datei.
         self._card_places_save.stop()

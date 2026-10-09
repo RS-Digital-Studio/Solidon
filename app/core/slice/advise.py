@@ -20,7 +20,7 @@ Werten aus dem G-Code wird es nie vermischt (Regel 14, §22.5).
 from __future__ import annotations
 
 import math
-from collections.abc import Sequence
+from collections.abc import Collection, Sequence
 from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, Final
 
@@ -56,6 +56,7 @@ from app.core.slice.analysis import (
     smooth_outline_height,
     tapered_layers,
     thinnest_spot,
+    tip_islands,
     total_overhang,
     worth_support,
 )
@@ -63,6 +64,7 @@ from app.core.types import (
     BoundingBox,
     CancelToken,
     Finding,
+    MaterialProfile,
     PrintSettings,
     Profile,
     SceneObject,
@@ -226,6 +228,9 @@ def advise(
     fit_kinds: Sequence[str] = (),
     connectors: Sequence[float] = (),
     flavour: SlicerFlavour | None = None,
+    whole_layers: bool = False,
+    organic: Collection[str] = (),
+    declined: Collection[str] = (),
 ) -> list[SettingAdvice]:
     """Was an diesen Einstellungen für dieses Teil nicht passt (§29).
 
@@ -239,6 +244,14 @@ def advise(
     sagt, wie dick der Zapfen dabei ist — und nur die zweite Angabe lässt sich
     gegen die Bahnbreite rechnen.
 
+    ``whole_layers`` sagt, dass der Slicer den Stützabstand auf der Platte
+    dieses Teils auf ganze Schichten rundet, weil dort ein Reinigungsturm steht;
+    ``organic`` sind die Stützarten, die das Programm als organische Bäume auf
+    den Schichten des Modells druckt (:func:`rounds_to_whole_layers`, RM-622).
+    ``declined`` sind Pfade, deren Vorschlag der Kunde nicht übernimmt — im
+    Druckdialog abgewählt, im Export nicht übernommen: Abstand und untere
+    Trennschicht fragen dann mit der eigenen Stützart (:func:`printed_style`).
+
     **Für einen Resin-Drucker bleibt die Liste leer.** Jede Regel hier spricht
     über Düse, Bahn, Bett, Lüfter oder Rückzug — für Resin nicht falsch
     justiert, sondern gegenstandslos. Ein Bericht, in dem neun von zwanzig
@@ -251,7 +264,9 @@ def advise(
     advice += _from_machine(settings, profile)
     advice += _from_material(settings, profile)
     if result is not None:
-        advice += _from_geometry(settings, profile, result, bounds, flavour)
+        advice += _from_geometry(
+            settings, profile, result, bounds, flavour, whole_layers, organic, declined
+        )
     if fit_kinds:
         advice += _from_fits(settings, fit_kinds)
     # Erst nach den Regeln oben, und gegen deren Stand gerechnet: Die
@@ -354,6 +369,8 @@ def _merged(settings: PrintSettings, advice: list[SettingAdvice]) -> list[Settin
 def combine(
     settings: PrintSettings,
     groups: Sequence[tuple[PrintSettings, Sequence[SettingAdvice]]],
+    *,
+    separate: Collection[str] = frozenset(),
 ) -> list[SettingAdvice]:
     """Vereint Anforderungen mehrerer Körper an gemeinsame Einstellungen.
 
@@ -362,6 +379,13 @@ def combine(
     Würfel kann die schon eingeschalteten Stützen seines Nachbarn nicht
     abschalten. Filamentabhängige Werte werden nur innerhalb desselben
     Materialslots zusammengeführt; verschiedene Spulen behalten eigene Werte.
+
+    **Was je Teil geschrieben wird** (``separate``, im Druckdialog die
+    Kontaktpfade aus ``handover.asked_for_contact``), zählt nur, wo ein Körper
+    es verlangt: Die übrigen behalten ihren Wert, jedes Teil bekommt seinen
+    eigenen (RM-583). Gefragt wird dafür gegen die Grundlage, nicht gegen die
+    Übernahme. Innerhalb eines Teils mit mehreren Spulen gilt weiter der Wert,
+    der alle einschließt — der Dialog führt erst je Körper zusammen.
     """
     candidates: dict[str, list[SettingAdvice]] = {}
     final = [apply(base, list(entries)) for base, entries in groups]
@@ -374,7 +398,11 @@ def combine(
         if path == "support.placement":
             relevant = [value for value in final if value.support.style != "none"] or final
         values = [settings_table.read_path(value, path) for value in relevant]
-        value = _combined_value(path, values)
+        # Was je Teil geschrieben wird, zählt nur, wo ein Körper es verlangt;
+        # die übrigen behalten ihren Wert ohnehin (RM-583).
+        value = _combined_value(
+            path, [entry.value for entry in entries] if path in separate else values
+        )
         was = settings_table.read_path(settings, path)
         if not _differs(value, was):
             continue
@@ -403,6 +431,9 @@ def _combined_value(path: str, values: Sequence[object]) -> object:
         if path.startswith(("speed.", "layers.")) or path in (
             "cooling.fan_speed",
             "cooling.minimum_speed",
+            # Die dichtere Trennschicht hält eine flache Decke auf der Platte;
+            # eine lockere ließe sie durchhängen (RM-583).
+            "support.interface_spacing",
         ):
             return min(numbers)
         return max(numbers)
@@ -795,6 +826,8 @@ class SupportNeed:
     quiet_layers: frozenset[int] = frozenset()
     """Schichten, deren Brücken nicht zählen: Ihr Überhang besteht ganz aus
     Kanal- und Randstücken (:func:`_quiet_layers`)."""
+    tips: int = 0
+    """Inseln, deren Baumspitze keine Trennschicht bekommt (:func:`tip_islands`)."""
 
 
 def _largest_field(
@@ -880,7 +913,261 @@ def support_need(result: SliceResult, *, cancelled: CancelToken | None = None) -
         patch=patch,
         piece=piece,
         quiet_layers=resting,
+        tips=tip_islands(result),
     )
+
+
+#: Wie weit der Stützabstand vom Wert aus Material und Schichthöhe abweichen
+#: darf, bevor Solidon ihn vorschlägt, als Anteil (RM-583) — das Band der
+#: Recherche vom 08.10.2026: Prusa nimmt 0,17 bei 0,15er Schichten und 0,22 bei
+#: 0,2ern, beides hält ab, was es soll.
+SUPPORT_GAP_BAND: Final = (0.8, 1.25)
+
+#: Die Trennschicht unter großen flachen Decken: Lücke in mm und Lagen. Lockerer
+#: hängen die ersten Bahnen darüber durch (Recherche Nr. 3: 0,1 bis 0,2 mm,
+#: drei Lagen).
+DENSE_INTERFACE: Final = (0.2, 3)
+
+#: Unter kleinen und gewölbten Flächen — Schuppen, Kinn, Krallen: Dort sitzt
+#: eine dichte Trennschicht fest und reißt Material mit (Recherche Nr. 3: 0,4 bis
+#: 0,5 mm, zwei Lagen).
+OPEN_INTERFACE: Final = (0.5, 2)
+
+#: Untere Trennschichten, wo die Stütze auf dem Modell steht (Recherche Nr. 2).
+#: Ohne sie steht der rohe Stützfuß auf der Fläche und zeichnet sie; das Profil
+#: des MK4S führt 0.
+BOTTOM_INTERFACE_LAYERS: Final = 2
+
+
+#: Wo der Slicer den Stützabstand immer in ganzen Schichten rechnet (RM-583):
+#: CuraEngine (``support_top_distance`` je Schicht). Die Orca-Familie nur,
+#: solange die Stütze die Schichthöhe des Modells hat; die eigene Höhe schaltet
+#: die Übergabe dann ein (``slicer_keys.has_independent_support_layers``) — außer
+#: neben einem Reinigungsturm (``whole_layers``) und unter organischen Bäumen
+#: (``organic``), das sagt der Aufrufer (RM-622).
+WHOLE_LAYER_GAP_FLAVOURS: Final[frozenset[SlicerFlavour]] = frozenset({"cura"})
+
+
+def rounds_to_whole_layers(
+    flavour: SlicerFlavour | None,
+    whole_layers: bool = False,
+    style: str = "",
+    organic: Collection[str] = (),
+) -> bool:
+    """Rechnet der Slicer den Stützabstand hier in ganzen Schichten (RM-622)? Cura
+    immer; die Orca-Familie neben einem Reinigungsturm (``whole_layers``); jedes
+    Programm unter organischen Bäumen, also wenn ``style`` zu den Arten gehört,
+    die es so druckt (``organic``, :func:`handover.organic_styles`): Sie liegen
+    auf den Schichten des Modells, auch mit eigener Stützschichthöhe."""
+    return whole_layers or flavour in WHOLE_LAYER_GAP_FLAVOURS or style in organic
+
+
+#: Vorschläge, an deren Übernahme andere hängen (:func:`printed_style`): Wählt
+#: der Kunde einen davon ab, fragt der Druckdialog neu (RM-622).
+DECIDING_PATHS: Final = frozenset({"support.style"})
+
+
+def printed_style(
+    settings: PrintSettings, advice: Sequence[SettingAdvice], declined: Collection[str] = ()
+) -> str:
+    """Die Stützart, mit der ein Teil druckt (RM-622): die vorgeschlagene, solange
+    der Kunde sie nicht ablehnt (``declined``), sonst die eigene. Abstand und
+    untere Trennschicht hängen an ihr — unter organischen Bäumen rundet der
+    Slicer den Abstand, und manches Programm druckt dort keine untere
+    Trennschicht. Rat, Druckdialog und Export fragen hier, damit ein
+    abgelehnter Baum dem Gitter nicht Abstand und Trennschicht nimmt."""
+    if "support.style" in declined:
+        return settings.support.style
+    return next(
+        (str(entry.value) for entry in advice if entry.path == "support.style"),
+        settings.support.style,
+    )
+
+
+def in_whole_layers(gap: float, layer: float) -> bool:
+    """Misst dieser Abstand ganze Schichten? Sonst rundet ein Slicer, der in ganzen
+    Schichten rechnet, ihn selbst (RM-583, RM-622)."""
+    return layer > 0.0 and is_close(gap / layer, round(gap / layer))
+
+
+def support_gap_target(
+    layer: float,
+    material: MaterialProfile,
+    flavour: SlicerFlavour | None = None,
+    *,
+    whole_layers: bool = False,
+    style: str = "",
+    organic: Collection[str] = (),
+) -> float | None:
+    """Der Stützabstand, mit dem sich die Stütze von diesem Material sauber löst
+    (RM-583): ein Vielfaches der Schichthöhe, begrenzt nach dem Materialprofil.
+    Ohne Werte im Profil ``None``: unbekannt, der Abstand bleibt beim Hersteller.
+
+    Wo der Slicer in ganzen Schichten rechnet (Cura), ist es das Vielfache
+    innerhalb der Grenzen, das dem Ziel am nächsten liegt, mindestens eine
+    Schicht. Liegt keines darin, das kleinste über dem Minimum — oberhalb des
+    Maximums bleibt nur eine Schicht (PLA ab 0,28 mm). Die Orca-Familie rundet
+    nur ohne eigene Stützschichthöhe; die schaltet die Übergabe ein
+    (``handover.frees_support_layers``).
+
+    **Neben einem Reinigungsturm rundet auch die Orca-Familie, unter
+    organischen Bäumen jedes Programm, das sie so druckt — die Orca-Familie wie
+    PrusaSlicer** (:func:`rounds_to_whole_layers`, RM-622): Die Stütze liegt
+    dann auf den Schichten des Modells, und der Abstand rundet auf die nächste
+    (am Turm ``SupportMaterial.cpp``, unter Bäumen der organische Generator,
+    bei Orca ``TreeSupport3D.cpp``; gemessen in sechs Programmen). PLA
+    bei 0,08er Schichten bekäme aus 0,10 mm eine Schicht, also 0,08 — unter dem
+    Minimum; in ganzen Schichten gerechnet sind es 0,16."""
+    factor, low, high = (
+        material.support_gap_factor,
+        material.support_gap_min,
+        material.support_gap_max,
+    )
+    if factor is None or low is None or high is None or layer <= 0.0:
+        return None
+    target = min(max(layer * factor, low), high)
+    if not rounds_to_whole_layers(flavour, whole_layers, style, organic):
+        return target
+    first = max(1, math.ceil(low / layer - EPS_GEOM))
+    last = math.floor(high / layer + EPS_GEOM)
+    if first > last:
+        return first * layer
+    # Eine halbe Schicht rundet auf, auch wenn die Division knapp darunter landet.
+    return min(max(math.floor(target / layer + 0.5 + EPS_GEOM), first), last) * layer
+
+
+#: Ab wie vielen Inseln mit Baumspitze ohne Trennschicht (:attr:`SupportNeed.tips`)
+#: der Abstand über den Spitzen gilt (RM-584). Gesetzt an 165 Modellen aus Roberts
+#: Sammlung und ``tests/data/meshes``: Der Drache hat 199, danach folgen eine
+#: Baugruppe mit 49, ein Schachturm mit 34 und ein Küchenteil mit 21, alle übrigen
+#: unter 15. Gemessen ist die Wirkung nur am Drachen; die Schwelle liegt mit Abstand
+#: zu beiden Seiten, und Teile mit wenigen kleinen Inseln behalten die
+#: Trennschicht ihrer großen Decken.
+TIP_ISLANDS: Final = 100
+
+#: Wie viele Schichten Luft mindestens über einer Baumspitze ohne Trennschicht
+#: stehen (RM-584): Mit einer schweißt die Spitze an, gemessen am Drachen in
+#: ElegooSlicer, PrusaSlicer und Cura.
+TIP_GAP_LAYERS: Final = 2
+
+
+def tip_gap(
+    layer: float,
+    material: MaterialProfile,
+    need: SupportNeed,
+    flavour: SlicerFlavour | None,
+    style: str,
+    organic: Collection[str] = (),
+) -> float | None:
+    """Der Abstand oben über Baumspitzen ohne Trennschicht (RM-584), oder ``None``.
+
+    Unter Inseln unter 1 mm² baut der Slicer keine Trennschicht
+    (:func:`analysis.tip_islands`); die Spitze steht eine Schicht unter dem
+    Modell und schweißt an. Am Drachen (PLA, 0,2 mm) senkte 0,4 statt 0,2 die
+    Kontaktfläche am Kinn von 59,4 auf 6,9 mm², an den Kopfstacheln von 92,4 auf
+    3,6 mm² — für eine Minute und 0,7 g. Gilt, wo der Slicer Baumspitzen setzt:
+    unter organischen Bäumen (``organic``) und unter Curas Bäumen. In ganzen
+    Schichten, mindestens :data:`TIP_GAP_LAYERS`, aus ``support_tip_gap`` des
+    Materials; ohne gemessenen Wert ``None``.
+    """
+    if material.support_tip_gap is None or layer <= 0.0 or need.tips < TIP_ISLANDS:
+        return None
+    if style not in organic and not (flavour == "cura" and style == "tree"):
+        return None
+    layers = math.floor(material.support_tip_gap / layer + 0.5 + EPS_GEOM)
+    return max(TIP_GAP_LAYERS, layers) * layer
+
+
+def _support_contact(
+    settings: PrintSettings,
+    profile: Profile,
+    need: SupportNeed,
+    on_model: bool,
+    flavour: SlicerFlavour | None,
+    whole_layers: bool = False,
+    style: str = "",
+    organic: Collection[str] = (),
+) -> list[SettingAdvice]:
+    """Abstand und Trennschicht der Stütze nach Material, Schichthöhe und
+    Fläche (RM-583) — die häufigsten Ursachen für Narben und festsitzende Stützen
+    (``konzepte/recherche-slicer-einstellungen-2026-10.md``, Nr. 1, 2, 3, 7).
+
+    Der Abstand oben ist ein Vielfaches der Schichthöhe aus dem Materialprofil,
+    begrenzt nach unten und oben (Regel 7); wo der Slicer in ganzen Schichten
+    rechnet (:func:`rounds_to_whole_layers`, mit der Art ``style``, mit der das
+    Teil druckt, :func:`printed_style`), das Vielfache. Dort passt auch ein
+    Abstand im Band nicht, der keine ganze Schicht ist: Der Slicer rundet ihn
+    selbst, Cura auf, die Orca-Familie zur
+    nächsten (0,2 mm sind bei 0,08er Schichten zweieinhalb). Unter einer großen
+    flachen Decke (ein Stück über ``OVERHANG_LAYER_WORTH_SUPPORT``) wird die
+    Trennschicht dicht, sonst locker. Material, das an sich selbst haftet
+    (``support_interface_cooling`` im Profil), bekommt volle Kühlung an der
+    Trennschicht.
+    """
+    advice: list[SettingAdvice] = []
+    material = profile.material
+    layer = settings.layers.layer_height
+    style = style or settings.support.style
+    target = support_gap_target(
+        layer, material, flavour, whole_layers=whole_layers, style=style, organic=organic
+    )
+    reason = _("Passend zu Schicht und Material löst sich die Stütze sauber.")
+    tips = tip_gap(layer, material, need, flavour, style, organic)
+    if tips is not None and (target is None or tips > target):
+        target = tips
+        reason = _("Feine Spitzen brauchen mehr Luft über den Baumstützen.")
+    low, high = SUPPORT_GAP_BAND
+    gap = settings.support.z_gap
+    if target is not None and (
+        not low * target <= gap <= high * target
+        or (
+            rounds_to_whole_layers(flavour, whole_layers, style, organic)
+            and not in_whole_layers(gap, layer)
+        )
+    ):
+        advice.append(
+            _advice(settings, path="support.z_gap", value=round(target, 4), reason=reason)
+        )
+    if on_model and settings.support.bottom_interface_layers < BOTTOM_INTERFACE_LAYERS:
+        advice.append(
+            _advice(
+                settings,
+                path="support.bottom_interface_layers",
+                value=BOTTOM_INTERFACE_LAYERS,
+                reason=_("Eine Trennschicht unter dem Stützfuß schont das Teil."),
+            )
+        )
+    flat = need.piece > OVERHANG_LAYER_WORTH_SUPPORT
+    spacing, layers = DENSE_INTERFACE if flat else OPEN_INTERFACE
+    middle = (DENSE_INTERFACE[0] + OPEN_INTERFACE[0]) / 2.0
+    reason = (
+        _("Eine dichte Trennschicht hält große flache Decken.")
+        if flat
+        else _("Lockere Trennschichten lösen sich von Details leichter.")
+    )
+    current = settings.support.interface_spacing
+    if (current > middle) if flat else (current < middle):
+        advice.append(
+            _advice(settings, path="support.interface_spacing", value=spacing, reason=reason)
+        )
+    if (
+        (settings.support.interface_layers < layers)
+        if flat
+        else (settings.support.interface_layers > layers)
+    ):
+        advice.append(
+            _advice(settings, path="support.interface_layers", value=layers, reason=reason)
+        )
+    if material.support_interface_cooling and not settings.cooling.support_interface_cooling:
+        advice.append(
+            _advice(
+                settings,
+                path="cooling.support_interface_cooling",
+                value=True,
+                reason=_("Volle Kühlung löst die Stütze von diesem Material leichter."),
+            )
+        )
+    return advice
 
 
 def _from_geometry(
@@ -889,6 +1176,9 @@ def _from_geometry(
     result: SliceResult,
     bounds: BoundingBox | None,
     flavour: SlicerFlavour | None = None,
+    whole_layers: bool = False,
+    organic: Collection[str] = (),
+    declined: Collection[str] = (),
 ) -> list[SettingAdvice]:
     """Der eigentliche Gewinn: das Teil bestimmt seine Einstellungen mit."""
     advice: list[SettingAdvice] = []
@@ -1047,6 +1337,20 @@ def _from_geometry(
                 value=True,
                 reason=_("Diese Ränder tragen sich selbst, Stütze ließe Narben."),
             )
+        )
+    if needs_support:
+        # Gefragt mit der Stützart, mit der das Teil druckt: Schlägt der Rat
+        # Bäume vor und übernimmt der Kunde sie, liegt die Stütze auf den
+        # Schichten des Modells (RM-622).
+        advice += _support_contact(
+            settings,
+            profile,
+            need,
+            on_model,
+            flavour,
+            whole_layers,
+            printed_style(settings, advice, declined),
+            organic,
         )
 
     # **Über „automatisch“ nur, wo der Slicer nichts rechnet** (Entscheidung J,
@@ -1464,15 +1768,21 @@ def _from_connectors(settings: PrintSettings, diameters: Sequence[float]) -> lis
 #: Was je Teil geschrieben wird, wenn sein Grund an der Geometrie hängt
 #: (Konzept Herstellerprofil, Entscheidung G): Stützen mit Art, Ort und
 #: Sperre, die Haftung, die Werte einer Passung, Wände und Füllung um
-#: Verbinder, Wandgenerator und Bahnbreite an schmalen Stellen. Temperatur,
-#: Kühlung, Rückzug und Volumenstrom bleiben plattenweit — sie hängen an der
-#: Spule, nicht am Teil.
+#: Verbinder, Wandgenerator und Bahnbreite an schmalen Stellen. Dazu der
+#: Stützkontakt: Abstand und Trennschichten hängen am Material der Spule, die
+#: das Teil druckt, und nur das gestützte Teil braucht sie (RM-583).
+#: Temperatur, Kühlung, Rückzug und Volumenstrom gehen je Spule hinaus
+#: (``print_settings_dialog.FILAMENT_GROUPS``), nicht je Teil.
 PART_PATHS: Final = frozenset(
     {
         "support.style",
         "support.placement",
         "support.block_channels",
         "support.spare_ledges",
+        "support.z_gap",
+        "support.interface_layers",
+        "support.bottom_interface_layers",
+        "support.interface_spacing",
         "adhesion.kind",
         "adhesion.brim_gap",
         "shell.precise_outer_wall",
@@ -1490,6 +1800,19 @@ PART_PATHS: Final = frozenset(
     }
 )
 
+#: Der Stützkontakt (RM-583): je Teil geschrieben, und der Rat geht je Körper
+#: in beide Richtungen — PLA will weniger Abstand als PETG, eine Figur eine
+#: lockere Trennschicht als eine flache Decke. Der Druckdialog führt diese Pfade
+#: deshalb getrennt zusammen (:func:`combine`, ``separate``).
+CONTACT_PATHS: Final = frozenset(
+    {
+        "support.z_gap",
+        "support.interface_layers",
+        "support.bottom_interface_layers",
+        "support.interface_spacing",
+    }
+)
+
 #: Was nur der Schnitt des Körpers sagen kann (:func:`_from_geometry` samt
 #: :func:`_calm_walls`). Der Export schneidet ein Teil eigens, wenn einer
 #: dieser Pfade je Teil geht (``writer._part_values``); fehlt hier ein Pfad,
@@ -1502,6 +1825,10 @@ SLICED_PATHS: Final = frozenset(
         "support.placement",
         "support.block_channels",
         "support.spare_ledges",
+        "support.z_gap",
+        "support.interface_layers",
+        "support.bottom_interface_layers",
+        "support.interface_spacing",
         "adhesion.kind",
         "adhesion.brim_gap",
         "shell.wall_generator",
@@ -1567,6 +1894,9 @@ def for_part(
     fit_kinds: Sequence[str] = (),
     connectors: Sequence[float] = (),
     flavour: SlicerFlavour | None = None,
+    whole_layers: bool = False,
+    organic: Collection[str] = (),
+    declined: Collection[str] = (),
 ) -> list[SettingAdvice]:
     """Was dieses eine Teil anders braucht als die Platte (§29).
 
@@ -1595,6 +1925,9 @@ def for_part(
                 fit_kinds=fit_kinds,
                 connectors=connectors,
                 flavour=flavour,
+                whole_layers=whole_layers,
+                organic=organic,
+                declined=declined,
             )
             if entry.path in PART_PATHS
         ]

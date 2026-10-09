@@ -327,6 +327,110 @@ def test_an_unchanged_bore_does_not_recalculate_the_mesh(profile: Profile) -> No
     assert {entry.code for entry in result.findings} == {"bore.resize_unchanged"}
 
 
+@pytest.mark.parametrize("operation", ["drill_hole", "drill_brep_hole", "plug_hole"])
+def test_bore_inputs_accept_a_metre_and_reject_larger_values(operation: str) -> None:
+    """Bohren und Verschließen nehmen dieselbe Obergrenze wie Gewinde an."""
+    from app.core.errors import ValidationError
+    from app.core.registry.params import validate
+
+    schema = REGISTRY.get(operation).params
+    assert validate(schema, {"diameter": 1000.0}).diameter == pytest.approx(1000.0)
+    with pytest.raises(ValidationError) as caught:
+        validate(schema, {"diameter": 1000.1})
+    assert caught.value.field == "diameter"
+    assert caught.value.constraint == "maximum"
+    assert caught.value.suggestions
+
+
+@pytest.mark.parametrize("kind", ["mesh", "brep"])
+@pytest.mark.parametrize("diameter", [201.0, 1000.0])
+@pytest.mark.parametrize("quality", ["draft", "fine"])
+@pytest.mark.parametrize("compensate", [False, True])
+def test_large_bores_are_cut_and_manually_closed(
+    kind: str, diameter: float, quality: Quality, compensate: bool, profile: Profile
+) -> None:
+    """Oberhalb der alten Grenze und bei einem Meter stimmen Abtrag und Verschluss."""
+    from app.core.brep import edit
+    from app.core.registry.params import validate
+
+    exact_kernel()
+    height = 10.0
+    width = diameter + 40.0
+    exact = edit.box(width, width, height)
+    source = SceneObject(
+        id="large_plate",
+        name="Platte",
+        kind=kind,
+        mesh=exact if kind == "brep" else as_mesh_data(exact),
+    )
+    operation = "drill_brep_hole" if kind == "brep" else "drill_hole"
+    values = {"diameter": diameter, "z": height, "compensate": compensate}
+    validate(REGISTRY.get(operation).params, values)
+    drilled = _run_op(operation, source, profile, quality=quality, **values).outputs[0]
+    removed = source.mesh.volume - drilled.mesh.volume
+    radius = bore_diameter(diameter, profile, compensate) / 2.0
+    assert removed == pytest.approx(math.pi * radius * radius * height, rel=0.001)
+    assert as_mesh_data(drilled.mesh).raw.is_watertight
+    _assert_large_round_wall(drilled, radius, height)
+    validate(REGISTRY.get("plug_hole").params, values)
+    filled = _run_op("plug_hole", drilled, profile, quality=quality, **values).outputs[0]
+    assert filled.mesh.volume == pytest.approx(width * width * height, rel=1e-6)
+    assert as_mesh_data(filled.mesh).raw.is_watertight
+    assert filled.kind == kind
+
+
+def _assert_large_round_wall(entry: SceneObject, radius: float, height: float, *, cone=False):
+    """Misst echte Sehnenmitten der Innenwand statt die eingestellte Segmentzahl."""
+    from app.core.units import MAX_FACET_SAG
+
+    mesh = (
+        entry.mesh.to_mesh(deflection=MAX_FACET_SAG / 4.0)
+        if entry.kind == "brep"
+        else as_mesh_data(entry.mesh)
+    )
+    triangles = mesh.raw.triangles
+    expected = radius - (height - triangles[:, :, 2]) if cone else radius
+    radii = np.linalg.norm(triangles[:, :, :2], axis=2)
+    wall = triangles[np.all(np.abs(radii - expected) <= MAX_FACET_SAG, axis=1)]
+    assert len(wall) > 0
+    midpoints = (wall + np.roll(wall, 1, axis=1)) / 2.0
+    wanted = radius - (height - midpoints[:, :, 2]) if cone else radius
+    deviation = np.abs(np.linalg.norm(midpoints[:, :, :2], axis=2) - wanted)
+    assert float(deviation.max()) <= MAX_FACET_SAG + EPS_GEOM
+
+
+@pytest.mark.parametrize("kind", ["mesh", "brep"])
+@pytest.mark.parametrize("quality", ["draft", "fine"])
+def test_large_countersinks_keep_their_round_wall(kind: str, quality: Quality, profile: Profile):
+    """Die große Senkung hält Nennmaß und Sehnenfehler an beiden Kernen."""
+    from app.core.brep import edit
+
+    exact_kernel()
+    height = 10.0
+    radius = 500.0
+    exact = edit.box(1040.0, 1040.0, height)
+    source = SceneObject(
+        id="large_plate",
+        name="Platte",
+        kind=kind,
+        mesh=exact if kind == "brep" else as_mesh_data(exact),
+    )
+    sunk = _run_op(
+        "countersink_hole",
+        source,
+        profile,
+        quality=quality,
+        diameter=2.0 * radius,
+        z=height,
+        angle=90.0,
+    ).outputs[0]
+    lower = radius - height
+    volume = math.pi * height * (radius * radius + radius * lower + lower * lower) / 3.0
+    assert source.mesh.volume - sunk.mesh.volume == pytest.approx(volume, rel=0.001)
+    assert as_mesh_data(sunk.mesh).raw.is_watertight
+    _assert_large_round_wall(sunk, radius, height, cone=True)
+
+
 def test_drilling_removes_material(profile: Profile) -> None:
     body = cube_mesh()
     result = drill(body, position=(0.0, 0.0, 0.0), axis="z", diameter=6.0, profile=profile)
@@ -660,8 +764,8 @@ def test_a_countersink_without_a_neighbour_still_finds_the_far_mouth(profile: Pr
     Der Würfel steht von -10 bis 10, die Bohrung geht durch, geklickt wird auf
     die **Mitte** — so meldet ein erkanntes Loch seine Lage (§21.3). Gesucht
     werden muss dann über zehn Millimeter hinweg bis ``z = 10``; eine Suche, die
-    zu früh anhält, fiele hier auf. Vor und nach dem Wechsel von der weitesten
-    auf die nächste Grenze dieselbe Zahl: 15,07 mm³.
+    zu früh anhält, fiele hier auf. Der Abtrag folgt dem Kegelstumpf oberhalb
+    der Bohrung mit dem Senkdurchmesser 8,4 mm an der tatsächlichen Mündung.
     """
     body = drill(
         cube_mesh(),
@@ -677,7 +781,9 @@ def test_a_countersink_without_a_neighbour_still_finds_the_far_mouth(profile: Pr
         body, position=(0.0, 0.0, 10.0), axis="z", diameter=8.4, anchor="centre", profile=profile
     )
 
-    assert body.volume - found.mesh.volume == pytest.approx(15.07, abs=0.05)
+    outer, inner = 8.4 / 2.0, 6.0 / 2.0
+    expected = math.pi * ((outer**3 - inner**3) / 3.0 - inner**2 * (outer - inner))
+    assert body.volume - found.mesh.volume == pytest.approx(expected, abs=0.05)
     assert found.mesh.volume == pytest.approx(placed.mesh.volume, abs=0.01), (
         "die gesuchte Mündung ist die, die man von Hand einträgt"
     )

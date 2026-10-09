@@ -181,6 +181,7 @@ from app.ui.labels import (
     BoundedSpin,
     LengthSpin,
     RowCheckBox,
+    adding_key,
     caption_toggles,
     cavity_name,
     choice_label,
@@ -9114,6 +9115,8 @@ class FeaturePanel(QWidget):
         self._feature_kind: str | None = None
         self._answered: str | None = None
         self._part_operation: int | None = None
+        self._edge_keys: str | None = None
+        """Die gezeigten Kanten, wie ``show_edge`` sie bekam — sonst ``None``."""
         self._groups: dict[str, FeatureActionGroup] = {}
         self._into_view: Callable[[], None] | None = None
         """Der Weg ins Bild für das gezeigte Merkmal — oder nichts.
@@ -9241,6 +9244,7 @@ class FeaturePanel(QWidget):
         self._feature_kind = None
         self._answered = None
         self._part_operation = None
+        self._edge_keys = None
         self._groups = {}
         self._said_notes.clear()
         self._fit_button = None
@@ -9875,9 +9879,13 @@ class FeaturePanel(QWidget):
         Operation an einer Kante ansetzt, ist eine Aussage über Geometrie.
 
         ``title`` ist die Zeile, die der Kunde schon aus der Kantenliste des
-        Dialogs kennt („Senkrecht · 20 mm · x -20,0, y -15,0"). Der Schlüssel
-        dahinter steht nirgends im Fenster: Er ist eine Kennung aus sechs
-        Zahlen und keine Beschriftung (§2.4).
+        Dialogs kennt („Senkrecht · 20 mm · x -20,0, y -15,0"), bei mehreren
+        Kanten ihre Zahl. Der Schlüssel dahinter steht nirgends im Fenster: Er
+        ist eine Kennung aus sechs Zahlen und keine Beschriftung (§2.4).
+        ``key`` sind mehrere, durch Leerzeichen getrennt, wie ``kind="edges"``
+        sie ablegt — jede Handlung nimmt sie als einen Schritt (RM-563). Den
+        Weg dorthin sagt die Zeile unter der Überschrift, denn gesucht hat ihn
+        der Kunde an genau dieser Stelle.
 
         **Die Zahlenfelder sind die des Dialogs** (P6.2): ``ValueField`` mit
         derselben Einheit, denselben Grenzen und dem Umschalter für einen
@@ -9887,9 +9895,22 @@ class FeaturePanel(QWidget):
         nicht. Die Felder, die von einer Auswahl abhängen (zweiter Abstand,
         Winkel, Seitentausch), stehen nur da, solange sie gelten
         (:meth:`_follow_conditions`).
+
+        **Kommt eine Kante dazu oder geht eine heraus, bleiben die Werte**
+        (RM-563): Wer einen Radius eingibt und dann die nächste Kante mit Strg
+        dazunimmt, meint ihn weiter. Erkannt wird das an einer gemeinsamen
+        Kante mit der vorigen Wahl; eine ganz neue fängt mit den Vorgaben an.
         """
         from app.core.perceive.actions import edge_actions
 
+        previous = self._edge_keys
+        carried: dict[tuple[str, str], dict[str, Any]] = {}
+        armed: tuple[str, str] | None = None
+        if previous is not None and set(previous.split()) & set(key.split()):
+            for run_key, entry in self._runs.items():
+                carried[(entry.title, entry.op)] = entry.values()
+                if run_key == self._armed:
+                    armed = (entry.title, entry.op)
         self._keep_rows_for_reuse()
         try:
             self.clear(rebuilding=True)
@@ -9903,6 +9924,15 @@ class FeaturePanel(QWidget):
             set_level(heading, "section")
             self._rows.insertWidget(self._rows.count() - 1, heading)
             self._built.append(heading)
+            more = QLabel(
+                tr("Weitere Kanten dazu mit Umschalt oder {key} und Klick.", key=adding_key()),
+                self,
+            )
+            more.setWordWrap(True)
+            fit_wrapped(more)
+            set_level(more, "caption")
+            self._rows.insertWidget(self._rows.count() - 1, more)
+            self._built.append(more)
 
             for action in edge_actions(key):
                 self._separate()
@@ -9923,6 +9953,14 @@ class FeaturePanel(QWidget):
             self._texture_fields = {}
             self._texture_owner = None
             self._drop_spare_rows()
+        self._edge_keys = key
+        for shown in self._shown_rows.values():
+            if (kept := carried.get((str(shown.action.title), shown.op))) is not None:
+                refresh_feature_fields(shown.entries, shown.widgets, kept)
+                self._follow_conditions(shown)
+        for run_key, entry in self._runs.items():
+            if (entry.title, entry.op) == armed:
+                self._arm(run_key)
         self._settle_apply()
 
     def shown_part_step(self) -> int | None:

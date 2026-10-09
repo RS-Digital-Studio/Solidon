@@ -37,6 +37,8 @@ _IGNORED_WHEEL_TEXTS: Final = {
     "pyside6": {"licenseref-qt-commercial.txt"},
     "pyside6-addons": {"licenseref-qt-commercial.txt"},
     "pyside6-essentials": {"licenseref-qt-commercial.txt"},
+    "pyside6-pdf": {"licenseref-qt-commercial.txt"},
+    "pyside6-webengine": {"licenseref-qt-commercial.txt"},
     "shiboken6": {"licenseref-qt-commercial.txt"},
 }
 

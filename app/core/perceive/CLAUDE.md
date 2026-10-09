@@ -22,7 +22,7 @@ denselben Überschriften: `konzepte/begruendungen/karte-app-core-perceive.md`.
 | `patterns.py` | Muster (§25): Erkennung `find_patterns` und ausdrückliche Zusammenfassung `grouped_pattern` über dieselbe Zellenlesung `_read_cells`, Absagen `group_refusal`; `Frame`, Stopfen `plug_for`, Feld `field_outline` für `remove_feature`/`resize_feature` in `geom/prepare_ops.py`; `carrier_of` findet den Träger über Ebene oder Achse, nie über eine Kennung; `cylinder_facet_groups` ordnet die Mantelnormalen plattformgleich über die Winkelnaht, `cylinder_facet_lines` liest daraus die achsparallelen Facettengeraden — dieselben für Stopfen (`FacetPolygon` mit Ecken am Schnitt der Facetten, Stirnenden `Frame.ends`) und Quellausrichtung |
 | `relations.py` | Nachbarschaften: Hohlraumketten (unten), Rohrwand (`sleeve_at`, `thinnest_sleeve`), Dreieckseigentum (`cell_owner_table`, `CONTESTED`), Gleichartigkeit (`alike_for_actions`, `_same_surface_patch`), Gruppensätze (`group_evidence_texts`, `group_reason_texts` — das Panel liest sie von hier) |
 | `groups.py` | Funktionale Gruppen (Dateiaudit §7): Kammer, Tasche, Nut, Kanal, Anschluss, Gewinde mit Einlauf und Schulter, Bajonett und Rastung (auch runde Mulden), Scharnier, Steckaufnahme, Schrift — `functional_groups` (je Netz und Merkmalsliste gemerkt, geteilt), `chamber_region` für *Kammer ändern*, `reason_against_group` (mit `trough_walls`) als Absage für Fenster und Operation; für *Verschluss ändern* je Stellung (`stations`) `closure_flanks`, `closure_pairs`, `closure_stops` und die Absagen `reason_against_play`/`_turn`/`_closure_change`; ein Merkmal steht in höchstens einer Gruppe, Bausteinmerkmale in keiner |
-| `matching.py` | Stabile Bezeichner (§21.3): `match`, `settled_by_surface` (Zwillinge nach der Lage ihrer Oberfläche; `settled_twins` mit den Orten beider Seiten aus `surface_places`, für jeden zuordnenden Weg beider Kerne), `resolve`, `apply_mapping`, `inherit_originators`, `transformed_features`, `moved_features`; `planar_source`, `planar_faces`, `pieces_in_place` prüfen die räumliche Herkunft ebener Restflächen gemeinsam für Auswertung und Abschneiden |
+| `matching.py` | Stabile Bezeichner (§21.3): `match` (gemerkt je Eingang, begrenzt über Kennungen, Bytes in `matched_bytes`; `forget_matches`), `settled_by_surface` (Zwillinge nach der Lage ihrer Oberfläche; `settled_twins` mit den Orten beider Seiten aus `surface_places`, für jeden zuordnenden Weg beider Kerne), `resolve`, `apply_mapping`, `inherit_originators`, `transformed_features`, `moved_features`; `planar_source`, `planar_faces`, `pieces_in_place` prüfen die räumliche Herkunft ebener Restflächen gemeinsam für Auswertung und Abschneiden |
 | `match_records.py` | JSON-Struktur und körperqualifizierte Antwortschlüssel; Domänen `group:`, `native-group:`, `edge-answer:`, `recognition-answer:` als Konstanten |
 | `match_decisions.py` | Ganze Zuordnungsentscheidungen wiedererkennen und atomar prüfen; `resolve_group(scope=...)` gibt eine native Wahl nur für denselben Scope frei, eine Netzantwort nie für die native Frage; keine zweite Zuordnung |
 | `local.py` | Begrenzte Suche am großen Netz (unten) |
@@ -36,6 +36,10 @@ denselben Überschriften: `konzepte/begruendungen/karte-app-core-perceive.md`.
 `__init__.py` trägt nur den Paketdocstring.
 
 ## Der Weg durch die Erkennung
+
+`point_in_shell` fragt einen unentscheidbaren Punkt quer neben seiner Achse
+nach. Bausteinplatzierung, Stiftprüfung und Hohlraumschutz verwenden dieselbe
+Frage; der Aufrufer legt fest, welche Antwort ohne eindeutigen Beleg schützt.
 
 - **Konkurrierende Rundformen brauchen vollständige Nachweise**: Ein Zylinder
   beendet die Frage vor dem Kegellauf nur, wenn seine Originalecken bis
@@ -172,16 +176,24 @@ hält beide Wege zusammen.
 - **Was nicht gilt, steht trotzdem da** (`op=None` mit Satz), und **jedes Feld
   trägt seinen gemessenen Wert** — eine andere Vorgabe wäre eine stille
   Änderung. `ActionField.measurement` ist der Ausgangswert.
-- **Versetzen fragt eine Funktion**: `move_refusal` ist die Zeile *Merkmal
-  verschieben* (`actions_for(only=)`); `move_feature` und der Griff
-  (`FeaturePanel.refuses`) lesen sie. Nur dort sagt `move_blocked` zusätzlich
-  ab (Zapfen oder Kuppel als ganzer Körper, Zapfen desselben Teils in der
-  Bohrung; ein getrenntes Teil dort nennt `OTHER_PART_IN_THE_BORE`), und eine
-  Haltelippe (`only_a_rim_inside`) sperrt nicht. An der Fläche steht in dieser
-  Zeile *Fläche versetzen*, der Weg beginnt bei 0 (`_STARTS_AT_ZERO`).
+- **Jede Zeile fragt eine Funktion**: `action_refusal(op, …)` ist die Zeile
+  der Operation (`actions_for(only=)`); jede Merkmalshandlung sagt mit ihrem
+  Satz ab, ohne Ausnahme (`prepare_ops._refuse_like_the_card`), der Griff liest
+  `move_refusal` (`FeaturePanel.refuses`). `move_blocked` sperrt das Versetzen
+  zusätzlich (Zapfen desselben Teils in der Bohrung; ein getrenntes Teil dort
+  nennt `OTHER_PART_IN_THE_BORE`); ein Zapfen oder eine Kuppel als ganzer
+  Körper sperrt Versetzen, Ändern, Drehen und Entfernen
+  (`FEATURE_SPANS_THE_BODY`); eine Haltelippe (`only_a_rim_inside`) sperrt
+  das Versetzen nicht. An der Fläche steht in dieser Zeile *Fläche
+  versetzen*, der Weg beginnt bei 0 (`_STARTS_AT_ZERO`). *Verdoppeln* legt
+  die Kopie anderthalb Breiten neben die ganze Kette, entlang X oder Y, nie
+  entlang der eigenen Achse (`_beside_the_original`).
 - **Grau mit dem Satz der Operation**: geteilter Hohlraum
   (`_shares_its_cavity`; ohne Netz keine Sperre), kein eigener Körper
-  (`no_own_body`), Verengung (`cone_reason`, `not_offered_at`), Bohrung einer
+  (`no_own_body`), ein getrenntes Teil im Hohlraum jeder Art außer dem
+  Einschluss oder das Merkmal selbst in einem fremden
+  (`prepare_ops.separate_part_reason`, jede Zeile),
+  Verengung (`cone_reason`, `not_offered_at`), Bohrung einer
   Kette mit Verengung (`narrowing_reason`), Kegel einer Kette bei *Merkmal
   ändern* (`_countersink_unsized` → `countersink_resize_refusal`), Verrundung
   ohne zwei Ebenen (`fillet_blocked` — liest die Ebenen aus `planar_mask`

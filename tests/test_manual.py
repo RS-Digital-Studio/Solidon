@@ -714,16 +714,16 @@ def test_the_reference_writes_numbers_the_way_the_language_does() -> None:
 
     german = manual.find(manual.reference_key("holes"))
     assert german is not None
-    assert "0,2 … 200" in str(german.body)
-    assert "0.2 … 200" not in str(german.body)
+    assert "0,2 … 1000" in str(german.body)
+    assert "0.2 … 1000" not in str(german.body)
 
     install_catalog("en", read_catalog("en"))
     set_language("en")
     try:
         english = manual.find(manual.reference_key("holes"))
         assert english is not None
-        assert "0.2 … 200" in str(english.body)
-        assert "0,2 … 200" not in str(english.body)
+        assert "0.2 … 1000" in str(english.body)
+        assert "0,2 … 1000" not in str(english.body)
     finally:
         set_language("de")
 
