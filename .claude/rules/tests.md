@@ -117,8 +117,9 @@ nicht weggeräumt.
   dieselbe synthetische Metrik, auch ausdrücklich gesetzt). Was an der
   Schriftmetrik hängt, prüft die echte Plattform (`WA_DontShowOnScreen`) oder
   niemand. Die Fensterverträge der Linux-CI laufen offscreen mit DejaVu Sans;
-  lokal nachgestellt mit `QT_QPA_FONTDIR` auf einen Ordner nur mit dessen
-  TTF-Dateien (aus matplotlibs `mpl-data/fonts/ttf`).
+  lokal nachgestellt mit `QT_QPA_FONTDIR` auf einen eigenen Ordner nur mit den
+  `DejaVu*.ttf` aus `app/core/geom/data/fonts` (auf den ganzen Ordner nimmt
+  Qt Comfortaa).
 - **Was am Anzeigen hängt, prüft nur ein gezeigter Dialog** (`show()`,
   `activateWindow()`): Ungezeigt gibt es keinen Erstfokus, und ein Test bleibt
   grün, während der erste Bildklick am Fenster ins falsche Feld geht (RM-416,
