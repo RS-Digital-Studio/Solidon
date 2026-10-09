@@ -988,7 +988,7 @@ def test_the_channel_space_leaves_a_column_on_the_model_free() -> None:
     Brücke gar nicht (0,0 statt 2,0 m Stützbahn). Hier steht dieselbe Lage im
     Tunnel: eine Säule auf dem Tunnelboden neben der Kanaldecke.
     """
-    from app.core.types import Polygon
+    from tests.helpers import slice_contour
 
     result = slice_body(tunnel_block(20.0), 0.5)
     model = model_support(result)
@@ -997,7 +997,7 @@ def test_the_channel_space_leaves_a_column_on_the_model_free() -> None:
     blocked = unary_union([region for _low, _high, region in channel_space(result, model, LINE)])
     assert blocked.intersection(footprint).area > 15.0, "ohne die Säule sperrt der Tunnel sie mit"
 
-    beside = replace(model, open_columns=(*model.open_columns, (Polygon(column), 8.0, 27.0)))
+    beside = replace(model, open_columns=(*model.open_columns, (slice_contour(column), 8.0, 27.0)))
     slabs = channel_space(result, beside, LINE)
 
     assert slabs, "der Kanal bleibt gesperrt"
@@ -1011,12 +1011,12 @@ def test_a_column_too_narrow_for_a_line_stays_blocked() -> None:
     im Kanal der Waschschüssel den OrcaSlicer 1,5 m Stütze hindurchstellen
     (08.10.2026). Hier eine Säule von 0,6 mm im Tunnel, schmaler als zwei
     Bahnbreiten."""
-    from app.core.types import Polygon
+    from tests.helpers import slice_contour
 
     result = slice_body(tunnel_block(20.0), 0.5)
     model = model_support(result)
     crumb = ((4.0, -0.3), (4.6, -0.3), (4.6, 0.3), (4.0, 0.3))
-    beside = replace(model, open_columns=(*model.open_columns, (Polygon(crumb), 8.0, 27.0)))
+    beside = replace(model, open_columns=(*model.open_columns, (slice_contour(crumb), 8.0, 27.0)))
 
     blocked = unary_union([region for _low, _high, region in channel_space(result, beside, LINE)])
 
@@ -1029,7 +1029,7 @@ def test_a_gap_too_narrow_for_a_support_line_stays_free() -> None:
     Zwickel zwischen Schwanz- und Kinnstacheln aus 60 000 Krümeln unter 100 mm³.
     Hier ein Schlitz von 0,6 mm neben dem Tunnel mit einer eigenen Säule darin;
     den Filter hielt bis zur Durchsicht des Merges vom 08.10.2026 kein Test."""
-    from app.core.types import Polygon
+    from tests.helpers import slice_contour
 
     body = trimesh.boolean.difference(
         [tunnel_block(20.0).raw, brick(0.6, 50.0, 20.0, (12.3, 0.0, 18.0))]
@@ -1037,7 +1037,9 @@ def test_a_gap_too_narrow_for_a_support_line_stays_free() -> None:
     result = slice_body(place_on_bed(MeshData.of(body)), 0.5)
     model = model_support(result)
     slit = ((12.0, -15.0), (12.6, -15.0), (12.6, 15.0), (12.0, 15.0))
-    beside = replace(model, channel_columns=(*model.channel_columns, (Polygon(slit), 8.0, 27.0)))
+    beside = replace(
+        model, channel_columns=(*model.channel_columns, (slice_contour(slit), 8.0, 27.0))
+    )
 
     blocked = unary_union([region for _low, _high, region in channel_space(result, beside, LINE)])
 
@@ -1067,7 +1069,7 @@ def test_in_an_enclosed_cavity_nothing_is_spared() -> None:
     selbst Stütze bräuchte; ausgespart, holte der ElegooSlicer sie mit einem Ast
     quer durch den Kanal (1,6 m), ohne Aussparung 0,0 m (08.10.2026). Hier dieselbe
     Säule wie im offenen Tunnel, in einer geschlossenen Kammer."""
-    from app.core.types import Polygon
+    from tests.helpers import slice_contour
 
     block = brick(60.0, 40.0, 40.0, (0.0, 0.0, 20.0))
     chamber = brick(20.0, 30.0, 20.0, (0.0, 0.0, 18.0))
@@ -1077,7 +1079,7 @@ def test_in_an_enclosed_cavity_nothing_is_spared() -> None:
     model = model_support(result)
     column = ((2.0, -2.0), (6.0, -2.0), (6.0, 2.0), (2.0, 2.0))
     footprint = box(2.0, -2.0, 6.0, 2.0)
-    beside = replace(model, open_columns=(*model.open_columns, (Polygon(column), 8.0, 27.0)))
+    beside = replace(model, open_columns=(*model.open_columns, (slice_contour(column), 8.0, 27.0)))
 
     blocked = unary_union([region for _low, _high, region in channel_space(result, beside, LINE)])
 

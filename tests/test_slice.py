@@ -1902,8 +1902,9 @@ def test_the_patch_area_is_the_one_shoelace_the_sketch_uses_too() -> None:
     """
     from app.core.sketch import profile as sketch_profile
     from app.core.slice.analysis import largest_overhang_patch
-    from app.core.types import LayerInfo, Polygon, SliceResult
+    from app.core.types import LayerInfo, SliceResult
     from app.core.units import ring_area
+    from tests.helpers import slice_contour
 
     assert sketch_profile.ring_area is ring_area, "eine Formel, zwei Leser"
     square = ((0.0, 0.0), (4.0, 0.0), (4.0, 4.0), (0.0, 4.0))
@@ -1914,17 +1915,62 @@ def test_the_patch_area_is_the_one_shoelace_the_sketch_uses_too() -> None:
     hole = ((1.0, 1.0), (2.0, 1.0), (2.0, 2.0), (1.0, 2.0))
     layer = LayerInfo(
         z=0.2,
-        contours=(Polygon(outline=square),),
+        contours=(slice_contour(square),),
         area=16.0,
         overhang_area=15.0,
         islands=(),
         min_width=4.0,
-        overhangs=(Polygon(outline=square, holes=(hole,)), Polygon(outline=hole)),
+        overhangs=(slice_contour(square, (hole,)), slice_contour(hole)),
     )
     result = SliceResult(
         layers=(layer,), support_volume=0.0, first_layer_area=16.0, source="internal"
     )
     assert largest_overhang_patch(result) == pytest.approx(15.0), "Loch abgezogen, größtes Stück"
+
+
+@pytest.mark.parametrize("corners", [3, 8, 127, 128, 129, 1000, 5000])
+def test_a_contour_area_is_bit_identical_and_counted_once(
+    corners: int, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Die Fläche einer Kontur gleicht der Schleife über Punkt-Tupel Bit für Bit
+    und wird einmal je Kontur gerechnet (Nachprüfung L, G-2).
+
+    Als Felder kostete jede Frage das Umwandeln neu: Gesamtüberhang, größter
+    Fleck, Stützsäulen und Fußflächen lesen dieselben Stücke, am
+    Kumiko-Organizer 6,3 statt 4,4 ms je Durchgang. Ab 128 Punkten rechnet das
+    Feld die Produkte, summiert wird in derselben Folge.
+    """
+    import random
+
+    from app.core.slice import analysis
+    from app.core.units import ring_area
+    from tests.helpers import slice_contour
+
+    generator = random.Random(corners)
+
+    def ring(count: int, scale: float) -> list[tuple[float, float]]:
+        return [
+            (generator.uniform(-scale, scale) + 1e4, generator.uniform(-scale, scale) - 3e3)
+            for _index in range(count)
+        ]
+
+    outline, hole = ring(corners, 100.0), ring(max(3, corners // 3), 10.0)
+    piece = slice_contour(outline, (hole,))
+    closed = [(*outline, outline[0]), (*hole, hole[0])]
+    expected = ring_area(closed[0]) - sum(ring_area(points) for points in closed[1:])
+    twin = slice_contour(outline, (hole,))
+    assert analysis.piece_area(piece).hex() == expected.hex()
+    rings: list[int] = []
+    real = analysis._ring_area
+
+    def counted(points: Any) -> float:
+        rings.append(len(points))
+        return real(points)
+
+    monkeypatch.setattr(analysis, "_ring_area", counted)
+    assert analysis.piece_area(piece).hex() == expected.hex()
+    assert rings == [], "the second question is answered from the contour"
+    assert piece == twin and hash(piece) == hash(twin), "the area is no part of equality"
 
 
 def test_a_cup_touching_the_outer_wall_is_measured_as_a_taper() -> None:

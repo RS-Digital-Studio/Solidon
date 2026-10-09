@@ -34,11 +34,11 @@ from app.core.types import (
     BoundingBox,
     LayerInfo,
     MaterialSlot,
-    Polygon,
     Profile,
     SettingAdvice,
     SliceResult,
 )
+from tests.helpers import slice_contour
 
 MESHES = Path(__file__).parent / "data" / "meshes"
 
@@ -397,7 +397,7 @@ def _layers(
     layers = tuple(
         LayerInfo(
             z=float(index) * 0.2,
-            contours=(Polygon(outline=square),),
+            contours=(slice_contour(square),),
             area=area,
             overhang_area=overhang,
             islands=(square,) if islands and index > 0 else (),
@@ -794,8 +794,8 @@ def _standing_on(*feet: float) -> SliceResult:
     # das Bett des Druckers — ein Brim wird nur so breit vorgeschlagen, wie es
     # dort Platz hat (``advise.brim_room``).
     contours = tuple(
-        Polygon(
-            outline=(
+        slice_contour(
+            (
                 (20.0 * index, 0.0),
                 (20.0 * index + area**0.5, 0.0),
                 (20.0 * index + area**0.5, area**0.5),
@@ -815,7 +815,7 @@ def _standing_on(*feet: float) -> SliceResult:
     above = replace(
         first,
         z=0.3,
-        contours=(Polygon(outline=((0.0, 0.0), (200.0, 0.0), (200.0, 50.0), (0.0, 50.0))),),
+        contours=(slice_contour(((0.0, 0.0), (200.0, 0.0), (200.0, 50.0), (0.0, 50.0))),),
     )
     return SliceResult(
         layers=(first, above), support_volume=0.0, first_layer_area=sum(feet), source="internal"

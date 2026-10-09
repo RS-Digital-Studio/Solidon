@@ -220,8 +220,9 @@ class BoundingBox:
 
 @dataclass(frozen=True, slots=True)
 class Polygon:
-    """Eine geschlossene Kontur mit optionalen Löchern, benutzt von der
-    Schichtanalyse (§22)."""
+    """Eine geschlossene Kontur mit optionalen Löchern aus Punkt-Tupeln.
+
+    Die Schichtanalyse liefert ihre Konturen als :class:`SliceContour` (RM-595)."""
 
     outline: Ring
     holes: tuple[Ring, ...] = ()
@@ -242,6 +243,9 @@ class SliceContour:
 
     outline: Points2
     holes: tuple[Points2, ...] = ()
+    _area: float | None = field(default=None, init=False, repr=False, compare=False)
+    """Die Fläche, einmal gerechnet (``slice.analysis.piece_area``); nicht Teil der
+    Gleichheit (Nachprüfung L, G-2)."""
 
     def _key(self) -> tuple[tuple[tuple[int, ...], bytes], ...]:
         return tuple((tuple(ring.shape), ring.tobytes()) for ring in (self.outline, *self.holes))

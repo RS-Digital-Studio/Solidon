@@ -16,7 +16,9 @@ verschiedene Dinge, und der Bericht sagt, welches welches ist.
 
 from __future__ import annotations
 
+import functools
 import math
+import operator
 import threading
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, replace
@@ -33,7 +35,7 @@ from app.core.errors import ValidationError
 from app.core.geom import kernel_process
 from app.core.geom.mesh import MeshData
 from app.core.knowledge.rules import OVERHANG_ANGLE_FACTOR, OVERHANG_LIMIT_DEGREES
-from app.core.types import CancelToken, LayerInfo, Polygon, Ring, SliceContour, SliceResult
+from app.core.types import CancelToken, LayerInfo, Ring, SliceContour, SliceResult
 from app.core.units import EPS_GEOM, exact_cos, is_close, ring_area
 from app.i18n import _
 
@@ -887,7 +889,7 @@ def _cross_sections(
     """Schnitte und optional ihre bereits vorhandenen Kernkonturen.
 
     ``cross_sections`` braucht nur GEOS-Geometrien. ``slice_body`` muss sie
-    danach in :class:`Polygon` zurückübersetzen; beim häufigen Ein-Ring-Fall
+    danach in :class:`SliceContour` zurückübersetzen; beim häufigen Ein-Ring-Fall
     wären das dieselben Koordinaten zum zweiten Mal. Der private gemeinsame
     Weg hält sie deshalb nur für diesen Aufrufer fest.
     """
@@ -4536,19 +4538,41 @@ def _apart(one: tuple[float, ...], other: tuple[float, ...]) -> bool:
     return one[2] < other[0] or one[0] > other[2] or one[3] < other[1] or one[1] > other[3]
 
 
-def piece_area(piece: SliceContour | Polygon) -> float:
+def piece_area(piece: SliceContour) -> float:
     """Die Fläche einer Kontur samt Löchern, ohne GEOS — für viele kleine
     Stücke schneller als der Umweg über ein Polygon (:func:`units.ring_area`).
 
-    Ein Feld geht als Liste hinein: Dieselben Zahlen in derselben Folge, also
-    dieselbe Summe — über die Zeilen eines Felds liefe die Schleife zehnmal
-    langsamer."""
-    return ring_area(_listed(piece.outline)) - sum(ring_area(_listed(hole)) for hole in piece.holes)
+    **Einmal je Kontur gerechnet und an ihr gemerkt** (Nachprüfung L, G-2):
+    Gesamtüberhang, größter Fleck, Stützsäulen und Fußflächen fragen dieselben
+    Stücke; als Felder kostete jede Frage das Umwandeln in Python-Zahlen neu,
+    am Kumiko-Organizer 6,3 statt 4,4 ms je Durchgang."""
+    known = piece._area
+    if known is None:
+        known = _ring_area(piece.outline) - sum(_ring_area(hole) for hole in piece.holes)
+        # Eingefroren ist die Kontur für ihre Gleichheit; die Fläche folgt aus
+        # ihr und steht außerhalb davon.
+        object.__setattr__(piece, "_area", known)
+    return known
 
 
-def _listed(ring: Any) -> Any:
-    """Ein Konturfeld als Liste von Punkten; ein Tupel bleibt, wie es ist."""
-    return ring.tolist() if hasattr(ring, "tolist") else ring
+#: Ab wie vielen Punkten ein Ring seine Produkte in NumPy rechnet. Darunter
+#: ist die Schleife über eine Liste schneller (8 Punkte: 1 gegen 11 µs),
+#: darüber das Feld (4 096 Punkte: 560 gegen 120 µs).
+_VECTOR_RING: Final = 128
+
+
+def _ring_area(ring: Any) -> float:
+    """:func:`units.ring_area` eines Konturfelds, Bit für Bit.
+
+    Im Feld dieselben Produkte und Differenzen je Punkt, je für sich gerundet,
+    und dieselbe Summe in derselben Folge von links: ``functools.reduce`` über
+    ``float.__add__`` statt ``sum`` — das summiert seit Python 3.12 mit
+    Ausgleich und gäbe andere Bits."""
+    if len(ring) < _VECTOR_RING:
+        return ring_area(ring.tolist())
+    before = np.roll(ring, 1, axis=0)
+    terms = before[:, 0] * ring[:, 1] - ring[:, 0] * before[:, 1]
+    return abs(functools.reduce(operator.add, terms.tolist(), 0.0)) / 2.0
 
 
 def taper_length(shape: ShapelyPolygon) -> float:

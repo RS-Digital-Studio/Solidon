@@ -63,6 +63,7 @@ from app.core.types import (
     Sketch,
     SketchConstraint,
     SketchElement,
+    SliceContour,
     Source,
 )
 
@@ -94,6 +95,21 @@ BOTH_ENDS: dict[str, list[tuple[float, float]]] = {
         (0, 0),
     ],
 }
+
+
+def slice_contour(
+    outline: Sequence[Sequence[float]], holes: Sequence[Sequence[Sequence[float]]] = ()
+) -> SliceContour:
+    """Eine Kontur, wie die Schichtanalyse sie liefert: geschlossene, schreibgeschützte Felder."""
+
+    def closed(points: Sequence[Sequence[float]]) -> Any:
+        ring = np.array(points, dtype=np.float64)
+        if len(ring) and not np.array_equal(ring[0], ring[-1]):
+            ring = np.vstack((ring, ring[:1]))
+        ring.flags.writeable = False
+        return ring
+
+    return SliceContour(outline=closed(outline), holes=tuple(closed(hole) for hole in holes))
 
 
 def exact_kernel() -> Any:
