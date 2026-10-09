@@ -31,6 +31,7 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-09 | [RM-624: Ein Slicertest hält Kontaktabstand und untere Trennschicht in sechs Programmen (09.10.2026)](#rm-624-ein-slicertest-hält-kontaktabstand-und-untere-trennschicht-in-sechs-programmen-09102026) |
 | 2026-10-09 | [RM-680: Bausteine verwalten steht ohne eigenen Baustein offen (09.10.2026)](#rm-680-bausteine-verwalten-steht-ohne-eigenen-baustein-offen-09102026) |
 | 2026-10-09 | [RM-650: Ein eingefügtes Modell kommt in den Ausschnitt (09.10.2026)](#rm-650-ein-eingefügtes-modell-kommt-in-den-ausschnitt-09102026) |
 | 2026-10-09 | [RM-584 (Teil): Über Baumspitzen rät Solidon zwei Schichten Luft (09.10.2026)](#rm-584-teil-über-baumspitzen-rät-solidon-zwei-schichten-luft-09102026) |
@@ -27319,6 +27320,34 @@ nach einer Rücknahme bucht wirklich, eine abgewiesene Spule kommt in den Dialog
 zurück, die Übernahme aus dem Slicer überschreibt keine Handspule, Rücknahmen
 sind rücknehmbar, das Lager sichert seinen letzten lesbaren Stand selbst,
 Datumsfelder haben einen Kalender.
+
+## RM-624: Ein Slicertest hält Kontaktabstand und untere Trennschicht in sechs Programmen (09.10.2026)
+
+<a id="rm-624-ein-slicertest-hält-kontaktabstand-und-untere-trennschicht-in-sechs-programmen-09102026"></a>
+<a id="rm-624"></a>
+
+**Befund (09.10.2026, Nachprüfung von RM-622):** Was RM-622 über die Programme sagt —
+organische Bäume runden den Abstand auf die Schichten des Modells, vier Programme drucken
+unter Bäumen keine untere Trennschicht — war mit einer örtlichen Sonde gemessen, und kein
+Test hielt es. Die Messleser kannten `G92 E…` nicht: Unter absoluten Extrusionswerten galt
+nach einem Rücksetzen jede Bahn als Leerfahrt.
+
+**Behoben:** `tests/helpers.support_contact` misst Abstand und Trennschichten im G-Code
+(Raster `CONTACT_CELL`, Kontakt bis `CONTACT_AIR`), zählt Extrusion relativ, absolut und mit
+`G92` wie der Drucker, und nimmt mit `inset` nur Zellen im Inneren der Modellfläche — am Rand
+teilen sich Außenwand und eine Stützsäule auf dem Bett eine Zelle (am ElegooSlicer 898
+Scheinkontakte mit 0 mm). `test_the_support_contact_arrives_as_solidon_says` schneidet eine
+Platte über einer Säule (PETG, 0,28 mm bei 0,2-mm-Schichten) in ElegooSlicer, OrcaSlicer,
+Bambu Studio, Creality Print, Anycubic Slicer Next und PrusaSlicer mit Gitter und Baum und
+prüft gegen `advise.rounds_to_whole_layers` und `handover.ignored_under_trees`: unter Gitter
+0,28 mm, unter organischen Bäumen 0,2 mm, die untere Trennschicht unter Bäumen nach Tabelle.
+
+**Nachweis (09.10.2026):** zwölf Fälle an den echten Programmen unter Windows grün;
+`test_the_contact_measure_counts_extrusion_as_the_printer_does` (relativ, absolut, absolut
+mit `G92 E0`) grün. Die Unterseite unter Gitter misst je Randabstand verschieden (Füllung
+und Stütze verschränkt mit eigener Stützhöhe), deshalb prüft der Test sie nur unter Bäumen,
+wo die Tabelle etwas behauptet. Cura und SuperSlicer fehlen: RM-622 hat sie nicht gemessen.
+Changelog: nein (Test).
 
 ## RM-027 entfällt mit dem privaten Index (09.09.2026)
 

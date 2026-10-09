@@ -26,8 +26,10 @@ import io
 import json
 import math
 import os
+import re
 import shutil
 import socketserver
+import statistics
 import struct
 import subprocess
 import time
@@ -2221,4 +2223,183 @@ def chin_over_chest() -> MeshData:
         brick(40.0, 10.0, 60.0, (0.0, 20.0, 34.0)),
         brick(60.0, 30.0, 20.0, (0.0, 0.0, 14.0)),
         chin(44.0),
+    )
+
+
+# --- Stützkontakt im G-Code (RM-624) ---------------------------------------------
+
+#: Kantenlänge einer Rasterzelle der Kontaktmessung in der Aufsicht, in mm. Zwei
+#: statt einem halben: Eine weite Trennschicht (Lücke 1,2 mm) traf mit 0,5 mm
+#: viele Zellen ihrer obersten Lage nicht, und die Messung nahm eine Lage tiefer.
+CONTACT_CELL = 2.0
+#: Wie viel Luft zwischen Stütze und Modell noch als Kontakt zählt, in mm; mehr
+#: ist Stütze neben dem Modell, nicht darunter.
+CONTACT_AIR = 1.0
+_CONTACT_INTERFACE = ("support interface", "support material interface", "support-interface")
+#: Bambus Übergangslage unter der Trennschicht ist Stütze, kein Modell.
+_CONTACT_SUPPORT = ("support", "support material", "support transition")
+_CONTACT_SKIPPED = ("skirt", "brim", "custom", "prime tower", "wipe tower")
+#: Bambu Studio schreibt ``; FEATURE:``, die übrigen ``;TYPE:``.
+_CONTACT_TYPED = re.compile(r"^;\s*(?:TYPE|FEATURE)\s*:\s*(.+?)\s*$")
+#: PrusaSlicer schreibt Koordinaten ohne führende Null („Z.2“).
+_CONTACT_NUMBER = re.compile(r"([XYZEF])(-?\d*\.?\d+)")
+
+
+@dataclasses.dataclass(frozen=True)
+class SupportContact:
+    """Wo die Stütze das Modell berührt, gemessen im G-Code (:func:`support_contact`).
+
+    Je Seite der Median der Luft zwischen Stütze und Modell in mm und der
+    Trennschichten daran, dazu die Zahl der Rasterzellen mit Kontakt — ohne
+    Zellen sagt der Median nichts.
+    """
+
+    top_gap: float | None
+    top_interface_layers: float | None
+    top_cells: int
+    bottom_gap: float | None
+    bottom_interface_layers: float | None
+    bottom_cells: int
+
+
+def _contact_kind(name: str) -> str | None:
+    lowered = name.strip().lower()
+    if lowered in _CONTACT_INTERFACE:
+        return "interface"
+    if lowered in _CONTACT_SUPPORT:
+        return "support"
+    if lowered in _CONTACT_SKIPPED:
+        return None
+    return "model"
+
+
+def _contact_heights(levels: set[float]) -> dict[float, float]:
+    ordered = sorted(levels)
+    return {
+        level: round(level - (ordered[index - 1] if index else 0.0), 3)
+        for index, level in enumerate(ordered)
+    }
+
+
+def support_contact(text: str, inset: float = 0.0) -> SupportContact:
+    """Abstand und Trennschichten zwischen Stütze und Modell in einem G-Code (RM-624).
+
+    Ein Raster von :data:`CONTACT_CELL` in der Aufsicht; je Zelle die Ebenen mit
+    Modell-, Stütz- und Trennschichtbahn. Oben zählt eine Ebene nur mit Modell
+    über einer mit Trennschicht: Luft ist die Unterkante der Modellschicht minus
+    die Ebene darunter, dazu die Trennschichten direkt darunter. Unten zählt die
+    unterste Stützebene über einer Ebene nur mit Modell. Höchstens
+    :data:`CONTACT_AIR` Luft ist Kontakt.
+
+    **Extrusion wird gezählt, wie der Drucker sie fährt**: relativ (``M83``) ist
+    jeder positive ``E``-Wert Material, absolut (``M82``) jeder Anstieg — und
+    ``G92 E…`` setzt den Zähler zurück. Die historischen Messleser kannten das
+    Rücksetzen nicht; nach ``G92 E0`` galt jede Bahn als Leerfahrt, bis der
+    Zähler den alten Stand wieder überstieg.
+
+    ``inset`` nimmt nur Zellen, deren Mitte so weit innerhalb der Aufsicht aller
+    Modellbahnen liegt. Am Rand teilen sich Außenwand und eine Stützsäule daneben
+    eine Zelle, und die Säule auf dem Bett zählte als Stütze mit 0 mm Luft auf
+    dem Modell — am ElegooSlicer 898 solcher Zellen gegen die echten.
+    """
+    cells: dict[tuple[int, int], dict[float, set[str]]] = {}
+    x = y = z = e = 0.0
+    kind: str | None = None
+    relative_e = False
+    printed: dict[str, set[float]] = {"model": set(), "support": set(), "interface": set()}
+    for line in text.splitlines():
+        typed = _CONTACT_TYPED.match(line)
+        if typed:
+            kind = _contact_kind(typed.group(1))
+            continue
+        command = line.split(";")[0].strip()
+        if command.startswith("M83"):
+            relative_e = True
+            continue
+        if command.startswith("M82"):
+            relative_e = False
+            continue
+        values = {key: float(number) for key, number in _CONTACT_NUMBER.findall(command)}
+        if command.startswith("G92"):
+            e = values.get("E", e)
+            continue
+        if not command.startswith(("G0", "G1")):
+            continue
+        new_x, new_y = values.get("X", x), values.get("Y", y)
+        z = values.get("Z", z)
+        extruded = "E" in values and (values["E"] > 0.0 if relative_e else values["E"] > e)
+        if "E" in values and not relative_e:
+            e = values["E"]
+        if extruded and kind is not None:
+            level = round(z, 3)
+            printed[kind].add(level)
+            steps = max(1, int(max(abs(new_x - x), abs(new_y - y)) / CONTACT_CELL))
+            for step in range(steps + 1):
+                px = x + (new_x - x) * step / steps
+                py = y + (new_y - y) * step / steps
+                column = cells.setdefault((int(px // CONTACT_CELL), int(py // CONTACT_CELL)), {})
+                column.setdefault(level, set()).add(kind)
+        x, y = new_x, new_y
+    # Die Schichthöhe aus den Ebenen derselben Art, nicht aus der letzten
+    # Z-Bewegung: Ein Z-Hop davor hätte sie negativ gemacht.
+    model_height = _contact_heights(printed["model"])
+    support_height = _contact_heights(printed["support"] | printed["interface"])
+    carried = {"support", "interface"}
+    top: list[tuple[float, int]] = []
+    bottom: list[tuple[float, int]] = []
+    model_cells = [
+        key for key, column in cells.items() if any("model" in k for k in column.values())
+    ]
+    low_x = min((key[0] for key in model_cells), default=0) * CONTACT_CELL + inset
+    high_x = (max((key[0] for key in model_cells), default=0) + 1) * CONTACT_CELL - inset
+    low_y = min((key[1] for key in model_cells), default=0) * CONTACT_CELL + inset
+    high_y = (max((key[1] for key in model_cells), default=0) + 1) * CONTACT_CELL - inset
+    for key, column in cells.items():
+        centre_x, centre_y = (key[0] + 0.5) * CONTACT_CELL, (key[1] + 0.5) * CONTACT_CELL
+        if not (low_x <= centre_x <= high_x and low_y <= centre_y <= high_y):
+            continue
+        levels = sorted(column)
+        for index in range(1, len(levels)):
+            here, below = column[levels[index]], column[levels[index - 1]]
+            top_gap = round(
+                levels[index] - model_height.get(levels[index], 0.2) - levels[index - 1], 3
+            )
+            bottom_gap = round(
+                levels[index] - support_height.get(levels[index], 0.2) - levels[index - 1], 3
+            )
+            if (
+                "model" in here
+                and not here & carried
+                and "interface" in below
+                and top_gap <= CONTACT_AIR
+            ):
+                count = 0
+                for lower in reversed(levels[:index]):
+                    if "interface" not in column[lower]:
+                        break
+                    count += 1
+                top.append((top_gap, count))
+            if (
+                here & carried
+                and "model" in below
+                and not below & carried
+                and bottom_gap <= CONTACT_AIR
+            ):
+                count = 0
+                for upper in levels[index:]:
+                    if "interface" not in column[upper]:
+                        break
+                    count += 1
+                bottom.append((bottom_gap, count))
+
+    def median(values: list[float]) -> float | None:
+        return round(statistics.median(values), 3) if values else None
+
+    return SupportContact(
+        top_gap=median([gap for gap, _ in top]),
+        top_interface_layers=median([float(count) for _, count in top]),
+        top_cells=len(top),
+        bottom_gap=median([gap for gap, _ in bottom]),
+        bottom_interface_layers=median([float(count) for _, count in bottom]),
+        bottom_cells=len(bottom),
     )

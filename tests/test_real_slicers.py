@@ -26,11 +26,11 @@ from pathlib import Path
 import pytest
 import trimesh
 
-from app.core.export import appimage, cura_linux, handover, slicer_profiles
+from app.core.export import appimage, cura_linux, handover, slicer_keys, slicer_profiles
 from app.core.geom.mesh import MeshData
 from app.core.knowledge import print_settings, profiles
 from app.core.types import Profile, SceneObject
-from tests.helpers import set_test_license
+from tests.helpers import set_test_license, support_contact
 
 #: Je Programm ein Drucker, den sein Hersteller selbst führt — so läuft der
 #: Fall den Weg, den ein Kunde mit diesem Slicer am ehesten geht.
@@ -290,3 +290,162 @@ def test_curas_printers_are_read_from_its_appimage_without_starting_it(
         record_testsuite_property(
             "cura_dateien", sum(1 for path in root.rglob("*") if path.is_file())
         )
+
+
+def _contact_gcode(relative: bool, resets: bool) -> str:
+    """Eine Platte über einer Säule als G-Code: Modell auf jeder Ebene in einer
+    eigenen Zelle (Säule), Trennschicht auf 0,6 mm und das Dach auf 1,0 mm über
+    derselben Zelle. Relativ, absolut oder absolut mit ``G92 E0`` je Ebene."""
+    lines = ["M83" if relative else "M82"]
+    e = 0.0
+
+    def move(x: float, y: float, z: float) -> str:
+        nonlocal e
+        e += 0.05
+        return f"G1 X{x} Y{y} Z{z} E{0.05 if relative else round(e, 5)}"
+
+    for level, kinds in (
+        (0.2, ("Outer wall",)),
+        (0.4, ("Outer wall",)),
+        (0.6, ("Outer wall", "Support interface")),
+        (0.8, ("Outer wall",)),
+        (1.0, ("Outer wall", "Top surface")),
+    ):
+        if resets and not relative:
+            lines.append("G92 E0")
+            e = 0.0
+        for kind in kinds:
+            lines.append(f";TYPE:{kind}")
+            if kind == "Outer wall":
+                lines += ["G0 X50 Y50", move(51.0, 50.0, level)]
+            else:
+                lines += ["G0 X10 Y10", move(11.0, 10.0, level), move(11.0, 11.0, level)]
+    return "\n".join(lines) + "\n"
+
+
+@pytest.mark.parametrize(("relative", "resets"), [(True, False), (False, False), (False, True)])
+def test_the_contact_measure_counts_extrusion_as_the_printer_does(
+    relative: bool, resets: bool
+) -> None:
+    """Dieselbe Bahn misst gleich, relativ, absolut und mit ``G92 E0`` (RM-624).
+
+    Die historischen Messleser kannten ``G92`` nicht: Nach dem Rücksetzen galt
+    jede Bahn als Leerfahrt, und unter absoluten Werten fehlten Kontakte.
+    """
+    measured = support_contact(_contact_gcode(relative, resets))
+
+    assert measured.top_cells > 0, "die Messung findet den Kontakt"
+    assert measured.top_gap == pytest.approx(0.2)
+    assert measured.top_interface_layers == pytest.approx(1.0)
+
+
+#: Was RM-622 an den Programmen gemessen hat und Solidons Tabellen behaupten
+#: (``advise.rounds_to_whole_layers``, ``slicer_keys.IGNORED_UNDER_TREES_BY_PROGRAM``).
+_CONTACT_PROGRAMS = (
+    "elegooslicer",
+    "orcaslicer",
+    "bambustudio",
+    "crealityprint",
+    "anycubicslicernext",
+    "prusaslicer",
+)
+
+
+@pytest.mark.parametrize("style", ["grid", "tree"])
+@pytest.mark.parametrize(
+    ("program", "printer"),
+    [
+        pytest.param(program, PROGRAMS[program], marks=pytest.mark.slicer(program), id=program)
+        for program in _CONTACT_PROGRAMS
+    ],
+)
+def test_the_support_contact_arrives_as_solidon_says(
+    program: str,
+    printer: str,
+    style: str,
+    installed_slicer: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Abstand und untere Trennschicht kommen an, wie Solidons Tabellen sagen (RM-624).
+
+    Eine Platte über einer Säule auf einem Sockel, PETG mit 0,28 mm Abstand bei
+    0,2-mm-Schichten. Unter Gitter gilt der Wert (eigene Stützebenen), unter
+    organischen Bäumen rundet das Programm auf die Schichten des Modells
+    (RM-622). Unter Bäumen drucken Bambu Studio, Creality Print, Anycubic Slicer
+    Next und PrusaSlicer keine untere Trennschicht. Ändert ein neuer Slicerstand
+    eine dieser Eigenschaften, wird der Test rot, und die Tabelle zieht nach.
+    """
+    from app.core.slice import advise
+    from app.ui.print_settings_dialog import _PlateJob, _prepare_plate
+
+    set_test_license(monkeypatch, active=True)
+    parts = []
+    for size, height, z in ((36.0, 3.0, 1.5), (8.0, 10.2, 8.0), (36.0, 2.0, 14.0)):
+        side = 8.0 if size == 8.0 else 36.0
+        part = trimesh.creation.box((side, side, height))
+        part.apply_translation((0.0, 0.0, z))
+        parts.append(part)
+    body = SceneObject("stufe", "Stufe", MeshData.of(trimesh.boolean.union(parts)))
+    profile = profiles.make_profile(printer, "petg")
+    settings = print_settings.resolve(profile)
+    for path, value in (
+        ("layers.layer_height", 0.2),
+        ("support.style", style),
+        ("support.placement", "everywhere"),
+        ("support.z_gap", 0.28),
+        ("support.interface_layers", 2),
+        ("support.bottom_interface_layers", 2),
+    ):
+        settings = print_settings.with_choice(settings, path, value)
+    setup = _preselected(handover.detect(installed_slicer), profile)
+    folder = tmp_path / "platte"
+    folder.mkdir()
+    job = _PlateJob(
+        objects=(body,),
+        plates=(0,),
+        folder=folder,
+        name="stufe",
+        setup=setup,
+        settings=settings,
+        profile=profile,
+        slot_profiles={},
+    )
+    run = _prepare_plate(job, 0)
+    outcome = handover.slice_model(
+        [run.model],
+        settings,
+        profile,
+        setup,
+        output_dir=folder,
+        timeout=600,
+        keep_arrangement=run.keep_arrangement,
+        slots=run.slots,
+        model_height=run.model_height,
+        model_meshes=run.meshes,
+        expected_tools=run.used_tools,
+    )
+    # Vier Millimeter vom Rand: Dort teilen sich Sockelwand und die Stütze
+    # daneben, die auf dem Bett steht, eine Rasterzelle.
+    measured = support_contact(
+        outcome.gcode_path.read_text(encoding="utf-8", errors="replace"), inset=4.0
+    )
+
+    organic = handover.organic_styles(setup, profile)
+    assert measured.top_cells > 20, f"kaum Kontakt unter der Platte: {measured}"
+    if advise.rounds_to_whole_layers(setup.flavour, style=style, organic=organic):
+        assert measured.top_gap == pytest.approx(0.2, abs=0.02), measured
+    else:
+        assert measured.top_gap == pytest.approx(0.28, abs=0.04), measured
+    # Die untere Trennschicht nur unter Bäumen: Dort behauptet die Tabelle etwas.
+    # Unter Gitter legt die Orca-Familie mit eigener Stützhöhe Füllung und Stütze
+    # verschränkt, und die Unterseite misst je Randabstand anders (am ElegooSlicer
+    # 0,4 mm mit drei Lagen bei 4 mm, 0 mm mit einer bei 6 mm); die Oberseite
+    # blieb dabei überall 0,28 mm.
+    if style == "tree":
+        program_name = slicer_keys.program_of(setup.executable)
+        skipped = handover.ignored_under_trees(style, organic, program_name)
+        if "support.bottom_interface_layers" in skipped:
+            assert not measured.bottom_interface_layers, f"untere Trennschicht: {measured}"
+        else:
+            assert measured.bottom_cells > 20 and measured.bottom_interface_layers, measured
