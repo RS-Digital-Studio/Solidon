@@ -73,7 +73,6 @@ Nutzen da und sonst nichts.
 - Ein anderes Filament steht sofort im Bild, auch an Bausteinen und STEP-Teilen, und Solidon rechnet dafür nichts neu. Gewählte Körper zeigen ihre Filamentfarbe unter der Markierung.
 - Im Reiter *Auswahl* weist das Filamentfeld erst mit Klick oder Enter zu. Pfeiltasten und Tippen blättern nur, und das Mausrad rollt den Reiter.
 - In den übersetzten Fassungen rollt *Neues Filament* nicht mehr seitwärts, wenn das Fenster kürzer ist als sein Inhalt.
-- Updates bleiben sichtbar, auch wenn der Schlüssel wechselt, mit dem neue Versionen unterschrieben sind.
 
 ### Drucken und Übergabe an den Slicer
 

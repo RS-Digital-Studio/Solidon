@@ -49,7 +49,6 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Otro filamento se ve al instante, también en bloques y cuerpos STEP, y Solidon no recalcula nada por ello. Los cuerpos seleccionados muestran su color de filamento bajo el resaltado.
 - En la pestaña *Selección*, el campo de filamento solo asigna con un clic o Intro. Las flechas y la escritura solo recorren la lista, y la rueda del ratón desplaza la pestaña.
 - En las versiones traducidas, *Filamento nuevo* ya no se desplaza de lado cuando la ventana es más baja que su contenido.
-- Las actualizaciones siguen apareciendo aunque cambie la clave con la que se firman las versiones nuevas.
 
 ### Imprimir y entregar al slicer
 

@@ -45216,31 +45216,37 @@ Changelog: ja, unter *Drucken und Übergabe an den Slicer* — mit vergrößerte
 **RM-528 — Die Installation kennt nur einen Release-Schlüssel.** `app/core/updates.py` prüfte die
 Versionsdatei und vor dem Start die gespeicherte Paketangabe gegen genau einen Schlüssel
 (`RELEASE_PUBLIC_KEY`). Bauplan §37.2 verlangt mehrere zulässige, damit ein neuer eingeführt
-werden kann, solange der alte noch unterschreibt; vor dem Verkauf ist ein neues Paar geplant.
-Entschieden (Robert, 06.10.2026): Schlüsselliste bauen und in einer Version ausliefern, bevor
-der Schlüssel wechselt.
+werden kann, solange der alte noch unterschreibt. Entschieden (Robert, 06.10.2026):
+Schlüsselliste bauen und in einer Version ausliefern, bevor der Schlüssel wechselt.
 
-**Umsetzung:** `RELEASE_PUBLIC_KEYS` (der älteste zuerst, derzeit nur der Schlüssel seit 0.1.4).
-Jede Prüfung geht durch `updates.accepted_key` — `signing_key`/`signature_ok` bei der Abfrage
-und `_package_authorized` vor dem Start; kein Ort liest mehr einen einzelnen Schlüssel.
-`tools/sign_version.py` beschreibt den Wechsel in vier Schritten (neuer öffentlicher Schlüssel
-ans Ende der Liste und mit einer Version ausliefern, deren Datei noch der alte unterschreibt;
-erst danach mit dem neuen unterschreiben; den alten in der nächsten Version entfernen), nennt
-bei `--check` und nach dem Unterschreiben, welcher Schlüssel der Liste trägt, und lehnt jeden
-außer dem ältesten ohne `--after-switch` ab — ein zu früh unterschreibender neuer Schlüssel
-nähme jeder älteren Installation die Version, die ihn einführt. Dieselben Schritte stehen in
-`Signierung/README.md`, „Versionsdatei — der Release-Schlüssel und sein Wechsel“.
-`upload_website.py`, `tests/release_signing.py` und `konzept-demo-zu-1.0-2026-09.md` §11.2
-nennen die Liste.
+**Umsetzung:** `RELEASE_PUBLIC_KEYS`, derzeit nur der Schlüssel seit 0.1.4. Jede Prüfung geht
+durch `updates.accepted_key` — `signing_key`/`signature_ok` bei der Abfrage und
+`_package_authorized` vor dem Start; kein Ort liest mehr einen einzelnen Schlüssel. Der Ablauf
+des Wechsels in vier Schritten steht an einer Stelle, `Signierung/README.md` („Versionsdatei —
+der Release-Schlüssel und sein Wechsel“); Werkzeug, Regel und Konzept verweisen dorthin.
+`tools/sign_version.py` hält ihn mechanisch: Es unterschreibt nur mit einem Schlüssel, den die
+vorige veröffentlichte Version laut ihrem Git-Tag schon trug (`published_key_lists`,
+`keys_in_source` über `ast`, beide Quellformen), gleich mit welchem Schalter und an welcher
+Stelle der Liste; wechselt der Schlüssel gegenüber `HEAD:website/version.json`, verlangt es
+`--after-switch` als Bestätigung der Wartezeit. Ohne Tags hält es an. `--check` und
+`upload_website.refuse_unsigned_version` teilen sich `version_file_problem` und halten eine
+Datei an, die die vorige Version nicht lesen könnte. Jede Ablehnung nennt ein „Zu tun“.
+`--new-keypair` gibt eine Besitzprobe aus (Unterschrift des neuen Schlüssels über
+`proof_message`), die nach `KEY_PROOFS` in `tests/release_signing.py` kommt.
 
 **Nachweis:** `tests/test_updates.py` mit im Test erzeugten Schlüsseln: alter und neuer tragen
 bei Abfrage und Startprüfung, ein fremder nicht, eine beschädigte Unterschrift (ein Bit,
 gekürzt, veränderter Inhalt) mit keinem; eine Installation nur mit dem alten verwirft, was der
-neue unterschreibt; die ausgelieferten Schlüssel sind verschieden und Punkte der Kurve; das
-Werkzeug unterschreibt mit dem ältesten, mit dem neuen erst nach `--after-switch` und mit einem
-fremden nie, und sein Docstring nennt die Schritte in ihrer Reihenfolge. Gegenprobe:
-`accepted_key` nur mit dem ersten Schlüssel macht den Fall „neu“ und den Werkzeugtest rot.
-Changelog: ja — Updates bleiben nach einem Wechsel des Signierschlüssels erkennbar.
+neue unterschreibt. Werkzeug: der neue kann die Version, die ihn einführt, nicht
+unterschreiben, auch nicht mit `--after-switch` und nicht vorn in der Liste; der Wechsel selbst
+braucht den Schalter einmal; `--check` und Uploadsperre halten eine am Werkzeug vorbei
+unterschriebene Datei an; ohne Tags Ablehnung; die echte `version.json` trägt einen Schlüssel,
+den ihr Vorgänger-Tag kennt. Schlüssel: kein Doppel, kein Punkt kleiner Ordnung, der erste
+gegen seinen Abdruck, jeder weitere mit gültiger Besitzprobe; Gegenprobe mit Tippfehler,
+Platzhalter, vertauschter Probe, fehlender Probe und Doppel. Mutationen: ohne Tagprüfung vier
+Tests rot, ohne Bestätigung einer; `accepted_key` nur mit dem ersten Schlüssel zwei rot.
+Changelog: nein — mit einem Schlüssel in der Liste verhält sich die Installation wie 0.5.3. Ob
+und wann das Paar wechselt, führt [RM-634](ROADMAP.md#rm-634).
 
 ## RM-351: Der Signaturhinweis zu Windows nennt nur die erste signierte Version (09.10.2026)
 
@@ -45253,15 +45259,17 @@ sagte in allen sechs Sprachen „Die Windows-Version 0.5.0 ist digital signiert.
 „Version 0.5.1“; ein Kunde las daraus, die angebotene sei es nicht. Seit `1d9373efa` (in
 v0.5.2 und v0.5.3) lautet er versionsneutral „ab 0.5.0“; offen war der Wächter.
 
-**Umsetzung:** `tests/test_website.py::test_the_windows_signature_hint_names_only_the_first_signed_version`
-prüft je Startseite den Windows-Reiter (er muss einen Signaturhinweis tragen) und jeden Satz der
-Seite, der Windows und die Signatur nennt — auch den Zwilling in den Systemvoraussetzungen: Er
-nennt keine Version außer `FIRST_SIGNED_WINDOWS` (0.5.0) und keine über der aus
-`website/version.json`. Die Abnahme in der alten Form („keine andere Version als
-`version.json`“) hätte die richtige Fassung „ab 0.5.0“ abgelehnt.
+**Umsetzung:** `tests/test_website.py::test_the_signature_hints_name_only_the_first_signed_version`
+liest je Startseite die Stellen selbst, keine Wortfilter: Windows-Reiter, macOS-Reiter und die
+Zeile „Betriebssystem“ der Systemvoraussetzungen. Jede volle Versionsnummer dort ist die erste
+signierte (0.5.0) bzw. erste notarisierte (0.4.1), steht mit dem „ab“ der Sprache davor
+(`SINCE_WORDS`) und liegt nicht über `website/version.json`; die erste erlaubte muss an jeder
+Stelle gefunden werden, sonst ist der Hinweis weg und der Test rot.
 
-**Nachweis:** grün in allen sechs Sprachen. Gegenprobe an veränderten Kopien der deutschen
-Seite (`test_the_signature_guard_catches_a_manipulated_copy`): „ab 0.5.1“ im Reiter, „Version
-9.9.9“ im Zwilling, eine veröffentlichte 0.4.9 und ein Reiter ohne Signaturhinweis werden je
-erkannt. Der Live-Stand ist nicht nachgesehen; die Seiten im Repository sind die von v0.5.3.
-Changelog: nein.
+**Nachweis:** grün in allen sechs Sprachen. Gegenprobe an veränderten Kopien
+(`test_the_signature_guard_catches_a_manipulated_copy`): der Ausgangssatz deutsch und
+englisch, ein Satz ohne „Windows“ mit mitalternder Nummer, das portugiesische Partizip, „ab
+0.5.1“, „Version 9.9.9“ im Zwilling, eine veröffentlichte 0.4.9, ein Reiter ohne Hinweis und
+der Mac-Hinweis ohne „ab“ werden je erkannt; die ersten vier ließ die erste Fassung des
+Wächters durch (Review S, M-1). Live am 09.10.2026 nachgesehen: auf solidon3d.de steht in allen
+sechs Sprachen „ab 0.5.0“ neben „Version 0.5.3“, wie im Repository. Changelog: nein.

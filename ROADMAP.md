@@ -146,6 +146,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-145 — CRA-Konformitätsakte zum gesetzlichen Anwendungszeitpunkt vorbereiten](#rm-145) | Veröffentlichung, Betrieb und Vertrieb | Produktklassifizierung, technische Akte und Konformitätsverfahren für 2027 vorbereiten |
 | [RM-242 — Testphase der Vollversion nachreichen](#rm-242) | Veröffentlichung, Betrieb und Vertrieb | Robert 25.09.2026: 1.0 startet ohne Testphase, sie kommt später — Januar (Unentschlossene noch zu 69 €) oder Februar 2027 mit dem Preissprung. Offen: Termin, ob frühere Demo-Geräte sie bekommen (heute T15: nein), Release mit gesetztem `TRIAL_FROM` |
 | [RM-575 — Handbuchabbildungen für den Filamentknopf in der Kopfzeile](#rm-575) | Veröffentlichung, Betrieb und Vertrieb | Wartet auf den Release: `figure:window`, Kopfzeile und `website/handbuch.html` zeigen noch die Filamentgruppe links (RM-556) |
+| [RM-634 — Release-Schlüsselpaar wechseln](#rm-634) | Veröffentlichung, Betrieb und Vertrieb | Robert entscheidet, ob und wann; Ablauf in `Signierung/README.md`, Voraussetzung RM-528 erfüllt |
 | [RM-062 — Eingabemethode im aktuellen Flatpak bestätigen](#rm-062) | Kundenrückmeldungen | Am ausgelieferten 0.5.3 gemessen: Start, Fokus und Eingabe gehen, Fcitx nur über IBus; Abhilfe gebaut (Fcitx in der Umgebung, nur `XMODIFIERS=@im=ibus` oder `QT_IM_MODULE=wayland` unter `xcb` → `ibus`; Fcitx außerhalb des Flatpak über das IBus-Portal), offen der Nachweis im nächsten Paket für Flatpak, AppImage und Archiv, auch für die zwei IBus-Fälle |
 | [RM-521 — Cura unter Linux slicen lassen (AppImage und Flatpak)](#rm-521) | Kundenrückmeldungen | Lader-Weg und Rückfall gebaut, am Runner mit Flatpak und AppImage, draußen und im Sandkasten belegt (Lauf 37528397381); offen: Abnahme beim Kunden mit dem nächsten Paket (Ubuntu 24.04, Solidon als Flatpak) |
 | [RM-522 — Dem Linux-Kunden mit Orca als Flatpak die Behebung melden](#rm-522) | Kundenrückmeldungen | Text für 0.5.3 liegt in Roberts Ablage bereit, Behebung am ausgelieferten Paket belegt (RM-064); Robert schickt, dann Versand eintragen |
@@ -5087,6 +5088,19 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   **Abnahme:** `figure:window` und die Abbildungen mit Kopfzeile in allen Sprachen neu erzeugt
   (`/erzeugen`), `website/handbuch.html` daraus neu gebaut; keine Abbildung zeigt mehr die
   Filamentgruppe in der linken Spalte. Wartet auf den Release.
+
+<a id="rm-634"></a>
+
+- [ ] **RM-634 — Release-Schlüsselpaar wechseln.** Die Versionsdatei unterschreibt seit 0.1.4
+  derselbe Ed25519-Schlüssel. Ob und wann er wechselt, entscheidet Robert; ein neues Paar
+  erzeugt nur er, der private Teil gehört in den Passwortmanager. Voraussetzung RM-528 ist
+  erfüllt: Die Installation trägt eine Schlüsselliste, und `tools/sign_version.py` lässt den
+  neuen erst unterschreiben, wenn eine veröffentlichte Version ihn kennt. 0.6.0 bringt keinen
+  zweiten öffentlichen Schlüssel mit (Entscheidung Koordinator, 09.10.2026). Ablauf:
+  `Signierung/README.md`, „Versionsdatei — der Release-Schlüssel und sein Wechsel“.
+  **Abnahme:** neuer öffentlicher Schlüssel mit Besitzprobe in einer veröffentlichten Version,
+  nach der Wartezeit damit unterschrieben, der alte in der Version danach entfernt. Bauplan
+  §37.2.
 
 ## Kundenrückmeldungen
 
