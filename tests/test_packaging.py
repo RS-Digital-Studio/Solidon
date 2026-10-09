@@ -1249,7 +1249,11 @@ def test_the_start_check_judges_crash_hang_black_view_and_leftovers() -> None:
     assert verdict(0, _start_report(), tree_changed=["Contents/MacOS/neu.txt"])
     # RM-062: Unter Linux muss das IBus-Eingabemodul im Paket liegen.
     shipped = ["libcomposeplatforminputcontextplugin.so", "libibusplatforminputcontextplugin.so"]
-    assert verdict(0, _start_report(input_modules=shipped), linux=True) == []
+    images = ["gzip", "zstd"]
+    assert (
+        verdict(0, _start_report(input_modules=shipped, image_compressions=images), linux=True)
+        == []
+    )
     assert any(
         "IBus" in text for text in verdict(0, _start_report(input_modules=shipped[:1]), linux=True)
     )
@@ -1257,6 +1261,14 @@ def test_the_start_check_judges_crash_hang_black_view_and_leftovers() -> None:
         "ein Bericht ohne Angabe ist kein Beleg"
     )
     assert verdict(0, _start_report(input_modules=[])) == [], "unter Windows und macOS nicht"
+    # RM-549/RM-599: Unter Linux muss das Paket zstd und gzip entpacken können.
+    readable = {"input_modules": shipped, "image_compressions": ["gzip", "xz", "zstd"]}
+    assert verdict(0, _start_report(**readable), linux=True) == []
+    without = {**readable, "image_compressions": ["gzip", "xz"]}
+    assert any("zstd" in text for text in verdict(0, _start_report(**without), linux=True))
+    assert any(
+        "zstd" in text for text in verdict(0, _start_report(input_modules=shipped), linux=True)
+    ), "ein Bericht ohne Angabe ist kein Beleg"
 
 
 def test_the_start_check_sees_what_the_application_writes_into_its_own_tree(

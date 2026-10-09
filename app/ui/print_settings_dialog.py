@@ -2258,7 +2258,7 @@ class _CuraPrinterWorker(Worker):
 
     def work(self) -> None:
         # Hier und nicht im Fensterfaden entsteht die Druckerkopie einer
-        # AppImage-Cura (``cura_linux.never_wait_in``); danach gründet der
+        # AppImage-Cura (``appimage.never_wait_in``); danach gründet der
         # Dialog neu (:meth:`PrintSettingsDialog._cura_printer_found`).
         slicer_profiles.install_root(self._executable)
         printer_id = slicer_profiles.chosen_printer("cura", self._executable, self._known)

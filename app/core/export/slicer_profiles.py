@@ -37,10 +37,11 @@ from xml.etree import ElementTree as ET
 
 from app.core import build_area, discover
 from app.core.errors import CHECK_SLICER_PROFILE, ExternalToolError, ValidationError
-from app.core.export import cura_linux, prusa_conditions
+from app.core.export import appimage, cura_linux, prusa_conditions
 from app.core.export.slicer_keys import (
     CURA_JERK_LINKS,
     SlicerFlavour,
+    flavour_of,
     for_the_nozzle,
     has_readable_profiles,
     has_user_profile_tree,
@@ -238,14 +239,24 @@ def install_root(executable: Path) -> Path | None:
     ``cura/share/cura``. Ein Slicer aus dem Paketverwalter der Distribution legt
     genauso nach FHS ab (``/usr/share/PrusaSlicer/profiles``).
 
-    **Eine Cura als AppImage trägt ihn im Abbild**, das nur eingehängt lesbar
-    ist; gelesen wird eine Kopie im Nutzer-Cache (:func:`cura_linux.appimage_resources`).
-    Im Fensterfaden (:func:`cura_linux.never_wait_in`) heißt ``None`` dort „noch
-    nicht kopiert“, nicht „kein Bestand“.
+    **Eine Cura als AppImage trägt ihn im Abbild**; gelesen wird eine Kopie im
+    Nutzer-Cache (:func:`cura_linux.appimage_resources`), aus dem Abbild
+    gelesen, ohne das AppImage zu starten (Regel 11). Im Fensterfaden
+    (:func:`appimage.never_wait_in`) heißt ``None`` dort „noch nicht kopiert“,
+    nicht „kein Bestand“; ebenso bei einem unlesbaren Abbild.
+
+    **Die Orca-Familie als AppImage ebenso** (RM-549): Ihr Bestand liegt im
+    Abbild unter ``resources/profiles``, und erst ihr erster Start legte ihn
+    nach ``system/``. Die Wurzel ist die Kopie im Nutzer-Cache
+    (:func:`appimage.profiles`).
     """
     mark = discover.program_mark(executable.name)
     if mark == "cura" and cura_linux.is_appimage(executable):
         return cura_linux.appimage_resources(executable)
+    if cura_linux.is_appimage(executable) and has_user_profile_tree(
+        flavour_of(executable.name) or "other"
+    ):
+        return appimage.profiles(executable)
     app = discover.flatpak_app(executable)
     if mark == "cura" and app:
         # Curas AppDir bestimmt eine Stelle, für Bestand und Lader zugleich.
@@ -2900,11 +2911,11 @@ def find_profiles(
     users = user_roots(flavour, executable)
     roots.extend((folder, True) for folder in users)
     if installed is None:
-        # Ein AppImage trägt seinen Bestand im Abbild, das nur während seines
-        # Laufs eingehängt ist — unter Linux der Normalfall für Orca, Bambu,
-        # Elegoo und Creality. Die Orca-Familie kopiert die Bündel der
-        # eingerichteten Drucker nach ``system/`` neben ``user/``, und dort
-        # stehen genau die Drucker des Kunden.
+        # Der Rückfall ohne mitgelieferten Bestand: beim AppImage der
+        # Orca-Familie, solange der Fensterfaden noch keine Kopie hat oder das
+        # Abbild unlesbar ist (``appimage.profiles``). Der Slicer kopiert die
+        # Bündel der eingerichteten Drucker nach ``system/`` neben ``user/``,
+        # und dort stehen genau die Drucker des Kunden.
         for system in dict.fromkeys(folder.parent.parent / "system" for folder in users):
             if system.is_dir():
                 roots.append((system, False))
@@ -3051,9 +3062,10 @@ def _kind_by_folder(path: Path) -> ProfileKind | None:
 
 def profile_roots(flavour: SlicerFlavour, executable: Path) -> tuple[Path, ...]:
     """Alle Wurzeln des Profilbestands dieser Installation, mitgelieferte
-    zuerst: ``resources/profiles`` neben dem Programm, die eigenen
-    ``user/<Konto>`` und der ``system``-Bestand daneben, in den die
-    Orca-Familie die gewählten Herstellerbündel kopiert.
+    zuerst (:func:`install_root`: ``resources/profiles`` neben dem Programm,
+    beim AppImage dessen Kopie im Nutzer-Cache), die eigenen ``user/<Konto>``
+    und der ``system``-Bestand daneben, in den die Orca-Familie die gewählten
+    Herstellerbündel kopiert.
 
     Die Erbkette eines eigenen Profils (:func:`resolve_values`) braucht sie:
     Ein im Slicer angelegtes Filament unter ``user/<Konto>/filament/`` erbt
@@ -3526,7 +3538,9 @@ def _store_roots(path: Path, roots: Sequence[Path]) -> list[Path]:
     Pfad abgelesenen — für Aufrufer, die nur die Datei kennen: Ein eigenes
     Profil liegt unter ``<Programm>/user/<Konto>/``, und daneben liegt
     ``<Programm>/system/`` mit den kopierten Herstellerbündeln; ein
-    mitgeliefertes liegt unter ``resources/profiles``.
+    mitgeliefertes liegt unter ``resources/profiles``. Die Kopie aus einem
+    AppImage (``<Cache>/<Kennung>/profiles``) erkennt der Pfad nicht; ihre
+    Wurzel kommt über ``roots``.
     """
     found = [Path(root) for root in roots]
     for parent in path.parents:

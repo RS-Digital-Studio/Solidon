@@ -449,6 +449,84 @@ Einhängen 0,01 s, erste Kopie 3,3 s; Würfel auf dem K1 Max mit Flatpak und
 AppImage, draußen und im Sandkasten, gleich wie CuraEngine unter Windows.
 Eine Kopie wiegt rund 26 MB in rund 9 900 Dateien (Cura 5.13).
 
+**Seit RM-599 hängt die Kopie nicht mehr ein** (09.10.2026): `_read_resources`
+liest `share/cura/resources` über `squashfs` aus dem Abbild (Cura 5.13: gzip,
+128 KiB), und `engine_complete` beantwortet aus `AppRun.env`, Lader und
+CuraEngine im Abbild, ob Solidon rechnen kann — dieselbe Prüfung wie
+`loader_command` am eingehängten Ordner. Der Lader ist im Abbild eine
+Verknüpfung (`runtime/compat/lib64/ld-linux-x86-64.so.2` →
+`../lib/x86_64-linux-gnu/…`); `SquashImage.resolve` folgt ihr, ein absolutes
+Ziel zählte am eingehängten Abbild den Rechner mit und gilt hier als fehlend.
+Gegen 7-Zip: 9 944 Dateien byte-gleich, Rechenmaschine erkannt. Ein AppImage,
+das Solidon nicht sieht (aus seinem Flatpak außerhalb der Freigaben), hat schon
+vorher keine Fassung (`_key`) und keine Kopie bekommen. Eingehängt wird nur
+noch für den Lauf (`engine`). Ob das gebaute Paket gzip und zstd entpackt,
+meldet es im Starttest (`image_compressions`, `tools/check_frozen_start.py`).
+
+## Die Orca-Familie als AppImage (`appimage.py`, RM-549)
+
+Ein AppImage der Orca-Familie trägt seinen Herstellerbestand nur im
+eingebetteten SquashFS unter `resources/profiles`; erst sein erster Start legt
+die Bündel nach `<Konfiguration>/<Programm>/system/`. Bis RM-549 sah Solidon
+unter Linux deshalb keinen Herstellerdrucker, bis der Kunde den Slicer einmal
+geöffnet hatte, und die Konsole lehnte den Auftrag ohne vorgewähltes Profil ab.
+
+Gelesen wird das Abbild als Datei: Es beginnt hinter der Abschnittstabelle der
+Laufzeit (`image_offset`), Kompression über die Standardbibliothek (zlib,
+lzma, `compression.zstd`). Gestartet wird nichts, auch nicht
+`--appimage-extract` oder `--appimage-mount` (Regel 11). Der Leser steht seit
+RM-599 in `squashfs.py` und liest auch Curas Bestand (unten). Gemessen an
+den Fassungen der Slicerauswahl (09.10.2026, alle Typ 2, SquashFS 4.0, zstd,
+128-KiB-Blöcke): OrcaSlicer 2.4.2 12 006 Profile, ElegooSlicer 1.5.3.5
+12 007, Creality Print 7.3.0 6 898, Bambu Studio 2.8.2 3 589, jede Datei
+byte-gleich mit dem Auszug von 7-Zip. Lesen aller Profile 0,2 s; die Kopie
+dauert unter Windows 6 bis 17 s, fast ganz im Anlegen der Dateien. Die
+Erhebung findet danach 997, 997, 491 und 202 Drucker.
+
+Die Kopie folgte zuerst Curas Muster als Abschrift (`stamp.json` mit Pfad,
+Änderungszeit, Größe und Fassung des Kopierers, Austausch über einen
+Zwischenordner, Räumen verschwundener AppImages). Die Durchsicht fand den
+Zwilling schon auseinandergelaufen: Nur die Orca-Seite legte eine gelöschte
+Kopie neu an; Curas Merker nannte nach einem geleerten Nutzer-Cache den
+gelöschten Ordner weiter, und Curas Drucker fehlten bis zum Neustart, auch
+nach *Neu suchen*. Seitdem verwaltet `ImageCopies` beide Kopien; jeder Slicer
+bringt nur Cache-Ordner, Fassung und seinen Leser mit (`_fill_profiles`,
+`cura_linux._fill_printers`). Dort liegt auch `never_wait_in`, damit
+`cura_linux` `appimage` importiert und nicht umgekehrt.
+
+Ist das Abbild unlesbar (andere Kompression, beschädigt), bleibt
+`install_root` leer wie zuvor; die eigenen Profile bleiben in der Liste, ohne
+Profil rät der Druckdialog, den Slicer einmal zu öffnen (`_profiles_found`),
+und danach gilt `system/`. Bis zur Durchsicht übersetzte nur der xz- und der
+zstd-Zweig ihren Entpackfehler; ein gekipptes Bit in einem gzip-Block (Curas
+Kompression) entkam als `zlib.error`, kostete die ganze Profilliste, ließ
+einen Zwischenordner liegen und wurde bei jeder Frage neu gelesen. Jetzt
+übersetzt ein Entpacker für alle Kompressionen (`_inflater`), und die Kopie
+räumt ihren Zwischenordner auch bei einem unerwarteten Abbruch. Die Grenzen
+greifen vor der Allokation (§32): `read` prüft die angegebene Dateigröße vor
+dem ersten Block (eine Lücke kostet im Abbild vier Byte und entpackt einen
+ganzen Block; gemessen: 16 MiB Lückendatei bei 1 MiB Grenze belegten vorher
+34,6 MB), `entries` eine Verzeichnisgröße über `MAX_LISTING`, und der
+xz-/lzma-Entpacker bekommt höchstens `MAX_INFLATER_MEMORY`.
+
+Unter Windows verweigerte das Umbenennen des fertigen Zwischenordners in
+der Testsuite gelegentlich mit `WinError 5`, weil ein Scanner die frisch
+geschriebenen Dateien kurz offen hält (zwei von vier Läufen der Testdatei);
+`_rename` versucht es fünfmal im Abstand von 0,1 s.
+
+## Curas Jerk-Steuerung
+
+Aus der Karte verschoben (09.10.2026): Curas Jerk-Steuerung folgt der
+gewählten Definitions- und Containerkette. Bekannte Abhängigkeiten werden
+aufgelöst, eigene Rollen und Schalter gehen vor.
+`resolve_profile(cura_motion=True)` prüft die Bewegungswerte erst für die
+konkrete Übergabe; Druckerliste und Bettlesen bleiben davon unabhängig.
+Unbekannte aktive Werte halten CLI und Fensterprofil mit derselben Handlung
+an. Beide schreiben denselben aufgelösten Bestand. Extrudercontainer beachten
+das geerbte `settable_per_extruder`; globale Schalter bleiben global.
+Verglichen werden wirksame Rollen; ausgeschaltete Druck- oder Leerfahrtwerte
+bleiben ohne Wirkung und ohne rohe Formeln in der strikten Ausgabe.
+
 ## Warum `slicer_keys.py` existiert
 
 Aus der Karte verschoben (05.10.2026): `NOT_TAKEN_BY_PROGRAM` gibt es, weil
