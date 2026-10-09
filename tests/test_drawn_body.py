@@ -492,6 +492,42 @@ def test_a_drawing_on_a_face_cuts_its_body_as_a_pocket(profile: Profile) -> None
     assert volume == pytest.approx(40.0 * 30.0 * 20.0 - 10.0 * 10.0 * 5.0, rel=1e-6)
 
 
+def test_two_faces_at_the_same_height_are_told_apart_by_their_triangles() -> None:
+    """N10, G5: Zwei gleich hohe Deckflächen teilen die Ebene — den Punkt trägt nur eine."""
+    from types import SimpleNamespace
+
+    import trimesh
+
+    from app.ui.draw_flow import _face_at
+
+    raw = trimesh.Trimesh(
+        vertices=[(0, 0, 10), (10, 0, 10), (0, 10, 10), (20, 0, 10), (30, 0, 10), (20, 10, 10)],
+        faces=[(0, 1, 2), (3, 4, 5)],
+        process=False,
+    )
+    bounds = SimpleNamespace(minimum=(0.0, 0.0, 0.0), maximum=(30.0, 10.0, 10.0))
+    features = {
+        "face_1": SimpleNamespace(
+            kind="face", face_indices=(0,), params={"normal": (0, 0, 1), "centre": (3, 3, 10)}
+        ),
+        "face_2": SimpleNamespace(
+            kind="face", face_indices=(1,), params={"normal": (0, 0, 1), "centre": (23, 3, 10)}
+        ),
+    }
+    entry = SimpleNamespace(mesh=SimpleNamespace(raw=raw, bounds=bounds), features=features)
+    assert _face_at(entry, (22.0, 2.0, 10.0)) == "face_2"
+    assert _face_at(entry, (2.0, 2.0, 10.0)) == "face_1"
+    assert _face_at(entry, (15.0, 5.0, 10.0)) is None, "zwischen den Flächen trägt keine"
+
+
+def test_the_manual_names_the_way_to_the_kind_of_a_free_outline() -> None:
+    """N11: Bei einem freien Umriss öffnet der Doppelklick den Editor, *Fertig* den Schritt."""
+    from app.core.manual import pages
+
+    text = "".join(str(page.body) for page in pages() if page.key == "sketch")
+    assert "Bei einem freien Umriss öffnet ein Doppelklick auf den Schritt zuerst" in text
+
+
 def test_only_drawings_change_their_kind() -> None:
     project = new_project()
     history = History(project.document)

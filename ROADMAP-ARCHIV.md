@@ -58,6 +58,7 @@ entfernt hat.
 | 2026-10-06 | [RM-534: Der Prüfbericht sagt, wenn er neu rechnet, und die volle Kette entscheidet selbst (06.10.2026)](#rm-534-der-prüfbericht-sagt-wenn-er-neu-rechnet-und-die-volle-kette-entscheidet-selbst-06102026) |
 | 2026-10-06 | [RM-020: Die Druckprojekte brauchen keine eigene Sicherung (06.10.2026)](#rm-020-die-druckprojekte-brauchen-keine-eigene-sicherung-06102026) |
 | 2026-10-06 | [RM-183: Der Zeichenmodus ist abgenommen, die Rampe der 3D-Maus führt RM-070 (06.10.2026)](#rm-183-der-zeichenmodus-ist-abgenommen-die-rampe-der-3d-maus-führt-rm-070-06102026) |
+| 2026-10-09 | [RM-559 (Teil): F-i, der Entwurf kommt nach einer gescheiterten Booleschen Rechnung zurück (09.10.2026)](#rm-559-teil-f-i-der-entwurf-kommt-nach-einer-gescheiterten-booleschen-rechnung-zurück-09102026) |
 | 2026-10-06 | [RM-387: Sprachwächter und englische Passungszeichnung stehen auf dem Stand (06.10.2026)](#rm-387-sprachwächter-und-englische-passungszeichnung-stehen-auf-dem-stand-06102026) |
 | 2026-10-06 | [RM-313: Der Versionswächter liefert seit v0.5.2 echte Ergebnisse (06.10.2026)](#rm-313-der-versionswächter-liefert-seit-v052-echte-ergebnisse-06102026) |
 | 2026-10-06 | [RM-234: Die Fensterverträge melden sich auch bei rotem Kern (06.10.2026)](#rm-234-die-fensterverträge-melden-sich-auch-bei-rotem-kern-06102026) |
@@ -44205,3 +44206,29 @@ unverändert; `test_evaluation.py::test_a_pin_whose_plate_is_removed_says_nothin
 mit Gegenprobe (ohne `object_ids` rot). Die zwölf Beispielprojekte und `example_v48.p3d` tragen
 Format 48 und Bibliotheksversion 24. Changelog: ja — Stift für Bohrung baut Senkkopf,
 Zylinderkopf und Gewinde passend zur Bohrung.
+
+## RM-559 (Teil): F-i, der Entwurf kommt nach einer gescheiterten Booleschen Rechnung zurück (09.10.2026)
+
+<a id="rm-559-teil-f-i-der-entwurf-kommt-nach-einer-gescheiterten-booleschen-rechnung-zurück-09102026"></a>
+
+**F-i aus dem Entwurf zu RM-559** (Fehlerfall 2.3, Robert „alles machen“): Scheitert die
+Boolesche Rechnung des Schritts, den der dritte Klick anlegte, stand der Entwurf nicht mehr im
+Bild; im Verlauf blieb ein angehaltener Schritt, der Weg führte über den Prüfbericht oder
+Strg+Z und drei neue Klicks.
+
+**Umsetzung** (Paket Z1, Nachprüfung): `DrawFlow` merkt sich Entwurf, Höhe, Herkunft und Art
+des dritten Klicks (`_kept`) und erkennt in `_scene_changed` an `result.stopped_at`, dass die
+Kette an genau diesem Schritt hält. Dann kommt der Entwurf zurück ins Bild
+(`_come_back_failed`), die Leiste nennt die Ursache mit der Stellenzahl aus dem Befund und
+trägt *Reparieren und erneut versuchen* (nur wo `repair_is_available` es zulässt) und
+*Stellen zeigen*. Die Reparatur läuft über `Session.repair_and_retry`; derselbe Schritt rechnet
+danach ohne neuen Klick, und das Werkzeug schließt, sobald er steht. Escape nimmt den
+gescheiterten Schritt samt Reparaturzügen zurück (`_undo_depth`) und legt den Umriss ab wie
+nach H2, Strg+Z lässt den Entwurf mit seiner Höhe stehen, *Stellen zeigen* lässt den Schritt
+stehen und öffnet die Defektkarte (`MainWindow.show_places_of`).
+
+**Nachweis:** `tests/test_draw_ui.py`, drei Fenstertests an `broken_open.stl` ohne Flicken,
+mit einer Tasche, die am offenen Netz mit `NotManifoldError(open_edges=3)` scheitert: Entwurf
+zurück, Satz mit „3 Stellen“, beide Knöpfe; nach *Reparieren* genau ein gerechneter
+`sketch_pocket`, Volumen 20³ − 4·4·1 mm³; Escape nimmt den Schritt und legt den Umriss ab;
+*Stellen zeigen* lässt den Schritt stehen. Am Stand `16734a262` alle drei rot.

@@ -597,15 +597,20 @@ def test_a_single_click_is_no_unsaved_work(window: MainWindow) -> None:
 
 def test_a_value_beyond_the_limit_is_refused(window: MainWindow) -> None:
     """F-d: Die Zahl bleibt markiert stehen, der Satz nennt die Grenze, kein Schritt."""
+    from app.ui.draw_tool import height_limits
+    from app.ui.labels import length, limit_sentence
+
     window.start_drawing()
     flow = window.draw_flow()
     flow.take(("bed", bed_surface(), (0.0, 0.0), (0.0, 0.0, 0.0)))
     flow.aim((40.0, 30.0))
     flow.place()
-    flow.lift_to(5.0)
+    flow.lift = Lift(5.0)
     assert flow.type_first("9")
     assert not flow.type_values([99_999.0])
-    assert flow.entry.isVisibleTo(window.viewport) or flow.entry.fields[0].toolTip()
+    said = limit_sentence(length(99_999.0), length(height_limits()[1]), above=True)
+    assert said in window._announcement, "der Satz nennt die Grenze aus dem Schema"
+    assert flow.entry.fields[0].toolTip() == said
     assert window.session.history.operations == ()
 
 
@@ -721,3 +726,333 @@ def test_the_drawing_step_keeps_its_simple_shape(window: MainWindow) -> None:
     _three_clicks_on_the_bed(window)
     text = window.session.history.operations[-1].params["sketch"]
     assert shapes.simple_shape(sketch_from_text(text)) == "rectangle"
+
+
+# --- Nachprüfung: N1 bis N12 und F-i -------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("op_name", "said"), [("sketch_pocket", "Tasche"), ("sketch_join", "Anfügen")]
+)
+def test_a_chosen_pocket_or_join_refuses_the_bed(
+    window: MainWindow, op_name: str, said: str
+) -> None:
+    """N1: Aus Menü oder Palette gewählt, nimmt die Art das Bett nicht an (Regel 21)."""
+    window.launch_operation(REGISTRY.get(op_name))
+    flow = window.draw_flow()
+    assert flow.intent == op_name
+    flow.take(("bed", bed_surface(), (0.0, 0.0), (0.0, 0.0, 0.0)))
+    assert flow.draft is not None and flow.draft.phase == 0
+    assert said in window._announcement and "Fläche eines Körpers" in window._announcement
+    assert window.session.history.operations == ()
+
+
+def test_a_lost_body_brings_the_outline_back_on_the_bed(window: MainWindow) -> None:
+    """N2: Nach F-k liegt der Umriss auf der Grundebene, *Fertig* führt in die Höhe."""
+    top = _a_box_and_its_top(window)
+    window.start_drawing()
+    flow = window.draw_flow()
+    flow.arm_free()
+    flow.take(("face", top, (0.0, 0.0), (0.0, 0.0, 0.0)))
+    panel = window._sketch_panel
+    assert panel is not None
+    panel.canvas.set_sketch(
+        shapes.rectangle_between((-5.0, -5.0), (5.0, 5.0), panel.canvas.sketch.plane)
+    )
+    window.sketch_finish_button.click()
+    assert flow.draft is not None and flow.draft.outline is not None
+    window.session.undo()
+    assert window.session.wait_for_idle(60_000)
+    QApplication.processEvents()
+    assert window._discarded_sketch is not None
+    window.action_undo()
+    panel = window._sketch_panel
+    assert panel is not None
+    assert panel.canvas.sketch.plane == "plane:xy", "der Umriss selbst liegt auf dem Bett"
+    window.sketch_finish_button.click()
+    assert window.drawing() and flow.draft is not None and flow.draft.outline is not None
+    flow.lift = Lift(4.0)
+    assert flow.settle()
+    assert window.session.wait_for_idle(60_000)
+    assert window.session.history.operations[-1].op == "sketch_extrude"
+
+
+def test_the_overlap_worker_gets_its_own_copies(
+    window: MainWindow, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """N3: Keine geteilte Arbeiterkopie ohne ihr Schloss — und ein exakter Körper bleibt exakt."""
+    import app.ui.draw_flow as module
+    from app.core.brep.kernel import Solid
+    from app.ui import placement_flow
+
+    handed: list[Any] = []
+    original = module._OverlapWorker.__init__
+
+    def noted(self: Any, made: Any, others: list[tuple[str, Any]]) -> None:
+        handed.extend([made, *(other for _id, other in others)])
+        original(self, made, others)
+
+    monkeypatch.setattr(module._OverlapWorker, "__init__", noted)
+    window.session.apply(
+        "Quader",
+        [OperationDraft(op="create_box", params={"width": 20.0, "depth": 20.0, "height": 10.0})],
+    )
+    assert window.session.wait_for_idle(60_000)
+    window.start_drawing()
+    _three_clicks_on_the_bed(window)
+    assert window.draw_flow().wait_for_overlap()
+    assert len(handed) == 2
+    shared = [held[1] for held in placement_flow._worker_copies.values()]
+    scene = [entry.mesh for entry in window.session.last_result.scene.objects.values()]
+    assert not any(any(copy is one for one in shared) for copy in handed)
+    assert not any(any(copy is one for one in scene) for copy in handed)
+    assert isinstance(handed[0], Solid), "der aufgezogene Körper bleibt exakt"
+
+
+def test_the_film_pulls_up_its_plate_with_three_clicks(
+    qt_app: QApplication, window: MainWindow, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """N4: Der Langfilm zeigt den Weg von heute — drei Klicks, keine Skizze, kein Dialog davor."""
+    from app.core.types import Parameter
+    from tools.make_longform_video import pull_up_plate
+
+    class Recorder:
+        app = qt_app
+
+        def __init__(self) -> None:
+            self.window = window
+            self.titles: list[str] = []
+
+        def add(self, title: str, detail: str, seconds: float = 6.0, **_rest: Any) -> None:
+            self.titles.append(title)
+
+        def click(self, title: str, detail: str, **_rest: Any) -> None:
+            self.titles.append(title)
+
+    def no_sketch(*_args: Any, **_kwargs: Any) -> None:
+        raise AssertionError("der Film geht nicht über den Skizzenmodus")
+
+    monkeypatch.setattr(window, "start_sketch", no_sketch)
+    window._show_start_screen(False)  # wie ``_begin_video``: der Film beginnt im Arbeitsbereich
+    assert window.session.add_parameter(
+        Parameter(name="plattenstaerke", value=6.0, unit="mm", minimum=3.0, maximum=12.0)
+    )
+    assert window.session.wait_for_idle(60_000)
+    recorder = Recorder()
+    pull_up_plate(
+        recorder,
+        window.session,
+        (70.0, 45.0, 6.0),
+        {"height": "=@plattenstaerke", "name": "Montagehalter"},
+        bind=("Binden", "Die Höhe folgt dem Projektmaß."),
+        accept=("Übernehmen", "Ein Klick übernimmt."),
+    )
+    operations = window.session.history.operations
+    assert [entry.op for entry in operations] == ["sketch_extrude"]
+    assert operations[-1].params["height"] == "=@plattenstaerke"
+    body = next(iter(window.session.last_result.scene.objects.values()))
+    assert body.mesh.volume == pytest.approx(70.0 * 45.0 * 6.0, rel=1e-6)
+    assert "Zeichnen öffnen" in recorder.titles
+
+
+def test_a_changed_outline_goes_along_to_the_hole_field(window: MainWindow) -> None:
+    """N5: Wer den Umriss im Dialog ändert und auf *Lochfeld* wechselt, behält die Änderung."""
+    window.start_drawing()
+    _three_clicks_on_the_bed(window)
+    window.edit_operation(window.session.history.operations[-1].id)
+    dialog = window._op_dialog
+    assert dialog is not None
+    changed = sketch_to_text(shapes.rectangle_between((0.0, 0.0), (25.0, 15.0)))
+    dialog._editors["sketch"].set_text(changed)
+    choice = _kind_choice(dialog)
+    choice.setCurrentIndex(choice.findData("sketch_revolve"))
+    choice.setCurrentIndex(choice.findData("field_cut"))
+    assert dialog._editors["region_sketch"].text() == changed
+    dialog.reject()
+
+
+def test_a_refused_start_leaves_draw_unpressed(window: MainWindow) -> None:
+    """N6: Sagt *Zeichnen* ab, steht der Knopf nicht gedrückt."""
+    window.start_sketch("")
+    assert window._sketch_panel is not None
+    window._toolbar_sketch.trigger()
+    assert not window.drawing()
+    assert not window._toolbar_sketch.isChecked()
+    window.finish_sketch(keep=False)
+
+
+def test_a_project_change_cancels_the_overlap_check(window: MainWindow) -> None:
+    """N7: Ein Projektwechsel bricht die Überdeckungsprüfung ab; ihre Schwelle ist ein Volumen."""
+    from app.core.scene.cancel import CancelSignal
+    from app.core.units import EPS_DISPLAY
+    from app.ui.draw_flow import OVERLAP_VOLUME
+
+    assert pytest.approx(EPS_DISPLAY**3) == OVERLAP_VOLUME
+
+    class Running:
+        cancelled = CancelSignal()
+
+    flow = window.draw_flow()
+    running = Running()
+    flow._overlap = running  # type: ignore[assignment]
+    window.session.start_new()
+    assert window.session.wait_for_idle(60_000)
+    QApplication.processEvents()
+    assert running.cancelled.is_cancelled
+
+
+def test_the_escape_key_is_named_by_qt(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """N8: Der Tastenname im Tooltip von *Schließen* kommt aus Qt (Regel 20)."""
+    import app.ui.draw_bar as module
+
+    class French:
+        class SequenceFormat:
+            NativeText = 0
+
+        def __init__(self, _key: Any) -> None:
+            pass
+
+        def toString(self, _form: Any) -> str:  # noqa: N802 — Qt-Name
+            return "Échap"
+
+    monkeypatch.setattr(module, "QKeySequence", French)
+    bar = module.DrawBar()
+    assert "Échap" in bar.close_button.toolTip()
+    bar.deleteLater()
+
+
+def test_the_resume_after_recognition_comes_through_the_scene(window: MainWindow) -> None:
+    """N10, Abnahme 10: Das nächste Bild nach der Erkennung nimmt Klick 1 an derselben Stelle."""
+    top = _a_box_and_its_top(window)
+    flow = window.draw_flow()
+    point = (top.frame.origin[0] + 3.0, top.frame.origin[1] + 2.0, top.frame.origin[2])
+    flow._resume_at = (top.body, point, False)
+    window.session.apply(
+        "Verschieben",
+        [OperationDraft(op="translate_object", inputs=(top.body,), params={"x": 0.0})],
+    )
+    assert window.session.wait_for_idle(60_000)
+    QApplication.processEvents()
+    assert window.drawing() and flow.draft is not None and flow.draft.phase == 1
+    assert flow.draft.surface is not None and flow.draft.surface.body == top.body
+    reach = max(flow._step(top.frame), 1.0)
+    assert flow.draft.first == pytest.approx((3.0, 2.0), abs=reach), "an derselben Stelle"
+
+
+def test_enter_on_plate_two_sets_the_offset_of_the_body(
+    window: MainWindow, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """N10, G4: Auf Platte 2 steht der Entwurf beim Körper, nicht eine Bettbreite daneben."""
+    top = _a_box_and_its_top(window)
+    window.object_tree.select_object(top.body)
+    monkeypatch.setattr(window, "drawn_face_of_the_selection", lambda: top)
+    monkeypatch.setattr(window.viewport, "view_offset_of", lambda _body: (260.0, 0.0, 0.0))
+    window.start_drawing()
+    flow = window.draw_flow()
+    flow.press_enter()
+    assert flow.draft is not None and flow.draft.shift == (260.0, 0.0, 0.0)
+
+
+def test_an_unchanged_restored_outline_is_not_offered_twice(window: MainWindow) -> None:
+    """N12: Zurückgeholt und unverändert verworfen — dann gehört Strg+Z wieder dem Verlauf."""
+    window.session.apply("Quader", [OperationDraft(op="create_box")])
+    assert window.session.wait_for_idle(60_000)
+    _an_outline_waiting_for_its_height(window)
+    window._escape()
+    window.action_undo()
+    assert window._sketch_panel is not None
+    window.finish_sketch(keep=False)
+    assert window._discarded_sketch is None
+    window.action_undo()
+    assert window.session.wait_for_idle(60_000)
+    assert window._sketch_panel is None
+    assert window.session.history.operations == (), "Strg+Z nahm den Quader"
+
+
+def _an_open_box_with_a_failing_pocket(window: MainWindow, monkeypatch: pytest.MonkeyPatch) -> Any:
+    """Ein offenes Netz, an dem die Tasche scheitert, bis es repariert ist (F-i)."""
+    import dataclasses
+
+    from app.core.errors import NotManifoldError
+    from tests.helpers import MESHES
+
+    window.session.import_model(MESHES / "broken_open.stl")
+    assert window.session.wait_for_idle(120_000)
+    window.session.change_params(window.session.history.operations[0].id, {"mend": False})
+    assert window.session.wait_for_idle(120_000)
+    spec = REGISTRY.get("sketch_pocket")
+    original = spec.fn
+
+    def failing(ctx: Any) -> Any:
+        if not getattr(ctx.inputs[0].mesh, "is_watertight", True):
+            raise NotManifoldError(open_edges=3)
+        return original(ctx)
+
+    monkeypatch.setitem(REGISTRY._ops, "sketch_pocket", dataclasses.replace(spec, fn=failing))
+    entry = next(iter(window.session.last_result.scene.objects.values()))
+    top = max(
+        (key for key, feature in entry.features.items() if feature.kind == "face"),
+        key=lambda key: entry.features[key].params["normal"][2],
+    )
+    surface = face_surface(entry, top)
+    assert surface is not None
+    window.start_drawing()
+    flow = window.draw_flow()
+    flow.take(("face", surface, (-2.0, -2.0), (0.0, 0.0, 0.0)))
+    assert flow.type_values([4.0, 4.0]), "getippt: Ein Klick fiele aufs Raster"
+    flow.lift = Lift(-1.0)
+    assert flow.settle()
+    assert window.session.wait_for_idle(120_000)
+    QApplication.processEvents()
+    return flow
+
+
+def test_a_failed_pocket_comes_back_and_repair_computes_the_same_step(
+    window: MainWindow, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """F-i: Der Entwurf kommt zurück, die Leiste nennt die Ursache, *Reparieren* rechnet weiter."""
+    flow = _an_open_box_with_a_failing_pocket(window, monkeypatch)
+    assert window.drawing() and flow.failed
+    bar = window.draw_bar
+    assert "3 Stellen" in bar.state.text()
+    assert bar.repair.isVisibleTo(bar) and bar.places.isVisibleTo(bar)
+    bar.repair.click()
+    assert window.session.wait_for_idle(120_000)
+    QApplication.processEvents()
+    assert not window.drawing(), "derselbe Schritt ist gerechnet, ohne neuen Klick"
+    result = window.session.last_result
+    assert result.stopped_at is None
+    operations = [entry.op for entry in window.session.history.operations]
+    assert operations.count("sketch_pocket") == 1 and "repair" in operations
+    body = next(iter(result.scene.objects.values()))
+    assert body.mesh.volume == pytest.approx(20.0**3 - 4.0 * 4.0 * 1.0, rel=1e-6)
+
+
+def test_escape_after_a_failed_pocket_takes_the_step_and_lays_the_outline_aside(
+    window: MainWindow, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """F-i: Escape nimmt den gescheiterten Schritt zurück, Strg+Z holt den Umriss in den Editor."""
+    flow = _an_open_box_with_a_failing_pocket(window, monkeypatch)
+    assert flow.failed
+    window._escape()
+    assert window.session.wait_for_idle(120_000)
+    assert not window.drawing()
+    assert [entry.op for entry in window.session.history.operations] == ["load"]
+    assert window._discarded_sketch is not None
+    window.action_undo()
+    assert window._sketch_panel is not None and window._sketch_panel.sketch_text()
+
+
+def test_places_after_a_failed_pocket_shows_the_defect_map(
+    window: MainWindow, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """F-i: *Stellen zeigen* lässt den Schritt stehen und zeigt die Karte der Stellen."""
+    shown: list[str] = []
+    monkeypatch.setattr(window, "show_places_of", shown.append)
+    flow = _an_open_box_with_a_failing_pocket(window, monkeypatch)
+    window.draw_bar.places.click()
+    assert not window.drawing() and not flow.failed
+    assert shown == [next(iter(window.session.last_result.scene.objects))]
+    assert window.session.history.operations[-1].op == "sketch_pocket"

@@ -97,7 +97,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-556 — Filamente aus der linken Spalte in die Kopfleiste](#rm-556) | Bedienung und Darstellung | Robert, 08.10.: Knopf oben, Klick zeigt die Filamente des Projekts und den Weg ins Filamentlager |
 | [RM-557 — Nach einem Filamentwechsel bleibt der Körper in der alten Farbe, und Solidon rechnet lange](#rm-557) | Bedienung und Darstellung | Robert, 08.10.: eine Farbänderung färbt sofort um, ohne die Geometrie neu zu rechnen |
 | [RM-558 — Nach dem Einsetzen eines Bausteins bleibt ein Maßfeld „Y … mm“ in der Ansicht stehen](#rm-558) | Bedienung und Darstellung | Robert, 08.10. (Bild): Feld verschwindet mit dem Einsetzen |
-| [RM-559 — Körper in der Szene mit drei Klicks aufziehen, als Körper oder als Ausschnitt](#rm-559) | Bedienung und Darstellung | Gebaut (Paket Z1, 08.10.): Werkzeug *Zeichnen*, Strg+Umschalt+E; offen F-i (Entwurf nach gescheiterter Boolescher Rechnung), die Abnahme am echten Fenster und die Nachzählung durch bedienlogik |
+| [RM-559 — Körper in der Szene mit drei Klicks aufziehen, als Körper oder als Ausschnitt](#rm-559) | Bedienung und Darstellung | Gebaut (Paket Z1, 08.10.): Werkzeug *Zeichnen*, Strg+Umschalt+E; offen die Abnahme am echten Fenster und die Nachzählung durch bedienlogik |
 | [RM-560 — *Formen* arbeitet schwach](#rm-560) | Bedienung und Darstellung | Robert, 08.10.: erst messen, was nicht trägt, dann überarbeiten |
 | [RM-561 — *Zeichnen*, *Formen* und *Skelett* sind zu kompliziert bedient](#rm-561) | Bedienung und Darstellung | Zeichnen gebaut (Paket Z1, 08.10.): ein Weg vom Umriss zum Körper; offen Formen und Skelett (Paket Z2) und die Abnahme am echten Fenster |
 | [RM-569 — Ein beim Zuweisen neu angelegtes Filament bleibt gespeichert, im Lager und im Projekt](#rm-569) | Bedienung und Darstellung | Robert, 08.10.: Code legt es sofort im Lager an, das Projekt trägt Name, Material und Farbe an der Bindung; Zusammenspiel mit Strg+Z, Speichern und fremdem Rechner fehlt als Test |
@@ -4204,11 +4204,11 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   Editor geht mit Escape oder einem verschwundenen Ziel nicht verloren, null bleibt null, die
   getippte Richtung bleibt, eine gewählte Tasche bleibt Tasche, ein offener Umriss bleibt im
   Editor, Überdeckung als echtes Volumen im Arbeiter, Maßänderung um den festen Punkt; Tests
-  für Abnahme 10 und F-d bis F-k. Offen: **F-i** — scheitert die Boolesche Rechnung des
-  neuen Schritts, steht der Entwurf nicht mehr im Bild; der Schritt bleibt im Verlauf, der Weg
-  ist der Befund mit *Reparieren und erneut versuchen* oder Strg+Z und neu zeichnen. Dazu Fang,
-  Drahtform, Hervorhebung und Tastatur am echten Fenster, die Nachzählung durch `bedienlogik`,
-  Handbuchbilder und Anleitung *Einen Körper aufziehen* beim Release.
+  für Abnahme 10 und F-d bis F-k. Nach der Nachprüfung: die gewählte Art nimmt das Bett nicht
+  an, ein Umriss nach F-k liegt auf der Grundebene, eigene Kopien im Überdeckungsarbeiter, der
+  Langfilm zieht mit drei Klicks auf, F-i gebaut ([Archiv](ROADMAP-ARCHIV.md#rm-559-teil-f-i-der-entwurf-kommt-nach-einer-gescheiterten-booleschen-rechnung-zurück-09102026)).
+  Offen: Fang, Drahtform, Hervorhebung und Tastatur am echten Fenster, die Nachzählung durch
+  `bedienlogik`, Handbuchbilder und Anleitung *Einen Körper aufziehen* beim Release.
 
 <a id="rm-560"></a>
 

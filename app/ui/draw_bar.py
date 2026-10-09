@@ -10,8 +10,10 @@ Tooltip, damit man sie nebenbei lernt (R und C wie im Skizzeneditor).
 from __future__ import annotations
 
 from PySide6.QtCore import Qt, Signal
+from PySide6.QtGui import QKeySequence
 from PySide6.QtWidgets import QButtonGroup, QHBoxLayout, QLabel, QPushButton, QVBoxLayout, QWidget
 
+from app.core.errors import REPAIR_AND_RETRY, SHOW_LOCATIONS
 from app.i18n import tr
 from app.ui.draw_tool import DRAW_SHAPES
 from app.ui.style import NORMAL, TIGHT
@@ -26,6 +28,10 @@ class DrawBar(QWidget):
     """*Freie Form …*: Der nächste Klick öffnet den Skizzeneditor auf seiner Fläche."""
     recognitionRequested = Signal()
     """*Merkmale an dieser Stelle erkennen* an einer Stelle ohne erkannte Fläche (F-b)."""
+    repairRequested = Signal()
+    """*Reparieren und erneut versuchen* nach einer gescheiterten Rechnung (F-i)."""
+    placesRequested = Signal()
+    """*Stellen zeigen* nach einer gescheiterten Rechnung (F-i)."""
     closeRequested = Signal()
     """*Schließen*: der sichtbare Ausgang neben Escape, für eine Maus ohne Tastatur (G10)."""
 
@@ -71,9 +77,23 @@ class DrawBar(QWidget):
         self.recognise.setVisible(False)
         self.recognise.clicked.connect(self.recognitionRequested)
 
+        # Die zwei Auswege nach einer gescheiterten Rechnung (F-i), mit den
+        # Wörtern der Handlungen aus dem Kern — derselbe Text wie im Prüfbericht.
+        self.repair = QPushButton(str(REPAIR_AND_RETRY.label), self)
+        self.repair.setFocusPolicy(Qt.FocusPolicy.TabFocus)
+        self.repair.setVisible(False)
+        self.repair.clicked.connect(self.repairRequested)
+        self.places = QPushButton(str(SHOW_LOCATIONS.label), self)
+        self.places.setFocusPolicy(Qt.FocusPolicy.TabFocus)
+        self.places.setVisible(False)
+        self.places.clicked.connect(self.placesRequested)
+
         self.close_button = QPushButton(tr("Schließen"), self)
         self.close_button.setFocusPolicy(Qt.FocusPolicy.TabFocus)
-        leave = f"{tr('Das Werkzeug schließen, ohne einen Körper anzulegen.')} (Esc)"
+        # Der Tastenname aus Qt, nicht von Hand: Im Französischen heißt die
+        # Taste „Échap“ (Regel 20, N8).
+        key = QKeySequence(Qt.Key.Key_Escape).toString(QKeySequence.SequenceFormat.NativeText)
+        leave = f"{tr('Das Werkzeug schließen, ohne einen Körper anzulegen.')} ({key})"
         self.close_button.setToolTip(leave)
         self.close_button.setAccessibleDescription(leave)
         self.close_button.clicked.connect(self.closeRequested)
@@ -85,6 +105,8 @@ class DrawBar(QWidget):
         controls.addWidget(self.circle)
         controls.addStretch(1)
         controls.addWidget(self.recognise)
+        controls.addWidget(self.repair)
+        controls.addWidget(self.places)
         controls.addWidget(self.free)
         controls.addWidget(self.close_button)
 
@@ -103,4 +125,17 @@ class DrawBar(QWidget):
         (self.circle if shape == "circle" else self.rectangle).setChecked(True)
         self.rectangle.setEnabled(shaping)
         self.circle.setEnabled(shaping)
+        self.free.setEnabled(True)
         self.recognise.setVisible(recognise)
+        self.repair.setVisible(False)
+        self.places.setVisible(False)
+
+    def show_failure(self, text: str, *, repair: bool, places: bool) -> None:
+        """Die Rechnung des neuen Schritts ist gescheitert (F-i): Ursache und Auswege."""
+        self.state.setText(text)
+        self.rectangle.setEnabled(False)
+        self.circle.setEnabled(False)
+        self.free.setEnabled(False)
+        self.recognise.setVisible(False)
+        self.repair.setVisible(repair)
+        self.places.setVisible(places)

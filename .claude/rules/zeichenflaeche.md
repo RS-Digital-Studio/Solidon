@@ -34,14 +34,26 @@ RM-561; Bauplan §30.1). Warum: `konzepte/begruendungen/regel-zeichenflaeche.md`
   (F-h) sagen es mit Knöpfen in der Statuszeile, nichts geschieht von selbst.
   Eine Absage beim Anlegen lässt den Entwurf stehen.
 * **Überdeckung ist echtes Volumen:** Die Hüllquader filtern vor, die
-  Schnittmenge rechnet `_OverlapWorker` an Arbeiterkopien; der Satz kommt
-  erst mit ihr, eine Tasche wartet auf ihr neues Ergebnis (`_before_step`).
+  Schnittmenge rechnet `_OverlapWorker` an eigenen Kopien (`_private_body`,
+  exakt bleibt exakt; nie die geteilten aus `for_a_worker` ohne ihr Schloss),
+  Schwelle `OVERLAP_VOLUME`; der Satz kommt erst mit ihr, eine Tasche wartet
+  auf ihr neues Ergebnis (`_before_step`). Projektwechsel und Fensterabbau
+  brechen sie ab.
+* **Scheitert die Rechnung des neuen Schritts (F-i)**, kommt der Entwurf
+  zurück (`result.stopped_at` in `_scene_changed`, `_kept`): die Ursache mit
+  Stellenzahl in der Leiste, *Reparieren und erneut versuchen* rechnet
+  denselben Schritt ohne neuen Klick, *Stellen zeigen* lässt ihn stehen,
+  Escape nimmt ihn samt Reparaturzügen zurück und legt den Umriss ab.
+* **Die gewählte Art gilt** (`intent`): Tasche und Anfügen aus Menü oder
+  Palette nehmen das Bett nicht an und sagen es (Regel 21).
 * **Escape nimmt nur Unfertiges** (das offene Maßfeld, dann den Entwurf),
   **Strg+Z im Entwurf den letzten Klick** (`DrawDraft.back`), danach den
   Schritt; ohne Klick sagt es den Weg. Ein Umriss aus dem Editor ist kein
   Unfertiges: Strg+Z führt in den Editor zurück, Escape, *Schließen* und ein
   verschwundenes Ziel (F-k) legen ihn als verworfene Zeichnung ab
-  (`return_the_outline`). Ungesichert ist nur er, nicht ein Klick.
+  (`return_the_outline`; ohne Körper liegt er danach auf `plane:xy`).
+  Ungesichert ist nur er, nicht ein Klick. Ein zurückgeholter und unverändert
+  wieder verworfener Umriss wird nicht noch einmal angeboten.
 * **Andere Handlungen warten** (`_quiet_command_allowed`,
   `_drawing_refuses`) und sagen es im Tooltip (`_DRAWING_FIRST`); *Zeichnen*
   steht gedrückt, ein zweiter Druck schließt.

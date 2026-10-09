@@ -3651,6 +3651,9 @@ class MainWindow(QMainWindow):
         """Die Vorschau der laufenden Formsitzung, Zug für Zug (RM-366)."""
         self._discarded_sketch: _DiscardedSketch | None = None
         """Die zuletzt verworfene Zeichnung, solange Strg+Z sie noch meint."""
+        self._restored_text: str | None = None
+        """Der Text eines eben zurückgeholten Umrisses — unverändert verworfen,
+        wird er nicht noch einmal angeboten (N12)."""
         self._sketch_body: ObjectId | None = None
         """Der Körper, für den gezeichnet wird — ``None`` heißt „neu zeichnen"
         (Bedienabnahme Zeichnen, Abschnitt 7)."""
@@ -5403,7 +5406,7 @@ class MainWindow(QMainWindow):
             # Klicks, die Richtung des dritten entscheidet die Art. Auch
             # *Erzeugen → Zeichnen …* und im Fusion-Schema E kommen hier an.
             # Eine gewählte Tasche bleibt Tasche: Getippt ist die Tiefe (M4).
-            self.start_drawing(inward=spec.name == POCKET_OP)
+            self.start_drawing(intent=spec.name)
         elif _has_sketch_param(spec):
             self.start_sketch(spec.name)
         elif _has_armature_param(spec):
@@ -13163,14 +13166,12 @@ class MainWindow(QMainWindow):
 
         if shift is None:
             shift = self.viewport.view_offset_of(surface.body)
-        self.tools.close_tool()
-        self.tools.setVisible(False)
-        self.draw_bar.setVisible(True)
+        self.open_draw_bar()
         self.draw_flow().start_with_outline(
             sketch_from_text(text),
             surface,
             shift,
-            inward=origin.op_name == POCKET_OP,
+            intent=origin.op_name,
             origin=origin,
         )
         self._update_actions()
@@ -13947,7 +13948,10 @@ class MainWindow(QMainWindow):
         Eine leere Zeichnung wird nicht gemerkt — ein Angebot, nichts
         zurückzuholen, wäre eine Meldung ohne Inhalt.
         """
-        if not text:
+        restored, self._restored_text = self._restored_text, None
+        if not text or text == restored:
+            # Ein eben zurückgeholter, unveränderter Umriss wird nicht noch
+            # einmal angeboten: Sonst käme Strg+Z nie mehr am Verlauf an (N12).
             self._discarded_sketch = None
             return
         plane = ""
@@ -13998,6 +14002,8 @@ class MainWindow(QMainWindow):
             step=discarded.step,
             field_name=discarded.field_name,
         )
+        if self._sketch_panel is not None:
+            self._restored_text = self._sketch_panel.sketch_text()
         self.announce(tr("Zeichnung zurückgeholt."))
         return True
 
@@ -14407,8 +14413,12 @@ class MainWindow(QMainWindow):
         if self.drawing():
             # Wie Escape: Ein Umriss aus dem Editor bleibt für Strg+Z (H2).
             self.draw_flow().discard()
-            return
-        self.start_drawing()
+        else:
+            self.start_drawing()
+        # Qt hat den Knopf schon umgeschaltet; gilt eine Absage, gilt sie auch
+        # am Knopf (N6).
+        with QSignalBlocker(self._toolbar_sketch):
+            self._toolbar_sketch.setChecked(self.drawing())
 
     # --- Körper aufziehen (RM-559) ----------------------------------------------
 
@@ -14428,12 +14438,12 @@ class MainWindow(QMainWindow):
         """Ob gerade ein Körper aufgezogen wird."""
         return self._draw_flow is not None and self._draw_flow.active
 
-    def start_drawing(self, shape: str = "", *, inward: bool = False) -> None:
+    def start_drawing(self, shape: str = "", *, intent: str = "") -> None:
         """Das Werkzeug *Zeichnen* öffnen — Ansicht, Projektion und Nachbarn bleiben.
 
         Gesperrt wie jede schreibende Handlung: ein Halt der Kette nennt seinen
         Schritt, ohne exakten Kern sagt der Satz der Skizzen-Operationen, was
-        fehlt (F-j). ``inward`` ist die gewählte Tasche (M4).
+        fehlt (F-j). ``intent`` ist die gewählte Art aus Menü oder Palette (N1).
         """
         if not self._quiet_command_allowed() or self.drawing():
             return
@@ -14451,12 +14461,20 @@ class MainWindow(QMainWindow):
             return
         if self._quiet_host is not None:
             self.end_quiet_placement()
+        self.open_draw_bar()
+        self.draw_flow().start(shape, intent=intent)
+        self._update_actions()
+        self._show_invitation()
+
+    def open_draw_bar(self) -> None:
+        """Die Leiste des Aufziehens statt der Werkzeugzeile — auch für den Entwurf nach F-i."""
         self.tools.close_tool()
         self.tools.setVisible(False)
         self.draw_bar.setVisible(True)
-        self.draw_flow().start(shape, inward=inward)
-        self._update_actions()
-        self._show_invitation()
+
+    def outline_origin(self, surface: DrawSurface) -> _OutlineOrigin:
+        """Die Herkunft eines aufgezogenen Umrisses ohne Editor: seine Fläche, sein Körper (F-i)."""
+        return _OutlineOrigin(op_name="", plane=surface.plane, body=surface.body or "")
 
     def _drawing_closed(self) -> None:
         """Das Werkzeug ist zu: die Werkzeugzeile kommt zurück."""
@@ -14478,14 +14496,18 @@ class MainWindow(QMainWindow):
         (:meth:`restore_discarded_sketch`) — solange nichts anderes geschah.
         """
         from app.core.sketch.planes import is_feature_plane
+        from app.core.sketch.serialize import sketch_from_text, sketch_to_text
 
         result = self.session.last_result
         body = origin.body if result is not None and origin.body in result.scene.objects else ""
         plane = origin.plane
         if not body and is_feature_plane(plane):
             # Die Fläche gehört einem Körper, den es nicht mehr gibt (F-k):
-            # Der Umriss bleibt, gezeichnet wird auf der Grundebene weiter.
-            plane = ""
+            # Der Umriss bleibt und **liegt** auf der Grundebene, nicht nur die
+            # Wahl daneben — sonst führte *Fertig* in einen Dialog, der die
+            # tote Fläche nicht findet (N2).
+            plane = "plane:xy"
+            text = sketch_to_text(replace(sketch_from_text(text), plane=plane))
         if now:
             self.start_sketch(origin.op_name, text=text, plane=plane, body=body or None)
             return
@@ -21356,12 +21378,17 @@ class MainWindow(QMainWindow):
         if variant is not None:
 
             def switch_kind() -> None:
-                """Die Zeichnung geht mit, auch wenn die neue Art ihr Feld anders nennt."""
+                """Die Zeichnung geht mit, auch wenn die neue Art ihr Feld anders nennt.
+
+                Mit der zuletzt gezeigten, nicht der beim Öffnen (N5): Wer den
+                Umriss im Dialog geändert hat, meint den geänderten.
+                """
+                shown = str(dialog.values().get(_sketch_param(dialog.spec.name), "") or "")
                 picked = chosen_spec()
                 dialog.switch_variant(picked)
                 editor = dialog._editors.get(_sketch_param(picked.name))
                 if isinstance(editor, SketchField) and not editor.text().strip():
-                    editor.set_text(drawing_text)
+                    editor.set_text(shown or drawing_text)
 
             variant.currentIndexChanged.connect(switch_kind)
             variant.currentIndexChanged.connect(dialog.valuesChanged)
@@ -25906,8 +25933,15 @@ class MainWindow(QMainWindow):
         if not self._quiet_command_allowed():
             return
         object_id = self._object_of(error)
+        if object_id:
+            # Als Funktion der Klasse: Die Prüfstände des Berichts rufen diesen
+            # Weg an einem Stellvertreter ohne die übrigen Methoden des Fensters.
+            MainWindow.show_places_of(self, object_id)
+
+    def show_places_of(self, object_id: ObjectId) -> None:
+        """Die Defektkarte eines Körpers — *Stellen zeigen* aus Fehler und Aufziehen (F-i)."""
         result = self.session.last_result
-        entry = result.scene.objects.get(object_id) if result and object_id else None
+        entry = result.scene.objects.get(object_id) if result else None
         if entry is None:
             return
         with self.feature_dock.held():
@@ -27656,6 +27690,8 @@ class MainWindow(QMainWindow):
             seal_dialog.reject()
         for seal_flow in self.findChildren(SealFlow):
             seal_flow.close()
+        if self._draw_flow is not None:
+            self._draw_flow.cancel_overlap()
         self.session.cancel()
         session_idle = self.session.wait_for_idle(timeout_ms)
         # Die Analysekarte hat einen eigenen Schalter — ohne ihn läuft sie
