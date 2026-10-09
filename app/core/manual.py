@@ -1610,9 +1610,9 @@ INTRODUCTION: Final[tuple[Page, ...]] = (
         title=_("Freischaltung"),
         body=_(
             "**Diese Version ist eine vollständige, befristete Demo.** Bis einschließlich "
-            "30. Oktober 2026 ist Solidon ohne Lizenzschlüssel vollständig "
+            "30. November 2026 ist Solidon ohne Lizenzschlüssel vollständig "
             "freigeschaltet, und die Statuszeile zählt die Tage. Danach startet diese "
-            "Demo nicht mehr; Ihre Projekte bleiben erhalten.\n\n"
+            "Demo nicht mehr. Ihre Projekte bleiben erhalten.\n\n"
             "**Die spätere Verkaufsversion hat zunächst keine Testphase.** Ohne "
             "Freischaltung bleibt dort alles Lesende offen, Modelle öffnen, ansehen, "
             "vermessen. Freischaltung brauchen Änderungen am Modell, der Export, die "

@@ -890,7 +890,7 @@ def test_a_pipe_bore_is_recognised_as_its_pipe_thread() -> None:
 
     assert size_for_thread(18.7) == {"size": "G1/2", "internal": True}
     said = str(thread_advice(18.7))
-    assert "G1/2" in said and "Metrisch" in said, said
+    assert "G1/2" in said and "metrisch nur ein eigenes" in said, said
     before = standards.shown_thread_families()
     try:
         standards.set_shown_thread_families(("metric", "UNC", "UNF"))
@@ -912,7 +912,7 @@ def test_a_bore_between_two_series_names_both_and_preselects_metric() -> None:
     chosen = size_for_thread(bore)
     said = str(thread_advice(bore))
     assert chosen["size"] == "M16"
-    assert "M16" in said and "UNC" in said and "Vorgewählt" in said, said
+    assert "M16" in said and "UNC" in said and "vorgewählt ist M16" in said, said
 
 
 def test_only_metric_shown_keeps_the_old_preselection() -> None:

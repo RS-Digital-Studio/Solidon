@@ -3246,6 +3246,7 @@ class MainWindow(QMainWindow):
             self._window_shortcut(
                 QKeySequence(f"Alt+{index}"),
                 weak_slot(self, lambda view, name: view.tools.toggle(name), key),
+                self._tool_command_title(key),
             )
 
         self._recent_box: list[list[Path]] = []
@@ -8859,9 +8860,15 @@ class MainWindow(QMainWindow):
         self._store_settings()
         self.announce(tr("Druckplatte wieder da.") if visible else tr("Druckplatte ausgeblendet."))
 
-    def _window_shortcut(self, sequence: QKeySequence, invoke: Callable[[], None]) -> None:
-        """Eine Fensteraktion, die auch herausgezogene Reiter unverändert teilen."""
-        action = QAction(self)
+    def _window_shortcut(
+        self, sequence: QKeySequence, invoke: Callable[[], None], text: str = ""
+    ) -> None:
+        """Eine Fensteraktion, die auch herausgezogene Reiter unverändert teilen.
+
+        ``text`` ist der Name, unter dem derselbe Befehl in
+        :meth:`window_commands` steht: eine Taste, ein Befehl, ein Name.
+        """
+        action = QAction(text, self)
         action.setShortcut(sequence)
         action.setShortcutContext(Qt.ShortcutContext.WindowShortcut)
         action.triggered.connect(lambda _checked=False: invoke())
@@ -11903,12 +11910,16 @@ class MainWindow(QMainWindow):
         }
         for key, tool in self.tools.tools().items():
             commands[f"tool.{key}"] = (
-                tr("{name}: {value}", name=strip_title(), value=tool.title),
+                self._tool_command_title(key),
                 tool.shortcut,
                 lambda name=key: self.tools.toggle(name),
             )
         commands.update(self._menu_commands(commands))
         return commands
+
+    def _tool_command_title(self, key: str) -> str:
+        """Wie ein Werkzeug der Leiste als Befehl heißt („Ansicht: Schnitt“)."""
+        return tr("{name}: {value}", name=strip_title(), value=self.tools.tools()[key].title)
 
     def _menu_commands(self, known: dict[str, tuple[str, str, Any]]) -> dict[str, Any]:
         """Alles Übrige aus der Menüleiste — sie ist die Quelle, nicht eine

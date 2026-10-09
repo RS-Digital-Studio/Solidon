@@ -1050,8 +1050,7 @@ def thread_advice(diameter: float) -> TranslatableText:
     others = [entry for entry in _fitting_sizes(diameter, shown) if entry != size]
     if size is not None and size != CUSTOM_SIZE and others:
         return _(
-            "In diese Bohrung passen {sizes}. Vorgewählt ist {size}, die anderen stehen unter "
-            "„Größe“.",
+            "Es passen {sizes}, vorgewählt ist {size}, die übrigen unter „Größe“.",
             sizes=", ".join((str(size), *others)),
             size=size,
         )
@@ -1066,8 +1065,7 @@ def thread_advice(diameter: float) -> TranslatableText:
         custom = custom_thread_for(diameter)
         if custom is not None:
             return _(
-                "In diese Bohrung passt ein Innengewinde {size}. Metrisch nur ein eigenes Maß "
-                "Ø {diameter}, Steigung {pitch}.",
+                "Es passt {size}, metrisch nur ein eigenes Maß Ø {diameter}, Steigung {pitch}.",
                 size=size,
                 diameter=format_length(custom[0]),
                 pitch=format_length(custom[1]),
