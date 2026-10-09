@@ -65,7 +65,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-201 — Ein hohler Körper hält die 300 ms der Schichtanalyse nicht](#rm-201) | Geometrie, Erkennung und Druckvorbereitung | Unabhängige Clipper-Säulen, gerichtete Verschachtelung und `ring_nesting` gebaut, Hohlkugel bitgleich in 1,2–1,4 s; Mitre-Öffnung über Clipper und Zertifikate gemessen und verworfen; 300 ms verfehlt; entschieden (Robert, 06.10.): das Ziel bleibt, ein weiterer Hebel wird gesucht |
 | [RM-217 — Die Zuordnungsfrage zeigt das alte Merkmal nicht im Bild](#rm-217) | Geometrie, Erkennung und Druckvorbereitung | Altmerkmal und Kandidat werden gemeinsam markiert; Kern-, Ansichts- und Regressionstests grün. Offen: echter Fensterbeleg im Release unter RM-213 |
 | [RM-572 — Der Prüfbericht nennt keine Stelle, wo viele kleine Überhänge Stützen verlangen](#rm-572) | Geometrie, Erkennung und Druckvorbereitung | Text für „viele kleine Überhänge zusammen“ und eine Feldfrage im Budget §31 |
-| [RM-584 — Die Stützart folgt der Deckenform, und hohe Bäume stehen stabil](#rm-584) | Geometrie, Erkennung und Druckvorbereitung | Hybrid oder normal unter flachen Decken, Baumwände und Fuß ab etwa 100 mm, Spitzenabstand weiterer Materialien |
+| [RM-584 — Die Stützart folgt der Deckenform, und hohe Bäume stehen stabil](#rm-584) | Geometrie, Erkennung und Druckvorbereitung | Fuß hoher Bäume, Spitzenabstand weiterer Materialien |
 | [RM-585 — Bögen, die sich zwischen ihren Beinen schließen, tragen sich selbst](#rm-585) | Geometrie, Erkennung und Druckvorbereitung | Schließfrage für weite Bögen, Brückenregel für die letzte Spanne |
 | [RM-586 — Feine Schichten, wo das Modell feine Formen hat](#rm-586) | Geometrie, Erkennung und Druckvorbereitung | Variable Schichthöhe über die 3MF, Deckschichten mindestens 0,8 mm |
 | [RM-587 — Lange Brücken und steile Überhänge drucken sauber](#rm-587) | Geometrie, Erkennung und Druckvorbereitung | Dicke Brücke und Fluss über langen Brücken, Zusatzwände an steilen Überhängen |
@@ -104,6 +104,8 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-685 — *Druckoptimal ausrichten* behält eine stehende Lage mit dem Satz „braucht keine Stütze“, während die Schichtanalyse Stützraum zählt](#rm-685) | Geometrie, Erkennung und Druckvorbereitung | Regression gegenüber v0.5.0 im Stützraum (gewollt seit v0.5.1): Satz und Kennzahl widersprechen sich |
 | [RM-690 — Angeboten, aber mit den Vorgaben nicht ausführbar: Textur, Merkmal drehen, Formschräge, Einzelteile, Drehkörper](#rm-690) | Geometrie, Erkennung und Druckvorbereitung | Fünf Handlungen halten mit ihren eigenen Vorgaben an oder werden an Stellen angeboten, wo sie nicht gelten |
 | [RM-691 — Stift am Schlüsselloch der Halter hat je Kern eine andere Form](#rm-691) | Geometrie, Erkennung und Druckvorbereitung | Ringhalter und Ablage: am Netz glatt, exakt mit Kopf; Hohlraumkette angleichen und beide Kerne geometrisch gegenprüfen |
+| [RM-698 — Sparen, was der Druck nicht merkt: Speicher großer Modelle und ein gemeinsamer druckgleich-Vergleich](#rm-698) | Geometrie, Erkennung und Druckvorbereitung | Speicher am großen Modell messen; Vergleichshelfer für §11.2 bauen; Dreiecksindizes und einfach genau gehaltene Ecken mit Leitplanken prüfen |
+| [RM-699 — Ersteinrichtung nimmt Düsen bis 10 mm an, der Druckdialog bis 2 mm](#rm-699) | Geometrie, Erkennung und Druckvorbereitung | Obergrenze an einer Konstante festmachen und entscheiden, ob große Düsen (Granulat) dazugehören |
 | [RM-070 — SpaceMouse auf macOS und Linux am echten Gerät abnehmen](#rm-070) | Bedienung und Darstellung | Die Rampe ist stetig und getestet, die Bildrate an 815 104 Dreiecken gemessen (`7ff34c67`: 16,7 → 8,7 ms im Median); offen bleiben Linux, die 3DxWare-Mausemulation, das Gerät selbst und die Rampe im Skizzenmodus (aus RM-183) |
 | [RM-204 — Ein Merkmalklick baut alle Handlungen des Fensters neu](#rm-204) | Bedienung und Darstellung | Abnahme am echten Fenster beim Release (RM-213) |
 | [RM-559 — Körper in der Szene mit drei Klicks aufziehen, als Körper oder als Ausschnitt](#rm-559) | Bedienung und Darstellung | Gebaut (Paket Z1, 08.10.): Werkzeug *Zeichnen*, Strg+Umschalt+E; offen die Abnahme am echten Fenster und die Nachzählung durch bedienlogik |
@@ -937,9 +939,11 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   (`tree_hybrid`), Prusa „snug“; dazu brechen hohe Bäume ohne zweite Wand und Fuß, und eine
   Baumspitze unter der Stützbahn hinterlässt Punkte (Recherche Nr. 4, 5, 6). Abnahme: Stil
   je Deckenform in allen Familien, Baumstabilität an einem hohen Körper im Slicer gemessen.
-  Der Abstand über Baumspitzen ohne Trennschicht ist erledigt (Archiv, RM-584 Teil); offen
-  dort: `support_tip_gap` für PETG, ASA und ABS messen, und an der Baugruppe mit 49 und dem
-  Schachturm mit 34 Spitzeninseln prüfen, ob die Schwelle von 100 sinken kann.
+  Erledigt (Archiv, RM-584 Teil und Teil 2): Abstand über Baumspitzen, Gitter oder Hybrid
+  nach Deckenform, zwei Wände für hohe Bäume, wo der Slicer sie liest. Offen: der Fuß hoher
+  Bäume (Recherche Nr. 5, Stabilität im Slicer messen); `support_tip_gap` für PETG, ASA und
+  ABS messen, und an der Baugruppe mit 49 und dem Schachturm mit 34 Spitzeninseln prüfen,
+  ob die Schwelle von 100 sinken kann.
 
 <a id="rm-585"></a>
 
@@ -3593,6 +3597,35 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   derselben Geometrie ableiten. Abnahme: beide Kerne liefern dieselbe Form
   bis zur Vernetzungsabweichung, ohne gemeinsames Volumen mit dem Träger und
   mit dem halben Profilspiel; Regression über beide Halter und beide Bohrungen.
+
+<a id="rm-698"></a>
+
+- [ ] **RM-698 — Sparen, was der Druck nicht merkt: Speicher großer Modelle und ein gemeinsamer druckgleich-Vergleich.**
+  Robert, 09.10.2026: Was sich beim Druck nicht zeigt, darf gespart werden;
+  Maßstab ist „druckgleich“ (Bauplan §11.2, `PRINT_LIMIT`). Drei Teile:
+  (1) ein gemeinsamer Vergleich für Nachweise — diskret gleich, größte
+  Abweichung in Maß und Position, kein Netz schlechter, Rundreise der Netz-
+  und CAD-Formate —, damit nicht jedes Paket einen eigenen baut;
+  (2) Speicher am großen Modell messen (Spitze je Phase beim Laden, je Schritt
+  im Verlauf, Plattencache, Hilfsprozesse, Erkennung) und senken;
+  (3) prüfen, ob Dreiecksindizes als `int32` und Ecken einfach genau gehalten
+  werden können. Leitplanken aus dem Review der Regel: `EPS_GEOM` liegt ab
+  16 mm unter dem float32-Raster, die Koplanarprüfung gilt nur in float64,
+  Auswertung mit und ohne Cache muss bitgleich bleiben, Indexrechnungen
+  `a·n + b` laufen in int32 über. Abnahme: Spitze am großen Modell gemessen
+  gesenkt, Ergebnisse druckgleich über Korpus und Beispielprojekte, alle
+  Gleichheitsverträge aus §11.2 grün. Der 256-MB-Block von wgpu ist Teil (2).
+
+<a id="rm-699"></a>
+
+- [ ] **RM-699 — Ersteinrichtung nimmt Düsen bis 10 mm an, der Druckdialog bis 2 mm.**
+  Gefunden bei der Nachprüfung der Regel „druckgleich“ (09.10.2026): Die
+  Untergrenze beider Felder liest jetzt `SMALLEST_NOZZLE`, die Obergrenze
+  nicht — `first_run.printer_nozzle` nimmt 10 mm, `_NOZZLE_RANGE_MM` endet
+  bei 2 mm, und der Druckdialog kürzt einen größeren Wert still. Abnahme: eine
+  Konstante für beide Felder, ein Wert über 2 mm wird entweder unterstützt
+  (Granulatdüsen, mit Folgen für Schichthöhe und Linienbreite) oder in der
+  Ersteinrichtung mit Grund abgelehnt; Test hält beide Felder gleich.
 
 ## Bedienung und Darstellung
 

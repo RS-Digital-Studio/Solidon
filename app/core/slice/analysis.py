@@ -3463,6 +3463,15 @@ class ModelSupport:
     bed_columns: tuple[tuple[SliceContour, float, float], ...] = ()
     """Ebenso die Stücke, deren Säule das Bett erreicht: Grundriss, Höhe der
     untersten Schicht, Höhe des Stücks."""
+    tallest_column: float = 0.0
+    """Die längste Stützsäule in mm: vom Stück bis zum Bett, wenn ein Teil der
+    Säule es erreicht, sonst bis dorthin, wo sie zuletzt auf dem Modell aufsetzt;
+    ohne Ränder und Kanaldecken (RM-584: ab 100 mm brauchen Bäume zwei Wände)."""
+    details_on_model: bool = False
+    """Setzen **kleine** Stücke auf dem Modell auf, so viele, dass sie Stütze
+    brauchen — außerhalb von Decken mit einem Stück über
+    ``OVERHANG_LAYER_WORTH_SUPPORT``? Dann gibt Hybrid ihnen Bäume (RM-584);
+    setzt nur eine große flache Decke auf, trägt Gitter allein."""
 
 
 def overhang_outline(result: SliceResult) -> ShapelyPolygon | MultiPolygon | None:
@@ -4178,9 +4187,12 @@ def _model_support(
     groups = min(_workers(SUPPORT_WORKERS), len(starting)) if len(layers) >= PARALLEL_FROM else 1
     member = {index: number % groups for number, index in enumerate(starting)}
 
-    def descend(group: int) -> dict[int, tuple[int, float]]:
+    def descend(group: int) -> tuple[dict[int, tuple[int, float]], dict[int, int], set[int]]:
         pending: list[tuple[int, manifold3d.CrossSection]] = []
         landed: dict[int, tuple[int, float]] = {}
+        # Wo eine Säule zuletzt aufsetzt, und welche das Bett erreichen: die
+        # Höhe ihres Stamms (``ModelSupport.tallest_column``, RM-584).
+        lowest: dict[int, int] = {}
         for index in range(top, 0, -1):
             if member.get(index) == group:
                 pending.extend((owner, _material_cross(pieces[owner])) for owner in starts[index])
@@ -4202,10 +4214,11 @@ def _model_support(
                 if lost > EPS_GEOM:
                     low, before = landed.get(owner, (index - 1, 0.0))
                     landed[owner] = (low, before + lost)
+                    lowest[owner] = index - 1
                 if not remaining.is_empty():
                     kept.append((owner, remaining))
             pending = kept
-        return landed
+        return landed, lowest, {owner for owner, _column in pending}
 
     if groups == 1:
         shares = [descend(0)]
@@ -4217,11 +4230,39 @@ def _model_support(
     # In der Folge der Stücke, nicht der Arbeiter: Jedes Stück gehört genau
     # einer Gruppe, und die Summen darunter hängen dann nicht daran, wer
     # zuerst fertig war.
-    landed = {owner: share[owner] for share in shares for owner in share}
+    landed = {owner: share[0][owner] for share in shares for owner in share[0]}
     landed = {owner: landed[owner] for owner in sorted(landed)}
+    lowest = {owner: share[1][owner] for share in shares for owner in share[1]}
+    on_bed = {owner for share in shares for owner in share[2]}
+
+    def tallest(quiet: Callable[[int], bool]) -> float:
+        """Der höchste Stamm unter einem Stück, das Stütze braucht (RM-584): bis
+        zum Bett, wenn ein Teil der Säule es erreicht, sonst bis dorthin, wo sie
+        zuletzt aufsetzt. Bis zur ersten Berührung gemessen, war eine Platte auf
+        150 mm, die zum Teil auf einem Turm von 120 mm aufsetzt, 30 mm hoch.
+        Ränder und Kanaldecken tragen sich selbst (``quiet``) und zählen nicht.
+        Das Bett ist die unterste Schicht des Körpers wie bei ``bed_columns``,
+        nicht der Nullpunkt: Ein angehobener Körper (ein Deckel auf der Dose)
+        bekam sonst seine Lage dazu (Nachprüfung RM-584, N4)."""
+        bed = float(layers[0].z)
+        return max(
+            (
+                float(layers[names[owner][0]].z)
+                - (
+                    float(layers[lowest[owner]].z)
+                    if owner in lowest and owner not in on_bed
+                    else bed
+                )
+                for owner in range(len(names))
+                if (only is None or names[owner] in only) and not quiet(owner)
+            ),
+            default=0.0,
+        )
 
     if not landed:
-        return ModelSupport()
+        # Ohne Auflage auf dem Modell gibt es keine Kanaldecke, aber Ränder.
+        edges = ledges(result, only, cancelled=cancelled)
+        return ModelSupport(tallest_column=tallest(lambda owner: names[owner] in edges))
     islands: set[int] = set()
     channels: set[int] = set()
     places: dict[int, Any] = {}
@@ -4329,29 +4370,59 @@ def _model_support(
     edges = ledges(result, only, cancelled=cancelled)
     bearing = {owner for owner in landed if owner not in channels and names[owner] not in edges}
     resting_ledges = any(names[owner] in edges for owner in landed if owner not in channels)
-    outside = [area for owner, (_low, area) in landed.items() if owner in bearing]
-    open_patch = max(outside, default=0.0)
-    open_area = math.fsum(outside)
     island_on_model = bool(islands)
-    # **Und als Feld** (RM-570, Review 3): Ein Kinn mit schräger Unterseite
-    # über der Brust zerfällt in Streifen unter 10 mm². Je Stück gefragt,
-    # verlangte der Rat Stützen und zugleich „nur vom Bett“, und das Kinn
-    # druckte weiter in die Luft. Gezählt wird, was auf dem Modell aufsetzt;
-    # gefragt nur, wo ein Feld die Antwort ändern kann.
-    open_field = 0.0
-    if not worth_support(open_patch, open_area) and open_area > OVERHANG_LAYER_WORTH_SUPPORT:
-        resting = {names[owner]: area for owner, (_low, area) in landed.items() if owner in bearing}
-        seen: set[tuple[int, int]] = set()
-        for name in sorted(resting):
-            if name in seen:
-                continue
-            group = ceilings.of(name)
-            seen |= group
-            members = sorted(group & resting.keys())
-            field = _field([ceilings.shape(member) for member in members])
-            open_field = max(
-                open_field, min(field, math.fsum(resting[member] for member in members))
+
+    def resting_on(owners: set[int]) -> tuple[float, float, float]:
+        """Was von diesen Stücken auf dem Modell aufsetzt: das größte Stück, die
+        Summe und die größte Decke als Feld.
+
+        **Als Feld** (RM-570, Review 3): Ein Kinn mit schräger Unterseite über
+        der Brust zerfällt in Streifen unter 10 mm². Je Stück gefragt, verlangte
+        der Rat Stützen und zugleich „nur vom Bett“, und das Kinn druckte weiter
+        in die Luft. Gefragt nur, wo ein Feld die Antwort ändern kann."""
+        outside = [area for owner, (_low, area) in landed.items() if owner in owners]
+        patch = max(outside, default=0.0)
+        total = math.fsum(outside)
+        widest = 0.0
+        if not worth_support(patch, total) and total > OVERHANG_LAYER_WORTH_SUPPORT:
+            resting = {
+                names[owner]: area for owner, (_low, area) in landed.items() if owner in owners
+            }
+            seen: set[tuple[int, int]] = set()
+            for name in sorted(resting):
+                if name in seen:
+                    continue
+                group = ceilings.of(name)
+                seen |= group
+                members = sorted(group & resting.keys())
+                field = _field([ceilings.shape(member) for member in members])
+                widest = max(widest, min(field, math.fsum(resting[member] for member in members)))
+        return patch, total, widest
+
+    open_patch, open_area, open_field = resting_on(bearing)
+    # **Kleine Stücke auf dem Modell** (RM-584): Hybrid gibt Bäume an die
+    # Details und Gitter unter die große flache Decke. Setzt nur die flache
+    # Decke selbst auf dem Modell auf — die Platte des Tischs auf ihrem Sockel
+    # —, trägt Gitter allein; gefragt wird deshalb, was außerhalb von Decken
+    # mit einem Stück über ``OVERHANG_LAYER_WORTH_SUPPORT`` aufsetzt, mit
+    # denselben zwei Wegen wie der Stützbedarf.
+    flat_ceilings: dict[frozenset[tuple[int, int]], bool] = {}
+
+    def in_flat_ceiling(owner: int) -> bool:
+        group = ceilings.of(names[owner])
+        if group not in flat_ceilings:
+            flat_ceilings[group] = any(
+                areas[owner_of[member]] > OVERHANG_LAYER_WORTH_SUPPORT
+                for member in group
+                if member in owner_of
             )
+        return flat_ceilings[group]
+
+    small = {owner for owner in bearing if not in_flat_ceiling(owner)}
+    detail_patch, detail_area, detail_field = resting_on(small) if small else (0.0, 0.0, 0.0)
+    details_on_model = any(not in_flat_ceiling(owner) for owner in islands) or worth_support(
+        max(detail_patch, detail_field), detail_area
+    )
 
     chosen = frozenset(names[owner] for owner in channels)
     columns = tuple(
@@ -4394,6 +4465,8 @@ def _model_support(
 
     spared = set() if not columns else {owner for owner in range(len(names)) if needs_own(owner)}
     return ModelSupport(
+        tallest_column=tallest(lambda owner: names[owner] in in_channel or names[owner] in edges),
+        details_on_model=details_on_model,
         open_patch=open_patch,
         open_area=open_area,
         open_field=open_field,

@@ -31,6 +31,7 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-09 | [RM-584 (Teil 2): Unter flachen Decken Gitter oder Hybrid, und hohe Bäume bekommen zwei Wände (09.10.2026)](#rm-584-teil-2-unter-flachen-decken-gitter-oder-hybrid-und-hohe-bäume-bekommen-zwei-wände-09102026) |
 | 2026-10-09 | [RM-567: Weniger Arbeitsspeicher — Cachegrenze, BLAS-Faden, Renderer am echten Fenster (09.10.2026)](#rm-567-weniger-arbeitsspeicher--cachegrenze-blas-faden-renderer-am-echten-fenster-09102026) |
 | 2026-10-09 | [RM-624: Ein Slicertest hält Kontaktabstand und untere Trennschicht in sechs Programmen (09.10.2026)](#rm-624-ein-slicertest-hält-kontaktabstand-und-untere-trennschicht-in-sechs-programmen-09102026) |
 | 2026-10-09 | [RM-531 (Teil): Sieben Fenstertests außerhalb von Windows sind auf allen vier Plattformen grün (09.10.2026)](#rm-531-teil-sieben-fenstertests-außerhalb-von-windows-sind-auf-allen-vier-plattformen-grün-09102026) |
@@ -27325,6 +27326,47 @@ nach einer Rücknahme bucht wirklich, eine abgewiesene Spule kommt in den Dialog
 zurück, die Übernahme aus dem Slicer überschreibt keine Handspule, Rücknahmen
 sind rücknehmbar, das Lager sichert seinen letzten lesbaren Stand selbst,
 Datumsfelder haben einen Kalender.
+
+## RM-584 (Teil 2): Unter flachen Decken Gitter oder Hybrid, und hohe Bäume bekommen zwei Wände (09.10.2026)
+
+<a id="rm-584-teil-2-unter-flachen-decken-gitter-oder-hybrid-und-hohe-bäume-bekommen-zwei-wände-09102026"></a>
+
+**Befund (09.10.2026):** Unter einer großen flachen Decke blieb die Art des Herstellers,
+bei Elegoo und Bambu also Bäume, unter denen die Decke zwischen den Spitzen durchhängt;
+hohe Bäume brechen mit einer Wand (Recherche Nr. 4, 5).
+
+**Behoben:** Der Rat schlägt unter einem flachen Stück Gitter vor statt Bäumen —
+über „automatisch“ nur, wo es beim Programm Bäume heißt (`handover.tree_styles`), bei
+Cura, wo die Art der ganzen Platte gilt, ausdrücklich —, und Hybrid (`tree_hybrid`), wo
+das Programm es kennt und daneben kleine Stücke auf dem Modell aufsetzen
+(`details_on_model`) oder viele Inseln beginnen; PrusaSlicer und Cura bekommen Gitter.
+Gitter und Baum zweier Körper ergeben Hybrid nur, wo die Art der Platte gilt
+(`style_per_part`), ohne Hybrid Gitter; bei Orca und Prusa nennen Zeile und Feld die Teile
+mit eigenem Wert. Bei Cura gewinnt die flache Decke gegen den Baum eines anderen Körpers,
+ein Wechsel der Art nennt keine Teile, und was Cura gleich druckt („automatisch“ und
+Gitter), schlägt der Dialog nicht vor. Neues Feld *Wände der Bäume* (`support.tree_walls`, Orca
+`tree_support_wall_count`, Creality `tree_support_wall_count_tree`, Cura
+`support_wall_count`; PrusaSlicer nimmt es nicht); ab 100 mm Säulenhöhe vom Boden des
+Körpers (`ModelSupport.tallest_column`) zwei, gefragt mit `printed_style` gegen
+`trees`. ElegooSlicer, OrcaSlicer und Anycubic lesen die Wandzahl unter gefüllten
+organischen Bäumen nicht, unter hohlen schon (`hollow_trees`); der Druckdialog filtert
+den Rat dort (`IGNORED_UNDER_TREES_BY_PROGRAM`, Hinweis am Feld). Durchsicht und
+Nachprüfung: `.claude/.state/drache-2026-10-08/reviews-2026-10-09/review_rm584_teil2*.md`.
+
+**Nachweis (09.10.2026):** Stil je Deckenform in sieben Programmen
+(`output/drache-2026-10-08/stil-rm584*`); Wandzahl am ElegooSlicer an einem 120 mm hohen
+Turm: Hybrid mit zwei Wänden 14 % mehr Stützmaterial, organisch derselbe G-Code. Tests in
+`test_slice_findings.py` (Deckenform, hohe Bäume, Hybrid aus zwei Körpern),
+`test_print_settings.py` (Übergabe je Familie, Filter unter Bäumen, Feldhinweis),
+`test_manufacturer.py`, `test_print_time.py`; Slicertests in `test_real_slicers.py`
+(Wandzahl je Orca-Programm, Hybrid je Objekt, Abstand unter hohlen Bäumen). Messskript
+`.claude/.state/drache-2026-10-08/stil_je_decke.py`. Pilz und Figur auf einer Platte
+(Nachprüfung N1, N2; `slicer_stil.py`, `hut_bander.py` daneben): Cura bekommt
+`support_structure=normal` statt `tree` und trägt den Hut auf senkrechten Säulen gleicher
+Dichte statt auf Ästen; ElegooSlicer gibt dem Pilz `normal(auto)` und der Figur
+`tree(auto)`, wie die Zeile „Stützen · Figur, Pilz mit Gitter“ sagt.
+Offen im Register: der Fuß hoher Bäume.
+Changelog: ja.
 
 ## RM-624: Ein Slicertest hält Kontaktabstand und untere Trennschicht in sechs Programmen (09.10.2026)
 

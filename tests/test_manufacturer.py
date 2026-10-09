@@ -3809,3 +3809,111 @@ def test_prusas_bottom_contact_layers_are_read_back() -> None:
     assert manufacturer._read_prusa(none, context)[0]["support.bottom_interface_layers"] == 0
     spacing = {"support_material_interface_spacing": "0"}
     assert manufacturer._read_prusa(spacing, context)[0]["support.interface_spacing"] == 0.0
+
+
+@pytest.mark.parametrize(
+    ("values", "style"),
+    [
+        (
+            {"enable_support": "1", "support_type": "tree(auto)", "support_style": "tree_hybrid"},
+            "hybrid",
+        ),
+        ({"enable_support": "1", "support_type": "tree(auto)", "support_style": "default"}, "tree"),
+        ({"enable_support": "1", "support_type": "normal(auto)"}, "grid"),
+    ],
+)
+def test_a_hybrid_process_is_read_back_as_hybrid(values: dict[str, str], style: str) -> None:
+    """Ein Herstellerprozess mit ``tree_hybrid`` ist Hybrid (RM-584), sonst Baum
+    oder Gitter wie bisher."""
+    read, _foreign = manufacturer._read_process(values, manufacturer._Context(nozzle=0.4), {})
+    assert read["support.style"] == style
+
+
+@pytest.mark.parametrize(("walls", "read_as"), [("2", 2), ("0", 1), ("-1", 1)])
+def test_the_tree_walls_are_read_back(walls: str, read_as: int) -> None:
+    """Orca 0 und Bambu -1 heißen „automatisch“ — eine Wand (RM-584)."""
+    read, foreign = manufacturer._read_process(
+        {"tree_support_wall_count": walls}, manufacturer._Context(nozzle=0.4), {}
+    )
+    assert read["support.tree_walls"] == read_as
+    assert not foreign
+
+
+@pytest.mark.parametrize(
+    ("program", "values", "read_as"),
+    [
+        ("crealityprint", {"tree_support_wall_count_tree": "2"}, 2),
+        # Den gemeinsamen Namen überliest Creality Print; ohne eigenen Schlüssel
+        # gilt seine Vorgabe 0, eine Wand.
+        ("crealityprint", {"tree_support_wall_count": "2"}, 1),
+        ("orcaslicer", {"tree_support_wall_count": "2", "tree_support_wall_count_tree": "1"}, 2),
+    ],
+)
+def test_the_foundation_reads_the_wall_key_the_program_prints(
+    program: str, values: dict[str, str], read_as: int
+) -> None:
+    """Creality Print druckt die Wände der Bäume aus ``tree_support_wall_count_tree``
+    (RM-584, Slicertest). Die Grundlage liest denselben Schlüssel, sonst schlüge
+    der Rat vor, was schon gilt, oder überginge eine Abweichung."""
+    read, _foreign = manufacturer._read_process(
+        values,
+        manufacturer._Context(nozzle=0.4),
+        manufacturer.PROGRAM_DEFAULTS.get(program, {}),
+        program_name=program,
+    )
+    assert read["support.tree_walls"] == read_as
+
+
+def test_prusas_double_wall_threshold_is_no_wall_count() -> None:
+    """PrusaSlicer legt Doppelwände ab einem Astquerschnitt, ein Maß und keine
+    Wandzahl (Review RM-584, M5): Die Grundlage liest daraus keine Baumwände,
+    und das Feld nimmt PrusaSlicer nicht entgegen."""
+    read, foreign = manufacturer._read_prusa(
+        {"support_tree_branch_diameter_double_wall": "3"}, manufacturer._Context(nozzle=0.4)
+    )
+    assert "support.tree_walls" not in read
+    assert "support.tree_walls" not in foreign
+
+
+def test_every_program_that_knows_hybrid_counts_it_as_trees() -> None:
+    """Das Zeitmodell rechnet Hybrid als Baum, wo der Slicer es kennt
+    (``Motion.support_hybrid``), die Übergabe ersetzt es sonst durch Gitter
+    (``slicer_keys.NOT_OFFERED_BY_PROGRAM``). Beide Stellen müssen dasselbe sagen
+    (Review RM-584, L4): je Familie ein Zeitmodell, je Programm der Ersatz."""
+    families = {
+        "orca": manufacturer._orca_support_motion({}, None, 0.4).get("support_hybrid", False),
+        "prusa": manufacturer._prusa_support_motion({}, 0.4).get("support_hybrid", False),
+        "cura": False,
+    }
+    programs = {
+        mark: flavour
+        for fragment, flavour in slicer_keys.FLAVOUR_BY_NAME
+        if (mark := slicer_keys.program_of(f"{fragment}.exe")) and flavour in families
+    }
+    assert {"orcaslicer", "prusaslicer", "cura"} <= programs.keys(), programs
+    for program, flavour in programs.items():
+        knows = slicer_keys.substitute("support.style", "hybrid", program) is None
+        assert knows is families[flavour], program
+
+
+@pytest.mark.parametrize(
+    ("values", "flavour", "trees"),
+    [
+        ({"support_type": "tree(auto)"}, "orca", True),
+        ({"support_type": "normal(auto)"}, "orca", False),
+        ({"support_material_style": "organic"}, "prusa", True),
+        ({"support_material_style": "snug"}, "prusa", False),
+    ],
+)
+def test_auto_prints_trees_where_the_process_says_so(
+    values: dict[str, str], flavour: str, trees: bool
+) -> None:
+    """„Automatisch“ ist ein Baum, wo der Herstellerprozess Bäume stützt — eine
+    Auskunft für Zeitmodell und Rat (RM-584)."""
+    assert manufacturer.auto_prints_trees(values, flavour) is trees
+    motion = (
+        manufacturer._orca_support_motion(values, None, 0.4)
+        if flavour == "orca"
+        else manufacturer._prusa_support_motion(values, 0.4)
+    )
+    assert motion["support_tree"] is trees
