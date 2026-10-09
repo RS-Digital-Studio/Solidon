@@ -1261,6 +1261,101 @@ def test_download_technical_notes_stay_collapsible(page: str) -> None:
     )
 
 
+#: Die erste Windows-Version mit Signatur. Ein Signaturhinweis nennt nur sie —
+#: „ab 0.5.0“ bleibt bei jeder späteren Version wahr; jede andere Nummer
+#: hieße, die angebotene Version wäre es nicht oder erst später (RM-351).
+FIRST_SIGNED_WINDOWS = "0.5.0"
+
+#: Woran ein Satz als Aussage über die Signatur zu erkennen ist, je Sprache.
+SIGNED_STEMS = ("signiert", "signed", "firmad", "signé", "firmat", "assinatura")
+
+#: Eine vollständige Versionsnummer — „Windows 10“ und „macOS 13“ sind keine.
+#: Ein Datum wie 24.09.2026 auch nicht: Kein Teil einer Version hat vier Stellen.
+FULL_VERSION = re.compile(r"(?<![\d.])\d{1,3}\.\d{1,3}\.\d{1,3}(?!\d)")
+
+
+def _visible_sentences(markup: str) -> list[str]:
+    """Der lesbare Text einer Seite, in Sätze zerlegt.
+
+    Ein Block — Absatz, Zelle, Listenpunkt — endet auch ohne Punkt: Sonst
+    liefe eine Zeitleiste ohne Satzzeichen mit dem nächsten Satz zusammen.
+    """
+    import html
+
+    text = re.sub(r"<(script|style)\b.*?</\1>", " ", markup, flags=re.DOTALL)
+    text = re.sub(r"</?(?:p|li|td|th|div|h\d|br|dt|dd|summary)\b[^>]*>", "\x00", text)
+    text = html.unescape(re.sub(r"<[^>]+>", " ", text))
+    sentences = []
+    for block in text.split("\x00"):
+        sentences.extend(re.split(r"(?<=[.!?])\s+", " ".join(block.split())))
+    return [sentence for sentence in sentences if sentence]
+
+
+def _windows_signature_problems(markup: str, published: str) -> list[str]:
+    """Was ein Signaturhinweis zu Windows an Versionen nennt und nicht nennen darf.
+
+    Geprüft wird jeder Satz der Seite, der Windows und die Signatur nennt — der
+    Hinweis im Windows-Reiter und sein Zwilling in den Systemvoraussetzungen.
+    """
+    tab = re.search(r'<div data-tab="Windows"[^>]*>(.*?)</div>', markup, re.DOTALL)
+    if tab is None or not any(stem in tab.group(1).lower() for stem in SIGNED_STEMS):
+        return ["der Windows-Reiter trägt keinen Signaturhinweis mehr"]
+    limit = tuple(int(part) for part in published.split("."))
+    problems = []
+    for sentence in _visible_sentences(markup):
+        if "Windows" not in sentence or not any(s in sentence.lower() for s in SIGNED_STEMS):
+            continue
+        for version in FULL_VERSION.findall(sentence):
+            if version != FIRST_SIGNED_WINDOWS:
+                problems.append(f"nennt {version} statt {FIRST_SIGNED_WINDOWS}: {sentence}")
+            if tuple(int(part) for part in version.split(".")) > limit:
+                problems.append(f"nennt {version}, veröffentlicht ist {published}: {sentence}")
+    return problems
+
+
+def _published_version() -> str:
+    return str(json.loads((WEBSITE / "version.json").read_text(encoding="utf-8"))["version"])
+
+
+@pytest.mark.parametrize("page", START_PAGES)
+def test_the_windows_signature_hint_names_only_the_first_signed_version(page: str) -> None:
+    """Der Hinweis sagt, seit wann signiert wird — nie eine andere Version (RM-351).
+
+    Er stand einmal als „Die Windows-Version 0.5.0 ist digital signiert“
+    direkt unter „Version 0.5.1“, und ein Kunde las daraus, die angebotene sei
+    es nicht. Der Satz ist von Hand geschrieben; nur dieser Wächter merkt,
+    wenn er wieder eine Nummer bekommt, die mit dem Angebot altert — oder eine
+    über der veröffentlichten verspricht.
+    """
+    markup = (WEBSITE / page).read_text(encoding="utf-8")
+
+    assert not _windows_signature_problems(markup, _published_version()), page
+
+
+@pytest.mark.parametrize(
+    ("old", "new", "published", "expected"),
+    [
+        ("ab 0.5.0 digital", "ab 0.5.1 digital", None, "nennt 0.5.1 statt"),
+        ("Version 0.5.0 digital", "Version 9.9.9 digital", None, "veröffentlicht ist"),
+        ("ab 0.5.0 digital", "ab 0.5.0 digital", "0.4.9", "veröffentlicht ist 0.4.9"),
+        ("digital signiert. Die Signatur", "geprüft. Die Signatur", None, "keinen Signatur"),
+    ],
+    ids=["andere-version", "zwilling-ueber-veroeffentlicht", "vor-der-ersten", "ohne-hinweis"],
+)
+def test_the_signature_guard_catches_a_manipulated_copy(
+    old: str, new: str, published: str | None, expected: str
+) -> None:
+    """Gegenprobe an einer veränderten Kopie der deutschen Startseite."""
+    markup = (WEBSITE / "index.html").read_text(encoding="utf-8")
+    assert old in markup, f"die Vorlage für die Gegenprobe fehlt: {old}"
+
+    problems = _windows_signature_problems(
+        markup.replace(old, new), published or _published_version()
+    )
+
+    assert any(expected in problem for problem in problems), problems
+
+
 @pytest.mark.parametrize("page", START_PAGES)
 def test_the_download_box_can_switch_from_waiting_to_loading(page: str) -> None:
     """Am Erscheinungstag muss der Kasten umschalten können, in jeder Sprache.
