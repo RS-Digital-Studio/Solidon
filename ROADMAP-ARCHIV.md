@@ -31,6 +31,7 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-09 | [RM-549: Die AppImages der Orca-Familie zeigen ihre Herstellerdrucker ohne ersten Start (09.10.2026)](#rm-549-die-appimages-der-orca-familie-zeigen-ihre-herstellerdrucker-ohne-ersten-start-09102026) |
 | 2026-10-08 | [RM-602: Der Druckdialog ordnet die Profile in einem Lesedurchgang zu (08.10.2026)](#rm-602-der-druckdialog-ordnet-die-profile-in-einem-lesedurchgang-zu-08102026) |
 | 2026-10-08 | [RM-601: Die Slicerwahl im Druckdialog geht wie in Erste Schritte, und überall stehen nur unterstützte Slicer (08.10.2026)](#rm-601-die-slicerwahl-im-druckdialog-geht-wie-in-erste-schritte-und-überall-stehen-nur-unterstützte-slicer-08102026) |
 | 2026-10-08 | [RM-600: Ein Drucker, eingebaut und aus dem Slicer übernommen, ist ein Gerät (08.10.2026)](#rm-600-ein-drucker-eingebaut-und-aus-dem-slicer-übernommen-ist-ein-gerät-08102026) |
@@ -44496,3 +44497,31 @@ unverändert; `test_evaluation.py::test_a_pin_whose_plate_is_removed_says_nothin
 mit Gegenprobe (ohne `object_ids` rot). Die zwölf Beispielprojekte und `example_v48.p3d` tragen
 Format 48 und Bibliotheksversion 24. Changelog: ja — Stift für Bohrung baut Senkkopf,
 Zylinderkopf und Gewinde passend zur Bohrung.
+
+## RM-549: Die AppImages der Orca-Familie zeigen ihre Herstellerdrucker ohne ersten Start (09.10.2026)
+
+<a id="rm-549-die-appimages-der-orca-familie-zeigen-ihre-herstellerdrucker-ohne-ersten-start-09102026"></a>
+<a id="rm-549"></a>
+
+**Befund (07.10.2026, Slicerauswahl CI-09):** Die AppImages der Orca-Familie tragen
+`resources/profiles` nur im eingebetteten SquashFS; erst ihr erster Start legt die Bündel nach
+`<Konfiguration>/<Programm>/system/`. Über einem nie geöffneten AppImage fand Solidon keinen
+Herstellerdrucker, der Druckdialog sagte „Keine Profile gefunden“, und ohne vorgewähltes Profil
+lehnte die Konsole ab („process not compatible with printer“). Der Slicertest legte deshalb den
+Zustand nach dem ersten Start an (`tests.helpers.first_start`).
+
+**Behoben:** `app/core/export/appimage.py` liest das Abbild als Datei — Typ-2-Laufzeit,
+SquashFS 4.0, gzip, xz und zstd aus der Standardbibliothek — und legt die Profile je Fassung im
+Nutzer-Cache ab; gestartet wird nichts (Regel 11). `slicer_profiles.install_root` fragt dort für
+jedes AppImage der Orca-Familie, der Fensterfaden wartet nie (`cura_linux.may_wait`). Unlesbare
+Abbilder lassen die Liste leer wie bisher, der Druckdialog rät dann zum ersten Öffnen.
+`first_start` ist entfernt; die Slicertests laufen auf frischen AppImages.
+
+**Nachweis (09.10.2026):** Lokal an den vier Fassungen der Slicerauswahl (OrcaSlicer 2.4.2,
+ElegooSlicer 1.5.3.5, Creality Print 7.3.0.6149, Bambu Studio 2.8.2.61): alle 34 500 Profile
+byte-gleich mit dem Auszug von 7-Zip. Slicerauswahl 37870414650 grün auf Linux, Apple Silicon
+und Intel-Mac: unter Linux ohne ersten Start 997, 997, 491 und 202 Drucker, erste Kopie 0,63,
+0,63, 0,36 und 0,19 s, der Würfel aus allen vier AppImages gesliced.
+`tests/test_appimage_profiles.py` (41 Fälle; der Anschlussfall und der Fensterfaden am alten
+`slicer_profiles.py` rot), `tests/test_real_slicers.py::test_a_slicer_never_opened_offers_the_printers_of_its_maker`.
+Changelog: ja.
