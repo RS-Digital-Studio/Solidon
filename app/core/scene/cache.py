@@ -624,9 +624,9 @@ class ResultCache:
         # dabei die nächsten — am Spiderman mit acht Schritten las jede
         # Auswertung acht Netze von der Platte, 15 statt 2 s (08.10.2026). Was
         # ein älterer Eintrag wirklich braucht, sind Ecken, Dreiecke und
-        # Merkmale; Kantentabellen, Nachbarschaften und Schichtanalyse
-        # rechnet ein neues Netz aus denselben Feldern, wenn jemand fragt
-        # (``MeshData.lean``).
+        # Merkmale; Kantentabellen und Nachbarschaften rechnet ein neues
+        # Netz aus denselben Feldern, wenn jemand fragt (``MeshData.lean``).
+        # Die Schichtanalyse des Prüfberichts behält es (Nachprüfung L, M-2).
         # Der jüngste Eintrag bleibt immer ganz, auch über der Grenze — ohne
         # ihn rechnete der nächste Schritt alles noch einmal.
         ids = {id(mesh) for mesh in kept}

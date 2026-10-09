@@ -740,7 +740,7 @@ def test_a_long_history_on_a_large_body_stays_inside_the_memory_level(profile: P
 
     Am Spiderman hielt jedes Verschieben 230 MB mehr fest, ohne Verdrängung bis
     zu zwanzig Millionen Dreiecken. Hier ein Körper mit 20 480 Dreiecken, je
-    Schritt eine Schichtanalyse daran und eine Grenze für zwei volle Einträge:
+    Schritt nachgerechnete Nachbarschaften daran und eine Grenze für zwei volle Einträge:
     Der Cache hält sie nach jedem Schritt, und weil ältere Einträge schrumpfen
     statt zu gehen, kommt jeder Schritt weiter aus dem Speicher — eine
     Auswertung geht den ganzen Verlauf durch, und ein verdrängter Schritt käme
@@ -773,13 +773,13 @@ def test_a_long_history_on_a_large_body_stays_inside_the_memory_level(profile: P
     target = next(iter(first.scene.objects))
 
     def reported(result: Any) -> None:
-        """Was der Prüfbericht am gezeigten Netz ablegt: eine Schichtanalyse je Netz."""
+        """Was das Fenster am gezeigten Netz nachrechnet: Nachbarschaften, ableitbar."""
         import numpy as np
 
         for body in result.scene.objects.values():
             raw = cast(Any, body.mesh).raw
             raw._cache.verify()
-            raw._cache.cache["solidon_print_findings|probe"] = np.ones(400_000)
+            raw._cache.cache["face_adjacency_span"] = np.ones(400_000)
 
     def beyond(result: Any) -> int:
         """Was der Cache über die Netze der Szene hinaus hält, jedes Feld einmal."""
@@ -876,11 +876,11 @@ def test_trimming_counts_once_and_a_lean_entry_stays_lean(
             [OperationDraft(op="translate_object", inputs=(target,), params={"dx": 1.0})],
         )
         result = evaluate(project.document, profile, sources=sources, cache=cache)
-        # Was der Prüfbericht am gezeigten Netz ablegt, eine Schichtanalyse.
+        # Was das Fenster am gezeigten Netz nachrechnet, ableitbar.
         for shown in result.scene.objects.values():
             raw = cast(Any, shown.mesh).raw
             raw._cache.verify()
-            raw._cache.cache["solidon_print_findings|probe"] = np.ones(200_000)
+            raw._cache.cache["face_adjacency_span"] = np.ones(200_000)
     assert max(counted) <= 1, f"one exact count per trim, got {counted}"
     assert sum(leaned) > 0, "Voraussetzung: die Grenze schrumpft ältere Einträge"
     leaned.clear()
@@ -980,6 +980,75 @@ def test_a_lean_mesh_keeps_what_the_report_asks_after_undo() -> None:
     assert "face_adjacency" not in held, "Voraussetzung: das Netz ist schlank"
     assert small_components(lean.raw) == []
     assert set(lean.raw._cache.cache) == held, "nothing was computed again"
+
+
+def test_the_report_keeps_its_analysis_after_undo_under_a_tight_bound(profile: Profile) -> None:
+    """Nach acht Verschieben und dem Weg zurück hat der gezeigte Stand seine Schichtanalyse noch.
+
+    Ein schlankes Netz ließ sie los (Nachprüfung L, M-2), und der Prüfbericht
+    schnitt nach dem Zurücknehmen neu — am Spiderman 52 s auf einem Rechner mit
+    8 GB. Sie hält als Felder nur noch einen Bruchteil (RM-595) und bleibt.
+    """
+    import trimesh
+
+    from app.core.bootstrap import load_operations
+    from app.core.geom.mesh import as_mesh_data
+    from app.core.knowledge import print_settings
+    from app.core.knowledge.profiles import analysis_limits
+    from app.core.scene import History, OperationDraft, evaluate
+    from app.core.scene.cache import held_by
+    from app.core.scene.project import ProjectSources, new_project
+    from app.core.slice.findings import analysed, remembered_analysis
+    from app.core.types import Source
+
+    load_operations()
+    body = trimesh.creation.icosphere(subdivisions=4, radius=20.0)
+    project = new_project("centauri-carbon-2", "petg")
+    project.document.sources["src_1"] = Source(
+        id="src_1", kind="import", path="sources/ball.stl", sha256=""
+    )
+    project.sources["src_1"] = trimesh.exchange.stl.export_stl(body)
+    history = History(project.document)
+    history.apply("Laden", [OperationDraft(op="load", params={"source": "src_1", "unit": "mm"})])
+    sources = ProjectSources(project)
+    settings = print_settings.resolve(profile)
+    probe = ResultCache()
+    evaluate(project.document, profile, sources=sources, cache=probe)
+    budget = int(max(held_by(entry) for entry in probe._entries.values()) * 1.5)
+    cache = ResultCache(memory_budget=budget)
+    loaded = evaluate(project.document, profile, sources=sources, cache=cache)
+    target = next(iter(loaded.scene.objects))
+
+    def report(result: Any) -> tuple[Any, float, float]:
+        """Was das Fenster nach jeder Auswertung tut: die Analyse am gezeigten Netz."""
+        entry = result.scene.objects[target]
+        wall, angle = analysis_limits(profile, entry)
+        analysed(as_mesh_data(entry.mesh), settings, angle, wall)
+        return entry, angle, wall
+
+    report(loaded)
+    for _step in range(8):
+        history.apply(
+            "Verschieben",
+            [OperationDraft(op="translate_object", inputs=(target,), params={"dx": 1.0})],
+        )
+        moved = evaluate(project.document, profile, sources=sources, cache=cache)
+        report(moved)
+        # Was das Fenster sonst am gezeigten Netz nachrechnet, ableitbar.
+        raw = cast(Any, moved.scene.objects[target].mesh).raw
+        _ = raw.face_adjacency, raw.edges_unique
+    for _step in range(8):
+        history.undo()
+    back = evaluate(project.document, profile, sources=sources, cache=cache)
+    entry = back.scene.objects[target]
+    wall, angle = analysis_limits(profile, entry)
+    mesh = as_mesh_data(entry.mesh)
+    assert entry.mesh is not loaded.scene.objects[target].mesh, (
+        "Voraussetzung: der Ladestand kommt als schlankes Netz zurück"
+    )
+    assert remembered_analysis(mesh, settings, angle, wall) is not None, (
+        "the shown state still has its analysis"
+    )
 
 
 def test_secondary_material_calibration_and_role_are_part_of_the_hash(profile: Profile) -> None:

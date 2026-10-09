@@ -184,8 +184,9 @@ class MeshData:
         """Dieselben Ecken und Dreiecke ohne das, was sich aus ihnen neu rechnen lässt (RM-567).
 
         Für ältere Einträge des Ergebniscaches: Eine Auswertung liest von ihnen
-        das Ergebnis, nicht Kantentabellen, Nachbarschaften oder die
-        Schichtanalyse — die hielten am Spiderman zwei Drittel des Eintrags.
+        das Ergebnis, nicht Kantentabellen oder Nachbarschaften — die hielten
+        am Spiderman zwei Drittel des Eintrags. Die Schichtanalyse des
+        Prüfberichts bleibt (:data:`RELEASABLE`).
 
         **Ein neues Netz, kein geleertes.** Dasselbe Netz kann in diesem
         Augenblick ein anderer Faden lesen — Vorschau, Karte, Prüfbericht —,
@@ -1001,16 +1002,15 @@ _EDGE_TABLE_KEY: Final = "solidon_edge_table"
 #: Was :meth:`MeshData.lean` nicht mitnimmt: was
 #: ``trimesh`` aus Ecken und Dreiecken ableitet und groß ist, und Solidons
 #: eigene Ableitungen — Kantentabelle, Nachbarindex, Eckenfächer und -rang,
-#: Normalen, Fleckennachbarschaft — samt der Schichtanalyse des
-#: Prüfberichts (``slice.findings``, Schlüssel mit diesem Anfang). Nicht
-#: darin: ``face_normals`` und ``vertex_normals``, die eine Datei mitbringen
-#: kann, und alles, was ein Netz über seine Herkunft trägt. Ebenfalls nicht
-#: darin, obwohl ableitbar: die Teile (:func:`face_components`) und
-#: ``area_faces``, je 8 Byte je Dreieck. Nach jedem Zurücknehmen fragt der
-#: Bericht am gezeigten Stand nach kleinen Teilen
-#: (``repair.small_components``); ohne beide rechnete er am Spiderman
-#: Kantentabelle, Dreiecke, Kreuzprodukte und Flächen neu, 0,4 s je Schritt
-#: (Review L, G9).
+#: Normalen, Fleckennachbarschaft. Nicht darin: ``face_normals`` und
+#: ``vertex_normals``, die eine Datei mitbringen kann, und alles, was ein Netz
+#: über seine Herkunft trägt. Ebenfalls nicht darin, obwohl ableitbar, was der
+#: Bericht nach dem Zurücknehmen am gezeigten Stand fragt: die Teile
+#: (:func:`face_components`) und ``area_faces``, je 8 Byte je Dreieck — ohne
+#: sie rechnete er am Spiderman 0,4 s je Schritt neu (Review L, G9) —, und die
+#: Schichtanalyse des Prüfberichts (``slice.findings``): Ohne sie schnitt er
+#: nach dem Zurücknehmen neu, am Spiderman 52 s; als Felder hält sie seit
+#: RM-595 nur 17 bis 31 MB (Nachprüfung L, M-2).
 RELEASABLE: Final = frozenset(
     {
         "triangles",
@@ -1048,11 +1048,10 @@ RELEASABLE: Final = frozenset(
         "solidon_patch_adjacency",
     }
 )
-_RELEASABLE_PREFIXES: Final = ("solidon_print_findings|",)
 
 
 def _releasable(key: object) -> bool:
-    return isinstance(key, str) and (key in RELEASABLE or key.startswith(_RELEASABLE_PREFIXES))
+    return isinstance(key, str) and key in RELEASABLE
 
 
 def edge_table(body: trimesh.Trimesh) -> EdgeTable:
