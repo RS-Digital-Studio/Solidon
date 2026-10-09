@@ -1171,9 +1171,17 @@ NOT_TAKEN_BY_PROGRAM: Final[dict[str, frozenset[str]]] = {
     # SuperSlicer 2.5.59.13 kennt ``thick_bridges`` und
     # ``extra_perimeters_on_overhangs`` nicht (sie heißen dort ``bridge_type`` und
     # ``extra_perimeters_overhangs``), und seinen Brückenfluss liest er in Prozent:
-    # 0,9 hieße dort 0,9 % (RM-587, ``--save``).
+    # 0,9 hieße dort 0,9 % (RM-587, ``--save``). ``dont_support_bridges`` nimmt er
+    # an und stützt die 36-mm-Brücke trotzdem: 5 578 mm Stütze mit 0 und mit 1,
+    # an einem Teil und an beiden (RM-587).
     "superslicer": frozenset(
-        {"shell.scarf_seam", "shell.thick_bridges", "shell.bridge_flow", "shell.overhang_walls"}
+        {
+            "shell.scarf_seam",
+            "shell.thick_bridges",
+            "shell.bridge_flow",
+            "shell.overhang_walls",
+            "support.bridges",
+        }
     ),
     # Den Kontaktlüfter führt nur SuperSlicer (``--help-fff`` von 2.9.6).
     "prusaslicer": frozenset({"cooling.support_interface_cooling"}),

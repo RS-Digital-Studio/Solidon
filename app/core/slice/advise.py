@@ -1783,11 +1783,18 @@ def _from_connectors(settings: PrintSettings, diameters: Sequence[float]) -> lis
 #: Sperre, die Haftung, die Werte einer Passung, Wände und Füllung um
 #: Verbinder, Wandgenerator und Bahnbreite an schmalen Stellen. Dazu der
 #: Stützkontakt: Abstand und Trennschichten hängen am Material der Spule, die
-#: das Teil druckt, und nur das gestützte Teil braucht sie (RM-583).
+#: das Teil druckt, und nur das gestützte Teil braucht sie (RM-583). Und was
+#: frei druckt (RM-587): Brückenstütze, dicke Brücken, Brückenfluss,
+#: Zusatzwände und Umkehr gehören dem Teil mit der Brücke oder dem Überhang.
 #: Temperatur, Kühlung, Rückzug und Volumenstrom gehen je Spule hinaus
 #: (``print_settings_dialog.FILAMENT_GROUPS``), nicht je Teil.
 PART_PATHS: Final = frozenset(
     {
+        "support.bridges",
+        "shell.thick_bridges",
+        "shell.bridge_flow",
+        "shell.overhang_walls",
+        "shell.overhang_reverse",
         "support.style",
         "support.placement",
         "support.block_channels",

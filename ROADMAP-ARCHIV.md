@@ -46265,8 +46265,8 @@ unter flachen, einseitig hängenden Stücken ohne Stütze, breiter als die Wänd
 (`analysis.cantilevers`); *Wandrichtung wechseln* (`overhang_reverse`, nur Orca-Familie) für
 ABS, ASA und TPU an steilen Wänden zwischen 45 Grad und der Stützgrenze
 (`analysis.steep_overhang`). Rücklesung aus Orca- und Prusa-Ketten samt Programmvorgaben von
-PrusaSlicer (`--save`), Übergabe je Programm gemessen: Cura keiner der fünf, SuperSlicer nur die
-Brückenstütze (Fluss dort in Prozent, zwei Schlüssel unbekannt), Bambu Studio ohne Zusatzwände und
+PrusaSlicer (`--save`), Übergabe je Programm gemessen: Cura und SuperSlicer keiner der fünf
+(SuperSlicer: Fluss in Prozent, zwei Schlüssel unbekannt, die Brückenstütze ohne Wirkung), Bambu Studio ohne Zusatzwände und
 Umkehr, Anycubic Slicer Next ohne Zusatzwände (angenommen, ohne Wirkung). Die Gegenprobe fragt die
 Brückenstütze am wirksamen Wert des Teils statt am Herstellerprozess (`Motion.support_skips_bridges`
 entfällt). Gemessen über den Druckdialogweg: N1 vorher 0 mm Stützbahn, jetzt 4 317 mm, abgewählt 0;
@@ -46281,3 +46281,16 @@ nicht (Trichter 40 bis 80 Grad bitgleich), dort schlägt Solidon die Umkehr vor.
 `test_manufacturer.py`, `test_print_time.py`, `test_print_settings.py`, Slicertest
 `test_real_slicers.py` (PrusaSlicer, OrcaSlicer, ElegooSlicer, 3 von 3 grün); Messwerte und Begründung in
 `konzepte/begruendungen/regel-druckrat.md`. Umgesetzt von Claude (Worktree `F:/sl-bruecken`).
+
+**Je Teil (Entscheidung Robert, 09.10.2026):** Die fünf Werte stehen in `advise.PART_PATHS` und
+gehen als Objektwert an das Teil, dessen Rat sie verlangt; die Platte behält die Grundlage.
+Wirkungsnachweis mit zwei gleichen Teilen, nur eines mit Wert, in allen acht Programmen
+(Kerne gepinnt, getrennt an den Objektmarken): Wirkung nur am Teil mit Wert, etwa Brückenstütze
+aus in OrcaSlicer 0 gegen 4 778 mm, in Creality Print 0 gegen 4 775, dicke Brücke in Bambu Studio
+5,34 gegen 3,63 mm Förderung; Tabelle in der Begründung. Kein Programm nimmt einen der Werte nur
+plattenweit. SuperSlicer setzt die Brückenstütze auch an beiden Teilen nicht um und bekommt den
+Schlüssel nicht mehr; was eine Familie gar nicht nimmt, zählt im Split nicht mehr als „nur
+plattenweit“ (sonst meldete Cura an jedem anderen Teil eine Übernahme, die es nie druckt). Wächter
+`test_slicer_part_settings.py` (`MEASURED_PART_PATHS` samt Fehlstellen je Programm, Objektwerte nur
+am verlangenden Teil in PrusaSlicer und OrcaSlicer, Split ohne Scheinübernahme) mit Gegenprobe.
+Umgesetzt von Claude (Worktree `F:/sl-bruecken-teil`).

@@ -599,3 +599,30 @@ ein Prozent wie von Hand gerechnet (50 Grad: 431 gegen 432 mm²), am Korpus
 zwischen 0 (Behälter) und 1 976 mm² (Kumiko-Organizer); unter zehn ist es eine
 Kante. Gerechnet an vereinfachten, nicht vereinigten Konturen und abgebrochen,
 sobald es genug ist: am Besenhalter 0,16 s statt 2,1 s.
+
+**Je Teil, nicht für die Platte** (Entscheidung Robert, 09.10.2026). Die Werte
+gehören dem Teil mit der Brücke oder dem Überhang. Gemessen mit zwei gleichen
+Teilen auf einer Platte, nur das linke mit Wert, Rat kontrolliert, Aufteilung,
+Schreiber und Slicer echt, Kerne gepinnt (`FFFFF0FF`), getrennt an den
+Objektmarken der Druckdatei:
+
+| Programm | Brückenstütze aus (Stütze mm, mit / ohne Wert) | dicke Brücke und 70 % (Brückenförderung mm) | Zusatzwände (Brückenbahn mm) | Umkehr (Drehwechsel) |
+|---|---|---|---|---|
+| PrusaSlicer 2.9.6 | 0 / 4 804 | 5,27 / 3,83 | 996 / 1 254 | kennt es nicht |
+| OrcaSlicer 2.4.2 | 0 / 4 778 | 4,52 / 3,30 | 1 067 / 1 403 | 99 / 0 |
+| ElegooSlicer 1.5.3.5 | 0 / 5 113 | 2,20 / 3,57 | 1 007 / 1 303 | 99 / 0 |
+| Creality Print 7.3 | 0 / 4 775 | 5,16 / 4,21 | 1 139 / 1 399 | 98 / 0 |
+| Anycubic Slicer Next 2.0 | 0 / 7 585 | 5,15 / 3,89 | ohne Wirkung | 1 / 0 (dreht jede Schicht) |
+| Bambu Studio 02.08 | 0 / 5 090 | 5,34 / 3,63 | kennt es nicht | kennt es nicht |
+| SuperSlicer 2.5.59 | 5 578 / 5 578 | kennt es nicht | kennt es nicht | kennt es nicht |
+| CuraEngine 5.13 | kennt es nicht | kennt es nicht | kennt es nicht | kennt es nicht |
+
+Mit dem Wert an beiden Teilen zeigen beide die Wirkung (Creality Print:
+Brückenstütze aus 0 / 0, Förderung 5,16 / 5,16). Ein Programm, das einen der
+Werte nimmt, nimmt ihn also je Objekt; plattenweit bleibt keiner. SuperSlicer
+stützt die Brücke mit `dont_support_bridges` 0 und 1 gleich, auch an beiden
+Teilen, und bekommt den Schlüssel nicht mehr. Was eine Familie gar nicht nimmt,
+gilt im Split auch nicht als „nur plattenweit“: Cura hätte sonst an jedem anderen
+Teil eine Übernahme gemeldet, die es nie druckt. Die Lagetrennung allein führte
+in die Irre: Creality Print ordnet die Teile entlang Y an, und eine Trennung in X
+mischte beide Teile.
