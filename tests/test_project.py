@@ -4871,13 +4871,18 @@ def test_v48_sculpting_and_posing_compute_as_saved(profile) -> None:
     eine Kugel Ø 40, auf 1,5 mm angeglichen, mit 24 Pinselproben in vier Gesten
     (zweimal Auftragen über dieselbe Linie, Glätten mit Stärke 2, Abtragen) und
     Symmetrie X, dazu ein Stab 12 × 12 × 60 mm mit zwei Knochen nur in der oberen
-    Hälfte, um 30° und 25° gebeugt. Gemessen beim Schreiben: Kugel 32 742,854319
-    mm³ bis z = 44,328983; Stab 8 584,334036 mm³, sein Fuß bei z = 1,019238, weil
-    er damals am nächsten Knochen hing. Nach der Migration tragen die Schritte
-    ``mirror_fitted`` und ``fixed_rest`` aus, die Züge Pinselfassung 1, und beide
+    Hälfte, um 30° und 25° gebeugt, und ein Klotz 40 × 20 × 20 mm mit einem dünnen
+    Arm an einer Seite — in X nicht symmetrisch — mit drei Spiegelzügen (Review
+    G4). Gemessen beim Schreiben: Kugel 32 742,854319 mm³ bis z = 44,328983; Stab
+    8 584,334036 mm³, sein Fuß bei z = 1,019238, weil er damals am nächsten Knochen
+    hing; Klotz 16 508,448935 mm³ bis z = 21,387214. Nach der Migration tragen die Schritte
+    ``mirror_fitted`` und ``fixed_rest`` aus, die Züge Pinselfassung 1, und alle
     Körper rechnen wie gespeichert. Gegenproben: Mit festem Rumpf bleibt der Fuß
-    auf dem Bett, und dieselben Züge in Fassung 2 rechnen anders.
+    auf dem Bett, mit angepasster Spiegelmitte rechnet der Klotz anders, und
+    dieselben Züge in Fassung 2 rechnen anders.
     """
+    import numpy as np
+
     from app.core.geom.sculpt import strokes_from_text, strokes_to_text
     from app.core.scene.evaluate import evaluate
 
@@ -4885,9 +4890,9 @@ def test_v48_sculpting_and_posing_compute_as_saved(profile) -> None:
     assert project_data(path)["format_version"] == 48
 
     project = load(path)
-    (sculpt,) = [entry for entry in project.document.ops if entry.op == "sculpt_strokes"]
+    sculpt, lumpy = [entry for entry in project.document.ops if entry.op == "sculpt_strokes"]
     (pose,) = [entry for entry in project.document.ops if entry.op == "pose_armature"]
-    assert sculpt.params["mirror_fitted"] is False
+    assert sculpt.params["mirror_fitted"] is False and lumpy.params["mirror_fitted"] is False
     assert pose.params["fixed_rest"] is False
     strokes = strokes_from_text(sculpt.params["strokes"])
     assert len(strokes) == 24 and all(stroke.brush == 1 for stroke in strokes)
@@ -4902,8 +4907,15 @@ def test_v48_sculpting_and_posing_compute_as_saved(profile) -> None:
     assert float(saved["kugel"].raw.bounds[1][2]) == pytest.approx(44.328983, abs=1e-6)
     assert float(saved["stab"].volume) == pytest.approx(8584.334036, abs=1e-5)
     assert float(saved["stab"].raw.bounds[0][2]) == pytest.approx(1.019238, abs=1e-6)
+    assert float(saved["klotz"].volume) == pytest.approx(16508.448935, abs=1e-5)
+    assert float(saved["klotz"].raw.bounds[1][2]) == pytest.approx(21.387214, abs=1e-6)
 
     history = History(project.document)
+    history.change_params(lumpy.id, {**lumpy.params, "mirror_fitted": True})
+    fitted = np.asarray(bodies()["klotz"].raw.vertices) - np.asarray(saved["klotz"].raw.vertices)
+    assert float(np.abs(fitted).max()) > 1.0, (
+        "Gegenprobe: an der angepassten Mitte spiegeln die Züge anderswohin"
+    )
     history.change_params(pose.id, {**pose.params, "fixed_rest": True})
     assert float(bodies()["stab"].raw.bounds[0][2]) == pytest.approx(0.0, abs=1e-3), (
         "mit festem Rumpf bleibt der Fuß auf dem Bett"
