@@ -2394,7 +2394,7 @@ def test_escape_has_exactly_one_owner_in_the_sketch_mode(qt_app: QApplication) -
     ``test_escape_gives_back_one_thing_at_a_time`` direkt an ``drop_tool`` —
     und das Fenster ist der einzige Weg, auf dem die Taste sie je erreicht.
     """
-    from PySide6.QtGui import QShortcut
+    from PySide6.QtGui import QAction, QShortcut
 
     from app.ui.main_window import MainWindow
     from app.ui.session import Session
@@ -2407,10 +2407,17 @@ def test_escape_has_exactly_one_owner_in_the_sketch_mode(qt_app: QApplication) -
         panel = window._sketch_panel
         assert panel is not None
 
-        owners = [
+        # Besitzer sind ``QShortcut`` und Aktionen gleichermaßen: Das Fenster
+        # hält Esc als Aktion, damit herausgezogene Reiter sie teilen.
+        owners: list[QShortcut | QAction] = [
             shortcut
             for shortcut in window.findChildren(QShortcut)
             if shortcut.key().toString() == "Esc" and shortcut.isEnabled()
+        ]
+        owners += [
+            action
+            for action in window.findChildren(QAction)
+            if action.isEnabled() and "Esc" in [key.toString() for key in action.shortcuts()]
         ]
         assert len(owners) == 1, (
             f"{len(owners)} Kürzel auf Escape — Qt führt dann keines aus: "
