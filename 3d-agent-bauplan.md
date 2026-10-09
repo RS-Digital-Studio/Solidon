@@ -381,6 +381,7 @@ Prüfung prüft jede gefundene Datei, nicht die englische.
 | Rückfallkette | `solver chain` | Stufen bei gescheiterter Boolescher Op |
 | Passung | `Fit` | benannte Beziehung zweier Features |
 | Profil | `Profile` | Drucker- oder Materialeinstellungen |
+| Druckgleich | `PRINT_LIMIT` | Maßstab für Beschleunigungen: diskret gleich, Maße höchstens um die Druckgrenze verschieden, kein Netz schlechter (§11.2) |
 | Verfahren | `technology` | wie ein Drucker Material zu einem Körper macht: `fdm` legt Bahnen aus einer Düse, `resin` belichtet Schichten in einem Harzbad (§38) |
 | Saugglocke | `cupping` | ein nach unten offener Hohlraum, der beim Abziehen von der Folie Unterdruck zieht — Resin-Befund der zweiten Stufe (§22.2); geplant, [RM-188](ROADMAP.md#rm-188) P9 |
 | Abflussöffnung | `drain` | die Bohrung, durch die ungehärtetes Harz aus einem ausgehöhlten Körper abläuft (§25); geplant, [RM-188](ROADMAP.md#rm-188) P9 |
@@ -845,10 +846,7 @@ Dialog, Kommandozeile und Agentenaufruf.
 
 ### 11.1 Einheiten
 Der Kern rechnet **ausschließlich in Millimetern** und in doppelter
-Genauigkeit. Gehaltene Netze — Verlauf, Cache, Platte, Hilfsprozesse — dürfen
-einfach genau sein (Ecken `float32`, Dreiecksindizes `int32`), solange das
-Ergebnis druckgleich bleibt (§11.2); Kundendaten aus STL kommen ohnehin so.
-Eine andere Anzeigeeinheit ist reine Oberflächensache und
+Genauigkeit. Eine andere Anzeigeeinheit ist reine Oberflächensache und
 erreicht den Kern nie. Umrechnungen passieren genau zweimal: beim Import
 (§17.1) und in der Anzeige.
 
@@ -869,15 +867,36 @@ in Facetten zerlegen (§25, §30). Die Merkmalszuordnung aus
 §21.3 nutzt eigene, geprüfte Kosten und Annahmeschwellen in
 `app/core/perceive/matching.py`; diese Funktion steuert sie nicht.
 
-**Druckgleich** ist der Maßstab für jede Beschleunigung und Ersparnis
-(Entscheidung Robert): Jedes diskrete Ergebnis bleibt gleich — Merkmale,
-Arten, Namen, Befunde, Objektzahl, Fragen an den Nutzer; Maße und Lagen
-weichen höchstens um die Druckgrenze ab, ein Vierzigstel der kleinsten
-angebotenen Düse (`COMMON_NOZZLE_SIZES`, 0,2 mm → 5 µm, unter einem
-Motor-Mikroschritt); die Netze bleiben sauber — wasserdicht, mannigfaltig,
-ohne Selbstdurchdringung und entartete Dreiecke —, und Import und Export
-laufen in jedem Format wie vorher. Bitgleich bleibt, was §11.3, Cache-Schlüssel
-und Projektdateien verlangen.
+**Druckgleich** ist der Maßstab, an dem eine Beschleunigung oder
+Speicherersparnis gemessen wird (Entscheidung Robert: Was sich beim Druck
+nicht zeigt, darf gespart werden, solange die kleinste Düse sauber
+unterstützt wird und die Modelle sauber ein- und ausgelesen werden).
+Verglichen wird der Stand nach der Änderung mit dem davor und mit dem letzten
+veröffentlichten, über Korpus und Beispielprojekte; die größte Abweichung
+steht im Nachweis.
+
+- **Diskret gleich:** Objekte und ihre Folge, Slots, Merkmale mit Art und
+  Kennung, Befunde, Fragen an den Nutzer, Rückfallstufe, dicht nach dem
+  Verschweißen wie im Slicer. Dreiecksfolge und letzte Anzeigestelle dürfen
+  sich ändern.
+- **Maße und Positionen** weichen höchstens um `PRINT_LIMIT` ab: ein
+  Vierzigstel der kleinsten Düse, die der Druckdialog annimmt
+  (`SMALLEST_NOZZLE`, 0,1 mm → 2,5 µm) — unter der Bahnauflösung der Slicer
+  (6–12,5 µm) und einem Achtel der feinsten Harzpixel.
+- **Kein Netz wird schlechter:** keine neue offene Kante, Selbstdurchdringung
+  oder entartetes Dreieck; Import und Export lesen und schreiben jedes Format
+  wie vorher, inhaltlich druckgleich, nicht bytegleich.
+
+Druckgleich lockert keinen Gleichheitsvertrag zwischen zwei Wegen desselben
+Stands: gleicher Startwert (§11.3), jede Plattform (`.claude/rules/kern.md`),
+Hilfsprozess und Prozess, Auswertung mit und ohne Cache (§15.1), örtliche und ganze
+Erkennung, Vorschau und Op, übersetzter Kern und NumPy-Rückfall — sie bleiben
+bitgleich, Projektdateien inhaltsgleich. Gebündelt wird nach den
+Plattformregeln (kein BLAS, kein `einsum` in Wegen zu Geometrie). Ändert eine
+druckgleiche Änderung die Bits eines gespeicherten Ergebnisses, steigt
+`cache_version`. `PRINT_LIMIT` ist keine Toleranz, mit der der Kern rechnet,
+und die Facettenauflösung `MAX_FACET_SAG` bleibt eine Modellentscheidung,
+keine Ersparnis.
 
 Numerische Genauigkeit, Erkennungsunsicherheit und Fertigungsspiel sind
 verschiedene Größen. Fertigungstoleranzen kommen aus dem Materialprofil,

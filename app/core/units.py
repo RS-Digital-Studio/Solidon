@@ -60,6 +60,16 @@ EPS_SETTING: Final[float] = 1e-6
 #: und genau davor steht die Zusage, dass beide dieselbe Kante gleich nennen.
 MAX_FACET_SAG: Final[float] = 0.05
 
+# --- Woran eine Beschleunigung gemessen wird (§11.2, druckgleich) -------------------
+
+#: Die kleinste Düse, die der Druckdialog annimmt.
+SMALLEST_NOZZLE: Final[float] = 0.1
+
+#: Wie weit Maße und Positionen nach einer Beschleunigung oder Ersparnis vom
+#: Stand davor abweichen dürfen: ein Vierzigstel der kleinsten Düse. Keine
+#: Toleranz, mit der der Kern rechnet, sondern der Maßstab der Nachweise.
+PRINT_LIMIT: Final[float] = SMALLEST_NOZZLE / 40
+
 #: Wie groß ein erzeugtes Gewinde werden darf, im Nenndurchmesser und in der
 #: Steigung — eine Grenze für *Druckbares Gewinde* mit eigenem Maß, *Schraube
 #: erstellen* und *Drehdeckel erzeugen* zugleich. Bis zum 06.10.2026 hatte jede
