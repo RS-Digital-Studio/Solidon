@@ -5222,6 +5222,51 @@ def test_a_rounded_box_keeps_its_fillets() -> None:
     assert counted.get("fillet") == 20, counted
 
 
+def test_the_contour_of_a_chosen_edge_is_what_the_fillet_rounds() -> None:
+    """RM-579: Welche Kanten eine Rundung an einer gewählten mitnimmt — vor dem Bau.
+
+    Quader 40 × 30 × 20, die vier senkrechten Kanten mit r = 3 gerundet: Der
+    obere Rand ist eine Kette aus vier Strecken und vier Viertelbögen,
+    tangential ineinander, und OpenCASCADE rundet an einer Strecke alle acht.
+    Die Hervorhebung zeigte nur die geklickte. Soll: ``contour_keys`` nennt die
+    acht, und die Rundung r = 1 an der einen trägt ab, was das Lehrbuch für
+    den ganzen Rand sagt — Querschnitt (1 - π/4)·r² entlang der Strecken
+    (2·34 + 2·24 mm) und um die Bögen nach Pappus, der Schwerpunkt des
+    Querschnitts (10 - 3π)/(12 - 3π)·r von der Kante. Am ungerundeten Quader
+    bleibt es die eine Kante.
+    """
+    plain = edit.box(40.0, 30.0, 20.0)
+    rounded = edit.fillet(plain, 3.0, "vertical")
+
+    def top_line(solid: Solid) -> str:
+        return edit.edge_key(
+            next(
+                info
+                for info in edit.edges_of(solid)
+                if info.flat
+                and abs(info.middle[0] + 20.0) < 0.01
+                and abs(info.middle[1]) < 0.01
+                and info.middle[2] > 10.0
+            )
+        )
+
+    chosen = top_line(rounded)
+    rim = edit.contour_keys(rounded, [chosen])
+    assert rim[0] == chosen
+    assert len(rim) == 8, rim
+    assert all(
+        info.middle[2] == pytest.approx(20.0, abs=1e-6) for info in edit.named_edges(rounded, rim)
+    ), "alle acht liegen im oberen Rand"
+    assert edit.contour_keys(plain, [top_line(plain)]) == (top_line(plain),)
+
+    radius = 1.0
+    share = (10.0 - 3.0 * math.pi) / (12.0 - 3.0 * math.pi) * radius
+    section = (1.0 - math.pi / 4.0) * radius**2
+    expected = section * (2.0 * 34.0 + 2.0 * 24.0 + 2.0 * math.pi * (3.0 - share))
+    one = edit.fillet(rounded, radius, "named", keys=(chosen,))
+    assert rounded.volume - one.volume == pytest.approx(expected, rel=1e-6)
+
+
 # --- Die Achse trägt an beiden Kernen dasselbe Vorzeichen ------------------------
 
 

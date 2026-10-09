@@ -71,8 +71,11 @@ beantwortet die Stufe für Merkmal und Kante.
   in `select`, `select_feature`, `_refresh_feature_selection`), **zählt in
   `selection_depth`** und **verschluckt keinen fremden Klick**
   (`_means_a_feature()`: Messen, Teilen, Skelett, Formen gehen vor). Umschalt
-  und Strg nehmen an einer gewählten Kante weitere dazu (`add_edge`), sonst
+  und Strg nehmen an einer gewählten Kante weitere dazu (`add_edges`), sonst
   den Körper.
+* **Eine Ecke bringt ihre Kanten** (`_corner_at`: ab `CORNER_EDGES`, halbe
+  Reichweite); am exakten Körper zeigt die Linie die ganze Kontur, die
+  Verrunden und Fase mitnehmen (`brep.edit.contour_keys`).
 * **Der Zeiger fragt `_edge_under`**, die Bedingungen von `_edge_click`; die
   Rolle bleibt `feature`.
 * **Rechts ohne Vorbedingung** (`_edge_click(direct=…)`); der Körper wird
@@ -458,16 +461,14 @@ aus dem Vorrat (`restyled`).
 `_apply_scene` vor dessen frühen Rückkehrpunkten (der leere Startaufbau kostet
 niemanden), einmal je Renderer (`_picker_warm`);
 `_warm_again_for_new_geometry` am **Ende** armiert neu, nur bei neuer
-Geometrie. Geprüft wird der Anschluss, nicht die Zeit
-(`test_the_picker_is_warmed_up_before_the_first_gesture`,
-`test_new_geometry_warms_the_picker_again`). Schriftzeichen ebenso
+Geometrie. Schriftzeichen ebenso
 (`_warm_the_glyphs`): **Neue Zeichen in Beschriftungen gehören in
 `LABEL_GLYPHS`.**
 
 ### Der Adapter wird einmal gefragt, und nicht im Hauptthread
 
 Ohne wgpu-Adapter stirbt der Renderer mit dem Prozess; die erste Frage kostet
-rund eine Sekunde, jede weitere 0,3 s, bei drei Sekunden Startbudget (§31). In
+rund eine Sekunde, jede weitere 0,3 s (Startbudget §31). In
 `app/ui/render/factory.py`: **Die Antwort bleibt liegen** (sie gilt für die
 Maschine); **gefragt wird nebenan** (`_AdapterProbe` aus `app.ui.app.main` an
 der Leine, bevor das Register lädt); **mit Frist** (`ADAPTER_TIMEOUT_SECONDS`,

@@ -194,7 +194,9 @@ unveränderten Ergebnis (`HasSourceDeviation`).
   ihren eigenen Satz. **Im Aufruf ist die Nummer der Beleg**: `selected_edges`
   (`checked_edge_indices`, `_edges_for`) geht vor `keys`, ohne Rückfall; die
   Auswertung bindet über `native_edge_indices`, nie über `edges_of`.
-  `edge_points` gibt die Kante nach `DEFLECTION` als Punktfolge.
+  `edge_points` gibt die Kante nach `DEFLECTION` als Punktfolge;
+  `contour_keys` nennt, was eine Rundung an ihr tangential mitnimmt, ohne zu
+  bauen (die Linie im Bild, RM-579).
 - **`native_edges_of_segments` belegt je Strecke** (`native_edges_of_chains`
   fasst je Zug zusammen): Netzknoten und Dreiecksnachbarn führen über
   `face_sources` zu genau zwei nativen Flächen; mehrere gemeinsame Kanten

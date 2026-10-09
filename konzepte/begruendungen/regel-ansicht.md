@@ -117,6 +117,17 @@ beim ersten Anlauf offen und kamen aus dem Review, keines aus der Suite:
   Merkmalfenster behält beim Dazunehmen, was schon eingetragen ist
   (`FeaturePanel.show_edge`): Wer zuerst den Radius tippt und dann die nächste
   Kante holt, meint ihn weiter.
+* **Eine Ecke bringt ihre Kanten, und die Linie zeigt die ganze Kontur**
+  (RM-590, RM-579, Review G). Die Kunden-E-Mail zu RM-563 nannte „Kanten und
+  Ecken“: Eine Ecke verrunden hieß, ihre drei Kanten einzeln mit Strg
+  zusammenzuklicken, und ein Klick auf die Ecke traf eine davon. Eine Ecke ist
+  ein Endpunkt, an dem sich mindestens drei Kanten treffen — an zweien liegt
+  ein Knick oder der Übergang einer Strecke in einen Bogen —, und sie fängt nur
+  in halber Kantenreichweite, damit eine Kante kurz vor ihrem Ende anklickbar
+  bleibt. Am exakten Körper rundet OpenCASCADE eine Kante mit jeder tangential
+  anschließenden; am Quader mit gerundeten senkrechten Kanten ging Verrunden an
+  einer oberen Strecke über alle acht Stücke des Rands, und die Linie zeigte
+  eine. Gelesen wird die Kontur aus demselben Builder, ohne zu bauen.
 
 **Ein Vorfilter misst gegen den Hüllquader der Kante, nicht gegen ihre
 Stützpunkte.** Der erste Anlauf tat das zweite und warf zwölf von zwölf

@@ -2468,6 +2468,126 @@ def test_ctrl_or_shift_click_takes_more_edges_of_the_chosen_body(qt_app: QApplic
     assert view.highlighted_edges() == ()
 
 
+@pytest.mark.parametrize("kernel", ["brep", "mesh"])
+def test_a_click_on_a_corner_chooses_the_edges_that_meet_there(
+    qt_app: QApplication, kernel: str
+) -> None:
+    """RM-590: Ein Klick auf eine Ecke wählt ihre drei Kanten.
+
+    Die Kunden-E-Mail zu RM-563 nannte „Kanten und Ecken“: Wer eine Ecke
+    verrunden wollte, klickte ihre drei Kanten einzeln mit Strg zusammen, und
+    ein Klick auf die Ecke selbst traf eine davon. Soll an beiden Körperarten:
+    Ein Klick auf die obere Ecke wählt die drei Kanten dort, ein Klick auf die
+    Mitte einer Kante weiter nur sie; mit Strg nimmt ein Klick auf die Ecke
+    ihre Kanten zu einer gewählten dazu und ein zweiter wieder heraus.
+    """
+    import numpy as np
+    import trimesh
+
+    view = Viewport()
+    renderer = _DepthRenderer()
+    view.renderer = renderer
+    if kernel == "brep":
+        exact_kernel()
+        _exact_block(view)
+    else:
+        raw = trimesh.creation.box((40.0, 30.0, 20.0))
+        raw.apply_translation((0.0, 0.0, 10.0))
+        entry = SceneObject(id="block", name="Block", mesh=MeshData.of(raw))
+        view.show_scene(EvaluationResult(scene=Scene(objects={"block": entry})))
+    vorbereitet = view._prepared_edges("block")
+
+    def an(punkt: tuple[float, float, float]) -> set[str]:
+        return {
+            key
+            for key, punkte in vorbereitet
+            if min(math.dist(punkte[0], punkt), math.dist(punkte[-1], punkt)) < 1e-6
+        }
+
+    def mitte(punkt: tuple[float, float, float]) -> str:
+        (key,) = [
+            key
+            for key, punkte in vorbereitet
+            if math.dist((np.asarray(punkte[0]) + np.asarray(punkte[-1])) / 2.0, punkt) < 1e-6
+        ]
+        return key
+
+    ecke = an((20.0, 15.0, 20.0))
+    assert len(ecke) == 3, "Voraussetzung: drei Kanten an der Ecke"
+    koerper = view._actors["block"]
+    # Die Projektion der Attrappe: x_bild = 2·x + 400, y_bild = 300 - 2·y.
+    renderer.picks[(440, 270)] = Pick((20.0, 15.0, 20.0), koerper, 0)
+    renderer.picks[(440, 300)] = Pick((20.0, 0.0, 20.0), koerper, 0)
+    renderer.picks[(360, 300)] = Pick((-20.0, 0.0, 20.0), koerper, 0)
+    gemeldet: list[tuple[str, str]] = []
+    view.edgePicked.connect(lambda body, key: gemeldet.append((body, key)))
+    view._selected = "block"
+
+    view._on_left_click(440, 270)
+    assert set(view.highlighted_edges()) == ecke, "die Ecke wählt ihre drei Kanten"
+    assert gemeldet and gemeldet[-1] == ("block", view.highlighted_edges()[-1])
+    linie = renderer.entries("edge:block")[-1]
+    assert len(linie["polylines"]) == 3, "drei Ketten in einer Linie"
+
+    view._on_left_click(440, 300)
+    assert view.highlighted_edges() == (mitte((20.0, 0.0, 20.0)),), "die Mitte meint die Kante"
+
+    links = mitte((-20.0, 0.0, 20.0))
+    view._on_left_click(360, 300)
+    assert view.highlighted_edges() == (links,)
+    view._on_left_click(440, 270, add=True)
+    assert set(view.highlighted_edges()) == {links, *ecke}, "mit Strg kommt die Ecke dazu"
+    view._on_left_click(440, 270, add=True)
+    assert view.highlighted_edges() == (links,), "ein zweiter Klick nimmt sie heraus"
+
+
+@pytest.mark.parametrize(("rounded", "chains"), [(True, 8), (False, 1)])
+def test_a_chosen_edge_of_an_exact_body_shows_the_whole_contour_it_rounds(
+    qt_app: QApplication, rounded: bool, chains: int
+) -> None:
+    """RM-579: Am exakten Körper zeigt die Linie die ganze Tangentenkette, die verrundet wird.
+
+    OpenCASCADE rundet eine Kante mit jeder tangential anschließenden. Am
+    Quader mit gerundeten senkrechten Kanten (r = 3) geht *Verrunden* an einer
+    oberen Strecke über den ganzen oberen Rand — vier Strecken, vier Bögen —,
+    und die Linie zeigte nur die geklickte; was mitging, sah der Kunde erst in
+    der Vorschau. Soll: acht Ketten in der Linie, gewählt und führend bleibt
+    die geklickte. Am ungerundeten Quader bleibt es eine.
+    """
+    from app.core.brep import edit as brep_edit
+    from app.core.brep.features import features_of
+
+    exact_kernel()
+    view = Viewport()
+    renderer = _DepthRenderer()
+    view.renderer = renderer
+    solid = brep_edit.box(40.0, 30.0, 20.0)
+    if rounded:
+        solid = brep_edit.fillet(solid, 3.0, "vertical")
+    entry = SceneObject(
+        id="block", name="Block", mesh=solid, kind="brep", features=features_of(solid)
+    )
+    view.show_scene(EvaluationResult(scene=Scene(objects={"block": entry})))
+    key = brep_edit.edge_key(
+        next(
+            info
+            for info in brep_edit.edges_of(solid)
+            if info.flat
+            and abs(info.middle[0] + 20.0) < 0.01
+            and abs(info.middle[1]) < 0.01
+            and info.middle[2] > 10.0
+        )
+    )
+
+    view.select_edge("block", key)
+
+    assert view.highlighted_edges() == (key,), "gewählt bleibt die eine"
+    assert view.highlighted_edge() == ("block", key)
+    linie = renderer.entries("edge:block")[-1]
+    assert len(linie["polylines"] or [linie]) == chains, linie["polylines"]
+    assert linie["keep_in_front"]
+
+
 def test_the_pointer_over_an_edge_promises_what_the_click_does(qt_app: QApplication) -> None:
     """Der Zeiger stellt dieselbe Frage wie der Klick — auch an einer Kante.
 
