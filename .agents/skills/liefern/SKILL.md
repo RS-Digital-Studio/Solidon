@@ -53,6 +53,13 @@ Linux und macOS** (Entscheidung Robert, `.claude/rules/tests.md`, CI-09):
    übergangen. Meldet das Werkzeug keinen Fenster- und keinen Slicertest,
    entfällt der Schritt. Die Laufnummern gehören in den Bericht.
 
+**Vor dem Merge nach main steht der Kundenpunkt im Changelog** (Entscheidung
+Robert, `.claude/rules/auslieferung.md`): Merkt ein Kunde, was die Einheit
+ändert, trägt der Zweig ihren Punkt als Teil der Einheit, also vor Tor und
+Review, in den offenen Abschnitt aller sechs `changelog/<sprache>.md` ein,
+geprüft wie dort beschrieben. Unterlagen, Tests
+und Werkzeuge ohne Wirkung beim Kunden brauchen keinen.
+
 ## Die Einheit abgrenzen
 
 Andere Sitzungen arbeiten im selben Baum. Geliefert wird nur, was zu dieser

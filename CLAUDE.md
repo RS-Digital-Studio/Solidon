@@ -40,8 +40,8 @@ setzen `PYTHONUTF8=1` für ihre Unterprozesse.
 **Je Schritt** die betroffenen Tests — der Importgraph wählt sie aus:
 
 ```
-.venv\Scripts\python.exe tools/affected_tests.py app/core/units.py --run   # Dateien nennen
-.venv\Scripts\python.exe tools/affected_tests.py --run                     # alle Änderungen gegen HEAD
+.venv\Scripts\python.exe tools/affected_tests.py app/core/units.py --run  # Dateien nennen
+.venv\Scripts\python.exe tools/affected_tests.py --run    # alle Änderungen gegen HEAD
 ```
 
 Ohne Dateiliste zählt jede Änderung gegen HEAD, auch fremde.
@@ -74,9 +74,9 @@ wird, steht in `/pruefen` und `.claude/rules/tests.md`.
 Weiteres:
 
 ```
-.venv\Scripts\python.exe -m app.ui.app                    # Anwendung starten
-.venv\Scripts\python.exe -m app.cli.main --help           # Kommandozeile
-.venv\Scripts\python.exe tools/run_agent_suite.py         # kostet Geld, kein Testlauf
+.venv\Scripts\python.exe -m app.ui.app                # Anwendung starten
+.venv\Scripts\python.exe -m app.cli.main --help       # Kommandozeile
+.venv\Scripts\python.exe tools/run_agent_suite.py     # kostet Geld, kein Testlauf
 ```
 
 Was **nicht Code** erzeugt — Bildschirmfotos, Handbuch, Website-Bilder, SEO,
@@ -167,10 +167,10 @@ raten — das steht in `AGENTS.md`. Dazu:
 - **Nach jedem abgeschlossenen Punkt committen und pushen**, sobald Tor und
   Review grün sind — in logischen Einheiten, nur die eigenen Pfade, mit
   `Co-Authored-By`, ohne Rückfrage, per Merge (Entscheidung Robert).
-- **Vor jedem Push nach main ein Review** (`solidon3d-review`, Entscheidung
-  Robert), auch für Unterlagen und Review-Fixes, Nachprüfung nur bei mehreren
-  mittleren oder schweren Befunden; danach eigene Worktrees und Zweige abbauen
-  (`/liefern`).
+- **Vor jedem Push nach main ein Review, bei Kundenwirkung samt Changelog**
+  (`solidon3d-review`, Entscheidung Robert), auch für Unterlagen und
+  Review-Fixes, Nachprüfung nur bei mehreren mittleren oder schweren Befunden;
+  danach eigene Worktrees und Zweige abbauen (`/liefern`).
 - **`.githooks/post-commit` pusht** jeden Commit, weil auf drei Maschinen
   gearbeitet wird. Er holt und rebasiert nicht — ist die Gegenstelle weiter,
   scheitert er und sagt es. `SOLIDON_KEIN_PUSH=1` hält einen Commit lokal,
