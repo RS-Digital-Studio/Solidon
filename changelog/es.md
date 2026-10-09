@@ -72,6 +72,12 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Al recortar una parte de un cuerpo, desaparecen también los chaflanes, roscas y alojamientos de tuerca de los bloques que había en ella.
 - En *Generar tapa* y *Generar tapa roscada*, un campo vacío para la altura de la abertura significa «Borde superior», y 0 es la altura de la cama. Los proyectos antiguos conservan su abertura.
 - Una restricción de ángulo en un dibujo pequeño ya no voltea las líneas.
+- Para modelar hay cuatro herramientas, cada una con su botón y su atajo. La intensidad es un nivel de 1 a 10, y repasar la misma zona ya no acumula material.
+- El pincel se ajusta al tamaño del cuerpo. Si la malla es demasiado gruesa, *Modelar* iguala los triángulos en el primer trazo, y un Ctrl+Z deshace ambas cosas.
+- Al reflejar, el plano queda donde el cuerpo coincide consigo mismo, aunque una parte sobresalga mucho hacia un lado.
+- Modelar sigue al ratón con fluidez, y hasta un paso con cientos de trazos de pincel se calcula rápido.
+- En *Esqueleto*, cada clic después del primero pone un hueso, Intro termina la cadena, arrastrar una articulación la dobla y *Terminado* lo guarda todo sin diálogo.
+- Un esqueleto solo dobla lo que cuelga de sus huesos, y el resto del cuerpo se queda quieto. Los proyectos anteriores se calculan como se guardaron.
 
 ### Generar con IA
 

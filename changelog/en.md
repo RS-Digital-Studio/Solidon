@@ -71,6 +71,12 @@ it into `website/version.json`.
 - When you cut away part of a body, chamfers, threads and nut pockets of parts that lay inside it go too.
 - In *Create lid* and *Create screw lid*, an empty field for the opening height means “Top edge”, and 0 is the height of the bed. Older projects keep their opening.
 - An angle constraint in a small sketch no longer flips the lines over.
+- Sculpting offers four tools, each with its own button and shortcut. Strength is a level from 1 to 10, and going over the same spot again no longer piles up.
+- The brush fits the size of the body. If the mesh is too coarse for it, *Sculpt* evens out the triangles on the first stroke, and one Ctrl+Z undoes both.
+- When mirroring, the plane lies where the body matches itself, even when one part sticks far out to the side.
+- Sculpting follows the mouse smoothly, and even a step with hundreds of brush strokes is calculated quickly.
+- In *Armature*, every click after the first sets a bone, Enter ends the chain, dragging a joint bends it, and *Done* saves everything without a dialog.
+- An armature bends only what hangs on its bones, and the rest of the body stays put. Older projects calculate as saved.
 
 ### Generating with AI
 

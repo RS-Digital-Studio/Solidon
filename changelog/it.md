@@ -71,6 +71,12 @@ scrive in `website/version.json`.
 - Quando tagli via una parte di un corpo, spariscono anche smussi, filettature e sedi per dadi dei blocchi che vi si trovavano.
 - In *Crea coperchio* e *Crea coperchio a vite*, un campo vuoto per l'altezza dell'apertura significa «Bordo superiore», e 0 è l'altezza del piano. I progetti più vecchi mantengono la loro apertura.
 - Un vincolo d'angolo in uno schizzo piccolo non ribalta più le linee.
+- Per modellare ci sono quattro strumenti, ognuno con il suo pulsante e la sua scorciatoia. L'intensità è un livello da 1 a 10, e ripassare lo stesso punto non accumula più materiale.
+- Il pennello si adatta alle dimensioni del corpo. Se la mesh è troppo grossolana, *Modella* uniforma i triangoli al primo tratto, e un Ctrl+Z annulla entrambe le cose.
+- Nello specchiare il piano sta dove il corpo corrisponde a sé stesso, anche quando una parte sporge molto di lato.
+- Modellare segue il mouse in modo fluido, e anche un passaggio con centinaia di tratti di pennello si calcola in fretta.
+- In *Scheletro* ogni clic dopo il primo crea un osso, Invio chiude la catena, trascinare un'articolazione la piega e *Fatto* salva tutto senza dialogo.
+- Uno scheletro piega solo ciò che è legato alle sue ossa, il resto del corpo resta fermo. I progetti precedenti si calcolano come salvati.
 
 ### Generare con l'IA
 

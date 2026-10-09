@@ -96,6 +96,12 @@ Nutzen da und sonst nichts.
 - Schneiden Sie einen Teil des Körpers weg, verschwinden auch Fasen, Gewinde und Mutterntaschen von Bausteinen, die darin lagen.
 - In *Deckel erzeugen* und *Drehdeckel erzeugen* heißt ein leeres Feld für die Höhe der Öffnung „Oberkante“, und 0 ist die Höhe des Betts. Ältere Projekte behalten ihre Öffnung.
 - Eine Winkelbedingung in einer kleinen Skizze wirft die Linien nicht mehr um.
+- Zum *Formen* gibt es vier Werkzeuge mit je einem Knopf und Kürzel. Die Stärke ist eine Stufe von 1 bis 10, und mehrfaches Überstreichen derselben Stelle türmt nichts mehr auf.
+- Der Pinsel passt zur Größe des Körpers. Ist das Netz für ihn zu grob, gleicht *Formen* die Dreiecke beim ersten Zug selbst an, und ein Strg+Z nimmt beides zurück.
+- Beim Spiegeln liegt die Ebene dort, wo der Körper sich selbst gleicht, auch wenn ein Teil weit zur Seite ragt.
+- Formen folgt der Maus flüssig, und auch ein Schritt mit hunderten Pinselzügen ist schnell gerechnet.
+- Im *Skelett* setzt jeder Klick nach dem ersten einen Knochen, Enter beendet die Kette, Ziehen an einem Gelenk beugt, und *Fertig* legt alles ohne Dialog ab.
+- Ein Skelett beugt nur, was an seinen Knochen hängt, der Rest des Körpers bleibt stehen. Ältere Projekte rechnen wie gespeichert.
 
 ### Erzeugen mit KI
 

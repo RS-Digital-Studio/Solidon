@@ -71,6 +71,12 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Ao cortar uma parte de um corpo, desaparecem também chanfros, roscas e alojamentos de porcas dos blocos que lá estavam.
 - Em *Criar tampa* e *Criar tampa de rosca*, um campo vazio para a altura da abertura significa «Aresta superior», e 0 é a altura da mesa. Os projetos antigos mantêm a sua abertura.
 - Uma restrição de ângulo num esboço pequeno já não vira as linhas.
+- Para modelar há quatro ferramentas, cada uma com o seu botão e atalho. A intensidade é um nível de 1 a 10, e passar de novo no mesmo sítio já não acumula material.
+- O pincel ajusta-se ao tamanho do corpo. Se a malha for demasiado grosseira, *Modelar* uniformiza os triângulos no primeiro traço, e um Ctrl+Z desfaz ambos.
+- Ao espelhar, o plano fica onde o corpo coincide consigo próprio, mesmo quando uma parte sobressai muito para o lado.
+- Modelar acompanha o rato com fluidez, e até um passo com centenas de traços de pincel é calculado depressa.
+- Em *Esqueleto*, cada clique depois do primeiro coloca um osso, Enter termina a cadeia, arrastar uma articulação dobra-a e *Concluído* guarda tudo sem diálogo.
+- Um esqueleto só dobra o que está preso aos seus ossos, e o resto do corpo fica parado. Os projetos anteriores calculam-se como foram guardados.
 
 ### Gerar com IA
 
