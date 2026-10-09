@@ -97,10 +97,19 @@ Ein Baustein sagt nur, **was** er ist; den Kern wählt der Aufrufer
   Bohrung und Länge. Der Netzkern eines Gewindes überdeckt den Gang auch in
   der Sehnenmitte (`build._core_segments`), der Gang läuft über ganze Umläufe;
   ein Langloch hat Sehnen nach `MAX_FACET_SAG` (`shapes.slot_segments`).
-- **`build.thread`** beschreibt rechtsgängig (`handedness="right"`, Winkel und
-  Höhe wachsen gemeinsam); Innenwerkzeug, Schraube, Mutter ändern den Drehsinn
-  nie, Spiegelungen führen ihn nach, ein Importgewinde bekommt keine Vorgabe;
-  in `measure_sources` steht er als `parameter`.
+- **`build.thread`** beschreibt Drehsinn, Gangzahl und Kegel (`handedness`,
+  `starts`/`lead`, `taper` als halber Kegelwinkel), wie der exakte Leser sie
+  nennt; Innenwerkzeug, Schraube, Mutter behalten den Drehsinn ihres Bausteins,
+  Spiegelungen führen ihn nach, ein Importgewinde bekommt keine Vorgabe; in
+  `measure_sources` steht er als `parameter`.
+- **Zoll- und Rohrgewinde** (RM-544): `standards.toml` führt sie als Tabellenart
+  `threads` (G, R, UNC, UNF, NPT), `standards.thread_size` gibt jeder Bezeichnung
+  Nennmaß, Steigung, Profil und Kegel. `fasteners.thread_dims` ist die eine
+  Stelle vom Baustein zu `ThreadDims`; `_printed_thread` legt die Bezugsebene
+  eines Kegels, `shapes.ridge_profile` kennt `flat`, `whitworth` und `npt`.
+  Ein Kegel entsteht am Netz genäht und vernetzt (`build.threaded`). Das
+  Netzbudget ist `MOST_THREAD_POINTS` (`thread_points`), `left_hand` der
+  Spiegelschalter (`PartSpec.mirrored_by`).
 - **Ein Baustein gibt seinem Wirt dessen Merkmale ohne die alten Dreiecke
   zurück** (`ops._merged_features`); ohne Partner in der neuen Erkennung steht
   ein Merkmal ohne Dreiecke im Baum, nie mit falschen.

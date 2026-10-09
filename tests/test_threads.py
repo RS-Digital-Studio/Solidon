@@ -15,6 +15,7 @@ gefragt wurde — nicht mehr, nicht weniger.
 
 from __future__ import annotations
 
+import dataclasses
 import itertools
 import math
 
@@ -775,30 +776,106 @@ def test_a_left_hand_bolt_does_not_fit_a_right_hand_nut() -> None:
     assert common.volume > 5.0, "ein Linksbolzen ginge glatt in eine Rechtsmutter"
 
 
-def test_a_left_hand_thread_is_the_mirror_of_the_right_hand_one() -> None:
-    """Was ``mirrored_by`` dem Bereichstest verspricht, am Baustein gemessen."""
+def _mirror_problem_at(spec_params: object, build: object, values: dict[str, object]) -> object:
+    """Die Spiegelprüfung einer Ecke, wie der Bereichstest sie fährt (``range_check``)."""
     from app.core.knowledge.parts.range_check import _mirror_problem
-    from app.core.knowledge.profiles import make_profile
+
+    made = build(spec_params(**values))  # type: ignore[operator]
+    return _mirror_problem(
+        spec_params,  # type: ignore[arg-type]
+        build,
+        values,
+        "left_hand",
+        made,
+        as_mesh_data(made.mesh),
+    )
+
+
+@pytest.mark.parametrize(
+    "values",
+    [
+        {"size": "M6"},
+        {"size": "G1/2", "length": 30.0},
+        {"size": "R1/2", "length": 20.0, "internal": True},
+        {"size": "1/4-20 UNC"},
+    ],
+    ids=["M6", "G1/2", "R1/2-innen", "UNC"],
+)
+def test_a_left_hand_thread_is_the_mirror_of_the_right_hand_one(values: dict[str, object]) -> None:
+    """Was ``mirrored_by`` dem Bereichstest verspricht, am Baustein gemessen — je Ecke.
+
+    G 1/2 trianguliert gespiegelt mit einer Ecke mehr; die Flächen liegen trotzdem
+    aufeinander, und genau das prüft der Vergleich.
+    """
+    from app.core.knowledge.parts import PARTS
 
     for name in ("printed_thread", "printed_screw", "printed_nut", "threaded_rod"):
-        from app.core.knowledge.parts import PARTS
-
-        spec = PARTS.get(name)
-        assert spec.mirrored_by == "left_hand"
-        assert _mirror_problem(spec.params, spec.fn, make_profile(), "left_hand") is None, name
+        assert PARTS.get(name).mirrored_by == "left_hand"
+    spec = PARTS.get("printed_thread")
+    assert _mirror_problem_at(spec.params, spec.fn, {**values, "play": 0.2}) is None
 
 
 def test_the_mirror_check_finds_a_switch_that_does_more_than_mirror() -> None:
     """Gegenprobe zur Spiegelprüfung: Ein Schalter, der das Maß ändert, fällt auf."""
-    from app.core.knowledge.parts.range_check import _mirror_problem
-    from app.core.knowledge.profiles import make_profile
 
     def wrong(raw: ThreadParams) -> object:
         return printed_thread(
             ThreadParams(size="M8" if raw.left_hand else "M6", length=raw.length, play=raw.play)
         )
 
-    assert _mirror_problem(ThreadParams, wrong, make_profile(), "left_hand") is not None
+    assert _mirror_problem_at(ThreadParams, wrong, {"size": "M6"}) is not None
+
+
+def test_the_mirror_check_finds_a_turn_that_keeps_volume_and_hull() -> None:
+    """Gegenprobe: Ein um 180° gedrehtes Rechtsgewinde hat Volumen und Hülle des Spiegelbilds.
+
+    Die Prüfung vor RM-544 verglich nur diese zwei Zahlen und hätte es als
+    Linksgewinde durchgelassen; der Flächenvergleich sieht den falschen Drehsinn.
+    """
+    from app.core.knowledge.parts import shapes
+
+    def turned(raw: ThreadParams) -> object:
+        made = printed_thread(ThreadParams(size="M6", length=raw.length, play=raw.play))
+        if not raw.left_hand:
+            return made
+        return dataclasses.replace(made, mesh=shapes.turned(made.mesh, 180.0, (0.0, 0.0, 1.0)))
+
+    assert _mirror_problem_at(ThreadParams, turned, {"size": "M6"}) is not None
+
+
+def test_the_range_check_mirrors_every_corner_not_only_the_default() -> None:
+    """Ein Schalter, der nur an einer Ecke mehr tut als spiegeln, fällt an genau dieser auf.
+
+    Vorher baute der Bereichstest die andere Stellung nur an der Vorgabe des
+    Bausteins; eine Ecke am Rand des Bereichs blieb ungeprüft.
+    """
+    from app.core.knowledge.parts import range_check
+    from app.core.knowledge.profiles import make_profile
+    from app.core.registry import op_params, param
+    from app.core.types import BaseParams
+    from app.i18n import _
+
+    @op_params
+    class SmallParams(BaseParams):
+        length: float = param(title=_("Länge"), default=6.0, unit="mm", minimum=6.0, maximum=10.0)
+        left_hand: bool = param(title=_("Linksgewinde"), default=False)
+
+    def sometimes(raw: SmallParams) -> object:
+        size = "M8" if raw.left_hand and raw.length > 9.0 else "M6"
+        return printed_thread(
+            ThreadParams(size=size, length=raw.length, left_hand=raw.left_hand, play=0.2)
+        )
+
+    report = range_check.check(
+        SmallParams,
+        sometimes,
+        make_profile(),
+        wall=range_check.WallRequirement.not_applicable("Gegenprobe der Spiegelprüfung."),
+        mirrored_by="left_hand",
+    )
+    assert report.checked == 2
+    broken = [failure.values for failure in report.failures]
+    assert broken == [{"length": 10.0, "left_hand": False}]
 
 
 def test_a_pipe_bore_is_recognised_as_its_pipe_thread() -> None:
@@ -883,8 +960,55 @@ def test_a_thread_both_large_and_fine_is_refused_before_it_builds() -> None:
         printed_thread(values)
     assert caught.value.constraint == "too_fine_for_its_size"
     assert caught.value.field == "length"
-    # Dieselbe Größe mit den Gängen ihrer Reihe baut.
+    # Dieselbe Größe mit den Gängen ihrer Reihe baut, und bis 72 mm auch so fein.
     assert _thread_reason(ThreadParams(size="custom_size", diameter=1000.0, length=200.0)) is None
+    assert (
+        _thread_reason(
+            ThreadParams(
+                size="custom_size", diameter=1000.0, form="whitworth", tpi=101.6, length=72.0
+            )
+        )
+        is None
+    )
+
+
+def test_the_mesh_budget_takes_no_flat_thread_away() -> None:
+    """Was vor RM-544 baute, baut weiter: Ø 1000 metrisch mit der feinsten Steigung über 200 mm.
+
+    Das Netzbudget kam mit dem Whitworth-Profil und seinen elf Punkten je Station.
+    In seiner ersten Fassung (2 hoch 16 Stationen) lehnte es auch flache Gewinde ab,
+    die vorher gebaut wurden — Ø 100 unter 0,3 mm Steigung über 200 mm. Das Budget
+    ist jetzt das größte flache Gewinde, das es gab.
+    """
+    from app.core.knowledge.parts.fasteners import (
+        LONGEST_PRINTED_THREAD,
+        PrintedScrewParams,
+        ThreadedRodParams,
+        _fastener_reason,
+        _rod_reason,
+        _thread_reason,
+    )
+    from app.core.units import FINEST_PITCH, LARGEST_THREAD
+
+    widest = {"size": "custom_size", "diameter": LARGEST_THREAD, "pitch": FINEST_PITCH}
+    longest = LONGEST_PRINTED_THREAD
+    assert _thread_reason(ThreadParams(**widest, length=longest)) is None
+    assert _thread_reason(ThreadParams(**widest, length=longest, internal=True)) is None
+    assert _fastener_reason(PrintedScrewParams(**widest, length=longest)) is None
+    assert _rod_reason(ThreadedRodParams(**widest, length=longest)) is None
+    # Unified hat dasselbe flache Profil: 101,6 Gänge je Zoll sind 0,25 mm.
+    assert (
+        _thread_reason(
+            ThreadParams(
+                size="custom_size",
+                diameter=LARGEST_THREAD,
+                form="unified",
+                tpi=101.6,
+                length=longest,
+            )
+        )
+        is None
+    )
 
 
 def test_a_deep_tapered_internal_thread_is_refused_at_its_length() -> None:

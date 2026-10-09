@@ -443,16 +443,18 @@ def check(
     """Fährt die Ecken und sagt je Ecke, was nicht hielt.
 
     ``mirrored_by`` ist ein Schalter, der den Baustein nur spiegelt
-    (``PartSpec.mirrored_by``, RM-544): Die Ecken stehen mit ihm auf seiner
+    (``PartSpec.mirrored_by``, RM-544): Die Prüfungen laufen mit ihm auf seiner
     Vorgabe, denn Wasserdichtheit, Wand, Selbstdurchdringung und Merkmale sind
-    unter einer Spiegelung dieselben. Dass er nur spiegelt, prüft der Lauf an der
-    Vorgabe des Bausteins: beide Stellungen gebaut, Volumen gleich und die Hülle
-    an der Ebene y = 0 gespiegelt — sonst ist es ein Fehler wie jeder andere.
+    unter einer Spiegelung dieselben. **Dass er nur spiegelt, belegt jede Ecke
+    selbst** (:func:`_mirror_problem`): Sie baut auch die andere Stellung, und
+    deren Körper muss das Spiegelbild an y = 0 sein — dasselbe Volumen, jede Ecke
+    auf der gespiegelten Fläche und umgekehrt, dieselben Merkmale. Eine erklärte
+    Ausschlussecke muss in beiden Stellungen ausgeschlossen sein. Damit ist die
+    andere Stellung an jeder Ecke voll geprüft, nicht an einer Stichprobe.
 
     ``window`` fährt nur die Ecken ``[von, bis)`` des Plans: Der Nachweis der
     Bibliothek teilt einen großen Baustein so auf mehrere Prozesse
-    (``tools/check_part_ranges.py``) und zählt die Teile zusammen. Die
-    Spiegelprüfung gehört zum Teil, der bei der ersten Ecke beginnt.
+    (``tools/check_part_ranges.py``) und zählt die Teile zusammen.
 
     ``feasible`` ist die erklärte Bedingung des Bausteins zwischen seinen
     Parametern (:attr:`PartSpec.feasible`): Nennt sie für eine Ecke einen
@@ -539,6 +541,8 @@ def check(
                 if not declared:
                     raise
                 excluded.append(RangeExclusion(dict(entered), declared[:200]))
+                if mirrored_by and not _mirror_excluded(params, build, entered, mirrored_by):
+                    add(entered, _mirror_failure(mirrored_by))
                 checked += 1
                 announce(index, 4)
                 if checked % 16 == 0:
@@ -554,6 +558,10 @@ def check(
                 break
 
             mesh = as_mesh_data(result.mesh)
+            if mirrored_by:
+                problem = _mirror_problem(params, build, entered, mirrored_by, result, mesh)
+                if problem is not None:
+                    add(entered, problem)
             if not mesh.is_watertight:
                 add(entered, str(_("nicht geschlossen")))
             if mesh.volume <= 0.0:
@@ -689,10 +697,6 @@ def check(
         # auch GUI-Objekte aus fremden Referenzzyklen im Arbeiter zerstören.
         if checked % 16 == 0:
             _collect_on_main_thread()
-    if mirrored_by and first == 0 and checked == len(plan) and not _is_cancelled(token):
-        problem = _mirror_problem(params, build, profile, mirrored_by)
-        if problem is not None:
-            add({mirrored_by: True}, problem)
     if checked < len(plan):
         add(
             {},
@@ -713,35 +717,102 @@ def check(
 
 
 #: Wie genau ein gespiegelter Baustein sein Vorbild treffen muss: Volumen relativ,
-#: Hülle in Millimetern. Beide Stellungen entstehen aus demselben Netz, einmal an
-#: y = 0 gespiegelt; die Vereinigung danach darf anders triangulieren, nicht anders
-#: messen.
+#: Flächenabstand in Millimetern. Beide Stellungen entstehen aus demselben Netz,
+#: einmal an y = 0 gespiegelt; die Vereinigung danach darf anders triangulieren
+#: (G 1/2: eine Ecke mehr auf einer Kante), nicht anders liegen. Gemessen lagen
+#: die Ecken auf 10⁻¹³ mm übereinander.
 _MIRROR_VOLUME: Final = 1e-6
-_MIRROR_BOUNDS: Final = 10.0 * EPS_GEOM
+_MIRROR_SURFACE: Final = 10.0 * EPS_GEOM
+
+
+def _mirror_failure(field: str) -> str:
+    return str(_("{field} spiegelt den Baustein nicht nur", field=field))
+
+
+def _mirrored(values: dict[str, Any], field: str) -> dict[str, Any]:
+    """Dieselbe Ecke in der anderen Stellung des Spiegelschalters."""
+    return {**values, field: not bool(values.get(field, False))}
+
+
+def _mirror_excluded(
+    params: type[BaseParams], build: Any, values: dict[str, Any], field: str
+) -> bool:
+    """Ob eine erklärte Ausschlussecke auch in der anderen Stellung ausgeschlossen ist."""
+    try:
+        build(params(**_mirrored(values, field)))
+    except ValidationError:
+        return True
+    return False
+
+
+def _same_triangles(one: Any, other: Any) -> bool:
+    """Ob zwei Netze aus denselben Dreiecken bestehen — bis auf Reihenfolge und Rundung.
+
+    Der schnelle Weg der Spiegelprüfung: Meist ist das gespiegelte Netz Dreieck für
+    Dreieck das andere (gemessen auf 10⁻¹³ mm), und dann liegen die Flächen
+    aufeinander, ohne eine Abstandsrechnung über Millionen Ecken.
+    """
+    import numpy as np
+
+    if len(one.faces) != len(other.faces):
+        return False
+
+    def ordered(body: Any) -> Any:
+        corners = np.asarray(body.vertices, dtype=np.float64)[np.asarray(body.faces)]
+        keys = np.round(corners / _MIRROR_SURFACE)
+        inner = np.lexsort((keys[:, :, 2], keys[:, :, 1], keys[:, :, 0]), axis=-1)
+        corners = np.take_along_axis(corners, inner[:, :, None], axis=1).reshape(-1, 9)
+        rows = np.round(corners / _MIRROR_SURFACE)
+        return corners[np.lexsort(rows.T[::-1])]
+
+    return bool(np.max(np.abs(ordered(one) - ordered(other)), initial=0.0) <= _MIRROR_SURFACE)
 
 
 def _mirror_problem(
-    params: type[BaseParams], build: Any, profile: Profile, field: str
+    params: type[BaseParams],
+    build: Any,
+    values: dict[str, Any],
+    field: str,
+    result: PartResult,
+    mesh: Any,
 ) -> str | None:
-    """Ob der Spiegelschalter an der Vorgabe nur spiegelt — sonst der Grund."""
+    """Ob die andere Stellung des Spiegelschalters an dieser Ecke nur spiegelt — sonst der Grund.
+
+    Gebaut wird die andere Stellung; ihr Körper muss das Spiegelbild an y = 0
+    sein: dasselbe Volumen, jede ihrer Ecken auf der gespiegelten Fläche und
+    jede gespiegelte Ecke auf ihrer — die Netze dürfen anders trianguliert sein,
+    die Flächen nicht anders liegen —, und dieselben Merkmale. Was so deckt, ist
+    wasserdicht, wandstark und frei von Selbstdurchdringung genau dann, wenn die
+    geprüfte Stellung es ist.
+    """
     import numpy as np
 
-    from app.core.geom.mesh import as_mesh_data
+    from app.core.geom.mesh import as_mesh_data, on_surface
 
-    values: dict[str, Any] = {}
-    if PLAY_FIELD in {entry.name for entry in params.spec()}:
-        values[PLAY_FIELD] = profile.material.clearance
     try:
-        plain = as_mesh_data(build(params(**values, **{field: False})).mesh)
-        mirrored = as_mesh_data(build(params(**values, **{field: True})).mesh)
+        other = build(params(**_mirrored(values, field)))
     except Exception as problem:  # Wie jede Ecke: der Grund gehört in den Bericht.
         return str(problem)
-    low, high = np.asarray(plain.raw.bounds, dtype=np.float64)
-    expected = np.array([[low[0], -high[1], low[2]], [high[0], -low[1], high[2]]])
-    found = np.asarray(mirrored.raw.bounds, dtype=np.float64)
-    same_volume = abs(mirrored.volume - plain.volume) <= _MIRROR_VOLUME * abs(plain.volume)
-    if not same_volume or not np.allclose(found, expected, atol=_MIRROR_BOUNDS, rtol=0.0):
-        return str(_("{field} spiegelt den Baustein nicht nur", field=field))
+    turned = as_mesh_data(other.mesh)
+    if abs(turned.volume - mesh.volume) > _MIRROR_VOLUME * abs(mesh.volume):
+        return _mirror_failure(field)
+    flipped = mesh.raw.copy()
+    flipped.vertices = np.asarray(flipped.vertices, dtype=np.float64) * np.array([1.0, -1.0, 1.0])
+    if not _same_triangles(flipped, turned.raw):
+        # Anders trianguliert: Dann muss jede Ecke auf der anderen Fläche liegen.
+        for body, points in (
+            (flipped, np.asarray(turned.raw.vertices, dtype=np.float64)),
+            (turned.raw, np.asarray(flipped.vertices, dtype=np.float64)),
+        ):
+            _closest, distance, _triangle = on_surface(body, points)
+            if len(distance) and float(np.max(distance)) > _MIRROR_SURFACE:
+                return _mirror_failure(field)
+    plain_features = getattr(result, "features", {})
+    other_features = getattr(other, "features", {})
+    if {name: feature.kind for name, feature in plain_features.items()} != {
+        name: feature.kind for name, feature in other_features.items()
+    }:
+        return _mirror_failure(field)
     return None
 
 

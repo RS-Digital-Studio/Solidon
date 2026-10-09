@@ -11383,15 +11383,16 @@ class MainWindow(QMainWindow):
                     # Passt das Gewinde zu Größen zweier Reihen, fragt der Kern
                     # zurück (RM-544, Regel 21) — hier die Frage, dann derselbe Weg.
                     choices = [str(entry) for entry in error.values.get("choices", ())]
-                    if error.constraint != AMBIGUOUS_THREAD or size is not None or not choices:
+                    asked = getattr(error, "constraint", None) == AMBIGUOUS_THREAD
+                    if not asked or size is not None or not choices:
                         show_error(error, self)
                         return
-                    chosen, accepted = QInputDialog.getItem(
+                    picked, accepted = QInputDialog.getItem(
                         self, tr("Gegenstück zum Gewinde"), str(error.detail), choices, 0, False
                     )
                     if not accepted:
                         return
-                    size = str(chosen)
+                    size = str(picked)
             for finding in applied.findings:
                 self.announce(str(finding.message))
             return

@@ -476,6 +476,19 @@ def _rows(family: str) -> list[standards.Thread]:
         ("1/2-14 NPT", "pitch_diameter", 0.75843 * INCH),
         ("1/2-14 NPT", "gauge", 0.320 * INCH),
         ("1/2-14 NPT", "outside", 0.840 * INCH),
+        # Zweite Quellen (Abgleich RM-544): gewinde-normen.de DIN ISO 228 G 1 1/2 d 47,803;
+        # Lehrenhersteller BSPT R 2 d 59,614; mechcodex R 2 Grundmaß 15,9;
+        # engineeringtoolbox #3-48 UNC 2,515 mm; machineref NPT 8: E0 8,43359, L1 1,063,
+        # D 8,625 Zoll und NPT 24: E0 23,7125, L1 2,375 Zoll.
+        ("G1 1/2", "nominal", 47.803),
+        ("R2", "nominal", 59.614),
+        ("R2", "gauge", 15.9),
+        ("#3-48 UNC", "nominal", 2.515),
+        ("8-8 NPT", "pitch_diameter", 8.43359 * INCH),
+        ("8-8 NPT", "gauge", 1.063 * INCH),
+        ("8-8 NPT", "outside", 8.625 * INCH),
+        ("24-8 NPT", "pitch_diameter", 23.7125 * INCH),
+        ("24-8 NPT", "gauge", 2.375 * INCH),
     ],
 )
 def test_thread_values_match_their_published_source(size: str, field: str, wanted: float) -> None:
@@ -601,7 +614,7 @@ def test_every_thread_size_resolves_and_the_series_keep_their_order() -> None:
     families = [standards.thread_family(size) for size in sizes]
     order = [family for family, _ in itertools.groupby(families)]
     assert order == list(standards.THREAD_FAMILIES)
-    assert len(sizes) == 27 + 24 + 15 + 33 + 23 + 16
+    assert len(sizes) == 27 + 24 + 15 + 33 + 23 + 24
     for size in sizes:
         entry = standards.thread_size(size)
         assert entry.nominal > 0.0 and entry.pitch > 0.0

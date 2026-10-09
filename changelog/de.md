@@ -130,6 +130,12 @@ Nutzen da und sonst nichts.
 - Reicht die Bohrung eines Bausteins nicht durch das Teil, heißt sie jetzt Sackloch. Bisher hieß sie Durchgang.
 - Ist die Wand dicker als bei *Kabeldurchführung* oder *Schlauchtülle* eingetragen, sagt der Schritt es und öffnet die Wandstärke. Bisher endete der Durchgang still im Material.
 - Liegt ein getrenntes Teil in einer Senkung, einem Langloch, einer Pfanne, einer Kehle oder einem Gewinde, sagen die Handlungen das. Bisher wurde es abgeschnitten oder verschmolz.
+- Gewinde gibt es jetzt auch als Rohrgewinde G und R, als Zollgewinde UNC und UNF und als NPT, im *Druckbaren Gewinde*, an Schraube, Mutter und *Gewindebolzen*.
+- Jedes Gewinde gibt es auch links. Ein eigenes Maß nimmt Gänge je Zoll und mehrere Gänge, auch bei *Schraube erstellen* und *Drehdeckel erzeugen*.
+- Welche Gewindereihen die Größenlisten zeigen, stellen Sie in den Einstellungen unter *Gewindereihen in den Auswahllisten* ein.
+- Gegenstück und *Stift für Bohrung* passen auch zu Zoll-, Rohr-, Links-, mehrgängigen und kegeligen Gewinden. Passt ein gemessenes Gewinde zu zwei Reihen, fragt Solidon nach.
+- Links-, mehrgängige und kegelige Gewinde lassen sich mit *Merkmal ändern* und *Merkmal entfernen* bearbeiten und behalten dabei Drehsinn, Gangzahl und Kegel.
+- Ein mehrgängiges Gewinde in einem eingelesenen Netz erkennt Solidon als ein Gewinde mit seiner Gangzahl. Bisher standen dort mehrere Gewinde mit doppelter Steigung.
 
 ### Bausteine
 

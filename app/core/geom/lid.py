@@ -1707,8 +1707,8 @@ class ScrewLidParams(BaseParams):
         maximum=MOST_LID_TPI,
         depends_on=("form", ("whitworth", "unified")),
         doc=_(
-            "Wie viele Gänge auf einem Zoll Länge liegen, höchstens so fein wie 1 mm Steigung. "
-            "Null nimmt die Reihe G bei Whitworth und UNC bei Unified."
+            "Wie viele Gänge auf einem Zoll liegen, höchstens so fein wie 1 mm Steigung. "
+            "Null nimmt G bei Whitworth und UNC bei Unified."
         ),
         zero_text=ZERO_AUTOMATIC,
     )
@@ -1922,7 +1922,7 @@ def screw_lid(ctx: OpContext) -> OpResult:
     # Ab hier rechnet alles mit der Steigung der Gewindeform; Gangzahl und
     # Drehsinn reichen die Gewindebauten durch (RM-544).
     pitch, profile = lid_thread(params, major)
-    params = dataclasses.replace(params, pitch=pitch)
+    params = cast(ScrewLidParams, dataclasses.replace(cast(Any, params), pitch=pitch))
     starts, left_hand = max(1, int(params.starts)), bool(params.left_hand)
 
     ridge = ridge_depth(params.pitch, profile)

@@ -256,6 +256,39 @@ def test_a_measured_m2_is_also_a_number_two_unified_thread() -> None:
         standards.set_shown_thread_families(before)
 
 
+@pytest.mark.parametrize(
+    ("diameter", "pitch", "metric", "unified"),
+    [
+        (2.0, 0.4, "M2", "#2-64 UNF"),
+        (2.5, 0.45, "M2.5", "#3-56 UNF"),
+        (4.0, 0.7, "M4", "#8-36 UNF"),
+        (5.0, 0.8, "M5", "#10-32 UNF"),
+    ],
+)
+def test_a_precise_measurement_tells_metric_from_unified(
+    diameter: float, pitch: float, metric: str, unified: str
+) -> None:
+    """Gefragt wird nur, wo die Messung zwei Größen nicht trennt (RM-544).
+
+    Die Paare liegen 0,8 Prozent in der Steigung auseinander. Ein erzeugtes
+    Gewinde nennt seine Zahlen genau, ein am exakten Körper gelesenes seine
+    Wendelabweichung — dort ist es die gemessene Größe, ohne Rückfrage. Eine
+    grobe Messung fragt weiter.
+    """
+    from app.core.counterpart import AMBIGUOUS_THREAD
+
+    inch = standards.thread_size(unified)
+    assert thread_values_for(_generated(diameter, pitch)) == {"size": metric}
+    assert thread_values_for(_generated(inch.nominal, inch.pitch)) == {"size": unified}
+    sharp = _generated(diameter, pitch, provenance="native", uncertainty=1e-4)
+    assert thread_values_for(sharp) == {"size": metric}
+    rough = _generated(diameter, pitch, provenance="detected", uncertainty=0.01)
+    with pytest.raises(ValidationError) as caught:
+        thread_values_for(rough)
+    assert caught.value.constraint == AMBIGUOUS_THREAD
+    assert {metric, unified} <= set(caught.value.values["choices"])
+
+
 def test_a_printed_inch_thread_names_its_own_size() -> None:
     """Ein gedrucktes G 1/2 nennt sich selbst; das Gegenstück fragt nicht nach dem Maß."""
     printed = _generated(20.755, 25.4 / 14.0, nominal=20.955, size="G1/2", profile="whitworth")

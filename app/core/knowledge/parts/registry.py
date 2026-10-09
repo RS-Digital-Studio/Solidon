@@ -518,10 +518,12 @@ class PartSpec:
 
     Wasserdichtheit, Wandstärke, Selbstdurchdringung und Merkmale sind unter
     einer Spiegelung dieselben; der Bereichstest (§24.3) fährt die Ecken
-    deshalb mit dem Schalter auf seiner Vorgabe und prüft daneben, dass der
-    Schalter an jeder Ecke wirklich nur spiegelt (``range_check``: Volumen und
-    gespiegelte Hülle gleich). Ein Schalter, der mehr tut als spiegeln, steht
-    hier nicht — er wäre eine Bedingung wie jede andere und zählte Ecken."""
+    deshalb mit dem Schalter auf seiner Vorgabe und baut an jeder Ecke auch die
+    andere Stellung: Ihr Körper muss das Spiegelbild sein — Volumen, Flächen und
+    Merkmale (``range_check._mirror_problem``). So ist sie an jeder Ecke voll
+    belegt, ohne die Ecken zu verdoppeln. Ein Schalter, der mehr tut als
+    spiegeln, steht hier nicht — er wäre eine Bedingung wie jede andere und
+    zählte Ecken."""
     retaining_lip: RetainingLipOf | None = None
     """Die Haltelippe unter der Mündung, an der der Baustein seinen Inhalt hält
     (:class:`RetainingLip`). Schräg zur Fläche gesetzt, fehlt sie auf der tiefen

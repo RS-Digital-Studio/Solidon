@@ -354,6 +354,73 @@ def test_a_thread_brings_its_half_and_the_dialog_stays_closed(
         window.deleteLater()
 
 
+def test_a_thread_matching_two_series_asks_and_takes_the_answer(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Passt ein Gewinde zu Größen zweier Reihen, fragt das Fenster und baut die Antwort (RM-544).
+
+    Der Kern hält mit ``AMBIGUOUS_THREAD`` an (Regel 21); hier steht, dass die
+    Anwendung die Frage stellt, mit der gewählten Größe denselben Weg noch einmal
+    geht und das Gegenstück in genau dieser Größe setzt. Die Messung, die beide
+    Größen nicht trennt, steht über ``_told_apart`` nach: Ein erzeugtes Ø 4 × 0,7
+    wäre sonst genau M4.
+    """
+    from PySide6.QtWidgets import QInputDialog
+
+    from app.core import counterpart
+
+    window = MainWindow(Session(), UiSettings())
+    try:
+        first, second = _two_plates(window)
+        window.session.history.apply(
+            "Bolzen auf der ersten Platte",
+            [
+                OperationDraft(
+                    op="insert_printed_thread",
+                    inputs=(first,),
+                    params={
+                        "size": "custom_size",
+                        "diameter": 4.0,
+                        "pitch": 0.7,
+                        "length": 8.0,
+                        "internal": False,
+                        "z": 10.0,
+                    },
+                )
+            ],
+        )
+        window.session.evaluate_now()
+        result = window.session.last_result
+        assert result is not None
+        thread = next(
+            name
+            for name, feature in result.scene.objects[first].features.items()
+            if feature.kind == "thread"
+        )
+        monkeypatch.setattr(counterpart, "_told_apart", lambda _f, _d, _p, sizes: tuple(sizes))
+        asked: list[list[str]] = []
+
+        def answer(*args: object) -> tuple[str, bool]:
+            choices = list(args[3])  # type: ignore[call-overload]
+            asked.append(choices)
+            return "#8-36 UNF", True
+
+        monkeypatch.setattr(QInputDialog, "getItem", answer)
+        window.object_tree.select_features(((first, thread), (second, _top_face(window, second))))
+        QApplication.processEvents()
+        window.action_counterpart()
+
+        assert len(asked) == 1 and {"M4", "#8-36 UNF"} <= set(asked[0])
+        step = window.session.project.document.ops[-1]
+        assert step.op == "insert_printed_thread" and step.inputs == (second,)
+        assert step.params["size"] == "#8-36 UNF" and step.params["internal"] is True
+    finally:
+        release = getattr(type(window), "release", None)
+        if release is not None:
+            release(window)
+        window.deleteLater()
+
+
 def test_the_thread_counterpart_does_not_hold_the_window_while_it_is_evaluated(
     qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
 ) -> None:

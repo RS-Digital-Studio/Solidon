@@ -394,11 +394,14 @@ _NOT_A_RANGE = frozenset(
         # Der Arbeitsspeicher beim Neuvernetzen (mesh_ops._out_of_memory): Die
         # Kantenlänge liegt im Schema, nur dieser Rechner schafft sie nicht.
         "memory",
-        # Die Gestalt eines Gewindes (P2.5-Rest): Ein kegeliges oder
-        # mehrgängiges Gewinde bekommt kein Gegenstück aus der Bibliothek, und
-        # Ändern oder Entfernen setzen keine Zylinder an einen Kegel. Das ist
-        # eine Eigenschaft des gewählten Merkmals, keine Zahl in einem Feld.
-        "thread_shape", "tapered",
+        # Die Gestalt eines Gewindes: Ein kegeliges Gewinde ohne Tabellengröße
+        # bekommt kein Gegenstück aus der Bibliothek. Das ist eine Eigenschaft
+        # des gewählten Merkmals, keine Zahl in einem Feld. Passt es zu Größen
+        # zweier Reihen, ist die Rückfrage eine Wahl, keine Spanne.
+        "thread_shape", "ambiguous_thread",
+        # Ein kegeliges Innengewinde, das zur Mündung hin enger wird, nimmt keinen
+        # Stift mit Gewinde auf — die Lage des Kegels, keine Zahl.
+        "narrow_mouth_thread",
         # Schrift und Schnitt einer Beschriftung: eine Familie, die dieser
         # Rechner nicht hat, und ein Schnitt, den es in dieser Familie nicht
         # gibt. Beides sind Einträge in zwei kurzen Listen — es gibt kein Feld,
@@ -506,9 +509,9 @@ _NOT_A_RANGE = frozenset(
         "no_shapes", "no_size", "no_sources", "no_split", "no_split_target", "no_triangles",
         "not_a_face", "not_a_hole", "not_a_mesh", "not_a_number", "not_an_archive",
         "not_a_project", "private_destination",
-        "left_handed", "not_a_twin", "not_a_drawing", "not_movable", "not_outline", "not_step",
+        "not_a_twin", "not_a_drawing", "not_movable", "not_outline", "not_step",
         "not_upright",
-        "one_body", "multi_start", "not_a_thread", "needs_exact",
+        "one_body", "not_a_thread", "needs_exact",
         # Ein Gewinde außerhalb dessen, was ein Bausteingewinde baut, und eine
         # Achse, die keine der drei ist: ein Merkmal und eine Größe außerhalb
         # einer Liste, keine Spanne im Feld.

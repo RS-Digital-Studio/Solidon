@@ -710,7 +710,7 @@ SATZMUSTER: dict[str, re.Pattern[str]] = {
 #: Überarbeitung; sie zu erhöhen ist eine Entscheidung, kein Nachtrag. Mit
 #: Review P2 N5 stieg sie einmal, weil der Wächter seitdem jeden Katalogtext
 #: liest und nicht nur die nach Aufrufort eingeordneten.
-MUSTER_BESTAND: dict[str, int] = {"Fachwort": 119, "Semikolon": 377, "Nur-Formel": 11}
+MUSTER_BESTAND: dict[str, int] = {"Fachwort": 119, "Semikolon": 374, "Nur-Formel": 11}
 
 MUSTER_DATEI = Path(__file__).resolve().parent / "data" / "text_patterns.json"
 

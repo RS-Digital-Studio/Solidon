@@ -93,6 +93,9 @@ MOST_STARTS: Final = 8
 #: Die meisten Gänge je Zoll — die feinste Steigung als Gänge je Zoll.
 MOST_TPI: Final = UNIT_TO_MM["in"] / FINEST_PITCH
 
+#: Das längste Gewinde der Gewindebausteine: Gewinde, Schraube und Bolzen.
+LONGEST_PRINTED_THREAD: Final = 200.0
+
 #: Jede Gewindegröße der Tabelle, Reihe für Reihe (``standards.thread_sizes``).
 _THREADS = standards.thread_sizes()
 
@@ -1691,7 +1694,7 @@ class ThreadParams(BaseParams):
         default=12.0,
         unit="mm",
         minimum=2.0,
-        maximum=200.0,
+        maximum=LONGEST_PRINTED_THREAD,
         doc=_("Länge des Gewindes, nicht des Bolzens."),
     )
     internal: bool = param(
@@ -1738,8 +1741,8 @@ class ThreadParams(BaseParams):
         "werden die Gewindekämme vom massiven Kern getragen."
     ),
     doc=_(
-        "Druckbares Innengewinde in einer Bohrung oder Gewindebolzen auf einer "
-        "ebenen Fläche — metrisch, in Zoll oder als Rohrgewinde. Für einen offenen "
+        "Druckbares Gewinde in einer Bohrung oder als Bolzen, metrisch, in Zoll oder "
+        "als Rohrgewinde. Für einen offenen "
         "Behälter mit passendem Schraubdeckel ist „Drehdeckel erzeugen“ der "
         "gemeinsame Weg."
     ),
@@ -1804,24 +1807,33 @@ THREAD_WITHOUT_CORE = _(
     "Eine feinere Steigung, einen größeren Durchmesser oder weniger Spiel wählen."
 )
 
-#: Wie viele Stationen ein Gewinde am Netz höchstens hat: Sehnen je Umlauf
-#: (``shapes.turn_segments``) mal Umläufe über die Länge. Dieselbe Frage wie
-#: ``units.FINEST_PITCH``, über den ganzen Körper gestellt: Der Bau nimmt keinen
-#: Abbruch entgegen, und ein Ø 1000 mit 0,25 mm Steigung über 200 mm wären
-#: 192 700 Stationen, im Whitworth-Profil vier Millionen Dreiecke — Minuten ohne
-#: Ausweg. 2 hoch 16 lassen jede Tabellengröße in jeder Länge zu (die meisten hat
-#: M1.6 über 200 mm mit 27 600) und Ø 1000 mit der Regelsteigung (8 900) ebenso;
-#: begrenzt wird nur, was groß und fein zugleich ist: über 200 mm Länge Ø 100
-#: unter 0,3 mm Steigung, Ø 1000 unter 0,74 mm.
-MOST_THREAD_STATIONS: Final = 2**16
 
-
-def thread_stations(
+def thread_points(
     nominal: float, pitch: float, length: float, profile: ThreadProfile = "flat"
 ) -> int:
-    """Wie viele Stationen der Gang dieses Gewindes am Netz bekommt — mit dem Vorlauf."""
+    """Wie viele Ecken der Gang dieses Gewindes am Netz bekommt — mit dem Vorlauf.
+
+    Stationen (Sehnen je Umlauf aus ``shapes.turn_segments`` mal Umläufe) mal
+    Punkte des Gangprofils: vier im flachen und im NPT-Profil, elf im
+    Whitworth-Profil mit seinen Bögen.
+    """
     segments = shapes.turn_segments(nominal / 2.0 + shapes.ridge_depth(pitch, profile))
-    return segments * math.ceil(length / pitch + 2.0)
+    corners = len(shapes.ridge_profile(1.0, 1.0, profile=profile))
+    return segments * math.ceil(length / pitch + 2.0) * corners
+
+
+#: Wie viele Ecken ein Gewinde am Netz höchstens hat (:func:`thread_points`): so
+#: viele wie das größte flache Gewinde, das es schon vor RM-544 gab — Ø 1000 mit
+#: der feinsten Steigung über die ganze Länge, 770 000 Ecken, gemessen 181 s und
+#: 6 GB. Damit lehnt das Budget kein metrisches, Unified- oder NPT-Gewinde ab
+#: (Robert: was wir liefern konnten, bleibt). Das Whitworth-Profil hat fast
+#: dreimal so viele Punkte je Station; dieselbe Ecke wären 7,3 Millionen Dreiecke,
+#: gemessen 286 s und 12 GB ohne Abbruch — mehr, als ein Rechner mit 8 GB hat. Es
+#: baut deshalb bis zu derselben Größe des Netzes: G-Größen und Whitworth mit der
+#: Regelsteigung in jeder Länge, Ø 1000 mit 101,6 Gängen je Zoll bis 72 mm.
+MOST_THREAD_POINTS: Final = thread_points(
+    LARGEST_THREAD, FINEST_PITCH, LONGEST_PRINTED_THREAD + FINEST_PITCH
+)
 
 
 def thread_problem(
@@ -1849,9 +1861,9 @@ def thread_problem(
       06.10.2026 genügte hier jeder Kern über 10⁻⁶ mm: Ø 2 x 1,6 baute einen
       Bolzen mit 0,04 mm Kern.
 
-    Mit ``length`` dazu ein Netz über :data:`MOST_THREAD_STATIONS` — groß und
-    fein zugleich (RM-544: seit den Gängen je Zoll ist das feine Ende eine Ecke
-    des Bereichs).
+    Mit ``length`` dazu ein Netz über :data:`MOST_THREAD_POINTS` — groß, fein
+    und lang zugleich im Whitworth-Profil (RM-544: seit den Gängen je Zoll ist das
+    feine Ende eine Ecke des Bereichs).
     """
     if 0.0 < pitch < FINEST_PITCH - EPS_GEOM:
         return ValidationError(
@@ -1888,15 +1900,12 @@ def thread_problem(
             },
             constraint="no_core",
         )
-    if length is not None and thread_stations(nominal, pitch, length, profile) > (
-        MOST_THREAD_STATIONS
-    ):
+    if length is not None and thread_points(nominal, pitch, length, profile) > (MOST_THREAD_POINTS):
         return ValidationError(
             "length",
             _(
-                "So groß, fein und lang wird das Gewinde zu einem Netz, das sich nicht in "
-                "vertretbarer Zeit rechnen lässt. Eine gröbere Steigung oder eine kürzere Länge "
-                "wählen."
+                "So groß, fein und lang gäbe das Gewinde ein Netz, das kein Rechner zügig "
+                "schafft. Eine gröbere Steigung oder kürzere Länge wählen."
             ),
             values={"pitch": pitch, "length": length, "diameter": nominal},
             constraint="too_fine_for_its_size",
@@ -2172,7 +2181,7 @@ class PrintedScrewParams(BaseParams):
         default=12.0,
         unit="mm",
         minimum=2.0,
-        maximum=200.0,
+        maximum=LONGEST_PRINTED_THREAD,
         doc=_("Länge des Gewindes unter dem Schraubenkopf."),
     )
     countersunk: bool = param(
@@ -2461,7 +2470,7 @@ class ThreadedRodParams(BaseParams):
         default=30.0,
         unit="mm",
         minimum=4.0,
-        maximum=200.0,
+        maximum=LONGEST_PRINTED_THREAD,
         doc=_("Länge des ganzen Bolzens, von Ende zu Ende."),
     )
     thread_length: float = param(

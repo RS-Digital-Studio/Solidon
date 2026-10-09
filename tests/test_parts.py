@@ -353,13 +353,14 @@ def test_the_library_really_has_21288_cartesian_boundaries() -> None:
     7936 mehr: Wandhalter bis M64 (512 → 832), Rohrschelle bis M64 (512 →
     3072), Klemmschale bis M64 (512 → 768), die Halter mit wählbarer Schraube
     (U und Ablage 320 → 1920, rund und Gabel 160 → 960).
-    Seit dem 09.10.2026 (RM-544) 4474 mehr: Gewinde, Schraube, Mutter und Bolzen
-    nehmen 138 Größen aus sechs Reihen und ein eigenes Maß in drei Gewindeformen
-    mit Gangzahl — Gewinde und Schraube je 1296, Mutter 324, Bolzen 2592. Das
-    Linksgewinde zählt keine Ecken: Es spiegelt nur (``PartSpec.mirrored_by``).
+    Seit dem 09.10.2026 (RM-544) 4746 mehr: Gewinde, Schraube, Mutter und Bolzen
+    nehmen 146 Größen aus sechs Reihen und ein eigenes Maß in drei Gewindeformen
+    mit Gangzahl — Gewinde und Schraube je 1360, Mutter 340, Bolzen 2720. Das
+    Linksgewinde zählt keine Ecken: Jede Ecke baut auch die gespiegelte Stellung
+    und belegt, dass sie nur spiegelt (``PartSpec.mirrored_by``).
     """
 
-    assert sum(len(corners(spec)) for spec in PARTS.all()) == 21288
+    assert sum(len(corners(spec)) for spec in PARTS.all()) == 21560
 
 
 def test_the_library_checks_up_to_4096_corners_and_an_own_part_512() -> None:

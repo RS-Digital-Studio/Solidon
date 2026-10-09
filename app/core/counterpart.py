@@ -60,6 +60,7 @@ from app.core.types import (
 )
 from app.core.units import (
     COARSEST_PITCH,
+    EPS_GEOM,
     FINEST_PITCH,
     LARGEST_THREAD,
     SMALLEST_THREAD,
@@ -432,6 +433,37 @@ def _starts_of(feature: Feature) -> int:
     return 1
 
 
+def _told_apart(
+    feature: Feature, diameter: float, pitch: float, sizes: Sequence[str]
+) -> tuple[str, ...]:
+    """Die Größen, die die Messung dieses Gewindes nicht voneinander trennt.
+
+    Die Erkennungsgrenze ``THREAD_SIZE_REACH`` ist weit, weil ein gedrucktes
+    Gewinde um das Spiel neben seinem Maß liegt. Darin liegen Paare aus zwei
+    Reihen: M2/#2-64, M2,5/#3-56, M4/#8-36 und M5/#10-32 UNF trennen 0,17 mm im
+    Durchmesser und 0,8 Prozent in der Steigung. Ob das eine Frage ist, sagt die
+    Messung: Ein erzeugtes Gewinde nennt seine Zahlen genau, ein gemessenes seine
+    Wendelabweichung (``uncertainty``) — die Steigung hängt nicht am Spiel. Bleibt
+    so genau eine Größe, ist sie gemessen, nicht geraten; sonst wird gefragt
+    (Regel 21), wie bei R 1/2 und NPT 1/2 mit ihren gleichen Gängen je Zoll.
+    """
+    precise = feature.provenance == "generated"
+    error = feature.params.get("uncertainty")
+    if precise:
+        pitch_reach = EPS_GEOM
+    elif isinstance(error, int | float) and not isinstance(error, bool) and error >= 0.0:
+        pitch_reach = max(float(error), EPS_GEOM)
+    else:
+        return tuple(sizes)
+    kept = tuple(
+        size
+        for size in sizes
+        if abs(standards.thread_size(size).pitch - pitch) <= pitch_reach
+        and (not precise or abs(standards.thread_size(size).nominal - diameter) <= EPS_GEOM)
+    )
+    return kept or tuple(sizes)
+
+
 def ambiguous_thread(feature: Feature, choices: Sequence[str]) -> ValidationError:
     """Die Rückfrage, welche der passenden Tabellengrößen gemeint ist (Regel 21)."""
     return ValidationError(
@@ -442,7 +474,7 @@ def ambiguous_thread(feature: Feature, choices: Sequence[str]) -> ValidationErro
         ),
         value=feature.id,
         values={"feature": feature.id, "choices": list(choices)},
-        constraint=AMBIGUOUS_THREAD,
+        constraint="ambiguous_thread",  # = AMBIGUOUS_THREAD; die Prüfung liest das Wort
         suggestions=(CHOOSE, CANCEL),
     )
 
@@ -504,6 +536,8 @@ def _matched_thread(
     shown = standards.shown_thread_families()
     if starts == 1:
         exact = standards.thread_sizes_near(diameter, pitch, tapered=tapered, families=shown)
+        if len(exact) > 1:
+            exact = _told_apart(feature, diameter, pitch, exact)
         if len(exact) > 1:
             raise ambiguous_thread(feature, exact)
         if exact:

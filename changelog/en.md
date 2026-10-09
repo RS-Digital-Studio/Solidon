@@ -105,6 +105,12 @@ it into `website/version.json`.
 - If the hole of a part does not go all the way through, it is now called blind. Until now it was called through.
 - If the wall is thicker than entered for a *Cable gland* or *Hose barb*, the step says so and opens the wall thickness. Until now the passage silently ended in the material.
 - If a separate part sits in a countersink, slot, socket, groove or thread, the actions say so. Until now it was cut off or merged.
+- Threads now also come as pipe threads G and R, inch threads UNC and UNF and as NPT, in the *Printable thread*, on screw, nut and *Threaded stud*.
+- Every thread is also available left-handed. A custom size takes threads per inch and several starts, also in *Create screw* and *Create screw lid*.
+- Which thread series the size lists show is set in the settings under *Thread series in the lists*.
+- Counterpart and *Pin for hole* also fit inch, pipe, left-hand, multi-start and tapered threads. If a measured thread fits two series, Solidon asks.
+- Left-hand, multi-start and tapered threads can be edited with *Change feature* and *Remove feature* and keep their hand, starts and taper.
+- Solidon recognises a multi-start thread in an imported mesh as one thread with its number of starts. Until now it showed several threads with double the pitch.
 
 ### Parts
 

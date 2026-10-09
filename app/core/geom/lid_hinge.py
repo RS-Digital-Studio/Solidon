@@ -1072,7 +1072,7 @@ def _bolt(
         raise ValidationError(
             field="at_feature",
             detail=_(
-                "Dieses kegelige Gewinde wird zur Mündung hin enger. Ein Stift käme nicht "
+                "Dieses kegelige Gewinde wird zur Mündung hin enger, ein Stift käme nicht "
                 "hinein. Wählen Sie unter „Weitere Einstellungen“ die Form „Glatter Stift“."
             ),
             value=zone.feature,

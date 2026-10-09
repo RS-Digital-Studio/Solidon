@@ -182,8 +182,15 @@ def _run(args: argparse.Namespace, profile_root: Path) -> int:
 
     from app.core.knowledge.parts.range_check import part_corner_count
 
+    counts = {name: part_corner_count(shipped[name]) for name in wanted}
+    # **Die teuren Ausschnitte zuerst**: große Bausteine vor kleinen, und je Baustein die
+    # hinteren Ausschnitte vor den vorderen — dort stehen eigenes Maß und Höchstmaße,
+    # am Gewinde Ø 1000 mit 101,6 Gängen je Zoll über 200 mm, Minuten je Ecke. Am
+    # Ende der Warteschlange hielten sie den ganzen Lauf auf; das Ergebnis ist dasselbe.
     tasks = [
-        (name, window) for name in wanted for window in _windows(part_corner_count(shipped[name]))
+        (name, window)
+        for name in sorted(wanted, key=lambda entry: -counts[entry])
+        for window in reversed(_windows(counts[name]))
     ]
     jobs = max(1, min(args.jobs, len(tasks)))
     parts = "Baustein" if len(wanted) == 1 else "Bausteine"

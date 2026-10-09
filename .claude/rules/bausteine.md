@@ -277,6 +277,24 @@ trägt. Am Endstand misst die Auswertung die Wand wie um jede Bohrung
 (`relations._measured` liest `length`, `is_a_cavity` liest `internal`; ein
 Außengewinde zählt mit seinem Kern, nicht mit der Spitze des Gangs).
 
+**Zoll, Rohr, links, mehrgängig und kegelig sind dasselbe Gewinde** (RM-544):
+Profil, Gangzahl, Drehsinn und Kegel reisen von der Tabelle (`thread_dims`)
+über `build.threaded` bis ins Merkmal, und jeder Weg, der ein Gewinde liest —
+Gegenstück, Stift, *Merkmal ändern*, *Entfernen* —, behält sie, statt
+abzusagen oder still rechts und eingängig zu schneiden. Das Netzbudget
+`MOST_THREAD_POINTS` ist das größte flache Gewinde, das es vorher gab: Es
+nimmt keinem metrischen, Unified- oder NPT-Gewinde etwas und begrenzt nur das
+Whitworth-Profil mit seinen elf Punkten je Station. **Gefragt wird, wo die
+Messung nicht trennt**: Passt ein Gewinde zu Größen zweier Reihen, entscheidet
+seine eigene Genauigkeit (`counterpart._told_apart` — erzeugt genau,
+gemessen mit `uncertainty`); bleibt mehr als eine, `AMBIGUOUS_THREAD`.
+
+**Ein Spiegelschalter zählt keine Ecken, aber jede Ecke belegt ihn**
+(`PartSpec.mirrored_by`): Der Bereichstest baut an jeder Ecke auch die andere
+Stellung und verlangt das Spiegelbild — Dreieck für Dreieck oder jede Ecke auf
+der gespiegelten Fläche, dazu Volumen und Merkmale. Volumen und Hülle allein
+ließen ein um 180° gedrehtes Rechtsgewinde als Linksgewinde durch.
+
 **Eine Schraube endet auch nicht an der Tabelle.** Schraubenloch,
 Mutternfalle, Schraube und Mutter nehmen `CUSTOM_SIZE` mit Nenndurchmesser;
 Löcher, Kopf, Mutter und Scheibe leitet `standards.derived_screw`/

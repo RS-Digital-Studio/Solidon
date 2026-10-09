@@ -106,6 +106,12 @@ dans `website/version.json`.
 - Si le perçage d'un bloc ne traverse pas la pièce, il s'appelle désormais borgne. Jusqu'ici il s'appelait traversant.
 - Si la paroi est plus épaisse que celle saisie pour un *Passe-câble* ou un *Embout cannelé*, l'étape le signale et ouvre l'épaisseur de paroi. Jusqu'ici le passage finissait en silence dans la matière.
 - Si une pièce séparée se trouve dans une fraisure, un trou oblong, une cuvette, une gorge ou un filetage, les actions le disent. Jusqu'ici elle était coupée ou fusionnée.
+- Les filetages existent désormais aussi en filetages de tuyauterie G et R, en filetages en pouces UNC et UNF et en NPT, dans le *Filetage imprimable*, sur vis, écrou et *Goujon fileté*.
+- Chaque filetage existe aussi à gauche. Une taille personnalisée accepte des filets par pouce et plusieurs filets, aussi dans *Créer une vis* et *Créer un couvercle vissé*.
+- Les séries de filetages que montrent les listes de tailles se choisissent dans les Réglages, sous *Séries de filetages dans les listes*.
+- La contrepartie et la *Goupille pour perçage* vont aussi aux filetages en pouces, de tuyauterie, à gauche, à plusieurs filets et coniques. Entre deux séries, Solidon demande laquelle.
+- Les filetages à gauche, à plusieurs filets et coniques se modifient avec *Modifier la caractéristique* et *Supprimer la caractéristique* et gardent sens, filets et conicité.
+- Solidon reconnaît un filetage à plusieurs filets dans un maillage importé comme un seul filetage avec son nombre de filets. Jusqu'ici, il en montrait plusieurs au pas double.
 
 ### Blocs
 
