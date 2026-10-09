@@ -28,6 +28,7 @@ import re
 import sys
 import threading
 from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
+from contextlib import contextmanager
 from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any, Final, Literal
@@ -92,6 +93,53 @@ ProfileIndexes = dict[tuple[Path, ProfileKind | None], dict[str, Path]]
 #: und ein zweites Mal für die Namensindizes und Erbketten; mit diesem Speicher
 #: öffnet es jede Datei nur einmal (DRUCK-14, Durchsicht 0.5.1).
 ProfileDocuments = dict[Path, dict[str, Any] | None]
+
+#: Der laufende Lesedurchgang (:func:`single_read`) — je Thread, damit die
+#: Profilsuche im Arbeiter nicht in den Durchgang des Fensters greift.
+_SINGLE_READ: Final = threading.local()
+
+
+@contextmanager
+def single_read() -> Iterator[None]:
+    """Ein Durchgang, in dem jede Profildatei einmal gelesen und jeder Ordner
+    einmal indiziert wird — danach verfällt beides.
+
+    Kommen im Druckdialog die Profile an, fragt er nach Prozessen, Filamenten,
+    Modell und Grundlage, und jede Frage baute ihre Namensindizes und Erbketten
+    neu. Gemessen an Roberts ElegooSlicer (08.10.2026): 14 327 Lesungen von
+    1431 Dateien und 23 Ordnerindizes je Antwort, „fdm_filament_common" allein
+    1136-mal, zusammen 2,5 s im Qt-Hauptthread. Länger als der Durchgang hält
+    der Speicher nicht, denn der Kunde legt im Slicer Profile an und benennt sie
+    um (:data:`ProfileIndexes`). Ausdrücklich übergebene Indizes und Dokumente
+    gehen vor; verschachtelt gilt der äußere Durchgang.
+    """
+    if getattr(_SINGLE_READ, "documents", None) is not None:
+        yield
+        return
+    _SINGLE_READ.documents = {}
+    _SINGLE_READ.indexes = {}
+    try:
+        yield
+    finally:
+        _SINGLE_READ.documents = None
+        _SINGLE_READ.indexes = None
+
+
+def _pass_documents(documents: ProfileDocuments | None) -> ProfileDocuments | None:
+    """Die übergebenen Dokumente, sonst die des laufenden Durchgangs."""
+    if documents is not None:
+        return documents
+    shared: ProfileDocuments | None = getattr(_SINGLE_READ, "documents", None)
+    return shared
+
+
+def _pass_indexes(indexes: ProfileIndexes | None) -> ProfileIndexes:
+    """Die übergebenen Indizes, sonst die des laufenden Durchgangs, sonst neue."""
+    if indexes is not None:
+        return indexes
+    shared: ProfileIndexes | None = getattr(_SINGLE_READ, "indexes", None)
+    return shared if shared is not None else {}
+
 
 #: Wie viele Dateien höchstens gelesen werden. Der ausgelieferte Bestand eines
 #: Slicers umfasst einige tausend Profile über alle Hersteller; eine Zahl weit
@@ -1189,9 +1237,10 @@ def _named_profile(
 
 def _printer_name(value: str) -> str:
     """Ein Druckername, vergleichbar gemacht: ohne Groß- und Kleinschreibung,
-    ohne „Original " und mit einem MINI, gleich wie Prusa ihn nennt."""
+    ohne „Original " und mit einem MINI, gleich wie Prusa ihn nennt — auch
+    „MINI && MINI+", wie PrusaSlicers Bündel das Modell führt."""
     value = value.casefold().removeprefix("original ")
-    return re.sub(r"^prusa mini(?:\+| is)?(?=\s|$)", "prusa mini", value)
+    return re.sub(r"^prusa mini(?:\+| is)?(?: &&? mini\+)?(?=\s|$)", "prusa mini", value)
 
 
 #: Die Düse am Ende eines Maschinennamens, in jeder Schreibweise der
@@ -1232,21 +1281,93 @@ def _names_the_printer(machine: str, title: str) -> bool:
     K1 Max und ihre CFS-Ausführungen. Seit bei gleicher Düse der kürzeste Name
     gewinnt (:func:`match`), gewann „Creality K1C 0.4 nozzle" gegen „Creality
     K1 (0.4 nozzle)" — ein K1 bekam die Maschine eines anderen Geräts und den
-    Prozess „0.08mm SuperDetail". Was nach dem Titel folgt, darf deshalb kein
-    Buchstabe und keine Ziffer sein; verwandte Modelle mit Leerzeichen („K1
-    Max") trennt :func:`match` über das Modellfeld.
+    Prozess „0.08mm SuperDetail".
+
+    **Und dahinter folgt nur die Düse** (:data:`_NOZZLE_AFTER`, RM-600). Ein
+    Leerzeichen reichte bis zum 08.10.2026, und „Anycubic Kobra 2" meinte damit
+    auch den Kobra 2 Max, „Elegoo Neptune 4" den Neptune 4 Pro und Max mit
+    anderem Bauraum, „Creality K1" den K1 SE, „Sovol SV06" den SV06 Plus. Wo
+    Solidon das längere Gerät nicht kennt, ging dessen Maschine samt Startcode
+    an den kürzeren Drucker. Gemessen an den Beständen von ElegooSlicer,
+    OrcaSlicer, Bambu Studio, Creality Print, Anycubic Slicer Next und PrusaSlicer:
+    Die Grenze nimmt 35, 35, 10, 22, 4 und 35 Zuordnungen weg, jede zu einem
+    anderen Gerät oder einer anderen Ausführung (MMU3, 2T, 5T, CFS-C, ACE,
+    High-Speed), keine zum selben. Eine High-Flow-Düse ist kein anderes Gerät, und
+    was ein Drucker in PrusaSlicers Bündel festhält, meint er weiter
+    (:func:`names_the_printer_profile`).
 
     Die eine Stelle für diesen Vergleich: :func:`printer_for` fragt „welcher
     meiner Drucker ist das", :func:`supports_printer` fragt „kennt dieser
     Slicer meinen Drucker". Zwei Formulierungen desselben Vergleichs würden
-    auseinanderlaufen, sobald einer von beiden verfeinert wird.
+    auseinanderlaufen, sobald einer von beiden verfeinert wird. Was davor
+    galt, fragt :func:`related_printer`.
     """
+    rest = _rest_after(machine, title)
+    return rest is not None and (not rest.strip() or _NOZZLE_AFTER.match(rest) is not None)
+
+
+#: Was im Maschinennamen auf den Drucker folgen darf: die Düse, in jeder
+#: Schreibweise der Bestände — „ 0.4 nozzle", „ (0.4 nozzle)", „ - 0.6 nozzle",
+#: auch als High-Flow-Düse („ HF0.4 nozzle", „ 0.4 HF nozzle"). HF ist eine
+#: Düsenart wie im Druckdialog, kein anderes Gerät.
+_NOZZLE_AFTER: Final = re.compile(
+    r"\s*[-\u2013\u2014:,]?\s*\(?(?:HF\s*)?\d+(?:[.,]\d+)?\s*(?:mm)?\s*(?:HF\s+)?nozzle\b",
+    re.IGNORECASE,
+)
+
+
+def _rest_after(machine: str, title: str) -> str | None:
+    """Was im Maschinennamen auf den Drucker folgt — ``None``, wenn er nicht
+    mit ihm als ganzem Wort beginnt."""
     wanted = _printer_name(title)
     name = _printer_name(machine)
     if not title or not name.startswith(wanted):
-        return False
+        return None
     rest = name[len(wanted) :]
-    return not rest or not rest[0].isalnum()
+    return rest if not rest or not rest[0].isalnum() else None
+
+
+def names_the_printer_profile(machine: str, profile: PrinterProfile) -> bool:
+    """Meint dieser Maschinenname diesen Drucker — über seinen Titel oder über das
+    Profil, das er in PrusaSlicers Bündel festhält (``prusaslicer_printer``)?
+
+    Dort steht hinter dem Titel mehr als die Düse: der MK4S hält „Original Prusa
+    MK4S HF0.4 nozzle", der XL „… XL Input Shaper 0.4 nozzle", der MINI „… MINI
+    && MINI+ Input Shaper". Verglichen wird ohne die Düse (:func:`model_name`),
+    damit die Düsenschwestern desselben Profils dazugehören.
+    """
+    if _names_the_printer(machine, profile.title):
+        return True
+    bundle = profile.prusaslicer_printer
+    return bool(bundle) and _device_name(machine) == _device_name(bundle)
+
+
+def _device_name(name: str) -> str:
+    """Das Gerät hinter einem Maschinennamen: ohne Düse und ohne High-Flow-Zusatz."""
+    return re.sub(r"\s+hf$", "", _printer_name(model_name(name)))
+
+
+def related_printer(machine: str, known: Mapping[str, PrinterProfile]) -> str:
+    """Ein bekannter Drucker, mit dessen Namen die Maschine nur beginnt — ein
+    Verwandter wie „Creality K1 SE" zum „Creality K1" —, sonst nichts.
+
+    Seit hinter dem Drucker nur die Düse folgen darf (:func:`_names_the_printer`),
+    gehört eine solche Maschine keinem bekannten Drucker. Wer daraus „ein
+    eigenes Profil" schließt, gibt sie jedem Projekt
+    (:func:`app.core.export.handover._fits_the_printer`); sie ist aber das Profil
+    eines anderen Geräts.
+
+    **Nur ein Name, der auf die Düse endet**, wie jedes Herstellerprofil. Ein
+    eigenes Profil heißt, wie der Kunde will — „Creality K1 Garage" ist seins und
+    kein Verwandter (Review RM-600, Runde 2).
+    """
+    if _NOZZLE_IN_NAME.search(machine) is None:
+        return ""
+    for identifier, profile in known.items():
+        rest = _rest_after(machine, profile.title)
+        if rest and not names_the_printer_profile(machine, profile):
+            return identifier
+    return ""
 
 
 def known_printers(flavour: SlicerFlavour, executable: Path) -> tuple[str, ...]:
@@ -1811,9 +1932,18 @@ def cura_instance_is_present(executable: Path, printer: PrinterProfile) -> bool:
 
 
 def chosen_printer(
-    flavour: SlicerFlavour, executable: Path, known: Mapping[str, PrinterProfile]
+    flavour: SlicerFlavour,
+    executable: Path,
+    known: Mapping[str, PrinterProfile],
+    *,
+    prefer: str = "",
 ) -> str:
-    """Die aktive Maschine mit ihrer Identität, auch bei gleichem Cura-Anzeigenamen."""
+    """Die aktive Maschine mit ihrer Identität, auch bei gleichem Cura-Anzeigenamen.
+
+    ``prefer`` wie bei :func:`printer_for`: derselbe Drucker unter zweiter
+    Identität gilt als der gemeinte. Cura unterscheidet seine Instanzen
+    selbst und braucht es nicht.
+    """
     chosen = chosen_machine(flavour, executable)
     if flavour == "cura":
         entry = profile_by_name(executable, flavour, chosen, "machine") if chosen else None
@@ -1839,7 +1969,7 @@ def chosen_printer(
             if entry.printer_model and printer.cura_definition == entry.printer_model
         ]
         return definitions[0] if len(definitions) == 1 else ""
-    return printer_for(chosen, known)
+    return printer_for(chosen, known, prefer=prefer)
 
 
 def supports_printer(flavour: SlicerFlavour, executable: Path, title: str) -> bool:
@@ -1877,22 +2007,51 @@ def _prusa_printer_models(executable: Path) -> tuple[str, ...]:
     return tuple(found)
 
 
-def printer_for(machine: str, known: Mapping[str, PrinterProfile]) -> str:
+def printer_for(machine: str, known: Mapping[str, PrinterProfile], *, prefer: str = "") -> str:
     """Welches Druckerprofil dieser Maschinenname meint — oder nichts.
 
     Der Name des Slicers trägt Düse und Zusätze („… 0.4 nozzle"), der von
     Solidon nicht; verglichen wird deshalb am Anfang. Trifft nichts, bleibt es
     leer: geraten wird hier so wenig wie in :func:`match`.
+
+    **Ein Gerät kann zweimal bekannt sein**: eingebaut („Elegoo Centauri
+    Carbon 2") und aus dem Slicer übernommen („Elegoo Centauri Carbon 2 0.4
+    nozzle"). Dann gewann der längere Titel, und wer fragte „gehört diese
+    Maschine meinem Projektdrucker?", bekam den Zwilling zur Antwort (RM-600).
+    ``prefer`` nennt den gemeinten Drucker; er gewinnt, wenn er dasselbe Gerät
+    ist wie der Treffer — gleicher Name ohne Düse — und dieser Name die
+    Maschine meint. Ein anderes Gerät gewinnt nie: „Elegoo Neptune 4" bleibt
+    hinter „Elegoo Neptune 4 Plus".
     """
     hits = [
         identifier
         for identifier, profile in known.items()
-        if _names_the_printer(machine, profile.title)
+        if names_the_printer_profile(machine, profile)
     ]
     if not hits:
         return ""
     # Der längste Titel gewinnt: „Elegoo Neptune 4 Plus" vor „Elegoo Neptune 4".
-    return max(hits, key=lambda identifier: len(known[identifier].title))
+    best = max(hits, key=lambda identifier: len(known[identifier].title))
+    wanted = known.get(prefer) if prefer else None
+    # Dasselbe Gerät heißt hier wie bei den Treffern: Titel oder Bündelprofil,
+    # ohne Düse und High-Flow-Zusatz. Über ``model_name`` allein blieben die
+    # eingebauten Prusa-Drucker draußen — der MK4S hält „… MK4S HF0.4 nozzle“
+    # (Review RM-600, Runde 2).
+    if (
+        wanted is not None
+        and (
+            _names_the_printer(machine, model_name(wanted.title))
+            or names_the_printer_profile(machine, wanted)
+        )
+        and _devices(wanted) & _devices(known[best])
+    ):
+        return prefer
+    return best
+
+
+def _devices(profile: PrinterProfile) -> set[str]:
+    """Die Geräte, die ein Drucker meint: sein Titel und sein Bündelprofil."""
+    return {_device_name(name) for name in (profile.title, profile.prusaslicer_printer) if name}
 
 
 def machine_with_nozzle(
@@ -2021,6 +2180,7 @@ def variant_order(
 def _load(path: Path, documents: ProfileDocuments | None = None) -> dict[str, Any] | None:
     """Der Inhalt einer Profildatei — ``None``, wenn sie sich nicht lesen lässt
     oder kein JSON-Objekt ist. Mit ``documents`` einmal je Durchgang."""
+    documents = _pass_documents(documents)
     if documents is not None and path in documents:
         return documents[path]
     try:
@@ -2432,7 +2592,7 @@ def _cura_definition_values(
     cura_raft_contact: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Definitionsdaten und bekannte Jerk-Beziehungen; fremde Ausdrücke bleiben unbekannt."""
-    indexes = {} if indexes is None else indexes
+    indexes = _pass_indexes(indexes)
     index: dict[str, Path] = {}
     for folder in [*(cura_resources(root) / "definitions" for root in roots), path.parent]:
         index_key: tuple[Path, ProfileKind | None] = (folder, "machine")
@@ -3485,6 +3645,7 @@ def binding(
     roots: Sequence[Path] = (),
     *,
     indexes: ProfileIndexes | None = None,
+    documents: ProfileDocuments | None = None,
 ) -> dict[str, Any]:
     """Woran ein Profil seine Verträglichkeit knüpft (§29).
 
@@ -3505,7 +3666,7 @@ def binding(
     leerer Eintrag verträgt sich mit keinem Drucker.
     """
     found: dict[str, Any] = {}
-    for loaded in _chain(path, roots, indexes=indexes):  # spezifisch zuerst
+    for loaded in _chain(path, roots, indexes=indexes, documents=documents):  # spezifisch zuerst
         for key in _BINDING:
             value = loaded.get(key)
             if key not in found and value:
@@ -3536,7 +3697,8 @@ def _chain(
     beim Delta, und wer das ausgeschriebene Profil liest, soll wissen, dass
     es unvollständig ist.
     """
-    indexes = {} if indexes is None else indexes
+    indexes = _pass_indexes(indexes)
+    documents = _pass_documents(documents)
 
     def lookup(current: Path, name: str) -> Path | None:
         _check_cancelled(cancelled)
@@ -3730,6 +3892,7 @@ def compatible_with(
     known: dict[str, SlicerProfile],
     *,
     indexes: ProfileIndexes | None = None,
+    documents: ProfileDocuments | None = None,
 ) -> tuple[str, ...]:
     """Für welche Drucker dieses Profil gilt — die eigene Angabe oder die
     geerbte.
@@ -3742,7 +3905,13 @@ def compatible_with(
     if profile.compatible_printers:
         return profile.compatible_printers
     if profile.path.is_file():
-        return tuple(_strings(binding(profile.path, indexes=indexes).get("compatible_printers")))
+        return tuple(
+            _strings(
+                binding(profile.path, indexes=indexes, documents=documents).get(
+                    "compatible_printers"
+                )
+            )
+        )
     seen: set[str] = set()
     current: SlicerProfile | None = profile
     for _step in range(MAX_INHERITANCE):
@@ -3794,15 +3963,27 @@ def _of_kind(
     # Ablage neu. Beim ElegooSlicer sind das 16 795 Dateien mal der Zahl der
     # Prozesse — der Qt-Hauptthread stand damit 49 Sekunden, und die Zeile
     # darunter zahlte es ein zweites Mal (Befund Robert, 09.09.2026).
-    if indexes is None:
-        indexes = {}
+    #
+    # **Und ein Dokumentenspeicher dazu**: Der Index fand die Eltern, gelesen
+    # wurden sie trotzdem je Kette neu. Gemessen an Roberts ElegooSlicer
+    # (08.10.2026): 14 327 Lesungen von 1431 Dateien je Profilantwort des
+    # Druckdialogs, „fdm_filament_common" allein 1136-mal, zusammen 2,5 s im
+    # Qt-Hauptthread.
+    indexes = _pass_indexes(indexes)
+    documents = _pass_documents(None)
+    if documents is None:
+        documents = {}
     fitting = [
-        entry for entry in entries if machine.name in compatible_with(entry, known, indexes=indexes)
+        entry
+        for entry in entries
+        if machine.name in compatible_with(entry, known, indexes=indexes, documents=documents)
     ]
     # Findet sich keine ausdrückliche Angabe, ist Zeigen besser als Verschweigen:
     # ein selbst angelegtes Profil ohne Verträglichkeitsliste soll wählbar sein.
     chosen = fitting or [
-        entry for entry in entries if not compatible_with(entry, known, indexes=indexes)
+        entry
+        for entry in entries
+        if not compatible_with(entry, known, indexes=indexes, documents=documents)
     ]
     return sorted(chosen, key=lambda entry: entry.name)
 

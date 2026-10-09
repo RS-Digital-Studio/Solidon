@@ -4090,7 +4090,7 @@ def test_cura_without_an_active_machine_is_not_reported_as_failed_adoption(
 ) -> None:
     from app.ui import print_settings_dialog as module
 
-    monkeypatch.setattr(module.slicer_profiles, "chosen_printer", lambda *_args: "")
+    monkeypatch.setattr(module.slicer_profiles, "chosen_printer", lambda *_args, **_kwargs: "")
     monkeypatch.setattr(module.slicer_profiles, "chosen_machine", lambda *_args: "")
     result: list[module._CuraPrinterSuggestion] = []
     worker = module._CuraPrinterWorker(Path("CuraEngine.exe"), profiles.printer_profiles())
@@ -4972,7 +4972,9 @@ def test_the_active_slicer_variant_and_nozzle_choice_stay_in_step(
     active = found[2]
     monkeypatch.setattr(slicer_profiles, "chosen_machine", lambda *_args: active.name)
     monkeypatch.setattr(
-        slicer_profiles, "chosen_printer", lambda *_args: dialog.session.profile.printer.id
+        slicer_profiles,
+        "chosen_printer",
+        lambda *_args, **_kwargs: dialog.session.profile.printer.id,
     )
     monkeypatch.setattr(dialog, "_machines_worth_showing", lambda machines: machines)
 
@@ -5597,7 +5599,7 @@ def test_curas_active_printer_can_be_adopted_without_losing_print_choices(
     monkeypatch.setattr(
         slicer_profiles,
         "chosen_printer",
-        lambda _flavour, _executable, _known: "",
+        lambda _flavour, _executable, _known, **_kwargs: "",
     )
     monkeypatch.setattr(
         slicer_profiles, "chosen_machine", lambda _flavour, _executable: "cura-instance:active"
@@ -7300,8 +7302,9 @@ def test_the_print_dialog_asks_in_the_order_its_answers_depend_on(
     Knöpfen.
 
     Geprüft an der Bauart (Zeile im Formular, Platz im Rollbereich) und nicht
-    an Bildpunkten: Slicer- und Plattenzeile sind ohne Slicer und mit einer
-    Platte verborgen, ihr Platz in der Folge bleibt.
+    an Bildpunkten: Die Plattenzeile ist mit einer Platte verborgen, ihr Platz
+    in der Folge bleibt. Die Slicerzeile steht immer da, ohne Slicer mit
+    „Programm wählen …“ allein (RM-601).
     """
     from PySide6.QtWidgets import QFormLayout
 
@@ -8478,6 +8481,47 @@ def test_the_vendor_fallback_never_binds_a_filament_of_another_material(
     dialog._profiles = [abs_profile, petg_profile, pla_profile]
     dialog._fill_filaments(None)
     assert dialog._filament_profile == str(pla_profile.path), "das Profil derselben Materialart"
+
+
+def test_an_adopted_twin_does_not_take_the_machines_of_the_project_printer(
+    dialog: PrintSettingsDialog, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Eingebauter Centauri Carbon 2 im Projekt, derselbe aus dem Slicer übernommen (RM-600).
+
+    Roberts Drache, 08.10.2026: Die Liste der Druckerprofile zeigte die 0,2er,
+    0,6er und 0,8er Maschine, aber nicht die 0,4er, mit der er druckt — die
+    hieß wie sein übernommener Drucker und wurde diesem zugeordnet. Gewählt
+    war damit nichts, ein Prozess fehlte, und das Filament fiel ohne Maschine
+    auf „Elegoo PLA @0.2 nozzle". Dazu bot der Dialog an, den Drucker des
+    Slicers zu übernehmen, auf dem das Projekt längst stand.
+    """
+    from app.core.export import slicer_profiles
+
+    built_in = profiles.printer("centauri-carbon-2")
+    twin = replace(
+        built_in, id="slicer-orca-af8733f715e1dfb0606b", title="Elegoo Centauri Carbon 2 0.4 nozzle"
+    )
+    profiles.save_printer(twin, slicer="elegooslicer")
+    dialog.session.project.document.printer = built_in.id
+    stock = [
+        SlicerProfile(path=Path(f"{name}.json"), name=name, kind="machine", nozzle=nozzle)
+        for name, nozzle in (
+            ("Elegoo Centauri Carbon 2 0.2 nozzle", 0.2),
+            ("Elegoo Centauri Carbon 2 0.4 nozzle", 0.4),
+            ("Elegoo Centauri Carbon 2 0.6 nozzle", 0.6),
+            ("Bambu Lab A1 0.4 nozzle", 0.4),
+        )
+    ]
+
+    shown = [entry.name for entry in dialog._machines_worth_showing(stock)]
+    assert shown == [entry.name for entry in stock[:3]], shown
+
+    dialog._slicer_path = Path("elegoo-slicer.exe")
+    monkeypatch.setattr(slicer_profiles, "chosen_machine", lambda *_args: stock[1].name)
+    assert dialog._printer_of_the_slicer() == "", "das Projekt steht schon auf diesem Gerät"
+    machine, belongs = dialog._slicer_machine_for_project(stock)
+    assert machine is stock[1]
+    assert belongs
 
 
 def test_the_printer_list_shows_the_printer_you_actually_have(
@@ -11078,3 +11122,48 @@ def test_a_suggestion_no_part_asks_for_says_it_applies_to_all(
     note = dialog._part_notes["adhesion.kind"]
     assert not note.isHidden()
     assert note.text() == str(tr("Gilt allen Teilen: Keines verlangt diesen Vorschlag für sich."))
+
+
+def test_profiles_arrive_in_one_read_and_fill_the_processes_once(
+    dialog: PrintSettingsDialog, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Die Profilantwort läuft in einem Lesedurchgang und füllt die Prozesse einmal (RM-602).
+
+    An Roberts ElegooSlicer stand der Dialog 2,5 s: jede Frage las die Profile
+    neu, und die Prozesse füllten sich zweimal — einmal über das Signal der
+    Maschinenwahl, gleich danach mit dem passenden Profil.
+    """
+    from app.core.export import slicer_profiles
+
+    dialog._slicer_path = Path("ElegooSlicer.exe")
+    dialog._profiles_pending = False
+    dialog.machine_choice.setCurrentIndex(-1)
+    dialog.ui_settings.slicer_machine_profile = ""
+    # Die gewählte Maschine ist nicht die erste der Liste — sonst steht die
+    # Auswahl nach dem Füllen schon auf ihr, und kein Signal läuft. Bei Robert
+    # war die 0,4er die zweite von vier.
+    found = [
+        _profile(
+            f"Elegoo Centauri Carbon 2 {diameter:.1f} nozzle",
+            "machine",
+            printer_model="Elegoo Centauri Carbon 2",
+            nozzle=diameter,
+        )
+        for diameter in (0.2, 0.4)
+    ]
+    machine = found[1]
+    monkeypatch.setattr(slicer_profiles, "match", lambda *_args, **_kwargs: (machine, None))
+    monkeypatch.setattr(slicer_profiles, "chosen_machine", lambda *_args: "")
+    monkeypatch.setattr(dialog, "_machines_worth_showing", lambda machines: machines)
+    calls: list[bool] = []
+    monkeypatch.setattr(
+        dialog,
+        "_fill_processes",
+        lambda _preferred: calls.append(slicer_profiles._SINGLE_READ.documents is not None),
+    )
+
+    dialog._profiles_found(found)
+
+    assert dialog.machine_choice.currentData() == slicer_profiles.identity(machine)
+    assert calls == [True], "einmal, und im Lesedurchgang"
+    assert getattr(slicer_profiles._SINGLE_READ, "documents", None) is None, "danach verworfen"
