@@ -159,25 +159,164 @@ def test_the_pdf_links_nowhere_outside_itself_but_the_website(language: str) -> 
     )
 
 
+#: Wie die Freischaltseite den Stichtag je Sprache schreibt: Format und Monate.
+_DEMO_DATE_FORMS: dict[str, tuple[str, list[str]]] = {
+    "de": (
+        "{day}. {month} {year}",
+        [
+            "Januar",
+            "Februar",
+            "März",
+            "April",
+            "Mai",
+            "Juni",
+            "Juli",
+            "August",
+            "September",
+            "Oktober",
+            "November",
+            "Dezember",
+        ],
+    ),
+    "en": (
+        "{day} {month} {year}",
+        [
+            "January",
+            "February",
+            "March",
+            "April",
+            "May",
+            "June",
+            "July",
+            "August",
+            "September",
+            "October",
+            "November",
+            "December",
+        ],
+    ),
+    "es": (
+        "{day} de {month} de {year}",
+        [
+            "enero",
+            "febrero",
+            "marzo",
+            "abril",
+            "mayo",
+            "junio",
+            "julio",
+            "agosto",
+            "septiembre",
+            "octubre",
+            "noviembre",
+            "diciembre",
+        ],
+    ),
+    "fr": (
+        "{day} {month} {year}",
+        [
+            "janvier",
+            "février",
+            "mars",
+            "avril",
+            "mai",
+            "juin",
+            "juillet",
+            "août",
+            "septembre",
+            "octobre",
+            "novembre",
+            "décembre",
+        ],
+    ),
+    "it": (
+        "{day} {month} {year}",
+        [
+            "gennaio",
+            "febbraio",
+            "marzo",
+            "aprile",
+            "maggio",
+            "giugno",
+            "luglio",
+            "agosto",
+            "settembre",
+            "ottobre",
+            "novembre",
+            "dicembre",
+        ],
+    ),
+    "pt": (
+        "{day} de {month} de {year}",
+        [
+            "janeiro",
+            "fevereiro",
+            "março",
+            "abril",
+            "maio",
+            "junho",
+            "julho",
+            "agosto",
+            "setembro",
+            "outubro",
+            "novembro",
+            "dezembro",
+        ],
+    ),
+}
+
+
+@pytest.mark.parametrize("language", sorted(available_languages()))
+def test_the_activation_page_names_the_shipped_demo_end_in_every_language(
+    language: str, shipped_demo_until: object
+) -> None:
+    """Die Freischaltseite nennt den ausgelieferten Stichtag — in jeder Sprache.
+
+    Der Stichtag steht als Text in der deutschen Quelle und frei in jedem
+    Katalog, ein Zwilling von ``store.DEMO_UNTIL``. Gebunden war nur die
+    deutsche Quelle; eine Übersetzung mit dem alten Datum fiel nicht auf.
+    """
+    from datetime import date
+
+    from app.i18n import install_catalog, set_language
+    from app.i18n.catalog import read_catalog
+
+    assert language in _DEMO_DATE_FORMS, (
+        f"Für {language} fehlt die Datumsschreibweise in _DEMO_DATE_FORMS."
+    )
+    if language != "de":
+        install_catalog(language, read_catalog(language))
+    set_language(language)
+    try:
+        activation = next(str(p.body) for p in manual.pages() if p.key == "activation")
+    finally:
+        set_language("de")
+    if shipped_demo_until is None:
+        # Verkaufsversion: Ohne Stichtag darf die Seite keine befristete Demo
+        # versprechen — das Kapitel kommt mit dem Wechsel auf 1.0 neu.
+        assert not re.search(r"\b20\d\d\b", activation.split("\n\n", 1)[0]), (
+            "Die Fassung hat keinen Demo-Stichtag, die Freischaltseite nennt aber "
+            "noch einen — Kapitel „activation“ in manual.py und die Kataloge nachziehen."
+        )
+        return
+    assert isinstance(shipped_demo_until, date)
+    form, months = _DEMO_DATE_FORMS[language]
+    day = shipped_demo_until
+    last_day = form.format(day=day.day, month=months[day.month - 1], year=day.year)
+    assert last_day in activation, (language, last_day, activation[:300])
+
+
 def test_written_manual_covers_the_current_demo_and_visible_controls(
     shipped_demo_until: object,
 ) -> None:
     """Die handgeschriebenen Kapitel nennen den ausgelieferten Zustand."""
-    from datetime import date
-
     pages = {page.key: str(page.body) for page in manual.pages()}
 
-    activation = pages["activation"]
-    # Der Stichtag der ausgelieferten Demo, nicht ein getippter: Mit dem
-    # Verkaufsstart am 1. Dezember rückte er vom 30. Oktober auf den 30. November.
-    assert isinstance(shipped_demo_until, date)
-    months = ("Januar", "Februar", "März", "April", "Mai", "Juni", "Juli", "August")
-    months += ("September", "Oktober", "November", "Dezember")
-    day = shipped_demo_until
-    last_day = f"{day.day}. {months[day.month - 1]} {day.year}"
-    assert last_day in activation, last_day
-    assert "vollständig freigeschaltet" in activation
-    assert "startet diese Demo nicht mehr" in activation
+    if shipped_demo_until is not None:
+        # Der Stichtag selbst steht im Sprachtest darüber.
+        activation = pages["activation"]
+        assert "vollständig freigeschaltet" in activation
+        assert "startet diese Demo nicht mehr" in activation
 
     seeing = pages["looking"]
     for value in (
