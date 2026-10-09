@@ -64,6 +64,9 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Se num furo estiver uma peça separada, como um pino, as ações no furo dizem-no e oferecem *Dividir em peças soltas*. Até agora, o pino fundia-se em silêncio com a placa.
 - Também em furos de blocos como o furo de parafuso, a bucha de inserção a quente ou o alojamento de porca, *Pino para furo* cria o pino adequado, e avisa se o furo não está no corpo.
 - Colocado à mão numa face, o alojamento de porca corta a sua bolsa no material. Até agora a bolsa ficava por cima e só o furo do parafuso era furado.
+- O furo do parafuso do alojamento de porca atravessa exatamente a peça, mesmo uma espessa. Até agora terminava 10 mm abaixo da bolsa ou furava o lado oposto de uma fenda.
+- Colocado por baixo, o alojamento de porca tem a bolsa sob a face e a ranhura desce até ela. Até agora a bolsa ficava meio por cima, com o parafuso na face.
+- Se o furo de um bloco não atravessa a peça, chama-se agora cego. Até agora chamava-se passante.
 - Se houver uma peça separada num escareamento, num furo oblongo, numa sede, numa garganta ou numa rosca, as ações dizem-no. Até agora era cortada ou fundida.
 
 ### Editar e esboçar

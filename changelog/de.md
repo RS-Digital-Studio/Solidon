@@ -89,6 +89,9 @@ Nutzen da und sonst nichts.
 - Liegt in einer Bohrung ein getrenntes Teil wie ein Stift, sagen die Handlungen an der Bohrung das und bieten *In Einzelteile aufteilen* an. Bisher verschmolz der Stift still mit der Platte.
 - Auch in Bohrungen von Bausteinen wie Schraubenloch, Einpressbuchse und Mutternfalle baut *Stift für Bohrung* den passenden Stift. Liegt die Bohrung nicht im Körper, sagt es das.
 - Von Hand auf eine Fläche gesetzt, schneidet die Mutternfalle ihre Tasche ins Material. Bisher stand die Tasche darüber, und nur das Schraubenloch wurde gebohrt.
+- Das Schraubenloch der Mutternfalle geht genau durch das Teil, auch durch ein dickes. Bisher endete es 10 mm unter der Tasche oder bohrte jenseits eines Spalts in die Gegenseite.
+- Von unten eingelegt liegt die Tasche der Mutternfalle unter der Fläche, ihr Schlitz führt hinab. Bisher saß sie halb darüber, die Schraube in der Fläche.
+- Reicht die Bohrung eines Bausteins nicht durch das Teil, heißt sie jetzt Sackloch. Bisher hieß sie Durchgang.
 - Liegt ein getrenntes Teil in einer Senkung, einem Langloch, einer Pfanne, einer Kehle oder einem Gewinde, sagen die Handlungen das. Bisher wurde es abgeschnitten oder verschmolz.
 
 ### Bearbeiten und Zeichnen

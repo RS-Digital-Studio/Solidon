@@ -32,6 +32,16 @@ Rastergrößen keine)."
 Warum die Prüfung die Richtung misst: „Zwei Volumen, die sich treffen, treffen
 sich am falschen Ende genauso."
 
+Warum eine Bohrung ohne eigene Tiefe vom Schritt gebohrt wird und nicht vom
+Baustein (RM-631):
+
+> Die Mutternfalle reichte fest 10 mm über ihre Tasche hinaus. In einem 40 mm
+> dicken Quader blieb ihr Schraubenloch ein Sackloch (z = 27,485 bis 40) und
+> hieß Durchgang, auf dem Boden eines 4 mm hohen Spalts bohrte es 6 mm in den
+> Backen darüber. Wie dick der Träger ist und was hinter der Fläche steht,
+> weiß nur die Operation; jede feste Zahl im Baustein ist an einem Träger zu
+> kurz und am nächsten zu lang.
+
 Warum der Deckel bis über die Ebene der Fläche angehoben wird:
 
 > Das Hundertstel über der Mündung reicht nur, solange die Achse senkrecht

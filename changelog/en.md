@@ -64,6 +64,9 @@ it into `website/version.json`.
 - If a separate part such as a pin sits in a hole, the actions on the hole say so and offer *Split into separate parts*. Until now the pin was silently merged with the plate.
 - In holes of parts such as the screw hole, the heat-set insert and the nut trap, *Pin for hole* also builds the matching pin. If the hole does not lie in the body, it says so.
 - Placed by hand on a face, the nut trap cuts its pocket into the material. Until now the pocket sat above it, and only the screw hole was drilled.
+- The nut trap's screw hole goes exactly through the part, even a thick one. Until now it ended 10 mm below the pocket or drilled into the opposite side across a gap.
+- Laid in from below, the nut trap's pocket sits under the face, its slot leading down to it. Until now it sat half above, with the screw in the face.
+- If the hole of a part does not go all the way through, it is now called blind. Until now it was called through.
 - If a separate part sits in a countersink, slot, socket, groove or thread, the actions say so. Until now it was cut off or merged.
 
 ### Editing and sketching

@@ -326,6 +326,18 @@ class PartSpec:
     Operation sagt das ihrem Registereintrag (``leaves_separate_parts``), und
     Auswertung und Assistentenprüfung melden deshalb keinen Zerfall.
     """
+    reaches_through: tuple[str, ...] = ()
+    """Die erklärten Bohrungen, die der Schritt durch den ganzen Träger führt (RM-631).
+
+    Der Baustein baut eine solche Bohrung nur über seine eigene Strecke: Wie
+    weit der Träger entlang ihrer Achse noch Material hat, weiß erst die
+    Operation. Sie verlängert die Bohrung von beiden Enden, bis das Material
+    endet — durch einen dicken Träger ganz, über die Fläche hinaus in einen
+    Spalt nie (``ops._reaching_through``). Die Mutternfalle reichte vorher fest
+    10 mm weiter: in einem 40-mm-Quader ein Sackloch, über einem Spalt in den
+    Backen darüber. Eine Bohrung mit eingetragener Tiefe steht nicht hier; sie
+    ist so tief wie eingetragen und dort ein Sackloch, wo der Träger dicker ist.
+    """
     joined_by_host: bool = False
     """Wahr, wenn der **Träger** die Teile dieses Bausteins zusammenhält.
 
@@ -699,6 +711,7 @@ def register_part(
     keeps_up: bool = False,
     lies_flat: bool = False,
     joined_by_host: bool = False,
+    reaches_through: Iterable[str] = (),
     bodies: int = 1,
     features: Iterable[str] = (),
     wall: WallRequirement | None = None,
@@ -753,6 +766,7 @@ def register_part(
                 keeps_up=keeps_up,
                 lies_flat=lies_flat,
                 joined_by_host=joined_by_host,
+                reaches_through=tuple(reaches_through),
                 features=declared_features,
                 wall=wall or WallRequirement(),
                 feature_requirements=declared_requirements,
@@ -830,7 +844,12 @@ def register_part(
 #: Version 25: Eine Mutternfalle, von Hand ohne Fläche und Richtung auf eine
 #: Oberfläche gesetzt, baut ihre Tasche ins Material statt darüber (RM-591);
 #: im Material gesetzt und alle übrigen Bausteine bleiben maßgleich.
-LIBRARY_VERSION: Final = "25"
+#: Version 26: Das Schraubenloch der Mutternfalle geht genau durch den Träger,
+#: nicht mehr fest 10 mm über die Tasche hinaus, und von unten eingelegt liegt
+#: ihre Tasche unter der Fläche (``NUT_TRAP_BORES_THROUGH_THE_PART``, RM-631).
+#: Alle übrigen Bausteine bleiben maßgleich; dass eine Bohrung, die nicht durch
+#: das Teil reicht, Sackloch heißt, entscheidet die Operation (``targets:10``).
+LIBRARY_VERSION: Final = "26"
 
 #: Version 2 hat eine einzige Ursache, und die betrifft drei Bausteine: sie
 #: bauten über ihrem Ursprung statt darunter. Der Eintrag steht hier statt

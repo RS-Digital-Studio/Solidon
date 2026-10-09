@@ -255,7 +255,13 @@ def test_heatset_exact_widens_at_the_mouth_and_matches_its_analytic_volume() -> 
     _roundtrip(tool)
 
 
-def test_nut_trap_exact_is_pocket_channel_and_bolt_in_one_body() -> None:
+def test_nut_trap_exact_is_pocket_and_channel_in_one_body() -> None:
+    """Tasche und Kanal; das Schraubenloch ist über der Tasche erklärt, gebohrt wird es im Schritt.
+
+    RM-631: Der Baustein trug einen Bolzen 10 mm über die Tasche hinaus nach
+    beiden Seiten. Wie weit die Bohrung reicht, misst jetzt die Operation am
+    Träger (``ops._reaching_through``).
+    """
     exact_kernel()
     nut, screw, play = standards.nut("M4"), standards.screw("M4"), 0.2
     values = {"size": "M4", "direction": "side", "slide": 12.0, "play": play, "screw_hole": True}
@@ -263,10 +269,13 @@ def test_nut_trap_exact_is_pocket_channel_and_bolt_in_one_body() -> None:
     tool = _sound(produced.mesh)
     width, height = nut.width + play, nut.height + play / 2.0
     hexagon = math.sqrt(3.0) / 2.0 * width**2
-    bolt = math.pi * (screw.clearance / 2.0) ** 2
-    # Der Kanal deckt die obere Hälfte des Sechskants, der Bolzen liegt ganz darin.
-    expected = (hexagon / 2.0 + width * 12.0) * height + bolt * 20.0
+    # Der Kanal deckt die obere Hälfte des Sechskants.
+    expected = (hexagon / 2.0 + width * 12.0) * height
     assert tool.volume == pytest.approx(expected, rel=1e-9)
+    bore = produced.features["bore_1"]
+    assert bore.params["diameter"] == pytest.approx(screw.clearance)
+    assert bore.params["depth"] == pytest.approx(height)
+    assert bore.params["through"] is True
     assert tool.bounds.maximum[0] == pytest.approx(width / 2.0, abs=1e-9)
     assert tool.bounds.minimum[1] == pytest.approx(-width / math.sqrt(3.0), abs=1e-9)
     assert tool.bounds.maximum[1] == pytest.approx(12.0, abs=1e-9)
@@ -274,12 +283,8 @@ def test_nut_trap_exact_is_pocket_channel_and_bolt_in_one_body() -> None:
     mesh = _built("nut_trap", False, **values)
     assert mesh.mesh.bounds.maximum == pytest.approx(tool.bounds.maximum, abs=1e-6)
     assert mesh.mesh.bounds.minimum == pytest.approx(tool.bounds.minimum, abs=1e-6)
-    # Nur der Bolzen ist facettiert. Die Untergrenze **ist** der Facettenverlust
-    # des Bolzens, das Netz trifft sie bis auf die letzten Stellen — verglichen
-    # wird deshalb mit einem Rundungsspielraum, nicht mit ``<`` auf der Grenze
-    # (seit ``MeshData.volume`` mit ``math.fsum`` summiert, lag es 10⁻¹³ darunter).
-    lower = 1.0 - (1.0 - FACET) * bolt * 20.0 / expected
-    assert lower - 1e-9 < mesh.mesh.volume / tool.volume < 1.0
+    # Sechskant und Kanal sind eben begrenzt: Das Netz trifft das Volumen genau.
+    assert mesh.mesh.volume == pytest.approx(tool.volume, rel=1e-9)
     # Nach unten gedreht: dieselbe Lage wie am Netz, gemessen an den Hüllen.
     below = _sound(_built("nut_trap", True, **{**values, "direction": "bottom"}).mesh)
     below_mesh = _built("nut_trap", False, **{**values, "direction": "bottom"}).mesh

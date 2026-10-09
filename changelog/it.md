@@ -64,6 +64,9 @@ scrive in `website/version.json`.
 - Se in un foro c'è un pezzo separato come un perno, le azioni sul foro lo dicono e offrono *Dividi in pezzi distinti*. Finora il perno veniva fuso in silenzio con la piastra.
 - Anche nei fori dei blocchi come il foro per vite, l'inserto a caldo o la sede per dado, *Perno per foro* crea il perno adatto, e avvisa se il foro non è nel corpo.
 - Posizionata a mano su una faccia, la sede per dado scava la sua tasca nel materiale. Finora la tasca restava sopra e veniva forato solo il foro per la vite.
+- Il foro per la vite della sede per dado attraversa esattamente il pezzo, anche se spesso. Finora finiva 10 mm sotto la tasca o forava il lato opposto oltre una fessura.
+- Inserita da sotto, la sede per dado ha la tasca sotto la faccia e la fessura scende fino a essa. Finora la tasca stava per metà sopra, con la vite nella faccia.
+- Se il foro di un blocco non attraversa il pezzo, ora si chiama cieco. Finora si chiamava passante.
 - Se in una svasatura, un'asola, una coppa, una gola o una filettatura c'è un pezzo separato, le azioni lo dicono. Finora veniva tagliato o fuso.
 
 ### Modificare e disegnare

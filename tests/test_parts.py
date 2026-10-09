@@ -1780,10 +1780,17 @@ def test_a_subtractive_part_reaches_into_the_material(
 
     Gemessen wird an der Wirkung, nicht an den Koordinaten: der Baustein sitzt
     auf der Oberseite einer Platte, und danach hat sie weniger Volumen.
+
+    **Die Mutternfalle baut nach oben**, weil die Mutter im Material sitzt; an
+    einer Fläche spiegelt die Operation sie (``ops._builds_upward_on_a_face``),
+    und genau so wird sie hier gesetzt. Bis RM-631 trug sie auch ungespiegelt
+    ab — mit dem Schraubenloch, das 10 mm unter die Tasche reichte.
     """
     spec, values = pair
     plate = shapes.box(60.0, 60.0, 20.0)
-    tool = shapes.moved(spec.fn(values).mesh, (0.0, 0.0, 20.0))
+    made = as_mesh_data(spec.fn(values).mesh)
+    flip = part_ops._extends_above_mouth(made)
+    tool = shapes.moved(part_ops._place(made, values, flip=flip), (0.0, 0.0, 20.0))
     cut = boolean("difference", [plate, tool])
 
     assert cut.mesh.volume < plate.volume - 1.0, (
@@ -5036,6 +5043,292 @@ def test_a_nut_trap_set_by_hand_cuts_its_pocket(
     cut = mesh.raw.section(plane_origin=[0.0, 0.0, floor - 1.0], plane_normal=[0.0, 0.0, 1.0])
     inner = np.hypot(*np.asarray(cut.vertices, dtype=float)[:, :2].T)
     assert (inner >= 15.0).all(), "unter der Stelle ist kein Loch, die Tasche bleibt oben"
+
+
+# --- RM-631: Eine Durchgangsbohrung geht genau durch das Teil -------------------------
+
+#: Ein Hauch neben der Achse, damit kein Messpunkt auf der Diagonale einer Deckfläche liegt.
+_BESIDE_THE_AXIS = (0.013, 0.017)
+
+
+def _rm631_carrier(kind: str, shape: str) -> Any:
+    """Der Träger der RM-631-Fälle, von Hand gebaut, in X und Y um null.
+
+    ``block12`` und ``block40``: Quader 40 × 40 × 12 bzw. × 40. ``thin3``: eine
+    3 mm dicke Platte. ``clamp``: eine Klammer — unterer Backen z = 0 … 8,
+    Spalt bis 12, oberer Backen z = 12 … 20, hinten bei y = 14 … 20 verbunden.
+    """
+    from app.core.types import SceneObject
+
+    blocks = {
+        "block12": [(40.0, 40.0, 12.0, 0.0, 0.0)],
+        "block40": [(40.0, 40.0, 40.0, 0.0, 0.0)],
+        "thin3": [(40.0, 40.0, 3.0, 0.0, 0.0)],
+        "clamp": [
+            (40.0, 40.0, 8.0, 0.0, 0.0),
+            (40.0, 40.0, 8.0, 0.0, 12.0),
+            (40.0, 6.0, 20.0, 17.0, 0.0),
+        ],
+    }[shape]
+    if kind == "brep":
+        from tests.helpers import exact_kernel
+
+        edit = exact_kernel()
+        solids = [
+            edit.moved(edit.box(width, depth, height), (0.0, y, z))
+            for width, depth, height, y, z in blocks
+        ]
+        solid = solids[0] if len(solids) == 1 else edit.unified(edit.boolean("union", solids))
+        return SceneObject(id="obj_1", name="Träger", mesh=solid, kind="brep")
+    import trimesh
+
+    meshes = []
+    for width, depth, height, y, z in blocks:
+        box = trimesh.creation.box(extents=(width, depth, height))
+        box.apply_translation((0.0, y, z + height / 2.0))
+        meshes.append(MeshData.of(box))
+    mesh = meshes[0] if len(meshes) == 1 else as_mesh_data(boolean("union", meshes).mesh)
+    return SceneObject(id="obj_1", name="Träger", mesh=mesh)
+
+
+def _rm631_insert(kind: str, shape: str, part: str, top: float, **params: Any) -> Any:
+    """Den Baustein von Hand auf die Fläche bei ``top`` setzen, Richtung +Z."""
+    from app.core.bootstrap import load_operations
+    from tests.helpers import run_operation
+
+    load_operations()
+    profile = profiles.make_profile("centauri-carbon-2", "petg")
+    placed = {"x": 0.0, "y": 0.0, "z": top, "nx": 0.0, "ny": 0.0, "nz": 1.0, **params}
+    return run_operation(f"insert_{part}", _rm631_carrier(kind, shape), profile, **placed)
+
+
+def _material_on_the_axis(entry: Any, heights: Any) -> list[bool]:
+    """Ob auf der Z-Achse (ein Hauch daneben) in diesen Höhen Material liegt."""
+    from app.core.perceive.features import _point_inside_shell, _triangle_bounds
+
+    triangles = np.asarray(as_mesh_data(entry.mesh).raw.triangles, dtype=np.float64)
+    bounds = _triangle_bounds(triangles)
+    x, y = _BESIDE_THE_AXIS
+    return [
+        bool(_point_inside_shell(np.array([x, y, float(height)]), triangles, bounds))
+        for height in heights
+    ]
+
+
+def _bore_ends(feature: Any) -> tuple[list[float], Any]:
+    """Die beiden Enden einer erklärten Bohrung, sortiert, und ihre Achse als Einheitsvektor."""
+    axis = np.asarray(feature.params["axis"], dtype=float)
+    axis /= float(np.linalg.norm(axis))
+    centre = np.asarray(feature.params["centre"], dtype=float)
+    half = float(feature.params["depth"]) / 2.0
+    return sorted([centre - axis * half, centre + axis * half], key=lambda p: float(p @ axis)), axis
+
+
+@pytest.mark.parametrize("kind", ["mesh", "brep"])
+def test_a_nut_trap_bores_through_a_carrier_thicker_than_its_old_reach(kind: str) -> None:
+    """RM-631: In einem 40 mm dicken Quader blieb die Schraubenbohrung ein Sackloch.
+
+    Das Werkzeug reichte 10 mm unter die Tasche, die Bohrung endete bei
+    z = 27,485, darunter stand Material bis z = 0 — und erklärt war sie als
+    Durchgang (``through=True``). Der Parametertext verspricht das Loch für die
+    Schraube durch das Teil. Soll: durch den ganzen Quader, z = 0 bis 40, als
+    Durchgang erklärt, entlang der Achse kein Material mehr.
+    """
+    result = _rm631_insert(kind, "block40", "nut_trap", 40.0, size="M3", slide=0.0)
+    carrier = result.outputs[0]
+    bore = carrier.features["nut_trap_bore_1"]
+    ends, _axis = _bore_ends(bore)
+    assert sorted(float(end[2]) for end in ends) == pytest.approx([0.0, 40.0], abs=0.05)
+    assert bore.params["through"] is True
+    assert not any(_material_on_the_axis(carrier, [0.5, 10.0, 20.0, 27.0, 30.0, 39.0]))
+
+
+@pytest.mark.parametrize("kind", ["mesh", "brep"])
+def test_a_nut_trap_on_the_floor_of_a_gap_leaves_the_jaw_above_alone(kind: str) -> None:
+    """RM-631: Das Werkzeug reichte 10 mm über die Fläche und bohrte, was dort stand.
+
+    Auf dem Boden eines 4 mm hohen Spalts gesetzt, ging das Schraubenloch durch
+    den Spalt hindurch 6 mm in den Backen darüber (Material dort danach erst ab
+    z = 18). Soll: Der Backen über dem Spalt bleibt voll, die Bohrung geht durch
+    den unteren Backen, z = 0 bis 8, und ist als Durchgang erklärt.
+    """
+    result = _rm631_insert(kind, "clamp", "nut_trap", 8.0, size="M3", slide=0.0)
+    carrier = result.outputs[0]
+    assert all(_material_on_the_axis(carrier, [12.5, 14.0, 16.0, 18.0, 19.5])), "oberer Backen"
+    assert not any(_material_on_the_axis(carrier, [0.5, 3.0, 5.0, 7.5]))
+    bore = carrier.features["nut_trap_bore_1"]
+    ends, _axis = _bore_ends(bore)
+    assert sorted(float(end[2]) for end in ends) == pytest.approx([0.0, 8.0], abs=0.05)
+    assert bore.params["through"] is True
+
+
+@pytest.mark.parametrize("kind", ["mesh", "brep"])
+@pytest.mark.parametrize(("depth", "through", "low"), [(10.0, False, 2.0), (14.0, True, 0.0)])
+def test_a_screw_hole_with_a_set_depth_says_whether_it_goes_through(
+    kind: str, depth: float, through: bool, low: float
+) -> None:
+    """RM-631: *Schraubenloch mit Senkung*, 10 mm tief in 12 mm, hieß Durchgang.
+
+    Mit eingetragener Tiefe ist die Bohrung so tief wie eingetragen — ein
+    Sackloch, wo der Träger dicker ist, und so erklärt (Karte: „Sackloch“).
+    Reicht die Tiefe durch, endet die Erklärung an der Unterseite (RM-598).
+    """
+    result = _rm631_insert(kind, "block12", "screw_hole", 12.0, size="M3", depth=depth)
+    bore = result.outputs[0].features["screw_hole_bore_1"]
+    ends, _axis = _bore_ends(bore)
+    assert sorted(float(end[2]) for end in ends) == pytest.approx([low, 12.0], abs=0.05)
+    assert bore.params["through"] is through
+
+
+@pytest.mark.parametrize("kind", ["mesh", "brep"])
+@pytest.mark.parametrize(
+    ("part", "params", "name"),
+    [
+        ("keyhole", {}, "keyhole_bore_1"),
+        ("cable_gland", {"strain_relief": False}, "cable_gland_bore_1"),
+        ("hose_barb", {}, "hose_barb_passage_1"),
+    ],
+)
+@pytest.mark.parametrize(
+    ("shape", "top", "through"), [("block40", 40.0, False), ("thin3", 3.0, True)]
+)
+def test_a_cut_through_bore_of_set_length_is_blind_in_a_thicker_carrier(
+    kind: str, part: str, params: dict[str, Any], name: str, shape: str, top: float, through: bool
+) -> None:
+    """RM-631: Dasselbe Erklärungsmuster an jedem abtragenden Baustein mit fester Länge.
+
+    Schlüsselloch, Kabeldurchführung und Schlauchanschluss bohren so tief, wie
+    ihre Maße sagen (Tiefe, Wandstärke). Im 40-mm-Quader blieb jede Bohrung ein
+    Sackloch und hieß Durchgang; in einer 3 mm dicken Platte geht sie durch.
+    Die Kabeldurchführung ohne Zugentlastung: Mit ihr öffnet die Bohrung in den
+    Klemmkanal dahinter, und gefragt wird je Bohrung, ob hinter ihren Enden
+    Material liegt.
+    """
+    result = _rm631_insert(kind, shape, part, top, **params)
+    bore = result.outputs[0].features[name]
+    assert bore.params["through"] is through
+
+
+@pytest.mark.parametrize("kind", ["mesh", "brep"])
+def test_a_nut_trap_laid_in_from_below_has_its_pocket_under_the_face(kind: str) -> None:
+    """RM-631: *Von unten eingelegt* lag die Tasche halb über der Fläche, die Bohrung quer.
+
+    Gedreht wurde nur der Körper: Der Schlitz lief von der Tasche weg tiefer ins
+    Material, die Tasche saß mittig auf der Fläche, die Schraubenachse in der
+    Fläche selbst — und erklärt waren Tasche und Bohrung entlang Z wie beim
+    Einschieben. Soll: Der Schlitz führt von der Fläche hinunter zur Tasche, die
+    Schraube liegt quer in der Tiefe des Einschubwegs und geht durch den ganzen
+    Quader; Tasche und Bohrung sind dort erklärt, wo sie liegen.
+    """
+    slide = 12.0
+    result = _rm631_insert(
+        kind, "block40", "nut_trap", 40.0, size="M3", slide=slide, direction="bottom"
+    )
+    carrier = result.outputs[0]
+    bore = carrier.features["nut_trap_bore_1"]
+    ends, axis = _bore_ends(bore)
+    assert abs(float(axis[2])) < 1e-9, "die Schraube liegt quer zur Fläche"
+    assert float(ends[0][2]) == pytest.approx(40.0 - slide, abs=0.05)
+    assert sorted(abs(float(end @ axis)) for end in ends) == pytest.approx([20.0, 20.0], abs=0.05)
+    assert bore.params["through"] is True
+    pocket = carrier.features["nut_trap_pocket_1"]
+    assert float(pocket.params["centre"][2]) == pytest.approx(40.0 - slide, abs=0.05)
+    nut = standards.nut("M3")
+    assert as_mesh_data(carrier.mesh).bounds.maximum[2] == pytest.approx(40.0, abs=0.02)
+    # Auf halbem Einschubweg ist nur der Schlitz da, so breit wie die Mutter über die Flächen.
+    cut = as_mesh_data(carrier.mesh).raw.section(
+        plane_origin=[0.0, 0.0, 40.0 - slide / 2.0], plane_normal=[0.0, 0.0, 1.0]
+    )
+    inner = np.asarray(cut.vertices, dtype=float)
+    inner = inner[np.hypot(inner[:, 0], inner[:, 1]) < 15.0]
+    assert float(np.abs(inner[:, 0]).max()) == pytest.approx(
+        (nut.width + _profile_clearance()) / 2.0, abs=0.02
+    )
+
+
+def _profile_clearance() -> float:
+    """Das Spiel des PETG-Profils, mit dem die RM-631-Fälle rechnen."""
+    return profiles.make_profile("centauri-carbon-2", "petg").material.clearance
+
+
+@pytest.mark.parametrize("kind", ["mesh", "brep"])
+def test_a_nut_trap_laid_in_from_below_does_not_sit_across_a_bore(kind: str) -> None:
+    """RM-631: An einer Bohrung stünde die Schraube *von unten eingelegt* quer zu ihr.
+
+    Die Mutternfalle sitzt in der Mitte der Bohrung, und ihre Schraube gehört in
+    deren Achse. Von unten eingelegt liegt sie quer — durch den ganzen Träger
+    hindurch. Soll: Die Operation sagt ab, mit dem Weg zurück in den Schritt.
+    """
+    from app.core.errors import ValidationError
+    from tests.helpers import run_operation
+
+    drilled, hole = _drilled_plate(kind, 12.0, 3.4)
+    profile = profiles.make_profile("centauri-carbon-2", "petg")
+    with pytest.raises(ValidationError) as refusal:
+        run_operation(
+            "insert_nut_trap", drilled, profile, at_feature=hole, size="M3", direction="bottom"
+        )
+    assert refusal.value.constraint == "feasible"
+    assert refusal.value.suggestions
+
+
+def _drilled_plate(kind: str, height: float, diameter: float) -> tuple[Any, str]:
+    """Platte 40 × 40 × ``height`` mit einer Bohrung durch die Mitte, ausgewertet, und ihr Name."""
+    from app.core.bootstrap import load_operations
+
+    load_operations()
+    if kind == "brep":
+        from tests.helpers import exact_kernel
+
+        exact_kernel()
+    profile = profiles.make_profile("centauri-carbon-2", "petg")
+    project = new_project("centauri-carbon-2", "petg")
+    History(project.document).apply(
+        "Platte mit Bohrung",
+        [
+            OperationDraft(
+                op="create_box" if kind == "mesh" else "create_brep_box",
+                params={"width": 40.0, "depth": 40.0, "height": height},
+            ),
+            OperationDraft(
+                op="drill_hole",
+                inputs=("obj_1",),
+                params={"diameter": diameter, "depth": 0.0, "z": height, "compensate": False},
+            ),
+        ],
+    )
+    evaluated = evaluate(project.document, profile, sources=ProjectSources(project))
+    assert evaluated.complete
+    drilled = evaluated.scene.objects["obj_1"]
+    (hole,) = [name for name, feature in drilled.features.items() if feature.kind == "hole"]
+    return drilled, hole
+
+
+@pytest.mark.parametrize("kind", ["mesh", "brep"])
+@pytest.mark.parametrize(("diameter", "widened"), [(2.5, 3.4), (6.0, 6.0)])
+def test_a_nut_trap_in_a_bore_takes_its_screw_hole_along_the_bore(
+    kind: str, diameter: float, widened: float
+) -> None:
+    """RM-631: In einer Bohrung reicht das Schraubenloch durch das Teil, erklärt bis zu ihren Enden.
+
+    Die Mutternfalle sitzt in der Mitte der Bohrung einer 20 mm dicken Platte
+    (Tasche z = 10 bis 12,5). Erklärt war das Schraubenloch fest von z = 0 bis
+    22,525, 2,5 mm über die Fläche hinaus. Soll: von z = 0 bis 20, als Durchgang;
+    eine engere Bohrung (Ø 2,5) wird auf das Durchgangsloch der M3 (Ø 3,4)
+    aufgebohrt, eine weitere (Ø 6) bleibt, wie sie ist.
+    """
+    from tests.helpers import run_operation
+
+    drilled, hole = _drilled_plate(kind, 20.0, diameter)
+    profile = profiles.make_profile("centauri-carbon-2", "petg")
+    result = run_operation("insert_nut_trap", drilled, profile, at_feature=hole, size="M3")
+    carrier = result.outputs[0]
+    bore = carrier.features["nut_trap_bore_1"]
+    ends, _axis = _bore_ends(bore)
+    assert sorted(float(end[2]) for end in ends) == pytest.approx([0.0, 20.0], abs=0.05)
+    assert bore.params["through"] is True
+    for height in (2.0, 18.0):
+        assert _widest_bore(as_mesh_data(carrier.mesh), height) == pytest.approx(widened, abs=0.02)
 
 
 def test_head_room_cuts_below_the_mouth_not_above_it(profile: Profile) -> None:

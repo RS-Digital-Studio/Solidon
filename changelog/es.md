@@ -65,6 +65,9 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Si en un taladro hay una pieza separada, como un pasador, las acciones del taladro lo dicen y ofrecen *Dividir en piezas sueltas*. Antes, el pasador se fundía en silencio con la placa.
 - También en taladros de bloques como el agujero para tornillo, el inserto termofijado o el alojamiento de tuerca, *Pasador para taladro* crea el pasador adecuado, y avisa si no están en el cuerpo.
 - Colocado a mano sobre una cara, el alojamiento de tuerca corta su hueco en el material. Hasta ahora el hueco quedaba encima y solo se taladraba el agujero para tornillo.
+- El agujero para tornillo del alojamiento de tuerca atraviesa exactamente la pieza, también una gruesa. Hasta ahora terminaba 10 mm bajo el hueco o perforaba el lado opuesto de una ranura.
+- Colocado desde abajo, el alojamiento de tuerca tiene el hueco bajo la cara y su ranura baja hasta él. Hasta ahora el hueco quedaba medio encima, con el tornillo en la cara.
+- Si el taladro de un bloque no atraviesa la pieza, ahora se llama ciego. Hasta ahora se llamaba pasante.
 - Si hay una pieza separada en un avellanado, una ranura, una cuenca, una garganta o una rosca, las acciones lo dicen. Hasta ahora se cortaba o se fundía.
 
 ### Editar y dibujar

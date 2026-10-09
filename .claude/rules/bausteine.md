@@ -74,16 +74,26 @@ Bauteil und nimmt nichts weg.
   Fläche, mit freier Richtung oder von Hand dort gesetzt, wo knapp über der
   Stelle Luft liegt, wird sie gespiegelt (`ops._builds_upward_on_a_face`,
   `_air_above`, RM-591). Gefragt wird knapp darüber, nicht auf halber Höhe
-  des Bausteins: Das Schraubenloch reicht über jeden Boden hinaus.
+  des Bausteins. *Von unten eingelegt* führt ihr Schlitz von der Mündung zur
+  Tasche, die Schraube liegt quer; an einer Bohrung sagt das der Schritt ab.
 - **Eine Einführfase wird als solche erklärt** (`build.bore(lead_in=True)`):
   Sie ist keine Bohrung, in die ein Stift gehört, und die Karte bietet dort
   keinen an (`perceive.actions.not_offered_at`).
-- **Die erklärte Durchgangsbohrung eines bloß abtragenden Bausteins endet im
-  Körper** (`ops._through_bores_in_the_body`, RM-598): Das Werkzeug darf über
-  die Form hinausreichen, damit es durch jede Wand geht, die Erklärung nicht.
-  Gemessen wird am Träger vor dem Schnitt, entlang der Achse — darum nur dort:
-  Die Bohrung eines anbauenden Bausteins oder seines Aufbaus (`host_add`) liegt
-  in Material, das der Träger noch nicht hat.
+- **Eine erklärte Durchgangsbohrung endet im Körper und geht durch ihn, sonst
+  heißt sie Sackloch** (`ops._through_bores_in_the_body`, RM-598, RM-631): Das
+  Werkzeug darf über die Form hinausreichen, die Erklärung nicht. Gekürzt wird
+  nur beim bloß abtragenden Baustein, am Träger vor dem Schnitt — die Bohrung
+  eines anbauenden oder seines Aufbaus (`host_add`) liegt in Material, das der
+  Träger noch nicht hat. Ob hinter einem Ende Material liegt, fragt der Körper
+  nach dem Schritt, bei jedem Baustein; eine eingetragene Tiefe bleibt die
+  Tiefe.
+- **Eine Bohrung ohne eigene Tiefe geht durch den ganzen Träger**
+  (`PartSpec.reaches_through`, `ops._reaching_through`, RM-631): Der Baustein
+  baut sie nur über seine Strecke, der Schritt verlängert sie an jedem Ende bis
+  zum ersten Austritt aus dem Material — nie über die Fläche hinaus in einen
+  Spalt. Nur wo der ganze Rand ihres Querschnitts im Material liegt: Eine Achse
+  in einer Fläche zöge sonst eine Rinne durch das Teil. In einer Bohrung muss
+  sie in deren Achse liegen.
 - **Schräg zur Fläche gesetzt, öffnet er trotzdem bis über sie.** Die Richtung
   bleibt Eingabe; angehoben wird der Deckel der Öffnung
   (`ops._opened_to_the_face`) bis über die **Ebene der Fläche am

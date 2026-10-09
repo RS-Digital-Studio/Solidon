@@ -57,6 +57,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-549 — Ein frisch installiertes Orca-AppImage unter Linux hat keine lesbaren Herstellerprofile](#rm-549) | Plattformen, Pakete und Grafik | Gefunden mit der Slicerauswahl (07.10.): ohne Vorwahl des Herstellerprofils lehnt die Orca-Familie den Auftrag ab; offen, ob der Druckdialog dann mit Grund und Weg endet |
 | [RM-022 — Nachbau als Operationsfolge](#rm-022) | Geometrie, Erkennung und Druckvorbereitung | Profilkörper am Netz gebaut (05.10.), Besenhalter angenommen; offen der Korpuslauf über diesen Stand samt fünf Teilen über 600 s, die Fensterabnahme beim Release und die Wiederholung der berichtigten Zahlenanzeige am Fenster |
 | [RM-188 — CAD-Ausbau, Bedienung und Resin für 0.5.x](#rm-188) | Geometrie, Erkennung und Druckvorbereitung | Nächster Schritt P0.8: die vier Konzepte je Anforderung dem Code oder einem Paket zuordnen; daneben P4.1 unter RM-022, P8.1, P9.1 und Zeichnen Z2. Reste der gebauten Pakete und Fragen an Robert stehen am Punkt; Abschluss mit P5.3 |
+| [RM-631 — Eine Durchgangsbohrung geht genau durch das Teil](#rm-631) | Geometrie, Erkennung und Druckvorbereitung | Gebaut auf `paket/g-geometrie`; offen die Nachprüfung G und der Merge nach main |
 | [RM-191 — PrusaSlicer braucht für dieselbe Übergabe länger als die Orca-Familie](#rm-191) | Geometrie, Erkennung und Druckvorbereitung | Nachgemessen am Gewürzregal (`56f70000`): Material innerhalb von 3 %, Zeit Prusa 1,93× Orca — behoben bis 1,19× (volle Füllung und Lückenfüllung für Prusa und Orca, Bahnbreite je Orca-Rolle, `machine_limits_usage = ignore`); der Rest ist die Bauweise des Slicers (Füllanker, Zusatzwände). Mit Herstellerbündel neu gemessen (06.10.): am MK4S ist PrusaSlicer schneller als Orca (218 gegen 345 min, Material gleich); langsamer bleibt PrusaSlicer ohne Bündel am CC2 (407 gegen 232 min, +20 % Material), weil Solidons Satz die Wandzahl nicht setzt (`perimeters = 3`, `extra_perimeters = 1`); nächster Schritt: im Prusa-Zweig für Drucker ohne Bündel Wandzahl und `extra_perimeters = 0` setzen, dann prusa:CC2 gegen elegoo:CC2 |
 | [RM-209 — Die Rundform-Einpassung an Gittermodellen](#rm-209) | Geometrie, Erkennung und Druckvorbereitung | Stapelumbau (0.5.1) und bitgleiche Vektornorm im Löser gebaut; Kumiko-Schale 18,6–20,2 s unter Last, §31 (unter 5 s) nicht erreicht; offen: Aufbereitung großer Flecken und Fits beschleunigen, danach ruhige Vergleichsläufe |
 | [RM-132 — Freiformerkennung am Ein-Sekunden-Ziel messen](#rm-132) | Geometrie, Erkennung und Druckvorbereitung | Ziel neu gefasst (Bauplan §31, Robert 06.10.: mechanisch unter 1 s, organisch unter 2 s am Referenzrechner); offen die Messung am neuen Ziel |
@@ -882,6 +883,19 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   der die Grenze hält; kein Rückschritt im Leistungsbudget (§31).
 
 ## Geometrie, Erkennung und Druckvorbereitung
+
+<a id="rm-631"></a>
+
+- [~] **RM-631 — Eine Durchgangsbohrung geht genau durch das Teil.** Gefunden bei RM-598
+  (Paket G, 09.10.2026): Das Schraubenloch der Mutternfalle reichte fest 10 mm über die Tasche
+  hinaus. In einem 40 mm dicken Quader blieb es ein Sackloch (z = 27,485 bis 40) und hieß
+  Durchgang, auf dem Boden eines Spalts bohrte es 10 mm über die Fläche in den Backen darüber;
+  *Schraubenloch mit Senkung* mit Tiefe 10 in 12 mm hieß ebenso Durchgang. Entschieden: Eine
+  Durchgangsbohrung geht genau durch das Teil, auch durch einen dicken Träger, und nie über die
+  Fläche hinaus in fremdes Material; mit gesetzter Tiefe ist sie ehrlich ein Sackloch.
+  **Abnahme:** je Kern die Mutternfalle durch 40 mm und auf dem Boden eines Spalts, das
+  Schraubenloch 10 in 12 mm als Sackloch, Bereichsnachweis und Beispiele neu. Gebaut auf
+  `paket/g-geometrie`, Nachweis im Bericht von Paket G.
 
 <a id="rm-571"></a>
 

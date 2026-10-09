@@ -215,6 +215,10 @@ Ein Baustein sagt nur, **was** er ist; den Kern wählt der Aufrufer
   und alter Ortsvorgabe; frische Dokumente nie. Jedes erzeugte Schema bekommt
   eigene Dataclass-Felder — ein geteiltes `Field` benennt sich beim nächsten
   Klassenbau um.
+- **`reaches_through`** nennt die Bohrungen, die der Schritt durch den
+  ganzen Träger führt (`_reaching_through`, Mutternfalle); jede erklärte
+  Durchgangsbohrung prüft `_through_bores_in_the_body` am Ergebnis (Regel in
+  `bausteine.md`).
 - **`depth_field`** sagt, welches Feld die Eindringtiefe ist (§18.5; warum der
   Name nicht reicht, im Docstring); wer ein auftragendes `depth` baut,
   deklariert es über `ParamSpec.subtractive_on` (`cuts`, `cuts_by_parameter`).
