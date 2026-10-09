@@ -216,8 +216,8 @@ Eine Kopie für einen Nebenfaden (`copy_with_answers`) liest vom Original nur
 Antworten aus `SHARED_ANSWERS`. Jede neue Frage in `features.remembered` steht
 in genau einer Menge: geteilt bei Zahl, schreibgeschütztem Feld, Menge oder
 Fit; gebunden (`BODY_BOUND_ANSWERS`), wenn sie beim Lesen etwas nachbaut
-(Netz mit trägem Cache, Suchbaum, vorbereitete GEOS-Fläche,
-`cached_property`). Ohne Eintrag gilt sie als gebunden — sicher, an der Kopie
+(Netz mit trägem Cache, Suchbaum, vorbereitete GEOS-Fläche, auch durch
+`contains_xy`/`intersects_xy`, `cached_property`). Ohne Eintrag gilt sie als gebunden — sicher, an der Kopie
 langsam; `test_every_remembered_question_is_either_shared_or_bound` verlangt
 ihn. Eine Antwort, die ein Körper ist, steht zusätzlich in
 `DERIVED_BODY_ANSWERS`.

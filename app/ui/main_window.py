@@ -85,7 +85,7 @@ from PySide6.QtWidgets import (
 from shiboken6 import isValid
 
 from app.branding import APP_NAME, APP_VERSION, PART_FILE_SUFFIX, PROJECT_SUFFIX
-from app.core import activation, bootstrap, discover, examples, feedback, manual, tools, updates
+from app.core import activation, bootstrap, examples, feedback, manual, tools, updates
 from app.core.agent import apply as agent_apply
 from app.core.agent.analysis import ANALYSIS_KINDS, analysis_text, unknown_analysis
 from app.core.agent.remote import Deferred as RemoteDeferred
@@ -1654,7 +1654,7 @@ class _ExportWorker(Worker):
         """
         setup = remembered_setup(self._ui_settings, self._material, self._profile.printer.id)
         if setup is None:
-            found = discover.find_program("slicer", tools.SLICERS)
+            found = tools.slicer_program()
             if found is not None:
                 setup = handover.detect(found)
         settings = self._settings

@@ -1212,7 +1212,7 @@ INTRODUCTION: Final[tuple[Page, ...]] = (
         summary=_("Was an einem Resin-Drucker anders ist, und was Solidon dort weglässt."),
         title=_("Harz statt Filament: Resin-Drucker"),
         body=_(
-            "Ein Resin-Drucker belichtet Schichten in einem Harzbad; Düse, Bahn und "
+            "Ein Resin-Drucker belichtet Schichten in einem Harzbad. Düse, Bahn und "
             "Elefantenfuß gibt es dort nicht. Beim ersten Start stehen zwei Resin-Drucker "
             "in derselben Liste wie die Filamentdrucker, ein kleiner wie Mars oder Photon "
             "Mono und ein großer wie Saturn oder Photon M. Ein eigener lässt sich mit "
@@ -1222,8 +1222,9 @@ INTRODUCTION: Final[tuple[Page, ...]] = (
             "Brim, Filamentwechsel und Düsentemperaturen, und der Druckdialog zeigt nur "
             "Drucker, Material, Platten und das Programm.\n\n"
             "**Der Weg zum Drucker ist die Datei**, denn viele Resin-Drucker arbeiten nur "
-            "mit dem Slicer ihres Herstellers. *Im Slicer öffnen* gibt die Datei an jedes "
-            "Programm, *Exportieren* legt sie ab. Wo Solidon die Form genau kennt, löst "
+            "mit dem Slicer ihres Herstellers. *Im Slicer öffnen* gibt die Datei an Ihren "
+            "Resin-Slicer wie ChituBox oder Lychee, *Exportieren* legt sie ab. Wo Solidon "
+            "die Form genau kennt, löst "
             "es sie so fein auf, wie die Bildpunkte verlangen, und der Prüfbericht nennt "
             "das Maß."
         ),

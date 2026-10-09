@@ -58,7 +58,7 @@ def _settings(**changes: object) -> PrintSettings:
         ),
         shell=replace(settings.shell, wall_count=2, top_layers=0, bottom_layers=0),
         infill=replace(settings.infill, density=0.0),
-        cooling=replace(settings.cooling, minimum_layer_time=0.0),
+        cooling=replace(settings.cooling, minimum_layer_time=0.0, minimum_speed=1e-6),
         retraction=replace(settings.retraction, length=0.0, z_hop=0.0),
         filament=replace(settings.filament, max_flow=0.0),
     )
@@ -68,7 +68,7 @@ def _settings(**changes: object) -> PrintSettings:
 
 
 def _motion(**changes: object) -> print_time.Motion:
-    return replace(print_time.Motion(nozzle=0.4, minimum_speed=1e-6), **changes)  # type: ignore[arg-type]
+    return replace(print_time.Motion(nozzle=0.4), **changes)  # type: ignore[arg-type]
 
 
 def _box(width: float, depth: float, height: float, at: float = 0.0) -> SliceResult:
@@ -111,8 +111,12 @@ def test_a_layer_is_slowed_to_the_minimum_time_but_not_below_the_minimum_speed()
     layers = sum(1 for layer in result.layers if layer.area > 1e-6)
     loop = 4.0 * (4.0 - 0.5)
 
-    free = print_time.plate_seconds([(result, settings)], _motion(minimum_speed=1e-6))
-    floored = print_time.plate_seconds([(result, settings)], _motion(minimum_speed=10.0))
+    free = print_time.plate_seconds(
+        [(result, print_settings.with_path(settings, "cooling.minimum_speed", 1e-6))], _motion()
+    )
+    floored = print_time.plate_seconds(
+        [(result, print_settings.with_path(settings, "cooling.minimum_speed", 10.0))], _motion()
+    )
 
     assert free == pytest.approx(layers * 5.0, rel=CLOSE)
     assert floored == pytest.approx(layers * loop / 10.0, rel=CLOSE)
@@ -257,7 +261,6 @@ def test_orca_motion_reads_the_manufacturer_chain_with_its_shares() -> None:
     )
 
     assert motion is not None
-    assert motion.minimum_speed == 20.0
     assert (motion.first_layer_wall_speed, motion.first_layer_infill_speed) == (50.0, 105.0)
     assert motion.solid_infill_speed == 250.0
     assert motion.internal_bridge_speed == pytest.approx(75.0)  # 150 % von 50
@@ -302,7 +305,6 @@ def test_prusa_motion_uses_jerk_and_only_limits_the_profile_hands_to_its_estimat
     used = manufacturer.prusa_motion({**values, "machine_limits_usage": "emit_to_gcode"}, 0.4)
 
     assert unused is not None and used is not None
-    assert unused.minimum_speed == 15.0
     assert unused.first_layer_infill_speed == pytest.approx(10.0)
     assert unused.solid_infill_speed == pytest.approx(80.0)
     assert unused.internal_bridge_speed == pytest.approx(37.5)

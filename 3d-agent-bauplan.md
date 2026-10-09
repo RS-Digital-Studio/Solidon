@@ -2515,7 +2515,7 @@ Erhebung der Drucker aus dem Slicer übernimmt ihn aus dessen Bettkontur;
 Bettform, Ursprung und die Gegenprobe an der Druckdatei folgen demselben
 Nullpunkt.
 
-**Die zweite Übergabeart braucht keine Übersetzung.** Ein Programm, dessen
+**Die zweite Übergabeart braucht keine Übersetzung.** Ein Resin-Slicer, dessen
 Einstellungen Solidon nicht kennt — der Hersteller-Slicer eines
 Resin-Druckers, ChituBox, Lychee —, bekommt die Datei in sein Fenster und
 sonst nichts: kein Profil, keine Konfiguration, kein Konsolenlauf, kein
@@ -2524,7 +2524,10 @@ Ursprung, denn einen Bauraum, zu dessen Ecke sich verschieben ließe, kennt
 Solidon dort nicht. Der Konsolenweg sagt für ein solches Programm ab und
 nennt den Weg über das Fenster. An einem Resin-Drucker reisen keine
 Druckeinstellungen mit der Datei — der Satz ist ein FDM-Vertrag, und ein
-Resin-Slicer liest ihn nicht.
+Resin-Slicer liest ihn nicht. Andere Programme stehen nicht zur Wahl:
+Erststart, Einstellungen und Druckdialog bieten nur Slicer an, deren Familie
+Solidon übersetzt, und Resin-Slicer, unter Windows, Linux und macOS gleich
+(Entscheidung Robert, 08.10.2026).
 
 **Das Profil des Herstellers ist die Grundlage** (Entscheidung Robert,
 27.09.2026, nach dem Minigolf-Druck am Centauri Carbon 2; Konzept
