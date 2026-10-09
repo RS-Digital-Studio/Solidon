@@ -46480,10 +46480,15 @@ alle Schritte. Leeres Fenster: Zusage 650 MB, dediziert 211 MB. Die einzige Spit
 zweiter Speicherblock von wgpu (256 MB dediziert und 256 MB Zusage, bleibend), am Riser beim
 Zurücknehmen auf den Ladestand. pygfx legte je gerichtetem Licht eine Schattentextur
 1024 x 1024 an, obwohl keines Schatten wirft (24 MB); seit `gfx_renderer.SHADOW_MAP_SIZE`
-ein Texel, Bild bytegleich, `test_render_contract.py::test_no_light_casts_a_shadow_…`. Damit
+ein Texel. In `test_render_contract.py` hält `test_no_light_casts_a_shadow_…` fest, dass kein
+Licht Schatten wirft, auch das des Achsenkreuzes, und
+`test_one_texel_shadow_maps_draw_the_same_image`, dass das Bild mit einem Texel dasselbe ist
+wie mit 1024 (Gegenprobe: mit Schattenwurf und -empfang unterscheiden sich die Bilder). Damit
 bleibt eine Sitzung mit einem Modell dieser Größe bei 273 MB dediziert (vorher 529 MB); kommt
 ein größeres Modell dazu, legt wgpu den Block dort an. Die Blockgröße steuert wgpu-native
-(keine Speicherhinweise in der C-Schnittstelle von wgpu 0.32).
+(keine Speicherhinweise in der C-Schnittstelle von wgpu 0.32); weiter unter RM-698, Teil 2.
+Zwei Fensterläufe mit dem Spiderman brachen ohne Python-Spur ab, am Stand davor wie danach —
+[RM-694](ROADMAP.md#rm-694).
 
 ## RM-571: Ein Sims im offenen Becher neben einem gesperrten Kanal behält seine Stütze (09.10.2026)
 
