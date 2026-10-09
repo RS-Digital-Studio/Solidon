@@ -48,7 +48,8 @@ Ohne Dateiliste zählt jede Änderung gegen HEAD, auch fremde.
 Meldet es „das ist die Suite" (`i18n`, `types.py`, `errors.py`, `log.py`),
 gleich das Tor fahren.
 
-**Vor dem Merge nach main** das Entwicklungstor (auf Paket- und Fixzweigen
+**Vor jedem Stand, der nach main geht** (Merge oder Commit direkt auf main),
+das Entwicklungstor (auf Paket- und Fixzweigen
 genügen die betroffenen Tests, ruff, format, mypy), zusammengefasst in `/pruefen`:
 
 ```
