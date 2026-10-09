@@ -2582,7 +2582,7 @@ def test_a_shelf_on_one_wall_is_a_ledge_and_no_bridge() -> None:
     Richtung; die Brückenweite ihrer Schicht ist deshalb ihre Diagonale, 40 mm
     (``analysis._supported_span``). Sie ist ein Rand: Weder verlangt der Rat
     Stützen über den Brückenweg, noch warnt der Bericht vor einer freien Decke —
-    beide lassen Schichten aus Rändern aus (``advise._quiet_layers``)."""
+    beide lassen Ränder aus (``analysis.span_beside``)."""
     body = on_bed(
         brick(40.0, 10.0, 40.0, (0.0, 0.0, 20.0)),
         brick(40.0, 2.5, 1.0, (0.0, 5.0 + 1.25, 20.5)),
@@ -2599,6 +2599,62 @@ def test_a_shelf_on_one_wall_is_a_ledge_and_no_bridge() -> None:
     assert not advise.support_need(result).needed
     codes = {finding.code for finding in advise.located_warnings(result, petg())}
     assert "slice.long_bridge" not in codes
+
+
+def _shelf_beside(*others: trimesh.Trimesh) -> MeshData:
+    """Die Konsole von oben, und auf derselben Schicht, was ``others`` bringt."""
+    return on_bed(
+        brick(40.0, 10.0, 40.0, (0.0, 0.0, 20.0)),
+        brick(40.0, 2.5, 1.0, (0.0, 5.0 + 1.25, 20.5)),
+        *others,
+    )
+
+
+def test_a_shelf_stays_a_ledge_beside_another_small_overhang() -> None:
+    """RM-627: Dieselbe Konsole, und auf ihrer Schicht ein Sporn von 1,5 auf
+    6 mm an einer Säule, 9 mm², weiter als ein Rand reicht. Die Schicht besteht
+    damit nicht mehr ganz aus Rändern, und ihre Brückenweite — die Diagonale der
+    Konsole, 40 mm — verlangte Stützen und eine Warnung vor einer freien Decke.
+    Der Sporn selbst spannt 6 mm."""
+    body = _shelf_beside(
+        brick(4.0, 4.0, 21.0, (30.0, -15.0, 10.5)),
+        brick(6.0, 1.5, 1.0, (35.0, -15.0, 20.5)),
+    )
+    result = slice_body(body, 0.2)
+    spanning = [layer for layer in result.layers if layer.bridge_width > SPAN_INTERESTING]
+    pieces = {
+        (index, number)
+        for index, layer in enumerate(result.layers)
+        for number in range(len(layer.overhangs))
+    }
+
+    assert spanning, "die Schicht der Konsole spannt als Ganzes über 15 mm"
+    assert pieces - ledges(result), "der Sporn ist kein Rand"
+    assert not advise.support_need(result).needed
+    codes = {finding.code for finding in advise.located_warnings(result, petg())}
+    assert "slice.long_bridge" not in codes
+
+
+def test_a_real_bridge_beside_a_shelf_is_still_reported_at_the_bridge() -> None:
+    """Gegenstück zu RM-627: Neben der Konsole spannt auf derselben Schicht ein
+    Steg von 3 mm über 20 mm Lücke. Er bleibt eine lange Brücke, mit seiner
+    Weite statt der Diagonale der Konsole, und der Klick fliegt zum Steg."""
+    body = _shelf_beside(
+        brick(3.0, 3.0, 20.0, (-35.0, -11.5, 10.0)),
+        brick(3.0, 3.0, 20.0, (-35.0, 11.5, 10.0)),
+        brick(3.0, 26.0, 1.0, (-35.0, 0.0, 20.5)),
+    )
+    result = slice_body(body, 0.2)
+
+    assert advise.support_need(result).needed
+    (bridge,) = [
+        finding
+        for finding in advise.located_warnings(result, petg())
+        if finding.code == "slice.long_bridge"
+    ]
+    assert bridge.values["span_mm"] == pytest.approx(20.0, abs=1.0)
+    assert bridge.location is not None
+    assert bridge.location[0] == pytest.approx(-35.0, abs=2.0), "am Steg, nicht an der Konsole"
 
 
 def _flange_with_tab(column: float, tab: float, *, flange: bool = True) -> MeshData:

@@ -107,6 +107,7 @@ Nutzen da und sonst nichts.
 - Unter Baumstützen und neben einem Reinigungsturm schlägt Solidon den Stützabstand in ganzen Schichten vor, so wie der Slicer ihn druckt.
 - Bei PLA schlägt Solidon für viele feine Spitzen mehr Abstand zu den Baumstützen darunter vor. Dadurch bleiben dort weniger Reste der Baumspitzen.
 - Verlangen viele kleine Überhänge zusammen Stützen, etwa an einem Kinn mit schräger Unterseite, nennt der Prüfbericht jetzt die Stelle.
+- Ein schmaler Rand, der sich selbst trägt, gilt neben einem anderen Überhang nicht mehr als lange Brücke. Der Prüfbericht warnt dort nicht mehr, und Solidon verlangt dafür keine Stützen.
 - Für PETG schlägt Solidon volle Kühlung an der Stütze vor. Sie löst sich so leichter vom Teil.
 - Neu in den Druckeinstellungen: *Trennschichten unten*, *Lücke in der Trennschicht* und *Volle Kühlung an der Stütze*.
 - Das Feld *Abstand nach oben* heißt jetzt *Abstand oben und unten* und gilt für beide Seiten der Stütze.

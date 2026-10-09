@@ -82,6 +82,7 @@ scrive in `website/version.json`.
 - Con i supporti ad albero e accanto a una torre di spurgo, Solidon propone lo spazio del supporto in strati interi, come lo stampa lo slicer.
 - Per il PLA, Solidon propone più spazio tra le numerose punte sottili e i supporti ad albero sottostanti. In questo modo restano meno residui delle punte dei supporti.
 - Se molti piccoli sbalzi richiedono insieme supporti, come un mento con la parte inferiore inclinata, il rapporto indica ora il punto.
+- Un bordo stretto che si regge da solo non conta più come ponte lungo accanto a un altro sbalzo. Il rapporto non avvisa più lì e Solidon non chiede supporti per questo.
 - Per il PETG Solidon suggerisce il raffreddamento pieno sul supporto. Così si stacca più facilmente dal pezzo.
 - Nuovo nelle impostazioni di stampa: *Strati di interfaccia inferiori*, *Spazio nell'interfaccia* e *Raffreddamento pieno sul supporto*.
 - Il campo *Spazio verso l'alto* ora si chiama *Spazio sopra e sotto* e vale per entrambi i lati del supporto.

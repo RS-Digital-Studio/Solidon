@@ -44,6 +44,7 @@ from app.core.slice.analysis import (
     _layer_shape,
     channel_space,
     island_layers,
+    kept_overhang,
     largest_overhang_patch,
     largest_sloped_patch,
     ledge_space,
@@ -54,6 +55,7 @@ from app.core.slice.analysis import (
     open_bridge_width,
     piece_area,
     smooth_outline_height,
+    span_beside,
     tapered_layers,
     thinnest_spot,
     tip_islands,
@@ -823,9 +825,6 @@ class SupportNeed:
     piece: float = 0.0
     """Das größte einzelne Stück in mm², ohne Kanaldecken und Ränder — über
     ``OVERHANG_LAYER_WORTH_SUPPORT`` eine flache Decke."""
-    quiet_layers: frozenset[int] = frozenset()
-    """Schichten, deren Brücken nicht zählen: Ihr Überhang besteht ganz aus
-    Kanal- und Randstücken (:func:`_quiet_layers`)."""
     tips: int = 0
     """Inseln, deren Baumspitze keine Trennschicht bekommt (:func:`tip_islands`)."""
 
@@ -904,15 +903,13 @@ def support_need(result: SliceResult, *, cancelled: CancelToken | None = None) -
     # darin dieselbe Decke wie beim Deckel. Gefragt wird deshalb das größte
     # zusammenhängende Stück (:func:`largest_overhang_patch`); lange freie
     # Stege fängt die Brückenregel darunter weiter ab.
-    resting = _quiet_layers(result, quiet)
     return SupportNeed(
-        needed=_may_need_support(result, islands, overhang, patch, resting),
+        needed=_may_need_support(result, islands, overhang, patch, quiet),
         islands=islands,
         model=model,
         overhang=overhang,
         patch=patch,
         piece=piece,
-        quiet_layers=resting,
         tips=tip_islands(result),
     )
 
@@ -1945,34 +1942,23 @@ def for_part(
     return _merged(settings, advice)
 
 
-def _quiet_layers(result: SliceResult, quiet: frozenset[tuple[int, int]]) -> frozenset[int]:
-    """Schichten, deren Überhang ganz aus Kanal- und Randstücken besteht — ihre
-    Brücken tragen sich selbst oder verlangen keine Stütze."""
-    return frozenset(
-        index
-        for index, layer in enumerate(result.layers)
-        if layer.overhangs
-        and all((index, number) in quiet for number in range(len(layer.overhangs)))
-    )
-
-
 def _may_need_support(
     result: SliceResult,
     islands: tuple[float, ...],
     overhang: float,
     patch: float,
-    quiet_layers: frozenset[int] = frozenset(),
+    quiet: frozenset[tuple[int, int]] = frozenset(),
 ) -> bool:
     """Die zwei Wege aus :func:`_from_geometry` zum Stützbedarf, dazu Inseln
-    und lange Brücken außerhalb der Schichten aus Kanal- und Randstücken
-    (:func:`_quiet_layers`)."""
+    und lange Brücken außerhalb der Kanal- und Randstücke ``quiet``
+    (:func:`span_beside`, RM-627)."""
     return (
         bool(islands)
         or worth_support(patch, overhang)
         or any(
-            layer.bridge_width > SPAN_INTERESTING
+            span_beside(result, index, quiet) > SPAN_INTERESTING
             for index, layer in enumerate(result.layers)
-            if index not in quiet_layers
+            if layer.bridge_width > SPAN_INTERESTING
         )
     )
 
@@ -2431,21 +2417,25 @@ def _from_spans(result: SliceResult) -> list[Finding]:
     if not spanning:
         return []
     # **Ein Rand, der sich selbst trägt, spannt nicht** (:func:`ledges`), wie im
-    # Stützbedarf (:func:`_quiet_layers`) — sonst warnte der Bericht, wo der Rat
-    # keine Stütze verlangt. Eine Schulter um eine freie Öffnung ist kein Rand
-    # (``analysis._spans_an_opening``): Ihre Bahnen laufen quer über die
-    # Öffnung, und der Befund bleibt (Gewürzbehälter, Review vom 08.10.2026).
-    # Gefragt erst hier, und nur nach den Stücken der spannenden Schichten.
+    # Stützbedarf (:func:`_may_need_support`) — sonst warnte der Bericht, wo der
+    # Rat keine Stütze verlangt. Gemessen wird je Schicht ohne die Ränder
+    # (:func:`span_beside`, RM-627): Ein Kragen um eine Wand meldete sonst
+    # 46 mm, sobald ein Kinnstreifen auf derselben Schicht lag. Eine Schulter um
+    # eine freie Öffnung ist kein Rand (``analysis._spans_an_opening``): Ihre
+    # Bahnen laufen quer über die Öffnung, und der Befund bleibt
+    # (Gewürzbehälter, Review vom 08.10.2026). Gefragt erst hier, und nur nach
+    # den Stücken der spannenden Schichten.
     asked = frozenset(
         (index, number)
         for index in spanning
         for number in range(len(result.layers[index].overhangs))
     )
-    resting = _quiet_layers(result, ledges(result, asked))
-    spanning = [index for index in spanning if index not in resting]
+    edges = ledges(result, asked)
+    widths = {index: span_beside(result, index, edges) for index in spanning}
+    spanning = [index for index in spanning if widths[index] > SPAN_INTERESTING]
     if not spanning:
         return []
-    worst = max(spanning, key=lambda index: result.layers[index].bridge_width)
+    worst = max(spanning, key=lambda index: widths[index])
     layer = result.layers[worst]
     _log.info("%d layer(s) span more than %.0f mm", len(spanning), SPAN_INTERESTING)
     location = None
@@ -2454,6 +2444,10 @@ def _from_spans(result: SliceResult) -> list[Finding]:
             _layer_shape(result.layers[worst - 1]).buffer(OVERHANG_MARGIN)
         )
         pieces = [part for part in getattr(free, "geoms", [free]) if part.area > 0.0]
+        # Der Ort liegt an der freien Fläche, die gemessen wurde, nicht am Rand.
+        kept = kept_overhang(result, worst, edges)
+        if kept is not None:
+            pieces = [part for part in pieces if part.intersects(kept)]
         if pieces:
             anchor = max(pieces, key=lambda part: part.area).representative_point()
             location = (float(anchor.x), float(anchor.y), float(layer.z))
@@ -2466,7 +2460,7 @@ def _from_spans(result: SliceResult) -> list[Finding]:
                 "Grad oder eine Stütze hilft."
             ),
             values={
-                "span_mm": round(layer.bridge_width, 1),
+                "span_mm": round(widths[worst], 1),
                 "z_mm": round(layer.z, 2),
                 "layers": len(spanning),
             },

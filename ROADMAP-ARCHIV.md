@@ -31,6 +31,7 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-09 | [RM-627: Ein Rand neben einem anderen Überhang ist keine lange Brücke (09.10.2026)](#rm-627-ein-rand-neben-einem-anderen-überhang-ist-keine-lange-brücke-09102026) |
 | 2026-10-09 | [RM-572: Der Prüfbericht nennt die Stelle, wo viele kleine Überhänge Stützen verlangen (09.10.2026)](#rm-572-der-prüfbericht-nennt-die-stelle-wo-viele-kleine-überhänge-stützen-verlangen-09102026) |
 | 2026-10-09 | [RM-680: Bausteine verwalten steht ohne eigenen Baustein offen (09.10.2026)](#rm-680-bausteine-verwalten-steht-ohne-eigenen-baustein-offen-09102026) |
 | 2026-10-09 | [RM-650: Ein eingefügtes Modell kommt in den Ausschnitt (09.10.2026)](#rm-650-ein-eingefügtes-modell-kommt-in-den-ausschnitt-09102026) |
@@ -27320,6 +27321,46 @@ nach einer Rücknahme bucht wirklich, eine abgewiesene Spule kommt in den Dialog
 zurück, die Übernahme aus dem Slicer überschreibt keine Handspule, Rücknahmen
 sind rücknehmbar, das Lager sichert seinen letzten lesbaren Stand selbst,
 Datumsfelder haben einen Kalender.
+
+## RM-627: Ein Rand neben einem anderen Überhang ist keine lange Brücke (09.10.2026)
+
+<a id="rm-627-ein-rand-neben-einem-anderen-überhang-ist-keine-lange-brücke-09102026"></a>
+<a id="rm-627"></a>
+
+**RM-627 — Ein Rand, der sich selbst trägt, zählt als lange Brücke, sobald auf seiner Schicht
+ein anderer Überhang liegt.**
+  Gefunden bei RM-572 (09.10.2026): Kinn über der Brust mit einem Kragen von 2 mm um die Rückwand
+  auf Kinnhöhe. Der Kragen ist ein Rand (`ledges`), vom Kinn auf einer Seite unterbrochen und
+  damit ohne beidseitig getragene Richtung; seine Schicht trägt `bridge_width` 46,2 mm. Rat und
+  Bericht nahmen Ränder nur schichtweise aus (`advise._quiet_layers`: Schichten, deren Stücke
+  alle Ränder oder Kanaldecken sind). Mit einem Kinnstreifen von 4,1 mm² (eigene Spannweite 0)
+  daneben zählte die ganze Schicht: Der Bericht meldete „Hier spannt eine Decke frei“ mit
+  46,2 mm am Kragen, und der Rat verlangte Stützen über den Brückenweg. An einer Wand mit
+  U-förmigem Kragen und einem Sporn von 8,5 mm² an einer Säule daneben (Spannweite 6,1 mm)
+  schaltete allein das Stützen ein — ohne den Sporn nicht.
+  **Stellen:** `advise._may_need_support`, `advise._from_spans`.
+  **Fix:** Die Brückenweite einer Schicht ohne Ränder und Kanaldecken messen, an der freien
+  Fläche, die ein übriges Stück berührt, wie `open_bridge_width`; der Ort der Warnung liegt an
+  dieser Fläche.
+  **Abnahme:** Konsole an einer Wand mit Sporn auf derselben Schicht ohne Stützbedarf und ohne
+  Warnung; eine echte Brücke neben der Konsole bleibt gemeldet, mit ihrer Weite und an ihrem Ort.
+
+**Abschluss:** `analysis.span_beside` misst die längste Brücke einer Schicht ohne die Stücke aus
+`quiet`, an der freien Fläche, die ein übriges Stück berührt (`kept_overhang`, wie bei
+`open_bridge_width`); steht kein Stück der Schicht darin, gilt `bridge_width` unverändert, eine
+Schicht nur aus Rändern spannt 0. `_may_need_support` fragt damit die Kanaldecken und Ränder aus
+`support_need`, `_from_spans` die Ränder; Weite und Ort der Warnung kommen aus derselben Fläche.
+`_quiet_layers` und `SupportNeed.quiet_layers` entfallen, sie hatten keinen Leser mehr. Kinn mit
+Kragen: keine lange Brücke mehr, der Befund über kleine Überhänge bleibt (z 44,55, 119,3 mm²), der
+Rat unverändert (Stützen über den Flächenweg). Wand mit U-Kragen und Sporn: kein Stützbedarf,
+kein Stützvorschlag; Kragen allein wie vorher. Tests
+`test_a_shelf_stays_a_ledge_beside_another_small_overhang` und
+`test_a_real_bridge_beside_a_shelf_is_still_reported_at_the_bridge` (Steg 20 mm, Ort am Steg);
+Gegenproben: Schichtweite statt `span_beside` lässt beide und
+`test_a_shelf_on_one_wall_is_a_ledge_and_no_bridge` rot werden, der Ort ohne die Flächenwahl den
+Brückentest. Kein Slicerlauf: Die Übergabe ändert sich nur, wo der Rat bisher allein wegen eines
+Rands Stützen einschaltete, und kehrt dort zum Herstellerprofil ohne Stützen zurück; dass Ränder
+ohne Stütze drucken, belegt [RM-582](#rm-582). Changelog: ja.
 
 ## RM-572: Der Prüfbericht nennt die Stelle, wo viele kleine Überhänge Stützen verlangen (09.10.2026)
 

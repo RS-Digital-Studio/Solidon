@@ -69,8 +69,11 @@ offenem Drucker. Übernommen wird auf Klick, nie von allein.
   ohne Ansatz), und die keine Öffnung über `SPAN_INTERESTING` überspannt
   (zwei Bahnen breit, von außen gefasst, Öffnung frei — geometrisch, denn der
   Stützschnitt misst keine Brücken), zählt nicht zum Stützbedarf, nicht zu
-  „auf dem Modell“, nicht zum Überhang- und nicht zum Brückenbefund. Wer nur
-  einige Stücke prüft, fragt mit `only`. `support.spare_ledges` sperrt ihre
+  „auf dem Modell“, nicht zum Überhang- und nicht zum Brückenbefund — je
+  Stück, nicht je Schicht: Die Brückenweite einer Schicht mit Rändern misst
+  `span_beside` an den übrigen Stücken, sonst zählte ein Rand neben einem
+  fremden Überhang als lange Brücke (RM-627). Wer nur einige Stücke prüft,
+  fragt mit `only`. `support.spare_ledges` sperrt ihre
   Überhangfläche (`ledge_space`) und spart aus, was Stütze braucht;
   vorgeschlagen nur mit Stützen.
 - **Der Stützkontakt folgt dem Material der Spule** (`_support_contact`):

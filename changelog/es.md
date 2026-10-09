@@ -83,6 +83,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Con soportes en árbol y junto a una torre de purga, Solidon propone el espacio del soporte en capas enteras, tal como lo imprime el slicer.
 - Para PLA, Solidon propone más espacio entre muchas puntas finas y los soportes en árbol situados debajo. Así quedan menos restos de las puntas de los soportes.
 - Si muchos voladizos pequeños necesitan soportes juntos, como una barbilla con la cara inferior inclinada, el informe indica ahora el lugar.
+- Un borde estrecho que se sostiene solo ya no cuenta como puente largo junto a otro voladizo. El informe ya no avisa ahí, y Solidon no pide soportes por ello.
 - Para PETG, Solidon sugiere refrigeración total en el soporte. Así se suelta más fácil de la pieza.
 - Nuevo en los ajustes de impresión: *Capas de separación inferiores*, *Hueco en la capa de separación* y *Refrigeración total en el soporte*.
 - El campo *Espacio superior* se llama ahora *Espacio arriba y abajo* y vale para ambos lados del soporte.

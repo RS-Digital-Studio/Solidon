@@ -3407,6 +3407,51 @@ def open_bridge_width(
     )
 
 
+def kept_overhang(
+    result: SliceResult, index: int, quiet: frozenset[tuple[int, int]]
+) -> ShapelyPolygon | MultiPolygon | None:
+    """Die Überhangstücke der Schicht ``index`` ohne die aus ``quiet``, vereinigt
+    — ``None``, wenn keines davon in ``quiet`` steht (RM-627)."""
+    layer = result.layers[index]
+    if not any((index, number) in quiet for number in range(len(layer.overhangs))):
+        return None
+    kept = [
+        ShapelyPolygon(piece.outline, piece.holes)
+        for number, piece in enumerate(layer.overhangs)
+        if (index, number) not in quiet
+    ]
+    joined = unary_union(kept) if kept else ShapelyPolygon()
+    return joined if isinstance(joined, ShapelyPolygon | MultiPolygon) else ShapelyPolygon()
+
+
+def span_beside(result: SliceResult, index: int, quiet: frozenset[tuple[int, int]]) -> float:
+    """Die längste Brücke der Schicht ``index``, ohne die Stücke aus ``quiet`` —
+    Kanaldecken und Ränder, die sich selbst tragen (RM-627).
+
+    ``LayerInfo.bridge_width`` gilt der ganzen Schicht. Ein Kragen von 2 mm um
+    eine Wand, auf einer Seite vom Kinn unterbrochen, hat keine beidseitig
+    getragene Richtung, und seine Schicht meldete eine Brücke von 46 mm. Er ist
+    ein Rand (:func:`ledges`); stand er allein auf seiner Schicht, schwieg der
+    Bericht, mit einem Kinnstreifen von 4 mm² daneben warnte er, und der Rat
+    verlangte Stützen über den Brückenweg. Gemessen wird deshalb nur die freie
+    Fläche, die ein Stück außerhalb von ``quiet`` berührt, wie bei
+    :func:`open_bridge_width`. Steht kein Stück der Schicht in ``quiet``, gilt
+    ihre Zahl unverändert.
+    """
+    layer = result.layers[index]
+    kept = kept_overhang(result, index, quiet)
+    if kept is None or index == 0:
+        return layer.bridge_width
+    if kept.is_empty:
+        return 0.0
+    return _bridge_width(
+        _material(layer),
+        _material(result.layers[index - 1]),
+        BRIDGE_FROM if result.bridge_from is None else result.bridge_from,
+        touching=kept,
+    )
+
+
 def model_support(
     result: SliceResult,
     channel_width: float = CHANNEL_WIDTH,
