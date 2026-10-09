@@ -180,6 +180,18 @@ def watch(name: str) -> None:
     setattr(module, name.split(":")[-1], wrapped)
 
 
+_shipped_known = getattr(feats, "_known_across", None)
+if _shipped_known is not None:
+
+    def _counted_known(name: str, body: Any, key: bytes) -> Any:
+        """Treffer und Fehlgriffe des Gedächtnisses je Frage (RM-592)."""
+        value = _shipped_known(name, body, key)
+        if ARMED[0]:
+            CALLS[f"gedaechtnis {name} {'Treffer' if value is not feats._UNKNOWN else 'neu'}"] += 1
+        return value
+
+    feats._known_across = _counted_known
+
 for stage in STAGES:
     watch(stage)
 

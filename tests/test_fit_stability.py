@@ -1729,3 +1729,266 @@ def test_a_patch_known_only_by_its_print_is_read_inside_its_round() -> None:
             assert read.digest == handles[features_module._patch_key(patch)].digest
     finally:
         features_module._SCREENED.reset(token)
+
+
+def _single_patch_parts(body: Any, patch: list[int], seams: bool) -> list[tuple[str, bytes]]:
+    """Der Fleckabdruck Fleck für Fleck, wie er vor der Stapelfassung gerechnet wurde."""
+    index = np.asarray(patch, dtype=np.int64)
+    faces = np.asarray(body.faces, dtype=np.int64)[index]
+    corners = np.asarray(body.vertices, dtype=np.float64)[faces]
+    _used, local = np.unique(faces.ravel(), return_inverse=True)
+    order = np.argsort(index, kind="stable")
+    parts = [
+        ("ecken", np.ascontiguousarray(corners).tobytes()),
+        ("eckennummern", np.asarray(local, dtype=np.int64).tobytes()),
+    ]
+    neighbours, pair_rows = features_module._neighbour_index(body)
+    ranked = index[order]
+    around = neighbours[index]
+    spot = np.minimum(np.searchsorted(ranked, np.maximum(around, 0)), len(index) - 1)
+    inside = (around >= 0) & (ranked[spot] == around)
+    place = np.where(inside, order[spot], np.where(around >= 0, -1, -2))
+    ranking = np.argsort(-place, axis=1, kind="stable")
+    place = np.take_along_axis(place, ranking, axis=1)
+    width = int((place > -2).sum(axis=1).max())
+    parts.append(("ring", np.ascontiguousarray(place[:, :width]).tobytes()))
+    if seams:
+        angles = np.asarray(body.face_adjacency_angles, dtype=np.float64)[
+            np.maximum(pair_rows[index], 0)
+        ]
+        angles = np.take_along_axis(np.where(inside, angles, 0.0), ranking, axis=1)
+        parts.append(("winkel", np.ascontiguousarray(angles[:, :width]).tobytes()))
+    parts.append(("normalen", np.asarray(body.face_normals, dtype=np.float64)[index].tobytes()))
+    parts.append(("flaechen", np.asarray(body.area_faces, dtype=np.float64)[index].tobytes()))
+    units = features_module.refined_units(body)
+    if units is not None:
+        own_units = units[index]
+        kept = own_units >= 0
+        pattern = np.full(len(index), -1, dtype=np.int64)
+        if kept.any():
+            pattern[kept] = np.unique(own_units[kept], return_inverse=True)[1]
+        parts.append(("ursprung", pattern.tobytes()))
+    return parts
+
+
+@pytest.mark.parametrize("refined", [False, True])
+def test_the_patch_prints_of_a_round_are_those_of_each_patch(refined: bool) -> None:
+    """Die Abdrücke einer ganzen Runde in einem Zug sind Byte für Byte die einzelnen.
+
+    Gemischt: große und kleine Flecken, ein Fleck in verdrehter Folge, zwei, die
+    sich Dreiecke teilen, mit und ohne Nahtwinkel, mit und ohne Ursprung vor
+    *Kanten verfeinern*.
+    """
+    from app.core.geom.mesh import remember_refined_units
+
+    raw = _rounded_box().raw
+    body = trimesh.Trimesh(np.array(raw.vertices), np.array(raw.faces), process=False)
+    if refined:
+        remember_refined_units(body, np.arange(len(body.faces), dtype=np.int64) // 3)
+    rng = np.random.default_rng(592)
+    count = len(body.faces)
+    patches = [
+        list(range(300)),
+        sorted(rng.choice(count, 40, replace=False).tolist()),
+        rng.permutation(np.arange(200, 260)).tolist(),
+        list(range(250, 400)),
+        [5],
+        list(range(count)),
+    ]
+    for seams in (False, True):
+        together = features_module._patch_prints_parts(body, patches, seams=seams)
+        for patch, parts in zip(patches, together, strict=True):
+            assert parts == _single_patch_parts(body, patch, seams)
+
+
+def test_the_hull_says_no_without_the_rectangle_and_says_what_it_would_say(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Ein Zylinder weit über dem Körper bekommt sein Nein, ohne dass das Rechteck rechnet.
+
+    Die Schranke aus dem achsparallelen Rahmen der Projektion verneint, was das
+    kleinste Rechteck ohnehin verneinen würde; dazwischen rechnet es weiter.
+    Für jeden Radius kommt dieselbe Antwort wie mit Rechteck allein.
+    """
+    rng = np.random.default_rng(592)
+    points = rng.random((4000, 3)) * np.array([80.0, 30.0, 12.0])
+    mesh = MeshData.of(trimesh.convex.convex_hull(points))
+    axes = [(0.0, 0.0, 1.0), (0.6, 0.0, 0.8), (0.3, 0.4, np.sqrt(0.75))]
+    counted = [0]
+    shipped = features_module._rectangle_across
+
+    def rectangle(*args: Any) -> float:
+        counted[0] += 1
+        return float(shipped(*args))
+
+    monkeypatch.setattr(features_module, "_rectangle_across", rectangle)
+    forget_cache()
+    for axis in axes:
+        assert not features_module._cylinder_fits(mesh, axis, 500.0)
+    assert counted[0] == 0, "ein Zylinder Ø 1000 an einem Körper von 88 mm braucht kein Rechteck"
+
+    radii = np.linspace(1.0, 120.0, 240)
+    with_bound = [[features_module._cylinder_fits(mesh, axis, r) for r in radii] for axis in axes]
+    monkeypatch.setattr(features_module, "_ACROSS_BOUND", np.inf)
+    forget_cache()
+    alone = [[features_module._cylinder_fits(mesh, axis, r) for r in radii] for axis in axes]
+    assert with_bound == alone
+    assert any(not answer for row in alone for answer in row) and any(
+        answer for row in alone for answer in row
+    )
+
+
+# --- G2: die Einpassungsrunden je Fleck (RM-592, P3) ------------------------------
+
+
+def _fitted_print(fitted: Any) -> list[Any]:
+    """Was ``_fitted`` hergibt, Bit für Bit: je Liste Fit und Dreiecke."""
+    return [
+        [(repr(entry[0]), sorted(int(index) for index in entry[1])) for entry in part]
+        if isinstance(part, list)
+        else repr(part)
+        for part in fitted
+    ]
+
+
+def _classified_hits(monkeypatch: pytest.MonkeyPatch) -> list[int]:
+    """Zählt Treffer und Ablagen von ``classify`` über die Körpergrenze."""
+    counts = [0, 0]
+    shipped_known = features_module._known_across
+    shipped_keep = features_module._keep_across
+
+    def known(name: str, body: Any, key: bytes) -> Any:
+        value = shipped_known(name, body, key)
+        if name == "classified" and value is not features_module._UNKNOWN:
+            counts[0] += 1
+        return value
+
+    def keep(name: str, body: Any, key: bytes, value: Any) -> None:
+        if name == "classified":
+            counts[1] += 1
+        shipped_keep(name, body, key, value)
+
+    monkeypatch.setattr(features_module, "_known_across", known)
+    monkeypatch.setattr(features_module, "_keep_across", keep)
+    return counts
+
+
+def _fresh_fitted(mesh: MeshData) -> list[Any]:
+    """Dieselbe Einpassung ohne jedes Gedächtnis."""
+    forget_cache()
+    before = features_module.remember_across_bodies(False)
+    try:
+        return _fitted_print(features_module._fitted(mesh))
+    finally:
+        features_module.remember_across_bodies(before)
+
+
+@pytest.mark.parametrize("name", ["post_with_fillet.stl", "plate_chamfered_mouths.stl"])
+def test_the_rounds_answer_each_patch_from_memory_like_the_calculation(
+    monkeypatch: pytest.MonkeyPatch, name: str
+) -> None:
+    """Am Zwilling antwortet ``classify`` aus dem Gedächtnis — mit Bit für Bit denselben Formen."""
+    mesh = features_module._one_body(plate(name))
+    counts = _classified_hits(monkeypatch)
+    forget_cache()
+    features_module._fitted(mesh)
+    assert counts == [0, counts[1]] and counts[1] > 0
+    twin = MeshData(raw=_twin(mesh.raw))
+    remembered = _fitted_print(features_module._fitted(twin))
+    assert counts[0] > 0, "derselbe Fleck an einem neuen Körper rechnet nicht"
+    assert remembered == _fresh_fitted(twin)
+
+
+def test_a_round_answer_needs_the_same_hull_and_the_same_body_numbers(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Eine andere Antwort der Hülle oder eine andere Diagonale rechnet die Runde neu.
+
+    Jeder Teil des Schlüssels einzeln: Ohne die Diagonale im Schlüssel träfe
+    der Körper mit dem losen Dreieck weit weg; ohne die Rückfrage träfe der
+    Zwilling, dessen Hülle anders antwortet. Beides gibt dann andere Formen als
+    die Rechnung.
+    """
+    mesh = features_module._one_body(plate("plate_chamfered_mouths.stl"))
+    counts = _classified_hits(monkeypatch)
+    forget_cache()
+    features_module._fitted(mesh)
+    wider = MeshData(raw=_twin(mesh.raw, far_triangle=True))
+    hits = counts[0]
+    features_module._fitted(wider)
+    assert counts[0] == hits, "eine andere Diagonale rechnet neu"
+
+    forget_cache()
+    features_module._fitted(mesh)
+    shipped = features_module._cylinder_fits
+    monkeypatch.setattr(features_module, "_cylinder_fits", lambda *args: not shipped(*args))
+    twin = MeshData(raw=_twin(mesh.raw))
+    asked_before = counts[1]
+    changed = _fitted_print(features_module._fitted(twin))
+    assert counts[1] > asked_before, "eine andere Antwort der Hülle rechnet neu"
+    assert changed == _fresh_fitted(twin)
+
+    # Die Gegenproben: ohne den Teil im Schlüssel träfe das Gedächtnis.
+    monkeypatch.setattr(features_module, "_cylinder_fits", shipped)
+    monkeypatch.setattr(features_module, "_LEFT_OUT", {"diagonale"})
+    forget_cache()
+    features_module._fitted(mesh)
+    hits = counts[0]
+    features_module._fitted(MeshData(raw=_twin(mesh.raw, far_triangle=True)))
+    assert counts[0] > hits, "ohne die Diagonale träfe der Körper mit dem fernen Dreieck"
+    monkeypatch.setattr(features_module, "_LEFT_OUT", {"rueckfrage"})
+    forget_cache()
+    features_module._fitted(mesh)
+    monkeypatch.setattr(features_module, "_cylinder_fits", lambda *args: not shipped(*args))
+    twin = MeshData(raw=_twin(mesh.raw))
+    blind = _fitted_print(features_module._fitted(twin))
+    assert blind != _fresh_fitted(twin), "ohne die Rückfrage gälte die alte Hülle"
+
+
+def test_a_cancelled_round_leaves_no_answer_for_its_patch(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Ein Abbruch mitten in ``classify`` legt für diesen Fleck nichts ab."""
+    from app.core.errors import OperationCancelled
+
+    mesh = features_module._one_body(plate("post_with_fillet.stl"))
+    counts = _classified_hits(monkeypatch)
+    forget_cache()
+
+    def cancelled(*_args: Any, **_kwargs: Any) -> Any:
+        raise OperationCancelled()
+
+    monkeypatch.setattr(features_module, "fit_sphere", cancelled)
+    monkeypatch.setattr(features_module, "fit_cone", cancelled)
+    with pytest.raises(OperationCancelled):
+        features_module._fitted(mesh)
+    held = features_module._BY_GEOMETRY.get("classified") or {}
+    assert len(held) == counts[1], "abgelegt nur, was vor dem Abbruch fertig war"
+    assert all(entry is not None for entry in held.values())
+
+
+@pytest.mark.parametrize("name", ["plate_chamfered_mouths.stl", "plate_countersunk.stl"])
+def test_the_stack_judges_each_patch_as_it_would_alone(name: str) -> None:
+    """Das Urteil des Stapels über einen Fleck hängt nicht daran, wer mit ihm im Stapel steht.
+
+    Sonst trüge eine gemerkte Antwort von ``classify`` das Urteil einer anderen
+    Runde an einen neuen Körper (Konzept R2). Je Fleck allein und alle zusammen:
+    dieselben Pläne, dieselben Urteile.
+    """
+    mesh = features_module._one_body(plate(name))
+    body = mesh.raw
+    curved = features_module._all_but(len(body.faces), features_module._large_facet_faces(body))
+    patches = [
+        patch
+        for patch in features_module._connected_patches(body, curved)
+        if features_module._face_count(body, patch) >= features_module.MIN_PATCH_FACES
+    ]
+    assert len(patches) > 1
+    forget_cache()
+    together = features_module._screened_fits(body, patches, shapes=None).fits
+    assert together
+    alone: dict[Any, Any] = {}
+    for patch in patches:
+        forget_cache()
+        alone.update(features_module._screened_fits(body, [patch], shapes=None).fits)
+    assert {key: verdict for key, (_plan, verdict) in together.items()} == {
+        key: verdict for key, (_plan, verdict) in alone.items()
+    }
