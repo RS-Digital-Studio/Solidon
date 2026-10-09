@@ -66,7 +66,7 @@ scrive in `website/version.json`.
 
 ### Blocchi
 
-- I blocchi che sono un pezzo a sé, come supporti, fascette o dadi, nascono senza selezione come corpo a sé in un punto libero del piatto, anche in un progetto vuoto.
+- I blocchi che sono un pezzo a sé, come clip per cavo, nervature o dadi, nascono senza selezione come corpo a sé in un punto libero del piatto, anche in un progetto vuoto.
 - Anche i tuoi blocchi nascono così come corpo a sé e non si attaccano a un corpo già presente nel progetto.
 - Con *Salva la selezione come blocco* il corpo selezionato arriva con esattamente i passi che lo costruiscono. Se arrivasse anche un secondo corpo, la finestra lo dice prima.
 - Supporti a parete, fascette per tubo, morsetti per profilo e supporti accettano ogni vite da M3 a M64. Se una misura non si accorda con le altre, il blocco dice cosa cambiare.

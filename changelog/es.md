@@ -67,7 +67,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 
 ### Bloques
 
-- Los bloques que son una pieza por sí solos, como soportes, abrazaderas o tuercas, se crean sin selección como cuerpo propio en un sitio libre de la placa, también en un proyecto vacío.
+- Los bloques que son una pieza por sí solos, como clips para cable, nervaduras o tuercas, se crean sin selección como cuerpo propio en un sitio libre de la placa, también en un proyecto vacío.
 - Sus propios bloques también se crean así como cuerpo propio y no se unen a un cuerpo que ya está en el proyecto.
 - Con *Guardar la selección como bloque* se guarda el cuerpo seleccionado con exactamente los pasos que lo construyen. Si viniera un segundo cuerpo, el diálogo lo indica antes.
 - Soportes de pared, abrazaderas de tubo y de perfil y soportes admiten cualquier tornillo de M3 a M64. Si un tamaño no encaja con las demás medidas, el bloque indica qué cambiar.

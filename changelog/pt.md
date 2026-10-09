@@ -66,7 +66,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 
 ### Blocos
 
-- Os blocos que são uma peça por si só, como suportes, abraçadeiras ou porcas, surgem sem seleção como corpo próprio num sítio livre da placa, também num projeto vazio.
+- Os blocos que são uma peça por si só, como clipes de cabo, nervuras ou porcas, surgem sem seleção como corpo próprio num sítio livre da placa, também num projeto vazio.
 - Os seus próprios blocos também surgem assim como corpo próprio e não se prendem a um corpo que já está no projeto.
 - Com *Guardar a seleção como bloco*, o corpo selecionado vem com exatamente os passos que o constroem. Se viesse um segundo corpo, o diálogo diz isso antes de guardar.
 - Suportes de parede, abraçadeiras de tubo e de perfil e suportes aceitam qualquer parafuso de M3 a M64. Se um tamanho não combina com as outras medidas, o bloco diz o que mudar.

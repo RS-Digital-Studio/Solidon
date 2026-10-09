@@ -67,7 +67,7 @@ dans `website/version.json`.
 
 ### Blocs
 
-- Les blocs qui forment une pièce à eux seuls, comme les supports, colliers ou écrous, se créent sans sélection comme corps à part sur un endroit libre du plateau, même dans un projet vide.
+- Les blocs qui forment une pièce à eux seuls, comme les clips de câble, nervures ou écrous, se créent sans sélection comme corps à part sur un endroit libre du plateau, même dans un projet vide.
 - Vos propres blocs se créent aussi ainsi comme corps à part et ne s'attachent pas à un corps déjà présent dans le projet.
 - Avec *Enregistrer la sélection comme bloc*, le corps sélectionné vient avec exactement les étapes qui le construisent. Si un second corps venait avec, le dialogue le dit avant.
 - Supports muraux, colliers de tube, colliers de profilé et supports acceptent toute vis de M3 à M64. Si une taille ne convient pas aux autres cotes, le bloc indique quoi changer.
