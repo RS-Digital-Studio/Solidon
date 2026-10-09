@@ -46,15 +46,16 @@ SUPPORT_ADDRESS: Final = "support@solidon3d.de"
 #: mindestens mit Sicherheitskorrekturen unterstützt. Die eine semantische
 #: Quelle wird in Oberfläche, öffentlicher Sicherheitszusage und CRA-Prüfung
 #: gelesen; eine abgeschriebene Datumszeichenkette könnte unbemerkt abweichen.
-SECURITY_SUPPORT_UNTIL: Final = date(2031, 10, 31)
+#: Fünf volle Jahre ab dem Verkaufsstart am 01.12.2026 (Robert, 09.10.2026).
+SECURITY_SUPPORT_UNTIL: Final = date(2031, 11, 30)
 
-#: Der geplante Verkaufsstart von Solidon 1.0 — 01.11.2026, 10:00 Uhr
-#: deutscher Zeit (Robert, 16.09.2026; RM-061), als UTC: Am 25.10. endet die
-#: Sommerzeit, 10:00 MEZ sind 09:00 UTC. Die Abschiedsmeldung einer
+#: Der geplante Verkaufsstart von Solidon 1.0 — 01.12.2026, 10:00 Uhr
+#: deutscher Zeit (Robert, 09.10.2026, zuvor 01.11.; RM-061), als UTC:
+#: 10:00 MEZ sind 09:00 UTC. Die Abschiedsmeldung einer
 #: abgelaufenen Demo wählt daran ihren Text; die tatsächliche Verfügbarkeit
 #: behauptet sie nie, denn die kennt nur die Website
 #: (``konzepte/konzept-demo-zu-1.0-2026-09.md`` §6.2).
-PLANNED_SALE_START: Final = datetime(2026, 11, 1, 9, 0, tzinfo=UTC)
+PLANNED_SALE_START: Final = datetime(2026, 12, 1, 9, 0, tzinfo=UTC)
 
 #: Die Produktseite: Download, Handbuch, Kauf. Von hier lesen der Installer
 #: (``tools/make_installer.py``), der Update-Hinweis und der Knopf „Solidon

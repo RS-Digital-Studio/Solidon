@@ -170,7 +170,7 @@ Eine als Demo bezeichnete Version (Versionsnummer 0.x) überlassen wir
 Ihnen unentgeltlich und befristet. Sie läuft vollständig — keine
 Wasserzeichen, keine Exportsperre, keine gesperrten Funktionen — bis zu dem
 Tag, den die jeweilige Anwendung selbst nennt: in der Statuszeile, im
-Über-Dialog und auf der Website. Die derzeit veröffentlichte Demo nennt den 30. Oktober 2026.
+Über-Dialog und auf der Website. Die derzeit veröffentlichte Demo nennt den 30. November 2026.
 Eine spätere 0.x-Demo kann einen eigenen Stichtag nennen.
 
 Danach lässt sich die Demo nicht mehr starten. Das ist kein Mangel,
@@ -227,7 +227,7 @@ aus diesem Vertrag nicht.
 
 Sicherheits- und Funktionserhaltungsaktualisierungen, die nach §§ 327f und
 327r BGB für den maßgeblichen Bereitstellungszeitraum erforderlich sind,
-stellen wir mindestens bis zum 31. Oktober 2031 bereit und informieren Sie
+stellen wir mindestens bis zum 30. November 2031 bereit und informieren Sie
 darüber. Diese Frist gilt für beide Lizenzarten gleich — sie hängt am
 Produkt und nicht daran, zu welchem Zweck es gekauft wurde. Diese Pflicht ist
 nicht auf eine Hauptversion beschränkt. Sie können
