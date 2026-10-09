@@ -157,7 +157,6 @@ allowed = [
   "LGPL-2.1-only",
   "LGPL-2.1-or-later",
   "LGPL-3.0-only",
-  "LicenseRef-Matplotlib",
   "LicenseRef-HarfBuzz-Old-MIT",
   # Die fünf unten kommen aus den Systembibliotheken, die das Linux-Paket
   # bündelt (`make_sbom.LINUX_FAMILY_COMPONENTS`), und sind am 03.09.2026
