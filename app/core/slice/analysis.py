@@ -3624,6 +3624,25 @@ def model_support(
     return answer
 
 
+def channel_pieces(
+    result: SliceResult,
+    only: frozenset[tuple[int, int]],
+    *,
+    cancelled: CancelToken | None = None,
+) -> frozenset[tuple[int, int]]:
+    """Welche der Stücke ``only`` Kanaldecken sind (:func:`model_support`).
+
+    Jedes Stück bekommt in der engen Frage dieselbe Antwort wie im ganzen
+    Durchgang; ist der gemerkt — der Prüfbericht fragt den Stützbedarf vor
+    den Befunden —, kommt die Antwort ohne neuen Durchgang daraus.
+    """
+    with _ANSWERS_LOCK:
+        for layers, width, selected, answer in _ANSWERS:
+            if layers is result.layers and is_close(width, CHANNEL_WIDTH) and selected is None:
+                return answer.channels & only
+    return model_support(result, only=only, cancelled=cancelled).channels
+
+
 #: Wie viele beantwortete Kanalfragen :func:`model_support` behält — die
 #: jüngsten, meist die Körper des offenen Druckdialogs. Ihre Schichttupel
 #: bleiben dafür am Leben, und damit bleibt ihre Identität eindeutig.

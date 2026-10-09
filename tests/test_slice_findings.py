@@ -483,6 +483,38 @@ def test_asking_single_pieces_gives_the_same_channel_answer() -> None:
         assert asked.channels == everything.channels & {name}, name
 
 
+def test_the_channel_pieces_come_from_the_full_answer_when_it_is_known(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """``channel_pieces`` antwortet wie die enge Kanalfrage; liegt die volle im
+    Merker, ohne neuen Durchgang (die Brückenwarnung nach dem Stützbedarf)."""
+    from app.core.slice import analysis
+    from app.core.slice.analysis import channel_pieces
+
+    result = slice_body(tunnel_block(20.0), 0.5)
+    names = frozenset(
+        (index, number)
+        for index, layer in enumerate(result.layers)
+        for number, _contour in enumerate(layer.overhangs)
+    )
+    single = frozenset({max(model_support(result).channels)})
+    calls: list[int] = []
+    real = analysis._model_support
+
+    def counting(*args: object, **kwargs: object) -> analysis.ModelSupport:
+        calls.append(1)
+        return real(*args, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(analysis, "_model_support", counting)
+
+    assert channel_pieces(result, names) == model_support(result).channels
+    assert channel_pieces(result, single) == single
+    assert not calls, "aus der gemerkten vollen Antwort"
+    fresh = slice_body(tunnel_block(20.0), 0.5)
+    assert channel_pieces(fresh, single) == model_support(fresh, only=single).channels
+    assert len(calls) == 1, "ohne volle Antwort die enge Frage, gemerkt"
+
+
 def test_the_channel_question_is_answered_once_per_measurement() -> None:
     """DRUCK-14: Die Kanalfrage hängt nur an den Schichten.
 
@@ -2800,6 +2832,98 @@ def test_a_ledge_without_a_core_costs_no_new_measurement(monkeypatch: pytest.Mon
 
     assert span_beside(result, index, edges) == result.layers[index].bridge_width
     assert not calls
+
+
+def _tunnel_beside(gap: float | None) -> MeshData:
+    """Block 40 x 30 x 20 auf einem Sockel, darin ein Tunnel 20 breit und 10 hoch
+    — seine Decke auf z 15 ist ein Kanal. Mit ``gap`` daneben ein Steg von 3 mm
+    über ``gap`` mm auf zwei Pfeilern vom Bett, auf derselben Höhe; seine Säule
+    erreicht das Bett, er ist keine Kanaldecke."""
+    parts = [
+        brick(40.0, 40.0, 5.0, (0.0, 0.0, 2.5)),
+        brick(10.0, 30.0, 10.0, (-15.0, 0.0, 10.0)),
+        brick(10.0, 30.0, 10.0, (15.0, 0.0, 10.0)),
+        brick(40.0, 30.0, 10.0, (0.0, 0.0, 20.0)),
+    ]
+    if gap is not None:
+        parts += [
+            brick(3.0, 3.0, 15.0, (45.0, -gap / 2.0 - 1.5, 7.5)),
+            brick(3.0, 3.0, 15.0, (45.0, gap / 2.0 + 1.5, 7.5)),
+            brick(3.0, gap + 6.0, 1.0, (45.0, 0.0, 15.5)),
+        ]
+    return on_bed(*parts)
+
+
+@pytest.mark.parametrize("gap", [None, 12.0])
+def test_a_ceiling_over_a_channel_is_no_bridge_a_support_helps(gap: float | None) -> None:
+    """Review zu RM-627: Über einem Tunnel von 20 mm meldete der Bericht „Ein
+    Übergang unter 45 Grad oder eine Stütze hilft“, wo der Rat bewusst keine
+    Stütze verlangt — eine Stütze im Kanal käme nicht mehr heraus. Der Befund
+    bleibt, die Decke hängt durch, aber er nennt den Kanal und rät nur zum
+    Übergang. Ein Steg über 12 mm daneben spannt nicht weit genug, um daran
+    etwas zu ändern."""
+    result = slice_body(_tunnel_beside(gap), 0.2)
+
+    assert not advise.support_need(result).needed
+    (bridge,) = [
+        finding
+        for finding in advise.located_warnings(result, petg())
+        if finding.code == "slice.long_bridge"
+    ]
+    assert "Kanal" in str(bridge.message)
+    assert "Stütze hilft" not in str(bridge.message)
+    assert bridge.values["span_mm"] == pytest.approx(20.0, abs=1.0)
+    assert bridge.location is not None
+    assert abs(bridge.location[0]) < 10.0, "über dem Tunnel"
+
+
+def test_the_bridge_warning_asks_the_channel_question_only_where_it_can_span(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Die Kanalfrage kostet je Decke den Durchgang bis zum Bett, am Drachen bis
+    96 s je Stück. Ein Sporn von 2 mm neben dem Tunnel trägt keine Brücke über
+    15 mm und wird nicht gefragt; die Tunneldecke schon."""
+    parts = _tunnel_beside(None).raw, brick(4.0, 4.0, 15.0, (45.0, 0.0, 7.5))
+    spur = brick(2.0, 1.5, 1.0, (48.0, 0.0, 15.5))
+    result = slice_body(on_bed(*parts, spur), 0.2)
+    asked: list[frozenset[tuple[int, int]]] = []
+    real = advise.channel_pieces
+
+    def recording(
+        result: SliceResult, only: frozenset[tuple[int, int]], **kwargs: object
+    ) -> frozenset[tuple[int, int]]:
+        asked.append(only)
+        return real(result, only, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(advise, "channel_pieces", recording)
+    (bridge,) = [
+        finding
+        for finding in advise.located_warnings(result, petg())
+        if finding.code == "slice.long_bridge"
+    ]
+
+    assert "Kanal" in str(bridge.message)
+    (only,) = asked
+    areas = sorted(piece_area(result.layers[index].overhangs[number]) for index, number in only)
+    assert areas and min(areas) > 100.0, "nur die Tunneldecke, nicht der Sporn"
+
+
+def test_a_bridge_beside_a_channel_is_reported_at_the_bridge() -> None:
+    """Gegenstück: Spannt der Steg daneben 20 mm, verlangt der Rat Stützen, und
+    der Befund ist eine Brücke wie jede andere — gemessen und gezeigt am Steg,
+    nicht an der Kanaldecke derselben Schicht."""
+    result = slice_body(_tunnel_beside(20.0), 0.2)
+
+    assert advise.support_need(result).needed
+    (bridge,) = [
+        finding
+        for finding in advise.located_warnings(result, petg())
+        if finding.code == "slice.long_bridge"
+    ]
+    assert "Stütze hilft" in str(bridge.message)
+    assert bridge.values["span_mm"] == pytest.approx(20.0, abs=1.0)
+    assert bridge.location is not None
+    assert bridge.location[0] == pytest.approx(45.0, abs=2.0), "am Steg, nicht über dem Tunnel"
 
 
 def _flange_with_tab(column: float, tab: float, *, flange: bool = True) -> MeshData:

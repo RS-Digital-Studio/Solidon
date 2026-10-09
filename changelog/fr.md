@@ -84,6 +84,7 @@ dans `website/version.json`.
 - Pour le PLA, Solidon propose davantage d'espace entre les nombreuses pointes fines et les supports arborescents en dessous. Cela laisse moins de résidus des pointes des supports.
 - Si de nombreux petits surplombs ont besoin ensemble de supports, comme un menton à face inférieure inclinée, le rapport indique désormais l'endroit.
 - Un rebord étroit qui se porte seul ne compte plus comme un long pont à côté d'un autre surplomb. Le rapport n'avertit plus à cet endroit, et Solidon n'y demande plus de supports.
+- Au-dessus d'un canal, le rapport ne conseille plus un support qu'on ne pourrait plus retirer. Il nomme le canal et une transition sous 45 degrés.
 - Pour le PETG, Solidon propose un refroidissement complet au support. Il se détache ainsi plus facilement de la pièce.
 - Nouveau dans les réglages d'impression : *Couches d'interface en bas*, *Écart dans l'interface* et *Refroidissement complet au support*.
 - Le champ *Espace au-dessus* s'appelle désormais *Espace dessus et dessous* et vaut pour les deux côtés du support.

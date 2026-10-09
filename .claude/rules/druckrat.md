@@ -46,7 +46,11 @@ offenem Drucker. Übernommen wird auf Klick, nie von allein.
   nur von Material daneben (`_Ceilings.closes`), schließt sie sich selbst.
   Gefragt wird die ganze Decke (Flächenmehrheit). Außen auf dem Modell zählt
   `worth_support`, auch als `open_field`. Wer das anfasst, misst Schüssel und
-  Drache.
+  Drache. Der Brückenbefund rät über einer Kanaldecke zum Übergang, nicht zur
+  Stütze, und eine Brücke daneben misst er ohne sie (`advise._from_spans`);
+  gefragt nur, was weiter als `SPAN_INTERESTING` spannen kann (`_may_span`),
+  denn die Kanalfrage kostet je Decke den Durchgang bis zum Bett
+  (`channel_pieces` liest die gemerkte volle Antwort).
 - **Eine Insel ist nie eine Kanaldecke**: Auf dem Modell heißt es „überall“,
   gleich wie klein (`ModelSupport.island_on_model`), ebenso für eine lange
   Brücke, die selbst dort hängt (`open_bridge_width`); über dem Bett bleibt
