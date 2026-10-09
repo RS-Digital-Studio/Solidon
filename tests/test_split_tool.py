@@ -619,7 +619,9 @@ def test_no_shortcut_of_the_window_is_handed_out_twice(window: MainWindow) -> No
             Qt.ShortcutContext.WindowShortcut,
             Qt.ShortcutContext.ApplicationShortcut,
         }:
-            taken.setdefault(sequence, set()).add(action.text())
+            # Zwei namenlose Aktionen fielen sonst im Namen ``""`` zusammen und
+            # verdeckten genau den Konflikt, den dieser Test sucht.
+            taken.setdefault(sequence, set()).add(action.text() or f"<ohne Namen {id(action)}>")
 
     doubled = {key: sorted(names) for key, names in taken.items() if len(names) > 1}
     assert not doubled, f"doppelt vergeben: {doubled}"
