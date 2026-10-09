@@ -43,6 +43,10 @@ STALL_SECONDS = 120.0
 #: hier macht keine zwanzig.
 MOST_CALLS = 500
 
+#: Gegen einen Lauf, der ohne Aufruf des Doppels immer weiter ausgibt oder
+#: schreibt: Der Halbierungsfall brauchte unter Last 295 s (RM-635).
+MOST_SECONDS = 1800.0
+
 
 def _tree_state(folder: Path) -> tuple[int, int, int]:
     """Anzahl, Größe und jüngste Änderung der Dateien unter ``folder``."""
@@ -63,13 +67,14 @@ def run_while_moving(
     oder eine Änderung unter ``cwd``.
 
     Ein Zustand statt einer Stoppuhr — gehalten wird an einer Pause von
-    :data:`STALL_SECONDS` oder an mehr als :data:`MOST_CALLS` Aufrufen. Die
+    :data:`STALL_SECONDS`, an mehr als :data:`MOST_CALLS` Aufrufen und erst als
+    Hängergrenze nach :data:`MOST_SECONDS`. Die
     Ausgabe geht in Dateien außerhalb von ``cwd``, gelesen wie ``text=True``.
     """
     with tempfile.TemporaryFile() as out, tempfile.TemporaryFile() as err:
         child = subprocess.Popen(command, stdout=out, stderr=err, env=env, cwd=cwd)
         seen: tuple[object, ...] | None = None
-        moved = time.monotonic()
+        begun = moved = time.monotonic()
         try:
             while child.poll() is None:
                 time.sleep(0.1)
@@ -85,6 +90,9 @@ def run_while_moving(
                 assert made <= MOST_CALLS, f"mehr als {MOST_CALLS} Aufrufe — eine Schleife?"
                 assert time.monotonic() - moved < STALL_SECONDS, (
                     f"{STALL_SECONDS:.0f} s ohne Aufruf und ohne Ausgabe — der Lauf hängt"
+                )
+                assert time.monotonic() - begun < MOST_SECONDS, (
+                    f"{MOST_SECONDS:.0f} s Gesamtgrenze erreicht — der Lauf endet nicht"
                 )
         finally:
             if child.poll() is None:
@@ -106,7 +114,7 @@ def test_a_run_that_neither_calls_nor_writes_is_stopped_as_hanging(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Die Wartelogik selbst: Stille ohne Aufruf ist ein Hänger, eine Aufrufschleife ohne
-    Ende auch — beides ohne Stoppuhr über den ganzen Lauf."""
+    Ende auch, und was ohne Ende nur ausgibt, hält die Gesamtgrenze an."""
     monkeypatch.setattr(sys.modules[__name__], "STALL_SECONDS", 1.0)
     with pytest.raises(AssertionError, match="hängt"):
         run_while_moving([BASH or "bash", "-c", "sleep 30"], cwd=tmp_path, calls=tmp_path / "c")
@@ -117,6 +125,13 @@ def test_a_run_that_neither_calls_nor_writes_is_stopped_as_hanging(
     endless = f'while true; do echo x >> "{calls.as_posix()}"; done'
     with pytest.raises(AssertionError, match="Schleife"):
         run_while_moving([BASH or "bash", "-c", endless], cwd=tmp_path, calls=calls)
+    # Ausgabe ohne Aufruf und ohne Ende: Nur die Gesamtgrenze hält sie an. Die
+    # Schleife endet nach 20 s von selbst, damit eine fehlende Grenze rot statt
+    # ewig wird.
+    monkeypatch.setattr(sys.modules[__name__], "MOST_SECONDS", 1.0)
+    talking = "for i in $(seq 200); do echo x; sleep 0.1; done"
+    with pytest.raises(AssertionError, match="Gesamtgrenze"):
+        run_while_moving([BASH or "bash", "-c", talking], cwd=tmp_path, calls=tmp_path / "keine")
 
 
 def test_the_script_lies_where_the_house_rules_point() -> None:

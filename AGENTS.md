@@ -173,10 +173,10 @@ Dialoge.
   Robert). Ein Schritt, der
   seine Tests rot lässt, wird nicht auf den nächsten gestapelt.
 - **Fenster, Renderer und Leistung lokal nur beim Release**; der Push nach main
-  löst in der CI alle Prüfungen selbst aus — Kern und Renderer auf allen vier
-  Plattformen, dazu die betroffenen Fenster- und Slicertests (`/liefern`). Auf
-  Zweigen läuft keine CI (Entscheidung Robert). Ein grüner Entwicklungslauf
-  ersetzt sie nicht.
+  löst im öffentlichen Repository alle Prüfungen selbst aus — Kern und
+  Renderer auf allen vier Plattformen, dazu die betroffenen Fenster- und
+  Slicertests (`/liefern`). Auf Zweigen läuft keine CI (Entscheidung Robert).
+  Ein grüner Entwicklungslauf ersetzt sie nicht.
 - **Bilder und Handbuch nur beim Release — und nur, was sich geändert hat**
   (Weg in `/erzeugen`).
 - **Die CI-Aufteilung hat einen geprüften Vertrag**

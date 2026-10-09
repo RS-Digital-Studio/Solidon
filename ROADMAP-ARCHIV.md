@@ -31,6 +31,7 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-09 | [RM-531 (Teil): Sieben Fenstertests außerhalb von Windows sind auf allen vier Plattformen grün (09.10.2026)](#rm-531-teil-sieben-fenstertests-außerhalb-von-windows-sind-auf-allen-vier-plattformen-grün-09102026) |
 | 2026-10-09 | [RM-635: Prozesstests zählen ihre Zeit ab dem Zustand, und der Abbau wartet auf das Ende des Prozesses (09.10.2026)](#rm-635-prozesstests-zählen-ihre-zeit-ab-dem-zustand-und-der-abbau-wartet-auf-das-ende-des-prozesses-09102026) |
 | 2026-10-09 | [RM-344: Die Release-CI fährt die Rendererfälle ohne Fenster auf allen vier Paketplattformen (09.10.2026)](#rm-344-die-release-ci-fährt-die-rendererfälle-ohne-fenster-auf-allen-vier-paketplattformen-09102026) |
 | 2026-10-09 | [RM-680: Bausteine verwalten steht ohne eigenen Baustein offen (09.10.2026)](#rm-680-bausteine-verwalten-steht-ohne-eigenen-baustein-offen-09102026) |
@@ -45496,6 +45497,30 @@ und die Spalten unverändert. Mit 150 % Schrift reichen die Felder bis 527 px st
 Changelog: ja, unter *Drucken und Übergabe an den Slicer* — mit vergrößerter Schrift hatte
 `v0.5.3` den Fehler.
 
+## RM-531 (Teil): Sieben Fenstertests außerhalb von Windows sind auf allen vier Plattformen grün (09.10.2026)
+
+<a id="rm-531-teil-sieben-fenstertests-außerhalb-von-windows-sind-auf-allen-vier-plattformen-grün-09102026"></a>
+
+**Befund (07.10.2026, Sonde 37495714708):** Nach den ersten Plattformfixes blieben sieben
+Testfunktionen außerhalb von Windows rot (U Linux, A macOS ARM, I macOS Intel):
+`test_widget_lifetime[KeyDialog]` (UAI, einer von zehn überlebt),
+`test_a_button_wraps_its_label_instead_of_cutting_it` (UAI, der Knopf bricht nicht um),
+`test_no_element_of_the_bar_is_squeezed` (UAI, Felder 356/364 statt 398/404 px bei 1600 px),
+`test_a_long_setup_failure_stays_in_the_scroll_area` (UAI, kein Rollbalken bei 200 Zeilen),
+`test_the_sketch_area_fits_a_laptop_screen` (AI, 977 statt höchstens 900 px),
+`test_the_left_column_shares_its_height_with_all_four` (AI, inzwischen `…_with_all_three`) und
+`test_chat_setup_follows_late_status_text…` (AI, Schlüsseldialog 105 statt 120 px).
+
+**Stand:** In der Fensterauswahl 37936316061 (welle2 `a9e4d3f64`, 121 Fensterdateien) liefen alle
+sieben auf Windows, Linux, macOS ARM und dem Intel-Mac grün. `test_widget_lifetime.py` (70
+Fälle), `test_selection_operations.py` (35), `test_transform_ui.py` (35), `test_generate_ui.py`
+(104) und `test_dialog_layout.py` (4) endeten je Plattform mit Exit 0; in `test_sketch_editor.py`
+(1 von 289) und `test_ui.py` (1 von 706, Intel-Mac 5) war je nur ein welle2-Fall rot (Escape im
+Skizzenmodus, Messausdruck; Intel dazu Organizer), keiner der sieben, behoben in `6e200fc31`.
+Die Fenstergruppe sammelt in diesen sieben Dateien 1 243 Fälle, dieselbe Zahl wie die Summe der
+Dateiergebnisse im Protokoll; die sieben stehen darin. Welcher der Plattformfixes zwischen dem
+07. und 09.10. welchen Fall behob, ist nicht einzeln zugeordnet. Changelog: nein.
+
 ## RM-635: Prozesstests zählen ihre Zeit ab dem Zustand, und der Abbau wartet auf das Ende des Prozesses (09.10.2026)
 
 <a id="rm-635-prozesstests-zählen-ihre-zeit-ab-dem-zustand-und-der-abbau-wartet-auf-das-ende-des-prozesses-09102026"></a>
@@ -45530,9 +45555,13 @@ rot). In `test_process.py` zählt eine Zeitgrenze, die das Thema ist, ab dem Ere
 (`_clock_held_until`: die 0,2 s ab dem lebenden Nachkommen oder dem hängenden Empfänger),
 Nachkommen werden über ihre Prozesskennung als beendet nachgewiesen statt über eine Marke nach
 fester Wartezeit, ein blockierender Empfänger über die Ordnung der Ereignisse; reine
-Hängergrenzen sind `HANG_GUARD` und entscheiden keinen Fall. `test_suite_script.py` wartet,
+Hängergrenzen sind `HANG_GUARD` und entscheiden keinen Fall. Wo die Reaktion selbst das Thema
+ist (Ausgabegrenze, Elternende, Abbruch, `linger`), gilt `REACTION` = 10 s ab dem Ereignis — nach
+der Nachprüfung (N-3): Ein Prozesskern, der nur alle 20 s hinsah, blieb ohne sie grün und ist
+jetzt in fünf Fällen rot. `test_suite_script.py` wartet,
 solange Aufrufe, Ausgabe oder Dateien im Arbeitsordner dazukommen (`run_while_moving`, Stille
-120 s, höchstens 500 Aufrufe), `test_kernel_process.in_a_worker`, solange dieser Prozess oder ein
+120 s, höchstens 500 Aufrufe, Gesamtgrenze 30 min gegen Ausgabe ohne Ende — N-4, Selbsttest am
+alten Stand rot), `test_kernel_process.in_a_worker`, solange dieser Prozess oder ein
 Hilfsprozess Rechenzeit bekommt (Stille 60 s, höchstens 30 min). Dasselbe Muster
 hatten `test_print_settings.py::test_a_slicer_that_says_too_much_is_not_an_error_code` (auch im
 Tor von Paket E rot) und `test_a_slicer_with_endless_output_is_stopped`: 4 s ab dem Start als

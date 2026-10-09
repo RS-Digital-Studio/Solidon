@@ -49,13 +49,18 @@ vor dem Commit das Review vor dem Push.
    Druckzeit oder Slicererkennung ihren Test mit `installed_slicer` und
    `@pytest.mark.slicer(<programm>)`.
 2. Der Push startet `build.yml` von selbst: Kern und Renderer auf allen vier
-   Plattformen, dazu `auswahl`, das mit `tools/ci_selection.py` die vom Diff
-   berührten Fenster- und Slicertests nennt und an `fenster` und `slicer`
-   gibt. Vorschau vor dem Merge: `tools/ci_selection.py --diff
-   origin/main...<zweig>`.
+   Plattformen, dazu `selection`, das mit `tools/ci_selection.py` die
+   Fenster- und Slicertests nennt, die der Diff seit dem letzten geprüften
+   main-Lauf berührt (ohne ihn seit dem vorigen Tag), und an
+   `window-selection` und `slicer-selection` gibt. Vorschau vor dem Merge:
+   `tools/ci_selection.py --diff origin/main...<zweig>`. Ein Push nur aus
+   Unterlagen startet keinen Lauf.
 3. Den Lauf mit `gh run watch <lauf-id> --exit-status` verfolgen; ein Rot wird
    auf main vorwärts behoben, nicht übergangen. Die Laufnummer gehört in den
-   Bericht.
+   Bericht. Ist das Repository privat, lehnt GitHub den Lauf nach Sekunden ab
+   — kein Befund und kein Nachweis; ein ersetzter oder abgebrochener Lauf ist
+   es auch nicht. Was er bringen sollte, wählt der nächste Lauf mit, der
+   durchkommt; erst dessen Ergebnis gehört in den Bericht.
 
 **Vor dem Merge nach main steht der Kundenpunkt im Changelog** (Entscheidung
 Robert, `.claude/rules/auslieferung.md`): Merkt ein Kunde, was die Einheit

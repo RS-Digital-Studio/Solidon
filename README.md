@@ -430,11 +430,13 @@ Ohne das Extra `brep` fehlt der exakte Kern; die betroffenen Operationen sagen
 das in einem Satz, alles andere funktioniert unverändert. Zum Starten per
 Doppelklick liegt unter `tools/start-solidon3d.cmd` eine Verknüpfung.
 
-Je Änderung laufen die betroffenen Tests, vor einem Commit das Entwicklungstor
-aus Suite, Ruff, Formatprüfung und mypy. Fenster-, Renderer- und
-Leistungsprüfungen laufen ausschließlich beim Release; die Release-CI fährt die
-Fensterdateien unter Windows und die Rendererprüfungen ohne Fenster auf allen
-vier Paketplattformen.
+Je Änderung laufen die betroffenen Tests, vor jedem Stand, der nach `main`
+geht, das Entwicklungstor aus Suite, Ruff, Formatprüfung und mypy. Fenster-,
+Renderer- und Leistungsprüfungen laufen lokal nur beim Release. In der CI
+fährt jeder Push nach `main` die Kernsuite und die Rendererprüfungen ohne
+Fenster auf allen vier Paketplattformen, dazu die Fenster- und Slicertests,
+die seine Änderungen berühren; der Release-Tag fährt alle Fensterdateien
+unter Windows und baut die Pakete. Zweige lösen keine CI aus.
 
 ### Lokale Sprachmodelle messen
 

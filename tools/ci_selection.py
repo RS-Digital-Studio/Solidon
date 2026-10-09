@@ -4,14 +4,16 @@
     .venv\\Scripts\\python.exe tools/ci_selection.py --diff abc12..origin/main  # ein Merge
     .venv\\Scripts\\python.exe tools/ci_selection.py app/ui/panels.py   # oder Dateien
     .venv\\Scripts\\python.exe tools/ci_selection.py --programs "<auswahl>"
+    .venv\\Scripts\\python.exe tools/ci_selection.py --checked-base  # nur in der CI
 
 Linux und macOS gibt es an keinem Arbeitsplatz. Beim Push nach main laufen
 deshalb die Fenstertests und die Slicertests mit echtem Programm, die der
-gepushte Diff berührt, auf den Läufern (Entscheidung Robert, 07.10.2026; auf
-Zweigen läuft keine CI, 09.10.2026): ``build.yml`` ruft dieses Werkzeug im Job
-``auswahl`` und gibt beide Listen an ``fenster-auswahl.yml`` und
-``slicer-auswahl.yml``. Nicht die ganze Suite — macOS-Minuten kosten das
-Zehnfache. Lokal zeigt es vor dem Merge, was der Push fahren wird.
+Diff seit dem letzten geprüften main-Lauf berührt, auf den Läufern
+(Entscheidung Robert, 07.10.2026; auf Zweigen läuft keine CI, 09.10.2026):
+``build.yml`` ruft dieses Werkzeug im Job ``selection`` und gibt beide Listen
+an ``fenster-auswahl.yml`` und ``slicer-auswahl.yml``; ``--checked-base`` nennt
+die Basis (:func:`checked_base`). Nicht die ganze Fenstergruppe — das Konto hat
+fünf macOS-Plätze. Lokal zeigt es vor dem Merge, was der Push fahren wird.
 
 Die betroffenen Testdateien kommen aus demselben Importgraphen wie
 ``affected_tests.py``. Zwei Dinge sind anders:

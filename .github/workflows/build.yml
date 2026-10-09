@@ -36,6 +36,16 @@ on:
   push:
     branches: [main]
     tags: ["v*"]
+    # Unterlagen allein starten keinen Lauf (CI-09): derselbe Schnitt wie
+    # `ci_selection.is_documentation`, nur Sprachkataloge zählen, weil die
+    # Kernsuite sie prüft. Für Tags wertet GitHub keine Pfade aus.
+    paths:
+      - "**"
+      - "!**.md"
+      - "!konzepte/**"
+      - "changelog/**"
+      - "DATENSCHUTZ.md"
+      - "THIRD-PARTY-NOTICES.md"
   workflow_dispatch:
     inputs:
       tests_only:

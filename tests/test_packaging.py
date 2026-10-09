@@ -720,17 +720,33 @@ def test_the_orchestration_guard_rejects_tests_after_the_build() -> None:
         _assert_changed_orchestration_is_tested(moved)
 
 
+def _assert_tag_trigger_without_schedule(workflow: str) -> None:
+    """Unter ``on:`` löst ein ``v*``-Tag aus, und kein Zeitplan."""
+    triggers = workflow_triggers(workflow)
+    assert "schedule" not in triggers, "ein Zeitplan startet Läufe ohne Push"
+    assert "tags:v*" in triggers.get("push", []), "der Tag-Push löst den Release-Lauf nicht aus"
+
+
 def test_latest_dependencies_run_for_release_tags_or_an_explicit_manual_build() -> None:
     """Nur öffentliche v*-Tags und öffentliche Handstarts mit
     check_latest lösen den Wächter aus."""
     workflow = WORKFLOW.read_text(encoding="utf-8")
-    triggers = workflow.split("\non:", 1)[1].split("\n# **Ein Stand", 1)[0]
-    assert "\n  schedule:" not in triggers
-    push = triggers.split("  push:\n", 1)[1].split("\n  pull_request:", 1)[0]
-    assert 'tags: ["v*"]' in push
-    inputs = workflow.split("  workflow_dispatch:\n", 1)[1].split("\nconcurrency:", 1)[0]
-    latest_input = inputs.split("      check_latest:\n", 1)[1].split("\n#", 1)[0]
-    assert "type: boolean" in latest_input and "default: false" in latest_input
+    _assert_tag_trigger_without_schedule(workflow)
+    # Gegenproben: der Tagfilter nur noch in einem Kommentar, ein Zeitplan dazu.
+    tag_line = '    tags: ["v*"]\n'
+    assert tag_line in workflow
+    for changed in (
+        workflow.replace(tag_line, "", 1) + '# tags: ["v*"]\n',
+        workflow.replace("\non:\n", '\non:\n  schedule:\n    - cron: "0 3 * * *"\n', 1),
+    ):
+        with pytest.raises(AssertionError):
+            _assert_tag_trigger_without_schedule(changed)
+    inputs = re.search(r"(?ms)^  workflow_dispatch:\n(.*?)^\S", workflow)
+    assert inputs is not None
+    latest_input = re.search(r"(?ms)^      check_latest:\n((?:        [^\n]*\n)+)", inputs.group(1))
+    assert latest_input is not None
+    assert "type: boolean" in latest_input.group(1)
+    assert "default: false" in latest_input.group(1)
     latest = job_block(workflow, "latest")
     expected = (
         "github.event.repository.private == false && ( "
@@ -1133,6 +1149,86 @@ def test_a_push_to_main_runs_every_check_and_builds_nothing(tmp_path: Path) -> N
     if shell is None:
         pytest.skip("ohne bash lässt sich der CI-Block nicht ausführen")
     _assert_main_push(WORKFLOW.read_text(encoding="utf-8"), shell, tmp_path)
+
+
+def _push_paths(workflow: str) -> list[str]:
+    """Die Pfadmuster unter ``on: push: paths:``, in ihrer Reihenfolge."""
+    section = re.split(r"(?m)^\S", workflow.split("\non:\n", 1)[1], maxsplit=1)[0]
+    block = re.search(r"(?ms)^  push:\n(.*?)(?=^  \S)", section + "  _:\n")
+    assert block is not None, "on: ohne push:"
+    paths = re.search(r"(?m)^    paths:\n((?:      - .*\n|    #.*\n)+)", block.group(1))
+    if paths is None:
+        return []
+    return [m.strip('"') for m in re.findall(r"(?m)^      - (.*)$", paths.group(1))]
+
+
+def _github_path_runs(patterns: list[str], path: str) -> bool:
+    """Löst ``path`` unter diesen Mustern aus? GitHubs Regel: ``*`` ohne ``/``,
+    ``**`` über Verzeichnisse, ein späteres Muster überstimmt ein früheres, ``!`` nimmt aus."""
+    if not patterns:
+        return True
+    runs = False
+    for pattern in patterns:
+        negated = pattern.startswith("!")
+        body = re.escape(pattern.removeprefix("!"))
+        body = body.replace(r"\*\*", "\0").replace(r"\*", "[^/]*").replace("\0", ".*")
+        if re.fullmatch(body, path):
+            runs = not negated
+    return runs
+
+
+#: Was ein Push nach main mit sich bringen kann, je Art der Regel in ``is_documentation``.
+_PUSHED_PATHS: Final = (
+    "README.md",
+    "ROADMAP.md",
+    "EULA.md",
+    "app/core/CLAUDE.md",
+    ".claude/rules/tests.md",
+    ".claude/skills/liefern/SKILL.md",
+    "konzepte/README.md",
+    "konzepte/nachweise/lauf.json",
+    "changelog/de.md",
+    "DATENSCHUTZ.md",
+    "THIRD-PARTY-NOTICES.md",
+    "app/i18n/locales/en.json",
+    "app/ui/main_window.py",
+    ".claude/scripts/suite-getrennt.sh",
+    ".github/workflows/build.yml",
+    "constraints.txt",
+    "website/index.html",
+)
+
+
+def _assert_documents_alone_start_nothing(workflow: str) -> None:
+    from tools.ci_selection import is_documentation
+
+    patterns = _push_paths(workflow)
+    for path in _PUSHED_PATHS:
+        # Sprachkataloge wählen keine Fenstertests, aber die Kernsuite prüft sie.
+        catalogue = path.startswith("app/i18n/locales/")
+        wanted = catalogue or not is_documentation(path)
+        assert _github_path_runs(patterns, path) is wanted, (
+            f"{path}: {'löst keinen Lauf aus' if wanted else 'löst einen Lauf aus'}"
+        )
+
+
+def test_a_push_of_documents_alone_starts_no_run() -> None:
+    """Unterlagen allein belegen keine macOS-Plätze (Festlegung 09.10.2026, CI-09):
+    derselbe Schnitt wie in ``ci_selection.is_documentation``, Kataloge ausgenommen.
+    Tags wertet GitHub ohne Pfade aus; die Ereignisse prüft ``workflow_triggers``."""
+    workflow = WORKFLOW.read_text(encoding="utf-8")
+    _assert_documents_alone_start_nothing(workflow)
+    patterns = "".join(f'      - "{p}"\n' for p in _push_paths(workflow))
+    assert patterns and patterns in workflow
+    for before, after in (
+        (patterns, '      - "**"\n'),
+        ('      - "changelog/**"\n', ""),
+        ('      - "!konzepte/**"\n', ""),
+        ('      - "DATENSCHUTZ.md"\n', ""),
+    ):
+        assert before in workflow
+        with pytest.raises(AssertionError):
+            _assert_documents_alone_start_nothing(workflow.replace(before, after, 1))
 
 
 _MAIN_IF: Final = "(github.event_name == 'push' && github.ref == 'refs/heads/main')"
@@ -4347,7 +4443,7 @@ def test_frozen_helper_end_budget_control_reproduces_the_old_deadline_failure(
     assert problems == ["Ein untätiger Hilfsprozess endete beim Schließen nicht selbst."]
 
 
-# --- CI-09: die Auswahl vor dem Merge auf Linux und macOS -----------------------
+# --- CI-09: die Auswahl beim Push nach main auf Linux und macOS -----------------
 
 _WINDOW_SELECTION: Final = WORKFLOW.parent / "fenster-auswahl.yml"
 _SLICER_SELECTION: Final = WORKFLOW.parent / "slicer-auswahl.yml"

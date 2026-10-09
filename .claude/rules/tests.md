@@ -22,11 +22,15 @@ denselben Überschriften in `konzepte/begruendungen/regel-tests.md`.
   Release-Nachweis.
 - **Der Push nach main fährt alle Prüfungen, ein Zweig keine** (Entscheidung
   Robert; CI-09): Kern und Renderer auf allen vier Paketplattformen, dazu die
-  Fenster- und Slicertests, die `tools/ci_selection.py` zum gepushten Diff nennt
-  (`build.yml`, Jobs `auswahl`, `fenster`, `slicer`). Ein Rot wird auf main
-  vorwärts behoben. Nur das Betroffene — macOS-Minuten kosten das Zehnfache.
-  Unterlagen und Kataloge lösen der Kosten wegen nichts aus, außer Markdown, das
-  die Anwendung liest.
+  Fenster- und Slicertests, die `tools/ci_selection.py` zum Diff seit dem
+  letzten geprüften main-Lauf nennt (`build.yml`, Jobs `selection`,
+  `window-selection`, `slicer-selection`) — ein ersetzter, abgebrochener oder
+  abgelehnter Lauf fällt so nicht heraus. Ein Rot wird auf main vorwärts
+  behoben. Geprüft wird nur im öffentlichen Repository; privat lehnt GitHub
+  jeden Lauf nach Sekunden ab, das ist kein Befund. Fenster und Slicer nur
+  das Betroffene, denn das Konto hat fünf macOS-Plätze. Unterlagen und
+  Kataloge wählen keine Fenster- oder Slicertests, außer Markdown, das die
+  Anwendung liest; Unterlagen allein starten keinen Lauf.
 - **Neues bringt seinen Test für diese Auswahl mit** (Entscheidung Robert): eine
   neue oder geänderte Oberfläche ihren Fenstertest; eine Änderung an
   Slicerübergabe, Profilen, Druckerwahl, Druckzeit oder Slicererkennung ihren

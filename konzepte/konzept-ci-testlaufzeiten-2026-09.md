@@ -1,7 +1,8 @@
 # Kürzere CI-Läufe bei unverändertem Prüfvertrag
 
 Stand: 24.09.2026, Nachweis in §7 vom 06.10.2026, CI-09 vom 07.10.2026, Rendererfälle auf
-allen Paketplattformen (CI-03 bis CI-05) vom 09.10.2026. Von Robert beauftragt: erst dieses Konzept, danach die
+allen Paketplattformen (CI-03 bis CI-05) und Push nach main (CI-03, CI-04, CI-09, §3) vom
+09.10.2026. Von Robert beauftragt: erst dieses Konzept, danach die
 vollständige Umsetzung. Der laufende Umsetzungs- und Abnahmestand gehört in
 `ROADMAP.md`; dieses Dokument beschreibt Entscheidungen und Nachweise.
 
@@ -45,12 +46,12 @@ Kernjob frühestens fertig ist, gleich wie viele Worker er hat.
 | CI-01 | Kein Test fällt durch die Aufteilung weg oder läuft in zwei Gruppen — weder bei Fenster-/Renderergruppen noch bei den Teilen der Kernsuite. Neue Dateien werden automatisch aufgenommen. | Partitionstests mit unbekannten Dateien, vollständiger Vereinigung und leeren Schnittmengen; `--ci-shard` gegen die echte Sammlung; Teilmatrix gleich `0 … N−1` |
 | CI-02 | Jeder Fenster- oder Rendererdateilauf erhält einen frischen Prozess; Qt-Abbau und Garbage Collection bleiben erhalten. | Prüfung der gestarteten Befehle und Prozessausgänge |
 | CI-03 | Fenster und echte Renderer laufen nur in der CI am Tag, beim Handstart und beim Push nach main, nie im Entwicklungstor: am Tag die Fensterdateien unter Windows, beim Push nach main die vom Diff berührten auf allen vier Paketplattformen (CI-09), beide Male jeder `rendering`-Fall ohne Fenster auf jeder Paketplattform (Windows, Linux, Apple Silicon, Intel-Mac), am Tag dazu im Versionswächter unter Linux (Entscheidung Robert, 06.10.2026, RM-344; Push nach main 09.10.2026). Leistung bleibt lokal beim Release, `rendered` bleibt aus CI ausgeschlossen. | Workflow- und Marker-Verträge, einschließlich `tests_only`; die Abdeckung je Plattform leiten `test_every_rendering_case_runs_on_every_platform_in_a_release_job` und `…_when_main_is_pushed` aus Workflow, Jobbedingungen und Markerwahl ab, `test_a_push_to_main_runs_every_check_and_builds_nothing` die Jobs je Ereignis, gegen einen festen Sollwert, mit Schrittbedingungen und ohne `--plan-only` |
-| CI-04 | Kernmatrix und native Typprüfung bleiben am Tag auf den bisherigen Plattformen; beim Push nach main laufen sie auch auf dem Intel-Mac. Die zwei speziellen Fensterverträge laufen auf allen vier Paketplattformen, außerhalb von Windows zusammen mit den Rendererfällen, auf dem Intel-Mac in einem eigenen Job neben dem Paket. | Prüfung der tatsächlichen Jobmatrix und Aufrufe |
+| CI-04 | Kernmatrix und native Typprüfung bleiben am Tag auf den bisherigen Plattformen (Windows, Linux, Apple Silicon); beim Push nach main laufen sie auch auf dem Intel-Mac. Das nimmt für main die Ausnahme vom 08.09.2026 zurück (`67e4be1d4`: Robert nahm den Intel-Mac aus der Kernmatrix, nachdem die Diagnose, für die er zurückgeholt war, geantwortet hatte). Gründe: Er ist eine Paketplattform, seine Befunde von damals sind behoben (Nahtabsturz, Löser-Determinismus in `67e4be1d4`, PHP-`mbstring`) oder überspringen mit Grund (nativer Rendererhänger), und am Tag verlängerte eine Intel-Zelle den Lauf, auf main nicht. Kosten: drei Intel-Teile je Push, geschätzt 50–70 macOS-Minuten. Festgelegt vom Koordinator nach Roberts Vorgabe „alle Prüfungen beim Push nach main“ (09.10.2026), Robert informiert. Die zwei speziellen Fensterverträge laufen auf allen vier Paketplattformen, außerhalb von Windows zusammen mit den Rendererfällen, auf dem Intel-Mac in einem eigenen Job neben dem Paket. | Prüfung der tatsächlichen Jobmatrix und Aufrufe |
 | CI-05 | Paketbau braucht sämtliche erforderlichen erfolgreichen Qualitäts-, Kern- und Fensterjobs; die Prüfung des Intel-Macs hält statt des Pakets jede Releaseakte an, damit sie den Tag-Lauf nicht verlängert (RM-344). Abbruch, leere Auswahl, Sammlungsfehler oder fehlender Bericht ergeben kein Grün. | Negative Fälle des Runners, Prüfung der Paket- und Releaseaktenabhängigkeiten |
 | CI-06 | Berichte nennen Auswahl, echte Prozessausgänge, Testzahlen und Zeiten; auch bei Fehlern werden vorhandene Berichte hochgeladen. | Berichtstests und `always()`-Artefaktschritte |
 | CI-07 | Gemeinsame Vorbereitung verändert keine Eingabe eines anderen Tests. Determinismus vergleicht weiterhin zwei unabhängig gebaute Ergebnisse. | Kopien für veränderliche Daten, unveränderte Zusicherungen und gezielte Gegenproben |
 | CI-08 | Laufzeitgewinn wird nur für einen abgeschlossenen vergleichbaren Lauf behauptet. Lokales Entwicklungstor und Release-Abnahme bleiben getrennt. | Nachweis mit Commit, Plattform, Befehl, Exit und Berichtspfad |
-| CI-09 | Beim Push nach main, von ihm selbst ausgelöst, und vor dem Release laufen die von der Änderung betroffenen Fenstertests auf Windows, Linux, Apple Silicon und Intel-Mac und die betroffenen Slicertests mit echten, fest versionierten und per Prüfsumme belegten Slicern auf Linux, Apple Silicon und Intel-Mac (Entscheidung Robert, 07.10.2026). Die Auswahl folgt dem Importgraphen; Unterlagen, `konzepte/` und Sprachkataloge lösen der Kosten wegen nichts aus, außer dem Markdown, das die Anwendung selbst liest (`READ_BY_THE_APPLICATION`). Die Fensterauswahl teilt ihre Auswahlen je Plattform gleichmäßig auf drei Läufer (Matrix `shard` 0–2, Auswahl i auf Teil i mod 3). Eine leere Auswahl, ein fehlendes Programm oder ein übersprungener Slicertest ist rot. | `tools/ci_selection.py` mit `tests/test_slicer_selection.py`; `fenster-auswahl.yml` und `slicer-auswahl.yml` mit ihren Verträgen in `tests/test_packaging.py` und `tests/test_supply_chain.py` |
+| CI-09 | Beim Push nach main, von ihm selbst ausgelöst, und vor dem Release laufen die von der Änderung betroffenen Fenstertests auf Windows, Linux, Apple Silicon und Intel-Mac und die betroffenen Slicertests mit echten, fest versionierten und per Prüfsumme belegten Slicern auf Linux, Apple Silicon und Intel-Mac (Entscheidung Robert, 07.10.2026). Betroffen ist, was sich seit dem Kopf des letzten main-Laufs mit vollständig gefahrener Auswahl geändert hat, ohne ihn seit dem vorigen Tag, ohne Tag jede Datei; ein ersetzter, abgebrochener oder abgelehnter Lauf verliert so nichts. Die Auswahl folgt dem Importgraphen; Unterlagen, `konzepte/` und Sprachkataloge wählen der Kosten wegen nichts, außer dem Markdown, das die Anwendung selbst liest (`READ_BY_THE_APPLICATION`), und ein Push nur aus solchen Unterlagen (ohne Kataloge, die die Kernsuite prüft) startet keinen Lauf (Pfadfilter, Festlegung des Koordinators 09.10.2026). Die Fensterauswahl teilt ihre Auswahlen je Plattform auf so viele Läufer, wie es Auswahlen gibt, höchstens drei (Matrix `shard` aus `parts`, Auswahl i auf Teil i mod n). Eine leere Auswahl, ein fehlendes Programm oder ein übersprungener Slicertest ist rot. | `tools/ci_selection.py` mit `tests/test_slicer_selection.py` (auch `--checked-base`); `fenster-auswahl.yml` und `slicer-auswahl.yml` mit ihren Verträgen in `tests/test_packaging.py` (Auswahlschritt gefahren, Pfadfilter gegen `is_documentation`) und `tests/test_supply_chain.py` |
 
 Änderungen an diesen Zusagen benötigen eine bewusste Fortschreibung dieses
 Konzepts und der zuständigen Regeldatei. Tests dürfen nicht gestrichen,
@@ -78,8 +79,8 @@ der längste Paketjob (11,7 min im Lauf 37530876754), eine Prüfzelle davor
 verlängerte den Tag-Lauf um jede Minute, die sie auf einen macOS-Platz wartet.
 Stattdessen hält sie jede Releaseakte an. Ein Tag-Lauf belegt zu Beginn fünf
 macOS-Plätze (drei Kernteile, Fensterverträge auf Apple Silicon, Intel-Mac),
-die gemessene Obergrenze des Kontos; während eines Tag-Laufs startet deshalb
-keine Fenster- oder Slicerauswahl auf main (`/erzeugen`). Der Versionswächter fährt
+die gemessene Obergrenze des Kontos; während eines Tag-Laufs geht deshalb nichts
+nach main, und ein main-Lauf über denselben Commit wird abgebrochen (`/erzeugen`). Der Versionswächter fährt
 unter Linux dieselben zwei Gruppen gegen die neuesten Fassungen. Gemessen in
 der Probe 37894162728 (09.10.2026, je Job mit Einrichtung, noch mit zwei
 Sammlungen): Linux 6:40 min, davon Renderer 54 s; Apple Silicon 8:15 min,
@@ -127,25 +128,39 @@ Schrittbericht: Ein Bericht, der nur als Artefakt existiert, fehlt genau
 dann, wenn der Job an seiner Frist endet.
 
 Beim Push nach main (CI-09) bestimmt `tools/ci_selection.py` im Job
-`auswahl` aus dem gepushten Diff (`github.event.before..github.sha`, ohne
-bekannten Vorgänger jede Datei) die betroffenen Testdateien über denselben
-Importgraphen wie `tools/affected_tests.py`, ohne Unterlagen und Kataloge
-(außer dem Markdown, das die Anwendung liest),
-und gibt zwei Semikolonlisten aus: je Datei die Fenster- und Rendererfälle
-(`--window-group windowed`) für `fenster-auswahl.yml` und die Fälle mit
-Marker `slicer` (`-m slicer`) für `slicer-auswahl.yml`. `build.yml` ruft
-beide Workflows (`workflow_call`, Jobs `fenster` und `slicer`), von Hand starten
-sie nur auf main; je Auswahl ein Prozess. Der Push nach main fährt damit alle
-Prüfungen: die Kernsuite auf allen vier Paketplattformen, Fensterverträge und
-Rendererfälle auf allen vier (unter Windows im Vertragsschritt, weil die
-Windows-Fenstergruppe nur am Tag läuft) und die beiden Auswahlen; Paketbau,
-Releaseakten und Signierung bleiben beim Tag und beim Handstart. Auf Zweigen und
-Wegwerfzweigen läuft keine CI (Entscheidung Robert, 09.10.2026), ein Rot wird
-auf main vorwärts behoben. Ein Push nach main belegt rund sechzehn macOS-Jobs;
-je Ref läuft deshalb ein Lauf, ein zweiter wartet, ein dritter ersetzt den
-wartenden (`concurrency`, `cancel-in-progress: false`); die
-Fensterauswahl verteilt die Auswahlen je Plattform auf drei Läufer, die
-höchstens eine Auswahl auseinanderliegen, und ein Teil ohne Auswahl ist grün. Der
+`selection` die betroffenen Testdateien über denselben Importgraphen wie
+`tools/affected_tests.py`, ohne Unterlagen und Kataloge (außer dem Markdown,
+das die Anwendung liest). Basis ist nicht der Vorgänger des Pushs, sondern der
+Kopf des jüngsten main-Laufs von `build.yml`, dessen `selection` grün war und
+dessen `window-selection` und `slicer-selection` abgeschlossen sind — Erfolg, Fehlschlag oder wegen
+leerer Liste übersprungen, nicht abgebrochen und nicht abgelehnt
+(`--checked-base` über die GitHub-API, `actions: read`, und
+`git merge-base --is-ancestor` gegen den Kopf); ohne ihn der vorige `v*`-Tag,
+ohne Tag jede Datei. So wählt ein Lauf auch, was ein ersetzter, beim Release
+abgebrochener oder im privaten Repository abgelehnter Lauf gebracht hätte.
+Ausgegeben werden zwei Semikolonlisten: je Datei die Fenster- und
+Rendererfälle (`--window-group windowed`) für `fenster-auswahl.yml` und die
+Fälle mit Marker `slicer` (`-m slicer`) für `slicer-auswahl.yml`, dazu die
+Zahl der Fensterteile. `build.yml` ruft beide Workflows (`workflow_call`, Jobs
+`window-selection` und `slicer-selection`, eine leere Liste startet nichts),
+von Hand starten sie nur auf main; je Auswahl ein Prozess. Der Push nach main
+fährt damit alle Prüfungen: die Kernsuite auf allen vier Paketplattformen,
+Fensterverträge und Rendererfälle auf allen vier (unter Windows im
+Vertragsschritt, weil die Windows-Fenstergruppe nur am Tag läuft) und die
+beiden Auswahlen; Paketbau, Releaseakten und Signierung bleiben beim Tag und
+beim Handstart. Auf Zweigen und Wegwerfzweigen läuft keine CI (Entscheidung
+Robert, 09.10.2026), ein Rot wird auf main vorwärts behoben. Ein Push, der nur
+Markdown-Unterlagen oder `konzepte/` ändert, startet keinen Lauf (Pfadfilter
+unter `on: push`, derselbe Schnitt wie `is_documentation`, Kataloge
+ausgenommen; Tags wertet GitHub ohne Pfade aus). Das Repository ist nur zum
+Release öffentlich; privat lehnt GitHub jeden Lauf nach Sekunden ab, und erst
+der erste öffentliche Lauf wählt den Rückstand. Ein Push nach main belegt bis
+zu sechzehn macOS-Jobs; je Ref und Ereignis läuft deshalb ein Lauf, ein
+zweiter wartet, ein dritter ersetzt den wartenden (`concurrency`,
+`cancel-in-progress: false`), und ein Handstart auf main hat seine eigene
+Gruppe, wartet also nicht hinter Pushes. Die Fensterauswahl startet je
+Plattform nur so viele Teile, wie es Auswahlen gibt, höchstens drei, die
+höchstens eine Auswahl auseinanderliegen; ein Teil ohne Auswahl ist grün. Der
 Slicerworkflow installiert nur die Programme, die die gewählten Fälle über
 `pytest.mark.slicer(<programm>)` verlangen — AppImages und ein
 Herstellerpaket unter Linux, PrusaSlicer als Flatpak auf festem Commit, DMGs

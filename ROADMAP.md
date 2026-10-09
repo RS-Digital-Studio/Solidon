@@ -143,7 +143,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-314 — Rechtenachweis der Stimme für die englischen Werkstattfilme](#rm-314) | Tests und Entwicklungswerkzeuge | Stimme mit Prüfsummen in `licences.toml` dokumentiert; offen: `/legal-review` zur Werbenutzung, Eintrag in `ASSET-RIGHTS.toml` und ein Test, der die Stimme prüft |
 | [RM-316 — Zwillinge und Nur-Test-Wege: der Rest aus dem Code-Bericht des Aufräumens](#rm-316) | Tests und Entwicklungswerkzeuge | (a) bis (d) bis auf zwei Namen erledigt (07.10.); offen `ai_disclosure._fit_content_height` (gewollt mit Fenstertest oder in `ContentHeight`) und `slice.analysis._opening_loss` ohne Produktionsaufrufer |
 | [RM-467 — Bibliotheken alle drei Tage auf neue Versionen prüfen und aktualisieren](#rm-467) | Tests und Entwicklungswerkzeuge | Läufe 02.10. und 09.10. im Archiv, der nächste am 12.10.; Paketbeleg der Bauplattform unter RM-468 |
-| [RM-531 — Fenstertests und echte Slicer auch unter Linux und macOS in der CI](#rm-531) | Tests und Entwicklungswerkzeuge | Entschieden (Robert, 06.10.): Fenster- und Renderergruppe auf vier Plattformen am Tag, per Handstart und bei jedem Push auf main. 14 der 23 roten Fenstertests außerhalb von Windows behoben, auf allen vier grün (07.10.), der Intel-Kontrastfall danach (`58f768eb6`), Rendererfälle ohne Fenster seit RM-344 auf allen vier; offen sieben Fälle, `build.yml`, die Wächter und der Slicer-Job |
+| [RM-531 — Fenstertests und echte Slicer auch unter Linux und macOS in der CI](#rm-531) | Tests und Entwicklungswerkzeuge | Entschieden (Robert, 06.10.): Fenster- und Renderergruppe auf vier Plattformen am Tag, per Handstart und bei jedem Push auf main. 14 der 23 roten Fenstertests außerhalb von Windows behoben, auf allen vier grün (07.10.), der Intel-Kontrastfall danach (`58f768eb6`), Rendererfälle ohne Fenster seit RM-344 auf allen vier, die sieben übrigen Fälle grün in 37936316061, der Push nach main fährt Fenster- und Slicerauswahl selbst (Paket CI); offen die Abnahme am ersten main-Lauf |
 | [RM-688 — Der Test zu Curas Mindesttempo prüft das Mindesttempo nicht mehr](#rm-688) | Tests und Entwicklungswerkzeuge | Seit `9416f41ef` steht dort nur `assert motion is not None`; Attrappe und Vorgabe sind beide 10 |
 | [RM-002 — netcup-AVV und Freigabe der Rechtstexte belegen](#rm-002) | Veröffentlichung, Betrieb und Vertrieb | netcup-AVV belegen und zugehörige Rechtstexte fachlich abgleichen |
 | [RM-006 — Nächsten messbaren Schritt für die Sichtbarkeit festlegen](#rm-006) | Veröffentlichung, Betrieb und Vertrieb | Roberts Bestätigung des Plans bis 01.11. und die Montagsmessungen; der Punkt schließt, wenn Robert den Plan bestätigt |
@@ -492,8 +492,10 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
 - [ ] **RM-104 — Verbleibende Mac- und Unix-Befunde mit aktueller CI-Abdeckung abnehmen.** Die
   verbleibenden macOS-/Unix-Befunde schließen: Intel-Hänger beim ersten Ereignisdurchlauf mit
   Adapter- und Lebensdauerbeleg diagnostizieren; Fensterlayouts, Gewinde-/Exportpfade und Chatablauf
-  auf den betroffenen Architekturen prüfen. Der aktuelle CI-Testjob enthält keinen Intel-Mac; die
-  Fenstergruppe läuft nur auf Windows. Beide Einschränkungen ersetzen keine Fehlerbehebung. Abnahme:
+  auf den betroffenen Architekturen prüfen. Der Intel-Mac fährt in der CI Fensterverträge und
+  Rendererfälle (`window-contracts-intel`), beim Push nach main dazu die Kernsuite und die
+  Fensterauswahl; die volle Fenstergruppe läuft am Tag nur auf Windows. Beides ersetzt keine
+  Fehlerbehebung am Gerät. Abnahme:
   die im bisherigen Befund genannten Fälle auf macOS und Linux reproduzieren und schließen, mit
   sichtbaren Pixeln, bedienbarem Fenster und sauberem Prozessabschluss; anschließend die
   Testabdeckung entsprechend nachziehen. Bereits reparierte Skizzen-/B-Rep-/Dialogbefunde bleiben
@@ -5325,31 +5327,34 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   Startfläche, Befehlspalette und Prüfbericht, Anschlusstest und Wächter in
   `test_native_keys.py`), die Befehlspalette misst ihre Kürzelspalte mit gebrochenen Metriken,
   und zwölf Tests messen die Zusage statt einer Windows-Eigenheit (Aktualisierungsweg,
-  Kürzelschreibweise, Zeitgeber, Fäden, Kantenglättung, Menüeinzug). **Offen**, mit Plattform
-  (U Linux, A macOS ARM, I macOS Intel): `test_widget_lifetime[KeyDialog]` (UAI, einer von
-  zehn überlebt), `test_a_button_wraps_its_label_instead_of_cutting_it` (UAI, der Knopf bricht
-  nicht um), `test_no_element_of_the_bar_is_squeezed` (UAI, Felder 356/364 statt 398/404 px bei
-  1600 px), `test_a_long_setup_failure_stays_in_the_scroll_area` (UAI, kein Rollbalken bei 200
-  Zeilen), `test_the_sketch_area_fits_a_laptop_screen` (AI, 977 statt höchstens 900 px),
-  `test_the_left_column_shares_its_height_with_all_four` (AI, Objekte 104 px, Boden 182 px bei
-  900 px Fensterhöhe) und `test_chat_setup_follows_late_status_text…` (AI, der Text des
-  Schlüsseldialogs ist 105 statt 120 px hoch und rollt nicht).
+  Kürzelschreibweise, Zeitgeber, Fäden, Kantenglättung, Menüeinzug). Die sieben Fälle, die
+  danach noch rot waren, liefen in der Fensterauswahl 37936316061 auf allen vier Plattformen
+  grün ([Archiv](ROADMAP-ARCHIV.md#rm-531-teil-sieben-fenstertests-außerhalb-von-windows-sind-auf-allen-vier-plattformen-grün-09102026)).
   `test_black_lit_surfaces_still_show_their_shape` (I, Kontrast genau 10 bei verlangten mehr
   als 10) ist behoben (`58f768eb6`, Spreizung 12) und in der Rendererprobe von RM-344 auf dem
-  Intel-Mac grün (Lauf 37894162728). Jeder Fall wird zuerst am Paket seiner Plattform nachgestellt:
-  ob der Test irrt oder der Kunde es sieht. Die Winkelbedingung auf dem Intel-Mac führt
-  [RM-541](#rm-541). Danach die Umstellung in `build.yml`, die Wächter in
-  `test_packaging.py`, der Slicer-Job und die Unterlagen.
+  Intel-Mac grün (Lauf 37894162728). Die Winkelbedingung auf dem Intel-Mac führt
+  [RM-541](#rm-541).
 
   **Stand 07.10.2026, Auswahl vor dem Merge (Entscheidung Robert, CI-09):**
   `tools/ci_selection.py` nennt zum Diff die betroffenen Fenster- und Slicertests,
-  `fenster-auswahl.yml` und `slicer-auswahl.yml` fahren sie per Handstart auf dem Zweig.
+  `fenster-auswahl.yml` und `slicer-auswahl.yml` fuhren sie damals per Handstart auf dem Zweig.
   Slicertests tragen `slicer(<programm>)` und holen das Programm über `installed_slicer`
   (Wächter `test_slicer_selection.py`); `test_real_slicers.py` slict einen Würfel über den
   Weg des Druckdialogs in allen sieben Slicern. Lauf 37593226567: auf Ubuntu 24.04, macOS
   ARM und Intel je 13 von 13 Fällen grün, keiner übersprungen; Gegenprobe 37594281698 rot
   an fehlendem Programm und leerer Auswahl wie verlangt; Fensterauswahl 37591643343 auf
-  vier Plattformen grün. Offen bleibt hier der Tag-Job in `build.yml` aus dem Fix oben.
+  vier Plattformen grün.
+
+  **Stand 09.10.2026, der Push nach main prüft selbst (Paket CI, `paket/ci-renderer`):**
+  `build.yml` wählt beim Push nach main im Job `selection` die Fenster- und Slicertests seit dem
+  letzten geprüften main-Lauf (`ci_selection.py --checked-base`, sonst seit dem vorigen Tag) und
+  ruft `fenster-auswahl.yml` auf vier und `slicer-auswahl.yml` auf drei Plattformen auf
+  (`window-selection`, `slicer-selection`); auf Zweigen läuft keine CI, Unterlagen allein starten
+  keinen Lauf. Am Tag fährt die volle Fenstergruppe weiter nur unter Windows (CI-03), Linux und
+  macOS sehen jede Fensterdatei über die Auswahl. Die Wächter stehen in `test_packaging.py`,
+  `test_supply_chain.py` und `test_slicer_selection.py`. **Offen:** die Abnahme am ersten Lauf
+  nach dem Push nach main, der durchkommt — Fenster- und Slicerauswahl auf allen Plattformen
+  grün; solange das Repository privat ist, lehnt GitHub jeden Lauf ab.
 
 <a id="rm-688"></a>
 

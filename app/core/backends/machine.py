@@ -195,7 +195,9 @@ _CARD_LOCK: Final = threading.Lock()
 
 def probe_card() -> None:
     """Die Grafikkarte erheben — einmal je Prozess, **nur in einem Arbeiter** (ein
-    ``nvidia-smi``-Aufruf, bis 5 s bei einem hängenden Treiber)."""
+    ``nvidia-smi``-Aufruf mit 5 s Antwortgrenze; übersteht ein hängender Treiber auch
+    das harte Beenden, wartet der Abbau bis :data:`process.PROCESS_KILL_SECONDS` auf
+    sein Ende, unter Windows nach ``taskkill`` ein zweites Mal)."""
     with _CARD_LOCK:
         if _CARD:
             return
