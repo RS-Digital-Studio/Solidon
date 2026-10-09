@@ -39,6 +39,10 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - En el modo de dibujo, la pestaña *Selección* se oculta. La lista de restricciones muestra las de los puntos y líneas seleccionados, además de cualquier conflicto.
 - En la tarjeta de parámetros, una medida solo muestra «Sin utilizar» cuando es así. El botón dice cuántos números fijos se pueden vincular a medidas.
 - El informe de errores adjunta un registro de fallo solo cuando Solidon se ha cerrado de verdad por un fallo.
+- Los modelos grandes se cargan notablemente más rápido y necesitan menos memoria, también con un historial largo y en equipos con 8 GB.
+- Cada paso nuevo se calcula tan rápido como el primero, aunque el historial ya tenga muchos pasos.
+- Deshacer y rehacer son más rápidos, y la memoria que ya no se necesita se libera enseguida.
+- Resolver solapamientos y exportar a 3MF es bastante más rápido.
 
 ### Imprimir y entregar al slicer
 
@@ -55,6 +59,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Donde los soportes bajo voladizos pequeños se apoyan en el modelo, Solidon sugiere soportes en árbol. Allí dejan menos marcas.
 - En puntas pequeñas, Solidon sugiere una *Velocidad mínima al frenar* más baja para que no se ablanden. El ajuste llega a cualquier slicer.
 - Los bordes estrechos que se sostienen solos quedan libres con *Bordes sin soporte*. Así la impresión necesita bastante menos soporte.
+- El informe de comprobación y *Orientar para imprimir* calculan más rápido y necesitan menos memoria.
 
 ### Roscas, taladros y piezas normalizadas
 

@@ -38,6 +38,10 @@ scrive in `website/version.json`.
 - In modalità disegno la linguetta *Selezione* è nascosta. L'elenco dei vincoli mostra quelli dei punti e delle linee selezionati, più ogni conflitto.
 - Nella scheda dei parametri, una misura mostra «Non utilizzato» solo quando è così. Il pulsante dice quanti numeri fissi si possono collegare alle misure.
 - La segnalazione di errore allega un registro di arresto anomalo solo dopo un vero arresto anomalo di Solidon.
+- I modelli grandi si caricano molto più velocemente e richiedono meno memoria, anche con una cronologia lunga e su computer con 8 GB.
+- Ogni nuovo passaggio si calcola veloce come il primo, anche quando la cronologia ha già molti passaggi.
+- Annulla e ripristina sono più veloci, e la memoria non più necessaria si libera subito.
+- Risolvere le sovrapposizioni ed esportare in 3MF è molto più veloce.
 
 ### Stampare e passare allo slicer
 
@@ -54,6 +58,7 @@ scrive in `website/version.json`.
 - Dove i supporti sotto piccoli sbalzi poggiano sul modello, Solidon suggerisce supporti ad albero. Lì lasciano meno segni.
 - Sulle punte piccole Solidon suggerisce una *Velocità minima di rallentamento* più bassa, così non si ammorbidiscono. L'impostazione arriva a ogni slicer.
 - I bordi stretti che si reggono da soli restano liberi con *Bordi senza supporto*. La stampa richiede così molto meno supporto.
+- Il rapporto di verifica e *Orienta per la stampa* calcolano più velocemente e richiedono meno memoria.
 
 ### Filettature, fori e componenti normalizzati
 
