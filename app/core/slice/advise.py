@@ -1411,7 +1411,7 @@ def _from_geometry(
                     settings,
                     path="support.tree_walls",
                     value=TALL_TREE_WALLS,
-                    reason=_("Hohe Bäume brechen mit einer Wand; zwei tragen sie."),
+                    reason=_("Zwei Wände halten hohe Bäume stabil."),
                 )
             )
 

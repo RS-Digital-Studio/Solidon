@@ -1412,7 +1412,7 @@ _CHOICE_NOTES: dict[str, TranslatableText] = {
     "lines": _("Parallele Bahnen, je Schicht gedreht — am schnellsten, am wenigsten fest."),
     "triangles": _("Dreiecksraster — sehr steif in der Ebene."),
     "tree": _("Äste wachsen um das Teil herum — sparsam und leicht zu entfernen."),
-    "hybrid": _("Bäume an den Details, normale Stütze unter großen flachen Decken."),
+    "hybrid": _("Bäume an den Details, Gitter unter großen flachen Decken."),
     "everywhere": _("Stützen überall, auch auf dem Teil selbst."),
     "build_plate": _("Stützen nur vom Druckbett aus — auf dem Teil selbst steht nichts."),
     "skirt": _("Eine Linie ums Teil, ohne es zu berühren — spült die Düse und prüft die Haftung."),

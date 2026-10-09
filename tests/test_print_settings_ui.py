@@ -8543,6 +8543,9 @@ def test_the_list_of_ignored_settings_matches_what_the_slicers_take() -> None:
         print_settings.with_path(base, "adhesion.kind", kind)
         for kind in ("skirt", "brim", "raft", "none")
     ]
+    # Die Wände der Bäume schreibt Cura nur unter Bäumen (RM-584): Ohne diese
+    # Lage stünde ``support.tree_walls`` als nicht übernommen in der Messung.
+    layouts.append(print_settings.with_path(base, "support.style", "tree"))
 
     def other(field: object) -> object:
         """Ein zweiter Wert, der sich vom ersten unterscheidet."""
