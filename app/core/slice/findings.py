@@ -43,6 +43,7 @@ from app.core.slice.analysis import (
     model_support,
     slice_body,
     total_overhang,
+    worth_support,
 )
 from app.core.types import (
     CancelToken,
@@ -222,25 +223,26 @@ def body_findings(
         return found
     large = overhang_findings(entry.id, result, cancelled=cancelled)
     found += large
-    # **Viele kleine Überhänge** (RM-572): Verlangt der Rat Stützen über die
-    # Summe vieler Streifen oder eine schräge Unterseite als Feld, schwieg der
-    # Bericht. Gefragt wird dieselbe Antwort wie im Rat, einmal je Körper und
-    # nur, wo kein großes Stück gemeldet ist und überhaupt Überhang steht.
+    # Der Stützbedarf nach dem Rat (``advise.support_need``) ist die teuerste
+    # Frage des Berichts — am Drachen mit 2,9 Millionen Dreiecken über sieben
+    # Minuten CPU. Gestellt wird sie nur, wo auch eine andere Lage gesucht
+    # wird: höchstens acht Körper, ab einem Kubikzentimeter Stützraum. Ein
+    # Schachsatz zahlte sonst je Figur vier bis sieben Sekunden für keinen
+    # einzigen Befund (Review RM-572).
     need = (
         advise.support_need(result, cancelled=cancelled)
-        if not large and total_overhang(result) > OVERHANG_REPORTED_FROM
+        if search and result.support_volume >= ORIENT_WORTH_SUPPORT
         else None
     )
-    if need is not None:
-        found += small_overhang_findings(entry.id, result, need)
+    # **Viele kleine Überhänge** (RM-572): Verlangt der Rat Stützen über die
+    # Summe vieler Streifen oder eine schräge Unterseite als Feld, schwieg der
+    # Bericht, solange kein Stück die Meldeschwelle erreicht.
+    if need is not None and not large:
+        found += small_overhang_findings(entry.id, result, need, cancelled=cancelled)
     found += [_placed(finding, entry.id) for finding in advise.located_warnings(result, profile)]
     # Eine Lage, die nach der Regel der Druckvorschläge keine Stütze braucht,
     # spart durch eine andere keine — dieselbe Frage wie ``orientation.stays``.
-    if (
-        search
-        and result.support_volume >= ORIENT_WORTH_SUPPORT
-        and (need or advise.support_need(result, cancelled=cancelled)).needed
-    ):
+    if need is not None and need.needed:
         found += orientation_findings(entry.id, mesh, profile, cancelled=cancelled)
     return found
 
@@ -392,15 +394,13 @@ def overhang_findings(
         return []
     candidates: list[tuple[float, tuple[int, int], float, ShapelyPolygon]] = []
     for index, layer in enumerate(result.layers):
-        # Eine Insel ist auch ein Überhang — der ganze Querschnitt hängt in der
-        # Luft. Sie hat ihre eigene Zeile (:func:`island_findings`); hier
-        # stünde dieselbe Stelle ein zweites Mal.
+        # Inselstücke meldet :func:`island_findings` (:func:`_on_island`).
         floating = [ShapelyPolygon(entry.outline, entry.holes) for entry in layer.islands]
         for number, contour in enumerate(layer.overhangs):
             piece = ShapelyPolygon(contour.outline, contour.holes)
             if piece.area <= OVERHANG_REPORTED_FROM:
                 continue
-            if any(piece.intersection(island).area > 0.5 * piece.area for island in floating):
+            if _on_island(piece, floating):
                 continue
             candidates.append((float(piece.area), (index, number), layer.z, piece))
     if not candidates:
@@ -440,55 +440,99 @@ def overhang_findings(
 
 
 def small_overhang_findings(
-    object_id: ObjectId, result: SliceResult, need: advise.SupportNeed
+    object_id: ObjectId,
+    result: SliceResult,
+    need: advise.SupportNeed,
+    *,
+    cancelled: CancelToken | None = None,
 ) -> list[Finding]:
     """Wo viele kleine Überhänge zusammen Stützen verlangen (RM-572).
 
     Der Rat verlangt Stützen auch über die Summe vieler Streifen oder über eine
     schräge Unterseite als Feld (RM-570); kein Stück davon erreicht
     :data:`OVERHANG_REPORTED_FROM`, und :func:`overhang_findings` schwieg. Der
-    Drache: größtes Stück 23,7 mm², zusammen 1 492 mm². Gezeigt wird die
-    Schicht mit der meisten Überhangfläche außerhalb von Kanälen, an ihrem
-    größten Stück; Schichten, die ganz aus Kanal- und Randstücken bestehen
-    (``SupportNeed.quiet_layers``), zählen nicht. Ohne Stützbedarf nach dem Rat
-    — der Gitterbecher — gibt es keinen Befund, ebenso wenn nur Inseln ihn
-    tragen (die meldet :func:`island_findings`).
+    Drache: größtes Stück 23,7 mm², zusammen 1 492 mm².
+
+    Gefragt wird nur der Überhangweg des Rats (:func:`worth_support`), nicht
+    ``need.needed``: Das ist auch wahr, wenn allein eine Insel oder eine lange
+    Brücke Stützen verlangt, und beide haben ihre eigene Zeile
+    (:func:`island_findings`, ``slice.long_bridge``). Aus demselben Grund
+    zählen Stücke auf einer Insel nicht — weder in der Fläche noch beim Ort —,
+    ebenso wenig Kanaldecken und Ränder, die sich selbst tragen
+    (:func:`ledges`). Was danach bleibt, muss den Weg allein tragen und mehr als
+    :data:`OVERHANG_REPORTED_FROM` sein. Gezeigt wird die Schicht mit der
+    meisten verbliebenen Überhangfläche, an ihrem größten Stück. Ohne
+    Stützbedarf nach dem Rat — der Gitterbecher — gibt es keinen Befund.
     """
-    if not need.needed or need.overhang <= OVERHANG_REPORTED_FROM:
+    if not worth_support(need.patch, need.overhang):
         return []
-    best: tuple[float, int] | None = None
+    # Die volle Randfrage hat ``support_need`` eben gestellt — ist der Weg
+    # oben wahr, war er es auch mit allen Stücken —, sie kommt aus dem Merker.
+    quiet = need.model.channels | ledges(result, cancelled=cancelled)
+    floating: set[tuple[int, int]] = set()
+    layers: list[tuple[float, int, ShapelyPolygon]] = []
     for index, layer in enumerate(result.layers):
-        if index in need.quiet_layers:
-            continue
-        area = sum(
-            ShapelyPolygon(piece.outline, piece.holes).area
-            for number, piece in enumerate(layer.overhangs)
-            if (index, number) not in need.model.channels
-        )
-        if area > 0.0 and (best is None or area > best[0]):
-            best = (area, index)
-    if best is None:
+        islands = [ShapelyPolygon(entry.outline, entry.holes) for entry in layer.islands]
+        kept: list[ShapelyPolygon] = []
+        for number, contour in enumerate(layer.overhangs):
+            if (index, number) in quiet:
+                continue
+            piece = ShapelyPolygon(contour.outline, contour.holes)
+            if islands and _on_island(piece, islands):
+                floating.add((index, number))
+                continue
+            kept.append(piece)
+        if kept:
+            largest = max(kept, key=lambda piece: piece.area)
+            layers.append((math.fsum(piece.area for piece in kept), index, largest))
+    if not layers:
         return []
-    _area, index = best
-    layer = result.layers[index]
-    pieces = [
-        ShapelyPolygon(piece.outline, piece.holes)
-        for number, piece in enumerate(layer.overhangs)
-        if (index, number) not in need.model.channels
-    ]
-    spot = max(pieces, key=lambda piece: piece.area).representative_point()
+    overhang = need.overhang
+    if floating:
+        # Ohne die Inselstücke dieselbe Frage noch einmal: Ein schwebender
+        # Würfel von 12 mm ist ein Stück von 144 mm², und der Weg wäre wahr,
+        # ohne dass ein einziger kleiner Überhang daneben stünde.
+        # Ist das Feld des Rats eine Decke (größer als jedes Stück), gilt es
+        # weiter: Die Feldfrage überspringt Stücke auf Inseln selbst
+        # (``_Ceilings.floats``), und am Drachen kostete sie noch einmal 5,4 s CPU.
+        without = frozenset(quiet | floating)
+        overhang = total_overhang(result, without=without)
+        patch = (
+            need.patch
+            if need.patch > need.piece
+            else advise._largest_field(
+                result, overhang, largest_overhang_patch(result, without=without), without=without
+            )
+        )
+        if not worth_support(patch, overhang):
+            return []
+    if overhang <= OVERHANG_REPORTED_FROM:
+        return []
+    _area, index, piece = max(layers, key=lambda entry: (entry[0], -entry[1]))
+    z = result.layers[index].z
+    spot = piece.representative_point()
     return [
         Finding(
             code="slice.small_overhangs",
             severity="warning",
             message=_("Viele kleine Überhänge hängen frei und brauchen zusammen Stützen."),
             object_id=object_id,
-            values={"z_mm": round(layer.z, 2), "area_mm2": round(need.overhang, 1)},
-            location=(float(spot.x), float(spot.y), float(layer.z)),
+            values={"z_mm": round(z, 2), "area_mm2": round(overhang, 1)},
+            location=(float(spot.x), float(spot.y), float(z)),
             source="internal",
             suggestions=(ORIENT_FOR_PRINT, SHOW_SUPPORT_NEED),
         )
     ]
+
+
+def _on_island(piece: ShapelyPolygon, islands: list[ShapelyPolygon]) -> bool:
+    """Liegt das Überhangstück zum größeren Teil auf einer Insel seiner Schicht?
+
+    Eine Insel ist auch ein Überhang — der ganze Querschnitt hängt in der
+    Luft. Sie hat ihre eigene Zeile (:func:`island_findings`); als Überhang
+    stünde dieselbe Stelle ein zweites Mal im Bericht.
+    """
+    return any(piece.intersection(island).area > 0.5 * piece.area for island in islands)
 
 
 def orientation_findings(

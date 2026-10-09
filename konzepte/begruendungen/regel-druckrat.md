@@ -369,9 +369,16 @@ Summe von 150 gefragt, blieb ein Feld von 134 mm² „keine Stützen“ (Review 
 davon auf dem Modell aufsetzt): Sonst verlangte der Rat am Kinn über der Brust
 Stützen und zugleich „nur vom Bett“, und das Kinn druckte weiter in die Luft.
 Der Gitterbecher bleibt ohne Stütze, und im Korpus (242 Körper) ändert sich
-außer der Sperre kein Vorschlag. Die Feldfrage über den ganzen Körper kostet am Drachen 8,2 s CPU;
-der Prüfbericht stellt sie deshalb nicht, und wo viele kleine Überhänge
-Stützen verlangen, nennt er noch keine Stelle (RM-572).
+außer der Sperre kein Vorschlag. Die Feldfrage über den ganzen Körper kostet am
+Drachen 8,2 s CPU. **Der Prüfbericht nennt die Stelle** (RM-572,
+`findings.small_overhang_findings`): Wo der Rat über die Fläche Stützen
+verlangt und kein Stück die Meldeschwelle erreicht, zeigt er die Schicht mit
+der meisten Überhangfläche an ihrem größten Stück. Er fragt dieselbe Antwort
+(`support_need`), aber nur, wo er auch eine andere Lage sucht — höchstens acht
+Körper, ab 1 cm³ Stützraum —, denn sie ist seine teuerste Frage. Nur der
+Flächenweg zählt: Inseln und lange Brücken haben eigene Zeilen, und
+Inselstücke, Kanaldecken und Ränder gehen weder in die Fläche noch in den Ort
+ein.
 
 **Das Mindesttempo bremst Spitzen, damit die Mindestzeit greift (08.10.2026,
 RM-580).** Am Drachen erreichten die obersten 12 mm in keinem Slicer die

@@ -27332,17 +27332,36 @@ Unterseite als Feld (RM-570), schwieg der Bericht — am Kinn mit 18° (Streifen
 zusammen 189 mm²) und am Drachen (größtes Stück 23,7 mm², zusammen 1 492 mm²).
 
 **Behoben:** `findings.small_overhang_findings` meldet „Viele kleine Überhänge hängen frei
-und brauchen zusammen Stützen.“ an der Schicht mit der meisten Überhangfläche außerhalb von
-Kanälen, an ihrem größten Stück, mit *Druckoptimal ausrichten* und *Stützbedarf zeigen*.
-Gefragt wird dieselbe Antwort wie im Rat (`advise.support_need`), einmal je Körper und nur
-ohne großes Stück; `body_findings` teilt sie mit der Lagensuche, die sie vorher ohnehin
-stellte. Ohne Stützbedarf nach dem Rat — der Gitterbecher — kein Befund.
+und brauchen zusammen Stützen.“ an der Schicht mit der meisten Überhangfläche, an ihrem
+größten Stück, mit *Druckoptimal ausrichten* und *Stützbedarf zeigen*. Gefragt wird nur der
+Flächenweg des Rats (`worth_support(need.patch, need.overhang)`), nicht `need.needed`, und
+Inselstücke, Kanaldecken und Ränder (`ledges`) zählen weder in der Fläche noch beim Ort;
+ohne sie muss der Weg weiter tragen und die Fläche über 100 mm² liegen. Ohne Stützbedarf
+nach dem Rat — der Gitterbecher — kein Befund. Die Antwort des Rats (`advise.support_need`)
+holt `body_findings` nur unter der Bedingung der Lagensuche (höchstens acht Körper,
+Stützraum ab 1 000 mm³) und teilt sie mit ihr.
 
-**Nachweis (09.10.2026):** `test_many_small_overhangs_get_a_finding_with_a_place` (Kinn und
-Kiefer mit schräger Unterseite, Ort an der Unterseite),
-`test_a_lattice_of_small_self_supporting_pieces_gets_no_supports` (Gitterbecher ohne
-Befund). Kosten: keine zusätzliche Feldfrage, wo der Bericht sie schon für die Lagensuche
-stellte. Changelog: ja.
+**Review (09.10.2026, `review_rm572_rm624.md`):** Der erste Stand fragte `need.needed` und
+zählte Inselflächen: Ein Sockel mit schwebendem 12- oder 20-mm-Würfel bekam neben der Insel
+„viele kleine Überhänge“ mit 144 bzw. 400 mm² an derselben Stelle, zwei 20-mm-Brücken von
+je 58 mm² (zusammen 115,8, kein Flächenweg) neben `slice.long_bridge` ebenso. Er stellte
+die Bedarfsfrage außerdem ohne Lagensuche: Von 17 kleinen Modellen eines neu
+(`carcassonne-4x4-grid`, +0,45 s, kein Befund), bei mehr als acht Körpern ein Schachsatz
+mit 3,7–7,0 s je Figur, fünf Figuren 23,9 s, kein Befund. Beides ist behoben, und
+der Ort meidet jetzt auch selbsttragende Ränder.
+
+**Nachweis (09.10.2026):** Profil Centauri Carbon 2/PETG über `print_findings`: Kinn
+(Stützraum 2 739 mm³) Befund bei z 44,55 an der Unterseite, 119,3 mm²; Kiefer (8 889 mm³)
+bei z 47,35, 200,1 mm²; Würfel 12 und 20 mm nur Insel; zwei Brücken nur lange Brücke.
+Drache (`obj3.stl`, 2 948 698 Dreiecke, generic-220/PLA): Stützraum 34 178 mm³, Bedarfsfrage
+wie vorher mit der Lagensuche; Befund unverändert bei z 102,75 (x −4,8, y −4,8), Fläche ohne
+Inselstücke 630,6 statt 663,3 mm². Der Befund selbst kostet dort 0,09 s CPU (vorher 0,06);
+die Feldfrage ohne Inselstücke neu zu stellen kostete 5,4 s, das Feld des Rats gilt weiter,
+wo es eine Decke ist. Tests in `test_print_findings.py`
+(Kinn mit Ort im Grundriss und auf der Unterseite, Kragen von 2 mm auf Kinnhöhe, Würfel,
+Brücken, keine Bedarfsfrage ohne Lagensuche), `test_many_small_overhangs_get_a_finding_with_a_place`
+(Kinn und Kiefer, Ort auf der Unterseite an seiner Höhe),
+`test_a_lattice_of_small_self_supporting_pieces_gets_no_supports` (Gitterbecher). Changelog: ja.
 
 ## RM-027 entfällt mit dem privaten Index (09.09.2026)
 
@@ -43951,7 +43970,7 @@ Streifen in der Aufsicht vereinigt, ohne Kanalstücke, nur wo sie im Mittel brei
 als `OVERHANG_MARGIN`. Dieselbe Feldfrage entscheidet den Stützort
 (`ModelSupport.open_field`: sonst „nur vom Bett“ am Kinn über der Brust) und welche
 Überhänge die Kanalsperre ausspart (RM-566). Wo viele kleine Überhänge Stützen
-verlangen, nennt der Prüfbericht noch keine Stelle: [RM-572](ROADMAP.md#rm-572).
+verlangen, nannte der Prüfbericht noch keine Stelle: [RM-572](#rm-572).
 
 **Nachweis (08.10.2026):** `tests/test_advise.py::test_a_sloped_underside_is_one_field`
 (Kinn, Feld unter der Summe 150, Feld unter 100, Rauschen einer Wand),

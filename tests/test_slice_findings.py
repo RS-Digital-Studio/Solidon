@@ -1897,8 +1897,15 @@ def test_many_small_overhangs_get_a_finding_with_a_place(body: str) -> None:
     assert [finding.code for finding in found] == ["slice.small_overhangs"]
     location = found[0].location
     assert location is not None
-    lowest = min(z for z in (layer.z for layer in result.layers) if z > 40.0)
-    assert lowest <= location[2] <= 50.0, "an der Unterseite des Kinns"
+    x, y, z = location
+    # Die Unterseite steigt von ``underside`` an der Rückwand (y = 15) bis 50 mm
+    # an der Spitze (y = -3); ein Streifen auf der Höhe z liegt bei dieser y.
+    underside = 44.0 if body == "chin" else 47.0
+    assert -8.0 < x < 8.0 and -3.0 < y < 15.0, "im Grundriss des Kinns"
+    assert underside < z < 50.2
+    run = 18.0 / (50.0 - underside)
+    # Ein Streifen ist eine Schicht hoch, also ``run`` mal 0,2 mm breit.
+    assert y == pytest.approx(-3.0 + run * (50.0 - z), abs=0.5 + 0.2 * run), "an ihrer Höhe"
 
 
 @pytest.mark.parametrize("underside_at_wall", [47.0, 48.0])
