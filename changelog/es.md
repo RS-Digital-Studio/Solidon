@@ -39,6 +39,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - En el modo de dibujo, la pestaña *Selección* se oculta. La lista de restricciones muestra las de los puntos y líneas seleccionados, además de cualquier conflicto.
 - En la tarjeta de parámetros, una medida solo muestra «Sin utilizar» cuando es así. El botón dice cuántos números fijos se pueden vincular a medidas.
 - El informe de errores adjunta un registro de fallo solo cuando Solidon se ha cerrado de verdad por un fallo.
+- En el catálogo de bloques, *Gestionar bloques* aparece abierto mientras aún no haya ningún bloque propio.
 
 ### Imprimir y entregar al slicer
 

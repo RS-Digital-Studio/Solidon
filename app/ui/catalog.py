@@ -171,6 +171,23 @@ def _origin_words(spec: PartSpec) -> str:
     return ""
 
 
+def _in_own_library(spec: PartSpec) -> bool:
+    """Ob der Baustein als Datei im eigenen Bausteinordner liegt.
+
+    Gespeicherte Rezepte und aus Datei hinzugefügte Bausteine: nur sie lassen
+    sich weitergeben, bearbeiten und entfernen. **Nicht** ``PartSpec.own`` —
+    das zählt den ``.py``-Baustein mit und den hinzugefügten nicht, und ein
+    mitgereister gehört der Projektdatei. Eine Quelle für Weitergabe,
+    Verwaltungsknöpfe und den offenen Abschnitt (RM-680).
+    """
+    return getattr(spec, "source", "") in ("recipe", "imported")
+
+
+def _own_library_is_empty() -> bool:
+    """Ob es noch keinen Baustein im eigenen Bausteinordner gibt (RM-680)."""
+    return not any(_in_own_library(spec) for spec in PARTS.all())
+
+
 def describe(spec: PartSpec) -> str:
     """Die Eckzeichen einer Kachel in Worten, eine Zeile — leer ohne Zeichen."""
     return " · ".join(mark.words for mark in tile_marks(spec))
@@ -596,10 +613,16 @@ class PartCatalog(QDialog):
             management_layout.addWidget(action, index // 2, index % 2)
         management_layout.addWidget(self.save_hint, 3, 0, 1, 2)
         management_layout.addWidget(self.share_hint, 4, 0, 1, 2)
+        # **Offen, solange es keinen eigenen Baustein gibt** (RM-680): Wer noch
+        # keinen hat, kommt über *Speichern* und *Hinzufügen* zu einem, und die
+        # Sperrgründe daneben sagen, was fehlt (§2.7). Hinter der zugeklappten
+        # Kopfzeile (48ffcf145) fand das niemand; in 0.5.1 lag es offen. Danach
+        # gilt der Merker (``remember``) — auch, wenn :meth:`_show_detail` den
+        # Abschnitt für einen eigenen Baustein geöffnet hat (RM-658).
         self.management_section = collapsible(
             tr("Bausteine verwalten"),
             management,
-            open_now=False,
+            open_now=_own_library_is_empty(),
             contents=tr(
                 "Eigene Bausteine speichern, aus Datei hinzufügen, weitergeben, "
                 "als OpenSCAD schreiben, bearbeiten, entfernen"
@@ -1129,14 +1152,20 @@ class PartCatalog(QDialog):
         gebunden und wird nicht still in eine eigenständige Datei umgedeutet.
         """
         if spec is None:
+            # Ohne eigenen Baustein steht dieser Satz vorn im offenen Abschnitt
+            # (RM-680); „wählen Sie einen" schickte zu einem eingebauten und
+            # damit in die nächste Absage.
+            if _own_library_is_empty():
+                return False, tr(
+                    "Speichern Sie zuerst einen eigenen Baustein, um ihn weiterzugeben."
+                )
             return False, tr("Wählen Sie einen Baustein, den Sie als Datei weitergeben möchten.")
-        source = getattr(spec, "source", "")
-        if source == "travelled":
+        if getattr(spec, "source", "") == "travelled":
             return False, tr(
                 "Dieser Baustein gehört zur geöffneten Projektdatei. Speichern Sie ihn "
                 "zuerst als eigenen Baustein, um ihn weiterzugeben."
             )
-        if source not in ("recipe", "imported"):
+        if not _in_own_library(spec):
             return False, tr(
                 "Eingebaute Bausteine sind bereits in Solidon enthalten. Speichern Sie "
                 "zuerst einen eigenen Baustein, um ihn weiterzugeben."
@@ -1185,7 +1214,7 @@ class PartCatalog(QDialog):
         self.set_can_write_scad(
             spec is not None, tr("Wählen Sie zuerst einen Baustein aus der Bibliothek.")
         )
-        own = spec is not None and getattr(spec, "source", "") in ("recipe", "imported")
+        own = spec is not None and _in_own_library(spec)
         self.remove_part.setVisible(own)
         # Dieselbe Bedingung, und trotzdem eine eigene Zeile: Entfernen und
         # Bearbeiten sind zwei Handlungen, und die nächste Voraussetzung, die

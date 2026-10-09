@@ -38,6 +38,7 @@ it into `website/version.json`.
 - In sketch mode the *Selection* tab is hidden. The list of constraints shows those of the selected points and lines, plus any conflict.
 - In the parameter card, a dimension shows “Not used” only where that is true. The button says how many fixed numbers can be bound to dimensions.
 - The error report attaches a crash log only when Solidon actually crashed.
+- In the part catalogue, *Manage parts* is open as long as there is no part of your own yet.
 
 ### Printing and slicer handover
 

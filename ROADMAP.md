@@ -133,8 +133,8 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-674 — Warten auf die feine Rechnung: Halt, Änderung und Abbruch während des Wartens](#rm-674) | Bedienung und Darstellung | In Arbeit: Claude (Worktree `F:/solidon-claude-g`). Zweiter Export einer angehaltenen Kette schreibt still, Änderung beim Warten heißt „abgebrochen“, Druckdialog ohne Abbrechen |
 | [RM-677 — Nach *Automatisch teilen* fragt jeder Export nach demselben Zustand](#rm-677) | Bedienung und Darstellung | Teile liegen nach dem Teilen aneinander und schweben, jeder Export fragt deshalb erneut |
 | [RM-678 — Ein Merkmalsfeld im Operationsdialog übernimmt eine Vorbelegung, die nicht in seiner Liste steht](#rm-678) | Bedienung und Darstellung | *Zum Langloch ziehen* mit gewählter Fläche trägt `face_top` ins Feld *Bohrung* ein und hält danach an |
-| [RM-680 — Der Bausteinkatalog beginnt mit zugeklapptem Verwaltungsabschnitt, auch wenn noch kein eigener Baustein existiert](#rm-680) | Bedienung und Darstellung | Speichern, Hinzufügen und die Sperrgründe stehen hinter einer Kopfzeile, die man erst öffnen muss (seit `48ffcf145`) |
 | [RM-681 — Schriftzug: Zeichen, die die Schrift nicht hat, und Steuerzeichen werden still als Kasten gedruckt](#rm-681) | Bedienung und Darstellung | Nachprüfung RM-471 09.10.: fehlende Glyphe und Steuerzeichen ablehnen und eine Schrift vorschlagen, die die Zeichen hat |
+| [RM-658 — Ein Abschnitt, der sich selbst öffnet, merkt sich das als Wahl des Kunden](#rm-658) | Bedienung und Darstellung | Gefunden im Review von RM-680: `open_section` schreibt den Merker; ein Fix in `panels.open_section` deckt Katalog, Filamentangaben und Einstellungen |
 | [RM-003 — Lizenzkette der Generatoren klären und TripoSG ersetzen](#rm-003) | KI und Generatoren | Weg 3 auf TRELLIS.2-4B und FLUX.2 [klein] 4B umgebaut, alte Einrichtung wird mit Ansage entfernt (Robert, 07.10.); offen die Kanzleifragen (DINOv3-Lizenz, Trainingsdaten, Apache-Hinweise), bis dahin nennt die Startseite den Prüfvorbehalt |
 | [RM-004 — Echte Text- und Bildgenerierung über alle Zielplattformen abnehmen](#rm-004) | KI und Generatoren | Windows mit TRELLIS.2 gefahren (07.10.): Text- und Bildweg bis zum Export, nach RM-550 5 von 7 Körpern geschlossen, Auswertung 15–60 s; offen RM-550-Rest, Linux und macOS |
 | [RM-550 — Erzeugte Körper aus Weg 3 bleiben nach der Reparatur offen](#rm-550) | KI und Generatoren | Ursachen behoben (07.10.): berührende Stücke, Textweg über das Bild, 200 000 Dreiecke, beide UDF-Hüllen; 5 von 7 Läufen geschlossen; offen die Warnung „kreuzt sich selbst“ und zerfallene Rohnetze einzelner Startwerte |
@@ -4620,31 +4620,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   Belege: `F:\solidon-review-reports\funktionsliste\befunde-texte.md` (T-04), Bild
   `regression-0.5.2\texte\bilder\09d8e9485-pt-Dialog_Langloch.png`.
 
-<a id="rm-680"></a>
-
-- [ ] **RM-680 — Der Bausteinkatalog beginnt mit zugeklapptem Verwaltungsabschnitt, auch wenn noch kein eigener Baustein existiert.**
-  Nachprüfung RM-455 (03.10.2026, `09d8e9485`, Befund 3.1). Im frisch geöffneten Katalog stehen
-  *Auswahl als Baustein speichern …*, *Baustein aus Datei hinzufügen …*, *Als OpenSCAD-Datei
-  schreiben …*, *Baustein als Datei weitergeben …* und die beiden Sperrgründe hinter der
-  zugeklappten Kopfzeile *Bausteine verwalten*, solange kein eigener Baustein gewählt ist; in
-  v0.5.1 und v0.5.0 standen sie offen (**Regression gegenüber v0.5.1**, Ursache `48ffcf145`). RM-455
-  klappt den Abschnitt nur an einem eigenen Baustein auf. Die beiden Hinweistests klappen ihn selbst
-  auf und prüfen „der Grund steht sichtbar da“ (§2.7) nur im offenen Zustand. Auf `paket/b-bausteine`
-  beginnt der Abschnitt weiter zu (`open_now=False`, `app/ui/catalog.py:609–611`); die Kopfzeile
-  nennt seit `dd7e1e923` im Untertitel „Eigene Bausteine speichern, aus Datei hinzufügen, …“; aufgeklappt
-  wird nur an einem eigenen Baustein (`:1223`).
-  **Stellen:** `app/ui/catalog.py:599–602` und `:1200` (origin/main), `:609–611` und `:1223`
-  (`paket/b-bausteine`), die
-  Hinweistests in `tests/test_catalog_ui.py`.
-  **Fix (allgemein):** Der Abschnitt beginnt offen, solange ein Sperrgrund steht oder noch kein
-  eigener Baustein existiert; oder *Speichern* und *Hinzufügen* stehen außerhalb der Klappe. Die
-  Hinweistests prüfen den Grund ohne vorheriges Aufklappen.
-  **Abnahme:** Fenstertest: frischer Katalog ohne eigene Bausteine zeigt *Speichern*, *Hinzufügen*
-  und beide Sperrgründe ohne Klick; mit eigenem Baustein und gewähltem eingebautem Baustein bleibt
-  das heutige Verhalten; die Handbuchseiten `own-parts` und `exchange` nennen den Abschnitt.
-  Bauplan §2.7, §24.
-  Belege: `F:\solidon-review-reports\verif-09d8e9485.md` (Abschnitt 3).
-
 <a id="rm-681"></a>
 
 - [ ] **RM-681 — Schriftzug: Zeichen, die die Schrift nicht hat, und Steuerzeichen werden still als Kasten gedruckt.**
@@ -4668,6 +4643,23 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   Gegenprobe ohne Absage: weiches Trennzeichen, Nullbreite, „ÇÃÑÕÂÊÎÔÛ“ und die 93 Kernfälle.
   Bauplan §25, §2.7.
   Belege: `F:\solidon-review-reports\rm471\befunde.md` (B1), `rm471\bericht.md`.
+
+<a id="rm-658"></a>
+
+- [ ] **RM-658 — Ein Abschnitt, der sich selbst öffnet, merkt sich das als Wahl des Kunden.**
+  Gefunden im Review von RM-680 (09.10.2026, vorbestehend). `panels.open_section` klappt einen
+  Abschnitt über seinen Kopfknopf auf; an einem Abschnitt mit `remember=` schreibt `toggled` dabei
+  dauerhaft „offen“ in den Merker (`app/ui/panels.py`, `collapsible`). Die Regel der Fenster sagt,
+  `remember=` gehöre nie an eine Klappe, die sich selbst öffnet (`.claude/rules/fenster.md`,
+  Klappen). Betroffen sind drei Abschnitte: *Bausteine verwalten* im Katalog (`_show_detail`
+  öffnet ihn an einem eigenen Baustein, RM-455; danach beginnt er immer offen, auch wenn RM-680 ihn
+  zu beginnen ließe), *Weitere Angaben* der Filamentangaben (`app/ui/filament_picker.py`, Sprung zu
+  einem Feld) und *Weitere Einstellungen* (`app/ui/settings_dialog.py`, Sprung zu einer Option).
+  **Fix (allgemein):** `open_section` öffnet, ohne den Merker zu ändern: Der Kopfknopf trägt seinen
+  Schlüssel, und `open_section` stellt den gemerkten Wert danach wieder her. Gemerkt wird nur, was
+  der Kunde klickt.
+  **Abnahme:** Je Abschnitt: zuklappen, Selbstöffnung auslösen, Dialog schließen und neu öffnen →
+  zu; nach einem Klick des Kunden auf die Kopfzeile bleibt dessen Zustand. Bauplan §2.5.
 
 ## KI und Generatoren
 

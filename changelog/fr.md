@@ -39,6 +39,7 @@ dans `website/version.json`.
 - En mode dessin, l'onglet *Sélection* est masqué. La liste des contraintes montre celles des points et lignes sélectionnés, ainsi que chaque conflit.
 - Dans la carte des paramètres, une cote n'affiche « Non utilisé » que si c'est le cas. Le bouton indique combien de nombres fixes peuvent être liés à des cotes.
 - Le rapport d'erreur ne joint un journal de plantage que si Solidon a vraiment planté.
+- Dans le catalogue de blocs, *Gérer les blocs* est ouvert tant qu'il n'y a pas encore de bloc personnel.
 
 ### Imprimer et transmettre au slicer
 

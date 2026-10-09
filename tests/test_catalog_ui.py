@@ -16,7 +16,6 @@ from PySide6.QtWidgets import QApplication, QDialogButtonBox, QListView, QListWi
 
 from app.core.knowledge.parts import PARTS
 from app.ui.catalog import TILE_WIDTH, PartCatalog
-from app.ui.panels import open_section
 
 
 def catalog_names(catalog: PartCatalog) -> set[str]:
@@ -57,6 +56,18 @@ def wait_until(ready: Callable[[], bool], what: str, timeout_ms: int = 5000) -> 
         if time.monotonic() > deadline:
             raise AssertionError(f"{what} kam in {timeout_ms} ms nicht zustande")
         application.processEvents()
+
+
+@pytest.fixture
+def no_own_parts(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Die Bibliothek nur mit mitgelieferten Bausteinen (RM-680).
+
+    Ob *Bausteine verwalten* offen beginnt und was der Weitergabeknopf ohne
+    Auswahl sagt, hängt am eigenen Bausteinordner. Ein Rezept, das ein anderer
+    Test im selben Arbeiter registriert ließ, darf das nicht entscheiden.
+    """
+    shipped = tuple(spec for spec in PARTS.all() if spec.source == "shipped")
+    monkeypatch.setattr(PARTS, "all", lambda: shipped)
 
 
 def test_the_catalogue_is_a_grid_not_a_list(qt_app: QApplication) -> None:
@@ -364,6 +375,7 @@ def test_a_failed_or_missing_range_check_is_written_on_the_entry(
     assert tr("an den Grenzen kam kein brauchbarer Körper heraus") in describe(donor)
 
 
+@pytest.mark.usefixtures("no_own_parts")
 def test_the_locked_save_button_shows_its_reason_beside_it(qt_app: QApplication) -> None:
     """„Sagt daneben, was ihm fehlt" — das Handbuch versprach es, der Grund
     stand aber nur im Tooltip, und die Detailspalte desselben Dialogs sagt
@@ -374,9 +386,8 @@ def test_the_locked_save_button_shows_its_reason_beside_it(qt_app: QApplication)
     """
     catalog = PartCatalog()
     try:
-        # Knopf und Grund stehen im Abschnitt *Bausteine verwalten*, der seit
-        # 48ffcf145 zugeklappt beginnt; wer den Knopf sucht, öffnet ihn.
-        open_section(catalog._management)
+        # Ohne eigenen Baustein beginnt *Bausteine verwalten* offen (RM-680):
+        # Der Grund steht da, ohne dass jemand die Kopfzeile öffnet.
         catalog.set_can_save(False, "Dafür muss zuerst etwas gerechnet sein.")
         assert catalog.save_hint.isVisibleTo(catalog), "der Grund steht sichtbar da"
         assert "gerechnet" in catalog.save_hint.text()
@@ -385,6 +396,75 @@ def test_the_locked_save_button_shows_its_reason_beside_it(qt_app: QApplication)
         catalog.set_can_save(True, "")
         assert not catalog.save_hint.isVisibleTo(catalog), "frei heißt: keine Zeile"
         assert catalog.save_part.isEnabled()
+    finally:
+        catalog.release()
+
+
+@pytest.mark.usefixtures("no_own_parts")
+def test_a_fresh_catalogue_shows_its_management_without_a_click(qt_app: QApplication) -> None:
+    """RM-680: Ohne eigenen Baustein begann *Bausteine verwalten* zugeklappt.
+
+    *Speichern*, *Hinzufügen* und beide Sperrgründe standen hinter einer
+    Kopfzeile, die niemand öffnet (Rückschritt gegenüber 0.5.1, seit
+    48ffcf145). Ohne eigenen Baustein beginnt der Abschnitt jetzt offen, und
+    der Weitergabeknopf schickt zum Speichern: „Wählen Sie einen Baustein"
+    führte zu einem eingebauten und damit in die nächste Absage.
+    """
+    from app.i18n import tr
+
+    catalog = PartCatalog()
+    try:
+        catalog.show()
+        QApplication.processEvents()
+        assert catalog.save_part.isVisibleTo(catalog), "Speichern steht ohne Klick da"
+        assert catalog.adopt_part.isVisibleTo(catalog), "Hinzufügen steht ohne Klick da"
+        catalog.set_can_save(False, "Dafür muss zuerst etwas gerechnet sein.")
+        assert catalog.save_hint.isVisibleTo(catalog)
+        assert catalog.share_hint.isVisibleTo(catalog)
+        assert catalog.share_hint.text() == tr(
+            "Speichern Sie zuerst einen eigenen Baustein, um ihn weiterzugeben."
+        )
+    finally:
+        catalog.release()
+
+
+@pytest.mark.parametrize(
+    ("source", "kept"),
+    [("recipe", True), ("imported", True), ("travelled", False), ("user", False)],
+)
+def test_only_a_part_in_the_own_library_closes_the_management(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch, source: str, kept: bool
+) -> None:
+    """RM-680: Zu beginnt *Bausteine verwalten* nur, wenn der eigene Ordner etwas hält.
+
+    Gezählt wird, was sich dort weitergeben, bearbeiten und entfernen lässt:
+    ein gespeichertes Rezept und ein hinzugefügter Baustein. Ein mitgereister
+    gehört der Projektdatei, ein ``.py``-Baustein hat keine Datei zum
+    Weitergeben — für beide ist *Speichern* der nächste Schritt.
+    ``PartSpec.own`` zählte anders (``user`` ja, ``imported`` nein); wer
+    darauf vereinfacht, fällt hier auf.
+    """
+    import dataclasses
+
+    from app.i18n import tr
+
+    shipped = tuple(spec for spec in PARTS.all() if spec.source == "shipped")
+    donor = next(spec for spec in shipped if "magnet" not in spec.name)
+    probe = dataclasses.replace(donor, name="eigen_probe_680", source=source)
+    monkeypatch.setattr(PARTS, "all", lambda: (*shipped, probe))
+    catalog = PartCatalog()
+    try:
+        catalog.show()
+        QApplication.processEvents()
+        assert catalog.save_part.isVisibleTo(catalog) is not kept, (
+            f"{source}: der Abschnitt beginnt {'zu' if kept else 'offen'}"
+        )
+        reason = (
+            tr("Wählen Sie einen Baustein, den Sie als Datei weitergeben möchten.")
+            if kept
+            else tr("Speichern Sie zuerst einen eigenen Baustein, um ihn weiterzugeben.")
+        )
+        assert catalog.share_part.toolTip() == reason, source
     finally:
         catalog.release()
 
@@ -574,6 +654,7 @@ def test_a_rendered_preview_replaces_the_placeholder(qt_app: QApplication) -> No
         katalog.release()
 
 
+@pytest.mark.usefixtures("no_own_parts")
 def test_part_file_export_stays_shut_and_says_why(qt_app: QApplication) -> None:
     """Der Datei-Export ist gesperrt, und er sagt jedes Mal, warum.
 
@@ -589,15 +670,14 @@ def test_part_file_export_stays_shut_and_says_why(qt_app: QApplication) -> None:
     verlangt mehr als eine Kodierung, und ein grau gewordener Knopf ist genau
     eine.
 
-    Zwei Lagen, zwei Sätze: ohne Auswahl fehlt der Baustein, mit einem
-    eingebauten fehlt die Datei. Ein Satz für beides wäre in einem der Fälle
-    unwahr.
+    Zwei Lagen, zwei Sätze: ohne Auswahl fehlt der Baustein (ohne eigenen
+    Baustein ein eigener, RM-680), mit einem eingebauten fehlt die Datei. Ein
+    Satz für beides wäre in einem der Fälle unwahr.
     """
     catalog = PartCatalog()
     try:
         catalog.show()
-        # Der Knopf steht im zugeklappten Abschnitt *Bausteine verwalten*.
-        open_section(catalog._management)
+        # Ohne eigenen Baustein beginnt *Bausteine verwalten* offen (RM-680).
         QApplication.processEvents()
         assert not catalog.share_part.isEnabled(), "ohne Auswahl gibt es keine Datei zu exportieren"
         leer = catalog.share_part.toolTip()
@@ -1893,27 +1973,32 @@ def test_the_catalog_scad_export_obeys_the_export_boundary(
         catalog.deleteLater()
 
 
+@pytest.mark.usefixtures("no_own_parts")
 def test_the_closed_management_names_what_it_holds(qt_app: QApplication) -> None:
     """„Bausteine verwalten" sagt zugeklappt, was dahinter steht (RM-491).
 
     Speichern, Weitergeben und Entfernen lagen hinter einer Überschrift, die
     nicht verriet, dass es sie gibt. Der Zustand bleibt für den nächsten
-    Katalog stehen.
+    Katalog stehen. Ohne eigenen Baustein beginnt der Abschnitt offen
+    (RM-680); zugeklappt wird er hier vom Kunden.
     """
     from PySide6.QtWidgets import QLabel, QToolButton
 
     catalog = PartCatalog()
     summary = catalog.management_section.findChild(QLabel, "sectionSummary")
     heading = catalog.management_section.findChild(QToolButton)
-    assert summary is not None and summary.isVisibleTo(catalog)
+    assert summary is not None and heading is not None
+    assert heading.isChecked(), "ohne eigenen Baustein offen (RM-680)"
+    heading.click()
+    assert summary.isVisibleTo(catalog), "zugeklappt nennt er, was dahinter steht"
     for word in ("speichern", "weitergeben", "entfernen"):
         assert word in summary.text(), (word, summary.text())
-    heading.click()
-    assert not summary.isVisibleTo(catalog)
     catalog.deleteLater()
 
     again = PartCatalog()
-    assert again.management_section.findChild(QToolButton).isChecked(), "offen verlassen, offen"
+    assert not again.management_section.findChild(QToolButton).isChecked(), (
+        "zugeklappt verlassen, zugeklappt"
+    )
     again.deleteLater()
 
 
