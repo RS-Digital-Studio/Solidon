@@ -157,7 +157,6 @@ allowed = [
   "LGPL-2.1-only",
   "LGPL-2.1-or-later",
   "LGPL-3.0-only",
-  "LicenseRef-Matplotlib",
   "LicenseRef-HarfBuzz-Old-MIT",
   # Die fünf unten kommen aus den Systembibliotheken, die das Linux-Paket
   # bündelt (`make_sbom.LINUX_FAMILY_COMPONENTS`), und sind am 03.09.2026
@@ -238,6 +237,10 @@ tifffile = { licence = "BSD-3-Clause", note = "kommt mit scikit-image" }
 PySide6 = { licence = "LGPL-3.0-only", note = "dynamisch gebunden, §36" }
 PySide6-Essentials = { licence = "LGPL-3.0-only" }
 PySide6-Addons = { licence = "LGPL-3.0-only" }
+# Ab 6.12 eigene Räder statt Teil von PySide6-Addons; PySide6 verlangt sie,
+# die Anwendung lädt keines davon.
+PySide6-Pdf = { licence = "LGPL-3.0-only" }
+PySide6-WebEngine = { licence = "LGPL-3.0-only" }
 shiboken6 = { licence = "LGPL-3.0-only" }
 pillow = { licence = "MIT-CMU", note = "HPND, freizügig" }
 # Der Agent legt den eigenen Schlüssel im Schlüsselbund des Systems ab (§27).
