@@ -55,6 +55,7 @@ it into `website/version.json`.
 - In the translated versions, *New filament* no longer scrolls sideways when the window is shorter than its content.
 - Large models load noticeably faster and need less memory, even with a long history and on computers with 8 GB.
 - Even in a long history, a new step takes hardly longer to calculate than the first.
+- On models with thousands of features, moving and other steps that leave the shape unchanged finish up to twice as fast.
 - Undo and redo are faster, and memory that is no longer needed is freed right away.
 - Resolving overlaps and exporting as 3MF are considerably faster.
 - The workspace appears faster when opening large 3MF files.

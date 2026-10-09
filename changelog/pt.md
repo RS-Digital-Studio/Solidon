@@ -55,6 +55,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Nas versões traduzidas, *Novo filamento* já não se desloca para o lado quando a janela é mais baixa do que o conteúdo.
 - Os modelos grandes carregam visivelmente mais depressa e precisam de menos memória, também com um histórico longo e em computadores com 8 GB.
 - Mesmo num histórico longo, um passo novo quase não demora mais a calcular do que o primeiro.
+- Em modelos com milhares de características, mover e outros passos que não alteram a forma terminam até duas vezes mais depressa.
 - Desfazer e refazer são mais rápidos, e a memória que já não é precisa fica logo livre.
 - Resolver sobreposições e exportar em 3MF é bastante mais rápido.
 - A área de trabalho aparece mais depressa ao abrir ficheiros 3MF grandes.

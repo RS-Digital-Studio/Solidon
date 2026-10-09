@@ -56,6 +56,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - En las versiones traducidas, *Filamento nuevo* ya no se desplaza de lado cuando la ventana es más baja que su contenido.
 - Los modelos grandes se cargan notablemente más rápido y necesitan menos memoria, también con un historial largo y en equipos con 8 GB.
 - Incluso en un historial largo, un paso nuevo apenas tarda más en calcularse que el primero.
+- En modelos con miles de características, mover y otros pasos que no cambian la forma terminan hasta el doble de rápido.
 - Deshacer y rehacer son más rápidos, y la memoria que ya no se necesita se libera enseguida.
 - Resolver solapamientos y exportar a 3MF es bastante más rápido.
 - El área de trabajo aparece más rápido al abrir archivos 3MF grandes.

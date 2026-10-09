@@ -55,6 +55,7 @@ scrive in `website/version.json`.
 - Nelle versioni tradotte, *Nuovo filamento* non scorre più di lato quando la finestra è più bassa del suo contenuto.
 - I modelli grandi si caricano molto più velocemente e richiedono meno memoria, anche con una cronologia lunga e su computer con 8 GB.
 - Anche in una cronologia lunga, un nuovo passaggio richiede appena più tempo del primo.
+- Sui modelli con migliaia di caratteristiche, lo spostamento e gli altri passaggi che non cambiano la forma finiscono fino a due volte più in fretta.
 - Annulla e ripristina sono più veloci, e la memoria non più necessaria si libera subito.
 - Risolvere le sovrapposizioni ed esportare in 3MF è molto più veloce.
 - L'area di lavoro viene visualizzata più rapidamente quando si aprono file 3MF di grandi dimensioni.
