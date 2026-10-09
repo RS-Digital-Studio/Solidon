@@ -24,9 +24,9 @@
 # Handstarts mit gesetztem check_latest im öffentlichen Repository.
 
 altgraph==0.17.5
-ast_serialize==0.12.0
-cadquery-ocp-novtk==8.0.1.0.0
-cadquery-ocp-proxy==8.0.1.0.0
+ast_serialize==0.12.1
+cadquery-ocp-novtk==8.0.1.1.0
+cadquery-ocp-proxy==8.0.1.1.0
 certifi==2026.7.22
 cffi==2.1.1
 colorama==0.4.6
@@ -38,8 +38,8 @@ fonttools==4.66.1
 freetype-py==2.5.1
 hidapi==0.15.0
 hsluv==5.0.4
-ImageIO==2.38.0
-iniconfig==2.3.0
+ImageIO==2.38.1
+iniconfig==2.3.1
 jaraco.classes==3.4.0
 jaraco.context==6.1.2
 jaraco.functools==4.6.0
@@ -50,7 +50,7 @@ lazy-loader==0.6
 librt==0.16.0
 macholib==1.16.4
 manifold3d==3.5.4
-MarkupSafe==3.0.3
+MarkupSafe==3.0.4
 more-itertools==11.1.0
 mypy==2.4.0
 mypy_extensions==1.1.0
@@ -61,16 +61,18 @@ pathspec==1.1.1
 pefile==2024.8.26
 pillow==12.3.0
 pluggy==1.6.0
-pycparser==3.0
+pycparser==3.1
 pygfx==0.17.0
 Pygments==2.21.0
 pyinstaller==6.22.3
 pyinstaller-hooks-contrib==2026.8
 pylinalg==0.6.8
 pypdf==6.19.0
-PySide6==6.11.2
-PySide6_Addons==6.11.2
-PySide6_Essentials==6.11.2
+PySide6==6.12.0
+PySide6_Addons==6.12.0
+PySide6_Essentials==6.12.0
+PySide6_Pdf==6.12.0.140
+PySide6_WebEngine==6.12.0.140
 pytest==9.1.1
 pytest-forked==1.7.5
 pytest-xdist==3.8.0
@@ -82,13 +84,13 @@ scikit-image==0.26.0
 scipy==1.18.1
 SecretStorage==3.5.0
 setuptools==84.0.0
-shapely==2.1.2
-shiboken6==6.11.2
+shapely==2.2.0
+shiboken6==6.12.0
 svg.path==7.1
 tifffile==2026.9.20
-trimesh==5.1.0
+trimesh==5.1.1
 typing_extensions==4.16.0
-uharfbuzz==0.56.2
+uharfbuzz==0.56.3
 vhacdx==0.1.0
 wgpu==0.32.0
 xxhash==4.0.1

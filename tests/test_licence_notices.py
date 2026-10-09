@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import sysconfig
 import tomllib
 from dataclasses import replace
@@ -205,9 +206,11 @@ def test_fixed_texts_are_hash_checked_and_tied_to_the_target_version(
     tmp_path: Path,
 ) -> None:
     original = make_licence_notices.FIXED_MANIFEST
-    text = original.read_text(encoding="utf-8").replace(
-        'versions = ["6.11.2"]', 'versions = ["0.0.0"]', 1
-    )
+    source = original.read_text(encoding="utf-8")
+    # Die erste Versionsliste der Tabelle, gleich welche Fassung sie gerade nennt.
+    first = re.compile(r"^versions = \[[^\]]*\]$", re.MULTILINE)
+    text = first.sub('versions = ["0.0.0"]', source, count=1)
+    assert text != source
     temporary = tmp_path / "third_party_licenses.invalid.toml"
     temporary.write_text(text, encoding="utf-8")
     monkeypatch.setattr(make_licence_notices, "FIXED_MANIFEST", temporary)

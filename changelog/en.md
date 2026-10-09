@@ -19,6 +19,7 @@ it into `website/version.json`.
 
 ### Operation and system
 
+- On the Mac, Solidon now needs macOS 14 or later. Every Mac from 2018 on can install it for free.
 - Solidon now starts on Intel Macs with macOS 26. Version 0.5.3 hung there at startup.
 - On the Mac, *Cancel* stops a running answer from the local model at once.
 - On the Mac, Return opens the selected entry on the start screen, in *Search functions* and in the report.

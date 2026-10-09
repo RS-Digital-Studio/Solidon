@@ -44,6 +44,7 @@ Nutzen da und sonst nichts.
 
 ### Bedienung und System
 
+- Am Mac braucht Solidon jetzt macOS 14 oder neuer. Jeder Mac ab 2018 kann es kostenlos installieren.
 - Auf Intel-Macs mit macOS 26 startet Solidon jetzt. Version 0.5.3 blieb dort beim Start hängen.
 - Am Mac bricht *Abbrechen* eine laufende Antwort des lokalen Modells sofort ab.
 - Am Mac öffnet Return den gewählten Eintrag im Startbildschirm, in *Funktion suchen* und im Prüfbericht.
