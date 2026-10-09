@@ -10217,6 +10217,50 @@ def test_an_empty_choice_expires_when_the_printer_is_created_in_the_slicer(
     assert renewed.current()
 
 
+def test_a_3mf_export_searches_the_machine_model_once(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """RM-670: Die Grundlage entsteht je Export viermal — für die Datei, die
+    Befunde, den Stützfuß und die Platte —, und jedes Mal suchte
+    ``machine_model`` rekursiv im ganzen Bestand nach der Modelldatei. Am
+    ElegooSlicer war das rund die Hälfte der Rechenzeit eines Exports. Im
+    Lesedurchgang des Exports geschieht die Suche jetzt einmal."""
+    from app.core import tools
+    from app.core.export import slicer_profiles
+
+    executable = cc2_stock(tmp_path)
+    monkeypatch.setattr(tools, "slicer_program", lambda: executable)
+    profile = profiles.make_profile("centauri-carbon-2", "pla")
+    chosen = _foundation_choice(profile)
+    assert chosen.setup is not None
+    asked: list[object] = []
+    searched: list[object] = []
+    for name, calls in (("machine_model", asked), ("_machine_model_in", searched)):
+        original = getattr(slicer_profiles, name)
+
+        def counted(*args: Any, original: Any = original, calls: list[object] = calls) -> Any:
+            calls.append(args[1])
+            return original(*args)
+
+        monkeypatch.setattr(slicer_profiles, name, counted)
+    worker = preflight_main._ExportWorker(
+        [_cube_object()],
+        tmp_path / "modell.3mf",
+        "3mf",
+        profile=profile,
+        sources={},
+        settings=print_settings.resolve(profile),
+        ui_settings=UiSettings(),
+        material="pla",
+        chosen=chosen,
+    )
+
+    worker._assembly()
+
+    assert len(asked) > 1, "mehrere Fragen je Export — sonst prüfte der Test nichts"
+    assert searched == ["Elegoo Centauri Carbon 2"], "gesucht wird einmal"
+
+
 def test_the_export_hands_a_renewed_choice_back_to_the_window(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

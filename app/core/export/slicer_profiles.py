@@ -117,7 +117,8 @@ def single_read() -> Iterator[None]:
     um (:data:`ProfileIndexes`). Ausdrücklich übergebene Indizes und Dokumente
     gehen vor; verschachtelt gilt der äußere Durchgang. Die Signatur des
     gemerkten Bestands (:func:`_holding_signature`) erhebt ein Durchgang
-    einmal je Slicer.
+    einmal je Slicer, die Modelldatei einer Maschine (:func:`machine_model`)
+    einmal je Maschine.
     """
     if getattr(_SINGLE_READ, "documents", None) is not None:
         yield
@@ -126,6 +127,7 @@ def single_read() -> Iterator[None]:
     _SINGLE_READ.indexes = {}
     _SINGLE_READ.signatures = {}
     _SINGLE_READ.listings = {}
+    _SINGLE_READ.models = {}
     try:
         yield
     finally:
@@ -133,6 +135,7 @@ def single_read() -> Iterator[None]:
         _SINGLE_READ.indexes = None
         _SINGLE_READ.signatures = None
         _SINGLE_READ.listings = None
+        _SINGLE_READ.models = None
 
 
 def _json_files(root: Path) -> list[Path]:
@@ -4683,9 +4686,30 @@ def machine_model(
     Eine eigene Vorlage liegt unter ``user/``, das Modell ihres Druckers beim
     Hersteller. Gesucht nur neben der Vorlage, fand Solidon für „Mein P1S" keine
     Standardplatte und riet die glatte (Review Stufe A+B, R4).
+
+    **Im Lesedurchgang einmal je Maschine** (:func:`single_read`): Die Suche
+    im Bestand läuft rekursiv über alle Herstellerordner, und ein 3MF-Export
+    fragte viermal — je Grundlage für Datei, Befunde, Stützfuß und Platte. Am
+    ElegooSlicer war das rund die Hälfte seiner Rechenzeit (RM-670).
     """
     if not model_name:
         return {}
+    shared: dict[tuple[Path, str, tuple[Path, ...]], dict[str, Any]] | None = getattr(
+        _SINGLE_READ, "models", None
+    )
+    key = (machine_file, model_name, tuple(roots))
+    if shared is not None and key in shared:
+        return shared[key]
+    found = _machine_model_in(machine_file, model_name, roots)
+    if shared is not None:
+        shared[key] = found
+    return found
+
+
+def _machine_model_in(
+    machine_file: Path, model_name: str, roots: tuple[Path, ...]
+) -> dict[str, Any]:
+    """:func:`machine_model` ohne den Lesedurchgang."""
     beside = _machine_model_beside(machine_file, model_name)
     if beside:
         return beside

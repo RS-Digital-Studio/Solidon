@@ -95,7 +95,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-541 — Der Skizzenlöser landet auf dem Intel-Mac im anderen Zweig einer Winkelbedingung](#rm-541) | Geometrie, Erkennung und Druckvorbereitung | Gefunden mit RM-531 (06.10.): 135° statt 45° unter macOS Intel; offen die Rechnung in Verschiebungen und ihre Wirkung auf unterbestimmte Skizzen |
 | [RM-542 — Die fünf offenen Entscheidungen der Erstkonfiguration](#rm-542) | Geometrie, Erkennung und Druckvorbereitung | Gefunden beim Umräumen der Konzepte (RM-099, 06.10.): nur im Konzept geführt; offen der Abgleich mit RM-281 und Roberts Entscheidung |
 | [RM-568 — Merkmalerkennung und die übrigen langen Wege schneller machen](#rm-568) | Geometrie, Erkennung und Druckvorbereitung | Selbstschnittsuche, Zuordnung, Ringvereinfachung, 3MF und gemerkte Zuordnungsschritte gebaut (Paket L, 08./09.10.); offen: Kandidatensuche der Selbstschnitte, örtliche Neuerkennung nach Booleschen Operationen |
-| [RM-670 — Jeder 3MF-Export sucht den Slicer und liest dessen Profilbündel neu](#rm-670) | Geometrie, Erkennung und Druckvorbereitung | Gebaut (Merker, Vorwärmen, ein Lesedurchgang); offen ist die Abnahme mit Orca, PrusaSlicer und Cura am Fenster |
+| [RM-670 — Jeder 3MF-Export sucht den Slicer und liest dessen Profilbündel neu](#rm-670) | Geometrie, Erkennung und Druckvorbereitung | Gebaut, Kernabnahme gemessen; offen: der erste 3MF-Export der Orca-Familie und von PrusaSlicer bis 0,6 s über STL (Namensindizes je Export), die Wandzeit am Fenster |
 | [RM-671 — *Weich verschmelzen* liefert ein splittriges Netz, und *Dreiecke angleichen* hält die Kantenlänge nicht](#rm-671) | Geometrie, Erkennung und Druckvorbereitung | In Arbeit: Claude (Worktree `F:/solidon-claude-f`). Regression seit v0.4.4: Splitter unter 10° 2,9 → 11,8 %, nach dem Angleichen 30 % und doppelte Kantenlänge |
 | [RM-672 — Laden gleich nach dem Start dauert doppelt so lang, und unter Fremdlast hungert der Hilfsprozess das Laden aus](#rm-672) | Geometrie, Erkennung und Druckvorbereitung | Seit v0.5.1: sofortiges Öffnen 3,0 → 6–7 s; unter Fremdlast vor RM-380 gemessen 150 s statt 15 s, die Rechnung läuft weiter zurückgestellt |
 | [RM-673 — Eine Bohrung mit neuer Richtung: die Kerne schneiden verschieden, der exakte warnt falsch, und das Verdoppeln hat keinen Test](#rm-673) | Geometrie, Erkennung und Druckvorbereitung | Netz dreht starr und meldet `no_longer_through`, exakt bohrt durch und meldet `mouth_covered` |
@@ -3255,18 +3255,25 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
 
 - [ ] **RM-670 — Jeder 3MF-Export sucht den Slicer und liest dessen Profilbündel neu.**
   Gebaut (Archiv, RM-670 Teil): Bestand je Slicer gemerkt mit Signatur, Programmsuche gemerkt,
-  Vorwärmen nach dem Start, ein Lesedurchgang je Export; die Vorwahl des Hauptfensters trägt den
-  Stand ihres Bestands, auch leer, und übernimmt, was ein Export neu herleitet. **Offen ist die
-  Abnahme:** mit Orca, PrusaSlicer und Cura je ein Quader, die Figur aus Weg 4 und ein
-  Beispielprojekt am echten Fenster: zweiter 3MF-Export unter 0,5 s, erster höchstens 0,2 s über dem STL-Export;
-  die Maschinenbefunde beim *Slicen* unverändert (Tests über den echten Exportweg); ein im
-  Slicer neu angelegtes Druckerprofil kennt der nächste Export. Bauplan §29, §31. Am ElegooSlicer
-  (Würfel, ohne Fenster) liegt der zweite Export bei 0,39–0,52 s CPU, Ausreißer bis 0,77, unter
-  Fremdlast — die Schwelle also knapp. Die Restkosten liegen im wiederholten Durchsuchen der Profilordner:
-  `manufacturer.base_settings` läuft je Export viermal (Datei, `foundation_findings`,
-  `support_foot_for`, `project_settings`), jedes Mal mit `machine_model` (rekursives `glob`,
-  im Profil rund die Hälfte der Zeit), dazu `_names_in` je Art. Belege:
-  `F:\solidon-review-reports\regression-0.5.2\weg2\befunde.md` (W2-1), `weg4\befunde.md` (W4-2).
+  Vorwärmen nach dem Start, ein Lesedurchgang je Export samt einer Suche nach der Modelldatei;
+  die Vorwahl des Hauptfensters trägt den Stand ihres Bestands, auch leer, und übernimmt, was
+  ein Export neu herleitet; ein im Slicer angelegter Drucker erreicht den nächsten Export.
+  **Abnahme als Kernmessung** (09.10.2026, Roberts Slicer, Rechner unter Fremdlast, CPU-Zeit,
+  ohne Fenster; Würfel, Figur aus Weg 4, `dose-mit-deckel.p3d`): zweiter 3MF-Export bei
+  ElegooSlicer, OrcaSlicer und PrusaSlicer für Würfel und Figur 0,20–0,36 s, für die Dose
+  0,44–0,56 s; Cura 0,02–0,41 s. **Offen:**
+  (a) Der erste 3MF-Export nach dem Vorwärmen liegt bei der Orca-Familie und PrusaSlicer
+  0,16–0,61 s über dem STL-Export (Ziel höchstens 0,2 s), die Dose auch beim zweiten um 0,5 s.
+  Je Export entstehen die Namensindizes der Erbketten neu (`_names_in`, dreimal je rund 0,08 s),
+  dazu die Suche nach der Modelldatei und die Signatur. Hebel: Indizes und Modelldatei wie den
+  Bestand unter dessen Signatur über den Export hinaus halten (die Warnung an
+  `ProfileIndexes` gilt für ungeprüftes Halten). Bei Cura kostet das Schreiben der Dose selbst
+  rund 0,2 s.
+  (b) Am echten Fenster: Wandzeit des ersten Exports mit Vorwärmen und Auswertung daneben.
+  (c) Die Maschinenbefunde beim *Slicen* unverändert: `test_real_slicers.py` (`slicer`-Marker)
+  beim Release.
+  Bauplan §29, §31. Belege: `F:\solidon-review-reports\regression-0.5.2\weg2\befunde.md` (W2-1),
+  `weg4\befunde.md` (W4-2).
 
 <a id="rm-671"></a>
 
