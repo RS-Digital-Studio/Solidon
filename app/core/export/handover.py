@@ -1347,6 +1347,8 @@ def object_keys(
     if native is not None:
         written.update(_speed_roles(native, written, flavour, program=program))
         written.update(_acceleration_roles(native, written, flavour, applied))
+        if flavour == "orca":
+            written.update(tree_over_hybrid(native, applied.support.style, written))
         if flavour == "orca" and profile is not None and "enable_support" in written:
             # Schaltet erst das Teil Stützen ein, prüft der Slicer seine Bäume
             # mit den Werten der Platte (:func:`organic_tree_fitted`).
@@ -1650,6 +1652,23 @@ def asked_for_contact(
     for path in sorted(separate | (per_part & {"support.style"})):
         asking = with_path(asking, path, read_path(base, path))
     return separate, asking
+
+
+def style_per_part(flavour: SlicerFlavour | None, program: str = "") -> bool:
+    """Bekommt jedes Teil seine eigene Stützart, samt Art (RM-584)?
+
+    In der Orca-Familie und bei PrusaSlicer ja, wo das Programm sie je Objekt
+    liest (:func:`_part_paths`). Cura schaltet Stützen je Netz, die Art gilt der
+    Platte (:func:`cura_takes_whole`). Wo sie je Teil geht, führt der
+    Druckdialog Gitter und Baum zweier Körper nicht zu Hybrid zusammen: Die
+    Datei bekäme dafür je Teil Gitter und Baum, und die Zeile zeigte, was nicht
+    gedruckt wird.
+    """
+    if flavour is None:
+        return False
+    if flavour == "cura" and not cura_takes_whole("support.style"):
+        return False
+    return "support.style" in _part_paths(flavour, program)
 
 
 def cura_takes_whole(path: str) -> bool:
@@ -2032,7 +2051,7 @@ def _for_supports(written: dict[str, str], settings: PrintSettings, profile: Pro
     tree = settings.support.style == "tree"
     if width:
         # Curas Formel: Der Baum trägt keine Füllung, nur seine Wand
-        # (``support_infill_rate`` 0 beim Baum, ``support_wall_count`` 1).
+        # (``support_infill_rate`` 0 beim Baum, ``support_wall_count``).
         distance = width / density if density > 0.0 and not tree else 0.0
         written["support_line_distance"] = f"{distance:g}"
         # Auf den eben gerechneten Abstand, nicht noch einmal auf die Breite:
@@ -2056,7 +2075,8 @@ def _for_supports(written: dict[str, str], settings: PrintSettings, profile: Pro
         # Die Stütze wächst um eine Bahnbreite plus Curas festen Zuschlag —
         # beim Baum um nichts.
         written["support_offset"] = "0" if tree else f"{width + _SUPPORT_GROWTH:g}"
-        written["support_wall_count"] = "1" if tree else "0"
+        # Beim Baum die Wände der Stämme (RM-584), normale Stütze ohne Wand.
+        written["support_wall_count"] = str(settings.support.tree_walls) if tree else "0"
     # Krümel unter 2 mm² bekommen keine eigene Stütze (Creality in Cura).
     written["minimum_support_area"] = f"{_MINIMUM_SUPPORT_AREA:g}"
 
@@ -3368,6 +3388,28 @@ def tower_cause(
 #: ``tree_strong`` planen eigene Stützebenen (``plan_layer_heights``).
 _ORGANIC_ORCA_STYLES: Final = frozenset({"", "default", "organic"})
 
+#: Der Hybridstil der Orca-Familie: Bäume an den Details, normale Stütze unter
+#: großen flachen Decken (RM-584).
+_HYBRID_ORCA_STYLE: Final = "tree_hybrid"
+
+
+def tree_over_hybrid(
+    native: Mapping[str, object], style: str, written: Mapping[str, str]
+) -> dict[str, str]:
+    """Ein gewählter Baum druckt als Baum, auch über einem Hybridprozess (RM-584).
+
+    Solidon schreibt ``support_style`` nur für Hybrid; die übrigen Arten lassen
+    den Stil des Herstellers. Über einem Prozess mit ``tree_hybrid`` liest die
+    Grundlage Hybrid (``manufacturer._support_style``), und wer dort Baum
+    wählte, bekam ohne Stil wieder Hybrid — der Dialog zeigte, was nicht
+    gedruckt wurde (Konzept Herstellerprofil, Entscheidung H). Dann geht
+    ``default`` hinaus, beim Baum organisch (:data:`_ORGANIC_ORCA_STYLES`).
+    Gefragt nur, wo die Stützart geschrieben wird (``support_type``)."""
+    if style != "tree" or "support_type" not in written or "support_style" in written:
+        return {}
+    native_style = str(_printed(native.get("support_style", ""))).strip().casefold()
+    return {"support_style": "default"} if native_style == _HYBRID_ORCA_STYLE else {}
+
 
 def organic_styles(
     setup: SlicerSetup | None,
@@ -3414,10 +3456,62 @@ def organic_styles(
         return frozenset(styles)
     native = _native_process(setup)
     style = str(_printed(native.get("support_style", ""))).strip().casefold()
+    # Über einem Hybridprozess schreibt ein gewählter Baum ``default``
+    # (:func:`tree_over_hybrid`), „automatisch“ bleibt Hybrid.
+    if style == _HYBRID_ORCA_STYLE:
+        return frozenset({"tree"})
     if style not in _ORGANIC_ORCA_STYLES:
         return frozenset()
     kind = str(_printed(native.get("support_type", ""))).strip()
     return frozenset({"tree", "auto"} if kind.startswith("tree") else {"tree"})
+
+
+def tree_styles(
+    setup: SlicerSetup | None,
+    profile: Profile | None = None,
+    program: str = "",
+    *,
+    flavour: SlicerFlavour | None = None,
+) -> frozenset[str] | None:
+    """Welche Stützarten Solidons dieses Programm als Bäume druckt (RM-584) —
+    organisch, schlank, kräftig oder als Hybrid; ``None`` ohne Programm.
+
+    Curas Antwort hängt an keinem Bestand — ``support_structure`` kennt nur
+    ``tree`` und ``normal`` —, sie gilt deshalb auch ohne gefundenes Programm,
+    wenn die Datei für Cura geschrieben wird (``flavour``). Sonst schlug der Rat
+    dort Hybrid vor (Nachprüfung RM-584, N1).
+
+    Der Rat fragt hier, ob „automatisch“ Bäume heißt — nur dann hängt eine
+    große flache Decke darunter zwischen Baumspitzen durch, und Gitter oder
+    Hybrid lohnt —, und ob die Wände der Bäume etwas drucken. Eine Art, die das
+    Programm ersetzt (:data:`slicer_keys.NOT_OFFERED_BY_PROGRAM`), zählt mit
+    ihrem Ersatz: Hybrid ist bei PrusaSlicer und Cura Gitter, SuperSlicer kennt
+    keine Bäume. „Automatisch“ fragt den Herstellerprozess
+    (:func:`manufacturer.auto_prints_trees`, wie das Zeitmodell); Cura schreibt
+    dafür ``normal``, PrusaSlicer ohne Bündel seine Vorgabe ``grid``. Lässt
+    sich der Prozess der Orca-Familie nicht lesen, zählt „automatisch“ als
+    Baum: Ohne Auskunft bleibt der Rat vorsichtig, wie ohne Programm.
+    """
+    if (setup.flavour if setup is not None else flavour) == "cura":
+        return frozenset({"tree"})
+    if setup is None or setup.flavour not in ("orca", "prusa"):
+        return None
+    program = program or slicer_keys.program_of(setup.executable)
+    styles = {
+        style
+        for style in ("tree", "hybrid")
+        if slicer_keys.substitute("support.style", style, program) is None
+    }
+    if setup.flavour == "orca":
+        native = _native_process(setup)
+        if not native or manufacturer.auto_prints_trees(native, "orca"):
+            styles.add("auto")
+    elif setup.flavour == "prusa":
+        style = _prusa_process_style(setup, profile) if profile is not None else ""
+        chosen = style or manufacturer.prusa_defaults(program).get("support_material_style", "")
+        if manufacturer.auto_prints_trees({"support_material_style": chosen}, "prusa"):
+            styles.add("auto")
+    return frozenset(styles)
 
 
 def _prusa_process_style(setup: SlicerSetup, profile: Profile) -> str:
@@ -3431,17 +3525,47 @@ def _prusa_process_style(setup: SlicerSetup, profile: Profile) -> str:
     return str(chain.values.get("support_material_style", "")).strip().casefold()
 
 
-def ignored_under_trees(style: str, organic: Collection[str], program: str) -> frozenset[str]:
+def ignored_under_trees(
+    style: str, organic: Collection[str], program: str, *, hollow: bool = False
+) -> frozenset[str]:
     """Pfade, die dieses Programm unter Bäumen nicht druckt
     (:data:`slicer_keys.IGNORED_UNDER_TREES_BY_PROGRAM`) — leer, wo die Stützart
     ``style``, mit der das Teil druckt (:func:`advise.printed_style`), keine
     organischen Bäume sind (``organic``, :func:`organic_styles`). Ein Vorschlag
     darauf änderte nichts am Druck. Druckdialog und Export fragen hier je Körper
-    (RM-622)."""
+    (RM-622). Hohle Bäume (``hollow``, :func:`hollow_trees`) bestehen aus ihren
+    Wänden, und die Wandzahl wirkt (RM-584)."""
     ignored = slicer_keys.IGNORED_UNDER_TREES_BY_PROGRAM.get(program, frozenset())
     if not ignored or style not in organic:
         return frozenset()
-    return ignored
+    return ignored - {"support.tree_walls"} if hollow else ignored
+
+
+#: Die Grundmuster, unter denen die Orca-Familie organische Bäume hohl druckt:
+#: ``default`` heißt beim Baum hohl, ein fehlender Schlüssel ebenso.
+_HOLLOW_TREE_PATTERNS: Final = frozenset({"", "default", "hollow"})
+
+
+def hollow_trees(setup: SlicerSetup | None) -> bool:
+    """Druckt der Herstellerprozess organische Bäume hohl, nur aus Wänden (RM-584)?
+
+    Dann wirkt die Wandzahl auch unter organischen Bäumen. Gemessen am
+    ElegooSlicer an einem Turm von 40 mm mit Insel (09.10.2026): Der Prozess
+    des Neptune 4 (``support_base_pattern`` ``default``) druckte mit zwei
+    Wänden 13 234 statt 12 211 Bewegungen, auch ohne eigene Stützschichthöhe.
+    Derselbe Prozess mit ``rectilinear`` und der des Centauri Carbon 2
+    (``rectilinear``) druckten mit einer und zwei Wänden denselben G-Code.
+    Solidon schreibt das Muster nur für Gitter und Hybrid. Ohne lesbaren
+    Prozess ``False``, wie am Centauri Carbon 2 gemessen.
+
+    **Organisch bleiben sie** (:func:`organic_styles`): Am Neptune 4 druckten
+    0,28 mm Abstand oben bei 0,2 mm Schicht dieselben Bewegungen wie 0,2 mm,
+    0,4 mm andere — der Slicer rundet auf ganze Schichten wie unter gefüllten
+    Bäumen, auch mit eigener Stützschichthöhe.
+    """
+    native = _native_process(setup)
+    pattern = str(_printed(native.get("support_base_pattern", ""))).strip().casefold()
+    return bool(native) and pattern in _HOLLOW_TREE_PATTERNS
 
 
 def support_layers_findings(setup: SlicerSetup | None, free: bool) -> list[Finding]:
@@ -4553,6 +4677,7 @@ def _orca_process(
             # eine fehlende Fußkorrektur seine Rücklesung verhindert.
             own.pop("brim_object_gap")
     document.update(own)
+    document.update(tree_over_hybrid(document, settings.support.style, own))
     if base is not None:
         document.update(_speed_roles(document, own, "orca"))
         document.update(_acceleration_roles(document, own, "orca", settings, foundation))
