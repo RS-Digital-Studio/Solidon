@@ -25,7 +25,7 @@ import struct
 import threading
 import weakref
 from collections import Counter, OrderedDict
-from collections.abc import Callable, Iterator, Mapping, Sequence
+from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass, field, replace
@@ -6674,38 +6674,84 @@ def _simplified_ring(outline: np.ndarray, tolerance: float) -> np.ndarray:
     count = len(outline)
     if count <= 3:
         return outline
-    before = np.roll(np.arange(count), 1)
-    after = np.roll(np.arange(count), -1)
-    kept = np.ones(count, dtype=bool)
+    # **Ein Haufen statt eines Durchgangs über alle Ecken je Schritt, und die
+    # Lücken in Python-Zahlen** (RM-568). Der erste Weg suchte je
+    # weggelassener Ecke das Minimum über den ganzen Ring und rechnete jede
+    # Lücke mit fünf NumPy-Aufrufen über eine Handvoll Punkte — am Eiffelturm
+    # 182 532 Lücken und 10,1 s der Erkennung. Dieselben Rechenschritte in
+    # derselben Reihenfolge (:func:`_gap_distance`), derselbe Gleichstand:
+    # kleinste Kosten, dann der lexikographisch kleinere Punkt, dann die
+    # kleinere Nummer.
+    xs: list[float] = outline[:, 0].tolist()
+    ys: list[float] = outline[:, 1].tolist()
+    before = [(index - 1) % count for index in range(count)]
+    after = [(index + 1) % count for index in range(count)]
+    kept = [True] * count
+    costs: list[float] = _segment_distances(
+        outline, outline[np.asarray(before)], outline[np.asarray(after)]
+    ).tolist()
+    version = [0] * count
+    heap = [(costs[index], xs[index], ys[index], index, 0) for index in range(count)]
+    heapq.heapify(heap)
 
     def gap_cost(corner: int) -> float:
         """Der größte Abstand der Ecken zwischen den Nachbarn von ``corner`` von deren Sehne."""
-        start, end = int(before[corner]), int(after[corner])
+        start, end = before[corner], after[corner]
         inside = (
-            np.arange(start + 1, end)
+            range(start + 1, end)
             if start < end
-            else np.r_[np.arange(start + 1, count), np.arange(0, end)]
+            else itertools.chain(range(start + 1, count), range(end))
         )
-        return float(_segment_distances(outline[inside], outline[start], outline[end]).max())
+        return _gap_distance(xs, ys, inside, start, end)
 
-    costs = _segment_distances(outline, outline[before], outline[after])
+    def update(corner: int) -> None:
+        costs[corner] = gap_cost(corner)
+        version[corner] += 1
+        heapq.heappush(heap, (costs[corner], xs[corner], ys[corner], corner, version[corner]))
+
     remaining = count
     while remaining > 3:
-        masked = np.where(kept, costs, np.inf)
-        lowest = float(masked.min())
+        lowest, _x, _y, corner, seen = heapq.heappop(heap)
+        while not kept[corner] or seen != version[corner]:
+            lowest, _x, _y, corner, seen = heapq.heappop(heap)
         if lowest > tolerance:
             break
-        # Bitgleich und nicht „nahe“: Gefragt ist, welche von exakt gleich
-        # teuren Ecken zuerst geht — kein Vergleich zweier Maße (Regel 6).
-        tied = np.flatnonzero(masked == lowest)
-        corner = int(tied[np.lexsort(outline[tied].T[::-1])[0]])
         kept[corner] = False
         remaining -= 1
-        start, end = int(before[corner]), int(after[corner])
+        start, end = before[corner], after[corner]
         after[start], before[end] = end, start
-        costs[start] = gap_cost(start)
-        costs[end] = gap_cost(end)
-    return np.asarray(outline[kept], dtype=float)
+        update(start)
+        update(end)
+    return np.asarray(outline[np.asarray(kept)], dtype=float)
+
+
+def _gap_distance(
+    xs: Sequence[float], ys: Sequence[float], inside: Iterable[int], start: int, end: int
+) -> float:
+    """Der größte Abstand der Punkte ``inside`` von der Strecke von ``start`` nach ``end``.
+
+    Rechenschritt für Rechenschritt :func:`_segment_distances` für eine
+    gemeinsame Strecke, in Python-Zahlen: Produkt und Summe über zwei
+    Spalten, dieselbe Untergrenze des Nenners, dieselbe Klammer auf null bis
+    eins, die Wurzel aus der Quadratsumme — bitgleich, und für eine Handvoll
+    Punkte ohne fünf NumPy-Aufrufe.
+    """
+    start_x, start_y = xs[start], ys[start]
+    along_x, along_y = xs[end] - start_x, ys[end] - start_y
+    squares = along_x * along_x + along_y * along_y
+    floor = EPS_GEOM * EPS_GEOM
+    denominator = max(floor, squares)
+    largest = -math.inf
+    for index in inside:
+        point_x, point_y = xs[index], ys[index]
+        share = ((point_x - start_x) * along_x + (point_y - start_y) * along_y) / denominator
+        share = share if math.isnan(share) else min(max(share, 0.0), 1.0)
+        off_x = point_x - (start_x + share * along_x)
+        off_y = point_y - (start_y + share * along_y)
+        distance = math.sqrt(off_x * off_x + off_y * off_y)
+        if distance > largest:
+            largest = distance
+    return largest
 
 
 def _segment_distances(points: np.ndarray, starts: np.ndarray, ends: np.ndarray) -> np.ndarray:
@@ -7351,8 +7397,9 @@ _SUPPORT_CACHE: dict[str, OrderedDict[tuple[int, bytes, Any, int], Any]] = {}
 #: hätte den Merker umsonst gehabt (gemessen am 21.09.2026: 218 Streifen-
 #: fragen an der Lochplatte verdrängten die Facettenantwort zwischen ihren
 #: zwei Lesern). Die Grenzen gelten über alle Körper, damit auch viele
-#: lebende Körper — der Ergebniscache hält bis zu zwanzig Millionen Dreiecke
-#: — zusammen nicht mehr als acht Lesungen halten.
+#: lebende Körper — der Ergebniscache hält bis zu einem Achtel des
+#: Arbeitsspeichers (``scene.cache.MEMORY_SHARE``) — zusammen nicht mehr als
+#: acht Lesungen halten.
 SUPPORT_CACHE_LIMIT = 8
 CACHE_LIMIT_PER_QUESTION = 4096
 
@@ -7379,6 +7426,8 @@ WHOLE_BODY_ANSWERS: Final[frozenset[str]] = frozenset(
         "prepared_surface",
         "surfaces_near",
         "radii_near",
+        # Teil und Hüllquader je Hohlraum: ein Feld je Dreieck (Review G, F5).
+        "cavity_boxes",
     }
 )
 
@@ -7447,6 +7496,9 @@ SHARED_ANSWERS: Final[frozenset[str]] = frozenset(
         "hole_is_clear",
         "own_part_bore_clear",
         "hole_has_separate_contents",
+        "sticks_in_another_bore",
+        "cavity_boxes",
+        "thread_walls",
         "has_own_body",
         "moved_twin",
         "voids",
@@ -7551,6 +7603,31 @@ def _memory_of(body: trimesh.Trimesh, lineage: _Lineage | None = None) -> _BodyM
     # Modulvariablen sind dann womöglich schon abgebaut.
     farewell.atexit = False
     return memory
+
+
+def held_answers(body: trimesh.Trimesh) -> list[Any]:
+    """Was die Merker dieses Moduls für diesen Körper halten — zum Zählen, nicht zum Lesen.
+
+    Die gebundenen Antworten, die seiner Abstammung und die über die
+    Körpergrenze, die sie mithält. Sie gehen mit dem Körper (:func:`_forget_body`)
+    und wiegen deshalb mit dem, der ihn hält: Am Spiderman hielten acht
+    Schritte im Ergebniscache so über eine Milliarde Byte, die kein Feld des
+    Netzes zeigte (RM-567, 08.10.2026).
+    """
+    with _MEMORY_LOCK:
+        memory = _MEMORIES.get(id(body))
+        if memory is None or memory.ref() is not body:
+            return []
+        found: list[Any] = []
+        for name, key in (*memory.answers, *memory.lineage.answers):
+            answers = _SUPPORT_CACHE.get(name)
+            if answers is not None and key in answers:
+                found.append(answers[key])
+        for name, geometry_key in memory.lineage.geometric:
+            shared = _BY_GEOMETRY.get(name)
+            if shared is not None and geometry_key in shared:
+                found.append(shared[geometry_key])
+        return found
 
 
 def _forget_body(key: int, memory: _BodyMemory) -> None:
@@ -9684,7 +9761,9 @@ def _fit_circle(points: np.ndarray) -> tuple[np.ndarray, float]:
     # Geometrietoleranz: Maschinengenauigkeit mal Systemgröße und Spaltennorm.
     rank_limit = np.finfo(float).eps * max(matrix.shape) * math.sqrt(len(points))
     for column in range(3):
-        norms = [math.hypot(*matrix[column:, index]) for index in range(column, 3)]
+        # Als Python-Zahlen entpackt: dieselben Werte, ohne je Eintrag ein
+        # NumPy-Skalar anzulegen (RM-568).
+        norms = [math.hypot(*matrix[column:, index].tolist()) for index in range(column, 3)]
         pivot = column + int(np.argmax(norms))
         length = norms[pivot - column]
         if length <= rank_limit:
@@ -9694,7 +9773,7 @@ def _fit_circle(points: np.ndarray) -> tuple[np.ndarray, float]:
         direction = matrix[column:, column].copy()
         diagonal = -math.copysign(length, float(direction[0]))
         direction[0] -= diagonal
-        direction /= math.hypot(*direction)
+        direction /= math.hypot(*direction.tolist())
         for remaining in range(column + 1, 3):
             projection = 2.0 * math.fsum((direction * matrix[column:, remaining]).tolist())
             matrix[column:, remaining] -= projection * direction
@@ -11317,9 +11396,12 @@ def _tangential_cylinders(
             # Je Ring einmal entdoppelt: Ein Dreieck, das zwei Frontdreiecke
             # zugleich erreichen, stünde sonst zweimal in der nächsten Front,
             # und seine Nachfolger vervielfachten sich von Ring zu Ring.
+            # Erst sieben, dann entdoppeln: Die meisten Nachbarn einer Front
+            # sind schon gesehen, und das Sortieren über die kleine Rest-
+            # menge gibt dieselben Dreiecke in derselben Folge (RM-568).
             around = neighbours[front].ravel()
-            around = np.unique(around[around >= 0])
-            around = around[member[around] & ~claimed[around] & (seen[around] != floods)]
+            around = around[around >= 0]
+            around = np.unique(around[member[around] & ~claimed[around] & (seen[around] != floods)])
             seen[around] = floods
             if not len(around):
                 break
@@ -14181,6 +14263,48 @@ def _point_inside_shell(
             continue
         return bool(np.count_nonzero(ahead > 0.0) % 2 == 1)
     return None
+
+
+def point_in_shell(
+    point: np.ndarray,
+    triangles: np.ndarray,
+    bounds: tuple[np.ndarray, np.ndarray],
+    *,
+    undecided: bool,
+    axis: np.ndarray | None = None,
+) -> bool:
+    """Ob ``point`` in der Schale liegt — unentschieden eine Facettenhöhe daneben nachgefragt.
+
+    :func:`_point_inside_shell` kann an geteilten Kanten und Ecken nicht zählen:
+    Auf der Achse eines Drehkörpers oder eines mittig gesetzten Bausteins liegt
+    jeder Punkt über solchen Kanten. Dann fragt es
+    :data:`~app.core.units.MAX_FACET_SAG` daneben nach — quer zu ``axis``, wo
+    der Aufrufer eine Richtung hat, deren Höhe bleiben soll, sonst entlang der
+    Koordinatenachsen. Bleibt es offen, gilt ``undecided``: Der Aufrufer sagt,
+    welcher Irrtum der harmlose ist.
+
+    **Eine Frage, nicht vier** (Nachprüfung G, N-4): ``bore_pin`` wertete
+    unentschieden als Luft, ``parts.ops`` fragte daneben nach, ``_air_above``
+    nahm Material, ``_void_holds`` „darin“ — an der Rastdrehscheibe sagte das
+    Netz deshalb Luft, wo der exakte Kern Material sah.
+    """
+    answer = _point_inside_shell(point, triangles, bounds)
+    if answer is not None:
+        return answer
+    if axis is not None:
+        along = np.asarray(axis, dtype=np.float64)
+        helper = (1.0, 0.0, 0.0) if abs(float(along[0])) < 0.7071067811865476 else (0.0, 1.0, 0.0)
+        across = np.cross(along, np.asarray(helper, dtype=np.float64))
+        across /= float(np.linalg.norm(across, axis=0))
+        beside = np.cross(along, across)
+        offsets: list[np.ndarray] = [across, beside, -across, -beside]
+    else:
+        offsets = [*np.eye(3), *(-np.eye(3))]
+    for offset in offsets:
+        answer = _point_inside_shell(point + offset * units.MAX_FACET_SAG, triangles, bounds)
+        if answer is not None:
+            return answer
+    return undecided
 
 
 def _shells_inside_the_material(

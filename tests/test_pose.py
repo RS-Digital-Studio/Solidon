@@ -652,3 +652,230 @@ def test_a_click_on_the_skin_becomes_a_joint_on_the_axis() -> None:
     assert inside_the_body(mesh, on_top, (1.0, 0.0, 0.0)) == on_top, "streifend bleibt"
     beside = (9.0, 0.0, 10.0)
     assert inside_the_body(mesh, beside, (-1.0, 0.0, 0.0)) == beside, "neben der Haut bleibt"
+
+
+# --- fester Rumpf und Beugen mit der Maus (RM-561) --------------------------------
+
+
+def rod() -> MeshData:
+    """Ein stehender Stab 12 × 12 × 60 mm, fein genug zum Beugen."""
+    body = trimesh.creation.box(extents=(12.0, 12.0, 60.0))
+    body.apply_translation((0.0, 0.0, 30.0))
+    vertices, faces = trimesh.remesh.subdivide_to_size(
+        np.asarray(body.vertices, dtype=float), np.asarray(body.faces, dtype=np.int64), 2.0
+    )
+    fine = trimesh.Trimesh(vertices=vertices, faces=faces, process=False)
+    fine.merge_vertices()
+    return MeshData.of(fine)
+
+
+def upper_bones() -> list[Bone]:
+    """Nur die obere Hälfte trägt Knochen — wie ein Arm ohne Rumpfknochen."""
+    return [
+        Bone(name="oben", head=(0.0, 0.0, 30.0), tail=(0.0, 0.0, 45.0)),
+        Bone(name="spitze", head=(0.0, 0.0, 45.0), tail=(0.0, 0.0, 58.0), parent="oben"),
+    ]
+
+
+def test_what_no_bone_reaches_stays_where_it_is() -> None:
+    """Die verborgene Voraussetzung fällt: Wer nur den oberen Teil mit Knochen
+    versieht und beugt, beugt den oberen Teil. Bis Format 48 hing der Fuß am
+    nächsten Knochen und drehte mit (Gegenprobe ``fixed_rest=False``)."""
+    body = rod()
+    turn = [Pose(bone="oben", angles=(0.0, 30.0, 0.0))]
+    now = posed(body, upper_bones(), turn, fixed_rest=True)
+    then = posed(body, upper_bones(), turn, fixed_rest=False)
+    foot = np.asarray(body.raw.vertices)[:, 2] < 5.0
+
+    still = np.linalg.norm(now.raw.vertices[foot] - body.raw.vertices[foot], axis=1).max()
+    swung = np.linalg.norm(then.raw.vertices[foot] - body.raw.vertices[foot], axis=1).max()
+    assert still < 1e-3, f"der Fuß bleibt stehen: {still:.4f} mm"
+    assert swung > 5.0, f"Gegenprobe: bis Format 48 drehte er mit, {swung:.2f} mm"
+
+
+def test_a_bone_still_carries_its_own_skin() -> None:
+    """Der Rumpf hält nur, was kein Knochen hält: Was in der Reichweite eines
+    Knochens liegt, folgt ihm genau wie bisher."""
+    from app.core.geom.pose import REACH, _closest_on_segment
+
+    body = rod()
+    turn = [Pose(bone="oben", angles=(0.0, 30.0, 0.0))]
+    now = posed(body, upper_bones(), turn, fixed_rest=True)
+    then = posed(body, upper_bones(), turn, fixed_rest=False)
+    points = np.asarray(body.raw.vertices, dtype=float)
+    within = np.zeros(len(points), dtype=bool)
+    for bone in upper_bones():
+        head, tail = np.asarray(bone.head), np.asarray(bone.tail)
+        reach = float(np.linalg.norm(tail - head)) * REACH
+        within |= _closest_on_segment(points, head, tail) <= reach
+    assert within.sum() > 100, "Voraussetzung: die Haut um die Knochen"
+    assert np.abs(now.raw.vertices[within] - then.raw.vertices[within]).max() < 1e-9
+
+
+def test_the_rest_weight_rises_smoothly() -> None:
+    """Zwischen Knochen und Rumpf gleitet die Haut, sie reißt nicht: Kein Eckpunkt
+    springt mehr als die Nachbarn um ihn herum."""
+    from app.core.geom.pose import Skin
+
+    body = rod()
+    skin = Skin(body, upper_bones(), fixed_rest=True)
+    held = skin.field.sum(axis=1)
+    edges = np.asarray(body.raw.edges_unique)
+    jump = np.abs(held[edges[:, 0]] - held[edges[:, 1]]).max()
+    assert held.min() >= 0.0 and held.max() <= 1.0 + 1e-12
+    assert jump < 0.25, f"größter Sprung des Haltens zwischen Nachbarn: {jump:.3f}"
+
+
+def test_the_skin_computes_what_posed_computes() -> None:
+    """Die Vorschau beim Ziehen und die Operation sind dieselbe Rechnung."""
+    from app.core.geom.pose import Skin
+
+    body = rod()
+    angles = {"oben": (0.0, 20.0, 0.0), "spitze": (10.0, 0.0, 0.0)}
+    poses = [Pose(bone=name, angles=turn) for name, turn in angles.items()]
+    skin = Skin(body, upper_bones(), fixed_rest=True)
+    assert np.array_equal(
+        skin.posed(angles).raw.vertices,
+        posed(body, upper_bones(), poses, fixed_rest=True).raw.vertices,
+    )
+
+
+@pytest.mark.parametrize(
+    "angles",
+    [
+        (0.0, 0.0, 0.0),
+        (30.0, 0.0, 0.0),
+        (0.0, -45.0, 0.0),
+        (12.5, 33.0, -70.0),
+        (-120.0, 10.0, 80.0),
+    ],
+)
+def test_angles_read_back_from_their_rotation(angles: tuple[float, float, float]) -> None:
+    from app.core.geom.pose import _angles_of, _rotation
+
+    assert _angles_of(_rotation(angles)) == pytest.approx(angles, abs=0.01)
+
+
+def test_a_fixed_rest_skin_computes_only_what_a_bone_holds() -> None:
+    """Review F3: Mit festem Rumpf hält ein Knochen nur seine Gegend. Gewichte
+    und Stellung rechnen nur dort und sind dieselben Zahlen wie über das ganze
+    Netz; dahinter bleibt jede Ecke bitgleich, wo sie war."""
+    import trimesh
+
+    from app.core.geom import transform
+    from app.core.geom.mesh import MeshData
+    from app.core.geom.pose import REST_FAR, REST_NEAR, Skin, _bone_field, transforms, weights
+    from app.core.types import Bone
+
+    mesh = MeshData.of(trimesh.creation.icosphere(subdivisions=5, radius=50.0))
+    bones = [
+        Bone(name="a", head=(30.0, 0.0, 0.0), tail=(40.0, 0.0, 0.0), parent=""),
+        Bone(name="b", head=(40.0, 0.0, 0.0), tail=(48.0, 0.0, 0.0), parent="a"),
+    ]
+    angles = {"a": (0.0, 20.0, 0.0), "b": (0.0, 0.0, 35.0)}
+    points = np.asarray(mesh.raw.vertices, dtype=float)
+    field, nearest = _bone_field(points, bones)
+    share = np.clip((REST_FAR - nearest) / (REST_FAR - REST_NEAR), 0.0, 1.0)
+    held = share * share * (3.0 - 2.0 * share)
+    total = field.sum(axis=1)
+    whole = field / np.where(total > 0.0, total, 1.0)[:, None] * held[:, None]
+    local = weights(mesh, bones, fixed_rest=True)
+    assert np.array_equal(local, whole)
+    assert 0 < np.count_nonzero(local.any(axis=1)) < len(points) // 4, "nur die Gegend"
+
+    matrices = transforms(bones, angles)
+    moved = np.zeros_like(points)
+    for index, bone in enumerate(bones):
+        moved += transform.moved_points(points, matrices[bone.name]) * whole[:, index][:, None]
+    moved += points * (1.0 - whole.sum(axis=1))[:, None]
+    posed = np.asarray(Skin(mesh, bones, fixed_rest=True).posed(angles).raw.vertices)
+    assert np.array_equal(posed, moved)
+
+
+def test_a_click_on_bent_skin_comes_back_to_rest() -> None:
+    """Review G1: Gebeugte und ruhende Haut haben dieselben Ecken. Ein Punkt
+    auf einem gebeugten Dreieck landet auf demselben Dreieck in Ruhe, und eine
+    Blickrichtung behält ihre Lage zu ihm."""
+    import trimesh
+
+    from app.core.geom.mesh import MeshData
+    from app.core.geom.pose import _about, rest_of_click
+
+    rest = MeshData.of(trimesh.creation.icosphere(subdivisions=3, radius=10.0))
+    turn = _about((0.0, 0.0, 1.0), 40.0)
+    still = np.asarray(rest.raw.vertices, dtype=float)
+    bent_points = np.stack([(turn * row[None, :]).sum(axis=1) for row in still])
+    bent_points = bent_points + np.asarray((5.0, 0.0, 0.0))
+    shown = MeshData.of(trimesh.Trimesh(bent_points, rest.raw.faces, process=False))
+    corners = np.asarray(rest.raw.faces)[17]
+    clicked = bent_points[corners].mean(axis=0)
+    looking = (turn * np.asarray((0.3, -1.0, 0.2))[None, :]).sum(axis=1)
+    found = rest_of_click(rest, shown, tuple(clicked), tuple(looking))
+    assert found is not None
+    place, direction = found
+    assert np.allclose(place, still[corners].mean(axis=0), atol=1e-9)
+    assert np.allclose(direction, (0.3, -1.0, 0.2), atol=1e-9)
+    assert rest_of_click(rest, shown, (100.0, 0.0, 0.0), (0.0, 0.0, 1.0)) is None
+
+
+def test_a_click_searches_only_its_area_with_the_same_answer() -> None:
+    """Review N4: Ein Klick auf die Haut suchte sein Dreieck und den Blick zur
+    Gegenwand über alle Dreiecke (an 1,3 Millionen 2,1 s je Klick). Mit
+    :class:`ClickSurface` rechnet er nur die Dreiecke an den nächsten Ecken und
+    am Strahl — und kommt genau dorthin, wohin die Rechnung über alle kommt."""
+    import trimesh
+
+    from app.core.geom.mesh import MeshData
+    from app.core.geom.pose import ClickSurface, Skin, inside_the_body, rest_of_click
+    from app.core.types import Bone
+
+    mesh = MeshData.of(trimesh.creation.icosphere(subdivisions=5, radius=50.0))
+    bones = [
+        Bone(name="a", head=(0.0, 0.0, -20.0), tail=(0.0, 0.0, 0.0), parent=""),
+        Bone(name="b", head=(0.0, 0.0, 0.0), tail=(0.0, 0.0, 20.0), parent="a"),
+    ]
+    shown = Skin(mesh, bones, fixed_rest=True).posed({"b": (0.0, 25.0, 0.0)})
+    bent = np.asarray(shown.raw.vertices)
+    near, still = ClickSurface(shown), ClickSurface(mesh)
+    checked = 0
+    for face in np.random.default_rng(5).integers(0, len(shown.raw.faces), 25):
+        place = tuple(float(v) for v in bent[shown.raw.faces[face]].mean(axis=0))
+        looking = tuple(float(-v) for v in np.asarray(place) / np.linalg.norm(place))
+        everywhere = rest_of_click(mesh, shown, place, looking)
+        assert rest_of_click(mesh, shown, place, looking, surface=near) == everywhere
+        if everywhere is not None:
+            whole = inside_the_body(mesh, everywhere[0], everywhere[1])
+            assert inside_the_body(mesh, everywhere[0], everywhere[1], surface=still) == whole
+            checked += 1
+    assert checked >= 20
+
+
+def test_a_dragged_turn_is_written_unrounded() -> None:
+    """Review G3 (Regel 6): Ein Zug am Gelenk schreibt die Drehung, die er
+    gezogen hat — nicht auf Hundertstel gerundet. Aus den Winkeln entsteht
+    wieder genau diese Drehung; gerundet wich sie um bis zu 0,005° ab."""
+    from app.core.geom.pose import _about, _rotation, bent
+
+    turned = bent(two_bones(), {}, "upper", (1.0, 2.0, 0.5), 37.3)
+    assert any(abs(value * 100.0 - round(value * 100.0)) > 1e-6 for value in turned)
+    assert np.allclose(_rotation(turned), _about((1.0, 2.0, 0.5), 37.3), atol=1e-12)
+
+
+def test_dragging_a_joint_turns_its_bone_about_the_head_in_the_view() -> None:
+    """Ziehen am Gelenk dreht den Knochen, der dort endet, um seinen Kopf und um
+    die Blickachse; geschrieben werden seine drei Winkel. Mit gebeugtem Elternteil
+    dreht er um den Kopf, wo das Bild ihn zeigt, und die Eltern bleiben."""
+    from app.core.geom.pose import bent, posed_bones
+
+    bones = two_bones()
+    assert bent(bones, {}, "upper", (0.0, 1.0, 0.0), 30.0) == pytest.approx((0.0, 30.0, 0.0))
+
+    angles = {"upper": (0.0, 0.0, 40.0)}
+    before = posed_bones(bones, angles)
+    turned = dict(angles, lower=bent(bones, angles, "lower", (0.0, 0.0, 1.0), 25.0))
+    after = posed_bones(bones, turned)
+    assert np.allclose(after[0], before[0]), "der Elternteil bleibt"
+    head, tail = np.asarray(after[1][0]), np.asarray(after[1][1])
+    assert head == pytest.approx(np.asarray(before[1][0])), "um den eigenen Kopf"
+    direction = math.degrees(math.atan2(tail[1] - head[1], tail[0] - head[0]))
+    assert direction == pytest.approx(65.0, abs=0.05), "40° der Eltern und 25° gezogen"

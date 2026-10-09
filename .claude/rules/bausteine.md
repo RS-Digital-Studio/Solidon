@@ -70,6 +70,37 @@ Bauteil und nimmt nichts weg.
   verschoben kippt er um.
 - **Die Prüfung misst die Richtung**, nicht nur die Berührung: Sie sagt, an
   welchem Ende die Sperrfläche sitzt.
+- **Die Mutternfalle baut nach oben**, die Mutter sitzt im Material: An einer
+  Fläche, mit freier Richtung oder von Hand dort gesetzt, wo knapp über der
+  Stelle Luft liegt, wird sie gespiegelt (`ops._builds_upward_on_a_face`,
+  `_air_above`, RM-591). Gefragt wird knapp darüber, nicht auf halber Höhe
+  des Bausteins. *Von unten eingelegt* führt ihr Schlitz von der Mündung zur
+  Tasche, die Schraube liegt quer; der Einschubweg reicht mindestens über die
+  halbe Eckweite (`feasible`), an einer Bohrung sagt der Schritt ab.
+- **Eine Einführfase wird als solche erklärt** (`build.bore(lead_in=True)`):
+  Sie ist keine Bohrung, in die ein Stift gehört, und die Karte bietet dort
+  keinen an (`perceive.actions.not_offered_at`).
+- **Eine erklärte Durchgangsbohrung endet im Körper und geht durch ihn, sonst
+  heißt sie Sackloch** (`ops._through_bores_in_the_body`, RM-598, RM-631): Das
+  Werkzeug darf über die Form hinausreichen, die Erklärung nicht. Gekürzt wird
+  nur beim bloß abtragenden Baustein, am Träger vor dem Schnitt — die Bohrung
+  eines anbauenden oder seines Aufbaus (`host_add`) liegt in Material, das der
+  Träger noch nicht hat. Ob hinter einem Ende Material liegt, fragt der Körper
+  nach dem Schritt und der Träger davor, bei jedem Baustein; eine eingetragene
+  Tiefe bleibt die Tiefe. Wer hinter einer Wand eingetragener Stärke aufbaut
+  (`host_add`) und eine dickere trifft, sagt es mit `parts.wall_thicker` und
+  öffnet `wall` (`ops._wall_thicker`, RM-633).
+- **Eine Bohrung ohne eigene Tiefe geht durch den ganzen Träger**
+  (`PartSpec.reaches_through`, `ops._reaching_through`, RM-631): Der Baustein
+  baut sie nur über seine Strecke, der Schritt verlängert sie an jedem Ende
+  durch Material, berührende Fugen und die Luft der Bohrung, in der er sitzt,
+  bis zur ersten echten Luft — nie über die Fläche hinaus in einen Spalt
+  (`_run_through`). Nur wo der ganze Rand ihres Querschnitts Material erreicht:
+  Eine Achse in einer Fläche oder ein Loch am Rand zöge sonst eine Rinne; dann
+  sagt es `parts.through_cut_short`. In einer Bohrung muss sie in deren Achse
+  liegen. Ihre Länge ist gemessen, die Kürzung auf der Achse lässt sie aus. Ohne Träger — Katalogbild, Platzierungsgeist,
+  SCAD — zeigt `through.with_shown_bores` sie drei Durchmesser weit, nie aus
+  der Mündung: Sonst läge sie unsichtbar im Baustein (RM-632).
 - **Schräg zur Fläche gesetzt, öffnet er trotzdem bis über sie.** Die Richtung
   bleibt Eingabe; angehoben wird der Deckel der Öffnung
   (`ops._opened_to_the_face`) bis über die **Ebene der Fläche am
@@ -109,6 +140,30 @@ Bausteins (`oberflaeche.md`: „Ein Feld ohne Wirkung steht nicht da").
 `test_an_added_part_has_the_component_count_it_declares` prüft generisch: Ein
 aufgesetzter Baustein verbindet sich mit seinem Träger, und ein Rahmen, der
 das nicht hergibt, gehört nicht in den Katalog.
+
+## Was für sich ein Teil ist, steht frei
+
+`standalone` sagt der Baustein selbst, die eine Quelle für Katalog,
+Erzeuger und Agent: gesetzt, wo er ohne Träger seine Aufgabe erfüllt
+(Kabelclip, Rippe, Standfuß, Mutter), nicht, wo er nur am Träger wirkt
+(Rastnase, Federarm, Lasche, Auge, Nutfeder, Lochwand-Haken) oder nur
+abträgt — Letzteres weist das Register ab. **Eine gewählte Stelle, an die er
+gehört, setzt an, ein gewählter Körper nicht** (`ops.catalog_operation`): Jeder Erzeuger wählt
+seinen Körper, und der zweite Clip hinge sonst am ersten. Ohne Träger gibt es
+nur die aufgesetzte Form; eine abtragende Wahl muss genau ihre Vorgabe als
+aufgesetzte Form übrig lassen, und kein Feld darf an ihr hängen. Seine
+Unterseite liegt auf der Ebene seines Ursprungs (`_on_its_own_bed`); **nur
+ohne Richtung und mit Achse Z ist das das Bett**, und ein Mündungsbaustein
+steht dann kopfüber. Mit Achse X oder einer Richtung dreht diese Ebene mit,
+wie bei jedem Erzeuger zuvor; aufs Bett bringt ihn *Auf das Bett setzen*. Ein alter Erzeugerschritt rechnet gleich, samt Flächenkennungen
+(`test_every_creator_keeps_its_old_placement`). Aus dem Katalog kommt er auf
+eine freie Stelle der Platte (`ops.free_spot_for`). **Den Umriss eines eigenen
+Bausteins rechnet nie der Hauptthread:** Ein Rezept baut dafür seinen ganzen
+Stapel, also öffnet der Dialog mit der Stelle für den Platzhalter (`rough=True`),
+und `_FreeSpotWorker` reicht die echte nach, solange der Kunde die Lage nicht
+geändert hat (`ops.footprint_at_once`).
+`test_every_standalone_part_makes_a_watertight_body_without_a_selection`
+prüft jeden.
 
 ## Was vereinigt wird, kann nur weiter werden
 
@@ -160,20 +215,28 @@ Abdruck des gefahrenen Stands (`parts/range_proof.py`).
   `test_self_intersections.py`).
 - **Der Bereichstest läuft auch in der Anwendung**: `range_check.check` hängt
   am Rezeptdialog, ein Kunde sieht ihn für eigene Rezepte.
-- **Mehr Wahl heißt mehr Bausteine, nicht mehr Ecken**: Über
-  `range_check.MAX_CORNERS` (512) lehnt der Bereichstest ab, bevor er rechnet.
-  Eine Vorlage mit vielen Formen wird ein Baustein je Form mit gemeinsamem
-  Unterbau (`holders.py`: vier Halter, je 256 oder 512 Ecken), keine
-  Formwahl, die das Produkt sprengt.
+- **Zwei Grenzen, je nach Herkunft** (`range_check.corner_limit`): Ein
+  eigener Baustein des Kunden prüft bis `MAX_CORNERS` (512), auf seinem
+  Rechner, und der Dialog nennt vorher Kombinationen und geschätzte Dauer. Die
+  mitgelieferte Bibliothek prüft bis `LIBRARY_MAX_CORNERS` (4096), einmal bei
+  uns; die Grenze richtet sich nach der Rechenzeit des Nachweises (Begründung
+  am Wert). Darüber lehnt der Bereichstest ab, bevor er rechnet. Eine Vorlage
+  mit vielen Formen bleibt ein Baustein je Form, wo der Kunde sie im Katalog
+  am Bild erkennt (`holders.py`), nicht der Grenze wegen.
 - **Ein Feld ohne Wirkung zählt keine Ecken**: Wo die Bedingung eines Feldes
   (`depends_on`) in einer Ecke nicht erfüllt ist, steht es dort auf seiner
   Vorgabe (`range_check.corners`). Das setzt voraus, dass der Baustein den
   Wert dann wirklich verwirft; wer ein verstecktes Feld trotzdem liest, bricht
   den Vertrag und den Nachweis zugleich.
-- **Eine Größenreihe passt in den Bereichstest oder wird begrenzt, mit
-  Grund**: Wandhalter (M2–M27), Klemmschale (M3–M33), Rohrschelle (M3–M6)
-  und Stangenverbinder (M3–M5) nehmen so viele Normgrößen, wie 512 Ecken oder
-  ihre Wand tragen; die Befestigungsbausteine nehmen alle und ein eigenes Maß.
+- **Eine Größenreihe nimmt, was die Tabelle hergibt** (RM-578, Robert: „wenn
+  wir mehr liefern können, wollen wir das“): Wandhalter und Halterlaschen
+  M2–M64, Klemmschale M3–M64, Rohrschelle M3–M64 (soweit Mutter und Scheibe in
+  der Tabelle stehen), die Befestigungsbausteine alle und ein eigenes Maß. Wo
+  eine große Größe an einem kleinen Teil nicht trägt, sagt der Bau es mit
+  Vorschlag (`feasible`, etwa `_clamp_reason`, `_shell_reason`), statt sie zu
+  verbieten. Begrenzt bleibt nur, was die Wand nicht trägt: der
+  Stangenverbinder bei M5, weil die Schraube ihr Gewinde in die dünne Hülse
+  schneidet.
 - **Ein Maß ohne Obergrenze ist ein Bereich ohne Rand**: Ohne `maximum` fährt
   der Test nur die Untergrenze. Jedes Längenmaß eines Bausteins trägt beide
   Grenzen; ausgenommen Winkel und Versatz der Trennebene an den Profilklemmen —
@@ -280,6 +343,20 @@ Daten in `<Nutzerdaten>/parts/recipes/*.json` (`parts/recipe.py`,
   §24.3): dieselben Ecken wie in der Suite, mit Fortschritt und Abbruch; das
   Ergebnis steht als `PartSpec.range_passed` am Katalogeintrag (§24.5 verlangt
   den Warnhinweis, kein Verbot).
+- **Ein Rezept ist genau ein Körper und steht deshalb für sich** (RM-574):
+  `register` gibt ihm `standalone` und einen Erzeuger `create_<name>`, der
+  Katalog setzt es ohne passende Stelle als eigenen Körper. Wer ein Rezept
+  bindet, ersetzt, entfernt oder als Beilage auflöst, nimmt die Operationen,
+  die ihm gehören (`ops.operation_names`, gefragt **vor** dem Abmelden des
+  Katalogeintrags) — nie alles, was nach ihm heißt: Ein Anhang „box“ nähme
+  sonst den Quader mit. **Namensschutz:** Gehört
+  `create_<name>` einer anderen Operation (`create_box`), bleibt es beim
+  Einsetzen, und ein neuer Baustein dieses Namens wird beim Speichern
+  abgewiesen (`recipe.reserved_name`); auch Beilagenfolge und Entwurf lesen
+  diesen Namen dann nicht als Rezept (`_recipe_creator`). Gefragt wird die
+  Zugehörigkeit (`part_of`), nie die Kategorie: `create_lid` steht unter den
+  Bausteinen und gehört keinem. Wer Schritte eines Bausteins zählt (*Schritt
+  zeigen*, Quelltextsperre), zählt beide Namen.
 - **`travelling_parts` warnt nur vor `.py`s** — ein Rezept reist als Daten,
   sein `source` ist `recipe`. **`own` heißt „gehört dem Kunden"** und umfasst
   beide Gestalten; wer nur die `.py` meint, fragt `source == "user"`.

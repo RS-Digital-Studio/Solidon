@@ -788,12 +788,12 @@ def _sketch_editor(theme: Theme) -> str:
 
 
 def _sketch_uses(theme: Theme) -> str:
-    """Ein Umriss, drei Arten Körper — und die Wahl fällt am Ende.
+    """Ein Umriss, drei Arten Körper — und die Wahl fällt danach.
 
-    Der Grund für dieses Bild steht in §2.2, Weg 2: die Entscheidung, was aus
-    einer Zeichnung wird, fällt bei „Fertig" und nicht vorab in einem Menü.
-    Wer sie vorab treffen soll, muss wissen, was zur Auswahl steht — und fünf
-    Menüeinträge sagen das nicht.
+    Der Grund für dieses Bild steht in §2.2, Weg 2: Hochziehen oder Tasche
+    entscheidet die Richtung der Höhe nach *Fertig*, die übrigen Arten wählt
+    der Schritt unter *Art* (RM-561). Wer sie vorab treffen soll, muss wissen,
+    was zur Auswahl steht — und fünf Menüeinträge sagen das nicht.
     """
     canvas = Canvas(620, 320, theme)
     colours = canvas.colours
@@ -878,8 +878,8 @@ def _sketch_uses(theme: Theme) -> str:
         str(
             _(
                 "Dazu Tasche schneiden und zwischen zwei Umrissen aufspannen. "
-                "Gewählt wird bei „Fertig“, mit der Zeichnung vor Augen — "
-                "Hochziehen und Abtragen stehen direkt daneben."
+                "Hochziehen oder Tasche wählt die Richtung der Höhe, die übrigen "
+                "Arten der Schritt unter „Art“."
             )
         ),
         width=44,

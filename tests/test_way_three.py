@@ -761,6 +761,160 @@ def test_a_generated_model_goes_to_the_next_plate_when_the_first_is_full(
     assert body.mesh.bounds.centre[:2] == pytest.approx((0.0, 0.0), abs=1e-6)
 
 
+# --- Zerfallene Rohnetze (RM-550) ------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("name", "expected"),
+    [
+        ("generated_fell_apart.glb", True),
+        ("generated_touching.glb", False),
+        ("cubes_touching_edge.glb", False),
+    ],
+)
+def test_a_raw_mesh_that_fell_apart_in_the_generator_is_recognised(
+    name: str, expected: bool
+) -> None:
+    """Ein Rohnetz, das schon im Generator zerfällt, repariert keine Kette (RM-550).
+
+    Gemessen an echten Läufen von TRELLIS.2: Ein zerfallenes Netz hat
+    Tausende Kanten mit mehr als zwei Flächen, und keine lässt sich trennen;
+    jeder dieser Läufe endete offen. Ein heiles hat ein paar Dutzend, dort, wo
+    sich zwei Stücke berühren, und die Reparatur trennt sie. Ein kleines Netz
+    mit einer einzigen Berührkante liegt über dem Anteil und ist trotzdem
+    heil — deshalb zählt erst, was nach dem Trennen bleibt.
+    """
+    from app.core.generate import fell_apart
+    from app.core.geom.mesh import read_mesh
+
+    mesh = read_mesh((Path(__file__).parent / "data" / "meshes" / name).read_bytes(), ".glb")
+
+    assert fell_apart(mesh) is expected
+
+
+# --- Nur eine Haut (RM-577) -------------------------------------------------------
+
+
+def _cup(wall: float) -> bytes:
+    """Ein oben offener Becher 100 × 100 × 60 mm mit Wand ``wall`` — als Vollkörper
+    geschlossen, im Mittel so dick wie seine Wand."""
+    import manifold3d
+
+    outer = manifold3d.Manifold.cube((100.0, 100.0, 60.0))
+    inner = manifold3d.Manifold.cube((100.0 - 2 * wall, 100.0 - 2 * wall, 60.0)).translate(
+        (wall, wall, wall)
+    )
+    body = (outer - inner).to_mesh()
+    cup = trimesh.Trimesh(
+        np.asarray(body.vert_properties)[:, :3], np.asarray(body.tri_verts), process=False
+    )
+    return bytes(trimesh.exchange.export.export_mesh(cup, None, file_type="stl"))
+
+
+@pytest.mark.parametrize(("wall", "warned"), [(0.3, True), (5.0, False)])
+def test_a_generated_body_that_is_only_a_skin_is_reported(
+    project: Project, profile: Profile, wall: float, warned: bool
+) -> None:
+    """TRELLIS.2 lieferte fünf von 17 Körpern als Haut von 0,3 mm um einen Hohlraum,
+    geschlossen und ohne Befund (RM-577). Am Endstand steht jetzt ein Befund mit
+    dem Ausweg *Neu erzeugen* — gemessen gegen die dünnste Wand des Materials."""
+    from app.core.errors import GENERATE_AGAIN
+
+    from_text(project, ScriptedMeshBackend(fallback=_cup(wall), suffix=".stl"), "Becher", seed=1)
+
+    scene = evaluated(project, profile)
+
+    skins = [f for f in scene.scene.report.findings if f.code == "scene.thin_skin"]
+    assert bool(skins) is warned, [f.code for f in scene.scene.report.findings]
+    if warned:
+        assert skins[0].severity == "warning" and GENERATE_AGAIN in skins[0].suggestions
+        assert skins[0].values["thickness_mm"] < skins[0].values["least_mm"]
+        assert "{" not in str(skins[0].message)
+
+
+def test_the_skin_limit_is_the_wall_of_the_profile_not_a_number(
+    project: Project, profile: Profile, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Regel 7: Druckt das Material Wände ab 0,2 mm, ist ein Becher mit 0,3 mm
+    keine Haut — mit einer festen Grenze im Code bliebe der Befund (Nachprüfung K, N8)."""
+    import importlib
+
+    checks = importlib.import_module("app.core.scene.evaluate")
+    from_text(project, ScriptedMeshBackend(fallback=_cup(0.3), suffix=".stl"), "Becher", seed=1)
+    monkeypatch.setattr(checks, "analysis_limits", lambda _profile, _entry: (0.2, 45.0))
+
+    scene = evaluated(project, profile)
+
+    assert "scene.thin_skin" not in {f.code for f in scene.scene.report.findings}
+
+
+def _thick_cube_beside_a_wide_thin_plate() -> trimesh.Trimesh:
+    """Zwei Schalen: ein Würfel von 15 mm mit gut einem Zehntel der Fläche und eine
+    Platte von 75 × 75 × 0,05 mm, die den Rest trägt."""
+    cube = trimesh.creation.box(extents=(15.0, 15.0, 15.0))
+    plate = trimesh.creation.box(extents=(75.0, 75.0, 0.05))
+    plate.apply_translation((0.0, 0.0, 30.0))
+    return trimesh.util.concatenate([cube, plate])
+
+
+def test_the_dialog_and_the_report_judge_a_skin_alike(project: Project, profile: Profile) -> None:
+    """Eine dicke Schale neben einer großen dünnen ist an beiden Orten kein Hautkörper —
+    eine Herleitung für Dialog und Bericht (Nachprüfung K, N7). Über den ganzen
+    Körper gerechnet hätte der Bericht hier eine Haut von 0,6 mm genannt."""
+    from app.core.generate import skin_thickness
+    from app.core.geom.mesh import MeshData, only_a_skin
+
+    body = _thick_cube_beside_a_wide_thin_plate()
+    least = profile.minimum_wall_thickness
+    whole = 2.0 * body.volume / body.area
+    assert only_a_skin(whole, least), "die alte Rechnung hätte eine Haut gemeldet"
+    assert not only_a_skin(skin_thickness(MeshData.of(body)), least)
+
+    payload = bytes(trimesh.exchange.export.export_mesh(body, None, file_type="stl"))
+    from_text(project, ScriptedMeshBackend(fallback=payload, suffix=".stl"), "Zwei", seed=1)
+    scene = evaluated(project, profile)
+
+    assert "scene.thin_skin" not in {f.code for f in scene.scene.report.findings}
+
+
+def test_a_thin_imported_body_is_not_called_a_generated_skin(
+    project: Project, profile: Profile
+) -> None:
+    """Ein eingelesenes dünnes Teil hat seine Wand mit Absicht — die Frage gilt nur
+    erzeugten Körpern (RM-577)."""
+    from app.core.ingest.plan import import_plan
+    from app.core.scene.project import checksum
+    from app.core.types import Source
+
+    payload = _cup(0.3)
+    project.document.sources["src_1"] = Source(
+        id="src_1", kind="import", path="sources/becher.stl", sha256=checksum(payload)
+    )
+    project.sources["src_1"] = payload
+    plan = import_plan("src_1", "becher.stl", payload, first_model=True)
+    History(project.document).apply(plan.title, [plan.draft])
+
+    scene = evaluated(project, profile)
+
+    assert "scene.thin_skin" not in {f.code for f in scene.scene.report.findings}
+
+
+def test_the_stored_skin_from_the_measurement_is_measured_as_one() -> None:
+    """Die gespeicherte Haut (Text, Startwert 14) misst 0,26 mm, ein heiler Würfel
+    viele Millimeter (``generate.skin_thickness``, RM-577)."""
+    from app.core.generate import skin_thickness
+    from app.core.geom.mesh import MeshData
+
+    stored = np.load(MESHES / "generated_skin.npz")
+    skin = MeshData.of(
+        trimesh.Trimesh(stored["vertices"].astype(float), stored["faces"], process=False)
+    )
+    cube = MeshData.of(trimesh.creation.box(extents=(10.0, 10.0, 10.0)))
+
+    assert 0.2 < (skin_thickness(skin) or 0.0) < 0.35
+    assert (skin_thickness(cube) or 0.0) > 10.0
+
+
 # --- *Größe ändern* rechnet nur das Maß neu (RM-676) ---------------------------
 
 

@@ -75,6 +75,7 @@ from app.ui.cursors import cursor
 from app.ui.icons import icon
 from app.ui.leash import stop_watching_the_dying
 from app.ui.style import ROOMY, SPACE
+from app.ui.tab_windows import DetachableTabs
 from app.ui.theme import THEMES, Theme
 
 
@@ -379,8 +380,10 @@ def card_width(base: int, cap: int, window: int, share: float = GROWTH_SHARE) ->
 class CardPlace:
     """Wo eine Seitenkarte liegt: an einem Rand oder frei über der Ansicht.
 
-    ``edge`` ist ``"left"``, ``"right"`` oder leer für eine schwebende Karte;
-    dann sagen ``across`` und ``down`` als Anteil zwischen null und eins, wo
+    ``edge`` nennt die obere linke/rechte Ecke (``left``/``right``), die
+    unteren Ecken (``bottom-left``/``bottom-right``), den unteren Rand
+    (``bottom`` mit waagrechtem Anteil) oder ist leer für eine schwebende Karte.
+    Bei freier Lage sagen ``across`` und ``down`` zwischen null und eins, wo
     sie im Spielraum steht. **Anteile, keine Punkte:** Dieselbe Anordnung gilt
     auf jedem Bildschirm und kann den Fensterrand rechnerisch nicht verlassen.
     """
@@ -390,7 +393,9 @@ class CardPlace:
     down: float = 0.0
 
     def text(self) -> str:
-        """Die Form in den Einstellungen: ``left``, ``right`` oder ``float:0.4:0.2``."""
+        """Die Form in den Einstellungen: Ecke, ``bottom:0.4`` oder ``float:0.4:0.2``."""
+        if self.edge == "bottom":
+            return f"bottom:{round(self.across, 4)!r}"
         if self.edge:
             return self.edge
         # Gespeichert, nicht angezeigt: der Punkt ist hier Teil der Form.
@@ -399,8 +404,14 @@ class CardPlace:
     @staticmethod
     def read(text: object, home: str) -> CardPlace:
         """Aus den Einstellungen — und bei allem, was nicht passt, der Stammplatz."""
-        if text in ("left", "right"):
+        if text in ("left", "right", "bottom-left", "bottom-right"):
             return CardPlace(str(text))
+        if isinstance(text, str) and text.startswith("bottom:"):
+            try:
+                across = float(text.removeprefix("bottom:"))
+            except ValueError:
+                return CardPlace(home)
+            return CardPlace("bottom", across) if 0.0 <= across <= 1.0 else CardPlace(home)
         if not isinstance(text, str) or not text.startswith("float:"):
             return CardPlace(home)
         parts = text.split(":")
@@ -435,6 +446,14 @@ def card_rect(place: CardPlace, width: int, room: int, size: QSize) -> QRect:
         return QRect(EDGE, EDGE, breadth, max(min(size.height(), room), 0))
     if place.edge == "right":
         return QRect(width - breadth - EDGE, EDGE, breadth, max(min(size.height(), room), 0))
+    if place.edge.startswith("bottom"):
+        height = max(min(size.height(), room), 0)
+        left = round(place.across * max(width - breadth, 0))
+        if place.edge == "bottom-left":
+            left = EDGE
+        elif place.edge == "bottom-right":
+            left = width - breadth - EDGE
+        return QRect(left, room - height, breadth, height)
     top = floating_top(place, room, size.height())
     left = MARGIN + round(place.across * max(width - breadth - 2 * MARGIN, 0))
     return QRect(left, top, breadth, max(min(size.height(), room - top), 0))
@@ -459,6 +478,12 @@ def dropped_place(rect: QRect, width: int, room: int, snap: int = SNAP_TO_EDGE) 
     schiebt mit ``snap=0``, sonst käme eine Karte mit dem ersten Pfeil nie
     vom Rand los.
     """
+    if room - (rect.top() + rect.height()) <= snap:
+        if rect.left() - EDGE <= snap:
+            return CardPlace("bottom-left")
+        if width - EDGE - (rect.left() + rect.width()) <= snap:
+            return CardPlace("bottom-right")
+        return CardPlace("bottom", _share(rect.left(), width - rect.width()))
     if rect.left() - EDGE <= snap:
         return CardPlace("left")
     if width - EDGE - (rect.left() + rect.width()) <= snap:
@@ -472,7 +497,13 @@ def dropped_place(rect: QRect, width: int, room: int, snap: int = SNAP_TO_EDGE) 
 
 
 def _opposite(edge: str) -> str:
-    return "right" if edge == "left" else "left"
+    return {
+        "left": "right",
+        "right": "left",
+        "bottom-left": "bottom-right",
+        "bottom-right": "bottom-left",
+        "bottom": "left",
+    }[edge]
 
 
 def settled_places(
@@ -498,8 +529,8 @@ def settled_places(
     result = dict(places)
     result[moved] = wanted
     other = next(key for key in result if key != moved)
-    if wanted.edge and result[other].edge == wanted.edge:
-        result[other] = CardPlace(places[moved].edge or _opposite(wanted.edge))
+    if wanted.edge and result[other] == wanted:
+        result[other] = places[moved] if places[moved].edge else CardPlace(_opposite(wanted.edge))
     if moved not in sizes or other not in sizes:
         return result
     mine = card_rect(result[moved], width, room, sizes[moved])
@@ -611,6 +642,21 @@ QWidget#{CARD}[{DOCK_PROPERTY}="right"] {{
     border-bottom-right-radius: 0px;
 }}
 
+QWidget#{CARD}[{DOCK_PROPERTY}="bottom"],
+QWidget#{CARD}[{DOCK_PROPERTY}="bottom-left"],
+QWidget#{CARD}[{DOCK_PROPERTY}="bottom-right"] {{
+    border-bottom: none;
+    border-bottom-left-radius: 0px;
+    border-bottom-right-radius: 0px;
+}}
+QWidget#{CARD}[{DOCK_PROPERTY}="bottom-left"] {{
+    border-left: none;
+    border-top-left-radius: 0px;
+}}
+QWidget#{CARD}[{DOCK_PROPERTY}="bottom-right"] {{
+    border-right: none;
+    border-top-right-radius: 0px;
+}}
 QWidget#{OUTLINE} {{
     background: {colours["accent_line"]};
 }}
@@ -656,6 +702,19 @@ def _round_corners(zone: QWidget) -> None:
             mask = mask.united(
                 QRegion(QRect(side, rect.top(), rect.width() - ROOMY, rect.height()))
             )
+        if dock in ("bottom", "bottom-left", "bottom-right"):
+            mask = mask.united(
+                QRegion(
+                    QRect(
+                        rect.left(), rect.top() + ROOMY, rect.width(), max(rect.height() - ROOMY, 0)
+                    )
+                )
+            )
+            if dock != "bottom":
+                side = rect.left() if dock == "bottom-left" else rect.left() + ROOMY
+                mask = mask.united(
+                    QRegion(QRect(side, rect.top(), max(rect.width() - ROOMY, 0), rect.height()))
+                )
     zone.setMask(mask)
 
 
@@ -855,7 +914,7 @@ def rows_height(view: QAbstractItemView) -> int:
     return wanted + chrome
 
 
-class CurrentPageTabs(QTabWidget):
+class CurrentPageTabs(DetachableTabs):
     """Ein Reiterwidget, das so hoch sein will wie die Seite, die vorn steht.
 
     Qt misst einen Reiterstapel an seiner größten Seite: ``QStackedLayout``
@@ -885,7 +944,7 @@ class CurrentPageTabs(QTabWidget):
 
     def sizeHint(self) -> QSize:  # noqa: N802 - Qt-Name
         whole = super().sizeHint()
-        page, stack = self.currentWidget(), self._stack()
+        page, stack = QTabWidget.currentWidget(self), self._stack()
         if page is None or stack is None:
             return whole
         return QSize(whole.width(), self._chrome_height(whole, stack) + page.sizeHint().height())
@@ -899,7 +958,7 @@ class CurrentPageTabs(QTabWidget):
         den Prüfbericht auch dann Platz gemacht, wenn die Auswahl vorn steht.
         """
         least = super().minimumSizeHint()
-        page, stack = self.currentWidget(), self._stack()
+        page, stack = QTabWidget.currentWidget(self), self._stack()
         if page is None or stack is None:
             return least
         chrome = max(least.height() - stack.minimumSizeHint().height(), 0)
@@ -917,7 +976,7 @@ class CurrentPageTabs(QTabWidget):
         return self.currentWidget() is not None or super().hasHeightForWidth()
 
     def heightForWidth(self, width: int) -> int:  # noqa: N802 - Qt-Name
-        page, stack = self.currentWidget(), self._stack()
+        page, stack = QTabWidget.currentWidget(self), self._stack()
         if page is None or stack is None:
             return super().heightForWidth(width)
         # Der Rand links und rechts, wie er gerade gelegt ist; vor dem ersten
@@ -1649,12 +1708,14 @@ class OverlayHost(QWidget):
         top = min(max(moved.top(), 0), max(room - moved.height(), 0))
         place = dropped_place(QRect(QPoint(left, top), moved.size()), width, room, 0)
         current = self.places[key]
-        if down and not across and current.edge and place.edge == current.edge:
+        if (down and not across and current.edge and place.edge == current.edge) or (
+            current.edge.startswith("bottom") and down < 0 and place.edge in ("left", "right")
+        ):
             if top == start.top():
                 return
             place = CardPlace(
                 "",
-                0.0 if current.edge == "left" else 1.0,
+                _share(left - MARGIN, width - moved.width() - 2 * MARGIN),
                 _share(top - MARGIN, room - 2 * MARGIN),
             )
         if place == current:
@@ -1993,6 +2054,12 @@ def _drag_sentence(
         return tr("Hier ist neben der anderen Karte kein Platz.")
     other = next(name for name in settled if name != key)
     mine, theirs = settled[key], settled[other]
+    if mine.edge.startswith("bottom"):
+        if theirs != before[other]:
+            if theirs.edge:
+                return tr("Loslassen tauscht die beiden Karten.")
+            return tr("Loslassen legt die Karte an den unteren Rand, die andere rückt beiseite.")
+        return tr("Loslassen legt die Karte an den unteren Rand.")
     if theirs == before[other]:
         if mine.edge == "left":
             return tr("Loslassen legt die Karte an den linken Rand.")
@@ -2018,6 +2085,8 @@ def _placed_sentence(key: str, place: CardPlace) -> str:
     """Wo eine Karte jetzt liegt, mit dem Rückweg."""
     if place == CardPlace(key):
         return tr("Die Karte liegt wieder an ihrem Platz.")
+    if place.edge.startswith("bottom"):
+        return tr("Die Karte liegt jetzt unten. Doppelklick auf den Griff legt sie zurück.")
     if place.edge == "left":
         return tr("Die Karte liegt jetzt links. Doppelklick auf den Griff legt sie zurück.")
     if place.edge == "right":
@@ -2119,6 +2188,10 @@ class CardGrip(QToolButton):
                 "Liegt rechts an. Pfeiltasten schieben die Karte, die Eingabetaste "
                 "nennt die Plätze."
             )
+        elif place.edge.startswith("bottom"):
+            text = tr(
+                "Liegt unten an. Pfeiltasten schieben die Karte, die Eingabetaste nennt die Plätze."
+            )
         else:
             text = tr(
                 "Schwebt über der Ansicht. Pfeiltasten schieben die Karte, die Eingabetaste "
@@ -2127,11 +2200,14 @@ class CardGrip(QToolButton):
         self.setAccessibleDescription(text)
 
     def place_menu(self) -> QMenu:
-        """Die drei Plätze als Menü — gebaut hier, gezeigt in :meth:`_show_menu`."""
+        """Ecken, unterer Rand und Rückweg — gezeigt in :meth:`_show_menu`."""
         menu = QMenu(self)
         for label, place in (
             (tr("An den linken Rand"), CardPlace("left")),
             (tr("An den rechten Rand"), CardPlace("right")),
+            (tr("Nach unten links"), CardPlace("bottom-left")),
+            (tr("Nach unten rechts"), CardPlace("bottom-right")),
+            (tr("An den unteren Rand"), CardPlace("bottom", 0.5)),
             (tr("An ihren Platz"), CardPlace(self.key)),
         ):
             action = menu.addAction(label)

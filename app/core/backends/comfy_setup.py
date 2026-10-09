@@ -192,6 +192,20 @@ BACKGROUND_MEGABYTES: Final = math.ceil(BACKGROUND.size / 1_000_000)
 #: den Grund mit keinem Wort.
 HEADROOM_GIGABYTES: Final = 1.5
 
+#: Wie lange ein Auftrag dauert, gemessen am heutigen Ablauf (200 000 Dreiecke,
+#: zweites ``FillHoles``) auf einer NVIDIA RTX 4080 mit 16 GB, ComfyUI 0.37.0
+#: (Review K, M1): Der erste Auftrag nach dem Start von ComfyUI lädt die Modelle
+#: von der Platte — aus einem Bild 209 und 258 s, aus Text, wo FLUX.2 [klein]
+#: vorher das Bild malt, 270 bis 315 s (08.10.2026). Jeder weitere lädt sie neu
+#: aus dem Zwischenspeicher, denn Solidon gibt die Karte nach jedem Auftrag frei:
+#: 35 bis 67 s auf freiem Rechner, 123 bis 158 s, während daneben gerechnet
+#: wurde. Auf einem Mac ist Weg 3 nicht gemessen, und der Satz sagt das.
+FIRST_IMAGE_SECONDS: Final = 230
+FIRST_TEXT_SECONDS: Final = 290
+WARM_SECONDS_LOW: Final = 35
+WARM_SECONDS_HIGH: Final = 160
+MEASURED_GRAPHICS_GB: Final = 16
+
 #: Was Solidon bis Oktober 2026 selbst in ComfyUI anlegte (:func:`remove_legacy`).
 LEGACY_NODES: Final = "custom_nodes/ComfyUI-TripoSG-Solidon"
 LEGACY_WEIGHTS: Final = "models/triposg/TripoSG"

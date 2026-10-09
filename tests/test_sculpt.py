@@ -17,6 +17,7 @@ from __future__ import annotations
 import dataclasses
 import itertools
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 import pytest
@@ -1696,3 +1697,482 @@ def test_unreadable_gesture_metadata_has_a_recovery_action(value):
     with pytest.raises(ValidationError) as caught:
         strokes_from_text(json.dumps(data))
     assert caught.value.suggestions
+
+
+# --- Pinselfassung 2 (RM-560) ----------------------------------------------------
+#
+# Jeder Test rechnet Fassung 1 daneben: Sie ist die Gegenprobe, denn sie rechnet
+# wie bis Format 48 und zeigt den Befund, den Fassung 2 behebt (Messung im
+# Bericht des Pakets Z2).
+
+
+def _passes(base: MeshData, brush: int, strength: float, passes: int = 10) -> list[Stroke]:
+    """Zehnmal dieselbe Linie über die Oberseite, jede Linie eine Geste."""
+    strokes: list[Stroke] = []
+    preview = SculptPreview(base)
+    for number in range(passes):
+        for x in np.arange(-12.0, 12.01, 2.0):
+            strokes.append(
+                stroke_at(
+                    base,
+                    (float(x), 0.0, 10.0),
+                    radius=4.0,
+                    strength=strength,
+                    before=strokes,
+                    preview=preview,
+                    gesture=number + 1,
+                    brush=brush,
+                )
+            )
+            preview.show(strokes)
+    return strokes
+
+
+def _largest_fold(before: MeshData, after: MeshData) -> float:
+    """Der größte Winkel zwischen Nachbardreiecken, die sich bewegt haben, in Grad."""
+    moved = np.linalg.norm(after.raw.vertices - before.raw.vertices, axis=1) > 1e-9
+    touched = moved[np.asarray(after.raw.faces)].any(axis=1)
+    pairs = after.raw.face_adjacency
+    keep = touched[pairs[:, 0]] | touched[pairs[:, 1]]
+    return float(np.degrees(after.raw.face_adjacency_angles[keep].max()))
+
+
+def _changed(stroke: Stroke, **changes: object) -> Stroke:
+    return dataclasses.replace(stroke, **changes)  # type: ignore[arg-type]
+
+
+def _second(x: float, y: float, z: float, **kwargs: object) -> Stroke:
+    """:func:`on_ball` in Pinselfassung 2 — dort heißt ``brush`` der Radius."""
+    return _changed(on_ball(x, y, z, **kwargs), brush=2)
+
+
+@pytest.fixture(scope="module")
+def slab() -> MeshData:
+    """Ein Quader 40 × 40 × 20 mm, auf 1 mm angeglichen — Oberseite bei z = 10."""
+    return uniform(MeshData.of(trimesh.creation.box(extents=(40, 40, 20))), 1.0, 0.0)
+
+
+def test_each_gesture_is_its_own_stage_in_brush_two() -> None:
+    """H4: Eine neue Geste setzt auf das Ergebnis der vorigen; Fassung 1 kennt nur Werkzeuge."""
+    from app.core.geom.sculpt import starts_stage
+
+    first = _second(1.0, 0.0, 0.0, gesture=1)
+    same = _second(1.0, 0.1, 0.0, gesture=1)
+    other = _second(1.0, 0.2, 0.0, gesture=2)
+    assert [len(part) for part in stages([first, same, other])] == [2, 1]
+    assert starts_stage(first, _second(1.0, 0.0, 0.0, gesture=0)), "ohne Kennung allein"
+    old = [_changed(stroke, brush=1) for stroke in (first, same, other)]
+    assert [len(part) for part in stages(old)] == [3], "Fassung 1 rechnet wie bisher"
+    smooth = _second(1.0, 0.0, 0.0, tool="smooth", gesture=3)
+    smoother = _second(1.0, 0.1, 0.0, tool="smooth", gesture=3)
+    assert [len(part) for part in stages([smooth, smoother])] == [2], (
+        "H7: eine Glättgeste ist ein Durchgang, nicht einer je Probe"
+    )
+    assert [len(part) for part in stages([_changed(s, brush=1) for s in (smooth, smoother)])] == [
+        1,
+        1,
+    ], "Gegenprobe: Fassung 1 rechnet je Glättprobe einen Durchgang"
+
+
+def test_ten_passes_make_a_hill_and_not_a_folded_column(slab: MeshData) -> None:
+    """H4: Zehnmal dieselbe Linie in einer Etappe stapelte eine Säule mit Falte
+    (gemessen 148,6° zwischen Nachbardreiecken); je Geste eine Etappe wird ein Hügel."""
+    hill = apply_strokes(slab, _passes(slab, brush=2, strength=5.0))
+    one_stage = [_changed(s, gesture=1, cut=False) for s in _passes(slab, 1, 0.5)]
+    column = apply_strokes(slab, one_stage)
+
+    assert _largest_fold(slab, column) > 120.0, "Gegenprobe: Fassung 1 in einer Etappe faltet"
+    assert _largest_fold(slab, hill) < 80.0
+    assert not len(crossing_face_pairs(hill.raw.vertices, np.asarray(hill.raw.faces)).first)
+    top = float(hill.raw.bounds[1][2]) - 10.0
+    assert 1.0 < top < 5.0, f"ein Hügel, keine Säule: {top:.2f} mm"
+
+
+@pytest.fixture(scope="module")
+def rough_ball() -> MeshData:
+    """Eine Kugel R 20 mit ±0,3 mm Rauschen, Startwert fest."""
+    rng = np.random.default_rng(7)
+    sphere = trimesh.creation.icosphere(subdivisions=5, radius=20.0)
+    noise = 1.0 + rng.uniform(-0.015, 0.015, len(sphere.vertices))
+    return MeshData.of(
+        trimesh.Trimesh(
+            vertices=sphere.vertices * noise[:, None], faces=sphere.faces, process=False
+        )
+    )
+
+
+def _roughness(mesh: MeshData, reference: MeshData) -> float:
+    near = np.linalg.norm(reference.raw.vertices - np.array([0.0, 0.0, 20.0]), axis=1) < 3.0
+    return float(np.std(np.linalg.norm(mesh.raw.vertices[near], axis=1)))
+
+
+def test_smoothing_never_roughens_whatever_the_level(rough_ball: MeshData) -> None:
+    """H3: Glätten schoss in Fassung 1 ab Stärke 2 über — bei 3 war die Fläche
+    rauer als vorher. In Fassung 2 ist jede Stufe ein Schritt hin zum Mittel."""
+    before = _roughness(rough_ball, rough_ball)
+
+    def smoothed(level: float, brush: int) -> float:
+        stroke = Stroke(
+            point=(0.0, 0.0, 20.0),
+            normal=(0.0, 0.0, 1.0),
+            radius=6.0,
+            strength=level,
+            tool="smooth",
+            brush=brush,
+        )
+        return _roughness(apply_strokes(rough_ball, [stroke]), rough_ball)
+
+    found = [smoothed(float(level), 2) for level in range(1, 11)]
+    assert all(value < before for value in found)
+    assert found == sorted(found, reverse=True), "höhere Stufe, glatter"
+    assert smoothed(3.0, 1) > before, "Gegenprobe: Fassung 1 schießt über"
+
+
+def test_pinching_never_crosses_the_fold() -> None:
+    """H3: Kneifen mit Stärke 3 kreuzte in Fassung 1 (216 sich schneidende Paare);
+    in Fassung 2 kommt es höchstens auf halbem Weg zur Strichmitte an."""
+    base = ball(5)
+
+    def line(brush: int, strength: float) -> MeshData:
+        strokes = []
+        for x in np.arange(-6.0, 6.01, 3.0):
+            z = float(np.sqrt(400.0 - x * x))
+            strokes.append(
+                Stroke(
+                    point=(float(x), 0.0, z),
+                    normal=(float(x) / 20, 0.0, z / 20),
+                    radius=6.0,
+                    strength=strength,
+                    tool="pinch",
+                    gesture=1,
+                    brush=brush,
+                )
+            )
+        return apply_strokes(base, strokes)
+
+    for level in (5.0, 10.0):
+        after = line(2, level)
+        assert not len(crossing_face_pairs(after.raw.vertices, np.asarray(after.raw.faces)).first)
+    old = line(1, 3.0)
+    assert len(crossing_face_pairs(old.raw.vertices, np.asarray(old.raw.faces)).first), (
+        "Gegenprobe: Fassung 1 kreuzt"
+    )
+
+
+def test_flattening_stops_at_its_plane(slab: MeshData) -> None:
+    """Zwanzig Flachzieh-Proben an einer Stelle ziehen eine Beule auf die
+    Ebene und nicht darüber hinaus in eine Mulde."""
+    bump = apply_strokes(slab, [Stroke((0.0, 0.0, 10.0), (0.0, 0.0, 1.0), 6.0, 10.0, brush=2)])
+    flat = [
+        Stroke((0.0, 0.0, 10.0), (0.0, 0.0, 1.0), 8.0, 10.0, tool="flatten", gesture=1, brush=2)
+        for _ in range(20)
+    ]
+    after = apply_strokes(bump, flat)
+    near = np.linalg.norm(after.raw.vertices[:, :2], axis=1) < 3.0
+    heights = after.raw.vertices[near, 2]
+    assert heights.min() >= float(bump.raw.vertices[near, 2].min()) - 1e-9, "keine Mulde"
+    assert float(np.ptp(heights)) < float(np.ptp(bump.raw.vertices[near, 2])), "flacher"
+
+
+def test_a_higher_level_lifts_more_and_one_gesture_saturates(slab: MeshData) -> None:
+    """Die Stufe ohne Einheit: höher heißt mehr, und eine Geste häuft an einer
+    Stelle höchstens :data:`ADD_LIMIT` volle Proben auf."""
+    from app.core.geom.sculpt import ADD_LIMIT, ADD_SHARE
+
+    def lift(level: float, probes: int) -> float:
+        strokes = [
+            Stroke((0.0, 0.0, 10.0), (0.0, 0.0, 1.0), 4.0, level, gesture=1, brush=2)
+            for _ in range(probes)
+        ]
+        return float(apply_strokes(slab, strokes).raw.bounds[1][2]) - 10.0
+
+    lifts = [lift(float(level), 1) for level in range(1, 11)]
+    assert lifts == sorted(lifts) and lifts[0] > 0.0
+    assert lift(10.0, 200) <= ADD_LIMIT * ADD_SHARE * 4.0 + 1e-9, "eine Geste sättigt"
+
+
+def test_the_direction_follows_the_whole_brush(slab: MeshData) -> None:
+    """H10: Die Richtung war die Normale der nächsten Ecke — vor einer Kante
+    0°, auf ihr 45°, ein Sprung. In Fassung 2 wächst sie stetig, und auf einer
+    verrauschten Fläche bleibt sie nahe der Senkrechten."""
+
+    def angles(mesh: MeshData, points: list[tuple[float, float, float]], brush: int) -> np.ndarray:
+        made = [stroke_at(mesh, point, radius=4.0, strength=5.0, brush=brush) for point in points]
+        return np.degrees(np.arccos(np.clip([stroke.normal[2] for stroke in made], -1.0, 1.0)))
+
+    towards = [(0.0, 20.0 - float(away), 10.0) for away in np.arange(3.0, -0.01, -0.25)]
+    assert float(np.max(np.abs(np.diff(angles(slab, towards, 1))))) >= 44.0, "Gegenprobe"
+    assert float(np.max(np.abs(np.diff(angles(slab, towards, 2))))) < 20.0
+
+    rng = np.random.default_rng(3)
+    rough = slab.raw.copy()
+    top = rough.vertices[:, 2] > 9.99
+    rough.vertices[top, 2] += rng.uniform(-0.15, 0.15, int(top.sum()))
+    noisy = MeshData.of(rough)
+    spots = [(float(x), float(y), 10.0) for x, y in rng.uniform(-12.0, 12.0, (30, 2))]
+    assert float(np.median(angles(noisy, spots, 1))) > 3.0, "Gegenprobe"
+    assert float(np.median(angles(noisy, spots, 2))) < 1.5
+
+
+def test_the_mirror_plane_lies_where_the_body_meets_itself() -> None:
+    """H11: Die erzeugte Figur hat ihre Symmetrie 4,2 mm neben der Mitte ihres
+    Hüllquaders; die Suche findet sie. Ein Körper ohne Symmetrie behält die Mitte."""
+    from app.core.geom.sculpt import fitted_mirror_centre, mirror_centre, mirror_plane
+
+    meshes = Path(__file__).parent / "data" / "meshes"
+    figure = read_mesh((meshes / "generated_figure.stl").read_bytes(), ".stl")
+    middle = mirror_centre(figure)
+    fitted = fitted_mirror_centre(figure, (0,))
+    assert float(middle[0]) == pytest.approx(4.2, abs=0.05), (
+        "Voraussetzung: die Mitte liegt daneben"
+    )
+    assert abs(float(fitted[0])) < 0.3
+    assert mirror_plane(figure, axes=1)[0] == pytest.approx(float(fitted[0]))
+    assert mirror_plane(figure, fitted=False, axes=1)[0] == pytest.approx(float(middle[0]))
+    assert mirror_plane(figure, axes=0) == tuple(float(v) for v in middle), (
+        "ohne Spiegeln keine Suche"
+    )
+
+    wedge = trimesh.creation.box(extents=(30, 10, 10))
+    wedge.vertices[wedge.vertices[:, 0] > 0, 2] *= 3.0
+    uneven = MeshData.of(wedge)
+    assert fitted_mirror_centre(uneven, (0,))[0] == pytest.approx(float(mirror_centre(uneven)[0]))
+
+
+def test_the_brush_version_survives_the_text_and_refuses_the_unknown() -> None:
+    """Die Fassung reist im Zug mit; eine, die dieses Programm nicht rechnen kann,
+    ist ein Lesefehler mit Ausweg und kein still falscher Zug."""
+    import json
+
+    stroke = _second(1.0, 0.0, 0.0, gesture=4)
+    text = strokes_to_text([stroke, on_ball(0.0, 1.0, 0.0)])
+    data = json.loads(text)
+    assert data[0]["v"] == 2 and "v" not in data[1], "Fassung 1 schreibt nichts Neues"
+    assert strokes_from_text(text)[0] == stroke
+    data[0]["v"] = 3
+    with pytest.raises(ValidationError) as caught:
+        strokes_from_text(json.dumps(data))
+    assert caught.value.suggestions
+
+
+def test_a_coarse_mesh_is_refined_for_the_brush_and_then_it_works() -> None:
+    """H9 und H2: Am Quader aus zwölf Dreiecken tat ein Zug nichts (bewegt 0 mm,
+    ``sculpt.no_effect``). Die Sitzung gleicht auf ``radius / REFINE_TO_EDGE``
+    an; danach trägt derselbe Zug über eine Schichthöhe."""
+    from app.core.geom.sculpt import (
+        BRUSH_TO_EDGE,
+        REFINE_TO_EDGE,
+        brush_radius_for,
+        median_edge,
+        refine_edge_for,
+    )
+    from app.core.knowledge import profiles
+
+    box = MeshData.of(trimesh.creation.box(extents=(40, 30, 10)))
+    radius = brush_radius_for(box)
+    assert radius == 2.0, "ein Zwanzigstel von 51 mm, auf 1-2-5 gerundet"
+    edge = refine_edge_for(box, radius, finest=0.05)
+    assert edge == pytest.approx(radius / REFINE_TO_EDGE)
+    fine = uniform(box, edge, 0.0)
+    assert median_edge(fine) * BRUSH_TO_EDGE <= radius
+    assert refine_edge_for(fine, radius, finest=0.05) == 0.0, "fein genug, kein zweites Mal"
+
+    stroke = stroke_at(fine, (0.0, 0.0, 5.0), radius=radius, strength=5.0, brush=2)
+    after = apply_strokes(fine, [stroke])
+    moved = float(np.linalg.norm(after.raw.vertices - fine.raw.vertices, axis=1).max())
+    layer = profiles.make_profile("centauri-carbon-2", "petg").printer.layer_height
+    assert moved > layer
+    rough = stroke_at(box, (0.0, 0.0, 5.0), radius=radius, strength=5.0, brush=2)
+    coarse = apply_strokes(box, [rough])
+    assert np.allclose(coarse.raw.vertices, box.raw.vertices), "Gegenprobe: ohne Angleichen nichts"
+
+
+def test_refining_stays_within_its_triangle_budget() -> None:
+    """Ein kleiner Pinsel auf einem großen Körper würde Millionen Dreiecke
+    verlangen; die Kante hält :data:`REFINE_MAX_TRIANGLES` ein."""
+    import math
+
+    from app.core.geom.sculpt import REFINE_MAX_TRIANGLES, REFINE_TO_EDGE, refine_edge_for
+
+    big = MeshData.of(trimesh.creation.box(extents=(200, 200, 200)))
+    edge = refine_edge_for(big, 0.5, finest=0.05)
+    estimate = float(big.raw.area) / (math.sqrt(3.0) / 4.0 * edge * edge)
+    assert estimate <= REFINE_MAX_TRIANGLES * 1.0001
+    assert edge > 0.5 / REFINE_TO_EDGE
+
+
+def test_the_starting_radius_follows_the_body() -> None:
+    """H8: 6 mm fest waren am Korpus 0,059 bis 0,173 der Diagonale; aus der
+    Körpergröße bleibt es um ein Zwanzigstel — die Rundung auf 1-2-5 lässt
+    höchstens den Faktor √2,5 nach jeder Seite."""
+    from app.core.geom.sculpt import brush_radius_for
+
+    meshes = Path(__file__).parent / "data" / "meshes"
+    shares, fixed = [], []
+    for name in ("clean_figure.stl", "generated_figure.stl", "cube_clean.stl", "sphere_socket.stl"):
+        mesh = read_mesh((meshes / name).read_bytes(), ".stl")
+        diagonal = float(np.linalg.norm(np.ptp(mesh.raw.bounds, axis=0)))
+        shares.append(brush_radius_for(mesh) / diagonal)
+        fixed.append(6.0 / diagonal)
+    band = 2.5**0.5 / 20.0
+    assert all(1.0 / 400.0 / band <= share <= band for share in shares), shares
+    assert max(shares) / min(shares) < max(fixed) / min(fixed), "Gegenprobe: 6 mm fest"
+
+
+# --- Etappen der Fassung 2 rechnen nur ihr Gebiet (F6, RM-560) ------------------------
+
+
+def _gestures(tool: str, symmetry: int, seed: int = 3) -> list[Stroke]:
+    """Dreißig Gesten zu je sechs Proben, eng beieinander, damit sie sich
+    überlagern; ``tool="mixed"`` wechselt das Werkzeug je Geste."""
+    generator = np.random.default_rng(seed)
+    strokes = []
+    for gesture in range(1, 31):
+        aim = np.array([0.3, 0.2, 1.0]) + generator.normal(scale=0.3, size=3)
+        aim /= np.linalg.norm(aim)
+        chosen = SCULPT_TOOLS[gesture % len(SCULPT_TOOLS)] if tool == "mixed" else tool
+        for _sample in range(6):
+            place = aim * 20.0 + generator.normal(scale=1.0, size=3)
+            place = place / np.linalg.norm(place) * 20.0
+            strokes.append(
+                Stroke(
+                    tuple(place),
+                    tuple(place / 20.0),
+                    3.0,
+                    float(generator.integers(1, 11)),
+                    tool=chosen,
+                    gesture=gesture,
+                    brush=2,
+                    symmetry=symmetry,
+                )
+            )
+    return strokes
+
+
+def _fresh_stages(mesh: MeshData, strokes: list[Stroke], plane: tuple[float, float, float]):
+    """Die Rechnung vor F6: jede Etappe auf einem neuen Netz mit eigenem
+    Suchbaum und allen Normalen, jeder Zug einzeln."""
+    from app.core.geom.sculpt import _Stage
+
+    body = mesh.raw
+    for part in stages(strokes):
+        stage = _Stage(body, np.asarray(plane), front_only=True, mirror_once=True)
+        for stroke in part:
+            stage.add(stroke)
+        body = stage.moved()
+    return np.asarray(body.vertices)
+
+
+@pytest.mark.parametrize("symmetry", [0, 1], ids=["plain", "mirrored"])
+@pytest.mark.parametrize("tool", [*SCULPT_TOOLS, "mixed"])
+def test_a_stage_that_only_follows_its_area_computes_the_same_mesh(tool: str, symmetry: int):
+    """F6: Die Auswertung führt Ecken, Normalen und Suchbaum nur im Gebiet der
+    vorigen Etappe nach und rechnet eine Etappe in einem Schritt. Das Netz ist
+    bitgleich mit der Rechnung, die jede Etappe neu aufbaut — und mit der
+    Vorschau, die Zug für Zug rechnet."""
+    from app.core.geom.sculpt import mirror_centre
+
+    mesh = ball(5)
+    middle = mirror_centre(mesh)
+    plane = (float(middle[0]), float(middle[1]), float(middle[2]))
+    strokes = _gestures(tool, symmetry)
+    evaluated = np.asarray(apply_strokes(mesh, strokes, centre=plane).raw.vertices)
+    assert np.abs(evaluated - np.asarray(mesh.raw.vertices)).max() > 0.01, (
+        "Gegenprobe: nichts geformt"
+    )
+    assert np.array_equal(evaluated, _fresh_stages(mesh, strokes, plane))
+    preview = SculptPreview(mesh, centre=plane)
+    for count in range(1, len(strokes) + 1):
+        preview.extend(strokes[:count])
+    assert np.array_equal(evaluated, np.asarray(preview.shown.raw.vertices))
+
+
+def test_gestures_build_nothing_over_the_whole_mesh_per_stage(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """F6, Review N2: Was eine Etappe teuer machte, war der Neuaufbau von
+    Suchbaum und Normalen über das ganze Netz — einer je Geste. Gezählt statt
+    gestoppt, damit es auf jedem Rechner gilt: Fünfzig Gesten bauen den Suchbaum
+    höchstens zweimal über alle Ecken und die Normalen nie; die Rechnung von
+    vorher baute beides je Etappe."""
+    import app.core.geom.sculpt as sculpt
+
+    mesh = ball(5)
+    count = len(mesh.raw.vertices)
+    trees: list[int] = []
+    normals: list[int] = []
+    built = sculpt.cKDTree
+
+    def tree(points: Any, *args: Any, **kwargs: Any) -> Any:
+        if len(points) == count:
+            trees.append(1)
+        return built(points, *args, **kwargs)
+
+    whole = sculpt._Stage.normals.fget
+    monkeypatch.setattr(sculpt, "cKDTree", tree)
+    monkeypatch.setattr(
+        sculpt._Stage, "normals", property(lambda stage: normals.append(1) or whole(stage))
+    )
+    generator = np.random.default_rng(11)
+    strokes = []
+    for gesture in range(1, 51):
+        aim = generator.normal(size=3)
+        aim /= np.linalg.norm(aim)
+        for _sample in range(5):
+            place = aim * 20.0 + generator.normal(scale=1.0, size=3)
+            place = place / np.linalg.norm(place) * 20.0
+            strokes.append(
+                Stroke(tuple(place), tuple(place / 20.0), 3.0, 5.0, gesture=gesture, brush=2)
+            )
+    apply_strokes(mesh, strokes, centre=(0.0, 0.0, 0.0))
+    assert len(trees) <= 2 and not normals, (len(trees), len(normals))
+    trees.clear()
+    _fresh_stages(mesh, strokes, (0.0, 0.0, 0.0))
+    assert len(trees) == 50, "Gegenprobe: je Etappe neu"
+
+
+def test_local_normals_are_the_normals_of_the_whole_mesh() -> None:
+    """Eine Ecke bekommt dieselbe Normale, ob ihr Gebiet allein oder das ganze
+    Netz gerechnet wird; an einer Ikosaederkugel ist es bis auf ein
+    Achtelgrad die von ``Trimesh``."""
+    from app.core.geom.sculpt import _Topology
+
+    raw = trimesh.creation.icosphere(subdivisions=5, radius=20.0)
+    points = np.asarray(raw.vertices, dtype=float)
+    points = points + np.random.default_rng(1).normal(scale=0.05, size=points.shape)
+    topology = _Topology(raw.faces, len(points))
+    whole = topology.vertex_normals(points, np.arange(len(points)))
+    some = np.sort(np.random.default_rng(2).choice(len(points), 500, replace=False))
+    assert np.array_equal(topology.vertex_normals(points, some), whole[some])
+    regular = np.asarray(raw.vertices, dtype=float)
+    ours = topology.vertex_normals(regular, np.arange(len(regular)))
+    cosine = np.einsum("ij,ij->i", ours, np.asarray(raw.vertex_normals))
+    assert np.degrees(np.arccos(np.clip(cosine, -1.0, 1.0))).max() < 0.25
+
+
+def test_an_old_search_tree_finds_what_a_new_one_finds() -> None:
+    """Der Suchbaum bleibt über Etappen stehen, solange die Ecken nicht weiter
+    gewandert sind als ein Radius; Kugelabfragen messen nach und liefern
+    dieselben Ecken, sortiert, wie ein neuer Baum — einzeln wie gesammelt."""
+    from app.core.geom.sculpt import _Lookup
+
+    raw = trimesh.creation.icosphere(subdivisions=5, radius=20.0)
+    before = np.asarray(raw.vertices, dtype=float)
+    generator = np.random.default_rng(4)
+    moved = generator.choice(len(before), 2000, replace=False)
+    after = before.copy()
+    after[moved] += generator.normal(scale=0.8, size=(len(moved), 3))
+    old = _Lookup(before).moved(after, np.sort(moved), 5.0)
+    assert old.drift > 0.0, "Gegenprobe: der alte Baum muss nachmessen"
+    fresh = _Lookup(after)
+    centres = after[generator.integers(0, len(after), 40)]
+    radii = np.full(len(centres), 3.0)
+    near, away, owner, bounds = old.balls(centres, radii)
+    for number, centre in enumerate(centres):
+        expected, distance = fresh.ball(centre, 3.0)
+        found, measured = old.ball(centre, 3.0)
+        assert np.array_equal(found, expected) and np.array_equal(measured, distance)
+        low, high = bounds[number], bounds[number + 1]
+        assert np.array_equal(near[low:high], expected)
+        assert np.array_equal(away[low:high], distance)
+        assert np.all(owner[low:high] == number)

@@ -1064,3 +1064,123 @@ def test_inserted_history_uses_positions_in_report_status_and_dependency_tips(qt
         )
     finally:
         session.release()
+
+
+# --- Reparieren und Zerlegen vor dem angehaltenen Schritt (RM-547) -------------
+
+
+def _retried_twice(*, as_old_file: bool = False) -> History:
+    """Die Platte, verschoben; erst *Reparieren*, dann *Zerlegen* vor der ersten Bohrung.
+
+    ``as_old_file`` nimmt den beiden Zügen Revision und Zuordnung — so stehen
+    sie in Dateien, die vor RM-547 geschrieben wurden.
+    """
+    import dataclasses
+
+    history = _plate()
+    history.apply(
+        "Verschieben",
+        [OperationDraft(op="translate_object", inputs=("obj_1",), params={"dx": 5.0})],
+    )
+    history.repair_and_retry(history.operations[1].id)
+    drill = next(entry.id for entry in history.operations if entry.op == "drill_hole")
+    history.split_and_retry(drill, "obj_1", 2)
+    if as_old_file:
+        history.document.transactions = [
+            dataclasses.replace(transaction, revision=None, renumbered={})
+            if transaction.revision == "insert"
+            else transaction
+            for transaction in history.document.transactions
+        ]
+    return history
+
+
+@pytest.mark.parametrize("as_old_file", [False, True], ids=["neu", "alte-datei"])
+def test_a_retried_step_is_replanned_not_deleted_in_the_digest(as_old_file: bool) -> None:
+    """RM-547: Nach *Reparieren* und *Zerlegen und erneut versuchen* heißt nichts „gelöscht“.
+
+    Beide Züge planen den Rest unter neuen Kennungen neu. Steckbrief und
+    Verlaufsfeld nannten die alten Schritte „gelöscht“, obwohl sie unter
+    neuer Kennung weiterrechnen. Jetzt stehen sie wie ein beim Umbau neu
+    gefasster Schritt: einmal, unter ihrer sichtbaren Nummer.
+    """
+    from app.core.perceive.digest import _stack_lines, _step_numbers
+    from app.i18n import tr
+
+    history = _retried_twice(as_old_file=as_old_file)
+    document = history.document
+    living = [entry.id for entry in document.ops]
+    replaced = {
+        op_id
+        for transaction in document.transactions
+        if transaction.changes is not None
+        for op_id in (transaction.changes.before.edited_ops or {})
+    }
+    assert replaced and replanned_steps(document) == frozenset(replaced)
+
+    steps = _step_numbers(document)
+    text = " ".join(_stack_lines(document, steps))
+    assert str(tr("gelöscht")) not in text, text
+    for op_id in living:
+        assert text.count(f"op{steps[op_id]} ") == 1, (op_id, text)
+    assert sorted(steps[op_id] for op_id in living) == list(range(1, len(living) + 1))
+
+
+@pytest.mark.parametrize("as_old_file", [False, True], ids=["neu", "alte-datei"])
+def test_the_history_shows_each_retried_step_once_and_none_deleted(
+    qt_app: Any, as_old_file: bool
+) -> None:
+    """RM-547 im Fenster: jeder lebende Schritt einmal mit seiner Nummer, nichts „gelöscht“."""
+    from PySide6.QtCore import Qt
+
+    from app.i18n import tr
+    from app.ui.panels import GROUP_ROLE, HistoryPanel
+
+    history = _retried_twice(as_old_file=as_old_file)
+    panel = HistoryPanel()
+    try:
+        panel.show_document(history.document)
+        for index in range(panel.list.count()):
+            item = panel.list.item(index)
+            if item.data(GROUP_ROLE) and item.isHidden():
+                continue
+            if item.data(GROUP_ROLE) and item.text().startswith("▸"):
+                panel._toggle_group(item)
+        rows = [panel.list.item(index) for index in range(panel.list.count())]
+        texts = [row.text() for row in rows]
+        assert not any(str(tr("gelöscht")) in text for text in texts), texts
+        positions = {entry.id: number for number, entry in enumerate(history.operations, 1)}
+        for op_id, number in positions.items():
+            shown = [row for row in rows if row.data(Qt.ItemDataRole.UserRole) == op_id]
+            assert len(shown) == 1, (op_id, texts)
+            assert not shown[0].isHidden(), (op_id, texts)
+            assert shown[0].text().strip().lstrip("▸▾ ").startswith(f"{number}  "), texts
+    finally:
+        panel.deleteLater()
+
+
+@pytest.mark.parametrize("as_old_file", [False, True], ids=["neu", "alte-datei"])
+def test_a_halt_after_a_retry_marks_the_retried_step(qt_app: Any, as_old_file: bool) -> None:
+    """Review U1, Fund 2: Hält die Kette nach „… und erneut versuchen“ wieder an, steht das „!“.
+
+    Bauplan §15.3: Die betroffene Operation ist im Verlauf markiert. Der Umbau
+    hat seine eigenen Zeilen (``_add_revision_rows``), und die kannten den Halt
+    nicht — gerade nach einem Rettungsversuch sucht der Kunde diese Stelle.
+    """
+    from app.i18n import tr
+    from app.ui.panels import GROUP_ROLE, HistoryPanel
+
+    history = _retried_twice(as_old_file=as_old_file)
+    drill = next(entry.id for entry in history.operations if entry.op == "drill_hole")
+    panel = HistoryPanel()
+    try:
+        panel.show_document(history.document, stopped_at=drill)
+        rows = [panel.list.item(index) for index in range(panel.list.count())]
+        marked = [row for row in rows if "! " in row.text()]
+        assert len(marked) == 1, [row.text() for row in rows]
+        sentence = str(tr("Hier hält die Kette an — der Grund steht im Prüfbericht."))
+        assert sentence in marked[0].toolTip()
+        if not as_old_file:
+            assert marked[0].data(GROUP_ROLE) is None, "die Zeile des Schritts selbst"
+    finally:
+        panel.deleteLater()

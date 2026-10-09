@@ -30,11 +30,20 @@ Handlungen steht, sagt `grenzen.md`. Warum:
   Wiederherstellungsdaten gemeinsam ab.
 - Gespeicherte Gesten öffnen auf ihrem Eingang:
   `Session.scene_before_step_async` im Vorschauarbeiter, Antwort gebunden an
-  Dokumentidentität/Werkzeugnummer. Verfeinerung über `Session.insert_before`
-  im Revisionsarbeiter ersetzt Schrittkennung und Eingangsbindung.
-- Formen/Skelett haben denselben lokalen Undo-Weg für Menü und Strg+Z; leerer
-  Editor nimmt keinen Dokument-Schritt zurück. Zeichnen hat eigene Kürzel
-  und deaktiviert die globale Aktion.
+  Dokumentidentität/Werkzeugnummer.
+- Zeichnen, Formen, Skelett: Kürzel oben, Escape nimmt Unfertiges, Strg+Z
+  die letzte Geste, *Fertig* ohne Dialog (RM-561). Formen/Skelett haben
+  denselben lokalen Undo-Weg für Menü und Strg+Z, Zeichnen deaktiviert die
+  globale Aktion. Leerer Editor nimmt keinen Dokument-Schritt zurück.
+- Reiter können in eigene OS-Fenster wechseln. `DetachableTabs` hält ihren
+  Platz als Hülle im Stapel; `widget`, `indexOf` und `currentWidget` beziehen
+  sich weiter auf den echten Inhalt. Schließen und *Zurück in Solidon* hängen
+  denselben Inhalt zurück. Sichtbarkeit und Meldungsmarken folgen dem Reiter,
+  nicht seiner Nummer. Die Anordnung liegt nur in `UiSettings.tab_layout`;
+  fehlende Monitore begrenzen Fenster auf vorhandene Bildschirmflächen.
+- Karten rasten auch unten links, unten rechts und am unteren Rand ein.
+  `CardPlace` speichert den waagrechten Anteil am unteren Rand; die Unterkante
+  bleibt beim Wechsel der Inhaltshöhe erhalten. Die Werkzeugzeile bleibt frei.
 - Drei Zonen: links Baum/Parameter/Verlauf, Mitte Viewport, rechts eine Karte
   mit den Reitern Auswahl, Prüfbericht, Chat (F9 blendet sie aus). Keine
   Betriebsarten. Die Karte misst die vordere Seite (`CurrentPageTabs`).
@@ -81,11 +90,13 @@ Handlungen steht, sagt `grenzen.md`. Warum:
 - Eine Geste baut das Fenster einmal: `_on_tree_selection` überlässt Menübau
   dem Merkmalsignal; `_fields_this_round` merkt Merkmal und `FeaturePanel.serial`
   derselben Runde. Bei neuen Signalen die teuren Aufrufe zählen.
-- Tour ist ein Angebot: zusätzlicher rechter Reiter für Beispielprojekte
-  (`ui/tour.py`, Schritte `core/tour.py`), Erkennung über `projectChanged`,
-  Weiter auch ohne Erkennung. Warnung lässt aktive Tour stehen, Projektwechsel
-  räumt sie ab. Erkennungswerte müssen zu `make_examples.py` passen
-  (`test_tour.py`).
+- Tour ist ein Angebot: rechter Reiter für Beispiele (`ui/tour.py`, Schritte
+  `core/tour.py`), Erkennung über `projectChanged`, Weiter auch ohne. Warnung
+  und Vorwahl der Startansicht lassen sie stehen, ein Projektwechsel räumt sie
+  ab; Erkennungswerte passen zu `make_examples.py`. Schritte messen ihre Höhe
+  (`ContentScroller`), ohne Tooltip, aufklappbar per Klick und Taste (RM-553);
+  einen Reiter derselben Karte rahmt die Tour (`point_at`), statt ihn zu holen
+  (RM-573).
 
 ## Rückfragen
 
@@ -99,14 +110,11 @@ werden:
   Löschtitel; ein gelöschter Schritt trägt keine Nummer mehr.
 - **Die lange Merkmalserkennung wird angeboten** (§21.1): Oberhalb der
   automatischen Grenze nennt die Frage Dauer und Speicherbedarf; die
-  Alternative — auch das Schließen — lädt mit begrenzter Erkennung. Das ist
-  kein abgebrochener Import und keine Sackgasse: Der Befund `perceive.too_large`
-  trägt *Alle Merkmale erkennen*, auch an jedem Folgeschritt des Körpers (die
-  Wahl gehört dem Körper), aber nur, wo am Ladeschritt eine Wahl steht (`panels._recognition_reopenable` über
-  `history.recognition_reopenable`; Kommandozeile: `recognize`). An einer
-  Sammelzeile gilt er allen ihren Körpern, und die Frage kommt mit derselben
-  Schätzung wieder; am Speicherfehler steht er zuletzt und nicht hervorgehoben —
-  vorn steht, was der Satz nennt.
+  Alternative, auch das Schließen, lädt mit begrenzter Erkennung. Der Befund
+  `perceive.too_large` trägt *Alle Merkmale erkennen* an jedem Folgeschritt
+  des Körpers, wo am Ladeschritt eine Wahl steht
+  (`history.recognition_reopenable`), an einer Sammelzeile für alle ihre
+  Körper; am Speicherfehler zuletzt und nicht hervorgehoben.
 - **Export** (§29): Eine geschriebene Datei holt kein Undo zurück. Der Export
   prüft, bringt den Bericht nach vorn und fragt erst ab
   `warning` (`dialogs.confirm_export`; der Lizenzhinweis §16.3 ist `info`),
@@ -119,10 +127,8 @@ werden:
   und öffnet über `QDesktopServices`.
 - **Wer nur hinsieht, wird nicht gefragt:** Beim Schließen fragt das Fenster nur,
   wenn etwas verloren ginge, das nicht in den Dateien des Kunden steht
-  (`ingest.plan.is_only_imported` über `Session.only_imported`).
-  `Session.modified` bleibt, was es war — die Sicherung hängt daran —; nur das
-  bewusste Schließen fragt nicht und räumt die Sicherung selbst weg. Ein
-  eingelesenes Modell steht in „Zuletzt geöffnet“.
+  (`Session.only_imported`). `Session.modified` bleibt; das Schließen ohne
+  Frage räumt die Sicherung selbst weg.
 
 ## Der Verlauf lässt sich umbauen — und sagt, was er nicht kann
 
@@ -254,6 +260,8 @@ Stellen halten das, beide sind nötig:
   die Mindestbreite des Inhalts und meldet sie mit `tell_the_zone` bis zur
   Karte, sonst steht sie einige Runden zu schmal; Auswahlfelder baut
   `column_choice`, sonst verlangt ihr längster Eintrag die Spalte.
+- **Das i einer Handlung** zeigt beim Darüberfahren ihren Satz, der Klick
+  öffnet `manual.help_for_action` (RM-554).
 - **Ein Feld einer Merkmalsart steht nur an ihr** (`perceive.actions._carried_by`):
   die Steigung am Gewinde, nicht an der Bohrung.
 - **Eine Anzahl ist keine Länge** (`count`, `steps`, `holes`):
@@ -288,9 +296,10 @@ Ansichtsseite steht in `griffe.md`.
   *Achse* — jede andere Achse bekommt einen Satz mit dem Weg.
 - **Eine gebundene Lage folgt dem Griff:** Der Zug wandert als Versatz in den
   Ausdruck (`expressions.shifted`: `=@staerke + 5`), eine Achse ohne Zug bleibt
-  unangetastet; abgelehnt wird nur eine Drehung an einem gebundenen Wert. Eine
-  Achse mit Ausdruck bekommt im Merkmalfenster das `ValueField` des
-  Operationsdialogs (`FeaturePanel._part_fields`, §13).
+  unangetastet; abgelehnt wird nur eine Drehung an einem gebundenen Wert. Jedes
+  Zahlenfeld des Schritts trägt im Merkmalfenster fx, mit oder ohne Ausdruck
+  (`_expression_entry`, §13, RM-555) — nur in den Handlungen dieses Schritts
+  (`_schemas_of`), nie in gleichnamigen Feldern der Nachbarn.
 - **Entf** nimmt an Dach oder Einzelmerkmal den Schritt des Bausteins
   (`MainWindow._delete_the_chosen_feature`), nie den Körper; ohne Baustein gilt
   `remove_feature`; greift auch das nicht (Fläche, Gewinde, Verrundung), fällt
@@ -315,8 +324,8 @@ Ansichtsseite steht in `griffe.md`.
   `_commit_slot_change`) und legt keinen zweiten obenauf. Wer eine Operation
   baut, die ein Merkmal aus ihrem früheren Schritt noch einmal anfasst, fragt
   zuerst `created_by`.
-- **Karte:** nur `perceive.actions.OFFERED_AT_A_PART` (*Stift für Bohrung* am
-  Innengewinde, an keiner anderen Art), danach `not_offered_at`.
+- **Karte:** nur `perceive.actions.OFFERED_AT_A_PART` (*Stift für Bohrung* an
+  Innengewinde und Bohrung), danach `not_offered_at`.
 
 ## Der Hauptknopf
 
@@ -340,12 +349,9 @@ Warum, mit Anlässen: `regel-fenster.md`, „Der Hauptknopf“; Wächter `test_s
 
 ## Ein Dialog, der höher ist als sein Inhalt
 
-Von Hand gezogen oder beim Öffnen an den Inhalt angepasst — überschüssiger
-Raum braucht **eine** Stelle, sonst verteilt Qt ihn als Lücken zwischen
-Widgets fester Höhe. Die Stelle ist ein `addStretch` dort, wo Leere nicht
-stört, oder ein Widget, das den Platz nutzt. `style.WrappedNote` misst
-Statusmeldungen ohne die gepinnte Höhe, denn `QLabel.heightForWidth` meldet
-nie weniger als die Mindesthöhe.
+Überschüssiger Raum braucht **eine** Stelle: ein `addStretch`, wo Leere nicht
+stört, oder ein Widget, das ihn nutzt. Statusmeldungen misst
+`style.WrappedNote`.
 
 **Dialoggröße nach Auslöser:** `ContentHeight` misst die natürliche Geometrie
 des aktuellen Inhalts einmal nach dem Anzeigen, die Höhe erst in der neuen
@@ -456,14 +462,17 @@ ein Programmfehler, nicht Ihre Schuld“ (§33.1).
   verwirft späte Antworten.
 
 
-### Formsitzung: Mauszüge und Analyse
+### Formen und Skelett: Gesten
 
-- Ein Pinselzug reicht vom Drücken bis zum Loslassen, auch außerhalb des
-  Modells. Seine räumlichen Proben teilen die optionale `Stroke.gesture`-Kennung
-  im vorhandenen Strichparameter. Kennung null hält alte Einzelzüge lesbar;
-  die Zusatzkennung verändert deren Geometrie nicht.
-- Zählung, lokales Rückgängig und Wiederholen verwenden diese Gruppe, einschließlich
-  noch wartender Arbeiterproben. Eine neue Geste leert lokales Wiederholen;
-  Beenden des Editors beendet auch einen noch gehaltenen Pinsel im Navigator.
-- Die sichtbare Gestenleiste trägt ihre eigene `MapLegend` mit Skala und Herkunft.
-  Ein Kartenwechsel entwertet alte Befunde und Wartehinweise zusammen.
+- Ein Pinselzug reicht vom Drücken bis zum Loslassen, auch neben dem Modell;
+  seine Proben teilen `Stroke.gesture`, jede Geste ist eine Etappe
+  (`Stroke.brush` 2, alte rechnen wie gespeichert). Zählung und lokales
+  Rückgängig nehmen die Gruppe samt wartender Proben; Beenden lässt den Pinsel los.
+- Zu grobes Netz gleicht der Arbeiter an, neu wie geöffnet; ins Dokument erst
+  mit *Fertig* und neuen Zügen, eine Transaktion (`insert_before(changed=)`).
+  Scheitert es, kein zweiter Versuch.
+- Skelett: n Knochen, n + 1 Klicks, Enter beendet die Kette, Ziehen am Gelenk
+  beugt (gebundener Winkel: Satz statt Zug), *Fertig* ohne Dialog. Escape
+  nimmt nur Unfertiges.
+- Die Gestenleiste trägt ihre `MapLegend`; ein Kartenwechsel entwertet Befund
+  und Wartehinweis.

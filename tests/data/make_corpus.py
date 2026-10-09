@@ -313,6 +313,25 @@ def pocket_with_pin() -> None:
     write(trimesh.boolean.difference([block, groove]), "pocket_with_pin.stl")
 
 
+def ball_in_socket() -> None:
+    """Eine Kugelpfanne Ø 12 in einer Platte 30 × 30 × 12 und darin lose eine Kugel Ø 10
+    — das Kugelgelenk zum Drucken in einem Stück (Review G, F1).
+
+    Die Mitte liegt 3 mm unter der Oberseite, die Kugel steht 2 mm darüber und
+    berührt die Pfanne nirgends. Vor dem Fix schnitt *Merkmal ändern* an der
+    Pfanne die Kugel ab, *Merkmal verschieben* und *Merkmal entfernen*
+    verschmolzen sie still mit der Platte.
+    """
+    plate = trimesh.creation.box(extents=(30.0, 30.0, 12.0))
+    plate.apply_translation((0.0, 0.0, 6.0))
+    socket = trimesh.creation.icosphere(subdivisions=4, radius=6.0)
+    socket.apply_translation((0.0, 0.0, 9.0))
+    ball = trimesh.creation.icosphere(subdivisions=4, radius=5.0)
+    ball.apply_translation((0.0, 0.0, 9.0))
+    carved = trimesh.boolean.difference([plate, socket])
+    write(trimesh.util.concatenate([carved, ball]), "ball_in_socket.stl")
+
+
 def cup_on_stem() -> None:
     """Ein Becher Ø 30 auf einem schmaleren Fuß, innen Ø 28 mit Deckelfalz
     Ø 29,2 — nachgebaut nach dem Minitopf aus RM-535.
@@ -906,6 +925,7 @@ if __name__ == "__main__":
     near_sphere_ellipsoid()
     torus_ring()
     pocket_with_pin()
+    ball_in_socket()
     cup_on_stem()
     pin_with_end_chamfers()
     post_with_fillet()

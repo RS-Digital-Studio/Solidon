@@ -992,6 +992,15 @@ def uses_tree_supports(settings: PrintSettings, motion: Motion) -> bool:
     return style == "tree" or (style == "auto" and motion.support_tree)
 
 
+def _contact_density(settings: PrintSettings, motion: Motion) -> float:
+    """Wie dicht die Trennschicht liegt: aus der Lücke, die Solidon schreibt, wo
+    sie gewählt oder übernommen ist (RM-583), sonst die des Herstellerprozesses."""
+    width = settings.layers.line_width
+    if "support.interface_spacing" in settings.chosen | settings.accepted and width > 0.0:
+        return width / (width + max(settings.support.interface_spacing, 0.0))
+    return motion.support_interface_density or 1.0
+
+
 def _support_lines(
     layer: _Layer,
     supports: Sequence[manifold3d.CrossSection],
@@ -1010,7 +1019,7 @@ def _support_lines(
     body, contact = _support_parts(supports, index, settings)
     tree = uses_tree_supports(settings, motion)
     density = max(settings.support.density, 0.0)
-    contact_density = motion.support_interface_density or 1.0
+    contact_density = _contact_density(settings, motion)
     for area, share, speed, joined in (
         (body, density, roles.support, not tree),
         (contact, contact_density, roles.support_interface, False),
@@ -1061,7 +1070,7 @@ def support_material(
     _material, columns = _columns_of(result, settings, motion, cancelled)
     width = settings.layers.line_width
     density = max(settings.support.density, 0.0)
-    contact_density = motion.support_interface_density or 1.0
+    contact_density = _contact_density(settings, motion)
     tree = uses_tree_supports(settings, motion)
     total = 0.0
     for index, column in enumerate(columns):

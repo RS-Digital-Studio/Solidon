@@ -2233,11 +2233,8 @@ def test_the_view_bar_names_the_new_plane_and_keeps_the_view(qt_app: QApplicatio
     zum Ziehgriff. ``sketchViewChanged`` geht ans Ebenenfeld
     (``MainWindow._on_sketch_view_changed`` → ``reflect_camera_view``), und
     sobald die Skizze Elemente hat, setzt sie dort die **Blickebene**. Erst
-    dadurch gehen Blick und Zeichenebene auseinander, und genau das ist die
-    Bedingung, unter der die Leiste das Aufziehen einer Höhe anbietet
-    (``_sketch_pull_offer``). Die ViewBar ist damit ein zweiter Weg in die
-    Querschau neben den Ziffern 1 bis 3 — das war am 07.09.2026 zwischen zwei
-    Sitzungen erst umstritten und dann am Code belegt.
+    dadurch gehen Blick und Zeichenebene auseinander. Die ViewBar ist damit
+    ein zweiter Weg in die Querschau neben den Ziffern 1 bis 3.
 
     Der Nachbartest darüber ersetzt ``_settle_sketch_view`` durch eine
     Attrappe und kann die Meldung deshalb nicht sehen; hier läuft sie echt.
@@ -2285,9 +2282,9 @@ def test_the_view_bar_names_the_new_plane_and_keeps_the_view(qt_app: QApplicatio
 
 def test_the_sketch_cards_have_parseable_theme_styles(qt_app: QApplication) -> None:
     """Die modernen Karten dürfen nicht auf Qts ungestylten Rückfall fallen."""
-    from app.ui.viewport import SketchActionBadge, SketchPlanePicker, SketchSelectionBadge
+    from app.ui.viewport import SketchPlanePicker, SketchSelectionBadge
 
-    cards = (SketchPlanePicker(), SketchSelectionBadge(), SketchActionBadge())
+    cards = (SketchPlanePicker(), SketchSelectionBadge())
 
     for card in cards:
         assert "}}" not in card.styleSheet(), card.styleSheet()
@@ -2910,683 +2907,6 @@ def flat_curves() -> tuple[Any, ...]:
     return (SketchCurve(points=(*corners, corners[0]), construction=False),)
 
 
-def test_the_cage_grows_out_of_the_outline_along_the_normal() -> None:
-    """Was beim Ziehen wächst, liegt über der Zeichnung und nicht daneben.
-
-    Die Drahtform ist die einzige Auskunft während des Zugs — eine, die um
-    einen halben Millimeter neben der Ebene läge, behauptete einen anderen
-    Körper als den, der danach entsteht.
-    """
-    from app.core.sketch.planes import frame_of
-    from app.ui.viewport import pull_cage
-
-    frame = frame_of((0.0, 0.0, 1.0), (0.0, 0.0, 0.0))
-    lines = pull_cage(frame, flat_curves(), height=12.0)
-
-    assert lines, "eine Höhe über einem Umriss ergibt eine Drahtform"
-    heights = {round(point[2], 9) for start, end in lines for point in (start, end)}
-    assert heights == {0.0, 12.0}, f"nur Boden und Deckel, gemessen {sorted(heights)}"
-
-
-def test_the_cage_reaches_the_full_height_and_no_further() -> None:
-    """Die Höhe der Drahtform ist die Zahl, die am Zeiger steht.
-
-    Getrennt vom Test darüber, weil eine Drahtform, die *irgendwo* über der
-    Ebene endet, dort auch grün wäre — geprüft wird der Wert.
-    """
-    from app.core.sketch.planes import frame_of
-    from app.ui.viewport import pull_cage
-
-    frame = frame_of((0.0, 0.0, 1.0), (0.0, 0.0, 0.0))
-    for height in (0.5, 7.0, 250.0):
-        lines = pull_cage(frame, flat_curves(), height=height)
-        top = max(point[2] for start, end in lines for point in (start, end))
-        assert top == pytest.approx(height)
-
-
-def test_the_cage_follows_a_tilted_plane_instead_of_world_up() -> None:
-    """Auf einer angeklickten Fläche ist „hoch" die Normale dieser Fläche.
-
-    Dieselbe Zusage wie bei ``axis_hit``, hier für das Bild: Ein Körper, der
-    entlang der Ebenennormalen entsteht, muss auch dorthin wachsen zu sehen
-    sein — sonst zeigt die Vorschau etwas anderes als das Ergebnis.
-    """
-    from app.core.sketch.planes import frame_of
-    from app.ui.viewport import pull_cage
-
-    frame = frame_of((1.0, 0.0, 1.0), (0.0, 0.0, 0.0))
-    curves = flat_curves()
-    lines = pull_cage(frame, curves, height=10.0)
-
-    lifted = {tuple(round(value, 6) for value in end) for start, end in lines}
-    for point in curves[0].points:
-        expected = tuple(round(point[axis] + 10.0 * frame.normal[axis], 6) for axis in range(3))
-        assert expected in lifted, f"{expected} fehlt in der angehobenen Kopie"
-
-
-def test_construction_geometry_is_not_pulled_up() -> None:
-    """Hilfsgeometrie bildet kein Profil, also entsteht daran kein Körper.
-
-    Eine mitgezogene Konstruktionslinie wäre eine Wand, die im Ergebnis nicht
-    vorkommt — dieselbe Grenze, die ``regions_of`` später zieht.
-    """
-    from app.core.sketch.planes import frame_of
-    from app.core.sketch.profile import SketchCurve
-    from app.ui.viewport import pull_cage
-
-    frame = frame_of((0.0, 0.0, 1.0), (0.0, 0.0, 0.0))
-    helper = SketchCurve(points=((0.0, 0.0, 0.0), (100.0, 100.0, 0.0)), construction=True)
-    assert pull_cage(frame, (helper,), height=10.0) == []
-
-
-def test_a_height_of_zero_draws_nothing() -> None:
-    """Kein Sonderfall, sondern ein Körper ohne Ausdehnung.
-
-    Der Zug beginnt bei null: Ohne diesen Zweig legte der erste Mausdruck eine
-    Drahtform mit deckungsgleichem Boden und Deckel in die Szene, also
-    doppelte Linien auf der Zeichnung.
-    """
-    from app.core.sketch.planes import frame_of
-    from app.ui.viewport import pull_cage
-
-    frame = frame_of((0.0, 0.0, 1.0), (0.0, 0.0, 0.0))
-    assert pull_cage(frame, flat_curves(), height=0.0) == []
-
-
-def test_the_cage_caps_its_ribs_on_a_finely_sampled_curve() -> None:
-    """Ein Kreis mit vierundsechzig Punkten wird keine Wand aus Strichen.
-
-    Die Sprossen machen aus zwei Umrissen einen Körper; eine je Punkt ergäbe
-    bei einer abgetasteten Kurve eine geschlossene Fläche, hinter der die
-    Zeichnung verschwindet. Erste und letzte bleiben dabei immer dabei — an
-    den Enden hängt die Form.
-    """
-    from app.core.sketch.planes import frame_of
-    from app.core.sketch.profile import SketchCurve
-    from app.ui.viewport import MOST_PULL_RIBS, pull_cage
-
-    frame = frame_of((0.0, 0.0, 1.0), (0.0, 0.0, 0.0))
-    ring = SketchCurve(
-        points=tuple(
-            (
-                10.0 * math.cos(step / 64.0 * math.tau),
-                10.0 * math.sin(step / 64.0 * math.tau),
-                0.0,
-            )
-            for step in range(65)
-        ),
-        construction=False,
-    )
-    lines = pull_cage(frame, (ring,), height=5.0)
-    ribs = [pair for pair in lines if pair[0][2] != pair[1][2]]
-
-    assert len(ribs) <= MOST_PULL_RIBS + 1, f"{len(ribs)} Sprossen sind eine Wand"
-    feet = {tuple(round(value, 6) for value in pair[0]) for pair in ribs}
-    for index in (0, 64):
-        point = tuple(round(value, 6) for value in ring.points[index])
-        assert point in feet, "Anfang und Ende tragen immer eine Sprosse"
-
-
-def test_a_rectangle_keeps_a_rib_at_every_corner() -> None:
-    """Und bei fünf Punkten bleiben alle fünf.
-
-    Die Gegenprobe zum Deckel darüber: Wer die Sprossen pauschal ausdünnt,
-    verliert an einem Rechteck eine Ecke, und aus dem Kasten wird ein Dach.
-    """
-    from app.core.sketch.planes import frame_of
-    from app.ui.viewport import pull_cage
-
-    frame = frame_of((0.0, 0.0, 1.0), (0.0, 0.0, 0.0))
-    lines = pull_cage(frame, flat_curves(), height=6.0)
-    ribs = [pair for pair in lines if pair[0][2] != pair[1][2]]
-
-    assert len(ribs) == 5, f"fünf Punkte, fünf Sprossen — gemessen {len(ribs)}"
-
-
-def test_the_grip_measures_against_the_segments_not_the_corners() -> None:
-    """Ein Griff, der nur an den Ecken greift, verlangt eine Zielübung.
-
-    Dieselbe Unterscheidung wie bei der Merkmalssuche: gemessen wird gegen den
-    nächsten Ort *auf* der Strecke. Die Mitte einer 40 Punkte langen Kante ist
-    von jeder Ecke zwanzig entfernt und von der Kante null.
-    """
-    from app.ui.viewport import polyline_distance
-
-    line = [(0.0, 0.0), (40.0, 0.0)]
-    assert polyline_distance(line, (20.0, 0.0)) == pytest.approx(0.0)
-    assert polyline_distance(line, (20.0, 3.0)) == pytest.approx(3.0)
-
-
-def test_the_grip_ends_where_the_drawing_ends() -> None:
-    """Er reicht nicht entlang der verlängerten Geraden weiter.
-
-    Sonst wäre in der Querschau — dort projiziert der Umriss auf einen Strich —
-    die ganze Bildzeile ein Griff, und die Kamera hätte ihre linke Taste
-    verloren.
-    """
-    from app.ui.viewport import polyline_distance
-
-    line = [(0.0, 0.0), (40.0, 0.0)]
-    assert polyline_distance(line, (60.0, 0.0)) == pytest.approx(20.0)
-
-
-def test_nothing_drawn_is_infinitely_far_away() -> None:
-    """Von nichts ist alles gleich weit weg — und damit greift nichts.
-
-    Ohne diesen Zweig gäbe ``min`` über eine leere Folge einen Fehler, und zwar
-    genau beim Betreten des Modus, wenn noch keine Linie steht.
-    """
-    from app.ui.viewport import polyline_distance
-
-    assert polyline_distance([], (0.0, 0.0)) == math.inf
-    assert polyline_distance([(3.0, 4.0)], (0.0, 0.0)) == pytest.approx(5.0)
-
-
-def test_the_pulled_height_snaps_to_the_grid_that_is_drawn() -> None:
-    """Eine aufgezogene Höhe ist eine runde Zahl.
-
-    Zwei Gründe in einem: 20 statt 19,7 ist die Zahl, die jemand meinte, und
-    ein Zug, der zwischen zwei Rasterpunkten nichts ändert, muss nicht neu
-    zeichnen — dieselbe Ersparnis, an der die Fangmarke hängt.
-    """
-    from app.ui.viewport import pulled_height
-
-    assert pulled_height(19.7, step=5.0, limits=(0.1, 1000.0)) == pytest.approx(20.0)
-    assert pulled_height(19.7, step=0.0, limits=(0.1, 1000.0)) == pytest.approx(19.7)
-
-
-def test_the_pulled_height_stays_inside_the_limits_of_the_operation() -> None:
-    """Die Zahl am Zeiger ist die, die der Dialog danach annimmt.
-
-    Eine Höhe von 4000 mm lehnt ``sketch_extrude`` ab; sie am Zeiger zu zeigen
-    und danach abzulehnen wäre eine Zusage, die der nächste Schritt bricht.
-    Das Vorzeichen bleibt erhalten: außen ist Aufbau, innen ist Tasche.
-    """
-    from app.ui.viewport import pulled_height
-
-    assert pulled_height(4000.0, step=0.0, limits=(0.1, 1000.0)) == pytest.approx(1000.0)
-    assert pulled_height(-30.0, step=0.0, limits=(0.1, 1000.0)) == pytest.approx(-30.0)
-    assert pulled_height(-4000.0, step=0.0, limits=(0.1, 1000.0)) == pytest.approx(-1000.0)
-
-
-def test_without_known_limits_the_height_is_not_clamped() -> None:
-    """Eine erfundene Grenze wäre schlechter als keine.
-
-    ``set_sketch_pull`` ohne Grenzen heißt „unbekannt", nicht „null bis null" —
-    ohne diesen Zweig wäre jede Höhe auf null geklemmt und der Griff tot.
-    """
-    from app.ui.viewport import pulled_height
-
-    assert pulled_height(4000.0, step=0.0, limits=(0.0, 0.0)) == pytest.approx(4000.0)
-
-
-def gripping(viewport: Any, *, height: float | None = 10.0) -> None:
-    """Stellt die Ansicht so, als läge der Zeiger auf dem Griff.
-
-    **Ohne diese Attrappe ist jeder Test über den Griff grün und prüft
-    nichts** (§35). Offscreen ist ``renderer`` None, also gibt ``_display_of``
-    nichts, ``grip_reach`` unendlich und ``sketch_pull_ready`` **immer**
-    ``False`` — auch mit gesetztem Angebot. Die erste Fassung dieses Tests
-    behauptete damit „ohne Frage kein Griff" und hätte auch bei einem Griff,
-    der jede Frage übergeht, bestanden (gefunden von der Review-Sitzung,
-    27.08.2026).
-
-    Ersetzt werden genau die drei Methoden, die einen Renderer brauchen — die
-    Reichweite im Bild, der Ort auf der Ebene und das Maß entlang der Achse.
-    Alles davor und danach ist echt: die Reihenfolge der Bedingungen, die Frage
-    an das Fenster und das Signal. ``height=None`` stellt den Fall, dass sich
-    von dieser Blickrichtung aus keine Höhe ablesen lässt.
-    """
-    viewport.grip_reach = lambda x, y: 0.0
-    viewport.pull_base_at = lambda x, y: (0.0, 0.0)
-    viewport.pull_height_at = lambda base, x, y: height
-
-
-def test_the_grip_is_not_offered_without_the_window_answering(qt_app: QApplication) -> None:
-    """Ohne ``set_sketch_pull`` gibt es die Geste nicht.
-
-    Die Ansicht kennt den Zustand der Zeichnung nicht — Querschau,
-    geschlossener Umriss, gewählte Operation. Wer die Frage nicht stellt,
-    bekommt keinen Griff, und die linke Taste bleibt bei der Kamera.
-
-    Mit der Attrappe aus :func:`gripping`, damit der Test an der **Frage**
-    scheitert und nicht am fehlenden Bild.
-    """
-    from app.core.sketch.planes import frame_of
-    from app.ui.viewport import Viewport
-
-    viewport = Viewport()
-    viewport.set_sketching(frame_of((0.0, 0.0, 1.0), (0.0, 0.0, 0.0)))
-    gripping(viewport)
-
-    assert viewport.sketch_pull_ready(10, 10) is False
-
-
-def test_the_answer_of_the_window_decides_the_grip(qt_app: QApplication) -> None:
-    """Drei Antworten, drei Ausgänge — und einer davon ist ein Satz.
-
-    ``"ready"`` gibt die Taste dem Griff; ein **Grund** gibt sie der Kamera und
-    sagt, warum (Regel 17); eine leere Antwort gibt sie der Kamera und schweigt,
-    denn dort war die Geste nicht gemeint. Der mittlere Fall war in der ganzen
-    Suite nicht belegt: ``sketchPullBlocked`` kam nirgends vor.
-    """
-    from app.core.sketch.planes import frame_of
-    from app.ui.viewport import Viewport
-
-    viewport = Viewport()
-    viewport.set_sketching(frame_of((0.0, 0.0, 1.0), (0.0, 0.0, 0.0)))
-    gripping(viewport)
-    heard: list[str] = []
-    viewport.sketchPullBlocked.connect(heard.append)
-
-    viewport.set_sketch_pull(lambda: "ready", (0.1, 1000.0))
-    assert viewport.sketch_pull_ready(10, 10) is True
-    assert heard == [], "wo es geht, wird nichts gesagt"
-
-    viewport.set_sketch_pull(lambda: "Zum Aufziehen fehlt der geschlossene Umriss.", (0.1, 1000.0))
-    assert viewport.sketch_pull_ready(10, 10) is False
-    assert heard == ["Zum Aufziehen fehlt der geschlossene Umriss."], heard
-
-    heard.clear()
-    viewport.set_sketch_pull(lambda: "", (0.1, 1000.0))
-    assert viewport.sketch_pull_ready(10, 10) is False
-    assert heard == [], "wo die Geste nicht angeboten wird, gibt es nichts zu erklären"
-
-
-def test_a_view_that_cannot_read_a_height_offers_no_grip(qt_app: QApplication) -> None:
-    """Angeboten wird nur, was auch geht — und das entscheidet die Rechnung.
-
-    Der Griff hing an der Ebenen**wahl**, gearbeitet wird mit der
-    Blick**richtung**. Bei einer Skizze auf einer angeklickten Fläche fallen die
-    beiden immer auseinander: Der Blick hat dort nie denselben Namen wie die
-    Zeichenebene, und bei frontaler Ansicht gab ``axis_hit`` nichts zurück —
-    der Griff nahm die linke Taste und tat stumm nichts.
-
-    Keine zweite Schwelle, sondern dieselbe wie in ``axis_hit``: gefragt wird
-    die Rechnung selbst.
-    """
-    from app.core.sketch.planes import frame_of
-    from app.ui.viewport import Viewport
-
-    viewport = Viewport()
-    viewport.set_sketching(frame_of((0.0, 0.0, 1.0), (0.0, 0.0, 0.0)))
-    heard: list[str] = []
-    viewport.sketchPullBlocked.connect(heard.append)
-    viewport.set_sketch_pull(lambda: "ready", (0.1, 1000.0))
-
-    gripping(viewport, height=None)
-    assert viewport.sketch_pull_ready(10, 10) is False
-    assert heard == [], "ein Blick, aus dem keine Höhe folgt, ist kein Fehler des Nutzers"
-
-    gripping(viewport, height=10.0)
-    assert viewport.sketch_pull_ready(10, 10) is True, "und mit lesbarer Höhe gilt sie wieder"
-
-
-def test_a_typed_height_above_the_maximum_is_not_applied(qt_app: QApplication) -> None:
-    """Die Obergrenze gilt für die Tastatur genauso wie für den Zug.
-
-    Geprüft wurde nur die Untergrenze: Getippte 4000 gingen bei einem
-    Höchstwert von 1000 durch, und der Dialog klemmte sie danach kommentarlos —
-    also genau die Zusage gebrochen, dass die Grenze an **einer** Stelle steht.
-
-    Abgelehnt und nicht geklemmt: Wer tippt, meint genau diese Zahl, und sie
-    stillschweigend zu ändern wäre die Antwort auf eine andere Frage. Die Zahl
-    bleibt im Feld markiert stehen.
-    """
-    from app.ui.viewport import Viewport
-
-    viewport = Viewport()
-    heard: list[float] = []
-    viewport.sketchPulled.connect(heard.append)
-    viewport._pull_limits = (0.1, 1000.0)
-    viewport._pull_from = (0.0, 0.0)
-    viewport._drag_kind = "pull"
-    viewport.drag_bar.typing = True
-    viewport.drag_bar.value.setText("4000")
-
-    viewport._apply_typed()
-
-    assert not heard, "eine Höhe über dem Höchstwert wird nicht angewandt"
-    assert viewport._drag_kind == "pull", "der Zug läuft weiter, das Feld bleibt stehen"
-
-
-def test_pulling_inward_requests_a_pocket_instead_of_making_a_sliver(
-    qt_app: QApplication,
-) -> None:
-    """Ein Zug nach innen bleibt negativ und wird dadurch zur Tasche."""
-    from app.ui.viewport import Viewport
-
-    viewport = Viewport()
-    pulled: list[float] = []
-    blocked: list[str] = []
-    viewport.sketchPulled.connect(pulled.append)
-    viewport.sketchPullBlocked.connect(blocked.append)
-    viewport._pull_limits = (0.1, 1000.0)
-    viewport._cut_limits = (0.1, 1000.0)
-    viewport._pull_from = (0.0, 0.0)
-    viewport._drag_kind = "pull"
-    viewport._pull_height = -30.0
-
-    viewport.finish_sketch_pull()
-
-    assert pulled == [pytest.approx(-30.0)]
-    assert not blocked
-    assert viewport.pulling() is False
-
-
-def test_the_pull_offers_a_field_for_the_height_at_the_pointer(qt_app: QApplication) -> None:
-    """Ohne Feld ist die Tastatur am Ziehgriff nur halb verdrahtet.
-
-    ``eventFilter`` schreibt eine getippte Ziffer in ``drag_bar.value`` und holt
-    den Fokus dorthin — aber während eines Skizzenzugs wurde die Leiste nie
-    gezeigt. Ein unsichtbares Feld nimmt keinen Fokus, und die Eingabetaste lief
-    ins Leere. Gemeldet von Robert am 07.09.2026 („beim hochziehen … ich kann
-    auch keinen wert eingeben"); am gebauten Fenster war ``isVisible()`` der
-    Leiste während des ganzen Zugs falsch.
-
-    ``isHidden`` statt ``isVisible``: In einem nie gezeigten Fenster lügt das
-    zweite (siehe ``wartezeit.md``).
-    """
-    from app.core.sketch.planes import frame_of
-    from app.ui.viewport import Viewport
-
-    viewport = Viewport()
-    try:
-        frame = frame_of((0.0, 0.0, 1.0), (0.0, 0.0, 0.0))
-        viewport.set_sketching(frame)
-        viewport._sketch_curves = flat_curves()
-        viewport.set_sketch_pull(lambda: "ready", (0.1, 1000.0), (0.1, 1000.0))
-        viewport._pull_from = (0.0, 0.0)
-        viewport._drag_kind = "pull"
-
-        # **Die Gegenprobe zuerst.** Ohne sie beschriebe die Zusage unten nur
-        # einen Anfangszustand: Eine Leiste, die immer stünde, bestünde diesen
-        # Test, ohne etwas zu zeigen.
-        assert viewport.drag_bar.isHidden(), "vor dem Zug steht keine Leiste"
-
-        viewport.pull_height_at = lambda base, x, y: 20.0
-        viewport.continue_sketch_pull(120, 80)
-
-        bar = viewport.drag_bar
-        assert not bar.isHidden(), "während des Zugs steht das Feld im Bild"
-        assert bar.label.text() == "Höhe"
-        assert "20" in bar.value.text(), bar.value.text()
-        assert bar.anchor is not None, "und zwar am Zeiger, nicht oben mittig"
-        assert bar.typed_value() == pytest.approx(20.0)
-
-        # **Nach innen heißt Tiefe, und das Vorzeichen bleibt im Feld.** Sonst
-        # nähme die Eingabetaste den Betrag und machte aus einer Tasche
-        # kommentarlos einen Aufbau: ``_apply_typed`` liest den Feldwert
-        # unverändert als Höhe.
-        viewport.pull_height_at = lambda base, x, y: -12.0
-        viewport.continue_sketch_pull(120, 200)
-        assert bar.label.text() == "Tiefe"
-        assert bar.typed_value() == pytest.approx(-12.0)
-    finally:
-        viewport.deleteLater()
-
-
-def test_the_visible_arrow_and_cross_are_grabbable(qt_app: QApplication) -> None:
-    """Was als Griff gezeichnet wird, greift bis an Pfeilspitze und Kreuz.
-
-    Der sichtbare Griff ist 38 Bildpunkte lang; nur zehn Bildpunkte um den
-    Umriss zu prüfen machte gerade seine Enden zur Attrappe.
-    """
-    from app.core.sketch.planes import frame_of
-    from app.ui.viewport import CURSOR_PIXELS, Viewport
-
-    viewport = Viewport()
-    frame = frame_of((0.0, 0.0, 1.0), (0.0, 0.0, 0.0))
-    viewport.set_sketching(frame)
-    viewport._sketch_curves = flat_curves()
-    viewport.pixels_per_mm = lambda _frame: 1.0
-    # **Beide Maßstäbe setzen, nicht nur einen.** Der Ziehgriff misst
-    # seit dem 30.08.2026 auch senkrecht zur Ebene — dort zeigt sein
-    # Schaft, und nur diese Richtung wird im Bild verkürzt. Wer nur
-    # ``pixels_per_mm`` patcht, lässt die zweite Messung auf ihren
-    # Rückfallwert laufen und bekommt eine Griffgröße, die niemand
-    # gesetzt hat.
-    viewport.pixels_per_mm_upright = lambda _frame: 1.0
-    viewport._display_of = lambda point: (float(point[0]), float(point[2]))
-    handle = viewport._pull_handle_segments()
-    outward = handle[0][1]
-    viewport.set_sketch_pull(lambda: "ready", (0.1, 1000.0), (0.1, 1000.0))
-    viewport.pull_height_at = lambda base, x, y: 10.0
-
-    assert viewport.grip_reach(int(outward[0]), int(outward[2])) > CURSOR_PIXELS
-    assert viewport.pull_handle_reach(int(outward[0]), int(outward[2])) <= CURSOR_PIXELS
-    assert viewport.sketch_pull_ready(int(outward[0]), int(outward[2]))
-
-
-def test_without_an_editable_body_only_the_outward_pull_is_visible_and_valid(
-    qt_app: QApplication,
-) -> None:
-    """Ein fehlendes Taschenziel verschwindet aus Griff und Zugvorschau."""
-    from app.core.sketch.planes import frame_of
-    from app.ui.viewport import Viewport
-
-    viewport = Viewport()
-    viewport.set_sketching(frame_of((0.0, 0.0, 1.0), (0.0, 0.0, 0.0)))
-    viewport._sketch_curves = flat_curves()
-    viewport.pixels_per_mm = lambda _frame: 1.0
-    # **Beide Maßstäbe setzen, nicht nur einen.** Der Ziehgriff misst
-    # seit dem 30.08.2026 auch senkrecht zur Ebene — dort zeigt sein
-    # Schaft, und nur diese Richtung wird im Bild verkürzt. Wer nur
-    # ``pixels_per_mm`` patcht, lässt die zweite Messung auf ihren
-    # Rückfallwert laufen und bekommt eine Griffgröße, die niemand
-    # gesetzt hat.
-    viewport.pixels_per_mm_upright = lambda _frame: 1.0
-    viewport.set_sketch_pull(
-        lambda: "ready",
-        (0.1, 1000.0),
-        (0.1, 1000.0),
-        lambda: False,
-    )
-
-    assert len(viewport._visible_pull_handle_segments()) == 3
-    assert viewport._pull_takes(10.0)
-    assert not viewport._pull_takes(-10.0)
-
-    hidden: list[bool] = []
-    viewport._pull_from = (0.0, 0.0)
-    viewport._pull_height = 10.0
-    viewport.pull_height_at = lambda _base, _x, _y: -10.0
-    viewport._show_pull_cage = lambda: hidden.append(True)
-    viewport.continue_sketch_pull(10, 10)
-
-    assert viewport._pull_height == pytest.approx(0.0)
-    assert hidden == [True], "beim Richtungswechsel verschwindet die alte Aufbauvorschau"
-
-
-def test_a_rejected_pull_clears_its_wire_preview(qt_app: QApplication) -> None:
-    """Eine Absage lässt weder Drahtkäfig noch alte Zahl im Bild stehen."""
-    from app.ui.viewport import Viewport
-
-    viewport = Viewport()
-    viewport._pull_height = -8.0
-    viewport._pull_actors = [object()]
-
-    viewport.cancel_sketch_pull()
-
-    assert viewport._pull_actors == []
-    assert viewport._pull_height == pytest.approx(0.0)
-
-
-def test_a_segment_of_zero_length_is_measured_as_a_point(qt_app: QApplication) -> None:
-    """Zwei gleiche Punkte sind eine Strecke ohne Richtung, kein Toleranzfall.
-
-    Hier stand ``EPS_GEOM`` — eine Fertigungstoleranz in Millimetern — gegen
-    das Quadrat eines Abstands in **Bildpunkten**. Wirkungslos, aber ein Leser
-    hält so etwas für eine geprüfte Wahl. Ein geschlossener Umriss trägt seinen
-    ersten Punkt am Ende noch einmal; wer ihn zweimal hintereinander legt,
-    bekommt genau diese Strecke.
-    """
-    from app.ui.viewport import polyline_distance
-
-    doubled = [(10.0, 10.0), (10.0, 10.0), (40.0, 10.0)]
-    assert polyline_distance(doubled, (10.0, 14.0)) == pytest.approx(4.0)
-    assert polyline_distance([(10.0, 10.0), (10.0, 10.0)], (13.0, 14.0)) == pytest.approx(5.0)
-
-
-def test_letting_go_of_the_grip_becomes_an_operation(qt_app: QApplication) -> None:
-    """Der Zug endet als Signal und nicht als Geometrie (Regel 2).
-
-    Die Ansicht ändert nie selbst ein Modell: Was beim Loslassen herauskommt,
-    ist eine Zahl, und das Fenster macht daraus ``sketch_extrude``.
-    """
-    from app.ui.viewport import Viewport
-
-    viewport = Viewport()
-    heard: list[float] = []
-    viewport.sketchPulled.connect(heard.append)
-    viewport._pull_limits = (0.1, 1000.0)
-    viewport._pull_from = (0.0, 0.0)
-    viewport._pull_height = 14.0
-    viewport._drag_kind = "pull"
-
-    viewport.finish_sketch_pull()
-
-    assert heard == [pytest.approx(14.0)], "die gezogene Höhe kommt genau einmal an"
-    assert viewport.pulling() is False, "und der Zug ist danach vorbei"
-
-
-def test_a_click_on_the_grip_is_not_a_pull(qt_app: QApplication) -> None:
-    """Ohne Bewegung entsteht keine Operation.
-
-    Die Untergrenze der Operation ist die Grenze, unterhalb derer nichts
-    entstehen kann — ein Druck ohne Zug ergäbe sonst einen Schritt im Verlauf
-    über einen Körper von null Millimetern Höhe.
-    """
-    from app.ui.viewport import Viewport
-
-    viewport = Viewport()
-    heard: list[float] = []
-    viewport.sketchPulled.connect(heard.append)
-    viewport._pull_limits = (0.1, 1000.0)
-    viewport._pull_from = (0.0, 0.0)
-    viewport._pull_height = 0.0
-    viewport._drag_kind = "pull"
-
-    viewport.finish_sketch_pull()
-
-    assert not heard, "null Millimeter sind kein Zug"
-
-
-def test_a_typed_height_takes_the_same_way_out_as_a_pulled_one(qt_app: QApplication) -> None:
-    """Die Eingabetaste während des Zugs (§18.11) — mit derselben Grenze.
-
-    Zwei Wege zu derselben Operation wären zwei Gelegenheiten, die Grenze zu
-    vergessen: Getippt geht die Zahl durch ``finish_sketch_pull``, und eine
-    unbrauchbare bleibt im Feld stehen, statt angewandt zu werden.
-    """
-    from app.ui.viewport import Viewport
-
-    viewport = Viewport()
-    heard: list[float] = []
-    viewport.sketchPulled.connect(heard.append)
-    viewport._pull_limits = (0.1, 1000.0)
-    viewport._pull_from = (0.0, 0.0)
-    viewport._drag_kind = "pull"
-    viewport.drag_bar.typing = True
-    viewport.drag_bar.value.setText("25")
-
-    viewport._apply_typed()
-    assert heard == [pytest.approx(25.0)], "die getippte Höhe gewinnt"
-
-    heard.clear()
-    viewport._pull_from = (0.0, 0.0)
-    viewport._drag_kind = "pull"
-    viewport.drag_bar.typing = True
-    viewport.drag_bar.value.setText("0")
-
-    viewport._apply_typed()
-    assert not heard, "eine Höhe unter der Untergrenze wird nicht angewandt"
-    assert viewport._drag_kind == "pull", "und der Zug läuft weiter, das Feld bleibt stehen"
-
-
-def test_escape_during_a_pull_applies_nothing(qt_app: QApplication) -> None:
-    """Esc verwirft den Zug — und räumt die Drahtform ab, nicht den Stil.
-
-    ``_end_drag`` holt sonst den Navigationsstil zurück, und das baute den
-    Interaktionsstil mitten in der Geste neu auf: Das Loslassen käme bei einem
-    Stil an, der von seinem Drücken nichts weiß.
-    """
-    from app.ui.viewport import Viewport
-
-    viewport = Viewport()
-    heard: list[float] = []
-    viewport.sketchPulled.connect(heard.append)
-    viewport._pull_limits = (0.1, 1000.0)
-    viewport._pull_from = (0.0, 0.0)
-    viewport._pull_height = 30.0
-    viewport._drag_kind = "pull"
-
-    viewport._end_drag()
-
-    assert not heard, "Esc wendet nichts an"
-    assert viewport.pulling() is False
-    assert viewport._drag_kind is None
-
-
-def test_leaving_the_sketch_plane_ends_a_running_pull(qt_app: QApplication) -> None:
-    """Ein Zug gehört der Ebene, auf der er begann.
-
-    Dieselbe Begründung wie bei der Fangmarke: Ein Ebenenwechsel geht durch
-    ``set_sketching`` mit einem neuen Rahmen, und eine Drahtform, die dann
-    stehen bleibt, schwebt auf der vorigen Ebene im Raum.
-    """
-    from app.core.sketch.planes import frame_of
-    from app.ui.viewport import Viewport
-
-    viewport = Viewport()
-    viewport._pull_from = (0.0, 0.0)
-    viewport._pull_height = 12.0
-    viewport._drag_kind = "pull"
-
-    viewport.set_sketching(frame_of((0.0, 1.0, 0.0), (0.0, 0.0, 0.0)))
-
-    assert viewport.pulling() is False, "die neue Ebene beginnt ohne laufenden Zug"
-
-
-def test_in_the_sketch_mode_the_drag_callback_pulls_instead_of_moving(
-    qt_app: QApplication,
-) -> None:
-    """Dieselbe Geste, zwei Bedeutungen — und die Weiche steht im Rückruf.
-
-    Der Interaktionsstil kennt nur vier Schritte (bereit, Start, Zug, Ende).
-    Ohne die Weiche liefe ein Zug im Skizzenmodus in den Körperzug: Er fragte
-    nach dem gewählten Körper, fände keinen, und der Ziehgriff wäre still
-    nicht vorhanden.
-    """
-    from app.core.sketch.planes import frame_of
-    from app.ui.viewport import Viewport, _weak_callbacks
-
-    viewport = Viewport()
-    viewport.set_sketching(frame_of((0.0, 0.0, 1.0), (0.0, 0.0, 0.0)))
-    steps: list[str] = []
-
-    def note(what: str, answer: bool = True) -> Any:
-        def called(*_args: object) -> bool:
-            steps.append(what)
-            return answer
-
-        return called
-
-    viewport.sketch_pull_ready = note("ready")
-    viewport.begin_sketch_pull = note("start")
-    viewport.continue_sketch_pull = note("move")
-    viewport.finish_sketch_pull = note("end")
-    viewport.can_drag_body_at = note("body")
-
-    callbacks = _weak_callbacks(viewport)
-    callbacks.on_body_drag("ready", 10, 10)
-    callbacks.on_body_drag("start", 10, 10)
-    callbacks.on_body_drag("move", 10, 30)
-    callbacks.on_body_drag("end", 10, 30)
-
-    assert steps == ["ready", "start", "move", "end"], f"gemessen {steps}"
-
-
 def test_outside_the_sketch_mode_the_same_callback_moves_a_body(qt_app: QApplication) -> None:
     """Die Gegenprobe: Ohne Zeichenebene bleibt es der Körperzug.
 
@@ -3607,7 +2927,6 @@ def test_outside_the_sketch_mode_the_same_callback_moves_a_body(qt_app: QApplica
         return called
 
     viewport.can_drag_body_at = note("body", False)
-    viewport.sketch_pull_ready = note("pull", True)
 
     callbacks = _weak_callbacks(viewport)
     callbacks.on_body_drag("ready", 10, 10)
@@ -3681,62 +3000,6 @@ def test_dismissing_the_value_field_forgets_the_anchor(qt_app: QApplication) -> 
     bar.dismiss()
 
     assert bar.anchor is None
-
-
-def test_a_pull_to_the_stop_still_becomes_an_operation(qt_app: QApplication) -> None:
-    """Der Anschlag ist eine Zusage und keine Absage.
-
-    Wer weit über die Obergrenze hinauszieht, sieht in der Leiste den
-    geklemmten Wert — **und der ist, was gilt**. Die Richtungsprüfung fragte
-    einen Anlauf lang die vollständige Grenze und lehnte damit genau diesen
-    Fall ab: kein Körper, dazu „andersherum ziehen" als Meldung zu einem Zug,
-    der in die richtige Richtung ging (gefunden von der Review-Sitzung,
-    27.08.2026). Die Frage nach der **Richtung** hat nur eine Grenze.
-    """
-    from app.ui.viewport import Viewport, pulled_height
-
-    viewport = Viewport()
-    pulled: list[float] = []
-    blocked: list[str] = []
-    viewport.sketchPulled.connect(pulled.append)
-    viewport.sketchPullBlocked.connect(blocked.append)
-    viewport._pull_limits = (0.1, 1000.0)
-    viewport._pull_from = (0.0, 0.0)
-    viewport._drag_kind = "pull"
-    viewport._pull_height = pulled_height(4000.0, 0.0, viewport._pull_limits)
-    assert viewport._pull_height == pytest.approx(1000.0), "die Leiste zeigt den Anschlag"
-
-    viewport.finish_sketch_pull()
-
-    assert pulled == [pytest.approx(1000.0)], f"gemessen {pulled}"
-    assert not blocked, blocked
-
-
-def test_a_typed_height_survives_a_pull_in_the_wrong_direction(qt_app: QApplication) -> None:
-    """Wer tippt, hat die Frage nach der Richtung beantwortet.
-
-    und die Richtungsprüfung lehnte damit auch die **eingetippte** Höhe ab: Der
-    Griff war per Tastatur nicht mehr zu retten, obwohl §18.11 genau dafür die
-    Zahleneingabe während des Zugs vorsieht.
-    """
-    from app.ui.viewport import Viewport
-
-    viewport = Viewport()
-    pulled: list[float] = []
-    blocked: list[str] = []
-    viewport.sketchPulled.connect(pulled.append)
-    viewport.sketchPullBlocked.connect(blocked.append)
-    viewport._pull_limits = (0.1, 1000.0)
-    viewport._pull_from = (0.0, 0.0)
-    viewport._drag_kind = "pull"
-    viewport._pull_height = 0.1
-    viewport.drag_bar.typing = True
-    viewport.drag_bar.value.setText("25")
-
-    viewport._apply_typed()
-
-    assert pulled == [pytest.approx(25.0)], f"gemessen {pulled}"
-    assert not blocked, blocked
 
 
 def test_camera_near_a_sketch_main_view_snaps_by_direction() -> None:
@@ -3843,8 +3106,6 @@ def test_sketch_drag_callback_edits_before_it_moves_the_camera(
     viewport = Viewport()
     viewport.set_sketching(frame_of((0.0, 0.0, 1.0), (0.0, 0.0, 0.0)))
     viewport._sketch_hit = lambda x, y: (float(x), float(y))
-    viewport.pull_handle_reach = lambda x, y: math.inf
-    viewport.sketch_pull_ready = lambda x, y: False
     steps: list[object] = []
     viewport.set_sketch_edit(
         lambda point: True,
@@ -3860,34 +3121,6 @@ def test_sketch_drag_callback_edits_before_it_moves_the_camera(
     callbacks.on_body_drag("end", 8, 9)
 
     assert steps == [("start", (4.0, 5.0)), ("move", (8.0, 9.0)), "end"]
-
-
-def test_explicit_pull_handle_wins_over_sketch_editing(qt_app: QApplication) -> None:
-    """Der sichtbare Pfeil kann nicht in einen Auswahl- oder Kamerazug fallen."""
-    from app.core.sketch.planes import frame_of
-    from app.ui.viewport import Viewport, _weak_callbacks
-
-    viewport = Viewport()
-    viewport.set_sketching(frame_of((0.0, 0.0, 1.0), (0.0, 0.0, 0.0)))
-    viewport._sketch_hit = lambda x, y: (float(x), float(y))
-    viewport.pull_handle_reach = lambda x, y: 0.0
-    viewport.sketch_pull_ready = lambda x, y: True
-    steps: list[str] = []
-    viewport.set_sketch_edit(
-        lambda point: True,
-        lambda point: steps.append("edit") or True,
-        lambda point: None,
-        lambda: None,
-    )
-    viewport.begin_sketch_pull = lambda x, y: steps.append("pull") or True
-    viewport.continue_sketch_pull = lambda x, y: None
-    viewport.finish_sketch_pull = lambda: None
-
-    callbacks = _weak_callbacks(viewport)
-    assert callbacks.on_body_drag("ready", 10, 10)
-    assert callbacks.on_body_drag("start", 10, 10)
-
-    assert steps == ["pull"]
 
 
 def test_sketch_render_state_keeps_selection_and_control_points_offscreen(
@@ -3929,90 +3162,6 @@ def _profilkurve():
             (-20.0, -20.0, 0.0),
         )
     )
-
-
-def test_the_handle_stretches_lengthwise_but_not_across() -> None:
-    """Der Schaft wird gestreckt, Flügel und Kreuz bleiben, wie sie waren.
-
-    **Weil nur eine der beiden Richtungen im Bild verkürzt wird.** Der Schaft
-    zeigt entlang der Ebenennormalen und schrumpft mit dem Sinus des
-    Kippwinkels; Pfeilflügel und Kreuz liegen *in* der Ebene und tun das nicht.
-    Wer beide über dieselbe Zahl bemisst, bläst beim Strecken die Querstücke
-    mit auf — gemessen am 30.08.2026 eine Griffspanne von 156 statt 69
-    Bildpunkten, aus einem Griff, den man nicht findet, wurde einer, der das
-    Profil verdeckt.
-    """
-    from app.core.sketch.planes import frame_of
-    from app.ui.viewport import pull_handle
-
-    rahmen = frame_of((0.0, 0.0, 1.0), (0.0, 0.0, 0.0))
-    kurven = (_profilkurve(),)
-
-    schmal = pull_handle(rahmen, kurven, 10.0, 2.0)
-    breit = pull_handle(rahmen, kurven, 10.0, 8.0)
-    assert len(schmal) == len(breit), "die Zahl der Striche hängt nicht an der Breite"
-
-    def weiteste_quer(striche):
-        return max(abs(punkt[0]) for strich in striche for punkt in strich)
-
-    def weiteste_laengs(striche):
-        return max(abs(punkt[2]) for strich in striche for punkt in strich)
-
-    assert weiteste_quer(breit) > weiteste_quer(schmal), (
-        "eine größere Querweite muss die Flügel breiter machen"
-    )
-    assert weiteste_laengs(breit) == pytest.approx(weiteste_laengs(schmal)), (
-        "die Querweite darf den Schaft nicht verlängern — genau diese Kopplung war der Fehler"
-    )
-
-
-def test_without_a_cross_size_the_handle_behaves_as_before() -> None:
-    """``across`` ohne Wert heißt ``size`` — die alte Form bleibt erreichbar.
-
-    In der Seitenansicht sind beide Maße ohnehin gleich; ein Aufrufer, der nur
-    eine Zahl kennt, bekommt weiterhin genau das, was er bekam.
-    """
-    from app.core.sketch.planes import frame_of
-    from app.ui.viewport import pull_handle
-
-    rahmen = frame_of((0.0, 0.0, 1.0), (0.0, 0.0, 0.0))
-    kurven = (_profilkurve(),)
-
-    assert pull_handle(rahmen, kurven, 7.0) == pull_handle(rahmen, kurven, 7.0, 7.0)
-
-
-def test_the_stretch_is_bounded_by_the_snap_that_precedes_it() -> None:
-    """Die Streckgrenze endet dort, wo das Einrasten beginnt.
-
-    **Eine Zahl aus der Sache und keine Streuzahl.** Der Schaft wird gestreckt,
-    damit er im Bild seine Länge behält, und das wächst gegen unendlich, je
-    flacher der Blick steht. Begrenzt wird es dort, wo es aufhört, gebraucht zu
-    werden: Unter zehn Grad rastet die Kamera auf die nächste Hauptansicht ein
-    (``_settle_sketch_view``), es gibt dort also keinen flachen Blick mehr. Bei
-    genau zehn Grad ist der nötige Faktor ``1/sin(10°) = 5,76``.
-
-    Wird die Grenze darunter gesetzt, greift sie **vor** dem Einrasten — dann
-    bleibt zwischen zehn und dem Einrastwinkel eine Lücke, in der der Griff
-    wieder zu kurz ist.
-    """
-    import math
-
-    from app.ui.viewport import PULL_HANDLE_STRETCH, sketch_view_near
-
-    noetig_bei_zehn = 1.0 / math.sin(math.radians(10.0))
-    assert noetig_bei_zehn <= PULL_HANDLE_STRETCH, (
-        f"die Streckgrenze {PULL_HANDLE_STRETCH} liegt unter den {noetig_bei_zehn:.2f}, "
-        "die bei zehn Grad nötig sind — dort wäre der Griff wieder zu kurz"
-    )
-
-    # Und die zehn Grad sind wirklich der Rand des Einrastens: knapp darunter
-    # fängt es, knapp darüber nicht.
-    for grad, erwartet in ((9.5, "plane:xy"), (10.5, None)):
-        rad = math.radians(grad)
-        kamera = (0.0, math.sin(rad) * 10.0, math.cos(rad) * 10.0)
-        assert sketch_view_near(kamera, (0.0, 0.0, 0.0)) == erwartet, (
-            f"bei {grad}° erwartet: {erwartet} — die Streckgrenze ist auf diesen Rand gerechnet"
-        )
 
 
 def test_each_navigation_scheme_does_what_its_name_promises() -> None:
@@ -4730,37 +3879,6 @@ def test_without_a_scene_there_are_no_protected_patches(qt_app: QApplication) ->
     viewport.set_protected("obj_1", "face_3", True)
 
     assert viewport.protected_patches("obj_1") == []
-
-
-def test_the_pocket_preview_starts_at_the_top_of_the_body(qt_app: QApplication) -> None:
-    """Umriss auf dem Bett, Teil darüber: Die Drahtform wächst von der Oberkante nach unten.
-
-    Bis zum 02.09.2026 wuchs sie von der Zeichenebene in die Luft unter dem
-    Teil, während ``sketch_pocket`` oben schnitt — Tiefe richtig, Ort falsch.
-    Nach außen bleibt die Zeichenebene der Ausgangspunkt.
-    """
-    from app.core.sketch.planes import frame_of
-    from app.ui.viewport import Viewport
-
-    viewport = Viewport()
-    viewport._sketch_frame = frame_of((0.0, 0.0, 1.0), (0.0, 0.0, 0.0))
-    viewport.set_sketch_pull(
-        lambda: "ready", (0.1, 1000.0), (0.1, 1000.0), lambda: True, lambda: 20.0
-    )
-
-    viewport._pull_height = -5.0
-    lowered = viewport._pull_frame()
-    assert lowered.origin[2] == pytest.approx(20.0)
-    assert lowered.normal == viewport._sketch_frame.normal
-
-    viewport._pull_height = 5.0
-    assert viewport._pull_frame() is viewport._sketch_frame
-
-    viewport.set_sketch_pull(
-        lambda: "ready", (0.1, 1000.0), (0.1, 1000.0), lambda: True, lambda: 0.0
-    )
-    viewport._pull_height = -5.0
-    assert viewport._pull_frame() is viewport._sketch_frame, "Ebene ist Oberkante: nichts zu heben"
 
 
 def test_a_cut_through_an_editable_body_still_shows_it(qt_app: QApplication) -> None:
@@ -7798,22 +6916,21 @@ def test_the_display_cache_follows_the_geometry_not_only_the_id(
 
 
 def test_a_body_with_filament_still_shows_that_it_is_selected(qt_app: QApplication) -> None:
-    """Auswahlfarbe schlägt Dreiecksfarben — sonst bleibt ein Teil mit Filament grau.
+    """Die Auswahl liegt als Ton über den Dreiecksfarben — sonst bliebe ein Teil grau.
 
     Wer einem Körper ein Filament zuweist, gibt ihm Farben je Dreieck; pygfx
     liest sie über ``material.color_mode = "face"`` und sieht die Körperfarbe
-    gar nicht mehr an. Die Auswahl schrieb bis hierher genau dorthin: im
-    Objektbaum markiert, im Bild grau wie alle anderen (Befund Robert,
-    08.09.2026, an vier Teilen in „PLA Weiß").
-
-    Geprüft wird die Umschaltung selbst und nicht ihre Farbe — was pygfx aus
-    ``color_mode`` macht, ist Sache des Renderers; dass die Ansicht sie beim
-    Auswählen umlegt und beim Abwählen zurücknimmt, ist ihre eigene Aussage.
+    gar nicht mehr an. Die Auswahl schrieb bis zum 08.09.2026 genau dorthin:
+    im Objektbaum markiert, im Bild grau wie alle anderen. Danach stand sie
+    deckend, und ein neues Filament zeigte sich erst nach dem Abwählen
+    (RM-557). Geprüft wird, dass die Ansicht den Ton beim Auswählen legt und
+    beim Abwählen zurücknimmt; was pygfx daraus mischt, ist Sache des
+    Renderers.
     """
     from app.core.geom.mesh import MeshData
     from app.core.scene.evaluate import EvaluationResult
     from app.core.types import MaterialSlot, Scene, SceneObject
-    from app.ui.viewport import Viewport
+    from app.ui.viewport import SELECTED_COLOUR, SELECTION_TINT_SHARE, Viewport
 
     body = trimesh.creation.box(extents=(10.0, 10.0, 10.0))
     mesh = MeshData.of(body, tuple([1] * len(body.faces)))
@@ -7831,18 +6948,69 @@ def test_a_body_with_filament_still_shows_that_it_is_selected(qt_app: QApplicati
         viewport.show_scene(result)
         actor = viewport._actors.get("obj_1")
         assert isinstance(actor, RecordingItem), "der Körper wurde gezeichnet"
-        assert actor.face_colours_visible, "ohne Auswahl gilt der Werkstoff je Dreieck"
+        assert actor.face_tint is None, "ohne Auswahl gilt der Werkstoff je Dreieck"
 
         viewport.select("obj_1")
-        assert not actor.face_colours_visible, (
-            "ausgewählt muss die eine Auswahlfarbe gelten, sonst sieht man die Auswahl nicht"
+        assert actor.face_tint == (SELECTED_COLOUR, SELECTION_TINT_SHARE), (
+            "ausgewählt liegt die Auswahlfarbe als Ton darüber"
         )
 
         viewport.select(None)
-        assert actor.face_colours_visible, "abgewählt kommt der Werkstoff zurück"
+        assert actor.face_tint is None, "abgewählt kommt der Werkstoff ungetönt zurück"
     finally:
         viewport.renderer = None
         viewport.deleteLater()
+
+
+def test_an_exact_body_shows_the_filament_it_was_given() -> None:
+    """RM-557: Ein Baustein mit Filament steht im Bild in dessen Farbe, nicht grau.
+
+    Die Ansicht las die Slots am Körper (``mesh.slots``); ein exakter Körper
+    trägt sie an seiner Vernetzung, und gelesen als leer zeichnete sie ihn in
+    der Körperfarbe — „der Körper bleibt in der alten Farbe“ (Robert,
+    08.10.2026), gemessen am echten Fenster: nach dem Abwählen grau.
+    """
+    from tests.helpers import exact_kernel
+
+    edit = exact_kernel()
+    from app.core.types import MaterialSlot, SceneObject
+    from app.ui.viewport import slot_cell_colours
+
+    solid = edit.box(20.0, 20.0, 20.0)
+    solid = solid.with_triangle_slots((1,) * solid.triangle_count)
+    entry = SceneObject(
+        "obj_1",
+        "Würfel",
+        solid,
+        kind="brep",
+        material_slots=[MaterialSlot(1, "Rot", (1.0, 0.0, 0.0))],
+    )
+    colours = slot_cell_colours(solid, entry, solid.triangle_count, "#808080")
+    assert colours is not None, "der exakte Körper bekommt seine Filamentfarbe"
+    assert colours.colormap is not None
+    assert set(np.asarray(colours.values).tolist()) == {1}
+    assert colours.colormap[1] == "#ff0000"
+
+
+def test_a_new_filament_keeps_what_the_view_prepared_for_the_triangles() -> None:
+    """RM-557: Kanten, Hüllen und Normalen hängen an den Dreiecken, nicht an der Farbe.
+
+    Ein Filamentwechsel baut ein neues Netz um dieselben Dreiecke. Der Merker
+    der Ansicht verglich die Hülle und rechnete danach alle drei neu — an
+    einem großen Körper im Arbeiter, und so lange stand das alte Bild.
+    """
+    from dataclasses import replace
+
+    from app.core.geom.mesh import MeshData
+    from app.ui.viewport import _MeshMemo
+
+    memo = _MeshMemo()
+    plain = MeshData.of(trimesh.creation.box())
+    memo.remember("obj_1", plain, "Kanten")
+    painted = replace(plain, slots=(1,) * plain.triangle_count)
+    assert memo.has("obj_1", painted) and memo.get("obj_1", painted) == "Kanten"
+    other = MeshData.of(trimesh.creation.box(extents=(2.0, 2.0, 2.0)))
+    assert not memo.has("obj_1", other), "andere Dreiecke, andere Antwort"
 
 
 def test_a_body_under_an_analysis_map_keeps_its_colours_when_selected() -> None:
@@ -7854,14 +7022,14 @@ def test_a_body_under_an_analysis_map_keeps_its_colours_when_selected() -> None:
     Ohne Fenster an der Entscheidung selbst; der Weg durch die Ansicht steht
     im Fenstertest darunter.
     """
-    from app.ui.viewport import shows_face_colours
+    from app.ui.viewport import SELECTED_COLOUR, face_tint
 
-    assert shows_face_colours("obj_1", highlighted=(), map_owner=None)
-    assert not shows_face_colours("obj_1", highlighted=("obj_1",), map_owner=None), (
-        "ein gewählter Körper mit Filament zeigt die eine Auswahlfarbe"
+    assert face_tint("obj_1", highlighted=(), map_owner=None) is None
+    assert face_tint("obj_1", highlighted=("obj_1",), map_owner=None) == SELECTED_COLOUR, (
+        "ein gewählter Körper mit Filament trägt den Ton der Auswahl"
     )
-    assert shows_face_colours("obj_1", highlighted=("obj_1",), map_owner="obj_1")
-    assert not shows_face_colours("obj_2", highlighted=("obj_2",), map_owner="obj_1"), (
+    assert face_tint("obj_1", highlighted=("obj_1",), map_owner="obj_1") is None
+    assert face_tint("obj_2", highlighted=("obj_2",), map_owner="obj_1") == SELECTED_COLOUR, (
         "die Karte des einen Körpers gibt dem anderen keine Ausnahme"
     )
 
@@ -7886,7 +7054,7 @@ def test_selecting_the_body_of_an_analysis_map_leaves_the_map_visible(qt_app: QA
         viewport.select("obj_1")
         actor = viewport._actors.get("obj_1")
         assert isinstance(actor, RecordingItem), "der Körper wurde gezeichnet"
-        assert actor.face_colours_visible, "gewählt bleibt die Karte die Farbe des Körpers"
+        assert actor.face_tint is None, "gewählt bleibt die Karte die Farbe des Körpers"
     finally:
         viewport.renderer = None
         viewport.deleteLater()
@@ -8764,85 +7932,15 @@ def _scaled_sketch_view(ratio: float) -> tuple[Any, float]:
     renderer.device_ratio = lambda: ratio  # type: ignore[method-assign]
     viewport.renderer = renderer
     viewport.set_sketching(frame_of((0.0, 0.0, 1.0), (0.0, 0.0, 0.0)))
-    viewport._sketch_curves = flat_curves()
     per_mm = DEVICE_PIXELS_PER_MM * ratio
     viewport.pixels_per_mm = lambda _frame: per_mm  # type: ignore[method-assign]
-    viewport.pixels_per_mm_upright = lambda _frame: per_mm  # type: ignore[method-assign]
     # Das Rechteck liegt in der XY-Ebene; im Bild wird x nach rechts und die
-    # Normale (z) nach oben. So steht der Ziehgriff als senkrechte Strecke da.
+    # Normale (z) nach oben.
     viewport._display_of = lambda point: (  # type: ignore[method-assign]
         float(point[0]) * per_mm,
         float(point[2]) * per_mm,
     )
-    viewport.set_sketch_pull(lambda: "ready", (0.1, 1000.0), (0.1, 1000.0))
-    viewport.pull_height_at = lambda base, x, y: 10.0  # type: ignore[method-assign]
     return viewport, per_mm
-
-
-@pytest.mark.parametrize("ratio", [1.0, 1.5, 2.0])
-def test_the_outline_grip_reaches_as_far_in_logical_points_at_any_scaling(
-    qt_app: QApplication, ratio: float
-) -> None:
-    """Sechs Logikpunkte neben dem Umriss greift er, sechzehn nicht — überall.
-
-    ``grip_reach`` antwortet in Gerätepixeln, :data:`CURSOR_PIXELS` sind
-    Logikpunkte. Ohne Umrechnung reichte der Griff auf einem Bildschirm mit 200
-    Prozent Skalierung nur noch fünf Logikpunkte weit: dieselbe Zahl, die halbe
-    sichtbare Handbreit.
-
-    Gemessen über :meth:`Viewport._resting_role` — die Entscheidung, die der
-    Kunde als Zeigerform sieht — und nicht an der Rechnung darunter.
-    """
-    from app.ui.viewport import Viewport
-
-    viewport, per_mm = _scaled_sketch_view(ratio)
-    assert isinstance(viewport, Viewport)
-    try:
-        # Weit weg vom Griff in der Mitte des Rechtecks: Hier entscheidet
-        # allein der Abstand zum Umriss.
-        beside = round(5.0 * per_mm)
-        viewport._hover_at = (beside, round(6.0 * ratio))
-        assert viewport._resting_role() == "move", (
-            f"sechs Logikpunkte neben dem Umriss hält der Griff (Verhältnis {ratio})"
-        )
-        viewport._hover_at = (beside, round(16.0 * ratio))
-        assert viewport._resting_role() == "draw", (
-            f"sechzehn Logikpunkte daneben nicht mehr (Verhältnis {ratio})"
-        )
-    finally:
-        viewport.deleteLater()
-
-
-@pytest.mark.parametrize("ratio", [1.0, 1.5, 2.0])
-def test_the_pull_handle_keeps_its_size_and_its_hit_zone_at_any_scaling(
-    qt_app: QApplication, ratio: float
-) -> None:
-    """Der Ziehgriff steht 38 Logikpunkte hoch und hält 14 weit — überall.
-
-    Beide Zahlen gingen bei 200 Prozent Skalierung auf die Hälfte: die Länge,
-    weil sie durch einen Maßstab in Gerätepixeln geteilt wurde, die Trefferzone,
-    weil sie gegen einen Abstand in Gerätepixeln stand. Ein Stummel mit einem
-    halben Ring darum ist genau das, wogegen
-    :meth:`Viewport.pixels_per_mm_upright` einmal gebaut wurde.
-    """
-    from app.ui.viewport import PULL_HANDLE_PIXELS, PULL_HIT_PIXELS
-
-    viewport, per_mm = _scaled_sketch_view(ratio)
-    try:
-        inward, outward = viewport._pull_handle_segments()[0]
-        half = abs(float(outward[2]) - float(inward[2])) / 2.0 * per_mm / ratio
-        assert half == pytest.approx(PULL_HANDLE_PIXELS), (
-            f"der sichtbare Griff misst {half} Logikpunkte (Verhältnis {ratio})"
-        )
-
-        tip = viewport._display_of(outward)
-        limit = viewport._device_pixels(PULL_HIT_PIXELS)
-        near = viewport.pull_handle_reach(round(tip[0] + 10.0 * ratio), round(tip[1]))
-        far = viewport.pull_handle_reach(round(tip[0] + 20.0 * ratio), round(tip[1]))
-        assert near <= limit, f"zehn Logikpunkte neben der Spitze hält er (Verhältnis {ratio})"
-        assert far > limit, f"zwanzig nicht mehr (Verhältnis {ratio})"
-    finally:
-        viewport.deleteLater()
 
 
 @pytest.mark.parametrize("ratio", [1.0, 1.5, 2.0])

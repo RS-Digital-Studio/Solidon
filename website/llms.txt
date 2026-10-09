@@ -12,7 +12,7 @@ abschaltbar.
 
 ## Preis und Lizenz
 
-Bis zum 30. Oktober ist die Demo kostenlos und vollständig. Solidon3D 1.0 ist für den 1. November 2026 geplant, Verkaufsstart um 10:00 Uhr deutscher Zeit: einmal bezahlen, kein Abo, alle Updates von Version 1.x inklusive.
+Bis zum 30. November ist die Demo kostenlos und vollständig. Solidon3D 1.0 ist für den 1. Dezember 2026 geplant, Verkaufsstart um 10:00 Uhr deutscher Zeit: einmal bezahlen, kein Abo, alle Updates von Version 1.x inklusive.
 
 - Privat: 69 € Einstiegspreis bis 31.01.2027 · Ab 1. Februar 2027: 99 € · Eine Person an einem freigeschalteten Rechner · Voller Funktionsumfang, alle Updates von 1.x · Support nach Möglichkeit, ohne zugesagte Frist
 - Gewerblich: 199 € Einstiegspreis bis 31.01.2027 · Ab 1. Februar 2027: 249 € · Bis zu zwei Personen im selben Unternehmen, zwei Rechner · Derselbe Funktionsumfang wie privat, alle Updates von 1.x · Antwort des Supports innerhalb von zwei Werktagen · Weitergabe im Betrieb, Rechnung auf die Firma

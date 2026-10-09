@@ -73,14 +73,12 @@ WALL_MOUNT_KEEPS_HOLE_WALLS = PartChange(
 _MAGNETS = standards.magnet_sizes()
 _SCREWS = standards.screw_sizes()
 
-#: Die Schrauben des Wandhalters: M2 bis M27. Der Bereichstest fährt fünf
-#: zweiwertige Felder je Größe, 32 Ecken, und ``range_check.MAX_CORNERS`` lässt
-#: sechzehn Größen zu. Die Tabelle reicht seit dem 06.10.2026 bis M64; der
-#: Wandhalter beginnt wie bisher bei M2 (eine M1.6 trägt an keiner Wand) und
-#: endet an der sechzehnten Größe. Mehr hieße ein Feld weniger im Test.
-_WALL_SCREWS: Final = tuple(
-    size for size in _SCREWS if 2.0 <= standards.screw(size).nominal <= 27.0
-)
+#: Die Schrauben des Wandhalters: jede Größe der Normteiltabelle ab M2 (eine
+#: M1.6 trägt an keiner Wand), bis M64. Bis RM-578 endete die Reihe bei M27,
+#: weil 512 Ecken für sechzehn Größen reichten; die Grenze der mitgelieferten
+#: Bibliothek richtet sich jetzt nach der Rechenzeit ihres Nachweises
+#: (``range_check.LIBRARY_MAX_CORNERS``). Die Platte wächst mit der Schraube.
+WALL_SCREWS: Final = tuple(size for size in _SCREWS if standards.screw(size).nominal >= 2.0)
 
 
 SLOT_RUNS_DOWNWARD = PartChange(
@@ -407,7 +405,7 @@ class WallMountParams(BaseParams):
     size: str = param(
         title=_("Schraube"),
         default="M4",
-        choices=_WALL_SCREWS,
+        choices=WALL_SCREWS,
         doc=_("Wofür die Löcher sind. Es sind Durchgangslöcher aus der Normteiltabelle."),
         placement="advanced",
     )
@@ -431,6 +429,7 @@ class WallMountParams(BaseParams):
 
 @register_part(
     name="wall_mount",
+    standalone=True,
     title=_("Wandhalter"),
     group="mounting",
     params=WallMountParams,
@@ -713,15 +712,17 @@ PIPE_CLAMP_ADDED = PartChange(
 
 _PIPES: Final = standards.pipe_sizes()
 
-#: Die Klemmschrauben der Rohrschelle: M3 bis M6, soweit die Normteiltabelle
-#: Mutter und Unterlegscheibe dazu führt. **Nicht bis M8 wie die Lasche**: Der
-#: Bereichstest fährt Rohrreihe, eigenen Durchmesser, Breite, Wand, Spiel und
-#: Schraube als kartesisches Produkt, und mit acht Rohren und vier Schrauben
-#: sind das genau die 512 Ecken, die ``range_check.MAX_CORNERS`` zulässt.
+#: Die Klemmschrauben der Rohrschelle: jede Größe ab M3, zu der die
+#: Normteiltabelle Mutter und Unterlegscheibe führt, bis M64. Bis RM-578 endete
+#: die Reihe bei M6, weil acht Rohre mal vier Schrauben genau 512 Ecken waren.
+#: Wo die Scheibe breiter ist als die Schelle, sagt :func:`_clamp_reason` es mit
+#: Vorschlag, statt die Größe zu verbieten.
 _CLAMP_SCREWS: Final = tuple(
     size
-    for size in ("M3", "M4", "M5", "M6")
-    if size in _SCREWS and size in standards.nut_sizes() and size in standards.washer_sizes()
+    for size in _SCREWS
+    if standards.screw(size).nominal >= 3.0
+    and size in standards.nut_sizes()
+    and size in standards.washer_sizes()
 )
 
 #: Wie weit die Klemmschraube den Ring **über das Spiel hinaus** schließen
@@ -763,12 +764,15 @@ class PipeClampParams(BaseParams):
         ),
         zero_text=ZERO_AS_CHOSEN,
     )
+    # Bis 120 mm, damit die Scheibe der größten Klemmschraube (M64, 115 mm) ganz
+    # aufliegt: Jede angebotene Schraube ist baubar (RM-578); vorher endete die
+    # Breite bei 80 mm, und ab M45 wäre der Vorschlag „größere Breite“ leer gewesen.
     width: float = param(
         title=_("Breite"),
         default=15.0,
         unit="mm",
         minimum=7.0,
-        maximum=80.0,
+        maximum=120.0,
         doc=_("Wie breit die Schelle ist, längs des Rohrs gemessen."),
     )
     wall: float = param(
@@ -1779,6 +1783,7 @@ class FootParams(BaseParams):
 
 @register_part(
     name="foot",
+    standalone=True,
     title=_("Standfuß"),
     group="mounting",
     params=FootParams,

@@ -78,6 +78,15 @@ def test_the_way_out_of_a_company_network_travels_without_its_credentials() -> N
         assert secret not in str(answer)
 
 
+def test_the_program_folder_travels_so_that_nvidia_smi_finds_its_library() -> None:
+    """Ohne ``PROGRAMFILES`` antwortet ``nvidia-smi`` mit „Failed to initialize
+    NVML“ (rc 255, gemessen an der RTX 4080), und jeder Windows-Rechner hätte für
+    Solidon keine Grafikkarte (RM-564, Nachprüfung K, N6)."""
+    answer = process.trusted_environment({"PROGRAMFILES": r"C:\Program Files"})
+
+    assert answer == {"PROGRAMFILES": r"C:\Program Files"}
+
+
 def test_bounded_environment_drops_gui_session_capabilities() -> None:
     source = {
         "PATH": "Programme",

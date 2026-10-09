@@ -1,23 +1,27 @@
-"""Der Skeletteditor im Fenster (Konzept P16 §7.5).
+"""Das Skelettwerkzeug im Fenster (Konzept P16 §7.5, RM-561).
 
 Dieselbe Bauart wie die Formsitzung: ein Werkzeugmodus, eine Leiste neben der
-Werkzeugzeile, ein Zustand im Fenster, eine Operation am Ende. Was ihn
-unterscheidet, ist die Arbeitsteilung dahinter — **hier werden Gesten
-gesammelt, die Stellung selbst ist eine Zahl.**
+Werkzeugzeile, ein Zustand im Fenster, eine Operation am Ende.
 
-Zwei Klicks machen einen Knochen: erst das Gelenk, dann das Ende. Die Winkel
-setzt niemand mit der Maus; sie stehen im Dialog der Operation, wo auch ein
-Projektparameter erlaubt ist. Das ist der Punkt, an dem Posing hierher gehört
-und nicht zu einem Animationsprogramm.
+Der erste Klick setzt ein Gelenk, jeder weitere einen Knochen am Fuß des
+vorigen — n Knochen sind n + 1 Klicks. Enter beendet die Kette, ein Klick auf
+ein Gelenk setzt dort fort. Ziehen an einem Gelenk beugt den Knochen, der dort
+endet; geschrieben wird dasselbe ``pose``-Feld, das der Schrittdialog als
+Zahlen zeigt. *Fertig* legt den Schritt ohne Dialog an.
+
+Geprüft wird offscreen über die Methoden, die die Ansicht ruft: ein Klick ist
+ein Punkt, ein Zug ist ein Winkel.
 """
 
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
+import pytest
 from PySide6.QtWidgets import QApplication
 
-from app.core.geom.pose import armature_from_text
+from app.core.geom.pose import armature_from_text, pose_angles
 from app.ui.main_window import MainWindow
 from app.ui.session import Session
 from tests.ui_helpers import session as session
@@ -27,16 +31,26 @@ from tests.ui_helpers import with_a_body
 MESHES = Path(__file__).parent / "data" / "meshes"
 
 
-def bone(
-    window: MainWindow, head: tuple[float, float, float], tail: tuple[float, float, float]
+def chain(window: MainWindow, *points: tuple[float, float, float]) -> None:
+    """Eine Kette: der erste Punkt ein Gelenk, jeder weitere ein Knochen."""
+    for point in points:
+        window._on_bone_point(point)
+
+
+def bend(window: MainWindow, joint: int, degrees: float) -> None:
+    """Am Gelenk ziehen, bis der Knochen um ``degrees`` gebeugt ist, und loslassen."""
+    window._on_joint_drag_started(joint)
+    assert window._armature_drag is not None, "an diesem Gelenk endet kein Knochen"
+    window._bend_to(degrees)
+    window._on_joint_drag_finished()
+
+
+def test_exact_armature_gestures_wait_for_the_conversion_and_write_once(
+    window: MainWindow,
 ) -> None:
-    """Ein Knochen sind zwei Klicks."""
-    window._on_bone_point(head)
-    window._on_bone_point(tail)
-
-
-def test_exact_armature_gestures_reach_the_guarded_operation_dialog(window: MainWindow) -> None:
-    """Skelett zeichnen übergibt erst an den Editor, dessen Vorschau die Konvertierung zeigt."""
+    """Am exakten Körper wartet *Fertig* auf die Vorschau mit der Konvertierung
+    — ohne Dialog, und geschrieben wird genau einmal (Entscheidung Robert,
+    21.09.2026: der Klick vor dem Bild verfällt nicht)."""
     from app.core.scene.history import OperationDraft
     from tests.helpers import exact_kernel
 
@@ -49,21 +63,13 @@ def test_exact_armature_gestures_reach_the_guarded_operation_dialog(window: Main
     identifier = next(iter(window.session.last_result.scene.objects))
     window.object_tree.select_object(identifier)
     window.start_armature(identifier)
-    bone(window, (10.0, 10.0, 0.0), (10.0, 10.0, 20.0))
+    chain(window, (10.0, 10.0, 0.0), (10.0, 10.0, 20.0))
     before = len(window.session.project.document.ops)
     window.finish_armature()
-    dialog = window._op_dialog
-    assert dialog is not None and dialog.spec.name == "pose_armature"
-    bones = armature_from_text(str(dialog.values()["armature"]))
-    assert len(bones) == 1 and bones[0].tail == (10.0, 10.0, 20.0)
-    dialog.accept()
-    # **Der Klick vor dem Bild verfällt nicht** (Entscheidung Robert,
-    # 21.09.2026): Er bindet sich an die erwartete Freigabe und läuft, sobald
-    # die Vorschau mit der Konvertierung steht — geschrieben wird erst dann,
-    # und genau einmal.
-    approval = window._preview_approval
-    assert approval is not None and approval.pending_click is not None
+    assert window._op_dialog is None, "kein Dialog mehr"
     assert len(window.session.project.document.ops) == before
+    assert window.session.wait_for_idle(30_000)
+    QApplication.processEvents()
     assert window.session.wait_for_idle(30_000)
     assert len(window.session.project.document.ops) == before + 1
     assert window.session.last_result.scene.objects[identifier].kind == "mesh"
@@ -91,11 +97,7 @@ def test_starting_shows_the_bar_and_hides_the_view_tools(window: MainWindow) -> 
 
 
 def test_two_sessions_do_not_open_at_once(window: MainWindow) -> None:
-    """Wer formt, setzt kein Skelett — und umgekehrt.
-
-    Ein Modus, der beides gleichzeitig kann, kann keines von beidem
-    verlässlich: Derselbe Klick müsste zwei Dinge bedeuten.
-    """
+    """Wer formt, setzt kein Skelett — und umgekehrt."""
     object_id = with_a_body(window)
     window.start_sculpt(object_id)
 
@@ -105,16 +107,35 @@ def test_two_sessions_do_not_open_at_once(window: MainWindow) -> None:
     assert window.sculpting()
 
 
+def test_the_toolbar_holds_one_key_per_tool(window: MainWindow) -> None:
+    """Je Werkzeug ein Kürzel (RM-561): Strg+Umschalt+F formt, Strg+Umschalt+K
+    öffnet das Skelett — und der Knopf sagt es."""
+    from PySide6.QtGui import QKeySequence
+
+    object_id = with_a_body(window)
+    window.object_tree.select_object(object_id)
+    QApplication.processEvents()
+    for action, keys in (
+        (window._toolbar_sculpt, "Ctrl+Shift+F"),
+        (window._toolbar_armature, "Ctrl+Shift+K"),
+    ):
+        assert action.shortcut() == QKeySequence(keys)
+        native = QKeySequence(keys).toString(QKeySequence.SequenceFormat.NativeText)
+        assert native in action.toolTip(), "der Knopf nennt seine Taste"
+    window._toolbar_armature.trigger()
+    assert window.setting_armature()
+
+
 # --- Knochen setzen -------------------------------------------------------------
 
 
-def test_two_clicks_make_one_bone(window: MainWindow) -> None:
-    """Erst das Gelenk, dann das Ende."""
+def test_the_first_click_is_a_joint_and_the_second_a_bone(window: MainWindow) -> None:
     object_id = with_a_body(window)
     window.start_armature(object_id)
 
     window._on_bone_point((0.0, 0.0, 0.0))
     assert not window._armature_bones, "nach einem Klick steht noch kein Knochen"
+    assert "Ende des Knochens" in window.pose_bar.state.text()
 
     window._on_bone_point((0.0, 0.0, 20.0))
     assert len(window._armature_bones) == 1
@@ -122,142 +143,197 @@ def test_two_clicks_make_one_bone(window: MainWindow) -> None:
     assert window._armature_bones[0].tail == (0.0, 0.0, 20.0)
 
 
-def test_the_next_bone_hangs_on_the_one_before(window: MainWindow) -> None:
-    """Ein Skelett ist meistens eine Kette.
-
-    Wer für jeden Knochen sein Elternteil wählen muss, klickt dreimal so oft
-    wie nötig.
-    """
+def test_each_further_click_is_one_more_bone(window: MainWindow) -> None:
+    """S1: ein Arm aus zwei Knochen sind drei Klicks, nicht vier (RM-561) —
+    der Kopf des nächsten Knochens ist der Fuß des vorigen."""
     object_id = with_a_body(window)
     window.start_armature(object_id)
 
-    bone(window, (0.0, 0.0, 0.0), (0.0, 0.0, 20.0))
-    bone(window, (0.0, 0.0, 20.0), (0.0, 0.0, 40.0))
+    chain(window, (0.0, 0.0, 0.0), (0.0, 0.0, 20.0), (0.0, 0.0, 40.0))
 
-    assert window._armature_bones[0].parent == ""
-    assert window._armature_bones[1].parent == window._armature_bones[0].name
+    first, second = window._armature_bones
+    assert second.head == first.tail
+    assert first.parent == "" and second.parent == first.name
+    assert [bone.name for bone in window._armature_bones] == ["bone_1", "bone_2"], (
+        "Namen werden durchnummeriert, umbenannt wird im Schrittdialog"
+    )
 
 
-def test_a_new_chain_hangs_on_nothing(window: MainWindow) -> None:
-    """Für den zweiten Arm — sonst wächst alles an einer Kette weiter."""
+def test_enter_ends_the_chain_and_the_next_click_starts_a_new_one(window: MainWindow) -> None:
+    """Für den zweiten Arm: Enter, dann wieder ein Gelenk und ein Knochen."""
     object_id = with_a_body(window)
     window.start_armature(object_id)
-    bone(window, (0.0, 0.0, 0.0), (0.0, 0.0, 20.0))
+    chain(window, (0.0, 0.0, 0.0), (0.0, 0.0, 20.0))
 
-    window.break_armature_chain()
-    bone(window, (10.0, 0.0, 0.0), (20.0, 0.0, 0.0))
+    window.viewport.chainEnded.emit()
+    chain(window, (10.0, 0.0, 0.0), (20.0, 0.0, 0.0))
 
     assert window._armature_bones[1].parent == ""
+    assert window._armature_bones[1].head == (10.0, 0.0, 0.0)
 
 
-def test_a_name_is_used_once_and_then_forgotten(window: MainWindow) -> None:
-    """Ein stehen gebliebener Name wäre der Name des nächsten Knochens.
-
-    Zwei Knochen mit demselben Namen sind ein Skelett, dessen Stellung niemand
-    mehr zuordnet — die Winkel stehen je Name.
-    """
+def test_a_click_on_a_joint_continues_there_and_on_the_chain_end_ends_it(
+    window: MainWindow,
+) -> None:
+    """Ein Klick auf ein vorhandenes Gelenk setzt dort fort; ein Doppelklick auf
+    den letzten Punkt beendet die Kette, sein zweiter Klick öffnet sie nicht
+    wieder."""
     object_id = with_a_body(window)
     window.start_armature(object_id)
+    chain(window, (0.0, 0.0, 0.0), (0.0, 0.0, 20.0), (0.0, 0.0, 40.0))
+    joints = [rest for _posed, _ends, rest in window._armature_joints()]
 
-    window.pose_bar.name.setText("oberarm")
-    bone(window, (0.0, 0.0, 0.0), (0.0, 0.0, 20.0))
-    bone(window, (0.0, 0.0, 20.0), (0.0, 0.0, 40.0))
+    end = joints.index((0.0, 0.0, 40.0))
+    window.viewport.jointPicked.emit(end)
+    window.viewport.jointPicked.emit(end)
+    assert window._armature_head is None, "der Doppelklick beendet die Kette"
 
-    assert window._armature_bones[0].name == "oberarm"
-    assert window._armature_bones[1].name != "oberarm"
-    assert not window.pose_bar.name.text()
+    middle = joints.index((0.0, 0.0, 20.0))
+    window.viewport.jointPicked.emit(middle)
+    window._on_bone_point((10.0, 0.0, 20.0))
+    branch = window._armature_bones[-1]
+    assert branch.head == (0.0, 0.0, 20.0)
+    assert branch.parent == window._armature_bones[0].name, "der Ast hängt am ersten Knochen"
 
 
-def test_a_repeated_name_is_made_unique(window: MainWindow) -> None:
-    """Auch wenn jemand denselben Namen zweimal tippt."""
+def test_the_bar_has_no_name_field_and_no_extra_buttons(qt_app: QApplication) -> None:
+    """*Neue Kette*, *Letzten zurück* und das Namensfeld sind entfallen (RM-561):
+    Enter und Strg+Z tun dasselbe, und Namen braucht nur, wer Winkel bindet."""
+    from PySide6.QtWidgets import QLineEdit, QPushButton
+
+    from app.ui.pose_bar import PoseBar
+
+    leiste = PoseBar()
+    assert not leiste.findChildren(QLineEdit)
+    assert [knopf.text() for knopf in leiste.findChildren(QPushButton)] == [leiste.done.text()]
+
+
+def test_every_button_in_the_bar_says_what_it_does(qt_app: QApplication) -> None:
+    """Jeder Knopf der Skelettleiste trägt einen Tooltip — *Fertig* sagt, dass
+    danach ein Verlaufsschritt steht."""
+    from PySide6.QtWidgets import QPushButton
+
+    from app.ui.pose_bar import PoseBar
+
+    leiste = PoseBar()
+    knoepfe = leiste.findChildren(QPushButton)
+    assert knoepfe
+    stumm = [knopf.text() for knopf in knoepfe if not knopf.toolTip().strip()]
+    assert not stumm, "Knöpfe ohne Tooltip: " + ", ".join(stumm)
+
+
+# --- beugen ---------------------------------------------------------------------
+
+
+def test_dragging_a_joint_bends_its_bone_and_the_rest_stays(window: MainWindow) -> None:
+    """Ziehen am Gelenk beugt den Knochen, der dort endet, und schreibt seine
+    Winkel; *Fertig* legt Skelett und Stellung ohne Dialog als einen Schritt an.
+    Was kein Knochen erreicht, bleibt stehen (fester Rumpf)."""
+    import numpy as np
+
     object_id = with_a_body(window)
+    body = window.session.last_result.scene.objects[object_id].mesh
+    low, high = body.raw.bounds
+    middle = (low + high) / 2.0
+    top = float(high[2])
+    shoulder = (float(middle[0]), float(middle[1]), top - 25.0)
+    elbow = (float(middle[0]), float(middle[1]), top - 12.0)
+    hand = (float(middle[0]), float(middle[1]), top - 2.0)
     window.start_armature(object_id)
-
-    window.pose_bar.name.setText("arm")
-    bone(window, (0.0, 0.0, 0.0), (0.0, 0.0, 20.0))
-    window.pose_bar.name.setText("arm")
-    bone(window, (0.0, 0.0, 20.0), (0.0, 0.0, 40.0))
-
-    names = [entry.name for entry in window._armature_bones]
-    assert len(set(names)) == 2, f"zwei Knochen, zwei Namen: {names}"
-
-
-# --- zurücknehmen ---------------------------------------------------------------
-
-
-def test_undo_takes_back_the_half_set_bone_first(window: MainWindow) -> None:
-    """Sonst nähme das erste Strg+Z einen fertigen Knochen und ließe den
-    angefangenen stehen."""
-    object_id = with_a_body(window)
-    window.start_armature(object_id)
-    bone(window, (0.0, 0.0, 0.0), (0.0, 0.0, 20.0))
-    window._on_bone_point((0.0, 0.0, 20.0))
-
-    window.action_undo()
-
-    assert window._armature_head is None
-    assert len(window._armature_bones) == 1, "der fertige Knochen steht noch"
-
-
-def test_undo_then_takes_back_a_whole_bone(window: MainWindow) -> None:
-    object_id = with_a_body(window)
-    window.start_armature(object_id)
-    bone(window, (0.0, 0.0, 0.0), (0.0, 0.0, 20.0))
-    bone(window, (0.0, 0.0, 20.0), (0.0, 0.0, 40.0))
+    chain(window, shoulder, elbow, hand)
     before = len(window.session.project.document.ops)
 
-    window.action_undo()
+    joints = [ends for _posed, ends, _rest in window._armature_joints()]
+    bend(window, joints.index("bone_2"), 40.0)
 
-    assert len(window._armature_bones) == 1
-    assert len(window.session.project.document.ops) == before, "der Verlauf bleibt unberührt"
-
-
-# --- was dabei herauskommt ------------------------------------------------------
-
-
-def test_finishing_opens_the_dialog_with_the_skeleton(window: MainWindow) -> None:
-    """„Fertig" gibt an den Operationsdialog ab, wie es die Skizze vormacht.
-
-    Vorher legte es eine Operation mit leerer Stellung an: nichts geschah,
-    ohne Ansage, und weiter ging es nur über Verlauf → Doppelklick → JSON.
-    Der Dialog öffnet mit gesetztem Skelett — die Winkel sind der nächste
-    Handgriff, dort darf auch ein Projektparameter stehen.
-    """
-    object_id = with_a_body(window)
-    window.start_armature(object_id)
-    bone(window, (0.0, 0.0, 0.0), (0.0, 0.0, 20.0))
-    bone(window, (0.0, 0.0, 20.0), (0.0, 0.0, 40.0))
-    before = len(window.session.project.document.ops)
-
+    angles = window._armature_angles["bone_2"]
+    assert any(abs(value) > 1.0 for value in angles), angles
+    assert "bone_1" not in window._armature_pose, "nur der gezogene Knochen dreht"
     window.finish_armature()
-
-    assert len(window.session.project.document.ops) == before, (
-        "eine Operation mit leerer Stellung täte nichts — erst der Dialog"
+    assert window._op_dialog is None
+    assert window.session.wait_for_idle(30_000)
+    ops = window.session.project.document.ops
+    assert len(ops) == before + 1 and ops[-1].op == "pose_armature"
+    written = pose_angles(str(ops[-1].params["pose"]))
+    assert written["bone_2"] == pytest.approx(angles)
+    posed = window.session.last_result.scene.objects[object_id].mesh
+    feet = np.asarray(body.raw.vertices)[:, 2] < float(low[2]) + 5.0
+    assert np.allclose(posed.raw.vertices[feet], body.raw.vertices[feet], atol=1e-3), (
+        "die Füße bleiben stehen"
     )
-    dialog = window._op_dialog
-    assert dialog is not None
-    bones = armature_from_text(str(dialog.values()["armature"]))
-    assert len(bones) == 2
-    assert bones[1].parent == bones[0].name
+    assert not np.allclose(posed.raw.vertices, body.raw.vertices), "der Arm ist gebeugt"
 
 
-def test_accepting_the_dialog_writes_one_operation(window: MainWindow) -> None:
-    """Regel 16: Der ganze Vorgang ist eine Transaktion."""
+def test_a_typed_angle_is_exact_and_undo_takes_back_the_bend(window: MainWindow) -> None:
+    """Tippen statt ziehen gibt genau den Winkel (§18.11); Strg+Z nimmt die
+    letzte Beugung zurück, nicht den Knochen."""
     object_id = with_a_body(window)
     window.start_armature(object_id)
-    bone(window, (0.0, 0.0, 0.0), (0.0, 0.0, 20.0))
+    chain(window, (0.0, 0.0, 0.0), (0.0, 0.0, 20.0))
+    joint = [ends for _posed, ends, _rest in window._armature_joints()].index("bone_1")
+    window._on_joint_drag_started(joint)
+    window._on_joint_angle_typed(30.0)
+
+    # Offscreen schaut die Kamera entlang +Y: gedreht wird um diese Achse.
+    assert window._armature_angles["bone_1"] == pytest.approx((0.0, 30.0, 0.0), abs=0.01)
+    assert window.undo_bone()
+    assert "bone_1" not in window._armature_pose
+    assert len(window._armature_bones) == 1, "der Knochen bleibt"
+
+
+def test_escape_cancels_a_running_bend(window: MainWindow) -> None:
+    object_id = with_a_body(window)
+    window.start_armature(object_id)
+    chain(window, (0.0, 0.0, 0.0), (0.0, 0.0, 20.0))
+    window._on_joint_drag_started(1)
+    window._bend_to(25.0)
+
+    window._escape()
+
+    assert window.setting_armature(), "Escape nahm nur den laufenden Zug"
+    assert window._armature_drag is None
+    assert "bone_1" not in window._armature_pose
+
+
+# --- zurücknehmen und Escape ----------------------------------------------------
+
+
+def test_escape_takes_the_half_bone_and_then_finishes(window: MainWindow) -> None:
+    """Escape nimmt das Unfertige — ein Gelenk ohne Knochen — und beendet sonst
+    wie *Fertig*, ohne Dialog und ohne etwas wegzuwerfen (RM-561)."""
+    object_id = with_a_body(window)
+    window.start_armature(object_id)
+    chain(window, (0.0, 0.0, 0.0), (0.0, 0.0, 20.0))
+    window.viewport.chainEnded.emit()
+    window._on_bone_point((10.0, 0.0, 0.0))
     before = len(window.session.project.document.ops)
 
-    window.finish_armature()
-    dialog = window._op_dialog
-    assert dialog is not None
-    dialog.accept()
+    window._escape()
+    assert window.setting_armature()
+    assert window._armature_head is None and len(window._armature_bones) == 1
 
+    window._escape()
+    assert not window.setting_armature()
+    assert window._op_dialog is None
     assert window.session.wait_for_idle(30_000)
     ops = window.session.project.document.ops
     assert len(ops) == before + 1
-    assert ops[-1].op == "pose_armature"
     assert armature_from_text(str(ops[-1].params["armature"]))
+
+
+def test_undo_goes_back_click_by_click(window: MainWindow) -> None:
+    object_id = with_a_body(window)
+    window.start_armature(object_id)
+    chain(window, (0.0, 0.0, 0.0), (0.0, 0.0, 20.0), (0.0, 0.0, 40.0))
+    before = len(window.session.project.document.ops)
+
+    window.action_undo()
+    assert len(window._armature_bones) == 1
+    assert window._armature_head == (0.0, 0.0, 20.0), "die Kette steht wieder am ersten Fuß"
+    window.action_undo()
+    window.action_undo()
+    assert not window._armature_bones and window._armature_head is None
+    assert len(window.session.project.document.ops) == before, "der Verlauf bleibt unberührt"
 
 
 def test_an_empty_session_leaves_no_step_behind(window: MainWindow) -> None:
@@ -270,36 +346,29 @@ def test_an_empty_session_leaves_no_step_behind(window: MainWindow) -> None:
     assert len(window.session.project.document.ops) == before
 
 
-def test_escape_ends_the_session_without_throwing_it_away(window: MainWindow) -> None:
-    """Wie beim Formen: Escape beendet und verwirft nicht — die gesetzten
-    Knochen stehen im Dialog, der sich daraufhin öffnet."""
+def test_finishing_writes_one_step_and_one_undo_takes_it(window: MainWindow) -> None:
+    """Regel 16: Der ganze Vorgang ist eine Transaktion."""
     object_id = with_a_body(window)
     window.start_armature(object_id)
-    bone(window, (0.0, 0.0, 0.0), (0.0, 0.0, 20.0))
+    chain(window, (0.0, 0.0, 0.0), (0.0, 0.0, 20.0), (0.0, 0.0, 40.0))
+    before = len(window.session.project.document.ops)
 
-    window._escape()
+    window.finish_armature()
+    assert window.session.wait_for_idle(30_000)
+    ops = window.session.project.document.ops
+    assert len(ops) == before + 1
+    bones = armature_from_text(str(ops[-1].params["armature"]))
+    assert len(bones) == 2 and bones[1].parent == bones[0].name
 
-    assert not window.setting_armature()
-    dialog = window._op_dialog
-    assert dialog is not None
-    assert armature_from_text(str(dialog.values()["armature"]))
+    window.session.undo()
+    assert window.session.wait_for_idle(30_000)
+    assert len(window.session.project.document.ops) == before
 
 
 def test_a_bound_angle_bends_the_body_and_follows_the_parameter(qt_app: QApplication) -> None:
-    """Der Punkt, an dem Posing hierher gehoert und nicht zu Blender.
-
-    Vier Stellen sagten zu, dass ein Gelenkwinkel ein Projektparameter sein
-    darf — Registereintrag, ``Pose``-Docstring, der ``fx``-Umschalter am
-    Winkelfeld und der Kopf von ``tests/test_pose.py``. Der Kern antwortete
-    darauf mit ``Diese Stellung laesst sich nicht lesen``.
-
-    Geprueft wird Ende zu Ende, und der zweite Teil ist der wichtigere: Wird
-    der Parameter geaendert, muss sich der Koerper **mitbewegen**. Der
-    Cache-Schluessel deckt alles, wovon das Ergebnis abhaengt (§15) — und ein
-    Ausdruck im JSON-Text der Operation ist fuer ``resolve_params``
-    unsichtbar. Ohne ``NESTED_REFERENCES`` bliebe der Arm gebeugt, waehrend
-    die Zahl daneben schon die neue ist.
-    """
+    """Der Punkt, an dem Posing hierher gehört und nicht zu Blender: Ein
+    Gelenkwinkel darf ein Projektparameter sein, und wird der Parameter
+    geändert, bewegt sich der Körper mit (§15, ``NESTED_REFERENCES``)."""
     from app.core.geom.mesh import as_mesh_data
     from app.core.scene import OperationDraft
     from app.core.types import Parameter
@@ -328,7 +397,6 @@ def test_a_bound_angle_bends_the_body_and_follows_the_parameter(qt_app: QApplica
     assert result is not None
     zehn_grad = as_mesh_data(result.scene.objects["obj_1"].mesh).bounds.size
 
-    # Derselbe Stapel, ein anderer Parameterwert: Der Koerper muss folgen.
     session.change_parameter("neigung", 45.0)
     assert session.wait_for_idle(60_000)
 
@@ -337,30 +405,13 @@ def test_a_bound_angle_bends_the_body_and_follows_the_parameter(qt_app: QApplica
     fuenfundvierzig = as_mesh_data(result.scene.objects["obj_1"].mesh).bounds.size
 
     assert zehn_grad != fuenfundvierzig, (
-        "der gebeugte Koerper haengt am Parameter — sonst steht ein altes Ergebnis im Cache"
+        "der gebeugte Körper hängt am Parameter — sonst steht ein altes Ergebnis im Cache"
     )
 
 
 def test_the_context_menu_opens_the_editor_and_not_a_raw_dialog(window: MainWindow) -> None:
-    """Das Kontextmenü führte drei Gesten-Operationen in einen Rohdialog.
-
-    Genau dieser Fehler ist für Menü und Palette schon behoben worden — der
-    Docstring von ``launch_operation`` beschreibt ihn: „„Formen" über
-    Strg+Umschalt+P endete in einem Rohdialog: die Operation lief, veränderte
-    nichts und hinterließ einen leeren Schritt im Verlauf." Das Kontextmenü blieb
-    an ``run_operation`` hängen, und drei Operationen mit Gestenfeld stehen dort
-    am Körper: „Formen", „Stellung geben" und „Tasche schneiden".
-
-    Der Rechtsklick auf den Körper ist der Weg, den §2.6 „den kürzesten Weg vom
-    Sehen zum Tun" nennt. Geprüft wird das Signal, nicht die Methode: die
-    Verbindung ist die Aussage.
-
-    **Vier Editoren, nicht drei.** Die Dichtnut hat seit dem 16.09.2026 einen
-    eigenen: Sie braucht einen *geschlossenen* Weg und wählt ihn über das
-    Wegfeld ihres Dialogs, an dem der ``SealFlow`` hängt — deshalb nimmt
-    ``_has_sketch_param`` sie ausdrücklich aus. Ein Rohdialog bliebe hier
-    trotzdem rot: Er trägt keinen ``SealFlow``.
-    """
+    """Das Kontextmenü führt die Gesten-Operationen in ihren Editor, nicht in einen
+    Rohdialog (§2.6: der kürzeste Weg vom Sehen zum Tun)."""
     from app.core.registry import REGISTRY
     from app.ui.op_dialog import OperationDialog
     from app.ui.seal_flow import SealFlow
@@ -375,12 +426,6 @@ def test_the_context_menu_opens_the_editor_and_not_a_raw_dialog(window: MainWind
     assert len(offered) >= 3, f"nur {len(offered)} Gesten-Operationen im Kontextmenü?"
 
     for spec in offered:
-        # **Die Auswahl je Durchgang herstellen, nicht erben.** Der Rechtsklick
-        # gilt dem Körper, auf dem er sitzt — in der Bedienung ist er gewählt,
-        # wenn das Menü aufgeht. Über neun Durchgänge hält das nicht: Ein
-        # geschlossener Editor lässt den Baum ohne Auswahl zurück, und
-        # ``start_armature`` steigt dann mit „erst etwas auswählen" aus,
-        # ohne dass an der Verbindung etwas fehlte.
         item = window.object_tree.tree.topLevelItem(0)
         assert item is not None
         item.setSelected(True)
@@ -392,101 +437,27 @@ def test_the_context_menu_opens_the_editor_and_not_a_raw_dialog(window: MainWind
             or window.setting_armature()
             or bool(window.findChildren(SealFlow))
         )
-        assert opened, (
-            f"{spec.title} landete nicht in ihrem Editor — "
-            f"Skizze={window._sketch_panel is not None}, "
-            f"Pinsel={window.sculpting()}, Skelett={window.setting_armature()}, "
-            f"Dichtweg={bool(window.findChildren(SealFlow))}, "
-            f"offene Dialoge={[type(d).__name__ for d in window.findChildren(OperationDialog)]}, "
-            f"Auswahl={window.object_tree.selected()!r}"
-        )
-        # Zurück auf Anfang, sonst prüft der zweite Durchgang die Sitzung des
-        # ersten. ``_escape`` nimmt Skizze, Skelett und Pinsel zurück, einen
-        # offenen Operationsdialog dagegen nicht — der Dichtnut-Weg bliebe
-        # sonst stehen und machte den nächsten Durchgang grün, ohne ihn zu
-        # prüfen.
+        assert opened, f"{spec.title} landete nicht in ihrem Editor"
         for dialog in window.findChildren(OperationDialog):
             dialog.reject()
         window._escape()
         QApplication.processEvents()
+        assert window.session.wait_for_idle(30_000)
 
 
-# --- Was die Leiste über sich selbst sagt -------------------------------------
+# --- ein zweites Mal an dasselbe Skelett ----------------------------------------
 
 
-def test_every_button_in_the_bar_says_what_it_does(qt_app: QApplication) -> None:
-    """Jeder Knopf der Skelettleiste trägt einen Tooltip.
-
-    **Weil die Beschriftung allein zwei von dreien nicht trug.** „Letzten
-    zurück" nannte nicht, *was* zurückgeht — ein Knochen, eine Kette oder die
-    Sitzung; „Fertig" nannte nicht, dass danach ein Verlaufsschritt steht und
-    das Skelett nicht mehr im Bild zu suchen ist. Für jemanden ohne
-    CAD-Erfahrung sind das genau die Fragen, die vor dem Klick entstehen.
-
-    Der Test zählt nicht, er fragt jeden Knopf einzeln — eine Zahl wäre beim
-    vierten Knopf still wieder falsch.
-    """
-    from PySide6.QtWidgets import QPushButton
-
-    from app.ui.pose_bar import PoseBar
-
-    leiste = PoseBar()
-    knoepfe = leiste.findChildren(QPushButton)
-    assert len(knoepfe) >= 3, f"nur {len(knoepfe)} Knöpfe gefunden — sucht das noch richtig?"
-
-    stumm = [knopf.text() for knopf in knoepfe if not knopf.toolTip().strip()]
-    assert not stumm, "Knöpfe ohne Tooltip: " + ", ".join(stumm)
-
-
-def test_the_name_field_belongs_to_the_bone_not_to_the_pose(qt_app: QApplication) -> None:
-    """Was ein Screenreader vorliest, muss dasselbe sein wie das, was daneben steht.
-
-    **Hier stand „Name der Pose", und das Feld benennt den Knochen.** Der
-    Platzhalter sagte es richtig, der barrierefreie Name etwas anderes, und
-    ``next_name`` tut das Dritte — wer die Leiste nicht sieht, bekam die
-    falsche Auskunft (Regel 18 dem Geist nach: die zweite Kodierung muss
-    dasselbe sagen wie die erste). Eine Pose hat in dieser Anwendung überhaupt
-    keinen Namen.
-    """
-    from app.ui.pose_bar import PoseBar
-
-    leiste = PoseBar()
-    gesprochen = leiste.name.accessibleName()
-    gelesen = leiste.name.placeholderText()
-
-    assert "Pose" not in gesprochen, f"das Feld benennt den Knochen, nicht die Pose: {gesprochen!r}"
-    assert "Knochen" in gesprochen, (
-        f"der barrierefreie Name muss den Knochen nennen: {gesprochen!r}"
-    )
-    assert gesprochen == gelesen, (
-        f"gesprochen {gesprochen!r} gegen gelesen {gelesen!r} — beide beschreiben "
-        "dasselbe Feld und dürfen nicht auseinanderlaufen"
-    )
-
-
-# --- Ein zweites Mal an dasselbe Skelett --------------------------------------
-
-
-def test_reopening_the_editor_brings_the_bones_back(window: MainWindow) -> None:
-    """Wer den Editor erneut öffnet, sieht sein Skelett — kein leeres Blatt.
-
-    **Weil ein Kunde, der ein Skelett gesetzt hat, es ändern will und nicht
-    ersetzen.** Vorher fing der Editor jedes Mal bei null an; der einzige Weg
-    zu einem verschobenen Gelenk war, alles neu zu setzen — und beim „Fertig"
-    entstand eine **zweite** Operation, die den Körper ein zweites Mal beugt.
-
-    Gelesen wird aus dem Dokument und nicht aus der Szene: Dort steht die
-    Eingabe, die Szene trägt nur das Ergebnis, und aus einem gebeugten Körper
-    lassen sich die Knochen nicht zurückrechnen.
-    """
-    from app.core.geom.pose import Bone, armature_to_text
+def test_reopening_brings_bones_and_pose_back_and_bending_changes_the_same_step(
+    window: MainWindow,
+) -> None:
+    """S3: Ein Doppelklick im Verlauf öffnet das Werkzeug mit Knochen **und**
+    greifbaren Gelenken; gezogen wird weiter an derselben Stellung, und *Fertig*
+    ändert denselben Schritt, statt einen zweiten anzulegen."""
+    from app.core.geom.pose import armature_to_text, pose_text
     from app.core.scene.history import OperationDraft
+    from app.core.types import Bone
 
-    # **Mit armature_to_text gebaut und nicht von Hand getippt.** Das Format
-    # ist JSON; ein erfundener Text wäre eine Zusage über die Schreibweise
-    # statt über das Laden — genau die Sorte Test, die am Prüfling vorbeimisst.
-    # Der erste Anlauf tat es und fiel an einer ValidationError, die mit dem
-    # Gemessenen nichts zu tun hatte.
     gesetzt = [
         Bone(name="arm", head=(0.0, 0.0, 0.0), tail=(0.0, 0.0, 10.0), parent=""),
         Bone(name="hand", head=(0.0, 0.0, 10.0), tail=(0.0, 0.0, 20.0), parent="arm"),
@@ -498,49 +469,238 @@ def test_reopening_the_editor_brings_the_bones_back(window: MainWindow) -> None:
             OperationDraft(
                 op="pose_armature",
                 inputs=(koerper,),
-                params={"armature": armature_to_text(gesetzt), "pose": ""},
+                params={
+                    "armature": armature_to_text(gesetzt),
+                    "pose": pose_text({"arm": [0.0, 20.0, 0.0]}),
+                },
             )
         ],
     )
     assert window.session.wait_for_idle(60_000)
+    step = window.session.project.document.ops[-1].id
+    count = len(window.session.project.document.ops)
 
+    window.edit_operation(step)
+    assert window.session.wait_for_idle(30_000)
+    assert window.setting_armature()
+    assert window._armature_step == step
+    assert [bone.name for bone in window._armature_bones] == ["arm", "hand"]
+    assert window._armature_angles["arm"] == pytest.approx((0.0, 20.0, 0.0))
+    shown = window.viewport.bones_shown
+    assert shown[1][0] != (0.0, 0.0, 10.0), "die Knochen stehen in der Stellung im Bild"
+
+    joints = [ends for _posed, ends, _rest in window._armature_joints()]
+    bend(window, joints.index("hand"), 15.0)
+    window.finish_armature()
+    assert window.session.wait_for_idle(30_000)
+    assert len(window.session.project.document.ops) == count, "derselbe Schritt, kein zweiter"
+    written = pose_angles(str(window.session.history.operation(step).params["pose"]))
+    assert written["arm"] == pytest.approx((0.0, 20.0, 0.0))
+    assert "hand" in written
+
+
+def _bound_arm(window: MainWindow, angle: object) -> tuple[str, int]:
+    """Ein Körper mit Arm und Hand, die Hand gestellt mit ``angle`` um Y."""
+    from app.core.geom.pose import armature_to_text, pose_text
+    from app.core.scene.history import OperationDraft
+    from app.core.types import Bone, Parameter
+
+    koerper = with_a_body(window)
+    window.session.add_parameter(Parameter(name="w", value=20.0, unit="°"))
+    assert window.session.wait_for_idle(30_000)
+    gesetzt = [
+        Bone(name="arm", head=(0.0, 0.0, 0.0), tail=(0.0, 0.0, 10.0), parent=""),
+        Bone(name="hand", head=(0.0, 0.0, 10.0), tail=(0.0, 0.0, 20.0), parent="arm"),
+    ]
+    window.session.apply(
+        "Skelett",
+        [
+            OperationDraft(
+                op="pose_armature",
+                inputs=(koerper,),
+                params={
+                    "armature": armature_to_text(gesetzt),
+                    "pose": pose_text({"arm": [0.0, 0.0, 0.0], "hand": [0.0, angle, 0.0]}),
+                },
+            )
+        ],
+    )
+    assert window.session.wait_for_idle(60_000)
+    return koerper, window.session.project.document.ops[-1].id
+
+
+def test_dragging_a_bound_angle_keeps_its_binding_and_says_where_to_change_it(
+    window: MainWindow,
+) -> None:
+    """Review F2 (Regel 21): Ein Zug am Gelenk schrieb drei Zahlen über einen
+    Winkel, der an einem Projektmaß hing — still, und Varianten über das Maß
+    bewegten den Knochen danach nicht mehr. Jetzt bleibt der Zug aus, die
+    Bindung steht, und der Satz nennt den Weg."""
+    said: list[str] = []
+    _koerper, step = _bound_arm(window, "=@w")
+    window.edit_operation(step)
+    assert window.session.wait_for_idle(30_000)
+    window.announce = lambda text, *args, **kwargs: said.append(str(text))  # type: ignore[method-assign]
+    joints = [ends for _posed, ends, _rest in window._armature_joints()]
+    window._on_joint_drag_started(joints.index("hand"))
+    assert window._armature_drag is None
+    assert window._armature_pose["hand"][1] == "=@w"
+    assert said and "=@w" in said[-1] and "Diesen Schritt ändern" in said[-1]
+    window._on_joint_drag_started(joints.index("arm"))
+    assert window._armature_drag is not None, "Gegenprobe: ein freier Winkel lässt sich ziehen"
+    window._on_joint_drag_cancelled()
+    window.finish_armature()
+    assert window.session.wait_for_idle(30_000)
+    written = pose_angles(str(window.session.history.operation(step).params["pose"]))
+    assert written["hand"][1] == "=@w"
+
+
+@pytest.mark.parametrize("broken", [1, 2])
+def test_an_unreadable_angle_rests_only_its_own_bone(window: MainWindow, broken: int) -> None:
+    """Review G1: Ein einziger ungebundener Winkel stellte das ganze Skelett in
+    Ruhe. Jetzt steht nur sein Knochen in Ruhe, die anderen in ihrer Stellung,
+    und der Satz nennt ihn."""
+    from app.core.geom.pose import armature_to_text, pose_text
+    from app.core.scene.history import OperationDraft
+    from app.core.types import Bone
+
+    said: list[str] = []
+    gesetzt = [
+        Bone(name="arm", head=(0.0, 0.0, 0.0), tail=(0.0, 0.0, 10.0), parent=""),
+        Bone(name="bein", head=(5.0, 0.0, 0.0), tail=(5.0, 0.0, -10.0), parent=""),
+        Bone(name="fuss", head=(5.0, 0.0, -10.0), tail=(8.0, 0.0, -12.0), parent="bein"),
+    ]
+    koerper = with_a_body(window)
+    stellung: dict[str, list[Any]] = {"arm": [0.0, 20.0, 0.0], "bein": [0.0, "=@fehlt", 0.0]}
+    stellung["fuss"] = [0.0, "=@weg", 0.0] if broken == 2 else [0.0, 5.0, 0.0]
+    window.session.apply(
+        "Skelett",
+        [
+            OperationDraft(
+                op="pose_armature",
+                inputs=(koerper,),
+                params={
+                    "armature": armature_to_text(gesetzt),
+                    "pose": pose_text(stellung),
+                },
+            )
+        ],
+    )
+    assert window.session.wait_for_idle(60_000)
+    step = window.session.project.document.ops[-1].id
+    window.announce = lambda text, *args, **kwargs: said.append(str(text))  # type: ignore[method-assign]
+    window.start_armature(koerper, step=step)
+    assert window._armature_angles["arm"] == pytest.approx((0.0, 20.0, 0.0))
+    assert "bein" not in window._armature_angles
+    assert any("bein" in text for text in said)
+    sentence = next(text for text in said if "bein" in text)
+    if broken == 2:
+        assert "fuss" in sentence and sentence.startswith("Die Winkel"), "Review N7: Mehrzahl"
+    else:
+        assert sentence.startswith("Der Winkel")
+
+
+def test_a_new_chain_in_bent_skin_starts_where_the_skin_rests(window: MainWindow) -> None:
+    """Review G1: Der erste Klick einer neuen Kette in gebeugter Haut wurde als
+    Ruhepunkt genommen, wo das Bild ihn zeigte — der Knochen band dann Haut, die
+    in Ruhe woanders liegt. Über das getroffene Dreieck kommt er in die Ruhe,
+    und ein neuer Knochen zeigt die Haut mit seinen Gewichten."""
+    import numpy as np
+
+    _koerper, step = _bound_arm(window, 60.0)
+    window.edit_operation(step)
+    assert window.session.wait_for_idle(30_000)
+    shown = window._armature_shown
+    rest = window._sculpt_mesh(window._armature_target)
+    assert shown is not None and rest is not None and shown is not rest, "die Haut ist gebeugt"
+    bent = np.asarray(shown.raw.vertices)
+    still = np.asarray(rest.raw.vertices)
+    moved = np.flatnonzero(np.linalg.norm(bent - still, axis=1) > 2.0)
+    assert len(moved), "Voraussetzung: die Hand bewegt Haut"
+    corner = int(moved[0])
+    face = int(np.flatnonzero((np.asarray(shown.raw.faces) == corner).any(axis=1))[0])
+    corners = np.asarray(shown.raw.faces)[face]
+    clicked = bent[corners].mean(axis=0)
+    window._on_bone_point(tuple(float(v) for v in clicked))
+    head = np.asarray(window._armature_head)
+    resting = still[corners].mean(axis=0)
+    shown_place = clicked
+    assert np.linalg.norm(head - shown_place) > 1.0, "nicht dort, wo das Bild die Haut zeigt"
+    assert np.linalg.norm(head - resting) < np.linalg.norm(head - shown_place)
+    before = window._armature_shown
+    window._on_bone_point(tuple(float(v) for v in clicked + np.asarray((0.0, 3.0, 0.0))))
+    assert len(window._armature_bones) == 3
+    assert window.wait_for_armature_skin()
+    assert window._armature_shown is not before, "die Haut zeigt den neuen Knochen"
+
+
+def test_a_large_skin_is_bent_in_a_worker_and_clicks_use_what_is_shown(
+    window: MainWindow, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Review F3: Gewichte und gebeugte Haut rechnete jeder Klick im
+    Hauptfaden, an 327 680 Dreiecken 1,2 s. Ab der Sofortgrenze rechnet ein
+    Arbeiter; ein Klick trifft den gezeigten Körper und rechnet keine Haut."""
+    import app.core.geom.pose as pose
+    import app.ui.placement_flow as placement_flow
+
+    monkeypatch.setattr(placement_flow, "AT_ONCE_BELOW", 1)
+    built: list[int] = []
+    original = pose.Skin.__init__
+
+    def counted(self: Any, *args: Any, **kwargs: Any) -> None:
+        built.append(1)
+        original(self, *args, **kwargs)
+
+    monkeypatch.setattr(pose.Skin, "__init__", counted)
+    _koerper, step = _bound_arm(window, 60.0)
+    window.edit_operation(step)
+    assert window.session.wait_for_idle(30_000)
+    assert window._armature_skin_worker is not None, "die Haut rechnet im Arbeiter"
+    assert window.wait_for_armature_skin()
+    shown = window._armature_shown
+    assert shown is not None and shown is not window._sculpt_mesh(window._armature_target)
+    built.clear()
+    window._on_bone_point(tuple(float(v) for v in shown.raw.vertices[0]))
+    assert built == [], "der Klick rechnet keine Haut"
+
+
+def test_reopening_and_finishing_unchanged_adds_no_undo_step(window: MainWindow) -> None:
+    from app.core.geom.pose import armature_to_text
+    from app.core.scene.history import OperationDraft
+    from app.core.types import Bone
+
+    koerper = with_a_body(window)
+    window.session.apply(
+        "Skelett",
+        [
+            OperationDraft(
+                op="pose_armature",
+                inputs=(koerper,),
+                params={
+                    "armature": armature_to_text([Bone("arm", (0, 0, 0), (0, 0, 10))]),
+                    "pose": '{"arm":[0,30,0]}',
+                },
+            )
+        ],
+    )
+    assert window.session.wait_for_idle(60_000)
+    transactions = len(window.session.project.document.transactions)
     window.start_armature(koerper)
-    assert window.session.wait_for_idle()
-
-    assert len(window._armature_bones) == 2, (
-        f"das gesetzte Skelett muss im Editor stehen, dort stehen "
-        f"{len(window._armature_bones)} Knochen"
-    )
-    assert window._armature_step is not None, (
-        "der Editor muss wissen, welchen Schritt er ändert — sonst legt „Fertig“ "
-        "einen zweiten an, und der Körper wird zweimal gebeugt"
-    )
-    assert "arm" in armature_to_text(window._armature_bones), (
-        "die Namen der Knochen müssen mitkommen, sonst heißt die Stellung anders als vorher"
-    )
+    assert window.session.wait_for_idle(30_000)
+    window.finish_armature()
+    assert window.session.wait_for_idle(30_000)
+    assert len(window.session.project.document.transactions) == transactions
 
 
 def test_a_body_without_an_armature_starts_empty(window: MainWindow) -> None:
-    """Ohne gesetztes Skelett bleibt der Editor ein leeres Blatt.
-
-    Die Gegenprobe zum Laden: Wer zum ersten Mal ein Skelett setzt, darf keine
-    Knochen vorfinden, und „Fertig" legt einen neuen Schritt an statt einen
-    fremden zu ändern.
-    """
     window.start_armature(with_a_body(window))
 
     assert window._armature_bones == [], "ohne Skelett fängt der Editor leer an"
-    assert window._armature_step is None, (
-        "ohne vorhandenen Schritt darf keiner zum Ändern vorgemerkt sein"
-    )
+    assert window._armature_step is None
 
 
 def test_an_unreadable_armature_does_not_block_the_editor(window: MainWindow) -> None:
-    """Ein unlesbares Skelett lässt den Editor leer anfangen, statt ihn zu verweigern.
-
-    Der Schritt bleibt unberührt im Verlauf stehen — eine kaputte Eingabe ist
-    kein Grund, dem Kunden das Werkzeug zu nehmen (§2.1).
-    """
+    """Ein unlesbares Skelett lässt den Editor leer anfangen, statt ihn zu verweigern."""
     from app.core.scene.history import OperationDraft
 
     koerper = with_a_body(window)
@@ -560,16 +720,12 @@ def test_an_unreadable_armature_does_not_block_the_editor(window: MainWindow) ->
 
     assert window.setting_armature(), "der Editor muss trotzdem aufgehen"
     assert window._armature_bones == []
-    assert window._armature_step is None, (
-        "ein unlesbarer Schritt darf nicht zum Ändern vorgemerkt werden — sonst "
-        "überschriebe „Fertig“ ihn mit einem halben Skelett"
-    )
+    assert window._armature_step is None
 
 
-def test_bones_are_drawn_and_sit_inside_the_body(window: MainWindow) -> None:
-    """RM-367 W4-6 und W4-7: Der Skeletteditor zeigt Knochen und Gelenk im Bild,
-    und ein Klick auf die Haut setzt das Gelenk ins Innere.
-    """
+def test_bones_and_the_open_chain_end_are_drawn_inside_the_body(window: MainWindow) -> None:
+    """RM-367 W4-6 und W4-7: Knochen und Gelenke stehen im Bild, ein Klick auf
+    die Haut setzt das Gelenk ins Innere, und das offene Kettenende ist markiert."""
     import numpy as np
 
     object_id = with_a_body(window)
@@ -591,7 +747,8 @@ def test_bones_are_drawn_and_sit_inside_the_body(window: MainWindow) -> None:
 
     window._on_bone_point(top)
     assert len(window.viewport.bones_shown) == 1, "der Knochen steht im Bild"
-    assert window.viewport.joint_shown is None
+    assert window.viewport.joint_shown == window._armature_bones[0].tail, "das offene Ende"
+    assert len(window.viewport.joints_shown) == 2, "beide Gelenke lassen sich greifen"
 
     window.finish_armature()
     assert window.viewport.bones_shown == ()
@@ -604,10 +761,8 @@ def test_pose_print_findings_remain_in_the_bar_after_finishing(window: MainWindo
 
     object_id = with_a_body(window)
     window.start_armature(object_id)
-    bone(window, (0.0, 0.0, 0.0), (0.0, 0.0, 20.0))
+    chain(window, (0.0, 0.0, 0.0), (0.0, 0.0, 20.0))
     window.finish_armature()
-    assert window._op_dialog is not None
-    window._op_dialog.accept()
     assert window.session.wait_for_idle(30_000)
     finding = Finding(
         code="pose.pinched",
@@ -632,7 +787,8 @@ def test_pose_print_findings_remain_in_the_bar_after_finishing(window: MainWindo
 
 
 def test_history_reopens_the_requested_armature_instead_of_the_latest(window: MainWindow) -> None:
-    """RM-375: Die gewählte Operationskennung bestimmt das Skelett."""
+    """RM-375: Die gewählte Operationskennung bestimmt das Skelett. Strg+Z nimmt
+    an einem wieder geöffneten Skelett den letzten Knochen weg."""
     from app.core.geom.pose import armature_to_text
     from app.core.scene.history import OperationDraft
     from app.core.types import Bone

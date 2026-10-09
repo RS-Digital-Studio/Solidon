@@ -49,16 +49,16 @@ Merkmalen. Der Empfänger ordnet Callbackmeldungen der Auftragsrevision zu.
 | `revision.py` | Den Verlauf umbauen: `dependencies`, `step_needs`, `revise`, `verdict`, `commit`; `searched_at_the_end` lässt Eingefügtes seine freie Stelle am Endstand suchen |
 | `rebuild.py` | Nachbau (§42): P4.0/Netzfits, Formvergleich, benannte Maße, atomare Übernahme |
 | `bundling.py` | Welche Züge zu einem Schritt verschmelzen (§15.5), **opt-in je Operation** |
-| `evaluate.py` | Die Auswertung (§15.1); `EvaluationResult.question_reference` trägt bei einer offenen Zuordnungsfrage den bisherigen Bezug mit Ansichtsdreiecken nur vorübergehend zur Ansicht |
+| `evaluate.py` | Die Auswertung (§15.1); `EvaluationResult.question_reference` trägt bei einer offenen Zuordnungsfrage den bisherigen Bezug mit Ansichtsdreiecken nur vorübergehend zur Ansicht; gemerkte Zuordnungsschritte (RM-593) |
 | `edge_binding.py` | Gewählte Kanten **vor** dem Verbrauchercache binden (§21.3) |
-| `cache.py` | Ergebnis-Cache über dem Operations-Hash, Speicher und Platte |
+| `cache.py` | Ergebnis-Cache über dem Operations-Hash, Speicher und Platte; Speicherebene in Bytes begrenzt samt Merkern, ältere Einträge schrumpfen vor dem Verdrängen (RM-567) |
 | `hashing.py` | `operation_hash()`, `object_hash()`, `profile_key()`, `feature_digest` |
 | `parameter_usage.py` | Direkte und abgeleitete Parameterverwendung je Operationsfeld (§13) |
 | `parameter_binding.py` | Feste Zahlen, die zu Projektmaßen passen, und ihre Bindung (`projektmasse.md`) |
 | `cancel.py` | Kooperativer Abbruch (§15.6, §2.8) |
 | `fits.py` | Passungen (§14) — Verletzungen erkannt, nie still gerechnet; `fit_kinds_for` sagt, welche Passungsarten Körper tragen (Druckdialog, Export je Teil) |
 | `orphans.py` | Verweise ohne Merkmal (§21.3): `question_for()`, `candidates_of()`, `lineage()` |
-| `placement.py` | Dialogvorbelegung und Oberflächenplatzierung am Originalnetz (§18.5); `seat_on_face`: ein Erzeuger auf gewählter Fläche, in ihrer Ebene über das Bett gehoben; `seat_of`: wo sitzt, was schon da ist; `prepare_tool()` liefert in `PlacementTool` den effektiven Werkzeugwinkel und die Kernachse für die Vorschau; `slot_hole`/`resize_hole` verwenden bei markierten Altwinkeln die positive Merkmalsachse, ein migriertes `drill_hole` mit `measured_frame` behält seine gespeicherte Richtung, auch gegen die positive Normale; Nullnormalen verwenden dieselbe BRep-Hüllmittenentscheidung wie `_bore_span`, Mesh liest die lokale Materialsäule; `SIDE_NAMES` übernimmt die gemeinsamen Seitennamen aus `registry/surfaces.py` |
+| `placement.py` | Dialogvorbelegung und Oberflächenplatzierung am Originalnetz (§18.5); `seat_on_face`: ein Erzeuger auf gewählter Fläche, in ihrer Ebene über das Bett gehoben; `seat_of`: wo sitzt, was schon da ist; `prepare_tool()` liefert in `PlacementTool` den effektiven Werkzeugwinkel und die Kernachse für die Vorschau; Altwinkel, migrierte Richtungen und Nullnormalen: Begründungen, „Platzierung“ |
 | `ops.py` | Umbenennen, Löschen, Duplizieren, Muster |
 | `variants.py` | Der Variantengenerator (§28.3): `_marked` graviert den Wert ein, wo Material für drei Schichten plus Mindestwand steht (`label_ops.too_thin_to_print`), sonst `variants.no_mark`; fein, mit geteiltem Cache; ein Druckauftrag, kein Dokumentzustand (Regel 2) |
 
@@ -268,6 +268,8 @@ Merkmalen. Der Empfänger ordnet Callbackmeldungen der Auftragsrevision zu.
   `fit_sights`; `verdict` fragt Herkunft, Abdruck, Lage) → `commit`. Neu
   gefasst ab der ersten Änderung (`_moved_order`, `_clone`, alte Kennungen als
   `None` in `edited_ops`); `valid_targets` nennt Gründe (`_order_problem`).
+  `plan_insert(changed=)`: neue Werte späterer Schritte, eine Transaktion
+  unter `title`; fremde Kennung oder `produces_from` → `InternalError`.
 - **Ausgeschaltet** (`Operation.suppressed`): `history.step_off`,
   `step_resting`; `_absent_objects`, `_without_absent_inputs`,
   `needs_resting_step`, `fits.paused_fits`, `orphans.references` fragt nicht;
@@ -346,9 +348,11 @@ Merkmalen. Der Empfänger ordnet Callbackmeldungen der Auftragsrevision zu.
 ### Projektdatei
 
 - **Revisionsherkunft**: `Transaction.renumbered` hält die belegte Zuordnung
-  alter zu neuer Schrittkennung bei Einfügen und Verschieben. Sichtbare Titel
-  folgen dieser Herkunft; Positionsnummern bleiben reine Anzeige. Alte Dateien
-  ohne Zuordnung werden nicht durch Parametergleichheit nachträglich verbunden.
+  alter zu neuer Schrittkennung bei Einfügen, Verschieben und den Wegen „… und
+  erneut versuchen“ (`revision="insert"`, RM-547). Sichtbare Titel folgen dieser
+  Herkunft; Positionsnummern bleiben reine Anzeige. Alte Dateien ohne Zuordnung
+  werden nicht durch Parametergleichheit verbunden; ihre erneuten Versuche
+  erkennt `types.replanned_steps` an der Gestalt.
 
 - **Spulen** (`PrintSettings`): Filamentidentität und lokale Kennung, nie
   Pfade, Namensvorlagen übersetzbar und vor dem Lesen geprüft; die Migration

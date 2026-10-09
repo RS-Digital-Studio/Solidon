@@ -158,6 +158,7 @@ SIDE_EFFECTS: Final[Mapping[str, TranslatableText]] = {
     ),
     "leave_open": _("Nimmt die geschlossene Öffnung zurück; der Körper ist danach offen."),
     "give_thickness": _("Macht aus der Fläche eine Wand mit der Mindestdicke des Materials."),
+    "generate_again": _("Öffnet „Modell erzeugen“ für einen neuen Versuch, das Modell bleibt."),
     "remove_small_parts": _("Entfernt die kleinen Einzelteile aus dem Körper."),
     "decimate_mesh": _FEWER_TRIANGLES,
     "decimate_and_retry": _FEWER_TRIANGLES,
