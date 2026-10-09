@@ -26,7 +26,7 @@ import threading
 import zipfile
 import zlib
 from collections import OrderedDict
-from collections.abc import Collection, Iterable, Sequence
+from collections.abc import Callable, Collection, Iterable, Sequence
 from contextlib import suppress
 from dataclasses import dataclass, field, replace
 from pathlib import Path
@@ -98,7 +98,7 @@ def held_by(
     kept: Collection[int] = (),
     seen: set[int] | None = None,
     freeable: list[int] | None = None,
-    counted: dict[int, tuple[Any, int]] | None = None,
+    counted: dict[int, tuple[Any, int, dict[int, tuple[object, int]]]] | None = None,
 ) -> int:
     """Wie viele Bytes ein Eintrag gerade hält — Netze samt Cache, Merkmale.
 
@@ -115,10 +115,12 @@ def held_by(
     ``counted`` merkt die Bytes je Merkmalssatz: Ein Eintrag ändert seine
     Merkmale nie, und sie jedes Mal neu zu zählen kostete am Eiffelturm
     (4 878 Merkmale, neun Einträge) 1,4 s je ``trim``. Gemerkt wird je Satz
-    für sich; was zwei Sätze teilen — Dreiecksnummern eines bewegten
-    Merkmals —, zählt dann doppelt, die Grenze hält also eher zu früh.
+    sein Rest und seine großen Behälter (``memory.held_parts``): Was zwei
+    Sätze teilen — die Dreiecksnummern eines bewegten Merkmals —, zählt
+    einmal; je Satz für sich gezählt, hielt die Grenze am Laptop-Riser nach
+    vier Verschieben 150 statt 122 MB (Nachprüfung L, M-3).
     """
-    from app.core.memory import held_bytes
+    from app.core.memory import held_bytes, held_parts
 
     seen = set() if seen is None else seen
     total = 0
@@ -132,11 +134,18 @@ def held_by(
         features = entry.features
         known = counted.get(id(features))
         if known is None or known[0] is not features:
-            known = (features, held_bytes(features))
+            known = (features, *held_parts(features))
             counted[id(features)] = known
-        if id(features) not in seen:
-            seen.add(id(features))
-            total += known[1]
+        if id(features) in seen:
+            continue
+        total += known[1]
+        # Der Satz selbst kann einer seiner Teile sein; erst danach als
+        # gezählt vermerkt.
+        for identity, (_holder, size) in known[2].items():
+            if identity not in seen:
+                seen.add(identity)
+                total += size
+        seen.add(id(features))
     return total
 
 
@@ -183,7 +192,7 @@ def _held_signature(result: CachedResult) -> tuple[tuple[int, int, int], ...]:
     return tuple(signature)
 
 
-def _memo_bytes() -> int:
+def _memo_bytes(seen: set[int] | None = None) -> int:
     """Was die Merker der Auswertung halten; sie zählen in derselben Grenze (Review L, G3).
 
     Der Merker der Zuordnung (``perceive.matching.matched_bytes``) und der
@@ -191,11 +200,25 @@ def _memo_bytes() -> int:
     (``scene.evaluate.remembered_bytes``, RM-593). Sie gehören keinem Eintrag
     und werden hier nicht verdrängt — ihre eigenen Grenzen zählen Kennungen
     und Merkmale.
+
+    Mit ``seen`` — den schon gezählten Feldern der Einträge — zählen die
+    Schritte nur, was sie darüber hinaus halten: Ihre bewegten Merkmale teilen
+    die Dreiecksnummern mit den Einträgen (Nachprüfung L, M-3). Ohne ``seen``
+    ihr Gewicht über den eigenen Eintrag hinaus, eine Obergrenze.
     """
     from app.core.perceive.matching import matched_bytes
-    from app.core.scene.evaluate import remembered_bytes
+    from app.core.scene.evaluate import remembered_bytes, remembered_parts
 
-    return matched_bytes() + remembered_bytes()
+    if seen is None:
+        return matched_bytes() + remembered_bytes()
+    steps = 0
+    for rest, parts in remembered_parts():
+        steps += rest
+        for identity, (_holder, size) in parts.items():
+            if identity not in seen:
+                seen.add(identity)
+                steps += size
+    return matched_bytes() + steps
 
 
 def _release_steps(excess: int) -> int:
@@ -467,7 +490,7 @@ class ResultCache:
         self._memory_budget = default_memory_budget() if memory_budget is None else memory_budget
         self._held: dict[str, tuple[tuple[Any, ...], int]] = {}
         #: Bytes je Merkmalssatz eines Eintrags (``held_by``, ``counted``).
-        self._features_held: dict[int, tuple[Any, int]] = {}
+        self._features_held: dict[int, tuple[Any, int, dict[int, tuple[object, int]]]] = {}
         """Je Schlüssel die zuletzt gemessenen Bytes und woran die Messung hing
         (:func:`_held_signature`)."""
         self._disk = disk
@@ -579,16 +602,52 @@ class ResultCache:
 
     def _store(self, key: str, result: CachedResult) -> None:
         """Nur mit gehaltenem Schloss aufrufen — siehe :attr:`_lock`."""
+        gone: list[CachedResult] = []
         if key in self._entries:
-            self._cost -= self._entries.pop(key).cost
+            gone.append(self._entries.pop(key))
+            self._cost -= gone[-1].cost
             self._held.pop(key, None)
         self._entries[key] = result
         self._cost += result.cost
         while self._cost > self._budget and len(self._entries) > 1:
             dropped_key, dropped = self._entries.popitem(last=False)
+            gone.append(dropped)
             self._held.pop(dropped_key, None)
             self._cost -= dropped.cost
             self.statistics.evictions += 1
+        self._release_steps_of(gone)
+
+    def _release_steps_of(self, gone: Iterable[CachedResult]) -> int:
+        """Nur mit gehaltenem Schloss aufrufen — vergisst die Schritte verlassener Merkmale.
+
+        Ein gemerkter Zuordnungsschritt zählt die Merkmale seines Eintrags
+        nicht mit (``evaluate._remember_step``); verlässt der Eintrag die
+        Speicherebene, geht der Schritt mit, außer ein anderer Eintrag hält
+        dieselben Merkmale (Nachprüfung L, G-6). Gibt die Bytes zurück.
+        """
+        sources = {id(body.features) for entry in gone for body in entry.objects}
+        if not sources:
+            return 0
+        sources -= self._features_present()
+        if not sources:
+            return 0
+        from app.core.scene.evaluate import release_steps_of
+
+        return release_steps_of(sources)
+
+    def _features_present(self) -> set[int]:
+        """Nur mit gehaltenem Schloss — die Kennungen der Merkmalssätze aller Einträge."""
+        return {id(body.features) for entry in self._entries.values() for body in entry.objects}
+
+    def with_held_features(self, then: Callable[[frozenset[int]], None]) -> None:
+        """Ruft ``then`` mit den Kennungen der Merkmalssätze aller Einträge, unter dem Schloss.
+
+        Für den Merker der Zuordnungsschritte (``evaluate._keep_steps``): Er
+        nimmt nur Schritte, deren Merkmale hier liegen, und kein anderer Faden
+        verdrängt sie dazwischen.
+        """
+        with self._lock:
+            then(frozenset(self._features_present()))
 
     def trim(self, keep: Iterable[Mesh] = ()) -> None:
         """Hält die Bytegrenze der Speicherebene (RM-567).
@@ -661,27 +720,30 @@ class ResultCache:
             freed = _release_steps(held - self._memory_budget)
             held -= freed
             released += freed
+        gone: list[CachedResult] = []
         for key in older:
             if held <= self._memory_budget:
-                return released
+                break
             entry = self._entries[key]
             if any(id(body.mesh) in ids for body in entry.objects):
                 continue
             del self._entries[key]
+            gone.append(entry)
             self._held.pop(key, None)
             held -= sizes[key]
             released += sizes[key]
             self._cost -= entry.cost
             self.statistics.evictions += 1
-        return released
+        return released + self._release_steps_of(gone)
 
     def _exact(
         self, kept: Sequence[Mesh], ids: set[int]
     ) -> tuple[dict[str, int], dict[str, int], int]:
         """Je Eintrag seine Bytes und was schlanke Netze davon freigäben, dazu die Summe.
 
-        Jedes Feld einmal: erst die Szene, dann vom jüngsten Eintrag an,
-        zuletzt der Merker der Zuordnung.
+        Jedes Feld einmal: erst die Szene, dann vom jüngsten Eintrag an, dann
+        die gemerkten Zuordnungsschritte (Nachprüfung L, M-3), zuletzt der
+        Merker der Zuordnung.
         """
         present = {id(body.features) for entry in self._entries.values() for body in entry.objects}
         for gone in set(self._features_held) - present:
@@ -695,7 +757,7 @@ class ResultCache:
             loose = [0]
             sizes[key] = held_by(self._entries[key], ids, seen, loose, self._features_held)
             freeable[key] = loose[0]
-        return sizes, freeable, sum(sizes.values()) + _memo_bytes()
+        return sizes, freeable, sum(sizes.values()) + _memo_bytes(seen)
 
     def _unkept(self, key: str, entry: CachedResult, kept: set[int]) -> int:
         """Die Bytes eines Eintrags ohne die Netze der Szene; gemerkt, solange er nicht wächst.
@@ -750,7 +812,9 @@ class ResultCache:
         ``test_the_memory_level_fills_itself_from_disk`` fest.
         """
         with self._lock:
+            gone = list(self._entries.values())
             self._entries.clear()
+            self._release_steps_of(gone)
             self._held.clear()
             self._features_held.clear()
             self._refusals.clear()

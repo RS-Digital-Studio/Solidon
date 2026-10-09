@@ -899,8 +899,9 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   jeder Merker zählt einzeln, ohne Stichprobe; die Merker der Zuordnung und der
   Zuordnungsschritte zählen in der Grenze und gehen vor einem Eintrag; exakte Körper zählen
   Tessellierung und Form und werden schlank; `physical_memory` nimmt die kleinste Grenze aus
-  Rechner, cgroup, Windows-Job und Adressraum. Ein schlankes Netz behält Teile und
-  Dreiecksflächen, die der Bericht nach dem Zurücknehmen fragt (RM-594 und RM-593 im Archiv).
+  Rechner, cgroup, Windows-Job und Adressraum. Ein schlankes Netz behält Teile,
+  Dreiecksflächen und die Schichtanalyse, die der Bericht nach dem Zurücknehmen fragt (RM-594
+  und RM-593 im Archiv); Einträge und Schrittmerker zählen geteilte Merkmale einmal.
   Die Schichtanalyse hält ihre Konturen als Felder (RM-595, Archiv).
   **Offen:** der Renderer am echten Fenster (offscreen nicht messbar).
 

@@ -740,7 +740,7 @@ def test_a_long_history_on_a_large_body_stays_inside_the_memory_level(profile: P
 
     Am Spiderman hielt jedes Verschieben 230 MB mehr fest, ohne Verdrängung bis
     zu zwanzig Millionen Dreiecken. Hier ein Körper mit 20 480 Dreiecken, je
-    Schritt nachgerechnete Nachbarschaften daran und eine Grenze für zwei volle Einträge:
+    Schritt Nachgerechnetes daran und eine Grenze für zwei volle Einträge:
     Der Cache hält sie nach jedem Schritt, und weil ältere Einträge schrumpfen
     statt zu gehen, kommt jeder Schritt weiter aus dem Speicher — eine
     Auswertung geht den ganzen Verlauf durch, und ein verdrängter Schritt käme
@@ -773,13 +773,13 @@ def test_a_long_history_on_a_large_body_stays_inside_the_memory_level(profile: P
     target = next(iter(first.scene.objects))
 
     def reported(result: Any) -> None:
-        """Was das Fenster am gezeigten Netz nachrechnet: Nachbarschaften, ableitbar."""
+        """Was das Fenster am gezeigten Netz nachrechnet, ableitbar und nicht mitbewegt."""
         import numpy as np
 
         for body in result.scene.objects.values():
             raw = cast(Any, body.mesh).raw
             raw._cache.verify()
-            raw._cache.cache["face_adjacency_span"] = np.ones(400_000)
+            raw._cache.cache["vertex_degree"] = np.ones(400_000)
 
     def beyond(result: Any) -> int:
         """Was der Cache über die Netze der Szene hinaus hält, jedes Feld einmal."""
@@ -876,11 +876,12 @@ def test_trimming_counts_once_and_a_lean_entry_stays_lean(
             [OperationDraft(op="translate_object", inputs=(target,), params={"dx": 1.0})],
         )
         result = evaluate(project.document, profile, sources=sources, cache=cache)
-        # Was das Fenster am gezeigten Netz nachrechnet, ableitbar.
+        # Was das Fenster am gezeigten Netz nachrechnet, ableitbar und nicht
+        # mitbewegt (``transform._carry_cache`` teilte es sonst mit dem nächsten).
         for shown in result.scene.objects.values():
             raw = cast(Any, shown.mesh).raw
             raw._cache.verify()
-            raw._cache.cache["face_adjacency_span"] = np.ones(200_000)
+            raw._cache.cache["vertex_degree"] = np.ones(200_000)
     assert max(counted) <= 1, f"one exact count per trim, got {counted}"
     assert sum(leaned) > 0, "Voraussetzung: die Grenze schrumpft ältere Einträge"
     leaned.clear()
@@ -903,7 +904,7 @@ def test_the_matching_memory_counts_inside_the_byte_bound(monkeypatch: pytest.Mo
     cache.put("new", new)
     cache.trim()
     assert cache._entries["old"] is old, "Voraussetzung: beide passen ohne den Merker"
-    monkeypatch.setattr(cache_module, "_memo_bytes", lambda: 2_000)
+    monkeypatch.setattr(cache_module, "_memo_bytes", lambda seen=None: 2_000)
     cache.trim()
     shrunk = cache._entries["old"]
     assert shrunk is not old, "the older entry made room for the memo"
@@ -980,6 +981,72 @@ def test_a_lean_mesh_keeps_what_the_report_asks_after_undo() -> None:
     assert "face_adjacency" not in held, "Voraussetzung: das Netz ist schlank"
     assert small_components(lean.raw) == []
     assert set(lean.raw._cache.cache) == held, "nothing was computed again"
+
+
+def test_the_byte_bound_counts_features_once_across_entries_and_remembered_steps(
+    profile: Profile,
+) -> None:
+    """Was Einträge und gemerkte Schritte teilen, zählt die Grenze einmal (Nachprüfung L, M-3).
+
+    Ein verschobener Körper behält die Dreiecksnummern seiner Merkmale, und
+    der gemerkte Zuordnungsschritt teilt sie mit dem Eintrag, aus dem er kam.
+    Je Satz und je Schritt für sich gezählt, hielt die Grenze am Laptop-Riser
+    nach vier Verschieben 212 statt 147 MB — sie schrumpfte und verdrängte
+    früher, und der Schrittmerker war nach dreizehn Schritten voll.
+    """
+    from importlib import import_module
+
+    from app.core.bootstrap import load_operations
+    from app.core.memory import held_bytes
+    from app.core.perceive import matching
+    from app.core.scene import History, OperationDraft, evaluate
+    from app.core.scene import cache as cache_module
+    from app.core.scene.project import ProjectSources, new_project
+    from app.core.types import Source
+
+    evaluation = import_module("app.core.scene.evaluate")
+    load_operations()
+    meshes = Path(__file__).parent / "data" / "meshes"
+    project = new_project("centauri-carbon-2", "petg")
+    project.document.sources["src_1"] = Source(
+        id="src_1", kind="import", path="sources/plate_holes.stl", sha256=""
+    )
+    project.sources["src_1"] = (meshes / "plate_holes.stl").read_bytes()
+    history = History(project.document)
+    history.apply("Laden", [OperationDraft(op="load", params={"source": "src_1", "unit": "mm"})])
+    sources = ProjectSources(project)
+    cache = ResultCache()
+    result = evaluate(project.document, profile, sources=sources, cache=cache)
+    target = next(iter(result.scene.objects))
+    for _step in range(4):
+        history.apply(
+            "Verschieben",
+            [OperationDraft(op="translate_object", inputs=(target,), params={"dx": 1.0})],
+        )
+        result = evaluate(project.document, profile, sources=sources, cache=cache)
+    assert len(result.scene.objects[target].features) >= 10, "Voraussetzung: Merkmale"
+    assert len(evaluation._REMEMBERED_STEPS) >= 4, "Voraussetzung: gemerkte Schritte"
+    kept = [body.mesh for body in result.scene.objects.values()]
+    ids = {id(mesh) for mesh in kept}
+    _sizes, _freeable, counted = cache._exact(kept, ids)
+    # Von außen, jedes Feld einmal: die Szene, die Einträge vom jüngsten an,
+    # was die gemerkten Schritte darüber hinaus halten, der Zuordnungsmerker.
+    seen: set[int] = set()
+    for mesh in kept:
+        cache_module._mesh_bytes(mesh, seen)
+    once = sum(
+        cache_module.held_by(cache._entries[key], ids, seen)
+        for key in reversed(list(cache._entries))
+    )
+    # Je Feld des Schritts für sich: Ein Tupel nur für die Zählung bekäme beim
+    # nächsten Schritt dieselbe Kennung und zählte dann als gesehen.
+    once += sum(
+        held_bytes(part, seen)
+        for step in evaluation._REMEMBERED_STEPS.values()
+        for part in (step.changed, step.findings, step.source, step.digests)
+    )
+    once += sum(held_bytes(answer, seen) for _ways, answer, _weight in matching._MATCHES.values())
+    assert abs(counted - once) <= 0.1 * once, f"bound counts {counted}, each field once {once}"
 
 
 def test_the_report_keeps_its_analysis_after_undo_under_a_tight_bound(profile: Profile) -> None:

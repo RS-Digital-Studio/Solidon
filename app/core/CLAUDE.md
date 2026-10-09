@@ -67,7 +67,7 @@ laden für jede Datei hier; diese Karte sagt, **was wo liegt**. Das Warum:
 | `process.py` · `http.py` · `json_boundary.py` | Sichere Grenze für externe Prozesse (§32; `run_limited` beendet einen Prozess, der nach seinem gemeldeten Ergebnis nicht endet: `finished`, `linger`; `bind_helper` bindet die Hilfsprozesse des Netzkerns an diesen Prozess) · für kleine HTTP-Transporte (`apply_header_deadline`) · für JSON aus fremden Vertrauensräumen |
 | `network.py` | CA-Satz für macOS und Pakete ohne nutzbaren Vertrauensspeicher (Flatpak) |
 | `keyring_backend.py` | Backend-Suche des System-Schlüsselbunds, einmal je Prozess im eigenen Faden; geteilt von `backends.keys` und `activation.device`, damit keins das andere importiert |
-| `memory.py` | Was der Prozess an Arbeitsspeicher bekommt (`physical_memory`: Rechner, cgroup, Windows-Job, Adressraum) und was ein Wert davon hält (`held_bytes`: NumPy-Puffer einmal, jede Folge ganz) — für die Grenze des Ergebniscaches (RM-567); `note_released` meldet dem Sammler im Fenster, was in Ringen wartet (RM-594) |
+| `memory.py` | Was der Prozess an Arbeitsspeicher bekommt (`physical_memory`: Rechner, cgroup, Windows-Job, Adressraum) und was ein Wert davon hält (`held_bytes`: NumPy-Puffer einmal, jede Folge ganz; `held_parts`: Rest und teilbare große Behälter, damit Einträge und Schrittmerker Geteiltes einmal zählen) — für die Grenze des Ergebniscaches (RM-567); `note_released` meldet dem Sammler im Fenster, was in Ringen wartet (RM-594) |
 
 - **Absturz**: `faulthandler` hält einen eigenen rohen Deskriptor bis zum
   Prozessende. Haupt- und Nebenfadenfehler nehmen mit der CLI denselben

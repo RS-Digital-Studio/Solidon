@@ -1947,6 +1947,9 @@ def test_a_result_that_came_from_a_question_stays_out_of_the_long_lived_cache() 
         def trim(self, keep: object = ()) -> None:
             return None
 
+        def with_held_features(self, then: Any) -> None:
+            then(frozenset())
+
     load_operations()
     meshes = Path(__file__).parent / "data" / "meshes"
     profile = make_profile("centauri-carbon-2", "petg")
@@ -8154,9 +8157,9 @@ def test_preview_recognises_only_features_read_after_the_current_step(
     measured.clear()
     warm = evaluate(project.document, profile, sources=sources, cache=cache, detect_features=False)
     assert warm.complete and warm.recognition_left_out == {entry.id}
-    # Höchstens so oft wie kalt: Ein Schritt mit denselben Eingängen kommt aus
-    # dem Merker der Auswertung und erkennt gar nicht neu (RM-593).
-    assert len(measured) <= (2 if following else 1)
+    # Genau so oft wie kalt: Ohne Erkennung merkt sich die Auswertung keinen
+    # Schritt (RM-593), der warme Lauf misst also wieder.
+    assert len(measured) == (2 if following else 1)
     assert (
         warm.scene.objects[entry.id].features.keys()
         == result.scene.objects[entry.id].features.keys()
@@ -8498,3 +8501,83 @@ def test_the_step_memory_keeps_what_this_evaluation_uses(
     assert calls.count("translate_object") == 1, "the old steps still come from memory"
     assert module.release_remembered_steps(1) > 0
     assert len(module._REMEMBERED_STEPS) == kept - 1, "released, the oldest gives way first"
+
+
+def test_a_step_that_does_not_fit_leaves_the_unused_steps_in_place(
+    profile: Profile, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Reicht der Platz nicht, verdrängt ein neuer Schritt nichts (Nachprüfung L, G-5).
+
+    Der Merker räumte zuerst die Schritte aus, die diese Auswertung nicht
+    brauchte, und gab danach auf — der neue Schritt blieb ungemerkt, und der
+    alte, zu dem der Nutzer gleich zurückgeht, war weg.
+    """
+    from importlib import import_module
+
+    from app.core.scene.project import ProjectSources
+
+    module = import_module("app.core.scene.evaluate")
+    project = _moved_plate(4)
+    sources = ProjectSources(project)
+    calls: list[str] = []
+    real = module._with_features
+
+    def counted(entry: Any, previous: Any, operation: Any, *arguments: Any, **named: Any) -> Any:
+        calls.append(operation.op)
+        return real(entry, previous, operation, *arguments, **named)
+
+    monkeypatch.setattr(module, "_with_features", counted)
+    cache = ResultCache()
+    evaluate(project.document, profile, sources=sources, cache=cache)
+    before = list(module._REMEMBERED_STEPS)
+    assert len(before) >= 5, "Voraussetzung: Laden und vier Verschieben gemerkt"
+    # Voll: Der geänderte letzte Schritt wiegt so viel wie der alte, und der
+    # alte ist das Einzige, was diese Auswertung nicht braucht — zu wenig.
+    monkeypatch.setattr(module, "REMEMBERED_BYTES_KEPT", module.remembered_bytes() - 1)
+    last = project.document.ops[-1]
+    project.document.ops[-1] = dataclasses.replace(last, params={**last.params, "dx": 3.0})
+    calls.clear()
+    evaluate(project.document, profile, sources=sources, cache=cache)
+    assert calls == ["translate_object"], calls
+    assert set(module._REMEMBERED_STEPS) == set(before), "nothing was pushed out in vain"
+    project.document.ops[-1] = last
+    calls.clear()
+    evaluate(project.document, profile, sources=sources, cache=cache)
+    assert calls == [], "the old last step still comes from memory"
+
+
+def test_a_step_leaves_the_memory_with_the_entry_it_came_from(profile: Profile) -> None:
+    """Verlässt ein Eintrag die Speicherebene, gehen seine Schritte mit (Nachprüfung L, G-6).
+
+    Ein Schritt trifft nur an den Merkmalen seines Eintrags und zählt sie
+    nicht mit; ohne den Eintrag hielte er sie fest, ungezählt und ohne je
+    wieder zu treffen.
+    """
+    from importlib import import_module
+
+    from app.core.scene.project import ProjectSources
+
+    module = import_module("app.core.scene.evaluate")
+    project = _moved_plate(3)
+    sources = ProjectSources(project)
+    cache = ResultCache()
+    result = evaluate(project.document, profile, sources=sources, cache=cache)
+    assert len(module._REMEMBERED_STEPS) >= 4, "Voraussetzung: gemerkte Schritte"
+
+    def held() -> set[int]:
+        return {id(body.features) for entry in cache._entries.values() for body in entry.objects}
+
+    assert all(id(step.source) in held() for step in module._REMEMBERED_STEPS.values())
+    cache._memory_budget = 1
+    cache.trim(keep=[body.mesh for body in result.scene.objects.values()])
+    assert cache.statistics.evictions > 0, "Voraussetzung: die Grenze verdrängt"
+    assert module._REMEMBERED_STEPS, "the step of the kept entry stays"
+    assert all(id(step.source) in held() for step in module._REMEMBERED_STEPS.values()), (
+        "no remembered step outlives its entry"
+    )
+    assert module.remembered_bytes() == sum(
+        step.weight for step in module._REMEMBERED_STEPS.values()
+    )
+    cache.clear()
+    assert not module._REMEMBERED_STEPS, "clearing the memory level forgets every step"
+    assert module.remembered_bytes() == 0

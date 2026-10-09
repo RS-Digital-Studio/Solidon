@@ -187,11 +187,12 @@ _log = get_logger(__name__)
 #: durch und ordnete nach jedem Schritt neu zu, auch aus dem Cache — bewegte
 #: Merkmale, Zuordnung, Teilhashes —, am Eiffelturm (4 878 Merkmale) gut eine
 #: Sekunde mehr je Schritt im Verlauf, bei jeder Auswertung. Dieselben
-#: Eingänge geben dieselbe Antwort. Ein Schritt am Eiffelturm hält 19 MB
-#: Merkmale, einer am Laptop-Riser 13 MB (``feature_bytes.py``, Paket L); die
-#: Hälfte der kleinsten Speicherebene (``scene.cache.MEMORY_FLOOR``) trägt
-#: einen Verlauf von dreizehn Schritten am Eiffelturm. Gezählt wird in der
-#: Bytegrenze des Ergebniscaches (:func:`remembered_bytes`).
+#: Eingänge geben dieselbe Antwort. Gewogen wird, was ein Schritt über die
+#: Merkmale seines Eintrags hinaus hält — die bewegten teilen ihre
+#: Dreiecksnummern mit ihnen (Nachprüfung L, M-3): am Eiffelturm 10 MB je
+#: Schritt, am Laptop-Riser 1,6 MB. Die Hälfte der kleinsten Speicherebene
+#: (``scene.cache.MEMORY_FLOOR``) trägt so 25 Schritte am Eiffelturm. Gezählt
+#: wird in der Bytegrenze des Ergebniscaches (:func:`remembered_parts`).
 REMEMBERED_BYTES_KEPT: Final = 256 * 1024 * 1024
 
 #: Was ein mitgemerkter Teilhash eines Merkmals hält (``hashing.FeatureMemo``):
@@ -684,6 +685,9 @@ def _evaluate(
     step_ways = _step_ways()
     step_generation = _next_generation()
     remembered_now: dict[ObjectId, _RememberedStep] = {}
+    # Neu gemerkte Schritte; in den Merker kommen sie erst, wenn ihr Ergebnis
+    # in der Speicherebene liegt (:func:`_keep_steps`).
+    fresh_steps: list[tuple[bytes, _RememberedStep]] = []
     # Die Ladewahl je Körper zur Vollerkennung (§21.1): am Ladeschritt
     # entschieden, von jedem Folgeschritt desselben Körpers gelesen. Jede
     # Auswertung baut sie in Stapelreihenfolge neu auf — sie ist eine Folge
@@ -1465,9 +1469,8 @@ def _evaluate(
                         features_complete=spec.features_complete,
                     )
                 )
-                if remembered is None:
+                if remembered is None and cache is not None:
                     remembered = _remember_step(
-                        step_key,
                         step_ways,
                         step_generation,
                         placed,
@@ -1490,6 +1493,8 @@ def _evaluate(
                             else None
                         ),
                     )
+                    if remembered is not None:
+                        fresh_steps.append((step_key, remembered))
                 if remembered is not None:
                     remembered_now[object_id] = remembered
             except AppError as error:
@@ -1804,6 +1809,9 @@ def _evaluate(
     if cache is not None and stopped_at is None:
         for key, result, to_disk in pending:
             cache.put(key, result, to_disk=to_disk)
+    if cache is not None:
+        cache.with_held_features(lambda held: _keep_steps(fresh_steps, step_generation, held))
+    if cache is not None and stopped_at is None:
         # Auch ohne neuen Eintrag: Ein Lauf aus lauter Treffern — Zurücknehmen —
         # lässt die Netze älterer Stände wachsen (RM-567). Die Netze der
         # fertigen Szene bleiben, wie sie sind.
@@ -4330,7 +4338,13 @@ class _RememberedStep:
     """Die Ladewahl, die der Schritt seinem Körper gegeben hat — der Ladeschritt
     trägt sie ein —, ``None``, wenn er sie nicht angefasst hat."""
     weight: int
-    """Bytes, für die Grenze des Merkers (:data:`REMEMBERED_BYTES_KEPT`)."""
+    """Bytes über die Merkmale seines Eintrags hinaus, für die Grenze des Merkers
+    (:data:`REMEMBERED_BYTES_KEPT`) — :attr:`rest` und alle :attr:`parts`."""
+    rest: int
+    """Was nur er hält, samt der Schätzung für die Teilhashes."""
+    parts: dict[int, tuple[object, int]]
+    """Seine großen Behälter (``memory.held_parts``), die er mit anderen Schritten
+    und Einträgen teilen kann — für die genaue Zählung der Speicherebene."""
     source: dict[FeatureId, Feature]
     """Die Merkmale, die die Operation selbst ausgab — dasselbe Objekt, solange ihr
     Ergebnis aus dem Cache kommt. Rechnet sie neu, fragt der Schritt neu."""
@@ -4364,6 +4378,18 @@ def remembered_bytes() -> int:
     """Was die gemerkten Zuordnungsschritte halten, in Bytes — für den Ergebniscache."""
     with _REMEMBERED_LOCK:
         return _REMEMBERED_BYTES
+
+
+def remembered_parts() -> list[tuple[int, dict[int, tuple[object, int]]]]:
+    """Je gemerktem Schritt sein Rest und seine Teile — für die genaue Zählung des Ergebniscaches.
+
+    Ein Schritt teilt die Dreiecksnummern seiner bewegten Merkmale mit dem
+    Eintrag, aus dem er kam, und mit dem Eintrag des nächsten Schritts; die
+    Speicherebene zählt jeden Teil einmal (``ResultCache._exact``,
+    Nachprüfung L, M-3).
+    """
+    with _REMEMBERED_LOCK:
+        return [(step.rest, step.parts) for step in _REMEMBERED_STEPS.values()]
 
 
 def forget_remembered_steps() -> None:
@@ -4545,7 +4571,6 @@ def _own_copy(value: Any) -> Any:
 
 
 def _remember_step(
-    key: bytes,
     ways: tuple[Any, ...],
     generation: int,
     placed: SceneObject,
@@ -4556,54 +4581,102 @@ def _remember_step(
     unrecognised: bool,
     recognition: tuple[_BodyRecognition | None] | None,
 ) -> _RememberedStep | None:
-    """Merkt die Antwort eines Schritts, der nichts gefragt und nichts festgehalten hat.
+    """Die Antwort eines Schritts, der nichts gefragt und nichts festgehalten hat, zum Merken.
 
     Eine Frage, eine festgehaltene Antwort oder eine geänderte Ladewahl macht
     den Schritt zu mehr als einer Funktion seiner Eingänge; er wird dann nicht
     gemerkt (``quiet``). Ebenso, wenn die Ausgabe ein anderes Netz trägt.
 
-    **Verdrängt wird, was diese Auswertung nicht gebraucht hat** — Schritte
-    eines geänderten Verlaufs. Eine Auswertung geht den Verlauf von vorn
-    durch; wer dabei den ältesten Schritt verdrängte, holte ihn bei der
-    nächsten neu und verdrängte den zweiten, und keiner träfe mehr. Ist alles
-    in Gebrauch, bleibt der neue Schritt ungemerkt.
+    **Gewogen wird, was er über seinen Eintrag hinaus hält** (Nachprüfung L,
+    M-3): Die Merkmale der Operation (``source``) hält der Eintrag der
+    Speicherebene, und die bewegten Merkmale teilen ihre Dreiecksnummern mit
+    ihnen. Je Schritt ganz gezählt, wog er am Laptop-Riser 12,3 MB, über den
+    Eintrag hinaus hält er 0,24 MB. Darum kommt er erst in den Merker, wenn
+    sein Ergebnis in der Speicherebene liegt (:func:`_keep_steps`), und geht,
+    wenn es sie verlässt (:func:`release_steps_of`).
     """
-    global _REMEMBERED_BYTES
     if not quiet or produced.mesh is not placed.mesh:
         return None
-    from app.core.memory import held_bytes
+    from app.core.memory import held_parts, mark_held
 
     changed: dict[str, Any] = {}
     for item in dataclasses.fields(produced):
         value = getattr(produced, item.name)
         if value is not getattr(placed, item.name):
             changed[item.name] = _own_copy(value)
-    weight = held_bytes(changed) + held_bytes(findings)
-    weight += _DIGEST_BYTES * len(produced.features)
-    known = _RememberedStep(
+    seen: set[int] = set()
+    mark_held(placed.features, seen)
+    rest, parts = held_parts((changed, findings), seen)
+    rest += _DIGEST_BYTES * len(produced.features)
+    return _RememberedStep(
         ways,
         changed,
         findings,
         unrecognised,
         _copied_recognition(recognition),
-        weight,
+        rest + sum(size for _holder, size in parts.values()),
+        rest,
+        parts,
         placed.features,
         used=[generation],
     )
+
+
+def _keep_steps(
+    fresh: Sequence[tuple[bytes, _RememberedStep]], generation: int, held: Collection[int]
+) -> None:
+    """Legt die neu gemerkten Schritte einer Auswertung in den Merker.
+
+    Nur, wessen Merkmale (``source``) ein Eintrag der Speicherebene hält —
+    ``held`` nennt deren Kennungen, gelesen unter dem Schloss des Caches
+    (``ResultCache.with_held_features``). Ein abgebrochener Lauf legt nichts
+    ab, und ein Schritt ohne Eintrag träfe nie wieder.
+
+    **Verdrängt wird, was diese Auswertung nicht gebraucht hat** — Schritte
+    eines geänderten Verlaufs. Eine Auswertung geht den Verlauf von vorn
+    durch; wer dabei den ältesten Schritt verdrängte, holte ihn bei der
+    nächsten neu und verdrängte den zweiten, und keiner träfe mehr. Reicht,
+    was sie nicht gebraucht hat, nicht für den neuen Schritt, bleibt er
+    ungemerkt, und verdrängt wird nichts (Nachprüfung L, G-5).
+    """
+    global _REMEMBERED_BYTES
     with _REMEMBERED_LOCK:
-        replaced = _REMEMBERED_STEPS.pop(key, None)
-        if replaced is not None:
-            _REMEMBERED_BYTES -= replaced.weight
-        while _REMEMBERED_STEPS and _REMEMBERED_BYTES + weight > REMEMBERED_BYTES_KEPT:
-            oldest_key = next(iter(_REMEMBERED_STEPS))
-            if _REMEMBERED_STEPS[oldest_key].used[0] >= generation:
-                return None
-            _REMEMBERED_BYTES -= _REMEMBERED_STEPS.pop(oldest_key).weight
-        if weight > REMEMBERED_BYTES_KEPT:
-            return None
-        _REMEMBERED_STEPS[key] = known
-        _REMEMBERED_BYTES += weight
-    return known
+        for key, known in fresh:
+            if id(known.source) not in held or known.weight > REMEMBERED_BYTES_KEPT:
+                continue
+            replaced = _REMEMBERED_STEPS.pop(key, None)
+            if replaced is not None:
+                _REMEMBERED_BYTES -= replaced.weight
+            excess = _REMEMBERED_BYTES + known.weight - REMEMBERED_BYTES_KEPT
+            unused = 0
+            for step in _REMEMBERED_STEPS.values():
+                if unused >= excess or step.used[0] >= generation:
+                    break
+                unused += step.weight
+            if unused < excess:
+                continue
+            while _REMEMBERED_BYTES + known.weight > REMEMBERED_BYTES_KEPT:
+                _REMEMBERED_BYTES -= _REMEMBERED_STEPS.popitem(last=False)[1].weight
+            _REMEMBERED_STEPS[key] = known
+            _REMEMBERED_BYTES += known.weight
+
+
+def release_steps_of(sources: Collection[int]) -> int:
+    """Vergisst die Schritte, deren Merkmale ``sources`` nennt; gibt die Bytes zurück.
+
+    Für die Speicherebene, wenn ein Eintrag sie verlässt (Nachprüfung L, G-6):
+    Ein Schritt trifft nur am selben Merkmalsobjekt, und ohne den Eintrag
+    hielte er dessen Merkmale fest, die er nicht mitzählt.
+    """
+    global _REMEMBERED_BYTES
+    if not sources:
+        return 0
+    freed = 0
+    with _REMEMBERED_LOCK:
+        for key in [key for key, step in _REMEMBERED_STEPS.items() if id(step.source) in sources]:
+            freed += _REMEMBERED_STEPS.pop(key).weight
+        _REMEMBERED_BYTES -= freed
+    return freed
 
 
 def _remember_digests(

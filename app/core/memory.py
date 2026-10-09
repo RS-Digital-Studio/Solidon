@@ -263,10 +263,78 @@ def held_bytes(value: object, seen: set[int] | None = None) -> int:
     Suchbaum —, zählt mit seinem Objektkopf. Für eine Verdrängungsgrenze
     genau genug, für eine Abrechnung nicht.
     """
-    return _held(value, set() if seen is None else seen, 0)
+    return _held(value, set() if seen is None else seen, 0, None)
 
 
-def _held(value: object, seen: set[int], depth: int) -> int:
+#: Ab welcher Größe :func:`held_parts` einen Behälter als eigenen Teil führt.
+#: Darunter liegen die Kleinteile eines Merkmals — Kennung, Achse, Werte —, die
+#: zwei Sätze nie teilen; darüber die Dreiecksnummern, die ein bewegtes
+#: Merkmal mit seinem Vorgänger teilt.
+PART_BYTES: Final = 1024
+
+
+def held_parts(
+    value: object, seen: set[int] | None = None
+) -> tuple[int, dict[int, tuple[object, int]]]:
+    """Was ``value`` hält, zerlegt in einen Rest und seine großen Behälter (Nachprüfung L, M-3).
+
+    Der Rest ist, was nur ``value`` gehört; die Teile — je Kennung, wie
+    :func:`held_bytes` sie in ``seen`` einträgt, der Behälter und seine Bytes
+    ohne seine eigenen Teile — kann ein anderer Wert mit ihm teilen. Wer
+    mehrere Werte zählt, addiert den Rest jedes Werts und jeden Teil nur, wenn
+    seine Kennung noch nicht gezählt ist: dieselbe Summe wie :func:`held_bytes`
+    über alle zusammen, bis auf die Kleinteile unter :data:`PART_BYTES`, ohne
+    sie noch einmal zu durchlaufen. Die Teile halten ihre Behälter, damit
+    keine Kennung frei und neu vergeben wird. Was in ``seen`` steht, zählt
+    weder zum Rest noch zu den Teilen.
+    """
+    parts: dict[int, tuple[object, int]] = {}
+    rest = _held(value, set() if seen is None else seen, 0, parts)
+    return rest, parts
+
+
+def mark_held(value: object, seen: set[int], depth: int = 0) -> None:
+    """Trägt in ``seen`` ein, was ``value`` erreicht, ohne es zu zählen (Nachprüfung L, M-3).
+
+    Für den, der danach nur wissen will, was ein zweiter Wert darüber hinaus
+    hält (``held_parts(other, seen)``). Eine Folge, deren erstes Element eine
+    Zahl, ein Text oder ein Zahlentupel ist, wird nicht durchlaufen — die
+    Dreiecksnummern eines Merkmals, hunderttausend Zahlen, kosteten sonst so
+    viel wie ihre Zählung. Was dabei unerkannt bleibt, zählt der zweite Wert
+    mit: eher zu viel als zu wenig.
+    """
+    if value is None or isinstance(value, (bool, int, float, complex, str, bytes)):
+        return
+    identity = id(value)
+    if identity in seen:
+        return
+    seen.add(identity)
+    if hasattr(value, "dtype"):
+        seen.add(id(_array_root(value)))
+        return
+    if depth >= DEPTH or isinstance(value, type) or callable(value):
+        return
+    items: Any
+    if isinstance(value, dict):
+        items = list(dict(value).values())
+    elif isinstance(value, (tuple, list, set, frozenset)):
+        items = list(value)
+        if items and (type(items[0]) in _FLAT or _points(items[:1])):
+            return
+    else:
+        names = _field_names(type(value))
+        if names is not None:
+            items = [getattr(value, name, None) for name in names]
+        else:
+            attributes = getattr(value, "__dict__", None)
+            items = [attributes] if isinstance(attributes, dict) else []
+    for item in items:
+        mark_held(item, seen, depth + 1)
+
+
+def _held(
+    value: object, seen: set[int], depth: int, parts: dict[int, tuple[object, int]] | None
+) -> int:
     if value is None or isinstance(value, (bool, int, float, complex)):
         return sys.getsizeof(value)
     if isinstance(value, (str, bytes, bytearray, memoryview)):
@@ -275,6 +343,18 @@ def _held(value: object, seen: set[int], depth: int) -> int:
     if identity in seen:
         return 0
     seen.add(identity)
+    size = _held_once(value, seen, depth, parts)
+    if parts is None or size < PART_BYTES:
+        return size
+    # Ein Feld zählt :func:`_array_bytes` über seinen Grundpuffer; dessen
+    # Kennung steht dann in ``seen``, und unter ihr teilt es sich.
+    parts[id(_array_root(value)) if hasattr(value, "dtype") else identity] = (value, size)
+    return 0
+
+
+def _held_once(
+    value: object, seen: set[int], depth: int, parts: dict[int, tuple[object, int]] | None
+) -> int:
     buffer = _array_bytes(value, seen)
     if buffer is not None:
         return buffer
@@ -289,26 +369,28 @@ def _held(value: object, seen: set[int], depth: int) -> int:
         snapshot = dict(value)
         return (
             sys.getsizeof(value)
-            + _sampled(list(snapshot), seen, depth)
-            + _sampled(list(snapshot.values()), seen, depth)
+            + _sampled(list(snapshot), seen, depth, parts)
+            + _sampled(list(snapshot.values()), seen, depth, parts)
         )
     if isinstance(value, (tuple, list)):
         return sys.getsizeof(value) + _sampled(
-            value if isinstance(value, tuple) else list(value), seen, depth
+            value if isinstance(value, tuple) else list(value), seen, depth, parts
         )
     if isinstance(value, (set, frozenset)):
         # Eine Menge wird ganz gezählt; ihre Folge hängt am Hash und damit
         # am Prozess.
-        return sys.getsizeof(value) + _sampled(list(value), seen, depth)
+        return sys.getsizeof(value) + _sampled(list(value), seen, depth, parts)
     if isinstance(value, type) or callable(value):
         return _HEADER
     total = sys.getsizeof(value)
     names = _field_names(type(value))
     if names is not None:
-        return total + sum(_held(getattr(value, name, None), seen, depth + 1) for name in names)
+        return total + sum(
+            _held(getattr(value, name, None), seen, depth + 1, parts) for name in names
+        )
     attributes = getattr(value, "__dict__", None)
     if isinstance(attributes, dict):
-        return total + _held(attributes, seen, depth + 1)
+        return total + _held(attributes, seen, depth + 1, parts)
     return total
 
 
@@ -331,7 +413,12 @@ def _field_names(kind: type) -> tuple[str, ...] | None:
     return names
 
 
-def _sampled(items: tuple[object, ...] | list[object], seen: set[int], depth: int) -> int:
+def _sampled(
+    items: tuple[object, ...] | list[object],
+    seen: set[int],
+    depth: int,
+    parts: dict[int, tuple[object, int]] | None,
+) -> int:
     """Die Summe der Elemente einer Folge.
 
     **Eine Punktfolge wird gerechnet, nicht durchlaufen**: Tupel aus Zahlen
@@ -357,7 +444,7 @@ def _sampled(items: tuple[object, ...] | list[object], seen: set[int], depth: in
         first = items[0]
         assert isinstance(first, tuple)
         return len(items) * (sys.getsizeof(first) + sum(sys.getsizeof(value) for value in first))
-    return sum(_held(item, seen, depth + 1) for item in items)
+    return sum(_held(item, seen, depth + 1, parts) for item in items)
 
 
 #: Was :func:`_held` ohne ``seen`` mit ``sys.getsizeof`` zählt.
@@ -378,9 +465,7 @@ def _array_bytes(value: object, seen: set[int]) -> int | None:
     nbytes = getattr(value, "nbytes", None)
     if not isinstance(nbytes, int) or not hasattr(value, "dtype"):
         return None
-    root: Any = value
-    while getattr(root, "base", None) is not None and hasattr(root.base, "nbytes"):
-        root = root.base
+    root = _array_root(value)
     if root is not value:
         if id(root) in seen:
             return 0
@@ -388,6 +473,14 @@ def _array_bytes(value: object, seen: set[int]) -> int | None:
         root_bytes = getattr(root, "nbytes", nbytes)
         return int(root_bytes) if isinstance(root_bytes, int) else nbytes
     return nbytes
+
+
+def _array_root(value: object) -> Any:
+    """Das Feld, dessen Puffer ``value`` zeigt — ``value`` selbst, wenn es keine Ansicht ist."""
+    root: Any = value
+    while getattr(root, "base", None) is not None and hasattr(root.base, "nbytes"):
+        root = root.base
+    return root
 
 
 def _shapely_bytes(geometry: object) -> int:
