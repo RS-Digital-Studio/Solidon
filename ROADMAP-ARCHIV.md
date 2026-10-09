@@ -31,6 +31,8 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-09 | [RM-528: Eine Installation kennt mehrere Release-Schlüssel, und der Wechsel hat einen Ablauf (09.10.2026)](#rm-528-eine-installation-kennt-mehrere-release-schlüssel-und-der-wechsel-hat-einen-ablauf-09102026) |
+| 2026-10-09 | [RM-351: Der Signaturhinweis zu Windows nennt nur die erste signierte Version (09.10.2026)](#rm-351-der-signaturhinweis-zu-windows-nennt-nur-die-erste-signierte-version-09102026) |
 | 2026-10-09 | [RM-620: Ein Slicer, der Filamente mit zu verschiedenen Temperaturen ablehnt, sagt es (09.10.2026)](#rm-620-ein-slicer-der-filamente-mit-zu-verschiedenen-temperaturen-ablehnt-sagt-es-09102026) |
 | 2026-10-08 | [RM-602: Der Druckdialog ordnet die Profile in einem Lesedurchgang zu (08.10.2026)](#rm-602-der-druckdialog-ordnet-die-profile-in-einem-lesedurchgang-zu-08102026) |
 | 2026-10-08 | [RM-601: Die Slicerwahl im Druckdialog geht wie in Erste Schritte, und überall stehen nur unterstützte Slicer (08.10.2026)](#rm-601-die-slicerwahl-im-druckdialog-geht-wie-in-erste-schritte-und-überall-stehen-nur-unterstützte-slicer-08102026) |
@@ -45205,3 +45207,61 @@ dass er geladen ist. Gegenprobe: `align_forms` ohne `at_most` macht fr und pt ro
 und die Spalten unverändert. Mit 150 % Schrift reichen die Felder bis 527 px statt 531 px.
 Changelog: ja, unter *Drucken und Übergabe an den Slicer* — mit vergrößerter Schrift hatte
 `v0.5.3` den Fehler.
+
+## RM-528: Eine Installation kennt mehrere Release-Schlüssel, und der Wechsel hat einen Ablauf (09.10.2026)
+
+<a id="rm-528-eine-installation-kennt-mehrere-release-schlüssel-und-der-wechsel-hat-einen-ablauf-09102026"></a>
+<a id="rm-528"></a>
+
+**RM-528 — Die Installation kennt nur einen Release-Schlüssel.** `app/core/updates.py` prüfte die
+Versionsdatei und vor dem Start die gespeicherte Paketangabe gegen genau einen Schlüssel
+(`RELEASE_PUBLIC_KEY`). Bauplan §37.2 verlangt mehrere zulässige, damit ein neuer eingeführt
+werden kann, solange der alte noch unterschreibt; vor dem Verkauf ist ein neues Paar geplant.
+Entschieden (Robert, 06.10.2026): Schlüsselliste bauen und in einer Version ausliefern, bevor
+der Schlüssel wechselt.
+
+**Umsetzung:** `RELEASE_PUBLIC_KEYS` (der älteste zuerst, derzeit nur der Schlüssel seit 0.1.4).
+Jede Prüfung geht durch `updates.accepted_key` — `signing_key`/`signature_ok` bei der Abfrage
+und `_package_authorized` vor dem Start; kein Ort liest mehr einen einzelnen Schlüssel.
+`tools/sign_version.py` beschreibt den Wechsel in vier Schritten (neuer öffentlicher Schlüssel
+ans Ende der Liste und mit einer Version ausliefern, deren Datei noch der alte unterschreibt;
+erst danach mit dem neuen unterschreiben; den alten in der nächsten Version entfernen), nennt
+bei `--check` und nach dem Unterschreiben, welcher Schlüssel der Liste trägt, und lehnt jeden
+außer dem ältesten ohne `--after-switch` ab — ein zu früh unterschreibender neuer Schlüssel
+nähme jeder älteren Installation die Version, die ihn einführt. Dieselben Schritte stehen in
+`Signierung/README.md`, „Versionsdatei — der Release-Schlüssel und sein Wechsel“.
+`upload_website.py`, `tests/release_signing.py` und `konzept-demo-zu-1.0-2026-09.md` §11.2
+nennen die Liste.
+
+**Nachweis:** `tests/test_updates.py` mit im Test erzeugten Schlüsseln: alter und neuer tragen
+bei Abfrage und Startprüfung, ein fremder nicht, eine beschädigte Unterschrift (ein Bit,
+gekürzt, veränderter Inhalt) mit keinem; eine Installation nur mit dem alten verwirft, was der
+neue unterschreibt; die ausgelieferten Schlüssel sind verschieden und Punkte der Kurve; das
+Werkzeug unterschreibt mit dem ältesten, mit dem neuen erst nach `--after-switch` und mit einem
+fremden nie, und sein Docstring nennt die Schritte in ihrer Reihenfolge. Gegenprobe:
+`accepted_key` nur mit dem ersten Schlüssel macht den Fall „neu“ und den Werkzeugtest rot.
+Changelog: ja — Updates bleiben nach einem Wechsel des Signierschlüssels erkennbar.
+
+## RM-351: Der Signaturhinweis zu Windows nennt nur die erste signierte Version (09.10.2026)
+
+<a id="rm-351-der-signaturhinweis-zu-windows-nennt-nur-die-erste-signierte-version-09102026"></a>
+<a id="rm-351"></a>
+
+**RM-351 — Die Website bietet 0.5.1 an und nennt im Downloadhinweis 0.5.0 als signierte
+Fassung.** Review seit 0.5.1, Befund E-N1, Commit `1f5dc9f43`. Der Hinweis im Windows-Reiter
+sagte in allen sechs Sprachen „Die Windows-Version 0.5.0 ist digital signiert.“ direkt unter
+„Version 0.5.1“; ein Kunde las daraus, die angebotene sei es nicht. Seit `1d9373efa` (in
+v0.5.2 und v0.5.3) lautet er versionsneutral „ab 0.5.0“; offen war der Wächter.
+
+**Umsetzung:** `tests/test_website.py::test_the_windows_signature_hint_names_only_the_first_signed_version`
+prüft je Startseite den Windows-Reiter (er muss einen Signaturhinweis tragen) und jeden Satz der
+Seite, der Windows und die Signatur nennt — auch den Zwilling in den Systemvoraussetzungen: Er
+nennt keine Version außer `FIRST_SIGNED_WINDOWS` (0.5.0) und keine über der aus
+`website/version.json`. Die Abnahme in der alten Form („keine andere Version als
+`version.json`“) hätte die richtige Fassung „ab 0.5.0“ abgelehnt.
+
+**Nachweis:** grün in allen sechs Sprachen. Gegenprobe an veränderten Kopien der deutschen
+Seite (`test_the_signature_guard_catches_a_manipulated_copy`): „ab 0.5.1“ im Reiter, „Version
+9.9.9“ im Zwilling, eine veröffentlichte 0.4.9 und ein Reiter ohne Signaturhinweis werden je
+erkannt. Der Live-Stand ist nicht nachgesehen; die Seiten im Repository sind die von v0.5.3.
+Changelog: nein.
