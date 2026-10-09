@@ -359,9 +359,21 @@ als offen (4 statt 64 % des Simses im Sperrraum, Review). Unter einer Bahn kommt
 sicher nichts heraus, aber dass eine Bahn genügt, hatte niemand belegt. Die
 Bahnbreite bleibt als Mindestbreite, mit der Saum und Schacht sich berühren; der
 Sperrraum selbst verlangt mehr als zwei Bahnbreiten, eine Bahn samt Abstand.
+Der Schacht steht senkrecht, und das ist eine bekannte Grenze (Nachprüfung von
+RM-571): Ein schräges Loch der Weite 2R in einem Deckel der Dicke H zählt nur mit
+seiner senkrechten Durchsicht 2R / cos θ − H · tan θ. Ein Loch Ø 34 mm in einem
+Deckel von 20 mm, 20° geneigt, sieht senkrecht 28,9 mm; der Sims daneben liegt zu
+64 % im Sperrraum statt zu 4 % und druckt dort ohne Stütze, obwohl das Loch quer
+zu seiner Achse weit genug bliebe. Den Schacht entlang seiner Achse zu suchen
+hieße, den Himmel je Richtung neu zu schichten, für eine seltene Form.
 Ausgespart wird die ganze Säule, auch was von ihr unter einem Dach liegt: Ihr
-Stück braucht selbst Stütze, eine halb gesperrte Säule stützte der Slicer nur
-halb, und wer das offene Ende der Stütze greift, zieht auch den Rest heraus. Ein
+Stück braucht selbst Stütze. Am Wedge-Lock nahm eine Sperre über der Säule einer
+Brücke ihr die ganze Stütze (Cura 0,0 statt 2,0 m). Was ein Slicer unter einer
+zur Hälfte gesperrten Säule stellt, ist nicht gemessen, und dass man die Stütze
+an ihrem offenen Ende ganz herauszieht, ist eine Annahme. Eine L-förmige Säule
+aus dem offenen Becher in den Tunnel bleibt so im Tunnel frei; nur ausgespart,
+was nicht eng ist, läge dieser Teil ganz im Sperrraum (Test
+`test_a_reachable_column_is_spared_whole`). Ein
 Streifen vom offenen Becher 14 mm in den Tunnel, an dem das im Review auffiel,
 ist mit dem Schacht nicht mehr erreichbar: Die Tasche zwischen Block und
 Becherwand, aus der er kommt, ist 16 mm weit. Am Becher berührt der Sims den
@@ -391,9 +403,13 @@ den Saum hinausreicht; das kostet am Becher 0,23 → 0,58 s CPU-Zeit gegenüber
 dem Stand mit einer Bahn als Maß (Median aus acht Läufen im Wechsel, unter
 Fremdlast, die Wandzeit sagte dabei nichts). Ohne Vereinfachung des Himmels nach
 jeder Schicht waren es 1,1 s, denn jede Schicht schneidet die Becherwand an
-etwas anderen Punkten, und der Himmel wuchs auf 3 916 Ecken. Am Eiffelturm
-(8,6 → 8,7 s), an Schüssel und Drache fragt keine Säule nach dem Schacht, und
-der Sperrraum bleibt überall gleich. Der
+etwas anderen Punkten, und der Himmel wuchs auf 3 916 Ecken. Seit eine Schicht,
+die den Himmel nicht mehr schneidet, nur noch danach gefragt wird
+(`SKY_SKIP_INSET`, aus der Nachprüfung), kostet der Becher 0,64 → 0,28 s, also
+so viel wie vor dem Schacht; ein Becher als Kegelstumpf, dessen Wand jede
+Schicht neu schneidet, bleibt bei 0,42 → 0,45 s (CPU, Median im Wechsel, alle
+Scheiben gleich). Am Eiffelturm (8,6 → 8,7 s), an Schüssel und Drache fragt
+keine Säule nach dem Schacht, und der Sperrraum bleibt überall gleich. Der
 Zuschlag einer Bahnbreite kommt vor dem Aussparen; ein Loch, in dem keine Bahn
 samt Abstand Platz hat, schließt sich (ein Krümel von 0,33 mm² im Kanal,
 ausgespart mit Zuschlag: 1,5 m Stütze im OrcaSlicer). Vorgeschlagen wird die

@@ -90,6 +90,11 @@ WIDTH_STEPS = 6
 #: ablegen kann.
 WIDTH_SIMPLIFY = 0.01
 
+#: Um wie viel der Himmel einer Säule eingerückt wird, bevor eine Schicht, die
+#: ihn nicht mehr schneidet, übersprungen wird (:func:`_sky_above`) — ein
+#: Zehntel der Vereinfachung, die dort ohnehin gilt.
+SKY_SKIP_INSET = WIDTH_SIMPLIFY / 10.0
+
 #: Ab wie viel verlorener Fläche eine Öffnung eine Struktur getroffen hat und
 #: nicht bloß gerechnet, in mm².
 #:
@@ -1913,16 +1918,31 @@ def _sky_above(
     sky = window
     index = count - 1
     found: dict[int, ShapelyPolygon] = {}
+    # **Übersprungen wird eine Schicht, die den Himmel nicht mehr schneidet**
+    # (Nachprüfung RM-571): Hat die letzte Schicht ihn nicht verändert, wird er
+    # um :data:`SKY_SKIP_INSET` eingerückt vorbereitet, und eine Schicht, deren
+    # Material diesen Kern nicht berührt, kostet nur noch die Frage danach. Die
+    # Wand eines Bechers schneidet dasselbe Stück Himmel Schicht für Schicht.
+    inner: ShapelyPolygon | None = None
+    stable = False
     for start in sorted(set(starts), reverse=True):
         while index >= start and not sky.is_empty:
+            shade = shapely.clip_by_rect(shade_at(index), *sky.bounds)
+            index -= 1
+            if stable:
+                if inner is None:
+                    inner = sky.buffer(-SKY_SKIP_INSET)
+                    shapely.prepare(inner)
+                if not shapely.intersects(inner, shade):
+                    continue
+                inner = None
+            before = sky.area
             # Vereinfacht nach jeder Schicht (:data:`WIDTH_SIMPLIFY`): Jede
             # schneidet dieselbe Wand an etwas anderen Punkten, und der Himmel
-            # über dem Sims im Becher wuchs ohne auf 3 916 Ecken und kostete
-            # 1,1 s statt 0,29 s.
-            sky = sky.difference(shapely.clip_by_rect(shade_at(index), *sky.bounds)).simplify(
-                WIDTH_SIMPLIFY
-            )
-            index -= 1
+            # über dem Sims im Becher wuchs ohne auf 3 812 Ecken und kostete
+            # allein 0,92 s.
+            sky = sky.difference(shade).simplify(WIDTH_SIMPLIFY)
+            stable = abs(sky.area - before) <= SKY_SKIP_INSET * sky.length
             if sky.area < smallest:
                 sky = ShapelyPolygon()
         found[start] = sky
@@ -1951,11 +1971,22 @@ def _open_above(
     0,5 mm neben dem Sims galt als offen (Review RM-571: 4 statt 64 % des
     Simses im Sperrraum).
 
+    **Der Schacht steht senkrecht** (bekannte Grenze, Nachprüfung RM-571): Der
+    Himmel wird Schicht für Schicht senkrecht über der Scheibe gesucht. Ein
+    schräges Loch der Weite ``2R`` in einem Deckel der Dicke ``H`` zählt nur
+    mit seiner senkrechten Durchsicht ``2R / cos θ - H · tan θ``. Quer zu
+    seiner Achse bliebe es weit genug, aber ein Sims daneben bleibt gesperrt
+    und druckt ohne Stütze: Ein Loch Ø 34 mm in einem Deckel von 20 mm, um 20°
+    geneigt, sieht senkrecht 28,9 mm und sperrt den Sims zu 64 % (senkrecht
+    4 %). Den Schacht entlang seiner Achse zu suchen hieße, den Himmel je
+    Richtung neu zu schichten.
+
     **Ausgespart wird die ganze Säule**, auch was von ihr unter einem Dach
-    liegt (Entscheidung, Review RM-571): Ihr Stück braucht selbst Stütze, und
-    eine zur Hälfte gesperrte Säule stützte der Slicer nur zur Hälfte — die
-    Lücke des Wedge-Locks (``open_columns``). Die Stütze darunter ist ein
-    Körper; wer ihr offenes Ende greift, zieht auch den Rest heraus.
+    liegt (Entscheidung, Review RM-571): Ihr Stück braucht selbst Stütze. Am
+    Wedge-Lock nahm eine Sperre über der Säule einer Brücke ihr die ganze
+    Stütze (Cura 0,0 statt 2,0 m, ``open_columns``); was ein Slicer unter einer
+    zur Hälfte gesperrten Säule stellt, ist nicht gemessen, und dass man die
+    Stütze an ihrem offenen Ende ganz herauszieht, ist eine Annahme.
     """
     if sky.is_empty:
         return False

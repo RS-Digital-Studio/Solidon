@@ -1156,23 +1156,28 @@ def test_a_column_under_a_cover_in_an_open_cup_stays_blocked() -> None:
         assert region.intersection(footprint).area == pytest.approx(footprint.area, rel=1e-6)
 
 
-@pytest.mark.parametrize("slit", [0.5, 1.0, 2.0])
+@pytest.mark.parametrize("slit", [0.5, 1.0, 2.0, 25.0])
 def test_a_slit_in_a_lid_does_not_open_the_cup(slit: float) -> None:
     """Von oben erreichbar heißt durch einen Schacht so weit wie ein Kanal
     (``CHANNEL_WIDTH``, derselbe Kreis wie für die Enge): Durch einen Schlitz
     holt niemand eine Stütze unter einem Sims heraus. Eine Bahn breit genügte
     bis zum Review von RM-571, und mit einem Schlitz ab 0,5 mm im Deckel lag
     der Sims frei wie im offenen Becher (4 statt 64 %). Hier der Becher mit
-    Deckel, der Schlitz unmittelbar neben dem Sims."""
+    Deckel, der Schlitz unmittelbar neben dem Sims. Bis 2 mm fasst der Himmel
+    nicht einmal die Fläche eines Kanalkreises; die Weite des Kreises selbst
+    entscheidet erst der Schlitz von 25 mm (mit Radius 5 oder 12 mm statt 15
+    lag der Sims dort frei, Nachprüfung RM-571)."""
     lid = cup_lid(brick(slit, 80.0, 5.0, (-slit / 2.0, 0.0, 61.5)))
 
     assert ledge_share_blocked(cup_with_a_ledge(lid)) > 0.5
 
 
-def test_a_lid_open_wider_than_a_channel_opens_the_cup() -> None:
+@pytest.mark.parametrize("opening", [32.0, 40.0])
+def test_a_lid_open_wider_than_a_channel_opens_the_cup(opening: float) -> None:
     """Die Gegenprobe zum Schlitz: Ist der Deckel neben dem Sims weiter offen als
-    ein Kanal (34 mm), liegt der Sims frei wie im offenen Becher."""
-    lid = cup_lid(brick(40.0, 80.0, 5.0, (-20.0, 0.0, 61.5)))
+    ein Kanal (32 mm, bzw. 34 mm bis zur Becherwand), liegt der Sims frei wie im
+    offenen Becher."""
+    lid = cup_lid(brick(opening, 80.0, 5.0, (-opening / 2.0, 0.0, 61.5)))
 
     assert ledge_share_blocked(cup_with_a_ledge(lid)) < 0.05
 
@@ -1200,6 +1205,29 @@ def test_open_sky_is_asked_two_line_widths_around_a_column_even_at_a_tip() -> No
     assert _open_above(square, nothing, sky_from(-0.2), LINE)
 
 
+def test_a_reachable_column_is_spared_whole() -> None:
+    """Ausgespart wird die ganze erreichbare Säule, auch was von ihr unter einem
+    Dach liegt (Entscheidung zu RM-571): Ihr Stück braucht selbst Stütze. Hier
+    eine L-förmige Säule im Becher, im Offenen am Block entlang und dann in den
+    Tunnel unter ihm. Nur ausgespart, was nicht eng ist, lag ihr Teil im Tunnel
+    zu 100 % im Sperrraum (Nachprüfung RM-571)."""
+    from tests.helpers import slice_contour
+
+    result = slice_body(cup_with_a_ledge(), 0.5)
+    model = model_support(result)
+    outline = ((-4.0, -16.0), (26.0, -16.0), (26.0, 0.0), (22.0, 0.0), (22.0, -12.0), (-4.0, -12.0))
+    in_tunnel = box(22.0, -8.0, 26.0, 0.0)
+    asked = replace(model, open_columns=(*model.open_columns, (slice_contour(outline), 4.0, 12.0)))
+
+    slabs = [region for _low, high, region in channel_space(result, asked, LINE) if high <= 12.0]
+
+    assert len(slabs) > 3, "die Sperre reicht durch den Tunnel"
+    tunnel = unary_union([region for _low, high, region in channel_space(result, model, LINE)])
+    assert tunnel.intersection(in_tunnel).area > 0.9 * in_tunnel.area, "ohne die Säule gesperrt"
+    for region in slabs:
+        assert region.intersection(in_tunnel).area == pytest.approx(0.0, abs=1e-6)
+
+
 def test_open_sky_is_asked_at_each_slab() -> None:
     """Erreichbar wird je Scheibe gefragt, mit allem, was über ihr liegt: Unter
     einem Dach ist eine Säule nicht erreichbar, über ihm schon. Hier eine Säule
@@ -1225,18 +1253,23 @@ def test_open_sky_is_asked_at_each_slab() -> None:
         assert region.intersection(footprint).area == pytest.approx(0.0, abs=1e-6)
 
 
-@pytest.mark.parametrize("opening", ["thin wall", "slit"])
-def test_open_sky_must_be_beside_the_column_and_a_line_wide(opening: str) -> None:
-    """Der offene Himmel zählt nur neben der Säule, mit ihr durch freien Raum
-    verbunden, und nur eine Bahn breit: Hinter einer dünnen Wand liegt die Luft
-    außerhalb des Teils, und durch einen Schlitz, schmaler als eine Bahn, holt
-    niemand eine Stütze heraus. Hier eine geschlossene Kammer, die Säule an
-    ihrer Wand von 0,2 mm bzw. unter einem Schlitz von 0,3 mm in der Decke."""
+@pytest.mark.parametrize("opening", ["thin wall", "thin wall and slit", "slit"])
+def test_open_sky_counts_only_as_a_shaft_beside_the_column(opening: str) -> None:
+    """Erreichbar macht nur ein Schacht so weit wie ein Kanal, neben der Säule
+    und mit ihr durch freien Raum verbunden: Hinter einer dünnen Wand liegt die
+    Luft außerhalb des Teils, und durch einen Schlitz holt niemand eine Stütze
+    heraus. Hier eine geschlossene Kammer, die Säule an ihrer Wand von 0,2 mm,
+    dazu einmal ein Schlitz von 1 mm in der Decke über ihr, bzw. unter einem
+    Schlitz von 0,3 mm. Mit Wand und Schlitz entscheidet der Schnitt mit dem
+    Schacht: Draußen ist der Himmel weit, drinnen nur der Schlitz; mit dem Himmel
+    statt dem Schacht lag die Säule frei (Nachprüfung RM-571)."""
     from tests.helpers import slice_contour
 
-    if opening == "thin wall":
+    if opening.startswith("thin wall"):
         block = brick(20.4, 30.4, 40.0, (0.0, 0.0, 20.0))
         hollow = brick(20.0, 30.0, 20.0, (0.0, 0.0, 18.0))
+        if opening == "thin wall and slit":
+            hollow = trimesh.boolean.union([hollow, brick(1.0, 30.0, 14.0, (9.5, 0.0, 34.0))])
         body = trimesh.boolean.difference([block, hollow])
         column = ((6.0, -2.0), (10.0, -2.0), (10.0, 2.0), (6.0, 2.0))
     else:

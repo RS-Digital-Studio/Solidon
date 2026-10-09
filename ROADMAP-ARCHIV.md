@@ -46275,6 +46275,11 @@ gleich. Tests in
 `test_slice_findings.py`: Sims im offenen Becher und Himmel je Scheibe, beide am Stand von
 RM-566 rot; überdachte Säule, dünne Wand und Schlitz in der Kammerdecke als Gegenproben;
 aus dem Review Deckel mit Schlitz 0,5/1/2 mm (mit einer Bahn als Maß rot), Deckel weiter
-offen als ein Kanal, Nase 3 mm vor dem Himmel (mit Gehrung rot). Belege:
+offen als ein Kanal, Nase 3 mm vor dem Himmel (mit Gehrung rot); aus der Nachprüfung
+Deckel mit Schlitz 25 mm (mit Kreisradius 5 oder 12 mm rot), dünne Wand mit Schlitz über
+der Säule (mit Himmel statt Schacht rot) und die L-förmige Säule, die im Tunnel frei bleibt
+(nur außerhalb der Enge ausgespart rot). Ebenfalls aus der Nachprüfung: Schichten, die den
+Himmel nicht mehr schneiden, werden übersprungen (Becher 0,64 → 0,28 s CPU, alle Scheiben
+gleich), und der senkrechte Schacht ist als Grenze benannt. Belege:
 `output/konsolidierung-2026-10-07/codex-claude/belege/lauf-a.md`. Changelog: nein (die
 Lücke entstand mit RM-566 im selben 0.6.0-Zyklus).
