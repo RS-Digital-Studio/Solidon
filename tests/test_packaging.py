@@ -30,6 +30,7 @@ import ast
 import json
 import os
 import re
+import shlex
 import shutil
 import struct
 import subprocess
@@ -46,7 +47,18 @@ from typing import Any, Final
 import pytest
 
 from app.branding import APP_NAME
-from tests.workflow_helpers import job_block, step_block, step_script
+from tests.workflow_helpers import (
+    MAIN_PUSH,
+    TAG_PUSH,
+    evaluate,
+    job_block,
+    job_names,
+    job_runners,
+    running_jobs,
+    step_block,
+    step_script,
+    workflow_triggers,
+)
 from tools import run_suite_isolated
 
 ROOT: Final = Path(__file__).resolve().parent.parent
@@ -832,16 +844,22 @@ def test_ci_report_guard_rejects_always_on_a_different_step(job: str) -> None:
 
 
 def test_ci_window_steps_use_the_package_release_condition() -> None:
-    """main, PR und tests_only-Handstarts geben keine Fensterprüfungen frei."""
+    """tests_only-Handstarts geben keine Fensterprüfungen frei; Paket und Windows-
+    Fenstergruppe laufen nur am Tag und beim Handstart, Verträge und Renderer auch beim
+    Push nach main (:func:`test_a_push_to_main_runs_every_check_and_builds_nothing`)."""
     workflow = WORKFLOW.read_text(encoding="utf-8")
-    expected = (
-        "inputs.tests_only != true && "
-        "(startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch')"
-    )
-    for name in ("package", "window-contracts", "window-contracts-intel", "windows"):
+    release = "startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'"
+    main = "(github.event_name == 'push' && github.ref == 'refs/heads/main')"
+    expected = {
+        "package": f"inputs.tests_only != true && ({release})",
+        "windows": f"inputs.tests_only != true && ({release})",
+        "window-contracts": f"inputs.tests_only != true && ({release} || {main})",
+        "window-contracts-intel": f"inputs.tests_only != true && ({release} || {main})",
+    }
+    for name, wanted in expected.items():
         block = job_block(workflow, name)
         condition = re.search(r"^    if: (.+)$", block, flags=re.MULTILINE)
-        assert condition is not None and condition.group(1) == expected, name
+        assert condition is not None and condition.group(1) == wanted, name
     for name in ("quality", "suite"):
         assert "--ci-group" not in job_block(workflow, name)
     # Der Versionswächter fährt Fensterverträge und Renderer (RM-344); er
@@ -872,6 +890,191 @@ def test_the_tests_only_promise_rejects_a_latest_window_step_without_it() -> Non
     assert changed != latest
     with pytest.raises(AssertionError):
         _assert_latest_windows_respect_tests_only(changed)
+
+
+#: Was beim Push nach main laufen muss (Entscheidung Robert, 09.10.2026): Stil,
+#: Kernsuite, Fensterverträge mit Renderern auf allen vier Paketplattformen und die
+#: Fenster- und Slicertests, die der Diff berührt.
+_ON_MAIN: Final = frozenset(
+    {
+        "quality",
+        "suite",
+        "window-contracts",
+        "window-contracts-intel",
+        "auswahl",
+        "fenster",
+        "slicer",
+    }
+)
+
+#: Was nur am Tag und beim Handstart läuft: die Windows-Fenstergruppe, der
+#: Versionswächter, Paketbau, Releaseakten und Signierung.
+_ONLY_AT_RELEASE: Final = frozenset(
+    {
+        "windows",
+        "latest",
+        "package",
+        "linux-release-check",
+        "windows-installer",
+        "windows-release-check",
+        "macos-app-sign",
+        "macos-package",
+        "macos-installer-sign",
+        "macos-release-check",
+    }
+)
+
+
+def _assert_main_push(workflow: str) -> None:
+    """Der Push nach main löst alle Prüfungen aus und baut nichts; ein Zweig löst nichts aus."""
+    assert workflow_triggers(workflow) == {
+        "push": ["branches:main", "tags:v*"],
+        "workflow_dispatch": [],
+    }, "nur main, Tags und Handstart lösen aus, kein Zweig und kein Pull Request"
+    on_main = running_jobs(workflow, MAIN_PUSH, _SELECTED)
+    assert on_main >= _ON_MAIN, f"fehlt beim Push nach main: {sorted(_ON_MAIN - on_main)}"
+    assert not on_main & _ONLY_AT_RELEASE, f"baut beim Push nach main: {sorted(on_main)}"
+    packaged = set(_release_runners(job_block(workflow, "package")))
+    for job in ("suite", "window-contracts"):
+        runners = set(job_runners(job_block(workflow, job), MAIN_PUSH))
+        if job == "window-contracts":
+            runners |= set(job_runners(job_block(workflow, "window-contracts-intel"), MAIN_PUSH))
+        assert runners == packaged, f"{job} beim Push nach main auf {sorted(runners)}"
+    empty = {"auswahl": {"fenster": "", "slicer": ""}}
+    assert not running_jobs(workflow, MAIN_PUSH, empty) & {"fenster", "slicer"}, (
+        "eine leere Auswahl startet einen Lauf, der leer rot würde"
+    )
+    at_tag = running_jobs(workflow, TAG_PUSH, _SELECTED)
+    assert not at_tag & {"auswahl", "fenster", "slicer"}, "am Tag fährt die Fenstergruppe alles"
+    assert at_tag >= {"package", "windows", "suite", "window-contracts"}
+    for job, path in (("fenster", _WINDOW_SELECTION), ("slicer", _SLICER_SELECTION)):
+        block = job_block(workflow, job)
+        assert f"    uses: ./.github/workflows/{path.name}\n" in block, job
+        assert f"      tests: ${{{{ needs.auswahl.outputs.{job} }}}}\n" in block, job
+    concurrency = workflow.split("\nconcurrency:\n", 1)[1].split("\n\n", 1)[0]
+    assert "group: bauen-${{ github.ref }}" in concurrency
+    assert re.search(r"(?m)^  cancel-in-progress: false$", concurrency), (
+        "ein neuer Push bricht keinen laufenden Lauf ab, er ersetzt nur den wartenden"
+    )
+
+
+def test_a_push_to_main_runs_every_check_and_builds_nothing() -> None:
+    """Alle Prüfungen beim Push nach main, keine auf Zweigen (Entscheidung Robert,
+    09.10.2026); Paketbau, Releaseakten und Signierung nur am Tag und beim Handstart.
+
+    Abgeleitet aus den Bedingungen der Jobs, ausgewertet für jedes Ereignis
+    (``workflow_helpers.running_jobs``), nicht aus einer Liste von Zeilen.
+    """
+    _assert_main_push(WORKFLOW.read_text(encoding="utf-8"))
+
+
+@pytest.mark.parametrize(
+    "job,before,after",
+    [
+        # Ein Zweig oder ein Pull Request löst wieder aus.
+        ("", "    branches: [main]\n", '    branches: ["**"]\n'),
+        (
+            "",
+            "  workflow_dispatch:\n    inputs:\n",
+            "  pull_request:\n  workflow_dispatch:\n    inputs:\n",
+        ),
+        # Die Kernsuite beim Push nach main ohne Intel-Mac.
+        ("suite", '"macos-latest", "macos-26-intel"]', '"macos-latest"]'),
+        # Fensterverträge und Renderer nur noch am Tag.
+        (
+            "window-contracts",
+            " || (github.event_name == 'push' && github.ref == 'refs/heads/main'))",
+            ")",
+        ),
+        # Die Auswahl läuft auch am Tag, oder ihre Fensterliste kommt nicht an.
+        ("auswahl", "(github.event_name == 'push' && github.ref == 'refs/heads/main')", "(true)"),
+        ("fenster", "needs.auswahl.outputs.fenster }}", "needs.auswahl.outputs.slicer }}"),
+        # Die Windows-Fenstergruppe und mit ihr der Paketbau laufen beim Push nach main.
+        (
+            "windows",
+            "github.event_name == 'workflow_dispatch')",
+            "github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main')",
+        ),
+        # Ein neuer Push bricht den laufenden ab.
+        ("", "  cancel-in-progress: false\n", "  cancel-in-progress: true\n"),
+    ],
+)
+def test_the_main_push_contract_rejects_a_changed_workflow(
+    job: str, before: str, after: str
+) -> None:
+    """Gegenproben: Zweig oder Pull Request lösen aus, Intel fehlt, Renderer nur am Tag,
+    Auswahl am Tag oder vertauscht, Paket auf main, Abbruch eines laufenden Laufs."""
+    workflow = WORKFLOW.read_text(encoding="utf-8")
+    if job:
+        changed = _in_job(workflow, job, before, after)
+    else:
+        assert workflow.count(before) == 1, before
+        changed = workflow.replace(before, after)
+    with pytest.raises(AssertionError):
+        _assert_main_push(changed)
+
+
+@pytest.mark.parametrize("known", [True, False])
+def test_the_selection_reads_the_pushed_diff_and_hands_both_lists_on(
+    tmp_path: Path, known: bool
+) -> None:
+    """``auswahl`` liest den Diff vom Stand vor dem Push bis zu seinem Kopf und gibt beide
+    Listen an ``fenster`` und ``slicer``; ohne bekannten Vorgänger zählt jede Datei."""
+    shell = _workflow_shell()
+    if shell is None:
+        pytest.skip("ohne bash lässt sich der CI-Block nicht ausführen")
+    step = step_block(
+        job_block(WORKFLOW.read_text(encoding="utf-8"), "auswahl"), "Auswahl aus dem gepushten Diff"
+    )
+    assert "BEFORE: ${{ github.event.before }}" in step and "AFTER: ${{ github.sha }}" in step
+    calls = tmp_path / "calls.txt"
+    output = tmp_path / "github-output.txt"
+    fake_git = tmp_path / "bin" / "git"
+    _fake_bin(
+        tmp_path / "bin",
+        """printf '%s\\037' "$@" >> "$CALLS"\nprintf '\\n' >> "$CALLS"
+printf 'fenster: tests/test_ui.py -k x; tests/test_a.py\\n'
+printf 'slicer: tests/test_real_slicers.py -m slicer\\n'
+printf 'gh workflow run fenster-auswahl.yml --ref main\\n'""",
+    )
+    fake_git.write_text(
+        "#!/bin/sh\n"
+        'case "$1" in\n'
+        '  cat-file) [ "$KNOWN" = 1 ] ;;\n'
+        "  ls-files) printf 'app/a.py\\0tools/b c.py\\0' ;;\n"
+        "esac\n",
+        encoding="utf-8",
+        newline="\n",
+    )
+    fake_git.chmod(0o755)
+    done = subprocess.run(
+        [shell, "-c", step_script(step)],
+        cwd=tmp_path,
+        env=dict(
+            os.environ,
+            PATH=os.pathsep.join(
+                (str(tmp_path / "bin"), str(Path(shell).parent), os.environ.get("PATH", ""))
+            ),
+            CALLS=calls.as_posix(),
+            GITHUB_OUTPUT=output.as_posix(),
+            BEFORE="1111111",
+            AFTER="2222222",
+            KNOWN="1" if known else "0",
+        ),
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
+    assert done.returncode == 0, done.stdout + done.stderr
+    (call,) = [line.split("\x1f")[:-1] for line in calls.read_text("utf-8").splitlines()]
+    if known:
+        assert call == ["tools/ci_selection.py", "--diff", "1111111..2222222"]
+    else:
+        assert call == ["tools/ci_selection.py", "app/a.py", "tools/b c.py"]
+    assert output.read_text("utf-8").splitlines() == [
+        "fenster=tests/test_ui.py -k x; tests/test_a.py",
+        "slicer=tests/test_real_slicers.py -m slicer",
+    ]
 
 
 @pytest.mark.parametrize("job, release", [("suite", False), ("suite", True), ("latest", False)])
@@ -1025,17 +1228,8 @@ def _marked(expression: str, markers: frozenset[str]) -> bool:
 
 
 def _release_runners(block: str) -> tuple[str, ...]:
-    """Die Läufer eines Jobs bei einem Tag: Matrixliste, Tag-Zweig einer
-    Ausdrucksmatrix oder ein fester ``runs-on``."""
-    listed = re.search(r"(?m)^        os: \[([^\]]+)\]$", block)
-    if listed is not None:
-        return tuple(label.strip() for label in listed.group(1).split(","))
-    tagged = re.search(r"(?m)^        os: \$\{\{ .*?fromJSON\('(\[[^']+\])'\)", block)
-    if tagged is not None:
-        return tuple(json.loads(tagged.group(1)))
-    fixed = re.search(r"(?m)^    runs-on: ([a-z0-9.-]+)$", block)
-    assert fixed is not None, "Job ohne erkennbare Läufer"
-    return (fixed.group(1),)
+    """Die Läufer eines Jobs bei einem Tag (:func:`workflow_helpers.job_runners`)."""
+    return job_runners(block, TAG_PUSH)
 
 
 def _runner_os(label: str) -> str:
@@ -1048,7 +1242,23 @@ def _runner_os(label: str) -> str:
 
 def _jobs(workflow: str) -> list[str]:
     """Die Jobnamen des Workflows in ihrer Reihenfolge."""
-    return re.findall(r"(?m)^  ([a-z][a-z0-9-]*):\n", workflow.split("\njobs:\n", 1)[1])
+    return job_names(workflow)
+
+
+def _step_environment(step: str, context: Any) -> str:
+    """Die Umgebung eines Schritts als ``export``-Zeilen, Ausdrücke für dieses Ereignis
+    ausgewertet — ``ON_MAIN`` entscheidet, was der Schritt fährt."""
+    match = re.search(r"(?m)^        env:\n((?:          [A-Z_][A-Z0-9_]*: .*\n)+)", step)
+    if match is None:
+        return ""
+    lines = []
+    for line in match.group(1).splitlines():
+        name, value = line.strip().split(": ", 1)
+        if value.startswith("${{"):
+            found = evaluate(value, context)
+            value = str(found).lower() if isinstance(found, bool) else str(found or "")
+        lines.append(f"export {name}={shlex.quote(value)}\n")
+    return "".join(lines)
 
 
 def _release_gates(workflow: str) -> list[str]:
@@ -1080,8 +1290,11 @@ def _release_gates(workflow: str) -> list[str]:
     return gates
 
 
-def _test_scripts(workflow: str, jobs: Iterable[str]) -> list[tuple[str, str, str]]:
-    """Jeder Testschritt dieser Jobs auf jedem ihrer Läufer am Tag: (Job, Läufer, Skript).
+def _test_scripts(
+    workflow: str, jobs: Iterable[str], context: Any = TAG_PUSH
+) -> list[tuple[str, str, str]]:
+    """Jeder Testschritt dieser Jobs auf jedem ihrer Läufer bei diesem Ereignis (Vorgabe:
+    Tag): (Job, Läufer, Skript samt der Umgebung des Schritts).
 
     Teilmatrizen stehen auf Teil 0: Dass ihre Teile zusammen alles fahren, hält
     :func:`_assert_ci_dependencies` (Teilmatrix gleich ``0 … N−1``). Ein
@@ -1106,8 +1319,10 @@ def _test_scripts(workflow: str, jobs: Iterable[str]) -> list[tuple[str, str, st
             assert "continue-on-error" not in step, (
                 f"Rendererfälle dürfen rot werden: {job}, „{name}“ trägt continue-on-error"
             )
-            scripts.append(script.replace("${{ matrix.shard }}", "0"))
-        for label in _release_runners(block):
+            scripts.append(
+                _step_environment(step, context) + script.replace("${{ matrix.shard }}", "0")
+            )
+        for label in job_runners(block, context):
             for script in scripts:
                 found.append((job, label, script.replace("${{ matrix.os }}", label)))
     return found
@@ -1255,6 +1470,66 @@ def _assert_rendering_runs_everywhere(workflow: str, shell: str, folder: Path) -
     assert not gaps, "Rendererfälle, die der Versionswächter nicht fährt: " + "; ".join(gaps)
 
 
+#: Was ``auswahl`` beim Push nach main für die Wächter ausgibt: Fenster- und
+#: Slicerfälle sind betroffen, ihre Jobs laufen.
+_SELECTED: Final = {"auswahl": {"fenster": "tests/test_ui.py", "slicer": "tests/test_x.py"}}
+
+
+def _assert_rendering_runs_on_main(workflow: str, shell: str, folder: Path) -> None:
+    """Beim Push nach main läuft jeder Rendererfall ohne Fenster auf jeder Paketplattform
+    (Entscheidung Robert, 09.10.2026: alle Prüfungen beim Push nach main)."""
+    jobs = sorted(running_jobs(workflow, MAIN_PUSH, _SELECTED))
+    testing = [job for job in jobs if "\n    uses: " not in job_block(workflow, job)]
+    steps = _test_scripts(workflow, testing, MAIN_PUSH)
+    calls = _calls_of(steps, shell, folder)
+    platforms = _release_runners(job_block(workflow, "package"))
+    gaps = _rendering_gaps(steps, calls, testing, platforms)
+    assert not gaps, "Rendererfälle ohne Lauf beim Push nach main: " + "; ".join(gaps)
+
+
+def test_every_rendering_case_runs_on_every_platform_when_main_is_pushed(
+    tmp_path: Path,
+) -> None:
+    """Der Push nach main fährt die Rendererfälle auf Windows, Linux und beiden Macs —
+    unter Windows im Schritt der Fensterverträge, weil die Fenstergruppe dort nur am
+    Tag läuft."""
+    shell = _workflow_shell()
+    if shell is None:
+        pytest.skip("ohne bash lässt sich der CI-Block nicht ausführen")
+    _assert_rendering_runs_on_main(WORKFLOW.read_text(encoding="utf-8"), shell, tmp_path)
+
+
+@pytest.mark.parametrize(
+    "job,before,after",
+    [
+        # Unter Windows nie Renderer im Vertragsschritt: am Tag richtig, auf main eine Lücke.
+        ("window-contracts", ' && [ "${ON_MAIN:-false}" != "true" ]', ""),
+        # Der Schritt erfährt nicht, dass er auf main läuft.
+        (
+            "window-contracts",
+            "github.event_name == 'push' && github.ref == 'refs/heads/main' }}\n",
+            "github.event_name == 'workflow_dispatch' }}\n",
+        ),
+        # Der Intel-Mac prüft auf main nicht mit.
+        (
+            "window-contracts-intel",
+            " || (github.event_name == 'push' && github.ref == 'refs/heads/main'))",
+            ")",
+        ),
+    ],
+)
+def test_the_main_rendering_guard_rejects_a_platform_left_out(
+    tmp_path: Path, job: str, before: str, after: str
+) -> None:
+    """Gegenproben zum Push nach main: Windows ohne Renderer, ``ON_MAIN`` falsch, Intel aus."""
+    shell = _workflow_shell()
+    if shell is None:
+        pytest.skip("ohne bash lässt sich der CI-Block nicht ausführen")
+    changed = _in_job(WORKFLOW.read_text(encoding="utf-8"), job, before, after)
+    with pytest.raises(AssertionError, match="Rendererfälle"):
+        _assert_rendering_runs_on_main(changed, shell, tmp_path)
+
+
 def test_every_rendering_case_runs_on_every_platform_in_a_release_job(tmp_path: Path) -> None:
     """Jeder ``rendering``-Fall ohne Fenster läuft am Tag auf Windows, Linux und beiden
     Macs (RM-344).
@@ -1289,10 +1564,8 @@ _PLATFORM_STEP: Final = f"      - name: {_CONTRACT_STEP}\n"
         # Nur Linux trägt die Rendererfälle, Apple Silicon nicht.
         (
             "window-contracts",
-            "          else\n            python tools/run_suite_isolated.py --release "
-            "--ci-group contracts --ci-group rendering",
-            "          else\n            python tools/run_suite_isolated.py --release "
-            "--ci-group contracts",
+            'if [ "$RUNNER_OS" = "Windows" ] && [ "${ON_MAIN:-false}" != "true" ]',
+            'if [ "$RUNNER_OS" != "Linux" ] && [ "${ON_MAIN:-false}" != "true" ]',
         ),
         # Der Intel-Mac fehlt, oder seine Prüfung hält keine Releaseakte mehr an.
         ("window-contracts-intel", "runs-on: macos-26-intel", "runs-on: macos-latest"),
@@ -1317,7 +1590,7 @@ _PLATFORM_STEP: Final = f"      - name: {_CONTRACT_STEP}\n"
             "        if: false\n",
         ),
         # ... ein Aufruf, der nur plant, und ein Schritt, der rot werden darf.
-        ("window-contracts", "--release --ci-group", "--release --plan-only --ci-group"),
+        ("window-contracts", "--release $groups", "--release --plan-only $groups"),
         ("window-contracts", _PLATFORM_STEP, _PLATFORM_STEP + "        continue-on-error: true\n"),
     ],
 )
@@ -3916,11 +4189,12 @@ def test_the_selections_before_a_merge_run_where_packages_run() -> None:
 
 @pytest.mark.parametrize("path", [_WINDOW_SELECTION, _SLICER_SELECTION], ids=lambda p: p.name)
 def test_a_selection_starts_by_hand_and_runs_each_choice_in_its_own_process(path: Path) -> None:
-    """Handstart mit der Eingabe ``tests``; sie kommt über die Umgebung, nie in den Befehl."""
+    """Handstart auf main oder Aufruf aus build.yml beim Push nach main, mit der Eingabe
+    ``tests``; sie kommt über die Umgebung, nie in den Befehl."""
     text = path.read_text(encoding="utf-8")
     trigger = text.split("\non:\n", 1)[1].split("\n\n", 1)[0]
 
-    assert re.findall(r"(?m)^  (\w+):", trigger) == ["workflow_dispatch"], trigger
+    assert re.findall(r"(?m)^  (\w+):", trigger) == ["workflow_dispatch", "workflow_call"]
     assert "SELECTION: ${{ inputs.tests }}" in text
     assert "${{ inputs.tests }}" not in text.split("SELECTION: ${{ inputs.tests }}", 1)[1]
     assert 'os.environ["SELECTION"].split(";")' in text

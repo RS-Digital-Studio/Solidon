@@ -1,13 +1,13 @@
 # Ausgewählte Fenstertests auf jeder Paketplattform (Robert, 06.10.2026:
 # „Fenstertests jetzt immer Windows, Mac und Linux, alle Versionen“).
 #
-# Vor einem Commit fährt die Sitzung die Fenstertests, die ihre Änderung
-# berührt, lokal unter Windows und hier auf den Rechnern, für die es ein
-# Paket gibt: Windows, Linux, Apple Silicon und Intel-Mac — dieselbe Liste wie
-# die Paketmatrix in build.yml. Gestartet von Hand auf dem Zweig mit der
-# Änderung:
+# Beim Push nach main fährt build.yml (Job `fenster`) hier die Fenstertests,
+# die der gepushte Diff berührt, auf den Rechnern, für die es ein Paket gibt:
+# Windows, Linux, Apple Silicon und Intel-Mac — dieselbe Liste wie die
+# Paketmatrix in build.yml (CI-09). Auf Zweigen läuft keine CI (Entscheidung
+# Robert, 09.10.2026). Von Hand nur auf main:
 #
-#   gh workflow run fenster-auswahl.yml --ref <zweig> \
+#   gh workflow run fenster-auswahl.yml --ref main \
 #     -f tests="tests/test_print_contract_ui.py; tests/test_ui.py -k halt_message"
 #
 # Jede durch Semikolon getrennte Auswahl läuft in einem eigenen Prozess, wie
@@ -26,6 +26,12 @@ name: Fensterauswahl
 
 on:
   workflow_dispatch:
+    inputs:
+      tests:
+        description: "Pytest-Auswahlen, durch Semikolon getrennt; je Auswahl ein Prozess"
+        type: string
+        required: true
+  workflow_call:
     inputs:
       tests:
         description: "Pytest-Auswahlen, durch Semikolon getrennt; je Auswahl ein Prozess"

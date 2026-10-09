@@ -44,13 +44,13 @@ Kernjob frühestens fertig ist, gleich wie viele Worker er hat.
 |---|---|---|
 | CI-01 | Kein Test fällt durch die Aufteilung weg oder läuft in zwei Gruppen — weder bei Fenster-/Renderergruppen noch bei den Teilen der Kernsuite. Neue Dateien werden automatisch aufgenommen. | Partitionstests mit unbekannten Dateien, vollständiger Vereinigung und leeren Schnittmengen; `--ci-shard` gegen die echte Sammlung; Teilmatrix gleich `0 … N−1` |
 | CI-02 | Jeder Fenster- oder Rendererdateilauf erhält einen frischen Prozess; Qt-Abbau und Garbage Collection bleiben erhalten. | Prüfung der gestarteten Befehle und Prozessausgänge |
-| CI-03 | Fenster und echte Renderer laufen nur in Releasejobs: die Fensterdateien unter Windows, jeder `rendering`-Fall ohne Fenster auf jeder Paketplattform (Windows, Linux, Apple Silicon, Intel-Mac) und im Versionswächter unter Linux (Entscheidung Robert, 06.10.2026, RM-344). Leistung bleibt lokal beim Release, `rendered` bleibt aus CI ausgeschlossen. | Workflow- und Marker-Verträge, einschließlich `tests_only`; die Abdeckung je Plattform leitet `test_every_rendering_case_runs_on_every_platform_in_a_release_job` aus Workflow und Markerwahl ab, gegen einen festen Sollwert, mit Schrittbedingungen und ohne `--plan-only` |
-| CI-04 | Kernmatrix und native Typprüfung bleiben auf den bisherigen Plattformen. Die zwei speziellen Fensterverträge laufen auf allen vier Paketplattformen, außerhalb von Windows zusammen mit den Rendererfällen, auf dem Intel-Mac in einem eigenen Job neben dem Paket. | Prüfung der tatsächlichen Jobmatrix und Aufrufe |
+| CI-03 | Fenster und echte Renderer laufen nur in der CI am Tag, beim Handstart und beim Push nach main, nie im Entwicklungstor: am Tag die Fensterdateien unter Windows, beim Push nach main die vom Diff berührten auf allen vier Paketplattformen (CI-09), beide Male jeder `rendering`-Fall ohne Fenster auf jeder Paketplattform (Windows, Linux, Apple Silicon, Intel-Mac), am Tag dazu im Versionswächter unter Linux (Entscheidung Robert, 06.10.2026, RM-344; Push nach main 09.10.2026). Leistung bleibt lokal beim Release, `rendered` bleibt aus CI ausgeschlossen. | Workflow- und Marker-Verträge, einschließlich `tests_only`; die Abdeckung je Plattform leiten `test_every_rendering_case_runs_on_every_platform_in_a_release_job` und `…_when_main_is_pushed` aus Workflow, Jobbedingungen und Markerwahl ab, `test_a_push_to_main_runs_every_check_and_builds_nothing` die Jobs je Ereignis, gegen einen festen Sollwert, mit Schrittbedingungen und ohne `--plan-only` |
+| CI-04 | Kernmatrix und native Typprüfung bleiben am Tag auf den bisherigen Plattformen; beim Push nach main laufen sie auch auf dem Intel-Mac. Die zwei speziellen Fensterverträge laufen auf allen vier Paketplattformen, außerhalb von Windows zusammen mit den Rendererfällen, auf dem Intel-Mac in einem eigenen Job neben dem Paket. | Prüfung der tatsächlichen Jobmatrix und Aufrufe |
 | CI-05 | Paketbau braucht sämtliche erforderlichen erfolgreichen Qualitäts-, Kern- und Fensterjobs; die Prüfung des Intel-Macs hält statt des Pakets jede Releaseakte an, damit sie den Tag-Lauf nicht verlängert (RM-344). Abbruch, leere Auswahl, Sammlungsfehler oder fehlender Bericht ergeben kein Grün. | Negative Fälle des Runners, Prüfung der Paket- und Releaseaktenabhängigkeiten |
 | CI-06 | Berichte nennen Auswahl, echte Prozessausgänge, Testzahlen und Zeiten; auch bei Fehlern werden vorhandene Berichte hochgeladen. | Berichtstests und `always()`-Artefaktschritte |
 | CI-07 | Gemeinsame Vorbereitung verändert keine Eingabe eines anderen Tests. Determinismus vergleicht weiterhin zwei unabhängig gebaute Ergebnisse. | Kopien für veränderliche Daten, unveränderte Zusicherungen und gezielte Gegenproben |
 | CI-08 | Laufzeitgewinn wird nur für einen abgeschlossenen vergleichbaren Lauf behauptet. Lokales Entwicklungstor und Release-Abnahme bleiben getrennt. | Nachweis mit Commit, Plattform, Befehl, Exit und Berichtspfad |
-| CI-09 | Nach dem Push nach main und vor dem Release laufen die von der Änderung betroffenen Fenstertests auf Windows, Linux, Apple Silicon und Intel-Mac und die betroffenen Slicertests mit echten, fest versionierten und per Prüfsumme belegten Slicern auf Linux, Apple Silicon und Intel-Mac (Entscheidung Robert, 07.10.2026). Die Auswahl folgt dem Importgraphen; Unterlagen, `konzepte/` und Sprachkataloge lösen der Kosten wegen nichts aus, außer dem Markdown, das die Anwendung selbst liest (`READ_BY_THE_APPLICATION`). Die Fensterauswahl teilt ihre Auswahlen je Plattform gleichmäßig auf drei Läufer (Matrix `shard` 0–2, Auswahl i auf Teil i mod 3). Eine leere Auswahl, ein fehlendes Programm oder ein übersprungener Slicertest ist rot. | `tools/ci_selection.py` mit `tests/test_slicer_selection.py`; `fenster-auswahl.yml` und `slicer-auswahl.yml` mit ihren Verträgen in `tests/test_packaging.py` und `tests/test_supply_chain.py` |
+| CI-09 | Beim Push nach main, von ihm selbst ausgelöst, und vor dem Release laufen die von der Änderung betroffenen Fenstertests auf Windows, Linux, Apple Silicon und Intel-Mac und die betroffenen Slicertests mit echten, fest versionierten und per Prüfsumme belegten Slicern auf Linux, Apple Silicon und Intel-Mac (Entscheidung Robert, 07.10.2026). Die Auswahl folgt dem Importgraphen; Unterlagen, `konzepte/` und Sprachkataloge lösen der Kosten wegen nichts aus, außer dem Markdown, das die Anwendung selbst liest (`READ_BY_THE_APPLICATION`). Die Fensterauswahl teilt ihre Auswahlen je Plattform gleichmäßig auf drei Läufer (Matrix `shard` 0–2, Auswahl i auf Teil i mod 3). Eine leere Auswahl, ein fehlendes Programm oder ein übersprungener Slicertest ist rot. | `tools/ci_selection.py` mit `tests/test_slicer_selection.py`; `fenster-auswahl.yml` und `slicer-auswahl.yml` mit ihren Verträgen in `tests/test_packaging.py` und `tests/test_supply_chain.py` |
 
 Änderungen an diesen Zusagen benötigen eine bewusste Fortschreibung dieses
 Konzepts und der zuständigen Regeldatei. Tests dürfen nicht gestrichen,
@@ -126,16 +126,24 @@ Gruppe, eine rote Datei als Anmerkung am Lauf, die Übersicht im
 Schrittbericht: Ein Bericht, der nur als Artefakt existiert, fehlt genau
 dann, wenn der Job an seiner Frist endet.
 
-Nach dem Push nach main (CI-09) bestimmt `tools/ci_selection.py` aus dem
-Diff des Merges die betroffenen Testdateien über denselben
+Beim Push nach main (CI-09) bestimmt `tools/ci_selection.py` im Job
+`auswahl` aus dem gepushten Diff (`github.event.before..github.sha`, ohne
+bekannten Vorgänger jede Datei) die betroffenen Testdateien über denselben
 Importgraphen wie `tools/affected_tests.py`, ohne Unterlagen und Kataloge
 (außer dem Markdown, das die Anwendung liest),
 und gibt zwei Semikolonlisten aus: je Datei die Fenster- und Rendererfälle
 (`--window-group windowed`) für `fenster-auswahl.yml` und die Fälle mit
-Marker `slicer` (`-m slicer`) für `slicer-auswahl.yml`. Beide Workflows
-starten nur von Hand auf main und fahren je Auswahl einen Prozess; auf Zweigen
-und Wegwerfzweigen läuft keine CI (Entscheidung Robert, 09.10.2026), ein Rot wird
-auf main vorwärts behoben; die
+Marker `slicer` (`-m slicer`) für `slicer-auswahl.yml`. `build.yml` ruft
+beide Workflows (`workflow_call`, Jobs `fenster` und `slicer`), von Hand starten
+sie nur auf main; je Auswahl ein Prozess. Der Push nach main fährt damit alle
+Prüfungen: die Kernsuite auf allen vier Paketplattformen, Fensterverträge und
+Rendererfälle auf allen vier (unter Windows im Vertragsschritt, weil die
+Windows-Fenstergruppe nur am Tag läuft) und die beiden Auswahlen; Paketbau,
+Releaseakten und Signierung bleiben beim Tag und beim Handstart. Auf Zweigen und
+Wegwerfzweigen läuft keine CI (Entscheidung Robert, 09.10.2026), ein Rot wird
+auf main vorwärts behoben. Ein Push nach main belegt rund sechzehn macOS-Jobs;
+je Ref läuft deshalb ein Lauf, ein zweiter wartet, ein dritter ersetzt den
+wartenden (`concurrency`, `cancel-in-progress: false`); die
 Fensterauswahl verteilt die Auswahlen je Plattform auf drei Läufer, die
 höchstens eine Auswahl auseinanderliegen, und ein Teil ohne Auswahl ist grün. Der
 Slicerworkflow installiert nur die Programme, die die gewählten Fälle über

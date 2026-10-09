@@ -1,10 +1,12 @@
 # Ausgewählte Slicertests mit echten Programmen auf Linux und macOS
 # (Entscheidung Robert, 07.10.2026). Windows deckt der lokale Lauf.
 #
-# Vor dem Merge nach main bestimmt `tools/ci_selection.py` die Slicertests,
-# die eine Änderung berührt, und gibt den Befehl dazu aus:
+# Beim Push nach main bestimmt `tools/ci_selection.py` die Slicertests, die
+# der gepushte Diff berührt, und build.yml (Job `slicer`) fährt sie hier
+# (CI-09). Auf Zweigen läuft keine CI (Entscheidung Robert, 09.10.2026). Von
+# Hand nur auf main:
 #
-#   gh workflow run slicer-auswahl.yml --ref <zweig> \
+#   gh workflow run slicer-auswahl.yml --ref main \
 #     -f tests="tests/test_real_slicers.py -m slicer; tests/test_print_settings.py -m slicer"
 #
 # Installiert werden nur die Programme, die die gewählten Fälle über
@@ -29,6 +31,17 @@ on:
         required: true
       programme:
         description: "Leer: aus den Markern der Auswahl. Sonst Programme mit Leerzeichen, etwa: cura orcaslicer"
+        type: string
+        required: false
+        default: ""
+  workflow_call:
+    inputs:
+      tests:
+        description: "Pytest-Auswahlen, durch Semikolon getrennt; je Auswahl ein Prozess"
+        type: string
+        required: true
+      programme:
+        description: "Leer: aus den Markern der Auswahl"
         type: string
         required: false
         default: ""

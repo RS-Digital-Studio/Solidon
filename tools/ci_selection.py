@@ -5,12 +5,13 @@
     .venv\\Scripts\\python.exe tools/ci_selection.py app/ui/panels.py   # oder Dateien
     .venv\\Scripts\\python.exe tools/ci_selection.py --programs "<auswahl>"
 
-Linux und macOS gibt es an keinem Arbeitsplatz. Nach dem Push nach main laufen
-deshalb die Fenstertests und die Slicertests mit echtem Programm, die die
-Änderung berührt, per Handstart auf main (Entscheidung Robert, 07.10.2026; auf
-Zweigen läuft keine CI, 09.10.2026): ``fenster-auswahl.yml`` und
+Linux und macOS gibt es an keinem Arbeitsplatz. Beim Push nach main laufen
+deshalb die Fenstertests und die Slicertests mit echtem Programm, die der
+gepushte Diff berührt, auf den Läufern (Entscheidung Robert, 07.10.2026; auf
+Zweigen läuft keine CI, 09.10.2026): ``build.yml`` ruft dieses Werkzeug im Job
+``auswahl`` und gibt beide Listen an ``fenster-auswahl.yml`` und
 ``slicer-auswahl.yml``. Nicht die ganze Suite — macOS-Minuten kosten das
-Zehnfache.
+Zehnfache. Lokal zeigt es vor dem Merge, was der Push fahren wird.
 
 Die betroffenen Testdateien kommen aus demselben Importgraphen wie
 ``affected_tests.py``. Zwei Dinge sind anders:
