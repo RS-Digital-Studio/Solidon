@@ -8,6 +8,62 @@ Die Absätze stehen im Wortlaut der Regel vor der Verdichtung, sortiert unter
 ihre heutigen Überschriften. Verweise wie „oben", „unten" oder „dieser
 Abschnitt" meinen deshalb die alte Anordnung.
 
+## Körper aufziehen: drei Klicks, ein Schritt
+
+Robert am 08.10.2026: Ein Quader soll mit drei Klicks in der Ansicht
+entstehen — Anfang, Gegenecke, Höhe —, auf einem Körper angefügt oder
+ausgeschnitten, „einfach halten, ein Weg, keine Modi" (RM-559). Dazu RM-561:
+„keine komplizierten Bedienungen, nicht mehrere Wege". Der Entwurf der
+Bedienlogik vom selben Tag (Konsolidierung 07./08.10., freigegeben mit „Ja
+alles machen") hat die Entscheidungen E1 bis E12 getroffen; die tragenden:
+
+* **Keine neue Operation.** Das Ergebnis ist ein Schritt der Skizzenfamilie,
+  damit der Schrittdialog die *Art* umschaltet, ohne neu zu zeichnen.
+  `create_box` kann weder anfügen noch schneiden, Quader plus Boolesch wären
+  zwei Schritte.
+* **Die Richtung entscheidet, kein Schalter.** Ein Modusschalter widerspräche
+  der Vorgabe, eine Zusatztaste ist unsichtbar; die Richtung ist das, was der
+  Kunde mit der Hand zeigt.
+* **Bemaßt, nicht frei.** Das Werkzeug hat keine Bedingungsknöpfe, und ein
+  Quader ist für den Kunden ein Ding mit drei Maßen — deshalb öffnet der
+  Doppelklick auf eine Einfachform die Zahlen statt des Editors (E11).
+* **Kein Dialog, kein Modus.** Regel 19 verbietet die Bestätigung vor
+  Rücknehmbarem; der Ortho-Sprung und die ausgeblendeten Nachbarn des
+  Skizzenmodus kosteten beim Quader aufs Bett einen Moduswechsel und fünf
+  Blickwechsel (Zählung im Entwurf: vorher 5 Klicks, 2 Eingaben, 1 Dialog,
+  nachher 4 Klicks).
+* **Ein Weg vom Umriss zum Körper.** Vorher führten fünf Ausgänge aus der
+  freien Skizze zur selben Sache (*Hochziehen*, *Abtragen*, *Fertig* mit
+  stiller Wahl, *Mehr*, Ziehgriff der Querschau). Übrig ist *Fertig* → Höhe
+  in der Ansicht. Der Ziehgriff unten ist damit Geschichte.
+* **Kreis nach innen ist eine Tasche, keine Bohrung:** eine Werkzeugfamilie,
+  *Art* umschaltbar; wer eine Passung braucht, nimmt *Bohrung setzen*.
+
+Das Review des Pakets (Konsolidierung 08.10.) fand, wo der erste Stand diese
+Zusagen brach; die Gründe der Nachbesserung:
+
+* **Die *Art* am Schritt ersetzt *Mehr*.** Mit *Mehr* fiel der einzige Weg vom
+  freien Umriss zu Drehen, Führen, Überblenden und Lochfeld. Die Liste steht
+  jetzt im Schrittdialog, für alle Operationen der Zeichnungsfamilie;
+  `History.change_kind` ersetzt den Schritt in einer Transaktion und reicht
+  über `change_kernel`, damit Vorschau und Übernehmen keinen zweiten Weg
+  brauchen.
+* **Ein Umriss aus dem Editor ist Fertiges.** Escape nach *Fertig* warf eine
+  womöglich halbe Stunde Bedingungsarbeit weg, und das nächste Strg+Z nahm
+  einen fremden Schritt. Seither gilt die Entscheidung vom 23.09. auch hier:
+  verworfen heißt beiseitegelegt, Strg+Z holt ihn.
+* **Null bleibt null.** Ein Klick unter das Bett baute einen Körper an der
+  Untergrenze von 0,1 mm; die Regel des alten Ziehgriffs gilt sachlich weiter.
+* **Eine getippte Zahl erbt keine spätere Zeigerrichtung,** und eine gewählte
+  Tasche bleibt Tasche (Regel 21): Die Absicht des Kunden schlägt die zufällige
+  Lage der Maus.
+* **Überdeckung ist Volumen, nicht Hülle.** Ein Einsatz im Rahmen, ein Stift im
+  Ring liegen in der Hülle des anderen und berühren ihn nicht; ein falscher Satz
+  mit Handlungsangebot ist schlimmer als keiner.
+* **Ein Maß wächst vom Ansatz weg.** Die erste Ecke bzw. die Mitte ist der feste
+  Punkt der aufgezogenen Form; um den Ebenenursprung gestreckt wanderte ein
+  Durchgangsloch beim Umbemaßen.
+
 ## Was entsteht, steht am Zeiger
 
 Der Skizzeneditor (`app/ui/sketch_editor.py`) ist die zweite Ansicht, in der
@@ -474,6 +530,9 @@ merkt nicht, sonst stünden im Rückgängig so viele Schritte, wie die Maus
 Meldungen geschickt hat.
 
 ## Der Ziehgriff der Querschau
+
+> Abgelöst durch das Aufziehen (RM-561, 08.10.2026): Der Griff und *Hochziehen*,
+> *Abtragen*, *Mehr* sind aus der Skizze genommen. Was folgt, ist der Stand davor.
 
 **In der Querschau zieht man am Umriss, und der Körper wächst mit**
 (`Viewport.set_sketch_pull`, `axis_hit`, `pull_cage`). Robert am 27.08.2026:

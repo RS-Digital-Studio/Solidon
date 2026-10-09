@@ -32,9 +32,9 @@ Handlungen steht, sagt `grenzen.md`. Warum:
   `Session.scene_before_step_async` im Vorschauarbeiter, Antwort gebunden an
   Dokumentidentität/Werkzeugnummer. Verfeinerung über `Session.insert_before`
   im Revisionsarbeiter ersetzt Schrittkennung und Eingangsbindung.
-- Formen/Skelett haben denselben lokalen Undo-Weg für Menü und Strg+Z; leerer
-  Editor nimmt keinen Dokument-Schritt zurück. Zeichnen hat eigene Kürzel
-  und deaktiviert die globale Aktion.
+- Zeichnen, Formen, Skelett: Kürzel oben, Escape nimmt Unfertiges, Strg+Z
+  die letzte Geste, *Fertig* ohne Dialog (RM-561, für Formen und Skelett
+  Ziel von Z2). Leerer Editor nimmt keinen Schritt zurück.
 - Drei Zonen: links Baum/Parameter/Verlauf, Mitte Viewport, rechts eine Karte
   mit den Reitern Auswahl, Prüfbericht, Chat (F9 blendet sie aus). Keine
   Betriebsarten. Die Karte misst die vordere Seite (`CurrentPageTabs`).
@@ -101,14 +101,11 @@ werden:
   Löschtitel; ein gelöschter Schritt trägt keine Nummer mehr.
 - **Die lange Merkmalserkennung wird angeboten** (§21.1): Oberhalb der
   automatischen Grenze nennt die Frage Dauer und Speicherbedarf; die
-  Alternative — auch das Schließen — lädt mit begrenzter Erkennung. Das ist
-  kein abgebrochener Import und keine Sackgasse: Der Befund `perceive.too_large`
-  trägt *Alle Merkmale erkennen*, auch an jedem Folgeschritt des Körpers (die
-  Wahl gehört dem Körper), aber nur, wo am Ladeschritt eine Wahl steht (`panels._recognition_reopenable` über
-  `history.recognition_reopenable`; Kommandozeile: `recognize`). An einer
-  Sammelzeile gilt er allen ihren Körpern, und die Frage kommt mit derselben
-  Schätzung wieder; am Speicherfehler steht er zuletzt und nicht hervorgehoben —
-  vorn steht, was der Satz nennt.
+  Alternative, auch das Schließen, lädt mit begrenzter Erkennung. Der Befund
+  `perceive.too_large` trägt *Alle Merkmale erkennen* an jedem Folgeschritt
+  des Körpers, wo am Ladeschritt eine Wahl steht
+  (`history.recognition_reopenable`), an einer Sammelzeile für alle ihre
+  Körper; am Speicherfehler zuletzt und nicht hervorgehoben.
 - **Export** (§29): Eine geschriebene Datei holt kein Undo zurück. Der Export
   prüft, bringt den Bericht nach vorn und fragt erst ab
   `warning` (`dialogs.confirm_export`; der Lizenzhinweis §16.3 ist `info`),
@@ -121,10 +118,8 @@ werden:
   und öffnet über `QDesktopServices`.
 - **Wer nur hinsieht, wird nicht gefragt:** Beim Schließen fragt das Fenster nur,
   wenn etwas verloren ginge, das nicht in den Dateien des Kunden steht
-  (`ingest.plan.is_only_imported` über `Session.only_imported`).
-  `Session.modified` bleibt, was es war — die Sicherung hängt daran —; nur das
-  bewusste Schließen fragt nicht und räumt die Sicherung selbst weg. Ein
-  eingelesenes Modell steht in „Zuletzt geöffnet“.
+  (`Session.only_imported`). `Session.modified` bleibt; das Schließen ohne
+  Frage räumt die Sicherung selbst weg.
 
 ## Der Verlauf lässt sich umbauen — und sagt, was er nicht kann
 
@@ -345,12 +340,9 @@ Warum, mit Anlässen: `regel-fenster.md`, „Der Hauptknopf“; Wächter `test_s
 
 ## Ein Dialog, der höher ist als sein Inhalt
 
-Von Hand gezogen oder beim Öffnen an den Inhalt angepasst — überschüssiger
-Raum braucht **eine** Stelle, sonst verteilt Qt ihn als Lücken zwischen
-Widgets fester Höhe. Die Stelle ist ein `addStretch` dort, wo Leere nicht
-stört, oder ein Widget, das den Platz nutzt. `style.WrappedNote` misst
-Statusmeldungen ohne die gepinnte Höhe, denn `QLabel.heightForWidth` meldet
-nie weniger als die Mindesthöhe.
+Überschüssiger Raum braucht **eine** Stelle: ein `addStretch`, wo Leere nicht
+stört, oder ein Widget, das ihn nutzt. Statusmeldungen misst
+`style.WrappedNote`.
 
 **Dialoggröße nach Auslöser:** `ContentHeight` misst die natürliche Geometrie
 des aktuellen Inhalts einmal nach dem Anzeigen, die Höhe erst in der neuen

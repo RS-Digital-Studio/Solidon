@@ -46,6 +46,7 @@ Fassungen: `konzepte/begruendungen/karte-tests.md`.
 | Rechnet die Zeitgegenprobe aus der Schichtanalyse — Mindestschichtzeit bis zum Mindesttempo, Ecken, Beschleunigung, Herstellerwerte? | `test_print_time.py`, dort auch der Quader am installierten Slicer (`slicer`-Marker je Programm, übersprungen ohne ihn); der Startanteil aus `M73 P` in `test_gcode.py` |
 | Behalten innere Vollschichten, sichtbare Oberseite und Bügeln ihre Tempi in Cura? | `test_cura_skin_speeds.py` — Engine-Ebenen; `test_export.py` — importierbares Profil, mit und ohne obere Schichten |
 | Die vier Hauptwege Ende zu Ende | `test_way_one.py` … `test_way_four.py` |
+| Wird aus drei Klicks genau ein Skizzen-Schritt, mit Richtung, Fang, Rücknahme und Maßen? | `test_drawn_body.py` ohne Fenster (Kern und Klickbedeutung) · `test_draw_ui.py` am Fenster |
 | 39 Referenzanfragen an den Agenten | `test_agent_suite.py`, Fälle in `agent_cases.py`, das Modell mit vorgeschriebenen Antworten in `scripted_backend.py` |
 | Folgen Eigenschaften, Befunde, Material und Übergabe dem Verfahren eines Resin-Druckers? | `test_resin.py` — die acht Abnahmepunkte aus Konzept §9, Stufe 1 |
 | Öffnet jedes angebotene Modellformat dieselbe Referenzgeometrie? Prüft das Einlesen Dichtheit und Kennzahlen einmal? | `test_import_formats.py` · `test_ingest_figures.py` |

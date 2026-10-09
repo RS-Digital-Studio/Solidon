@@ -79,6 +79,10 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Al recortar una parte de un cuerpo, desaparecen también los chaflanes, roscas y alojamientos de tuerca de los bloques que había en ella.
 - En *Generar tapa* y *Generar tapa roscada*, un campo vacío para la altura de la abertura significa «Borde superior», y 0 es la altura de la cama. Los proyectos antiguos conservan su abertura.
 - Una restricción de ángulo en un dibujo pequeño ya no voltea las líneas.
+- Un cuerpo se levanta con tres clics: *Dibujar* en la barra superior (Ctrl+Mayús+E), luego esquina, esquina opuesta, altura. Hacia fuera se une, hacia dentro recorta.
+- Al levantar se pueden escribir las medidas. Un doble clic en el paso abre sus medidas, y en *Tipo* se convierte en un sólido de revolución o un patrón de orificios sin volver a dibujar.
+- Desde el editor de bocetos, *Terminado* vuelve a la vista y el siguiente clic pone la altura. Escape aparta el contorno, Ctrl+Z lo recupera.
+- Si un paso nuevo no se puede calcular, el borrador sigue en la vista y *Reparar y volver a intentarlo* lo calcula sin otro clic.
 
 ### Generar con IA
 

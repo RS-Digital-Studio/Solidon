@@ -2078,7 +2078,9 @@ eine Gegenform mit Spiel in einen Einsatz einlassen; Primitive einfügen
 Vieleck), Skizze extrudieren, an einen Körper anfügen, rotieren, als Tasche
 schneiden, entlang Pfad führen, zwischen Skizzenprofilen überblenden; durch
 Drehen, entlang einer Bahn oder durch Überblenden schneiden; ein Lochfeld in
-den gezeichneten Umriss schneiden
+den gezeichneten Umriss schneiden. Einen Quader oder Zylinder mit drei Klicks
+in der Ansicht aufziehen — als neuer Körper, angefügt oder als Tasche, ein
+Schritt dieser Familie (§30.1)
 
 **Formgebung** (B-Rep) — Fase, Verrundung, Wulst oder Kehlnaht an Kanten;
 Formschräge, exakte Schale, Sweep, Loft, exaktes Gewinde als Schraube (§30.1)
@@ -2132,6 +2134,12 @@ Fläche gekrümmt unterteilen, einer offenen Fläche eine Wand geben
 **Organisch** (Weg 4, §2.2) — zwei Körper weich verschmelzen, von Hand
 formen, um ein Skelett in eine Stellung beugen. Alle Züge eines Formvorgangs
 sind ein Schritt im Verlauf (Regel 2).
+
+Zeichnen, Formen und Skelett folgen **einer** Bedienregel (Entscheidung Robert,
+08.10.2026): je ein Kürzel in der oberen Leiste, Escape nimmt nur Unfertiges
+und lässt Fertiges stehen, Strg+Z im Werkzeug nimmt die letzte Geste, danach
+den ganzen Schritt, und *Fertig* legt den Schritt ohne Dialog an. Zahlen und
+Parameterbindung bleiben im Schrittdialog.
 
 **Varianten** — dieselbe Op-Kette mit durchvariiertem Parameter (§28.3)
 
@@ -2623,12 +2631,25 @@ Druckteil von der ersten Linie bis zum Export im selben Programm.
   Maßbedingung gespeichert. Die eingestellte Langlochbreite wird als
   Durchmesserbedingung gespeichert; die Eckenzahl legt nur die Grundform
   fest.
-- **Zwei gleichwertige Eingabewege.** Grundformen über Dialog, CLI und Agent
-  sowie der grafische Editor im Viewport (Ebene anklicken, zeichnen,
-  Bedingungen setzen) erzeugen dieselben parametrischen Skizzendaten. Der
-  grafische Editor erweitert die Eingabe; für parametrische Konstruktion
-  bleibt er optional. Bedienlogik und Datenübergabe sind offscreen prüfbar;
-  Darstellung und tatsächliche Eingabe werden am echten Fenster abgenommen.
+- **Drei Eingabewege, ein Datenmodell.** Grundformen über Dialog, CLI und
+  Agent; das **Aufziehen** in der Ansicht (Werkzeug *Zeichnen*); der
+  grafische Editor für freie Umrisse. Alle erzeugen dieselben parametrischen
+  Skizzendaten. Der grafische Editor erweitert die Eingabe; für parametrische
+  Konstruktion bleibt er optional. Bedienlogik und Datenübergabe sind
+  offscreen prüfbar; Darstellung und tatsächliche Eingabe werden am echten
+  Fenster abgenommen.
+- **Aufziehen: drei Klicks, ein Schritt** (Entscheidung Robert, 08.10.2026).
+  Klick 1 setzt den Anfang auf das Bett oder eine ebene Fläche, Klick 2 die
+  Gegenecke eines Rechtecks oder den Rand eines Kreises, Klick 3 die Höhe.
+  Die Richtung des dritten Klicks entscheidet ohne Schalter: auf dem Bett ein
+  neuer Körper (`sketch_extrude`), aus einer Fläche heraus angefügt an ihren
+  Körper (`sketch_join`), in den Körper hinein eine Tasche (`sketch_pocket`),
+  bis zur Gegenwand durchgehend. Kein Moduswechsel, kein Dialog; Maße lassen
+  sich tippen. Rechteck und Kreis tragen beide Maße als Bedingung, die erste
+  Ecke bzw. die Mitte steht fest; der Schrittdialog zeigt diese Maße vorn.
+  Ein freier Umriss entsteht im Editor auf der angeklickten Fläche, dessen
+  einziger Abschluss *Fertig* in dieselbe Höhenwahl zurückführt. Drehen,
+  Führen und Überblenden wählt der Schrittdialog unter *Art*.
 - **Die Skizzen-Ops rechnen gegen den B-Rep-Kern.** Ohne installiertes
   `brep` sagen sie das in einem Satz; alles andere bleibt benutzbar
   (bestehendes Muster aus P12).

@@ -95,8 +95,6 @@ trägt, sagt der Kopf von `oberflaeche.md`.
 
 ## Module
 
-`__init__.py` trägt nur den Paketdocstring.
-
 ### Rahmen und Einstieg
 
 | Datei | Zweck |
@@ -148,6 +146,7 @@ trägt, sagt der Kopf von `oberflaeche.md`.
 | `analysis_bar.py` | Analysekarten, Legende und Schichtvorschau (§18.4, §18.10) |
 | `section_bar.py` | Schnittebene (§18.2) |
 | `split_bar.py` | Trennleiste (§25, §18.2) |
+| `draw_tool.py`, `draw_flow.py`, `draw_bar.py` | Aufziehen (§30.1): Klicks, Ablauf, Leiste |
 | `explode_bar.py` | Explosionsansicht (§18.8) |
 | `sculpt_bar.py` | Leiste der Formsitzung (§25); `GestureAnalysis` aus `analysis_bar` teilt Kartenwahl und Druckbefund mit dem Skelett |
 | `pose_bar.py` | Leiste des Skeletteditors (§25); nach Abschluss bleiben Kartenwahl, Druckbefund und Schließen erreichbar |
@@ -157,7 +156,7 @@ trägt, sagt der Kopf von `oberflaeche.md`.
 
 | Datei | Zweck |
 |---|---|
-| `op_dialog.py` | ausschließlich aus Parameterschema (§10, §2.4): `ValueField`, `CountField`, `offer_naming` (§13); Hauptknopf `accept_text`; vorn `lead_sentence` und die Lesezeile *Stelle* (`place_fields`, `place_text`) mit `aim_again` zurück zur Platzierung, hinten die Klappe mit `advanced_summary`; `show_seat`: *Auf das Bett* bei Erzeugern auf gewählter Fläche |
+| `op_dialog.py` | aus dem Parameterschema (§10, §2.4): `ValueField`, `CountField`, `offer_naming` (§13); Hauptknopf `accept_text`; vorn `lead_sentence`, `front_fields` (Einfachform) und die Lesezeile *Stelle* (`place_fields`, `place_text`, `aim_again`), hinten die Klappe mit `advanced_summary`; `show_seat` (*Auf das Bett*) |
 | `dialogs.py` | Fragen und Fehler (§2.7, §21.3): `AskDialog`, `ErrorNotice`, Freischaltung online und per Datei, `DonationDialog`, `AboutDialog`, `confirm_export`, `confirm_handover`, `open_link`; `align_to_the_front` für Dialoge mit Rückseite |
 | `outline_dialog.py` | SVG-/DXF-Konturen wählen und ihre echte Extrusion sehen (§19.2); `values()` liefert nur `load_outline`-Werte |
 | `step_dialog.py` | die Körper einer STEP-Baugruppe wählen; Vorschau als Hüllquader |

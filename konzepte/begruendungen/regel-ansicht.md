@@ -1158,7 +1158,7 @@ eines der folgenden Stücke anfasst, liest sie zusätzlich:
 | `sketch_grid`, `grid_step_for`, `pixels_per_mm`, `LEAST_VIEW_PIXELS` | Raster und Maßstab |
 | `show_sketch_cursor`, `sketch_cursor`, `CURSOR_PIXELS` | die Fangmarke und ihre 6,9 ms |
 | `set_sketching`, `_sketch_hit`, `sketch_screen_at` | wohin ein Klick fällt |
-| `set_sketch_pull`, `pull_cage`, `pulled_height`, `polyline_distance` | der Ziehgriff der Querschau |
+| `set_drawing`, `show_draw`, `ray_at`, `surface_under` | das Aufziehen mit drei Klicks (der Ziehgriff der Querschau ist abgelöst, RM-561) |
 | `MEASURE_GAP`, `DragValueBar.anchor` | die Zahl am Zeiger |
 | `apply_wheel_zoom`, `view_on_plane`, `cameraMoved` | Zoom und Schwenk auf einer Ebene |
 | `place_sketch_cards`, `spread_sketch_cards`, `SKETCH_CARD_FONT_PIXELS` | keine Karte über einer anderen |

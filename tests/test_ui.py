@@ -189,6 +189,8 @@ def test_document_history_waits_only_for_a_begun_measure_draft(command: str, beg
     calls: list[str] = []
     view = SimpleNamespace(
         _quiet_host=SimpleNamespace(begun=begun, committing=False),
+        undo_drawing=lambda: False,
+        drawing=lambda: False,
         restore_discarded_sketch=lambda: False,
         undo_sculpt_stroke=lambda: False,
         undo_bone=lambda: False,
@@ -559,26 +561,29 @@ def test_first_measure_edit_releases_split_but_passive_measures_do_not(
     assert measuring[-1]["begun"] is True
 
 
-@pytest.mark.parametrize("handled_by", ["sketch", "sculpt", "bone"])
+@pytest.mark.parametrize("handled_by", ["draw", "sketch", "sculpt", "bone"])
 def test_editor_undo_keeps_priority_over_document_history(handled_by: str) -> None:
-    """Das eigene Gesten-Undo bleibt vor der Sperre für fremde Dokumentbefehle."""
+    """Das eigene Gesten-Undo bleibt vor der Sperre für fremde Dokumentbefehle.
+
+    Das Aufziehen zuerst (RM-559): Im Entwurf nimmt Strg+Z den letzten Klick.
+    """
     from types import SimpleNamespace
 
     calls: list[str] = []
+    order = ["draw", "sketch", "sculpt", "bone"]
 
     def undo(kind: str) -> bool:
         calls.append(kind)
         return handled_by == kind
 
     view = SimpleNamespace(
+        undo_drawing=lambda: undo("draw"),
         restore_discarded_sketch=lambda: undo("sketch"),
         undo_sculpt_stroke=lambda: undo("sculpt"),
         undo_bone=lambda: undo("bone"),
     )
     MainWindow.action_undo(view)
-    assert (
-        calls == ["sketch", "sculpt", "bone"][: ["sketch", "sculpt", "bone"].index(handled_by) + 1]
-    )
+    assert calls == order[: order.index(handled_by) + 1]
 
 
 def test_a_blocked_sketch_restore_keeps_the_discarded_drawing() -> None:
@@ -14263,8 +14268,8 @@ def test_a_plain_project_carries_no_tour(
 def test_the_toolbar_has_a_drawing_entry_for_way_two(window: MainWindow) -> None:
     """§2.2: Weg 2 (neu konstruieren) nennt die Werkzeugzeile als Ort — der
     Platz war nie belegt, und das Zeichnen lag drei Ebenen tief im Menü. Der
-    Knopf startet den Skizzenmodus ohne festgelegte Operation; die
-    Erzeugungsart kommt bei „Fertig".
+    Knopf öffnet das Aufziehen ohne Moduswechsel (RM-559); ein zweiter Druck
+    schließt es wieder.
     """
     from PySide6.QtWidgets import QToolBar
 
@@ -14276,10 +14281,11 @@ def test_the_toolbar_has_a_drawing_entry_for_way_two(window: MainWindow) -> None
 
     window.action_sketch_free()
     try:
-        assert window.sketching()
-        assert window._sketch_target == ""
+        assert window.drawing()
+        assert not window.sketching(), "kein Skizzenmodus"
     finally:
-        window.finish_sketch(keep=False)
+        window.action_sketch_free()
+    assert not window.drawing()
 
 
 def test_the_toolbar_has_the_two_entries_for_way_four(window: MainWindow) -> None:
@@ -14355,7 +14361,7 @@ def test_the_sketch_bar_says_what_finishing_does(window: MainWindow) -> None:
     Dialog. Wer „die Operation" liest und keine gewählt hat, sucht nach
     etwas, das nirgends steht.
     """
-    window.action_sketch_free()
+    window.start_sketch("")
     try:
         assert "Operation" not in window._sketch_hint.text()
         assert "Freies Zeichnen" in window.statusBar().currentMessage()
@@ -14403,7 +14409,7 @@ def test_undo_in_the_sketch_mode_means_the_last_stroke(window: MainWindow) -> No
     assert window.session.history.can_undo, "sonst prüft das Folgende nichts"
     assert window.undo_action.isEnabled()
 
-    window.action_sketch_free()
+    window.start_sketch("")
     try:
         assert not window.undo_action.isEnabled(), "im Modus gehört Strg+Z dem Blatt"
         assert not window.redo_action.isEnabled()
@@ -18497,7 +18503,7 @@ def test_drawing_starts_on_the_selected_face_not_under_it(window: MainWindow) ->
     window.object_tree.select_object(object_id)
     window.object_tree.select_feature(object_id, top)
 
-    window.action_sketch_free()
+    window.start_sketch("")
     try:
         panel = window._sketch_panel
         assert panel is not None
@@ -18543,7 +18549,7 @@ def test_duplicate_face_ids_keep_the_selected_body_and_its_label(window: MainWin
 
     window.object_tree.select_object(second_id)
     window.object_tree.select_feature(second_id, duplicate)
-    window.action_sketch_free()
+    window.start_sketch("")
     try:
         panel = window._sketch_panel
         assert panel is not None
@@ -18559,7 +18565,7 @@ def test_duplicate_face_ids_keep_the_selected_body_and_its_label(window: MainWin
 def test_drawing_without_a_selection_still_starts_on_the_base_plane(window: MainWindow) -> None:
     """Ohne Auswahl bleibt die Grundebene die Vorgabe — der Fix darf den
     leeren Start nicht mitreißen."""
-    window.action_sketch_free()
+    window.start_sketch("")
     try:
         panel = window._sketch_panel
         assert panel is not None
@@ -18590,7 +18596,7 @@ def test_the_snap_marker_follows_the_canvas_not_a_second_calculation(
     monkeypatch.setattr(
         type(window.viewport), "show_sketch_cursor", lambda self, point: shown.append(point)
     )
-    window.action_sketch_free()
+    window.start_sketch("")
     try:
         panel = window._sketch_panel
         assert panel is not None
@@ -18623,7 +18629,7 @@ def test_the_sketch_hint_names_the_plane_being_drawn_on(window: MainWindow) -> N
     window.object_tree.select_object(object_id)
     window.object_tree.select_feature(object_id, top)
 
-    window.action_sketch_free()
+    window.start_sketch("")
     try:
         panel = window._sketch_panel
         assert panel is not None
@@ -21889,35 +21895,6 @@ def test_the_naming_box_remembers_the_last_choice(window: MainWindow, name: str)
     assert window.session.wait_for_idle(60_000)
     assert window.session.project.document.parameters, "angehakt legt die Maße an"
     assert load_settings().name_dimensions is True
-
-
-def test_finish_lists_the_sketch_operations_in_the_window(window: MainWindow) -> None:
-    """Die zehn Skizzenoperationen hängen unter *Mehr* — der Dialog
-    „Was soll daraus werden?" ist am 16.09.2026 gefallen (Robert: „weniger
-    ist manchmal mehr"), und an *Fertig* hängen sie seit dem 23.09.2026 nicht
-    mehr (Bedienabnahme Zeichnen, E2). Hochziehen steht vorn."""
-    window.action_sketch_free()
-    try:
-        names = list(window._finish_actions)
-        assert names[0] == "sketch_extrude", "der Normalfall steht an erster Stelle"
-        assert set(names) == {
-            "sketch_extrude",
-            "sketch_join",
-            "sketch_pocket",
-            "sketch_revolve",
-            "sketch_loft",
-            "sketch_sweep",
-            "sketch_revolve_cut",
-            "sketch_loft_cut",
-            "sketch_sweep_cut",
-            "field_cut",
-        }
-        assert window.sketch_more_button.menu() is window._finish_menu
-        assert window.sketch_finish_button.menu() is None
-        for action in window._finish_actions.values():
-            assert action.toolTip(), "jeder Eintrag sagt, was er tut oder warum nicht"
-    finally:
-        window.finish_sketch(keep=False)
 
 
 def test_delete_on_a_face_takes_the_body_and_says_so(window: MainWindow) -> None:

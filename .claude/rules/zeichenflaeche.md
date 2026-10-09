@@ -1,16 +1,89 @@
 ---
-description: "Der Skizzeneditor — Vorschau und Fang am Zeiger, Raster und Maßstab, gezogene Punkte und Zwangsbedingungen, Maßkarten, der Ziehgriff der Querschau, Form- und Lochwerkzeuge, die Karte unten, Ebenen und Flächenkontur, Ellipse und Kurvenbedingungen, der Zielkörper"
+description: "Das Aufziehen in der Ansicht (drei Klicks, Richtung entscheidet) und der Skizzeneditor — Vorschau und Fang am Zeiger, Raster und Maßstab, gezogene Punkte und Zwangsbedingungen, Maßkarten, Form- und Lochwerkzeuge, die Karte unten, Ebenen und Flächenkontur, Ellipse und Kurvenbedingungen, der Zielkörper"
 paths:
   - "app/ui/sketch_editor.py"
+  - "app/ui/draw_*.py"
 ---
 
 # Regeln für die Zeichenfläche
 
-Der Skizzenmodus (`app/ui/sketch_editor.py`, gezeigt im Viewport). Texte,
+Das Aufziehen (`app/ui/draw_tool.py`, `draw_flow.py`, `draw_bar.py`) und der
+Skizzenmodus (`app/ui/sketch_editor.py`, gezeigt im Viewport). Texte,
 Barrierefreiheit und Zeiger regelt `oberflaeche.md`, die Ansicht `ansicht.md`,
 das Warten `wartezeit.md`; sie gelten mit. Anlässe, Messwerte und die Mechanik
 im Einzelnen stehen unter denselben Überschriften in
 `konzepte/begruendungen/regel-zeichenflaeche.md`.
+
+## Körper aufziehen: drei Klicks, ein Schritt
+
+*Zeichnen* oben (Strg+Umschalt+E, Fusion E) ist das Aufziehen (RM-559,
+RM-561; Bauplan §30.1). Warum: `konzepte/begruendungen/regel-zeichenflaeche.md`.
+
+* **Die Bedeutung jedes Klicks steht in `draw_tool.py`** (`DrawDraft`,
+  `lifted`, `picture`) und wird ohne Fenster geprüft; `DrawFlow` übersetzt
+  nur Mausstellen in `take`/`aim`/`place`/`lift_to`/`settle`.
+* **Kein Moduswechsel:** Ansicht, Projektion und Nachbarn bleiben; die
+  linke Taste gehört dem Entwurf über `set_placement_pointer`, Rad und
+  rechte Taste der Kamera. Die Werkzeugzeile weicht der `DrawBar`.
+* **Die Richtung des dritten Klicks entscheidet**, kein Schalter: auf dem
+  Bett `sketch_extrude`, aus einer Fläche heraus `sketch_join`, hinein
+  `sketch_pocket`, an der Gegenwand `through` (`reach_inside`). Ziel ist der
+  Körper der angeklickten Fläche, auf dem Bett ein neuer.
+* **Kein Dialog, ein Einmalwerkzeug:** Klick 3 legt den Schritt an, das
+  Werkzeug schließt, der Körper wird gewählt. Überdeckung (F-g) und Zerfall
+  (F-h) sagen es mit Knöpfen in der Statuszeile, nichts geschieht von selbst.
+  Eine Absage beim Anlegen lässt den Entwurf stehen.
+* **Überdeckung ist echtes Volumen:** Die Hüllquader filtern vor, die
+  Schnittmenge rechnet `_OverlapWorker` an eigenen Kopien (`_private_body`,
+  exakt bleibt exakt; nie die geteilten aus `for_a_worker` ohne ihr Schloss),
+  Schwelle `OVERLAP_VOLUME`; der Satz kommt erst mit ihr, eine Tasche wartet
+  auf ihr neues Ergebnis (`_before_step`). Projektwechsel und Fensterabbau
+  brechen sie ab.
+* **Scheitert die Rechnung des neuen Schritts (F-i)**, kommt der Entwurf
+  zurück (`result.stopped_at` in `_scene_changed`, `_kept`): die Ursache mit
+  Stellenzahl in der Leiste, *Reparieren und erneut versuchen* rechnet
+  denselben Schritt ohne neuen Klick, *Stellen zeigen* lässt ihn stehen,
+  Escape nimmt ihn samt Reparaturzügen zurück und legt den Umriss ab.
+* **Die gewählte Art gilt** (`intent`): Tasche und Anfügen aus Menü oder
+  Palette nehmen das Bett nicht an und sagen es (Regel 21).
+* **Escape nimmt nur Unfertiges** (das offene Maßfeld, dann den Entwurf),
+  **Strg+Z im Entwurf den letzten Klick** (`DrawDraft.back`), danach den
+  Schritt; ohne Klick sagt es den Weg. Ein Umriss aus dem Editor ist kein
+  Unfertiges: Strg+Z führt in den Editor zurück, Escape, *Schließen* und ein
+  verschwundenes Ziel (F-k) legen ihn als verworfene Zeichnung ab
+  (`return_the_outline`; ohne Körper liegt er danach auf `plane:xy`).
+  Ungesichert ist nur er, nicht ein Klick. Ein zurückgeholter und unverändert
+  wieder verworfener Umriss wird nicht noch einmal angeboten.
+* **Andere Handlungen warten** (`_quiet_command_allowed`,
+  `_drawing_refuses`) und sagen es im Tooltip (`_DRAWING_FIRST`); *Zeichnen*
+  steht gedrückt, ein zweiter Druck schließt.
+* **Aufgezogen heißt bemaßt** (`shapes.rectangle_between`, `circle_around`):
+  beide Maße als Bedingung, die erste Ecke fest — anders als im Editor. Ein
+  Maß im Schrittdialog wächst um diesen Punkt (`shapes.held_point`).
+* **Die Art wechselt am Schritt** (`_kind_choice`, `History.change_kind`
+  über `change_kernel`): alle Arten der Zeichnungsfamilie, eine ohne Körper
+  gesperrt mit Grund. Ersetzt wird in einer Transaktion.
+* **Die Höhe** liest `axis_hit` an der Mitte des Umrisses; steht der Blick
+  innerhalb `STEEP_DEGREES` auf der Normalen, folgt sie der senkrechten
+  Mausbewegung. Gefangen auf das Raster, Grenzen aus dem Schema
+  (`operation_limits`). **Null bleibt null:** Unter einem halben
+  Rasterschritt und in eine Richtung ohne Körper (F-e) ist die Höhe null, der
+  Klick legt nichts an.
+* **Getippt ist ein Betrag in der Richtung, die beim Öffnen des Felds galt**;
+  danach ändert die Maus sie nicht mehr, ein Minus kehrt um. Eine gewählte
+  Tasche (`inward_first`) tippt die Tiefe. Fehlt die Tiefe des Rechtecks,
+  gilt die am Zeiger.
+* **Höhe und Tiefe unterscheiden sich ohne Farbe** (Regel 18): außen
+  durchgezogen und *Höhe*, innen gestrichelt und *Tiefe* (`_dashes`).
+* **Ecken und Kantenmitten der Fläche schlagen das Raster** (`face_marks`),
+  in logischen Bildpunkten (`MARK_REACH_PIXELS` mal Geräteverhältnis).
+* **Ein Weg vom Umriss zum Körper** (RM-561): *Freie Form …* öffnet den
+  Editor auf der Fläche mit der Linie in der Hand; *Fertig* bringt jeden
+  geschlossenen freien Umriss und den für Hochziehen, Anfügen oder Tasche
+  zurück in die Ansicht, es fehlt die Höhe (`_rise_from_the_sketch`). Ein
+  offener bleibt im Editor mit Satz, eine Tasche ohne Ziel ebenso. Andere
+  Arten, ein geänderter Schritt und gegebene Werte (`finish_sketch(given=…)`)
+  öffnen ihren Dialog.
 
 ## Was entsteht, steht am Zeiger
 
@@ -174,6 +247,8 @@ im Einzelnen stehen unter denselben Überschriften in
 * **Gezeichnet heißt frei, getippt heißt bemaßt:** `_finish_rectangle` streift
   den Festpunkt und lässt nur das Maß einer Seite stehen, deren Zahl im Feld
   stand; `shapes.rectangle` bleibt für Dialog und Agent bestimmt (§30.1).
+* **Maßfeld und Wertleiste heben sich beim Erscheinen an**, nicht je
+  Zeigerbewegung: Alle Kinder der Ansicht sind native Fenster.
 * **Genau waagerecht oder senkrecht bleibt es** (`_axis_constraint`); ein
   getipptes Maß zieht `_snapped_direction` innerhalb `AXIS_SNAP_DEGREES` auf
   die Achse, und der getippte Linienzug geht danach weiter.
@@ -200,71 +275,10 @@ möglich.
   kopiert), erst ab `startDragDistance` (`_shift_selection`); der Undo-Punkt
   entsteht beim ersten wirklichen Zug, einmal.
 
-## Der Ziehgriff der Querschau
-
-In der Querschau zieht man am Umriss, und der Körper wächst mit
-(`Viewport.set_sketch_pull`, `axis_hit`, `pull_cage`).
-
-* **Angeboten nur in der Querschau:** `SketchCanvas.planes_are_parallel`
-  vergleicht die Richtungen von Blick und Zeichenebene (gegenläufige Normalen
-  sind parallel; dieselbe Prüfung gilt einer gewählten Fläche beim Einrasten
-  der Kamera); in der Draufsicht führt der Hinweis zur Vorder- oder
-  Seitenansicht, die freie Ansicht zählt als Querschau. Wer sich ohne
-  Ebenenwahl in die Kantensicht dreht, bekommt ihn nicht — dort ist Zeichnen
-  die Absicht.
-* **Die Frage stellt das Fenster** (`MainWindow._sketch_pull_offer`: `"ready"`,
-  ein Grund oder leer); ein Grund nur, wo die Geste gemeint war, über
-  `sketchPullBlocked` an `announce` (Regel 17) — und dieselbe Quelle schreibt
-  den Satz in die Leiste.
-* **Angeboten wird nur, was geht** (`pull_height_at` in `sketch_pull_ready`,
-  dieselbe `axis_hit`-Prüfung wie der Zug, am selben Ort `pull_base_at`).
-* **Der Griff ist der Umriss selbst**, gemessen gegen die Strecken der
-  projizierten Kurven (`polyline_distance`) bis `CURSOR_PIXELS`;
-  Konstruktionsgeometrie zählt nicht.
-* **Dieselbe Zustandsmaschine wie der Körperzug** (`on_body_drag`,
-  `ready`/`start`/`move`/`end`); `_end_drag` beendet den Ziehgriff über
-  `_end_pull`, **nicht** über `set_navigation`.
-* **Was wächst, ist eine Drahtform** (`pull_cage`, höchstens `MOST_PULL_RIBS`
-  Sprossen), keine Vorschau über `session.preview_async`.
-* **Die Höhe ist gefangen und geklemmt** (`pulled_height`): auf das sichtbare
-  Raster, in die Grenzen **aus dem Schema** (`main_window.pull_limits`), nie
-  abgeschrieben.
-* **Ein Zug in die falsche Richtung sagt es, statt einen Splitter zu bauen:**
-  Geklemmt wird mit Vorzeichen, null bleibt null; die Richtung entscheiden
-  `continue_sketch_pull` und `_pull_takes` an derselben geklemmten Höhe,
-  geprüft nur gegen die Untergrenze — ein Zug bis zum Anschlag ist gemeint, und
-  eine getippte Zahl ersetzt Zeiger samt Richtung.
-* **Die Grenze steht an einer Stelle** (`_pull_takes`, für Loslassen und
-  Eingabetaste): Beim Tippen wird abgelehnt, beim Ziehen geklemmt; die
-  abgelehnte Zahl bleibt markiert im Feld (wie bei `_apply_typed`).
-* **Ohne Attrappe nicht prüfbar:** Offscreen ist `sketch_pull_ready` immer
-  falsch; `gripping` in `tests/test_viewport_decisions.py` ersetzt genau die
-  drei Methoden, die einen Renderer brauchen (Muster aus `ansicht.md`,
-  `test_cursors.py`).
-* **Die freie Skizze bietet *Hochziehen* und *Abtragen* als Wörter**, sobald
-  der Umriss geschlossen ist, und führt damit in den Operationsdialog — die
-  Leiste erzeugt keine Geometrie (Regel 2). Offen nennen beide ihre Bedingung;
-  *Abtragen* steht nur mit Zielkörper da. Wurde der Modus für eine andere
-  Operation geöffnet, bleiben beide verborgen.
-
-### Die Zahl am Zeiger
-
-* **Die Wertleiste steht am Zeiger** (`DragValueBar.anchor`, derselbe
-  `MEASURE_GAP` aus `viewport.py`); an den Griffen von §18.11 bleibt sie oben
-  mittig.
-* **Sie ist während des Zugs sichtbar und tippbar** — ein unsichtbares Feld
-  nimmt keinen Fokus, und was über den Ausschnitt hinausgeht, ist nur tippbar.
-* **Mit Vorzeichen, nicht als Betrag** (`_apply_typed` nimmt den Feldwert als
-  Höhe); die Richtung steht zusätzlich im Namen (*Höhe*, *Tiefe*).
-* **Maßfeld und Wertleiste heben sich beim Erscheinen an**, nicht je
-  Zeigerbewegung (`_place_measure_field` läuft an jedem `measuringChanged`):
-  Alle Kinder der Ansicht sind native Fenster, und die Leiste entsteht vor der
-  Grafikfläche. Die Schlösser nach ihren Feldern.
 
 ## Keine Karte über einer anderen
 
-`show_sketch` sammelt erst alle Maßkarten und Karten des Ziehgriffs und
-verteilt sie gemeinsam (`place_sketch_cards`, Rechnung in
+`show_sketch` sammelt erst alle Maßkarten und verteilt sie gemeinsam (`place_sketch_cards`, Rechnung in
 `spread_sketch_cards`): Die erste behält ihren Platz, jede weitere rückt zum
 nächsten freien um ihren Anker, senkrecht vor waagerecht; weggelassen wird
 keine. Gemessen mit derselben Schrift, die pygfx zeichnet
@@ -295,10 +309,6 @@ keine. Gemessen mit derselben Schrift, die pygfx zeichnet
   Landmarke, Nullachsen mit X/Y/Z nahe am Ursprung. Skizzenkanten hinweisblau
   und breiter, Auswahl und Unfertiges bernsteinfarben und zusätzlich dicker
   oder als Vorschau kodiert; Maße in ruhigen Karten.
-* **Der Weg wird progressiv erklärt:** Schließt ein Umriss, nennt das Bild die
-  Vorder- oder Seitenansicht; in der Querschau Pfeil und — nur mit gewähltem
-  bearbeitbarem Körper — Kreuz. Das Profil wird über der Werkzeugkarte
-  zentriert; ein Griff hinter der Leiste oder ohne gültige Operation ist keiner.
 * **Die untere Karte bleibt eine Leiste:** Im Viewport-Modus zählen
   unsichtbarer Canvas, Strecklayout und Schichthinweis nicht zur Höhe (die
   Schichtauskunft ist ein Tooltip am Ebenenfeld); `OverlayHost._bottom_size`
@@ -369,22 +379,16 @@ selben Ort, gesucht über die gelösten Punkte —, dann Klick.
 * **Der Gestensatz steht einmal, als Karte im Bild**; die Zeile der
   Skizzenkarte sagt nur, was sonst nirgends steht (abweichender Blick, Fläche
   eines Körpers).
-* **Die Arten hängen an *Mehr*** (`_fill_finish_menu`): die
-  Skizzen-Operationen des Registers mit ihrem `doc`-Satz als Tooltip,
-  Hochziehen, Anfügen und Tasche vorn, Unmögliches gesperrt mit Grund, was
-  als Knopf daneben steht, ausgeblendet (`_update_sketch_actions`); kein
-  Dialog „Was soll daraus werden?", und mit festgelegter Operation kein
-  *Mehr*. *Fertig* hat kein Menü und nimmt den
-  wahrscheinlicheren Fall: über dem Zielkörper eine Tasche, sonst ein neuer
-  Körper (Entscheidung Robert). **Ein Knopf, eine Bedeutung** — mit Menü und
-  `clicked` am selben Knopf entschiede die Zustellung des Loslassens.
+* **Ein Abschluss: *Fertig*** (RM-561) — kein Hochziehen, Abtragen oder
+  *Mehr* daneben, kein Menü am Knopf. **Ein Knopf, eine Bedeutung** — mit
+  Menü und `clicked` am selben Knopf entschiede die Zustellung des Loslassens.
 * **Ein Zeichnen-Knopf je Skizzenfeld:** am vorhandenen Schritt ins Bild
   (`offer_space`), sonst ins Fenster, nie beides.
 * **Jeder Knopf ohne Text trägt einen Namen** (`setAccessibleName`, geprüft über
   `QAccessible`).
 * **Der Tabulator läuft durch die Karte** (`MainWindow._chain_sketch_card`:
-  Werkzeuge, Ebene, Raster, Statuszeile, Hochziehen, Abtragen, Fertig,
-  Verwerfen, dann die Bedingungsliste), angeknüpft an die Statuszeile, nie über
+  Werkzeuge, Ebene, Raster, Statuszeile, Ziel, Nachbarn, Fertig, Verwerfen,
+  dann die Bedingungsliste), angeknüpft an die Statuszeile, nie über
   `nextInFocusChain` (`test_the_menus_outlive_the_sketch_mode`).
 
 ## Ebenen, Zustand und Flächenkontur
@@ -450,10 +454,10 @@ selben Ort, gesucht über die gelösten Punkte —, dann Klick.
   gewählte immer; die fünfte Karte bietet die Oberseite
   (`SketchPlanePicker.offer_face`, `placement.top_face`). Aufgelöst wird gegen
   die ganze Szene.
-* **Das Ziel bestimmt das Ergebnis:** *Hochziehen* heißt am Ziel *An Körper
-  anfügen* (`sketch_join`), wenn der Umriss auf oder über ihm liegt
-  (`_outline_meets_the_body`); *Abtragen* nur mit Ziel und nur am Ziel. Das
-  Ziel ist auch nachträglich im Feld *Ziel* wählbar.
+* **Das Ziel bestimmt das Ergebnis** (`_rising_surface`): nach außen am Ziel
+  `sketch_join`, wenn der Umriss auf oder über ihm liegt
+  (`_outline_meets_the_body`); nach innen nur mit Ziel. Das Ziel ist auch
+  nachträglich im Feld *Ziel* wählbar.
 * **Beim Verlassen kommt die vorige Sicht zurück** (`_view_before_sketch`,
   `_restore_the_view_before_sketch`); beim Betreten gilt die Platte des Ziels,
   und eine Explosion wird aufgehoben.
@@ -473,7 +477,10 @@ selben Ort, gesucht über die gelösten Punkte —, dann Klick.
   §30.1 bleibt).
 * **Ein Schritt mit Zeichnung öffnet direkt den Zeichenmodus**
   (`MainWindow.edit_operation`), mit seiner Schrittkennung und dem betroffenen
-  Skizzenfeld. *Fertig* gibt die neue Zeichnung in denselben Schritt zurück;
+  Skizzenfeld — **außer einer Einfachform** (`shapes.simple_shape`): Ein
+  Rechteck oder Kreis öffnet den Dialog mit *Breite*/*Tiefe* (Tasche:
+  *Länge*) oder *Durchmesser* und der Höhe vorn (`front_fields`), *Umriss
+  bearbeiten …* führt in den Editor. *Fertig* gibt die neue Zeichnung in denselben Schritt zurück;
   der Dialog zeigt davor die Erzeugungsmaße. Ein gezielter Sprung in ein
   Zahlenfeld öffnet weiterhin den Zahlendialog samt Weg zurück ins Zeichnen.
   Auch *Verwerfen → Strg+Z* bewahrt Schritt und Skizzenfeld. Das Angebot

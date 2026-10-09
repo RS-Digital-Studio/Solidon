@@ -155,11 +155,12 @@ def test_a_preview_refusal_stays_in_the_dialog_without_a_local_action(
 def test_the_sketch_menu_starts_drawing(
     empty_window: MainWindow, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """RM-395: Der Sammeleintrag führt wie die Palette direkt in die Zeichnung."""
+    """RM-395/RM-559: Der Sammeleintrag führt wie die Palette direkt ins Aufziehen."""
     drawn: list[str] = []
+    monkeypatch.setattr(empty_window, "start_drawing", lambda **_how: drawn.append("draw"))
     monkeypatch.setattr(empty_window, "start_sketch", drawn.append)
     empty_window._variant_actions["sketch_extrude"].trigger()
-    assert drawn == ["sketch_extrude"]
+    assert drawn == ["draw"]
     assert empty_window._op_dialog is None
 
 
@@ -182,11 +183,15 @@ def test_new_material_roles_start_with_the_project_material(
     dialog.reject()
 
 
-@pytest.mark.parametrize("shape", ["rectangle", "circle", "slot"])
+@pytest.mark.parametrize("shape", ["slot"])
 def test_reopening_a_drawing_changes_one_step_and_keeps_undo_and_saved_state(
     empty_window: MainWindow, tmp_path: Path, shape: str
 ) -> None:
-    """RM-375: Zeichnung bearbeiten, verwerfen, übernehmen und erneut öffnen."""
+    """RM-375: Zeichnung bearbeiten, verwerfen, übernehmen und erneut öffnen.
+
+    Ein freier Umriss öffnet den Editor; ein Rechteck oder Kreis öffnet seine
+    Maße (RM-559, E11 — ``tests/test_draw_ui.py``).
+    """
     from PySide6.QtTest import QTest
 
     sketch = shapes.circle(20.0) if shape == "circle" else getattr(shapes, shape)(20.0, 10.0)

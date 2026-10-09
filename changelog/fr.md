@@ -79,6 +79,10 @@ dans `website/version.json`.
 - Quand vous découpez une partie d'un corps, les chanfreins, filetages et logements d'écrou des blocs qui s'y trouvaient disparaissent aussi.
 - Dans *Créer un couvercle* et *Créer un couvercle vissé*, une hauteur d'ouverture vide signifie « Arête supérieure », et 0 est la hauteur du plateau. Les anciens projets gardent leur ouverture.
 - Une contrainte d'angle dans une petite esquisse ne renverse plus les lignes.
+- Un corps se tire en trois clics : *Dessiner* dans la barre du haut (Ctrl+Maj+E), puis coin, coin opposé, hauteur. Vers l'extérieur il se joint, vers l'intérieur il découpe.
+- Pendant le tirage, les dimensions se saisissent au clavier. Un double-clic sur l'étape ouvre ses dimensions, et sous *Type* elle devient un corps de révolution ou un réseau de trous.
+- Depuis l'éditeur d'esquisse, *Terminé* ramène dans la vue, et le clic suivant pose la hauteur. Échap met le contour de côté, Ctrl+Z le rappelle.
+- Si une nouvelle étape ne peut pas être calculée, le brouillon reste dans la vue, et *Réparer et réessayer* la calcule sans nouveau clic.
 
 ### Générer avec l'IA
 

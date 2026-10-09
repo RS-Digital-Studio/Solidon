@@ -1792,6 +1792,19 @@ def test_save_before_project_switch_waits_for_the_gesture_result_dialog(
     permitted = window._may_discard()
     if kind == "sculpt":
         assert permitted
+    elif kind == "sketch":
+        # Fertig bringt den Umriss zurück in die Ansicht, die Höhe fehlt noch
+        # (RM-561). Gespeichert wird erst, wenn sie gesetzt ist.
+        assert not permitted
+        assert window.drawing() and window._op_dialog is None
+        assert window._has_unsaved_gestures()
+        assert len(window.session.project.document.ops) == before
+        flow = window.draw_flow()
+        flow.lift_to(10.0)
+        assert flow.settle()
+        assert window.session.wait_for_idle(30_000)
+        assert not window._has_unsaved_gestures()
+        assert window._may_discard()
     else:
         assert not permitted
         dialog = window._op_dialog
