@@ -80,6 +80,11 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Las paredes finas, por ejemplo de un jarrón, llegan cerradas y con grosor.
 - El asistente responde en el idioma en que usted escribe.
 - Con un modelo local, el asistente tiene tanto margen como con uno alojado y completa encargos de hasta doce pasos.
+- Los modelos generados llegan cerrados más a menudo. Donde las caras solo se tocan, Solidon las separa, y alisa pequeños pliegues de la superficie en vez de avisar de una autointersección.
+- Si un intento ya se deshizo al generarse, el diálogo lo dice antes de aceptarlo y ofrece *Otro intento*.
+- Si un modelo generado es solo una piel fina alrededor de un hueco, lo dice el diálogo antes de aceptarlo y el informe de comprobación después, con el camino a un nuevo intento.
+- Antes de descargar, *Configurar el chat* y *Configurar ComfyUI* indican cuánta memoria gráfica y espacio necesita un modelo y si este equipo los tiene.
+- En un Mac, *Configurar el chat* propone un modelo local que cabe en la memoria compartida y dice cuándo conviene más una clave para un modelo alojado.
 
 ## 0.5.3
 

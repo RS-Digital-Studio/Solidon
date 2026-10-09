@@ -80,6 +80,11 @@ dans `website/version.json`.
 - Les parois minces, par exemple d'un vase, arrivent fermées et avec une épaisseur.
 - L'assistant répond dans la langue dans laquelle vous écrivez.
 - Avec un modèle local, l'assistant dispose d'autant de place qu'avec un modèle hébergé et mène des tâches jusqu'à douze étapes.
+- Les modèles générés arrivent plus souvent fermés. Là où des faces se touchent seulement, Solidon les sépare, et il lisse les petits plis de la surface au lieu de signaler une auto-intersection.
+- Si un essai s'est déjà défait pendant la génération, la boîte de dialogue le dit avant de l'accepter et propose *Encore un essai*.
+- Si un modèle généré n'est qu'une fine peau autour d'une cavité, la boîte de dialogue le dit avant de l'accepter et le rapport de contrôle ensuite, avec la voie vers un nouvel essai.
+- Avant le téléchargement, *Configurer le chat* et *Configurer ComfyUI* indiquent la mémoire graphique et la place qu'un modèle demande, et si cet ordinateur les a.
+- Sur un Mac, *Configurer le chat* propose un modèle local qui tient dans la mémoire partagée et dit quand une clé pour un modèle hébergé vaut mieux.
 
 ## 0.5.3
 
