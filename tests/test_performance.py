@@ -919,6 +919,56 @@ def test_the_layer_analysis_survives_a_knurled_surface() -> None:
     assert taken < 8.0
 
 
+def sieve_with_arms() -> MeshData:
+    """Ein Sieb 80 auf 80 auf 40 mm mit 8 mal 8 Bohrungen und 24 Armen ringsum.
+
+    Unter jedem Arm hängt eine Stützsäule bis aufs Bett, neben einem Material,
+    das je Schicht 64 Löcher trägt — der Fall des Laptop-Risers, an dem zwei
+    Drittel aller Abzüge der Säulen nichts wegnahmen.
+    """
+    import math
+
+    import trimesh
+
+    from app.core.geom.transform import place_on_bed
+
+    block = trimesh.creation.box(extents=(80.0, 80.0, 40.0))
+    block.apply_translation((0.0, 0.0, 20.0))
+    tools = []
+    for row in range(8):
+        for column in range(8):
+            tool = trimesh.creation.cylinder(radius=2.0, height=50.0, sections=32)
+            tool.apply_translation((-35.0 + 10.0 * row, -35.0 + 10.0 * column, 20.0))
+            tools.append(tool)
+    parts = [trimesh.boolean.difference([block, *tools])]
+    for index in range(24):
+        arm = trimesh.creation.box(extents=(12.0, 3.0, 3.0))
+        arm.apply_translation((46.0, -30.0 + 60.0 * (index // 4) / 5.0, 6.0 + 30.0 * index / 23.0))
+        arm.apply_transform(
+            trimesh.transformations.rotation_matrix(math.pi / 2.0 * (index % 4), (0, 0, 1))
+        )
+        parts.append(arm)
+    return place_on_bed(MeshData.of(trimesh.boolean.union(parts)))
+
+
+def test_support_columns_beside_the_model_skip_the_subtraction() -> None:
+    """Die Säulen des Prüfberichts ziehen nur ab, was ihr Hüllrechteck berührt (RM-595).
+
+    Der Prüfbericht verbringt neun Zehntel in der Stützfrage
+    (``analysis.model_support``); jede Säule zog je Schicht das Material
+    darunter ab, auch wo beide Hüllrechtecke getrennt liegen — am Laptop-Riser
+    181 statt 127 s. Gemessen am 09.10.2026 an diesem Sieb mit 0,1 mm: 1,20 s,
+    mit erzwungenem Abzug (``_apart`` immer falsch) 1,81 s — anderthalbmal so
+    lang, über der Schwelle des Vergleichslaufs.
+    """
+    result = slice_body(sieve_with_arms(), 0.1)
+    taken = measure(
+        "model_support_columns",
+        lambda: slice_analysis._model_support(result, slice_analysis.CHANNEL_WIDTH, None),
+    )
+    assert taken < 6.0
+
+
 def test_the_wall_thickness_map_stays_under_the_bound() -> None:
     """§31 nennt drei Sekunden für diese Karte, im Hintergrund.
 

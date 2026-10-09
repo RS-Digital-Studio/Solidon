@@ -189,9 +189,9 @@ _log = get_logger(__name__)
 #: Sekunde mehr je Schritt im Verlauf, bei jeder Auswertung. Dieselben
 #: Eingänge geben dieselbe Antwort. Gewogen wird, was ein Schritt über die
 #: Merkmale seines Eintrags hinaus hält — die bewegten teilen ihre
-#: Dreiecksnummern mit ihnen (Nachprüfung L, M-3): am Eiffelturm 10 MB je
+#: Dreiecksnummern mit ihnen (Nachprüfung L, M-3): am Eiffelturm 12 MB je
 #: Schritt, am Laptop-Riser 1,6 MB. Die Hälfte der kleinsten Speicherebene
-#: (``scene.cache.MEMORY_FLOOR``) trägt so 25 Schritte am Eiffelturm. Gezählt
+#: (``scene.cache.MEMORY_FLOOR``) trägt so 21 Schritte am Eiffelturm. Gezählt
 #: wird in der Bytegrenze des Ergebniscaches (:func:`remembered_parts`).
 REMEMBERED_BYTES_KEPT: Final = 256 * 1024 * 1024
 
@@ -4637,7 +4637,7 @@ def _keep_steps(
     Merkmalen der Operation, und die hält der Eintrag — ``parts_of`` nennt
     dessen große Behälter aus dem Merker des Caches, den die Grenze ohnehin
     füllt. Je Schritt ganz gezählt, wog er am Eiffelturm 19 MB, über den
-    Eintrag hinaus 10 MB; am Laptop-Riser 12,3 statt 1,6 MB. Er geht, wenn
+    Eintrag hinaus 12 MB; am Laptop-Riser 12,3 statt 1,6 MB. Er geht, wenn
     der Eintrag die Speicherebene verlässt (:func:`release_steps_of`).
 
     **Verdrängt wird, was diese Auswertung nicht gebraucht hat** — Schritte

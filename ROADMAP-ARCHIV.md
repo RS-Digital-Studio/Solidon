@@ -44537,6 +44537,23 @@ Verschieben, 8 GB nachgestellt, achtmal Zurück im Wechsel mit main (`g9_run.sh`
 `test_cache.py::test_trimming_reports_what_waits_for_the_collector`,
 `…a_lean_mesh_keeps_what_the_report_asks_after_undo`.
 
+**Nachprüfung (09.10.2026).** Ein schlankes Netz behält auch die Schichtanalyse des Prüfberichts
+(`geom/mesh.RELEASABLE` ohne sie): Spiderman, 1 GB Grenze, acht Verschieben und zurück — die
+Analyse ist noch da, der Bericht danach 0,0 statt 51,6 s CPU. Merkmalssätze und gemerkte Schritte
+zählen jeden großen Behälter einmal (`memory.held_parts`, `ResultCache._exact`); ein Schritt wiegt,
+was er über die Merkmale seines Eintrags hinaus hält, kommt erst mit seinem Eintrag in den Merker
+und geht mit ihm, auch mit dem eigenen Cache der Varianten; passt er nicht, verdrängt er nichts.
+Grenze gegen Einmalzählung: Riser nach vier Verschieben 212 → 136 MB bei 138 MB, Eiffelturm nach
+sechs 447/456 → 367/376 MB bei 359/367 MB; Schrittgewicht Eiffelturm 19 → 12 MB, der Merker trägt
+dort 21 statt 13 Schritte. Die volle Bereinigung wartet bei gedrückter Maustaste, Meldungen
+während der Bereinigung bleiben. Tests, alle am Stand davor rot: `test_cache.py::
+test_the_report_keeps_its_analysis_after_undo_under_a_tight_bound`,
+`…the_byte_bound_counts_features_once_across_entries_and_remembered_steps`, `test_evaluation.py::
+test_a_step_that_does_not_fit_leaves_the_unused_steps_in_place`,
+`…a_step_leaves_the_memory_with_the_entry_it_came_from`, `test_calibration.py::
+test_the_variants_leave_no_remembered_step_behind`, `test_leash.py::
+test_a_full_collection_waits_for_the_drag_and_keeps_what_arrives_meanwhile`.
+
 ## RM-595: Prüfbericht und Schichtanalyse schneller, ihre Konturen als Felder (09.10.2026)
 
 <a id="rm-595-prüfbericht-und-schichtanalyse-schneller-ihre-konturen-als-felder-09102026"></a>
@@ -44558,3 +44575,12 @@ allein 99,8 s, Rauschen); eine gemerkte Analyse 114 → 17 MB (Riser), 164 → 2
 test_separate_columns_keep_their_answer_without_the_subtraction` (Gegenprobe: jeder Abzug
 erzwungen), `…each_layer_material_is_built_once_by_parallel_columns`, `test_slice.py::
 test_the_contours_of_an_analysis_are_frozen_float_fields`, `…rings_of_a_section_read_in_one_call…`.
+
+**Nachprüfung (09.10.2026).** `piece_area` merkt die Fläche an der Kontur und rechnet Ringe ab
+128 Punkten mit NumPy, Bit für Bit gleich; Weg des Berichts an frischen Konturen: Riser main
+28,6/34,2 ms, vorher 49,8/52,7 ms, jetzt 20,3/23,4 ms, jede weitere Frage unter 1 ms. Die Tests
+bauen Schichten über `tests.helpers.slice_contour`. Leistungsmarke `model_support_columns`
+(`test_performance.py::test_support_columns_beside_the_model_skip_the_subtraction`, Sieb mit 24
+Armen, 0,1 mm): 1,17–1,35 s, mit erzwungenem Abzug 1,78–1,90 s. Prüfbericht main gegen jetzt,
+gleicher Abdruck aus Code, Werten und Ort: Spiderman 216,8 → 186,5 s CPU, Riser 176,4 → 120,6 s,
+Kumiko 7,0 → 6,9 s, Schraubendreherhalter 14,5 → 12,9 s. Bauplan §9 führt `SliceContour`.
