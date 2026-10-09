@@ -8,6 +8,9 @@ Checkliste in `AGENTS.md`, Skill `neuer-baustein`. Herleitungen:
 **Dieses Verzeichnis steht unter MIT** (`LICENSE` hier, der Grund aus §36 im
 Paketdocstring). Wer hier Code hinzufügt, prüft, dass er unter MIT stehen darf.
 
+Die Spiegelungsentscheidung für abtragende Bausteine liegt in
+`through.builds_upward`; Operation, Vorschau und SCAD verwenden sie gemeinsam.
+
 ## Die Karte
 
 | Datei | Rolle |

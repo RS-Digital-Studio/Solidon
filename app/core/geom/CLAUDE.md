@@ -188,6 +188,8 @@ Rundung, Radius aus `measured_radius`)
 
 **Merkmalshandlungen** (Regeln in `operationen.md`):
 
+- `_shell_prints` gruppiert Schalen einmal; Abbruch zwischen Blöcken und Ergebnissen.
+
 - Hohlraumwerkzeuge entscheiden Richtung und Gültigkeit über das körpernahe
   `signed_volume`; Schwerpunkt und Trägheit werden dafür nicht berechnet.
   `_bore_end_rims` prüft alle Mündungsränder gemeinsam über

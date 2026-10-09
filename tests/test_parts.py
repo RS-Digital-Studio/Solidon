@@ -5064,6 +5064,7 @@ def _rm631_carrier(kind: str, shape: str) -> Any:
         "block12": [(40.0, 40.0, 12.0, 0.0, 0.0)],
         "block40": [(40.0, 40.0, 40.0, 0.0, 0.0)],
         "thin3": [(40.0, 40.0, 3.0, 0.0, 0.0)],
+        "touching": [(40.0, 40.0, 6.0, 0.0, 0.0), (40.0, 40.0, 6.0, 0.0, 6.0)],
         "clamp": [
             (40.0, 40.0, 8.0, 0.0, 0.0),
             (40.0, 40.0, 8.0, 0.0, 12.0),
@@ -5078,6 +5079,11 @@ def _rm631_carrier(kind: str, shape: str) -> Any:
             edit.moved(edit.box(width, depth, height), (0.0, y, z))
             for width, depth, height, y, z in blocks
         ]
+        if shape == "touching":
+            # Zwei Platten in einem Objekt, als Verbund — wie eine eingelesene Baugruppe.
+            from app.core.knowledge.parts.exact import compound
+
+            return SceneObject(id="obj_1", name="Träger", mesh=compound(*solids), kind="brep")
         solid = solids[0] if len(solids) == 1 else edit.unified(edit.boolean("union", solids))
         return SceneObject(id="obj_1", name="Träger", mesh=solid, kind="brep")
     import trimesh
@@ -5087,6 +5093,10 @@ def _rm631_carrier(kind: str, shape: str) -> Any:
         box = trimesh.creation.box(extents=(width, depth, height))
         box.apply_translation((0.0, y, z + height / 2.0))
         meshes.append(MeshData.of(box))
+    if shape == "touching":
+        # Zwei Schalen, die sich berühren — nicht vereinigt.
+        joined = trimesh.util.concatenate([entry.raw for entry in meshes])
+        return SceneObject(id="obj_1", name="Träger", mesh=MeshData.of(joined))
     mesh = meshes[0] if len(meshes) == 1 else as_mesh_data(boolean("union", meshes).mesh)
     return SceneObject(id="obj_1", name="Träger", mesh=mesh)
 
@@ -5269,10 +5279,13 @@ def test_a_nut_trap_laid_in_from_below_does_not_sit_across_a_bore(kind: str) -> 
             "insert_nut_trap", drilled, profile, at_feature=hole, size="M3", direction="bottom"
         )
     assert refusal.value.constraint == "feasible"
+    assert refusal.value.field == "direction", "Nachprüfung G, N-9: der Cursor gehört ins Feld"
     assert refusal.value.suggestions
 
 
-def _drilled_plate(kind: str, height: float, diameter: float) -> tuple[Any, str]:
+def _drilled_plate(
+    kind: str, height: float, diameter: float, depth: float = 0.0
+) -> tuple[Any, str]:
     """Platte 40 × 40 × ``height`` mit einer Bohrung durch die Mitte, ausgewertet, und ihr Name."""
     from app.core.bootstrap import load_operations
 
@@ -5293,7 +5306,7 @@ def _drilled_plate(kind: str, height: float, diameter: float) -> tuple[Any, str]
             OperationDraft(
                 op="drill_hole",
                 inputs=("obj_1",),
-                params={"diameter": diameter, "depth": 0.0, "z": height, "compensate": False},
+                params={"diameter": diameter, "depth": depth, "z": height, "compensate": False},
             ),
         ],
     )
@@ -5380,6 +5393,90 @@ def test_a_cable_gland_in_a_slightly_thicker_wall_cuts_through_the_rest(kind: st
     bore = result.outputs[0].features["cable_gland_bore_1"]
     assert bore.params["through"] is True
     assert not [finding for finding in result.findings if finding.code == "parts.wall_thicker"]
+
+
+@pytest.mark.parametrize("kind", ["mesh", "brep"])
+@pytest.mark.parametrize("diameter", [6.0, 2.5])
+def test_a_nut_trap_at_a_blind_bore_bores_on_through_the_part(kind: str, diameter: float) -> None:
+    """Nachprüfung G, N-1: An einer Sackbohrung blieb unter ihrem Boden alles stehen.
+
+    Platte 20 mm, Sackbohrung 6 mm tief von oben, die Mutternfalle M3 an ihr.
+    Ø 6 (weiter als das Durchgangsloch Ø 3,4): Der Ring lag knapp unter der
+    Tasche in der Luft der Bohrung, gebohrt wurde nichts, erklärt z = 14 bis 20,
+    Sackloch. Ø 2,5 (enger): gebohrt richtig, erklärt aber nur z = 0 bis 14,
+    weil die Kürzung auf der Achse in der alten Bohrung Luft sah. Soll: In
+    beiden Fällen z = 0 bis 20, als Durchgang, ohne Material in der Achse.
+    """
+    from tests.helpers import run_operation
+
+    drilled, hole = _drilled_plate(kind, 20.0, diameter, depth=6.0)
+    profile = profiles.make_profile("centauri-carbon-2", "petg")
+    result = run_operation("insert_nut_trap", drilled, profile, at_feature=hole, size="M3")
+    carrier = result.outputs[0]
+    bore = carrier.features["nut_trap_bore_1"]
+    ends, _axis = _bore_ends(bore)
+    assert sorted(float(end[2]) for end in ends) == pytest.approx([0.0, 20.0], abs=0.05)
+    assert bore.params["through"] is True
+    assert not any(_material_on_the_axis(carrier, [1.0, 6.0, 10.0, 13.0]))
+
+
+@pytest.mark.parametrize("kind", ["mesh", "brep"])
+def test_a_nut_trap_on_two_touching_plates_bores_through_both(kind: str) -> None:
+    """Nachprüfung G, N-2: An zwei sich berührenden Platten endete das Schraubenloch dazwischen.
+
+    Zwei Platten 40 × 40 × 6 in einem Objekt, die sich bei z = 6 berühren — wie
+    eine eingelesene Baugruppe. Vor RM-631 bohrte der feste Stummel durch beide;
+    danach endete die Bohrung an der Berührfläche, die untere Platte blieb zu.
+    Eine Berührung ist kein Spalt. Soll: z = 0 bis 12, durch beide.
+    """
+    result = _rm631_insert(kind, "touching", "nut_trap", 12.0, size="M3", slide=0.0)
+    carrier = result.outputs[0]
+    bore = carrier.features["nut_trap_bore_1"]
+    ends, _axis = _bore_ends(bore)
+    assert sorted(float(end[2]) for end in ends) == pytest.approx([0.0, 12.0], abs=0.05)
+    assert bore.params["through"] is True
+    assert not any(_material_on_the_axis(carrier, [1.0, 3.0, 5.5, 7.0, 9.0]))
+
+
+@pytest.mark.parametrize("kind", ["mesh", "brep"])
+def test_a_nut_trap_at_the_edge_says_that_its_screw_hole_is_missing(kind: str) -> None:
+    """Nachprüfung G, N-6: Am Rand fiel das Schraubenloch weg, gesagt wurde nur die Kante.
+
+    Bei x = 18,8 ragt das Schraubenloch 0,5 mm aus der Seitenwand des 40-mm-
+    Quaders. Die Verlängerung unterbleibt — sie zöge eine Rinne —, und der
+    Kunde las nur „über den Rand“. Soll: ein eigener Befund mit Weg.
+    """
+    result = _rm631_insert(kind, "block12", "nut_trap", 12.0, size="M3", slide=0.0, x=18.8)
+    said = [finding for finding in result.findings if finding.code == "parts.through_cut_short"]
+    assert len(said) == 1
+    assert [action.id for action in said[0].suggestions] == ["correct_input"]
+    inside = _rm631_insert(kind, "block12", "nut_trap", 12.0, size="M3", slide=0.0, x=18.0)
+    assert not [f for f in inside.findings if f.code == "parts.through_cut_short"]
+
+
+@pytest.mark.parametrize("kind", ["mesh", "brep"])
+@pytest.mark.parametrize("slide", [0.0, 2.0])
+def test_a_nut_trap_laid_in_from_below_needs_a_slide_past_its_corners(
+    kind: str, slide: float
+) -> None:
+    """Nachprüfung G, N-5: Mit kurzem Einschubweg ragte die Tasche über die Fläche.
+
+    Von unten eingelegt liegt die Mitte der Tasche so tief wie der Einschubweg;
+    die Ecken reichen die halbe Eckweite (bei M3 3,3 mm) darüber. Bei 0 lag die
+    Schraube in der Fläche, bei 2 ragte die Tasche 1,3 mm heraus, ohne Befund.
+    Soll: eine Absage am Feld *Einschubweg*; bei 4 mm rechnet es.
+    """
+    from app.core.errors import ValidationError
+
+    with pytest.raises(ValidationError) as refusal:
+        _rm631_insert(kind, "block40", "nut_trap", 40.0, size="M3", slide=slide, direction="bottom")
+    assert refusal.value.field == "slide"
+    assert refusal.value.constraint == "feasible"
+    assert refusal.value.suggestions
+    made = _rm631_insert(
+        kind, "block40", "nut_trap", 40.0, size="M3", slide=4.0, direction="bottom"
+    )
+    assert as_mesh_data(made.outputs[0].mesh).bounds.maximum[2] == pytest.approx(40.0, abs=0.02)
 
 
 def test_head_room_cuts_below_the_mouth_not_above_it(profile: Profile) -> None:

@@ -80,17 +80,29 @@ def shown_bores(spec: PartSpec, produced: PartResult, *, upward: bool) -> list[S
 
 def with_shown_bores(spec: PartSpec, produced: PartResult, form: Any) -> Any:
     """``form`` mit den gezeigten Fortsetzungen — im Kern, den ``building`` gewählt hat."""
-    from app.core.geom.mesh import as_mesh_data
     from app.core.knowledge.parts.build import union
 
     if not spec.reaches_through:
         return form
-    upward = float(as_mesh_data(form).bounds.maximum[2]) > BOOLEAN_OVERLAP + EPS_GEOM
+    upward = builds_upward(form)
     pieces = [
         cylinder_along(entry.diameter, entry.start, entry.direction, 0.0, entry.length)
         for entry in shown_bores(spec, produced, upward=upward)
     ]
     return union(form, *pieces) if pieces else form
+
+
+def builds_upward(form: Any) -> bool:
+    """Ob ein Baustein über seine Mündung hinaus nach +Z baut — die Mutternfalle.
+
+    **Die eine Spiegelungsentscheidung** (``ops._extends_above_mouth``): Ein
+    abtragender Baustein, der so baut, wird an einer Fläche gespiegelt, und
+    seine Mündung liegt dann bei -Z. Operation, Anzeige und SCAD fragen hier,
+    statt den Ausdruck je für sich herzuleiten (Nachprüfung G, N-8).
+    """
+    from app.core.geom.mesh import as_mesh_data
+
+    return float(as_mesh_data(form).bounds.maximum[2]) > BOOLEAN_OVERLAP + EPS_GEOM
 
 
 def cylinder_along(diameter: float, centre: Vec3, axis: Vec3, start: float, length: float) -> Any:

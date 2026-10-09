@@ -918,24 +918,60 @@ _SUBTRACTIVE_PARTS: Final = (
 )
 
 
+#: Die anbauenden Bausteine, deren Bohrungen die Karte *Stift für Bohrung* anbietet
+#: (Nachprüfung G, N-4: Review 1 verlangte den Kartentest über alle, gebaut war er über
+#: die abtragenden).
+_ADDING_PARTS_WITH_BORES: Final = (
+    "barrel_hinge",
+    "bayonet",
+    "detent_disc",
+    "fit_ladder",
+    "hinge_eye",
+    "holder_ring",
+    "holder_shelf",
+    "holder_u",
+    "lug",
+    "pipe_clamp",
+    "rod_connector",
+    "wall_mount",
+)
+
+
 def test_the_list_of_subtractive_parts_is_complete() -> None:
-    """Die Liste oben ist die des Registers — ein neuer Baustein fällt hier auf."""
+    """Die Listen oben sind die des Registers — ein neuer Baustein fällt hier auf."""
     from app.core.knowledge.parts.registry import PARTS
+    from app.core.perceive.actions import OFFERED_AT_A_PART
 
     assert {spec.name for spec in PARTS.all() if spec.subtractive} == set(_SUBTRACTIVE_PARTS)
+    offered = {
+        spec.name
+        for spec in PARTS.all()
+        if not spec.subtractive
+        and not spec.separate_from_host
+        and any(
+            feature.kind in OFFERED_AT_A_PART["pin_for_bore"]
+            and "pin_for_bore" not in not_offered_at(feature)
+            for feature in spec.fn(spec.params()).features.values()
+        )
+    }
+    assert offered == set(_ADDING_PARTS_WITH_BORES)
 
 
 @pytest.mark.parametrize("kind", ["mesh", "brep"])
-@pytest.mark.parametrize("part", _SUBTRACTIVE_PARTS)
+@pytest.mark.parametrize("width", [30.0, 40.0])
+@pytest.mark.parametrize("part", [*_SUBTRACTIVE_PARTS, *_ADDING_PARTS_WITH_BORES])
 def test_every_offered_pin_at_a_part_bore_stands_in_the_body_or_says_why(
-    profile: Profile, kind: str, part: str
+    profile: Profile, kind: str, width: float, part: str
 ) -> None:
     """Review G, F2: Die Karte bot *Stift für Bohrung* an Bausteinbohrungen an, an
     denen er Unsinn baute.
 
     An der Einführfase der Einpressbuchse eine Scheibe Ø 4,75 × 0,5, an
     Tasche und Schraubenloch einer Mutternfalle Stifte über dem Körper, 12,5 mm
-    aus dem Teil heraus — ohne Befund. Soll: An jeder Bohrung, an der die Karte
+    aus dem Teil heraus — ohne Befund. An der Führung der Rastdrehscheibe, die
+    den Pilzzapfen umschließt, verschmolz der Stift am Netz mit 84,6 mm³
+    (Nachprüfung G, N-4): Die Achse liegt dort im Material, und am Netz galt
+    eine unentscheidbare Zählung als Luft. Soll: An jeder Bohrung, an der die Karte
     ihn anbietet, steht der Stift lose im Körper (dicht, ohne gemeinsames
     Volumen, überall das halbe Spiel entfernt, innerhalb seiner Grenzen),
     oder die Operation sagt ab, mit einem Weg.
@@ -951,7 +987,7 @@ def test_every_offered_pin_at_a_part_bore_stands_in_the_body_or_says_why(
         [
             OperationDraft(
                 op="create_box" if kind == "mesh" else "create_brep_box",
-                params={"width": 30.0, "depth": 30.0, "height": 12.0},
+                params={"width": width, "depth": width, "height": 12.0},
             ),
             OperationDraft(op=f"insert_{part}", inputs=("obj_1",), params={"z": 12.0}),
         ],

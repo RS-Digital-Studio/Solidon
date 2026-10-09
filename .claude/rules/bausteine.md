@@ -75,7 +75,8 @@ Bauteil und nimmt nichts weg.
   Stelle Luft liegt, wird sie gespiegelt (`ops._builds_upward_on_a_face`,
   `_air_above`, RM-591). Gefragt wird knapp darüber, nicht auf halber Höhe
   des Bausteins. *Von unten eingelegt* führt ihr Schlitz von der Mündung zur
-  Tasche, die Schraube liegt quer; an einer Bohrung sagt das der Schritt ab.
+  Tasche, die Schraube liegt quer; der Einschubweg reicht mindestens über die
+  halbe Eckweite (`feasible`), an einer Bohrung sagt der Schritt ab.
 - **Eine Einführfase wird als solche erklärt** (`build.bore(lead_in=True)`):
   Sie ist keine Bohrung, in die ein Stift gehört, und die Karte bietet dort
   keinen an (`perceive.actions.not_offered_at`).
@@ -91,11 +92,13 @@ Bauteil und nimmt nichts weg.
   öffnet `wall` (`ops._wall_thicker`, RM-633).
 - **Eine Bohrung ohne eigene Tiefe geht durch den ganzen Träger**
   (`PartSpec.reaches_through`, `ops._reaching_through`, RM-631): Der Baustein
-  baut sie nur über seine Strecke, der Schritt verlängert sie an jedem Ende bis
-  zum ersten Austritt aus dem Material — nie über die Fläche hinaus in einen
-  Spalt. Nur wo der ganze Rand ihres Querschnitts im Material liegt: Eine Achse
-  in einer Fläche zöge sonst eine Rinne durch das Teil. In einer Bohrung muss
-  sie in deren Achse liegen. Ohne Träger — Katalogbild, Platzierungsgeist,
+  baut sie nur über seine Strecke, der Schritt verlängert sie an jedem Ende
+  durch Material, berührende Fugen und die Luft der Bohrung, in der er sitzt,
+  bis zur ersten echten Luft — nie über die Fläche hinaus in einen Spalt
+  (`_run_through`). Nur wo der ganze Rand ihres Querschnitts Material erreicht:
+  Eine Achse in einer Fläche oder ein Loch am Rand zöge sonst eine Rinne; dann
+  sagt es `parts.through_cut_short`. In einer Bohrung muss sie in deren Achse
+  liegen. Ihre Länge ist gemessen, die Kürzung auf der Achse lässt sie aus. Ohne Träger — Katalogbild, Platzierungsgeist,
   SCAD — zeigt `through.with_shown_bores` sie drei Durchmesser weit, nie aus
   der Mündung: Sonst läge sie unsichtbar im Baustein (RM-632).
 - **Schräg zur Fläche gesetzt, öffnet er trotzdem bis über sie.** Die Richtung

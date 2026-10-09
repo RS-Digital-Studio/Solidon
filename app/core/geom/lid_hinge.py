@@ -546,7 +546,9 @@ def _along(body: shapes.Form, axis: Vec3, centre: Vec3) -> shapes.Form:
     # dort, wo die Senkung beginnt, und deren Mündung liegt am weiten Rand (RM-552).
     # 7: Absage, wo der Hohlraum nicht im Körper liegt, und an der Einführfase; der
     # glatte Stift endet vor Material um das halbe Spiel (Review G, F2).
-    cache_version="7",
+    # 8: Ein unentscheidbarer Punkt auf der Achse fragt daneben nach, statt als
+    # Luft zu gelten — an der Rastdrehscheibe verschmolz der Stift (N-4).
+    cache_version="8",
     doc=_(
         "Baut einen losen Stift, der in diese Bohrung passt, samt Senkkopf, Zylinderkopf oder "
         "Gewinde. Er ist um das Spiel aus dem Materialprofil kleiner. Am Klappdeckel mit Stift "

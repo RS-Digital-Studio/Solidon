@@ -1130,6 +1130,28 @@ NUT_TRAP_SINKS_WITHOUT_A_FACE = PartChange(
 )
 
 
+def _nut_trap_above_the_face(params: NutTrapParams) -> TranslatableText | None:
+    """Von unten eingelegt muss die Tasche ganz unter der Mündung liegen (Nachprüfung G, N-5).
+
+    Ihre Mitte liegt so tief wie der Einschubweg, und die Ecken des Sechskants
+    reichen die halbe Eckweite darüber hinaus. Kürzer ragte die Tasche über die
+    Fläche, bei null lag die Schraube in ihr — das Bild, das RM-631 beheben
+    sollte. Die erklärte Bedingung steht am Vertrag, der Bereichstest fährt diese
+    Ecken als Ausschluss.
+    """
+    if params.direction != "bottom":
+        return None
+    entry = _nut_of(params.size, params.diameter)
+    corner = (entry.width + params.play) / math.sqrt(3.0)
+    if params.slide >= corner - EPS_GEOM:
+        return None
+    return _(
+        "Von unten eingelegt braucht die Mutter einen Einschubweg von mindestens {length}, "
+        "sonst ragt die Tasche über die Fläche.",
+        length=format_length(corner),
+    )
+
+
 @register_part(
     name="nut_trap",
     title=_("Mutternfalle"),
@@ -1141,6 +1163,7 @@ NUT_TRAP_SINKS_WITHOUT_A_FACE = PartChange(
     at_hole_advice=nut_trap_advice,
     features=["pocket", "bore"],
     reaches_through=("bore_1",),
+    feasible=lambda raw: _nut_trap_above_the_face(cast(NutTrapParams, raw)),
     wall=WallRequirement.not_applicable("Der Baustein ist ein abtragender Werkzeugkörper."),
     feature_requirements=(
         FeatureRequirement("pocket"),
@@ -1167,6 +1190,9 @@ NUT_TRAP_SINKS_WITHOUT_A_FACE = PartChange(
 )
 def nut_trap(raw: BaseParams) -> PartResult:
     params = cast(NutTrapParams, raw)
+    problem = _nut_trap_above_the_face(params)
+    if problem is not None:
+        raise ValidationError("slide", problem, constraint="feasible")
     entry = _nut_of(params.size, params.diameter)
     width = entry.width + params.play
     height = entry.height + params.play / 2.0

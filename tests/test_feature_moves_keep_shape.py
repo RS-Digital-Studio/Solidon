@@ -2824,6 +2824,95 @@ def test_an_exact_pin_that_only_touches_material_says_so(profile: Profile, op: s
     assert made.is_watertight and made.component_count == 1
 
 
+def test_shell_prints_keep_measured_values_after_grouping() -> None:
+    """N-7: Die Gruppierung erhält Volumen, Fläche und Hülle auch bei vermischten Schalen."""
+    import trimesh
+
+    boxes = []
+    expected = []
+    for index, size in enumerate(((2.0, 3.0, 4.0), (4.0, 5.0, 6.0), (6.0, 7.0, 8.0))):
+        body = trimesh.creation.box(extents=size)
+        body.apply_translation((index * 20.0, 0.0, 0.0))
+        boxes.append(body)
+        width, depth, height = size
+        expected.append(
+            (
+                width * depth * height,
+                2.0 * (width * depth + width * height + depth * height),
+                body.bounds[0],
+                body.bounds[1],
+            )
+        )
+    body = trimesh.util.concatenate(boxes)
+    order = np.arange(len(body.faces)).reshape(3, -1).T.reshape(-1)
+    labels = np.repeat(np.asarray([2, 5, 8], dtype=np.int64), 12)[order]
+    body.faces = body.faces[order]
+    result = prepare_ops._shell_prints(
+        MeshData.of(body), labels, np.asarray([8, 2, 5], dtype=np.int64)
+    )
+    for found, wanted in zip(result, (expected[2], expected[0], expected[1]), strict=True):
+        assert found[0] == pytest.approx(wanted[0])
+        assert found[1] == pytest.approx(wanted[1])
+        assert np.array_equal(found[2], wanted[2])
+        assert np.array_equal(found[3], wanted[3])
+
+
+@pytest.mark.parametrize("limit", [1, 2, 3, 4])
+def test_shell_prints_can_be_cancelled_between_batches(limit: int) -> None:
+    """N-7: Auch die sortierte Teileprüfung endet am Abbruch, bevor sie ein Ergebnis liefert."""
+    import trimesh
+
+    from app.core.errors import OperationCancelled
+    from tests.helpers import CountingToken
+
+    body = MeshData.of(trimesh.creation.box(extents=(2.0, 3.0, 4.0)))
+    token = CountingToken(limit)
+    with pytest.raises(OperationCancelled):
+        prepare_ops._shell_prints(
+            body, np.zeros(body.triangle_count, dtype=np.int64), np.asarray([0]), token
+        )
+    assert token.calls == limit
+
+
+def test_an_exact_pin_pattern_whose_copies_only_touch_says_so(profile: Profile) -> None:
+    """Nachprüfung G, N-3: *Merkmal vervielfachen* fragte RM-597 nicht.
+
+    Platte 60 × 40 × 8 mit Zapfen Ø 6 × 6, drei Plätze im Abstand eines
+    Durchmessers: Die Kopien berühren sich auf Mantellinien, der Körper war
+    gültig, sein Zwilling offen (zwei mehrfache Kanten), und gesagt wurde nur
+    „vervielfacht“. *Merkmal verdoppeln* sagt in derselben Lage ab. Soll: dieselbe
+    Absage; im Abstand von anderthalb Durchmessern rechnet es, dicht und als ein Teil.
+    """
+    from app.core.brep import edit
+    from app.core.brep.features import features_of
+    from app.core.errors import GeometryError
+
+    load_operations()
+    exact_kernel()
+    body = edit.box(60.0, 40.0, 8.0)
+    body = edit.unified(
+        edit.boolean("union", [body, edit.moved(edit.cylinder(6.0, 6.0), (-15.0, 0.0, 8.0))])
+    )
+    entry = SceneObject("obj_1", "Platte", body, kind="brep", features=features_of(body))
+    pin = next(name for name, feature in entry.features.items() if feature.kind == "pin")
+    with pytest.raises(GeometryError) as caught:
+        _raw(
+            "pattern_feature",
+            entry,
+            profile,
+            at_features=(pin,),
+            kind="linear",
+            count=3,
+            spacing=6.0,
+        )
+    assert [action.id for action in caught.value.suggestions] == ["correct_input", "cancel"]
+    apart = _raw(
+        "pattern_feature", entry, profile, at_features=(pin,), kind="linear", count=3, spacing=9.0
+    ).outputs[0]
+    made = as_mesh_data(apart.mesh)
+    assert made.is_watertight and made.component_count == 1
+
+
 @pytest.mark.parametrize("kernel", ["mesh", "brep"])
 @pytest.mark.parametrize("kind", ["hole", "cone"])
 def test_the_card_tilts_a_countersink_only_as_far_as_it_stays_one(

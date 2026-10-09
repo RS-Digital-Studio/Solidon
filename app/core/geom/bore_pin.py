@@ -218,14 +218,14 @@ def check_in_the_body(
     den Enden. Jede muss im Hüllquader des Körpers liegen und in Luft
     (``perceive.features._point_inside_shell``, das an Kanten die Richtung
     wechselt — eine bloße Zählung der Treffer zählt eine geteilte Kante
-    mehrfach); eine unentscheidbare Zählung gilt als Luft. **Eine Wand in
+    mehrfach); unentscheidbar wird quer daneben nachgefragt. **Eine Wand in
     Reichweite** (:func:`room_beyond`, acht Strahlen von der Achse nach außen)
     braucht nur eine der Stellen: Die Bohrung eines Deckelscharniers läuft durch
     Augen mit Lücken dazwischen, und in der Lücke steht keine Wand — dort sagte
     *Stift für Bohrung* am Klappdeckel ab. Eine Bohrung, die frei neben dem
     Körper schwebt, hat an keiner Stelle eine.
     """
-    from app.core.perceive.features import _point_inside_shell, _triangle_bounds
+    from app.core.perceive.features import _triangle_bounds, point_in_shell
 
     triangles = np.asarray(mesh.raw.triangles, dtype=np.float64)
     bounds = _triangle_bounds(triangles) if mesh.is_watertight else None
@@ -242,7 +242,13 @@ def check_in_the_body(
             radius = section.inner + (section.outer - section.inner) * share
             point = origin + axis * place
             outside = bool((point < lowest).any() or (point > highest).any())
-            solid = bounds is not None and _point_inside_shell(point, triangles, bounds) is True
+            # Unentschieden wird daneben nachgefragt (``point_in_shell``): Auf der
+            # Achse der Rastdrehscheibe lag jeder Punkt über Kanten des
+            # Drehkörpers, und das Netz sagte Luft, wo der exakte Kern Material
+            # sah — der Stift verschmolz mit dem Zapfen (Nachprüfung G, N-4).
+            solid = bounds is not None and point_in_shell(
+                point, triangles, bounds, undecided=False, axis=axis
+            )
             if outside or solid:
                 raise _not_in_the_body(section.feature or value, value)
             walled = walled or (

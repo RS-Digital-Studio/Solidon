@@ -34,9 +34,7 @@ HEADER = """// {title} ({name}, Version {version})
 
 def to_scad(spec: PartSpec, params: BaseParams | None = None) -> str:
     """Ein Baustein als OpenSCAD-Modul."""
-    from app.core.geom.boolean import BOOLEAN_OVERLAP
-    from app.core.knowledge.parts.through import shown_bores
-    from app.core.units import EPS_GEOM
+    from app.core.knowledge.parts.through import builds_upward, shown_bores
 
     values = params or spec.params()
     produced = spec.fn(values)
@@ -59,8 +57,7 @@ def to_scad(spec: PartSpec, params: BaseParams | None = None) -> str:
             lines.extend(
                 ["", f"// {advice}", *_module(f"{spec.name}_{suffix}", as_mesh_data(extra.mesh))]
             )
-    upward = float(mesh.bounds.maximum[2]) > BOOLEAN_OVERLAP + EPS_GEOM
-    shown = shown_bores(spec, produced, upward=upward)
+    shown = shown_bores(spec, produced, upward=builds_upward(mesh))
     lines.extend(_shown_module(spec.name, shown))
     lines.extend(["", f"{spec.name}();"])
     if shown:

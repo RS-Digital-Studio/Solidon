@@ -14188,6 +14188,48 @@ def _point_inside_shell(
     return None
 
 
+def point_in_shell(
+    point: np.ndarray,
+    triangles: np.ndarray,
+    bounds: tuple[np.ndarray, np.ndarray],
+    *,
+    undecided: bool,
+    axis: np.ndarray | None = None,
+) -> bool:
+    """Ob ``point`` in der Schale liegt — unentschieden eine Facettenhöhe daneben nachgefragt.
+
+    :func:`_point_inside_shell` kann an geteilten Kanten und Ecken nicht zählen:
+    Auf der Achse eines Drehkörpers oder eines mittig gesetzten Bausteins liegt
+    jeder Punkt über solchen Kanten. Dann fragt es
+    :data:`~app.core.units.MAX_FACET_SAG` daneben nach — quer zu ``axis``, wo
+    der Aufrufer eine Richtung hat, deren Höhe bleiben soll, sonst entlang der
+    Koordinatenachsen. Bleibt es offen, gilt ``undecided``: Der Aufrufer sagt,
+    welcher Irrtum der harmlose ist.
+
+    **Eine Frage, nicht vier** (Nachprüfung G, N-4): ``bore_pin`` wertete
+    unentschieden als Luft, ``parts.ops`` fragte daneben nach, ``_air_above``
+    nahm Material, ``_void_holds`` „darin“ — an der Rastdrehscheibe sagte das
+    Netz deshalb Luft, wo der exakte Kern Material sah.
+    """
+    answer = _point_inside_shell(point, triangles, bounds)
+    if answer is not None:
+        return answer
+    if axis is not None:
+        along = np.asarray(axis, dtype=np.float64)
+        helper = (1.0, 0.0, 0.0) if abs(float(along[0])) < 0.7071067811865476 else (0.0, 1.0, 0.0)
+        across = np.cross(along, np.asarray(helper, dtype=np.float64))
+        across /= float(np.linalg.norm(across, axis=0))
+        beside = np.cross(along, across)
+        offsets: list[np.ndarray] = [across, beside, -across, -beside]
+    else:
+        offsets = [*np.eye(3), *(-np.eye(3))]
+    for offset in offsets:
+        answer = _point_inside_shell(point + offset * units.MAX_FACET_SAG, triangles, bounds)
+        if answer is not None:
+            return answer
+    return undecided
+
+
 def _shells_inside_the_material(
     body: trimesh.Trimesh,
     components: Sequence[Any],

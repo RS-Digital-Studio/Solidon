@@ -37,6 +37,10 @@ denselben Überschriften: `konzepte/begruendungen/karte-app-core-perceive.md`.
 
 ## Der Weg durch die Erkennung
 
+`point_in_shell` fragt einen unentscheidbaren Punkt quer neben seiner Achse
+nach. Bausteinplatzierung, Stiftprüfung und Hohlraumschutz verwenden dieselbe
+Frage; der Aufrufer legt fest, welche Antwort ohne eindeutigen Beleg schützt.
+
 - **Konkurrierende Rundformen brauchen vollständige Nachweise**: Ein Zylinder
   beendet die Frage vor dem Kegellauf nur, wenn seine Originalecken bis
   `EPS_GEOM` und seine senkrechten Normalen bis `EPS_ANGLE` stimmen.

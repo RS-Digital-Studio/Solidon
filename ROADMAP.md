@@ -96,6 +96,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-541 — Der Skizzenlöser landet auf dem Intel-Mac im anderen Zweig einer Winkelbedingung](#rm-541) | Geometrie, Erkennung und Druckvorbereitung | Gefunden mit RM-531 (06.10.): 135° statt 45° unter macOS Intel; offen die Rechnung in Verschiebungen und ihre Wirkung auf unterbestimmte Skizzen |
 | [RM-542 — Die fünf offenen Entscheidungen der Erstkonfiguration](#rm-542) | Geometrie, Erkennung und Druckvorbereitung | Gefunden beim Umräumen der Konzepte (RM-099, 06.10.): nur im Konzept geführt; offen der Abgleich mit RM-281 und Roberts Entscheidung |
 | [RM-568 — Merkmalerkennung und die übrigen langen Wege schneller machen](#rm-568) | Geometrie, Erkennung und Druckvorbereitung | Robert, 08.10.: Profil je Stufe an den Korpusmodellen, die teuersten Stellen zuerst; Budget §31 |
+| [RM-691 — Stift am Schlüsselloch der Halter hat je Kern eine andere Form](#rm-691) | Geometrie, Erkennung und Druckvorbereitung | Ringhalter und Ablage: am Netz glatt, exakt mit Kopf; Hohlraumkette angleichen und beide Kerne geometrisch gegenprüfen |
 | [RM-070 — SpaceMouse auf macOS und Linux am echten Gerät abnehmen](#rm-070) | Bedienung und Darstellung | Die Rampe ist stetig und getestet, die Bildrate an 815 104 Dreiecken gemessen (`7ff34c67`: 16,7 → 8,7 ms im Median); offen bleiben Linux, die 3DxWare-Mausemulation, das Gerät selbst und die Rampe im Skizzenmodus (aus RM-183) |
 | [RM-204 — Ein Merkmalklick baut alle Handlungen des Fensters neu](#rm-204) | Bedienung und Darstellung | Abnahme am echten Fenster beim Release (RM-213) |
 | [RM-547 — Nach „Reparieren und erneut versuchen“ heißt ein weiterrechnender Schritt „gelöscht“](#rm-547) | Bedienung und Darstellung | Entschieden (Claude, Produktabwägung): wie ein beim Umbau neu gefasster Schritt behandeln, in Verlauf und Steckbrief |
@@ -3206,6 +3207,19 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   Stellen zuerst, gemessen in CPU-Zeit ohne Fremdlast. **Abnahme:** Messbericht vorher und nachher
   je Stufe; Leistungstests (`pytest -m performance`, Budget §31) mit neuen, engeren Zielwerten für
   das Erreichte; Ergebnisse unverändert (Korpustests grün, gleiche Merkmale).
+
+<a id="rm-691"></a>
+- [ ] **RM-691 — Stift am Schlüsselloch der Halter hat je Kern eine andere Form.**
+  Nachprüfung von Paket G, N-4 (09.10.2026): Auf einem Quader 40 × 40 × 12 mm
+  `holder_ring` oder `holder_shelf` bei z = 12 setzen, dann *Stift für Bohrung*
+  an `holder_ring_bore_1/2` beziehungsweise `holder_shelf_bore_1/2` aufrufen.
+  Bei PETG entsteht am Netz ein glatter Stift mit 67,19 mm³, exakt ein Stift
+  mit Kopf mit 90,82 mm³. Beide stehen lose und innerhalb der Trägerhülle;
+  die Kopfform ist verschieden. Der Unterschied besteht schon vor Paket G.
+  Offen: Die gelesene Hohlraumkette beider Kerne vergleichen und den Kopf aus
+  derselben Geometrie ableiten. Abnahme: beide Kerne liefern dieselbe Form
+  bis zur Vernetzungsabweichung, ohne gemeinsames Volumen mit dem Träger und
+  mit dem halben Profilspiel; Regression über beide Halter und beide Bohrungen.
 
 ## Bedienung und Darstellung
 

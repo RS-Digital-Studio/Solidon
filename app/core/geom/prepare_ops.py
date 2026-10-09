@@ -1054,10 +1054,12 @@ def _another_part_changed(
         return False
     tolerance = weld_tolerance(float(before.bounds.diagonal))
     labels, _groups = _part_labels(before)
-    wanted = _shell_prints(before, labels, np.unique(labels[foreign]))
+    wanted = _shell_prints(before, labels, np.unique(labels[foreign]), cancelled)
     after_labels, _after_groups = _part_labels(after)
-    present = _shell_prints(after, after_labels, np.unique(after_labels))
+    present = _shell_prints(after, after_labels, np.unique(after_labels), cancelled)
     for volume, area, low, high in wanted:
+        if cancelled is not None:
+            cancelled.raise_if_cancelled()
         if not any(
             abs(volume - other_volume) <= tolerance * max(area, other_area)
             and np.all(np.abs(low - other_low) <= tolerance)
@@ -1069,9 +1071,21 @@ def _another_part_changed(
 
 
 def _shell_prints(
-    mesh: MeshData, labels: NDArray[np.int64], chosen: NDArray[np.int64]
+    mesh: MeshData,
+    labels: NDArray[np.int64],
+    chosen: NDArray[np.int64],
+    cancelled: CancelToken | None = None,
 ) -> list[tuple[float, float, NDArray[np.float64], NDArray[np.float64]]]:
-    """Rauminhalt mit Vorzeichen, Fläche und Hüllquader je Schale ``chosen``."""
+    """Rauminhalt mit Vorzeichen, Fläche und Hüllquader je Schale ``chosen``.
+
+    **Einmal sortiert, nicht je Schale gesucht** (Nachprüfung G, N-7): Die
+    Hüllquader kamen aus ``triangles[labels == label]`` je Schale, also
+    Dreiecke mal Schalen — an 1 500 losen Kugeln mit 480 000 Dreiecken 11,2 s.
+    Jetzt nach Schale sortiert und mit ``reduceat`` je Abschnitt; Minimum und
+    Maximum sind dieselben Zahlen.
+    """
+    if cancelled is not None:
+        cancelled.raise_if_cancelled()
     triangles = np.asarray(mesh.raw.triangles, dtype=np.float64)
     signed = np.einsum("ij,ij->i", triangles[:, 0], np.cross(triangles[:, 1], triangles[:, 2]))
     volumes = np.bincount(labels, weights=signed / 6.0, minlength=int(labels.max()) + 1)
@@ -1080,17 +1094,20 @@ def _shell_prints(
         weights=np.asarray(mesh.raw.area_faces, dtype=np.float64),
         minlength=int(labels.max()) + 1,
     )
+    if cancelled is not None:
+        cancelled.raise_if_cancelled()
+    order = np.argsort(labels, kind="stable")
+    present, first = np.unique(labels[order], return_index=True)
+    if cancelled is not None:
+        cancelled.raise_if_cancelled()
+    lowest = np.minimum.reduceat(triangles.min(axis=1)[order], first, axis=0)
+    highest = np.maximum.reduceat(triangles.max(axis=1)[order], first, axis=0)
+    rows = np.searchsorted(present, np.asarray(chosen, dtype=np.int64))
     prints = []
-    for label in chosen:
-        corners = triangles[labels == label].reshape(-1, 3)
-        prints.append(
-            (
-                float(volumes[label]),
-                float(areas[label]),
-                corners.min(axis=0),
-                corners.max(axis=0),
-            )
-        )
+    for label, row in zip(chosen, rows, strict=True):
+        if cancelled is not None:
+            cancelled.raise_if_cancelled()
+        prints.append((float(volumes[label]), float(areas[label]), lowest[row], highest[row]))
     return prints
 
 
@@ -4513,7 +4530,7 @@ def _void_holds(mesh: MeshData, feature: Feature, triangles: NDArray[np.int64]) 
     unentscheidbare Zählung gilt als darin — eine Absage zu viel ist besser
     als ein still verschmolzenes Teil.
     """
-    from app.core.perceive.features import _point_inside_shell, _triangle_bounds
+    from app.core.perceive.features import _triangle_bounds, point_in_shell
 
     own = np.asarray(feature.face_indices, dtype=np.int64)
     raw = mesh.raw
@@ -4533,7 +4550,7 @@ def _void_holds(mesh: MeshData, feature: Feature, triangles: NDArray[np.int64]) 
     high = shell.reshape(-1, 3).max(axis=0) + FEATURE_OVERLAP
     if not len(points) or (points.min(axis=0) < low).any() or (points.max(axis=0) > high).any():
         return False
-    return _point_inside_shell(points[0], shell, _triangle_bounds(shell)) is not False
+    return point_in_shell(points[0], shell, _triangle_bounds(shell), undecided=True)
 
 
 def _part_labels(mesh: MeshData) -> tuple[NDArray[np.int64], list[NDArray[np.int64]]]:
@@ -5674,7 +5691,9 @@ _NO_MOUTH_TO_GRIP: Final = _(
     # Innengewinde, und jede Zeile der Karte gilt ohne Ausnahme (Review G).
     # 18: ein getrenntes Teil daneben bleibt, wie es war, oder die Handlung
     # sagt ab (RM-596); exakt sagt eine Berührung auf Linie oder Punkt ab (RM-597).
-    cache_version="18",
+    # +1: ein unentscheidbarer Punkt im Lufteinschluss fragt daneben nach
+    # (``point_in_shell``, Nachprüfung G, N-4).
+    cache_version="19",
     title=_("Merkmal verschieben"),
     category="holes",
     params=MoveFeatureParams,
@@ -6052,7 +6071,9 @@ class DuplicateFeatureParams(FeaturePlacementParams):
     # Innengewinde, und jede Zeile der Karte gilt ohne Ausnahme (Review G).
     # 18: ein getrenntes Teil daneben bleibt, wie es war, oder die Handlung
     # sagt ab (RM-596); exakt sagt eine Berührung auf Linie oder Punkt ab (RM-597).
-    cache_version="18",
+    # +1: ein unentscheidbarer Punkt im Lufteinschluss fragt daneben nach
+    # (``point_in_shell``, Nachprüfung G, N-4).
+    cache_version="19",
     title=_("Merkmal verdoppeln"),
     category="holes",
     params=DuplicateFeatureParams,
@@ -6472,8 +6493,9 @@ class _PatternPlace:
     # 9: am Netz findet eine Kopie nicht ihre Vorlage wieder (RM-226).
     # 10: exakt findet sich eine Senkung über ihre Spitze wieder (RM-226).
     # 11: ein getrenntes Teil daneben bleibt, wie es war, oder die Handlung
-    # sagt ab (RM-596).
-    cache_version="11",
+    # sagt ab (RM-596). 12: exakt sagt ein Platz ab, dessen Kopie anderes
+    # Material nur auf einer Linie berührt, wie beim Verdoppeln (RM-597, N-3).
+    cache_version="12",
     title=_("Merkmal vervielfachen"),
     category="holes",
     params=PatternFeatureParams,
@@ -6997,7 +7019,12 @@ def _exact_pattern_result(
             material.append(_exact_place_tool(source, solid, place, faces_bodies, rims))
     placed = solid
     if material:
-        placed = edit.unified(edit.boolean("union", [placed, *material]))
+        # Wie beim Verdoppeln (RM-597): Kopien, die einander oder anderes
+        # Material nur auf einer Mantellinie berühren, ließen den Zwilling offen
+        # — gültiger Körper, zwei mehrfache Kanten, Befund nur „vervielfacht“.
+        placed = _exact_placed_holds(
+            solid, edit.unified(edit.boolean("union", [placed, *material]))
+        )
     hollow = [place for place in kept if is_a_cavity(place.unit.feature)]
     tools = None
     if hollow:
@@ -7271,7 +7298,9 @@ class RemoveFeatureParams(BaseParams):
     # Innengewinde, und jede Zeile der Karte gilt ohne Ausnahme (Review G).
     # 21: ein getrenntes Teil daneben bleibt, wie es war, oder die Handlung
     # sagt ab (RM-596).
-    cache_version="21",
+    # +1: ein unentscheidbarer Punkt im Lufteinschluss fragt daneben nach
+    # (``point_in_shell``, Nachprüfung G, N-4).
+    cache_version="22",
     title=_("Merkmal entfernen"),
     category="holes",
     params=RemoveFeatureParams,
@@ -7511,7 +7540,9 @@ class RotateFeatureParams(BaseParams):
     # Und eine Drehung auf sich selbst fragt am Winkel, nicht am Kosinus (Review G, F3).
     # 15: ein getrenntes Teil daneben bleibt, wie es war, oder die Handlung
     # sagt ab (RM-596); exakt sagt eine Berührung auf Linie oder Punkt ab (RM-597).
-    cache_version="15",
+    # +1: ein unentscheidbarer Punkt im Lufteinschluss fragt daneben nach
+    # (``point_in_shell``, Nachprüfung G, N-4).
+    cache_version="16",
     title=_("Merkmal drehen"),
     category="holes",
     params=RotateFeatureParams,
@@ -8954,7 +8985,9 @@ class ResizeFeatureParams(BaseParams):
     # Innengewinde, und jede Zeile der Karte gilt ohne Ausnahme (Review G).
     # 24: ein getrenntes Teil daneben bleibt, wie es war, oder die Handlung
     # sagt ab (RM-596); exakt sagt eine Berührung auf Linie oder Punkt ab (RM-597).
-    cache_version="24",
+    # +1: ein unentscheidbarer Punkt im Lufteinschluss fragt daneben nach
+    # (``point_in_shell``, Nachprüfung G, N-4).
+    cache_version="25",
     title=_("Merkmal ändern"),
     category="holes",
     params=ResizeFeatureParams,
@@ -9808,7 +9841,9 @@ OPEN_BODY_DETAIL: Final = _(
     # Innengewinde, und jede Zeile der Karte gilt ohne Ausnahme (Review G).
     # 22: ein getrenntes Teil daneben bleibt, wie es war, oder die Handlung
     # sagt ab (RM-596).
-    cache_version="22",
+    # +1: ein unentscheidbarer Punkt im Lufteinschluss fragt daneben nach
+    # (``point_in_shell``, Nachprüfung G, N-4).
+    cache_version="23",
     title=_("Bohrung ändern"),
     category="holes",
     params=ResizeHoleParams,
@@ -10534,7 +10569,9 @@ SLOT_FEATURE_RENAMED: Final = _(
     # 19: sagt ab, wo die Karte die Zeile sperrt, mit ihrem Satz (RM-548).
     # 20: jeder Hohlraum fragt nach einem getrennten Teil, auch Kugelpfanne, Kehle und
     # Innengewinde, und jede Zeile der Karte gilt ohne Ausnahme (Review G).
-    cache_version="20",
+    # +1: ein unentscheidbarer Punkt im Lufteinschluss fragt daneben nach
+    # (``point_in_shell``, Nachprüfung G, N-4).
+    cache_version="21",
     # **Kein „Bohrung zum Langloch".** Der Titel stand so, solange die
     # Operation nur an einer Bohrung galt; seit die Erkennung Langlöcher findet
     # (:mod:`app.core.perceive.slots`), gilt sie auch an einem und hieße dort
@@ -18927,7 +18964,9 @@ class PlugParams(BaseParams):
     # (RM-545, Review G).
     # 9: ein getrenntes Teil daneben bleibt, wie es war, oder die Handlung
     # sagt ab (RM-596).
-    cache_version="9",
+    # +1: ein unentscheidbarer Punkt im Lufteinschluss fragt daneben nach
+    # (``point_in_shell``, Nachprüfung G, N-4).
+    cache_version="10",
     title=_("Bohrung verschließen"),
     category="holes",
     params=PlugParams,
