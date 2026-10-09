@@ -165,15 +165,16 @@ Dialoge.
   ist. Jede gefundene Leistungs- oder Speicherverbesserung wird umgesetzt,
   solange die Ergebnisse gleich bleiben (Messung vorher und nachher, Test).
 - **Kleine Schritte, je Schritt nur die betroffenen Tests**
-  (`tools/affected_tests.py` leitet sie aus dem Importgraphen ab). Das
-  Entwicklungstor — alle Tests ohne Fenster, Renderer und Leistung, ruff, format, mypy —
-  läuft **vor dem Commit**, nicht nach jedem Schritt (Entscheidung Robert). Ein
-  Schritt, der seine Tests rot lässt, wird nicht auf den nächsten gestapelt.
+  (`tools/affected_tests.py` leitet sie aus dem Importgraphen ab), auf Paket-
+  und Fixzweigen auch vor dem Commit, dazu ruff, format, mypy. Das
+  Entwicklungstor — alle Tests ohne Fenster, Renderer und Leistung — läuft
+  einmal **vor dem Merge nach main** (Entscheidung Robert). Ein Schritt, der
+  seine Tests rot lässt, wird nicht auf den nächsten gestapelt.
 - **Fenster, Renderer und Leistung lokal nur beim Release**; der Push nach main
   löst in der CI alle Prüfungen selbst aus — Kern und Renderer auf allen vier
   Plattformen, dazu die betroffenen Fenster- und Slicertests (`/liefern`). Auf
   Zweigen läuft keine CI (Entscheidung Robert). Ein grüner Entwicklungslauf
-  ersetzt das nicht.
+  ersetzt sie nicht.
 - **Bilder und Handbuch nur beim Release — und nur, was sich geändert hat**
   (Weg in `/erzeugen`).
 - **Die CI-Aufteilung hat einen geprüften Vertrag**
