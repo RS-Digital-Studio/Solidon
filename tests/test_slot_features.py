@@ -2998,6 +2998,42 @@ def test_a_coarse_bore_with_a_cross_bore_stays_free(sections: int) -> None:
     assert hole_is_clear(mesh, holes[0])
 
 
+def test_triangles_lying_in_a_mouth_plane_do_not_break_the_clipping() -> None:
+    """Ein Dreieck, das in der Ebene einer Mündung liegt, bricht die Frage nicht ab.
+
+    ``_clipped_by`` beschneidet jedes Dreieck an den Grenzen zwischen den
+    Mündungen: die erste macht aus ihm ein Viereck, und liegt dieses in der
+    zweiten, entscheidet das Rundungsrauschen das Vorzeichen jeder Ecke.
+    Wechselt es reihum, kreuzt jede Kante, und die Eckenzahl überstieg die
+    Spalten des Felds — ``_closest_to_the_axis`` griff dahinter und warf
+    ``IndexError`` (Review RM-253: an diesen schrägen Grenzen 159 der 20 000
+    Dreiecke). Gefragt wird jede Lage auf einmal; keine darf die Spalten
+    überschreiten.
+    """
+    from app.core.geom.prepare_ops import _clipped_by, _closest_to_the_axis
+
+    def unit(values: tuple[float, float, float]) -> np.ndarray:
+        vector = np.asarray(values, dtype=np.float64)
+        return vector / math.sqrt(float((vector * vector).sum()))
+
+    top, bottom = unit((0.3, 0.1, 1.0)), unit((0.2, -0.4, -1.0))
+    corners = np.random.default_rng(253).uniform(-40.0, 40.0, size=(20_000, 3, 3))
+    lying = corners - ((corners * bottom).sum(axis=-1) - 4.98)[..., None] * bottom
+    above = (lying * top).sum(axis=-1) > 4.98
+    assert (above.any(axis=1) & ~above.all(axis=1)).sum() > 1_000, (
+        "Voraussetzung: die erste Grenze schneidet die Dreiecke"
+    )
+    noise = (lying * bottom).sum(axis=-1) - 4.98
+    assert np.abs(noise).max() < 1e-12 and (noise > 0.0).any() and (noise < 0.0).any(), (
+        "Voraussetzung: die Ecken liegen bis aufs Rauschen in der zweiten Grenze, zu beiden Seiten"
+    )
+
+    polygons, counts = _clipped_by(lying, [(top, 4.98), (bottom, 4.98)])
+
+    assert int(counts.max()) <= polygons.shape[1]
+    assert len(_closest_to_the_axis(polygons, counts, unit((0.0, 0.0, 1.0)))) == len(lying)
+
+
 @pytest.mark.parametrize("kernel", ["mesh", "brep"])
 def test_pulling_a_bore_preserves_a_second_body_beyond_the_measured_depth(
     profile: Profile, kernel: str

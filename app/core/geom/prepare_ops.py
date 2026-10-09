@@ -4122,8 +4122,9 @@ OTHER_PART_IN_THE_BORE: Final = _(
 FILLED_BORE_REASONS: Final = (HOLE_IS_NOT_EMPTY, OTHER_PART_IN_THE_BORE)
 
 #: Wie weit innerhalb des gemessenen Radius :func:`hole_is_clear` nach
-#: Dreiecksmitten sucht — die eigene Wand liegt auf dem Radius, ein Steg,
-#: eine Nabe oder ein Zapfen deutlich darunter.
+#: Dreiecksmitten sucht, und wie weit innerhalb der eigenen Wand
+#: :func:`_reaching_in` nach dem Stück eines Dreiecks — die eigene Wand liegt
+#: auf dem Radius, ein Steg, eine Nabe oder ein Zapfen deutlich darunter.
 _CLEARANCE_MARGIN: Final = 0.02
 
 #: Wie viele Punkte :func:`_without_cavities` entlang der Achse eines fremden
@@ -4897,7 +4898,11 @@ def _clipped_by(
         mask = np.stack((kept, crossing), axis=2).reshape(len(polygons), 2 * width)
         order = np.argsort(~mask, axis=1, kind="stable")[:, : width + 1]
         polygons = np.take_along_axis(out, order[..., None], axis=1)
-        counts = mask.sum(axis=1).astype(np.int64)
+        # **Mehr Ecken gibt es nur im Rundungsrauschen** (Review RM-253): Liegt ein
+        # Vieleck in der Grenzebene, wechselt das Vorzeichen reihum, jede Kante
+        # kreuzt, und die Zählung überstieg die Spalten — die nächste Rechnung
+        # griff dahinter. Was bleibt, sind Randpunkte in Folge, konvex wie zuvor.
+        counts = np.minimum(mask.sum(axis=1), width + 1).astype(np.int64)
     return polygons, counts
 
 
