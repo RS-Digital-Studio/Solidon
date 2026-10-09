@@ -767,7 +767,7 @@ def test_selected_export_keeps_the_selected_filaments_project_profile(
             ]
         )
         settings = handover.bind_slot_profiles(settings, slots)
-    monkeypatch.setattr(main_window, "remembered_setup", lambda *_args: None)
+    monkeypatch.setattr(main_window, "remembered_setup", lambda *_args, **_kwargs: None)
     profile_files = {}
     for name, speed in (("PETG Standard", "5"), ("PETG Schnell", "21")):
         path = tmp_path / f"{name}.json"

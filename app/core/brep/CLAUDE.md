@@ -109,7 +109,9 @@ unveränderten Ergebnis (`HasSourceDeviation`).
   auch an einer Eckrundung der Mittelpunkt ihrer Trägerkugel.
 - **Orientierung**: `TopAbs_REVERSED` dreht die Ebenennormale; Bohrung gegen
   Zapfen, Senkung gegen Kegel sagen Orientierung **und** `Position().Direct()`
-  zusammen. Unvollständige U-Spanne heißt `partial`.
+  zusammen. Unvollständige U-Spanne heißt `partial`; zusammengelegte Mäntel
+  sind ganz, sobald einer selbst die volle Umdrehung trägt
+  (`_cylinder_group_extent`).
 - **`SurfacePatch`** trägt echte Tessellierungsdreiecke; Langloch, Ring und
   Kammer bekommen nur ihre Teilflächen, native Belege verdrängen Netzfits,
   Reste bekommen keinen erfundenen Träger. `measure_sources` nennt jedes native
@@ -193,7 +195,9 @@ unveränderten Ergebnis (`HasSourceDeviation`).
   ihren eigenen Satz. **Im Aufruf ist die Nummer der Beleg**: `selected_edges`
   (`checked_edge_indices`, `_edges_for`) geht vor `keys`, ohne Rückfall; die
   Auswertung bindet über `native_edge_indices`, nie über `edges_of`.
-  `edge_points` gibt die Kante nach `DEFLECTION` als Punktfolge.
+  `edge_points` gibt die Kante nach `DEFLECTION` als Punktfolge;
+  `contour_keys` nennt, was eine Rundung an ihr tangential mitnimmt, ohne zu
+  bauen (die Linie im Bild, RM-579).
 - **`native_edges_of_segments` belegt je Strecke** (`native_edges_of_chains`
   fasst je Zug zusammen): Netzknoten und Dreiecksnachbarn führen über
   `face_sources` zu genau zwei nativen Flächen; mehrere gemeinsame Kanten

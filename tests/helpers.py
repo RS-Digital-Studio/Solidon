@@ -46,6 +46,7 @@ import pytest
 import trimesh
 
 from app.core.geom.mesh import MeshData, as_mesh_data
+from app.core.geom.transform import place_on_bed
 from app.core.scene import History, OperationDraft
 from app.core.scene.project import Project, new_project
 from app.core.types import (
@@ -1204,6 +1205,42 @@ def bore_plate(
     return SceneObject("plate", "Platte", mesh, features=detect(mesh))
 
 
+def countersunk_project(kind: str, sink: float) -> tuple[Project, History]:
+    """Platte 40 × 40 × 10, Bohrung Ø 5,2 ganz durch, oben gesenkt auf ``sink`` —
+    über die Operationen des Kunden, am Netz oder am exakten Körper."""
+    from app.core.bootstrap import load_operations
+
+    load_operations()
+    project = new_project("centauri-carbon-2", "petg")
+    history = History(project.document)
+    box = "create_brep_box" if kind == "brep" else "create_box"
+    history.apply(
+        "Quader",
+        [OperationDraft(op=box, params={"width": 40.0, "depth": 40.0, "height": 10.0})],
+    )
+    history.apply(
+        "Bohren",
+        [
+            OperationDraft(
+                op="drill_hole",
+                inputs=("obj_1",),
+                params={"diameter": 5.2, "x": 0.0, "y": 0.0, "z": 10.0, "axis": "z", "depth": 0.0},
+            )
+        ],
+    )
+    history.apply(
+        "Senken",
+        [
+            OperationDraft(
+                op="countersink_hole",
+                inputs=("obj_1",),
+                params={"diameter": sink, "x": 0.0, "y": 0.0, "z": 10.0, "axis": "z"},
+            )
+        ],
+    )
+    return project, history
+
+
 def blind_bore(kernel: str) -> SceneObject:
     """Platte mit Sackloch Ø 6 und 6 mm Tiefe, Boden bei z = 4."""
     return bore_plate(kernel, [(0, 4), (3, 4), (3, 10), (0, 10), (0, 4)])
@@ -2000,63 +2037,99 @@ class LoopbackServer(http.server.HTTPServer):
         self.server_port = int(port)
 
 
-# --- Der erste Start eines Slicers der Orca-Familie als AppImage ------------------
+# --- Ein Slicerbestand, an dem jede falsche Vorwahlregel eine andere Datei trifft -----
 
-#: Wo die Orca-Familie ihre Konfiguration ablegt, unter ``slicer_profiles.config_base``.
-#: Creality Print 7 legt unter seinem Anwendungsschlüssel und der Version ab.
-ORCA_CONFIG_FOLDERS = {
-    "orcaslicer": "OrcaSlicer",
-    "bambustudio": "BambuStudio",
-    "elegooslicer": "ElegooSlicer",
-    "crealityprint": "Creality/Creality Print/7.2",
-}
+#: Die Maschinen des Bestands aus :func:`cc2_stock`, beim Namen.
+CC2_MACHINE = "Elegoo Centauri Carbon 2 0.4 nozzle"
+CC2_FINE_NOZZLE = "Elegoo Centauri Carbon 2 0.2 nozzle"
+CC2_HIGH_FLOW = "Elegoo Centauri Carbon 2 HF0.4 nozzle"
 
 
-def first_start(executable: Path) -> Path | None:
-    """Was der erste Start eines AppImage der Orca-Familie beim Kunden hinterlässt.
+def cc2_stock(folder: Path) -> Path:
+    """Ein ElegooSlicer-Bestand für den Centauri Carbon 2 mit je zwei
+    Maschinen, Prozessen und Filamenten; gibt die Programmdatei zurück (RM-623).
 
-    Ein solches AppImage trägt seinen Herstellerbestand nur im Abbild, das zur
-    Laufzeit eingehängt ist; lesbar wird er erst, wenn der Slicer einmal lief
-    und die Bündel nach ``<Konfiguration>/<Programm>/system/`` kopiert hat,
-    neben ``user/default/``. Genau das legt diese Funktion an, aus dem
-    ausgepackten Abbild — ohne Bilder und Bettmodelle, die Solidon nicht
-    liest. Gibt den angelegten ``system``-Ordner zurück, sonst ``None``.
+    Jede falsche Regel der Vorwahl träfe eine andere Datei: Die alphabetisch
+    erste Maschine ist die 0,2er Düse (``cc2-02.json``), der erste Prozess
+    „0.12mm Fine“ (``fine.json``) statt des Standards (``standard.json``),
+    das erste Filament PETG (``petg.json``) statt PLA (``pla.json``). Die
+    High-Flow-Variante mit 0,4 (``cc2-hf.json``) ist nur die Wahl, wenn der
+    Slicer auf ihr steht — die Zuordnung nimmt den kürzeren Namen. Der
+    Prozess trägt zwei Wände (``wall_loops``), Solidons Tabelle drei.
     """
-    from app.core import discover
-    from app.core.export import slicer_profiles
 
-    folder = ORCA_CONFIG_FOLDERS.get(discover.program_mark(executable.name))
-    base = slicer_profiles.config_base(executable)
-    if folder is None or not base or executable.suffix.lower() != ".appimage":
-        return None
-    system = Path(base) / folder / "system"
-    if system.is_dir():
-        return system
-    unpacked = Path(base) / ".erststart"
-    unpacked.mkdir(parents=True, exist_ok=True)
-    subprocess.run(
-        [str(executable), "--appimage-extract"],
-        cwd=unpacked,
-        capture_output=True,
-        timeout=600,
-        check=True,
+    def write(path: Path, document: dict[str, object]) -> None:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(document), encoding="utf-8")
+
+    root = folder / "ElegooSlicer" / "resources" / "profiles" / "Elegoo"
+    write(
+        root / "machine" / "fdm_machine_common.json",
+        {"type": "machine", "name": "fdm_machine_common", "nozzle_diameter": ["0.4"]},
     )
-    profiles = next(
-        (
-            candidate
-            for candidate in sorted((unpacked / "squashfs-root").rglob("profiles"))
-            if candidate.is_dir() and any(candidate.glob("*.json"))
-        ),
-        None,
+    for file, name, nozzle in (
+        ("cc2.json", CC2_MACHINE, "0.4"),
+        ("cc2-02.json", CC2_FINE_NOZZLE, "0.2"),
+        ("cc2-hf.json", CC2_HIGH_FLOW, "0.4"),
+    ):
+        write(
+            root / "machine" / "ECC2" / file,
+            {
+                "type": "machine",
+                "name": name,
+                "inherits": "fdm_machine_common",
+                "instantiation": "true",
+                "printer_model": "Elegoo Centauri Carbon 2",
+                "nozzle_diameter": [nozzle],
+                "default_print_profile": "0.20mm Standard @CC2",
+            },
+        )
+    both = [CC2_MACHINE, CC2_HIGH_FLOW]
+    write(
+        root / "process" / "fdm_process_common.json",
+        {
+            "type": "process",
+            "name": "fdm_process_common",
+            "layer_height": "0.2",
+            "initial_layer_print_height": "0.2",
+            "line_width": "0.42",
+            "wall_loops": "2",
+            "sparse_infill_density": "15%",
+        },
     )
-    if profiles is None:
-        return None
-    (Path(base) / folder / "user" / "default").mkdir(parents=True, exist_ok=True)
-    shutil.copytree(
-        profiles, system, ignore=shutil.ignore_patterns("*.stl", "*.png", "*.svg", "*.jpg")
-    )
-    shutil.rmtree(unpacked, ignore_errors=True)
-    return system
+    for file, name, layer in (
+        ("standard.json", "0.20mm Standard @CC2", "0.2"),
+        ("fine.json", "0.12mm Fine @CC2", "0.12"),
+    ):
+        write(
+            root / "process" / "ECC2" / file,
+            {
+                "type": "process",
+                "name": name,
+                "inherits": "fdm_process_common",
+                "instantiation": "true",
+                "layer_height": layer,
+                "compatible_printers": both,
+            },
+        )
+    for file, name, kind, temperature in (
+        ("pla.json", "Elegoo PLA @ECC2", "PLA", "210"),
+        ("petg.json", "Elegoo PETG @ECC2", "PETG", "240"),
+    ):
+        write(
+            root / "filament" / "ECC2" / file,
+            {
+                "type": "filament",
+                "name": name,
+                "instantiation": "true",
+                "filament_type": [kind],
+                "nozzle_temperature": [temperature],
+                "compatible_printers": both,
+            },
+        )
+    executable = folder / "ElegooSlicer" / "elegoo-slicer.exe"
+    executable.write_bytes(b"")
+    return executable
 
 
 def plate_on_a_sloped_foot(angle: float) -> MeshData:
@@ -2071,3 +2144,81 @@ def plate_on_a_sloped_foot(angle: float) -> MeshData:
     wide = 30.0 + reach
     top = [(x, y, z) for x in (-wide, wide) for y in (-wide, wide) for z in (4.0, 10.0)]
     return MeshData.of(trimesh.convex.convex_hull(np.array(foot + top)))
+
+
+def object_values(written: Path, member: str) -> dict[str, dict[str, str]]:
+    """Die Objektwerte einer Baugruppe je Objektname — aus
+    ``model_settings.config`` (Orca-Familie) oder ``Slic3r_PE_model.config``
+    (PrusaSlicer)."""
+    from xml.etree import ElementTree as ET
+
+    config = ET.fromstring(zipfile.ZipFile(written).read(member))
+    values: dict[str, dict[str, str]] = {}
+    for node in config.iter("object"):
+        own = {meta.get("key", ""): meta.get("value", "") for meta in node.findall("metadata")}
+        values[own.pop("name", node.get("id", ""))] = own
+    return values
+
+
+def supported_table(index: int) -> trimesh.Trimesh:
+    """Sockel, Säule und Platte darüber: Die Stütze steht auf dem Sockel. Je
+    ``index`` 45 mm weiter rechts, damit mehrere auf einer Platte Platz haben."""
+    parts = []
+    for extents, z in (
+        ((30.0, 30.0, 3.0), 1.5),
+        ((8.0, 8.0, 10.2), 8.0),
+        ((30.0, 30.0, 2.0), 14.0),
+    ):
+        brick = trimesh.creation.box(extents=extents)
+        brick.apply_translation([index * 45.0, 0.0, z])
+        parts.append(brick)
+    return trimesh.boolean.union(parts, engine="manifold")
+
+
+def on_bed(*parts: trimesh.Trimesh) -> MeshData:
+    """Die Teile vereint und auf das Bett gestellt."""
+    body = parts[0] if len(parts) == 1 else trimesh.boolean.union(list(parts))
+    return place_on_bed(MeshData.of(body))
+
+
+def brick(x: float, y: float, z: float, at: tuple[float, float, float]) -> trimesh.Trimesh:
+    """Ein Quader der Kanten ``x``, ``y``, ``z`` mit der Mitte in ``at``."""
+    body: trimesh.Trimesh = trimesh.creation.box(extents=(x, y, z))
+    body.apply_translation(at)
+    return body
+
+
+def column_table() -> MeshData:
+    """Bodenplatte 40 auf 40, darauf eine Säule 10 auf 10, darauf eine Platte.
+
+    Keine Insel, 1 500 mm² Überhang auf einer Schicht — und jede Stütze
+    darunter endet auf der Bodenplatte, nicht auf dem Bett.
+    """
+    return on_bed(
+        brick(40.0, 40.0, 5.0, (0.0, 0.0, 2.5)),
+        brick(10.0, 10.0, 20.0, (0.0, 0.0, 15.0)),
+        brick(40.0, 40.0, 5.0, (0.0, 0.0, 27.5)),
+    )
+
+
+def chin(underside_at_wall: float) -> trimesh.Trimesh:
+    """Der Kopf mit schräger Unterseite: an der Rückwand auf ``underside_at_wall``,
+    an der Spitze 18 mm davor auf 50 mm."""
+    return trimesh.convex.convex_hull(
+        [
+            (x, y, z)
+            for x in (-8.0, 8.0)
+            for y, z in ((15.0, underside_at_wall), (-3.0, 50.0), (15.0, 56.0), (-3.0, 56.0))
+        ]
+    )
+
+
+def chin_over_chest() -> MeshData:
+    """Eine Figur im Kleinen: ein Kinn mit schräger Unterseite über der Brust,
+    dessen Streifen auf dem Modell aufsetzen — kleine, gewölbte Überhänge."""
+    return on_bed(
+        brick(80.0, 60.0, 4.0, (0.0, 0.0, 2.0)),
+        brick(40.0, 10.0, 60.0, (0.0, 20.0, 34.0)),
+        brick(60.0, 30.0, 20.0, (0.0, 0.0, 14.0)),
+        chin(44.0),
+    )

@@ -400,10 +400,16 @@ _REFUSALS_KEPT: Final = 256
 #:   ``prepare_ops`` rechnen ohne BLAS, LAPACK und die Winkelfunktionen der
 #:   Plattform. Gespeicherte Ergebnisse und Mustererkennungen trügen noch die
 #:   letzte Stelle der Maschine, auf der sie entstanden.
-#: - 53 (RM-592): Eine Boolesche ohne Wirkung gibt ihren Eingang in dessen
+#: - 53 (RM-548, Review G): Zusammengelegte Mäntel sind am exakten Kern ganz,
+#:   sobald einer selbst die volle Umdrehung trägt
+#:   (``brep.features._cylinder_group_extent``). Gespeicherte exakte Erkennungen
+#:   nannten die Bohrung durch berührende Platten angeschnitten.
+#: - 54 (Welle 2): Die Pakete G, B und L auf einem gemeinsamen Stand; trennt ihn
+#:   von den Ergebnissen der einzelnen Zweige.
+#: - 55 (RM-592): Eine Boolesche ohne Wirkung gibt ihren Eingang in dessen
 #:   Dreiecksfolge zurück (``attributes.in_source_layout``). Ein gespeichertes
 #:   Ergebnis trüge die Folge des Kerns und träfe den Merkmalscache nicht.
-CACHE_FORMAT_VERSION: Final = 53
+CACHE_FORMAT_VERSION: Final = 55
 
 
 @dataclass(frozen=True, slots=True)

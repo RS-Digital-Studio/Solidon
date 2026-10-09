@@ -3177,6 +3177,27 @@ def island_layers(result: SliceResult) -> tuple[float, ...]:
     return tuple(layer.z for layer in result.layers if layer.islands)
 
 
+#: Unter welcher Fläche eine Insel an ihrer Baumspitze keine Trennschicht
+#: bekommt, in mm² (RM-584): ``minimum_roof_area`` der Orca-Familie
+#: (``TreeSupport3D.cpp:1151``), aus demselben Quelltext in PrusaSlicer. Die
+#: Spitze steht dann eine Schicht unter dem Modell und schweißt an.
+TIP_ROOF_AREA: Final = 1.0
+
+
+def tip_islands(result: SliceResult) -> int:
+    """Wie viele Inseln unter :data:`TIP_ROOF_AREA` beginnen (RM-584).
+
+    Jede trägt eine Baumspitze ohne Trennschicht. Am Drachen sind es 210 von
+    213, an Kinn und Kopfstacheln, und dort blieben die Rückstände.
+    """
+    return sum(
+        1
+        for layer in result.layers
+        for island in layer.islands
+        if ShapelyPolygon(island.outline, island.holes).area < TIP_ROOF_AREA
+    )
+
+
 #: Ab welcher freien Spannweite eine Decke gemeldet wird, in Millimetern.
 #:
 #: Zehn Millimeter überbrückt jeder Drucker, zwanzig hängen bei PETG sichtbar

@@ -31,9 +31,31 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-09 | [RM-680: Bausteine verwalten steht ohne eigenen Baustein offen (09.10.2026)](#rm-680-bausteine-verwalten-steht-ohne-eigenen-baustein-offen-09102026) |
+| 2026-10-09 | [RM-650: Ein eingefügtes Modell kommt in den Ausschnitt (09.10.2026)](#rm-650-ein-eingefügtes-modell-kommt-in-den-ausschnitt-09102026) |
+| 2026-10-09 | [RM-584 (Teil): Über Baumspitzen rät Solidon zwei Schichten Luft (09.10.2026)](#rm-584-teil-über-baumspitzen-rät-solidon-zwei-schichten-luft-09102026) |
+| 2026-10-09 | [RM-622: Neben einem Reinigungsturm und unter organischen Bäumen rät Solidon den Stützabstand in ganzen Schichten (09.10.2026)](#rm-622-neben-einem-reinigungsturm-und-unter-organischen-bäumen-rät-solidon-den-stützabstand-in-ganzen-schichten-09102026) |
+| 2026-10-09 | [RM-583: Stützabstand und Trennschichten folgen dem Material der Spule, je Teil (09.10.2026)](#rm-583-stützabstand-und-trennschichten-folgen-dem-material-der-spule-je-teil-09102026) |
+| 2026-10-09 | [RM-467: Zweiter Bibliothekslauf, Qt 6.12 und macOS 14 (09.10.2026)](#rm-467-zweiter-bibliothekslauf-qt-612-und-macos-14-09102026) |
+| 2026-10-09 | [RM-496: Am echten Fenster laden reale Modelle so schnell wie in v0.5.1 (09.10.2026)](#rm-496-am-echten-fenster-laden-reale-modelle-so-schnell-wie-in-v051-09102026) |
+| 2026-10-09 | [RM-623: Ohne gemerkte Profilwahl kommt die Grundlage trotzdem vom Hersteller (09.10.2026)](#rm-623-ohne-gemerkte-profilwahl-kommt-die-grundlage-trotzdem-vom-hersteller-09102026) |
+| 2026-10-09 | [RM-621: Ein Slicer, der hinter Flatpak abstürzt, heißt abgestürzt (09.10.2026)](#rm-621-ein-slicer-der-hinter-flatpak-abstürzt-heißt-abgestürzt-09102026) |
+| 2026-10-09 | [RM-528: Eine Installation kennt mehrere Release-Schlüssel, und der Wechsel hat einen Ablauf (09.10.2026)](#rm-528-eine-installation-kennt-mehrere-release-schlüssel-und-der-wechsel-hat-einen-ablauf-09102026) |
+| 2026-10-09 | [RM-351: Der Signaturhinweis zu Windows nennt nur die erste signierte Version (09.10.2026)](#rm-351-der-signaturhinweis-zu-windows-nennt-nur-die-erste-signierte-version-09102026) |
 | 2026-10-09 | [RM-620: Ein Slicer, der Filamente mit zu verschiedenen Temperaturen ablehnt, sagt es (09.10.2026)](#rm-620-ein-slicer-der-filamente-mit-zu-verschiedenen-temperaturen-ablehnt-sagt-es-09102026) |
 | 2026-10-09 | [RM-595: Prüfbericht und Schichtanalyse schneller, ihre Konturen als Felder (09.10.2026)](#rm-595-prüfbericht-und-schichtanalyse-schneller-ihre-konturen-als-felder-09102026) |
 | 2026-10-09 | [RM-593 und RM-594: Auswertung wächst nicht mehr je Schritt, losgelassene Netze werden frei (09.10.2026)](#rm-593-und-rm-594-auswertung-wächst-nicht-mehr-je-schritt-losgelassene-netze-werden-frei-09102026) |
+| 2026-10-09 | [RM-633: Eine Kabeldurchführung in einer dickeren Wand sagt es (09.10.2026)](#rm-633-eine-kabeldurchführung-in-einer-dickeren-wand-sagt-es-09102026) |
+| 2026-10-09 | [RM-632: Die Mutternfalle zeigt ihr Schraubenloch vor dem Setzen (09.10.2026)](#rm-632-die-mutternfalle-zeigt-ihr-schraubenloch-vor-dem-setzen-09102026) |
+| 2026-10-09 | [RM-631: Eine Durchgangsbohrung geht genau durch das Teil (09.10.2026)](#rm-631-eine-durchgangsbohrung-geht-genau-durch-das-teil-09102026) |
+| 2026-10-09 | [RM-598: Die erklärte Schraubenbohrung der Mutternfalle endet im Körper (09.10.2026)](#rm-598-die-erklärte-schraubenbohrung-der-mutternfalle-endet-im-körper-09102026) |
+| 2026-10-09 | [RM-597: Ein exakt gesetztes Merkmal, das anderes Material nur auf einer Linie berührt, sagt es (09.10.2026)](#rm-597-ein-exakt-gesetztes-merkmal-das-anderes-material-nur-auf-einer-linie-berührt-sagt-es-09102026) |
+| 2026-10-09 | [RM-596: Merkmalshandlungen lassen fremde Teile, wie sie sind (09.10.2026)](#rm-596-merkmalshandlungen-lassen-fremde-teile-wie-sie-sind-09102026) |
+| 2026-10-09 | [RM-591: Die Mutternfalle schneidet ihre Tasche, auch von Hand auf eine Fläche gesetzt (09.10.2026)](#rm-591-die-mutternfalle-schneidet-ihre-tasche-auch-von-hand-auf-eine-fläche-gesetzt-09102026) |
+| 2026-10-09 | [RM-590: Ein Klick auf eine Ecke wählt ihre Kanten (09.10.2026)](#rm-590-ein-klick-auf-eine-ecke-wählt-ihre-kanten-09102026) |
+| 2026-10-09 | [RM-579: Die Linie zeigt am exakten Körper die ganze Kontur, die verrundet wird (09.10.2026)](#rm-579-die-linie-zeigt-am-exakten-körper-die-ganze-kontur-die-verrundet-wird-09102026) |
+| 2026-10-09 | [RM-599: Curas AppImage wird für seine Drucker gelesen, nicht eingehängt (09.10.2026)](#rm-599-curas-appimage-wird-für-seine-drucker-gelesen-nicht-eingehängt-09102026) |
+| 2026-10-09 | [RM-549: Die AppImages der Orca-Familie zeigen ihre Herstellerdrucker ohne ersten Start (09.10.2026)](#rm-549-die-appimages-der-orca-familie-zeigen-ihre-herstellerdrucker-ohne-ersten-start-09102026) |
 | 2026-10-08 | [RM-602: Der Druckdialog ordnet die Profile in einem Lesedurchgang zu (08.10.2026)](#rm-602-der-druckdialog-ordnet-die-profile-in-einem-lesedurchgang-zu-08102026) |
 | 2026-10-08 | [RM-601: Die Slicerwahl im Druckdialog geht wie in Erste Schritte, und überall stehen nur unterstützte Slicer (08.10.2026)](#rm-601-die-slicerwahl-im-druckdialog-geht-wie-in-erste-schritte-und-überall-stehen-nur-unterstützte-slicer-08102026) |
 | 2026-10-08 | [RM-600: Ein Drucker, eingebaut und aus dem Slicer übernommen, ist ein Gerät (08.10.2026)](#rm-600-ein-drucker-eingebaut-und-aus-dem-slicer-übernommen-ist-ein-gerät-08102026) |
@@ -45,6 +67,11 @@ entfernt hat.
 | 2026-10-08 | [RM-566: Der Drache bekommt seine Stützen, und die Kanalsperre sperrt nur Raum, an den man nicht hinkommt (08.10.2026)](#rm-566-der-drache-bekommt-seine-stützen-und-die-kanalsperre-sperrt-nur-raum-an-den-man-nicht-hinkommt-08102026) |
 | 2026-10-08 | [RM-564: Vor dem Herunterladen nennt Solidon die Voraussetzungen eines Modells und ob dieser Rechner sie erfüllt (08.10.2026)](#rm-564-vor-dem-herunterladen-nennt-solidon-die-voraussetzungen-eines-modells-und-ob-dieser-rechner-sie-erfüllt-08102026) |
 | 2026-10-08 | [RM-550: Erzeugte Körper aus Weg 3 schließen, Falten werden geglättet, und ein zerfallener Versuch sagt es vor dem Übernehmen (08.10.2026)](#rm-550-erzeugte-körper-aus-weg-3-schließen-falten-werden-geglättet-und-ein-zerfallener-versuch-sagt-es-vor-dem-übernehmen-08102026) |
+| 2026-10-08 | [RM-563: Verrunden an mehreren Kanten zugleich wählen (08.10.2026)](#rm-563-verrunden-an-mehreren-kanten-zugleich-wählen-08102026) |
+| 2026-10-08 | [RM-545: Ein getrenntes Teil in Senkung, Langloch oder Schraube verschmilzt nicht mehr still (08.10.2026)](#rm-545-ein-getrenntes-teil-in-senkung-langloch-oder-schraube-verschmilzt-nicht-mehr-still-08102026) |
+| 2026-10-08 | [RM-548: Karte und Operation stellen je Merkmalshandlung dieselbe Frage (08.10.2026)](#rm-548-karte-und-operation-stellen-je-merkmalshandlung-dieselbe-frage-08102026) |
+| 2026-10-08 | [RM-552: Stift für Bohrung baut an Schraubenloch und Einpressbuchse (08.10.2026)](#rm-552-stift-für-bohrung-baut-an-schraubenloch-und-einpressbuchse-08102026) |
+| 2026-10-08 | [RM-546: Merkmal drehen sagt, wenn die Drehung das Merkmal auf sich selbst legt (08.10.2026)](#rm-546-merkmal-drehen-sagt-wenn-die-drehung-das-merkmal-auf-sich-selbst-legt-08102026) |
 | 2026-10-06 | [RM-104 (Teil): Abbruch des lokalen Modells auf macOS und HiDPI-Test unter Xvfb (06.10.2026)](#rm-104-teil-abbruch-des-lokalen-modells-auf-macos-und-hidpi-test-unter-xvfb-06102026) |
 | 2026-10-06 | [RM-537: Im Bild vor der Erkennung stehen keine veralteten Merkmale mehr, und eine verschwundene Wahl fällt nicht auf den Körper (06.10.2026)](#rm-537-im-bild-vor-der-erkennung-stehen-keine-veralteten-merkmale-mehr-und-eine-verschwundene-wahl-fällt-nicht-auf-den-körper-06102026) |
 | 2026-10-07 | [RM-014: Der Agent setzt keine Pinselstriche und kein Skelett, er nennt dem Nutzer den Weg (07.10.2026)](#rm-014-der-agent-setzt-keine-pinselstriche-und-kein-skelett-er-nennt-dem-nutzer-den-weg-07102026) |
@@ -44010,6 +44037,30 @@ in der CI unter Linux und macOS). Sonde mit Roberts Bestand: Das Feld steht beim
 ElegooSlicer da, der Wechsel auf Anycubic Slicer Next bietet Kobra S1 und S1 Max. Changelog:
 ja.
 
+## RM-584 (Teil): Über Baumspitzen rät Solidon zwei Schichten Luft (09.10.2026)
+
+<a id="rm-584-teil-über-baumspitzen-rät-solidon-zwei-schichten-luft-09102026"></a>
+
+**Befund (09.10.2026, Roberts Drachendruck vom 08.10.2026, PLA am CC2):** An Kinn und
+Kopfstacheln blieben Reste der Bäume. Jede der 64 Bartstacheln beginnt als Insel von im
+Median 0,07 mm²; unter 1 mm² baut der Slicer an der Baumspitze keine Trennschicht
+(`TreeSupport3D.cpp:1151`), und die Spitze stand eine Schicht unter dem Modell, an 22 Punkten
+angedruckt. Zwei Schichten Abstand senkten die Kontaktfläche mit 0,2 mm Luft am Kinn von 59,4
+auf 6,9 mm², an den Stacheln von 92,4 auf 3,6 mm², für 1 min und 0,7 g, in ElegooSlicer,
+PrusaSlicer und Cura (`output/drache-2026-10-09/rueckstaende/bericht.md`).
+
+**Behoben:** `analysis.tip_islands` zählt die Inseln unter `TIP_ROOF_AREA`
+(`SupportNeed.tips`); ab `TIP_ISLANDS` (100) rät `advise.tip_gap` unter organischen und Curas
+Bäumen `support_tip_gap` des Materials in ganzen Schichten, mindestens zwei, auch über dem
+Höchstwert des Materials. Gemessen ist PLA (0,40 mm); andere Materialien behalten ihren
+Abstand. Schwelle an 165 Modellen: Drache 199, danach eine Baugruppe 49, ein Schachturm 34.
+
+**Nachweis (09.10.2026):** Am Drachen mit Roberts Stützwerten rät Solidon 0,4 statt 0,2 mm.
+Tests `test_small_islands_are_counted_as_tips`, `test_many_tips_under_trees_get_air_in_whole_layers`
+(Orca, „automatisch“, 0,12-mm-Schichten, Cura, PrusaSlicer),
+`test_tips_need_many_islands_trees_and_a_measured_material` (eine Insel weniger, Gitter, PETG,
+ohne Slicer; Gegenprobe mit einer Insel mehr). Changelog: ja.
+
 ## RM-602: Der Druckdialog ordnet die Profile in einem Lesedurchgang zu (08.10.2026)
 
 <a id="rm-602-der-druckdialog-ordnet-die-profile-in-einem-lesedurchgang-zu-08102026"></a>
@@ -44113,6 +44164,47 @@ Ränder ihrer Höhe, eingeschränkte Frage, Abbruch, Merker, Sperre in allen dre
 Plattengegenprobe auch bei gemischten Teilen; 14 Gegenproben rot. Korpus: 45 von 242 Körpern bekommen „Ränder ohne Stütze“, 7 brauchen keine Stützen mehr (Besteck-Organizer, Carcassonne-Gitter, Herz-Deko-Sockel, CC2-Werkzeugkiste, drei Teile aus `chufang`), sonst ändern sich nur Folgevorschläge. Tor
 grün (24 839 bestanden, 116 übersprungen); Durchsicht sechs Runden `solidon3d-review`, die letzte ohne Befund.
 
+## RM-622: Neben einem Reinigungsturm und unter organischen Bäumen rät Solidon den Stützabstand in ganzen Schichten (09.10.2026)
+
+<a id="rm-622-neben-einem-reinigungsturm-und-unter-organischen-bäumen-rät-solidon-den-stützabstand-in-ganzen-schichten-09102026"></a>
+<a id="rm-622"></a>
+
+**Befund (Abnahme RM-583, 09.10.2026):** Mit zwei Filamenten baut die Orca-Familie einen
+Reinigungsturm, schaltet die eigene Stützschichthöhe ab und rundet den Stützabstand zur
+nächsten Schicht (`PrintConfig.cpp`, `SupportMaterial.cpp`): Im ElegooSlicer bekam PLA bei
+0,08er Schichten aus 0,10 mm eine Schicht, 0,08, unter dem Minimum des Materials. Am
+PETG-Drachen kamen die geschriebenen 0,28 mm in keinem Programm an. Gegenprobe an zwei
+gestützten PETG-Körpern (`output/drache-2026-10-08/kontakt-stil`): Mit Gitter druckten
+ElegooSlicer, OrcaSlicer, Bambu Studio, Creality Print, Anycubic Slicer Next und PrusaSlicer
+0,28 mit eigenen Zwischenebenen, mit organischen Bäumen alle sechs 0,2 ohne eine; Bambu,
+Creality, Anycubic und PrusaSlicer druckten unter Bäumen auch keine untere Trennschicht.
+
+**Behoben:** `writer.tower_plates` nennt die Platten mit Turm, `handover.organic_styles` je
+Programm die Arten, die es organisch druckt (ohne Programm die Familie der Datei); Rat,
+Druckdialog, Feldsatz und Export fragen dieselbe Auskunft und raten dort ganze Schichten
+innerhalb der Materialgrenzen (`advise.rounds_to_whole_layers`). Gefragt wird mit der Art,
+mit der das Teil druckt (`advise.printed_style`): Ein abgewählter oder nicht übernommener
+Baum nimmt dem Gitter weder Abstand noch untere Trennschicht, und der Dialog fragt die
+Stützart je Teil gegen die Grundlage wie der Export (`handover.asked_for_contact`). Die
+untere Trennschicht fällt nur weg, wo das Programm sie unter Bäumen nicht druckt
+(`handover.ignored_under_trees`). Die eigene Stützschichthöhe schaltet der Export nur für
+Teile außerhalb organischer Bäume ein (`handover.support_gaps_by_style`); einen eigenen
+Abstand zwischen zwei Schichten nennt er gerundet (`export.support_gap_rounded`), auch für
+PrusaSlicer.
+
+**Nachweis (09.10.2026):** ElegooSlicer mit PLA und PETG bei 0,08 mm neben einem Turm:
+vorher 0,08 am PLA- und 0,16 am PETG-Teil (geschrieben 0,10 und 0,12), nachher an beiden
+0,16 wie geschrieben, oben und unten. Tests in `test_slice_findings.py`,
+`test_print_settings.py` und `test_print_settings_ui.py`: Turm je Platte und Auftrag,
+Bäume je Programm samt Prusa-Kette und ohne Programm, Rat und Feldsatz gleich, Zeile und
+Datei gleich nach Übernehmen in jeder Reihenfolge, abgewählter Baum, Schalter und Befund je
+Teil; jede Gegenprobe rot. Die Messung der Programme steht in
+`.claude/.state/drache-2026-10-08/kontakt_je_teil.py`; die in RM-624 festgehaltene Grenze bei
+Extrusionsrücksetzungen schränkt die historischen Mengenwerte ein. Der vollständige
+Entwicklungslauf des zusammengeführten Stands ist grün (25 025 bestanden, 118 übersprungen;
+Exit 0; ruff, Format und mypy grün). Durchsicht drei Runden
+`solidon3d-review`; der dauerhafte Kontaktabstands-Slicertest bleibt RM-624.
+
 ## RM-620: Ein Slicer, der Filamente mit zu verschiedenen Temperaturen ablehnt, sagt es (09.10.2026)
 
 <a id="rm-620-ein-slicer-der-filamente-mit-zu-verschiedenen-temperaturen-ablehnt-sagt-es-09102026"></a>
@@ -44138,6 +44230,190 @@ Orca-Erkennungen** (−50, −101, −62): Dort kommt der Rückgabewert als Byte
 dazu ein einziger Slicerlauf bei −62 mit Anordnungsvorgabe. Review `solidon3d-review` in
 zwei Runden (zwei mittlere, dann zwei leichte Befunde, behoben), Entwicklungstor grün
 (24 875 bestanden, 116 übersprungen). Changelog: ja (Behebung, seit v0.5.3).
+
+## RM-583: Stützabstand und Trennschichten folgen dem Material der Spule, je Teil (09.10.2026)
+
+<a id="rm-583-stützabstand-und-trennschichten-folgen-dem-material-der-spule-je-teil-09102026"></a>
+<a id="rm-583"></a>
+
+**Befund (Recherche 08.10.2026):** Solidon ließ Z-Abstand, Trennschichten, deren Lücke und
+den Kontaktlüfter beim Hersteller; `support.z_gap` hatte ein Feld, aber keine Regel. Die
+häufigsten Ursachen für Narben und verschweißte Stützen
+(`konzepte/recherche-slicer-einstellungen-2026-10.md`, Nr. 1, 2, 3, 7): Abstand nicht auf
+Schicht und Material abgestimmt (PLA etwa eine Schicht, PETG 1,25 bis 1,5), unten keine
+Trennschicht, wo die Stütze auf dem Modell steht (MK4S-Profil 0), dichte Trennschichten
+unter kleinen Flächen, Kontaktlüfter aus (alle Orca-Profile −1). Robert: „immer nach dem
+verwendeten Material, kein Projektmaterial“ — PLA und PETG auf einer Platte brauchen
+verschiedene Werte.
+
+**Behoben:** Das Materialprofil führt `support_gap_factor`, `support_gap_min`,
+`support_gap_max` und `support_interface_cooling` (Regel 7; PLA, ABS und ASA 1,0/0,10/0,25,
+PETG und PETG-CF 1,4/0,12/0,30 mit voller Kühlung, TPU ohne Quelle und damit ohne Rat).
+`advise._support_contact` schlägt den Abstand vor (`support_gap_target`; wo der Slicer in
+ganzen Schichten rechnet, das Vielfache im Band), unten Trennschichten, wo die Stütze auf
+dem Modell steht, unter flachen Decken dichte, sonst lockere Trennschichten, und volle
+Kühlung an der Trennschicht. Neue Felder *Trennschichten unten*, *Lücke in der
+Trennschicht* und *Volle Kühlung an der Stütze*, *Abstand nach oben* heißt *Abstand oben
+und unten*; Übergabe und Rücklesen in allen Familien (Prusa −1 = wie oben, Orca-Lüfter als
+Filamentwert, SuperSlicer mit unterem Abstand und Lüfter, PrusaSlicer und Bambu ohne Lüfter,
+Cura `support_fan_enable` und eigene untere Höhe, Cura sagt einen Abstand zwischen zwei
+Schichten an). Abstand und Trennschichten gehen je Teil (`PART_PATHS`, `SLICED_PATHS`,
+Cura `CURA_DERIVED_PER_MESH`), gefragt mit dem Material der Spule; der Druckdialog führt
+sie getrennt zusammen (`combine` mit `CONTACT_PATHS`). Die Orca-Familie rundet ohne eigene
+Stützschichthöhe auf ganze Schichten (`Slicing.cpp`, Elegoos CC2-Prozess hat sie aus); an
+den geschriebenen Abständen schaltet die Übergabe sie ein
+(`handover.frees_support_layers`, Befund `slicer.support_layers_freed`), mit Reinigungsturm
+(`handover.tower_cause` je Platte: mehrere Filamente außer „je Objekt“, glatter Zeitraffer,
+Wicklungserkennung) sagt der Export nur die Rundung (`export.support_gap_rounded`). Der
+Druckdialog fragt den Kontakt wie der Export gegen die Grundlage
+(`handover.asked_for_contact`), führt erst je Körper über die Spulen und dann nur die
+verlangenden Körper zusammen; die Zeile nennt nur Teile mit ihrem Wert. Die Cura-Grundlage
+trägt den Abstand in ganzen Schichten, Curas Satz dazu kommt nur mit Stützen, nennt das
+Feld und öffnet es. Ein vor 0.6.0 kalibriertes Material ergänzt fehlende Werte aus dem
+mitgelieferten Eintrag. Die Spule druckt das Material ihres gewählten Filamentprofils
+(`handover.slot_material_type`). Druckzeit und Stützmenge rechnen mit der geschriebenen
+Lücke; die Matrix misst mit dem Filament des Materials.
+
+**Nachweis (09.10.2026):** Kontaktsonde (`.claude/.state/drache-2026-10-08/kontakt_je_teil.py`,
+zwei gestützte Stufenkörper, einer mit Objektwerten, Raster 2 mm) in allen acht
+Programmen: Abstand oben wie geschrieben (0,4 gegen 0,2 mm; SuperSlicer bei 0,15er
+Schichten 0,53 gegen 0,33), Trennschichten bei Prusa und Cura genau, die Orca-Familie oben
+eine Übergangslage und unten die Kontaktlage mehr (`SupportCommon.cpp`), weite Lücke mit
+deutlich weniger Bahn je Ebene (Orca 1044 gegen 1617 mm), bei Cura plattenweit. Eine
+erste Messung mit 0,5-mm-Raster und Bambus Übergangslage als Modell hatte bei Cura 0,6
+statt 0,4 und bei Bambu unten fünf Lagen gezeigt; beide druckten wie geschrieben. Echter Rat
+auf einer Platte mit PLA und PETG: PrusaSlicer 0,2 und 0,28 mm; Orca, Elegoo, Creality und
+Bambu mit Reinigungsturm beide 0,2. PETG allein: ElegooSlicer und Creality Print 0,28.
+PETG-Drache (09.10.2026, `output/drache-2026-10-08/kontakt-drache-petg`): alle fünf Programme
+(ElegooSlicer, Anycubic am Kobra 2, Bambu Studio, PrusaSlicer, Cura) rechnen ohne Absturz; der
+Rat schreibt 0,28 mm als Objektwert, in der Orca-Familie mit eigener Stützschichthöhe, Cura bekommt
+keinen (0,2 ist dort die ganze Schicht). Gedruckt wurde 0,2: Der Drache stützt je Teil mit Bäumen,
+und Bäume liegen in allen Programmen auf den Schichten des Modells (Gegenprobe an zwei Körpern: mit
+Gitter 0,28 und Zwischenebenen in allen sechs, mit Bäumen 0,2 ohne eine) — weiter in RM-622.
+Tests in `test_slice_findings.py`, `test_print_settings.py`, `test_print_settings_ui.py`,
+`test_print_time.py`, `test_manufacturer.py`, `test_slicer_part_settings.py`,
+`test_calibration.py` und `test_export.py`. Review `solidon3d-review` mit Nachprüfung; Entwicklungstor grün (24 941 bestanden, 116 übersprungen); nach dem Merge von main 24 942 bestanden, vier unter Fremdlast rot und einzeln grün (22 Fälle); ruff, format und mypy grün. Changelog: ja (neu in 0.6.0).
+
+## RM-467: Zweiter Bibliothekslauf, Qt 6.12 und macOS 14 (09.10.2026)
+
+<a id="rm-467-zweiter-bibliothekslauf-qt-612-und-macos-14-09102026"></a>
+
+**RM-467, zweiter Lauf am 09.10.2026** (fällig am 05.10., nachgeholt). Geprüft: 69 Pins aus
+  `constraints.txt` gegen PyPI (Sicherheitsmeldungen, cp314-Räder für Windows x64, Linux x86_64,
+  Apple Silicon und Intel-Mac). Keine Sicherheitsmeldung; neu waren 16 Fassungen, alle mit Rädern
+  für jede Plattform.
+  **Übernommen:** ast_serialize 0.12.1, cadquery-ocp-novtk und -proxy 8.0.1.1.0 (behebt eine
+  Regression gegenüber OCP 7.9.3, OCCT bleibt 8.0.1), ImageIO 2.38.1, iniconfig 2.3.1, MarkupSafe
+  3.0.4, pycparser 3.1, PySide6 6.12.0 mit Essentials, Addons und shiboken6 (Qt 6.12.0), shapely
+  2.2.0 (GEOS 3.14.1), trimesh 5.1.1 und uharfbuzz 0.56.3 (HarfBuzz 14.6.0).
+  **Folgen:**
+  - PySide6 6.12 verlangt zwei neue Räder, `PySide6_Pdf` und `PySide6_WebEngine` (6.12.0.140);
+    bis 6.11 lagen beide Module in `PySide6_Addons`. Die Anwendung lädt keines davon, nur
+    `tools/make_manual.py` druckt über QtWebEngine. Beide stehen mit Pin in `constraints.txt`, in
+    der Freigabeliste und in der Lizenzbeilage (43 statt 41 Laufzeitkomponenten), wie bisher
+    `PySide6_Addons`. Allein `PySide6_Essentials` zu verlangen geht nicht: `PySide6/__init__.py`
+    mit der DLL-Suche unter Windows und die Typstubs gehören dem Rad `PySide6`.
+  - Qt 6.12 baut für macOS ab 14 (`macosx_14_0` statt `macosx_13_0`). Die Mindestversion steht
+    jetzt in einer Quelle, `branding.MACOS_MINIMUM`, und gilt in Plist, Installer-Beschreibung,
+    den sechs Startseiten und im Changelog. macOS 14 läuft auf jedem Mac ab 2018 und hält damit
+    die Vorgabe der letzten acht Jahre. Die Installer-Beschreibung trug die Zahl bisher als
+    zweites Literal ohne Prüfung; `test_the_minimum_system_versions_on_the_website_match_installer_and_bundle`
+    liest sie jetzt aus branding und prüft Plist, Installer und Startseiten.
+  - shapely 2.2 kündigt `shapely.ops.transform` ab, und die Warnungsregel der Suite machte daraus
+    28 rote Dichtungstests. `seal_ops._polygon_in_frame` rechnet über `shapely.transform` mit
+    derselben Formel je Koordinate. Ein Vergleich aller Abkündigungen zwischen 2.1.2 und 2.2.0
+    fand sonst nur Namen, die Solidon nicht verwendet.
+  - trimesh 5.1.1 korrigiert `align_vectors` (Solidon dreht seit RM-187 selbst) und
+    `closest_point` an entarteten Dreiecken (die Umgehung in `geom/mesh.py` bleibt richtig).
+  - Lizenztabellen: Qt 6.12.0 mit Quelle am Tag v6.12.0, GEOS 3.14.1 am Tag 3.14.1, HarfBuzz
+    14.6.0 mit byte-gleicher COPYING (SHA-256 gegen den Tag). Der Versionswächter in
+    `test_licence_notices.py` ersetzte ein festes `versions = ["6.11.2"]` und wäre beim nächsten
+    Qt-Sprung still grün geworden; er nimmt jetzt die erste Versionsliste und prüft, dass er
+    etwas ersetzt hat.
+  **Belege:** Entwicklungstor mit den neuen Fassungen: 24 932 bestanden, 29 rot, davon
+  28 Dichtungstests durch die Abkündigung in shapely 2.2 (behoben; die fünf Dichtungsdateien danach
+  mit 75 Tests grün) und der bekannte Hooktest einer eigenen Worktree-Umgebung. Betroffene Tests
+  nach der Behebung: 8942 bestanden, ein Lastausreißer im Cura-Rohrtest einzeln grün; ruff, Format
+  und mypy grün. UI-Audit mit Qt 6.12: die zwölf Beispielprojekte geöffnet, ausgewertet und
+  exportiert, mit denselben Befunden wie im Lauf davor. Der Gegenlauf mit der alten Umgebung kam
+  unter Volllast des Rechners (rund 150 fremde Testprozesse) nicht über die Zeitgrenze des
+  Hilfsprozesses; die Fensterprüfung mit Qt 6.12 auf allen Plattformen übernimmt das Release-Tor.
+  **Offen:** Der Paketbau auf vier Plattformen mit Qt 6.12 und den beiden neuen Rädern belegt
+  sich im vollen CI-Lauf, zusammen mit RM-468 und RM-469.
+## RM-623: Ohne gemerkte Profilwahl kommt die Grundlage trotzdem vom Hersteller (09.10.2026)
+
+<a id="rm-623-ohne-gemerkte-profilwahl-kommt-die-grundlage-trotzdem-vom-hersteller-09102026"></a>
+<a id="rm-623"></a>
+
+**Befund (09.10.2026, an Roberts Drachendruck vom 08.10.2026):** Die Fensterdatei trug 5 KB
+nur mit Solidons Werten, ohne `printer_settings_id` und ohne Elegoos Prozess; ElegooSlicer
+füllte den Rest mit Orca-Vorgaben (`independent_support_layer_height` 1 statt 0, keine untere
+Trennschicht), und die Konsole stürzte an derselben Datei ab (`ElegooSlicer.cpp:1697`). In
+Roberts `settings.json` waren Maschine und Prozess leer. **Ursache, am Stand des Drucks
+(190a9e1a8) nachgestellt:** Das Projekt druckte auf dem eingebauten `centauri-carbon-2`,
+daneben lag sein Zwilling aus ElegooSlicer; die 0,4er Maschine wurde dem Zwilling zugeschlagen
+und fehlte in der Liste des Dialogs, Maschine und Prozess blieben leer, und das Öffnen im
+Fenster verlangt keine Maschine. RM-600 hat die Liste behoben (am heutigen Stand belegt der
+Dialog CC2 0.4, „0.20mm Standard“ und „Elegoo PLA @ECC2“ vor). Offen blieb
+`remembered_setup`: Ohne passende gemerkte Wahl gab es kein Setup, das Hauptfenster rechnete
+mit Solidons Tabelle, und der Menüexport schrieb keinen Herstellerprozess.
+
+**Behoben:** `handover.standard_choice` wählt ohne gemerkte Wahl, was der Dialog vorbelegt —
+die im Slicer eingestellte Maschine, wenn sie dieser Drucker ist, sonst die zugeordnete, sonst
+die einzige, aber nie die eines anderen bekannten Druckers; dazu ihren Standardprozess und das
+Filament der Materialart. `remembered_setup` nimmt sie, wo keine passende Wahl gemerkt ist.
+
+**Nachweis (09.10.2026):** Sonde mit Roberts Einstellungen: `remembered_setup` liefert CC2 0.4,
+„0.20mm Standard @Elegoo CC2 0.4 nozzle“ und „Elegoo PLA @ECC2“; der Menüexport eines Würfels
+trägt `printer_settings_id`, 289 Schlüssel und Elegoos Stützwerte, und die ElegooSlicer-Konsole
+schneidet ihn (Exit 0). Tests `test_without_a_choice_the_stock_names_machine_process_and_filament`,
+`test_the_standard_choice_takes_no_machine_of_another_printer` (Gegenprobe ohne Schutz rot),
+`test_without_a_fitting_choice_the_export_takes_the_dialogs_choice`. Changelog: ja (Behebung).
+
+**Abschlussprüfung (09.10.2026):** Die Vorwahl prüft die konkrete Maschine auch gegen die
+Projektdüse, bevor sie Prozess und Filament liest. Fehlt etwa die 0,8-mm-Schwester, gibt es
+keine Herstellergrundlage aus der 0,4-mm-Maschine; der Regressionstest war vor dem Fix rot.
+Die gemeinsame Einrichtung wird stufenunabhängig wiederverwendet, abgelöste Arbeiter werden
+abgesagt. Zweite Durchsicht: verbleibende Düsenlücke und Qt-Abbau im Verdrahtungstest behoben.
+Entwicklungstor auf dem reparierten Stand: 24.909 bestanden, 118 übersprungen, Exit 0;
+ruff, Format und mypy ebenfalls Exit 0. Die verpflichtenden Plattformauswahlen und der
+Abgleich mit dem aktuellen Hauptzweig gehören zur gemeinsamen Integration.
+
+## RM-621: Ein Slicer, der hinter Flatpak abstürzt, heißt abgestürzt (09.10.2026)
+
+<a id="rm-621-ein-slicer-der-hinter-flatpak-abstürzt-heißt-abgestürzt-09102026"></a>
+<a id="rm-621"></a>
+
+**Befund (09.10.2026, am Quelltext beim Prüfen von RM-620):** Unter Linux startet ein Slicer
+als Flatpak über `flatpak run` (bubblewrap), und aus Solidons eigenem Flatpak geht jeder Start
+über `flatpak-spawn --host`. Beide melden einen Signaltod des Kindes wie eine Shell als
+128 + Signal (`bubblewrap.c`, `propagate_exit_status`; `flatpak-spawn.c`); ein SIGSEGV käme
+als 139 an. `handover.crashed` kannte nur die negative POSIX-Form und den Windows-`NTSTATUS`,
+und der Kunde läse „Der Slicer hat keine Druckdatei geschrieben“ samt Rat, das Profil zu
+prüfen. Der Weg bestand mit dem Flatpak-Start in v0.5.3. Das Review fand dazu: Endet ein
+Slicer der Orca-Familie nach seiner `result.json` nicht, beendet Solidon ihn, und unter Linux
+und macOS kam Solidons SIGTERM als −15 zurück — `crashed` hielt auch das für einen Absturz,
+und eine Absage in der Datei ging unter.
+
+**Behoben:** `handover.crashed(exit_code, wrapped=)` zählt hinter einem Starter nur
+128 + SIGILL, SIGABRT, SIGBUS, SIGFPE, SIGKILL und SIGSEGV als Absturz (`_FATAL_SIGNALS`):
+Die Orca-Absagen reichen von −1 bis −105, in Byteform 151 bis 255, und manche sind genau
+128 + Signal (−100 als 156 = 128 + SIGWINCH). `handover._wrapped` fragt
+`discover.sandboxed` — ein Flatpak auf einer der beiden Seiten ist zugleich Sandbox und
+Starter. Steht eine Absage in der `result.json`, die dieser Versuch geschrieben hat
+(`_result_refusal`, `_result_signature`), zählt ihr Code (`_exit_code`) für Absturz und
+Absagearten; die Absage eines ersten Versuchs gilt nicht für den zweiten ohne
+Anordnungsvorgabe (`test_retry_does_not_reuse_files_or_plate_report_from_the_failed_attempt`).
+
+**Nachweis (09.10.2026):** `test_a_crash_behind_flatpak_is_a_crash` (sechs Absturzsignale,
+Orca-Absagen in Byteform von 152 bis 206, 0 und 1, je mit und ohne Starter),
+`test_a_flatpak_slicer_that_crashes_says_so` (Kette bis zur Meldung mit „abgestürzt“ und
+Slicerwahl als erster Handlung), `test_both_flatpak_starters_count_as_a_wrapper`,
+`test_a_refusal_in_the_result_file_is_no_crash_after_solidon_stopped_the_slicer` (−15 mit
+−50 in der Datei: Platte statt Absturz); Gegenproben rot. Regel `dateiformat.md` („Ein
+Absturz ist keine Absage“) und Begründung nachgezogen. Review `solidon3d-review` (fünf
+leichte Befunde und ein Nebenbefund, behoben), Entwicklungstor grün (24 895 bestanden, 116 übersprungen). Changelog: ja
+(Behebung, seit v0.5.3).
 
 ## RM-104 (Teil): Abbruch des lokalen Modells auf macOS und HiDPI-Test unter Xvfb (06.10.2026)
 
@@ -44906,6 +45182,16 @@ zurück, Satz mit „3 Stellen“, beide Knöpfe; nach *Reparieren* genau ein ge
 <a id="rm-562-bausteine-die-für-sich-ein-teil-sind-entstehen-ohne-auswahl-als-eigener-körper-08102026"></a>
 <a id="rm-562"></a>
 
+**Nachgetragener Ausgangsbefund von main:**
+
+**Fund aus RM-306 (03.10., Thread „Bedienung und KI“):** `create_<baustein>` legt über
+  `_place(..., ctx.params)` (`knowledge/parts/ops.py`) mit der x/y/z-Vorgabe 0, und der Katalog
+  ruft es mit diesen Vorgaben; ein eigenständiger Baustein landet damit in der Plattenmitte,
+  mitten in einem dort liegenden Modell. Ein weiteres Modell kommt seit RM-306 über
+  `prepare.placed_at_free_spot` an die freie Stelle nächst der Mitte, die der Schritt festhält
+  (`spot_x`, `spot_y`, `spot_plate`, Bauplan §17.1 Schritt 6); derselbe Weg gehört zum
+  Baustein — ein direkter Aufruf von `first_free_spot` legte ihn bei jeder Auswertung neu.
+
 **RM-562 — Bausteine, die für sich ein Teil sind, als eigenen Körper einsetzen.** Kunden-E-Mail
 vom 07.10.2026 und Robert, 08.10.2026: Kabelclip, Eckwinkel, Versteifungsrippe, Standfuß,
 Wandhalter und weitere ließen sich nur an einen gewählten Körper anfügen.
@@ -45293,3 +45579,666 @@ bauen Schichten über `tests.helpers.slice_contour`. Leistungsmarke `model_suppo
 Armen, 0,1 mm): 1,17–1,35 s, mit erzwungenem Abzug 1,78–1,90 s. Prüfbericht main gegen jetzt,
 gleicher Abdruck aus Code, Werten und Ort: Spiderman 216,8 → 186,5 s CPU, Riser 176,4 → 120,6 s,
 Kumiko 7,0 → 6,9 s, Schraubendreherhalter 14,5 → 12,9 s. Bauplan §9 führt `SliceContour`.
+## RM-496: Am echten Fenster laden reale Modelle so schnell wie in v0.5.1 (09.10.2026)
+
+<a id="rm-496-am-echten-fenster-laden-reale-modelle-so-schnell-wie-in-v051-09102026"></a>
+<a id="rm-496"></a>
+
+**RM-496 — Reale Modelle laden im Prüfstand fast doppelt so lang wie in v0.5.1 — am echten Fenster nachmessen.**
+  Versionsvergleich 0.5.2 (02.10.2026), Weg 1, unter Vorbehalt. Laden bis Ruhe: Rucksack-Halter
+  2,9–3,3 s (v0.5.1) → 5,3–6,1 s, pegboard-STEP ähnlich. Im Profil sind 2,2 s davon nachgeholte
+  Importe von trimesh/networkx und 1,4 s Merkmalserkennung. Der Prüfstand läuft ohne das
+  Vorwärmen beim Programmstart; ob der Kunde die Importzeit sieht, ist offen.
+  **Stellen:** Ladeweg `app/core/ingest/`, Vorwärmen in `app/ui/app.py`; Profil
+  `weg1\sonden\ladeprof.py`.
+  **Fix (allgemein):** am echten Fenster über den Startweg messen; sieht der Kunde die Importe,
+  gehören sie ins Vorwärmen, und die Erkennung darf das Bild nicht aufhalten (vgl. RM-492).
+  **Abnahme:** drei reale Modelle (Rucksack-Halter, pegboard-STEP, ein drittes) am echten Fenster
+  nicht langsamer als v0.5.1. Bauplan §31.
+  Belege: `F:\solidon-review-reports\regression-0.5.2\weg1\befunde.md` (W1-5), Rohwerte in `weg1\ergebnisse\`.
+  Vermerk 09.10.2026: Am echten Fenster kein Rückschritt (03.10., Stand `1e4a03d75`): Über den echten Startweg mit Vorwärmen laden Rucksack, STEP und 3MF so schnell wie in v0.5.1 (3,7 / 3,3 / 14,9 s gegen 3,5 / 3,6 / 14,2 s; v0.4.1 Rucksack 3,1 s); die Verdopplung des Prüfstands kam vom fehlenden Vorwärmen und von Fremdlast. Seit v0.5.1 offen und als [RM-672](ROADMAP.md#rm-672) übernommen, samt der Messung des Bibliothekseinflusses: sofortiges Öffnen nach dem Start dauert doppelt so lang wie in v0.4.1, und unter Fremdlast hungerte der zurückgestellte Hilfsprozess das Laden bis über 150 s aus (vor RM-380 gemessen). Beleg: `F:\solidon-review-reports\rm496\bericht.md`.
+
+**Abschluss:** Am echten Fenster gemessen (03.10.2026, `F:\solidon-review-reports\rm496\bericht.md`, Startweg `app.ui.app.main()` mit Ladebildschirm und Vorwärmen, Prozessbaum auf HIGH, je Zelle 3–4 Läufe im Wechsel): Öffnen bis Ruhe nach 3 s Rucksack-Halter 3,74 s (v0.5.1: 3,46, v0.4.1: 3,13), pegboard-STEP 3,30 s (3,55 / 3,67), `elegoo_grease_tool.3mf` mit 7 Körpern 14,87 s (14,24; v0.4.1 lädt die Datei nicht). Die Verdopplung des Prüfstands kam vom fehlenden Vorwärmen (2,2 s Importe) und von Fremdlast; kein Rückschritt gegenüber v0.5.1. Was offen blieb — sofortiges Öffnen direkt nach dem Start doppelt so lang wie in v0.4.1, der zurückgestellte Hilfsprozess unter Fremdlast und der Einfluss der neuen Bibliotheksstände (+0,3 bis 1,5 s) — steht in [RM-672](ROADMAP.md#rm-672). Abgeschlossen von Claude (Review-Thread).
+
+## RM-650: Ein eingefügtes Modell kommt in den Ausschnitt (09.10.2026)
+
+<a id="rm-650-ein-eingefügtes-modell-kommt-in-den-ausschnitt-09102026"></a>
+<a id="rm-650"></a>
+
+**RM-650 — Ein eingefügtes Modell kommt in den Ausschnitt.**
+Gefunden bei RM-306 (03.10.2026): Ein weiteres Modell kommt an die freie Stelle neben der Plattenmitte; war die Ansicht auf das erste Modell eingepasst, stand das neue außerhalb des Bilds, und nur der Objektbaum verriet, dass es angekommen war.
+
+**Abschluss:** Nach dem Einfügen eines weiteren Modells rahmt die Ansicht einmal nach, wenn es über den zuletzt eingepassten Rahmen hinausragt — derselbe Weg wie nach einem Größenschritt (RM-280). `MainWindow._on_model_placed` merkt sich den Körper (`_placed_to_frame`), und `_frame_the_placed` meldet unmittelbar vor dem Aufbau, der ihn trägt, an `Viewport.frame_if_beyond`; was im Rahmen liegt, lässt die Kamera in Ruhe. Gemerkt wird der Körper, nicht der Zeitpunkt: Eine Bitte gleich beim Einfügen verbrauchte das Review-Gegenbeispiel, ein Aufbau der alten Szene bei offener Schichtansicht. Ein abgewiesener Import und ein Dokument ohne den Körper räumen die Merkung ab. Gilt für Datei, Download, erzeugtes Modell und Einfügemarke (`Session.modelPlaced`, RM-303). Regel in `.claude/rules/kamera.md`, Changelog 0.6.0 in sechs Sprachen. Test `test_ui.py::test_a_further_model_beyond_the_view_comes_into_it` ohne und mit offener Schichtansicht; ohne Nachrahmen beide rot, mit der Bitte beim Einfügen der Fall mit Schichtansicht rot (Gegenproben). Fenstersonde am echten Fenster (zwei Würfel, der zweite neben dem ersten): vorher 3 von 4 — Ausschnitt blieb bei −10…10 mm, das neue Modell reichte bis 35 mm —, nachher 4 von 4, beide im Bild. Umgesetzt von Claude (Thread „Bedienung und KI“).
+## RM-546: Merkmal drehen sagt, wenn die Drehung das Merkmal auf sich selbst legt (08.10.2026)
+
+<a id="rm-546-merkmal-drehen-sagt-wenn-die-drehung-das-merkmal-auf-sich-selbst-legt-08102026"></a>
+<a id="rm-546"></a>
+
+**RM-546 — *Merkmal drehen* um die eigene Achse einer runden Bohrung tut nichts und sagt es
+nicht.** Gefunden am 06.10.2026 beim Review von RM-441 (Claude): Eine Durchgangsbohrung Ø 5
+mit Achse +Z, um `axis="z"` um 45° gedreht, liefert denselben Körper und keinen Befund; nur
+`angle=0` meldet `rotate_feature.unchanged`. Das widerspricht „Eine Operation, die nichts
+bewirkt hat, sagt das“ (`.claude/rules/operationen.md`), und das Modell erfährt nicht, dass der
+Schritt wirkungslos war. **Fix:** Bildet die Drehung das Werkzeug auf sich selbst ab
+(Drehachse gleich Merkmalsachse durch die Mitte, rotationssymmetrische Art), denselben Befund
+mit *Diesen Schritt ändern* am Feld `axis` geben; `cache_version` erhöhen. **Abnahme:** Test an
+Bohrung, Zapfen und Senkung je Kern; ein Langloch bleibt drehbar. Bauplan §2.7.
+
+**Nachweis (08.10.2026, `8601cf9e5`, Paket G):** `prepare_ops._turned_onto_itself` fragt
+nach dem Winkel null die gedrehte Achse: Liegt sie mit demselben Vorzeichen wieder auf der
+alten (Schranke `1 − EPS_GEOM` wie am Ring in `_rotate_torus`) und beim Langloch die
+Mittellinie parallel, kommt der Eingang unverändert zurück, mit `rotate_feature.unchanged` und
+*Diesen Schritt ändern* am Feld `axis` (um die eigene Achse) oder `angle` (volle Umdrehung um
+eine andere). Ein Langloch liegt erst nach einer halben Umdrehung wieder auf sich und bleibt
+sonst drehbar. `cache_version` 11. Tests in `tests/test_feature_moves_keep_shape.py`:
+`test_a_turn_onto_itself_changes_nothing_and_says_so` (Bohrung, Zapfen, Senkung je Kern, um z
+45° und um x 360°, 12 Fälle) und
+`test_a_slot_turned_about_its_own_axis_turns_and_a_half_turn_lies_on_itself` (eine
+Vierteldrehung stellt das Langloch quer, Sollpunkte aus den Maßen) — am Basisstand 14 von 14
+rot. `test_finding_ways.py` führt das Feld je Stelle. Umgesetzt von Claude.
+
+## RM-552: Stift für Bohrung baut an Schraubenloch und Einpressbuchse (08.10.2026)
+
+<a id="rm-552-stift-für-bohrung-baut-an-schraubenloch-und-einpressbuchse-08102026"></a>
+<a id="rm-552"></a>
+
+**RM-552 — *Stift für Bohrung* liest die Kette an einer Bausteinbohrung mit Senkung nicht.**
+Gefunden am 07.10.2026 in der Nachprüfung von P2 (Claude): Am Baustein *Schraubenloch* läuft
+die Bohrung Ø 3,4 von z 2 bis 12 durch ihre Senkung (z 10,7 bis 12), an der *Einpressbuchse M4*
+ebenso. `bore_pin._following` verlangt, dass ein Abschnitt am Ende des vorigen beginnt, und sagt
+`chain_unreadable` („lässt sich hier nicht eindeutig lesen“) — über einen Hohlraum, den Solidon
+selbst gebaut hat. Die Karte bietet den Stift an Bausteinmerkmalen nur noch am Innengewinde an
+(`perceive.actions.OFFERED_AT_A_PART`); über Menü und Palette trifft die Absage jedes
+Baustein-Schraubenloch weiter. **Fix:** Überlappende Kettenglieder auf ihren gemeinsamen
+Abschnitt kürzen, statt abzusagen — die Bohrung endet, wo die Senkung beginnt; danach die Karte
+an Bausteinbohrungen wieder öffnen, wenn der Stift dort baut. **Abnahme:** Test am Schraubenloch
+und an der Einpressbuchse je Kern: Stift gebaut, Spiel rundum mindestens das eingestellte; die
+Magnettasche sagt weiter `narrowing_mouth`.
+
+**Nachweis (08.10.2026, `7cc96d546`, Paket G):** Zwei Ursachen. Die Bausteinbohrung läuft
+durch ihre Senkung bis zur Mündung, und `bore_pin._following` verlangte einen Anschluss am
+Ende; jetzt endet ein Glied, in das das nächste hineinbeginnt, an dessen Anfang, und
+`_chained` prüft, dass die Kette danach bis zum alten Ende reicht (Lücke, Glied mitten in der
+Bohrung oder davor bleiben unlesbar). Dazu nennt die Senkung eines Bausteins ihre Mitte und
+Höhe (`fasteners._countersink_feature`), die Erkennung den weiten Rand; `_cone_mouth` legt die
+Mündung für beide richtig, auch auf dem Weg vom Gewinde aus (`_walk`). Die Karte bietet den
+Stift an Bausteinbohrungen wieder an (`OFFERED_AT_A_PART` mit `hole`), `cache_version` 6.
+Tests: `tests/test_bore_pin.py::test_a_part_bore_that_runs_through_its_countersink_gets_its_pin`
+(Schraubenloch, Schraubenloch mit Kopftiefe, Einpressbuchse je Kern; Volumen gegen die
+Normteiltabelle auf 1e-4, Boden um das halbe Spiel, `_loose` rundum) — am Basisstand rot mit
+`chain_unreadable` —, `test_the_magnet_pocket_from_a_part_still_has_a_narrowing_mouth`
+(Gegenfall) und `tests/test_selection_operations.py::test_a_part_bore_offers_its_pin`. An den
+zwölf Beispielprojekten bauen sieben Bausteinbohrungen, die vorher absagten (Senkkopf 90°,
+Abstand 0,1247 mm gegen das halbe Spiel 0,125); alle übrigen Bohrungen unverändert.
+Umgesetzt von Claude.
+
+## RM-548: Karte und Operation stellen je Merkmalshandlung dieselbe Frage (08.10.2026)
+
+<a id="rm-548-karte-und-operation-stellen-je-merkmalshandlung-dieselbe-frage-08102026"></a>
+<a id="rm-548"></a>
+
+**RM-548 — Lippentasche: die Karte sperrt Verdoppeln und Drehen, die Operation rechnet.**
+Gefunden am 07.10.2026 beim Bau von RM-535 (Claude): Seit RM-535 fragen Karte, Operation und
+Griff beim *Versetzen* dieselbe Funktion (`actions.move_refusal`); bei *Verdoppeln* und
+*Drehen* sperrt die Karte eine Lippentasche (`narrowing`) noch, während die Operation
+rechnet. **Abnahme:** Karte und Operation stellen je Handlung dieselbe Frage; ein Test über
+die Korpusnetze wie `test_the_card_offers_a_move_exactly_where_the_operation_moves`.
+
+**Nachweis (08.10.2026, `1a6af98b8`, Paket G):** Die genannte Lippentasche war an den
+Korpus- und Bausteinfällen nicht mehr uneins (Magnettasche aus dem Baustein, gedrehte
+Scheibe mit Lippe, Lippe unter einer Kuppel: Karte und Operation sagten dasselbe). Die Sonde
+über Korpusnetze und je Zeile der Karte fand die Uneinigkeit dort, wo die Operation „über die
+Luft“ rechnete: an der Tasche um einen Zapfen (`pocket_with_pin.stl`) Verdoppeln, Drehen,
+Bohrung ändern und Entfernen, am Wulst (`post_with_fillet.stl`) und am Ring als ganzem Körper
+(`torus_ring.stl`) das Verdoppeln und am Ring ein anderer Satz; umgekehrt bot die Karte am
+Zapfen und an der Kuppel, die der ganze Körper sind (`dense_cylinder.stl`,
+`shallow_sphere_cap_uv.stl`), Drehen, Ändern und Entfernen an, und die Operation endete mit
+„Von dem Körper bleibt nichts übrig“. Jetzt fragt jede Merkmalshandlung nach ihren
+Leerläufen die Zeile der Karte (`actions.action_refusal`, `prepare_ops._refuse_like_the_card`;
+`move_refusal` ist ihre Fassung fürs Versetzen); was aus dem Lesen des Hohlraums kommt, liest
+die Operation in ihrem eigenen Lauf (berührende exakte Platten, RM-386). `FEATURE_SPANS_THE_BODY`
+sperrt Versetzen, Ändern, Drehen und Entfernen mit einem Satz für alle vier. Dabei gefunden und
+behoben: *Merkmal drehen* belegte an jeder Senkung 90° vor, die Operation kippt sie nur unter
+90° minus halbem Öffnungswinkel; vorbelegt wird jetzt der größte ganze Winkel darunter
+(`prepare_ops.largest_sink_tilt`). Tests in `tests/test_feature_moves_keep_shape.py`:
+`test_the_card_offers_each_handling_exactly_where_the_operation_computes` (neun Korpusnetze ×
+fünf Zeilen, 45 Fälle, am Basisstand 13 rot) und
+`test_the_card_tilts_a_countersink_only_as_far_as_it_stays_one` (je Kern an Bohrung und
+Senkung, am Basisstand 4 rot). An sieben Kundenmodellen aus `F:\3D Dateien` (Scraper mit
+Magneten, Minitopf, Wedge-Lock, Carcassonne-Gitter, Bohrerhalter, Pegboard-STEP, Side kit
+rest; bis zu 18 bewegbare Merkmale je Körper, alle sechs Zeilen) bleibt keine Uneinigkeit
+(vorher 27: 5 an Tasche, Wulst und Ring, 22 Senkungswinkel). Cache-Versionen der sechs
+Operationen erhöht; `move_feature` blieb in `1a6af98b8` auf 15, erst `ec790e827` setzte 16
+(hier stand „sieben“, berichtigt nach Review G, F7).
+Umgesetzt von Claude.
+
+**Nachtrag (09.10.2026, `8911bd021`, Review G, F6/1 und F8):** Der Rest, den das Review fand: An
+einer Senkbohrung durch zwei berührende exakte Platten sperrte die Karte *Merkmal ändern* an
+der Senkung (`CHAIN_NOT_READABLE`), wo die Operation nach dem Verbinden rechnete, und bot
+*Verdoppeln* an Bohrung und Senkung an, wo die Operation absagte; `_READ_BY_THE_OPERATION`
+nahm sechs Sätze aus der gemeinsamen Frage und ließ das stehen. Die Ursache lag in der
+Erkennung: Die zwei ganzen Mäntel, je Platte einer, legte `brep.features` zu einer Bohrung
+zusammen und maß ihren Umfang an den Punkten der Tessellation — 351,4 Grad, also
+`partial`, und `_entrance_side` las keinen Einlauf. Ein Mantel, der selbst die volle
+Umdrehung trägt, ist jetzt ganz (`_cylinder_group_extent`); die Ausnahmeliste ist fort, und
+jede Merkmalshandlung sagt mit dem Satz der Karte ab. Derselbe Vergleich läuft jetzt über acht
+exakte Körper (Platte mit Bohrungen, Tasche mit Zapfen, Kugelpfanne, Ring, Zylinder,
+Senkplatte, berührende Platten mit und ohne Senkung) mal sechs Zeilen; am Basisstand drei
+Zeilen uneins. Er fand dabei die Vorgabe beim Verdoppeln: Die Kopie stand einen Durchmesser
+entlang X daneben und berührte das Original auf einer Linie — am exakten Körper sagte
+*Übernehmen* an jeder Bohrung ab, das Ergebnis bliebe offen. Sie liegt jetzt anderthalb
+Breiten neben der ganzen Kette, entlang X oder Y, nie entlang der eigenen Achse
+(`actions._beside_the_original`). Tests:
+`test_partial_bores.py::test_a_bore_through_two_touching_plates_is_whole_on_both_cores`,
+`test_feature_moves_keep_shape.py::test_the_card_offers_each_handling_exactly_where_the_operation_computes_on_exact_bodies`
+(48 Fälle, am Stand davor 5 rot),
+`test_features.py::test_the_panel_duplicates_a_countersunk_bore_beside_its_countersink`.
+
+## RM-545: Ein getrenntes Teil in Senkung, Langloch oder Schraube verschmilzt nicht mehr still (08.10.2026)
+
+<a id="rm-545-ein-getrenntes-teil-in-senkung-langloch-oder-schraube-verschmilzt-nicht-mehr-still-08102026"></a>
+<a id="rm-545"></a>
+
+**RM-545 — Über Senkung, Langloch und Baustein Schraube verschmilzt ein getrenntes Teil still.**
+Gefunden im Review der RM-413-Einheit (06.10.2026, Fund H1, ergänzt im Nachreview):
+`F:\solidon-review-reports\claude-2026-10-06\geometrie\review-einheit-1.md` und
+`review-einheit-1-runde-2.md`. Die Absage aus RM-413 (`_refuse_another_part_in_the_bore`,
+`perceive.actions.no_own_body`) fragt nur `kind == "hole"`; über die anderen Glieder bleibt
+derselbe Fehler erreichbar, am Basisstand wie heute. Je Zeile, die das Menü anbietet:
+- **Senkbohrung mit Stift** (Bohrung Ø 6, Senkung 90° Ø 10, Stift Ø 5), an `cone_1`: Am Netz
+  ergeben Versetzen und Entfernen ein Teil statt zwei; Ändern (Ø 11) und Drehen (10°) schneiden
+  den Stift von 293,4 auf 97,4 mm³ ab, Befund nur `bore.over_the_edge`. Exakt sagen dieselben
+  vier Zeilen mit `CHAIN_NOT_READABLE` ab — falscher Grund, und die Kerne sagen Verschiedenes.
+  Verdoppeln rechnet an beiden Kernen richtig.
+- **Langloch mit Stift** (`_plate_with_a_second_body(slot=True, inside=True)`), keine Zeile
+  grau: Versetzen, Entfernen und Kippen ergeben an beiden Kernen ein Teil; *Bohrung ändern*
+  (Ø 7) schneidet den Stift am Netz auf 97,6 mm³ ab und verschmilzt ihn exakt, beides ohne
+  Befund. Verdoppeln rechnet am Netz richtig und sagt exakt mit „bliebe offen“ ab.
+- **Baustein *Schraube*** (`insert_printed_screw`, M6, gesenkt, `separate_from_host`, Netz):
+  An der Senkung verschmelzen Versetzen, Entfernen und Kippen die Schraube mit der Platte,
+  Ändern schneidet sie von 462,3 auf 260,5 mm³. Am Kopf `cone_1` schneiden Versetzen und
+  Entfernen den Kopf ab (261,6 mm³), Ändern und Kippen verschmelzen, Verdoppeln bleibt ohne
+  Wirkung und ohne Befund. Beide Kegel stehen in keiner Kette; die Bohrung ist nach dem
+  Einsetzen nicht mehr erkannt.
+Weg: die Frage an den Hohlraum hängen statt an die Merkmalsart — ein Glied einer Kette fragt
+die Bohrung mit (`cavity_chain_state_at`), ein Kegel ohne Kette seinen eigenen Hohlraum, für
+`slot` eine Stadionfassung von `hole_is_clear` und `_own_part_bore_clear`; Menü und Operation
+mit demselben Satz. Abnahme: An diesen Gliedern sagt jede Zeile, die das Menü heute anbietet,
+an beiden Kernen mit `OTHER_PART_IN_THE_BORE` und `split_bodies, cancel` ab und steht im Menü
+mit demselben Satz grau, oder sie rechnet mit unverändertem Teil (Teilezahl, Volumen des
+Teils), an beiden Kernen gleich; je Fall und Zeile ein Test, am heutigen Stand rot. *Zum
+Langloch ziehen* am freien Stift bleibt frei. Sonden: `review-einheit-1-sonden\` und
+`review-einheit-1-runde-2-sonden\test_probe_rm545_zeilen.py`.
+
+**Nachweis (08.10.2026, `ec790e827`, Paket G):** `prepare_ops.separate_part_reason` fragt den
+Hohlraum statt der Art: jedes Glied einer Kette (die Senkung fragt ihre Bohrung mit,
+`cavity_chain_state_at`), das Langloch über sein Stadion um die Mittellinie und eine Senkung
+ohne Kette über den Halbmesser ihrer Wand auf jeder Höhe (`hole_is_clear` misst alle drei,
+`_inside_and_radial`) sagen `OTHER_PART_IN_THE_BORE`; ein Stift oder Schraubenkopf, der selbst
+in der Bohrung eines anderen Teils steckt, sagt den neuen Satz `PART_IN_ANOTHER_BORE` — beide
+mit `split_bodies, cancel`. Karte (`actions_for`, jede Zeile grau) und Operation
+(`_refuse_another_part_in_the_bore` in `_movable_feature` und `resize_hole`) lesen dieselbe
+Funktion; *Zum Langloch ziehen* bleibt am Langloch mit freiem Stift frei
+(`hole_has_separate_contents` nimmt das Langloch). Abweichung von der Abnahme, mit Grund: Am
+Schraubenkopf und am Stift selbst wäre „In dieser Bohrung liegt ein getrenntes Teil“ falsch,
+deshalb der eigene Satz. Tests in `tests/test_slot_features.py`:
+`test_a_separate_part_in_a_countersink_slot_or_screw_says_so_at_every_row` (Senkung,
+Langloch, Senkung und Kopf der Schraube, Stift in Senkbohrung und Langloch, je Kern und Zeile,
+60 Fälle; im Basis-Worktree 60 rot, weil die Karte die Zeilen anbot) und
+`test_the_slot_with_a_separate_pin_still_pulls_and_keeps_the_pin` (Gegenfall, 2 Fälle);
+`test_widening_a_slot_with_a_second_body_in_it_is_no_split` hielt das Abschneiden des Stifts
+fest und prüft jetzt den Stopfen mit dem zweiten Körper neben der Platte. Am Laptop-Ständer
+(`F:\3D Dateien\parametric-laptop-riser.stl`, 22 Teile, 217 Merkmale gefahren) sagen 21
+Merkmale ab, deren Versetzen um 1 mm vorher still 20 bis 142 Teile oder bis −634 mm³
+hinterließ, dazu einer mit −90,9 mm³ bei gleicher Teilezahl; 26 sagten schon vorher mit
+anderem Grund ab. Cache-Versionen der sechs Handlungen erhöht; *Bohrung verschließen*
+(`plug_hole`) fragt dieselbe Funktion und fehlte darunter (berichtigt nach Review G, F4 und
+F7: `cache_version` 8 in `8911bd021`). Umgesetzt von Claude.
+
+**Nachtrag (09.10.2026, `8911bd021`, Review G, F1 und F5):** Die Frage hing wieder an einer
+Artenliste (Bohrung, Langloch, Kegel); Kugelpfanne, Kehle und Innengewinde fragte niemand,
+und die Regelzeile „an jedem Hohlraum“ stimmte nicht. Jetzt fragt sie `types.is_a_cavity`:
+Pfanne und Kehle messen sich in `_inside_and_radial` (Abstand von der Mitte, vom Mittelkreis),
+das Innengewinde am Kern, ein gedrucktes Gewinde ohne Flächen an den Wänden seines Gangs
+(`_with_walls`); am Hohlraum, der keine Bohrung ist, heißen die Sätze
+`OTHER_PART_IN_THE_CAVITY` und `PART_IN_ANOTHER_CAVITY`. Der Lufteinschluss fragt als
+Aufnahme nicht: Versetzen nimmt seine Insel mit, Entfernen füllt sie — so veröffentlicht
+(`test_brep_voids`), an beiden Kernen nachgemessen. Am Kugelgelenk (`ball_in_socket.stl`,
+neu im Korpus, 10 038,06 + 522,47 mm³) sagen Ändern, Versetzen und Entfernen der Pfanne und
+Versetzen der Kugel ab; vorher blieben von der Kugel 41,4 mm³, oder beide verschmolzen. F5:
+Die Teilefrage las jeden Hohlraum über alle Dreiecke, ohne Merker und ohne Abbruch, und jede
+Handlung fragte zweimal. Jetzt gemerkt je Netz und Teil (`sticks_in_another_bore`,
+`cavity_boxes`), nur Hohlräume, deren Hüllquader das eigene Teil erreicht, über dessen
+Dreiecke. Laptop-Ständer (173 592 Dreiecke, 22 Teile): Karte an `pin_5` 2,111 s → 0,518 s
+beim ersten Klick am Körper (die Hüllquader einmal je Netz; ab 20 000 Dreiecken im Arbeiter)
+und 0,018 s danach, `pin_8` 1,726 → 0,016 s, alle 254 Merkmale 121,7 → 4,0 s. Tests in
+`test_slot_features.py`: `test_a_loose_part_in_any_cavity_says_so_at_every_row` (Pfanne, Kugel,
+Kehle, Gewinde je Kern und Zeile), `test_the_ball_in_its_socket_stays_a_loose_ball`,
+`test_a_void_takes_its_loose_ball_along_and_fills_it_on_purpose`,
+`test_the_separate_part_question_reads_what_reaches_and_is_asked_once` (Gegenprobe: mit der
+zweiten Frage in `_movable_feature` rot, „fragte 2-mal“).
+
+## RM-563: Verrunden an mehreren Kanten zugleich wählen (08.10.2026)
+
+<a id="rm-563-verrunden-an-mehreren-kanten-zugleich-wählen-08102026"></a>
+<a id="rm-563"></a>
+
+**RM-563 — Verrunden an mehreren Kanten zugleich wählen.** Kunden-E-Mail vom
+07.10.2026: Der Kunde fand keine Mehrfachauswahl von Kanten und Ecken für *Verrunden*.
+Zuerst prüfen, was es gibt; fehlt der Weg, wird er gebaut, gibt es ihn, wird er sichtbar.
+**Abnahme:** Strg- oder Umschalt-Klick wählt mehrere Kanten, *Verrunden* nimmt alle als einen
+Schritt, am Netz wie am exakten Körper; Handbuch nennt den Weg; Fenstertest.
+
+**Nachweis (08.10.2026, `6cebc6cc7`, Paket G):** Bestand vorher: Mehrere Kanten gab es nur
+über die Kantenliste auf der Rückseite des Dialogs und die Gruppen („alle senkrechten“);
+der Kantenklick im Bild verweigerte das Dazunehmen ausdrücklich, Kantenketten wählt die
+Ansicht keine (der exakte Kern rundet eine Tangentenkette von sich aus mit). Jetzt nimmt an
+einer gewählten Kante Strg- oder Umschalt-Klick weitere desselben Körpers dazu oder heraus
+(`Viewport.add_edge`, `select_edges`, `highlighted_edges`); die zuletzt geklickte führt,
+alle stehen als eine Linie mit einer Kette je Kante im Bild, ein Fehlklick mit Taste wirft
+die Sammlung nicht weg, rechts auf eine der gewählten gilt das Menü allen, die letzte heraus
+führt zurück auf den Körper. Eine Ecke sind ihre Kanten: drei an einer Ecke rechnen dicht
+an beiden Kernen. Das Merkmalfenster nennt „2 Kanten“ und den Weg („Weitere Kanten dazu mit
+Umschalt oder Strg und Klick.“, am Mac ⌘, `labels.adding_key`), behält eingetragene Werte
+beim Dazunehmen, und jede Handlung nimmt alle Schlüssel als einen Schritt; Kontextmenü und
+Menüeintrag belegen den Dialog mit denselben Kanten vor (`_edges_from_view`) statt der
+Vorgabegruppe, die Liste beschriftet sie auch am Netz. Am Kern ändert sich nichts:
+`edges="named"` mit mehreren Schlüsseln rechnet wie die Gruppe (vier obere einzeln und die
+Gruppe *oben*, zwölf einzeln und *alle*: gleiches Volumen an beiden Kernen). Tests:
+`test_ctrl_or_shift_click_takes_more_edges_of_the_chosen_body` (Ansicht) und
+`test_edges_taken_with_ctrl_click_round_in_one_step` (Fenster, Netz und exakt: Radius vor
+der zweiten Kante behalten, ein Schritt mit beiden Schlüsseln, entfernt
+2·(1 − π/4)·r²·40 mm, am Netz der Sehnenzug, Strg+Z); am alten Stand beide rot, neun
+Gegenproben je rot. Echte Modelle (ein Schritt mit drei
+getrennten Kanten gegen drei einzelne Verrundungen, r = 0,8 mm): Wedge-Lock, 1x1-bin,
+desk-organizer (Netz) und carpet-corner-clip (exakt) gleich bis 7·10⁻⁸ mm³, dicht, ein Teil;
+am build_tray (exakt) liegen zwei der drei Kanten auf einer Tangentenkette, die schon jede
+allein ganz rundet — der Schritt nimmt 10,2873 + 10,4578 mm³, wie Kette und dritte Kante.
+Umgesetzt von Claude.
+
+## RM-591: Die Mutternfalle schneidet ihre Tasche, auch von Hand auf eine Fläche gesetzt (09.10.2026)
+
+<a id="rm-591-die-mutternfalle-schneidet-ihre-tasche-auch-von-hand-auf-eine-fläche-gesetzt-09102026"></a>
+<a id="rm-591"></a>
+
+**RM-591 — Von Hand auf die Deckfläche gesetzt, schneidet die Mutternfalle nichts.**
+Gefunden im Review G zu RM-552 (08.10.2026, F2): Quader 30 × 30 × 12, Mutternfalle mit
+`z = 12`: Die Tasche stand ganz über dem Körper, nur das Schraubenloch wurde abgetragen, und
+*Stift für Bohrung* baute an Tasche und Bohrung in die Luft. **Abnahme:** Ursache finden und
+beheben; die Tasche liegt im Material, das Gehäuse-Beispiel bleibt, wie es ist.
+
+**Nachweis (09.10.2026, `8911bd021`, Paket G, Review-Fixes):** Die Mutternfalle baut nach oben
+(die Mutter sitzt im Material) und wurde nur an einer gewählten Fläche gespiegelt. Mit nur
+`x`/`y`/`z` — Chat, Kommandozeile, Dialog ohne Fläche — blieb sie über der Stelle. Jetzt
+spiegelt sie auch dort, wo knapp über der Stelle Luft liegt (`parts.ops._air_above`, zwei
+Überlappungsmaße entlang der Achse). **Zurückgenommen:** Die erste Fassung fragte auf halber
+Höhe des ganzen Bausteins und meldete das Gehäuse-Beispiel als unverändert, gemessen am
+Volumen. Das Schraubenloch reicht aber über jeden Boden hinaus, und in der Mitte des 8 mm
+dicken Bodens rückte die Tasche um 2,5 mm nach unten (z 4,0–6,5 → 1,51–4,01), bei
+gleichem Volumen — gesehen erst an der neu gerenderten Vorschau. Mit der Frage knapp über der
+Stelle ist die Vorschau wieder Byte für Byte die alte. Test:
+`test_parts.py::test_a_nut_trap_set_by_hand_cuts_its_pocket` (Deckfläche und Bodenmitte, je
+mit und ohne Schraubenloch; Deckfläche am Basisstand rot, Bodenmitte mit Schraubenloch an der
+ersten Fassung rot). Bausteinänderung `NUT_TRAP_SINKS_WITHOUT_A_FACE`, Bibliotheksversion 25,
+Bereichsnachweis 49 von 49, Beispiele neu erzeugt (nur `parts_version`, dazu der Stand von
+`inner_shells` in `weg3`, den der Erzeuger schon am Basisstand schrieb). Umgesetzt von Claude.
+
+## RM-590: Ein Klick auf eine Ecke wählt ihre Kanten (09.10.2026)
+
+<a id="rm-590-ein-klick-auf-eine-ecke-wählt-ihre-kanten-09102026"></a>
+<a id="rm-590"></a>
+
+**RM-590 — Ecke als Klickziel.** Gefunden im Review G zu RM-563 (08.10.2026, F6/3): Die
+Kunden-E-Mail nannte „Kanten und Ecken“; eine Ecke verrunden hieß, ihre drei Kanten einzeln
+mit Strg zusammenzuklicken. **Abnahme:** Ein Klick auf eine Ecke wählt ihre drei Kanten.
+
+**Nachweis (09.10.2026, `5fc487f07`, Paket G, Review-Fixes):** `Viewport._corner_at`: Ein
+Endpunkt, an dem sich mindestens drei Kanten treffen (`CORNER_EDGES`), ist eine Ecke; er fängt
+in halber Kantenreichweite (`CORNER_REACH_PIXELS`), damit eine Kante kurz vor ihrem Ende
+anklickbar bleibt, und die nächste Ecke gewinnt. Ohne Taste wählt der Klick alle Kanten dort,
+mit Strg oder Umschalt an einer gewählten Kante kommen sie dazu oder gehen wieder heraus
+(`add_edges`); an beiden Körperarten. Verrunden r = 3 an den drei Kanten einer Quaderecke
+40 × 30 × 20 trägt exakt 169,3076 mm³ ab, Lehrbuchwert Σ(1 − π/4)·r²·(Lᵢ − r) + r³·(1 − π/6).
+Test: `test_selection.py::test_a_click_on_a_corner_chooses_the_edges_that_meet_there` (exakt
+und Netz; am Basisstand rot: eine Kante). Handbuch, Regel der Ansicht und Begründung
+nachgezogen. Umgesetzt von Claude.
+
+## RM-579: Die Linie zeigt am exakten Körper die ganze Kontur, die verrundet wird (09.10.2026)
+
+<a id="rm-579-die-linie-zeigt-am-exakten-körper-die-ganze-kontur-die-verrundet-wird-09102026"></a>
+<a id="rm-579"></a>
+
+**RM-579 — Am exakten Körper zeigt die Linie nur die geklickte Kante.** Gefunden im
+Review G zu RM-563 (08.10.2026, F6/2): Gerundet wird die ganze Tangentenkette — OpenCASCADE
+nimmt tangential anschließende Kanten mit —, die Hervorhebung zeigte nur die geklickte, und
+welche mitgingen, sah der Kunde erst in der Vorschau (`build_tray`). **Abnahme:** Die
+Hervorhebung zeigt am exakten Körper die ganze Kette, die verrundet wird.
+
+**Nachweis (09.10.2026, `5fc487f07`, Paket G, Review-Fixes):** `brep.edit.contour_keys` liest die
+Kontur aus demselben Builder (`BRepFilletAPI_MakeFillet`, ohne zu bauen),
+`Viewport._contour_of_chosen_edges` zeichnet sie, einmal je Auswertung gemerkt. Quader
+40 × 30 × 20 mit gerundeten senkrechten Kanten (r = 3): an einer oberen Strecke acht Ketten
+statt einer; die Rundung r = 1 an der einen trägt 28,6378 mm³ ab, den Lehrbuchwert des ganzen
+Rands, (1 − π/4)·r²·(116 + 2π·(3 − 0,2234·r)). Tests:
+`test_brep.py::test_the_contour_of_a_chosen_edge_is_what_the_fillet_rounds` und
+`test_selection.py::test_a_chosen_edge_of_an_exact_body_shows_the_whole_contour_it_rounds`
+(am Basisstand rot: eine Kette statt acht). Umgesetzt von Claude.
+
+## RM-598: Die erklärte Schraubenbohrung der Mutternfalle endet im Körper (09.10.2026)
+
+<a id="rm-598-die-erklärte-schraubenbohrung-der-mutternfalle-endet-im-körper-09102026"></a>
+<a id="rm-598"></a>
+
+**RM-598 — Die erklärte Schraubenbohrung der Mutternfalle reicht 10 mm in die Luft.**
+Gefunden bei den Review-Fixes zu Paket G (09.10.2026): Der Baustein schneidet sein
+Schraubenloch 10 mm über die Tasche hinaus, damit es durch jede Wand geht, und erklärte die
+Bohrung über diese ganze Länge — auf der Deckfläche eines 12 mm dicken Quaders von z = -0,5
+bis z = 22. *Stift für Bohrung* sagte deshalb ab, an der Stelle sei kein Hohlraum im Körper.
+**Abnahme:** Die erklärte Bohrung endet im Körper, und *Stift für Bohrung* geht dort.
+
+**Nachweis (09.10.2026, `2f96dafe8`, Paket G):** Eine erklärte Durchgangsbohrung eines
+Bausteins endet an den Grenzen des Körpers (`parts.ops._through_bores_in_the_body`): gemessen
+am Träger vor dem Schnitt, entlang der Achse; wo die Mitte eines Stücks auf der Diagonale einer
+Deckfläche liegt, fragt die Probe eine Facettenhöhe daneben nach. Die Bausteinoperationen
+tragen `targets:8`. Test `test_bore_pin.py::test_the_screw_bore_of_a_nut_trap_ends_in_the_body_and_takes_a_pin`
+(je Kern: Bohrung von z = 0 bis z = 12, der Stift lose und im Körper; am Stand davor rot mit
+-0,515 bis 22,01). Bereichsnachweis 49 von 49, Beispiele unverändert. Umgesetzt von Claude.
+
+**Nachtrag (09.10.2026, Paket G):** Die erste Fassung kürzte jede erklärte Durchgangsbohrung,
+auch die im eigenen Material eines anbauenden Bausteins, die am Träger vor dem Schritt in der
+Luft liegt: An Passungsleiter und Bajonett blieben 0,01 mm statt 3 und 11,625 mm, am
+Schlauchanschluss, der seinen Stutzen aufbaut, 3 statt 30 mm. **Zurückgenommen** ist damit die
+Aussage, außer der Mutternfalle bleibe alles, wie es war — Beispiele und Bereichsnachweis lesen
+die Länge erklärter Bohrungen nicht. Die Begrenzung gilt jetzt nur für bloß abtragende Bausteine
+(`only_cuts`), die Bausteinoperationen tragen `targets:9`. Test
+`test_bore_pin.py::test_a_part_that_builds_material_keeps_the_length_of_its_bores` (je Kern an
+Passungsleiter, Bajonett und Schlauchanschluss; ohne die Einschränkung sechs rot). An vier
+eingelesenen Modellen — Laptop-Ständer als Netz, drei exakte Körper — endet die Bohrung der
+Mutternfalle auf der größten Deckfläche im Körper statt 10,01 mm darüber in der Luft (am
+Teppichclip oben im Gegenbacken, den das Werkzeug mit durchbohrt), und *Stift für Bohrung* baut
+dort den Stift; ohne die Begrenzung sagte er an drei der vier ab, am vierten ragte der Stift
+10 mm aus der Fläche.
+
+## RM-597: Ein exakt gesetztes Merkmal, das anderes Material nur auf einer Linie berührt, sagt es (09.10.2026)
+
+<a id="rm-597-ein-exakt-gesetztes-merkmal-das-anderes-material-nur-auf-einer-linie-berührt-sagt-es-09102026"></a>
+<a id="rm-597"></a>
+
+**RM-597 — Eine exakte Zapfenkopie, die das Original berührt, liefert einen undichten Körper.**
+Gefunden bei den Review-Fixes zu Paket G (09.10.2026): Tasche mit Zapfen, die Kopie genau einen
+Durchmesser daneben — offener Zwilling, 18 560,8 mm³, ohne Befund; der Schnittweg sagt in
+derselben Lage längst ab. **Abnahme:** Auch getippte Zahlen führen nicht dorthin, ohne dass es
+gesagt wird oder richtig rechnet.
+
+**Nachweis (09.10.2026, `2f96dafe8`, Paket G):** Die exakten Wege aus den Flächen — Versetzen,
+Verdoppeln, Ändern, Zapfen und Kegel kippen — fragen ihr Ergebnis (`_exact_placed_holds`): War
+der Körper vorher dicht und ist er danach ungültig oder zeigt sein Zwilling eine Berührung —
+Kanten an mehr als zwei Dreiecken, ohne offene Kante —, sagt die Handlung ab, mit dem Weg, die
+Eingabe zu ändern. **Zurückgenommen:** Die erste Fassung sagte bei jedem offenen Zwilling ab und
+traf damit die um 1° gekippte Wellenhälfte über einer Kehle, einen gültigen Körper, dessen Netz
+an einer Naht nicht schloss (fünf offene neben vier mehrfachen Kanten); die zweite fragte die
+Topologie und übersah den an die Wand versetzten Zapfen. Test
+`test_feature_moves_keep_shape.py::test_an_exact_pin_that_only_touches_material_says_so`
+(Kopie, an die Taschenwand versetzt, auf den Boden gekippt; ohne die Frage alle drei rot).
+Der Vergleich von Karte und Operation über exakte Körper nimmt dafür einen 5 mm hohen Zapfen:
+Bei Höhe gleich Durchmesser legt die Vorgabe der Karte (90°) ihn genau auf den Boden.
+Umgesetzt von Claude.
+
+## RM-596: Merkmalshandlungen lassen fremde Teile, wie sie sind (09.10.2026)
+
+<a id="rm-596-merkmalshandlungen-lassen-fremde-teile-wie-sie-sind-09102026"></a>
+<a id="rm-596"></a>
+
+**RM-596 — *Merkmal drehen* an einer Wellenhälfte verschmilzt den losen O-Ring in der Kehle.**
+Gefunden bei den Review-Fixes zu Paket G (09.10.2026): Welle Ø 20 × 40 mit Kehle und losem
+O-Ring; die obere Hälfte um 10° gekippt fährt in den Ring, und beide Kerne lieferten ein Teil
+statt zwei (12 717 mm³ am Netz), ohne Befund. **Abnahme:** Absage oder richtige Rechnung, an
+beiden Kernen.
+
+**Nachweis (09.10.2026, `2f96dafe8`, Paket G):** Jede Merkmalshandlung außer *Zum Langloch
+ziehen*, das ein freies Teil in seiner Bohrung mit Absicht mitschneidet, fragt ihr Ergebnis
+(`_leaves_other_parts_alone`): Jede Schale eines Teils, zu dem das Merkmal nicht gehört — Teile
+als Materialfamilien —, steht danach mit demselben Rauminhalt und Hüllquader für sich da, sonst
+Absage mit *In Einzelteile aufteilen*; wo die Handlung berührende Teile mit Befund vereinigt,
+gilt der Befund. Um 1° gekippt rechnet die Wellenhälfte weiter, der Ring bleibt lose. Am
+Laptop-Ständer fängt dieselbe Frage drei Versetzungen um 0,5 mm, die vorher bis zu 145 Schalen
+hinterließen, und kostet dort 0,3 bis 0,4 s. Test
+`test_slot_features.py::test_turning_a_shaft_half_does_not_swallow_the_loose_ring_in_its_groove`
+(je Kern; ohne die Frage rot). Cache-Versionen der acht Handlungen erhöht. Umgesetzt von Claude.
+
+## RM-631: Eine Durchgangsbohrung geht genau durch das Teil (09.10.2026)
+
+<a id="rm-631-eine-durchgangsbohrung-geht-genau-durch-das-teil-09102026"></a>
+<a id="rm-631"></a>
+
+**RM-631 — Eine Durchgangsbohrung geht genau durch das Teil.** Gefunden bei RM-598 (Paket G,
+09.10.2026): Das Schraubenloch der Mutternfalle reichte fest 10 mm über die Tasche hinaus. In
+einem 40 mm dicken Quader blieb es ein Sackloch (z = 27,485 bis 40) und hieß Durchgang, auf dem
+Boden eines Spalts bohrte es in den Backen darüber; *Schraubenloch mit Senkung* mit Tiefe 10 in
+12 mm hieß ebenso Durchgang. Entschieden (Koordinator Welle 2): Eine Durchgangsbohrung geht
+genau durch das Teil, auch durch einen dicken Träger, und nie über die Fläche hinaus in fremdes
+Material; mit gesetzter Tiefe ist sie ehrlich ein Sackloch. **Abnahme:** je Kern die Mutternfalle
+durch 40 mm und auf dem Boden eines Spalts, das Schraubenloch 10 in 12 mm als Sackloch,
+Bereichsnachweis und Beispiele neu.
+
+**Nachweis (09.10.2026, `a7177473d`, Paket G):** Die Mutternfalle baut ihr Schraubenloch nur über
+die Tasche und nennt es in `PartSpec.reaches_through`; die Operation verlängert es an jedem Ende
+bis zum ersten Austritt aus dem Träger (`parts.ops._reaching_through`: acht Punkte am Rand des
+Querschnitts, nur wenn alle im Material liegen), in einer Bohrung bis zu deren Enden, quer zu ihr
+sagt sie ab. *Von unten eingelegt* führt der Schlitz von der Mündung zur Tasche, Tasche und
+Bohrung sind dort erklärt, wo sie liegen. Jede erklärte Durchgangsbohrung, hinter deren Ende nach
+dem Schritt Material liegt, heißt Sackloch (`_through_bores_in_the_body`). `LIBRARY_VERSION` 26
+mit `NUT_TRAP_BORES_THROUGH_THE_PART`, Bausteinoperationen `targets:10`. Tests in `test_parts.py`
+(`test_a_nut_trap_bores_through_a_carrier_thicker_than_its_old_reach`,
+`…_on_the_floor_of_a_gap_leaves_the_jaw_above_alone`, `…_screw_hole_with_a_set_depth_says_whether_it_goes_through`,
+`…_cut_through_bore_of_set_length_is_blind_in_a_thicker_carrier`, `…_laid_in_from_below_…` (2),
+`…_in_a_bore_takes_its_screw_hole_along_the_bore`), je Kern 28 Fälle, am Stand davor 20 rot.
+Bereichsnachweis 49 von 49, Beispiele nur `parts_version` (Gehäuse: Volumen gleich, 1 268 statt
+1 274 Dreiecke). An eingelesenen Modellen: in einem 40 mm hohen Lochwandhalter durch das ganze
+Material statt 12,5 mm, auf dem Boden des Spalts einer Teppichklammer bleibt der Backen darüber
+voll (vorher bis z = 7 durchbohrt). Umgesetzt von Claude.
+
+## RM-632: Die Mutternfalle zeigt ihr Schraubenloch vor dem Setzen (09.10.2026)
+
+<a id="rm-632-die-mutternfalle-zeigt-ihr-schraubenloch-vor-dem-setzen-09102026"></a>
+<a id="rm-632"></a>
+
+**RM-632 — Katalogbild, Platzierungsgeist und SCAD-Export der Mutternfalle zeigen kein
+Schraubenloch.** Folge von RM-631 (Paket G, 09.10.2026): Seit der Schritt das Schraubenloch durch
+den Träger bohrt, baut der Baustein es nur über seine Tasche, wo es nicht zu sehen ist.
+**Abnahme:** In Vorschau, Geist und SCAD steht die Bohrung mit einer benannten Anzeigelänge, nie
+aus der Mündung heraus.
+
+**Nachweis (09.10.2026, `571f8dead`, Paket G):** `parts/through.py` zeigt die Bohrungen aus
+`reaches_through` drei Durchmesser weit (`SHOWN_REACH`, bei M3 10,2 mm), nur an den Enden, die
+nicht aus der Mündung zeigen; `preview.render`, `ops.placement_tools`, `ops.placed_tool` und
+`scad.to_scad` (Zylinder mit der Variable `through_length`) benutzen es, `ops._reaching_through`
+denselben Zylinder. Tests `test_parts_catalog.py::test_the_nut_trap_shows_its_screw_hole_in_the_preview_and_the_scad_file`
+(seitlich und von unten) und `…::test_the_nut_trap_ghost_shows_its_screw_hole_into_the_material_only`,
+am Stand `c12091b8d` rot (Vorschau mit und ohne Schraubenloch 38 Dreiecke, kein Zylinder in der
+SCAD-Datei). Maße unverändert. Umgesetzt von Claude.
+
+## RM-633: Eine Kabeldurchführung in einer dickeren Wand sagt es (09.10.2026)
+
+<a id="rm-633-eine-kabeldurchführung-in-einer-dickeren-wand-sagt-es-09102026"></a>
+<a id="rm-633"></a>
+
+**RM-633 — Die Kabeldurchführung mit Zugentlastung heißt im dicken Träger Durchgang.** Gefunden
+bei RM-631 (Paket G, 09.10.2026): Im 40-mm-Quader öffnete die Bohrung in den eigenen Klemmkanal,
+der eingeschlossen im Material lag; erklärt war sie als Durchgang, gesagt wurde nichts.
+**Abnahme:** je Kern Sackloch und ein Befund mit Weg zur Wandstärke; in der passenden Wand bleibt
+alles, wie es war.
+
+**Nachweis (09.10.2026, `571f8dead`, Paket G):** `_through_bores_in_the_body` fragt außer dem Körper
+nach dem Schritt den Träger davor; verschließt er die Bohrung, ist sie ein Sackloch. Ein abtragender
+Baustein mit Aufbau (`host_add`) und Feld `wall` meldet dann `parts.wall_thicker` (Warnung, gemessene
+Wand, *Diesen Schritt ändern* auf `wall`), Kabeldurchführung und Schlauchtülle; neuer Satz in allen
+Katalogen, Bausteinoperationen `targets:11`. Test
+`test_parts.py::test_a_part_built_for_a_thinner_wall_says_so` (je Kern, beide Bausteine, 40 mm und
+3 mm): am Stand `c12091b8d` die vier 40-mm-Fälle rot. **Zurückgenommen:** Die erste Fassung fragte
+den Träger direkt hinter der Bohrung und warnte an der Dose im Beispiel, deren ausgehöhlte Wand dort
+2,8 statt 2,4 mm misst (Raster der Aushöhlung) — der Klemmkanal schneidet den Rest durch (Torlauf).
+Gefragt wird jetzt hinter dem ganzen Werkzeug entlang der Achse; Gegenprobe
+`test_a_cable_gland_in_a_slightly_thicker_wall_cuts_through_the_rest` (je Kern). Die Beispiele
+bleiben unverändert. Umgesetzt von Claude.
+## RM-549: Die AppImages der Orca-Familie zeigen ihre Herstellerdrucker ohne ersten Start (09.10.2026)
+
+<a id="rm-549-die-appimages-der-orca-familie-zeigen-ihre-herstellerdrucker-ohne-ersten-start-09102026"></a>
+<a id="rm-549"></a>
+
+**Befund (07.10.2026, Slicerauswahl CI-09):** Die AppImages der Orca-Familie tragen
+`resources/profiles` nur im eingebetteten SquashFS; erst ihr erster Start legt die Bündel nach
+`<Konfiguration>/<Programm>/system/`. Über einem nie geöffneten AppImage fand Solidon keinen
+Herstellerdrucker, der Druckdialog sagte „Keine Profile gefunden“, und ohne vorgewähltes Profil
+lehnte die Konsole ab („process not compatible with printer“). Der Slicertest legte deshalb den
+Zustand nach dem ersten Start an (`tests.helpers.first_start`).
+
+**Behoben:** `app/core/export/appimage.py` liest das Abbild als Datei — Typ-2-Laufzeit,
+SquashFS 4.0, gzip, xz und zstd aus der Standardbibliothek — und legt die Profile je Fassung im
+Nutzer-Cache ab; gestartet wird nichts (Regel 11). `slicer_profiles.install_root` fragt dort für
+jedes AppImage der Orca-Familie, der Fensterfaden wartet nie (`appimage.never_wait_in`).
+Unlesbare Abbilder lassen den mitgelieferten Bestand leer wie bisher, der Druckdialog rät dann
+zum ersten Öffnen.
+`first_start` ist entfernt; die Slicertests laufen auf frischen AppImages.
+
+**Nachweis (09.10.2026):** Lokal an den vier Fassungen der Slicerauswahl (OrcaSlicer 2.4.2,
+ElegooSlicer 1.5.3.5, Creality Print 7.3.0.6149, Bambu Studio 2.8.2.61): alle 34 500 Profile
+byte-gleich mit dem Auszug von 7-Zip. Slicerauswahl 37870414650 grün auf Linux, Apple Silicon
+und Intel-Mac: unter Linux ohne ersten Start 997, 997, 491 und 202 Drucker, erste Kopie 0,63,
+0,63, 0,36 und 0,19 s, der Würfel aus allen vier AppImages gesliced.
+`tests/test_appimage_profiles.py` (41 Fälle; der Anschlussfall und der Fensterfaden am alten
+`slicer_profiles.py` rot), `tests/test_real_slicers.py::test_a_slicer_never_opened_offers_the_printers_of_its_maker`.
+Changelog: ja.
+
+## RM-599: Curas AppImage wird für seine Drucker gelesen, nicht eingehängt (09.10.2026)
+
+<a id="rm-599-curas-appimage-wird-für-seine-drucker-gelesen-nicht-eingehängt-09102026"></a>
+<a id="rm-599"></a>
+
+**Anlass (Vorschlag aus RM-549):** Die Druckerkopie einer AppImage-Cura (RM-521) startete das
+AppImage mit `--appimage-mount`, nur um `share/cura/resources` zu kopieren und nachzusehen, ob
+Lader und CuraEngine darin liegen. Ohne FUSE gab es dann keine Drucker. Curas Abbild (5.13) ist
+gzip-komprimiert und damit mit der Standardbibliothek lesbar.
+
+**Behoben:** Der Leser aus RM-549 steht als `app/core/export/squashfs.py` für beide bereit.
+`cura_linux._read_resources` kopiert den Bestand aus dem Abbild, `engine_complete` beantwortet
+aus `AppRun.env`, Lader und CuraEngine im Abbild dieselbe Frage wie `loader_command` am
+eingehängten Ordner. Der Lader ist im Abbild eine Verknüpfung nach `lib/x86_64-linux-gnu`;
+`SquashImage.resolve` folgt Verknüpfungen nur innerhalb des Abbilds. Eingehängt wird nur noch
+für einen Lauf. Vertrag wie zuvor: Cache je Fassung, Fensterfaden wartet nie, fremde Eingabe.
+Der Starttest des Pakets verlangt unter Linux, dass es gzip und zstd entpackt
+(`image_compressions`, `tools/check_frozen_start.py`).
+
+**Nachweis (09.10.2026):** Lokal gegen 7-Zip: 9 944 Dateien byte-gleich, Rechenmaschine
+erkannt. Gegenprobe mit dem alten `cura_linux.py`: der neue Fall
+`test_curas_printers_and_engine_come_from_the_image_without_starting_it` und
+`test_cura_as_an_appimage_computes_while_it_is_mounted` rot (Prozessstart beim Lesen, Einhängen
+der Kopie). Slicerauswahl 37879205882 (Cura) grün auf Linux, Apple Silicon und Intel-Mac:
+unter Linux mit leerem Cache und ohne Prozessstart 9 944 Dateien in 1,19 s, Rechenmaschine
+erkannt (`test_real_slicers.py::test_curas_printers_are_read_from_its_appimage_without_starting_it`),
+der Würfel aus Curas AppImage gesliced. Changelog: nein, Cura als AppImage ist als Ganzes neu in 0.6.0.
+
+**Nach der Durchsicht (Review 1, 09.10.2026), für RM-549 und RM-599:** Ein beschädigter
+gzip-Block entkam als `zlib.error` und kostete die ganze Profilliste samt eigener Profile; jetzt
+übersetzt ein Entpacker für alle Kompressionen jeden Entpackfehler in ein unlesbares Abbild, die
+Absage gilt je Fassung bis *Neu suchen*, und kein Zwischenordner bleibt liegen. Die Kopie-Verwaltung
+war ein auseinandergelaufener Zwilling (Curas Merker nannte nach geleertem Cache einen gelöschten
+Ordner); beide nutzen jetzt `appimage.ImageCopies`. Die Grenzen greifen vor der Allokation (§32).
+Gegenprobe am Zweigstand `09c2941c8`: neun neue Fälle rot (`zlib.error`, Zwischenordner,
+34,6 MB Spitze bei 1 MiB Grenze, Curas Drucker fehlen nach dem Leeren), die übrigen über
+Mutationen; der Fensterfadentest wird mit eingebauter Sperre rot.
+## RM-528: Eine Installation kennt mehrere Release-Schlüssel, und der Wechsel hat einen Ablauf (09.10.2026)
+
+<a id="rm-528-eine-installation-kennt-mehrere-release-schlüssel-und-der-wechsel-hat-einen-ablauf-09102026"></a>
+<a id="rm-528"></a>
+
+**RM-528 — Die Installation kennt nur einen Release-Schlüssel.** `app/core/updates.py` prüfte die
+Versionsdatei und vor dem Start die gespeicherte Paketangabe gegen genau einen Schlüssel
+(`RELEASE_PUBLIC_KEY`). Bauplan §37.2 verlangt mehrere zulässige, damit ein neuer eingeführt
+werden kann, solange der alte noch unterschreibt. Entschieden (Robert, 06.10.2026):
+Schlüsselliste bauen und in einer Version ausliefern, bevor der Schlüssel wechselt.
+
+**Umsetzung:** `RELEASE_PUBLIC_KEYS`, derzeit nur der Schlüssel seit 0.1.4. Jede Prüfung geht
+durch `updates.accepted_key` — `signing_key`/`signature_ok` bei der Abfrage und
+`_package_authorized` vor dem Start; kein Ort liest mehr einen einzelnen Schlüssel. Der Ablauf
+des Wechsels in vier Schritten steht an einer Stelle, `Signierung/README.md` („Versionsdatei —
+der Release-Schlüssel und sein Wechsel“); Werkzeug, Regel und Konzept verweisen dorthin.
+`tools/sign_version.py` hält ihn mechanisch: Es unterschreibt nur mit einem Schlüssel, den die
+vorige veröffentlichte Version laut ihrem Git-Tag schon trug (`published_key_lists`,
+`keys_in_source` über `ast`, beide Quellformen), gleich mit welchem Schalter und an welcher
+Stelle der Liste; wechselt der Schlüssel gegenüber `HEAD:website/version.json`, verlangt es
+`--after-switch` als Bestätigung der Wartezeit. Ohne Tags hält es an. `--check` und
+`upload_website.refuse_unsigned_version` teilen sich `version_file_problem` und halten eine
+Datei an, die die vorige Version nicht lesen könnte. Jede Ablehnung nennt ein „Zu tun“.
+`--new-keypair` gibt eine Besitzprobe aus (Unterschrift des neuen Schlüssels über
+`proof_message`), die nach `KEY_PROOFS` in `tests/release_signing.py` kommt.
+
+**Nachweis:** `tests/test_updates.py` mit im Test erzeugten Schlüsseln: alter und neuer tragen
+bei Abfrage und Startprüfung, ein fremder nicht, eine beschädigte Unterschrift (ein Bit,
+gekürzt, veränderter Inhalt) mit keinem; eine Installation nur mit dem alten verwirft, was der
+neue unterschreibt. Werkzeug: der neue kann die Version, die ihn einführt, nicht
+unterschreiben, auch nicht mit `--after-switch` und nicht vorn in der Liste; der Wechsel selbst
+braucht den Schalter einmal; `--check` und Uploadsperre halten eine am Werkzeug vorbei
+unterschriebene Datei an; ohne Tags Ablehnung; die echte `version.json` trägt einen Schlüssel,
+den ihr Vorgänger-Tag kennt. Schlüssel: kein Doppel, kein Punkt kleiner Ordnung, der erste
+gegen seinen Abdruck, jeder weitere mit gültiger Besitzprobe; Gegenprobe mit Tippfehler,
+Platzhalter, vertauschter Probe, fehlender Probe und Doppel. Mutationen: ohne Tagprüfung vier
+Tests rot, ohne Bestätigung einer; `accepted_key` nur mit dem ersten Schlüssel zwei rot.
+Changelog: nein — mit einem Schlüssel in der Liste verhält sich die Installation wie 0.5.3. Ob
+und wann das Paar wechselt, führt [RM-634](ROADMAP.md#rm-634).
+
+## RM-351: Der Signaturhinweis zu Windows nennt nur die erste signierte Version (09.10.2026)
+
+<a id="rm-351-der-signaturhinweis-zu-windows-nennt-nur-die-erste-signierte-version-09102026"></a>
+<a id="rm-351"></a>
+
+**RM-351 — Die Website bietet 0.5.1 an und nennt im Downloadhinweis 0.5.0 als signierte
+Fassung.** Review seit 0.5.1, Befund E-N1, Commit `1f5dc9f43`. Der Hinweis im Windows-Reiter
+sagte in allen sechs Sprachen „Die Windows-Version 0.5.0 ist digital signiert.“ direkt unter
+„Version 0.5.1“; ein Kunde las daraus, die angebotene sei es nicht. Seit `1d9373efa` (in
+v0.5.2 und v0.5.3) lautet er versionsneutral „ab 0.5.0“; offen war der Wächter.
+
+**Umsetzung:** `tests/test_website.py::test_the_signature_hints_name_only_the_first_signed_version`
+liest je Startseite die Stellen selbst, keine Wortfilter: Windows-Reiter, macOS-Reiter und die
+Zeile „Betriebssystem“ der Systemvoraussetzungen. Jede volle Versionsnummer dort ist die erste
+signierte (0.5.0) bzw. erste notarisierte (0.4.1), steht mit dem „ab“ der Sprache davor
+(`SINCE_WORDS`) und liegt nicht über `website/version.json`; die erste erlaubte muss an jeder
+Stelle gefunden werden, sonst ist der Hinweis weg und der Test rot.
+
+**Nachweis:** grün in allen sechs Sprachen. Gegenprobe an veränderten Kopien
+(`test_the_signature_guard_catches_a_manipulated_copy`): der Ausgangssatz deutsch und
+englisch, ein Satz ohne „Windows“ mit mitalternder Nummer, das portugiesische Partizip, „ab
+0.5.1“, „Version 9.9.9“ im Zwilling, eine veröffentlichte 0.4.9, ein Reiter ohne Hinweis und
+der Mac-Hinweis ohne „ab“ werden je erkannt; die ersten vier ließ die erste Fassung des
+Wächters durch (Review S, M-1). Live am 09.10.2026 nachgesehen: auf solidon3d.de steht in allen
+sechs Sprachen „ab 0.5.0“ neben „Version 0.5.3“, wie im Repository. Changelog: nein.
+
+## RM-680: Bausteine verwalten steht ohne eigenen Baustein offen (09.10.2026)
+
+<a id="rm-680-bausteine-verwalten-steht-ohne-eigenen-baustein-offen-09102026"></a>
+<a id="rm-680"></a>
+
+**RM-680 — Der Bausteinkatalog beginnt mit zugeklapptem Verwaltungsabschnitt, auch wenn noch kein eigener Baustein existiert.**
+  Nachprüfung RM-455 (03.10.2026, `09d8e9485`, Befund 3.1). Im frisch geöffneten Katalog stehen
+  *Auswahl als Baustein speichern …*, *Baustein aus Datei hinzufügen …*, *Als OpenSCAD-Datei
+  schreiben …*, *Baustein als Datei weitergeben …* und die beiden Sperrgründe hinter der
+  zugeklappten Kopfzeile *Bausteine verwalten*, solange kein eigener Baustein gewählt ist; in
+  v0.5.1 und v0.5.0 standen sie offen (**Regression gegenüber v0.5.1**, Ursache `48ffcf145`). RM-455
+  klappt den Abschnitt nur an einem eigenen Baustein auf. Die beiden Hinweistests klappen ihn selbst
+  auf und prüfen „der Grund steht sichtbar da“ (§2.7) nur im offenen Zustand. Auf `paket/b-bausteine`
+  beginnt der Abschnitt weiter zu (`open_now=False`, `app/ui/catalog.py:609–611`); die Kopfzeile
+  nennt seit `dd7e1e923` im Untertitel „Eigene Bausteine speichern, aus Datei hinzufügen, …“; aufgeklappt
+  wird nur an einem eigenen Baustein (`:1223`).
+  **Stellen:** `app/ui/catalog.py:599–602` und `:1200` (origin/main), `:609–611` und `:1223`
+  (`paket/b-bausteine`), die
+  Hinweistests in `tests/test_catalog_ui.py`.
+  **Fix (allgemein):** Der Abschnitt beginnt offen, solange ein Sperrgrund steht oder noch kein
+  eigener Baustein existiert; oder *Speichern* und *Hinzufügen* stehen außerhalb der Klappe. Die
+  Hinweistests prüfen den Grund ohne vorheriges Aufklappen.
+  **Abnahme:** Fenstertest: frischer Katalog ohne eigene Bausteine zeigt *Speichern*, *Hinzufügen*
+  und beide Sperrgründe ohne Klick; mit eigenem Baustein und gewähltem eingebautem Baustein bleibt
+  das heutige Verhalten; die Handbuchseiten `own-parts` und `exchange` nennen den Abschnitt.
+  Bauplan §2.7, §24.
+  Belege: `F:\solidon-review-reports\verif-09d8e9485.md` (Abschnitt 3).
+
+**Abschluss:** Der Abschnitt *Bausteine verwalten* beginnt offen, solange der eigene Bausteinordner nichts hält (`PartCatalog`, `_own_library_is_empty`). Gezählt werden gespeicherte Rezepte und hinzugefügte Bausteine, dieselbe Frage wie für Weitergabe, *Bearbeiten* und *Entfernen* (`_in_own_library`, vorher dreimal hergeleitet); ein mitgereister und ein `.py`-Baustein zählen nicht, `PartSpec.own` zählte anders. Danach gilt der Merker (`remember`, RM-491), und ein eigener Baustein klappt den Abschnitt wie bisher auf (RM-455; dass dieses Aufklappen gemerkt wird, steht in [RM-658](ROADMAP.md#rm-658)). Damit stehen *Auswahl als Baustein speichern …*, *Baustein aus Datei hinzufügen …* und beide Sperrgründe ohne Klick da, wie in 0.5.1 (Rückschritt seit `48ffcf145`, in 0.5.2 und 0.5.3). Weil der Weitergabegrund jetzt vorn steht, sagt er ohne eigenen Baustein „Speichern Sie zuerst einen eigenen Baustein, um ihn weiterzugeben.“ statt zum Wählen aufzufordern, das bei einem eingebauten in die nächste Absage führte. Die Hinweistests prüfen den Grund ohne vorheriges Aufklappen und stellen die Bibliothek ohne eigene Bausteine selbst her (`no_own_parts`); `test_the_closed_management_names_what_it_holds` prüft den zugeklappten Zustand nach einem Klick; neu `test_a_fresh_catalogue_shows_its_management_without_a_click` und `test_only_a_part_in_the_own_library_closes_the_management` (Rezept und hinzugefügt zu, mitgereist und `.py` offen). Gegenprobe über ein Plugin, je Mutation von acht Tests rot: immer zu 6, immer offen 2, Prädikat über `PartSpec.own` 2, alter Weitergabegrund 3; Katalogtests 52 grün, Handbuch-, Katalog-, Wortlaut- und Changelogtests 539 grün. Die Handbuchseiten *Eigene Bausteine* und *Bausteindateien austauschen* nennen Abschnitt und Knopf in allen sechs Sprachen, der eingefrorene Musterbestand trägt die neuen Seitenschlüssel; Changelog 0.6.0. Fenstersonde am echten Fenster, frischer Nutzerordner: 4 von 4, *Speichern*, *Hinzufügen* und beide Sperrgründe ohne Klick sichtbar, der Weitergabegrund schickt zum Speichern. Umgesetzt von Claude (Thread „Bedienung und KI“).

@@ -179,7 +179,16 @@ def test_accepted_application_exit_uses_the_terminal_viewport_path(
         def release_recovery(self) -> None:
             events.append("session.release_recovery")
 
+    class _Tabs:
+        def layout_state(self) -> dict[str, object]:
+            events.append("tabs.layout_state")
+            return {"order": ["report"], "windows": {"report": [100, 100, 400, 500]}}
+
+        def shutdown_windows(self) -> None:
+            events.append("tabs.shutdown_windows")
+
     class _ExitWindow:
+        right = _Tabs()
         _remote = None
         _rebuild_dialog = None
         session = _Session()
@@ -230,14 +239,21 @@ def test_accepted_application_exit_uses_the_terminal_viewport_path(
 
     event = QCloseEvent()
 
-    main_window.MainWindow.closeEvent(_ExitWindow(), event)
+    window = _ExitWindow()
+    main_window.MainWindow.closeEvent(window, event)
 
+    assert window.settings.tab_layout == {
+        "order": ["report"],
+        "windows": {"report": [100, 100, 400, 500]},
+    }
     assert event.isAccepted()
     assert events == [
         "question.cancel",
         "window.setEnabled:False",
         "window.wait_for_workers",
         "spacemouse.stop",
+        "tabs.layout_state",
+        "tabs.shutdown_windows",
         "card_places.stop",
         "settings.save",
         "usage.stop",

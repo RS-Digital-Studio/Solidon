@@ -1066,6 +1066,32 @@ def test_objects_and_materials_are_found_without_entering_a_mesh() -> None:
     assert threemf_reader._materials_in(model) == {"5": [("Rot", (1.0, 0.0, 0.0))]}
 
 
+def test_the_search_does_not_walk_through_colour_and_texture_tables() -> None:
+    """Farb- und Texturtabellen werden übersprungen wie ein Netz (RM-258).
+
+    Eine ``colorgroup`` oder ``texture2dgroup`` trägt je Ecke eines bemalten
+    Modells einen Eintrag — Millionen Elemente, die die Suche in Python einzeln
+    besuchte, während der Hauptfaden bei jedem Griff wartete. Im Format stehen
+    darin nur Farben und Koordinaten; ein ``object`` darin darf deshalb nicht
+    gefunden werden, sonst stiege die Suche doch hinab. Die Gegenprobe: die
+    Objekte und Materialgruppen daneben findet sie weiter.
+    """
+    material = "http://schemas.microsoft.com/3dmanufacturing/material/2015/02"
+    model = ET.fromstring(
+        f'<model xmlns="{CORE}" xmlns:m="{material}"><resources>'
+        '<m:colorgroup id="7"><m:color color="#FF0000"/><object id="98"/></m:colorgroup>'
+        '<m:texture2dgroup id="8" texid="9"><m:tex2coord u="0" v="0"/><object id="97"/>'
+        "</m:texture2dgroup>"
+        '<basematerials id="5"><base name="Rot" displaycolor="#FF0000"/></basematerials>'
+        '<object id="1"><mesh><vertices><vertex x="0" y="0" z="0"/></vertices>'
+        "<triangles/></mesh></object>"
+        '<object id="2"><components><component objectid="1"/></components></object>'
+        '</resources><build><item objectid="2"/></build></model>'
+    )
+    assert list(threemf_reader._objects_in(model)) == ["1", "2"]
+    assert threemf_reader._materials_in(model) == {"5": [("Rot", (1.0, 0.0, 0.0))]}
+
+
 def test_no_search_over_the_whole_model_holds_the_interpreter() -> None:
     """Kein ``findall(".//object")`` oder ``".//basematerials"`` mehr im Leser (RM-258).
 

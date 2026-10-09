@@ -20,6 +20,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 
 ### Manejo y sistema
 
+- En el Mac, Solidon necesita ahora macOS 14 o más reciente. Cualquier Mac desde 2018 puede instalarlo gratis.
 - Solidon ya arranca en los Mac con Intel y macOS 26. La versión 0.5.3 se quedaba colgada allí al iniciar.
 - En el Mac, *Cancelar* detiene al instante una respuesta en curso del modelo local.
 - En el Mac, Retorno abre la entrada seleccionada en la pantalla de inicio, en *Buscar función* y en el informe de comprobación.
@@ -28,6 +29,9 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Supr también funciona cuando la pestaña *Selección* tiene el foco, y quita varios cuerpos marcados en un solo paso. Si la tecla no hace nada, la barra de estado dice por qué.
 - El clic derecho en los cuerpos ofrece *Quitar objeto* y, con varios, *Unir*. *Vaciar* también está en una cara seleccionada, que pasa a ser la abertura.
 - Los paneles de la izquierda y la derecha se mueven por su asa, se acoplan a un borde o quedan flotando. *Vista → Paneles a su sitio* los devuelve.
+- Los paneles también se pueden colocar abajo a la izquierda, abajo a la derecha y en el borde inferior.
+- Puede reordenar las pestañas y arrastrarlas a ventanas propias, también en otra pantalla. Cerrar la ventana o *Volver a Solidon* devuelve su contenido.
+- Solidon recuerda la disposición. Las ventanas siguen al alcance aunque se desconecte una pantalla.
 - Mientras recalcula, el informe de comprobación dice *Recalculando …* y muestra las líneas anteriores como estado previo. Antes, los errores viejos parecían seguir vigentes.
 - Si el cálculo rápido falla en un paso, Solidon lo calcula a fondo en la misma pasada en lugar de detenerse.
 - Un hallazgo que dice que un paso no tuvo efecto abre ese paso en el campo correspondiente.
@@ -53,34 +57,55 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Incluso en un historial largo, un paso nuevo apenas tarda más en calcularse que el primero.
 - Deshacer y rehacer son más rápidos, y la memoria que ya no se necesita se libera enseguida.
 - Resolver solapamientos y exportar a 3MF es bastante más rápido.
+- El área de trabajo aparece más rápido al abrir archivos 3MF grandes.
+- Un modelo añadido queda después a la vista, aunque se coloque junto a otro sobre el que se había hecho zoom.
+- En el catálogo de bloques, *Gestionar bloques* aparece abierto mientras aún no haya ningún bloque propio.
 
 ### Imprimir y entregar al slicer
 
 - En Linux, Solidon crea ahora el archivo de impresión también con Cura como Flatpak o AppImage.
+- En Linux, las impresoras de OrcaSlicer, Bambu Studio, ElegooSlicer y Creality Print como AppImage se ofrecen de inmediato, aunque el slicer nunca se haya abierto.
 - El diálogo de impresión ofrece las impresoras del slicer elegido, como *Primeros pasos* y *Ajustes*. Una impresora adoptada así se queda con su slicer.
 - En el diálogo de impresión se puede cambiar el slicer como en *Primeros pasos*, también con *Elegir programa …* para uno que Solidon no encuentra por sí mismo.
 - Una impresora de la lista de Solidon y la misma del slicer cuentan como un solo equipo. El diálogo elige el perfil con la boquilla correcta y el archivo lleva el código de inicio.
+- Sin un perfil del slicer guardado, la exportación y la ventana principal usan lo que el diálogo de impresión propone para la impresora, con la máquina y el proceso del fabricante.
 - Solo se ofrecen los slicers con los que trabaja Solidon, además de slicers de resina como ChituBox y Lychee. Bambu Studio como AppImage ahora también cuenta.
 - El código de inicio y el volumen de impresión vienen solo de su impresora, no de otro modelo de la misma serie.
 - El diálogo de impresión asigna los perfiles del slicer mucho más rápido, al abrirse y tras cada cambio de slicer.
 - El tiempo de impresión estimado se acerca más al del slicer, mucho más en piezas con soportes.
-- Si los soportes y el skirt caben en la cama, la comprobación lo mide ahora solo bajo los voladizos. Las piezas cerca del borde ya no reciben un aviso sin motivo.
+- La comprobación de si los soportes y el skirt caben en la cama mide ahora solo bajo los voladizos. Las piezas cerca del borde ya no reciben un aviso sin motivo.
 - Las sugerencias aceptadas ya casi no dejan sin soporte voladizos que lo necesitan. *Mantener libres los canales* solo bloquea el espacio del que ya no se podría sacar un soporte.
 - Donde los soportes bajo voladizos pequeños se apoyan en el modelo, Solidon sugiere soportes en árbol. Allí dejan menos marcas.
 - En puntas pequeñas, Solidon sugiere una *Velocidad mínima al frenar* más baja para que no se ablanden. El ajuste llega a cualquier slicer.
 - Los bordes estrechos que se sostienen solos quedan libres con *Bordes sin soporte*. Así la impresión necesita bastante menos soporte.
+- Los soportes se quitan con más facilidad: el espacio sigue el material y la altura de capa de cada pieza, también con varios materiales en una placa. La separación sigue la superficie de encima.
+- Si un soporte se apoya en la pieza, Solidon sugiere también una capa de separación debajo para que su pie no deje marcas. Con soportes en árbol, solo en los slicers que la imprimen ahí.
+- Con soportes en árbol y junto a una torre de purga, Solidon propone el espacio del soporte en capas enteras, tal como lo imprime el slicer.
+- Para PLA, Solidon propone más espacio entre muchas puntas finas y los soportes en árbol situados debajo. Así quedan menos restos de las puntas de los soportes.
+- Para PETG, Solidon sugiere refrigeración total en el soporte. Así se suelta más fácil de la pieza.
+- Nuevo en los ajustes de impresión: *Capas de separación inferiores*, *Hueco en la capa de separación* y *Refrigeración total en el soporte*.
+- El campo *Espacio superior* se llama ahora *Espacio arriba y abajo* y vale para ambos lados del soporte.
 - Si el slicer rechaza filamentos con temperaturas demasiado distintas en una placa, Solidon indica ahora el motivo y qué hacer, en lugar de decir solo que no se creó ningún archivo.
 - En el diálogo de impresión, impresora, filamentos y calidad se ven enteros también con la letra ampliada. Las etiquetas largas pasan a la línea siguiente.
 - El informe de comprobación calcula más rápido y necesita menos memoria.
+- En Linux con Flatpak, Solidon indica ahora que el slicer se ha bloqueado, en lugar de decir solo que no se creó ningún archivo.
 
 ### Roscas, taladros y piezas normalizadas
 
 - Las roscas admiten ahora cualquier diámetro hasta 1000 mm, ya sea con *Rosca imprimible*, en un taladro, con *Crear tornillo* o *Generar tapa roscada*.
+- Los taladros normales también se pueden crear y volver a tapar con diámetros de hasta 1000 mm. Los taladros grandes y los avellanados mantienen su forma redonda.
 - Tornillos, tuercas y arandelas están disponibles según ISO de M1,6 a M64. Para otros tamaños, *Medida propia* deriva las medidas de los tamaños vecinos y lo indica.
 - Con *Ajustado al taladro*, *Pasador para taladro* construye la contrapieza: una cabeza avellanada enrasada para un avellanado, una rosca exterior del mismo tamaño y paso para una interior.
 - En una rosca interior impresa, la selección ofrece directamente *Pasador para taladro*.
 - Si en un taladro hay una pieza separada, como un pasador, las acciones del taladro lo dicen y ofrecen *Dividir en piezas sueltas*. Antes, el pasador se fundía en silencio con la placa.
 - Nuevo: el *Perno roscado*, una varilla roscada o espárrago sin cabeza, con chaflán en ambos extremos y la misma rosca imprimible que el tornillo y la tuerca.
+- También en taladros de bloques como el agujero para tornillo, el inserto termofijado o el alojamiento de tuerca, *Pasador para taladro* crea el pasador adecuado, y avisa si no están en el cuerpo.
+- Colocado a mano sobre una cara, el alojamiento de tuerca corta su hueco en el material. Hasta ahora el hueco quedaba encima y solo se taladraba el agujero para tornillo.
+- El agujero para tornillo del alojamiento de tuerca atraviesa exactamente la pieza, también una gruesa. Hasta ahora terminaba 10 mm bajo el hueco o perforaba el lado opuesto de una ranura.
+- Colocado desde abajo, el alojamiento de tuerca tiene el hueco bajo la cara y su ranura baja hasta él. Hasta ahora el hueco quedaba medio encima, con el tornillo en la cara.
+- Si el taladro de un bloque no atraviesa la pieza, ahora se llama ciego. Hasta ahora se llamaba pasante.
+- Si la pared es más gruesa de lo indicado en *Pasacables* o *Espiga para manguera*, el paso lo dice y abre el espesor de pared. Hasta ahora el paso acababa en el material sin aviso.
+- Si hay una pieza separada en un avellanado, una ranura, una cuenca, una garganta o una rosca, las acciones lo dicen. Hasta ahora se cortaba o se fundía.
 
 ### Bloques
 
@@ -107,6 +132,12 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Modelar sigue al ratón con fluidez, y hasta un paso con cientos de trazos de pincel se calcula rápido.
 - En *Esqueleto*, cada clic después del primero pone un hueso, Intro termina la cadena, arrastrar una articulación la dobla y *Terminado* lo guarda todo sin diálogo.
 - Un esqueleto solo dobla lo que cuelga de sus huesos, y el resto del cuerpo se queda quieto. Los proyectos anteriores se calculan como se guardaron.
+- Con Ctrl o Mayús selecciona varias aristas y las redondea o achaflana en un solo paso. Un clic en una esquina selecciona todas las aristas que se juntan allí.
+- En un cuerpo exacto, el resaltado de una arista muestra también las aristas tangentes contiguas que *Redondear* y *Aplicar un chaflán* incluyen.
+- Lo que la selección ofrece en una característica, la operación lo ejecuta con esos mismos valores. Lo que aparece en gris lo dice con la misma frase, también por chat y línea de comandos.
+- Como lugar de la copia, *Duplicar característica* propone una anchura y media junto al original, con una pared entre ambas y nunca a lo largo de su eje.
+- En un avellanado, *Girar característica* propone el mayor ángulo con el que sigue siéndolo, y avisa cuando un giro solo deja la característica sobre sí misma.
+- Si una acción alcanzara una pieza separada junto a la característica, o una característica colocada tocara otro material solo en una línea, Solidon lo dice en vez de dañar el cuerpo.
 
 ### Generar con IA
 
@@ -241,7 +272,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Las piezas altas y delgadas sobre una base pequeña reciben la sugerencia de paredes más tranquilas, a 60 mm/s y con menos aceleración. En la Centauri Carbon 2 esas varillas se arrancaban.
 - Con Cura, el informe de comprobación nombra las piezas que solo reciben esos valores de rebote, porque Cura los acepta solo para toda la placa.
 - Solidon sugiere «Pared exterior primero» solo para la pieza que lo necesita y nunca para una con soportes.
-- También en la búsqueda rápida, «Orientar para imprimir» comprueba si una pieza se sostiene con seguridad. Si una no se sostiene en ninguna parte, orienta igual las demás y el informe la nombra.
+- La búsqueda rápida de «Orientar para imprimir» también comprueba si una pieza se sostiene con seguridad. Si una no se sostiene en ninguna parte, orienta igual las demás y el informe la nombra.
 - Con «Organizar sobre la placa», cada pieza va a la primera placa donde cabe. El juego de minigolf necesita así cuatro placas en lugar de seis.
 - Si arrastra un cuerpo en la vista a otra placa, pasa a pertenecer a esa placa.
 - Cuando llega otro modelo, desde un archivo, una descarga o generado, la vista muestra la placa en la que está.
@@ -257,8 +288,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - El relleno Líneas llega a Bambu Studio y Creality Print como líneas, sin sustituirse por Rejilla o Cúbico.
 - Tras cortar, Solidon avisa de ajustes descartados por PrusaSlicer o los slicers de Orca. También detecta cambios en el borde, el orden de paredes y el tipo de soporte.
 - La preselección de filamento toma Generic o la marca de su impresora en lugar de un filamento especial ajeno, por ejemplo Generic PETG en vez de BETA PETG en la Bambu A1.
-- Exportar y laminar usan el cálculo fino en lugar de la vista más rápida de la ventana. Así, los conos y las piezas fusionadas con suavidad llegan lisos al archivo.
-- También con modelos de superficies STEP, con giros de casi 180° y en caras reconocidas en parte funcionan «Orientar para imprimir», «Girar» y «Trasladar». El cuerpo sigue exacto.
+- Ahora «Orientar para imprimir», «Girar» y «Trasladar» funcionan también con modelos de superficies STEP, con giros de casi 180° y en caras reconocidas en parte. El cuerpo sigue exacto.
 - Una pared exterior más lenta se aplica ahora también a perímetros pequeños como agujeros y tallos en PrusaSlicer y la familia Orca.
 - PrusaSlicer y la familia Orca respetan la densidad de soporte elegida. El campo empieza en 1 %. Para imprimir sin soportes, elija «Ninguno».
 - En impresiones multicolor con OrcaSlicer, ElegooSlicer, Bambu Studio y Creality Print, la torre de purga recibe una posición inicial adaptada al tamaño de la placa.
@@ -298,10 +328,10 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Si un taladro corta el cuerpo en dos, el informe lo dice una sola vez, con el número de piezas al final, y calla en cuanto el cuerpo vuelve a ser una pieza.
 - Los patrones sobre caras cilíndricas de modelos importados siguen cerrados al modificarlos.
 - En el historial de un cuerpo STEP se pueden reordenar pasos o insertar uno antes, aunque un paso posterior se refiera a un taladro. La referencia sigue al taladro.
-- Un taladro desplazado o duplicado con una dirección nueva sigue exacto en un cuerpo STEP.
+- Un taladro simple o una ranura que se desplaza o duplica con una dirección nueva sigue exacto en un cuerpo STEP.
 - Una característica reconocida a más de un metro del origen conserva su lugar al cambiarla. Antes el campo recortaba la cifra sin aviso y el taladro se movía.
 - Si un paso alcanza una pieza cuya superficie se cruza consigo misma, se detiene y muestra el lugar. Fuera de ella sigue calculando y avisa de que las piezas no se pudieron unir.
-- También por la costura de simetría de una figura, «Dividir el modelo» corta sin dejarla abierta, y los pasadores ya están en la vista previa.
+- Ahora «Dividir el modelo» corta una figura también por su costura de simetría sin dejarla abierta, y los pasadores ya están en la vista previa.
 - Si un corte solo roza una pared, «Dividir el modelo» indica el lugar y lleva a la posición del corte en vez de fallar en los pasadores.
 - Recortar corta ahora también en ángulo: arriba elige el «Plano»: en un eje con inclinación, paralelo a una cara, por una arista o por tres puntos que marca en la vista.
 - Un cuerpo STEP sigue siendo un cuerpo STEP al recortarlo, con sus caras, aristas y nombres.
@@ -351,7 +381,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - El editor de esqueleto muestra huesos y articulación en la vista, y una articulación queda en el centro del cuerpo en vez de en su piel, así la figura se dobla de forma pareja.
 - La barra de modelado llama ahora «Intensidad» al valor del pincel, en lugar de «Espesor», que parecía un grosor de pared.
 - Si un trazo de modelado atraviesa la pared o la deja demasiado fina, aparece en el informe y antes de exportar, con «Mostrar el punto» y «Deshacer el trazo».
-- En la ventana, «Fusionar suavemente» calcula ahora fino, mientras el cuerpo no sea muy grande.
+- Ahora «Fusionar suavemente» calcula fino también en la ventana, mientras el cuerpo no sea muy grande.
 - Si un bloque como un ojo de cerradura sobrepasa el borde de su cara, aunque sea solo con el avellanado o el chaflán, o entra en una pared detrás, aparece en el informe.
 - Una medida tecleada como longitud 40 estira el dibujo solo en esa dirección. El cuerpo resultante queda cerrado y apoyado en la placa.
 - Los dibujos SVG llegan bien: giros, cizallas, esquinas redondeadas, elipses y arcos elípticos son correctos, y las capas ocultas quedan fuera.
@@ -370,7 +400,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 
 - Cancelar durante «Otro intento» solo detiene el intento en curso. Los terminados siguen disponibles para elegir.
 - Cada intento de la lista indica su frase o su imagen y su semilla. Si su entrada ya no coincide con el intento elegido, el diálogo dice cuál se aplicará.
-- El modelo de imagen se descarga con «Configurar modelo de imagen …» aunque los demás pesos ya estén.
+- Ahora «Configurar modelo de imagen …» descarga el modelo de imagen aunque los demás pesos ya estén.
 - Si un error al generar nombra la configuración como salida, aparece como botón en el diálogo.
 - Mientras se genera un modelo, la ventana sigue utilizable. El diálogo se aparta, y la barra de estado muestra progreso, tiempo y «Cancelar».
 - El diálogo de generar indica el volumen al tamaño con que llega la pieza.

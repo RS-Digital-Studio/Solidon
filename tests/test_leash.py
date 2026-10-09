@@ -843,6 +843,98 @@ def test_the_start_hands_the_interpreter_over_every_millisecond() -> None:
     assert "configure_gil_switching()" in inspect.getsource(app_module.main)
 
 
+def test_a_worker_gives_way_until_the_main_thread_releases_it() -> None:
+    """Ein Arbeiter mit Vortritt wartet, bis der Hauptfaden freigibt (RM-258).
+
+    Gegenprobe: ohne Anspruch wartet er gar nicht.
+    """
+    from app.ui.leash import RightOfWay
+
+    way = RightOfWay()
+    way.claim()
+    came: list[bool] = []
+    worker = Thread(target=lambda: came.append(way.wait(timeout_s=60)))
+    worker.start()
+    worker.join(0.2)
+    assert worker.is_alive() and not came, "er wartet"
+    way.release()
+    worker.join(10)
+    assert came == [True], "nach der Freigabe rechnet er weiter"
+
+    unclaimed: list[bool] = []
+    worker = Thread(target=lambda: unclaimed.append(RightOfWay().wait(timeout_s=60)))
+    worker.start()
+    worker.join(10)
+    assert unclaimed == [True], "ohne Anspruch kein Warten"
+
+
+def test_the_way_ends_after_its_time_on_a_cancel_and_never_in_the_main_thread() -> None:
+    """Ein hängendes Fenster hält keinen Arbeiter fest, ein Abbruch auch nicht (RM-258).
+
+    Und der Hauptfaden selbst wartet nie auf sich — er riefe sonst die
+    Freigabe nie.
+    """
+    import time
+
+    from app.ui.leash import RightOfWay
+
+    way = RightOfWay()
+    way.claim()
+    came: list[bool] = []
+    begun = time.monotonic()
+    worker = Thread(target=lambda: came.append(way.wait(timeout_s=0.2)))
+    worker.start()
+    worker.join(10)
+    assert came == [False] and time.monotonic() - begun >= 0.2, "nach der Frist weiter"
+
+    stop = Event()
+    came.clear()
+    worker = Thread(target=lambda: came.append(way.wait(stop.is_set, timeout_s=60)))
+    worker.start()
+    stop.set()
+    worker.join(10)
+    assert came == [False], "ein Abbruch beendet das Warten"
+
+    begun = time.monotonic()
+    assert way.wait(timeout_s=60) is False and time.monotonic() - begun < 1, "nie im Hauptfaden"
+    assert way.claimed, "der Anspruch bleibt, bis jemand freigibt"
+
+
+def test_without_an_application_the_way_is_released_at_once(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Ohne Ereignisschleife zeichnet niemand — die Freigabe wartet auf nichts (RM-258)."""
+    import app.ui.leash as leash_module
+    from app.ui.leash import RightOfWay
+
+    monkeypatch.setattr(leash_module.QCoreApplication, "instance", staticmethod(lambda: None))
+    way = RightOfWay()
+    way.claim()
+    way.release_after_frame()
+    assert not way.claimed
+
+
+def test_the_way_is_released_after_the_event_loop_turned_twice(qt_app: QApplication) -> None:
+    """Freigegeben wird erst, wenn die Schleife abgearbeitet hat, was die Meldung
+    auslöste — zwei Runden, nicht sofort (RM-258)."""
+    import time
+
+    from app.ui.leash import RIGHT_OF_WAY_ROUNDS, RightOfWay
+
+    assert RIGHT_OF_WAY_ROUNDS == 2
+    way = RightOfWay()
+    way.claim()
+    way.release_after_frame()
+    assert way.claimed, "nicht im selben Aufruf"
+    deadline = time.monotonic() + 5
+    turns = 0
+    while way.claimed and time.monotonic() < deadline:
+        time.sleep(0.005)
+        qt_app.processEvents()
+        turns += 1
+    assert not way.claimed and turns >= RIGHT_OF_WAY_ROUNDS, "nach den Runden der Schleife"
+
+
 def test_every_worker_in_the_surface_uses_the_base_class() -> None:
     """Von dreiundzwanzig Arbeitern fing genau einer eine unerwartete Ausnahme.
 

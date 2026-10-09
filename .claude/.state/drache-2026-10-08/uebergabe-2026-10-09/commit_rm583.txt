@@ -1,0 +1,21 @@
+Stützabstand und Trennschichten folgen dem Material der Spule, je Teil
+
+Das Materialprofil führt Abstandsfaktor, Grenzen und die volle Kühlung an
+der Trennschicht. Der Rat schlägt den Abstand je Material und Schichthöhe
+vor, unten Trennschichten, wo die Stütze auf dem Modell steht, unter flachen
+Decken eine dichte, sonst eine lockere Trennschicht. Abstand und
+Trennschichten gehen je Teil, gefragt mit dem Material der gewählten Spule;
+der Lüfter je Spule. Neue Felder Trennschichten unten, Lücke in der
+Trennschicht und Volle Kühlung an der Stütze, Abstand oben und unten gilt
+für beide Seiten.
+
+Die Orca-Familie rundet ohne eigene Stützschichthöhe auf ganze Schichten;
+die Übergabe schaltet sie an den geschriebenen Abständen ein und sagt es,
+mit Reinigungsturm sagt der Export die Rundung. Cura rechnet in ganzen
+Schichten: Rat und Grundlage geben dort das Vielfache im Materialband.
+
+Der Druckdialog fragt den Kontakt wie der Export gegen die Grundlage und
+kommt nach einmal Übernehmen zur Ruhe. Ein vor 0.6.0 kalibriertes Material
+bekommt die neuen Werte aus dem mitgelieferten Eintrag (RM-583).
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>

@@ -58,9 +58,8 @@ dessen Docstring nennt Rundungsgrenzen/Ursprung. Nicht Vereinbares bleibt.
 (`repair.self_crossing_shells`).
 
 `attributes.in_source_layout`/`prepare_ops._without_scars` erhalten nach jeder
-Stufe bitgleich übernommene Dreiecksecken und deren Eingangsfolge;
-Dreiecksfolge/Koordinaten bleiben beim Kern; ändert der Schritt nichts, kommt der
-Eingang in seiner Folge zurück. Regel/Messfall:
+Stufe bitgleich übernommene Dreiecksecken und deren Eingangsfolge, ohne
+Wirkung den Eingang selbst. Regel/Messfall:
 `operationen.md`, „Boolesches geht durch die Rückfallkette“.
 
 - **Native Stufen** übergeben `Mesh64` und lesen Status und Volumen vor der
@@ -188,6 +187,8 @@ Rundung, Radius aus `measured_radius`)
 
 **Merkmalshandlungen** (Regeln in `operationen.md`):
 
+- `_shell_prints` gruppiert Schalen einmal; Abbruch zwischen Blöcken und Ergebnissen.
+
 - Hohlraumwerkzeuge entscheiden Richtung und Gültigkeit über das körpernahe
   `signed_volume`; Schwerpunkt und Trägheit werden dafür nicht berechnet.
   `_bore_end_rims` prüft alle Mündungsränder gemeinsam über
@@ -213,6 +214,7 @@ Rundung, Radius aus `measured_radius`)
   (`PLACE_BOUND_FINDINGS`); exakt trägt der Neuschnitt die übrige Topologie
   (`_exact_rest_carried`). Ob ein Wert die Bohrung ändert, sagen
   `bore_is_unchanged` und `bore_depth_is_unchanged` für Op und Fenster.
+- `DrillParams`/`PlugParams`: `LARGEST_THREAD`; Sehnen: `shapes.turn_segments`.
 - **Maße und Nachprüfung**: `_with_nominal_bore` hält bekannte Maße nur, wenn
   alle Wandpunkte im Sehnenband liegen; `voxel` und `jittered` behaupten
   keine. Über `FEATURE_LIMIT_TRIANGLES` prüft `detect_known` im Radius des

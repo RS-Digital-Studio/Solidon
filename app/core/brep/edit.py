@@ -955,6 +955,47 @@ def named_edges(solid: Solid, keys: Sequence[str]) -> list[EdgeInfo]:
     return edges_named(edges_of(solid), keys)
 
 
+def contour_keys(solid: Solid, keys: Sequence[str]) -> tuple[str, ...]:
+    """Die Schlüssel der Kanten, die eine Rundung an ``keys`` mitnimmt (RM-579).
+
+    OpenCASCADE rundet eine Kante mit jeder tangential anschließenden — eine
+    Kontur (:func:`fillet`, ``law``): Am Quader mit gerundeten senkrechten
+    Kanten geht die Rundung an einer oberen Strecke über alle vier Strecken
+    und vier Bögen des Rands. Die Hervorhebung im Bild zeigte nur die
+    geklickte Kante, und welche mitgehen, sah der Kunde erst in der Vorschau.
+    Gelesen wird die Kontur aus demselben Builder, ohne zu bauen; der Radius
+    spielt dafür keine Rolle. Was der Builder nicht annimmt, bleibt, wie es
+    gewählt war — die gewählten Schlüssel stehen vorn, in ihrer Folge.
+    """
+    require()
+    from OCP.BRepFilletAPI import BRepFilletAPI_MakeFillet
+    from OCP.collections import IndexedMap_TopoDS_Shape_TopTools_ShapeMapHasher as ShapeMap
+    from OCP.Standard import Standard_Failure
+    from OCP.TopAbs import TopAbs_EDGE
+    from OCP.TopExp import TopExp
+
+    chosen = tuple(dict.fromkeys(keys))
+    entries = edges_of(solid)
+    named = edges_named(entries, chosen)
+    if not named:
+        return chosen
+    known = ShapeMap()
+    TopExp.MapShapes_s(solid.shape, TopAbs_EDGE, known)
+    by_index = {int(known.FindIndex(entry.edge)): edge_key(entry) for entry in entries}
+    builder = BRepFilletAPI_MakeFillet(solid.shape)
+    try:
+        for entry in named:
+            builder.Add(1.0, entry.edge)
+    except Standard_Failure:
+        return chosen
+    members = [
+        by_index.get(int(known.FindIndex(builder.Edge(contour, number))))
+        for contour in range(1, int(builder.NbContours()) + 1)
+        for number in range(1, int(builder.NbEdges(contour)) + 1)
+    ]
+    return tuple(dict.fromkeys([*chosen, *(key for key in members if key is not None)]))
+
+
 def choose(solid: Solid, choice: EdgeChoice, *, rings_by_plane: bool = True) -> list[EdgeInfo]:
     """Die Kanten, die eine benannte Auswahl meint."""
     return choose_by_place(edges_of(solid), choice, rings_by_plane=rings_by_plane)
