@@ -43,6 +43,7 @@ entfernt hat.
 | 2026-10-07 | [RM-543: Die gelöschte Zeile hielt der Test, nicht das Fenster (07.10.2026)](#rm-543-die-gelöschte-zeile-hielt-der-test-nicht-das-fenster-07102026) |
 | 2026-10-08 | [RM-562: Bausteine, die für sich ein Teil sind, entstehen ohne Auswahl als eigener Körper (08.10.2026)](#rm-562-bausteine-die-für-sich-ein-teil-sind-entstehen-ohne-auswahl-als-eigener-körper-08102026) |
 | 2026-10-08 | [RM-565: *Auswahl als Baustein speichern* nimmt den gewählten Körper (08.10.2026)](#rm-565-auswahl-als-baustein-speichern-nimmt-den-gewählten-körper-08102026) |
+| 2026-10-09 | [RM-578: Mitgelieferte Bausteine nehmen jede Normgröße der Tabelle, die 512er-Grenze gilt nur für eigene Bausteine (09.10.2026)](#rm-578-mitgelieferte-bausteine-nehmen-jede-normgröße-der-tabelle-die-512er-grenze-gilt-nur-für-eigene-bausteine-09102026) |
 | 2026-10-06 | [RM-114: Die Zielreihe der Hohlkugel ist auf drei Plattformen gleich (06.10.2026)](#rm-114-die-zielreihe-der-hohlkugel-ist-auf-drei-plattformen-gleich-06102026) |
 | 2026-10-06 | [RM-038: Der Mailentwurf kommt aus dem Flatpak unverändert an (06.10.2026)](#rm-038-der-mailentwurf-kommt-aus-dem-flatpak-unverändert-an-06102026) |
 | 2026-10-06 | [RM-040: Ein Kundenbericht aus 0.5.3 führte über Ausnahme und Stapel zur Behebung (06.10.2026)](#rm-040-ein-kundenbericht-aus-053-führte-über-ausnahme-und-stapel-zur-behebung-06102026) |
@@ -44298,3 +44299,38 @@ Körpers, und der Dialog zeigt genau die Merkmale des Klotzes (Zeilenzahl, M4). 
 nicht genau einen Körper“. Handbuch „Eigene Bausteine“ und „Der Verlauf“ in sechs Sprachen.
 Changelog: ja — Einen gewählten Körper als eigenen Baustein speichern, ohne Schritte im Verlauf
 zu markieren.
+
+## RM-578: Mitgelieferte Bausteine nehmen jede Normgröße der Tabelle, die 512er-Grenze gilt nur für eigene Bausteine (09.10.2026)
+
+<a id="rm-578-mitgelieferte-bausteine-nehmen-jede-normgröße-der-tabelle-die-512er-grenze-gilt-nur-für-eigene-bausteine-09102026"></a>
+<a id="rm-578"></a>
+
+**RM-578 — Mitgelieferte Bausteine bekommen alle Normgrößen.** Entscheidung Robert, 08.10.2026:
+„wenn wir mehr liefern können, wollen wir das“. Bis dahin begrenzte `range_check.MAX_CORNERS`
+(512) jede Größenreihe: Wandhalter M2–M27, Rohrschelle M3–M6, Klemmschale M3–M33, die Halter mit
+fester Schraube M4.
+
+**Umsetzung** (Zweig `paket/b-bausteine`, Commit siehe Paketbericht): Zwei Grenzen nach Herkunft
+(`range_check.corner_limit`): eigene Bausteine des Kunden 512, die mitgelieferte Bibliothek 4096
+(`LIBRARY_MAX_CORNERS`). Begründung aus der Rechenzeit, gemessen mit sechs Prozessen: Bausteine
+ohne Gewinde 0,02–0,3 s je Ecke, 4096 Ecken also höchstens rund zwanzig Minuten, so lange wie das
+druckbare Gewinde heute; Gewindebausteine (4–8 s je Ecke) bleiben durch ihre Kosten darunter. Der
+Rezeptdialog nennt vor der ersten Ecke Kombinationen und geschätzte Dauer (aus der Zeit der Probe
+mal der Eckenzahl). Größenreihen: Wandhalter M2–M64 (832 Ecken), Rohrschelle M3–M64 mit Mutter
+und Scheibe (3072, Schellenbreite bis 120 mm, damit auch die Scheibe von M64 aufliegt), Klemmschale
+M3–M64 (768, Klemmtiefe bis 120 mm an Schale, Einlage und Klemmenpaar), Halter mit wählbarer
+Laschenschraube M2–M64 (U und Ablage 1920, rund und Gabel 960). Wo eine große Schraube an einem
+kleinen Teil keinen Platz hat, lehnt der Bau mit Vorschlag ab (`_clamp_reason`, `_shell_reason`).
+Der Stangenverbinder bleibt bei M5: Die Schraube schneidet ihr Gewinde in eine Wand von 1,2 bis 8
+mm. Kein bestehendes Maß geändert, `LIBRARY_VERSION` bleibt. Die Halter bleiben vier Bausteine,
+weil der Kunde sie am Vorschaubild erkennt.
+
+**Nachweis:** `test_the_library_checks_up_to_4096_corners_and_an_own_part_512`,
+`test_every_offered_screw_size_is_buildable_up_to_m64` (jede angebotene Größe baut an einer Ecke,
+M64 wasserdicht), `test_a_holder_takes_every_screw_of_the_wall_mount_and_its_tabs_grow`,
+`test_the_range_check_names_its_size_and_duration_before_the_first_corner`; Bibliothek 16 814
+Ecken. Voller Bereichsnachweis aller 50 Bausteine mit `--jobs 6`: 35 Minuten (23:27–00:03),
+alle bestanden. Handbuch „Die Bausteine“ und „Eigene Bausteine“ in sechs Sprachen; die
+Website-Zusage „zur gewählten Normgröße“ stimmt unverändert. Changelog: ja — Wandhalter,
+Rohrschelle, Profilklemmen und die Laschen der Halter nehmen jede Schraubengröße bis M64; ein
+eigener Baustein nennt vor dem Prüfen, wie lange es dauert.

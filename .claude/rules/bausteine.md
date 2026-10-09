@@ -180,20 +180,28 @@ Abdruck des gefahrenen Stands (`parts/range_proof.py`).
   `test_self_intersections.py`).
 - **Der Bereichstest läuft auch in der Anwendung**: `range_check.check` hängt
   am Rezeptdialog, ein Kunde sieht ihn für eigene Rezepte.
-- **Mehr Wahl heißt mehr Bausteine, nicht mehr Ecken**: Über
-  `range_check.MAX_CORNERS` (512) lehnt der Bereichstest ab, bevor er rechnet.
-  Eine Vorlage mit vielen Formen wird ein Baustein je Form mit gemeinsamem
-  Unterbau (`holders.py`: vier Halter, je 256 oder 512 Ecken), keine
-  Formwahl, die das Produkt sprengt.
+- **Zwei Grenzen, je nach Herkunft** (`range_check.corner_limit`): Ein
+  eigener Baustein des Kunden prüft bis `MAX_CORNERS` (512), auf seinem
+  Rechner, und der Dialog nennt vorher Kombinationen und geschätzte Dauer. Die
+  mitgelieferte Bibliothek prüft bis `LIBRARY_MAX_CORNERS` (4096), einmal bei
+  uns; die Grenze richtet sich nach der Rechenzeit des Nachweises (Begründung
+  am Wert). Darüber lehnt der Bereichstest ab, bevor er rechnet. Eine Vorlage
+  mit vielen Formen bleibt ein Baustein je Form, wo der Kunde sie im Katalog
+  am Bild erkennt (`holders.py`), nicht der Grenze wegen.
 - **Ein Feld ohne Wirkung zählt keine Ecken**: Wo die Bedingung eines Feldes
   (`depends_on`) in einer Ecke nicht erfüllt ist, steht es dort auf seiner
   Vorgabe (`range_check.corners`). Das setzt voraus, dass der Baustein den
   Wert dann wirklich verwirft; wer ein verstecktes Feld trotzdem liest, bricht
   den Vertrag und den Nachweis zugleich.
-- **Eine Größenreihe passt in den Bereichstest oder wird begrenzt, mit
-  Grund**: Wandhalter (M2–M27), Klemmschale (M3–M33), Rohrschelle (M3–M6)
-  und Stangenverbinder (M3–M5) nehmen so viele Normgrößen, wie 512 Ecken oder
-  ihre Wand tragen; die Befestigungsbausteine nehmen alle und ein eigenes Maß.
+- **Eine Größenreihe nimmt, was die Tabelle hergibt** (RM-578, Robert: „wenn
+  wir mehr liefern können, wollen wir das“): Wandhalter und Halterlaschen
+  M2–M64, Klemmschale M3–M64, Rohrschelle M3–M64 (soweit Mutter und Scheibe in
+  der Tabelle stehen), die Befestigungsbausteine alle und ein eigenes Maß. Wo
+  eine große Größe an einem kleinen Teil nicht trägt, sagt der Bau es mit
+  Vorschlag (`feasible`, etwa `_clamp_reason`, `_shell_reason`), statt sie zu
+  verbieten. Begrenzt bleibt nur, was die Wand nicht trägt: der
+  Stangenverbinder bei M5, weil die Schraube ihr Gewinde in die dünne Hülse
+  schneidet.
 - **Ein Maß ohne Obergrenze ist ein Bereich ohne Rand**: Ohne `maximum` fährt
   der Test nur die Untergrenze. Jedes Längenmaß eines Bausteins trägt beide
   Grenzen; ausgenommen Winkel und Versatz der Trennebene an den Profilklemmen —

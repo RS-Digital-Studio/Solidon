@@ -25,6 +25,8 @@ Schritten spürbar lange (§2.8).
 
 from __future__ import annotations
 
+import math
+import time
 import unicodedata
 from collections.abc import Callable, Mapping
 from itertools import pairwise
@@ -99,6 +101,26 @@ PLACE_FRONT = "front"
 PLACE_ADVANCED = "advanced"
 
 
+def estimate_text(count: int, one: float) -> str:
+    """Der Satz vor dem Bereichstest: Kombinationen und geschätzte Dauer (RM-578).
+
+    ``one`` ist die Zeit des einen Schnitts mit seiner Probe; jede Ecke kostet
+    etwa eine solche Auswertung. Ohne Fenster prüfbar.
+    """
+    seconds = max(1, math.ceil(count * one))
+    if seconds < 90:
+        return str(
+            tr("Geprüft werden {count} Kombinationen, etwa {seconds} Sekunden.").format(
+                count=count, seconds=seconds
+            )
+        )
+    return str(
+        tr("Geprüft werden {count} Kombinationen, etwa {minutes} Minuten.").format(
+            count=count, minutes=math.ceil(seconds / 60)
+        )
+    )
+
+
 class _CheckWorker(Worker):
     """Schneiden und prüfen, beides abseits des Oberflächen-Threads (§2.8, §38).
 
@@ -131,6 +153,11 @@ class _CheckWorker(Worker):
     """
     step = Signal(float, str)
     """Wie weit er ist (0 bis 1) und woran — eine Ecke je Meldung."""
+    planned = Signal(str)
+    """Wie viele Kombinationen kommen und wie lange es etwa dauert (RM-578).
+
+    Geschätzt aus der Probe, die der Schnitt ohnehin einmal rechnet, mal der
+    Zahl der Ecken — gesagt, bevor die erste Ecke läuft."""
 
     def __init__(self, cut: Callable[[], Any], profile: Profile) -> None:
         super().__init__()
@@ -158,9 +185,13 @@ class _CheckWorker(Worker):
         # anfängt: Vier Sekunden ohne Auskunft sind vier Sekunden Zweifel.
         self.step.emit(0.0, str(tr("Der Ausschnitt wird geschnitten und einmal gerechnet …")))
         try:
+            started = time.monotonic()
             recipe = self._cut()
             if self.is_cancelled:
                 return
+            self.planned.emit(
+                estimate_text(recipes.range_size(recipe.exposed), time.monotonic() - started)
+            )
             checked = recipes.range_check(
                 recipe,
                 self._profile,
@@ -1188,6 +1219,7 @@ class RecipeDialog(QDialog):
         QTimer.singleShot(0, self, self._reveal_report)
         worker = _CheckWorker(cut, self._profile)
         worker.step.connect(self._step)
+        worker.planned.connect(self._planned)
         worker.failed.connect(self._failed)
         worker.done.connect(self._checked)
         # **``crashed`` gibt eine Zeichenkette, kein ``AppError``** — und eine
@@ -1199,6 +1231,12 @@ class RecipeDialog(QDialog):
         worker.finished.connect(lambda done=worker: self._worker_done(done))
         self._worker = worker
         self._leash.start(worker)
+
+    def _planned(self, text: str) -> None:
+        """Kombinationen und geschätzte Dauer, solange der Bereichstest läuft."""
+        if self._checking:
+            self.range_plan.setText(text)
+            self.range_plan.setVisible(True)
 
     def _say(self, text: str) -> None:
         """Ein Satz unter den Feldern — sichtbar nur, solange er etwas sagt."""

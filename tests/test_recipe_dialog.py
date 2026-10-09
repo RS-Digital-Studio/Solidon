@@ -1335,7 +1335,8 @@ def test_a_range_error_reaches_the_dialog_as_a_correctable_error(
         raise problem
 
     monkeypatch.setattr(module.recipes, "range_check", reject_range)
-    worker = module._CheckWorker(lambda: object(), None)
+    # Ein Schnitt ohne freigegebene Maße: Die Dauerschätzung davor liest ``exposed``.
+    worker = module._CheckWorker(lambda: SimpleNamespace(exposed=()), None)  # type: ignore[arg-type]
     heard: list[object] = []
     worker.failed.connect(heard.append)
     try:
@@ -1827,6 +1828,46 @@ def test_a_slice_with_a_second_body_says_so_and_locks_before_filling_in(
     finally:
         dialog.release()
         dialog.deleteLater()
+
+
+def test_the_range_check_names_its_size_and_duration_before_the_first_corner(
+    qt_app: QApplication, monkeypatch: Any
+) -> None:
+    """RM-578: Ein eigener Baustein prüft bis 512 Ecken, und der Dialog sagt vorher, wie lange.
+
+    Geschätzt aus dem Schnitt, der den Ausschnitt ohnehin einmal rechnet, mal der
+    Zahl der Ecken; gesagt, bevor die erste Ecke läuft.
+    """
+    import app.ui.recipe_dialog as module
+    from app.ui.recipe_dialog import estimate_text
+
+    assert estimate_text(4, 0.5) == "Geprüft werden 4 Kombinationen, etwa 2 Sekunden."
+    assert estimate_text(512, 2.0).endswith("etwa 18 Minuten.")
+
+    heard: list[tuple[str, object]] = []
+    recipe = SimpleNamespace(
+        exposed=(
+            SimpleNamespace(name="a", minimum=1.0, maximum=2.0),
+            SimpleNamespace(name="b", minimum=1.0, maximum=2.0),
+        )
+    )
+    monkeypatch.setattr(module.recipes, "range_size", lambda exposed: 4)
+
+    def checking(*args: object, **kwargs: object) -> object:
+        heard.append(("check", None))
+        return recipe
+
+    monkeypatch.setattr(module.recipes, "range_check", checking)
+    worker = module._CheckWorker(lambda: recipe, None)  # type: ignore[arg-type]
+    worker.planned.connect(lambda text: heard.append(("plan", text)))
+    try:
+        worker.work()
+        assert [kind for kind, _text in heard] == ["plan", "check"], (
+            "erst die Ansage, dann die Ecken"
+        )
+        assert "4 Kombinationen" in str(heard[0][1])
+    finally:
+        worker.deleteLater()
 
 
 def test_the_dialog_says_what_it_takes(qt_app: QApplication) -> None:

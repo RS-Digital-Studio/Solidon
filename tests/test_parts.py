@@ -96,9 +96,12 @@ def corners(spec: PartSpec) -> list[dict[str, Any]]:
     :func:`app.core.knowledge.parts.range_check.corners` — dort läuft sie
     beim Kunden, wenn er ein Rezept anlegt (§24.5), hier läuft sie in der
     Suite. Eine Regel, ein Ort; die Kopie, die hier stand, wäre beim
-    nächsten Nachbessern auseinandergelaufen.
+    nächsten Nachbessern auseinandergelaufen. Die Grenze kommt aus der Herkunft
+    (``corner_limit``, RM-578).
     """
-    return core_corners(spec.params)
+    from app.core.knowledge.parts.range_check import corner_limit
+
+    return core_corners(spec.params, corner_limit(spec.source))
 
 
 def required_defaults(spec: PartSpec) -> dict[str, Any]:
@@ -149,6 +152,7 @@ def test_registered_range_check_uses_every_declared_requirement(profile: Profile
         wall=spec.wall,
         features=spec.feature_requirements,
         feasible=spec.feasible,
+        limit=range_check.LIBRARY_MAX_CORNERS,
     )
 
 
@@ -314,7 +318,7 @@ def test_range_corners_are_the_complete_cartesian_boundary() -> None:
     assert len({tuple(entry.items()) for entry in plan}) == len(plan)
 
 
-def test_the_library_really_has_8878_cartesian_boundaries() -> None:
+def test_the_library_really_has_16814_cartesian_boundaries() -> None:
     """Vollständige Grenzen einschließlich der 120 Organizer-Kombinationen.
 
     Die 312 seit dem 16.09.2026 sind die Klemmschale (32), ihre Einlage (256),
@@ -341,10 +345,84 @@ def test_the_library_really_has_8878_cartesian_boundaries() -> None:
     400, auch Lagersitz, Kanalnaht, die Halter, Raumboden und Dichtung).
     Seit dem 08.10.2026 kommen 496 dazu: der Gewindebolzen, 27 Größen mal
     Länge, Gewindelänge, Fase und Spiel an je zwei Grenzen, dazu das eigene
-    Maß mit Durchmesser und Steigung.
+    Maß mit Durchmesser und Steigung. Mit RM-578 (Grenze der Bibliothek 4096)
+    7936 mehr: Wandhalter bis M64 (512 → 832), Rohrschelle bis M64 (512 →
+    3072), Klemmschale bis M64 (512 → 768), die Halter mit wählbarer Schraube
+    (U und Ablage 320 → 1920, rund und Gabel 160 → 960).
     """
 
-    assert sum(len(corners(spec)) for spec in PARTS.all()) == 8878
+    assert sum(len(corners(spec)) for spec in PARTS.all()) == 16814
+
+
+def test_the_library_checks_up_to_4096_corners_and_an_own_part_512() -> None:
+    """RM-578: Die 512er-Grenze gilt nur noch für eigene Bausteine des Kunden.
+
+    Die mitgelieferte Bibliothek wird einmal bei uns nachgewiesen; ihre Grenze
+    richtet sich nach der Rechenzeit des Nachweises. Ein Bereich mit 1024 Ecken
+    ist für ein Rezept zu groß und für die Bibliothek nicht — voll geprüft in
+    beiden Fällen, ohne Stichprobe.
+    """
+    from app.core.errors import ValidationError
+    from app.core.knowledge.parts.range_check import (
+        LIBRARY_MAX_CORNERS,
+        MAX_CORNERS,
+        corner_limit,
+    )
+
+    assert (MAX_CORNERS, LIBRARY_MAX_CORNERS) == (512, 4096)
+    assert corner_limit("shipped") == LIBRARY_MAX_CORNERS
+    assert {corner_limit(source) for source in ("recipe", "imported", "user")} == {MAX_CORNERS}
+
+    @op_params
+    class Wide(BaseParams):
+        a: float = param(title="a", default=1.0, minimum=1.0, maximum=2.0)
+        b: float = param(title="b", default=1.0, minimum=1.0, maximum=2.0)
+        c: float = param(title="c", default=1.0, minimum=1.0, maximum=2.0)
+        d: float = param(title="d", default=1.0, minimum=1.0, maximum=2.0)
+        e: float = param(title="e", default=1.0, minimum=1.0, maximum=2.0)
+        f: float = param(title="f", default=1.0, minimum=1.0, maximum=2.0)
+        g: float = param(title="g", default=1.0, minimum=1.0, maximum=2.0)
+        h: float = param(title="h", default=1.0, minimum=1.0, maximum=2.0)
+        i: float = param(title="i", default=1.0, minimum=1.0, maximum=2.0)
+        j: float = param(title="j", default=1.0, minimum=1.0, maximum=2.0)
+
+    with pytest.raises(ValidationError):
+        core_corners(Wide)
+    assert len(core_corners(Wide, LIBRARY_MAX_CORNERS)) == 1024
+
+
+def test_every_offered_screw_size_is_buildable_up_to_m64() -> None:
+    """RM-578: Wandhalter, Rohrschelle, Klemmschale und Halter nehmen die Tabelle bis M64.
+
+    Bis dahin endeten sie bei M27, M6 und M33, weil 512 Ecken nicht mehr Größen
+    trugen. Angeboten wird nur, was an einer Ecke des Bereichs baut: Schellenbreite
+    und Klemmtiefe reichen für die Scheibe und Mutter der größten Größe, sonst
+    stünde der Vorschlag „größer wählen“ ins Leere.
+    """
+    from app.core.knowledge.parts.mounting import _CLAMP_SCREWS, WALL_SCREWS
+    from app.core.knowledge.parts.profile_clamps import CLAMP_DEPTH_LIMIT, SCREW_SIZES
+    from app.core.sketch import shapes as sketch_shapes
+    from app.core.sketch.serialize import sketch_to_text
+
+    assert WALL_SCREWS[0] == "M2" and WALL_SCREWS[-1] == "M64"
+    assert _CLAMP_SCREWS[0] == "M3" and _CLAMP_SCREWS[-1] == "M64"
+    assert SCREW_SIZES[0] == "M3" and SCREW_SIZES[-1] == "M64"
+    pipe = PARTS.get("pipe_clamp")
+    widest = next(entry.maximum for entry in pipe.params.spec() if entry.name == "width")
+    for size in _CLAMP_SCREWS:
+        assert pipe.feasible(pipe.params(screw_size=size, width=widest, play=0.2)) is None, size
+    shell = PARTS.get("profile_clamp_shell")
+    seat = sketch_to_text(sketch_shapes.circle(20.0))
+    for size in SCREW_SIZES:
+        values = shell.params(seat_sketch=seat, screw_size=size, depth=CLAMP_DEPTH_LIMIT, play=0.2)
+        assert shell.feasible(values) is None, size
+    for name, values in (
+        ("wall_mount", {"size": "M64"}),
+        ("pipe_clamp", {"screw_size": "M64", "width": widest, "play": 0.2}),
+    ):
+        spec = PARTS.get(name)
+        built = as_mesh_data(spec.fn(spec.params(**values)).mesh)
+        assert built.is_watertight and built.component_count == 1, name
 
 
 def test_a_field_without_effect_does_not_multiply_the_corners() -> None:
@@ -8091,6 +8169,36 @@ def test_the_holder_plate_holds_the_whole_countersink_and_the_keyhole() -> None:
     assert holders._thickness("keyhole", 3.0) == pytest.approx(3.0 + holders.KEYHOLE.depth)
     assert holders._thickness("pegboard", 3.0) == pytest.approx(3.0)
     assert holders._thickness("clamp", 3.0) == pytest.approx(3.0)
+
+
+@pytest.mark.parametrize("size", ["M2", "M12", "M64"])
+def test_a_holder_takes_every_screw_of_the_wall_mount_and_its_tabs_grow(size: str) -> None:
+    """RM-578: Die Schraube der Laschen ist wählbar wie beim Wandhalter, bis M64.
+
+    Bis dahin stand sie fest auf M4, weil 512 Ecken je Halter für eine Wahl nicht
+    reichten. Die Laschen wachsen mit der Senkung, die Bohrung hat das
+    Durchgangsloch der Tabelle.
+    """
+    from app.core.knowledge.parts import holders
+    from app.core.knowledge.parts.mounting import WALL_SCREWS
+
+    assert size in WALL_SCREWS
+    wall = 3.0
+    produced = _holder(
+        "holder_u",
+        mount="screws",
+        screw_size=size,
+        width=40.0,
+        depth=30.0,
+        height=40.0,
+        wall=wall,
+        floor=True,
+    )
+    screw = standards.screw(size)
+    tab = screw.countersink + 2.0 * wall
+    assert produced.mesh.bounds.size[0] == pytest.approx(40.2 + 2.0 * wall + 2.0 * tab)
+    assert produced.features["bore_1"].params["diameter"] == pytest.approx(screw.clearance)
+    assert holders._thickness("screws", wall, size) > wall
 
 
 def test_the_screw_holes_sit_in_tabs_beside_the_holder_with_the_countersink_in_front() -> None:

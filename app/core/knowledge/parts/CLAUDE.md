@@ -176,7 +176,8 @@ Ein Baustein sagt nur, **was** er ist; den Kern wählt der Aufrufer
 ### Bereichstest und Versionen
 
 - **Der Bereichstest zählt das kartesische Produkt vor jedem Bau**
-  (`range_check.corner_count`, über `MAX_CORNERS` eine Absage mit Anzahl);
+  (`range_check.corner_count`, über `corner_limit` — 512 für eigene, 4096 für
+  mitgelieferte Bausteine — eine Absage mit Anzahl);
   Stichproben ersetzen den Vertrag nicht, `recipe.capture` begrenzt die Felder
   (`shared.MAX_EXPOSED`), der Dialog zeigt die Prüfmenge. Jede Phase einer Ecke
   gehört in ihren Bericht; nur eine erklärte Ablehnung beim Bau ist ein

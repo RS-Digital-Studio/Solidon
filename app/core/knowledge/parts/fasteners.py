@@ -1873,8 +1873,8 @@ class ThreadedRodParams(BaseParams):
         maximum=3.0,
         placement="advanced",
         doc=_(
-            "Höhe der kegeligen Kuppe an beiden Enden, unter 45 Grad bis auf den Kern, damit "
-            "eine Mutter greift. Null heißt: so hoch, wie ein Gang tief ist."
+            "Höhe der Kuppe an beiden Enden, unter 45 Grad bis auf den Kern. Null heißt: so "
+            "hoch, wie ein Gang tief ist."
         ),
         zero_text=ZERO_AUTOMATIC,
     )
@@ -1927,9 +1927,8 @@ def _rod_reason(raw: BaseParams) -> TranslatableText | str | None:
     features=["thread"],
     wall=WallRequirement.not_applicable("Die Gewindekämme werden vom massiven Kern getragen."),
     doc=_(
-        "Gewindestange oder Stiftschraube ohne Kopf zum Drucken: durchgehendes Gewinde oder je "
-        "ein Gewinde an beiden Enden, mit Fase. Dasselbe druckbare Profil wie Gewinde und "
-        "Mutter, die darauf passt."
+        "Gewindestange oder Stiftschraube ohne Kopf, mit Fase an beiden Enden. Dasselbe "
+        "druckbare Profil wie Gewinde und Mutter."
     ),
     caveat=_(
         "Für hohe Lasten oder häufiges Lösen. Dafür halten Metallschrauben mit Mutternfalle oder "
