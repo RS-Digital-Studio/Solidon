@@ -16,15 +16,16 @@ denselben Überschriften in `konzepte/begruendungen/regel-tests.md`.
 
 ## Entwicklung und Release
 
-- **Je Schritt die betroffenen Tests, vor dem Merge nach main das Entwicklungstor,
+- **Je Schritt die betroffenen Tests, vor jedem Merge oder Commit auf main das Entwicklungstor,
   Fenster, Renderer und Leistung lokal ausschließlich beim Release** — auch nicht als gezielte
   Teilmenge (`CLAUDE.md`, `/pruefen`). Ein grüner Entwicklungslauf ist kein
   Release-Nachweis.
 - **Beim Push nach main und vor dem Release laufen die betroffenen Fenster-
   und Slicertests auf Linux und macOS, auf Zweigen keine CI** (Entscheidung
-  Robert; CI-09): `tools/ci_selection.py` nennt sie zum Diff des Merges,
-  `fenster-auswahl.yml` und `slicer-auswahl.yml` fahren sie auf main; ein Rot
-  wird dort vorwärts behoben. Nur das Betroffene — macOS-Minuten kosten das
+  Robert; CI-09): `tools/ci_selection.py` nennt sie zum Diff des Merges, die
+  liefernde Sitzung startet `fenster-auswahl.yml` und `slicer-auswahl.yml` mit
+  `--ref main`, bis der Push sie selbst auslöst (RM-344); ein Rot wird auf main
+  vorwärts behoben. Nur das Betroffene — macOS-Minuten kosten das
   Zehnfache.
   Unterlagen und Kataloge lösen der Kosten wegen nichts aus, außer Markdown, das
   die Anwendung liest.

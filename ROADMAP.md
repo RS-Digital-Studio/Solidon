@@ -30,7 +30,7 @@ Auflagen werden daneben rechtzeitig bearbeitet. Die nächste Version ist **0.6.0
 am Kundengerät von Hand gegengeprobt, Signierschritt korrigiert, kommt mit dem nächsten Tag),
 Cura unter Linux (RM-521, gebaut, Abnahme beim Kunden mit dem nächsten Paket) — und die mit
 0.5.3 fällige Antwort an den Orca-Flatpak-Kunden (RM-522). Fristen: Verkaufskonzept bis
-15.10. (RM-092), Verkaufskandidat bis 25.10., Demo ab 0.6.0 bis 30.11., Start am 01.12.2026 um 10:00 Uhr (RM-061).
+15.10. (RM-092), Verkaufskandidat bis 25.11., Demo ab 0.6.0 bis 30.11., Start am 01.12.2026 um 10:00 Uhr (RM-061).
 Daneben bleiben die Mac-/Linux-Nachweise und die CRA-Betriebsvorbereitung offen — deren Frist
 ist am 11.09.2026 **abgelaufen**, die Meldepflicht aus Art. 14 gilt seither (RM-091).
 Eine zurückgestellte
@@ -154,7 +154,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-034 — Versicherungsschutz für Software und Produktschäden klären](#rm-034) | Veröffentlichung, Betrieb und Vertrieb | Versicherungsangebote gegen die tatsächlichen Risiken prüfen lassen |
 | [RM-035 — EULA wirksam in den Bestellvorgang einbeziehen](#rm-035) | Veröffentlichung, Betrieb und Vertrieb | Produktgrenzen und EULA im vollständigen Bestellweg rechtlich prüfen |
 | [RM-036 — Vertrag und Freistellungen des Zahlungsdienstleisters prüfen](#rm-036) | Veröffentlichung, Betrieb und Vertrieb | Konkreten Anbietervertrag und Haftungsübernahme entscheiden |
-| [RM-061 — Verkaufsbereitschaft und Ende der Demo vorbereiten](#rm-061) | Veröffentlichung, Betrieb und Vertrieb | Kandidat bis 25.10.; Demo ab 0.6.0 bis 30.11. (bis 0.5.3: 30.10.); Start 01.12.2026 um 10:00 Uhr deutscher Zeit — gebaut in 0.5.0: Abschied mit Pause und Start, ‚heute letzter Tag‘, Hinweis ab 24.10. (`29dcefa4`); offen täglicher Ablaufwächter und Bestell-Webhook |
+| [RM-061 — Verkaufsbereitschaft und Ende der Demo vorbereiten](#rm-061) | Veröffentlichung, Betrieb und Vertrieb | Kandidat bis 25.11.; Demo ab 0.6.0 bis 30.11. (bis 0.5.3: 30.10.); Start 01.12.2026 um 10:00 Uhr deutscher Zeit — gebaut in 0.5.0: Abschied mit Pause und Start, ‚heute letzter Tag‘, Hinweis ab 24.10. (`29dcefa4`); offen täglicher Ablaufwächter und Bestell-Webhook |
 | [RM-091 — CRA-Meldebereitschaft herstellen, die Frist ist abgelaufen](#rm-091) | Veröffentlichung, Betrieb und Vertrieb | Meldeweg entschieden (Robert, 23.09.2026: über die Support-Adresse, Antwortfrist zwei Arbeitstage, keine Belohnung, kein PGP; `SECURITY.md`, `SECURITY-INCIDENT.md` und `security.html` sind konform); offen EU-Login, Vertretung, CSIRT-Zuordnung, Alarmierung und Probelauf — Roberts Konten |
 | [RM-092 — Verkaufskonzept für den geplanten Start abschließen](#rm-092) | Veröffentlichung, Betrieb und Vertrieb | Anbieter, Bestellstrecke, Lieferung, Widerruf und Signierung bis 15.10. |
 | [RM-093 — Noch fehlende Angaben und Prüfungen der Rechtstexte klären](#rm-093) | Veröffentlichung, Betrieb und Vertrieb | Fehlende Anbieter-/Rechtsentscheidungen und Sprachfassungen fachlich prüfen |
@@ -5517,9 +5517,9 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
 <a id="rm-061"></a>
 
 - [~] **RM-061 — Verkaufsbereitschaft und Ende der Demo vorbereiten.** Bei geklärter Anmeldung,
-  Zahlung und Rechtstexten bis 25.10. einen Verkaufskandidaten vorbereiten. Verkaufsstart ist
+  Zahlung und Rechtstexten bis 25.11. einen Verkaufskandidaten vorbereiten. Verkaufsstart ist
   am **01.12.2026 um 10:00 Uhr Europe/Berlin** (Robert, 09.10.; zuvor 01.11. mit dem 31.10.
-  für letzte Optimierungen). Grundlage ist das
+  für letzte Optimierungen; der Kandidat wandert mit auf den 25.11., Robert 09.10.). Grundlage ist das
   [Übergangskonzept](konzepte/konzept-demo-zu-1.0-2026-09.md): Ablauf alter Demos und laufender
   Sitzungen, Aktualisierung und Projektübernahme, Kaufzustellung, Geräteaktivierung und
   Veröffentlichung nach §§5–13 umsetzen; Abnahmefälle T01–T32 und Freigabekriterien §§15–16

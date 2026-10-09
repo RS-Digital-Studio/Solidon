@@ -168,7 +168,9 @@ Dialoge.
   (`tools/affected_tests.py` leitet sie aus dem Importgraphen ab), auf Paket-
   und Fixzweigen auch vor dem Commit, dazu ruff, format, mypy. Das
   Entwicklungstor — alle Tests ohne Fenster, Renderer und Leistung — läuft
-  einmal **vor dem Merge nach main** (Entscheidung Robert). Ein Schritt, der
+  einmal **vor jedem Stand, der nach main geht**: vor dem Merge und vor jedem
+  Commit direkt auf main, den `post-commit` sofort pusht (Entscheidung
+  Robert). Ein Schritt, der
   seine Tests rot lässt, wird nicht auf den nächsten gestapelt.
 - **Fenster, Renderer und Leistung lokal nur beim Release**; die CI läuft nur
   beim Push nach main, auf Zweigen nie (Entscheidung Robert, `/liefern`). Ein
