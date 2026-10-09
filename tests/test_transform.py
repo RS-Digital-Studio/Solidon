@@ -329,6 +329,104 @@ def test_fit_to_size_reaches_the_given_edge(profile: Profile) -> None:
     assert bodies[0].plate == 0
 
 
+def _fitted_cube(profile: Profile, largest: float, monkeypatch: pytest.MonkeyPatch):
+    """Würfel laden, auf ``largest`` bringen und legen; dazu die Zahl der vollen
+    Merkmalserkennungen in dieser Auswertung."""
+    import importlib
+
+    from app.core.perceive import features
+
+    evaluation = importlib.import_module("app.core.scene.evaluate")
+
+    full: list[int] = []
+    original = evaluation.detect
+
+    def counted(mesh, *args, **kwargs):
+        if features.known_detection(mesh) is None:
+            full.append(int(mesh.triangle_count))
+        return original(mesh, *args, **kwargs)
+
+    monkeypatch.setattr(evaluation, "detect", counted)
+    features.forget_cache()
+    project = new_project("centauri-carbon-2", "pla")
+    project.document.sources["src_1"] = Source(
+        id="src_1", kind="import", path="sources/cube_clean.stl", sha256=""
+    )
+    project.sources["src_1"] = (MESHES / "cube_clean.stl").read_bytes()
+    history = History(project.document)
+    history.apply("Laden", [OperationDraft(op="load", params={"source": "src_1", "unit": "mm"})])
+    history.apply(
+        "Auf Maß",
+        [
+            OperationDraft(
+                op="fit_to_size",
+                inputs=("obj_1",),
+                outputs=("obj_1",),
+                params={"largest": largest, "free_spot": True},
+            )
+        ],
+    )
+    result = evaluate(project.document, profile, sources=ProjectSources(project))
+    return result, full
+
+
+def test_fit_to_size_within_the_print_limit_only_moves(
+    profile: Profile, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """RM-676: Ein Maßschritt, der die längste Kante um weniger als die
+    Druckgrenze verschöbe, legt nur — eine starre Bewegung, die Merkmale reisen mit.
+
+    Am erzeugten Bett (1 229 570 Dreiecke) hinterließ das Ausdünnen eine Kante von
+    100,000222 mm; der letzte Schritt der Erzeugung skalierte darauf um den Faktor
+    1 - 2,2·10⁻⁶, galt nicht als Bewegung, und die Erkennung lief am vollen Netz
+    ein weiteres Mal, 29 s CPU für 0,2 µm, die kein Drucker sieht.
+    """
+    from app.core.geom.transform import is_rigid
+    from app.core.units import PRINT_LIMIT
+
+    result, full = _fitted_cube(profile, 20.0 + PRINT_LIMIT / 2.0, monkeypatch)
+
+    body = result.scene.objects["obj_1"]
+    assert max(body.mesh.bounds.size) == pytest.approx(20.0, abs=1e-9), "das Maß bleibt"
+    assert body.mesh.bounds.minimum[2] == pytest.approx(0.0, abs=1e-9), "und steht auf dem Bett"
+    assert len(full) == 1, f"nur der Ladeschritt wird erkannt, nicht die Bewegung: {full}"
+    assert any(f.code == "transform.fitted" for f in result.scene.report.findings)
+
+    from app.core.geom import ops
+    from app.core.scene.cancel import NeverCancelled
+    from app.core.types import OpContext, Scene, SceneObject
+
+    entry = SceneObject(id="obj_1", name="Würfel", mesh=cube())
+    spec = REGISTRY.get("fit_to_size")
+    moved = ops.fit_to_size(
+        OpContext(
+            scene=Scene(objects={entry.id: entry}),
+            inputs=[entry],
+            params=spec.params(largest=20.0 - PRINT_LIMIT / 2.0),
+            profile=profile,
+            quality="fine",
+            seed=None,
+            progress=lambda fraction, text: None,
+            ask=lambda question, choices: choices[0],
+            cancelled=NeverCancelled(),
+        )
+    )
+    assert moved.transform is not None and is_rigid(moved.transform)
+
+
+def test_fit_to_size_beyond_the_print_limit_scales(
+    profile: Profile, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Gegenstück: Was die Druckgrenze überschreitet, wird auf das Maß gebracht."""
+    from app.core.units import PRINT_LIMIT
+
+    largest = 20.0 + 2.0 * PRINT_LIMIT
+    result, full = _fitted_cube(profile, largest, monkeypatch)
+
+    assert max(result.scene.objects["obj_1"].mesh.bounds.size) == pytest.approx(largest, abs=1e-9)
+    assert len(full) == 2, full
+
+
 def test_a_later_fit_to_size_settles_the_earlier_one(profile: Profile) -> None:
     """RM-676: Nur der letzte *Auf Maß bringen* eines Körpers bietet *Größe ändern* an.
 
