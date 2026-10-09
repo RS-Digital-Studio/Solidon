@@ -986,12 +986,12 @@ PUBLIC_WARNING_MARKERS = (
 )
 
 PLANNED_1_0_MARKERS = {
-    "index.html": "1. November 2026 geplant",
-    "en/index.html": "planned for 1 November 2026",
-    "es/index.html": "prevista para el 1 de noviembre de 2026",
-    "fr/index.html": "prévue pour le 1er novembre 2026",
-    "it/index.html": "prevista per il 1º novembre 2026",
-    "pt/index.html": "prevista para 1 de novembro de 2026",
+    "index.html": "1. Dezember 2026 geplant",
+    "en/index.html": "planned for 1 December 2026",
+    "es/index.html": "prevista para el 1 de diciembre de 2026",
+    "fr/index.html": "prévue pour le 1er décembre 2026",
+    "it/index.html": "prevista per il 1º dicembre 2026",
+    "pt/index.html": "prevista para 1 de dezembro de 2026",
 }
 
 RETIRED_MEDIA = (

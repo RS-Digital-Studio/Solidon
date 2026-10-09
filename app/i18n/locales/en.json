@@ -4886,7 +4886,7 @@
   "Lege ein Hauptmaß als Projektparameter an, statt es als Zahl zu setzen.": "Add a main dimension as a project parameter instead of setting it as a number.",
   "Lege ein Passungspaar an. Die Toleranz kommt aus dem Materialprofil.": "Add a fit. The tolerance comes from the material profile.",
   "Legen Sie die Datei filaments.json beiseite und beginnen Sie leer.": "Set the filaments.json file aside and start empty.",
-  "Legen Sie wie in [Das erste eigene Teil](manual:first-part) einen Quader an und lassen Sie *Maße als Parameter anlegen* angehakt.": "Add a box as in [Your first part](manual:first-part) and leave *Create the dimensions as parameters* ticked.",
+  "Legen Sie wie in [Das erste eigene Teil](manual:first-part) einen Quader an. *Maße als Parameter anlegen* muss angehakt sein.": "Add a box as in [Your first part](manual:first-part). *Create the dimensions as parameters* must be ticked.",
   "Legen Sie wie in [Das erste eigene Teil](manual:first-part) einen Quader an. Danach ist er schon gewählt.": "Add a box as in [Your first part](manual:first-part). It is selected right away.",
   "Legen Sie zuerst Projektparameter an und binden Sie die Maße daran, die am Baustein einstellbar sein sollen.": "Create project parameters first and bind the dimensions that should be adjustable on the part to them.",
   "Legt Kopien in einer Reihe oder auf einem Kreis an — ein Lochbild, ein Kranz Schraubdome, eine Reihe Clips. Ein einziger Schritt im Verlauf, und die Anzahl bleibt änderbar.": "Places copies in a row or on a circle — a hole pattern, a ring of screw bosses, a row of clips. A single step in the history, and the count stays editable.",

@@ -32,6 +32,8 @@ entfernt hat.
 | Datum | Abschnitt |
 |---|---|
 | 2026-10-09 | [RM-680: Bausteine verwalten steht ohne eigenen Baustein offen (09.10.2026)](#rm-680-bausteine-verwalten-steht-ohne-eigenen-baustein-offen-09102026) |
+| 2026-10-09 | [RM-650: Ein eingefügtes Modell kommt in den Ausschnitt (09.10.2026)](#rm-650-ein-eingefügtes-modell-kommt-in-den-ausschnitt-09102026) |
+| 2026-10-09 | [RM-467: Zweiter Bibliothekslauf, Qt 6.12 und macOS 14 (09.10.2026)](#rm-467-zweiter-bibliothekslauf-qt-612-und-macos-14-09102026) |
 | 2026-10-09 | [RM-496: Am echten Fenster laden reale Modelle so schnell wie in v0.5.1 (09.10.2026)](#rm-496-am-echten-fenster-laden-reale-modelle-so-schnell-wie-in-v051-09102026) |
 | 2026-10-09 | [RM-621: Ein Slicer, der hinter Flatpak abstürzt, heißt abgestürzt (09.10.2026)](#rm-621-ein-slicer-der-hinter-flatpak-abstürzt-heißt-abgestürzt-09102026) |
 | 2026-10-09 | [RM-620: Ein Slicer, der Filamente mit zu verschiedenen Temperaturen ablehnt, sagt es (09.10.2026)](#rm-620-ein-slicer-der-filamente-mit-zu-verschiedenen-temperaturen-ablehnt-sagt-es-09102026) |
@@ -44121,6 +44123,53 @@ dazu ein einziger Slicerlauf bei −62 mit Anordnungsvorgabe. Review `solidon3d-
 zwei Runden (zwei mittlere, dann zwei leichte Befunde, behoben), Entwicklungstor grün
 (24 875 bestanden, 116 übersprungen). Changelog: ja (Behebung, seit v0.5.3).
 
+## RM-467: Zweiter Bibliothekslauf, Qt 6.12 und macOS 14 (09.10.2026)
+
+<a id="rm-467-zweiter-bibliothekslauf-qt-612-und-macos-14-09102026"></a>
+
+**RM-467, zweiter Lauf am 09.10.2026** (fällig am 05.10., nachgeholt). Geprüft: 69 Pins aus
+  `constraints.txt` gegen PyPI (Sicherheitsmeldungen, cp314-Räder für Windows x64, Linux x86_64,
+  Apple Silicon und Intel-Mac). Keine Sicherheitsmeldung; neu waren 16 Fassungen, alle mit Rädern
+  für jede Plattform.
+  **Übernommen:** ast_serialize 0.12.1, cadquery-ocp-novtk und -proxy 8.0.1.1.0 (behebt eine
+  Regression gegenüber OCP 7.9.3, OCCT bleibt 8.0.1), ImageIO 2.38.1, iniconfig 2.3.1, MarkupSafe
+  3.0.4, pycparser 3.1, PySide6 6.12.0 mit Essentials, Addons und shiboken6 (Qt 6.12.0), shapely
+  2.2.0 (GEOS 3.14.1), trimesh 5.1.1 und uharfbuzz 0.56.3 (HarfBuzz 14.6.0).
+  **Folgen:**
+  - PySide6 6.12 verlangt zwei neue Räder, `PySide6_Pdf` und `PySide6_WebEngine` (6.12.0.140);
+    bis 6.11 lagen beide Module in `PySide6_Addons`. Die Anwendung lädt keines davon, nur
+    `tools/make_manual.py` druckt über QtWebEngine. Beide stehen mit Pin in `constraints.txt`, in
+    der Freigabeliste und in der Lizenzbeilage (43 statt 41 Laufzeitkomponenten), wie bisher
+    `PySide6_Addons`. Allein `PySide6_Essentials` zu verlangen geht nicht: `PySide6/__init__.py`
+    mit der DLL-Suche unter Windows und die Typstubs gehören dem Rad `PySide6`.
+  - Qt 6.12 baut für macOS ab 14 (`macosx_14_0` statt `macosx_13_0`). Die Mindestversion steht
+    jetzt in einer Quelle, `branding.MACOS_MINIMUM`, und gilt in Plist, Installer-Beschreibung,
+    den sechs Startseiten und im Changelog. macOS 14 läuft auf jedem Mac ab 2018 und hält damit
+    die Vorgabe der letzten acht Jahre. Die Installer-Beschreibung trug die Zahl bisher als
+    zweites Literal ohne Prüfung; `test_the_minimum_system_versions_on_the_website_match_installer_and_bundle`
+    liest sie jetzt aus branding und prüft Plist, Installer und Startseiten.
+  - shapely 2.2 kündigt `shapely.ops.transform` ab, und die Warnungsregel der Suite machte daraus
+    28 rote Dichtungstests. `seal_ops._polygon_in_frame` rechnet über `shapely.transform` mit
+    derselben Formel je Koordinate. Ein Vergleich aller Abkündigungen zwischen 2.1.2 und 2.2.0
+    fand sonst nur Namen, die Solidon nicht verwendet.
+  - trimesh 5.1.1 korrigiert `align_vectors` (Solidon dreht seit RM-187 selbst) und
+    `closest_point` an entarteten Dreiecken (die Umgehung in `geom/mesh.py` bleibt richtig).
+  - Lizenztabellen: Qt 6.12.0 mit Quelle am Tag v6.12.0, GEOS 3.14.1 am Tag 3.14.1, HarfBuzz
+    14.6.0 mit byte-gleicher COPYING (SHA-256 gegen den Tag). Der Versionswächter in
+    `test_licence_notices.py` ersetzte ein festes `versions = ["6.11.2"]` und wäre beim nächsten
+    Qt-Sprung still grün geworden; er nimmt jetzt die erste Versionsliste und prüft, dass er
+    etwas ersetzt hat.
+  **Belege:** Entwicklungstor mit den neuen Fassungen: 24 932 bestanden, 29 rot, davon
+  28 Dichtungstests durch die Abkündigung in shapely 2.2 (behoben; die fünf Dichtungsdateien danach
+  mit 75 Tests grün) und der bekannte Hooktest einer eigenen Worktree-Umgebung. Betroffene Tests
+  nach der Behebung: 8942 bestanden, ein Lastausreißer im Cura-Rohrtest einzeln grün; ruff, Format
+  und mypy grün. UI-Audit mit Qt 6.12: die zwölf Beispielprojekte geöffnet, ausgewertet und
+  exportiert, mit denselben Befunden wie im Lauf davor. Der Gegenlauf mit der alten Umgebung kam
+  unter Volllast des Rechners (rund 150 fremde Testprozesse) nicht über die Zeitgrenze des
+  Hilfsprozesses; die Fensterprüfung mit Qt 6.12 auf allen Plattformen übernimmt das Release-Tor.
+  **Offen:** Der Paketbau auf vier Plattformen mit Qt 6.12 und den beiden neuen Rädern belegt
+  sich im vollen CI-Lauf, zusammen mit RM-468 und RM-469.
+
 ## RM-621: Ein Slicer, der hinter Flatpak abstürzt, heißt abgestürzt (09.10.2026)
 
 <a id="rm-621-ein-slicer-der-hinter-flatpak-abstürzt-heißt-abgestürzt-09102026"></a>
@@ -44583,6 +44632,16 @@ Zylinderkopf und Gewinde passend zur Bohrung.
   Vermerk 09.10.2026: Am echten Fenster kein Rückschritt (03.10., Stand `1e4a03d75`): Über den echten Startweg mit Vorwärmen laden Rucksack, STEP und 3MF so schnell wie in v0.5.1 (3,7 / 3,3 / 14,9 s gegen 3,5 / 3,6 / 14,2 s; v0.4.1 Rucksack 3,1 s); die Verdopplung des Prüfstands kam vom fehlenden Vorwärmen und von Fremdlast. Seit v0.5.1 offen und als [RM-672](ROADMAP.md#rm-672) übernommen, samt der Messung des Bibliothekseinflusses: sofortiges Öffnen nach dem Start dauert doppelt so lang wie in v0.4.1, und unter Fremdlast hungerte der zurückgestellte Hilfsprozess das Laden bis über 150 s aus (vor RM-380 gemessen). Beleg: `F:\solidon-review-reports\rm496\bericht.md`.
 
 **Abschluss:** Am echten Fenster gemessen (03.10.2026, `F:\solidon-review-reports\rm496\bericht.md`, Startweg `app.ui.app.main()` mit Ladebildschirm und Vorwärmen, Prozessbaum auf HIGH, je Zelle 3–4 Läufe im Wechsel): Öffnen bis Ruhe nach 3 s Rucksack-Halter 3,74 s (v0.5.1: 3,46, v0.4.1: 3,13), pegboard-STEP 3,30 s (3,55 / 3,67), `elegoo_grease_tool.3mf` mit 7 Körpern 14,87 s (14,24; v0.4.1 lädt die Datei nicht). Die Verdopplung des Prüfstands kam vom fehlenden Vorwärmen (2,2 s Importe) und von Fremdlast; kein Rückschritt gegenüber v0.5.1. Was offen blieb — sofortiges Öffnen direkt nach dem Start doppelt so lang wie in v0.4.1, der zurückgestellte Hilfsprozess unter Fremdlast und der Einfluss der neuen Bibliotheksstände (+0,3 bis 1,5 s) — steht in [RM-672](ROADMAP.md#rm-672). Abgeschlossen von Claude (Review-Thread).
+
+## RM-650: Ein eingefügtes Modell kommt in den Ausschnitt (09.10.2026)
+
+<a id="rm-650-ein-eingefügtes-modell-kommt-in-den-ausschnitt-09102026"></a>
+<a id="rm-650"></a>
+
+**RM-650 — Ein eingefügtes Modell kommt in den Ausschnitt.**
+Gefunden bei RM-306 (03.10.2026): Ein weiteres Modell kommt an die freie Stelle neben der Plattenmitte; war die Ansicht auf das erste Modell eingepasst, stand das neue außerhalb des Bilds, und nur der Objektbaum verriet, dass es angekommen war.
+
+**Abschluss:** Nach dem Einfügen eines weiteren Modells rahmt die Ansicht einmal nach, wenn es über den zuletzt eingepassten Rahmen hinausragt — derselbe Weg wie nach einem Größenschritt (RM-280). `MainWindow._on_model_placed` merkt sich den Körper (`_placed_to_frame`), und `_frame_the_placed` meldet unmittelbar vor dem Aufbau, der ihn trägt, an `Viewport.frame_if_beyond`; was im Rahmen liegt, lässt die Kamera in Ruhe. Gemerkt wird der Körper, nicht der Zeitpunkt: Eine Bitte gleich beim Einfügen verbrauchte das Review-Gegenbeispiel, ein Aufbau der alten Szene bei offener Schichtansicht. Ein abgewiesener Import und ein Dokument ohne den Körper räumen die Merkung ab. Gilt für Datei, Download, erzeugtes Modell und Einfügemarke (`Session.modelPlaced`, RM-303). Regel in `.claude/rules/kamera.md`, Changelog 0.6.0 in sechs Sprachen. Test `test_ui.py::test_a_further_model_beyond_the_view_comes_into_it` ohne und mit offener Schichtansicht; ohne Nachrahmen beide rot, mit der Bitte beim Einfügen der Fall mit Schichtansicht rot (Gegenproben). Fenstersonde am echten Fenster (zwei Würfel, der zweite neben dem ersten): vorher 3 von 4 — Ausschnitt blieb bei −10…10 mm, das neue Modell reichte bis 35 mm —, nachher 4 von 4, beide im Bild. Umgesetzt von Claude (Thread „Bedienung und KI“).
 
 ## RM-680: Bausteine verwalten steht ohne eigenen Baustein offen (09.10.2026)
 

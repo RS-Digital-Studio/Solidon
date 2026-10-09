@@ -20809,6 +20809,54 @@ def test_a_further_model_brings_its_plate_into_view(
     assert window.header.plate == 1, "das neue Modell steht auf Platte 2 und gehört ins Bild"
 
 
+@pytest.mark.parametrize("layer_open", [False, True])
+def test_a_further_model_beyond_the_view_comes_into_it(
+    window: MainWindow, tmp_path: Path, layer_open: bool
+) -> None:
+    """RM-650 (Fund aus RM-306): Ein weiteres Modell neben dem gerahmten stand außerhalb des Bilds.
+
+    Die Ansicht war auf das erste Modell eingepasst; das zweite kam daneben an
+    die freie Stelle, und nur der Objektbaum verriet es. Jetzt rahmt die
+    Ansicht einmal nach, wenn das neue Modell über den eingepassten Rahmen
+    hinausragt — derselbe Weg wie nach einem Größenschritt (RM-280). Auch bei
+    offener Schichtansicht: Deren Aufbau der alten Szene verbrauchte die Bitte,
+    solange sie beim Einfügen gestellt wurde statt vor dem Aufbau, der das
+    neue Modell trägt.
+    """
+    from app.core.slice.analysis import slice_body
+    from app.ui.viewport import reaches_beyond
+
+    cube = (MESHES / "cube_clean.stl").read_bytes()
+    first = tmp_path / "erster.stl"
+    first.write_bytes(cube)
+    window.open_path(first)
+    assert window.session.wait_for_idle(60_000)
+    QApplication.processEvents()
+    framed = window.viewport._fitted_bounds
+    assert framed is not None
+    if layer_open:
+        result = window.session.last_result
+        assert result is not None
+        body = next(iter(result.scene.objects))
+        layers = slice_body(result.scene.objects[body].mesh, 2.0)
+        window.viewport.set_layer(layers.layers[3], body)
+
+    second = tmp_path / "zweiter.stl"
+    second.write_bytes(cube)
+    window.open_path(second)
+    assert window.session.wait_for_idle(60_000)
+    QApplication.processEvents()
+
+    result = window.session.last_result
+    assert result is not None and len(result.scene.objects) == 2
+    both = window.viewport._object_bounds()
+    assert both is not None
+    assert reaches_beyond(framed, both), "ohne Überstand prüft der Test nichts"
+    assert not reaches_beyond(window.viewport._fitted_bounds, both), (
+        "das neue Modell steht im eingepassten Rahmen"
+    )
+
+
 def test_the_section_plane_cuts_every_plate_at_its_own_place(window: MainWindow) -> None:
     """Und die Entscheidung daneben: Der Schnitt ist eine Szenenebene (RM-119).
 

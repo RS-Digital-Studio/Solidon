@@ -19,6 +19,7 @@ scrive in `website/version.json`.
 
 ### Uso e sistema
 
+- Su Mac, Solidon richiede ora macOS 14 o successivo. Ogni Mac dal 2018 in poi può installarlo gratuitamente.
 - Solidon ora si avvia sui Mac Intel con macOS 26. La versione 0.5.3 vi si bloccava all'avvio.
 - Su Mac, *Annulla* interrompe subito una risposta in corso del modello locale.
 - Su Mac, Invio apre la voce selezionata nella schermata iniziale, in *Cerca funzione* e nel rapporto di verifica.
@@ -38,6 +39,7 @@ scrive in `website/version.json`.
 - In modalità disegno la linguetta *Selezione* è nascosta. L'elenco dei vincoli mostra quelli dei punti e delle linee selezionati, più ogni conflitto.
 - Nella scheda dei parametri, una misura mostra «Non utilizzato» solo quando è così. Il pulsante dice quanti numeri fissi si possono collegare alle misure.
 - La segnalazione di errore allega un registro di arresto anomalo solo dopo un vero arresto anomalo di Solidon.
+- Un modello aggiunto è poi visibile, anche se finisce accanto a un modello su cui la vista era ingrandita.
 - Nel catalogo dei blocchi, *Gestisci blocchi* è aperto finché non esiste ancora un blocco proprio.
 
 ### Stampare e passare allo slicer
@@ -50,7 +52,7 @@ scrive in `website/version.json`.
 - Il codice di avvio e il volume di stampa vengono solo dalla tua stampante, non da un altro modello della stessa serie.
 - La finestra di stampa assegna i profili dello slicer molto più in fretta, all'apertura e dopo ogni cambio di slicer.
 - Il tempo di stampa stimato è più vicino a quello dello slicer, molto più vicino per i pezzi con supporti.
-- Se supporti e skirt stanno sul piano, il controllo lo misura ora solo sotto gli sbalzi. I pezzi vicini al bordo non ricevono più un avviso senza motivo.
+- Il controllo che supporti e skirt stiano sul piano ora misura solo sotto gli sbalzi. I pezzi vicini al bordo non ricevono più un avviso senza motivo.
 - I suggerimenti accettati non lasciano quasi più senza supporto gli sbalzi che ne hanno bisogno. *Tenere liberi i canali* blocca solo lo spazio da cui un supporto non si potrebbe più togliere.
 - Dove i supporti sotto piccoli sbalzi poggiano sul modello, Solidon suggerisce supporti ad albero. Lì lasciano meno segni.
 - Sulle punte piccole Solidon suggerisce una *Velocità minima di rallentamento* più bassa, così non si ammorbidiscono. L'impostazione arriva a ogni slicer.
@@ -203,7 +205,7 @@ scrive in `website/version.json`.
 - I pezzi alti e sottili su una base piccola ricevono pareti più tranquille, a 60 mm/s e con meno accelerazione. Sulla Centauri Carbon 2 queste aste si staccavano.
 - Con Cura il rapporto di verifica nomina i pezzi che ricevono questi valori solo di riflesso, perché Cura li accetta solo per l'intero piatto.
 - Solidon propone «Prima la parete esterna» solo per il pezzo che ne ha bisogno, e mai per uno con supporti.
-- Anche nella ricerca rapida, «Orienta per la stampa» controlla che un pezzo stia in piedi in modo sicuro. Se uno non sta in piedi da nessuna parte, orienta comunque gli altri e lo indica nel rapporto.
+- La ricerca rapida di «Orienta per la stampa» controlla anche che un pezzo stia in piedi in modo sicuro. Se uno non sta in piedi da nessuna parte, orienta comunque gli altri e lo indica nel rapporto.
 - Con «Disponi sul piano» ogni pezzo va sul primo piatto dove c'è posto. Il set di minigolf ora ne occupa quattro invece di sei.
 - Se trascini un corpo nella vista su un altro piano, finisce sul piatto di quel piano.
 - Quando arriva un altro modello, da un file, da un download o generato, la vista mostra il piatto su cui si trova.
@@ -219,8 +221,7 @@ scrive in `website/version.json`.
 - Il riempimento Linee arriva in Bambu Studio e Creality Print come linee, senza essere sostituito da Griglia o Cubico.
 - Dopo il taglio, Solidon segnala le impostazioni scartate da PrusaSlicer o dagli slicer Orca, oltre alle modifiche a bordo, ordine delle pareti e tipo di supporto.
 - La preselezione del filamento prende Generic o la marca della tua stampante invece di un filamento speciale di terzi, ad esempio Generic PETG invece di BETA PETG sulla Bambu A1.
-- Esportazione e slicing usano il calcolo fine invece della vista più rapida nella finestra. Coni e parti fuse in modo morbido arrivano così lisci nel file.
-- Anche con modelli di superfici STEP, con rotazioni di quasi 180° e su facce riconosciute in parte funzionano «Orienta per la stampa», «Ruota» e «Sposta». Il corpo resta esatto.
+- Ora «Orienta per la stampa», «Ruota» e «Sposta» funzionano anche con modelli di superfici STEP, con rotazioni di quasi 180° e su facce riconosciute in parte. Il corpo resta esatto.
 - Una parete esterna più lenta vale ora anche per i perimetri piccoli come fori e steli in PrusaSlicer e nella famiglia Orca.
 - PrusaSlicer e la famiglia Orca rispettano la densità dei supporti scelta. Il campo parte dall'1 %. Per stampare senza supporti, scegli «Nessuno».
 - Nelle stampe multicolore con OrcaSlicer, ElegooSlicer, Bambu Studio e Creality Print, la torre di spurgo parte da una posizione adatta alle dimensioni del piatto.
@@ -260,10 +261,10 @@ scrive in `website/version.json`.
 - Se un foro taglia il corpo in due, il rapporto lo dice una volta sola, con il numero di pezzi alla fine, e tace appena il corpo torna a essere un pezzo unico.
 - I motivi sulle facce cilindriche dei modelli importati restano chiusi quando li modifichi.
 - Nella cronologia di un corpo STEP puoi riordinare i passi o inserirne uno prima, anche se un passo successivo riguarda un foro. Il riferimento segue il foro.
-- Un foro spostato o duplicato con una nuova direzione resta esatto su un corpo STEP.
+- Un foro semplice o un'asola spostati o duplicati con una nuova direzione restano esatti su un corpo STEP.
 - Una caratteristica riconosciuta a più di un metro dall'origine mantiene il suo posto quando la modifichi. Prima il campo tagliava il numero in silenzio e il foro si spostava.
 - Se un passaggio colpisce un pezzo la cui superficie interseca se stessa, si ferma e mostra il punto. Altrove continua a calcolare e avvisa che i pezzi non si sono potuti unire.
-- Anche lungo la cucitura di simmetria di una figura, «Dividi il modello» taglia senza lasciarla aperta, e le spine sono già al loro posto nell'anteprima.
+- Ora «Dividi il modello» taglia una figura anche lungo la sua cucitura di simmetria senza lasciarla aperta, e le spine sono già al loro posto nell'anteprima.
 - Se un taglio sfiora soltanto una parete, «Dividi il modello» indica il punto e porta alla posizione del taglio invece di fallire sulle spine.
 - Tronca ora taglia anche in obliquo: in alto scegli il «Piano»: su un asse con inclinazione, parallelo a una faccia, per uno spigolo o per tre punti cliccati nella vista.
 - Un corpo STEP resta un corpo STEP quando lo tronchi, con facce, spigoli e nomi.
@@ -313,7 +314,7 @@ scrive in `website/version.json`.
 - L'editor dello scheletro mostra ossa e giunto nella vista, e un giunto sta al centro del corpo invece che sulla pelle, così la figura si piega in modo uniforme.
 - La barra di modellazione chiama ora «Intensità» il valore del pennello invece di «Spessore», che faceva pensare a una parete.
 - Se un tratto di modellazione buca la parete o la rende troppo sottile, il rapporto e l'esportazione lo segnalano, con «Mostra il punto» e «Annulla il tratto».
-- Nella finestra, «Fondi dolcemente» calcola ora fine, finché il corpo non è molto grande.
+- Ora «Fondi dolcemente» calcola fine anche nella finestra, finché il corpo non è molto grande.
 - Se un blocco come un buco di serratura sporge oltre il bordo della sua faccia, anche solo con la svasatura o lo smusso, o entra in una parete dietro, il rapporto lo segnala.
 - Una misura digitata come lunghezza 40 allunga lo schizzo solo in quella direzione. Il corpo che ne nasce resta chiuso e appoggiato sul piano.
 - I disegni SVG arrivano corretti: rotazioni, inclinazioni, angoli arrotondati, ellissi e archi ellittici sono giusti, e i livelli nascosti restano fuori.
@@ -332,7 +333,7 @@ scrive in `website/version.json`.
 
 - Annullare durante «Un altro tentativo» ferma solo il tentativo in corso. Quelli finiti restano da scegliere.
 - Ogni tentativo nell'elenco indica la sua frase o immagine e il seme. Se il tuo input non corrisponde più al tentativo scelto, la finestra dice quale verrà applicato.
-- Il modello di immagine viene scaricato da «Configura modello immagine …» anche se gli altri pesi ci sono già.
+- Ora «Configura modello immagine …» scarica il modello di immagine anche se gli altri pesi ci sono già.
 - Se un errore durante la generazione indica la configurazione come via d'uscita, compare come pulsante nella finestra.
 - Mentre si genera un modello, la finestra resta utilizzabile. La finestra di dialogo si sposta di lato, e la barra di stato mostra avanzamento, tempo e «Annulla».
 - La finestra di generazione indica il volume alla misura con cui arriva il pezzo.
