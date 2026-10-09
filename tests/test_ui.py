@@ -12053,6 +12053,11 @@ def test_the_keyboard_reaches_zoom_and_the_next_body(window: MainWindow) -> None
     assert window.object_tree.selected_objects() == ("obj_2",)
 
     shortcuts = {entry.key().toString() for entry in window.findChildren(QShortcut)}
+    shortcuts.update(
+        sequence.toString()
+        for action in window.findChildren(QAction)
+        for sequence in action.shortcuts()
+    )
     assert "Ctrl+Tab" in shortcuts
     assert any("+" in text for text in shortcuts), "der Zoom hat ein Kürzel"
 

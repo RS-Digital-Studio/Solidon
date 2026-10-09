@@ -51,7 +51,6 @@ from PySide6.QtGui import (
     QDropEvent,
     QKeyEvent,
     QKeySequence,
-    QShortcut,
     QShowEvent,
     QStandardItemModel,
 )
@@ -75,7 +74,6 @@ from PySide6.QtWidgets import (
     QPushButton,
     QSizePolicy,
     QStackedWidget,
-    QTabWidget,
     QTextEdit,
     QToolBar,
     QToolButton,
@@ -894,7 +892,7 @@ class _SelectionPage(QWidget):
 
     def __init__(
         self,
-        tabs: QTabWidget,
+        tabs: CurrentPageTabs,
         fallback: QWidget,
         parent: QWidget | None = None,
         *,
@@ -911,6 +909,7 @@ class _SelectionPage(QWidget):
         self._was_current = False
         self._held = 0
         tabs.currentChanged.connect(self._current_changed)
+        tabs.pageVisibilityChanged.connect(self._current_changed)
 
     @contextmanager
     def held(self) -> Iterator[None]:
@@ -935,7 +934,7 @@ class _SelectionPage(QWidget):
 
     def is_current(self) -> bool:
         """Ob der Reiter vorn ist."""
-        return self._tabs.currentWidget() is self
+        return self._tabs.page_is_visible(self)
 
     def reveal(self) -> None:
         """Holt den Reiter nach vorn, es sei denn, der Kunde hat ihn verlassen.
@@ -944,6 +943,10 @@ class _SelectionPage(QWidget):
         nicht über eine laufende Tour, die vorn steht.
         """
         if not self._workspace_visible or self.dismissed or self._held:
+            return
+        if self._tabs.is_detached(self):
+            # Die sichtbaren Felder werden passiv erneuert. Eine neue Auswahl
+            # darf dem gerade benutzten Fenster nicht den Fokus stehlen.
             return
         if not self._tabs.isTabVisible(self._tabs.indexOf(self)):
             # Verborgen im Zeichenmodus (RM-519): Eine Auswahl dort holt
@@ -3120,6 +3123,8 @@ class MainWindow(QMainWindow):
         # Nach dem Zentrum, das Karte, Bericht und Tour baut: Der Reiter
         # *Auswahl* setzt sich dort vor sie (RM-511).
         self._build_feature_dock()
+        self.right.layoutChanged.connect(self._remember_tab_layout)
+        QTimer.singleShot(0, self, self._restore_tab_layout)
         # Nach den Menüs, denn die Kopfzeile entsteht in der Werkzeugleiste:
         # ein Aufruf aus ``_build_central`` heraus fände sie noch nicht.
         self._apply_card_style(self.settings.theme)
@@ -3129,7 +3134,7 @@ class MainWindow(QMainWindow):
 
         # §2.6: das offene Werkzeug schließen. ``close_tool`` gab es dafür seit
         # jeher und niemanden, der es rief — Escape tat nichts.
-        QShortcut(QKeySequence(Qt.Key.Key_Escape), self, self._escape)
+        self._window_shortcut(QKeySequence(Qt.Key.Key_Escape), weak_slot(self, MainWindow._escape))
 
         # §19.2: der Viewport ist mit der Tastatur navigierbar. Die
         # Achsansichten waren es, Zoom und Durchblättern nicht — wer ohne
@@ -3138,15 +3143,15 @@ class MainWindow(QMainWindow):
             (QKeySequence.StandardKey.ZoomIn, 1.25),
             (QKeySequence.StandardKey.ZoomOut, 0.8),
         ):
-            QShortcut(sequence, self, weak_slot(self, lambda view, f: view.viewport.zoom(f), step))
-        QShortcut(
+            self._window_shortcut(
+                QKeySequence(sequence), weak_slot(self, lambda view, f: view.viewport.zoom(f), step)
+            )
+        self._window_shortcut(
             QKeySequence("Ctrl+Tab"),
-            self,
             weak_slot(self, lambda view: view.object_tree.step_selection(True)),
         )
-        QShortcut(
+        self._window_shortcut(
             QKeySequence("Ctrl+Shift+Tab"),
-            self,
             weak_slot(self, lambda view: view.object_tree.step_selection(False)),
         )
 
@@ -3171,9 +3176,8 @@ class MainWindow(QMainWindow):
         # und in der Kürzelübersicht; geraten werden muss es nicht.
         for index, key in enumerate(self.tools.tools(), start=1):
             self.tools.set_shortcut(key, f"Alt+{index}")
-            QShortcut(
+            self._window_shortcut(
                 QKeySequence(f"Alt+{index}"),
-                self,
                 weak_slot(self, lambda view, name: view.tools.toggle(name), key),
             )
 
@@ -8787,6 +8791,32 @@ class MainWindow(QMainWindow):
         self.viewport.set_bed_visible(visible)
         self._store_settings()
         self.announce(tr("Druckplatte wieder da.") if visible else tr("Druckplatte ausgeblendet."))
+
+    def _window_shortcut(self, sequence: QKeySequence, invoke: Callable[[], None]) -> None:
+        """Eine Fensteraktion, die auch herausgezogene Reiter unverändert teilen."""
+        action = QAction(self)
+        action.setShortcut(sequence)
+        action.setShortcutContext(Qt.ShortcutContext.WindowShortcut)
+        action.triggered.connect(lambda _checked=False: invoke())
+        self.addAction(action)
+
+    def _restore_tab_layout(self) -> None:
+        """Eigene Fenster erst nach dem vollständigen Aufbau wieder öffnen."""
+        self.right.configure_pages(
+            {
+                "selection": self.feature_dock,
+                "report": self.report,
+                "chat": self.chat,
+                "tour": self.tour,
+                "constraints": self._constraints_room,
+            },
+            self.settings.tab_layout,
+        )
+
+    def _remember_tab_layout(self, state: dict[str, object]) -> None:
+        """Die Reiteranordnung über denselben verzögerten Schreibweg merken."""
+        self.settings.tab_layout = state
+        self._card_places_save.start()
 
     def _remember_card_places(self, places: dict[str, str]) -> None:
         """Wo die Seitenkarten liegen, für den nächsten Start (:class:`CardPlace`).
@@ -28919,6 +28949,8 @@ class MainWindow(QMainWindow):
         # Wie das Fenster verlassen wird, so kommt es wieder — maximiert ist
         # nur die Vorgabe für den ersten Start.
         self.settings.window_geometry = bytes(self.saveGeometry().toHex().data()).decode("ascii")
+        self.settings.tab_layout = self.right.layout_state()
+        self.right.shutdown_windows()
         self.settings.circle_measure = circle_measure()
         # Eine gebündelte Kartenlage geht mit dieser Zeile in die Datei.
         self._card_places_save.stop()

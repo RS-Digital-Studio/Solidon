@@ -88,6 +88,7 @@ Fassungen: `konzepte/begruendungen/karte-tests.md`.
 | Druckziel, Übergabestatus, Befundkarte, Änderungserklärung und Beleg (RM-090) · Liest die Gegenprobe jede geschriebene Datei zurück? · Nennt jede Handlung ihre Nebenfolge? | `test_print_contract.py`, `test_print_contract_ui.py` · `test_export_readback.py` · `test_action_effects.py` |
 | Mehrfachimport am Fenster: Dialogabbruch, Einfügen, Rückfrage, Gestensperre · Spulendatum per Tastatur und zurück auf „Unbekannt“ | `test_batch_import_ui.py` · `test_date_field.py` |
 | Nachbau im Prüfbericht: Kandidaten, Vergleich, Verluste, Abbruch/Projektwechsel, Undo/Redo und Dateirundreise | `test_rebuild_ui.py`; Geometrievertrag in `test_rebuild.py` |
+| Karten unten andocken, Reiter umordnen und verlustfrei in eigene Fenster ziehen? | `test_tab_windows.py`: reine Platz- und Bildschirmrechnung im Tor; Inhalte, Reiterkennungen und OS-Fenster in der Fenster-CI |
 | Kundenwege im Fenster | `test_ui.py`; Teilbereiche in `test_ui_dialogs.py`, `test_ui_export.py`, `test_ui_licensing.py`, `test_ui_remote.py`; `test_operation_ui.py` mit leerem Fenster, wo keine Geometrie nötig ist |
 | Bleiben Dialoginhalt, Klappen und Aktionsleisten erreichbar und Fenster im Bildschirm? | `test_dialog_layout.py`, `test_dialog_layout_regressions.py`; die Abläufe der Einstellungen in `test_ui_settings.py` |
 | Steht im Register jeder Umschalter vor den Feldern, die er schaltet, und nie hinter der Klappe eines Vorderfelds? | `test_dependency_order.py`; die Folge des Druckdialogs in `test_print_settings_ui.py` |

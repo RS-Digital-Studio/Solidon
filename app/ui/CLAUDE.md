@@ -233,7 +233,8 @@ Bausteinherkunft: `MainWindow.part_step_of` liest Provenienz/Schrittkategorie;
 | `palette.py` | Farbe, die nie allein Bedeutung trägt (§19.1); `category_colours` färbt Bild und Legende |
 | `icons.py` | Symbole als themenabhängige SVGs (§19.3, Regel 18); `svg_pixmap` rastert scharf auf HiDPI |
 | `motion.py` | Bewegung an einer Stelle, nicht an zwanzig |
-| `tab_signal.py` | Marken und Blinken am Reiter Prüfbericht |
+| `tab_signal.py` | Marken und Blinken am Reiter Prüfbericht; Zuordnungen folgen `tabMoved` |
+| `tab_windows.py` | Reiter mit stabiler Inhaltshülle, Umordnung, eigenen OS-Fenstern und Rückweg; lokale Anordnung über `UiSettings.tab_layout`, vorhandene Bildschirme begrenzen die Geometrie |
 | `labels.py` | Kurztexte (`slicer_title`, `feature_measure`, `cavity_name`, `group_summary`, `body_requirement`, `DateField`); `choice_label` mit Wert/Einheit aus `core/registry/surfaces.py`; `wheel_needs_focus` |
 
 ### Hilfe und Bedienung
