@@ -56,17 +56,24 @@ offenem Drucker. Übernommen wird auf Klick, nie von allein.
   flachen Stück über `OVERHANG_LAYER_WORTH_SUPPORT` Gitter** statt Bäumen —
   über „automatisch“ nur, wo es beim Programm Bäume heißt (`trees` aus
   `handover.tree_styles`, eine Quelle mit `Motion.support_tree`; ohne Programm
-  vorsichtig wie Bäume). Setzen daneben kleine Stücke auf dem Modell auf
+  vorsichtig wie Bäume). Wo die Art der ganzen Platte gilt (Cura), sagt die
+  Decke ausdrücklich Gitter, auch über „automatisch“, sonst gewänne der Baum
+  eines anderen Körpers. Setzen daneben kleine Stücke auf dem Modell auf
   (`ModelSupport.details_on_model`, nicht die Decke selbst) oder beginnen viele
   Inseln, **Hybrid** (`tree_hybrid`), wo das Programm es kennt; PrusaSlicer,
   SuperSlicer und Cura ersetzen es durch Gitter (`NOT_OFFERED_BY_PROGRAM`), der
-  Rat schlägt dort gleich Gitter vor. Über gewähltem Gitter oder Hybrid nichts.
+  Rat schlägt dort gleich Gitter vor. Über gewähltem Gitter nichts, über einem
+  Hybrid, den das Programm als Gitter druckt, Bäume für Details.
   Gitter und Baum zweier Körper ergeben Hybrid nur, wo die Art der Platte gilt
-  (`combine` ohne `separate`, `handover.style_per_part`). Ein gewählter Baum
-  über einem Hybridprozess geht als `default` hinaus (`tree_over_hybrid`).
+  (`combine` ohne `separate`, `handover.style_per_part`), ohne Hybrid beim
+  Programm Gitter (`combine(trees=)`). Geht die Art je Teil, nennt die Zeile die
+  Teile mit ihrem Wert und die mit eigenem anderem Wert (`_TargetedAdvice.others`,
+  Feldhinweis ebenso); bei Cura nennt ein Wechsel der Art keine Teile, nur an
+  oder aus. Ein gewählter Baum über einem Hybridprozess geht als `default`
+  hinaus (`tree_over_hybrid`).
 - **Zwei Wände für hohe Bäume** (`support.tree_walls`): ab `TALL_TREE_HEIGHT`
-  Säulenhöhe (`ModelSupport.tallest_column`: bis zum Bett oder zur letzten
-  Auflage, ohne Ränder und Kanaldecken), gefragt mit `printed_style` gegen
+  Säulenhöhe (`ModelSupport.tallest_column`: bis zum Boden des Körpers oder zur
+  letzten Auflage, ohne Ränder und Kanaldecken), gefragt mit `printed_style` gegen
   `trees`. Die Orca-Familie liest die Wandzahl unter gefüllten organischen
   Bäumen nicht (`IGNORED_UNDER_TREES_BY_PROGRAM`), unter hohlen schon
   (`handover.hollow_trees`); Bambu Studio und Creality Print lesen sie überall,
@@ -74,7 +81,8 @@ offenem Drucker. Übernommen wird auf Klick, nie von allein.
   filtert wie bei der unteren Trennschicht; der Slicertest
   (`test_real_slicers.py`) hält die Tabelle gegen die Programme. PrusaSlicer zählt
   keine Wände (`NOT_TAKEN_BY`). Plattenweit, nicht je Teil (`PART_PATHS`).
-  Unter Gitter ist das Feld inaktiv (`inactive_paths`).
+  Unter Gitter ist das Feld inaktiv (`inactive_paths`), ebenso unter einer Art,
+  die das Programm als Gitter druckt (Ersatz, „automatisch“ außerhalb `trees`).
 - **`support.block_channels`**, weil „nur vom Bett“ Kanäle nicht freihält:
   `analysis.channel_space` sperrt um Decken, die sonst Stütze bräuchten
   (`worth_support` je Stück, im Zweifel Stütze), nur unerreichbaren Raum (eng

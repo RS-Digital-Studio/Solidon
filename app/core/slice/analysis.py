@@ -4111,14 +4111,18 @@ def _model_support(
         zum Bett, wenn ein Teil der Säule es erreicht, sonst bis dorthin, wo sie
         zuletzt aufsetzt. Bis zur ersten Berührung gemessen, war eine Platte auf
         150 mm, die zum Teil auf einem Turm von 120 mm aufsetzt, 30 mm hoch.
-        Ränder und Kanaldecken tragen sich selbst (``quiet``) und zählen nicht."""
+        Ränder und Kanaldecken tragen sich selbst (``quiet``) und zählen nicht.
+        Das Bett ist die unterste Schicht des Körpers wie bei ``bed_columns``,
+        nicht der Nullpunkt: Ein angehobener Körper (ein Deckel auf der Dose)
+        bekam sonst seine Lage dazu (Nachprüfung RM-584, N4)."""
+        bed = float(layers[0].z)
         return max(
             (
                 float(layers[names[owner][0]].z)
                 - (
                     float(layers[lowest[owner]].z)
                     if owner in lowest and owner not in on_bed
-                    else 0.0
+                    else bed
                 )
                 for owner in range(len(names))
                 if (only is None or names[owner] in only) and not quiet(owner)

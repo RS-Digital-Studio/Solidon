@@ -1409,7 +1409,7 @@ def part_advice(
                 else handover.slot_processes(entry, current, profile, setup, slot_profiles)
             )
         ]
-        return advise.combine(current, groups)
+        return advise.combine(current, groups, trees=trees)
 
     # Was das Programm seiner Familie nicht kennt, schlägt der Rat nicht vor:
     # SuperSlicer stürzte an der Schrägnaht als Objektwert ab (RM-459). Eine

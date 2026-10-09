@@ -1417,6 +1417,10 @@ class _TargetedAdvice(SettingAdvice):
     """Die Teile, an die der Export diesen Vorschlag schreibt, wenn er nur
     einigen gilt (Konzept Herstellerprofil, Entscheidung G). Leer heißt: die
     ganze Platte."""
+    others: tuple[tuple[str, object], ...] = ()
+    """Teile, die mit dieser Zeile ihren eigenen, anderen Wert bekommen, je Name
+    und Wert — Gitter am Pilz neben dem Baum der Figur (Nachprüfung RM-584, N2).
+    Wählt der Kunde die Zeile ab, verlieren auch sie ihn."""
 
 
 #: So viele Teilenamen stehen in einer Zeile des Rats; die übrigen zählt sie.
@@ -1480,6 +1484,12 @@ class _AdviceWorker(Worker):
         """Je übernommenem Vorschlag, der je Teil geschrieben wird, die Teile, die
         ihn bekommen — leer heißt: keines verlangt ihn, er gilt allen
         (``writer._unserved``). Der Dialog nennt sie am Feld (RM-289, B6)."""
+        self.accepted_others: dict[str, tuple[tuple[str, object], ...]] = {}
+        """Dazu die Teile, die mit ihm ihren eigenen, anderen Wert bekommen
+        (Nachprüfung RM-584, N2), je Name und Wert."""
+        self.trees: frozenset[str] | None = None
+        """Welche Stützarten das Programm als Bäume druckt
+        (:func:`handover.tree_styles`), je Lauf einmal gefragt."""
         self.towers: frozenset[int] = frozenset()
         """Die Platten mit Reinigungsturm (:func:`writer.tower_plates`), je Lauf
         einmal gefragt."""
@@ -1542,7 +1552,7 @@ class _AdviceWorker(Worker):
         self.hollow = handover.hollow_trees(self.setup)
         program = slicer_keys.program_of(self.setup.executable) if self.setup else ""
         # Was das Programm als Bäume druckt, wie im Export (RM-584).
-        trees = handover.tree_styles(self.setup, self.profile, program)
+        trees = self.trees = handover.tree_styles(self.setup, self.profile, program)
         # Geht die Stützart je Teil, bekommt jedes Teil seine eigene; Gitter und
         # Baum werden nur dort Hybrid, wo sie der Platte gilt (RM-584).
         if handover.style_per_part(self.flavour, program):
@@ -1653,9 +1663,11 @@ class _AdviceWorker(Worker):
                     )
                 )
             if own:
-                common.append((asking, advise.combine(asking, own)))
+                common.append((asking, advise.combine(asking, own, trees=trees)))
         entries = self._with_parts(
-            advise.combine(self.settings, common, separate=separate), results, separate
+            advise.combine(self.settings, common, separate=separate, trees=trees),
+            results,
+            separate,
         )
         if self.rules_wanted:
             self.accepted_parts = self._accepted_targets(results)
@@ -1724,6 +1736,9 @@ class _AdviceWorker(Worker):
             return {}
         chain = split.accepted_per_part()
         wanted: dict[str, list[str]] = {path: [] for path in split.per_part}
+        # Wer mit dem Vorschlag seinen eigenen, anderen Wert bekommt (N2): Am Feld
+        # stand sonst der Wert der Grundlage für ein Teil, das der Export stützt.
+        others: dict[str, list[tuple[str, object]]] = {}
         for body in self.objects:
             self.cancelled.raise_if_cancelled()
             for entry in part_advice(
@@ -1740,10 +1755,15 @@ class _AdviceWorker(Worker):
                 whole_layers=body.plate in self.towers,
                 organic=self.organic,
             ):
-                if entry.path in wanted and print_settings.same_value(
+                if entry.path not in wanted:
+                    continue
+                if print_settings.same_value(
                     entry.value, print_settings.read_path(self.settings, entry.path)
                 ):
                     wanted[entry.path].append(str(body.name))
+                else:
+                    others.setdefault(entry.path, []).append((str(body.name), entry.value))
+        self.accepted_others = {path: tuple(found) for path, found in others.items()}
         return {path: tuple(names) for path, names in wanted.items()}
 
     def _with_parts(
@@ -1778,10 +1798,20 @@ class _AdviceWorker(Worker):
             self.flavour,
         )
         candidates &= split.per_part
+        # Bei Cura geht je Netz nur „Stützen an oder aus“, die Art gilt der Platte
+        # (``handover.cura_takes_whole``): Ein Wechsel der Art nennt keine Teile
+        # (Nachprüfung RM-584, N3).
+        if self.flavour == "cura" and any(
+            entry.path == "support.style" and "none" not in (entry.was, entry.value)
+            for entry in entries
+        ):
+            candidates.discard("support.style")
         if not candidates:
             return entries
         chain = split.accepted_per_part()
         wanted: dict[str, list[str]] = {}
+        # Teile mit eigenem, anderem Wert unter einer getrennt geführten Zeile (N2).
+        others: dict[str, list[tuple[str, object]]] = {}
         shown = {entry.path: entry.value for entry in entries}
         for body in self.objects:
             self.cancelled.raise_if_cancelled()
@@ -1804,11 +1834,16 @@ class _AdviceWorker(Worker):
                 # Beim Stützkontakt bekommt jedes Teil seinen Wert, ebenso die
                 # Stützart, wo sie je Teil geht (``separate``); die Zeile nennt
                 # nur die Teile, die ihren bekommen (RM-583, RM-584).
-                if entry.path in candidates and (
-                    entry.path not in advise.CONTACT_PATHS | frozenset(separate)
-                    or print_settings.same_value(entry.value, shown[entry.path])
-                ):
+                if entry.path not in candidates:
+                    continue
+                if entry.path not in advise.CONTACT_PATHS | frozenset(
+                    separate
+                ) or print_settings.same_value(entry.value, shown[entry.path]):
                     wanted.setdefault(entry.path, []).append(str(body.name))
+                else:
+                    # Auch sie bekommen mit dieser Zeile ihren Wert; abgewählt
+                    # verlören sie ihn, also nennt die Zeile sie (N2).
+                    others.setdefault(entry.path, []).append((str(body.name), entry.value))
         named: list[SettingAdvice] = []
         for entry in entries:
             parts = tuple(wanted.get(entry.path, ()))
@@ -1820,6 +1855,7 @@ class _AdviceWorker(Worker):
                     reason=entry.reason,
                     severity=entry.severity,
                     parts=parts,
+                    others=tuple(others.get(entry.path, ())),
                 )
             named.append(entry)
         return named
@@ -2683,11 +2719,18 @@ class PrintSettingsDialog(QDialog):
         drucken (RM-289, B6)."""
         self._accepted_parts: dict[str, tuple[str, ...]] = {}
         """Aus dem letzten Rat (:attr:`_AdviceWorker.accepted_parts`)."""
+        self._accepted_others: dict[str, tuple[tuple[str, object], ...]] = {}
+        """Ebenso, wer mit ihm seinen eigenen, anderen Wert bekommt
+        (:attr:`_AdviceWorker.accepted_others`)."""
         self._organic: frozenset[str] = frozenset()
-        self._hollow_trees = False
         """Die Stützarten, die das Programm als organische Bäume druckt, aus dem
         letzten Rat (:attr:`_AdviceWorker.organic`): Das Feld sagt dasselbe wie
         der Vorschlag daneben (RM-622)."""
+        self._hollow_trees = False
+        """Ob das Programm organische Bäume hohl druckt (:attr:`_AdviceWorker.hollow`)."""
+        self._trees: frozenset[str] | None = None
+        """Was das Programm als Bäume druckt (:attr:`_AdviceWorker.trees`):
+        „Automatisch“ als normale Stütze hat keine Baumwände (N6)."""
         #: Wo die Suche gerade steht — Begriff, Trefferliste, Platz darin.
         self._search_term = ""
         self._search_hits: list[str] = []
@@ -4331,6 +4374,10 @@ class PrintSettingsDialog(QDialog):
         style = str(
             _setting_editor_value(self._editors["support.style"], self._fields["support.style"])
         )
+        # „Automatisch“, das beim Programm normale Stütze druckt, hat keine
+        # Baumwände (Nachprüfung RM-584, N6): wie Gitter gefragt.
+        if style == "auto" and self._trees is not None and "auto" not in self._trees:
+            style = "grid"
         # Gefragt mit der Art, die das Programm druckt: Hybrid ist bei
         # PrusaSlicer und Cura Gitter (RM-584).
         program = slicer_keys.program_of(self._slicer_path) if self._slicer_path else ""
@@ -7387,7 +7434,10 @@ class PrintSettingsDialog(QDialog):
         Nach dem Übernehmen stand „Stützen: Automatisch“ fett im Feld, als
         drucke die Platte so — gedruckt bekam es nur der Pilz. Die Teile kommen
         aus dem letzten Rat (:attr:`_AdviceWorker.accepted_parts`), der Wert der
-        übrigen aus der eigenen Wahl unter dem Vorschlag oder der Grundlage.
+        übrigen aus der eigenen Wahl unter dem Vorschlag oder der Grundlage. Wer
+        mit dem Vorschlag einen eigenen, anderen Wert bekommt, steht mit diesem
+        da (:attr:`_AdviceWorker.accepted_others`, Nachprüfung RM-584, N2): Der
+        Pilz unter der Figur druckte mit Gitter, das Feld sagte „Aus“.
         """
         for path, label in self._part_notes.items():
             parts = self._accepted_parts.get(path)
@@ -7400,6 +7450,11 @@ class PrintSettingsDialog(QDialog):
                 label.hide()
                 continue
             else:
+                others = self._accepted_others.get(path, ())
+                own_values = " ".join(
+                    str(tr("{part} bekommt {value}.", part=name, value=self._shown(path, value)))
+                    for name, value in others
+                )
                 own = print_settings.plate_choice(self.settings, path)
                 rest = (
                     str(tr("{value} (Ihre Einstellung)")).replace(
@@ -7410,11 +7465,17 @@ class PrintSettingsDialog(QDialog):
                     .replace("{value}", self._shown(path, print_settings.read_path(base, path)))
                     .replace("{source}", source)
                 )
-                text = (
-                    str(tr("Nur für {parts}. Die übrigen Teile drucken mit {value}."))
-                    .replace("{parts}", ", ".join(parts))
-                    .replace("{value}", rest)
-                )
+                if len(parts) + len(others) >= len(self._plate_bodies()):
+                    head = str(tr("Nur für {parts}.", parts=", ".join(parts)))
+                    text = f"{head} {own_values}"
+                else:
+                    text = (
+                        str(tr("Nur für {parts}. Die übrigen Teile drucken mit {value}."))
+                        .replace("{parts}", ", ".join(parts))
+                        .replace("{value}", rest)
+                    )
+                    if own_values:
+                        text = f"{text} {own_values}"
             label.setText(text)
             label.setToolTip(text)
             label.setAccessibleDescription(text)
@@ -8155,10 +8216,14 @@ class PrintSettingsDialog(QDialog):
             return
         self.slice_result = next(iter(results.values()))[2] if len(results) == 1 else None
         self._accepted_parts = dict(worker.accepted_parts)
+        self._accepted_others = dict(worker.accepted_others)
         if worker.organic != self._organic or worker.hollow != self._hollow_trees:
             self._organic = worker.organic
             self._hollow_trees = worker.hollow
             self._mark_fields_this_slicer_ignores()
+        if worker.trees != self._trees:
+            self._trees = worker.trees
+            self._update_inactive_setting_rows()
         self._mark_origins()
         self._advice_entries = entries
         self._advice_pending = False
@@ -8466,6 +8531,11 @@ class PrintSettingsDialog(QDialog):
                 title = f"{title} · {', '.join(names[: SHOWN_PART_NAMES - 1])} {rest}"
             else:
                 title = f"{title} · {', '.join(names)}"
+            # Wer mit der Zeile seinen eigenen Wert bekommt, steht dahinter (N2).
+            for name, value in entry.others:
+                title += ", " + str(
+                    tr("{part} mit {value}", part=name, value=shown_value(entry.path, value))
+                )
         return title
 
     @staticmethod
@@ -8474,7 +8544,12 @@ class PrintSettingsDialog(QDialog):
         Tooltip und den Bildschirmleser, denn der Titel kürzt ab vier Teilen."""
         if not isinstance(entry, _TargetedAdvice) or not entry.parts:
             return ""
-        return tr("Gilt für: {parts}", parts=", ".join(entry.parts))
+        said = str(tr("Gilt für: {parts}", parts=", ".join(entry.parts)))
+        for name, value in entry.others:
+            said += "\n" + str(
+                tr("{part} bekommt {value}.", part=name, value=shown_value(entry.path, value))
+            )
+        return said
 
     def _chosen_advice(self) -> list[SettingAdvice]:
         """Die angehakten Vorschläge, in der Reihenfolge der Liste."""

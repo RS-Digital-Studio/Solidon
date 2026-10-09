@@ -572,9 +572,8 @@ FIELDS: tuple[Field, ...] = (
         choice_notes=(("auto", _("Stützen an. Welche Art, bestimmt das Profil Ihres Slicers.")),),
         note=_(
             "Ob und wie gestützt wird. Automatisch nimmt die Art aus dem Profil Ihres Slicers. "
-            "Baum braucht weniger Material und lässt sich leichter abnehmen, Gitter trägt "
-            "schwere Überhänge und flache Decken sicherer. Hybrid stützt Details mit Bäumen "
-            "und große flache Decken mit Gitter."
+            "Baum spart Material und löst sich leichter, Gitter trägt flache Decken. Hybrid "
+            "nimmt Bäume für Details, Gitter für Decken."
         ),
     ),
     Field(

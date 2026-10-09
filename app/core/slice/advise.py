@@ -384,6 +384,7 @@ def combine(
     groups: Sequence[tuple[PrintSettings, Sequence[SettingAdvice]]],
     *,
     separate: Collection[str] = frozenset(),
+    trees: Collection[str] | None = None,
 ) -> list[SettingAdvice]:
     """Vereint Anforderungen mehrerer Körper an gemeinsame Einstellungen.
 
@@ -402,7 +403,10 @@ def combine(
 
     **Gitter und Baum zweier Körper werden Hybrid, wo die Stützart der Platte
     gilt** (RM-584). Steht sie in ``separate`` (``handover.style_per_part``),
-    bekommt jedes Teil seine eigene, und Hybrid käme in keiner Datei an.
+    bekommt jedes Teil seine eigene, und Hybrid käme in keiner Datei an. Kennt
+    das Programm kein Hybrid (``trees`` ohne ``hybrid``, Cura), werden beide
+    Gitter, mit dem Grund der Decke (Nachprüfung RM-584, N3): Hybrid hatte der
+    Kunde nie gesehen, und der Ersatzsatz verdrängte den Grund.
     """
     candidates: dict[str, list[SettingAdvice]] = {}
     final = [apply(base, list(entries)) for base, entries in groups]
@@ -417,10 +421,15 @@ def combine(
         values = [settings_table.read_path(value, path) for value in relevant]
         # Was je Teil geschrieben wird, zählt nur, wo ein Körper es verlangt;
         # die übrigen behalten ihren Wert ohnehin (RM-583).
+        # Die Stützart zählt jeden Körper, auch je Teil: Ein Würfel ohne Bedarf
+        # schaltet die Stützen des Kegels nicht ab. Getrennt heißt bei ihr nur,
+        # dass Gitter und Baum nicht Hybrid werden (RM-584).
+        requested = path in separate and path != "support.style"
         value = _combined_value(
             path,
-            [entry.value for entry in entries] if path in separate else values,
+            [entry.value for entry in entries] if requested else values,
             together=path not in separate,
+            hybrid=trees is None or "hybrid" in trees,
         )
         was = settings_table.read_path(settings, path)
         if not _differs(value, was):
@@ -430,11 +439,13 @@ def combine(
     return merged
 
 
-def _combined_value(path: str, values: Sequence[object], *, together: bool = True) -> object:
+def _combined_value(
+    path: str, values: Sequence[object], *, together: bool = True, hybrid: bool = True
+) -> object:
     """Nimmt je Einstellungsart die Anforderung, die alle Körper einschließt.
 
     ``together`` heißt, der Wert gilt allen Körpern zugleich; nur dann werden
-    Gitter und Baum Hybrid."""
+    Gitter und Baum Hybrid, wo das Programm es kennt (``hybrid``), sonst Gitter."""
     ranks = {
         # ``auto`` steht über „aus" und unter jeder ausdrücklichen Art: Wo ein
         # Körper Bäume verlangt, schließt das den ein, der nur Stützen will.
@@ -451,8 +462,9 @@ def _combined_value(path: str, values: Sequence[object], *, together: bool = Tru
         and {"grid", "tree"} <= {str(value) for value in values}
     ):
         # Ein Körper mit flacher Decke und einer mit Details auf einer Platte:
-        # Hybrid gibt beiden, was sie verlangen (RM-584).
-        return "hybrid"
+        # Hybrid gibt beiden, was sie verlangen (RM-584); ohne Hybrid trägt
+        # Gitter die Decke.
+        return "hybrid" if hybrid else "grid"
     if path in ranks:
         return max(values, key=lambda value: ranks[path].index(str(value)))
     if all(isinstance(value, bool) for value in values):
@@ -1291,8 +1303,14 @@ def _from_geometry(
         if "hybrid" in printed_trees and (model.details_on_model or many_islands)
         else "grid"
     )
+    # **Wo die Art der ganzen Platte gilt** (Cura: ``support_structure``, Stützen
+    # je Netz nur an oder aus), sagt die flache Decke ausdrücklich Gitter
+    # (Nachprüfung RM-584, N1): Ihr „automatisch“ hieße dort zwar ``normal``,
+    # aber neben einem Körper, der Bäume verlangt, gewann der Baum, und der Hut
+    # des Pilzes hing zwischen Baumspitzen durch.
+    plate_kind = flavour == "cura"
     if flat:
-        wanted = under_ceiling if auto_trees else "auto"
+        wanted = under_ceiling if auto_trees or plate_kind else "auto"
     else:
         wanted = "tree" if many_islands or branching else "auto"
     # Was gerade Bäume druckt und unter der Decke durchhinge — ein gewählter
@@ -1316,7 +1334,15 @@ def _from_geometry(
                 severity="warning",
             )
         )
-    elif needs_support and branching and settings.support.style in ("auto", "grid"):
+    elif (
+        needs_support
+        and branching
+        and (
+            settings.support.style in ("auto", "grid")
+            # Ein Hybrid, den das Programm als Gitter druckt (N7).
+            or (settings.support.style == "hybrid" and "hybrid" not in printed_trees)
+        )
+    ):
         advice.append(
             _advice(
                 settings,
@@ -1335,6 +1361,21 @@ def _from_geometry(
                 reason=_("Große flache Decken hängen zwischen Baumspitzen durch.")
                 if under_ceiling == "grid"
                 else _("Bäume für Details, Gitter unter der großen flachen Decke."),
+            )
+        )
+    elif (
+        needs_support
+        and flat
+        and plate_kind
+        and settings.support.style == "auto"
+        and under_ceiling == "grid"
+    ):
+        advice.append(
+            _advice(
+                settings,
+                path="support.style",
+                value="grid",
+                reason=_("Gitter hält die flache Decke, auch neben Baumstützen."),
             )
         )
     elif not needs_support and settings.support.style != "none":

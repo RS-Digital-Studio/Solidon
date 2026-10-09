@@ -11555,7 +11555,9 @@ def test_beside_a_tower_the_dialog_proposes_the_gap_the_file_gets(
     Schichten wie der Export (RM-622): PLA und PETG bei 0,08er Schichten
     bekommen 0,16 mm, die Zeile nennt beide Tische und nicht den Block ohne
     Stütze daneben, und die Datei trägt an jedem Tisch genau den Wert der Zeile.
-    Ebenso unter „automatisch“, wenn das Herstellerprofil mit Bäumen stützt.
+    Ebenso unter „automatisch“, wenn das Herstellerprofil mit Bäumen stützt und
+    der Kunde das Gitter ablehnt, das der Rat seit RM-584 unter den flachen
+    Tischplatten vorschlägt (``declined``); übernommen druckten sie Gitter.
     Frei nennt die Zeile 0,12 am PETG-Tisch, und dieser bekommt ihn. Nach dem
     Übernehmen nennt das Feld dieselben Teile (``accepted_parts``)."""
     import trimesh
@@ -11597,7 +11599,16 @@ def test_beside_a_tower_the_dialog_proposes_the_gap_the_file_gets(
     def worked(current: PrintSettings) -> tuple[list[SettingAdvice], print_dialog._AdviceWorker]:
         found: list[list[SettingAdvice]] = []
         worker = print_dialog._AdviceWorker(
-            objects, current, profile, setup, {}, (), (), {}, flavour="orca"
+            objects,
+            current,
+            profile,
+            setup,
+            {},
+            (),
+            (),
+            {},
+            flavour="orca",
+            declined=frozenset({"support.style"}) if case == "trees" else frozenset(),
         )
         worker.done.connect(lambda entries, _measured: found.append(entries))
         worker.work()

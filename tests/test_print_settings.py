@@ -8275,22 +8275,41 @@ def _advice_of(bodies: tuple[Any, ...], settings: Any, profile: Any, flavour: An
     return got[0]
 
 
-@pytest.mark.parametrize(("flavour", "shown"), [("orca", "tree"), ("cura", "hybrid")])
+@pytest.mark.parametrize(
+    ("flavour", "trees", "start", "shown"),
+    [
+        ("orca", frozenset({"auto", "tree", "hybrid"}), "none", "tree"),
+        ("cura", frozenset({"tree"}), "none", "grid"),
+        ("cura", frozenset({"tree"}), "auto", "grid"),
+        ("cura", frozenset({"tree"}), "tree", "grid"),
+    ],
+)
 def test_grid_and_tree_become_hybrid_only_where_the_style_is_the_plates(
-    tmp_path: Path, flavour: str, shown: str
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    flavour: str,
+    trees: frozenset[str],
+    start: str,
+    shown: str,
 ) -> None:
     """Ein Pilz unter Gitter und eine Figur unter Bäumen auf einer Platte (Review
     RM-584, M3): Die Orca-Familie bekommt die Stützart je Teil, also Gitter und
     Baum je Objekt — der Dialog führte beides zu „Hybrid“ zusammen, das in
-    keiner Datei ankam. Dort nennt die Zeile den Baum mit der Figur. Bei Cura
-    gilt die Art der Platte, Hybrid bleibt und geht als Gitter hinaus."""
+    keiner Datei ankam. Dort nennt die Zeile den Baum mit der Figur und den Pilz
+    mit seinem Gitter (Nachprüfung N2). Bei Cura gilt die Art der Platte, und
+    das Programm kennt kein Hybrid: Gitter trägt den Hut, der Export sagt, dass
+    die Figur ihren Baum nicht bekommt (N1), und ein Wechsel der Art nennt keine
+    Teile (N3). So, wie Cura gefunden antwortet (``tree_styles``)."""
     from app.core.export.writer import write_assembly
     from app.core.geom.transform import apply, translation
     from app.core.types import SceneObject
     from tests.helpers import brick, chin_over_chest, on_bed
 
+    monkeypatch.setattr(handover, "tree_styles", lambda *_args, **_kwargs: trees)
     profile = profiles.make_profile("centauri-carbon-2", "petg")
     settings = print_settings.resolve(profile)
+    if start != "none":
+        settings = print_settings.with_choice(settings, "support.style", start)
     mushroom = on_bed(
         brick(8.0, 8.0, 12.0, (0.0, 0.0, 6.0)), brick(40.0, 40.0, 2.0, (0.0, 0.0, 13.0))
     )
@@ -8305,10 +8324,38 @@ def test_grid_and_tree_become_hybrid_only_where_the_style_is_the_plates(
     style = [entry for entry in entries if entry.path == "support.style"]
     assert [entry.value for entry in style] == [shown]
     assert getattr(style[0], "parts", ()) == (("Figur",) if flavour == "orca" else ())
+    assert getattr(style[0], "others", ()) == ((("Pilz", "grid"),) if flavour == "orca" else ())
+    if start == "tree":
+        assert style[0].reason == "Große flache Decken hängen zwischen Baumspitzen durch."
+    assert slicer_keys.offered(style, flavour) == style, "nichts wird ersetzt"
     accepted = print_settings.with_accepted(settings, "support.style", shown)
     if flavour == "cura":
         assert handover.values_for(accepted, profile, "cura")["support_structure"] == "normal"
+        _written, findings = write_assembly(
+            list(bodies),
+            tmp_path,
+            project_name="Platte",
+            profile=profile,
+            settings=accepted,
+            flavour="cura",
+        )
+        missing = [
+            (finding.object_id, finding.values.get("value"))
+            for finding in findings
+            if finding.code == "export.part_setting_unavailable"
+            and finding.values.get("setting") == "support.style"
+        ]
+        # Wechselt die Zeile nur die Art der Platte (eigene Wahl Baum), verlangt
+        # die Figur nichts für sich; sonst sagt der Export, dass sie ihren Baum
+        # nicht bekommt.
+        assert missing == ([] if start == "tree" else [("obj_figur", "tree")])
         return
+    from app.ui.print_settings_dialog import _AdviceWorker
+
+    worker = _AdviceWorker(bodies, accepted, profile, None, {}, (), (), {}, flavour="orca")
+    worker.work()
+    assert worker.accepted_parts.get("support.style") == ("Figur",)
+    assert worker.accepted_others.get("support.style") == (("Pilz", "grid"),)
     written, _findings = write_assembly(
         list(bodies),
         tmp_path,
@@ -8491,6 +8538,72 @@ def test_a_long_list_of_parts_is_counted_in_the_line_and_named_in_full_beside_it
         "Gilt für: Scheibe 1, Scheibe 2, Scheibe 3, Scheibe 4, Scheibe 5"
     )
     assert PrintSettingsDialog._advice_parts(entry()) == ""
+
+
+def test_a_row_names_the_parts_that_get_their_own_value_with_it() -> None:
+    """„Aus → Baum · Figur“ verschwieg den Pilz, der mit derselben Zeile Gitter
+    bekommt; abgewählt verlöre er seine Stütze (Nachprüfung RM-584, N2). Die
+    Zeile nennt ihn mit seinem Wert, Tooltip und Bildschirmleser ebenso."""
+    from types import SimpleNamespace
+
+    from app.ui.print_settings_dialog import PrintSettingsDialog, _TargetedAdvice
+
+    host = SimpleNamespace(_fields={"support.style": SimpleNamespace(title="Stützen")})
+    entry = _TargetedAdvice(
+        path="support.style",
+        value="tree",
+        was="none",
+        reason="",
+        parts=("Figur",),
+        others=(("Pilz", "grid"),),
+    )
+
+    assert PrintSettingsDialog._advice_title(host, entry) == "Stützen · Figur, Pilz mit Gitter"
+    assert PrintSettingsDialog._advice_parts(entry) == "Gilt für: Figur\nPilz bekommt Gitter."
+
+
+@pytest.mark.parametrize(
+    ("executable", "style", "trees", "inactive"),
+    [
+        # PrusaSlicer und Cura drucken Hybrid als Gitter (N5).
+        ("prusa-slicer.exe", "hybrid", None, True),
+        ("CuraEngine.exe", "hybrid", None, True),
+        ("elegoo-slicer.exe", "hybrid", None, False),
+        # „Automatisch“ als normale Stütze (Cura, OrcaSlicer mit normal(auto), N6).
+        ("CuraEngine.exe", "auto", frozenset({"tree"}), True),
+        ("elegoo-slicer.exe", "auto", frozenset({"auto", "tree", "hybrid"}), False),
+        ("orca-slicer.exe", "auto", None, False),
+    ],
+)
+def test_the_tree_walls_rest_where_the_program_prints_no_tree(
+    monkeypatch: pytest.MonkeyPatch,
+    executable: str,
+    style: str,
+    trees: frozenset[str] | None,
+    inactive: bool,
+) -> None:
+    """Das Feld der Baumwände ist inaktiv, wo das Programm keinen Baum druckt —
+    gefragt mit der Art, die es druckt (Nachprüfung RM-584, N5, N6): Hybrid ist
+    bei PrusaSlicer und Cura Gitter, „automatisch“ außerhalb von ``trees``
+    normale Stütze. Ohne Auskunft bleibt es aktiv."""
+    from app.ui import print_settings_dialog as dialog
+
+    flavour = slicer_keys.flavour_of(executable)
+    host = SimpleNamespace(
+        settings=print_settings.resolve(profiles.make_profile()),
+        session=SimpleNamespace(profile=profiles.make_profile()),
+        _fields={field.path: field for field in dialog.FIELDS},
+        _editors={"adhesion.kind": "skirt", "support.style": style},
+        _current_flavour=lambda: flavour,
+        _foundation_for_current_setup=lambda: None,
+        _slicer_path=executable,
+        _trees=trees,
+    )
+    monkeypatch.setattr(dialog, "_setting_editor_value", lambda editor, _field: editor)
+
+    found = dialog.PrintSettingsDialog._inactive_paths(host)  # type: ignore[arg-type]
+
+    assert ("support.tree_walls" in found) is inactive
 
 
 def test_opening_curas_window_writes_the_3mf_the_console_writes_an_stl(tmp_path: Path) -> None:

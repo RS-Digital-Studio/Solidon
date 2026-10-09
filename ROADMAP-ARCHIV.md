@@ -27329,22 +27329,30 @@ Datumsfelder haben einen Kalender.
 bei Elegoo und Bambu also Bäume, unter denen die Decke zwischen den Spitzen durchhängt;
 hohe Bäume brechen mit einer Wand (Recherche Nr. 4, 5).
 
-**Behoben:** Der Rat schlägt unter einem flachen Stück Gitter vor, auch statt
-„automatisch“, und Hybrid (`tree_hybrid`), wo zugleich kleine Stücke auf dem Modell
-aufsetzen oder viele Inseln beginnen; PrusaSlicer und Cura bekommen Gitter. Mehrere
-Körper mit Gitter und Baum ergeben Hybrid (`combine`). Neues Feld *Wände der Bäume*
-(`support.tree_walls`, Orca `tree_support_wall_count`, Prusa
-`support_tree_branch_diameter_double_wall`, Cura `support_wall_count`); ab 100 mm
-Säulenhöhe (`ModelSupport.tallest_column`) zwei, gefragt mit `printed_style`. Die
-Orca-Familie liest die Wandzahl unter organischen Bäumen nicht; Dialog und Export
-filtern den Rat dort (`IGNORED_UNDER_TREES_BY_PROGRAM`, Hinweis am Feld).
+**Behoben:** Der Rat schlägt unter einem flachen Stück Gitter vor statt Bäumen —
+über „automatisch“ nur, wo es beim Programm Bäume heißt (`handover.tree_styles`), bei
+Cura, wo die Art der ganzen Platte gilt, ausdrücklich —, und Hybrid (`tree_hybrid`), wo
+das Programm es kennt und daneben kleine Stücke auf dem Modell aufsetzen
+(`details_on_model`) oder viele Inseln beginnen; PrusaSlicer und Cura bekommen Gitter.
+Gitter und Baum zweier Körper ergeben Hybrid nur, wo die Art der Platte gilt
+(`style_per_part`), ohne Hybrid Gitter; bei Orca und Prusa nennt die Zeile die Teile mit
+eigenem Wert. Neues Feld *Wände der Bäume* (`support.tree_walls`, Orca
+`tree_support_wall_count`, Creality `tree_support_wall_count_tree`, Cura
+`support_wall_count`; PrusaSlicer nimmt es nicht); ab 100 mm Säulenhöhe vom Boden des
+Körpers (`ModelSupport.tallest_column`) zwei, gefragt mit `printed_style` gegen
+`trees`. ElegooSlicer, OrcaSlicer und Anycubic lesen die Wandzahl unter gefüllten
+organischen Bäumen nicht, unter hohlen schon (`hollow_trees`); der Druckdialog filtert
+den Rat dort (`IGNORED_UNDER_TREES_BY_PROGRAM`, Hinweis am Feld). Durchsicht und
+Nachprüfung: `.claude/.state/drache-2026-10-08/reviews-2026-10-09/review_rm584_teil2*.md`.
 
 **Nachweis (09.10.2026):** Stil je Deckenform in sieben Programmen
 (`output/drache-2026-10-08/stil-rm584*`); Wandzahl am ElegooSlicer an einem 120 mm hohen
 Turm: Hybrid mit zwei Wänden 14 % mehr Stützmaterial, organisch derselbe G-Code. Tests in
 `test_slice_findings.py` (Deckenform, hohe Bäume, Hybrid aus zwei Körpern),
 `test_print_settings.py` (Übergabe je Familie, Filter unter Bäumen, Feldhinweis),
-`test_manufacturer.py`, `test_print_time.py`. Offen im Register: der Fuß hoher Bäume.
+`test_manufacturer.py`, `test_print_time.py`; Slicertests in `test_real_slicers.py`
+(Wandzahl je Orca-Programm, Hybrid je Objekt, Abstand unter hohlen Bäumen). Messskript
+`output/drache-2026-10-08/stil-rm584/stil_je_decke.py`. Offen im Register: der Fuß hoher Bäume.
 Changelog: ja.
 
 ## RM-027 entfällt mit dem privaten Index (09.09.2026)

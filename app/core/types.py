@@ -1396,8 +1396,9 @@ class SupportSettings:
     tree_walls: int = 1
     """Wände der Baumstämme (RM-584). Hohe Bäume brechen mit einer Wand oder
     kippen; ab etwa 100 mm Stützhöhe tragen zwei (Recherche Nr. 5).
-    PrusaSlicer zählt keine Wände, es legt Doppelwände ab einem Astquerschnitt
-    — zwei heißt dort ab 3 mm, Prusas Vorgabe."""
+    PrusaSlicer zählt keine Wände und nimmt das Feld nicht
+    (``slicer_keys.NOT_TAKEN_BY``); seine Doppelwand ab einem Astquerschnitt
+    bleibt beim Hersteller."""
 
 
 @dataclass(frozen=True, slots=True)

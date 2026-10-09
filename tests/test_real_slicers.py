@@ -356,8 +356,8 @@ def test_tree_walls_change_the_print_only_where_the_program_reads_them(
     G-Code mit einer und zwei Wänden am Centauri Carbon 2 —, unter hohlen
     (``handover.hollow_trees``, Neptune 4) schon. Was jedes Programm davon tut,
     steht in ``slicer_keys.IGNORED_UNDER_TREES_BY_PROGRAM``. Der Fall hält die
-    Tabelle gegen das Programm, auch für Bambu Studio, das dort fehlt, bis es
-    gemessen ist."""
+    Tabelle gegen das Programm; Bambu Studio und Creality Print lesen die
+    Wandzahl auch unter ihren Bäumen und fehlen dort."""
     set_test_license(monkeypatch, active=True)
     profile = profiles.make_profile(printer, "pla")
     setup = _preselected(handover.detect(installed_slicer), profile)
