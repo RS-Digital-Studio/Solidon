@@ -27250,6 +27250,28 @@ class MainWindow(QMainWindow):
         # an ``two_components.stl`` sagte der Bericht „mehrere Teile" und die
         # Zerlegung „ein Stück". Wer hier klickt, bekommt die Teile, die der
         # Bericht genannt hat; die Splitter nimmt *Kleine Teile entfernen*.
+        #
+        # **Hält die Kette an diesem Schritt, kommt die Zerlegung davor**
+        # (RM-638): Hinter einen Halt nimmt die Sitzung keinen Schritt an
+        # (``Session.halt_in_the_way``), und die Teile-Absage einer
+        # Merkmalshandlung blieb so ohne Wirkung. Der Schritt rechnet danach
+        # am Teil, das sein Merkmal trägt (``values["part_index"]``), alles in
+        # einem Zug und einem Strg+Z.
+        result = self.session.last_result
+        if error.op_id is not None and result is not None and result.stopped_at == error.op_id:
+            try:
+                part_index: int | None = int(str(error.values.get("part_index", "")))
+            except ValueError:
+                part_index = None
+            self.session.split_and_retry(
+                error.op_id,
+                object_id,
+                count,
+                keep_tiny=True,
+                part_index=part_index,
+                feature=str(error.values.get("feature", "")),
+            )
+            return
         self.session.apply(
             REGISTRY.get("split_bodies").title,
             [

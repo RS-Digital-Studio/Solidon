@@ -138,6 +138,8 @@ it into `website/version.json`.
 - As the spot for the copy, *Duplicate feature* suggests one and a half widths beside the original, with a wall in between and never along its axis.
 - On a countersink, *Turn feature* suggests the largest angle at which it stays one, and says when a turn only lays the feature onto itself.
 - If an action would hit a separate part next to the feature, or a placed feature would touch other material only along a line, Solidon says so instead of damaging the body.
+- If a feature action refuses because a separate part is in the way, *Split into separate parts* on the finding splits the body and runs the action on the feature's part. Ctrl+Z undoes both.
+- Splitting into separate parts keeps every printable part, including small pins and washers next to a large plate. Only open surfaces and crumbs the printer cannot reproduce are dropped.
 
 ### Generating with AI
 

@@ -163,6 +163,8 @@ Nutzen da und sonst nichts.
 - Als Stelle der Kopie schlägt *Merkmal verdoppeln* anderthalb Breiten neben dem Original vor, mit einer Wand dazwischen und nie entlang seiner Achse.
 - An einer Senkung schlägt *Merkmal drehen* den größten Winkel vor, unter dem sie eine bleibt, und sagt, wenn eine Drehung das Merkmal nur auf sich selbst legt.
 - Träfe eine Handlung ein getrenntes Teil neben dem Merkmal oder berührte ein gesetztes Merkmal anderes Material nur auf einer Linie, sagt Solidon das, statt den Körper zu beschädigen.
+- Sagt eine Merkmalshandlung ab, weil ein getrenntes Teil im Weg ist, teilt *In Einzelteile aufteilen* am Befund den Körper und führt die Handlung am Teil des Merkmals aus. Strg+Z nimmt beides zurück.
+- Jedes druckbare Teil bleibt beim Aufteilen in Einzelteile erhalten, auch kleine Stifte und Scheiben neben einer großen Platte. Wegfallen nur offene Flächen und Krümel, die der Drucker nicht abbildet.
 
 ### Erzeugen mit KI
 

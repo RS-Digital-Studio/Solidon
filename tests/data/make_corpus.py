@@ -816,6 +816,67 @@ def two_components() -> None:
     write(trimesh.util.concatenate([box, fragment]), "two_components.stl")
 
 
+def plate_with_loose_parts() -> None:
+    """Eine Baugruppe als ein Netz: viele kleine echte Teile und drei Splitter (RM-639).
+
+    So kommt ein Ständer aus einem CAD-Export: Die Grundplatte 120 × 80 × 8 mm
+    trägt vier Bohrungen Ø 6,4, in jeder steckt ein loser Stift Ø 6 × 14; daneben
+    liegen zwei Scheiben Ø 12 × 2 und ein Klotz 10 × 10 × 5. Jedes dieser Teile
+    liegt unter einem Prozent der Platte — und jedes ist druckbar. Dazu drei
+    Splitter: ein loses Dreieck, ein Kasten ohne Deckel (offene Schale) und ein
+    geschlossener Würfel 0,2 mm, kleiner als eine Bahn der Düse.
+    """
+    plate = trimesh.creation.box(extents=(120.0, 80.0, 8.0))
+    plate.apply_translation((0.0, 0.0, 4.0))
+    places = [(x, y) for x in (-45.0, 45.0) for y in (-25.0, 25.0)]
+    bores = [
+        trimesh.creation.cylinder(
+            radius=3.2,
+            height=12.0,
+            sections=48,
+            transform=trimesh.transformations.translation_matrix((x, y, 4.0)),
+        )
+        for x, y in places
+    ]
+    parts = [trimesh.boolean.difference([plate, *bores])]
+    parts.extend(
+        trimesh.creation.cylinder(
+            radius=3.0,
+            height=14.0,
+            sections=48,
+            transform=trimesh.transformations.translation_matrix((x, y, 4.0)),
+        )
+        for x, y in places
+    )
+    parts.extend(
+        trimesh.creation.cylinder(
+            radius=6.0,
+            height=2.0,
+            sections=48,
+            transform=trimesh.transformations.translation_matrix((80.0, y, 1.0)),
+        )
+        for y in (-15.0, 15.0)
+    )
+    block = trimesh.creation.box(extents=(10.0, 10.0, 5.0))
+    block.apply_translation((80.0, 35.0, 2.5))
+    parts.append(block)
+    triangle = trimesh.Trimesh(
+        vertices=[(-80.0, 0.0, 1.0), (-78.0, 0.0, 1.0), (-80.0, 2.0, 1.0)],
+        faces=[(0, 1, 2)],
+        process=False,
+    )
+    parts.append(triangle)
+    tray = trimesh.creation.box(extents=(5.0, 5.0, 5.0))
+    tray.apply_translation((-80.0, 20.0, 2.5))
+    tray.update_faces(tray.face_normals[:, 2] < 0.5)
+    tray.remove_unreferenced_vertices()
+    parts.append(tray)
+    crumb = trimesh.creation.box(extents=(0.2, 0.2, 0.2))
+    crumb.apply_translation((-80.0, -20.0, 0.1))
+    parts.append(crumb)
+    write(trimesh.util.concatenate(parts), "plate_with_loose_parts.stl")
+
+
 def generated_figure() -> None:
     """Was ein Bildmodell abliefert — und was daran zu reparieren ist (§34, Weg 3).
 
@@ -936,6 +997,7 @@ if __name__ == "__main__":
     broken_open()
     partially_open()
     two_components()
+    plate_with_loose_parts()
     generated_figure()
     clean_figure()
     broken_selfint()

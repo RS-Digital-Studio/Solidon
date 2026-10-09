@@ -139,6 +139,8 @@ dans `website/version.json`.
 - Comme emplacement de la copie, *Dupliquer la caractéristique* propose une largeur et demie à côté de l'original, avec une paroi entre les deux et jamais le long de son axe.
 - Sur une fraisure, *Faire pivoter la caractéristique* propose le plus grand angle qui la laisse fraisure, et prévient quand une rotation ne fait que la reposer sur elle-même.
 - Si une action touchait une pièce séparée voisine, ou si une caractéristique posée ne touchait une autre matière que sur une ligne, Solidon le dit au lieu d'abîmer le corps.
+- Si une action sur une caractéristique refuse parce qu'une pièce séparée gêne, *Diviser en pièces distinctes* sur le constat divise le corps et agit sur sa pièce. Ctrl+Z annule les deux.
+- La division en pièces distinctes garde toute pièce imprimable, même petits goujons et rondelles près d'une grande plaque. Seules tombent surfaces ouvertes et miettes non imprimables.
 
 ### Générer avec l'IA
 

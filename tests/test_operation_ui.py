@@ -8614,3 +8614,141 @@ def test_closing_the_window_while_a_click_waits_writes_nothing(
         gate.set()
         window.close()
         window.deleteLater()
+
+
+def _halted_at_a_pin_in_the_bore(
+    qt_app: QApplication, tmp_path: Path, *, beside: bool
+) -> tuple[MainWindow, str, list[float]]:
+    """Platte mit Bohrung Ø 6 und losem Stift darin als STL, *Merkmal versetzen*
+    an der Bohrung: Die Kette hält am Schritt, weil der Stift im Weg ist.
+
+    Platte 40 × 20 × 10, Bohrung Ø 6 durch, Stift Ø 5 × 15 darin, 5 mm darüber.
+    ``beside`` legt einen größeren gebohrten Klotz daneben — dann ist die Platte
+    nach der Zerlegung nicht das erste Teil.
+    """
+    import trimesh
+
+    plate = trimesh.boolean.difference(
+        [
+            trimesh.creation.box(extents=(40.0, 20.0, 10.0)),
+            trimesh.creation.cylinder(radius=3.0, height=12.0, sections=64),
+        ]
+    )
+    plate.apply_translation((0.0, 0.0, 5.0))
+    pin = trimesh.creation.cylinder(radius=2.5, height=15.0, sections=64)
+    pin.apply_translation((0.0, 0.0, 7.5))
+    raw = trimesh.util.concatenate([plate, pin])
+    if beside:
+        block = trimesh.boolean.difference(
+            [
+                trimesh.creation.box(extents=(60.0, 60.0, 20.0)),
+                trimesh.creation.cylinder(radius=4.0, height=30.0, sections=48),
+            ]
+        )
+        block.apply_translation((-120.0, 0.0, 10.0))
+        raw = trimesh.util.concatenate([raw, block])
+    path = tmp_path / "platte_mit_stift.stl"
+    raw.export(path)
+    window = MainWindow(Session(), UiSettings())
+    window.open_path(path)
+    assert window.session.wait_for_idle(60_000)
+    result = window.session.last_result
+    assert result is not None
+    body = result.scene.objects["obj_1"]
+    bore = next(
+        (
+            name
+            for name, feature in body.features.items()
+            if feature.kind == "hole" and abs(float(feature.params["diameter"]) - 6.0) < 0.1
+        ),
+        None,
+    )
+    assert bore is not None, {
+        name: (f.kind, f.params.get("centre")) for name, f in body.features.items()
+    }
+    if beside:
+        assert bore != "hole_1", "Voraussetzung: auf ihrem Teil hieße die Bohrung anders"
+    centre = [float(value) for value in body.features[bore].params["centre"]]
+    assert window.session.apply(
+        "Merkmal versetzen",
+        [
+            OperationDraft(
+                op="move_feature",
+                inputs=("obj_1",),
+                params={"at_feature": bore, "x": centre[0] + 3.0, "y": centre[1], "z": centre[2]},
+            )
+        ],
+    )
+    assert window.session.wait_for_idle(60_000)
+    return window, bore, centre
+
+
+@pytest.mark.parametrize("beside", [False, True], ids=["platte_allein", "klotz_daneben"])
+def test_splitting_at_a_part_refusal_moves_the_feature_on_its_own_part(
+    qt_app: QApplication, tmp_path: Path, beside: bool
+) -> None:
+    """RM-638: *In Einzelteile aufteilen* an einer Teile-Absage tat nichts.
+
+    Die Absage trug keine Stückzahl, der Knopf kehrte still zurück; und hinter
+    die angehaltene Kette nimmt die Sitzung keinen Schritt. Jetzt kommt die
+    Zerlegung vor den angehaltenen Schritt, der Schritt rechnet am Teil, das die
+    Bohrung trägt — mit gebohrtem Klotz daneben ist das nicht das erste, und
+    die Bohrung hieße dort ohne Mitnahme ``hole_1`` —, und ein Strg+Z
+    nimmt beides zurück (Regel 16).
+    """
+    from app.core.geom.mesh import as_mesh_data
+    from app.ui.panels import actions_for_document, as_error
+
+    window, bore, centre = _halted_at_a_pin_in_the_bore(qt_app, tmp_path, beside=beside)
+    try:
+        halted = window.session.last_result
+        assert halted is not None and halted.stopped_at is not None
+        before_ops = [(entry.op, entry.inputs) for entry in window.session.project.document.ops]
+        transactions = len(window.session.project.document.transactions)
+        (refusal,) = [
+            finding
+            for finding in halted.scene.report.findings
+            if finding.op_id == halted.stopped_at and finding.severity == "error"
+        ]
+        assert refusal.values["kind"] == "hole", "die Art der Absage bleibt ihre"
+        offered = actions_for_document(
+            refusal,
+            window.session.displayed_document(),
+            stopped_at=halted.stopped_at,
+            live_objects=halted.scene.objects,
+        )
+        assert "split_bodies" in [action.id for action in offered]
+
+        window.error_handlers()["split_bodies"](
+            as_error(refusal, window.session.displayed_document())
+        )
+        assert window.session.wait_for_idle(60_000)
+
+        after = window.session.last_result
+        assert after is not None and after.stopped_at is None, [
+            str(finding.message) for finding in after.scene.report.findings
+        ]
+        document = window.session.project.document
+        assert len(document.transactions) == transactions + 1, "ein Zug"
+        ops = [entry.op for entry in document.ops]
+        assert ops == ["load", "split_bodies", "move_feature"]
+        moved = document.ops[-1]
+        carrier = "obj_2" if beside else "obj_1"
+        assert moved.inputs == (carrier,), "der Schritt rechnet am Teil mit der Bohrung"
+        assert moved.params["at_feature"] == bore
+        objects = after.scene.objects
+        assert len(objects) == (3 if beside else 2)
+        plate = objects[carrier]
+        holes = {name: f for name, f in plate.features.items() if f.kind == "hole"}
+        assert list(holes) == [bore], "die Bohrung behält auf ihrem Teil ihren Namen"
+        assert float(holes[bore].params["centre"][0]) == pytest.approx(centre[0] + 3.0, abs=0.05)
+        assert as_mesh_data(plate.mesh).component_count == 1
+
+        window.session.undo()
+        assert window.session.wait_for_idle(60_000)
+        assert [(entry.op, entry.inputs) for entry in window.session.project.document.ops] == (
+            before_ops
+        )
+        assert len(window.session.last_result.scene.objects) == 1
+    finally:
+        window.wait_for_workers()

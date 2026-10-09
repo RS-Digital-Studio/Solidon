@@ -5204,6 +5204,91 @@ def test_split_bodies_with_too_few_parts_offers_the_measured_count(profile: Prof
     assert fehler.value.suggestions[0] is RECOUNT_AND_RETRY
 
 
+def _loose_parts_corpus() -> SceneObject:
+    """``plate_with_loose_parts.stl`` ohne Löcherschließen — die offenen Splitter bleiben offen."""
+    data = (MESHES / "plate_with_loose_parts.stl").read_bytes()
+    mesh = normalise(read_mesh(data, ".stl"), "mm", mend=False).mesh
+    assert mesh.component_count == 11, "die Vorbedingung: acht Teile und drei Splitter"
+    return SceneObject(id="obj_1", name="Ständer", mesh=mesh)
+
+
+def test_split_bodies_keeps_every_printable_part_and_drops_only_splinters(
+    profile: Profile,
+) -> None:
+    """Ein Splitter ist, was der Drucker nicht hinterlässt oder was keine Schale schließt (RM-639).
+
+    Am Laptop-Ständer warf *In Einzelteile aufteilen* 13 von 22 echten Teilen
+    weg: Stifte, Scheiben und Schraubenköpfe lagen unter einem Prozent der
+    größten Platte. Der Korpus hat dieselbe Lage — Platte 75 774 mm³, vier Stifte
+    in ihren Bohrungen, zwei Scheiben und ein Klotz zwischen 0,3 und 0,7 Prozent
+    davon — und drei echte Splitter: ein loses Dreieck, einen Kasten ohne Deckel
+    und einen Würfel 0,2 mm unter dem kleinsten druckbaren Volumen. Die acht
+    Teile bleiben, die drei Splitter fallen, und *Splitter behalten* gibt alle
+    elf. Ein Drucker mit feinerer Auflösung behält den Würfel.
+    """
+    from app.core.errors import ValidationError
+
+    entry = _loose_parts_corpus()
+    crumb = 0.2 * 0.2 * 0.2
+    assert crumb < profile.smallest_printable_volume, "Vorbedingung: der Würfel ist ein Splitter"
+
+    result = _run_op("split_bodies", entry, profile, count=8)
+
+    volumes = sorted(
+        (round(abs(float(as_mesh_data(part.mesh).volume)), 3) for part in result.outputs),
+        reverse=True,
+    )
+    assert volumes == [75773.5, 500.0, 394.711, 394.711, 394.711, 394.711, 225.549, 225.549]
+    befunde = {finding.code: finding for finding in result.findings}
+    assert befunde["split_bodies.tiny"].values["count"] == "3"
+    assert "split_bodies.surplus" not in befunde
+
+    with pytest.raises(ValidationError) as fehler:
+        _run_op("split_bodies", entry, profile, count=9)
+    assert fehler.value.values["found"] == "8", "die Splitter zählen nicht als Teile"
+
+    alle = _run_op("split_bodies", entry, profile, count=11, keep_tiny=True)
+    assert len(alle.outputs) == 11
+    assert "split_bodies.tiny" not in {finding.code for finding in alle.findings}
+
+    fein = profiles.make_profile("generic-resin-130", "resin")
+    assert fein.smallest_printable_volume < crumb, "Vorbedingung: das Harz belichtet den Würfel"
+    feiner = _run_op("split_bodies", entry, fein, count=9)
+    smallest = min(abs(float(as_mesh_data(part.mesh).volume)) for part in feiner.outputs)
+    assert smallest == pytest.approx(crumb, abs=1e-3)
+    assert {finding.code: finding for finding in feiner.findings}["split_bodies.tiny"].values[
+        "count"
+    ] == "2"
+
+
+def test_split_bodies_keeps_open_sheets_when_no_part_is_closed(profile: Profile) -> None:
+    """Besteht der Körper nur aus offenen Flächen, sind sie die Teile (RM-639).
+
+    Die offene Schale ist neben geschlossenen Teilen ein Splitter. Zwei Blätter
+    allein dagegen sind ein Flächenmodell, und eine Zerlegung, die beide
+    verwürfe, sagte „besteht aus einem Stück“.
+    """
+    import trimesh
+
+    from app.core.geom.mesh import MeshData
+
+    blaetter = []
+    for shift in (0.0, 40.0):
+        sheet = trimesh.creation.box(extents=(20.0, 20.0, 2.0))
+        sheet.update_faces(sheet.face_normals[:, 2] > 0.5)
+        sheet.remove_unreferenced_vertices()
+        sheet.apply_translation((shift, 0.0, 0.0))
+        blaetter.append(sheet)
+    entry = SceneObject(
+        id="obj_1", name="Blätter", mesh=MeshData.of(trimesh.util.concatenate(blaetter))
+    )
+
+    result = _run_op("split_bodies", entry, profile, count=2)
+
+    assert len(result.outputs) == 2
+    assert "split_bodies.tiny" not in {finding.code for finding in result.findings}
+
+
 def _u_profile(
     length: float, width: float, wall: float = 2.0, height: float = 25.0
 ) -> trimesh.Trimesh:

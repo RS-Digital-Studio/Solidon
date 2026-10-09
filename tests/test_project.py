@@ -4925,3 +4925,50 @@ def test_v48_sculpting_and_posing_compute_as_saved(profile) -> None:
     assert abs(float(bodies()["kugel"].volume) - 32742.854319) > 1.0, (
         "Gegenprobe: in Fassung 2 rechnen dieselben Züge anders"
     )
+
+
+def test_v49_split_bodies_drops_what_it_dropped_then(profile) -> None:
+    """49 → 50: *In Einzelteile aufteilen* verwirft in einer älteren Datei, was es damals verwarf.
+
+    ``split_splinters_v49.p3d`` hat der Stand vor RM-639 geschrieben
+    (``0ceb7e9ff``): Platte 100 × 60 × 10, Klotz 20 × 20 × 10 und drei Stifte
+    Ø 6 × 10, vereint und in zwei Teile zerlegt. Die Stifte lagen unter einem
+    Prozent der Platte und fielen weg; gemessen beim Schreiben 60 000 und
+    4 000 mm³, je ein Stück. Nach der Migration trägt der Schritt
+    ``legacy_tiny_share`` und rechnet wie gespeichert. Gegenprobe: Ohne Marker
+    sind die Stifte Teile und gehen zur Platte, ihrem nächsten Nachbarn.
+    """
+    from app.core.geom.mesh import as_mesh_data
+    from app.core.scene.evaluate import evaluate
+
+    path = Path(__file__).parent / "data" / "projects" / "split_splinters_v49.p3d"
+    assert project_data(path)["format_version"] == 49
+
+    project = load(path)
+    (split,) = [entry for entry in project.document.ops if entry.op == "split_bodies"]
+    assert split.params["legacy_tiny_share"] is True
+
+    def bodies() -> dict[str, Any]:
+        result = evaluate(project.document, profile, sources=ProjectSources(project))
+        assert result.complete, [str(f.message) for f in result.scene.report.findings]
+        return {entry.name: as_mesh_data(entry.mesh) for entry in result.scene.objects.values()}
+
+    saved = bodies()
+    assert sorted(saved) == ["platte 1", "platte 2"]
+    assert float(saved["platte 1"].volume) == pytest.approx(60000.0, abs=1e-6)
+    assert saved["platte 1"].component_count == 1
+    assert float(saved["platte 2"].volume) == pytest.approx(4000.0, abs=1e-6)
+
+    history = History(project.document)
+    history.change_params(split.id, {**split.params, "legacy_tiny_share": False})
+    today = bodies()
+    assert sorted(today) == ["platte 1", "platte 2"]
+    assert today["platte 1"].component_count == 4, "Gegenprobe: die Stifte sind Teile"
+    assert float(today["platte 1"].volume) > 60000.0 + 3 * 250.0
+
+    project = load(path)
+    (split,) = [entry for entry in project.document.ops if entry.op == "split_bodies"]
+    History(project.document).change_params(split.id, {**split.params, "count": 3})
+    (changed,) = [entry for entry in project.document.ops if entry.op == "split_bodies"]
+    assert "legacy_tiny_share" not in changed.params, "eine Änderung rechnet wie heute"
+    assert len(bodies()) == 3, "mit dem Marker fände die Zerlegung nur zwei Teile"

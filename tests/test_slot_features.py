@@ -28,7 +28,7 @@ from shapely.geometry import Polygon
 from app.core.bootstrap import load_operations
 from app.core.errors import ValidationError
 from app.core.geom.boolean import boolean
-from app.core.geom.mesh import MeshData, as_mesh_data
+from app.core.geom.mesh import MeshData, as_mesh_data, face_components
 from app.core.geom.prepare import drill, shortest_slot
 from app.core.perceive.digest import _feature_line
 from app.core.perceive.features import _fitted, _one_body, detect
@@ -38,6 +38,7 @@ from app.core.types import (
     Feature,
     Finding,
     OpContext,
+    OpResult,
     Profile,
     Quality,
     Scene,
@@ -2787,6 +2788,10 @@ def test_every_bore_op_names_the_separate_pin(
 
     assert caught.value.detail is OTHER_PART_IN_THE_BORE
     assert [action.id for action in caught.value.suggestions] == ["split_bodies", "cancel"]
+    # Der Knopf braucht Stückzahl und Teil des Merkmals (RM-638): Ohne
+    # ``components`` kehrte er still zurück; die Platte ist das größte Teil.
+    assert caught.value.values["components"] == "2"
+    assert caught.value.values["part_index"] == "0"
 
 
 @pytest.mark.parametrize("kernel", ["mesh", "brep"])
@@ -2838,11 +2843,81 @@ def test_a_bore_through_two_plates_with_a_pin_names_the_pin(profile: Profile, ke
         if feature.kind == "hole" and abs(float(feature.params["diameter"]) - 6.0) < 0.1
     ]
     assert bores, "Voraussetzung: die Bohrung ist erkannt"
+    groups = face_components(body.raw)
     for feature in bores:
         assert filled_bore_reason(body, feature) is OTHER_PART_IN_THE_BORE
         with pytest.raises(ValidationError) as caught:
             run_op("move_feature", entry, profile, at_feature=feature.id, x=8.0, y=0.0, z=10.0)
         assert caught.value.detail is OTHER_PART_IN_THE_BORE
+        # Liegt der Mantel auf beiden Platten, nennt die Absage kein Teil (RM-638,
+        # Regel 21): Welches gemeint ist, wäre geraten.
+        carriers = sum(bool(np.isin(feature.face_indices, group).any()) for group in groups)
+        assert caught.value.values["components"] == "3"
+        assert ("part_index" in caught.value.values) is (carriers == 1)
+
+
+def test_splitting_carries_the_refused_feature_onto_its_part(profile: Profile) -> None:
+    """Die Zerlegung aus einer Teile-Absage gibt das Merkmal auf seinem Teil mit (RM-638).
+
+    Ein neues Teil vergibt seine Merkmalsnamen frisch; der Schritt, der nach der
+    Zerlegung an ``hole_2`` weiterrechnen soll, fände dort nur ``hole_1``. Mit
+    ``carry_feature`` steht das Merkmal mit seinen eigenen Dreiecken im Teil —
+    dieselben Ecken wie im Körper —, und kein anderes Teil trägt es.
+    """
+    import trimesh
+
+    from app.core.geom.prepare_ops import split_offer
+
+    load_operations()
+    plate = as_mesh_data(_plate_with_a_second_body("mesh", inside=True).mesh).raw
+    block = trimesh.boolean.difference(
+        [
+            trimesh.creation.box(extents=(60.0, 60.0, 20.0)),
+            trimesh.creation.cylinder(radius=4.0, height=30.0, sections=48),
+        ]
+    )
+    block.apply_translation((-120.0, 0.0, 10.0))
+    mesh = MeshData.of(trimesh.util.concatenate([plate, block]))
+    entry = SceneObject(id="obj_1", name="Teile", mesh=mesh, features=detect(mesh))
+    bore = next(
+        f
+        for f in entry.features.values()
+        if f.kind == "hole" and abs(float(f.params["diameter"]) - 6.0) < 0.1
+    )
+    offer = split_offer(mesh, bore)
+    assert offer == {"components": "3", "part_index": "1"}, "die Platte ist das zweite Teil"
+
+    result = _split(entry, profile, carry_feature=bore.id)
+
+    carriers = [part for part in result.outputs if part.features]
+    assert [part.id for part in carriers] == [result.outputs[1].id]
+    carried = carriers[0].features[bore.id]
+    corners = np.asarray(as_mesh_data(carriers[0].mesh).raw.triangles)[list(carried.face_indices)]
+    expected = np.asarray(mesh.raw.triangles)[list(bore.face_indices)]
+    assert np.array_equal(corners, expected), "dieselben Dreiecke, nur im Teil gezählt"
+
+    plain = _split(entry, profile)
+    assert not any(part.features for part in plain.outputs), "ohne Angabe bleibt alles frisch"
+
+
+def _split(entry: SceneObject, profile: Profile, **params: object) -> OpResult:
+    """*In Einzelteile aufteilen* in alle drei Teile, wie der Knopf es fährt."""
+    from app.core.scene.cancel import NeverCancelled
+
+    spec = REGISTRY.get("split_bodies")
+    return spec.fn(
+        OpContext(
+            scene=Scene(objects={entry.id: entry}),
+            inputs=[entry],
+            params=spec.params(count=3, keep_tiny=True, **params),
+            profile=profile,
+            quality="fine",
+            seed=7,
+            progress=lambda fraction, text: None,
+            ask=lambda question, options: options[0],
+            cancelled=NeverCancelled(),
+        )
+    )
 
 
 def _names_the_other_part(entry: SceneObject, feature: Feature, profile: Profile) -> None:

@@ -139,6 +139,8 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Como lugar de la copia, *Duplicar característica* propone una anchura y media junto al original, con una pared entre ambas y nunca a lo largo de su eje.
 - En un avellanado, *Girar característica* propone el mayor ángulo con el que sigue siéndolo, y avisa cuando un giro solo deja la característica sobre sí misma.
 - Si una acción alcanzara una pieza separada junto a la característica, o una característica colocada tocara otro material solo en una línea, Solidon lo dice en vez de dañar el cuerpo.
+- Si una acción sobre una característica se niega porque estorba una pieza separada, *Dividir en piezas sueltas* en el aviso divide el cuerpo y actúa sobre su pieza. Ctrl+Z deshace ambas.
+- Al dividir en piezas sueltas se conserva cada pieza imprimible, también pasadores y arandelas pequeños junto a una placa grande. Solo caen superficies abiertas y migas que la impresora no reproduce.
 
 ### Generar con IA
 
