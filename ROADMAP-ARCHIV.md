@@ -31,6 +31,7 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-09 | [RM-541: Skizzen rechnen an jeder Stelle der Ebene und auf jedem Rechner gleich (09.10.2026)](#rm-541-skizzen-rechnen-an-jeder-stelle-der-ebene-und-auf-jedem-rechner-gleich-09102026) |
 | 2026-10-09 | [RM-620: Ein Slicer, der Filamente mit zu verschiedenen Temperaturen ablehnt, sagt es (09.10.2026)](#rm-620-ein-slicer-der-filamente-mit-zu-verschiedenen-temperaturen-ablehnt-sagt-es-09102026) |
 | 2026-10-08 | [RM-602: Der Druckdialog ordnet die Profile in einem Lesedurchgang zu (08.10.2026)](#rm-602-der-druckdialog-ordnet-die-profile-in-einem-lesedurchgang-zu-08102026) |
 | 2026-10-08 | [RM-601: Die Slicerwahl im Druckdialog geht wie in Erste Schritte, und überall stehen nur unterstützte Slicer (08.10.2026)](#rm-601-die-slicerwahl-im-druckdialog-geht-wie-in-erste-schritte-und-überall-stehen-nur-unterstützte-slicer-08102026) |
@@ -45205,3 +45206,45 @@ dass er geladen ist. Gegenprobe: `align_forms` ohne `at_most` macht fr und pt ro
 und die Spalten unverändert. Mit 150 % Schrift reichen die Felder bis 527 px statt 531 px.
 Changelog: ja, unter *Drucken und Übergabe an den Slicer* — mit vergrößerter Schrift hatte
 `v0.5.3` den Fehler.
+
+## RM-541: Skizzen rechnen an jeder Stelle der Ebene und auf jedem Rechner gleich (09.10.2026)
+
+<a id="rm-541-skizzen-rechnen-an-jeder-stelle-der-ebene-und-auf-jedem-rechner-gleich-09102026"></a>
+<a id="rm-541"></a>
+
+**RM-541 — Der Skizzenlöser landete auf dem Intel-Mac im anderen Zweig einer Winkelbedingung.**
+`test_sketch_editor.py::test_the_angle_button_asks_for_its_degrees` setzte 45° und bekam unter
+`macos-26-intel` 135° (Lauf 37495714708, damals noch über `lsmr`).
+
+**Ursache:** `least_squares` mit `method="trf"` beginnt mit dem Vertrauensradius ‖x₀‖ und misst
+`xtol` an ‖x‖; die Unbekannten waren absolute Koordinaten. Der erste Schritt hing so an der
+Entfernung der Zeichnung vom Nullpunkt — und, weil alles ein Lauf war, an jedem anderen Teil der
+Zeichnung. Belegt ohne Intel-Rechner über Versätze, die die Rundung jeder Rechnung ändern wie eine
+andere Maschine: Am Stand davor (`78d39dec9`) lag dieselbe Winkelskizze 1000 mm daneben bis zu
+292 mm anders, neben vierzig freien Linien kippten 9 von 60 Paaren schon am Nullpunkt, und 69 von
+300 versetzten Läufen endeten in einem Widerspruch, den es nicht gab. Daneben zwei Ursachen, die
+erst beim Umbau auffielen: `lsmr` bildet bei einer einzelnen gespannten Bedingung einen Zweierraum
+aus Rauschen (ein Winkelpaar neben einer bemaßten Kette aus zwanzig Linien kippte), und eine
+Gerade mit gleicher Krümmung wie ein Bogen lief nach sechshundert Auswertungen zu einem Bogen mit
+240 km Radius, dessen Urteil die letzte Stelle des Rangs fällte.
+
+**Umsetzung** (Zweig `paket/sk-skizzenloeser`): `solver._solve` rechnet je zusammenhängendem Teil
+(`_parts`, `_solve_part`) in Verschiebungen ab null; `x_scale` ist die Streuung des Teils (`lsmr`,
+Zug), in der dichten Rechnung höchstens `DENSE_FIRST_STEP` = 1 mm. Ein Teil ohne Spannung bleibt,
+einer, der weiter als `FARTHEST_MOVE` = 100 m liefe, auch. Die Fassung steht an der Skizze
+(`Sketch.solver`, `types.SKETCH_SOLVER` = 2, Bauplan §9); Format 50 schreibt `"solver": 1` in jeden
+gespeicherten Skizzentext, der über `_solve_in_coordinates` wie 0.5.0 bis 0.5.3 rechnet. Der
+Editor rechnet ab der ersten Änderung mit der heutigen Fassung, die Fassung steht im Cache-Schlüssel.
+
+**Nachweis:** Wächter `test_sketch.py::test_a_sketch_solves_alike_wherever_it_lies` (Winkelpaar
+allein, im Maßstab 1:100, neben vierzig freien Linien und neben einer bemaßten Kette; Versätze
+±1000 mm und ±10⁵ mm): neu höchstens 1,6·10⁻¹¹ mm Abweichung, kein Paar gekippt; Gegenprobe am
+Stand davor rot in allen vier Fällen (5 von 60 Paaren am Nullpunkt gekippt, 16 Widersprüche, bis
+150 m daneben). Über 742 mitgeschriebene Eingaben aus 3554 Skizzentests: versetzt neu höchstens
+5,1·10⁻⁹ mm, am Stand 0.5.3 105 Abweichungen über `EPS_GEOM`; schon gelöste gespeicherte Stände
+unverändert (höchstens 3,3·10⁻¹³ mm), unterbestimmte 96-mal näher und 18-mal weiter am Ausgang
+als mit 0.5.3, kein Urteil anders. §31-Kette: 8 Auswertungen wie vorher. Altdatei
+`tests/data/projects/sketch_solver_v49.p3d` rechnet wie mit 0.5.3 (2 656,656241 mm³), derselbe
+Text mit dem heutigen Löser anders. Die Kette aus zwanzig Linien, über ihre Reichweite gezogen,
+blieb am Nullpunkt stehen und rutschte 1000 mm daneben um 3,8 mm; jetzt rutscht sie überall.
+Changelog: ja — Skizzen rechnen auf jedem Rechner gleich.

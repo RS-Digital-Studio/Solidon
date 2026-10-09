@@ -32,7 +32,14 @@ import numpy as np
 from app.core.deferred import csr_matrix, least_squares
 from app.core.errors import SketchConflictError, ValidationError
 from app.core.expressions import evaluate
-from app.core.types import Point2, Sketch, SketchConstraint, SketchElement, SolvedSketch
+from app.core.types import (
+    SKETCH_SOLVER,
+    Point2,
+    Sketch,
+    SketchConstraint,
+    SketchElement,
+    SolvedSketch,
+)
 from app.core.units import EPS_GEOM
 from app.i18n import _
 
@@ -1501,6 +1508,211 @@ def _residuals_at(equations: Sequence[_Equation], points: np.ndarray) -> np.ndar
     return np.asarray(rows, dtype=float)
 
 
+def _jacobian(equations: Sequence[_Equation], x: np.ndarray) -> csr_matrix:
+    """Die Jacobimatrix der Gleichungen an ``x``, über alle Koordinaten.
+
+    Dünn besetzt von Anfang an: Jede Ableitung berührt eine Handvoll Punkte,
+    und ein dichter Block über alle Punkte wuchs quadratisch — 3,2 GB bei
+    10 000 Punkten und 10 000 Bedingungen, angefordert bevor eine Zeile
+    gerechnet war (Gesamtreview 05.09.2026, G-09).
+    """
+    pts = np.asarray(x, dtype=float).reshape(-1, 2)
+    rows: list[int] = []
+    cols: list[int] = []
+    data: list[float] = []
+    begin = 0
+    for equation in equations:
+        block = _SparseRows(begin)
+        equation.grad(pts, block)  # type: ignore[arg-type]
+        for (row, point, coordinate), value in block.entries.items():
+            rows.append(begin + row)
+            cols.append(point * 2 + coordinate)
+            data.append(value)
+        begin += equation.rows
+    return csr_matrix((data, (rows, cols)), shape=(begin, pts.size))
+
+
+#: Wie weit ein Lauf einen Punkt höchstens verschiebt, in Millimetern.
+#:
+#: Weiter ist keine Lösung, sondern ein Lauf ins Unendliche: Eine Gerade und
+#: ein Bogen mit gleicher Krümmung trafen sich nach sechshundert Auswertungen
+#: mit einem Bogenradius von 240 km unter dem Restfehler, und ob das als
+#: gelöst oder als Widerspruch galt, entschied die letzte Stelle des Rangs
+#: (RM-541). Hundert Meter verschiebt keine Zeichnung für einen Drucker; der
+#: Teil bleibt dann, wo er war, und die Prüfung danach nennt den Widerspruch.
+FARTHEST_MOVE: Final[float] = 100_000.0
+
+#: Wie weit der erste Schritt einer **dichten** Rechnung höchstens reicht, in
+#: Millimetern — kleiner, wenn der Teil kleiner ist (:func:`_solve_part`).
+#:
+#: Eine unterbestimmte Skizze hat einen Jacobi-Rang unter ihren Unbekannten,
+#: und dort setzt TRF jeden Schritt auf den Rand des Vertrauensbereichs. Mit
+#: der Streuung des Teils als Radius war der erste Schritt so groß wie die
+#: Zeichnung: Zwei Splines mit gleicher Krümmung trafen sich danach mit
+#: entgegengesetzter Tangente, eine Spitze statt eines Übergangs. Ein
+#: Millimeter ist der Schritt, mit dem scipy ab null beginnt; die dichte
+#: Rechnung kostet je Schritt Mikrosekunden und wächst von dort in Stufen.
+DENSE_FIRST_STEP: Final[float] = 1.0
+
+
+@dataclass(frozen=True, slots=True)
+class _Part:
+    """Gleichungen, die über gemeinsame Punkte zusammenhängen, und die
+    Koordinaten ihrer freien Punkte (je Punkt ``x`` und ``y``, aufsteigend)."""
+
+    equations: tuple[_Equation, ...]
+    columns: np.ndarray
+
+
+def _columns_of(points: Sequence[int]) -> np.ndarray:
+    return np.asarray([2 * point + axis for point in points for axis in (0, 1)], dtype=np.intp)
+
+
+def _parts(equations: Sequence[_Equation], flat: np.ndarray, held: np.ndarray) -> list[_Part]:
+    """Die zusammenhängenden Teile der Skizze, in der Folge ihrer ersten Gleichung.
+
+    Zwei Punkte gehören zusammen, wenn eine Gleichung beide liest — gelesen
+    an den Einträgen ihrer Ableitung am Start, die jede Gleichung unabhängig
+    vom Wert schreibt. Gehaltene Punkte verbinden nichts: Sie sind Konstanten.
+    Schreibt eine Gleichung gar nichts, sagt sie nicht, was sie liest, und
+    alles rechnet als ein Teil.
+    """
+    pts = flat.reshape(-1, 2)
+    parent = list(range(pts.shape[0]))
+
+    def root(point: int) -> int:
+        while parent[point] != point:
+            parent[point] = parent[parent[point]]
+            point = parent[point]
+        return point
+
+    touched: list[tuple[int, ...]] = []
+    for equation in equations:
+        block = _SparseRows(0)
+        equation.grad(pts, block)  # type: ignore[arg-type]
+        if not block.entries:
+            free_points = [int(point) for point in np.flatnonzero(~held)]
+            return [_Part(tuple(equations), _columns_of(free_points))]
+        reached = tuple(
+            sorted({point for (_row, point, _axis) in block.entries if not held[point]})
+        )
+        touched.append(reached)
+        for point in reached[1:]:
+            first, second = root(reached[0]), root(point)
+            if first != second:
+                parent[max(first, second)] = min(first, second)
+    grouped: dict[int, list[int]] = {}
+    for index, reached in enumerate(touched):
+        if reached:
+            grouped.setdefault(root(reached[0]), []).append(index)
+    return [
+        _Part(
+            tuple(equations[index] for index in members),
+            _columns_of(sorted({point for index in members for point in touched[index]})),
+        )
+        for members in grouped.values()
+    ]
+
+
+def _spread(origin: np.ndarray, scale: np.ndarray) -> float:
+    """Wie weit die Punkte eines Teils um ihre Mitte liegen — sein erster
+    Vertrauensradius, gemessen wie die Schritte (``origin / scale``).
+
+    Ohne Norm aus BLAS und ohne Potenz (``.claude/rules/kern.md``): Die Zahl
+    bestimmt den Weg zur Lösung und damit, wo eine unterbestimmte Zeichnung
+    landet."""
+    centred = origin.copy()
+    centred[0::2] -= float(np.mean(origin[0::2]))
+    centred[1::2] -= float(np.mean(origin[1::2]))
+    ratio = centred / scale
+    reach = math.sqrt(float(np.sum(ratio * ratio)))
+    return reach if reach > 0.0 else 1.0
+
+
+def _solve_part(
+    part: _Part,
+    solution: np.ndarray,
+    weight: np.ndarray,
+    *,
+    dense_allowed: bool,
+    tries: int | None,
+) -> None:
+    """Löst einen Teil und schreibt seine Koordinaten in ``solution``.
+
+    **In Verschiebungen gegen den Ausgang** (RM-541). TRF beginnt mit dem
+    Vertrauensradius ‖x₀‖ und misst ``xtol`` an ‖x‖: In Koordinaten war das
+    die Entfernung der Zeichnung vom Nullpunkt — und, solange alles ein Lauf
+    war, die der übrigen Teile. Ein Winkel tausend Millimeter neben dem
+    Ursprung tat einen ersten Schritt von tausend Millimetern, sprang über die
+    nächste Lösung, und welche er traf, entschied die Rundung der Maschine. Ab
+    null bestimmt ``x_scale`` den ersten Schritt: die Streuung des Teils
+    (:func:`_spread`) — für ``lsmr`` und den Zug, deren Budgets aus §31 und
+    Stufen auf einen Radius in der Größe der Zeichnung abgestimmt sind —, in
+    der dichten Rechnung höchstens :data:`DENSE_FIRST_STEP`.
+
+    **Je Teil**, weil ``lsmr`` sonst entartet: Steht nur eine Gleichung eines
+    Teils unter Spannung, zeigen Gradient und Gauß-Newton-Schritt in dieselbe
+    Richtung, und die zweite Richtung des Zweierraums ist Rundungsrauschen.
+    Ein Winkel zwischen zwei Linien neben einer bemaßten Kette aus zwanzig
+    Linien warf die Linien so bis zu vier Meter weit. Allein ist das
+    Linienpaar klein genug für die dichte Rechnung.
+
+    Ein Teil, dessen Gleichungen am Start exakt null sind, bleibt stehen —
+    TRF täte dort keinen Schritt. Ein Lauf weiter als :data:`FARTHEST_MOVE`
+    auch.
+    """
+    columns = part.columns
+    origin = solution[columns].copy()
+    if not np.any(_residuals_at(part.equations, solution)):
+        return
+    scale = weight[columns]
+    full = solution.copy()
+
+    def placed(z: np.ndarray) -> np.ndarray:
+        full[columns] = origin + z
+        return full
+
+    def residuals(z: np.ndarray) -> np.ndarray:
+        return _residuals_at(part.equations, placed(z))
+
+    def jacobian(z: np.ndarray) -> csr_matrix:
+        return _jacobian(part.equations, placed(z))[:, columns]
+
+    # ``lsmr`` statt der dichten SVD je Iteration: bei 200 Bedingungen der
+    # Unterschied zwischen 700 ms und dem Budget aus §31 — nachgemessen.
+    # **Kleine Teile rechnen dicht** (:data:`EXACT_UP_TO`): Mit ``lsmr`` löst
+    # TRF den Schritt im Zweierraum aus Gradient und Gauß-Newton-Schritt, und
+    # der entartet bei einer einzelnen Bedingung (oben). Ein Zug bleibt bei
+    # ``lsmr``: Er beginnt an einer gelösten Skizze, und seine Stufen
+    # (``tries``, ``stiff``) sind auf diesen Löser abgestimmt.
+    dense = dense_allowed and columns.size <= EXACT_UP_TO
+    reach = _spread(origin, scale)
+    result = least_squares(
+        residuals,
+        np.zeros(columns.size),
+        jac=(lambda z: jacobian(z).toarray()) if dense else jacobian,
+        method="trf",
+        tr_solver="exact" if dense else "lsmr",
+        x_scale=scale * (min(reach, DENSE_FIRST_STEP) if dense else reach),
+        # Ohne Grenze läuft LSMR hier bis zur kleineren Matrixkante. Bei der
+        # langen, dünn besetzten Kette des §31-Korpus sind das 300 innere
+        # Schritte je Versuch und 105 ms insgesamt. Mit 150 Schritten braucht
+        # der äußere Löser acht statt achtzehn Versuche, hält denselben Rest
+        # weit unter ``_TOL`` und löst die 200 Bedingungen in 42 ms. Die
+        # Grenze ist keine Genauigkeitsschranke: TRF setzt mit dem verbleibenden
+        # Rest weiter an, statt eine unfertige Antwort zurückzugeben.
+        tr_options={} if dense else {"maxiter": 150},
+        xtol=1e-14 if dense else 1e-10,
+        ftol=1e-14 if dense else 1e-10,
+        gtol=1e-14 if dense else 1e-10,
+        max_nfev=tries,
+    )
+    moved = np.asarray(result.x, dtype=float)
+    if float(np.max(np.abs(moved))) > FARTHEST_MOVE:
+        return
+    solution[columns] = origin + moved
+
+
 def _solve(
     equations: Sequence[_Equation],
     start: np.ndarray,
@@ -1515,6 +1727,9 @@ def _solve(
     nur, was die Rangprüfung nach dem Abschälen noch braucht
     (:func:`_matrix_rank`), und im Fehlerfall die Suche nach dem Paar.
 
+    Gerechnet wird je zusammenhängendem Teil (:func:`_parts`,
+    :func:`_solve_part`); Punkte, die keine Gleichung liest, bleiben.
+
     ``pinned`` nennt Punkte, die ein Zug gerade hält (:func:`solve_sketch`).
     Ohne ``stiff`` sind sie **Konstanten**: Ihre Koordinaten stehen in
     ``start`` und verlassen das Gleichungssystem — der Löser rechnet nur die
@@ -1522,54 +1737,58 @@ def _solve(
     ``stiff`` bleiben sie Variablen, nur zähe (:data:`DRAG_STIFFNESS`): Das
     ist der Rückfall, wenn die Bedingungen den Zeigerort nicht zulassen.
 
-    ``tries`` begrenzt die Zahl der Auswertungen — nur der Zug setzt sie
-    (:data:`DRAG_REACH_TRIES`, :data:`DRAG_SLIDE_TRIES`). Das gewöhnliche
+    ``tries`` begrenzt die Zahl der Auswertungen je Teil — nur der Zug setzt
+    sie (:data:`DRAG_REACH_TRIES`, :data:`DRAG_SLIDE_TRIES`). Das gewöhnliche
     Lösen bleibt unbegrenzt: Dort ist die Lösung, was gefragt ist, und nicht
     die Antwort auf die nächste Mausbewegung.
     """
     flat = start.reshape(-1)
-    total_rows = sum(equation.rows for equation in equations)
-    points = flat.size // 2
+    if not equations:
+        return flat, np.zeros(0), csr_matrix((0, flat.size))
+    held = np.zeros(flat.size // 2, dtype=bool)
+    if pinned and not stiff:
+        held[list(pinned)] = True
+    if held.all() or tries == 0:
+        # Alles hängt am Zeiger — oder gefragt ist nur, wie es an dieser
+        # Stelle steht: Es gibt nichts zu rechnen, nur zu prüfen, ob die
+        # Bedingungen hier gelten.
+        return flat, _residuals_at(equations, flat), _jacobian(equations, flat)
+    weight = np.ones(flat.size)
+    if pinned and stiff:
+        for point in pinned:
+            weight[2 * point : 2 * point + 2] = DRAG_STIFFNESS
+    solution = np.asarray(flat, dtype=float).copy()
+    for part in _parts(equations, flat, held):
+        _solve_part(part, solution, weight, dense_allowed=not pinned, tries=tries)
+    return solution, _residuals_at(equations, solution), _jacobian(equations, solution)
+
+
+def _solve_in_coordinates(
+    equations: Sequence[_Equation],
+    start: np.ndarray,
+    *,
+    pinned: Sequence[int] = (),
+    stiff: bool = False,
+    tries: int | None = None,
+) -> tuple[np.ndarray, np.ndarray, Any]:
+    """Der Löser bis Solidon 0.5 — für Skizzen mit ``solver == 1`` (RM-541).
+
+    Ein Lauf über alle Punkte, in Koordinaten, immer über ``lsmr``: So
+    rechneten 0.5.0 bis 0.5.3 jede Skizze, und eine Skizze aus einer solchen
+    Projektdatei rechnet hier wie gespeichert. Neues rechnet :func:`_solve`;
+    diese Fassung wird nicht verbessert, sonst rechnete sie nicht mehr wie
+    gespeichert.
+    """
+    flat = start.reshape(-1)
     held = np.zeros(flat.size, dtype=bool)
     if pinned and not stiff:
         for point in pinned:
             held[2 * point : 2 * point + 2] = True
     free = ~held
-
-    def fun(x: np.ndarray) -> np.ndarray:
-        return _residuals_at(equations, x)
-
-    def sparse_jac(x: np.ndarray) -> csr_matrix:
-        # Dünn besetzt von Anfang an: Jede Ableitung berührt eine Handvoll
-        # Punkte, und ein dichter Block über alle Punkte wuchs quadratisch —
-        # 3,2 GB bei 10 000 Punkten und 10 000 Bedingungen, angefordert
-        # bevor eine Zeile gerechnet war (Gesamtreview 05.09.2026, G-09).
-        pts = x.reshape(-1, 2)
-        rows: list[int] = []
-        cols: list[int] = []
-        data: list[float] = []
-        begin = 0
-        for equation in equations:
-            block = _SparseRows(begin)
-            equation.grad(pts, block)  # type: ignore[arg-type]
-            for (row, point, coordinate), value in block.entries.items():
-                rows.append(begin + row)
-                cols.append(point * 2 + coordinate)
-                data.append(value)
-            begin += equation.rows
-        return csr_matrix((data, (rows, cols)), shape=(total_rows, points * 2))
-
     if not equations:
         return flat, np.zeros(0), csr_matrix((0, flat.size))
     if not free.any() or tries == 0:
-        # Alles hängt am Zeiger — oder gefragt ist nur, wie es an dieser
-        # Stelle steht: Es gibt nichts zu rechnen, nur zu prüfen, ob die
-        # Bedingungen hier gelten.
-        return flat, fun(flat), sparse_jac(flat)
-
-    # Die gehaltenen Koordinaten werden vor dem Lösen aus dem System genommen:
-    # ``fun`` und ``sparse_jac`` sehen weiter alle Punkte, der Löser nur die
-    # freien Spalten. So bleibt jede Gleichung, wie sie ist.
+        return flat, _residuals_at(equations, flat), _jacobian(equations, flat)
     full = flat.copy()
 
     def widened(z: np.ndarray) -> np.ndarray:
@@ -1577,54 +1796,31 @@ def _solve(
         return full
 
     def free_fun(z: np.ndarray) -> np.ndarray:
-        return fun(widened(z))
+        return _residuals_at(equations, widened(z))
 
     def free_jac(z: np.ndarray) -> csr_matrix:
-        return sparse_jac(widened(z))[:, free]
+        return _jacobian(equations, widened(z))[:, free]
 
     scale: float | np.ndarray = 1.0
     if pinned and stiff:
         scale = np.ones(flat.size)
         for point in pinned:
             scale[2 * point : 2 * point + 2] = DRAG_STIFFNESS
-
-    # ``lsmr`` statt der dichten SVD je Iteration: bei 200 Bedingungen der
-    # Unterschied zwischen 700 ms und dem Budget aus §31 — nachgemessen.
-    # **Kleine Skizzen rechnen dicht** (:data:`EXACT_UP_TO`): Mit ``lsmr``
-    # löst TRF den Schritt in einem Zweierraum aus Gradient und
-    # Gauß-Newton-Schritt. Bei einer einzelnen Bedingung zeigen beide in
-    # dieselbe Richtung, der Raum entartet, und der Schritt lief bis an den
-    # Rand des Vertrauensbereichs — mit einer Richtung aus dem Rundungsrauschen.
-    # Ein Winkel warf so Linien um, je Plattform verschieden. Ein Zug bleibt
-    # bei ``lsmr``: Er beginnt an einer gelösten Skizze, und seine Stufen
-    # (``tries``, ``stiff``) sind auf diesen Löser abgestimmt.
-    dense = not pinned and int(free.sum()) <= EXACT_UP_TO
     result = least_squares(
         free_fun,
         flat[free],
-        jac=(lambda z: free_jac(z).toarray()) if dense else free_jac,
+        jac=free_jac,
         method="trf",
-        tr_solver="exact" if dense else "lsmr",
+        tr_solver="lsmr",
         x_scale=scale,
-        # Ohne Grenze läuft LSMR hier bis zur kleineren Matrixkante. Bei der
-        # langen, dünn besetzten Kette des §31-Korpus sind das 300 innere
-        # Schritte je Versuch und 105 ms insgesamt. Mit 150 Schritten braucht
-        # der äußere Löser acht statt achtzehn Versuche, hält denselben Rest
-        # weit unter ``_TOL`` und löst die 200 Bedingungen in 42 ms. Die
-        # Grenze ist keine Genauigkeitsschranke: TRF setzt mit dem verbleibenden
-        # Rest weiter an, statt eine unfertige Antwort zurückzugeben.
-        tr_options={} if dense else {"maxiter": 150},
-        xtol=1e-14 if dense else 1e-10,
-        ftol=1e-14 if dense else 1e-10,
-        gtol=1e-14 if dense else 1e-10,
+        tr_options={"maxiter": 150},
+        xtol=1e-10,
+        ftol=1e-10,
+        gtol=1e-10,
         max_nfev=tries,
     )
     solution = widened(np.asarray(result.x, dtype=float)).copy()
-    return (
-        solution,
-        np.asarray(result.fun, dtype=float),
-        sparse_jac(solution),
-    )
+    return solution, np.asarray(result.fun, dtype=float), _jacobian(equations, solution)
 
 
 def _row_blocks(equations: Sequence[_Equation]) -> list[range]:
@@ -1864,7 +2060,9 @@ def solve_sketch(
     dense_columns = anchors.size - 2 * len(set(fixed))
     if max(dense_rows, 0) * max(dense_columns, 0) * 8 > MAX_JACOBIAN_BYTES:
         raise _too_large(sketch, anchors)
-    solution, residuals, jacobian = _solve(
+    # Eine Skizze aus einer älteren Projektdatei rechnet wie gespeichert (RM-541).
+    solve = _solve if sketch.solver >= SKETCH_SOLVER else _solve_in_coordinates
+    solution, residuals, jacobian = solve(
         equations, begin, pinned=pinned, tries=DRAG_REACH_TRIES if pinned else None
     )
     max_residual = float(np.max(np.abs(residuals))) if residuals.size else 0.0
@@ -1883,7 +2081,7 @@ def solve_sketch(
         reached = solution.reshape(-1, 2).copy()
         for point in pinned:
             reached[point] = begin[point]
-        solution, residuals, jacobian = _solve(
+        solution, residuals, jacobian = solve(
             equations, reached, pinned=pinned, stiff=True, tries=DRAG_SLIDE_TRIES
         )
         max_residual = float(np.max(np.abs(residuals))) if residuals.size else 0.0
@@ -1900,7 +2098,7 @@ def solve_sketch(
             ).reshape(-1, 2)
             held_residuals = _residuals_at(equations, held)
             if not held_residuals.size or float(np.max(np.abs(held_residuals))) <= _TOL:
-                solution, residuals, jacobian = _solve(equations, held, pinned=(), tries=0)
+                solution, residuals, jacobian = solve(equations, held, pinned=(), tries=0)
                 max_residual = float(np.max(np.abs(residuals))) if residuals.size else 0.0
     rank = _matrix_rank(jacobian) if residuals.size else 0
     counted_rank = _rank_with_circle_gauges(sketch, solution, jacobian, rank, variables)

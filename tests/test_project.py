@@ -49,6 +49,7 @@ from app.core.scene.serialise import (
     transaction_to_data,
 )
 from app.core.types import (
+    SKETCH_SOLVER,
     Action,
     ChatEntry,
     Document,
@@ -4924,4 +4925,47 @@ def test_v48_sculpting_and_posing_compute_as_saved(profile) -> None:
     history.change_params(sculpt.id, {**sculpt.params, "strokes": strokes_to_text(renewed)})
     assert abs(float(bodies()["kugel"].volume) - 32742.854319) > 1.0, (
         "Gegenprobe: in Fassung 2 rechnen dieselben Züge anders"
+    )
+
+
+def test_v49_drawn_sketches_compute_as_saved(profile) -> None:
+    """49 → 50: Eine gezeichnete Skizze aus einer älteren Datei rechnet wie gespeichert (RM-541).
+
+    ``sketch_solver_v49.p3d`` hat der Stand vor der Umstellung geschrieben
+    (``78d39dec9``, Format 49): eine Platte 5 hoch aus vier schief gezeichneten
+    Linien mit Deckung, die untere waagerecht, die rechte 80° zur unteren —
+    unterbestimmt, und gespeichert sind die gezeichneten Punkte, wie der Editor
+    sie nach einer neuen Bedingung schreibt. Gerechnet mit dem Löser von 0.5.3
+    (Code aus dem Tag) beim Schreiben: 2 656,656241 mm³, die linke untere Ecke
+    der Hülle bei (0,030846 | −0,011202). Nach der Migration trägt der
+    Skizzentext ``"solver": 1`` und rechnet so; derselbe Text ohne die Angabe
+    rechnet mit dem heutigen Löser anders (gemessen 2 626,81 mm³).
+    """
+    from app.core.scene.evaluate import evaluate
+    from app.core.sketch.serialize import sketch_from_text, sketch_to_text
+
+    path = Path(__file__).parent / "data" / "projects" / "sketch_solver_v49.p3d"
+    assert project_data(path)["format_version"] == 49
+    assert '"solver"' not in project_data(path)["ops"][0]["params"]["sketch"]
+
+    project = load(path)
+    (plate,) = project.document.ops
+    drawing = sketch_from_text(plate.params["sketch"])
+    assert drawing.solver == 1
+
+    def volume_and_corner() -> tuple[float, float, float]:
+        result = evaluate(project.document, profile, sources=ProjectSources(project))
+        assert result.complete, [str(f.message) for f in result.scene.report.findings]
+        mesh = result.scene.objects["obj_1"].mesh
+        low = mesh.raw.bounds[0]
+        return float(mesh.volume), float(low[0]), float(low[1])
+
+    volume, left, bottom = volume_and_corner()
+    assert volume == pytest.approx(2656.656241, abs=1e-3)
+    assert (left, bottom) == pytest.approx((0.030846, -0.011202), abs=1e-4)
+
+    renewed = sketch_to_text(dataclasses.replace(drawing, solver=SKETCH_SOLVER))
+    History(project.document).change_params(plate.id, {**plate.params, "sketch": renewed})
+    assert abs(volume_and_corner()[0] - 2656.656241) > 1.0, (
+        "Gegenprobe: mit dem heutigen Löser landet dieselbe Zeichnung anders"
     )

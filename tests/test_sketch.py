@@ -450,6 +450,110 @@ def test_an_angle_turns_two_free_lines_to_the_nearest_solution() -> None:
             )
 
 
+def _angle_pair(
+    start: int, target: int, at: tuple[float, float], size: float, company: str
+) -> Sketch:
+    """Zwei freie Linien (10 und 8,5 lang, mal ``size``) mit einem Winkelmaß, an ``at``.
+
+    ``company``: allein, neben vierzig freien Linien (dann rechnet die Skizze
+    über ``lsmr``) oder neben einer bemaßten, schon gelösten Kette aus zwanzig
+    Linien — die Lage, in der nur das Linienpaar unter Spannung steht.
+    """
+    dx, dy = at
+    turn = math.radians(start)
+    elements = [
+        SketchElement("line", ((dx, dy), (10.0 * size + dx, dy))),
+        SketchElement(
+            "line",
+            ((dx, dy), (8.5 * size * math.cos(turn) + dx, 8.5 * size * math.sin(turn) + dy)),
+        ),
+    ]
+    constraints = [SketchConstraint("angle", (0, 1, 2, 3), str(target))]
+    if company == "free":
+        elements += [
+            SketchElement(
+                "line",
+                (
+                    ((20.0 + i) * size + dx, 5.0 * size + dy),
+                    ((21.0 + i) * size + dx, 7.0 * size + dy),
+                ),
+            )
+            for i in range(40)
+        ]
+    if company == "chain":
+        elements += [
+            SketchElement(
+                "line",
+                (
+                    (10.0 * i * size + dx, 50.0 * size + dy),
+                    (10.0 * (i + 1) * size + dx, 50.0 * size + dy),
+                ),
+            )
+            for i in range(20)
+        ]
+        constraints += [
+            SketchConstraint("distance", (4 + 2 * i, 5 + 2 * i), repr(10.0 * size))
+            for i in range(20)
+        ]
+        constraints += [
+            SketchConstraint("coincident", (3 + 2 * i, 4 + 2 * i)) for i in range(1, 20)
+        ]
+        constraints.append(SketchConstraint("fixed", (4,)))
+    return Sketch(plane="plane:xy", elements=tuple(elements), constraints=tuple(constraints))
+
+
+@pytest.mark.parametrize(
+    ("company", "size"), [("alone", 1.0), ("alone", 0.01), ("free", 1.0), ("chain", 1.0)]
+)
+def test_a_sketch_solves_alike_wherever_it_lies(company: str, size: float) -> None:
+    """Dieselbe Skizze tausend oder hunderttausend Millimeter daneben: dieselbe Lösung (RM-541).
+
+    Der Löser rechnete in Koordinaten, und TRF beginnt mit dem
+    Vertrauensradius ‖x₀‖ — der Entfernung der Zeichnung vom Nullpunkt. Der
+    erste Schritt reichte so über beide Lösungen eines Winkels, und welche er
+    traf, entschied die Rundung: 45° gesetzt, unter macOS Intel 135° bekommen
+    (Lauf 37495714708). Neben einer bemaßten Kette rechnete alles über
+    ``lsmr``, dessen Zweierraum bei einer einzelnen gespannten Bedingung aus
+    Rauschen besteht. Am Stand davor (``78d39dec9``) kippten in diesem Raster
+    5 von 60 Paaren schon am Nullpunkt und 9 von 180 versetzt, 16 Läufe
+    endeten in einem Widerspruch, und versetzt landeten Punkte bis 150 m
+    daneben; der Löser von 0.5.3 kippte auch zwei Paare ohne Begleiter.
+
+    Die Versätze ersetzen den Intel-Rechner: Sie ändern die Rundung jeder
+    Rechnung, wie eine andere Maschine es tut, und die Lösung darf sich davon
+    nicht rühren. Soll ist die nächste Lösung — der Winkel auf der Seite, auf
+    der die Zeichnung schon liegt, kein Punkt weiter als beide Linien lang.
+    """
+    from app.core.sketch.solver import EXACT_UP_TO
+    from app.core.units import EPS_GEOM
+
+    if company != "alone":
+        assert (
+            len(edit.flat_points(_angle_pair(5, 30, (0.0, 0.0), size, company))) * 2 > EXACT_UP_TO
+        )
+    for start in (5, 29, 53, 77, 89):
+        for target in (30, 45, 100):
+            nearest = target if abs(start - target) <= abs(start - (target - 180)) else target - 180
+            drawn = _angle_pair(start, target, (0.0, 0.0), size, company)
+            home = solve_sketch(drawn)
+            assert math.isclose(turn_between(*home.elements[:2]), nearest, abs_tol=1e-4), (
+                start,
+                target,
+                turn_between(*home.elements[:2]),
+            )
+            moved = max(
+                math.dist(before, after)
+                for old, new in zip(drawn.elements, home.elements, strict=True)
+                for before, after in zip(old.points, new.points, strict=True)
+            )
+            assert moved <= (10.0 + 8.5) * size, (start, target, moved)
+            for at in ((1000.0, 0.0), (-1000.0, 1000.0), (1e5, -1e5)):
+                away = solve_sketch(_angle_pair(start, target, at, size, company))
+                back = [(x - at[0], y - at[1]) for x, y in _flat(away)]
+                gap = max(math.dist(a, b) for a, b in zip(back, _flat(home), strict=True))
+                assert gap <= EPS_GEOM, (start, target, at, gap)
+
+
 def test_an_angle_outside_the_half_turn_is_refused() -> None:
     """Null und 180 Grad sind ``parallel``, und darüber wiederholt sich alles.
 
@@ -2144,7 +2248,7 @@ def _counting_evaluations(monkeypatch: pytest.MonkeyPatch) -> list[int]:
     return evaluations
 
 
-def test_a_drag_beyond_reach_stays_bounded_and_leaves_the_sketch_standing(
+def test_a_drag_beyond_reach_stays_bounded_and_slides_the_chain_along(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Eine gestreckte Kette über ihre Länge hinaus zu ziehen, hielt das Fenster an.
@@ -2152,25 +2256,31 @@ def test_a_drag_beyond_reach_stays_bounded_and_leaves_the_sketch_standing(
     Gemessen am 22.09.2026: Die erste Zugstufe suchte ohne Grenze nach einem
     Ort, den es nicht gibt — an zwanzig Linien 646 Auswertungen, an hundert 103
     Sekunden je Mausereignis. Gezählt wird hier nicht die Zeit, sondern die
-    Arbeit: Sie ist auf jeder Maschine dieselbe. Und die Zeichnung bleibt
-    stehen, statt sich in einen Widerspruch zu verwandeln — die Zeile des
-    Editors sagt dann, was hält.
+    Arbeit: Sie ist auf jeder Maschine dieselbe. Und die Zeichnung wird kein
+    Widerspruch.
+
+    Bis RM-541 blieb die Kette hier stehen, weil die zweite Stufe in ihren
+    fünfzig Auswertungen keine Lage fand — am Nullpunkt; dieselbe Kette
+    tausend Millimeter daneben rutschte in siebzehn um 3,8 mm zum Zeiger. Seit
+    der Löser in Verschiebungen rechnet, rutscht sie an jedem Ort, wie die
+    kurze Kette darunter.
     """
     from app.core.sketch import solver
 
     sketch = _chain(20)
     start = _flat(solve_sketch(sketch))
     end = len(start) - 1
+    target = (start[end][0] + 3.0, start[end][1] + 4.0)
     evaluations = _counting_evaluations(monkeypatch)
 
-    solved = solve_sketch(
-        sketch, dragged={end: (start[end][0] + 3.0, start[end][1] + 4.0)}, start=start
-    )
+    solved = solve_sketch(sketch, dragged={end: target}, start=start)
+    landed = _flat(solved)[end]
 
     assert sum(evaluations) <= solver.DRAG_REACH_TRIES + solver.DRAG_SLIDE_TRIES, evaluations
-    for before, after in zip(start, _flat(solved), strict=True):
-        assert after == pytest.approx(before, abs=1e-6), "die Kette bleibt, wo sie war"
     assert solved.max_residual <= 1e-6
+    assert _flat(solved)[0] == pytest.approx(start[0], abs=1e-6), "der feste Anfang bleibt"
+    assert math.dist(start[0], landed) <= 200.0 + 1e-6, "weiter als die Kette reicht nie"
+    assert math.dist(landed, target) < math.dist(start[end], target), "näher am Zeiger"
 
 
 def test_a_reachable_drag_is_untouched_by_the_bound(monkeypatch: pytest.MonkeyPatch) -> None:

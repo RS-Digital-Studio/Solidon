@@ -7175,6 +7175,44 @@ def test_the_angle_button_asks_for_its_degrees(
         panel.deleteLater()
 
 
+def test_an_older_sketch_solves_as_saved_until_it_is_changed(qt_app: QApplication) -> None:
+    """Eine Skizze aus einer älteren Datei (``"solver": 1``) rechnet im Editor wie
+    gespeichert; die erste Änderung stellt sie auf den heutigen Löser (RM-541).
+
+    Öffnen allein ändert nichts — der Text bleibt derselbe, und der Schritt
+    gilt nicht als geändert. Ein Zug ist eine Änderung wie jede andere.
+    """
+    import json
+
+    from app.core.sketch.serialize import sketch_to_text
+    from app.core.types import SKETCH_SOLVER, Sketch, SketchConstraint, SketchElement
+
+    older = Sketch(
+        plane="plane:xy",
+        elements=(
+            SketchElement("line", ((0.0, 0.0), (10.0, 0.0))),
+            SketchElement("line", ((0.0, 0.0), (8.0, 3.0))),
+        ),
+        constraints=(SketchConstraint("angle", (0, 1, 2, 3), "45"),),
+        solver=1,
+    )
+    text = sketch_to_text(older)
+    for change in ("constraint", "drag"):
+        panel = SketchPanel(text, {})
+        try:
+            canvas = panel.canvas
+            assert canvas.sketch.solver == 1
+            assert panel.sketch_text() == text, "Öffnen allein ändert den Schritt nicht"
+            if change == "constraint":
+                canvas.add_constraint("horizontal", (0, 1))
+            else:
+                canvas.move_point(3, 7.0, 4.0)
+            assert canvas.sketch.solver == SKETCH_SOLVER, change
+            assert "solver" not in json.loads(panel.sketch_text()), change
+        finally:
+            panel.deleteLater()
+
+
 def test_an_angle_shows_its_degrees_on_a_card(qt_app: QApplication) -> None:
     """Das Maß steht mit Gradzeichen im Bild — und der Doppelklick trifft es."""
     from app.core.units import DEGREE_UNIT

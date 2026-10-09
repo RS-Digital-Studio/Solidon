@@ -1131,7 +1131,15 @@ def test_two_splines_join_with_matching_curvature() -> None:
 
 
 def test_a_line_and_an_arc_cannot_share_their_curvature_and_it_says_which() -> None:
-    """Widersprüchlich: Eine Gerade hat keine Krümmung, ein Bogen immer eine."""
+    """Widersprüchlich: Eine Gerade hat keine Krümmung, ein Bogen immer eine.
+
+    Gelöst wäre es nur im Unendlichen, und dorthin lief der Löser: nach
+    sechshundert Auswertungen ein Bogen mit 240 km Radius unter dem
+    Restfehler. Ob das als Widerspruch galt, entschied die letzte Stelle des
+    Rangs, und genannt wurde die Deckung statt des Übergangs. Seit RM-541
+    bleibt ein Teil, der weiter als ``FARTHEST_MOVE`` liefe, stehen, und die
+    Meldung nennt die beiden Bedingungen, die einander widersprechen.
+    """
     with pytest.raises(SketchConflictError) as caught:
         solve_sketch(
             _line_arc_joint(
@@ -1142,7 +1150,7 @@ def test_a_line_and_an_arc_cannot_share_their_curvature_and_it_says_which() -> N
             )
         )
 
-    assert 2 in (caught.value.first, caught.value.second)
+    assert {caught.value.first, caught.value.second} == {1, 2}
 
 
 def test_curvature_belongs_to_the_end_of_a_spline() -> None:

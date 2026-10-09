@@ -172,6 +172,50 @@ bleibt dadurch abbrechbar, bevor ein Ergebnis in Szene oder Cache erscheint.
   schon festliegt". Gilt sie dort nicht, bleibt sie, und der Widerspruch wird
   gemeldet.
 
+- **Je zusammenhängendem Teil, in Verschiebungen** (RM-541, 09.10.2026).
+  `least_squares` mit `method="trf"` beginnt mit dem Vertrauensradius ‖x₀‖
+  und misst `xtol` an ‖x‖. Mit Koordinaten als Unbekannten war das die
+  Entfernung der Zeichnung vom Nullpunkt: Ein Winkel 45° kam unter macOS Intel
+  als 135° an (Lauf 37495714708), am Windows-Stand verschob dieselbe Skizze
+  tausend Millimeter daneben ihre Punkte um bis zu 292 mm, und mit `lsmr`
+  endeten Läufe in einem Widerspruch, den es nicht gab. Der erste Ansatz —
+  Verschiebungen ab null, scipy beginnt dann mit einem Millimeter — kostete
+  die §31-Kette 16 statt 8 Auswertungen, ließ die zweite Zugstufe einer
+  Kette nicht mehr rutschen und warf Linien im Maßstab 1:100 um mehr als das
+  Fünffache ihrer Länge. Ein Radius aus der Streuung aller Punkte
+  (‖x₀ − Schwerpunkt‖) hielt Budget und Zug, machte aber jeden anderen Teil
+  der Zeichnung zum neuen Nullpunkt: Ein Winkelpaar neben einer bemaßten,
+  gelösten Kette aus zwanzig Linien kippte in 11 von 60 Fällen, weil `lsmr`
+  bei einer einzelnen gespannten Bedingung einen Zweierraum aus Rauschen
+  bildet. Deshalb: Punkte, die eine Gleichung verbindet, sind ein Teil
+  (`_parts`), jeder rechnet für sich (`_solve_part`), `lsmr` und der Zug mit
+  der Streuung des Teils als `x_scale`, die dichte Rechnung höchstens mit
+  `DENSE_FIRST_STEP` — an zwei Splines mit gleicher Krümmung setzte die
+  Streuung den ersten Schritt so groß wie die Zeichnung, und sie trafen sich
+  mit entgegengesetzter Tangente. Ein Teil ohne Spannung (alle Reste exakt
+  null) bleibt ohne Lauf stehen; das hält Lochbilder schnell (20 × 20 Löcher
+  wie vorher um 30 ms).
+
+- **Ein Lauf ins Unendliche ist keine Lösung** (`FARTHEST_MOVE`). Eine Gerade
+  und ein Bogen mit gleicher Krümmung erfüllen das nur mit unendlichem
+  Radius; der Löser kroch dorthin, nach sechshundert Auswertungen lag der
+  Rest bei 240 km Radius unter `_TOL`, und ob das als Widerspruch galt,
+  entschied die letzte Stelle des Rangs. Was weiter als hundert Meter liefe,
+  bleibt stehen, und die Meldung nennt die zwei Bedingungen am Start.
+
+- **Gespeicherte Skizzen rechnen wie gespeichert** (`Sketch.solver`,
+  Format 50). Bestimmte und schon gelöste Skizzen landen in beiden Fassungen
+  am selben Ort (über 742 Eingaben aus den Skizzentests höchstens 3·10⁻¹³ mm),
+  unterbestimmte nicht: Gespeichert sind die gezeichneten Punkte, und eine
+  schief gezeichnete Platte wäre nach dem Update 30 mm³ größer oder kleiner.
+  Die Migration 49 → 50 schreibt `"solver": 1` in jeden Skizzentext, der
+  rechnet über `_solve_in_coordinates` wie 0.5.0 bis 0.5.3 — nicht wie der
+  unveröffentlichte dichte Stand dazwischen, denn kein Kunde hat mit ihm
+  gerechnet. Der Editor zeigt eine ältere Skizze, wie sie rechnet, und
+  wechselt bei der ersten Änderung oder dem ersten Zug auf die heutige
+  Fassung; erst wer übernimmt, ändert den Schritt. Die Fassung steht im
+  Cache-Schlüssel jeder Skizze (`evaluate._with_nested_context`).
+
 ## Formen, Ecken und Kurven
 
 *Früher unter „Grenzen“.*

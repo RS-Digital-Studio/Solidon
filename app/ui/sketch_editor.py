@@ -84,6 +84,7 @@ from app.core.sketch.profile import (
 from app.core.sketch.serialize import sketch_from_text, sketch_to_text
 from app.core.sketch.solver import CURVE_SLOTS, solve_sketch
 from app.core.types import (
+    SKETCH_SOLVER,
     PlaneFrame,
     Sketch,
     SketchConstraint,
@@ -2030,7 +2031,9 @@ class SketchCanvas(QWidget):
 
     def _apply(self, sketch: Sketch) -> None:
         self._remember()
-        self.sketch = sketch
+        # Eine Skizze aus einer älteren Datei rechnet wie gespeichert, bis
+        # jemand sie ändert; ab da mit dem heutigen Löser (RM-541).
+        self.sketch = replace(sketch, solver=SKETCH_SOLVER)
         self._resolve()
 
     def _resolve(self) -> None:
@@ -2685,6 +2688,9 @@ class SketchCanvas(QWidget):
         zurückhält, sagt das ebenfalls — stumm bliebe nur die Frage, warum
         der Punkt nicht folgt (Regel 17).
         """
+        # Ein Zug ist eine Änderung: ab ihm rechnet auch eine ältere Skizze
+        # mit dem heutigen Löser, wie nach ``_apply`` (RM-541).
+        self.sketch = replace(self.sketch, solver=SKETCH_SOLVER)
         try:
             solved = solve_sketch(self.sketch, self._params, dragged=dragged, start=self.points())
         except SketchConflictError as error:

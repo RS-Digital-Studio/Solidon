@@ -80,6 +80,17 @@ reichen `ctx.cancelled` an `brep.features.features_of` weiter.
   `DRAG_REACH_TRIES`/`DRAG_SLIDE_TRIES`; findet keine Stufe eine Lage, bleibt
   die Zeichnung stehen. Geprüft wird in Schritten wie die Maus
   (`tests/test_sketch_edit.py`).
+- **Gelöst wird je zusammenhängendem Teil, in Verschiebungen** (RM-541,
+  `_parts`, `_solve_part`): jeder Teil ab null, `x_scale` seine Streuung, die
+  dichte Rechnung höchstens `DENSE_FIRST_STEP`. So hängt der erste Schritt
+  weder am Nullpunkt noch an anderen Teilen; ein Teil ohne Spannung bleibt,
+  einer, der weiter als `FARTHEST_MOVE` liefe, auch.
+- **Die Fassung des Lösers steht an der Skizze** (`Sketch.solver`,
+  `types.SKETCH_SOLVER`): `1` rechnet über `_solve_in_coordinates` wie bis
+  0.5 (Migration 49 → 50), der Editor ab der ersten Änderung mit der
+  heutigen. Wer Lösungen unterbestimmter Skizzen wandern lässt, hebt
+  `SKETCH_SOLVER` samt Migration; die Fassung steht im Cache-Schlüssel jeder
+  Skizze.
 - **Feste Punkte kosten die Zerlegung nichts** (`_matrix_rank` schält
   Einerzeilen dünn ab, `_solve` gibt die `csr_matrix`) und zählen nicht ins
   Budget der dichten Matrix (`MAX_JACOBIAN_BYTES`), das sonst alle dichten

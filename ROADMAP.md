@@ -96,7 +96,6 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-548 — Lippentasche: die Karte sperrt Verdoppeln und Drehen, die Operation rechnet](#rm-548) | Geometrie, Erkennung und Druckvorbereitung | Gefunden mit RM-535 (07.10.): dieselbe Uneinigkeit wie vorher beim Versetzen; Karte und Operation dieselbe Frage stellen lassen |
 | [RM-539 — Ein Baustein mit Trägeraufbau, auf der Innenseite gesetzt, baut nach außen ohne Befund](#rm-539) | Geometrie, Erkennung und Druckvorbereitung | Gefunden am Gehäuse-Beispiel (06.10.); offen der Befund beim Einsetzen und seine Handlung |
 | [RM-540 — Ein angeschnittenes erzeugtes Merkmal behält sein volles Maß, und die Schnittwege ordnen es verschieden zu](#rm-540) | Geometrie, Erkennung und Druckvorbereitung | Zwilling seit der Ausdehnungsregel (06.10.); ein Kriterium für alle Schnittwege festlegen |
-| [RM-541 — Der Skizzenlöser landet auf dem Intel-Mac im anderen Zweig einer Winkelbedingung](#rm-541) | Geometrie, Erkennung und Druckvorbereitung | Gefunden mit RM-531 (06.10.): 135° statt 45° unter macOS Intel; offen die Rechnung in Verschiebungen und ihre Wirkung auf unterbestimmte Skizzen |
 | [RM-542 — Die fünf offenen Entscheidungen der Erstkonfiguration](#rm-542) | Geometrie, Erkennung und Druckvorbereitung | Gefunden beim Umräumen der Konzepte (RM-099, 06.10.): nur im Konzept geführt; offen der Abgleich mit RM-281 und Roberts Entscheidung |
 | [RM-552 — *Stift für Bohrung* liest die Kette an einer Bausteinbohrung mit Senkung nicht](#rm-552) | Geometrie, Erkennung und Druckvorbereitung | Gefunden in der Nachprüfung von P2 (07.10.): Schraubenloch und Einpressbuchse sagen über Menü und Palette `chain_unreadable`, weil die Bausteinbohrung durch ihre Senkung läuft; die Karte bietet den Stift dort nicht mehr an. Offen: `bore_pin._following` liest eine überlappende Kette |
 | [RM-568 — Merkmalerkennung und die übrigen langen Wege schneller machen](#rm-568) | Geometrie, Erkennung und Druckvorbereitung | Robert, 08.10.: Profil je Stufe an den Korpusmodellen, die teuersten Stellen zuerst; Budget §31 |
@@ -3203,22 +3202,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   Gewinde geteilt und abgeschnitten, an Netz und exaktem Kern: dasselbe Gewinde mit derselben
   Länge an derselben Hälfte; ein Prüfstück durch eine Bohrung nennt ihre Tiefe im Stück.
 
-<a id="rm-541"></a>
-
-- [ ] **RM-541 — Der Skizzenlöser landet auf dem Intel-Mac im anderen Zweig einer
-  Winkelbedingung.** `test_sketch_editor.py::test_the_angle_button_asks_for_its_degrees` setzt
-  45° und bekommt unter `macos-26-intel` 135°, unter Windows, Linux und macOS ARM 45° (Sonde
-  zu [RM-531](#rm-531), Lauf 37495714708). `least_squares` mit `method="trf"`
-  (`app/core/sketch/solver.py`) beginnt mit dem Vertrauensradius ‖x₀‖, und weil die
-  Unbekannten absolute Koordinaten sind, ist das in diesem Fall rund 13 mm: Der erste Schritt
-  reicht über beide Zweige, und welchen er trifft, entscheidet die Rechnung der Plattform.
-  Belegt ist der Radius, nicht die Rundung, die unter Intel kippt; an einem Intel-Rechner ist
-  nichts nachgerechnet. **Fix:** in Verschiebungen gegen den Ausgangsstand rechnen, damit der
-  erste Schritt am Zug hängt und nicht an der Lage des Ursprungs. Das ändert die Lösung
-  unterbestimmter Skizzen; deshalb vorher und nachher gegen die Skizzentests und die Budgets
-  aus §31 messen. **Abnahme:** der Test auf allen vier Plattformen grün, unterbestimmte Skizzen
-  bleiben am nächsten Stand zu ihrem Ausgang, die Laufzeit im Budget.
-
 <a id="rm-542"></a>
 
 - [ ] **RM-542 — Die fünf offenen Entscheidungen der Erstkonfiguration.** Das
@@ -4791,8 +4774,8 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   Schlüsseldialogs ist 105 statt 120 px hoch und rollt nicht) und
   `test_black_lit_surfaces_still_show_their_shape` (I, Kontrast genau 10 bei verlangten mehr
   als 10; Renderer, RM-344). Jeder Fall wird zuerst am Paket seiner Plattform nachgestellt:
-  ob der Test irrt oder der Kunde es sieht. Die Winkelbedingung auf dem Intel-Mac führt
-  [RM-541](#rm-541). Danach die Umstellung in `build.yml`, die Wächter in
+  ob der Test irrt oder der Kunde es sieht. Die Winkelbedingung auf dem Intel-Mac behebt
+  [RM-541](ROADMAP-ARCHIV.md#rm-541). Danach die Umstellung in `build.yml`, die Wächter in
   `test_packaging.py`, der Slicer-Job und die Unterlagen.
 
   **Stand 07.10.2026, Auswahl vor dem Merge (Entscheidung Robert, CI-09):**

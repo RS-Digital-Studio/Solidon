@@ -659,6 +659,7 @@ class Sketch:
     plane: str
     elements: tuple[SketchElement, ...]
     constraints: tuple[SketchConstraint, ...] = ()
+    solver: int = 2
 
 
 OpFn = Callable[[OpContext], OpResult]
@@ -725,7 +726,9 @@ Die Typaliase und ihre Bedeutung gehören zu diesem Vertrag:
   „nichts überlebt" (§21.2).
 - `solve_sketch` beginnt ohne `dragged` und `start` bei den gespeicherten
   Punkten. `dragged` nennt Punkte, die der Zeiger gerade zieht, `start` den
-  zuletzt gelösten Stand, von dem aus gerechnet wird.
+  zuletzt gelösten Stand, von dem aus gerechnet wird. `Sketch.solver` nennt die
+  Fassung des Lösers: `1` rechnet wie bis Solidon 0.5, damit eine ältere
+  Projektdatei wie gespeichert rechnet; eine neue Skizze trägt die heutige.
 - `SceneObject.material` und `plate` ordnen Material und Druckplatte zu;
   `reserved_feature_ids` verhindert die Wiedervergabe früherer Merkmalsnamen.
   `frame` ist der dauerhafte Ausgangsrahmen in Weltkoordinaten (vollständige
