@@ -3073,6 +3073,40 @@ def test_bounds_that_cut_nothing_do_not_change_what_reaches_in() -> None:
     assert reached == pytest.approx([1.0] * (len(far) + 1))
 
 
+def test_a_clear_bore_clips_none_of_its_own_triangles(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Die Teilefrage an einer freien Bohrung beschneidet keines ihrer eigenen Dreiecke.
+
+    ``_reaching_in`` maß die eigene Wand an jedem eigenen Dreieck und nahm dieselben
+    Dreiecke danach noch einmal als Kandidaten — an einer Bohrung mit 200 000
+    eigenen Dreiecken 2,1 s und 268 MB je Frage statt 0,25 s und 77 MB (Review
+    RM-253). Die Wand braucht es nur, wenn ein fremdes Stück dem Radius näher kommt
+    als ihre untere Schranke; die eigenen Dreiecke stehen nie in der eigenen
+    Bohrung. Hier beschnitt die Frage 896 Dreiecke, alle eigene.
+    """
+    from app.core.geom import prepare_ops
+
+    plate = trimesh.creation.box(extents=(40.0, 20.0, 10.0))
+    plate.apply_translation((0.0, 0.0, 5.0))
+    bore = trimesh.creation.cylinder(radius=3.0, height=14.0, sections=256)
+    bore.apply_translation((0.0, 0.0, 5.0))
+    mesh = MeshData.of(boolean("difference", [MeshData.of(plate), MeshData.of(bore)]).mesh.raw)
+    holes = [feature for feature in detect(mesh).values() if feature.kind == "hole"]
+    assert len(holes) == 1 and len(holes[0].face_indices) >= 512, "Voraussetzung: feine Bohrung"
+    clipped: list[int] = []
+    original = prepare_ops._clipped_by
+
+    def counted(
+        triangles: np.ndarray, bounds: list[tuple[np.ndarray, float]]
+    ) -> tuple[np.ndarray, np.ndarray]:
+        clipped.append(len(triangles))
+        return original(triangles, bounds)
+
+    monkeypatch.setattr(prepare_ops, "_clipped_by", counted)
+
+    assert prepare_ops._hole_is_clear_read(mesh, holes[0], 3.0, 10.0)
+    assert sum(clipped) == 0
+
+
 def _plate_with_a_sheet(kernel: str) -> SceneObject:
     """Platte 60 x 50 x 10 mit Bohrung Ø 6 längs z und ein getrenntes Blech von
     0,2 mm, das auf halber Höhe in ihr steckt: ein Prisma über dem Dreieck

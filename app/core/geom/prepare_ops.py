@@ -4804,9 +4804,11 @@ def _reaching_in(
     Dreiecken (``own``) gemessen, und davon der Saum aus
     :data:`_CLEARANCE_MARGIN`: Ein grobes Vieleck liegt mit seinen Seitenmitten
     innerhalb des Radius, und eine Querbohrung endet auf der Wand, nicht davor.
-    Ohne eigene Dreiecke gilt der Radius. Ohne Achse gibt es keinen Zylinder und
-    nichts, was hineinreicht — die Absage dafür sagt die Operation
-    (``FEATURE_WITHOUT_AXIS``), nicht diese Frage.
+    Ohne eigene Dreiecke gilt der Radius (:func:`_own_wall_limit`). Die eigenen
+    Dreiecke selbst stehen nie darin — ihr Stück kommt der Achse höchstens so
+    nahe wie die Wand, die sie bestimmen —, und sie werden nicht gefragt. Ohne
+    Achse gibt es keinen Zylinder und nichts, was hineinreicht — die Absage dafür
+    sagt die Operation (``FEATURE_WITHOUT_AXIS``), nicht diese Frage.
     """
     raw = mesh.raw
     found = np.full(len(raw.faces), np.inf, dtype=np.float64)
@@ -4814,18 +4816,12 @@ def _reaching_in(
         return found
     points = np.asarray(raw.vertices, dtype=np.float64)
     faces = np.asarray(raw.faces, dtype=np.int64)
-    wall = radius
-    if len(own):
-        closest = _closest_to_the_axis(*_clipped_by(points[faces[own]] - centre, bounds), axis)
-        reached = closest[np.isfinite(closest)]
-        if len(reached):
-            wall = min(wall, float(reached.min()))
-    limit = wall * (1.0 - _CLEARANCE_MARGIN)
+    widest = radius * (1.0 - _CLEARANCE_MARGIN)
     # **Die Vorauswahl als Bitmuster je Ecke**: welche Seite jeder Grenze sie
-    # erreicht — quer zur Achse über ``-limit`` und unter ``limit`` in zwei
+    # erreicht — quer zur Achse über ``-widest`` und unter ``widest`` in zwei
     # Richtungen, diesseits jeder Mündung. Ein Dreieck bleibt, wenn seine drei
     # Ecken zusammen jede Bedingung erfüllen; sonst liegt es ganz jenseits einer
-    # Grenze oder sein Quader quer zur Achse neben dem Quadrat ±``limit``, und
+    # Grenze oder sein Quader quer zur Achse neben dem Quadrat ±``widest``, und
     # es kommt der Achse zwischen den Mündungen nicht so nah. Ein Durchgang über
     # die Dreiecke mit einem Byte je Ecke — Reduktionen über eine Achse der
     # Länge drei kosteten am Laptop-Ständer (173 592 Dreiecke) 60 ms je Bohrung.
@@ -4840,8 +4836,8 @@ def _reaching_in(
     # darüber“, ``False`` „eine Ecke darunter“. Zwei Mündungen mit
     # entgegengesetzter Normale teilen sich eine Projektion.
     checks: list[tuple[NDArray[np.float64], tuple[tuple[float, bool], ...]]] = [
-        (first, ((-limit, True), (limit, False))),
-        (second, ((-limit, True), (limit, False))),
+        (first, ((-widest, True), (widest, False))),
+        (second, ((-widest, True), (widest, False))),
     ]
     if len(bounds) == 2 and np.array_equal(bounds[1][0], -bounds[0][0]):
         checks.append((bounds[0][0], ((bounds[0][1], False), (-bounds[1][1], True))))
@@ -4859,12 +4855,63 @@ def _reaching_in(
             pattern |= hit.astype(pattern.dtype) << bit
             bit += 1
     reached_by = pattern[faces[:, 0]] | pattern[faces[:, 1]] | pattern[faces[:, 2]]
-    candidates = np.flatnonzero(reached_by == (1 << bit) - 1)
+    complete = reached_by == (1 << bit) - 1
+    complete[own] = False
+    candidates = np.flatnonzero(complete)
     if not len(candidates):
         return found
     closest = _closest_to_the_axis(*_clipped_by(points[faces[candidates]] - centre, bounds), axis)
+    limit = _own_wall_limit(
+        points, faces, own, centre, bounds, axis, radius, closest, (first, second)
+    )
     found[candidates] = np.where(closest < limit, closest, np.inf)
     return found
+
+
+def _own_wall_limit(
+    points: NDArray[np.float64],
+    faces: NDArray[np.int64],
+    own: NDArray[np.int64],
+    centre: NDArray[np.float64],
+    bounds: Sequence[tuple[NDArray[np.float64], float]],
+    axis: NDArray[np.float64],
+    radius: float,
+    closest: NDArray[np.float64],
+    across: tuple[NDArray[np.float64], NDArray[np.float64]],
+) -> float:
+    """Wie nah ein Stück der Achse kommen muss, um in der Bohrung zu stehen: der
+    Saum aus :data:`_CLEARANCE_MARGIN` unter der eigenen Wand (``own``), höchstens
+    unter dem Radius.
+
+    **Gemessen wird die Wand nur, wo sie entscheidet** (Review RM-253): Jedes
+    eigene Dreieck zu beschneiden kostete an einer Bohrung mit 200 000 eigenen
+    Dreiecken 2,1 s und 268 MB je Frage statt 0,25 s und 77 MB. Kommt kein Stück
+    (``closest``) näher als der Saum unter dem Radius, entscheidet die Wand nichts.
+    Sonst reicht meist eine untere Schranke aus den Quadern der eigenen Dreiecke
+    quer zur Achse (``across``, zwei Richtungen), um ``EPS_GEOM`` gegen Rundung
+    gesenkt; erst ein Stück zwischen ihr und dem Radius verlangt die Wand selbst.
+    Die Antwort bleibt dieselbe.
+    """
+    widest = radius * (1.0 - _CLEARANCE_MARGIN)
+    near = closest < widest
+    if not len(own) or not near.any():
+        return widest
+    corners = points[faces[own]] - centre
+    gaps: list[NDArray[np.float64]] = []
+    for direction in across:
+        values = corners[..., 0] * direction[0] + corners[..., 1] * direction[1]
+        values = values + corners[..., 2] * direction[2]
+        low = np.minimum(np.minimum(values[:, 0], values[:, 1]), values[:, 2])
+        high = np.maximum(np.maximum(values[:, 0], values[:, 1]), values[:, 2])
+        gaps.append(np.maximum(np.maximum(low, -high), 0.0))
+    floor = float(np.sqrt(gaps[0] * gaps[0] + gaps[1] * gaps[1]).min()) - EPS_GEOM
+    sure = min(radius, floor) * (1.0 - _CLEARANCE_MARGIN)
+    if not (near & (closest >= sure)).any():
+        return sure
+    reached = _closest_to_the_axis(*_clipped_by(corners, bounds), axis)
+    reached = reached[np.isfinite(reached)]
+    wall = min(radius, float(reached.min())) if len(reached) else radius
+    return wall * (1.0 - _CLEARANCE_MARGIN)
 
 
 def _clipped_by(
