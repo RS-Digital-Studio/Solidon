@@ -1944,6 +1944,12 @@ def test_a_result_that_came_from_a_question_stays_out_of_the_long_lived_cache() 
         def put(self, key: str, result: CachedResult, *, to_disk: bool = False) -> None:
             self.written.append(to_disk)
 
+        def trim(self, keep: object = ()) -> None:
+            return None
+
+        def with_held_features(self, then: Any) -> None:
+            then(frozenset(), lambda features: {})
+
     load_operations()
     meshes = Path(__file__).parent / "data" / "meshes"
     profile = make_profile("centauri-carbon-2", "petg")
@@ -6556,6 +6562,145 @@ def test_a_small_import_is_not_shown_twice(monkeypatch) -> None:
     assert not pictures
 
 
+def _counting_runs(monkeypatch, session: Any) -> tuple[list[bool], threading.Event]:
+    """Zählt die Läufe einer Sitzung — ``True`` heißt mit Erkennung — und meldet den ersten."""
+    runs: list[bool] = []
+    began = threading.Event()
+    real = session.run_evaluation
+
+    def counted(*args: Any, **kwargs: Any) -> Any:
+        runs.append(bool(kwargs.get("detect_features", True)))
+        began.set()
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(session, "run_evaluation", counted)
+    return runs, began
+
+
+def test_after_its_picture_the_load_waits_until_the_window_has_drawn_it(monkeypatch) -> None:
+    """Nach dem Bild rechnet der Ladeweg erst weiter, wenn das Fenster es gezeichnet hat (RM-258).
+
+    Das Bild baut Ansicht, Baum, Auswahl und Bericht auf — Hunderte Einstiege
+    aus Qt in Python, und neben der weiterlaufenden Erkennung wartete jeder
+    davon auf den GIL: Am Mausoleum-Drachen stand das Fenster vor der Frage
+    nach der Vollerkennung bis 0,55 s. Gegenprobe: Nach der Freigabe rechnet
+    der Lauf zu Ende.
+    """
+    import app.ui.leash as leash_module
+    from app.ui import session as session_module
+    from app.ui.session import _EvaluationWorker
+
+    monkeypatch.setattr(session_module, "PICTURE_FIRST_TRIANGLES", 1)
+    monkeypatch.setattr(leash_module, "RIGHT_OF_WAY_S", 60.0)
+    session = _session_with_unshown_import(MESHES / "plate_holes.stl")
+    worker = _EvaluationWorker(session, picture_first=True)
+    # Das Signal käme ohne Ereignisschleife nie an; gemeldet wird beim Bauen des Bildes.
+    shown = threading.Event()
+    real_picture = session_module._as_picture
+
+    def picture_of(result: Any) -> Any:
+        shown.set()
+        return real_picture(result)
+
+    monkeypatch.setattr(session_module, "_as_picture", picture_of)
+    runs, _began = _counting_runs(monkeypatch, session)
+    results: list[Any] = []
+    thread = threading.Thread(target=lambda: results.append(worker._evaluate(session)))
+    thread.start()
+    try:
+        assert shown.wait(60), "das Bild kam"
+        thread.join(0.3)
+        assert runs == [False], "vor der Freigabe beginnt die Erkennung nicht"
+    finally:
+        way = getattr(worker, "right_of_way", None)
+        if way is not None:
+            way.release()
+        thread.join(60)
+    assert runs == [False, True] and results, "nach der Freigabe rechnet der Lauf zu Ende"
+
+
+def test_the_load_begins_after_the_window_has_drawn_the_change(monkeypatch) -> None:
+    """Der Ladeweg beginnt erst, wenn das Fenster zur Arbeitsfläche gewechselt hat (RM-258).
+
+    Der Wechsel von der Startfläche ist das größte Bild des Imports; neben dem
+    Einlesen, das sofort losrechnete, stand das Fenster dabei bis 0,77 s.
+    Gegenprobe: Ein Lauf außerhalb des Ladewegs beginnt sofort.
+    """
+    import app.ui.leash as leash_module
+    from app.ui.session import _EvaluationWorker
+
+    monkeypatch.setattr(leash_module, "RIGHT_OF_WAY_S", 60.0)
+    session = _session_with_unshown_import(MESHES / "plate_holes.stl")
+    runs, began = _counting_runs(monkeypatch, session)
+    worker = _EvaluationWorker(session, picture_first=True)
+    thread = threading.Thread(target=worker.work)
+    thread.start()
+    try:
+        assert not began.wait(0.3), "vor der Freigabe liest der Ladeweg nichts"
+    finally:
+        way = getattr(worker, "right_of_way", None)
+        if way is not None:
+            way.release()
+        thread.join(60)
+    assert runs, "nach der Freigabe rechnet er"
+
+    runs.clear()
+    began.clear()
+    plain = _EvaluationWorker(session, picture_first=False)
+    thread = threading.Thread(target=plain.work)
+    thread.start()
+    try:
+        assert began.wait(60), "eine Änderung am Modell wartet auf niemanden"
+    finally:
+        thread.join(60)
+
+
+def test_the_window_gives_the_way_back_after_its_picture(monkeypatch) -> None:
+    """Die Sitzung gibt den Lauf frei: nach dem Start, nach dem Bild, und sofort,
+    wenn das Bild nicht mehr gilt oder jemand synchron wartet (RM-258).
+
+    Ohne Freigabe stünde jeder Ladeweg bis zur Frist still.
+    """
+    import app.ui.leash as leash_module
+    from app.ui.leash import RightOfWay
+    from app.ui.session import _EvaluationWorker
+
+    monkeypatch.setattr(leash_module, "RIGHT_OF_WAY_S", 60.0)
+    after_frame: list[RightOfWay] = []
+    monkeypatch.setattr(
+        RightOfWay, "release_after_frame", lambda way, *_rounds: after_frame.append(way)
+    )
+    session = _session_with_unshown_import(MESHES / "plate_holes.stl")
+
+    session.evaluate_async()
+    started = session._worker
+    assert started is not None and started.right_of_way in after_frame, "nach dem Start"
+    assert started.right_of_way.claimed, "der Lauf wartet auf das Fenster"
+    # Ohne Ereignisschleife meldet sich der Lauf nie fertig; eine Millisekunde
+    # Warten genügt, um zu sehen, ob der synchrone Warter freigibt.
+    assert not session.wait_for_idle(1)
+    assert not started.right_of_way.claimed, "wer synchron wartet, gibt den Vortritt sofort frei"
+    assert started.wait(60_000)
+    session.cancel_signal.reset()
+
+    worker = _EvaluationWorker(session, picture_first=True)
+    session._worker = worker
+    picture = session.run_evaluation(session.quality, detect_features=False)
+    after_frame.clear()
+    worker.right_of_way.claim()
+    session._on_picture(picture, finished=worker)
+    assert after_frame == [worker.right_of_way], "nach dem Bild, wenn es gezeichnet ist"
+
+    stale = _EvaluationWorker(session, picture_first=True)
+    after_frame.clear()
+    stale.right_of_way.claim()
+    session._on_picture(picture, finished=stale)
+    assert not after_frame and not stale.right_of_way.claimed, (
+        "ein überholtes Bild gibt sofort frei"
+    )
+    session._worker = None
+
+
 def test_the_run_after_the_picture_does_not_ask_again(monkeypatch) -> None:
     """Was das Bild schon gefragt hat, beantwortet der Lauf danach selbst (KUNDE-14).
 
@@ -8151,6 +8296,8 @@ def test_preview_recognises_only_features_read_after_the_current_step(
     measured.clear()
     warm = evaluate(project.document, profile, sources=sources, cache=cache, detect_features=False)
     assert warm.complete and warm.recognition_left_out == {entry.id}
+    # Genau so oft wie kalt: Ohne Erkennung merkt sich die Auswertung keinen
+    # Schritt (RM-593), der warme Lauf misst also wieder.
     assert len(measured) == (2 if following else 1)
     assert (
         warm.scene.objects[entry.id].features.keys()
@@ -8340,3 +8487,236 @@ def test_checks_follow_undo_profile_change_and_reopened_project(
         "completed",
     ]
     assert first.check_states == after.check_states
+
+
+def _moved_plate(steps: int) -> Any:
+    """Die Lochplatte, ``steps``-mal verschoben — ein Verlauf, der nur Zuordnung kostet."""
+    project = _loaded_plate()
+    history = History(project.document)
+    for _step in range(steps):
+        history.apply(
+            "Verschieben",
+            [
+                OperationDraft(
+                    op="translate_object",
+                    inputs=(project.document.ops[0].outputs[0],),
+                    params={"dx": 2.0},
+                )
+            ],
+        )
+    return project
+
+
+def _feature_print(result: Any) -> list[Any]:
+    """Alle Merkmale aller Körper im Plattenformat, nach Namen geordnet."""
+    from app.core.scene.cache import feature_to_data
+
+    return [
+        (object_id, name, feature_to_data(body.features[name]))
+        for object_id, body in sorted(result.scene.objects.items())
+        for name in sorted(body.features)
+    ]
+
+
+def test_an_unchanged_history_is_matched_once_across_evaluations(
+    profile: Profile, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Die zweite Auswertung eines unveränderten Verlaufs ordnet keinen Schritt neu zu (RM-593).
+
+    Jede Auswertung ging den Verlauf durch und rechnete nach jedem Schritt
+    bewegte Merkmale, Zuordnung und Teilhashes neu, auch aus dem Cache — am
+    Eiffelturm 3,7, 4,5, 5,4 und 7,3 s für vier Verschieben, mit dem Merker
+    gleichbleibend um 6 s bei denselben Merkmalen. Das Ergebnis ist
+    dasselbe wie ohne Merker.
+    """
+    from importlib import import_module
+
+    from app.core.scene.project import ProjectSources
+
+    module = import_module("app.core.scene.evaluate")
+    project = _moved_plate(4)
+    sources = ProjectSources(project)
+    calls: list[int] = []
+    real = module._with_features
+
+    def counted(*arguments: Any, **named: Any) -> Any:
+        calls.append(1)
+        return real(*arguments, **named)
+
+    # Vor der ersten Auswertung ersetzt: Der Merker vergleicht die Rechenwege,
+    # und ein später ersetzter fragte zu Recht neu.
+    monkeypatch.setattr(module, "_with_features", counted)
+    cache = ResultCache()
+    first = evaluate(project.document, profile, sources=sources, cache=cache)
+    assert first.complete and len(calls) == 5
+    calls.clear()
+    again = evaluate(project.document, profile, sources=sources, cache=cache)
+    assert again.complete
+    assert calls == [], "every moved step comes from memory"
+    assert _feature_print(again) == _feature_print(first)
+    assert again.object_hashes == first.object_hashes
+    module.forget_remembered_steps()
+    fresh = evaluate(project.document, profile, sources=sources, cache=cache)
+    assert _feature_print(fresh) == _feature_print(first)
+    assert fresh.object_hashes == first.object_hashes
+    assert len(calls) == 5
+
+
+def test_a_changed_step_and_everything_after_it_are_matched_again(
+    profile: Profile, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Ein geänderter Wert ordnet seinen Schritt und die folgenden neu zu, die davor nicht."""
+    from importlib import import_module
+
+    from app.core.scene.project import ProjectSources
+
+    module = import_module("app.core.scene.evaluate")
+    project = _moved_plate(3)
+    sources = ProjectSources(project)
+    calls: list[str] = []
+    real = module._with_features
+
+    def counted(entry: Any, previous: Any, operation: Any, *arguments: Any, **named: Any) -> Any:
+        calls.append(operation.op)
+        return real(entry, previous, operation, *arguments, **named)
+
+    monkeypatch.setattr(module, "_with_features", counted)
+    cache = ResultCache()
+    evaluate(project.document, profile, sources=sources, cache=cache)
+    second = project.document.ops[2]
+    project.document.ops[2] = dataclasses.replace(second, params={**second.params, "dx": 3.0})
+    calls.clear()
+    changed = evaluate(project.document, profile, sources=sources, cache=cache)
+    assert changed.complete
+    assert calls == ["translate_object", "translate_object"], calls
+
+
+def test_the_step_memory_keeps_what_this_evaluation_uses(
+    profile: Profile, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Voll verdrängt der Merker nur Schritte, die diese Auswertung nicht brauchte (RM-593).
+
+    Eine Auswertung geht den Verlauf von vorn durch. Wer dabei den ältesten
+    Schritt verdrängte, holte ihn bei der nächsten neu und verdrängte den
+    zweiten — und keiner träfe mehr. Bei voller Grenze bleibt deshalb der
+    neue Schritt ungemerkt, und die alten treffen weiter.
+    """
+    from importlib import import_module
+
+    from app.core.scene.project import ProjectSources
+
+    module = import_module("app.core.scene.evaluate")
+    project = _moved_plate(4)
+    sources = ProjectSources(project)
+    calls: list[str] = []
+    real = module._with_features
+
+    def counted(entry: Any, previous: Any, operation: Any, *arguments: Any, **named: Any) -> Any:
+        calls.append(operation.op)
+        return real(entry, previous, operation, *arguments, **named)
+
+    monkeypatch.setattr(module, "_with_features", counted)
+    cache = ResultCache()
+    evaluate(project.document, profile, sources=sources, cache=cache)
+    kept = len(module._REMEMBERED_STEPS)
+    assert kept >= 4, "the four moves are remembered"
+    monkeypatch.setattr(module, "REMEMBERED_BYTES_KEPT", module.remembered_bytes())
+    History(project.document).apply(
+        "Verschieben",
+        [
+            OperationDraft(
+                op="translate_object",
+                inputs=(project.document.ops[0].outputs[0],),
+                params={"dx": 2.0},
+            )
+        ],
+    )
+    calls.clear()
+    evaluate(project.document, profile, sources=sources, cache=cache)
+    assert calls.count("translate_object") == 1, "only the new step is matched"
+    assert len(module._REMEMBERED_STEPS) == kept, "and stays unremembered"
+    calls.clear()
+    evaluate(project.document, profile, sources=sources, cache=cache)
+    assert calls.count("translate_object") == 1, "the old steps still come from memory"
+    assert module.release_remembered_steps(1) > 0
+    assert len(module._REMEMBERED_STEPS) == kept - 1, "released, the oldest gives way first"
+
+
+def test_a_step_that_does_not_fit_leaves_the_unused_steps_in_place(
+    profile: Profile, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Reicht der Platz nicht, verdrängt ein neuer Schritt nichts (Nachprüfung L, G-5).
+
+    Der Merker räumte zuerst die Schritte aus, die diese Auswertung nicht
+    brauchte, und gab danach auf — der neue Schritt blieb ungemerkt, und der
+    alte, zu dem der Nutzer gleich zurückgeht, war weg.
+    """
+    from importlib import import_module
+
+    from app.core.scene.project import ProjectSources
+
+    module = import_module("app.core.scene.evaluate")
+    project = _moved_plate(4)
+    sources = ProjectSources(project)
+    calls: list[str] = []
+    real = module._with_features
+
+    def counted(entry: Any, previous: Any, operation: Any, *arguments: Any, **named: Any) -> Any:
+        calls.append(operation.op)
+        return real(entry, previous, operation, *arguments, **named)
+
+    monkeypatch.setattr(module, "_with_features", counted)
+    cache = ResultCache()
+    evaluate(project.document, profile, sources=sources, cache=cache)
+    before = list(module._REMEMBERED_STEPS)
+    assert len(before) >= 5, "Voraussetzung: Laden und vier Verschieben gemerkt"
+    # Voll: Der geänderte letzte Schritt wiegt so viel wie der alte, und der
+    # alte ist das Einzige, was diese Auswertung nicht braucht — zu wenig.
+    monkeypatch.setattr(module, "REMEMBERED_BYTES_KEPT", module.remembered_bytes() - 1)
+    last = project.document.ops[-1]
+    project.document.ops[-1] = dataclasses.replace(last, params={**last.params, "dx": 3.0})
+    calls.clear()
+    evaluate(project.document, profile, sources=sources, cache=cache)
+    assert calls == ["translate_object"], calls
+    assert set(module._REMEMBERED_STEPS) == set(before), "nothing was pushed out in vain"
+    project.document.ops[-1] = last
+    calls.clear()
+    evaluate(project.document, profile, sources=sources, cache=cache)
+    assert calls == [], "the old last step still comes from memory"
+
+
+def test_a_step_leaves_the_memory_with_the_entry_it_came_from(profile: Profile) -> None:
+    """Verlässt ein Eintrag die Speicherebene, gehen seine Schritte mit (Nachprüfung L, G-6).
+
+    Ein Schritt trifft nur an den Merkmalen seines Eintrags und zählt sie
+    nicht mit; ohne den Eintrag hielte er sie fest, ungezählt und ohne je
+    wieder zu treffen.
+    """
+    from importlib import import_module
+
+    from app.core.scene.project import ProjectSources
+
+    module = import_module("app.core.scene.evaluate")
+    project = _moved_plate(3)
+    sources = ProjectSources(project)
+    cache = ResultCache()
+    result = evaluate(project.document, profile, sources=sources, cache=cache)
+    assert len(module._REMEMBERED_STEPS) >= 4, "Voraussetzung: gemerkte Schritte"
+
+    def held() -> set[int]:
+        return {id(body.features) for entry in cache._entries.values() for body in entry.objects}
+
+    assert all(id(step.source) in held() for step in module._REMEMBERED_STEPS.values())
+    cache._memory_budget = 1
+    cache.trim(keep=[body.mesh for body in result.scene.objects.values()])
+    assert cache.statistics.evictions > 0, "Voraussetzung: die Grenze verdrängt"
+    assert module._REMEMBERED_STEPS, "the step of the kept entry stays"
+    assert all(id(step.source) in held() for step in module._REMEMBERED_STEPS.values()), (
+        "no remembered step outlives its entry"
+    )
+    assert module.remembered_bytes() == sum(
+        step.weight for step in module._REMEMBERED_STEPS.values()
+    )
+    cache.clear()
+    assert not module._REMEMBERED_STEPS, "clearing the memory level forgets every step"
+    assert module.remembered_bytes() == 0

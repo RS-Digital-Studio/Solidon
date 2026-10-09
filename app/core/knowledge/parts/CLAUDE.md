@@ -8,6 +8,9 @@ Checkliste in `AGENTS.md`, Skill `neuer-baustein`. Herleitungen:
 **Dieses Verzeichnis steht unter MIT** (`LICENSE` hier, der Grund aus §36 im
 Paketdocstring). Wer hier Code hinzufügt, prüft, dass er unter MIT stehen darf.
 
+Die Spiegelungsentscheidung für abtragende Bausteine liegt in
+`through.builds_upward`; Operation, Vorschau und SCAD verwenden sie gemeinsam.
+
 ## Die Karte
 
 | Datei | Rolle |
@@ -29,6 +32,7 @@ Paketdocstring). Wer hier Code hinzufügt, prüft, dass er unter MIT stehen darf
 | `range_check.py` | Der Bereichstest in der Anwendung: Selbstdurchdringung über `geom.intersections`, Wandstärke über `geom.mesh.ray_hits_batch`, ohne VTK |
 | `range_proof.py` | Der Bereichsnachweis: Abdruck je Baustein gegen `data/part_ranges.toml` (`tools/check_part_ranges.py`) |
 | `preview.py` | Vorschaubilder — gerendert, nicht von Hand gepflegt |
+| `through.py` | Bohrungen durch den ganzen Träger (`reaches_through`): ihr Zylinder für `ops._reaching_through` und ihre Fortsetzung in Vorschau, Platzierungsgeist und SCAD mit der Anzeigelänge `SHOWN_REACH` |
 | `scad.py` | Export als OpenSCAD-Quelltext; schreibt, führt nichts aus |
 | `recipe.py` | Ein eigener Baustein als **Rezept**: Daten statt Programm (§24.5) |
 | `shared.py` · `shared_texts.py` | Der geschlossene Prüfvertrag lokaler Bausteindateien (Form, Mengen, Ops, Payloads, `MAX_EXPOSED`) · seine übersetzbaren Prüfgründe |
@@ -222,6 +226,10 @@ Ein Baustein sagt nur, **was** er ist; den Kern wählt der Aufrufer
   und alter Ortsvorgabe; frische Dokumente nie. Jedes erzeugte Schema bekommt
   eigene Dataclass-Felder — ein geteiltes `Field` benennt sich beim nächsten
   Klassenbau um.
+- **`reaches_through`** nennt die Bohrungen, die der Schritt durch den
+  ganzen Träger führt (`_reaching_through`, Mutternfalle); jede erklärte
+  Durchgangsbohrung prüft `_through_bores_in_the_body` am Ergebnis (Regel in
+  `bausteine.md`).
 - **`depth_field`** sagt, welches Feld die Eindringtiefe ist (§18.5; warum der
   Name nicht reicht, im Docstring); wer ein auftragendes `depth` baut,
   deklariert es über `ParamSpec.subtractive_on` (`cuts`, `cuts_by_parameter`).

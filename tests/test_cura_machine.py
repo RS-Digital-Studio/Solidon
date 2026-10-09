@@ -31,7 +31,8 @@ import pytest
 
 from app.core import discover
 from app.core.errors import ExternalToolError, OperationCancelled, ValidationError
-from app.core.export import cura_linux, handover, slicer_profiles
+from app.core.export import appimage as image_copies
+from app.core.export import cura_linux, handover, slicer_profiles, squashfs
 from app.core.knowledge import print_settings, profiles
 from tests.cura_fakes import (
     APPRUN_ENV,
@@ -45,6 +46,7 @@ from tests.cura_fakes import (
     failing_mount,
     flatpak_cura,
 )
+from tests.squashfs_fakes import IMAGE_AT, Link, appimage_file, tree_of
 
 
 def _written(engine: Path, printer: str, tmp_path: Path) -> handover.SlicerConfig:
@@ -2138,9 +2140,11 @@ def test_cura_as_an_appimage_computes_while_it_is_mounted(
 ) -> None:
     """Das Abbild bleibt eingehängt, solange CuraEngine rechnet, und ist danach
     beendet; CuraEngine startet über Lader und Pfad des Einhängepunkts. Die
-    Drucker kommen aus einer Kopie, die nur einmal je Fassung entsteht."""
+    Drucker kommen aus einer Kopie, die nur einmal je Fassung entsteht — gelesen
+    aus dem Abbild, eingehängt wird nur für den Lauf (RM-599)."""
     mounts: list[Path] = []
-    appimage, point = appimage_cura(tmp_path, monkeypatch, mounts)
+    copies: list[Path] = []
+    appimage, point = appimage_cura(tmp_path, monkeypatch, mounts, copies=copies)
     ended = ended_mounts(monkeypatch)
     while_running: list[int] = []
 
@@ -2148,14 +2152,14 @@ def test_cura_as_an_appimage_computes_while_it_is_mounted(
         appimage, monkeypatch, tmp_path, during=lambda: while_running.append(len(ended))
     )
 
-    assert while_running == [1], "nur das Einhängen der Kopie ist beendet, das des Laufs lebt"
+    assert while_running == [0], "das Einhängen des Laufs lebt, solange er rechnet"
     assert command[: command.index("slice")] == [
         str(point / "runtime" / "compat" / "lib64" / "ld-linux-x86-64.so.2"),
         "--library-path",
         cura_linux.library_path(cura_linux.read_environment(APPRUN_ENV), str(point)),
         str(point / "CuraEngine"),
     ]
-    assert len(ended) == 2 and all(process.poll() is not None for process in ended)
+    assert len(ended) == 1 and all(process.poll() is not None for process in ended)
     copy = slicer_profiles.install_root(appimage)
     assert copy is not None and not copy.is_relative_to(point)
     assert (
@@ -2163,7 +2167,8 @@ def test_cura_as_an_appimage_computes_while_it_is_mounted(
     ).is_file()
     found = slicer_profiles.find_profiles(appimage, "cura", ("machine",))
     assert "Creality K1 Max" in {entry.name for entry in found}
-    assert mounts.count(appimage) == 2, "einmal für die Kopie, einmal für den Lauf"
+    assert mounts == [appimage], "eingehängt nur für den Lauf"
+    assert copies == [appimage], "die Drucker einmal aus dem Abbild gelesen"
     assert handover.console_refusal(appimage) is None
 
 
@@ -2218,19 +2223,21 @@ def test_the_window_thread_never_waits_for_the_printer_copy(
 ) -> None:
     """Der Druckdialog fragt Curas Bestand im Fensterfaden (``_rebase``). Dort
     antwortet die Kopie nur, wenn sie schon da ist: Weder hängt der Fensterfaden
-    selbst ein noch wartet er auf einen Arbeiter, der gerade kopiert."""
+    selbst ein noch liest er das Abbild, noch wartet er auf einen Arbeiter, der
+    gerade kopiert."""
     mounts: list[Path] = []
-    appimage, _point = appimage_cura(tmp_path, monkeypatch, mounts, delay=2.0)
-    monkeypatch.setattr(cura_linux, "_never_waits", None)
-    cura_linux.never_wait_in(threading.current_thread())
+    copies: list[Path] = []
+    appimage, _point = appimage_cura(tmp_path, monkeypatch, mounts, delay=2.0, copies=copies)
+    monkeypatch.setattr(image_copies, "_never_waits", None)
+    image_copies.never_wait_in(threading.current_thread())
 
     assert slicer_profiles.install_root(appimage) is None
-    assert not mounts, "der Fensterfaden hängt nichts ein"
+    assert not mounts and not copies, "der Fensterfaden liest nichts"
 
     worker = threading.Thread(target=cura_linux.appimage_resources, args=(appimage,))
     worker.start()
     deadline = time.monotonic() + 10.0
-    while not mounts and time.monotonic() < deadline:
+    while not copies and time.monotonic() < deadline:
         time.sleep(0.01)
     started = time.monotonic()
     assert slicer_profiles.install_root(appimage) is None
@@ -2239,7 +2246,7 @@ def test_the_window_thread_never_waits_for_the_printer_copy(
 
     copy = slicer_profiles.install_root(appimage)
     assert copy is not None and (copy / "resources" / "definitions").is_dir()
-    assert len(mounts) == 1
+    assert copies == [appimage] and not mounts
 
 
 def test_the_window_waits_for_no_copy_and_rebases_after_the_worker() -> None:
@@ -2264,30 +2271,68 @@ def test_the_window_waits_for_no_copy_and_rebases_after_the_worker() -> None:
         raise AssertionError(names)
 
     build = body("app/ui/app.py", "build_application")
-    assert "cura_linux.never_wait_in(threading.current_thread())" in build
+    assert "appimage.never_wait_in(threading.current_thread())" in build
     work = body("app/ui/print_settings_dialog.py", "_CuraPrinterWorker", "work")
     assert work.index("install_root(self._executable)") < work.index("chosen_printer(")
     found = body("app/ui/print_settings_dialog.py", "PrintSettingsDialog", "_cura_printer_found")
     assert "self._foundation_key = None" in found and "self._rebase()" in found
 
 
+@pytest.mark.parametrize(
+    ("loader", "engine"),
+    [
+        (Link("../lib/x86_64-linux-gnu/ld-linux-x86-64.so.2"), True),
+        (Link("/lib64/ld-linux-x86-64.so.2"), False),
+    ],
+    ids=["inside", "host"],
+)
+def test_curas_printers_and_engine_come_from_the_image_without_starting_it(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, loader: Link, engine: bool
+) -> None:
+    """RM-599: Drucker und die Frage nach der Rechenmaschine beantwortet das Abbild,
+    ohne dass ein Prozess startet (Regel 11). Curas Lader ist darin eine
+    Verknüpfung nach ``lib/x86_64-linux-gnu`` (Cura 5.13); eine, die auf den
+    Rechner zeigt, zählt nicht."""
+    mounts: list[Path] = []
+    appimage, point = appimage_cura(tmp_path, monkeypatch, mounts)
+    tree = tree_of(point)
+    compat = tree["runtime"]["compat"]
+    compat["lib"] = {"x86_64-linux-gnu": {"ld-linux-x86-64.so.2": b"ELF"}}
+    compat["lib64"] = {"ld-linux-x86-64.so.2": loader}
+    appimage_file(appimage, tree, compression="gzip")
+
+    def forbidden(*_args: object, **_kwargs: object) -> None:
+        pytest.fail("zum Lesen der Drucker startet kein Prozess")
+
+    monkeypatch.setattr(subprocess, "Popen", forbidden)
+    monkeypatch.setattr(subprocess, "run", forbidden)
+
+    copy = cura_linux.appimage_resources(appimage)
+
+    assert copy is not None
+    assert (copy / "resources" / "definitions" / "creality_k1max.def.json").is_file()
+    assert cura_linux.engine_missing(appimage) is not engine
+    assert not mounts
+
+
 def test_the_printers_of_an_appimage_are_copied_once_per_version(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     mounts: list[Path] = []
-    appimage, _point = appimage_cura(tmp_path, monkeypatch, mounts)
+    copies: list[Path] = []
+    appimage, _point = appimage_cura(tmp_path, monkeypatch, mounts, copies=copies)
 
     first = cura_linux.appimage_resources(appimage)
     again = cura_linux.appimage_resources(appimage)
     assert first is not None and first == again
-    assert len(mounts) == 1
-    stamp = json.loads((first.parent.parent / cura_linux.STAMP).read_text(encoding="utf-8"))
+    assert len(copies) == 1 and not mounts
+    stamp = json.loads((first.parent.parent / image_copies.STAMP).read_text(encoding="utf-8"))
     assert stamp["engine"] is True
 
     newer = appimage.stat().st_mtime_ns + 10**9
     os.utime(appimage, ns=(newer, newer))
     assert cura_linux.appimage_resources(appimage) == first
-    assert len(mounts) == 2, "eine neue Fassung wird neu gelesen"
+    assert len(copies) == 2, "eine neue Fassung wird neu gelesen"
 
 
 def test_the_copy_of_a_removed_appimage_is_cleared(
@@ -2318,22 +2363,93 @@ def test_the_copy_of_a_removed_appimage_is_cleared(
 def test_a_failed_copy_is_tried_again_after_searching_anew(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Wer nach der Meldung FUSE nachinstalliert und *Neu suchen* drückt, bekommt
-    Curas Drucker ohne Neustart; ohne neue Suche wird nicht bei jeder Frage
-    erneut eingehängt."""
+    """Ließ sich das Abbild nicht lesen (etwa noch im Herunterladen), bekommt der
+    Kunde nach *Neu suchen* Curas Drucker ohne Neustart; ohne neue Suche wird
+    nicht bei jeder Frage erneut gelesen."""
     mounts: list[Path] = []
-    appimage, _point = appimage_cura(tmp_path, monkeypatch, mounts)
-    working = cura_linux.mount_command
-    failing_mount(tmp_path, monkeypatch, mounts)
+    copies: list[Path] = []
+    appimage, _point = appimage_cura(tmp_path, monkeypatch, mounts, copies=copies)
+    working = cura_linux._read_resources
 
+    def damaged(image: Path, target: Path) -> bool | None:
+        copies.append(image)
+        raise squashfs.UnreadableImageError("the file ends before 4096")
+
+    monkeypatch.setattr(cura_linux, "_read_resources", damaged)
     assert cura_linux.appimage_resources(appimage) is None
-    monkeypatch.setattr(cura_linux, "mount_command", working)
+    monkeypatch.setattr(cura_linux, "_read_resources", working)
     assert cura_linux.appimage_resources(appimage) is None
-    assert len(mounts) == 1, "das Nein gilt bis zur neuen Suche"
+    assert len(copies) == 1, "das Nein gilt bis zur neuen Suche"
 
     discover.forget_cache()
     assert cura_linux.appimage_resources(appimage) is not None
-    assert len(mounts) == 2
+    assert len(copies) == 2 and not mounts
+
+
+def test_a_damaged_gzip_block_in_curas_image_is_refused_once_without_a_half_copy(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Cura 5.13 packt mit gzip. Ein gekipptes Bit in einem Block ist ein
+    unlesbares Abbild: kein Absturz, kein Zwischenordner im Cache, gelesen einmal
+    je Fassung bis *Neu suchen* — am echt beschädigten Abbild, nicht an einer
+    Attrappe des Lesers. Vorher entkam ``zlib.error`` aus dem Druckdialog, und
+    jede Frage las das Abbild erneut."""
+    monkeypatch.setattr(cura_linux.PRINTER_COPIES, "root", lambda: tmp_path / "cache")
+    monkeypatch.setattr(cura_linux.PRINTER_COPIES, "_kept", {})
+    monkeypatch.setattr(cura_linux.PRINTER_COPIES, "_failed", {})
+    mounts: list[Path] = []
+    copies: list[Path] = []
+    appimage, _point = appimage_cura(tmp_path, monkeypatch, mounts, copies=copies)
+    data = bytearray(appimage.read_bytes())
+    for at in range(IMAGE_AT + 96, IMAGE_AT + 100):
+        data[at] ^= 0xFF
+    appimage.write_bytes(bytes(data))
+
+    for _question in range(3):
+        assert slicer_profiles.install_root(appimage) is None
+    assert slicer_profiles.find_profiles(appimage, "cura", ("machine",)) == []
+    assert handover.console_refusal(appimage) is None, "unbekannt sperrt nicht"
+    assert copies == [appimage]
+    assert list((tmp_path / "cache").iterdir()) == [], "kein halber Zwischenordner"
+
+    discover.forget_cache()
+    assert cura_linux.appimage_resources(appimage) is None
+    assert copies == [appimage, appimage] and not mounts
+
+
+@pytest.mark.parametrize("limit", ["files", "bytes", "environment"])
+def test_curas_copy_counts_its_limits_over_all_folders(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, limit: str
+) -> None:
+    """Dateizahl und Bytezahl gelten für Curas ganze Kopie, nicht je Ordner
+    (``definitions``, ``extruders`` …), und ``AppRun.env`` hat eine eigene
+    kleine Grenze. Vorher durfte jeder der sechs Ordner die volle Grenze
+    nehmen und ``AppRun.env`` bis 1 GiB. Gezeigt mit herabgesetzten Grenzen,
+    die jeder Ordner für sich einhält, die Kopie als Ganzes aber nicht."""
+    monkeypatch.setattr(cura_linux.PRINTER_COPIES, "root", lambda: tmp_path / "cache")
+    monkeypatch.setattr(cura_linux.PRINTER_COPIES, "_kept", {})
+    monkeypatch.setattr(cura_linux.PRINTER_COPIES, "_failed", {})
+    mounts: list[Path] = []
+    appimage, point = appimage_cura(tmp_path, monkeypatch, mounts)
+    resources = point / "share" / "cura" / "resources"
+    folders = [
+        [path for path in (resources / name).rglob("*") if path.is_file()]
+        for name in cura_linux.RESOURCE_FOLDERS
+        if (resources / name).is_dir()
+    ]
+    assert len(folders) >= 2, "mehr als ein Ordner, sonst prüft der Fall nichts"
+    if limit == "files":
+        monkeypatch.setattr(squashfs, "MAX_COPIED_FILES", max(len(files) for files in folders))
+    elif limit == "bytes":
+        sizes = [sum(path.stat().st_size for path in files) for files in folders]
+        assert max(sizes) < sum(sizes)
+        monkeypatch.setattr(squashfs, "MAX_COPIED_BYTES", max(sizes))
+    else:
+        monkeypatch.setattr(cura_linux, "ENVIRONMENT_BYTES", 16)
+
+    assert cura_linux.appimage_resources(appimage) is None
+    assert list((tmp_path / "cache").iterdir()) == []
+    assert not mounts
 
 
 def test_a_copy_that_cannot_replace_the_old_one_says_why(
@@ -2348,7 +2464,7 @@ def test_a_copy_that_cannot_replace_the_old_one_says_why(
         raise PermissionError(13, "Zugriff verweigert", str(self))
 
     monkeypatch.setattr(Path, "rename", refuse)
-    with caplog.at_level("WARNING", logger="app.core.export.cura_linux"):
+    with caplog.at_level("WARNING", logger="app.core.export.appimage"):
         assert cura_linux.appimage_resources(appimage) is None
     assert "cannot replace the printers" in caplog.text and "Zugriff verweigert" in caplog.text
 
@@ -2544,14 +2660,15 @@ def test_a_cleared_copy_leaves_the_memory_too(
     die Kopie des Sticks), Stick wieder da — dann wird neu kopiert, statt einen
     gelöschten Ordner zu nennen."""
     mounts: list[Path] = []
+    copies: list[Path] = []
     stick, _point = appimage_cura(
-        tmp_path / "stick", monkeypatch, mounts, name="Cura-auf-dem-Stick.AppImage"
+        tmp_path / "stick", monkeypatch, mounts, name="Cura-auf-dem-Stick.AppImage", copies=copies
     )
     first = cura_linux.appimage_resources(stick)
     assert first is not None and first.is_dir()
     away = stick.with_name("weg.bin")
     stick.rename(away)
-    other, _point = appimage_cura(tmp_path / "andere", monkeypatch, mounts)
+    other, _point = appimage_cura(tmp_path / "andere", monkeypatch, mounts, copies=copies)
     assert cura_linux.appimage_resources(other) is not None
     assert not first.exists(), "die Kopie des abgezogenen Sticks ist geräumt"
     away.rename(stick)
@@ -2559,7 +2676,7 @@ def test_a_cleared_copy_leaves_the_memory_too(
     again = cura_linux.appimage_resources(stick)
 
     assert again is not None and again.is_dir()
-    assert mounts.count(stick) == 2
+    assert copies.count(stick) == 2
 
 
 def test_the_rest_of_an_aborted_copy_is_cleared_once_it_is_old(
@@ -2568,15 +2685,15 @@ def test_the_rest_of_an_aborted_copy_is_cleared_once_it_is_old(
     """Bricht eine Kopie ab (Solidon stirbt), bleibt ein Zwischenordner ohne Marke.
     Geräumt wird er erst, wenn er älter ist als :data:`STALE_SECONDS` — ein
     junger kann gerade ein zweiter Solidon füllen. Geräumt wird nur die Form, die
-    ``_copy_resources`` anlegt (``mkdtemp``: 16 Hex-Zeichen, Bindestrich, acht
+    ``ImageCopies._copy`` anlegt (``mkdtemp``: 16 Hex-Zeichen, Bindestrich, acht
     Zeichen aus a–z, 0–9, _); ein fremder Ordner mit Bindestrich bleibt."""
-    root = cura_linux._cache_root()
+    root = cura_linux.PRINTER_COPIES.root()
     old = root / "0123456789abcdef-a1b2_c3d"
     young = root / "fedcba9876543210-x9y8z7w6"
     others = [root / "fremd", root / "meine-sicherung", root / "0123456789abcdef-Abgebrochen"]
     for folder in (old, young, *others):
         (folder / "share").mkdir(parents=True)
-    past = time.time() - cura_linux.STALE_SECONDS - 60
+    past = time.time() - image_copies.STALE_SECONDS - 60
     for folder in (old, *others):
         os.utime(folder, (past, past))
     mounts: list[Path] = []
@@ -2648,9 +2765,13 @@ def test_every_way_out_of_a_mount_closes_its_pipes(tmp_path: Path, way: str) -> 
     if way == "cancelled":
         token.cancel()
 
+    # Die kurze Frist nur für das stumme Einhängen: Mit Punkt brauchte ein unter
+    # Last startendes Python im Tor (-n 8) länger als eine Sekunde für seine
+    # erste Zeile, und der Fall endete als „no answer“.
+    seconds = 1.0 if way == "silent" else None
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always", ResourceWarning)
-        with cura_linux._mounted(command, token, seconds=1.0) as found:
+        with cura_linux._mounted(command, token, seconds=seconds) as found:
             assert (found.point == tmp_path) == (way == "point")
         gc.collect()
 

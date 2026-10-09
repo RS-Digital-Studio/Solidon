@@ -117,8 +117,9 @@ nicht weggeräumt.
   dieselbe synthetische Metrik, auch ausdrücklich gesetzt). Was an der
   Schriftmetrik hängt, prüft die echte Plattform (`WA_DontShowOnScreen`) oder
   niemand. Die Fensterverträge der Linux-CI laufen offscreen mit DejaVu Sans;
-  lokal nachgestellt mit `QT_QPA_FONTDIR` auf einen Ordner nur mit dessen
-  TTF-Dateien (aus matplotlibs `mpl-data/fonts/ttf`).
+  lokal nachgestellt mit `QT_QPA_FONTDIR` auf einen eigenen Ordner nur mit den
+  `DejaVu*.ttf` aus `app/core/geom/data/fonts` (auf den ganzen Ordner nimmt
+  Qt Comfortaa).
 - **Was am Anzeigen hängt, prüft nur ein gezeigter Dialog** (`show()`,
   `activateWindow()`): Ungezeigt gibt es keinen Erstfokus, und ein Test bleibt
   grün, während der erste Bildklick am Fenster ins falsche Feld geht (RM-416,
@@ -190,6 +191,13 @@ reicht dafür selten. Sprache in `tests/`: `AGENTS.md`, „Sprachregelung“.
   bloße Anweisung, auch im Aufräumen: Ein ungeprüftes Warten ließ auf dem
   langsamen Intel-Läufer Tests auf halbem Stand weiterlaufen. Der Wächter steht
   in `test_toolchain.py`.
+- **Wer auf einen Arbeiterfaden wartet, wartet mit `processEvents()` und
+  `time.sleep`, nie mit `QTest.qWait`** (`ui_helpers.wait_until`): `qWait` hält
+  die GIL, und ein Faden mit vielen Dateiblicken (`shutil.which` über einen
+  langen PATH) kam auf dem Windows-Läufer in Sekunden nicht durch.
+- **Eine Arbeiterfrage im Test steht auf einer Freigabe** (`threading.Event`),
+  wenn der Test prüft, was vor ihrer Antwort gilt: Auf einem schnellen Läufer
+  ist sie sonst schon beantwortet, bevor die nächste Zeile läuft.
 
 ## Den Lauf messen, nicht einen Filter darüber
 
@@ -274,11 +282,12 @@ einzeln laufen grün. Deshalb:
   **ein Lauf, dessen Ausgabe nicht wächst, arbeitet nicht**; ein bis zwei
   Sekunden ohne CPU zwischen zwei Fensterdateien sind normal. Erst ohne
   CPU-Sekunde und ohne Byte über zwanzig Sekunden ist es ein Hänger.
-- **Ein BLAS-Faden je Testprozess**: Tor und `affected_tests.py --run` setzen
-  `OPENBLAS_NUM_THREADS=1`, wenn der Aufrufer nichts setzt; eigene Sonden und
-  Skripte starten ebenso. Sonst sagt jeder Prozess mit numpy und scipy je
-  Rechenkern einen Puffer zu, an 32 Kernen 1,5 GB, und Läufe nebeneinander
-  reißen die Zusagegrenze. Leistungsläufe bleiben ohne Vorgabe.
+- **Ein BLAS-Faden je Prozess**: `import app` setzt `OPENBLAS_NUM_THREADS=1`,
+  wenn niemand etwas setzt (RM-567), Tor und `affected_tests.py --run` ebenso
+  für Prozesse, die NumPy vor der Anwendung laden. Sonst sagt jeder Prozess
+  mit numpy und scipy je Rechenkern einen Puffer zu, an 32 Kernen 1,5 GB, und
+  Läufe nebeneinander reißen die Zusagegrenze. Leistungsläufe messen damit
+  denselben Stand wie der Kunde.
 - **Im Tor eine feste Arbeiterzahl, nie `-n auto`**: Parallelität zeigt
   Speicherhunger als Korrektheitsfehler, 32 Arbeiter sterben schon beim
   Verteilen, und eine Zahl, die an der Kernzahl hängt, ist eine stille

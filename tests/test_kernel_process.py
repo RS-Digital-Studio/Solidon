@@ -1127,6 +1127,67 @@ def test_a_helper_starts_with_one_blas_thread_and_ours_stay(
     assert os.environ.get("OPENBLAS_NUM_THREADS") == ours
 
 
+#: Was ein frischer Prozess nach ``import app``, ``numpy`` und ``scipy.linalg``
+#: an Zusage meldet — und was er ohne die Vorgabe meldete (RM-567).
+_BLAS_PROBE = textwrap.dedent(
+    """
+    import os, sys
+    before = "numpy" in sys.modules
+    import app
+    import numpy, scipy.linalg
+    private = -1
+    if sys.platform == "win32":
+        import ctypes
+        from ctypes import wintypes
+
+        class Counters(ctypes.Structure):
+            _fields_ = [("cb", wintypes.DWORD), ("faults", wintypes.DWORD)] + [
+                (name, ctypes.c_size_t)
+                for name in ("peak", "ws", "a", "b", "c", "d", "pf", "peak_pf", "private")
+            ]
+
+        counters = Counters()
+        counters.cb = ctypes.sizeof(Counters)
+        kernel = ctypes.WinDLL("kernel32")
+        kernel.GetCurrentProcess.restype = wintypes.HANDLE
+        psapi = ctypes.WinDLL("psapi")
+        psapi.GetProcessMemoryInfo.argtypes = [wintypes.HANDLE, ctypes.c_void_p, wintypes.DWORD]
+        psapi.GetProcessMemoryInfo(kernel.GetCurrentProcess(), ctypes.byref(counters), counters.cb)
+        private = counters.private // 2**20
+    print(before, os.environ.get("OPENBLAS_NUM_THREADS"), private)
+    """
+)
+
+
+@pytest.mark.parametrize("given", [None, "3"], ids=["ohne", "gesetzt"])
+def test_the_application_loads_blas_with_one_thread_unless_told_otherwise(
+    given: str | None,
+) -> None:
+    """``import app`` setzt einen BLAS-Faden, bevor NumPy lädt (RM-567).
+
+    Ohne die Vorgabe sagte OpenBLAS je Rechenkern einen Puffer zu, für
+    ``numpy`` und ``scipy`` je einmal: 1 522 MB nach dem Import an 32 Kernen,
+    mit einem Faden 44 MB (08.10.2026). Ein ausdrücklich gesetzter Wert bleibt.
+    """
+    environment = {key: value for key, value in os.environ.items() if key != "OPENBLAS_NUM_THREADS"}
+    if given is not None:
+        environment["OPENBLAS_NUM_THREADS"] = given
+    result = subprocess.run(
+        [sys.executable, "-c", _BLAS_PROBE],
+        capture_output=True,
+        text=True,
+        check=True,
+        cwd=Path(__file__).resolve().parents[1],
+        env=environment,
+        timeout=300,
+    )
+    before, threads, private = result.stdout.split()
+    assert before == "False", "numpy was loaded before the application could choose"
+    assert threads == (given or "1")
+    if given is None and sys.platform == "win32":
+        assert int(private) < 400, f"{private} MB committed after loading numpy and scipy"
+
+
 #: Was ``numpy`` über BLAS oder LAPACK rechnet. Mit der Zahl der Fäden ändert sich
 #: dort die Reihenfolge einer Summe und damit das letzte Bit.
 _BLAS_CALLS = frozenset(

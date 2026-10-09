@@ -1267,6 +1267,14 @@ def _default_of(entry: ParamSpec, *, technical: bool = True) -> str:
         return ""
     if not technical and isinstance(entry.default, (tuple, list)) and not entry.default:
         return ""
+    # Eine gespeicherte Struktur, etwa die Aufteilung eines Organizers, ist
+    # JSON und keine Vorgabe, die ein Kunde liest; der Dialog baut sie.
+    if (
+        not technical
+        and isinstance(entry.default, str)
+        and entry.default.lstrip().startswith(("{", "["))
+    ):
+        return ""
     if isinstance(entry.default, (int, float)):
         return format_decimal(entry.default)
     if not technical and entry.choices and entry.default in entry.choices:

@@ -319,6 +319,8 @@ module = [
   "app.core.knowledge.filaments",
   # Arbeitsspeicher über kernel32 oder sysconf, Apple Silicon über sysctl (RM-564).
   "app.core.backends.machine",
+  # Der eingebaute Arbeitsspeicher: kernel32 auf Windows, sysconf sonst.
+  "app.core.memory",
 ]
 warn_unreachable = false
 

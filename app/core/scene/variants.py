@@ -164,55 +164,62 @@ def build(
     # trifft dann auch nach einem Neustart.
     shared = cache if cache is not None else disk_backed_cache()
 
-    for index in range(count):
-        if cancelled is not None and cancelled.is_cancelled:
-            _log.info("variants cancelled after %d of %d", index, count)
-            break
-        value = first + step * index
-        working = copy.deepcopy(document)
-        working.parameters[parameter] = dataclasses.replace(
-            working.parameters[parameter], value=value, expression=""
-        )
-
-        def onward(share: float, text: str, done: int = index) -> None:
-            """Der Anteil über alle Läufe, nicht der des einzelnen."""
-            progress((done + max(0.0, min(1.0, share))) / count, text)
-
-        result = evaluate(
-            working,
-            profile,
-            quality=quality,
-            sources=sources,
-            progress=onward,
-            cancelled=cancelled,
-            cache=shared,
-        )
-        variant = Variant(value=value, complete=result.complete)
-        variant.findings.extend(result.scene.report.findings)
-
-        if not result.complete:
-            made.findings.append(
-                Finding(
-                    code="variants.stopped",
-                    severity="error",
-                    message=_("Eine Variante ließ sich nicht rechnen."),
-                    values={"parameter": parameter, "value": round(value, 3)},
-                )
+    try:
+        for index in range(count):
+            if cancelled is not None and cancelled.is_cancelled:
+                _log.info("variants cancelled after %d of %d", index, count)
+                break
+            value = first + step * index
+            working = copy.deepcopy(document)
+            working.parameters[parameter] = dataclasses.replace(
+                working.parameters[parameter], value=value, expression=""
             )
-            made.variants.append(variant)
-            continue
 
-        width = _place(
-            variant,
-            result.scene,
-            index,
-            value,
-            offset,
-            result.scene.profile if mark else None,
-            quality,
-        )
-        offset += width + gap
-        made.variants.append(variant)
+            def onward(share: float, text: str, done: int = index) -> None:
+                """Der Anteil über alle Läufe, nicht der des einzelnen."""
+                progress((done + max(0.0, min(1.0, share))) / count, text)
+
+            result = evaluate(
+                working,
+                profile,
+                quality=quality,
+                sources=sources,
+                progress=onward,
+                cancelled=cancelled,
+                cache=shared,
+            )
+            variant = Variant(value=value, complete=result.complete)
+            variant.findings.extend(result.scene.report.findings)
+
+            if not result.complete:
+                made.findings.append(
+                    Finding(
+                        code="variants.stopped",
+                        severity="error",
+                        message=_("Eine Variante ließ sich nicht rechnen."),
+                        values={"parameter": parameter, "value": round(value, 3)},
+                    )
+                )
+                made.variants.append(variant)
+                continue
+
+            width = _place(
+                variant,
+                result.scene,
+                index,
+                value,
+                offset,
+                result.scene.profile if mark else None,
+                quality,
+            )
+            offset += width + gap
+            made.variants.append(variant)
+    finally:
+        # Der eigene Cache geht mit diesem Aufruf und mit ihm die
+        # Zuordnungsschritte, die an seinen Einträgen hängen: Sie zählen
+        # deren Merkmale nicht mit und träfen nie wieder (Nachprüfung L, M-3).
+        if cache is None:
+            shared.clear()
 
     _log.info("built %d variants of %s", len(made.variants), parameter)
     return made

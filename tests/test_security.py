@@ -53,18 +53,18 @@ FREE_VERSION_ONE = {
 }
 
 LONG_DATE = {
-    "de": "{day}. Oktober {year}",
-    "en": "{day} October {year}",
-    "es": "{day} de octubre de {year}",
-    "fr": "{day} octobre {year}",
-    "it": "{day} ottobre {year}",
-    "pt": "{day} de outubro de {year}",
+    "de": "{day}. November {year}",
+    "en": "{day} November {year}",
+    "es": "{day} de noviembre de {year}",
+    "fr": "{day} novembre {year}",
+    "it": "{day} novembre {year}",
+    "pt": "{day} de novembro de {year}",
 }
 
 
 def _long_date(language: str) -> str:
     """Sprachform der einen Produktkonstante, wie sie die Website verwendet."""
-    assert SECURITY_SUPPORT_UNTIL.month == 10
+    assert SECURITY_SUPPORT_UNTIL.month == 11
     return LONG_DATE[language].format(
         day=SECURITY_SUPPORT_UNTIL.day,
         year=SECURITY_SUPPORT_UNTIL.year,

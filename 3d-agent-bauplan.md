@@ -206,11 +206,22 @@ darüber. Leere oder zugeklappte Bereiche geben ihren Platz frei.
   Statusleiste führt auch bei ausgeblendeter Karte zum Prüfbericht zurück.
 - **Die beiden Seitenkarten lassen sich verschieben** (Entscheidung Robert):
   am Griff oben rechts, mit der Maus oder den Pfeiltasten. Sie rasten an
-  einem Fensterrand ein oder schweben frei über der Ansicht; ein Rand trägt
-  eine Karte. Doppelklick auf den Griff und *Ansicht → Karten an
-  ihren Platz* stellen die Anordnung oben wieder her. Die Lage merken die
-  Einstellungen; sie ist Darstellung und steht nicht im Verlauf. Eigene
-  Fenster werden die Karten nicht.
+  allen vier Ecken oder am unteren Fensterrand ein oder schweben frei über
+  der Ansicht. Bei genügend Platz können beide Karten unten nebeneinander
+  liegen; sie überdecken einander nicht. Doppelklick auf den Griff und
+  *Ansicht → Karten an ihren Platz* stellen die Anordnung oben wieder her.
+  Die Lage merken die Einstellungen; sie ist Darstellung und steht nicht im
+  Verlauf. Die Karten bleiben innerhalb von Solidon.
+- **Reiter lassen sich umordnen und in eigene Fenster herausziehen**
+  (Entscheidung Robert). Diese Fenster können auch auf einem zweiten Monitor
+  liegen. *Zurück in Solidon* und Schließen hängen denselben Inhalt ohne
+  Verlust zurück. Der ursprüngliche Reiter hält den Weg zum Fenster und
+  zurück offen; das Kontextmenü bietet die Schritte auch ohne Ziehen.
+  Reihenfolge und Fensterlage werden auf diesem Gerät gemerkt. Fehlt ein
+  Monitor, bleiben die Fenster auf einem vorhandenen Bildschirm erreichbar.
+  Ein sichtbar herausgezogener Auswahlreiter bleibt beim Wechsel der übrigen
+  Reiter offen; automatische Aktualisierung nimmt ihm oder anderen Fenstern
+  nicht den Fokus. Die vorhandenen Fensterkürzel arbeiten auf derselben Sitzung.
 - Keine Betriebsarten-Umschaltung zwischen „Bearbeiten“ und „Konstruieren“.
   Alle Werkzeuge arbeiten an derselben Szene.
 
@@ -619,15 +630,21 @@ class OpResult:
     feature_continuations: tuple[tuple[FeatureContinuation, ...], ...] = ()
 
 
+@dataclass(frozen=True, slots=True, eq=False)
+class SliceContour:
+    outline: Points2
+    holes: tuple[Points2, ...] = ()
+
+
 @dataclass(frozen=True, slots=True)
 class LayerInfo:
     z: float
-    contours: tuple[Polygon, ...]
+    contours: tuple[SliceContour, ...]
     area: float
     overhang_area: float
-    islands: tuple[Polygon, ...]
+    islands: tuple[SliceContour, ...]
     min_width: float
-    overhangs: tuple[Polygon, ...] = ()
+    overhangs: tuple[SliceContour, ...] = ()
     bridge_width: float = 0.0
     taper_length: float = 0.0
 
@@ -638,6 +655,7 @@ class SliceResult:
     support_volume: float
     first_layer_area: float
     source: MetricSource = "internal"
+    bridge_from: float | None = None  # ab welcher Breite eine freie Fläche Brücke ist, mm
 
 
 @dataclass(frozen=True, slots=True)
@@ -686,6 +704,11 @@ Die Typaliase und ihre Bedeutung gehören zu diesem Vertrag:
   wenn ihr Merkmal derzeit nicht sicher erkannt wird (§21.3).
 - `ObjectKind`: `mesh` oder `brep`; `Quality`: `draft` oder `fine`.
   `MetricSource`: `internal` oder `gcode` — nie vermischen (§22.5).
+- `Points2`: ein schreibgeschütztes `float64`-Feld der Form (n, 2), ein
+  geschlossener Ring. `SliceContour` trägt Umriss und Löcher einer Kontur
+  der Schichtanalyse so; gleich sind zwei Konturen mit denselben Zahlen, Bit
+  für Bit (Gleichheit und Hash über die Bytes der Felder). Als Felder hält
+  eine gemerkte Analyse ein Siebtel des Speichers von Punkt-Tupeln.
 - `SketchElementKind`: `point`, `line`, `arc`, `circle`, `spline`, `ellipse`,
   `elliptical_arc`. `construction` kennzeichnet Hilfsgeometrie.
 - `SketchConstraintKind`: `distance`, `radius`, `diameter`, `coincident`,
@@ -3217,7 +3240,7 @@ Für die weitere CRA-Vorbereitung gelten diese Liefergegenstände:
    gesetzlichen Meldepfade. Die öffentliche Sicherheitsseite muss damit
    übereinstimmen; Bereitschaft wird praktisch nachgewiesen.
 3. **Unterstützungsdauer.** Für Solidon 1.x ist mindestens der
-   31. Oktober 2031 zugesagt. Erwartete Nutzungsdauer und gesetzliche
+   30. November 2031 zugesagt. Erwartete Nutzungsdauer und gesetzliche
    Mindestunterstützung werden vor jeder späteren Bereitstellung erneut
    geprüft; der feste Termin ersetzt diese Prüfung nicht. Art. 13 Abs. 8
    verlangt grundsätzlich mindestens fünf Jahre, bei kürzer erwarteter

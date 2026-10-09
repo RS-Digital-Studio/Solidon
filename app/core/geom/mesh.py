@@ -140,6 +140,88 @@ class MeshData:
     def slot_indices(self) -> tuple[int, ...]:
         return self.slots
 
+    def held_bytes(self, seen: set[int] | None = None, freeable: list[int] | None = None) -> int:
+        """Was dieses Netz im Arbeitsspeicher hält, in Bytes (RM-567).
+
+        Ecken und Dreiecke, dazu alles, was ``trimesh``, die Erkennung und
+        der Prüfbericht in seinem Cache gemerkt haben — Kantentabellen,
+        Nachbarschaften, eine Schichtanalyse — und die belegte
+        Innengeometrie. Am Laptop-Riser 36 Byte je Dreieck für die
+        Grunddaten und 608 für den Cache nach dem Laden (08.10.2026). Gelesen
+        wird am rohen Speicher von ``trimesh``, ohne dessen Prüfsumme: Die
+        Frage darf nichts rechnen. ``seen`` zählt geteilte Felder einmal.
+
+        ``freeable`` bekommt in seinem ersten Element dazugezählt, was
+        :meth:`lean` losließe: die Ableitungen aus :data:`RELEASABLE`, soweit
+        nicht schon gezählt. Erst wird gezählt, was bliebe, dann das Lösbare —
+        ein Feld, das beide tragen, bleibt.
+        """
+        from app.core.memory import held_bytes
+
+        known = set() if seen is None else seen
+        raw = self.raw
+        total = held_bytes(self.slots, known)
+        loose: list[object] = []
+        for holder in (raw, getattr(raw, "visual", None)):
+            store = getattr(getattr(holder, "_data", None), "data", None)
+            cache = getattr(getattr(holder, "_cache", None), "cache", None)
+            total += held_bytes(store, known)
+            if not isinstance(cache, dict):
+                continue
+            snapshot = dict(cache)
+            total += held_bytes(
+                {key: value for key, value in snapshot.items() if not _releasable(key)}, known
+            )
+            loose.extend(value for key, value in snapshot.items() if _releasable(key))
+        if self.cavity is not None:
+            total += self.cavity.held_bytes(known, freeable)
+        released = sum(held_bytes(value, known) for value in loose)
+        if freeable is not None:
+            freeable[0] += released
+        return total + released
+
+    def lean(self) -> MeshData:
+        """Dieselben Ecken und Dreiecke ohne das, was sich aus ihnen neu rechnen lässt (RM-567).
+
+        Für ältere Einträge des Ergebniscaches: Eine Auswertung liest von ihnen
+        das Ergebnis, nicht Kantentabellen oder Nachbarschaften — die hielten
+        am Spiderman zwei Drittel des Eintrags. Die Schichtanalyse des
+        Prüfberichts bleibt (:data:`RELEASABLE`).
+
+        **Ein neues Netz, kein geleertes.** Dasselbe Netz kann in diesem
+        Augenblick ein anderer Faden lesen — Vorschau, Karte, Prüfbericht —,
+        und ``trimesh`` wie die Erkennung fragen erst, ob ein Wert im Cache
+        steht, und lesen ihn danach; dazwischen entfernt, käme ``None``. Die
+        Felder teilt das neue Netz mit dem alten, den Speicher des Abgeleiteten
+        gibt erst frei, wer das alte zuletzt loslässt. Was nicht aus der
+        Geometrie folgt — der Ursprung je Dreieck, der Beleg einer starren
+        Bewegung —, reist mit, ebenso Normalen, die eine Datei mitgebracht
+        haben kann, und die Farben. Ein Netz mit Textur bleibt, wie es ist.
+        """
+        raw = self.raw
+        visual = getattr(raw, "visual", None)
+        kind = getattr(visual, "kind", None)
+        if kind not in (None, "face", "vertex") or not hasattr(raw, "_cache"):
+            return self
+        # Eine Kopie des Caches in einem Zug: Ein anderer Faden kann gerade
+        # etwas hinzufügen, und über das Wörterbuch selbst zu laufen, bräche
+        # dann mit „dictionary changed size during iteration“ ab.
+        known = dict(raw._cache.cache)
+        if not any(_releasable(key) for key in known) and (
+            self.cavity is None or self.cavity.lean() is self.cavity
+        ):
+            return self
+        fresh = trimesh.Trimesh(
+            vertices=raw.vertices, faces=raw.faces, process=False, validate=False
+        )
+        if kind is not None and visual is not None:
+            fresh.visual = visual.copy()
+        carried = {key: value for key, value in known.items() if not _releasable(key)}
+        fresh._cache.verify()
+        fresh._cache.update(carried)
+        cavity = self.cavity.lean() if self.cavity is not None else None
+        return MeshData(raw=fresh, slots=self.slots, cavity=cavity, cavity_open=self.cavity_open)
+
     # --- Aufbau -----------------------------------------------------------------
 
     @classmethod
@@ -244,10 +326,33 @@ class MeshData:
         return cls(raw=mesh, slots=slots, cavity=cavity, cavity_open=opened)
 
     def to_stl(self) -> bytes:
-        """Binäres STL, für den Export und die Übergabe an einen Slicer (§29)."""
-        result: bytes = trimesh.exchange.stl.export_stl(self.raw)
-        return result
+        """Binäres STL, für den Export und die Übergabe an einen Slicer (§29).
 
+        Byte für Byte, was ``trimesh.exchange.stl.export_stl`` schreibt — Kopf,
+        Normalen und Ecken als float32 —, aber blockweise in einen Puffer
+        (RM-567): trimesh baute das gepackte Feld und kopierte es danach
+        zweimal; hier wird es einmal in den Puffer geschrieben.
+        """
+        from trimesh.exchange import stl
+
+        faces = np.asarray(self.raw.faces)
+        vertices = np.asarray(self.raw.vertices)
+        header = np.zeros(1, dtype=stl._stl_dtype_header)
+        header["face_count"] = len(faces)
+        size = header.nbytes + len(faces) * stl._stl_dtype.itemsize
+        buffer = bytearray(size)
+        buffer[: header.nbytes] = header.tobytes()
+        packed = np.frombuffer(buffer, dtype=stl._stl_dtype, offset=header.nbytes)
+        if len(faces):
+            packed["normals"] = self.raw.face_normals
+            for begin in range(0, len(faces), _STL_BLOCK):
+                end = begin + _STL_BLOCK
+                packed["vertices"][begin:end] = vertices[faces[begin:end]]
+        return bytes(buffer)
+
+
+#: Wie viele Dreiecke :meth:`MeshData.to_stl` je Block in den Puffer schreibt.
+_STL_BLOCK: Final = 262_144
 
 _STORAGE_SUGGESTIONS = (CANCEL,)
 """Ein eingebetteter Netzstand, dem nicht zu trauen ist, hat genau einen Weg:
@@ -893,6 +998,60 @@ class EdgeTable:
 
 #: Wo :func:`edge_table` die Zählung im Cache des Netzes ablegt.
 _EDGE_TABLE_KEY: Final = "solidon_edge_table"
+
+#: Was :meth:`MeshData.lean` nicht mitnimmt: was
+#: ``trimesh`` aus Ecken und Dreiecken ableitet und groß ist, und Solidons
+#: eigene Ableitungen — Kantentabelle, Nachbarindex, Eckenfächer und -rang,
+#: Normalen, Fleckennachbarschaft. Nicht darin: ``face_normals`` und
+#: ``vertex_normals``, die eine Datei mitbringen kann, und alles, was ein Netz
+#: über seine Herkunft trägt. Ebenfalls nicht darin, obwohl ableitbar, was der
+#: Bericht nach dem Zurücknehmen am gezeigten Stand fragt: die Teile
+#: (:func:`face_components`) und ``area_faces``, je 8 Byte je Dreieck — ohne
+#: sie rechnete er am Spiderman 0,4 s je Schritt neu (Review L, G9) —, und die
+#: Schichtanalyse des Prüfberichts (``slice.findings``): Ohne sie schnitt er
+#: nach dem Zurücknehmen neu, am Spiderman 52 s; als Felder hält sie seit
+#: RM-595 nur 17 bis 31 MB (Nachprüfung L, M-2).
+RELEASABLE: Final = frozenset(
+    {
+        "triangles",
+        "triangles_cross",
+        "triangles_center",
+        "face_angles",
+        "edges",
+        "edges_face",
+        "edges_sorted",
+        "edges_unique",
+        "edges_unique_idx",
+        "edges_unique_inverse",
+        "edges_unique_length",
+        "face_adjacency",
+        "face_adjacency_edges",
+        "face_adjacency_unshared",
+        "face_adjacency_angles",
+        "face_adjacency_projections",
+        "face_adjacency_span",
+        "face_adjacency_radius",
+        "face_adjacency_convex",
+        "facets",
+        "facets_area",
+        "facets_normal",
+        "facets_origin",
+        "facets_boundary",
+        "vertex_faces",
+        "vertex_neighbors",
+        "vertex_degree",
+        _EDGE_TABLE_KEY,
+        "solidon_neighbour_index",
+        "solidon_vertex_rank",
+        "solidon_vertex_faces",
+        "solidon_stable_normals",
+        "solidon_patch_adjacency",
+    }
+)
+
+
+def _releasable(key: object) -> bool:
+    return isinstance(key, str) and key in RELEASABLE
 
 
 def edge_table(body: trimesh.Trimesh) -> EdgeTable:
@@ -2571,9 +2730,11 @@ def read_mesh(payload: bytes, suffix: str) -> MeshData:
         # ``Trimesh`` herauskommt — mehrere Körper in einer Datei verschweißt
         # er wie zuvor ``force="mesh"``, gemessen an einer GLB mit zwei
         # Quadern: beide Wege 24 Dreiecke.
-        loaded = trimesh.load_mesh(
-            io.BytesIO(payload), file_type=normalised.lstrip("."), process=False
-        )
+        loaded = _stl_body(payload) if normalised == ".stl" else None
+        if loaded is None:
+            loaded = trimesh.load_mesh(
+                io.BytesIO(payload), file_type=normalised.lstrip("."), process=False
+            )
     except PROGRAMMING_ERRORS:
         raise
     except Exception as problem:  # trimesh wirft eine breite Palette an Parserfehlern
@@ -2594,6 +2755,30 @@ def read_mesh(payload: bytes, suffix: str) -> MeshData:
             values={"suffix": suffix},
         )
     return MeshData.of(loaded)
+
+
+def _stl_body(payload: bytes) -> trimesh.Trimesh | None:
+    """Eine STL direkt aus ihrem Leser, ohne den Umweg über eine Szene (RM-567).
+
+    ``trimesh.load_mesh`` baut eine Szene, zieht ihr Netz heraus und kopiert
+    es; Szene und Original bleiben als Ring liegen, den erst die
+    Speicherbereinigung abräumt — am Spiderman 254 MB, am Murmelbrett 650 MB,
+    und im Fenster räumt sie nur der Hauptfaden nach seinen Schwellen ab
+    (``ui.leash.collect_in_main_thread``). Dieselben Ecken, Dreiecke und
+    Dreiecksattribute, ohne die Normalen aus der Datei — die Kopie dort
+    verwarf sie ebenfalls; geprüft an 65 STL aus Korpus und ``F:\\3D Dateien``.
+    Eine ASCII-STL mit mehreren Körpern ist eine Szene; für sie ``None``.
+    """
+    loaded = trimesh.exchange.stl.load_stl(io.BytesIO(payload))
+    if not isinstance(loaded, dict) or "geometry" in loaded:
+        return None
+    return trimesh.Trimesh(
+        vertices=loaded["vertices"],
+        faces=loaded["faces"],
+        face_attributes=loaded.get("face_attributes"),
+        metadata=loaded.get("metadata"),
+        process=False,
+    )
 
 
 def _check_embedded_gltf(payload: bytes) -> None:

@@ -28,12 +28,12 @@ abgestimmte Offenlegung behandeln wir nicht als Angriff auf das Projekt.
 Solidon 1 ist eine kostenpflichtige Kauflizenz. Der Kaufpreis umfasst alle
 Sicherheits- und Funktionsaktualisierungen innerhalb der Hauptversion 1.
 Sicherheitsunterstützung und Sicherheitsaktualisierungen für Solidon 1.x
-leisten wir bis mindestens **31. Oktober 2031**. Eine gekaufte Version bleibt
+leisten wir bis mindestens **30. November 2031**. Eine gekaufte Version bleibt
 danach zeitlich unbegrenzt nutzbar; das Ende des Sicherheitszeitraums beendet
 die Lizenz nicht.
 
 Die kostenlose, befristete Demo trägt eine Versionsnummer 0.x und endet am
-30. Oktober 2026. Sie ist nicht die Verkaufsversion 1.
+30. November 2026. Sie ist nicht die Verkaufsversion 1.
 
 Sicherheitskorrekturen erscheinen in der jeweils aktuellen unterstützten
 1.x-Fassung. Der Update-Hinweis der Anwendung nennt eine neue Fassung; geladen

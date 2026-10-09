@@ -181,6 +181,10 @@ auf Roberts Rechner (`tools/sign_release.py`), in die CI kommt er nicht.
   Intel-Macs mit macOS 26 schon das `import ctypes` in PyInstallers Bootstrap
   in Apples libffi. Der Signierschritt liest Schlüssel und Wert zurück,
   `test_supply_chain.py` hält den Text (RM-104).
+- **Ein neuer Release-Schlüssel reist aus, bevor er unterschreibt**: ans Ende
+  von `updates.RELEASE_PUBLIC_KEYS`, die Versionsdatei dieser Version
+  unterschreibt noch der alte, Ablauf in `Signierung/README.md`. Eine
+  Installation kennt nur die Schlüssel ihrer Version und verwirft den Rest still.
 - Neue Actions nur mit vollständiger 40-stelliger Commit-ID.
 - Downloads im Workflow nur von einer unveränderlichen Veröffentlichung und
   nach Prüfsummenprüfung.

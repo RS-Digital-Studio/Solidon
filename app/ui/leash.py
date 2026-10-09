@@ -45,16 +45,29 @@ from __future__ import annotations
 import ctypes
 import gc
 import sys
+import threading
+import time
 import weakref
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from threading import Lock
 from typing import Any, Final
 
-from PySide6.QtCore import QEvent, QMetaMethod, QObject, QThread, QTimer, Signal
+from PySide6.QtCore import (
+    QCoreApplication,
+    QEvent,
+    QMetaMethod,
+    QObject,
+    Qt,
+    QThread,
+    QTimer,
+    Signal,
+)
+from PySide6.QtGui import QGuiApplication
 from shiboken6 import isValid
 
 from app.core.log import get_logger
+from app.core.memory import forget_released, released_bytes
 
 _log = get_logger(__name__)
 
@@ -259,6 +272,90 @@ def wait_for_all(timeout_ms: int = 2000) -> tuple[Any, ...]:
         # dort; so kann der Rückruf seine Leine geordnet aufräumen.
         QTimer.singleShot(0, _keeper_object(), lambda done=worker: _release_global(done))
     return tuple(stubborn)
+
+
+#: Wie lange ein Arbeiter höchstens auf den Hauptfaden wartet, dem er den
+#: Vortritt lässt (:class:`RightOfWay`). Ein Bild braucht ein paar hundert
+#: Millisekunden; steht das Fenster länger, rechnet der Arbeiter weiter.
+RIGHT_OF_WAY_S: Final = 1.0
+
+#: Nach wie vielen Runden der Ereignisschleife der Hauptfaden den Arbeiter
+#: freigibt (:meth:`RightOfWay.release_after_frame`). Die erste Runde zeichnet,
+#: was die Meldung ausgelöst hat; die zweite, was dabei nachgereicht wurde —
+#: die verschobene Kartenlage, ein Bericht, der seine Höhe neu misst.
+RIGHT_OF_WAY_ROUNDS: Final = 2
+
+#: Wie oft ein wartender Arbeiter nach dem Abbruch sieht.
+_RIGHT_OF_WAY_POLL_S: Final = 0.05
+
+
+class RightOfWay:
+    """Der Hauptfaden zeichnet zuerst: Ein Arbeiter hält an, bis das Bild steht.
+
+    **Ein Bild neben einem rechnenden Arbeiter kostet ein Vielfaches seiner
+    Rechenzeit** (RM-258). Jeder Einstieg aus Qt in Python und jeder Qt-Aufruf,
+    der den GIL hergibt, wartet auf das Umschaltintervall des Arbeiters
+    (:data:`GIL_SWITCH_S`); ein Bild hat davon Hunderte. Am Mausoleum-Drachen
+    standen so das erste Bild der Arbeitsfläche und das Modellbild vor der
+    Frage nach der Vollerkennung je 0,2 bis 1,4 s, bei 0,03 bis 0,09 s
+    Rechenzeit des Hauptfadens. Hält der Arbeiter an diesen zwei Stellen an,
+    bis das Fenster sie gezeichnet hat, rechnet der Hauptfaden ohne Warten —
+    und der Arbeiter verliert kaum etwas, denn den GIL hätte er ohnehin
+    abgeben müssen.
+
+    Der Arbeiter ruft :meth:`claim` vor der Meldung und :meth:`wait` danach;
+    der Hauptfaden gibt mit :meth:`release_after_frame` frei. Gewartet wird
+    höchstens :data:`RIGHT_OF_WAY_S` und nie im Hauptfaden selbst; ein
+    Abbruch beendet das Warten.
+    """
+
+    def __init__(self) -> None:
+        self._free = threading.Event()
+        self._free.set()
+
+    @property
+    def claimed(self) -> bool:
+        """Ob ein Arbeiter gerade auf die Freigabe wartet oder gleich warten wird."""
+        return not self._free.is_set()
+
+    def claim(self) -> None:
+        """Arbeiter, vor der Meldung: Ab jetzt wartet :meth:`wait` auf die Freigabe."""
+        self._free.clear()
+
+    def release(self) -> None:
+        """Sofort freigeben — auch, wenn niemand mehr zeichnet."""
+        self._free.set()
+
+    def wait(
+        self, cancelled: Callable[[], bool] | None = None, timeout_s: float | None = None
+    ) -> bool:
+        """Arbeiter: bis zur Freigabe warten; ``True``, wenn sie kam.
+
+        ``False`` nach Ablauf der Frist (ohne Angabe :data:`RIGHT_OF_WAY_S`),
+        nach einem Abbruch und im Hauptfaden, der nie auf sich selbst warten
+        darf.
+        """
+        if threading.current_thread() is threading.main_thread():
+            return not self.claimed
+        deadline = time.monotonic() + (RIGHT_OF_WAY_S if timeout_s is None else timeout_s)
+        while not self._free.wait(min(_RIGHT_OF_WAY_POLL_S, max(deadline - time.monotonic(), 0))):
+            if (cancelled is not None and cancelled()) or time.monotonic() >= deadline:
+                return False
+        return True
+
+    def release_after_frame(self, rounds: int = RIGHT_OF_WAY_ROUNDS) -> None:
+        """Hauptfaden: freigeben, wenn die Ereignisschleife ``rounds`` Runden gedreht hat.
+
+        Ein Zeitgeber, keine Zählung von Ereignissen: Er läuft erst, wenn die
+        Schleife abgearbeitet hat, was vor ihm anstand — auch das Neuzeichnen,
+        das die Meldung angestoßen hat.
+        """
+        if not self.claimed:
+            return
+        if rounds <= 0 or QCoreApplication.instance() is None:
+            self.release()
+            return
+        QTimer.singleShot(1, _keeper_object(), lambda: self.release_after_frame(rounds - 1))
 
 
 class Worker(QThread):
@@ -646,6 +743,12 @@ COLLECT_EVERY_MS: Final = 500
 #: Aufruf den ersten.
 COLLECTOR_NAME: Final = "mainThreadCollector"
 
+#: Ab wie vielen losgelassenen Bytes der Sammler die älteste Generation
+#: abräumt, auch wenn ihre Schwelle nicht erreicht ist (RM-594,
+#: ``memory.note_released``). Ein Viertel der kleinsten Speicherebene
+#: (``scene.cache.MEMORY_FLOOR``): Mehr wartet nicht auf die Bereinigung.
+COLLECT_AFTER_RELEASED: Final = 128 * 1024 * 1024
+
 
 class _MainThreadCollector(QObject):
     """Räumt Ringe im Hauptfaden ab, sobald die Schwellen der Automatik erreicht sind."""
@@ -667,6 +770,8 @@ class _MainThreadCollector(QObject):
         """
         if _undisturbed_count:
             return
+        if _collect_released():
+            return
         young, middle, old = gc.get_count()
         first, second, third = self._threshold
         if young <= first:
@@ -676,6 +781,35 @@ class _MainThreadCollector(QObject):
             gc.collect(1)
             if old > third:
                 gc.collect(2)
+
+
+def _collect_released() -> bool:
+    """Räumt alle Generationen ab, wenn genug losgelassen wurde (RM-594).
+
+    Losgelassene Netze hängen in Ringen, überleben die jungen Generationen
+    und werden erst frei, wenn die älteste abgeräumt wird; deren Schwelle
+    erreichte der Sammler selten. Nur im Hauptfaden rufen, wie
+    :meth:`_MainThreadCollector.collect_if_due`.
+
+    **Nicht mitten in einem Zug** (Nachprüfung L, G-4): Eine volle
+    Bereinigung hält den Hauptfaden 160 bis 180 ms an (Laptop-Riser, sechs
+    Schritte, 250 000 Objekte). Eine Auswertung endet oft, während der Nutzer
+    schon die Ansicht dreht; solange eine Maustaste gedrückt ist, wartet sie
+    bis zum nächsten Takt.
+    """
+    reported = released_bytes()
+    if reported < COLLECT_AFTER_RELEASED or _buttons_held():
+        return False
+    gc.collect()
+    forget_released(reported)
+    return True
+
+
+def _buttons_held() -> bool:
+    """Ob gerade eine Maustaste gedrückt ist — ein Zug in der Ansicht oder an einem Griff."""
+    if QGuiApplication.instance() is None:
+        return False
+    return QGuiApplication.mouseButtons() != Qt.MouseButton.NoButton
 
 
 def collect_in_main_thread(application: QObject) -> None:

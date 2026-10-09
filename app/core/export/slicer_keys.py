@@ -29,7 +29,9 @@ from dataclasses import replace
 from pathlib import Path
 from typing import TYPE_CHECKING, Final, Literal, NamedTuple
 
+from app.core.knowledge import print_fields
 from app.core.knowledge.print_settings import SCARF_LENGTH
+from app.core.units import format_length
 from app.i18n import TranslatableText, _
 
 if TYPE_CHECKING:
@@ -314,8 +316,23 @@ PRUSA: Final[tuple[Row, ...]] = (
     ("support.placement", "support_material_buildplate_only", _mapped({"build_plate": "1"}, "0")),
     ("support.threshold_angle", "support_material_threshold", _angle_from_horizontal),
     ("support.z_gap", "support_material_contact_distance", _number),
+    # Unten derselbe Abstand wie oben: Wo die Stütze auf dem Modell steht,
+    # haftet sie genauso (RM-583). PrusaSlicers 0 hieße „wie oben“ auch.
+    ("support.z_gap", "support_material_bottom_contact_distance", _number),
     ("support.xy_gap", "support_material_xy_spacing", _number),
     ("support.interface_layers", "support_material_interface_layers", _integer),
+    (
+        "support.bottom_interface_layers",
+        "support_material_bottom_interface_layers",
+        _integer,
+    ),
+    ("support.interface_spacing", "support_material_interface_spacing", _number),
+    # Den Kontaktlüfter kennt SuperSlicer, PrusaSlicer nicht (RM-583).
+    (
+        "cooling.support_interface_cooling",
+        "support_material_interface_fan_speed",
+        _mapped({"True": "100"}, "-1"),
+    ),
     ("adhesion.skirt_loops", "skirts", _integer),
     ("adhesion.skirt_distance", "skirt_distance", _number),
     ("adhesion.brim_width", "brim_width", _number),
@@ -460,8 +477,26 @@ ORCA: Final[tuple[Row, ...]] = (
     ("support.placement", "support_on_build_plate_only", _mapped({"build_plate": "1"}, "0")),
     ("support.threshold_angle", "support_threshold_angle", _angle_from_horizontal),
     ("support.z_gap", "support_top_z_distance", _number),
+    # Unten derselbe Abstand wie oben (RM-583), siehe PrusaSlicer.
+    ("support.z_gap", "support_bottom_z_distance", _number),
     ("support.xy_gap", "support_object_xy_distance", _number),
+    # Gedruckt wird oben eine Übergangslage, unten die Kontaktlage dazu
+    # (``SupportCommon.cpp``); das Herstellerprofil meint dieselbe Zählung, und
+    # Solidon gleicht nichts aus (RM-583, Kontaktsonde).
     ("support.interface_layers", "support_interface_top_layers", _integer),
+    ("support.bottom_interface_layers", "support_interface_bottom_layers", _integer),
+    ("support.interface_spacing", "support_interface_spacing", _number),
+    # Die untere Trennschicht hat eine eigene Lücke; alle fünf Programme der
+    # Familie führen sie (Konfigurationsblöcke vom 08.10.2026).
+    ("support.interface_spacing", "support_bottom_interface_spacing", _number),
+    # -1 heißt „wie die übrige Schicht“, die Vorgabe aller gemessenen Profile.
+    # Ein Filamentwert in der Orca-Familie (Filamentprofile der Hersteller).
+    (
+        "cooling.support_interface_cooling",
+        "support_material_interface_fan_speed",
+        _mapped({"True": "100"}, "-1"),
+        "filament",
+    ),
     # ``auto`` ist Orcas ``auto_brim`` (``advise.AUTO_BRIM_FLAVOURS``) und die
     # Vorgabe jedes Herstellerprofils. Bis zum 27.09.2026 kannte Solidon es
     # nicht und schrieb ``no_brim`` darüber.
@@ -569,6 +604,14 @@ CURA: Final[tuple[Row, ...]] = (
     # anderen beiden. Das obere Ende spiegelt ``CURA_MIRRORED`` aus
     # ``cool_fan_speed``, das untere stand dort bis zum 23.09.2026 mit.
     ("cooling.fan_speed", "cool_fan_speed", _percent),
+    # Curas Gegenstück kühlt die Haut über der Stütze, nicht die Stütze selbst
+    # — dieselbe Absicht: die Fläche löst sich leichter (RM-583).
+    ("cooling.support_interface_cooling", "support_fan_enable", _mapped({"True": "true"}, "false")),
+    (
+        "cooling.support_interface_cooling",
+        "support_supported_skin_fan_speed",
+        _only({"True": "100"}),
+    ),
     ("cooling.minimum_fan_speed", "cool_fan_speed_min", _percent),
     ("cooling.fan_below_layer_time", "cool_min_layer_time_fan_speed_max", _integer),
     ("cooling.bridge_fan_speed", "bridge_fan_speed", _percent),
@@ -791,7 +834,8 @@ CURA_MIRRORED: Final[dict[str, tuple[str, ...]]] = {
         "top_skin_expand_distance",
     ),
     "support_line_distance": ("support_initial_layer_line_distance",),
-    "support_interface_height": ("support_bottom_height", "support_roof_height"),
+    # Die untere Höhe rechnet ``handover._for_supports`` aus den eigenen Lagen.
+    "support_interface_height": ("support_roof_height",),
 }
 
 #: Dasselbe mit einem Faktor davor — Curas Formel, als Zahl statt als Satz.
@@ -1086,7 +1130,7 @@ GEOMETRY_KEYS: Final[dict[str, tuple[str, ...]]] = {
 LIMITED: Final[dict[SlicerFlavour, frozenset[str]]] = {
     "prusa": frozenset(),
     "orca": frozenset(),
-    "cura": frozenset({"cooling.disable_first_layers"}),
+    "cura": frozenset({"cooling.disable_first_layers", "support.z_gap"}),
     "other": frozenset(),
 }
 
@@ -1098,7 +1142,24 @@ LIMITED: Final[dict[SlicerFlavour, frozenset[str]]] = {
 #: 0xC0000005 ab (RM-459, gemessen je Schlüssel der Beilage).
 NOT_TAKEN_BY_PROGRAM: Final[dict[str, frozenset[str]]] = {
     "superslicer": frozenset({"shell.scarf_seam"}),
+    # Den Kontaktlüfter führt nur SuperSlicer (``--help-fff`` von 2.9.6).
+    "prusaslicer": frozenset({"cooling.support_interface_cooling"}),
+    # Bambu Studio führt ``support_material_interface_fan_speed`` nicht; sein
+    # Konfigurationsblock nennt den Schlüssel nicht (P1S, 08.10.2026).
+    "bambustudio": frozenset({"cooling.support_interface_cooling"}),
 }
+
+#: Was ein Programm unter Baumstützen nicht druckt (RM-622): Bambu Studio,
+#: Creality Print, Anycubic Slicer Next und PrusaSlicer legen unter organischen
+#: Bäumen keine untere Trennschicht, auch wenn sie geschrieben ist — gemessen an
+#: zwei gestützten Körpern aus PETG (09.10.2026): unter Gitter mit unteren
+#: Lagen, unter organischen Bäumen ohne; ElegooSlicer und OrcaSlicer drucken sie
+#: auch dort.
+IGNORED_UNDER_TREES_BY_PROGRAM: Final[dict[str, frozenset[str]]] = {
+    program: frozenset({"support.bottom_interface_layers"})
+    for program in ("bambustudio", "crealityprint", "anycubicslicernext", "prusaslicer")
+}
+
 
 #: Diese Programme lesen die Werte nur für die Platte. Gemessen mit zwei
 #: Körpern, unverändertem Herstellerprofil und getrennten Bahnen (RM-317).
@@ -1513,6 +1574,37 @@ def for_program(values: Mapping[str, str], flavour: SlicerFlavour, program: str)
     return kept
 
 
+#: Die Trennschicht zu einem Drittel dicht, wie Creality und Elegoo in Cura
+#: (``support_interface_density`` 33,3 %): Linienabstand drei Bahnbreiten.
+#: Ohne gewählte Lücke schreibt die Übergabe ihn, die Grundlage zeigt die
+#: Lücke daraus, und die Druckzeit rechnet mit dieser Dichte (RM-583).
+CURA_INTERFACE_LINES: Final = 3.0
+
+
+def support_gap_in_whole_layers(flavour: SlicerFlavour | None) -> bool:
+    """Rechnet dieser Slicer den Stützabstand immer in ganzen Schichten (RM-583)?
+
+    Die Menge steht beim Rat (:data:`advise.WHOLE_LAYER_GAP_FLAVOURS`), wie
+    der Auto-Brim: Der Rat fragt sie, und ``slice`` importiert ``export`` nicht.
+    """
+    from app.core.slice import advise
+
+    return advise.rounds_to_whole_layers(flavour)
+
+
+def has_independent_support_layers(flavour: SlicerFlavour | None) -> bool:
+    """Bekommt die Stütze hier eine eigene Schichthöhe, damit ein Abstand zwischen
+    zwei Schichten gilt (``independent_support_layer_height``, RM-583)?
+
+    Nur die Orca-Familie: Ohne den Schalter rundet sie auf ganze Schichten
+    (``Slicing.cpp``). PrusaSlicer legt die Kontaktschicht unter Gitter ohnehin
+    in den gewünschten Abstand, Cura rechnet in Schichten
+    (:func:`support_gap_in_whole_layers`). Unter organischen Bäumen rundet jedes
+    Programm, auch mit eigener Höhe (``handover.organic_styles``, RM-622).
+    """
+    return flavour == "orca"
+
+
 def caps_volumetric_speed(flavour: SlicerFlavour) -> bool:
     """Deckelt dieser Slicer das Tempo selbst nach dem Volumenstrom des Filaments?
 
@@ -1529,7 +1621,11 @@ def caps_volumetric_speed(flavour: SlicerFlavour) -> bool:
 
 
 def limitation(
-    flavour: SlicerFlavour, path: str, settings: PrintSettings | None = None, program: str = ""
+    flavour: SlicerFlavour,
+    path: str,
+    settings: PrintSettings | None = None,
+    program: str = "",
+    organic: Collection[str] = (),
 ) -> TranslatableText | None:
     """Eine abweichende Bedeutung, die ein gleich benannter Wert verdecken würde.
 
@@ -1543,6 +1639,10 @@ def limitation(
 
     Ebenso eine Wahl, die das Programm nicht kennt und ersetzt
     (:data:`NOT_OFFERED_BY_PROGRAM`) — der Satz kommt nur, solange sie steht.
+
+    Unter organischen Bäumen gilt die Auskunft, mit der auch der Rat fragt
+    (``organic``, ``handover.organic_styles``, RM-622): Feld und Vorschlag
+    daneben sagen dasselbe.
     """
     if settings is not None and program:
         group, name = path.split(".", 1)
@@ -1557,6 +1657,39 @@ def limitation(
             "schrittweise hoch.",
             layer=settings.cooling.disable_first_layers + 1,
         )
+    # Ein Stützabstand zwischen zwei Schichten wird in Cura eine ganze (RM-583).
+    if support_gap_in_whole_layers(flavour) and path == "support.z_gap":
+        from app.core.slice import advise
+
+        layer = settings.layers.layer_height if settings is not None else 0.0
+        # Ohne Stützen druckt der Abstand nichts; ein Satz dazu wäre Lärm.
+        if settings is None or layer <= 0.0 or settings.support.style == "none":
+            return None
+        if advise.in_whole_layers(settings.support.z_gap, layer):
+            return None
+        field = print_fields.field_of(path)
+        return _(
+            "Cura rechnet „{setting}“ in ganzen Schichten zu {layer}.",
+            setting=field.title if field is not None else path,
+            layer=format_length(layer),
+        )
+    # Unter organischen Bäumen liegt die Stütze auf den Schichten des Modells
+    # (RM-622): welche Art das ist, sagt ``organic``, eine Quelle für Feld und Rat.
+    trees = settings is not None and settings.support.style in organic
+    if trees and path == "support.z_gap":
+        from app.core.slice import advise
+
+        layer = settings.layers.layer_height if settings is not None else 0.0
+        if settings is None or advise.in_whole_layers(settings.support.z_gap, layer):
+            return None
+        field = print_fields.field_of(path)
+        return _(
+            "Unter Baumstützen rechnet der Slicer „{setting}“ in ganzen Schichten zu {layer}.",
+            setting=field.title if field is not None else path,
+            layer=format_length(layer),
+        )
+    if trees and path in IGNORED_UNDER_TREES_BY_PROGRAM.get(program, frozenset()):
+        return _("Unter Baumstützen druckt dieses Programm keine untere Trennschicht.")
     return None
 
 

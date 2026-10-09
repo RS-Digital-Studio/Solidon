@@ -7867,6 +7867,41 @@ def test_symbols_render_and_follow_the_text_colour(qt_app: QApplication) -> None
         assert "#ff0000" in source, name
 
 
+def test_a_symbol_is_rasterised_once_per_colour_and_size(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Jedes Neuzeichnen fragt das Symbol neu — gerastert wird es einmal (RM-258).
+
+    Neben einem rechnenden Arbeiter kostete das Rastern beim ersten Bild der
+    Arbeitsfläche bis 170 ms. Gegenprobe: eine andere Farbe — gesperrt, ein
+    anderes Thema — und eine andere Größe rastern neu, sonst stünde nach einem
+    Themenwechsel die alte Farbe da.
+    """
+    from PySide6.QtCore import QSize
+    from PySide6.QtGui import QIcon, QPixmapCache
+
+    from app.ui import icons
+
+    QPixmapCache.clear()
+    drawn: list[int] = []
+    real = icons.svg_pixmap
+
+    def counted(source: str, size: int) -> Any:
+        drawn.append(size)
+        return real(source, size)
+
+    monkeypatch.setattr(icons, "svg_pixmap", counted)
+    engine = icons.ThemedIcon(icons.known()[0])
+    normal, off = QIcon.Mode.Normal, QIcon.State.Off
+    first = engine.pixmap(QSize(24, 24), normal, off)
+    again = engine.pixmap(QSize(24, 24), normal, off)
+    assert not first.isNull() and again.cacheKey() == first.cacheKey()
+    assert drawn == [24], "dasselbe Symbol in derselben Farbe und Größe einmal"
+    engine.pixmap(QSize(24, 24), QIcon.Mode.Disabled, off)
+    engine.pixmap(QSize(32, 32), normal, off)
+    assert drawn == [24, 24, 32], "andere Farbe und andere Größe rastern neu"
+
+
 def test_the_application_icon_carries_every_size(qt_app: QApplication) -> None:
     """Das Fenster-Symbol kommt aus der SVG-Quelle — leer hieße: Windows zeigt
     sein Standardbild, und niemand merkt es vor dem ersten Screenshot.
@@ -12053,6 +12088,11 @@ def test_the_keyboard_reaches_zoom_and_the_next_body(window: MainWindow) -> None
     assert window.object_tree.selected_objects() == ("obj_2",)
 
     shortcuts = {entry.key().toString() for entry in window.findChildren(QShortcut)}
+    shortcuts.update(
+        sequence.toString()
+        for action in window.findChildren(QAction)
+        for sequence in action.shortcuts()
+    )
     assert "Ctrl+Tab" in shortcuts
     assert any("+" in text for text in shortcuts), "der Zoom hat ein Kürzel"
 
@@ -13795,18 +13835,19 @@ def test_the_banner_names_the_reason_and_the_empty_difference(window: MainWindow
     assert banner.isHidden()
 
 
-def test_a_slow_preview_says_it_is_computing(window: MainWindow) -> None:
+def test_a_slow_preview_says_it_is_computing(window: MainWindow, qt_app: QApplication) -> None:
     """Nach 0,2 s ohne Ergebnis sagt das Band, dass gerechnet wird (§2.8).
 
     Ein Aushöhlen über einem großen Netz braucht Sekunden; solange stand das
     alte Bild unter dem alten Band, und ein Haken, dessen Wirkung erst nach
     drei Sekunden kommt, sah aus wie einer, der nicht reagiert.
     """
-    from PySide6.QtTest import QTest
-
     banner = window.viewport.banner
+    assert window._preview_busy.interval() == 200
+    assert window._preview_busy.isSingleShot()
     window._preview_busy.start()
-    QTest.qWait(300)
+    # Die Frist bleibt oben geprüft; der CI-Helfer wartet auf Qts Zustellung.
+    wait_until(qt_app, lambda: banner.note.text() == tr("Vorschau wird gerechnet …"))
     assert banner.note.text() == tr("Vorschau wird gerechnet …")
 
     # Das Ergebnis löst die Ansage ab — und ein Ergebnis vor Ablauf der
@@ -13815,7 +13856,7 @@ def test_a_slow_preview_says_it_is_computing(window: MainWindow) -> None:
     assert banner.note.text() == tr("Vorschau — noch nicht übernommen")
     window._preview_busy.start()
     window._show_preview(dataclasses.make_dataclass("Voll", [("changed", bool)])(True))
-    QTest.qWait(300)
+    assert not window._preview_busy.isActive()
     assert banner.note.text() == tr("Vorschau — noch nicht übernommen")
     window._clear_preview()
 
@@ -20856,6 +20897,181 @@ def test_a_clicked_edge_reaches_the_selection_window(
     )
 
 
+@pytest.mark.parametrize("kind", ["mesh", "brep"])
+def test_edges_taken_with_ctrl_click_round_in_one_step(window: MainWindow, kind: str) -> None:
+    """Zwei Kanten mit Strg-Klick, *Verrunden* im Merkmalfenster — ein Schritt (RM-563).
+
+    Der Kundenweg Ende zu Ende, am Netz wie am exakten Körper: Körper wählen,
+    eine obere Kante anklicken, die gegenüberliegende mit Strg dazu. Das
+    Fenster nennt beide und den Weg zu weiteren, Kontextmenü und Menüeintrag
+    belegen den Dialog mit beiden vor, und *Verrunden* übernimmt **einen**
+    Schritt mit beiden Schlüsseln. Der Sollwert ist Lehrbuchgeometrie: zwei
+    Zwickel ``(1 − π/4)·r²`` über die Kantenlänge, am Netz der Sehnenzug mit
+    der Feinheit der Zusage (``polygon_share``). Strg+Z nimmt ihn ganz zurück.
+    """
+    import math
+
+    from PySide6.QtWidgets import QLabel
+
+    from app.core.geom.edges import edge_key, edges_in_kernel
+    from app.ui.render.api import Pick
+    from tests.helpers import exact_kernel
+    from tests.render_fakes import RecordingRenderer
+    from tests.test_variable_fillet import polygon_share
+
+    if kind == "brep":
+        exact_kernel()
+    renderer = RecordingRenderer(size=(900, 600))
+    window.viewport.renderer = renderer
+    creator = "create_brep_box" if kind == "brep" else "create_box"
+    assert window.session.apply(
+        "Quader",
+        [OperationDraft(op=creator, params={"width": 40.0, "depth": 30.0, "height": 20.0})],
+    )
+    assert window.session.wait_for_idle(60_000)
+    result = window.session.last_result
+    assert result is not None
+    object_id, body = next(iter(result.scene.objects.items()))
+    steps = len(window.session.project.document.ops)
+    before = float(body.mesh.volume)
+    top = float(body.mesh.bounds.maximum[2])
+    _kernel, entries = edges_in_kernel(body.mesh, kind)
+    lang_oben = sorted(
+        (
+            entry
+            for entry in entries
+            if abs(entry.middle[2] - top) < 1e-6 and abs(entry.direction[0]) > 0.9
+        ),
+        key=lambda entry: entry.middle[1],
+    )
+    assert len(lang_oben) == 2, "die zwei langen oberen Kanten"
+    keys = tuple(edge_key(entry) for entry in lang_oben)
+    offset = window.viewport._shown_offset(body, result)
+
+    def klick(entry: Any, *, add: bool = False) -> None:
+        point = tuple(float(entry.middle[axis]) + float(offset[axis]) for axis in range(3))
+        x, y, _depth = renderer.world_to_display(point)
+        renderer.picks[(round(x), round(y))] = Pick(point, window.viewport._actors[object_id], 0)
+        window.viewport._on_left_click(round(x), round(y), add=add)
+        QApplication.processEvents()
+
+    spec = REGISTRY.get("fillet_edges")
+    feld = next(entry for entry in spec.params.spec() if entry.name == "radius")
+
+    def radius() -> Any:
+        # Nur das sichtbare Feld: Das Fenster baut sich je Kantenwahl neu und
+        # hält Zeilen zur Wiederverwendung zurück.
+        return next(
+            widget
+            for widget in window.feature_panel.findChildren(QWidget)
+            if widget.accessibleName() == f"{spec.title} — {feld.title}"
+            and widget.isVisibleTo(window.feature_panel)
+        )
+
+    window.object_tree.select_object(object_id)
+    QApplication.processEvents()
+    klick(lang_oben[0])
+    radius().set_value(3.0)
+    QApplication.processEvents()
+    klick(lang_oben[1], add=True)
+
+    assert window.viewport.highlighted_edges() == keys, "beide Kanten, in Klickfolge"
+    assert radius().value() == pytest.approx(3.0), (
+        "der eingegebene Radius bleibt, wenn eine Kante dazukommt"
+    )
+    assert window.object_tree.selected() == object_id, "der Körper bleibt gewählt"
+    texte = [label.text() for label in window.feature_panel.findChildren(QLabel)]
+    assert "2 Kanten" in texte, "das Fenster nennt die Zahl"
+    assert "Weitere Kanten dazu mit Umschalt oder Strg und Klick." in texte, (
+        "und den Weg zu weiteren"
+    )
+    assert window.measurements.text().startswith("2 Kanten, zuletzt "), (
+        "die Statuszeile sagt es ohne Bild (Regel 18)"
+    )
+
+    def vorbelegt() -> dict[str, Any]:
+        dialog = next(child for child in window.findChildren(OperationDialog) if child.isVisible())
+        werte = dialog.values()
+        liste = dialog._editors["edge_keys"].list
+        angehakt = [
+            liste.item(row).text()
+            for row in range(liste.count())
+            if liste.item(row).checkState() == Qt.CheckState.Checked
+        ]
+        dialog.reject()
+        QApplication.processEvents()
+        assert len(angehakt) == 2 and not set(angehakt) & set(keys), (
+            "beide angehakt, beschriftet mit Lage und Länge statt Kennung"
+        )
+        return werte
+
+    menue = window._edge_menu()
+    assert menue is not None
+    eintrag = next(
+        action
+        for action in menue.actions()
+        if action.text() == str(REGISTRY.get("fillet_edges").title)
+    )
+    eintrag.trigger()
+    werte = vorbelegt()
+    assert werte["edges"] == "named" and werte["edge_keys"].split() == list(keys), (
+        "das Kontextmenü meint alle gewählten Kanten"
+    )
+    window.run_operation(REGISTRY.get("fillet_edges"))
+    werte = vorbelegt()
+    assert werte["edges"] == "named" and werte["edge_keys"].split() == list(keys), (
+        "der Menüeintrag belegt die gewählten Kanten vor statt der Gruppe"
+    )
+    assert window.viewport.highlighted_edges() == keys, "ein abgebrochener Dialog lässt sie stehen"
+
+    assert radius().value() == pytest.approx(3.0), "auch nach den zwei Dialogen"
+    window._feature_preview.stop()
+    window._preview_feature_change()
+    assert window.session.wait_for_idle(60_000)
+    for _ in range(40):
+        QApplication.processEvents()
+    window.feature_panel._apply.click()
+    assert window.session.wait_for_idle(60_000)
+
+    ops = window.session.project.document.ops
+    assert len(ops) == steps + 1, "ein Schritt für beide Kanten"
+    assert ops[-1].op == "fillet_edges" and ops[-1].params["edges"] == "named"
+    assert sorted(ops[-1].params["edge_keys"].split()) == sorted(keys)
+    nach = window.session.last_result
+    assert nach is not None and nach.complete
+    share = (1.0 - math.pi / 4.0) if kind == "brep" else polygon_share(3.0)
+    entfernt = 2.0 * share * 3.0**2 * 40.0
+    assert before - float(nach.scene.objects[object_id].mesh.volume) == pytest.approx(
+        entfernt, rel=2e-3 if kind == "mesh" else 1e-5
+    ), "zwei Zwickel über je 40 mm"
+
+    window.session.undo()
+    assert window.session.wait_for_idle(60_000)
+    assert len(window.session.project.document.ops) == steps
+    zurueck = window.session.last_result
+    assert zurueck is not None
+    assert float(zurueck.scene.objects[object_id].mesh.volume) == pytest.approx(before, abs=1e-9)
+
+    # Mit Taste die letzte Kante heraus: Die Auswahl steht wieder auf dem
+    # Körper, wie nach Escape, und das Fenster zeigt keine Kante mehr.
+    window.object_tree.select_object(object_id)
+    QApplication.processEvents()
+    klick(lang_oben[0])
+    assert window.viewport.highlighted_edges() == keys[:1]
+    klick(lang_oben[0], add=True)
+    assert window.viewport.highlighted_edges() == ()
+    assert window.object_tree.selected() == object_id
+    assert window.viewport.selection_depth() == 1
+    sichtbar = [
+        label.text()
+        for label in window.feature_panel.findChildren(QLabel)
+        if label.isVisibleTo(window.feature_panel)
+    ]
+    assert "Weitere Kanten dazu mit Umschalt oder Strg und Klick." not in sichtbar, (
+        "das Fenster meint keine Kante mehr"
+    )
+
+
 def test_the_age_of_a_backup_follows_the_application_language(tmp_path: Path) -> None:
     """Das Datum einer alten Sicherung wandert mit der Sprache.
 
@@ -21044,6 +21260,54 @@ def test_a_further_model_brings_its_plate_into_view(
         "ohne zweite Platte prüft der Test nichts"
     )
     assert window.header.plate == 1, "das neue Modell steht auf Platte 2 und gehört ins Bild"
+
+
+@pytest.mark.parametrize("layer_open", [False, True])
+def test_a_further_model_beyond_the_view_comes_into_it(
+    window: MainWindow, tmp_path: Path, layer_open: bool
+) -> None:
+    """RM-650 (Fund aus RM-306): Ein weiteres Modell neben dem gerahmten stand außerhalb des Bilds.
+
+    Die Ansicht war auf das erste Modell eingepasst; das zweite kam daneben an
+    die freie Stelle, und nur der Objektbaum verriet es. Jetzt rahmt die
+    Ansicht einmal nach, wenn das neue Modell über den eingepassten Rahmen
+    hinausragt — derselbe Weg wie nach einem Größenschritt (RM-280). Auch bei
+    offener Schichtansicht: Deren Aufbau der alten Szene verbrauchte die Bitte,
+    solange sie beim Einfügen gestellt wurde statt vor dem Aufbau, der das
+    neue Modell trägt.
+    """
+    from app.core.slice.analysis import slice_body
+    from app.ui.viewport import reaches_beyond
+
+    cube = (MESHES / "cube_clean.stl").read_bytes()
+    first = tmp_path / "erster.stl"
+    first.write_bytes(cube)
+    window.open_path(first)
+    assert window.session.wait_for_idle(60_000)
+    QApplication.processEvents()
+    framed = window.viewport._fitted_bounds
+    assert framed is not None
+    if layer_open:
+        result = window.session.last_result
+        assert result is not None
+        body = next(iter(result.scene.objects))
+        layers = slice_body(result.scene.objects[body].mesh, 2.0)
+        window.viewport.set_layer(layers.layers[3], body)
+
+    second = tmp_path / "zweiter.stl"
+    second.write_bytes(cube)
+    window.open_path(second)
+    assert window.session.wait_for_idle(60_000)
+    QApplication.processEvents()
+
+    result = window.session.last_result
+    assert result is not None and len(result.scene.objects) == 2
+    both = window.viewport._object_bounds()
+    assert both is not None
+    assert reaches_beyond(framed, both), "ohne Überstand prüft der Test nichts"
+    assert not reaches_beyond(window.viewport._fitted_bounds, both), (
+        "das neue Modell steht im eingepassten Rahmen"
+    )
 
 
 def test_the_section_plane_cuts_every_plate_at_its_own_place(window: MainWindow) -> None:

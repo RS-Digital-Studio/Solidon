@@ -17,14 +17,14 @@ Projektdateien tragen die Endung `.p3d`.
 ## Die öffentliche Demo
 
 Die aktuelle Version ist eine **Demo**: vollständig, unentgeltlich, ohne
-Schlüssel und ohne Konto, **befristet bis zum 30. Oktober 2026**. Danach
+Schlüssel und ohne Konto, **befristet bis zum 30. November 2026**. Danach
 startet sie nicht mehr — kein Betrachtermodus, keine halbe Version, die
 niemand pflegt. Projektdateien sind davon unberührt: eine `.p3d` ist ein
 ZIP-Archiv mit JSON darin und bleibt lesbar.
 
 Der Stichtag steht in `app/core/activation/store.py` (`DEMO_UNTIL`) und
-nirgends sonst. Am **31. Oktober 2026** bleibt die Demo gestoppt; am
-**1. November 2026** startet die Verkaufsversion 1.0. Sie trägt bei
+nirgends sonst. Ab dem **1. Dezember 2026** bleibt die Demo gestoppt, und am
+selben Tag startet die Verkaufsversion 1.0. Sie trägt bei
 `DEMO_UNTIL` und `TRIAL_FROM` jeweils `None`: kein Demo-Stichtag und zunächst
 keine Testphase. Ab dem 1. November ausgestellte Verkaufsschlüssel öffnen
 schreibende Funktionen erst mit dem passenden Geräte-Zertifikat; bereits
@@ -33,7 +33,7 @@ Der gepflegte 14-Tage-Pfad bleibt im Code,
 aber nur ein späterer neuer Bau mit gesetztem `TRIAL_FROM` kann ihn anbieten.
 Das Konzept dahinter steht in `konzepte/konzept-demo-2026-10.md`.
 
-Verkauft wird 1.0 ab dem **1. November 2026, 10:00 Uhr**, in zwei Lizenzarten
+Verkauft wird 1.0 ab dem **1. Dezember 2026, 10:00 Uhr**, in zwei Lizenzarten
 mit demselben Funktionsumfang, beide als Einmalkauf mit allen Updates von 1.x:
 **privat 69 €** und **gewerblich 199 €**, jeweils als Einstiegspreis bis zum
 31. Januar 2027; ab dem 1. Februar 2027 kostet die private Lizenz 99 € und die
