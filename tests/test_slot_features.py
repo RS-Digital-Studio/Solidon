@@ -2845,6 +2845,159 @@ def test_a_bore_through_two_plates_with_a_pin_names_the_pin(profile: Profile, ke
         assert caught.value.detail is OTHER_PART_IN_THE_BORE
 
 
+def _names_the_other_part(entry: SceneObject, feature: Feature, profile: Profile) -> None:
+    """Menü und jede Handlung an der Bohrung sagen das andere Teil, mit Weg."""
+    from app.core.geom.prepare_ops import OTHER_PART_IN_THE_BORE, filled_bore_reason, hole_is_clear
+    from app.core.perceive.actions import actions_for
+
+    load_operations()
+    mesh = as_mesh_data(entry.mesh)
+    assert not hole_is_clear(mesh, feature)
+    assert filled_bore_reason(mesh, feature) is OTHER_PART_IN_THE_BORE
+    rows = actions_for(feature, entry.features, mesh=mesh)
+    moved = [row for row in rows if row.op is None and str(row.title) == "Merkmal verschieben"]
+    assert moved and all(row.reason is OTHER_PART_IN_THE_BORE for row in moved)
+    for op, params in sorted(_BORE_OPS.items()):
+        with pytest.raises(ValidationError) as caught:
+            run_op(op, entry, profile, at_feature=feature.id, **params)
+        assert caught.value.detail is OTHER_PART_IN_THE_BORE, op
+        assert [action.id for action in caught.value.suggestions] == ["split_bodies", "cancel"], op
+
+
+@pytest.mark.parametrize("span", [(0.0, 40.0), (-30.0, 10.0), (-25.0, 35.0)])
+@pytest.mark.parametrize("kernel", ["mesh", "brep"])
+def test_a_long_pin_in_the_bore_is_seen_beyond_its_mouths(
+    profile: Profile, kernel: str, span: tuple[float, float]
+) -> None:
+    """Ein Stift, der weit aus der Platte ragt, steht trotzdem in ihrer Bohrung (RM-253).
+
+    Am Laptop-Ständer steckt in ``hole_1`` (Platte 10,27 mm) eine geschlitzte
+    Hülse von 43 mm. Ihre Manteldreiecke laufen über die ganze Länge, ihre
+    Mitten lagen 9 bis 23 mm vor der Bohrungsmitte und damit hinter den
+    Mündungen bei ±4,93 mm: Die Prüfung über Dreiecksmitten sah nichts,
+    *Merkmal versetzen* und *Drehen* rechneten durch die Hülse (−127 mm³, „geht
+    nicht mehr durch“), *Bohrung ändern* auf Ø 4,5 nahm 64 mm³ weg, statt
+    Material zuzugeben. Hier die Platte 10 mm mit Bohrung Ø 6 und ein Stift Ø 4
+    über ``span``: Keine seiner Dreiecksmitten liegt in der Bohrung, ein Stück
+    jedes Manteldreiecks schon. Am Stand davor galt die Bohrung als frei.
+    """
+    entry = _plate_with_a_second_body(kernel, inside=True, pin_span=span, pin_diameter=4.0)
+    feature = entry.features[_bore_in(entry, "hole")]
+    mesh = as_mesh_data(entry.mesh)
+    assert mesh.component_count == 2, "Voraussetzung: Platte und Stift"
+    centres = np.asarray(mesh.raw.triangles_center, dtype=np.float64)
+    within = (np.hypot(centres[:, 0], centres[:, 1]) < 2.9) & (
+        (centres[:, 2] > 0.0) & (centres[:, 2] < 10.0)
+    )
+    assert not within.any(), "Voraussetzung: keine Dreiecksmitte steht in der Bohrung"
+
+    _names_the_other_part(entry, feature, profile)
+
+
+def _plate_with_a_cross_pin(kernel: str, start: float, length: float) -> SceneObject:
+    """Platte 40 x 20 x 10, Bohrung Ø 6 längs z, Querbohrung Ø 3 längs x auf halber
+    Höhe, darin ein getrennter Stift Ø 2,4 von ``start`` über ``length`` entlang x."""
+    exact_kernel()
+    from OCP.BRep import BRep_Builder
+    from OCP.BRepPrimAPI import BRepPrimAPI_MakeCylinder
+    from OCP.gp import gp_Ax2, gp_Dir, gp_Pnt
+    from OCP.TopoDS import TopoDS_Compound
+
+    from app.core.brep import edit
+    from app.core.brep.features import features_of
+    from app.core.brep.kernel import Solid
+
+    plate = edit.cut_bore(
+        edit.box(40.0, 20.0, 10.0),
+        position=(0.0, 0.0, 5.0),
+        direction=(0.0, 0.0, 1.0),
+        diameter=6.0,
+        depth=12.0,
+    )
+    plate = edit.cut_bore(
+        plate, position=(0.0, 0.0, 5.0), direction=(1.0, 0.0, 0.0), diameter=3.0, depth=42.0
+    )
+    pin = BRepPrimAPI_MakeCylinder(
+        gp_Ax2(gp_Pnt(start, 0.0, 5.0), gp_Dir(1.0, 0.0, 0.0)), 1.2, length
+    ).Shape()
+    compound = TopoDS_Compound()
+    builder = BRep_Builder()
+    builder.MakeCompound(compound)
+    builder.Add(compound, plate.shape)
+    builder.Add(compound, pin)
+    solid = Solid(compound)
+    if kernel == "brep":
+        return SceneObject(
+            id="obj_1", name="Platte", mesh=solid, kind="brep", features=features_of(solid)
+        )
+    mesh = MeshData.of(as_mesh_data(solid).raw.copy())
+    return SceneObject(id="obj_1", name="Platte", mesh=mesh, features=detect(mesh))
+
+
+@pytest.mark.parametrize("pin", [(-18.0, 36.0), (-35.0, 40.0)])
+@pytest.mark.parametrize("kernel", ["mesh", "brep"])
+def test_a_cross_pin_through_the_bore_is_seen_although_its_middles_lie_beside_it(
+    profile: Profile, kernel: str, pin: tuple[float, float]
+) -> None:
+    """Derselbe Fehler quer zur Achse: Ein Querstift läuft mitten durch die Bohrung (RM-253).
+
+    Seine Manteldreiecke reichen über die ganze Stiftlänge, ihre Mitten liegen
+    bei x = ±6 (mittig) oder −22 und −8 (einseitig) — weit außerhalb des Radius
+    3, obwohl jedes von ihnen die Bohrung quert. Am Stand davor galt die
+    Bohrung als frei; die Querbohrung der Platte endet auf der Bohrungswand und
+    zählt nicht.
+    """
+    entry = _plate_with_a_cross_pin(kernel, *pin)
+    feature = entry.features[_bore_in(entry, "hole")]
+    assert as_mesh_data(entry.mesh).component_count == 2, "Voraussetzung: Platte und Stift"
+    assert float(feature.params["depth"]) == pytest.approx(10.0, abs=0.05)
+
+    _names_the_other_part(entry, feature, profile)
+
+
+def test_a_cross_bore_alone_leaves_the_bore_free() -> None:
+    """Gegenfall: Ohne Stift darin ist die Bohrung mit Querbohrung frei — deren Wand
+    endet auf der Bohrungswand und steht nicht darin, an beiden Kernen. Der Stift
+    liegt hier weit neben der Platte."""
+    from app.core.geom.prepare_ops import hole_is_clear
+
+    for kernel in ("mesh", "brep"):
+        entry = _plate_with_a_cross_pin(kernel, 60.0, 5.0)
+        feature = entry.features[_bore_in(entry, "hole")]
+        assert hole_is_clear(as_mesh_data(entry.mesh), feature), kernel
+
+
+@pytest.mark.parametrize("sections", [13, 15])
+def test_a_coarse_bore_with_a_cross_bore_stays_free(sections: int) -> None:
+    """Gegenfall zur Grenze der eigenen Wand: Ein grobes Vieleck liegt mit seinen
+    Seitenmitten innerhalb des Saums am Radius, und die Querbohrung endet dort.
+
+    Ein 13- bis 15-Eck Ø 6 hat seine Seitenmitten 2,91 bis 2,93 mm von der Achse,
+    unter 0,98 · 3. Gegen den Radius gemessen galten die Enden der Querbohrung als
+    Material in der Bohrung; gegen die eigene Wand (``_reaching_in``) bleibt sie
+    frei.
+    """
+    from app.core.geom.prepare_ops import hole_is_clear
+
+    plate = trimesh.creation.box(extents=(40.0, 20.0, 10.0))
+    plate.apply_translation((0.0, 0.0, 5.0))
+    bore = trimesh.creation.cylinder(radius=3.0, height=14.0, sections=sections)
+    bore.apply_translation((0.0, 0.0, 5.0))
+    cross = trimesh.creation.cylinder(radius=1.5, height=44.0, sections=sections)
+    cross.apply_transform(trimesh.transformations.rotation_matrix(math.pi / 2.0, (0, 1, 0)))
+    cross.apply_translation((0.0, 0.0, 5.0))
+    body = boolean("difference", [MeshData.of(plate), MeshData.of(bore), MeshData.of(cross)]).mesh
+    mesh = MeshData.of(body.raw.copy())
+    holes = [
+        feature
+        for feature in detect(mesh).values()
+        if feature.kind == "hole" and abs(float(feature.params["diameter"]) - 6.0) < 0.1
+    ]
+    assert len(holes) == 1, "Voraussetzung: die grobe Bohrung ist erkannt"
+    assert float(holes[0].params["radial_min"]) < 3.0 * 0.98, "Voraussetzung: grobes Vieleck"
+    assert hole_is_clear(mesh, holes[0])
+
+
 @pytest.mark.parametrize("kernel", ["mesh", "brep"])
 def test_pulling_a_bore_preserves_a_second_body_beyond_the_measured_depth(
     profile: Profile, kernel: str

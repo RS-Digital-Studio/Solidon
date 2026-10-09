@@ -62,6 +62,7 @@ scrive in `website/version.json`.
 - Viti, dadi e rondelle ci sono secondo ISO da M1,6 a M64. Per altre misure, *Misura personalizzata* ricava le dimensioni dalle misure vicine e lo dice.
 - Con *Adatto al foro*, *Perno per foro* costruisce la controparte: una testa svasata a filo per una svasatura, una filettatura esterna di pari misura e passo per una interna.
 - Su una filettatura interna stampata, la selezione offre direttamente *Perno per foro*.
+- Se una boccola sporge molto da un foro o un perno lo attraversa, le azioni sul foro indicano il pezzo separato e offrono *Dividi in pezzi distinti*.
 - Se in un foro c'è un pezzo separato come un perno, le azioni sul foro lo dicono e offrono *Dividi in pezzi distinti*. Finora il perno veniva fuso in silenzio con la piastra.
 
 ### Modificare e disegnare

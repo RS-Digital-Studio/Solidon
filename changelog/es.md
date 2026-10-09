@@ -63,6 +63,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Tornillos, tuercas y arandelas están disponibles según ISO de M1,6 a M64. Para otros tamaños, *Medida propia* deriva las medidas de los tamaños vecinos y lo indica.
 - Con *Ajustado al taladro*, *Pasador para taladro* construye la contrapieza: una cabeza avellanada enrasada para un avellanado, una rosca exterior del mismo tamaño y paso para una interior.
 - En una rosca interior impresa, la selección ofrece directamente *Pasador para taladro*.
+- Si un casquillo sobresale mucho de un taladro o un pasador lo atraviesa, las acciones del taladro nombran la pieza separada y ofrecen *Dividir en piezas sueltas*.
 - Si en un taladro hay una pieza separada, como un pasador, las acciones del taladro lo dicen y ofrecen *Dividir en piezas sueltas*. Antes, el pasador se fundía en silencio con la placa.
 
 ### Editar y dibujar

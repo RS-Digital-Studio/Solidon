@@ -63,6 +63,7 @@ dans `website/version.json`.
 - Vis, écrous et rondelles existent selon ISO de M1,6 à M64. Pour d'autres tailles, *Taille personnalisée* déduit les cotes des tailles voisines et le signale.
 - Avec *Ajustée au perçage*, *Goupille pour perçage* construit la contrepartie : une tête fraisée affleurante pour une fraisure, un filetage extérieur de même taille et même pas pour un intérieur.
 - Sur un filetage intérieur imprimé, la sélection propose directement *Goupille pour perçage*.
+- Si une douille dépasse largement d'un perçage ou qu'une goupille le traverse, ses actions signalent la pièce séparée et proposent *Diviser en pièces distinctes*.
 - Si une pièce séparée, comme une goupille, occupe un perçage, ses actions le signalent et proposent *Diviser en pièces distinctes*. Avant, la goupille fusionnait sans bruit avec la plaque.
 
 ### Modifier et esquisser
