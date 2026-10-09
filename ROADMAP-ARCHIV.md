@@ -31,6 +31,7 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-09 | [RM-599: Curas AppImage wird für seine Drucker gelesen, nicht eingehängt (09.10.2026)](#rm-599-curas-appimage-wird-für-seine-drucker-gelesen-nicht-eingehängt-09102026) |
 | 2026-10-09 | [RM-549: Die AppImages der Orca-Familie zeigen ihre Herstellerdrucker ohne ersten Start (09.10.2026)](#rm-549-die-appimages-der-orca-familie-zeigen-ihre-herstellerdrucker-ohne-ersten-start-09102026) |
 | 2026-10-08 | [RM-602: Der Druckdialog ordnet die Profile in einem Lesedurchgang zu (08.10.2026)](#rm-602-der-druckdialog-ordnet-die-profile-in-einem-lesedurchgang-zu-08102026) |
 | 2026-10-08 | [RM-601: Die Slicerwahl im Druckdialog geht wie in Erste Schritte, und überall stehen nur unterstützte Slicer (08.10.2026)](#rm-601-die-slicerwahl-im-druckdialog-geht-wie-in-erste-schritte-und-überall-stehen-nur-unterstützte-slicer-08102026) |
@@ -44525,3 +44526,31 @@ und Intel-Mac: unter Linux ohne ersten Start 997, 997, 491 und 202 Drucker, erst
 `tests/test_appimage_profiles.py` (41 Fälle; der Anschlussfall und der Fensterfaden am alten
 `slicer_profiles.py` rot), `tests/test_real_slicers.py::test_a_slicer_never_opened_offers_the_printers_of_its_maker`.
 Changelog: ja.
+
+## RM-599: Curas AppImage wird für seine Drucker gelesen, nicht eingehängt (09.10.2026)
+
+<a id="rm-599-curas-appimage-wird-für-seine-drucker-gelesen-nicht-eingehängt-09102026"></a>
+<a id="rm-599"></a>
+
+**Anlass (Vorschlag aus RM-549):** Die Druckerkopie einer AppImage-Cura (RM-521) startete das
+AppImage mit `--appimage-mount`, nur um `share/cura/resources` zu kopieren und nachzusehen, ob
+Lader und CuraEngine darin liegen. Ohne FUSE gab es dann keine Drucker. Curas Abbild (5.13) ist
+gzip-komprimiert und damit mit der Standardbibliothek lesbar.
+
+**Behoben:** Der Leser aus RM-549 steht als `app/core/export/squashfs.py` für beide bereit.
+`cura_linux._read_resources` kopiert den Bestand aus dem Abbild, `engine_complete` beantwortet
+aus `AppRun.env`, Lader und CuraEngine im Abbild dieselbe Frage wie `loader_command` am
+eingehängten Ordner. Der Lader ist im Abbild eine Verknüpfung nach `lib/x86_64-linux-gnu`;
+`SquashImage.resolve` folgt Verknüpfungen nur innerhalb des Abbilds. Eingehängt wird nur noch
+für einen Lauf. Vertrag wie zuvor: Cache je Fassung, Fensterfaden wartet nie, fremde Eingabe.
+Der Starttest des Pakets verlangt unter Linux, dass es gzip und zstd entpackt
+(`image_compressions`, `tools/check_frozen_start.py`).
+
+**Nachweis (09.10.2026):** Lokal gegen 7-Zip: 9 944 Dateien byte-gleich, Rechenmaschine
+erkannt. Gegenprobe mit dem alten `cura_linux.py`: der neue Fall
+`test_curas_printers_and_engine_come_from_the_image_without_starting_it` und
+`test_cura_as_an_appimage_computes_while_it_is_mounted` rot (Prozessstart beim Lesen, Einhängen
+der Kopie). Slicerauswahl 37879205882 (Cura) grün auf Linux, Apple Silicon und Intel-Mac:
+unter Linux mit leerem Cache und ohne Prozessstart 9 944 Dateien in 1,19 s, Rechenmaschine
+erkannt (`test_real_slicers.py::test_curas_printers_are_read_from_its_appimage_without_starting_it`),
+der Würfel aus Curas AppImage gesliced. Changelog: nein, Cura als AppImage ist als Ganzes neu in 0.6.0.
