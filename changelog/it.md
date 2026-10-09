@@ -62,6 +62,14 @@ scrive in `website/version.json`.
 - Con *Adatto al foro*, *Perno per foro* costruisce la controparte: una testa svasata a filo per una svasatura, una filettatura esterna di pari misura e passo per una interna.
 - Su una filettatura interna stampata, la selezione offre direttamente *Perno per foro*.
 - Se in un foro c'è un pezzo separato come un perno, le azioni sul foro lo dicono e offrono *Dividi in pezzi distinti*. Finora il perno veniva fuso in silenzio con la piastra.
+- Nuovo il *Perno filettato*: una barra filettata o un prigioniero senza testa, smussato a entrambe le estremità, con la stessa filettatura stampabile di vite e dado.
+
+### Blocchi
+
+- I blocchi che sono un pezzo a sé, come supporti, fascette o dadi, nascono senza selezione come corpo a sé in un punto libero del piatto, anche in un progetto vuoto.
+- Anche i tuoi blocchi nascono così come corpo a sé e non si attaccano a un corpo già presente nel progetto.
+- Con *Salva la selezione come blocco* il corpo selezionato arriva con esattamente i passi che lo costruiscono. Se arrivasse anche un secondo corpo, la finestra lo dice prima.
+- Supporti a parete, fascette per tubo, morsetti per profilo e supporti accettano ogni vite da M3 a M64. Se una misura non si accorda con le altre, il blocco dice cosa cambiare.
 
 ### Modificare e disegnare
 

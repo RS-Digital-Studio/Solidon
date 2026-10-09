@@ -62,6 +62,14 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Com *Ajustado ao furo*, *Pino para furo* constrói a contrapeça: uma cabeça escareada à face para um escareamento, uma rosca externa do mesmo tamanho e passo para uma interna.
 - Numa rosca interna impressa, a seleção oferece diretamente *Pino para furo*.
 - Se num furo estiver uma peça separada, como um pino, as ações no furo dizem-no e oferecem *Dividir em peças soltas*. Até agora, o pino fundia-se em silêncio com a placa.
+- Novo: o *Perno roscado*, uma barra roscada ou um perno sem cabeça, chanfrado nas duas pontas, com a mesma rosca imprimível do parafuso e da porca.
+
+### Blocos
+
+- Os blocos que são uma peça por si só, como suportes, abraçadeiras ou porcas, surgem sem seleção como corpo próprio num sítio livre da placa, também num projeto vazio.
+- Os seus próprios blocos também surgem assim como corpo próprio e não se prendem a um corpo que já está no projeto.
+- Com *Guardar a seleção como bloco*, o corpo selecionado vem com exatamente os passos que o constroem. Se viesse um segundo corpo, o diálogo diz isso antes de guardar.
+- Suportes de parede, abraçadeiras de tubo e de perfil e suportes aceitam qualquer parafuso de M3 a M64. Se um tamanho não combina com as outras medidas, o bloco diz o que mudar.
 
 ### Editar e esboçar
 
