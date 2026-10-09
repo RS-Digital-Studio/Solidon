@@ -105,8 +105,8 @@ def held_by(
     Gemessen wird nicht einmal für immer: Ein Netz im Cache ist dasselbe
     Objekt wie in der Szene, und was später an ihm gerechnet wird —
     Nachbarschaften, die Schichtanalyse des Prüfberichts —, hängt sich an ihn
-    und wiegt mit. Netze, deren Nummer (``id``) oder die ihres ``raw`` in
-    ``kept`` steht, hält die Szene ohnehin; sie zählen hier nicht. Felder, deren Nummer in ``seen``
+    und wiegt mit. Netze, deren Nummer (``id``) in ``kept`` steht, hält die
+    Szene ohnehin; sie zählen hier nicht. Felder, deren Nummer in ``seen``
     steht, sind schon gezählt — ein bewegtes Netz teilt seine
     Nachbarschaften mit seinem Quellnetz (``transform._carry_cache``).
     ``freeable`` sammelt in seinem ersten Element, was schlanke Netze davon
@@ -125,7 +125,7 @@ def held_by(
     seen = set() if seen is None else seen
     total = 0
     for entry in result.objects:
-        if id(entry.mesh) in kept or id(getattr(entry.mesh, "raw", None)) in kept:
+        if id(entry.mesh) in kept:
             continue
         total += _mesh_bytes(entry.mesh, seen, freeable)
         if counted is None:
@@ -773,14 +773,7 @@ class ResultCache:
         # Der jüngste Eintrag bleibt immer ganz, auch über der Grenze — ohne
         # ihn rechnete der nächste Schritt alles noch einmal.
         ids = {id(mesh) for mesh in kept}
-        # Für die Schätzung zählt auch ein Netz als gehalten, das nur die Hülle
-        # um ein Netz der Szene ist (RM-636): *Filament zuweisen* und
-        # *Umbenennen* geben dieselben Ecken und Dreiecke in einer neuen Hülle
-        # aus (``with_slots`` teilt ``raw``). Der Eintrag davor verlor damit den
-        # Platz in der Szene, und sein Netz samt Erkennungsmerker wurde neu
-        # durchlaufen, als hielte er es allein — am Eiffelturm je Schritt.
-        shown = ids | {id(raw) for mesh in kept if (raw := getattr(mesh, "raw", None)) is not None}
-        held = sum(self._unkept(key, entry, shown) for key, entry in self._entries.items())
+        held = sum(self._unkept(key, entry, ids) for key, entry in self._entries.items())
         if held + _memo_bytes() <= self._memory_budget:
             return 0
         # Die Schätzung je Eintrag zählt geteilte Felder mehrfach; über der
@@ -858,10 +851,7 @@ class ResultCache:
         an ihm etwas geändert hatte. Welche seiner Netze die Szene hält, steht
         deshalb mit im Merker.
         """
-        shown = tuple(
-            id(body.mesh) in kept or id(getattr(body.mesh, "raw", None)) in kept
-            for body in entry.objects
-        )
+        shown = tuple(id(body.mesh) in kept for body in entry.objects)
         signature = (*_held_signature(entry), shown)
         known = self._held.get(key)
         if known is None or known[0] != signature:
