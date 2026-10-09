@@ -53,6 +53,9 @@ Nutzen da und sonst nichts.
 - Entf wirkt auch, wenn der Reiter *Auswahl* den Fokus hat, und entfernt mehrere markierte Körper in einem Schritt. Tut die Taste nichts, nennt die Statuszeile den Grund.
 - Der Rechtsklick an Körpern bietet *Objekt entfernen* und bei mehreren *Vereinigen*. *Aushöhlen* steht auch an einer gewählten Fläche, sie wird die Öffnung.
 - Die Karten links und rechts lassen sich am Griff verschieben, an den Rand legen oder schweben lassen. *Ansicht → Karten an ihren Platz* legt sie zurück.
+- Die Karten lassen sich auch unten links, unten rechts und am unteren Rand anordnen.
+- Reiter lassen sich umordnen und in eigene Fenster ziehen, auch auf einen zweiten Bildschirm. Schließen oder *Zurück in Solidon* holt ihren Inhalt zurück.
+- Solidon merkt sich die Anordnung. Auch wenn ein Bildschirm fehlt, bleiben die Fenster erreichbar.
 - Während neu gerechnet wird, sagt der Prüfbericht *Wird neu berechnet …* und zeigt die bisherigen Zeilen als vorigen Stand. Bisher sahen alte Fehler dabei aus, als gälten sie noch.
 - Scheitert die schnelle Rechnung an einem Schritt, rechnet Solidon ihn im selben Lauf gründlich nach, statt anzuhalten.
 - Sagt ein Befund, dass ein Schritt nichts bewirkt hat, öffnet er diesen Schritt mit dem passenden Feld.
@@ -64,13 +67,32 @@ Nutzen da und sonst nichts.
 - Im Zeichenmodus ist der Reiter *Auswahl* ausgeblendet. Die Liste der Bedingungen zeigt die der gewählten Punkte und Linien und jeden Widerspruch.
 - In der Parameterkarte steht unter einem Maß nur noch „Nicht verwendet“, wo das zutrifft. Wie viele feste Zahlen sich an Maße binden lassen, sagt der Knopf.
 - Der Fehlerbericht hängt ein Absturzprotokoll nur noch an, wenn Solidon wirklich abgestürzt ist.
+- Die Karte der Tour ist so hoch wie ihre Schritte. Ein Schritt klappt per Klick oder Leertaste auf, und keine Sprechblase liegt mehr über der Ansicht.
+- Zeigt ein Tourschritt auf den Prüfbericht, bleibt die Tour sichtbar. Der Reiter ist gerahmt, und der Schritt sagt, welchen Reiter Sie öffnen.
+- Ein Klick auf das i neben einer Handlung im Reiter *Auswahl* öffnet das Handbuch an der Stelle, die sie erklärt.
+- Jedes Maß eines Bausteins lässt sich über fx an ein Projektmaß binden, auch wenn noch kein Ausdruck darin steht.
+- Nach dem Ziehen am Griff einer Vorschau bleibt keine Zahl über der Ansicht stehen. Eine dabei getippte Zahl verschiebt die Vorschau, nicht den gewählten Körper.
+- Nach *Reparieren und erneut versuchen* und verwandten Wegen heißt im Verlauf kein weiterrechnender Schritt mehr „gelöscht“. Hält die Kette erneut an, ist der Schritt markiert.
+- Der Knopf *Filamente* steht jetzt in der Kopfzeile. Er listet die Filamente des Projekts und führt ins Filamentlager.
+- Ein anderes Filament steht sofort im Bild, auch an Bausteinen und STEP-Teilen, und Solidon rechnet dafür nichts neu. Gewählte Körper zeigen ihre Filamentfarbe unter der Markierung.
+- Im Reiter *Auswahl* weist das Filamentfeld erst mit Klick oder Enter zu. Pfeiltasten und Tippen blättern nur, und das Mausrad rollt den Reiter.
+- In den übersetzten Fassungen rollt *Neues Filament* nicht mehr seitwärts, wenn das Fenster kürzer ist als sein Inhalt.
+- Große Modelle laden spürbar schneller und brauchen weniger Arbeitsspeicher, auch mit langem Verlauf und auf Rechnern mit 8 GB.
+- Auch in einem langen Verlauf rechnet ein neuer Schritt kaum länger als der erste.
+- Rückgängig und Wiederholen gehen schneller, und nicht mehr gebrauchter Arbeitsspeicher wird gleich wieder frei.
+- Das Auflösen von Überschneidungen und der Export als 3MF gehen deutlich schneller.
+- Die Arbeitsfläche wird beim Öffnen großer 3MF-Dateien schneller angezeigt.
+- Ein eingefügtes Modell steht danach im Bild, auch wenn es neben einem herangezoomten Modell landet.
+- Im Bausteinkatalog steht *Bausteine verwalten* offen, solange es noch keinen eigenen Baustein gibt.
 
 ### Drucken und Übergabe an den Slicer
 
 - Unter Linux erzeugt Solidon die Druckdatei jetzt auch mit Cura als Flatpak oder AppImage.
+- Unter Linux stehen die Drucker von OrcaSlicer, Bambu Studio, ElegooSlicer und Creality Print als AppImage sofort zur Wahl, auch wenn der Slicer noch nie geöffnet wurde.
 - Der Druckdialog bietet die Drucker des gewählten Slicers an, wie *Erste Schritte* und *Einstellungen*. Ein so übernommener Drucker bleibt bei seinem Slicer.
 - Im Druckdialog lässt sich der Slicer wechseln wie in *Erste Schritte*, auch über *Programm wählen …* für einen, den Solidon nicht selbst findet.
 - Ein Drucker aus Solidons Liste und derselbe aus dem Slicer gelten als ein Gerät. Der Druckdialog wählt das Slicerprofil mit der richtigen Düse, und die Druckdatei trägt den Startcode.
+- Ohne gemerktes Slicerprofil nehmen Export und Hauptfenster, was der Druckdialog für den Drucker vorschlägt, samt Maschine und Prozess des Herstellers.
 - Zur Wahl stehen nur noch Slicer, mit denen Solidon arbeitet, dazu Resin-Slicer wie ChituBox und Lychee. Bambu Studio als AppImage zählt jetzt dazu.
 - Startcode und Bauraum kommen nur noch von genau Ihrem Drucker, nicht von einem anderen Modell derselben Reihe.
 - Der Druckdialog ordnet die Profile des Slicers deutlich schneller zu, beim Öffnen und nach jedem Slicerwechsel.
@@ -80,18 +102,41 @@ Nutzen da und sonst nichts.
 - Setzen Stützen unter kleinen Überhängen auf dem Modell auf, schlägt Solidon Baumstützen vor. Sie hinterlassen dort weniger Spuren.
 - Bei kleinen Spitzen schlägt Solidon ein niedrigeres *Mindesttempo beim Bremsen* vor, damit sie nicht weich werden. Die Einstellung geht an jeden Slicer.
 - Schmale Ränder, die sich selbst tragen, bleiben mit *Ränder ohne Stütze* frei. Der Druck braucht so deutlich weniger Stütze.
+- Stützen lösen sich leichter und sauberer: Der Abstand folgt Material und Schichthöhe jedes Teils, auch bei mehreren Materialien auf einer Platte. Die Trennschicht folgt der Fläche darüber.
+- Steht eine Stütze auf dem Teil, schlägt Solidon auch darunter eine Trennschicht vor, damit ihr Fuß keine Spuren hinterlässt. Unter Baumstützen nur bei Slicern, die sie dort drucken.
+- Unter Baumstützen und neben einem Reinigungsturm schlägt Solidon den Stützabstand in ganzen Schichten vor, so wie der Slicer ihn druckt.
+- Bei PLA schlägt Solidon für viele feine Spitzen mehr Abstand zu den Baumstützen darunter vor. Dadurch bleiben dort weniger Reste der Baumspitzen.
+- Für PETG schlägt Solidon volle Kühlung an der Stütze vor. Sie löst sich so leichter vom Teil.
+- Neu in den Druckeinstellungen: *Trennschichten unten*, *Lücke in der Trennschicht* und *Volle Kühlung an der Stütze*.
+- Das Feld *Abstand nach oben* heißt jetzt *Abstand oben und unten* und gilt für beide Seiten der Stütze.
 - Lehnt der Slicer Filamente mit zu verschiedenen Temperaturen auf einer Platte ab, nennt Solidon jetzt Grund und Ausweg, statt nur zu melden, dass keine Druckdatei entstand.
+- Im Druckdialog bleiben Drucker, Filamente und Qualität auch bei vergrößerter Schrift ganz sichtbar. Lange Beschriftungen brechen dafür um.
+- Der Prüfbericht rechnet schneller und braucht weniger Arbeitsspeicher.
 - Unter Linux mit Flatpak meldet Solidon einen Absturz des Slicers jetzt als Absturz, statt nur zu sagen, dass keine Druckdatei entstand.
 - Auch bei Druckern, die PrusaSlicer oder SuperSlicer nicht selbst kennen, rechnen beide die Druckzeit mit den übergebenen Beschleunigungen, und die Datei nennt das Material der Spule.
 
 ### Gewinde, Bohrungen und Normteile
 
 - Gewinde gibt es jetzt in jedem Durchmesser bis 1000 mm, ob mit *Druckbares Gewinde*, in einer Bohrung, mit *Schraube erstellen* oder *Drehdeckel erzeugen*.
+- Auch normale Bohrungen lassen sich jetzt bis 1000 mm Durchmesser anlegen und wieder verschließen. Große Bohrungen und Senkungen behalten ihre runde Form.
 - Schrauben, Muttern und Scheiben gibt es nach ISO von M1,6 bis M64. Für andere Größen leitet *Eigenes Maß* die Maße aus den Nachbargrößen ab und sagt das.
 - Mit *Passend zur Bohrung* baut *Stift für Bohrung* das Gegenstück: in eine Senkung einen bündigen Senkkopf, in ein Innengewinde ein Außengewinde gleicher Größe und Steigung.
 - An einem gedruckten Innengewinde bietet die Auswahl *Stift für Bohrung* direkt an.
-- Ragt eine Hülse weit aus einer Bohrung oder quert ein Stift sie, nennen die Handlungen an der Bohrung das getrennte Teil und bieten *In Einzelteile aufteilen* an.
-- Liegt in einer Bohrung ein getrenntes Teil wie ein Stift, sagen die Handlungen an der Bohrung das und bieten *In Einzelteile aufteilen* an. Bisher verschmolz der Stift still mit der Platte.
+- Steckt ein getrenntes Teil in einem Hohlraum wie Bohrung, Langloch, Senkung oder Gewinde, sagen die Handlungen das. Bisher verschmolz es oder wurde abgeschnitten.
+- Neu ist der *Gewindebolzen*, eine Gewindestange oder Stiftschraube ohne Kopf, mit Fase an beiden Enden und demselben druckbaren Gewinde wie Schraube und Mutter.
+- Auch in Bohrungen von Bausteinen wie Schraubenloch, Einpressbuchse und Mutternfalle baut *Stift für Bohrung* den passenden Stift. Liegt die Bohrung nicht im Körper, sagt es das.
+- Von Hand auf eine Fläche gesetzt, schneidet die Mutternfalle ihre Tasche ins Material. Bisher stand die Tasche darüber, und nur das Schraubenloch wurde gebohrt.
+- Das Schraubenloch der Mutternfalle geht genau durch das Teil, auch durch ein dickes. Bisher endete es 10 mm unter der Tasche oder bohrte jenseits eines Spalts in die Gegenseite.
+- Von unten eingelegt liegt die Tasche der Mutternfalle unter der Fläche, ihr Schlitz führt hinab. Bisher saß sie halb darüber, die Schraube in der Fläche.
+- Reicht die Bohrung eines Bausteins nicht durch das Teil, heißt sie jetzt Sackloch. Bisher hieß sie Durchgang.
+- Ist die Wand dicker als bei *Kabeldurchführung* oder *Schlauchtülle* eingetragen, sagt der Schritt es und öffnet die Wandstärke. Bisher endete der Durchgang still im Material.
+
+### Bausteine
+
+- Bausteine, die für sich ein Teil sind, etwa Kabelclip, Rippe oder Mutter, entstehen ohne Auswahl als eigener Körper auf einer freien Stelle der Druckplatte, auch im leeren Projekt.
+- Auch eigene Bausteine entstehen so als eigener Körper und hängen nicht an einem Körper, der schon im Projekt liegt.
+- Mit *Auswahl als Baustein speichern* kommt der gewählte Körper mit genau den Schritten, die ihn bauen. Käme ein zweiter Körper mit, sagt der Dialog es vor dem Speichern.
+- Wandhalter, Rohrschellen, Profilklemmen und Halter nehmen jede Schraube von M3 bis M64. Passt eine Größe nicht zu den übrigen Maßen, sagt der Baustein, was zu ändern ist.
 
 ### Bearbeiten und Zeichnen
 
@@ -101,6 +146,22 @@ Nutzen da und sonst nichts.
 - Schneiden Sie einen Teil des Körpers weg, verschwinden auch Fasen, Gewinde und Mutterntaschen von Bausteinen, die darin lagen.
 - In *Deckel erzeugen* und *Drehdeckel erzeugen* heißt ein leeres Feld für die Höhe der Öffnung „Oberkante“, und 0 ist die Höhe des Betts. Ältere Projekte behalten ihre Öffnung.
 - Eine Winkelbedingung in einer kleinen Skizze wirft die Linien nicht mehr um.
+- Ein Körper entsteht mit drei Klicks: *Zeichnen* oben in der Werkzeugleiste (Strg+Umschalt+E), dann Ecke, Gegenecke, Höhe. Nach außen fügt er an, nach innen schneidet er.
+- Beim Aufziehen lassen sich die Maße tippen. Ein Doppelklick auf den Schritt öffnet seine Maße, und unter *Art* wird daraus ohne neues Zeichnen ein Drehkörper oder ein Lochfeld.
+- Aus dem Skizzeneditor führt *Fertig* zurück in die Ansicht, der nächste Klick setzt die Höhe. Escape legt den Umriss beiseite, Strg+Z holt ihn zurück.
+- Lässt sich ein neuer Schritt nicht rechnen, bleibt der Entwurf im Bild, und *Reparieren und erneut versuchen* rechnet ihn ohne neuen Klick.
+- Zum *Formen* gibt es vier Werkzeuge mit je einem Knopf und Kürzel. Die Stärke ist eine Stufe von 1 bis 10, und mehrfaches Überstreichen derselben Stelle türmt nichts mehr auf.
+- Der Pinsel passt zur Größe des Körpers. Ist das Netz für ihn zu grob, gleicht *Formen* die Dreiecke beim ersten Zug selbst an, und ein Strg+Z nimmt beides zurück.
+- Beim Spiegeln liegt die Ebene dort, wo der Körper sich selbst gleicht, auch wenn ein Teil weit zur Seite ragt.
+- Formen folgt der Maus flüssig, und auch ein Schritt mit hunderten Pinselzügen ist schnell gerechnet.
+- Im *Skelett* setzt jeder Klick nach dem ersten einen Knochen, Enter beendet die Kette, Ziehen an einem Gelenk beugt, und *Fertig* legt alles ohne Dialog ab.
+- Ein Skelett beugt nur, was an seinen Knochen hängt, der Rest des Körpers bleibt stehen. Ältere Projekte rechnen wie gespeichert.
+- Mit Strg oder Umschalt wählen Sie mehrere Kanten und verrunden oder fasen sie in einem Schritt. Ein Klick auf eine Ecke wählt alle Kanten, die dort zusammenlaufen.
+- An einem exakten Körper zeigt die Hervorhebung einer Kante auch die tangential anschließenden, die *Verrunden* und *Fase anbringen* mitnehmen.
+- Was die Auswahl an einem Merkmal anbietet, führt die Operation mit genau diesen Werten aus. Was grau steht, sagt sie mit demselben Satz, auch über Chat und Kommandozeile.
+- Als Stelle der Kopie schlägt *Merkmal verdoppeln* anderthalb Breiten neben dem Original vor, mit einer Wand dazwischen und nie entlang seiner Achse.
+- An einer Senkung schlägt *Merkmal drehen* den größten Winkel vor, unter dem sie eine bleibt, und sagt, wenn eine Drehung das Merkmal nur auf sich selbst legt.
+- Träfe eine Handlung ein getrenntes Teil neben dem Merkmal oder berührte ein gesetztes Merkmal anderes Material nur auf einer Linie, sagt Solidon das, statt den Körper zu beschädigen.
 
 ### Erzeugen mit KI
 
@@ -109,6 +170,11 @@ Nutzen da und sonst nichts.
 - Dünne Wände, etwa an einer Vase, kommen geschlossen und mit Dicke an.
 - Der Assistent antwortet in der Sprache, in der Sie schreiben.
 - Mit lokalem Modell hat der Assistent so viel Raum wie mit einem gehosteten und schafft Aufträge mit bis zu zwölf Schritten.
+- Erzeugte Modelle kommen öfter geschlossen an. Wo sich Flächen nur berühren, trennt Solidon sie, und kleine Falten der Oberfläche glättet es, statt eine Selbstkreuzung zu melden.
+- Ist ein Versuch schon beim Erzeugen zerfallen, sagt der Dialog es vor dem Übernehmen und bietet *Noch ein Versuch* an.
+- Ist ein erzeugtes Modell nur eine dünne Haut um einen Hohlraum, sagt es der Dialog vor dem Übernehmen und der Prüfbericht danach, jeweils mit dem Weg zu einem neuen Versuch.
+- Vor dem Herunterladen nennen *Chat einrichten* und *ComfyUI einrichten*, wie viel Grafikspeicher und Platz ein Modell braucht und ob dieser Rechner das hat.
+- Auf einem Mac schlägt *Chat einrichten* ein lokales Modell vor, das in den gemeinsamen Speicher passt, und sagt, wann ein Schlüssel für ein gehostetes Modell besser ist.
 
 ## 0.5.3
 

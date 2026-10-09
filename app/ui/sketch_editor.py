@@ -3532,8 +3532,8 @@ class SketchCanvas(QWidget):
             tip = self._to_screen(*self._pointer)
         # **Erscheint es gerade, kommt es zugleich nach oben.** Die Karten über
         # der Ansicht holen sich in ihrem ``place()`` selbst nach oben
-        # (``SketchPlanePicker``, ``SketchSelectionBadge``,
-        # ``SketchActionBadge``), und Qt stapelt nach Kindfolge: Das verliehene
+        # (``SketchPlanePicker``, ``SketchSelectionBadge``), und Qt stapelt
+        # nach Kindfolge: Das verliehene
         # Feld lag danach **unter** der Ebenenkarte, die beim freien Einstieg
         # mitten im Bild steht. Gemessen am 07.09.2026 am gebauten Fenster —
         # ``isVisible()`` war wahr, ``childAt`` an der Feldmitte gab die Karte
@@ -8266,6 +8266,16 @@ class SketchPanel(QWidget):
         self.state.setText(brief if visible else "")
         self.state.setVisible(visible)
 
+    def start_line_at(self, point: tuple[float, float]) -> None:
+        """*Freie Form …* aus dem Aufziehen: Linie in der Hand, ihr Anfang am Klick (RM-561).
+
+        Der Klick, der die Fläche gewählt hat, ist zugleich der erste Punkt des
+        Linienzugs — der Weg geht durch :meth:`SketchCanvas.place_on_plane`,
+        wie jeder andere Klick auf der Ebene.
+        """
+        self.choose_tool("line")
+        self.canvas.place_on_plane(point)
+
     def _take_rectangle(self, _target: str = "") -> None:
         """Der Verweis in der Einladung wählt das Rechteck — der häufigste erste
         Strich. Bis zum 16.09.2026 klappte er das Formenmenü auf; das gibt es
@@ -8397,12 +8407,11 @@ class SketchField(QWidget):
         # das Bild, sonst in das Fenster — nie beide nebeneinander (Robert,
         # 16.09.2026: „weniger ist manchmal mehr"). Bis dahin standen
         # „Zeichnen …" und „Im Raum zeichnen …" zusammen an jedem Schritt.
-        self.space_button = QPushButton(tr("Zeichnen …"), self)
+        self.space_button = QPushButton(tr("Umriss bearbeiten …"), self)
         self.space_button.setToolTip(
             tr(
-                "Zeichnet die Skizze dort, wo sie liegt — mit Ziehgriff, Maßeingabe im "
-                "Bild und den Ebenen des Körpers. Dieser Dialog geht dabei zu; die "
-                "übrigen Werte bleiben am Schritt."
+                "Bearbeitet die Zeichnung dort, wo sie liegt, mit Maßeingabe im Bild. "
+                "Dieser Dialog geht dabei zu, die übrigen Werte bleiben am Schritt."
             )
         )
         self.space_button.setVisible(False)

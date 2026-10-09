@@ -56,7 +56,9 @@ ROD_LAYOUTS: Final[dict[str, tuple[Vec3, ...]]] = {
 #: Die Klemmschrauben: ein Kernloch quer durch die Wand, in das die Schraube
 #: ihr Gewinde selbst schneidet und dann gegen die Stange drückt. Das Maß ist
 #: ``tap`` aus der Normteiltabelle. Mehr als M5 trägt eine Hülse dieser Wand
-#: nicht, und vier Werte halten den Bereichstest bei 384 Ecken.
+#: nicht: Die Schraube schneidet ihr Gewinde in eine Wand von 1,2 bis 8 mm. Das
+#: ist die eine Größenreihe, die nicht der Tabelle folgt (RM-578), und ihr Grund
+#: ist die Wand, nicht der Bereichstest.
 ROD_SCREWS: Final = (
     "none",
     *(size for size in ("M3", "M4", "M5") if size in standards.screw_sizes()),

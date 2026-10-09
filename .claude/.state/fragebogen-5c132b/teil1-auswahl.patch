@@ -1,0 +1,1230 @@
+diff --git a/.claude/rules/ansicht.md b/.claude/rules/ansicht.md
+index d71245f8f..400c2ad73 100644
+--- a/.claude/rules/ansicht.md
++++ b/.claude/rules/ansicht.md
+@@ -34,7 +34,12 @@ Stufen: nichts, Körper, Merkmal oder Kante (`Viewport.selection_depth`).
+   Zug (`kamera.md`).
+ * **Rechts meint immer das Genaueste** (`_select_at(..., direct=True)`): Wer
+   auf die störende Stelle zeigt, hängt an keiner Vorbedingung (§18.5). Die
+-  Operationen von Weg 1 stehen im Auswahlfenster; das Menü führt keine aus.
++  Operationen von Weg 1 stehen im Auswahlfenster; das Menü trägt davon nur
++  *Entfernen* und *Vereinigen* (`grenzen.md`).
++* **Außer er trifft eine Mehrfachauswahl**: Liegt der Zeiger auf einem von
++  mehreren gewählten Körpern, bleibt die Auswahl, und das Menü gilt allen
++  (`_on_right_click`, Entscheidung Robert) — im Objektbaum ebenso, wenn die
++  Zeile schon markiert ist (`ObjectTree._on_context_menu`).
+ * **Ein offener Operationsdialog schaltet die Stufen ab**
+   (`set_direct_picking`) — dort ist ein Klick eine Antwort.
+ * **Escape geht eine Stufe je Druck zurück**, in `MainWindow._escape` nach dem
+diff --git a/.claude/rules/fenster.md b/.claude/rules/fenster.md
+index b9385c2f3..2cb231181 100644
+--- a/.claude/rules/fenster.md
++++ b/.claude/rules/fenster.md
+@@ -281,7 +286,8 @@ Ansichtsseite steht in `griffe.md`.
+   `remove_feature`; greift auch das nicht (Fläche, Gewinde, Verrundung), fällt
+   der Körper — mit Ansage und Strg+Z: Eine Fläche ist kein Ding, das man
+   löscht, der Körper ist gemeint, und ein Teil, das Entf nicht löscht, ist eine
+-  Sackgasse (Regel 19). *Ausblenden* heißt am Merkmal *Körper ausblenden*.
++  Sackgasse (Regel 19). Ohne Merkmal nimmt Entf alle markierten Körper
++  (`on_bodies`). *Ausblenden* heißt am Merkmal *Körper ausblenden*.
+ - **Bei gewähltem Dach** fragt `_move_the_part` `_common_part_step`, und das
+   Dach bekommt einen eigenen Griff (`_part_grip_anchor` →
+   `Viewport.set_part_grip`; welches Merkmal ihn trägt, sagt das Fenster) statt
+@@ -428,35 +434,18 @@ Sie ist für den Absturz da (§38), nie dafür, eine Entscheidung zu überstimme
+ 
+ ## Wie die Karten ihre Höhe teilen
+ 
+-`OverlayHost._share_room` verteilt die Höhe einer Zone auf ihre `RoomTaker`:
+-
+-- **Gerechnet wird nie mit den Höhen, die gerade gesetzt wurden**;
+-  `natural_height` taugt darin nicht, `extra_height`
+-  rechnet strukturell (je Posten: Wunsch des Ganzen minus die Wünsche der
+-  Karten darin).
+-- **Was nicht den Karten gehört, wird abgezogen** (Abschnittsköpfe,
+-  Parameterleiste, Layoutabstände).
+-- **Jede Karte nennt ihren Boden** (`RoomTaker.least_height`; aus `fit_to_rows`
+-  mit drei Mindestzeilen und aus dem leeren Zustand über `fit_wrapped`), nie
+-  höher als ihr Wunsch; verteilt wird nur, was darüber liegt.
+-- **Eine Karte aus vielen festen Zeilen rollt, statt sich zu stauchen**
+-  (`overlay.FittedScroller`, der Prüfbericht): Erst gibt die Liste bis zu ihrer
+-  Mindesthöhe nach, dann rollt der Inhalt; die rechte Zone rechnet ihren
+-  Wunsch an der Kartenbreite (`natural_height(zone, width=)`).
+-
+-`tests/test_overlay.py` hält alle drei. `fit_to_rows` rechnet mit
+-**einer** Zeilenhöhe — ungleiche Zeilen (Objektbaum) misst `overlay.rows_height`, und
+-`wanted_height` fragt dieselbe Quelle wie das Setzen. **Was unter der Liste
+-steht, gehört in beide Rechnungen.**
+-
+-**Gesetzt wird einmal je Ereignisdurchlauf, nicht je Ereignis:** `_place_later`
+-setzt über einen Nullzeitgeber — kein nachgereichtes Ereignis, denn die Listen
+-legen ihre Zeilen selbst über einen Nullzeitgeber, und `rows_height` misst an
+-`visualRect`; `resizeEvent` und `reflow` setzen sofort. Tests brauchen mehrere
+-Runden `processEvents` — eine Zusicherung nach einer Runde misst einen
+-Zwischenstand. `is_room_taker` antwortet je Widget-Typ einmal. **Wer Inhalt
+-wachsen lässt, sagt es bis zur Zone** (`overlay.tell_the_zone`, dann
+-`reflow`), sonst wächst die Karte in zwei Zügen.
++`OverlayHost._share_room` verteilt die Höhe einer Zone auf ihre `RoomTaker`
++(`tests/test_overlay.py`): nie mit gerade gesetzten Höhen (`extra_height`,
++nicht `natural_height`); abgezogen wird, was nicht den Karten gehört; jede
++Karte nennt ihren Boden (`least_height`, nie über ihrem Wunsch); viele feste
++Zeilen rollen (`FittedScroller`). Ungleiche Zeilen misst `rows_height`, und
++`wanted_height` fragt dieselbe Quelle; was unter der Liste steht, gehört in
++beide Rechnungen.
++
++**Gesetzt wird einmal je Ereignisdurchlauf** (`_place_later`, Nullzeitgeber;
++`resizeEvent` und `reflow` sofort) — Tests brauchen mehrere Runden
++`processEvents`. **Wer Inhalt wachsen lässt, sagt es bis zur Zone**
++(`tell_the_zone`, dann `reflow`), sonst wächst die Karte in zwei Zügen.
+ 
+ ## Rückmeldung und Fehlerbericht
+ 
+diff --git a/.claude/rules/grenzen.md b/.claude/rules/grenzen.md
+index 29239d4fb..ee7d2fd6c 100644
+--- a/.claude/rules/grenzen.md
++++ b/.claude/rules/grenzen.md
+@@ -73,9 +75,11 @@ nächsten. Wer eine Unterscheidung einführt, führt die Anordnungsfrage mit ein
+   Szene stehen unter dem Satz die Wege, die er nennt (`PartCatalog.offer_ways`:
+   *Quader anlegen*, *Modell einfügen …*). Ein modaler Katalog, der „wählen Sie
+   im Objektbaum“ sagt, ist eine Sackgasse (RM-356).
+-- **Das Kontextmenü an Körper und Merkmal trägt keine Operationen**
++- **Das Kontextmenü an Körper und Merkmal trägt keine Liste der Operationen**
+   (Entscheidung Robert), nur *Diesen Schritt ändern*, *Auf dieser Fläche
+-  zeichnen* und die Sichtbarkeit; der Viewport zeigt dasselbe Menü.
++  zeichnen*, die Sichtbarkeit, *Entfernen* (heißt, was Entf tut) und bei
++  mehreren Körpern *Vereinigen* (`_add_selection_entries`); der Viewport zeigt
++  dasselbe Menü.
+ - **Der Wegweiser nennt den Ort:** `menu_path` schreibt „Handlungen rechts
+   (bei gewähltem Körper) → Vereinigen“, „(bei gewähltem Merkmal: Fläche)“,
+   „(ohne Auswahl)“ oder „Befehlspalette“, sonst den Menüweg; Werkzeugbeschreibungen
+@@ -150,6 +154,9 @@ Robert).
+   Darüber steht „Gilt für alle Körper.", ohne Suchfeld; ein
+   Suchtext von der letzten Auswahl filtert dort nichts weg
+   (`SelectionOperationsPanel._without_a_selection`).
++- **Die Suche der Karte rechnet wie die Palette** (`found_in_rounds`); ein
++  Treffer, der an der Auswahl nicht geht, nennt seinen Sperrgrund statt „Kein
++  Treffer“.
+ - **Eine Karte ohne Liste lädt nicht zum Suchen ein:** Das Suchfeld verschwindet
+   mit der Liste, ein Satz nennt, wo die Handlungen stehen; wer sucht und nichts
+   findet, behält es, mit *In allen Funktionen suchen* (Palette, dasselbe Wort).
+diff --git a/.claude/rules/operationen.md b/.claude/rules/operationen.md
+index ec4a98b81..2e0ddc3bc 100644
+--- a/.claude/rules/operationen.md
++++ b/.claude/rules/operationen.md
+@@ -34,8 +34,8 @@ Kürzel. `ctx.quality`: Entwurf zum Iterieren, Fein für Export und Prüfbericht
+   `lid.reason_against`, `MainWindow._lid_reason`, `LID_OPS`.
+ - Ops prüfen Merkmalsarten über ihren `applies_to`-Registereintrag und
+   `perceive.actions.reason_against`, auch für Chat/CLI; keine Modulliste.
+-- Ebene verlangt `face`; reine Dreiecksarbeit (`paint_slot`, `clear_filament`)
+-  nimmt zusätzlich die eigene Art `curved_face`.
++- Ebene verlangt `face`; `paint_slot`, `clear_filament` und *Aushöhlen*
++  (Fläche wird Öffnung) nehmen auch `curved_face`.
+ 
+ ## Den Kern wählt der Körper, nicht der Kunde
+ 
+diff --git a/app/core/geom/prepare_ops.py b/app/core/geom/prepare_ops.py
+index 7b9164289..bc2bde5df 100644
+--- a/app/core/geom/prepare_ops.py
++++ b/app/core/geom/prepare_ops.py
+@@ -17796,6 +17796,14 @@ class HollowParams(BaseParams):
+     params=HollowParams,
+     consumes=1,
+     produces=1,
++    # **An einer gewählten Fläche angeboten — sie wird die Öffnung** (P6.3):
++    # Der Dialog trägt sie in *Öffnungen* ein (``values_for``). Ohne diese
++    # Zeile stand *Aushöhlen* an einer Fläche weder vorn noch in der Liste,
++    # und wer nach dem Anlegen eines Quaders auf ihn klickte — er war schon
++    # gewählt, der Klick nahm die Oberseite —, fand die Handlung nicht, die
++    # das Handbuch an dieser Stelle zeigt (Fragebogen zu 0.5.3).
++    applies_to=("face", "curved_face"),
++    also_on_body=True,
+     doc=_(
+         "Höhlt ein Objekt aus, mit Entlüftungen oder mit gewählten offenen Flächen. "
+         "Spart Material und Zeit; am Dreiecksmodell stimmt die Wand im Rahmen des "
+diff --git a/app/core/guides.py b/app/core/guides.py
+index 029babe35..ee01b1a9a 100644
+--- a/app/core/guides.py
++++ b/app/core/guides.py
+@@ -350,10 +350,14 @@ GUIDES: Final[tuple[Guide, ...]] = (
+                 "field:height",
+             ),
+             step(_("Klicken Sie auf *Quader anlegen*."), "dialog.accept"),
++            # **Ein neues Teil ist schon gewählt** (``_queue_created_choice``):
++            # Der erste Klick nimmt deshalb die Fläche. „Zweimal: erst das Teil,
++            # dann die Fläche“ stimmte nur, wenn vorher etwas anderes gewählt war
++            # (Fragebogen zu 0.5.3).
+             step(
+                 _(
+-                    "Klicken Sie zweimal auf die Oberseite: erst ist das Teil gewählt, "
+-                    "dann die Fläche."
++                    "Klicken Sie auf die Oberseite. Der neue Quader ist schon gewählt, "
++                    "also wählt der Klick die Fläche."
+                 ),
+                 "viewport",
+             ),
+@@ -393,10 +397,14 @@ GUIDES: Final[tuple[Guide, ...]] = (
+             # Klick und Knopf in je einem Bild: Zusammen wurde der Ausschnitt
+             # das ganze Fenster, und *Aushöhlen* war nicht mehr zu lesen
+             # (Probelauf 27.09.2026).
++            # **Kein Klick auf den neuen Quader**: Er ist nach dem Anlegen schon
++            # gewählt, und ein Klick darauf nahm die Oberseite — an einer Fläche
++            # stand *Aushöhlen* dann nicht, wo das nächste Bild es zeigt
++            # (Fragebogen zu 0.5.3).
+             step(
+                 _(
+                     "Legen Sie wie in [Das erste eigene Teil](manual:first-part) "
+-                    "einen Quader an und klicken Sie darauf."
++                    "einen Quader an. Danach ist er schon gewählt."
+                 ),
+                 "viewport",
+             ),
+diff --git a/app/core/manual.py b/app/core/manual.py
+index 39ffc7275..22885a26a 100644
+--- a/app/core/manual.py
++++ b/app/core/manual.py
+@@ -283,10 +283,13 @@ def _where_to_start_page() -> Page:
+         str(
+             _(
+                 "**Auswählen geht in zwei Stufen.** Der erste Klick wählt das ganze Teil, "
+-                "der zweite die Fläche darin; `Esc` geht eine Stufe zurück. Rechts unter "
+-                "*Auswahl* stehen dann die Handlungen, die dazu passen. Der Rechtsklick "
+-                "zeigt, was es nur an dieser Stelle gibt: den Schritt, aus dem sie stammt, "
+-                "das Zeichnen auf der Fläche und das Ausblenden des Körpers."
++                "der zweite die Fläche darin; `Esc` geht eine Stufe zurück. Ein gerade "
++                "angelegtes Teil ist schon gewählt, dort wählt der erste Klick die Fläche. "
++                "Ein weiteres Teil nehmen Sie mit gedrückter Umschalt- oder `Strg`-Taste "
++                "dazu, am Mac mit `⌘`. Rechts unter *Auswahl* stehen dann die Handlungen, "
++                "die dazu passen. Der Rechtsklick zeigt den Schritt, aus dem die Stelle "
++                "stammt, das Zeichnen auf der Fläche, das Ausblenden, *Objekt entfernen* "
++                "und bei mehreren Teilen *Vereinigen*."
+             )
+         ),
+         str(
+@@ -581,7 +584,7 @@ INTRODUCTION: Final[tuple[Page, ...]] = (
+             "markierten bleibt der Reiter, wie er war.\n\n## Was mit einem Merkmal "
+             "sonst noch geht\n\n**Entf trifft das Merkmal, nicht den Körper.** Ist "
+             "eine Bohrung gewählt, nimmt die Taste die Bohrung weg; ohne gewähltes "
+-            "Merkmal löscht sie das Objekt.\n\n**Der Griff sitzt am gewählten "
++            "Merkmal löscht sie alle markierten Objekte.\n\n**Der Griff sitzt am gewählten "
+             "Merkmal.** Wer eine Bohrung wählt und *Bewegen* holt, findet ihn an "
+             "ihrer Öffnung. Ein Zug daran wird *Merkmal verschieben* oder *Merkmal "
+             "drehen*, das Teil bleibt stehen. Einen Skalierwürfel gibt es dort "
+diff --git a/app/ui/command_palette.py b/app/ui/command_palette.py
+index bb0d0a20f..9b5e181cc 100644
+--- a/app/ui/command_palette.py
++++ b/app/ui/command_palette.py
+@@ -7,6 +7,7 @@ eine Tabelle davon liest.
+ 
+ from __future__ import annotations
+ 
++from collections.abc import Sequence
+ from functools import lru_cache
+ from typing import Final, cast
+ 
+@@ -230,6 +231,36 @@ def matches(entry: PaletteEntry, query: str, *, stem: bool = False, any_word: bo
+     return all(stem_of(part) in haystack for part in parts if len(part) >= STEM_LENGTH)
+ 
+ 
++def found_in_rounds(entries: Sequence[PaletteEntry], query: str) -> tuple[list[PaletteEntry], bool]:
++    """Was eine Suche trifft, in den Runden der Palette — und ob die letzte gelockert hat.
++
++    **Zwei Runden, und die zweite nur bei Bedarf.** Genau passende Treffer
++    zuerst; findet sich keiner, wird auf den Wortstamm gelockert — „bohren"
++    fand sonst nichts, weil die Operation „Bohrung setzen" heißt. Immer zu
++    lockern hieße, zwischen guten Treffern dauerhaft Ungefähres zu zeigen.
++
++    **Und eine dritte für mehrwortige Fragen.** „ecke abrunden" fand nichts,
++    obwohl „abrunden" das *Verrunden* findet; „zu viele dreiecke" nichts,
++    obwohl „dreiecke" auf *Dreiecke verringern* führt (Bedienweg-Durchsicht
++    14.09.2026, sieben von 71 Kundenwörtern leer). Erst wenn kein Eintrag auf
++    alle Wörter passt, genügt eines — und ``True`` sagt es dem Aufrufer, denn
++    eine Liste, die stillschweigend weniger prüft, sieht aus wie eine genaue.
++
++    **Eine Rechnung für jedes Suchfeld über Operationen**: die Palette und die
++    Suche in der Karte der Handlungen. Die Karte verglich bis zum 06.10.2026
++    nur Titel und Gruppe, und „verschmelzen“ fand dort nichts, während die
++    Palette *Vereinigen* zeigte (Fragebogen zu 0.5.3).
++    """
++    found = [entry for entry in entries if matches(entry, query)]
++    if not found and query.strip():
++        found = [entry for entry in entries if matches(entry, query, stem=True)]
++    loosened = False
++    if not found and len(query.split()) > 1:
++        found = [entry for entry in entries if matches(entry, query, any_word=True)]
++        loosened = bool(found)
++    return found, loosened
++
++
+ def word_hits(entry: PaletteEntry, query: str) -> int:
+     """Wie viele Wörter der Anfrage diesen Eintrag treffen — ganz oder am Stamm.
+ 
+@@ -412,26 +443,7 @@ class CommandPalette(QDialog):
+ 
+     def _refilter(self, query: str) -> None:
+         self.list.clear()
+-        # **Zwei Runden, und die zweite nur bei Bedarf.** Genau passende
+-        # Treffer zuerst; findet sich keiner, wird auf den Wortstamm gelockert
+-        # — „bohren" fand sonst nichts, weil die Operation „Bohrung setzen"
+-        # heißt. Immer zu lockern hieße, zwischen guten Treffern dauerhaft
+-        # Ungefähres zu zeigen.
+-        found = [entry for entry in self._entries if matches(entry, query)]
+-        if not found and query.strip():
+-            found = [entry for entry in self._entries if matches(entry, query, stem=True)]
+-        # **Und eine dritte für mehrwortige Fragen.** „ecke abrunden" fand
+-        # nichts, obwohl „abrunden" das *Verrunden* findet; „zu viele
+-        # dreiecke" nichts, obwohl „dreiecke" auf *Dreiecke verringern* führt
+-        # (Bedienweg-Durchsicht 14.09.2026, sieben von 71 Kundenwörtern
+-        # leer). Erst wenn kein Eintrag auf alle Wörter passt, genügt eines —
+-        # sortiert nach Trefferzahl und mit einer Zeile darüber, die das sagt:
+-        # Eine Liste, die stillschweigend weniger prüft, sieht aus wie eine
+-        # genaue.
+-        loosened = False
+-        if not found and len(query.split()) > 1:
+-            found = [entry for entry in self._entries if matches(entry, query, any_word=True)]
+-            loosened = bool(found)
++        found, loosened = found_in_rounds(self._entries, query)
+         # Stabil nach Güte: Titel vor Name vor Beschreibung, und innerhalb
+         # derselben Güte bleibt die Reihenfolge aus ``applies_to`` stehen.
+         #
+diff --git a/app/ui/main_window.py b/app/ui/main_window.py
+index 764ae43a5..84d78ac75 100644
+--- a/app/ui/main_window.py
++++ b/app/ui/main_window.py
+@@ -261,7 +264,7 @@ from app.ui.ai_disclosure import (
+ from app.ui.analysis_bar import AnalysisBar, LayerBar, support_note
+ from app.ui.catalog import PartCatalog
+ from app.ui.chat import ChatPanel
+-from app.ui.command_palette import CommandPalette, fold
++from app.ui.command_palette import CommandPalette, fold, native_key
+ from app.ui.dialogs import (
+     AboutDialog,
+     ActivationDialog,
+@@ -5804,11 +5884,11 @@ class MainWindow(QMainWindow):
+                 return str(_NEEDS_BODY)
+             if braucht == 1:
+                 return str(tr("Wählen Sie dafür ein Objekt aus — im Bild oder im Objektbaum."))
+-            return str(
+-                tr("Wählen Sie dafür {count} Objekte aus — im Bild oder im Objektbaum.").format(
+-                    count=braucht
+-                )
+-            )
++            # **Derselbe Satz wie beim Tastendruck** (:func:`_needs_objects`):
++            # Er sagt, wie das zweite Objekt dazukommt. „Wählen Sie dafür 2
++            # Objekte aus“ ließ genau das offen, und ein Anfänger fand
++            # *Vereinigen* deshalb nicht (Fragebogen zu 0.5.3).
++            return _needs_objects(braucht)
+         # Der Satz steht in ``labels``: das Kontextmenü am Körper braucht ihn
+         # auch, und zwei Stellen mit derselben Auskunft driften.
+         reason = kind_requirement(spec, kinds, spoiled_the_exact_body(self.session.last_result))
+@@ -14528,6 +14629,14 @@ class MainWindow(QMainWindow):
+         self.viewport.selection_refused = selection_refused
+         self.object_tree.tree.selection_allowed = selection_allowed
+         self.object_tree.tree.selection_refused = selection_refused
++
++        def selection_entries(menu: QMenu) -> None:
++            """*Vereinigen* und *Entfernen* im Kontextmenü von Baum und Ansicht."""
++            window = window_ref()
++            if window is not None:
++                window._add_selection_entries(menu)
++
++        self.object_tree.selection_entries = selection_entries
+         self._measures_to_resume: str = ""
+         """Das Merkmal, an dem die Maße nach dem Übernehmen wieder ins Bild kommen.
+ 
+@@ -15098,6 +15207,74 @@ class MainWindow(QMainWindow):
+         sister: OperationSpec | None = instead_of(spec.name, feature.kind)
+         return sister
+ 
++    def _add_selection_entries(self, menu: QMenu) -> None:
++        """*Vereinigen* und *Entfernen* am Rechtsklick (Entscheidung Robert, 06.10.2026).
++
++        Wer vom Slicer kommt, sucht beides dort: Cura, Orca und PrusaSlicer
++        tragen *Löschen* im Kontextmenü des Objekts, Cura dazu
++        *Zusammenführen*, und der Fragebogen zu 0.5.3 fragte nach genau diesen
++        zwei. Alle übrigen Operationen bleiben rechts in der Karte.
++
++        Beide Einträge gehen den Weg ihrer Taste (:meth:`launch_operation`),
++        tragen sie hinter dem Tabulator — dort setzt ``QMenu`` die
++        Kürzelspalte, ohne dass eine zweite Aktion die Taste bindet — und
++        sind gesperrt, wo die Taste nichts täte, mit demselben Grund
++        (:meth:`_reason_locked`).
++        """
++        chosen = self.object_tree.selected_objects()
++        if not chosen:
++            return
++        result = self.session.last_result
++        objects = len(result.scene.objects) if result is not None else 0
++        kinds = self._kinds_of_selection()
++        entries: list[tuple[OperationSpec, tuple[str, str], str]] = []
++        if len(chosen) > 1 and not self.object_tree.selected_features():
++            union = REGISTRY.get("union_objects")
++            key = shortcut_for(union.name, union.shortcut, self.settings.shortcut_scheme)
++            entries.append(
++                (
++                    union,
++                    (str(union.title), first_sentence(str(union.doc))),
++                    native_key(key) if key else "",
++                )
++            )
++        entries.append(
++            (
++                REGISTRY.get("delete_object"),
++                self._removal_entry(),
++                delete_keys(sys.platform)[0].toString(QKeySequence.SequenceFormat.NativeText),
++            )
++        )
++        menu.addSeparator()
++        for spec, (title, sentence), key in entries:
++            action = menu.addAction(f"{title}\t{key}" if key else title)
++            locked = self._reason_locked(spec, kinds, objects, len(chosen))
++            action.setEnabled(locked is None)
++            action.setToolTip(locked or sentence)
++            action.triggered.connect(weak_slot(self, MainWindow.launch_operation, spec))
++
++    def _removal_entry(self) -> tuple[str, str]:
++        """Was Entf an der Auswahl tut, als Titel und Satz — derselbe Weg wie :meth:`run_operation`.
++
++        Am Baustein fällt sein Schritt, an einem Merkmal mit eigener
++        Operation (Bohrung, Zapfen) greift sie, sonst fällt der Körper
++        (:meth:`_delete_the_chosen_feature`). Ein Eintrag „Objekt entfernen“
++        an einer Bohrung, der dann die Bohrung schließt, wäre ein Versprechen,
++        das die Handlung nicht hält.
++        """
++        features = self.object_tree.selected_features()
++        if features:
++            if self._common_part_step(features) is not None:
++                return (
++                    tr("Baustein entfernen"),
++                    tr("Nimmt den Schritt aus dem Verlauf. Strg+Z holt ihn zurück."),
++                )
++            instead = self.feature_instead_of("delete_object")
++            if instead is not None:
++                return str(instead.title), first_sentence(str(instead.doc))
++        removal = REGISTRY.get("delete_object")
++        return str(removal.title), first_sentence(str(removal.doc))
++
+     def _delete_the_chosen_feature(self) -> bool:
+         """Entf mit gewählten Merkmalen trifft, was gemeint ist — und sagt es.
+ 
+@@ -19754,6 +19961,15 @@ class MainWindow(QMainWindow):
+             self._local_features.invalidate()
+         if spec.name == "delete_object" and self._delete_the_chosen_feature():
+             return
++        # **Entf meint alles Markierte** (Fragebogen zu 0.5.3: „einfach in der
++        # Objektliste markieren und entfernen“). ``delete_object`` verbraucht
++        # einen Körper, und mit zwei markierten nahm die Taste still nur den
++        # ersten. Ein Schritt je Körper in einer Transaktion, wie die
++        # Sammelzeile des Prüfberichts — ein Strg+Z holt alle zurück.
++        if spec.name == "delete_object" and on_bodies is None:
++            marked = self.object_tree.selected_objects()
++            if len(marked) > 1 and not self.object_tree.selected_features():
++                on_bodies = marked
+         spec = self._sister_for_the_chosen_feature(spec) or spec
+         instead = self.feature_instead_of(spec.name)
+         if instead is not None:
+diff --git a/app/ui/panels.py b/app/ui/panels.py
+index b8e77b8e7..d96ed70c0 100644
+--- a/app/ui/panels.py
++++ b/app/ui/panels.py
+@@ -1999,6 +1999,13 @@ class ObjectTree(QWidget):
+     Ohne Kennung: Was gewählt ist, weiß das Fenster ohnehin, und der Katalog
+     fragt es dort ab. Der Baum sagt nur, dass jemand ihn sehen will."""
+ 
++    selection_entries: Callable[[QMenu], None] | None = None
++    """Hängt *Vereinigen* und *Entfernen* an das Kontextmenü (:meth:`context_menu`).
++
++    Gesetzt vom Fenster: Wie *Entfernen* heißt, hängt daran, was Entf an der
++    Auswahl tut — am Baustein, an einer Bohrung, am Körper —, und das weiß nur
++    das Fenster (``MainWindow._removal_entry``)."""
++
+     def __init__(self, parent: QWidget | None = None) -> None:
+         super().__init__(parent)
+         self.tree = _ObjectTreeView(self)
+@@ -3192,13 +3199,17 @@ class ObjectTree(QWidget):
+         # auf eine Deckfläche zeigt, meint die Deckfläche (§18.5).
+         self._add_sketch_on_face(menu)
+         self._add_visibility(menu, chosen)
+-        # **Keine Operationen mehr** (Robert, 11.09.2026: „ebenso dann beim
+-        # rechtsklick im objektbaum"). Sie standen hier als dieselbe Liste wie
+-        # rechts in der Karte der Handlungen — gruppiert, gefaltet, mit dem
+-        # Katalog an der Stelle der Bausteine —, und zwei Orte für dieselbe
+-        # Liste sind einer zu viel. Was bleibt, gibt es nur hier: der Weg vom
+-        # Ergebnis zurück zum Schritt, die Skizze auf der Fläche und die
+-        # Sichtbarkeit des Körpers.
++        # **Keine Liste der Operationen** (Robert, 11.09.2026: „ebenso dann
++        # beim rechtsklick im objektbaum"). Sie standen hier als dieselbe Liste
++        # wie rechts in der Karte der Handlungen, und zwei Orte für dieselbe
++        # Liste sind einer zu viel. **Zwei Handlungen kommen dazu** (Robert,
++        # 06.10.2026, nach dem Fragebogen zu 0.5.3): *Entfernen* und bei
++        # mehreren Körpern *Vereinigen* — die beiden, die jeder Slicer an
++        # dieser Stelle trägt. Welche Zeilen das sind und wie sie heißen,
++        # weiß das Fenster (:attr:`selection_entries`): *Entfernen* heißt, was
++        # Entf an dieser Auswahl tut.
++        if self.selection_entries is not None:
++            self.selection_entries(menu)
+         return menu
+ 
+     def _on_double_click(self, item: QTreeWidgetItem, column: int) -> None:
+@@ -3261,12 +3272,17 @@ class ObjectTree(QWidget):
+         if self.tree.selection_allowed is not None and not self.tree.selection_allowed():
+             return
+         item = self.tree.itemAt(position)
+-        if item is not None:
++        if item is not None and not (item.isSelected() and len(self.tree.selectedItems()) > 1):
+             # Der Rechtsklick meint die Zeile darunter. Ohne diese Auswahl
+             # öffnete sich zwar das passende Kontextmenü, der Dialog erbte
+             # aber ein vorher gewähltes Merkmal oder keines — ein Gewinde
+             # stand dann nicht in der gerade angeklickten Bohrung. Geleert wird
+             # ohne Zwischenmeldung, gemeldet der neue Stand.
++            #
++            # **Außer die Zeile gehört schon zu mehreren markierten** — dann
++            # meint der Klick die Gruppe, wie in jedem Dateimanager und in
++            # Cura: zwei Körper markieren, mit rechts *Vereinigen* oder
++            # *Objekt entfernen* (Entscheidung Robert, 06.10.2026).
+             with QSignalBlocker(self.tree):
+                 self.tree.clearSelection()
+             item.setSelected(True)
+diff --git a/app/ui/selection_operations.py b/app/ui/selection_operations.py
+index f25d5e87c..8ba1ce815 100644
+--- a/app/ui/selection_operations.py
++++ b/app/ui/selection_operations.py
+@@ -40,6 +40,7 @@ from app.core.registry import (
+     MENU_GROUPS,
+     REGISTRY,
+     OperationSpec,
++    PaletteEntry,
+     catalogue_operations,
+     caveat_line,
+     folded_categories,
+@@ -48,6 +49,7 @@ from app.core.registry import (
+ )
+ from app.core.registry.surfaces import SCENE_ACTIONS_IN_THE_CARD, menu_rank
+ from app.i18n import sort_key, tr
++from app.ui.command_palette import fold, found_in_rounds
+ from app.ui.icons import icon, icon_name_for
+ from app.ui.leash import stop_watching_the_dying, weak_slot
+ from app.ui.overlay import ContentScroller
+@@ -470,6 +472,13 @@ class SelectionOperationsPanel(QWidget):
+         self._nothing_chosen = False
+         """Ob gerade nichts gewählt ist — die Stufe der ganzen Szene."""
+         self._buttons: dict[str, QToolButton] = {}
++        self._list_twins: dict[str, QToolButton] = {}
++        """Je Hauptaktion ihr Knopf in der Liste — verborgen, solange sie oben steht.
++
++        Eine Hauptaktion der einen Stufe kann an einer anderen gelten, ohne dort
++        oben zu stehen: *Aushöhlen* an einer Fläche, *Reparieren* am ganzen
++        Körper. Ohne Listenknopf stand sie dann nirgends (gemessen 06.10.2026;
++        Fragebogen zu 0.5.3)."""
+         self._groups: dict[str, tuple[QWidget, QToolButton, tuple[QToolButton, ...]]] = {}
+         """Je Gruppe ihr Abschnitt, sein Umschalter und ihre Knöpfe.
+ 
+@@ -487,6 +496,15 @@ class SelectionOperationsPanel(QWidget):
+         self._query = ""
+         """Der zuletzt eingegebene Suchtext — ein Stufenwechsel darf ihn nicht
+         vergessen."""
++        self._entries = {
++            spec.name: PaletteEntry(
++                name=spec.name, title=spec.title, category=spec.category, doc=spec.doc
++            )
++            for spec in operations
++        }
++        """Je Handlung die Zeile, gegen die gesucht wird — wie in der Palette
++        (:func:`~app.ui.command_palette.found_in_rounds`): Titel, Name,
++        Beschreibung und Kundenwörter, gefaltet."""
+         self._wrapped_for: tuple[int, int, tuple[str, ...], tuple[int, ...]] | None = None
+         """Für welche Breiten und Hauptaktionen die Beschriftungen zuletzt
+         umbrochen wurden (:meth:`_wrap_labels`)."""
+@@ -589,10 +607,11 @@ class SelectionOperationsPanel(QWidget):
+         grouped: dict[str, list[OperationSpec]] = {}
+         ranks: dict[str, tuple[int, int, int, int]] = {}
+         for spec in operations:
+-            # Was oben stehen kann, steht nicht auch darunter: zwei Knöpfe für
+-            # dieselbe Handlung sind eine Frage ohne Antwort.
+-            if spec.name in self._quick_buttons:
+-                continue
++            # **Was oben steht, steht nicht auch darunter** — zwei Knöpfe für
++            # dieselbe Handlung sind eine Frage ohne Antwort. Entschieden wird
++            # das je Stufe in :meth:`_filter`, nicht hier: Bis zum 06.10.2026
++            # bekam eine Hauptaktion gar keinen Listenknopf, und wo sie galt,
++            # ohne oben zu stehen, fehlte sie ganz (:attr:`_list_twins`).
+             rank, title = _card_group(spec)
+             ranks[title] = min(rank, ranks.get(title, rank))
+             grouped.setdefault(title, []).append(spec)
+@@ -613,7 +632,7 @@ class SelectionOperationsPanel(QWidget):
+             self._grids[title] = box_layout
+             buttons: list[QToolButton] = []
+             for spec in sorted(grouped[title], key=lambda entry: sort_key(entry.title)):
+-                button = self._operation_button(spec, box)
++                button = self._operation_button(spec, box, twin=spec.name in self._quick_buttons)
+                 button.setObjectName("operationRow")
+                 button.setAutoRaise(True)
+                 button.setMinimumHeight(LIST_ROW_HEIGHT)
+@@ -752,8 +771,14 @@ class SelectionOperationsPanel(QWidget):
+             self._settle_print_section()
+         return super().eventFilter(watched, event)
+ 
+-    def _operation_button(self, spec: OperationSpec, parent: QWidget | None = None) -> QToolButton:
+-        """Einen Registereintrag als direkte, tastaturfähige Handlung bauen."""
++    def _operation_button(
++        self, spec: OperationSpec, parent: QWidget | None = None, *, twin: bool = False
++    ) -> QToolButton:
++        """Einen Registereintrag als direkte, tastaturfähige Handlung bauen.
++
++        ``twin`` baut den Listenknopf einer Hauptaktion (:attr:`_list_twins`);
++        unter ihrem Namen in :attr:`_buttons` bleibt der Knopf oben.
++        """
+         button = QToolButton(parent or self)
+         button.setText(str(spec.title))
+         button.setIcon(icon(icon_name_for(spec), button))
+@@ -772,7 +797,7 @@ class SelectionOperationsPanel(QWidget):
+         # einem Umbruch mitten im Titel fände „bohrung verschließen" sich
+         # selbst nicht mehr.
+         button.setProperty("operationTitle", str(spec.title))
+-        self._buttons[spec.name] = button
++        (self._list_twins if twin else self._buttons)[spec.name] = button
+         return button
+ 
+     def _request_operation(self, spec: OperationSpec) -> None:
+@@ -1108,15 +1133,21 @@ class SelectionOperationsPanel(QWidget):
+             self._query = query
+         # Ohne Auswahl ist das Suchfeld verborgen; ein Suchtext von der
+         # letzten Auswahl filterte sonst unsichtbar die Handlungen weg.
+-        wanted = "" if self._nothing_chosen else self._query.strip().casefold()
+-        found = 0
++        wanted = "" if self._nothing_chosen else self._query.strip()
++        hits = self._search_hits(wanted)
++        # Ein getroffener Hauptknopf oben ist ein Treffer — sonst sagte die
++        # Liste „Kein Treffer“ unter dem Knopf, der gesucht war.
++        found = sum(1 for name in self._quick_shown if name in hits) if wanted else 0
+         for title, (section, toggle, buttons) in self._groups.items():
+             shown = 0
+             for button in buttons:
+-                label = str(button.property("operationTitle") or button.text())
+-                match = not wanted or wanted in f"{title} {label}".casefold()
+-                fits = self._fits_the_level(str(button.property("operationName")))
+-                visible = match and fits and button.isEnabled()
++                name = str(button.property("operationName"))
++                visible = (
++                    (not wanted or name in hits)
++                    and self._fits_the_level(name)
++                    and button.isEnabled()
++                    and name not in self._quick_shown
++                )
+                 button.setVisible(visible)
+                 shown += visible
+             section.setVisible(shown > 0)
+@@ -1131,12 +1162,58 @@ class SelectionOperationsPanel(QWidget):
+                 # zweien offen. Gerechnet wird an der Stufe, nicht am Bestand.
+                 toggle.setChecked(shown <= OPEN_UP_TO)
+             found += shown
+-        self._say_there_is_nothing(found, bool(wanted))
++        self._say_there_is_nothing(found, bool(wanted), self._needs_another_choice(hits))
+         # Welche Knöpfe dastehen, hat sich gerade geändert — und ob ihre
+         # Beschriftung in die Spalte passt, ist eine Frage je Knopf.
+         self._arrange_groups()
+         self._wrap_labels()
+ 
++    def _search_hits(self, wanted: str) -> frozenset[str]:
++        """Welche Handlungen der Suchtext trifft — wie in der Befehlspalette.
++
++        Titel, Name, Beschreibung und Kundenwörter, gefaltet, in den Runden
++        von :func:`~app.ui.command_palette.found_in_rounds`: „verschmelzen“
++        findet *Vereinigen*, „aushoehlen“ das *Aushöhlen*, „löschen“ das
++        *Objekt entfernen*. Bis zum 06.10.2026 verglich die Karte nur Titel
++        und Gruppe und fand keines davon (Fragebogen zu 0.5.3). **Eine
++        getroffene Gruppe** nimmt ihre Handlungen mit, wie bisher: „formgebung“
++        zeigt die ganze Gruppe.
++        """
++        if not wanted:
++            return frozenset()
++        found, _loosened = found_in_rounds(tuple(self._entries.values()), wanted)
++        parts = fold(wanted).split()
++        in_a_group = {
++            str(button.property("operationName"))
++            for title, (_section, _toggle, buttons) in self._groups.items()
++            if all(part in fold(title) for part in parts)
++            for button in buttons
++        }
++        return frozenset(str(entry.name) for entry in found) | in_a_group
++
++    def _needs_another_choice(self, hits: frozenset[str]) -> str:
++        """Der Satz zu einem Treffer, der an dieser Auswahl nicht geht — oder nichts.
++
++        Wer an einem Körper „verschmelzen“ sucht, meint *Vereinigen*, und das
++        braucht zwei. Ein „Kein Treffer“ wäre falsch und eine Sackgasse; der
++        Grund aus der Freigabe (:meth:`_take_availability`) sagt, wie das
++        zweite Objekt dazukommt. Genannt wird der erste Treffer in der
++        Reihenfolge des Titels, der einen Grund trägt.
++        """
++        locked = [
++            name
++            for name in hits
++            if name in self._buttons
++            and self._states.get(name, (True, ""))[1]
++            and not self._states.get(name, (True, ""))[0]
++        ]
++        if not locked:
++            return ""
++        name = min(locked, key=lambda entry: sort_key(str(self._entries[entry].title)))
++        return tr(
++            "{name}: {value}", name=str(self._entries[name].title), value=self._states[name][1]
++        )
++
+     def _take_availability(self, availability: Callable[[str], tuple[bool, str]]) -> None:
+         """Freigabe und Hinweis jedes Knopfes nachführen — nur, wo sie sich ändern."""
+         for name, button in self._buttons.items():
+@@ -1145,14 +1222,17 @@ class SelectionOperationsPanel(QWidget):
+             if self._states.get(name) == state:
+                 continue
+             self._states[name] = state
+-            button.setEnabled(enabled)
+-            spec_tip = button.property("operationTip")
+-            if spec_tip is None:
+-                spec_tip = button.toolTip()
+-                button.setProperty("operationTip", spec_tip)
+-            tip = str(spec_tip) if enabled or not reason else reason
+-            button.setToolTip(tip)
+-            button.setAccessibleDescription(tip)
++            for shown in (button, self._list_twins.get(name)):
++                if shown is None:
++                    continue
++                shown.setEnabled(enabled)
++                spec_tip = shown.property("operationTip")
++                if spec_tip is None:
++                    spec_tip = shown.toolTip()
++                    shown.setProperty("operationTip", spec_tip)
++                tip = str(spec_tip) if enabled or not reason else reason
++                shown.setToolTip(tip)
++                shown.setAccessibleDescription(tip)
+ 
+     def _without_a_selection(self, availability: Callable[[str], tuple[bool, str]]) -> None:
+         """Ohne Auswahl: die Handlungen für alle Körper und der Weg zu den Bausteinen.
+@@ -1187,7 +1267,7 @@ class SelectionOperationsPanel(QWidget):
+         else:
+             self.catalogRequested.emit()
+ 
+-    def _say_there_is_nothing(self, found: int, searching: bool) -> None:
++    def _say_there_is_nothing(self, found: int, searching: bool, elsewhere: str = "") -> None:
+         """Die leere Liste sagt, warum sie leer ist — und lädt nicht zum Suchen ein.
+ 
+         Zwei verschiedene Leeren, und sie brauchen zwei Sätze: Wer **sucht**,
+@@ -1200,6 +1280,10 @@ class SelectionOperationsPanel(QWidget):
+         „Weitere Operationen durchsuchen" verspricht, während die Liste
+         darunter leer ist und leer bleibt, stellt eine Frage, auf die es
+         keine Antwort gibt (Befund Robert, 18.09.2026).
++
++        ``elsewhere`` ist der Satz zu einem Treffer, der eine andere Auswahl
++        braucht (:meth:`_needs_another_choice`) — er tritt an die Stelle von
++        „Kein Treffer“, denn es gibt einen, nur nicht hier.
+         """
+         if self._nothing_chosen:
+             # Ohne Auswahl gibt es nichts zu durchsuchen: Was dasteht, sind
+@@ -1225,7 +1309,7 @@ class SelectionOperationsPanel(QWidget):
+             # Liste und zugleich der Weg zurück.
+             self.search.setVisible(True)
+             self.scroller.setVisible(False)
+-            self._nothing.setText(tr("Kein Treffer — versuchen Sie ein anderes Wort."))
++            self._nothing.setText(elsewhere or tr("Kein Treffer — versuchen Sie ein anderes Wort."))
+             self._nothing.setVisible(True)
+             return
+         self._only_this_sentence(tr("Was sich hier tun lässt, steht oben bei den Maßen."))
+diff --git a/app/ui/viewport.py b/app/ui/viewport.py
+index b132d632d..112824e55 100644
+--- a/app/ui/viewport.py
++++ b/app/ui/viewport.py
+@@ -17739,6 +17766,13 @@ class Viewport(QWidget):
+         Die Stufe geht dabei nicht verloren: Ein Rechtsklick, der eine Bohrung
+         wählt, setzt die Auswahl auf sie — der nächste Linksklick daneben führt
+         also von dort weiter und nicht von vorn.
++
++        **Eine Gruppe bleibt eine Gruppe** (Entscheidung Robert, 06.10.2026):
++        Trifft der Rechtsklick einen von mehreren gewählten Körpern, meint er
++        alle, und das Menü trägt *Vereinigen* — wie in Cura, Orca und
++        PrusaSlicer, wo man mehrere Teile markiert und dann mit rechts
++        zusammenführt oder löscht. Das Genaueste unter dem Zeiger nimmt er nur,
++        wo er keine Mehrfachauswahl trifft.
+         """
+         if not self.user_selection_allowed():
+             self._refuse_selection()
+@@ -17777,6 +17811,12 @@ class Viewport(QWidget):
+         # §25); zurückgerechnet suchte der Rechtsklick sie auf Platte 2 eine
+         # Bettbreite daneben und fand keine. Nur die Körper- und
+         # Merkmalssuche darunter fragt die Szene.
++        if self._selected_more and self._click_target(self._from_view(point), direct=True)[0] in (
++            self._selected,
++            *self._selected_more,
++        ):
++            self.contextMenuAt.emit(x, y)
++            return
+         if not self._edge_click(x, y, point, direct=True):
+             self._select_at(self._from_view(point), direct=True)
+         self.contextMenuAt.emit(x, y)
+diff --git a/tests/test_analysis_ui.py b/tests/test_analysis_ui.py
+index d03d6a0f5..fb43c040c 100644
+--- a/tests/test_analysis_ui.py
++++ b/tests/test_analysis_ui.py
+@@ -1814,35 +1814,55 @@ def test_the_view_and_the_tree_show_the_same_menu(window: MainWindow) -> None:
+     menu.deleteLater()
+ 
+ 
+-def test_the_context_menu_carries_no_operations_any_more(window: MainWindow) -> None:
+-    """Rechtsklick auf Körper oder Fläche: kein Operationsverzeichnis mehr.
++def _offered_titles(menu: Any) -> set[str]:
++    """Die Einträge eines Kontextmenüs ohne Kürzelspalte (hinter dem Tabulator)."""
++    return {
++        action.text().replace("&", "").split("	")[0]
++        for entry in menu.actions()
++        for action in (entry.menu().actions() if entry.menu() else [entry])
++        if not action.isSeparator()
++    }
++
++
++def _a_second_body(window: MainWindow) -> list[str]:
++    """Ein Quader neben der Platte — die Lage, in der *Vereinigen* gilt."""
++    from app.core.scene import OperationDraft
++
++    window.session.apply("Quader", [OperationDraft(op="create_box")])
++    assert window.session.wait_for_idle()
++    result = window.session.last_result
++    assert result is not None
++    bodies = list(result.scene.objects)
++    assert len(bodies) == 2, f"die Lage dieses Tests sind zwei Körper: {bodies}"
++    return bodies
++
++
++def test_the_context_menu_offers_removal_and_union_but_no_list(window: MainWindow) -> None:
++    """Rechtsklick: *Entfernen* immer, *Vereinigen* bei zwei Körpern — sonst keine Operationen.
+ 
+     Bis zum 11.09.2026 stand dort dieselbe Liste wie rechts in der Karte der
+-    Handlungen — gruppiert, gefaltet, mit dem Katalog an der Stelle der
+-    Bausteine —, und zwei Orte für dieselbe Liste sind einer zu viel (Robert:
+-    „ebenso dann beim rechtsklick im objektbaum"). Was bleibt, gibt es nur
+-    hier: der Weg vom Ergebnis zurück zum Schritt, die Skizze auf der Fläche
+-    und die Sichtbarkeit. Die Operationen stehen rechts — an derselben
+-    Auswahl, mit Grund, wenn eine nicht geht.
++    Handlungen, und zwei Orte für dieselbe Liste sind einer zu viel (Robert:
++    „ebenso dann beim rechtsklick im objektbaum"). Am 06.10.2026 kamen zwei
++    Handlungen zurück, die jeder Slicer an dieser Stelle trägt (Robert, nach
++    dem Fragebogen zu 0.5.3: „Objekt einfach löschen … in der Objektliste
++    markieren und entfernen?“ und „Zwei Objekte verschmelzen“). Die übrigen
++    stehen weiter rechts, an derselben Auswahl, mit Grund, wenn eine nicht
++    geht.
++
++    **Entfernen heißt, was Entf tut**: am Körper und an einer bloßen Fläche
++    *Objekt entfernen*, an einer Bohrung deren eigene Operation.
+     """
+     from app.core.registry import REGISTRY
+ 
+     titles = {str(spec.title) for spec in REGISTRY.all()}
+-
+-    def offered(menu) -> set[str]:
+-        return {
+-            action.text().replace("&", "")
+-            for entry in menu.actions()
+-            for action in (entry.menu().actions() if entry.menu() else [entry])
+-            if not action.isSeparator()
+-        }
++    removal = str(REGISTRY.get("delete_object").title)
+ 
+     select_plate(window)
+     menu = window.object_tree.context_menu()
+     assert menu is not None
+-    body = offered(menu)
+-    assert body, "Sichtbarkeit steht darin"
+-    assert not (body & titles), f"am Körper stehen noch Operationen: {sorted(body & titles)}"
++    body = _offered_titles(menu)
++    assert tr("Ausblenden") in body, "die Sichtbarkeit bleibt"
++    assert body & titles == {removal}, f"am Körper nur Entfernen: {sorted(body & titles)}"
+     assert not any(entry.menu() is not None for entry in menu.actions()), "und kein Untermenü"
+     menu.deleteLater()
+     assert set(window.selection_operations._buttons) & {"union_objects", "hollow_object"}, (
+@@ -1855,15 +1875,98 @@ def test_the_context_menu_carries_no_operations_any_more(window: MainWindow) ->
+     window.object_tree.select_feature(object_id, face)
+     menu = window.object_tree.context_menu()
+     assert menu is not None
+-    at_face = offered(menu)
+-    assert not (at_face & titles), (
+-        f"an der Fläche stehen noch Operationen: {sorted(at_face & titles)}"
++    at_face = _offered_titles(menu)
++    assert at_face & titles == {removal}, (
++        f"an der Fläche entfernt Entf den Körper, und so heißt der Eintrag: {sorted(at_face)}"
+     )
+     assert tr("Auf dieser Fläche zeichnen") in at_face, (
+         f"die Skizze auf der Fläche bleibt: {sorted(at_face)}"
+     )
+     menu.deleteLater()
+ 
++    window.object_tree.select_feature(object_id, "hole_1")
++    menu = window.object_tree.context_menu()
++    assert menu is not None
++    at_hole = _offered_titles(menu) & titles
++    assert at_hole == {str(REGISTRY.get("remove_feature").title)}, (
++        f"an der Bohrung nimmt Entf die Bohrung, nicht den Körper: {sorted(at_hole)}"
++    )
++    menu.deleteLater()
++
++    bodies = _a_second_body(window)
++    window.object_tree.select_objects(bodies)
++    menu = window.object_tree.context_menu()
++    assert menu is not None
++    both = _offered_titles(menu)
++    union = str(REGISTRY.get("union_objects").title)
++    assert both & titles == {union, removal}, f"bei zwei Körpern: {sorted(both & titles)}"
++    next(action for action in menu.actions() if action.text().startswith(union)).trigger()
++    assert window.session.wait_for_idle()
++    result = window.session.last_result
++    assert result is not None and len(result.scene.objects) == 1, "die beiden sind eins"
++    assert window.session.project.document.ops[-1].op == "union_objects"
++    menu.deleteLater()
++
++
++def test_a_right_click_on_a_marked_row_keeps_the_group(
++    window: MainWindow, monkeypatch: pytest.MonkeyPatch
++) -> None:
++    """Zwei markierte Zeilen, Rechtsklick auf eine davon: beide bleiben gewählt.
++
++    Sonst bot das Menü nie *Vereinigen* an — der Rechtsklick wählte nur die
++    Zeile darunter, und eine Gruppe ging verloren, bevor ihr Menü aufging
++    (Fragebogen zu 0.5.3). Eine **nicht** markierte Zeile wählt er weiterhin
++    allein: Dort meint er sie, und ein Dialog erbte sonst eine fremde Auswahl.
++    Das Menü selbst bleibt hier zu — ``QMenu.exec`` wartet offscreen auf
++    einen Klick, den es nie gibt.
++    """
++    bodies = _a_second_body(window)
++    tree = window.object_tree
++    monkeypatch.setattr(tree, "context_menu", lambda: None)
++    view = tree.tree
++    rows = [view.topLevelItem(index) for index in range(view.topLevelItemCount())]
++    assert len(rows) == 2
++
++    tree.select_objects(bodies)
++    tree._on_context_menu(view.visualItemRect(rows[1]).center())
++    assert set(tree.selected_objects()) == set(bodies), "die Gruppe bleibt"
++
++    first = str(rows[0].data(0, Qt.ItemDataRole.UserRole))
++    second = str(rows[1].data(0, Qt.ItemDataRole.UserRole))
++    tree.select_object(first)
++    tree._on_context_menu(view.visualItemRect(rows[1]).center())
++    assert tree.selected_objects() == (second,), "eine fremde Zeile meint der Klick allein"
++
++
++def test_entf_takes_every_marked_body_in_one_step(window: MainWindow) -> None:
++    """Zwei markiert, Entf: beide weg — und ein Strg+Z holt beide zurück.
++
++    Fragebogen zu 0.5.3: „einfach in der Objektliste markieren und entfernen“.
++    ``delete_object`` verbraucht einen Körper, und mit zwei markierten nahm
++    die Taste still nur den ersten (gemessen am 06.10.2026 an zwei Quadern:
++    ein Schritt, ein Körper blieb). Jetzt ein Schritt je Körper in **einer**
++    Transaktion, wie die Sammelzeile des Prüfberichts.
++    """
++    from app.core.registry import REGISTRY
++
++    bodies = _a_second_body(window)
++    window.object_tree.select_objects(bodies)
++    window.run_operation(REGISTRY.get("delete_object"))
++    assert window.session.wait_for_idle()
++    result = window.session.last_result
++    assert result is not None and not result.scene.objects, "beide markierten sind weg"
++    assert [entry.op for entry in window.session.project.document.ops][-2:] == [
++        "delete_object",
++        "delete_object",
++    ]
++
++    window.session.undo()
++    assert window.session.wait_for_idle()
++    result = window.session.last_result
++    assert result is not None and set(result.scene.objects) == set(bodies), (
++        "ein Strg+Z holt beide zurück"
++    )
++
+ 
+ def test_no_menu_shows_the_same_line_twice(window: MainWindow) -> None:
+     """Zwei Zeilen mit demselben Text sind eine Frage ohne Antwort.
+diff --git a/tests/test_hollow_opening.py b/tests/test_hollow_opening.py
+index 33d97f32b..90bcb2a29 100644
+--- a/tests/test_hollow_opening.py
++++ b/tests/test_hollow_opening.py
+@@ -189,6 +189,26 @@ def test_a_clicked_face_fills_the_opening_field_and_a_bore_does_not(profile: Pro
+     assert values_for(spec, bore, "obj_1") == {}
+ 
+ 
++def test_hollowing_is_offered_where_its_opening_can_be_chosen() -> None:
++    """An einer gewählten Fläche steht *Aushöhlen* — die Fläche wird die Öffnung.
++
++    Fragebogen zu 0.5.3: „Aushöhlen erscheint nicht so, wie im Handbuch
++    beschrieben.“ Ein frisch angelegter Quader ist gewählt, der Klick darauf
++    nahm die Oberseite, und an einer Fläche bot die Karte *Aushöhlen* gar
++    nicht an, obwohl der Dialog genau sie als Öffnung einträgt. Angeboten wird
++    es jetzt an jeder Art, die das Feld *Öffnungen* nimmt, und am ganzen
++    Körper wie bisher.
++    """
++    load_operations()
++    spec = REGISTRY.get("hollow_object")
++    openings = next(entry for entry in spec.params.spec() if entry.name == "openings")
++
++    assert openings.feature_kinds, "ohne Arten prüft der Vergleich nichts"
++    assert set(spec.applies_to) == set(openings.feature_kinds), "angeboten, wo die Öffnung entsteht"
++    assert spec.also_on_body, "am ganzen Körper bleibt es"
++    assert spec in REGISTRY.for_feature("face"), "die Karte fragt dieselbe Zuordnung"
++
++
+ @pytest.mark.parametrize(
+     ("open_at", "constraint"),
+     [
+diff --git a/tests/test_hollow_opening_ui.py b/tests/test_hollow_opening_ui.py
+index 782512c5e..67a9b3b75 100644
+--- a/tests/test_hollow_opening_ui.py
++++ b/tests/test_hollow_opening_ui.py
+@@ -69,6 +69,43 @@ def test_a_clicked_side_face_is_the_opening_of_the_hollowing_dialog(window: Main
+         dialog.reject()
+ 
+ 
++def test_a_chosen_face_offers_hollowing_in_the_card_and_becomes_the_opening(
++    window: MainWindow,
++) -> None:
++    """Rechts unter *Auswahl* steht *Aushöhlen* auch an einer Fläche.
++
++    Fragebogen zu 0.5.3: „Aushöhlen erscheint nicht so, wie im Handbuch
++    beschrieben.“ Ein angelegter Quader ist gewählt, der Klick darauf nahm die
++    Oberseite, und an einer Fläche stand *Aushöhlen* weder vorn noch in der
++    Liste. Jetzt steht es dort, und der Knopf trägt die Fläche als Öffnung ein
++    — oben offen, wie die Anleitung *Ein Gehäuse mit Deckel* es will.
++    """
++    window.open_path(MESHES / "cube_clean.stl")
++    window.session.wait_for_idle()
++    result = window.session.evaluate_now()
++    object_id, entry = next(iter(result.scene.objects.items()))
++    top = next(
++        identifier
++        for identifier, feature in entry.features.items()
++        if feature.kind == "face" and feature.params["normal"][2] > 0.9
++    )
++
++    window.object_tree.select_object(object_id)
++    window.object_tree.select_feature(object_id, top)
++    panel = window.selection_operations
++    assert panel.chosen_level() == "face"
++    assert panel._buttons["hollow_object"].isHidden(), "oben steht es an der Fläche nicht"
++    button = panel._list_twins["hollow_object"]
++    assert not button.isHidden() and button.isEnabled(), "aber in der Liste darunter"
++
++    button.click()
++    dialog = next(child for child in window.findChildren(OperationDialog) if child.isVisible())
++    try:
++        assert dialog.values()["openings"] == [top], "die gewählte Fläche ist die Öffnung"
++    finally:
++        dialog.reject()
++
++
+ def test_hollowing_at_the_clicked_side_ends_in_the_history_with_the_face(
+     window: MainWindow,
+ ) -> None:
+diff --git a/tests/test_selection.py b/tests/test_selection.py
+index e640df73d..b738e059f 100644
+--- a/tests/test_selection.py
++++ b/tests/test_selection.py
+@@ -1467,6 +1467,36 @@ def test_a_right_click_goes_straight_to_the_deepest_target(window: MainWindow) -
+     assert viewport._click_target(point, direct=True) == ("obj_1", "hole_1"), "rechts: sofort"
+ 
+ 
++def test_a_right_click_on_one_of_several_chosen_bodies_keeps_them_all(
++    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
++) -> None:
++    """Rechts auf einen von mehreren gewählten Körpern meint alle (Entscheidung Robert).
++
++    Der Rechtsklick meint sonst das Genaueste unter dem Zeiger und hätte die
++    Gruppe gegen eine Fläche getauscht, bevor ihr Menü mit *Vereinigen*
++    aufging — in Cura, Orca und PrusaSlicer markiert man zwei Teile und führt
++    sie mit rechts zusammen (Fragebogen zu 0.5.3). Die Gegenprobe: Ist nur
++    ein Körper gewählt, wählt derselbe Klick wieder die Stelle.
++    """
++    view = Viewport()
++    view._selected, view._selected_more = "obj_1", ("obj_2",)
++    monkeypatch.setattr(view, "_aim_at", lambda x, y: (1.0, 2.0, 3.0))
++    monkeypatch.setattr(view, "_click_target", lambda point, **kwargs: ("obj_2", "face_3"))
++    picked: list[tuple[str, bool]] = []
++    view.objectPicked.connect(lambda body, add: picked.append((body, add)))
++    shown: list[tuple[int, int]] = []
++    view.contextMenuAt.connect(lambda x, y: shown.append((x, y)))
++
++    view._on_right_click(360, 300)
++    assert shown == [(360, 300)], "das Menü geht auf"
++    assert picked == [], "und keine neue Auswahl"
++    assert (view._selected, view._selected_more) == ("obj_1", ("obj_2",)), "die Gruppe bleibt"
++
++    view._selected_more = ()
++    view._on_right_click(360, 300)
++    assert picked, "allein gewählt meint der Rechtsklick wieder die Stelle"
++
++
+ def test_a_right_click_leaves_the_selection_where_it_landed(window: MainWindow) -> None:
+     """Und die Stufe geht dabei nicht verloren.
+ 
+diff --git a/tests/test_selection_operations.py b/tests/test_selection_operations.py
+index 48362a1dd..f14ceef86 100644
+--- a/tests/test_selection_operations.py
++++ b/tests/test_selection_operations.py
+@@ -95,9 +95,15 @@ def test_the_front_row_follows_the_kind_and_the_count_of_the_selection(
+         for _section, _toggle, buttons in panel._groups.values()
+         for button in buttons
+     }
++    # **Jede Hauptaktion hat auch ihre Zeile in der Liste**, verborgen, wo sie
++    # oben steht (Fragebogen zu 0.5.3). Bis zum 06.10.2026 verbot dieser Test
++    # die Zeile ganz — und hielt damit die Lücke fest: *Aushöhlen* an einer
++    # Fläche und *Reparieren* am ganzen Körper gelten dort, stehen dort nicht
++    # oben und standen deshalb nirgends. Die Zusage ist „nie oben und unten
++    # zugleich“, und die prüft die Schleife unten je Lage.
+     for name in all_quick_names():
+         assert name in panel._quick_buttons, f"{name} steht in keiner Lage als Knopf da"
+-        assert name not in in_the_list, f"{name} stünde oben und in der Liste"
++        assert name in in_the_list, f"{name} fehlt in der Liste, wo es gilt, ohne oben zu stehen"
+ 
+     # **Ausgeschrieben, nicht aus der Tabelle gelesen.** Für die Merkmalsarten
+     # ist die Erwartung seit dem 09.09.2026 nicht mehr die Tabelle selbst: Was
+@@ -133,12 +139,46 @@ def test_the_front_row_follows_the_kind_and_the_count_of_the_selection(
+             name for name, button in panel._quick_buttons.items() if not button.isHidden()
+         )
+         assert set(shown) == set(wanted), f"{bodies} Körper, {kind or 'kein'} Merkmal: {shown}"
++        twice = [name for name in shown if not panel._list_twins[name].isHidden()]
++        assert not twice, f"oben und in der Liste zugleich: {twice}"
+ 
+     # **Das Merkmal hat Vorrang vor der Menge.** Wer eine Bohrung angeklickt
+     # hat, meint sie und nicht den Körper darunter.
+     assert quick_names(2, "hole") == quick_names(1, "hole")
+ 
+ 
++def test_a_main_action_of_another_level_stands_in_the_list(qt_app: QApplication) -> None:
++    """*Aushöhlen* an einer Fläche: nicht oben, aber in der Liste — und klickbar.
++
++    Fragebogen zu 0.5.3. Die Hauptaktion des Körpers gilt an einer Fläche
++    (die Fläche wird die Öffnung), steht dort aber nicht oben; ihr Knopf in
++    der Liste tritt dann an ihre Stelle und trägt dieselbe Freigabe.
++    """
++    load_operations()
++    panel = SelectionOperationsPanel(REGISTRY.all())
++    requested: list[str] = []
++    panel.operationRequested.connect(lambda spec: requested.append(spec.name))
++
++    panel.set_context(1, _availability(1))
++    assert not panel._buttons["hollow_object"].isHidden(), "am Körper oben"
++    assert panel._list_twins["hollow_object"].isHidden(), "und deshalb nicht darunter"
++
++    panel.set_context(1, _availability(1), feature_kind="face")
++    assert panel._buttons["hollow_object"].isHidden(), "an der Fläche nicht oben"
++    twin = panel._list_twins["hollow_object"]
++    assert not twin.isHidden() and twin.isEnabled(), "aber in der Liste"
++    twin.click()
++    assert requested == ["hollow_object"], "und er führt in dieselbe Handlung"
++
++    panel.set_context(
++        1,
++        lambda name: (False, "Gesperrt.") if name == "hollow_object" else (True, ""),
++        feature_kind="face",
++    )
++    assert twin.isHidden(), "eine gesperrte Handlung steht wie oben nicht da"
++    assert twin.toolTip() == "Gesperrt.", "und trägt den Grund wie ihr Knopf oben"
++
++
+ def test_what_the_feature_does_not_offer_leaves_the_front_row() -> None:
+     """Am Kegel, der die Mündung verengt, steht *Senken* nicht vorn (R3).
+ 
+@@ -204,6 +244,45 @@ def test_the_panel_leaves_out_what_the_feature_does_not_offer(qt_app: QApplicati
+     assert "countersink_hole" in front()
+ 
+ 
++def test_the_search_finds_customer_words_and_names_what_another_choice_needs(
++    qt_app: QApplication,
++) -> None:
++    """„löschen“ findet *Objekt entfernen*, „verschmelzen“ nennt, was *Vereinigen* braucht.
++
++    Fragebogen zu 0.5.3: Ein Anfänger fand weder das Löschen noch das
++    Vereinigen. Die Suche der Karte verglich nur Titel und Gruppe; sie rechnet
++    jetzt wie die Palette (``found_in_rounds``). Und ein Treffer, der an
++    dieser Auswahl nicht geht, ist kein „Kein Treffer“: Der Satz nennt seinen
++    Sperrgrund — im Fenster der, der sagt, wie das zweite Objekt dazukommt.
++    """
++    from app.i18n import tr
++
++    load_operations()
++    panel = SelectionOperationsPanel(REGISTRY.all())
++    panel.set_context(1, _availability(1))
++
++    panel.search.setText("löschen")
++    assert not panel._buttons["delete_object"].isHidden(), "Kundenwort ohne Titeltreffer"
++    assert panel._nothing.isHidden()
++
++    panel.search.setText("verschmelzen")
++    assert not panel._nothing.isHidden()
++    assert panel._nothing.text() == tr(
++        "{name}: {value}",
++        name=str(REGISTRY.get("union_objects").title),
++        value="Dafür müssen 2 Körper ausgewählt sein.",
++    )
++    assert not panel._everywhere.isHidden(), "der Weg in alle Funktionen bleibt"
++
++    panel.search.setText("xyzzy")
++    assert panel._nothing.text() == tr("Kein Treffer — versuchen Sie ein anderes Wort.")
++
++    panel.search.setText("")
++    panel.set_context(2, _availability(2))
++    panel.search.setText("verschmelzen")
++    assert panel._nothing.isHidden(), "bei zwei Körpern ist *Vereinigen* oben ein Treffer"
++
++
+ def test_selection_changes_update_in_place_and_explain_disabled_actions(
+     qt_app: QApplication,
+ ) -> None:
+diff --git a/tests/test_theme_and_palette.py b/tests/test_theme_and_palette.py
+index dcbf3adb1..ccf451bf9 100644
+--- a/tests/test_theme_and_palette.py
++++ b/tests/test_theme_and_palette.py
+@@ -408,6 +408,35 @@ def test_the_search_finds_by_title_name_and_documentation() -> None:
+     assert not matches(entry, "bohrung")
+ 
+ 
++def test_the_card_finds_with_the_rounds_of_the_palette() -> None:
++    """Ein Kundenwort findet in der Karte der Handlungen, was es in der Palette findet.
++
++    Fragebogen zu 0.5.3: Ein Anfänger suchte *Vereinigen* als „verschmelzen“
++    und das Löschen als „löschen“. Die Suche der Karte verglich nur Titel und
++    Gruppe und fand keines davon, die Palette beides. Beide fragen jetzt
++    :func:`found_in_rounds`; hier die Rechnung, die Karte selbst in
++    ``tests/test_selection_operations.py``.
++    """
++    from app.core.bootstrap import load_operations
++    from app.ui.command_palette import found_in_rounds
++
++    load_operations()
++    entries = _palette_entries()
++
++    def found(query: str) -> set[str]:
++        return {str(entry.name) for entry in found_in_rounds(entries, query)[0]}
++
++    assert "union_objects" in found("verschmelzen"), "Kundenwort"
++    assert "union_objects" in found("zusammenfügen"), "Kundenwort mit Umlaut"
++    assert "delete_object" in found("löschen"), "Kundenwort ohne Titeltreffer"
++    assert "hollow_object" in found("aushoehlen"), "Faltung"
++    assert "drill_hole" in found("bohren"), "zweite Runde: der Wortstamm"
++    assert found_in_rounds(entries, "verschmelzen")[1] is False, "eine genaue Runde lockert nicht"
++    loose, loosened = found_in_rounds(entries, "loch bitte xyzzy")
++    assert loosened and loose, "dritte Runde: ein Wort von mehreren genügt, und sie sagt es"
++    assert found_in_rounds(entries, "xyzzy") == ([], False)
++
++
+ def test_the_palette_lists_every_operation_but_the_merged_twins(qt_app: object) -> None:
+     """Die Grundliste zeigt jede Handlung **einmal**.
+ 
+diff --git a/tools/make_guides.py b/tools/make_guides.py
+index 52420b443..ab0157913 100644
+--- a/tools/make_guides.py
++++ b/tools/make_guides.py
+@@ -1178,7 +1178,9 @@ def story_housing_with_lid(run: GuideRun) -> None:
+         raise SystemExit("Der Quader wurde nicht gerechnet")
+     _face_id, face = _top_face(result.scene.objects[body])
+     centre = tuple(float(value) for value in face.params["centre"])
+-    run.capture(1, points={"viewport": _visible(run, (centre[0], centre[1], centre[2]))})
++    # Ein Ring, kein Zeiger: Der neue Quader ist schon gewählt, geklickt wird
++    # hier nicht (der Satz des Schritts sagt es).
++    run.capture(1, rings={"viewport": _visible(run, (centre[0], centre[1], centre[2]))})
+     run.capture(2)
+ 
+     guide_targets.widget_for(run.window, "operation:hollow_object").click()

@@ -2437,7 +2437,9 @@ def _mapped(
     return replace(sketch, elements=elements, constraints=tuple(constraints)), tuple(kept)
 
 
-def scaled(sketch: Sketch, factor: float) -> tuple[Sketch, tuple[str, ...]]:
+def scaled(
+    sketch: Sketch, factor: float, anchor: Point2 | None = None
+) -> tuple[Sketch, tuple[str, ...]]:
     """Die Skizze um *factor* vergrößern — Punkte **und** Maße, gleichmäßig.
 
     Der Grund, aus dem das hier steht und nicht in der Oberfläche: Die Punkte
@@ -2457,12 +2459,15 @@ def scaled(sketch: Sketch, factor: float) -> tuple[Sketch, tuple[str, ...]]:
     sagen. Solche Maße kommen als zweiter Rückgabewert zurück — wer skaliert,
     weiß damit, dass die Zeichnung nicht vollständig gefolgt ist, und kann es
     sagen, statt eine Größe zu versprechen, die nicht eintritt.
+
+    ``anchor`` ersetzt den Bezugspunkt: Eine aufgezogene Form wächst um ihren
+    festen Punkt (:func:`app.core.sketch.shapes.held_point`, RM-559).
     """
     _checked_factor(factor)
     box = _drawing_box(sketch)
     if box is None:
         return sketch, ()
-    return _mapped(sketch, (factor, factor), _anchor_of(box))
+    return _mapped(sketch, (factor, factor), anchor if anchor is not None else _anchor_of(box))
 
 
 #: Elementarten, die eine Streckung in nur einer Richtung nicht übersteht: Ein
@@ -2490,6 +2495,7 @@ def stretched(
     factor: float,
     axis: int,
     values: Mapping[str, float] | None = None,
+    anchor: Point2 | None = None,
 ) -> Stretch:
     """Die Zeichnung in **einer** Richtung auf ein Maß bringen (RM-391).
 
@@ -2505,11 +2511,13 @@ def stretched(
     (:data:`_ROUND_KINDS`). Sonst wächst die Zeichnung gleichmäßig, und
     ``evenly`` sagt es: Ein Kreis Ø 30 auf Länge 40 ist ein Kreis Ø 40 und
     keine Ellipse.
+
+    ``anchor`` ersetzt den Bezugspunkt wie bei :func:`scaled`.
     """
     _checked_factor(factor)
 
     def evenly() -> Stretch:
-        bigger, kept = scaled(sketch, factor)
+        bigger, kept = scaled(sketch, factor, anchor)
         return Stretch(bigger, kept, evenly=True)
 
     if any(element.kind in _ROUND_KINDS for element in sketch.elements) or any(
@@ -2525,7 +2533,7 @@ def stretched(
     if box is None:
         return Stretch(sketch, (), evenly=False)
     factors = (factor, 1.0) if axis == 0 else (1.0, factor)
-    candidate, kept = _mapped(settled, factors, _anchor_of(box))
+    candidate, kept = _mapped(settled, factors, anchor if anchor is not None else _anchor_of(box))
 
     # Gilt noch alles, was kein Maß ist? Gefragt wird der Löser ohne die Maße:
     # Was er dann verschiebt, hat die Streckung verletzt.

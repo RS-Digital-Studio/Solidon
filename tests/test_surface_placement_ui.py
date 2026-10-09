@@ -4585,7 +4585,7 @@ def test_historical_bore_fields_preview_all_following_steps_and_preserve_origina
     from app.core.brep import Solid
     from app.core.scene import placement
     from app.core.types import Parameter
-    from app.ui.labels import LengthSpin
+    from app.ui.op_dialog import ValueField
 
     window = _window_with_a_renderer()
     try:
@@ -4693,11 +4693,12 @@ def test_historical_bore_fields_preview_all_following_steps_and_preserve_origina
             assert session.wait_for_idle(30_000)
             expected = dict(flow.dialog.values())
             assert abs(expected["x"]) > 1.0
+        # Jedes Zahlenfeld des Schritts trägt fx (RM-555); getippt wird in sein Drehfeld.
         depth = next(
             field
-            for field in flow._measure_group.findChildren(LengthSpin)
+            for field in flow._measure_group.findChildren(ValueField)
             if "Tiefe" in field.accessibleName()
-        )
+        ).spin
         assert "aus dem Schritt" in depth.toolTip()
         assert "erzeugenden Schritt" in depth.accessibleDescription()
         depth.lineEdit().selectAll()

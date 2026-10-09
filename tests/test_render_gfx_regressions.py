@@ -63,15 +63,16 @@ def test_selection_and_background_changes_keep_filament_face_colours(renderer: G
     assert np.array_equal(after[red | blue], before[red | blue])
 
 
-def test_hidden_face_colours_leave_one_plain_colour(renderer: GfxRenderer) -> None:
-    """Ausgeblendete Dreiecksfarben heißen eine Farbe, nicht Farben je Ecke.
+def test_a_tint_over_face_colours_keeps_each_face_its_own_colour(renderer: GfxRenderer) -> None:
+    """Der Ton der Auswahl liegt über jedem Dreieck, nicht über den Eckennummern.
 
     pygfx multipliziert unter ``color_mode = "auto"`` die Körperfarbe mit
     ``geometry.colors``, gelesen **je Ecke** (``meshshader.py``,
     ``use_vertex_color``). Ein Puffer je Dreieck wurde so über die
     Eckennummern gelegt: Am ausgewählten Körper unter einer Überhangkarte
-    lagen gelbe Flecken quer über der Oberseite, deren Werte der Unterseite
-    gehörten (Fensterabnahme RM-366, 04.10.2026).
+    lagen gelbe Flecken quer über der Oberseite (Fensterabnahme RM-366,
+    04.10.2026). Der Ton wird deshalb in den Puffer je Dreieck gemischt, und
+    beide Filamente bleiben unter ihm unterscheidbar (RM-557).
     """
     item = renderer.add_surface(
         *plate(0),
@@ -82,38 +83,46 @@ def test_hidden_face_colours_leave_one_plain_colour(renderer: GfxRenderer) -> No
         ),
     )
     look_down(renderer, item.bounds())
-    item.set_face_colours_visible(False)
-    item.set_colour("#ffffff")
-    shot = renderer.screenshot()
-    white = (shot[:, :, 0] > 240) & (shot[:, :, 1] > 240) & (shot[:, :, 2] > 240)
-    tinted = (np.abs(shot[:, :, 0].astype(int) - shot[:, :, 2].astype(int)) > 40) & (
-        np.maximum(shot[:, :, 0], shot[:, :, 2]) > 120
-    )
-    assert white.sum() > 100, "die eine Farbe muss zu sehen sein"
-    assert tinted.sum() == 0, "keine Dreiecksfarbe darf durch die eine Farbe scheinen"
-    item.set_face_colours_visible(True)
+    item.set_face_tint("#ffffff", 0.5)
+    shot = renderer.screenshot().astype(int)
+    # Halb Weiß, als sRGB auf den Schirm gebracht: 187 statt 128.
+    half = (shot > 150) & (shot < 220)
+    pink = (shot[:, :, 0] > 240) & half[:, :, 1] & half[:, :, 2]
+    light_blue = (shot[:, :, 2] > 240) & half[:, :, 0] & half[:, :, 1]
+    assert pink.sum() > 100 and light_blue.sum() > 100, "jede Fläche behält ihren Werkstoff"
+    item.set_face_tint(None)
     again = renderer.screenshot()
     red = (again[:, :, 0] > 240) & (again[:, :, 1] < 10) & (again[:, :, 2] < 10)
     blue = (again[:, :, 2] > 240) & (again[:, :, 0] < 10) & (again[:, :, 1] < 10)
-    assert red.sum() > 100 and blue.sum() > 100, "sichtbar kehren die Dreiecksfarben zurück"
+    assert red.sum() > 100 and blue.sum() > 100, "ohne Ton kehren die Dreiecksfarben zurück"
 
 
-def test_hiding_face_colours_switches_to_the_plain_colour_mode() -> None:
-    """Ohne Fenster: Aus heißt ``"uniform"``, an heißt ``"face"`` — nie ``"auto"``.
+def test_a_tint_is_mixed_into_the_face_buffer_and_taken_back() -> None:
+    """Ohne Fenster: gemischt wird im Puffer je Dreieck, ``color_mode`` bleibt ``"face"``.
 
     Die Hälfte des Falls oben, die ohne Grafikkarte prüfbar ist; was
     ``"auto"`` in pygfx bedeutet, zeigt nur das Bild.
     """
     from app.ui.render.gfx_renderer import GfxItem
 
-    body = SimpleNamespace(material=SimpleNamespace(color_mode="face"), _solidon_face_colours=True)
+    base = np.array([[1.0, 0.0, 0.0, 1.0], [0.0, 0.0, 1.0, 1.0]], dtype=np.float32)
+    written: list[bool] = []
+    colors = SimpleNamespace(data=base.copy(), update_full=lambda: written.append(True))
+    body = SimpleNamespace(
+        material=SimpleNamespace(color_mode="face"),
+        geometry=SimpleNamespace(colors=colors),
+        _solidon_face_colours=base.copy(),
+    )
     plain = SimpleNamespace(material=SimpleNamespace(color_mode="auto"))
     item = GfxItem("body", SimpleNamespace(visible=True), [body, plain], "#808080")
-    item.set_face_colours_visible(False)
-    assert body.material.color_mode == "uniform"
-    assert plain.material.color_mode == "auto", "ohne Dreiecksfarben bleibt alles, wie es war"
-    item.set_face_colours_visible(True)
+    item.set_face_tint("#ffffff", 0.5)
+    assert np.allclose(colors.data[:, :3], [[1.0, 0.5, 0.5], [0.5, 0.5, 1.0]])
     assert body.material.color_mode == "face"
+    assert plain.material.color_mode == "auto", "ohne Dreiecksfarben bleibt alles, wie es war"
+    item.set_face_tint("#ffffff", 0.5)
+    assert len(written) == 1, "derselbe Ton schreibt den Puffer nicht noch einmal"
+    item.set_face_tint(None)
+    assert np.array_equal(colors.data, base)
 
 
 def test_initial_style_is_readable_and_nonpickable_surface_does_not_cover(
@@ -1490,3 +1499,64 @@ def test_pointer_events_do_not_ask_the_gpu_for_a_pick(
     renderer._canvas._events.flush()
     renderer.screenshot()
     assert asked == []
+
+
+def test_a_preview_leaves_the_remembered_normals_of_the_body_alone() -> None:
+    """Review F1: Die Ansicht reicht vorbereitete Normalen ohne Kopie an
+    ``add_surface`` und merkt sie sich für das nächste Bild desselben Netzes.
+    Die Vorschau einer Formsitzung schrieb ihre Normalen in dieses Feld, und
+    der unveränderte Körper bekam danach ihre Beleuchtung. Jetzt bekommt der
+    Puffer ein eigenes Feld; das gemerkte bleibt, wie es war."""
+    import pygfx as gfx
+
+    from app.ui.render.gfx_renderer import _positions, _rewrite_surface
+
+    vertices, faces = cube()
+    known = GfxRenderer.surface_normals(vertices, faces)
+    assert known is not None
+    kept = known.copy()
+    indices = np.ascontiguousarray(np.asarray(faces, dtype=np.uint32).reshape(-1, 3))
+    # So gibt ``add_surface`` das Feld weiter: ``float32`` wird nicht kopiert.
+    handed = np.ascontiguousarray(known, dtype=np.float32)
+    geometry = gfx.Geometry(positions=_positions(vertices), indices=indices, normals=handed)
+    assert geometry.normals.data is known, "Voraussetzung: der Puffer hält das gemerkte Feld"
+    moved = np.asarray(vertices, dtype=float).copy()
+    moved[0] += (-6.0, -6.0, -6.0)
+
+    assert _rewrite_surface(geometry, _positions(moved))
+
+    assert np.array_equal(known, kept)
+    assert not np.array_equal(geometry.normals.data, kept), "Gegenprobe: neue Beleuchtung"
+    assert np.array_equal(geometry.positions.data, _positions(moved))
+
+
+def test_moving_a_lit_surface_rewrites_its_buffers_instead_of_a_new_geometry(
+    renderer: GfxRenderer,
+) -> None:
+    """RM-560, H6: Eine Vorschau der Formsitzung bekam je Zug eine neue
+    Geometrie, und pygfx baute dafür Bindungen und Pipeline neu — an 241 480
+    Dreiecken das Teuerste am ganzen Zug. Jetzt gehen Ecken und Normalen in die
+    vorhandenen Puffer; Bild, Hüllquader und Beleuchtung folgen trotzdem."""
+    from app.ui.render.gfx_renderer import _normals
+
+    vertices, faces = cube()
+    known = GfxRenderer.surface_normals(vertices, faces)
+    assert known is not None
+    kept = known.copy()
+    body = renderer.add_surface(vertices, faces, name="body", style=SurfaceStyle(), normals=known)
+    geometry = body.objects[0].geometry
+    look_down(renderer, body.bounds())
+    before = renderer.screenshot()
+    lower, upper = body.bounds()[0], body.bounds()[1]
+
+    moved = np.asarray(vertices, dtype=float) + np.asarray((4.0, 0.0, 0.0))
+    body.update_points(moved)
+
+    assert body.objects[0].geometry is geometry, "dieselbe Geometrie, neue Zahlen"
+    assert body.bounds()[0] == pytest.approx(lower + 4.0)
+    assert body.bounds()[1] == pytest.approx(upper + 4.0)
+    assert np.array_equal(
+        geometry.normals.data, _normals(moved.astype(np.float32), np.asarray(faces))
+    )
+    assert not np.array_equal(before, renderer.screenshot())
+    assert np.array_equal(known, kept), "das gemerkte Feld bleibt (Review F1)"

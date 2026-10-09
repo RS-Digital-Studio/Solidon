@@ -88,6 +88,7 @@ from app.core.export.writer import (
     part_advice,
     prepare_slicer_meshes,
     slicer_rim,
+    tower_plates,
     write_assembly,
 )
 from app.core.filament_usage import UsageRequest, from_gcode
@@ -376,7 +377,11 @@ def _remembered_profiles_match(settings: UiSettings, printer_id: str, slicer: Pa
 
 
 def remembered_setup(
-    settings: UiSettings, material: str = "", printer_id: str = ""
+    settings: UiSettings,
+    material: str = "",
+    printer_id: str = "",
+    *,
+    cancelled: CancelToken | None = None,
 ) -> handover.SlicerSetup | None:
     """Der Slicer, wie er hier zuletzt eingestellt war (§29).
 
@@ -404,17 +409,21 @@ def remembered_setup(
     vermerkten ab, gelten die Profile nicht — sie stammen aus dem Bestand
     eines anderen Programms. Auch hier gilt: ohne Vermerk kein Vergleich.
 
-    ``None``, solange kein Druckerprofil gemerkt ist: Die Suche nach dem
-    Programm geht über PATH, Registry und die üblichen Orte und kostet eine
-    halbe Sekunde. Wer den Slicer nie eingerichtet hat, bekäme dafür ein Setup
-    ohne Maschine — also nichts, was die Kette auflösen könnte.
+    **Gilt keine gemerkte Maschine, gilt die Vorwahl des Dialogs** (RM-623,
+    :func:`handover.standard_choice`): Maschine, Prozess und Filament, die er
+    für diesen Drucker vorbelegt, mit gemerktem Prozess, Filament und — für
+    denselben Drucker und Slicer — Platte als Vorzug wie dort. Ohne sie ging
+    die Datei ohne Herstellerprozess hinaus, und die Grundlage im Hauptfenster
+    war Solidons Tabelle statt des Profils, mit dem gedruckt wird. ``None``
+    bleibt es, wo kein Slicer da ist oder sein Bestand den Drucker nicht
+    kennt. Gerufen wird nur aus Arbeitern: Die Programmsuche kostet eine halbe
+    Sekunde, der Bestand eines großen Slicers Sekunden CPU-Zeit; ein
+    unbekannter Drucker endet nach dem Lesen der Maschinen. ``cancelled``
+    sagt die Vorwahl zwischen ihren Schritten ab.
     """
-    if not settings.slicer_machine_profile:
-        return None
     found = tools.slicer_program()
-    if not _remembered_profiles_match(settings, printer_id, found):
+    if found is None:
         return None
-    assert found is not None
     setup = handover.detect(found)
     if handover.only_opens(setup):
         # Ein Programm ohne Familie ist hier kein Fehler, sondern eine
@@ -425,6 +434,25 @@ def remembered_setup(
         if material
         else settings.slicer_base_filament
     )
+    remembered = _remembered_profiles_match(settings, printer_id, found)
+    if not settings.slicer_machine_profile or not remembered:
+        # Wie der Dialog: Prozess und Filament gelten, wenn sie zur gewählten
+        # Maschine passen (``_fill_processes``, ``_fill_filaments``), die
+        # Platte nur für denselben Drucker und Slicer
+        # (``_refresh_bed_plate_context``).
+        return handover.standard_choice(
+            replace(
+                setup,
+                base_process=settings.slicer_base_process,
+                base_filament=filament,
+                plate=settings.slicer_bed_plate if remembered else "",
+            ),
+            profiles.scene_profile(
+                printer_id or settings.printer or profiles.DEFAULT_PRINTER,
+                material or settings.material or profiles.DEFAULT_MATERIAL,
+            ),
+            cancelled=cancelled,
+        )
     return replace(
         setup,
         machine_profile=settings.slicer_machine_profile,
@@ -1422,6 +1450,7 @@ class _AdviceWorker(Worker):
         *,
         part_fits: Mapping[str, tuple[str, ...]] | None = None,
         flavour: SlicerFlavour = "orca",
+        declined: frozenset[str] = frozenset(),
     ) -> None:
         super().__init__()
         self.objects = objects
@@ -1438,6 +1467,10 @@ class _AdviceWorker(Worker):
         self.flavour = flavour
         """Die Familie, für die die Teile benannt werden; ohne Slicer die der
         gespeicherten 3MF."""
+        self.declined = declined
+        """Abgewählte Zeilen, an denen andere hängen (:data:`advise.DECIDING_PATHS`):
+        Ohne den Baum fragen Abstand und Trennschicht mit der eigenen Stützart,
+        wie der Export (RM-622)."""
         self.cancelled = CancelSignal()
         self.analysis_context: tuple[Any, ...] | None = None
         """Für welchen Geometriestand dieser Arbeiter misst (``_analysis_context``)."""
@@ -1447,6 +1480,12 @@ class _AdviceWorker(Worker):
         """Je übernommenem Vorschlag, der je Teil geschrieben wird, die Teile, die
         ihn bekommen — leer heißt: keines verlangt ihn, er gilt allen
         (``writer._unserved``). Der Dialog nennt sie am Feld (RM-289, B6)."""
+        self.towers: frozenset[int] = frozenset()
+        """Die Platten mit Reinigungsturm (:func:`writer.tower_plates`), je Lauf
+        einmal gefragt."""
+        self.organic: frozenset[str] = frozenset()
+        """Die Stützarten, die das Programm als organische Bäume druckt
+        (:func:`handover.organic_styles`), je Lauf einmal gefragt."""
 
     def cancel(self) -> None:
         """Auch innerhalb eines großen Körpers kann die Schichtanalyse aufhören."""
@@ -1466,9 +1505,13 @@ class _AdviceWorker(Worker):
         self.rules_wanted = False
 
     def work(self) -> None:
-        """Ein ausdrücklicher Abbruch ist kein unerwarteter Arbeiterfehler."""
+        """Ein ausdrücklicher Abbruch ist kein unerwarteter Arbeiterfehler.
+
+        Gerechnet wird in einem Lesedurchgang (:func:`slicer_profiles.single_read`):
+        Turm, Spulenprozesse und Grundlage fragen dieselben Profile."""
         try:
-            self._calculate()
+            with slicer_profiles.single_read():
+                self._calculate()
         except OperationCancelled:
             return
         except AppError as problem:
@@ -1482,6 +1525,18 @@ class _AdviceWorker(Worker):
             threemf.SlotKey,
             tuple[MaterialSlot, list[tuple[PrintSettings, Sequence[SettingAdvice]]]],
         ] = {}
+        # Der Stützkontakt geht je Teil und wird gegen die Grundlage gefragt,
+        # wie im Export; gegen die Übernahme gefragt, kam jede Zeile mit ihrer
+        # Gegenzeile wieder (RM-583).
+        separate, asking = handover.asked_for_contact(
+            self.settings, self.profile, self.setup, self.flavour
+        )
+        # Neben einem Reinigungsturm und unter organischen Bäumen rundet der
+        # Slicer den Stützabstand; der Rat rechnet dort in ganzen Schichten, wie
+        # im Export (RM-622).
+        self.towers = tower_plates(self.objects, self.setup)
+        self.organic = handover.organic_styles(self.setup, self.profile, flavour=self.flavour)
+        program = slicer_keys.program_of(self.setup.executable) if self.setup else ""
         for index, body in enumerate(self.objects):
             self.cancelled.raise_if_cancelled()
             self.progressed.emit(index + 1, len(self.objects), str(body.name))
@@ -1489,7 +1544,7 @@ class _AdviceWorker(Worker):
             own_profile = profiles.for_object(self.profile, body)
             # Dieselben Spulen, die der Export je Teil fragt (Entscheidung G).
             processes = handover.slot_processes(
-                body, self.settings, self.profile, self.setup, self.slot_profiles
+                body, asking, self.profile, self.setup, self.slot_profiles
             )
             angle = min(
                 (process.profile.overhang_limit_degrees for process in processes),
@@ -1537,6 +1592,9 @@ class _AdviceWorker(Worker):
             results[body.id] = (angle, wall, result)
             if not self.rules_wanted:
                 continue
+            # Erst über die Spulen dieses Körpers: Ein Teil bekommt einen Wert,
+            # der alle seine Spulen einschließt (wie ``writer.part_advice``).
+            own: list[tuple[PrintSettings, Sequence[SettingAdvice]]] = []
             for process in processes:
                 entries = advise.advise(
                     process.settings,
@@ -1546,8 +1604,20 @@ class _AdviceWorker(Worker):
                     fit_kinds=self.fit_kinds,
                     connectors=self.connectors,
                     flavour=self.flavour,
+                    whole_layers=body.plate in self.towers,
+                    organic=self.organic,
+                    declined=self.declined,
                 )
-                common.append(
+                # Was das Programm unter den Bäumen dieses Körpers nicht druckt,
+                # schlägt der Dialog nicht vor — je Körper wie der Export
+                # (``writer.part_advice``, RM-622).
+                under_trees = handover.ignored_under_trees(
+                    advise.printed_style(process.settings, entries, self.declined),
+                    self.organic,
+                    program,
+                )
+                entries = [entry for entry in entries if entry.path not in under_trees]
+                own.append(
                     (
                         process.settings,
                         [
@@ -1570,7 +1640,11 @@ class _AdviceWorker(Worker):
                         ],
                     )
                 )
-        entries = self._with_parts(advise.combine(self.settings, common), results)
+            if own:
+                common.append((asking, advise.combine(asking, own)))
+        entries = self._with_parts(
+            advise.combine(self.settings, common, separate=separate), results
+        )
         if self.rules_wanted:
             self.accepted_parts = self._accepted_targets(results)
         for slot, groups in materials.values():
@@ -1651,6 +1725,8 @@ class _AdviceWorker(Worker):
                 fit_kinds=self.part_fits.get(body.id, ()),
                 flavour=self.flavour,
                 accepted=chain,
+                whole_layers=body.plate in self.towers,
+                organic=self.organic,
             ):
                 if entry.path in wanted and print_settings.same_value(
                     entry.value, print_settings.read_path(self.settings, entry.path)
@@ -1679,14 +1755,21 @@ class _AdviceWorker(Worker):
         candidates = {entry.path for entry in entries if entry.path in advise.PART_PATHS}
         if not candidates:
             return entries
+        # Was abgewählt ist, wird nicht übernommen und geht an kein Teil.
         split = handover.split_for_parts(
-            advise.apply(self.settings, entries), self.profile, self.setup, self.flavour
+            advise.apply(
+                self.settings, [entry for entry in entries if entry.path not in self.declined]
+            ),
+            self.profile,
+            self.setup,
+            self.flavour,
         )
         candidates &= split.per_part
         if not candidates:
             return entries
         chain = split.accepted_per_part()
         wanted: dict[str, list[str]] = {}
+        shown = {entry.path: entry.value for entry in entries}
         for body in self.objects:
             self.cancelled.raise_if_cancelled()
             if not self.rules_wanted:
@@ -1702,8 +1785,15 @@ class _AdviceWorker(Worker):
                 fit_kinds=self.part_fits.get(body.id, ()),
                 flavour=self.flavour,
                 accepted=chain,
+                whole_layers=body.plate in self.towers,
+                organic=self.organic,
             ):
-                if entry.path in candidates:
+                # Beim Stützkontakt bekommt jedes Teil seinen Wert; die Zeile nennt
+                # nur die Teile, die ihren bekommen (RM-583).
+                if entry.path in candidates and (
+                    entry.path not in advise.CONTACT_PATHS
+                    or print_settings.same_value(entry.value, shown[entry.path])
+                ):
                     wanted.setdefault(entry.path, []).append(str(body.name))
         named: list[SettingAdvice] = []
         for entry in entries:
@@ -2258,7 +2348,7 @@ class _CuraPrinterWorker(Worker):
 
     def work(self) -> None:
         # Hier und nicht im Fensterfaden entsteht die Druckerkopie einer
-        # AppImage-Cura (``cura_linux.never_wait_in``); danach gründet der
+        # AppImage-Cura (``appimage.never_wait_in``); danach gründet der
         # Dialog neu (:meth:`PrintSettingsDialog._cura_printer_found`).
         slicer_profiles.install_root(self._executable)
         printer_id = slicer_profiles.chosen_printer("cura", self._executable, self._known)
@@ -2579,6 +2669,10 @@ class PrintSettingsDialog(QDialog):
         drucken (RM-289, B6)."""
         self._accepted_parts: dict[str, tuple[str, ...]] = {}
         """Aus dem letzten Rat (:attr:`_AdviceWorker.accepted_parts`)."""
+        self._organic: frozenset[str] = frozenset()
+        """Die Stützarten, die das Programm als organische Bäume druckt, aus dem
+        letzten Rat (:attr:`_AdviceWorker.organic`): Das Feld sagt dasselbe wie
+        der Vorschlag daneben (RM-622)."""
         #: Wo die Suche gerade steht — Begriff, Trefferliste, Platz darin.
         self._search_term = ""
         self._search_hits: list[str] = []
@@ -2824,7 +2918,7 @@ class PrintSettingsDialog(QDialog):
         # aus dem zugeklappten Kasten zog die Vorderseite sonst auf 168 Punkte,
         # wo 120 reichen, und in 560 Punkten Breite fehlten der Druckerauswahl
         # die 40, die „Allgemeiner FDM-Drucker 220 mm“ braucht.
-        align_forms(self, apart=(self.tabs, self.slicer_box))
+        align_forms(self, apart=(self.tabs, self.slicer_box), at_most=self._label_room())
         even_fields(self)
         self._built = True
         self._mark_origins()
@@ -2864,6 +2958,33 @@ class PrintSettingsDialog(QDialog):
         stored = self.ui_settings.print_quality
         known = print_settings.quality_presets()
         return stored if stored in known else print_settings.DEFAULT_QUALITY
+
+    def _label_room(self) -> int:
+        """So breit darf die Beschriftungsspalte werden, damit die Kopfzeile in
+        der Mindestbreite ganz dasteht (RM-630).
+
+        Abgezogen werden das breiteste Kopffeld in seiner Mindestbreite, der
+        Abstand zur Beschriftung und die Ränder bis zum Fenster samt
+        senkrechtem Rollbalken. Eine längere Beschriftung bricht um:
+        „Densidade de preenchimento“ schob die Felder sonst über den rechten
+        Rand, wo die Schrift breiter läuft als am Arbeitsplatz.
+        """
+        head = self._head
+        widest = 0
+        for row in range(head.rowCount()):
+            item = head.itemAt(row, QFormLayout.ItemRole.FieldRole)
+            if item is not None and not item.isEmpty():
+                widest = max(widest, item.minimumSize().width())
+        spacing = head.horizontalSpacing()
+        if spacing < 0:
+            spacing = max(0, head.spacing())
+        chrome = 2 * self._scroll.frameWidth() + self._scroll.verticalScrollBar().sizeHint().width()
+        content = self._scroll.widget()
+        for layout in (self.layout(), content.layout() if content is not None else None, head):
+            if layout is not None:
+                margins = layout.contentsMargins()
+                chrome += margins.left() + margins.right()
+        return self.minimumWidth() - chrome - spacing - widest
 
     def _build_head(self) -> QFormLayout:
         # **Welcher Slicer**, wenn mehr als einer installiert ist. Ohne diese
@@ -3059,7 +3180,7 @@ class PrintSettingsDialog(QDialog):
         # jetzt möglich ist, statt nur zu berichten).
         self.material_link = QPushButton(tr("Filamente …"), self)
         self.material_link.setToolTip(
-            tr("Öffnet links den Abschnitt „Filamente“ — dort wird die Spule gewählt.")
+            tr("Zeigt die Filamente des Projekts und den Weg ins Filamentlager.")
         )
         self.material_link.setAccessibleDescription(self.material_link.toolTip())
         self.material_link.clicked.connect(self.filamentsRequested)
@@ -3091,7 +3212,7 @@ class PrintSettingsDialog(QDialog):
         # Kunde erst nach dem Druck bemerkt. Das zweite ist zu lang: Spalte
         # null trägt die längste Beschriftung, und „Diâmetro do bico" drückte
         # die Druckerauswahl auf 342 px, wo „Allgemeiner FDM-Drucker 220 mm"
-        # 400 braucht (``test_the_portuguese_header_keeps_every_control_visible``).
+        # 400 braucht (``test_the_translated_header_keeps_every_control_visible``).
         # Das Durchmesserzeichen sagt dasselbe auf einem Viertel der Breite;
         # vorgelesen wird der ``accessibleName``.
         nozzle_label = QLabel(tr("Düse ⌀"), self)
@@ -3115,6 +3236,7 @@ class PrintSettingsDialog(QDialog):
         # begannen ihre Felder bei 68 Punkten und die des Wichtigsten
         # darunter bei 170.
         head = QFormLayout()
+        self._head = head
         head.setRowWrapPolicy(QFormLayout.RowWrapPolicy.DontWrapRows)
         slicer_field = QHBoxLayout()
         slicer_field.setContentsMargins(0, 0, 0, 0)
@@ -4624,11 +4746,16 @@ class PrintSettingsDialog(QDialog):
         parent_print_settings = known.get("open_print_settings")
 
         def open_print_settings(error: AppError) -> None:
-            if error.values.get("constraint") == "empty_first_layer":
+            field = str(error.values.get("field") or "")
+            if (
+                error.values.get("constraint") == "empty_first_layer"
+                or print_fields.field_of(field) is not None
+            ):
                 if context is not None and context == self._print_context():
                     # Haftung bei einer leeren ersten Schicht, Wandbahnen bei
-                    # einer, die schmaler ist als eine Bahn (RM-312).
-                    self._lift(str(error.values.get("field") or "adhesion.kind"))
+                    # einer, die schmaler ist als eine Bahn (RM-312), und jedes
+                    # Feld, das ein Befund nennt (RM-583).
+                    self._lift(field or "adhesion.kind")
             elif parent_print_settings is not None:
                 parent_print_settings(error)
 
@@ -6475,9 +6602,10 @@ class PrintSettingsDialog(QDialog):
             )
             # Mit den Einstellungen: Curas Lüfterhochlauf weicht erst ab zwei
             # Schichten ohne Lüfter ab, und nur dann steht ein Satz da. Ebenso
-            # eine Wahl, die das Programm nicht kennt (RM-480).
+            # eine Wahl, die das Programm nicht kennt (RM-480). Unter Bäumen mit
+            # derselben Auskunft wie der Rat (RM-622).
             specific = (
-                slicer_keys.limitation(flavour, path, self.settings, program)
+                slicer_keys.limitation(flavour, path, self.settings, program, self._organic)
                 if flavour is not None
                 else None
             )
@@ -7527,12 +7655,11 @@ class PrintSettingsDialog(QDialog):
     def _update_inactive_setting_rows(self) -> None:
         """Keine Detailwerte zeigen, wenn Stützen oder Bettart ausgeschaltet sind."""
         inactive = self._inactive_paths()
-        for tab, paths in (
-            ("support", print_settings.SUPPORT_DETAILS),
-            ("adhesion", tuple(print_settings.ADHESION_DETAILS)),
-        ):
-            form = self._tab_forms[tab]
+        for paths in (print_settings.SUPPORT_DETAILS, tuple(print_settings.ADHESION_DETAILS)):
             for path in paths:
+                # Das Formular der Gruppe des Felds: Die volle Kühlung an der
+                # Stütze steht unter „Kühlung“, nicht unter „Stützen“ (RM-583).
+                form = self._tab_forms[self._fields[path].group]
                 active = path not in inactive
                 form.setRowVisible(self._labels[path], active)
                 editor = self._editors[path]
@@ -7853,6 +7980,17 @@ class PrintSettingsDialog(QDialog):
             self.machine_choice.currentData(),
             self.process_choice.currentData(),
             self._filament_profile,
+            self._declined_advice(),
+        )
+
+    def _declined_advice(self) -> frozenset[str]:
+        """Abgewählte Zeilen, an denen andere Zeilen hängen
+        (:data:`advise.DECIDING_PATHS`): Ohne den Baum gelten Abstand und
+        Trennschicht der eigenen Stützart (RM-622)."""
+        return frozenset(
+            key
+            for key, chosen in self._advice_choices.items()
+            if not chosen and key in advise.DECIDING_PATHS
         )
 
     def _advice_scene_changed(self, *_args: object) -> None:
@@ -7936,6 +8074,7 @@ class PrintSettingsDialog(QDialog):
             part_fits=dict(self._part_fits()),
             # Ohne Slicer schreibt der Export die 3MF wie für die Orca-Familie.
             flavour=flavour or "orca",
+            declined=self._declined_advice(),
         )
         worker.analysis_context = analysis_context
         context = self._advice_request
@@ -7996,6 +8135,9 @@ class PrintSettingsDialog(QDialog):
             return
         self.slice_result = next(iter(results.values()))[2] if len(results) == 1 else None
         self._accepted_parts = dict(worker.accepted_parts)
+        if worker.organic != self._organic:
+            self._organic = worker.organic
+            self._mark_fields_this_slicer_ignores()
         self._mark_origins()
         self._advice_entries = entries
         self._advice_pending = False
@@ -8142,6 +8284,12 @@ class PrintSettingsDialog(QDialog):
         key = item.data(0, Qt.ItemDataRole.UserRole)
         if key is not None:
             self._advice_choices[key] = item.checkState(0) == Qt.CheckState.Checked
+        if key in advise.DECIDING_PATHS:
+            # An dieser Wahl hängen andere Zeilen: Ohne den Baum fragen Abstand
+            # und Trennschicht mit der eigenen Stützart (RM-622). Die Schichten
+            # bleiben gemessen, nur der Rat rechnet neu — erst nach diesem
+            # Signal, denn der Neuaufbau löscht die Zeile, die es sendet.
+            QTimer.singleShot(0, self, self._refresh_advice)
 
     def _show_advice(self) -> None:
         """Die aktuelle Messung anzeigen, ohne dabei eine neue anzufordern."""

@@ -557,11 +557,13 @@ unter eindeutigen Namen vollständig hochgeladen und geprüft, dann wird die
 Versionsdatei veröffentlicht. Unter demselben Namen niemals andere Bytes ersetzen.
 
 Die letzte Demo muss die veröffentlichte Signatur weiterhin prüfen können.
-Der aktuelle Prüfer verwendet genau einen `RELEASE_PUBLIC_KEY`; ein beim
+Der Prüfer nimmt jeden Schlüssel aus `RELEASE_PUBLIC_KEYS` an (RM-528); eine
+Installation kennt aber nur die Schlüssel ihrer eigenen Version, und ein beim
 Hauptversionswechsel bloß ausgetauschter Signierschlüssel würde diesen Weg
 unterbrechen. Den vorhandenen Release-Schlüssel beim Übergang beibehalten;
-eine notwendige Schlüsselrotation benötigt vorab einen gesondert geprüften
-Übergang für Bestandsinstallationen und gehört zu T29.
+eine notwendige Schlüsselrotation folgt dem Ablauf in `Signierung/README.md`
+(neuer Schlüssel zuerst in einer Version ausgeliefert, erst danach
+unterschreibend) und gehört zu T29.
 
 Während der Pause wird eine alte Demo nicht dadurch wieder geöffnet, dass
 `version.json` weiterhin 0.x nennt. Die Website muss unabhängig davon klarstellen,

@@ -108,7 +108,7 @@ class ProfileClampSetParams(CounterProfileParams):
         title=_("Klemmtiefe"),
         default=40.0,
         minimum=16.0,
-        maximum=80.0,
+        maximum=clamps.CLAMP_DEPTH_LIMIT,
         unit="mm",
         doc=_("Länge der Schalen entlang des Profils."),
         placement="advanced",

@@ -17,13 +17,16 @@ Apple Silicon und Intel-Mac, sobald eine Änderung die Übergabe berührt
 from __future__ import annotations
 
 import re
+import subprocess
+import time
+from collections.abc import Callable
 from dataclasses import replace
 from pathlib import Path
 
 import pytest
 import trimesh
 
-from app.core.export import handover, slicer_profiles
+from app.core.export import appimage, cura_linux, handover, slicer_profiles
 from app.core.geom.mesh import MeshData
 from app.core.knowledge import print_settings, profiles
 from app.core.types import Profile, SceneObject
@@ -48,33 +51,25 @@ _EXTRUSION = re.compile(r"^G1 [^;\n]*\bE\.?\d", re.MULTILINE)
 def _preselected(setup: handover.SlicerSetup, profile: Profile) -> handover.SlicerSetup:
     """Maschine, Prozess und Filament des Herstellers, wie der Druckdialog sie vorwählt.
 
-    Dieselbe Wahl wie ``tools/matrix_unit.prepared`` (Stufe C): Die
-    Orca-Familie und PrusaSlicer bekommen das Herstellerprofil ihres
-    Bestands, Cura seine Druckerdefinition über die Übergabe selbst. Ohne
-    diese Wahl lehnt die Orca-Familie den Prozess ab („process not compatible
-    with printer“, Rückgabe -17).
+    Die Vorwahl selbst (:func:`handover.standard_choice`), die auch Export und
+    Hauptfenster ohne gemerkte Maschine nehmen (RM-623) — so läuft sie hier
+    auf Linux und beiden Macs am echten Bestand. Dieselbe Wahl wie
+    ``tools/matrix_unit.prepared`` (Stufe C): Die Orca-Familie und
+    PrusaSlicer bekommen das Herstellerprofil ihres Bestands, Cura seine
+    Druckerdefinition über die Übergabe selbst. Ohne diese Wahl lehnt die
+    Orca-Familie den Prozess ab („process not compatible with printer“,
+    Rückgabe -17).
     """
     if setup.flavour not in ("orca", "prusa"):
         return setup
-    executable = setup.executable
-    machine, process = slicer_profiles.match(
-        list(slicer_profiles.find_profiles(executable, setup.flavour, ("machine", "process"))),
-        profile.printer,
+    chosen = handover.standard_choice(setup, profile)
+    assert chosen is not None, (
+        f"kein Herstellerprofil für {profile.printer.id} bei {setup.executable}"
     )
-    assert machine is not None, f"kein Herstellerprofil für {profile.printer.id} bei {executable}"
-    roots = slicer_profiles.profile_roots(setup.flavour, executable)
-    filament = slicer_profiles.match_filament(
-        list(slicer_profiles.find_profiles(executable, setup.flavour, ("filament",))),
-        machine,
-        "PLA",
-        roots,
+    assert handover.machine_for(chosen, profile) == chosen.machine_profile, (
+        f"{chosen.machine_profile} gehört nicht zu {profile.printer.id}"
     )
-    return replace(
-        setup,
-        machine_profile=machine.name,
-        base_process=process.name if process else "",
-        base_filament=slicer_profiles.identity(filament) if filament else "",
-    )
+    return chosen
 
 
 @pytest.mark.parametrize(
@@ -288,3 +283,95 @@ def test_a_related_device_never_hands_its_machine_to_the_smaller_printer(
     assert [finding.code for finding in handover.machine_missing(setup, kobra)] == [
         "slicer.machine_mismatch"
     ]
+
+
+#: Die Orca-Familie, deren Linux-Fassung ein AppImage ist (RM-549).
+ORCA_APPIMAGES = ("orcaslicer", "bambustudio", "elegooslicer", "crealityprint")
+
+
+@pytest.mark.parametrize(
+    "program",
+    [
+        pytest.param(program, marks=pytest.mark.slicer(program), id=program)
+        for program in ORCA_APPIMAGES
+    ],
+)
+def test_a_slicer_never_opened_offers_the_printers_of_its_maker(
+    program: str,
+    installed_slicer: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    record_testsuite_property: Callable[[str, object], None],
+) -> None:
+    """Frisch installiert, nie geöffnet: keine eigene Konfiguration, kein ``system/``.
+
+    Trotzdem stehen die Drucker des Herstellers zur Wahl und die Maschine des
+    Druckers aus :data:`PROGRAMS`. Unter Linux kommen sie aus dem Abbild des
+    AppImage, das dafür nicht startet (Regel 11); bis RM-549 sah Solidon dort
+    keinen Herstellerdrucker, bis der Slicer einmal gelaufen war. Wie lange die
+    erste Kopie dort dauert, steht im Bericht des Laufs (``record_testsuite_property``;
+    ``record_property`` verträgt der ``xunit2``-Bericht des Workflows nicht).
+    """
+    empty = tmp_path / "konfiguration"
+    empty.mkdir()
+    monkeypatch.setattr(slicer_profiles, "config_base", lambda _executable: str(empty))
+
+    def forbidden(*_args: object, **_kwargs: object) -> None:
+        pytest.fail("Zum Lesen der Profile startet kein Programm")
+
+    monkeypatch.setattr(subprocess, "Popen", forbidden)
+    monkeypatch.setattr(subprocess, "run", forbidden)
+
+    found = slicer_profiles.discover_printers(installed_slicer, "orca")
+    machine, _process = slicer_profiles.match(
+        slicer_profiles.find_profiles(installed_slicer, "orca"),
+        profiles.make_profile(PROGRAMS[program], "pla").printer,
+    )
+
+    assert len(found) >= 10, [printer.title for printer in found]
+    assert machine is not None, PROGRAMS[program]
+    if cura_linux.is_appimage(installed_slicer):
+        root = slicer_profiles.install_root(installed_slicer)
+        assert root is not None and root.is_relative_to(appimage.PROFILE_COPIES.root()), root
+        started = time.perf_counter()
+        count = appimage.copy_profiles(installed_slicer, tmp_path / "kopie")
+        seconds = round(time.perf_counter() - started, 2)
+        record_testsuite_property(f"{program}_profile", count)
+        record_testsuite_property(f"{program}_kopie_sekunden", seconds)
+        record_testsuite_property(f"{program}_drucker", len(found))
+
+
+@pytest.mark.slicer("cura")
+def test_curas_printers_are_read_from_its_appimage_without_starting_it(
+    installed_slicer: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    record_testsuite_property: Callable[[str, object], None],
+) -> None:
+    """RM-599: Unter Linux liest Solidon Curas Drucker aus dem Abbild, mit leerem
+    Cache und ohne einen Prozess zu starten; ob CuraEngine samt Lader darin
+    vollständig ist, beantwortet dasselbe Lesen. Andernorts (Mac-Bündel) liegt der
+    Bestand neben dem Programm, und der Fall prüft nur, dass er gelesen wird."""
+    monkeypatch.setattr(cura_linux.PRINTER_COPIES, "root", lambda: tmp_path / "cache")
+    monkeypatch.setattr(cura_linux.PRINTER_COPIES, "_kept", {})
+    monkeypatch.setattr(cura_linux.PRINTER_COPIES, "_failed", {})
+
+    def forbidden(*_args: object, **_kwargs: object) -> None:
+        pytest.fail("Zum Lesen der Drucker startet kein Programm")
+
+    monkeypatch.setattr(subprocess, "Popen", forbidden)
+    monkeypatch.setattr(subprocess, "run", forbidden)
+
+    started = time.perf_counter()
+    root = slicer_profiles.install_root(installed_slicer)
+    seconds = round(time.perf_counter() - started, 2)
+
+    assert root is not None, installed_slicer
+    assert (slicer_profiles.cura_resources(root) / "definitions" / "fdmprinter.def.json").is_file()
+    if cura_linux.is_appimage(installed_slicer):
+        assert root.is_relative_to(tmp_path / "cache"), root
+        assert not cura_linux.engine_missing(installed_slicer)
+        record_testsuite_property("cura_kopie_sekunden", seconds)
+        record_testsuite_property(
+            "cura_dateien", sum(1 for path in root.rglob("*") if path.is_file())
+        )

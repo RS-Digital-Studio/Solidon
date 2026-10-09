@@ -1745,7 +1745,7 @@ tragen sie immer (`spool_label`). Der Spulenname auf der Karte bekommt zwei
 Zeilen, bevor er in der Mitte gekürzt wird (`name_lines`); die Schraffur
 des Wickels heißt „Bestand unbekannt" und nichts anderes (`coil_fill`).
 
-`FilamentField` und `FilamentPanel` schreiben über `CatalogueWrites` außerhalb
+`FilamentField` schreibt über `CatalogueWrites` außerhalb
 des Qt-Hauptthreads. Die Steuerung gehört dem obersten Fenster und hält
 bestätigte Aufträge über verworfene Kinddialoge hinaus. Erst die erfolgreiche
 Speicherung aktualisiert die Auswahl; `MainWindow.wait_for_workers` wartet
@@ -1754,7 +1754,7 @@ die Aufträge vor dem Schließen ab. Operationsdialoge berücksichtigen den
 
 Lesefehler im Lager bewahren die letzte gültige Ansicht und zeigen den
 fachlichen Sicherungs- oder Wiederholungsweg — als Knöpfe
-(`_read_handlers` in `InventoryView` und `FilamentPanel`: `restore_backup`,
+(`_read_handlers` in `InventoryView`: `restore_backup`,
 `set_aside_file`, `retry`), nicht als Rat. Unerwartete Ausnahmen werden protokolliert und als interner Fehler
 kenntlich gemacht. `problem_text` setzt Titel und Detail in zwei Zeilen und
 `spoken_values` lässt `field` und `constraint` weg: Das sind Adressen für

@@ -266,6 +266,17 @@ def circle_word() -> str:
     return str(tr("Radius") if _CIRCLE_MEASURE == "radius" else tr("Durchmesser"))
 
 
+def adding_key() -> str:
+    """Die Taste, die mit einem Klick zur Auswahl dazunimmt — neben Umschalt.
+
+    Am Mac ⌘ und nicht Control: „Strg“ ist für Qt dort die Befehlstaste
+    (``app.i18n.keys``), und ``native_keys`` wandelt nur Kürzel mit „+“ —
+    „Strg und Klick“ bliebe stehen. Die Sätze nehmen die Taste deshalb als
+    Wert (``{key}``).
+    """
+    return "⌘" if i18n.key_platform() == "darwin" else tr("Strg", context="Taste")
+
+
 class TrackSlider(QSlider):
     """Ein Regler, der dorthin springt, wohin man klickt.
 
@@ -1129,6 +1140,10 @@ _HUES: tuple[tuple[int, TranslatableText], ...] = (
 #: Formulierung für denselben Fall.
 UNEXPECTED_CRASH = _("Dabei ist etwas schiefgegangen, womit hier niemand gerechnet hat.")
 
+#: Die Filamentliste einer leeren Szene und die Kurzhilfe des Knopfs davor
+#: sagen denselben Satz (Review U2, Nachprüfung G3).
+NO_BODIES_YET = _("Noch kein Körper im Projekt")
+
 
 _BLACK = _("Schwarz")
 _WHITE = _("Weiß")
@@ -1539,6 +1554,13 @@ _VALUE_NAMES: dict[str, TranslatableText] = {
     "pair": _("Gegenstückpaar"),
     "plane": _("Ebene"),
     "play": _("Spiel"),
+    # ``geom.repair``: geglättete Falten, gezählt je Stelle (RM-550).
+    "places": _("Stellen"),
+    # ``backends.needs``: was ein Modell braucht und was dieser Rechner hat (RM-564).
+    "card": _("Grafikkarte"),
+    "disk": _("Freier Platz nötig"),
+    "graphics": _("Speicher der Grafik"),
+    "total": _("Arbeitsspeicher"),
     "points": _("Punkte"),
     "press": _("Pressmaß"),
     "previous": _("Bisher"),

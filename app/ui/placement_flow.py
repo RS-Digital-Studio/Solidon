@@ -648,11 +648,7 @@ def surface_object_for_worker(source: SceneObject) -> SceneObject:
     from app.core.brep.kernel import Solid
 
     mesh = source.mesh
-    copy = (
-        mesh.with_triangle_slots(tuple(mesh.slot_indices))
-        if isinstance(mesh, Solid)
-        else for_a_worker(mesh)
-    )
+    copy = mesh.detached() if isinstance(mesh, Solid) else for_a_worker(mesh)
     return replace(source, mesh=copy)
 
 

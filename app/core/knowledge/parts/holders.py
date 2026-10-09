@@ -7,13 +7,12 @@ einem Schritt (``standalone``) und bietet an, ihre Maße als Projektparameter
 anzulegen (``template``) — danach dreht die Parameterleiste „denselben Halter,
 anderes Maß".
 
-**Vier Bausteine und nicht einer mit einer Formwahl, aus zwei Gründen.** Der
-Bereichstest fährt das volle kartesische Produkt aller Grenzen und weist mehr
-als ``range_check.MAX_CORNERS`` (512) ab, ohne zu rechnen (§24.3: keine
-Stichprobe). Vier Formen mal eckig oder rund mal vier Befestigungen mal Boden
-mal sechs Maße wären 8192 Ecken; je Form sind es 256 oder 512. Und der Kunde
-ohne CAD-Kenntnisse erkennt seinen Halter im Katalog an vier Vorschaubildern
-schneller als an einem Auswahlfeld mit den Buchstaben U, L und Z.
+**Vier Bausteine und nicht einer mit einer Formwahl**, weil der Kunde ohne
+CAD-Kenntnisse seinen Halter im Katalog an vier Vorschaubildern schneller
+erkennt als an einem Auswahlfeld mit den Buchstaben U, L und Z. Die Eckengrenze
+ist dafür kein Grund mehr: Seit RM-578 gilt für die mitgelieferte Bibliothek
+``range_check.LIBRARY_MAX_CORNERS``, und nichts an den Haltern ist ihretwegen
+eingeschränkt; die Schraube der Laschen ist wählbar wie beim Wandhalter.
 
 **Gemeinsam ist die Rückwand und ihre Befestigung** (:func:`_assembled`). Die
 Rückwand liegt bei ``y ∈ [-t, 0]`` an der Wand, ihre Vorderseite ``y = 0`` ist
@@ -41,6 +40,7 @@ from app.core.knowledge.parts.build import bore, face, form_of, result, subtract
 from app.core.knowledge.parts.fasteners import ScrewHoleParams, screw_hole
 from app.core.knowledge.parts.mounting import (
     HEAD_CLEARANCE,
+    WALL_SCREWS,
     KeyholeParams,
     PegboardHookParams,
     WallMountParams,
@@ -110,7 +110,9 @@ def _largest_play(params: type[BaseParams]) -> float:
 #: es selbst zulassen — sonst bauten sie hier außerhalb ihres geprüften Bereichs.
 HOOKS_PLAY: Final = min(_largest_play(PegboardHookParams), _largest_play(KeyholeParams))
 
-#: Die Schraube der Schraublöcher, dieselbe wie beim Wandhalter.
+#: Die Vorgabe der Schraublöcher, dieselbe wie beim Wandhalter. Wählbar ist jede
+#: Größe des Wandhalters (RM-578); bis dahin war sie fest, weil 512 Ecken je
+#: Halter für eine Schraubenwahl nicht reichten.
 SCREW_SIZE: Final = WallMountParams().size
 
 #: Wo der Kreis eines runden Sitzes höchstens von seiner Sehne abweicht. Der
@@ -149,6 +151,9 @@ class _Fastened(Protocol):
     @property
     def board(self) -> float: ...
 
+    @property
+    def screw_size(self) -> str: ...
+
 
 def _mount_param(default: str) -> Any:
     return param(
@@ -173,6 +178,20 @@ def _board_param() -> Any:
             "Tischplatte, Tür. Der Spalt hat genau dieses Maß."
         ),
         placement="advanced",
+    )
+
+
+def _screw_param() -> Any:
+    return param(
+        title=_("Schraube"),
+        default=SCREW_SIZE,
+        choices=WALL_SCREWS,
+        depends_on=("mount", ("screws",)),
+        placement="advanced",
+        doc=_(
+            "Die Schraube durch die Laschen, mit Senkung aus der Normteiltabelle. Die "
+            "Laschen wachsen mit ihr."
+        ),
     )
 
 
@@ -298,18 +317,18 @@ class _Plate:
     """Wie viele Schlüssellöcher sie trägt — null bei jeder anderen Befestigung."""
 
 
-def _thickness(mount: str, wall: float) -> float:
+def _thickness(mount: str, wall: float, screw: str = SCREW_SIZE) -> float:
     """Die Rückwand trägt vor jeder Aussparung noch eine volle Wandstärke."""
     if mount == "keyhole":
         return wall + KEYHOLE.depth
     if mount == "screws":
-        return wall + _countersink_depth(SCREW_SIZE)
+        return wall + _countersink_depth(screw)
     return wall
 
 
-def _ear(wall: float) -> float:
+def _ear(wall: float, screw: str = SCREW_SIZE) -> float:
     """Die Lasche neben der Halteform: Senkung plus eine Wandstärke je Seite."""
-    return standards.screw(SCREW_SIZE).countersink + 2.0 * wall
+    return standards.screw(screw).countersink + 2.0 * wall
 
 
 def _varied[P: BaseParams](params: P, **changes: Any) -> P:
@@ -335,7 +354,7 @@ def _plate(params: _Fastened, width: float, height: float, hooks: Form | None) -
     Lochwand.
     """
     wall = params.wall
-    thickness = _thickness(params.mount, wall)
+    thickness = _thickness(params.mount, wall, params.screw_size)
     if params.mount == "keyhole":
         across = _keyhole_width(params.play)
         length = across + KEYHOLE.drop
@@ -347,8 +366,12 @@ def _plate(params: _Fastened, width: float, height: float, hooks: Form | None) -
             _keyholes(wide, params.play, wall),
         )
     if params.mount == "screws":
-        countersink = standards.screw(SCREW_SIZE).countersink
-        return _Plate(width + 2.0 * _ear(wall), max(height, countersink + 2.0 * wall), thickness)
+        countersink = standards.screw(params.screw_size).countersink
+        return _Plate(
+            width + 2.0 * _ear(wall, params.screw_size),
+            max(height, countersink + 2.0 * wall),
+            thickness,
+        )
     if params.mount == "pegboard" and hooks is not None:
         size = hooks.bounds.size
         return _Plate(
@@ -412,12 +435,12 @@ def _assembled(
                 )
             )
     elif params.mount == "screws":
-        screw = standards.screw(SCREW_SIZE)
+        screw = standards.screw(params.screw_size)
         tool = form_of(
             screw_hole(
                 _varied(
                     ScrewHoleParams(),
-                    size=SCREW_SIZE,
+                    size=params.screw_size,
                     depth=t + 2.0 * BOOLEAN_OVERLAP,
                     countersink=True,
                     washer=False,
@@ -428,7 +451,7 @@ def _assembled(
         # Die Mündung vorn, ein Haar vor der Fläche, die Bohrung nach hinten
         # durch die Lasche: Der Schraubenkopf liegt vorn in der Senkung.
         tool = shapes.turned(tool, -90.0, (1.0, 0.0, 0.0))
-        ear = _ear(wall)
+        ear = _ear(wall, params.screw_size)
         for index, x in enumerate((-1.0, 1.0), start=1):
             offset = x * (width / 2.0 + ear / 2.0)
             cutters.append(shapes.moved(tool, (offset, BOOLEAN_OVERLAP, plate.height / 2.0)))
@@ -517,6 +540,7 @@ class HolderUParams(BaseParams):
     )
     mount: str = _mount_param("keyhole")
     board: float = _board_param()
+    screw_size: str = _screw_param()
     floor: bool = param(
         title=_("Boden"),
         default=False,
@@ -616,6 +640,7 @@ class HolderRingParams(BaseParams):
     )
     mount: str = _mount_param("screws")
     board: float = _board_param()
+    screw_size: str = _screw_param()
     floor: bool = param(
         title=_("Boden"),
         default=True,
@@ -728,6 +753,7 @@ class HolderForkParams(BaseParams):
     )
     mount: str = _mount_param("pegboard")
     board: float = _board_param()
+    screw_size: str = _screw_param()
     wall: float = _wall_param()
     play: float = play_param(maximum=HOOKS_PLAY)
 
@@ -848,6 +874,7 @@ class HolderShelfParams(BaseParams):
     )
     mount: str = _mount_param("screws")
     board: float = _board_param()
+    screw_size: str = _screw_param()
     wall: float = _wall_param()
     play: float = play_param(maximum=HOOKS_PLAY)
 

@@ -35,6 +35,7 @@ from itertools import pairwise
 from typing import Any, Final, cast
 
 import numpy as np
+from numpy.typing import NDArray
 
 from app.core.errors import (
     ARRANGE_ON_BED,
@@ -488,6 +489,16 @@ def _hole_of(source: SceneObject, name: str) -> Feature:
             values={"known": ", ".join(sorted(source.features))},
             suggestions=(CHANGE_SELECTION, CANCEL),
         )
+    # Die Einführfase einer Einpressbuchse ist als Bohrung erklärt, aber kein
+    # Hohlraum für sich: Der Stift dort war eine Scheibe Ø 4,75 und 0,5 hoch (Review G, F2).
+    if feature.kind == "hole" and feature.params.get("lead_in"):
+        raise ValidationError(
+            field="at_feature",
+            detail=_("Das ist die Einführfase der Bohrung darunter. Wählen Sie die Bohrung."),
+            value=name,
+            constraint="lead_in",
+            suggestions=(CHANGE_SELECTION, CANCEL),
+        )
     return feature
 
 
@@ -531,7 +542,13 @@ def _along(body: shapes.Form, axis: Vec3, centre: Vec3) -> shapes.Form:
     # bekommt die kürzeste druckbare Länge oder eine eigene Absage (Review P2, G1, M2).
     # 5: Ein Kettenglied neben der Achse nimmt seinen Abschnitt um den Versatz
     # enger, das halbe Spiel bleibt rundum (Review P2 N7).
-    cache_version="5",
+    # 6: Eine Bausteinbohrung, die durch ihre Senkung läuft, endet für den Stift
+    # dort, wo die Senkung beginnt, und deren Mündung liegt am weiten Rand (RM-552).
+    # 7: Absage, wo der Hohlraum nicht im Körper liegt, und an der Einführfase; der
+    # glatte Stift endet vor Material um das halbe Spiel (Review G, F2).
+    # 8: Ein unentscheidbarer Punkt auf der Achse fragt daneben nach, statt als
+    # Luft zu gelten — an der Rastdrehscheibe verschmolz der Stift (N-4).
+    cache_version="8",
     doc=_(
         "Baut einen losen Stift, der in diese Bohrung passt, samt Senkkopf, Zylinderkopf oder "
         "Gewinde. Er ist um das Spiel aus dem Materialprofil kleiner. Am Klappdeckel mit Stift "
@@ -564,11 +581,20 @@ def pin_for_bore(ctx: OpContext) -> OpResult:
     cavity = bore_pin.cavity_of(hole, source.features, source.mesh)
     if cavity.thread is None and not cavity.widenings:
         return _plain_pin(ctx, source, hole, clearance)
+    bore_pin.check_in_the_body(
+        as_mesh_data(source.mesh), cavity.origin, cavity.axis, cavity.sections, hole.id
+    )
     return _matched_pin(ctx, source, cavity, clearance)
 
 
 def _plain_pin(ctx: OpContext, source: SceneObject, hole: Feature, clearance: float) -> OpResult:
-    """Der glatte Zylinder, Bohrung minus Spiel, so lang wie die Bohrung und mittig in ihr."""
+    """Der glatte Zylinder, Bohrung minus Spiel, so lang wie die Bohrung und mittig in ihr.
+
+    **Vor Material endet er um das halbe Spiel davor** (Review G, F2), wie der
+    Stift mit Kopf (:func:`_matched_pin`): Im Sackloch stand er auf dem Boden,
+    Abstand null, und gedruckt wären Stift und Boden eins. An einer offenen
+    Mündung bleibt er bündig.
+    """
     params = cast(PinForBoreParams, ctx.params)
     diameter = float(hole.params.get("diameter", 0.0)) - clearance
     length = params.length or float(
@@ -590,8 +616,35 @@ def _plain_pin(ctx: OpContext, source: SceneObject, hole: Feature, clearance: fl
             constraint="positive",
             suggestions=(CORRECT_INPUT, CANCEL),
         )
-    centre = tuple(float(value) for value in hole.params["centre"])
-    axis = tuple(float(value) for value in hole.params.get("axis", _Z))
+    mesh = as_mesh_data(source.mesh)
+    origin = np.asarray(hole.params["centre"], dtype=np.float64).reshape(3)
+    direction = np.asarray(hole.params.get("axis", _Z), dtype=np.float64).reshape(3)
+    direction /= max(float(math.hypot(*direction)), EPS_GEOM)
+    low, high = -length / 2.0, length / 2.0
+    wall = float(hole.params.get("diameter", 0.0)) / 2.0
+    bore_pin.check_in_the_body(
+        mesh,
+        origin,
+        direction,
+        (bore_pin.Section(low, high, wall, wall, hole.id),),
+        hole.id,
+    )
+    gap = clearance / 2.0
+    reach = diameter / 2.0 + gap
+    low += _short_of_material(mesh, origin, direction, low, -1.0, gap, reach)
+    high -= _short_of_material(mesh, origin, direction, high, 1.0, gap, reach)
+    length = high - low
+    if length <= EPS_GEOM:
+        raise ValidationError(
+            field="length",
+            detail=_("Die Bohrung nennt keine Länge. Tragen Sie die Länge des Stifts ein."),
+            values={"feature": hole.id},
+            constraint="positive",
+            suggestions=(CORRECT_INPUT, CANCEL),
+        )
+    middle = origin + direction * ((low + high) / 2.0)
+    centre = (float(middle[0]), float(middle[1]), float(middle[2]))
+    axis = (float(direction[0]), float(direction[1]), float(direction[2]))
     with shapes.building(cast(Any, "brep" if source.kind == "brep" else "mesh")):
         body = shapes.moved(shapes.cylinder(diameter, length), (0.0, 0.0, -length / 2.0))
         body = _along(body, (axis[0], axis[1], axis[2]), (centre[0], centre[1], centre[2]))
@@ -625,6 +678,27 @@ def _plain_pin(ctx: OpContext, source: SceneObject, hole: Feature, clearance: fl
             )
         ],
     )
+
+
+def _short_of_material(
+    mesh: MeshData,
+    origin: NDArray[np.float64],
+    axis: NDArray[np.float64],
+    end: float,
+    way: float,
+    gap: float,
+    reach: float,
+) -> float:
+    """Um wie viel der glatte Stift an diesem Ende zurückbleibt, damit er nichts berührt.
+
+    Steht Material auf der Achse näher als das halbe Spiel (der Boden eines
+    Sacklochs), oder läuft dahinter eine engere Bohrung weiter, auf deren Absatz
+    er säße (die Tasche einer Mutternfalle über ihrem Schraubenloch), bleibt er
+    um das halbe Spiel davor. Eine offene Mündung lässt ihn bündig.
+    """
+    if bore_pin.room_beyond(mesh, origin, axis, end, way, gap) < reach:
+        return gap
+    return max(0.0, gap - bore_pin.material_gap(mesh, origin, axis, end, way, gap))
 
 
 def _pin_result(

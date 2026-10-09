@@ -1590,49 +1590,39 @@ def story_label_a_part(run: GuideRun) -> None:
 
 
 def story_draw_and_pull(run: GuideRun) -> None:
-    """*Zeichnen*, Ebene, Rechteck, *Hochziehen*, Höhe, fertiges Teil."""
-    from app.core.sketch import shapes
+    """*Zeichnen*, Klick aufs Bett, Gegenecke, Höhe, fertiges Teil (RM-559)."""
     from app.ui import guide_targets
+    from app.ui.draw_tool import bed_surface
 
     _fresh(run)
     guide_targets.widget_for(run.window, "start.new").click()
     run.settle(30)
     run.capture(1)
     guide_targets.widget_for(run.window, "toolbar.draw").click()
-    run.settle(60)
-    panel = run.window._sketch_panel
-    if panel is None:
-        raise SystemExit("Der Zeichenmodus ging nicht auf")
+    run.settle(30)
+    flow = run.window.draw_flow()
+    if not flow.active:
+        raise SystemExit("Das Aufziehen ging nicht auf")
     run.capture(2)
-    guide_targets.widget_for(run.window, "sketch:rectangle").click()
-    run.settle(20)
+    # Dieselben Schritte, die ein Klick in der Ansicht auslöst: Anfang auf dem
+    # Bett, Gegenecke 50 mal 30 mm, Höhe 10 mm — das Rechteck der Anleitung.
+    flow.take(("bed", bed_surface(), (-25.0, -15.0), (0.0, 0.0, 0.0)))
+    flow.aim((25.0, 15.0))
+    run.window.viewport.reset_camera(follow_selection=False)
+    run.settle(40)
     run.capture(3)
-    # Gezeichnet wird wie in ``make_figures.frame_sketch``: Das Rechteck mit
-    # seinen Maßen ist dasselbe, das der Kunde mit zwei Zahlen aufzieht.
-    panel.canvas.insert_shape(shapes.rectangle(50.0, 30.0))
-    # Näher heran wie mit dem Mausrad: Auf der ganzen Platte stünde das
-    # Rechteck briefmarkengroß im Bild, und seine Maße wären nicht zu lesen.
-    # Nicht ``fit_view``: Die Ansicht reicht unter den Seitenkarten durch, und
-    # auf das Rechteck selbst eingepasst lief es hinter ihnen aus dem Bild.
-    # Die Kamera hört auf dasselbe Signal wie beim Einpassen.
-    panel.canvas.viewFitted.emit(0.0, 0.0, 175.0, 105.0)
+    flow.place()
+    flow.lift_to(10.0)
     run.settle(40)
     run.capture(4)
-    run.capture(5)
-    guide_targets.widget_for(run.window, "sketch.pull").click()
-    run.settle(60)
-    dialog = _open_dialog(run, "Grundform hochziehen")
-    dialog._editors["height"].set_value(10.0)
-    run.settle(60)
-    run.capture(6)
-    guide_targets.widget_for(run.window, "dialog.accept").click()
-    web.until_quiet(run.app, run.session, "Hochziehen")
+    flow.settle()
+    web.until_quiet(run.app, run.session, "Aufziehen")
     run.window.object_tree.select_object(None)
     run.window.right.setCurrentWidget(run.window.report)
     run.window.viewport.view_from("iso")
     run.window.viewport.reset_camera(follow_selection=False)
     run.settle(40)
-    run.capture(7)
+    run.capture(5)
 
 
 def story_two_colours(run: GuideRun) -> None:

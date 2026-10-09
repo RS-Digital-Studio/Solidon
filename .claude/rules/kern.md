@@ -458,7 +458,7 @@ dorthin, wo beide ihn sehen, und `flatpak-spawn --watch-bus` hängt auch aus,
 wenn der Aufrufer ohne Signal stirbt. Draußen deckt das nur `setpriv
 --pdeathsig` ab, wo es da ist; ohne `setpriv` bleibt die Einhängung nach einem
 harten Ende von Solidon stehen. Die Druckerkopie einer AppImage-Cura legt ein
-Arbeiter an, der Fensterfaden wartet nie darauf (`never_wait_in`). Kann
+Arbeiter an, der Fensterfaden wartet nie darauf (`appimage.never_wait_in`). Kann
 Solidon nicht rechnen, gibt es nur Curas Fenster (`WINDOW_ONLY`, ohne
 behauptete Ursache) — nie den Starter als Rechenweg, der öffnet nur das
 Fenster und schreibt nichts.

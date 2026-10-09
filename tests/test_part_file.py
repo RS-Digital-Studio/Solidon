@@ -26,7 +26,7 @@ from app.core.knowledge.parts.registry import PartRegistry
 from app.core.registry.registry import Registry
 from app.core.scene.migrations import FORMAT_VERSION
 from app.core.types import Document, Operation, Parameter, Source, SourceOrigin
-from tests.helpers import break_writes_after_a_first_piece
+from tests.helpers import break_writes_after_a_first_piece, clean_recipe_globals
 
 HISTORICAL_RECIPE = Path(__file__).parent / "data" / "recipes" / "historical_box_v1.json"
 MESHES = Path(__file__).parent / "data" / "meshes"
@@ -1058,6 +1058,7 @@ def test_nested_part_installs_and_reopens_in_a_fresh_receiver(part, tmp_path):
         from app.core.bootstrap import load_operations
         from app.core.knowledge import profiles
         from app.core.knowledge.parts import recipe, PARTS
+        from app.core.knowledge.parts.ops import operation_names
         from app.core.knowledge.parts.part_file import PartFileIO
         from app.core.registry import REGISTRY
         load_operations()
@@ -1067,8 +1068,9 @@ def test_nested_part_installs_and_reopens_in_a_fresh_receiver(part, tmp_path):
         result = PARTS.get("review_outer").fn(PARTS.get("review_outer").params())
         assert result.mesh.is_watertight and result.mesh.volume > 20 * 18 * 8
         assert not PARTS.has("review_inner"), "der private Anhang ersetzt keinen Katalogeintrag"
+        for operation in operation_names("review_outer"):
+            REGISTRY.remove(operation)
         PARTS.remove("review_outer")
-        REGISTRY.remove("insert_review_outer")
         loaded = recipe.load_all()
         assert "review_outer" in loaded.loaded and not loaded.findings
         reopened = PARTS.get("review_outer").fn(PARTS.get("review_outer").params())
@@ -1129,7 +1131,6 @@ def test_nested_recipe_boundaries_stop_before_build(part, monkeypatch, problem):
 
 def test_embedded_recipe_does_not_replace_a_different_local_version(part):
     from app.core.knowledge.parts.registry import PARTS
-    from app.core.registry import REGISTRY
 
     data = _nested_part_data(part)
     expected = recipe.build(
@@ -1153,8 +1154,7 @@ def test_embedded_recipe_does_not_replace_a_different_local_version(part):
         )
         assert PARTS.get("review_inner") is previous
     finally:
-        PARTS.remove("review_inner")
-        REGISTRY.remove("insert_review_inner")
+        clean_recipe_globals("review_inner")
 
 
 @pytest.mark.parametrize(

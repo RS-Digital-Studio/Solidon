@@ -28,6 +28,9 @@ it into `website/version.json`.
 - Del also works while the *Selection* tab has focus, and it removes several marked bodies in one step. When the key does nothing, the status bar gives the reason.
 - Right-clicking bodies offers *Remove object* and, for several, *Unite*. *Hollow out* is also available on a selected face, which becomes the opening.
 - The left and right panels can be moved by their handle, docked to an edge or left floating. *View → Panels back to their place* puts them back.
+- Panels can also be placed at the bottom left, bottom right and along the bottom edge.
+- Tabs can be reordered or dragged into their own windows, also on a second screen. Closing the window or *Return to Solidon* brings the content back.
+- Solidon remembers the layout. The windows stay within reach even when a screen is disconnected.
 - While Solidon recalculates, the report says *Recalculating …* and shows the previous lines as the earlier state. Until now, old errors looked as if they still applied.
 - If the quick calculation fails at a step, Solidon calculates it thoroughly in the same run instead of stopping.
 - A finding that says a step had no effect opens that step at the matching field.
@@ -39,13 +42,32 @@ it into `website/version.json`.
 - In sketch mode the *Selection* tab is hidden. The list of constraints shows those of the selected points and lines, plus any conflict.
 - In the parameter card, a dimension shows “Not used” only where that is true. The button says how many fixed numbers can be bound to dimensions.
 - The error report attaches a crash log only when Solidon actually crashed.
+- The tour card is as tall as its steps. A step unfolds with a click or the space bar, and no tooltip bubble covers the view any more.
+- When a tour step points at the report, the tour stays visible. The tab is framed, and the step tells you which tab to open.
+- Clicking the i next to an action in the *Selection* tab opens the manual where that action is explained.
+- Every dimension of a part can be bound to a project dimension with fx, even before it holds an expression.
+- After dragging the handle of a preview, no number stays above the view. A number typed during the drag moves the preview, not the selected body.
+- After *Repair and try again* and similar ways, the history no longer calls a step that keeps working “deleted”. If the chain stops again, that step is marked.
+- The *Filaments* button now sits in the header. It lists the project's filaments and leads to the filament inventory.
+- A different filament shows at once, on parts and STEP bodies too, and Solidon recomputes nothing for it. Selected bodies show their filament colour beneath the highlight.
+- In the *Selection* tab, the filament field assigns only on a click or Enter. Arrow keys and typing just browse, and the mouse wheel scrolls the tab.
+- In the translated versions, *New filament* no longer scrolls sideways when the window is shorter than its content.
+- Large models load noticeably faster and need less memory, even with a long history and on computers with 8 GB.
+- Even in a long history, a new step takes hardly longer to calculate than the first.
+- Undo and redo are faster, and memory that is no longer needed is freed right away.
+- Resolving overlaps and exporting as 3MF are considerably faster.
+- The workspace appears faster when opening large 3MF files.
+- An added model is in view afterwards, even when it lands next to a model you zoomed in on.
+- In the part catalogue, *Manage parts* is open as long as there is no part of your own yet.
 
 ### Printing and slicer handover
 
 - On Linux, Solidon now also creates the print file with Cura as a Flatpak or AppImage.
+- On Linux, the printers of OrcaSlicer, Bambu Studio, ElegooSlicer and Creality Print as an AppImage are offered right away, even if the slicer has never been opened.
 - The print dialog offers the printers of the selected slicer, like *First steps* and *Settings*. A printer taken over this way stays with its slicer.
 - In the print dialog you can switch the slicer as in *First steps*, also via *Choose program …* for one that Solidon does not find by itself.
 - A printer from Solidon's list and the same one from the slicer count as one device. The print dialog picks the slicer profile with the right nozzle, and the print file carries the start code.
+- Without a saved slicer profile, export and main window use what the print dialog suggests for the printer, including the manufacturer's machine and process.
 - Only slicers Solidon works with are offered, plus resin slicers such as ChituBox and Lychee. Bambu Studio as an AppImage now counts too.
 - Start code and build volume come only from exactly your printer, not from another model of the same series.
 - The print dialog matches the slicer's profiles much faster, when opening and after every slicer change.
@@ -55,18 +77,41 @@ it into `website/version.json`.
 - Where supports under small overhangs rest on the model, Solidon suggests tree supports. They leave fewer marks there.
 - For small tips, Solidon suggests a lower *Minimum slowdown speed* so they do not go soft. The setting reaches every slicer.
 - Narrow rims that hold up on their own stay free of support with *No support under rims*. Prints need noticeably less support that way.
+- Supports come off more easily and cleanly: the gap follows the material and layer height of each part, even with several materials on one plate. The interface follows the surface above.
+- Where a support stands on the part, Solidon also suggests an interface layer below it so its foot leaves no marks. Under tree supports only with slicers that print it there.
+- Under tree supports and next to a prime tower, Solidon suggests the support gap in whole layers, the way the slicer prints it.
+- For PLA, Solidon suggests more clearance from tree supports beneath many fine tips. This leaves less residue from the tree tips there.
+- For PETG, Solidon suggests full cooling at the support. It then comes off the part more easily.
+- New in the print settings: *Interface layers below*, *Interface gap* and *Full cooling at the support*.
+- The *Gap above* field is now called *Gap above and below* and applies to both sides of the support.
 - If the slicer refuses filaments whose temperatures are too far apart on one plate, Solidon now names the reason and the way out instead of only saying that no print file was made.
+- In the print dialog, printer, filaments and quality stay fully visible even with enlarged text. Long labels wrap instead.
+- The report calculates faster and needs less memory.
 - On Linux with Flatpak, Solidon now reports a slicer crash as a crash instead of only saying that no print file was made.
 - Even for printers that PrusaSlicer or SuperSlicer do not know themselves, both estimate the print time with the accelerations handed over, and the file names the material of the spool.
 
 ### Threads, holes and standard parts
 
 - Threads now come in any diameter up to 1000 mm, whether with *Printable thread*, in a hole, with *Create screw* or *Create screw lid*.
+- Regular holes can now be created and plugged again at diameters up to 1000 mm. Large holes and countersinks keep their round shape.
 - Screws, nuts and washers are available to ISO from M1.6 to M64. For other sizes, *Custom size* derives the dimensions from the neighbouring sizes and says so.
 - With *To fit the hole*, *Pin for hole* builds the counterpart: a flush countersunk head for a countersink, an external thread of the same size and pitch for an internal thread.
 - On a printed internal thread, the selection offers *Pin for hole* directly.
-- If a sleeve sticks far out of a hole or a pin crosses it, the actions on the hole name the separate part and offer *Split into separate parts*.
-- If a separate part such as a pin sits in a hole, the actions on the hole say so and offer *Split into separate parts*. Until now the pin was silently merged with the plate.
+- If a separate part sits in a cavity such as a hole, slot, countersink or thread, the actions say so. Until now it was merged or cut off.
+- New is the *Threaded stud*, a headless threaded rod or stud with a chamfer at both ends and the same printable thread as screw and nut.
+- In holes of parts such as the screw hole, the heat-set insert and the nut trap, *Pin for hole* also builds the matching pin. If the hole does not lie in the body, it says so.
+- Placed by hand on a face, the nut trap cuts its pocket into the material. Until now the pocket sat above it, and only the screw hole was drilled.
+- The nut trap's screw hole goes exactly through the part, even a thick one. Until now it ended 10 mm below the pocket or drilled into the opposite side across a gap.
+- Laid in from below, the nut trap's pocket sits under the face, its slot leading down to it. Until now it sat half above, with the screw in the face.
+- If the hole of a part does not go all the way through, it is now called blind. Until now it was called through.
+- If the wall is thicker than entered for a *Cable gland* or *Hose barb*, the step says so and opens the wall thickness. Until now the passage silently ended in the material.
+
+### Parts
+
+- Parts that are a piece on their own, such as cable clips, ribs or nuts, are created without a selection as a body of their own on a free spot of the build plate, even in an empty project.
+- Your own parts are created as a body of their own in the same way and do not attach to a body already in the project.
+- With *Save selection as a part*, the selected body comes with exactly the steps that build it. If a second body would come along, the dialog says so before saving.
+- Wall mounts, pipe clamps, profile clamps and holders take every screw from M3 to M64. If a size does not fit the other dimensions, the part says what to change.
 
 ### Editing and sketching
 
@@ -76,6 +121,22 @@ it into `website/version.json`.
 - When you cut away part of a body, chamfers, threads and nut pockets of parts that lay inside it go too.
 - In *Create lid* and *Create screw lid*, an empty field for the opening height means “Top edge”, and 0 is the height of the bed. Older projects keep their opening.
 - An angle constraint in a small sketch no longer flips the lines over.
+- A body takes three clicks: *Draw* in the top toolbar (Ctrl+Shift+E), then corner, opposite corner, height. Outwards it joins on, inwards it cuts.
+- While pulling up, you can type the dimensions. A double-click on the step opens its dimensions, and under *Kind* it becomes a revolved body or a hole pattern without redrawing.
+- From the sketch editor, *Done* leads back into the view, and the next click sets the height. Escape lays the outline aside, Ctrl+Z brings it back.
+- If a new step cannot be calculated, the draft stays in the view, and *Repair and try again* calculates it without another click.
+- Sculpting offers four tools, each with its own button and shortcut. Strength is a level from 1 to 10, and going over the same spot again no longer piles up.
+- The brush fits the size of the body. If the mesh is too coarse for it, *Sculpt* evens out the triangles on the first stroke, and one Ctrl+Z undoes both.
+- When mirroring, the plane lies where the body matches itself, even when one part sticks far out to the side.
+- Sculpting follows the mouse smoothly, and even a step with hundreds of brush strokes is calculated quickly.
+- In *Armature*, every click after the first sets a bone, Enter ends the chain, dragging a joint bends it, and *Done* saves everything without a dialog.
+- An armature bends only what hangs on its bones, and the rest of the body stays put. Older projects calculate as saved.
+- With Ctrl or Shift you select several edges and fillet or chamfer them in one step. A click on a corner selects all edges that meet there.
+- On an exact body, the highlight of an edge also shows the tangentially adjoining edges that *Fillet* and *Add a chamfer* take along.
+- What the selection offers for a feature, the operation carries out with exactly those values. What is greyed out, it states in the same words, also via chat and command line.
+- As the spot for the copy, *Duplicate feature* suggests one and a half widths beside the original, with a wall in between and never along its axis.
+- On a countersink, *Turn feature* suggests the largest angle at which it stays one, and says when a turn only lays the feature onto itself.
+- If an action would hit a separate part next to the feature, or a placed feature would touch other material only along a line, Solidon says so instead of damaging the body.
 
 ### Generating with AI
 
@@ -84,6 +145,11 @@ it into `website/version.json`.
 - Thin walls, for example on a vase, arrive closed and with thickness.
 - The assistant replies in the language you write in.
 - With a local model the assistant has as much room as with a hosted one and handles tasks of up to twelve steps.
+- Generated models arrive closed more often. Where faces only touch, Solidon separates them, and it smooths small folds in the surface instead of reporting a self-intersection.
+- If an attempt already fell apart while generating, the dialog says so before you take it and offers *One more attempt*.
+- If a generated model is only a thin skin around a cavity, the dialog says so before you take it and the report afterwards, each with the way to a new attempt.
+- Before downloading, *Set up the chat* and *Set up ComfyUI* say how much graphics memory and disk space a model needs and whether this computer has it.
+- On a Mac, *Set up the chat* suggests a local model that fits into the shared memory and says when a key for a hosted model is the better choice.
 
 ## 0.5.3
 

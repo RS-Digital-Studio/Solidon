@@ -1,34 +1,40 @@
-"""Die Leiste der Formsitzung (Bauplan §25, Konzept P16 §8).
+"""Die Leiste der Formsitzung (Bauplan §25, Konzept P16 §8, RM-561).
 
 Sie steht neben der Werkzeugzeile, nicht darin — wie die Skizzenleiste und aus
 demselben Grund: Die Umschalter dort sind Ansichtswerkzeuge, die sich
 gegenseitig ablösen. Formen ist keines davon; man geht hinein, macht die
 Sache, geht heraus (Entscheidung J).
 
-Acht Bedienelemente, nicht mehr: Werkzeug, Radius, Stärke, Symmetrie, ein
-Schalter für die erzwungene Etappe, zwei Hinweisfelder und *Fertig*. Die
-Grenze steht in ``tests/test_interface_limits.py`` und wird hier eingehalten,
-nicht angehoben.
+Acht Bedienelemente, nicht mehr: vier Werkzeugknöpfe als eine Gruppe, Radius,
+Stärke, *Spiegeln*, Zustand, Warnung, Kartenwahl und *Fertig*. Die Grenze
+steht in ``tests/test_interface_limits.py`` und wird hier eingehalten, nicht
+angehoben. Was wegfiel (RM-561): die Werkzeugliste (ein Klick statt zwei),
+*Neu ansetzen* (jede Geste ist eine Etappe), die Liste der acht
+Symmetrieebenen (die übrigen stehen im Schrittdialog) und *Dreiecke jetzt
+angleichen* (die Sitzung gleicht selbst an).
 """
 
 from __future__ import annotations
 
 from typing import Any, TypedDict
 
-from PySide6.QtCore import QSize, Signal
+from PySide6.QtCore import QSignalBlocker, QSize, Signal
 from PySide6.QtWidgets import (
+    QButtonGroup,
     QCheckBox,
-    QComboBox,
     QHBoxLayout,
     QLabel,
     QPushButton,
+    QSpinBox,
+    QToolButton,
     QVBoxLayout,
     QWidget,
 )
 
+from app.core.geom.sculpt import BRUSH, LEVEL_DEFAULT, LEVEL_RANGE
 from app.i18n import TranslatableText, _, tr
 from app.ui.analysis_bar import GestureAnalysis
-from app.ui.labels import LengthSpin, choice_label
+from app.ui.labels import LengthSpin
 from app.ui.style import NORMAL, TIGHT, make_primary
 
 
@@ -45,93 +51,92 @@ class StrokeValues(TypedDict):
     tool: str
     radius: float
     strength: float
-    cut: bool
+    brush: int
 
 
-#: Die sechs Werkzeuge in der Reihenfolge, in der man sie braucht: erst
-#: auftragen und abtragen, dann die drei, die eine Form beruhigen, zuletzt das
-#: eine, das sie schärft.
+#: Die vier Werkzeuge, die die Leiste zeigt, in der Reihenfolge, in der man
+#: sie braucht, mit dem Satz, der sagt, was sie tun. *Aufblasen* und
+#: *Kneifen* rechnet der Kern für alte Schritte weiter; Aufblasen ähnelt
+#: Auftragen, und Kneifen faltete bei hoher Stärke (H3, RM-561).
 #:
 #: Als ``_()``-Literale und nicht als nackte Zeichenketten mit ``tr()``
 #: darüber: Der Einsammler liest den Quelltext, und ``tr(variable)`` sieht er
-#: nicht. Sechs Namen wären stumm ins Englische durchgereicht worden — derselbe
-#: Fund wie bei den Seitennamen in ``labels.py``.
-TOOLS: tuple[tuple[str, TranslatableText], ...] = (
-    ("draw", _("Auftragen")),
-    ("carve", _("Abtragen")),
-    ("smooth", _("Glätten")),
-    ("inflate", _("Aufblasen")),
-    ("flatten", _("Flachziehen")),
-    ("pinch", _("Kneifen")),
+#: nicht.
+TOOLS: tuple[tuple[str, TranslatableText, TranslatableText], ...] = (
+    ("draw", _("Auftragen"), _("Trägt Material auf, wo der Pinsel streicht.")),
+    ("carve", _("Abtragen"), _("Trägt Material ab, wo der Pinsel streicht.")),
+    ("smooth", _("Glätten"), _("Gleicht Unebenheiten unter dem Pinsel aus.")),
+    ("flatten", _("Flachziehen"), _("Zieht die Fläche unter dem Pinsel eben.")),
 )
 
-#: Die Symmetrieebenen, wie die Operation sie kennt.
-PLANES: tuple[str, ...] = ("none", "x", "y", "z", "xy", "xz", "yz", "xyz")
+#: Die Ebene, an der *Spiegeln* spiegelt: links und rechts, X durch die Mitte
+#: des Körpers.
+MIRROR_PLANE = "x"
 
 
 class SculptBar(QWidget):
-    """Werkzeug, Pinsel und Symmetrie für die laufende Formsitzung."""
+    """Werkzeug, Pinsel und Spiegeln für die laufende Formsitzung."""
 
     finished = Signal()
 
-    refineRequested = Signal()
-    """Der Knopf an der Warnung: das Netz jetzt fein genug machen."""
+    mirrorChanged = Signal()
+    """*Spiegeln* ein- oder ausgeschaltet — die Vorschau gilt allen Zügen."""
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
 
-        self.tool = QComboBox(self)
-        self.tool.setAccessibleName(tr("Formwerkzeug"))
-        for value, title in TOOLS:
-            self.tool.addItem(str(title), value)
-        self.tool.setToolTip(
-            tr(
-                "Glätten, Aufblasen und Flachziehen lesen, was vor ihnen liegt — sie kosten "
-                "je einen zusätzlichen Durchgang."
-            )
-        )
+        self.tools = QButtonGroup(self)
+        self.tools.setExclusive(True)
+        self.tool_buttons: dict[str, QToolButton] = {}
+        tool_row = QHBoxLayout()
+        tool_row.setContentsMargins(0, 0, 0, 0)
+        tool_row.setSpacing(TIGHT)
+        for index, (key, title, hint) in enumerate(TOOLS):
+            button = QToolButton(self)
+            button.setCheckable(True)
+            button.setText(str(title))
+            button.setToolTip(str(hint))
+            button.setAccessibleDescription(str(hint))
+            self.tools.addButton(button, index)
+            self.tool_buttons[key] = button
+            tool_row.addWidget(button)
+        self.tool_buttons["draw"].setChecked(True)
 
-        # Radius und Stärke sind Längen und folgen der Anzeigeeinheit (§19.3);
-        # was der Kern bekommt, sind Millimeter.
+        # Radius ist eine Länge und folgt der Anzeigeeinheit (§19.3); was der
+        # Kern bekommt, sind Millimeter. Den Startwert setzt das Fenster aus
+        # der Körpergröße (``sculpt.brush_radius_for``, H8).
         self.radius = LengthSpin(self)
         self.radius.set_range_mm(0.1, 100.0)
-        self.radius.set_value_mm(6.0)
+        self.radius.set_value_mm(5.0)
         self.radius.setToolTip(tr("Wie weit der Pinsel greift."))
         # Die Beschriftung links steht im Layout, nicht im Barrierefreiheitsbaum
         # — ohne eigenen Namen wäre das Feld für einen Bildschirmleser ein
         # leeres Kästchen (``oberflaeche.md``).
         self.radius.setAccessibleName(tr("Radius"))
 
-        self.strength = LengthSpin(self)
-        self.strength.set_range_mm(0.05, 10.0)
-        self.strength.set_step_mm(0.1)
-        self.strength.set_value_mm(1.0)
-        self.strength.setToolTip(tr("Wie weit ein einzelner Zug die Fläche verschiebt."))
+        # **Eine Stufe, keine Länge** (H3): In Millimetern hieß dieselbe Zahl
+        # je Werkzeug etwas anderes, und Glätten schoss ab 2 über. Die Stufe
+        # bildet der Kern je Werkzeug auf eine Wirkung ab, die nie überschießt.
+        self.strength = QSpinBox(self)
+        self.strength.setRange(*LEVEL_RANGE)
+        self.strength.setValue(LEVEL_DEFAULT)
+        self.strength.setToolTip(tr("Wie stark ein Zug wirkt, von 1 bis 10."))
         self.strength.setAccessibleName(tr("Stärke", context="Pinsel"))
 
-        self.symmetry = QComboBox(self)
-        self.symmetry.setAccessibleName(tr("Symmetrie"))
-        for value in PLANES:
-            self.symmetry.addItem(choice_label(value), value)
-        self.symmetry.setToolTip(
+        self.mirror = QCheckBox(tr("Spiegeln"), self)
+        self.mirror.setToolTip(
             tr(
-                "Gespiegelt wird an der Mitte des Körpers — nicht am Schwerpunkt, "
-                "der beim Formen wandert."
+                "Jeder Zug wirkt auch auf der anderen Seite des Körpers, links und rechts "
+                "gespiegelt. Weitere Ebenen über „Diesen Schritt ändern“."
             )
         )
+        self._plane = "none"
+        """Die Symmetrie der Sitzung, wie die Operation sie schreibt. Ein
+        wieder geöffneter Schritt kann eine andere Ebene tragen als X; sie
+        bleibt, bis jemand *Spiegeln* umschaltet."""
+        self.mirror.toggled.connect(self._mirror_toggled)
 
-        # Die erzwungene Etappe aus Entscheidung C. Als Schalter und nicht als
-        # eigenes Werkzeug: Sie gilt für den *nächsten* Zug, unabhängig davon,
-        # womit er gemacht wird.
-        self.cut = QCheckBox(tr("Neu ansetzen"), self)
-        self.cut.setToolTip(
-            tr(
-                "Der nächste Zug sitzt auf dem Ergebnis der vorigen, statt sich mit ihnen zu "
-                "addieren. Kostet einen Durchgang."
-            )
-        )
-
-        #: Was die Sitzung über sich weiß: Zahl der Züge und Etappen.
+        #: Was die Sitzung über sich weiß: die Zahl der Züge.
         self.state = QLabel("", self)
 
         #: Was ihr im Weg steht — zu grobes Netz, zu dünne Wand. Leer, solange
@@ -139,21 +144,13 @@ class SculptBar(QWidget):
         self.warning = QLabel("", self)
         self.warning.setWordWrap(True)
 
-        #: Die Handlung zur Warnung. Sie stand als Satz da — „erst gleichmäßig
-        #: vernetzen" — und ließ den Nutzer allein damit: Sitzung verlassen,
-        #: im Menü suchen, eine Kantenlänge raten, neu anfangen. Die Zahl, die
-        #: er dabei raten müsste, folgt aus dem Pinselradius und steht dem
-        #: Fenster zur Verfügung (§2.7: ein Hinweis endet nicht mit sich
-        #: selbst). Sichtbar nur mit der Warnung, zu der er gehört.
-        self.refine = QPushButton(tr("Dreiecke jetzt angleichen"), self)
-        self.refine.setVisible(False)
-        self.refine.clicked.connect(self.refineRequested)
-
         # Kein „Verwerfen" daneben, anders als bei der Skizze: Eine Sitzung
         # ohne Züge hinterlässt nichts, und eine mit Zügen ist eine
-        # Transaktion, die ein Undo vollständig zurücknimmt (Regel 19). Ein
-        # Knopf, der dasselbe tut wie Strg+Z, wäre ein neunter.
+        # Transaktion, die ein Undo vollständig zurücknimmt (Regel 19).
         self.done = QPushButton(tr("Fertig"), self)
+        self.done.setToolTip(
+            tr("Schließt die Sitzung und legt alle Züge als einen Schritt in den Verlauf.")
+        )
         make_primary(self.done)
         self.done.clicked.connect(self.finished)
 
@@ -162,14 +159,12 @@ class SculptBar(QWidget):
         layout = QHBoxLayout()
         outer.addLayout(layout)
         layout.setContentsMargins(NORMAL, TIGHT, NORMAL, TIGHT)
-        layout.addWidget(QLabel(tr("Werkzeug"), self))
-        layout.addWidget(self.tool)
+        layout.addLayout(tool_row)
         layout.addWidget(QLabel(tr("Radius"), self))
         layout.addWidget(self.radius)
         layout.addWidget(QLabel(tr("Stärke", context="Pinsel"), self))
         layout.addWidget(self.strength)
-        layout.addWidget(QLabel(tr("Symmetrie"), self))
-        layout.addWidget(self.symmetry)
+        layout.addWidget(self.mirror)
         self._row = layout
         #: Die zweite Zeile für Zustand und Abschluss, solange die erste nicht
         #: passt (:meth:`_fit`). Leer, wo Platz ist.
@@ -184,29 +179,25 @@ class SculptBar(QWidget):
         self.analysis = GestureAnalysis(self)
         outer.addWidget(self.analysis)
 
-    # --- Ablesen ---------------------------------------------------------------
-
     # --- Breite ------------------------------------------------------------------
 
     def _place_tail(self, row: QHBoxLayout) -> None:
-        """Neu ansetzen, Zustand, Warnung, Angleichen und *Fertig* in diese Zeile."""
-        for widget in (self.cut, self.state, self.warning, self.refine, self.done):
+        """Zustand, Warnung und *Fertig* in diese Zeile."""
+        for widget in (self.state, self.warning, self.done):
             self._row.removeWidget(widget)
             self._tail.removeWidget(widget)
-        row.addWidget(self.cut)
         row.addWidget(self.state)
         row.addWidget(self.warning, stretch=1)
-        row.addWidget(self.refine)
         row.addWidget(self.done)
 
     def _fit(self) -> None:
         """Passt die Leiste nicht in eine Zeile, rückt ihr Ende in eine zweite.
 
         Am echten Fenster (1 100 Punkte breit, Fensterabnahme 04.10.2026)
-        kürzte die eine Zeile jedes Wort — „Auftrage“, „Neu ansetze“, „2 Züge,
-        eine Eta“. Gemessen wird gegen die im einzeiligen Zustand gemerkte
-        Breite, nicht gegen die aktuelle: Sonst flackert die Leiste an der
-        Grenze (dieselbe Regel wie ``TransformBar._fit_roles``).
+        kürzte die eine Zeile jedes Wort. Gemessen wird gegen die im
+        einzeiligen Zustand gemerkte Breite, nicht gegen die aktuelle: Sonst
+        flackert die Leiste an der Grenze (dieselbe Regel wie
+        ``TransformBar._fit_roles``).
         """
         if not self._wrapped:
             self._roomy_width = super().sizeHint().width()
@@ -229,55 +220,55 @@ class SculptBar(QWidget):
         super().resizeEvent(event)
         self._fit()
 
+    # --- Ablesen und Setzen -------------------------------------------------------
+
     def values(self) -> StrokeValues:
         """Was der nächste Zug mitbekommt.
 
         **Die einzige Lesestelle.** Sie war lange keine — die Methode stand
-        hier ohne Aufrufer, während das Fenster dieselben vier Werte aus den
+        hier ohne Aufrufer, während das Fenster dieselben Werte aus den
         Widgets neu zusammenstellte. Zwei Wege zu derselben Auskunft, und der
         benutzte war der falsche.
         """
         return {
-            "tool": str(self.tool.currentData()),
+            "tool": self.tool(),
             "radius": self.radius.value_mm(),
-            "strength": self.strength.value_mm(),
-            "cut": bool(self.cut.isChecked()),
+            "strength": float(self.strength.value()),
+            "brush": BRUSH,
         }
 
-    def plane(self) -> str:
-        """Die gewählte Symmetrie, wie die Operation sie schreibt."""
-        return str(self.symmetry.currentData())
+    def tool(self) -> str:
+        """Das gewählte Werkzeug, wie der Kern es nennt."""
+        return next(key for key, button in self.tool_buttons.items() if button.isChecked())
 
-    def show_count(self, strokes: int, stages: int) -> None:
-        """Züge und Etappen — die Etappenzahl ist der Preis aus Entscheidung C
-        und gehört sichtbar."""
+    def set_tool(self, key: str) -> None:
+        """Ein Werkzeug wählen — wie ein Klick auf seinen Knopf."""
+        self.tool_buttons[key].setChecked(True)
+
+    def plane(self) -> str:
+        """Die Symmetrie der Sitzung, wie die Operation sie schreibt."""
+        return self._plane
+
+    def set_plane(self, plane: str) -> None:
+        """Die Symmetrie eines geöffneten Schritts übernehmen, ohne Meldung."""
+        self._plane = plane or "none"
+        with QSignalBlocker(self.mirror):
+            self.mirror.setChecked(self._plane != "none")
+
+    def _mirror_toggled(self, on: bool) -> None:
+        self._plane = MIRROR_PLANE if on else "none"
+        self.mirrorChanged.emit()
+
+    def show_count(self, strokes: int) -> None:
+        """Wie viele Züge die Sitzung trägt. Etappen gehören dem Kern (RM-561)."""
         if not strokes:
             self.state.setText(tr("Noch kein Zug."))
             return
-        # Die Einzahl steht daneben, sie wird nicht gebildet (P0.1): Nach dem
-        # ersten Zug stand hier „1 Züge, 1 Etappen".
-        if strokes == 1:
-            self.state.setText(
-                tr("Ein Zug, eine Etappe")
-                if stages <= 1
-                else tr("Ein Zug, {stages} Etappen").format(stages=stages)
-            )
-            return
-        if stages == 1:
-            self.state.setText(tr("{strokes} Züge, eine Etappe").replace("{strokes}", str(strokes)))
-            return
+        # Die Einzahl steht daneben, sie wird nicht gebildet (P0.1).
         self.state.setText(
-            tr("{strokes} Züge, {stages} Etappen")
-            .replace("{strokes}", str(strokes))
-            .replace("{stages}", str(stages))
+            tr("Ein Zug") if strokes == 1 else tr("{strokes} Züge").format(strokes=strokes)
         )
 
-    def show_warning(self, text: str, refinable: bool = False) -> None:
-        """Was im Weg steht — und, wo es sich beheben lässt, der Knopf dazu.
-
-        ``refinable`` ist nicht aus dem Text abzuleiten: Die Warnung über zu
-        dünne Wände sieht genauso aus und hat keine Handlung, die von hier aus
-        richtig wäre.
-        """
+    def show_warning(self, text: str) -> None:
+        """Was im Weg steht — leer, solange nichts im Weg steht."""
         self.warning.setText(text)
-        self.refine.setVisible(bool(text) and refinable)

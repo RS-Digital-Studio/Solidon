@@ -47,9 +47,26 @@ def _corner_values(params: type[BaseParams]) -> list[tuple[str, list[Any]]]:
     return lists
 
 
-#: Vollständige Kombinationen pro Lauf. Deckt die mitgelieferte Bibliothek
-#: (höchstens 320 Ecken je Baustein) ab und begrenzt fremde Parameterprodukte.
+#: Vollständige Kombinationen je Lauf für einen **eigenen** Baustein des Kunden
+#: (Rezept, eigene ``.py``): Er prüft auf seinem Rechner, im Dialog, und der
+#: Dialog nennt vorher die geschätzte Dauer.
 MAX_CORNERS: Final = 512
+
+#: Dieselbe Grenze für die **mitgelieferte** Bibliothek (RM-578, Entscheidung
+#: Robert, 08.10.2026: „wenn wir mehr liefern können, wollen wir das“). Ihr
+#: Nachweis läuft einmal bei uns (``tools/check_part_ranges.py --jobs``), nie
+#: beim Kunden; die Grenze richtet sich deshalb nach seiner Rechenzeit, nicht
+#: nach einem Dialog. Gemessen am 08.10.2026 mit sechs Prozessen: Bausteine ohne
+#: Gewinde kosten 0,02 bis 0,3 s je Ecke, 4096 Ecken also höchstens rund
+#: zwanzig Minuten — so lange wie das druckbare Gewinde mit 248 Ecken bei 5 s je
+#: Ecke. Ein Gewindebaustein bleibt durch seine Kosten von selbst darunter. Die
+#: volle Prüfung ohne Stichprobe gilt unverändert (§24.3).
+LIBRARY_MAX_CORNERS: Final = 4096
+
+
+def corner_limit(source: str) -> int:
+    """Die Eckengrenze für einen Baustein dieser Herkunft (``PartSpec.source``)."""
+    return LIBRARY_MAX_CORNERS if source == "shipped" else MAX_CORNERS
 
 
 def _collect_on_main_thread() -> None:
@@ -163,23 +180,23 @@ def corner_count(params: type[BaseParams]) -> int:
     return math.prod(_count(root, children) for root in roots)
 
 
-def require_range_size(count: int) -> None:
+def require_range_size(count: int, limit: int = MAX_CORNERS) -> None:
     """Weist zu große Bereiche vor dem Rechnen ab; niemals nur teilweise prüfen."""
-    if count > MAX_CORNERS:
+    if count > limit:
         raise ValidationError(
             field="exposed",
             constraint="maximum",
-            values={"count": count, "limit": MAX_CORNERS},
+            values={"count": count, "limit": limit},
             detail=_(
                 "Der Bereichstest umfasst {count} Kombinationen; höchstens {limit} "
                 "sind möglich. Geben Sie weniger Maße frei.",
                 count=count,
-                limit=MAX_CORNERS,
+                limit=limit,
             ),
         )
 
 
-def corners(params: type[BaseParams]) -> list[dict[str, Any]]:
+def corners(params: type[BaseParams], limit: int = MAX_CORNERS) -> list[dict[str, Any]]:
     """Der Parameterbereich als die Werte, die ein Baustein überstehen muss.
 
     Der kleinste und der größte Wert jeder Zahl, jede Wahl jedes Enums und
@@ -202,7 +219,7 @@ def corners(params: type[BaseParams]) -> list[dict[str, Any]]:
     von denen 400 verschieden sind.
     """
     roots, children, order = _forest(params)
-    require_range_size(math.prod(_count(root, children) for root in roots))
+    require_range_size(math.prod(_count(root, children) for root in roots), limit)
     if not roots:
         return [{}]
     plan: list[dict[str, Any]] = []
@@ -396,6 +413,7 @@ def check(
     wall: WallRequirement = DEFAULT_WALL_REQUIREMENT,
     features: tuple[FeatureRequirement, ...] = (),
     feasible: Callable[[BaseParams], Any] | None = None,
+    limit: int = MAX_CORNERS,
 ) -> RangeReport:
     """Fährt die Ecken und sagt je Ecke, was nicht hielt.
 
@@ -441,7 +459,7 @@ def check(
     from app.core.geom.mesh import as_mesh_data
 
     token = cancelled or _Silent()
-    plan = corners(params)
+    plan = corners(params, limit)
     failures: list[RangeFailure] = []
     excluded: list[RangeExclusion] = []
     checked = 0
@@ -668,4 +686,5 @@ def check_part(
         wall=spec.wall,
         features=spec.feature_requirements,
         feasible=spec.feasible,
+        limit=corner_limit(spec.source),
     )

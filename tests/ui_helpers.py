@@ -461,3 +461,13 @@ def scene_with_a_hole_and_a_fillet() -> Any:
             objects={"obj_1": SceneObject(id="obj_1", name="A", mesh=mesh, features=features)}
         )
     )
+
+
+def wait_for_catalogue(widget: Any) -> None:
+    """Ein Lagerauftrag muss im Widget ankommen, nicht nur auf der Platte."""
+    from PySide6.QtTest import QTest
+
+    deadline = time.monotonic() + 5
+    while not widget.wait_for_workers(0) and time.monotonic() < deadline:
+        QTest.qWait(10)
+    assert widget.wait_for_workers(0)

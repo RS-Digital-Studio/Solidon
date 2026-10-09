@@ -242,7 +242,16 @@ class PartSpec:
     host_add: HostCut | None = None
     """Zusätzlicher Trägeraufbau, der vor dem Schnitt mit dem Ziel vereinigt wird."""
     standalone: bool = False
-    """Bietet zusätzlich eine Erzeugeroperation ohne Trägerobjekt an."""
+    """Wahr für einen Baustein, der für sich ein Teil ist (RM-562).
+
+    Er bekommt zusätzlich einen Erzeuger ohne Trägerobjekt (``create_…``), und
+    der Katalog legt ihn ohne gewählte Stelle als eigenen Körper an
+    (``ops.catalog_operation``). Eigenständig ist, was ohne Träger seine
+    Aufgabe erfüllt — Kabelclip, Rippe, Standfuß, Mutter. Was nur am Träger
+    wirkt (Rastnase, Federarm, Lasche) oder nur abträgt, ist es nicht; das
+    Abtragen weist das Register ab. Eine abtragende Wahl (``subtractive_on``)
+    lässt der Erzeuger weg.
+    """
     template: bool = False
     """Eine Vorlage: Der Erzeuger bietet an, seine Maße als Projektparameter anzulegen (§13).
 
@@ -325,6 +334,18 @@ class PartSpec:
     keinen Fehler: Der Baustein bildet eine demontierbare Verbindung ab. Die
     Operation sagt das ihrem Registereintrag (``leaves_separate_parts``), und
     Auswertung und Assistentenprüfung melden deshalb keinen Zerfall.
+    """
+    reaches_through: tuple[str, ...] = ()
+    """Die erklärten Bohrungen, die der Schritt durch den ganzen Träger führt (RM-631).
+
+    Der Baustein baut eine solche Bohrung nur über seine eigene Strecke: Wie
+    weit der Träger entlang ihrer Achse noch Material hat, weiß erst die
+    Operation. Sie verlängert die Bohrung von beiden Enden, bis das Material
+    endet — durch einen dicken Träger ganz, über die Fläche hinaus in einen
+    Spalt nie (``ops._reaching_through``). Die Mutternfalle reichte vorher fest
+    10 mm weiter: in einem 40-mm-Quader ein Sackloch, über einem Spalt in den
+    Backen darüber. Eine Bohrung mit eingetragener Tiefe steht nicht hier; sie
+    ist so tief wie eingetragen und dort ein Sackloch, wo der Träger dicker ist.
     """
     joined_by_host: bool = False
     """Wahr, wenn der **Träger** die Teile dieses Bausteins zusammenhält.
@@ -599,6 +620,34 @@ class PartRegistry:
                 detail=f"{spec.name!r} is a template without a creator",
                 values={"part": spec.name},
             )
+        if spec.standalone and spec.subtractive:
+            raise InternalError(
+                detail=f"{spec.name!r} only cuts and cannot stand alone",
+                values={"part": spec.name},
+            )
+        if spec.standalone:
+            # Der Erzeuger lässt die abtragende Wahl weg (``ops.build_params``):
+            # Übrig bleiben muss genau die Vorgabe, und kein Feld darf an ihr hängen.
+            fields = spec.params.spec()
+            for entry in fields:
+                if entry.subtractive_on is None:
+                    continue
+                kept = [
+                    value
+                    for value in (entry.choices or (False, True))
+                    if value not in entry.subtractive_on
+                ]
+                hanging = [
+                    other.name
+                    for other in fields
+                    if other.depends_on is not None and other.depends_on[0] == entry.name
+                ]
+                if kept != [entry.default] or hanging:
+                    raise InternalError(
+                        detail=f"{spec.name!r} cannot stand alone: {entry.name!r} "
+                        "must leave exactly its default as the uncut form",
+                        values={"part": spec.name, "field": entry.name},
+                    )
 
     def get(self, name: str) -> PartSpec:
         if name not in self._parts:
@@ -699,6 +748,7 @@ def register_part(
     keeps_up: bool = False,
     lies_flat: bool = False,
     joined_by_host: bool = False,
+    reaches_through: Iterable[str] = (),
     bodies: int = 1,
     features: Iterable[str] = (),
     wall: WallRequirement | None = None,
@@ -753,6 +803,7 @@ def register_part(
                 keeps_up=keeps_up,
                 lies_flat=lies_flat,
                 joined_by_host=joined_by_host,
+                reaches_through=tuple(reaches_through),
                 features=declared_features,
                 wall=wall or WallRequirement(),
                 feature_requirements=declared_requirements,
@@ -827,7 +878,15 @@ def register_part(
 #: (``THREAD_MESH_WHOLE_TURNS`` an Gewinde, Schraube und Mutter): Die Maße
 #: bleiben, das Netz eines Gewindes mit krummer Umlaufzahl ändert sich.
 #: Schmalere Laschen und alle übrigen Bausteine bleiben maßgleich.
-LIBRARY_VERSION: Final = "24"
+#: Version 25: Eine Mutternfalle, von Hand ohne Fläche und Richtung auf eine
+#: Oberfläche gesetzt, baut ihre Tasche ins Material statt darüber (RM-591);
+#: im Material gesetzt und alle übrigen Bausteine bleiben maßgleich.
+#: Version 26: Das Schraubenloch der Mutternfalle geht genau durch den Träger,
+#: nicht mehr fest 10 mm über die Tasche hinaus, und von unten eingelegt liegt
+#: ihre Tasche unter der Fläche (``NUT_TRAP_BORES_THROUGH_THE_PART``, RM-631).
+#: Alle übrigen Bausteine bleiben maßgleich; dass eine Bohrung, die nicht durch
+#: das Teil reicht, Sackloch heißt, entscheidet die Operation (``targets:10``).
+LIBRARY_VERSION: Final = "27"
 
 #: Version 2 hat eine einzige Ursache, und die betrifft drei Bausteine: sie
 #: bauten über ihrem Ursprung statt darunter. Der Eintrag steht hier statt

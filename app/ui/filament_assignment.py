@@ -1,10 +1,14 @@
-"""Schnelle ausdrückliche Spulenwahl an der Auswahl, ohne eigene Operation."""
+"""Schnelle ausdrückliche Spulenwahl an der Auswahl, ohne eigene Operation.
+
+Die Wahl weist sofort zu, an jedem Körper (RM-557): Ein Filament ändert keine
+Geometrie und keinen Rechenkern, also gibt es nichts vorab zu zeigen —
+Strg+Z nimmt die Zuweisung zurück (Regel 19).
+"""
 
 from __future__ import annotations
 
-from collections.abc import Callable
-
 from PySide6.QtCore import QSignalBlocker, Qt, Signal
+from PySide6.QtGui import QFocusEvent, QInputMethodEvent, QKeyEvent, QWheelEvent
 from PySide6.QtWidgets import QComboBox, QLabel, QPushButton, QVBoxLayout, QWidget
 
 from app.core.errors import AppError
@@ -23,8 +27,56 @@ from app.ui.filament_picker import (
     spool_slot,
     swatch,
 )
+from app.ui.labels import wheel_needs_focus
 from app.ui.leash import weak_slot
-from app.ui.style import TIGHT, make_primary, set_level
+from app.ui.style import TIGHT, set_level
+
+
+class _SpoolChoice(QComboBox):
+    """Die Auswahlliste des Schnellwählers: Am geschlossenen Feld weist nur Enter zu.
+
+    Jede Wahl ist sofort eine Zuweisung mit eigenem Verlaufsschritt (RM-557).
+    Qt meldet am geschlossenen Feld jeden Pfeilschritt, jeden getippten
+    Buchstaben und jede Radraste als Wahl — wer mit der Tastatur zur dritten
+    Spule wollte, legte zwei Schritte für die ersten an. Geschlossen blättern
+    deshalb alle Tasten nur, Enter weist zu, Escape kehrt zur Standzeile
+    zurück; das Rad wählt nie, es rollt die Karte. Aus der offenen Liste
+    (Alt+Pfeil runter, F4, Leertaste) weisen Klick und Enter zu wie gewohnt
+    (Entscheidung Koordinator, Review U2).
+    """
+
+    def keyPressEvent(self, event: QKeyEvent) -> None:  # noqa: N802 — Qt-Name
+        if event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
+            event.accept()
+            self.activated.emit(self.currentIndex())
+            return
+        if event.key() == Qt.Key.Key_Escape and self.currentIndex() > 0:
+            event.accept()
+            with QSignalBlocker(self):
+                self.setCurrentIndex(0)
+            return
+        with QSignalBlocker(self):
+            super().keyPressEvent(event)
+
+    def inputMethodEvent(self, event: QInputMethodEvent) -> None:  # noqa: N802 — Qt-Name
+        """Was eine Eingabemethode tippt, sucht wie eine Taste — und wählt ebenso nicht."""
+        with QSignalBlocker(self):
+            super().inputMethodEvent(event)
+
+    def wheelEvent(self, event: QWheelEvent) -> None:  # noqa: N802 — Qt-Name
+        """Die Raste geht an den Rollbereich, auch mit Fokus: Rollen ist keine Wahl."""
+        event.ignore()
+
+    def focusOutEvent(self, event: QFocusEvent) -> None:  # noqa: N802 — Qt-Name
+        """Wer blättert und geht, hat nichts gewählt — das Feld zeigt wieder den Stand.
+
+        Sonst stünde eine nie zugewiesene Spule im Feld. Die offene Liste
+        nimmt den Fokus mit ``PopupFocusReason``; dann bleibt die Zeile.
+        """
+        if event.reason() != Qt.FocusReason.PopupFocusReason and self.currentIndex() > 0:
+            with QSignalBlocker(self):
+                self.setCurrentIndex(0)
+        super().focusOutEvent(event)
 
 
 class QuickFilamentPicker(QWidget):
@@ -35,20 +87,12 @@ class QuickFilamentPicker(QWidget):
     clearRequested = Signal()
     described = Signal(str)
     """Die aktuelle Zuweisung in einem Satz — für die zugeklappte Kopfzeile (RM-510)."""
-    preview_required = False
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._objects: list[SceneObject] = []
         self._selected_features: tuple[tuple[str, str], ...] = ()
         self._part = False
-        self._apply_pending: Callable[[], None] | None = None
-        self._cancel_pending: Callable[[], None] | None = None
-        self._blocked_reason: str | None = None
-        self.preview_check: Callable[[], bool] | None = None
-        self.preview_defer: Callable[[], None] | None = None
-        """Ein Klick vor der Vorschau oder während einer Auswertung wartet auf
-        sie; das Hauptfenster entscheidet, worauf (wie am Merkmalfenster)."""
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(TIGHT)
@@ -57,25 +101,20 @@ class QuickFilamentPicker(QWidget):
         self.scope.setWordWrap(True)
         set_level(self.scope, "caption")
         layout.addWidget(self.scope)
-        self.picker = QComboBox(self)
+        self.picker = _SpoolChoice(self)
         self.picker.setAccessibleName(tr("Filament für die Auswahl"))
         self.picker.setMinimumContentsLength(12)
         self.picker.setSizeAdjustPolicy(
             QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon
         )
         self.picker.activated.connect(self._chosen)
+        # Ohne Fokus geht die Raste an den Rollbereich (Regel aller Felder);
+        # mit Fokus reicht ``_SpoolChoice.wheelEvent`` sie ebenso weiter.
+        wheel_needs_focus(self.picker)
         layout.addWidget(self.picker)
         self.notice = ErrorNotice(self)
         self.notice.hide()
         layout.addWidget(self.notice)
-        self.apply_button = make_primary(QPushButton(tr("Übernehmen"), self))
-        self.apply_button.clicked.connect(self.accept)
-        self.apply_button.hide()
-        layout.addWidget(self.apply_button)
-        self.cancel_button = QPushButton(tr("Abbrechen"), self)
-        self.cancel_button.clicked.connect(self.cancel_preview)
-        self.cancel_button.hide()
-        layout.addWidget(self.cancel_button)
         self.clear_button = QPushButton(tr("Filament entfernen"), self)
         self.clear_button.clicked.connect(self.clearRequested)
         layout.addWidget(self.clear_button)
@@ -98,74 +137,10 @@ class QuickFilamentPicker(QWidget):
         niemand gewählt hat (Robert, 16.09.2026: „wo stelle ich von der
         Versteifungsrippe insgesamt das filament ein?").
         """
-        if (
-            tuple(id(obj) for obj in objects) != tuple(id(obj) for obj in self._objects)
-            or selected_features != self._selected_features
-            or part != self._part
-        ):
-            self.cancel_preview()
         self._objects = list(objects)
         self._selected_features = selected_features
         self._part = part
         self.refresh()
-
-    def stage_preview(self, apply: Callable[[], None], cancel: Callable[[], None]) -> None:
-        """Eine vorbereitete Zuweisung bleibt im vorhandenen Wähler zur Übernahme."""
-        self.cancel_preview()
-        self._apply_pending = apply
-        self._cancel_pending = cancel
-        self.apply_button.show()
-        self.cancel_button.show()
-        self.block_apply(self._blocked_reason)
-
-    def block_apply(self, reason: str | None) -> None:
-        """Nur Übernehmen sperren; Spulenwahl und Abbrechen bleiben frei."""
-        self._blocked_reason = reason
-        self.apply_button.setEnabled(self._apply_pending is not None and reason is None)
-        explanation = reason if reason is not None else str(tr("Filament zuweisen"))
-        self.apply_button.setToolTip(explanation)
-        self.apply_button.setAccessibleDescription(explanation)
-
-    def can_accept(self) -> bool:
-        """Ob der vorbereitete Auftrag freigegeben ist."""
-        if self._apply_pending is None:
-            return False
-        current = self.preview_check is None or self.preview_check()
-        return current and self._blocked_reason is None
-
-    def accept(self) -> None:
-        """Den Auftrag übernehmen; seine Aktualität prüft das Hauptfenster erneut.
-
-        **Ein früher Klick verfällt nicht.** Steht die Vorschau noch aus oder
-        rechnet die Szene, ging er hier ohne ein Wort verloren, obwohl der
-        Knopf frei war — Warten ist keine Sperre. Er geht an
-        ``preview_defer``, und das Fenster übernimmt, sobald es darf.
-        """
-        if self._apply_pending is None or self._blocked_reason is not None:
-            return
-        if self.can_accept():
-            self._apply_pending()
-            return
-        if self.preview_defer is not None:
-            self.preview_defer()
-
-    def finish_preview(self) -> None:
-        """Die Bedienstelle nach erfolgreicher Übernahme leeren."""
-        self._apply_pending = None
-        self._cancel_pending = None
-        self._blocked_reason = None
-        self.preview_check = None
-        self.preview_defer = None
-        self.preview_required = False
-        self.apply_button.hide()
-        self.cancel_button.hide()
-
-    def cancel_preview(self) -> None:
-        """Auswahlwechsel oder Abbrechen verwirft nur die wartende Zuweisung."""
-        cancel = self._cancel_pending
-        self.finish_preview()
-        if cancel is not None:
-            cancel()
 
     def refresh(self) -> None:
         """Neue Lagerwerte stehen sofort zur Wahl, die Szene bleibt dabei unverändert."""
@@ -301,7 +276,6 @@ class QuickFilamentPicker(QWidget):
 
     def _chosen(self, index: int) -> None:
         """Nur eine ausdrückliche Wahl einer noch aktiven Spule wird weitergereicht."""
-        self.cancel_preview()
         identifier = str(self.picker.itemData(index) or "")
         if not identifier or not self._objects:
             return

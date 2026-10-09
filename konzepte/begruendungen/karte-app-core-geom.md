@@ -15,6 +15,14 @@ sind der Hintergrund.
 
 ## Vorspann
 
+### Große Bohrungen und Senkungen
+
+Die Obergrenze für neue Bohrungen und ihren manuellen Verschluss folgt dem
+größten Gewindedurchmesser (`units.LARGEST_THREAD`). Vorschau und Netzwerkzeug
+leiten ihre Sehnenzahl aus `shapes.turn_segments` ab. Eine feste Zahl von 48
+Segmenten genügt für große Durchmesser nicht; auch Senkungen halten deshalb
+`MAX_FACET_SAG` ein und verlängern die Flanke über die Mündung hinaus.
+
 *Früher unter „Grenzen“, HEAD-Fassung — die Regel dazu steht heute in `operationen.md` (der `caveat`).*
 
 - **Der Sehnenzug wird benannt, nicht versteckt.** Eine Verrundung am Netz
@@ -1591,6 +1599,26 @@ die Ausrichtung von 26 112 Trägerecken braucht 0,12 statt 0,2 s.
 
 ### Reparatur
 
+*Aus der Karte verschoben (RM-550, Budget):* Beide optionalen Abbruchtoken
+von `material_part_families` und `material_part_count` reichen durch `_Shells`
+bis Gitterzertifikat und Kreuzungssuche; die Standardschnittstellen bleiben
+erhalten.
+
+**Berührkanten und Falten (RM-550).** An einem TRELLIS.2-Netz (Startwert 8)
+trennte die geometrisch bessere Paarung 70 von 71 Kanten mit vier Flächen; an
+der letzten hingen die Fächer beider Paare um die Ecken zusammen, keine Ecke
+teilte sich, und das Streichen danach schnitt ein Viereck auf, das kein Füller
+schließt. Ein zweiter Durchgang nimmt für die übrigen Kanten die andere
+Paarung. Falten — 2 bis 24 Dreieckspaare unter einem Millimeter, meist mit
+gemeinsamer Ecke — löst keine Vereinigung; `smooth_folds` rückt die Ecken in
+die Mitte ihrer Nachbarn (an Startwert 13 nach drei Runden kreuzungsfrei) und
+füllt sonst die Stelle neu. Jede Ecke darf nur so weit, wie die kreuzenden
+Dreiecke an ihr lang sind: Mit der längsten Kante ihres Fächers rückte am
+Zapfen auf einem Block eine Ecke 10 mm, denn ein CAD-Fächer reicht bis zur
+Blockecke, und gehalten hat nur die Volumenwache. Übernommen wird nur, was danach geschlossen,
+gleich ausgerichtet, gleich viele Teile, fast gleiches Volumen und frei von
+Kreuzungen ist; geprüft wird nur an den Stellen (`_crosses_near`).
+
 *Früher im Kopf der Karte.*
 
 `repair()` übernimmt die Dreiecksbereinigung nur, wenn das Netz danach nicht
@@ -2214,3 +2242,12 @@ Wer mit `trimesh` an einer Ebene teilt und danach verschweißt, legt vorher auf
 die Ebene, was trimesh zu ihr zählt (`section.settled_on_plane`): Ecke und
 Schnittkopie stünden sonst bis 1e-8 mm auseinander, und das Verschweißen über
 gerundete Koordinaten verfehlte sie — der Körper bliebe offen.
+
+## Hilfsprozess: Startplätze und Abbau
+
+*Aus der Karte verschoben (`kernel_process.py`).* Startplätze bleiben unter
+Poolschloss bis zum bestätigten Ende reserviert. Tote Stoppreste sammelt die
+nächste Anfrage; lebende sperren Starts und lokale Rückfälle, auch nach
+Vorabstart, mit Fehlerbericht. Dauerhafte Absagen bleiben. `shutdown` gibt
+trotz Fehler Wartende frei, erfasst offene Starts und trennt alte
+Reservierungen, Rückgaben und Absagen vom neuen Bestand.

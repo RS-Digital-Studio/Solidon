@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import math
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, Final, cast
 
 import numpy as np
 from shapely.geometry import LineString
@@ -33,20 +33,24 @@ __all__ = ["CONTOUR_SAG"]
 _ADDED = PartChange("1", "2026-09-15", "Geteilte Profilklemme mit separat wechselbaren Einlagen.")
 
 #: Die Schraubengrößen der Klemme — aus der Normteiltabelle, soweit dort
-#: Schraube **und** Mutter stehen. Die Website verspricht Schrauben „zur
-#: gewählten Normgröße"; zu wählen war bis zum 22.09.2026 nur M4, bis zum
-#: 06.10.2026 M3 bis M6. Jetzt M3 bis M33: Wo die Klemmtiefe für eine große
-#: Größe nicht reicht, sagt ``_shell_reason`` es mit Vorschlag — bei der
-#: größten Klemmtiefe von 80 mm reicht sie bis M42. Die Schale fährt 32 Ecken
-#: je Größe, und ``range_check.MAX_CORNERS`` lässt sechzehn zu; M3 bis M33 sind
-#: sechzehn, seit die Tabelle auch M33 und M39 führt. Das Klemmenpaar
+#: Schraube **und** Mutter stehen, ab M3 bis M64. Die Website verspricht
+#: Schrauben „zur gewählten Normgröße"; zu wählen war bis zum 22.09.2026 nur
+#: M4, bis zum 06.10.2026 M3 bis M6, bis RM-578 M3 bis M33 (sechzehn Größen mal
+#: 32 Ecken der Schale füllten 512). Wo die Klemmtiefe für eine große Größe
+#: nicht reicht, sagt ``_shell_reason`` es mit Vorschlag; die größte Klemmtiefe
+#: (:data:`CLAMP_DEPTH_LIMIT`) reicht für jede Größe. Das Klemmenpaar
 #: (``geom/profile_clamp_ops.py``) bietet dieselbe Auswahl an. Kein Eintrag im
 #: Änderungsverlauf: Eine neue Wahl ändert keine bestehende Schale, und ein
 #: Hinweis beim Öffnen wäre einer ohne Anlass.
+#: Die größte Klemmtiefe von Schale, Einlage und Klemmenpaar. Bis RM-578 waren es
+#: 80 mm, und ab M45 hatte die Schraubenaufnahme nie genug Rand; die Aufnahme von
+#: M64 braucht mit Spiel rund 111 mm und zwei Schalenwände dazu.
+CLAMP_DEPTH_LIMIT: Final = 120.0
+
 SCREW_SIZES: tuple[str, ...] = tuple(
     size
     for size in standards.screw_sizes()
-    if 3.0 <= standards.screw(size).nominal <= 33.0 and size in standards.nut_sizes()
+    if standards.screw(size).nominal >= 3.0 and size in standards.nut_sizes()
 )
 _SHELL_SEATED = PartChange(
     version="19",
@@ -217,7 +221,7 @@ class ProfileClampShellParams(BaseParams):
         title=_("Klemmtiefe"),
         default=40.0,
         minimum=16.0,
-        maximum=80.0,
+        maximum=CLAMP_DEPTH_LIMIT,
         unit="mm",
         doc=_("Länge der Schale entlang des Profils."),
     )
@@ -435,7 +439,7 @@ class ProfileClampLinerParams(BaseParams):
         title=_("Klemmtiefe"),
         default=40.0,
         minimum=16.0,
-        maximum=80.0,
+        maximum=CLAMP_DEPTH_LIMIT,
         unit="mm",
         doc=_("Länge der zugehörigen Klemmschale."),
     )

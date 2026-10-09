@@ -629,14 +629,18 @@ def test_cable_relief_rejects_a_gap_that_cannot_grip():
 
 
 def test_standalone_registration_completes_an_existing_legacy_operation():
-    """Ein vorhandener Einsetzpfad verhindert den zusätzlich erklärten Erzeuger nicht."""
+    """Ein vorhandener Einsetzpfad verhindert den zusätzlich erklärten Erzeuger nicht.
+
+    Der alte Stand ist die Einsetzoperation allein; ``register_one`` legt heute
+    beide an (RM-574) und stellt ihn deshalb nicht mehr her.
+    """
     from app.core.knowledge.parts.registry import PartRegistry
     from app.core.registry import Registry
 
     parts, registry = PartRegistry(), Registry()
     spec = PARTS.get("fit_ladder")
     parts.register(spec)
-    ops.register_one(spec, registry)
+    ops._register_one(spec, ops.build_params(spec), registry)
     assert ops.register_all(parts, registry) == ("create_fit_ladder",)
     assert registry.get("create_fit_ladder").consumes == 0
     assert ops.register_all(parts, registry) == ()
