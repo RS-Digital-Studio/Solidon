@@ -16,7 +16,7 @@ denselben Überschriften in `konzepte/begruendungen/regel-tests.md`.
 
 ## Entwicklung und Release
 
-- **Je Schritt die betroffenen Tests, vor dem Merge nach main das Entwicklungstor,
+- **Je Schritt die betroffenen Tests, vor jedem Merge oder Commit auf main das Entwicklungstor,
   Fenster, Renderer und Leistung lokal ausschließlich beim Release** — auch nicht als gezielte
   Teilmenge (`CLAUDE.md`, `/pruefen`). Ein grüner Entwicklungslauf ist kein
   Release-Nachweis.

@@ -598,7 +598,12 @@ def test_no_shortcut_of_the_window_is_handed_out_twice(window: MainWindow) -> No
     from PySide6.QtCore import Qt
     from PySide6.QtGui import QAction, QKeySequence
 
-    taken: dict[str, set[str]] = {}
+    # Befehle und Aktionen getrennt: Je Taste zählen die Aktionen über ihre
+    # Identität, nicht über den Namen. Die Werkzeugaktion heißt wie ihr
+    # Paletteneintrag; zwei Aktionen mit Alt+1 und demselben Namen fielen in
+    # einer Namensmenge zu einer zusammen — und Qt löste dann keine aus.
+    titles: dict[str, set[str]] = {}
+    actions: dict[str, dict[int, str]] = {}
     for key, (title, sequence, _fn) in window.window_commands().items():
         # Was aus der Menüleiste gelesen wurde (``menu.…``), trägt das Kürzel
         # **derselben** Aktion, die die Schleife darunter ohnehin prüft — nur
@@ -609,7 +614,7 @@ def test_no_shortcut_of_the_window_is_handed_out_twice(window: MainWindow) -> No
         if key.startswith("menu."):
             continue
         if sequence:
-            taken.setdefault(QKeySequence(sequence).toString(), set()).add(title)
+            titles.setdefault(QKeySequence(sequence).toString(), set()).add(title)
     for action in window.findChildren(QAction):
         sequence = action.shortcut().toString()
         # Widgetgebundene Kürzel dürfen denselben Griff verwenden: Entf im
@@ -619,12 +624,21 @@ def test_no_shortcut_of_the_window_is_handed_out_twice(window: MainWindow) -> No
             Qt.ShortcutContext.WindowShortcut,
             Qt.ShortcutContext.ApplicationShortcut,
         }:
-            # Zwei namenlose Aktionen fielen sonst im Namen ``""`` zusammen und
-            # verdeckten genau den Konflikt, den dieser Test sucht.
-            taken.setdefault(sequence, set()).add(action.text() or f"<ohne Namen {id(action)}>")
+            actions.setdefault(sequence, {})[id(action)] = action.text() or "<ohne Namen>"
 
-    doubled = {key: sorted(names) for key, names in taken.items() if len(names) > 1}
-    assert not doubled, f"doppelt vergeben: {doubled}"
+    doubled = {key: sorted(held.values()) for key, held in actions.items() if len(held) > 1}
+    assert not doubled, f"doppelt vergeben (Aktionen): {doubled}"
+    doubled = {key: sorted(names) for key, names in titles.items() if len(names) > 1}
+    assert not doubled, f"doppelt vergeben (Befehle): {doubled}"
+    # Hält eine Aktion die Taste eines Befehls, ist sie dieser Befehl: Ein
+    # anderer Name hieße zwei Dinge auf einer Taste.
+    foreign = {
+        key: (sorted(names), sorted(actions[key].values()))
+        for key, names in titles.items()
+        if key in actions and set(actions[key].values()) != names
+    }
+    assert not foreign, f"Befehl und Aktion teilen eine Taste: {foreign}"
+    taken = set(titles) | set(actions)
     # Die Zusage ist „jedes Werkzeug der Zeile hat sein eigenes Kürzel", nicht
     # „es sind acht". Ausgeschrieben war die Zahl, und mit dem Ausbau des
     # Pinsels wurden es sieben — der Test fiel, obwohl nichts kaputt war. Die

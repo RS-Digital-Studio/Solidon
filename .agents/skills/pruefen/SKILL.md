@@ -22,7 +22,7 @@ gezielten Dateiauswahl bis zum Release zurückgestellt. Das ist keine fehlende
 Umgebung und kein Anlass, sie mit einem direkten Pytest-Aufruf nachzuholen.
 Keine vollständige Suite allein wegen eines kleinen Doku-Edits.
 
-Ohne Argument und vor jedem Merge nach main läuft das Entwicklungstor (auf
+Ohne Argument und vor jedem Merge oder Commit auf main läuft das Entwicklungstor (auf
 Paket- und Fixzweigen vor dem Commit nur die betroffenen Tests, ruff, format,
 mypy):
 alle Tests ohne Fenster (`not windowed`), ohne echte Renderer (`not rendering`),
