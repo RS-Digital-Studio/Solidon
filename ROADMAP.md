@@ -143,7 +143,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-314 — Rechtenachweis der Stimme für die englischen Werkstattfilme](#rm-314) | Tests und Entwicklungswerkzeuge | Stimme mit Prüfsummen in `licences.toml` dokumentiert; offen: `/legal-review` zur Werbenutzung, Eintrag in `ASSET-RIGHTS.toml` und ein Test, der die Stimme prüft |
 | [RM-316 — Zwillinge und Nur-Test-Wege: der Rest aus dem Code-Bericht des Aufräumens](#rm-316) | Tests und Entwicklungswerkzeuge | (a) bis (d) bis auf zwei Namen erledigt (07.10.); offen `ai_disclosure._fit_content_height` (gewollt mit Fenstertest oder in `ContentHeight`) und `slice.analysis._opening_loss` ohne Produktionsaufrufer |
 | [RM-467 — Bibliotheken alle drei Tage auf neue Versionen prüfen und aktualisieren](#rm-467) | Tests und Entwicklungswerkzeuge | Läufe 02.10. und 09.10. im Archiv, der nächste am 12.10.; Paketbeleg der Bauplattform unter RM-468 |
-| [RM-531 — Fenstertests und echte Slicer auch unter Linux und macOS in der CI](#rm-531) | Tests und Entwicklungswerkzeuge | Entschieden (Robert, 06.10.): Fenster- und Renderergruppe auf vier Plattformen am Tag, per Handstart und bei jedem Push auf main. 14 der 23 roten Fenstertests außerhalb von Windows behoben, auf allen vier grün (07.10.); offen acht Fälle, `build.yml`, die Wächter und der Slicer-Job |
+| [RM-531 — Fenstertests und echte Slicer auch unter Linux und macOS in der CI](#rm-531) | Tests und Entwicklungswerkzeuge | Entschieden (Robert, 06.10.): Fenster- und Renderergruppe auf vier Plattformen am Tag, per Handstart und bei jedem Push auf main. 14 der 23 roten Fenstertests außerhalb von Windows behoben, auf allen vier grün (07.10.), der Intel-Kontrastfall danach (`58f768eb6`), Rendererfälle ohne Fenster seit RM-344 auf allen vier; offen sieben Fälle, `build.yml`, die Wächter und der Slicer-Job |
 | [RM-688 — Der Test zu Curas Mindesttempo prüft das Mindesttempo nicht mehr](#rm-688) | Tests und Entwicklungswerkzeuge | Seit `9416f41ef` steht dort nur `assert motion is not None`; Attrappe und Vorgabe sind beide 10 |
 | [RM-002 — netcup-AVV und Freigabe der Rechtstexte belegen](#rm-002) | Veröffentlichung, Betrieb und Vertrieb | netcup-AVV belegen und zugehörige Rechtstexte fachlich abgleichen |
 | [RM-006 — Nächsten messbaren Schritt für die Sichtbarkeit festlegen](#rm-006) | Veröffentlichung, Betrieb und Vertrieb | Roberts Bestätigung des Plans bis 01.11. und die Montagsmessungen; der Punkt schließt, wenn Robert den Plan bestätigt |
@@ -416,9 +416,11 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
 - [~] **RM-051 — Renderer und Grafiklaufzeit in Linux- und Mac-Paketen abnehmen.** Gebaut und
   veröffentlicht ist **0.5.3** für alle vier Ziele. Die expliziten wgpu-Bibliotheken stecken
   weiter in der Paket-Spec. Offen sind der tatsächliche Grafik-/Eingabeweg samt Vulkan
-  beziehungsweise Metal und die Unix-Fenstergruppe: Die Fensterverträge laufen auf allen drei
-  Systemen (`build.yml`, Job `window-contracts`), die volle Fenster- und Renderergruppe führt die
-  CI nur auf Windows aus, weil Linux und macOS konkrete Befunde zeigen. Abnahme je Plattform:
+  beziehungsweise Metal und die Unix-Fenstergruppe: Die Fensterverträge laufen auf allen vier
+  Paketplattformen (`build.yml`, Jobs `window-contracts` und `window-contracts-intel`), die
+  Rendererfälle ohne Fenster seit RM-344 ebenso, und ohne Grafikadapter ist die CI rot
+  (`test_ci_has_a_working_graphics_adapter`). Die Fenstergruppe führt die CI nur auf Windows aus,
+  weil Linux und macOS konkrete Befunde zeigen ([RM-531](#rm-531)). Abnahme je Plattform:
   sichtbares Modell, Auswahl/Navigation, Schließen, dokumentierte Treiber-/Paketumgebung und
   erfolgreiche vollständige Fenstergruppe ohne stilles Überspringen fehlender Adapter.
 
@@ -5289,7 +5291,8 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
 
 - [~] **RM-531 — Fenstertests und echte Slicer auch unter Linux und macOS in der CI.** Die
   Fenstergruppe läuft in der Release-CI nur unter Windows (Job `windows` in `build.yml`), Linux
-  und macOS fahren nur die Fensterverträge (`--ci-group contracts`). Echte Slicer prüft keine CI:
+  und macOS fahren die Fensterverträge und die Rendererfälle ohne Fenster (`--ci-group contracts
+  --ci-group rendering`, RM-344). Echte Slicer prüft keine CI:
   Erkennung, Herstellerbestand und Slicen unter Linux und macOS belegten bisher nur
   Wegwerfzweige (`.claude/.state/slicer-sonde-2026-10-05/`,
   `.claude/.state/druckerliste-2026-10-06/`). Am 06.10.2026 liefen dort die Fensterdateien der
@@ -5329,10 +5332,11 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   1600 px), `test_a_long_setup_failure_stays_in_the_scroll_area` (UAI, kein Rollbalken bei 200
   Zeilen), `test_the_sketch_area_fits_a_laptop_screen` (AI, 977 statt höchstens 900 px),
   `test_the_left_column_shares_its_height_with_all_four` (AI, Objekte 104 px, Boden 182 px bei
-  900 px Fensterhöhe), `test_chat_setup_follows_late_status_text…` (AI, der Text des
-  Schlüsseldialogs ist 105 statt 120 px hoch und rollt nicht) und
+  900 px Fensterhöhe) und `test_chat_setup_follows_late_status_text…` (AI, der Text des
+  Schlüsseldialogs ist 105 statt 120 px hoch und rollt nicht).
   `test_black_lit_surfaces_still_show_their_shape` (I, Kontrast genau 10 bei verlangten mehr
-  als 10; in der Rendererprobe von RM-344 am 09.10. auf dem Intel-Mac grün, Lauf 37894162728). Jeder Fall wird zuerst am Paket seiner Plattform nachgestellt:
+  als 10) ist behoben (`58f768eb6`, Spreizung 12) und in der Rendererprobe von RM-344 auf dem
+  Intel-Mac grün (Lauf 37894162728). Jeder Fall wird zuerst am Paket seiner Plattform nachgestellt:
   ob der Test irrt oder der Kunde es sieht. Die Winkelbedingung auf dem Intel-Mac führt
   [RM-541](#rm-541). Danach die Umstellung in `build.yml`, die Wächter in
   `test_packaging.py`, der Slicer-Job und die Unterlagen.

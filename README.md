@@ -433,8 +433,8 @@ Doppelklick liegt unter `tools/start-solidon3d.cmd` eine Verknüpfung.
 Je Änderung laufen die betroffenen Tests, vor einem Commit das Entwicklungstor
 aus Suite, Ruff, Formatprüfung und mypy. Fenster-, Renderer- und
 Leistungsprüfungen laufen ausschließlich beim Release; die Release-CI fährt die
-Fensterdateien unter Windows und die Rendererprüfungen auf allen vier
-Paketplattformen.
+Fensterdateien unter Windows und die Rendererprüfungen ohne Fenster auf allen
+vier Paketplattformen.
 
 ### Lokale Sprachmodelle messen
 

@@ -149,25 +149,71 @@ def test_the_rendering_group_plans_from_its_own_collection(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """``--ci-group rendering`` zählt Rendererfälle ohne Fenster und nennt seine Auswahl."""
-    monkeypatch.setattr(
-        list_windowed_tests,
-        "collect_ci_window_counts",
-        lambda _: pytest.fail("die Rendergruppe zählte Fensterfälle"),
-    )
-    monkeypatch.setattr(
-        list_windowed_tests,
-        "collect_ci_rendering_counts",
-        lambda _: {
-            runner.ROOT / "tests/test_render_factory.py": 3,
-            runner.ROOT / "tests/test_a.py": 2,
-        },
-    )
+    windows = {runner.ROOT / path: 1 for path in (*runner.CONTRACT_FILES, "tests/test_ui.py")}
+    rendering = {
+        runner.ROOT / "tests/test_render_factory.py": 3,
+        runner.ROOT / "tests/test_a.py": 2,
+    }
+    monkeypatch.setattr(list_windowed_tests, "collect_ci_counts", lambda _: (windows, rendering))
     arguments = ["--ci-group", "rendering", "--report-dir", str(tmp_path), "--plan-only"]
     assert runner.main(arguments) == 0
     summary = json.loads((tmp_path / "summary.json").read_text(encoding="utf-8"))
     assert summary["marker"] == runner.RENDERING_MARKER
     assert [file["path"] for file in summary["selected"]] == ["tests/test_a.py"]
     assert runner.RENDERING_MARKER in (tmp_path / "summary.md").read_text(encoding="utf-8")
+
+
+@pytest.mark.parametrize("red", ["contracts", "rendering", None])
+def test_two_groups_share_one_collection_and_a_red_one_hides_nothing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, red: str | None
+) -> None:
+    """Fensterverträge und Rendererfälle in einem Aufruf: eine Sammlung, je Gruppe ein
+    Bericht, beide laufen, und eine rote Gruppe macht den Aufruf rot (G-10 aus dem
+    Review von RM-344: die zweite Sammlung kostete je Läufer 10 bis 25 Sekunden)."""
+    collections = []
+
+    def collect(_: object) -> tuple[dict[Path, int], dict[Path, int]]:
+        collections.append(1)
+        return (
+            {runner.ROOT / path: 1 for path in runner.CONTRACT_FILES},
+            {runner.ROOT / "tests/test_a.py": 1},
+        )
+
+    monkeypatch.setattr(list_windowed_tests, "collect_ci_counts", collect)
+    ran: list[tuple[str, str]] = []
+
+    def run(file: runner.PlannedFile, directory: Path, *, timeout: float) -> dict[str, Any]:
+        ran.append((directory.name, file.path))
+        junit = directory / (file.path.replace("/", "__").removesuffix(".py") + ".xml")
+        prepared = directory / f"prepared-{len(ran)}.xml"
+        _junit(prepared)
+        failing = int(directory.name == red)
+        body = (
+            f"import shutil; shutil.copyfile({str(prepared)!r}, {str(junit)!r}); "
+            f"raise SystemExit({failing})"
+        )
+        return original(file, directory, timeout=timeout, command=[sys.executable, "-c", body])
+
+    original = runner.run_ci_file
+    monkeypatch.setattr(runner, "run_ci_file", run)
+    arguments = ["--release", "--ci-group", "contracts", "--ci-group", "rendering"]
+    assert runner.main([*arguments, "--report-dir", str(tmp_path)]) == int(red is not None)
+    assert collections == [1]
+    assert [group for group, _path in ran] == ["contracts", "contracts", "rendering"]
+    for group, marker in (("contracts", runner.CI_MARKER), ("rendering", runner.RENDERING_MARKER)):
+        summary = json.loads((tmp_path / group / "summary.json").read_text(encoding="utf-8"))
+        assert summary["group"] == group and summary["marker"] == marker
+        assert summary["status"] == ("failed" if group == red else "passed")
+        assert summary["collection_seconds"] >= 0
+    assert not (tmp_path / "summary.json").exists()
+
+
+def test_a_group_named_twice_is_a_usage_error(tmp_path: Path) -> None:
+    """Mit zweimal derselben Gruppe liefe jede ihrer Dateien doppelt (CI-01)."""
+    arguments = ["--plan-only", "--ci-group", "rendering", "--ci-group", "rendering"]
+    with pytest.raises(SystemExit) as error:
+        runner.main([*arguments, "--report-dir", str(tmp_path)])
+    assert error.value.code == 2
 
 
 def test_tied_durations_use_the_path_and_then_the_shard_index() -> None:
@@ -290,14 +336,44 @@ def test_ci_collection_excludes_generated_and_performance_cases_but_keeps_mixed_
     (tmp_path / "test_generated.py").write_text(
         "import pytest\n@pytest.mark.rendered\ndef test_generated(qt_app): pass\n", encoding="utf-8"
     )
-    assert list_windowed_tests.collect_ci_window_counts((tmp_path,), confcutdir=tmp_path) == {
-        mixed.resolve(): 8
-    }
-    # Die Gruppe ``rendering``: echte Grafik ohne Fenster, also die zwei Fälle über
-    # die geerbte Fixture und der direkt markierte (RM-344).
-    assert list_windowed_tests.collect_ci_rendering_counts((tmp_path,), confcutdir=tmp_path) == {
-        mixed.resolve(): 3
-    }
+    # Fenster- und Rendererfälle: 8. Die Gruppe ``rendering``: echte Grafik ohne
+    # Fenster, also die zwei Fälle über die geerbte Fixture und der direkt
+    # markierte (RM-344).
+    expected = ({mixed.resolve(): 8}, {mixed.resolve(): 3})
+    assert list_windowed_tests.collect_ci_counts((tmp_path,), confcutdir=tmp_path) == expected
+    # Gleichlauf: Was die Sammlung je Gruppe zählt, wählt pytest mit dem Marker
+    # dieser Gruppe im frischen Prozess auch aus — dieselbe Markierung über den
+    # Fixture-Graphen, dieselben Fälle.
+    for marker, counted in zip((runner.CI_MARKER, runner.RENDERING_MARKER), expected, strict=True):
+        assert _chosen_by_pytest(tmp_path, marker) == {
+            path.name: count for path, count in counted.items()
+        }, marker
+
+
+def _chosen_by_pytest(folder: Path, marker: str) -> dict[str, int]:
+    """Je Datei, wie viele Fälle ``pytest --collect-only -m marker`` wählt, mit der
+    Markierung aus ``tools/list_windowed_tests.py`` wie im Lauf der CI."""
+    done = subprocess.run(
+        [
+            sys.executable,
+            *("-m", "pytest", "--collect-only", "-q", "-p", "no:cacheprovider"),
+            *("-p", "tools.list_windowed_tests", "-c", str(folder / "pytest.ini")),
+            *("--rootdir", str(folder), "-m", marker, str(folder)),
+        ],
+        cwd=runner.ROOT,
+        env={**os.environ, "PYTEST_ADDOPTS": ""},
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        timeout=120,
+    )
+    assert done.returncode == 0, done.stdout + done.stderr
+    chosen: dict[str, int] = {}
+    for line in done.stdout.splitlines():
+        if "::" in line:
+            name = Path(line.split("::", 1)[0]).name
+            chosen[name] = chosen.get(name, 0) + 1
+    return chosen
 
 
 def test_renderer_group_keeps_pure_cases_from_mixed_files(tmp_path: Path) -> None:
@@ -350,9 +426,9 @@ def test_renderer_group_keeps_pure_cases_from_mixed_files(tmp_path: Path) -> Non
         list_windowed_tests.collect_windowed((mixed, generated, combined), confcutdir=tmp_path)
         == release_with_generated
     )
-    assert list_windowed_tests.collect_ci_window_counts(
-        (mixed, generated, combined), confcutdir=tmp_path
-    ) == {mixed.resolve(): 2}
+    assert list_windowed_tests.collect_ci_counts((mixed, generated, combined), confcutdir=tmp_path)[
+        0
+    ] == {mixed.resolve(): 2}
     assert list_windowed_tests.WINDOW_GROUPS == {
         "plain": "not windowed and not rendering",
         "windowed": "(windowed or rendering)",
@@ -558,7 +634,7 @@ def test_a_broken_collection_does_not_return_a_partial_plan(tmp_path: Path) -> N
         encoding="utf-8",
     )
     with pytest.raises(RuntimeError, match="sammeln") as raised:
-        list_windowed_tests.collect_ci_window_counts((tmp_path,), confcutdir=tmp_path)
+        list_windowed_tests.collect_ci_counts((tmp_path,), confcutdir=tmp_path)
     message = str(raised.value)
     assert "test_broken.py" in message and "SyntaxError" in message
     assert "test_case[" not in message, "die Meldung trägt die ganze Fallliste"
@@ -571,6 +647,14 @@ def test_each_real_pytest_command_preserves_the_fixed_ci_selection(tmp_path: Pat
     assert (
         command[command.index("-m", 6) + 1]
         == "(windowed or rendering) and not performance and not rendered"
+    )
+    # Die Rendererfälle ohne Fenster als Wert, nicht über die Konstante: Wer die
+    # Gruppe verengt, schreibt CI-03 fort und diese Zeile mit.
+    rendering = runner.PlannedFile("tests/test_x.py", 1, 3, runner.RENDERING_MARKER)
+    command = runner.pytest_command(rendering, tmp_path / "x.xml")
+    assert (
+        command[command.index("-m", 6) + 1]
+        == "rendering and not windowed and not performance and not rendered"
     )
     assert "faulthandler_timeout=120" in command and "--durations=30" in command
     assert "-n" not in command and command[-1] == "tests/test_x.py"
@@ -750,8 +834,8 @@ def _mock_collection(monkeypatch: pytest.MonkeyPatch) -> None:
     counts = _counts(**{"tests/test_a.py": 1, "tests/test_b.py": 1})
     monkeypatch.setattr(
         list_windowed_tests,
-        "collect_ci_window_counts",
-        lambda _: {runner.ROOT / path: count for path, count in counts.items()},
+        "collect_ci_counts",
+        lambda _: ({runner.ROOT / path: count for path, count in counts.items()}, {}),
     )
 
 
@@ -840,10 +924,10 @@ def test_collection_failure_leaves_a_failed_report(
 ) -> None:
     """Auch vor dem ersten Datei-Prozess bleibt ein maschinenlesbarer Fehlernachweis."""
 
-    def broken(_: object) -> dict[Path, int]:
+    def broken(_: object) -> tuple[dict[Path, int], dict[Path, int]]:
         raise RuntimeError("collection crashed")
 
-    monkeypatch.setattr(list_windowed_tests, "collect_ci_window_counts", broken)
+    monkeypatch.setattr(list_windowed_tests, "collect_ci_counts", broken)
     assert (
         runner.main(["--plan-only", "--ci-group", "contracts", "--report-dir", str(tmp_path)]) == 1
     )
@@ -863,14 +947,14 @@ def test_a_collection_failure_stands_in_the_log_and_not_only_in_the_report(
     bleibt dabei Text, auch eine Zeile, die wie ein Workflow-Befehl aussieht.
     """
 
-    def broken(_: object) -> dict[Path, int]:
+    def broken(_: object) -> tuple[dict[Path, int], dict[Path, int]]:
         raise RuntimeError(
             "Die Tests ließen sich nicht sammeln (Exit 2).\n"
             "::error::vorgetäuscht\n"
             "E   ImportError: kaputt"
         )
 
-    monkeypatch.setattr(list_windowed_tests, "collect_ci_window_counts", broken)
+    monkeypatch.setattr(list_windowed_tests, "collect_ci_counts", broken)
     monkeypatch.setenv("GITHUB_ACTIONS", "true")
     assert (
         runner.main(["--plan-only", "--ci-group", "contracts", "--report-dir", str(tmp_path)]) == 1

@@ -121,7 +121,9 @@ Release-Bilder und gehören nicht in den Uploadpfad.
    Versionsstand feststellen; kein fest eingetragenes Beispiel-Tag. Laufkennung
    und Commit gehören zum Nachweis, `gh run watch <lauf-id> --exit-status`
    liefert den Abschluss. Gehen Commit und Tag zusammen hinaus, laufen zwei
-   Bauten über denselben Commit; der auf `main` lässt sich abbrechen. Der Job
+   Bauten über denselben Commit; der auf `main` lässt sich abbrechen. Solange
+   der Tag-Lauf prüft, startet keine Fenster- oder Slicerauswahl: Er belegt
+   alle fünf macOS-Plätze des Kontos (Konzept CI-Testlaufzeiten §3). Der Job
    „Neueste Versionen“ hält den Lauf nicht an (`continue-on-error`); sein
    Ergebnis lesen und ein Rot als Punkt ins Register von `ROADMAP.md`.
    **Bis der signierte Installer gebaut ist, geht nichts anderes auf `main`**:

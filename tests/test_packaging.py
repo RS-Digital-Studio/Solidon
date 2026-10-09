@@ -34,6 +34,7 @@ import shutil
 import struct
 import subprocess
 import sys
+import tempfile
 from collections.abc import Callable, Iterable, Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass, field
@@ -43,7 +44,6 @@ from types import SimpleNamespace
 from typing import Any, Final
 
 import pytest
-from _pytest.mark.expression import Expression
 
 from app.branding import APP_NAME
 from tests.workflow_helpers import job_block, step_block, step_script
@@ -570,7 +570,7 @@ def _assert_ci_dependencies(workflow: str) -> None:
         assert not re.search(r"^    needs:", block, flags=re.MULTILINE), name
         assert "continue-on-error:" not in block, name
     contracts = job_block(workflow, "window-contracts")
-    assert f"os: [windows-latest, {LINUX_RUNNER}, macos-latest, macos-26-intel]" in contracts
+    assert f"os: [windows-latest, {LINUX_RUNNER}, macos-latest]" in contracts
     windows = job_block(workflow, "windows")
     assert "runs-on: windows-latest" in windows
     count = re.search(r"--shard-index \$\{\{ matrix\.shard \}\} --shard-count (\d+) ", windows)
@@ -610,10 +610,7 @@ def test_the_package_waits_for_every_independent_required_check() -> None:
         ("--ci-shard ${{ matrix.shard }}/3", "--ci-shard 0/3"),
         ("  windows:\n", "  windows:\n    needs: suite\n"),
         ("  suite:\n", "  suite:\n    continue-on-error: true\n"),
-        (
-            f"os: [windows-latest, {LINUX_RUNNER}, macos-latest, macos-26-intel]",
-            "os: [windows-latest]",
-        ),
+        (f"os: [windows-latest, {LINUX_RUNNER}, macos-latest]", "os: [windows-latest]"),
     ],
 )
 def test_the_ci_contract_rejects_lost_coverage_or_hidden_failures(before: str, after: str) -> None:
@@ -760,6 +757,12 @@ def test_latest_dependencies_run_for_release_tags_or_an_explicit_manual_build() 
     assert 0 in _shard_matrix(suite)
     # Ein roter Typlauf verschluckt die Tests seines Teils nicht.
     assert "if: success() || steps.types.outcome == 'failure'" in step_block(suite, "Tests")
+    # Im Versionswächter verschluckt ein neuer Befund von ruff oder mypy weder
+    # Kerntests noch Bilder, und rote Kerntests verschlucken die Bilder nicht.
+    assert "id: style" in step_block(latest, "Stil und Typen")
+    assert "if: success() || steps.style.outcome == 'failure'\n" in step_block(latest, "Tests")
+    window = step_block(latest, "Fensterverträge und Rendererfälle")
+    assert "steps.style.outcome == 'failure' || steps.tests.outcome == 'failure'" in window
 
 
 def test_a_red_latest_job_leaves_the_release_run_green() -> None:
@@ -780,6 +783,7 @@ def test_a_red_latest_job_leaves_the_release_run_green() -> None:
     [
         ("suite", ("matrix.os", "matrix.shard")),
         ("window-contracts", ("matrix.os",)),
+        ("window-contracts-intel", ()),
         ("windows", ("matrix.shard",)),
         ("latest", ()),
     ],
@@ -809,7 +813,9 @@ def _assert_ci_report_upload(block: str, dimensions: tuple[str, ...]) -> None:
         assert "${{ " + dimension + " }}" in upload
 
 
-@pytest.mark.parametrize("job", ["suite", "window-contracts", "windows", "latest"])
+@pytest.mark.parametrize(
+    "job", ["suite", "window-contracts", "window-contracts-intel", "windows", "latest"]
+)
 def test_ci_report_guard_rejects_always_on_a_different_step(job: str) -> None:
     """Ein beliebiger immer laufender Nachbarschritt schützt den Upload nicht."""
     block = job_block(WORKFLOW.read_text(encoding="utf-8"), job)
@@ -832,7 +838,7 @@ def test_ci_window_steps_use_the_package_release_condition() -> None:
         "inputs.tests_only != true && "
         "(startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch')"
     )
-    for name in ("package", "window-contracts", "windows"):
+    for name in ("package", "window-contracts", "window-contracts-intel", "windows"):
         block = job_block(workflow, name)
         condition = re.search(r"^    if: (.+)$", block, flags=re.MULTILINE)
         assert condition is not None and condition.group(1) == expected, name
@@ -840,8 +846,32 @@ def test_ci_window_steps_use_the_package_release_condition() -> None:
         assert "--ci-group" not in job_block(workflow, name)
     # Der Versionswächter fährt Fensterverträge und Renderer (RM-344); er
     # selbst läuft nur am Tag oder auf ausdrücklichen Handstart
-    # (:func:`test_latest_dependencies_run_for_release_tags_or_an_explicit_manual_build`).
-    assert "--ci-group" in job_block(workflow, "latest")
+    # (:func:`test_latest_dependencies_run_for_release_tags_or_an_explicit_manual_build`),
+    # und ein Handstart mit ``tests_only`` hält auch diesen Schritt an.
+    _assert_latest_windows_respect_tests_only(job_block(workflow, "latest"))
+
+
+def _assert_latest_windows_respect_tests_only(latest: str) -> None:
+    """Jeder Fensterschritt im Versionswächter endet seine Bedingung mit ``tests_only``."""
+    steps = [
+        step
+        for step in re.findall(r"(?ms)^      - name: [^\n]*\n.*?(?=^      - |\Z)", latest)
+        if "--ci-group" in step
+    ]
+    assert steps, "der Versionswächter fährt keine Fensterverträge"
+    for step in steps:
+        condition = re.search(r"(?m)^        if: (.*)$", step)
+        assert condition is not None, step
+        assert condition.group(1).endswith(") && inputs.tests_only != true"), step
+
+
+def test_the_tests_only_promise_rejects_a_latest_window_step_without_it() -> None:
+    """Gegenprobe: ohne ``tests_only`` führe ein Handstart mit beiden Schaltern Fenster."""
+    latest = job_block(WORKFLOW.read_text(encoding="utf-8"), "latest")
+    changed = latest.replace(" && inputs.tests_only != true", "")
+    assert changed != latest
+    with pytest.raises(AssertionError):
+        _assert_latest_windows_respect_tests_only(changed)
 
 
 @pytest.mark.parametrize("job, release", [("suite", False), ("suite", True), ("latest", False)])
@@ -899,31 +929,99 @@ def test_each_ci_window_group_is_executed_only_at_release_and_once(
     expected = ["contracts"] if release else []
     if release:
         expected.append("rendering" if platform != "Windows" else "windowed")
-    assert [line.split("--ci-group ", 1)[1].split()[0] for line in windows] == expected
+    assert [group for line in windows for group in re.findall(r"--ci-group (\S+)", line)] == (
+        expected
+    )
     assert all("--release" in line and "--report-dir" in line for line in windows)
 
 
-#: Der Schritt, in dem `window-contracts` und `latest` Fensterverträge und
-#: Rendererfälle fahren.
+#: Der Schritt, in dem `window-contracts`, `window-contracts-intel` und `latest`
+#: Fensterverträge und Rendererfälle fahren.
 _CONTRACT_STEP: Final = "Fensterverträge und Rendererfälle"
 
-#: Ein Rendererfall im Sinn von RM-344: echte Grafik ohne Fenster, Leistung und
-#: Erzeugnisvergleich. Die Fenstergruppe läuft nur unter Windows, diese Fälle
-#: laufen auf jeder Paketplattform.
-_RENDERING_CASE: Final = run_suite_isolated.RENDERING_MARKER
+#: Ein Rendererfall im Sinn von RM-344, als Wert und nicht aus dem Prüfling
+#: (Konzept CI-03): echte Grafik ohne Fenster, Leistung und Erzeugnisvergleich.
+#: Die Fenstergruppe läuft nur unter Windows, diese Fälle auf jeder
+#: Paketplattform. Wer die Gruppe verengt, schreibt CI-03 fort und diese Zeile.
+_RENDERING_CASE: Final = "rendering and not windowed and not performance and not rendered"
 
 #: Steht für jede Testdatei außer den zwei Fensterverträgen, auch für eine, die
 #: es noch nicht gibt.
 _ANY_OTHER_FILE: Final = "tests/test_any_new_file.py"
 
+#: Bedingungen eines Testschritts, unter denen er am Tag läuft, solange sein
+#: Job grün ist: ``success()``, ergänzt nur um „oder ein früherer Schritt ist
+#: rot“, beim Versionswächter dazu ``tests_only`` (nie gesetzt am Tag). Jede
+#: andere Bedingung — eine Plattform, ``false``, ein Ausdruck über Eingaben —
+#: kann einen Rendererfall still auslassen und macht den Wächter rot.
+_ALWAYS_ON_A_GREEN_TAG: Final = re.compile(
+    r"(?P<base>success\(\)(?: \|\| steps\.[a-z_]+\.outcome == 'failure')*)"
+    r"|\((?P<wrapped>success\(\)(?: \|\| steps\.[a-z_]+\.outcome == 'failure')*)\)"
+    r" && inputs\.tests_only != true"
+)
+
+#: Je Paar aus ``RUNNER_OS`` und Skript die Python-Aufrufe der Attrappe. Die
+#: Wächter unten fahren denselben Workflow mehrfach, ihre Gegenproben ändern
+#: je ein oder zwei Skripte; der Rest kommt von hier.
+_SIMULATED: dict[tuple[str, str], list[list[str]]] = {}
+
+#: Je ``-m``-Ausdruck die Markermengen über seinen eigenen Namen, die pytest wählt.
+_CHOSEN: dict[str, frozenset[frozenset[str]]] = {}
+
+
+def _marker_names(expression: str) -> tuple[str, ...]:
+    """Die Markernamen eines ``-m``-Ausdrucks, sortiert."""
+    return tuple(sorted(set(re.findall(r"[A-Za-z_]\w*", expression)) - {"and", "or", "not"}))
+
 
 def _marked(expression: str, markers: frozenset[str]) -> bool:
-    """Wählt ``-m expression`` einen Fall mit diesen Markern? Mit pytests eigenem Auswerter."""
+    """Wählt ``pytest -m expression`` einen Fall mit genau diesen Markern?
 
-    def present(name: str, /, **_: object) -> bool:
-        return name in markers
-
-    return Expression.compile(expression).evaluate(present)
+    Über die öffentliche Schnittstelle, nicht über pytests internen Auswerter:
+    je Ausdruck einmal ``--collect-only`` über eine erzeugte Datei mit einem Fall
+    je Kombination seiner Marker.
+    """
+    names = _marker_names(expression)
+    if expression not in _CHOSEN:
+        combos = [
+            frozenset(chosen)
+            for size in range(len(names) + 1)
+            for chosen in combinations(names, size)
+        ]
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            (root / "pytest.ini").write_text(
+                "[pytest]\nmarkers =\n" + "".join(f"    {name}: probe\n" for name in names),
+                encoding="utf-8",
+            )
+            (root / "test_markers.py").write_text(
+                "import pytest\n"
+                + "".join(
+                    "".join(f"@pytest.mark.{name}\n" for name in sorted(combo))
+                    + f"def test_{index}(): pass\n"
+                    for index, combo in enumerate(combos)
+                ),
+                encoding="utf-8",
+            )
+            done = subprocess.run(
+                [
+                    sys.executable,
+                    *("-m", "pytest", "--collect-only", "-q", "-p", "no:cacheprovider"),
+                    *("-c", str(root / "pytest.ini"), "--rootdir", folder),
+                    *("-m", expression, str(root / "test_markers.py")),
+                ],
+                cwd=folder,
+                env={**os.environ, "PYTEST_ADDOPTS": "", "PYTEST_DISABLE_PLUGIN_AUTOLOAD": "1"},
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                timeout=60,
+            )
+        # 5: Der Ausdruck wählt keinen Fall.
+        assert done.returncode in {0, 5}, done.stdout + done.stderr
+        chosen = {int(index) for index in re.findall(r"::test_(\d+)$", done.stdout, re.MULTILINE)}
+        _CHOSEN[expression] = frozenset(combos[index] for index in chosen)
+    return markers.intersection(names) in _CHOSEN[expression]
 
 
 def _release_runners(block: str) -> tuple[str, ...]:
@@ -948,24 +1046,69 @@ def _runner_os(label: str) -> str:
     raise AssertionError(f"unbekannter Läufer: {label}")
 
 
+def _jobs(workflow: str) -> list[str]:
+    """Die Jobnamen des Workflows in ihrer Reihenfolge."""
+    return re.findall(r"(?m)^  ([a-z][a-z0-9-]*):\n", workflow.split("\njobs:\n", 1)[1])
+
+
+def _release_gates(workflow: str) -> list[str]:
+    """Die Pflichtjobs am Tag: worauf das Paket wartet, und was jede Releaseakte anhält.
+
+    Eine Releaseakte (``--release-check``) hält an einem Job, wenn er unter ihren
+    ``needs`` steht und ihre Bedingung sein Ergebnis nicht übergeht: ohne
+    ``always()``, ``cancelled()`` oder ``failure()`` gilt ``success()`` über alle
+    ``needs``, mit ihnen nur ein ausdrückliches ``needs.<job>.result == 'success'``.
+    """
+    package = job_block(workflow, "package")
+    needs = re.search(r"^    needs: \[([^\]]+)\]$", package, flags=re.MULTILINE)
+    assert needs is not None, "Paketabhängigkeiten fehlen"
+    gates = [name.strip() for name in needs.group(1).split(",")]
+    records = [job for job in _jobs(workflow) if "--release-check" in job_block(workflow, job)]
+    assert records, "keine Releaseakte im Workflow"
+
+    def held(record: str) -> set[str]:
+        block = job_block(workflow, record)
+        found = re.search(r"(?m)^    needs: (?:\[([^\]]+)\]|([a-z0-9-]+))$", block)
+        named = {name.strip() for name in (found.group(1) or found.group(2)).split(",")}
+        condition = block.split("\n    if:", 1)[1].split("\n    runs-on:", 1)[0]
+        if not re.search(r"\b(always|cancelled|failure)\(\)", condition):
+            return named
+        return {name for name in named if f"needs.{name}.result == 'success'" in condition}
+
+    for job in sorted(set.intersection(*(held(record) for record in records)) - set(gates)):
+        gates.append(job)
+    return gates
+
+
 def _test_scripts(workflow: str, jobs: Iterable[str]) -> list[tuple[str, str, str]]:
     """Jeder Testschritt dieser Jobs auf jedem ihrer Läufer am Tag: (Job, Läufer, Skript).
 
     Teilmatrizen stehen auf Teil 0: Dass ihre Teile zusammen alles fahren, hält
-    :func:`_assert_ci_dependencies` (Teilmatrix gleich ``0 … N−1``).
+    :func:`_assert_ci_dependencies` (Teilmatrix gleich ``0 … N−1``). Ein
+    Testschritt läuft nur unter einer Bedingung aus ``_ALWAYS_ON_A_GREEN_TAG``
+    und ohne ``continue-on-error``; jede andere lässt den Wächter rot werden.
     """
     found = []
     for job in jobs:
         block = job_block(workflow, job)
-        scripts = [
-            step_script(step)
-            for step in re.findall(r"(?ms)^      - name: [^\n]*\n.*?(?=^      - |\Z)", block)
-            if "        run: |\n" in step
-        ]
-        scripts = [text for text in scripts if "pytest" in text or "run_suite_isolated" in text]
+        scripts = []
+        for step in re.findall(r"(?ms)^      - name: [^\n]*\n.*?(?=^      - |\Z)", block):
+            if "        run: |\n" not in step:
+                continue
+            script = step_script(step)
+            if "pytest" not in script and "run_suite_isolated" not in script:
+                continue
+            name = step.split("\n", 1)[0].removeprefix("      - name: ")
+            condition = re.search(r"(?m)^        if: (.*)$", step)
+            assert condition is None or _ALWAYS_ON_A_GREEN_TAG.fullmatch(condition.group(1)), (
+                f"Rendererfälle hängen an einer Bedingung: {job}, „{name}“: {condition.group(1)}"
+            )
+            assert "continue-on-error" not in step, (
+                f"Rendererfälle dürfen rot werden: {job}, „{name}“ trägt continue-on-error"
+            )
+            scripts.append(script.replace("${{ matrix.shard }}", "0"))
         for label in _release_runners(block):
             for script in scripts:
-                script = script.replace("${{ matrix.shard }}", "0")
                 found.append((job, label, script.replace("${{ matrix.os }}", label)))
     return found
 
@@ -975,50 +1118,56 @@ def _calls_of(
 ) -> list[list[list[str]]]:
     """Fährt die Schritte mit Attrappen und liefert je Schritt seine Python-Aufrufe.
 
-    Eine Shell für alle, je Schritt eine Subshell mit dem ``RUNNER_OS`` seines
-    Läufers: Unter Windows kostet jeder Start der bash aus Git Sekunden, im
-    vollen Tor mit acht Arbeitern über eine Minute für alle Schritte zusammen.
+    Je Paar aus ``RUNNER_OS`` und Skript nur einmal je Prozess
+    (:data:`_SIMULATED`), alle neuen Paare in einer Shell, je Paar eine Subshell:
+    Unter Windows kostet jeder Start der bash aus Git über 0,1 s, eine
+    Simulation des ganzen Workflows rund eine Sekunde, im vollen Tor unter
+    Last ein Vielfaches.
     """
-    calls = folder / "calls.txt"
-    calls.unlink(missing_ok=True)
-    parts = [
-        f"printf '\\036%s\\n' {index} >> \"$CALLS\"\n"
-        f"(\nexport RUNNER_OS={_runner_os(label)}\n{script}\n) || "
-        f'{{ echo "Schritt {index} ({job}, {label}): Exit $?" >&2; exit 1; }}'
-        for index, (job, label, script) in enumerate(scripts)
-    ]
-    done = subprocess.run(
-        [shell, "-c", "\n".join(parts)],
-        cwd=folder,
-        env=dict(
-            os.environ,
-            PATH=os.pathsep.join(
-                (
-                    _fake_bin(
-                        folder / "bin",
-                        """printf '%s\\037' "$@" >> "$CALLS"\nprintf '\\n' >> "$CALLS" """,
-                    ),
-                    str(Path(shell).parent),
-                    os.environ.get("PATH", ""),
-                )
+    keys = [(_runner_os(label), script) for _job, label, script in scripts]
+    fresh = list(dict.fromkeys(key for key in keys if key not in _SIMULATED))
+    if fresh:
+        calls = folder / "calls.txt"
+        calls.unlink(missing_ok=True)
+        parts = [
+            f"printf '\\036%s\\n' {index} >> \"$CALLS\"\n"
+            f"(\nexport RUNNER_OS={runner_os}\n{script}\n) || "
+            f'{{ echo "Skript {index} ({runner_os}): Exit $?" >&2; exit 1; }}'
+            for index, (runner_os, script) in enumerate(fresh)
+        ]
+        done = subprocess.run(
+            [shell, "-c", "\n".join(parts)],
+            cwd=folder,
+            env=dict(
+                os.environ,
+                PATH=os.pathsep.join(
+                    (
+                        _fake_bin(
+                            folder / "bin",
+                            """printf '%s\\037' "$@" >> "$CALLS"\nprintf '\\n' >> "$CALLS" """,
+                        ),
+                        str(Path(shell).parent),
+                        os.environ.get("PATH", ""),
+                    )
+                ),
+                CALLS=calls.as_posix(),
             ),
-            CALLS=calls.as_posix(),
-        ),
-        capture_output=True,
-        text=True,
-        timeout=300,
-    )
-    assert done.returncode == 0, done.stdout + done.stderr
-    found: list[list[list[str]]] = [[] for _ in scripts]
-    current = -1
-    # ``split`` und nicht ``splitlines``: Das trennt auch am Satztrenner \x1e.
-    lines = calls.read_text(encoding="utf-8").split("\n") if calls.is_file() else []
-    for line in filter(None, lines):
-        if line.startswith("\x1e"):
-            current = int(line[1:])
-        else:
-            found[current].append(line.split("\x1f")[:-1])
-    return found
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+        assert done.returncode == 0, done.stdout + done.stderr
+        found: list[list[list[str]]] = [[] for _ in fresh]
+        current = -1
+        # ``split`` und nicht ``splitlines``: Das trennt auch am Satztrenner \x1e.
+        lines = calls.read_text(encoding="utf-8").split("\n") if calls.is_file() else []
+        for line in filter(None, lines):
+            if line.startswith("\x1e"):
+                current = int(line[1:])
+            else:
+                found[current].append(line.split("\x1f")[:-1])
+        _SIMULATED.update(zip(fresh, found, strict=True))
+    return [_SIMULATED[key] for key in keys]
 
 
 def _selects(call: list[str], path: str, markers: frozenset[str]) -> bool:
@@ -1026,16 +1175,22 @@ def _selects(call: list[str], path: str, markers: frozenset[str]) -> bool:
 
     Der isolierte Läufer wählt je Gruppe Dateien und Marker
     (``run_suite_isolated.takes_file``, ``GROUP_MARKERS``), ein Kernlauf nur
-    über ``-m``.
+    über ``-m``. Wer nur plant oder sammelt, fährt nichts.
     """
     if any(argument.endswith("run_suite_isolated.py") for argument in call):
         assert "--release" in call, call
-        group = call[call.index("--ci-group") + 1]
-        return run_suite_isolated.takes_file(group, path) and _marked(
-            run_suite_isolated.GROUP_MARKERS[group], markers
+        if "--plan-only" in call:
+            return False
+        groups = [call[index + 1] for index, word in enumerate(call) if word == "--ci-group"]
+        return any(
+            run_suite_isolated.takes_file(group, path)
+            and _marked(run_suite_isolated.GROUP_MARKERS[group], markers)
+            for group in groups
         )
     if call[:2] == ["-m", "pytest"]:
         rest = call[2:]
+        if "--collect-only" in rest or "--co" in rest:
+            return False
         return "-m" not in rest or _marked(rest[rest.index("-m") + 1], markers)
     return False
 
@@ -1050,10 +1205,7 @@ def _rendering_cases(calls: Iterable[list[str]]) -> list[tuple[str, frozenset[st
     for call in calls:
         if call[:2] == ["-m", "pytest"] and "-m" in call[2:]:
             expressions.append(call[2:][call[2:].index("-m") + 1])
-    names = sorted(
-        {word for text in expressions for word in re.findall(r"[A-Za-z_]\w*", text)}
-        - {"and", "or", "not"}
-    )
+    names = sorted({name for text in expressions for name in _marker_names(text)})
     combos = [
         frozenset(chosen) for size in range(len(names) + 1) for chosen in combinations(names, size)
     ]
@@ -1090,14 +1242,13 @@ def _rendering_gaps(
 
 def _assert_rendering_runs_everywhere(workflow: str, shell: str, folder: Path) -> None:
     """Jeder Rendererfall läuft am Tag auf jeder Paketplattform in einem Pflichtjob
-    des Pakets, und der Versionswächter fährt sie alle auf seinem Läufer (RM-344)."""
-    package = job_block(workflow, "package")
-    needs = re.search(r"^    needs: \[([^\]]+)\]$", package, flags=re.MULTILINE)
-    assert needs is not None, "Paketabhängigkeiten fehlen"
-    required = [name.strip() for name in needs.group(1).split(",")]
+    (:func:`_release_gates`), und der Versionswächter fährt sie alle auf seinem
+    Läufer (RM-344)."""
+    required = _release_gates(workflow)
     steps = _test_scripts(workflow, [*required, "latest"])
     calls = _calls_of(steps, shell, folder)
-    gaps = _rendering_gaps(steps, calls, required, _release_runners(package))
+    platforms = _release_runners(job_block(workflow, "package"))
+    gaps = _rendering_gaps(steps, calls, required, platforms)
     assert not gaps, "Rendererfälle ohne Pflichtjob am Tag: " + "; ".join(gaps)
     latest = _release_runners(job_block(workflow, "latest"))
     gaps = _rendering_gaps(steps, calls, ["latest"], latest)
@@ -1105,13 +1256,14 @@ def _assert_rendering_runs_everywhere(workflow: str, shell: str, folder: Path) -
 
 
 def test_every_rendering_case_runs_on_every_platform_in_a_release_job(tmp_path: Path) -> None:
-    """Jeder ``rendering``-Fall läuft am Tag auf Windows, Linux und beiden Macs (RM-344).
+    """Jeder ``rendering``-Fall ohne Fenster läuft am Tag auf Windows, Linux und beiden
+    Macs (RM-344).
 
     Abgeleitet aus dem Workflow und der Markerwahl, nicht aus einer Liste: Die
-    Testschritte jedes Pflichtjobs des Pakets laufen mit Attrappen, und jeder
-    gestartete Aufruf wird mit pytests eigenem Auswerter gegen jede Art
-    Rendererfall gehalten. Bis zum 09.10.2026 liefen über hundert davon nur
-    unter Windows, und kein Test merkte es.
+    Testschritte jedes Pflichtjobs laufen mit Attrappen, und jeder gestartete
+    Aufruf wird mit pytests Markerauswahl gegen jede Art Rendererfall gehalten.
+    Bis zum 09.10.2026 liefen über hundert davon nur unter Windows, und kein
+    Test merkte es.
     """
     shell = _workflow_shell()
     if shell is None:
@@ -1119,38 +1271,67 @@ def test_every_rendering_case_runs_on_every_platform_in_a_release_job(tmp_path: 
     _assert_rendering_runs_everywhere(WORKFLOW.read_text(encoding="utf-8"), shell, tmp_path)
 
 
+def _in_job(workflow: str, job: str, before: str, after: str) -> str:
+    """Ersetzt ``before`` überall im Block eines Jobs und nur dort."""
+    block = job_block(workflow, job)
+    assert before in block, (job, before)
+    return workflow.replace(block, block.replace(before, after), 1)
+
+
+_PLATFORM_STEP: Final = f"      - name: {_CONTRACT_STEP}\n"
+
+
 @pytest.mark.parametrize(
-    "before,after",
+    "job,before,after",
     [
         # Der Stand vor RM-344: Die Fensterverträge fahren nur ihre zwei Dateien.
+        ("window-contracts", "--ci-group contracts --ci-group rendering", "--ci-group contracts"),
+        # Nur Linux trägt die Rendererfälle, Apple Silicon nicht.
         (
-            '          if [ "$RUNNER_OS" != "Windows" ]; then\n'
-            '            run_group rendering || { code=$?; [ "$status" -ne 0 ] || status=$code; }\n'
-            "          fi\n",
+            "window-contracts",
+            "          else\n            python tools/run_suite_isolated.py --release "
+            "--ci-group contracts --ci-group rendering",
+            "          else\n            python tools/run_suite_isolated.py --release "
+            "--ci-group contracts",
+        ),
+        # Der Intel-Mac fehlt, oder seine Prüfung hält keine Releaseakte mehr an.
+        ("window-contracts-intel", "runs-on: macos-26-intel", "runs-on: macos-latest"),
+        ("linux-release-check", "needs: [package, window-contracts-intel]", "needs: package"),
+        (
+            "macos-release-check",
+            "      needs.window-contracts-intel.result == 'success' &&\n",
             "",
         ),
-        ('[ "$RUNNER_OS" != "Windows" ]', '[ "$RUNNER_OS" = "Linux" ]'),
-        ("macos-latest, macos-26-intel]", "macos-latest]"),
-        ('--ci-group "$1" --report-dir "reports/$1"', "--ci-group contracts --report-dir r"),
         # Der Versionswächter ohne Renderer, wie vor RM-344.
+        ("latest", "--ci-group contracts --ci-group rendering", "--ci-group contracts"),
+        # M-1: eine Schrittbedingung, die am Tag nicht überall wahr ist ...
         (
-            '          run_group rendering || { code=$?; [ "$status" -ne 0 ] || status=$code; }\n'
-            '          exit "$status"\n',
-            '          exit "$status"\n',
+            "window-contracts",
+            _PLATFORM_STEP,
+            _PLATFORM_STEP + "        if: runner.os == 'Windows'\n",
         ),
+        (
+            "latest",
+            "        if: (success() || steps.style.outcome == 'failure' || "
+            "steps.tests.outcome == 'failure') && inputs.tests_only != true\n",
+            "        if: false\n",
+        ),
+        # ... ein Aufruf, der nur plant, und ein Schritt, der rot werden darf.
+        ("window-contracts", "--release --ci-group", "--release --plan-only --ci-group"),
+        ("window-contracts", _PLATFORM_STEP, _PLATFORM_STEP + "        continue-on-error: true\n"),
     ],
 )
 def test_the_rendering_guard_rejects_a_workflow_that_drops_a_platform(
-    tmp_path: Path, before: str, after: str
+    tmp_path: Path, job: str, before: str, after: str
 ) -> None:
-    """Gegenproben: Markerwahl zurückgedreht, ein Mac weniger, Versionswächter ohne Renderer."""
+    """Gegenproben: Markerwahl zurückgedreht, ein Mac weniger, die Intel-Prüfung ohne
+    Wirkung, Versionswächter ohne Renderer, Schrittbedingung, ``--plan-only``."""
     shell = _workflow_shell()
     if shell is None:
         pytest.skip("ohne bash lässt sich der CI-Block nicht ausführen")
-    workflow = WORKFLOW.read_text(encoding="utf-8")
-    assert before in workflow
+    changed = _in_job(WORKFLOW.read_text(encoding="utf-8"), job, before, after)
     with pytest.raises(AssertionError, match="Rendererfälle"):
-        _assert_rendering_runs_everywhere(workflow.replace(before, after), shell, tmp_path)
+        _assert_rendering_runs_everywhere(changed, shell, tmp_path)
 
 
 def test_the_rendering_guard_follows_the_workflow_and_not_a_list(tmp_path: Path) -> None:
@@ -1160,17 +1341,34 @@ def test_the_rendering_guard_follows_the_workflow_and_not_a_list(tmp_path: Path)
     if shell is None:
         pytest.skip("ohne bash lässt sich der CI-Block nicht ausführen")
     workflow = WORKFLOW.read_text(encoding="utf-8")
-    moved = workflow.replace('[ "$RUNNER_OS" != "Windows" ]', '[ "$RUNNER_OS" = "none" ]')
+    moved = workflow.replace("--ci-group contracts --ci-group rendering", "--ci-group contracts")
     moved = moved.replace(
         '"ubuntu-24.04", "macos-latest"]', '"ubuntu-24.04", "macos-latest", "macos-26-intel"]', 1
     )
     moved = moved.replace("not windowed and not rendering", "not windowed")
-    assert moved.count('= "none" ]') == 1
+    assert "--ci-group rendering" not in moved
     _assert_rendering_runs_everywhere(moved, shell, tmp_path)
     with pytest.raises(AssertionError, match="Rendererfälle"):
         _assert_rendering_runs_everywhere(
             moved.replace('not windowed"', 'not windowed and not rendering"'), shell, tmp_path
         )
+
+
+def test_the_rendering_guard_reads_its_markers_like_pytest() -> None:
+    """Die Markerauswahl des Wächters gegen einen festen Sollwert: Rendererfall ist,
+    was ``rendering`` trägt und weder Fenster noch Leistung noch Vergleich."""
+    universe = ("performance", "rendered", "rendering", "windowed")
+    chosen = {
+        frozenset(combo)
+        for size in range(len(universe) + 1)
+        for combo in combinations(universe, size)
+        if _marked(_RENDERING_CASE, frozenset(combo))
+    }
+    assert chosen == {frozenset({"rendering"})}
+    assert _marked(run_suite_isolated.CI_MARKER, frozenset({"windowed"}))
+    assert not _marked(run_suite_isolated.CI_MARKER, frozenset({"windowed", "rendered"}))
+    # Ein Marker, den der Ausdruck nicht nennt, ändert nichts an der Wahl.
+    assert _marked(_RENDERING_CASE, frozenset({"rendering", "slicer"}))
 
 
 def _apt_packages(block: str) -> set[str]:
@@ -1186,6 +1384,11 @@ def _apt_packages(block: str) -> set[str]:
     return packages
 
 
+#: Die Linux-Jobs mit ``xvfb-run``, deren xcb-Bibliotheken der Wächter prüft;
+#: fällt einer heraus, prüfte er womöglich eine leere Menge.
+_XVFB_JOBS: Final = frozenset({"suite", "window-contracts", "latest", "package"})
+
+
 def _assert_drawing_linux_jobs_have_a_graphics_stack(
     workflow: str, shell: str, folder: Path
 ) -> set[str]:
@@ -1195,7 +1398,7 @@ def _assert_drawing_linux_jobs_have_a_graphics_stack(
     dessen Starttest die 3D-Ansicht zeichnet. Jeder Job mit ``xvfb-run`` braucht
     die Bibliotheken der nativen xcb-Canvas.
     """
-    jobs = re.findall(r"(?m)^  ([a-z][a-z0-9-]*):\n", workflow.split("\njobs:\n", 1)[1])
+    jobs = _jobs(workflow)
     testing = [
         job
         for job in jobs
@@ -1213,10 +1416,12 @@ def _assert_drawing_linux_jobs_have_a_graphics_stack(
         installed = _apt_packages(job_block(workflow, job))
         assert "libvulkan1" in installed, f"{job} hat keinen Vulkan-Loader für wgpu"
         assert "mesa-vulkan-drivers" in installed, f"{job} hat keinen Software-Adapter für wgpu"
+    checked = set()
     for job in jobs:
         block = job_block(workflow, job)
-        if "xvfb-run" not in block:
+        if "xvfb-run" not in block or "Linux" not in map(_runner_os, _release_runners(block)):
             continue
+        checked.add(job)
         installed = _apt_packages(block)
         for dependency in (
             "xvfb",
@@ -1230,6 +1435,7 @@ def _assert_drawing_linux_jobs_have_a_graphics_stack(
             "libxcb-xkb1",
         ):
             assert dependency in installed, f"{job} fehlt {dependency} für die native xcb-Canvas"
+    assert checked >= _XVFB_JOBS, f"ohne xvfb-run: {sorted(_XVFB_JOBS - checked)}"
     return drawing
 
 
@@ -1249,61 +1455,73 @@ def test_every_linux_ci_path_that_uses_pygfx_has_a_vulkan_adapter(tmp_path: Path
     workflow = WORKFLOW.read_text(encoding="utf-8")
     drawing = _assert_drawing_linux_jobs_have_a_graphics_stack(workflow, shell, tmp_path)
     assert {"window-contracts", "latest"} <= drawing, drawing
+    # Die Gegenproben ändern nur apt-Zeilen und Aufrufe; die Simulation der
+    # übrigen Skripte kommt aus dem ersten Lauf (:data:`_SIMULATED`).
     contracts = job_block(workflow, "window-contracts")
     without = workflow.replace(contracts, contracts.replace(" mesa-vulkan-drivers", ""), 1)
     assert without != workflow
     with pytest.raises(AssertionError, match="window-contracts hat keinen Software-Adapter"):
         _assert_drawing_linux_jobs_have_a_graphics_stack(without, shell, tmp_path)
+    unwrapped = workflow.replace('xvfb-run -a --server-args="-screen 0 1920x1080x24" ', "")
+    with pytest.raises(AssertionError, match="ohne xvfb-run"):
+        _assert_drawing_linux_jobs_have_a_graphics_stack(unwrapped, shell, tmp_path)
+
+
+def test_the_intel_mac_check_holds_every_release_record_but_not_the_package() -> None:
+    """Der Intel-Mac prüft neben dem Paket und hält jede Releaseakte an (RM-344).
+
+    Das Intel-Paket ist der längste Paketjob; eine Prüfzelle in ``package.needs``
+    verlängerte den Tag-Lauf um jede Minute, die sie auf einen macOS-Platz
+    wartet. Ihr Schritt ist wortgleich mit dem in ``window-contracts``.
+    """
+    workflow = WORKFLOW.read_text(encoding="utf-8")
+    _assert_intel_check(workflow)
+
+
+def _assert_intel_check(workflow: str) -> None:
+    """Vertrag von ``window-contracts-intel``: eigener Läufer, nicht vor dem Paket,
+    fail-closed vor jeder Releaseakte, derselbe Schritt wie die übrigen Plattformen."""
+    intel = job_block(workflow, "window-contracts-intel")
+    assert re.search(r"(?m)^    runs-on: macos-26-intel$", intel)
+    assert not re.search(r"(?m)^    needs:", intel)
+    assert "continue-on-error" not in intel
+    package = re.search(r"(?m)^    needs: \[([^\]]+)\]$", job_block(workflow, "package"))
+    assert package is not None and "window-contracts-intel" not in package.group(1)
+    assert "window-contracts-intel" in _release_gates(workflow)
+    same = step_script(step_block(job_block(workflow, "window-contracts"), _CONTRACT_STEP))
+    assert step_script(step_block(intel, _CONTRACT_STEP)) == same
 
 
 @pytest.mark.parametrize(
-    "job,platform",
-    [("window-contracts", "Linux"), ("window-contracts", "macOS"), ("latest", "Linux")],
-)
-@pytest.mark.parametrize("contracts,rendering", [(0, 1), (1, 0), (2, 1), (0, 0)])
-def test_a_red_group_is_not_hidden_by_a_green_neighbour(
-    tmp_path: Path, job: str, platform: str, contracts: int, rendering: int
-) -> None:
-    """Beide Gruppen laufen, und der Schritt endet mit dem ersten roten Ausgang."""
-    shell = _workflow_shell()
-    if shell is None:
-        pytest.skip("ohne bash lässt sich der CI-Block nicht ausführen")
-    script = step_script(step_block(job_block(WORKFLOW.read_text("utf-8"), job), _CONTRACT_STEP))
-    calls = tmp_path / "calls.txt"
-    fake = """
-printf '%s\\n' "$*" >> "$CALLS"
-case "$*" in
-  *"--ci-group contracts"*) exit "$CONTRACTS_EXIT" ;;
-  *"--ci-group rendering"*) exit "$RENDERING_EXIT" ;;
-esac
-exit 99
-"""
-    done = subprocess.run(
-        [shell, "-c", script],
-        cwd=tmp_path,
-        env=dict(
-            os.environ,
-            PATH=os.pathsep.join(
-                (
-                    _fake_bin(tmp_path / "bin", fake),
-                    str(Path(shell).parent),
-                    os.environ.get("PATH", ""),
-                )
-            ),
-            RUNNER_OS=platform,
-            CALLS=calls.as_posix(),
-            CONTRACTS_EXIT=str(contracts),
-            RENDERING_EXIT=str(rendering),
+    "job,before,after",
+    [
+        (
+            "package",
+            "window-contracts, windows]",
+            "window-contracts, windows, window-contracts-intel]",
         ),
-        capture_output=True,
-        text=True,
-        timeout=30,
-    )
-    assert done.returncode == (contracts or rendering), done.stdout + done.stderr
-    groups = [
-        line.split("--ci-group ", 1)[1].split()[0] for line in calls.read_text("utf-8").splitlines()
-    ]
-    assert groups == ["contracts", "rendering"]
+        ("window-contracts-intel", "runs-on: macos-26-intel", "runs-on: macos-latest"),
+        ("window-contracts-intel", "    runs-on:", "    continue-on-error: true\n    runs-on:"),
+        (
+            "windows-release-check",
+            "needs: [windows-installer, window-contracts-intel]",
+            "needs: windows-installer",
+        ),
+        (
+            "window-contracts-intel",
+            "--ci-group contracts --ci-group rendering",
+            "--ci-group rendering",
+        ),
+    ],
+)
+def test_the_intel_mac_contract_rejects_a_changed_workflow(
+    job: str, before: str, after: str
+) -> None:
+    """Gegenproben: Intel vor dem Paket, auf dem falschen Mac, rot erlaubt, ohne
+    Wirkung auf eine Releaseakte, ein anderer Schritt."""
+    changed = _in_job(WORKFLOW.read_text(encoding="utf-8"), job, before, after)
+    with pytest.raises(AssertionError):
+        _assert_intel_check(changed)
 
 
 @pytest.mark.parametrize(
@@ -1312,6 +1530,7 @@ exit 99
         ("window-contracts", "Linux"),
         ("window-contracts", "Windows"),
         ("window-contracts", "macOS"),
+        ("window-contracts-intel", "macOS"),
         ("windows", "Windows"),
     ],
 )
@@ -1890,8 +2109,7 @@ def test_the_workflow_finds_every_file_that_builds_a_window() -> None:
     assert "windowed=$(grep" not in workflow
     runner = (ROOT / "tools/run_suite_isolated.py").read_text(encoding="utf-8")
     assert re.search(
-        r"(?m)^    from tools\.list_windowed_tests import "
-        r"collect_ci_rendering_counts, collect_ci_window_counts$",
+        r"(?m)^    from tools\.list_windowed_tests import collect_ci_counts$",
         runner,
     )
 

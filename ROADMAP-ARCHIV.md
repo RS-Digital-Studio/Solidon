@@ -31,7 +31,7 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
-| 2026-10-09 | [RM-344: Die Release-CI fährt jeden Rendererfall auf allen vier Paketplattformen (09.10.2026)](#rm-344-die-release-ci-fährt-jeden-rendererfall-auf-allen-vier-paketplattformen-09102026) |
+| 2026-10-09 | [RM-344: Die Release-CI fährt die Rendererfälle ohne Fenster auf allen vier Paketplattformen (09.10.2026)](#rm-344-die-release-ci-fährt-die-rendererfälle-ohne-fenster-auf-allen-vier-paketplattformen-09102026) |
 | 2026-10-09 | [RM-680: Bausteine verwalten steht ohne eigenen Baustein offen (09.10.2026)](#rm-680-bausteine-verwalten-steht-ohne-eigenen-baustein-offen-09102026) |
 | 2026-10-09 | [RM-650: Ein eingefügtes Modell kommt in den Ausschnitt (09.10.2026)](#rm-650-ein-eingefügtes-modell-kommt-in-den-ausschnitt-09102026) |
 | 2026-10-09 | [RM-584 (Teil): Über Baumspitzen rät Solidon zwei Schichten Luft (09.10.2026)](#rm-584-teil-über-baumspitzen-rät-solidon-zwei-schichten-luft-09102026) |
@@ -45495,9 +45495,9 @@ und die Spalten unverändert. Mit 150 % Schrift reichen die Felder bis 527 px st
 Changelog: ja, unter *Drucken und Übergabe an den Slicer* — mit vergrößerter Schrift hatte
 `v0.5.3` den Fehler.
 
-## RM-344: Die Release-CI fährt jeden Rendererfall auf allen vier Paketplattformen (09.10.2026)
+## RM-344: Die Release-CI fährt die Rendererfälle ohne Fenster auf allen vier Paketplattformen (09.10.2026)
 
-<a id="rm-344-die-release-ci-fährt-jeden-rendererfall-auf-allen-vier-paketplattformen-09102026"></a>
+<a id="rm-344-die-release-ci-fährt-die-rendererfälle-ohne-fenster-auf-allen-vier-paketplattformen-09102026"></a>
 <a id="rm-344"></a>
 
 **Befund (Review seit 0.5.1, E-M1, Commit `6f0be89df`):** Kernmatrix und Versionswächter wählten
@@ -45507,18 +45507,36 @@ Der Vulkan-Wächter prüfte feste Jobnamen, darunter drei ohne Bildtest, und lie
 Kommentar erfüllen. Entschieden (Robert, 06.10.2026): die Rendererfälle auch unter Linux und macOS.
 
 **Behoben:** CI-Gruppe `rendering` in `tools/run_suite_isolated.py` (Rendererfälle ohne Fenster,
-alle Dateien außer den zwei Vertragsdateien, je Datei ein Prozess). Der Job `window-contracts`
-läuft jetzt auch auf dem Intel-Mac und fährt außerhalb von Windows nach den Verträgen diese
-Gruppe; kein neuer macOS-Job. Der Versionswächter `latest` fährt beide Gruppen unter Linux.
-Konzept CI-03/CI-04, `.claude/rules/tests.md`, `auslieferung.md`, Karten und README nachgezogen.
+alle Dateien außer den zwei Vertragsdateien, je Datei ein Prozess); mehrere `--ci-group` in einem
+Aufruf teilen sich eine Sammlung, eine rote Gruppe hält die andere nicht an. `window-contracts`
+fährt unter Linux und auf Apple Silicon Verträge und Rendererfälle in einem Aufruf. Der Intel-Mac
+fährt denselben Schritt im eigenen Job `window-contracts-intel`, auf den das Paket nicht wartet:
+Das Intel-Paket ist der längste Paketjob (11,7 min im Lauf 37530876754), eine Prüfzelle davor
+verlängerte den Tag-Lauf um jede Minute Wartezeit auf einen der fünf macOS-Plätze. Stattdessen
+hält er die Releaseakten von Linux, Windows und macOS an, und `sign_release.verify_ci_run` nimmt
+keinen Lauf an, in dem er rot ist. Der Versionswächter `latest` fährt beide Gruppen unter Linux,
+auch nach einem roten Stil-, Typ- oder Kernschritt, und nicht bei `tests_only`. Ein Rendererfall
+mit Fenster (`test_held_frames_arrive_as_one_after_the_release`) läuft weiter nur unter Windows,
+wo die Fenstergruppe läuft ([RM-531](ROADMAP.md#rm-531)). Konzept CI-03 bis CI-05 und §3,
+`.claude/rules/tests.md`, `auslieferung.md`, `/erzeugen` (keine Fenster- oder Slicerauswahl
+während eines Tag-Laufs), Karten und README nachgezogen.
 
 **Nachweis:** `test_every_rendering_case_runs_on_every_platform_in_a_release_job` leitet aus
-Workflow und Markerwahl ab, dass jeder Rendererfall auf jeder Paketplattform in einem Pflichtjob
-des Pakets läuft, mit fünf Gegenproben (Markerwahl zurückgedreht, nur Linux, Intel-Mac fehlt,
-Gruppe fest auf contracts, Versionswächter ohne Renderer) und einer in die andere Richtung. Der
-Vulkan-Wächter liest die zeichnenden Linux-Jobs aus ihren Aufrufen und die Pakete aus den
-apt-Zeilen. Rendererprobe auf dem Wegwerfzweig `wegwerf/renderer-probe`, Lauf 37894162728, alle
-grün, 0 übersprungen außer den drei nativen Fällen von `test_render_factory` auf dem Intel-Mac
+Workflow und Markerwahl ab, dass jeder Rendererfall ohne Fenster auf jeder Paketplattform in einem
+Pflichtjob läuft — worauf das Paket wartet oder was jede Releaseakte anhält. Der Sollwert
+„Rendererfall“ steht als Wert im Test, die Markerauswahl kommt aus pytests öffentlicher
+Sammlung, eine Schrittbedingung außerhalb einer Positivliste, `continue-on-error` am Schritt und
+`--plan-only` machen ihn rot. Zehn Gegenproben (Markerwahl zurückgedreht, nur Linux, Intel-Mac auf
+dem falschen Läufer, Intel-Prüfung ohne Wirkung auf die Linux- oder die Mac-Akte, Versionswächter
+ohne Renderer, `if: runner.os == 'Windows'`, `if: false`, `--plan-only`, `continue-on-error`) und
+eine in die andere Richtung; die drei Schrittmutationen und eine um `gizmo` verengte Gruppe
+blieben am vorigen Wächter grün. `test_ci_runner.py` hält den Marker der Gruppe als Wert und den
+Gleichlauf zwischen Sammlung und `pytest -m` je Gruppe. Der Vulkan-Wächter liest die zeichnenden
+Linux-Jobs aus ihren Aufrufen und die Pakete aus den apt-Zeilen, die xcb-Prüfung verlangt die
+vier Linux-Jobs mit `xvfb-run`. Die Simulation läuft je Paar aus Läufersystem und Skript einmal:
+die Wächterfamilie 20 Fälle in 6,9 s statt 20 in 10,9 s am ruhigen Rechner, Zeitgrenze wieder
+60 s. Rendererprobe auf dem Wegwerfzweig `wegwerf/renderer-probe`, Lauf 37894162728, alle grün,
+0 übersprungen außer den drei nativen Fällen von `test_render_factory` auf dem Intel-Mac
 (gewollt): Linux 6:40 min (Renderer 110 Fälle in 54 s), macOS ARM 8:15 min (91 s), Intel-Mac
 11:10 min (74 s), Windows unverändert 9:08 min, `latest` 5:48 min. Changelog: nein.
 

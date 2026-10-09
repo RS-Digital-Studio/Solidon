@@ -184,20 +184,17 @@ def collect_test_groups(
     return tuple(sorted(collector.files)), tuple(sorted(collector.plain_files))
 
 
-def collect_ci_window_counts(
+def collect_ci_counts(
     paths: Sequence[Path], *, confcutdir: Path | None = None
-) -> dict[Path, int]:
-    """Zählt Fenster- und Rendererfälle ohne Leistung und Erzeugnisvergleiche."""
+) -> tuple[dict[Path, int], dict[Path, int]]:
+    """Zählt je Datei, ohne Leistung und Erzeugnisvergleiche, in einer Sammlung: die
+    Fenster- und Rendererfälle (``contracts``, ``windowed``) und die Rendererfälle
+    ohne Fenster (``rendering``)."""
     collector = _collect(paths, confcutdir=confcutdir)
-    return dict(sorted(collector.window_counts.items()))
-
-
-def collect_ci_rendering_counts(
-    paths: Sequence[Path], *, confcutdir: Path | None = None
-) -> dict[Path, int]:
-    """Zählt Rendererfälle ohne Fenster, Leistung und Erzeugnisvergleiche."""
-    collector = _collect(paths, confcutdir=confcutdir)
-    return dict(sorted(collector.rendering_counts.items()))
+    return (
+        dict(sorted(collector.window_counts.items())),
+        dict(sorted(collector.rendering_counts.items())),
+    )
 
 
 def collect_ci_selection(

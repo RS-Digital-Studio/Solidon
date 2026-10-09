@@ -3,8 +3,8 @@
     python tools/run_suite_isolated.py [--release] [muster …]
     python tools/run_suite_isolated.py --release --ci-group windowed --shard-count 2 \
         --shard-index 0 --report-dir build/ci/windows-0
-    python tools/run_suite_isolated.py --release --ci-group rendering \
-        --report-dir build/ci/rendering
+    python tools/run_suite_isolated.py --release --ci-group contracts --ci-group rendering \
+        --report-dir build/ci
 
 Der CI-Weg plant aus der aktuellen Sammlung, schreibt je Datei JUnit und
 Protokoll und behält fehlende Berichte als Fehler. ``--plan-only`` sammelt
@@ -12,7 +12,8 @@ und verteilt ohne Testausführung; dafür ist ``--release`` nicht nötig.
 Drei Gruppen: ``contracts`` fährt die zwei plattformübergreifenden
 Fensterverträge, ``windowed`` unter Windows alle übrigen Fenster- und
 Rendererdateien, ``rendering`` unter Linux und macOS deren Rendererfälle ohne
-Fenster.
+Fenster. Mehrere Gruppen teilen sich eine Sammlung und laufen nacheinander,
+jede in ``<report-dir>/<gruppe>``; eine rote Gruppe hält die nächste nicht an.
 
 Fenster- und Rendererfälle laufen ausschließlich mit ``--release``; ohne das
 fährt jede Datei ihre Entwicklungstests ohne Fenster, Renderer, Erzeugnisvergleiche
@@ -86,7 +87,7 @@ BUDGET_HEADROOM = 1.5
 CONTRACT_FILES = frozenset({"tests/test_print_settings_ui.py", "tests/test_render_factory.py"})
 CI_MARKER = "(windowed or rendering) and not performance and not rendered"
 #: Die Rendererfälle ohne Fenster. Unter Linux und auf beiden Macs läuft die
-#: Fenstergruppe nicht, die Bildfälle aber doch (RM-344).
+#: Fenstergruppe nicht, die Bildfälle aber doch (RM-344, Konzept CI-03).
 RENDERING_MARKER = "rendering and not windowed and not performance and not rendered"
 #: Der Marker, den jede CI-Gruppe an ihre Dateien gibt.
 GROUP_MARKERS = {"contracts": CI_MARKER, "windowed": CI_MARKER, "rendering": RENDERING_MARKER}
@@ -431,15 +432,47 @@ def write_ci_summary(report_dir: Path, summary: dict[str, Any]) -> None:
 
 
 def run_ci(arguments: argparse.Namespace) -> int:
-    """Sammelt die gesamte CI-Menge, plant identisch in jedem Shard und fährt nur dessen Dateien."""
-    from tools.list_windowed_tests import collect_ci_rendering_counts, collect_ci_window_counts
+    """Sammelt die gesamte CI-Menge einmal und fährt jede gewählte Gruppe.
 
-    report_dir = arguments.report_dir.resolve()
+    Jede Gruppe plant identisch in jedem Shard und fährt nur dessen Dateien;
+    alle Gruppen laufen, auch nach einer roten, und jede schreibt ihren eigenen
+    Bericht. Eine zweite Sammlung kostete je Läufer 10 bis 25 Sekunden.
+    """
+    from tools.list_windowed_tests import collect_ci_counts
+
+    groups: list[str] = arguments.ci_group
+    base = arguments.report_dir.resolve()
+    summaries = {
+        group: _new_summary(arguments, group, base if len(groups) == 1 else base / group)
+        for group in groups
+    }
+    started = time.monotonic()
+    collected: dict[str, dict[Path, int] | Exception]
+    try:
+        window_counts, rendering_counts = collect_ci_counts((ROOT / "tests",))
+        collected = {
+            group: rendering_counts if group == "rendering" else window_counts for group in groups
+        }
+    except (OSError, ValueError, KeyError, RuntimeError) as error:
+        collected = dict.fromkeys(groups, error)
+    seconds = time.monotonic() - started
+    failed = False
+    for group, (report_dir, summary) in summaries.items():
+        summary["collection_seconds"] = seconds
+        failed |= _run_ci_group(arguments, report_dir, summary, collected[group])
+    return int(failed)
+
+
+def _new_summary(
+    arguments: argparse.Namespace, group: str, report_dir: Path
+) -> tuple[Path, dict[str, Any]]:
+    """Legt den Bericht einer Gruppe an, bevor gesammelt wird: Auch ein früher
+    Abbruch hinterlässt ihn."""
     report_dir.mkdir(parents=True, exist_ok=True)
     summary: dict[str, Any] = {
         "schema": 1,
-        "group": arguments.ci_group,
-        "marker": GROUP_MARKERS[arguments.ci_group],
+        "group": group,
+        "marker": GROUP_MARKERS[group],
         "shard_index": arguments.shard_index,
         "shard_count": arguments.shard_count,
         "commit": os.environ.get("GITHUB_SHA", ""),
@@ -451,22 +484,27 @@ def run_ci(arguments: argparse.Namespace) -> int:
         "results": [],
         "issues": [],
     }
+    write_ci_summary(report_dir, summary)
+    return report_dir, summary
+
+
+def _run_ci_group(
+    arguments: argparse.Namespace,
+    report_dir: Path,
+    summary: dict[str, Any],
+    collected: dict[Path, int] | Exception,
+) -> bool:
+    """Plant und fährt eine Gruppe aus der gemeinsamen Sammlung; ``True`` heißt rot."""
     started = time.monotonic()
     github = os.environ.get("GITHUB_ACTIONS") == "true"
-    write_ci_summary(report_dir, summary)
+    group = summary["group"]
     try:
-        collect = (
-            collect_ci_rendering_counts
-            if arguments.ci_group == "rendering"
-            else collect_ci_window_counts
-        )
-        counts = {
-            path.relative_to(ROOT).as_posix(): count
-            for path, count in collect((ROOT / "tests",)).items()
-        }
+        if isinstance(collected, Exception):
+            raise collected
+        counts = {path.relative_to(ROOT).as_posix(): count for path, count in collected.items()}
         weights, fallback = read_durations(WINDOW_DURATIONS)
         shards = plan_shards(
-            counts, weights, fallback, group=arguments.ci_group, shard_count=arguments.shard_count
+            counts, weights, fallback, group=group, shard_count=arguments.shard_count
         )
         summary["plan"] = [[asdict(file) for file in shard] for shard in shards]
         selected = shards[arguments.shard_index]
@@ -515,7 +553,7 @@ def run_ci(arguments: argparse.Namespace) -> int:
         with Path(step_summary).open("a", encoding="utf-8") as page:
             page.write((report_dir / "summary.md").read_text(encoding="utf-8") + "\n")
     print(f"{summary['status']}: {report_dir / 'summary.md'}", flush=True)
-    return int(summary["status"] == "failed")
+    return summary["status"] == "failed"
 
 
 @contextlib.contextmanager
@@ -581,7 +619,12 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--release", action="store_true", help="beim Release auch Fenster- und Rendererfälle fahren"
     )
-    parser.add_argument("--ci-group", choices=tuple(GROUP_MARKERS))
+    parser.add_argument(
+        "--ci-group",
+        action="append",
+        choices=tuple(GROUP_MARKERS),
+        help="mehrfach: eine Sammlung, je Gruppe ein Unterordner von --report-dir",
+    )
     parser.add_argument("--shard-index", type=int, default=0)
     parser.add_argument("--shard-count", type=int, default=1)
     parser.add_argument("--report-dir", type=Path)
@@ -603,6 +646,8 @@ def main(argv: list[str] | None = None) -> int:
             parser.error("CI-Gruppen brauchen --report-dir und erlauben keine Dateifilter.")
         if not 0 <= arguments.shard_index < arguments.shard_count:
             parser.error("Shardindex muss zwischen 0 und Shardanzahl minus 1 liegen.")
+        if len(set(arguments.ci_group)) != len(arguments.ci_group):
+            parser.error("Jede CI-Gruppe nur einmal nennen.")
         return run_ci(arguments)
     if (
         arguments.plan_only

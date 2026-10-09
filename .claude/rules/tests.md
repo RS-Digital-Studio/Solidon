@@ -155,10 +155,10 @@ QApplication.instance().setStyleSheet(before)   # ins finally
   wählt oder abwählt, steuert nichts und wird nicht angelegt.
 - `rendering` für Tests mit echter Adapterabfrage, Rendereraufbau, Zeichnen,
   GPU-Picks oder Bildrücklesen. Entwicklungstor und Kernmatrix wählen sie ab;
-  am Tag läuft jeder Fall auf jeder Paketplattform genau einmal — unter
-  Windows in der Gruppe `windowed`, unter Linux und auf beiden Macs in
-  `rendering` (RM-344), dazu im Versionswächter. Linux- und Mac-Pakete zeichnen
-  über einen anderen Grafikweg als Windows.
+  am Tag läuft jeder Fall **ohne Fenster** auf jeder Paketplattform genau
+  einmal, dazu im Versionswächter (Aufteilung: Konzept CI-03, RM-344). Ein
+  Rendererfall mit Fenster läuft, wo die Fenstertests laufen — unter Windows.
+  Linux- und Mac-Pakete zeichnen über einen anderen Grafikweg als Windows.
 - `slicer("<programm>")` für Tests mit echtem, installiertem Slicer; das Programm
   liefert nur die Fixture `installed_slicer` (`test_slicer_selection.py` hält
   das). Fehlt es, überspringt sich der Fall; in `slicer-auswahl.yml`

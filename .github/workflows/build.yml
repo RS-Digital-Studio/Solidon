@@ -6,7 +6,9 @@
 # veröffentlicht. Kern und Fenster laufen in Teilen: Die aktuelle
 # Pytest-Sammlung bestimmt die vollständige Menge, Laufzeittabellen verteilen
 # sie nur. Fenster und Renderer laufen je Datei in einem frischen Prozess, die
-# Fensterdateien unter Windows, die Rendererfälle auf jeder Paketplattform. Leistung wird
+# Fensterdateien unter Windows, die Rendererfälle ohne Fenster auf jeder
+# Paketplattform; die Prüfung des Intel-Macs hält die Releaseakten statt des
+# Pakets an (`window-contracts-intel`). Leistung wird
 # beim Release lokal gemessen, erzeugte Vergleiche bleiben dort. Die
 # Baujobs arbeiten gegen `constraints.txt`; der Versionswächter daneben (Job
 # `latest`) löst frei auf und meldet, was eine neue Version bricht — auf
@@ -195,19 +197,18 @@ jobs:
 
   window-contracts:
     name: Fensterverträge und Renderer (${{ matrix.os }})
-    # Die zwei Fensterverträge auf jeder Paketplattform, dazu unter Linux und
-    # auf beiden Macs die Rendererfälle ohne Fenster (RM-344, Entscheidung
-    # Robert 06.10.2026); unter Windows trägt sie der Job `windows`. Kein
-    # eigener Rendererjob: macOS-Läufer sind knapp, und dieser hat
-    # Abhängigkeiten, Konturkern und Vulkan schon. Der Intel-Mac ist der
-    # einzige Prüfjob seiner Plattform.
+    # Die zwei Fensterverträge, dazu unter Linux und auf Apple Silicon die
+    # Rendererfälle ohne Fenster (RM-344, Entscheidung Robert 06.10.2026);
+    # unter Windows trägt sie der Job `windows`, auf dem Intel-Mac
+    # `window-contracts-intel`. Kein eigener Rendererjob: macOS-Läufer sind
+    # knapp, und dieser hat Abhängigkeiten, Konturkern und Vulkan schon.
     if: inputs.tests_only != true && (startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch')
     runs-on: ${{ matrix.os }}
     timeout-minutes: 120
     strategy:
       fail-fast: false
       matrix:
-        os: [windows-latest, ubuntu-24.04, macos-latest, macos-26-intel]
+        os: [windows-latest, ubuntu-24.04, macos-latest]
     env:
       QT_QPA_PLATFORM: offscreen
     steps:
@@ -260,30 +261,80 @@ jobs:
         run: python tools/build_slice_core.py
 
       - name: Fensterverträge und Rendererfälle
-        # Beide Gruppen laufen, auch wenn die erste rot ist, und der Schritt
-        # endet mit dem ersten roten Ausgang. Unter Windows liefen die
-        # Rendererfälle hier doppelt (CI-01).
+        # Beide Gruppen in einem Aufruf: eine Sammlung, und eine rote Gruppe
+        # hält die andere nicht an. Unter Windows liefen die Rendererfälle
+        # hier doppelt (CI-01). Derselbe Schritt steht in
+        # `window-contracts-intel`.
         shell: bash
         run: |
           set -euo pipefail
-          run_group() {
-            if [ "$RUNNER_OS" = "Linux" ]; then
-              xvfb-run -a --server-args="-screen 0 1920x1080x24" python tools/run_suite_isolated.py --release --ci-group "$1" --report-dir "reports/$1"
-            else
-              python tools/run_suite_isolated.py --release --ci-group "$1" --report-dir "reports/$1"
-            fi
-          }
-          status=0
-          run_group contracts || status=$?
-          if [ "$RUNNER_OS" != "Windows" ]; then
-            run_group rendering || { code=$?; [ "$status" -ne 0 ] || status=$code; }
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            python tools/run_suite_isolated.py --release --ci-group contracts --report-dir reports/contracts
+          elif [ "$RUNNER_OS" = "Linux" ]; then
+            xvfb-run -a --server-args="-screen 0 1920x1080x24" python tools/run_suite_isolated.py --release --ci-group contracts --ci-group rendering --report-dir reports
+          else
+            python tools/run_suite_isolated.py --release --ci-group contracts --ci-group rendering --report-dir reports
           fi
-          exit "$status"
       - name: Fenstervertrags- und Rendererberichte sichern
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: tests-contracts-${{ matrix.os }}
+          overwrite: true
+          path: reports/
+          if-no-files-found: error
+          retention-days: 14
+
+  window-contracts-intel:
+    name: Fensterverträge und Renderer (macos-26-intel)
+    # Der einzige Prüfjob des Intel-Macs, mit demselben Schritt wie
+    # `window-contracts`. Das Paket wartet nicht auf ihn: Das Intel-Paket ist
+    # der längste Paketjob, und eine Prüfzelle davor verlängerte den Tag-Lauf
+    # um jede Minute, die sie auf einen der fünf macOS-Plätze wartet. Statt
+    # dessen hält er jede Releaseakte an (`*-release-check`), und
+    # `sign_release.verify_ci_run` nimmt keinen Lauf an, in dem er rot ist.
+    if: inputs.tests_only != true && (startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch')
+    runs-on: macos-26-intel
+    timeout-minutes: 120
+    env:
+      QT_QPA_PLATFORM: offscreen
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.14.8"
+          cache: pip
+          cache-dependency-path: |
+            constraints.txt
+            pyproject.toml
+
+      - name: Abhängigkeiten
+        # Derselbe Satz wie in `window-contracts`.
+        run: python -m pip install -c constraints.txt -e ".[dev,geom,ui,brep]"
+
+      - name: Konturverkettung übersetzen
+        run: python tools/build_slice_core.py
+
+      - name: Fensterverträge und Rendererfälle
+        # Wortgleich mit dem Schritt in `window-contracts`
+        # (`tests/test_packaging.py` hält es fest).
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            python tools/run_suite_isolated.py --release --ci-group contracts --report-dir reports/contracts
+          elif [ "$RUNNER_OS" = "Linux" ]; then
+            xvfb-run -a --server-args="-screen 0 1920x1080x24" python tools/run_suite_isolated.py --release --ci-group contracts --ci-group rendering --report-dir reports
+          else
+            python tools/run_suite_isolated.py --release --ci-group contracts --ci-group rendering --report-dir reports
+          fi
+      - name: Fenstervertrags- und Rendererberichte sichern
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: tests-contracts-macos-26-intel
           overwrite: true
           path: reports/
           if-no-files-found: error
@@ -734,7 +785,7 @@ jobs:
 
   linux-release-check:
     name: Linux-Releaseakte prüfen
-    needs: package
+    needs: [package, window-contracts-intel]
     if: inputs.tests_only != true && (startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-24.04
     timeout-minutes: 120
@@ -984,7 +1035,7 @@ jobs:
 
   windows-release-check:
     name: Windows-Releaseakte prüfen
-    needs: windows-installer
+    needs: [windows-installer, window-contracts-intel]
     if: inputs.tests_only != true && (success())
     runs-on: windows-latest
     timeout-minutes: 120
@@ -1476,10 +1527,11 @@ jobs:
 
   macos-release-check:
     name: macOS-Releaseakte prüfen (${{ matrix.machine_arch }})
-    needs: [macos-package, macos-installer-sign]
+    needs: [macos-package, macos-installer-sign, window-contracts-intel]
     if: >-
       inputs.tests_only != true && (
       always() && needs.macos-package.result == 'success' &&
+      needs.window-contracts-intel.result == 'success' &&
       (((vars.MACOS_SIGNING_MODE == '' || vars.MACOS_SIGNING_MODE == 'unsigned') && needs.macos-installer-sign.result == 'skipped') ||
        ((vars.MACOS_SIGNING_MODE == 'signed' || vars.MACOS_SIGNING_MODE == 'notarized') && needs.macos-installer-sign.result == 'success')))
     runs-on: ${{ matrix.os }}
@@ -1648,6 +1700,7 @@ jobs:
         run: python -m pip freeze --exclude-editable
 
       - name: Stil und Typen
+        id: style
         run: |
           python -m ruff check .
           python -m ruff format --check .
@@ -1655,6 +1708,9 @@ jobs:
 
       - name: Tests
         id: tests
+        # Ein neuer Befund von ruff oder mypy nimmt der Frühwarnung weder die
+        # Kerntests noch die Bilder (RM-344).
+        if: success() || steps.style.outcome == 'failure'
         env:
           QT_QPA_PLATFORM: offscreen
         # Wie im Suite-Job wählt der Marker Fenster, Renderer und Leistung ab,
@@ -1670,18 +1726,16 @@ jobs:
         # Was `window-contracts` unter Linux fährt, hier gegen die neuesten
         # Fassungen: Ein neues pygfx, wgpu oder PySide6 zeigt sich zuerst an
         # Bildern und Fenstern (RM-344). Je Datei ein frischer Prozess (CI-02);
-        # ein rotes Ergebnis der Kerntests verdeckt diese Gruppen nicht.
-        if: success() || steps.tests.outcome == 'failure'
+        # ein rotes Ergebnis von Stil, Typen oder Kerntests verdeckt diese
+        # Gruppen nicht. `tests_only` verspricht einen Lauf ohne Fenster und
+        # hält auch diesen Schritt an.
+        if: (success() || steps.style.outcome == 'failure' || steps.tests.outcome == 'failure') && inputs.tests_only != true
         env:
           QT_QPA_PLATFORM: offscreen
         shell: bash
         run: |
           set -euo pipefail
-          run_group() { xvfb-run -a --server-args="-screen 0 1920x1080x24" python tools/run_suite_isolated.py --release --ci-group "$1" --report-dir "reports/latest/$1"; }
-          status=0
-          run_group contracts || status=$?
-          run_group rendering || { code=$?; [ "$status" -ne 0 ] || status=$code; }
-          exit "$status"
+          xvfb-run -a --server-args="-screen 0 1920x1080x24" python tools/run_suite_isolated.py --release --ci-group contracts --ci-group rendering --report-dir reports/latest
 
       - name: Versionsprüfbericht sichern
         if: always()

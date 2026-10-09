@@ -18,10 +18,12 @@ dabei **einzuhalten** ist; das Warum steht unter denselben Überschriften in
 
 Die CI-Prüfjobs folgen `konzepte/konzept-ci-testlaufzeiten-2026-09.md`. Der
 Paketbau wartet auf Qualität, jeden Teil der Kernmatrix auf jeder Plattform,
-die Fensterverträge mit den Rendererfällen auf allen vier Paketplattformen und
-jede Windows-Fenstergruppe;
-ein übersprungener, abgebrochener oder roter Pflichtjob ergibt keine
-Paketfreigabe. Signierung und Veröffentlichung behalten ihre eigenen Grenzen.
+die Fensterverträge unter Windows, Linux und Apple Silicon (außerhalb von
+Windows samt den Rendererfällen ohne Fenster) und jede Windows-Fenstergruppe;
+dieselbe Prüfung auf dem Intel-Mac hält statt des Pakets jede Releaseakte an,
+damit sie den Tag-Lauf nicht verlängert. Ein übersprungener, abgebrochener oder roter Pflichtjob
+ergibt keine Freigabe. Signierung und Veröffentlichung behalten ihre eigenen
+Grenzen.
 
 - Die Teilmatrix eines Jobs ist genau `0 … N−1` für das `N` in seinem Aufruf;
   wer Teile dazunimmt, ändert beides zusammen.
