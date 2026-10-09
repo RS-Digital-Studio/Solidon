@@ -371,15 +371,6 @@ def _tree_walls(text: str, _context: _Context) -> object:
     return max(int(number), 1)
 
 
-def _prusa_tree_walls(text: str, _context: _Context) -> object:
-    """PrusaSlicers Doppelwand ab einem Astquerschnitt (RM-584): bis 3 mm zählt
-    als zwei Wände, darüber oder 0 als eine — das MK4S-Profil führt 8."""
-    number = _float(text)
-    if number is None or number < 0.0:
-        return Foreign(text)
-    return 2 if 0.0 < number <= 3.0 else 1
-
-
 def _fraction(text: str, _context: _Context) -> object:
     """„15%" als Anteil 0,15."""
     number = _float(text.rstrip("%").strip())
@@ -929,6 +920,20 @@ ORCA_SUPPORT_INTERFACE_SPEED: Final = 80.0
 ORCA_SUPPORT_CLOSING: Final = 2.0
 
 
+def auto_prints_trees(values: Mapping[str, Any], flavour: str) -> bool:
+    """Stützt dieser Herstellerprozess unter „automatisch“ mit Bäumen (RM-584)?
+
+    In der Orca-Familie heißt es ``support_type`` ``tree(…)``, ob organisch,
+    schlank, kräftig oder hybrid; bei PrusaSlicer ``support_material_style``
+    ``organic``. Die eine Auskunft für Zeitmodell (``Motion.support_tree``) und
+    Rat (``handover.tree_styles``)."""
+    if flavour == "orca":
+        return (_text(values.get("support_type")) or "").startswith("tree")
+    if flavour == "prusa":
+        return (_text(values.get("support_material_style")) or "") == "organic"
+    return False
+
+
 def _orca_support_motion(
     process: Mapping[str, Any], default: float | None, nozzle: float
 ) -> dict[str, Any]:
@@ -953,7 +958,9 @@ def _orca_support_motion(
         "support_interface_density": width / (width + spacing)
         if spacing is not None and spacing >= 0.0
         else None,
-        "support_tree": (_text(process.get("support_type")) or "").startswith("tree"),
+        "support_tree": auto_prints_trees(process, "orca"),
+        # Jedes Programm der Familie kennt ``tree_hybrid``; ein Wächter hält es
+        # gegen ``slicer_keys.NOT_OFFERED_BY_PROGRAM`` (RM-584).
         "support_hybrid": True,
         # Fest in ``SupportMaterial.cpp`` (``support_closing_radius(2.0)``).
         "support_closing": ORCA_SUPPORT_CLOSING,
@@ -1051,7 +1058,7 @@ def _prusa_support_motion(values: Mapping[str, Any], nozzle: float) -> dict[str,
         "support_interface_density": width / (width + spacing)
         if spacing is not None and spacing >= 0.0
         else None,
-        "support_tree": (_text(values.get("support_material_style")) or "") == "organic",
+        "support_tree": auto_prints_trees(values, "prusa"),
         "support_closing": _float(_text(values.get("support_material_closing_radius")) or ""),
         "support_skips_bridges": (_text(values.get("dont_support_bridges")) or "0")
         in ("1", "true"),
@@ -1425,7 +1432,6 @@ PRUSA_PROCESS: Final[tuple[tuple[str, str, Reader], ...]] = (
     ("support.z_gap", "support_material_contact_distance", _number),
     ("support.interface_layers", "support_material_interface_layers", _count),
     ("support.interface_spacing", "support_material_interface_spacing", _number),
-    ("support.tree_walls", "support_tree_branch_diameter_double_wall", _prusa_tree_walls),
     ("adhesion.skirt_loops", "skirts", _count),
     ("adhesion.skirt_distance", "skirt_distance", _number),
     ("adhesion.brim_width", "brim_width", _number),

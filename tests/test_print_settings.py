@@ -341,6 +341,27 @@ def test_a_replaced_support_suggestion_explains_the_support_actually_offered() -
     assert slicer_keys.offered([advice], "prusaslicer") == [advice]
 
 
+@pytest.mark.parametrize("program", ["prusaslicer", "cura"])
+def test_a_replaced_suggestion_that_turns_supports_on_keeps_its_warning(program: str) -> None:
+    """„Aus → Hybrid“ mit der Warnung, das Teil drucke in die Luft, wurde bei
+    PrusaSlicer und Cura „Gitter“ mit dem Satz über die fehlende Hybridstütze —
+    die Warnung war weg (Review RM-584, M2). Schaltet der Vorschlag Stützen erst
+    ein, bleibt sein Grund; wechselt er nur die Art, steht der Ersatzsatz da."""
+    warning = SettingAdvice(
+        "support.style", "hybrid", "none", "Ohne Stützen druckt dieses Teil in die Luft.", "warning"
+    )
+    shown = slicer_keys.offered([warning], program)
+    assert [(entry.value, entry.reason, entry.severity) for entry in shown] == [
+        ("grid", warning.reason, "warning")
+    ]
+    switched = replace(warning, was="tree", reason="Decke", severity="info")
+    replaced = slicer_keys.substitute("support.style", "hybrid", program)
+    assert replaced is not None
+    assert [entry.reason for entry in slicer_keys.offered([switched], program)] == [replaced.reason]
+    # Gegenprobe: Wo das Programm Hybrid kennt, bleibt der Vorschlag, wie er ist.
+    assert slicer_keys.offered([warning], "elegooslicer") == [warning]
+
+
 @pytest.mark.parametrize(
     "program,flavour",
     [
@@ -1250,6 +1271,7 @@ UNREACHABLE: dict[str, dict[str, str]] = {
         "adhesion.kind": "kennt keine Art, nur die Maße — ``ADHESION_KEYS`` nullt die anderen.",
         "support.block_channels": "reist als Stützsperre in der 3MF (``AS_GEOMETRY``).",
         "support.spare_ledges": "reist als Stützsperre in der 3MF (``AS_GEOMETRY``).",
+        "support.tree_walls": "PrusaSlicer zählt keine Baumwände (``NOT_TAKEN_BY``, RM-584).",
     },
     "orca": {
         "adhesion.kind": "in ``brim_type`` enthalten, das die Tabelle schreibt.",
@@ -1706,19 +1728,29 @@ def test_hybrid_supports_reach_each_family_as_what_it_knows() -> None:
 
 def test_tree_walls_reach_each_family() -> None:
     """Zwei Wände für hohe Baumstämme (RM-584): die Orca-Familie zählt sie
-    (``tree_support_wall_count``), PrusaSlicer legt Doppelwände ab 3 mm
-    Astquerschnitt, Cura gibt dem Baum seine Wandzahl."""
+    (``tree_support_wall_count``), Cura gibt dem Baum seine Wandzahl.
+    PrusaSlicer zählt keine Wände (Review RM-584, M5): Seine Doppelwand ab einem
+    Astquerschnitt bleibt beim Hersteller, auch die Vorgabe ohne Bündel, die
+    eine geschriebene Wand abgeschaltet hätte."""
     profile = profiles.make_profile()
     settings = print_settings.resolve(profile)
     for path, value in (("support.style", "tree"), ("support.tree_walls", 2)):
         settings = print_settings.with_choice(settings, path, value)
 
     assert handover.as_mapping(settings, "orca")["tree_support_wall_count"] == "2"
-    assert handover.as_mapping(settings, "prusa")["support_tree_branch_diameter_double_wall"] == "3"
+    # Creality Print liest die Wände unter eigenem Namen (Slicertest RM-584).
+    creality = handover.by_section(settings, "orca", program="crealityprint")["process"]
+    assert creality.get("tree_support_wall_count_tree") == "2"
+    assert "tree_support_wall_count" not in creality
     assert handover.values_for(settings, profile, "cura")["support_wall_count"] == "2"
-    single = print_settings.with_choice(settings, "support.tree_walls", 1)
-    assert handover.as_mapping(single, "prusa")["support_tree_branch_diameter_double_wall"] == "0"
-    assert not slicer_keys.takes("prusa", "support.tree_walls", program="superslicer")
+    for walls in (1, 2):
+        chosen = print_settings.with_choice(settings, "support.tree_walls", walls)
+        written, _expected = handover.prusa_values(chosen, profile, None, console=False)
+        assert "support_tree_branch_diameter_double_wall" not in written, walls
+    for program in ("prusaslicer", "superslicer"):
+        assert not slicer_keys.takes("prusa", "support.tree_walls", program=program)
+    note = slicer_keys.limitation("prusa", "support.tree_walls", settings, "prusaslicer")
+    assert note is not None and "PrusaSlicer" in str(note)
 
 
 def test_grid_supports_reach_every_slicer_as_a_grid() -> None:
@@ -7252,6 +7284,10 @@ UNREACHED: Final[dict[tuple[str, str], str]] = {
         "Die genaue Außenwand ist eine Eigenheit der Orca-Familie; PrusaSlicer "
         "kennt keinen entsprechenden Schalter."
     ),
+    ("support.tree_walls", "prusa"): (
+        "PrusaSlicer zählt keine Baumwände: Seine organischen Äste bekommen ab einem "
+        "Astquerschnitt eine zweite Wand, ein Maß, das beim Hersteller bleibt (RM-584)."
+    ),
     ("shell.precise_outer_wall", "cura"): (
         "Dasselbe für CuraEngine — dort heißt der nächste Verwandte "
         "``outer_inset_first`` und meint die Reihenfolge, nicht das Maß."
@@ -8237,6 +8273,54 @@ def _advice_of(bodies: tuple[Any, ...], settings: Any, profile: Any, flavour: An
     worker.work()
     assert got, "der Arbeiter kam ohne Rat zurück"
     return got[0]
+
+
+@pytest.mark.parametrize(("flavour", "shown"), [("orca", "tree"), ("cura", "hybrid")])
+def test_grid_and_tree_become_hybrid_only_where_the_style_is_the_plates(
+    tmp_path: Path, flavour: str, shown: str
+) -> None:
+    """Ein Pilz unter Gitter und eine Figur unter Bäumen auf einer Platte (Review
+    RM-584, M3): Die Orca-Familie bekommt die Stützart je Teil, also Gitter und
+    Baum je Objekt — der Dialog führte beides zu „Hybrid“ zusammen, das in
+    keiner Datei ankam. Dort nennt die Zeile den Baum mit der Figur. Bei Cura
+    gilt die Art der Platte, Hybrid bleibt und geht als Gitter hinaus."""
+    from app.core.export.writer import write_assembly
+    from app.core.geom.transform import apply, translation
+    from app.core.types import SceneObject
+    from tests.helpers import brick, chin_over_chest, on_bed
+
+    profile = profiles.make_profile("centauri-carbon-2", "petg")
+    settings = print_settings.resolve(profile)
+    mushroom = on_bed(
+        brick(8.0, 8.0, 12.0, (0.0, 0.0, 6.0)), brick(40.0, 40.0, 2.0, (0.0, 0.0, 13.0))
+    )
+    figure = apply(chin_over_chest(), translation((70.0, 0.0, 0.0)))
+    bodies = (
+        SceneObject(id="obj_pilz", name="Pilz", mesh=mushroom),
+        SceneObject(id="obj_figur", name="Figur", mesh=figure),
+    )
+
+    entries = _advice_of(bodies, settings, profile, flavour)
+
+    style = [entry for entry in entries if entry.path == "support.style"]
+    assert [entry.value for entry in style] == [shown]
+    assert getattr(style[0], "parts", ()) == (("Figur",) if flavour == "orca" else ())
+    accepted = print_settings.with_accepted(settings, "support.style", shown)
+    if flavour == "cura":
+        assert handover.values_for(accepted, profile, "cura")["support_structure"] == "normal"
+        return
+    written, _findings = write_assembly(
+        list(bodies),
+        tmp_path,
+        project_name="Platte",
+        profile=profile,
+        settings=accepted,
+        flavour="orca",
+    )
+    values = object_values(written, "Metadata/model_settings.config")
+    assert values["Pilz"].get("support_type") == "normal(auto)"
+    assert values["Figur"].get("support_type") == "tree(auto)"
+    assert "support_style" not in values["Pilz"] and "support_style" not in values["Figur"]
 
 
 @pytest.mark.parametrize("kind", ["auto", "skirt"])
@@ -9446,12 +9530,15 @@ def test_a_process_that_does_not_resolve_builds_no_tower(
     [
         ("elegoo-slicer.exe", "orca", {"support_type": "tree(auto)"}, {"tree", "auto"}),
         ("orca-slicer.exe", "orca", {"support_type": "normal(auto)"}, {"tree"}),
+        # Über einem Hybridprozess geht ein gewählter Baum als ``default`` hinaus
+        # (``tree_over_hybrid``, Review RM-584, L8); „automatisch“ bleibt Hybrid.
         (
             "elegoo-slicer.exe",
             "orca",
             {"support_type": "tree(auto)", "support_style": "tree_hybrid"},
-            set(),
+            {"tree"},
         ),
+        ("orca-slicer.exe", "orca", {"support_style": "tree_slim"}, set()),
         ("orca-slicer.exe", "orca", {"support_style": "organic"}, {"tree"}),
         ("prusa-slicer.exe", "prusa", {}, {"tree"}),
         ("superslicer.exe", "prusa", {}, set()),
@@ -9467,8 +9554,9 @@ def test_organic_trees_are_known_per_program(
 ) -> None:
     """Welche Stützarten ein Programm als organische Bäume auf den Schichten des
     Modells druckt (RM-622): „Baum“ in der Orca-Familie, solange der
-    Herstellerprozess keinen anderen Baumstil führt (``tree_hybrid`` plant eigene
-    Stützebenen, ``TreeSupport.cpp``), „automatisch“ dazu, wo er mit Bäumen
+    Herstellerprozess keinen anderen Baumstil führt (``tree_slim`` plant eigene
+    Stützebenen, ``TreeSupport.cpp``; über ``tree_hybrid`` schreibt Solidon den
+    organischen Baum), „automatisch“ dazu, wo er mit Bäumen
     stützt (Elegoo, Bambu); PrusaSlicer schreibt „Baum“ organisch; SuperSlicer
     kennt keine Bäume, Cura rundet ohnehin."""
     monkeypatch.setattr(handover, "_native_process", lambda _setup: native)
@@ -9694,10 +9782,18 @@ def test_a_declined_tree_keeps_gap_and_bottom_interface_for_the_grid(
 @pytest.mark.parametrize(
     ("executable", "native", "style", "rounds"),
     [
+        # Ein gewählter Baum über einem Hybridprozess druckt organisch (Review
+        # RM-584, L8), „automatisch“ dort weiter als Hybrid.
         (
             "elegoo-slicer.exe",
             {"support_type": "tree(auto)", "support_style": "tree_hybrid"},
             "tree",
+            True,
+        ),
+        (
+            "elegoo-slicer.exe",
+            {"support_type": "tree(auto)", "support_style": "tree_hybrid"},
+            "auto",
             False,
         ),
         (
@@ -9718,8 +9814,8 @@ def test_field_and_advice_agree_on_trees(
     style: str,
     rounds: bool,
 ) -> None:
-    """Feldsatz und Rat fragen dieselbe Auskunft (RM-622, Review M3): Ein
-    Prozess mit ``tree_hybrid`` oder ``tree_slim`` plant eigene Stützebenen, der
+    """Feldsatz und Rat fragen dieselbe Auskunft (RM-622, Review M3): „Automatisch“
+    über ``tree_hybrid`` und Baum über ``tree_slim`` planen eigene Stützebenen, der
     Abstand von 0,28 mm für PETG bleibt, und das Feld schweigt; unter Elegoos
     „automatisch“ mit Bäumen und ohne gefundenen Slicer unter „Baum“ rät Solidon
     0,2, und das Feld sagt, dass der Slicer rundet."""
@@ -9801,7 +9897,12 @@ def test_under_trees_no_bottom_interface_where_the_program_skips_it(
         ("orca", "support.bottom_interface_layers", "bambu-studio.exe", True),
         ("orca", "support.bottom_interface_layers", "elegoo-slicer.exe", False),
         ("orca", "support.tree_walls", "elegoo-slicer.exe", True),
-        ("prusa", "support.tree_walls", "prusa-slicer.exe", False),
+        # Bambu Studio und Creality Print lesen die Wandzahl auch unter Bäumen
+        # (Slicertest, Review RM-584, L5).
+        ("orca", "support.tree_walls", "bambu-studio.exe", False),
+        ("orca", "support.tree_walls", "creality-print.exe", False),
+        # PrusaSlicer zählt keine Baumwände und sagt es (Review RM-584, M5).
+        ("prusa", "support.tree_walls", "prusa-slicer.exe", True),
     ],
 )
 def test_the_field_says_what_trees_do_to_it(
@@ -9835,6 +9936,9 @@ def test_the_field_says_what_trees_do_to_it(
         ("tree", "elegoo-slicer.exe", True),
         ("hybrid", "elegoo-slicer.exe", False),
         ("tree", "prusa-slicer.exe", False),
+        ("tree", "bambu-studio.exe", False),
+        ("tree", "creality-print.exe", False),
+        ("tree", "orca-slicer.exe", True),
     ],
 )
 def test_tree_walls_count_only_where_the_program_reads_them(
@@ -9842,9 +9946,11 @@ def test_tree_walls_count_only_where_the_program_reads_them(
 ) -> None:
     """Die Orca-Familie liest ``tree_support_wall_count`` unter organischen
     Bäumen nicht (RM-584, gemessen am ElegooSlicer: derselbe G-Code mit einer
-    und zwei Wänden, unter Hybrid 14 % mehr Stütze). Dialog und Export filtern
-    den Rat dort wie die untere Trennschicht; PrusaSlicer verdoppelt organische
-    Äste über einen Durchmesser und behält ihn."""
+    und zwei Wänden, unter Hybrid 14 % mehr Stütze). Der Druckdialog filtert
+    den Rat dort wie die untere Trennschicht. Je Teil geht die Wandzahl nicht,
+    der Export schlägt sie also nicht vor (Review RM-584, L9). PrusaSlicer zählt
+    keine Wände (``NOT_TAKEN_BY``), Bambu Studio und Creality Print lesen sie auch
+    unter Bäumen und behalten den Rat (Slicertest, Review RM-584, L5)."""
     flavour = "prusa" if executable.startswith("prusa") else "orca"
     setup = handover.SlicerSetup(executable=Path(executable), flavour=flavour)  # type: ignore[arg-type]
     organic = handover.organic_styles(setup)
@@ -9853,6 +9959,127 @@ def test_tree_walls_count_only_where_the_program_reads_them(
     ignored = handover.ignored_under_trees(style, organic, program)
 
     assert ("support.tree_walls" in ignored) is dropped
+
+
+@pytest.mark.parametrize(
+    ("pattern", "hollow"), [("default", True), ("hollow", True), ("rectilinear", False)]
+)
+def test_hollow_trees_read_their_walls(
+    monkeypatch: pytest.MonkeyPatch, pattern: str, hollow: bool
+) -> None:
+    """Hohle organische Bäume bestehen aus ihren Wänden: Am ElegooSlicer druckte
+    der Prozess des Neptune 4 (``support_base_pattern`` ``default``) mit zwei
+    Wänden mehr, der des Centauri Carbon 2 (``rectilinear``) denselben G-Code
+    (Nachprüfung RM-584, 09.10.2026). Rat und Feld lassen die Wandzahl dort
+    stehen."""
+    native = {"support_type": "tree(auto)", "support_style": "default"}
+    monkeypatch.setattr(
+        handover, "_native_process", lambda _setup: {**native, "support_base_pattern": pattern}
+    )
+    setup = handover.SlicerSetup(executable=Path("elegoo-slicer.exe"), flavour="orca")
+    organic = handover.organic_styles(setup)
+    found = handover.hollow_trees(setup)
+
+    assert found is hollow
+    ignored = handover.ignored_under_trees("tree", organic, "elegooslicer", hollow=found)
+    assert ("support.tree_walls" in ignored) is not hollow
+    assert "support.bottom_interface_layers" not in ignored, "Elegoo druckt sie unter Bäumen"
+    settings = print_settings.with_choice(
+        print_settings.resolve(profiles.make_profile()), "support.style", "tree"
+    )
+    note = slicer_keys.limitation(
+        "orca", "support.tree_walls", settings, "elegooslicer", organic, hollow=found
+    )
+    assert (note is None) is hollow
+
+
+@pytest.mark.parametrize(
+    ("executable", "flavour", "native", "prusa_style", "trees"),
+    [
+        (
+            "elegoo-slicer.exe",
+            "orca",
+            {"support_type": "tree(auto)"},
+            "",
+            {"auto", "tree", "hybrid"},
+        ),
+        ("orca-slicer.exe", "orca", {"support_type": "normal(auto)"}, "", {"tree", "hybrid"}),
+        # Ohne lesbaren Prozess bleibt der Rat vorsichtig.
+        ("orca-slicer.exe", "orca", {}, "", {"auto", "tree", "hybrid"}),
+        ("prusa-slicer.exe", "prusa", {}, "snug", {"tree"}),
+        ("prusa-slicer.exe", "prusa", {}, "organic", {"auto", "tree"}),
+        # Ohne Bündel PrusaSlicers Vorgabe ``grid``.
+        ("prusa-slicer.exe", "prusa", {}, "", {"tree"}),
+        ("superslicer.exe", "prusa", {}, "", set()),
+        ("CuraEngine.exe", "cura", {}, "", {"tree"}),
+    ],
+)
+def test_the_tree_styles_say_what_each_program_prints_as_trees(
+    monkeypatch: pytest.MonkeyPatch,
+    executable: str,
+    flavour: str,
+    native: dict[str, str],
+    prusa_style: str,
+    trees: set[str],
+) -> None:
+    """Welche Arten das Programm als Bäume druckt, fragt der Rat für Gitter unter
+    flachen Decken und für die Wände (Review RM-584, M1, M4): „automatisch“ nach
+    dem Herstellerprozess, Hybrid nur, wo das Programm es kennt."""
+    monkeypatch.setattr(handover, "_native_process", lambda _setup: native)
+    monkeypatch.setattr(handover, "_prusa_process_style", lambda _setup, _profile: prusa_style)
+    setup = handover.SlicerSetup(executable=Path(executable), flavour=flavour)  # type: ignore[arg-type]
+
+    assert handover.tree_styles(setup, profiles.make_profile()) == trees
+    assert handover.tree_styles(None, profiles.make_profile()) is None
+
+
+def test_a_chosen_tree_prints_as_a_tree_over_a_hybrid_process() -> None:
+    """Über einem Herstellerprozess mit ``tree_hybrid`` liest die Grundlage Hybrid;
+    wer Baum wählte, bekam ohne Stil wieder Hybrid (Review RM-584, L8). Dann geht
+    ``default`` hinaus, der organische Baum, und der Rat rundet dort wie unter
+    organischen Bäumen."""
+    native = {"support_type": "tree(auto)", "support_style": "tree_hybrid"}
+    written = {"enable_support": "1", "support_type": "tree(auto)"}
+
+    assert handover.tree_over_hybrid(native, "tree", written) == {"support_style": "default"}
+    # Gegenproben: Hybrid und „automatisch“ bleiben Hybrid, ein anderer Stil bleibt.
+    assert handover.tree_over_hybrid(native, "hybrid", written) == {}
+    assert handover.tree_over_hybrid(native, "auto", written) == {}
+    assert (
+        handover.tree_over_hybrid({**native, "support_style": "tree_slim"}, "tree", written) == {}
+    )
+    assert handover.tree_over_hybrid(native, "tree", {}) == {}
+
+
+def test_a_chosen_tree_over_a_hybrid_process_reaches_the_file(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Der Prozess der Orca-Familie bekommt den Baum über dem Hybridprozess, und
+    der Rat fragt ihn als organisch (Review RM-584, L8)."""
+    native = {"support_type": "tree(auto)", "support_style": "tree_hybrid", "enable_support": "1"}
+    monkeypatch.setattr(handover, "_native_process", lambda _setup: native)
+    setup = handover.SlicerSetup(executable=Path("elegoo-slicer.exe"), flavour="orca")
+    assert handover.organic_styles(setup) == {"tree"}
+
+    profile = profiles.make_profile()
+    settings = print_settings.with_choice(print_settings.resolve(profile), "support.style", "tree")
+    keys = handover.object_keys(
+        settings,
+        [SettingAdvice("support.style", "tree", "hybrid", "Details")],
+        "orca",
+        profile=profile,
+        native=native,
+    )
+    assert keys.get("support_style") == "default"
+
+
+@pytest.mark.parametrize(
+    ("style", "inactive"), [("grid", True), ("tree", False), ("hybrid", False), ("auto", False)]
+)
+def test_the_tree_walls_rest_under_a_grid(style: str, inactive: bool) -> None:
+    """Unter Gitter druckt kein Baum, das Feld der Baumwände tut nichts (Review
+    RM-584, L3) — gefragt mit der Art, die das Programm druckt."""
+    assert ("support.tree_walls" in print_settings.inactive_paths(style, "skirt")) is inactive
 
 
 def test_the_part_advice_memo_knows_the_tower() -> None:

@@ -3839,13 +3839,56 @@ def test_the_tree_walls_are_read_back(walls: str, read_as: int) -> None:
     assert not foreign
 
 
-@pytest.mark.parametrize(("threshold", "walls"), [("3", 2), ("8", 1), ("0", 1)])
-def test_prusas_double_wall_threshold_is_read_as_tree_walls(threshold: str, walls: int) -> None:
-    """PrusaSlicer legt Doppelwände ab einem Astquerschnitt; bis 3 mm (Prusas
-    Vorgabe) zählt das als zwei Wände, das MK4S-Profil mit 8 und 0 als eine
-    (RM-584)."""
-    read, _foreign = manufacturer._read_prusa(
-        {"support_tree_branch_diameter_double_wall": threshold},
-        manufacturer._Context(nozzle=0.4),
+def test_prusas_double_wall_threshold_is_no_wall_count() -> None:
+    """PrusaSlicer legt Doppelwände ab einem Astquerschnitt, ein Maß und keine
+    Wandzahl (Review RM-584, M5): Die Grundlage liest daraus keine Baumwände,
+    und das Feld nimmt PrusaSlicer nicht entgegen."""
+    read, foreign = manufacturer._read_prusa(
+        {"support_tree_branch_diameter_double_wall": "3"}, manufacturer._Context(nozzle=0.4)
     )
-    assert read["support.tree_walls"] == walls
+    assert "support.tree_walls" not in read
+    assert "support.tree_walls" not in foreign
+
+
+def test_every_program_that_knows_hybrid_counts_it_as_trees() -> None:
+    """Das Zeitmodell rechnet Hybrid als Baum, wo der Slicer es kennt
+    (``Motion.support_hybrid``), die Übergabe ersetzt es sonst durch Gitter
+    (``slicer_keys.NOT_OFFERED_BY_PROGRAM``). Beide Stellen müssen dasselbe sagen
+    (Review RM-584, L4): je Familie ein Zeitmodell, je Programm der Ersatz."""
+    families = {
+        "orca": manufacturer._orca_support_motion({}, None, 0.4).get("support_hybrid", False),
+        "prusa": manufacturer._prusa_support_motion({}, 0.4).get("support_hybrid", False),
+        "cura": False,
+    }
+    programs = {
+        mark: flavour
+        for fragment, flavour in slicer_keys.FLAVOUR_BY_NAME
+        if (mark := slicer_keys.program_of(f"{fragment}.exe")) and flavour in families
+    }
+    assert {"orcaslicer", "prusaslicer", "cura"} <= programs.keys(), programs
+    for program, flavour in programs.items():
+        knows = slicer_keys.substitute("support.style", "hybrid", program) is None
+        assert knows is families[flavour], program
+
+
+@pytest.mark.parametrize(
+    ("values", "flavour", "trees"),
+    [
+        ({"support_type": "tree(auto)"}, "orca", True),
+        ({"support_type": "normal(auto)"}, "orca", False),
+        ({"support_material_style": "organic"}, "prusa", True),
+        ({"support_material_style": "snug"}, "prusa", False),
+    ],
+)
+def test_auto_prints_trees_where_the_process_says_so(
+    values: dict[str, str], flavour: str, trees: bool
+) -> None:
+    """„Automatisch“ ist ein Baum, wo der Herstellerprozess Bäume stützt — eine
+    Auskunft für Zeitmodell und Rat (RM-584)."""
+    assert manufacturer.auto_prints_trees(values, flavour) is trees
+    motion = (
+        manufacturer._orca_support_motion(values, None, 0.4)
+        if flavour == "orca"
+        else manufacturer._prusa_support_motion(values, 0.4)
+    )
+    assert motion["support_tree"] is trees

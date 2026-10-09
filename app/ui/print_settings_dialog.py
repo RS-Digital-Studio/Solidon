@@ -20,7 +20,7 @@ nicht getroffen hat.
 from __future__ import annotations
 
 from collections import Counter
-from collections.abc import Callable, Iterable, Mapping, Sequence
+from collections.abc import Callable, Collection, Iterable, Mapping, Sequence
 from dataclasses import KW_ONLY, dataclass, replace
 from itertools import pairwise
 from pathlib import Path
@@ -1486,6 +1486,8 @@ class _AdviceWorker(Worker):
         self.organic: frozenset[str] = frozenset()
         """Die Stützarten, die das Programm als organische Bäume druckt
         (:func:`handover.organic_styles`), je Lauf einmal gefragt."""
+        self.hollow = False
+        """Druckt der Prozess organische Bäume hohl (:func:`handover.hollow_trees`)?"""
 
     def cancel(self) -> None:
         """Auch innerhalb eines großen Körpers kann die Schichtanalyse aufhören."""
@@ -1536,7 +1538,15 @@ class _AdviceWorker(Worker):
         # im Export (RM-622).
         self.towers = tower_plates(self.objects, self.setup)
         self.organic = handover.organic_styles(self.setup, self.profile, flavour=self.flavour)
+        # Hohle Bäume bestehen aus ihren Wänden, dort wirkt die Wandzahl (RM-584).
+        self.hollow = handover.hollow_trees(self.setup)
         program = slicer_keys.program_of(self.setup.executable) if self.setup else ""
+        # Was das Programm als Bäume druckt, wie im Export (RM-584).
+        trees = handover.tree_styles(self.setup, self.profile, program)
+        # Geht die Stützart je Teil, bekommt jedes Teil seine eigene; Gitter und
+        # Baum werden nur dort Hybrid, wo sie der Platte gilt (RM-584).
+        if handover.style_per_part(self.flavour, program):
+            separate = separate | {"support.style"}
         for index, body in enumerate(self.objects):
             self.cancelled.raise_if_cancelled()
             self.progressed.emit(index + 1, len(self.objects), str(body.name))
@@ -1607,6 +1617,7 @@ class _AdviceWorker(Worker):
                     whole_layers=body.plate in self.towers,
                     organic=self.organic,
                     declined=self.declined,
+                    trees=trees,
                 )
                 # Was das Programm unter den Bäumen dieses Körpers nicht druckt,
                 # schlägt der Dialog nicht vor — je Körper wie der Export
@@ -1615,6 +1626,7 @@ class _AdviceWorker(Worker):
                     advise.printed_style(process.settings, entries, self.declined),
                     self.organic,
                     program,
+                    hollow=self.hollow,
                 )
                 entries = [entry for entry in entries if entry.path not in under_trees]
                 own.append(
@@ -1643,7 +1655,7 @@ class _AdviceWorker(Worker):
             if own:
                 common.append((asking, advise.combine(asking, own)))
         entries = self._with_parts(
-            advise.combine(self.settings, common, separate=separate), results
+            advise.combine(self.settings, common, separate=separate), results, separate
         )
         if self.rules_wanted:
             self.accepted_parts = self._accepted_targets(results)
@@ -1738,6 +1750,7 @@ class _AdviceWorker(Worker):
         self,
         entries: list[SettingAdvice],
         results: Mapping[str, tuple[float, float, SliceResult]],
+        separate: Collection[str] = advise.CONTACT_PATHS,
     ) -> list[SettingAdvice]:
         """Nennt an jedem Vorschlag, der je Teil geschrieben wird, die Teile.
 
@@ -1788,10 +1801,11 @@ class _AdviceWorker(Worker):
                 whole_layers=body.plate in self.towers,
                 organic=self.organic,
             ):
-                # Beim Stützkontakt bekommt jedes Teil seinen Wert; die Zeile nennt
-                # nur die Teile, die ihren bekommen (RM-583).
+                # Beim Stützkontakt bekommt jedes Teil seinen Wert, ebenso die
+                # Stützart, wo sie je Teil geht (``separate``); die Zeile nennt
+                # nur die Teile, die ihren bekommen (RM-583, RM-584).
                 if entry.path in candidates and (
-                    entry.path not in advise.CONTACT_PATHS
+                    entry.path not in advise.CONTACT_PATHS | frozenset(separate)
                     or print_settings.same_value(entry.value, shown[entry.path])
                 ):
                     wanted.setdefault(entry.path, []).append(str(body.name))
@@ -2670,6 +2684,7 @@ class PrintSettingsDialog(QDialog):
         self._accepted_parts: dict[str, tuple[str, ...]] = {}
         """Aus dem letzten Rat (:attr:`_AdviceWorker.accepted_parts`)."""
         self._organic: frozenset[str] = frozenset()
+        self._hollow_trees = False
         """Die Stützarten, die das Programm als organische Bäume druckt, aus dem
         letzten Rat (:attr:`_AdviceWorker.organic`): Das Feld sagt dasselbe wie
         der Vorschlag daneben (RM-622)."""
@@ -4313,12 +4328,15 @@ class PrintSettingsDialog(QDialog):
                 flavour,
                 self._foundation_for_current_setup(),
             )
+        style = str(
+            _setting_editor_value(self._editors["support.style"], self._fields["support.style"])
+        )
+        # Gefragt mit der Art, die das Programm druckt: Hybrid ist bei
+        # PrusaSlicer und Cura Gitter (RM-584).
+        program = slicer_keys.program_of(self._slicer_path) if self._slicer_path else ""
+        replaced = slicer_keys.substitute("support.style", style, program)
         inactive = print_settings.inactive_paths(
-            str(
-                _setting_editor_value(self._editors["support.style"], self._fields["support.style"])
-            ),
-            kind,
-            also=also,
+            str(replaced.value) if replaced is not None else style, kind, also=also
         )
         if flavour is not None:
             effective = handover.effective_adhesion(
@@ -6605,7 +6623,9 @@ class PrintSettingsDialog(QDialog):
             # eine Wahl, die das Programm nicht kennt (RM-480). Unter Bäumen mit
             # derselben Auskunft wie der Rat (RM-622).
             specific = (
-                slicer_keys.limitation(flavour, path, self.settings, program, self._organic)
+                slicer_keys.limitation(
+                    flavour, path, self.settings, program, self._organic, hollow=self._hollow_trees
+                )
                 if flavour is not None
                 else None
             )
@@ -8135,8 +8155,9 @@ class PrintSettingsDialog(QDialog):
             return
         self.slice_result = next(iter(results.values()))[2] if len(results) == 1 else None
         self._accepted_parts = dict(worker.accepted_parts)
-        if worker.organic != self._organic:
+        if worker.organic != self._organic or worker.hollow != self._hollow_trees:
             self._organic = worker.organic
+            self._hollow_trees = worker.hollow
             self._mark_fields_this_slicer_ignores()
         self._mark_origins()
         self._advice_entries = entries

@@ -410,11 +410,34 @@ Kinn in allen sieben Programmen (`output/drache-2026-10-08/stil-rm584*`): Hybrid
 kommt in Elegoo, Orca, Bambu, Creality und Anycubic als `tree_hybrid` an und
 stützt die Decke mit Gitter, die Details mit Ästen (ElegooSlicer 71 300 mm
 Stützbahn gegen 146 364 mm unter reinen Bäumen). PrusaSlicer und Cura kennen kein
-Hybrid; dort gilt Gitter. **Zwei Wände für hohe Bäume** (Recherche Nr. 5): Ab
-100 mm brechen Bäume mit einer Wand. Am ElegooSlicer an einem 120 mm hohen Turm
-mit Insel ergab Hybrid mit zwei Wänden 14 % mehr Stützmaterial; unter
+Hybrid; dort schlägt der Rat unter einem gewählten Baum gleich Gitter vor.
+**„Automatisch“ bleibt, wo es keine Bäume heißt** (Durchsicht RM-584, M1): Bei
+PrusaSlicer stützt es mit dem Stil des Prozesses, am MK4S `snug`, den die
+Recherche (Nr. 4) für flache Decken neben `tree_hybrid` empfiehlt; Cura schreibt
+dafür `normal`, dieselbe Übergabe wie Gitter. Der Grund „Große flache Decken
+hängen zwischen Baumspitzen durch“ stand dort über einer Stütze ohne Spitzen.
+Hybrid verlangt kleine Stücke auf dem Modell neben der Decke: Am Tisch setzt
+nur die Platte selbst auf dem Sockel auf, und „Bäume für Details“ stand über
+einem Teil ohne Detail (L7). Gitter und Baum zweier Körper werden nur Hybrid,
+wo die Art der Platte gilt; die Orca-Familie schrieb sonst je Objekt Gitter und
+Baum, und die Zeile zeigte Hybrid (M3). **Zwei Wände für hohe Bäume** (Recherche
+Nr. 5): Ab 100 mm brechen Bäume mit einer Wand. Am ElegooSlicer an einem 120 mm
+hohen Turm mit Insel ergab Hybrid mit zwei Wänden 14 % mehr Stützmaterial; unter
 organischen Bäumen war der G-Code mit einer und zwei Wänden derselbe — dort
-schlägt Solidon die Wände nicht vor. Der Fuß hoher Bäume ist noch offen (RM-584).
+schlägt Solidon die Wände nicht vor. Das gilt gefüllten Bäumen: Der Slicertest
+der Durchsicht fand am Neptune 4, dessen Prozess das Grundmuster `default` führt
+und Bäume hohl druckt, mit zwei Wänden 13 234 statt 12 211 Bewegungen, auch ohne
+eigene Stützschichthöhe; mit `rectilinear` war der G-Code derselbe
+(`handover.hollow_trees`). Derselbe Test bestätigte OrcaSlicer und Anycubic
+Slicer Next; Bambu Studio (ohne die Schlüssel der organischen Äste) las die
+Wandzahl auch unter seinen Bäumen, Creality Print 7.2 überall, aber nur als
+`tree_support_wall_count_tree` — den gemeinsamen Namen überging es auch unter
+Hybrid. PrusaSlicer zählt keine
+Wände: Seine Doppelwand ab einem Astquerschnitt (`support_tree_branch_diameter_double_wall`,
+Vorgabe 3 mm) ist ein Maß, und eine geschriebene Wand schaltete sie ohne Bündel
+ab (M5). Die Säulenhöhe reicht bis zum Bett, wenn ein Teil der Säule es
+erreicht: Bis zur ersten Berührung gemessen, war eine Platte auf 150 mm über
+einem Turm von 120 mm 30 mm hoch (L1). Der Fuß hoher Bäume ist noch offen (RM-584).
 
 **Ränder tragen sich selbst (08.10.2026, RM-582).** Der Eiffelturm aus dem
 Korpus ist ohne Stützen gedacht („一体无支撑“). Der Rat verlangte Stützen wegen

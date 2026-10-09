@@ -80,7 +80,7 @@ scrive in `website/version.json`.
 - I supporti si staccano più facilmente: lo spazio segue materiale e altezza dello strato di ogni pezzo, anche con più materiali su un piatto. L'interfaccia segue la superficie sopra.
 - Se un supporto poggia sul pezzo, Solidon suggerisce anche uno strato di interfaccia sotto, così il suo piede non lascia segni. Con i supporti ad albero solo negli slicer che lo stampano lì.
 - Con i supporti ad albero e accanto a una torre di spurgo, Solidon propone lo spazio del supporto in strati interi, come lo stampa lo slicer.
-- Sotto un'ampia superficie inferiore piana, Solidon propone la griglia invece degli alberi, e l'ibrido se servono anche dettagli fini. Alberi alti: due pareti.
+- Sotto un'ampia superficie inferiore piana, Solidon propone la griglia invece degli alberi, e l'ibrido se servono anche dettagli fini. Per gli alberi alti, Solidon propone due pareti.
 - Per il PLA, Solidon propone più spazio tra le numerose punte sottili e i supporti ad albero sottostanti. In questo modo restano meno residui delle punte dei supporti.
 - Per il PETG Solidon suggerisce il raffreddamento pieno sul supporto. Così si stacca più facilmente dal pezzo.
 - Nuovo nelle impostazioni di stampa: *Strati di interfaccia inferiori*, *Spazio nell'interfaccia* e *Raffreddamento pieno sul supporto*.

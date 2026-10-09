@@ -256,6 +256,173 @@ def test_a_slicer_never_opened_offers_the_printers_of_its_maker(
         record_testsuite_property(f"{program}_drucker", len(found))
 
 
+#: Die Orca-Familie: Wandzahl der Bäume und Hybrid je Objekt gehen dort ans
+#: Programm (RM-584).
+ORCA_FAMILY = ("orcaslicer", "bambustudio", "elegooslicer", "crealityprint", "anycubicslicernext")
+
+
+def _tower_with_island() -> SceneObject:
+    """Ein Turm von 40 mm mit einer Insel auf 35 mm daneben, die ein Baum vom Bett
+    trägt. Die Wandzahl ist gesetzt, nicht vorgeschlagen; ob das Programm sie
+    liest, zeigt auch ein kurzer Baum, und der hohe kostete am ElegooSlicer
+    vier Minuten je Lauf."""
+    tower = trimesh.creation.box(extents=(10.0, 10.0, 40.0))
+    tower.apply_translation((0.0, 0.0, 20.0))
+    island = trimesh.creation.box(extents=(6.0, 6.0, 4.0))
+    island.apply_translation((20.0, 0.0, 37.0))
+    return SceneObject("turm", "Turm", MeshData.of(trimesh.util.concatenate([tower, island])))
+
+
+def _moves(gcode: Path) -> list[str]:
+    """Die Bewegungen einer Druckdatei, ohne Kopf, Zeiten und Konfigurationsblock."""
+    return [
+        line
+        for line in gcode.read_text(encoding="utf-8", errors="replace").splitlines()
+        if line.startswith(("G0 ", "G1 ", "G2 ", "G3 "))
+    ]
+
+
+def _sliced_tower(
+    printer: str,
+    installed_slicer: Path,
+    folder: Path,
+    chosen: dict[str, object],
+    accepted: dict[str, object] | None = None,
+) -> tuple[list[str], Path]:
+    """Den Turm durch das echte Programm, wie der Druckdialog ihn schickt: Bewegungen
+    der Druckdatei und die geschriebene Platte."""
+    from app.ui.print_settings_dialog import _PlateJob, _prepare_plate
+
+    profile = profiles.make_profile(printer, "pla")
+    settings = print_settings.resolve(profile)
+    for path, value in chosen.items():
+        settings = print_settings.with_choice(settings, path, value)
+    for path, value in (accepted or {}).items():
+        settings = print_settings.with_accepted(settings, path, value)
+    setup = _preselected(handover.detect(installed_slicer), profile)
+    folder.mkdir(parents=True)
+    job = _PlateJob(
+        objects=(_tower_with_island(),),
+        plates=(0,),
+        folder=folder,
+        name="turm",
+        setup=setup,
+        settings=settings,
+        profile=profile,
+        slot_profiles={},
+    )
+    run = _prepare_plate(job, 0)
+    outcome = handover.slice_model(
+        [run.model],
+        settings,
+        profile,
+        setup,
+        output_dir=folder,
+        timeout=900,
+        keep_arrangement=run.keep_arrangement,
+        slots=run.slots,
+        model_height=run.model_height,
+        model_meshes=run.meshes,
+        expected_tools=run.used_tools,
+    )
+    return _moves(outcome.gcode_path), run.model
+
+
+@pytest.mark.parametrize(
+    ("program", "printer"),
+    [
+        pytest.param(program, PROGRAMS[program], marks=pytest.mark.slicer(program), id=program)
+        for program in ORCA_FAMILY
+    ]
+    # Elegoos Prozess für den Centauri Carbon 2 füllt seine Bäume.
+    + [
+        pytest.param(
+            "elegooslicer",
+            "centauri-carbon-2",
+            marks=pytest.mark.slicer("elegooslicer"),
+            id="elegooslicer-cc2",
+        )
+    ],
+)
+def test_tree_walls_change_the_print_only_where_the_program_reads_them(
+    program: str,
+    printer: str,
+    installed_slicer: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Zwei Wände für hohe Bäume (RM-584) ändern die Druckdatei unter Hybrid. Unter
+    gefüllten organischen Bäumen liest ElegooSlicer die Wandzahl nicht — derselbe
+    G-Code mit einer und zwei Wänden am Centauri Carbon 2 —, unter hohlen
+    (``handover.hollow_trees``, Neptune 4) schon. Was jedes Programm davon tut,
+    steht in ``slicer_keys.IGNORED_UNDER_TREES_BY_PROGRAM``. Der Fall hält die
+    Tabelle gegen das Programm, auch für Bambu Studio, das dort fehlt, bis es
+    gemessen ist."""
+    set_test_license(monkeypatch, active=True)
+    profile = profiles.make_profile(printer, "pla")
+    setup = _preselected(handover.detect(installed_slicer), profile)
+    organic = handover.organic_styles(setup, profile)
+    for style in ("hybrid", "tree"):
+        moves = {
+            walls: _sliced_tower(
+                printer,
+                installed_slicer,
+                tmp_path / f"{style}-{walls}",
+                {
+                    "support.style": style,
+                    "support.placement": "build_plate",
+                    "support.tree_walls": walls,
+                },
+            )[0]
+            for walls in (1, 2)
+        }
+        assert len(moves[1]) > 1000, f"{program} druckt den Turm nicht"
+        ignored = "support.tree_walls" in handover.ignored_under_trees(
+            style, organic, program, hollow=handover.hollow_trees(setup)
+        )
+        assert (moves[1] == moves[2]) is ignored, (
+            f"{program}, {style}: Wände {'überlesen' if moves[1] == moves[2] else 'gedruckt'}, "
+            f"die Tabelle sagt {'überlesen' if ignored else 'gedruckt'}"
+        )
+
+
+@pytest.mark.parametrize(
+    "program",
+    [
+        pytest.param(program, marks=pytest.mark.slicer(program), id=program)
+        for program in ORCA_FAMILY
+    ],
+)
+def test_hybrid_for_one_part_reaches_the_program_as_tree_hybrid(
+    program: str, installed_slicer: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Verlangt ein Teil Hybrid, bekommt es ``tree_hybrid`` als Objektwert (RM-584),
+    und das Programm druckt es anders als denselben Turm mit Baum je Objekt — sonst
+    hätte es den Stil der Platte genommen."""
+    from app.core.export import writer
+    from app.core.types import SettingAdvice
+    from tests.helpers import object_values
+
+    set_test_license(monkeypatch, active=True)
+    moves: dict[str, list[str]] = {}
+    for style in ("tree", "hybrid"):
+        # Der Rat des Teils ist hier gesetzt, nicht gerechnet: Gefragt ist die
+        # Übergabe je Objekt, nicht die Deckenform des Turms.
+        own = [SettingAdvice("support.style", style, "none", "Probe")]
+        monkeypatch.setattr(writer, "part_advice", lambda *_args, own=own, **_kwargs: own)
+        moves[style], model = _sliced_tower(
+            PROGRAMS[program],
+            installed_slicer,
+            tmp_path / style,
+            {"support.placement": "build_plate"},
+            accepted={"support.style": style},
+        )
+        written = object_values(model, "Metadata/model_settings.config")["Turm"]
+        assert written.get("support_type") == "tree(auto)", written
+        assert (written.get("support_style") == "tree_hybrid") is (style == "hybrid"), written
+    assert moves["tree"] != moves["hybrid"], f"{program} druckt Hybrid je Objekt wie den Baum"
+
+
 @pytest.mark.slicer("cura")
 def test_curas_printers_are_read_from_its_appimage_without_starting_it(
     installed_slicer: Path,

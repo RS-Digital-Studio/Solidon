@@ -187,6 +187,7 @@ def test_actual_row_refresh_matches_effective_raft_without_supports(monkeypatch,
         },
         _current_flavour=lambda: flavour,
         _foundation_for_current_setup=lambda: None,
+        _slicer_path="",
         _labels={path: path for path in rows},
         _refusals={},
         _tab_forms={

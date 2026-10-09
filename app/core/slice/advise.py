@@ -239,6 +239,7 @@ def advise(
     whole_layers: bool = False,
     organic: Collection[str] = (),
     declined: Collection[str] = (),
+    trees: Collection[str] | None = None,
 ) -> list[SettingAdvice]:
     """Was an diesen Einstellungen für dieses Teil nicht passt (§29).
 
@@ -259,6 +260,10 @@ def advise(
     ``declined`` sind Pfade, deren Vorschlag der Kunde nicht übernimmt — im
     Druckdialog abgewählt, im Export nicht übernommen: Abstand und untere
     Trennschicht fragen dann mit der eigenen Stützart (:func:`printed_style`).
+    ``trees`` sind die Stützarten, die das Programm als Bäume druckt
+    (``handover.tree_styles``, RM-584), ``None`` ohne Programm: Gitter oder
+    Hybrid unter einer großen flachen Decke und die Wände hoher Bäume fragen
+    danach.
 
     **Für einen Resin-Drucker bleibt die Liste leer.** Jede Regel hier spricht
     über Düse, Bahn, Bett, Lüfter oder Rückzug — für Resin nicht falsch
@@ -273,7 +278,7 @@ def advise(
     advice += _from_material(settings, profile)
     if result is not None:
         advice += _from_geometry(
-            settings, profile, result, bounds, flavour, whole_layers, organic, declined
+            settings, profile, result, bounds, flavour, whole_layers, organic, declined, trees
         )
     if fit_kinds:
         advice += _from_fits(settings, fit_kinds)
@@ -394,6 +399,10 @@ def combine(
     eigenen (RM-583). Gefragt wird dafür gegen die Grundlage, nicht gegen die
     Übernahme. Innerhalb eines Teils mit mehreren Spulen gilt weiter der Wert,
     der alle einschließt — der Dialog führt erst je Körper zusammen.
+
+    **Gitter und Baum zweier Körper werden Hybrid, wo die Stützart der Platte
+    gilt** (RM-584). Steht sie in ``separate`` (``handover.style_per_part``),
+    bekommt jedes Teil seine eigene, und Hybrid käme in keiner Datei an.
     """
     candidates: dict[str, list[SettingAdvice]] = {}
     final = [apply(base, list(entries)) for base, entries in groups]
@@ -409,7 +418,9 @@ def combine(
         # Was je Teil geschrieben wird, zählt nur, wo ein Körper es verlangt;
         # die übrigen behalten ihren Wert ohnehin (RM-583).
         value = _combined_value(
-            path, [entry.value for entry in entries] if path in separate else values
+            path,
+            [entry.value for entry in entries] if path in separate else values,
+            together=path not in separate,
         )
         was = settings_table.read_path(settings, path)
         if not _differs(value, was):
@@ -419,8 +430,11 @@ def combine(
     return merged
 
 
-def _combined_value(path: str, values: Sequence[object]) -> object:
-    """Nimmt je Einstellungsart die Anforderung, die alle Körper einschließt."""
+def _combined_value(path: str, values: Sequence[object], *, together: bool = True) -> object:
+    """Nimmt je Einstellungsart die Anforderung, die alle Körper einschließt.
+
+    ``together`` heißt, der Wert gilt allen Körpern zugleich; nur dann werden
+    Gitter und Baum Hybrid."""
     ranks = {
         # ``auto`` steht über „aus" und unter jeder ausdrücklichen Art: Wo ein
         # Körper Bäume verlangt, schließt das den ein, der nur Stützen will.
@@ -431,7 +445,11 @@ def _combined_value(path: str, values: Sequence[object]) -> object:
         "adhesion.kind": ("none", "skirt", "auto", "brim", "raft"),
         "shell.wall_generator": ("classic", "arachne"),
     }
-    if path == "support.style" and {"grid", "tree"} <= {str(value) for value in values}:
+    if (
+        together
+        and path == "support.style"
+        and {"grid", "tree"} <= {str(value) for value in values}
+    ):
         # Ein Körper mit flacher Decke und einer mit Details auf einer Platte:
         # Hybrid gibt beiden, was sie verlangen (RM-584).
         return "hybrid"
@@ -1192,6 +1210,7 @@ def _from_geometry(
     whole_layers: bool = False,
     organic: Collection[str] = (),
     declined: Collection[str] = (),
+    trees: Collection[str] | None = None,
 ) -> list[SettingAdvice]:
     """Der eigentliche Gewinn: das Teil bestimmt seine Einstellungen mit."""
     advice: list[SettingAdvice] = []
@@ -1254,16 +1273,33 @@ def _from_geometry(
     # Flügel einer Figur zerfallen in kleine Stücke.
     branching = on_model and need.piece <= OVERHANG_LAYER_WORTH_SUPPORT
     # **Unter einer großen flachen Decke keine Bäume** (RM-584, Recherche Nr. 4):
-    # Zwischen den Baumspitzen hängt die Unterseite durch, und Elegoo wie Bambu
-    # stützen unter „automatisch“ mit Bäumen. Dort trägt Gitter; setzen
-    # Stützen auf dem Modell an oder beginnen viele Inseln in der Luft, Hybrid —
-    # Bäume für die Details, normale Stütze unter der Decke.
+    # Zwischen den Baumspitzen hängt die Unterseite durch. Dort trägt Gitter;
+    # setzen daneben kleine Stücke auf dem Modell auf
+    # (``ModelSupport.details_on_model``) oder beginnen viele Inseln in der
+    # Luft, Hybrid — Bäume für die Details, normale Stütze unter der Decke.
+    # Welche Arten das Programm als Bäume druckt, sagt ``trees``
+    # (``handover.tree_styles``): „Automatisch“ ist bei Elegoo und Bambu ein
+    # Baum, bei PrusaSlicer mit ``snug`` und bei Cura nicht — dort bleibt es;
+    # Hybrid kennen PrusaSlicer und Cura nicht, dort trägt Gitter allein. Ohne
+    # Programm bleibt der Rat vorsichtig und zählt „automatisch“ als Baum.
     flat = need.piece > OVERHANG_LAYER_WORTH_SUPPORT
     many_islands = len(islands) >= TREE_FROM_ISLANDS
+    printed_trees = frozenset({"tree", "hybrid"}) if trees is None else frozenset(trees)
+    auto_trees = trees is None or "auto" in trees
+    under_ceiling = (
+        "hybrid"
+        if "hybrid" in printed_trees and (model.details_on_model or many_islands)
+        else "grid"
+    )
     if flat:
-        wanted = "hybrid" if on_model or many_islands else "grid"
+        wanted = under_ceiling if auto_trees else "auto"
     else:
         wanted = "tree" if many_islands or branching else "auto"
+    # Was gerade Bäume druckt und unter der Decke durchhinge — ein gewählter
+    # Hybrid nicht: Er legt dort schon Gitter.
+    over_trees = (settings.support.style == "tree" and "tree" in printed_trees) or (
+        settings.support.style == "auto" and auto_trees
+    )
     if needs_support and settings.support.style == "none":
         # **Stützen an, die Art des Slicers** — außer das Modell verlangt eine
         # (Entscheidung J, 27.09.2026). Hier stand ``grid``, und Elegoo wie
@@ -1289,26 +1325,16 @@ def _from_geometry(
                 reason=_("Bäume hinterlassen auf dem Modell weniger Spuren."),
             )
         )
-    elif (
-        needs_support and wanted == "grid" and settings.support.style in ("auto", "tree", "hybrid")
-    ):
+    elif needs_support and flat and over_trees:
+        # Über einem gewählten Gitter nicht: Es trägt die flache Decke.
         advice.append(
             _advice(
                 settings,
                 path="support.style",
-                value="grid",
-                reason=_("Große flache Decken hängen zwischen Baumspitzen durch."),
-            )
-        )
-    elif needs_support and wanted == "hybrid" and settings.support.style in ("auto", "tree"):
-        # Über einem gewählten Gitter nicht: Es trägt die flache Decke, und ob
-        # daneben kleine Stücke auf dem Modell aufsetzen, sagt ``on_model`` nicht.
-        advice.append(
-            _advice(
-                settings,
-                path="support.style",
-                value="hybrid",
-                reason=_("Bäume für Details, Gitter unter der großen flachen Decke."),
+                value=under_ceiling,
+                reason=_("Große flache Decken hängen zwischen Baumspitzen durch.")
+                if under_ceiling == "grid"
+                else _("Bäume für Details, Gitter unter der großen flachen Decke."),
             )
         )
     elif not needs_support and settings.support.style != "none":
@@ -1400,9 +1426,11 @@ def _from_geometry(
             organic,
         )
         # Hohe Bäume brechen mit einer Wand (RM-584); gefragt mit derselben
-        # Stützart wie der Kontakt.
+        # Stützart wie der Kontakt, und nur, wo das Programm sie als Baum druckt
+        # (``trees``): Hybrid ist bei PrusaSlicer und Cura Gitter, „automatisch“
+        # bei Elegoo ein Baum.
         if (
-            printed in ("tree", "hybrid")
+            printed in printed_trees
             and settings.support.tree_walls < TALL_TREE_WALLS
             and need.model.tallest_column >= TALL_TREE_HEIGHT
         ):
@@ -1835,6 +1863,13 @@ def _from_connectors(settings: PrintSettings, diameters: Sequence[float]) -> lis
 #: das Teil druckt, und nur das gestützte Teil braucht sie (RM-583).
 #: Temperatur, Kühlung, Rückzug und Volumenstrom gehen je Spule hinaus
 #: (``print_settings_dialog.FILAMENT_GROUPS``), nicht je Teil.
+#:
+#: **Die Wände der Bäume fehlen, obwohl ihr Grund an der Geometrie hängt**
+#: (``support.tree_walls``, RM-584): Ob ein Programm die Wandzahl je Objekt
+#: liest, ist für keines gemessen, und eine Objektzahl, die der Slicer
+#: übergeht, ließe die hohen Bäume mit einer Wand stehen, während der Dialog
+#: zwei nennt. Plattenweit trifft der Wert jedes Teil sicher; ein niedriger Baum
+#: daneben trägt die zweite Wand für etwas Material mit.
 PART_PATHS: Final = frozenset(
     {
         "support.style",
@@ -1960,6 +1995,7 @@ def for_part(
     whole_layers: bool = False,
     organic: Collection[str] = (),
     declined: Collection[str] = (),
+    trees: Collection[str] | None = None,
 ) -> list[SettingAdvice]:
     """Was dieses eine Teil anders braucht als die Platte (§29).
 
@@ -1991,6 +2027,7 @@ def for_part(
                 whole_layers=whole_layers,
                 organic=organic,
                 declined=declined,
+                trees=trees,
             )
             if entry.path in PART_PATHS
         ]

@@ -102,13 +102,6 @@ def _integer(value: object) -> str:
     return str(int(value))  # type: ignore[call-overload]
 
 
-def _double_wall(value: object) -> str:
-    """PrusaSlicer zählt keine Baumwände: Zwei heißt Doppelwand ab 3 mm
-    Astquerschnitt (``support_tree_branch_diameter_double_wall``, Prusas
-    Vorgabe; das MK4S-Profil führt 8), eine heißt nie (RM-584)."""
-    return "3" if int(value) >= 2 else "0"  # type: ignore[call-overload]
-
-
 def _number_or_silent(value: object) -> str:
     """Wie :func:`_number`, aber Null heißt „unbekannt" und wird nicht
     geschrieben.
@@ -340,7 +333,7 @@ PRUSA: Final[tuple[Row, ...]] = (
         _integer,
     ),
     ("support.interface_spacing", "support_material_interface_spacing", _number),
-    ("support.tree_walls", "support_tree_branch_diameter_double_wall", _double_wall),
+    # Die Wände der Bäume fehlen: PrusaSlicer zählt keine (:data:`NOT_TAKEN_BY`).
     # Den Kontaktlüfter kennt SuperSlicer, PrusaSlicer nicht (RM-583).
     (
         "cooling.support_interface_cooling",
@@ -1105,7 +1098,12 @@ def flavour_of(name: str) -> SlicerFlavour | None:
 #:
 #: ``tests/test_print_settings_ui.py`` hält die Liste gegen diese Messung.
 NOT_TAKEN_BY: Final[dict[SlicerFlavour, frozenset[str]]] = {
-    "prusa": frozenset({"shell.precise_outer_wall"}),
+    # PrusaSlicer zählt keine Baumwände (RM-584): Seine organischen Äste legen
+    # ab einem Astquerschnitt eine zweite Wand
+    # (``support_tree_branch_diameter_double_wall``, Vorgabe 3 mm), ein Maß und
+    # keine Wandzahl. Geschrieben schaltete eine Wand die Doppelwand ab, die
+    # PrusaSlicer ohne Bündel legt; das Maß bleibt beim Hersteller.
+    "prusa": frozenset({"shell.precise_outer_wall", "support.tree_walls"}),
     "orca": frozenset(),
     "cura": frozenset(
         {
@@ -1162,8 +1160,8 @@ LIMITED: Final[dict[SlicerFlavour, frozenset[str]]] = {
 #: 2.9 nicht, und sein 3MF-Leser stürzt ab zwei unbekannten Schlüsseln mit
 #: 0xC0000005 ab (RM-459, gemessen je Schlüssel der Beilage).
 NOT_TAKEN_BY_PROGRAM: Final[dict[str, frozenset[str]]] = {
-    # Bäume kennt SuperSlicer nicht (RM-480), also auch keine Baumwände.
-    "superslicer": frozenset({"shell.scarf_seam", "support.tree_walls"}),
+    # Die Baumwände kennt die ganze Familie nicht (:data:`NOT_TAKEN_BY`).
+    "superslicer": frozenset({"shell.scarf_seam"}),
     # Den Kontaktlüfter führt nur SuperSlicer (``--help-fff`` von 2.9.6).
     "prusaslicer": frozenset({"cooling.support_interface_cooling"}),
     # Bambu Studio führt ``support_material_interface_fan_speed`` nicht; sein
@@ -1182,21 +1180,25 @@ NOT_TAKEN_BY_PROGRAM: Final[dict[str, frozenset[str]]] = {
 #: nicht** (RM-584): ``tree_support_wall_count`` gilt für ``tree_hybrid``,
 #: ``tree_slim`` und ``tree_strong``. Gemessen am ElegooSlicer an einem 120 mm
 #: hohen Turm mit Insel: organisch mit einer und zwei Wänden derselbe G-Code,
-#: Hybrid mit zwei Wänden 14 % mehr Stützmaterial. PrusaSlicer verdoppelt die
-#: Wand organischer Äste über einen Durchmesser und bleibt außen vor.
+#: Hybrid mit zwei Wänden 14 % mehr Stützmaterial. Das gilt gefüllten Bäumen;
+#: hohle (``support_base_pattern`` ``default``) bestehen aus ihren Wänden, und
+#: die Wandzahl wirkt (``handover.hollow_trees``). PrusaSlicer zählt keine
+#: Baumwände (:data:`NOT_TAKEN_BY`). Der Slicertest
+#: (``test_tree_walls_change_the_print_only_where_the_program_reads_them``,
+#: 09.10.2026, Drucker aus ``PROGRAMS``) bestätigt OrcaSlicer und Anycubic Slicer
+#: Next. **Bambu Studio und Creality Print lesen die Wandzahl auch unter ihren
+#: Bäumen**: Bambu führt die Schlüssel der organischen Äste nicht
+#: (``tree_support_branch_diameter_organic``), seine Bäume entstehen anders.
+#: Creality Print 7.2 liest sie als ``tree_support_wall_count_tree``
+#: (:data:`PROGRAM_KEYS`), unter Hybrid wie unter Bäumen; den gemeinsamen Namen
+#: überging es auch unter Hybrid.
 _NO_BOTTOM_INTERFACE_UNDER_TREES: Final = (
     "bambustudio",
     "crealityprint",
     "anycubicslicernext",
     "prusaslicer",
 )
-_NO_WALLS_UNDER_TREES: Final = (
-    "elegooslicer",
-    "orcaslicer",
-    "bambustudio",
-    "crealityprint",
-    "anycubicslicernext",
-)
+_NO_WALLS_UNDER_TREES: Final = ("elegooslicer", "orcaslicer", "anycubicslicernext")
 IGNORED_UNDER_TREES_BY_PROGRAM: Final[dict[str, frozenset[str]]] = {
     program: frozenset(
         (
@@ -1262,9 +1264,11 @@ PROGRAM_ALIASES: Final[dict[str, dict[str, tuple[str, ...]]]] = {
 }
 
 
-#: Bambu behält den Plural; die übrige Orca-Familie führt den Singular.
+#: Bambu behält den Plural; die übrige Orca-Familie führt den Singular. Creality
+#: Print liest die Wände der Bäume unter eigenem Namen (RM-584, Slicertest).
 PROGRAM_KEYS: Final[dict[str, dict[str, str]]] = {
     "bambustudio": {"chamber_temperature": "chamber_temperatures"},
+    "crealityprint": {"tree_support_wall_count": "tree_support_wall_count_tree"},
 }
 
 
@@ -1529,9 +1533,7 @@ class Substitute(NamedTuple):
 
 #: Hybridstützen kennt nur die Orca-Familie (``tree_hybrid``, RM-584); die
 #: übrigen bekommen Gitter, das die flache Decke trägt.
-_NO_HYBRID: Final = Substitute(
-    "grid", _("Dieser Slicer kennt keine Hybridstütze und stützt mit Gitter.")
-)
+_NO_HYBRID: Final = Substitute("grid", _("Dieser Slicer kennt kein Hybrid und stützt mit Gitter."))
 
 
 #: Wahlen in Solidon, die ein **Programm** nicht kennt, mit dem, was es
@@ -1566,6 +1568,12 @@ def offered(advice: Sequence[SettingAdvice], program: str) -> list[SettingAdvice
     Ein Vorschlag auf eine Wahl aus :data:`NOT_OFFERED_BY_PROGRAM` wird zu
     ihrem Ersatz — SuperSlicer bekommt statt der Baumstütze Gitter angeboten
     (RM-480). Ist der Ersatz schon eingestellt, bleibt nichts vorzuschlagen.
+
+    **Schaltet der Vorschlag Stützen erst ein, bleibt sein Grund** (RM-584):
+    „Ohne Stützen druckt dieses Teil in die Luft.“ gilt dem Ersatz genauso,
+    und der Satz über die fehlende Art verdrängte die Warnung. Wechselt er nur
+    die Art, gilt sein Grund der Art, die das Programm nicht kennt — dann
+    steht der Ersatzsatz da.
     """
     shown: list[SettingAdvice] = []
     for entry in advice:
@@ -1573,7 +1581,8 @@ def offered(advice: Sequence[SettingAdvice], program: str) -> list[SettingAdvice
         if replaced is None:
             shown.append(entry)
         elif replaced.value != entry.was:
-            shown.append(replace(entry, value=replaced.value, reason=replaced.reason))
+            reason = entry.reason if entry.was == "none" else replaced.reason
+            shown.append(replace(entry, value=replaced.value, reason=reason))
     return shown
 
 
@@ -1685,6 +1694,8 @@ def limitation(
     settings: PrintSettings | None = None,
     program: str = "",
     organic: Collection[str] = (),
+    *,
+    hollow: bool = False,
 ) -> TranslatableText | None:
     """Eine abweichende Bedeutung, die ein gleich benannter Wert verdecken würde.
 
@@ -1701,13 +1712,18 @@ def limitation(
 
     Unter organischen Bäumen gilt die Auskunft, mit der auch der Rat fragt
     (``organic``, ``handover.organic_styles``, RM-622): Feld und Vorschlag
-    daneben sagen dasselbe.
+    daneben sagen dasselbe, auch über hohle Bäume (``hollow``).
     """
     if settings is not None and program:
         group, name = path.split(".", 1)
         replaced = substitute(path, getattr(getattr(settings, group), name), program)
         if replaced is not None:
             return replaced.reason
+    # PrusaSlicer verdoppelt die Wand dicker Äste nach einem Maß (RM-584,
+    # :data:`NOT_TAKEN_BY`); SuperSlicer kennt keine Bäume und bleibt beim
+    # allgemeinen Satz.
+    if flavour == "prusa" and path == "support.tree_walls" and program != "superslicer":
+        return _("PrusaSlicer zählt keine Baumwände und gibt dicken Ästen selbst zwei.")
     if flavour == "cura" and path == "cooling.disable_first_layers":
         if settings is None or settings.cooling.disable_first_layers < 2:
             return None
@@ -1749,6 +1765,10 @@ def limitation(
         )
     if trees and path in IGNORED_UNDER_TREES_BY_PROGRAM.get(program, frozenset()):
         if path == "support.tree_walls":
+            # Hohle Bäume bestehen aus ihren Wänden (``hollow``,
+            # ``handover.hollow_trees``, RM-584).
+            if hollow:
+                return None
             return _("Unter organischen Bäumen liest dieses Programm die Wandzahl nicht.")
         return _("Unter Baumstützen druckt dieses Programm keine untere Trennschicht.")
     return None
