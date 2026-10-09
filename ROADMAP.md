@@ -2354,7 +2354,10 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   einer 10-mm-Platte mit einem getrennten Stift Ø 4 über 0 … 40 mm gilt dort als frei, über
   0 … 15 mm nicht, an beiden Kernen; die runde Bohrung mit demselben Stift ebenso — die Handlungen
   sagen dort erst nachträglich mit anderem Satz ab („träfe ein getrenntes Teil daneben“), und das
-  Menü bietet ihre Zeilen an. **Weg:** beim Zusammenführen von Paket G `_reaching_in` in
+  Menü bietet ihre Zeilen an. **Zusammenführen:** Der Commit `9f5e74214` (Zweig `claude/lauf-b`,
+  RM-253) ändert `_inside_the_bore`, das Paket G durch `_inside_and_radial` ersetzt — der Konflikt
+  dort ist erwartet; je Handlung bei `cache_version` den höheren der beiden Werte plus eins
+  nehmen. **Weg:** beim Zusammenführen von Paket G `_reaching_in` in
   `_inside_and_radial` übernehmen, je Art mit ihrem Abstand (Achsstück am Langloch, Kegelwand je
   Höhe an der Senkung, Mitte bzw. Mittelkreis an Pfanne und Kehle, Kern am Innengewinde) und der
   Grenze der eigenen Wand. **Abnahme:** je Art ein Fall mit langem Stift, am Stand davor rot;
