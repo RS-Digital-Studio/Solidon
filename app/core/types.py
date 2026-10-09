@@ -980,6 +980,11 @@ class MaterialProfile:
     support_interface_cooling: bool = False
     """Ob sich die Stütze von diesem Material mit voller Kühlung an der
     Trennschicht leichter löst (RM-583, Recherche Nr. 7: PETG)."""
+    support_tip_gap: float | None = None
+    """Luft über Baumspitzen ohne Trennschicht in mm (RM-584): Unter kleinen
+    Inseln baut der Slicer keine, und eine Schicht Abstand schweißt die Spitze
+    an. **None heißt nicht gemessen**: Dann gilt der Abstand aus
+    :attr:`support_gap_factor`."""
     minimum_wall: float | None = None
     """Gemessene druckbare Mindestwand in mm, ausschließlich für den gespeicherten Prozess."""
     overhang_angle: float | None = None

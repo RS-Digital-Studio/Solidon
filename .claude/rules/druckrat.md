@@ -84,7 +84,11 @@ offenem Drucker. Übernommen wird auf Klick, nie von allein.
   fragen dieselbe Auskunft) —, das Vielfache innerhalb der
   Materialgrenzen, auch statt eines Werts in `SUPPORT_GAP_BAND`, der zwischen
   zwei Schichten liegt (`in_whole_layers`); einen eigenen solchen Wert nennt
-  der Export gerundet (`export.support_gap_rounded`). Unter einem flachen Stück über
+  der Export gerundet (`export.support_gap_rounded`). **Über Baumspitzen ohne
+  Trennschicht** (ab `TIP_ISLANDS` Inseln unter `TIP_ROOF_AREA`, `tip_islands`)
+  gilt unter organischen und Curas Bäumen `support_tip_gap` des Materials in
+  ganzen Schichten, mindestens `TIP_GAP_LAYERS`, auch über `support_gap_max`
+  (`tip_gap`); ohne gemessenen Wert nicht. Unter einem flachen Stück über
   `OVERHANG_LAYER_WORTH_SUPPORT` eine dichte Trennschicht, sonst eine lockere;
   steht die Stütze auf dem Modell, auch unten (`BOTTOM_INTERFACE_LAYERS`) —
   nicht, wo das Programm sie unter Bäumen nicht druckt

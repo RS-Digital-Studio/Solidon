@@ -392,6 +392,7 @@ _MATERIAL_FIELDS_NO_OPERATION_READS: dict[str, str] = {
     "support_gap_min": "Druckrat und Slicerübergabe, keine Geometrie",
     "support_gap_max": "Druckrat und Slicerübergabe, keine Geometrie",
     "support_interface_cooling": "Druckrat und Slicerübergabe, keine Geometrie",
+    "support_tip_gap": "Druckrat und Slicerübergabe, keine Geometrie",
 }
 
 

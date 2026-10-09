@@ -31,6 +31,7 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-09 | [RM-584 (Teil): Über Baumspitzen rät Solidon zwei Schichten Luft (09.10.2026)](#rm-584-teil-über-baumspitzen-rät-solidon-zwei-schichten-luft-09102026) |
 | 2026-10-08 | [RM-602: Der Druckdialog ordnet die Profile in einem Lesedurchgang zu (08.10.2026)](#rm-602-der-druckdialog-ordnet-die-profile-in-einem-lesedurchgang-zu-08102026) |
 | 2026-10-08 | [RM-601: Die Slicerwahl im Druckdialog geht wie in Erste Schritte, und überall stehen nur unterstützte Slicer (08.10.2026)](#rm-601-die-slicerwahl-im-druckdialog-geht-wie-in-erste-schritte-und-überall-stehen-nur-unterstützte-slicer-08102026) |
 | 2026-10-08 | [RM-600: Ein Drucker, eingebaut und aus dem Slicer übernommen, ist ein Gerät (08.10.2026)](#rm-600-ein-drucker-eingebaut-und-aus-dem-slicer-übernommen-ist-ein-gerät-08102026) |
@@ -43987,6 +43988,30 @@ rot); `tests/test_first_run_setup.py::test_only_slicers_solidon_works_with_are_o
 in der CI unter Linux und macOS). Sonde mit Roberts Bestand: Das Feld steht beim Öffnen mit
 ElegooSlicer da, der Wechsel auf Anycubic Slicer Next bietet Kobra S1 und S1 Max. Changelog:
 ja.
+
+## RM-584 (Teil): Über Baumspitzen rät Solidon zwei Schichten Luft (09.10.2026)
+
+<a id="rm-584-teil-über-baumspitzen-rät-solidon-zwei-schichten-luft-09102026"></a>
+
+**Befund (09.10.2026, Roberts Drachendruck vom 08.10.2026, PLA am CC2):** An Kinn und
+Kopfstacheln blieben Reste der Bäume. Jede der 64 Bartstacheln beginnt als Insel von im
+Median 0,07 mm²; unter 1 mm² baut der Slicer an der Baumspitze keine Trennschicht
+(`TreeSupport3D.cpp:1151`), und die Spitze stand eine Schicht unter dem Modell, an 22 Punkten
+angedruckt. Zwei Schichten Abstand senkten die Kontaktfläche mit 0,2 mm Luft am Kinn von 59,4
+auf 6,9 mm², an den Stacheln von 92,4 auf 3,6 mm², für 1 min und 0,7 g, in ElegooSlicer,
+PrusaSlicer und Cura (`output/drache-2026-10-09/rueckstaende/bericht.md`).
+
+**Behoben:** `analysis.tip_islands` zählt die Inseln unter `TIP_ROOF_AREA`
+(`SupportNeed.tips`); ab `TIP_ISLANDS` (100) rät `advise.tip_gap` unter organischen und Curas
+Bäumen `support_tip_gap` des Materials in ganzen Schichten, mindestens zwei, auch über dem
+Höchstwert des Materials. Gemessen ist PLA (0,40 mm); andere Materialien behalten ihren
+Abstand. Schwelle an 165 Modellen: Drache 199, danach eine Baugruppe 49, ein Schachturm 34.
+
+**Nachweis (09.10.2026):** Am Drachen mit Roberts Stützwerten rät Solidon 0,4 statt 0,2 mm.
+Tests `test_small_islands_are_counted_as_tips`, `test_many_tips_under_trees_get_air_in_whole_layers`
+(Orca, „automatisch“, 0,12-mm-Schichten, Cura, PrusaSlicer),
+`test_tips_need_many_islands_trees_and_a_measured_material` (eine Insel weniger, Gitter, PETG,
+ohne Slicer; Gegenprobe mit einer Insel mehr). Changelog: ja.
 
 ## RM-602: Der Druckdialog ordnet die Profile in einem Lesedurchgang zu (08.10.2026)
 

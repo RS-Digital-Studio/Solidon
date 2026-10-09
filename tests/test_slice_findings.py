@@ -38,6 +38,7 @@ from app.core.slice.analysis import (
     slice_body,
     spanning_width,
     support_on_model,
+    tip_islands,
     worth_support,
 )
 from app.core.types import PrintSettings, Profile, SettingAdvice, SliceResult
@@ -1566,6 +1567,84 @@ def test_under_organic_trees_the_gap_comes_in_whole_layers(
         paths=("support.z_gap",),
         organic=frozenset(organic),
     ) == {"support.z_gap": pytest.approx(gap)}
+
+
+def bearded_table(pins: int, side: float = 0.6) -> MeshData:
+    """Der Tisch mit einem Bart: ``pins`` dünne Stifte hängen unter der Platte,
+    jeder beginnt als Insel mit ``side`` mal ``side`` mm² — die Bartstacheln am
+    Kinn des Drachen im Kleinen (RM-584)."""
+    places = [
+        (x, y)
+        for x in (-18.0, -15.0, -12.0, -9.0, -6.5, 6.5, 9.0, 12.0, 15.0, 18.0)
+        for y in (-18.0, -15.0, -12.0, -9.0, -6.5, 6.5, 9.0, 12.0, 15.0, 18.0)
+    ][:pins]
+    assert len(places) == pins, "so viele Stifte trägt die Platte nicht"
+    return on_bed(
+        brick(40.0, 40.0, 5.0, (0.0, 0.0, 2.5)),
+        brick(10.0, 10.0, 20.0, (0.0, 0.0, 15.0)),
+        brick(40.0, 40.0, 5.0, (0.0, 0.0, 27.5)),
+        *(brick(side, side, 4.2, (x, y, 23.1)) for x, y in places),
+    )
+
+
+def test_small_islands_are_counted_as_tips() -> None:
+    """Jeder Stift unter 1 mm² beginnt als Insel ohne Trennschicht an seiner
+    Baumspitze (``minimum_roof_area``, RM-584); ein Stift von 1,44 mm² nicht."""
+    assert tip_islands(slice_body(bearded_table(12), 0.2)) == 12
+    assert tip_islands(slice_body(bearded_table(12, side=1.2), 0.2)) == 0
+    assert tip_islands(slice_body(table(), 0.2)) == 0, "die Platte ist keine Insel"
+
+
+@pytest.mark.parametrize(
+    ("layer", "style", "flavour", "organic", "gap"),
+    [
+        (0.2, "tree", "orca", {"tree"}, 0.4),
+        (0.2, "auto", "orca", {"tree", "auto"}, 0.4),
+        (0.12, "tree", "orca", {"tree"}, 0.36),
+        (0.2, "tree", "cura", set(), 0.4),
+        (0.2, "tree", "prusa", {"tree"}, 0.4),
+    ],
+)
+def test_many_tips_under_trees_get_air_in_whole_layers(
+    layer: float, style: str, flavour: str, organic: set[str], gap: float
+) -> None:
+    """Roberts Drache (PLA, 0,2 mm): Am Kinn und an den Kopfstacheln stand jede
+    Baumspitze eine Schicht unter dem Modell und schweißte an. Zwei Schichten
+    senkten die Kontaktfläche um 88 und 96 Prozent, in ElegooSlicer, PrusaSlicer
+    und Cura gemessen (RM-584). Der Rat gilt über dem Höchstwert des Materials
+    (0,25 mm) und in ganzen Schichten, mindestens zwei."""
+    proposed = _support_advice(
+        bearded_table(advise.TIP_ISLANDS),
+        profiles.make_profile("centauri-carbon-2", "pla"),
+        {"layers.layer_height": layer, "support.style": style, "support.z_gap": layer},
+        flavour=flavour,
+        paths=("support.z_gap",),
+        organic=frozenset(organic),
+    )
+    assert proposed == {"support.z_gap": pytest.approx(gap)}
+
+
+@pytest.mark.parametrize("case", ["few", "grid", "petg", "no slicer"])
+def test_tips_need_many_islands_trees_and_a_measured_material(case: str) -> None:
+    """Gegenproben: Wenige Inseln (ein Stift, eine Nase), Gitterstützen ohne
+    Spitzen, ein Material ohne gemessenen Spitzenabstand und ein Rat ohne
+    Slicer behalten den Abstand des Materials. Gefragt an :func:`advise.tip_gap`
+    selbst: Mit hundert Stiften schlägt der Rat Bäume vor, und unter dem
+    vorgeschlagenen Stil gälte der Abstand wieder."""
+    pins = advise.TIP_ISLANDS - 1 if case == "few" else advise.TIP_ISLANDS
+    need = advise.support_need(slice_body(bearded_table(pins), 0.2))
+    material = profiles.material("petg" if case == "petg" else "pla")
+    style = "grid" if case == "grid" else "tree"
+    flavour = None if case == "no slicer" else "orca"
+    organic = frozenset() if case == "no slicer" else frozenset({"tree"})
+
+    assert need.tips == pins
+    assert advise.tip_gap(0.2, material, need, flavour, style, organic) is None
+    if case == "few":
+        more = advise.support_need(slice_body(bearded_table(advise.TIP_ISLANDS), 0.2))
+        assert advise.tip_gap(0.2, material, more, flavour, style, organic) == pytest.approx(0.4), (
+            "die Gegenprobe: eine Insel mehr, und der Abstand gilt"
+        )
 
 
 def test_proposed_trees_bring_whole_layers_along() -> None:

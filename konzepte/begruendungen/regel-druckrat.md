@@ -527,3 +527,18 @@ und nach dem größten Wert verschwand die Zeile des PLA-Teils ganz. Ein vor
 0.6.0 kalibriertes Material kennt die neuen Werte nicht und bekommt sie aus
 dem mitgelieferten Eintrag, wie die Druckeinstellungen je Eintrag. Für TPU nennt
 keine Quelle einen Abstand; ohne Werte bleibt er beim Hersteller.
+
+**Über Baumspitzen zwei Schichten** (RM-584): Roberts Drache (PLA, CC2, 0,2 mm)
+behielt an Kinn und Kopfstacheln Reste der Bäume. Jede der 64 Bartstacheln beginnt
+als Insel von im Median 0,07 mm²; unter 1 mm² baut der Slicer an der Spitze keine
+Trennschicht (`minimum_roof_area`, `TreeSupport3D.cpp:1151`), und die Spitze steht
+eine Schicht unter dem Modell. Zwei Schichten Abstand senkten die Kontaktfläche
+mit 0,2 mm Luft am Kinn von 59,4 auf 6,9 mm², an den Stacheln von 92,4 auf 3,6 mm²,
+für eine Minute und 0,7 g; PrusaSlicer und Cura gleich. XY-Abstand, Astabstand,
+Baumdichte, Trennschichtabstand und andere Baumarten halfen nicht; drei Schichten
+ließen die Bartspitzen durchhängen können. An großen Decken fällt dafür die
+Trennschicht weg — deshalb gilt der Abstand erst ab vielen solchen Inseln: An 165
+Modellen hat der Drache 199, danach eine Baugruppe 49 und ein Schachturm 34;
+die Schwelle steht bei 100.
+Gemessen ist nur PLA (`support_tip_gap`); ohne Wert bleibt der Abstand des
+Materials. Bericht: `output/drache-2026-10-09/rueckstaende/bericht.md`.

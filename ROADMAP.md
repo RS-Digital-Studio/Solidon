@@ -67,7 +67,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-571 — Ein Sims im offenen Becher neben einem gesperrten Kanal verliert Stütze](#rm-571) | Geometrie, Erkennung und Druckvorbereitung | Ein Maß für „von oben erreichbar“ finden, das den offenen Becher vom Rohrbogen der Schüssel trennt |
 | [RM-572 — Der Prüfbericht nennt keine Stelle, wo viele kleine Überhänge Stützen verlangen](#rm-572) | Geometrie, Erkennung und Druckvorbereitung | Text für „viele kleine Überhänge zusammen“ und eine Feldfrage im Budget §31 |
 | [RM-583 — Stützabstand und Kontaktlagen passen zu Material, Schichthöhe und Auflage](#rm-583) | Geometrie, Erkennung und Druckvorbereitung | Abstand und Kontaktlagen je Material und Schichthöhe, unten wie oben auf dem Modell, Kontaktlüfter |
-| [RM-584 — Die Stützart folgt der Deckenform, und hohe Bäume stehen stabil](#rm-584) | Geometrie, Erkennung und Druckvorbereitung | Hybrid oder normal unter flachen Decken, Baumwände und Fuß ab etwa 100 mm, Baumspitze |
+| [RM-584 — Die Stützart folgt der Deckenform, und hohe Bäume stehen stabil](#rm-584) | Geometrie, Erkennung und Druckvorbereitung | Hybrid oder normal unter flachen Decken, Baumwände und Fuß ab etwa 100 mm, Spitzenabstand weiterer Materialien |
 | [RM-585 — Bögen, die sich zwischen ihren Beinen schließen, tragen sich selbst](#rm-585) | Geometrie, Erkennung und Druckvorbereitung | Schließfrage für weite Bögen, Brückenregel für die letzte Spanne |
 | [RM-586 — Feine Schichten, wo das Modell feine Formen hat](#rm-586) | Geometrie, Erkennung und Druckvorbereitung | Variable Schichthöhe über die 3MF, Deckschichten mindestens 0,8 mm |
 | [RM-587 — Lange Brücken und steile Überhänge drucken sauber](#rm-587) | Geometrie, Erkennung und Druckvorbereitung | Dicke Brücke und Fluss über langen Brücken, Zusatzwände an steilen Überhängen |
@@ -939,14 +939,9 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   (`tree_hybrid`), Prusa „snug“; dazu brechen hohe Bäume ohne zweite Wand und Fuß, und eine
   Baumspitze unter der Stützbahn hinterlässt Punkte (Recherche Nr. 4, 5, 6). Abnahme: Stil
   je Deckenform in allen Familien, Baumstabilität an einem hohen Körper im Slicer gemessen.
-  **Rückstände an Baumspitzen** (Roberts Drachendruck vom 08.10.2026, PLA am CC2): An Kinn
-  (64 Bartstacheln, Inseldecken unter 1 mm²) und Kopfstacheln steht jede Spitze eine Schicht
-  unter dem Modell, ohne Trennschicht (unter 1 mm² baut der Slicer keine,
-  `TreeSupport3D.cpp:1151`), 22 Punkte angedruckt. Zwei Schichten Abstand (0,4 mm) senken die
-  Kontaktfläche am Kinn von 59,4 auf 6,9 mm², an den Stacheln von 92,4 auf 3,6 mm², für 1 min
-  und 0,7 g; große Decken verlieren dabei ihre Trennschicht. Bericht:
-  `output/drache-2026-10-09/rueckstaende/bericht.md`. Abnahme: Erkennung an der Größe der
-  Inseldecken, Schwelle am Korpus, Rat in ganzen Schichten über dem Materialhöchstwert.
+  Der Abstand über Baumspitzen ohne Trennschicht ist erledigt (Archiv, RM-584 Teil); offen
+  dort: `support_tip_gap` für PETG, ASA und ABS messen, und an der Baugruppe mit 49 und dem
+  Schachturm mit 34 Spitzeninseln prüfen, ob die Schwelle von 100 sinken kann.
 
 <a id="rm-585"></a>
 

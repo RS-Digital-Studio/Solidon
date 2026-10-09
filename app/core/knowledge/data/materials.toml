@@ -19,6 +19,7 @@
 # support_gap_min    kleinster Stützabstand in mm, darunter verschweißt die Kontaktschicht
 # support_gap_max    größter Stützabstand in mm, darüber sackt die Fläche durch
 # support_interface_cooling  volle Kühlung an der Trennschicht löst die Stütze leichter
+# support_tip_gap    Luft über Baumspitzen ohne Trennschicht in mm, nur wo gemessen
 #
 # Die Stützabstände stammen aus der Recherche vom 08.10.2026
 # (`konzepte/recherche-slicer-einstellungen-2026-10.md`, Abschnitt 2.2): PLA
@@ -55,6 +56,7 @@ layer_bond_ratio = 0.6
 support_gap_factor = 1.0
 support_gap_min = 0.10
 support_gap_max = 0.25
+support_tip_gap = 0.40
 
 [petg]
 title = "PETG"

@@ -56,6 +56,7 @@ from app.core.slice.analysis import (
     smooth_outline_height,
     tapered_layers,
     thinnest_spot,
+    tip_islands,
     total_overhang,
     worth_support,
 )
@@ -819,6 +820,8 @@ class SupportNeed:
     quiet_layers: frozenset[int] = frozenset()
     """Schichten, deren Brücken nicht zählen: Ihr Überhang besteht ganz aus
     Kanal- und Randstücken (:func:`_quiet_layers`)."""
+    tips: int = 0
+    """Inseln, deren Baumspitze keine Trennschicht bekommt (:func:`tip_islands`)."""
 
 
 def _largest_field(
@@ -904,6 +907,7 @@ def support_need(result: SliceResult, *, cancelled: CancelToken | None = None) -
         patch=patch,
         piece=piece,
         quiet_layers=resting,
+        tips=tip_islands(result),
     )
 
 
@@ -1002,6 +1006,48 @@ def support_gap_target(
     return min(max(math.floor(target / layer + 0.5 + EPS_GEOM), first), last) * layer
 
 
+#: Ab wie vielen Inseln mit Baumspitze ohne Trennschicht (:attr:`SupportNeed.tips`)
+#: der Abstand über den Spitzen gilt (RM-584). Gesetzt an 165 Modellen aus Roberts
+#: Sammlung und ``tests/data/meshes``: Der Drache hat 199, danach folgen eine
+#: Baugruppe mit 49, ein Schachturm mit 34 und ein Küchenteil mit 21, alle übrigen
+#: unter 15. Gemessen ist die Wirkung nur am Drachen; die Schwelle liegt mit Abstand
+#: zu beiden Seiten, und Teile mit wenigen kleinen Inseln behalten die
+#: Trennschicht ihrer großen Decken.
+TIP_ISLANDS: Final = 100
+
+#: Wie viele Schichten Luft mindestens über einer Baumspitze ohne Trennschicht
+#: stehen (RM-584): Mit einer schweißt die Spitze an, gemessen am Drachen in
+#: ElegooSlicer, PrusaSlicer und Cura.
+TIP_GAP_LAYERS: Final = 2
+
+
+def tip_gap(
+    layer: float,
+    material: MaterialProfile,
+    need: SupportNeed,
+    flavour: SlicerFlavour | None,
+    style: str,
+    organic: Collection[str] = (),
+) -> float | None:
+    """Der Abstand oben über Baumspitzen ohne Trennschicht (RM-584), oder ``None``.
+
+    Unter Inseln unter 1 mm² baut der Slicer keine Trennschicht
+    (:func:`analysis.tip_islands`); die Spitze steht eine Schicht unter dem
+    Modell und schweißt an. Am Drachen (PLA, 0,2 mm) senkte 0,4 statt 0,2 die
+    Kontaktfläche am Kinn von 59,4 auf 6,9 mm², an den Kopfstacheln von 92,4 auf
+    3,6 mm² — für eine Minute und 0,7 g. Gilt, wo der Slicer Baumspitzen setzt:
+    unter organischen Bäumen (``organic``) und unter Curas Bäumen. In ganzen
+    Schichten, mindestens :data:`TIP_GAP_LAYERS`, aus ``support_tip_gap`` des
+    Materials; ohne gemessenen Wert ``None``.
+    """
+    if material.support_tip_gap is None or layer <= 0.0 or need.tips < TIP_ISLANDS:
+        return None
+    if style not in organic and not (flavour == "cura" and style == "tree"):
+        return None
+    layers = math.floor(material.support_tip_gap / layer + 0.5 + EPS_GEOM)
+    return max(TIP_GAP_LAYERS, layers) * layer
+
+
 def _support_contact(
     settings: PrintSettings,
     profile: Profile,
@@ -1034,6 +1080,14 @@ def _support_contact(
     target = support_gap_target(
         layer, material, flavour, whole_layers=whole_layers, style=style, organic=organic
     )
+    reason = _("Passend zu Schicht und Material löst sich die Stütze sauber.")
+    tips = tip_gap(layer, material, need, flavour, style, organic)
+    if tips is not None and (target is None or tips > target):
+        target = tips
+        reason = _(
+            "Viele kleine Inseln stehen auf Baumspitzen ohne Trennschicht. Mit diesem "
+            "Abstand schweißen sie nicht an."
+        )
     low, high = SUPPORT_GAP_BAND
     gap = settings.support.z_gap
     if target is not None and (
@@ -1044,12 +1098,7 @@ def _support_contact(
         )
     ):
         advice.append(
-            _advice(
-                settings,
-                path="support.z_gap",
-                value=round(target, 4),
-                reason=_("Passend zu Schicht und Material löst sich die Stütze sauber."),
-            )
+            _advice(settings, path="support.z_gap", value=round(target, 4), reason=reason)
         )
     if on_model and settings.support.bottom_interface_layers < BOTTOM_INTERFACE_LAYERS:
         advice.append(

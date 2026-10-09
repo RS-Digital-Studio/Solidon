@@ -177,6 +177,7 @@ def test_an_older_calibration_keeps_the_shipped_support_values(
     assert calibrated.support_gap_min == pytest.approx(shipped.support_gap_min)
     assert calibrated.support_gap_max == pytest.approx(shipped.support_gap_max)
     assert calibrated.support_interface_cooling is shipped.support_interface_cooling
+    assert calibrated.support_tip_gap == shipped.support_tip_gap
 
 
 @pytest.mark.parametrize("stage", ["write", "fsync", "replace"])
