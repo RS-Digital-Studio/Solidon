@@ -106,7 +106,7 @@ trägt, sagt der Kopf von `oberflaeche.md`.
 | `start_check.py` | Starttest des Pakets (`auslieferung.md`), ohne Qt auf Modulebene |
 | `first_run.py` | Erstlauf (§38); `_PrinterSurvey`, `PrinterComboBox` mit fester Live-Suche; Druckerlisten je Modell gruppiert |
 | `start_screen.py` | die ersten fünf Minuten (§2.3) |
-| `header.py` | Kopfzeile: Projektname, `printer_button_text`, die belegten Filamente (`mesh.slot_indices`) |
+| `header.py` | Kopfzeile: Projektname, `printer_button_text`, Knopf *Filamente* (Kurzhilfe aus `FilamentPanel.rows`) |
 
 ### Brücke zum Kern
 
@@ -192,7 +192,7 @@ Druckfelder, ihre Herkunft und Suchtreffer: `druckerwahl.md`.
 | Datei | Zweck |
 |---|---|
 | `filament_inventory.py` | das lokale Lager ohne Renderer (`InventoryView`): Spulen, Bestand, Archiv, Rücknahme mit Rückweg (`restore_booking`) |
-| `filament_picker.py` | Filamentwähler (Name, Typ, Farbe statt 0–7), gemeinsamer Spulendialog und Slicerfilamente (`_SlicerFilamentSearch` im Arbeiter); Schreiben über `CatalogueWrites`; `swatch` = Farbpunkt |
+| `filament_picker.py` | Filamentwähler (Name, Typ, Farbe statt 0–7), gemeinsamer Spulendialog, Slicerfilamente (`_SlicerFilamentSearch`), `FilamentPopup` hinter *Filamente*; `CatalogueWrites`; `swatch` |
 | `filament_assignment.py` | Schnellauswahl an der Auswahl (`QuickFilamentPicker`, `spoolChosen`), ohne eigene Operation |
 | `filament_usage.py` | Buchungsangebote nach der Ausgabe (§20) |
 
@@ -263,8 +263,8 @@ Bausteinherkunft: `MainWindow.part_step_of` liest Provenienz/Schrittkategorie;
   nur an cachegleiche Rechnung (`Session.preview_is_the_evaluation`); läuft
   oder fehlt die Auswertung, an ihr Ende (`_WaitingClick`). Wert-/Dokumentwechsel
   entwertet jede Bindung, wartende mit Satz.
-  `block_apply` sperrt bei Problemen, nicht beim Warten. Dialog, Panel,
-  `QuietHost`, Filamentwahl prüfen über `preview_check`/`preview_defer`.
+  `block_apply` sperrt bei Problemen, nicht beim Warten. Dialog, Panel und
+  `QuietHost` prüfen über `preview_check`/`preview_defer`.
 - **Panel und Bild:** `QuietHost`: `feature_field`/`feature_field_values`.
   `set_measuring` übergibt Abschluss an die Maßgruppe; Panelzwillinge aus
   (`_blocks`, `LEADS_INTO_THE_VIEW`, `_in_the_view`); Fußknöpfe bleiben beim

@@ -45,6 +45,10 @@ dans `website/version.json`.
 - Chaque cote d'un bloc peut être liée à une cote du projet avec fx, même si elle ne porte encore aucune expression.
 - Après avoir tiré la poignée d'un aperçu, aucun nombre ne reste au-dessus de la vue. Un nombre saisi pendant le geste déplace l'aperçu, pas le corps sélectionné.
 - Après *Réparer et réessayer* et les chemins voisins, l'historique n'appelle plus « supprimée » une étape qui continue de calculer. Si la chaîne s'arrête de nouveau, l'étape est marquée.
+- Le bouton *Filaments* se trouve désormais dans l'en-tête. Il liste les filaments du projet et mène au stock de filament.
+- Un autre filament s'affiche aussitôt, aussi sur les blocs et les corps STEP, et Solidon ne recalcule rien pour cela. Les corps sélectionnés montrent leur couleur de filament sous la surbrillance.
+- Dans l'onglet *Sélection*, le champ du filament n'attribue qu'au clic ou avec Entrée. Les flèches et la saisie ne font que parcourir la liste, et la molette fait défiler l'onglet.
+- Dans les versions traduites, *Nouveau filament* ne défile plus de côté quand la fenêtre est moins haute que son contenu.
 
 ### Imprimer et transmettre au slicer
 
@@ -62,6 +66,7 @@ dans `website/version.json`.
 - Pour les petites pointes, Solidon propose une *Vitesse minimale de ralentissement* plus basse afin qu'elles ne ramollissent pas. Le réglage parvient à chaque slicer.
 - Les rebords étroits qui se portent seuls restent libres avec *Rebords sans support*. L'impression demande ainsi nettement moins de support.
 - Si le slicer refuse des filaments aux températures trop différentes sur un plateau, Solidon en donne désormais la raison et l'issue, au lieu de dire seulement qu'aucun fichier n'a été créé.
+- Dans la boîte de dialogue d'impression, imprimante, filaments et qualité restent entièrement visibles, même avec un texte agrandi. Les libellés longs passent à la ligne.
 
 ### Filetages, perçages et pièces normalisées
 

@@ -3640,9 +3640,7 @@ class ParameterPanel(QWidget):
         # ein Deckel die untersten Zeilen nicht versteckt, sondern
         # unerreichbar gemacht — genau der Fehler, den ``extra_height``
         # beschreibt. Und *Parameter anlegen …* bleibt darunter stehen: Er ist
-        # der einzige Weg zu einem neuen Maß und darf nicht wegrollen, aus
-        # demselben Grund, aus dem die Filamentkarte ihre Knöpfe außerhalb
-        # ihrer Liste führt.
+        # der einzige Weg zu einem neuen Maß und darf nicht wegrollen.
         # Die Mindestbreite aller Zeilen muss bis zur Karte reisen. Ein bloß
         # versteckter Querbalken lässt Qt beim Tab-Fokus die Maßnamen wegrollen.
         self._scroll = ColumnScroller(self)
@@ -3716,10 +3714,9 @@ class ParameterPanel(QWidget):
 
         Aus den Wunschhöhen gerechnet und nicht aus den gelegten — dieselbe
         Bedingung, unter der die ganze Verteilung stillsteht
-        (``OverlayHost._share_room``). Wortgleich mit
-        ``FilamentPanel._around_the_list`` ist das nicht: Dort stehen ein
-        Hinweis und drei Knöpfe, hier einer — zwei, solange der Bindeknopf
-        dasteht; ein verborgener Knopf bekommt auch keinen Abstand.
+        (``OverlayHost._share_room``). Hier steht ein Knopf — zwei, solange
+        der Bindeknopf dasteht; ein verborgener Knopf bekommt auch keinen
+        Abstand.
         """
         margins = self._outer.contentsMargins()
         shown = [
@@ -3754,7 +3751,7 @@ class ParameterPanel(QWidget):
         Drei Zeilen, wie bei den Nachbarn — aber **nie höher als der Wunsch**:
         Eine Karte ohne Parameter zeigt einen umbrochenen Satz, und Platz für
         drei Zeilen wäre Platz, den sie niemandem zeigen kann, während die
-        Nachbarn ihn brauchen (dieselbe Feinheit wie bei der Filamentkarte).
+        Nachbarn ihn brauchen.
         """
         rows = LEAST_PARAMETER_ROWS * (self.add_button.sizeHint().height() + TIGHT)
         return min(self._around_the_rows() + rows, self.wanted_height())
@@ -12083,7 +12080,9 @@ def least_number_width(spin: QDoubleSpinBox) -> int:
     return metrics.horizontalAdvance(spin.text() + "0") + frame
 
 
-def align_forms(dialog: QWidget, *, apart: tuple[QWidget, ...] = ()) -> None:
+def align_forms(
+    dialog: QWidget, *, apart: tuple[QWidget, ...] = (), at_most: int | None = None
+) -> None:
     """Alle Formularzeilen eines Dialogs auf eine Beschriftungsspalte legen.
 
     Ein ``QFormLayout`` rechnet seine linke Spalte für sich, und ein Dialog
@@ -12111,6 +12110,13 @@ def align_forms(dialog: QWidget, *, apart: tuple[QWidget, ...] = ()) -> None:
     um dessen Innenrand versetzt. Ihre Formulare teilen eine Spalte unter
     sich; die längste Beschriftung eines verborgenen Reiters („Linienbreite
     erste Schicht“) zog sonst die Vorderseite auf 170 Punkte, wo 110 reichen.
+
+    ``at_most`` deckelt die Spalte der Formulare außerhalb von ``apart``:
+    Eine längere Beschriftung bricht dann zwischen ihren Wörtern um, und das
+    längste Wort einer umbrechenden Beschriftung setzt die Spalte — eine
+    Kante bleibt. Sonst nahm eine lange Übersetzung („Densidade de
+    preenchimento“) den Feldern daneben den Platz, den sie in der
+    Mindestbreite des Dialogs brauchen (RM-630).
     """
 
     def inside(form: QFormLayout, area: QWidget) -> bool:
@@ -12120,7 +12126,7 @@ def align_forms(dialog: QWidget, *, apart: tuple[QWidget, ...] = ()) -> None:
     forms = dialog.findChildren(QFormLayout)
     groups = [[form for form in forms if inside(form, area)] for area in apart]
     rest = [form for form in forms if not any(inside(form, area) for area in apart)]
-    for group in (rest, *groups):
+    for group, limit in ((rest, at_most), *((group, None) for group in groups)):
         labels: list[QWidget] = []
         for form in group:
             for row in range(form.rowCount()):
@@ -12130,9 +12136,21 @@ def align_forms(dialog: QWidget, *, apart: tuple[QWidget, ...] = ()) -> None:
                     labels.append(widget)
         if not labels:
             continue
-        widest = max(widget.sizeHint().width() for widget in labels)
+        natural = {id(widget): widget.sizeHint().width() for widget in labels}
+        widest = max(natural.values())
+        if limit is not None and widest > limit:
+            # Umgebrochen wird zwischen Wörtern; das längste Wort einer
+            # umbrechenden Beschriftung setzt die Spalte, damit sie eine Kante
+            # bleibt.
+            widest = max(limit, 0)
+            for widget in labels:
+                if natural[id(widget)] > widest and isinstance(widget, QLabel):
+                    widget.setWordWrap(True)
+                    widest = max(widest, widget.minimumSizeHint().width())
         for widget in labels:
             widget.setMinimumWidth(widest)
+            if isinstance(widget, QLabel) and widget.wordWrap() and natural[id(widget)] > widest:
+                widget.setMaximumWidth(widest)
 
 
 def even_fields(dialog: QWidget) -> None:

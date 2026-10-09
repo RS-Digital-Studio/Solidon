@@ -45,6 +45,10 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Cada cota de un bloque se puede vincular con fx a una cota del proyecto, aunque todavía no tenga ninguna expresión.
 - Tras arrastrar el tirador de una vista previa, ya no queda ningún número sobre la vista. Un número tecleado al arrastrar mueve la vista previa, no el cuerpo elegido.
 - Tras *Reparar y volver a intentarlo* y caminos parecidos, el historial ya no llama «eliminado» a un paso que sigue calculando. Si la cadena vuelve a parar, el paso queda marcado.
+- El botón *Filamentos* está ahora en la cabecera. Muestra los filamentos del proyecto y lleva al inventario de filamentos.
+- Otro filamento se ve al instante, también en bloques y cuerpos STEP, y Solidon no recalcula nada por ello. Los cuerpos seleccionados muestran su color de filamento bajo el resaltado.
+- En la pestaña *Selección*, el campo de filamento solo asigna con un clic o Intro. Las flechas y la escritura solo recorren la lista, y la rueda del ratón desplaza la pestaña.
+- En las versiones traducidas, *Filamento nuevo* ya no se desplaza de lado cuando la ventana es más baja que su contenido.
 
 ### Imprimir y entregar al slicer
 
@@ -62,6 +66,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - En puntas pequeñas, Solidon sugiere una *Velocidad mínima al frenar* más baja para que no se ablanden. El ajuste llega a cualquier slicer.
 - Los bordes estrechos que se sostienen solos quedan libres con *Bordes sin soporte*. Así la impresión necesita bastante menos soporte.
 - Si el slicer rechaza filamentos con temperaturas demasiado distintas en una placa, Solidon indica ahora el motivo y qué hacer, en lugar de decir solo que no se creó ningún archivo.
+- En el diálogo de impresión, impresora, filamentos y calidad se ven enteros también con la letra ampliada. Las etiquetas largas pasan a la línea siguiente.
 
 ### Roscas, taladros y piezas normalizadas
 

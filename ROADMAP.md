@@ -102,17 +102,13 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-568 — Merkmalerkennung und die übrigen langen Wege schneller machen](#rm-568) | Geometrie, Erkennung und Druckvorbereitung | Robert, 08.10.: Profil je Stufe an den Korpusmodellen, die teuersten Stellen zuerst; Budget §31 |
 | [RM-070 — SpaceMouse auf macOS und Linux am echten Gerät abnehmen](#rm-070) | Bedienung und Darstellung | Die Rampe ist stetig und getestet, die Bildrate an 815 104 Dreiecken gemessen (`7ff34c67`: 16,7 → 8,7 ms im Median); offen bleiben Linux, die 3DxWare-Mausemulation, das Gerät selbst und die Rampe im Skizzenmodus (aus RM-183) |
 | [RM-204 — Ein Merkmalklick baut alle Handlungen des Fensters neu](#rm-204) | Bedienung und Darstellung | Abnahme am echten Fenster beim Release (RM-213) |
-| [RM-556 — Filamente aus der linken Spalte in die Kopfleiste](#rm-556) | Bedienung und Darstellung | Robert, 08.10.: Knopf oben, Klick zeigt die Filamente des Projekts und den Weg ins Filamentlager |
-| [RM-557 — Nach einem Filamentwechsel bleibt der Körper in der alten Farbe, und Solidon rechnet lange](#rm-557) | Bedienung und Darstellung | Robert, 08.10.: eine Farbänderung färbt sofort um, ohne die Geometrie neu zu rechnen |
 | [RM-559 — Körper in der Szene mit drei Klicks aufziehen, als Körper oder als Ausschnitt](#rm-559) | Bedienung und Darstellung | Gebaut (Paket Z1, 08.10.): Werkzeug *Zeichnen*, Strg+Umschalt+E; offen die Abnahme am echten Fenster und die Nachzählung durch bedienlogik |
 | [RM-560 — *Formen* arbeitet schwach](#rm-560) | Bedienung und Darstellung | Befunde H1–H11 behoben, je mit Test oder Messung, Review Z2 behoben; offen allein Roberts Abnahme am echten Fenster |
 | [RM-561 — *Zeichnen*, *Formen* und *Skelett* sind zu kompliziert bedient](#rm-561) | Bedienung und Darstellung | Zeichnen (Paket Z1), Formen und Skelett (Paket Z2) umgebaut, mit Fenstertests; offen die Nachzählung durch bedienlogik und die Abnahme am echten Fenster |
 | [RM-576 — Formen: Vorschau höchstens einmal je Bild übergeben (kleine Netze)](#rm-576) | Bedienung und Darstellung | gebaut und gemessen; offen allein der Blick auf die Bildrate am echten Fenster |
-| [RM-569 — Ein beim Zuweisen neu angelegtes Filament bleibt gespeichert, im Lager und im Projekt](#rm-569) | Bedienung und Darstellung | Robert, 08.10.: Code legt es sofort im Lager an, das Projekt trägt Name, Material und Farbe an der Bindung; Zusammenspiel mit Strg+Z, Speichern und fremdem Rechner fehlt als Test |
 | [RM-283 — Ein Handbuch, das man ohne Ausprobieren versteht](#rm-283) | Bedienung und Darstellung | Nummernplatzierung gebaut und in den Bildanleitungen von 0.5.3 erzeugt (`ee9a572f3`); offen allein die Feldabnahme nach §11 mit einem Kunden ohne CAD |
 | [RM-084 — Kundentexte gegen die vereinbarte Sprache prüfen](#rm-084) | Bedienung und Darstellung | Kataloge und Quelltexte durchgesehen und behoben (04.10., `871cc29e6`), Handbuch und Stempel mit 0.5.3 erzeugt; offen allein die Fensterabnahme der längeren Knopfnamen auf 1280 px (RM-213) |
 | [RM-090 — Gemeinsamen Vertrag für die fünf Produkterlebnisse umsetzen](#rm-090) | Bedienung und Darstellung | Gegenprobe liest Export- und Slicerdateien zurück, Nebenfolge je Handlung aus dem Kern, Folge je Befund, Kandidatenprüfung nennt nur Neues und Behobenes, NM 1–11 ohne Fenster belegt; offen allein die Fensterabnahme beim Release (RM-213) |
-| [RM-135 — Zugewiesene Höhe der Filamentkarte vollständig nutzen](#rm-135) | Bedienung und Darstellung | Windows-Stand nachgemessen am 23.09.2026 (Overlay- und Kartentests grün); offen nur der macOS-Prüflauf |
 | [RM-198 — Eine feine Fenstermaske über der Vulkan-Fläche verliert das Gerät](#rm-198) | Bedienung und Darstellung | Probe über den echten Startweg beim nächsten Release (RM-213); D3D12 als Backend ist eine eigene Entscheidung |
 | [RM-200 — Ein Zug am Griff soll flüssig sein](#rm-200) | Bedienung und Darstellung | Am echten Fenster prüfen, ob sich die Geste flüssig anfühlt (Release, RM-213) |
 | [RM-213 — Fensterabnahme und die Kundenwege am echten Fenster](#rm-213) | Bedienung und Darstellung | Beim Release: die offscreen belegten Änderungen am echten Fenster, die Kundenwege C14/A13/A4/C5/C1 und die vier Hauptwege mit Zeiten, die Fensterproben der Fensterwache und von C14. Vorbedingungen für 0.5.3 erfüllt (Taglauf 37409338027 mit allen Fensterdateien grün, Bereichsnachweis `534d69b79`), beim nächsten Release erneut; dazu die vier Handwege der Merkmalbedienung (§4) |
@@ -151,6 +147,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-242 — Testphase der Vollversion nachreichen](#rm-242) | Veröffentlichung, Betrieb und Vertrieb | Robert 25.09.2026: 1.0 startet ohne Testphase, sie kommt später — Januar (Unentschlossene noch zu 69 €) oder Februar 2027 mit dem Preissprung. Offen: Termin, ob frühere Demo-Geräte sie bekommen (heute T15: nein), Release mit gesetztem `TRIAL_FROM` |
 | [RM-351 — Die Website bietet 0.5.1 an und nennt im Downloadhinweis 0.5.0 als signierte Fassung](#rm-351) | Veröffentlichung, Betrieb und Vertrieb | Hinweis seit `1d9373efa` in sechs Sprachen versionsneutral („ab 0.5.0“), in 0.5.2 und 0.5.3; offen der Wächter aus der Abnahme — oder Roberts Verzicht, weil der Satz keine Version mehr an das Angebot bindet |
 | [RM-528 — Die Installation kennt nur einen Release-Schlüssel](#rm-528) | Veröffentlichung, Betrieb und Vertrieb | Schlüsselliste in `updates.py` bauen und ausliefern, bevor der Release-Schlüssel wechselt (Entscheidung Robert, 06.10.) |
+| [RM-575 — Handbuchabbildungen für den Filamentknopf in der Kopfzeile](#rm-575) | Veröffentlichung, Betrieb und Vertrieb | Wartet auf den Release: `figure:window`, Kopfzeile und `website/handbuch.html` zeigen noch die Filamentgruppe links (RM-556) |
 | [RM-062 — Eingabemethode im aktuellen Flatpak bestätigen](#rm-062) | Kundenrückmeldungen | Am ausgelieferten 0.5.3 gemessen: Start, Fokus und Eingabe gehen, Fcitx nur über IBus; Abhilfe gebaut (Fcitx in der Umgebung, nur `XMODIFIERS=@im=ibus` oder `QT_IM_MODULE=wayland` unter `xcb` → `ibus`; Fcitx außerhalb des Flatpak über das IBus-Portal), offen der Nachweis im nächsten Paket für Flatpak, AppImage und Archiv, auch für die zwei IBus-Fälle |
 | [RM-521 — Cura unter Linux slicen lassen (AppImage und Flatpak)](#rm-521) | Kundenrückmeldungen | Lader-Weg und Rückfall gebaut, am Runner mit Flatpak und AppImage, draußen und im Sandkasten belegt (Lauf 37528397381); offen: Abnahme beim Kunden mit dem nächsten Paket (Ubuntu 24.04, Solidon als Flatpak) |
 | [RM-522 — Dem Linux-Kunden mit Orca als Flatpak die Behebung melden](#rm-522) | Kundenrückmeldungen | Text für 0.5.3 liegt in Roberts Ablage bereit, Behebung am ausgelieferten Paket belegt (RM-064); Robert schickt, dann Versand eintragen |
@@ -3637,16 +3634,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   ja, der vorhandene Beleg-Punkt ist neu gefasst, ein Punkt zur Folge je Befund kommt dazu (alles
   neu seit v0.5.1).
 
-<a id="rm-135"></a>
-
-- [~] **RM-135 — Zugewiesene Höhe der Filamentkarte vollständig nutzen.** Qt berechnet Hinweis,
-  sichtbare Knöpfe und Abstände bei der tatsächlichen Breite; leere Listen erzwingen keine
-  überzähligen Mindestzeilen. Acht Regressionen und die native Windows-Abnahme mit knappen/freien
-  Höhen, langen Hinweisen, großer Schrift und voller Liste sind grün. Nachbarkarten behalten ihren
-  Raum; der Mac-xfail ist entfernt. Offen bleibt der plattformübergreifende Prüflauf auf macOS.
-
-  [Bisheriger Befund](ROADMAP-ARCHIV.md#ein-ort-für-die-auswahl-07092026).
-
 <a id="rm-213"></a>
 
 - [~] **RM-213 — Fensterabnahme und die Kundenwege am echten Fenster.**
@@ -4228,24 +4215,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   Fensterabnahme beim Release (RM-213): Kaufdatum „05092026“ tippen und *Unbekannt*, Spulenfenster
   auf halber Höhe, *Werte mitgeben* mit schreibgeschütztem Nutzerordner. Changelog: nein.
 
-<a id="rm-556"></a>
-
-- [ ] **RM-556 — Filamente aus der linken Spalte in die Kopfleiste.** Robert, 08.10.2026: Die
-  Gruppe *Filamente* unten links wandert als Knopf in die obere Leiste. Ein Klick öffnet eine
-  kleine Liste der Filamente, die das Projekt verwendet, und darunter den Weg ins
-  Filamentlager. **Abnahme:** linke Spalte ohne Filamente, Knopf in der Kopfleiste innerhalb
-  der Oberflächengrenzen (`test_interface_limits`), Fenstertest für Liste und Wechsel ins
-  Lager, Handbuch und Abbildungen nachgezogen.
-
-<a id="rm-557"></a>
-
-- [ ] **RM-557 — Nach einem Filamentwechsel bleibt der Körper in der alten Farbe, und Solidon
-  rechnet lange.** Robert, 08.10.2026: Der Wechsel lädt spürbar, und danach zeigt die Ansicht
-  noch die alte Farbe. Es ändert sich nur die Farbe. **Soll:** Die Ansicht färbt sofort um;
-  die Geometrie wird nicht neu gerechnet. Ist die Zuordnung ein Schritt im Dokument (Regel 2),
-  trifft die Auswertung ihren Zwischenspeicher, und die Farbe steht trotzdem sofort.
-  **Abnahme:** Test zählt beim Farbwechsel null neue Netzberechnungen; Fenstertest: neue Farbe
-  im ersten Bild nach dem Wechsel; Strg+Z stellt die alte Farbe wieder her.
 
 <a id="rm-559"></a>
 
@@ -4316,19 +4285,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   und Vorschau jede Probe sofort, ins Bild kommt die Fläche einmal je Ereignisrunde
   (`test_the_samples_of_one_event_reach_the_view_once`). **Abnahme:** Erfüllt, wenn ein schneller
   Zug an einem kleinen Korpusmodell am echten Fenster flüssig folgt; offen allein dieser Blick.
-
-<a id="rm-569"></a>
-
-- [ ] **RM-569 — Ein beim Zuweisen neu angelegtes Filament bleibt gespeichert, im Lager und im
-  Projekt.** Robert, 08.10.2026: „werden Filamente auch gespeichert, wenn wir einem Körper ein
-  Filament zuweisen, das wir in dem Schritt auch erstellen?“ Nachgesehen: *Neues Filament …* in
-  der Auswahl (`filament_picker._make_one`) schreibt es über `filaments.save` sofort ins
-  Filamentlager und wählt es danach; das Projekt trägt Name, Material und Farbe an der
-  Spulenbindung (`SpoolBinding`). Ungeprüft ist das Zusammenspiel. **Abnahme:** Test über den
-  ganzen Weg — Filament beim Zuweisen anlegen, Projekt speichern, mit leerem Nutzerordner öffnen:
-  Name, Farbe und Material stehen da; Strg+Z nimmt die Zuweisung zurück, das Lager behält das
-  Filament; Speichern, bevor der Lagereintrag geschrieben ist, verliert nichts; ein
-  fehlgeschlagener Lagereintrag meldet sich mit Handlungsvorschlag.
 
 ## KI und Generatoren
 
@@ -5159,6 +5115,15 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   einer Version ausliefern, bevor der Schlüssel wechselt. **Abnahme:** Test mit zwei
   Schlüsseln (alter und neuer unterschreiben gültig, ein fremder nicht), `sign_version.py`
   und Signierdoku nennen den Ablauf des Wechsels. Bauplan §37.2.
+
+<a id="rm-575"></a>
+
+- [ ] **RM-575 — Handbuchabbildungen für den Filamentknopf in der Kopfzeile.** Mit RM-556 steht
+  *Filamente* als Knopf in der Kopfzeile, die linke Spalte trägt keine Filamentgruppe mehr; das
+  Handbuch beschreibt es in sechs Sprachen, die Abbildungen zeigen noch den alten Stand.
+  **Abnahme:** `figure:window` und die Abbildungen mit Kopfzeile in allen Sprachen neu erzeugt
+  (`/erzeugen`), `website/handbuch.html` daraus neu gebaut; keine Abbildung zeigt mehr die
+  Filamentgruppe in der linken Spalte. Wartet auf den Release.
 
 ## Kundenrückmeldungen
 

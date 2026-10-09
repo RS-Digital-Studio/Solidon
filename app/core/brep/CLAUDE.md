@@ -82,8 +82,9 @@ unveränderten Ergebnis (`HasSourceDeviation`).
   an jedem nativen Schritt lässt Eingabe und Cache stehen.
 - **Filamentslots** je nativer Fläche (`face_slots`) reisen über
   `_copied_faces`, auch in `to_mesh(deflection=)`; `with_triangle_slots` nimmt
-  nur widerspruchsfreie ganze Flächen und hält die Merkmalsdreiecke in ihrer
-  Folge. `carried_face_slots` folgt nur belegten Ersetzungen (`ModifiedShape`,
+  nur widerspruchsfreie ganze Flächen, kopiert die Form nicht und teilt Merker
+  und Dreiecke (`_recoloured`, RM-557: ein Filament rechnet nichts neu); eine
+  eigene Kopie für einen Arbeiter ist `detached`. `carried_face_slots` folgt nur belegten Ersetzungen (`ModifiedShape`,
   `ShapeBuild_ReShape`): erste Quelle, Abzugswerkzeuge färben nie, neue Flächen
   Slot null, Widerspruch wird abgewiesen; `keep_filament_boundaries` hält
   Slotgrenzen. Die Zuordnung entsteht beim Öffnen aus dem Verlauf.

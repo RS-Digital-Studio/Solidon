@@ -6916,22 +6916,21 @@ def test_the_display_cache_follows_the_geometry_not_only_the_id(
 
 
 def test_a_body_with_filament_still_shows_that_it_is_selected(qt_app: QApplication) -> None:
-    """Auswahlfarbe schlägt Dreiecksfarben — sonst bleibt ein Teil mit Filament grau.
+    """Die Auswahl liegt als Ton über den Dreiecksfarben — sonst bliebe ein Teil grau.
 
     Wer einem Körper ein Filament zuweist, gibt ihm Farben je Dreieck; pygfx
     liest sie über ``material.color_mode = "face"`` und sieht die Körperfarbe
-    gar nicht mehr an. Die Auswahl schrieb bis hierher genau dorthin: im
-    Objektbaum markiert, im Bild grau wie alle anderen (Befund Robert,
-    08.09.2026, an vier Teilen in „PLA Weiß").
-
-    Geprüft wird die Umschaltung selbst und nicht ihre Farbe — was pygfx aus
-    ``color_mode`` macht, ist Sache des Renderers; dass die Ansicht sie beim
-    Auswählen umlegt und beim Abwählen zurücknimmt, ist ihre eigene Aussage.
+    gar nicht mehr an. Die Auswahl schrieb bis zum 08.09.2026 genau dorthin:
+    im Objektbaum markiert, im Bild grau wie alle anderen. Danach stand sie
+    deckend, und ein neues Filament zeigte sich erst nach dem Abwählen
+    (RM-557). Geprüft wird, dass die Ansicht den Ton beim Auswählen legt und
+    beim Abwählen zurücknimmt; was pygfx daraus mischt, ist Sache des
+    Renderers.
     """
     from app.core.geom.mesh import MeshData
     from app.core.scene.evaluate import EvaluationResult
     from app.core.types import MaterialSlot, Scene, SceneObject
-    from app.ui.viewport import Viewport
+    from app.ui.viewport import SELECTED_COLOUR, SELECTION_TINT_SHARE, Viewport
 
     body = trimesh.creation.box(extents=(10.0, 10.0, 10.0))
     mesh = MeshData.of(body, tuple([1] * len(body.faces)))
@@ -6949,18 +6948,69 @@ def test_a_body_with_filament_still_shows_that_it_is_selected(qt_app: QApplicati
         viewport.show_scene(result)
         actor = viewport._actors.get("obj_1")
         assert isinstance(actor, RecordingItem), "der Körper wurde gezeichnet"
-        assert actor.face_colours_visible, "ohne Auswahl gilt der Werkstoff je Dreieck"
+        assert actor.face_tint is None, "ohne Auswahl gilt der Werkstoff je Dreieck"
 
         viewport.select("obj_1")
-        assert not actor.face_colours_visible, (
-            "ausgewählt muss die eine Auswahlfarbe gelten, sonst sieht man die Auswahl nicht"
+        assert actor.face_tint == (SELECTED_COLOUR, SELECTION_TINT_SHARE), (
+            "ausgewählt liegt die Auswahlfarbe als Ton darüber"
         )
 
         viewport.select(None)
-        assert actor.face_colours_visible, "abgewählt kommt der Werkstoff zurück"
+        assert actor.face_tint is None, "abgewählt kommt der Werkstoff ungetönt zurück"
     finally:
         viewport.renderer = None
         viewport.deleteLater()
+
+
+def test_an_exact_body_shows_the_filament_it_was_given() -> None:
+    """RM-557: Ein Baustein mit Filament steht im Bild in dessen Farbe, nicht grau.
+
+    Die Ansicht las die Slots am Körper (``mesh.slots``); ein exakter Körper
+    trägt sie an seiner Vernetzung, und gelesen als leer zeichnete sie ihn in
+    der Körperfarbe — „der Körper bleibt in der alten Farbe“ (Robert,
+    08.10.2026), gemessen am echten Fenster: nach dem Abwählen grau.
+    """
+    from tests.helpers import exact_kernel
+
+    edit = exact_kernel()
+    from app.core.types import MaterialSlot, SceneObject
+    from app.ui.viewport import slot_cell_colours
+
+    solid = edit.box(20.0, 20.0, 20.0)
+    solid = solid.with_triangle_slots((1,) * solid.triangle_count)
+    entry = SceneObject(
+        "obj_1",
+        "Würfel",
+        solid,
+        kind="brep",
+        material_slots=[MaterialSlot(1, "Rot", (1.0, 0.0, 0.0))],
+    )
+    colours = slot_cell_colours(solid, entry, solid.triangle_count, "#808080")
+    assert colours is not None, "der exakte Körper bekommt seine Filamentfarbe"
+    assert colours.colormap is not None
+    assert set(np.asarray(colours.values).tolist()) == {1}
+    assert colours.colormap[1] == "#ff0000"
+
+
+def test_a_new_filament_keeps_what_the_view_prepared_for_the_triangles() -> None:
+    """RM-557: Kanten, Hüllen und Normalen hängen an den Dreiecken, nicht an der Farbe.
+
+    Ein Filamentwechsel baut ein neues Netz um dieselben Dreiecke. Der Merker
+    der Ansicht verglich die Hülle und rechnete danach alle drei neu — an
+    einem großen Körper im Arbeiter, und so lange stand das alte Bild.
+    """
+    from dataclasses import replace
+
+    from app.core.geom.mesh import MeshData
+    from app.ui.viewport import _MeshMemo
+
+    memo = _MeshMemo()
+    plain = MeshData.of(trimesh.creation.box())
+    memo.remember("obj_1", plain, "Kanten")
+    painted = replace(plain, slots=(1,) * plain.triangle_count)
+    assert memo.has("obj_1", painted) and memo.get("obj_1", painted) == "Kanten"
+    other = MeshData.of(trimesh.creation.box(extents=(2.0, 2.0, 2.0)))
+    assert not memo.has("obj_1", other), "andere Dreiecke, andere Antwort"
 
 
 def test_a_body_under_an_analysis_map_keeps_its_colours_when_selected() -> None:
@@ -6972,14 +7022,14 @@ def test_a_body_under_an_analysis_map_keeps_its_colours_when_selected() -> None:
     Ohne Fenster an der Entscheidung selbst; der Weg durch die Ansicht steht
     im Fenstertest darunter.
     """
-    from app.ui.viewport import shows_face_colours
+    from app.ui.viewport import SELECTED_COLOUR, face_tint
 
-    assert shows_face_colours("obj_1", highlighted=(), map_owner=None)
-    assert not shows_face_colours("obj_1", highlighted=("obj_1",), map_owner=None), (
-        "ein gewählter Körper mit Filament zeigt die eine Auswahlfarbe"
+    assert face_tint("obj_1", highlighted=(), map_owner=None) is None
+    assert face_tint("obj_1", highlighted=("obj_1",), map_owner=None) == SELECTED_COLOUR, (
+        "ein gewählter Körper mit Filament trägt den Ton der Auswahl"
     )
-    assert shows_face_colours("obj_1", highlighted=("obj_1",), map_owner="obj_1")
-    assert not shows_face_colours("obj_2", highlighted=("obj_2",), map_owner="obj_1"), (
+    assert face_tint("obj_1", highlighted=("obj_1",), map_owner="obj_1") is None
+    assert face_tint("obj_2", highlighted=("obj_2",), map_owner="obj_1") == SELECTED_COLOUR, (
         "die Karte des einen Körpers gibt dem anderen keine Ausnahme"
     )
 
@@ -7004,7 +7054,7 @@ def test_selecting_the_body_of_an_analysis_map_leaves_the_map_visible(qt_app: QA
         viewport.select("obj_1")
         actor = viewport._actors.get("obj_1")
         assert isinstance(actor, RecordingItem), "der Körper wurde gezeichnet"
-        assert actor.face_colours_visible, "gewählt bleibt die Karte die Farbe des Körpers"
+        assert actor.face_tint is None, "gewählt bleibt die Karte die Farbe des Körpers"
     finally:
         viewport.renderer = None
         viewport.deleteLater()

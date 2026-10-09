@@ -8981,16 +8981,15 @@ def test_selected_bodies_reveal_their_operations_in_the_window_on_the_right(
 
 
 @pytest.mark.parametrize("theme", ["dark", "light"])
-def test_the_left_column_shares_its_height_with_all_four(window: MainWindow, theme: str) -> None:
-    """Der Abnahmenachweis zu P4: alle vier Abschnitte teilen, keiner nimmt.
+def test_the_left_column_shares_its_height_with_all_three(window: MainWindow, theme: str) -> None:
+    """Der Abnahmenachweis zu P4: alle Abschnitte teilen, keiner nimmt.
 
-    Vorher teilten nur drei. ``ObjectTree``, ``HistoryPanel`` und
-    ``FilamentPanel`` beantworten den Raumvertrag aus ``overlay.py`` seit
-    Langem, ``ParameterPanel`` nicht — und ``_share_room`` fragt nur, wer ihn
-    hat; wer ihn nicht hat, „behält seine eigene Höhe". Genau das tat die
-    Parameterkarte: Bei zehn Maßen stand sie auf 378 Bildpunkten und damit
-    höher als Baum, Verlauf und Filamente zusammen (148, 58, 126 — gemessen am
-    gebauten Fenster).
+    ``ObjectTree`` und ``HistoryPanel`` beantworten den Raumvertrag aus
+    ``overlay.py`` seit Langem, ``ParameterPanel`` lange nicht — und
+    ``_share_room`` fragt nur, wer ihn hat; wer ihn nicht hat, „behält seine
+    eigene Höhe". Genau das tat die Parameterkarte: Bei zehn Maßen stand sie
+    auf 378 Bildpunkten (gemessen am gebauten Fenster). Die Filamente stehen
+    seit RM-556 in der Kopfzeile und nicht mehr in der Spalte.
 
     Geprüft wird an Roberts vier Vorgaben vom 07.09.2026: Jeder bekommt
     wenigstens seinen Boden, keiner mehr als seinen Wunsch. Unterhalb der
@@ -9000,7 +8999,6 @@ def test_the_left_column_shares_its_height_with_all_four(window: MainWindow, the
     from PySide6.QtTest import QTest
 
     from app.ui.overlay import MARGIN, extra_height
-    from app.ui.panels import open_section
 
     window.action_theme(theme)
     _with_two_objects(window)
@@ -9009,18 +9007,12 @@ def test_the_left_column_shares_its_height_with_all_four(window: MainWindow, the
             name=f"mass_{nummer}", value=float(nummer + 1), unit="mm"
         )
     window.parameters.show_document(window.session.project.document)
-    # Der Filamentabschnitt steht zugeklappt in der Spalte; zugeklappt zählt er
-    # in der Verteilung nicht mit (``_share_room`` fragt ``isVisibleTo``), und
-    # Roberts Vorgabe „Filamente ist heute kaum zu sehen" gilt dem
-    # aufgeklappten.
-    open_section(window.filaments)
     window.show()
 
     karten = {
         "Objekte": window.object_tree,
         "Parameter": window.parameters,
         "Verlauf": window.history_panel,
-        "Filamente": window.filaments,
     }
     zuteilung: dict[str, list[int]] = {name: [] for name in karten}
     knapp = geteilt = voll = False
@@ -9699,7 +9691,7 @@ def test_every_offered_error_action_does_something(window: MainWindow) -> None:
         # Die drei gelten dem Filamentlager und hängen an dessen Fehlerkarten:
         # ``reload`` am Revisionskonflikt (`InventoryView._rejected`),
         # ``restore_backup`` und ``set_aside_file`` an der unlesbaren Datei
-        # (`InventoryView._read_handlers`, `FilamentPanel._read_handlers`).
+        # (`InventoryView._read_handlers`).
         # Wie ``retry`` sind sie verdrahtet, wo der Fehler entsteht — das
         # Hauptfenster hat weder die Datei noch den Dialog dazu.
         "reload",

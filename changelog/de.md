@@ -69,6 +69,10 @@ Nutzen da und sonst nichts.
 - Jedes Maß eines Bausteins lässt sich über fx an ein Projektmaß binden, auch wenn noch kein Ausdruck darin steht.
 - Nach dem Ziehen am Griff einer Vorschau bleibt keine Zahl über der Ansicht stehen. Eine dabei getippte Zahl verschiebt die Vorschau, nicht den gewählten Körper.
 - Nach *Reparieren und erneut versuchen* und verwandten Wegen heißt im Verlauf kein weiterrechnender Schritt mehr „gelöscht“. Hält die Kette erneut an, ist der Schritt markiert.
+- Der Knopf *Filamente* steht jetzt in der Kopfzeile. Er listet die Filamente des Projekts und führt ins Filamentlager.
+- Ein anderes Filament steht sofort im Bild, auch an Bausteinen und STEP-Teilen, und Solidon rechnet dafür nichts neu. Gewählte Körper zeigen ihre Filamentfarbe unter der Markierung.
+- Im Reiter *Auswahl* weist das Filamentfeld erst mit Klick oder Enter zu. Pfeiltasten und Tippen blättern nur, und das Mausrad rollt den Reiter.
+- In den übersetzten Fassungen rollt *Neues Filament* nicht mehr seitwärts, wenn das Fenster kürzer ist als sein Inhalt.
 
 ### Drucken und Übergabe an den Slicer
 
@@ -86,6 +90,7 @@ Nutzen da und sonst nichts.
 - Bei kleinen Spitzen schlägt Solidon ein niedrigeres *Mindesttempo beim Bremsen* vor, damit sie nicht weich werden. Die Einstellung geht an jeden Slicer.
 - Schmale Ränder, die sich selbst tragen, bleiben mit *Ränder ohne Stütze* frei. Der Druck braucht so deutlich weniger Stütze.
 - Lehnt der Slicer Filamente mit zu verschiedenen Temperaturen auf einer Platte ab, nennt Solidon jetzt Grund und Ausweg, statt nur zu melden, dass keine Druckdatei entstand.
+- Im Druckdialog bleiben Drucker, Filamente und Qualität auch bei vergrößerter Schrift ganz sichtbar. Lange Beschriftungen brechen dafür um.
 
 ### Gewinde, Bohrungen und Normteile
 

@@ -2019,6 +2019,7 @@ QMenuBar {{ background: {window}; border-bottom: 1px solid {line}; }}
 QMenuBar::item {{ padding: {TIGHT}px {ROOMY}px; background: transparent; }}
 QMenuBar::item:selected {{ background: {hover}; }}
 QMenu {{ background: {base}; border: 1px solid {line}; padding: {TIGHT}px; }}
+QFrame#filamentPopup {{ background: {base}; border: 1px solid {line}; }}
 QMenu::item {{ padding: {TIGHT}px {WIDE}px; border-radius: {SPACE}px; }}
 QMenu::item:selected {{ background: {highlight}; color: {on_highlight}; }}
 QMenu::separator {{ height: 1px; background: {line}; margin: {TIGHT}px {NORMAL}px; }}

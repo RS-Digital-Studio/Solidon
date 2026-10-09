@@ -596,6 +596,11 @@ entfernt hat.
 | 2026-09-07 | [Ein Ort für die Auswahl (07.09.2026)](#ein-ort-für-die-auswahl-07092026) |
 | 2026-09-07 | [Die Durchsicht des 07.09.2026](#die-durchsicht-des-07092026) |
 | 2026-09-08 | [Zwei Werkzeuge, zwei Wahrheiten (08.09.2026)](#zwei-werkzeuge-zwei-wahrheiten-08092026) |
+| 2026-10-08 | [RM-557: Ein Filamentwechsel färbt sofort um und rechnet nichts neu (08.10.2026)](#rm-557-ein-filamentwechsel-färbt-sofort-um-und-rechnet-nichts-neu-08102026) |
+| 2026-10-08 | [RM-556: Die Filamente stehen hinter einem Knopf in der Kopfzeile (08.10.2026)](#rm-556-die-filamente-stehen-hinter-einem-knopf-in-der-kopfzeile-08102026) |
+| 2026-10-08 | [RM-135: Die Filamentkarte der linken Spalte gibt es nicht mehr (08.10.2026)](#rm-135-die-filamentkarte-der-linken-spalte-gibt-es-nicht-mehr-08102026) |
+| 2026-10-08 | [RM-569: Ein beim Zuweisen angelegtes Filament bleibt im Lager und im Projekt (08.10.2026)](#rm-569-ein-beim-zuweisen-angelegtes-filament-bleibt-im-lager-und-im-projekt-08102026) |
+| 2026-10-09 | [RM-630: Die Kopfzeile des Druckdialogs behält ihre Felder, wenn die Schrift breiter läuft (09.10.2026)](#rm-630-die-kopfzeile-des-druckdialogs-behält-ihre-felder-wenn-die-schrift-breiter-läuft-09102026) |
 
 ---
 
@@ -9178,7 +9183,7 @@ Arbeit gilt ausschließlich `ROADMAP.md`.
 | RM-109 — Die Schichtanalyse der Rändelplatte kostet 7,0 s statt 4,5 — der Preis der Rippenerkennung, und ein Teil davon ist sparbar | weiter offen → [RM-109](#rm-109) | app/core/slice/analysis.py:1153 ruft _survives_opening bei der Vorprüfung weiter auf. Die alte 4,3-s-Marke gehörte zu einer falschen Analyse; 7,0 s bleibt ein historischer Messwert, keine neue Leistungsaussage. |
 | RM-110 — Zwei Zwillinge lesen den Pfad eines offenen Handles | weiter offen → [RM-110](#rm-110) | app/core/scene/project.py:365 und app/core/updates.py:967 führen weiterhin zwei Implementierungen. Der Mac-F_GETPATH-Fehler ist bereits behoben; offen ist nur die gemeinsame Pflege. |
 | RM-111 — Der Sammellauf zwischen zwei Tests gilt nur noch für zwei Dateien | zusammengeführt → [RM-107](ROADMAP.md#rm-107) | tests/conftest.py:185–244 führt _DIALOG_MODULES und den eingeschränkten Sammellauf weiterhin. Derselbe verbliebene Diagnoseauftrag wie RM107. |
-| RM-112 — Die Filamentkarte rechnet ihr Beiwerk auf dem Mac zu klein | zusammengeführt → [RM-135](ROADMAP.md#rm-135) | tests/test_filament_picker.py:534–538 markiert die Mac-Unterhöhe weiterhin xfail. RM135 betrifft denselben _around_the_list-Vertrag in der anderen Richtung. |
+| RM-112 — Die Filamentkarte rechnet ihr Beiwerk auf dem Mac zu klein | zusammengeführt → [RM-135](#rm-135) | tests/test_filament_picker.py:534–538 markiert die Mac-Unterhöhe weiterhin xfail. RM135 betrifft denselben _around_the_list-Vertrag in der anderen Richtung. |
 | RM-113 — Die Tokendatei gehört auf dem Windows-Runner nicht dem Nutzer | weiter offen → [RM-113](#rm-113) | tests/test_licence_admin.py:45ff überspringt in CI weiterhin bei 'gehört nicht dem aktuellen Nutzer'. Aus der Vermutung Administratorengruppe folgt keine Erlaubnis, sie ungeprüft als Eigentümer anzuerkennen. |
 | RM-114 — Die Reihe der Vereinfachungsziele ist auf Apple Silicon ungemessen | weiter offen → [RM-114](#rm-114) | tests/test_subdivision.py:480–485 probiert 40000/20000/30000/60000/15000 und überspringt, wenn keine Variante öffnet. Ein aktuelles dortiges Messfenster fehlt. |
 | RM-115 — Die Releaseakte meldet, sie blockiert nicht | weiter offen → [RM-115](#rm-115-abschluss-050) | .github/workflows/build.yml hat --write-evidence und --release-check bereits, aber die Warnungsbehandlung besteht. Behebung älterer ELF-/Bibliotheksbefunde ersetzt keinen grünen vollständigen Artefaktnachweis. |
@@ -9201,7 +9206,7 @@ Arbeit gilt ausschließlich `ROADMAP.md`.
 | RM-132 — Freiformerkennung liegt noch über dem Ein-Sekunden-Ziel | weiter offen → [RM-132](ROADMAP.md#rm-132) | tests/test_performance.py enthält inzwischen beide zusätzlichen Fälle; :556 nennt 1,41 s synthetisch und 1,52 s organisch. Die Korpuslücke ist geschlossen, das strengere Ziel bleibt laut Punkt ausdrücklich offen. |
 | RM-133 — `rotate_feature` ändert das Volumen, und niemand sagt es | weiter offen → [RM-133](#rm-133) | prepare_ops.py:1912ff meldet inzwischen verlorenen Durchgang über _throughness_lost. Die allgemeine Volumenänderung ist weiter eine Bedienentscheidung, kein bestätigter Geometriefehler. |
 | RM-134 — Testhilfen stehen zweimal | weiter offen → [RM-134](ROADMAP.md#rm-134) | tests/test_cone_fit_quality.py:15 und test_torus_fit_quality.py:15 führen _freeform_patch doppelt; test_analysis_ui.py:161 und test_selection.py:361 on_the_bore_wall mit unterschiedlicher Signatur. Die historische Zahl 21 Gruppen wird nicht ungeprüft fortgeschrieben. |
-| RM-135 — Die Filamentkarte fordert mehr, als sie zeigt | weiter offen → [RM-135](ROADMAP.md#rm-135) | app/ui/filament_picker.py:831ff _around_the_list bleibt die gemeinsame Berechnung. tests/test_filament_picker.py:534ff hat weiterhin die Mac-Unterhöhen-Ausnahme. 144/126 ist ein historischer Windows-Befund; beide Richtungen gemeinsam neu vermessen. |
+| RM-135 — Die Filamentkarte fordert mehr, als sie zeigt | gegenstandslos (RM-556) → [RM-135](#rm-135) | app/ui/filament_picker.py:831ff _around_the_list bleibt die gemeinsame Berechnung. tests/test_filament_picker.py:534ff hat weiterhin die Mac-Unterhöhen-Ausnahme. 144/126 ist ein historischer Windows-Befund; beide Richtungen gemeinsam neu vermessen. |
 | RM-136 — Die Handbücher von 0.3.5 tragen neuen Text auf alten Bildern | weiter offen → [RM-136](#rm-136) | app/core/figures.py:92 beschreibt weiter vier Bereiche, :1118 trägt der Bildtext den alten Aufbau. 4a88f97a/cdb5cab1 aktualisieren echte Screenshots und Medien; 84a746e7 veröffentlicht 0.3.5. Der alte Auftrag 'vor Paketbau 0.3.5' und pauschal alte Screenshots sind erledigt; Schema bleibt offen. |
 | RM-137 — Live-Abnahme des Sitzungsendes | weiter offen → [RM-137](#rm-137) | Aktuelle ROADMAP.md wurde während der Durchsicht berechtigt weitergeführt: Desktop und Standalone-CLI sind getrennt geprüft. loggedIn=false stammt aus der separaten CLI und beweist keine fehlende Desktop-Anmeldung; Pyright ist bereits als Kind einer Desktop-Sitzung belegt. Nur Live-Abnahme des echten Sitzungsendes fehlt. |
 
@@ -24339,7 +24344,7 @@ bleibt, steht hier mit Kästchen.
   weiter 114 und 65 am Stück. Was offen bleibt, ist die Mine selbst:
   Zerstörung eines Qt-Objekts zur falschen Zeit, gleich durch wen — die
   andere Hälfte steht in „Fünf Fensterdateien reißen".
-- **Historischer Befund RM-112 (zusammengeführt; aktuelle Aufgabe [RM-135](ROADMAP.md#rm-135)):** **Die Filamentkarte rechnet ihr Beiwerk auf dem Mac zu klein.**
+- **Historischer Befund RM-112 (zusammengeführt, gegenstandslos mit RM-556; Abschluss [RM-135](#rm-135)):** **Die Filamentkarte rechnet ihr Beiwerk auf dem Mac zu klein.**
   `test_the_filament_card_shares_the_height_instead_of_taking_it` meldet auf
   macos-latest „eine knapp bemessene Karte muss sich auch klein machen":
   `sizeHint()` liegt nach `set_room(least_height())` über dem Boden, also
@@ -26196,7 +26201,7 @@ mit Grund, eine Handlung der falschen Auswahlstufe verschwindet. Und
       duplizieren* und *Objekt umbenennen* verschwinden an einer Fläche,
       statt bedienbar dazustehen. Vor P6, sonst zieht der Umbau die falschen
       Knöpfe in seinen neuen Ort mit.
-- **Historischer Befund RM-135 (weiter offen; aktuelle Aufgabe [RM-135](ROADMAP.md#rm-135)):** **Die Filamentkarte fordert mehr, als sie zeigt.** Beim Bau des
+- **Historischer Befund RM-135 (gegenstandslos mit RM-556; Abschluss [RM-135](#rm-135)):** **Die Filamentkarte fordert mehr, als sie zeigt.** Beim Bau des
       P4-Nachweises gemessen: Sie meldet als Wunsch 144 Bildpunkte, bekommt
       sie zugeteilt und setzt 126 um. Die Differenz rechnet
       `filament_picker._around_the_list` zu hoch — sie fordert damit Platz,
@@ -45052,3 +45057,151 @@ entfernen, öffnen und rechnen), `test_an_own_part_named_like_an_operation_keeps
 Szene, dann neben einem gewählten Körper auf freier Stelle). Gegenprobe ohne Erzeuger: alle rot.
 Handbuch „Eigene Bausteine“ in sechs Sprachen. Changelog: ja — Ein eigener Baustein entsteht auch
 im leeren Projekt als eigenes Teil.
+
+## RM-557: Ein Filamentwechsel färbt sofort um und rechnet nichts neu (08.10.2026)
+
+<a id="rm-557-ein-filamentwechsel-färbt-sofort-um-und-rechnet-nichts-neu-08102026"></a>
+<a id="rm-557"></a>
+
+**RM-557 — Nach einem Filamentwechsel bleibt der Körper in der alten Farbe, und Solidon rechnet
+lange.** Robert, 08.10.2026: Der Wechsel lädt spürbar, danach zeigt die Ansicht noch die alte
+Farbe.
+
+**Ursache, am echten Fenster gemessen** (Sonde liest die Bildpunkte der Körpermitte aus dem
+Renderer, zweiter Schirm): Drei Ursachen, die zusammen das Bild ergaben. (1) Ein exakter Körper
+(Baustein, STEP) zeigte sein Filament nie: `Viewport._slot_colours` las `mesh.slots`, und
+`Solid` trägt die Slots an seiner Vernetzung — nach dem Abwählen grau (104, 110, 117) statt rot.
+(2) Gewählt deckte die Auswahlfarbe jedes Filament zu (`set_face_colours_visible(False)`), und
+gewählt ist der Körper, während man ihm am Schnellwähler ein Filament gibt — Netzkörper zeigten
+die neue Farbe erst nach dem Abwählen. (3) Am exakten Körper ging die Wahl durch eine Vorschau
+mit *Übernehmen*, und `Solid.with_triangle_slots` kopierte die Form über `replace`; mit der Kopie
+begannen alle Merker kalt. Am Lochbrett aus STEP (6194 Dreiecke, 96 Merkmale): Wahl bis zur
+Vorschau 2,0–3,9 s mit drei Auswertungen, *Übernehmen* weitere 2,8–2,9 s — davon 2,5 s exakte
+Fläche und Volumen in `_warm_metrics` und die ganze Schichtanalyse des Prüfberichts.
+
+**Behebung:** `Solid._recoloured` baut den Körper mit neuen Slots um dieselbe Form, mit
+denselben Merkern und denselben Dreiecken (keine Formkopie, `trimesh`-Cache samt Schichtanalyse
+bleibt). Die Ansicht liest die Slots über die Vernetzung (`slot_cell_colours`, ohne Fenster
+prüfbar) und merkt Kanten, Hüllen und Normalen an den Dreiecken statt an der Netzhülle
+(`_MeshMemo`). Die Auswahl liegt als Ton über den Filamentfarben (`face_tint`,
+`SELECTION_TINT_SHARE` = 0,35, Renderer `Item.set_face_tint` statt `set_face_colours_visible`);
+eine Analysekarte bleibt ungetönt. Der Schnellwähler weist an jedem Körper sofort zu, ohne
+Vorschau und *Übernehmen* — ein Filament ändert weder Geometrie noch Rechenkern, Strg+Z nimmt es
+zurück (Regel 19). Platzierungsarbeiter bekommen ihre eigene Kopie jetzt ausdrücklich
+über `Solid.detached` (bis dahin nebenbei aus `with_triangle_slots`).
+
+**Nachweis:** `tests/test_paint.py::test_a_new_filament_computes_no_geometry_again` zählt
+Vernetzung, Formkopie, exakte Masse und Schichtanalyse nach der Zuweisung — null, an Netz und
+exaktem Körper, ganzer Körper und Fläche (Gegenprobe am alten Stand: `copy_shape` 1,
+`properties` 2, `slice_body` 1). `tests/test_viewport_decisions.py`:
+`test_an_exact_body_shows_the_filament_it_was_given` (Gegenprobe rot),
+`test_a_new_filament_keeps_what_the_view_prepared_for_the_triangles`, `face_tint`.
+Fenstertests: `tests/test_filament_workflow.py::test_a_quick_spool_colours_the_body_at_once_and_undo_takes_it_back`
+(jedes Bild nach der Wahl trägt das neue Filament, Strg+Z keines mehr, beide Kerne, Körper und
+Fläche), `test_render_gfx_regressions.py::test_a_tint_over_face_colours_keeps_each_face_its_own_colour`.
+Am echten Fenster nachher: neue Farbe 0,08–0,16 s nach der Wahl, gewählt getönt (Rot 142, 75,
+55; Blau 88, 75, 126), abgewählt rein (143, 27, 27 / 27, 27, 143), exakter Körper ebenso; am
+Lochbrett 0,2 s und eine Auswertung statt rund 7 s und vier.
+
+Changelog: ja — ein neues Filament steht sofort im Bild, auch an Bausteinen und STEP-Teilen.
+
+## RM-556: Die Filamente stehen hinter einem Knopf in der Kopfzeile (08.10.2026)
+
+<a id="rm-556-die-filamente-stehen-hinter-einem-knopf-in-der-kopfzeile-08102026"></a>
+<a id="rm-556"></a>
+
+**RM-556 — Filamente aus der linken Spalte in die Kopfleiste.** Robert, 08.10.2026: Die Gruppe
+*Filamente* unten links wandert als Knopf in die obere Leiste; ein Klick öffnet eine kleine
+Liste der Filamente, die das Projekt verwendet, und darunter den Weg ins Filamentlager.
+
+**Umsetzung:** `HeaderBar.filament_button` (*Filamente*, Spulensymbol, beschriftet) rechts neben
+den Druckeinstellungen; die Kurzhilfe nennt dieselben Zeilen wie die Liste (`FilamentPanel.rows`,
+`show_filaments`). Im Wunschmaß der Kopfzeile zählt nur sein Zeichen, das Wort steht nur bei
+Platz danach — die Suche behält bei 1366 px ihr Wort (Review U2); ein zweiter Klick schließt
+die Liste, der Rückweg zu den Druckeinstellungen steht nur nach dem Weg von dort. Der Klick öffnet `filament_picker.FilamentPopup` (ein `Qt.Popup`, `show`
+statt `exec`) mit `FilamentPanel`: je Filament eine Zeile mit Farbe, Name und Zahl der Körper,
+*Druckwerte …* für das gewählte Filament, *Filamentlager öffnen*; aus den Druckeinstellungen
+(*Filamente …*) kommt dieselbe Liste mit *Zurück zu Druckeinstellungen*. Das Regal — anlegen,
+ändern, archivieren, Sicherung zurückholen — steht nur noch im Filamentlager; die linke Spalte
+trägt Objekte, Parameter und Verlauf. Die Raumteilung der Filamentkarte in der Spalte entfällt
+mit ihr (RM-135 gegenstandslos). Handbuch (*Das Fenster*, Filamentlager) in allen sechs Sprachen.
+
+**Nachweis:** Fenstertest
+`test_header.py::test_the_filaments_open_from_the_header_and_lead_into_the_inventory` (keine
+Filamentgruppe links, Knopf in der Leiste, Liste mit den Projektfilamenten, Wechsel ins Lager
+schließt sie), `test_operation_ui.py::test_the_settings_dialog_leads_to_the_filament_list`,
+die Liste in `test_filament_picker.py` ohne Regal. Oberflächengrenzen
+(`test_interface_limits.py`) grün. Abbildungen erzeugt der Koordinator beim Release.
+Changelog: ja — *Filamente* steht oben in der Kopfzeile und führt ins Filamentlager.
+
+## RM-135: Die Filamentkarte der linken Spalte gibt es nicht mehr (08.10.2026)
+
+<a id="rm-135-die-filamentkarte-der-linken-spalte-gibt-es-nicht-mehr-08102026"></a>
+<a id="rm-135"></a>
+
+**RM-135 — Zugewiesene Höhe der Filamentkarte vollständig nutzen.** Offen war allein der
+macOS-Prüflauf der Raumteilung. Mit RM-556 steht die Filamentliste nicht mehr als Karte in der
+linken Spalte, sondern hinter *Filamente* in der Kopfzeile; sie bemisst sich selbst
+(höchstens zwölf Zeilen, dann rollt sie) und nimmt an der Raumteilung nicht mehr teil. Die
+Regressionen der Kartenhöhe sind mit ihr entfallen. Gegenstandslos, nicht erledigt.
+Bisheriger Befund: [Ein Ort für die Auswahl](#ein-ort-für-die-auswahl-07092026).
+
+## RM-569: Ein beim Zuweisen angelegtes Filament bleibt im Lager und im Projekt (08.10.2026)
+
+<a id="rm-569-ein-beim-zuweisen-angelegtes-filament-bleibt-im-lager-und-im-projekt-08102026"></a>
+<a id="rm-569"></a>
+
+**RM-569 — Ein beim Zuweisen neu angelegtes Filament bleibt gespeichert, im Lager und im
+Projekt.** Robert, 08.10.2026: „werden Filamente auch gespeichert, wenn wir einem Körper ein
+Filament zuweisen, das wir in dem Schritt auch erstellen?“ Ja — und jetzt belegt über den
+ganzen Weg.
+
+**Nachweis:** Fenstertest
+`tests/test_filament_workflow.py::test_a_filament_made_while_assigning_survives_save_undo_and_another_machine`
+am echten Operationsdialog *Filament zuweisen* (`run_operation`, `_open_operation_dialog`):
+*Neues Filament …*, der erste Lagereintrag scheitert an der gesperrten Datei
+(`PermissionError` → `FileWriteError`) und meldet sich im Dialog mit *Erneut versuchen*, ohne
+Spule keine Wahl; der zweite Versuch hängt, während das Projekt gespeichert wird — der Dialog
+bleibt offen, die Wahl kommt nach dem Schreiben an; zuweisen, speichern; ein Rechner mit leerem
+Lager öffnet die Datei und kennt Name, Farbe (#2e86c1) und Material am Slot und an der
+Spulenbindung, ohne etwas in sein Lager zu legen; Strg+Z nimmt Zuweisung und Bindung, das Lager
+behält die Spule. Gegenproben: Spulenbindung ohne Namen (`with_spool`) und ein Dialog, der bei
+jeder Projektmeldung schließt, machen den Test rot. Am Code war nichts zu beheben.
+Changelog: nein.
+
+## RM-630: Die Kopfzeile des Druckdialogs behält ihre Felder, wenn die Schrift breiter läuft (09.10.2026)
+
+<a id="rm-630-die-kopfzeile-des-druckdialogs-behält-ihre-felder-wenn-die-schrift-breiter-läuft-09102026"></a>
+<a id="rm-630"></a>
+
+**RM-630 — Im portugiesischen Druckdialog ragen Qualität, Drucker und *Filamentos …* bei 560 px
+über den Rand.** Fund der Nachprüfung U2: Der Test
+`test_the_portuguese_header_keeps_every_control_visible_at_manual_width` (heute
+`test_the_translated_header_keeps_every_control_visible_at_manual_width`) setzte Portugiesisch,
+ohne den Katalog zu laden. Er maß also deutsche Texte und war nur grün, solange kein früherer
+Test im Lauf die Kataloge geladen hatte.
+
+**Befund:** `panels.align_forms` gibt der Kopfzeile und *Das Wichtigste* eine
+Beschriftungsspalte. Die längste Beschriftung setzt sie, „Densidade de preenchimento“
+(Fülldichte). In der Offscreen-Schrift misst sie 312 px, und Qualität, Drucker und
+*Filamentos …* ragten bei 560 px 48 px über den Rand. Französisch und Italienisch schnitten den
+Druckernamen ab. Am echten Windows-Fenster (Segoe) und mit DejaVu ragt in keiner Sprache etwas
+hinaus; portugiesisch ist die Beschriftung dort 155 bis 178 px breit. Mit 150 % Schriftgröße
+ragt die portugiesische Kopfzeile am echten Fenster 4 px unter den Rollbalken. Das ist bei
+`v0.5.3` und `origin/main` gleich gebaut: Die gemeinsame Spalte kam mit `11c22886c`, den
+`git tag --contains` nur in `v0.5.3` findet. Ein Kunde merkt es bei vergrößerter Schrift.
+
+**Behebung:** `align_forms(..., at_most=)` deckelt die Spalte der Formulare außerhalb der
+Reiter. Eine längere Beschriftung bricht zwischen ihren Wörtern um, wie in
+`dialogs.align_to_the_front`; ein einzelnes längeres Wort behält seine Breite.
+`PrintSettingsDialog._label_room` rechnet den Deckel aus der Mindestbreite des Dialogs. Davon
+gehen ab: das breiteste Kopffeld in seiner Mindestbreite (der Drucker mit 20 Zeichen), der
+Abstand und die Ränder samt Rollbalken. Mit Arbeitsplatzschrift ändert sich nichts: Der Deckel
+liegt über der längsten Beschriftung.
+
+**Nachweis:** Der Test läuft für alle sechs Sprachen, lädt den Katalog selbst und sichert zu,
+dass er geladen ist. Gegenprobe: `align_forms` ohne `at_most` macht fr und pt rot (Felder rechts
+über dem Rand), mit Deckel sind alle sechs grün. Am echten Windows-Fenster sind alle sechs grün
+und die Spalten unverändert. Mit 150 % Schrift reichen die Felder bis 527 px statt 531 px.
+Changelog: ja, unter *Drucken und Übergabe an den Slicer* — mit vergrößerter Schrift hatte
+`v0.5.3` den Fehler.

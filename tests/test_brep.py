@@ -243,10 +243,14 @@ def test_native_face_attributes_follow_a_copy_with_reordered_faces(monkeypatch) 
 
     monkeypatch.setattr(kernel, "copy_shape", reordered_copy)
     assigned = source.with_triangle_slots(slots)
-    assert assigned._copied_faces != tuple(range(source.face_count))
+    # Ein Filament kopiert die Form nicht (RM-557); die umgeordnete Kopie
+    # entsteht erst beim nächsten Körper aus ihr.
+    assert assigned.shape is source.shape
+    copied = dataclasses.replace(assigned, deflection=0.01)
+    assert copied._copied_faces != tuple(range(source.face_count))
     assert np.array_equal(assigned.raw.triangles, source.raw.triangles)
     assert np.array_equal(source.raw.face_attributes[kernel._FACE_ATTRIBUTE], original_mapping)
-    for result in (assigned, dataclasses.replace(assigned, deflection=0.01)):
+    for result in (assigned, copied):
         expected = np.where(result.raw.triangles_center[:, 0] < 0, 2, 4)
         assert np.array_equal(np.asarray(result.mesh.slots), expected)
         for face_index in range(result.face_count):

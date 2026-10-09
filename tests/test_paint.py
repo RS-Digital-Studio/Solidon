@@ -1014,3 +1014,87 @@ def test_a_filament_no_triangle_uses_any_more_leaves_the_body(profile: Profile) 
         slots=tuple(green.material_slots),
     )
     assert [str(slot.name) for slot in merge_slots([part])] == ["Grün"]
+
+
+def _read_like_the_window(result, profile: Profile) -> None:
+    """Was Fenster und Prüfbericht nach jeder Auswertung von jedem Körper lesen."""
+    from app.core.geom.mesh import as_mesh_data
+    from app.core.knowledge import print_settings
+    from app.core.slice.findings import print_findings
+
+    for entry in result.scene.objects.values():
+        mesh = entry.mesh
+        for name in ("volume", "area", "is_watertight", "component_count", "bounds"):
+            getattr(mesh, name)
+        as_mesh_data(mesh).raw.vertex_normals  # noqa: B018 — die Ansicht liest sie
+    print_findings(result.scene, profile, print_settings.resolve(profile))
+
+
+@pytest.mark.parametrize("kernel", ["mesh", "brep"])
+@pytest.mark.parametrize("scope", ["body", "face"])
+def test_a_new_filament_computes_no_geometry_again(
+    profile: Profile, monkeypatch: pytest.MonkeyPatch, kernel: str, scope: str
+) -> None:
+    """RM-557: Ein Filamentwechsel ändert nur die Farbe — keine Netzberechnung danach.
+
+    Robert, 08.10.2026: „Der Wechsel lädt spürbar.“ Gemessen am Lochbrett aus
+    STEP: 2,5 s für Fläche und Volumen nach jeder Zuweisung, dazu die ganze
+    Schichtanalyse — der exakte Körper kopierte bei jedem Filament seine Form,
+    und mit der Kopie begannen alle Merker kalt. Gezählt wird hier, was ein
+    Körper neu rechnet, nachdem Auswertung, Kennzahlen und Prüfbericht ihn
+    einmal gesehen haben: Vernetzung, Formkopie, exakte Masse, Schichtanalyse.
+    """
+    from collections import Counter
+
+    from app.core.brep import kernel as brep_kernel
+    from app.core.brep import properties as brep_properties
+    from app.core.scene import History, OperationDraft, ResultCache, evaluate
+    from app.core.scene.project import new_project
+    from app.core.slice import findings as slice_findings
+
+    exact_kernel()
+    project = new_project()
+    history = History(project.document)
+    create = "create_brep_box" if kernel == "brep" else "create_box"
+    history.apply(
+        "Quader",
+        [OperationDraft(create, params={"width": 40.0, "depth": 30.0, "height": 20.0})],
+    )
+    cache = ResultCache()
+    first = evaluate(project.document, profile, cache=cache)
+    identifier, body = next(iter(first.scene.objects.items()))
+    assert body.kind == kernel
+    _read_like_the_window(first, profile)
+
+    counted: Counter[str] = Counter()
+
+    def counting(module: object, name: str) -> None:
+        original = getattr(module, name)
+
+        def wrapper(*args: object, **kwargs: object) -> object:
+            counted[name] += 1
+            return original(*args, **kwargs)
+
+        monkeypatch.setattr(module, name, wrapper)
+
+    counting(brep_kernel, "tessellate")
+    counting(brep_kernel, "copy_shape")
+    counting(brep_properties, "properties")
+    counting(slice_findings, "slice_body")
+
+    params: dict[str, object] = {"slot": 1, "name": "Rot", "colour": "#ff0000"}
+    if scope == "face":
+        face = next(feature.id for feature in body.features.values() if feature.face_indices)
+        draft = OperationDraft(
+            "paint_slot", inputs=(identifier,), params={**params, "at_feature": face}
+        )
+    else:
+        draft = OperationDraft("assign_slot", inputs=(identifier,), params=params)
+    history.apply("Filament zuweisen", [draft])
+    second = evaluate(project.document, profile, cache=cache)
+    _read_like_the_window(second, profile)
+
+    painted = second.scene.objects[identifier]
+    assert painted.kind == kernel
+    assert any(slot.colour == (1.0, 0.0, 0.0) for slot in painted.material_slots)
+    assert dict(counted) == {}, "nur die Farbe hat sich geändert"

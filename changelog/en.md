@@ -44,6 +44,10 @@ it into `website/version.json`.
 - Every dimension of a part can be bound to a project dimension with fx, even before it holds an expression.
 - After dragging the handle of a preview, no number stays above the view. A number typed during the drag moves the preview, not the selected body.
 - After *Repair and try again* and similar ways, the history no longer calls a step that keeps working “deleted”. If the chain stops again, that step is marked.
+- The *Filaments* button now sits in the header. It lists the project's filaments and leads to the filament inventory.
+- A different filament shows at once, on parts and STEP bodies too, and Solidon recomputes nothing for it. Selected bodies show their filament colour beneath the highlight.
+- In the *Selection* tab, the filament field assigns only on a click or Enter. Arrow keys and typing just browse, and the mouse wheel scrolls the tab.
+- In the translated versions, *New filament* no longer scrolls sideways when the window is shorter than its content.
 
 ### Printing and slicer handover
 
@@ -61,6 +65,7 @@ it into `website/version.json`.
 - For small tips, Solidon suggests a lower *Minimum slowdown speed* so they do not go soft. The setting reaches every slicer.
 - Narrow rims that hold up on their own stay free of support with *No support under rims*. Prints need noticeably less support that way.
 - If the slicer refuses filaments whose temperatures are too far apart on one plate, Solidon now names the reason and the way out instead of only saying that no print file was made.
+- In the print dialog, printer, filaments and quality stay fully visible even with enlarged text. Long labels wrap instead.
 
 ### Threads, holes and standard parts
 

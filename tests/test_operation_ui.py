@@ -4686,20 +4686,18 @@ def test_every_feature_kind_has_a_name_in_the_tree(qt_app: QApplication) -> None
     )
 
 
-def test_the_settings_dialog_leads_to_the_filament_section(window: MainWindow) -> None:
+def test_the_settings_dialog_leads_to_the_filament_list(window: MainWindow) -> None:
     """Der Weg vom Bericht zur Wahl — und er muss im Fenster ankommen.
 
     Die Kopfzeile der Druckeinstellungen berichtet, woraus sich das Material
-    ergibt; gewählt wird es am Filamentwähler in der linken Spalte. Der ist
-    einklappbar und im Regelfall zu, also genügt kein Aufleuchten: Der
-    Abschnitt geht auf, sonst zeigt der Rahmen auf eine Kopfzeile, unter der
-    nichts steht (dieselbe Zusage wie beim Tourschritt).
+    ergibt; welche Filamente das Projekt trägt, steht hinter *Filamente* in der
+    Kopfzeile des Fensters (RM-556). *Filamente …* öffnet genau diese Liste.
 
     **Und der Dialog kommt nicht zurück, sondern der Rückweg.** Bis zum
     Gesamtreview (05.09.2026, UI-18) trat der modale Dialog nur zurück und
-    stand danach wieder über dem Fenster — der Filamentwähler war dann sichtbar
+    stand danach wieder über dem Fenster — die Filamente waren dann sichtbar
     und nicht bedienbar. Jetzt schließt der Dialog mit seinen Werten, und die
-    Filamentkarte zeigt den Knopf zurück zu den Druckeinstellungen.
+    Liste zeigt den Knopf zurück zu den Druckeinstellungen.
     """
     from PySide6.QtWidgets import QDialog
 
@@ -4707,16 +4705,15 @@ def test_the_settings_dialog_leads_to_the_filament_section(window: MainWindow) -
 
     dialog = PrintSettingsDialog(window.session, window.settings, window)
     dialog.filamentsRequested.connect(lambda: window._show_filaments(dialog))
-    section = window.filaments.parentWidget()
-    assert section is not None
     assert window.filaments.return_to_print_button.isHidden(), "der Rückweg wartet auf den Hinweg"
 
     dialog.material_link.click()
 
-    assert not window.filaments.isHidden(), "der Abschnitt steht offen"
+    assert window.filament_popup.isVisible(), "die Liste steht offen"
     assert dialog.result() == QDialog.DialogCode.Accepted, "der Dialog ging mit seinen Werten zu"
     assert dialog.isHidden(), "und sperrt das Fenster nicht mehr"
     assert not window.filaments.return_to_print_button.isHidden(), "der Rückweg steht da"
+    window.filament_popup.hide()
     dialog.deleteLater()
 
 
@@ -4738,7 +4735,8 @@ def test_the_window_wires_the_filament_shortcut_itself(
     monkeypatch.setattr(module.PrintSettingsDialog, "exec", follow_material)
     window.action_print_settings()
     assert followed == [True]
-    assert not window.filaments.isHidden()
+    assert window.filament_popup.isVisible()
+    window.filament_popup.hide()
 
 
 def test_the_window_waits_for_the_search_of_a_closed_print_dialog(
