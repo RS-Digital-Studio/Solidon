@@ -814,3 +814,40 @@ def test_the_hatch_of_an_added_body_shows_on_its_surface(renderer: Renderer) -> 
     near_line = np.abs(flat - want).sum(axis=1) < 90
     assert near_line.mean() > 0.03, f"die Striche sind zu sehen ({near_line.mean():.3f})"
     assert near_line.mean() < 0.7, "und die Fläche bleibt dazwischen zu sehen"
+
+
+def test_no_light_casts_a_shadow_so_the_shadow_maps_stay_one_texel(renderer: Renderer) -> None:
+    """Kein Licht der Ansicht wirft Schatten, also brauchen seine Schattentexturen keine Fläche.
+
+    pygfx legte je gerichtetem Licht 1024 x 1024 Tiefenwerte an, auch ohne
+    Schatten: am echten Fenster 24 MB Grafikspeicher (RM-567). Seit
+    ``SHADOW_MAP_SIZE`` ist es ein Texel je Licht; das Bild ist dasselbe, denn
+    der Shader liest die Textur nur bei ``cast_shadow`` (Bildvergleich beider
+    Stände in ``paket-l2``). Wirft ein Licht doch einmal Schatten, wird dieser
+    Test rot, bevor es mit einem Texel schattiert.
+    """
+    import gc
+
+    import pygfx as gfx
+    from pygfx.renderers.wgpu.engine.renderstate import LightRenderState
+
+    vertices, faces = cube()
+    body = renderer.add_surface(vertices, faces, name="cube", style=SurfaceStyle())
+    renderer.set_axes_marker(None)
+    renderer.reset_camera(body.bounds())
+    image = renderer.screenshot()
+    assert image[150, 200].sum() > sum(BACKGROUND_RGB) + 60, "Voraussetzung: beleuchtet gezeichnet"
+    assert isinstance(renderer, GfxRenderer)
+    lights = [obj for obj in renderer._scene.iter() if isinstance(obj, gfx.Light)]
+    assert len(lights) >= 2, "Voraussetzung: der Lichtsatz steht in der Szene"
+    assert not any(light.cast_shadow for light in lights), "kein Licht wirft Schatten"
+    states = [
+        state
+        for state in gc.get_objects()
+        if isinstance(state, LightRenderState)
+        and state.directional_lights_shadow_texture is not None
+    ]
+    assert states, "Voraussetzung: ein Lichtzustand mit gerichteten Lichtern"
+    for state in states:
+        width, height, _layers = state.directional_lights_shadow_texture.size
+        assert (width, height) == (1, 1), "eine Schattentextur ohne Schatten hat ein Texel"
