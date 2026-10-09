@@ -3,10 +3,17 @@
     python tools/run_suite_isolated.py [--release] [muster …]
     python tools/run_suite_isolated.py --release --ci-group windowed --shard-count 2 \
         --shard-index 0 --report-dir build/ci/windows-0
+    python tools/run_suite_isolated.py --release --ci-group contracts --ci-group rendering \
+        --report-dir build/ci
 
 Der CI-Weg plant aus der aktuellen Sammlung, schreibt je Datei JUnit und
 Protokoll und behält fehlende Berichte als Fehler. ``--plan-only`` sammelt
 und verteilt ohne Testausführung; dafür ist ``--release`` nicht nötig.
+Drei Gruppen: ``contracts`` fährt die zwei plattformübergreifenden
+Fensterverträge, ``windowed`` unter Windows alle übrigen Fenster- und
+Rendererdateien, ``rendering`` unter Linux und macOS deren Rendererfälle ohne
+Fenster. Mehrere Gruppen teilen sich eine Sammlung und laufen nacheinander,
+jede in ``<report-dir>/<gruppe>``; eine rote Gruppe hält die nächste nicht an.
 
 Fenster- und Rendererfälle laufen ausschließlich mit ``--release``; ohne das
 fährt jede Datei ihre Entwicklungstests ohne Fenster, Renderer, Erzeugnisvergleiche
@@ -79,6 +86,11 @@ BUDGET_HEADROOM = 1.5
 
 CONTRACT_FILES = frozenset({"tests/test_print_settings_ui.py", "tests/test_render_factory.py"})
 CI_MARKER = "(windowed or rendering) and not performance and not rendered"
+#: Die Rendererfälle ohne Fenster. Unter Linux und auf beiden Macs läuft die
+#: Fenstergruppe nicht, die Bildfälle aber doch (RM-344, Konzept CI-03).
+RENDERING_MARKER = "rendering and not windowed and not performance and not rendered"
+#: Der Marker, den jede CI-Gruppe an ihre Dateien gibt.
+GROUP_MARKERS = {"contracts": CI_MARKER, "windowed": CI_MARKER, "rendering": RENDERING_MARKER}
 
 #: Wie lange der Leser nach dem Prozessende noch auf den Rest der Ausgabe
 #: wartet. Hält ein entkommener Enkel die Leitung offen, endet der Bericht
@@ -93,12 +105,23 @@ class PlannedFile:
     path: str
     expected_tests: int
     estimated_seconds: float
+    marker: str = CI_MARKER
 
 
 def file_budget(file: PlannedFile, floor: float) -> float:
     """Die Zeitgrenze einer Datei in der CI: mindestens ``floor``, bei einer
     lang gemessenen Datei das :data:`BUDGET_HEADROOM`-fache ihrer Messung."""
     return max(floor, BUDGET_HEADROOM * file.estimated_seconds)
+
+
+def takes_file(group: str, path: str) -> bool:
+    """Ob eine CI-Gruppe eine Datei führt: ``contracts`` die zwei Vertragsdateien, die übrigen
+    Gruppen alle anderen.
+
+    Die Rendererfälle der Vertragsdateien fährt ``contracts`` auf jeder Plattform
+    mit; ``rendering`` nimmt sie deshalb nicht noch einmal (CI-01).
+    """
+    return (path in CONTRACT_FILES) == (group == "contracts")
 
 
 def plan_shards(
@@ -109,18 +132,24 @@ def plan_shards(
     group: str,
     shard_count: int,
 ) -> tuple[tuple[PlannedFile, ...], ...]:
-    """Verteilt die gesammelte Menge vollständig, längste Datei zuerst; Pfade lösen Gleichstand."""
-    if shard_count < 1 or (group == "contracts" and shard_count != 1):
-        raise ValueError("Die Fensterverträge brauchen genau eine Gruppe; Shardanzahl prüfen.")
-    if group not in {"contracts", "windowed"}:
-        raise ValueError("Unbekannte CI-Gruppe; windowed oder contracts wählen.")
-    if not counts.keys() >= CONTRACT_FILES:
+    """Verteilt die gesammelte Menge vollständig, längste Datei zuerst; Pfade lösen Gleichstand.
+
+    ``counts`` ist die Sammlung der Gruppe: Fenster- und Rendererfälle für
+    ``contracts`` und ``windowed``, Rendererfälle ohne Fenster für ``rendering``.
+    """
+    if group not in GROUP_MARKERS:
+        raise ValueError("Unbekannte CI-Gruppe; windowed, contracts oder rendering wählen.")
+    if shard_count < 1 or (group != "windowed" and shard_count != 1):
+        raise ValueError(
+            "Fensterverträge und Rendererfälle brauchen genau eine Gruppe; Shardanzahl prüfen."
+        )
+    if group != "rendering" and not counts.keys() >= CONTRACT_FILES:
         missing = ", ".join(sorted(CONTRACT_FILES - counts.keys()))
         raise ValueError(f"Fensterverträge fehlen in der aktuellen Sammlung: {missing}.")
     files = [
-        PlannedFile(name, count, weights.get(name, fallback))
+        PlannedFile(name, count, weights.get(name, fallback), GROUP_MARKERS[group])
         for name, count in counts.items()
-        if (name in CONTRACT_FILES) == (group == "contracts")
+        if takes_file(group, name)
     ]
     if any(file.expected_tests < 1 for file in files):
         raise ValueError("Eine Datei enthält keine ausführbaren Fensterfälle; Sammlung prüfen.")
@@ -167,7 +196,7 @@ def junit_counts(path: Path) -> dict[str, int]:
 
 
 def pytest_command(file: PlannedFile, junit: Path) -> list[str]:
-    """Eine Fensterdatei, ein frischer Prozess, derselbe feste CI-Marker."""
+    """Eine Fensterdatei, ein frischer Prozess, der feste Marker ihrer CI-Gruppe."""
     return [
         str(PYTHON),
         "-u",
@@ -181,7 +210,7 @@ def pytest_command(file: PlannedFile, junit: Path) -> list[str]:
         "--durations=30",
         f"--junitxml={junit}",
         "-m",
-        CI_MARKER,
+        file.marker,
         file.path,
     ]
 
@@ -371,6 +400,7 @@ def write_ci_summary(report_dir: Path, summary: dict[str, Any]) -> None:
         "",
         f"Stand: {summary['status']}; Shard {summary['shard_index'] + 1}/{summary['shard_count']}.",
         f"Commit: {summary['commit'] or 'lokal'}; Plattform: {summary['platform']}.",
+        f'Auswahl je Datei: `-m "{summary["marker"]}"`.',
         f"Geplant: {len(summary['selected'])} Dateien, "
         f"{sum(file['expected_tests'] for file in summary['selected'])} Fälle. "
         f"Abgeschlossen: {len(summary['results'])} Dateien.",
@@ -402,14 +432,47 @@ def write_ci_summary(report_dir: Path, summary: dict[str, Any]) -> None:
 
 
 def run_ci(arguments: argparse.Namespace) -> int:
-    """Sammelt die gesamte CI-Menge, plant identisch in jedem Shard und fährt nur dessen Dateien."""
-    from tools.list_windowed_tests import collect_ci_window_counts
+    """Sammelt die gesamte CI-Menge einmal und fährt jede gewählte Gruppe.
 
-    report_dir = arguments.report_dir.resolve()
+    Jede Gruppe plant identisch in jedem Shard und fährt nur dessen Dateien;
+    alle Gruppen laufen, auch nach einer roten, und jede schreibt ihren eigenen
+    Bericht. Eine zweite Sammlung kostete je Läufer 10 bis 25 Sekunden.
+    """
+    from tools.list_windowed_tests import collect_ci_counts
+
+    groups: list[str] = arguments.ci_group
+    base = arguments.report_dir.resolve()
+    summaries = {
+        group: _new_summary(arguments, group, base if len(groups) == 1 else base / group)
+        for group in groups
+    }
+    started = time.monotonic()
+    collected: dict[str, dict[Path, int] | Exception]
+    try:
+        window_counts, rendering_counts = collect_ci_counts((ROOT / "tests",))
+        collected = {
+            group: rendering_counts if group == "rendering" else window_counts for group in groups
+        }
+    except (OSError, ValueError, KeyError, RuntimeError) as error:
+        collected = dict.fromkeys(groups, error)
+    seconds = time.monotonic() - started
+    failed = False
+    for group, (report_dir, summary) in summaries.items():
+        summary["collection_seconds"] = seconds
+        failed |= _run_ci_group(arguments, report_dir, summary, collected[group])
+    return int(failed)
+
+
+def _new_summary(
+    arguments: argparse.Namespace, group: str, report_dir: Path
+) -> tuple[Path, dict[str, Any]]:
+    """Legt den Bericht einer Gruppe an, bevor gesammelt wird: Auch ein früher
+    Abbruch hinterlässt ihn."""
     report_dir.mkdir(parents=True, exist_ok=True)
     summary: dict[str, Any] = {
         "schema": 1,
-        "group": arguments.ci_group,
+        "group": group,
+        "marker": GROUP_MARKERS[group],
         "shard_index": arguments.shard_index,
         "shard_count": arguments.shard_count,
         "commit": os.environ.get("GITHUB_SHA", ""),
@@ -421,17 +484,27 @@ def run_ci(arguments: argparse.Namespace) -> int:
         "results": [],
         "issues": [],
     }
+    write_ci_summary(report_dir, summary)
+    return report_dir, summary
+
+
+def _run_ci_group(
+    arguments: argparse.Namespace,
+    report_dir: Path,
+    summary: dict[str, Any],
+    collected: dict[Path, int] | Exception,
+) -> bool:
+    """Plant und fährt eine Gruppe aus der gemeinsamen Sammlung; ``True`` heißt rot."""
     started = time.monotonic()
     github = os.environ.get("GITHUB_ACTIONS") == "true"
-    write_ci_summary(report_dir, summary)
+    group = summary["group"]
     try:
-        counts = {
-            path.relative_to(ROOT).as_posix(): count
-            for path, count in collect_ci_window_counts((ROOT / "tests",)).items()
-        }
+        if isinstance(collected, Exception):
+            raise collected
+        counts = {path.relative_to(ROOT).as_posix(): count for path, count in collected.items()}
         weights, fallback = read_durations(WINDOW_DURATIONS)
         shards = plan_shards(
-            counts, weights, fallback, group=arguments.ci_group, shard_count=arguments.shard_count
+            counts, weights, fallback, group=group, shard_count=arguments.shard_count
         )
         summary["plan"] = [[asdict(file) for file in shard] for shard in shards]
         selected = shards[arguments.shard_index]
@@ -480,7 +553,7 @@ def run_ci(arguments: argparse.Namespace) -> int:
         with Path(step_summary).open("a", encoding="utf-8") as page:
             page.write((report_dir / "summary.md").read_text(encoding="utf-8") + "\n")
     print(f"{summary['status']}: {report_dir / 'summary.md'}", flush=True)
-    return int(summary["status"] == "failed")
+    return summary["status"] == "failed"
 
 
 @contextlib.contextmanager
@@ -546,7 +619,12 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--release", action="store_true", help="beim Release auch Fenster- und Rendererfälle fahren"
     )
-    parser.add_argument("--ci-group", choices=("windowed", "contracts"))
+    parser.add_argument(
+        "--ci-group",
+        action="append",
+        choices=tuple(GROUP_MARKERS),
+        help="mehrfach: eine Sammlung, je Gruppe ein Unterordner von --report-dir",
+    )
     parser.add_argument("--shard-index", type=int, default=0)
     parser.add_argument("--shard-count", type=int, default=1)
     parser.add_argument("--report-dir", type=Path)
@@ -568,6 +646,8 @@ def main(argv: list[str] | None = None) -> int:
             parser.error("CI-Gruppen brauchen --report-dir und erlauben keine Dateifilter.")
         if not 0 <= arguments.shard_index < arguments.shard_count:
             parser.error("Shardindex muss zwischen 0 und Shardanzahl minus 1 liegen.")
+        if len(set(arguments.ci_group)) != len(arguments.ci_group):
+            parser.error("Jede CI-Gruppe nur einmal nennen.")
         return run_ci(arguments)
     if (
         arguments.plan_only
