@@ -31,6 +31,9 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-09 | [RM-591: Die Mutternfalle schneidet ihre Tasche, auch von Hand auf eine Fläche gesetzt (09.10.2026)](#rm-591-die-mutternfalle-schneidet-ihre-tasche-auch-von-hand-auf-eine-fläche-gesetzt-09102026) |
+| 2026-10-09 | [RM-590: Ein Klick auf eine Ecke wählt ihre Kanten (09.10.2026)](#rm-590-ein-klick-auf-eine-ecke-wählt-ihre-kanten-09102026) |
+| 2026-10-09 | [RM-579: Die Linie zeigt am exakten Körper die ganze Kontur, die verrundet wird (09.10.2026)](#rm-579-die-linie-zeigt-am-exakten-körper-die-ganze-kontur-die-verrundet-wird-09102026) |
 | 2026-10-08 | [RM-570: Eine schräge Unterseite ist ein Feld, und ein Kinn bekommt seine Stützen (08.10.2026)](#rm-570-eine-schräge-unterseite-ist-ein-feld-und-ein-kinn-bekommt-seine-stützen-08102026) |
 | 2026-10-08 | [RM-566: Der Drache bekommt seine Stützen, und die Kanalsperre sperrt nur Raum, an den man nicht hinkommt (08.10.2026)](#rm-566-der-drache-bekommt-seine-stützen-und-die-kanalsperre-sperrt-nur-raum-an-den-man-nicht-hinkommt-08102026) |
 | 2026-10-08 | [RM-563: Verrunden an mehreren Kanten zugleich wählen (08.10.2026)](#rm-563-verrunden-an-mehreren-kanten-zugleich-wählen-08102026) |
@@ -44390,9 +44393,32 @@ fünf Zeilen, 45 Fälle, am Basisstand 13 rot) und
 Senkung, am Basisstand 4 rot). An sieben Kundenmodellen aus `F:\3D Dateien` (Scraper mit
 Magneten, Minitopf, Wedge-Lock, Carcassonne-Gitter, Bohrerhalter, Pegboard-STEP, Side kit
 rest; bis zu 18 bewegbare Merkmale je Körper, alle sechs Zeilen) bleibt keine Uneinigkeit
-(vorher 27: 5 an Tasche, Wulst und Ring, 22 Senkungswinkel). Cache-Versionen der sieben
-Operationen erhöht.
+(vorher 27: 5 an Tasche, Wulst und Ring, 22 Senkungswinkel). Cache-Versionen der sechs
+Operationen erhöht; `move_feature` blieb in `1a6af98b8` auf 15, erst `ec790e827` setzte 16
+(hier stand „sieben“, berichtigt nach Review G, F7).
 Umgesetzt von Claude.
+
+**Nachtrag (09.10.2026, `8911bd021`, Review G, F6/1 und F8):** Der Rest, den das Review fand: An
+einer Senkbohrung durch zwei berührende exakte Platten sperrte die Karte *Merkmal ändern* an
+der Senkung (`CHAIN_NOT_READABLE`), wo die Operation nach dem Verbinden rechnete, und bot
+*Verdoppeln* an Bohrung und Senkung an, wo die Operation absagte; `_READ_BY_THE_OPERATION`
+nahm sechs Sätze aus der gemeinsamen Frage und ließ das stehen. Die Ursache lag in der
+Erkennung: Die zwei ganzen Mäntel, je Platte einer, legte `brep.features` zu einer Bohrung
+zusammen und maß ihren Umfang an den Punkten der Tessellation — 351,4 Grad, also
+`partial`, und `_entrance_side` las keinen Einlauf. Ein Mantel, der selbst die volle
+Umdrehung trägt, ist jetzt ganz (`_cylinder_group_extent`); die Ausnahmeliste ist fort, und
+jede Merkmalshandlung sagt mit dem Satz der Karte ab. Derselbe Vergleich läuft jetzt über acht
+exakte Körper (Platte mit Bohrungen, Tasche mit Zapfen, Kugelpfanne, Ring, Zylinder,
+Senkplatte, berührende Platten mit und ohne Senkung) mal sechs Zeilen; am Basisstand drei
+Zeilen uneins. Er fand dabei die Vorgabe beim Verdoppeln: Die Kopie stand einen Durchmesser
+entlang X daneben und berührte das Original auf einer Linie — am exakten Körper sagte
+*Übernehmen* an jeder Bohrung ab, das Ergebnis bliebe offen. Sie liegt jetzt anderthalb
+Breiten neben der ganzen Kette, entlang X oder Y, nie entlang der eigenen Achse
+(`actions._beside_the_original`). Tests:
+`test_partial_bores.py::test_a_bore_through_two_touching_plates_is_whole_on_both_cores`,
+`test_feature_moves_keep_shape.py::test_the_card_offers_each_handling_exactly_where_the_operation_computes_on_exact_bodies`
+(48 Fälle, am Stand davor 5 rot),
+`test_features.py::test_the_panel_duplicates_a_countersunk_bore_beside_its_countersink`.
 
 ## RM-545: Ein getrenntes Teil in Senkung, Langloch oder Schraube verschmilzt nicht mehr still (08.10.2026)
 
@@ -44451,7 +44477,32 @@ fest und prüft jetzt den Stopfen mit dem zweiten Körper neben der Platte. Am L
 (`F:\3D Dateien\parametric-laptop-riser.stl`, 22 Teile, 217 Merkmale gefahren) sagen 21
 Merkmale ab, deren Versetzen um 1 mm vorher still 20 bis 142 Teile oder bis −634 mm³
 hinterließ, dazu einer mit −90,9 mm³ bei gleicher Teilezahl; 26 sagten schon vorher mit
-anderem Grund ab. Cache-Versionen der sechs Handlungen erhöht. Umgesetzt von Claude.
+anderem Grund ab. Cache-Versionen der sechs Handlungen erhöht; *Bohrung verschließen*
+(`plug_hole`) fragt dieselbe Funktion und fehlte darunter (berichtigt nach Review G, F4 und
+F7: `cache_version` 8 in `8911bd021`). Umgesetzt von Claude.
+
+**Nachtrag (09.10.2026, `8911bd021`, Review G, F1 und F5):** Die Frage hing wieder an einer
+Artenliste (Bohrung, Langloch, Kegel); Kugelpfanne, Kehle und Innengewinde fragte niemand,
+und die Regelzeile „an jedem Hohlraum“ stimmte nicht. Jetzt fragt sie `types.is_a_cavity`:
+Pfanne und Kehle messen sich in `_inside_and_radial` (Abstand von der Mitte, vom Mittelkreis),
+das Innengewinde am Kern, ein gedrucktes Gewinde ohne Flächen an den Wänden seines Gangs
+(`_with_walls`); am Hohlraum, der keine Bohrung ist, heißen die Sätze
+`OTHER_PART_IN_THE_CAVITY` und `PART_IN_ANOTHER_CAVITY`. Der Lufteinschluss fragt als
+Aufnahme nicht: Versetzen nimmt seine Insel mit, Entfernen füllt sie — so veröffentlicht
+(`test_brep_voids`), an beiden Kernen nachgemessen. Am Kugelgelenk (`ball_in_socket.stl`,
+neu im Korpus, 10 038,06 + 522,47 mm³) sagen Ändern, Versetzen und Entfernen der Pfanne und
+Versetzen der Kugel ab; vorher blieben von der Kugel 41,4 mm³, oder beide verschmolzen. F5:
+Die Teilefrage las jeden Hohlraum über alle Dreiecke, ohne Merker und ohne Abbruch, und jede
+Handlung fragte zweimal. Jetzt gemerkt je Netz und Teil (`sticks_in_another_bore`,
+`cavity_boxes`), nur Hohlräume, deren Hüllquader das eigene Teil erreicht, über dessen
+Dreiecke. Laptop-Ständer (173 592 Dreiecke, 22 Teile): Karte an `pin_5` 2,111 s → 0,518 s
+beim ersten Klick am Körper (die Hüllquader einmal je Netz; ab 20 000 Dreiecken im Arbeiter)
+und 0,018 s danach, `pin_8` 1,726 → 0,016 s, alle 254 Merkmale 121,7 → 4,0 s. Tests in
+`test_slot_features.py`: `test_a_loose_part_in_any_cavity_says_so_at_every_row` (Pfanne, Kugel,
+Kehle, Gewinde je Kern und Zeile), `test_the_ball_in_its_socket_stays_a_loose_ball`,
+`test_a_void_takes_its_loose_ball_along_and_fills_it_on_purpose`,
+`test_the_separate_part_question_reads_what_reaches_and_is_asked_once` (Gegenprobe: mit der
+zweiten Frage in `_movable_feature` rot, „fragte 2-mal“).
 
 ## RM-563: Verrunden an mehreren Kanten zugleich wählen (08.10.2026)
 
@@ -44490,3 +44541,71 @@ desk-organizer (Netz) und carpet-corner-clip (exakt) gleich bis 7·10⁻⁸ mm³
 am build_tray (exakt) liegen zwei der drei Kanten auf einer Tangentenkette, die schon jede
 allein ganz rundet — der Schritt nimmt 10,2873 + 10,4578 mm³, wie Kette und dritte Kante.
 Umgesetzt von Claude.
+
+## RM-591: Die Mutternfalle schneidet ihre Tasche, auch von Hand auf eine Fläche gesetzt (09.10.2026)
+
+<a id="rm-591-die-mutternfalle-schneidet-ihre-tasche-auch-von-hand-auf-eine-fläche-gesetzt-09102026"></a>
+<a id="rm-591"></a>
+
+**RM-591 — Von Hand auf die Deckfläche gesetzt, schneidet die Mutternfalle nichts.**
+Gefunden im Review G zu RM-552 (08.10.2026, F2): Quader 30 × 30 × 12, Mutternfalle mit
+`z = 12`: Die Tasche stand ganz über dem Körper, nur das Schraubenloch wurde abgetragen, und
+*Stift für Bohrung* baute an Tasche und Bohrung in die Luft. **Abnahme:** Ursache finden und
+beheben; die Tasche liegt im Material, das Gehäuse-Beispiel bleibt, wie es ist.
+
+**Nachweis (09.10.2026, `8911bd021`, Paket G, Review-Fixes):** Die Mutternfalle baut nach oben
+(die Mutter sitzt im Material) und wurde nur an einer gewählten Fläche gespiegelt. Mit nur
+`x`/`y`/`z` — Chat, Kommandozeile, Dialog ohne Fläche — blieb sie über der Stelle. Jetzt
+spiegelt sie auch dort, wo knapp über der Stelle Luft liegt (`parts.ops._air_above`, zwei
+Überlappungsmaße entlang der Achse). **Zurückgenommen:** Die erste Fassung fragte auf halber
+Höhe des ganzen Bausteins und meldete das Gehäuse-Beispiel als unverändert, gemessen am
+Volumen. Das Schraubenloch reicht aber über jeden Boden hinaus, und in der Mitte des 8 mm
+dicken Bodens rückte die Tasche um 2,5 mm nach unten (z 4,0–6,5 → 1,51–4,01), bei
+gleichem Volumen — gesehen erst an der neu gerenderten Vorschau. Mit der Frage knapp über der
+Stelle ist die Vorschau wieder Byte für Byte die alte. Test:
+`test_parts.py::test_a_nut_trap_set_by_hand_cuts_its_pocket` (Deckfläche und Bodenmitte, je
+mit und ohne Schraubenloch; Deckfläche am Basisstand rot, Bodenmitte mit Schraubenloch an der
+ersten Fassung rot). Bausteinänderung `NUT_TRAP_SINKS_WITHOUT_A_FACE`, Bibliotheksversion 25,
+Bereichsnachweis 49 von 49, Beispiele neu erzeugt (nur `parts_version`, dazu der Stand von
+`inner_shells` in `weg3`, den der Erzeuger schon am Basisstand schrieb). Umgesetzt von Claude.
+
+## RM-590: Ein Klick auf eine Ecke wählt ihre Kanten (09.10.2026)
+
+<a id="rm-590-ein-klick-auf-eine-ecke-wählt-ihre-kanten-09102026"></a>
+<a id="rm-590"></a>
+
+**RM-590 — Ecke als Klickziel.** Gefunden im Review G zu RM-563 (08.10.2026, F6/3): Die
+Kunden-E-Mail nannte „Kanten und Ecken“; eine Ecke verrunden hieß, ihre drei Kanten einzeln
+mit Strg zusammenzuklicken. **Abnahme:** Ein Klick auf eine Ecke wählt ihre drei Kanten.
+
+**Nachweis (09.10.2026, `5fc487f07`, Paket G, Review-Fixes):** `Viewport._corner_at`: Ein
+Endpunkt, an dem sich mindestens drei Kanten treffen (`CORNER_EDGES`), ist eine Ecke; er fängt
+in halber Kantenreichweite (`CORNER_REACH_PIXELS`), damit eine Kante kurz vor ihrem Ende
+anklickbar bleibt, und die nächste Ecke gewinnt. Ohne Taste wählt der Klick alle Kanten dort,
+mit Strg oder Umschalt an einer gewählten Kante kommen sie dazu oder gehen wieder heraus
+(`add_edges`); an beiden Körperarten. Verrunden r = 3 an den drei Kanten einer Quaderecke
+40 × 30 × 20 trägt exakt 169,3076 mm³ ab, Lehrbuchwert Σ(1 − π/4)·r²·(Lᵢ − r) + r³·(1 − π/6).
+Test: `test_selection.py::test_a_click_on_a_corner_chooses_the_edges_that_meet_there` (exakt
+und Netz; am Basisstand rot: eine Kante). Handbuch, Regel der Ansicht und Begründung
+nachgezogen. Umgesetzt von Claude.
+
+## RM-579: Die Linie zeigt am exakten Körper die ganze Kontur, die verrundet wird (09.10.2026)
+
+<a id="rm-579-die-linie-zeigt-am-exakten-körper-die-ganze-kontur-die-verrundet-wird-09102026"></a>
+<a id="rm-579"></a>
+
+**RM-579 — Am exakten Körper zeigt die Linie nur die geklickte Kante.** Gefunden im
+Review G zu RM-563 (08.10.2026, F6/2): Gerundet wird die ganze Tangentenkette — OpenCASCADE
+nimmt tangential anschließende Kanten mit —, die Hervorhebung zeigte nur die geklickte, und
+welche mitgingen, sah der Kunde erst in der Vorschau (`build_tray`). **Abnahme:** Die
+Hervorhebung zeigt am exakten Körper die ganze Kette, die verrundet wird.
+
+**Nachweis (09.10.2026, `5fc487f07`, Paket G, Review-Fixes):** `brep.edit.contour_keys` liest die
+Kontur aus demselben Builder (`BRepFilletAPI_MakeFillet`, ohne zu bauen),
+`Viewport._contour_of_chosen_edges` zeichnet sie, einmal je Auswertung gemerkt. Quader
+40 × 30 × 20 mit gerundeten senkrechten Kanten (r = 3): an einer oberen Strecke acht Ketten
+statt einer; die Rundung r = 1 an der einen trägt 28,6378 mm³ ab, den Lehrbuchwert des ganzen
+Rands, (1 − π/4)·r²·(116 + 2π·(3 − 0,2234·r)). Tests:
+`test_brep.py::test_the_contour_of_a_chosen_edge_is_what_the_fillet_rounds` und
+`test_selection.py::test_a_chosen_edge_of_an_exact_body_shows_the_whole_contour_it_rounds`
+(am Basisstand rot: eine Kette statt acht). Umgesetzt von Claude.
