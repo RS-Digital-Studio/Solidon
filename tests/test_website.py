@@ -2060,7 +2060,8 @@ def test_the_pages_do_not_promise_a_date_that_is_about_to_pass(
 
     **Nicht zu verwechseln mit dem Wecker in ``test_activation.py``**
     (``test_the_shipped_deadline_has_not_passed``). Der fragt, ob die
-    ausgelieferte Demo noch läuft, und wird am **31.10.** rot — für die
+    ausgelieferte Demo noch läuft, und wird am Tag nach ``store.DEMO_UNTIL``
+    rot — für die
     Website ist das der Tag zu spät. Dieser hier fragt, ob noch Zeit bleibt,
     die Sätze zu ändern, und schlägt fünf Tage vorher an. Zwei Fragen, zwei
     Tests, dieselbe Quelle.

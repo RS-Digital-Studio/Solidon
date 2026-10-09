@@ -166,8 +166,8 @@ Feldliste steht deshalb als Tabelle, nicht als Codeblock.
 Kleine Schritte, Test zuerst bei Geometrie, kein Revert, nie stillschweigend
 raten — das steht in `AGENTS.md`. Dazu:
 
-- **Nach jedem abgeschlossenen Punkt committen und pushen**, sobald Tor und
-  Review grün sind — in logischen Einheiten, nur die eigenen Pfade, mit
+- **Nach jedem abgeschlossenen Punkt committen und pushen**, sobald die
+  Prüfung des Stands und vor main das Review grün sind — in logischen Einheiten, nur die eigenen Pfade, mit
   `Co-Authored-By`, ohne Rückfrage, per Merge (Entscheidung Robert).
 - **Vor jedem Push nach main ein Review, bei Kundenwirkung samt Changelog**
   (`solidon3d-review`, Entscheidung Robert), auch für Unterlagen und

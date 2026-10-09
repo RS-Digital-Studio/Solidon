@@ -266,6 +266,10 @@ _DEMO_DATE_FORMS: dict[str, tuple[str, list[str]]] = {
 }
 
 
+#: Wie der Monatserste geschrieben wird, wo er nicht bloß „1“ heißt.
+_FIRST_OF_MONTH: dict[str, str] = {"fr": "1er", "it": "1º"}
+
+
 @pytest.mark.parametrize("language", sorted(available_languages()))
 def test_the_activation_page_names_the_shipped_demo_end_in_every_language(
     language: str, shipped_demo_until: object
@@ -293,16 +297,31 @@ def test_the_activation_page_names_the_shipped_demo_end_in_every_language(
         set_language("de")
     if shipped_demo_until is None:
         # Verkaufsversion: Ohne Stichtag darf die Seite keine befristete Demo
-        # versprechen — das Kapitel kommt mit dem Wechsel auf 1.0 neu.
-        assert not re.search(r"\b20\d\d\b", activation.split("\n\n", 1)[0]), (
-            "Die Fassung hat keinen Demo-Stichtag, die Freischaltseite nennt aber "
-            "noch einen — Kapitel „activation“ in manual.py und die Kataloge nachziehen."
-        )
+        # und keine „spätere“ Verkaufsversion versprechen — spiegelbildlich zu
+        # den Demo-Sätzen in ``test_written_manual_covers_…``. Geprüft wird die
+        # deutsche Quelle; die Kataloge folgen ihrem Schlüssel
+        # (``test_translations.py``).
+        if language == "de":
+            promised = [
+                phrase
+                for phrase in (
+                    "befristete Demo",
+                    "startet diese Demo nicht mehr",
+                    "spätere Verkaufsversion",
+                )
+                if phrase in activation
+            ]
+            assert not promised, (
+                f"Die Fassung hat keinen Demo-Stichtag, die Freischaltseite sagt aber "
+                f"{promised} — Kapitel „activation“ in manual.py und die Kataloge nachziehen."
+            )
         return
     assert isinstance(shipped_demo_until, date)
     form, months = _DEMO_DATE_FORMS[language]
     day = shipped_demo_until
-    last_day = form.format(day=day.day, month=months[day.month - 1], year=day.year)
+    # Der Monatserste trägt im Französischen und Italienischen die Ordnungszahl.
+    day_text = _FIRST_OF_MONTH.get(language, "1") if day.day == 1 else str(day.day)
+    last_day = form.format(day=day_text, month=months[day.month - 1], year=day.year)
     assert last_day in activation, (language, last_day, activation[:300])
 
 
