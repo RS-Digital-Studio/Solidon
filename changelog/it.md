@@ -19,6 +19,7 @@ scrive in `website/version.json`.
 
 ### Uso e sistema
 
+- La demo ora funziona fino al 30 novembre 2026. Solidon3D 1.0 è prevista per il 1º dicembre e i tuoi progetti restano.
 - Su Mac, Solidon richiede ora macOS 14 o successivo. Ogni Mac dal 2018 in poi può installarlo gratuitamente.
 - Solidon ora si avvia sui Mac Intel con macOS 26. La versione 0.5.3 vi si bloccava all'avvio.
 - Su Mac, *Annulla* interrompe subito una risposta in corso del modello locale.
@@ -90,6 +91,7 @@ scrive in `website/version.json`.
 - Nella finestra di stampa, stampante, filamenti e qualità restano del tutto visibili anche con il testo ingrandito. Le etichette lunghe vanno a capo.
 - Il rapporto di verifica calcola più velocemente e richiede meno memoria.
 - Su Linux con Flatpak, Solidon ora segnala un arresto anomalo dello slicer come tale, invece di dire solo che non è stato creato alcun file.
+- Anche con il computer a pieno carico, Solidon indica il vero motivo dopo l'arresto di uno slicer, invece di un tempo scaduto. Un file di stampa finito viene usato.
 
 ### Filettature, fori e componenti normalizzati
 

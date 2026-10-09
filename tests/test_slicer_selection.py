@@ -246,3 +246,72 @@ def test_only_installed_slicer_asks_the_machine_for_a_slicer() -> None:
         found += _unmarked_machine_searches(path.read_text(encoding="utf-8"), path.name)
 
     assert not found, "Slicer an installed_slicer vorbei gesucht:\n" + "\n".join(found)
+
+
+# --- Die Basis der Auswahl beim Push nach main (CI-09, N-1 der Nachprüfung) ---------------
+
+
+def _run(number: int, sha: str, *, status: str = "completed") -> dict[str, object]:
+    return {
+        "id": number,
+        "head_sha": sha,
+        "head_branch": "main",
+        "event": "push",
+        "status": status,
+    }
+
+
+def _jobs(
+    window: str = "success", slicer: str = "skipped", chose: str = "success"
+) -> list[dict[str, object]]:
+    """Die Jobs eines main-Laufs, wie die API sie nennt; gerufene als ``<Name> / <Job>``."""
+    jobs: list[dict[str, object]] = [
+        {"name": "Stil und Format", "status": "completed", "conclusion": "success"},
+        {"name": ci_selection.SELECTION_JOB, "status": "completed", "conclusion": chose},
+    ]
+    window_name, slicer_name = ci_selection.SELECTION_RUNS
+    for part in range(2):
+        jobs.append(
+            {
+                "name": f"{window_name} / Fensterauswahl (macos-latest, Teil {part})",
+                "status": "completed" if window != "in_progress" else "in_progress",
+                "conclusion": None if window == "in_progress" else window,
+            }
+        )
+    jobs.append({"name": slicer_name, "status": "completed", "conclusion": slicer})
+    return jobs
+
+
+def test_the_selection_base_is_the_last_main_run_that_finished_its_selection() -> None:
+    """Ein ersetzter Lauf (keine Jobs), ein abgebrochener, ein noch laufender und der
+    eigene Lauf zählen nicht; ein roter, der seine Auswahl gefahren hat, schon."""
+    runs = [
+        _run(9, "eigener", status="in_progress"),
+        _run(8, "ersetzt"),
+        _run(7, "abgebrochen"),
+        _run(6, "laeuft-noch", status="in_progress"),
+        _run(5, "rot-aber-gefahren"),
+        _run(4, "aelter"),
+    ]
+    jobs = {
+        8: [],
+        7: _jobs(window="cancelled"),
+        6: _jobs(window="in_progress"),
+        5: _jobs(window="failure"),
+        4: _jobs(),
+    }
+    assert ci_selection.checked_base(runs, lambda run: jobs.get(int(str(run)), []), "9") == (
+        "rot-aber-gefahren"
+    )
+    assert ci_selection.checked_base(runs[:4], lambda run: jobs.get(int(str(run)), [])) is None
+    # Eine gescheiterte Auswahl hat nichts gewählt; ein Lauf von einem anderen Zweig zählt nicht.
+    assert not ci_selection.checked_run(_jobs(chose="failure"))
+    other = [{**_run(3, "zweig"), "head_branch": "paket/x"}]
+    assert ci_selection.checked_base(other, lambda _run: _jobs()) is None
+
+
+def test_the_selection_job_names_are_those_of_the_workflow() -> None:
+    """Die Namen, an denen die Basis einen fertigen Lauf erkennt, stehen so in build.yml."""
+    workflow = (ROOT / ".github" / "workflows" / "build.yml").read_text(encoding="utf-8")
+    for name in (ci_selection.SELECTION_JOB, *ci_selection.SELECTION_RUNS):
+        assert f"\n    name: {name}\n" in workflow, name
