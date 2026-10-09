@@ -431,15 +431,18 @@ def test_a_bore_sunk_at_both_ends_refuses_a_head(profile: Profile) -> None:
     ("change", "constraint"),
     [
         ({"internal": False}, "not_a_bore"),
-        ({"handedness": "left"}, "left_handed"),
-        ({"starts": 2}, "multi_start"),
         ({"taper": 1.79}, "thread_shape"),
     ],
 )
 def test_a_thread_without_a_counterpart_says_why(
     change: dict[str, Any], constraint: str, profile: Profile
 ) -> None:
-    """Dieselben Absagen wie das Gegenstück zum Gewinde, dazu das Außengewinde."""
+    """Dieselben Absagen wie das Gegenstück zum Gewinde, dazu das Außengewinde.
+
+    Seit RM-544 bekommen Links- und mehrgängige Gewinde ihren Stift
+    (:func:`test_a_left_hand_or_two_start_thread_gets_its_pin`); abgesagt wird nur
+    ein kegeliges ohne Größe R oder NPT — ein zylindrischer Stift passte nicht.
+    """
     carrier = _threaded("mesh", profile)
     name = _thread_of(carrier)
     feature = carrier.features[name]
@@ -449,6 +452,77 @@ def test_a_thread_without_a_counterpart_says_why(
         run("pin_for_bore", carrier, profile, at_feature=name)
     assert caught.value.constraint == constraint
     assert caught.value.suggestions
+
+
+@pytest.mark.parametrize(
+    ("values", "handedness", "starts"),
+    [
+        ({"size": "M6", "left_hand": True}, "left", 1),
+        ({"size": "custom_size", "diameter": 6.0, "pitch": 1.0, "starts": 2}, "right", 2),
+    ],
+    ids=["links", "zweigaengig"],
+)
+def test_a_left_hand_or_two_start_thread_gets_its_pin(
+    values: dict[str, Any], handedness: str, starts: int, profile: Profile
+) -> None:
+    """RM-544, Stufe 2: Der Stift trägt Drehsinn und Gangzahl des Gewindes, in dem er steht.
+
+    Bis dahin sagte er zu beiden ab. Die Lage der Gänge wird mit Vorschub und
+    Drehsinn gemessen (``bore_pin.thread_turn``); ohne beides stünde sein Gang im
+    Gang des Trägers, und der Befund sagte, dass sie sich berühren.
+    """
+    carrier = _box(
+        "mesh",
+        profile,
+        OperationDraft(op="drill_hole", inputs=("obj_1",), params={"diameter": 5.0, "z": 12.0}),
+        OperationDraft(
+            op="insert_printed_thread",
+            inputs=("obj_1",),
+            params={**values, "length": 8.0, "internal": True, "at_feature": "hole_1"},
+        ),
+    )
+    name = _thread_of(carrier)
+    result = run("pin_for_bore", carrier, profile, at_feature=name)
+    pin = result.outputs[1]
+    (thread,) = [entry for entry in pin.features.values() if entry.kind == "thread"]
+    assert thread.params["handedness"] == handedness
+    assert int(thread.params.get("starts", 1)) == starts
+    codes = {entry.code for entry in result.findings}
+    assert "pin_for_bore.thread_touches" not in codes, [str(f.message) for f in result.findings]
+    assert as_mesh_data(pin.mesh).is_watertight
+
+
+@pytest.mark.parametrize(("size", "bore"), [("G1/2", 18.7), ("R1/2", 18.0), ("1/2-14 NPT", 18.0)])
+def test_a_pipe_thread_gets_a_pin_that_turns_in_loose(
+    size: str, bore: float, profile: Profile
+) -> None:
+    """RM-544: In ein G-, R- oder NPT-Innengewinde kommt ein Stift mit demselben Gewinde.
+
+    Am kegeligen Rohrgewinde mit demselben Kegel und derselben Bezugsebene an der
+    Mündung: Er steht lose in den Gängen, an keiner Stelle im Material, und sein
+    Gewinde nennt Größe und Kegel.
+    """
+    carrier = _box(
+        "mesh",
+        profile,
+        OperationDraft(op="drill_hole", inputs=("obj_1",), params={"diameter": bore, "z": 12.0}),
+        OperationDraft(
+            op="insert_printed_thread",
+            inputs=("obj_1",),
+            params={"size": size, "length": 10.0, "internal": True, "at_feature": "hole_1"},
+        ),
+    )
+    name = _thread_of(carrier)
+    result = run("pin_for_bore", carrier, profile, at_feature=name)
+    pin = result.outputs[1]
+    (thread,) = [entry for entry in pin.features.values() if entry.kind == "thread"]
+    assert thread.params["size"] == size
+    assert ("taper" in thread.params) is (size != "G1/2")
+    codes = {entry.code for entry in result.findings}
+    assert "pin_for_bore.thread_touches" not in codes, [str(f.message) for f in result.findings]
+    mesh = as_mesh_data(pin.mesh)
+    assert mesh.raw.is_watertight
+    assert shared_volume(mesh.raw, as_mesh_data(carrier.mesh).raw) <= 1e-3, "er steckt lose"
 
 
 def _short_thread(profile: Profile, length: float) -> SceneObject:

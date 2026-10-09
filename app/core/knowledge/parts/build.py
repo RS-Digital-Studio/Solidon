@@ -15,12 +15,12 @@ from __future__ import annotations
 
 import math
 from collections.abc import Mapping
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, Any, cast
 
 from app.core.errors import InternalError
 from app.core.geom.boolean import boolean
 from app.core.geom.mesh import MeshData, as_mesh_data
-from app.core.knowledge.parts.shapes import Form
+from app.core.knowledge.parts.shapes import Form, ThreadProfile
 from app.core.types import BRepBody, Feature, FeatureId, MeasureSource, PartResult, Vec3
 
 if TYPE_CHECKING:
@@ -79,7 +79,17 @@ def intersect(first: Form, second: Form) -> Form:
 
 
 def threaded(
-    diameter: float, pitch: float, length: float, *, internal: bool = False, bottom: float = 0.0
+    diameter: float,
+    pitch: float,
+    length: float,
+    *,
+    internal: bool = False,
+    bottom: float = 0.0,
+    profile: ThreadProfile = "flat",
+    starts: int = 1,
+    left: bool = False,
+    taper: float = 0.0,
+    reference: float | None = None,
 ) -> Form:
     """Kern und Gang eines Bausteingewindes, auf Länge geschnitten — je Kern (P2.7).
 
@@ -103,22 +113,71 @@ def threaded(
     Schraube und Mutter um 2,3 mm³, gleich wie man sie gegeneinander drehte.
     Mit dem Vorlauf ist der Gang an beiden Stirnflächen offen, und die Phase
     bleibt dieselbe: Sie hängt an ``bottom`` modulo Steigung.
+
+    **Gewindeform, Gangzahl, Drehsinn und Kegel** (RM-544): ``profile`` wählt das
+    Gangprofil (``shapes.ThreadProfile``), ``starts`` Gänge teilen sich den
+    Vorschub ``starts · pitch``, ``left`` baut linksgängig, und ``taper`` ist der
+    Zuwachs des Halbmessers je Millimeter Höhe — negativ, wo der Kegel nach oben
+    enger wird. ``diameter`` gilt dann auf der Höhe ``reference`` (Vorgabe
+    ``bottom``), in derselben Lage wie ``bottom``. Die Phase bleibt an
+    ``bottom``: Bei Winkel null beginnt dort ein Gang, wie bisher, auch gespiegelt.
     """
     from app.core.geom.boolean import BOOLEAN_OVERLAP
     from app.core.knowledge.parts import shapes
 
+    level = bottom if reference is None else reference
     if shapes.building_exact():
         from app.core.knowledge.parts import exact as twins
 
-        return twins.threaded(diameter, pitch, length, internal=internal, bottom=bottom)
-    depth = pitch * shapes.RIDGE_SHARE
+        return twins.threaded(
+            diameter,
+            pitch,
+            length,
+            internal=internal,
+            bottom=bottom,
+            profile=profile,
+            starts=starts,
+            left=left,
+            taper=taper,
+            reference=level,
+        )
+    if taper and _exact_available():
+        # **Ein Kegel entsteht genäht und wird vernetzt** (RM-544). Am Netz gebaut
+        # — Kegelkern und kegelig gelegter Gang vereinigt — ließ die Boolesche
+        # Kette an R 1/4 über 200 mm eine Falte von drei Dreiecken stehen, und ein
+        # nachträglich verzogener Zylinder faltete seine Stirnflächen
+        # (Bereichsnachweis). ``helical_thread`` legt den Kegel in die Flächen
+        # selbst; vernetzt ist der Körper dicht und ohne Selbstdurchdringung.
+        with shapes.building("brep"):
+            solid = threaded(
+                diameter,
+                pitch,
+                length,
+                internal=internal,
+                bottom=bottom,
+                profile=profile,
+                starts=starts,
+                left=left,
+                taper=taper,
+                reference=level,
+            )
+        return as_mesh_data(solid)
+    depth = shapes.ridge_depth(pitch, profile)
+    lead = starts * pitch
+    # Ohne exakten Kern ist ein Kegel ein verzogener Zylinder: Gebaut wird das
+    # zylindrische Gewinde mit dem Maß der Bezugsebene, danach rückt jede Ecke
+    # radial um ``taper`` je Millimeter Abstand von ihr (:func:`_tapered`). Höhe
+    # und Winkel bleiben, die Phase also auch. Sehnen und Kernecken richten sich
+    # nach der weitesten Stelle, denn dort wächst die Sehnentiefe mit.
+    spread = 2.0 * abs(taper) * max(abs(bottom - level), abs(bottom + length - level))
+    widest = diameter + spread
     core_diameter = diameter if internal else diameter - 2.0 * depth
     # Kern und Gang auf denselben Winkeln, so fein, wie der Kamm es verlangt.
-    segments = shapes.turn_segments(diameter / 2.0 + depth if internal else diameter / 2.0)
+    segments = shapes.turn_segments(widest / 2.0 + depth if internal else widest / 2.0)
     core = shapes.cylinder(
         core_diameter + 2.0 * BOOLEAN_OVERLAP,
         length,
-        segments=_core_segments(core_diameter / 2.0, segments),
+        segments=_core_segments((core_diameter + spread) / 2.0, segments),
     )
     # **Der Gang läuft über ganze Umläufe** und wird erst vom Schnittzylinder
     # gekürzt — wie beim Drehdeckel (``lid._thread_tool_height``) und beim
@@ -127,15 +186,54 @@ def threaded(
     # Stationen nicht mehr auf den Kernecken, und je Umlauf blieben weniger
     # Sehnen, als ``turn_segments`` verlangt (Ø 46 auf 2 mm: 33 statt 48,
     # Review RM-532 R1).
-    turns = math.ceil((length + pitch) / pitch - 1e-9)
+    turns = math.ceil((length + lead) / lead - 1e-9)
     ridge = shapes.moved(
-        shapes.thread_body(diameter, pitch, turns * pitch, segments=segments, internal=internal),
-        (0.0, 0.0, -pitch),
+        shapes.thread_body(
+            diameter,
+            pitch,
+            turns * lead,
+            segments=segments,
+            internal=internal,
+            profile=profile,
+            starts=starts,
+            left=left,
+        ),
+        (0.0, 0.0, -lead),
     )
     body = union(core, ridge)
     limit = shapes.cylinder(diameter * 2.0 + 4.0, length)
     body = intersect(body, limit)
+    if taper:
+        body = _tapered(shapes.mesh_only(body), taper, level - bottom)
     return shapes.moved(body, (0.0, 0.0, bottom)) if bottom else body
+
+
+def _exact_available() -> bool:
+    """Ob der exakte Kern da ist: im Paket immer, in einem Quellklon ohne Extra nicht."""
+    from app.core.brep import kernel
+
+    return bool(kernel.available())
+
+
+def _tapered(body: MeshData, taper: float, reference: float) -> MeshData:
+    """Ein zylindrisches Netz radial zum Kegel verzogen: ``r + taper · (z - reference)``.
+
+    Jede Ecke behält Höhe und Winkel. Die Verschiebung ist an jeder Höhe für alle
+    Ecken gleich groß und ändert sich über die Länge um ein Zweiunddreißigstel je
+    Millimeter — weit zu wenig, als dass eine Fläche über eine andere klappte; die
+    Überdeckung zwischen Kern und Gang bleibt dieselbe.
+    """
+    import numpy as np
+
+    raw = body.raw.copy()
+    points = np.asarray(raw.vertices, dtype=np.float64)
+    radius = np.hypot(points[:, 0], points[:, 1])
+    grown = radius + taper * (points[:, 2] - reference)
+    scale = np.divide(grown, radius, out=np.ones_like(radius), where=radius > 0.0)
+    points[:, 0] *= scale
+    points[:, 1] *= scale
+    raw.vertices = points
+    return body.replacing(raw)
 
 
 def _core_segments(root: float, segments: int) -> int:
@@ -278,6 +376,9 @@ def thread(
     axis: Vec3 = (0.0, 0.0, 1.0),
     internal: bool = False,
     length: float = 0.0,
+    left: bool = False,
+    starts: int = 1,
+    taper: float = 0.0,
 ) -> tuple[FeatureId, Feature]:
     """Ein benanntes Gewinde, wie ein Baustein es beim Bauen erklärt (§24.1).
 
@@ -301,26 +402,48 @@ def thread(
     Die Vorgabe ist null, damit ein Baustein, der sie nicht kennt, sich nicht
     ändert: Wer keine Strecke nennt, bekommt keine Unterdrückung, und ein
     altes Projekt behält seine Funde, statt dass jemand radial rät.
+
+    **Drehsinn, Gangzahl und Kegel** (RM-544) im Vertrag des exakten Lesers
+    (``brep.thread.thread_features``): ``handedness``, ``starts`` und ``lead``
+    nur, wo es mehr als einen Gang gibt, ``taper`` als halber Kegelwinkel in Grad,
+    positiv, wo der Durchmesser entlang ``axis`` wächst — nur am kegeligen
+    Gewinde; ``diameter`` gilt dann in der Mitte (``centre``). ``taper`` hier ist
+    der Zuwachs des Halbmessers je Millimeter, wie ``build.threaded`` ihn nimmt.
     """
+    params: dict[str, Any] = {
+        "diameter": diameter,
+        "pitch": pitch,
+        # thread_body lässt Winkel und Höhe gemeinsam wachsen; Innenwerkzeug,
+        # Schraube und Mutter behalten den Drehsinn ihres Bausteins.
+        "handedness": "left" if left else "right",
+        "centre": centre,
+        "axis": axis,
+        "internal": internal,
+        "length": length,
+    }
+    if starts > 1:
+        params["starts"] = starts
+        params["lead"] = starts * pitch
+    if taper:
+        params["taper"] = math.degrees(math.atan(taper))
     return identifier, Feature(
         id=identifier,
         kind="thread",
         provenance="generated",
-        params={
-            "diameter": diameter,
-            "pitch": pitch,
-            # thread_body lässt Winkel und Höhe gemeinsam wachsen; auch
-            # Innenwerkzeuge, Schraube und Mutter behalten diesen rechten Gang.
-            "handedness": "right",
-            "centre": centre,
-            "axis": axis,
-            "internal": internal,
-            "length": length,
-        },
+        params=params,
         # Auch die Händigkeit ist ein Parameter des Bausteins, keine Messung —
         # ohne Quelle las der Steckbrief „rechtsgängig" wie ein gemessenes Maß.
         measure_sources=dict.fromkeys(
-            ("diameter", "pitch", "handedness", "centre", "axis", "length"), "parameter"
+            (
+                "diameter",
+                "pitch",
+                "handedness",
+                "centre",
+                "axis",
+                "length",
+                *(name for name in ("starts", "lead", "taper") if name in params),
+            ),
+            "parameter",
         ),
     )
 

@@ -474,6 +474,16 @@ class PinForBoreParams(BaseParams):
         ),
     )
     name: str = param(title=_("Name"), default="", placement="advanced", doc=NAME_DOC)
+    # **Die Antwort auf die Rückfrage** (RM-544, Regel 21): Passt ein gemessenes
+    # Gewinde zu Größen zweier Reihen — R 1/2 und NPT 1/2 haben beide 14 Gänge je
+    # Zoll —, fragt der Schritt einmal und hält die Antwort hier fest.
+    thread_size: str = param(
+        title=_("Gewindegröße"),
+        default="",
+        internal=True,
+        placement="advanced",
+        doc=_("Welche Normgröße ein Gewinde meint, das zu mehreren passt."),
+    )
 
 
 def _hole_of(source: SceneObject, name: str) -> Feature:
@@ -531,7 +541,8 @@ def _along(body: shapes.Form, axis: Vec3, centre: Vec3) -> shapes.Form:
     # bekommt die kürzeste druckbare Länge oder eine eigene Absage (Review P2, G1, M2).
     # 5: Ein Kettenglied neben der Achse nimmt seinen Abschnitt um den Versatz
     # enger, das halbe Spiel bleibt rundum (Review P2 N7).
-    cache_version="5",
+    # 6: Zoll- und Rohrgewinde, Links-, mehrgängige und kegelige Gewinde (RM-544).
+    cache_version="6",
     doc=_(
         "Baut einen losen Stift, der in diese Bohrung passt, samt Senkkopf, Zylinderkopf oder "
         "Gewinde. Er ist um das Spiel aus dem Materialprofil kleiner. Am Klappdeckel mit Stift "
@@ -561,10 +572,38 @@ def pin_for_bore(ctx: OpContext) -> OpResult:
                 suggestions=(CORRECT_INPUT, CANCEL),
             )
         return _plain_pin(ctx, source, hole, clearance)
-    cavity = bore_pin.cavity_of(hole, source.features, source.mesh)
+    cavity, answered = _cavity_asked(ctx, source, hole)
     if cavity.thread is None and not cavity.widenings:
         return _plain_pin(ctx, source, hole, clearance)
-    return _matched_pin(ctx, source, cavity, clearance)
+    made = _matched_pin(ctx, source, cavity, clearance)
+    return dataclasses.replace(made, answered={**made.answered, **answered})
+
+
+def _cavity_asked(
+    ctx: OpContext, source: SceneObject, hole: Feature
+) -> tuple[bore_pin.Cavity, dict[str, Any]]:
+    """Der Hohlraum der Bohrung — und, wo ihr Gewinde mehrdeutig ist, die Frage danach.
+
+    Passt ein gemessenes Gewinde zu Größen verschiedener Reihen
+    (``counterpart.AMBIGUOUS_THREAD``), hält der Schritt an und fragt über
+    ``ctx.ask`` (Regel 21); die Antwort steht danach in ``thread_size``, und die
+    nächste Auswertung fragt nicht noch einmal.
+    """
+    from app.core.counterpart import AMBIGUOUS_THREAD
+
+    params = cast(PinForBoreParams, ctx.params)
+    chosen = params.thread_size or None
+    try:
+        return bore_pin.cavity_of(hole, source.features, source.mesh, chosen), {}
+    except ValidationError as error:
+        if error.constraint != AMBIGUOUS_THREAD or chosen is not None:
+            raise
+        choices = [str(entry) for entry in error.values.get("choices", ())]
+        answer = ctx.ask(str(error.detail), choices)
+        if answer not in choices:
+            raise
+        cavity = bore_pin.cavity_of(hole, source.features, source.mesh, answer)
+        return cavity, {"thread_size": answer}
 
 
 def _plain_pin(ctx: OpContext, source: SceneObject, hole: Feature, clearance: float) -> OpResult:
@@ -679,7 +718,12 @@ def _matched_pin(
     mesh = as_mesh_data(source.mesh)
     origin, axis = cavity.origin, cavity.axis
     zone = cavity.thread
-    crest = (zone.nominal - clearance) / 2.0 if zone is not None else 0.0
+    # Am Kegel ist das weiteste Ende maßgeblich — die Mündung (RM-544).
+    crest = (
+        (max(zone.nominal_at(zone.start), zone.nominal_at(zone.end)) - clearance) / 2.0
+        if zone is not None
+        else 0.0
+    )
     far = bore_pin.material_gap(mesh, origin, axis, cavity.low, -1.0, gap)
     near = bore_pin.material_gap(mesh, origin, axis, cavity.high, 1.0, gap)
     # **Ein Gewinde endet vor der engeren Bohrung darunter.** Auf der Achse ist
@@ -778,19 +822,26 @@ def _matched_pin(
     )
     if zone is not None:
         thread_top = _thread_top(cavity, zone, top, crest, gap)
-        at = origin + axis * ((bottom + thread_top) / 2.0)
+        halfway = (bottom + thread_top) / 2.0
+        at = origin + axis * halfway
         key, made = thread(
             BORE_PIN_THREAD_FEATURE,
-            zone.nominal - clearance,
+            zone.nominal_at(halfway) - clearance,
             zone.pitch,
             (float(at[0]), float(at[1]), float(at[2])),
             axis=direction,
             internal=False,
             length=thread_top - bottom,
+            left=bool(zone.dims is not None and zone.dims.left),
+            starts=int(zone.dims.starts) if zone.dims is not None else 1,
+            taper=zone.slope,
         )
+        extra: dict[str, Any] = {"nominal": zone.nominal_at(halfway)}
+        if zone.values.get("size") != CUSTOM_SIZE:
+            extra["size"] = zone.values.get("size")
         features[key] = dataclasses.replace(
             made,
-            params={**made.params, "nominal": zone.nominal},
+            params={**made.params, **extra},
             measure_sources={**made.measure_sources, "nominal": "parameter"},
         )
     findings.insert(0, _made(cavity, zone, smooth, top - bottom))
@@ -919,17 +970,46 @@ def _bolt(
     kommt mit dem Körper der kleinste Abstand der Gänge im Halbmesser, ``None``
     ohne Messung.
     """
-    from app.core.knowledge.parts.fasteners import ThreadParams, printed_thread
+    from app.core.knowledge.parts.fasteners import ThreadParams, _printed_thread, printed_thread
 
     raw = validate(
         ThreadParams,
         {**zone.values, "length": top - bottom, "internal": False, "play": clearance},
     )
-    bolt = shapes.moved(form_of(printed_thread(raw)), (0.0, 0.0, bottom))
+
+    def made() -> Any:
+        """Der Bolzen ab null; am Kegel mit der Bezugsebene des Innengewindes (RM-544)."""
+        if zone.dims is None or not zone.dims.tapered:
+            return printed_thread(raw)
+        # Ein kegeliges Innengewinde wird zur Mündung weiter. Der Stift hat seine
+        # Spitze innen und dieselbe Bezugsebene; der Baustein selbst kennt nur
+        # die eigene, deshalb hier sein Bau mit der fremden.
+        return _printed_thread(
+            zone.dims,
+            top - bottom,
+            False,
+            clearance,
+            bottom=0.0,
+            tip_at_top=False,
+            reference=zone.reference - bottom,
+        )
+
+    if zone.dims is not None and zone.dims.tapered and zone.slope <= 0.0:
+        raise ValidationError(
+            field="at_feature",
+            detail=_(
+                "Dieses kegelige Gewinde wird zur Mündung hin enger. Ein Stift käme nicht "
+                "hinein. Wählen Sie unter „Weitere Einstellungen“ die Form „Glatter Stift“."
+            ),
+            value=zone.feature,
+            constraint="narrow_mouth_thread",
+            suggestions=(CORRECT_INPUT, CANCEL),
+        )
+    bolt = shapes.moved(form_of(made()), (0.0, 0.0, bottom))
     exact = shapes.building_exact()
     with shapes.building("mesh"):
         # Am Netz ist der Bolzen sein eigener Zwilling; exakt wird er einmal vernetzt gebaut.
-        twin = shapes.moved(form_of(printed_thread(raw)), (0.0, 0.0, bottom)) if exact else bolt
+        twin = shapes.moved(form_of(made()), (0.0, 0.0, bottom)) if exact else bolt
         origin, axis = cavity.origin, cavity.axis
         placed = _along(
             twin,
@@ -943,7 +1023,9 @@ def _bolt(
         cavity.axis,
         (max(zone.start, bottom), min(zone.end, top)),
         zone.pitch,
-        zone.nominal / 2.0 + zone.pitch,
+        max(zone.nominal_at(zone.start), zone.nominal_at(zone.end)) / 2.0 + zone.pitch,
+        lead=zone.lead,
+        slope=zone.slope,
     )
     if measured is None:
         return bolt, None

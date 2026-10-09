@@ -178,6 +178,7 @@ def _declaration(spec: PartSpec) -> dict[str, object]:
             for entry in spec.feature_requirements
         ],
         "feasible": spec.feasible is not None,
+        "mirrored_by": spec.mirrored_by,
         "params": [
             [
                 entry.name,
@@ -274,7 +275,7 @@ def status(
     nicht hielt; ``stale`` ein Lauf zu einem früheren Stand; ``missing`` gar
     keiner. Ohne Profil gilt das Bezugsprofil, mit dem das Werkzeug fährt.
     """
-    from app.core.knowledge.parts.range_check import corner_count
+    from app.core.knowledge.parts.range_check import part_corner_count
 
     entry = (proofs if proofs is not None else load()).get(spec.name)
     if entry is None:
@@ -282,7 +283,7 @@ def status(
     current = fingerprint(spec, profile if profile is not None else reference_profile())
     if current is not None and entry.fingerprint != current:
         return "stale"
-    corners = corner_count(spec.params)
+    corners = part_corner_count(spec)
     if current is None and (entry.version != spec.version or entry.corners != corners):
         return "stale"
     if not entry.passed or entry.failures or entry.checked != corners:

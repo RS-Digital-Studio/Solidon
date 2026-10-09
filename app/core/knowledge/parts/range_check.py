@@ -18,7 +18,7 @@ import gc
 import itertools
 import math
 import threading
-from collections.abc import Callable
+from collections.abc import Callable, Collection
 from dataclasses import dataclass
 from typing import Any, Final
 
@@ -30,12 +30,21 @@ from app.core.units import EPS_DISPLAY, EPS_GEOM
 from app.i18n import _
 
 
-def _corner_values(params: type[BaseParams]) -> list[tuple[str, list[Any]]]:
-    """Die unterschiedlichen Randwerte je Feld, noch ohne ihr kartesisches Produkt."""
+def _corner_values(
+    params: type[BaseParams], pinned: Collection[str] = ()
+) -> list[tuple[str, list[Any]]]:
+    """Die unterschiedlichen Randwerte je Feld, noch ohne ihr kartesisches Produkt.
+
+    ``pinned`` stehen auf ihrer Vorgabe: der Spiegelschalter eines Bausteins
+    (``PartSpec.mirrored_by``), dessen andere Stellung :func:`check` als
+    Spiegelbild belegt.
+    """
     lists: list[tuple[str, list[Any]]] = []
     for entry in params.spec():
         values: list[Any] = []
-        if entry.kind == "enum":
+        if entry.name in pinned:
+            values = [entry.default]
+        elif entry.kind == "enum":
             values = list(entry.choices)
         elif entry.kind == "bool":
             values = [True, False]
@@ -97,7 +106,9 @@ def _matches(value: Any, wanted: tuple[str | bool, ...]) -> bool:
     )
 
 
-def _forest(params: type[BaseParams]) -> tuple[list[_Field], dict[str, list[_Field]], list[str]]:
+def _forest(
+    params: type[BaseParams], pinned: Collection[str] = ()
+) -> tuple[list[_Field], dict[str, list[_Field]], list[str]]:
     """Die Felder als Wald: Wurzeln ohne Bedingung, darunter, was von ihnen abhängt.
 
     Ein Feld hängt an höchstens einem Steuerfeld (``depends_on``). Wo das
@@ -107,7 +118,7 @@ def _forest(params: type[BaseParams]) -> tuple[list[_Field], dict[str, list[_Fie
     """
     entries = {entry.name: entry for entry in params.spec()}
     fields = {}
-    for name, values in _corner_values(params):
+    for name, values in _corner_values(params, pinned):
         entry = entries[name]
         rest = entry.default if entry.default in values or entry.kind in ("float", "int") else None
         fields[name] = _Field(
@@ -174,10 +185,20 @@ def _expand(field: _Field, children: dict[str, list[_Field]]) -> list[dict[str, 
     return expanded
 
 
-def corner_count(params: type[BaseParams]) -> int:
+def corner_count(params: type[BaseParams], pinned: Collection[str] = ()) -> int:
     """Zählt den ganzen Bereich, ohne eine einzige Kombination anzulegen."""
-    roots, children, _order = _forest(params)
+    roots, children, _order = _forest(params, pinned)
     return math.prod(_count(root, children) for root in roots)
+
+
+def part_corner_count(spec: PartSpec) -> int:
+    """Die Ecken eines Registerbausteins — sein Spiegelschalter zählt keine (:func:`check`)."""
+    return corner_count(spec.params, _pinned(spec))
+
+
+def _pinned(spec: PartSpec) -> tuple[str, ...]:
+    """Die Felder, die der Bereichstest dieses Bausteins auf ihrer Vorgabe lässt."""
+    return (spec.mirrored_by,) if spec.mirrored_by else ()
 
 
 def require_range_size(count: int, limit: int = MAX_CORNERS) -> None:
@@ -196,7 +217,9 @@ def require_range_size(count: int, limit: int = MAX_CORNERS) -> None:
         )
 
 
-def corners(params: type[BaseParams], limit: int = MAX_CORNERS) -> list[dict[str, Any]]:
+def corners(
+    params: type[BaseParams], limit: int = MAX_CORNERS, pinned: Collection[str] = ()
+) -> list[dict[str, Any]]:
     """Der Parameterbereich als die Werte, die ein Baustein überstehen muss.
 
     Der kleinste und der größte Wert jeder Zahl, jede Wahl jedes Enums und
@@ -218,7 +241,7 @@ def corners(params: type[BaseParams], limit: int = MAX_CORNERS) -> list[dict[str
     Schraubenloch mit 23 Normgrößen und eigenem Maß hätte 1536 Ecken gezählt,
     von denen 400 verschieden sind.
     """
-    roots, children, order = _forest(params)
+    roots, children, order = _forest(params, pinned)
     require_range_size(math.prod(_count(root, children) for root in roots), limit)
     if not roots:
         return [{}]
@@ -414,8 +437,22 @@ def check(
     features: tuple[FeatureRequirement, ...] = (),
     feasible: Callable[[BaseParams], Any] | None = None,
     limit: int = MAX_CORNERS,
+    mirrored_by: str | None = None,
+    window: tuple[int, int] | None = None,
 ) -> RangeReport:
     """Fährt die Ecken und sagt je Ecke, was nicht hielt.
+
+    ``mirrored_by`` ist ein Schalter, der den Baustein nur spiegelt
+    (``PartSpec.mirrored_by``, RM-544): Die Ecken stehen mit ihm auf seiner
+    Vorgabe, denn Wasserdichtheit, Wand, Selbstdurchdringung und Merkmale sind
+    unter einer Spiegelung dieselben. Dass er nur spiegelt, prüft der Lauf an der
+    Vorgabe des Bausteins: beide Stellungen gebaut, Volumen gleich und die Hülle
+    an der Ebene y = 0 gespiegelt — sonst ist es ein Fehler wie jeder andere.
+
+    ``window`` fährt nur die Ecken ``[von, bis)`` des Plans: Der Nachweis der
+    Bibliothek teilt einen großen Baustein so auf mehrere Prozesse
+    (``tools/check_part_ranges.py``) und zählt die Teile zusammen. Die
+    Spiegelprüfung gehört zum Teil, der bei der ersten Ecke beginnt.
 
     ``feasible`` ist die erklärte Bedingung des Bausteins zwischen seinen
     Parametern (:attr:`PartSpec.feasible`): Nennt sie für eine Ecke einen
@@ -459,7 +496,11 @@ def check(
     from app.core.geom.mesh import as_mesh_data
 
     token = cancelled or _Silent()
-    plan = corners(params, limit)
+    plan = corners(params, limit, (mirrored_by,) if mirrored_by else ())
+    first = 0
+    if window is not None:
+        first = max(0, window[0])
+        plan = plan[first : max(first, window[1])]
     failures: list[RangeFailure] = []
     excluded: list[RangeExclusion] = []
     checked = 0
@@ -648,6 +689,10 @@ def check(
         # auch GUI-Objekte aus fremden Referenzzyklen im Arbeiter zerstören.
         if checked % 16 == 0:
             _collect_on_main_thread()
+    if mirrored_by and first == 0 and checked == len(plan) and not _is_cancelled(token):
+        problem = _mirror_problem(params, build, profile, mirrored_by)
+        if problem is not None:
+            add({mirrored_by: True}, problem)
     if checked < len(plan):
         add(
             {},
@@ -667,14 +712,51 @@ def check(
     return report
 
 
+#: Wie genau ein gespiegelter Baustein sein Vorbild treffen muss: Volumen relativ,
+#: Hülle in Millimetern. Beide Stellungen entstehen aus demselben Netz, einmal an
+#: y = 0 gespiegelt; die Vereinigung danach darf anders triangulieren, nicht anders
+#: messen.
+_MIRROR_VOLUME: Final = 1e-6
+_MIRROR_BOUNDS: Final = 10.0 * EPS_GEOM
+
+
+def _mirror_problem(
+    params: type[BaseParams], build: Any, profile: Profile, field: str
+) -> str | None:
+    """Ob der Spiegelschalter an der Vorgabe nur spiegelt — sonst der Grund."""
+    import numpy as np
+
+    from app.core.geom.mesh import as_mesh_data
+
+    values: dict[str, Any] = {}
+    if PLAY_FIELD in {entry.name for entry in params.spec()}:
+        values[PLAY_FIELD] = profile.material.clearance
+    try:
+        plain = as_mesh_data(build(params(**values, **{field: False})).mesh)
+        mirrored = as_mesh_data(build(params(**values, **{field: True})).mesh)
+    except Exception as problem:  # Wie jede Ecke: der Grund gehört in den Bericht.
+        return str(problem)
+    low, high = np.asarray(plain.raw.bounds, dtype=np.float64)
+    expected = np.array([[low[0], -high[1], low[2]], [high[0], -low[1], high[2]]])
+    found = np.asarray(mirrored.raw.bounds, dtype=np.float64)
+    same_volume = abs(mirrored.volume - plain.volume) <= _MIRROR_VOLUME * abs(plain.volume)
+    if not same_volume or not np.allclose(found, expected, atol=_MIRROR_BOUNDS, rtol=0.0):
+        return str(_("{field} spiegelt den Baustein nicht nur", field=field))
+    return None
+
+
 def check_part(
     spec: PartSpec,
     profile: Profile,
     *,
     progress: ProgressFn | None = None,
     cancelled: CancelToken | None = None,
+    window: tuple[int, int] | None = None,
 ) -> RangeReport:
-    """Prüft einen Registerbaustein ausschließlich nach seiner Deklaration."""
+    """Prüft einen Registerbaustein ausschließlich nach seiner Deklaration.
+
+    ``window`` wie bei :func:`check`: ein Ausschnitt der Ecken für den Nachweis.
+    """
     return check(
         spec.params,
         spec.fn,
@@ -687,4 +769,6 @@ def check_part(
         features=spec.feature_requirements,
         feasible=spec.feasible,
         limit=corner_limit(spec.source),
+        mirrored_by=spec.mirrored_by,
+        window=window,
     )

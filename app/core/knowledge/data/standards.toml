@@ -12,6 +12,8 @@
 #
 # Alle Maße in Millimetern.
 
+# Version 14 seit dem 09.10.2026: Zoll- und Rohrgewinde als eigene Tabellenart
+# `threads` (G, R, UNC, UNF, NPT, RM-544). Kein bestehender Wert hat sich geändert.
 # Version 13 seit dem 06.10.2026: Schrauben, Muttern und Scheiben reichen über
 # die ISO-Größen von M1.6 bis M64 (ohne M60); die Regelsteigungen aus `pitches`
 # (Version 12) stehen jetzt bei ihren Schrauben, die Tabellenart entfällt. Dazu
@@ -55,7 +57,7 @@
 # tragen zwei Felder mehr (`lip`, `depth`). In beiden Schritten hat sich kein
 # bestehender Wert geändert, alte Projekte rechnen also unverändert — die Zahl
 # sagt, dass die Tabelle mehr weiß, nicht dass sie etwas anderes weiß.
-version = "13"
+version = "14"
 
 # --- Metrische Schrauben --------------------------------------------------------
 # nominal: Nenndurchmesser · clearance: Durchgangsloch (mittel)
@@ -1228,3 +1230,795 @@ note = "Elektro-Installationsrohr M32; HT-Abflussrohr DN 32"
 size = "40"
 outer = 40.0
 note = "Elektro-Installationsrohr M40; HT-Abflussrohr DN 40"
+
+# --- Zoll- und Rohrgewinde (RM-544) ---------------------------------------------
+# Seit Version 14. Eine Zeile je Gewindegröße; Schrauben, Muttern und Scheiben dazu
+# führt die Tabelle nicht — wer eine gedruckte Schraube in diesen Größen baut, bekommt
+# Kopf und Mutter aus der metrischen Reihe abgeleitet, und der Baustein sagt es.
+# family: G (zylindrisches Rohrgewinde), R (kegeliges Rohrgewinde), UNC und UNF
+#   (Unified grob und fein), NPT (kegeliges amerikanisches Rohrgewinde). Welche Reihe
+#   ein Kunde in den Auswahllisten sieht, stellt er in den Einstellungen ein.
+# nominal: Außendurchmesser in mm, bei R und NPT in der Bezugsebene (gauge plane).
+# tpi: Gänge je Zoll; die Steigung ist 25,4 / tpi und steht deshalb nicht da.
+# Gelesen am 09.10.2026; gerechnet wird mit dem exakten Zollmaß, nicht mit den auf
+# drei Stellen gerundeten Millimetern der Blätter.
+#
+# G nach ISO 228-1 (Whitworth-Profil 55°, Gangtiefe h = 0,640327·P):
+#   nominal, tpi, minor: Wikipedia „British Standard Pipe“ (Tabelle der Durchmesser).
+#   Gegenprobe ist das Grundprofil, keine zweite Tabelle: minor ist der Kerndurchmesser d1 der Blätter; sie runden h auf drei Stellen
+#   (G1: 1,479), deshalb liegt d − 1,280654·P bis zu 0,001 mm daneben —
+#   `tests/test_standards.py` rechnet jede Zeile so nach.
+
+[[threads]]
+size = "G1/16"
+family = "G"
+nominal = 7.723
+tpi = 28
+minor = 6.561
+
+[[threads]]
+size = "G1/8"
+family = "G"
+nominal = 9.728
+tpi = 28
+minor = 8.566
+
+[[threads]]
+size = "G1/4"
+family = "G"
+nominal = 13.157
+tpi = 19
+minor = 11.445
+
+[[threads]]
+size = "G3/8"
+family = "G"
+nominal = 16.662
+tpi = 19
+minor = 14.95
+
+[[threads]]
+size = "G1/2"
+family = "G"
+nominal = 20.955
+tpi = 14
+minor = 18.631
+
+[[threads]]
+size = "G5/8"
+family = "G"
+nominal = 22.911
+tpi = 14
+minor = 20.587
+
+[[threads]]
+size = "G3/4"
+family = "G"
+nominal = 26.441
+tpi = 14
+minor = 24.117
+
+[[threads]]
+size = "G7/8"
+family = "G"
+nominal = 30.201
+tpi = 14
+minor = 27.877
+
+[[threads]]
+size = "G1"
+family = "G"
+nominal = 33.249
+tpi = 11
+minor = 30.291
+
+[[threads]]
+size = "G1 1/8"
+family = "G"
+nominal = 37.897
+tpi = 11
+minor = 34.939
+
+[[threads]]
+size = "G1 1/4"
+family = "G"
+nominal = 41.91
+tpi = 11
+minor = 38.952
+
+[[threads]]
+size = "G1 1/2"
+family = "G"
+nominal = 47.803
+tpi = 11
+minor = 44.845
+
+[[threads]]
+size = "G1 3/4"
+family = "G"
+nominal = 53.746
+tpi = 11
+minor = 50.788
+
+[[threads]]
+size = "G2"
+family = "G"
+nominal = 59.614
+tpi = 11
+minor = 56.656
+
+[[threads]]
+size = "G2 1/4"
+family = "G"
+nominal = 65.71
+tpi = 11
+minor = 62.752
+
+[[threads]]
+size = "G2 1/2"
+family = "G"
+nominal = 75.184
+tpi = 11
+minor = 72.226
+
+[[threads]]
+size = "G2 3/4"
+family = "G"
+nominal = 81.534
+tpi = 11
+minor = 78.576
+
+[[threads]]
+size = "G3"
+family = "G"
+nominal = 87.884
+tpi = 11
+minor = 84.926
+
+[[threads]]
+size = "G3 1/2"
+family = "G"
+nominal = 100.33
+tpi = 11
+minor = 97.372
+
+[[threads]]
+size = "G4"
+family = "G"
+nominal = 113.03
+tpi = 11
+minor = 110.072
+
+[[threads]]
+size = "G4 1/2"
+family = "G"
+nominal = 125.73
+tpi = 11
+minor = 122.772
+
+[[threads]]
+size = "G5"
+family = "G"
+nominal = 138.43
+tpi = 11
+minor = 135.472
+
+[[threads]]
+size = "G5 1/2"
+family = "G"
+nominal = 151.13
+tpi = 11
+minor = 148.172
+
+[[threads]]
+size = "G6"
+family = "G"
+nominal = 163.83
+tpi = 11
+minor = 160.872
+
+# R nach ISO 7-1 (dasselbe Profil, Kegel 1:16 auf den Durchmesser):
+#   nominal und tpi wie G derselben Größe — in der Bezugsebene sind die Durchmesser
+#   die von ISO 228-1. gauge: Abstand der Bezugsebene vom kleinen Ende des
+#   Außengewindes (Grundmaß, „gauge length“), Wikipedia „British Standard Pipe“
+#   (Taper threads); dieselben Werte führt EN 10226-1.
+#   Das Innengewinde Rc hat die Bezugsebene an seiner Mündung.
+
+[[threads]]
+size = "R1/16"
+family = "R"
+nominal = 7.723
+tpi = 28
+gauge = 4.0
+
+[[threads]]
+size = "R1/8"
+family = "R"
+nominal = 9.728
+tpi = 28
+gauge = 4.0
+
+[[threads]]
+size = "R1/4"
+family = "R"
+nominal = 13.157
+tpi = 19
+gauge = 6.0
+
+[[threads]]
+size = "R3/8"
+family = "R"
+nominal = 16.662
+tpi = 19
+gauge = 6.4
+
+[[threads]]
+size = "R1/2"
+family = "R"
+nominal = 20.955
+tpi = 14
+gauge = 8.2
+
+[[threads]]
+size = "R3/4"
+family = "R"
+nominal = 26.441
+tpi = 14
+gauge = 9.5
+
+[[threads]]
+size = "R1"
+family = "R"
+nominal = 33.249
+tpi = 11
+gauge = 10.4
+
+[[threads]]
+size = "R1 1/4"
+family = "R"
+nominal = 41.91
+tpi = 11
+gauge = 12.7
+
+[[threads]]
+size = "R1 1/2"
+family = "R"
+nominal = 47.803
+tpi = 11
+gauge = 12.7
+
+[[threads]]
+size = "R2"
+family = "R"
+nominal = 59.614
+tpi = 11
+gauge = 15.9
+
+[[threads]]
+size = "R2 1/2"
+family = "R"
+nominal = 75.184
+tpi = 11
+gauge = 17.5
+
+[[threads]]
+size = "R3"
+family = "R"
+nominal = 87.884
+tpi = 11
+gauge = 20.6
+
+[[threads]]
+size = "R4"
+family = "R"
+nominal = 113.03
+tpi = 11
+gauge = 25.4
+
+[[threads]]
+size = "R5"
+family = "R"
+nominal = 138.43
+tpi = 11
+gauge = 28.6
+
+[[threads]]
+size = "R6"
+family = "R"
+nominal = 163.83
+tpi = 11
+gauge = 28.6
+
+# UNC und UNF nach ASME B1.1 (Profil wie metrisch ISO, 60°):
+#   nominal: das Zollmaß der Bezeichnung mal 25,4; die Nummerngrößen #N haben
+#   0,060 + 0,013·N Zoll (#1 0,073), was `tests/test_standards.py` nachrechnet.
+#   tpi: Wikipedia „Unified Thread Standard“ (Tabellen UNC und UNF). #0-80 UNF (1,524 mm) liegt
+#   unter dem kleinsten Gewinde, das die Bibliothek baut (`units.SMALLEST_THREAD`),
+#   und fehlt deshalb.
+
+[[threads]]
+size = "#1-64 UNC"
+family = "UNC"
+nominal = 1.8542
+tpi = 64
+
+[[threads]]
+size = "#2-56 UNC"
+family = "UNC"
+nominal = 2.1844
+tpi = 56
+
+[[threads]]
+size = "#3-48 UNC"
+family = "UNC"
+nominal = 2.5146
+tpi = 48
+
+[[threads]]
+size = "#4-40 UNC"
+family = "UNC"
+nominal = 2.8448
+tpi = 40
+
+[[threads]]
+size = "#5-40 UNC"
+family = "UNC"
+nominal = 3.175
+tpi = 40
+
+[[threads]]
+size = "#6-32 UNC"
+family = "UNC"
+nominal = 3.5052
+tpi = 32
+
+[[threads]]
+size = "#8-32 UNC"
+family = "UNC"
+nominal = 4.1656
+tpi = 32
+
+[[threads]]
+size = "#10-24 UNC"
+family = "UNC"
+nominal = 4.826
+tpi = 24
+
+[[threads]]
+size = "#12-24 UNC"
+family = "UNC"
+nominal = 5.4864
+tpi = 24
+
+[[threads]]
+size = "1/4-20 UNC"
+family = "UNC"
+nominal = 6.35
+tpi = 20
+
+[[threads]]
+size = "5/16-18 UNC"
+family = "UNC"
+nominal = 7.9375
+tpi = 18
+
+[[threads]]
+size = "3/8-16 UNC"
+family = "UNC"
+nominal = 9.525
+tpi = 16
+
+[[threads]]
+size = "7/16-14 UNC"
+family = "UNC"
+nominal = 11.1125
+tpi = 14
+
+[[threads]]
+size = "1/2-13 UNC"
+family = "UNC"
+nominal = 12.7
+tpi = 13
+
+[[threads]]
+size = "9/16-12 UNC"
+family = "UNC"
+nominal = 14.2875
+tpi = 12
+
+[[threads]]
+size = "5/8-11 UNC"
+family = "UNC"
+nominal = 15.875
+tpi = 11
+
+[[threads]]
+size = "3/4-10 UNC"
+family = "UNC"
+nominal = 19.05
+tpi = 10
+
+[[threads]]
+size = "7/8-9 UNC"
+family = "UNC"
+nominal = 22.225
+tpi = 9
+
+[[threads]]
+size = "1-8 UNC"
+family = "UNC"
+nominal = 25.4
+tpi = 8
+
+[[threads]]
+size = "1 1/8-7 UNC"
+family = "UNC"
+nominal = 28.575
+tpi = 7
+
+[[threads]]
+size = "1 1/4-7 UNC"
+family = "UNC"
+nominal = 31.75
+tpi = 7
+
+[[threads]]
+size = "1 3/8-6 UNC"
+family = "UNC"
+nominal = 34.925
+tpi = 6
+
+[[threads]]
+size = "1 1/2-6 UNC"
+family = "UNC"
+nominal = 38.1
+tpi = 6
+
+[[threads]]
+size = "1 3/4-5 UNC"
+family = "UNC"
+nominal = 44.45
+tpi = 5
+
+[[threads]]
+size = "2-4.5 UNC"
+family = "UNC"
+nominal = 50.8
+tpi = 4.5
+
+[[threads]]
+size = "2 1/4-4.5 UNC"
+family = "UNC"
+nominal = 57.15
+tpi = 4.5
+
+[[threads]]
+size = "2 1/2-4 UNC"
+family = "UNC"
+nominal = 63.5
+tpi = 4
+
+[[threads]]
+size = "2 3/4-4 UNC"
+family = "UNC"
+nominal = 69.85
+tpi = 4
+
+[[threads]]
+size = "3-4 UNC"
+family = "UNC"
+nominal = 76.2
+tpi = 4
+
+[[threads]]
+size = "3 1/4-4 UNC"
+family = "UNC"
+nominal = 82.55
+tpi = 4
+
+[[threads]]
+size = "3 1/2-4 UNC"
+family = "UNC"
+nominal = 88.9
+tpi = 4
+
+[[threads]]
+size = "3 3/4-4 UNC"
+family = "UNC"
+nominal = 95.25
+tpi = 4
+
+[[threads]]
+size = "4-4 UNC"
+family = "UNC"
+nominal = 101.6
+tpi = 4
+
+[[threads]]
+size = "#1-72 UNF"
+family = "UNF"
+nominal = 1.8542
+tpi = 72
+
+[[threads]]
+size = "#2-64 UNF"
+family = "UNF"
+nominal = 2.1844
+tpi = 64
+
+[[threads]]
+size = "#3-56 UNF"
+family = "UNF"
+nominal = 2.5146
+tpi = 56
+
+[[threads]]
+size = "#4-48 UNF"
+family = "UNF"
+nominal = 2.8448
+tpi = 48
+
+[[threads]]
+size = "#5-44 UNF"
+family = "UNF"
+nominal = 3.175
+tpi = 44
+
+[[threads]]
+size = "#6-40 UNF"
+family = "UNF"
+nominal = 3.5052
+tpi = 40
+
+[[threads]]
+size = "#8-36 UNF"
+family = "UNF"
+nominal = 4.1656
+tpi = 36
+
+[[threads]]
+size = "#10-32 UNF"
+family = "UNF"
+nominal = 4.826
+tpi = 32
+
+[[threads]]
+size = "#12-28 UNF"
+family = "UNF"
+nominal = 5.4864
+tpi = 28
+
+[[threads]]
+size = "1/4-28 UNF"
+family = "UNF"
+nominal = 6.35
+tpi = 28
+
+[[threads]]
+size = "5/16-24 UNF"
+family = "UNF"
+nominal = 7.9375
+tpi = 24
+
+[[threads]]
+size = "3/8-24 UNF"
+family = "UNF"
+nominal = 9.525
+tpi = 24
+
+[[threads]]
+size = "7/16-20 UNF"
+family = "UNF"
+nominal = 11.1125
+tpi = 20
+
+[[threads]]
+size = "1/2-20 UNF"
+family = "UNF"
+nominal = 12.7
+tpi = 20
+
+[[threads]]
+size = "9/16-18 UNF"
+family = "UNF"
+nominal = 14.2875
+tpi = 18
+
+[[threads]]
+size = "5/8-18 UNF"
+family = "UNF"
+nominal = 15.875
+tpi = 18
+
+[[threads]]
+size = "3/4-16 UNF"
+family = "UNF"
+nominal = 19.05
+tpi = 16
+
+[[threads]]
+size = "7/8-14 UNF"
+family = "UNF"
+nominal = 22.225
+tpi = 14
+
+[[threads]]
+size = "1-12 UNF"
+family = "UNF"
+nominal = 25.4
+tpi = 12
+
+[[threads]]
+size = "1 1/8-12 UNF"
+family = "UNF"
+nominal = 28.575
+tpi = 12
+
+[[threads]]
+size = "1 1/4-12 UNF"
+family = "UNF"
+nominal = 31.75
+tpi = 12
+
+[[threads]]
+size = "1 3/8-12 UNF"
+family = "UNF"
+nominal = 34.925
+tpi = 12
+
+[[threads]]
+size = "1 1/2-12 UNF"
+family = "UNF"
+nominal = 38.1
+tpi = 12
+
+# NPT nach ASME B1.20.1 (60°, Gangtiefe h = 0,8·P, Kegel 1:16 auf den Durchmesser):
+#   outside (Rohraußendurchmesser D), tpi, pitch_diameter (E0, Flankendurchmesser am
+#   kleinen Ende) und gauge (L1, Einschraublänge von Hand = Abstand der Bezugsebene vom
+#   kleinen Ende): Wikipedia „National pipe thread“ (Tabelle). nominal ist gerechnet, nicht
+#   abgelesen: der Außendurchmesser in der Bezugsebene, E0 + L1/16 + 0,8·P;
+#   `tests/test_standards.py` rechnet E0 = D − (0,05·D + 1,1)·P nach.
+
+[[threads]]
+size = "1/16-27 NPT"
+family = "NPT"
+nominal = 7.8946
+tpi = 27
+gauge = 4.064
+outside = 7.9375
+pitch_diameter = 6.888
+
+[[threads]]
+size = "1/8-27 NPT"
+family = "NPT"
+nominal = 10.2421
+tpi = 27
+gauge = 4.1021
+outside = 10.287
+pitch_diameter = 9.2332
+
+[[threads]]
+size = "1/4-18 NPT"
+family = "NPT"
+nominal = 13.6162
+tpi = 18
+gauge = 5.7861
+outside = 13.716
+pitch_diameter = 12.1257
+
+[[threads]]
+size = "3/8-18 NPT"
+family = "NPT"
+nominal = 17.0549
+tpi = 18
+gauge = 6.096
+outside = 17.145
+pitch_diameter = 15.5451
+
+[[threads]]
+size = "1/2-14 NPT"
+family = "NPT"
+nominal = 21.2236
+tpi = 14
+gauge = 8.128
+outside = 21.336
+pitch_diameter = 19.2641
+
+[[threads]]
+size = "3/4-14 NPT"
+family = "NPT"
+nominal = 26.5687
+tpi = 14
+gauge = 8.6106
+outside = 26.67
+pitch_diameter = 24.5791
+
+[[threads]]
+size = "1-11.5 NPT"
+family = "NPT"
+nominal = 33.2282
+tpi = 11.5
+gauge = 10.16
+outside = 33.401
+pitch_diameter = 30.8262
+
+[[threads]]
+size = "1 1/4-11.5 NPT"
+family = "NPT"
+nominal = 41.9848
+tpi = 11.5
+gauge = 10.668
+outside = 42.164
+pitch_diameter = 39.5511
+
+[[threads]]
+size = "1 1/2-11.5 NPT"
+family = "NPT"
+nominal = 48.0544
+tpi = 11.5
+gauge = 10.668
+outside = 48.26
+pitch_diameter = 45.6207
+
+[[threads]]
+size = "2-11.5 NPT"
+family = "NPT"
+nominal = 60.0922
+tpi = 11.5
+gauge = 11.0744
+outside = 60.325
+pitch_diameter = 57.6331
+
+[[threads]]
+size = "2 1/2-8 NPT"
+family = "NPT"
+nominal = 72.6987
+tpi = 8
+gauge = 17.3228
+outside = 73.025
+pitch_diameter = 69.0761
+
+[[threads]]
+size = "3-8 NPT"
+family = "NPT"
+nominal = 88.6078
+tpi = 8
+gauge = 19.4564
+outside = 88.9
+pitch_diameter = 84.8517
+
+[[threads]]
+size = "3 1/2-8 NPT"
+family = "NPT"
+nominal = 101.3158
+tpi = 8
+gauge = 20.8534
+outside = 101.6
+pitch_diameter = 97.4725
+
+[[threads]]
+size = "4-8 NPT"
+family = "NPT"
+nominal = 113.9731
+tpi = 8
+gauge = 21.4376
+outside = 114.3
+pitch_diameter = 110.0933
+
+[[threads]]
+size = "5-8 NPT"
+family = "NPT"
+nominal = 140.952
+tpi = 8
+gauge = 23.7998
+outside = 141.3002
+pitch_diameter = 136.9245
+
+[[threads]]
+size = "6-8 NPT"
+family = "NPT"
+nominal = 167.7915
+tpi = 8
+gauge = 24.3332
+outside = 168.275
+pitch_diameter = 163.7307

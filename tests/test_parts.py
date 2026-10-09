@@ -101,7 +101,8 @@ def corners(spec: PartSpec) -> list[dict[str, Any]]:
     """
     from app.core.knowledge.parts.range_check import corner_limit
 
-    return core_corners(spec.params, corner_limit(spec.source))
+    pinned = (spec.mirrored_by,) if spec.mirrored_by else ()
+    return core_corners(spec.params, corner_limit(spec.source), pinned)
 
 
 def required_defaults(spec: PartSpec) -> dict[str, Any]:
@@ -134,6 +135,7 @@ def test_registered_range_check_uses_every_declared_requirement(profile: Profile
         joined_by_host=True,
         bodies=2,
         feasible=lambda values: values["size"] != "M2",
+        mirrored_by="lead_in",
     )
     progress = mock.Mock()
     cancelled = CancelSignal()
@@ -153,6 +155,8 @@ def test_registered_range_check_uses_every_declared_requirement(profile: Profile
         features=spec.feature_requirements,
         feasible=spec.feasible,
         limit=range_check.LIBRARY_MAX_CORNERS,
+        mirrored_by="lead_in",
+        window=None,
     )
 
 
@@ -318,7 +322,7 @@ def test_range_corners_are_the_complete_cartesian_boundary() -> None:
     assert len({tuple(entry.items()) for entry in plan}) == len(plan)
 
 
-def test_the_library_really_has_16814_cartesian_boundaries() -> None:
+def test_the_library_really_has_21288_cartesian_boundaries() -> None:
     """Vollständige Grenzen einschließlich der 120 Organizer-Kombinationen.
 
     Die 312 seit dem 16.09.2026 sind die Klemmschale (32), ihre Einlage (256),
@@ -349,9 +353,13 @@ def test_the_library_really_has_16814_cartesian_boundaries() -> None:
     7936 mehr: Wandhalter bis M64 (512 → 832), Rohrschelle bis M64 (512 →
     3072), Klemmschale bis M64 (512 → 768), die Halter mit wählbarer Schraube
     (U und Ablage 320 → 1920, rund und Gabel 160 → 960).
+    Seit dem 09.10.2026 (RM-544) 4474 mehr: Gewinde, Schraube, Mutter und Bolzen
+    nehmen 138 Größen aus sechs Reihen und ein eigenes Maß in drei Gewindeformen
+    mit Gangzahl — Gewinde und Schraube je 1296, Mutter 324, Bolzen 2592. Das
+    Linksgewinde zählt keine Ecken: Es spiegelt nur (``PartSpec.mirrored_by``).
     """
 
-    assert sum(len(corners(spec)) for spec in PARTS.all()) == 16814
+    assert sum(len(corners(spec)) for spec in PARTS.all()) == 21288
 
 
 def test_the_library_checks_up_to_4096_corners_and_an_own_part_512() -> None:
@@ -4782,9 +4790,13 @@ def test_an_external_thread_turns_into_the_internal_thread_of_the_same_size(
     ("bore", "size", "nominal"), [(60.0, "M64", 64.0), (70.0, "custom_size", 76.6)]
 )
 def test_a_pipe_of_sixty_takes_an_internal_thread_and_its_bolt_turns_through(
-    profile: Profile, bore: float, size: str, nominal: float
+    profile: Profile, bore: float, size: str, nominal: float, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Der Kundenvorschlag S-20261006-c66299: ein Innengewinde in einem Rohr mit 60 mm.
+
+    Mit den metrischen Gewinden allein in den Listen (RM-544): Sind alle Reihen
+    gezeigt, trifft die 70-mm-Bohrung das Kernloch der 3-4 UNC, und die
+    Normgröße geht dem eigenen Maß vor.
 
     Das Rohr mit 8 mm Wand bekommt das Gewinde, das ``size_for_thread`` an
     seiner Bohrung vorwählt: in 60 mm seit Tabellenversion 13 die Normgröße
@@ -4798,6 +4810,7 @@ def test_a_pipe_of_sixty_takes_an_internal_thread_and_its_bolt_turns_through(
     from app.core.knowledge.parts.fasteners import size_for_thread, thread_measure
     from app.core.units import EPS_GEOM
 
+    monkeypatch.setattr(standards, "_shown_families", ("metric",))
     chosen = size_for_thread(bore)
     assert chosen["size"] == size
     assert thread_measure(

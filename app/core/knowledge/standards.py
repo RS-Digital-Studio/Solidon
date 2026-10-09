@@ -16,14 +16,14 @@ from __future__ import annotations
 import math
 import tomllib
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from itertools import pairwise
 from pathlib import Path
 from typing import Any, Final
 
 from app.core.errors import ValidationError
 from app.core.log import get_logger
-from app.core.units import EPS_GEOM
+from app.core.units import EPS_GEOM, UNIT_TO_MM
 from app.i18n import _
 
 _log = get_logger(__name__)
@@ -169,6 +169,78 @@ class Pipe:
     note: str = ""
 
 
+#: Die Gewindereihen der Bibliothek (RM-544), in der Reihenfolge der Auswahllisten.
+#: ``metric`` ist die Schraubentabelle (ISO 261/262), die übrigen stehen in
+#: ``threads``: G zylindrisch nach ISO 228-1, R kegelig nach ISO 7-1, UNC und UNF
+#: nach ASME B1.1, NPT kegelig nach ASME B1.20.1.
+THREAD_FAMILIES: Final = ("metric", "G", "R", "UNC", "UNF", "NPT")
+
+#: Die kegeligen Reihen: Ihr Durchmesser gilt in der Bezugsebene, und er wächst
+#: wie der Kegel 1:16 auf den Durchmesser (:data:`PIPE_TAPER`).
+TAPERED_FAMILIES: Final = ("R", "NPT")
+
+#: Der Kegel der Rohrgewinde R und NPT im Halbmesser: 1:16 auf den Durchmesser
+#: heißt ein Zweiunddreißigstel Millimeter Halbmesser je Millimeter Länge.
+PIPE_TAPER: Final = 1.0 / 32.0
+
+#: Welches Gangprofil eine Reihe baut (``shapes.ridge_profile``): ``flat`` ist das
+#: druckbar abgeflachte 60°-Profil der metrischen Gewinde, das auch Unified trägt —
+#: ISO 68-1 und ASME B1.1 haben dasselbe Grundprofil. ``whitworth`` ist das gerundete
+#: 55°-Profil von G und R, ``npt`` das 60°-Profil mit der Gangtiefe 0,8·P.
+THREAD_PROFILE_OF: Final[dict[str, str]] = {
+    "metric": "flat",
+    "G": "whitworth",
+    "R": "whitworth",
+    "UNC": "flat",
+    "UNF": "flat",
+    "NPT": "npt",
+}
+
+
+@dataclass(frozen=True, slots=True)
+class Thread:
+    """Ein Zoll- oder Rohrgewinde der Tabelle (RM-544).
+
+    ``nominal`` ist der Außendurchmesser, bei R und NPT in der Bezugsebene;
+    ``gauge`` deren Abstand vom kleinen Ende des Außengewindes. ``minor``,
+    ``outside`` und ``pitch_diameter`` sind veröffentlichte Werte, an denen die
+    Gegenprobe rechnet; gebaut wird aus ``nominal`` und ``tpi``.
+    """
+
+    size: str
+    family: str
+    nominal: float
+    tpi: float
+    gauge: float = 0.0
+    minor: float | None = None
+    outside: float | None = None
+    pitch_diameter: float | None = None
+    note: str = ""
+
+    @property
+    def pitch(self) -> float:
+        """Die Steigung in Millimetern aus den Gängen je Zoll."""
+        return UNIT_TO_MM["in"] / self.tpi
+
+
+@dataclass(frozen=True, slots=True)
+class ThreadSize:
+    """Ein Gewinde der Tabelle, gleich aus welcher Reihe — was ein Gewindebaustein baut.
+
+    ``nominal`` und ``pitch`` in Millimetern; ``profile`` nach
+    :data:`THREAD_PROFILE_OF`; ``tapered`` mit Bezugsebene ``gauge`` Millimeter
+    über dem kleinen Ende.
+    """
+
+    size: str
+    family: str
+    nominal: float
+    pitch: float
+    profile: str
+    tapered: bool = False
+    gauge: float = 0.0
+
+
 @dataclass(frozen=True, slots=True)
 class Tables:
     """Alles, was die Tabelle hält, mit ihrer Version."""
@@ -184,6 +256,8 @@ class Tables:
     tubes: dict[str, Tube]
     boards: dict[str, Board]
     pipes: dict[str, Pipe]
+    threads: dict[str, Thread] = field(default_factory=dict)
+    """Zoll- und Rohrgewinde (RM-544), nach dem Außendurchmesser."""
     headless: tuple[float, ...] = ()
     """ISO-Nennmaße ohne Zylinderschraube nach DIN 912 (M60): Abgeleitet treffen
     Steigung, Löcher, Mutter und Scheibe dort die Normwerte, nur der Kopf nicht."""
@@ -221,6 +295,7 @@ def load(path: Path | None = None) -> Tables:
         boards=_index(Board, data.get("boards", ()), "boards", source),
         # Nach dem Außendurchmesser, damit die Auswahl der Rohrschelle aufsteigt.
         pipes=_index(Pipe, data.get("pipes", ()), "pipes", source, "outer"),
+        threads=_index(Thread, data.get("threads", ()), "threads", source, "nominal"),
         headless=tuple(
             _finite_positive(value, "headless", str(value), "nominal", source)
             for value in data.get("headless", ())
@@ -426,6 +501,37 @@ def _validate(tables: Tables, source: Path) -> None:
         _finite_positive(board.stagger, "boards", board.size, "stagger", source, zero=True)
         _finite_positive(board.thickness, "boards", board.size, "thickness", source)
 
+    _validate_threads(tables, source)
+
+
+def _validate_threads(tables: Tables, source: Path) -> None:
+    """Die Zoll- und Rohrgewinde: bekannte Reihe, Maße, Kegel und Reihenfolge je Reihe.
+
+    Je Reihe steigt der Durchmesser, und die Steigung fällt nie — dieselbe Zusage
+    wie bei den Schrauben, auf der :func:`regular_tpi` ruht. Eine kegelige Reihe
+    braucht ihre Bezugsebene, eine zylindrische hat keine.
+    """
+    for entry in tables.threads.values():
+        if entry.family not in THREAD_FAMILIES or entry.family == "metric":
+            raise _invalid("threads", entry.size, "family", source)
+        nominal = _finite_positive(entry.nominal, "threads", entry.size, "nominal", source)
+        _finite_positive(entry.tpi, "threads", entry.size, "tpi", source)
+        gauge = _finite_positive(entry.gauge, "threads", entry.size, "gauge", source, zero=True)
+        if (entry.family in TAPERED_FAMILIES) != (gauge > 0.0):
+            raise _invalid("threads", entry.size, "gauge_for_taper", source)
+        for name in ("minor", "outside", "pitch_diameter"):
+            value = getattr(entry, name)
+            if value is not None:
+                _finite_positive(value, "threads", entry.size, name, source)
+        if entry.minor is not None and entry.minor >= nominal:
+            raise _invalid("threads", entry.size, "minor_nominal", source)
+    for family in THREAD_FAMILIES[1:]:
+        rows = [entry for entry in tables.threads.values() if entry.family == family]
+        _ordered(tuple(entry.nominal for entry in rows), "threads", family, "nominal_rises", source)
+        for smaller, larger in pairwise(rows):
+            if larger.tpi > smaller.tpi:
+                raise _invalid("threads", larger.size, "pitch_rises", source)
+
 
 #: Welche Tabelle zu welcher Art gehört (§24.2). Sie steht hier, neben den
 #: Tabellen, und nicht dort, wo nachgeschlagen wird: Diese Zuordnung lag in der
@@ -442,6 +548,7 @@ TABLES: Final[dict[str, str]] = {
     "tube": "tubes",
     "board": "boards",
     "pipe": "pipes",
+    "thread": "threads",
 }
 
 
@@ -530,6 +637,134 @@ def thread_size_near(diameter: float, pitch: float) -> str | None:
         ):
             return entry.size
     return None
+
+
+def thread(size: str) -> Thread:
+    """Ein Zoll- oder Rohrgewinde der Tabelle, oder ein klarer Fehler."""
+    found: Thread = _lookup(load().threads, size, "thread")
+    return found
+
+
+def thread_size(size: str) -> ThreadSize:
+    """Das Gewinde einer Größe aus irgendeiner Reihe — metrisch aus der Schraubentabelle.
+
+    Die eine Stelle, an der ein Gewindebaustein von einer Bezeichnung zu Maßen
+    kommt: Ob „M6“ oder „G1/2“, er bekommt Nennmaß, Steigung, Profil und Kegel.
+    """
+    tables = load()
+    wanted = size.strip()
+    if wanted in tables.screws or wanted.upper() in tables.screws:
+        entry = screw(wanted)
+        return ThreadSize(entry.size, "metric", entry.nominal, entry.pitch, "flat")
+    row = thread(wanted)
+    return ThreadSize(
+        row.size,
+        row.family,
+        row.nominal,
+        row.pitch,
+        THREAD_PROFILE_OF[row.family],
+        tapered=row.family in TAPERED_FAMILIES,
+        gauge=row.gauge,
+    )
+
+
+def thread_family(size: str) -> str | None:
+    """Die Reihe einer Größe (:data:`THREAD_FAMILIES`), ``None`` ohne Gewinde."""
+    tables = load()
+    if size in tables.screws:
+        return "metric"
+    row = tables.threads.get(size)
+    return row.family if row is not None else None
+
+
+def thread_sizes(families: Sequence[str] | None = None) -> tuple[str, ...]:
+    """Die Gewindegrößen der genannten Reihen, Reihe für Reihe, je Reihe aufsteigend.
+
+    Ohne Angabe alle — so stehen sie im Parameterschema eines Gewindebausteins.
+    Was die Auswahlliste davon zeigt, entscheidet die Oberfläche
+    (:func:`shown_thread_families`).
+    """
+    tables = load()
+    chosen = THREAD_FAMILIES if families is None else tuple(families)
+    sizes: list[str] = []
+    for family in THREAD_FAMILIES:
+        if family not in chosen:
+            continue
+        if family == "metric":
+            sizes.extend(tables.screws)
+        else:
+            sizes.extend(size for size, row in tables.threads.items() if row.family == family)
+    return tuple(sizes)
+
+
+#: Welche Reihen die Auswahllisten zeigen und die Erkennung vorschlägt (RM-544).
+#: Eine Einstellung der Oberfläche, kein Dokumentzustand: Ein Schritt, der eine
+#: ausgeblendete Reihe trägt, zeigt und rechnet sie weiter. Gestellt von der
+#: Oberfläche (``set_shown_thread_families``), gelesen von der Vorwahl an einer
+#: Bohrung und vom Gegenstück — dasselbe Muster wie die Anzeigeeinheit in
+#: ``app.i18n``.
+_shown_families: tuple[str, ...] = THREAD_FAMILIES
+
+
+def set_shown_thread_families(families: Sequence[str]) -> None:
+    """Merkt sich, welche Reihen der Kunde sehen will; Unbekanntes fällt weg.
+
+    Mindestens eine Reihe bleibt: Eine leere Wahl ist keine, und ohne Reihe
+    gäbe es kein Gewinde. Bleibt nichts übrig, gelten alle.
+    """
+    global _shown_families
+    kept = tuple(family for family in THREAD_FAMILIES if family in set(families))
+    _shown_families = kept or THREAD_FAMILIES
+
+
+def shown_thread_families() -> tuple[str, ...]:
+    """Die Reihen, die Auswahllisten zeigen und die Erkennung vorschlägt."""
+    return _shown_families
+
+
+def regular_tpi(diameter: float, family: str) -> float:
+    """Die Gänge je Zoll einer Reihe bei diesem Durchmesser, wie :func:`regular_pitch`.
+
+    Die größte Größe der Reihe, die der Durchmesser erreicht; darunter die
+    kleinste. Ein Whitworth-Gewinde mit eigenem Maß nimmt die Reihe G, eines mit
+    Unified-Profil die Reihe UNC — die groben Reihen, wie metrisch die Regelsteigung.
+    """
+    rows = [row for row in load().threads.values() if row.family == family]
+    if not rows:
+        raise _invalid("threads", family, "family", _DATA_FILE)
+    reached = [row.tpi for row in rows if row.nominal <= diameter + EPS_GEOM]
+    return reached[-1] if reached else rows[0].tpi
+
+
+def thread_sizes_near(
+    diameter: float,
+    pitch: float,
+    *,
+    tapered: bool = False,
+    reach: tuple[float, float] | None = None,
+    families: Sequence[str] | None = None,
+) -> tuple[str, ...]:
+    """Alle Tabellengrößen, die ein Gewinde dieses Maßes meinen kann — aus jeder Reihe.
+
+    Durchmesser und Steigung innerhalb von ``reach`` (Vorgabe
+    :data:`THREAD_SIZE_REACH`). Ein kegeliges Gewinde trifft nur die kegeligen
+    Reihen und umgekehrt; sein gemessener Durchmesser gilt in der Mitte der
+    Gänge und darf deshalb um den Kegel über der Bezugslänge neben dem Nennmaß
+    liegen. Mehr als ein Treffer ist eine Mehrdeutigkeit, die der Aufrufer
+    erfragt (Regel 21): R 1/2 und NPT 1/2 haben beide 14 Gänge je Zoll.
+    ``families`` begrenzt auf die gezeigten Reihen.
+    """
+    diameter_reach, pitch_reach = reach or THREAD_SIZE_REACH
+    chosen = THREAD_FAMILIES if families is None else tuple(families)
+    found: list[str] = []
+    for size in thread_sizes(chosen):
+        entry = thread_size(size)
+        if entry.tapered != tapered:
+            continue
+        spread = diameter_reach + (2.0 * entry.gauge * PIPE_TAPER if tapered else 0.0)
+        if abs(entry.nominal - diameter) <= spread and abs(entry.pitch - pitch) <= pitch_reach:
+            found.append(size)
+    return tuple(found)
 
 
 def headless_size(diameter: float) -> bool:

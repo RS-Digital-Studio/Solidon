@@ -137,7 +137,14 @@ class Section:
 
 @dataclass(frozen=True, slots=True)
 class ThreadZone:
-    """Wo das Innengewinde entlang der Achse liegt, und welches Gegenstück es bekommt."""
+    """Wo das Innengewinde entlang der Achse liegt, und welches Gegenstück es bekommt.
+
+    ``dims`` ist das Gewinde des Gegenstücks (``fasteners.ThreadDims``) mit
+    Profil, Gangzahl, Drehsinn und Kegel (RM-544). Am kegeligen Gewinde ist
+    ``reference`` die Lage der Bezugsebene entlang der Achse — an der Mündung,
+    wo es am weitesten ist —, und ``slope`` der Zuwachs des Halbmessers je
+    Millimeter nach außen.
+    """
 
     start: float
     end: float
@@ -148,6 +155,30 @@ class ThreadZone:
     #: Was das Gegenstück über die Wahl seines Maßes sagt
     #: (``counterpart.thread_size_note``) — der Stift sagt dasselbe (Review P2, G4).
     note: Finding | None = None
+    dims: Any = None
+    reference: float = 0.0
+    slope: float = 0.0
+
+    @property
+    def depth(self) -> float:
+        """Die Gangtiefe im Profil des Gegenstücks."""
+        from app.core.knowledge.parts import shapes
+
+        if self.dims is not None:
+            return float(self.dims.depth)
+        return self.pitch * shapes.RIDGE_SHARE
+
+    @property
+    def lead(self) -> float:
+        """Der Vorschub je Umdrehung, negativ für ein Linksgewinde."""
+        if self.dims is None:
+            return self.pitch
+        lead = float(self.dims.lead)
+        return -lead if self.dims.left else lead
+
+    def nominal_at(self, s: float) -> float:
+        """Das Nennmaß an der Stelle ``s`` — am Kegel wächst es zur Mündung hin."""
+        return self.nominal + 2.0 * self.slope * (s - self.reference)
 
 
 @dataclass(frozen=True, slots=True)
@@ -399,13 +430,18 @@ def cavity_of(
     feature: Feature,
     features: Mapping[FeatureId, Feature],
     body: Any,
+    size: str | None = None,
 ) -> Cavity:
-    """Der Hohlraum an einer gewählten Bohrung oder einem gewählten Innengewinde."""
+    """Der Hohlraum an einer gewählten Bohrung oder einem gewählten Innengewinde.
+
+    ``size`` ist die Antwort, wenn das Gewinde zu mehreren Tabellengrößen passt
+    (``counterpart.AMBIGUOUS_THREAD``, RM-544): Ohne sie fragt der Aufrufer.
+    """
     from app.core.perceive.relations import cavity_chain_state_at, cavity_sides
 
     mesh = as_mesh_data(body)
     if feature.kind == "thread":
-        return _at_a_thread(feature, features, mesh)
+        return _at_a_thread(feature, features, mesh, size)
     state = cavity_chain_state_at(feature, features, mesh)
     if state.chain is None and state.touches_other:
         raise _unreadable(feature.id, reason=state.reason)
@@ -427,7 +463,7 @@ def cavity_of(
             and candidate.params.get("internal")
             and _coaxial(candidate, origin, axis, radius)
         ):
-            zone = _thread_zone(candidate, origin, axis)
+            zone = _thread_zone(candidate, origin, axis, size)
             bore_part = sections[0]
             if zone.end > bore_part.start + EPS_GEOM and zone.start < bore_part.end - EPS_GEOM:
                 return _threaded_bore(origin, axis, sections, zone, feature.id)
@@ -435,17 +471,33 @@ def cavity_of(
 
 
 def _thread_zone(
-    feature: Feature, origin: NDArray[np.float64], axis: NDArray[np.float64]
+    feature: Feature,
+    origin: NDArray[np.float64],
+    axis: NDArray[np.float64],
+    size: str | None = None,
 ) -> ThreadZone:
-    """Wo ein Innengewinde entlang der Achse liegt, mit dem Maß seines Gegenstücks."""
+    """Wo ein Innengewinde entlang der Achse liegt, mit dem Maß seines Gegenstücks.
+
+    Ein kegeliges Gewinde (RM-544) nennt sein Maß in der Mitte und seinen Kegel
+    entlang seiner Achse (``thread_is_tapered``); die Bezugsebene der
+    Tabellengröße liegt dort, wo es das Nennmaß hat. In diesem Rahmen gerechnet,
+    der gleichsinnig oder gegensinnig zur Achse des Gewindes liegt.
+    """
     from app.core.counterpart import thread_size_note, thread_values_for
-    from app.core.knowledge.parts.fasteners import thread_measure
+    from app.core.knowledge.parts.fasteners import thread_dims
 
     refuse_thread(feature)
-    values = thread_values_for(feature)
-    nominal, pitch = thread_measure(
-        str(values["size"]), float(values.get("diameter", 0.0)), float(values.get("pitch", 0.0))
+    values = thread_values_for(feature, size)
+    dims = thread_dims(
+        str(values["size"]),
+        float(values.get("diameter", 0.0)),
+        float(values.get("pitch", 0.0)),
+        form=str(values.get("form", "metric")),
+        tpi=float(values.get("tpi", 0.0)),
+        starts=int(values.get("starts", 1)),
+        left=bool(values.get("left_hand", False)),
     )
+    nominal, pitch = dims.nominal, dims.pitch
     middle = _along(feature.params["centre"], origin, axis)
     half = float(feature.params.get("length", 0.0)) / 2.0
     if half <= EPS_GEOM:
@@ -456,6 +508,9 @@ def _thread_zone(
             constraint="positive",
             suggestions=(CORRECT_INPUT, CANCEL),
         )
+    reference, slope = middle, 0.0
+    if dims.tapered:
+        reference, slope = _taper_in_frame(feature, axis, middle, nominal)
     return ThreadZone(
         middle - half,
         middle + half,
@@ -463,15 +518,44 @@ def _thread_zone(
         pitch,
         dict(values),
         feature.id,
-        thread_size_note(feature),
+        thread_size_note(feature, size),
+        dims,
+        reference,
+        slope,
     )
 
 
-def refuse_thread(feature: Feature) -> None:
-    """Dieselben Absagen wie das Gegenstück zum Gewinde — links-, mehrgängig, kegelig —,
-    dazu das Außengewinde, das keinen Stift aufnimmt."""
-    from app.core.counterpart import refuse_unmatched_thread
+def _taper_in_frame(
+    feature: Feature, axis: NDArray[np.float64], middle: float, nominal: float
+) -> tuple[float, float]:
+    """Bezugsebene und Kegel eines kegeligen Innengewindes im Rahmen des Hohlraums.
 
+    Das Merkmal nennt den halben Kegelwinkel ``taper`` in Grad, positiv, wo der
+    Durchmesser entlang seiner ``axis`` wächst, und sein Maß in der Mitte —
+    ``nominal`` am gedruckten Gewinde, sonst ``diameter``. Die Bezugsebene liegt,
+    wo das Nennmaß der Tabellengröße erreicht ist.
+    """
+    own = _unit(feature.params.get("axis", (0.0, 0.0, 1.0)))
+    sense = 1.0 if float(np.dot(own, axis)) >= 0.0 else -1.0
+    slope = sense * math.tan(math.radians(float(feature.params.get("taper", 0.0))))
+    named = feature.params.get("nominal")
+    measured = (
+        float(named)
+        if isinstance(named, int | float) and not isinstance(named, bool)
+        else float(feature.params.get("diameter", nominal))
+    )
+    if abs(slope) <= EPS_GEOM:
+        return middle, 0.0
+    return middle + (nominal - measured) / (2.0 * slope), slope
+
+
+def refuse_thread(feature: Feature) -> None:
+    """Das Außengewinde nimmt keinen Stift auf.
+
+    Links-, mehrgängige und kegelige Innengewinde bekommen seit RM-544 ihren
+    Stift: Das Gegenstück trägt Drehsinn, Gangzahl und Kegel mit
+    (``counterpart.thread_values_for``).
+    """
     if not feature.params.get("internal"):
         raise ValidationError(
             field="at_feature",
@@ -480,19 +564,18 @@ def refuse_thread(feature: Feature) -> None:
             constraint="not_a_bore",
             suggestions=(CHANGE_SELECTION, CANCEL),
         )
-    refuse_unmatched_thread(feature)
 
 
 def root_radius(zone: ThreadZone, clearance: float) -> float:
     """Der Halbmesser, bis zu dem der Umriss im Gewindebereich reicht: im Kern des Bolzens.
 
     Der Bolzen hat seinen Kern zwei Gangtiefen unter dem Nennmaß minus Spiel
-    (``shapes.RIDGE_SHARE``, wie der Gewindebaustein); der Umriss bleibt um die
-    Zugabe der Booleschen Kette darin, damit sich keine zwei Mäntel decken.
+    (die Gangtiefe seines Profils, wie der Gewindebaustein); der Umriss bleibt um
+    die Zugabe der Booleschen Kette darin, damit sich keine zwei Mäntel decken. Am
+    Kegel zählt das engste Ende.
     """
-    from app.core.knowledge.parts import shapes
-
-    core = zone.nominal - 2.0 * zone.pitch * shapes.RIDGE_SHARE - clearance
+    narrowest = min(zone.nominal_at(zone.start), zone.nominal_at(zone.end))
+    core = narrowest - 2.0 * zone.depth - clearance
     return core / 2.0 - BOOLEAN_OVERLAP
 
 
@@ -521,7 +604,12 @@ def _threaded_bore(
     return Cavity(origin, axis, tuple(above), zone)
 
 
-def _at_a_thread(feature: Feature, features: Mapping[FeatureId, Feature], mesh: MeshData) -> Cavity:
+def _at_a_thread(
+    feature: Feature,
+    features: Mapping[FeatureId, Feature],
+    mesh: MeshData,
+    size: str | None = None,
+) -> Cavity:
     """Der Hohlraum an einem gewählten Innengewinde: das Gewinde und, was sich an ihm weitet.
 
     Ein Gewinde, das ``insert_printed_thread`` in eine Bohrung schnitt, steht
@@ -534,7 +622,7 @@ def _at_a_thread(feature: Feature, features: Mapping[FeatureId, Feature], mesh: 
     """
     origin = np.asarray(feature.params["centre"], dtype=np.float64).reshape(3)
     axis = _unit(feature.params.get("axis", (0.0, 0.0, 1.0)))
-    zone = _thread_zone(feature, origin, axis)
+    zone = _thread_zone(feature, origin, axis, size)
     others = [
         candidate
         for candidate in features.values()
@@ -547,8 +635,16 @@ def _at_a_thread(feature: Feature, features: Mapping[FeatureId, Feature], mesh: 
     down = _walk(others, zone, origin, -axis)
     if up and down:
         raise _two_heads(feature.id)
-    if down or (not up and _closed_beyond(mesh, origin, axis, zone.end)):
+    flip = bool(down) or (not up and _closed_beyond(mesh, origin, axis, zone.end))
+    if zone.slope:
+        # Ein kegeliges Gewinde hat seine Mündung am weiten Ende (RM-544); nur
+        # von dort kommt ein Stift hinein, gleich was am engen Ende anschließt.
+        flip = zone.slope < 0.0
+        up, down = (up, []) if not flip else ([], down)
+    if flip:
         axis, sections = -axis, down
+        # Gewendet liegt die Bezugsebene gespiegelt, und der Kegel zeigt anders.
+        zone = replace(zone, reference=-zone.reference, slope=-zone.slope)
     else:
         sections = up
     return Cavity(origin, axis, tuple(sections), zone)
@@ -765,12 +861,18 @@ def _samples(
     low: float,
     high: float,
     reach: float,
+    *,
+    lead: float | None = None,
+    slope: float = 0.0,
 ) -> tuple[NDArray[np.float64], NDArray[np.float64]]:
     """Die Ecken eines Gewindes als (Gangphase, Halbmesser).
 
     Ein Gewinde ist unter einer Schraubung um die Achse in sich selbst
     überführt; jeder Punkt seiner Fläche liegt auf dem Profil ``r(u)`` mit
-    ``u = s - Steigung · θ / 2π`` (rechtsgängig). Elementweise gerechnet wie
+    ``u = s - Vorschub · θ / 2π`` modulo der Steigung (RM-544: der Vorschub ist
+    bei mehreren Gängen ihr Vielfaches und links negativ). Am Kegel wird der
+    Halbmesser um ``slope · s`` bereinigt, damit gleiche Phasen an verschiedenen
+    Stellen dasselbe Profil zeigen. Elementweise gerechnet wie
     ``mesh.ray_hits``, damit die gewählte Drehung auf jeder Maschine dieselbe ist.
     """
     helper = np.array([1.0, 0.0, 0.0]) if abs(float(axis[0])) < 0.9 else np.array([0.0, 1.0, 0.0])
@@ -787,8 +889,9 @@ def _samples(
         chosen = np.flatnonzero(keep)
         keep = np.zeros_like(keep)
         keep[chosen[:: math.ceil(chosen.size / TURN_SAMPLES)]] = True
-    phase = np.mod(s[keep] - pitch * np.arctan2(y[keep], x[keep]) / (2.0 * math.pi), pitch)
-    return phase, r[keep]
+    advance = pitch if lead is None else lead
+    phase = np.mod(s[keep] - advance * np.arctan2(y[keep], x[keep]) / (2.0 * math.pi), pitch)
+    return phase, r[keep] - slope * s[keep]
 
 
 def thread_turn(
@@ -799,6 +902,9 @@ def thread_turn(
     zone: tuple[float, float],
     pitch: float,
     reach: float,
+    *,
+    lead: float | None = None,
+    slope: float = 0.0,
 ) -> tuple[float, float] | None:
     """Um wie viel Grad der Bolzen um die Achse zu drehen ist, damit er in den Gängen sitzt.
 
@@ -806,14 +912,15 @@ def thread_turn(
     Beide Profile werden als ``r(u)`` gelesen (:func:`_samples`); gesucht ist
     die Verschiebung ``δ`` der Phase, bei der der Bolzen überall am weitesten
     innerhalb der Bohrung bleibt. Eine Drehung um ``φ`` verschiebt die Phase um
-    ``-φ · Steigung / 360``. Zurück kommen die Drehung und der kleinste Abstand
+    ``-φ · Vorschub / 360``; ``lead`` ist der Vorschub, links negativ, ``slope``
+    der Kegel (:func:`_samples`). Zurück kommen die Drehung und der kleinste Abstand
     im Halbmesser; ``None``, wo an einer Seite keine Ecken liegen.
     """
     start, end = zone
     inset = pitch if end - start > 3.0 * pitch else 0.2 * (end - start)
     low, high = start + inset, end - inset
-    around, outer = _samples(carrier, origin, axis, pitch, low, high, reach)
-    phase, radius = _samples(pin, origin, axis, pitch, low, high, reach)
+    around, outer = _samples(carrier, origin, axis, pitch, low, high, reach, lead=lead, slope=slope)
+    phase, radius = _samples(pin, origin, axis, pitch, low, high, reach, lead=lead, slope=slope)
     if around.size < 8 or phase.size < 8:
         return None
     order = np.argsort(around, kind="stable")
@@ -829,4 +936,4 @@ def thread_turn(
         gap = min(float(np.min(wall - radius)), float(np.min(outer - bolt)))
         if gap > best_gap + EPS_GEOM:
             best_gap, best_shift = gap, float(shift)
-    return -360.0 * best_shift / pitch, best_gap
+    return -360.0 * best_shift / (pitch if lead is None else lead), best_gap

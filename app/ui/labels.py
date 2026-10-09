@@ -1191,6 +1191,9 @@ def colour_name(value: str) -> str:
 #: stehen wie oben nicht drin — wo der Name die ganze Auskunft ist, wäre ein
 #: Satz Tapete.
 _CHOICE_NOTES: dict[str, TranslatableText] = {
+    "metric": _("Steigung in Millimetern, Flanken 60° wie ISO-Gewinde."),
+    "whitworth": _("Gänge je Zoll, Flanken 55° gerundet wie Rohrgewinde G."),
+    "unified": _("Gänge je Zoll, Flanken 60° wie UNC und UNF."),
     "mesh": _("Berechnet die Form als Dreiecksnetz."),
     "brep": _("Berechnet die Form mit dem exakten Kern aus Flächen und Kanten."),
     "motedis-2020-b6": _(

@@ -35,6 +35,7 @@ from app.i18n import _
 
 if TYPE_CHECKING:
     from app.core.brep.kernel import Solid
+    from app.core.knowledge.parts.shapes import ThreadProfile
     from app.core.sketch.profile import Profile
 
 #: Die Stufenleiter der Vereinigung, in Millimetern: Ohne Toleranz lässt
@@ -230,7 +231,17 @@ def rounded_dovetail(diameter: float, length: float) -> Solid:
 
 
 def threaded(
-    diameter: float, pitch: float, length: float, *, internal: bool = False, bottom: float = 0.0
+    diameter: float,
+    pitch: float,
+    length: float,
+    *,
+    internal: bool = False,
+    bottom: float = 0.0,
+    profile: ThreadProfile = "flat",
+    starts: int = 1,
+    left: bool = False,
+    taper: float = 0.0,
+    reference: float | None = None,
 ) -> Solid:
     """Kern und Gang des Bausteingewindes, auf Länge geschnitten — als genähter Körper.
 
@@ -252,18 +263,52 @@ def threaded(
     ``BOOLEAN_OVERLAP`` über den Fußradius hinaus, damit ``manifold3d`` die
     Naht zum Gang findet. Hier gibt es keine Naht, und der Fuß liegt genau auf
     dem Fußradius.
+
+    Gewindeform, Gangzahl, Drehsinn und Kegel wie beim Netz (``build.threaded``):
+    ``helical_thread`` näht mehrere Gänge und Kegelmäntel selbst, ein
+    Linksgewinde ist das gespiegelte Rechtsgewinde — die Spiegelung an der
+    Ebene y = 0 lässt die Gänge bei Winkel null, wo sie sind.
     """
     from app.core.brep import profiles
     from app.core.knowledge.parts.shapes import ridge_profile
 
-    ridge = ridge_profile(diameter, pitch, internal=internal)
+    lead = starts * pitch
+    start = bottom - lead
+    level = bottom if reference is None else reference
+    # ``helical_thread`` nimmt die Radien auf der Höhe ``start``.
+    at_start = diameter + 2.0 * taper * (start - level)
+    ridge = ridge_profile(at_start, pitch, internal=internal, profile=profile)
     crest_radius = max(radial for radial, _axial in ridge)
-    turns = math.ceil(length / pitch) + 2
-    whole = profiles.helical_thread(ridge[0][0], pitch, turns, ridge, start=bottom - pitch)
-    limit = cylinder(2.0 * crest_radius + 2.0, length)
+    turns = math.ceil(length / lead) + 2
+    whole = profiles.helical_thread(
+        ridge[0][0],
+        pitch,
+        turns,
+        ridge,
+        start=start,
+        starts=starts,
+        taper=math.atan(taper),
+    )
+    # Der Schnitt umfasst die weiteste Stelle über die ganze Länge des Körpers.
+    reach = crest_radius + max(0.0, taper) * (turns + 1) * lead
+    limit = cylinder(2.0 * reach + 2.0, length)
     if bottom:
         limit = moved(limit, (0.0, 0.0, bottom))
-    return intersect(whole, limit)
+    body = intersect(whole, limit)
+    return mirrored_across_y(body) if left else body
+
+
+def mirrored_across_y(solid: Solid) -> Solid:
+    """Der Körper gespiegelt an der Ebene y = 0 — aus einem Rechtsgewinde ein Linksgewinde."""
+    return _edit().transformed(  # type: ignore[no-any-return]
+        solid,
+        (
+            (1.0, 0.0, 0.0, 0.0),
+            (0.0, -1.0, 0.0, 0.0),
+            (0.0, 0.0, 1.0, 0.0),
+            (0.0, 0.0, 0.0, 1.0),
+        ),
+    )
 
 
 # --- Bewegen -------------------------------------------------------------------------

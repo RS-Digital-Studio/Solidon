@@ -36,7 +36,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any, Final
 
-from app.core.errors import CANCEL, CHANGE_SELECTION, CORRECT_INPUT, ValidationError
+from app.core.errors import CANCEL, CHANGE_SELECTION, CHOOSE, CORRECT_INPUT, ValidationError
 from app.core.knowledge import standards
 from app.core.log import get_logger
 from app.core.scene.fits import active_fits, numbered_name
@@ -63,6 +63,7 @@ from app.core.units import (
     FINEST_PITCH,
     LARGEST_THREAD,
     SMALLEST_THREAD,
+    UNIT_TO_MM,
     format_length,
     is_close,
 )
@@ -370,27 +371,31 @@ def attach_fit(
 THREAD_SIZE_REACH: Final = standards.THREAD_SIZE_REACH
 
 
-def thread_values_for(feature: Feature) -> dict[str, Any]:
+def thread_values_for(feature: Feature, size: str | None = None) -> dict[str, Any]:
     """Die Größe des Bausteingewindes, das zu diesem Gewinde passt.
 
     Trifft es eine Tabellengröße in Durchmesser und Steigung, ist es diese —
-    ein gemessenes M6 bleibt ein M6. Sonst nimmt das Gegenstück das eigene Maß
-    des Gewindes (``fasteners.CUSTOM_SIZE``). Bis zum 06.10.2026 endete die
-    Antwort an der Tabelle: über M8 und zwischen zwei Größen gab es kein
-    Gegenstück, nur einen Satz. Abgesagt wird, was kein Bausteingewinde baut —
-    jenseits der gemeinsamen Grenzen oder ohne tragenden Kern
-    (``fasteners.thread_problem``), und zwar vor dem Schritt, nicht erst in der
-    Auswertung an einem Schritt, den der Kunde nicht eingegeben hat.
+    ein gemessenes M6 bleibt ein M6, ein gemessenes G 1/2 ein G1/2 (RM-544).
+    Sonst nimmt das Gegenstück das eigene Maß des Gewindes
+    (``fasteners.CUSTOM_SIZE``). Bis zum 06.10.2026 endete die Antwort an der
+    Tabelle: über M8 und zwischen zwei Größen gab es kein Gegenstück, nur einen
+    Satz. Abgesagt wird, was kein Bausteingewinde baut — jenseits der
+    gemeinsamen Grenzen oder ohne tragenden Kern (``fasteners.thread_problem``),
+    und zwar vor dem Schritt, nicht erst in der Auswertung an einem Schritt, den
+    der Kunde nicht eingegeben hat.
+
+    ``size`` ist die Antwort auf die Rückfrage, wenn das Gewinde zu mehr als
+    einer Tabellengröße passt (:data:`AMBIGUOUS_THREAD`, Regel 21).
     """
-    return _matched_thread(feature)[0]
+    return _matched_thread(feature, size)[0]
 
 
-def thread_size_note(feature: Feature) -> Finding | None:
+def thread_size_note(feature: Feature, size: str | None = None) -> Finding | None:
     """Was das Gegenstück über die Wahl seines Maßes sagt — oder ``None``.
 
     Dieselbe Entscheidung wie :func:`thread_values_for`, als Satz für den Kunden.
     """
-    return _matched_thread(feature)[1]
+    return _matched_thread(feature, size)[1]
 
 
 def _thread_tolerance(feature: Feature) -> tuple[float, float]:
@@ -412,7 +417,39 @@ def _thread_tolerance(feature: Feature) -> tuple[float, float]:
     return THREAD_SIZE_REACH[0], THREAD_SIZE_REACH[1] + pitch_extra
 
 
-def _matched_thread(feature: Feature) -> tuple[dict[str, Any], Finding | None]:
+#: Der Grund der Rückfrage, wenn ein Gewinde zu mehreren Tabellengrößen passt
+#: (RM-544): R 1/2 und NPT 1/2 haben beide 14 Gänge je Zoll, und ihr Flankenwinkel
+#: lässt sich an einem Netz nicht messen. Wer die Rückfrage stellt, liest die
+#: Größen aus ``values["choices"]`` und ruft mit der Antwort erneut.
+AMBIGUOUS_THREAD: Final = "ambiguous_thread"
+
+
+def _starts_of(feature: Feature) -> int:
+    """Wie viele Gänge sich den Vorschub teilen — gemessen oder gesetzt, sonst einer."""
+    starts = feature.params.get("starts", 1)
+    if isinstance(starts, int | float) and not isinstance(starts, bool) and starts > 1:
+        return int(starts)
+    return 1
+
+
+def ambiguous_thread(feature: Feature, choices: Sequence[str]) -> ValidationError:
+    """Die Rückfrage, welche der passenden Tabellengrößen gemeint ist (Regel 21)."""
+    return ValidationError(
+        field="size",
+        detail=_(
+            "Das Gewinde passt zu {sizes}. Welche Größe ist gemeint?",
+            sizes=", ".join(choices),
+        ),
+        value=feature.id,
+        values={"feature": feature.id, "choices": list(choices)},
+        constraint=AMBIGUOUS_THREAD,
+        suggestions=(CHOOSE, CANCEL),
+    )
+
+
+def _matched_thread(
+    feature: Feature, size: str | None = None
+) -> tuple[dict[str, Any], Finding | None]:
     """Maß und Begründung des Gegenstücks — die eine Entscheidung für beide.
 
     **Knapp neben einer Tabellengröße ist es die Tabellengröße, und der Befund
@@ -426,9 +463,25 @@ def _matched_thread(feature: Feature) -> tuple[dict[str, Any], Finding | None]:
     Maße, sodass *Merkmal ändern* das gemessene setzt, wo es wirklich so ist.
     Außerhalb dieser Unsicherheit bleibt das gemessene Maß, und der Befund sagt,
     dass es keine Normgröße ist.
+
+    **Jede gezeigte Reihe, und gefragt wird, wo zwei passen** (RM-544): Ein
+    gedrucktes Gewinde nennt seine Größe selbst (``size``); ein gemessenes trifft
+    die Größen aller gezeigten Reihen (``standards.shown_thread_families``), und
+    passt es zu Größen aus verschiedenen Reihen, hält die Entscheidung an und
+    fragt (:data:`AMBIGUOUS_THREAD`). Ein Linksgewinde bekommt ein Linksgewinde,
+    ein mehrgängiges ein eigenes Maß mit derselben Gangzahl, ein kegeliges die
+    kegelige Größe — ohne sie gibt es kein kegeliges Gegenstück.
     """
     from app.core.knowledge.parts.fasteners import CUSTOM_SIZE, thread_problem
 
+    extra: dict[str, Any] = {"left_hand": True} if thread_is_left_handed(feature) else {}
+    starts = _starts_of(feature)
+    tapered = thread_is_tapered(feature)
+    known = standards.thread_sizes()
+    if size is not None:
+        if size not in known:
+            raise ambiguous_thread(feature, [size])
+        return {"size": size, **extra}, None
     # Ein gedrucktes Gewinde nennt sein Nennmaß neben dem gebauten
     # (``build.thread``); das gebaute liegt um das Spiel daneben, bei TPU weiter
     # als die Erkennungsgrenze.
@@ -438,29 +491,60 @@ def _matched_thread(feature: Feature) -> tuple[dict[str, Any], Finding | None]:
     else:
         diameter = float(feature.params.get("diameter", 0.0))
     pitch = float(feature.params.get("pitch", 0.0))
-    exact = standards.thread_size_near(diameter, pitch)
-    if exact is not None:
-        return {"size": exact}, None
-    diameter_reach, pitch_reach = _thread_tolerance(feature)
-    near = [
-        size
-        for size in standards.screw_sizes()
-        if abs(standards.screw(size).nominal - diameter) <= diameter_reach
-        and abs(standards.screw(size).pitch - pitch) <= pitch_reach
-    ]
-    if near:
-        size = min(near, key=lambda entry: abs(standards.screw(entry).pitch - pitch))
-        return {"size": size}, Finding(
-            code="parts.counterpart_standard_size",
-            severity="info",
-            message=_(
-                "Gemessen sind Ø {diameter}, Steigung {pitch}: das ist {size} innerhalb der "
-                "Messunsicherheit. Ein anderes Maß setzt „Merkmal ändern“ am Gegenstück.",
-                diameter=format_length(diameter),
-                pitch=format_length(pitch),
-                size=size,
+    # Die Größe, die ein gedrucktes Gewinde nennt, gilt, solange Maß und Kegel
+    # noch zu ihr passen — ein später geändertes Merkmal trägt sie sonst weiter.
+    named_size = feature.params.get("size")
+    if (
+        isinstance(named_size, str)
+        and named_size in known
+        and starts == 1
+        and named_size in standards.thread_sizes_near(diameter, pitch, tapered=tapered)
+    ):
+        return {"size": named_size, **extra}, None
+    shown = standards.shown_thread_families()
+    if starts == 1:
+        exact = standards.thread_sizes_near(diameter, pitch, tapered=tapered, families=shown)
+        if len(exact) > 1:
+            raise ambiguous_thread(feature, exact)
+        if exact:
+            return {"size": exact[0], **extra}, None
+        near = standards.thread_sizes_near(
+            diameter,
+            pitch,
+            tapered=tapered,
+            reach=_thread_tolerance(feature),
+            families=shown,
+        )
+        if len({standards.thread_family(entry) for entry in near}) > 1:
+            raise ambiguous_thread(feature, near)
+        if near:
+            chosen = min(near, key=lambda entry: abs(standards.thread_size(entry).pitch - pitch))
+            return {"size": chosen, **extra}, Finding(
+                code="parts.counterpart_standard_size",
+                severity="info",
+                message=_(
+                    "Gemessen sind Ø {diameter}, Steigung {pitch}: das ist {size} innerhalb der "
+                    "Messunsicherheit. Ein anderes Maß setzt „Merkmal ändern“ am Gegenstück.",
+                    diameter=format_length(diameter),
+                    pitch=format_length(pitch),
+                    size=chosen,
+                ),
+                values={"size": chosen, "diameter_mm": diameter, "pitch_mm": pitch},
+            )
+    if tapered:
+        # **Ein kegeliges Gegenstück gibt es nur in einer Größe der Tabelle**: Ein
+        # eigenes Maß ist zylindrisch, und beide Teile hätten gepasst, bis jemand
+        # sie zusammenschraubt (P2.5, 22.09.2026).
+        raise ValidationError(
+            field="at_feature",
+            detail=_(
+                "Zu diesem kegeligen Gewinde passt keine Größe R oder NPT der gezeigten "
+                "Reihen. Ein Gegenstück aus der Bibliothek wäre zylindrisch und passte nicht."
             ),
-            values={"size": size, "diameter_mm": diameter, "pitch_mm": pitch},
+            value=feature.id,
+            values={"feature": feature.id, "diameter": diameter, "pitch": pitch},
+            constraint="thread_shape",
+            suggestions=(CHANGE_SELECTION, CANCEL),
         )
     problem = (
         thread_problem(diameter, pitch, 0.0)
@@ -486,6 +570,19 @@ def _matched_thread(feature: Feature) -> tuple[dict[str, Any], Finding | None]:
             constraint="beyond_threads",
             suggestions=(CHANGE_SELECTION, CANCEL),
         )
+    values: dict[str, Any] = {"size": CUSTOM_SIZE, "diameter": diameter, "pitch": pitch}
+    if feature.params.get("profile") == "whitworth":
+        # Ein gedrucktes Whitworth-Gewinde mit eigenem Maß behält seine Form, und
+        # seine Steigung steht als Gänge je Zoll.
+        values = {
+            "size": CUSTOM_SIZE,
+            "diameter": diameter,
+            "form": "whitworth",
+            "tpi": UNIT_TO_MM["in"] / pitch,
+        }
+    if starts > 1:
+        values["starts"] = starts
+    values.update(extra)
     note = None
     if feature.provenance != "generated":
         note = Finding(
@@ -499,67 +596,21 @@ def _matched_thread(feature: Feature) -> tuple[dict[str, Any], Finding | None]:
             ),
             values={"diameter_mm": diameter, "pitch_mm": pitch},
         )
-    return {"size": CUSTOM_SIZE, "diameter": diameter, "pitch": pitch}, note
-
-
-def refuse_unmatched_thread(feature: Feature) -> None:
-    """Die Gewinde, zu denen die Bibliothek kein Gegenstück baut — mit dem Grund.
-
-    Linksgängig, mehrgängig, kegelig: Das Bausteingewinde ist rechtsgängig,
-    eingängig und zylindrisch. Dieselbe Frage stellen das Gegenstück am anderen
-    Teil (:func:`thread_counterpart_draft`) und *Stift für Bohrung*
-    (``geom.bore_pin``, RM-536), mit denselben Sätzen.
-    """
-    if thread_is_left_handed(feature):
-        raise ValidationError(
-            field="at_feature",
-            detail=_(
-                "Ein Rechtsgewinde und ein Linksgewinde greifen nicht ineinander. Ein Gegenstück "
-                "zu einem Linksgewinde gibt es aus der Bibliothek nicht."
-            ),
-            value=feature.id,
-            constraint="left_handed",
-            suggestions=(CHANGE_SELECTION, CANCEL),
-        )
-    # **Die Gangzahl gehört zur Frage.** Ein zweigängiges Gewinde ist kein
-    # eingängiges mit anderem Maß: Bis zum 22.09.2026 hieß es an
-    # ``zweigaengig.step`` „kein Normmaß, nächstes M8", und träfen Durchmesser
-    # und Teilung zufällig eine Tabellengröße, entstünde still ein eingängiges
-    # Gegengewinde, das nicht greift.
-    starts = feature.params.get("starts", 1)
-    if isinstance(starts, int | float) and not isinstance(starts, bool) and starts > 1:
-        raise ValidationError(
-            field="at_feature",
-            detail=_(
-                "Ein mehrgängiges Gewinde hat kein Gegenstück aus der Bibliothek — deren "
-                "Gewinde sind eingängig."
-            ),
-            value=feature.id,
-            values={"feature": feature.id, "starts": int(starts)},
-            constraint="multi_start",
-            suggestions=(CHANGE_SELECTION, CANCEL),
-        )
-    # **Und ebenso wenig zu einem kegeligen.** Das Bibliotheksgewinde ist
-    # zylindrisch; sein Gegenstück zu einem kegeligen Rohrgewinde hätte einen
-    # festen Durchmesser — beide Teile hätten gepasst, bis jemand sie
-    # zusammenschraubt (P2.5, 22.09.2026).
-    if thread_is_tapered(feature):
-        raise ValidationError(
-            field="at_feature",
-            detail=_(
-                "Ein Gegenstück aus der Bibliothek ist zylindrisch. Zu einem kegeligen "
-                "Gewinde passt es nicht."
-            ),
-            value=feature.id,
-            constraint="thread_shape",
-            suggestions=(CHANGE_SELECTION, CANCEL),
-        )
+    return values, note
 
 
 def thread_counterpart_draft(
-    feature: Feature, second_object: ObjectId, second_place: Mapping[str, Any]
+    feature: Feature,
+    second_object: ObjectId,
+    second_place: Mapping[str, Any],
+    size: str | None = None,
 ) -> OperationDraft:
-    """Der eine Schritt: das gegengleiche Bausteingewinde am anderen Teil, im passenden Maß."""
+    """Der eine Schritt: das gegengleiche Bausteingewinde am anderen Teil, im passenden Maß.
+
+    Ein Linksgewinde bekommt ein Linksgewinde, ein mehrgängiges ein eigenes Maß
+    derselben Gangzahl, ein kegeliges seine kegelige Größe (RM-544); passt das
+    Gewinde zu mehreren Größen, fragt :func:`thread_values_for` zurück.
+    """
     if feature.kind != "thread":
         raise ValidationError(
             field="at_feature",
@@ -568,10 +619,9 @@ def thread_counterpart_draft(
             constraint="not_a_thread",
             suggestions=(CHANGE_SELECTION, CANCEL),
         )
-    refuse_unmatched_thread(feature)
     length = float(feature.params.get("length", 0.0))
     params: dict[str, Any] = {
-        **thread_values_for(feature),
+        **thread_values_for(feature, size),
         "internal": not bool(feature.params.get("internal", False)),
         **dict(second_place),
     }
@@ -588,13 +638,15 @@ def apply_thread_counterpart(
     second_place: Mapping[str, Any],
     *,
     origin: Origin | None = None,
+    size: str | None = None,
 ) -> CounterpartApplied:
     """Setzt das Gegenstück zu einem vorhandenen Gewinde — ein Schritt, eine Transaktion.
 
     Wie :func:`apply_counterpart`, nur dass die erste Hälfte schon steht: Es
     entsteht ein Bausteingewinde am zweiten Teil, und :func:`attach_thread_fit`
     hängt danach die Passung zwischen dem vorhandenen und dem neuen Gewinde an
-    dieselbe Transaktion.
+    dieselbe Transaktion. ``size`` ist die Antwort auf die Rückfrage
+    :data:`AMBIGUOUS_THREAD`.
     """
     if first_object == second_object:
         raise ValidationError(
@@ -607,13 +659,13 @@ def apply_thread_counterpart(
             constraint="same_object",
             suggestions=(CORRECT_INPUT,),
         )
-    draft = thread_counterpart_draft(feature, second_object, second_place)
+    draft = thread_counterpart_draft(feature, second_object, second_place, size)
     history = History(document)
     applied = history.apply(_("Gegenstück zum Gewinde"), [draft], origin or Origin(by="user"))
     step = document.ops[-1]
     made = [step.outputs[0]] if step.outputs else []
     _log.info("thread counterpart for %s/%s: %s", first_object, feature.id, ", ".join(made) or "?")
-    note = thread_size_note(feature)
+    note = thread_size_note(feature, size)
     return CounterpartApplied(
         object_ids=[first_object, *made],
         op_ids=(step.id,),
@@ -895,23 +947,42 @@ def coupled_step_change(
     return StepCoupling(edits, tuple(drafts)) if edits or drafts else None
 
 
-#: Die Felder, die das Maß eines gedruckten Gewindes bestimmen.
-_PRINTED_SIZE_FIELDS: Final = ("size", "diameter", "pitch")
+#: Die Felder, die das Maß eines gedruckten Gewindes bestimmen — seit RM-544 mit
+#: Gewindeform, Gängen je Zoll, Gangzahl und Drehsinn.
+_PRINTED_SIZE_FIELDS: Final = (
+    "size",
+    "diameter",
+    "pitch",
+    "form",
+    "tpi",
+    "starts",
+    "left_hand",
+)
 
 
 def _printed_size(params: Mapping[str, Any]) -> tuple[Any, ...]:
     """Was an einem gedruckten Gewinde das Maß bestimmt.
 
-    Die Größe, beim eigenen Maß dazu Durchmesser und Steigung — an einer
-    Tabellengröße ändern die beiden Felder nichts, und ein Schritt, der nur sie
-    ändert, ist keiner, den das Gegenstück mitmachen müsste.
+    Die Größe und der Drehsinn, beim eigenen Maß dazu Durchmesser, Steigung,
+    Gewindeform, Gänge je Zoll und Gangzahl — an einer Tabellengröße ändern
+    diese Felder nichts, und ein Schritt, der nur sie ändert, ist keiner, den
+    das Gegenstück mitmachen müsste.
     """
     from app.core.knowledge.parts.fasteners import CUSTOM_SIZE
 
     size = params.get("size")
+    left = bool(params.get("left_hand", False))
     if size != CUSTOM_SIZE:
-        return (size,)
-    return (size, params.get("diameter"), params.get("pitch", 0.0))
+        return (size, left)
+    return (
+        size,
+        left,
+        str(params.get("form", "metric")),
+        params.get("diameter"),
+        params.get("pitch", 0.0),
+        params.get("tpi", 0.0),
+        params.get("starts", 1),
+    )
 
 
 def _same_printed_size(first: Mapping[str, Any], second: Mapping[str, Any]) -> bool:
@@ -925,7 +996,10 @@ def _same_printed_size(first: Mapping[str, Any], second: Mapping[str, Any]) -> b
         return False
     return all(
         is_close(float(a), float(b))
-        if isinstance(a, int | float) and isinstance(b, int | float)
+        if isinstance(a, int | float)
+        and isinstance(b, int | float)
+        and not isinstance(a, bool)
+        and not isinstance(b, bool)
         else a == b
         for a, b in zip(left[1:], right[1:], strict=True)
     )

@@ -499,6 +499,17 @@ class PartSpec:
     Gedächtnis „Bausteinbereich ist ein Produktionsvertrag“: bedingte
     Eigenschaften stehen als Metadaten am Baustein, nicht als Sonderfall im
     Prüfkern und nicht als stille Kappung im Baustein."""
+    mirrored_by: str | None = None
+    """Ein Schalter, der den Baustein nur spiegelt — ``left_hand`` an den
+    Gewindebausteinen (RM-544): An der Ebene y = 0 gespiegelt wird aus dem
+    Rechtsgewinde das Linksgewinde, sonst ändert sich nichts.
+
+    Wasserdichtheit, Wandstärke, Selbstdurchdringung und Merkmale sind unter
+    einer Spiegelung dieselben; der Bereichstest (§24.3) fährt die Ecken
+    deshalb mit dem Schalter auf seiner Vorgabe und prüft daneben, dass der
+    Schalter an jeder Ecke wirklich nur spiegelt (``range_check``: Volumen und
+    gespiegelte Hülle gleich). Ein Schalter, der mehr tut als spiegeln, steht
+    hier nicht — er wäre eine Bedingung wie jede andere und zählte Ecken."""
     retaining_lip: RetainingLipOf | None = None
     """Die Haltelippe unter der Mündung, an der der Baustein seinen Inhalt hält
     (:class:`RetainingLip`). Schräg zur Fläche gesetzt, fehlt sie auf der tiefen
@@ -745,6 +756,7 @@ def register_part(
     changes: Sequence[PartChange] = (),
     grip_from_profile: bool = True,
     feasible: Feasibility | None = None,
+    mirrored_by: str | None = None,
     retaining_lip: RetainingLipOf | None = None,
     source: str = "shipped",
     registry: PartRegistry | None = None,
@@ -798,6 +810,7 @@ def register_part(
                 changes=tuple(changes),
                 grip_from_profile=grip_from_profile,
                 feasible=feasible,
+                mirrored_by=mirrored_by,
                 retaining_lip=retaining_lip,
                 source=source,
             )

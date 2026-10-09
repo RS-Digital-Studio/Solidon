@@ -16,9 +16,12 @@ den heutigen Stand jedes Bausteins, ohne selbst zu rechnen.
     python tools/check_part_ranges.py --check         # nur vergleichen, nichts rechnen
     python tools/check_part_ranges.py --jobs 8        # Prozesse (Vorgabe: bis zu vier)
 
-Jeder Baustein läuft in einem eigenen Prozess, wie ein Kunde ihn nie sähe: Der
-Bereichstest sammelt native Netze, und ein Prozess je Baustein gibt sie mit
-seinem Ende zurück. Der Lauf schreibt die Nutzerverzeichnisse in einen
+Jeder Baustein läuft in eigenen Prozessen, wie ein Kunde ihn nie sähe: Der
+Bereichstest sammelt native Netze, und ein Prozess gibt sie mit seinem Ende
+zurück. Ein Baustein mit mehr als ``SHARD_CORNERS`` Ecken wird in Ausschnitte
+geteilt, die nebeneinander laufen (``range_check.check`` mit ``window``); der
+Nachweis zählt sie zusammen. Seit den Zoll- und Rohrgewinden (RM-544) hat der
+Gewindebolzen 2592 Ecken, am Stück Stunden. Der Lauf schreibt die Nutzerverzeichnisse in einen
 Temp-Ordner um (§38) — eigene Bausteine des Entwicklers laden so nicht mit.
 
 Exit-Code 0, wenn jeder gefahrene Baustein bestanden hat (bei ``--check``:
@@ -42,6 +45,9 @@ from pathlib import Path
 from typing import Any, Final
 
 ROOT: Final = Path(__file__).resolve().parent.parent
+
+#: Wie viele Ecken ein Prozess höchstens am Stück fährt.
+SHARD_CORNERS: Final = 96
 
 
 def _this_tree() -> None:
@@ -85,8 +91,10 @@ def _registry() -> Any:
     return builtin.load()
 
 
-def _run_one(name: str, temporary: Path | None = None) -> dict[str, Any]:
-    """Ein Baustein, ein Prozess: den Bereichstest fahren und das Ergebnis melden."""
+def _run_one(
+    name: str, temporary: Path | None = None, window: tuple[int, int] | None = None
+) -> dict[str, Any]:
+    """Ein Ausschnitt eines Bausteins, ein Prozess: den Bereichstest fahren und melden."""
     with _isolate(temporary):
         registry = _registry()
         from app.core.knowledge.parts import range_check, range_proof
@@ -94,18 +102,40 @@ def _run_one(name: str, temporary: Path | None = None) -> dict[str, Any]:
         spec = registry.get(name)
         profile = range_proof.reference_profile()
         started = time.perf_counter()
-        report = range_check.check_part(spec, profile)
+        report = range_check.check_part(spec, profile, window=window)
         return {
             "name": name,
             "version": spec.version,
             "fingerprint": range_proof.fingerprint(spec, profile),
-            "corners": range_check.corner_count(spec.params),
+            "corners": range_check.part_corner_count(spec),
             "checked": report.checked,
             "excluded": len(report.excluded),
             "failures": [(dict(failure.values), failure.reason) for failure in report.failures],
             "passed": report.passed,
             "seconds": time.perf_counter() - started,
         }
+
+
+def _windows(corners: int) -> list[tuple[int, int] | None]:
+    """Die Ausschnitte eines Bausteins: am Stück bis ``SHARD_CORNERS``, sonst geteilt."""
+    if corners <= SHARD_CORNERS:
+        return [None]
+    return [(start, start + SHARD_CORNERS) for start in range(0, corners, SHARD_CORNERS)]
+
+
+def _merged(pieces: list[dict[str, Any]]) -> dict[str, Any]:
+    """Die Ausschnitte eines Bausteins als ein Ergebnis — bestanden nur, wenn alle Ecken liefen."""
+    first = pieces[0]
+    checked = sum(int(piece["checked"]) for piece in pieces)
+    failures = [failure for piece in pieces for failure in piece["failures"]]
+    return {
+        **first,
+        "checked": checked,
+        "excluded": sum(int(piece["excluded"]) for piece in pieces),
+        "failures": failures,
+        "passed": checked == int(first["corners"]) and checked > 0 and not failures,
+        "seconds": sum(float(piece["seconds"]) for piece in pieces),
+    }
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -150,17 +180,33 @@ def _run(args: argparse.Namespace, profile_root: Path) -> int:
         print("Der Nachweis passt zu jedem Baustein; nichts zu fahren.")
         return 0
 
-    jobs = max(1, min(args.jobs, len(wanted)))
+    from app.core.knowledge.parts.range_check import part_corner_count
+
+    tasks = [
+        (name, window) for name in wanted for window in _windows(part_corner_count(shipped[name]))
+    ]
+    jobs = max(1, min(args.jobs, len(tasks)))
     parts = "Baustein" if len(wanted) == 1 else "Bausteine"
     processes = "Prozess" if jobs == 1 else "Prozessen"
-    print(f"Fahre {len(wanted)} {parts} mit {jobs} {processes}: {', '.join(wanted)}")
+    print(
+        f"Fahre {len(wanted)} {parts} in {len(tasks)} Ausschnitten mit {jobs} {processes}: "
+        f"{', '.join(wanted)}"
+    )
     results: dict[str, dict[str, Any]] = {}
+    pending: dict[str, list[dict[str, Any]]] = {name: [] for name in wanted}
+    expected = {name: sum(1 for task in tasks if task[0] == name) for name in wanted}
     with ProcessPoolExecutor(max_workers=jobs, max_tasks_per_child=1) as pool:
         # Der Elternlauf besitzt auch die Arbeiterprofile und räumt sie nach
         # einem nativen Prozessabbruch, bei dem kein finally mehr laufen kann.
-        futures = {pool.submit(_run_one, name, profile_root): name for name in wanted}
+        futures = {
+            pool.submit(_run_one, name, profile_root, window): name for name, window in tasks
+        }
         for future in as_completed(futures):
-            outcome = future.result()
+            piece = future.result()
+            pending[piece["name"]].append(piece)
+            if len(pending[piece["name"]]) < expected[piece["name"]]:
+                continue
+            outcome = _merged(pending[piece["name"]])
             results[outcome["name"]] = outcome
             verdict = "bestanden" if outcome["passed"] else "GEBROCHEN"
             print(

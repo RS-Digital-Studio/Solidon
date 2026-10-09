@@ -31,10 +31,12 @@ from app.core.geom.boolean import BOOLEAN_OVERLAP, boolean, deepest, shared_volu
 from app.core.geom.lid_hinge import HINGE_SIDES, HINGES
 from app.core.geom.mesh import MeshData, as_mesh_data
 from app.core.knowledge.parts.build import face
+from app.core.knowledge.parts.fasteners import CUSTOM_FORMS, MOST_STARTS
 from app.core.knowledge.parts.shapes import (
-    RIDGE_SHARE,
+    ThreadProfile,
     mesh_only,
     moved,
+    ridge_depth,
     thread_body,
     turn_segments,
 )
@@ -1671,6 +1673,10 @@ def _lifted(body: MeshData, z: float) -> MeshData:
     return body.replacing(raised)
 
 
+#: Die meisten Gänge je Zoll am Drehdeckel: so fein wie seine feinste Steigung, 1 mm.
+MOST_LID_TPI: Final = 25.4
+
+
 @op_params
 class ScrewLidParams(BaseParams):
     height: float = param(
@@ -1683,14 +1689,28 @@ class ScrewLidParams(BaseParams):
     )
     # **Die benannte Ausnahme von ``units.FINEST_PITCH``**: Ein Schraubdeckel
     # greift feiner als 1 mm nicht mehr sicher, und die Kappe soll mit der Hand
-    # aufgehen. Die übrigen Gewindewege beginnen bei 0,25.
+    # aufgehen. Die übrigen Gewindewege beginnen bei 0,25. Seit RM-544 gilt sie
+    # der metrischen Gewindeform; in Zoll stehen die Gänge je Zoll dafür.
     pitch: float = param(
         title=_("Steigung"),
         default=DEFAULT_PITCH,
         unit="mm",
         minimum=1.0,
         maximum=COARSEST_PITCH,
+        depends_on=("form", ("metric",)),
         doc=_("Abstand benachbarter Gewindegänge entlang der Achse."),
+    )
+    tpi: float = param(
+        title=_("Gänge je Zoll"),
+        default=0.0,
+        minimum=0.0,
+        maximum=MOST_LID_TPI,
+        depends_on=("form", ("whitworth", "unified")),
+        doc=_(
+            "Wie viele Gänge auf einem Zoll Länge liegen, höchstens so fein wie 1 mm Steigung. "
+            "Null nimmt die Reihe G bei Whitworth und UNC bei Unified."
+        ),
+        zero_text=ZERO_AUTOMATIC,
     )
     thickness: float = param(
         title=_("Deckelstärke"),
@@ -1760,7 +1780,62 @@ class ScrewLidParams(BaseParams):
         doc=_("Null heißt: der Wert aus dem Materialprofil."),
         zero_text=ZERO_FROM_PROFILE,
     )
+    form: str = param(
+        title=_("Gewindeform"),
+        default="metric",
+        choices=CUSTOM_FORMS,
+        placement="advanced",
+        doc=_(
+            "Metrisch mit der Steigung in Millimetern, Whitworth (55°, wie G) oder Unified "
+            "(60°, wie UNC) mit Gängen je Zoll."
+        ),
+    )
+    starts: int = param(
+        title=_("Gangzahl"),
+        default=1,
+        minimum=1,
+        maximum=MOST_STARTS,
+        placement="advanced",
+        doc=_(
+            "Mehrere Gänge nebeneinander, wie an Flaschen: Der Deckel sitzt nach einem "
+            "Bruchteil einer Umdrehung."
+        ),
+    )
+    left_hand: bool = param(
+        title=_("Linksgewinde"),
+        default=False,
+        placement="advanced",
+        doc=_("Hals und Deckel drehen gegen den Uhrzeigersinn zu."),
+    )
     legacy_zero_top: bool = _saved_top_edge_marker()
+
+
+def lid_thread(params: ScrewLidParams, major: float) -> tuple[float, ThreadProfile]:
+    """Steigung und Gangprofil des Drehdeckels aus seiner Gewindeform (RM-544).
+
+    Metrisch die eingetragene Steigung im druckbaren Profil; Whitworth und
+    Unified aus den Gängen je Zoll, null nimmt die Reihe G oder UNC beim
+    Durchmesser des Halses (``standards.regular_tpi``).
+    """
+    from app.core.knowledge import standards
+
+    form = getattr(params, "form", "metric")
+    if form not in ("whitworth", "unified"):
+        return params.pitch, "flat"
+    series = "G" if form == "whitworth" else "UNC"
+    count = params.tpi if params.tpi > 0.0 else standards.regular_tpi(major, series)
+    pitch = max(25.4 / count, 1.0)
+    return pitch, "whitworth" if form == "whitworth" else "flat"
+
+
+def _lid_profile(params: ScrewLidParams) -> ThreadProfile:
+    """Das Gangprofil der Gewindeform — für Rechnungen, die die Steigung schon kennen."""
+    return "whitworth" if getattr(params, "form", "metric") == "whitworth" else "flat"
+
+
+def _lid_lead(params: ScrewLidParams) -> float:
+    """Der Vorschub je Umdrehung: so viele Steigungen, wie es Gänge sind."""
+    return max(1, int(getattr(params, "starts", 1))) * params.pitch
 
 
 @register_op(
@@ -1774,7 +1849,8 @@ class ScrewLidParams(BaseParams):
     # 6: Hals und Kappe verwenden dieselben Winkelstationen des Netzes.
     # 7: Die Null der Höhe ist das Bett, leer die Oberkante (RM-526).
     # 8: Gang und Rundkörper über Ø 46 so fein wie die Facettenregel (``turn_sections``).
-    cache_version="8",
+    # 9: Gewindeform, Gänge je Zoll, Gangzahl und Linksgewinde (RM-544).
+    cache_version="9",
     title=_("Drehdeckel erzeugen"),
     category="parts",
     params=ScrewLidParams,
@@ -1843,8 +1919,13 @@ def screw_lid(ctx: OpContext) -> OpResult:
     major, bore = neck_diameters(outline_width, cavities)
     if params.neck:
         major = params.neck
+    # Ab hier rechnet alles mit der Steigung der Gewindeform; Gangzahl und
+    # Drehsinn reichen die Gewindebauten durch (RM-544).
+    pitch, profile = lid_thread(params, major)
+    params = dataclasses.replace(params, pitch=pitch)
+    starts, left_hand = max(1, int(params.starts)), bool(params.left_hand)
 
-    ridge = params.pitch * RIDGE_SHARE
+    ridge = ridge_depth(params.pitch, profile)
     core = major - 2.0 * ridge
 
     if core - bore <= EPS_GEOM:
@@ -1872,6 +1953,9 @@ def screw_lid(ctx: OpContext) -> OpResult:
             params.height,
             params.pitch,
             cancelled=ctx.cancelled,
+            profile=profile,
+            starts=starts,
+            left=left_hand,
         )
         lid, cap_faces = exact_screw_cap(major, params, clearance, cancelled=ctx.cancelled)
     else:
@@ -1892,7 +1976,15 @@ def screw_lid(ctx: OpContext) -> OpResult:
             "intersection",
             [
                 mesh_only(
-                    thread_body(major, params.pitch, _thread_tool_height(params), segments=stations)
+                    thread_body(
+                        major,
+                        params.pitch,
+                        _thread_tool_height(params),
+                        segments=stations,
+                        profile=profile,
+                        starts=starts,
+                        left=left_hand,
+                    )
                 ),
                 _pipe(major * 2.0, 0.0, params.height, 0.0),
             ],
@@ -1910,14 +2002,16 @@ def screw_lid(ctx: OpContext) -> OpResult:
         lid, cap_solver = _screw_cap(major, params, clearance, ctx.quality, ctx.cancelled)
         solver = deepest([bounded.solver, with_neck.solver, with_thread.solver, cap_solver])
 
+    turning = _turning(params, profile)
     neck_thread = Feature(
         id=NECK_THREAD_FEATURE,
         kind="thread",
         provenance="generated",
         params={
+            **turning,
             "diameter": round(major, 4),
             "pitch": round(params.pitch, 4),
-            "handedness": "right",
+            "handedness": "left" if left_hand else "right",
             "centre": (centre_x, centre_y, z + params.height / 2.0),
             "axis": (0.0, 0.0, 1.0),
             "internal": False,
@@ -1936,9 +2030,10 @@ def screw_lid(ctx: OpContext) -> OpResult:
             # plus Spiel, die Nut eine Gangtiefe darüber); mit dem Nennmaß des
             # Halses maß die Passung 0,00 mm und meldete jeden frischen Deckel
             # als zu eng.
+            **turning,
             "diameter": round(major + clearance, 4),
             "pitch": round(params.pitch, 4),
-            "handedness": "right",
+            "handedness": "left" if left_hand else "right",
             "centre": (0.0, 0.0, (params.height + SKIRT_RELIEF) / 2.0),
             "axis": (0.0, 0.0, 1.0),
             "internal": True,
@@ -2014,6 +2109,17 @@ def screw_lid(ctx: OpContext) -> OpResult:
     )
 
 
+def _turning(params: ScrewLidParams, profile: ThreadProfile) -> dict[str, Any]:
+    """Was die Gewindemerkmale über Gangzahl und Profil sagen, wo es vom Üblichen abweicht."""
+    found: dict[str, Any] = {}
+    if params.starts > 1:
+        found["starts"] = int(params.starts)
+        found["lead"] = round(_lid_lead(params), 4)
+    if profile != "flat":
+        found["profile"] = profile
+    return found
+
+
 def _screw_cap(
     major: float,
     params: ScrewLidParams,
@@ -2054,7 +2160,14 @@ def _screw_cap(
     # weg, obwohl das passende Außengewinde dort noch Material trägt.
     groove = mesh_only(
         thread_body(
-            inside, params.pitch, _thread_tool_height(params), segments=stations, internal=True
+            inside,
+            params.pitch,
+            _thread_tool_height(params),
+            segments=stations,
+            internal=True,
+            profile=_lid_profile(params),
+            starts=max(1, int(params.starts)),
+            left=bool(params.left_hand),
         )
     )
 
@@ -2079,7 +2192,8 @@ def _thread_tool_height(params: ScrewLidParams) -> float:
     Ganze Umdrehungen reichen über die Schürze; Hals und Kappe nehmen aus
     diesem identischen Werkzeugraster ihre jeweils benötigte Höhe.
     """
-    return math.ceil((params.height + SKIRT_RELIEF) / params.pitch) * params.pitch
+    lead = _lid_lead(params)
+    return math.ceil((params.height + SKIRT_RELIEF) / lead) * lead
 
 
 def _cap_sizes(
@@ -2092,7 +2206,7 @@ def _cap_sizes(
     plus Spiel plus zweimal die Wand.
     """
     skirt = params.height + SKIRT_RELIEF
-    inside = major - 2.0 * params.pitch * RIDGE_SHARE + clearance
+    inside = major - 2.0 * ridge_depth(params.pitch, _lid_profile(params)) + clearance
     outer = major + 2.0 * clearance + 2.0 * params.wall
     return skirt, inside, outer
 
@@ -2152,6 +2266,9 @@ def exact_screw_neck(
     pitch: float,
     *,
     cancelled: CancelToken | None = None,
+    profile: ThreadProfile = "flat",
+    starts: int = 1,
+    left: bool = False,
 ) -> tuple[Any, tuple[int, ...]]:
     """Den Gewindehals auf das exakte Gehäuse setzen — mit den Flächen seines Gewindes.
 
@@ -2169,7 +2286,9 @@ def exact_screw_neck(
     if cancelled is not None:
         cancelled.raise_if_cancelled()
     with building("brep"):
-        rod = threaded_form(major, pitch, height, bottom=z)
+        rod = threaded_form(
+            major, pitch, height, bottom=z, profile=profile, starts=starts, left=left
+        )
     tool = edit.moved(edit.cylinder(bore, height + 2.0), (0.0, 0.0, z - 1.0))
     neck = edit.boolean("difference", [cast(Any, rod), tool])
     if abs(centre[0]) > EPS_GEOM or abs(centre[1]) > EPS_GEOM:
@@ -2203,8 +2322,16 @@ def exact_screw_cap(
         cancelled.raise_if_cancelled()
     skirt, inside, outer = _cap_sizes(major, params, clearance)
     with building("brep"):
+        lead = _lid_lead(params)
         cutter = threaded_form(
-            inside, params.pitch, skirt + params.pitch, internal=True, bottom=-params.pitch
+            inside,
+            params.pitch,
+            skirt + lead,
+            internal=True,
+            bottom=-lead,
+            profile=_lid_profile(params),
+            starts=max(1, int(params.starts)),
+            left=bool(params.left_hand),
         )
     body = edit.cylinder(outer, skirt + params.thickness)
     if cancelled is not None:

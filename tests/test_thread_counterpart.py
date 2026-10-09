@@ -169,7 +169,13 @@ def test_the_draft_is_the_opposite_thread_in_the_table_size() -> None:
     assert bolt.params["z"] == pytest.approx(10.0)
 
 
-def test_only_a_right_hand_thread_gets_a_counterpart() -> None:
+def test_a_left_hand_thread_gets_a_left_hand_counterpart() -> None:
+    """RM-544: Ein Linksgewinde bekommt ein Linksgewinde, statt einer Absage.
+
+    Bis dahin sagte das Gegenstück zu jedem Linksgewinde ab — das
+    Bibliotheksgewinde war nur rechtsgängig. Eine Bohrung ohne Gewinde bleibt
+    abgesagt.
+    """
     hole = Feature(
         id="hole_1", kind="hole", provenance="native", params={"diameter": 6.0, "depth": 10.0}
     )
@@ -177,32 +183,92 @@ def test_only_a_right_hand_thread_gets_a_counterpart() -> None:
         thread_counterpart_draft(hole, "obj_2", {})
     assert caught.value.constraint == "not_a_thread"
     assert caught.value.suggestions
-    with pytest.raises(ValidationError) as caught:
-        thread_counterpart_draft(_generated(6.0, 1.0, handedness="left"), "obj_2", {})
-    assert caught.value.constraint == "left_handed"
-    assert caught.value.suggestions
+    draft = thread_counterpart_draft(_generated(6.0, 1.0, handedness="left"), "obj_2", {})
+    assert draft.params["size"] == "M6"
+    assert draft.params["left_hand"] is True
 
 
-@pytest.mark.parametrize(
-    ("shape", "constraint"),
-    [({"starts": 2, "lead": 2.0}, "multi_start"), ({"taper": 1.7899}, "thread_shape")],
-    ids=["zweigaengig", "kegelig"],
-)
-def test_a_multi_start_or_tapered_thread_gets_no_library_counterpart(
-    shape: dict, constraint: str
-) -> None:
-    """Das Bibliotheksgewinde ist eingängig und zylindrisch (P2.5, 22.09.2026).
+def test_a_multi_start_thread_gets_its_own_measure_with_the_same_starts() -> None:
+    """RM-544: Ein zweigängiges Gewinde bekommt ein zweigängiges Gegenstück.
 
-    Zu einem zweigängigen Bolzen M6 entstand ein eingängiges Gegenstück M6 —
-    halber Vorschub, schraubt nicht; zu einem kegeligen Rohrgewinde eines mit
-    festem Durchmesser. Beides stand als gelungenes Gegenstück im Baum. Die
-    Gangzahl sagt ab wie beim Neuschneiden (``multi_start``), der Kegel mit
-    eigenem Grund.
+    Bis zum 22.09.2026 entstand zu einem zweigängigen Bolzen M6 ein eingängiges
+    Gegenstück M6 — halber Vorschub, schraubt nicht —, danach eine Absage. Jetzt
+    nimmt es das eigene Maß mit derselben Teilung und Gangzahl; eine Tabellengröße
+    ist es nie, auch wo Durchmesser und Teilung eine träfen.
     """
+    values = thread_values_for(_generated(8.0, 1.25, starts=2, lead=2.5))
+    assert values == {"size": CUSTOM_SIZE, "diameter": 8.0, "pitch": 1.25, "starts": 2}
+
+
+def test_a_tapered_thread_takes_its_tapered_size_or_is_refused() -> None:
+    """RM-544: Ein kegeliges Gewinde bekommt seine kegelige Größe; ohne sie eine Absage.
+
+    Ein Gegenstück mit eigenem Maß wäre zylindrisch — beide Teile hätten gepasst,
+    bis jemand sie zusammenschraubt (P2.5, 22.09.2026).
+    """
+    taper = {"taper": 1.7899}
     with pytest.raises(ValidationError) as caught:
-        thread_counterpart_draft(_generated(6.0, 1.0, **shape), "obj_2", {})
-    assert caught.value.constraint == constraint
+        thread_values_for(_generated(6.0, 1.0, **taper))
+    assert caught.value.constraint == "thread_shape"
     assert caught.value.suggestions
+    assert thread_values_for(_generated(13.2, 25.4 / 19.0, **taper)) == {"size": "R1/4"}
+
+
+def test_a_measured_thread_matching_two_series_asks_which_one() -> None:
+    """Regel 21 (RM-544): R 1/2 und NPT 1/2 haben beide 14 Gänge je Zoll — gefragt wird.
+
+    Die Rückfrage nennt beide Größen; mit der Antwort entsteht das Gegenstück. Wer
+    eine der Reihen ausblendet, wird nicht gefragt.
+    """
+    from app.core.counterpart import AMBIGUOUS_THREAD
+
+    measured = _generated(21.1, 25.4 / 14.0, provenance="native", taper=1.7899)
+    with pytest.raises(ValidationError) as caught:
+        thread_values_for(measured)
+    assert caught.value.constraint == AMBIGUOUS_THREAD
+    assert set(caught.value.values["choices"]) == {"R1/2", "1/2-14 NPT"}
+    assert caught.value.suggestions
+    assert thread_values_for(measured, "1/2-14 NPT") == {"size": "1/2-14 NPT"}
+    draft = thread_counterpart_draft(measured, "obj_2", {}, "R1/2")
+    assert draft.params["size"] == "R1/2" and draft.params["internal"] is True
+    before = standards.shown_thread_families()
+    try:
+        standards.set_shown_thread_families(("metric", "G", "R"))
+        assert thread_values_for(measured) == {"size": "R1/2"}
+    finally:
+        standards.set_shown_thread_families(before)
+
+
+def test_a_measured_m2_is_also_a_number_two_unified_thread() -> None:
+    """Die Paare zwischen den Reihen fragen zurück; mit metrisch allein bleibt es M2."""
+    from app.core.counterpart import AMBIGUOUS_THREAD
+
+    measured = _generated(2.0, 0.4, provenance="native")
+    with pytest.raises(ValidationError) as caught:
+        thread_values_for(measured)
+    assert caught.value.constraint == AMBIGUOUS_THREAD
+    assert "M2" in caught.value.values["choices"]
+    before = standards.shown_thread_families()
+    try:
+        standards.set_shown_thread_families(("metric",))
+        assert thread_values_for(measured) == {"size": "M2"}
+    finally:
+        standards.set_shown_thread_families(before)
+
+
+def test_a_printed_inch_thread_names_its_own_size() -> None:
+    """Ein gedrucktes G 1/2 nennt sich selbst; das Gegenstück fragt nicht nach dem Maß."""
+    printed = _generated(20.755, 25.4 / 14.0, nominal=20.955, size="G1/2", profile="whitworth")
+    assert thread_values_for(printed) == {"size": "G1/2"}
+    left = _generated(20.755, 25.4 / 14.0, size="G1/2", handedness="left")
+    assert thread_values_for(left) == {"size": "G1/2", "left_hand": True}
+    own = _generated(30.2, 25.4 / 11.0, nominal=30.0, profile="whitworth")
+    assert thread_values_for(own) == {
+        "size": CUSTOM_SIZE,
+        "diameter": 30.0,
+        "form": "whitworth",
+        "tpi": pytest.approx(11.0),
+    }
 
 
 @pytest.mark.parametrize("kind", ["mesh", "brep"])
@@ -475,15 +541,8 @@ def test_an_imported_thread_gets_its_counterpart_and_a_measurable_fit(
     ]
 
 
-def test_a_multi_start_thread_is_refused_with_a_sentence() -> None:
-    """Ein zweigängiges Gewinde hat kein eingängiges Gegenstück.
-
-    ``zweigaengig.step`` trägt zwei Gänge mit 1 mm Teilung auf Ø 8. Bis zum
-    22.09.2026 fragte ``thread_counterpart_draft`` die Gangzahl nicht und sagte
-    „kein Normmaß, nächstes M8" — ein Satz über das falsche Maß, und bei einer
-    Steigung, die zufällig in der Tabelle steht, wäre still ein eingängiges
-    Gegengewinde entstanden, das nicht greift.
-    """
+def test_an_imported_two_start_thread_gets_a_two_start_counterpart() -> None:
+    """``zweigaengig.step``: zwei Gänge mit 1 mm Teilung auf Ø 8 (RM-544, vorher eine Absage)."""
     from pathlib import Path
 
     from app.core.brep import step
@@ -493,16 +552,10 @@ def test_a_multi_start_thread_is_refused_with_a_sentence() -> None:
     solid = step.read((Path(__file__).parent / "data/threads/zweigaengig.step").read_bytes())
     thread = next(f for f in features_of(solid).values() if f.kind == "thread")
     assert thread.params.get("starts") == 2
-    with pytest.raises(ValidationError) as caught:
-        thread_counterpart_draft(thread, "obj_2", {})
-    assert caught.value.constraint == "multi_start"
-    assert caught.value.suggestions
-
-    # Und auch dort, wo Durchmesser und Steigung eine Tabellengröße träfen.
-    lookalike = _generated(8.0, 1.25, starts=2)
-    with pytest.raises(ValidationError) as caught:
-        thread_counterpart_draft(lookalike, "obj_2", {})
-    assert caught.value.constraint == "multi_start"
+    draft = thread_counterpart_draft(thread, "obj_2", {})
+    assert draft.params["size"] == CUSTOM_SIZE
+    assert draft.params["starts"] == 2
+    assert draft.params["pitch"] == pytest.approx(1.0, abs=0.02)
 
 
 def test_a_thread_beyond_the_table_gets_its_own_measure() -> None:

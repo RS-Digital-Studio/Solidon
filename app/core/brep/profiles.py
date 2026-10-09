@@ -1238,7 +1238,9 @@ def helical_thread(
     ``starts`` Gänge teilen sich einen Umlauf: Der Vorschub ist
     ``starts * pitch``, und jeder Gang sitzt um eine Teilung über dem vorigen
     — dieselben Flächenarten, nur mehr davon je Umlauf. ``taper`` ist der
-    halbe Kegelwinkel im Bogenmaß (ein kegeliges Rohrgewinde): Jeder
+    halbe Kegelwinkel im Bogenmaß (ein kegeliges Rohrgewinde), negativ für einen
+    Kegel, der nach oben enger wird (das Außengewinde, das an seiner Spitze
+    endet, RM-544): Jeder
     Profilpunkt läuft dann auf einem Kegel statt einem Zylinder, sein Radius
     wächst je Millimeter Höhe um ``tan(taper)``, und die Radien in ``ridge``
     gelten auf der Höhe ``start``. Die Regelflächen zwischen zwei Helices
@@ -1275,8 +1277,10 @@ def helical_thread(
         and ridge[-1][1] < pitch
     ):
         raise InternalError(detail="the ridge must start and end on the root radius")
-    if not (math.isfinite(taper) and 0.0 <= taper < math.pi / 4.0):
-        raise InternalError(detail="the half angle of a tapered thread must lie below 45 degrees")
+    if not (math.isfinite(taper) and abs(taper) < math.pi / 4.0):
+        raise InternalError(
+            detail="the half angle of a tapered thread must lie within 45 degrees of the axis"
+        )
     lead = starts * pitch
     slope = math.tan(taper)
     # Eine Trägerfläche je Profilpunkt — nach seinem Index, nicht nach dem
@@ -1285,7 +1289,7 @@ def helical_thread(
     # Mantellinie ab der Höhe ``start``.
     stretch = 1.0 / math.cos(taper)
     surfaces: list[Any]
-    if taper > 0.0:
+    if taper:
         frame = gp_Ax3(gp_Pnt(0.0, 0.0, start), gp_Dir(0.0, 0.0, 1.0))
         surfaces = [Geom_ConicalSurface(frame, taper, radial) for radial, _axial in ridge]
     else:
@@ -1293,13 +1297,13 @@ def helical_thread(
 
     def along(height: float) -> float:
         """Wo die Höhe ``height`` auf der Trägerfläche liegt."""
-        return (height - start) * stretch if taper > 0.0 else height
+        return (height - start) * stretch if taper else height
 
     def radius(radial: float, height: float) -> float:
         """Der Radius eines Profilpunkts auf der Höhe ``height``."""
         return radial + (height - start) * slope
 
-    rise = lead * stretch if taper > 0.0 else lead
+    rise = lead * stretch if taper else lead
 
     def helix(point: int, origin: float) -> Any:
         """Ein Umlauf auf der Fläche des Profilpunkts, ab Winkel null auf Höhe ``origin``."""

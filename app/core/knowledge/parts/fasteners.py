@@ -15,7 +15,7 @@ Dokumentation, statt es in einer Zahl zu verstecken.
 from __future__ import annotations
 
 import math
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from typing import Any, Final, cast
 
 from app.core.errors import CHANGE_SIZE, CHANGE_THIS_STEP, ValidationError
@@ -40,6 +40,7 @@ from app.core.knowledge.parts.registry import (
     WallRequirement,
     register_part,
 )
+from app.core.knowledge.parts.shapes import ThreadProfile
 from app.core.registry import op_params, param, play_param
 from app.core.registry.params import ZERO_AUTOMATIC, ZERO_NONE, ZERO_THROUGH
 from app.core.types import (
@@ -59,6 +60,7 @@ from app.core.units import (
     SMALLEST_THREAD,
     THREAD_MIN_CORE_SHARE,
     THREAD_MIN_GRIP_SHARE,
+    UNIT_TO_MM,
     format_length,
 )
 from app.i18n import TranslatableText, _
@@ -68,6 +70,31 @@ from app.i18n import TranslatableText, _
 #: Schraube, Mutter und Loch den Nenndurchmesser, bei der Einpressbuchse
 #: Bohrung und Länge aus dem Datenblatt.
 CUSTOM_SIZE: Final = "custom_size"
+
+#: Die Gewindeformen eines eigenen Maßes (RM-544): metrisch mit der Steigung in
+#: Millimetern, Whitworth (55°, das Profil von G und R) und Unified (60°, das von
+#: UNC und UNF) mit Gängen je Zoll.
+CUSTOM_FORMS: Final = ("metric", "whitworth", "unified")
+
+#: Welches Gangprofil eine Gewindeform eines eigenen Maßes baut, und aus welcher
+#: Reihe ihre Gänge je Zoll kommen, wenn keine eingetragen sind.
+_FORM_PROFILE: Final[dict[str, ThreadProfile]] = {
+    "metric": "flat",
+    "whitworth": "whitworth",
+    "unified": "flat",
+}
+_FORM_SERIES: Final = {"whitworth": "G", "unified": "UNC"}
+
+#: Die meisten Gänge, die sich einen Vorschub teilen. Acht trägt jede Flasche und
+#: jede Trapezspindel eines Druckers (Tr8x8 hat vier); darüber stehen die Gänge
+#: so steil, dass sie sich nicht mehr wie ein Gewinde drehen.
+MOST_STARTS: Final = 8
+
+#: Die meisten Gänge je Zoll — die feinste Steigung als Gänge je Zoll.
+MOST_TPI: Final = UNIT_TO_MM["in"] / FINEST_PITCH
+
+#: Jede Gewindegröße der Tabelle, Reihe für Reihe (``standards.thread_sizes``).
+_THREADS = standards.thread_sizes()
 
 _SCREWS = standards.screw_sizes()
 
@@ -101,6 +128,174 @@ def _nominal_param(doc: TranslatableText, *, placement: ParamPlacement = "front"
         depends_on=("size", (CUSTOM_SIZE,)),
         placement=placement,
         doc=doc,
+    )
+
+
+def _thread_size_param(doc: TranslatableText, default: str) -> Any:
+    """Die Gewindegröße aus jeder Reihe der Tabelle, dazu das eigene Maß (RM-544).
+
+    Im Schema stehen alle Reihen; welche die Auswahlliste zeigt, stellt der
+    Kunde ein (``standards.shown_thread_families``) — ein gespeicherter Schritt
+    mit einer ausgeblendeten Reihe rechnet und zeigt sie weiter.
+    """
+    return param(title=_("Größe"), default=default, choices=(*_THREADS, CUSTOM_SIZE), doc=doc)
+
+
+def _form_param() -> Any:
+    """Die Gewindeform eines eigenen Maßes — metrisch, Whitworth oder Unified."""
+    return param(
+        title=_("Gewindeform"),
+        default="metric",
+        choices=CUSTOM_FORMS,
+        placement="advanced",
+        depends_on=("size", (CUSTOM_SIZE,)),
+        doc=_(
+            "Metrisch mit der Steigung in Millimetern, Whitworth (55°, wie G) oder Unified "
+            "(60°, wie UNC) mit Gängen je Zoll."
+        ),
+    )
+
+
+def _pitch_param() -> Any:
+    """Die Steigung eines eigenen metrischen Maßes; null ist die Regelsteigung."""
+    return param(
+        title=_("Steigung"),
+        default=0.0,
+        unit="mm",
+        minimum=0.0,
+        maximum=COARSEST_PITCH,
+        placement="advanced",
+        depends_on=("form", ("metric",)),
+        doc=_(
+            "Höhenzuwachs je Umdrehung, null nimmt die Regelsteigung des Durchmessers. Eine "
+            "feinere Steigung schneidet nur mit kleinerem Nenndurchmesser weniger tief in die "
+            "Wand."
+        ),
+        zero_text=ZERO_AUTOMATIC,
+    )
+
+
+def _tpi_param() -> Any:
+    """Die Gänge je Zoll eines eigenen Zollmaßes; null nimmt die Reihe der Gewindeform."""
+    return param(
+        title=_("Gänge je Zoll"),
+        default=0.0,
+        minimum=0.0,
+        maximum=MOST_TPI,
+        placement="advanced",
+        depends_on=("form", ("whitworth", "unified")),
+        doc=_(
+            "Wie viele Gänge auf einem Zoll Länge liegen. Null nimmt die Reihe G bei "
+            "Whitworth und UNC bei Unified."
+        ),
+        zero_text=ZERO_AUTOMATIC,
+    )
+
+
+def _starts_param() -> Any:
+    """Wie viele Gänge sich den Vorschub teilen — beim eigenen Maß."""
+    return param(
+        title=_("Gangzahl"),
+        default=1,
+        minimum=1,
+        maximum=MOST_STARTS,
+        placement="advanced",
+        depends_on=("size", (CUSTOM_SIZE,)),
+        doc=_(
+            "Mehrere Gänge nebeneinander, wie an Flaschen und Spindeln: Je Umdrehung "
+            "geht es um so viele Steigungen weiter."
+        ),
+    )
+
+
+def _left_param() -> Any:
+    """Linksgewinde — für jede Größe."""
+    return param(
+        title=_("Linksgewinde"),
+        default=False,
+        placement="advanced",
+        doc=_("Schraubt gegen den Uhrzeigersinn ein, wie an Pedal, Spannschloss und Gasflasche."),
+    )
+
+
+@dataclass(frozen=True, slots=True)
+class ThreadDims:
+    """Alles, was ein Bausteingewinde baut: Maß, Profil, Gänge, Drehsinn und Kegel (RM-544).
+
+    ``nominal`` ist der Außendurchmesser, bei einem kegeligen Rohrgewinde in
+    der Bezugsebene, die ``gauge`` Millimeter über dem kleinen Ende des
+    Außengewindes liegt; beim Innengewinde liegt sie an der Mündung. ``size``
+    ist die Bezeichnung der Tabelle, leer beim eigenen Maß.
+    """
+
+    nominal: float
+    pitch: float
+    profile: ThreadProfile = "flat"
+    starts: int = 1
+    left: bool = False
+    tapered: bool = False
+    gauge: float = 0.0
+    size: str = ""
+
+    @property
+    def depth(self) -> float:
+        """Die Gangtiefe dieses Profils."""
+        return shapes.ridge_depth(self.pitch, self.profile)
+
+    @property
+    def lead(self) -> float:
+        """Der Vorschub je Umdrehung: so viele Steigungen, wie es Gänge sind."""
+        return self.starts * self.pitch
+
+
+def thread_dims(
+    size: str,
+    diameter: float = 0.0,
+    pitch: float = 0.0,
+    *,
+    form: str = "metric",
+    tpi: float = 0.0,
+    starts: int = 1,
+    left: bool = False,
+) -> ThreadDims:
+    """Das Gewinde einer Größe aus der Tabelle oder eines eigenen Maßes.
+
+    Eine Tabellengröße bringt Nennmaß, Steigung, Profil und Kegel mit; die
+    Gangzahl gilt nur dem eigenen Maß (mehrgängig ist keine Normgröße einer
+    Reihe), der Drehsinn jeder Größe. Beim eigenen Maß ist eine Steigung von
+    null die Regelsteigung des Durchmessers, null Gänge je Zoll die Reihe der
+    Gewindeform (``standards.regular_tpi``).
+    """
+    if size != CUSTOM_SIZE:
+        entry = standards.thread_size(size)
+        return ThreadDims(
+            entry.nominal,
+            entry.pitch,
+            cast(ThreadProfile, entry.profile),
+            left=left,
+            tapered=entry.tapered,
+            gauge=entry.gauge,
+            size=entry.size,
+        )
+    profile = _FORM_PROFILE.get(form, "flat")
+    if form in _FORM_SERIES:
+        count = tpi if tpi > 0.0 else standards.regular_tpi(diameter, _FORM_SERIES[form])
+        step = UNIT_TO_MM["in"] / count
+    else:
+        step = pitch if pitch > 0.0 else standards.regular_pitch(diameter)
+    return ThreadDims(diameter, step, profile, starts=max(1, int(starts)), left=left)
+
+
+def thread_of(params: BaseParams) -> ThreadDims:
+    """Das Gewinde aus den Feldern eines Gewindebausteins — fehlende Felder auf ihrer Vorgabe."""
+    return thread_dims(
+        str(getattr(params, "size", CUSTOM_SIZE)),
+        float(getattr(params, "diameter", 0.0) or 0.0),
+        float(getattr(params, "pitch", 0.0) or 0.0),
+        form=str(getattr(params, "form", "metric")),
+        tpi=float(getattr(params, "tpi", 0.0) or 0.0),
+        starts=int(getattr(params, "starts", 1) or 1),
+        left=bool(getattr(params, "left_hand", False)),
     )
 
 
@@ -574,24 +769,56 @@ def custom_nut_for(bore: float) -> float | None:
     return nominal
 
 
-def _gripped_up_to(screw: standards.Screw) -> float:
+def _gripped_up_to(dims: ThreadDims) -> float:
     """Die weiteste Bohrung, in der das Innengewinde dieser Größe noch trägt.
 
     Das Nennmaß abzüglich des Anteils ``units.THREAD_MIN_GRIP_SHARE`` der
     Gangtiefe auf beiden Seiten — darüber fasst der Gang zu wenig Wand.
     """
-    return screw.nominal - 2.0 * shapes.RIDGE_SHARE * screw.pitch * THREAD_MIN_GRIP_SHARE
+    return dims.nominal - 2.0 * dims.depth * THREAD_MIN_GRIP_SHARE
 
 
-def _printed_root(screw: standards.Screw) -> float:
+def _printed_root(dims: ThreadDims) -> float:
     """Der Gangfuß des gedruckten Innengewindes dieser Größe: Nennmaß minus zwei Gangtiefen.
 
     Die engste Bohrung, die das Gewinde ohne Aufbohren nimmt — an derselben
     Stelle misst :func:`custom_thread_for` das eigene Maß und
     :func:`thread_at_hole` das Aufbohren (Review P2, M1). Das ISO-Bohrermaß
-    ``tap`` = D - P liegt ein Zehntel der Steigung darüber.
+    ``tap`` = D - P liegt ein Zehntel der Steigung darüber; bei G 1/2 ist der
+    Gangfuß das Kernmaß d1 = 18,631 nach ISO 228-1.
     """
-    return screw.nominal - 2.0 * shapes.RIDGE_SHARE * screw.pitch
+    return dims.nominal - 2.0 * dims.depth
+
+
+def _fitting_sizes(diameter: float, families: tuple[str, ...]) -> list[str]:
+    """Je gezeigter Reihe die größte zylindrische Tabellengröße, die in diese Bohrung passt.
+
+    Dieselben zwei Schranken in jeder Reihe (:func:`size_for_thread`). Kegelige
+    Rohrgewinde schlägt eine zylindrische Bohrung nicht vor: Sie meint ein
+    zylindrisches Gewinde, und neben jedem G stünde sonst sein R zur Wahl.
+    """
+    found: list[str] = []
+    for family in families:
+        if family in standards.TAPERED_FAMILIES:
+            continue
+        fitting = [
+            size
+            for size in standards.thread_sizes((family,))
+            if _printed_root(thread_dims(size)) <= diameter + EPS_GEOM
+            and diameter <= _gripped_up_to(thread_dims(size))
+        ]
+        if fitting:
+            found.append(fitting[-1])
+    return found
+
+
+def _custom_form(families: tuple[str, ...]) -> str:
+    """Die Gewindeform eines eigenen Maßes aus den gezeigten Reihen: metrisch zuerst."""
+    if "metric" in families:
+        return "metric"
+    if any(family in families for family in ("G", "R")):
+        return "whitworth"
+    return "unified"
 
 
 def size_for_thread(diameter: float) -> dict[str, Any]:
@@ -606,6 +833,15 @@ def size_for_thread(diameter: float) -> dict[str, Any]:
     Nennmaß griffe der gedruckte Bolzen nicht. Eine Ø 6,5-Bohrung bekommt
     deshalb keine Tabellengröße — für M6 ist sie zu weit, für M8 zu eng —,
     sondern das eigene Maß Ø 7,6 x 1, dessen Kernloch sie ist.
+
+    **Jede gezeigte Reihe** (RM-544, ``standards.shown_thread_families``): Die
+    Bohrung eines Rohrs mit 18,7 mm ist das Kernloch eines G 1/2. Passen Größen
+    aus mehreren Reihen, steht die erste vorgewählt — metrisch vor G, R, UNC,
+    UNF, NPT — und der Satz über dem Dialog nennt alle (:func:`thread_advice`);
+    der Kunde entscheidet dort, bevor etwas geschnitten wird (Regel 21). Eine
+    metrische Normgröße, auch die gerundete, geht vor (:func:`_metric_choice`);
+    erst wo metrisch nur ein eigenes Maß bliebe, ist die Normgröße einer
+    anderen Reihe vorgewählt.
 
     **Ein eigenes Maß, das eine Tabellengröße trifft, ist diese** (Review P2,
     M1): Knapp unter dem Gangfuß einer Größe läge es weniger als
@@ -630,19 +866,45 @@ def size_for_thread(diameter: float) -> dict[str, Any]:
     an einer Bohrung, gemessen an zehn von 22 Durchmessern.
 
     **Und wo keine Tabellengröße passt, passt ein eigenes Maß**
-    (:func:`custom_thread_for`): zwischen zwei Größen und über M64. Ohne Größe
-    bleibt nur eine Bohrung, die enger ist als das Kernloch des kleinsten
-    Gewindes (Ø 1,215), oder eine, deren Gewinde größer als
-    ``units.LARGEST_THREAD`` würde (über 993,4).
+    (:func:`custom_thread_for`): zwischen zwei Größen und über M64, in der
+    Gewindeform der ersten gezeigten Reihe. Ohne Größe bleibt nur eine Bohrung,
+    die enger ist als das Kernloch des kleinsten Gewindes (Ø 1,215), oder eine,
+    deren Gewinde größer als ``units.LARGEST_THREAD`` würde (über 993,4).
     """
-    fitting = [
-        size
-        for size in standards.screw_sizes()
-        if _printed_root(standards.screw(size)) <= diameter + EPS_GEOM
-        and diameter <= _gripped_up_to(standards.screw(size))
-    ]
+    shown = standards.shown_thread_families()
+    fitting = _fitting_sizes(diameter, shown)
+    metric = _metric_choice(diameter) if "metric" in shown else None
+    if metric is not None and "size" in metric and metric["size"] != CUSTOM_SIZE:
+        return metric
     if fitting:
-        return {"size": fitting[-1], "internal": True}
+        return {"size": fitting[0], "internal": True}
+    if metric is not None:
+        return metric
+    form = _custom_form(shown)
+    custom = custom_thread_for(diameter, form)
+    if custom is None:
+        return {"internal": True}
+    return {
+        "size": CUSTOM_SIZE,
+        "diameter": custom[0],
+        "form": form,
+        "tpi": 0.0,
+        "internal": True,
+    }
+
+
+def _metric_choice(diameter: float) -> dict[str, Any]:
+    """Die metrische Vorwahl allein: Tabellengröße, gerundete Normgröße oder eigenes Maß.
+
+    Die Reihenfolge der Vorwahl (:func:`size_for_thread`) fragt sie zuerst:
+    Eine metrische Normgröße — auch die, an die ein eigenes Maß innerhalb der
+    Erkennungsgrenze heranreicht — geht jedem Zoll- und Rohrgewinde vor; erst wo
+    metrisch nur ein eigenes Maß bliebe, ist eine Normgröße einer anderen Reihe
+    die bessere Wahl.
+    """
+    fitting = _fitting_sizes(diameter, ("metric",))
+    if fitting:
+        return {"size": fitting[0], "internal": True}
     custom = custom_thread_for(diameter)
     if custom is None:
         return {"internal": True}
@@ -650,7 +912,7 @@ def size_for_thread(diameter: float) -> dict[str, Any]:
     # Die Rundung nimmt die Normgröße nur, wo ihr Gang noch greift: An der
     # M1.6 ist ``THREAD_SIZE_REACH`` weiter als 0,55 der Steigung, und Ø 1,41
     # bekäme eine M1.6, deren Gang nicht in die Wand reicht (Review P2 N3).
-    if near is not None and diameter <= _gripped_up_to(standards.screw(near)):
+    if near is not None and diameter <= _gripped_up_to(thread_dims(near)):
         return {"size": near, "internal": True}
     # Die Steigung bleibt auf „automatisch": Das Maß ist so gewählt, dass die
     # Regelsteigung seines Durchmessers genau die ist, mit der es gerechnet wurde.
@@ -667,13 +929,13 @@ def _too_wide_for(diameter: float) -> str | None:
     wide = [
         size
         for size in standards.screw_sizes()
-        if _gripped_up_to(standards.screw(size)) < diameter
+        if _gripped_up_to(thread_dims(size)) < diameter
         and diameter <= standards.screw(size).nominal + EPS_GEOM
     ]
     return wide[-1] if wide else None
 
 
-def custom_thread_for(bore: float) -> tuple[float, float] | None:
+def custom_thread_for(bore: float, form: str = "metric") -> tuple[float, float] | None:
     """Das Innengewinde mit eigenem Maß, dessen Kernloch diese Bohrung ist.
 
     **Kernloch heißt hier der Gangfuß des Druckprofils, nicht das ISO-Kernloch.**
@@ -692,14 +954,29 @@ def custom_thread_for(bore: float) -> tuple[float, float] | None:
     Steigung 6 bleibt stehen. Die Regelsteigung steigt nur und ist begrenzt,
     die Schleife endet also nach höchstens so vielen Runden, wie die Reihe
     Stufen hat. ``None``, wo selbst das kleinste Gewinde nicht hineinpasst.
+
+    In Whitworth- oder Unified-Form (RM-544) dieselbe Rechnung mit den Gängen je
+    Zoll der Reihe G oder UNC und der Gangtiefe des Profils.
     """
-    pitch = standards.regular_pitch(bore)
-    while True:
-        nominal = bore + 2.0 * pitch * shapes.RIDGE_SHARE
-        following = standards.regular_pitch(nominal)
-        if following <= pitch:
-            break
-        pitch = following
+    if form not in _FORM_SERIES:
+        pitch = standards.regular_pitch(bore)
+        while True:
+            nominal = bore + 2.0 * pitch * shapes.RIDGE_SHARE
+            following = standards.regular_pitch(nominal)
+            if following <= pitch:
+                break
+            pitch = following
+    else:
+        series = _FORM_SERIES[form]
+        share = shapes.DEPTH_SHARE[_FORM_PROFILE[form]]
+        inch = UNIT_TO_MM["in"]
+        pitch = inch / standards.regular_tpi(bore, series)
+        while True:
+            nominal = bore + 2.0 * pitch * share
+            following = inch / standards.regular_tpi(nominal, series)
+            if following <= pitch:
+                break
+            pitch = following
     if nominal < SMALLEST_THREAD or nominal > LARGEST_THREAD:
         return None
     return nominal, pitch
@@ -759,9 +1036,47 @@ def thread_advice(diameter: float) -> TranslatableText:
     eine Tabellengröße trifft, gibt es hier nicht (:func:`size_for_thread`);
     hat die Bohrung das Nennmaß einer Größe, die ihr zu weit ist, nennt der
     Satz sie (Review P2, M1).
+
+    **Passen Größen aus mehreren Reihen** (RM-544), nennt der Satz alle und die
+    vorgewählte — gefragt wird im Dialog, an dem Feld, das die Größe trägt
+    (Regel 21). Ein eigenes Maß in Zoll nennt seine Gänge je Zoll.
     """
     values = size_for_thread(diameter)
     size = values.get("size")
+    shown = standards.shown_thread_families()
+    others = [entry for entry in _fitting_sizes(diameter, shown) if entry != size]
+    if size is not None and size != CUSTOM_SIZE and others:
+        return _(
+            "In diese Bohrung passen {sizes}. Vorgewählt ist {size}, die anderen stehen unter "
+            "„Größe“.",
+            sizes=", ".join((str(size), *others)),
+            size=size,
+        )
+    if (
+        size is not None
+        and size != CUSTOM_SIZE
+        and standards.thread_family(str(size)) != "metric"
+        and "metric" in shown
+    ):
+        # Ein Zoll- oder Rohrgewinde trifft die Bohrung, metrisch nur ein eigenes
+        # Maß: Die Normgröße ist vorgewählt, das metrische Maß steht daneben.
+        custom = custom_thread_for(diameter)
+        if custom is not None:
+            return _(
+                "In diese Bohrung passt ein Innengewinde {size}. Metrisch nur ein eigenes Maß "
+                "Ø {diameter}, Steigung {pitch}.",
+                size=size,
+                diameter=format_length(custom[0]),
+                pitch=format_length(custom[1]),
+            )
+    if size == CUSTOM_SIZE and values.get("form", "metric") != "metric":
+        dims = thread_dims(CUSTOM_SIZE, values["diameter"], form=str(values["form"]))
+        return _(
+            "In diese Bohrung passt ein Innengewinde mit eigenem Maß Ø {diameter}, {count} "
+            "Gänge je Zoll, kein Normgewinde.",
+            diameter=format_length(dims.nominal),
+            count=f"{UNIT_TO_MM['in'] / dims.pitch:g}",
+        )
     if size == CUSTOM_SIZE:
         nominal, pitch = thread_measure(CUSTOM_SIZE, values["diameter"], values["pitch"])
         wide = _too_wide_for(diameter)
@@ -839,9 +1154,12 @@ def thread_at_hole(
     if not params.internal:
         return []
     own = params.size == CUSTOM_SIZE
-    nominal, pitch = thread_measure(params.size, params.diameter, params.pitch)
+    # Ein kegeliges Innengewinde ist an der Mündung am weitesten; dort gelten
+    # Nennmaß und Kernloch, gemessen wird also an seiner weitesten Stelle.
+    dims = thread_of(params)
+    nominal, pitch = dims.nominal, dims.pitch
     hole = float(bore.params["diameter"])
-    depth = pitch * shapes.RIDGE_SHARE
+    depth = dims.depth
     found: list[Finding] = []
     wall = _wall_around(bore, host, mouth, outward, params.length)
     least = profile.minimum_wall_thickness if profile is not None else None
@@ -1272,14 +1590,13 @@ THREAD_MESH_WHOLE_TURNS = PartChange(
 
 @op_params
 class ThreadParams(BaseParams):
-    size: str = param(
-        title=_("Größe"),
-        default="M6",
-        choices=(*_SCREWS, CUSTOM_SIZE),
-        doc=_(
-            "Nenndurchmesser und Steigung. Das Profil ist druckbar abgeflacht, "
-            "kein ISO-Profil — das löst ein Drucker ohnehin nicht auf."
+    size: str = _thread_size_param(
+        _(
+            "Nenndurchmesser und Steigung, metrisch, in Zoll oder als Rohrgewinde. Metrisch "
+            "und Zoll sind druckbar abgeflacht, die Rohrgewinde G, R und NPT tragen das Profil "
+            "der Norm."
         ),
+        "M6",
     )
     # **Ein Gewinde endete bei M8**, weil die Größe nur aus der Schraubentabelle
     # kam (Kundenvorschlag S-20261006-c66299: ein Innengewinde in einem Rohr
@@ -1322,21 +1639,14 @@ class ThreadParams(BaseParams):
             "mit passendem Schraubdeckel verwenden Sie „Drehdeckel erzeugen“."
         ),
     )
-    pitch: float = param(
-        title=_("Steigung"),
-        default=0.0,
-        unit="mm",
-        minimum=0.0,
-        maximum=COARSEST_PITCH,
-        placement="advanced",
-        depends_on=("size", (CUSTOM_SIZE,)),
-        doc=_(
-            "Höhenzuwachs je Umdrehung, null nimmt die Regelsteigung des Durchmessers. Eine "
-            "feinere Steigung schneidet nur mit kleinerem Nenndurchmesser weniger tief in die "
-            "Wand."
-        ),
-        zero_text=ZERO_AUTOMATIC,
-    )
+    # Seit RM-544 hängt die Steigung an der Gewindeform, die selbst am eigenen
+    # Maß hängt: Ein altes Projekt ohne ``form`` steht auf „metrisch“ und
+    # rechnet wie zuvor.
+    form: str = _form_param()
+    pitch: float = _pitch_param()
+    tpi: float = _tpi_param()
+    starts: int = _starts_param()
+    left_hand: bool = _left_param()
     play: float = play_param()
 
 
@@ -1357,7 +1667,7 @@ class ThreadParams(BaseParams):
     ),
     doc=_(
         "Druckbares Innengewinde in einer Bohrung oder Gewindebolzen auf einer "
-        "ebenen Fläche — als Wendel mit abgeflachtem Kamm. Für einen offenen "
+        "ebenen Fläche — metrisch, in Zoll oder als Rohrgewinde. Für einen offenen "
         "Behälter mit passendem Schraubdeckel ist „Drehdeckel erzeugen“ der "
         "gemeinsame Weg."
     ),
@@ -1376,6 +1686,7 @@ class ThreadParams(BaseParams):
         THREAD_MESH_WHOLE_TURNS,
     ],
     feasible=lambda raw: _thread_reason(cast(ThreadParams, raw)),
+    mirrored_by="left_hand",
 )
 def printed_thread(raw: BaseParams) -> PartResult:
     """Ein Gewinde, und sein Gegenstück so gemessen, dass die zwei wirklich
@@ -1394,10 +1705,14 @@ def printed_thread(raw: BaseParams) -> PartResult:
       fällt glatt hindurch. An M6 gemessen: eine Schraube mit 5,85 außen
       reicht bis r = 2,925, und ein auf 6,15 gebohrtes Loch beginnt bei
       r = 3,075 — hundertfünfzig Mikrometer Luft.
+
+    Zoll- und Rohrgewinde (RM-544) gehen denselben Weg mit ihrem Profil; ein
+    kegeliges Rohrgewinde wird außen zur Spitze hin enger und innen zur Tiefe
+    hin, beide mit der Bezugsebene an der Stelle, an der sie sich von Hand
+    gefügt treffen.
     """
     params = cast(ThreadParams, raw)
-    nominal, pitch = thread_measure(params.size, params.diameter, params.pitch)
-    return _printed_thread(nominal, pitch, params.length, params.internal, params.play)
+    return _printed_thread(thread_of(params), params.length, params.internal, params.play)
 
 
 def thread_measure(size: str, diameter: float = 0.0, pitch: float = 0.0) -> tuple[float, float]:
@@ -1406,11 +1721,10 @@ def thread_measure(size: str, diameter: float = 0.0, pitch: float = 0.0) -> tupl
     Bei :data:`CUSTOM_SIZE` gelten ``diameter`` und ``pitch``; eine Steigung
     von null ist die Regelsteigung des Durchmessers
     (``standards.regular_pitch``), wie sie ein Normgewinde dieser Größe hätte.
+    Eine Größe jeder Reihe nennt ihre Tabellenwerte (:func:`thread_dims`).
     """
-    if size != CUSTOM_SIZE:
-        screw = standards.screw(size)
-        return screw.nominal, screw.pitch
-    return diameter, pitch if pitch > 0.0 else standards.regular_pitch(diameter)
+    dims = thread_dims(size, diameter, pitch)
+    return dims.nominal, dims.pitch
 
 
 THREAD_WITHOUT_CORE = _(
@@ -1418,22 +1732,54 @@ THREAD_WITHOUT_CORE = _(
     "Eine feinere Steigung, einen größeren Durchmesser oder weniger Spiel wählen."
 )
 
+#: Wie viele Stationen ein Gewinde am Netz höchstens hat: Sehnen je Umlauf
+#: (``shapes.turn_segments``) mal Umläufe über die Länge. Dieselbe Frage wie
+#: ``units.FINEST_PITCH``, über den ganzen Körper gestellt: Der Bau nimmt keinen
+#: Abbruch entgegen, und ein Ø 1000 mit 0,25 mm Steigung über 200 mm wären
+#: 192 700 Stationen, im Whitworth-Profil vier Millionen Dreiecke — Minuten ohne
+#: Ausweg. 2 hoch 16 lassen jede Tabellengröße in jeder Länge zu (die meisten hat
+#: M1.6 über 200 mm mit 27 600) und Ø 1000 mit der Regelsteigung (8 900) ebenso;
+#: begrenzt wird nur, was groß und fein zugleich ist: über 200 mm Länge Ø 100
+#: unter 0,3 mm Steigung, Ø 1000 unter 0,74 mm.
+MOST_THREAD_STATIONS: Final = 2**16
 
-def thread_problem(nominal: float, pitch: float, play: float) -> ValidationError | None:
+
+def thread_stations(
+    nominal: float, pitch: float, length: float, profile: ThreadProfile = "flat"
+) -> int:
+    """Wie viele Stationen der Gang dieses Gewindes am Netz bekommt — mit dem Vorlauf."""
+    segments = shapes.turn_segments(nominal / 2.0 + shapes.ridge_depth(pitch, profile))
+    return segments * math.ceil(length / pitch + 2.0)
+
+
+def thread_problem(
+    nominal: float,
+    pitch: float,
+    play: float,
+    profile: ThreadProfile = "flat",
+    length: float | None = None,
+) -> ValidationError | None:
     """Warum ein Gewinde dieses Maßes nicht gebaut wird — oder ``None``.
 
     **Die eine Regel für Bau, Erklärung und Gegenstück** (``_printed_thread``,
-    ``_thread_reason``, ``counterpart.thread_values_for``). Zwei Absagen:
+    ``_thread_reason``, ``counterpart.thread_values_for``). Drei Absagen:
 
     * eine Steigung feiner als ``units.FINEST_PITCH``: Darunter wächst das Netz
       ohne Grenze, und der Bau nimmt keinen Abbruch entgegen;
+    * eine Steigung gröber als ``units.COARSEST_PITCH`` — erreichbar seit den
+      Gängen je Zoll (RM-544), denn weniger als 1,27 Gänge je Zoll sind mehr als
+      20 mm je Umdrehung;
     * ein Bolzen ohne tragenden Kern: Geprüft wird **der Bolzen des Maßes**,
       auch für ein Innengewinde, denn eines, zu dem es keinen Bolzen gibt, hat
-      kein Gegenstück. Sein Kern — Nennmaß minus Spiel minus zwei Gangtiefen —
-      muss mehr als ``units.THREAD_MIN_CORE_SHARE`` seines Außenmaßes behalten,
-      dieselbe Regel wie bei *Schraube erstellen*. Bis zum 06.10.2026 genügte
-      hier jeder Kern über 10⁻⁶ mm: Ø 2 x 1,6 baute einen Bolzen mit 0,04 mm
-      Kern.
+      kein Gegenstück. Sein Kern — Nennmaß minus Spiel minus zwei Gangtiefen
+      seines Profils — muss mehr als ``units.THREAD_MIN_CORE_SHARE`` seines
+      Außenmaßes behalten, dieselbe Regel wie bei *Schraube erstellen*. Bis zum
+      06.10.2026 genügte hier jeder Kern über 10⁻⁶ mm: Ø 2 x 1,6 baute einen
+      Bolzen mit 0,04 mm Kern.
+
+    Mit ``length`` dazu ein Netz über :data:`MOST_THREAD_STATIONS` — groß und
+    fein zugleich (RM-544: seit den Gängen je Zoll ist das feine Ende eine Ecke
+    des Bereichs).
     """
     if 0.0 < pitch < FINEST_PITCH - EPS_GEOM:
         return ValidationError(
@@ -1446,21 +1792,76 @@ def thread_problem(nominal: float, pitch: float, play: float) -> ValidationError
             values={"minimum": FINEST_PITCH, "pitch": pitch},
             constraint="finest_pitch",
         )
+    if pitch > COARSEST_PITCH + EPS_GEOM:
+        return ValidationError(
+            "tpi",
+            _(
+                "Gröber als {coarsest} Steigung baut kein Gewinde. Mehr Gänge je Zoll wählen "
+                "oder null für die Reihe der Gewindeform.",
+                coarsest=format_length(COARSEST_PITCH),
+            ),
+            values={"maximum": COARSEST_PITCH, "pitch": pitch},
+            constraint="coarsest_pitch",
+        )
+    share = shapes.DEPTH_SHARE[profile]
     major = nominal - play
-    if major - 2.0 * pitch * shapes.RIDGE_SHARE <= THREAD_MIN_CORE_SHARE * major:
+    if major - 2.0 * pitch * share <= THREAD_MIN_CORE_SHARE * major:
         return ValidationError(
             "pitch",
             THREAD_WITHOUT_CORE,
             values={
-                "maximum": max(major, 0.0)
-                * (1.0 - THREAD_MIN_CORE_SHARE)
-                / (2.0 * shapes.RIDGE_SHARE),
+                "maximum": max(major, 0.0) * (1.0 - THREAD_MIN_CORE_SHARE) / (2.0 * share),
                 "pitch": pitch,
                 "play": play,
             },
             constraint="no_core",
         )
+    if length is not None and thread_stations(nominal, pitch, length, profile) > (
+        MOST_THREAD_STATIONS
+    ):
+        return ValidationError(
+            "length",
+            _(
+                "So groß, fein und lang wird das Gewinde zu einem Netz, das sich nicht in "
+                "vertretbarer Zeit rechnen lässt. Eine gröbere Steigung oder eine kürzere Länge "
+                "wählen."
+            ),
+            values={"pitch": pitch, "length": length, "diameter": nominal},
+            constraint="too_fine_for_its_size",
+        )
     return None
+
+
+TAPER_TOO_DEEP = _(
+    "So lang wird das kegelige Innengewinde in der Tiefe zu eng für einen tragenden Kern. "
+    "Eine kürzere Länge wählen."
+)
+
+
+def _taper_problem(
+    dims: ThreadDims, length: float, internal: bool, play: float
+) -> ValidationError | None:
+    """Ob ein kegeliges Innengewinde über seine Länge zu eng wird — oder ``None``.
+
+    Das Innengewinde hat seine Bezugsebene an der Mündung und wird nach innen
+    enger, je 16 mm Länge um einen Millimeter im Durchmesser: R 1/16 nach 200 mm
+    hätte keinen Durchmesser mehr. Geprüft wird an der engsten Stelle mit
+    derselben Kernregel wie überall (:func:`thread_problem`). Ein Außengewinde
+    wird zur Spitze hin enger, aber seine Spitze liegt immer ``gauge`` vor der
+    Bezugsebene — die Länge macht es nur am Fuß weiter.
+    """
+    if not dims.tapered or not internal:
+        return None
+    narrowest = dims.nominal - 2.0 * standards.PIPE_TAPER * length
+    problem = thread_problem(narrowest, dims.pitch, play, dims.profile)
+    if problem is None:
+        return None
+    return ValidationError(
+        "length",
+        TAPER_TOO_DEEP,
+        values={"length": length, "narrowest_mm": narrowest},
+        constraint="taper_too_deep",
+    )
 
 
 def _thread_reason(params: ThreadParams) -> TranslatableText | str | None:
@@ -1470,19 +1871,24 @@ def _thread_reason(params: ThreadParams) -> TranslatableText | str | None:
     Bau dort richtig ablehnte — die Absage war nur nicht erklärt (Review RM-532,
     F1).
     """
-    nominal, pitch = thread_measure(params.size, params.diameter, params.pitch)
-    problem = thread_problem(nominal, pitch, params.play)
+    dims = thread_of(params)
+    problem = thread_problem(
+        dims.nominal, dims.pitch, params.play, dims.profile, params.length + dims.lead
+    )
+    if problem is None:
+        problem = _taper_problem(dims, params.length, params.internal, params.play)
     return None if problem is None else problem.detail
 
 
 def _printed_thread(
-    nominal: float,
-    pitch: float,
+    dims: ThreadDims,
     length: float,
     internal: bool,
     play: float,
     *,
     bottom: float | None = None,
+    tip_at_top: bool = True,
+    reference: float | None = None,
 ) -> PartResult:
     """Baut das Gewinde für Bausteine, die mit seinen Maßen zusammenpassen.
 
@@ -1493,37 +1899,89 @@ def _printed_thread(
     wächst von null nach oben. Wer das Gewinde woanders braucht (die Schraube
     unter ihrem Kopf, die Mutter um ihre Höhe), sagt es hier, statt den
     fertigen Körper zu bewegen — exakt kostet jede Bewegung Sekunden.
+
+    **Ein kegeliges Rohrgewinde** (RM-544) hat seine Bezugsebene innen an der
+    Mündung, also am oberen Ende, und außen ``gauge`` Millimeter vor seiner
+    Spitze — oben, wo es auf einer Fläche steht (``tip_at_top``), unten, wo es
+    unter einem Kopf hängt. In der Bezugsebene hat es sein Nennmaß; das Paar
+    trifft sich dort, wenn das Außengewinde um ``gauge`` eingeschraubt ist.
+    Wer die Bezugsebene woanders braucht — der Stift in einem kegeligen
+    Innengewinde an dessen Mündung —, nennt ihre Höhe als ``reference``.
     """
-    problem = thread_problem(nominal, pitch, play)
+    problem = thread_problem(dims.nominal, dims.pitch, play, dims.profile, length + dims.lead)
+    if problem is None:
+        problem = _taper_problem(dims, length, internal, play)
     if problem is not None:
         raise problem
     # Das Innenwerkzeug ist Kern plus Spiel, und die Nut reicht von dort
     # hinaus; der Bolzen ist das Nennmaß minus Spiel.
-    depth = pitch * shapes.RIDGE_SHARE
-    diameter = nominal - 2.0 * depth + play if internal else nominal - play
+    depth = dims.depth
+    diameter = dims.nominal - 2.0 * depth + play if internal else dims.nominal - play
     built = length
     if bottom is None:
         bottom = -length if internal else 0.0
         # Das Werkzeug reicht ein Hundertstel über die Mündung hinaus (§39); der
         # Gang beginnt trotzdem unten, die Phase hängt an ``bottom``.
         built = length + BOOLEAN_OVERLAP if internal else length
+    slope, level = _taper_frame(dims, bottom, length, internal, tip_at_top)
+    if reference is not None and dims.tapered:
+        level = reference
 
     # Kern plus Gang, auf Länge geschnitten — wie das entsteht, weiß ``build``
     # je Kern; die Maße stehen hier.
-    body = threaded(diameter, pitch, built, internal=internal, bottom=bottom)
+    body = threaded(
+        diameter,
+        dims.pitch,
+        built,
+        internal=internal,
+        bottom=bottom,
+        profile=dims.profile,
+        starts=dims.starts,
+        left=dims.left,
+        taper=slope,
+        reference=level,
+    )
     return result(
         body,
-        _thread_feature(nominal, pitch, play, (0.0, 0.0, bottom + length / 2.0), internal, length),
+        _thread_feature(
+            dims,
+            play,
+            (0.0, 0.0, bottom + length / 2.0),
+            internal,
+            length,
+            slope=slope,
+            reference=level,
+        ),
     )
 
 
+def _taper_frame(
+    dims: ThreadDims, bottom: float, length: float, internal: bool, tip_at_top: bool
+) -> tuple[float, float]:
+    """Kegel und Bezugshöhe eines Gewindes: Zuwachs des Halbmessers je Millimeter Höhe.
+
+    Zylindrisch ist beides null und die Bezugshöhe ``bottom``. Innen liegt die
+    Bezugsebene an der Mündung oben, und nach unten wird es enger; außen liegt
+    sie ``gauge`` vor der Spitze, und zur Spitze hin wird es enger.
+    """
+    if not dims.tapered:
+        return 0.0, bottom
+    if internal:
+        return standards.PIPE_TAPER, bottom + length
+    if tip_at_top:
+        return -standards.PIPE_TAPER, bottom + length - dims.gauge
+    return standards.PIPE_TAPER, bottom + dims.gauge
+
+
 def _thread_feature(
-    nominal: float,
-    pitch: float,
+    dims: ThreadDims,
     play: float,
     centre: tuple[float, float, float],
     internal: bool,
     length: float,
+    *,
+    slope: float = 0.0,
+    reference: float = 0.0,
 ) -> tuple[str, Feature]:
     """Das Merkmal eines gedruckten Gewindes: das gebaute Maß und das Nennmaß daneben.
 
@@ -1536,18 +1994,31 @@ def _thread_feature(
     Das Nennmaß steht als ``nominal`` daneben: Die Passungsprüfung weiß daran,
     dass diese Hälfte das Spiel des Materials trägt (``fits._thread_wanted``),
     und das Gegenstück findet sein Maß (``counterpart.thread_values_for``).
+    Eine Tabellengröße nennt sich dazu selbst (``size``, RM-544) — „G1/2“ ist
+    am Maß allein nicht von einem eigenen Maß mit 14 Gängen je Zoll zu
+    unterscheiden. Ein kegeliges Gewinde nennt sein Maß in der Mitte, wie der
+    exakte Leser (``brep.thread.thread_features``).
     """
+    nominal = dims.nominal + 2.0 * slope * (centre[2] - reference)
     identifier, feature = thread(
         "thread_1",
         nominal + play if internal else nominal - play,
-        pitch,
+        dims.pitch,
         centre,
         internal=internal,
         length=length,
+        left=dims.left,
+        starts=dims.starts,
+        taper=slope,
     )
+    extra: dict[str, Any] = {"nominal": nominal}
+    if dims.size:
+        extra["size"] = dims.size
+    if dims.profile != "flat":
+        extra["profile"] = dims.profile
     return identifier, replace(
         feature,
-        params={**feature.params, "nominal": nominal},
+        params={**feature.params, **extra},
         measure_sources={**feature.measure_sources, "nominal": "parameter"},
     )
 
@@ -1567,18 +2038,60 @@ SEPARATE_PARTS_KEEP_THEIR_PLAY = PartChange(
 )
 
 
+def _head_of(dims: ThreadDims) -> standards.Screw:
+    """Kopf und Löcher zur Schraube eines Gewindes: metrisch aus der Tabelle, sonst abgeleitet.
+
+    Zoll- und Rohrgewinde führen keine Köpfe (RM-544): Sie nehmen die metrische
+    Reihe beim Nennmaß, wie ein eigenes Maß, und :func:`_derived_thread` sagt es.
+    """
+    if dims.size and standards.thread_family(dims.size) == "metric":
+        return standards.screw(dims.size)
+    return standards.derived_screw(dims.nominal)
+
+
+def _nut_for(dims: ThreadDims) -> standards.Nut:
+    """Die Mutter zu einem Gewinde: metrisch aus der Tabelle, sonst abgeleitet."""
+    if dims.size and dims.size in standards.load().nuts:
+        return standards.nut(dims.size)
+    return standards.derived_nut(dims.nominal)
+
+
+def _derived_thread(made: PartResult, dims: ThreadDims) -> PartResult:
+    """Sagt am Ergebnis, was an Kopf und Mutter abgeleitet ist (:func:`_derived`, RM-544).
+
+    Ein eigenes Maß wie bisher; eine Zoll- oder Rohrgröße ist als Gewinde
+    genormt, ihr Kopf und ihre Mutter aber stehen in keiner Tabelle der
+    Bibliothek — der Satz nennt die Größe und dass beides aus der metrischen
+    Reihe abgeleitet ist.
+    """
+    if not dims.size:
+        return _derived(made, CUSTOM_SIZE, dims.nominal)
+    if standards.thread_family(dims.size) == "metric":
+        return made
+    made.findings.append(
+        Finding(
+            code="parts.derived_size",
+            severity="info",
+            message=_(
+                "{size}: Das Gewinde folgt der Norm, Kopf und Mutter sind aus den metrischen "
+                "Normgrößen daneben abgeleitet.",
+                size=dims.size,
+            ),
+            values={"diameter_mm": dims.nominal, "size": dims.size},
+        )
+    )
+    return made
+
+
 @op_params
 class PrintedScrewParams(BaseParams):
-    size: str = param(
-        title=_("Größe"),
-        default="M5",
-        choices=(*_SCREWS, CUSTOM_SIZE),
-        doc=_("Nenndurchmesser und Steigung des passenden gedruckten Gewindes."),
+    size: str = _thread_size_param(
+        _("Nenndurchmesser und Steigung des passenden gedruckten Gewindes."), "M5"
     )
     diameter: float = _nominal_param(
         _(
-            "Der Durchmesser, wie die Zahl hinter dem M; die Steigung ist die Regelsteigung "
-            "dazu. Ohne Normgröße ist der Kopf aus den Normgrößen daneben abgeleitet."
+            "Der Durchmesser, wie die Zahl hinter dem M. Ohne Normgröße ist der Kopf aus den "
+            "Normgrößen daneben abgeleitet."
         ),
         placement="advanced",
     )
@@ -1598,6 +2111,11 @@ class PrintedScrewParams(BaseParams):
             "selben rücknehmbaren Schritt passend an."
         ),
     )
+    form: str = _form_param()
+    pitch: float = _pitch_param()
+    tpi: float = _tpi_param()
+    starts: int = _starts_param()
+    left_hand: bool = _left_param()
     play: float = play_param()
 
 
@@ -1636,11 +2154,14 @@ class PrintedScrewParams(BaseParams):
         SEPARATE_PARTS_KEEP_THEIR_PLAY,
         THREAD_MESH_WHOLE_TURNS,
     ],
+    feasible=lambda raw: _fastener_reason(raw),
+    mirrored_by="left_hand",
 )
 def printed_screw(raw: BaseParams) -> PartResult:
     """Eine Schraube, deren Gewinde und Kopf an derselben Bohrung sitzen."""
     params = cast(PrintedScrewParams, raw)
-    screw = _screw_of(params.size, params.diameter)
+    dims = thread_of(params)
+    screw = _head_of(dims)
     diameter = screw.nominal - params.play
     # **Auch der Kopf hat Spiel zu seinem Sitz** (RM-276). Er lag ohne Abstand
     # auf dem Träger, und an Ort und Stelle in einem Stück gedruckt verschweißte
@@ -1660,9 +2181,11 @@ def printed_screw(raw: BaseParams) -> PartResult:
         # z = 0 und damit vollständig **über** der Fläche.
         head = shapes.moved(head, (0.0, 0.0, -head_height))
     else:
-        # Mit eigenem Maß ist der Kopf über die Flächen eine Schlüsselweite der
-        # Reihe, keine gerechnete Zwischengröße (Review RM-532 Runde 2, K-N2).
-        across = standards.wrench_size(screw.head) if params.size == CUSTOM_SIZE else screw.head
+        # Mit eigenem oder abgeleitetem Maß ist der Kopf über die Flächen eine
+        # Schlüsselweite der Reihe, keine gerechnete Zwischengröße (Review RM-532
+        # Runde 2, K-N2).
+        metric = bool(dims.size) and standards.thread_family(dims.size) == "metric"
+        across = screw.head if metric else standards.wrench_size(screw.head)
         head = shapes.moved(shapes.hexagon(across, screw.head_height), (0.0, 0.0, thread_top))
 
     # Die Länge meint ausdrücklich das Gewinde **unter** dem Kopf. Beim
@@ -1671,15 +2194,17 @@ def printed_screw(raw: BaseParams) -> PartResult:
     # und lag damit um die ganze Kopfhöhe im Kopf. Bei kurzen Schrauben blieb
     # kein Gang außerhalb des Kegels, bei langen zerfiel die Vereinigung an
     # einzelnen Normgrößen. Ein kleiner Überstand verbindet beide Körper
-    # robust, ohne das zugesagte Längenmaß sichtbar zu verändern.
+    # robust, ohne das zugesagte Längenmaß sichtbar zu verändern. Ein
+    # kegeliges Gewinde hat seine Spitze unten (``tip_at_top``).
+    bottom = thread_top - params.length + BOOLEAN_OVERLAP
     shank = form_of(
         _printed_thread(
-            screw.nominal,
-            screw.pitch,
+            dims,
             params.length,
             internal=False,
             play=params.play,
-            bottom=thread_top - params.length + BOOLEAN_OVERLAP,
+            bottom=bottom,
+            tip_at_top=False,
         )
     )
 
@@ -1689,18 +2214,43 @@ def printed_screw(raw: BaseParams) -> PartResult:
     # STEP ungültig zurück. Die Schraube ist ohnehin ein lösbares Teil.
     joined = compound if shapes.building_exact() and params.countersunk else union
     body = joined(head, shank)
+    slope, reference = _taper_frame(dims, bottom, params.length, False, False)
     made = result(
         body,
         _thread_feature(
-            screw.nominal,
-            screw.pitch,
+            dims,
             params.play,
             (0.0, 0.0, thread_top - params.length / 2.0),
             False,
             params.length,
+            slope=slope,
+            reference=reference,
         ),
     )
-    return _derived(made, params.size, params.diameter)
+    return _derived_thread(made, dims)
+
+
+def _fastener_reason(raw: BaseParams) -> TranslatableText | str | None:
+    """Die erklärte Bedingung von Schraube und Mutter: das Gewinde aus derselben Regel.
+
+    Bis RM-544 hatten beide nur Tabellengrößen und die Regelsteigung eines
+    eigenen Maßes, und jedes davon trug einen Kern. Mit eigener Steigung und
+    Gängen je Zoll kann ein eigenes Maß keinen mehr haben; die Absage kommt aus
+    :func:`thread_problem`, wie beim Gewinde.
+    """
+    dims = thread_of(raw)
+    # Die Mutter hat keine Länge im Schema: Ihr Gewinde ist so hoch wie sie.
+    length = float(getattr(raw, "length", 0.0) or 0.0)
+    if not length:
+        length = _nut_for(dims).height + 2.0 * BOOLEAN_OVERLAP
+    problem = thread_problem(
+        dims.nominal,
+        dims.pitch,
+        float(getattr(raw, "play", 0.0)),
+        dims.profile,
+        length + dims.lead,
+    )
+    return None if problem is None else problem.detail
 
 
 def _printed_screw_countersink(raw: BaseParams) -> PartResult | None:
@@ -1709,7 +2259,7 @@ def _printed_screw_countersink(raw: BaseParams) -> PartResult | None:
     if not params.countersunk:
         return None
 
-    screw = _screw_of(params.size, params.diameter)
+    screw = _head_of(thread_of(params))
     # **Die Senkung steht um das Spiel vom Kopf ab** (RM-276): Sie war der Kopf
     # selbst — dieselbe 90°-Flanke, derselbe Außendurchmesser —, und an Ort und
     # Stelle gedruckt verschweißten beide. Die Flanke rückt jetzt senkrecht zu
@@ -1724,19 +2274,20 @@ def _printed_screw_countersink(raw: BaseParams) -> PartResult | None:
 
 @op_params
 class PrintedNutParams(BaseParams):
-    size: str = param(
-        title=_("Größe"),
-        default="M5",
-        choices=(*_NUTS, CUSTOM_SIZE),
-        doc=_("Nenndurchmesser und Steigung des passenden gedruckten Gewindes."),
+    size: str = _thread_size_param(
+        _("Nenndurchmesser und Steigung des passenden gedruckten Gewindes."), "M5"
     )
     diameter: float = _nominal_param(
         _(
-            "Der Durchmesser, wie die Zahl hinter dem M; die Steigung ist die Regelsteigung "
-            "dazu. Ohne Normgröße sind Schlüsselweite und Höhe aus den Normgrößen daneben "
-            "abgeleitet."
+            "Der Durchmesser, wie die Zahl hinter dem M. Ohne Normgröße sind Schlüsselweite "
+            "und Höhe aus den Normgrößen daneben abgeleitet."
         )
     )
+    form: str = _form_param()
+    pitch: float = _pitch_param()
+    tpi: float = _tpi_param()
+    starts: int = _starts_param()
+    left_hand: bool = _left_param()
     play: float = play_param()
 
 
@@ -1764,41 +2315,42 @@ class PrintedNutParams(BaseParams):
         SEPARATE_PARTS_KEEP_THEIR_PLAY,
         THREAD_MESH_WHOLE_TURNS,
     ],
+    feasible=lambda raw: _fastener_reason(raw),
+    mirrored_by="left_hand",
 )
 def printed_nut(raw: BaseParams) -> PartResult:
-    """Eine Sechskantmutter, deren Innengewinde zum gedruckten Bolzen passt."""
+    """Eine Sechskantmutter, deren Innengewinde zum gedruckten Bolzen passt.
+
+    Ein kegeliges Rohrgewinde (RM-544) hat seine Bezugsebene oben: Von dort
+    wird die Mutter nach unten enger, wie ein Rohrstück, in das von oben
+    geschraubt wird.
+    """
     params = cast(PrintedNutParams, raw)
-    nut = _nut_of(params.size, params.diameter)
+    dims = thread_of(params)
+    nut = _nut_for(dims)
     depth = nut.height + 2.0 * BOOLEAN_OVERLAP
     # Wie der Schraubenkopf steht die Mutter um das Spiel über der Fläche, auf
     # der sie sitzt (RM-276): Ohne Abstand verschweißte sie an Ort und Stelle
     # gedruckt mit dem Träger.
     lift = params.play
     # Das Werkzeug reicht ein Hundertstel unter den Boden und über die Decke hinaus.
-    screw = _screw_of(params.size, params.diameter)
-    cutter = form_of(
-        _printed_thread(
-            screw.nominal,
-            screw.pitch,
-            depth,
-            internal=True,
-            play=params.play,
-            bottom=lift - BOOLEAN_OVERLAP,
-        )
-    )
+    bottom = lift - BOOLEAN_OVERLAP
+    cutter = form_of(_printed_thread(dims, depth, internal=True, play=params.play, bottom=bottom))
     body = subtract(shapes.moved(shapes.hexagon(nut.width, nut.height), (0.0, 0.0, lift)), cutter)
+    slope, reference = _taper_frame(dims, bottom, depth, True, True)
     made = result(
         body,
         _thread_feature(
-            screw.nominal,
-            screw.pitch,
+            dims,
             params.play,
             (0.0, 0.0, lift + nut.height / 2.0),
             True,
             nut.height,
+            slope=slope,
+            reference=reference,
         ),
     )
-    return _derived(made, params.size, params.diameter)
+    return _derived_thread(made, dims)
 
 
 #: Das kürzeste Gewinde an einem Bolzenende — dieselbe Untergrenze wie die Länge
@@ -1817,11 +2369,8 @@ THREADED_ROD_ADDED: Final = PartChange(
 
 @op_params
 class ThreadedRodParams(BaseParams):
-    size: str = param(
-        title=_("Größe"),
-        default="M6",
-        choices=(*_SCREWS, CUSTOM_SIZE),
-        doc=_("Nenndurchmesser und Steigung des passenden gedruckten Gewindes."),
+    size: str = _thread_size_param(
+        _("Nenndurchmesser und Steigung des passenden gedruckten Gewindes."), "M6"
     )
     diameter: float = _nominal_param(
         _(
@@ -1830,21 +2379,11 @@ class ThreadedRodParams(BaseParams):
         ),
         placement="advanced",
     )
-    pitch: float = param(
-        title=_("Steigung"),
-        default=0.0,
-        unit="mm",
-        minimum=0.0,
-        maximum=COARSEST_PITCH,
-        placement="advanced",
-        depends_on=("size", (CUSTOM_SIZE,)),
-        doc=_(
-            "Höhenzuwachs je Umdrehung, null nimmt die Regelsteigung des Durchmessers. Eine "
-            "feinere Steigung schneidet nur mit kleinerem Nenndurchmesser weniger tief in die "
-            "Wand."
-        ),
-        zero_text=ZERO_AUTOMATIC,
-    )
+    form: str = _form_param()
+    pitch: float = _pitch_param()
+    tpi: float = _tpi_param()
+    starts: int = _starts_param()
+    left_hand: bool = _left_param()
     length: float = param(
         title=_("Länge"),
         default=30.0,
@@ -1881,9 +2420,15 @@ class ThreadedRodParams(BaseParams):
     play: float = play_param()
 
 
-def _rod_chamfer(chosen: float, pitch: float) -> float:
+def _rod_chamfer(chosen: float, dims: ThreadDims) -> float:
     """Die Höhe der Kuppe: eingetragen, sonst so hoch, wie ein Gang tief ist."""
-    return chosen or pitch * shapes.RIDGE_SHARE
+    return chosen or dims.depth
+
+
+def _rod_tip(dims: ThreadDims, play: float) -> float:
+    """Der Außendurchmesser des Bolzens an seinen Enden — am Kegel das kleine Ende."""
+    tip = dims.nominal - 2.0 * standards.PIPE_TAPER * dims.gauge if dims.tapered else dims.nominal
+    return tip - play
 
 
 def _rod_problem(params: ThreadedRodParams) -> tuple[str, TranslatableText | str] | None:
@@ -1894,13 +2439,15 @@ def _rod_problem(params: ThreadedRodParams) -> tuple[str, TranslatableText | str
     Stiftschraube an ihrer Gewindelänge, eine automatische Fase an Größe und
     Spiel, nicht an einem Feld, das auf Null steht.
     """
-    nominal, pitch = thread_measure(params.size, params.diameter, params.pitch)
-    problem = thread_problem(nominal, pitch, params.play)
+    dims = thread_of(params)
+    problem = thread_problem(
+        dims.nominal, dims.pitch, params.play, dims.profile, params.length + dims.lead
+    )
     if problem is not None:
         detail = problem.detail if problem.detail is not None else str(problem)
         return problem.field or "pitch", detail
-    chamfer = _rod_chamfer(params.chamfer, pitch)
-    core = nominal - params.play - 2.0 * pitch * shapes.RIDGE_SHARE
+    chamfer = _rod_chamfer(params.chamfer, dims)
+    core = _rod_tip(dims, params.play) - 2.0 * dims.depth
     if chamfer > core / 4.0:
         if not params.chamfer:
             return "play", _(
@@ -1925,9 +2472,10 @@ def _rod_problem(params: ThreadedRodParams) -> tuple[str, TranslatableText | str
                 "Gewindelänge oder null für ein durchgehendes Gewinde.",
                 shortest=format_length(_SHORTEST_ROD_THREAD),
             )
-    elif params.length - 2.0 * chamfer < _SHORTEST_ROD_THREAD:
+    elif params.length - 2.0 * chamfer < _SHORTEST_ROD_THREAD * (2.0 if dims.tapered else 1.0):
         # Durchgehend ist es **ein** Gewinde zwischen zwei Kuppen, wie der Bau es
         # legt; je halbe Länge gezählt baute die Mindestlänge nie (Review G-a).
+        # Ein kegeliges sind zwei, je eines von jedem Ende bis zur Mitte.
         return "length", _(
             "Zwischen den Fasen bleibt weniger als {shortest} Gewinde. Wählen Sie einen "
             "längeren Bolzen oder eine kleinere Fase.",
@@ -1961,13 +2509,14 @@ def _rod_reason(raw: BaseParams) -> TranslatableText | str | None:
     ),
     changes=[THREADED_ROD_ADDED],
     feasible=_rod_reason,
+    mirrored_by="left_hand",
 )
 def threaded_rod(raw: BaseParams) -> PartResult:
     """Ein Bolzen ohne Kopf aus demselben Gewindekern wie *Druckbares Gewinde*.
 
     Die Gänge baut :func:`_printed_thread` — derselbe Kamm, dasselbe Spiel,
     dieselbe Phase wie beim Gewinde auf einer Fläche und bei der Mutter, die
-    darauf passt; die Normmaße kommen aus :func:`thread_measure`. Eigen ist nur,
+    darauf passt; die Normmaße kommen aus :func:`thread_of`. Eigen ist nur,
     was einen Bolzen ausmacht: die Gesamtlänge, ein glatter Schaft zwischen zwei
     Gewinden und an beiden Enden eine kegelige Kuppe bis auf den Kern.
 
@@ -1975,6 +2524,10 @@ def threaded_rod(raw: BaseParams) -> PartResult:
     Wendel tessellierte am exakten Kern je nach Größe undicht (M6, M12, M24
     gemessen); die Kuppe sitzt deshalb vor dem Gewinde und geht knapp unter dem
     Kerndurchmesser in den Kern über.
+
+    **Ein kegeliges Rohrgewinde** (RM-544) wird zu beiden Enden hin enger, wie
+    ein Doppelnippel: Durchgehend sind es zwei Gewinde, die sich in der Mitte
+    treffen, sonst je eines an jedem Ende mit dem Schaft dazwischen.
     """
     params = cast(ThreadedRodParams, raw)
     problem = _rod_problem(params)
@@ -1984,28 +2537,46 @@ def threaded_rod(raw: BaseParams) -> PartResult:
             detail=problem[1],
             suggestions=(CHANGE_THIS_STEP,),
         )
-    nominal, pitch = thread_measure(params.size, params.diameter, params.pitch)
-    chamfer = _rod_chamfer(params.chamfer, pitch)
-    crest = nominal - params.play
+    dims = thread_of(params)
+    chamfer = _rod_chamfer(params.chamfer, dims)
     length = params.length
-    if not params.thread_length:
-        runs: tuple[tuple[float, float], ...] = ((chamfer, length - 2.0 * chamfer),)
-        body = form_of(
-            _printed_thread(nominal, pitch, runs[0][1], False, params.play, bottom=chamfer)
-        )
+    pieces: list[tuple[float, float, bool]] = []
+    if not params.thread_length and not dims.tapered:
+        pieces.append((chamfer, length - 2.0 * chamfer, True))
+        body = form_of(_printed_thread(dims, pieces[0][1], False, params.play, bottom=chamfer))
     else:
-        reach = params.thread_length
-        runs = ((chamfer, reach - chamfer), (length - reach, reach - chamfer))
-        lower, upper = (
-            form_of(_printed_thread(nominal, pitch, run, False, params.play, bottom=bottom))
-            for bottom, run in runs
+        reach = params.thread_length or length / 2.0
+        upper_start = length - reach
+        pieces = [(chamfer, reach - chamfer, False), (upper_start, reach - chamfer, True)]
+        # Das untere Gewinde hat seine Spitze unten, das obere oben. Durchgehend
+        # treffen sich beide in der Mitte und überdecken sich dort um ein
+        # Hundertstel, damit die Vereinigung eine Fläche teilt statt zu berühren.
+        joint = BOOLEAN_OVERLAP if not params.thread_length else 0.0
+        lower = form_of(
+            _printed_thread(
+                dims, reach - chamfer + joint, False, params.play, bottom=chamfer, tip_at_top=False
+            )
         )
-        shank = shapes.moved(
-            shapes.cylinder(crest, length - 2.0 * reach + 2.0 * BOOLEAN_OVERLAP),
-            (0.0, 0.0, reach - BOOLEAN_OVERLAP),
+        upper = form_of(
+            _printed_thread(
+                dims,
+                reach - chamfer + joint,
+                False,
+                params.play,
+                bottom=upper_start - joint,
+                tip_at_top=True,
+            )
         )
-        body = union(lower, shank, upper)
-    inner = crest - 2.0 * pitch * shapes.RIDGE_SHARE - 2.0 * BOOLEAN_OVERLAP
+        if params.thread_length:
+            crest = _rod_shank(dims, params.play, reach - chamfer)
+            shank = shapes.moved(
+                shapes.cylinder(crest, length - 2.0 * reach + 2.0 * BOOLEAN_OVERLAP),
+                (0.0, 0.0, reach - BOOLEAN_OVERLAP),
+            )
+            body = union(lower, shank, upper)
+        else:
+            body = union(lower, upper)
+    inner = _rod_tip(dims, params.play) - 2.0 * dims.depth - 2.0 * BOOLEAN_OVERLAP
     tip = inner - 2.0 * chamfer
     rise = chamfer + BOOLEAN_OVERLAP
     body = union(
@@ -2013,16 +2584,35 @@ def threaded_rod(raw: BaseParams) -> PartResult:
         body,
         shapes.moved(shapes.cone(inner, tip, rise), (0.0, 0.0, length - rise)),
     )
-    features = [
-        (
-            f"thread_{index}",
-            replace(
-                _thread_feature(
-                    nominal, pitch, params.play, (0.0, 0.0, bottom + run / 2.0), False, run
-                )[1],
-                id=f"thread_{index}",
-            ),
+    features = []
+    for index, (bottom, run, tip_at_top) in enumerate(pieces, start=1):
+        slope, reference = _taper_frame(dims, bottom, run, False, tip_at_top)
+        features.append(
+            (
+                f"thread_{index}",
+                replace(
+                    _thread_feature(
+                        dims,
+                        params.play,
+                        (0.0, 0.0, bottom + run / 2.0),
+                        False,
+                        run,
+                        slope=slope,
+                        reference=reference,
+                    )[1],
+                    id=f"thread_{index}",
+                ),
+            )
         )
-        for index, (bottom, run) in enumerate(runs, start=1)
-    ]
     return result(body, *features)
+
+
+def _rod_shank(dims: ThreadDims, play: float, run: float) -> float:
+    """Der Durchmesser des glatten Schafts: der Kamm, wo das Gewinde in ihn übergeht.
+
+    Zylindrisch ist das das Nennmaß minus Spiel; kegelig ist das Gewinde dort
+    am weitesten, ``run`` hinter seiner Spitze.
+    """
+    if not dims.tapered:
+        return dims.nominal - play
+    return _rod_tip(dims, play) + 2.0 * standards.PIPE_TAPER * run

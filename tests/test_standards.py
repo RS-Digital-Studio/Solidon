@@ -228,7 +228,7 @@ def test_the_metric_series_runs_from_m1_6_to_m64_in_every_table() -> None:
     assert tuple(tables.screws) == expected
     assert set(tables.nuts) == set(expected)
     assert set(tables.washers) == set(expected)
-    assert tables.version == "13"
+    assert tables.version == "14"
 
 
 @pytest.mark.parametrize(
@@ -449,3 +449,160 @@ def test_a_derived_hexagon_takes_a_wrench_size_of_the_series() -> None:
         assert standards.derived_nut(diameter).width in tables.wrenches, diameter
     beyond = standards.derived_nut(70.0).width
     assert beyond > max(tables.wrenches) and beyond not in tables.wrenches
+
+
+# --- Zoll- und Rohrgewinde (Tabellenversion 14, RM-544) ---------------------------
+
+INCH = 25.4
+
+
+def _rows(family: str) -> list[standards.Thread]:
+    return [row for row in standards.load().threads.values() if row.family == family]
+
+
+@pytest.mark.parametrize(
+    ("size", "field", "wanted"),
+    [
+        # ISO 228-1 nach Wikipedia „British Standard Pipe“: G 1/2 d 20,955, d1 18,631.
+        ("G1/2", "nominal", 20.955),
+        ("G1/2", "minor", 18.631),
+        ("G1", "minor", 30.291),
+        # ISO 7-1: R 1/2 hat seine Bezugsebene 8,2 mm über dem kleinen Ende.
+        ("R1/2", "gauge", 8.2),
+        # ASME B1.1: 1/4-20 UNC hat 0,2500 Zoll außen; #10-32 UNF 0,1900 Zoll.
+        ("1/4-20 UNC", "nominal", 0.25 * INCH),
+        ("#10-32 UNF", "nominal", 0.19 * INCH),
+        # ASME B1.20.1: NPT 1/2 E0 = 0,75843 Zoll, L1 = 0,320 Zoll, D = 0,840 Zoll.
+        ("1/2-14 NPT", "pitch_diameter", 0.75843 * INCH),
+        ("1/2-14 NPT", "gauge", 0.320 * INCH),
+        ("1/2-14 NPT", "outside", 0.840 * INCH),
+    ],
+)
+def test_thread_values_match_their_published_source(size: str, field: str, wanted: float) -> None:
+    """Sollwerte von außen, als Zahl der Quelle — nicht aus der Tabelle zurückgelesen."""
+    assert getattr(standards.thread(size), field) == pytest.approx(wanted, abs=1e-3)
+
+
+@pytest.mark.parametrize("size", [row.size for row in _rows("G")])
+def test_every_g_row_agrees_with_its_basic_profile(size: str) -> None:
+    """ISO 228-1: d1 = d − 2·h mit h = 0,640327·P; die Blätter runden h auf drei Stellen."""
+    row = standards.thread(size)
+    assert row.minor is not None
+    assert row.minor == pytest.approx(row.nominal - 2.0 * 0.640327 * row.pitch, abs=0.0011)
+
+
+@pytest.mark.parametrize("size", [row.size for row in _rows("R")])
+def test_every_r_row_is_its_g_size_in_the_gauge_plane(size: str) -> None:
+    """ISO 7-1: In der Bezugsebene hat R die Durchmesser und Gänge von G derselben Größe."""
+    row = standards.thread(size)
+    parallel = standards.thread("G" + size[1:])
+    assert row.nominal == pytest.approx(parallel.nominal)
+    assert row.tpi == pytest.approx(parallel.tpi)
+    assert 0.0 < row.gauge < row.nominal
+
+
+@pytest.mark.parametrize("size", [row.size for row in _rows("UNC") + _rows("UNF")])
+def test_every_unified_row_is_its_inch_designation(size: str) -> None:
+    """ASME B1.1: Der Außendurchmesser steht in der Bezeichnung, #N hat 0,060 + 0,013·N Zoll."""
+    row = standards.thread(size)
+    name, rest = size.split("-", 1)
+    tpi = float(rest.split()[0])
+    if name.startswith("#"):
+        inches = 0.060 + 0.013 * int(name[1:])
+    else:
+        whole, _, fraction = name.rpartition(" ") if " " in name else ("", "", name)
+        top, _, bottom = fraction.partition("/")
+        inches = (float(whole) if whole else 0.0) + (
+            float(top) / float(bottom) if bottom else float(top)
+        )
+    assert row.nominal == pytest.approx(inches * INCH, abs=1e-4)
+    assert row.tpi == pytest.approx(tpi)
+
+
+@pytest.mark.parametrize("size", [row.size for row in _rows("NPT")])
+def test_every_npt_row_agrees_with_the_asme_formulas(size: str) -> None:
+    """ASME B1.20.1: E0 = D − (0,05·D + 1,1)·p in Zoll; das Nennmaß in der Bezugsebene
+    ist E0 + L1/16 + 0,8·p (Gangtiefe 0,8·p um den Flankendurchmesser)."""
+    row = standards.thread(size)
+    assert row.outside is not None and row.pitch_diameter is not None
+    outside, pitch = row.outside / INCH, 1.0 / row.tpi
+    assert row.pitch_diameter / INCH == pytest.approx(
+        outside - (0.05 * outside + 1.1) * pitch, abs=2e-5
+    )
+    assert row.nominal == pytest.approx(
+        row.pitch_diameter + row.gauge / 16.0 + 0.8 * row.pitch, abs=1e-3
+    )
+
+
+def test_within_a_series_no_two_threads_lie_within_the_reach() -> None:
+    """Die Erkennungsgrenze trennt in jeder Reihe jede zylindrische Größe von jeder anderen.
+
+    Zwischen den Reihen gilt das nicht, und das ist die Mehrdeutigkeit, nach der das
+    Gegenstück fragt (``counterpart.AMBIGUOUS_THREAD``, Regel 21): Ein gemessenes
+    M2 x 0,4 ist ebenso #1-64 UNC (Ø 1,854 x 0,397) und #2-64 UNF. Die Paare stehen
+    hier fest, damit eine neue Größe, die eines dazubringt, auffällt.
+    """
+    sizes = [
+        standards.thread_size(size)
+        for size in standards.thread_sizes()
+        if not standards.thread_size(size).tapered
+    ]
+    reach = standards.THREAD_SIZE_REACH
+    direct = [
+        (first.size, second.size)
+        for first, second in itertools.combinations(sizes, 2)
+        if abs(first.nominal - second.nominal) <= reach[0]
+        and abs(first.pitch - second.pitch) <= reach[1]
+    ]
+    assert all(
+        standards.thread_family(first) != standards.thread_family(second)
+        for first, second in direct
+    ), direct
+    assert direct == [
+        ("M2", "#1-64 UNC"),
+        ("M2", "#2-64 UNF"),
+        ("M2.5", "#3-56 UNF"),
+        ("M4", "#8-36 UNF"),
+        ("M5", "#10-32 UNF"),
+    ]
+
+
+def test_a_tapered_thread_without_its_gauge_plane_is_refused(tmp_path: Path) -> None:
+    """Ein kegeliges Gewinde ohne Bezugsebene hätte kein Maß, an dem es gilt."""
+    broken = tmp_path / "taper.toml"
+    broken.write_text(
+        standards._DATA_FILE.read_text(encoding="utf-8")
+        + '\n[[threads]]\nsize = "R7"\nfamily = "R"\nnominal = 180.0\ntpi = 11\n',
+        encoding="utf-8",
+    )
+    with pytest.raises(ValidationError) as caught:
+        standards.load(broken)
+    assert caught.value.field == "threads.R7.gauge_for_taper"
+    assert caught.value.suggestions
+
+
+def test_the_thread_series_never_get_finer_as_they_grow(tmp_path: Path) -> None:
+    """Dieselbe Zusage wie bei den Schrauben: Die Reihe, aus der ein eigenes Zollmaß seine
+    Gänge nimmt (``regular_tpi``), wird mit dem Durchmesser nie feiner."""
+    broken = tmp_path / "finer.toml"
+    broken.write_text(
+        standards._DATA_FILE.read_text(encoding="utf-8")
+        + '\n[[threads]]\nsize = "G7"\nfamily = "G"\nnominal = 190.0\ntpi = 14\n',
+        encoding="utf-8",
+    )
+    with pytest.raises(ValidationError) as caught:
+        standards.load(broken)
+    assert caught.value.field == "threads.G7.pitch_rises"
+
+
+def test_every_thread_size_resolves_and_the_series_keep_their_order() -> None:
+    """Jede Größe der Auswahl hat Maße; die Reihen stehen metrisch, G, R, UNC, UNF, NPT."""
+    sizes = standards.thread_sizes()
+    families = [standards.thread_family(size) for size in sizes]
+    order = [family for family, _ in itertools.groupby(families)]
+    assert order == list(standards.THREAD_FAMILIES)
+    assert len(sizes) == 27 + 24 + 15 + 33 + 23 + 16
+    for size in sizes:
+        entry = standards.thread_size(size)
+        assert entry.nominal > 0.0 and entry.pitch > 0.0
+        assert entry.tapered == (entry.family in standards.TAPERED_FAMILIES)
