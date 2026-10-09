@@ -1,0 +1,133 @@
+diff --git a/app/core/export/handover.py b/app/core/export/handover.py
+index 971fd9031..08ac809e8 100644
+--- a/app/core/export/handover.py
++++ b/app/core/export/handover.py
+@@ -6655,7 +6655,7 @@ def slice_model(
+             )
+             if _says_outside_the_volume(output):
+                 raise _outside_the_volume(setup, profile, output, model_height)
+-            if crashed(completed.returncode):
++            if crashed(completed.returncode, wrapped=_wrapped(setup)):
+                 raise ExternalToolError(
+                     tool=setup.name,
+                     title=SLICER_FAILED,
+@@ -7694,7 +7694,13 @@ def signed_exit_code(exit_code: int) -> int:
+     return exit_code - (1 << 32) if exit_code >= (1 << 31) else exit_code
+ 
+ 
+-def crashed(exit_code: int) -> bool:
++#: Signale, an denen ein Programm stirbt, statt aufzugeben: SIGILL, SIGABRT,
++#: SIGBUS, SIGFPE, SIGKILL und SIGSEGV in Linux' Zählung — ein Starter, der
++#: einen Signaltod als 128 + Signal meldet, gibt es nur dort.
++_FATAL_SIGNALS: Final = frozenset({4, 6, 7, 8, 9, 11})
++
++
++def crashed(exit_code: int, *, wrapped: bool = False) -> bool:
+     """Ist der Slicer abgestürzt, statt ordentlich aufzugeben?
+ 
+     Ein Absturz und ein abgelehnter Auftrag sehen für den Aufrufer gleich aus —
+@@ -7713,14 +7719,33 @@ def crashed(exit_code: int) -> bool:
+     ``NTSTATUS`` mit Fehlerschwere und freiem reserviertem Bit 28. Eigene
+     negative Windows-Rückgabewerte kommen dagegen als unsigned DWORD an:
+     Bambus ``-100`` ist ``0xFFFFFF9C`` und kein gültiger NTSTATUS.
++
++    **Hinter einem Starter** (``wrapped``, :func:`_wrapped`) kommt ein
++    Signaltod als 128 + Signal an: ``flatpak run`` endet in bwrap
++    (``bubblewrap.c``), ``flatpak-spawn --host`` ebenso. Ein SIGSEGV war dort
++    139, und der Kunde las „keine Druckdatei geschrieben“ (RM-621). Die
++    Byteform der Orca-Absagen (-1 bis -110, also 146 bis 255) trifft keines
++    der Signale aus :data:`_FATAL_SIGNALS`.
+     """
+     if exit_code < 0:
+         return True
++    if wrapped and exit_code - 128 in _FATAL_SIGNALS:
++        return True
+     # MS-ERREF §2.3: Schwere 11, N-Bit 0; das Customer-Bit bleibt frei,
+     # damit auch nicht abgefangene C++-Ausnahmen (0xE06D7363) erkannt werden.
+     return exit_code <= 0xFFFFFFFF and exit_code & 0xD0000000 == 0xC0000000
+ 
+ 
++def _wrapped(setup: SlicerSetup) -> bool:
++    """Startet der Slicer hinter ``flatpak run`` oder ``flatpak-spawn --host``?
++
++    Dann meldet der Starter einen Signaltod als 128 + Signal
++    (:func:`crashed`): ein Slicer als Flatpak (:func:`discover.flatpak_app`)
++    oder Solidon selbst im Flatpak (:func:`discover.on_host`).
++    """
++    return bool(discover.flatpak_app(setup.executable)) or discover.in_flatpak()
++
++
+ #: Die Datei, in die Bambu Studio neben die Druckdatei schreibt, wie der Lauf
+ #: ausging — auch dann, wenn er keine schrieb.
+ RESULT_FILE: Final = "result.json"
+diff --git a/tests/test_print_settings.py b/tests/test_print_settings.py
+index e0f4c79ef..d1033712e 100644
+--- a/tests/test_print_settings.py
++++ b/tests/test_print_settings.py
+@@ -4425,6 +4425,66 @@ def test_a_crash_is_told_apart_from_a_refusal(code: int, expected: bool) -> None
+     assert handover.crashed(code) is expected
+ 
+ 
++@pytest.mark.parametrize(
++    ("code", "expected"),
++    [
++        # bwrap meldet einen Signaltod als 128 + Signal (``bubblewrap.c``):
++        # SIGSEGV, SIGABRT, SIGBUS, SIGILL, SIGFPE, SIGKILL.
++        (139, True),
++        (134, True),
++        (135, True),
++        (132, True),
++        (136, True),
++        (137, True),
++        # Die Byteform der Orca-Absagen bleibt eine Absage (RM-620): -62, -50,
++        # -101; 155 wäre SIGPROF, an dem kein Slicer stirbt.
++        (194, False),
++        (206, False),
++        (155, False),
++        (1, False),
++        (0, False),
++    ],
++)
++def test_a_crash_behind_flatpak_is_a_crash(code: int, expected: bool) -> None:
++    """Hinter ``flatpak run`` oder ``flatpak-spawn`` kommt ein Signaltod als
++    128 + Signal an, nicht als negative Zahl (RM-621). Ein SIGSEGV war dort
++    139, und der Kunde las „keine Druckdatei geschrieben“ statt „abgestürzt“.
++    Ohne Starter bleibt 139 ein gewöhnlicher Rückgabewert."""
++    assert handover.crashed(code, wrapped=True) is expected
++    assert handover.crashed(code) is False
++
++
++def test_a_flatpak_slicer_that_crashes_says_so(
++    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
++) -> None:
++    """Die Kette bis zum Kunden: Orca als Flatpak stirbt an SIGSEGV (RM-621)."""
++    from app.core import discover
++
++    class _Crashed:
++        returncode = 139
++        stdout = b""
++        stderr = b""
++
++    model = tmp_path / "model.stl"
++    model.write_bytes(b"solid x\nendsolid x\n")
++    executable = tmp_path / "io.github.softfever.OrcaSlicer"
++    executable.write_bytes(b"")
++    monkeypatch.setattr(handover, "_run_slicer", lambda *args, **kwargs: _Crashed())
++    monkeypatch.setattr(
++        discover,
++        "flatpak_app",
++        lambda program: "io.github.softfever.OrcaSlicer" if Path(program) == executable else "",
++    )
++    profile = profiles.make_profile()
++    setup = handover.SlicerSetup(executable=executable, flavour="orca")
++
++    with pytest.raises(ExternalToolError) as raised:
++        handover.slice_model(model, print_settings.resolve(profile), profile, setup)
++
++    assert "abgestürzt" in str(raised.value.detail), str(raised.value.detail)
++    assert raised.value.suggestions[0].id == "choose_slicer"
++
++
+ def test_a_crashed_slicer_says_so_instead_of_blaming_the_profile(
+     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+ ) -> None:

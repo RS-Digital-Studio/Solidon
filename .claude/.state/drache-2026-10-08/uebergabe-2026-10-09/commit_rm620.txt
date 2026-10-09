@@ -1,0 +1,14 @@
+Lehnt der Slicer Filamente mit zu verschiedenen Temperaturen ab, sagt Solidon es
+
+Anycubic Slicer Next lehnte PLA und PETG auf einer Platte mit -62 ab, ohne
+ein Wort auf der Konsole, und der Kunde las „keine Druckdatei geschrieben“.
+handover.ORCA_MIXED_TEMPERATURES übersetzt den Code in einen Satz mit
+Anordnen als erster Handlung; einen zweiten Lauf ohne Anordnungsvorgabe gibt
+es bei -62 nicht.
+
+Unter Linux und macOS griff keine der drei Orca-Erkennungen (-50, -101,
+-62): Dort kommt der Rückgabewert als Byte an. handover.orca_refused prüft
+die Windows- und die Byteform. Kataloge, Changelog und Regel nachgezogen
+(RM-620).
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
