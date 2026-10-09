@@ -1039,7 +1039,7 @@ def test_each_start_page_distinguishes_the_plan_from_an_offer(page: str, marker:
 
     **Seit dem 23.09.2026 stehen die Preise auf der Seite** (Entscheidung
     Robert: zwei Lizenzarten, Einstiegspreis bis Ende Januar). Angekündigt ist
-    damit, was ab dem 1. November gilt — verkauft wird vorher nichts. Die
+    damit, was ab dem Verkaufsstart gilt — verkauft wird vorher nichts. Die
     Seite sagt deshalb weiter „geplant", und sie zeichnet für Suchmaschinen
     kein ``Offer`` und keine Vorbestellung aus: Ein Rich Result mit Preis und
     „Jetzt kaufen" wäre eine Kaufmöglichkeit, die es noch nicht gibt.
