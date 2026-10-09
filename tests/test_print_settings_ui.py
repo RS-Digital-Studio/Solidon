@@ -11030,6 +11030,7 @@ def test_real_operation_entry_reaches_size_dialog_with_fixed_id_without_feature_
         "_spacing_for",
         "_plane_through",
         "_measured_from_body",
+        "_edges_from_view",
         "_source_names",
         "_parameter_values",
         "_feature_names",

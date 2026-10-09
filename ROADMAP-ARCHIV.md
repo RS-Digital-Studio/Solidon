@@ -38,6 +38,15 @@ entfernt hat.
 | 2026-10-09 | [RM-620: Ein Slicer, der Filamente mit zu verschiedenen Temperaturen ablehnt, sagt es (09.10.2026)](#rm-620-ein-slicer-der-filamente-mit-zu-verschiedenen-temperaturen-ablehnt-sagt-es-09102026) |
 | 2026-10-09 | [RM-595: Prüfbericht und Schichtanalyse schneller, ihre Konturen als Felder (09.10.2026)](#rm-595-prüfbericht-und-schichtanalyse-schneller-ihre-konturen-als-felder-09102026) |
 | 2026-10-09 | [RM-593 und RM-594: Auswertung wächst nicht mehr je Schritt, losgelassene Netze werden frei (09.10.2026)](#rm-593-und-rm-594-auswertung-wächst-nicht-mehr-je-schritt-losgelassene-netze-werden-frei-09102026) |
+| 2026-10-09 | [RM-633: Eine Kabeldurchführung in einer dickeren Wand sagt es (09.10.2026)](#rm-633-eine-kabeldurchführung-in-einer-dickeren-wand-sagt-es-09102026) |
+| 2026-10-09 | [RM-632: Die Mutternfalle zeigt ihr Schraubenloch vor dem Setzen (09.10.2026)](#rm-632-die-mutternfalle-zeigt-ihr-schraubenloch-vor-dem-setzen-09102026) |
+| 2026-10-09 | [RM-631: Eine Durchgangsbohrung geht genau durch das Teil (09.10.2026)](#rm-631-eine-durchgangsbohrung-geht-genau-durch-das-teil-09102026) |
+| 2026-10-09 | [RM-598: Die erklärte Schraubenbohrung der Mutternfalle endet im Körper (09.10.2026)](#rm-598-die-erklärte-schraubenbohrung-der-mutternfalle-endet-im-körper-09102026) |
+| 2026-10-09 | [RM-597: Ein exakt gesetztes Merkmal, das anderes Material nur auf einer Linie berührt, sagt es (09.10.2026)](#rm-597-ein-exakt-gesetztes-merkmal-das-anderes-material-nur-auf-einer-linie-berührt-sagt-es-09102026) |
+| 2026-10-09 | [RM-596: Merkmalshandlungen lassen fremde Teile, wie sie sind (09.10.2026)](#rm-596-merkmalshandlungen-lassen-fremde-teile-wie-sie-sind-09102026) |
+| 2026-10-09 | [RM-591: Die Mutternfalle schneidet ihre Tasche, auch von Hand auf eine Fläche gesetzt (09.10.2026)](#rm-591-die-mutternfalle-schneidet-ihre-tasche-auch-von-hand-auf-eine-fläche-gesetzt-09102026) |
+| 2026-10-09 | [RM-590: Ein Klick auf eine Ecke wählt ihre Kanten (09.10.2026)](#rm-590-ein-klick-auf-eine-ecke-wählt-ihre-kanten-09102026) |
+| 2026-10-09 | [RM-579: Die Linie zeigt am exakten Körper die ganze Kontur, die verrundet wird (09.10.2026)](#rm-579-die-linie-zeigt-am-exakten-körper-die-ganze-kontur-die-verrundet-wird-09102026) |
 | 2026-10-08 | [RM-602: Der Druckdialog ordnet die Profile in einem Lesedurchgang zu (08.10.2026)](#rm-602-der-druckdialog-ordnet-die-profile-in-einem-lesedurchgang-zu-08102026) |
 | 2026-10-08 | [RM-601: Die Slicerwahl im Druckdialog geht wie in Erste Schritte, und überall stehen nur unterstützte Slicer (08.10.2026)](#rm-601-die-slicerwahl-im-druckdialog-geht-wie-in-erste-schritte-und-überall-stehen-nur-unterstützte-slicer-08102026) |
 | 2026-10-08 | [RM-600: Ein Drucker, eingebaut und aus dem Slicer übernommen, ist ein Gerät (08.10.2026)](#rm-600-ein-drucker-eingebaut-und-aus-dem-slicer-übernommen-ist-ein-gerät-08102026) |
@@ -49,6 +58,11 @@ entfernt hat.
 | 2026-10-08 | [RM-566: Der Drache bekommt seine Stützen, und die Kanalsperre sperrt nur Raum, an den man nicht hinkommt (08.10.2026)](#rm-566-der-drache-bekommt-seine-stützen-und-die-kanalsperre-sperrt-nur-raum-an-den-man-nicht-hinkommt-08102026) |
 | 2026-10-08 | [RM-564: Vor dem Herunterladen nennt Solidon die Voraussetzungen eines Modells und ob dieser Rechner sie erfüllt (08.10.2026)](#rm-564-vor-dem-herunterladen-nennt-solidon-die-voraussetzungen-eines-modells-und-ob-dieser-rechner-sie-erfüllt-08102026) |
 | 2026-10-08 | [RM-550: Erzeugte Körper aus Weg 3 schließen, Falten werden geglättet, und ein zerfallener Versuch sagt es vor dem Übernehmen (08.10.2026)](#rm-550-erzeugte-körper-aus-weg-3-schließen-falten-werden-geglättet-und-ein-zerfallener-versuch-sagt-es-vor-dem-übernehmen-08102026) |
+| 2026-10-08 | [RM-563: Verrunden an mehreren Kanten zugleich wählen (08.10.2026)](#rm-563-verrunden-an-mehreren-kanten-zugleich-wählen-08102026) |
+| 2026-10-08 | [RM-545: Ein getrenntes Teil in Senkung, Langloch oder Schraube verschmilzt nicht mehr still (08.10.2026)](#rm-545-ein-getrenntes-teil-in-senkung-langloch-oder-schraube-verschmilzt-nicht-mehr-still-08102026) |
+| 2026-10-08 | [RM-548: Karte und Operation stellen je Merkmalshandlung dieselbe Frage (08.10.2026)](#rm-548-karte-und-operation-stellen-je-merkmalshandlung-dieselbe-frage-08102026) |
+| 2026-10-08 | [RM-552: Stift für Bohrung baut an Schraubenloch und Einpressbuchse (08.10.2026)](#rm-552-stift-für-bohrung-baut-an-schraubenloch-und-einpressbuchse-08102026) |
+| 2026-10-08 | [RM-546: Merkmal drehen sagt, wenn die Drehung das Merkmal auf sich selbst legt (08.10.2026)](#rm-546-merkmal-drehen-sagt-wenn-die-drehung-das-merkmal-auf-sich-selbst-legt-08102026) |
 | 2026-10-06 | [RM-104 (Teil): Abbruch des lokalen Modells auf macOS und HiDPI-Test unter Xvfb (06.10.2026)](#rm-104-teil-abbruch-des-lokalen-modells-auf-macos-und-hidpi-test-unter-xvfb-06102026) |
 | 2026-10-06 | [RM-537: Im Bild vor der Erkennung stehen keine veralteten Merkmale mehr, und eine verschwundene Wahl fällt nicht auf den Körper (06.10.2026)](#rm-537-im-bild-vor-der-erkennung-stehen-keine-veralteten-merkmale-mehr-und-eine-verschwundene-wahl-fällt-nicht-auf-den-körper-06102026) |
 | 2026-10-07 | [RM-014: Der Agent setzt keine Pinselstriche und kein Skelett, er nennt dem Nutzer den Weg (07.10.2026)](#rm-014-der-agent-setzt-keine-pinselstriche-und-kein-skelett-er-nennt-dem-nutzer-den-weg-07102026) |
@@ -45420,3 +45434,475 @@ Kumiko 7,0 → 6,9 s, Schraubendreherhalter 14,5 → 12,9 s. Bauplan §9 führt 
 Gefunden bei RM-306 (03.10.2026): Ein weiteres Modell kommt an die freie Stelle neben der Plattenmitte; war die Ansicht auf das erste Modell eingepasst, stand das neue außerhalb des Bilds, und nur der Objektbaum verriet, dass es angekommen war.
 
 **Abschluss:** Nach dem Einfügen eines weiteren Modells rahmt die Ansicht einmal nach, wenn es über den zuletzt eingepassten Rahmen hinausragt — derselbe Weg wie nach einem Größenschritt (RM-280). `MainWindow._on_model_placed` merkt sich den Körper (`_placed_to_frame`), und `_frame_the_placed` meldet unmittelbar vor dem Aufbau, der ihn trägt, an `Viewport.frame_if_beyond`; was im Rahmen liegt, lässt die Kamera in Ruhe. Gemerkt wird der Körper, nicht der Zeitpunkt: Eine Bitte gleich beim Einfügen verbrauchte das Review-Gegenbeispiel, ein Aufbau der alten Szene bei offener Schichtansicht. Ein abgewiesener Import und ein Dokument ohne den Körper räumen die Merkung ab. Gilt für Datei, Download, erzeugtes Modell und Einfügemarke (`Session.modelPlaced`, RM-303). Regel in `.claude/rules/kamera.md`, Changelog 0.6.0 in sechs Sprachen. Test `test_ui.py::test_a_further_model_beyond_the_view_comes_into_it` ohne und mit offener Schichtansicht; ohne Nachrahmen beide rot, mit der Bitte beim Einfügen der Fall mit Schichtansicht rot (Gegenproben). Fenstersonde am echten Fenster (zwei Würfel, der zweite neben dem ersten): vorher 3 von 4 — Ausschnitt blieb bei −10…10 mm, das neue Modell reichte bis 35 mm —, nachher 4 von 4, beide im Bild. Umgesetzt von Claude (Thread „Bedienung und KI“).
+## RM-546: Merkmal drehen sagt, wenn die Drehung das Merkmal auf sich selbst legt (08.10.2026)
+
+<a id="rm-546-merkmal-drehen-sagt-wenn-die-drehung-das-merkmal-auf-sich-selbst-legt-08102026"></a>
+<a id="rm-546"></a>
+
+**RM-546 — *Merkmal drehen* um die eigene Achse einer runden Bohrung tut nichts und sagt es
+nicht.** Gefunden am 06.10.2026 beim Review von RM-441 (Claude): Eine Durchgangsbohrung Ø 5
+mit Achse +Z, um `axis="z"` um 45° gedreht, liefert denselben Körper und keinen Befund; nur
+`angle=0` meldet `rotate_feature.unchanged`. Das widerspricht „Eine Operation, die nichts
+bewirkt hat, sagt das“ (`.claude/rules/operationen.md`), und das Modell erfährt nicht, dass der
+Schritt wirkungslos war. **Fix:** Bildet die Drehung das Werkzeug auf sich selbst ab
+(Drehachse gleich Merkmalsachse durch die Mitte, rotationssymmetrische Art), denselben Befund
+mit *Diesen Schritt ändern* am Feld `axis` geben; `cache_version` erhöhen. **Abnahme:** Test an
+Bohrung, Zapfen und Senkung je Kern; ein Langloch bleibt drehbar. Bauplan §2.7.
+
+**Nachweis (08.10.2026, `8601cf9e5`, Paket G):** `prepare_ops._turned_onto_itself` fragt
+nach dem Winkel null die gedrehte Achse: Liegt sie mit demselben Vorzeichen wieder auf der
+alten (Schranke `1 − EPS_GEOM` wie am Ring in `_rotate_torus`) und beim Langloch die
+Mittellinie parallel, kommt der Eingang unverändert zurück, mit `rotate_feature.unchanged` und
+*Diesen Schritt ändern* am Feld `axis` (um die eigene Achse) oder `angle` (volle Umdrehung um
+eine andere). Ein Langloch liegt erst nach einer halben Umdrehung wieder auf sich und bleibt
+sonst drehbar. `cache_version` 11. Tests in `tests/test_feature_moves_keep_shape.py`:
+`test_a_turn_onto_itself_changes_nothing_and_says_so` (Bohrung, Zapfen, Senkung je Kern, um z
+45° und um x 360°, 12 Fälle) und
+`test_a_slot_turned_about_its_own_axis_turns_and_a_half_turn_lies_on_itself` (eine
+Vierteldrehung stellt das Langloch quer, Sollpunkte aus den Maßen) — am Basisstand 14 von 14
+rot. `test_finding_ways.py` führt das Feld je Stelle. Umgesetzt von Claude.
+
+## RM-552: Stift für Bohrung baut an Schraubenloch und Einpressbuchse (08.10.2026)
+
+<a id="rm-552-stift-für-bohrung-baut-an-schraubenloch-und-einpressbuchse-08102026"></a>
+<a id="rm-552"></a>
+
+**RM-552 — *Stift für Bohrung* liest die Kette an einer Bausteinbohrung mit Senkung nicht.**
+Gefunden am 07.10.2026 in der Nachprüfung von P2 (Claude): Am Baustein *Schraubenloch* läuft
+die Bohrung Ø 3,4 von z 2 bis 12 durch ihre Senkung (z 10,7 bis 12), an der *Einpressbuchse M4*
+ebenso. `bore_pin._following` verlangt, dass ein Abschnitt am Ende des vorigen beginnt, und sagt
+`chain_unreadable` („lässt sich hier nicht eindeutig lesen“) — über einen Hohlraum, den Solidon
+selbst gebaut hat. Die Karte bietet den Stift an Bausteinmerkmalen nur noch am Innengewinde an
+(`perceive.actions.OFFERED_AT_A_PART`); über Menü und Palette trifft die Absage jedes
+Baustein-Schraubenloch weiter. **Fix:** Überlappende Kettenglieder auf ihren gemeinsamen
+Abschnitt kürzen, statt abzusagen — die Bohrung endet, wo die Senkung beginnt; danach die Karte
+an Bausteinbohrungen wieder öffnen, wenn der Stift dort baut. **Abnahme:** Test am Schraubenloch
+und an der Einpressbuchse je Kern: Stift gebaut, Spiel rundum mindestens das eingestellte; die
+Magnettasche sagt weiter `narrowing_mouth`.
+
+**Nachweis (08.10.2026, `7cc96d546`, Paket G):** Zwei Ursachen. Die Bausteinbohrung läuft
+durch ihre Senkung bis zur Mündung, und `bore_pin._following` verlangte einen Anschluss am
+Ende; jetzt endet ein Glied, in das das nächste hineinbeginnt, an dessen Anfang, und
+`_chained` prüft, dass die Kette danach bis zum alten Ende reicht (Lücke, Glied mitten in der
+Bohrung oder davor bleiben unlesbar). Dazu nennt die Senkung eines Bausteins ihre Mitte und
+Höhe (`fasteners._countersink_feature`), die Erkennung den weiten Rand; `_cone_mouth` legt die
+Mündung für beide richtig, auch auf dem Weg vom Gewinde aus (`_walk`). Die Karte bietet den
+Stift an Bausteinbohrungen wieder an (`OFFERED_AT_A_PART` mit `hole`), `cache_version` 6.
+Tests: `tests/test_bore_pin.py::test_a_part_bore_that_runs_through_its_countersink_gets_its_pin`
+(Schraubenloch, Schraubenloch mit Kopftiefe, Einpressbuchse je Kern; Volumen gegen die
+Normteiltabelle auf 1e-4, Boden um das halbe Spiel, `_loose` rundum) — am Basisstand rot mit
+`chain_unreadable` —, `test_the_magnet_pocket_from_a_part_still_has_a_narrowing_mouth`
+(Gegenfall) und `tests/test_selection_operations.py::test_a_part_bore_offers_its_pin`. An den
+zwölf Beispielprojekten bauen sieben Bausteinbohrungen, die vorher absagten (Senkkopf 90°,
+Abstand 0,1247 mm gegen das halbe Spiel 0,125); alle übrigen Bohrungen unverändert.
+Umgesetzt von Claude.
+
+## RM-548: Karte und Operation stellen je Merkmalshandlung dieselbe Frage (08.10.2026)
+
+<a id="rm-548-karte-und-operation-stellen-je-merkmalshandlung-dieselbe-frage-08102026"></a>
+<a id="rm-548"></a>
+
+**RM-548 — Lippentasche: die Karte sperrt Verdoppeln und Drehen, die Operation rechnet.**
+Gefunden am 07.10.2026 beim Bau von RM-535 (Claude): Seit RM-535 fragen Karte, Operation und
+Griff beim *Versetzen* dieselbe Funktion (`actions.move_refusal`); bei *Verdoppeln* und
+*Drehen* sperrt die Karte eine Lippentasche (`narrowing`) noch, während die Operation
+rechnet. **Abnahme:** Karte und Operation stellen je Handlung dieselbe Frage; ein Test über
+die Korpusnetze wie `test_the_card_offers_a_move_exactly_where_the_operation_moves`.
+
+**Nachweis (08.10.2026, `1a6af98b8`, Paket G):** Die genannte Lippentasche war an den
+Korpus- und Bausteinfällen nicht mehr uneins (Magnettasche aus dem Baustein, gedrehte
+Scheibe mit Lippe, Lippe unter einer Kuppel: Karte und Operation sagten dasselbe). Die Sonde
+über Korpusnetze und je Zeile der Karte fand die Uneinigkeit dort, wo die Operation „über die
+Luft“ rechnete: an der Tasche um einen Zapfen (`pocket_with_pin.stl`) Verdoppeln, Drehen,
+Bohrung ändern und Entfernen, am Wulst (`post_with_fillet.stl`) und am Ring als ganzem Körper
+(`torus_ring.stl`) das Verdoppeln und am Ring ein anderer Satz; umgekehrt bot die Karte am
+Zapfen und an der Kuppel, die der ganze Körper sind (`dense_cylinder.stl`,
+`shallow_sphere_cap_uv.stl`), Drehen, Ändern und Entfernen an, und die Operation endete mit
+„Von dem Körper bleibt nichts übrig“. Jetzt fragt jede Merkmalshandlung nach ihren
+Leerläufen die Zeile der Karte (`actions.action_refusal`, `prepare_ops._refuse_like_the_card`;
+`move_refusal` ist ihre Fassung fürs Versetzen); was aus dem Lesen des Hohlraums kommt, liest
+die Operation in ihrem eigenen Lauf (berührende exakte Platten, RM-386). `FEATURE_SPANS_THE_BODY`
+sperrt Versetzen, Ändern, Drehen und Entfernen mit einem Satz für alle vier. Dabei gefunden und
+behoben: *Merkmal drehen* belegte an jeder Senkung 90° vor, die Operation kippt sie nur unter
+90° minus halbem Öffnungswinkel; vorbelegt wird jetzt der größte ganze Winkel darunter
+(`prepare_ops.largest_sink_tilt`). Tests in `tests/test_feature_moves_keep_shape.py`:
+`test_the_card_offers_each_handling_exactly_where_the_operation_computes` (neun Korpusnetze ×
+fünf Zeilen, 45 Fälle, am Basisstand 13 rot) und
+`test_the_card_tilts_a_countersink_only_as_far_as_it_stays_one` (je Kern an Bohrung und
+Senkung, am Basisstand 4 rot). An sieben Kundenmodellen aus `F:\3D Dateien` (Scraper mit
+Magneten, Minitopf, Wedge-Lock, Carcassonne-Gitter, Bohrerhalter, Pegboard-STEP, Side kit
+rest; bis zu 18 bewegbare Merkmale je Körper, alle sechs Zeilen) bleibt keine Uneinigkeit
+(vorher 27: 5 an Tasche, Wulst und Ring, 22 Senkungswinkel). Cache-Versionen der sechs
+Operationen erhöht; `move_feature` blieb in `1a6af98b8` auf 15, erst `ec790e827` setzte 16
+(hier stand „sieben“, berichtigt nach Review G, F7).
+Umgesetzt von Claude.
+
+**Nachtrag (09.10.2026, `8911bd021`, Review G, F6/1 und F8):** Der Rest, den das Review fand: An
+einer Senkbohrung durch zwei berührende exakte Platten sperrte die Karte *Merkmal ändern* an
+der Senkung (`CHAIN_NOT_READABLE`), wo die Operation nach dem Verbinden rechnete, und bot
+*Verdoppeln* an Bohrung und Senkung an, wo die Operation absagte; `_READ_BY_THE_OPERATION`
+nahm sechs Sätze aus der gemeinsamen Frage und ließ das stehen. Die Ursache lag in der
+Erkennung: Die zwei ganzen Mäntel, je Platte einer, legte `brep.features` zu einer Bohrung
+zusammen und maß ihren Umfang an den Punkten der Tessellation — 351,4 Grad, also
+`partial`, und `_entrance_side` las keinen Einlauf. Ein Mantel, der selbst die volle
+Umdrehung trägt, ist jetzt ganz (`_cylinder_group_extent`); die Ausnahmeliste ist fort, und
+jede Merkmalshandlung sagt mit dem Satz der Karte ab. Derselbe Vergleich läuft jetzt über acht
+exakte Körper (Platte mit Bohrungen, Tasche mit Zapfen, Kugelpfanne, Ring, Zylinder,
+Senkplatte, berührende Platten mit und ohne Senkung) mal sechs Zeilen; am Basisstand drei
+Zeilen uneins. Er fand dabei die Vorgabe beim Verdoppeln: Die Kopie stand einen Durchmesser
+entlang X daneben und berührte das Original auf einer Linie — am exakten Körper sagte
+*Übernehmen* an jeder Bohrung ab, das Ergebnis bliebe offen. Sie liegt jetzt anderthalb
+Breiten neben der ganzen Kette, entlang X oder Y, nie entlang der eigenen Achse
+(`actions._beside_the_original`). Tests:
+`test_partial_bores.py::test_a_bore_through_two_touching_plates_is_whole_on_both_cores`,
+`test_feature_moves_keep_shape.py::test_the_card_offers_each_handling_exactly_where_the_operation_computes_on_exact_bodies`
+(48 Fälle, am Stand davor 5 rot),
+`test_features.py::test_the_panel_duplicates_a_countersunk_bore_beside_its_countersink`.
+
+## RM-545: Ein getrenntes Teil in Senkung, Langloch oder Schraube verschmilzt nicht mehr still (08.10.2026)
+
+<a id="rm-545-ein-getrenntes-teil-in-senkung-langloch-oder-schraube-verschmilzt-nicht-mehr-still-08102026"></a>
+<a id="rm-545"></a>
+
+**RM-545 — Über Senkung, Langloch und Baustein Schraube verschmilzt ein getrenntes Teil still.**
+Gefunden im Review der RM-413-Einheit (06.10.2026, Fund H1, ergänzt im Nachreview):
+`F:\solidon-review-reports\claude-2026-10-06\geometrie\review-einheit-1.md` und
+`review-einheit-1-runde-2.md`. Die Absage aus RM-413 (`_refuse_another_part_in_the_bore`,
+`perceive.actions.no_own_body`) fragt nur `kind == "hole"`; über die anderen Glieder bleibt
+derselbe Fehler erreichbar, am Basisstand wie heute. Je Zeile, die das Menü anbietet:
+- **Senkbohrung mit Stift** (Bohrung Ø 6, Senkung 90° Ø 10, Stift Ø 5), an `cone_1`: Am Netz
+  ergeben Versetzen und Entfernen ein Teil statt zwei; Ändern (Ø 11) und Drehen (10°) schneiden
+  den Stift von 293,4 auf 97,4 mm³ ab, Befund nur `bore.over_the_edge`. Exakt sagen dieselben
+  vier Zeilen mit `CHAIN_NOT_READABLE` ab — falscher Grund, und die Kerne sagen Verschiedenes.
+  Verdoppeln rechnet an beiden Kernen richtig.
+- **Langloch mit Stift** (`_plate_with_a_second_body(slot=True, inside=True)`), keine Zeile
+  grau: Versetzen, Entfernen und Kippen ergeben an beiden Kernen ein Teil; *Bohrung ändern*
+  (Ø 7) schneidet den Stift am Netz auf 97,6 mm³ ab und verschmilzt ihn exakt, beides ohne
+  Befund. Verdoppeln rechnet am Netz richtig und sagt exakt mit „bliebe offen“ ab.
+- **Baustein *Schraube*** (`insert_printed_screw`, M6, gesenkt, `separate_from_host`, Netz):
+  An der Senkung verschmelzen Versetzen, Entfernen und Kippen die Schraube mit der Platte,
+  Ändern schneidet sie von 462,3 auf 260,5 mm³. Am Kopf `cone_1` schneiden Versetzen und
+  Entfernen den Kopf ab (261,6 mm³), Ändern und Kippen verschmelzen, Verdoppeln bleibt ohne
+  Wirkung und ohne Befund. Beide Kegel stehen in keiner Kette; die Bohrung ist nach dem
+  Einsetzen nicht mehr erkannt.
+Weg: die Frage an den Hohlraum hängen statt an die Merkmalsart — ein Glied einer Kette fragt
+die Bohrung mit (`cavity_chain_state_at`), ein Kegel ohne Kette seinen eigenen Hohlraum, für
+`slot` eine Stadionfassung von `hole_is_clear` und `_own_part_bore_clear`; Menü und Operation
+mit demselben Satz. Abnahme: An diesen Gliedern sagt jede Zeile, die das Menü heute anbietet,
+an beiden Kernen mit `OTHER_PART_IN_THE_BORE` und `split_bodies, cancel` ab und steht im Menü
+mit demselben Satz grau, oder sie rechnet mit unverändertem Teil (Teilezahl, Volumen des
+Teils), an beiden Kernen gleich; je Fall und Zeile ein Test, am heutigen Stand rot. *Zum
+Langloch ziehen* am freien Stift bleibt frei. Sonden: `review-einheit-1-sonden\` und
+`review-einheit-1-runde-2-sonden\test_probe_rm545_zeilen.py`.
+
+**Nachweis (08.10.2026, `ec790e827`, Paket G):** `prepare_ops.separate_part_reason` fragt den
+Hohlraum statt der Art: jedes Glied einer Kette (die Senkung fragt ihre Bohrung mit,
+`cavity_chain_state_at`), das Langloch über sein Stadion um die Mittellinie und eine Senkung
+ohne Kette über den Halbmesser ihrer Wand auf jeder Höhe (`hole_is_clear` misst alle drei,
+`_inside_and_radial`) sagen `OTHER_PART_IN_THE_BORE`; ein Stift oder Schraubenkopf, der selbst
+in der Bohrung eines anderen Teils steckt, sagt den neuen Satz `PART_IN_ANOTHER_BORE` — beide
+mit `split_bodies, cancel`. Karte (`actions_for`, jede Zeile grau) und Operation
+(`_refuse_another_part_in_the_bore` in `_movable_feature` und `resize_hole`) lesen dieselbe
+Funktion; *Zum Langloch ziehen* bleibt am Langloch mit freiem Stift frei
+(`hole_has_separate_contents` nimmt das Langloch). Abweichung von der Abnahme, mit Grund: Am
+Schraubenkopf und am Stift selbst wäre „In dieser Bohrung liegt ein getrenntes Teil“ falsch,
+deshalb der eigene Satz. Tests in `tests/test_slot_features.py`:
+`test_a_separate_part_in_a_countersink_slot_or_screw_says_so_at_every_row` (Senkung,
+Langloch, Senkung und Kopf der Schraube, Stift in Senkbohrung und Langloch, je Kern und Zeile,
+60 Fälle; im Basis-Worktree 60 rot, weil die Karte die Zeilen anbot) und
+`test_the_slot_with_a_separate_pin_still_pulls_and_keeps_the_pin` (Gegenfall, 2 Fälle);
+`test_widening_a_slot_with_a_second_body_in_it_is_no_split` hielt das Abschneiden des Stifts
+fest und prüft jetzt den Stopfen mit dem zweiten Körper neben der Platte. Am Laptop-Ständer
+(`F:\3D Dateien\parametric-laptop-riser.stl`, 22 Teile, 217 Merkmale gefahren) sagen 21
+Merkmale ab, deren Versetzen um 1 mm vorher still 20 bis 142 Teile oder bis −634 mm³
+hinterließ, dazu einer mit −90,9 mm³ bei gleicher Teilezahl; 26 sagten schon vorher mit
+anderem Grund ab. Cache-Versionen der sechs Handlungen erhöht; *Bohrung verschließen*
+(`plug_hole`) fragt dieselbe Funktion und fehlte darunter (berichtigt nach Review G, F4 und
+F7: `cache_version` 8 in `8911bd021`). Umgesetzt von Claude.
+
+**Nachtrag (09.10.2026, `8911bd021`, Review G, F1 und F5):** Die Frage hing wieder an einer
+Artenliste (Bohrung, Langloch, Kegel); Kugelpfanne, Kehle und Innengewinde fragte niemand,
+und die Regelzeile „an jedem Hohlraum“ stimmte nicht. Jetzt fragt sie `types.is_a_cavity`:
+Pfanne und Kehle messen sich in `_inside_and_radial` (Abstand von der Mitte, vom Mittelkreis),
+das Innengewinde am Kern, ein gedrucktes Gewinde ohne Flächen an den Wänden seines Gangs
+(`_with_walls`); am Hohlraum, der keine Bohrung ist, heißen die Sätze
+`OTHER_PART_IN_THE_CAVITY` und `PART_IN_ANOTHER_CAVITY`. Der Lufteinschluss fragt als
+Aufnahme nicht: Versetzen nimmt seine Insel mit, Entfernen füllt sie — so veröffentlicht
+(`test_brep_voids`), an beiden Kernen nachgemessen. Am Kugelgelenk (`ball_in_socket.stl`,
+neu im Korpus, 10 038,06 + 522,47 mm³) sagen Ändern, Versetzen und Entfernen der Pfanne und
+Versetzen der Kugel ab; vorher blieben von der Kugel 41,4 mm³, oder beide verschmolzen. F5:
+Die Teilefrage las jeden Hohlraum über alle Dreiecke, ohne Merker und ohne Abbruch, und jede
+Handlung fragte zweimal. Jetzt gemerkt je Netz und Teil (`sticks_in_another_bore`,
+`cavity_boxes`), nur Hohlräume, deren Hüllquader das eigene Teil erreicht, über dessen
+Dreiecke. Laptop-Ständer (173 592 Dreiecke, 22 Teile): Karte an `pin_5` 2,111 s → 0,518 s
+beim ersten Klick am Körper (die Hüllquader einmal je Netz; ab 20 000 Dreiecken im Arbeiter)
+und 0,018 s danach, `pin_8` 1,726 → 0,016 s, alle 254 Merkmale 121,7 → 4,0 s. Tests in
+`test_slot_features.py`: `test_a_loose_part_in_any_cavity_says_so_at_every_row` (Pfanne, Kugel,
+Kehle, Gewinde je Kern und Zeile), `test_the_ball_in_its_socket_stays_a_loose_ball`,
+`test_a_void_takes_its_loose_ball_along_and_fills_it_on_purpose`,
+`test_the_separate_part_question_reads_what_reaches_and_is_asked_once` (Gegenprobe: mit der
+zweiten Frage in `_movable_feature` rot, „fragte 2-mal“).
+
+## RM-563: Verrunden an mehreren Kanten zugleich wählen (08.10.2026)
+
+<a id="rm-563-verrunden-an-mehreren-kanten-zugleich-wählen-08102026"></a>
+<a id="rm-563"></a>
+
+**RM-563 — Verrunden an mehreren Kanten zugleich wählen.** Kunden-E-Mail vom
+07.10.2026: Der Kunde fand keine Mehrfachauswahl von Kanten und Ecken für *Verrunden*.
+Zuerst prüfen, was es gibt; fehlt der Weg, wird er gebaut, gibt es ihn, wird er sichtbar.
+**Abnahme:** Strg- oder Umschalt-Klick wählt mehrere Kanten, *Verrunden* nimmt alle als einen
+Schritt, am Netz wie am exakten Körper; Handbuch nennt den Weg; Fenstertest.
+
+**Nachweis (08.10.2026, `6cebc6cc7`, Paket G):** Bestand vorher: Mehrere Kanten gab es nur
+über die Kantenliste auf der Rückseite des Dialogs und die Gruppen („alle senkrechten“);
+der Kantenklick im Bild verweigerte das Dazunehmen ausdrücklich, Kantenketten wählt die
+Ansicht keine (der exakte Kern rundet eine Tangentenkette von sich aus mit). Jetzt nimmt an
+einer gewählten Kante Strg- oder Umschalt-Klick weitere desselben Körpers dazu oder heraus
+(`Viewport.add_edge`, `select_edges`, `highlighted_edges`); die zuletzt geklickte führt,
+alle stehen als eine Linie mit einer Kette je Kante im Bild, ein Fehlklick mit Taste wirft
+die Sammlung nicht weg, rechts auf eine der gewählten gilt das Menü allen, die letzte heraus
+führt zurück auf den Körper. Eine Ecke sind ihre Kanten: drei an einer Ecke rechnen dicht
+an beiden Kernen. Das Merkmalfenster nennt „2 Kanten“ und den Weg („Weitere Kanten dazu mit
+Umschalt oder Strg und Klick.“, am Mac ⌘, `labels.adding_key`), behält eingetragene Werte
+beim Dazunehmen, und jede Handlung nimmt alle Schlüssel als einen Schritt; Kontextmenü und
+Menüeintrag belegen den Dialog mit denselben Kanten vor (`_edges_from_view`) statt der
+Vorgabegruppe, die Liste beschriftet sie auch am Netz. Am Kern ändert sich nichts:
+`edges="named"` mit mehreren Schlüsseln rechnet wie die Gruppe (vier obere einzeln und die
+Gruppe *oben*, zwölf einzeln und *alle*: gleiches Volumen an beiden Kernen). Tests:
+`test_ctrl_or_shift_click_takes_more_edges_of_the_chosen_body` (Ansicht) und
+`test_edges_taken_with_ctrl_click_round_in_one_step` (Fenster, Netz und exakt: Radius vor
+der zweiten Kante behalten, ein Schritt mit beiden Schlüsseln, entfernt
+2·(1 − π/4)·r²·40 mm, am Netz der Sehnenzug, Strg+Z); am alten Stand beide rot, neun
+Gegenproben je rot. Echte Modelle (ein Schritt mit drei
+getrennten Kanten gegen drei einzelne Verrundungen, r = 0,8 mm): Wedge-Lock, 1x1-bin,
+desk-organizer (Netz) und carpet-corner-clip (exakt) gleich bis 7·10⁻⁸ mm³, dicht, ein Teil;
+am build_tray (exakt) liegen zwei der drei Kanten auf einer Tangentenkette, die schon jede
+allein ganz rundet — der Schritt nimmt 10,2873 + 10,4578 mm³, wie Kette und dritte Kante.
+Umgesetzt von Claude.
+
+## RM-591: Die Mutternfalle schneidet ihre Tasche, auch von Hand auf eine Fläche gesetzt (09.10.2026)
+
+<a id="rm-591-die-mutternfalle-schneidet-ihre-tasche-auch-von-hand-auf-eine-fläche-gesetzt-09102026"></a>
+<a id="rm-591"></a>
+
+**RM-591 — Von Hand auf die Deckfläche gesetzt, schneidet die Mutternfalle nichts.**
+Gefunden im Review G zu RM-552 (08.10.2026, F2): Quader 30 × 30 × 12, Mutternfalle mit
+`z = 12`: Die Tasche stand ganz über dem Körper, nur das Schraubenloch wurde abgetragen, und
+*Stift für Bohrung* baute an Tasche und Bohrung in die Luft. **Abnahme:** Ursache finden und
+beheben; die Tasche liegt im Material, das Gehäuse-Beispiel bleibt, wie es ist.
+
+**Nachweis (09.10.2026, `8911bd021`, Paket G, Review-Fixes):** Die Mutternfalle baut nach oben
+(die Mutter sitzt im Material) und wurde nur an einer gewählten Fläche gespiegelt. Mit nur
+`x`/`y`/`z` — Chat, Kommandozeile, Dialog ohne Fläche — blieb sie über der Stelle. Jetzt
+spiegelt sie auch dort, wo knapp über der Stelle Luft liegt (`parts.ops._air_above`, zwei
+Überlappungsmaße entlang der Achse). **Zurückgenommen:** Die erste Fassung fragte auf halber
+Höhe des ganzen Bausteins und meldete das Gehäuse-Beispiel als unverändert, gemessen am
+Volumen. Das Schraubenloch reicht aber über jeden Boden hinaus, und in der Mitte des 8 mm
+dicken Bodens rückte die Tasche um 2,5 mm nach unten (z 4,0–6,5 → 1,51–4,01), bei
+gleichem Volumen — gesehen erst an der neu gerenderten Vorschau. Mit der Frage knapp über der
+Stelle ist die Vorschau wieder Byte für Byte die alte. Test:
+`test_parts.py::test_a_nut_trap_set_by_hand_cuts_its_pocket` (Deckfläche und Bodenmitte, je
+mit und ohne Schraubenloch; Deckfläche am Basisstand rot, Bodenmitte mit Schraubenloch an der
+ersten Fassung rot). Bausteinänderung `NUT_TRAP_SINKS_WITHOUT_A_FACE`, Bibliotheksversion 25,
+Bereichsnachweis 49 von 49, Beispiele neu erzeugt (nur `parts_version`, dazu der Stand von
+`inner_shells` in `weg3`, den der Erzeuger schon am Basisstand schrieb). Umgesetzt von Claude.
+
+## RM-590: Ein Klick auf eine Ecke wählt ihre Kanten (09.10.2026)
+
+<a id="rm-590-ein-klick-auf-eine-ecke-wählt-ihre-kanten-09102026"></a>
+<a id="rm-590"></a>
+
+**RM-590 — Ecke als Klickziel.** Gefunden im Review G zu RM-563 (08.10.2026, F6/3): Die
+Kunden-E-Mail nannte „Kanten und Ecken“; eine Ecke verrunden hieß, ihre drei Kanten einzeln
+mit Strg zusammenzuklicken. **Abnahme:** Ein Klick auf eine Ecke wählt ihre drei Kanten.
+
+**Nachweis (09.10.2026, `5fc487f07`, Paket G, Review-Fixes):** `Viewport._corner_at`: Ein
+Endpunkt, an dem sich mindestens drei Kanten treffen (`CORNER_EDGES`), ist eine Ecke; er fängt
+in halber Kantenreichweite (`CORNER_REACH_PIXELS`), damit eine Kante kurz vor ihrem Ende
+anklickbar bleibt, und die nächste Ecke gewinnt. Ohne Taste wählt der Klick alle Kanten dort,
+mit Strg oder Umschalt an einer gewählten Kante kommen sie dazu oder gehen wieder heraus
+(`add_edges`); an beiden Körperarten. Verrunden r = 3 an den drei Kanten einer Quaderecke
+40 × 30 × 20 trägt exakt 169,3076 mm³ ab, Lehrbuchwert Σ(1 − π/4)·r²·(Lᵢ − r) + r³·(1 − π/6).
+Test: `test_selection.py::test_a_click_on_a_corner_chooses_the_edges_that_meet_there` (exakt
+und Netz; am Basisstand rot: eine Kante). Handbuch, Regel der Ansicht und Begründung
+nachgezogen. Umgesetzt von Claude.
+
+## RM-579: Die Linie zeigt am exakten Körper die ganze Kontur, die verrundet wird (09.10.2026)
+
+<a id="rm-579-die-linie-zeigt-am-exakten-körper-die-ganze-kontur-die-verrundet-wird-09102026"></a>
+<a id="rm-579"></a>
+
+**RM-579 — Am exakten Körper zeigt die Linie nur die geklickte Kante.** Gefunden im
+Review G zu RM-563 (08.10.2026, F6/2): Gerundet wird die ganze Tangentenkette — OpenCASCADE
+nimmt tangential anschließende Kanten mit —, die Hervorhebung zeigte nur die geklickte, und
+welche mitgingen, sah der Kunde erst in der Vorschau (`build_tray`). **Abnahme:** Die
+Hervorhebung zeigt am exakten Körper die ganze Kette, die verrundet wird.
+
+**Nachweis (09.10.2026, `5fc487f07`, Paket G, Review-Fixes):** `brep.edit.contour_keys` liest die
+Kontur aus demselben Builder (`BRepFilletAPI_MakeFillet`, ohne zu bauen),
+`Viewport._contour_of_chosen_edges` zeichnet sie, einmal je Auswertung gemerkt. Quader
+40 × 30 × 20 mit gerundeten senkrechten Kanten (r = 3): an einer oberen Strecke acht Ketten
+statt einer; die Rundung r = 1 an der einen trägt 28,6378 mm³ ab, den Lehrbuchwert des ganzen
+Rands, (1 − π/4)·r²·(116 + 2π·(3 − 0,2234·r)). Tests:
+`test_brep.py::test_the_contour_of_a_chosen_edge_is_what_the_fillet_rounds` und
+`test_selection.py::test_a_chosen_edge_of_an_exact_body_shows_the_whole_contour_it_rounds`
+(am Basisstand rot: eine Kette statt acht). Umgesetzt von Claude.
+
+## RM-598: Die erklärte Schraubenbohrung der Mutternfalle endet im Körper (09.10.2026)
+
+<a id="rm-598-die-erklärte-schraubenbohrung-der-mutternfalle-endet-im-körper-09102026"></a>
+<a id="rm-598"></a>
+
+**RM-598 — Die erklärte Schraubenbohrung der Mutternfalle reicht 10 mm in die Luft.**
+Gefunden bei den Review-Fixes zu Paket G (09.10.2026): Der Baustein schneidet sein
+Schraubenloch 10 mm über die Tasche hinaus, damit es durch jede Wand geht, und erklärte die
+Bohrung über diese ganze Länge — auf der Deckfläche eines 12 mm dicken Quaders von z = -0,5
+bis z = 22. *Stift für Bohrung* sagte deshalb ab, an der Stelle sei kein Hohlraum im Körper.
+**Abnahme:** Die erklärte Bohrung endet im Körper, und *Stift für Bohrung* geht dort.
+
+**Nachweis (09.10.2026, `2f96dafe8`, Paket G):** Eine erklärte Durchgangsbohrung eines
+Bausteins endet an den Grenzen des Körpers (`parts.ops._through_bores_in_the_body`): gemessen
+am Träger vor dem Schnitt, entlang der Achse; wo die Mitte eines Stücks auf der Diagonale einer
+Deckfläche liegt, fragt die Probe eine Facettenhöhe daneben nach. Die Bausteinoperationen
+tragen `targets:8`. Test `test_bore_pin.py::test_the_screw_bore_of_a_nut_trap_ends_in_the_body_and_takes_a_pin`
+(je Kern: Bohrung von z = 0 bis z = 12, der Stift lose und im Körper; am Stand davor rot mit
+-0,515 bis 22,01). Bereichsnachweis 49 von 49, Beispiele unverändert. Umgesetzt von Claude.
+
+**Nachtrag (09.10.2026, Paket G):** Die erste Fassung kürzte jede erklärte Durchgangsbohrung,
+auch die im eigenen Material eines anbauenden Bausteins, die am Träger vor dem Schritt in der
+Luft liegt: An Passungsleiter und Bajonett blieben 0,01 mm statt 3 und 11,625 mm, am
+Schlauchanschluss, der seinen Stutzen aufbaut, 3 statt 30 mm. **Zurückgenommen** ist damit die
+Aussage, außer der Mutternfalle bleibe alles, wie es war — Beispiele und Bereichsnachweis lesen
+die Länge erklärter Bohrungen nicht. Die Begrenzung gilt jetzt nur für bloß abtragende Bausteine
+(`only_cuts`), die Bausteinoperationen tragen `targets:9`. Test
+`test_bore_pin.py::test_a_part_that_builds_material_keeps_the_length_of_its_bores` (je Kern an
+Passungsleiter, Bajonett und Schlauchanschluss; ohne die Einschränkung sechs rot). An vier
+eingelesenen Modellen — Laptop-Ständer als Netz, drei exakte Körper — endet die Bohrung der
+Mutternfalle auf der größten Deckfläche im Körper statt 10,01 mm darüber in der Luft (am
+Teppichclip oben im Gegenbacken, den das Werkzeug mit durchbohrt), und *Stift für Bohrung* baut
+dort den Stift; ohne die Begrenzung sagte er an drei der vier ab, am vierten ragte der Stift
+10 mm aus der Fläche.
+
+## RM-597: Ein exakt gesetztes Merkmal, das anderes Material nur auf einer Linie berührt, sagt es (09.10.2026)
+
+<a id="rm-597-ein-exakt-gesetztes-merkmal-das-anderes-material-nur-auf-einer-linie-berührt-sagt-es-09102026"></a>
+<a id="rm-597"></a>
+
+**RM-597 — Eine exakte Zapfenkopie, die das Original berührt, liefert einen undichten Körper.**
+Gefunden bei den Review-Fixes zu Paket G (09.10.2026): Tasche mit Zapfen, die Kopie genau einen
+Durchmesser daneben — offener Zwilling, 18 560,8 mm³, ohne Befund; der Schnittweg sagt in
+derselben Lage längst ab. **Abnahme:** Auch getippte Zahlen führen nicht dorthin, ohne dass es
+gesagt wird oder richtig rechnet.
+
+**Nachweis (09.10.2026, `2f96dafe8`, Paket G):** Die exakten Wege aus den Flächen — Versetzen,
+Verdoppeln, Ändern, Zapfen und Kegel kippen — fragen ihr Ergebnis (`_exact_placed_holds`): War
+der Körper vorher dicht und ist er danach ungültig oder zeigt sein Zwilling eine Berührung —
+Kanten an mehr als zwei Dreiecken, ohne offene Kante —, sagt die Handlung ab, mit dem Weg, die
+Eingabe zu ändern. **Zurückgenommen:** Die erste Fassung sagte bei jedem offenen Zwilling ab und
+traf damit die um 1° gekippte Wellenhälfte über einer Kehle, einen gültigen Körper, dessen Netz
+an einer Naht nicht schloss (fünf offene neben vier mehrfachen Kanten); die zweite fragte die
+Topologie und übersah den an die Wand versetzten Zapfen. Test
+`test_feature_moves_keep_shape.py::test_an_exact_pin_that_only_touches_material_says_so`
+(Kopie, an die Taschenwand versetzt, auf den Boden gekippt; ohne die Frage alle drei rot).
+Der Vergleich von Karte und Operation über exakte Körper nimmt dafür einen 5 mm hohen Zapfen:
+Bei Höhe gleich Durchmesser legt die Vorgabe der Karte (90°) ihn genau auf den Boden.
+Umgesetzt von Claude.
+
+## RM-596: Merkmalshandlungen lassen fremde Teile, wie sie sind (09.10.2026)
+
+<a id="rm-596-merkmalshandlungen-lassen-fremde-teile-wie-sie-sind-09102026"></a>
+<a id="rm-596"></a>
+
+**RM-596 — *Merkmal drehen* an einer Wellenhälfte verschmilzt den losen O-Ring in der Kehle.**
+Gefunden bei den Review-Fixes zu Paket G (09.10.2026): Welle Ø 20 × 40 mit Kehle und losem
+O-Ring; die obere Hälfte um 10° gekippt fährt in den Ring, und beide Kerne lieferten ein Teil
+statt zwei (12 717 mm³ am Netz), ohne Befund. **Abnahme:** Absage oder richtige Rechnung, an
+beiden Kernen.
+
+**Nachweis (09.10.2026, `2f96dafe8`, Paket G):** Jede Merkmalshandlung außer *Zum Langloch
+ziehen*, das ein freies Teil in seiner Bohrung mit Absicht mitschneidet, fragt ihr Ergebnis
+(`_leaves_other_parts_alone`): Jede Schale eines Teils, zu dem das Merkmal nicht gehört — Teile
+als Materialfamilien —, steht danach mit demselben Rauminhalt und Hüllquader für sich da, sonst
+Absage mit *In Einzelteile aufteilen*; wo die Handlung berührende Teile mit Befund vereinigt,
+gilt der Befund. Um 1° gekippt rechnet die Wellenhälfte weiter, der Ring bleibt lose. Am
+Laptop-Ständer fängt dieselbe Frage drei Versetzungen um 0,5 mm, die vorher bis zu 145 Schalen
+hinterließen, und kostet dort 0,3 bis 0,4 s. Test
+`test_slot_features.py::test_turning_a_shaft_half_does_not_swallow_the_loose_ring_in_its_groove`
+(je Kern; ohne die Frage rot). Cache-Versionen der acht Handlungen erhöht. Umgesetzt von Claude.
+
+## RM-631: Eine Durchgangsbohrung geht genau durch das Teil (09.10.2026)
+
+<a id="rm-631-eine-durchgangsbohrung-geht-genau-durch-das-teil-09102026"></a>
+<a id="rm-631"></a>
+
+**RM-631 — Eine Durchgangsbohrung geht genau durch das Teil.** Gefunden bei RM-598 (Paket G,
+09.10.2026): Das Schraubenloch der Mutternfalle reichte fest 10 mm über die Tasche hinaus. In
+einem 40 mm dicken Quader blieb es ein Sackloch (z = 27,485 bis 40) und hieß Durchgang, auf dem
+Boden eines Spalts bohrte es in den Backen darüber; *Schraubenloch mit Senkung* mit Tiefe 10 in
+12 mm hieß ebenso Durchgang. Entschieden (Koordinator Welle 2): Eine Durchgangsbohrung geht
+genau durch das Teil, auch durch einen dicken Träger, und nie über die Fläche hinaus in fremdes
+Material; mit gesetzter Tiefe ist sie ehrlich ein Sackloch. **Abnahme:** je Kern die Mutternfalle
+durch 40 mm und auf dem Boden eines Spalts, das Schraubenloch 10 in 12 mm als Sackloch,
+Bereichsnachweis und Beispiele neu.
+
+**Nachweis (09.10.2026, `a7177473d`, Paket G):** Die Mutternfalle baut ihr Schraubenloch nur über
+die Tasche und nennt es in `PartSpec.reaches_through`; die Operation verlängert es an jedem Ende
+bis zum ersten Austritt aus dem Träger (`parts.ops._reaching_through`: acht Punkte am Rand des
+Querschnitts, nur wenn alle im Material liegen), in einer Bohrung bis zu deren Enden, quer zu ihr
+sagt sie ab. *Von unten eingelegt* führt der Schlitz von der Mündung zur Tasche, Tasche und
+Bohrung sind dort erklärt, wo sie liegen. Jede erklärte Durchgangsbohrung, hinter deren Ende nach
+dem Schritt Material liegt, heißt Sackloch (`_through_bores_in_the_body`). `LIBRARY_VERSION` 26
+mit `NUT_TRAP_BORES_THROUGH_THE_PART`, Bausteinoperationen `targets:10`. Tests in `test_parts.py`
+(`test_a_nut_trap_bores_through_a_carrier_thicker_than_its_old_reach`,
+`…_on_the_floor_of_a_gap_leaves_the_jaw_above_alone`, `…_screw_hole_with_a_set_depth_says_whether_it_goes_through`,
+`…_cut_through_bore_of_set_length_is_blind_in_a_thicker_carrier`, `…_laid_in_from_below_…` (2),
+`…_in_a_bore_takes_its_screw_hole_along_the_bore`), je Kern 28 Fälle, am Stand davor 20 rot.
+Bereichsnachweis 49 von 49, Beispiele nur `parts_version` (Gehäuse: Volumen gleich, 1 268 statt
+1 274 Dreiecke). An eingelesenen Modellen: in einem 40 mm hohen Lochwandhalter durch das ganze
+Material statt 12,5 mm, auf dem Boden des Spalts einer Teppichklammer bleibt der Backen darüber
+voll (vorher bis z = 7 durchbohrt). Umgesetzt von Claude.
+
+## RM-632: Die Mutternfalle zeigt ihr Schraubenloch vor dem Setzen (09.10.2026)
+
+<a id="rm-632-die-mutternfalle-zeigt-ihr-schraubenloch-vor-dem-setzen-09102026"></a>
+<a id="rm-632"></a>
+
+**RM-632 — Katalogbild, Platzierungsgeist und SCAD-Export der Mutternfalle zeigen kein
+Schraubenloch.** Folge von RM-631 (Paket G, 09.10.2026): Seit der Schritt das Schraubenloch durch
+den Träger bohrt, baut der Baustein es nur über seine Tasche, wo es nicht zu sehen ist.
+**Abnahme:** In Vorschau, Geist und SCAD steht die Bohrung mit einer benannten Anzeigelänge, nie
+aus der Mündung heraus.
+
+**Nachweis (09.10.2026, `571f8dead`, Paket G):** `parts/through.py` zeigt die Bohrungen aus
+`reaches_through` drei Durchmesser weit (`SHOWN_REACH`, bei M3 10,2 mm), nur an den Enden, die
+nicht aus der Mündung zeigen; `preview.render`, `ops.placement_tools`, `ops.placed_tool` und
+`scad.to_scad` (Zylinder mit der Variable `through_length`) benutzen es, `ops._reaching_through`
+denselben Zylinder. Tests `test_parts_catalog.py::test_the_nut_trap_shows_its_screw_hole_in_the_preview_and_the_scad_file`
+(seitlich und von unten) und `…::test_the_nut_trap_ghost_shows_its_screw_hole_into_the_material_only`,
+am Stand `c12091b8d` rot (Vorschau mit und ohne Schraubenloch 38 Dreiecke, kein Zylinder in der
+SCAD-Datei). Maße unverändert. Umgesetzt von Claude.
+
+## RM-633: Eine Kabeldurchführung in einer dickeren Wand sagt es (09.10.2026)
+
+<a id="rm-633-eine-kabeldurchführung-in-einer-dickeren-wand-sagt-es-09102026"></a>
+<a id="rm-633"></a>
+
+**RM-633 — Die Kabeldurchführung mit Zugentlastung heißt im dicken Träger Durchgang.** Gefunden
+bei RM-631 (Paket G, 09.10.2026): Im 40-mm-Quader öffnete die Bohrung in den eigenen Klemmkanal,
+der eingeschlossen im Material lag; erklärt war sie als Durchgang, gesagt wurde nichts.
+**Abnahme:** je Kern Sackloch und ein Befund mit Weg zur Wandstärke; in der passenden Wand bleibt
+alles, wie es war.
+
+**Nachweis (09.10.2026, `571f8dead`, Paket G):** `_through_bores_in_the_body` fragt außer dem Körper
+nach dem Schritt den Träger davor; verschließt er die Bohrung, ist sie ein Sackloch. Ein abtragender
+Baustein mit Aufbau (`host_add`) und Feld `wall` meldet dann `parts.wall_thicker` (Warnung, gemessene
+Wand, *Diesen Schritt ändern* auf `wall`), Kabeldurchführung und Schlauchtülle; neuer Satz in allen
+Katalogen, Bausteinoperationen `targets:11`. Test
+`test_parts.py::test_a_part_built_for_a_thinner_wall_says_so` (je Kern, beide Bausteine, 40 mm und
+3 mm): am Stand `c12091b8d` die vier 40-mm-Fälle rot. **Zurückgenommen:** Die erste Fassung fragte
+den Träger direkt hinter der Bohrung und warnte an der Dose im Beispiel, deren ausgehöhlte Wand dort
+2,8 statt 2,4 mm misst (Raster der Aushöhlung) — der Klemmkanal schneidet den Rest durch (Torlauf).
+Gefragt wird jetzt hinter dem ganzen Werkzeug entlang der Achse; Gegenprobe
+`test_a_cable_gland_in_a_slightly_thicker_wall_cuts_through_the_rest` (je Kern). Die Beispiele
+bleiben unverändert. Umgesetzt von Claude.

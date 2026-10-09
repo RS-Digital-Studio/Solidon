@@ -83,6 +83,13 @@ scrive in `website/version.json`.
 - Su una filettatura interna stampata, la selezione offre direttamente *Perno per foro*.
 - Se in un foro c'è un pezzo separato come un perno, le azioni sul foro lo dicono e offrono *Dividi in pezzi distinti*. Finora il perno veniva fuso in silenzio con la piastra.
 - Nuovo il *Perno filettato*: una barra filettata o un prigioniero senza testa, smussato a entrambe le estremità, con la stessa filettatura stampabile di vite e dado.
+- Anche nei fori dei blocchi come il foro per vite, l'inserto a caldo o la sede per dado, *Perno per foro* crea il perno adatto, e avvisa se il foro non è nel corpo.
+- Posizionata a mano su una faccia, la sede per dado scava la sua tasca nel materiale. Finora la tasca restava sopra e veniva forato solo il foro per la vite.
+- Il foro per la vite della sede per dado attraversa esattamente il pezzo, anche se spesso. Finora finiva 10 mm sotto la tasca o forava il lato opposto oltre una fessura.
+- Inserita da sotto, la sede per dado ha la tasca sotto la faccia e la fessura scende fino a essa. Finora la tasca stava per metà sopra, con la vite nella faccia.
+- Se il foro di un blocco non attraversa il pezzo, ora si chiama cieco. Finora si chiamava passante.
+- Se la parete è più spessa di quanto indicato per «Passacavo» o «Portagomma», il passaggio lo dice e apre lo spessore di parete. Finora il foro finiva in silenzio nel materiale.
+- Se in una svasatura, un'asola, una coppa, una gola o una filettatura c'è un pezzo separato, le azioni lo dicono. Finora veniva tagliato o fuso.
 
 ### Blocchi
 
@@ -109,6 +116,12 @@ scrive in `website/version.json`.
 - Modellare segue il mouse in modo fluido, e anche un passaggio con centinaia di tratti di pennello si calcola in fretta.
 - In *Scheletro* ogni clic dopo il primo crea un osso, Invio chiude la catena, trascinare un'articolazione la piega e *Fatto* salva tutto senza dialogo.
 - Uno scheletro piega solo ciò che è legato alle sue ossa, il resto del corpo resta fermo. I progetti precedenti si calcolano come salvati.
+- Con Ctrl o Maiusc selezioni più spigoli e li raccordi o smussi in un solo passaggio. Un clic su un angolo seleziona tutti gli spigoli che vi si incontrano.
+- Su un corpo esatto l'evidenziazione di uno spigolo mostra anche gli spigoli tangenti adiacenti che *Raccorda* e *Applica uno smusso* includono.
+- Ciò che la selezione offre su una caratteristica, l'operazione lo esegue con esattamente quei valori. Ciò che è in grigio lo dice con la stessa frase, anche via chat e riga di comando.
+- Come posto della copia, *Duplica caratteristica* propone una larghezza e mezza accanto all'originale, con una parete in mezzo e mai lungo il suo asse.
+- Su una svasatura, *Ruota caratteristica* propone l'angolo più grande con cui resta tale, e avvisa quando una rotazione rimette la caratteristica solo su sé stessa.
+- Se un'azione colpisse un pezzo separato accanto alla caratteristica, o una caratteristica posizionata toccasse altro materiale solo lungo una linea, Solidon lo dice invece di danneggiare il corpo.
 
 ### Generare con l'IA
 

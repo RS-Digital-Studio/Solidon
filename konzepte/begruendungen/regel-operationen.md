@@ -117,6 +117,9 @@ bearbeitbar sein, egal ob importiert Format egal und beim selbst zeichnen").
 Sie stehen jetzt in `geom/edge_ops.py`, fragen `SceneObject.kind` im Rumpf und
 wählen danach den Kern.
 
+Die Netz-Zwillinge der Grundkörper bleiben trotzdem erreichbar: über das
+Kontextmenü ihres Verlaufsschritts (aus der Regel hierher verschoben, Review G).
+
 **Das ist kein Zwillingspaar** (`MENU_TWINS`, `registry/registry.py`), und der
 Unterschied ist keine Feinheit: Ein Zwillingspaar sind zwei registrierte
 Operationen für dieselbe Handlung, und bis P2.8 wählte der **Kunde** über
@@ -1556,6 +1559,9 @@ Zugabe aus §39 (`FEATURE_OVERLAP`, 0,02 mm) hat bei den üblichen Durchmessern
 dieselbe Größenordnung wie der Vieleckverlust und deckt ihn zu. Wer sie
 weglässt — weil sein Werkzeug exakt sein muss —, verliert diese Deckung mit.
 
+Merksatz dazu, aus der Regel hierher verschoben (Review G): `FEATURE_OVERLAP`
+verdeckt den Vieleckverlust.
+
 ## Toleranzen sind Durchmessermaße
 
 `clearance` und `press` aus dem Materialprofil gelten **im Durchmesser**, wie
@@ -2358,3 +2364,30 @@ Operation absagte, und sperrte die Tasche um einen Zapfen, in der sie rechnete;
 der Griff fragte nur die Art. `actions.move_refusal` ist die Zeile der Karte,
 und Operation und Griff lesen sie. Robert (d): Die Tasche um einen Zapfen sagt
 ab, statt beide gemeinsam zu versetzen.
+
+## Fremde Teile bleiben, und ein exakt gesetztes Merkmal ist dicht (RM-596, RM-597)
+
+**Die Teilefrage vorab kennt zwei Lagen, das Ergebnis alle.**
+`separate_part_reason` fragt, ob ein Teil im Hohlraum des Merkmals liegt oder
+das Merkmal im Hohlraum eines anderen. Wohin eine Handlung ihr Werkzeug bringt,
+hängt an den eingegebenen Zahlen: An einer Welle mit losem O-Ring in der Kehle
+kippte *Merkmal drehen* die obere Hälfte um 10° in den Ring, und beide Kerne
+lieferten ein Teil statt zwei, ohne Befund (12 717 mm³ am Netz). Seitdem fragt
+jede Merkmalshandlung außer *Zum Langloch ziehen* ihr Ergebnis: Jede Schale
+eines Teils, zu dem das Merkmal nicht gehört, steht danach mit demselben
+Rauminhalt und Hüllquader für sich da (`_leaves_other_parts_alone`). Teile sind
+Materialfamilien (`repair.material_part_families`); ohne sicheren Beleg gibt es
+keine Absage, und wo die Handlung berührende Teile mit Befund vereinigt
+(`boolean.parts_united`), gilt der Befund.
+
+**Der Schnittweg fragte die Dichtheit längst, der Weg aus den Flächen nicht.**
+Eine exakte Zapfenkopie, die das Original auf einer Mantellinie berührt, kam mit
+offenem Zwilling zurück (18 560,8 mm³), ohne Befund; ebenso der an die
+Taschenwand versetzte und der auf den Taschenboden gekippte Zapfen. Jetzt sagt
+die Handlung ab, wo der Körper vorher dicht war und danach ungültig ist oder
+sein Zwilling eine Berührung zeigt: Kanten an mehr als zwei Dreiecken, ohne
+offene Kante (`_exact_placed_holds`). Eine Naht, die nur die Vernetzung nicht
+schließt — an der um 1° gekippten Wellenhälfte fünf offene neben vier
+mehrfachen Kanten —, kommt durch wie bisher (§30). Ein schon offenes
+eingelesenes Modell bleibt bearbeitbar. Am Netz rechnet dieselbe Lage, weil der
+Kern Berührung symbolisch auflöst.

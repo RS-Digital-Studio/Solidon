@@ -37,6 +37,10 @@ denselben Überschriften: `konzepte/begruendungen/karte-app-core-perceive.md`.
 
 ## Der Weg durch die Erkennung
 
+`point_in_shell` fragt einen unentscheidbaren Punkt quer neben seiner Achse
+nach. Bausteinplatzierung, Stiftprüfung und Hohlraumschutz verwenden dieselbe
+Frage; der Aufrufer legt fest, welche Antwort ohne eindeutigen Beleg schützt.
+
 - **Konkurrierende Rundformen brauchen vollständige Nachweise**: Ein Zylinder
   beendet die Frage vor dem Kegellauf nur, wenn seine Originalecken bis
   `EPS_GEOM` und seine senkrechten Normalen bis `EPS_ANGLE` stimmen.
@@ -172,16 +176,24 @@ hält beide Wege zusammen.
 - **Was nicht gilt, steht trotzdem da** (`op=None` mit Satz), und **jedes Feld
   trägt seinen gemessenen Wert** — eine andere Vorgabe wäre eine stille
   Änderung. `ActionField.measurement` ist der Ausgangswert.
-- **Versetzen fragt eine Funktion**: `move_refusal` ist die Zeile *Merkmal
-  verschieben* (`actions_for(only=)`); `move_feature` und der Griff
-  (`FeaturePanel.refuses`) lesen sie. Nur dort sagt `move_blocked` zusätzlich
-  ab (Zapfen oder Kuppel als ganzer Körper, Zapfen desselben Teils in der
-  Bohrung; ein getrenntes Teil dort nennt `OTHER_PART_IN_THE_BORE`), und eine
-  Haltelippe (`only_a_rim_inside`) sperrt nicht. An der Fläche steht in dieser
-  Zeile *Fläche versetzen*, der Weg beginnt bei 0 (`_STARTS_AT_ZERO`).
+- **Jede Zeile fragt eine Funktion**: `action_refusal(op, …)` ist die Zeile
+  der Operation (`actions_for(only=)`); jede Merkmalshandlung sagt mit ihrem
+  Satz ab, ohne Ausnahme (`prepare_ops._refuse_like_the_card`), der Griff liest
+  `move_refusal` (`FeaturePanel.refuses`). `move_blocked` sperrt das Versetzen
+  zusätzlich (Zapfen desselben Teils in der Bohrung; ein getrenntes Teil dort
+  nennt `OTHER_PART_IN_THE_BORE`); ein Zapfen oder eine Kuppel als ganzer
+  Körper sperrt Versetzen, Ändern, Drehen und Entfernen
+  (`FEATURE_SPANS_THE_BODY`); eine Haltelippe (`only_a_rim_inside`) sperrt
+  das Versetzen nicht. An der Fläche steht in dieser Zeile *Fläche
+  versetzen*, der Weg beginnt bei 0 (`_STARTS_AT_ZERO`). *Verdoppeln* legt
+  die Kopie anderthalb Breiten neben die ganze Kette, entlang X oder Y, nie
+  entlang der eigenen Achse (`_beside_the_original`).
 - **Grau mit dem Satz der Operation**: geteilter Hohlraum
   (`_shares_its_cavity`; ohne Netz keine Sperre), kein eigener Körper
-  (`no_own_body`), Verengung (`cone_reason`, `not_offered_at`), Bohrung einer
+  (`no_own_body`), ein getrenntes Teil im Hohlraum jeder Art außer dem
+  Einschluss oder das Merkmal selbst in einem fremden
+  (`prepare_ops.separate_part_reason`, jede Zeile),
+  Verengung (`cone_reason`, `not_offered_at`), Bohrung einer
   Kette mit Verengung (`narrowing_reason`), Kegel einer Kette bei *Merkmal
   ändern* (`_countersink_unsized` → `countersink_resize_refusal`), Verrundung
   ohne zwei Ebenen (`fillet_blocked` — liest die Ebenen aus `planar_mask`

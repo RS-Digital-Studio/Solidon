@@ -400,7 +400,11 @@ _REFUSALS_KEPT: Final = 256
 #:   ``prepare_ops`` rechnen ohne BLAS, LAPACK und die Winkelfunktionen der
 #:   Plattform. Gespeicherte Ergebnisse und Mustererkennungen trügen noch die
 #:   letzte Stelle der Maschine, auf der sie entstanden.
-CACHE_FORMAT_VERSION: Final = 52
+#: - 53 (RM-548, Review G): Zusammengelegte Mäntel sind am exakten Kern ganz,
+#:   sobald einer selbst die volle Umdrehung trägt
+#:   (``brep.features._cylinder_group_extent``). Gespeicherte exakte Erkennungen
+#:   nannten die Bohrung durch berührende Platten angeschnitten.
+CACHE_FORMAT_VERSION: Final = 54
 
 
 @dataclass(frozen=True, slots=True)

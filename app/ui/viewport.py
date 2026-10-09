@@ -53,6 +53,7 @@ from PySide6.QtWidgets import (
 
 from app.branding import ENVIRONMENT_PREFIX
 from app.core.geom.measure import (
+    CORNER_EDGES,
     Measurement,
     MeasurementList,
     SnapResult,
@@ -1352,6 +1353,11 @@ FEATURE_EDGE_WIDTH = 1.5
 #: (:data:`FEATURE_REACH_SHARE`): Wer die Kante meint, zielt genauer als wer
 #: die Fläche meint.
 EDGE_REACH_PIXELS = 10.0
+
+#: Wie nah ein Klick an einer Ecke liegen muss, damit er sie meint (RM-590) —
+#: halb so weit wie an einer Kante. Nahe einer Ecke liegen alle ihre Kanten in
+#: Reichweite; wer eine davon kurz vor ihrem Ende meint, trifft sie so noch.
+CORNER_REACH_PIXELS = EDGE_REACH_PIXELS / 2.0
 
 #: Strichstärke der gewählten Kante. Dick genug, dass sie neben der
 #: Körperkante darunter als eigene Linie zu sehen ist — Farbe allein trüge die
@@ -4884,10 +4890,11 @@ class Viewport(QWidget):
     edgePicked = Signal(str, str)
     """Ein Klick hat eine bearbeitbare Kante getroffen — Körper und Schlüssel.
 
-    Zwei Felder und kein `add`, anders als bei :attr:`featurePicked`: Eine
-    Kante wird einzeln gewählt. Wer mehrere verrunden will, nimmt die Gruppen
-    der Operation — „alle senkrechten" ist eine Auswahl und keine Sammlung
-    von Klicks.
+    Zwei Felder und kein `add`, anders als bei :attr:`featurePicked`: Die
+    Sammlung führt hier die Ansicht und nicht der Baum, denn eine Kante steht
+    in keiner seiner Zeilen. Wer mit Strg oder Umschalt weitere dazunimmt oder
+    herausnimmt (RM-563), meldet die getroffene; was gilt, sagt
+    :meth:`Viewport.highlighted_edges` — leer, wenn die letzte herausging.
 
     Der Schlüssel kommt aus der Geometrie (``brep.edit.edge_key``) und
     überlebt damit eine zweite Auswertung; er ist genau das, was die
@@ -5546,6 +5553,9 @@ class Viewport(QWidget):
         """Für welche Auswertung zuletzt geprüft wurde, ob die gewählte Kante
         sie überlebt hat. Ohne dieses Feld lief die Prüfung bei jedem
         Szenenaufbau — und die tastet alle Kanten des Körpers ab."""
+        self._edge_contours: dict[tuple[ObjectId, tuple[str, ...]], tuple[str, ...]] = {}
+        """Je Körper und gewählten Kanten die ganze Kontur, die eine Rundung
+        mitnimmt (:meth:`_contour_of_chosen_edges`) — einmal je Auswertung."""
         self._edge_info: dict[tuple[ObjectId, str], Any] = {}
         """Die ``EdgeInfo`` je Kante — was ihre Beschriftung braucht.
 
@@ -5561,8 +5571,15 @@ class Viewport(QWidget):
         Er steht neben der Merkmalsauswahl und nicht in ihr — eine Kante ist
         kein Merkmal, sie hat keine Kennung, die die Erkennung vergibt.
         """
+        self._more_edges: tuple[str, ...] = ()
+        """Die übrigen gewählten Kanten desselben Körpers, in Klickfolge (RM-563).
+
+        Strg- oder Umschalt-Klick nimmt sie dazu (:meth:`add_edge`). Die
+        zuletzt geklickte steht in ``_selected_edge`` und führt: Fasenmarken,
+        Titel und Auswahltiefe fragen nur sie, und ohne sie ist dieses Feld
+        leer."""
         self._edge_patch: Item | None = None
-        """Die Linie der gewählten Kante, vor dem Material gezeichnet
+        """Die Linie der gewählten Kanten, vor dem Material gezeichnet
         (:meth:`_redraw_edge_patch`)."""
         self._chamfer_values: dict[str, Any] | None = None
         """Die Werte der Fase im Merkmalfenster, solange sie die gewählte Kante
@@ -7294,6 +7311,7 @@ class Viewport(QWidget):
         # wenn ihre Kante den Schritt nicht überlebt hat — sonst zeigte die
         # Hervorhebung auf einen Schlüssel, den es nicht mehr gibt.
         self._edge_geometry.clear()
+        self._edge_contours.clear()
         self._edge_boxes.clear()
         self._markings = {
             key: known for key, known in self._markings.items() if known[0]() is not None
@@ -7307,9 +7325,11 @@ class Viewport(QWidget):
         # Dieselbe Bauart wie ``_shadow_splits`` und ``_edge_meshes``: Was
         # sich merkt, wofür es gerechnet hat, rechnet nicht zweimal.
         if self._selected_edge is not None and result is not self._edges_checked:
-            owner, key = self._selected_edge
-            if key not in {name for name, _points in self._prepared_edges(owner)}:
-                self._selected_edge = None
+            owner = self._selected_edge[0]
+            present = {name for name, _points in self._prepared_edges(owner)}
+            kept = [name for name in self.highlighted_edges() if name in present]
+            self._selected_edge = (owner, kept[-1]) if kept else None
+            self._more_edges = tuple(kept[:-1])
         self._edges_checked = result
         # Eine Platte mehr heißt ein Bett mehr. Die Kulisse gehört
         # ``show_build_volume``, und die kennt die Szene nicht — hier ist die
@@ -10644,8 +10664,18 @@ class Viewport(QWidget):
         Umgekehrt räumt jede Merkmalsauswahl sie weg, denn zwei hervorgehobene
         Stellen an einem Körper behaupten zwei Antworten auf eine Frage.
         """
-        chosen = (object_id, key) if object_id is not None and key else None
-        if chosen == self._selected_edge:
+        self.select_edges(object_id, (key,) if key else ())
+
+    def select_edges(self, object_id: ObjectId | None, keys: Sequence[str]) -> None:
+        """Mehrere Kanten eines Körpers hervorheben, die letzte führt (RM-563).
+
+        Derselbe Weg wie :meth:`select_edge`, nur mit der ganzen Sammlung:
+        Das Fenster stellt sie so wieder her, wenn es den Baum räumt.
+        """
+        unique = tuple(dict.fromkeys(key for key in keys if key))
+        chosen = (object_id, unique[-1]) if object_id is not None and unique else None
+        more = unique[:-1] if chosen is not None else ()
+        if chosen == self._selected_edge and more == self._more_edges:
             return
         # **Erst das Merkmal räumen, dann die Kante setzen.** Andersherum
         # entstünde ein Ring: :meth:`select_feature` lässt seinerseits die
@@ -10659,6 +10689,7 @@ class Viewport(QWidget):
         if chosen is not None and self.highlighted_feature_refs():
             self.select_feature(None)
         self._selected_edge = chosen
+        self._more_edges = more
         # Die Werte der Fase gehörten der vorigen Kante; die neue bekommt
         # ihre eigenen, sobald das Merkmalfenster sie meldet.
         self._chamfer_values = None
@@ -10671,8 +10702,46 @@ class Viewport(QWidget):
         if self.renderer is not None:
             self._draw()
 
+    def add_edge(self, object_id: ObjectId, key: str) -> None:
+        """Eine Kante desselben Körpers dazunehmen — oder eine gewählte herausnehmen.
+
+        Der Weg von Strg- und Umschalt-Klick an einer gewählten Kante
+        (RM-563), dieselbe Umschaltung wie bei Merkmalen und Körpern. Die
+        dazugenommene führt; wird die führende herausgenommen, führt die
+        zuletzt davor gewählte. Ohne gewählte Kante dieses Körpers ist es ein
+        gewöhnliches :meth:`select_edge`, und die letzte herausgenommen lässt
+        keine stehen.
+        """
+        self.add_edges(object_id, (key,))
+
+    def add_edges(self, object_id: ObjectId, keys: Sequence[str]) -> None:
+        """Mehrere Kanten desselben Körpers dazunehmen — oder herausnehmen, wenn
+        schon alle gewählt sind: die Kanten einer Ecke (RM-590) wie eine einzelne
+        (:meth:`add_edge`). Die zuletzt genannte führt."""
+        current = (
+            self.highlighted_edges()
+            if self._selected_edge is not None and self._selected_edge[0] == object_id
+            else ()
+        )
+        named = tuple(dict.fromkeys(key for key in keys if key))
+        if named and all(key in current for key in named):
+            chosen = [key for key in current if key not in named]
+        else:
+            chosen = [*(key for key in current if key not in named), *named]
+        self.select_edges(object_id if chosen else None, chosen)
+
+    def highlighted_edges(self) -> tuple[str, ...]:
+        """Die Schlüssel aller gewählten Kanten in Klickfolge, die führende zuletzt.
+
+        Sie gehören dem Körper aus :meth:`highlighted_edge`; ohne gewählte
+        Kante ist die Folge leer.
+        """
+        if self._selected_edge is None:
+            return ()
+        return (*self._more_edges, self._selected_edge[1])
+
     def _drop_edge(self) -> None:
-        """Die gewählte Kante fallen lassen — die eine Stelle dafür.
+        """Die gewählten Kanten fallen lassen — die eine Stelle dafür.
 
         Sie hängt an mehreren Wegen, und jeder einzeln geschriebene wäre
         einer, den der nächste vergisst: Ein anderer Körper im Baum, ein
@@ -10683,6 +10752,7 @@ class Viewport(QWidget):
         if self._selected_edge is None:
             return
         self._selected_edge = None
+        self._more_edges = ()
         self._chamfer_values = None
         self._chamfer_shown = None
         self._redraw_edge_patch()
@@ -12050,14 +12120,16 @@ class Viewport(QWidget):
         return self._candidates
 
     def _redraw_edge_patch(self) -> None:
-        """Die gewählte Kante als eigene Linie über dem Körper.
+        """Die gewählten Kanten als eigene Linie über dem Körper.
 
         Sie liegt genau auf der Körperkante darunter, und deshalb trägt die
         Aussage nicht die Farbe allein: Die Linie ist mehr als dreimal so
         breit wie die Kantendarstellung (:data:`SELECTED_EDGE_WIDTH` gegen
         :data:`FEATURE_EDGE_WIDTH`), und sie wird vor dem Material gezeichnet
         (``keep_in_front``) — eine Marke, die im Material verschwindet, sagt
-        nichts über die Stelle, die sie meint (Regel 18, ``api.py``).
+        nichts über die Stelle, die sie meint (Regel 18, ``api.py``). Mehrere
+        Kanten (RM-563) sind ein Element mit einer Kette je Kante: Es folgt
+        dem Körper wie die eine (:meth:`_sync_feature_preview`).
         """
         if self.renderer is None:
             return
@@ -12074,10 +12146,17 @@ class Viewport(QWidget):
 
         import numpy as np
 
-        object_id, key = self._selected_edge
+        object_id = self._selected_edge[0]
         entry = self._result.scene.objects.get(object_id)
-        points = next((pts for name, pts in self._prepared_edges(object_id) if name == key), None)
-        if entry is None or points is None or len(points) < 2:
+        prepared: dict[str, Any] = {}
+        for name, points in self._prepared_edges(object_id):
+            prepared.setdefault(name, points)
+        chains = [
+            np.asarray(prepared[name], dtype=float)
+            for name in self._contour_of_chosen_edges(object_id)
+            if name in prepared and len(prepared[name]) >= 2
+        ]
+        if entry is None or not chains:
             return
         # **Nur an einem sichtbaren Körper**, wie die Merkmalsfläche daneben
         # (`_redraw_feature_patch` über `_face_indices`). Ohne diese Frage
@@ -12088,13 +12167,42 @@ class Viewport(QWidget):
             return
         offset = np.asarray(self._shown_offset(entry, self._result), dtype=float)
         self._edge_patch = self.renderer.add_lines(
-            np.asarray(points, dtype=float) + offset,
+            np.vstack(chains) + offset,
             name=f"edge:{object_id}",
             colour=SELECTED_COLOUR,
             width=SELECTED_EDGE_WIDTH,
-            connected=True,
+            connected=len(chains) == 1,
+            polylines=[len(chain) for chain in chains] if len(chains) > 1 else None,
             keep_in_front=True,
         )
+
+    def _contour_of_chosen_edges(self, object_id: ObjectId) -> tuple[str, ...]:
+        """Die gewählten Kanten samt allem, was eine Rundung an ihnen mitnimmt (RM-579).
+
+        Am exakten Körper rundet OpenCASCADE eine Kante mit jeder tangential
+        anschließenden (``brep.edit.contour_keys``): An einem Quader mit
+        gerundeten senkrechten Kanten geht die Rundung an einer oberen Strecke
+        über den ganzen oberen Rand. Die Linie zeigte nur die geklickte, und
+        welche Kanten mitgingen, sah der Kunde erst in der Vorschau. Das Netz
+        hat keine solche Kontur; dort gilt, was gewählt ist.
+        """
+        chosen = self.highlighted_edges()
+        entry = self._result.scene.objects.get(object_id) if self._result is not None else None
+        if entry is None or entry.kind != "brep" or not chosen:
+            return chosen
+        known = self._edge_contours.get((object_id, chosen))
+        if known is None:
+            from app.core.brep import edit as brep_edit
+            from app.core.brep.kernel import Solid, available
+
+            body = entry.mesh
+            known = (
+                brep_edit.contour_keys(body, chosen)
+                if available() and isinstance(body, Solid)
+                else chosen
+            )
+            self._edge_contours[(object_id, chosen)] = known
+        return known
 
     def _feature_patch_state(self) -> tuple[Any, ...]:
         """Wovon die Merkmalsmarkierung abhängt — und nur davon.
@@ -13382,12 +13490,12 @@ class Viewport(QWidget):
 
         Vier Bedingungen, und jede hat ihren Grund:
 
-        * **Kein Dazunehmen.** Eine Kante wird einzeln gewählt — wer mehrere
-          verrunden will, nimmt die Gruppen der Operation („alle senkrechten"
-          ist eine Auswahl und keine Sammlung von Klicks, siehe
-          :attr:`edgePicked`). Umschalt und Strg meinen also den Körper oder
-          das Merkmal, und ein Kantentreffer dazwischen verschluckte das
-          Dazunehmen: Die Linie leuchtete, und der Objektbaum erfuhr nichts.
+        * **Dazunehmen nur an einer gewählten Kante** (:meth:`_add_edge_click`,
+          RM-563). Dort nimmt Umschalt oder Strg weitere Kanten desselben
+          Körpers dazu, wie an einem Merkmal weitere Merkmale. Sonst meinen
+          beide Tasten den Körper oder das Merkmal, und ein Kantentreffer
+          dazwischen verschluckte das Dazunehmen: Die Linie leuchtete, und der
+          Objektbaum erfuhr nichts.
         * **Eine Stufe tiefer** (:meth:`_goes_deeper`). Der erste Klick auf
           einen Körper meint den Körper — auch dann, wenn er zufällig neben
           einer Kante landet. ``add`` geht dorthin mit und wird nicht
@@ -13412,11 +13520,17 @@ class Viewport(QWidget):
         direkten Klick die Linie, und *Verrunden* daneben fände nichts, woran
         es ansetzen könnte. Auf dem gestuften Weg kostet das nichts: Dort ist
         der Körper längst gewählt, sonst käme der Klick gar nicht hierher.
+
+        **Eine Ecke bringt ihre Kanten** (:meth:`_corner_at`, RM-590): Trifft
+        der Klick eine, wählt er alle, die dort zusammenlaufen, und meldet die
+        letzte.
         """
         if not self.user_selection_allowed():
             return True
-        if add or self._direct_picking:
+        if self._direct_picking:
             return False
+        if add:
+            return self._add_edge_click(x, y, point)
         # **In einer Mündung meint der Klick die Bohrung** (Durchsicht 0.5.1,
         # KUNDE-05). Eine Bohrung Ø 4,4 hat in der Übersicht zehn Bildpunkte
         # Durchmesser; jede Stelle darin lag in der Reichweite ihres Rands, und
@@ -13433,14 +13547,113 @@ class Viewport(QWidget):
         object_id = self._object_at_view(point)
         if object_id is None or not self._goes_deeper(object_id, direct=direct, add=add):
             return False
-        key = self._edge_at(x, y, object_id, behind=point)
+        corner = self._corner_at(x, y, object_id, behind=point)
+        key = corner[-1] if corner else self._edge_at(x, y, object_id, behind=point)
         if key is None:
             return False
         if object_id != self._selected:
             self.objectPicked.emit(object_id, False)
-        self.select_edge(object_id, key)
+        self.select_edges(object_id, corner or (key,))
         self.edgePicked.emit(object_id, key)
         return True
+
+    def _add_edge_click(self, x: int, y: int, point: Vec3) -> bool:
+        """Strg- oder Umschalt-Klick — eine weitere Kante, wenn schon eine gewählt ist.
+
+        Ohne gewählte Kante gehört der Klick dem Körper oder dem Merkmal wie
+        bisher, und an einem anderen Körper dessen Dazunehmen. Am selben
+        Körper nimmt er die getroffene Kante dazu oder heraus, an einer Ecke
+        ihre Kanten (:meth:`add_edges`, :meth:`_corner_at`), und meldet die
+        letzte über :attr:`edgePicked`; das Fenster liest die ganze Sammlung
+        aus :meth:`highlighted_edges`. **Trifft er
+        keine Kante, geschieht nichts** — dieselbe Regel wie beim Klick ins
+        Leere mit Taste: Wer dazunehmen will und danebentrifft, verliert
+        seine Sammlung nicht. In einer Mündung trifft er keine, wie ohne Taste.
+        """
+        chosen = self._selected_edge
+        if chosen is None:
+            return False
+        object_id = self._object_at_view(point)
+        if object_id is not None and object_id != chosen[0]:
+            return False
+        if object_id is None or self._aim_in_opening is not None:
+            return True
+        corner = self._corner_at(x, y, object_id, behind=point)
+        key = corner[-1] if corner else self._edge_at(x, y, object_id, behind=point)
+        if key is not None:
+            self.add_edges(object_id, corner or (key,))
+            self.edgePicked.emit(object_id, key)
+        return True
+
+    def _corner_at(
+        self, x: int, y: int, object_id: ObjectId | None, behind: Vec3 | None = None
+    ) -> tuple[str, ...]:
+        """Die Kanten der Ecke unter einem Bildpunkt — leer, wo dort keine ist (RM-590).
+
+        Die Kunden-E-Mail zu RM-563 nannte „Kanten und Ecken“: Wer eine Ecke
+        verrunden will, meint die drei Kanten, die dort zusammenlaufen, und
+        musste sie bis hierher einzeln mit Strg zusammenklicken. Eine Ecke ist
+        ein Endpunkt, an dem sich mindestens ``measure.CORNER_EDGES`` Kanten
+        treffen, und getroffen ist sie, wenn sie im Bild höchstens
+        :data:`CORNER_REACH_PIXELS` vom Klick liegt — die nächste gewinnt.
+        Dieselben Kanten wie bei :meth:`_edge_at`, an beiden Körperarten, und
+        derselbe Vorfilter über den getroffenen Punkt: Eine verdeckte Ecke
+        auf der Rückseite nimmt nicht teil.
+        """
+        prepared = self._prepared_edges(object_id)
+        if not prepared or self.renderer is None or self._result is None or object_id is None:
+            return ()
+        entry = self._result.scene.objects.get(object_id)
+        if entry is None:
+            return ()
+
+        import numpy as np
+
+        from app.core.units import weld_tolerance
+
+        offset = np.asarray(self._shown_offset(entry, self._result), dtype=float)
+        near = self._edges_near(prepared, offset, behind, entry)
+        ends = [
+            (np.asarray(points[end], dtype=float), name)
+            for name, points in (prepared[index] for index in near)
+            if len(points) >= 2
+            for end in (0, -1)
+        ]
+        if len(ends) < CORNER_EDGES:
+            return ()
+        corners = np.asarray([point for point, _name in ends])
+        span = corners.max(axis=0) - corners.min(axis=0)
+        tolerance = weld_tolerance(float(np.linalg.norm(span)))
+        reach = CORNER_REACH_PIXELS * self._device_ratio()
+        best: tuple[float, tuple[str, ...]] | None = None
+        for point, _name in ends:
+            shown = point + offset
+            across, down, _depth = self.renderer.world_to_display(
+                (float(shown[0]), float(shown[1]), float(shown[2]))
+            )
+            distance = float(np.hypot(across - x, down - y))
+            if distance > reach or (best is not None and distance >= best[0]):
+                continue
+            meeting = np.linalg.norm(corners - point, axis=1) <= tolerance
+            names = tuple(
+                dict.fromkeys(name for (_p, name), hit in zip(ends, meeting, strict=True) if hit)
+            )
+            if len(names) >= CORNER_EDGES:
+                best = (distance, names)
+        return best[1] if best is not None else ()
+
+    def _picks_a_chosen_edge(self, x: int, y: int, point: Vec3) -> bool:
+        """Ob ein Klick auf eine von **mehreren** gewählten Kanten zeigt.
+
+        Der Rechtsklick fragt danach (:meth:`_on_right_click`): Eine Gruppe
+        bleibt eine Gruppe, wie bei mehreren Körpern, und das Menü gilt allen.
+        """
+        if not self._more_edges or self._selected_edge is None:
+            return False
+        if self._object_at_view(point) != self._selected_edge[0]:
+            return False
+        key = self._edge_at(x, y, self._selected_edge[0], behind=point)
+        return key is not None and key in self.highlighted_edges()
 
     def _goes_deeper(self, object_id: ObjectId, *, direct: bool, add: bool) -> bool:
         """Ob ein Klick auf diesen Körper die zweite Stufe meint (§18.5).
@@ -17901,6 +18114,10 @@ class Viewport(QWidget):
             self._selected,
             *self._selected_more,
         ):
+            self.contextMenuAt.emit(x, y)
+            return
+        # Dasselbe für mehrere gewählte Kanten (RM-563): Das Menü gilt allen.
+        if self._picks_a_chosen_edge(x, y, point):
             self.contextMenuAt.emit(x, y)
             return
         if not self._edge_click(x, y, point, direct=True):

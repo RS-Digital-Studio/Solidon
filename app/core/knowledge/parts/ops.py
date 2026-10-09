@@ -22,11 +22,13 @@ from __future__ import annotations
 import dataclasses
 import math
 from collections.abc import Container, Iterable, Mapping, Sequence
+from itertools import pairwise
 from typing import TYPE_CHECKING, Any, Final, cast, overload
 
 from app.core.errors import (
     CANCEL,
     CHANGE_SIZE,
+    CHANGE_THIS_STEP,
     CORRECT_INPUT,
     SHOW_LOCATION,
     Action,
@@ -51,6 +53,7 @@ from app.core.geom.transform import along as lying_along
 from app.core.geom.transform import composed, rotation, rotation_about, translation
 from app.core.knowledge.parts.registry import PARTS, PartRegistry, PartSpec
 from app.core.knowledge.parts.shapes import Kernel, building
+from app.core.knowledge.parts.through import with_shown_bores
 from app.core.knowledge.profiles import for_object
 from app.core.knowledge.strength import spring_load
 from app.core.log import get_logger
@@ -627,8 +630,17 @@ def _register_one(spec: PartSpec, params: type[BaseParams], registry: Registry |
         # öffnet bis über seine Fläche (``_opened_to_the_face``): Ein Ergebnis
         # von davor trüge weder den Satz noch die freie Öffnung. targets:7 —
         # in einer Bohrung, die schon weiter ist, sagt er das statt „neben
-        # dem Körper“ (``parts.bore_too_wide``).
-        cache_version=f"{_result_version(spec)}:targets:7",
+        # dem Körper“ (``parts.bore_too_wide``). targets:8 — eine erklärte
+        # Durchgangsbohrung endet im Körper (:func:`_through_bores_in_the_body`,
+        # RM-598). targets:9 — das nur bei einem bloß abtragenden Baustein; die
+        # Bohrungen eines anbauenden behalten ihre Länge. targets:10 — eine
+        # erklärte Durchgangsbohrung, hinter deren Ende Material liegt, heißt
+        # Sackloch, und ``reaches_through`` bohrt durch den Träger (RM-631).
+        # targets:11 — auch der Träger davor verschließt sie, und ein Baustein,
+        # der für eine dünnere Wand gebaut ist, sagt es (RM-633). targets:12 —
+        # die Bohrung geht durch berührende Fugen und die Luft der Sitzbohrung,
+        # eine nur halb im Material liegende sagt es (Nachprüfung G, N-1/2/6).
+        cache_version=f"{_result_version(spec)}:targets:13",
         params=params,
         consumes=1,
         produces=1,
@@ -1296,6 +1308,18 @@ def _insert_at(ctx: OpContext, spec: PartSpec) -> OpResult:
             bore=bore,
             cancelled=ctx.cancelled,
         )
+        reaching, produced = _reaching_through(
+            spec,
+            produced,
+            built,
+            body,
+            _matrix(ctx.params, anchor, sink, direction, spec.keeps_up, flip),
+            bore,
+            "mesh",
+        )
+        if reaching is not built:
+            built = as_mesh_data(reaching)
+            placed = _place(built, ctx.params, anchor, sink, direction, spec.keeps_up, flip)
         placed = _opened_to_the_face(placed, body, ctx.params, anchor, direction, spec.keeps_up)
         lip = _lip_on_a_slant(spec, part_params, body, ctx.params, anchor, direction, spec.keeps_up)
     addition = spec.host_add(part_params) if spec.host_add is not None else None
@@ -1395,6 +1419,21 @@ def _insert_at(ctx: OpContext, spec: PartSpec) -> OpResult:
         host_features,
         added_features,
     )
+    features, enclosed = _through_bores_in_the_body(
+        features,
+        set(features) - set(source.features),
+        as_mesh_data(body),
+        as_mesh_data(mesh),
+        as_mesh_data(original_body),
+        as_mesh_data(placed),
+        only_cuts=subtractive and spec.host_add is None,
+        measured=_measured_names(spec, features),
+    )
+    thicker = (
+        _wall_thicker(spec, part_params, enclosed, as_mesh_data(original_body), mouth, outward)
+        if subtractive and spec.host_add is not None
+        else None
+    )
 
     # Und die Gegenprobe zu „hat nichts bewirkt": Er hat etwas hinzugefügt, nur
     # nicht **am** Teil. Ein lösbares Teil fragt stattdessen, ob sein Träger
@@ -1421,6 +1460,7 @@ def _insert_at(ctx: OpContext, spec: PartSpec) -> OpResult:
             *([flat] if flat else []),
             *([on_edge] if on_edge else []),
             *([spring] if spring else []),
+            *([thicker] if thicker else []),
         ],
     )
 
@@ -1715,6 +1755,490 @@ def _spring_finding(name: str, params: BaseParams, profile: Profile | None) -> F
     )
 
 
+#: Wie weit hinter dem Ende einer Bohrung gefragt wird, ob dort Material liegt:
+#: zwei Überlappungsmaße — über das Hundertstel hinaus, mit dem ein Werkzeug
+#: über seine Mündung reicht, und nah genug, um keine Wand dahinter zu treffen.
+_BEYOND: Final = 2.0 * BOOLEAN_OVERLAP
+
+
+def _through_bores_in_the_body(
+    features: dict[str, Feature],
+    fresh: Iterable[str],
+    host: MeshData,
+    after: MeshData,
+    original: MeshData,
+    tool: MeshData,
+    *,
+    only_cuts: bool,
+    measured: frozenset[str] = frozenset(),
+) -> tuple[dict[str, Feature], tuple[str, ...]]:
+    """Eine erklärte Durchgangsbohrung endet im Körper und geht durch ihn — oder heißt Sackloch.
+
+    **Sie endet im Körper** (RM-598). Ein abtragender Baustein darf sein
+    Werkzeug über die eigene Form hinausreichen lassen, die Erklärung nicht:
+    Auf der Deckfläche eines 12 mm dicken Quaders lag die Schraubenbohrung der
+    Mutternfalle von z = -0,5 bis z = 22, fast zur Hälfte in der Luft, und
+    *Stift für Bohrung* sagte ab, dort sei kein Hohlraum im Körper. Gemessen
+    wird am Träger vor dem Schnitt, entlang der Achse: Wo sie im Material
+    liegt, wird gebohrt (:func:`_material_span`). Nur, wo der Baustein bloß
+    abträgt (``only_cuts``): Die Bohrung im eigenen Material eines anbauenden
+    Bausteins oder in seinem Aufbau (``host_add``) liegt am Träger vor dem
+    Schritt in der Luft — an Passungsleiter und Bajonett blieb von ihr das
+    Hundertstel, mit dem sie in den Träger sinken.
+
+    **Und sie geht durch** (RM-631). *Schraubenloch mit Senkung*, 10 mm tief in
+    12 mm, hieß Durchgang und endete 2 mm über der Unterseite; ebenso jede
+    Bohrung fester Länge in einem dickeren Träger. Liegt hinter einem ihrer
+    Enden Material (:data:`_BEYOND`), ist sie ein Sackloch und heißt so — die
+    Maße bleiben. Gefragt wird für jeden Baustein der Körper nach dem Schritt
+    (``after``) — unter der Bohrung eines anbauenden liegt der Träger, auf dem
+    er sitzt — und der Träger davor (``original``): Hinter der Bohrung der
+    Kabeldurchführung liegt ihr eigener Klemmkanal, und in einer dickeren Wand
+    lag er eingeschlossen im Material, während die Bohrung in ihn hinein
+    öffnete (RM-633). Den Träger davor fragt es hinter dem ganzen Werkzeug
+    (``tool``) entlang der Achse: Ist die Wand ein paar Zehntel dicker als
+    eingetragen — eine ausgehöhlte Dose im Raster der Aushöhlung —, schneidet
+    der Klemmkanal durch den Rest, und das ist kein Sackloch. Ist der Träger
+    nicht dicht, bleibt die Erklärung, wie sie war; ist es das Ergebnis nicht,
+    zählt nur der Träger davor.
+
+    Zurück kommen die Merkmale und die Namen der Bohrungen, die der Träger vor
+    dem Schritt verschließt — für :func:`_wall_thicker`.
+    """
+    import numpy as np
+
+    from app.core.perceive.features import _triangle_bounds
+
+    triangles = np.asarray(host.raw.triangles, dtype=np.float64)
+    if not len(triangles) or not host.is_watertight:
+        return features, ()
+    bounds = _triangle_bounds(triangles)
+    finished = np.asarray(after.raw.triangles, dtype=np.float64)
+    closing = _triangle_bounds(finished) if len(finished) and after.is_watertight else None
+    before = np.asarray(original.raw.triangles, dtype=np.float64)
+    carrier = _triangle_bounds(before) if len(before) and original.is_watertight else None
+    corners = np.asarray(tool.raw.vertices, dtype=np.float64)
+    enclosed: list[str] = []
+    result = dict(features)
+    for name in sorted(fresh):
+        feature = features.get(name)
+        if feature is None or feature.kind != "hole" or not feature.params.get("through"):
+            continue
+        depth = float(feature.params.get("depth") or 0.0)
+        axis = np.asarray(feature.params.get("axis") or (0.0, 0.0, 1.0), dtype=np.float64)
+        length = float(np.linalg.norm(axis))
+        if depth <= EPS_GEOM or length <= 0.0:
+            continue
+        axis /= length
+        centre = np.asarray(feature.params["centre"], dtype=np.float64)
+        # Eine Bohrung aus ``reaches_through`` ist gemessen (:func:`_reaching_through`):
+        # Auf der Achse lag in einer engeren Sitzbohrung Luft, und die Kürzung
+        # nahm ihr die Strecke bis dorthin (Nachprüfung G, N-1).
+        span = (
+            _material_span(host, triangles, bounds, centre, axis, depth / 2.0)
+            if only_cuts and name not in measured
+            else None
+        )
+        low, high = span if span is not None else (-depth / 2.0, depth / 2.0)
+        beyond = (low - _BEYOND, high + _BEYOND)
+        along = np.sum((corners - centre) * axis, axis=1) if len(corners) else np.zeros(1)
+        past_the_tool = (
+            min(low, float(along.min())) - _BEYOND,
+            max(high, float(along.max())) + _BEYOND,
+        )
+        by_carrier = carrier is not None and any(
+            _in_material(centre + axis * end, before, carrier, axis) for end in past_the_tool
+        )
+        through = not by_carrier and (
+            closing is None
+            or not any(_in_material(centre + axis * end, finished, closing, axis) for end in beyond)
+        )
+        if by_carrier:
+            enclosed.append(name)
+        if span is None and through:
+            continue
+        middle = centre + axis * (low + high) / 2.0
+        result[name] = dataclasses.replace(
+            feature,
+            params={
+                **feature.params,
+                "centre": (float(middle[0]), float(middle[1]), float(middle[2])),
+                "depth": high - low,
+                "through": through,
+            },
+        )
+    return result, tuple(enclosed)
+
+
+def _measured_names(spec: PartSpec, features: Mapping[str, Feature]) -> frozenset[str]:
+    """Die gesetzten Namen der Bohrungen aus ``spec.reaches_through`` — auch mit Ziffer.
+
+    ``_free_name`` hängt an einen vergebenen Namen ``_2``, ``_3`` an; der
+    Baustein kennt nur seinen.
+    """
+    wanted = {f"{spec.name}_{name}" for name in spec.reaches_through}
+    return frozenset(
+        key
+        for key in features
+        if key in wanted
+        or any(key.startswith(f"{base}_") and key[len(base) + 1 :].isdigit() for base in wanted)
+    )
+
+
+def _wall_thicker(
+    spec: PartSpec,
+    params: BaseParams,
+    enclosed: tuple[str, ...],
+    original: MeshData,
+    mouth: Vec3,
+    outward: Vec3,
+) -> Finding | None:
+    """Ein Baustein, der für eine Wandstärke gebaut ist, sitzt in einer dickeren (RM-633).
+
+    Kabeldurchführung und Schlauchanschluss bohren durch eine Wand der Stärke
+    ``wall`` und bauen dahinter auf (``host_add``): Klemmblock mit Kanal, Tülle.
+    In einer dickeren Wand liegt beides im vollen Material, der Kanal ist
+    eingeschlossen, das Kabel kommt nicht heraus — und gesagt wurde nichts.
+    Gemessen wird die Wand am Träger vor dem Schritt, von der Mündung entlang
+    der Achse bis zum ersten Austritt; der Befund nennt sie und öffnet das Feld.
+    """
+    import numpy as np
+
+    from app.core.geom.mesh import ray_hit_distances
+
+    wall = getattr(params, "wall", None)
+    if not enclosed or not isinstance(wall, int | float):
+        return None
+    triangles = np.asarray(original.raw.triangles, dtype=np.float64)
+    inward = -np.asarray(outward, dtype=np.float64)
+    start = np.asarray(mouth, dtype=np.float64) + inward * _BEYOND
+    hits = np.asarray(ray_hit_distances(triangles, start, inward), dtype=np.float64)
+    if not len(hits):
+        return None
+    thickness = _BEYOND + float(hits.min())
+    return Finding(
+        code="parts.wall_thicker",
+        severity="warning",
+        message=_(
+            "Die Wand ist hier {thickness} dick, der Baustein ist für {wall} gebaut. Sein "
+            "Durchgang endet im Material.",
+            thickness=format_length(thickness),
+            wall=format_length(float(wall)),
+        ),
+        values={"part": spec.name, "field": "wall", "wall_mm": round(thickness, 3)},
+        suggestions=(CHANGE_THIS_STEP,),
+    )
+
+
+def _material_span(
+    host: MeshData,
+    triangles: Any,
+    bounds: Any,
+    centre: Any,
+    axis: Any,
+    reach: float,
+) -> tuple[float, float] | None:
+    """Von wo bis wo die Achse innerhalb ``±reach`` um ``centre`` im Material liegt —
+    oder ``None``, wo sie es nirgends tut.
+
+    Die Treffer eines Strahls entlang der Achse teilen die Strecke; ob ein Stück
+    im Material liegt, fragt seine Mitte (:func:`_in_material`).
+    """
+    import numpy as np
+
+    from app.core.geom.mesh import ray_hit_distances
+
+    lead = reach + float(host.bounds.diagonal)
+    hits = ray_hit_distances(triangles, centre - axis * lead, axis)
+    along = sorted({float(distance) - lead for distance in np.asarray(hits, dtype=np.float64)})
+    cuts = [-reach, *(value for value in along if -reach < value < reach), reach]
+    inside = [
+        (low, high)
+        for low, high in pairwise(cuts)
+        if high - low > EPS_GEOM
+        and _in_material(centre + axis * (low + high) / 2.0, triangles, bounds, axis)
+    ]
+    if not inside:
+        return None
+    return inside[0][0], inside[-1][1]
+
+
+def _across(axis: Any) -> tuple[Any, Any]:
+    """Zwei Einheitsvektoren quer zu ``axis`` und zueinander."""
+    import numpy as np
+
+    helper = (1.0, 0.0, 0.0) if abs(float(axis[0])) < math.sqrt(0.5) else (0.0, 1.0, 0.0)
+    across = np.cross(axis, np.asarray(helper, dtype=np.float64))
+    across /= float(np.linalg.norm(across))
+    return across, np.cross(axis, across)
+
+
+def _in_material(point: Any, triangles: Any, bounds: Any, axis: Any) -> bool:
+    """Ob ``point`` im Material liegt — unentschieden eine Facettenhöhe quer zur Achse daneben.
+
+    ``_point_inside_shell`` zählt Durchstöße und kann es an geteilten Kanten
+    nicht: Auf der Achse eines mittig gesetzten Bausteins liegt jeder Punkt über
+    der Diagonale der Deckflächen. Dann fragt es
+    :data:`~app.core.units.MAX_FACET_SAG` daneben nach, quer zur Achse, damit
+    die Höhe entlang ihr bleibt; ohne Antwort gilt Luft.
+    """
+    from app.core.perceive.features import point_in_shell
+
+    return point_in_shell(point, triangles, bounds, undecided=False, axis=axis)
+
+
+def _reaching_through(
+    spec: PartSpec,
+    produced: PartResult,
+    built: Any,
+    host: MeshData,
+    matrix: Any,
+    seated: Feature | None,
+    kernel: Kernel,
+) -> tuple[Any, PartResult]:
+    """Die Bohrungen aus ``spec.reaches_through``, durch den ganzen Träger geführt (RM-631).
+
+    Die Mutternfalle schnitt ihr Schraubenloch fest 10 mm über die Tasche
+    hinaus: In einem 40 mm dicken Quader endete es bei z = 27,485 und hieß
+    Durchgang, auf dem Boden eines 4 mm hohen Spalts bohrte es 6 mm in den
+    Backen darüber. Jetzt baut der Baustein die Bohrung nur über seine eigene
+    Strecke, und hier wird sie von jedem Ende aus verlängert, so weit der
+    Träger dort Material hat: von acht Punkten am Rand des Querschnitts ab dem
+    Ende, je Punkt durch Material, berührende Fugen und die Luft der Bohrung,
+    in der er sitzt (:func:`_run_through`), der längste zählt.
+
+    **Nur wenn alle acht Material erreichen.** Hinter der Fläche, an der die
+    Tasche öffnet, und hinter einem Spalt liegt Luft; dort bleibt es beim
+    Baustein. Erreichen es nur manche — die Achse in einer Fläche des Trägers,
+    das Loch am Rand —, zöge die Bohrung eine Rinne; dann bleibt sie, und
+    ``parts.through_cut_short`` sagt es. Die Mitte zählt nicht mit: In einer
+    engeren Bohrung liegt sie in der Luft, und der Rand muss trotzdem durch.
+
+    Gemessen wird am Träger vor dem Schritt (``host``) im gesetzten Rahmen
+    (``matrix``), gebaut im eigenen, damit beide Kerne dieselbe Form und
+    dieselbe Lage bekommen. Am exakten Kern ist ``host`` die Vernetzung; das
+    Werkzeug reicht dort um die Facettenhöhe weiter, damit an einer gewölbten
+    Austrittsfläche keine Haut stehen bleibt. Die Erklärung endet am
+    gemessenen Austritt.
+
+    **In einer Bohrung gehört sie in deren Achse** (``seated``): Quer dazu ginge
+    sie quer durch das Teil — die Mutternfalle *von unten eingelegt* an einer
+    Bohrung. Dann sagt der Schritt ab. Längs erklärt sie sich mindestens bis zu
+    den Enden dieser Bohrung: Ist sie schon weiter, läuft die Schraube durch
+    sie, und erklärt war vorher die feste Länge bis 2,5 mm über die Fläche.
+
+    Gibt ``built`` unverändert zurück, wo nichts zu bohren ist — der Aufrufer
+    erkennt das an der Identität; ``produced`` trägt die erklärte Länge.
+    """
+    import numpy as np
+
+    from app.core.knowledge.parts.build import union
+    from app.core.knowledge.parts.through import cylinder_along, triple, unit
+    from app.core.perceive.features import _triangle_bounds
+
+    if not spec.reaches_through:
+        return built, produced
+    triangles = np.asarray(host.raw.triangles, dtype=np.float64)
+    if not len(triangles):
+        return built, produced
+    bounds = _triangle_bounds(triangles)
+    frame = np.asarray(matrix, dtype=np.float64)
+    overshoot = BOOLEAN_OVERLAP + (MAX_FACET_SAG if kernel == "brep" else 0.0)
+    features = dict(produced.features)
+    pieces: list[Any] = []
+    cut_short: list[str] = []
+    for name in spec.reaches_through:
+        feature = features.get(name)
+        if feature is None or feature.kind != "hole":
+            continue
+        axis = unit(feature.params.get("axis") or (0.0, 0.0, 1.0))
+        centre = triple(feature.params["centre"])
+        half = float(feature.params.get("depth") or 0.0) / 2.0
+        radius = float(feature.params["diameter"]) / 2.0
+        outward = unit(_applied(frame, axis, moved=False))
+        if seated is not None:
+            along = unit(seated.params.get("axis") or (0.0, 0.0, 1.0))
+            if abs(dot3(outward, along)) < 1.0 - EPS_GEOM:
+                turning = "direction" in {entry.name for entry in spec.params.spec()}
+                raise ValidationError(
+                    field="direction" if turning else "",
+                    detail=_(
+                        "Die Bohrung dieses Bausteins stünde quer zu der, in der er sitzt. "
+                        "Eine andere Richtung wählen oder ihn auf eine Fläche setzen."
+                    ),
+                    constraint="feasible",
+                    values={"part": spec.name, "feature": name},
+                    suggestions=(CORRECT_INPUT, CANCEL),
+                )
+        across, beside = _across(np.asarray(axis, dtype=np.float64))
+        ring = [
+            (math.cos(step * math.pi / 4.0) * across + math.sin(step * math.pi / 4.0) * beside)
+            * (0.99 * radius)
+            for step in range(8)
+        ]
+        runs: list[float] = []
+        for sign in (-1.0, 1.0):
+            end = np.asarray(centre, dtype=np.float64) + np.asarray(axis) * (sign * half)
+            heading = np.asarray((sign * outward[0], sign * outward[1], sign * outward[2]))
+            reached = [
+                _run_through(
+                    np.asarray(_applied(frame, end + offset)), heading, triangles, bounds, seated
+                )
+                for offset in ring
+            ]
+            found = [run for run in reached if run is not None]
+            if found and len(found) < len(ring):
+                cut_short.append(name)
+            runs.append(round(max(found), 6) if len(found) == len(ring) else 0.0)
+        below, above = runs
+        # In einer Bohrung, die schon weiter ist, läuft die Schraube durch sie:
+        # Erklärt wird sie bis zu deren Enden, gebohrt wird dort nichts.
+        declared_below, declared_above = below, above
+        if seated is not None:
+            placed = _applied(frame, centre)
+            seated_axis = unit(seated.params.get("axis") or (0.0, 0.0, 1.0))
+            seated_half = float(seated.params.get("depth") or 0.0) / 2.0
+            for reach in (-seated_half, seated_half):
+                tip = tuple(
+                    float(seated.params["centre"][index])
+                    + seated_axis[index] * reach
+                    - placed[index]
+                    for index in range(3)
+                )
+                along_axis = dot3((tip[0], tip[1], tip[2]), outward)
+                declared_below = max(declared_below, round(-along_axis - half, 6))
+                declared_above = max(declared_above, round(along_axis - half, 6))
+        if declared_below <= 0.0 and declared_above <= 0.0:
+            continue
+        with building(kernel):
+            if below > 0.0:
+                pieces.append(
+                    cylinder_along(
+                        2.0 * radius,
+                        centre,
+                        axis,
+                        -half - below - overshoot,
+                        below + overshoot + BOOLEAN_OVERLAP,
+                    )
+                )
+            if above > 0.0:
+                pieces.append(
+                    cylinder_along(
+                        2.0 * radius,
+                        centre,
+                        axis,
+                        half - BOOLEAN_OVERLAP,
+                        above + overshoot + BOOLEAN_OVERLAP,
+                    )
+                )
+        middle = (declared_above - declared_below) / 2.0
+        features[name] = dataclasses.replace(
+            feature,
+            params={
+                **feature.params,
+                "centre": (
+                    centre[0] + axis[0] * middle,
+                    centre[1] + axis[1] * middle,
+                    centre[2] + axis[2] * middle,
+                ),
+                "depth": round(2.0 * half + declared_below + declared_above, 6),
+            },
+        )
+    findings = [*produced.findings, *(_cut_short(spec, name) for name in cut_short)]
+    if features == produced.features and not cut_short:
+        return built, produced
+    if not pieces:
+        return built, dataclasses.replace(produced, features=features, findings=findings)
+    with building(kernel) as notes:
+        reaching = union(built, *pieces)
+    return reaching, dataclasses.replace(
+        produced, mesh=reaching, features=features, findings=[*findings, *notes]
+    )
+
+
+def _run_through(
+    origin: Any, heading: Any, triangles: Any, bounds: Any, seated: Feature | None
+) -> float | None:
+    """Wie weit der Träger ab ``origin`` entlang ``heading`` Material hat — ``None``, wo keins.
+
+    Gezählt über **alle** Treffer des Strahls, nicht den ersten (Nachprüfung G):
+    Weiter geht es durch Material, durch eine Fuge unter zwei
+    Überlappungsmaßen — zwei Platten, die sich in einem Objekt berühren, sind
+    ein Teil zum Verschrauben, kein Spalt (N-2) — und durch die Luft der
+    Bohrung, in der der Baustein sitzt, bis zu ihrem Boden (N-1: an einer
+    Sackbohrung blieb sonst darunter alles stehen). Echte Luft dahinter beendet
+    die Strecke; ein Spalt bleibt ein Spalt.
+    """
+
+    from app.core.geom.mesh import ray_hit_distances
+
+    hits = sorted(
+        {round(float(value), 9) for value in ray_hit_distances(triangles, origin, heading)}
+    )
+    reached: float | None = None
+    for low, high in pairwise([0.0, *hits]):
+        if high - low <= EPS_GEOM:
+            continue
+        middle = origin + heading * ((low + high) / 2.0)
+        if _in_material(middle, triangles, bounds, heading):
+            reached = high
+            continue
+        if high - low < 2.0 * BOOLEAN_OVERLAP or (
+            seated is not None and _in_the_seated_bore(middle, seated)
+        ):
+            continue
+        break
+    return reached
+
+
+def _in_the_seated_bore(point: Any, bore: Feature) -> bool:
+    """Ob ``point`` in der Bohrung liegt, in der der Baustein sitzt — quer wie längs."""
+    import numpy as np
+
+    from app.core.knowledge.parts.through import unit
+
+    axis = np.asarray(unit(bore.params.get("axis") or (0.0, 0.0, 1.0)), dtype=np.float64)
+    offset = np.asarray(point, dtype=np.float64) - np.asarray(bore.params["centre"])
+    along = float(np.sum(offset * axis))
+    half = float(bore.params.get("depth") or 0.0) / 2.0
+    return abs(along) <= half + _BEYOND and bool(_inside_the_bore(np.asarray([point]), bore)[0])
+
+
+def _cut_short(spec: PartSpec, name: str) -> Finding:
+    """Die Bohrung durch den Träger liegt nur zum Teil im Material und wurde nicht gebohrt (N-6).
+
+    Am Rand ragte das Schraubenloch der Mutternfalle 0,5 mm aus der Seitenwand;
+    die Verlängerung unterbleibt dort, denn sie zöge eine Rinne, und gesagt
+    wurde nur „über den Rand“. Der Kunde erfährt jetzt, dass das Loch fehlt.
+    """
+    return Finding(
+        code="parts.through_cut_short",
+        severity="warning",
+        message=_(
+            "Die Bohrung des Bausteins liegt hier nur zum Teil im Material und reicht nicht "
+            "durch. Weiter vom Rand setzen."
+        ),
+        values={"part": spec.name, "feature": name},
+        suggestions=(CORRECT_INPUT,),
+    )
+
+
+def _applied(matrix: Any, point: Any, *, moved: bool = True) -> Vec3:
+    """Ein Punkt (mit ``moved=False`` eine Richtung) durch ``matrix`` — Zeile für Zeile.
+
+    Ohne ``@``: Die Matrixmultiplikation ruft BLAS und rundet die letzte Stelle
+    je Maschine anders (RM-187); hier entstehen daraus Werkzeuglängen.
+    """
+    rows = [
+        float(matrix[row][0]) * float(point[0])
+        + float(matrix[row][1]) * float(point[1])
+        + float(matrix[row][2]) * float(point[2])
+        + (float(matrix[row][3]) if moved else 0.0)
+        for row in range(3)
+    ]
+    return (rows[0], rows[1], rows[2])
+
+
 def _merged_features(
     source: SceneObject,
     produced: PartResult,
@@ -1933,6 +2457,27 @@ def _insert_at_exact(
             bore=bore,
             cancelled=ctx.cancelled,
         )
+        reaching, produced = _reaching_through(
+            spec,
+            produced,
+            built,
+            as_mesh_data(body),
+            _matrix(ctx.params, anchor, sink, direction, spec.keeps_up, flip),
+            bore,
+            "brep",
+        )
+        if reaching is not built:
+            built = _exact_form(spec, produced)
+            placed = _place_solid(
+                built,
+                ctx.params,
+                anchor,
+                sink,
+                direction,
+                spec.keeps_up,
+                flip,
+                cancelled=ctx.cancelled,
+            )
         placed = _opened_to_the_face(placed, body, ctx.params, anchor, direction, spec.keeps_up)
         lip = _lip_on_a_slant(spec, part_params, body, ctx.params, anchor, direction, spec.keeps_up)
     added_features: dict[str, Feature] = {}
@@ -2015,6 +2560,21 @@ def _insert_at_exact(
         host_features,
         added_features,
     )
+    features, enclosed = _through_bores_in_the_body(
+        features,
+        set(features) - set(source.features),
+        as_mesh_data(body),
+        as_mesh_data(mesh),
+        as_mesh_data(original_body),
+        as_mesh_data(placed),
+        only_cuts=subtractive and spec.host_add is None,
+        measured=_measured_names(spec, features),
+    )
+    thicker = (
+        _wall_thicker(spec, part_params, enclosed, as_mesh_data(original_body), mouth, outward)
+        if subtractive and spec.host_add is not None
+        else None
+    )
     loose = (
         _host_split(original_body, prepared, spec, source)
         if spec.separate_from_host
@@ -2034,6 +2594,7 @@ def _insert_at_exact(
             *([flat] if flat else []),
             *([on_edge] if on_edge else []),
             *([spring] if spring else []),
+            *([thicker] if thicker else []),
         ],
     )
 
@@ -2340,7 +2901,9 @@ def placed_tool(
 
     Im Rahmen des Objekts und mit genau der Lage der Operation — Anker am
     Merkmal oder an der eingetragenen Stelle, Richtung, Rolle, Einsenken,
-    Spiegelung (:func:`_insert_at`). Für den Geist beim Zug an einem Baustein
+    Spiegelung (:func:`_insert_at`). Eine Bohrung durch den Träger
+    (``reaches_through``) zeigt er mit ihrer Anzeigelänge
+    (``through.with_shown_bores``, RM-632). Für den Geist beim Zug an einem Baustein
     (RM-174): Die Ansicht zeigte bis dahin nur die Marke des einen Merkmals,
     das man angefasst hatte; der Rest des Bausteins folgte erst beim Loslassen.
     Mit diesem Körper wandert der ganze Umriss. Er wird einmal zu Beginn des
@@ -2358,7 +2921,8 @@ def placed_tool(
     subtractive = cuts(spec, params)
     sink = 0.0 if subtractive or spec.separate_from_host else BOOLEAN_OVERLAP
     flip = subtractive and _builds_upward_on_a_face(source, params, built)
-    return _place(built, params, anchor, sink, direction, spec.keeps_up, flip)
+    shown = as_mesh_data(with_shown_bores(spec, produced, built))
+    return _place(shown, params, anchor, sink, direction, spec.keeps_up, flip)
 
 
 def lands_on(host: Mesh, tool: MeshData) -> bool:
@@ -2401,7 +2965,8 @@ def placement_tools(
 ) -> tuple[MeshData, MeshData | None]:
     """Der wirkliche Baustein lokal an einer Oberfläche, vor deren Rahmenmatrix.
 
-    Drehung, Einsenken und Schnittspiegelung sind enthalten. Der Aufrufer legt
+    Drehung, Einsenken und Schnittspiegelung sind enthalten, eine Bohrung durch
+    den Träger mit ihrer Anzeigelänge (RM-632). Der Aufrufer legt
     nur noch ``frame_of`` darüber. Ausdruckswerte müssen vorher wie für die
     Operation aufgelöst werden; ein Zielmaterial übergibt er über ``for_object``.
     """
@@ -2423,6 +2988,7 @@ def placement_tools(
     subtractive = cuts(spec, params)
     sink = 0.0 if standalone or subtractive or spec.separate_from_host else BOOLEAN_OVERLAP
     flip = subtractive and _extends_above_mouth(mesh)
+    mesh = as_mesh_data(with_shown_bores(spec, produced, mesh))
     primary = _place(
         mesh, params, sink=sink, direction=(0.0, 0.0, 1.0), keeps_up=spec.keeps_up, flip=flip
     )
@@ -2653,11 +3219,22 @@ def _builds_upward_on_a_face(source: SceneObject, params: Any, built: Mesh) -> b
     Danach liegt seine Öffnung an der Fläche und die Tasche darunter im Material
     — genau wie bei jedem anderen abtragenden Baustein. An einer Bohrung
     geschieht nichts: Dort hält ``_at_the_mouth`` die Tasche schon in der Mitte.
+
+    **Von Hand gesetzt, ohne Richtung, entscheidet die Stelle** (RM-591): Mit
+    nur einer Position — über Chat, Kommandozeile oder den Dialog ohne Fläche —
+    zeigt der Baustein entlang seiner Achse, und auf der Deckfläche einer
+    Platte stand die Tasche ganz darüber; der Körper verlor nur das
+    Schraubenloch (Review G). Liegt über der Stelle Luft, wird gespiegelt wie
+    an einer Fläche (:func:`_air_above`). Liegt sie im Material — das
+    Gehäuse-Beispiel setzt seine Mutternfalle in die Mitte des Bodens —, bleibt
+    die Tasche, wo sie war.
     """
     name = str(_placement_value(params, "at_feature", "") or "")
     feature = source.features.get(name) if name else None
-    if not name and _free_direction(params) is not None:
-        return _extends_above_mouth(built)
+    if not name:
+        if not _extends_above_mouth(built):
+            return False
+        return _free_direction(params) is not None or _air_above(source, params)
     if feature is None or feature.kind != "face":
         return False
     return _extends_above_mouth(built)
@@ -2683,9 +3260,46 @@ def _on_its_own_bed(
     return direction, low if abs(low) > EPS_GEOM else 0.0
 
 
+def _air_above(source: SceneObject, params: Any) -> bool:
+    """Ob über der von Hand gesetzten Stelle Luft liegt — dorthin wüchse der Baustein.
+
+    Gefragt wird knapp über der Stelle, zwei Überlappungsmaße entlang der
+    gewählten Achse (``axis``), im Körper des Trägers
+    (``perceive.features._point_inside_shell``). Eine unentscheidbare Zählung
+    gilt als Material: Dann bleibt es beim Bisherigen.
+
+    **Knapp darüber, nicht auf halber Höhe des Bausteins.** So stand es in der
+    ersten Fassung, und das Schraubenloch der Mutternfalle reichte damals über
+    jeden Boden hinaus: In der Mitte des 8 mm dicken Bodens im Gehäuse-Beispiel
+    lag die halbe Höhe in der Luft, und die Tasche rückte um 2,5 mm nach unten.
+    """
+    import numpy as np
+
+    from app.core.perceive.features import _triangle_bounds, point_in_shell
+
+    up = {"x": (1.0, 0.0, 0.0), "y": (0.0, 1.0, 0.0)}.get(
+        str(_placement_value(params, "axis", "z")), (0.0, 0.0, 1.0)
+    )
+    reach = 2.0 * BOOLEAN_OVERLAP
+    position = np.asarray(
+        [float(_placement_value(params, name, 0.0)) for name in ("x", "y", "z")], dtype=np.float64
+    )
+    triangles = np.asarray(as_mesh_data(source.mesh).raw.triangles, dtype=np.float64)
+    if not len(triangles):
+        return False
+    point = position + np.asarray(up, dtype=np.float64) * reach
+    return not point_in_shell(point, triangles, _triangle_bounds(triangles), undecided=True)
+
+
 def _extends_above_mouth(built: Mesh) -> bool:
-    """Die eine Spiegelungsentscheidung für Schnittvorschau und tatsächliche Op."""
-    return float(built.bounds.maximum[2]) > BOOLEAN_OVERLAP + EPS_GEOM
+    """Die eine Spiegelungsentscheidung für Schnittvorschau und tatsächliche Op.
+
+    Dieselbe Frage stellen Anzeige und SCAD (``through.builds_upward``); dort
+    steht sie, damit es eine Antwort bleibt (Nachprüfung G, N-8).
+    """
+    from app.core.knowledge.parts.through import builds_upward
+
+    return builds_upward(built)
 
 
 def _free_direction(params: Any) -> Vec3 | None:

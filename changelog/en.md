@@ -83,6 +83,13 @@ it into `website/version.json`.
 - On a printed internal thread, the selection offers *Pin for hole* directly.
 - If a separate part such as a pin sits in a hole, the actions on the hole say so and offer *Split into separate parts*. Until now the pin was silently merged with the plate.
 - New is the *Threaded stud*, a headless threaded rod or stud with a chamfer at both ends and the same printable thread as screw and nut.
+- In holes of parts such as the screw hole, the heat-set insert and the nut trap, *Pin for hole* also builds the matching pin. If the hole does not lie in the body, it says so.
+- Placed by hand on a face, the nut trap cuts its pocket into the material. Until now the pocket sat above it, and only the screw hole was drilled.
+- The nut trap's screw hole goes exactly through the part, even a thick one. Until now it ended 10 mm below the pocket or drilled into the opposite side across a gap.
+- Laid in from below, the nut trap's pocket sits under the face, its slot leading down to it. Until now it sat half above, with the screw in the face.
+- If the hole of a part does not go all the way through, it is now called blind. Until now it was called through.
+- If the wall is thicker than entered for a *Cable gland* or *Hose barb*, the step says so and opens the wall thickness. Until now the passage silently ended in the material.
+- If a separate part sits in a countersink, slot, socket, groove or thread, the actions say so. Until now it was cut off or merged.
 
 ### Parts
 
@@ -109,6 +116,12 @@ it into `website/version.json`.
 - Sculpting follows the mouse smoothly, and even a step with hundreds of brush strokes is calculated quickly.
 - In *Armature*, every click after the first sets a bone, Enter ends the chain, dragging a joint bends it, and *Done* saves everything without a dialog.
 - An armature bends only what hangs on its bones, and the rest of the body stays put. Older projects calculate as saved.
+- With Ctrl or Shift you select several edges and fillet or chamfer them in one step. A click on a corner selects all edges that meet there.
+- On an exact body, the highlight of an edge also shows the tangentially adjoining edges that *Fillet* and *Add a chamfer* take along.
+- What the selection offers for a feature, the operation carries out with exactly those values. What is greyed out, it states in the same words, also via chat and command line.
+- As the spot for the copy, *Duplicate feature* suggests one and a half widths beside the original, with a wall in between and never along its axis.
+- On a countersink, *Turn feature* suggests the largest angle at which it stays one, and says when a turn only lays the feature onto itself.
+- If an action would hit a separate part next to the feature, or a placed feature would touch other material only along a line, Solidon says so instead of damaging the body.
 
 ### Generating with AI
 
