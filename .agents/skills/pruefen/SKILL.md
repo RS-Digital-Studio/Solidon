@@ -30,8 +30,8 @@ ohne `performance` und ohne die
 Erzeugnisvergleiche (`not rendered` — sie brauchen einen Lauf von `.agents/skills/erzeugen/SKILL.md`
 und gehören wie in der CI zum Release), dazu Ruff, Format und mypy.
 **Fenster-, Renderer- und Leistungsprüfungen laufen lokal ausschließlich beim
-Release**; die betroffenen auf Linux und macOS startet nach dem Push nach main
-die liefernde Sitzung auf main (`.agents/skills/liefern/SKILL.md`), auf Zweigen nie.
+Release**; auf Linux und macOS fährt sie die CI beim Push nach main von selbst
+(`.agents/skills/liefern/SKILL.md`), auf Zweigen nie.
 Nur dort wählt `--release` das zusätzliche Release-Tor. Die Option autorisiert
 weder einen Paketbau noch eine Veröffentlichung.
 Ein bereits vollständig grüner Nachweis für denselben relevanten Stand muss

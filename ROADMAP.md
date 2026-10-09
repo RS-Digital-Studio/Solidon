@@ -142,9 +142,8 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-288 — Ein Einzelprozess über die ganze Suite hängt im Sammler](#rm-288) | Tests und Entwicklungswerkzeuge | Nachstellversuch als Einzelprozess lief ohne Hänger durch (3:33 h); offen: Ursache, und ob die Anwendung betroffen ist |
 | [RM-314 — Rechtenachweis der Stimme für die englischen Werkstattfilme](#rm-314) | Tests und Entwicklungswerkzeuge | Stimme mit Prüfsummen in `licences.toml` dokumentiert; offen: `/legal-review` zur Werbenutzung, Eintrag in `ASSET-RIGHTS.toml` und ein Test, der die Stimme prüft |
 | [RM-316 — Zwillinge und Nur-Test-Wege: der Rest aus dem Code-Bericht des Aufräumens](#rm-316) | Tests und Entwicklungswerkzeuge | (a) bis (d) bis auf zwei Namen erledigt (07.10.); offen `ai_disclosure._fit_content_height` (gewollt mit Fenstertest oder in `ContentHeight`) und `slice.analysis._opening_loss` ohne Produktionsaufrufer |
-| [RM-344 — Renderertests laufen in der CI nur noch unter Windows](#rm-344) | Tests und Entwicklungswerkzeuge | Entschieden (Robert, 06.10.): `rendering`-Fälle in der Release-CI auch unter Linux und macOS, dazu der Wächter in `test_packaging.py` |
 | [RM-467 — Bibliotheken alle drei Tage auf neue Versionen prüfen und aktualisieren](#rm-467) | Tests und Entwicklungswerkzeuge | Läufe 02.10. und 09.10. im Archiv, der nächste am 12.10.; Paketbeleg der Bauplattform unter RM-468 |
-| [RM-531 — Fenstertests und echte Slicer auch unter Linux und macOS in der CI](#rm-531) | Tests und Entwicklungswerkzeuge | Entschieden (Robert, 06.10.): Fenster- und Renderergruppe auf vier Plattformen am Tag, per Handstart und bei jedem Push auf main. 14 der 23 roten Fenstertests außerhalb von Windows behoben, auf allen vier grün (07.10.); offen acht Fälle, `build.yml`, die Wächter und der Slicer-Job |
+| [RM-531 — Fenstertests und echte Slicer auch unter Linux und macOS in der CI](#rm-531) | Tests und Entwicklungswerkzeuge | Entschieden (Robert, 06.10.): Fenster- und Renderergruppe auf vier Plattformen am Tag, per Handstart und bei jedem Push auf main. 14 der 23 roten Fenstertests außerhalb von Windows behoben, auf allen vier grün (07.10.), der Intel-Kontrastfall danach (`58f768eb6`), Rendererfälle ohne Fenster seit RM-344 auf allen vier, die sieben übrigen Fälle grün in 37936316061, der Push nach main fährt Fenster- und Slicerauswahl selbst (Paket CI); offen die Abnahme am ersten main-Lauf |
 | [RM-688 — Der Test zu Curas Mindesttempo prüft das Mindesttempo nicht mehr](#rm-688) | Tests und Entwicklungswerkzeuge | Seit `9416f41ef` steht dort nur `assert motion is not None`; Attrappe und Vorgabe sind beide 10 |
 | [RM-002 — netcup-AVV und Freigabe der Rechtstexte belegen](#rm-002) | Veröffentlichung, Betrieb und Vertrieb | netcup-AVV belegen und zugehörige Rechtstexte fachlich abgleichen |
 | [RM-006 — Nächsten messbaren Schritt für die Sichtbarkeit festlegen](#rm-006) | Veröffentlichung, Betrieb und Vertrieb | Roberts Bestätigung des Plans bis 01.11. und die Montagsmessungen; der Punkt schließt, wenn Robert den Plan bestätigt |
@@ -417,9 +416,11 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
 - [~] **RM-051 — Renderer und Grafiklaufzeit in Linux- und Mac-Paketen abnehmen.** Gebaut und
   veröffentlicht ist **0.5.3** für alle vier Ziele. Die expliziten wgpu-Bibliotheken stecken
   weiter in der Paket-Spec. Offen sind der tatsächliche Grafik-/Eingabeweg samt Vulkan
-  beziehungsweise Metal und die Unix-Fenstergruppe: Die Fensterverträge laufen auf allen drei
-  Systemen (`build.yml`, Job `window-contracts`), die volle Fenster- und Renderergruppe führt die
-  CI nur auf Windows aus, weil Linux und macOS konkrete Befunde zeigen. Abnahme je Plattform:
+  beziehungsweise Metal und die Unix-Fenstergruppe: Die Fensterverträge laufen auf allen vier
+  Paketplattformen (`build.yml`, Jobs `window-contracts` und `window-contracts-intel`), die
+  Rendererfälle ohne Fenster seit RM-344 ebenso, und ohne Grafikadapter ist die CI rot
+  (`test_ci_has_a_working_graphics_adapter`). Die Fenstergruppe führt die CI nur auf Windows aus,
+  weil Linux und macOS konkrete Befunde zeigen ([RM-531](#rm-531)). Abnahme je Plattform:
   sichtbares Modell, Auswahl/Navigation, Schließen, dokumentierte Treiber-/Paketumgebung und
   erfolgreiche vollständige Fenstergruppe ohne stilles Überspringen fehlender Adapter.
 
@@ -491,8 +492,10 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
 - [ ] **RM-104 — Verbleibende Mac- und Unix-Befunde mit aktueller CI-Abdeckung abnehmen.** Die
   verbleibenden macOS-/Unix-Befunde schließen: Intel-Hänger beim ersten Ereignisdurchlauf mit
   Adapter- und Lebensdauerbeleg diagnostizieren; Fensterlayouts, Gewinde-/Exportpfade und Chatablauf
-  auf den betroffenen Architekturen prüfen. Der aktuelle CI-Testjob enthält keinen Intel-Mac; die
-  Fenstergruppe läuft nur auf Windows. Beide Einschränkungen ersetzen keine Fehlerbehebung. Abnahme:
+  auf den betroffenen Architekturen prüfen. Der Intel-Mac fährt in der CI Fensterverträge und
+  Rendererfälle (`window-contracts-intel`), beim Push nach main dazu die Kernsuite und die
+  Fensterauswahl; die volle Fenstergruppe läuft am Tag nur auf Windows. Beides ersetzt keine
+  Fehlerbehebung am Gerät. Abnahme:
   die im bisherigen Befund genannten Fälle auf macOS und Linux reproduzieren und schließen, mit
   sichtbaren Pixeln, bedienbarem Fenster und sauberem Prozessabschluss; anschließend die
   Testabdeckung entsprechend nachziehen. Bereits reparierte Skizzen-/B-Rep-/Dialogbefunde bleiben
@@ -5291,37 +5294,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   Produktionsaufrufer, nur Tests — als Prüfweg dokumentieren oder entfernen.
   Vermerk 09.10.2026 (Nachprüfung `09d8e9485`, Befund 6.1): `detect_unit(diagonal, largest_mm=PLAUSIBLE_MAX_MM)` (`app/core/ingest/loader.py:454`) behält die Vorgabe, mit der die Kommandozeile still Zoll las (RM-420); beide Produktionsaufrufer reichen die Reichweite, nur `tests/test_ingest.py:2136` nutzt die Vorgabe (`detect_unit(0.52).unit == "in"`). `largest_mm` ohne Vorgabe, den Test auf „ohne Drucker keine sichere Lesart“ umstellen. Beleg: `F:\solidon-review-reports\verif-09d8e9485.md` (Abschnitt 6).
 
-<a id="rm-344"></a>
-
-- [ ] **RM-344 — Renderertests laufen in der CI nur noch unter Windows.**
-  Review seit 0.5.1, Befund E-M1, Commit `6f0be89df` (Codex).
-  Der Marker `rendering` wird in der Kernmatrix (`.github/workflows/build.yml:185`) und im Job
-  `latest` (am 06.10. `:1616`) abgewählt und nur noch von der Gruppe `windowed` (Job `windows`) und
-  `window-contracts` getragen (`tools/run_suite_isolated.py:80–81`).
-  `pytest --collect-only -m "rendering and not windowed and not performance and not rendered"`
-  am 06.10.2026: 112 Fälle (`test_render_gfx_regressions` 69, `test_render_contract` 24,
-  `test_render_gizmo` 14, `test_render_factory` 3, `test_feature_label_layout` 2), vorher in der
-  Kernmatrix auf drei Plattformen; `test_render_factory.py` läuft über `CONTRACT_FILES` in den
-  Fensterverträgen aller drei Plattformen, die übrigen 109 nur auf Windows beim Release. Linux-
-  und Mac-Pakete zeichnen über Vulkan/Metal, RM-051 ist offen, neue pygfx-/wgpu-Fassungen prüft
-  `latest` nicht mehr. Widerspricht CI-03/CI-04 aus `konzepte/konzept-ci-testlaufzeiten-2026-09.md`;
-  eine Entscheidung Roberts dafür ist nicht festgehalten.
-  Hohl geworden: `test_every_linux_ci_path_that_uses_pygfx_has_a_vulkan_adapter`
-  (am 06.10. `tests/test_packaging.py:899ff.`) bleibt grün über Jobs ohne Bildtest; veraltet
-  der Kommentar `build.yml:110–116`. Die damals genannte Stelle `README.md:170–178` ist
-  umgeschrieben; am 06.10. nennt `README.md` „Fenster-, Renderer- und Leistungsprüfungen“ nur
-  für das lokale Tor.
-  **Fix:** Die `rendering`-Fälle in der Release-CI zusätzlich auf Linux und macOS fahren (etwa in
-  `window-contracts` mit `-m "rendering and not windowed …"`) und in `latest` wieder mitnehmen —
-  oder, wenn Robert die Windows-Grenze will, die Entscheidung im Konzept festhalten.
-  **Abnahme:** Wächter in `test_packaging.py`, dass jeder `rendering`-Fall auf jeder Plattform in
-  mindestens einem Releasejob läuft; Vulkan-Wächter, Kommentar und README auf dem Stand.
-  Bauplan §35, §38. Beleg: `bericht-E.md` (M1), `sonden\e_collect_rendering_only.txt`,
-  `e_collect_render_core.txt`.
-  Nachprüfung am Stand `6ce767031`: besteht noch. Von 110 Renderfällen laufen 107 nur in der Windows-Release-CI; Wächter fehlt, Kommentar und README veraltet. Belege `F:\solidon-review-reports\verif-E.md`.
-  **Entschieden (Robert, 06.10.2026):** Die Release-CI fährt die `rendering`-Fälle auch
-  unter Linux und macOS.
-
 <a id="rm-467"></a>
 
 - [~] **RM-467 — Bibliotheken alle drei Tage auf neue Versionen prüfen und aktualisieren.**
@@ -5345,7 +5317,8 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
 
 - [~] **RM-531 — Fenstertests und echte Slicer auch unter Linux und macOS in der CI.** Die
   Fenstergruppe läuft in der Release-CI nur unter Windows (Job `windows` in `build.yml`), Linux
-  und macOS fahren nur die Fensterverträge (`--ci-group contracts`). Echte Slicer prüft keine CI:
+  und macOS fahren die Fensterverträge und die Rendererfälle ohne Fenster (`--ci-group contracts
+  --ci-group rendering`, RM-344). Echte Slicer prüft keine CI:
   Erkennung, Herstellerbestand und Slicen unter Linux und macOS belegten bisher nur
   Wegwerfzweige (`.claude/.state/slicer-sonde-2026-10-05/`,
   `.claude/.state/druckerliste-2026-10-06/`). Am 06.10.2026 liefen dort die Fensterdateien der
@@ -5360,7 +5333,8 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   macOS) und Erkennung, Druckerlisten aus Erststart, Einstellungen und Druckdialog sowie das
   Slicen eines Würfels prüft — die beiden Sonden als Grundlage, nach `tools/` gezogen (RM-530).
   Ausgelöst am Tag und per Handstart, im Vertrag der CI-Aufteilung
-  (`konzepte/konzept-ci-testlaufzeiten-2026-09.md`); die Renderertests stehen in RM-344.
+  (`konzepte/konzept-ci-testlaufzeiten-2026-09.md`); die Rendererfälle laufen seit RM-344 auf
+  allen vier Plattformen.
   **Abnahme:** Ein Tag-Lauf zeigt die Fenstergruppe auf drei Plattformen grün und je Plattform
   jeden installierbaren Slicer mit Druckerliste und Druckdatei; `test_packaging.py` hält die
   neuen Jobs im Vertrag.
@@ -5377,30 +5351,34 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   Startfläche, Befehlspalette und Prüfbericht, Anschlusstest und Wächter in
   `test_native_keys.py`), die Befehlspalette misst ihre Kürzelspalte mit gebrochenen Metriken,
   und zwölf Tests messen die Zusage statt einer Windows-Eigenheit (Aktualisierungsweg,
-  Kürzelschreibweise, Zeitgeber, Fäden, Kantenglättung, Menüeinzug). **Offen**, mit Plattform
-  (U Linux, A macOS ARM, I macOS Intel): `test_widget_lifetime[KeyDialog]` (UAI, einer von
-  zehn überlebt), `test_a_button_wraps_its_label_instead_of_cutting_it` (UAI, der Knopf bricht
-  nicht um), `test_no_element_of_the_bar_is_squeezed` (UAI, Felder 356/364 statt 398/404 px bei
-  1600 px), `test_a_long_setup_failure_stays_in_the_scroll_area` (UAI, kein Rollbalken bei 200
-  Zeilen), `test_the_sketch_area_fits_a_laptop_screen` (AI, 977 statt höchstens 900 px),
-  `test_the_left_column_shares_its_height_with_all_four` (AI, Objekte 104 px, Boden 182 px bei
-  900 px Fensterhöhe), `test_chat_setup_follows_late_status_text…` (AI, der Text des
-  Schlüsseldialogs ist 105 statt 120 px hoch und rollt nicht) und
+  Kürzelschreibweise, Zeitgeber, Fäden, Kantenglättung, Menüeinzug). Die sieben Fälle, die
+  danach noch rot waren, liefen in der Fensterauswahl 37936316061 auf allen vier Plattformen
+  grün ([Archiv](ROADMAP-ARCHIV.md#rm-531-teil-sieben-fenstertests-außerhalb-von-windows-sind-auf-allen-vier-plattformen-grün-09102026)).
   `test_black_lit_surfaces_still_show_their_shape` (I, Kontrast genau 10 bei verlangten mehr
-  als 10; Renderer, RM-344). Jeder Fall wird zuerst am Paket seiner Plattform nachgestellt:
-  ob der Test irrt oder der Kunde es sieht. Die Winkelbedingung auf dem Intel-Mac führt
-  [RM-541](#rm-541). Danach die Umstellung in `build.yml`, die Wächter in
-  `test_packaging.py`, der Slicer-Job und die Unterlagen.
+  als 10) ist behoben (`58f768eb6`, Spreizung 12) und in der Rendererprobe von RM-344 auf dem
+  Intel-Mac grün (Lauf 37894162728). Die Winkelbedingung auf dem Intel-Mac führt
+  [RM-541](#rm-541).
 
   **Stand 07.10.2026, Auswahl vor dem Merge (Entscheidung Robert, CI-09):**
   `tools/ci_selection.py` nennt zum Diff die betroffenen Fenster- und Slicertests,
-  `fenster-auswahl.yml` und `slicer-auswahl.yml` fahren sie per Handstart auf dem Zweig.
+  `fenster-auswahl.yml` und `slicer-auswahl.yml` fuhren sie damals per Handstart auf dem Zweig.
   Slicertests tragen `slicer(<programm>)` und holen das Programm über `installed_slicer`
   (Wächter `test_slicer_selection.py`); `test_real_slicers.py` slict einen Würfel über den
   Weg des Druckdialogs in allen sieben Slicern. Lauf 37593226567: auf Ubuntu 24.04, macOS
   ARM und Intel je 13 von 13 Fällen grün, keiner übersprungen; Gegenprobe 37594281698 rot
   an fehlendem Programm und leerer Auswahl wie verlangt; Fensterauswahl 37591643343 auf
-  vier Plattformen grün. Offen bleibt hier der Tag-Job in `build.yml` aus dem Fix oben.
+  vier Plattformen grün.
+
+  **Stand 09.10.2026, der Push nach main prüft selbst (Paket CI, `paket/ci-renderer`):**
+  `build.yml` wählt beim Push nach main im Job `selection` die Fenster- und Slicertests seit dem
+  letzten geprüften main-Lauf (`ci_selection.py --checked-base`, sonst seit dem vorigen Tag) und
+  ruft `fenster-auswahl.yml` auf vier und `slicer-auswahl.yml` auf drei Plattformen auf
+  (`window-selection`, `slicer-selection`); auf Zweigen läuft keine CI, Unterlagen allein starten
+  keinen Lauf. Am Tag fährt die volle Fenstergruppe weiter nur unter Windows (CI-03), Linux und
+  macOS sehen jede Fensterdatei über die Auswahl. Die Wächter stehen in `test_packaging.py`,
+  `test_supply_chain.py` und `test_slicer_selection.py`. **Offen:** die Abnahme am ersten Lauf
+  nach dem Push nach main, der durchkommt — Fenster- und Slicerauswahl auf allen Plattformen
+  grün; solange das Repository privat ist, lehnt GitHub jeden Lauf ab.
 
 <a id="rm-688"></a>
 

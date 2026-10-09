@@ -31,6 +31,9 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-09 | [RM-531 (Teil): Sieben Fenstertests außerhalb von Windows sind auf allen vier Plattformen grün (09.10.2026)](#rm-531-teil-sieben-fenstertests-außerhalb-von-windows-sind-auf-allen-vier-plattformen-grün-09102026) |
+| 2026-10-09 | [RM-635: Prozesstests zählen ihre Zeit ab dem Zustand, und der Abbau wartet auf das Ende des Prozesses (09.10.2026)](#rm-635-prozesstests-zählen-ihre-zeit-ab-dem-zustand-und-der-abbau-wartet-auf-das-ende-des-prozesses-09102026) |
+| 2026-10-09 | [RM-344: Die Release-CI fährt die Rendererfälle ohne Fenster auf allen vier Paketplattformen (09.10.2026)](#rm-344-die-release-ci-fährt-die-rendererfälle-ohne-fenster-auf-allen-vier-paketplattformen-09102026) |
 | 2026-10-09 | [RM-571: Ein Sims im offenen Becher neben einem gesperrten Kanal behält seine Stütze (09.10.2026)](#rm-571-ein-sims-im-offenen-becher-neben-einem-gesperrten-kanal-behält-seine-stütze-09102026) |
 | 2026-10-09 | [RM-680: Bausteine verwalten steht ohne eigenen Baustein offen (09.10.2026)](#rm-680-bausteine-verwalten-steht-ohne-eigenen-baustein-offen-09102026) |
 | 2026-10-09 | [RM-650: Ein eingefügtes Modell kommt in den Ausschnitt (09.10.2026)](#rm-650-ein-eingefügtes-modell-kommt-in-den-ausschnitt-09102026) |
@@ -45494,6 +45497,135 @@ dass er geladen ist. Gegenprobe: `align_forms` ohne `at_most` macht fr und pt ro
 und die Spalten unverändert. Mit 150 % Schrift reichen die Felder bis 527 px statt 531 px.
 Changelog: ja, unter *Drucken und Übergabe an den Slicer* — mit vergrößerter Schrift hatte
 `v0.5.3` den Fehler.
+
+## RM-531 (Teil): Sieben Fenstertests außerhalb von Windows sind auf allen vier Plattformen grün (09.10.2026)
+
+<a id="rm-531-teil-sieben-fenstertests-außerhalb-von-windows-sind-auf-allen-vier-plattformen-grün-09102026"></a>
+
+**Befund (07.10.2026, Sonde 37495714708):** Nach den ersten Plattformfixes blieben sieben
+Testfunktionen außerhalb von Windows rot (U Linux, A macOS ARM, I macOS Intel):
+`test_widget_lifetime[KeyDialog]` (UAI, einer von zehn überlebt),
+`test_a_button_wraps_its_label_instead_of_cutting_it` (UAI, der Knopf bricht nicht um),
+`test_no_element_of_the_bar_is_squeezed` (UAI, Felder 356/364 statt 398/404 px bei 1600 px),
+`test_a_long_setup_failure_stays_in_the_scroll_area` (UAI, kein Rollbalken bei 200 Zeilen),
+`test_the_sketch_area_fits_a_laptop_screen` (AI, 977 statt höchstens 900 px),
+`test_the_left_column_shares_its_height_with_all_four` (AI, inzwischen `…_with_all_three`) und
+`test_chat_setup_follows_late_status_text…` (AI, Schlüsseldialog 105 statt 120 px).
+
+**Stand:** In der Fensterauswahl 37936316061 (welle2 `a9e4d3f64`, 121 Fensterdateien) liefen alle
+sieben auf Windows, Linux, macOS ARM und dem Intel-Mac grün. `test_widget_lifetime.py` (70
+Fälle), `test_selection_operations.py` (35), `test_transform_ui.py` (35), `test_generate_ui.py`
+(104) und `test_dialog_layout.py` (4) endeten je Plattform mit Exit 0; in `test_sketch_editor.py`
+(1 von 289) und `test_ui.py` (1 von 706, Intel-Mac 5) war je nur ein welle2-Fall rot (Escape im
+Skizzenmodus, Messausdruck; Intel dazu Organizer), keiner der sieben, behoben in `6e200fc31`.
+Die Fenstergruppe sammelt in diesen sieben Dateien 1 243 Fälle, dieselbe Zahl wie die Summe der
+Dateiergebnisse im Protokoll; die sieben stehen darin. Welcher der Plattformfixes zwischen dem
+07. und 09.10. welchen Fall behob, ist nicht einzeln zugeordnet. Changelog: nein.
+
+## RM-635: Prozesstests zählen ihre Zeit ab dem Zustand, und der Abbau wartet auf das Ende des Prozesses (09.10.2026)
+
+<a id="rm-635-prozesstests-zählen-ihre-zeit-ab-dem-zustand-und-der-abbau-wartet-auf-das-ende-des-prozesses-09102026"></a>
+<a id="rm-635"></a>
+
+**Befund (Pakete CI und SK, 09.10.2026):** Im vollen Entwicklungstor wurden sechs Fälle aus
+`tests/test_process.py` (Grenzen 3 bis 5 s) und
+`test_suite_script.py::test_a_portion_that_swallows_tests_is_halved_until_it_runs` (60 s) rot,
+einzeln grün; wiederholt auch `test_kernel_process.py::test_a_job_gives_the_same_bytes_in_the_helper_as_here[voxel]`
+(120 s) und `test_cura_machine.py::test_every_way_out_of_a_mount_closes_its_pipes[point]`.
+
+**Ursache, mit Lastgegenprobe:** Mit 192 rechnenden Prozessen auf 32 Threads braucht ein frischer
+Interpreter bis zu seiner ersten Ausgabe im Mittel 5,5 s statt 0,07 s (über `run_limited` 10,9 s
+statt 0,19 s, Höchstwert 13,3 s), und unter genau dieser Last werden dieselben sechs Fälle aus
+`test_process.py` rot. Die festen Grenzen zählten den Interpreterstart des Kindes mit. Der
+Halbierungstest braucht ruhig 0,87 s und riss dort die 60 s: Git-Bash bildet jeden Teilprozess über
+eine nachgebaute `fork` nach. `voxel` brauchte 81 s statt 1,9 s, weil der Hilfsprozess
+absichtlich eine Klasse tiefer rechnet. Eine abgesenkte Klasse des pytest-Arbeiters ist es nicht:
+Eine Prioritätssonde über `test_kernel_process.py` und `test_kernel_process_lifecycle.py` fand
+keinen Test, der sie zurücklässt. Der Cura-Fall `[point]` hatte dieselbe Ursache (erste Zeile in
+1 s) und war in `90467cefb` schon behoben; unter Last zeigte er eine zweite im Produktcode:
+`process.terminate_process_tree` wartete nach dem harten Beenden fest 0,5 s und warf dann selbst
+`TimeoutExpired`. Ein beendetes Kind mit acht rechnenden Fäden braucht schon ruhig im Median
+0,53 s bis zu seinem Ende, unter Last bis 3,2 s; der Lauf meldete dann einen Zeitablauf statt
+seines Grundes (Abbruch, Zeitgrenze, Ausgabegrenze, oder ein Ergebnis, nach dem der Slicer nicht
+endete). Seit `df8fae688`, also in jeder veröffentlichten Version seit 0.3.0.
+
+**Behoben:** `PROCESS_KILL_SECONDS` (30 s) ist die Grenze für das Ende eines hart beendeten
+Prozesses und für `taskkill`, die Schonfrist davor bleibt 0,5 s; Test zuerst
+(`test_a_killed_process_that_takes_a_moment_to_die_is_waited_for`, beide Zweige, am alten Stand
+rot). In `test_process.py` zählt eine Zeitgrenze, die das Thema ist, ab dem Ereignis
+(`_clock_held_until`: die 0,2 s ab dem lebenden Nachkommen oder dem hängenden Empfänger),
+Nachkommen werden über ihre Prozesskennung als beendet nachgewiesen statt über eine Marke nach
+fester Wartezeit, ein blockierender Empfänger über die Ordnung der Ereignisse; reine
+Hängergrenzen sind `HANG_GUARD` und entscheiden keinen Fall. Wo die Reaktion selbst das Thema
+ist (Ausgabegrenze, Elternende, Abbruch, `linger`), gilt `REACTION` = 10 s ab dem Ereignis — nach
+der Nachprüfung (N-3): Ein Prozesskern, der nur alle 20 s hinsah, blieb ohne sie grün und ist
+jetzt in fünf Fällen rot. `test_suite_script.py` wartet,
+solange Aufrufe, Ausgabe oder Dateien im Arbeitsordner dazukommen (`run_while_moving`, Stille
+120 s, höchstens 500 Aufrufe, Gesamtgrenze 30 min gegen Ausgabe ohne Ende — N-4, Selbsttest am
+alten Stand rot), `test_kernel_process.in_a_worker`, solange dieser Prozess oder ein
+Hilfsprozess Rechenzeit bekommt (Stille 60 s, höchstens 30 min). Dasselbe Muster
+hatten `test_print_settings.py::test_a_slicer_that_says_too_much_is_not_an_error_code` (auch im
+Tor von Paket E rot) und `test_a_slicer_with_endless_output_is_stopped`: 4 s ab dem Start als
+bloße Hängergrenze, jetzt 120 s bei einem Kind, das 240 s schliefe. Regel in
+`.claude/rules/tests.md` („Fremdlast macht auch funktionale Tests rot“).
+
+**Nachweis:** Unter derselben Last, unter der vorher sechs Fälle rot waren: `test_process.py` und
+die fünf Cura-Einhängefälle 29 von 29 grün; in einem zweiten Lauf unter noch schwererer Last
+(Interpreterstart bis 16,6 s) alle Fälle aus `test_process.py`, die 13 Bitgleichheitsfälle
+(`voxel` 64 bis 101 s) und die Cura-Fälle grün, der Halbierungstest grün nach 295 s. Sechs
+Mutationen am Prozesskern (Zeitgrenze ohne Baum, Erfolg ohne Nachkommen, Ausgabegrenze erst am
+Ende, Empfänger im Faden der Uhr, ohne `linger`, `linger` sofort) machen je ihren Fall rot; die
+Wartelogiken selbst haben Gegenproben (stiller Hänger, Aufrufschleife, Rechnung ohne Ende).
+Changelog: ja, unter *Drucken und Übergabe an den Slicer*.
+
+## RM-344: Die Release-CI fährt die Rendererfälle ohne Fenster auf allen vier Paketplattformen (09.10.2026)
+
+<a id="rm-344-die-release-ci-fährt-die-rendererfälle-ohne-fenster-auf-allen-vier-paketplattformen-09102026"></a>
+<a id="rm-344"></a>
+
+**Befund (Review seit 0.5.1, E-M1, Commit `6f0be89df`):** Kernmatrix und Versionswächter wählten
+`rendering` ab; von den Rendererfällen ohne Fenster (113 am 09.10.2026) liefen nur die drei aus
+`test_render_factory.py` außerhalb von Windows, die übrigen 110 nur in der Windows-Fenstergruppe.
+Der Vulkan-Wächter prüfte feste Jobnamen, darunter drei ohne Bildtest, und ließ sich von einem
+Kommentar erfüllen. Entschieden (Robert, 06.10.2026): die Rendererfälle auch unter Linux und macOS.
+
+**Behoben:** CI-Gruppe `rendering` in `tools/run_suite_isolated.py` (Rendererfälle ohne Fenster,
+alle Dateien außer den zwei Vertragsdateien, je Datei ein Prozess); mehrere `--ci-group` in einem
+Aufruf teilen sich eine Sammlung, eine rote Gruppe hält die andere nicht an. `window-contracts`
+fährt unter Linux und auf Apple Silicon Verträge und Rendererfälle in einem Aufruf. Der Intel-Mac
+fährt denselben Schritt im eigenen Job `window-contracts-intel`, auf den das Paket nicht wartet:
+Das Intel-Paket ist der längste Paketjob (11,7 min im Lauf 37530876754), eine Prüfzelle davor
+verlängerte den Tag-Lauf um jede Minute Wartezeit auf einen der fünf macOS-Plätze. Stattdessen
+hält er die Releaseakten von Linux, Windows und macOS an, und `sign_release.verify_ci_run` nimmt
+keinen Lauf an, in dem er rot ist. Der Versionswächter `latest` fährt beide Gruppen unter Linux,
+auch nach einem roten Stil-, Typ- oder Kernschritt, und nicht bei `tests_only`. Ein Rendererfall
+mit Fenster (`test_held_frames_arrive_as_one_after_the_release`) läuft weiter nur unter Windows,
+wo die Fenstergruppe läuft ([RM-531](ROADMAP.md#rm-531)). Konzept CI-03 bis CI-05 und §3,
+`.claude/rules/tests.md`, `auslieferung.md`, `/erzeugen` (keine Fenster- oder Slicerauswahl
+während eines Tag-Laufs), Karten und README nachgezogen.
+
+**Nachweis:** `test_every_rendering_case_runs_on_every_platform_in_a_release_job` leitet aus
+Workflow und Markerwahl ab, dass jeder Rendererfall ohne Fenster auf jeder Paketplattform in einem
+Pflichtjob läuft — worauf das Paket wartet oder was jede Releaseakte anhält. Der Sollwert
+„Rendererfall“ steht als Wert im Test, die Markerauswahl kommt aus pytests öffentlicher
+Sammlung, eine Schrittbedingung außerhalb einer Positivliste, `continue-on-error` am Schritt und
+`--plan-only` machen ihn rot. Zehn Gegenproben (Markerwahl zurückgedreht, nur Linux, Intel-Mac auf
+dem falschen Läufer, Intel-Prüfung ohne Wirkung auf die Linux- oder die Mac-Akte, Versionswächter
+ohne Renderer, `if: runner.os == 'Windows'`, `if: false`, `--plan-only`, `continue-on-error`) und
+eine in die andere Richtung; die drei Schrittmutationen und eine um `gizmo` verengte Gruppe
+blieben am vorigen Wächter grün. `test_ci_runner.py` hält den Marker der Gruppe als Wert und den
+Gleichlauf zwischen Sammlung und `pytest -m` je Gruppe. Der Vulkan-Wächter liest die zeichnenden
+Linux-Jobs aus ihren Aufrufen und die Pakete aus den apt-Zeilen, die xcb-Prüfung verlangt die
+vier Linux-Jobs mit `xvfb-run`. Die Simulation läuft je Paar aus Läufersystem und Skript einmal:
+die Wächterfamilie 20 Fälle in 6,9 s statt 20 in 10,9 s am ruhigen Rechner, Zeitgrenze wieder
+60 s. Rendererprobe auf dem Wegwerfzweig `wegwerf/renderer-probe`, Lauf 37894162728, alle grün,
+0 übersprungen außer den drei nativen Fällen von `test_render_factory` auf dem Intel-Mac
+(gewollt): Linux 6:40 min (Renderer 110 Fälle in 54 s), macOS ARM 8:15 min (91 s), Intel-Mac
+11:10 min (74 s), Windows unverändert 9:08 min, `latest` 5:48 min. Nach den Review-Funden, vor
+der Vorgabe ohne CI auf Zweigen: zweite Rendererprobe 37942642659 (window-contracts auf drei
+Läufern, `window-contracts-intel`, `latest`) grün, Slicerauswahl 37942574165 auf drei Läufern
+grün; die Fensterauswahl 37942569808 war nur in Fällen rot, die auf welle2 a9e4d3f64 genauso
+rot sind (Lauf 37936316061). Changelog: nein.
 
 ## RM-593 und RM-594: Auswertung wächst nicht mehr je Schritt, losgelassene Netze werden frei (09.10.2026)
 
