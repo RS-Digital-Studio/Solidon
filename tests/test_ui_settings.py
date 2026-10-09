@@ -340,7 +340,7 @@ def test_settings_keep_imported_printers_local_until_the_selected_one_is_saved(
         profiles.printer(profiles.DEFAULT_PRINTER), id="slicer-first", title="Printer A"
     )
     second = replace(first, id="slicer-second", title="Printer B")
-    path = Path("my-slicer.exe")
+    path = Path("my-orca-slicer.exe")
     saved: list[object] = []
     paths: list[str] = []
     monkeypatch.setattr(module.discover, "remembered_path", lambda _key: "")

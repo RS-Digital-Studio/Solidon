@@ -196,11 +196,11 @@ Cura erhält zusätzlich Blocker und vollständige Definitionsketten mit technis
 Namen (`handover._prepare_cura_cli`); nur Vererbung und Extruderzug-Verweise ändern
 sich in den Kopien. Originaldateien und Herstellerprofile bleiben unverändert.
 
-- **Die Stützsperre** (`support.block_channels`, Regel in `dateiformat.md`):
+- **Die Stützsperre** (`support.block_channels`, `.spare_ledges`):
   `writer._support_blocker` fragt zuerst die Schichten des Prüfberichts
   (`slice.findings.remembered_analysis`), sonst schneidet es einmal mit
-  `detail="support"` und extrudiert die Kanalscheiben mit `manifold3d`
-  (`BLOCKER_SIMPLIFY`, `BLOCKER_MARGIN`); abbrechbar bis in den Schnitt
+  `detail="support"` und extrudiert `channel_space` und `ledge_space` mit `manifold3d`
+  (`BLOCKER_SIMPLIFY`); abbrechbar bis in den Schnitt
   (`write_assembly(cancelled=)`, `_PlateJob.cancelled`).
 - **Cura bekommt je Teil ein Netz**: neben dem zusammengelegten STL je Teil
   und je Sperre ein STL und die Netzliste `<name>.meshes.json`

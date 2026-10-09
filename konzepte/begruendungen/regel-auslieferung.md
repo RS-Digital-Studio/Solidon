@@ -86,8 +86,11 @@ Hauptprogramm, keine an `Python.framework` und `_cffi_backend` (Lauf
 auf Intel und ARM, und der geschnittene Rücklesetext bricht ohne Liste und bei
 `<false/>` ab und lässt die Liste durch (Lauf 37530339300). Developer-ID-
 Zeitstempel und Notarisierung mit der Liste sind im Handstart von
-`build.yml` belegt (Lauf 37530876754, beide Architekturen grün), die Wirkung
-belegt erst ein echter Intel-Mac mit macOS 26.
+`build.yml` belegt (Lauf 37530876754, beide Architekturen grün). Für die
+Wirkung spricht eine Probe von Hand am Intel-Mac eines Kunden mit macOS 26.5:
+ad hoc mit Hardened Runtime signiert hing es ohne die Berechtigung und
+startete mit ihr. Der Start des
+notarisierten Pakets dort steht aus (RM-104).
 
 ## Was der Kunde bekommt, ist geprüft — und zwar die verteilte Menge
 

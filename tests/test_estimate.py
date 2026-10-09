@@ -449,7 +449,7 @@ def test_no_support_is_measured_as_a_strand_through_the_nozzle(nozzle):
     schlüge an einer 0,8er Düse an, die dieselbe Stütze mit wenigen Metern legt."""
     import math
 
-    from app.core.slice.advise import SPAN_INTERESTING
+    from app.core.slice.analysis import SPAN_INTERESTING
     from app.core.slice.estimate import support_floor
 
     profile = profiles.make_profile()
@@ -540,6 +540,72 @@ def test_the_plate_comparison_knows_when_support_is_wanted_and_blocked():
     alone = compared(blocking, bare)
     assert alone.channels_blocked
     assert alone.support_floor_mm3 is None, "die Tunneldecke allein verlangt keine Stütze"
+
+
+def test_a_blocker_without_space_does_not_block_the_comparison():
+    """Eine Kanaldecke, unter der kein Raum zu sperren ist, ergibt keinen
+    Sperrkörper — der Zeitvergleich bleibt offen, auch mit übernommener Sperre.
+    Gefragt war hier bis zum Review vom 08.10.2026 nur, ob es Kanalstücke gibt:
+    ein Schlitz von 0,6 mm Höhe neben einer Kragplatte hielt den Vergleich an."""
+    import trimesh
+
+    from app.core.geom.mesh import MeshData
+    from app.core.slice.estimate import plate_comparison
+    from app.core.types import SceneObject
+
+    block = trimesh.creation.box(extents=(30.0, 40.0, 20.0))
+    block.apply_translation((0.0, 0.0, 10.0))
+    cut = trimesh.creation.box(extents=(5.0, 50.0, 0.6))
+    cut.apply_translation((0.0, 0.0, 6.3))
+    arm = trimesh.creation.box(extents=(20.0, 40.0, 4.0))
+    arm.apply_translation((25.0, 0.0, 18.0))
+    body = MeshData.of(trimesh.boolean.union([trimesh.boolean.difference([block, cut]), arm]))
+    profile = profiles.make_profile()
+    plain = print_settings.resolve(profile)
+    blocking = dataclasses.replace(
+        plain, support=dataclasses.replace(plain.support, style="normal", block_channels=True)
+    )
+    part = (SceneObject(id="slot", name="Schlitz", mesh=body), body, blocking)
+
+    compared = plate_comparison(0, [part], profile, keep_arrangement=True, separate_objects=False)
+
+    assert not compared.channels_blocked
+    assert compared.support_material_mm3 is not None, "die Stützmenge bleibt bekannt"
+
+
+def test_a_ledge_blocker_makes_the_support_amount_unknown():
+    """Unter gesperrten Rändern druckt der Slicer keine Stütze, die Säulen der
+    Zeitrechnung stünden aber da: Mit „Ränder ohne Stütze“ und ohne Kanalsperre
+    warnte die Gegenprobe vor einer Abweichung um das 3,6-Fache (Review vom
+    08.10.2026). Die Stützmenge ist dann unbekannt, und der Befund ohne Stütze
+    nennt den richtigen Schalter."""
+    import trimesh
+
+    from app.core.geom.mesh import MeshData
+    from app.core.slice.estimate import _support_missing, plate_comparison
+    from app.core.types import SceneObject
+
+    column = trimesh.creation.box(extents=(30.0, 30.0, 40.0))
+    column.apply_translation((0.0, 0.0, 20.0))
+    flange = trimesh.creation.box(extents=(35.0, 35.0, 1.0))
+    flange.apply_translation((0.0, 0.0, 20.5))
+    arm = trimesh.creation.box(extents=(15.0, 10.0, 2.0))
+    arm.apply_translation((22.5, 0.0, 21.4))
+    body = MeshData.of(trimesh.boolean.union([column, flange, arm]))
+    profile = profiles.make_profile()
+    plain = print_settings.resolve(profile)
+    sparing = dataclasses.replace(
+        plain, support=dataclasses.replace(plain.support, style="normal", spare_ledges=True)
+    )
+    part = (SceneObject(id="flange", name="Flansch", mesh=body), body, sparing)
+
+    compared = plate_comparison(0, [part], profile, keep_arrangement=True, separate_objects=False)
+
+    assert compared.ledges_blocked
+    assert not compared.channels_blocked
+    assert compared.support_material_mm3 is None, "die Stützmenge ist mit Sperre unbekannt"
+    finding = _support_missing(compared, 0.0, None)
+    assert "Ränder ohne Stütze" in str(finding.message)
 
 
 def test_plate_findings_preserve_selected_plate_order_and_reject_partial_mapping():
