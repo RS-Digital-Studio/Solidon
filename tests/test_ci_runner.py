@@ -18,6 +18,10 @@ import pytest
 from tools import ci_shards, list_windowed_tests
 from tools import run_suite_isolated as runner
 
+#: Hängergrenze der Kindprozesse dieser Datei, keine Zeitaussage: Eine Sammlung in
+#: einem frischen Interpreter dauert ruhig Sekunden, unter Last ein Vielfaches (RM-635).
+_HANG_GUARD = 900.0
+
 
 @pytest.fixture(autouse=True)
 def _outside_github_actions(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -62,7 +66,7 @@ def test_these_tests_leave_the_step_summary_of_the_real_job_alone(tmp_path: Path
         capture_output=True,
         text=True,
         encoding="utf-8",
-        timeout=120,
+        timeout=_HANG_GUARD,
     )
     assert done.returncode == 0, done.stdout + done.stderr
     assert "3 passed" in done.stdout, done.stdout
@@ -365,7 +369,7 @@ def _chosen_by_pytest(folder: Path, marker: str) -> dict[str, int]:
         capture_output=True,
         text=True,
         encoding="utf-8",
-        timeout=120,
+        timeout=_HANG_GUARD,
     )
     assert done.returncode == 0, done.stdout + done.stderr
     chosen: dict[str, int] = {}
@@ -1099,7 +1103,7 @@ def _collected(*extra: str) -> list[str]:
         capture_output=True,
         text=True,
         encoding="utf-8",
-        timeout=120,
+        timeout=_HANG_GUARD,
     )
     assert done.returncode == 0, done.stdout + done.stderr
     return [line for line in done.stdout.splitlines() if "::" in line]

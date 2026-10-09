@@ -18,7 +18,8 @@
 # **Der Push nach main fährt alle Prüfungen** (Entscheidung Robert, 09.10.2026):
 # die Kernsuite auf allen vier Paketplattformen, Fensterverträge und
 # Rendererfälle ohne Fenster auf allen vier, dazu die Fenster- und Slicertests,
-# die der gepushte Diff berührt (`auswahl`, `fenster`, `slicer`, CI-09). Zweige
+# die der Diff seit dem letzten geprüften Stand berührt (`selection`,
+# `window-selection`, `slicer-selection`, CI-09). Zweige
 # lösen nichts aus. Paketbau, Releaseakten und Signierung laufen nur am Tag und
 # beim Handstart; dort fährt die Windows-Fenstergruppe alle Fensterdateien.
 # Signiert wird getrennt davon: Windows lokal über
@@ -48,15 +49,16 @@ on:
         required: false
         default: false
 
-# **Ein Lauf je Ref zur Zeit.** Ein Push nach main belegt mit Kern, Verträgen
-# und Auswahlen rund sechzehn macOS-Jobs, das Konto trägt fünf zugleich. Ein
-# zweiter Push wartet deshalb, bis der erste fertig ist, und ein dritter
-# ersetzt den wartenden zweiten (GitHub hält je Gruppe einen Lauf in der
-# Warteschlange): Geprüft wird zuletzt, was liegt. Ein laufender Lauf wird
-# nicht abgebrochen — ein halber Lauf belegt nichts. Jeder Tag hat seine
-# eigene Ref und wartet auf niemanden.
+# **Ein Lauf je Ref und Ereignis zur Zeit.** Ein Push nach main belegt mit
+# Kern, Verträgen und Auswahlen bis zu sechzehn macOS-Jobs, das Konto trägt fünf
+# zugleich. Ein zweiter Push wartet deshalb, bis der erste fertig ist, und ein
+# dritter ersetzt den wartenden zweiten (GitHub hält je Gruppe einen Lauf in der
+# Warteschlange). Was der ersetzte brachte, wählt der nächste mit, weil
+# `selection` ab dem letzten geprüften Stand wählt. Ein laufender Lauf wird
+# nicht abgebrochen. Ein Handstart auf main hat seine eigene Gruppe und wartet
+# nicht hinter Pushes; jeder Tag hat seine eigene Ref.
 concurrency:
-  group: bauen-${{ github.ref }}
+  group: bauen-${{ github.ref }}-${{ github.event_name }}
   cancel-in-progress: false
 
 jobs:
@@ -358,25 +360,34 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
-  auswahl:
+  selection:
     name: Fenster- und Slicertests zum Push
-    # CI-09 beim Push nach main: `tools/ci_selection.py` liest den gepushten
-    # Diff und nennt je Datei die Fenster- und die Slicerfälle, die er berührt —
-    # über denselben Importgraphen wie `affected_tests.py`; eine Änderung an
-    # einem gemeinsamen Helfer weitet die Auswahl bis zur ganzen Gruppe aus.
-    # Ohne bekannten Vorgänger (umgeschriebene Geschichte) zählt jede Datei.
+    # CI-09 beim Push nach main: `tools/ci_selection.py` nennt je Datei die
+    # Fenster- und die Slicerfälle, die sich seit dem letzten geprüften Stand
+    # geändert haben — über denselben Importgraphen wie `affected_tests.py`;
+    # eine Änderung an einem gemeinsamen Helfer weitet die Auswahl bis zur
+    # ganzen Gruppe aus. Geprüft ist der Kopf des jüngsten main-Laufs, dessen
+    # Auswahl vollständig gefahren ist (`--checked-base`, GitHub-API), nicht der
+    # Vorgänger dieses Pushs: Was ein ersetzter, abgebrochener oder abgelehnter
+    # Lauf brachte, fällt so nicht heraus. Ohne einen solchen Lauf gilt der
+    # vorige Tag, ohne Tag jede Datei.
     if: inputs.tests_only != true && (github.event_name == 'push' && github.ref == 'refs/heads/main')
     runs-on: ubuntu-24.04
     timeout-minutes: 60
+    permissions:
+      contents: read
+      actions: read
     outputs:
-      fenster: ${{ steps.auswahl.outputs.fenster }}
-      slicer: ${{ steps.auswahl.outputs.slicer }}
+      window_tests: ${{ steps.selection.outputs.window_tests }}
+      window_parts: ${{ steps.selection.outputs.window_parts }}
+      slicer_tests: ${{ steps.selection.outputs.slicer_tests }}
     env:
       QT_QPA_PLATFORM: offscreen
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          # Die ganze Geschichte samt Tags: Basis und Diff liegen weit zurück.
           fetch-depth: 0
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
@@ -397,41 +408,60 @@ jobs:
       - name: Abhängigkeiten
         run: python -m pip install -c constraints.txt -e ".[dev,geom,ui,brep]"
 
-      - name: Auswahl aus dem gepushten Diff
-        id: auswahl
+      - name: Auswahl seit dem letzten geprüften Stand
+        id: selection
         shell: bash
         env:
-          BEFORE: ${{ github.event.before }}
-          AFTER: ${{ github.sha }}
+          GH_TOKEN: ${{ github.token }}
+          HEAD_SHA: ${{ github.sha }}
         run: |
           set -euo pipefail
-          if git cat-file -e "$BEFORE^{commit}" 2>/dev/null; then
-            python tools/ci_selection.py --diff "$BEFORE..$AFTER" > auswahl.txt
-          else
-            mapfile -d '' files < <(git ls-files -z app tools tests)
-            python tools/ci_selection.py "${files[@]}" > auswahl.txt
+          base=$(python tools/ci_selection.py --checked-base)
+          if [ -z "$base" ]; then
+            base=$(git describe --tags --abbrev=0 --match 'v*' "$HEAD_SHA^" 2>/dev/null || true)
           fi
-          cat auswahl.txt
+          if [ -n "$base" ] && git merge-base --is-ancestor "$base" "$HEAD_SHA"; then
+            echo "Basis: $base"
+            python tools/ci_selection.py --diff "$base..$HEAD_SHA" > selection.txt
+          else
+            echo "Keine geprüfte Basis: jede Datei"
+            mapfile -d '' files < <(git ls-files -z app tools tests)
+            python tools/ci_selection.py "${files[@]}" > selection.txt
+          fi
+          cat selection.txt
+          windows=$(sed -n 's/^fenster: //p' selection.txt)
+          slicers=$(sed -n 's/^slicer: //p' selection.txt)
+          # Nur so viele Teile, wie es Auswahlen gibt: Ein leerer Teil belegte
+          # sonst je Plattform einen Läufer, auf macOS einen der fünf Plätze.
+          count=$(printf '%s' "$windows" | tr ';' '\n' | grep -c '[^[:space:]]' || true)
+          case "$count" in
+            0) parts="[]" ;;
+            1) parts="[0]" ;;
+            2) parts="[0, 1]" ;;
+            *) parts="[0, 1, 2]" ;;
+          esac
           {
-            printf 'fenster=%s\n' "$(sed -n 's/^fenster: //p' auswahl.txt)"
-            printf 'slicer=%s\n' "$(sed -n 's/^slicer: //p' auswahl.txt)"
+            printf 'window_tests=%s\n' "$windows"
+            printf 'window_parts=%s\n' "$parts"
+            printf 'slicer_tests=%s\n' "$slicers"
           } >> "$GITHUB_OUTPUT"
 
-  fenster:
+  window-selection:
     name: Fensterauswahl zum Push
-    needs: auswahl
-    if: inputs.tests_only != true && (github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.auswahl.outputs.fenster != '')
+    needs: selection
+    if: inputs.tests_only != true && (github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.selection.outputs.window_tests != '')
     uses: ./.github/workflows/fenster-auswahl.yml
     with:
-      tests: ${{ needs.auswahl.outputs.fenster }}
+      tests: ${{ needs.selection.outputs.window_tests }}
+      parts: ${{ needs.selection.outputs.window_parts }}
 
-  slicer:
+  slicer-selection:
     name: Slicerauswahl zum Push
-    needs: auswahl
-    if: inputs.tests_only != true && (github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.auswahl.outputs.slicer != '')
+    needs: selection
+    if: inputs.tests_only != true && (github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.selection.outputs.slicer_tests != '')
     uses: ./.github/workflows/slicer-auswahl.yml
     with:
-      tests: ${{ needs.auswahl.outputs.slicer }}
+      tests: ${{ needs.selection.outputs.slicer_tests }}
 
   windows:
     name: Fenster- und Rendererdateien (Windows, Gruppe ${{ matrix.shard }})

@@ -38,10 +38,12 @@ genau diese.
 from __future__ import annotations
 
 import argparse
+import json
+import os
 import shlex
 import subprocess
 import sys
-from collections.abc import Iterable, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from pathlib import Path, PurePosixPath
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -139,14 +141,113 @@ def programs(selection: str, root: Path = ROOT) -> list[str]:
     return sorted({program for wanted in found.values() for program in wanted})
 
 
+#: Die Jobs eines main-Laufs, die eine Auswahl fahren, mit ihrem Namen in
+#: ``build.yml``; ein gerufener Workflow erscheint als ``<Name> / <Job>``.
+SELECTION_JOB = "Fenster- und Slicertests zum Push"
+SELECTION_RUNS = ("Fensterauswahl zum Push", "Slicerauswahl zum Push")
+
+#: Abschlüsse, mit denen eine Auswahl gefahren ist — auch rot, auch übersprungen,
+#: weil leer. Abgebrochen oder nie gestartet ist sie nicht gefahren.
+FINISHED = frozenset({"success", "failure", "skipped"})
+
+#: So viele main-Läufe sieht die Suche nach einer geprüften Basis zurück.
+RUNS_BACK = 50
+
+
+def checked_run(jobs: Sequence[Mapping[str, object]]) -> bool:
+    """Ob ein main-Lauf seine Auswahl vollständig gefahren hat.
+
+    Die Auswahl selbst ist grün, und jeder Job von Fenster- und Slicerauswahl ist
+    fertig. Ein ersetzter Lauf hat keine Jobs, ein abgebrochener einen
+    abgebrochenen, ein abgelehnter (privates Repository) keinen.
+    """
+    named = [job for job in jobs if job.get("name") == SELECTION_JOB]
+    if not named or named[0].get("conclusion") != "success":
+        return False
+    runs = [
+        job
+        for job in jobs
+        if any(
+            str(job.get("name", "")) == name or str(job.get("name", "")).startswith(f"{name} / ")
+            for name in SELECTION_RUNS
+        )
+    ]
+    return bool(runs) and all(
+        job.get("status") == "completed" and job.get("conclusion") in FINISHED for job in runs
+    )
+
+
+def checked_base(
+    runs: Sequence[Mapping[str, object]],
+    jobs_of: Callable[[object], Sequence[Mapping[str, object]]],
+    current: str = "",
+) -> str | None:
+    """Der Kopf des jüngsten main-Laufs, dessen Auswahl vollständig gefahren ist.
+
+    Ab ihm wählt der nächste Lauf: Was ein ersetzter, abgebrochener oder
+    abgelehnter Lauf brachte, fällt so nicht aus der Auswahl (CI-09). ``runs``
+    kommen neueste zuerst; ohne einen solchen Lauf ``None``.
+    """
+    for run in runs:
+        if str(run.get("id")) == current or run.get("status") != "completed":
+            continue
+        if run.get("head_branch") != "main" or run.get("event") != "push":
+            continue
+        if checked_run(jobs_of(run.get("id"))):
+            return str(run["head_sha"])
+    return None
+
+
+def _github(path: str) -> dict[str, object]:
+    """Eine Antwort der GitHub-API über ``gh``; ``GH_TOKEN`` kommt aus dem Job."""
+    done = subprocess.run(
+        ["gh", "api", path], capture_output=True, text=True, check=True, encoding="utf-8"
+    )
+    found: dict[str, object] = json.loads(done.stdout)
+    return found
+
+
+def checked_base_on_github() -> str:
+    """:func:`checked_base` für ``GITHUB_REPOSITORY``; leer, wenn keiner da oder die API
+    nicht antwortet — dann wählt der Workflow ab dem vorigen Tag."""
+    repository = os.environ["GITHUB_REPOSITORY"]
+    try:
+        listing = _github(
+            f"repos/{repository}/actions/workflows/build.yml/runs"
+            f"?branch=main&event=push&per_page={RUNS_BACK}"
+        )
+        runs = listing.get("workflow_runs")
+        if not isinstance(runs, list):
+            raise ValueError("keine Laufliste")
+
+        def jobs_of(run: object) -> list[Mapping[str, object]]:
+            jobs = _github(f"repos/{repository}/actions/runs/{run}/jobs?per_page=100")["jobs"]
+            if not isinstance(jobs, list):
+                raise ValueError("keine Jobliste")
+            return jobs
+
+        return checked_base(runs, jobs_of, os.environ.get("GITHUB_RUN_ID", "")) or ""
+    except (OSError, subprocess.CalledProcessError, ValueError, KeyError) as error:
+        print(f"Keine Antwort der GitHub-API: {error}", file=sys.stderr)
+        return ""
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("files", nargs="*", help="geänderte Dateien; leer: aus --diff")
     parser.add_argument("--diff", default=DEFAULT_DIFF, help=f"Git-Diff, Vorgabe {DEFAULT_DIFF}")
     parser.add_argument("--programs", metavar="AUSWAHL", help="Programme einer Slicerauswahl")
+    parser.add_argument(
+        "--checked-base",
+        action="store_true",
+        help="Kopf des letzten main-Laufs mit vollständig gefahrener Auswahl (GitHub-API)",
+    )
     arguments = parser.parse_args(argv)
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8")
+    if arguments.checked_base:
+        print(checked_base_on_github())
+        return 0
     if arguments.programs is not None:
         print(" ".join(programs(arguments.programs)))
         return 0

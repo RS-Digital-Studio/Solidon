@@ -894,16 +894,16 @@ def test_the_tests_only_promise_rejects_a_latest_window_step_without_it() -> Non
 
 #: Was beim Push nach main laufen muss (Entscheidung Robert, 09.10.2026): Stil,
 #: Kernsuite, Fensterverträge mit Renderern auf allen vier Paketplattformen und die
-#: Fenster- und Slicertests, die der Diff berührt.
+#: Fenster- und Slicertests, die der Diff seit dem letzten geprüften Stand berührt.
 _ON_MAIN: Final = frozenset(
     {
         "quality",
         "suite",
         "window-contracts",
         "window-contracts-intel",
-        "auswahl",
-        "fenster",
-        "slicer",
+        "selection",
+        "window-selection",
+        "slicer-selection",
     }
 )
 
@@ -924,48 +924,218 @@ _ONLY_AT_RELEASE: Final = frozenset(
     }
 )
 
+#: Der Push nach main mit Kopf und Token, wie der Auswahlschritt sie liest.
+_PUSHED: Final = {
+    **MAIN_PUSH,
+    "github": {**MAIN_PUSH["github"], "sha": "2222222", "token": "token"},
+}
 
-def _assert_main_push(workflow: str) -> None:
-    """Der Push nach main löst alle Prüfungen aus und baut nichts; ein Zweig löst nichts aus."""
+#: Die Jobs, die die Listen aus ``selection`` fahren, mit ihrer Liste.
+_SELECTION_CONSUMERS: Final = {"window-selection": "window", "slicer-selection": "slicer"}
+
+
+def _selection_step(workflow: str) -> tuple[str, str]:
+    """Der Schritt von ``selection``, auf den dessen Jobausgaben zeigen: (``id``, Block).
+
+    Gelesen aus ``outputs:`` (``steps.<id>.outputs.<name>``); jede Ausgabe muss auf
+    denselben Schritt zeigen, und den muss es mit dieser ``id`` geben.
+    """
+    job = job_block(workflow, "selection")
+    declared = re.search(r"(?ms)^    outputs:\n((?:      [a-z_]+: .*\n)+)", job)
+    assert declared is not None, "selection hat keine Jobausgaben"
+    ids = set(re.findall(r"\$\{\{ steps\.([a-z_-]+)\.outputs\.[a-z_]+ \}\}", declared.group(1)))
+    assert len(ids) == 1, f"die Ausgaben zeigen auf {sorted(ids)}"
+    (step_id,) = ids
+    steps = re.findall(r"(?ms)^      - name: [^\n]*\n.*?(?=^      - |\Z)", job)
+    found = [step for step in steps if re.search(rf"(?m)^        id: {step_id}$", step)]
+    assert len(found) == 1, f"kein Schritt mit id: {step_id}"
+    return step_id, found[0]
+
+
+def _run_selection_step(
+    workflow: str,
+    shell: str,
+    folder: Path,
+    *,
+    windows: str,
+    slicers: str,
+    base: str = "aaaaaaa",
+    ancestor: bool = True,
+    tag: str = "",
+) -> tuple[list[list[str]], dict[str, str]]:
+    """Fährt den Auswahlschritt mit Attrappen für ``python`` und ``git``.
+
+    ``base`` antwortet ``--checked-base``, ``tag`` dem Rückfall über den vorigen
+    Tag, ``ancestor`` der Frage, ob die Basis Vorfahr des Kopfs ist. Liefert die
+    Aufrufe von ``ci_selection.py`` außer der Basisfrage und ``GITHUB_OUTPUT``.
+    """
+    _step_id, step = _selection_step(workflow)
+    folder.mkdir(parents=True, exist_ok=True)
+    calls = folder / "calls.txt"
+    output = folder / "github-output.txt"
+    calls.unlink(missing_ok=True)
+    output.unlink(missing_ok=True)
+    _fake_bin(
+        folder / "bin",
+        """case "$*" in
+  *--checked-base*) printf '%s\\n' "$BASE_ANSWER"; exit 0 ;;
+esac
+printf '%s\\037' "$@" >> "$CALLS"
+printf '\\n' >> "$CALLS"
+printf 'fenster: %s\\n' "$WINDOWS"
+printf 'slicer: %s\\n' "$SLICERS"
+printf 'gh workflow run fenster-auswahl.yml --ref main\\n'""",
+    )
+    git = folder / "bin" / "git"
+    git.write_text(
+        "#!/bin/sh\n"
+        'case "$1" in\n'
+        '  describe) [ -n "$TAG_ANSWER" ] || exit 128; printf \'%s\\n\' "$TAG_ANSWER" ;;\n'
+        '  merge-base) [ "$ANCESTOR" = 1 ] ;;\n'
+        "  ls-files) printf 'app/a.py\\0tools/b c.py\\0' ;;\n"
+        "  *) exit 2 ;;\n"
+        "esac\n",
+        encoding="utf-8",
+        newline="\n",
+    )
+    git.chmod(0o755)
+    done = subprocess.run(
+        [shell, "-c", _step_environment(step, _PUSHED) + step_script(step)],
+        cwd=folder,
+        env=dict(
+            os.environ,
+            PATH=os.pathsep.join(
+                (str(folder / "bin"), str(Path(shell).parent), os.environ.get("PATH", ""))
+            ),
+            CALLS=calls.as_posix(),
+            GITHUB_OUTPUT=output.as_posix(),
+            HEAD_SHA="2222222",
+            BASE_ANSWER=base,
+            TAG_ANSWER=tag,
+            ANCESTOR="1" if ancestor else "0",
+            WINDOWS=windows,
+            SLICERS=slicers,
+        ),
+        capture_output=True,
+        text=True,
+        timeout=_SIMULATION_GUARD,
+    )
+    assert done.returncode == 0, done.stdout + done.stderr
+    made = [line.split("\x1f")[:-1] for line in calls.read_text("utf-8").splitlines()]
+    written = dict(
+        line.split("=", 1) for line in output.read_text("utf-8").splitlines() if "=" in line
+    )
+    return made, written
+
+
+def _selection_outputs(
+    workflow: str, shell: str, folder: Path, windows: str, slicers: str
+) -> dict[str, dict[str, str]]:
+    """Die Jobausgaben von ``selection`` für diese Listen, über den echten Schritt.
+
+    Jede Ausgabe aus ``outputs:`` muss der Schritt in ``GITHUB_OUTPUT`` schreiben.
+    """
+    step_id, _step = _selection_step(workflow)
+    _made, written = _run_selection_step(workflow, shell, folder, windows=windows, slicers=slicers)
+    job = job_block(workflow, "selection")
+    declared = re.findall(
+        rf"(?m)^      ([a-z_]+): \$\{{\{{ steps\.{step_id}\.outputs\.([a-z_]+) \}}\}}$", job
+    )
+    outputs = {}
+    for name, key in declared:
+        assert key in written, f"der Schritt schreibt {key} nicht"
+        outputs[name] = written[key]
+    return {"selection": outputs}
+
+
+def _consumer_inputs(workflow: str, job: str, outputs: dict[str, dict[str, str]]) -> dict[str, str]:
+    """Was ein gerufener Workflow unter ``with:`` bekommt, ausgewertet."""
+    block = job_block(workflow, job)
+    given = re.search(r"(?ms)^    with:\n((?:      [a-z_]+: .*\n)+)", block)
+    assert given is not None, f"{job} gibt nichts weiter"
+    context = {**MAIN_PUSH, "needs": {name: {"outputs": made} for name, made in outputs.items()}}
+    return {
+        name: str(evaluate(value, context) or "")
+        for name, value in re.findall(r"(?m)^      ([a-z_]+): (.*)$", given.group(1))
+    }
+
+
+def _assert_main_push(workflow: str, shell: str, folder: Path) -> None:
+    """Der Push nach main löst alle Prüfungen aus und baut nichts; ein Zweig löst nichts aus.
+
+    Die Ausgaben von ``selection`` kommen aus dem gefahrenen Schritt, nicht aus einer
+    Attrappe: Jobausgaben, Schritt-``id``, Bedingungen und Weitergabe hängen daran.
+    """
     assert workflow_triggers(workflow) == {
         "push": ["branches:main", "tags:v*"],
         "workflow_dispatch": [],
     }, "nur main, Tags und Handstart lösen aus, kein Zweig und kein Pull Request"
-    on_main = running_jobs(workflow, MAIN_PUSH, _SELECTED)
-    assert on_main >= _ON_MAIN, f"fehlt beim Push nach main: {sorted(_ON_MAIN - on_main)}"
-    assert not on_main & _ONLY_AT_RELEASE, f"baut beim Push nach main: {sorted(on_main)}"
+    lists = {"window": "tests/test_ui.py -k x; tests/test_a.py", "slicer": "tests/test_s.py"}
+    for windows, slicers in (
+        (lists["window"], lists["slicer"]),
+        (lists["window"], ""),
+        ("", lists["slicer"]),
+        ("", ""),
+    ):
+        outputs = _selection_outputs(workflow, shell, folder / "auswahl", windows, slicers)
+        on_main = running_jobs(workflow, MAIN_PUSH, outputs)
+        wanted = {
+            job
+            for job, kind in _SELECTION_CONSUMERS.items()
+            if (windows, slicers)[kind == "slicer"]
+        }
+        assert on_main >= (_ON_MAIN - set(_SELECTION_CONSUMERS)) | wanted, (
+            f"fehlt beim Push nach main: {sorted(_ON_MAIN - on_main)}"
+        )
+        assert on_main & set(_SELECTION_CONSUMERS) == wanted, (
+            f"Auswahljobs bei Fenster {bool(windows)}, Slicer {bool(slicers)}: {sorted(on_main)}"
+        )
+        assert not on_main & _ONLY_AT_RELEASE, f"baut beim Push nach main: {sorted(on_main)}"
+        for job in wanted:
+            given = _consumer_inputs(workflow, job, outputs)
+            expected = windows if _SELECTION_CONSUMERS[job] == "window" else slicers
+            assert given.get("tests") == expected, f"{job} bekommt {given}"
     packaged = set(_release_runners(job_block(workflow, "package")))
     for job in ("suite", "window-contracts"):
         runners = set(job_runners(job_block(workflow, job), MAIN_PUSH))
         if job == "window-contracts":
             runners |= set(job_runners(job_block(workflow, "window-contracts-intel"), MAIN_PUSH))
         assert runners == packaged, f"{job} beim Push nach main auf {sorted(runners)}"
-    empty = {"auswahl": {"fenster": "", "slicer": ""}}
-    assert not running_jobs(workflow, MAIN_PUSH, empty) & {"fenster", "slicer"}, (
-        "eine leere Auswahl startet einen Lauf, der leer rot würde"
-    )
-    at_tag = running_jobs(workflow, TAG_PUSH, _SELECTED)
-    assert not at_tag & {"auswahl", "fenster", "slicer"}, "am Tag fährt die Fenstergruppe alles"
+    at_tag = running_jobs(workflow, TAG_PUSH)
+    assert not at_tag & {"selection", *_SELECTION_CONSUMERS}, "am Tag fährt die Fenstergruppe alles"
     assert at_tag >= {"package", "windows", "suite", "window-contracts"}
-    for job, path in (("fenster", _WINDOW_SELECTION), ("slicer", _SLICER_SELECTION)):
-        block = job_block(workflow, job)
-        assert f"    uses: ./.github/workflows/{path.name}\n" in block, job
-        assert f"      tests: ${{{{ needs.auswahl.outputs.{job} }}}}\n" in block, job
+    for job, path in (
+        ("window-selection", _WINDOW_SELECTION),
+        ("slicer-selection", _SLICER_SELECTION),
+    ):
+        assert f"    uses: ./.github/workflows/{path.name}\n" in job_block(workflow, job), job
+    checkout = job_block(workflow, "selection").split("      - name:", 1)[0]
+    assert re.search(r"(?m)^          fetch-depth: 0$", checkout), (
+        "ohne volle Geschichte fehlen Basis und Tags, und jeder Push wählte jede Datei"
+    )
     concurrency = workflow.split("\nconcurrency:\n", 1)[1].split("\n\n", 1)[0]
-    assert "group: bauen-${{ github.ref }}" in concurrency
+    assert "group: bauen-${{ github.ref }}-${{ github.event_name }}" in concurrency, (
+        "ein Handstart auf main wartete sonst hinter Pushes und würde von ihnen ersetzt"
+    )
     assert re.search(r"(?m)^  cancel-in-progress: false$", concurrency), (
         "ein neuer Push bricht keinen laufenden Lauf ab, er ersetzt nur den wartenden"
     )
 
 
-def test_a_push_to_main_runs_every_check_and_builds_nothing() -> None:
+def test_a_push_to_main_runs_every_check_and_builds_nothing(tmp_path: Path) -> None:
     """Alle Prüfungen beim Push nach main, keine auf Zweigen (Entscheidung Robert,
     09.10.2026); Paketbau, Releaseakten und Signierung nur am Tag und beim Handstart.
 
     Abgeleitet aus den Bedingungen der Jobs, ausgewertet für jedes Ereignis
-    (``workflow_helpers.running_jobs``), nicht aus einer Liste von Zeilen.
+    (``workflow_helpers.running_jobs``), mit den Ausgaben des echten Auswahlschritts.
     """
-    _assert_main_push(WORKFLOW.read_text(encoding="utf-8"))
+    shell = _workflow_shell()
+    if shell is None:
+        pytest.skip("ohne bash lässt sich der CI-Block nicht ausführen")
+    _assert_main_push(WORKFLOW.read_text(encoding="utf-8"), shell, tmp_path)
+
+
+_MAIN_IF: Final = "(github.event_name == 'push' && github.ref == 'refs/heads/main')"
 
 
 @pytest.mark.parametrize(
@@ -981,29 +1151,46 @@ def test_a_push_to_main_runs_every_check_and_builds_nothing() -> None:
         # Die Kernsuite beim Push nach main ohne Intel-Mac.
         ("suite", '"macos-latest", "macos-26-intel"]', '"macos-latest"]'),
         # Fensterverträge und Renderer nur noch am Tag.
+        ("window-contracts", f" || {_MAIN_IF})", ")"),
+        # Die Auswahl läuft auch am Tag.
+        ("selection", _MAIN_IF, "(true)"),
+        # N-2: ohne Jobausgaben, mit anderer Schritt-id, mit vertauschter Liste in
+        # Bedingung oder Weitergabe, ohne volle Geschichte.
         (
-            "window-contracts",
-            " || (github.event_name == 'push' && github.ref == 'refs/heads/main'))",
-            ")",
+            "selection",
+            "    outputs:\n"
+            "      window_tests: ${{ steps.selection.outputs.window_tests }}\n"
+            "      window_parts: ${{ steps.selection.outputs.window_parts }}\n"
+            "      slicer_tests: ${{ steps.selection.outputs.slicer_tests }}\n",
+            "",
         ),
-        # Die Auswahl läuft auch am Tag, oder ihre Fensterliste kommt nicht an.
-        ("auswahl", "(github.event_name == 'push' && github.ref == 'refs/heads/main')", "(true)"),
-        ("fenster", "needs.auswahl.outputs.fenster }}", "needs.auswahl.outputs.slicer }}"),
+        ("selection", "        id: selection\n", "        id: wahl\n"),
+        ("window-selection", "outputs.window_tests != ''", "outputs.slicer_tests != ''"),
+        (
+            "slicer-selection",
+            "tests: ${{ needs.selection.outputs.slicer_tests }}",
+            "tests: ${{ needs.selection.outputs.window_tests }}",
+        ),
+        ("selection", "          fetch-depth: 0\n", ""),
         # Die Windows-Fenstergruppe und mit ihr der Paketbau laufen beim Push nach main.
         (
             "windows",
             "github.event_name == 'workflow_dispatch')",
             "github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main')",
         ),
-        # Ein neuer Push bricht den laufenden ab.
+        # Ein neuer Push bricht den laufenden ab, oder ein Handstart teilt die Warteschlange.
         ("", "  cancel-in-progress: false\n", "  cancel-in-progress: true\n"),
+        ("", "bauen-${{ github.ref }}-${{ github.event_name }}", "bauen-${{ github.ref }}"),
     ],
 )
 def test_the_main_push_contract_rejects_a_changed_workflow(
-    job: str, before: str, after: str
+    tmp_path: Path, job: str, before: str, after: str
 ) -> None:
     """Gegenproben: Zweig oder Pull Request lösen aus, Intel fehlt, Renderer nur am Tag,
-    Auswahl am Tag oder vertauscht, Paket auf main, Abbruch eines laufenden Laufs."""
+    Auswahl am Tag, ihre Weitergabe gebrochen, Paket auf main, Warteschlange."""
+    shell = _workflow_shell()
+    if shell is None:
+        pytest.skip("ohne bash lässt sich der CI-Block nicht ausführen")
     workflow = WORKFLOW.read_text(encoding="utf-8")
     if job:
         changed = _in_job(workflow, job, before, after)
@@ -1011,70 +1198,60 @@ def test_the_main_push_contract_rejects_a_changed_workflow(
         assert workflow.count(before) == 1, before
         changed = workflow.replace(before, after)
     with pytest.raises(AssertionError):
-        _assert_main_push(changed)
+        _assert_main_push(changed, shell, tmp_path)
 
 
-@pytest.mark.parametrize("known", [True, False])
-def test_the_selection_reads_the_pushed_diff_and_hands_both_lists_on(
-    tmp_path: Path, known: bool
-) -> None:
-    """``auswahl`` liest den Diff vom Stand vor dem Push bis zu seinem Kopf und gibt beide
-    Listen an ``fenster`` und ``slicer``; ohne bekannten Vorgänger zählt jede Datei."""
+def _assert_selection_step(workflow: str, shell: str, folder: Path) -> None:
+    """Die Auswahl wählt ab dem letzten geprüften Stand, sonst ab dem vorigen Tag, sonst
+    jede Datei; die Teile der Fensterauswahl folgen der Zahl der Auswahlen."""
+    every = ["tools/ci_selection.py", "app/a.py", "tools/b c.py"]
+    for case, expected in (
+        ({"base": "aaaaaaa"}, ["tools/ci_selection.py", "--diff", "aaaaaaa..2222222"]),
+        ({"base": "", "tag": "v0.5.3"}, ["tools/ci_selection.py", "--diff", "v0.5.3..2222222"]),
+        ({"base": "aaaaaaa", "ancestor": False}, every),
+        ({"base": ""}, every),
+    ):
+        made, written = _run_selection_step(
+            workflow, shell, folder, windows="tests/a.py", slicers="", **case
+        )
+        assert made == [expected], (case, made)
+    for windows, parts in (
+        ("", "[]"),
+        ("tests/a.py", "[0]"),
+        ("tests/a.py; tests/b.py", "[0, 1]"),
+        ("tests/a.py; tests/b.py; tests/c.py; tests/d.py", "[0, 1, 2]"),
+    ):
+        _made, written = _run_selection_step(workflow, shell, folder, windows=windows, slicers="")
+        assert written.get("window_parts") == parts, (windows, written)
+
+
+def test_the_selection_starts_at_the_last_checked_main_run(tmp_path: Path) -> None:
+    """N-1 aus der Nachprüfung: Die Basis ist der Kopf des jüngsten main-Laufs, dessen
+    Auswahl ganz gefahren ist (``ci_selection.checked_base``), nicht der Vorgänger des
+    Pushs — sonst fiele heraus, was ein ersetzter, abgebrochener oder abgelehnter Lauf
+    brachte. Rückfall: voriger Tag, dann jede Datei."""
     shell = _workflow_shell()
     if shell is None:
         pytest.skip("ohne bash lässt sich der CI-Block nicht ausführen")
-    step = step_block(
-        job_block(WORKFLOW.read_text(encoding="utf-8"), "auswahl"), "Auswahl aus dem gepushten Diff"
-    )
-    assert "BEFORE: ${{ github.event.before }}" in step and "AFTER: ${{ github.sha }}" in step
-    calls = tmp_path / "calls.txt"
-    output = tmp_path / "github-output.txt"
-    fake_git = tmp_path / "bin" / "git"
-    _fake_bin(
-        tmp_path / "bin",
-        """printf '%s\\037' "$@" >> "$CALLS"\nprintf '\\n' >> "$CALLS"
-printf 'fenster: tests/test_ui.py -k x; tests/test_a.py\\n'
-printf 'slicer: tests/test_real_slicers.py -m slicer\\n'
-printf 'gh workflow run fenster-auswahl.yml --ref main\\n'""",
-    )
-    fake_git.write_text(
-        "#!/bin/sh\n"
-        'case "$1" in\n'
-        '  cat-file) [ "$KNOWN" = 1 ] ;;\n'
-        "  ls-files) printf 'app/a.py\\0tools/b c.py\\0' ;;\n"
-        "esac\n",
-        encoding="utf-8",
-        newline="\n",
-    )
-    fake_git.chmod(0o755)
-    done = subprocess.run(
-        [shell, "-c", step_script(step)],
-        cwd=tmp_path,
-        env=dict(
-            os.environ,
-            PATH=os.pathsep.join(
-                (str(tmp_path / "bin"), str(Path(shell).parent), os.environ.get("PATH", ""))
-            ),
-            CALLS=calls.as_posix(),
-            GITHUB_OUTPUT=output.as_posix(),
-            BEFORE="1111111",
-            AFTER="2222222",
-            KNOWN="1" if known else "0",
-        ),
-        capture_output=True,
-        text=True,
-        timeout=60,
-    )
-    assert done.returncode == 0, done.stdout + done.stderr
-    (call,) = [line.split("\x1f")[:-1] for line in calls.read_text("utf-8").splitlines()]
-    if known:
-        assert call == ["tools/ci_selection.py", "--diff", "1111111..2222222"]
-    else:
-        assert call == ["tools/ci_selection.py", "app/a.py", "tools/b c.py"]
-    assert output.read_text("utf-8").splitlines() == [
-        "fenster=tests/test_ui.py -k x; tests/test_a.py",
-        "slicer=tests/test_real_slicers.py -m slicer",
-    ]
+    workflow = WORKFLOW.read_text(encoding="utf-8")
+    _assert_selection_step(workflow, shell, tmp_path)
+    step = _selection_step(workflow)[1]
+    assert "github.event.before" not in step
+    assert "GH_TOKEN: ${{ github.token }}" in step
+    assert re.search(r"(?m)^      actions: read$", job_block(workflow, "selection"))
+
+
+def test_the_selection_step_rejects_the_pushed_diff_alone(tmp_path: Path) -> None:
+    """Gegenprobe: Wählt der Schritt wie vorher ab ``github.event.before``, ist er rot."""
+    shell = _workflow_shell()
+    if shell is None:
+        pytest.skip("ohne bash lässt sich der CI-Block nicht ausführen")
+    workflow = WORKFLOW.read_text(encoding="utf-8")
+    old = "base=$(python tools/ci_selection.py --checked-base)\n"
+    assert old in workflow
+    changed = workflow.replace(old, 'base="${BEFORE:-}"\n')
+    with pytest.raises(AssertionError):
+        _assert_selection_step(changed, shell, tmp_path)
 
 
 @pytest.mark.parametrize("job, release", [("suite", False), ("suite", True), ("latest", False)])
@@ -1119,7 +1296,7 @@ def test_each_ci_window_group_is_executed_only_at_release_and_once(
         ),
         capture_output=True,
         text=True,
-        timeout=30,
+        timeout=_SIMULATION_GUARD,
     )
     assert done.returncode == 0, done.stdout + done.stderr
     invoked = calls.read_text(encoding="utf-8").splitlines()
@@ -1137,6 +1314,11 @@ def test_each_ci_window_group_is_executed_only_at_release_and_once(
     )
     assert all("--release" in line and "--report-dir" in line for line in windows)
 
+
+#: Hängergrenze der Workflow-Simulationen, keine Zeitaussage: Git-Bash bildet jeden
+#: Teilprozess über eine nachgebaute ``fork`` nach, und unter Last dauerte ein
+#: Lauf von 0,9 s fast fünf Minuten (RM-635).
+_SIMULATION_GUARD: Final = 900
 
 #: Der Schritt, in dem `window-contracts`, `window-contracts-intel` und `latest`
 #: Fensterverträge und Rendererfälle fahren.
@@ -1218,7 +1400,7 @@ def _marked(expression: str, markers: frozenset[str]) -> bool:
                 capture_output=True,
                 text=True,
                 encoding="utf-8",
-                timeout=60,
+                timeout=_SIMULATION_GUARD,
             )
         # 5: Der Ausdruck wählt keinen Fall.
         assert done.returncode in {0, 5}, done.stdout + done.stderr
@@ -1369,7 +1551,7 @@ def _calls_of(
             ),
             capture_output=True,
             text=True,
-            timeout=60,
+            timeout=_SIMULATION_GUARD,
         )
         assert done.returncode == 0, done.stdout + done.stderr
         found: list[list[list[str]]] = [[] for _ in fresh]
@@ -1470,9 +1652,15 @@ def _assert_rendering_runs_everywhere(workflow: str, shell: str, folder: Path) -
     assert not gaps, "Rendererfälle, die der Versionswächter nicht fährt: " + "; ".join(gaps)
 
 
-#: Was ``auswahl`` beim Push nach main für die Wächter ausgibt: Fenster- und
+#: Was ``selection`` beim Push nach main für die Wächter ausgibt: Fenster- und
 #: Slicerfälle sind betroffen, ihre Jobs laufen.
-_SELECTED: Final = {"auswahl": {"fenster": "tests/test_ui.py", "slicer": "tests/test_x.py"}}
+_SELECTED: Final = {
+    "selection": {
+        "window_tests": "tests/test_ui.py",
+        "window_parts": "[0]",
+        "slicer_tests": "tests/test_x.py",
+    }
+}
 
 
 def _assert_rendering_runs_on_main(workflow: str, shell: str, folder: Path) -> None:
@@ -1837,7 +2025,7 @@ def test_window_failures_block_the_package_on_every_platform(
         ),
         capture_output=True,
         text=True,
-        timeout=30,
+        timeout=_SIMULATION_GUARD,
     )
     assert done.returncode == exit_code, done.stdout + done.stderr
 
@@ -1887,7 +2075,7 @@ exit 0
         ),
         capture_output=True,
         text=True,
-        timeout=30,
+        timeout=_SIMULATION_GUARD,
     )
     assert done.returncode == exit_code, done.stdout + done.stderr
     assert len(calls.read_text(encoding="utf-8").splitlines()) == 1
@@ -3479,7 +3667,7 @@ def test_the_linux_installer_never_deletes_a_shared_directory(tmp_path: Path) ->
         ],
         capture_output=True,
         text=True,
-        timeout=30,
+        timeout=_SIMULATION_GUARD,
     )
 
     assert done.returncode == 0, done.stderr
@@ -3516,7 +3704,7 @@ def test_the_linux_installer_keeps_its_own_directory_as_it_is() -> None:
         ],
         capture_output=True,
         text=True,
-        timeout=30,
+        timeout=_SIMULATION_GUARD,
     )
 
     assert done.stdout == "/opt/solidon3d", f"aus der Vorgabe wurde {done.stdout}"
@@ -4222,10 +4410,10 @@ def _run_window_share(tmp_path: Path, selection: str, shard: int) -> tuple[int, 
     )
     done = subprocess.run(
         [sys.executable, "-c", wrapper],
-        env=dict(os.environ, SELECTION=selection, SHARD=str(shard), SHARDS="3"),
+        env=dict(os.environ, SELECTION=selection, SHARD=str(shard), PARTS="[0, 1, 2]"),
         capture_output=True,
         text=True,
-        timeout=60,
+        timeout=_SIMULATION_GUARD,
     )
     ran = calls.read_text(encoding="utf-8").splitlines() if calls.is_file() else []
     return done.returncode, ran
@@ -4234,19 +4422,22 @@ def _run_window_share(tmp_path: Path, selection: str, shard: int) -> tuple[int, 
 def test_the_window_selection_shares_its_choices_evenly_across_three_runners(
     tmp_path: Path,
 ) -> None:
-    """Je Plattform drei Läufer, und jede Auswahl läuft genau einmal (CI-09).
+    """Je Plattform bis zu drei Läufer, und jede Auswahl läuft genau einmal (CI-09).
 
     Die Fensterauswahl eines großen Zweigs lief je Plattform auf einem Läufer
-    hintereinander; die Matrix teilt sie jetzt in drei Teile, die höchstens
-    eine Auswahl auseinanderliegen. Gefahren wird das Skript aus dem Workflow.
+    hintereinander; die Matrix teilt sie in die Teile aus ``parts`` (Vorgabe drei,
+    build.yml gibt nur so viele, wie es Auswahlen gibt), die höchstens eine
+    Auswahl auseinanderliegen. Gefahren wird das Skript aus dem Workflow.
     """
     text = _WINDOW_SELECTION.read_text(encoding="utf-8")
     job = job_block(text, "selection")
-    shards = re.search(r"(?m)^\s+shard: \[([0-9, ]+)\]$", job)
-    assert shards is not None, "die Matrix teilt nicht"
-    numbers = [int(entry) for entry in shards.group(1).split(",")]
-    assert numbers == [0, 1, 2]
-    assert "SHARD: ${{ matrix.shard }}" in job and 'SHARDS: "3"' in job
+    assert re.search(r"(?m)^\s+shard: \$\{\{ fromJSON\(inputs\.parts\) \}\}$", job), (
+        "die Matrix teilt nicht nach parts"
+    )
+    defaults = re.findall(r"(?m)^      parts:\n(?:        .*\n)*?        default: \"(.*)\"$", text)
+    assert defaults == ["[0, 1, 2]", "[0, 1, 2]"], defaults
+    numbers = json.loads(defaults[0])
+    assert "SHARD: ${{ matrix.shard }}" in job and "PARTS: ${{ inputs.parts }}" in job
     assert "matrix.shard" in job.split("runs-on:", 1)[0], "der Name nennt den Teil"
 
     choices = [f"tests/test_{index}.py" for index in range(7)]
@@ -4310,7 +4501,7 @@ def test_a_programme_input_reaches_the_environment_only_as_names(
         env=dict(os.environ, WANTED=wanted, SELECTION="", GITHUB_ENV=environment.as_posix()),
         capture_output=True,
         text=True,
-        timeout=30,
+        timeout=_SIMULATION_GUARD,
     )
     written = environment.read_text(encoding="utf-8")
     if accepted:

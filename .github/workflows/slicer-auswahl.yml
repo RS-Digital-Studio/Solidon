@@ -2,7 +2,8 @@
 # (Entscheidung Robert, 07.10.2026). Windows deckt der lokale Lauf.
 #
 # Beim Push nach main bestimmt `tools/ci_selection.py` die Slicertests, die
-# der gepushte Diff berührt, und build.yml (Job `slicer`) fährt sie hier
+# der Diff seit dem letzten geprüften Stand berührt, und build.yml (Job
+# `slicer-selection`) fährt sie hier
 # (CI-09). Auf Zweigen läuft keine CI (Entscheidung Robert, 09.10.2026). Von
 # Hand nur auf main:
 #
