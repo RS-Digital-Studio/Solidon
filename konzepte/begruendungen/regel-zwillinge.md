@@ -23,7 +23,25 @@ Woran sich zeigte, dass die gefährlichen Zwillinge die gedrifteten sind:
 > zeigt darauf, weil zwei Fassungen derselben Regel weder wort- noch
 > strukturgleich sind. Gefunden hat sie jemand, der den Code kannte.
 
+Die Regel sagte bis zur zweiten Kürzung dazu noch: „Ein Skript findet Kopien;
+eine Regel in zwei Fassungen findet nur, wer die Sache kennt."
+
 ## Woher sie kommen
+
+Bis zur zweiten Kürzung stand die Liste so in der Regel:
+
+1. **Eine vermutete Schichtgrenze** — wer eine Grenze vermutet, statt sie
+   nachzulesen, kopiert.
+2. **Zwei Sitzungen, ein Problem** — die Nachbarstelle ist noch nicht
+   committet.
+3. **Ein Kommentar „dieselbe wie …" ist kein Teilen** — er wandert beim
+   nächsten Anfassen nicht mit.
+4. **Der Name statt der Eigenschaft** — wo hinter `== "orca"` eine Frage
+   steht, gehört ein Prädikat hin (`slicer_keys.py` führt sie).
+5. **Ein Geschwistermodul entsteht durch Kopieren** und nimmt die
+   Hilfsfunktion mit, statt sie herauszuziehen.
+6. **Jede Testdatei bringt ihre Fixture mit**, weil sie allein lauffähig sein
+   soll.
 
 „Sechs Wege, jeder an einem Fall dieses Projekts belegt (§0.6 des
 Konzepts)." Die Belege, die in der Regel nicht mehr stehen:
@@ -34,6 +52,11 @@ Konzepts)." Die Belege, die in der Regel nicht mehr stehen:
   wirkungslos — er wandert beim nächsten Anfassen nicht mit."
 - Zum Namen statt der Eigenschaft: „`== "orca"` meint jedes Mal etwas anderes
   und sieht jedes Mal gleich aus."
+
+## Was das Tor hält
+
+Aus der Regel verschoben: Beide Tests in `tests/test_shared_constants.py`
+haben eine Untergrenze gegen einen kaputten Suchlauf.
 
 ## Zwillinge, die noch stehen
 

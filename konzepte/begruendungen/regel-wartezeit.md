@@ -636,7 +636,11 @@ Aufruf her, auch nicht beim Bauen des Körpers (RM-212).
 (`geom.kernel_process`). Derselbe Weg, im Wechsel gemessen
 (`konzepte/nachweise-release-0.5.1/sonden/hilfsprozess/grob_stillstand.py`, 28.09.2026): Lochplatte 516 → 92 ms,
 Spiderman 573 → 7 ms, Piratenschiff 874 → 6 ms, Eiffelturm 425 → 75 ms,
-Waschschüssel 95 → 4 ms, derselbe Abtrag.
+Waschschüssel 95 → 4 ms, derselbe Abtrag. Der Wortlaut der Regel vor ihrer
+Kürzung: „`manifold3d` gibt den GIL nie her, und aus dem Vorschau-Arbeiter
+hielt die erste grobe Vorschau je Körper sonst den Hauptthread an. Das gilt
+nur für Arbeiter — aus dem Hauptthread gerufen rechnet der Kern hier, denn
+gewartet wäre dort genauso.“
 
 **Und die Vorschau des Dialogs erkennt keine Merkmale** (22.09.2026).
 `preview_async` reicht `detect_features=False` bis in `evaluate`: Die
@@ -1063,6 +1067,10 @@ sie nicht — `gc.get_referrers` schon.
 *jedes* Objekt; eine Eins ist ein Zeiger auf genau eine Referenz, und die
 findet man, statt sie für Streuung zu halten.
 
+Aus der Regel hierher verschoben, als Griffe der Fehlersuche: Eine `cell`
+zeigt auf eine Closure; `__qualname__`/`__code__` benennen die Zeile. Genau
+eines von zehn erhaltenen Widgets spricht für eine Referenz, nicht Streuung.
+
 Warum die Knopfgruppe den `weak_slot` schlägt: `weak_slot` je Knopf riss
 `test_widget_lifetime` mit einer Zugriffsverletzung (Ursache bei RM-021).
 
@@ -1233,6 +1241,11 @@ Besenhalter — `shapely` und `numpy` geben den GIL überwiegend her. Eine
 Prüfung, die nach jeder Geste neu anläuft, bekommt einen Abbruchschalter:
 Die Wandkarte nimmt seither `cancelled` (`maps.wall_thickness_map`).
 
+Der Satz über den GIL-Griff stand bis zur Kürzung so in der Regel: **Der
+Hauptthread greift je Bild hundertmal nach dem GIL** — jeder Python-Filter,
+jede Python-Überschreibung, jeder Slot ist ein Griff, und neben einem
+rechnenden Arbeiter wartet jeder.
+
 **Messfalle beim Takt:** Ein `QTimer` bis 20 ms (oder jeder präzise) hebt
 selbst die Zeitgeberauflösung des Prozesses; eine Sonde mit 5-ms-Takt misst
 die 15,6-ms-Wartezeit je GIL-Griff nie. Gemessen wird mit einem groben Takt ab
@@ -1323,7 +1336,9 @@ Zwei Sätze, die dazugehören:
   je Ereignis einen Aufruf: drei davon 17 ms je Klick. Wer an der Anwendung
   zuhören muss, meldet sich mit seinen Ereignisarten bei
   `app_events.listen` an und mit `app_events.forget` ab;
-  `test_app_events` hält das am Quelltext fest.
+  `test_app_events` hält das am Quelltext fest. Der Verteiler hält seine
+  Zuhörer schwach, denn fest gehalten überlebte die geschlossene Ansicht samt
+  Renderer.
 * **Was das Merkmalfenster den Kern fragt, fragt an einem großen Körper der
   Arbeiter** (RM-232). Ab `ANSWERS_IN_WORKER_FROM` Dreiecken laufen
   Hohlraumkette, Handlungen und Gleichartige in `_FeatureAnswersWorker` an

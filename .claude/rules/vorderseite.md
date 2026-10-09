@@ -102,6 +102,13 @@ Vorgabe sonst still eine andere Größe baute; ein abgewähltes Langloch holt
 Zeilen zurück und lässt sie zu
 (`test_a_choice_that_brings_back_fields_elsewhere_leaves_the_flap_closed`).
 
+Ein abgelehnter fx-Ausdruck in einem verborgenen bedingten Feld hält den
+Operationsdialog an, weil `values()` ihn weiterhin an den Kern reicht. Eine
+verborgene abgelehnte Zahl hält ihn nicht an: `ValueField.value()` liefert
+weiter den letzten gültigen Wert. Der Hinweis führt über verborgene Steuerfelder
+bis zur sichtbaren Wahl, ohne diese selbst zu ändern, und wird nach jeder
+Änderung der Abhängigkeiten neu berechnet.
+
 - **Agent und Mensch bekommen verschiedene Anreden, nicht verschiedene
   Inhalte:** „Gilt bei Art = circular“ im Handbuch, `kind` für den Agenten
   (`condition_text(..., keys=True)`), „Wirkt nur, wenn …“ im Dialog mit Werten

@@ -29,9 +29,9 @@ Arbeiteridentität. Die Wand-/Überhangprüfung liest eine Kopie der gezeigten
 Fläche. Prüfstände warten über `wait_for_sculpt_preview`/`…_armature_skin`.
 
 Was geschieht, während gerechnet wird (§2.8); die allgemeinen Regeln aus
-`oberflaeche.md` gelten zusätzlich. Messreihen, Anlässe und die Mechanik im
-Einzelnen stehen unter denselben Überschriften in
-`konzepte/begruendungen/regel-wartezeit.md`.
+`oberflaeche.md` gelten zusätzlich. Messreihen, Anlässe, Nachweise,
+Beispiele, Fehlersuche und die Mechanik im Einzelnen stehen unter denselben
+Überschriften in `konzepte/begruendungen/regel-wartezeit.md`.
 
 ## Wartezeit
 
@@ -201,10 +201,8 @@ Registry oder Netz, nicht nur der bekannte.
   Schließen von `KeyDialog` über `done`; `_let_go`: `_let_go_of_workers`
   setzen, Feld leeren, Signale und jede Verbindung trennen, Thread an
   `retire`) — **und jeder Ergebnis-Slot fragt zuerst das Flag**, denn ein
-  eingereihtes Signal kommt trotzdem an. `release()` wartet weiter.
-  Nachweis:
-  `tests/test_chat_ui.py::test_closing_the_key_dialog_does_not_wait_for_the_model_survey`;
-  Tests ohne Bezug zur Erhebung nehmen die Fixture `quick_survey`.
+  eingereihtes Signal kommt trotzdem an. `release()` wartet weiter. Tests
+  ohne Bezug zur Erhebung nehmen die Fixture `quick_survey`.
 
 ### Eine Erzeugung läuft im Hintergrund
 
@@ -217,10 +215,10 @@ Dialog. Jeder weitere Generator nimmt diesen Weg.
 
 ## Die grobe Vorschaustufe
 
-Ab `session.COARSE_PREVIEW_ABOVE` Dreiecken (rund 150 000, dort fällt die
-Sekunde) rechnet die Vorschau in ihrer Dokumentkopie auf `COARSE_PREVIEW_TARGET`
-Dreiecke verkleinert (`_preview_outcome`, `decimate_mesh` mit `method="fast"`,
-Werte in `session._coarse_params`). **Das Ziel ist die Schranke selbst**, dann
+Ab `session.COARSE_PREVIEW_ABOVE` Dreiecken rechnet die Vorschau in ihrer
+Dokumentkopie auf `COARSE_PREVIEW_TARGET` Dreiecke verkleinert
+(`_preview_outcome`, `decimate_mesh` mit `method="fast"`, Werte in
+`session._coarse_params`). **Das Ziel ist die Schranke selbst**, dann
 liefert der Kern ein geschlossenes Netz statt des offenen Rasters. Übernommen
 wird genau gerechnet.
 
@@ -231,8 +229,7 @@ wird genau gerechnet.
   deckungsgleiche Häute sind der schlimmste Fall für jeden Booleschen Kern. Die
   Verkleinerung des unveränderten Eingangs wird vorab gerechnet und je Szene
   und Schritt gemerkt: `supersede_preview` lässt sie weiterlaufen,
-  `cancel_preview` hält sie an. Nachweis:
-  `test_evaluation.py::test_the_coarse_reduction_of_the_unchanged_input_outlives_a_superseded_preview`.
+  `cancel_preview` hält sie an.
 * **Das Band sagt es als Text** (Regel 18): „Grobe Vorschau — beim Übernehmen
   wird genau gerechnet", vor „am Volumen ändert sich nichts", hinter „Vorschau
   unvollständig".
@@ -252,13 +249,10 @@ wird genau gerechnet.
   mit Absicht genau.
 * **Gibt der Kern am groben Netz auf** (`_kernel_gave_up`: `GeometryError`)
   oder scheitert die Verkleinerung, rechnet die Vorschau genau; ein ungültiger
-  Wert (`ValidationError`, `UserError`) rechnet nicht zweimal. Nachweis:
-  `test_evaluation.py::test_a_coarse_preview_the_kernel_refuses_is_computed_exactly`.
-* **Die Verkleinerung rechnet im Hilfsprozess** (`geom.kernel_process`, RM-212):
-  `manifold3d` gibt den GIL nie her, und aus dem Vorschau-Arbeiter hielt die
-  erste grobe Vorschau je Körper sonst den Hauptthread an. Das gilt nur für
-  Arbeiter — aus dem Hauptthread gerufen rechnet der Kern hier, denn gewartet
-  wäre dort genauso.
+  Wert (`ValidationError`, `UserError`) rechnet nicht zweimal.
+* **Die Verkleinerung rechnet aus einem Arbeiter im Hilfsprozess**
+  (`geom.kernel_process`, RM-212; GIL: `kern.md`), aus dem Hauptthread
+  gerufen hier — gewartet wäre dort genauso.
 * **Was an der Dreieckszahl hängt, zählt das Original, nicht die Kopie**
   (`OperationSpec.expected_triangles`, `_counted_ahead`): Eine Absage ist die
   Antwort, mit den Handlungen, die der Dialog selbst einlöst
@@ -278,8 +272,7 @@ wird genau gerechnet.
   Vorbereitung an, das Modell bleibt, der Dialog bleibt offen, ein wartender
   Klick auf *Übernehmen* verfällt. Vor `compare_scenes`, das keinen Abbruch
   kennt, fragt `_preview_outcome` das Signal; den Besitzer beenden Antwort,
-  Ablösung und Abbau. Nachweis (Release):
-  `test_operation_ui.py::test_a_long_preview_offers_cancel_and_cancelling_leaves_the_model`.
+  Ablösung und Abbau.
 * **Was die Operation nicht ändert, sagt das Band mit ihren Worten**
   (`_warning_of` reicht auch `info` durch; `OperationSpec.unchanged_effect`);
   „am Volumen ändert sich nichts" nur, wenn niemand Besseres weiß.
@@ -287,8 +280,7 @@ wird genau gerechnet.
   (`Session.preview_async`, RM-090): Geschätzte Dreieckszahl und ein
   Übernehmen, das nur auf die Rechnung wartet, lassen sie aus. Einen Klick
   hält sie nur, wo das Bild Pflicht ist oder noch nicht feststeht; sonst
-  entscheidet RM-493 (`_preview_can_apply`). Warum und Nachweise:
-  `konzepte/begruendungen/regel-wartezeit.md`.
+  entscheidet RM-493 (`_preview_can_apply`).
 * **Ein Klick während oder nach abgebrochener Auswertung wartet auf ihr Ende**
   (`MainWindow._click_after`): Die Zusage steht vor dem Lauftext, ein Abbruch
   rechnet beim nächsten Klick neu an. Gemerkt werden Eigentümer, Auftrag und
@@ -303,9 +295,6 @@ wird genau gerechnet.
   `recount_and_retry`) — sonst endet sie als angehaltener Schritt (Regel 19).
 
 ## Arbeiter und ihr Abbau
-
-Ausführliche Beispiele und Fehlersuche stehen unter denselben Überschriften
-in `konzepte/begruendungen/regel-wartezeit.md`.
 
 ### Ein Arbeiter erbt von `leash.Worker` und schreibt `work`
 
@@ -387,9 +376,7 @@ Methode (`ToolStrip._on_button`).
   (`viewport._weak_callbacks`). Kurzlebige Sender (Arbeiter, Dialog, Animation)
   dürfen mit Vorgabeargumenten halten; ihr Ring endet mit dem Sender.
 - Halter mit reproduzierbarer Lebensdauerannahme und `gc.get_referrers`
-  nachweisen, nicht per Lambdasuche. Eine `cell` zeigt auf eine Closure;
-  `__qualname__`/`__code__` benennen die Zeile. Genau eines von zehn erhaltenen
-  Widgets spricht für eine Referenz, nicht Streuung.
+  nachweisen, nicht per Lambdasuche.
 - Ohne Ring zerstört der Referenzzähler sofort, auch im Nebenthread. Vor
   erneuten Versuchen Stapelabzüge und Grenzen von `gc.collect`,
   `leash.undisturbed` und `deleteLater` in `tests/conftest.py` lesen.
@@ -398,7 +385,7 @@ Methode (`ToolStrip._on_button`).
 
 Jeder solche `eventFilter` beginnt mit `stop_watching_the_dying(self, watched,
 event)` und gibt bei Erfolg `False` zurück. Nicht nötig an der
-`QCoreApplication`; Begründung im verlinkten Dokument.
+`QCoreApplication`.
 `test_widget_lifetime.py` prüft das Filterargument, nicht die Datei.
 
 ### `isValid` beantwortet nicht, was für ein Objekt das ist
@@ -439,20 +426,18 @@ Wirkung prüfen (kommt die Ziffer an?). Für tatsächliche Sichtbarkeit
 
 ### Ein Arbeiter ist nur nebenläufig, wenn er den GIL hergibt
 
-`manifold3d` hält den GIL in jedem Aufruf; ein solcher Arbeiter steht für die
-Ereignisschleife im Hauptthread — deshalb rechnet der Kern an großen Körpern
-im Hilfsprozess (`kern.md`). **Gemessen wird der Hauptthread** — die größte
-Lücke eines Zeitgebers, solange der Arbeiter rechnet, zugeordnet über
-`faulthandler`-Abzüge (die laufen ohne GIL), nicht über einen Python-Faden, der
-in derselben Lücke steht. Für zwanzig Pixel genügt das Raster. `shapely` und
+`manifold3d` hält den GIL in jedem Aufruf — deshalb rechnet der Kern an
+großen Körpern im Hilfsprozess (`kern.md`). **Gemessen wird der
+Hauptthread** — die größte Lücke eines Zeitgebers, solange der Arbeiter
+rechnet, zugeordnet über `faulthandler`-Abzüge (die laufen ohne GIL), nicht
+über einen Python-Faden, der in derselben Lücke steht. Für zwanzig Pixel genügt das Raster. `shapely` und
 `numpy` geben ihn meist her (`_SculptWallWorker`), `pickle`, `repr` und
 `tuple`/`sorted` über Millionen Python-Zahlen nicht; eine Prüfung, die nach
 jeder Geste neu anläuft, bekommt einen Abbruchschalter
 (`maps.wall_thickness_map`).
 
-**Der Hauptthread greift je Bild hundertmal nach dem GIL** — jeder
-Python-Filter, jede Python-Überschreibung, jeder Slot ist ein Griff, und neben
-einem rechnenden Arbeiter wartet jeder. Daraus folgt:
+**Jeder Python-Filter, jede Python-Überschreibung, jeder Slot greift nach
+dem GIL** und wartet neben einem rechnenden Arbeiter. Daraus folgt:
 
 * **Umschalten nach 1 ms, nicht kürzer** (`leash.GIL_SWITCH_S`, gesetzt in
   `main` über `configure_gil_switching`; Grund im Docstring).
@@ -502,8 +487,7 @@ und ihr Ende nimmt sofort die jüngste Stelle.
   wird nur, was noch gewählt ist, und ein Absturz ist ein Fehlerbericht.
 * **Ein Filter an der Anwendung, nicht einer je Anliegen:** `app_events.listen`
   und `app_events.forget` (`test_app_events` prüft den Quelltext). Der
-  Verteiler hält seine Zuhörer schwach wie `installEventFilter` — fest
-  gehalten überlebte die geschlossene Ansicht samt Renderer; ein Zuhörer
+  Verteiler hält seine Zuhörer schwach wie `installEventFilter`; ein Zuhörer
   braucht deshalb einen Elternteil oder einen Besitzer.
 * **Die Vorbereitung zählt, statt zu verschneiden:** `placement._patch_area`
   baut die Fläche aus ihrem Rand und prüft sie; nur Abgelehntes geht durch
