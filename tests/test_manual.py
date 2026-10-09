@@ -644,6 +644,25 @@ def test_f1_on_every_other_operation_finds_its_entry_in_the_reference() -> None:
     assert not lost, "\n".join(lost)
 
 
+def test_every_sign_in_the_feature_panel_opens_a_page_that_exists() -> None:
+    """RM-554: Jedes i im Merkmalfenster zeigt auf eine vorhandene Handbuchseite.
+
+    Ein i steht nur an Zeilen mit Feldern, und die tragen eine Operation; das
+    Ziel ist dasselbe wie F1 (:func:`manual.help_for`). Geprüft über jede
+    Operation im Register; eine unbekannte führt auf die Seite über die
+    Merkmale.
+    """
+    keys = {page.key for page in manual.pages()}
+    lost = []
+    for operation in (*(spec.name for spec in REGISTRY.all()), "unknown_operation"):
+        key, spot = manual.help_for_action(operation)
+        if key not in keys or (spot and spot[1:] not in dict(manual.reference_anchors(key))):
+            lost.append(f"{operation} → {key}{spot}")
+    assert not lost, "\n".join(lost)
+    assert manual.help_for_action("insert_nut_trap") == manual.help_for("insert_nut_trap")
+    assert manual.help_for_action("unknown_operation") == ("features", "")
+
+
 @pytest.mark.parametrize("language", available_languages())
 def test_reference_anchors_follow_the_headings_and_keep_duplicate_titles_distinct(
     language: str,

@@ -2346,7 +2346,9 @@ def test_whole_face_texture_preview_matches_apply_and_edit(
     assert face is not None
     window._on_feature_picked(face.id)
     seen = []
-    monkeypatch.setattr(window, "_show_preview", seen.append)
+    monkeypatch.setattr(
+        window, "_show_preview", lambda difference, **_kwargs: seen.append(difference)
+    )
     # Erzwingt die Reduktionsschwelle am kleinen Korpus: Ganzfläche muss
     # trotzdem ohne vorgelagerte Änderung ihrer Flächendreiecke rechnen.
     monkeypatch.setattr(session_module, "COARSE_PREVIEW_ABOVE", 1)
@@ -2501,7 +2503,9 @@ def test_texture_panel_changes_existing_step_with_live_preview(
     }
     assert set(numeric) == {"pitch", "depth", "angle"}
     seen = []
-    monkeypatch.setattr(window, "_show_preview", seen.append)
+    monkeypatch.setattr(
+        window, "_show_preview", lambda difference, **_kwargs: seen.append(difference)
+    )
     numeric["depth"].spin.setValue(0.9)
     window._feature_preview.stop()
     window._preview_feature_change()
@@ -2565,11 +2569,11 @@ def test_a_texture_panel_click_while_the_scene_evaluates_changes_the_step_after_
     numeric = {
         field._entry.name: field for row in panel._built for field in row.findChildren(ValueField)
     }
-    monkeypatch.setattr(window, "_show_preview", lambda _difference: None)
+    monkeypatch.setattr(window, "_show_preview", lambda _difference, **_kwargs: None)
     numeric["depth"].spin.setValue(0.9)
     window._feature_preview.stop()
     window._preview_feature_change()
-    assert window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     gate = threading.Event()
     evaluate = Session.run_evaluation
 
@@ -7086,6 +7090,40 @@ def test_every_bool_row_in_the_register_is_a_row_checkbox(qt_app: QApplication) 
                     plain.append(f"{spec.name}.{name}")
         finally:
             dialog.deleteLater()
+    assert not plain, plain
+
+
+def test_every_position_field_of_every_operation_offers_fx(qt_app: QApplication) -> None:
+    """RM-555: X, Y und Z tragen im Dialog jeder Operation dasselbe Ausdrucksfeld.
+
+    Im Merkmalfenster stand an *Baustein verschieben* fx nur an den Achsen, die
+    schon einen Ausdruck trugen. Der Dialog ist die Vorlage dafür; hier steht
+    fest, dass er keine Achse auslässt (die Gegenseite im Merkmalfenster:
+    ``test_feature_panel.py``).
+    """
+    from app.core.registry.surfaces import PART_PLACEMENT_PARAMS
+    from app.ui.op_dialog import ValueField
+
+    plain: list[str] = []
+    checked = 0
+    for spec in REGISTRY.all():
+        axes = [
+            entry.name
+            for entry in spec.params.spec()
+            if entry.name in PART_PLACEMENT_PARAMS and entry.kind in ("float", "int")
+        ]
+        if not axes:
+            continue
+        dialog = OperationDialog(spec, {})
+        try:
+            for name in axes:
+                editor = dialog._editors.get(name)
+                checked += 1
+                if not isinstance(editor, ValueField) or editor.toggle.text() != "fx":
+                    plain.append(f"{spec.name}.{name}")
+        finally:
+            dialog.deleteLater()
+    assert checked > 100, "ohne Lagefelder prüft dieser Test nichts"
     assert not plain, plain
 
 

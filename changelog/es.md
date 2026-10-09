@@ -39,6 +39,12 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - En el modo de dibujo, la pestaña *Selección* se oculta. La lista de restricciones muestra las de los puntos y líneas seleccionados, además de cualquier conflicto.
 - En la tarjeta de parámetros, una medida solo muestra «Sin utilizar» cuando es así. El botón dice cuántos números fijos se pueden vincular a medidas.
 - El informe de errores adjunta un registro de fallo solo cuando Solidon se ha cerrado de verdad por un fallo.
+- La tarjeta del recorrido es tan alta como sus pasos. Un paso se despliega con un clic o la barra espaciadora, y ninguna burbuja tapa ya la vista.
+- Si un paso del recorrido señala el informe de comprobación, el recorrido sigue a la vista. La pestaña queda enmarcada y el paso dice cuál abrir.
+- Un clic en la i junto a una acción de la pestaña *Selección* abre el manual donde se explica esa acción.
+- Cada cota de un bloque se puede vincular con fx a una cota del proyecto, aunque todavía no tenga ninguna expresión.
+- Tras arrastrar el tirador de una vista previa, ya no queda ningún número sobre la vista. Un número tecleado al arrastrar mueve la vista previa, no el cuerpo elegido.
+- Tras *Reparar y volver a intentarlo* y caminos parecidos, el historial ya no llama «eliminado» a un paso que sigue calculando. Si la cadena vuelve a parar, el paso queda marcado.
 
 ### Imprimir y entregar al slicer
 

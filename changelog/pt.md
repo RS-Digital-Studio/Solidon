@@ -38,6 +38,12 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - No modo de desenho, o separador *Seleção* fica oculto. A lista de restrições mostra as dos pontos e linhas selecionados, mais qualquer conflito.
 - No cartão de parâmetros, uma medida só mostra «Não utilizado» quando é o caso. O botão diz quantos números fixos se podem associar a medidas.
 - O relatório de erro só anexa um registo de falha quando o Solidon falhou mesmo.
+- O cartão da visita guiada tem a altura dos seus passos. Um passo abre-se com um clique ou com a barra de espaços, e nenhum balão tapa mais a vista.
+- Quando um passo da visita guiada aponta para o relatório de verificação, a visita continua visível. O separador fica emoldurado e o passo diz qual abrir.
+- Um clique no i junto a uma ação do separador *Seleção* abre o manual onde essa ação é explicada.
+- Cada cota de um bloco pode ser ligada com fx a uma cota do projeto, mesmo antes de ter uma expressão.
+- Depois de arrastar a pega de uma pré-visualização, nenhum número fica sobre a vista. Um número escrito durante o arrasto move a pré-visualização, não o corpo escolhido.
+- Depois de *Reparar e tentar de novo* e caminhos semelhantes, o histórico já não chama «eliminado» a um passo que continua a calcular. Se a cadeia voltar a parar, o passo fica marcado.
 
 ### Imprimir e entregar ao slicer
 

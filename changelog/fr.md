@@ -39,6 +39,12 @@ dans `website/version.json`.
 - En mode dessin, l'onglet *Sélection* est masqué. La liste des contraintes montre celles des points et lignes sélectionnés, ainsi que chaque conflit.
 - Dans la carte des paramètres, une cote n'affiche « Non utilisé » que si c'est le cas. Le bouton indique combien de nombres fixes peuvent être liés à des cotes.
 - Le rapport d'erreur ne joint un journal de plantage que si Solidon a vraiment planté.
+- La carte de la visite guidée a la hauteur de ses étapes. Une étape se déplie d'un clic ou avec la barre d'espace, et aucune bulle ne couvre plus la vue.
+- Quand une étape de la visite guidée renvoie au rapport de contrôle, la visite reste visible. L'onglet est encadré et l'étape dit lequel ouvrir.
+- Un clic sur le i à côté d'une action de l'onglet *Sélection* ouvre le manuel à l'endroit qui l'explique.
+- Chaque cote d'un bloc peut être liée à une cote du projet avec fx, même si elle ne porte encore aucune expression.
+- Après avoir tiré la poignée d'un aperçu, aucun nombre ne reste au-dessus de la vue. Un nombre saisi pendant le geste déplace l'aperçu, pas le corps sélectionné.
+- Après *Réparer et réessayer* et les chemins voisins, l'historique n'appelle plus « supprimée » une étape qui continue de calculer. Si la chaîne s'arrête de nouveau, l'étape est marquée.
 
 ### Imprimer et transmettre au slicer
 

@@ -81,11 +81,13 @@ Handlungen steht, sagt `grenzen.md`. Warum:
 - Eine Geste baut das Fenster einmal: `_on_tree_selection` überlässt Menübau
   dem Merkmalsignal; `_fields_this_round` merkt Merkmal und `FeaturePanel.serial`
   derselben Runde. Bei neuen Signalen die teuren Aufrufe zählen.
-- Tour ist ein Angebot: zusätzlicher rechter Reiter für Beispielprojekte
-  (`ui/tour.py`, Schritte `core/tour.py`), Erkennung über `projectChanged`,
-  Weiter auch ohne Erkennung. Warnung lässt aktive Tour stehen, Projektwechsel
-  räumt sie ab. Erkennungswerte müssen zu `make_examples.py` passen
-  (`test_tour.py`).
+- Tour ist ein Angebot: rechter Reiter für Beispiele (`ui/tour.py`, Schritte
+  `core/tour.py`), Erkennung über `projectChanged`, Weiter auch ohne. Warnung
+  und Vorwahl der Startansicht lassen sie stehen, ein Projektwechsel räumt sie
+  ab; Erkennungswerte passen zu `make_examples.py`. Schritte messen ihre Höhe
+  (`ContentScroller`), ohne Tooltip, aufklappbar per Klick und Taste (RM-553);
+  einen Reiter derselben Karte rahmt die Tour (`point_at`), statt ihn zu holen
+  (RM-573).
 
 ## Rückfragen
 
@@ -254,6 +256,8 @@ Stellen halten das, beide sind nötig:
   die Mindestbreite des Inhalts und meldet sie mit `tell_the_zone` bis zur
   Karte, sonst steht sie einige Runden zu schmal; Auswahlfelder baut
   `column_choice`, sonst verlangt ihr längster Eintrag die Spalte.
+- **Das i einer Handlung** zeigt beim Darüberfahren ihren Satz, der Klick
+  öffnet `manual.help_for_action` (RM-554).
 - **Ein Feld einer Merkmalsart steht nur an ihr** (`perceive.actions._carried_by`):
   die Steigung am Gewinde, nicht an der Bohrung.
 - **Eine Anzahl ist keine Länge** (`count`, `steps`, `holes`):
@@ -288,9 +292,10 @@ Ansichtsseite steht in `griffe.md`.
   *Achse* — jede andere Achse bekommt einen Satz mit dem Weg.
 - **Eine gebundene Lage folgt dem Griff:** Der Zug wandert als Versatz in den
   Ausdruck (`expressions.shifted`: `=@staerke + 5`), eine Achse ohne Zug bleibt
-  unangetastet; abgelehnt wird nur eine Drehung an einem gebundenen Wert. Eine
-  Achse mit Ausdruck bekommt im Merkmalfenster das `ValueField` des
-  Operationsdialogs (`FeaturePanel._part_fields`, §13).
+  unangetastet; abgelehnt wird nur eine Drehung an einem gebundenen Wert. Jedes
+  Zahlenfeld des Schritts trägt im Merkmalfenster fx, mit oder ohne Ausdruck
+  (`_expression_entry`, §13, RM-555) — nur in den Handlungen dieses Schritts
+  (`_schemas_of`), nie in gleichnamigen Feldern der Nachbarn.
 - **Entf** nimmt an Dach oder Einzelmerkmal den Schritt des Bausteins
   (`MainWindow._delete_the_chosen_feature`), nie den Körper; ohne Baustein gilt
   `remove_feature`; greift auch das nicht (Fläche, Gewinde, Verrundung), fällt

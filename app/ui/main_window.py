@@ -28,7 +28,7 @@ from dataclasses import dataclass, replace
 from functools import partial
 from pathlib import Path
 from threading import Lock
-from typing import Any, Final, cast
+from typing import Any, Final, cast, get_args
 from uuid import uuid4
 
 from PySide6.QtCore import (
@@ -225,7 +225,7 @@ from app.core.slice.estimate import plates_findings, support_material, time_comp
 from app.core.slice.estimate import total as estimate_total
 from app.core.slice.findings import analysed
 from app.core.support import KIND_CRASH, KIND_IDEA, KIND_SURVEY
-from app.core.tour import tour_for
+from app.core.tour import TourTarget, tour_for
 from app.core.types import (
     Bone,
     CancelToken,
@@ -869,8 +869,8 @@ class _SelectionPage(QWidget):
     **Zwei Lagen, in denen eine Auswahl den Reiter nicht holt** (Durchsicht
     0.5.3): eine Auswahl, die der Prüfbericht trifft (:meth:`held` — wer dort
     einen Befund anklickt, liest den Bericht weiter), und eine laufende Tour,
-    die vorn steht — sie holt ihre Reiter selbst (``_flash_area``), wie sie
-    auch dem Bericht nicht weicht (``_focus_report``).
+    die vorn steht — sie zeigt selbst auf ihre Reiter (``_flash_area`` rahmt
+    sie, RM-573), wie sie auch dem Bericht nicht weicht (``_focus_report``).
     """
 
     closed = Signal()
@@ -3179,6 +3179,7 @@ class MainWindow(QMainWindow):
         self.feature_panel.stepEditRequested.connect(self._edit_panel_step)
         self.feature_panel.stepSelectionChanged.connect(self._drop_feature_preview)
         self.feature_panel.stepRemoveRequested.connect(self._remove_part_step)
+        self.feature_panel.manualRequested.connect(self.action_manual)
         # **Die eine Kundengeste der Trennen-Serie** (T8, RM-080): „Diese
         # Fläche soll schön bleiben." Kein Operationsweg — die Sperre steht im
         # Dokument und wirkt in der Suche, nicht im Verlauf.
@@ -27279,6 +27280,11 @@ class MainWindow(QMainWindow):
             self._remove_tour()
             return
         self.right.setTabVisible(self.right.indexOf(self.tour), True)
+        # Vorn, bevor die Tour beginnt: Ihr erster Schritt kann schon auf
+        # einen Nachbarreiter zeigen, und gezeigt wird nur auf einen, der
+        # nicht vorn steht (RM-573).
+        self.right.setCurrentWidget(self.tour)
+        self.tour.set_tab_names(self._tour_tab_names())
         self.tour.start(example, tour)
         if not self.right_column.isVisible():
             # Wer die rechte Spalte ausgeblendet hatte, bekäme eine
@@ -27287,7 +27293,23 @@ class MainWindow(QMainWindow):
             self.settings.right_panel_visible = True
             self._store_settings()
             self.right_column.setVisible(True)
-        self.right.setCurrentWidget(self.tour)
+
+    def _tour_tab_names(self) -> dict[str, str]:
+        """Welche Ziele der Tour Reiter der rechten Karte sind, mit dem Namen am Reiter.
+
+        Die Tour nennt dem Kunden den Reiter, auf den er klicken soll (RM-573);
+        welches Widget ein Ziel meint, sagt :mod:`app.ui.guide_targets`.
+        """
+        names: dict[str, str] = {}
+        for target in get_args(TourTarget):
+            try:
+                area = widget_for(self, target)
+            except MissingTargetError:
+                continue
+            index = self.right.indexOf(area)
+            if index >= 0:
+                names[target] = self.right.tabText(index)
+        return names
 
     def _open_example(self, example_id: str) -> None:
         """Öffnet ein Beispiel über seine Kennung — der Weg vom Ende einer Tour
@@ -27306,8 +27328,11 @@ class MainWindow(QMainWindow):
         Sekunde beantwortet die Frage, ohne sie gestellt zu haben.
 
         Zeigt der Schritt auf einen Reiter der rechten Karte, etwa den
-        Prüfbericht, wird er gleich mitgeholt: er teilt sich die Karte mit der
-        Tour, und ihn suchen zu lassen hieße, die Tour aus dem Blick zu nehmen.
+        Prüfbericht, wird er **nicht** nach vorn geholt (RM-573, Entscheidung
+        Robert): Er teilt sich die Karte mit der Tour und verdeckte sie samt
+        dem Schritt, den der Kunde gerade liest. Der Reiter trägt stattdessen
+        einen gestrichelten Rahmen, der Schritt sagt, worauf zu klicken ist,
+        und der Kunde öffnet selbst. Ein leeres Ziel nimmt den Rahmen wieder ab.
 
         Welches Widget ein Name meint, sagt :mod:`app.ui.guide_targets` —
         dieselbe Auflösung, mit der die Bildanleitungen ihre Rahmen setzen.
@@ -27316,6 +27341,9 @@ class MainWindow(QMainWindow):
         Hinweis; es wird protokolliert und nicht zum Fehler, anders als bei
         der Aufnahme, die daran den Release anhält.
         """
+        if not target:
+            self.right_tabs.stop_pointing()
+            return
         try:
             area = widget_for(self, target)
         except MissingTargetError as missing:
@@ -27323,8 +27351,11 @@ class MainWindow(QMainWindow):
             return
         # Jeder Reiter der rechten Karte, nicht nur der Bericht: Seit RM-511
         # steht dort auch die Auswahl.
-        if self.right.indexOf(area) >= 0:
-            self.right.setCurrentWidget(area)
+        index = self.right.indexOf(area)
+        if index >= 0 and self.right.currentIndex() != index:
+            self.right_tabs.point_at(index)
+            return
+        self.right_tabs.stop_pointing()
         # **Und die andere Bauart derselben Zusage.** Der Bericht teilt sich
         # eine Spalte mit der Tour und wird über den Reiter geholt; Objektbaum,
         # Parameter und Verlauf sitzen in einklappbaren Abschnitten (§2.5).
@@ -27339,6 +27370,7 @@ class MainWindow(QMainWindow):
 
     def _remove_tour(self) -> None:
         """Blendet den Tour-Reiter aus — beim Beenden und beim Projektwechsel."""
+        self.right_tabs.stop_pointing()
         self.tour.reset()
         self.right.setTabVisible(self.right.indexOf(self.tour), False)
 

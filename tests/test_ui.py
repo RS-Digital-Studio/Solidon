@@ -2488,6 +2488,181 @@ def test_the_start_screen_opens_the_manual(window: MainWindow) -> None:
     assert window._manual.isVisible()
 
 
+def test_the_sign_at_a_handling_opens_the_manual_on_its_page(window: MainWindow) -> None:
+    """RM-554: Das i an *Baustein verschieben* schlägt das Handbuch dort auf, wo der Baustein steht.
+
+    Durch das Merkmalfenster: das Schraubenloch als Baustein zeigen und das i an
+    *Baustein verschieben* anklicken. Das Schraubenloch lehrt die Anleitung, die
+    es in ``teaches`` führt; deren Seite schlägt das Fenster auf.
+    """
+    from types import SimpleNamespace
+
+    from PySide6.QtWidgets import QToolButton
+
+    from app.core import guides
+
+    page = next(guide.key for guide in guides.GUIDES if "insert_screw_hole" in guide.teaches)
+    step = SimpleNamespace(id=4, op="insert_screw_hole", params={"x": 10.0, "z": 6.0})
+    panel = window.feature_panel
+    panel.show_part(step, REGISTRY.get("insert_screw_hole"))
+    row = next(row for row in panel._shown_rows.values() if {"x", "y", "z"} <= set(row.widgets))
+    assert row.title is not None and row.title.text() == tr("Baustein verschieben")
+    dot = next(
+        widget for widget in row.box.findChildren(QToolButton) if widget.objectName() == "infoDot"
+    )
+    assert dot.toolTip(), "der Tooltip bleibt"
+    dot.click()
+
+    assert window._manual is not None
+    assert window._manual.isVisible()
+    shown = window._manual.current_page()
+    assert shown is not None and shown.key == page
+    window._manual.close()
+
+
+@pytest.mark.parametrize(
+    ("operation", "ending"),
+    [
+        ("create_detent_disc", "accept"),
+        ("create_box", "accept"),
+        ("create_detent_disc", "cancel"),
+    ],
+    ids=["einsetzen", "uebernehmen", "abbrechen"],
+)
+def test_no_drag_number_stays_in_the_view_after_the_dialog(
+    window: MainWindow, operation: str, ending: str
+) -> None:
+    """RM-558: Nach dem Einsetzen der Rastdrehscheibe stand „Y 60,62 mm“ über der Ansicht.
+
+    Die Zahl ist die des Zugs am Griff der Vorschau (``DragValueBar``). Das
+    Loslassen räumte sie nicht ab, und weder *Einsetzen* noch *Übernehmen*
+    noch *Abbrechen* taten es danach. Abgebrochen wird hier mitten im Zug, ohne
+    Loslassen: Auch dann geht die Zahl mit dem Dialog.
+    """
+    import numpy as np
+
+    window.run_operation(REGISTRY.get(operation))
+    dialog = next(child for child in window.findChildren(OperationDialog) if child.isVisible())
+    viewport = window.viewport
+    drag = np.eye(4)
+    drag[:3, 3] = (0.0, 60.62, 0.0)
+    viewport._on_preview_interacted(drag)
+    assert not viewport.drag_bar.isHidden(), "premise: the drag shows its number"
+    assert viewport.drag_bar.label.text() == "Y"
+
+    if ending == "accept":
+        viewport._on_preview_released(drag)
+        assert viewport.drag_bar.isHidden(), "mit dem Loslassen geht die Zahl"
+        _accept_after_preview(window, dialog)
+        assert window.session.wait_for_idle(60_000)
+    else:
+        dialog.reject()
+        QApplication.processEvents()
+    assert viewport.drag_bar.isHidden(), "kein Maßfeld bleibt stehen"
+    assert viewport._drag_kind is None, "und keine getippte Zahl verschiebt danach etwas"
+
+
+@pytest.mark.parametrize("released", [False, True], ids=["esc-im-zug", "esc-nach-loslassen"])
+def test_escape_in_a_preview_drag_puts_the_preview_back(
+    qt_app: QApplication, released: bool
+) -> None:
+    """Review U1, Nachprüfung, Fund 1: Esc im Vorschauzug lässt die Vorschau nicht versetzt stehen.
+
+    Der Griff setzt die Matrix der Vorschau schon im Zug. Nach Esc stand sie um
+    den verworfenen Weg versetzt, und der neue Griff rechnete ab dort: Ein
+    zweiter Zug um 3 mm meldete 15. Gezogen wird über den Rückruf, den der Griff
+    der Vorschau wirklich trägt — so prüft der Test auch, dass er der
+    Vorschauzug ist und nicht der Körperzug.
+    """
+    import numpy as np
+    from PySide6.QtTest import QTest
+
+    from app.ui.render.api import SurfaceStyle
+    from app.ui.viewport import Viewport
+    from tests.render_fakes import RecordingRenderer
+
+    viewport = Viewport()
+    renderer = RecordingRenderer(size=(800, 600))
+    viewport.renderer = renderer
+    actor = renderer.add_surface(
+        np.array([[0.0, 0.0, 0.0], [10.0, 0.0, 0.0], [0.0, 10.0, 0.0], [0.0, 0.0, 10.0]]),
+        np.array([[0, 1, 2], [0, 1, 3], [0, 2, 3], [1, 2, 3]]),
+        name="added:box",
+        style=SurfaceStyle(colour=(0.5, 0.5, 0.5)),
+    )
+    viewport._difference_actors = [actor]
+    try:
+        viewport.set_preview_gizmo(True)
+        gizmo = viewport._preview_gizmo
+        assert gizmo is not None
+        shift = np.eye(4)
+        shift[1, 3] = 12.0
+        moved = shift @ gizmo._cached
+        corrected = gizmo._interact(moved) if gizmo._interact is not None else None
+        assert viewport._preview_dragging, "der Griff der Vorschau meldet einen Vorschauzug"
+        actor.set_matrix(moved if corrected is None else corrected)
+        if released:
+            viewport.drag_bar.value.setFocus()
+            viewport.drag_bar.value.selectAll()
+            QTest.keyClicks(viewport.drag_bar.value, "5")
+            viewport._on_preview_released(actor.matrix())
+        QTest.keyClick(viewport.drag_bar.value, Qt.Key.Key_Escape)
+
+        assert np.allclose(actor.matrix(), np.eye(4)), "die Vorschau steht wieder am Anfang"
+        again = viewport._preview_gizmo
+        assert again is not None
+        second = np.eye(4)
+        second[1, 3] = 3.0
+        assert (second @ again._cached)[1, 3] == pytest.approx(3.0), "kein verworfener Weg"
+        assert viewport.drag_bar.isHidden()
+    finally:
+        viewport.set_preview_gizmo(False)
+        viewport.deleteLater()
+
+
+@pytest.mark.parametrize("released", [False, True], ids=["enter-im-zug", "erst-loslassen"])
+def test_a_number_typed_during_a_preview_drag_moves_the_preview(
+    window: MainWindow, released: bool
+) -> None:
+    """Review U1, Fund 3: Die getippte Zahl gehört der Vorschau, nicht dem gewählten Körper.
+
+    Am Griff der Vorschau von *Quader anlegen* 12 mm in Y ziehen und „5“ tippen.
+    Mit der Eingabetaste noch im Zug ging die Zahl über ``transformDragged`` an
+    die Auswahl; wer erst losließ, verlor sie still, und die Vorschau bekam die
+    gezogenen 12. Jetzt kommt die 5 als Zug an die Vorschau, in beiden Folgen.
+    """
+    import numpy as np
+    from PySide6.QtTest import QTest
+
+    window.run_operation(REGISTRY.get("create_box"))
+    dialog = next(child for child in window.findChildren(OperationDialog) if child.isVisible())
+    viewport = window.viewport
+    to_bodies: list[object] = []
+    to_preview: list[np.ndarray] = []
+    viewport.transformDragged.connect(to_bodies.append)
+    viewport.previewDragged.connect(lambda matrix: to_preview.append(np.asarray(matrix)))
+    drag = np.eye(4)
+    drag[:3, 3] = (0.0, 12.0, 0.0)
+    viewport._on_preview_interacted(drag)
+    viewport.drag_bar.value.setFocus()
+    viewport.drag_bar.value.selectAll()
+    QTest.keyClicks(viewport.drag_bar.value, "5")
+    assert viewport.drag_bar.typing, "premise: the keyboard has taken the drag"
+    if released:
+        viewport._on_preview_released(drag)
+        assert not viewport.drag_bar.isHidden(), "die getippte Zahl bleibt stehen"
+        assert not to_preview, "das Loslassen wendet die gezogenen 12 nicht an"
+    QTest.keyClick(viewport.drag_bar.value, Qt.Key.Key_Return)
+    QApplication.processEvents()
+
+    assert not to_bodies, "kein Versatz an die gewählten Körper"
+    assert len(to_preview) == 1
+    assert to_preview[0][:3, 3] == pytest.approx((0.0, 5.0, 0.0))
+    assert dialog.values()["y"] == pytest.approx(5.0)
+    assert viewport.drag_bar.isHidden() and viewport._drag_kind is None
+    dialog.reject()
+
+
 def test_new_leads_back_to_the_examples(window: MainWindow) -> None:
     """Nach dem ersten Start waren die sieben Beispiele unerreichbar.
 
@@ -3815,7 +3990,7 @@ def test_a_changed_number_previews_before_it_changes_anything(window: MainWindow
     assert len(window.session.project.document.ops) == vorher, "und ändert nichts"
 
     gezeigt: list[object] = []
-    window._show_preview = lambda difference: gezeigt.append(difference)  # type: ignore[method-assign]
+    window._show_preview = lambda difference, **_kwargs: gezeigt.append(difference)  # type: ignore[method-assign]
     window._feature_preview.stop()
     window._preview_feature_change()
     assert window.session.wait_for_idle(60_000)
@@ -4840,7 +5015,6 @@ def test_a_refused_measure_expression_blocks_accept_and_survives_refresh(
     sie, bietet das Fenster ihren Schritt an und holt dessen Maße ins Bild. Ein
     erfundener Schritt, den der Verlauf nicht kennt, kam nie bis zur Maßgruppe.
     """
-    from app.ui.labels import LengthSpin
     from app.ui.op_dialog import ValueField
     from tests.render_fakes import RecordingRenderer
 
@@ -4875,11 +5049,13 @@ def test_a_refused_measure_expression_blocks_accept_and_survives_refresh(
         for editor in flow._measure_group.findChildren(ValueField)
         if editor._entry.name == "diameter"
     )
-    other = next(
+    # Auch die Tiefe trägt fx (RM-555); der Fokus geht in ihr Drehfeld.
+    depth = next(
         editor
-        for editor in flow._measure_group.findChildren(LengthSpin)
-        if editor.accessibleName().endswith("Tiefe")
+        for editor in flow._measure_group.findChildren(ValueField)
+        if editor._entry.name == "depth"
     )
+    other = depth.spin
     window.show()
     QApplication.processEvents()
     line = diameter.text
@@ -4904,7 +5080,7 @@ def test_a_refused_measure_expression_blocks_accept_and_survives_refresh(
 
     other.lineEdit().setFocus()
     line.setModified(False)
-    flow.dialog.take_placement({"depth": other.value_mm() + 0.5})
+    flow.dialog.take_placement({"depth": float(depth.value() or 0.0) + 0.5})
     QApplication.processEvents()
     assert line.text() == refused_text, (
         "ein Rückschreiben überschreibt den abgelehnten Ausdruck nicht"
@@ -10526,8 +10702,10 @@ def test_failed_operation_is_repaired_before_retry_without_a_loop(
     assert window.session.last_result.stopped_at == retry_ops[-1].id
 
     rows = [window.history_panel.list.item(row) for row in range(window.history_panel.list.count())]
-    old_row = next(item for item in rows if old_transaction.id in item.toolTip())
-    assert tr("gelöscht") in old_row.text() and old_row.font().strikeOut()
+    # Neu gefasst, nicht gelöscht (RM-547): Die alte Zeile weicht der neuen
+    # Fassung unter dem Umbau, und nichts heißt „gelöscht“.
+    assert not any(tr("gelöscht") in item.text() for item in rows), [i.text() for i in rows]
+    assert not any(item.toolTip().startswith(f"{old_transaction.id} ") for item in rows)
     assert any(str(errors.REPAIR_AND_RETRY.label) in item.text() for item in rows)
 
     choose(failed_code)
@@ -13997,6 +14175,65 @@ def test_opening_an_example_starts_its_tour(window: MainWindow, session: Session
     assert not _tour_tab_visible(window)
     assert session.wait_for_idle(120_000)
     assert not session.busy, "kein Arbeiter überlebt den Test"
+
+
+def test_a_tour_step_on_the_report_frames_its_tab_and_stays_in_view(window: MainWindow) -> None:
+    """RM-573, Entscheidung Robert: Ein Tourschritt über den Prüfbericht holt dessen Reiter nicht.
+
+    Der Bericht teilt sich die Karte mit der Tour; nach vorn geholt verdeckte er
+    sie samt dem Schritt, den der Kunde gerade liest. Geprüft über den Weg, den
+    das Öffnen eines Beispiels geht (``_offer_tour``), an der Passungstour mit
+    drei Berichtsschritten nacheinander:
+
+    * Die Tour bleibt vorn, der Reiter trägt den Rahmen.
+    * Vor dem Schritt steht ein eigener Satz, welcher Reiter zu öffnen ist —
+      angehängt bezog sich „dazu“ auf die Handlung davor (Nachprüfung, Fund 3).
+    * Zahl und „ungelesen“ bleiben im Namen des Reiters, der Tour-Satz kommt
+      dazu (Nachprüfung, Fund 2).
+    * Öffnet der Kunde den Bericht und schaltet danach weiter, steht der Rahmen
+      im nächsten Berichtsschritt wieder (Nachprüfung, Fund 4).
+    """
+    from app.core import examples
+    from app.core.tour import tour_for
+
+    example_id = "passung-nach-materialwechsel"
+    tour = tour_for(example_id)
+    assert tour is not None
+    assert [step.shows for step in tour.steps[:3]] == ["report"] * 3, (
+        "premise: drei Berichtsschritte"
+    )
+    report = window.right.indexOf(window.report)
+
+    window._offer_tour(examples.directory() / f"{example_id}.p3d")
+    QApplication.processEvents()
+    # Eine ungesehene Warnung am Bericht, wie die Passungstour sie zeigt.
+    window.right_tabs.show_counts(report, 0, 1)
+    window.right_tabs.signal(report, error=False, warning=True)
+    assert window.right.currentWidget() is window.tour, "die Tour bleibt sichtbar"
+    assert window.tour.current_index == 0
+    assert window.right_tabs.pointed() == report, "der Reiter ist markiert"
+    assert window.right_tabs.pointed_frame() is not None
+    tip = window.right_tabs.tabToolTip(report)
+    assert tr("Die Tour zeigt hierher. Ein Klick öffnet den Reiter.") in tip
+    spoken = window.right_tabs.accessibleTabName(report)
+    assert tr("ungelesen") in spoken and "1" in spoken, spoken
+    assert spoken.endswith(str(tr("{tab}, die Tour zeigt hierher", tab="")).strip(", ")), spoken
+
+    second = window.tour._rows[1][1].full_text()
+    tab = window.right.tabText(report)
+    assert second.index(tab) < second.index(str(tour.steps[1].text)), (
+        "der Reiter steht vor der Handlung des Schritts"
+    )
+
+    window.right.setCurrentIndex(report)
+    assert window.right_tabs.pointed() == -1, "geöffnet ist der Hinweis erledigt"
+    window.right.setCurrentWidget(window.tour)
+    window.tour.advance()
+    assert window.tour.current_index == 1
+    assert window.right_tabs.pointed() == report, "der nächste Berichtsschritt rahmt wieder"
+
+    window.tour.stop()
+    assert window.right_tabs.pointed() == -1, "mit der Tour geht der Hinweis"
 
 
 def test_a_plain_project_carries_no_tour(
