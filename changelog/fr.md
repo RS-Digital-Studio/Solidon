@@ -43,6 +43,7 @@ dans `website/version.json`.
 ### Imprimer et transmettre au slicer
 
 - Sous Linux, Solidon crée désormais aussi le fichier d'impression avec Cura en Flatpak ou en AppImage.
+- Sous Linux, les imprimantes d'OrcaSlicer, Bambu Studio, ElegooSlicer et Creality Print en AppImage sont proposées tout de suite, même si le slicer n'a jamais été ouvert.
 - La boîte de dialogue d'impression propose les imprimantes du slicer choisi, comme *Premiers pas* et *Réglages*. Une imprimante reprise ainsi reste liée à son slicer.
 - Dans la boîte de dialogue d'impression, le slicer se change comme dans *Premiers pas*, aussi via *Choisir le programme …* pour un slicer que Solidon ne trouve pas seul.
 - Une imprimante de la liste de Solidon et la même issue du slicer sont un seul appareil. La boîte de dialogue choisit le profil à la bonne buse, et le fichier contient le code de démarrage.

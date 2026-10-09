@@ -67,6 +67,7 @@ Nutzen da und sonst nichts.
 ### Drucken und Übergabe an den Slicer
 
 - Unter Linux erzeugt Solidon die Druckdatei jetzt auch mit Cura als Flatpak oder AppImage.
+- Unter Linux stehen die Drucker von OrcaSlicer, Bambu Studio, ElegooSlicer und Creality Print als AppImage sofort zur Wahl, auch wenn der Slicer noch nie geöffnet wurde.
 - Der Druckdialog bietet die Drucker des gewählten Slicers an, wie *Erste Schritte* und *Einstellungen*. Ein so übernommener Drucker bleibt bei seinem Slicer.
 - Im Druckdialog lässt sich der Slicer wechseln wie in *Erste Schritte*, auch über *Programm wählen …* für einen, den Solidon nicht selbst findet.
 - Ein Drucker aus Solidons Liste und derselbe aus dem Slicer gelten als ein Gerät. Der Druckdialog wählt das Slicerprofil mit der richtigen Düse, und die Druckdatei trägt den Startcode.
