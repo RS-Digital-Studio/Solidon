@@ -16,7 +16,7 @@ portent les mêmes points dans le même ordre (`tests/test_changelog.py`).
 `tools/make_download.py` en tire la section de la version courante et l'écrit
 dans `website/version.json`.
 
-## 0.5.4
+## 0.6.0
 
 ### Utilisation et système
 
@@ -51,6 +51,10 @@ dans `website/version.json`.
 - La boîte de dialogue d'impression attribue les profils du slicer bien plus vite, à l'ouverture et après chaque changement de slicer.
 - La durée d'impression estimée est plus proche de celle du slicer, nettement plus pour les pièces avec supports.
 - La place des supports et du skirt sur le plateau se mesure désormais sous les seuls surplombs. Les pièces près du bord ne reçoivent plus d'avertissement injustifié.
+- Les suggestions acceptées ne laissent presque plus sans support les surplombs qui en ont besoin. *Garder les canaux libres* ne bloque plus que l'espace d'où un support ne pourrait plus être retiré.
+- Là où les supports sous de petits surplombs reposent sur le modèle, Solidon propose des supports arborescents. Ils y laissent moins de traces.
+- Pour les petites pointes, Solidon propose une *Vitesse minimale de ralentissement* plus basse afin qu'elles ne ramollissent pas. Le réglage parvient à chaque slicer.
+- Les rebords étroits qui se portent seuls restent libres avec *Rebords sans support*. L'impression demande ainsi nettement moins de support.
 
 ### Filetages, perçages et pièces normalisées
 
