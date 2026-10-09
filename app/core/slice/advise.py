@@ -273,7 +273,7 @@ def advise(
         )
     if fit_kinds:
         advice += _from_fits(settings, fit_kinds)
-    advice += _from_allowances(settings, allowances)
+    advice += _from_allowances(settings, profile, allowances)
     # Erst nach den Regeln oben, und gegen deren Stand gerechnet: Die
     # Wandzahl hängt an der Bahnbreite, und genau die senkt die Regel über die
     # dünnste Stelle. Vorher gerechnet stand im Bericht eine Wandzahl, die zu
@@ -1651,7 +1651,9 @@ def _from_fits(settings: PrintSettings, kinds: Sequence[str]) -> list[SettingAdv
     return advice
 
 
-def _from_allowances(settings: PrintSettings, allowances: Collection[str]) -> list[SettingAdvice]:
+def _from_allowances(
+    settings: PrintSettings, profile: Profile, allowances: Collection[str]
+) -> list[SettingAdvice]:
     """Was das Modell schon ausgleicht, gleicht der Slicer nicht noch einmal aus (RM-589).
 
     Eine Bohrung mit Materialzugabe ist um die Lochkorrektur des Materials
@@ -1662,8 +1664,15 @@ def _from_allowances(settings: PrintSettings, allowances: Collection[str]) -> li
     Einzug des Slicers käme in der ersten Schicht dazu: am Centauri Carbon 2
     0,3 statt 0,2 mm je Seite, am MK4S 0,4 statt 0,2 mm (gemessen im G-Code,
     09.10.2026). Vorgeschlagen wird null, nur wo der Slicer ausgleicht.
+
+    **Nicht an einem kalibrierten Material.** Der Prüfkörper der Kalibrierung
+    geht durch denselben Slicer mit dessen Ausgleich; gemessen und
+    eingetragen ist deshalb, was nach dem Slicer fehlt. Modell und Slicer
+    treffen das Maß dann nur zusammen, und null nähme den Teil des Slicers weg.
     """
     advice: list[SettingAdvice] = []
+    if profile.material.calibrated:
+        return advice
     if "holes" in allowances and not is_zero(settings.shell.hole_offset):
         advice.append(
             _advice(

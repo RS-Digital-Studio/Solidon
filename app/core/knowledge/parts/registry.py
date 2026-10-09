@@ -500,6 +500,12 @@ class PartSpec:
     changes: tuple[PartChange, ...] = ()
     grip_from_profile: bool = True
     """Ob ``grip=0`` das Materialübermaß meint; konstruktive Verengungen nicht."""
+    play_inside: bool = False
+    """Wahr, wenn auch der **aufgesetzte** Baustein sein Spiel in eine
+    Innenkontur legt: die Bohrung der Lasche, das Innengewinde der Mutter, die
+    Aufnahme des Stangenverbinders. Ein abtragender Baustein mit Spiel tut das
+    immer (:func:`app.core.scene.fits.allowances_for`, RM-589); ein Stift, ein
+    Bolzen oder eine Feder trägt sein Spiel außen und weitet kein Loch."""
     feasible: Feasibility | None = None
     """Eine erklärte Bedingung **zwischen** Parametern, die keine Einzelgrenze
     ausdrücken kann: Gibt den fachlichen Grund zurück, wenn eine Kombination
@@ -757,6 +763,7 @@ def register_part(
     caveat: TranslatableText | str = "",
     changes: Sequence[PartChange] = (),
     grip_from_profile: bool = True,
+    play_inside: bool = False,
     feasible: Feasibility | None = None,
     retaining_lip: RetainingLipOf | None = None,
     source: str = "shipped",
@@ -811,6 +818,7 @@ def register_part(
                 caveat=caveat,
                 changes=tuple(changes),
                 grip_from_profile=grip_from_profile,
+                play_inside=play_inside,
                 feasible=feasible,
                 retaining_lip=retaining_lip,
                 source=source,

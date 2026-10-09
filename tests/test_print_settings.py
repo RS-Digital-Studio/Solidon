@@ -1247,7 +1247,6 @@ def test_every_setting_in_a_table_actually_exists(flavour: str) -> None:
 UNREACHABLE: dict[str, dict[str, str]] = {
     "prusa": {
         "shell.precise_outer_wall": "PrusaSlicer kompensiert die Bahnbreite immer, ohne Schalter.",
-        "shell.hole_offset": "kennt keinen Ausgleich nur für Löcher (RM-589).",
         "adhesion.kind": "kennt keine Art, nur die Maße — ``ADHESION_KEYS`` nullt die anderen.",
         "support.block_channels": "reist als Stützsperre in der 3MF (``AS_GEOMETRY``).",
         "support.spare_ledges": "reist als Stützsperre in der 3MF (``AS_GEOMETRY``).",
@@ -7209,10 +7208,6 @@ UNREACHED: Final[dict[tuple[str, str], str]] = {
         "Die genaue Außenwand ist eine Eigenheit der Orca-Familie; PrusaSlicer "
         "kennt keinen entsprechenden Schalter."
     ),
-    ("shell.hole_offset", "prusa"): (
-        "PrusaSlicer weitet Löcher nicht eigens; ``xy_size_compensation`` verschiebt "
-        "jede Kontur und ist eine andere Sache (RM-589)."
-    ),
     ("shell.precise_outer_wall", "cura"): (
         "Dasselbe für CuraEngine — dort heißt der nächste Verwandte "
         "``outer_inset_first`` und meint die Reihenfolge, nicht das Maß."
@@ -7319,6 +7314,10 @@ def test_every_setting_reaches_every_slicer_or_stands_in_the_list() -> None:
         if art:
             start = _with_value(base, "adhesion.kind", art)
         changed = _with_value(start, field.path, value)
+        if field.path in slicer_keys.MAKER_OWNED:
+            # Loch- und Fußausgleich gehen nur als eigene Wahl hinaus (RM-589),
+            # und genau so setzt sie das Feld im Dialog.
+            changed = print_settings.with_choice(start, field.path, value)
         for flavour in ("prusa", "orca", "cura"):
             if handover.values_for(start, profile, flavour) == handover.values_for(
                 changed, profile, flavour

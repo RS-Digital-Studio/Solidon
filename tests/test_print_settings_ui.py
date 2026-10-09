@@ -6066,6 +6066,58 @@ def test_a_built_fit_counts_like_an_entered_one(session: Session, qt_app) -> Non
         dialog.deleteLater()
 
 
+def test_only_the_part_that_pulls_in_its_own_foot_gets_the_zero(
+    session: Session, qt_app: QApplication
+) -> None:
+    """RM-589, Review M3: Zwei Platten, nur die erste mit *Elefantenfuß
+    ausgleichen*. Der Dialog liest im Hauptthread, was jedes Modell selbst
+    ausgleicht, und die Zeile *Erste Schicht einziehen* nennt nur diese Platte —
+    dieselbe Auskunft wie der Export je Teil."""
+    from app.core.scene import History, OperationDraft
+    from app.ui.print_settings_dialog import PrintSettingsDialog, _AdviceWorker
+
+    history = History(session.project.document)
+    for x, name in ((-30.0, "Mit Fuß"), (30.0, "Ohne Fuß")):
+        history.apply(
+            name,
+            [
+                OperationDraft(
+                    op="create_box",
+                    params={"width": 30.0, "depth": 30.0, "height": 4.0, "x": x, "name": name},
+                )
+            ],
+        )
+    history.apply(
+        "Fuß", [OperationDraft(op="compensate_first_layer", inputs=("obj_1",), params={})]
+    )
+    session.evaluate_now()
+    dialog = PrintSettingsDialog(session, UiSettings())
+    try:
+        assert dict(dialog._part_allowances()) == {"obj_1": ("foot",), "obj_2": ()}
+        settings = print_settings.with_choice(dialog.settings, "layers.elephant_foot", 0.15)
+        worker = _AdviceWorker(
+            tuple(dialog._plate_bodies()),
+            settings,
+            session.profile,
+            None,
+            {},
+            (),
+            (),
+            {},
+            part_allowances=dict(dialog._part_allowances()),
+        )
+        answer: dict[str, list[SettingAdvice]] = {}
+        worker.done.connect(lambda entries, _results: answer.setdefault("entries", entries))
+        worker._calculate()
+    finally:
+        dialog.deleteLater()
+
+    rows = [entry for entry in answer["entries"] if entry.path == "layers.elephant_foot"]
+    assert len(rows) == 1, answer["entries"]
+    assert rows[0].value == pytest.approx(0.0)
+    assert getattr(rows[0], "parts", ()) == ("Mit Fuß",)
+
+
 @pytest.mark.parametrize("collar,expected", [(0.0, ()), (4.0, ("clearance",))])
 def test_a_declared_lid_condition_also_controls_print_advice(
     session: Session, qt_app: QApplication, collar: float, expected: tuple[str, ...]

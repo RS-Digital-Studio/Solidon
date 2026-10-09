@@ -440,8 +440,8 @@ def test_a_part_that_compensates_itself_is_not_compensated_again(
         "Fuß A", [OperationDraft(op="compensate_first_layer", inputs=("obj_1",), params={})]
     )
     scene = evaluate(document, profile).scene
-    assert allowances_for(document, {"obj_1"}) == ("holes", "foot")
-    assert allowances_for(document, {"obj_2"}) == ()
+    assert allowances_for(document, scene.objects["obj_1"]) == ("holes", "foot")
+    assert allowances_for(document, scene.objects["obj_2"]) == ()
 
     setup = _preselected(handover.detect(installed_slicer), profile)
     from app.core.export import manufacturer
@@ -454,7 +454,7 @@ def test_a_part_that_compensates_itself_is_not_compensated_again(
     offered = [
         entry
         for entry in advise.advise(
-            settings, profile, allowances=allowances_for(document, {"obj_1"})
+            settings, profile, allowances=allowances_for(document, scene.objects["obj_1"])
         )
         if entry.path in {"shell.hole_offset", "layers.elephant_foot"}
         and slicer_keys_takes(setup, entry.path)

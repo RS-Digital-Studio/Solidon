@@ -1201,11 +1201,20 @@ def test_a_suppressed_fit_step_does_not_suggest_a_slicer_fit() -> None:
 CORPUS_FIT = Path(__file__).parent / "data" / "projects" / "assembly_fit.p3d"
 
 
+def _evaluated_body(document, object_id: str):
+    """Der fertige Körper samt Merkmalen, gerechnet wie im Druckdialog."""
+    from app.core.scene import evaluate
+
+    profile = profiles.make_profile("centauri-carbon-2", "petg")
+    return evaluate(document, profile).scene.objects[object_id]
+
+
 def test_the_corpus_fit_knows_which_part_carries_its_allowance() -> None:
     """``assembly_fit.p3d``: Die Platte ist mit Materialzugabe gebohrt, der
     Deckel trägt nur den Stift. Nur die Platte gleicht ihr Loch schon im Modell
-    aus; ohne den Haken nicht mehr, mit *Elefantenfuß ausgleichen* auch den Fuß,
-    und ein ausgeschalteter Schritt zählt nicht."""
+    aus — nicht mehr ohne den Haken, nach dem Stopfen und nach einem Nachbohren
+    ohne Zugabe; mit *Elefantenfuß ausgleichen* auch den Fuß, und ein
+    ausgeschalteter Schritt zählt nicht."""
     from app.core.bootstrap import load_operations
     from app.core.scene import History, OperationDraft
     from app.core.scene.fits import allowances_for
@@ -1214,20 +1223,137 @@ def test_the_corpus_fit_knows_which_part_carries_its_allowance() -> None:
 
     load_operations()
     document = load(CORPUS_FIT).document
-    assert allowances_for(document, {"obj_1"}) == ("holes",)
-    assert allowances_for(document, {"obj_2"}) == ()
+    assert allowances_for(document, _evaluated_body(document, "obj_1")) == ("holes",)
+    assert allowances_for(document, _evaluated_body(document, "obj_2")) == ()
 
-    drill = next(entry for entry in document.ops if entry.op == "drill_hole")
-    History(document).change_params(drill.id, {**drill.params, "compensate": False})
-    assert allowances_for(document, {"obj_1"}) == ()
+    unchecked = load(CORPUS_FIT).document
+    drill = next(entry for entry in unchecked.ops if entry.op == "drill_hole")
+    History(unchecked).change_params(drill.id, {**drill.params, "compensate": False})
+    assert allowances_for(unchecked, _evaluated_body(unchecked, "obj_1")) == ()
 
-    History(document).apply(
+    plugged = load(CORPUS_FIT).document
+    History(plugged).apply(
+        "Stopfen",
+        [OperationDraft(op="plug_hole", inputs=("obj_1",), params={"at_feature": "hole_1"})],
+    )
+    assert allowances_for(plugged, _evaluated_body(plugged, "obj_1")) == ()
+
+    redrilled = load(CORPUS_FIT).document
+    History(redrilled).apply(
+        "Ändern",
+        [
+            OperationDraft(
+                op="resize_hole",
+                inputs=("obj_1",),
+                params={"at_feature": "hole_1", "diameter": 7.0, "compensate": False},
+            )
+        ],
+    )
+    assert allowances_for(redrilled, _evaluated_body(redrilled, "obj_1")) == ()
+
+    History(unchecked).apply(
         "Fuß", [OperationDraft(op="compensate_first_layer", inputs=("obj_1",), params={})]
     )
-    assert allowances_for(document, {"obj_1"}) == ("foot",)
-    foot = document.ops[-1]
-    resting = replace(document, ops=(*document.ops[:-1], replace(foot, suppressed=Suppression())))
-    assert allowances_for(resting, {"obj_1"}) == ()
+    body = _evaluated_body(unchecked, "obj_1")
+    assert allowances_for(unchecked, body) == ("foot",)
+    foot = unchecked.ops[-1]
+    resting = replace(unchecked, ops=(*unchecked.ops[:-1], replace(foot, suppressed=Suppression())))
+    assert allowances_for(resting, body) == ()
+
+
+def _bare_body(features=()):
+    """Ein Körper mit den genannten Merkmalen, ohne Auswertung — für die
+    Schritte, deren Auskunft am Schritt hängt."""
+    from app.core.types import SceneObject
+
+    raw = trimesh.creation.box((10.0, 10.0, 10.0))
+    return SceneObject(
+        "obj_1", "Körper", MeshData.of(raw), features={entry.id: entry for entry in features}
+    )
+
+
+@pytest.mark.parametrize(
+    ("op", "params", "expected"),
+    [
+        # Abtragend mit Spiel aus dem Material: die Bohrung des Dübels, die
+        # Mutternfalle, die Aussparung der Rastnase, die Tasche des Steckers und
+        # des Fußes, das Innengewinde.
+        ("insert_dowel", {"kind": "bore"}, ("holes",)),
+        ("insert_nut_trap", {}, ("holes",)),
+        ("insert_latch", {"negative": True}, ("holes",)),
+        ("insert_snap_connector", {"kind": "bore"}, ("holes",)),
+        ("insert_foot", {"kind": "pocket"}, ("holes",)),
+        ("insert_printed_thread", {"internal": True}, ("holes",)),
+        # Aufgesetzt, aber mit einer Bohrung, die das Spiel trägt.
+        ("insert_printed_nut", {}, ("holes",)),
+        ("insert_hinge_eye", {}, ("holes",)),
+        ("insert_barrel_hinge", {}, ("holes",)),
+        ("insert_rod_connector", {}, ("holes",)),
+        # Passungsschritte außerhalb der Bausteine.
+        ("create_lid", {}, ("holes",)),
+        ("split_pinned", {}, ("holes",)),
+        # Das Spiel außen oder gar keines: Stift, Rastnase, Gewindebolzen,
+        # Schnapphaken, Wärmeeinsatz, *Schraube erstellen*.
+        ("insert_dowel", {"kind": "pin"}, ()),
+        ("insert_latch", {"negative": False}, ()),
+        ("insert_printed_thread", {"internal": False}, ()),
+        ("insert_snap_fit", {}, ()),
+        ("insert_heatset_m4", {}, ()),
+        ("thread_exact", {}, ()),
+    ],
+)
+def test_only_a_step_that_puts_play_into_a_hole_counts(
+    op: str, params: dict[str, object], expected: tuple[str, ...]
+) -> None:
+    """Gezählt wird, was Spiel in eine Innenkontur legt (Review RM-589, M2)."""
+    from app.core.bootstrap import load_operations
+    from app.core.scene.fits import allowances_for
+    from app.core.types import Document, Operation
+
+    load_operations()
+    document = Document(
+        format_version=1,
+        app_version="0.0.1",
+        ops=(Operation(id=1, op=op, params=params, outputs=("obj_1",)),),
+    )
+
+    assert allowances_for(document, _bare_body()) == expected
+
+
+@pytest.mark.parametrize(
+    ("shape", "compensate", "expected"),
+    [
+        ("circle", True, ("holes",)),
+        ("slot", True, ("holes",)),
+        # Ein Sechseck behält sein Eckmaß, auch mit Haken (``field_ops``).
+        ("hexagon", True, ()),
+        ("circle", False, ()),
+    ],
+)
+def test_a_hole_field_counts_only_where_it_compensates(
+    shape: str, compensate: bool, expected: tuple[str, ...]
+) -> None:
+    """*Lochfeld schneiden* weitet nur runde Löcher und Langlöcher."""
+    from app.core.bootstrap import load_operations
+    from app.core.scene.fits import allowances_for
+    from app.core.types import Document, Feature, Operation
+
+    load_operations()
+    document = Document(
+        format_version=1,
+        app_version="0.0.1",
+        ops=(
+            Operation(
+                id=1,
+                op="field_cut",
+                params={"shape": shape, "compensate": compensate},
+                outputs=("obj_1",),
+            ),
+        ),
+    )
+    hole = Feature(id="pattern_1", kind="pattern", provenance="generated", params={}, created_by=1)
+
+    assert allowances_for(document, _bare_body((hole,))) == expected
 
 
 @pytest.mark.parametrize(
@@ -1267,14 +1393,108 @@ def test_what_the_model_compensates_the_slicer_does_not(
         assert len(reason) <= 60 and ";" not in reason, reason
 
 
-def test_without_a_maker_profile_the_foot_comes_from_the_material() -> None:
-    """Solidons eigener Satz zieht die erste Schicht um den Wert des Materials
-    ein; den des Slicers liest die Grundlage aus dem Herstellerprofil."""
-    for material in ("pla", "petg", "tpu-95a"):
-        profile = profiles.make_profile("creality-ender3-v3-se", material)
-        settings = print_settings.resolve(profile)
-        assert settings.layers.elephant_foot == pytest.approx(profile.material.elephant_foot)
-        assert settings.shell.hole_offset == pytest.approx(0.0)
+#: Die Schlüssel für Einzug und Lochausgleich in allen Familien (RM-589).
+COMPENSATION_KEYS = frozenset(
+    {
+        "elefant_foot_compensation",
+        "first_layer_size_compensation",
+        "xy_hole_compensation",
+        "hole_size_compensation",
+        "xy_offset_layer_0",
+        "hole_xy_offset",
+    }
+)
+
+
+@pytest.mark.parametrize("flavour", ["orca", "prusa", "cura"])
+def test_solidons_own_set_leaves_the_slicer_its_compensation(flavour: str) -> None:
+    """Review RM-589, S1: Wo Solidon den ganzen Satz schreibt — Cura, PrusaSlicer
+    ohne Drucker im Bündel, die Orca-Familie ohne Prozess —, gehen Einzug und
+    Lochausgleich nur als eigene Wahl hinaus. Curas Druckerdefinitionen setzen
+    sie für 75 Drucker; ein Wert aus der Tabelle überschriebe sie, und ein Teil
+    mit *Elefantenfuß ausgleichen* zöge doppelt ein, ohne dass jemand klickt."""
+    from app.core.export import handover
+
+    profile = profiles.make_profile("creality-ender3-v3-se", "petg")
+    settings = print_settings.resolve(profile)
+    assert settings.layers.elephant_foot == pytest.approx(0.0)
+
+    assert not COMPENSATION_KEYS & set(handover.values_for(settings, profile, flavour))
+    assert not COMPENSATION_KEYS & set(handover.as_mapping(settings, flavour))
+
+    chosen = print_settings.with_choice(settings, "layers.elephant_foot", 0.15)
+    written = handover.values_for(chosen, profile, flavour)
+    key = {"orca": "elefant_foot_compensation", "prusa": "elefant_foot_compensation"}.get(
+        flavour, "xy_offset_layer_0"
+    )
+    assert float(written[key]) == pytest.approx(-0.15 if flavour == "cura" else 0.15)
+
+
+def test_a_cura_part_with_its_own_foot_gets_no_slicer_foot_without_a_click(
+    tmp_path: Path,
+) -> None:
+    """Der Fall aus dem Review: ein Teil mit *Elefantenfuß ausgleichen* an Cura,
+    der Rat nicht übernommen. Weder die Platte noch das Netz zieht ein zweites
+    Mal ein."""
+    from app.core.bootstrap import load_operations
+    from app.core.export.writer import write_assembly
+    from app.core.scene import History, OperationDraft, evaluate
+    from app.core.types import Document
+
+    load_operations()
+    profile = profiles.make_profile("creality-ender3-v3-se", "petg")
+    document = Document(format_version=1, app_version="0.0.1")
+    history = History(document)
+    history.apply(
+        "Platte",
+        [OperationDraft(op="create_box", params={"width": 30.0, "depth": 30.0, "height": 4.0})],
+    )
+    history.apply(
+        "Fuß", [OperationDraft(op="compensate_first_layer", inputs=("obj_1",), params={})]
+    )
+    scene = evaluate(document, profile).scene
+    write_assembly(
+        list(scene.objects.values()),
+        tmp_path,
+        project_name="fuss",
+        profile=profile,
+        settings=print_settings.resolve(profile),
+        flavour="cura",
+        document=document,
+    )
+
+    written = " ".join(
+        path.read_text(encoding="utf-8", errors="replace")
+        for path in tmp_path.rglob("*")
+        if path.is_file() and path.suffix != ".stl"
+    )
+    assert written, "keine Netzwerte geschrieben"
+    assert "xy_offset_layer_0" not in written
+
+
+def test_a_calibrated_material_keeps_the_slicers_compensation() -> None:
+    """Review RM-589, M1: Der Prüfkörper der Kalibrierung geht durch denselben
+    Slicer mit dessen Ausgleich; was eingetragen ist, ist der Rest. Null
+    nähme dem Loch die Lochkorrektur des Slicers und ließe den Fuß stehen."""
+    profile = profiles.make_profile("anycubic-kobra-2", "petg")
+    calibrated = Profile(
+        profile.printer,
+        replace(profile.material, calibrated=True, calibration_printer=profile.printer.id),
+    )
+    settings = print_settings.resolve(profile)
+    settings = print_settings.with_path(settings, "shell.hole_offset", 0.02)
+    settings = print_settings.with_path(settings, "layers.elephant_foot", 0.1)
+    paths = {"shell.hole_offset", "layers.elephant_foot"}
+
+    def offered(chosen: Profile) -> set[str]:
+        return {
+            entry.path
+            for entry in advise.advise(settings, chosen, allowances=("holes", "foot"))
+            if entry.path in paths
+        }
+
+    assert offered(profile) == paths
+    assert offered(calibrated) == set()
 
 
 # --- Schrägnaht an runden Außenwänden -------------------------------------------

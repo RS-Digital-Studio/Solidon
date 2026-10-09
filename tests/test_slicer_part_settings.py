@@ -617,7 +617,8 @@ def test_file_export_without_program_only_promises_shared_object_capabilities(
 # gebaut: ein neuer Pfad braucht einen eigenen Wirkungsnachweis. Lochausgleich
 # und Einzug der ersten Schicht (RM-589) belegt eine Platte mit zwei gleichen
 # Bohrplatten, eine mit Objektwerten null, am echten Programm
-# (``test_real_slicers.test_a_part_that_compensates_itself_is_not_compensated_again``).
+# (``test_real_slicers.test_a_part_that_compensates_itself_is_not_compensated_again``;
+# SuperSlicer mit derselben Funktion außerhalb der Auswahl, 09.10.2026).
 MEASURED_PART_PATHS = frozenset(
     {
         "adhesion.kind",
@@ -670,8 +671,6 @@ MEASURED_PART_PATHS = frozenset(
             "superslicer",
             "prusa",
             {
-                "layers.elephant_foot",
-                "shell.hole_offset",
                 "shell.precise_outer_wall",
                 "shell.scarf_seam",
                 "speed.acceleration",

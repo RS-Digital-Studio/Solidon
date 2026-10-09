@@ -377,7 +377,9 @@ def test_a_part_that_compensates_itself_keeps_its_brim_at_the_foot(
     base = print_settings.with_choice(base, "adhesion.kind", "brim")
     offered = [
         entry
-        for entry in advise.advise(base, profile, allowances=allowances_for(document, {"obj_1"}))
+        for entry in advise.advise(
+            base, profile, allowances=allowances_for(document, scene.objects["obj_1"])
+        )
         if entry.path in {"shell.hole_offset", "layers.elephant_foot"}
     ]
     assert len(offered) == 2
@@ -407,6 +409,47 @@ def test_a_part_that_compensates_itself_keeps_its_brim_at_the_foot(
         keys[1]
     )
     assert not [item for item in findings if item.code == "export.brim_foot_lowered"]
+
+
+def test_superslicer_gets_foot_and_holes_under_its_own_names() -> None:
+    """Review RM-589, L5: SuperSlicer liest den Einzug als
+    ``first_layer_size_compensation`` und den Lochausgleich als
+    ``hole_size_compensation``, beide als Materialzugabe — negativ heißt
+    eingezogen bzw. weiter (gemessen an zwei Bohrplatten, 2.5.59.13).
+    PrusaSlicer behält ``elefant_foot_compensation`` und bekommt keinen
+    Lochausgleich, den es nicht kennt."""
+    profile = profiles.make_profile("prusa-mini", "petg")
+    settings = print_settings.resolve(profile)
+    settings = print_settings.with_choice(settings, "layers.elephant_foot", 0.15)
+    settings = print_settings.with_choice(settings, "shell.hole_offset", 0.1)
+    native = handover.as_mapping(settings, "prusa", program="superslicer")
+    written = slicer_keys.for_program(native, "prusa", "superslicer")
+    prusaslicer = slicer_keys.for_program(
+        handover.as_mapping(settings, "prusa", program="prusaslicer"), "prusa", "prusaslicer"
+    )
+
+    assert written["first_layer_size_compensation"] == "-0.15"
+    assert written["hole_size_compensation"] == "-0.1"
+    assert "elefant_foot_compensation" not in written
+    assert prusaslicer["elefant_foot_compensation"] == "0.15"
+    assert "hole_size_compensation" not in prusaslicer
+    assert not slicer_keys.takes("prusa", "shell.hole_offset", program="prusaslicer")
+    assert slicer_keys.takes("prusa", "shell.hole_offset", program="superslicer")
+
+
+def test_superslicers_compensation_is_read_back_with_its_sign() -> None:
+    """Die Bündel von SuperSlicer setzen −0,05 bis −0,3 mm Einzug und −0,03
+    bis −0,05 mm Lochausgleich; Solidon liest daraus Einzug und Weitung."""
+    context = manufacturer._Context(nozzle=0.4)
+    read, _foreign = manufacturer._read_prusa(
+        {"first_layer_size_compensation": "-0.2", "hole_size_compensation": "-0.05"}, context
+    )
+
+    assert read["layers.elephant_foot"] == pytest.approx(0.2)
+    assert read["shell.hole_offset"] == pytest.approx(0.05)
+    defaults = manufacturer.prusa_defaults("superslicer")
+    assert "elefant_foot_compensation" not in defaults
+    assert defaults["first_layer_size_compensation"] == "0"
 
 
 def test_a_choice_and_an_accepted_suggestion_are_told_apart() -> None:
@@ -3246,6 +3289,7 @@ first_layer_height = 0.2
 extrusion_width = 0.45
 first_layer_extrusion_width = 0.5
 external_perimeter_extrusion_width = 0.45
+elefant_foot_compensation = 0.2
 perimeters = 2
 top_solid_layers = 5
 bottom_solid_layers = 3
@@ -3340,6 +3384,8 @@ def test_prusas_bundle_is_read_back_like_the_orca_family(prusa_bundle: Path) -> 
     assert foundation.has_profile and not foundation.has_plates
     assert manufacturer.findings(foundation) == [], "keine Platte zu nennen"
     assert (base.shell.wall_count, base.shell.bottom_layers) == (2, 3)
+    assert base.layers.elephant_foot == pytest.approx(0.2), "der Einzug des MK4S (RM-589)"
+    assert "layers.elephant_foot" in foundation.from_profile
     assert base.speed.first_layer == pytest.approx(100.0), "der Boden der ersten Schicht"
     assert base.speed.outer_wall == pytest.approx(200.0), "80 % der Wände"
     assert base.speed.top_surface == pytest.approx(100.0), "40 % der vollen Füllung"

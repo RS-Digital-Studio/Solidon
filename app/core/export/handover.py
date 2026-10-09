@@ -997,6 +997,8 @@ def as_mapping(
     for entry in slicer_keys.TABLES[flavour]:
         if paths is not None and entry.path not in paths:
             continue
+        if entry.path in slicer_keys.MAKER_OWNED and entry.path not in settings.explicit:
+            continue
         if entry.path == "adhesion.raft_gap" and not raft_gap_active(
             settings, flavour, also=native_adhesion_kinds
         ):
@@ -1354,7 +1356,12 @@ def object_keys(
                 organic_tree_fitted({**native, **written}, profile.printer.nozzle_diameter)
             )
     foot = brim_foot_offset
-    if flavour == "orca" and foot and "elefant_foot_compensation" in written:
+    if (
+        flavour == "orca"
+        and foot is not None
+        and not is_zero(foot)
+        and "elefant_foot_compensation" in written
+    ):
         # Die Orca-Familie misst den Brim vom unkorrigierten Umriss (RM-318).
         # Zieht dieses Teil die erste Schicht nicht mehr ein, weil sein Modell
         # es tut (RM-589), bleibt der Abstand am Fuß nur mit eigenem Wert.
@@ -1791,7 +1798,9 @@ def _applied(settings: PrintSettings, advice: Sequence[SettingAdvice]) -> PrintS
     changed = settings
     for entry in advice:
         changed = with_path(changed, entry.path, entry.value)
-    return changed
+    # Der Rat dieses Teils ist für das Teil übernommen; so schreibt
+    # :func:`as_mapping` auch, was es sonst dem Slicer lässt (RM-589).
+    return replace(changed, accepted=changed.accepted | {entry.path for entry in advice})
 
 
 def _only_chosen_adhesion(

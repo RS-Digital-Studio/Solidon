@@ -1521,7 +1521,7 @@ def _part_values(
         accepted=split.accepted_per_part(),
         whole_layers=whole_layers,
         organic=organic,
-        allowances=allowances_for(document, {entry.id}) if document is not None else (),
+        allowances=allowances_for(document, entry) if document is not None else (),
     )
     if cancelled is not None:
         cancelled.raise_if_cancelled()

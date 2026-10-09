@@ -153,8 +153,9 @@ FIELDS: tuple[Field, ...] = (
         step=0.01,
         decimals=3,
         note=_(
-            "Wie weit der Slicer die erste Schicht je Seite einzieht, damit sie nicht breiter "
-            "wird als das Teil. Zieht schon das Modell den Fuß ein, gehört hier null hin."
+            "Wie weit der Slicer die erste Schicht je Seite einzieht, gegen den Elefantenfuß "
+            "(Elephant foot compensation). Zieht das Modell den Fuß schon ein, schlägt Solidon "
+            "für dieses Teil null vor."
         ),
     ),
     # --- Wände ---
@@ -255,8 +256,9 @@ FIELDS: tuple[Field, ...] = (
         step=0.01,
         decimals=3,
         note=_(
-            "Wie weit der Slicer Löcher je Seite weitet. Trägt das Modell sein Spiel schon, "
-            "etwa eine Bohrung mit Materialzugabe, gehört hier null hin."
+            "Wie weit der Slicer Löcher je Seite weitet, seine Lochkorrektur oder sein "
+            "Lochausgleich (hole compensation). Trägt das Modell sein Spiel schon, schlägt Solidon "
+            "für dieses Teil null vor."
         ),
     ),
     Field(

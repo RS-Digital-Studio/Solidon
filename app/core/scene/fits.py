@@ -15,6 +15,7 @@ from __future__ import annotations
 import math
 from collections.abc import Collection
 from dataclasses import dataclass, replace
+from typing import TYPE_CHECKING, cast
 
 import numpy as np
 
@@ -41,6 +42,7 @@ from app.core.types import (
     Finding,
     Fit,
     FitKind,
+    Operation,
     Profile,
     Scene,
     SceneObject,
@@ -50,6 +52,9 @@ from app.core.types import (
 )
 from app.core.units import EPS_DISPLAY, EPS_GEOM, format_length
 from app.i18n import TranslatableText, _
+
+if TYPE_CHECKING:
+    from app.core.registry.params import BaseParams
 
 _log = get_logger(__name__)
 
@@ -353,12 +358,22 @@ def _producing(document: Document, object_ids: Collection[str]) -> tuple[set[str
 
 
 #: Schritte, die ein Loch um die Lochkorrektur des Materials weiten, wenn ihr
-#: Haken *Materialtoleranz berücksichtigen* steht (``compensate``). Der
-#: Stopfen (``plug_hole``) fehlt mit Absicht: Er füllt die geweitete Bohrung,
-#: danach bleibt kein Loch.
+#: Haken *Materialtoleranz berücksichtigen* steht (``compensate``). Gefragt
+#: wird am Merkmal des fertigen Körpers: Ein gestopftes Loch ist fort, und ein
+#: ohne Haken nachgebohrtes nennt seinen letzten Schritt.
 COMPENSATING_HOLE_OPS: frozenset[str] = frozenset(
     {"drill_hole", "drill_brep_hole", "resize_hole", "slot_hole", "field_cut"}
 )
+
+#: Die Formen, die *Lochfeld schneiden* um die Lochkorrektur weitet; ein
+#: Sechseck behält sein Eckmaß (``field_ops``).
+_COMPENSATED_FIELD_SHAPES: frozenset[str] = frozenset({"circle", "slot"})
+
+#: Passungsschritte außerhalb der Bausteine, die ihr Spiel in eine Innenkontur
+#: legen: die Öffnung unter dem Deckel, das Gewinde des Drehdeckels, die
+#: Bohrungen der Verbinder beim Teilen. *Schraube erstellen* trägt sein Spiel
+#: außen und fehlt deshalb.
+PLAY_HOLE_OPS: frozenset[str] = frozenset({"create_lid", "screw_lid", "split_pinned"})
 
 #: Der Schritt, der die ersten Schichten um den Elefantenfuß des Materials
 #: einzieht.
@@ -370,45 +385,64 @@ FOOT_OP = "compensate_first_layer"
 MODEL_ALLOWANCES: tuple[str, ...] = ("holes", "foot")
 
 
-def allowances_for(document: Document, object_ids: Collection[str]) -> tuple[str, ...]:
-    """Welche Ausgleiche diese Körper schon im Modell tragen (RM-589).
+def allowances_for(document: Document, body: SceneObject) -> tuple[str, ...]:
+    """Welche Ausgleiche dieser Körper schon im Modell trägt (RM-589).
 
-    Dieselben Körper und Schritte wie :func:`fit_kinds_for`. Löcher zählen,
-    wenn ein Schritt aus :data:`FITTING_OPS` sie mit Spiel baut oder ein
-    Schritt aus :data:`COMPENSATING_HOLE_OPS` mit gesetztem Haken bohrt; eine
-    nur eingetragene Passung ändert die Geometrie nicht und zählt deshalb
-    nicht. Der Druckrat stellt dann den gleichen Ausgleich des Slicers auf
-    null, sonst gleicht das Teil doppelt aus.
+    Dieselben Schritte wie :func:`fit_kinds_for`. Löcher zählen, wenn ein
+    Baustein sein Spiel in eine Innenkontur legt (abtragend mit Spiel oder
+    Übermaß, oder ``PartSpec.play_inside``), wenn ein Schritt aus
+    :data:`PLAY_HOLE_OPS` es tut, oder wenn am Körper eine Bohrung steht, die
+    ein Schritt aus :data:`COMPENSATING_HOLE_OPS` mit Haken gebohrt hat. Eine
+    nur eingetragene Passung ändert die Geometrie nicht und zählt nicht. Der
+    Druckrat stellt dann den gleichen Ausgleich des Slicers auf null.
     """
-    from app.core.registry import REGISTRY
-
-    _wanted, relevant = _producing(document, object_ids)
+    _wanted, relevant = _producing(document, {body.id})
+    steps = {operation.id: operation for operation in document.ops if operation.id in relevant}
     found: set[str] = set()
-    for operation in document.ops:
-        if operation.id not in relevant:
-            continue
+    for operation in steps.values():
         if operation.op == FOOT_OP:
             found.add("foot")
-            continue
-        if operation.op not in FITTING_OPS | COMPENSATING_HOLE_OPS:
-            continue
-        # Ohne Registereintrag (exakter Kern fehlt) gilt, was im Schritt steht.
-        schema = REGISTRY.get(operation.op).params.fields() if REGISTRY.has(operation.op) else ()
-        values = {entry.name: entry.default for entry in schema} | dict(operation.params)
-        if operation.op in COMPENSATING_HOLE_OPS:
-            if values.get("compensate") is True:
-                found.add("holes")
-            continue
-        # Ein Passungsschritt, der auch nur aufsetzen kann — der Stift statt
-        # seiner Bohrung —, weitet kein Loch (``subtractive_on``).
-        cutting = {
-            entry.name: entry.metadata["param"]["subtractive_on"]
-            for entry in schema
-            if entry.metadata.get("param", {}).get("subtractive_on") is not None
-        }
-        if not cutting or any(values[name] in wanted for name, wanted in cutting.items()):
+        elif operation.op in PLAY_HOLE_OPS or _part_with_play_inside(operation):
             found.add("holes")
+    for feature in body.features.values():
+        creator = steps.get(feature.created_by) if feature.created_by is not None else None
+        if creator is not None and creator.op in COMPENSATING_HOLE_OPS:
+            values = _step_values(creator)
+            if values.get("compensate") is True and (
+                creator.op != "field_cut" or values.get("shape") in _COMPENSATED_FIELD_SHAPES
+            ):
+                found.add("holes")
     return tuple(entry for entry in MODEL_ALLOWANCES if entry in found)
+
+
+def _step_values(operation: Operation) -> dict[str, object]:
+    """Die Parameter eines Schritts samt Vorgaben; ohne Registereintrag (der
+    exakte Kern fehlt) nur, was im Schritt steht."""
+    from app.core.registry import REGISTRY
+
+    schema = REGISTRY.get(operation.op).params.fields() if REGISTRY.has(operation.op) else ()
+    return {entry.name: entry.default for entry in schema} | dict(operation.params)
+
+
+def _part_with_play_inside(operation: Operation) -> bool:
+    """Legt dieser Bausteinschritt sein Spiel in eine Innenkontur?
+
+    Abtragend (``parts.ops.cuts``, dieselbe Auskunft wie Operation und
+    Vorschau) mit Spiel oder Übermaß aus dem Material, oder aufgesetzt mit
+    einer Bohrung, die das Spiel trägt (``PartSpec.play_inside``).
+    """
+    from types import SimpleNamespace
+
+    from app.core.knowledge.parts import ops as part_ops
+
+    spec = part_ops.part_of(operation.op)
+    if spec is None:
+        return False
+    fields = {entry.name for entry in spec.params.spec()}
+    if not fields & {part_ops.PLAY_FIELD, part_ops.GRIP_FIELD}:
+        return False
+    values = cast("BaseParams", SimpleNamespace(**_step_values(operation)))
+    return spec.play_inside or part_ops.cuts(spec, values)
 
 
 def fit_kinds_for(document: Document, object_ids: Collection[str]) -> tuple[str, ...]:

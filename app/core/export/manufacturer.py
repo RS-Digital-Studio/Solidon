@@ -348,6 +348,12 @@ def _number(text: str, _context: _Context) -> object:
     return Foreign(text) if number is None else number
 
 
+def _negated(text: str, _context: _Context) -> object:
+    """Eine Ausdehnung als Einzug (SuperSlicers ``first_layer_size_compensation``)."""
+    number = _float(text)
+    return Foreign(text) if number is None else -number + 0.0
+
+
 def _positive(text: str, _context: _Context) -> object:
     """Eine Zahl über null. Null heißt bei Tempo und Beschleunigung „wie die
     Maschine" — eine Angabe, die Solidon nicht als Zahl führt."""
@@ -488,17 +494,22 @@ ORCA_PROCESS: Final[tuple[tuple[str, str, Reader], ...]] = (
 #: Für die Zeitgegenprobe (RM-281, 06.10.2026) dazu, was die Ketten offen
 #: lassen und der Konfigurationsblock der Seitenablage zeigt: innere Brücke
 #: 150 % (ElegooSlicer 1.5.3.5, OrcaSlicer 2.4.2), ganze senkrechte Schalen
-#: (OrcaSlicer, Bambu Studio 02.08.02.61).
+#: (OrcaSlicer, Bambu Studio 02.08.02.61). Einzug und Lochausgleich setzen alle
+#: fünf auf null, gemessen ohne Prozessprofil (09.10.2026, RM-589): Ein Prozess
+#: ohne die Schlüssel (19 MK3S-Prozesse, Creality Print 21) druckt ohne beides.
 PROGRAM_DEFAULTS: Final[Mapping[str, Mapping[str, str]]] = {
     "elegooslicer": {
         "brim_type": "auto_brim",
+        "elefant_foot_compensation": "0",
         "internal_bridge_speed": "150%",
         "precise_outer_wall": "1",
         "wall_generator": "arachne",
         "wall_sequence": "inner wall/outer wall",
+        "xy_hole_compensation": "0",
     },
     "orcaslicer": {
         "brim_type": "auto_brim",
+        "elefant_foot_compensation": "0",
         "ensure_vertical_shell_thickness": "ensure_all",
         "initial_layer_speed": "30",
         "internal_bridge_speed": "150%",
@@ -506,27 +517,34 @@ PROGRAM_DEFAULTS: Final[Mapping[str, Mapping[str, str]]] = {
         "support_object_xy_distance": "0.35",
         "wall_generator": "arachne",
         "wall_sequence": "inner wall/outer wall",
+        "xy_hole_compensation": "0",
     },
     "bambustudio": {
         "brim_type": "auto_brim",
+        "elefant_foot_compensation": "0",
         "ensure_vertical_shell_thickness": "enabled",
         "precise_outer_wall": "0",
         "wall_generator": "arachne",
         "wall_sequence": "inner wall/outer wall",
+        "xy_hole_compensation": "0",
     },
     "crealityprint": {
         "brim_type": "auto_brim",
+        "elefant_foot_compensation": "0",
         "precise_outer_wall": "0",
         "wall_generator": "arachne",
         "wall_sequence": "inner wall/outer wall",
+        "xy_hole_compensation": "0",
     },
     "anycubicslicernext": {
         "brim_type": "auto_brim",
+        "elefant_foot_compensation": "0",
         "initial_layer_speed": "30",
         "precise_outer_wall": "1",
         "support_object_xy_distance": "0.35",
         "wall_generator": "arachne",
         "wall_sequence": "inner wall/outer wall",
+        "xy_hole_compensation": "0",
     },
 }
 
@@ -1526,8 +1544,17 @@ def prusa_defaults(program: str) -> Mapping[str, str]:
     Innenwandtempos bei SuperSlicer und 15 mm/s bei PrusaSlicer.
     """
     if program == "superslicer":
+        # Einzug und Lochausgleich unter SuperSlicers Namen, ebenso mit
+        # ``--save`` gemessen (2.5.59.13, 09.10.2026); ``elefant_foot_compensation``
+        # kennt es nicht.
         return {
-            **PRUSA_PROGRAM_DEFAULTS,
+            **{
+                key: value
+                for key, value in PRUSA_PROGRAM_DEFAULTS.items()
+                if key != "elefant_foot_compensation"
+            },
+            "first_layer_size_compensation": "0",
+            "hole_size_compensation": "0",
             "perimeter_generator": "classic",
             "small_perimeter_speed": "50%",
         }
@@ -1647,6 +1674,15 @@ def _read_prusa(
     take("speed.outer_wall_acceleration", _prusa_outer_wall_acceleration(values))
     take("support.style", _prusa_support_style(values))
     take("shell.scarf_seam", _prusa_scarf_seam(values))
+    # SuperSlicer führt Einzug und Lochausgleich unter eigenen Namen, beide
+    # als Materialzugabe, also mit umgekehrtem Vorzeichen
+    # (``slicer_keys.PROGRAM_NEGATED``, RM-589).
+    widened = _prusa_first(values.get("first_layer_size_compensation"))
+    if widened is not None:
+        take("layers.elephant_foot", _negated(widened, context))
+    holes = _prusa_first(values.get("hole_size_compensation"))
+    if holes is not None:
+        take("shell.hole_offset", _negated(holes, context))
     outer_width = _prusa_outer_width(values, context)
     take("support.threshold_angle", _prusa_support_angle(values, read, outer_width))
     take("support.xy_gap", _prusa_support_gap(values, outer_width))
