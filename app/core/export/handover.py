@@ -31,7 +31,7 @@ from collections.abc import Callable, Iterable, Mapping, Sequence
 from contextlib import ExitStack, suppress
 from dataclasses import dataclass, field, replace
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Final
+from typing import TYPE_CHECKING, Any, Final, Literal
 from xml.etree import ElementTree as ET
 
 from app.core import activation, build_area, discover, expressions
@@ -223,9 +223,6 @@ _DENSE_INFILL: Final = 0.95
 #: Innenwand und zwei Drittel davon: 214 und 143 mm/s am Ender-3 V3.
 _SUPPORT_SPEED: Final = 150.0
 _SUPPORT_INTERFACE_SPEED: Final = 80.0
-#: Die Schnittstelle zu einem Drittel dicht, wie Creality und Elegoo in Cura
-#: (``support_interface_density`` 33,3 %): Linienabstand drei Bahnbreiten.
-_INTERFACE_SPACING: Final = 3.0
 #: So viel Fläche braucht ein Stützstück mindestens, in mm² (Creality in Cura).
 _MINIMUM_SUPPORT_AREA: Final = 2.0
 #: Wie überhängende Wände bremsen, wenn der Hersteller keine Stufen nennt
@@ -1469,6 +1466,36 @@ def _part_paths(flavour: SlicerFlavour, program: str = "") -> frozenset[str]:
     return frozenset()
 
 
+def asked_for_contact(
+    settings: PrintSettings,
+    profile: Profile,
+    setup: SlicerSetup | None,
+    flavour: SlicerFlavour | None,
+) -> tuple[frozenset[str], PrintSettings]:
+    """Wogegen der Druckdialog den Stützkontakt je Körper fragt (RM-583).
+
+    Die Pfade aus ``advise.CONTACT_PATHS``, die dieser Slicer je Teil annimmt,
+    und Einstellungen, in denen sie auf der Grundlage stehen — wie im Export,
+    der je Teil gegen ``split_for_parts(...).base`` fragt. Gegen die Übernahme
+    gefragt, brachte jedes Übernehmen die Gegenzeile: Der Tisch wollte 0,2 gegen
+    die übernommenen 0,5 des Kinns, das Kinn danach wieder 0,5.
+    """
+    from app.core.slice import advise
+
+    if flavour is None:
+        return frozenset(), settings
+    # Ohne gefundenen Slicer trennt der Export ebenso, für die Familie der Datei.
+    program = slicer_keys.program_of(setup.executable) if setup is not None else ""
+    separate = advise.CONTACT_PATHS & _part_paths(flavour, program)
+    if not separate:
+        return separate, settings
+    base = split_for_parts(settings, profile, setup, flavour).base
+    asking = settings
+    for path in sorted(separate):
+        asking = with_path(asking, path, read_path(base, path))
+    return separate, asking
+
+
 def cura_takes_whole(path: str) -> bool:
     """Ob CuraEngine jeden Schlüssel dieses Pfads je Netz annimmt.
 
@@ -1705,13 +1732,6 @@ def _cura_dependants(
         if copied is not None:
             for target in targets:
                 written[target] = copied
-    # Die unteren Kontaktlagen eigens und nach dem Spiegel, der sie sonst der
-    # oberen Höhe gleichsetzt (RM-583): Wo die Stütze auf dem Modell steht,
-    # zeichnet ihr roher Fuß die Fläche darunter.
-    if "support_interface_height" in written:
-        bottom = settings.support.bottom_interface_layers
-        written["support_bottom_height"] = f"{bottom * settings.layers.layer_height:g}"
-        written["support_bottom_enable"] = "true" if bottom > 0 else "false"
     for target, source, factor in slicer_keys.CURA_SCALED:
         number = _as_float(written.get(source))
         if number is not None:
@@ -1777,7 +1797,7 @@ def _cura_computed(written: dict[str, str], settings: PrintSettings, profile: Pr
     Cura-Fenster genauso gerechnet, bevor es die Werte weitergibt.
     """
     _from_line_width(written, settings)
-    _for_supports(written, settings)
+    _for_supports(written, settings, profile)
     _for_speeds(written, settings, profile)
     _for_overhangs(written, profile.printer)
     _factory_habits(written, profile)
@@ -1841,7 +1861,7 @@ def _from_line_width(written: dict[str, str], settings: PrintSettings) -> None:
         written["wall_0_inset"] = "0"
 
 
-def _for_supports(written: dict[str, str], settings: PrintSettings) -> None:
+def _for_supports(written: dict[str, str], settings: PrintSettings, profile: Profile) -> None:
     """Die Stützen, wie die Werksprofile sie in Cura legen (Prüfbericht Cura, B4).
 
     Die Stütze selbst bleibt Curas ``zigzag``, eine verbundene Linienschar,
@@ -1869,11 +1889,12 @@ def _for_supports(written: dict[str, str], settings: PrintSettings) -> None:
         # die schwer abgeht und die Unterseite mit Ringen zeichnet.
         for key in ("support_roof_pattern", "support_bottom_pattern"):
             written[key] = "lines"
-        spacing = width * _INTERFACE_SPACING
         # Eine eigene Lücke gilt erst, wenn sie gewählt oder übernommen ist
-        # (RM-583); sonst bleibt Curas Drittel der Hersteller.
-        if "support.interface_spacing" in settings.chosen | settings.accepted:
-            spacing = width + settings.support.interface_spacing
+        # (RM-583); sonst die der Grundlage, auch bei geänderter Bahnbreite.
+        gap = settings.support.interface_spacing
+        if "support.interface_spacing" not in settings.chosen | settings.accepted:
+            gap = manufacturer.cura_interface_gap(print_settings.resolve(profile, settings.quality))
+        spacing = width + gap
         for key in ("support_roof_line_distance", "support_bottom_line_distance"):
             written[key] = f"{spacing:g}"
         # Die Stütze wächst um eine Bahnbreite plus Curas festen Zuschlag —
@@ -1886,9 +1907,15 @@ def _for_supports(written: dict[str, str], settings: PrintSettings) -> None:
     # Ohne den Schalter entsteht gar keine Schnittstelle, und ohne die Höhe
     # wurden aus zwei Schichten zwei Millimeter — das Zehnfache bei 0,2ern.
     layers = settings.support.interface_layers
-    written["support_interface_height"] = f"{layers * settings.layers.layer_height:g}"
-    for key in ("support_interface_enable", "support_roof_enable", "support_bottom_enable"):
-        written[key] = "true" if layers > 0 else "false"
+    # Unten eigene Lagen (RM-583): Wo die Stütze auf dem Modell steht,
+    # zeichnet ihr roher Fuß die Fläche darunter.
+    bottom = settings.support.bottom_interface_layers
+    height = settings.layers.layer_height
+    written["support_interface_height"] = f"{layers * height:g}"
+    written["support_bottom_height"] = f"{bottom * height:g}"
+    written["support_roof_enable"] = "true" if layers > 0 else "false"
+    written["support_bottom_enable"] = "true" if bottom > 0 else "false"
+    written["support_interface_enable"] = "true" if layers > 0 or bottom > 0 else "false"
     written["support_bottom_stair_step_height"] = "0" if layers > 0 else f"{_STAIR_STEP:g}"
     written["support_tree_top_rate"] = "30" if layers > 0 else "10"
     written["support_tree_rest_preference"] = (
@@ -2331,6 +2358,28 @@ class _SlotResolution:
         )
 
 
+def slot_material_type(slot: MaterialSlot, setup: SlicerSetup | None) -> str:
+    """Die Materialart, mit der diese Spule druckt (RM-583; Robert: „immer nach dem
+    verwendeten Material“): die des gewählten Filamentprofils, sonst die der Spule.
+
+    Eine geladene Datei bringt ihre Spulen samt Materialart mit; gibt der Kunde
+    einer davon ein Profil aus PETG, druckt sie PETG, und Rat wie Spulenwerte
+    folgen dem Profil, nicht der Herkunft der Datei.
+    """
+    if setup is not None and slot.material:
+        source = profile_source(slot.material, setup, "filament")
+        kind = ""
+        if isinstance(source, slicer_profiles.SlicerProfile):
+            kind = source.filament_type
+        elif source is not None:
+            values = slicer_profiles.resolve_values(source, roots=_profile_roots(setup))
+            raw = values.get("filament_type")
+            kind = str(raw[0] if isinstance(raw, list) and raw else raw or "")
+        if kind.strip():
+            return kind.strip()
+    return slot.material_type or ""
+
+
 def _resolve_slot(
     settings: PrintSettings,
     profile: Profile,
@@ -2352,7 +2401,7 @@ def _resolve_slot(
     aus der ganzen Erbkette. Ausdrückliche Spulenwerte gewinnen anschließend
     gruppenweise; Beratung und Ausgabe benutzen dieselbe Reihenfolge.
     """
-    material_id = profiles.material_id_for_type(slot.material_type or "")
+    material_id = profiles.material_id_for_type(slot_material_type(slot, setup))
     if material_id and material_id != profile.material.id:
         defaults = print_settings.resolve(
             replace(profile, material=profiles.material(material_id)), settings.quality
@@ -2456,7 +2505,7 @@ def slot_processes(
             continue
         chosen = slot_profiles.get(threemf.slot_identity(original), "")
         slot = replace(original, material=chosen) if chosen else original
-        material = profiles.material_id_for_type(slot.material_type or "")
+        material = profiles.material_id_for_type(slot_material_type(slot, setup))
         material_profile = (
             replace(own_profile, material=profiles.material(material)) if material else own_profile
         )
@@ -2968,38 +3017,124 @@ def _prusa_values(
 _FREE_SUPPORT_LAYERS: Final = "independent_support_layer_height"
 
 
-def frees_support_layers(
-    settings: PrintSettings,
-    profile: Profile,
-    slots: Sequence[MaterialSlot],
-    flavour: SlicerFlavour,
-) -> bool:
-    """Ob die Orca-Familie die Stütze in eigener Schichthöhe drucken muss,
-    damit Solidons Stützabstand gilt (RM-583).
+#: Wo die Orca-Familie den Stützabstand schreibt, oben und unten.
+_SUPPORT_GAP_KEYS: Final = ("support_top_z_distance", "support_bottom_z_distance")
 
-    Ohne ``independent_support_layer_height`` rundet sie den Abstand auf ganze
-    Schichten (``Slicing.cpp``), und Elegoos Prozesse für C2 und CC2 schalten
-    ihn ab: Aus 0,28 mm für PETG wurden im ElegooSlicer 0,2. Gefragt an den
-    Einstellungen **vor** der Trennung je Teil, nur wenn Solidon den Abstand
-    setzt, und nur, wenn einer keine ganze Schicht ist — der der Platte oder der
-    Rat je Teil nach dem Material jeder Spule. Mit mehreren Filamenten und
-    Reinigungsturm schaltet die Orca-Familie die eigene Höhe selbst wieder ab.
+
+def written_support_gaps(
+    plate: PrintSettings, parts: Iterable[Mapping[str, str]] = ()
+) -> list[float]:
+    """Die Stützabstände, die Solidon tatsächlich schreibt (RM-583): der der Platte,
+    wo Solidon ihn setzt (gewählt oder übernommen), und die Objektwerte der Teile.
+    Der Abstand des Herstellers steht hier nicht — ihn rundet der Slicer, wie
+    der Hersteller es eingestellt hat."""
+    gaps = [plate.support.z_gap] if "support.z_gap" in plate.chosen | plate.accepted else []
+    for keys in parts:
+        for key in _SUPPORT_GAP_KEYS:
+            number = _as_float(keys.get(key))
+            if number is not None:
+                gaps.append(number)
+    return gaps
+
+
+def frees_support_layers(gaps: Iterable[float], layer: float, flavour: SlicerFlavour) -> bool:
+    """Ob die Stütze eine eigene Schichthöhe braucht, damit diese Abstände gelten
+    (RM-583).
+
+    Ohne ``independent_support_layer_height`` rundet die Orca-Familie den
+    Abstand auf ganze Schichten (``Slicing.cpp``), und Elegoos Prozesse für C2
+    und CC2 schalten sie ab: Aus 0,28 mm für PETG wurden im ElegooSlicer 0,2.
+    Gefragt wird nur, wenn ein geschriebener Abstand keine ganze Schicht ist
+    (:func:`written_support_gaps`). Mit Reinigungsturm schaltet die
+    Orca-Familie die eigene Höhe selbst wieder ab (:func:`tower_cause`).
     """
-    from app.core.slice import advise
-
-    if flavour != "orca":
+    if not slicer_keys.has_independent_support_layers(flavour) or layer <= 0.0:
         return False
-    layer = settings.layers.layer_height
-    gaps = (
-        [settings.support.z_gap] if "support.z_gap" in settings.chosen | settings.accepted else []
-    )
-    if "support.z_gap" in settings.accepted:
-        materials = {profiles.material_id_for_type(slot.material_type or "") for slot in slots}
-        gaps += [
-            advise.support_gap_target(layer, profiles.material(material))
-            for material in sorted(material for material in materials if material)
-        ] or [advise.support_gap_target(layer, profile.material)]
-    return any(not is_close(gap / layer, round(gap / layer)) for gap in gaps)
+    return any(not is_close(gap / layer, round(gap / layer)) for gap in gaps if gap > 0.0)
+
+
+def _native_process(setup: SlicerSetup | None) -> Mapping[str, object]:
+    """Der aufgelöste Herstellerprozess der Orca-Familie, ohne Solidons Werte."""
+    if setup is None or setup.flavour != "orca" or not setup.base_process:
+        return {}
+    source = profile_file(setup.base_process, setup, "process")
+    if source is None:
+        return {}
+    return slicer_profiles.resolve_values(source, roots=_profile_roots(setup))
+
+
+def _switched_on(value: object) -> bool:
+    return str(_printed(value)).strip().casefold() in ("1", "true")
+
+
+def tower_cause(
+    setup: SlicerSetup | None, *, filaments: int, objects: int
+) -> Literal["filaments", "process"] | None:
+    """Warum der Herstellerprozess auf einer Platte einen Reinigungsturm baut.
+
+    Mit Turm schaltet die Orca-Familie die eigene Stützschichthöhe ab und
+    rundet den Stützabstand (``PrintConfig.cpp``, ``normalize_fdm_2``).
+    Mehrere Filamente bauen ihn, außer „je Objekt“ mit mehreren Objekten;
+    glatter Zeitraffer und Wicklungserkennung bauen ihn immer. ``None``: kein
+    Turm.
+    """
+    native = _native_process(setup)
+    if not _switched_on(native.get("enable_prime_tower", "0")):
+        return None
+    if str(_printed(native.get("timelapse_type", "0"))).strip() == "1" or _switched_on(
+        native.get("enable_wrapping_detection", "0")
+    ):
+        return "process"
+    by_object = str(_printed(native.get("print_sequence", ""))).strip() == "by object"
+    if filaments > 1 and not (by_object and objects > 1):
+        return "filaments"
+    return None
+
+
+def support_layers_findings(setup: SlicerSetup | None, free: bool) -> list[Finding]:
+    """Sagt, wenn Solidon die eigene Stützschichthöhe gegen den Herstellerprozess
+    einschaltet (RM-583): Die Stütze liegt dann auch auf eigenen Höhen, nicht
+    nur auf denen des Modells. Wie bei der gehobenen Baumspitze erfährt der
+    Kunde die Abweichung vom Herstellerprofil mit ihrem Grund."""
+    if not free or setup is None:
+        return []
+    native = _native_process(setup)
+    if _FREE_SUPPORT_LAYERS not in native or _switched_on(native[_FREE_SUPPORT_LAYERS]):
+        return []
+    return [
+        Finding(
+            code="slicer.support_layers_freed",
+            severity="info",
+            message=_(
+                "Damit der *Abstand oben und unten* gilt, druckt {slicer} die Stütze in "
+                "eigener Schichthöhe. Das Herstellerprofil hatte das abgeschaltet.",
+                slicer=setup.name,
+            ),
+            values={"setting": _FREE_SUPPORT_LAYERS, "slicer": setup.name},
+        )
+    ]
+
+
+def _frees_in_project(models: Sequence[Path]) -> bool | None:
+    """Was die Beilage einer Solidon-3MF zur eigenen Stützschichthöhe sagt.
+
+    Der Konsolenlauf lädt seinen Prozess über die Beilage hinweg; er muss
+    dasselbe schreiben, was :func:`app.core.export.writer.write_assembly` aus
+    den Werten der Teile entschieden hat. ``None``, wo keine Beilage es sagt."""
+    for model in models:
+        if model.suffix.casefold() != ".3mf" or not model.is_file():
+            continue
+        try:
+            with zipfile.ZipFile(model) as container:
+                if threemf.PROJECT_SETTINGS_PATH not in container.namelist():
+                    continue
+                embedded = json.loads(container.read(threemf.PROJECT_SETTINGS_PATH))
+        except zipfile.BadZipFile, OSError, ValueError:
+            # Keine lesbare Beilage: Dann sagt sie auch nichts dazu.
+            continue
+        if isinstance(embedded, dict) and _FREE_SUPPORT_LAYERS in embedded:
+            return _switched_on(embedded[_FREE_SUPPORT_LAYERS])
+    return None
 
 
 def write_config(
@@ -3018,7 +3153,8 @@ def write_config(
     Spulen, und die fahren verschieden. Trägt ein Slot einen eigenen
     Profilnamen (``MaterialSlot.material``), wird der als Unterlage genommen;
     sonst gilt für alle das eine aus dem ``setup``. ``free_support_layers``
-    sagt :func:`frees_support_layers` vor der Trennung je Teil.
+    sagt :func:`frees_support_layers` an den geschriebenen Abständen von Platte
+    und Teilen (:func:`written_support_gaps`), beim Konsolenlauf aus der Beilage.
     """
     _refuse_untranslated(setup)
     setup = replace(setup, machine_profile=machine_for(setup, profile))
@@ -4466,18 +4602,24 @@ def setting_limitations(
     Was nur je nach Wert angenähert ankommt (``slicer_keys.LIMITED``), wird
     erst mit den Einstellungen beurteilt — ohne sie gibt es dazu keinen Satz.
     """
-    paths = slicer_keys.NOT_TAKEN_BY[flavour] | slicer_keys.LIMITED[flavour]
-    return [
-        Finding(
-            code="slicer.setting_not_transferred",
-            severity="warning",
-            message=message,
-            values={"path": path},
-            suggestions=(CHECK_SLICER_PROFILE,),
+    limited = slicer_keys.LIMITED[flavour]
+    findings = []
+    for path in sorted(slicer_keys.NOT_TAKEN_BY[flavour] | limited):
+        message = slicer_keys.limitation(flavour, path, settings)
+        if message is None:
+            continue
+        # Was je nach Wert angenähert ankommt, ändert der Kunde am Feld; was
+        # nie ankommt, nur im Profil seines Slicers (RM-583).
+        findings.append(
+            Finding(
+                code="slicer.setting_not_transferred",
+                severity="warning",
+                message=message,
+                values={"path": path, "field": path} if path in limited else {"path": path},
+                suggestions=(OPEN_PRINT_SETTINGS,) if path in limited else (CHECK_SLICER_PROFILE,),
+            )
         )
-        for path in sorted(paths)
-        if (message := slicer_keys.limitation(flavour, path, settings)) is not None
-    ]
+    return findings
 
 
 def substituted_choices(settings: PrintSettings, program: str) -> list[Finding]:
@@ -6553,10 +6695,20 @@ def slice_model(
     # Gefragt an der Wahl vor der Trennung: Ein Ersatz gilt der Platte wie dem
     # Teil, das den Wert als Objektwert trägt (RM-480).
     substituted = substituted_choices(settings, slicer_keys.program_of(setup.executable))
-    free_support_layers = frees_support_layers(settings, profile, slots, setup.flavour)
     # **Dieselbe Platte wie in der Datei** (Entscheidung G): Was je Teil gilt,
     # trägt das Modell aus ``write_assembly`` als Objektwert oder Netzwert.
     settings = split_for_parts(settings, profile, setup, setup.flavour).plate
+    # Die eigene Stützschichthöhe hat der Export aus den Werten der Teile
+    # entschieden; ohne seine Beilage gilt der Abstand der Platte (RM-583).
+    free_support_layers = (
+        _frees_in_project(models)
+        if slicer_keys.has_independent_support_layers(setup.flavour)
+        else False
+    )
+    if free_support_layers is None:
+        free_support_layers = frees_support_layers(
+            written_support_gaps(settings), settings.layers.layer_height, setup.flavour
+        )
     # Ein Slicer als Flatpak sieht unser ``/tmp`` nicht
     # (``discover.workspace_for``).
     with discover.workspace_for(setup.executable, "solidon-slice-", ascii_only=True) as workspace:

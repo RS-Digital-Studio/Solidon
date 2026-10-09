@@ -18,12 +18,14 @@
 # support_gap_factor Luft zwischen Stütze und Teil als Vielfaches der Schichthöhe
 # support_gap_min    kleinster Stützabstand in mm, darunter verschweißt die Kontaktschicht
 # support_gap_max    größter Stützabstand in mm, darüber sackt die Fläche durch
+# support_interface_cooling  volle Kühlung an der Trennschicht löst die Stütze leichter
 #
 # Die Stützabstände stammen aus der Recherche vom 08.10.2026
 # (`konzepte/recherche-slicer-einstellungen-2026-10.md`, Abschnitt 2.2): PLA
 # ausgezählt aus dem Prusa-Bündel, PETG aus Foren und Herstellerhinweisen, kein
 # Herstellerprofil ändert den Abstand mit dem Material. Ausgangswerte wie alles
-# hier; ABS, ASA und TPU ohne eigene Quelle mit den Werten von PLA.
+# hier; ABS und ASA deshalb mit den Werten von PLA. Für TPU fehlt eine Quelle:
+# Ohne Werte ist der Abstand unbekannt und bleibt beim Hersteller.
 #
 # Die mechanischen Werte sind für alles, was federn soll: Schnapphaken,
 # Klemmzungen, Filmscharniere. Sie stehen hier als **Richtwerte gedruckter
@@ -68,6 +70,7 @@ layer_bond_ratio = 0.6
 support_gap_factor = 1.4
 support_gap_min = 0.12
 support_gap_max = 0.30
+support_interface_cooling = true
 
 [petg-cf]
 title = "PETG-CF"
@@ -83,6 +86,7 @@ layer_bond_ratio = 0.6
 support_gap_factor = 1.4
 support_gap_min = 0.12
 support_gap_max = 0.30
+support_interface_cooling = true
 
 [asa]
 title = "ASA"
@@ -95,6 +99,9 @@ calibrated = false
 youngs_modulus = 2000.0
 yield_strength = 42.0
 layer_bond_ratio = 0.6
+support_gap_factor = 1.0
+support_gap_min = 0.10
+support_gap_max = 0.25
 
 [abs]
 title = "ABS"
@@ -107,6 +114,9 @@ calibrated = false
 youngs_modulus = 2000.0
 yield_strength = 40.0
 layer_bond_ratio = 0.6
+support_gap_factor = 1.0
+support_gap_min = 0.10
+support_gap_max = 0.25
 
 [tpu-95a]
 title = "TPU 95A"

@@ -1249,8 +1249,6 @@ UNREACHABLE: dict[str, dict[str, str]] = {
         "adhesion.kind": "kennt keine Art, nur die Maße — ``ADHESION_KEYS`` nullt die anderen.",
         "support.block_channels": "reist als Stützsperre in der 3MF (``AS_GEOMETRY``).",
         "support.spare_ledges": "reist als Stützsperre in der 3MF (``AS_GEOMETRY``).",
-        "cooling.support_interface_cooling": "PrusaSlicer kennt keinen Lüfter für die "
-        "Kontaktschicht; nur SuperSlicer führt ihn.",
     },
     "orca": {
         "adhesion.kind": "in ``brim_type`` enthalten, das die Tabelle schreibt.",
@@ -3488,6 +3486,71 @@ def test_the_console_gets_the_same_plate_as_the_file(
 
     assert len(processes) == 1
     assert processes[0]["enable_support"] in ("0", ["0"])
+
+
+@pytest.mark.parametrize(
+    ("source", "gap", "freed"),
+    [("file", None, True), ("stl", 0.28, True), ("stl", 0.2, False)],
+)
+def test_the_console_frees_the_support_layers_like_the_file(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    source: str,
+    gap: float | None,
+    freed: bool,
+) -> None:
+    """Der Konsolenlauf schaltet die eigene Stützschichthöhe ein, wo der Export
+    es entschieden hat (RM-583, Nachprüfung L4). Die Beilage einer
+    Solidon-3MF sagt es aus den Werten der Teile; die Platte allein trägt dort
+    die Grundlage von 0,2 mm und hätte nein gesagt. Ohne Beilage gilt der
+    Abstand der Platte."""
+    from app.core.export import writer
+    from app.core.geom.mesh import MeshData
+    from app.core.types import SceneObject
+
+    profile = profiles.make_profile("centauri-carbon-2", "petg")
+    base = print_settings.with_choice(print_settings.resolve(profile), "support.style", "grid")
+    executable = tmp_path / "elegoo-slicer.exe"
+    executable.write_bytes(b"")
+    setup = handover.SlicerSetup(executable=executable, flavour="orca")
+    if source == "file":
+        settings = print_settings.with_accepted(base, "support.z_gap", 0.28)
+        objects = [
+            SceneObject(
+                id=f"teil-{index}",
+                name=f"Teil {index}",
+                mesh=MeshData(_supported_table(index)),
+                material="petg",
+            )
+            for index in range(2)
+        ]
+        model, _findings = writer.write_assembly(
+            objects,
+            tmp_path,
+            project_name="petg",
+            profile=profile,
+            settings=settings,
+            flavour="orca",
+            setup=setup,
+        )
+    else:
+        settings = print_settings.with_choice(base, "support.z_gap", gap)
+        model = tmp_path / "model.stl"
+        model.write_bytes(b"solid x\nendsolid x\n")
+    processes: list[dict[str, object]] = []
+
+    def run(command: list[str], *args: object, **kwargs: object) -> _Finished:
+        path = Path(command[command.index("--load-settings") + 1].split(";")[-1])
+        processes.append(json.loads(path.read_text(encoding="utf-8")))
+        target = Path(command[command.index("--outputdir") + 1])
+        (target / "plate_1.gcode").write_text(_gcode_printing_at(1.0, 5.0), encoding="utf-8")
+        return _Finished(b"")
+
+    monkeypatch.setattr(handover, "_run_slicer", run)
+    handover.slice_model(model, settings, profile, setup)
+
+    assert processes
+    assert (processes[0].get("independent_support_layer_height") == "1") is freed
 
 
 def test_an_unknown_arrange_flag_falls_back_and_reports(
@@ -6994,9 +7057,6 @@ UNREACHED: Final[dict[tuple[str, str], str]] = {
         "Reist als eigenes Netz mit ``anti_overhang_mesh`` neben den Teilen "
         "(``slicer_keys.takes_mesh_settings``); ``test_export`` prüft die Netzliste."
     ),
-    ("cooling.support_interface_cooling", "prusa"): (
-        "PrusaSlicer kennt keinen Lüfter für die Kontaktschicht; nur SuperSlicer führt ihn."
-    ),
     ("support.interface_spacing", "cura"): (
         "Wirkt bei Cura, sobald die Lücke gewählt oder übernommen ist; ohne Wahl bleibt die "
         "Trennschicht zu einem Drittel dicht wie bei Creality und Elegoo "
@@ -8723,6 +8783,47 @@ def test_the_support_gap_reaches_both_sides_and_curas_bottom_stands_alone() -> N
     assert float(distance) == pytest.approx(settings.layers.line_width + 0.2)
 
 
+def test_a_spool_prints_the_material_of_its_chosen_profile(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Roberts Drache kam mit PLA-Spulen aus seiner Datei. Gibt der Kunde der
+    Spule ein PETG-Profil, druckt sie PETG — und der Rat fragt PETG, nicht die
+    Herkunft der Datei (RM-583; Robert: „immer nach dem verwendeten Material“)."""
+    from app.core.export import threemf
+    from app.core.geom.mesh import MeshData
+    from app.core.types import MaterialSlot, SceneObject
+
+    source = tmp_path / "Elegoo PETG.json"
+    source.write_text(
+        json.dumps({"type": "filament", "name": "Elegoo PETG", "filament_type": ["PETG"]}),
+        encoding="utf-8",
+    )
+    chosen = slicer_profiles.SlicerProfile(
+        path=source, name="Elegoo PETG", kind="filament", filament_type="PETG"
+    )
+    monkeypatch.setattr(handover, "profile_source", lambda name, _setup, _kind: chosen)
+    profile = profiles.make_profile("centauri-carbon-2", "pla")
+    slot = MaterialSlot(index=0, name="Drache", material="Elegoo PLA", material_type="PLA")
+    body = SceneObject(
+        id="drache",
+        name="Drache",
+        mesh=MeshData(trimesh.creation.box(extents=(10.0, 10.0, 10.0))),
+        material_slots=(slot,),
+    )
+    setup = handover.SlicerSetup(executable=Path("elegoo-slicer.exe"), flavour="orca")
+
+    assert handover.slot_material_type(slot, None) == "PLA", "ohne Slicer die Spule"
+    assert handover.slot_material_type(slot, setup) == "PETG"
+    processes = handover.slot_processes(
+        body,
+        print_settings.resolve(profile),
+        profile,
+        setup,
+        {threemf.slot_identity(slot): "Elegoo PETG"},
+    )
+    assert [process.profile.material.id for process in processes] == ["petg"]
+
+
 def test_the_contact_cooling_belongs_to_its_spool(tmp_path: Path) -> None:
     """Die volle Kühlung an der Trennschicht hängt am Material (RM-583): Die
     PETG-Spule bekommt sie in ihrer Filamentdatei, die PLA-Spule daneben nicht."""
@@ -8756,30 +8857,22 @@ def test_the_contact_cooling_belongs_to_its_spool(tmp_path: Path) -> None:
 def test_a_gap_between_layers_frees_the_support_layers(tmp_path: Path) -> None:
     """Ohne eigene Stützschichthöhe rundet die Orca-Familie den Stützabstand auf
     ganze Schichten, und Elegoos CC2-Prozess schaltet sie ab: aus 0,28 mm für
-    PETG wurden im ElegooSlicer 0,2 (RM-583). Setzt Solidon einen Abstand
-    zwischen zwei Schichten, schaltet die Übergabe sie ein — auch wenn ihn nur
-    ein Teil nach dem Material seiner Spule bekommt."""
-    from app.core.types import MaterialSlot
-
+    PETG wurden im ElegooSlicer 0,2 (RM-583). Gefragt wird an dem, was Solidon
+    schreibt — dem Abstand der Platte, wo Solidon ihn setzt, und den
+    Objektwerten der Teile."""
     profile = profiles.make_profile("centauri-carbon-2", "pla")
     base = print_settings.resolve(profile)
-    petg = (MaterialSlot(index=0, name="Deckel", material_type="PETG"),)
-    pla = (MaterialSlot(index=0, name="Gehäuse", material_type="PLA"),)
+    gaps = handover.written_support_gaps
     frees = handover.frees_support_layers
 
-    assert not frees(base, profile, (), "orca"), (
-        "der Hersteller bleibt, solange Solidon nichts setzt"
-    )
+    assert gaps(base) == [], "den Abstand des Herstellers schreibt Solidon nicht"
     between = print_settings.with_accepted(base, "support.z_gap", 0.28)
-    assert frees(between, profile, (), "orca")
-    assert not frees(between, profile, (), "cura"), "Cura bekommt ganze Schichten"
-    whole = print_settings.with_choice(base, "support.z_gap", 0.4)
-    assert not frees(whole, profile, (), "orca")
-    # Je Teil: Der übernommene Abstand der Platte ist eine ganze Schicht, PETG
-    # verlangt 0,28.
-    accepted = print_settings.with_accepted(base, "support.z_gap", 0.2)
-    assert frees(accepted, profile, petg, "orca")
-    assert not frees(accepted, profile, pla, "orca")
+    assert gaps(between) == [pytest.approx(0.28)]
+    assert frees(gaps(between), 0.2, "orca")
+    assert not frees(gaps(between), 0.2, "cura"), "Cura bekommt ganze Schichten"
+    assert not frees([0.4, 0.2], 0.2, "orca")
+    object_values = [{"support_top_z_distance": "0.28", "support_bottom_z_distance": "0.28"}]
+    assert frees(gaps(base, object_values), 0.2, "orca"), "auch ein Objektwert"
 
     setup = handover.SlicerSetup(executable=Path("orca-slicer.exe"), flavour="orca")
     written = handover.write_config(base, profile, setup, tmp_path, free_support_layers=True)
@@ -8790,33 +8883,164 @@ def test_a_gap_between_layers_frees_the_support_layers(tmp_path: Path) -> None:
     assert "independent_support_layer_height" not in handover.project_settings(base, profile, setup)
 
 
-@pytest.mark.parametrize(("second", "rounded"), [("petg", True), ("pla", False)])
+@pytest.mark.parametrize(("native", "said"), [("0", True), ("1", False), (None, False)])
+def test_freed_support_layers_are_said_where_the_maker_had_them_off(
+    monkeypatch: pytest.MonkeyPatch, native: str | None, said: bool
+) -> None:
+    """Die eigene Stützschichthöhe ändert mehr als den Abstand: Die Stütze liegt
+    dann auch auf eigenen Höhen. Schaltet Solidon sie gegen den Herstellerprozess
+    ein, erfährt der Kunde es mit dem Grund (RM-583, Review)."""
+    values = {} if native is None else {"independent_support_layer_height": native}
+    monkeypatch.setattr(handover, "_native_process", lambda _setup: values)
+    setup = handover.SlicerSetup(executable=Path("elegoo-slicer.exe"), flavour="orca")
+
+    codes = {entry.code for entry in handover.support_layers_findings(setup, free=True)}
+
+    assert ("slicer.support_layers_freed" in codes) is said
+    assert not handover.support_layers_findings(setup, free=False)
+
+
+def test_cura_says_that_it_counts_the_gap_in_whole_layers() -> None:
+    """Cura rechnet den Stützabstand in ganzen Schichten; ein Wert dazwischen
+    bekommt einen Satz am Feld und bei der Übergabe (RM-583, Review)."""
+    profile = profiles.make_profile("centauri-carbon-2", "pla")
+    base = print_settings.with_choice(print_settings.resolve(profile), "support.style", "grid")
+    between = print_settings.with_choice(base, "support.z_gap", 0.28)
+    whole = print_settings.with_choice(base, "support.z_gap", 0.4)
+    unsupported = print_settings.with_choice(between, "support.style", "none")
+
+    assert "support.z_gap" in slicer_keys.LIMITED["cura"]
+    said = slicer_keys.limitation("cura", "support.z_gap", between)
+    assert said is not None and "Abstand oben und unten" in str(said), said
+    assert slicer_keys.limitation("cura", "support.z_gap", whole) is None
+    assert slicer_keys.limitation("orca", "support.z_gap", between) is None
+    assert slicer_keys.limitation("cura", "support.z_gap", unsupported) is None, (
+        "ohne Stützen druckt der Abstand nichts"
+    )
+    finding = next(
+        entry
+        for entry in handover.setting_limitations("cura", between)
+        if entry.values.get("path") == "support.z_gap"
+    )
+    assert [action.id for action in finding.suggestions] == ["open_print_settings"]
+    assert finding.values["field"] == "support.z_gap", "die Handlung öffnet das Feld"
+
+
+@pytest.mark.parametrize("quality", ["draft", "standard", "fine", "strong"])
+@pytest.mark.parametrize("printer", ["sovol-sv06", "centauri-carbon-2"])
+@pytest.mark.parametrize("material", ["pla", "petg", "tpu-95a"])
+def test_cura_gets_a_gap_in_whole_layers_from_its_foundation(
+    quality: str, printer: str, material: str
+) -> None:
+    """Cura rechnet den Stützabstand in ganzen Schichten. Solidons Vorgabe von
+    0,2 mm war bei 0,28 und 0,12 mm Schicht keine, und jede Übergabe in
+    Entwurf und Fein warnte, auch ohne Stützen (RM-583, Nachprüfung M2). Die
+    Grundlage trägt jetzt das Vielfache, das zum Material passt."""
+    from app.core.export import manufacturer
+
+    profile = profiles.make_profile(printer, material)
+    setup = handover.SlicerSetup(executable=Path("CuraEngine.exe"), flavour="cura")
+    foundation = manufacturer.base_settings(profile, quality, setup).settings
+    supported = print_settings.with_choice(foundation, "support.style", "grid")
+
+    layer = foundation.layers.layer_height
+    steps = foundation.support.z_gap / layer
+    assert steps >= 1.0 - 1e-9 and math.isclose(steps, round(steps), abs_tol=1e-6), (
+        foundation.support.z_gap,
+        layer,
+    )
+    for settings in (foundation, supported):
+        assert not [
+            entry
+            for entry in handover.setting_limitations("cura", settings)
+            if entry.values.get("path") == "support.z_gap"
+        ]
+
+
+def _supported_table(index: int) -> trimesh.Trimesh:
+    """Sockel, Säule und Platte darüber: Die Stütze steht auf dem Sockel."""
+    parts = []
+    for extents, z in (
+        ((30.0, 30.0, 3.0), 1.5),
+        ((8.0, 8.0, 10.2), 8.0),
+        ((30.0, 30.0, 2.0), 14.0),
+    ):
+        brick = trimesh.creation.box(extents=extents)
+        brick.apply_translation([index * 45.0, 0.0, z])
+        parts.append(brick)
+    return trimesh.boolean.union(parts, engine="manifold")
+
+
+_TOWER = {"enable_prime_tower": "1"}
+_ELEGOO = {"enable_prime_tower": "1", "independent_support_layer_height": "0"}
+
+
+@pytest.mark.parametrize(
+    ("materials", "native", "said"),
+    [
+        (("pla", "petg"), _TOWER, {"export.support_gap_rounded"}),
+        (("pla", "petg"), {"enable_prime_tower": "0"}, set()),
+        (("petg", "petg"), _TOWER, set()),
+        (("pla", "pla"), _TOWER, set()),
+        # Je Objekt mit mehreren Objekten fällt der Turm weg (``normalize_fdm_2``).
+        (("pla", "petg"), {**_TOWER, "print_sequence": "by object"}, set()),
+        # Glatter Zeitraffer baut ihn auch bei einem Filament.
+        (("petg", "petg"), {**_TOWER, "timelapse_type": "1"}, {"export.support_gap_rounded"}),
+        # Wo der Turm die eigene Höhe wieder abschaltet, kein Satz, dass sie gilt.
+        (("pla", "petg"), _ELEGOO, {"export.support_gap_rounded"}),
+        (("petg", "petg"), _ELEGOO, {"slicer.support_layers_freed"}),
+    ],
+)
 def test_a_mixed_plate_says_that_the_gap_is_rounded(
-    tmp_path: Path, second: str, rounded: bool
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    materials: tuple[str, str],
+    native: dict[str, str],
+    said: set[str],
 ) -> None:
     """Mit PLA und PETG auf einer Platte baut die Orca-Familie einen
     Reinigungsturm und schaltet die eigene Stützschichthöhe wieder ab: Im
     ElegooSlicer bekam das PETG-Teil 0,2 statt 0,28 mm (RM-583). Der Export
-    sagt es, statt still zu runden; zweimal PLA rundet nichts."""
-    from app.core.export import writer
-    from app.core.geom.mesh import MeshData
-    from app.core.types import SceneObject
+    sagt es, statt still zu runden — nur mit Turm, und nur, wenn ein
+    geschriebener Abstand keine ganze Schicht ist (zwei Farben PLA). Ein Satz,
+    dass die eigene Höhe gilt, kommt dann nicht dazu. Die Beilage trägt den
+    Schalter, und der Konsolenlauf liest ihn dort."""
+    import zipfile
 
+    from app.core.export import threemf, writer
+    from app.core.geom.mesh import MeshData
+    from app.core.types import MaterialSlot, SceneObject
+
+    monkeypatch.setattr(handover, "_native_process", lambda _setup: native)
     profile = profiles.make_profile("centauri-carbon-2", "pla")
-    base = print_settings.resolve(profile)
-    settings = print_settings.with_accepted(base, "support.z_gap", 0.2)
-    objects = []
-    for index, material in enumerate(("pla", second)):
-        block = trimesh.creation.box(extents=(20.0, 20.0, 10.0))
-        block.apply_translation([index * 30.0, 0.0, 5.0])
-        objects.append(
-            SceneObject(
-                id=f"teil-{index}", name=f"Teil {index}", mesh=MeshData(block), material=material
+    base = print_settings.with_choice(print_settings.resolve(profile), "support.style", "grid")
+    # Übernommen, was der Dialog anbietet: 0,28 nur, wo ein Teil PETG ist.
+    settings = (
+        print_settings.with_accepted(base, "support.z_gap", 0.28) if "petg" in materials else base
+    )
+    colours = ((1.0, 0.0, 0.0), (0.0, 0.0, 1.0))
+    objects = [
+        SceneObject(
+            id=f"teil-{index}",
+            name=f"Teil {index}",
+            mesh=MeshData(_supported_table(index)),
+            material=material,
+            material_slots=(
+                MaterialSlot(
+                    index=0,
+                    name=f"Spule {index}",
+                    colour=colours[index],
+                    material_type=material.upper(),
+                ),
             )
+            if materials == ("pla", "pla")
+            else (),
         )
+        for index, material in enumerate(materials)
+    ]
     setup = handover.SlicerSetup(executable=Path("orca-slicer.exe"), flavour="orca")
 
-    _path, findings = writer.write_assembly(
+    path, findings = writer.write_assembly(
         objects,
         tmp_path,
         project_name="gemischt",
@@ -8826,4 +9050,10 @@ def test_a_mixed_plate_says_that_the_gap_is_rounded(
         setup=setup,
     )
 
-    assert ("export.support_gap_rounded" in {entry.code for entry in findings}) is rounded
+    codes = {entry.code for entry in findings}
+    assert codes & {"export.support_gap_rounded", "slicer.support_layers_freed"} == said
+    freed = "petg" in materials
+    with zipfile.ZipFile(path) as archive:
+        project = json.loads(archive.read(threemf.PROJECT_SETTINGS_PATH))
+    assert (project.get("independent_support_layer_height") == "1") is freed
+    assert (handover._frees_in_project([path]) is True) is freed

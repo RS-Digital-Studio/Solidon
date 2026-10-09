@@ -611,8 +611,8 @@ def test_file_export_without_program_only_promises_shared_object_capabilities(
 # Stütze, dieselbe Stützsperre wie die Kanäle). Den Stützkontakt (RM-583) belegt
 # eine Platte mit zwei gestützten Stufenkörpern, einer mit Objektwerten, in allen
 # acht Programmen (``.claude/.state/drache-2026-10-08/kontakt_je_teil.py``):
-# Abstand 0,4 gegen 0,2 mm, mehr Trennschichten oben, keine unten, weniger
-# Trennschichtbahn bei weiter Lücke; Cura nimmt die Lücke nicht je Netz. Die
+# geschrieben 0,4 gegen 0,2 mm und so weiter, gemessen je Programm in
+# ``konzepte/begruendungen/regel-druckrat.md``; Cura nimmt die Lücke nicht je Netz. Die
 # Menge wird absichtlich nicht aus PART_PATHS oder den Schlüsseltabellen
 # gebaut: ein neuer Pfad braucht einen eigenen Wirkungsnachweis.
 MEASURED_PART_PATHS = frozenset(

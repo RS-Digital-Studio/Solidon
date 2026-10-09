@@ -10224,6 +10224,24 @@ def test_measures_of_other_bed_types_are_hidden_and_do_not_lock_slicing(
         assert not editor.refusal() or dialog._first_numeric_refusal() == ""
 
 
+@pytest.mark.parametrize("style", ["none", "tree"])
+def test_the_contact_cooling_row_follows_the_supports(
+    dialog: PrintSettingsDialog, style: str
+) -> None:
+    """Die volle Kühlung an der Stütze steht unter „Kühlung“, gehört aber zu den
+    Stützdetails: Ohne Stützen verschwindet sie dort (RM-583, Review). Gefragt
+    wurde das Formular der Stützen, Qt meldete „Invalid widget“, und die Zeile
+    blieb stehen."""
+    selector = dialog._editors["support.style"]
+    assert isinstance(selector, QComboBox)
+    selector.setCurrentIndex(selector.findData(style))
+    dialog._update_inactive_setting_rows()
+
+    path = "cooling.support_interface_cooling"
+    form = dialog._tab_forms["cooling"]
+    assert form.isRowVisible(dialog._labels[path]) is (style != "none")
+
+
 #: Der Schlüssel, an dem jede Haftungsart im Slicer wirkt, und die Felder, die
 #: dazugehören — von außen, aus den Schlüsselnamen der drei Familien.
 _ADHESION_EFFECT: dict[str, dict[str, tuple[str, ...]]] = {
@@ -11083,6 +11101,81 @@ def test_the_advice_worker_names_who_gets_an_accepted_suggestion(qt_app: QApplic
     }
 
     assert worker._accepted_targets(results) == {"adhesion.kind": ("Turm",)}
+
+
+@pytest.mark.parametrize("flavour", ["orca", "cura"])
+@pytest.mark.parametrize("case", ["ceilings", "materials"])
+def test_the_contact_rows_settle_in_the_dialog(
+    qt_app: QApplication, flavour: str, case: str
+) -> None:
+    """Der Rat zum Stützkontakt kommt nach einmal Übernehmen zur Ruhe (RM-583, H1).
+
+    Gegen die Übernahme gefragt, brachte jedes Übernehmen die Gegenzeile: am
+    Tisch die dichte Trennschicht, am Kinn die lockere und wieder zurück, bei
+    PLA und PETG der Abstand ebenso. Der Arbeiter fragt jetzt wie der Export
+    gegen die Grundlage, und die Zeile nennt nur das Teil, das ihren Wert
+    bekommt — nicht jedes, das einen anderen verlangt.
+    """
+    from app.core.slice import advise
+    from app.core.types import PrintSettings
+    from tests.test_slice_findings import chin_over_chest, table
+
+    profile = profiles.make_profile("centauri-carbon-2", "pla")
+    settings = print_settings.resolve(profile, "standard")
+    if case == "ceilings":
+        chosen: tuple[tuple[str, object], ...] = (
+            ("support.interface_spacing", 0.2),
+            ("support.interface_layers", 3),
+            ("support.bottom_interface_layers", 2),
+        )
+        objects = (
+            SceneObject(id="obj_1", name="Tisch", mesh=table()),
+            SceneObject(id="obj_2", name="Kinn", mesh=chin_over_chest()),
+        )
+        named: dict[str, tuple[str, ...]] = {
+            "support.interface_layers": ("Kinn",),
+            "support.interface_spacing": ("Kinn",),
+        }
+    else:
+        # PLA verlangt 0,15, PETG 0,21: Die Zeile zeigt den größeren Wert und
+        # nennt nur das Teil, das ihn bekommt.
+        chosen = (("layers.layer_height", 0.15), ("support.z_gap", 0.3))
+        objects = (
+            SceneObject(id="obj_1", name="PLA-Tisch", mesh=table(), material="pla"),
+            SceneObject(id="obj_2", name="PETG-Tisch", mesh=table(), material="petg"),
+        )
+        # Die dichte Trennschicht verlangen beide Tische: Sie gilt allen.
+        named = {
+            "support.z_gap": ("PETG-Tisch",),
+            "support.interface_layers": (),
+            "support.interface_spacing": (),
+        }
+    for path, value in chosen:
+        settings = print_settings.with_choice(settings, path, value)
+
+    def rows(current: PrintSettings) -> dict[str, SettingAdvice]:
+        found: list[list[SettingAdvice]] = []
+        worker = print_dialog._AdviceWorker(
+            objects, current, profile, None, {}, (), (), {}, flavour=flavour
+        )
+        worker.done.connect(lambda entries, _measured: found.append(entries))
+        worker.work()
+        assert found, "der Arbeiter liefert"
+        return {entry.path: entry for entry in found[-1] if entry.path in advise.CONTACT_PATHS}
+
+    first = rows(settings)
+    if flavour == "orca":
+        for path, entry in first.items():
+            parts = getattr(entry, "parts", ())
+            assert parts == named[path], (path, parts)
+        assert set(first) == set(named), first
+    elif case == "ceilings":
+        assert "support.interface_spacing" not in first, (
+            "Cura nimmt die Lücke nur für die Platte; die dichte des Tischs gilt allen"
+        )
+    for path, entry in first.items():
+        settings = print_settings.with_accepted(settings, path, entry.value)
+    assert rows(settings) == {}, "nach dem Übernehmen keine Gegenzeile"
 
 
 def test_the_field_says_which_parts_get_a_suggestion_and_what_the_rest_prints(

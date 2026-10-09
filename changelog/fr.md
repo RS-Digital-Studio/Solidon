@@ -55,6 +55,11 @@ dans `website/version.json`.
 - Là où les supports sous de petits surplombs reposent sur le modèle, Solidon propose des supports arborescents. Ils y laissent moins de traces.
 - Pour les petites pointes, Solidon propose une *Vitesse minimale de ralentissement* plus basse afin qu'elles ne ramollissent pas. Le réglage parvient à chaque slicer.
 - Les rebords étroits qui se portent seuls restent libres avec *Rebords sans support*. L'impression demande ainsi nettement moins de support.
+- Les supports se retirent plus facilement : l'espace suit le matériau et la hauteur de couche de chaque pièce, même avec plusieurs matériaux sur un plateau. L'interface suit la surface au-dessus.
+- Quand un support repose sur la pièce, Solidon propose aussi une couche d'interface en dessous pour que son pied ne laisse pas de traces.
+- Pour le PETG, Solidon propose un refroidissement complet au support. Il se détache ainsi plus facilement de la pièce.
+- Nouveau dans les réglages d'impression : *Couches d'interface en bas*, *Écart dans l'interface* et *Refroidissement complet au support*.
+- Le champ *Espace au-dessus* s'appelle désormais *Espace dessus et dessous* et vaut pour les deux côtés du support.
 
 ### Filetages, perçages et pièces normalisées
 

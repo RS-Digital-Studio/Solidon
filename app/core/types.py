@@ -968,14 +968,18 @@ class MaterialProfile:
     """
     layer_bond_ratio: float = 0.0
     """Anteil der Streckgrenze quer zur Schichtebene, zwischen 0 und 1; 0 heißt unbekannt."""
-    support_gap_factor: float = 1.0
+    support_gap_factor: float | None = None
     """Luft zwischen Stütze und Teil als Vielfaches der Schichthöhe (RM-583): PLA
     etwa eine Schicht, PETG haftet an sich selbst und braucht das 1,25- bis
-    1,5-Fache. Begrenzt durch :attr:`support_gap_min` und :attr:`support_gap_max`."""
-    support_gap_min: float = 0.10
+    1,5-Fache. Begrenzt durch :attr:`support_gap_min` und :attr:`support_gap_max`.
+    **None heißt unbekannt**: Dann bleibt der Abstand beim Hersteller."""
+    support_gap_min: float | None = None
     """Kleinster Stützabstand in mm — darunter verschweißt die Kontaktschicht."""
-    support_gap_max: float = 0.25
+    support_gap_max: float | None = None
     """Größter Stützabstand in mm — darüber sackt die gestützte Fläche durch."""
+    support_interface_cooling: bool = False
+    """Ob sich die Stütze von diesem Material mit voller Kühlung an der
+    Trennschicht leichter löst (RM-583, Recherche Nr. 7: PETG)."""
     minimum_wall: float | None = None
     """Gemessene druckbare Mindestwand in mm, ausschließlich für den gespeicherten Prozess."""
     overhang_angle: float | None = None

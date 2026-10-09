@@ -145,6 +145,40 @@ def test_a_measurement_lands_in_the_material_profile(own_profiles: Path) -> None
     assert (own_profiles / "materials.toml").is_file()
 
 
+@pytest.mark.parametrize("material", ["pla", "petg"])
+def test_an_older_calibration_keeps_the_shipped_support_values(
+    own_profiles: Path, material: str
+) -> None:
+    """Eine Kalibrierung von vor 0.6.0 kennt den Stützabstand nicht (RM-583).
+
+    Der eigene Eintrag ersetzte den mitgelieferten als Ganzes, und seit ein
+    fehlender Wert „unbekannt" heißt, bekam gerade wer kalibriert hatte weder
+    Abstandsrat noch Kontaktkühlung. Was dem eigenen Eintrag fehlt, kommt aus
+    dem mitgelieferten derselben Kennung; was er trägt, gilt.
+    """
+    shipped = profiles.material(material)
+    assert shipped.support_gap_factor is not None
+    own_profiles.mkdir(parents=True, exist_ok=True)
+    older = {
+        name: value
+        for name, value in dataclasses.asdict(shipped).items()
+        if name != "id" and value is not None and not name.startswith("support_")
+    }
+    older.update(clearance=0.18, calibrated=True)
+    text = calibration._as_toml({material: older})
+    (own_profiles / calibration.USER_MATERIALS).write_text(text, encoding="utf-8")
+    profiles.reload()
+
+    calibrated = profiles.material(material)
+
+    assert calibrated.calibrated
+    assert calibrated.clearance == pytest.approx(0.18)
+    assert calibrated.support_gap_factor == pytest.approx(shipped.support_gap_factor)
+    assert calibrated.support_gap_min == pytest.approx(shipped.support_gap_min)
+    assert calibrated.support_gap_max == pytest.approx(shipped.support_gap_max)
+    assert calibrated.support_interface_cooling is shipped.support_interface_cooling
+
+
 @pytest.mark.parametrize("stage", ["write", "fsync", "replace"])
 def test_a_failed_calibration_preserves_the_previous_file(
     own_profiles: Path, monkeypatch: pytest.MonkeyPatch, stage: str

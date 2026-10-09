@@ -1482,6 +1482,12 @@ class _AdviceWorker(Worker):
             threemf.SlotKey,
             tuple[MaterialSlot, list[tuple[PrintSettings, Sequence[SettingAdvice]]]],
         ] = {}
+        # Der Stützkontakt geht je Teil und wird gegen die Grundlage gefragt,
+        # wie im Export; gegen die Übernahme gefragt, kam jede Zeile mit ihrer
+        # Gegenzeile wieder (RM-583).
+        separate, asking = handover.asked_for_contact(
+            self.settings, self.profile, self.setup, self.flavour
+        )
         for index, body in enumerate(self.objects):
             self.cancelled.raise_if_cancelled()
             self.progressed.emit(index + 1, len(self.objects), str(body.name))
@@ -1489,7 +1495,7 @@ class _AdviceWorker(Worker):
             own_profile = profiles.for_object(self.profile, body)
             # Dieselben Spulen, die der Export je Teil fragt (Entscheidung G).
             processes = handover.slot_processes(
-                body, self.settings, self.profile, self.setup, self.slot_profiles
+                body, asking, self.profile, self.setup, self.slot_profiles
             )
             angle = min(
                 (process.profile.overhang_limit_degrees for process in processes),
@@ -1537,6 +1543,9 @@ class _AdviceWorker(Worker):
             results[body.id] = (angle, wall, result)
             if not self.rules_wanted:
                 continue
+            # Erst über die Spulen dieses Körpers: Ein Teil bekommt einen Wert,
+            # der alle seine Spulen einschließt (wie ``writer.part_advice``).
+            own: list[tuple[PrintSettings, Sequence[SettingAdvice]]] = []
             for process in processes:
                 entries = advise.advise(
                     process.settings,
@@ -1547,7 +1556,7 @@ class _AdviceWorker(Worker):
                     connectors=self.connectors,
                     flavour=self.flavour,
                 )
-                common.append(
+                own.append(
                     (
                         process.settings,
                         [
@@ -1570,7 +1579,11 @@ class _AdviceWorker(Worker):
                         ],
                     )
                 )
-        entries = self._with_parts(advise.combine(self.settings, common), results)
+            if own:
+                common.append((asking, advise.combine(asking, own)))
+        entries = self._with_parts(
+            advise.combine(self.settings, common, separate=separate), results
+        )
         if self.rules_wanted:
             self.accepted_parts = self._accepted_targets(results)
         for slot, groups in materials.values():
@@ -1687,6 +1700,7 @@ class _AdviceWorker(Worker):
             return entries
         chain = split.accepted_per_part()
         wanted: dict[str, list[str]] = {}
+        shown = {entry.path: entry.value for entry in entries}
         for body in self.objects:
             self.cancelled.raise_if_cancelled()
             if not self.rules_wanted:
@@ -1703,7 +1717,12 @@ class _AdviceWorker(Worker):
                 flavour=self.flavour,
                 accepted=chain,
             ):
-                if entry.path in candidates:
+                # Beim Stützkontakt bekommt jedes Teil seinen Wert; die Zeile nennt
+                # nur die Teile, die ihren bekommen (RM-583).
+                if entry.path in candidates and (
+                    entry.path not in advise.CONTACT_PATHS
+                    or print_settings.same_value(entry.value, shown[entry.path])
+                ):
                     wanted.setdefault(entry.path, []).append(str(body.name))
         named: list[SettingAdvice] = []
         for entry in entries:
@@ -4624,11 +4643,16 @@ class PrintSettingsDialog(QDialog):
         parent_print_settings = known.get("open_print_settings")
 
         def open_print_settings(error: AppError) -> None:
-            if error.values.get("constraint") == "empty_first_layer":
+            field = str(error.values.get("field") or "")
+            if (
+                error.values.get("constraint") == "empty_first_layer"
+                or print_fields.field_of(field) is not None
+            ):
                 if context is not None and context == self._print_context():
                     # Haftung bei einer leeren ersten Schicht, Wandbahnen bei
-                    # einer, die schmaler ist als eine Bahn (RM-312).
-                    self._lift(str(error.values.get("field") or "adhesion.kind"))
+                    # einer, die schmaler ist als eine Bahn (RM-312), und jedes
+                    # Feld, das ein Befund nennt (RM-583).
+                    self._lift(field or "adhesion.kind")
             elif parent_print_settings is not None:
                 parent_print_settings(error)
 
@@ -7527,12 +7551,11 @@ class PrintSettingsDialog(QDialog):
     def _update_inactive_setting_rows(self) -> None:
         """Keine Detailwerte zeigen, wenn Stützen oder Bettart ausgeschaltet sind."""
         inactive = self._inactive_paths()
-        for tab, paths in (
-            ("support", print_settings.SUPPORT_DETAILS),
-            ("adhesion", tuple(print_settings.ADHESION_DETAILS)),
-        ):
-            form = self._tab_forms[tab]
+        for paths in (print_settings.SUPPORT_DETAILS, tuple(print_settings.ADHESION_DETAILS)):
             for path in paths:
+                # Das Formular der Gruppe des Felds: Die volle Kühlung an der
+                # Stütze steht unter „Kühlung“, nicht unter „Stützen“ (RM-583).
+                form = self._tab_forms[self._fields[path].group]
                 active = path not in inactive
                 form.setRowVisible(self._labels[path], active)
                 editor = self._editors[path]

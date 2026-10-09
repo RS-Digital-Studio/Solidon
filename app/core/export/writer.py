@@ -2734,10 +2734,17 @@ def write_assembly(
     ]
     merged_slots = threemf.merge_slots(parts, across=whole_job)
     configured_slots: Sequence[MaterialSlot] = merged_slots
+    free_support_layers = False
     if settings is not None:
         from app.core.export import handover
 
         configured_slots = handover.configured_slots(merged_slots, settings)
+        # Gefragt an dem, was geschrieben wird: Platte und Objektwerte (RM-583).
+        free_support_layers = handover.frees_support_layers(
+            handover.written_support_gaps(settings, [part.settings for part in parts]),
+            settings.layers.layer_height,
+            flavour,
+        )
         known_setup = setup if setup is not None else handover.SlicerSetup(Path(flavour), flavour)
         findings += handover.unreachable_overrides(
             settings, known_setup, configured_slots, profile=profile
@@ -2753,16 +2760,25 @@ def write_assembly(
                 findings += handover.foundation_findings(
                     settings, profile, setup, slots=configured_slots
                 )
-            if accepted is not None and _rounds_support_gap(
-                accepted, profile, parts, configured_slots, flavour
-            ):
+            cause = _tower_cause(parts, setup) if free_support_layers else None
+            # Mit Turm gilt die eigene Stützschichthöhe nicht, also nur der eine
+            # Satz: Der Abstand wird gerundet (RM-583).
+            if cause is None:
+                findings += handover.support_layers_findings(setup, free_support_layers)
+            else:
                 findings.append(
                     Finding(
                         code="export.support_gap_rounded",
                         severity="info",
                         message=_(
-                            "Mit mehreren Filamenten rundet {slicer} den *Abstand nach oben* "
+                            "Mit mehreren Filamenten rundet {slicer} den *Abstand oben und unten* "
                             "auf ganze Schichten. Auf getrennten Platten gilt er genau.",
+                            slicer=setup.name,
+                        )
+                        if cause == "filaments"
+                        else _(
+                            "Das Herstellerprofil baut einen Reinigungsturm, und damit rundet "
+                            "{slicer} den *Abstand oben und unten* auf ganze Schichten.",
                             slicer=setup.name,
                         ),
                         values={"slicer": setup.name},
@@ -2779,7 +2795,7 @@ def write_assembly(
             flavour,
             setup,
             configured_slots,
-            accepted=accepted,
+            free_support_layers=free_support_layers,
         ),
         prusa_config=_plate_config(
             settings,
@@ -2808,25 +2824,26 @@ def write_assembly(
     return target, findings
 
 
-def _rounds_support_gap(
-    settings: PrintSettings,
-    profile: Profile,
-    parts: Sequence[threemf.AssemblyPart],
-    slots: Sequence[MaterialSlot],
-    flavour: SlicerFlavour,
-) -> bool:
-    """Ob die Orca-Familie einen Stützabstand zwischen zwei Schichten trotzdem rundet
-    (RM-583): Mit mehreren Filamenten auf einer Platte baut sie einen
-    Reinigungsturm und schaltet dafür die eigene Stützschichthöhe ab
-    (``PrintConfig.cpp``, ``normalize_fdm``), die
-    :func:`handover.frees_support_layers` eingeschaltet hätte."""
+def _tower_cause(
+    parts: Sequence[threemf.AssemblyPart], setup: SlicerSetup
+) -> Literal["filaments", "process"] | None:
+    """Baut die Orca-Familie auf einer der Platten einen Reinigungsturm? Dann
+    schaltet sie die eigene Stützschichthöhe ab, die
+    :func:`handover.frees_support_layers` eingeschaltet hätte, und ein Abstand
+    zwischen zwei Schichten wird gerundet (RM-583). Gefragt wird je Platte
+    (:func:`handover.tower_cause`); mehrere Filamente gehen vor.
+    """
     from app.core.export import handover
 
-    mixed = any(
-        len(threemf.merge_slots([part for part in parts if part.plate == plate])) > 1
-        for plate in {part.plate for part in parts}
-    )
-    return mixed and handover.frees_support_layers(settings, profile, slots, flavour)
+    causes = set()
+    for plate in {part.plate for part in parts}:
+        here = [part for part in parts if part.plate == plate]
+        causes.add(
+            handover.tower_cause(setup, filaments=len(threemf.merge_slots(here)), objects=len(here))
+        )
+    if "filaments" in causes:
+        return "filaments"
+    return "process" if "process" in causes else None
 
 
 def _plate_settings(
@@ -2836,7 +2853,7 @@ def _plate_settings(
     setup: SlicerSetup | None,
     slots: Sequence[MaterialSlot] = (),
     *,
-    accepted: PrintSettings | None = None,
+    free_support_layers: bool = False,
 ) -> dict[str, object]:
     """Die Druckeinstellungen, die mit der Datei reisen (§29).
 
@@ -2848,8 +2865,7 @@ def _plate_settings(
     Ist kein Slicer bekannt, werden trotzdem Solidons Werte geschrieben, nur
     ohne das Systemprofil darunter: die Maschine kennt Solidon aus dem eigenen
     Profil, und ein Wert, der dasteht, ist mehr als einer, der fehlt.
-    ``accepted`` sind die Einstellungen vor der Trennung je Teil
-    (:func:`handover.frees_support_layers`).
+    ``free_support_layers`` sagt :func:`handover.frees_support_layers`.
     """
     if settings is None:
         return {}
@@ -2861,9 +2877,7 @@ def _plate_settings(
         profile,
         known,
         slots=slots,
-        free_support_layers=handover.frees_support_layers(
-            accepted or settings, profile, slots, flavour
-        ),
+        free_support_layers=free_support_layers,
     )
 
 

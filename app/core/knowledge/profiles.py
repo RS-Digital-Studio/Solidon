@@ -303,6 +303,10 @@ def _bed_origin(value: Any, field: str, source: Path) -> tuple[float, float] | N
     return across, along
 
 
+def _optional_float(table: Mapping[str, Any], key: str) -> float | None:
+    return float(table[key]) if key in table else None
+
+
 def _material_from_table(
     identifier: str, table: Mapping[str, Any], source: Path
 ) -> MaterialProfile:
@@ -322,9 +326,12 @@ def _material_from_table(
             youngs_modulus=float(table.get("youngs_modulus", 0.0)),
             yield_strength=float(table.get("yield_strength", 0.0)),
             layer_bond_ratio=float(table.get("layer_bond_ratio", 0.0)),
-            support_gap_factor=float(table.get("support_gap_factor", 1.0)),
-            support_gap_min=float(table.get("support_gap_min", 0.10)),
-            support_gap_max=float(table.get("support_gap_max", 0.25)),
+            # Der Stützabstand ohne Vorgabe wie die Mechanik: unbekannt, und der
+            # Abstand bleibt beim Hersteller (RM-583).
+            support_gap_factor=_optional_float(table, "support_gap_factor"),
+            support_gap_min=_optional_float(table, "support_gap_min"),
+            support_gap_max=_optional_float(table, "support_gap_max"),
+            support_interface_cooling=bool(table.get("support_interface_cooling", False)),
             minimum_wall=(float(table["minimum_wall"]) if "minimum_wall" in table else None),
             overhang_angle=(float(table["overhang_angle"]) if "overhang_angle" in table else None),
             calibration_printer=str(table.get("calibration_printer", "")),
@@ -355,11 +362,18 @@ def _load_printers() -> dict[str, PrinterProfile]:
 
 def _load_materials() -> dict[str, MaterialProfile]:
     profiles: dict[str, MaterialProfile] = {}
-    for path in (_DATA_DIR / "materials.toml", user_profiles_dir() / "materials.toml"):
-        if not path.is_file():
-            continue
-        for identifier, table in _read_table(path).items():
-            profiles[identifier] = _material_from_table(identifier, table, path)
+    data = _DATA_DIR / "materials.toml"
+    shipped = _read_table(data)
+    for identifier, table in shipped.items():
+        profiles[identifier] = _material_from_table(identifier, table, data)
+    own = user_profiles_dir() / "materials.toml"
+    if own.is_file():
+        for identifier, table in _read_table(own).items():
+            # Je Eintrag, nicht je Datei (wie ``print_settings._load``): Eine
+            # Kalibrierung von vor 0.6.0 kennt den Stützabstand nicht und
+            # bekommt ihn aus dem mitgelieferten Eintrag (RM-583).
+            merged = {**shipped.get(identifier, {}), **table}
+            profiles[identifier] = _material_from_table(identifier, merged, own)
     for identifier, entry in _carried_materials.items():
         profiles.setdefault(identifier, entry)
     return _by_title(profiles)

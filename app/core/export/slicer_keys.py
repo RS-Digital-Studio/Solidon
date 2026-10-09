@@ -29,7 +29,9 @@ from dataclasses import replace
 from pathlib import Path
 from typing import TYPE_CHECKING, Final, Literal, NamedTuple
 
+from app.core.knowledge import print_fields
 from app.core.knowledge.print_settings import SCARF_LENGTH
+from app.core.units import format_length
 from app.i18n import TranslatableText, _
 
 if TYPE_CHECKING:
@@ -325,6 +327,12 @@ PRUSA: Final[tuple[Row, ...]] = (
         _integer,
     ),
     ("support.interface_spacing", "support_material_interface_spacing", _number),
+    # Den Kontaktlüfter kennt SuperSlicer, PrusaSlicer nicht (RM-583).
+    (
+        "cooling.support_interface_cooling",
+        "support_material_interface_fan_speed",
+        _mapped({"True": "100"}, "-1"),
+    ),
     ("adhesion.skirt_loops", "skirts", _integer),
     ("adhesion.skirt_distance", "skirt_distance", _number),
     ("adhesion.brim_width", "brim_width", _number),
@@ -472,9 +480,15 @@ ORCA: Final[tuple[Row, ...]] = (
     # Unten derselbe Abstand wie oben (RM-583), siehe PrusaSlicer.
     ("support.z_gap", "support_bottom_z_distance", _number),
     ("support.xy_gap", "support_object_xy_distance", _number),
+    # Gedruckt wird oben eine Übergangslage, unten die Kontaktlage dazu
+    # (``SupportCommon.cpp``); das Herstellerprofil meint dieselbe Zählung, und
+    # Solidon gleicht nichts aus (RM-583, Kontaktsonde).
     ("support.interface_layers", "support_interface_top_layers", _integer),
     ("support.bottom_interface_layers", "support_interface_bottom_layers", _integer),
     ("support.interface_spacing", "support_interface_spacing", _number),
+    # Die untere Trennschicht hat eine eigene Lücke; alle fünf Programme der
+    # Familie führen sie (Konfigurationsblöcke vom 08.10.2026).
+    ("support.interface_spacing", "support_bottom_interface_spacing", _number),
     # -1 heißt „wie die übrige Schicht“, die Vorgabe aller gemessenen Profile.
     # Ein Filamentwert in der Orca-Familie (Filamentprofile der Hersteller).
     (
@@ -820,7 +834,8 @@ CURA_MIRRORED: Final[dict[str, tuple[str, ...]]] = {
         "top_skin_expand_distance",
     ),
     "support_line_distance": ("support_initial_layer_line_distance",),
-    "support_interface_height": ("support_bottom_height", "support_roof_height"),
+    # Die untere Höhe rechnet ``handover._for_supports`` aus den eigenen Lagen.
+    "support_interface_height": ("support_roof_height",),
 }
 
 #: Dasselbe mit einem Faktor davor — Curas Formel, als Zahl statt als Satz.
@@ -1069,8 +1084,7 @@ def flavour_of(name: str) -> SlicerFlavour | None:
 #:
 #: ``tests/test_print_settings_ui.py`` hält die Liste gegen diese Messung.
 NOT_TAKEN_BY: Final[dict[SlicerFlavour, frozenset[str]]] = {
-    # Den Kontaktlüfter kennt nur SuperSlicer, nicht PrusaSlicer (RM-583).
-    "prusa": frozenset({"shell.precise_outer_wall", "cooling.support_interface_cooling"}),
+    "prusa": frozenset({"shell.precise_outer_wall"}),
     "orca": frozenset(),
     "cura": frozenset(
         {
@@ -1116,7 +1130,7 @@ GEOMETRY_KEYS: Final[dict[str, tuple[str, ...]]] = {
 LIMITED: Final[dict[SlicerFlavour, frozenset[str]]] = {
     "prusa": frozenset(),
     "orca": frozenset(),
-    "cura": frozenset({"cooling.disable_first_layers"}),
+    "cura": frozenset({"cooling.disable_first_layers", "support.z_gap"}),
     "other": frozenset(),
 }
 
@@ -1126,16 +1140,10 @@ LIMITED: Final[dict[SlicerFlavour, frozenset[str]]] = {
 #: gleicher Stand: SuperSlicer 2.5.59.13 kennt die Schrägnaht aus PrusaSlicer
 #: 2.9 nicht, und sein 3MF-Leser stürzt ab zwei unbekannten Schlüsseln mit
 #: 0xC0000005 ab (RM-459, gemessen je Schlüssel der Beilage).
-#: Einzelne Schlüssel, die ein Programm nicht kennt, obwohl es den Pfad
-#: darüber nimmt: SuperSlicer 2.5.59.13 kennt den oberen Stützabstand, den
-#: unteren eigens nicht (``tests/data/superslicer_3mf_keys.json``, RM-583). Dort
-#: gilt ohnehin oben wie unten derselbe.
-KEYS_UNKNOWN_TO_PROGRAM: Final[dict[str, frozenset[str]]] = {
-    "superslicer": frozenset({"support_material_bottom_contact_distance"}),
-}
-
 NOT_TAKEN_BY_PROGRAM: Final[dict[str, frozenset[str]]] = {
     "superslicer": frozenset({"shell.scarf_seam"}),
+    # Den Kontaktlüfter führt nur SuperSlicer (``--help-fff`` von 2.9.6).
+    "prusaslicer": frozenset({"cooling.support_interface_cooling"}),
     # Bambu Studio führt ``support_material_interface_fan_speed`` nicht; sein
     # Konfigurationsblock nennt den Schlüssel nicht (P1S, 08.10.2026).
     "bambustudio": frozenset({"cooling.support_interface_cooling"}),
@@ -1544,7 +1552,6 @@ def for_program(values: Mapping[str, str], flavour: SlicerFlavour, program: str)
     """
     dropped = NOT_TAKEN_BY_PROGRAM.get(program, frozenset())
     unknown = {entry.key for entry in TABLES[flavour] if entry.path in dropped}
-    unknown |= KEYS_UNKNOWN_TO_PROGRAM.get(program, frozenset())
     kept = {key: value for key, value in values.items() if key not in unknown}
     for old, new in PROGRAM_ALIASES.get(program, {}).items():
         if old not in kept:
@@ -1553,6 +1560,36 @@ def for_program(values: Mapping[str, str], flavour: SlicerFlavour, program: str)
         for key in new:
             kept.setdefault(key, value)
     return kept
+
+
+#: Die Trennschicht zu einem Drittel dicht, wie Creality und Elegoo in Cura
+#: (``support_interface_density`` 33,3 %): Linienabstand drei Bahnbreiten.
+#: Ohne gewählte Lücke schreibt die Übergabe ihn, die Grundlage zeigt die
+#: Lücke daraus, und die Druckzeit rechnet mit dieser Dichte (RM-583).
+CURA_INTERFACE_LINES: Final = 3.0
+
+
+def support_gap_in_whole_layers(flavour: SlicerFlavour | None) -> bool:
+    """Rechnet dieser Slicer den Stützabstand immer in ganzen Schichten (RM-583)?
+
+    Die Menge steht beim Rat (:data:`advise.WHOLE_LAYER_GAP_FLAVOURS`), wie
+    der Auto-Brim: Der Rat fragt sie, und ``slice`` importiert ``export`` nicht.
+    """
+    from app.core.slice import advise
+
+    return flavour in advise.WHOLE_LAYER_GAP_FLAVOURS
+
+
+def has_independent_support_layers(flavour: SlicerFlavour | None) -> bool:
+    """Bekommt die Stütze hier eine eigene Schichthöhe, damit ein Abstand zwischen
+    zwei Schichten gilt (``independent_support_layer_height``, RM-583)?
+
+    Nur die Orca-Familie: Ohne den Schalter rundet sie auf ganze Schichten
+    (``Slicing.cpp``). PrusaSlicer legt die Kontaktschicht ohnehin in den
+    gewünschten Abstand, Cura rechnet in Schichten
+    (:func:`support_gap_in_whole_layers`).
+    """
+    return flavour == "orca"
 
 
 def caps_volumetric_speed(flavour: SlicerFlavour) -> bool:
@@ -1598,6 +1635,21 @@ def limitation(
             "Cura kennt keine Lüfterpause und fährt den Lüfter bis Schicht {layer} "
             "schrittweise hoch.",
             layer=settings.cooling.disable_first_layers + 1,
+        )
+    # Ein Stützabstand zwischen zwei Schichten wird in Cura eine ganze (RM-583).
+    if support_gap_in_whole_layers(flavour) and path == "support.z_gap":
+        layer = settings.layers.layer_height if settings is not None else 0.0
+        # Ohne Stützen druckt der Abstand nichts; ein Satz dazu wäre Lärm.
+        if settings is None or layer <= 0.0 or settings.support.style == "none":
+            return None
+        steps = settings.support.z_gap / layer
+        if math.isclose(steps, round(steps), abs_tol=1e-6):
+            return None
+        field = print_fields.field_of(path)
+        return _(
+            "Cura rechnet „{setting}“ in ganzen Schichten zu {layer}.",
+            setting=field.title if field is not None else path,
+            layer=format_length(layer),
         )
     return None
 

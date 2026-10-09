@@ -20,7 +20,7 @@ Werten aus dem G-Code wird es nie vermischt (Regel 14, §22.5).
 from __future__ import annotations
 
 import math
-from collections.abc import Sequence
+from collections.abc import Collection, Sequence
 from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, Final
 
@@ -355,6 +355,8 @@ def _merged(settings: PrintSettings, advice: list[SettingAdvice]) -> list[Settin
 def combine(
     settings: PrintSettings,
     groups: Sequence[tuple[PrintSettings, Sequence[SettingAdvice]]],
+    *,
+    separate: Collection[str] = frozenset(),
 ) -> list[SettingAdvice]:
     """Vereint Anforderungen mehrerer Körper an gemeinsame Einstellungen.
 
@@ -363,6 +365,13 @@ def combine(
     Würfel kann die schon eingeschalteten Stützen seines Nachbarn nicht
     abschalten. Filamentabhängige Werte werden nur innerhalb desselben
     Materialslots zusammengeführt; verschiedene Spulen behalten eigene Werte.
+
+    **Was je Teil geschrieben wird** (``separate``, im Druckdialog die
+    Kontaktpfade aus ``handover.asked_for_contact``), zählt nur, wo ein Körper
+    es verlangt: Die übrigen behalten ihren Wert, jedes Teil bekommt seinen
+    eigenen (RM-583). Gefragt wird dafür gegen die Grundlage, nicht gegen die
+    Übernahme. Innerhalb eines Teils mit mehreren Spulen gilt weiter der Wert,
+    der alle einschließt — der Dialog führt erst je Körper zusammen.
     """
     candidates: dict[str, list[SettingAdvice]] = {}
     final = [apply(base, list(entries)) for base, entries in groups]
@@ -375,7 +384,11 @@ def combine(
         if path == "support.placement":
             relevant = [value for value in final if value.support.style != "none"] or final
         values = [settings_table.read_path(value, path) for value in relevant]
-        value = _combined_value(path, values)
+        # Was je Teil geschrieben wird, zählt nur, wo ein Körper es verlangt;
+        # die übrigen behalten ihren Wert ohnehin (RM-583).
+        value = _combined_value(
+            path, [entry.value for entry in entries] if path in separate else values
+        )
         was = settings_table.read_path(settings, path)
         if not _differs(value, was):
             continue
@@ -909,21 +922,42 @@ OPEN_INTERFACE: Final = (0.5, 2)
 BOTTOM_INTERFACE_LAYERS: Final = 2
 
 
+#: Wo der Slicer den Stützabstand immer in ganzen Schichten rechnet (RM-583):
+#: CuraEngine (``support_top_distance`` je Schicht). Die Orca-Familie nur,
+#: solange die Stütze die Schichthöhe des Modells hat; die eigene Höhe schaltet
+#: die Übergabe dann ein (``slicer_keys.has_independent_support_layers``).
+WHOLE_LAYER_GAP_FLAVOURS: Final[frozenset[SlicerFlavour]] = frozenset({"cura"})
+
+
 def support_gap_target(
     layer: float, material: MaterialProfile, flavour: SlicerFlavour | None = None
-) -> float:
+) -> float | None:
     """Der Stützabstand, mit dem sich die Stütze von diesem Material sauber löst
     (RM-583): ein Vielfaches der Schichthöhe, begrenzt nach dem Materialprofil.
-    Cura rechnet ihn in ganzen Schichten. Die Orca-Familie tut es nur ohne
-    eigene Stützschichthöhe; die schaltet die Übergabe dann ein
+    Ohne Werte im Profil ``None``: unbekannt, der Abstand bleibt beim Hersteller.
+
+    Wo der Slicer in ganzen Schichten rechnet (Cura), ist es das Vielfache
+    innerhalb der Grenzen, das dem Ziel am nächsten liegt, mindestens eine
+    Schicht. Liegt keines darin, das kleinste über dem Minimum — oberhalb des
+    Maximums bleibt nur eine Schicht (PLA ab 0,28 mm). Die Orca-Familie rundet
+    nur ohne eigene Stützschichthöhe; die schaltet die Übergabe ein
     (``handover.frees_support_layers``)."""
-    target = min(
-        max(layer * material.support_gap_factor, material.support_gap_min),
+    factor, low, high = (
+        material.support_gap_factor,
+        material.support_gap_min,
         material.support_gap_max,
     )
-    if flavour == "cura":
-        target = layer * max(1, round(target / layer))
-    return target
+    if factor is None or low is None or high is None or layer <= 0.0:
+        return None
+    target = min(max(layer * factor, low), high)
+    if flavour not in WHOLE_LAYER_GAP_FLAVOURS:
+        return target
+    first = max(1, math.ceil(low / layer - EPS_GEOM))
+    last = math.floor(high / layer + EPS_GEOM)
+    if first > last:
+        return first * layer
+    # Eine halbe Schicht rundet auf, auch wenn die Division knapp darunter landet.
+    return min(max(math.floor(target / layer + 0.5 + EPS_GEOM), first), last) * layer
 
 
 def _support_contact(
@@ -941,19 +975,19 @@ def _support_contact(
     begrenzt nach unten und oben (Regel 7); Cura rechnet ihn in ganzen
     Schichten. Unter einer großen flachen Decke (ein Stück über
     ``OVERHANG_LAYER_WORTH_SUPPORT``) wird die Trennschicht dicht, sonst locker.
-    Material, das an sich selbst haftet (Abstandsfaktor über eins), bekommt volle
-    Kühlung an der Trennschicht.
+    Material, das an sich selbst haftet (``support_interface_cooling`` im
+    Profil), bekommt volle Kühlung an der Trennschicht.
     """
     advice: list[SettingAdvice] = []
     material = profile.material
     target = support_gap_target(settings.layers.layer_height, material, flavour)
     low, high = SUPPORT_GAP_BAND
-    if not low * target <= settings.support.z_gap <= high * target:
+    if target is not None and not low * target <= settings.support.z_gap <= high * target:
         advice.append(
             _advice(
                 settings,
                 path="support.z_gap",
-                value=round(target, 2),
+                value=round(target, 4),
                 reason=_("Passend zu Schicht und Material löst sich die Stütze sauber."),
             )
         )
@@ -987,7 +1021,7 @@ def _support_contact(
         advice.append(
             _advice(settings, path="support.interface_layers", value=layers, reason=reason)
         )
-    if material.support_gap_factor > 1.0 and not settings.cooling.support_interface_cooling:
+    if material.support_interface_cooling and not settings.cooling.support_interface_cooling:
         advice.append(
             _advice(
                 settings,
@@ -1611,6 +1645,19 @@ PART_PATHS: Final = frozenset(
         "infill.density",
         "shell.wall_generator",
         "layers.line_width",
+    }
+)
+
+#: Der Stützkontakt (RM-583): je Teil geschrieben, und der Rat geht je Körper
+#: in beide Richtungen — PLA will weniger Abstand als PETG, eine Figur eine
+#: lockere Trennschicht als eine flache Decke. Der Druckdialog führt diese Pfade
+#: deshalb getrennt zusammen (:func:`combine`, ``separate``).
+CONTACT_PATHS: Final = frozenset(
+    {
+        "support.z_gap",
+        "support.interface_layers",
+        "support.bottom_interface_layers",
+        "support.interface_spacing",
     }
 )
 

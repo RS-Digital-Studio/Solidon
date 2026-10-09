@@ -226,6 +226,23 @@ def load(model: Path) -> tuple[list[Any], list[str]]:
     findings = sorted(
         {f"{f.severity}:{f.code}" for f in result.scene.report.findings if f.severity != "info"}
     )
+    if os.environ.get("GESAMT_MATERIAL"):
+        # **Wie ein Kunde, der die Spule wechselt**: Die Datei bringt ihre Spulen
+        # mit (Roberts Drache: PLA). Gemessen wird das gewählte Material, also
+        # bekommt jede Spule dessen Art und das Filament des Herstellers dazu
+        # (RM-583; vorher maß ein PETG-Lauf die PLA-Spule der Datei).
+        kind = slicer_keys.filament_type(MATERIAL)
+        objects = [
+            replace(
+                entry,
+                material=MATERIAL,
+                material_slots=tuple(
+                    replace(slot, material=None, material_type=kind)
+                    for slot in entry.material_slots
+                ),
+            )
+            for entry in objects
+        ]
     LOADED["turned"] = turned
     LOADED["project"] = project
     LOADED["sources"] = sources

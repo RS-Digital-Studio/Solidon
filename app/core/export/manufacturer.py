@@ -1053,17 +1053,14 @@ def cura_motion(setup: SlicerSetup, profile: Profile) -> Motion | None:
         return None
     jerk = _cura_number(chain.get("machine_max_jerk_xy"))
     limit = _cura_number(chain.get("machine_max_acceleration_x"))
-    interface = _cura_number(chain.get("support_interface_density"))
     return Motion(
         nozzle=profile.printer.nozzle_diameter,
         jerk=jerk if jerk is not None and jerk > 0.0 else None,
         acceleration_limit=limit if limit is not None and limit > 0.0 else None,
-        # Stütztempo und Beschleunigung folgen dem, was Solidon schreibt
-        # (``speed_print``, ``print_time._roles``); die Kontaktdichte steht in
-        # der Definition, in Prozent.
-        support_interface_density=interface / 100.0
-        if interface is not None and interface > 0.0
-        else None,
+        # Stütztempo, Beschleunigung und Kontaktdichte folgen dem, was Solidon
+        # schreibt (``speed_print``, ``print_time._roles``,
+        # ``slicer_keys.CURA_INTERFACE_LINES``), nicht der Definition.
+        support_interface_density=1.0 / slicer_keys.CURA_INTERFACE_LINES,
         support_closing=_cura_number(chain.get("support_join_distance")),
     )
 
@@ -1320,7 +1317,9 @@ def _read_filament(
             continue
         if solidon in slicer_profiles._AS_FRACTION:
             number /= 100.0
-        read[solidon] = kind(number)
+        value = kind(number)
+        if value is not None:
+            read[solidon] = value
     refuses = False
     key = PLATE_TEMPERATURES.get(plate)
     if key is not None:
@@ -1891,7 +1890,9 @@ def _prusa_material(values: Mapping[str, Any]) -> dict[str, object]:
             continue
         if solidon in slicer_profiles._AS_FRACTION:
             number /= 100.0
-        read[solidon] = kind(number)
+        value = kind(number)
+        if value is not None:
+            read[solidon] = value
     always = (_prusa_first(values.get("fan_always_on")) or "0").casefold()
     if always in ("0", "false") and "cooling.minimum_fan_speed" in read:
         read["cooling.minimum_fan_speed"] = 0.0
@@ -2271,6 +2272,12 @@ def _without_process(setup: SlicerSetup | None) -> str:
     return handover._profile_name(setup.machine_profile)
 
 
+def cura_interface_gap(stage: PrintSettings) -> float:
+    """Die Lücke, die Cura ohne Wahl druckt: drei Bahnbreiten der Stufe
+    Linienabstand, wie Creality und Elegoo in Cura (RM-583)."""
+    return (slicer_keys.CURA_INTERFACE_LINES - 1.0) * stage.layers.line_width
+
+
 def base_settings(
     profile: Profile, quality: QualityPreset, setup: SlicerSetup | None
 ) -> Foundation:
@@ -2282,6 +2289,23 @@ def base_settings(
     und die Übergabe schreibt sie dann vollständig.
     """
     fallback = cura_fan_curve(settings_table.resolve(profile, quality), profile, setup)
+    if setup is not None and setup.flavour == "cura":
+        from app.core.slice import advise
+
+        # Cura rechnet den Abstand in ganzen Schichten: Die Grundlage trägt das
+        # Vielfache, das zum Material passt, sonst das nächste (RM-583).
+        layer = fallback.layers.layer_height
+        gap = advise.support_gap_target(layer, profile.material, "cura")
+        if gap is None and layer > 0.0:
+            gap = max(1, round(fallback.support.z_gap / layer)) * layer
+        fallback = replace(
+            fallback,
+            support=replace(
+                fallback.support,
+                interface_spacing=cura_interface_gap(fallback),
+                z_gap=fallback.support.z_gap if gap is None else gap,
+            ),
+        )
     if setup is None or setup.flavour not in ("orca", "prusa") or not setup.base_process:
         return _table_foundation(
             profile,

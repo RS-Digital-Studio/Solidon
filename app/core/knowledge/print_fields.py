@@ -454,7 +454,7 @@ FIELDS: tuple[Field, ...] = (
         "cooling",
         kind="bool",
         note=_(
-            "Kühlt die Trennschicht der Stütze mit vollem Lüfter. Die Stütze löst sich "
+            "Kühlt mit vollem Lüfter, wo Stütze und Teil sich berühren. Die Stütze löst sich "
             "leichter, vor allem bei PETG."
         ),
     ),
@@ -603,7 +603,7 @@ FIELDS: tuple[Field, ...] = (
     ),
     Field(
         "support.z_gap",
-        _("Abstand nach oben"),
+        _("Abstand oben und unten"),
         "support",
         unit="mm",
         minimum=0.0,
@@ -611,8 +611,8 @@ FIELDS: tuple[Field, ...] = (
         step=0.05,
         decimals=2,
         note=_(
-            "Luft zwischen Stütze und Teil nach oben. Mehr heißt leichter abnehmen und rauere "
-            "Fläche darüber."
+            "Luft zwischen Stütze und Teil, oben wie unten. Mehr heißt leichter abnehmen und "
+            "rauere Fläche."
         ),
     ),
     Field(

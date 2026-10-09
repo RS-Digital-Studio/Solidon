@@ -2611,6 +2611,21 @@ def test_every_flavour_answers_every_property() -> None:
         # die Orca-Familie selbst; ein Tempodeckel als Vorschlag ändert dort
         # nichts am Druck (Gesamtprüfung, 27.09.2026). Cura liest den Wert nicht.
         "caps_volumetric_speed": {"prusa": True, "orca": True, "cura": False, "other": False},
+        # CuraEngine rechnet den Stützabstand in ganzen Schichten (RM-583).
+        "support_gap_in_whole_layers": {
+            "prusa": False,
+            "orca": False,
+            "cura": True,
+            "other": False,
+        },
+        # Eine eigene Stützschichthöhe, damit ein Abstand zwischen zwei Schichten
+        # gilt: nur die Orca-Familie (``independent_support_layer_height``).
+        "has_independent_support_layers": {
+            "prusa": False,
+            "orca": True,
+            "cura": False,
+            "other": False,
+        },
     }
     flavours = set(get_args(SlicerFlavour))
     assert len(flavours) >= 4, f"zu wenige Familien gefunden: {flavours}"

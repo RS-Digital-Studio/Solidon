@@ -54,6 +54,11 @@ it into `website/version.json`.
 - Where supports under small overhangs rest on the model, Solidon suggests tree supports. They leave fewer marks there.
 - For small tips, Solidon suggests a lower *Minimum slowdown speed* so they do not go soft. The setting reaches every slicer.
 - Narrow rims that hold up on their own stay free of support with *No support under rims*. Prints need noticeably less support that way.
+- Supports come off more easily and cleanly: the gap follows the material and layer height of each part, even with several materials on one plate. The interface follows the surface above.
+- Where a support stands on the part, Solidon also suggests an interface layer below it so its foot leaves no marks.
+- For PETG, Solidon suggests full cooling at the support. It then comes off the part more easily.
+- New in the print settings: *Interface layers below*, *Interface gap* and *Full cooling at the support*.
+- The *Gap above* field is now called *Gap above and below* and applies to both sides of the support.
 
 ### Threads, holes and standard parts
 

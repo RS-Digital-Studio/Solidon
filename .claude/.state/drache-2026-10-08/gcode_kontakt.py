@@ -24,10 +24,13 @@ import sys
 from collections import defaultdict
 from pathlib import Path
 
-CELL = 0.5
+# 2 mm statt 0,5: Eine weite Trennschicht (Lücke 1,2) traf mit 0,5 mm viele
+# Zellen ihrer obersten Lage nicht, und die Messung nahm eine Lage tiefer.
+CELL = 2.0
 CONTACT = 1.0
 INTERFACE = ("support interface", "support material interface", "support-interface")
-SUPPORT = ("support", "support material")
+#: Gegenprobe: Bambus Übergangslage unter der Trennschicht ist Stütze, kein Modell.
+SUPPORT = ("support", "support material", "support transition")
 SKIPPED = ("skirt", "brim", "custom", "prime tower", "wipe tower")
 KEYS = (
     "layer_height",
@@ -133,8 +136,14 @@ def measure(path: Path, area: tuple[float, float, float, float] | None) -> dict[
                 e = values["E"]
             if extruded and kind is not None:
                 level = round(z, 3)
-                printed[kind].add(level)
                 middle_x, middle_y = (x + new_x) / 2.0, (y + new_y) / 2.0
+                # Gegenprobe: Schichthöhen nur aus dem eigenen Bereich — mit
+                # eigener Stützschichthöhe liegen die Ebenen zweier Körper
+                # verschränkt.
+                if area is None or (
+                    area[0] <= middle_x <= area[1] and area[2] <= middle_y <= area[3]
+                ):
+                    printed[kind].add(level)
                 if kind == "interface" and (new_x, new_y) != (x, y) and (
                     area is None
                     or (area[0] <= middle_x <= area[1] and area[2] <= middle_y <= area[3])

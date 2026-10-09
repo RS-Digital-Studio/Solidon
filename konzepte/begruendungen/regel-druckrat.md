@@ -459,19 +459,42 @@ Ein Projektmaterial gibt es dafür nicht (Robert, 08.10.2026: „immer nach dem
 verwendeten Material“) — PLA und PETG auf einer Platte brauchen verschiedene
 Abstände, deshalb gehen Abstand und Trennschichten je Teil und der Lüfter je
 Spule. Gemessen an zwei gestützten Stufenkörpern auf einer Platte, einer mit
-Objektwerten (`.claude/.state/drache-2026-10-08/kontakt_je_teil.py`): In allen
-acht Programmen kommen Abstand (0,4 gegen 0,2 mm), obere und untere
-Trennschichten und die Lücke (gut ein Drittel weniger Bahn je Ebene) am
-richtigen Körper an; Cura nimmt die Lücke nur für die ganze Platte, denn ihr
-Linienabstand gehört dem Stützextruder. Mit dem echten Rat bekommt das
-PLA-Teil 0,2 und das PETG-Teil 0,28 mm. **Die Orca-Familie rundet den Abstand
+Objektwerten (`.claude/.state/drache-2026-10-08/kontakt_je_teil.py`, Lagen je
+Höhe gezählt, Raster 2 mm, Bambus Übergangslage als Stütze): Der Abstand oben
+kommt in allen acht Programmen an, 0,4 mm gegen 0,2 am Bezug (Anycubic 0,1;
+SuperSlicer bei 0,15er Schichten 0,53 gegen 0,33). Die Trennschichten kommen
+wie geschrieben an, Prusa und Cura genau (geschrieben 5 oben und 0 unten gegen
+2 und 2). Die Orca-Familie zählt anders: oben eine Übergangslage mehr (Orca,
+Elegoo, Creality und Anycubic 6 gegen 3), unten die Kontaktlage dazu (Bezug 3
+statt 2; Bambu druckt sie bei null als gewöhnliche Stütze,
+`SupportCommon.cpp`). Das Herstellerprofil meint dieselbe Zählung, also gleicht
+Solidon nichts aus. Die weite Lücke legt je Ebene deutlich weniger Bahn (Orca
+1044 gegen 1617 mm, Prusa 944 gegen 2512); Cura nimmt sie nur für die ganze
+Platte, denn ihr Linienabstand gehört dem Stützextruder. Mit dem echten Rat
+bekommt das PLA-Teil 0,2 und das PETG-Teil 0,28 mm. **Die Orca-Familie rundet den Abstand
 auf ganze Schichten, wenn die Stütze die Schichthöhe des Modells hat**
 (`Slicing.cpp`), und Elegoos Prozesse für C2 und CC2 stellen es so ein: Aus
 0,28 wurden im ElegooSlicer 0,2. Setzt Solidon einen Abstand zwischen zwei
 Schichten, schaltet die Übergabe `independent_support_layer_height` ein; der
 ElegooSlicer druckt dann 0,28. Mit zwei Filamenten baut die Orca-Familie einen
 Reinigungsturm und schaltet die eigene Höhe selbst wieder ab
-(`PrintConfig.cpp`, `normalize_fdm`) — Orca, Elegoo, Creality und Bambu
+(`PrintConfig.cpp`, `normalize_fdm_2`; „je Objekt“ mit mehreren Objekten baut
+keinen, glatter Zeitraffer immer einen) — Orca, Elegoo, Creality und Bambu
 druckten das PETG-Teil neben PLA mit 0,2, PrusaSlicer mit 0,28. Der Export
-sagt das, statt still zu runden. Cura rundet immer, deshalb rät Solidon dort
-in ganzen Schichten.
+sagt das, statt still zu runden, und dann nur das: Dass die eigene Höhe gilt,
+stimmt mit Turm nicht. Der Schalter richtet sich nach den
+geschriebenen Abständen, nicht nach den Zielen aller Spulen, und steht er gegen
+den Herstellerprozess, sagt es ein Befund: Die Stütze liegt dann auch auf
+eigenen Höhen (0,47, 0,75, 1,02 mm statt nur auf denen des Modells). Cura
+rechnet immer in ganzen Schichten, deshalb rät Solidon dort das Vielfache im
+Band des Materials — bei 0,08 mm Schicht für PLA zwei Schichten statt einer
+unter dem Minimum —, und die Cura-Grundlage trägt es auch: Solidons 0,2 war
+bei 0,28 und 0,12 mm Schicht keines, und jede Übergabe in Entwurf und Fein
+warnte, auch ohne Stützen. Über mehrere Körper führt der Druckdialog den
+Stützkontakt getrennt zusammen und fragt ihn wie der Export gegen die
+Grundlage: Gegen die Übernahme gefragt, brachte jedes Übernehmen die
+Gegenzeile (Tisch 0,2, Kinn 0,5 und zurück; PLA 0,15, PETG 0,21 und zurück),
+und nach dem größten Wert verschwand die Zeile des PLA-Teils ganz. Ein vor
+0.6.0 kalibriertes Material kennt die neuen Werte nicht und bekommt sie aus
+dem mitgelieferten Eintrag, wie die Druckeinstellungen je Eintrag. Für TPU nennt
+keine Quelle einen Abstand; ohne Werte bleibt er beim Hersteller.
