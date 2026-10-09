@@ -64,7 +64,6 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-193 — Die Erkennung an einer glatten Generator-Freiform kostet Minuten für null Merkmale](#rm-193) | Geometrie, Erkennung und Druckvorbereitung | Ziel neu gefasst (Bauplan §31: organisch unter 2 s am Referenzrechner); der Drache braucht 6,9–9,0 s unter Last bei null Merkmalen; offen ein Hebel bis zum neuen Ziel |
 | [RM-201 — Ein hohler Körper hält die 300 ms der Schichtanalyse nicht](#rm-201) | Geometrie, Erkennung und Druckvorbereitung | Unabhängige Clipper-Säulen, gerichtete Verschachtelung und `ring_nesting` gebaut, Hohlkugel bitgleich in 1,2–1,4 s; Mitre-Öffnung über Clipper und Zertifikate gemessen und verworfen; 300 ms verfehlt; entschieden (Robert, 06.10.): das Ziel bleibt, ein weiterer Hebel wird gesucht |
 | [RM-217 — Die Zuordnungsfrage zeigt das alte Merkmal nicht im Bild](#rm-217) | Geometrie, Erkennung und Druckvorbereitung | Altmerkmal und Kandidat werden gemeinsam markiert; Kern-, Ansichts- und Regressionstests grün. Offen: echter Fensterbeleg im Release unter RM-213 |
-| [RM-571 — Ein Sims im offenen Becher neben einem gesperrten Kanal verliert Stütze](#rm-571) | Geometrie, Erkennung und Druckvorbereitung | In Arbeit: Claude (Worktree `F:/solidon-claude-a`). Ein Maß für „von oben erreichbar“ finden, das den offenen Becher vom Rohrbogen der Schüssel trennt |
 | [RM-572 — Der Prüfbericht nennt keine Stelle, wo viele kleine Überhänge Stützen verlangen](#rm-572) | Geometrie, Erkennung und Druckvorbereitung | Text für „viele kleine Überhänge zusammen“ und eine Feldfrage im Budget §31 |
 | [RM-584 — Die Stützart folgt der Deckenform, und hohe Bäume stehen stabil](#rm-584) | Geometrie, Erkennung und Druckvorbereitung | Hybrid oder normal unter flachen Decken, Baumwände und Fuß ab etwa 100 mm, Spitzenabstand weiterer Materialien |
 | [RM-585 — Bögen, die sich zwischen ihren Beinen schließen, tragen sich selbst](#rm-585) | Geometrie, Erkennung und Druckvorbereitung | Schließfrage für weite Bögen, Brückenregel für die letzte Spanne |
@@ -73,6 +72,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-588 — Die Naht liegt hinten, und große Oberseiten werden gebügelt](#rm-588) | Geometrie, Erkennung und Druckvorbereitung | Naht hinten bei Figuren, Bügeln der obersten Fläche |
 | [RM-589 — Bohrungen und Stifte passen ohne Nacharbeit](#rm-589) | Geometrie, Erkennung und Druckvorbereitung | Loch- und Elefantenfußausgleich aus dem Spiel des Materialprofils |
 | [RM-624 — Ein Slicertest misst Kontaktabstand und untere Trennschicht in allen Programmen](#rm-624) | Geometrie, Erkennung und Druckvorbereitung | Messung aus `kontakt_je_teil.py` als Testhilfe, sechs Programme |
+| [RM-626 — Eine Kanalsäule endet an ihrer höchsten Auflage, und eine Insel im umschlossenen Kanalraum verliert ihre Säule](#rm-626) | Geometrie, Erkennung und Druckvorbereitung | Gefunden im Review von RM-571 (09.10.), mit Sonden belegt; nächster Schritt: Inseln behalten ihre Säule (Test an der Kammer), Schätzung messen, Kammer mit Insel in den vier Slicern |
 | [RM-218 — Am exakten Körper heißen Bohrungen nach ihrer Lage, und der Verlauf lässt sich dort nicht umbauen](#rm-218) | Geometrie, Erkennung und Druckvorbereitung | Code und Tor mit `d907d6036` in v0.5.2; offen allein die Fensterabnahme beim Release (RM-213) |
 | [RM-230 — Variable Verrundung und Formschräge: fünf Grenzen, die der Kunde merkt](#rm-230) | Geometrie, Erkennung und Druckvorbereitung | Grenzen 1 bis 3 gebaut oder benannt (06.10.: Mischecke exakt geprüft, Ring-Anfang und Zwischenstellen in den Feldhilfen); Tray: beide Kerne nennen die Fußrundung vor der Rechnung, aber der Weg über *Merkmal entfernen* trägt dort nicht; offen: Fußrundung als Kette entfernen, Netzschräge 2,3× langsamer, Fase am Fuß, B-Spline-Ecke und zweites Anstellen am Netz mit Kernen uneins |
 | [RM-253 — Am Laptop-Ständer tragen Kippen und Verdoppeln einer Bohrung falsch ab](#rm-253) | Geometrie, Erkennung und Druckvorbereitung | In Arbeit: Claude (Worktree `F:/solidon-claude-b`). 14 von 28 Bohrungen tragen ein fremdes Teil und sagen das jetzt mit Weg, statt es still zu verschmelzen (RM-413, 06.10.); offen an den freien `hole_1`/`hole_2`/`hole_4`: Verdoppeln ohne Wirkung, −127 mm³ bzw. +1,4–1,9 mm³ beim Versetzen und Kippen — gegen einen Sollwert ohne Boolesche an der kaputten Schale messen |
@@ -923,21 +923,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
 
 ## Geometrie, Erkennung und Druckvorbereitung
 
-<a id="rm-571"></a>
-
-- [ ] **RM-571 — Ein Sims im offenen Becher neben einem gesperrten Kanal verliert Stütze.**
-  Die Kanalsperre spart im umschlossenen Raum nichts aus
-  ([RM-566](ROADMAP-ARCHIV.md#rm-566)): Eine Stütze dort holt niemand heraus. Umschlossen
-  heißt ein Loch im Schnitt, und das ist auch das Innere jedes oben offenen Gefäßes. Steht
-  darin neben einem gesperrten Kanal ein Überhang, der Stütze braucht, liegt er im Sperrraum
-  (Review 2 vom 08.10.2026: Becher Ø 68 mm mit Tunnelblock und einem Sims 14 × 14 mm, 65 %
-  seines Grundrisses). Enger gefasst kam der Wasserkanal der Waschschüssel nicht mehr frei:
-  „eng und umschlossen“ ließ einen Ast von 0,7 m hinein, „zur Hälfte überdacht“ nahm ihr fast
-  die ganze Sperre, weil ihr Kanal in einem oben offenen Hohlraum liegt. Gesucht ist ein Maß
-  für „von oben erreichbar“, das beide trennt; Sonden `cup_ledge.py` und
-  `sonde_raumarten.py` unter `.claude/.state/drache-2026-10-08/`. Abnahme: der Sims im
-  Becher außerhalb des Sperrraums, die Schüssel in vier Slicern weiter ohne Stütze im Kanal.
-
 <a id="rm-572"></a>
 
 - [ ] **RM-572 — Der Prüfbericht nennt keine Stelle, wo viele kleine Überhänge Stützen verlangen.**
@@ -1022,6 +1007,45 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   Extrusionswerten verfälscht ein Rücksetzen deshalb die gezählte Bahnlänge. Ihre Mengen
   sind kein neu bestätigter Abnahmenachweis. Die Testhilfe muss dieselbe Bahn mit und ohne
   Extrusionsrücksetzung gleich messen und Rasterbeschreibung und Rasterwert zusammenhalten.
+
+<a id="rm-626"></a>
+
+- [ ] **RM-626 — Eine Kanalsäule endet an ihrer höchsten Auflage, und eine Insel im
+  umschlossenen Kanalraum verliert ihre Säule.**
+  Zwei Befunde an derselben Stelle, gefunden im Review und in der Nachprüfung von RM-571
+  (09.10.2026), beide nur mit Sonden belegt, im Slicer nicht gemessen; sie werden zusammen
+  behoben.
+
+  Die Lage zum Nachstellen: ein Block 60 × 40 × 40 mm (Mitte 0, 0, 20) mit einer
+  geschlossenen Kammer 20 × 30 × 20 mm (Mitte 0, 0, 18, also z 8–28) und einem Schlitz von
+  1 mm durch die Decke (x 6–7, y −15–15, z 28–40), Raster 0,5 mm, Bahnbreite 0,42 mm,
+  `model_support` und `channel_space` am Schnitt — die Kammer aus
+  `test_open_sky_counts_only_as_a_shaft_beside_the_column[slit]` mit 1 statt 0,3 mm.
+
+  (1) `analysis._model_support` merkt je Stück nur die erste, höchste Auflage
+  (`landed.get(owner, (index - 1, 0.0))`), und `channel_columns` wie `open_columns` tragen
+  sie als „Höhe, auf der seine Säule aufsetzt“. Mit einer schwebenden Insel 4 × 4 × 3 mm
+  unter der Kanaldecke (x 2–6, y −2–2, z 20–23) gilt die Kanalsäule als auf der Insel
+  aufgesetzt: Sie reicht von 22,75 bis 28,25 mm, und `channel_space` sperrt 22,5–29,5 mm
+  (6 Scheiben) statt 8,5–29,5 mm (20 Scheiben) ohne Insel. Die Decke selbst bleibt
+  gesperrt. Die naheliegende Behebung, die Säule bis zur untersten Auflage oder mit einer
+  Höhe je Auflage, sperrt dafür die Säule unter der Insel zu 100 % (heute 0 %).
+
+  (2) Eine Insel neben der Kanaldecke (2 × 4 × 3 mm, x 7,5–9,5, z 20–23) liegt schon heute mit
+  ihrer ganzen Säule im Sperrraum (100 %, `island_on_model` wahr): `channel_space` spart im
+  Umschlossenen nur aus, was von oben erreichbar ist, auch bei einer Insel. Eine Insel druckt
+  ohne Stütze aber in die Luft, gleich wie klein sie ist (`druckrat.md`). Ob ein Slicer sie
+  dann wirklich ohne Stütze lässt, ist nicht gemessen; RM-566 ist noch in keinem Tag.
+
+  Abnahme: Beide Inseln behalten ihre Säule (0 % im Sperrraum), als Test an der Kammer —
+  das ist Bedingung für jede Behebung von (1). Die Schätzung (`estimate`, sie fragt
+  `channel_space`) zählt an der Kammer mit Insel vorher und nachher, wie viel Stütze im Kanal
+  steht. Dazu die Kammer mit Insel und einer schrägen Fläche unter der Insel in ElegooSlicer,
+  OrcaSlicer, PrusaSlicer und Cura mit übernommenen Vorschlägen: Inseln gestützt, Stütze im
+  Kanal gemessen. Steht dort Stütze, reicht die Kanalsäule bis zur untersten Auflage außerhalb
+  der Inselsäulen, mit Test. Stellt heute keiner Stütze in den ungesperrten Teil, bleibt die
+  Höhe der Kanalsäule, wie sie ist, und der Punkt schließt mit der Inselbehebung, der
+  Schätzung und den Slicerzahlen als Beleg.
 
 <a id="rm-504"></a>
 
