@@ -6603,9 +6603,17 @@ class PrintSettingsDialog(QDialog):
             # Mit den Einstellungen: Curas Lüfterhochlauf weicht erst ab zwei
             # Schichten ohne Lüfter ab, und nur dann steht ein Satz da. Ebenso
             # eine Wahl, die das Programm nicht kennt (RM-480). Unter Bäumen mit
-            # derselben Auskunft wie der Rat (RM-622).
+            # derselben Auskunft wie der Rat (RM-622), Curas Abstand unten in den
+            # Grenzen des Materials wie die Übergabe (RM-628).
             specific = (
-                slicer_keys.limitation(flavour, path, self.settings, program, self._organic)
+                slicer_keys.limitation(
+                    flavour,
+                    path,
+                    self.settings,
+                    program,
+                    self._organic,
+                    material=self.session.profile.material,
+                )
                 if flavour is not None
                 else None
             )

@@ -1576,6 +1576,99 @@ def test_under_curas_grid_the_gap_is_the_materials(
     )
 
 
+@pytest.mark.parametrize(
+    ("material", "layer", "gap", "whole"),
+    [
+        ("petg", 0.2, 0.28, 0.20),
+        ("petg", 0.28, 0.30, 0.28),
+        ("petg", 0.12, 0.20, 0.24),
+        ("pla", 0.08, 0.10, 0.16),
+        ("pla", 0.28, 0.20, 0.28),
+        ("tpu-95a", 0.2, 0.28, 0.20),
+        ("tpu-95a", 0.2, 0.30, 0.40),
+        ("tpu-95a", 0.2, 0.05, 0.20),
+        ("petg", 0.2, 0.70, 0.80),
+    ],
+)
+def test_a_whole_layer_gap_is_the_nearest_inside_the_material_band(
+    material: str, layer: float, gap: float, whole: float
+) -> None:
+    """Das Vielfache der Schichthöhe, das einem Abstand am nächsten liegt, innerhalb
+    der Grenzen des Materials (RM-628): Aufgerundet bekäme PETG bei 0,28er
+    Schichten aus 0,30 zwei Schichten, 0,56 — fast das Doppelte des Höchstwerts
+    0,30, über dem die Fläche durchsackt. PLA bei 0,08er Schichten bekommt aus
+    0,10 zwei Schichten statt einer unter dem Mindestwert; liegt keines im Band,
+    bleibt eine Schicht. Ohne Werte des Materials (TPU) das nächste, mindestens
+    eine Schicht, eine halbe rundet auf. Ein eigener Wert außerhalb der Grenzen
+    bleibt beim nächsten Vielfachen."""
+    profile = profiles.make_profile("centauri-carbon-2", material)
+    assert advise.whole_layer_gap(gap, layer, profile.material) == pytest.approx(whole)
+
+
+@pytest.mark.parametrize(
+    ("style", "layer", "gap", "written", "printed"),
+    [
+        ("grid", 0.2, 0.28, 0.20, 0.20),
+        ("auto", 0.2, 0.28, 0.20, 0.20),
+        ("grid", 0.28, 0.30, 0.28, 0.28),
+        ("grid", 0.12, 0.168, 0.12, 0.12),
+        ("grid", 0.2, 0.40, 0.40, 0.40),
+        ("tree", 0.2, 0.44, 0.44, 0.60),
+        ("tree", 0.2, 0.40, 0.40, 0.40),
+    ],
+)
+def test_cura_gets_its_bottom_gap_in_whole_layers_under_grid(
+    style: str, layer: float, gap: float, written: float, printed: float
+) -> None:
+    """Unten rundet Cura immer auf (RM-628, gemessen in Cura 5.13): PETGs 0,28
+    unter Gitter druckten dort 0,40, über dem Höchstwert 0,30. Unter Gitter
+    schreibt die Übergabe deshalb unten das Vielfache im Band selbst, und Cura
+    druckt es genau; oben bleibt der Wert des Materials. Unter Curas Bäumen
+    gilt unten derselbe Wert wie oben, Cura rundet beide gleich auf."""
+    material = profiles.make_profile("centauri-carbon-2", "petg").material
+    bottom = advise.cura_bottom_gap(gap, layer, style, material)
+    assert bottom == pytest.approx(written)
+    rounding = advise.gap_rounding("cura", style=style, below=True)
+    assert advise.printed_gap(bottom, layer, rounding) == pytest.approx(printed)
+    _top, below = advise.printed_support_gaps(gap, layer, "cura", style, material=material)
+    assert below == pytest.approx(printed)
+
+
+@pytest.mark.parametrize(
+    ("flavour", "style", "organic", "gap", "top", "bottom"),
+    [
+        ("cura", "grid", (), 0.28, 0.28, 0.20),
+        ("cura", "tree", (), 0.44, 0.60, 0.60),
+        ("orca", "grid", ("tree",), 0.24, 0.24, 0.24),
+        ("orca", "tree", ("tree",), 0.24, 0.20, 0.20),
+        ("prusa", "grid", ("tree",), 0.24, 0.24, 0.24),
+        ("prusa", "tree", ("tree",), 0.44, 0.40, 0.40),
+    ],
+)
+def test_solidon_knows_what_each_program_prints_above_and_below(
+    flavour: str,
+    style: str,
+    organic: tuple[str, ...],
+    gap: float,
+    top: float,
+    bottom: float,
+) -> None:
+    """Oben und unten, wie es aus Solidons Übergabe gedruckt ankommt (RM-628),
+    PETG bei 0,2er Schichten — gemessen an Cura 5.13 und an Orca, Bambu, Elegoo,
+    Creality, Anycubic und PrusaSlicer (0,24 unter Gitter genau, unter
+    organischen Bäumen 0,20). Feldsatz und Slicertests fragen dieselbe Stelle."""
+    material = profiles.make_profile("centauri-carbon-2", "petg").material
+    printed = advise.printed_support_gaps(
+        gap,
+        0.2,
+        flavour,  # type: ignore[arg-type]
+        style,
+        organic,
+        material,
+    )
+    assert printed == (pytest.approx(top), pytest.approx(bottom))
+
+
 # Aus ``materials.toml``: PLA Faktor 1,0 zwischen 0,10 und 0,25 mm, PETG 1,4
 # zwischen 0,12 und 0,30 mm; neben dem Turm das Vielfache im Band, mindestens eins.
 @pytest.mark.parametrize(

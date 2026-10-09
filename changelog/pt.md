@@ -81,7 +81,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Os suportes saem com mais facilidade: a distância segue o material e a altura de camada de cada peça, também com vários materiais numa placa. A camada de separação segue a superfície acima.
 - Se um suporte assenta na peça, o Solidon sugere também uma camada de separação por baixo, para que o seu pé não deixe marcas. Com suportes em árvore, só nos slicers que a imprimem aí.
 - Com suportes em árvore e junto a uma torre de purga, o Solidon propõe a distância do suporte em camadas inteiras, tal como o slicer a imprime.
-- Com o Cura e suportes em grelha, o Solidon propõe a distância do suporte adequada ao material, porque o Cura a imprime exata. Onde o Cura arredonda para cima, o campo mostra o valor impresso.
+- Com o Cura e suportes em grelha, a distância do suporte segue o material: exata em cima, em camadas inteiras em baixo. Onde o Cura arredonda para cima, o campo mostra o valor impresso.
 - Para PLA, o Solidon propõe mais espaço entre as muitas pontas finas e os suportes em árvore por baixo. Assim ficam menos resíduos das pontas dos suportes.
 - Para PETG, o Solidon sugere arrefecimento total no suporte. Assim solta-se mais facilmente da peça.
 - Novo nas definições de impressão: *Camadas de separação inferiores*, *Folga na camada de separação* e *Arrefecimento total no suporte*.

@@ -8966,6 +8966,47 @@ def test_the_support_gap_reaches_both_sides_and_curas_bottom_stands_alone() -> N
     assert float(distance) == pytest.approx(settings.layers.line_width + 0.2)
 
 
+@pytest.mark.parametrize(
+    ("style", "layer", "gap", "bottom"),
+    [
+        ("grid", 0.2, 0.28, "0.2"),
+        ("auto", 0.2, 0.28, "0.2"),
+        ("grid", 0.28, 0.3, "0.28"),
+        ("grid", 0.12, 0.2, "0.24"),
+        ("grid", 0.2, 0.4, "0.4"),
+        ("tree", 0.2, 0.44, "0.44"),
+    ],
+)
+def test_cura_gets_the_bottom_gap_it_prints_as_meant(
+    style: str, layer: float, gap: float, bottom: str
+) -> None:
+    """Unten rundet Cura auf, unter Gitter druckt es oben genau (RM-628). Die
+    Übergabe schreibt unten deshalb das Vielfache im Band des Materials selbst:
+    PETG mit 0,28 bei 0,2er Schichten druckte unten 0,4, bei 0,28er Schichten
+    aus 0,30 sogar 0,56 — über dem Höchstwert 0,30. Unter Bäumen rundet Cura
+    oben wie unten, dort bleibt unten der Wert von oben. Ebenso je Teil."""
+    profile = profiles.make_profile("centauri-carbon-2", "petg")
+    settings = print_settings.resolve(profile)
+    for path, value in (
+        ("layers.layer_height", layer),
+        ("support.style", style),
+        ("support.placement", "everywhere"),
+        ("support.z_gap", gap),
+    ):
+        settings = print_settings.with_choice(settings, path, value)
+
+    cura = handover.values_for(settings, profile, "cura")
+    assert cura["support_z_distance"] == cura["support_top_distance"] == f"{gap:g}"
+    assert cura["support_bottom_distance"] == bottom
+
+    # Die Platte mit drei ganzen Schichten, damit das Teil unten abweicht.
+    plate = print_settings.with_choice(settings, "support.z_gap", 3 * layer)
+    advice = [SettingAdvice(path="support.z_gap", value=gap, was=3 * layer, reason="")]
+    part = handover.object_keys(plate, advice, "cura", profile=profile)
+    assert part["support_top_distance"] == f"{gap:g}"
+    assert part["support_bottom_distance"] == bottom, part
+
+
 def test_a_spool_prints_the_material_of_its_chosen_profile(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -9086,9 +9127,9 @@ def test_freed_support_layers_are_said_where_the_maker_had_them_off(
 @pytest.mark.parametrize(
     ("style", "placement", "gap", "said"),
     [
-        ("grid", "everywhere", 0.28, "oben genau, unten aufgerundet 0,40 mm"),
-        ("grid", "everywhere", 0.44, "oben genau, unten aufgerundet 0,60 mm"),
-        ("auto", "everywhere", 0.28, "oben genau, unten aufgerundet 0,40 mm"),
+        ("grid", "everywhere", 0.28, "oben genau, unten in ganzen Schichten zu 0,20 mm"),
+        ("grid", "everywhere", 0.34, "oben genau, unten in ganzen Schichten zu 0,40 mm"),
+        ("auto", "everywhere", 0.28, "oben genau, unten in ganzen Schichten zu 0,20 mm"),
         ("grid", "build_plate", 0.28, None),
         ("tree", "everywhere", 0.28, "Baumstützen rundet Cura den Stützabstand auf 0,40 mm"),
         ("tree", "build_plate", 0.44, "Baumstützen rundet Cura den Stützabstand auf 0,60 mm"),
@@ -9101,10 +9142,12 @@ def test_cura_says_what_it_prints_of_the_gap(
     style: str, placement: str, gap: float, said: str | None
 ) -> None:
     """Cura rundet einen Stützabstand zwischen zwei Schichten auf, unter Gitter
-    nur unten (RM-628, gemessen in Cura 5.13 bei 0,2er Schichten). Der Satz am
-    Feld und bei der Übergabe nennt, was gedruckt wird; unten nur, wo die Stütze
-    auf dem Modell stehen darf, und ohne Stützen nichts (RM-583, Review)."""
-    profile = profiles.make_profile("centauri-carbon-2", "pla")
+    nur unten (RM-628, gemessen in Cura 5.13 bei 0,12er, 0,2er und 0,28er
+    Schichten). Unter Gitter schreibt die Übergabe unten das Vielfache im Band
+    des Materials selbst (PETG: 0,28 wird 0,2, 0,34 wird 0,4). Der Satz am Feld
+    und bei der Übergabe nennt, was gedruckt wird; unten nur, wo die Stütze auf
+    dem Modell stehen darf, und ohne Stützen nichts (RM-583, Review)."""
+    profile = profiles.make_profile("centauri-carbon-2", "petg")
     settings = print_settings.resolve(profile)
     for path, value in (
         ("layers.layer_height", 0.2),
@@ -9115,7 +9158,7 @@ def test_cura_says_what_it_prints_of_the_gap(
         settings = print_settings.with_choice(settings, path, value)
 
     assert "support.z_gap" in slicer_keys.LIMITED["cura"]
-    message = slicer_keys.limitation("cura", "support.z_gap", settings)
+    message = slicer_keys.limitation("cura", "support.z_gap", settings, material=profile.material)
     if said is None:
         assert message is None, message
     else:

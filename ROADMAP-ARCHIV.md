@@ -46283,11 +46283,24 @@ das Material, nicht die Rundungsart; ein Vielfaches druckt jeder Slicer genau, u
 0,3 gegeben, anders als in der Orca-Familie. Der Baumspitzenrat (`tip_gap`) liefert schon
 ganze Schichten und druckt in Cura so. Die Cura-Grundlage fragt mit ihrer Art (keine, also
 Gitter) und trägt den Wert des Materials; ohne Materialwerte (TPU) bleibt Solidons 0,2, statt
-auf die nächste Schicht gerundet zu werden. Der Feldsatz nennt, was Cura druckt: „Unter
-Baumstützen rundet Cura den Stützabstand auf {gap} auf.“ und unter Gitter, wo die Stütze auf
-dem Modell stehen darf, „Cura druckt den Stützabstand oben genau, unten aufgerundet {gap}.“
-(sechs Kataloge). Die Druckzeit hängt nicht am Abstand (`print_time._support_columns` lässt
-die Säulen bis an die Decke reichen); dort war nichts zu ändern.
+auf die nächste Schicht gerundet zu werden.
+
+**Unten schreibt die Übergabe selbst** (Fertigstellung, 09.10.2026 abends): Mit dem genauen Wert oben
+hob Curas Aufrunden den Stützfuß unten über den Höchstwert des Materials — PETG bei 0,2 mm
+Schicht 0,4, bei 0,28 mm 0,56 statt höchstens 0,30; darüber liegt die erste Stützlage in der
+Luft. Solidon hat kein Feld für unten. `advise.cura_bottom_gap` sagt deshalb, was Cura als
+`support_bottom_distance` bekommt: unter Gitter das Vielfache, das Solidon meint
+(`advise.whole_layer_gap`: das nächste, im Materialband, wenn der Wert darin liegt; ein eigener
+Wert außerhalb bleibt beim nächsten), unter Bäumen den Wert von oben. `handover._for_supports`
+schreibt es, `slicer_keys.CURA_MIRRORED` spiegelt `support_z_distance` nur noch nach oben;
+je Teil geht es über dieselbe Ableitung (`object_keys`). `support_gap_target` wählt sein
+Vielfaches über dieselbe Funktion. Der Feldsatz nennt, was Cura druckt: „Unter Baumstützen
+rundet Cura den Stützabstand auf {gap} auf.“ und unter Gitter, wo die Stütze auf dem Modell
+stehen darf, „Cura druckt den Stützabstand oben genau, unten in ganzen Schichten zu {gap}.“
+(sechs Kataloge), mit den Materialgrenzen wie die Übergabe (`limitation(material=…)`,
+`setting_limitations`, Druckdialog). Die Druckzeit hängt nicht am Abstand
+(`print_time._support_columns` lässt die Säulen bis an die Decke reichen); dort war nichts zu
+ändern.
 
 **Nachweis (09.10.2026):** Test zuerst: `test_each_program_prints_the_gap_as_it_rounds`
 (Familie, Art, Seite als Tabelle, 24 Fälle), `test_under_curas_grid_the_gap_is_the_materials`,
@@ -46303,5 +46316,23 @@ Cura-Test rot, darunter beide Läufe am echten Programm, und 14 von 38 in den
 Druckeinstellungen. Betroffene Testdateien (Schnittbefunde, Druckeinstellungen, Export, Rat,
 Übersetzungen, Changelog, Roadmap, vier Cura-Dateien, Floß, Teilwerte, Schätzung,
 Sprachregeln, Karten, die zwei neuen Fälle aus `test_real_slicers.py`): siehe Commit.
-Die Messung aus RM-624 (`tests/gcode_contact.py`) war noch nicht gelandet; wenn sie landet,
-kann ihr Test Cura mit `printed_gap` dazunehmen. Changelog 0.6.0: ja.
+
+**Nachweis der Fertigstellung:** Test zuerst `test_a_whole_layer_gap_is_the_nearest_inside_the_material_band`
+(9 Fälle), `test_cura_gets_its_bottom_gap_in_whole_layers_under_grid` (7) und
+`test_cura_gets_the_bottom_gap_it_prints_as_meant` (6, Platte und je Teil); der Feldsatztest
+nennt den unteren Wert in ganzen Schichten. Gegenprobe über Plugins: `cura_bottom_gap` gibt den
+Wert von oben zurück — 11 von 57 Fällen rot; `CURA_MIRRORED` spiegelt wieder nach unten — 4 von
+6 rot. Der Cura-Slicertest läuft bei 0,2 mm Gitter 0,28, Baum 0,44, bei 0,28 mm Gitter 0,30 und
+bei 0,12 mm Baum 0,28, grün mit der Messprüfung (5 von 5). Sonde an Cura 5.13 (Ender-3 V3 SE,
+gepinnt), Platte über Säule, je Seite 100 bis 180 Zellen, zwei Messungen (Ring je Bahnmillimeter,
+Zellenmessung aus RM-624) gleich: Mit Solidons Rat druckte PETG unter Gitter bei 0,2 mm vorher
+(`d5ddfc217`) oben und unten 0,2, im Zwischenstand 0,28 und 0,40, jetzt 0,28 und 0,20; bei
+0,28 mm vorher 0,28 und 0,28, im Zwischenstand 0,30 und 0,56, jetzt 0,30 und 0,28; bei 0,12 mm
+vorher 0,12 und 0,12, jetzt 0,20 (im Band, kein Rat) und 0,24. Unter Bäumen und für PLA
+unverändert ganze Schichten, oben gleich unten. Feste Werte 0,28 und 0,44 bei 0,12, 0,2 und
+0,28 mm: oben unter Gitter genau, unter Bäumen aufgerundet (0,36/0,48, 0,40/0,60, 0,28/0,56),
+unten unter Gitter wie `cura_bottom_gap` (0,24, 0,48, 0,20, 0,40, 0,28, 0,56) und wie der
+Feldsatz. Stichprobe der übrigen Familien mit 0,24 mm bei 0,2 mm Schicht (PETG): Orca, Bambu,
+Elegoo, Creality, Anycubic und PrusaSlicer drucken unter Gitter oben und unten 0,24 (genau),
+unter organischen Bäumen oben und unten 0,20 (zur nächsten, nicht aufgerundet). Changelog
+0.6.0: ja, als Eigenschaft (Ursache `fafcd4841` liegt in keinem Tag).

@@ -1073,12 +1073,74 @@ def support_gap_target(
     target = min(max(layer * factor, low), high)
     if not rounds_to_whole_layers(flavour, whole_layers, style, organic):
         return target
+    return whole_layer_gap(target, layer, material)
+
+
+def whole_layer_gap(gap: float, layer: float, material: MaterialProfile | None = None) -> float:
+    """Das Vielfache der Schichthöhe, das ``gap`` am nächsten liegt, mindestens
+    eine Schicht; eine halbe rundet auf (RM-583, RM-628). So wählt Solidon, wo
+    ein Slicer den Abstand in ganzen Schichten druckt.
+
+    Liegt ``gap`` in den Grenzen des Materials (``support_gap_min`` bis
+    ``support_gap_max``), das nächste Vielfache darin; liegt keines darin, das
+    kleinste über dem Minimum — oberhalb des Maximums bleibt nur eine Schicht
+    (PLA ab 0,28 mm). PLA bei 0,08er Schichten bekommt aus 0,10 zwei Schichten,
+    nicht eine unter dem Minimum. Ein eigener Wert außerhalb der Grenzen bleibt
+    beim nächsten Vielfachen: Wer 0,7 mm Luft will, bekommt keine Schicht.
+    """
+    if layer <= 0.0:
+        return gap
+    # Eine halbe Schicht rundet auf, auch wenn die Division knapp darunter landet.
+    steps = max(1, math.floor(gap / layer + 0.5 + EPS_GEOM))
+    low = material.support_gap_min if material is not None else None
+    high = material.support_gap_max if material is not None else None
+    if low is None or high is None or not low - EPS_GEOM <= gap <= high + EPS_GEOM:
+        return steps * layer
     first = max(1, math.ceil(low / layer - EPS_GEOM))
     last = math.floor(high / layer + EPS_GEOM)
     if first > last:
         return first * layer
-    # Eine halbe Schicht rundet auf, auch wenn die Division knapp darunter landet.
-    return min(max(math.floor(target / layer + 0.5 + EPS_GEOM), first), last) * layer
+    return min(max(steps, first), last) * layer
+
+
+def cura_bottom_gap(
+    gap: float, layer: float, style: str, material: MaterialProfile | None = None
+) -> float:
+    """Was die Übergabe Cura als Abstand unten schreibt (``support_bottom_distance``,
+    RM-628).
+
+    Unten rundet Cura immer auf (:func:`gap_rounding`). Unter Gitter, wo oben
+    der Wert genau gilt, schreibt die Übergabe unten deshalb selbst das
+    Vielfache, das Solidon meint (:func:`whole_layer_gap`), und Cura druckt es
+    genau: PETG bei 0,2er Schichten oben 0,28 und unten 0,2 — aufgerundet waren
+    es 0,4, bei 0,28er Schichten aus 0,30 sogar 0,56, über dem Höchstwert 0,30,
+    über dem der Stützfuß in der Luft liegt. Unter Curas Bäumen rundet Cura oben
+    wie unten auf; dort bleibt unten der Wert von oben, und ein Vielfaches
+    druckt jeder Slicer genau.
+    """
+    if gap_rounding("cura", style=style) != "exact" or in_whole_layers(gap, layer):
+        return gap
+    return whole_layer_gap(gap, layer, material)
+
+
+def printed_support_gaps(
+    gap: float,
+    layer: float,
+    flavour: SlicerFlavour | None,
+    style: str = "",
+    organic: Collection[str] = (),
+    material: MaterialProfile | None = None,
+    *,
+    whole_layers: bool = False,
+) -> tuple[float, float]:
+    """Der Abstand oben und unten, den der Slicer aus Solidons Übergabe des
+    Abstands ``gap`` druckt (RM-628): wie er rundet (:func:`gap_rounding`) und,
+    bei Cura, was die Übergabe unten schreibt (:func:`cura_bottom_gap`).
+    Feldsatz und Slicertests fragen hier."""
+    top = printed_gap(gap, layer, gap_rounding(flavour, whole_layers, style, organic))
+    written = cura_bottom_gap(gap, layer, style, material) if flavour == "cura" else gap
+    rounding = gap_rounding(flavour, whole_layers, style, organic, below=True)
+    return top, printed_gap(written, layer, rounding)
 
 
 #: Ab wie vielen Inseln mit Baumspitze ohne Trennschicht (:attr:`SupportNeed.tips`)

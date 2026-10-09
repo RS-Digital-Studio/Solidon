@@ -2636,7 +2636,7 @@ def write_assembly(
         own = [part_values[entry.id].effective or settings for entry in chosen]
         from app.core.export import handover
 
-        findings += handover.setting_limitations(flavour, settings)
+        findings += handover.setting_limitations(flavour, settings, profile.material)
         # Eine gehobene Baumspitze ist eine Abweichung vom Herstellerprofil, die
         # der Kunde erfährt — an der Platte und an jedem Teil, das stützt.
         findings += handover.plate_tree_findings(

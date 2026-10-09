@@ -425,9 +425,13 @@ def test_the_cura_gap_measure_reads_fractions_resets_and_the_ring() -> None:
 
 
 @pytest.mark.slicer("cura")
-@pytest.mark.parametrize(("style", "gap"), [("grid", 0.28), ("tree", 0.44)])
+@pytest.mark.parametrize(
+    ("style", "layer", "gap"),
+    [("grid", 0.2, 0.28), ("tree", 0.2, 0.44), ("grid", 0.28, 0.3), ("tree", 0.12, 0.28)],
+)
 def test_curas_support_gap_arrives_as_solidon_says(
     style: str,
+    layer: float,
     gap: float,
     installed_slicer: Path,
     tmp_path: Path,
@@ -435,12 +439,15 @@ def test_curas_support_gap_arrives_as_solidon_says(
 ) -> None:
     """Cura druckt den Stützabstand, wie Solidon rät und anzeigt (RM-628).
 
-    Eine Platte über einer Säule auf einem Sockel, PETG bei 0,2-mm-Schichten,
-    Werte fern des Herstellers. CuraEngine rundet auf (``round_up_divide``):
-    unter Gitter nur unten, oben gilt der Abstand genau mit einer Bruchteillage
-    der Stütze; unter Bäumen oben und unten. 0,28 unter Gitter druckt oben 0,28
-    und unten 0,4, 0,44 unter Bäumen 0,6 — zur nächsten Schicht gerundet wären es
-    0,2 und 0,4. Der Satz am Feld nennt den Wert, den Cura unten druckt.
+    Eine Platte über einer Säule auf einem Sockel, PETG, Werte fern des
+    Herstellers. CuraEngine rundet auf (``round_up_divide``): unter Gitter nur
+    unten, oben gilt der Abstand genau mit einer Bruchteillage der Stütze; unter
+    Bäumen oben und unten. Unter Gitter schreibt die Übergabe unten deshalb das
+    Vielfache im Band von PETG selbst (``support_bottom_distance``): 0,28 bei
+    0,2er Schichten druckt oben 0,28 und unten 0,2 statt 0,4, 0,30 bei 0,28er
+    Schichten unten 0,28 statt 0,56. 0,44 unter Bäumen druckt 0,6 — zur nächsten
+    Schicht gerundet wären es 0,4. Der Satz am Feld nennt den Wert, den Cura
+    unten druckt.
     """
     from app.core.slice import advise
     from app.ui.print_settings_dialog import _PlateJob, _prepare_plate
@@ -454,7 +461,6 @@ def test_curas_support_gap_arrives_as_solidon_says(
     body = SceneObject("stufe", "Stufe", MeshData.of(trimesh.boolean.union(parts)))
     profile = profiles.make_profile(PROGRAMS["cura"], "petg")
     settings = print_settings.resolve(profile)
-    layer = 0.2
     for path, value in (
         ("layers.layer_height", layer),
         ("support.style", style),
@@ -497,10 +503,11 @@ def test_curas_support_gap_arrives_as_solidon_says(
         outcome.gcode_path.read_text(encoding="utf-8", errors="replace"), layer, (7.0, 14.0)
     )
 
-    top = advise.printed_gap(gap, layer, advise.gap_rounding("cura", style=style))
-    bottom = advise.printed_gap(gap, layer, advise.gap_rounding("cura", style=style, below=True))
+    top, bottom = advise.printed_support_gaps(gap, layer, "cura", style, material=profile.material)
     assert measured.top_points >= 10 and measured.bottom_points >= 10, measured
     assert measured.top == pytest.approx(top, abs=0.02), measured
     assert measured.bottom == pytest.approx(bottom, abs=0.02), measured
-    said = slicer_keys.limitation("cura", "support.z_gap", settings)
+    if style == "grid":
+        assert bottom == pytest.approx(layer), "unten eine Schicht, im Band von PETG"
+    said = slicer_keys.limitation("cura", "support.z_gap", settings, material=profile.material)
     assert said is not None and said.values == {"gap": format_length(bottom)}, said

@@ -35,7 +35,7 @@ from app.core.units import format_length
 from app.i18n import TranslatableText, _
 
 if TYPE_CHECKING:
-    from app.core.types import PrintSettings, SettingAdvice
+    from app.core.types import MaterialProfile, PrintSettings, SettingAdvice
 
 SlicerFlavour = Literal["prusa", "orca", "cura", "other"]
 """Die Familie eines Slicers — und ``other`` für jedes Programm, dessen
@@ -821,7 +821,9 @@ CURA_MIRRORED: Final[dict[str, tuple[str, ...]]] = {
     "speed_wall_0": ("speed_wall_0_flooring", "speed_wall_0_roofing"),
     "speed_wall_x": ("speed_wall_x_flooring", "speed_wall_x_roofing"),
     "support_angle": ("seam_overhang_angle",),
-    "support_z_distance": ("support_bottom_distance", "support_top_distance"),
+    # Unten nicht: Dort rundet Cura auf, und ``handover._for_supports`` schreibt
+    # das Vielfache, das Solidon meint (RM-628, ``advise.cura_bottom_gap``).
+    "support_z_distance": ("support_top_distance",),
     "machine_height": ("gantry_height",),
     "min_wall_line_width": (
         "min_bead_width",
@@ -1627,6 +1629,8 @@ def limitation(
     settings: PrintSettings | None = None,
     program: str = "",
     organic: Collection[str] = (),
+    *,
+    material: MaterialProfile | None = None,
 ) -> TranslatableText | None:
     """Eine abweichende Bedeutung, die ein gleich benannter Wert verdecken würde.
 
@@ -1643,7 +1647,8 @@ def limitation(
 
     Unter organischen Bäumen gilt die Auskunft, mit der auch der Rat fragt
     (``organic``, ``handover.organic_styles``, RM-622): Feld und Vorschlag
-    daneben sagen dasselbe.
+    daneben sagen dasselbe. Curas Abstand unten unter Gitter wählt die
+    Übergabe in den Grenzen von ``material`` (RM-628); der Satz nennt denselben.
     """
     if settings is not None and program:
         group, name = path.split(".", 1)
@@ -1659,7 +1664,8 @@ def limitation(
             layer=settings.cooling.disable_first_layers + 1,
         )
     # Ein Stützabstand zwischen zwei Schichten wird in Cura aufgerundet, unter
-    # Gitter nur unten (RM-628): Der Satz nennt, was gedruckt wird.
+    # Gitter nur unten, und dort schreibt die Übergabe ganze Schichten (RM-628):
+    # Der Satz nennt, was gedruckt wird.
     if rounds_support_gap_up(flavour) and path == "support.z_gap":
         from app.core.slice import advise
 
@@ -1670,15 +1676,20 @@ def limitation(
         gap, style = settings.support.z_gap, settings.support.style
         if advise.in_whole_layers(gap, layer):
             return None
-        below = advise.gap_rounding(flavour, style=style, below=True)
-        printed = format_length(advise.printed_gap(gap, layer, below))
+        top, bottom = advise.printed_support_gaps(gap, layer, flavour, style, material=material)
         # Oben rundet Cura nur unter seinen Bäumen, dann wie unten.
         if advise.gap_rounding(flavour, style=style) != "exact":
-            return _("Unter Baumstützen rundet Cura den Stützabstand auf {gap} auf.", gap=printed)
+            return _(
+                "Unter Baumstützen rundet Cura den Stützabstand auf {gap} auf.",
+                gap=format_length(top),
+            )
         # Unten zählt der Abstand nur, wo die Stütze auf dem Modell stehen darf.
         if settings.support.placement == "build_plate":
             return None
-        return _("Cura druckt den Stützabstand oben genau, unten aufgerundet {gap}.", gap=printed)
+        return _(
+            "Cura druckt den Stützabstand oben genau, unten in ganzen Schichten zu {gap}.",
+            gap=format_length(bottom),
+        )
     # Unter organischen Bäumen liegt die Stütze auf den Schichten des Modells
     # (RM-622): welche Art das ist, sagt ``organic``, eine Quelle für Feld und Rat.
     trees = settings is not None and settings.support.style in organic

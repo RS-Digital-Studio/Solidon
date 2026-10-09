@@ -87,6 +87,7 @@ from app.core.types import (
     BoundingBox,
     CancelToken,
     Finding,
+    MaterialProfile,
     MaterialSlot,
     Mesh,
     ObjectId,
@@ -2080,6 +2081,14 @@ def _for_supports(written: dict[str, str], settings: PrintSettings, profile: Pro
     # Der Baum bekommt seinen eigenen Winkel, gedeckelt wie in der Definition.
     angle = settings.support.threshold_angle
     written["support_tree_angle"] = f"{max(min(angle, 85.0), 20.0):g}"
+    # Unten rundet Cura auf (RM-628). Unter Gitter steht dort deshalb das
+    # Vielfache, das Solidon meint; oben gilt der Abstand genau.
+    from app.core.slice import advise
+
+    below = advise.cura_bottom_gap(
+        settings.support.z_gap, height, settings.support.style, profile.material
+    )
+    written["support_bottom_distance"] = f"{below:g}"
 
 
 def _for_speeds(written: dict[str, str], settings: PrintSettings, profile: Profile) -> None:
@@ -4873,17 +4882,20 @@ def _as_slots(value: object) -> object:
 
 
 def setting_limitations(
-    flavour: SlicerFlavour, settings: PrintSettings | None = None
+    flavour: SlicerFlavour,
+    settings: PrintSettings | None = None,
+    material: MaterialProfile | None = None,
 ) -> list[Finding]:
     """Benannte Übergabeverluste vor dem Öffnen und nach dem Slicen ausweisen.
 
     Was nur je nach Wert angenähert ankommt (``slicer_keys.LIMITED``), wird
     erst mit den Einstellungen beurteilt — ohne sie gibt es dazu keinen Satz.
+    ``material`` begrenzt, was Cura unten in ganzen Schichten bekommt (RM-628).
     """
     limited = slicer_keys.LIMITED[flavour]
     findings = []
     for path in sorted(slicer_keys.NOT_TAKEN_BY[flavour] | limited):
-        message = slicer_keys.limitation(flavour, path, settings)
+        message = slicer_keys.limitation(flavour, path, settings, material=material)
         if message is None:
             continue
         # Was je nach Wert angenähert ankommt, ändert der Kunde am Feld; was

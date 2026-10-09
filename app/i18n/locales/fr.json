@@ -967,7 +967,7 @@
   "ComfyUI wählen": "Choisir ComfyUI",
   "ComfyUI-Ordner wird geprüft …": "Vérification du dossier ComfyUI …",
   "ComfyUI-Ordner wird noch geprüft. Wählen Sie einen anderen erreichbaren Ordner oder warten Sie auf die Antwort.": "Le dossier ComfyUI est toujours en cours de vérification. Choisissez un autre dossier accessible ou attendez le résultat.",
-  "Cura druckt den Stützabstand oben genau, unten aufgerundet {gap}.": "Cura imprime l'espace du support exact au-dessus, arrondi vers le haut à {gap} au-dessous.",
+  "Cura druckt den Stützabstand oben genau, unten in ganzen Schichten zu {gap}.": "Cura imprime l'espace du support exact au-dessus et en couches entières au-dessous, à {gap}.",
   "Cura kennt keine Lüfterpause und fährt den Lüfter bis Schicht {layer} schrittweise hoch.": "Cura n'a pas de pause du ventilateur et l'accélère progressivement jusqu'à la couche {layer}.",
   "Cura kennt keine Lüfterpause: Der Lüfter läuft schon in Schicht {layer} mit {percent} %.": "Cura n'a pas de pause du ventilateur : il tourne déjà à {percent} % à la couche {layer}.",
   "Cura kennt „{printer}“ nicht. Die Druckdatei beginnt deshalb ohne den Startcode des Herstellers, ohne Spüllinie und ohne Bettnetz.": "Cura ne connaît pas « {printer} ». Le fichier d'impression commence donc sans le code de démarrage du fabricant, sans ligne de purge et sans maillage du plateau.",

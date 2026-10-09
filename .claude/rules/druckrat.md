@@ -80,7 +80,12 @@ offenem Drucker. Übernommen wird auf Klick, nie von allein.
   `SUPPORT_GAP_BAND`. **Wie jedes Programm einen Abstand zwischen zwei
   Schichten druckt, oben und unten, sagt `gap_rounding` und `printed_gap`
   allein** (RM-628): Cura rundet auf, unter Gitter nur unten — oben gilt dort
-  der Wert des Materials genau; die übrigen runden zur nächsten. Wo der Slicer
+  der Wert des Materials genau; die übrigen runden zur nächsten. **Unten unter
+  Curas Gitter schreibt die Übergabe das Vielfache selbst**
+  (`support_bottom_distance` aus `advise.cura_bottom_gap`, nicht gespiegelt):
+  aufgerundet läge der Fuß über `support_gap_max` in der Luft (PETG bei
+  0,28er Schichten 0,56). Ein Vielfaches wählt `whole_layer_gap` — das nächste,
+  im Materialband, wenn der Wert darin liegt. Wo der Slicer
   oben in ganzen Schichten druckt — Cura unter Bäumen, die
   Orca-Familie neben einem Reinigungsturm (`writer.tower_plates`,
   `whole_layers`), jedes Programm unter organischen Bäumen mit der Art, mit
