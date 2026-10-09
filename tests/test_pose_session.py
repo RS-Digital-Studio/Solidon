@@ -582,7 +582,7 @@ def test_an_unreadable_angle_rests_only_its_own_bone(window: MainWindow) -> None
             )
         ],
     )
-    window.session.wait_for_idle(60_000)
+    assert window.session.wait_for_idle(60_000)
     step = window.session.project.document.ops[-1].id
     window.announce = lambda text, *args, **kwargs: said.append(str(text))  # type: ignore[method-assign]
     window.start_armature(koerper, step=step)
