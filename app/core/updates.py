@@ -125,7 +125,7 @@ VERSION_URL: Final = "https://solidon3d.de/version.json"
 #: jede Versionsdatei still und erführe nie wieder von einem Update. Deshalb
 #: kommt ein neuer Schlüssel zuerst **hierher**, reist mit einer Version hinaus,
 #: während der alte noch unterschreibt, und unterschreibt erst danach. Der
-#: Ablauf Schritt für Schritt steht in ``tools/sign_version.py``. Reihenfolge:
+#: Ablauf Schritt für Schritt steht in ``Signierung/README.md``. Reihenfolge:
 #: der älteste zuerst, ein neuer kommt ans Ende.
 #:
 #: **Warum ein eigenes Paar und nicht das aus §8.** Der Lizenzschlüssel und die

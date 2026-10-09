@@ -561,7 +561,7 @@ Der Prüfer nimmt jeden Schlüssel aus `RELEASE_PUBLIC_KEYS` an (RM-528); eine
 Installation kennt aber nur die Schlüssel ihrer eigenen Version, und ein beim
 Hauptversionswechsel bloß ausgetauschter Signierschlüssel würde diesen Weg
 unterbrechen. Den vorhandenen Release-Schlüssel beim Übergang beibehalten;
-eine notwendige Schlüsselrotation folgt dem Ablauf in `tools/sign_version.py`
+eine notwendige Schlüsselrotation folgt dem Ablauf in `Signierung/README.md`
 (neuer Schlüssel zuerst in einer Version ausgeliefert, erst danach
 unterschreibend) und gehört zu T29.
 

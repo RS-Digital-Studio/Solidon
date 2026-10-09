@@ -39,11 +39,24 @@ TEST_SEED = bytes.fromhex("4a1d9e6c05b83f27ea94c1d0728b6f35a9c47e18d260b3fa815c9
 #: die Schlüssel brauchen, gegen die die Kunden prüfen.
 REAL_PUBLIC_KEYS = updates.RELEASE_PUBLIC_KEYS
 
+#: Der erste Release-Schlüssel, von Hand festgehalten (Abdruck aus
+#: ``Signierung/README.md``). Er stammt aus der Zeit vor der Besitzprobe; sein
+#: privater Teil wird hier nicht gebraucht, und gegen einen Tippfehler hält ihn
+#: der Vergleich mit dieser zweiten, unabhängig geschriebenen Fassung.
+FIRST_RELEASE_KEY = "603ec2d86e9f1b5232ccec58153b863f00c1f91cbc647a8696ecf6dfd4bbee79"
 
-def signed(payload: dict[str, Any]) -> dict[str, Any]:
-    """Dieselbe Antwort, mit gültiger Unterschrift für die Suite."""
+#: Je ausgelieferter Release-Schlüssel nach dem ersten seine Besitzprobe, wie
+#: ``tools/sign_version.py --new-keypair`` sie ausgibt: eine Unterschrift des
+#: neuen privaten Teils über ``sign_version.proof_message(öffentlicher Teil)``.
+#: Ein Tippfehler, ein vertauschter oder ein Platzhalter-Schlüssel in
+#: ``RELEASE_PUBLIC_KEYS`` besteht sie nicht (Schlüsselwechsel, Schritt 1).
+KEY_PROOFS: dict[str, str] = {}
+
+
+def signed(payload: dict[str, Any], seed: bytes = TEST_SEED) -> dict[str, Any]:
+    """Dieselbe Antwort, mit gültiger Unterschrift — vorgegeben die der Suite."""
     body = {key: value for key, value in payload.items() if key != updates.SIGNATURE_FIELD}
-    return {**body, updates.SIGNATURE_FIELD: sign(TEST_SEED, updates.signed_payload(body)).hex()}
+    return {**body, updates.SIGNATURE_FIELD: sign(seed, updates.signed_payload(body)).hex()}
 
 
 @pytest.fixture(autouse=True)

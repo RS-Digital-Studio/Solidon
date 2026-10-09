@@ -182,7 +182,7 @@ auf Roberts Rechner (`tools/sign_release.py`), in die CI kommt er nicht.
   `test_supply_chain.py` hält den Text (RM-104).
 - **Ein neuer Release-Schlüssel reist aus, bevor er unterschreibt**: ans Ende
   von `updates.RELEASE_PUBLIC_KEYS`, die Versionsdatei dieser Version
-  unterschreibt noch der alte, Ablauf in `tools/sign_version.py`. Eine
+  unterschreibt noch der alte, Ablauf in `Signierung/README.md`. Eine
   Installation kennt nur die Schlüssel ihrer Version und verwirft den Rest still.
 - Neue Actions nur mit vollständiger 40-stelliger Commit-ID.
 - Downloads im Workflow nur von einer unveränderlichen Veröffentlichung und
