@@ -449,6 +449,31 @@ statt 592, in PrusaSlicer 81 statt 367 und in Cura 104 statt 358 m (gegen
 bekommen 45 von 242 Körpern den Vorschlag, und 7 brauchen keine Stützen mehr:
 Ihr einziger Überhang waren Ränder.
 
+**Bögen tragen sich selbst, ihre letzte Spanne ist eine Brücke (09.10.2026,
+RM-585).** Nach den Rändern verlangte der Rat am Eiffelturm noch Stützen für die
+Bögen unten: Ihre Decke ist in der Aufsicht ein Feld von 360 mm² und reicht
+19 mm über die Beine — als Rand zu weit, als Feld (RM-570) eine Fläche, die
+Stütze lohnt. Doch jeder Streifen hängt nur ein Stück über der Schicht darunter,
+und der Bogen schließt sich zwischen seinen Beinen; ein Kinn tut das nicht, es
+hängt an der Kehle. Gefragt wird die ganze Decke samt Kanalstücken: Der Turmbogen
+hängt über das Gitter mit 2 244 Stücken zusammen, davon 1 188 im Kanal, und nur
+als Ganzes liegt er zwischen den Beinen. Drei Grenzen kamen aus Gegenproben. Die
+oberste Schicht ist die letzte Spanne und zählt mit ihrer Fläche weiter, sonst
+fiele eine flache Decke zwischen zwei Wänden heraus. Die Brückenregel gilt für
+jede Schicht: Der Steg auf Zwickeln aus `test_slice_findings` steigt um 0,25 mm
+über seine Tiefe an, bei 0,08 mm Schichten ist jeder seiner Streifen eine Brücke
+von 25 mm, und als Bogen gefragt verlor er seine Stützen. Und ein Streifen muss
+zwischen den Auflagen liegen (`_Ceilings.spanned`): Die Haube vor einer
+Tunnelmündung hängt an der Tunneldecke, aber vor ihren Wänden. Weil Rand-,
+Bogen- und Kanalfrage dieselbe Decke fragen, sind die Antworten der Schließfrage
+je Schichten gemerkt. Im G-Code (ElegooSlicer am Centauri Carbon 2 und
+PrusaSlicer am MK4S, ohne Stützen) liegt an den Bögen keine Bahnmitte weiter als
+3,94 mm vom Querschnitt der Schicht darunter, jede solche Bahn als Brücke mit
+Halt an beiden Enden; Bahnen mit freiem Ende ragen dort höchstens 0,51 mm über
+die Kante (Überhangwand). Mit Solidons Vorschlägen druckt der ElegooSlicer den
+Turm ohne Stütze in 4 h 25 min mit 33,6 g statt mit 216 m Stütze in 5 h 23 min
+mit 53,0 g.
+
 **Der Stützkontakt folgt dem Material der Spule (09.10.2026, RM-583).** Narben
 und verschweißte Stützen kommen am häufigsten von einem Abstand, der nicht zu
 Schicht und Material passt, von fehlenden Trennschichten, wo die Stütze auf dem

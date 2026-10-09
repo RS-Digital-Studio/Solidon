@@ -31,6 +31,7 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-09 | [RM-585: Bögen, die sich zwischen ihren Beinen schließen, tragen sich selbst (09.10.2026)](#rm-585-bögen-die-sich-zwischen-ihren-beinen-schließen-tragen-sich-selbst-09102026) |
 | 2026-10-09 | [RM-680: Bausteine verwalten steht ohne eigenen Baustein offen (09.10.2026)](#rm-680-bausteine-verwalten-steht-ohne-eigenen-baustein-offen-09102026) |
 | 2026-10-09 | [RM-650: Ein eingefügtes Modell kommt in den Ausschnitt (09.10.2026)](#rm-650-ein-eingefügtes-modell-kommt-in-den-ausschnitt-09102026) |
 | 2026-10-09 | [RM-584 (Teil): Über Baumspitzen rät Solidon zwei Schichten Luft (09.10.2026)](#rm-584-teil-über-baumspitzen-rät-solidon-zwei-schichten-luft-09102026) |
@@ -44153,7 +44154,7 @@ in der Randfrage ab. Der neue Schalter „Ränder ohne Stütze“ (`support.spar
 Vorschlag nur mit Stützen) sperrt ihre Überhangfläche in der Übergabe (`ledge_space`,
 gemerkt) und spart aus, was Stütze braucht; eigener Befund `export.ledge_blocker` über die
 gesperrten Ränder, und die Plattengegenprobe kennt die Sperre. Die Bögen unten bleiben
-gestützt: [RM-585](ROADMAP.md#rm-585).
+gestützt: [RM-585](#rm-585).
 
 **Nachweis (08.10.2026, Endstand):** Eiffelturm mit Solidons Vorschlägen: ElegooSlicer 216 statt 869 m Stütze, OrcaSlicer 163 statt 592, PrusaSlicer 81 statt 367, Cura 104 statt 358 (gegen „Stützen automatisch“); der
 Rest steht unter den Bögen. Drache: von den Überhängen, die Stütze brauchen (ohne Kanaldecken und Ränder, `gcode_stuetzen.py`, `needed_share`), sind gestützt: ElegooSlicer 99,8 %, OrcaSlicer 99,6 %, PrusaSlicer 100 %, Cura 96,5 %. Tests in `test_slice_findings.py`,
@@ -46242,3 +46243,47 @@ sechs Sprachen „ab 0.5.0“ neben „Version 0.5.3“, wie im Repository. Chan
   Belege: `F:\solidon-review-reports\verif-09d8e9485.md` (Abschnitt 3).
 
 **Abschluss:** Der Abschnitt *Bausteine verwalten* beginnt offen, solange der eigene Bausteinordner nichts hält (`PartCatalog`, `_own_library_is_empty`). Gezählt werden gespeicherte Rezepte und hinzugefügte Bausteine, dieselbe Frage wie für Weitergabe, *Bearbeiten* und *Entfernen* (`_in_own_library`, vorher dreimal hergeleitet); ein mitgereister und ein `.py`-Baustein zählen nicht, `PartSpec.own` zählte anders. Danach gilt der Merker (`remember`, RM-491), und ein eigener Baustein klappt den Abschnitt wie bisher auf (RM-455; dass dieses Aufklappen gemerkt wird, steht in [RM-658](ROADMAP.md#rm-658)). Damit stehen *Auswahl als Baustein speichern …*, *Baustein aus Datei hinzufügen …* und beide Sperrgründe ohne Klick da, wie in 0.5.1 (Rückschritt seit `48ffcf145`, in 0.5.2 und 0.5.3). Weil der Weitergabegrund jetzt vorn steht, sagt er ohne eigenen Baustein „Speichern Sie zuerst einen eigenen Baustein, um ihn weiterzugeben.“ statt zum Wählen aufzufordern, das bei einem eingebauten in die nächste Absage führte. Die Hinweistests prüfen den Grund ohne vorheriges Aufklappen und stellen die Bibliothek ohne eigene Bausteine selbst her (`no_own_parts`); `test_the_closed_management_names_what_it_holds` prüft den zugeklappten Zustand nach einem Klick; neu `test_a_fresh_catalogue_shows_its_management_without_a_click` und `test_only_a_part_in_the_own_library_closes_the_management` (Rezept und hinzugefügt zu, mitgereist und `.py` offen). Gegenprobe über ein Plugin, je Mutation von acht Tests rot: immer zu 6, immer offen 2, Prädikat über `PartSpec.own` 2, alter Weitergabegrund 3; Katalogtests 52 grün, Handbuch-, Katalog-, Wortlaut- und Changelogtests 539 grün. Die Handbuchseiten *Eigene Bausteine* und *Bausteindateien austauschen* nennen Abschnitt und Knopf in allen sechs Sprachen, der eingefrorene Musterbestand trägt die neuen Seitenschlüssel; Changelog 0.6.0. Fenstersonde am echten Fenster, frischer Nutzerordner: 4 von 4, *Speichern*, *Hinzufügen* und beide Sperrgründe ohne Klick sichtbar, der Weitergabegrund schickt zum Speichern. Umgesetzt von Claude (Thread „Bedienung und KI“).
+
+## RM-585: Bögen, die sich zwischen ihren Beinen schließen, tragen sich selbst (09.10.2026)
+
+<a id="rm-585-bögen-die-sich-zwischen-ihren-beinen-schließen-tragen-sich-selbst-09102026"></a>
+<a id="rm-585"></a>
+
+**Befund (Eiffelturm, 08.10.2026, nach RM-582):** Solidon verlangte Stützen für die Bögen unten
+(Feld 360 mm², 19 mm Reichweite über die Beine). Mit seinen Vorschlägen stellte der
+ElegooSlicer dort 216 m Stütze hin, der PrusaSlicer 81 m (Stand RM-582). Der Turm ist ohne
+Stützen gedacht („一体无支撑“). Die Decke des Turmbogens hängt über das Gitter mit 2 244
+Stücken zusammen, davon 1 188 im Kanal; die übrigen 1 056 zählten als Feld.
+
+**Behoben:** `analysis.vaults` nennt die Streifen von Decken, die sich zwischen ihren
+Auflagen schließen (`_Ceilings.closes`, gefragt an der ganzen Decke samt Kanalstücken): jedes
+Stück unter der obersten Schicht, das nicht weiter als `LEDGE_REACH` über das Material seiner
+eigenen Schicht darunter ragt (`_hangs_on`) und zu `CEILING_SPANNED` zwischen den Auflagen
+liegt (`_Ceilings.spanned`, neu: die Fläche, die spannt). Sie zählen nicht zum Stützbedarf,
+nicht zu dem, was auf dem Modell aufsetzt, und nicht zum Überhangbefund. Die oberste Schicht
+ist die letzte Spanne und zählt mit ihrer Fläche weiter; die Brückenregel gilt für jede
+Schicht, und nach Brücken auf dem Modell wird an den Streifen weiter gefragt
+(`open_pieces`); die Aussparung unter einer Kanalsperre zählt sie mit. Rand- und Bogenfrage
+gehen in einem Durchgang (`_self_carried`), die Antworten der Schließfrage sind je Schichten
+gemerkt (`_closing_answers`), auch für die Kanalfrage.
+
+**Nachweis (09.10.2026):** `tests/test_slice_findings.py::test_an_arch_that_closes_between_its_legs_carries_itself`
+(Rundbogen R 20 mm: keine Stütze, gegen den alten Stand rot mit Feld 130,9 mm²; flache Decke
+von 30 mm mit Ausrundungen: Stütze, letzte Spanne über 15 mm; Konsole mit gewölbter Unterseite:
+kein Bogen, Stütze) und `test_the_arch_question_asks_only_the_named_ceilings`. Zwei Gegenproben
+aus Zwischenständen hielten bestehende Tests: ohne Brückenregel auf den Streifen verlor der
+Steg auf Zwickeln bei 0,08 mm seine Stützen (`test_a_bridge_is_no_channel_because_its_foot_touches_a_wall`),
+ohne `spanned` trug die Haube vor der Tunnelmündung als Bogen
+(`test_a_strip_at_a_channel_mouth_does_not_borrow_the_channel_for_its_field`). Eiffelturm
+(0,2 mm, Startregel): Stützbedarf nein statt ja, Feld 0,5 statt 360,3 mm², Summe 28,3 statt
+388,6 mm², 2 504 Bogenstreifen; CPU-Zeit von `support_need` im Wechsel neu 111,5 und 138,1 s,
+alt 131,4 und 141,0 s (unter Volllast fremder Prozesse), `_model_support` am Sieb aus
+`test_performance` neu 1,14–1,25 s, alt 1,16–1,25 s. Slicer über `tools/matrix_unit.py`:
+ElegooSlicer am Centauri Carbon 2 mit Solidons Vorschlägen 0 statt 216 m Stütze, 4 h 25 min
+und 33,6 g statt 5 h 23 min und 53,0 g; PrusaSlicer am MK4S 0 m. Im G-Code liegt an den
+Bögen keine Bahnmitte weiter als 3,94 mm (Prusa 3,86 mm) vom Querschnitt der Schicht
+darunter, jede solche Bahn mit Halt an beiden Enden; Bahnen mit freiem Ende ragen dort
+höchstens 0,51 mm über die Kante, die Modellbahnen gleichen denen mit Stütze. Korpus
+(`korpus_alle.py`, Centauri Carbon 2, PLA, alter gegen neuen Stand): 241 von 243 Körpern
+gleich in Stützbedarf, Kanälen, Sperre und Vorschlägen; verschieden nur der Eiffelturm und
+seine reparierte Fassung, beide ohne Stützen und nur noch mit Brim.

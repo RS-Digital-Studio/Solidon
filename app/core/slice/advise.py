@@ -58,6 +58,7 @@ from app.core.slice.analysis import (
     thinnest_spot,
     tip_islands,
     total_overhang,
+    vaults,
     worth_support,
 )
 from app.core.types import (
@@ -876,8 +877,14 @@ def support_need(result: SliceResult, *, cancelled: CancelToken | None = None) -
     # stellte 831 m Baum außen am Turm hoch. Gefragt vor der Kanalfrage, die
     # dieselbe Antwort ohne Abbruch aus dem Merker liest.
     edges = ledges(result, cancelled=cancelled) if asked else frozenset()
+    # **Und kein Bogen, der sich zwischen seinen Beinen schließt** (RM-585,
+    # :func:`vaults`): Am Eiffelturm verlangten die Bögen unten als Feld von
+    # 360 mm² Stützen. Ihre Streifen zählen nicht zur Fläche; die Brückenregel
+    # gilt weiter für jede Schicht — die Streifen einer schwach geneigten Decke
+    # zwischen zwei Beinen sind je eine Brücke. Aus dem Merker der Randfrage.
+    arches = vaults(result, cancelled=cancelled) if asked else frozenset()
     model = model_support(result) if asked else ModelSupport()
-    quiet = model.channels | edges
+    quiet = model.channels | edges | arches
     overhang = total_overhang(result, without=quiet)
     piece = largest_overhang_patch(result, without=quiet)
     patch = _largest_field(result, overhang, piece, without=quiet)
@@ -904,7 +911,7 @@ def support_need(result: SliceResult, *, cancelled: CancelToken | None = None) -
     # darin dieselbe Decke wie beim Deckel. Gefragt wird deshalb das größte
     # zusammenhängende Stück (:func:`largest_overhang_patch`); lange freie
     # Stege fängt die Brückenregel darunter weiter ab.
-    resting = _quiet_layers(result, quiet)
+    resting = _quiet_layers(result, model.channels | edges)
     return SupportNeed(
         needed=_may_need_support(result, islands, overhang, patch, resting),
         islands=islands,

@@ -39,6 +39,7 @@ from app.core.slice.analysis import (
     spanning_width,
     support_on_model,
     tip_islands,
+    vaults,
     worth_support,
 )
 from app.core.types import PrintSettings, Profile, SettingAdvice, SliceResult
@@ -2733,6 +2734,86 @@ def test_the_ledge_blocker_covers_the_ledge_and_spares_the_arm() -> None:
         print_settings.resolve(petg()), petg(), slice_body(column_with_flange_and_arm(0.0), 0.2)
     )
     assert "support.spare_ledges" not in {entry.path for entry in lone}, "ohne Stützen nichts"
+
+
+def gate(opening: BaseGeometry, depth: float = 8.0) -> MeshData:
+    """Eine Wand 60 mm breit, ``depth`` mm tief und 40 mm hoch, durch die ``opening``
+    (in der Ansicht von vorn: x quer, y die Höhe) von vorn nach hinten durchgeht."""
+    cut = trimesh.creation.extrude_polygon(opening, depth + 10.0)
+    cut.apply_transform(trimesh.transformations.rotation_matrix(math.pi / 2.0, (1, 0, 0)))
+    cut.apply_translation((0.0, (depth + 10.0) / 2.0, 0.0))
+    wall = brick(60.0, depth, 40.0, (0.0, 0.0, 20.0))
+    return place_on_bed(MeshData.of(trimesh.boolean.difference([wall, cut])))
+
+
+#: Ein Rundbogen von 20 mm Halbmesser auf Beinen von 15 mm, Scheitel auf 35 mm.
+ROUND_ARCH = unary_union([Point(0.0, 15.0).buffer(20.0, 32), box(-20.0, -10.0, 20.0, 15.0)])
+#: Eine flache Decke von 30 mm auf 30 mm Höhe zwischen zwei Wänden, die Ecken mit
+#: 4 mm ausgerundet: Die Ausrundungen hängen in Streifen an den Wänden, die Decke
+#: dazwischen spannt 22 mm.
+FLAT_CEILING = box(-11.0, -14.0, 11.0, 26.0).buffer(4.0, 16)
+#: Der halbe Rundbogen ohne das zweite Bein: eine Konsole mit gewölbter Unterseite.
+HALF_ARCH = unary_union(
+    [Point(20.0, 15.0).buffer(20.0, 32), box(0.0, -10.0, 40.0, 15.0), box(20.0, -10.0, 40.0, 50.0)]
+)
+
+
+@pytest.mark.parametrize(
+    ("opening", "depth", "needed"),
+    [
+        pytest.param(ROUND_ARCH, 8.0, False, id="rundbogen"),
+        pytest.param(FLAT_CEILING, 8.0, True, id="flache-decke"),
+        pytest.param(HALF_ARCH, 16.0, True, id="konsole"),
+    ],
+)
+def test_an_arch_that_closes_between_its_legs_carries_itself(
+    opening: BaseGeometry, depth: float, needed: bool
+) -> None:
+    """Ein Bogen trägt sich wie ein Gewölbe, nur seine letzte Spanne ist eine Brücke
+    (RM-585). Am Eiffelturm verlangte der Rat für die Bögen unten Stützen: als Feld
+    360 mm², 19 mm über die Beine hinaus. Jeder Streifen hängt nur über der Schicht
+    darunter, und der Bogen schließt sich zwischen den Beinen.
+
+    Die flache Decke zwischen zwei Wänden bleibt, was sie war: Ihre letzte Spanne
+    ist 22 mm weit und braucht Stützen (Brückenregel). Und die Konsole mit
+    gewölbter Unterseite schließt sich nicht — sie hängt an einer Wand wie ein Kinn
+    und bleibt ein Feld (RM-570)."""
+    result = slice_body(gate(opening, depth), 0.2)
+    arches = vaults(result)
+    pieces = [
+        (index, number)
+        for index, layer in enumerate(result.layers)
+        for number in range(len(layer.overhangs))
+    ]
+    top = max(index for index, _number in pieces)
+
+    assert largest_sloped_patch(result) > OVERHANG_LAYER_WORTH_SUPPORT, "als Feld trüge es"
+    assert advise.support_need(result).needed is needed
+    assert not {name for name in arches if name[0] == top}, "die letzte Spanne zählt"
+    if opening is ROUND_ARCH:
+        assert arches == {name for name in pieces if name[0] < top}, "jeder Streifen trägt sich"
+        assert not advise.located_warnings(result, petg()), "kein Bericht über den Bogen"
+    if opening is FLAT_CEILING:
+        assert arches, "die Ausrundungen sind Streifen"
+        assert result.layers[top].bridge_width > SPAN_INTERESTING
+    if opening is HALF_ARCH:
+        assert not arches, "die Konsole ist kein Bogen"
+
+
+def test_the_arch_question_asks_only_the_named_ceilings() -> None:
+    """``vaults(result, only)`` antwortet für die gefragten Stücke wie die volle
+    Frage, mit der ganzen Decke des Stücks — gefragt vor der vollen Frage, deren
+    Antwort jeder engeren dient."""
+    result = slice_body(gate(ROUND_ARCH), 0.2)
+    lowest = min(
+        (index, number)
+        for index, layer in enumerate(result.layers)
+        for number in range(len(layer.overhangs))
+    )
+
+    asked = vaults(result, frozenset({lowest}))
+    assert lowest in asked
+    assert asked == vaults(result), "die ganze Decke des Stücks"
 
 
 def slot(length: float) -> MeshData:

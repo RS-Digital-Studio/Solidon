@@ -3300,9 +3300,10 @@ class ModelSupport:
 
     open_patch: float = 0.0
     """Die größte Fläche eines Stücks, die außerhalb eines Kanals auf dem Modell aufsetzt —
-    ohne Ränder, die sich selbst tragen (:func:`ledges`)."""
+    ohne Ränder und Bogenstreifen, die sich selbst tragen (:func:`ledges`, :func:`vaults`)."""
     open_area: float = 0.0
-    """Wie viel außerhalb von Kanälen insgesamt auf dem Modell aufsetzt, ohne Ränder."""
+    """Wie viel außerhalb von Kanälen insgesamt auf dem Modell aufsetzt, ohne Ränder und
+    Bogenstreifen."""
     open_field: float = 0.0
     """Die größte Decke davon als Feld (:func:`_field`, RM-570), höchstens so viel,
     wie von ihr auf dem Modell aufsetzt; ``0.0``, wo es die Antwort nicht ändert."""
@@ -3317,15 +3318,17 @@ class ModelSupport:
     bräuchte, sein Grundriss mit der Höhe, auf der seine Säule aufsetzt, und der,
     auf der es hängt — daraus baut die Übergabe die Stützsperre."""
     ledges_on_model: bool = False
-    """Setzen Ränder, die sich selbst tragen (:func:`ledges`), auf dem Modell auf?
+    """Setzen Ränder oder Bogenstreifen, die sich selbst tragen (:func:`ledges`,
+    :func:`vaults`), auf dem Modell auf?
     Dann stimmt „alle Überhänge erreichen das Bett“ nicht als Grund für „nur vom Bett“."""
     island_on_model: bool = False
     """Setzt eine **Insel** auf dem Modell auf? Sie druckt ohne Stütze in die
     Luft, gleich wie klein sie ist, und ist deshalb nie eine Kanaldecke."""
     open_pieces: frozenset[tuple[int, int]] = frozenset()
     """Die Stücke, deren Säule außerhalb eines Kanals auf dem Modell aufsetzt,
-    ohne Ränder (:func:`ledges`) — an ihnen fragt der Rat, ob eine lange Brücke
-    ihre Stütze auf dem Modell braucht (:func:`open_bridge_width`)."""
+    ohne Ränder (:func:`ledges`), mit Bogenstreifen (:func:`vaults`) — an ihnen
+    fragt der Rat, ob eine lange Brücke ihre Stütze auf dem Modell braucht
+    (:func:`open_bridge_width`)."""
     open_columns: tuple[tuple[SliceContour, float, float], ...] = ()
     """Von diesen Stücken die, die selbst Stütze brauchen (Insel, oder ihre Decke
     genügt :func:`worth_support`), wie ``channel_columns``: Grundriss, Höhe der
@@ -3508,6 +3511,54 @@ def ledges(
     Kanalfrage, und sie dient auch jeder engeren Frage; eine enge ist billig
     und verdrängte sonst volle Antworten anderer Körper aus dem Merker.
     """
+    return _self_carried(result, only, cancelled)[0]
+
+
+def vaults(
+    result: SliceResult,
+    only: frozenset[tuple[int, int]] | None = None,
+    *,
+    cancelled: CancelToken | None = None,
+) -> frozenset[tuple[int, int]]:
+    """Die Streifen der Bögen, die sich zwischen ihren Beinen schließen — sie
+    tragen sich selbst wie ein Gewölbe (RM-585).
+
+    Am Eiffelturm verlangte der Rat Stützen für die Bögen unten: Ihre Decke ist
+    in der Aufsicht ein Feld von 360 mm² und ragt 19 mm über die Beine, an
+    denen sie ansetzt — als Rand viel zu weit, als Feld (RM-570) eine Fläche,
+    die Stütze lohnt. Doch jeder Streifen hängt nur ein Stück über die Schicht
+    darunter, und der Bogen schließt sich zwischen seinen Beinen
+    (:meth:`_Ceilings.closes`). Ein Kinn tut das nicht; es hängt nur an der
+    Kehle und bleibt ein Feld.
+
+    Gemeint ist jedes Stück einer schließenden Decke unterhalb ihrer obersten
+    Schicht, das nicht weiter als :data:`LEDGE_REACH` über das Material seiner
+    eigenen Schicht darunter ragt (:func:`_hangs_on`) und zu
+    :data:`CEILING_SPANNED` zwischen ihren Auflagen liegt
+    (:meth:`_Ceilings.spanned`) — eine Haube vor der Mündung eines Tunnels
+    gehört zu dessen Decke, hängt aber vor seinen Wänden. **Die oberste Schicht
+    ist die letzte Spanne**: Sie zählt weiter mit ihrer Fläche, und eine flache
+    Decke zwischen zwei Wänden, die nur aus ihr besteht, ändert sich nicht.
+    Ebenso ein breiter Absatz mitten im Bogen. Die Streifen fallen nur aus der
+    Fläche; **die Brückenregel gilt weiter für jede Schicht**, denn die Streifen
+    einer schwach geneigten Decke zwischen zwei Beinen sind je eine Brücke
+    (der Steg auf Zwickeln aus ``test_slice_findings``).
+
+    Gefragt wird die ganze Decke samt Kanalstücken, denn ihr Grundriss spannt
+    zwischen den Beinen. Und nur, wo die Streifen zusammen mehr als
+    :data:`OVERHANG_LAYER_MINIMUM` messen: Darunter ändern sie kein Feld, und
+    die Schließfrage kostet je Decke. ``only`` und Merker wie bei :func:`ledges`
+    — beide Fragen gehen in einem Durchgang über dieselben Decken.
+    """
+    return _self_carried(result, only, cancelled)[1]
+
+
+def _self_carried(
+    result: SliceResult,
+    only: frozenset[tuple[int, int]] | None,
+    cancelled: CancelToken | None,
+) -> tuple[frozenset[tuple[int, int]], frozenset[tuple[int, int]]]:
+    """Ränder und Bogenstreifen (:func:`ledges`, :func:`vaults`), gemerkt."""
     with _ANSWERS_LOCK:
         for layers, answer in _LEDGES:
             if layers is result.layers:
@@ -3520,15 +3571,43 @@ def ledges(
     return answer
 
 
-_LEDGES: list[tuple[tuple[LayerInfo, ...], frozenset[tuple[int, int]]]] = []
+_LEDGES: list[
+    tuple[
+        tuple[LayerInfo, ...],
+        tuple[frozenset[tuple[int, int]], frozenset[tuple[int, int]]],
+    ]
+] = []
+
+
+def _closing_answers(layers: tuple[LayerInfo, ...]) -> dict[frozenset[tuple[int, int]], Any]:
+    """Die Antworten von :meth:`_Ceilings.closes` für diese Schichten, gemerkt
+    wie die Kanalfrage (Identität des Schichttupels).
+
+    Bogen- und Kanalfrage fragen dieselbe Decke: Am Eiffelturm umfasst der
+    Turmbogen über das Gitter 2 244 Stücke, und seine Schließfrage kostete unter
+    Volllast 16 s. Die Antwort hängt nur an den Schichten — jeder, der hier
+    fragt, nimmt ihr Material über :func:`_material`.
+    """
+    with _ANSWERS_LOCK:
+        for known, answers in _CLOSINGS:
+            if known is layers:
+                return answers
+        answers = {}
+        _CLOSINGS.append((layers, answers))
+        del _CLOSINGS[:-_ANSWERS_KEPT]
+    return answers
+
+
+_CLOSINGS: list[tuple[tuple[LayerInfo, ...], dict[frozenset[tuple[int, int]], Any]]] = []
 
 
 def _ledges(
     result: SliceResult,
     only: frozenset[tuple[int, int]] | None,
     cancelled: CancelToken | None,
-) -> frozenset[tuple[int, int]]:
-    """Die Randfrage selbst, ungemerkt (:func:`ledges`); abbrechbar je Decke."""
+) -> tuple[frozenset[tuple[int, int]], frozenset[tuple[int, int]]]:
+    """Rand- und Bogenfrage selbst, ungemerkt (:func:`ledges`, :func:`vaults`);
+    abbrechbar je Decke."""
     layers = result.layers
     materials: dict[int, ShapelyPolygon] = {}
 
@@ -3546,9 +3625,10 @@ def _ledges(
             for number in range(len(layer.overhangs))
         ]
     )
-    ceilings = _Ceilings(layers, material)
+    ceilings = _Ceilings(layers, material, _closing_answers(layers))
     seen: set[tuple[int, int]] = set()
     found: set[tuple[int, int]] = set()
+    arched: set[tuple[int, int]] = set()
     for name in asked:
         if name in seen or ceilings.floats(name):
             continue
@@ -3568,7 +3648,58 @@ def _ledges(
             BRIDGE_FROM if result.bridge_from is None else result.bridge_from,
         ):
             found |= group
-    return frozenset(found)
+            continue
+        arched |= _vault_strips(ceilings, group, material)
+    return frozenset(found), frozenset(arched)
+
+
+def _vault_strips(
+    ceilings: _Ceilings,
+    group: frozenset[tuple[int, int]],
+    material: Callable[[int], ShapelyPolygon],
+) -> frozenset[tuple[int, int]]:
+    """Die Streifen dieser Decke, wenn sie ein Bogen ist (:func:`vaults`), sonst nichts.
+
+    Erst die Fläche, dann die Streifen, zuletzt die Schließfrage — sie ist die
+    teuerste und wird nur gestellt, wo die Antwort etwas ändert.
+    """
+    top = max(member[0] for member in group)
+    below = sorted(member for member in group if member[0] < top)
+    if math.fsum(ceilings.shape(member).area for member in below) <= OVERHANG_LAYER_MINIMUM:
+        return frozenset()
+    strips = [
+        member for member in below if _hangs_on(ceilings.shape(member), material(member[0] - 1))
+    ]
+    if math.fsum(ceilings.shape(member).area for member in strips) <= OVERHANG_LAYER_MINIMUM:
+        return frozenset()
+    between = ceilings.spanned(group)
+    if between is None:
+        return frozenset()
+    # Nur, was zwischen den Auflagen liegt: Eine Haube vor der Mündung eines
+    # Tunnels hängt an dessen Decke, aber vor seinen Wänden.
+    return frozenset(
+        member
+        for member in strips
+        if ceilings.shape(member).intersection(between).area
+        >= CEILING_SPANNED * ceilings.shape(member).area
+    )
+
+
+def _hangs_on(piece: ShapelyPolygon, below: Any) -> bool:
+    """Ragt ``piece`` nicht weiter als :data:`LEDGE_REACH` über ``below``, bis auf
+    :data:`LEDGE_SPILL` seiner Fläche?
+
+    Gefragt die Fläche, nicht die Ecken, wie in :func:`_carried`: Eine Spanne
+    zwischen zwei Wänden hat alle Ecken auf den Wänden.
+    """
+    low_x, low_y, high_x, high_y = piece.bounds
+    margin = LEDGE_REACH + OVERHANG_MARGIN
+    near = shapely.clip_by_rect(
+        below, low_x - margin, low_y - margin, high_x + margin, high_y + margin
+    )
+    if near.is_empty:
+        return False
+    return bool(piece.difference(near.buffer(LEDGE_REACH)).area <= LEDGE_SPILL * piece.area)
 
 
 def ledge_space(
@@ -3747,10 +3878,16 @@ class _Ceilings:
     """
 
     def __init__(
-        self, layers: tuple[LayerInfo, ...], material: Callable[[int], ShapelyPolygon]
+        self,
+        layers: tuple[LayerInfo, ...],
+        material: Callable[[int], ShapelyPolygon],
+        closing: dict[frozenset[tuple[int, int]], Any] | None = None,
     ) -> None:
         self._layers = layers
         self._material = material
+        # Die Antworten der Schließfrage, mit anderen Fragen über dieselben
+        # Schichten geteilt (:func:`_closing_answers`).
+        self._closing = {} if closing is None else closing
         self._shapes: dict[tuple[int, int], ShapelyPolygon] = {}
         self._floating: dict[int, ShapelyPolygon] = {}
         self._floats: dict[tuple[int, int], bool] = {}
@@ -3883,7 +4020,28 @@ class _Ceilings:
         Konsole als gehalten, und ein Kiefer mit gewölbter Unterseite wurde in
         einer engen Tasche Kanal. Gehalten wird deshalb nur von Material neben
         dem Grundriss der Decke.
+
+        Gemerkt je Decke (:func:`_closing_answers`): Rand-, Bogen- und Kanalfrage
+        stellen sie über dieselben Schichten, am Eiffelturm für den Turmbogen
+        mit 2 244 Stücken.
         """
+        return self.spanned(ceiling) is not None
+
+    def spanned(self, ceiling: frozenset[tuple[int, int]]) -> Any | None:
+        """Wo die Decke zwischen ihren Auflagen liegt, in der Aufsicht —
+        ``None``, wenn sie sich nicht schließt (:meth:`closes`).
+
+        Die Teile ihres Grundrisses, die spannen (:meth:`_spans`), je nur so weit,
+        wie sie zwischen ihren gehaltenen Rändern liegen. Eine Haube vor der
+        Mündung eines Tunnels gehört zu dessen Decke, liegt aber vor seinen
+        Wänden, nicht zwischen ihnen (:func:`vaults`).
+        """
+        if ceiling not in self._closing:
+            self._closing[ceiling] = self._closes(ceiling)
+        return self._closing[ceiling]
+
+    def _closes(self, ceiling: frozenset[tuple[int, int]]) -> Any | None:
+        """:meth:`spanned`, ungemerkt."""
         names = sorted(ceiling)
         shapes = [self.shape(name) for name in names]
         reaches = {
@@ -3920,28 +4078,34 @@ class _Ceilings:
             if kept:
                 held.append(unary_union(kept).buffer(reach))
         if not held:
-            return False
+            return None
         anchored = unary_union(held)
         spanned = asked = 0.0
+        regions: list[Any] = []
         for part in _areas_of(footprint):
-            spans = self._spans(part, anchored, closing)
-            if spans is None:
+            answer = self._spans(part, anchored, closing)
+            if answer is None:
                 continue
+            spans, between = answer
             asked += part.area
-            spanned += part.area if spans else 0.0
-        return spanned > 0.0 and 2.0 * spanned >= asked
+            if spans:
+                spanned += part.area
+                regions.append(between)
+        if spanned > 0.0 and 2.0 * spanned >= asked:
+            return unary_union(regions)
+        return None
 
     @staticmethod
-    def _spans(part: ShapelyPolygon, anchored: Any, closing: float) -> bool | None:
-        """Liegt dieser Teil des Grundrisses zwischen seinen Auflagen?
+    def _spans(part: ShapelyPolygon, anchored: Any, closing: float) -> tuple[bool, Any] | None:
+        """Liegt dieser Teil des Grundrisses zwischen seinen Auflagen — und wo?
 
-        Ringsum gehalten, oder zu :data:`CEILING_SPANNED` in der Hülle seiner
-        gehaltenen Randstücke: eine Brücke zwischen zwei Stirnseiten, ein U, ein
-        Gewölbe zwischen zwei Wänden. Ein Eckregal an zwei angrenzenden Wänden
-        füllt seine Hülle nur zur Hälfte, ein Kiefer an der Kehle fast nicht.
-        ``None`` für einen Teil ohne gehaltenen Rand: Seine Auflage liegt in der
-        Aufsicht unter einem anderen Stück derselben Decke, und er entscheidet
-        nicht mit.
+        Ringsum gehalten (der Teil selbst), oder zu :data:`CEILING_SPANNED` in der
+        Hülle seiner gehaltenen Randstücke (der Teil in dieser Hülle): eine
+        Brücke zwischen zwei Stirnseiten, ein U, ein Gewölbe zwischen zwei
+        Wänden. Ein Eckregal an zwei angrenzenden Wänden füllt seine Hülle nur
+        zur Hälfte, ein Kiefer an der Kehle fast nicht. ``None`` für einen Teil
+        ohne gehaltenen Rand: Seine Auflage liegt in der Aufsicht unter einem
+        anderen Stück derselben Decke, und er entscheidet nicht mit.
         """
         rim = part.boundary
         # Zusammengefügt, bevor nach Länge gesiebt wird: Ein Lauf über den
@@ -3951,7 +4115,7 @@ class _Ceilings:
             line for line in _merged_lines(rim.difference(anchored)) if line.length > 2.0 * closing
         ]
         if not loose:
-            return True
+            return True, part
         held = [
             line
             for line in _merged_lines(rim.difference(unary_union(loose).buffer(EPS_GEOM)))
@@ -3959,8 +4123,10 @@ class _Ceilings:
         ]
         if not held:
             return None
-        between = shapely.convex_hull(shapely.multilinestrings(held)).buffer(closing)
-        return bool(part.intersection(between).area >= CEILING_SPANNED * part.area)
+        between = part.intersection(
+            shapely.convex_hull(shapely.multilinestrings(held)).buffer(closing)
+        )
+        return bool(between.area >= CEILING_SPANNED * part.area), between
 
     def of(self, start: tuple[int, int]) -> frozenset[tuple[int, int]]:
         """Die Decke, zu der ``start`` gehört, samt ``start``."""
@@ -4015,7 +4181,7 @@ def _model_support(
                 materials[index] = known
         return known
 
-    ceilings = _Ceilings(layers, lambda index: material_at(index)[0])
+    ceilings = _Ceilings(layers, lambda index: material_at(index)[0], _closing_answers(layers))
     # Einzelne Stücke bekommen dieselbe Antwort wie im ganzen Durchgang — und
     # die hängt seit der Decke als Ganzes an den Stücken ihrer Decke: Gefragt
     # wird deshalb jede Decke, zu der ein gewähltes Stück gehört.
@@ -4196,9 +4362,15 @@ def _model_support(
     islands &= reported
     # Ränder tragen sich selbst (:func:`ledges`) und verlangen keine Stütze auf
     # dem Modell — am Eiffelturm die der Plattformen. Gefragt nur, wonach
-    # gefragt war.
-    edges = ledges(result, only, cancelled=cancelled)
+    # gefragt war. Ebenso die Streifen eines Bogens (:func:`vaults`, RM-585).
+    arches = vaults(result, only, cancelled=cancelled)
+    rims = ledges(result, only, cancelled=cancelled)
+    edges = rims | arches
     bearing = {owner for owner in landed if owner not in channels and names[owner] not in edges}
+    # Nach Brücken gefragt werden die Bogenstreifen weiter (``open_pieces``):
+    # Die Streifen einer schwach geneigten Decke zwischen zwei Beinen sind je
+    # eine Brücke.
+    bridging = {owner for owner in landed if owner not in channels and names[owner] not in rims}
     resting_ledges = any(names[owner] in edges for owner in landed if owner not in channels)
     outside = [area for owner, (_low, area) in landed.items() if owner in bearing]
     open_patch = max(outside, default=0.0)
@@ -4249,6 +4421,8 @@ def _model_support(
     # offenes Stück von 11 mm², das sich selbst trägt; ausgespart, holte der
     # ElegooSlicer es mit einem Ast quer durch den Kanal (1,4 m Stütze darin).
     # Gefragt wird nur, wenn gesperrt wird — sonst kosten die Decken nichts.
+    # Bogenstreifen (:func:`vaults`) bleiben im Feld: Hier fällt der Zweifel
+    # auf Stütze, und die Streifen eines Stegs zwischen zwei Beinen sind Brücken.
     worth_of: dict[frozenset[tuple[int, int]], bool] = {}
 
     def needs_own(owner: int) -> bool:
@@ -4274,7 +4448,7 @@ def _model_support(
         channel_at=at,
         channel_columns=columns,
         island_on_model=island_on_model,
-        open_pieces=frozenset(names[owner] for owner in sorted(bearing)),
+        open_pieces=frozenset(names[owner] for owner in sorted(bridging)),
         open_columns=tuple(
             (
                 layers[names[owner][0]].overhangs[names[owner][1]],
