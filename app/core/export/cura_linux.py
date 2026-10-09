@@ -24,10 +24,11 @@ dieser Cura nicht, sondern öffnet die Datei nur in ihrem Fenster
 (:data:`WINDOW_ONLY`); den Grund schreibt es ins Protokoll.
 
 Die Drucker einer AppImage-Cura liegen im Abbild. :func:`appimage_resources`
-hängt es einmal je Fassung kurz ein und legt die Ordner, die Solidon liest, im
-Nutzer-Cache ab — beständig, denn jeder Einhängepunkt heißt anders, und eine
-Profilliste darf nicht in einen verschwundenen Ordner zeigen. Der Fensterfaden
-wartet darauf nie (:func:`never_wait_in`).
+liest sie einmal je Fassung aus dem Abbild, ohne das AppImage zu starten
+(:mod:`squashfs`, RM-599), und legt die Ordner, die Solidon liest, im
+Nutzer-Cache ab; ebenso, ob die Rechenmaschine darin vollständig ist.
+Eingehängt wird nur für einen Lauf. Der Fensterfaden wartet auf die Kopie nie
+(:func:`never_wait_in`).
 """
 
 from __future__ import annotations
@@ -40,7 +41,7 @@ import subprocess
 import tempfile
 import threading
 import time
-from collections.abc import Iterator, Mapping, Sequence
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path, PurePath, PurePosixPath
@@ -48,6 +49,7 @@ from typing import IO, Final
 
 from app.core import discover
 from app.core.errors import CHOOSE_SLICER, EXPORT_ONLY, ExternalToolError
+from app.core.export import squashfs
 from app.core.log import get_logger
 from app.core.paths import ensure_dir, user_cache_dir
 from app.core.process import (
@@ -81,6 +83,9 @@ FLATPAK_ROOT: Final = PurePosixPath("/app")
 #: Curas glibc, dann seine übrigen Bibliotheken. Gekürzt fand CuraEngine die
 #: ``libstdc++`` des Rechners und scheiterte an ``GLIBC_2.38``.
 LIBRARY_VARIABLES: Final = ("APPDIR_LIBC_LIBRARY_PATH", "APPDIR_LIBRARY_PATH")
+
+#: Wo Curas Druckerbestand im AppDir liegt.
+RESOURCES: Final = PurePosixPath("share/cura/resources")
 
 #: Die Ordner unter ``share/cura/resources``, die Solidon aus Curas Bestand
 #: liest (``slicer_profiles``: Drucker, Züge, Düsen, Qualität, Absicht,
@@ -199,15 +204,31 @@ def loader_command(here: Path, there: PurePath) -> list[str] | None:
     except (OSError, UnicodeDecodeError) as problem:
         _tell("no readable %s below %s: %s", ENVIRONMENT, here, problem)
         return None
+    if not engine_complete(variables, lambda path: (here / path).is_file(), here):
+        return None
+    return [
+        str(there / COMPAT / linker(variables)),
+        "--library-path",
+        library_path(variables, str(there)),
+        str(there / ENGINE),
+    ]
+
+
+def engine_complete(
+    variables: Mapping[str, str], is_file: Callable[[PurePosixPath], bool], where: object
+) -> bool:
+    """Trägt das AppDir, was :func:`loader_command` braucht: Lader, CuraEngine
+    und einen Bibliothekspfad? ``is_file`` fragt relativ zum AppDir — im
+    Ordner oder im Abbild (:func:`_read_resources`); ``where`` nennt es im
+    Protokoll."""
     name = linker(variables)
-    if not (here / COMPAT / name).is_file() or not (here / ENGINE).is_file():
-        _tell("cura below %s has no loader %s or no %s", here, name, ENGINE)
-        return None
-    libraries = library_path(variables, str(there))
-    if not libraries:
-        _tell("%s below %s names no library path", ENVIRONMENT, here)
-        return None
-    return [str(there / COMPAT / name), "--library-path", libraries, str(there / ENGINE)]
+    if not is_file(COMPAT / name) or not is_file(PurePosixPath(ENGINE)):
+        _tell("cura below %s has no loader %s or no %s", where, name, ENGINE)
+        return False
+    if not library_path(variables, "/"):
+        _tell("%s below %s names no library path", ENVIRONMENT, where)
+        return False
+    return True
 
 
 def flatpak_appdir(app_id: str) -> tuple[Path, PurePosixPath] | None:
@@ -463,7 +484,7 @@ _resources: dict[tuple[str, int, int], tuple[Path, bool]] = {}
 #: (:func:`discover.cache_generation`): *Neu suchen* versucht es wieder.
 _failed: dict[tuple[str, int, int], int] = {}
 _building = threading.Lock()
-#: Der Faden, der nie auf Einhängen und Kopie wartet (:func:`never_wait_in`).
+#: Der Faden, der nie auf eine Kopie wartet (:func:`never_wait_in`).
 _never_waits: threading.Thread | None = None
 
 
@@ -508,8 +529,9 @@ def _cache_folder(appimage: Path) -> Path:
 def appimage_resources(appimage: Path) -> Path | None:
     """``share/cura`` einer AppImage-Cura als beständige Kopie, oder ``None``.
 
-    Einmal je Fassung (Pfad, Änderungszeit, Größe): einhängen, die Ordner aus
-    :data:`RESOURCE_FOLDERS` in den Nutzer-Cache kopieren, aushängen. Danach
+    Einmal je Fassung (Pfad, Änderungszeit, Größe) die Ordner aus
+    :data:`RESOURCE_FOLDERS` aus dem Abbild in den Nutzer-Cache lesen
+    (:func:`_read_resources`), ohne das AppImage zu starten. Danach
     liest jede Frage die Kopie; ein neues AppImage ersetzt sie, und Kopien
     verschwundener AppImages werden geräumt. Scheitert es, bleibt es beim
     Nein, bis :func:`discover.forget_cache` neu suchen lässt. Im Faden aus
@@ -574,30 +596,22 @@ def _read_stamp(folder: Path) -> dict[str, object] | None:
 def _copy_resources(appimage: Path, key: tuple[str, int, int]) -> tuple[Path, bool] | None:
     folder = _cache_folder(appimage)
     started = time.monotonic()
-    with mounted(appimage) as mount:
-        if mount.point is None:
-            return None
-        resources = mount.point / "share" / "cura" / "resources"
-        if not resources.is_dir():
-            _log.warning("%s carries no cura resources", appimage.name)
-            return None
-        try:
-            fresh = Path(tempfile.mkdtemp(prefix=f"{folder.name}-", dir=ensure_dir(folder.parent)))
-        except OSError as problem:
-            _log.warning("cannot keep the printers of %s: %s", appimage.name, problem)
-            return None
-        try:
-            target = fresh / "share" / "cura" / "resources"
-            for name in RESOURCE_FOLDERS:
-                if (resources / name).is_dir():
-                    shutil.copytree(resources / name, target / name)
-            usable = loader_command(mount.point, mount.point) is not None
-            stamp = {"source": key[0], "mtime_ns": key[1], "size": key[2], "engine": usable}
-            (fresh / STAMP).write_text(json.dumps(stamp), encoding="utf-8")
-        except OSError as problem:
+    try:
+        fresh = Path(tempfile.mkdtemp(prefix=f"{folder.name}-", dir=ensure_dir(folder.parent)))
+    except OSError as problem:
+        _log.warning("cannot keep the printers of %s: %s", appimage.name, problem)
+        return None
+    try:
+        usable = _read_resources(appimage, fresh / RESOURCES)
+        if usable is None:
             shutil.rmtree(fresh, ignore_errors=True)
-            _log.warning("cannot keep the printers of %s: %s", appimage.name, problem)
             return None
+        stamp = {"source": key[0], "mtime_ns": key[1], "size": key[2], "engine": usable}
+        (fresh / STAMP).write_text(json.dumps(stamp), encoding="utf-8")
+    except (OSError, squashfs.UnreadableImageError) as problem:
+        shutil.rmtree(fresh, ignore_errors=True)
+        _log.warning("cannot keep the printers of %s: %s", appimage.name, problem)
+        return None
     kept = _replace(folder, fresh, appimage, key)
     if kept is not None:
         _log.info(
@@ -608,6 +622,37 @@ def _copy_resources(appimage: Path, key: tuple[str, int, int]) -> tuple[Path, bo
         )
         _clear_vanished(folder)
     return kept
+
+
+def _read_resources(appimage: Path, target: Path) -> bool | None:
+    """Curas Druckerbestand aus dem Abbild nach ``target``, ohne das AppImage zu
+    starten (RM-599, Regel 11) — und ob die Rechenmaschine darin vollständig ist.
+
+    ``None``, wenn das Abbild keinen Bestand trägt. Der Lader ist im Abbild
+    eine Verknüpfung (``lib64`` → ``lib/x86_64-linux-gnu``);
+    :meth:`squashfs.SquashImage.is_file` folgt ihr wie das Dateisystem eines
+    eingehängten Abbilds.
+    """
+    with appimage.open("rb") as handle:
+        image = squashfs.SquashImage.of(handle)
+        resources = image.find(RESOURCES)
+        if resources is None or resources.kind != squashfs.DIRECTORY:
+            _log.warning("%s carries no cura resources", appimage.name)
+            return None
+        for name in RESOURCE_FOLDERS:
+            found = image.find(RESOURCES / name)
+            if found is not None and found.kind == squashfs.DIRECTORY:
+                squashfs.copy_folder(image, found, target / name)
+        environment = image.resolve(PurePosixPath(ENVIRONMENT))
+        if environment is None or environment.kind != squashfs.FILE:
+            _tell("no readable %s inside %s", ENVIRONMENT, appimage)
+            return False
+        try:
+            variables = read_environment(image.read(environment).decode("utf-8"))
+        except UnicodeDecodeError as problem:
+            _tell("no readable %s inside %s: %s", ENVIRONMENT, appimage, problem)
+            return False
+        return engine_complete(variables, image.is_file, appimage)
 
 
 def _replace(

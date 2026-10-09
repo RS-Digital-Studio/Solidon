@@ -8,6 +8,9 @@ paths:
   - "app/core/knowledge/profiles.py"
   - "app/core/export/handover.py"
   - "app/core/export/slicer_profiles.py"
+  - "app/core/export/appimage.py"
+  - "app/core/export/squashfs.py"
+  - "app/core/export/cura_linux.py"
   - "app/core/tools.py"
 ---
 
@@ -84,14 +87,18 @@ einmal gelesen, danach verworfen. Länger hält kein Speicher, denn der Kunde
 
 ## Herstellerdrucker ohne ersten Start
 
-**Ein AppImage wird gelesen, nie gestartet** (RM-549, Regel 11): Den Bestand
-der Orca-Familie liest `export/appimage.py` aus dem SquashFS des Abbilds und
-legt ihn je Fassung im Nutzer-Cache ab (`install_root`) — kein
-`--appimage-extract`, kein Einhängen. Sonst sähe ein Kunde, der den Slicer nie
-geöffnet hat, keinen Herstellerdrucker. Der Fensterfaden wartet nie auf die
-Kopie (`cura_linux.may_wait`), die Erhebung im Arbeiter legt sie an. Alles aus
-dem Abbild ist fremde Eingabe: Längen gegen die Datei geprüft, Blöcke nur bis
-zur Blockgröße entpackt, Namen mit Trennern verworfen. Ist es unlesbar, bleibt
+**Ein AppImage wird gelesen, nie gestartet** (RM-549, RM-599, Regel 11): Den
+Bestand der Orca-Familie und Curas Drucker samt der Frage, ob seine
+Rechenmaschine da ist, liest `export/squashfs.py` aus dem Abbild; je Fassung
+liegt eine Kopie im Nutzer-Cache (`appimage.profiles`,
+`cura_linux.appimage_resources`) — kein `--appimage-extract`, kein Einhängen.
+Eingehängt wird nur, um Cura rechnen zu lassen. Sonst sähe ein Kunde, der den
+Slicer nie geöffnet hat, keinen Herstellerdrucker. Der Fensterfaden wartet nie
+auf die Kopie (`cura_linux.may_wait`), Arbeiter legen sie an. Alles aus dem
+Abbild ist fremde Eingabe: Längen gegen die Datei geprüft, Blöcke nur bis zur
+Blockgröße entpackt, Namen mit Trennern verworfen, Verknüpfungen nur innerhalb
+des Abbilds gefolgt. Ob das Paket gzip und zstd entpackt, prüft der Starttest
+unter Linux (`image_compressions`). Ist ein Orca-Abbild unlesbar, bleibt
 die Liste leer, der Druckdialog rät, den Slicer einmal zu öffnen, und danach
 gilt `system/`. Ein Slicertest simuliert keinen ersten Start; wer einen braucht,
 legt ihn im Test selbst an.

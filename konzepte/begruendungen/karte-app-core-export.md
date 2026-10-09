@@ -449,6 +449,20 @@ Einhängen 0,01 s, erste Kopie 3,3 s; Würfel auf dem K1 Max mit Flatpak und
 AppImage, draußen und im Sandkasten, gleich wie CuraEngine unter Windows.
 Eine Kopie wiegt rund 26 MB in rund 9 900 Dateien (Cura 5.13).
 
+**Seit RM-599 hängt die Kopie nicht mehr ein** (09.10.2026): `_read_resources`
+liest `share/cura/resources` über `squashfs` aus dem Abbild (Cura 5.13: gzip,
+128 KiB), und `engine_complete` beantwortet aus `AppRun.env`, Lader und
+CuraEngine im Abbild, ob Solidon rechnen kann — dieselbe Prüfung wie
+`loader_command` am eingehängten Ordner. Der Lader ist im Abbild eine
+Verknüpfung (`runtime/compat/lib64/ld-linux-x86-64.so.2` →
+`../lib/x86_64-linux-gnu/…`); `SquashImage.resolve` folgt ihr, ein absolutes
+Ziel zählte am eingehängten Abbild den Rechner mit und gilt hier als fehlend.
+Gegen 7-Zip: 9 944 Dateien byte-gleich, Rechenmaschine erkannt. Ein AppImage,
+das Solidon nicht sieht (aus seinem Flatpak außerhalb der Freigaben), hat schon
+vorher keine Fassung (`_key`) und keine Kopie bekommen. Eingehängt wird nur
+noch für den Lauf (`engine`). Ob das gebaute Paket gzip und zstd entpackt,
+meldet es im Starttest (`image_compressions`, `tools/check_frozen_start.py`).
+
 ## Die Orca-Familie als AppImage (`appimage.py`, RM-549)
 
 Ein AppImage der Orca-Familie trägt seinen Herstellerbestand nur im
@@ -460,8 +474,8 @@ geöffnet hatte, und die Konsole lehnte den Auftrag ohne vorgewähltes Profil ab
 Gelesen wird das Abbild als Datei: Es beginnt hinter der Abschnittstabelle der
 Laufzeit (`image_offset`), Kompression über die Standardbibliothek (zlib,
 lzma, `compression.zstd`). Gestartet wird nichts, auch nicht
-`--appimage-extract` oder `--appimage-mount` (Regel 11); Curas Kopie hängt
-weiter ein, weil Cura zum Rechnen ohnehin über seinen Lader läuft. Gemessen an
+`--appimage-extract` oder `--appimage-mount` (Regel 11). Der Leser steht seit
+RM-599 in `squashfs.py` und liest auch Curas Bestand (unten). Gemessen an
 den Fassungen der Slicerauswahl (09.10.2026, alle Typ 2, SquashFS 4.0, zstd,
 128-KiB-Blöcke): OrcaSlicer 2.4.2 12 006 Profile, ElegooSlicer 1.5.3.5
 12 007, Creality Print 7.3.0 6 898, Bambu Studio 2.8.2 3 589, jede Datei

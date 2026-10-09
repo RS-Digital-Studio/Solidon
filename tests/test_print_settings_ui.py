@@ -2516,20 +2516,21 @@ def _cura_appimage_dialog(
     monkeypatch.setattr(store, "TRIAL_FROM", store.DEMO_FROM)
     monkeypatch.setattr(activation, "_cached", activation.Activation(days_left=5))
     mounts: list[Path] = []
-    found, _point = appimage_cura(tmp_path, monkeypatch, mounts, **appimage)
+    copies: list[Path] = []
+    found, _point = appimage_cura(tmp_path, monkeypatch, mounts, copies=copies, **appimage)
     monkeypatch.setattr(cura_linux, "_never_waits", None)
     cura_linux.never_wait_in(threading.current_thread())
     dialog = PrintSettingsDialog(session, UiSettings())
     assert dialog.wait_for_slicers(), "die Slicersuche kam nicht zurück"
     dialog._slicer_path = found
-    return dialog, mounts
+    return dialog, copies
 
 
-def _until_mounted(mounts: list[Path]) -> None:
+def _until_copying(copies: list[Path]) -> None:
     deadline = time.monotonic() + 10.0
-    while not mounts and time.monotonic() < deadline:
+    while not copies and time.monotonic() < deadline:
         time.sleep(0.01)
-    assert mounts, "der Cura-Arbeiter hat nicht eingehängt"
+    assert copies, "der Cura-Arbeiter hat das Abbild nicht gelesen"
 
 
 def test_the_dialog_rebases_without_waiting_and_again_after_curas_copy(
@@ -2551,9 +2552,9 @@ def test_the_dialog_rebases_without_waiting_and_again_after_curas_copy(
         return result
 
     monkeypatch.setattr(manufacturer, "base_settings", spy)
-    dialog, mounts = _cura_appimage_dialog(session, monkeypatch, tmp_path, delay=3.0)
+    dialog, copies = _cura_appimage_dialog(session, monkeypatch, tmp_path, delay=3.0)
     dialog._start_profile_search()
-    _until_mounted(mounts)
+    _until_copying(copies)
     started = time.monotonic()
     dialog._foundation_key = None
     dialog._rebase()
@@ -2582,9 +2583,9 @@ def test_a_dialog_closed_during_curas_copy_gets_no_rebase(
         original(self, *args)
 
     monkeypatch.setattr(PrintSettingsDialog, "_rebase", counted)
-    dialog, mounts = _cura_appimage_dialog(session, monkeypatch, tmp_path, delay=2.0)
+    dialog, copies = _cura_appimage_dialog(session, monkeypatch, tmp_path, delay=2.0)
     dialog._start_profile_search()
-    _until_mounted(mounts)
+    _until_copying(copies)
     started = time.monotonic()
     dialog.reject()
     closing = time.monotonic() - started
@@ -2612,9 +2613,9 @@ def test_slicing_waits_with_a_reason_until_curas_copy_tells(
     from app.core.export import cura_linux
 
     reading = str(tr("Curas Drucker werden gelesen …"))
-    dialog, mounts = _cura_appimage_dialog(session, monkeypatch, tmp_path, delay=2.0, loader=loader)
+    dialog, copies = _cura_appimage_dialog(session, monkeypatch, tmp_path, delay=2.0, loader=loader)
     dialog._start_profile_search()
-    _until_mounted(mounts)
+    _until_copying(copies)
     dialog._show_slicer_state()
 
     assert not dialog.slice_button.isEnabled()
