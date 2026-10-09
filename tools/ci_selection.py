@@ -1,15 +1,16 @@
 """Welche Fenster- und Slicertests eine Änderung auf Linux und macOS braucht.
 
     .venv\\Scripts\\python.exe tools/ci_selection.py                    # origin/main...HEAD
-    .venv\\Scripts\\python.exe tools/ci_selection.py --diff main...ci/x  # ein Diff
+    .venv\\Scripts\\python.exe tools/ci_selection.py --diff abc12..origin/main  # ein Merge
     .venv\\Scripts\\python.exe tools/ci_selection.py app/ui/panels.py   # oder Dateien
     .venv\\Scripts\\python.exe tools/ci_selection.py --programs "<auswahl>"
 
-Linux und macOS gibt es an keinem Arbeitsplatz. Vor dem Merge nach main laufen
+Linux und macOS gibt es an keinem Arbeitsplatz. Nach dem Push nach main laufen
 deshalb die Fenstertests und die Slicertests mit echtem Programm, die die
-Änderung berührt, per Handstart auf den Läufern (Entscheidung Robert,
-07.10.2026): ``fenster-auswahl.yml`` und ``slicer-auswahl.yml``. Nicht die
-ganze Suite — macOS-Minuten kosten das Zehnfache.
+Änderung berührt, per Handstart auf main (Entscheidung Robert, 07.10.2026; auf
+Zweigen läuft keine CI, 09.10.2026): ``fenster-auswahl.yml`` und
+``slicer-auswahl.yml``. Nicht die ganze Suite — macOS-Minuten kosten das
+Zehnfache.
 
 Die betroffenen Testdateien kommen aus demselben Importgraphen wie
 ``affected_tests.py``. Zwei Dinge sind anders:
@@ -153,9 +154,9 @@ def main(argv: list[str] | None = None) -> int:
     print("fenster: " + "; ".join(windows))
     print("slicer: " + "; ".join(slicers))
     if windows:
-        print(f'gh workflow run fenster-auswahl.yml --ref <zweig> -f tests="{"; ".join(windows)}"')
+        print(f'gh workflow run fenster-auswahl.yml --ref main -f tests="{"; ".join(windows)}"')
     if slicers:
-        print(f'gh workflow run slicer-auswahl.yml --ref <zweig> -f tests="{"; ".join(slicers)}"')
+        print(f'gh workflow run slicer-auswahl.yml --ref main -f tests="{"; ".join(slicers)}"')
     if not windows and not slicers:
         print("Kein Fenster- und kein Slicertest hängt an dieser Änderung.")
     return 0

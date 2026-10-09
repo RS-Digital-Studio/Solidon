@@ -50,7 +50,7 @@ Kernjob frühestens fertig ist, gleich wie viele Worker er hat.
 | CI-06 | Berichte nennen Auswahl, echte Prozessausgänge, Testzahlen und Zeiten; auch bei Fehlern werden vorhandene Berichte hochgeladen. | Berichtstests und `always()`-Artefaktschritte |
 | CI-07 | Gemeinsame Vorbereitung verändert keine Eingabe eines anderen Tests. Determinismus vergleicht weiterhin zwei unabhängig gebaute Ergebnisse. | Kopien für veränderliche Daten, unveränderte Zusicherungen und gezielte Gegenproben |
 | CI-08 | Laufzeitgewinn wird nur für einen abgeschlossenen vergleichbaren Lauf behauptet. Lokales Entwicklungstor und Release-Abnahme bleiben getrennt. | Nachweis mit Commit, Plattform, Befehl, Exit und Berichtspfad |
-| CI-09 | Vor dem Merge nach main und vor dem Release laufen die von der Änderung betroffenen Fenstertests auf Windows, Linux, Apple Silicon und Intel-Mac und die betroffenen Slicertests mit echten, fest versionierten und per Prüfsumme belegten Slicern auf Linux, Apple Silicon und Intel-Mac (Entscheidung Robert, 07.10.2026). Die Auswahl folgt dem Importgraphen; Unterlagen, `konzepte/` und Sprachkataloge lösen der Kosten wegen nichts aus, außer dem Markdown, das die Anwendung selbst liest (`READ_BY_THE_APPLICATION`). Die Fensterauswahl teilt ihre Auswahlen je Plattform gleichmäßig auf drei Läufer (Matrix `shard` 0–2, Auswahl i auf Teil i mod 3). Eine leere Auswahl, ein fehlendes Programm oder ein übersprungener Slicertest ist rot. | `tools/ci_selection.py` mit `tests/test_slicer_selection.py`; `fenster-auswahl.yml` und `slicer-auswahl.yml` mit ihren Verträgen in `tests/test_packaging.py` und `tests/test_supply_chain.py` |
+| CI-09 | Nach dem Push nach main und vor dem Release laufen die von der Änderung betroffenen Fenstertests auf Windows, Linux, Apple Silicon und Intel-Mac und die betroffenen Slicertests mit echten, fest versionierten und per Prüfsumme belegten Slicern auf Linux, Apple Silicon und Intel-Mac (Entscheidung Robert, 07.10.2026). Die Auswahl folgt dem Importgraphen; Unterlagen, `konzepte/` und Sprachkataloge lösen der Kosten wegen nichts aus, außer dem Markdown, das die Anwendung selbst liest (`READ_BY_THE_APPLICATION`). Die Fensterauswahl teilt ihre Auswahlen je Plattform gleichmäßig auf drei Läufer (Matrix `shard` 0–2, Auswahl i auf Teil i mod 3). Eine leere Auswahl, ein fehlendes Programm oder ein übersprungener Slicertest ist rot. | `tools/ci_selection.py` mit `tests/test_slicer_selection.py`; `fenster-auswahl.yml` und `slicer-auswahl.yml` mit ihren Verträgen in `tests/test_packaging.py` und `tests/test_supply_chain.py` |
 
 Änderungen an diesen Zusagen benötigen eine bewusste Fortschreibung dieses
 Konzepts und der zuständigen Regeldatei. Tests dürfen nicht gestrichen,
@@ -79,7 +79,7 @@ verlängerte den Tag-Lauf um jede Minute, die sie auf einen macOS-Platz wartet.
 Stattdessen hält sie jede Releaseakte an. Ein Tag-Lauf belegt zu Beginn fünf
 macOS-Plätze (drei Kernteile, Fensterverträge auf Apple Silicon, Intel-Mac),
 die gemessene Obergrenze des Kontos; während eines Tag-Laufs startet deshalb
-keine Fenster- oder Slicerauswahl (`/erzeugen`). Der Versionswächter fährt
+keine Fenster- oder Slicerauswahl auf main (`/erzeugen`). Der Versionswächter fährt
 unter Linux dieselben zwei Gruppen gegen die neuesten Fassungen. Gemessen in
 der Probe 37894162728 (09.10.2026, je Job mit Einrichtung, noch mit zwei
 Sammlungen): Linux 6:40 min, davon Renderer 54 s; Apple Silicon 8:15 min,
@@ -126,14 +126,16 @@ Gruppe, eine rote Datei als Anmerkung am Lauf, die Übersicht im
 Schrittbericht: Ein Bericht, der nur als Artefakt existiert, fehlt genau
 dann, wenn der Job an seiner Frist endet.
 
-Vor dem Merge nach main (CI-09) bestimmt `tools/ci_selection.py` aus dem
-Diff des Zweigs gegen main die betroffenen Testdateien über denselben
+Nach dem Push nach main (CI-09) bestimmt `tools/ci_selection.py` aus dem
+Diff des Merges die betroffenen Testdateien über denselben
 Importgraphen wie `tools/affected_tests.py`, ohne Unterlagen und Kataloge
 (außer dem Markdown, das die Anwendung liest),
 und gibt zwei Semikolonlisten aus: je Datei die Fenster- und Rendererfälle
 (`--window-group windowed`) für `fenster-auswahl.yml` und die Fälle mit
 Marker `slicer` (`-m slicer`) für `slicer-auswahl.yml`. Beide Workflows
-starten nur von Hand auf dem Zweig und fahren je Auswahl einen Prozess; die
+starten nur von Hand auf main und fahren je Auswahl einen Prozess; auf Zweigen
+und Wegwerfzweigen läuft keine CI (Entscheidung Robert, 09.10.2026), ein Rot wird
+auf main vorwärts behoben; die
 Fensterauswahl verteilt die Auswahlen je Plattform auf drei Läufer, die
 höchstens eine Auswahl auseinanderliegen, und ein Teil ohne Auswahl ist grün. Der
 Slicerworkflow installiert nur die Programme, die die gewählten Fälle über

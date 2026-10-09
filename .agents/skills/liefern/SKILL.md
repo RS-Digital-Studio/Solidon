@@ -38,20 +38,21 @@ keine weitere Runde (Entscheidung Robert). Mehrere Punkte, die zusammen
 hinausgehen, teilen sich ein Review. Weil `post-commit` pusht, ist das Review
 vor dem Commit das Review vor dem Push.
 
-**Vor dem Merge nach main laufen die betroffenen Fenster- und Slicertests auf
-Linux und macOS** (Entscheidung Robert, `.claude/rules/tests.md`, CI-09):
+**Nach dem Push nach main laufen die betroffenen Fenster- und Slicertests auf
+Linux und macOS** (Entscheidung Robert, `.claude/rules/tests.md`, CI-09); auf
+Zweigen und Wegwerfzweigen läuft keine CI:
 
-1. Die Einheit liegt auf einem eigenen Zweig, gepusht (Handstart braucht
-   einen Stand auf der Gegenstelle). Eine neue oder geänderte Oberfläche
-   bringt ihren Fenstertest mit, eine Änderung an Slicerübergabe, Profilen,
-   Druckerwahl, Druckzeit oder Slicererkennung ihren Test mit
-   `installed_slicer` und `@pytest.mark.slicer(<programm>)`.
-2. `.venv\Scripts\python.exe tools/ci_selection.py --diff origin/main...<zweig>`
-   nennt beide Listen und die zwei `gh workflow run …`-Befehle; mit
-   `--ref <zweig>` starten.
-3. Beide Läufe grün, bevor gemergt wird; ein roter wird behoben, nicht
-   übergangen. Meldet das Werkzeug keinen Fenster- und keinen Slicertest,
-   entfällt der Schritt. Die Laufnummern gehören in den Bericht.
+1. Vor dem Merge belegen Wächter, Simulation und Gegenproben lokal, was ein
+   Workflow tun wird. Eine neue oder geänderte Oberfläche bringt ihren
+   Fenstertest mit, eine Änderung an Slicerübergabe, Profilen, Druckerwahl,
+   Druckzeit oder Slicererkennung ihren Test mit `installed_slicer` und
+   `@pytest.mark.slicer(<programm>)`.
+2. Nach dem Push: `.venv\Scripts\python.exe tools/ci_selection.py --diff
+   <main vorher>..origin/main` nennt beide Listen und die zwei
+   `gh workflow run …`-Befehle mit `--ref main`.
+3. Ein roter Lauf wird auf main vorwärts behoben, nicht übergangen. Meldet das
+   Werkzeug keinen Fenster- und keinen Slicertest, entfällt der Schritt. Die
+   Laufnummern gehören in den Bericht.
 
 **Vor dem Merge nach main steht der Kundenpunkt im Changelog** (Entscheidung
 Robert, `.claude/rules/auslieferung.md`): Merkt ein Kunde, was die Einheit

@@ -20,11 +20,12 @@ denselben Überschriften in `konzepte/begruendungen/regel-tests.md`.
   Fenster, Renderer und Leistung lokal ausschließlich beim Release** — auch nicht als gezielte
   Teilmenge (`CLAUDE.md`, `/pruefen`). Ein grüner Entwicklungslauf ist kein
   Release-Nachweis.
-- **Vor dem Merge nach main und vor dem Release laufen die betroffenen Fenster-
+- **Nach dem Push nach main und vor dem Release laufen die betroffenen Fenster-
   und Slicertests auf Linux und macOS** (Entscheidung Robert; CI-09):
-  `tools/ci_selection.py` nennt sie zum Diff, `fenster-auswahl.yml` und
-  `slicer-auswahl.yml` fahren sie per Handstart auf dem Zweig, beide grün vor
-  dem Merge. Nur das Betroffene — macOS-Minuten kosten das Zehnfache.
+  `tools/ci_selection.py` nennt sie zum Diff des Merges, `fenster-auswahl.yml`
+  und `slicer-auswahl.yml` fahren sie per Handstart auf main; ein Rot wird dort
+  vorwärts behoben. Auf Zweigen und Wegwerfzweigen läuft keine CI. Nur das
+  Betroffene — macOS-Minuten kosten das Zehnfache.
   Unterlagen und Kataloge lösen der Kosten wegen nichts aus, außer Markdown, das
   die Anwendung liest.
 - **Neues bringt seinen Test für diese Auswahl mit** (Entscheidung Robert): eine
