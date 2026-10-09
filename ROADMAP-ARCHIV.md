@@ -31,6 +31,9 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-09 | [RM-598: Die erklärte Schraubenbohrung der Mutternfalle endet im Körper (09.10.2026)](#rm-598-die-erklärte-schraubenbohrung-der-mutternfalle-endet-im-körper-09102026) |
+| 2026-10-09 | [RM-597: Ein exakt gesetztes Merkmal, das anderes Material nur auf einer Linie berührt, sagt es (09.10.2026)](#rm-597-ein-exakt-gesetztes-merkmal-das-anderes-material-nur-auf-einer-linie-berührt-sagt-es-09102026) |
+| 2026-10-09 | [RM-596: Merkmalshandlungen lassen fremde Teile, wie sie sind (09.10.2026)](#rm-596-merkmalshandlungen-lassen-fremde-teile-wie-sie-sind-09102026) |
 | 2026-10-09 | [RM-591: Die Mutternfalle schneidet ihre Tasche, auch von Hand auf eine Fläche gesetzt (09.10.2026)](#rm-591-die-mutternfalle-schneidet-ihre-tasche-auch-von-hand-auf-eine-fläche-gesetzt-09102026) |
 | 2026-10-09 | [RM-590: Ein Klick auf eine Ecke wählt ihre Kanten (09.10.2026)](#rm-590-ein-klick-auf-eine-ecke-wählt-ihre-kanten-09102026) |
 | 2026-10-09 | [RM-579: Die Linie zeigt am exakten Körper die ganze Kontur, die verrundet wird (09.10.2026)](#rm-579-die-linie-zeigt-am-exakten-körper-die-ganze-kontur-die-verrundet-wird-09102026) |
@@ -44819,3 +44822,70 @@ Rands, (1 − π/4)·r²·(116 + 2π·(3 − 0,2234·r)). Tests:
 `test_brep.py::test_the_contour_of_a_chosen_edge_is_what_the_fillet_rounds` und
 `test_selection.py::test_a_chosen_edge_of_an_exact_body_shows_the_whole_contour_it_rounds`
 (am Basisstand rot: eine Kette statt acht). Umgesetzt von Claude.
+
+## RM-598: Die erklärte Schraubenbohrung der Mutternfalle endet im Körper (09.10.2026)
+
+<a id="rm-598-die-erklärte-schraubenbohrung-der-mutternfalle-endet-im-körper-09102026"></a>
+<a id="rm-598"></a>
+
+**RM-598 — Die erklärte Schraubenbohrung der Mutternfalle reicht 10 mm in die Luft.**
+Gefunden bei den Review-Fixes zu Paket G (09.10.2026): Der Baustein schneidet sein
+Schraubenloch 10 mm über die Tasche hinaus, damit es durch jede Wand geht, und erklärte die
+Bohrung über diese ganze Länge — auf der Deckfläche eines 12 mm dicken Quaders von z = -0,5
+bis z = 22. *Stift für Bohrung* sagte deshalb ab, an der Stelle sei kein Hohlraum im Körper.
+**Abnahme:** Die erklärte Bohrung endet im Körper, und *Stift für Bohrung* geht dort.
+
+**Nachweis (09.10.2026, `2f96dafe8`, Paket G):** Eine erklärte Durchgangsbohrung eines
+Bausteins endet an den Grenzen des Körpers (`parts.ops._through_bores_in_the_body`): gemessen
+am Träger vor dem Schnitt, entlang der Achse; wo die Mitte eines Stücks auf der Diagonale einer
+Deckfläche liegt, fragt die Probe eine Facettenhöhe daneben nach. Die Bausteinoperationen
+tragen `targets:8`. Test `test_bore_pin.py::test_the_screw_bore_of_a_nut_trap_ends_in_the_body_and_takes_a_pin`
+(je Kern: Bohrung von z = 0 bis z = 12, der Stift lose und im Körper; am Stand davor rot mit
+-0,515 bis 22,01). Bereichsnachweis 49 von 49, Beispiele unverändert. Umgesetzt von Claude.
+
+## RM-597: Ein exakt gesetztes Merkmal, das anderes Material nur auf einer Linie berührt, sagt es (09.10.2026)
+
+<a id="rm-597-ein-exakt-gesetztes-merkmal-das-anderes-material-nur-auf-einer-linie-berührt-sagt-es-09102026"></a>
+<a id="rm-597"></a>
+
+**RM-597 — Eine exakte Zapfenkopie, die das Original berührt, liefert einen undichten Körper.**
+Gefunden bei den Review-Fixes zu Paket G (09.10.2026): Tasche mit Zapfen, die Kopie genau einen
+Durchmesser daneben — offener Zwilling, 18 560,8 mm³, ohne Befund; der Schnittweg sagt in
+derselben Lage längst ab. **Abnahme:** Auch getippte Zahlen führen nicht dorthin, ohne dass es
+gesagt wird oder richtig rechnet.
+
+**Nachweis (09.10.2026, `2f96dafe8`, Paket G):** Die exakten Wege aus den Flächen — Versetzen,
+Verdoppeln, Ändern, Zapfen und Kegel kippen — fragen ihr Ergebnis (`_exact_placed_holds`): War
+der Körper vorher dicht und ist er danach ungültig oder zeigt sein Zwilling eine Berührung —
+Kanten an mehr als zwei Dreiecken, ohne offene Kante —, sagt die Handlung ab, mit dem Weg, die
+Eingabe zu ändern. **Zurückgenommen:** Die erste Fassung sagte bei jedem offenen Zwilling ab und
+traf damit die um 1° gekippte Wellenhälfte über einer Kehle, einen gültigen Körper, dessen Netz
+an einer Naht nicht schloss (fünf offene neben vier mehrfachen Kanten); die zweite fragte die
+Topologie und übersah den an die Wand versetzten Zapfen. Test
+`test_feature_moves_keep_shape.py::test_an_exact_pin_that_only_touches_material_says_so`
+(Kopie, an die Taschenwand versetzt, auf den Boden gekippt; ohne die Frage alle drei rot).
+Der Vergleich von Karte und Operation über exakte Körper nimmt dafür einen 5 mm hohen Zapfen:
+Bei Höhe gleich Durchmesser legt die Vorgabe der Karte (90°) ihn genau auf den Boden.
+Umgesetzt von Claude.
+
+## RM-596: Merkmalshandlungen lassen fremde Teile, wie sie sind (09.10.2026)
+
+<a id="rm-596-merkmalshandlungen-lassen-fremde-teile-wie-sie-sind-09102026"></a>
+<a id="rm-596"></a>
+
+**RM-596 — *Merkmal drehen* an einer Wellenhälfte verschmilzt den losen O-Ring in der Kehle.**
+Gefunden bei den Review-Fixes zu Paket G (09.10.2026): Welle Ø 20 × 40 mit Kehle und losem
+O-Ring; die obere Hälfte um 10° gekippt fährt in den Ring, und beide Kerne lieferten ein Teil
+statt zwei (12 717 mm³ am Netz), ohne Befund. **Abnahme:** Absage oder richtige Rechnung, an
+beiden Kernen.
+
+**Nachweis (09.10.2026, `2f96dafe8`, Paket G):** Jede Merkmalshandlung außer *Zum Langloch
+ziehen*, das ein freies Teil in seiner Bohrung mit Absicht mitschneidet, fragt ihr Ergebnis
+(`_leaves_other_parts_alone`): Jede Schale eines Teils, zu dem das Merkmal nicht gehört — Teile
+als Materialfamilien —, steht danach mit demselben Rauminhalt und Hüllquader für sich da, sonst
+Absage mit *In Einzelteile aufteilen*; wo die Handlung berührende Teile mit Befund vereinigt,
+gilt der Befund. Um 1° gekippt rechnet die Wellenhälfte weiter, der Ring bleibt lose. Am
+Laptop-Ständer fängt dieselbe Frage drei Versetzungen um 0,5 mm, die vorher bis zu 145 Schalen
+hinterließen, und kostet dort 0,3 bis 0,4 s. Test
+`test_slot_features.py::test_turning_a_shaft_half_does_not_swallow_the_loose_ring_in_its_groove`
+(je Kern; ohne die Frage rot). Cache-Versionen der acht Handlungen erhöht. Umgesetzt von Claude.
