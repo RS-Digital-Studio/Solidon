@@ -644,6 +644,7 @@ class SliceResult:
     support_volume: float
     first_layer_area: float
     source: MetricSource = "internal"
+    bridge_from: float | None = None  # ab welcher Breite eine freie Fläche Brücke ist, mm
 
 
 @dataclass(frozen=True, slots=True)
