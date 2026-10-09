@@ -36,6 +36,7 @@ from app.core.slice.analysis import (
     narrowest,
     piece_area,
     slice_body,
+    span_beside,
     spanning_width,
     support_on_model,
     tip_islands,
@@ -2661,12 +2662,12 @@ def test_a_real_bridge_beside_a_shelf_is_still_reported_at_the_bridge() -> None:
 _FLANK = math.tan(math.radians(30.0))
 
 
-def _flanked_shelf(*others: trimesh.Trimesh) -> MeshData:
+def _flanked_shelf(*others: trimesh.Trimesh, depth: float = 2.5) -> MeshData:
     """Die Wand von oben, deren Seiten -x und +y zwischen z 18 und 24 unter
     30 Grad nach außen laufen, und an der Flanke +y auf z 20 die Konsole von
-    2,5 mm. Eine Flanke legt je Schicht 0,115 mm frei: mehr als die Zugabe der
-    Brückenfrage (0,05 mm), weniger als die des Überhangs (0,2 mm) — kein
-    Überhangstück, aber freie Fläche, die alles an der Wand verbindet."""
+    ``depth`` mm. Eine Flanke legt je Schicht 0,115 mm frei: mehr als die
+    Zugabe der Brückenfrage (0,05 mm), weniger als die des Überhangs (0,2 mm) —
+    kein Überhangstück, aber freie Fläche, die alles an der Wand verbindet."""
     grow = 6.0 * _FLANK
     lower = brick(40.0, 10.0, 18.0, (0.0, 0.0, 9.0))
     flank = trimesh.convex.convex_hull(
@@ -2675,7 +2676,7 @@ def _flanked_shelf(*others: trimesh.Trimesh) -> MeshData:
     )
     upper = brick(40.0 + grow, 10.0 + grow, 16.0, (-grow / 2.0, grow / 2.0, 32.0))
     face = 5.0 + 2.0 * _FLANK
-    shelf = brick(40.0, face + 2.5 - 5.0, 1.0, (0.0, (5.0 + face + 2.5) / 2.0, 20.5))
+    shelf = brick(40.0, face + depth - 5.0, 1.0, (0.0, (5.0 + face + depth) / 2.0, 20.5))
     return on_bed(lower, flank, upper, shelf, *others)
 
 
@@ -2725,6 +2726,80 @@ def test_a_bridge_on_the_flank_is_reported_with_its_own_span_and_place() -> None
     assert bridge.location is not None
     assert bridge.location[0] < -face, "über der Lücke des Stegs"
     assert abs(bridge.location[1]) < 1.5, "auf dem Steg, nicht an der Konsole"
+
+
+def _counting_spans(monkeypatch: pytest.MonkeyPatch) -> list[int]:
+    """Zählt die Bahnenmessungen (``analysis._supported_span``)."""
+    from app.core.slice import analysis
+
+    calls: list[int] = []
+    real = analysis._supported_span
+
+    def counting(*args: object, **kwargs: object) -> float:
+        calls.append(1)
+        return real(*args, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(analysis, "_supported_span", counting)
+    return calls
+
+
+def test_the_span_beside_a_ledge_is_measured_once_per_slice(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Review zu RM-627: Der Prüfbericht läuft nach jeder Auswertung, und
+    ``span_beside`` maß jede spannende Schicht mit Rand jedes Mal neu — an der
+    Waschschüssel 2,8 s für eine Schicht. Die Antwort gilt dem Schnitt; Rat,
+    Bericht und eine zweite Runde lesen sie aus dem Merker."""
+    face = 20.0 + 2.0 * _FLANK
+    result = slice_body(
+        _flanked_shelf(
+            brick(3.0, 3.0, 20.0, (-(face + 21.5), 0.0, 10.0)),
+            brick(23.0, 3.0, 1.0, (-(face + 11.5), 0.0, 20.5)),
+        ),
+        0.2,
+    )
+    (index,) = [
+        number
+        for number, layer in enumerate(result.layers)
+        if layer.bridge_width > SPAN_INTERESTING
+    ]
+    edges = ledges(result)
+    calls = _counting_spans(monkeypatch)
+
+    first = span_beside(result, index, edges)
+    measured = len(calls)
+    assert measured, "die Schicht mit Rand wird gemessen"
+    assert span_beside(result, index, edges) == first
+    assert advise.support_need(result).needed
+    advise.located_warnings(result, petg())
+    advise.located_warnings(result, petg())
+    assert len(calls) == measured, "aus dem Merker"
+
+
+def test_a_ledge_without_a_core_costs_no_new_measurement(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Ein Rand, schmaler als zwei Bahnen, trägt keinen Kern und nimmt der
+    Messung nichts weg, wenn seine freie Fläche über die Flanke an der Brücke
+    hängt: Die Zahl der Schicht gilt, ohne eine Bahn neu zu legen."""
+    face = 20.0 + 2.0 * _FLANK
+    result = slice_body(
+        _flanked_shelf(
+            brick(3.0, 3.0, 20.0, (-(face + 21.5), 0.0, 10.0)),
+            brick(23.0, 3.0, 1.0, (-(face + 11.5), 0.0, 20.5)),
+            depth=0.6,
+        ),
+        0.2,
+    )
+    (index,) = [
+        number
+        for number, layer in enumerate(result.layers)
+        if layer.bridge_width > SPAN_INTERESTING
+    ]
+    edges = ledges(result)
+    assert any(name[0] == index for name in edges), "der schmale Rand liegt auf der Schicht"
+    calls = _counting_spans(monkeypatch)
+
+    assert span_beside(result, index, edges) == result.layers[index].bridge_width
+    assert not calls
 
 
 def _flange_with_tab(column: float, tab: float, *, flange: bool = True) -> MeshData:
@@ -2848,10 +2923,9 @@ def test_the_ledge_space_is_remembered_per_line_width() -> None:
 
 
 def test_the_report_and_the_need_stop_in_the_ledge_question() -> None:
-    """Prüfbericht und Stützbedarf brechen in der Randfrage ab, ihrem teuersten
-    Schritt (am Eiffelturm 7,5 s über alle Stücke). Die Kanalfrage stellt dieselbe
-    Frage ohne Abbruch; deshalb kommt die Randfrage zuerst (zweites Review vom
-    08.10.2026)."""
+    """Prüfbericht und Stützbedarf brechen in der Randfrage ab (am Eiffelturm
+    7,5 s über alle Stücke); sie kommt vor der Kanalfrage, die dieselbe Antwort
+    aus dem Merker liest (zweites Review vom 08.10.2026)."""
     from app.core.errors import OperationCancelled
     from app.core.scene.cancel import CancelSignal
     from app.core.slice import findings
@@ -2864,6 +2938,26 @@ def test_the_report_and_the_need_stop_in_the_ledge_question() -> None:
         )
     with pytest.raises(OperationCancelled):
         advise.support_need(slice_body(column_with_flange_and_arm(15.0), 0.2), cancelled=token)
+
+
+def test_the_need_stops_in_the_channel_question_too() -> None:
+    """Auch nach gemerkter Randfrage bricht der Stützbedarf ab: Die Kanalfrage
+    lief ohne ``cancelled`` (Review zu RM-627, am Drachen 446 s CPU), und ihre
+    eigene Randfrage kam aus dem Merker, ohne zu fragen. Abgebrochen wird
+    nichts gemerkt."""
+    from app.core.errors import OperationCancelled
+    from app.core.scene.cancel import CancelSignal
+    from app.core.slice import analysis
+
+    result = slice_body(column_with_flange_and_arm(15.0), 0.2)
+    ledges(result)
+    token = CancelSignal()
+    token.cancel()
+
+    with pytest.raises(OperationCancelled):
+        advise.support_need(result, cancelled=token)
+    assert not any(layers is result.layers for layers, *_rest in analysis._ANSWERS)
+    assert advise.support_need(result).needed
 
 
 def test_the_ledge_blocker_covers_the_ledge_and_spares_the_arm() -> None:

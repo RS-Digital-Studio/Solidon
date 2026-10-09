@@ -239,7 +239,10 @@ def body_findings(
     # Bericht, solange kein Stück die Meldeschwelle erreicht.
     if need is not None and not large:
         found += small_overhang_findings(entry.id, result, need, cancelled=cancelled)
-    found += [_placed(finding, entry.id) for finding in advise.located_warnings(result, profile)]
+    found += [
+        _placed(finding, entry.id)
+        for finding in advise.located_warnings(result, profile, cancelled=cancelled)
+    ]
     # Eine Lage, die nach der Regel der Druckvorschläge keine Stütze braucht,
     # spart durch eine andere keine — dieselbe Frage wie ``orientation.stays``.
     if need is not None and need.needed:

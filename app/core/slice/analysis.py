@@ -3467,7 +3467,13 @@ def kept_overhang(
     return joined if isinstance(joined, ShapelyPolygon | MultiPolygon) else ShapelyPolygon()
 
 
-def span_beside(result: SliceResult, index: int, quiet: frozenset[tuple[int, int]]) -> float:
+def span_beside(
+    result: SliceResult,
+    index: int,
+    quiet: frozenset[tuple[int, int]],
+    *,
+    cancelled: CancelToken | None = None,
+) -> float:
     """Die längste Brücke der Schicht ``index``, ohne die Stücke aus ``quiet`` —
     Kanaldecken und Ränder, die sich selbst tragen (RM-627).
 
@@ -3480,8 +3486,15 @@ def span_beside(result: SliceResult, index: int, quiet: frozenset[tuple[int, int
     Fläche, die ein Stück außerhalb von ``quiet`` berührt, und darin nur deren
     Kerne (:func:`_widest_bridge`), wie bei :func:`open_bridge_width`. Steht
     kein Stück der Schicht in ``quiet``, gilt ihre Zahl unverändert.
+
+    **Gemerkt je Schnitt** (Identität des Schichttupels), je Schicht und
+    Auswahl ihrer Stücke aus ``quiet``, wie :func:`ledges`: Der Prüfbericht
+    läuft nach jeder Auswertung, und an der Waschschüssel kostete eine einzige
+    Schicht 2,8 s. Nimmt die Auswahl nichts weg, gilt die Zahl der Schicht ohne
+    neue Messung (:func:`_widest_bridge`). ``cancelled`` wird vor jeder
+    Messung gefragt.
     """
-    return _beside(result, index, quiet)[0]
+    return _beside(result, index, quiet, cancelled)[0]
 
 
 def span_spot(
@@ -3489,16 +3502,54 @@ def span_spot(
 ) -> tuple[float, float] | None:
     """Wo :func:`span_beside` die längste Brücke gemessen hat, in der Aufsicht —
     ``None``, wenn die Schicht als Ganzes zählt; dann gilt der Ort der Schicht."""
-    return _beside(result, index, quiet)[1]
+    return _beside(result, index, quiet, None)[1]
 
 
 def _beside(
+    result: SliceResult,
+    index: int,
+    quiet: frozenset[tuple[int, int]],
+    cancelled: CancelToken | None,
+) -> tuple[float, tuple[float, float] | None]:
+    """:func:`span_beside` und :func:`span_spot` aus einer gemerkten Messung."""
+    layer = result.layers[index]
+    mine = frozenset(number for number in range(len(layer.overhangs)) if (index, number) in quiet)
+    if not mine or index == 0:
+        return layer.bridge_width, None
+    with _ANSWERS_LOCK:
+        known = next((found for layers, found in _BESIDE if layers is result.layers), None)
+        if known is not None and (index, mine) in known:
+            return known[(index, mine)]
+    if cancelled is not None:
+        cancelled.raise_if_cancelled()
+    answer = _measured_beside(result, index, quiet)
+    with _ANSWERS_LOCK:
+        known = next((found for layers, found in _BESIDE if layers is result.layers), None)
+        if known is None:
+            known = {}
+            _BESIDE.append((result.layers, known))
+            del _BESIDE[:-_ANSWERS_KEPT]
+        known[(index, mine)] = answer
+    return answer
+
+
+#: Gemessene Brücken neben Rändern und Kanaldecken (:func:`span_beside`): je
+#: Schnitt (Schicht, Auswahl ihrer Stücke) → (Weite, Ort).
+_BESIDE: list[
+    tuple[
+        tuple[LayerInfo, ...],
+        dict[tuple[int, frozenset[int]], tuple[float, tuple[float, float] | None]],
+    ]
+] = []
+
+
+def _measured_beside(
     result: SliceResult, index: int, quiet: frozenset[tuple[int, int]]
 ) -> tuple[float, tuple[float, float] | None]:
-    """:func:`span_beside` und :func:`span_spot` aus einer Messung."""
+    """:func:`span_beside`, ungemerkt."""
     layer = result.layers[index]
     kept = kept_overhang(result, index, quiet)
-    if kept is None or index == 0:
+    if kept is None:
         return layer.bridge_width, None
     if kept.is_empty:
         return 0.0, None
@@ -3507,6 +3558,7 @@ def _beside(
         _material(result.layers[index - 1]),
         BRIDGE_FROM if result.bridge_from is None else result.bridge_from,
         touching=kept,
+        whole=layer.bridge_width,
     )
     if where is None:
         return width, None
@@ -3557,7 +3609,9 @@ def model_support(
     wird am Schichttupel selbst (Identität, nicht Gleichheit), für die letzten
     :data:`_ANSWERS_KEPT` Fragen. Die Stückauswahl (``only``) gehört zum
     Schlüssel, damit auch der Prüfbericht seine Kanalfrage nur einmal stellt.
-    ``cancelled`` erreicht die Randfrage darin (:func:`ledges`).
+    ``cancelled`` wird je Schicht des Durchgangs, je Kreisfrage und je Decke
+    gefragt und erreicht die Randfrage darin (:func:`ledges`); eine
+    abgebrochene Antwort wird nicht gemerkt.
     """
     with _ANSWERS_LOCK:
         for layers, width, selected, answer in _ANSWERS:
@@ -4160,6 +4214,8 @@ def _model_support(
         pending: list[tuple[int, manifold3d.CrossSection]] = []
         landed: dict[int, tuple[int, float]] = {}
         for index in range(top, 0, -1):
+            if cancelled is not None:
+                cancelled.raise_if_cancelled()
             if member.get(index) == group:
                 pending.extend((owner, _material_cross(pieces[owner])) for owner in starts[index])
             if not pending:
@@ -4225,6 +4281,8 @@ def _model_support(
     # Eine Frage je Schicht, nicht je Säule (:func:`_in_channels`), und die
     # Schichten nebeneinander: Jede fragt nur ihre eigene Fläche.
     def answer(under: int) -> list[bool]:
+        if cancelled is not None:
+            cancelled.raise_if_cancelled()
         return _in_channels(
             material_at(under)[0], [places[owner] for owner in asked[under]], channel_width
         )
@@ -4257,6 +4315,8 @@ def _model_support(
     for owner in sorted(channels):
         if owner in settled:
             continue
+        if cancelled is not None:
+            cancelled.raise_if_cancelled()
         ceiling = sorted(owner_of[name] for name in ceilings.of(names[owner]))
         settled.update(ceiling)
         inside = math.fsum(areas[member] for member in ceiling if member in channels)
@@ -4323,6 +4383,8 @@ def _model_support(
         for name in sorted(resting):
             if name in seen:
                 continue
+            if cancelled is not None:
+                cancelled.raise_if_cancelled()
             group = ceilings.of(name)
             seen |= group
             members = sorted(group & resting.keys())
@@ -4364,6 +4426,8 @@ def _model_support(
             return True
         group = ceilings.of(name)
         if group not in worth_of:
+            if cancelled is not None:
+                cancelled.raise_if_cancelled()
             shapes = [ceilings.shape(member) for member in sorted(group - in_channel)]
             worth_of[group] = worth_support(
                 _field(shapes), math.fsum(shape.area for shape in shapes)

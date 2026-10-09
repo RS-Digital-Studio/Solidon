@@ -874,9 +874,10 @@ def support_need(result: SliceResult, *, cancelled: CancelToken | None = None) -
     # weiter als ``LEDGE_REACH`` über sein Material ragt, trägt sich selbst. Die
     # Ränder der Plattformen verlangten sonst Stützen, und der ElegooSlicer
     # stellte 831 m Baum außen am Turm hoch. Gefragt vor der Kanalfrage, die
-    # dieselbe Antwort ohne Abbruch aus dem Merker liest.
+    # dieselbe Antwort aus dem Merker liest. Beide sind abbrechbar; die
+    # Kanalfrage kostete am Drachen (45°) 446 s CPU ohne Abbruch.
     edges = ledges(result, cancelled=cancelled) if asked else frozenset()
-    model = model_support(result) if asked else ModelSupport()
+    model = model_support(result, cancelled=cancelled) if asked else ModelSupport()
     quiet = model.channels | edges
     overhang = total_overhang(result, without=quiet)
     piece = largest_overhang_patch(result, without=quiet)
@@ -905,7 +906,7 @@ def support_need(result: SliceResult, *, cancelled: CancelToken | None = None) -
     # zusammenhängende Stück (:func:`largest_overhang_patch`); lange freie
     # Stege fängt die Brückenregel darunter weiter ab.
     return SupportNeed(
-        needed=_may_need_support(result, islands, overhang, patch, quiet),
+        needed=_may_need_support(result, islands, overhang, patch, quiet, cancelled),
         islands=islands,
         model=model,
         overhang=overhang,
@@ -1949,6 +1950,7 @@ def _may_need_support(
     overhang: float,
     patch: float,
     quiet: frozenset[tuple[int, int]] = frozenset(),
+    cancelled: CancelToken | None = None,
 ) -> bool:
     """Die zwei Wege aus :func:`_from_geometry` zum Stützbedarf, dazu Inseln
     und lange Brücken außerhalb der Kanal- und Randstücke ``quiet``
@@ -1957,7 +1959,7 @@ def _may_need_support(
         bool(islands)
         or worth_support(patch, overhang)
         or any(
-            span_beside(result, index, quiet) > SPAN_INTERESTING
+            span_beside(result, index, quiet, cancelled=cancelled) > SPAN_INTERESTING
             for index, layer in enumerate(result.layers)
             if layer.bridge_width > SPAN_INTERESTING
         )
@@ -2330,7 +2332,9 @@ def warnings_for(
     return findings
 
 
-def located_warnings(result: SliceResult, profile: Profile) -> list[Finding]:
+def located_warnings(
+    result: SliceResult, profile: Profile, *, cancelled: CancelToken | None = None
+) -> list[Finding]:
     """Die Befunde aus der Geometrie — jeder mit der Stelle, an der er sitzt.
 
     Eine Rechnung für zwei Wege: :func:`warnings_for` nimmt sie für den
@@ -2338,7 +2342,7 @@ def located_warnings(result: SliceResult, profile: Profile) -> list[Finding]:
     zusätzlich an ihren Körper für den Prüfbericht. Der Ort ist die Mitte der
     Fläche, die an der dünnsten Stelle bei der Öffnung verloren geht, bzw. die
     Mitte der freien Fläche über der längsten Brücke; ohne Ort fliegt der
-    Klick zum Körper.
+    Klick zum Körper. ``cancelled`` erreicht die Brückenfrage (:func:`_from_spans`).
     """
     findings: list[Finding] = []
     least = NARROW_LINE_SHARE * profile.printer.nozzle_diameter
@@ -2370,7 +2374,7 @@ def located_warnings(result: SliceResult, profile: Profile) -> list[Finding]:
                 suggestions=(OPEN_PRINT_SETTINGS,),
             )
         )
-    findings += _from_spans(result)
+    findings += _from_spans(result, cancelled)
     # **Ein Brim, der nicht aufs Bett passt, wird nicht vorgeschlagen — aber
     # gesagt** (:func:`_brim_where_it_fits`). Gefragt wie dort: kleine
     # Standfläche oder kleine Füße.
@@ -2396,7 +2400,7 @@ def located_warnings(result: SliceResult, profile: Profile) -> list[Finding]:
     return findings
 
 
-def _from_spans(result: SliceResult) -> list[Finding]:
+def _from_spans(result: SliceResult, cancelled: CancelToken | None = None) -> list[Finding]:
     """Decken, die quer durch die Luft spannen (§22.2).
 
     Kein Vorschlag, sondern ein Befund: keine Einstellung macht aus einer
@@ -2431,8 +2435,8 @@ def _from_spans(result: SliceResult) -> list[Finding]:
         for index in spanning
         for number in range(len(result.layers[index].overhangs))
     )
-    edges = ledges(result, asked)
-    widths = {index: span_beside(result, index, edges) for index in spanning}
+    edges = ledges(result, asked, cancelled=cancelled)
+    widths = {index: span_beside(result, index, edges, cancelled=cancelled) for index in spanning}
     spanning = [index for index in spanning if widths[index] > SPAN_INTERESTING]
     if not spanning:
         return []
