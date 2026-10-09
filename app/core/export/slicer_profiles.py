@@ -31,6 +31,7 @@ import time
 from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass, replace
+from functools import partial
 from pathlib import Path
 from typing import Any, Final, Literal
 from urllib.parse import unquote_plus
@@ -89,7 +90,7 @@ def _checked_paths(paths: Iterable[Path], cancelled: CancelToken | None) -> Iter
 #: danach Pfade aus, die es nicht mehr gibt — die Ersparnis wiegt das nicht
 #: auf. Wer ihn übergibt, hält ihn so kurz wie den Aufruf, in dem er entsteht.
 #: Länger hält nur, was vor jeder Antwort seine Signatur prüft
-#: (:data:`_holdings`, :data:`_prusa_cache`).
+#: (:data:`_holdings`, :data:`_prusa_cache`, :data:`_derived`).
 ProfileIndexes = dict[tuple[Path, ProfileKind | None], dict[str, Path]]
 
 #: Die gelesenen Profildateien eines Durchgangs, Datei → Inhalt (``None`` für
@@ -119,7 +120,9 @@ def single_read() -> Iterator[None]:
     gemerkten Bestands (:func:`_holding_signature`) erhebt ein Durchgang
     einmal je Slicer; was aus dem gelesenen Bestand folgt — die Modelldatei
     einer Maschine, die Grundlage eines Exports —, rechnet er einmal
-    (:func:`once_per_read`).
+    (:func:`once_per_read`). Namensindizes und Modelldatei der Orca-Familie
+    halten darüber hinaus, solange die Signatur gleich bleibt
+    (:func:`_once_per_stock`).
     """
     if getattr(_SINGLE_READ, "documents", None) is not None:
         yield
@@ -127,6 +130,7 @@ def single_read() -> Iterator[None]:
     _SINGLE_READ.documents = {}
     _SINGLE_READ.indexes = {}
     _SINGLE_READ.signatures = {}
+    _SINGLE_READ.signed_at = {}
     _SINGLE_READ.listings = {}
     _SINGLE_READ.once = {}
     try:
@@ -135,6 +139,7 @@ def single_read() -> Iterator[None]:
         _SINGLE_READ.documents = None
         _SINGLE_READ.indexes = None
         _SINGLE_READ.signatures = None
+        _SINGLE_READ.signed_at = None
         _SINGLE_READ.listings = None
         _SINGLE_READ.once = None
 
@@ -157,6 +162,77 @@ def once_per_read[T](key: object, compute: Callable[[], T]) -> T:
     computed = compute()
     shared[key] = computed
     return computed
+
+
+#: **Was aus dem Bestand eines Slicers folgt und über den Durchgang hinaus
+#: hält** — Namensindizes der Erbketten und Modelldateien
+#: (:func:`_once_per_stock`), je Programm mit Signatur und Stand der
+#: Programmsuche. Sie belegen dasselbe wie :data:`_holdings`: welche Profile
+#: es wo gibt, nicht ihre Werte — die liest jeder Durchgang aus den Dateien.
+#: Ohne sie baute jeder 3MF-Export am ElegooSlicer die Namensindizes neu (668
+#: Dateien je Herstellerordner) und suchte die Modelldatei rekursiv über alle
+#: Hersteller: rund 0,35 s CPU je Export (RM-670).
+_derived: dict[tuple[str, SlicerFlavour], tuple[_Signature, int, dict[object, Any]]] = {}
+
+#: Welchem Programm eine Wurzel des Bestands gehört — eingetragen, sobald
+#: :func:`_holding_signature` ihn erhebt. Was unter keiner bekannten Wurzel
+#: liegt, gilt nur im Durchgang.
+_root_owners: dict[Path, tuple[Path, SlicerFlavour]] = {}
+
+
+def _once_per_stock[T](folder: Path, key: object, compute: Callable[[], T]) -> T:
+    """Wie :func:`once_per_read`, aber gehalten, solange der Bestand des
+    Slicers, dem ``folder`` gehört, seine Signatur behält.
+
+    Nur im Lesedurchgang, denn nur dort ist die Signatur schon erhoben; sonst
+    kostete ihre Erhebung mehr als das Rechnen. Gemerkt wird erst ein Bestand,
+    dessen jüngste Änderung vor der Signatur älter war als :data:`SETTLE_NS` —
+    wie bei :func:`_held`. Die Installation geht wie dort nur mit
+    Programmdatei und oberster Ebene ein: Sie ändert sich mit einer neuen
+    Fassung.
+    """
+    if getattr(_SINGLE_READ, "once", None) is None:
+        return compute()
+    owner = _owner_of(folder)
+    if owner is None:
+        return once_per_read(key, compute)
+    executable, flavour = owner
+    program = (str(executable), flavour)
+    generation = discover.cache_generation()
+    signature = _holding_signature(flavour, executable)
+    signed: dict[tuple[str, str], int] = _SINGLE_READ.signed_at
+    asked_at = signed.get(program)
+    with _HOLDINGS_LOCK:
+        held = _derived.get(program)
+        if held is not None and held[:2] == (signature, generation) and key in held[2]:
+            found: T = held[2][key]
+            return found
+    computed = once_per_read(key, compute)
+    if asked_at is not None and _settled(_newest(signature), asked_at):
+        with _HOLDINGS_LOCK:
+            held = _derived.pop(program, None)
+            if held is None or held[:2] != (signature, generation):
+                held = (signature, generation, {})
+            held[2][key] = computed
+            _derived[program] = held
+            while len(_derived) > _HOLDINGS_LIMIT:
+                del _derived[next(iter(_derived))]
+    return computed
+
+
+def _owner_of(folder: Path) -> tuple[Path, SlicerFlavour] | None:
+    """Das Programm, unter dessen Wurzel ``folder`` liegt (:data:`_root_owners`)."""
+    with _HOLDINGS_LOCK:
+        owners = list(_root_owners.items())
+    for root, owner in owners:
+        if folder == root or folder.is_relative_to(root):
+            return owner
+    return None
+
+
+def _newest(signature: _Signature) -> int:
+    """Der jüngste Zeitstempel einer Signatur."""
+    return max((stamp for _path, stamp, _size in signature), default=0)
 
 
 def _json_files(root: Path) -> list[Path]:
@@ -3119,6 +3195,8 @@ def forget_holdings() -> None:
         _holdings.clear()
         _prusa_models.clear()
         _program_folders_seen.clear()
+        _derived.clear()
+        _root_owners.clear()
     with _PRUSA_LOCK:
         _prusa_cache = None
 
@@ -3269,6 +3347,7 @@ def _holding_signature(flavour: SlicerFlavour, executable: Path) -> _Signature:
     key = (str(executable), flavour)
     if shared is not None and key in shared:
         return shared[key]
+    asked_at = time.time_ns()
     installed = install_root(executable)
     folders, anywhere = _READ_BELOW.get(flavour, (frozenset(), True))
     parts: list[tuple[str, int, int]] = [_file_mark(executable)]
@@ -3282,6 +3361,10 @@ def _holding_signature(flavour: SlicerFlavour, executable: Path) -> _Signature:
     signature = tuple(parts)
     if shared is not None:
         shared[key] = signature
+        _SINGLE_READ.signed_at[key] = asked_at
+    with _HOLDINGS_LOCK:
+        for root in profile_roots(flavour, executable):
+            _root_owners[Path(root)] = (executable, flavour)
     return signature
 
 
@@ -4226,14 +4309,22 @@ def _chain(
         family = _family(current)
         family_key = (family, None)
         if family_key not in indexes:
-            indexes[family_key] = _names_in(family, None, cancelled=cancelled, documents=documents)
+            indexes[family_key] = _once_per_stock(
+                family,
+                ("names", family, None),
+                lambda: _names_in(family, None, cancelled=cancelled, documents=documents),
+            )
         local = indexes[family_key].get(name)
         if local is not None and local != current:
             return local
         for root in _store_roots(current, roots):
             key = (root, _kind_by_folder(current))
             if key not in indexes:
-                indexes[key] = _names_in(root, key[1], cancelled=cancelled, documents=documents)
+                indexes[key] = _once_per_stock(
+                    root,
+                    ("names", *key),
+                    partial(_names_in, root, key[1], cancelled=cancelled, documents=documents),
+                )
             found = indexes[key].get(name)
             if found is not None:
                 return found
@@ -4715,7 +4806,8 @@ def machine_model(
     """
     if not model_name:
         return {}
-    return once_per_read(
+    return _once_per_stock(
+        machine_file,
         ("machine_model", machine_file, model_name, tuple(roots)),
         lambda: _machine_model_in(machine_file, model_name, tuple(roots)),
     )

@@ -5711,3 +5711,52 @@ def test_a_kind_folder_counts_in_any_spelling(
     (own_profiles / "Filament" / "eigen.json").write_text("{}", encoding="utf-8")
 
     assert sp.stock_signature("orca", slicer) != before
+
+
+def test_inheritance_indexes_hold_across_passes_until_the_stock_changes(
+    own_profiles: Path, slicer: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """RM-670: Jeder 3MF-Export baute die Namensindizes der Erbketten neu — am
+    ElegooSlicer 668 Dateien je Herstellerordner, dreimal je Export. Sie
+    halten jetzt über den Lesedurchgang hinaus, solange die Signatur des
+    Bestands gleich ist. Legt der Kunde im Slicer ein eigenes Profil mit dem
+    Namen der Basis an, erbt sein Profil von diesem, nicht mehr vom
+    Hersteller — der gehaltene Index darf das nicht verdecken."""
+    own = own_profiles / "process"
+    own.mkdir()
+    _write(
+        own / "mein.json",
+        {
+            "type": "process",
+            "name": "Mein Prozess",
+            "from": "User",
+            "inherits": "0.20mm Standard @CC2",
+        },
+    )
+    _settle(tmp_path)
+    built = _counting(monkeypatch, "_names_in")
+    roots = sp.profile_roots("orca", slicer)
+
+    def walls() -> object:
+        with sp.single_read():
+            sp.stock_signature("orca", slicer)
+            return sp.resolve_values(own / "mein.json", roots=roots).get("wall_loops")
+
+    assert walls() is None, "der Herstellerprozess nennt keine Wände"
+    first = len(built)
+    assert first, "der erste Durchgang baut die Indizes"
+    assert walls() is None
+    assert len(built) == first, "der zweite Durchgang baut keinen Index neu"
+
+    _write(
+        own / "basis.json",
+        {
+            "type": "process",
+            "name": "0.20mm Standard @CC2",
+            "from": "User",
+            "inherits": "fdm_process_common",
+            "wall_loops": "5",
+        },
+    )
+
+    assert walls() == "5", "die neue eigene Basis gilt beim nächsten Durchgang"

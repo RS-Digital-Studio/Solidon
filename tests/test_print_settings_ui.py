@@ -10218,13 +10218,16 @@ def test_an_empty_choice_expires_when_the_printer_is_created_in_the_slicer(
 
 
 def _family_stock(
-    flavour: str, folder: Path, monkeypatch: pytest.MonkeyPatch
+    flavour: str,
+    folder: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    grow: Any = None,
 ) -> tuple[Profile, handover.SlicerSetup]:
     """Ein Bestand je Familie, die die Grundlage unterscheidet, mit der Wahl,
     die der Export dafür bekommt: Orca (Erbketten und Modelldatei), Prusa
     (Bündel) und Cura (Definitionen). Die eigenen Profile bleiben leer, und
     der Bestand ist älter als :data:`slicer_profiles.SETTLE_NS` — sonst
-    merkte ihn niemand."""
+    merkte ihn niemand. ``grow(flavour, executable)`` füllt ihn vorher auf."""
     import os
 
     from app.core.export import slicer_profiles
@@ -10260,6 +10263,8 @@ def _family_stock(
         executable = cura_installation(folder)
         profile = profiles.make_profile("creality-k1-max", "pla")
         setup = handover.SlicerSetup(executable, "cura")
+    if grow is not None:
+        grow(flavour, executable)
     past = 1_767_225_600.0
     for path in folder.rglob("*"):
         os.utime(path, (past, past))
@@ -10405,6 +10410,126 @@ def test_the_remembered_stock_writes_the_file_a_fresh_read_writes(
     changed = _family_export(profile, setup, tmp_path / "geaendert" / "modell.3mf", monkeypatch)
     assert changed[1] != fresh[1], "der nächste Export sieht den geänderten Bestand"
     assert (changed[0] != fresh[0]) == (flavour != "cura"), "die Datei trägt die Änderung"
+
+
+def _grow_family_stock(flavour: str, executable: Path) -> None:
+    """Füllt den Bestand aus :func:`_family_stock` auf die Größe eines echten:
+    rund 13 000 Profile der Orca-Familie in 30 Herstellerordnern (ElegooSlicer
+    1.5.3: 12 000), 30 Prusa-Bündel mit je 400 Abschnitten, bei Cura 600
+    Druckerdefinitionen, 600 Extruder, 2 000 Qualitäten und 400 Materialien."""
+    if flavour == "orca":
+        profiles_root = executable.parent / "resources" / "profiles"
+        for vendor in range(30):
+            root = profiles_root / f"Filler{vendor:02d}"
+            for kind, count in (("machine", 50), ("process", 100), ("filament", 230)):
+                folder = root / kind
+                folder.mkdir(parents=True)
+                common = f"fdm_{kind}_filler{vendor:02d}"
+                (folder / f"{common}.json").write_text(
+                    json.dumps({"type": kind, "name": common}), encoding="utf-8"
+                )
+                for index in range(count):
+                    name = f"Filler{vendor:02d} {kind} {index:03d}"
+                    document: dict[str, object] = {
+                        "type": kind,
+                        "name": name,
+                        "inherits": common,
+                        "instantiation": "true",
+                    }
+                    if kind == "machine":
+                        document["printer_model"] = name
+                        (folder / f"{name}.model.json").write_text(
+                            json.dumps({"type": "machine_model", "name": name}), encoding="utf-8"
+                        )
+                    (folder / f"{name}.json").write_text(json.dumps(document), encoding="utf-8")
+    elif flavour == "prusa":
+        profiles_root = executable.parent / "resources" / "profiles"
+        for vendor in range(30):
+            sections = [f"[vendor]\nname = Filler {vendor:02d}\n"]
+            for index in range(50):
+                sections.append(
+                    f"[printer_model:F{vendor:02d}M{index:03d}]\nname = Filler {vendor:02d} "
+                    f"Model {index:03d}\nvariants = 0.4\n"
+                )
+                sections.append(
+                    f"[printer:Filler {vendor:02d} Model {index:03d}]\n"
+                    f"printer_model = F{vendor:02d}M{index:03d}\nnozzle_diameter = 0.4\n"
+                )
+            for index in range(100):
+                sections.append(f"[print:0.20mm Filler {vendor:02d} {index:03d}]\nperimeters = 2\n")
+            for index in range(200):
+                sections.append(
+                    f"[filament:Filler {vendor:02d} PLA {index:03d}]\nfilament_type = PLA\n"
+                )
+            (profiles_root / f"Filler{vendor:02d}.ini").write_text(
+                "\n".join(sections), encoding="utf-8"
+            )
+    else:
+        resources = executable.parent / "share" / "cura" / "resources"
+        for index in range(600):
+            (resources / "definitions" / f"filler_{index:03d}.def.json").write_text(
+                json.dumps(
+                    {
+                        "version": 2,
+                        "name": f"Filler {index:03d}",
+                        "inherits": "fdmprinter",
+                        "metadata": {"visible": True, "manufacturer": "Filler"},
+                    }
+                ),
+                encoding="utf-8",
+            )
+            (resources / "extruders" / f"filler_{index:03d}_extruder_0.def.json").write_text(
+                json.dumps({"version": 2, "name": "Extruder 1", "inherits": "fdmextruder"}),
+                encoding="utf-8",
+            )
+        for index in range(2000):
+            folder = resources / "quality" / f"filler_{index % 600:03d}"
+            folder.mkdir(parents=True, exist_ok=True)
+            (folder / f"filler_{index:04d}.inst.cfg").write_text(
+                f"[general]\nversion = 4\nname = Fine\ndefinition = filler_{index % 600:03d}\n\n"
+                "[metadata]\nsetting_version = 27\ntype = quality\nquality_type = fine\n\n"
+                "[values]\n",
+                encoding="utf-8",
+            )
+        materials = resources / "materials"
+        materials.mkdir(exist_ok=True)
+        for index in range(400):
+            (materials / f"filler_{index:03d}.xml.fdm_material").write_text(
+                '<?xml version="1.0" encoding="UTF-8"?>\n'
+                '<fdmmaterial xmlns="http://www.ultimaker.com/material" version="1.3">'
+                "<metadata><name><brand>Filler</brand><material>PLA</material>"
+                f"<color>Farbe {index:03d}</color></name>"
+                f"<GUID>00000000-0000-0000-0000-{index:012d}</GUID><version>1</version>"
+                "</metadata><properties><diameter>1.75</diameter></properties></fdmmaterial>",
+                encoding="utf-8",
+            )
+
+
+@pytest.mark.performance
+@pytest.mark.parametrize("flavour", ["orca", "prusa", "cura"])
+def test_a_second_3mf_export_of_a_large_stock_stays_under_half_a_second(
+    flavour: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """RM-670: Am Bestand eines echten Slicers kostete jeder 3MF-Export das
+    Lesen von rund 1 550 Maschinenprofilen, am ElegooSlicer 1,6 s statt
+    0,36 s für einen Würfel. Der zweite Export derselben Szene liest nur noch
+    die Signatur des gemerkten Bestands und die Erbkette der Wahl: unter einer
+    halben Sekunde CPU-Zeit (Bauplan §31; gemessen am echten Bestand im
+    Register-Archiv). Der erste, der den Bestand liest, steht zum Vergleich in
+    der Meldung. CPU-Zeit statt Wanduhr — an einer belasteten Maschine
+    wartet die Wanduhr auf fremde Prozesse."""
+    profile, setup = _family_stock(
+        flavour, tmp_path / "programme", monkeypatch, grow=_grow_family_stock
+    )
+
+    started = time.process_time()
+    _family_export(profile, setup, tmp_path / "erster" / "modell.3mf", monkeypatch)
+    first = time.process_time() - started
+    started = time.process_time()
+    _family_export(profile, setup, tmp_path / "zweiter" / "modell.3mf", monkeypatch)
+    second = time.process_time() - started
+
+    assert second < 0.5, f"zweiter Export {second:.2f} s CPU, erster {first:.2f} s"
 
 
 def test_the_export_hands_a_renewed_choice_back_to_the_window(

@@ -94,7 +94,10 @@ hintereinander stellt, läuft in `slicer_profiles.single_read()` — jede Datei
 einmal gelesen, danach verworfen. Was allein aus seinen Argumenten und dem
 gelesenen Bestand folgt, rechnet der Durchgang einmal (`once_per_read`): die
 Grundlage (`manufacturer.base_settings`, je 3MF-Export bis zu viermal gefragt)
-und die Modelldatei (`machine_model`). Über Aufrufe hinweg hält nur, was vor jeder
+und die Modelldatei (`machine_model`). Namensindizes der Erbketten und die
+Modelldatei halten über den Durchgang hinaus unter der Signatur des Bestands
+(`_once_per_stock`), denn sie sagen nur, welches Profil wo liegt; Werte liest
+jeder Durchgang aus den Dateien. Über Aufrufe hinweg hält nur, was vor jeder
 Antwort seine Signatur prüft, denn der Kunde ändert seine Profile im Slicer:
 `_prusa_store` und der Bestand je Slicer und Profilarten (`_holdings`, jeder
 3MF-Export fragt ihn, RM-670). Eigene Profile und der `system`-Bestand gehen
