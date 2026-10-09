@@ -39,12 +39,13 @@ from app.ui.tool_strip import strip_title
 #: Es sind fünf, und sie fehlten der Übersicht vollständig: Escape schließt das
 #: offene Werkzeug, ``Strg+Tab`` blättert die Auswahl durch, und die
 #: Zoom-Tasten sind der Weg durch den Viewport ohne Zeigegerät. Sie sind
-#: ``QShortcut`` am Fenster (``MainWindow._install_shortcuts``), und ein
-#: ``QShortcut`` trägt keinen Titel — deshalb steht er hier.
+#: Aktionen am Fenster (``MainWindow._window_shortcut``) ohne Menüeintrag, und
+#: die Übersicht liest keine Fensteraktionen — deshalb stehen sie hier.
 #:
 #: Eine Tabelle von Hand ist der Preis, und sie driftet. Dagegen steht ein Test:
-#: ``tests/test_interface_limits.py`` vergleicht sie mit den ``QShortcut``-Kindern
-#: des gebauten Fensters und wird rot, sobald einer dazukommt, der hier fehlt.
+#: ``tests/test_interface_limits.py`` vergleicht sie mit den Tasten der
+#: Fensteraktionen (und etwaiger ``QShortcut``-Kinder) des gebauten Fensters und
+#: wird rot, sobald eine dazukommt, die hier fehlt.
 #: Das ist der Unterschied zu vorher — vorher fehlten dreizehn, und nichts sagte
 #: es.
 WINDOW_KEYS: Final[tuple[tuple[str, TranslatableText], ...]] = (
@@ -80,7 +81,8 @@ def entries(menu_bar: QMenuBar | None, window: QWidget | None = None) -> list[tu
     Tooltip des Knopfes **und in der Kürzelübersicht**."
 
     Drei Quellen also: die Menüleiste, die angemeldeten Werkzeuge (``window.tools``
-    kennt Titel und Taste) und :data:`WINDOW_KEYS`.
+    kennt Titel und Taste) und :data:`WINDOW_KEYS` — dazu die Knöpfe der oberen
+    Leiste, die ein Kürzel tragen.
 
     **Und die Handlungen rechts als vierte** (11.09.2026): Was einer Auswahl
     gilt, steht nicht mehr in der Leiste, sondern in der Karte rechts; seine
@@ -118,8 +120,25 @@ def entries(menu_bar: QMenuBar | None, window: QWidget | None = None) -> list[tu
     for tool in listed.values():
         if tool.shortcut:
             found.append((strip_title(), _plain(str(tool.title)), _native(tool.shortcut)))
+    toolbar = getattr(window, "toolbar", None)
+    if toolbar is not None:
+        # Die Werkzeuge der oberen Leiste (*Formen*, *Skelett*) stehen in
+        # keinem Menü und tragen ihr Kürzel selbst (RM-561).
+        heading = _plain(toolbar.windowTitle())
+        for action in toolbar.actions():
+            if not action.shortcut().isEmpty():
+                found.append(
+                    (heading, _plain(action.text()), _native(action.shortcut().toString()))
+                )
     for sequence, title in WINDOW_KEYS:
         found.append((tr("Fenster"), str(title), _native(sequence)))
+    # **Und die Werkzeuge der oberen Leiste** (RM-561): je eines ein Kürzel,
+    # an keinem Menüeintrag — sonst fände man Strg+Umschalt+E nur im Tooltip.
+    toolbar = getattr(window, "toolbar", None)
+    for action in toolbar.actions() if toolbar is not None else ():
+        sequence = action.shortcut()
+        if not sequence.isEmpty():
+            found.append((tr("Werkzeuge"), _plain(action.text()), _native(sequence.toString())))
     found.extend(_drawing_keys())
     return found
 

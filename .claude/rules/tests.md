@@ -16,15 +16,17 @@ denselben Überschriften in `konzepte/begruendungen/regel-tests.md`.
 
 ## Entwicklung und Release
 
-- **Je Schritt die betroffenen Tests, vor dem Commit das Entwicklungstor,
+- **Je Schritt die betroffenen Tests, vor jedem Merge oder Commit auf main das Entwicklungstor,
   Fenster, Renderer und Leistung lokal ausschließlich beim Release** — auch nicht als gezielte
   Teilmenge (`CLAUDE.md`, `/pruefen`). Ein grüner Entwicklungslauf ist kein
   Release-Nachweis.
-- **Vor dem Merge nach main und vor dem Release laufen die betroffenen Fenster-
-  und Slicertests auf Linux und macOS** (Entscheidung Robert; CI-09):
-  `tools/ci_selection.py` nennt sie zum Diff, `fenster-auswahl.yml` und
-  `slicer-auswahl.yml` fahren sie per Handstart auf dem Zweig, beide grün vor
-  dem Merge. Nur das Betroffene — macOS-Minuten kosten das Zehnfache.
+- **Beim Push nach main und vor dem Release laufen die betroffenen Fenster-
+  und Slicertests auf Linux und macOS, auf Zweigen keine CI** (Entscheidung
+  Robert; CI-09): `tools/ci_selection.py` nennt sie zum Diff des Merges, die
+  liefernde Sitzung startet `fenster-auswahl.yml` und `slicer-auswahl.yml` mit
+  `--ref main`, bis der Push sie selbst auslöst (RM-344); ein Rot wird auf main
+  vorwärts behoben. Nur das Betroffene — macOS-Minuten kosten das
+  Zehnfache.
   Unterlagen und Kataloge lösen der Kosten wegen nichts aus, außer Markdown, das
   die Anwendung liest.
 - **Neues bringt seinen Test für diese Auswahl mit** (Entscheidung Robert): eine
@@ -188,6 +190,13 @@ reicht dafür selten. Sprache in `tests/`: `AGENTS.md`, „Sprachregelung“.
   bloße Anweisung, auch im Aufräumen: Ein ungeprüftes Warten ließ auf dem
   langsamen Intel-Läufer Tests auf halbem Stand weiterlaufen. Der Wächter steht
   in `test_toolchain.py`.
+- **Wer auf einen Arbeiterfaden wartet, wartet mit `processEvents()` und
+  `time.sleep`, nie mit `QTest.qWait`** (`ui_helpers.wait_until`): `qWait` hält
+  die GIL, und ein Faden mit vielen Dateiblicken (`shutil.which` über einen
+  langen PATH) kam auf dem Windows-Läufer in Sekunden nicht durch.
+- **Eine Arbeiterfrage im Test steht auf einer Freigabe** (`threading.Event`),
+  wenn der Test prüft, was vor ihrer Antwort gilt: Auf einem schnellen Läufer
+  ist sie sonst schon beantwortet, bevor die nächste Zeile läuft.
 
 ## Den Lauf messen, nicht einen Filter darüber
 
@@ -272,11 +281,12 @@ einzeln laufen grün. Deshalb:
   **ein Lauf, dessen Ausgabe nicht wächst, arbeitet nicht**; ein bis zwei
   Sekunden ohne CPU zwischen zwei Fensterdateien sind normal. Erst ohne
   CPU-Sekunde und ohne Byte über zwanzig Sekunden ist es ein Hänger.
-- **Ein BLAS-Faden je Testprozess**: Tor und `affected_tests.py --run` setzen
-  `OPENBLAS_NUM_THREADS=1`, wenn der Aufrufer nichts setzt; eigene Sonden und
-  Skripte starten ebenso. Sonst sagt jeder Prozess mit numpy und scipy je
-  Rechenkern einen Puffer zu, an 32 Kernen 1,5 GB, und Läufe nebeneinander
-  reißen die Zusagegrenze. Leistungsläufe bleiben ohne Vorgabe.
+- **Ein BLAS-Faden je Prozess**: `import app` setzt `OPENBLAS_NUM_THREADS=1`,
+  wenn niemand etwas setzt (RM-567), Tor und `affected_tests.py --run` ebenso
+  für Prozesse, die NumPy vor der Anwendung laden. Sonst sagt jeder Prozess
+  mit numpy und scipy je Rechenkern einen Puffer zu, an 32 Kernen 1,5 GB, und
+  Läufe nebeneinander reißen die Zusagegrenze. Leistungsläufe messen damit
+  denselben Stand wie der Kunde.
 - **Im Tor eine feste Arbeiterzahl, nie `-n auto`**: Parallelität zeigt
   Speicherhunger als Korrektheitsfehler, 32 Arbeiter sterben schon beim
   Verteilen, und eine Zahl, die an der Kernzahl hängt, ist eine stille

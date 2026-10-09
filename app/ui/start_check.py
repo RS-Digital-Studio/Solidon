@@ -81,6 +81,7 @@ def describe(window: Any, seconds: float) -> dict[str, Any]:
     from PySide6.QtWidgets import QApplication
 
     from app.branding import APP_VERSION
+    from app.core.export.squashfs import readable_compressions
     from app.core.log import install_crash_logging, log_path
     from app.ui.qt_platform import input_modules
 
@@ -105,6 +106,9 @@ def describe(window: Any, seconds: float) -> dict[str, Any]:
         # tippt ein Fcitx-Nutzer unter Linux ins Leere, und die Abhilfe in
         # ``qt_platform`` schaltet sich still ab.
         "input_modules": list(input_modules()),
+        # Was das Paket aus einem Slicer-AppImage entpacken kann (RM-549, RM-599):
+        # Ohne ``_zstd`` sieht ein Kunde unter Linux keinen Drucker der Orca-Familie.
+        "image_compressions": list(readable_compressions()),
     }
 
 

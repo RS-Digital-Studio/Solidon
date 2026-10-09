@@ -20,13 +20,16 @@ wenn sie etwas weggenommen hat, das gemeint war (§11.1).
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from typing import Final
+from typing import Final, cast
 
 from app.core import activation
 from app.core.backends.mesh import CancelledFn, GeneratedMesh, MeshBackend
 from app.core.errors import AppError
+from app.core.geom.mesh import MeshData, edge_table, shell_thickness
+from app.core.geom.repair import branching_edge_count, separate_touching_sheets
 from app.core.log import get_logger
 from app.core.scene.history import History, OperationDraft
 from app.core.scene.project import Project, checksum, embedded_source_path, next_source_id
@@ -124,6 +127,78 @@ GENERATED_TRIANGLE_LIMIT: Final = 1_000_000
 #: dass eine erzeugte Figur ihre Falten behält. Als Anteil und nicht als eigene
 #: Zahl: Wer die Grenze verschiebt, verschiebt den Abstand mit.
 GENERATED_TRIANGLE_TARGET: Final = GENERATED_TRIANGLE_LIMIT * 3 // 4
+
+#: Ab welchem Anteil von Kanten, an denen nach dem Trennen berührender Stücke
+#: noch mehr als zwei Flächen hängen, ein erzeugtes Rohnetz als zerfallen gilt
+#: (RM-550).
+#:
+#: Ein heiles Netz von TRELLIS.2 über ComfyUIs ``RemeshMesh`` (``udf``) hat
+#: höchstens ein paar Dutzend solcher Kanten, dort, wo sich zwei Stücke an
+#: einer Linie berühren — gemessen 0 bis 0,036 % —, und die Reparatur trennt
+#: sie alle (``repair.separate_touching_sheets``). Manche Startwerte zerfallen
+#: dagegen schon im Generator: 0,63 bis 3,4 % der Kanten, oft Hunderte Teile,
+#: keine davon trennbar, und kein Lauf endete geschlossen. Die Grenze liegt mit
+#: Abstand zwischen beiden. Ein Anteil und keine Zahl, weil ein feineres Netz
+#: mehr Kanten hat; gezählt wird erst nach dem Trennen, weil ein kleines Netz
+#: mit einer einzigen Berührkante sonst schon über dem Anteil läge.
+TANGLED_EDGE_SHARE: Final = 0.002
+
+
+def fell_apart(mesh: Mesh) -> bool:
+    """Ob ein erzeugtes Rohnetz schon im Generator zerfallen ist.
+
+    Gefragt wird vor dem Übernehmen, denn der Ausweg ist ein neuer Versuch und
+    keine Reparatur. Gezählt wird am Netz, wie es aus dem Generator kommt; ein
+    heiles Netz liegt schon vor dem Trennen unter der Grenze. An einem
+    zerfallenen kostet das Trennen Sekunden (2 bis 6 s gemessen), deshalb
+    **merkt sich das Netz die Antwort** (:func:`_remembered`), und der Dialog
+    fragt zuerst im Arbeiter (Review K, H1). Ein Netz ohne Dreiecke zum Zählen
+    — eine Attrappe mit Kennzahlen — gilt als heil.
+    """
+    if not isinstance(mesh, MeshData):
+        return False
+
+    def judge() -> bool:
+        edges = len(edge_table(mesh.raw).counts)
+        limit = TANGLED_EDGE_SHARE * edges
+        if not edges or branching_edge_count(mesh) < limit:
+            return False
+        separated, _count = separate_touching_sheets(mesh)
+        return branching_edge_count(separated) >= limit
+
+    return bool(_remembered(mesh, "solidon_fell_apart", judge))
+
+
+def skin_thickness(mesh: Mesh) -> float | None:
+    """Die Dicke der dicksten großen Schale eines Rohnetzes auf Arbeitsgröße (RM-577).
+
+    Dieselbe Herleitung wie im Prüfbericht (``geom.mesh.shell_thickness``),
+    nur bei :data:`WORKING_SIZE_MM` statt in echter Größe: Das Rohnetz kommt in
+    Generatoreinheiten und wird beim Übernehmen auf diese Größe gebracht. Ein
+    heiles Rohnetz von TRELLIS.2 hat eine Außenhülle von 2,1 bis 7,7 mm, eine
+    Haut 0,26 bis 0,30 mm (Messung 08.10.2026). ``None`` ohne Netz oder ohne
+    eine solche Schale.
+    """
+    if not isinstance(mesh, MeshData) or not mesh.triangle_count:
+        return None
+    longest = float(max(mesh.raw.extents))
+    if longest <= EPS_GEOM:
+        return None
+    return shell_thickness(mesh, WORKING_SIZE_MM / longest)
+
+
+def _remembered(mesh: MeshData, key: str, compute: Callable[[], float | bool]) -> float | bool:
+    """Eine Antwort über ein Rohnetz, einmal gerechnet und im Cache des Netzes
+    abgelegt, der mit dessen Geometrie verfällt (wie ``MeshData.component_count``)."""
+    cache = getattr(mesh.raw, "_cache", None)
+    if cache is not None:
+        cache.verify()
+        if key in cache:
+            return cast("float | bool", cache[key])
+    value = compute()
+    if cache is not None:
+        cache[key] = value
+    return value
 
 
 @dataclass(frozen=True, slots=True)

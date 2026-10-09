@@ -590,82 +590,104 @@ def _operation_action(window: MainWindow, op_name: str) -> Any | None:
     return window._op_actions.get(op_name) or window._variant_actions.get(op_name)
 
 
-def _draw_rectangle(recorder: Recorder, panel: Any, length: float, width: float) -> None:
-    """Ein Rechteck über das echte Werkzeug, zwei Mausziele und zwei Maße zeichnen."""
+def _bed_point(window: MainWindow, point: tuple[float, float]) -> QPoint | None:
+    """Ein Punkt auf dem Bett als Bildschirmpunkt — für den Mauszeiger im Film."""
+    renderer = getattr(window.viewport, "renderer", None)
+    if renderer is None:
+        return None
+    x, y, _depth = renderer.world_to_display((point[0], point[1], 0.0))
+    ratio = window.viewport._device_ratio()
+    return window.viewport.mapToGlobal(QPoint(int(x / ratio), int(y / ratio)))
+
+
+def pull_up_plate(
+    recorder: Any,
+    session: Session,
+    size: tuple[float, float, float],
+    given: Mapping[str, Any],
+    *,
+    bind: tuple[str, str],
+    accept: tuple[str, str],
+) -> None:
+    """Eine Platte mit drei Klicks aufziehen und ihre Höhe danach an ein Projektmaß binden.
+
+    Der Weg, den der Kunde seit RM-559 geht: *Zeichnen* oben, erste Ecke auf
+    dem Bett, Gegenecke, Höhe — ohne Skizzenmodus und ohne Dialog. Die Bindung
+    an das Projektmaß geschieht danach im Schrittdialog, so wie ein Doppelklick
+    auf den Schritt ihn öffnet. ``recorder`` braucht nur ``add``, ``click``,
+    ``app`` und ``window``; der Wächter in ``tests/test_draw_ui.py`` fährt den
+    Weg ohne Bild.
+    """
+    from app.ui.draw_tool import Lift, bed_surface
+
+    window = recorder.window
+    length, width, height = size
+    count = len(session.history.operations)
+    button = window.toolbar.widgetForAction(window._toolbar_sketch)
     recorder.add(
-        "Skizzenwerkzeug → Rechteck",
-        "Der Rechteckknopf ist der direkte Weg: eine Ecke setzen, dann die Gegenecke.",
-        2.8,
-        target=panel.shapes_button,
+        "Zeichnen oben in der Werkzeugleiste",
+        "Ein Körper entsteht mit drei Klicks direkt in der Ansicht.",
+        3.0,
+        target=button,
     )
     recorder.click(
-        "Rechteckwerkzeug aktivieren",
-        "Jetzt folgen die beiden Punkte direkt im Viewport.",
-        target=panel.shapes_button,
+        "Zeichnen öffnen",
+        "Die Ansicht bleibt, unten erscheint eine schmale Leiste.",
+        target=button,
     )
-    panel.shapes_button.click()
+    window.start_drawing()
     video_base.settle(recorder.app, 8)
-
+    if not window.drawing():
+        raise SystemExit("Das Aufziehen ging nicht auf.")
+    flow = window.draw_flow()
     first = (-length / 2.0, -width / 2.0)
     opposite = (length / 2.0, width / 2.0)
-    first_local = recorder.window.viewport.sketch_screen_at(first)
-    opposite_local = recorder.window.viewport.sketch_screen_at(opposite)
-    if first_local is None or opposite_local is None:
-        raise SystemExit("Die beiden Rechteckpunkte sind im Skizzenviewport nicht sichtbar.")
-    first_point = recorder.window.viewport.mapToGlobal(first_local)
-    opposite_point = recorder.window.viewport.mapToGlobal(opposite_local)
     recorder.add(
-        "Erste Rechteckecke setzen",
-        "Der Mausweg endet links unten am sichtbaren Rasterpunkt.",
+        "Erste Ecke auf das Bett",
+        "Der erste Klick setzt den Anfang.",
         2.4,
-        target=first_point,
+        target=_bed_point(window, first) or window.viewport,
     )
-    recorder.add(
-        "Erste Rechteckecke setzen",
-        "Ein echter Skizzenklick legt den Startpunkt fest.",
-        0.3,
-        target=first_point,
-        click=True,
-    )
-    panel.canvas.place_on_plane(first)
-    panel.canvas.note_pointer(panel.canvas._to_screen(*opposite))
+    flow.take(("bed", bed_surface(), first, (0.0, 0.0, 0.0)))
+    # Getippt statt geklickt: Ein Klick fiele aufs Raster, und der Film nennt
+    # genau diese Maße.
+    flow.type_values([length, width])
+    if flow.draft is None or flow.draft.phase != 2:
+        raise SystemExit("Die Gegenecke wurde nicht gesetzt.")
     video_base.settle(recorder.app, 8)
     recorder.add(
-        "Maus zur Gegenecke bewegen",
-        "Die Live-Vorschau zeigt bereits das entstehende Rechteck.",
+        _text("Maße getippt: {length:g} x {width:g} mm", length=length, width=width),
+        "Statt des zweiten Klicks: Breite, Tab, Tiefe, Eingabetaste.",
         2.8,
-        target=opposite_point,
+        target=_bed_point(window, opposite) or window.viewport,
     )
-
-    panel.canvas.measure_field.set_value_mm(length)
-    recorder.add(
-        _text("Breite exakt auf {value:g} mm setzen", value=length),
-        "Das Maßfeld steht direkt am Mauszeiger und speichert eine Bedingung.",
-        2.8,
-        target=panel.canvas.measure_field,
-    )
-    recorder.click(
-        _text("{value:g} mm übernehmen", value=length),
-        "Tab wechselt danach zum zweiten Rechteckmaß.",
-        target=panel.canvas.measure_field,
-    )
-    panel.canvas.place_measured(length)
+    flow.lift = Lift(height)
     video_base.settle(recorder.app, 8)
-
-    panel.canvas.second_measure_field.set_value_mm(width)
     recorder.add(
-        _text("Höhe exakt auf {value:g} mm setzen", value=width),
-        "Auch das zweite Maß bleibt als editierbare Skizzenbedingung erhalten.",
+        _text("Höhe {value:g} mm", value=height),
+        "Der dritte Klick setzt die Höhe. Nach oben entsteht ein neuer Körper, ohne Dialog.",
         2.8,
-        target=panel.canvas.second_measure_field,
+        target=window.viewport,
     )
-    recorder.click(
-        _text("{value:g} mm übernehmen", value=width),
-        "Damit wird der geschlossene Umriss fertiggestellt.",
-        target=panel.canvas.second_measure_field,
-    )
-    panel.canvas.place_second_measured(width)
-    video_base.settle(recorder.app, 12)
+    if not flow.settle():
+        raise SystemExit("Der dritte Klick legte keinen Schritt an.")
+    _verify(session, "Platte aufziehen")
+    if window._op_dialog is not None or len(session.history.operations) != count + 1:
+        raise SystemExit("Das Aufziehen öffnete einen Dialog oder legte keinen Schritt an.")
+    step = session.history.operations[-1]
+    window.edit_operation(step.id, given=_localized_values(given))
+    video_base.settle(recorder.app, 25)
+    session.wait_for_idle(120_000)
+    dialog = window._op_dialog
+    if dialog is None:
+        raise SystemExit("Der Schrittdialog ging nicht auf.")
+    recorder.add(bind[0], bind[1], 7.0, dialog=dialog, target=dialog._editors.get("height"))
+    recorder.click(accept[0], accept[1], dialog=dialog, target=_button(dialog))
+    dialog.accept()
+    _verify(session, bind[0])
+    bound = str(session.history.operations[-1].params.get("height", ""))
+    if len(session.history.operations) != count + 1 or not bound.startswith("=@"):
+        raise SystemExit("Die Höhe der Platte hängt nicht am Projektmaß.")
 
 
 def _select(window: MainWindow, object_id: str) -> None:
@@ -1061,55 +1083,18 @@ def story_mounting_bracket(app: QApplication, folder: Path) -> Recorder:
         maximum=64.0,
     )
 
-    sketch_action = _operation_action(window, "sketch_extrude")
-    if sketch_action is not None:
-        _show_action_path(
-            recorder,
-            sketch_action,
-            "Der Menüpunkt öffnet den Skizzenmodus für eine neue Grundform.",
-        )
-    window.start_sketch("sketch_extrude")
-    video_base.settle(app, 30)
-    panel = window._sketch_panel
-    if panel is None:
-        raise SystemExit("Skizzenmodus ging nicht auf.")
-    _draw_rectangle(recorder, panel, 70.0, 45.0)
-    recorder.add(
-        "Das Rechteck misst 70 x 45 mm",
-        "Raster, Fang und beide Maße bleiben direkt am fertigen Umriss sichtbar.",
-        5.0,
-        target=window.viewport,
+    pull_up_plate(
+        recorder,
+        session,
+        (70.0, 45.0, 6.0),
+        {"height": "=@plattenstaerke", "name": "Montagehalter"},
+        bind=(
+            "Die Höhe an das Projektmaß binden",
+            "Ein Doppelklick auf den Schritt öffnet seine Maße. Die Höhe folgt jetzt "
+            "@plattenstaerke - eine spätere Variante baut denselben Verlauf neu.",
+        ),
+        accept=("Montageplatte übernehmen", "Ein Klick übernimmt den sichtbaren Vorschauzustand."),
     )
-    recorder.add(
-        "Die Skizze ist noch keine Geometrie",
-        "Erst die nächste Operation entscheidet, wie aus dem geschlossenen Umriss ein Körper wird.",
-        6.0,
-        target=panel,
-    )
-    window.finish_sketch(
-        keep=True,
-        given=_localized_values({"height": "=@plattenstaerke", "name": "Montagehalter"}),
-    )
-    video_base.settle(app, 25)
-    dialog = window._op_dialog
-    if dialog is None:
-        raise SystemExit("Extrusionsdialog ging nicht auf.")
-    recorder.add(
-        "Skizze aufziehen",
-        "Die Höhe folgt @plattenstaerke - eine spätere Variante baut denselben Verlauf neu.",
-        7.0,
-        dialog=dialog,
-        target=dialog._editors.get("height"),
-    )
-    action = _button(dialog)
-    recorder.click(
-        "Montageplatte erzeugen",
-        "Ein Klick übernimmt den sichtbaren Vorschauzustand.",
-        dialog=dialog,
-        target=action,
-    )
-    dialog.accept()
-    _verify(session, "Skizze aufziehen")
     _fit(window, app)
     recorder.add(
         "Der erste druckbare Körper steht",
@@ -1699,55 +1684,27 @@ def story_skadis_holder(app: QApplication, folder: Path) -> Recorder:
     _add_parameter(recorder, session, "rohr", "Rohrdurchmesser", 35.0, minimum=20.0, maximum=45.0)
     _add_parameter(recorder, session, "platte", "Plattenstärke", 6.0, minimum=4.0, maximum=10.0)
 
-    sketch_action = _operation_action(window, "sketch_extrude")
-    if sketch_action is not None:
-        _show_action_path(
-            recorder,
-            sketch_action,
-            "Der Menüpunkt öffnet den Skizzenmodus für die Grundplatte.",
-        )
-    window.start_sketch("sketch_extrude")
-    video_base.settle(app, 30)
-    panel = window._sketch_panel
-    if panel is None:
-        raise SystemExit("Skizzenmodus ging nicht auf.")
-    _draw_rectangle(recorder, panel, 100.0, 70.0)
+    pull_up_plate(
+        recorder,
+        session,
+        (100.0, 70.0, 6.0),
+        {"height": "=@platte", "name": "SKÅDIS-Besenhalter"},
+        bind=(
+            "Plattenstärke aus dem Projektmaß",
+            "Ein Doppelklick auf den Schritt öffnet seine Maße. Die Höhe verwendet @platte "
+            "statt einer verstreuten Zahl.",
+        ),
+        accept=(
+            "Grundplatte übernehmen",
+            "Der erste Körper bleibt für alle folgenden Bausteine ausgewählt.",
+        ),
+    )
     recorder.add(
         "Die Grundplatte misst 100 x 70 mm",
         "Sie bietet Platz für zwei SKÅDIS-Haken und den großen Halteclip.",
         5.0,
         target=window.viewport,
     )
-    recorder.add(
-        "Geschlossener Umriss, klare Maße",
-        "Die Skizze bleibt später im ersten Verlaufsschritt erreichbar.",
-        6.0,
-        target=panel,
-    )
-    window.finish_sketch(
-        keep=True,
-        given=_localized_values({"height": "=@platte", "name": "SKÅDIS-Besenhalter"}),
-    )
-    video_base.settle(app, 25)
-    dialog = window._op_dialog
-    if dialog is None:
-        raise SystemExit("Extrusionsdialog ging nicht auf.")
-    recorder.add(
-        "Plattenstärke aus dem Projektmaß",
-        "Die Extrusion verwendet @platte statt einer verstreuten Zahl.",
-        7.0,
-        dialog=dialog,
-        target=dialog._editors.get("height"),
-    )
-    action = _button(dialog)
-    recorder.click(
-        "Grundplatte aufziehen",
-        "Der erste Körper bleibt für alle folgenden Bausteine ausgewählt.",
-        dialog=dialog,
-        target=action,
-    )
-    dialog.accept()
-    _verify(session, "Grundplatte aufziehen")
     _fit(window, app)
     recorder.add(
         "Die stabile Basis ist fertig",

@@ -160,14 +160,21 @@ Dialoge.
 
 ## Arbeitsweise
 
+- **Mehr liefern, wo es geht.** Eine selbst gesetzte Grenze, die dem Kunden
+  weniger gibt (Größen, Formen, Bereiche), wird gehoben, sobald sie nicht nötig
+  ist. Jede gefundene Leistungs- oder Speicherverbesserung wird umgesetzt,
+  solange die Ergebnisse gleich bleiben (Messung vorher und nachher, Test).
 - **Kleine Schritte, je Schritt nur die betroffenen Tests**
-  (`tools/affected_tests.py` leitet sie aus dem Importgraphen ab). Das
-  Entwicklungstor — alle Tests ohne Fenster, Renderer und Leistung, ruff, format, mypy —
-  läuft **vor dem Commit**, nicht nach jedem Schritt (Entscheidung Robert). Ein
-  Schritt, der seine Tests rot lässt, wird nicht auf den nächsten gestapelt.
-- **Fenster, Renderer und Leistung lokal nur beim Release**; vor dem Merge
-  fährt die CI die betroffenen auf Linux und macOS (`/liefern`). Ein grüner
-  Entwicklungslauf ersetzt das nicht.
+  (`tools/affected_tests.py` leitet sie aus dem Importgraphen ab), auf Paket-
+  und Fixzweigen auch vor dem Commit, dazu ruff, format, mypy. Das
+  Entwicklungstor — alle Tests ohne Fenster, Renderer und Leistung — läuft
+  einmal **vor jedem Stand, der nach main geht**: vor dem Merge und vor jedem
+  Commit direkt auf main, den `post-commit` sofort pusht (Entscheidung
+  Robert). Ein Schritt, der
+  seine Tests rot lässt, wird nicht auf den nächsten gestapelt.
+- **Fenster, Renderer und Leistung lokal nur beim Release**; die CI läuft nur
+  beim Push nach main, auf Zweigen nie (Entscheidung Robert, `/liefern`). Ein
+  grüner Entwicklungslauf ersetzt sie nicht.
 - **Bilder und Handbuch nur beim Release — und nur, was sich geändert hat**
   (Weg in `/erzeugen`).
 - **Die CI-Aufteilung hat einen geprüften Vertrag**

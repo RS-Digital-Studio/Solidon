@@ -311,10 +311,8 @@ Herstellers, Solidon schreibt darüber nur die Abweichung.
   ganze Gruppe (`handover.object_keys`). **Ein übernommener Vorschlag
   verschwindet nie still**: Verlangt ihn kein Teil, geht er als Objektwert an
   jedes (`writer._unserved`, `export.part_setting_all`); die Platte bleibt,
-  damit `slice_model` dieselbe rechnet. „Kein Teil“ heißt keines des ganzen
-  Auftrags: Jeder Aufrufer gibt `write_assembly` den Auftrag als `job` mit,
-  der Druckdialog die gewählten Platten, der Dateiexport alle Körper, auch
-  wenn nur einer gewählt ist.
+  damit `slice_model` dieselbe rechnet. „Kein Teil“ heißt keines des Auftrags
+  (`job`: im Druckdialog die gewählten Platten, beim Dateiexport alle Körper).
 - **Die Druckplatte ist eine Angabe, keine Vermutung**: die im Druckdialog
   gewählte (`SlicerSetup.plate`), sonst die Standardplatte der Maschine oder ihres
   Modells, sonst die des Programms (`manufacturer.PROGRAM_PLATE`). Nur ohne
@@ -324,17 +322,18 @@ Herstellers, Solidon schreibt darüber nur die Abweichung.
   Betttemperatur der Grundlage kommt nur aus dem Schlüssel der aufliegenden
   Platte; 0 °C beim Hersteller sperrt sie für das Filament — die Grundlage
   liest dort nichts, `slicer.plate_refuses_filament` führt in die
-  Druckeinstellungen. Eine eigene Betttemperatur geht trotzdem in den
-  Schlüssel dieser Platte — die Wahl des Kunden.
+  Druckeinstellungen. Eine eigene Betttemperatur geht trotzdem dorthin.
 - **Gedruckt wird, was der Slicer liest**: die Düsenart-Fassung der
   Maschinendüse, ein eigener Wert in jeder (`slicer_keys.NOZZLE_KIND_KEYS`);
   wo gestützt wird, keine Baumspitze unter der Stützbahn
   (`handover.organic_tree_fitted`); passt der genannte Standardprozess nicht,
   der seiner Schichthöhe, ohne Prozess `slicer.process_missing`; was die
-  Konsole ablehnt, als Programmvorgabe (`slicer_keys.CONSOLE_LIMITS`).
+  Konsole ablehnt, als Programmvorgabe (`slicer_keys.CONSOLE_LIMITS`); ein
+  Stützabstand zwischen zwei Schichten mit eigener Stützschichthöhe, außer
+  unter organischen Bäumen (`handover.support_gaps_by_style`).
 - **Was sich nicht übersetzen lässt, wird nicht umgedeutet**
-  (`Foundation.foreign`): `crosshatch` bleibt, wird nicht geschrieben, und der
-  Dialog zeigt „Hersteller: crosshatch".
+  (`Foundation.foreign`): `crosshatch` bleibt ungeschrieben, der Dialog zeigt
+  „Hersteller: crosshatch".
 - **Ein mitbedienter Schlüssel wird nie schneller als beim Hersteller**
   (`handover._followers_not_faster`): Innenwand schreibt auch die
   Lückenfüllung, Füllung auch die innere Vollfüllung (Solidons eigener Satz
@@ -346,8 +345,8 @@ Herstellers, Solidon schreibt darüber nur die Abweichung.
   Herstellerprozess nie schneller als dort; eine eigene Wahl darf beides.
 - **Ein Vorschlag, der beim Slicer nichts ändert, wird nicht angeboten**:
   Tempodeckel nach Volumenstrom (`advise.limits_flow`) fallen weg, wo der
-  Slicer selbst deckelt (`slicer_keys.caps_volumetric_speed`: Orca-Familie,
-  PrusaSlicer), und bleiben bei Cura.
+  Slicer selbst deckelt (`slicer_keys.caps_volumetric_speed`), und bleiben bei
+  Cura.
 - **PrusaSlicer bekommt die ganze Kette seines Bündels in einer Datei**:
   Drucker, Prozess und Filament aus seinem Bestand (`manufacturer.prusa_chain`),
   aufgelöst und ohne die Profilverwaltungsschlüssel (`PRUSA_MANAGING_KEYS`),
@@ -364,7 +363,7 @@ Herstellers, Solidon schreibt darüber nur die Abweichung.
   (`slicer_profiles.identity`; `PrusaResearch.ini` trägt über neuntausend
   Profile) — Auswahlen über Profile nehmen diese Kennung. Den gelesenen
   Bestand hält `slicer_profiles._prusa_store`, geprüft an Größe und
-  Zeitstempel jeder Bündeldatei.
+  Zeitstempel jeder Datei.
 - **Bei PrusaSlicer erst der Hersteller, dann Liste und Bedingung**
   (`slicer_profiles._prusa_fits`, wie PrusaSlicers
   `is_compatible_with_printer`): Ein Systemprofil passt nur zum Drucker
@@ -481,15 +480,16 @@ der Slicer einen Gegenwert (Minimum zum Maximum, Schwelle zur Kurve, Schalter
 zum Anteil), braucht Solidon ein eigenes Feld, eine Zeile je Familie, eine in
 den Rücklesetabellen und einen Wert im Materialprofil. Ein Anteil, der nur mit
 einem Schalter wirkt, schreibt den Schalter mit (`_positive_switch`, etwa
-`reduce_fan_stop_start_freq`).
+`reduce_fan_stop_start_freq`). Curas Kontaktlüfter kühlt die Haut über der
+Stütze, zum selben Zweck.
 
 Kennt eine ältere Datei ein solches Feld nicht, ist es keine
 Dataclass-Vorgabe, sondern eine Frage an dieselbe Stelle wie bei einem neuen
 Projekt: Unteres Ende und Schwelle der Lüfterkurve kommen beim Öffnen aus dem
 Material (`print_settings.fan_curve`); der alte eine Wert bleibt das obere
 Ende, wie er im Dialog hieß. Kein Formatsprung, solange ein älteres Programm
-neue Schlüssel still übergeht (`_group_from_data` filtert nach bekannten
-Feldern) und die Datei dort druckt wie vorher.
+neue Schlüssel still übergeht (`_group_from_data`) und die Datei dort druckt
+wie vorher.
 
 ## Wie eine Zuordnung geprüft wird
 

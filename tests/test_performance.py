@@ -919,6 +919,56 @@ def test_the_layer_analysis_survives_a_knurled_surface() -> None:
     assert taken < 8.0
 
 
+def sieve_with_arms() -> MeshData:
+    """Ein Sieb 80 auf 80 auf 40 mm mit 8 mal 8 Bohrungen und 24 Armen ringsum.
+
+    Unter jedem Arm hängt eine Stützsäule bis aufs Bett, neben einem Material,
+    das je Schicht 64 Löcher trägt — der Fall des Laptop-Risers, an dem zwei
+    Drittel aller Abzüge der Säulen nichts wegnahmen.
+    """
+    import math
+
+    import trimesh
+
+    from app.core.geom.transform import place_on_bed
+
+    block = trimesh.creation.box(extents=(80.0, 80.0, 40.0))
+    block.apply_translation((0.0, 0.0, 20.0))
+    tools = []
+    for row in range(8):
+        for column in range(8):
+            tool = trimesh.creation.cylinder(radius=2.0, height=50.0, sections=32)
+            tool.apply_translation((-35.0 + 10.0 * row, -35.0 + 10.0 * column, 20.0))
+            tools.append(tool)
+    parts = [trimesh.boolean.difference([block, *tools])]
+    for index in range(24):
+        arm = trimesh.creation.box(extents=(12.0, 3.0, 3.0))
+        arm.apply_translation((46.0, -30.0 + 60.0 * (index // 4) / 5.0, 6.0 + 30.0 * index / 23.0))
+        arm.apply_transform(
+            trimesh.transformations.rotation_matrix(math.pi / 2.0 * (index % 4), (0, 0, 1))
+        )
+        parts.append(arm)
+    return place_on_bed(MeshData.of(trimesh.boolean.union(parts)))
+
+
+def test_support_columns_beside_the_model_skip_the_subtraction() -> None:
+    """Die Säulen des Prüfberichts ziehen nur ab, was ihr Hüllrechteck berührt (RM-595).
+
+    Der Prüfbericht verbringt neun Zehntel in der Stützfrage
+    (``analysis.model_support``); jede Säule zog je Schicht das Material
+    darunter ab, auch wo beide Hüllrechtecke getrennt liegen — am Laptop-Riser
+    181 statt 127 s. Gemessen am 09.10.2026 an diesem Sieb mit 0,1 mm: 1,20 s,
+    mit erzwungenem Abzug (``_apart`` immer falsch) 1,81 s — anderthalbmal so
+    lang, über der Schwelle des Vergleichslaufs.
+    """
+    result = slice_body(sieve_with_arms(), 0.1)
+    taken = measure(
+        "model_support_columns",
+        lambda: slice_analysis._model_support(result, slice_analysis.CHANNEL_WIDTH, None),
+    )
+    assert taken < 6.0
+
+
 def test_the_wall_thickness_map_stays_under_the_bound() -> None:
     """§31 nennt drei Sekunden für diese Karte, im Hintergrund.
 
@@ -1225,6 +1275,66 @@ def test_replaying_a_thousand_strokes_stays_under_two_seconds() -> None:
     assert taken < 2.0
 
 
+def _thousand_samples(brush: int) -> tuple[MeshData, list[Any]]:
+    """Tausend Proben auf dem Referenznetz, wie die Formsitzung sie schreibt.
+
+    Pinselfassung 1 wie bis Format 48: jede Probe an einer zufälligen Ecke,
+    alle in einer Etappe. Fassung 2 (RM-560): hundert Gesten zu je zehn
+    Proben, eng um eine zufällige Ecke — jede Geste eine Etappe.
+    """
+    import numpy as np
+    from scipy.spatial import cKDTree
+
+    from app.core.geom.sculpt import BRUSH
+    from app.core.types import Stroke
+
+    mesh = medium_mesh()
+    points = np.asarray(mesh.raw.vertices, dtype=float)
+    normals = np.asarray(mesh.raw.vertex_normals, dtype=float)
+    radius = float(np.ptp(points, axis=0).max()) * 0.05
+    generator = np.random.default_rng(7)
+    if brush < BRUSH:
+        picked = generator.integers(0, len(points), 1000)
+        return mesh, [
+            Stroke(
+                point=tuple(points[index]),
+                normal=tuple(normals[index]),
+                radius=radius,
+                strength=0.2,
+            )
+            for index in picked
+        ]
+    tree = cKDTree(points)
+    strokes = []
+    for gesture, index in enumerate(generator.integers(0, len(points), 100), start=1):
+        for place in points[index] + generator.normal(scale=radius * 0.5, size=(10, 3)):
+            _away, near = tree.query(place)
+            strokes.append(
+                Stroke(
+                    point=tuple(points[near]),
+                    normal=tuple(normals[near]),
+                    radius=radius,
+                    strength=5.0,
+                    gesture=gesture,
+                    brush=BRUSH,
+                )
+            )
+    return mesh, strokes
+
+
+def _evaluate_fresh(mesh: MeshData, strokes: list[Any]) -> Any:
+    """Die Auswertung auf einem frischen Netz: ohne die Normalen, die ein
+    vorheriger Aufruf am selben ``Trimesh`` hinterlassen hat — die Operation
+    bekommt ihr Eingangsnetz ohne sie."""
+    import trimesh
+
+    from app.core.geom.sculpt import apply_strokes
+
+    raw = mesh.raw
+    body = trimesh.Trimesh(raw.vertices.copy(), raw.faces.copy(), process=False)
+    return apply_strokes(MeshData.of(body), strokes)
+
+
 def test_the_real_stroke_evaluation_meets_the_same_budget() -> None:
     """Dasselbe Budget, aber an der Operation statt am Gewichtsfeld.
 
@@ -1233,30 +1343,21 @@ def test_the_real_stroke_evaluation_meets_the_same_budget() -> None:
     jetzt gilt die Zahl für sie: mit Normalen, Nachbarschaft, Etappen und dem
     neu gebauten Netz am Ende. Ein Budget, das nur den Kern kennt, deckt nicht
     ab, was der Nutzer wartet.
+
+    Gemessen wird Pinselfassung 2, die die Formsitzung schreibt (F6, RM-560):
+    jede Geste eine Etappe. Dieselbe Marke maß bis dahin Fassung 1 an einem
+    Netz, dessen Normalen schon gerechnet waren — beides sah nicht, was der
+    Kunde wartet.
     """
-    import numpy as np
+    mesh, strokes = _thousand_samples(2)
+    taken = measure("sculpt_apply_1000_brush2", lambda: _evaluate_fresh(mesh, strokes))
+    assert taken < 2.0
 
-    from app.core.geom.mesh import MeshData
-    from app.core.geom.sculpt import apply_strokes
-    from app.core.types import Stroke
 
-    mesh = medium_mesh()
-    points = np.asarray(mesh.raw.vertices, dtype=float)
-    normals = np.asarray(mesh.raw.vertex_normals, dtype=float)
-    radius = float(np.ptp(points, axis=0).max()) * 0.05
-    generator = np.random.default_rng(7)
-    picked = generator.integers(0, len(points), 1000)
-    strokes = [
-        Stroke(
-            point=tuple(points[index]),
-            normal=tuple(normals[index]),
-            radius=radius,
-            strength=0.2,
-        )
-        for index in picked
-    ]
-
-    taken = measure("sculpt_apply_1000", lambda: apply_strokes(MeshData.of(mesh.raw), strokes))
+def test_old_strokes_keep_the_same_budget() -> None:
+    """Fassung 1 bleibt im Budget: alte Projekte rechnen weiter wie gespeichert."""
+    mesh, strokes = _thousand_samples(1)
+    taken = measure("sculpt_apply_1000_brush1", lambda: _evaluate_fresh(mesh, strokes))
     assert taken < 2.0
 
 
@@ -2064,4 +2165,75 @@ def test_closing_notches_on_a_huge_patch_reads_the_rim_not_the_mesh() -> None:
     assert healed[0] == patch, "zwanzig Kerben sind keine Kerbe — der Fleck bleibt, wie er ist"
     assert taken_one < 1.5 and taken < 1.5, (
         "eine Kandidatenmenge darf nicht wieder den ganzen Fleck kosten"
+    )
+
+
+def test_the_self_intersection_search_on_a_closed_organic_surface() -> None:
+    """Ein geschlossenes, leicht verrauschtes Netz: fast alle Kandidaten sind Nachbarn.
+
+    Bis RM-568 ging jedes Paar mit gemeinsamer Ecke durch die genaue Prüfung —
+    an dieser Ikosphäre mit 327 680 Dreiecken 24 s CPU, am Spiderman 68 s.
+    Seit die Trennprüfung schräge Nachbarn vorab trennt (``_touching_apart``):
+    3,8 bis 4,8 s unter Fremdlast (08.10.2026). Die Schranke hält das Erreichte
+    mit Reserve für langsamere Rechner und liegt unter dem alten Stand.
+    """
+    import numpy as np
+    import trimesh
+
+    from app.core.geom.intersections import crossing_face_pairs
+
+    body = trimesh.creation.icosphere(subdivisions=7, radius=40.0)
+    body.vertices += np.random.default_rng(7).normal(scale=0.002, size=body.vertices.shape)
+    vertices, faces = np.asarray(body.vertices), np.asarray(body.faces)
+    found: list[Any] = []
+    taken = measure(
+        "self_intersection_closed_327k",
+        lambda: found.append(crossing_face_pairs(vertices, faces)),
+    )
+    assert len(found[0].first) == 0 and found[0].complete
+    assert taken < 12.0, "measured 4 to 6 s; the search before RM-568 took 24 to 30 s"
+
+
+def test_a_third_step_costs_what_the_first_did(profile: Profile) -> None:
+    """Die Zuordnung eines Schritts aus dem Cache wird nicht bei jeder Auswertung neu gerechnet.
+
+    Am Eiffelturm (4 878 Merkmale) kosteten drei Verschieben 6,7, 11,5 und
+    16,5 s: Jede Auswertung ordnete jeden früheren Schritt neu zu. Mit dem
+    Merker in ``matching.match`` 5,2, 5,3 und 8,2 s bei denselben Merkmalen
+    (RM-568). Hier eine Platte mit 64 verrundeten Taschen (326 Merkmale).
+    """
+    from app.core.bootstrap import load_operations
+
+    load_operations()
+    body = pocketed_plate(64)
+    project = new_project("centauri-carbon-2", "petg")
+    project.document.sources["src_1"] = Source(
+        id="src_1", kind="import", path="sources/plate.stl", sha256=""
+    )
+    project.sources["src_1"] = body.to_stl()
+    history = History(project.document)
+    history.apply(_("Laden"), [OperationDraft(op="load", params={"source": "src_1", "unit": "mm"})])
+    cache = ResultCache()
+    sources = ProjectSources(project)
+    first = evaluate(project.document, profile, sources=sources, cache=cache)
+    target = next(iter(first.scene.objects))
+    assert len(first.scene.objects[target].features) > 200, "Voraussetzung: viele Merkmale"
+    for _step in range(3):
+        history.apply(
+            _("Verschieben"),
+            [OperationDraft(op="translate_object", inputs=(target,), params={"dx": 2.0})],
+        )
+        evaluate(project.document, profile, sources=sources, cache=cache)
+    history.apply(
+        _("Verschieben"),
+        [OperationDraft(op="translate_object", inputs=(target,), params={"dx": 2.0})],
+    )
+    # Gemessen am 08.10.2026: 0,20, 0,25, 0,34 und 0,43 s; vorher 0,30, 0,47,
+    # 0,57 und 0,83 s. Den Zuordnungsmerker selbst hält
+    # ``test_matching.test_a_long_history_matches_only_its_new_step`` über die
+    # Zahl der Zuordnungen; ein Verhältnis der Zeiten hielte auch am Stand ohne
+    # Merker (Review L, G6). Hier steht die 25-%-Marke.
+    measure(
+        "evaluate_fourth_move_326_features",
+        lambda: evaluate(project.document, profile, sources=sources, cache=cache),
     )

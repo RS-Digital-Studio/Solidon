@@ -966,12 +966,23 @@ class _SearchThread:
         self._lock = threading.Lock()
         self._thread: threading.Thread | None = None
 
-    def submit(self, reader: HidReader, box: list[list[dict[str, Any]]]) -> None:
-        """Sucht mit ``reader`` und legt das Ergebnis in ``box``."""
+    def ensure_running(self) -> None:
+        """Den Faden starten, falls er noch nicht läuft — gesucht wird darin noch nichts.
+
+        **Mit dem Fenster, nicht bei der ersten Suche** (RM-258):
+        ``Thread.start`` wartet im Hauptfaden, bis der neue Faden läuft, und der
+        braucht dafür den GIL. Kam die erste Suche 1,5 s nach dem Fenster
+        mitten in einen Import — eine Datei per Doppelklick geöffnet —, stand
+        das Fenster daneben gemessen bis 0,43 s.
+        """
         with self._lock:
             if self._thread is None:
                 self._thread = threading.Thread(target=self._serve, name=SEARCH_THREAD, daemon=True)
                 self._thread.start()
+
+    def submit(self, reader: HidReader, box: list[list[dict[str, Any]]]) -> None:
+        """Sucht mit ``reader`` und legt das Ergebnis in ``box``."""
+        self.ensure_running()
         self._searches.put((reader, box))
 
     def _serve(self) -> None:
@@ -1043,6 +1054,8 @@ class SpaceMouseController(QObject):
         """Nach einem Gerät sehen — erst wenn das Fenster steht, dann immer seltener."""
         if self._reader.is_open:
             return
+        if isinstance(self._reader, HidReader):
+            _SEARCHER.ensure_running()
         self._scan_wait = SCAN_MS
         self._scan.start(SCAN_FIRST_MS)
 

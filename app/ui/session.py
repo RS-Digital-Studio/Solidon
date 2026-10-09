@@ -161,7 +161,7 @@ from app.core.types import (
 from app.core.units import is_close
 from app.i18n import TranslatableText, _, format_decimal, tr
 from app.ui.labels import step_number
-from app.ui.leash import Worker, WorkerLeash, undisturbed
+from app.ui.leash import RightOfWay, Worker, WorkerLeash, undisturbed
 from app.ui.print_contract import PrintTarget, print_target
 
 _log = get_logger(__name__)
@@ -367,6 +367,14 @@ class _EvaluationWorker(Worker):
         self.quality: Quality = quality
         """In welcher Güte dieser Lauf rechnet — fest ab dem Start, damit das
         Ergebnis sagen kann, ob es für Export und Slicer taugt (RM-426)."""
+        self.right_of_way = RightOfWay()
+        """Wo dieser Lauf dem Fenster den Vortritt lässt (RM-258): Ein Lauf auf
+        dem Ladeweg beginnt erst, wenn das Fenster den Wechsel zur
+        Arbeitsfläche gezeichnet hat, und rechnet nach seinem Bild erst weiter,
+        wenn es dasteht. Freigegeben wird in :meth:`Session.evaluate_async`
+        und :meth:`Session._on_picture`."""
+        if picture_first:
+            self.right_of_way.claim()
 
     def _evaluate(self, session: Session) -> EvaluationResult:
         """Der ganze Lauf — beim Ladeweg mit dem Bild davor."""
@@ -403,7 +411,9 @@ class _EvaluationWorker(Worker):
         )
         if _recognition_follows(picture):
             _warm_metrics(picture, session.cancel_signal)
+            self.right_of_way.claim()
             self.pictureWith.emit(_as_picture(picture))
+            self.right_of_way.wait(cancelled=lambda: session.cancel_signal.is_cancelled)
         session._pending.replay = asked
         try:
             result = session.run_evaluation(self.quality)
@@ -418,6 +428,7 @@ class _EvaluationWorker(Worker):
         session = self._session
         session._pending.project_generation = self._project_generation
         session._pending.worker = self
+        self.right_of_way.wait(cancelled=lambda: session.cancel_signal.is_cancelled)
         try:
             # §32: was diese Datei außer Geometrie mitbringt, wird am Dokument
             # abgelesen — vor der Auswertung, damit der Hinweis nicht von dem
@@ -5104,10 +5115,18 @@ class Session(QObject):
         return self._start_revision(planned, None)
 
     def insert_before(
-        self, op_id: OpId, title: TranslatableText | str, drafts: list[OperationDraft]
+        self,
+        op_id: OpId,
+        title: TranslatableText | str,
+        drafts: list[OperationDraft],
+        *,
+        changed: Mapping[OpId, Mapping[str, Any]] | None = None,
     ) -> bool:
-        """Einen Editorschritt gezielt davor einfügen, ohne die sichtbare Einfügemarke zu ändern."""
-        return self._insert(title, drafts, None, None, before=op_id)
+        """Einen Editorschritt gezielt davor einfügen, ohne die sichtbare Einfügemarke zu ändern.
+
+        ``changed`` gibt späteren Schritten neue Werte in derselben Transaktion
+        (:meth:`History.plan_insert`)."""
+        return self._insert(title, drafts, None, None, before=op_id, changed=changed)
 
     def _insert(
         self,
@@ -5118,6 +5137,7 @@ class Session(QObject):
         *,
         raise_on_error: bool = False,
         before: OpId | None = None,
+        changed: Mapping[OpId, Mapping[str, Any]] | None = None,
     ) -> bool:
         """Die Schritte vor die Einfügemarke setzen (P7.1) — geplant sofort, gerechnet im Arbeiter.
 
@@ -5148,7 +5168,7 @@ class Session(QObject):
             return False
         by = origin or Origin(by="user")
         try:
-            self.history.plan_insert(marker, title, drafts, by, changes)
+            self.history.plan_insert(marker, title, drafts, by, changes, changed)
         except AppError as error:
             if raise_on_error:
                 raise
@@ -5159,7 +5179,7 @@ class Session(QObject):
             history: History, _context: Dependencies, run: Callable[[Any], EvaluationResult]
         ) -> RevisionPlan:
             settled = searched_at_the_end(history.document, title, drafts, evaluate=run)
-            return history.plan_insert(marker, title, settled, by, changes)
+            return history.plan_insert(marker, title, settled, by, changes, changed)
 
         return self._start_revision(planned, None)
 
@@ -5277,6 +5297,7 @@ class Session(QObject):
         self._worker = worker
         self.busyChanged.emit(True)
         self._leash.start(worker)
+        worker.right_of_way.release_after_frame()
 
     def _on_check_state(self, state: CheckState, *, finished: _EvaluationWorker) -> None:
         """Nur der aktuelle Auftrag darf den Nachweisstand im Fenster ändern."""
@@ -6585,15 +6606,22 @@ class Session(QObject):
         Stapel), wartet weiter auf ``_on_finished``.
         """
         if self._stale(finished) or self.cancel_signal.is_cancelled:
+            if finished is not None:
+                finished.right_of_way.release()
             return
-        self.last_result = picture
-        self.picture = picture
-        self.picture_current = True
-        self.result_generation += 1
-        self.result_current = False
-        self.pictureChanged.emit(picture)
-        # Ein Bild gibt es nur von einem Stand, der nicht anhielt.
-        self._settle_import(picture)
+        try:
+            self.last_result = picture
+            self.picture = picture
+            self.picture_current = True
+            self.result_generation += 1
+            self.result_current = False
+            self.pictureChanged.emit(picture)
+            # Ein Bild gibt es nur von einem Stand, der nicht anhielt.
+            self._settle_import(picture)
+        finally:
+            # Der Arbeiter rechnet weiter, sobald das Bild gezeichnet ist (RM-258).
+            if finished is not None:
+                finished.right_of_way.release_after_frame()
 
     def _on_finished(self, result: Any, finished: _EvaluationWorker | None = None) -> None:
         if self._stale(finished):
@@ -6858,6 +6886,11 @@ class Session(QObject):
             )
             if worker is None:
                 return True
+            # Wer synchron wartet, zeichnet nicht — der Vortritt, den ihm der
+            # Lauf ließe, hielte ihn hier nur auf (RM-258).
+            way = getattr(worker, "right_of_way", None)
+            if isinstance(way, RightOfWay):
+                way.release()
             remaining_ms = int((deadline - time.monotonic()) * 1000)
             if remaining_ms <= 0:
                 return False

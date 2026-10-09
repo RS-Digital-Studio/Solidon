@@ -335,35 +335,50 @@ def test_quick_assignment_is_one_transaction_and_keeps_the_spool(qt_app, invento
     assert not session.project.document.print_settings.spool_bindings
 
 
-@pytest.mark.parametrize("scope", ["body", "two-faces"])
-def test_exact_quick_assignment_previews_then_commits_the_same_spool_and_scope(
-    qt_app, inventory, scope
-):
-    """Vorschau, Abbruch und Übernahme halten Körperart, Flächen und Lagerbindung zusammen."""
-    from copy import deepcopy
+def _drawn_colours(renderer, identifier: str) -> list[tuple[str, ...] | None]:
+    """Die Slotfarben jedes gezeichneten Körperaktors, in der Reihenfolge des Zeichnens."""
+    return [
+        tuple(entry["cell_colours"].colormap or ()) if entry["cell_colours"] is not None else None
+        for kind, entry in renderer.drawn
+        if kind == "surface" and entry["name"] == f"object:{identifier}"
+    ]
 
+
+@pytest.mark.parametrize("kernel", ["mesh", "brep"])
+@pytest.mark.parametrize("scope", ["body", "two-faces"])
+def test_a_quick_spool_colours_the_body_at_once_and_undo_takes_it_back(
+    qt_app, inventory, kernel, scope
+):
+    """RM-557: Die Wahl färbt im ersten Bild danach, an jedem Körper; Strg+Z nimmt sie zurück.
+
+    Robert, 08.10.2026: „Der Wechsel lädt spürbar, und danach zeigt die Ansicht
+    noch die alte Farbe.“ Am echten Fenster gemessen: Ein exakter Körper ging
+    erst durch eine Vorschau mit *Übernehmen*, zeigte danach grau, und gewählt
+    deckte die Auswahlfarbe jedes Filament zu. Jetzt weist die Wahl sofort zu,
+    die Auswahl liegt als Ton darüber (``viewport.face_tint``), und kein
+    Zwischenbild trägt die alte Farbe.
+    """
     from tests.helpers import exact_kernel
+    from tests.render_fakes import RecordingRenderer
 
     exact_kernel()
     from app.core.brep.kernel import Solid
     from app.core.scene.history import OperationDraft
     from app.ui.session import Session
+    from app.ui.viewport import SELECTED_COLOUR, SELECTION_TINT_SHARE
 
     window = main_window.MainWindow(Session(), UiSettings())
+    renderer = RecordingRenderer()
+    window.viewport.renderer = renderer
     try:
+        create = "create_brep_box" if kernel == "brep" else "create_box"
         assert window.session.apply(
             "Quader",
-            [
-                OperationDraft(
-                    "create_brep_box", params={"width": 40.0, "depth": 30.0, "height": 20.0}
-                )
-            ],
+            [OperationDraft(create, params={"width": 40.0, "depth": 30.0, "height": 20.0})],
         )
-        assert window.session.wait_for_idle(30_000)
-        result = window.session.last_result
-        assert result is not None and result.complete
-        identifier, body = next(iter(result.scene.objects.items()))
-        assert body.kind == "brep"
+        _settled(window)
+        identifier, body = next(iter(window.session.last_result.scene.objects.items()))
+        assert body.kind == kernel
         if scope == "body":
             window.object_tree.select_object(identifier)
             expected_op, count = "assign_slot", 1
@@ -372,96 +387,51 @@ def test_exact_quick_assignment_previews_then_commits_the_same_spool_and_scope(
             assert len(faces) == 2
             window.object_tree.select_features([(identifier, face) for face in faces])
             expected_op, count = "paint_slot", 2
-        qt_app.processEvents()
+        QApplication.processEvents()
+        before = len(window.session.project.document.transactions)
+        drawn = len(_drawn_colours(renderer, identifier))
         picker = window.quick_filament
         picker.refresh()
         row = picker.picker.findData(inventory.identifier)
         assert row > 0
-        before = deepcopy(window.session.project.document)
-        for cancel in (True, False):
-            picker.picker.setCurrentIndex(row)
-            picker.picker.activated.emit(row)
-            assert not picker.can_accept() and not picker.apply_button.isHidden()
-            if not cancel:
-                # **Vor dem Bild geklickt, läuft die Zuweisung, sobald es steht**
-                # (:meth:`MainWindow._apply_when_previewed`). Bis zur letzten
-                # Nachprüfung verfiel dieser Klick ohne ein Wort: Der Wähler
-                # ließ ihn nur bei fertiger Vorschau durch.
-                approval = window._preview_approval
-                assert approval is not None and approval.owner is picker
-                prepared = approval.order
-                picker.apply_button.click()
-                assert window.session.project.document == before, "vor dem Bild nichts"
-                assert window.session.wait_for_idle(30_000)
-                qt_app.processEvents()
-                assert window.session.wait_for_idle(30_000)
-                assert picker.apply_button.isHidden(), "die Zuweisung ist übernommen"
-                transaction = window.session.project.document.transactions[-1]
-                assert transaction.changes == prepared.changes
-                written = window.session.history.operations[-count:]
-                assert [(step.op, step.inputs, step.params) for step in written] == [
-                    (draft.op, draft.inputs, draft.params) for draft in prepared.drafts
-                ]
-                continue
-            assert window.session.wait_for_idle(30_000)
-            qt_app.processEvents()
-            approval = window._preview_approval
-            assert approval is not None and approval.owner is picker and approval.displayed
-            assert len(approval.order.drafts) == count
-            assert all(draft.op == expected_op for draft in approval.order.drafts)
-            assert all(draft.inputs == (identifier,) for draft in approval.order.drafts)
-            assert approval.difference is not None
-            assert not any(finding.converts_exact_body for finding in approval.difference.findings)
-            assert "geraden Teilstücken" not in window.viewport._preview_note
-            assert window.session.project.document == before
-            assert picker.can_accept()
-            picker.cancel_button.click()
-            assert window.session.project.document == before
-            assert window._preview_approval is None
-            assert picker.apply_button.isHidden()
-        changed = window.session.last_result.scene.objects[identifier]
-        assert changed.kind == "brep" and isinstance(changed.mesh, Solid)
-        assert not any(
-            finding.converts_exact_body
-            for finding in window.session.last_result.scene.report.findings
+        picker.picker.setCurrentIndex(row)
+        picker.picker.activated.emit(row)
+
+        assert len(window.session.project.document.transactions) == before + 1, "sofort"
+        written = window.session.history.operations[-count:]
+        assert all(step.op == expected_op for step in written)
+        _settled(window)
+        after = _drawn_colours(renderer, identifier)[drawn:]
+        assert after, "der Körper wurde neu gezeichnet"
+        assert all(colours and "#ff0000" in colours for colours in after), (
+            f"jedes Bild nach der Wahl trägt das neue Filament: {after}"
         )
-        assert any(slot.name == inventory.name for slot in changed.material_slots)
-        assert window.session.project.document.print_settings.spool_bindings[
-            0
-        ].spool_identifier == (inventory.identifier)
-        window.session.undo()
-        assert window.session.wait_for_idle(30_000)
-        assert window.session.last_result.scene.objects[identifier].kind == "brep"
-        assert not window.session.project.document.print_settings.spool_bindings
+        changed = window.session.last_result.scene.objects[identifier]
+        assert changed.kind == kernel
+        if kernel == "brep":
+            assert isinstance(changed.mesh, Solid)
+        actor = window.viewport._actors[identifier]
+        if scope == "body":
+            assert actor.face_tint == (SELECTED_COLOUR, SELECTION_TINT_SHARE), (
+                "die Auswahl liegt als Ton über dem Filament, nicht deckend"
+            )
+        assert (
+            window.session.project.document.print_settings.spool_bindings[0].spool_identifier
+            == inventory.identifier
+        )
+
+        drawn = len(_drawn_colours(renderer, identifier))
+        window.undo_action.trigger()
+        _settled(window)
+        undone = _drawn_colours(renderer, identifier)[drawn:]
+        assert undone, "Strg+Z zeichnet den Körper neu"
+        assert all(not colours or "#ff0000" not in colours for colours in undone)
+        assert len(window.session.project.document.transactions) == before
+        assert window.session.last_result.scene.objects[identifier].kind == kernel
         assert filaments.get(inventory.identifier).remaining_grams == pytest.approx(100.0)
-        assert not filaments.bookings()
     finally:
-        window.quick_filament.cancel_preview()
+        window.viewport.renderer = None
         window.release()
-
-
-def _staged_exact_spool(window, inventory):
-    """Ein exakter Quader, gewählt, mit vorbereiteter Spule am Schnellwähler."""
-    from app.core.scene.history import OperationDraft
-
-    assert window.session.apply(
-        "Quader",
-        [OperationDraft("create_brep_box", params={"width": 40.0, "depth": 30.0, "height": 20.0})],
-    )
-    assert window.session.wait_for_idle(30_000)
-    identifier = next(iter(window.session.last_result.scene.objects))
-    window.object_tree.select_object(identifier)
-    QApplication.processEvents()
-    picker = window.quick_filament
-    picker.refresh()
-    row = picker.picker.findData(inventory.identifier)
-    assert row > 0
-    picker.picker.setCurrentIndex(row)
-    picker.picker.activated.emit(row)
-    assert window.session.wait_for_idle(30_000)
-    QApplication.processEvents()
-    assert not picker.apply_button.isHidden()
-    return picker
 
 
 def _hold_evaluations(monkeypatch, gate):
@@ -478,99 +448,65 @@ def _hold_evaluations(monkeypatch, gate):
 
 
 def _settled(window):
-    """Bis Auswertung, Vorschau und der wartende Klick durch sind."""
+    """Bis Auswertung, Ansicht und Nachläufe durch sind."""
     for _ in range(3):
         assert window.session.wait_for_idle(30_000)
         QApplication.processEvents()
     assert window.session.wait_for_idle(30_000)
 
 
-def test_a_quick_spool_clicked_while_the_scene_evaluates_is_assigned_after_it(
+def test_a_quick_spool_chosen_while_the_scene_evaluates_is_assigned_once(
     qt_app, inventory, monkeypatch
 ):
-    """*Übernehmen* am Schnellwähler während einer Auswertung weist danach genau einmal zu.
+    """Eine Spulenwahl während einer Auswertung weist genau einmal zu, an einem exakten Körper.
 
-    Der Klick verfiel dort ohne ein Wort (Nachprüfung, Verdacht Maßgruppe, am
-    Schnellwähler nachgestellt): Der Wähler ließ ihn nur bei fertiger Vorschau
-    durch, und das Ende der Auswertung verwirft die vorbereitete Zuweisung
-    (``set_context``). Jetzt sagt die Statuszeile, dass er wartet, und er trägt
-    seinen Auftrag über das Ende hinaus (``MainWindow._carry_click``).
+    Bis RM-557 wartete die Wahl dort auf eine Vorschau und ein *Übernehmen*,
+    und dieser Klick verfiel während einer Auswertung ohne ein Wort
+    (Nachprüfung, Verdacht Maßgruppe). Die Wahl ist jetzt selbst die
+    Zuweisung; die laufende Auswertung wird vom neuen Stand abgelöst.
     """
     import threading
 
     from tests.helpers import exact_kernel
 
     exact_kernel()
-    from app.i18n import tr
+    from app.core.scene.history import OperationDraft
     from app.ui.session import Session
 
     window = main_window.MainWindow(Session(), UiSettings())
     gate = threading.Event()
     try:
-        picker = _staged_exact_spool(window, inventory)
+        assert window.session.apply(
+            "Quader",
+            [
+                OperationDraft(
+                    "create_brep_box", params={"width": 40.0, "depth": 30.0, "height": 20.0}
+                )
+            ],
+        )
+        _settled(window)
+        identifier = next(iter(window.session.last_result.scene.objects))
+        window.object_tree.select_object(identifier)
+        QApplication.processEvents()
+        picker = window.quick_filament
+        picker.refresh()
+        row = picker.picker.findData(inventory.identifier)
         before = len(window.session.project.document.transactions)
         _hold_evaluations(monkeypatch, gate)
         window.session.evaluate_async()
         assert window.session.busy, "die Lage: die Szene rechnet"
-        picker.apply_button.click()
-        waiting = window._click_after_evaluation
-        assert waiting is not None, "der Klick wartet"
-        assert window.status_message.text().startswith(
-            tr("Wird übernommen, sobald die Berechnung fertig ist.")
-        )
+        picker.picker.setCurrentIndex(row)
+        picker.picker.activated.emit(row)
         gate.set()
         _settled(window)
 
         transactions = window.session.project.document.transactions
         assert len(transactions) == before + 1, "genau eine Zuweisung"
         assert window.session.project.document.print_settings.spool_bindings
-        assert "übernommen" not in window.status_message.text(), window.status_message.text()
+        changed = window.session.last_result.scene.objects[identifier]
+        assert any(slot.name == inventory.name for slot in changed.material_slots)
     finally:
         gate.set()
-        window.quick_filament.cancel_preview()
-        window.release()
-
-
-def test_cancelling_the_quick_spool_while_its_click_waits_drops_the_click(
-    qt_app, inventory, monkeypatch
-):
-    """*Abbrechen* am Schnellwähler nimmt den wartenden Klick mit — still.
-
-    Bis zur Nachprüfung (Fund 2) räumte Abbrechen nur die Freigabe ab; die
-    Statuszeile versprach weiter „Wird übernommen …“ und sagte am Ende „Nicht
-    übernommen …, klicken Sie erneut“ — eine Einladung, das eben Verworfene zu
-    übernehmen.
-    """
-    import threading
-
-    from tests.helpers import exact_kernel
-
-    exact_kernel()
-    from app.ui.session import Session
-
-    window = main_window.MainWindow(Session(), UiSettings())
-    gate = threading.Event()
-    try:
-        picker = _staged_exact_spool(window, inventory)
-        before = len(window.session.project.document.transactions)
-        _hold_evaluations(monkeypatch, gate)
-        window.session.evaluate_async()
-        assert window.session.busy, "die Lage: die Szene rechnet"
-        picker.apply_button.click()
-        assert window._click_after_evaluation is not None, "die Lage: der Klick wartet"
-        picker.cancel_button.click()
-        assert window._click_after_evaluation is None, "Abbrechen nimmt den Klick mit"
-        assert "Wird übernommen" not in window.status_message.text()
-        gate.set()
-        _settled(window)
-
-        assert len(window.session.project.document.transactions) == before, "nichts geschrieben"
-        settings = window.session.project.document.print_settings
-        assert settings is None or not settings.spool_bindings
-        assert "übernommen" not in window.status_message.text(), window.status_message.text()
-    finally:
-        gate.set()
-        window.quick_filament.cancel_preview()
         window.release()
 
 
@@ -831,7 +767,7 @@ def test_selected_export_keeps_the_selected_filaments_project_profile(
             ]
         )
         settings = handover.bind_slot_profiles(settings, slots)
-    monkeypatch.setattr(main_window, "remembered_setup", lambda *_args: None)
+    monkeypatch.setattr(main_window, "remembered_setup", lambda *_args, **_kwargs: None)
     profile_files = {}
     for name, speed in (("PETG Standard", "5"), ("PETG Schnell", "21")):
         path = tmp_path / f"{name}.json"
@@ -957,3 +893,148 @@ def test_clearing_a_face_keeps_profiles_with_their_filaments_and_undo(qt_app, mo
     assert session.wait_for_idle()
     assert assigned() == {"Rot": "Rot Standard", "Blau": "Blau Schnell"}
     assert session.project.document.print_settings.slot_profile_bindings == before
+
+
+def test_a_filament_made_while_assigning_survives_save_undo_and_another_machine(
+    qt_app, tmp_path, monkeypatch
+):
+    """RM-569: *Neues Filament …* beim Zuweisen — der ganze Weg, nicht nur das Feld.
+
+    Robert, 08.10.2026: „werden Filamente auch gespeichert, wenn wir einem
+    Körper ein Filament zuweisen, das wir in dem Schritt auch erstellen?“
+    Gefahren wird der Weg des Kunden: anlegen, während der Lagereintrag noch
+    geschrieben wird das Projekt speichern, ein abgelehnter Lagereintrag sagt,
+    was jetzt hilft, der zweite Versuch gelingt, zuweisen, speichern. Danach
+    öffnet ein Rechner mit leerem Lager das Projekt und kennt Name, Farbe und
+    Material — über den Schritt und die Spulenbindung. Strg+Z nimmt die
+    Zuweisung, das Lager behält die Spule.
+    """
+    import threading
+
+    from PySide6.QtWidgets import QDialog, QPushButton
+
+    from app.core.errors import RETRY
+    from app.core.registry import REGISTRY
+    from app.core.scene.history import OperationDraft
+    from app.ui.filament_picker import NEW_FILAMENT, FilamentField, NewFilamentDialog
+    from app.ui.session import Session
+    from tests.ui_helpers import wait_for_catalogue, wait_until
+
+    workshop = tmp_path / "werkstatt.json"
+    monkeypatch.setattr(filaments, "catalogue_path", lambda: workshop)
+    made = filaments.CatalogueFilament("Werkstattblau", "#2e86c1", "PETG")
+    monkeypatch.setattr(NewFilamentDialog, "exec", lambda _dialog: QDialog.DialogCode.Accepted)
+    monkeypatch.setattr(NewFilamentDialog, "entry", lambda _dialog: made)
+
+    window = main_window.MainWindow(Session(), UiSettings())
+    session = window.session
+    try:
+        assert session.apply("Körper", [OperationDraft("create_box")])
+        _settled(window)
+        identifier = next(iter(session.last_result.scene.objects))
+        window.object_tree.select_object(identifier)
+        dialogs = []
+        opening = window._open_operation_dialog
+
+        def opened(dialog, run):
+            dialogs.append((dialog, run))
+            opening(dialog, run)
+
+        monkeypatch.setattr(window, "_open_operation_dialog", opened)
+        window.run_operation(REGISTRY.get("assign_slot"), on_bodies=[identifier])
+        dialog, run = dialogs[0]
+        field = dialog.findChild(FilamentField)
+        assert field is not None
+
+        # Der erste Lagereintrag scheitert an der Datei — und sagt, was hilft.
+        writing = filaments._write
+
+        def locked(_state):
+            raise PermissionError("Die Datei ist von einem anderen Programm gesperrt.")
+
+        monkeypatch.setattr(filaments, "_write", locked)
+        field._make_one(field.findData(NEW_FILAMENT))
+        wait_for_catalogue(field)
+        notice = dialog._filament_notice
+        assert "gesperrt" in notice.text()
+
+        def shown_retry() -> list[QPushButton]:
+            return [
+                button
+                for button in notice.findChildren(QPushButton)
+                if button.text() == str(RETRY.label) and button.isVisible()
+            ]
+
+        # Der Knopf kommt mit der nächsten Runde der Ereignisschleife
+        # (``QLayout`` zeigt neue Kinder verzögert); ``wait_for_catalogue``
+        # dreht sie nicht mehr, wenn der Arbeiter schon fertig war.
+        wait_until(qt_app, lambda: bool(shown_retry()))
+        retry = shown_retry()[0]
+        assert filaments.catalogue() == ()
+        assert dialog.values()["name"] != "Werkstattblau", "ohne Lagereintrag keine Wahl"
+
+        # Der zweite Versuch hängt, und genau dann wird das Projekt gespeichert.
+        gate = threading.Event()
+
+        def slow(state):
+            gate.wait(15)
+            writing(state)
+
+        monkeypatch.setattr(filaments, "_write", slow)
+        retry.click()
+        assert field.pending, "der Lagereintrag wird geschrieben"
+        project = tmp_path / "projekt.p3d"
+        window._save_to(project)
+        assert project.exists()
+        gate.set()
+        wait_for_catalogue(field)
+        monkeypatch.setattr(filaments, "_write", writing)
+        assert [entry.name for entry in filaments.catalogue()] == ["Werkstattblau"]
+        assert window._op_dialog is dialog and dialog.isVisible(), (
+            "das Speichern hat den offenen Dialog nicht geschlossen"
+        )
+        assert dialog.values()["name"] == "Werkstattblau", "die neue Spule ist gewählt"
+        assert not field.pending
+
+        run()
+        dialog.reject()
+        _settled(window)
+        body = session.last_result.scene.objects[identifier]
+        assert [(str(slot.name), slot.material_type) for slot in body.material_slots] == [
+            ("Werkstattblau", "PETG")
+        ]
+        window._save_to(project)
+
+        # Ein anderer Rechner: leeres Lager, dieselbe Datei.
+        monkeypatch.setattr(filaments, "catalogue_path", lambda: tmp_path / "fremd.json")
+        elsewhere = Session()
+        try:
+            elsewhere.open_project(project)
+            result = elsewhere.evaluate_now()
+            opened = result.scene.objects[identifier]
+            slot = opened.material_slots[0]
+            assert (str(slot.name), slot.material_type) == ("Werkstattblau", "PETG")
+            assert slot.colour is not None
+            assert "#" + "".join(f"{round(part * 255):02x}" for part in slot.colour) == "#2e86c1"
+            binding = elsewhere.project.document.print_settings.spool_bindings[0]
+            assert (str(binding.name), binding.colour, binding.material_type) == (
+                "Werkstattblau",
+                slot.colour,
+                "PETG",
+            )
+            assert filaments.catalogue() == (), "Öffnen legt nichts ins fremde Lager"
+        finally:
+            elsewhere.release()
+        monkeypatch.setattr(filaments, "catalogue_path", lambda: workshop)
+
+        window.undo_action.trigger()
+        _settled(window)
+        assert not session.last_result.scene.objects[identifier].material_slots
+        settings = session.project.document.print_settings
+        assert settings is None or not settings.spool_bindings
+        assert [entry.name for entry in filaments.catalogue()] == ["Werkstattblau"], (
+            "das Lager behält die Spule"
+        )
+    finally:
+        monkeypatch.setattr(window, "_may_discard", lambda: True)
+        window.release()

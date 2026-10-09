@@ -46,7 +46,6 @@ from typing import cast
 
 from PySide6.QtCore import (
     QCoreApplication,
-    QEvent,
     QModelIndex,
     QObject,
     QPersistentModelIndex,
@@ -58,7 +57,16 @@ from PySide6.QtCore import (
     QTimer,
     Signal,
 )
-from PySide6.QtGui import QColor, QIcon, QPainter, QPainterPath, QPen, QPixmap, QShowEvent
+from PySide6.QtGui import (
+    QColor,
+    QIcon,
+    QMouseEvent,
+    QPainter,
+    QPainterPath,
+    QPen,
+    QPixmap,
+    QShowEvent,
+)
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QCheckBox,
@@ -67,6 +75,7 @@ from PySide6.QtWidgets import (
     QDialog,
     QDialogButtonBox,
     QFormLayout,
+    QFrame,
     QGridLayout,
     QHBoxLayout,
     QInputDialog,
@@ -75,7 +84,6 @@ from PySide6.QtWidgets import (
     QListView,
     QListWidget,
     QListWidgetItem,
-    QMenu,
     QProgressBar,
     QPushButton,
     QSlider,
@@ -95,16 +103,15 @@ from app.core.geom.mesh import as_mesh_data
 from app.core.knowledge import filaments, profiles
 from app.core.types import CancelToken, MaterialSlot, PrintSettings, SceneObject
 from app.i18n import tr
-from app.ui.dialogs import ErrorNotice, problem_text
+from app.ui.dialogs import problem_text
 from app.ui.icons import icon
-from app.ui.labels import DateField, NumberSpin, localised, wheel_needs_focus
+from app.ui.labels import NO_BODIES_YET, DateField, NumberSpin, localised, wheel_needs_focus
 from app.ui.leash import RELEASE_RETRY_MS, WAIT_TIMEOUT_MS, Worker, WorkerLeash, weak_slot
 from app.ui.overlay import rows_height
 from app.ui.panels import (
     MAX_ROWS,
     align_forms,
     collapsible,
-    least_height_of,
     open_section,
     row_height_of,
     view_chrome,
@@ -117,6 +124,7 @@ from app.ui.style import (
     WIDE,
     ContentHeight,
     DialogScrollArea,
+    expanded_width,
     make_primary,
     set_level,
 )
@@ -769,6 +777,7 @@ class NewFilamentDialog(QDialog):
 
         self.more = QWidget(self)
         details = QFormLayout(self.more)
+        self._details = details
         details.setContentsMargins(0, 0, 0, 0)
         details.setVerticalSpacing(NORMAL)
         details.setHorizontalSpacing(NORMAL)
@@ -965,7 +974,16 @@ class NewFilamentDialog(QDialog):
         self._height.fit(self, self._scroll, intent="passive")
 
     def _fit_initial_content(self) -> None:
-        self._height.fit(self, self._scroll, grow_width=True, intent="initial")
+        """Beim Öffnen so breit, dass weder der senkrechte Rollbalken noch die
+        aufgeklappten *Weiteren Angaben* den Inhalt quer rollen lassen
+        (``style.expanded_width``)."""
+        self._height.fit(
+            self,
+            self._scroll,
+            grow_width=True,
+            intent="initial",
+            natural_width=expanded_width(self._scroll, self._details),
+        )
 
     def _fit_explicit_content(self) -> None:
         self._height.fit(self, self._scroll, intent="explicit")
@@ -1860,44 +1878,32 @@ def _explain(button: QPushButton, free: bool, said: str) -> None:
 
 
 class FilamentPanel(QWidget):
-    """Die Filamente auf einen Blick: was das Projekt trägt, was im Regal liegt.
+    """Die Filamente, die das Projekt verwendet — was hinter *Filamente* in der Kopfzeile steht.
 
-    Die Frage, die dieses Panel beantwortet, hat Robert am 27.08.2026 gestellt
-    — „wo wähle ich die Filamente und Farben aus?" — und sie war berechtigt:
-    Beide Antworten standen in Dialogen. Das Filamentfeld
-    (:class:`FilamentField`) zeigt Name, Typ und Farbe, aber nur solange eine
-    Operation offen ist; die Filamentprofile des Slicers stehen in den
-    Druckeinstellungen, zugeklappt und erst ab zwei Slots. Wer wissen wollte,
-    welche Spulen ein Projekt überhaupt braucht, fand es nirgends.
+    Die Frage dahinter hat Robert am 27.08.2026 gestellt: „wo wähle ich die
+    Filamente und Farben aus?“ Die Antwort stand bis RM-556 als Gruppe unten in
+    der linken Spalte, samt Regal. Jetzt öffnet der Knopf *Filamente* der
+    Kopfzeile diese kleine Liste (Robert, 08.10.2026): was die Körper tragen,
+    mit Farbe, Name und der Zahl der Körper, darunter der Weg ins
+    Filamentlager. Das Regal — anlegen, ändern, archivieren — steht im Lager
+    und nur dort.
 
-    **Zwei Hälften, und die Trennung ist die eigentliche Entscheidung:**
-
-    * **Im Projekt** — was die Körper tragen, mit Farbe, Name und der Zahl
-      der Körper. Die Zeile öffnet nur Druckwerte dieser Spule. Farbe oder
-      Zuordnung zu ändern hieße dagegen, Geometrie außerhalb einer Operation
-      anzufassen (Regel 2); der Weg dorthin ist das Auswahlfenster am Merkmal,
-      und der Hinweis unter der Liste sagt es.
-    * **Im Regal** — die Vorwahl (:mod:`app.core.knowledge.filaments`), also
-      die Spulen, die wirklich dastehen. Sie gehört keinem Projekt, hängt an
-      keinem Körper und ist deshalb hier vollständig bedienbar: anlegen,
-      Farbe oder Name ändern, herausnehmen.
-
-    Was im Regal steht, steht in jedem Filamentfeld zur Wahl — das Panel ist
-    damit die Stelle, an der man den Vorrat pflegt, und nicht ein zweiter Weg
-    zum selben Dialog.
+    Eine Zeile öffnet die Druckwerte dieser Spule. Farbe oder Zuordnung zu
+    ändern hieße dagegen, Geometrie außerhalb einer Operation anzufassen
+    (Regel 2); der Weg dorthin ist die Auswahl rechts, und der Satz unter der
+    Liste sagt es.
     """
 
-    #: Die Druckwerte gehören dem Projekt, nicht dem Regal. Das Hauptfenster
-    #: öffnet den Dialog und schreibt das Ergebnis über die Sitzung zurück.
+    #: Die Druckwerte gehören dem Projekt. Das Hauptfenster öffnet den Dialog
+    #: und schreibt das Ergebnis über die Sitzung zurück.
     overrideRequested = Signal(object)
     printSettingsRequested = Signal()
-    catalogueChanged = Signal()
     inventoryRequested = Signal()
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.list = QListWidget(self)
-        self.list.setAccessibleName(tr("Filamente"))
+        self.list.setAccessibleName(tr("Filamente im Projekt"))
         # Der Farbpunkt ist so groß wie das Feld vor ihm, und kein Name rollt
         # die Liste zur Seite (RM-489, :class:`_WithinTheWidth`).
         self.list.setIconSize(QSize(SWATCH_PIXELS, SWATCH_PIXELS))
@@ -1907,161 +1913,32 @@ class FilamentPanel(QWidget):
         self.list.setItemDelegate(_WithinTheWidth(self.list))
         self.list.itemDoubleClicked.connect(self._on_activated)
         self.list.currentItemChanged.connect(self._selection_changed)
-        self.list.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
-        self.list.customContextMenuRequested.connect(self._on_context_menu)
 
-        self.hint = ErrorNotice(self)
-        set_level(self.hint.label, "caption")
-        self._writes = CatalogueWrites(self)
-        self._writes.completed.connect(self._catalogue_saved)
-        self._writes.rejected.connect(self._write_failed)
-        self._writes.busyChanged.connect(self._write_busy)
+        self.hint = QLabel(tr("Zugewiesen wird ein Filament rechts unter Auswahl."), self)
+        self.hint.setWordWrap(True)
+        set_level(self.hint, "caption")
 
-        self.add_button = QPushButton(tr("Filament anlegen …"), self)
-        self.add_button.setIcon(icon("add", self.add_button))
-        self.add_button.clicked.connect(self._add)
-        self.inventory_button = QPushButton(tr("Filamentlager öffnen"), self)
-        self.inventory_button.clicked.connect(self.inventoryRequested)
-        # Freigabe und Satz beider Knöpfe setzt ``_selection_changed`` — beim
-        # Aufbau einmal ausdrücklich, weil ``_fill`` bei einem unlesbaren
-        # Lager vorher zurückkehrt.
         self.settings_button = QPushButton(tr("Druckwerte …"), self)
-        self.settings_button.setEnabled(False)
         self.settings_button.clicked.connect(self._request_override)
-        self.delete_button = QPushButton(tr("Spule archivieren"), self)
-        self.delete_button.setIcon(icon("delete", self.delete_button))
-        self.delete_button.setEnabled(False)
-        self.delete_button.clicked.connect(self._remove)
+        self.inventory_button = QPushButton(tr("Filamentlager öffnen"), self)
+        self.inventory_button.setIcon(icon("spool", self.inventory_button))
+        self.inventory_button.clicked.connect(self.inventoryRequested)
+        self.return_to_print_button = QPushButton(tr("Zurück zu Druckeinstellungen"), self)
+        self.return_to_print_button.clicked.connect(self.printSettingsRequested)
+        self.return_to_print_button.hide()
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(TIGHT, TIGHT, TIGHT, TIGHT)
         layout.setSpacing(TIGHT)
-        layout.addWidget(self.list, 1)
+        layout.addWidget(self.list)
         layout.addWidget(self.hint)
+        layout.addWidget(self.settings_button)
         layout.addWidget(self.inventory_button)
-        buttons = QHBoxLayout()
-        buttons.setSpacing(TIGHT)
-        buttons.addWidget(self.add_button)
-        buttons.addWidget(self.settings_button)
-        layout.addLayout(buttons)
-        layout.addWidget(self.delete_button)
-        self.return_to_print_button = QPushButton(tr("Zurück zu Druckeinstellungen"), self)
-        self.return_to_print_button.clicked.connect(self.printSettingsRequested)
-        self.return_to_print_button.hide()
         layout.addWidget(self.return_to_print_button)
 
         self._used: tuple[tuple[MaterialSlot | None, str, str, int, bool], ...] = ()
         """Slot, Name, Farbe, Zahl der Körper und eigene Druckwerte."""
-        self._room: int | None = None
-        """Was die Überlagerung dieser Karte zugeteilt hat (``set_room``)."""
-        self._selection_changed(None)
         self.show_scene(())
-
-    # -- Höhe: was die Überlagerung fragt --------------------------------
-
-    def _around_the_list(self) -> int:
-        """Qt misst sichtbare Knöpfe, Abstände und Hinweis bei der tatsächlichen Breite."""
-        layout = self.layout()
-        if layout is None:
-            return 0
-        measured = layout.totalHeightForWidth(self.width())
-        if measured < 0:
-            measured = layout.totalSizeHint().height()
-        # Der feste Listenbeitrag wird vollständig abgezogen. Der Rest hängt
-        # damit nur an Inhalt, Breite und Stil, niemals an der Höhenzuteilung.
-        list_item = layout.itemAt(0)
-        assert list_item is not None
-        return measured - list_item.sizeHint().height()
-
-    def sizeHint(self) -> QSize:  # noqa: N802 — Qt-Name
-        """Auch der äußere Layoutwunsch enthält den tatsächlich umbrochenen Hinweis."""
-        hint = super().sizeHint()
-        if hasattr(self, "_room"):
-            hint.setHeight(self._around_the_list() + self.list.height())
-        return hint
-
-    def event(self, event: QEvent) -> bool:
-        """Breite, Schrift und sichtbare Knöpfe erneuern denselben Höhenvertrag."""
-        result = super().event(event)
-        if hasattr(self, "_room") and event.type() in (
-            QEvent.Type.Resize,
-            QEvent.Type.LayoutRequest,
-            QEvent.Type.FontChange,
-            QEvent.Type.StyleChange,
-        ):
-            self._fit()
-        return result
-
-    def wanted_height(self) -> int:
-        """Die Höhe, bei der jede Spule zu sehen wäre.
-
-        **Ohne diese Methode teilt die Überlagerung der Karte nichts zu.**
-        ``_share_room`` fragt nur Kinder, die das ``RoomTaker``-Protokoll
-        erfüllen; wer es nicht tut, „behält seine eigene Höhe". Diese Karte tat
-        das, und ihre Höhe war die, die Qt einer Liste ohne Zutun gibt: 30
-        Bildpunkte bei 266 gewünschten (gemessen am 30.08.2026 im echten
-        Fenster, B21). Die Liste brach mitten in einer Zeile ab, während der
-        Verlauf daneben 246 Punkte hielt und mit 96 ausgekommen wäre.
-        """
-        return self._around_the_list() + rows_height(self.list)
-
-    def least_height(self) -> int:
-        """Und die, unter die diese Karte nicht geht, was auch zugeteilt wird.
-
-        Derselbe Boden, den ``fit_to_rows`` der Liste ohnehin setzt — die
-        Überlagerung muss ihn kennen, sonst verteilt sie unter ihn und das
-        Layout drückt die Karte zusammen, bis Zeilen außerhalb liegen.
-
-        **Nie höher als der Wunsch.** Jener Boden sind drei Mindestzeilen, und
-        die sollen verhindern, dass eine Liste mit zwanzig Zeilen auf eine
-        gedrückt wird. Bei einer Karte, die überhaupt nur eine Zeile *hat* —
-        leeres Regal, kein Projektfilament —, forderte er 130 Bildpunkte für
-        128 gewünschte: Platz, den die Karte niemandem zeigen kann, während
-        die Nachbarn ihn brauchen.
-        """
-        return min(self._around_the_list() + least_height_of(self.list), self.wanted_height())
-
-    def set_room(self, pixels: int) -> None:
-        """Wie hoch diese Karte werden darf (siehe ``fit_to_rows``)."""
-        if pixels == self._room:
-            return
-        self._room = pixels
-        self._fit()
-
-    def _fit(self) -> None:
-        """So hoch wie der Inhalt, höchstens so hoch wie zugeteilt.
-
-        Der Liste bleibt, was nach dem Beiwerk übrig ist: Ein Hinweis und zwei
-        Knöpfe stehen unter ihr, und wer ihr die volle Zuteilung gibt, schiebt
-        genau die aus der Karte heraus — die Knöpfe sind hier der einzige Weg
-        zu einer neuen Spule.
-
-        **Gerechnet wird über ``rows_height`` und nicht über ``fit_to_rows``,
-        und das ist der Kern des Befunds.** Jener Helfer nimmt die Höhe der
-        *ersten* Zeile mal die Zahl der Zeilen — richtig für einen Baum, in
-        dem jede Zeile gleich aussieht, falsch für diese Liste: Zwischen den
-        Spulen stehen zwei fette Überschriften („Im Projekt", „Im Regal"), und
-        die sind höher als eine Spulenzeile. Gemessen am 30.08.2026 bei fünf
-        Zeilen: 172 Punkte gebraucht, 156 gesetzt — die letzte Zeile fehlte,
-        und zwar auch dann, wenn die Spalte ihre volle Wunschhöhe bekam und
-        ringsum Platz frei war. ``rows_height`` misst jede Zeile einzeln.
-        """
-        wanted = rows_height(self.list)
-        if self._room is None:
-            # **Solange niemand zugeteilt hat, gilt derselbe Deckel wie in
-            # ``fit_to_rows``.** Er ist für den Augenblick vor dem ersten
-            # Zuteilen da: Ein Regal mit hundert Spulen würde die Spalte sonst
-            # schon beim Aufbau nehmen, bevor die Überlagerung überhaupt
-            # gefragt hat.
-            ceiling = view_chrome(self.list) + MAX_ROWS * row_height_of(self.list)
-        else:
-            ceiling = max(self._room - self._around_the_list(), 0)
-        floor = min(wanted, least_height_of(self.list))
-        self.list.setFixedHeight(max(floor, min(wanted, ceiling)))
-        # Dieselbe Stelle wie im Verlauf: die Liste ist bemessen, die Karte um
-        # sie herum meldete weiter ihre Mindesthöhe und wurde zusammengedrückt.
-        self.setMinimumHeight(self._around_the_list() + self.list.height())
-        self.updateGeometry()
 
     def show_scene(
         self,
@@ -2075,9 +1952,9 @@ class FilamentPanel(QWidget):
 
         **Ein Körper ohne Slot steht mit dabei**, als „Ohne Filament — Farbe
         des Teils" in der Körperfarbe. Er ist der Normalfall nach jedem
-        STL-Import, und ohne ihn zeigte das Panel bei einem frisch geöffneten
-        Modell eine leere Projekthälfte — während im Bild ein Körper stand,
-        der sehr wohl in einer Farbe gedruckt wird (Robert, 27.08.2026).
+        STL-Import, und ohne ihn zeigte die Liste bei einem frisch geöffneten
+        Modell nichts — während im Bild ein Körper stand, der sehr wohl in
+        einer Farbe gedruckt wird (Robert, 27.08.2026).
         """
         used: dict[threemf.SlotKey | None, tuple[MaterialSlot | None, int]] = {}
         for entry in objects:
@@ -2119,97 +1996,55 @@ class FilamentPanel(QWidget):
         )
         self._fill()
 
-    def refresh_catalogue(self) -> None:
-        """Liest nur das Filamentregal neu, der Projektzustand bleibt stehen.
-
-        Die Erstinbetriebnahme kann Spulen aus dem Slicer übernehmen, während
-        dieses Panel längst gebaut ist. Dafür wird weder die Szene erneut
-        ausgewertet noch ihre Zusammenfassung nachgebaut: :attr:`_used` bleibt
-        dieselbe, nur die Regalhälfte liest den gemeinsamen Katalog noch einmal.
-        """
-        self._fill()
-
     def _fill(self) -> None:
-        """Beide Hälften neu schreiben — Überschrift, Zeilen, Hinweis."""
-        try:
-            entries = filaments.catalogue()
-        except AppError as problem:
-            self.hint.set_error(problem, self._read_handlers())
-            self._fit()
-            return
+        """Die Zeilen neu schreiben; ohne Körper steht ein Satz statt einer leeren Liste."""
         self.list.clear()
-        if self._used:
-            self._heading(tr("Im Projekt"))
-            for slot, name, colour, count, has_override in self._used:
-                shown_name = name
-                if slot is not None:
-                    if slot.material_type and slot.material_type.casefold() not in name.casefold():
-                        shown_name = f"{name} · {slot.material_type}"
-                    if slot.material:
-                        shown_name = f"{shown_name} · {slot.material}"
-                label = self._used_label(shown_name, count)
-                if has_override:
-                    label = f"{label} · {tr('eigene Druckwerte')}"
-                item = QListWidgetItem(swatch(colour), label)
-                item.setFlags(Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsSelectable)
-                if slot is not None:
-                    item.setData(_SLOT_ROLE, slot)
-                # Der volle Text zuerst: In der schmalen Spalte endet die
-                # Zeile oft auf „…" (:class:`_WithinTheWidth`).
-                said = tr(
-                    "Druckwerte stehen unten. Geändert wird die Farbe eines Körpers "
-                    "rechts unter Auswahl, sobald er gewählt ist."
-                )
-                item.setToolTip(f"{label}\n{said}")
-                self.list.addItem(item)
-
-        self._heading(tr("Im Regal"))
-        for entry, label in zip(entries, spool_labels(entries), strict=True):
-            item = QListWidgetItem(swatch(colours_of(entry)), label)
-            item.setData(_NAME_ROLE, entry.name)
-            item.setData(_COLOUR_ROLE, colours_of(entry))
-            item.setData(_MATERIAL_TYPE_ROLE, entry.material_type)
-            item.setData(_PROFILE_ROLE, entry.slicer_profile)
-            item.setData(_ID_ROLE, entry.identifier)
-            profile_hint = (
-                tr("Slicer-Profil: {profile}").replace("{profile}", entry.slicer_profile)
-                if entry.slicer_profile
-                else tr("Ohne Slicer-Profil")
+        for (slot, _name, colour, _count, _own), label in zip(self._used, self.rows(), strict=True):
+            item = QListWidgetItem(swatch(colour), label)
+            item.setFlags(Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsSelectable)
+            if slot is not None:
+                item.setData(_SLOT_ROLE, slot)
+            # Der volle Text zuerst: Eine schmale Liste endet oft auf „…"
+            # (:class:`_WithinTheWidth`).
+            said = tr(
+                "Druckwerte stehen unten. Geändert wird die Farbe eines Körpers "
+                "rechts unter Auswahl, sobald er gewählt ist."
             )
-            said = tr("Doppelklick ändert Name, Typ und Farbe.")
-            # Die Kurzhilfe trägt die ganze Angabe, auch „Bestand unbekannt“.
-            item.setToolTip(f"{spool_label(entry)}\n{said} {profile_hint}")
-            item.setData(Qt.ItemDataRole.AccessibleDescriptionRole, spool_label(entry))
+            item.setToolTip(f"{label}\n{said}")
             self.list.addItem(item)
-
-        if entries:
-            self.hint.setText(tr("Was hier steht, steht beim Färben zur Wahl."))
-        else:
-            # Regel 17 auch ohne Fehler: Ein leeres Regal ist kein Mangel,
-            # aber ohne einen Satz sieht es aus wie ein kaputtes Panel.
-            self.hint.setText(
-                tr("Noch keine Spulen eingetragen. Was Sie anlegen, steht beim Färben zur Wahl.")
-            )
+        if not self._used:
+            item = QListWidgetItem(str(NO_BODIES_YET))
+            item.setFlags(Qt.ItemFlag.NoItemFlags)
+            self.list.addItem(item)
         self._selection_changed(self.list.currentItem())
-        # Die Zeilenzahl hat sich geändert, also auch die Höhe, die diese
-        # Karte will. Ohne diesen Ruf bleibt die Liste auf der Höhe des vorigen
-        # Inhalts stehen, bis die Überlagerung das nächste Mal von sich aus
-        # verteilt — und das tut sie erst beim nächsten Größenwechsel.
-        self._fit()
+        # So hoch wie die Zeilen, höchstens zwölf; was darüber hinausgeht, rollt.
+        self.list.setFixedHeight(
+            min(
+                rows_height(self.list), view_chrome(self.list) + MAX_ROWS * row_height_of(self.list)
+            )
+        )
+        self.updateGeometry()
 
-    def _heading(self, text: str) -> None:
-        """Eine Überschrift in der Liste — anwählbar ist sie nicht.
+    def rows(self) -> tuple[str, ...]:
+        """Die Zeilen der Liste als Text — dieselben, die die Kopfzeile in der Kurzhilfe nennt.
 
-        Zwei Listen übereinander wären zwei Rollbereiche in einem Panel, das
-        selten mehr als acht Zeilen hat; eine Liste mit zwei Überschriften ist
-        dieselbe Auskunft ohne den zweiten Balken.
+        Eine Quelle für beide (Review U2, Fund 3): Die Kurzhilfe las die
+        Projektvorgabe und sagte „Im Projekt: PLA“ über einen Körper, den die
+        Liste „Ohne Filament“ nennt.
         """
-        item = QListWidgetItem(text)
-        item.setFlags(Qt.ItemFlag.NoItemFlags)
-        font = item.font()
-        font.setBold(True)
-        item.setFont(font)
-        self.list.addItem(item)
+        rows = []
+        for slot, name, _colour, count, has_override in self._used:
+            shown_name = name
+            if slot is not None:
+                if slot.material_type and slot.material_type.casefold() not in name.casefold():
+                    shown_name = f"{name} · {slot.material_type}"
+                if slot.material:
+                    shown_name = f"{shown_name} · {slot.material}"
+            label = self._used_label(shown_name, count)
+            if has_override:
+                label = f"{label} · {tr('eigene Druckwerte')}"
+            rows.append(label)
+        return tuple(rows)
 
     @staticmethod
     def _used_label(name: str, count: int) -> str:
@@ -2218,113 +2053,23 @@ class FilamentPanel(QWidget):
             return f"{name} — {tr('1 Körper')}"
         return f"{name} — {tr('{count} Körper').replace('{count}', str(count))}"
 
-    def _chosen(self) -> filaments.CatalogueFilament | None:
-        """Das gewählte Regalfilament, oder nichts.
-
-        Gefragt wird über die Zeilennummer und nicht über ``currentItem()``:
-        Die Stubs geben dort ein Element ohne ``None`` zurück, obwohl es bei
-        leerer Liste keines gibt — eine Prüfung darauf hielte mypy für
-        unerreichbar. ``currentRow() < 0`` sagt dasselbe und ist wahr.
-        """
-        row = self.list.currentRow()
-        if row < 0:
-            return None
-        item = self.list.item(row)
-        name = item.data(_NAME_ROLE)
-        if not name:
-            return None
-        try:
-            return filaments.get(str(item.data(_ID_ROLE)))
-        except AppError as problem:
-            self.hint.set_error(problem, self._read_handlers())
-            return None
-
-    def _add(self) -> None:
-        dialog = NewFilamentDialog(self)
-        try:
-            if dialog.exec() != QDialog.DialogCode.Accepted:
-                return
-            entry = dialog.entry()
-            if not entry.name:
-                return
-            self._writes.run(partial(filaments.save, entry))
-        finally:
-            dialog.deleteLater()
-
-    def _read_handlers(self) -> dict[str, Callable[[AppError], None]]:
-        """Auch hier sind Zurückholen und Beiseitelegen Knöpfe, nicht nur im Lagerfenster."""
-        return {
-            "retry": weak_slot(self, FilamentPanel._fill),
-            "restore_backup": weak_slot(self, FilamentPanel._restore_backup),
-            "set_aside_file": weak_slot(self, FilamentPanel._set_aside_file),
-        }
-
-    def _restore_backup(self, *_args: object) -> None:
-        self._writes.run(filaments.restore_backup)
-
-    def _set_aside_file(self, *_args: object) -> None:
-        self._writes.run(filaments.set_aside_unreadable)
-
-    def _catalogue_saved(self, result: object) -> None:
-        self._fill()
-        if isinstance(result, filaments.CatalogueFilament) and result.archived:
-            # Nach dem Löschen steht der Rückweg da, nicht nur vorher in der
-            # Kurzhilfe des Knopfes — das Lagerfenster hält es genauso.
-            self.hint.setText(removal_hint())
-        self.catalogueChanged.emit()
-
-    def _write_failed(self, problem: object) -> None:
-        self.hint.set_error(
-            problem, {"retry": weak_slot(self._writes, CatalogueWrites.retry_failed)}
-        )
-        self._fit()
-
-    def _write_busy(self, busy: bool) -> None:
-        self.list.setEnabled(not busy)
-        self.add_button.setEnabled(not busy)
-        self._selection_changed(self.list.currentItem())
-        if busy:
-            self.hint.setText(tr("Das Filamentlager wird gespeichert …"))
-            self._fit()
-
-    def wait_for_workers(self, timeout_ms: int = 0) -> bool:
-        return self._writes.wait_for_workers(timeout_ms)
-
-    def release(self, timeout_ms: int = WAIT_TIMEOUT_MS) -> None:
-        self.wait_for_workers(timeout_ms)
-
     def _on_activated(self, item: QListWidgetItem) -> None:
         if item.data(_SLOT_ROLE) is not None:
             self._request_override()
-            return
-        if item.data(_NAME_ROLE):
-            self._edit()
 
     def _selection_changed(self, item: QListWidgetItem | None, *_args: object) -> None:
-        """Nur Projektfilamente haben eigene Druckwerte.
+        """Nur ein Filament hat eigene Druckwerte, ein Körper ohne Filament keine.
 
         **Ein ruhender Knopf sagt, worauf er wartet** — in Kurzhilfe und
-        Beschreibung (Regel 18). Beide standen grau mit einem Satz über ihre
-        Handlung; frei tragen sie wieder diesen Satz.
+        Beschreibung (Regel 18).
         """
-        project = bool(item is not None and item.data(_SLOT_ROLE) is not None)
-        shelf = bool(item is not None and item.data(_ID_ROLE))
-        busy = self._writes.pending
+        chosen = bool(item is not None and item.data(_SLOT_ROLE) is not None)
         _explain(
             self.settings_button,
-            project,
+            chosen,
             str(tr("Temperatur, Kühlung, Rückzug und Materialwerte dieser Spule einstellen."))
-            if project
-            else str(tr("Erst eine Spule unter „Im Projekt“ wählen.")),
-        )
-        _explain(
-            self.delete_button,
-            shelf and not busy,
-            removal_hint()
-            if shelf and not busy
-            else str(tr("Das Filamentlager wird gespeichert …"))
-            if busy
-            else str(tr("Erst eine Spule unter „Im Regal“ wählen.")),
+            if chosen
+            else str(tr("Erst ein Filament in der Liste wählen.")),
         )
 
     def _request_override(self) -> None:
@@ -2336,37 +2081,61 @@ class FilamentPanel(QWidget):
         if isinstance(slot, MaterialSlot):
             self.overrideRequested.emit(slot)
 
-    def _edit(self) -> None:
-        chosen = self._chosen()
-        if chosen is None:
-            return
-        dialog = NewFilamentDialog(self, entry=chosen)
-        try:
-            if dialog.exec() != QDialog.DialogCode.Accepted:
-                return
-            self._writes.run(partial(filaments.save, dialog.entry()))
-        finally:
-            dialog.deleteLater()
 
-    def _remove(self) -> None:
-        chosen = self._chosen()
-        if chosen is None:
-            return
-        self._writes.run(partial(filaments.archive, chosen.identifier))
+class FilamentPopup(QFrame):
+    """Die Liste unter dem Knopf *Filamente* der Kopfzeile (RM-556).
 
-    def _on_context_menu(self, where: QPoint) -> None:
-        item = self.list.itemAt(where)
-        if item is None or not self.list.isEnabled():
-            return
-        self.list.setCurrentItem(item)
-        if self._chosen() is None:
-            return
-        menu = QMenu(self)
-        menu.setToolTipsVisible(True)
-        menu.addAction(tr("Ändern …"), self._edit)
-        action = menu.addAction(icon("delete", self), tr("Spule archivieren"), self._remove)
-        action.setToolTip(removal_hint())
-        try:
-            menu.exec(self.list.viewport().mapToGlobal(where))
-        finally:
-            menu.deleteLater()
+    Ein ``Qt.Popup`` wie die Druckersuche (``first_run.PrinterComboBox``):
+    Escape und ein Klick daneben schließen es, und es hält niemanden auf —
+    ``show`` statt ``exec``, sonst stünde offscreen die Suite.
+    """
+
+    def __init__(self, parent: QWidget) -> None:
+        super().__init__(parent, Qt.WindowType.Popup)
+        self.setObjectName("filamentPopup")
+        self.setFrameShape(QFrame.Shape.StyledPanel)
+        self.setAutoFillBackground(True)
+        self.setAccessibleName(tr("Filamente im Projekt"))
+        self.panel = FilamentPanel(self)
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.addWidget(self.panel)
+        self._anchor: QWidget | None = None
+
+    def mousePressEvent(self, event: QMouseEvent) -> None:  # noqa: N802 — Qt-Name
+        """Ein Druck auf den Knopf, der die Liste öffnete, schließt sie nur — wie ``QMenu``.
+
+        Qt schließt ein Popup beim Druck daneben. Unter X11 spielt es den
+        Druck danach dem Widget darunter zu, und der Knopf öffnete die Liste
+        sofort wieder; unter Windows und offscreen bleibt der Druck bei der
+        Liste (Review U2, Fund 5 und Nachprüfung).
+        """
+        anchor = self._anchor
+        if anchor is not None and anchor.isVisible():
+            where = anchor.mapFromGlobal(event.globalPosition().toPoint())
+            if anchor.rect().contains(where):
+                self.setAttribute(Qt.WidgetAttribute.WA_NoMouseReplay, True)
+        super().mousePressEvent(event)
+
+    def show_below(self, anchor: QWidget) -> None:
+        """Unter dem Knopf, oder darüber, wenn unten der Platz fehlt — nie über den Schirmrand."""
+        self._anchor = anchor
+        self.setAttribute(Qt.WidgetAttribute.WA_NoMouseReplay, False)
+        screen = anchor.screen().availableGeometry()
+        self.adjustSize()
+        width = min(screen.width(), max(self.sizeHint().width(), POPUP_WIDTH))
+        height = min(self.sizeHint().height(), screen.height())
+        below = anchor.mapToGlobal(QPoint(0, anchor.height()))
+        above = anchor.mapToGlobal(QPoint(0, 0))
+        top = below.y() if below.y() + height <= screen.bottom() + 1 else above.y() - height
+        left = min(
+            max(below.x() + anchor.width() - width, screen.left()), screen.right() - width + 1
+        )
+        self.setGeometry(left, max(top, screen.top()), width, height)
+        self.show()
+        self.panel.list.setFocus(Qt.FocusReason.PopupFocusReason)
+
+
+#: Wie breit die Liste unter *Filamente* mindestens steht — genug für
+#: „PETG Rot · PETG — 2 Körper“, ohne dass die Kopfzeile sie bestimmt.
+POPUP_WIDTH = 320

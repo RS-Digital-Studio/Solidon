@@ -15,6 +15,19 @@
 # yield_strength    Streckgrenze in MPa
 # layer_bond_ratio  Anteil der Streckgrenze quer zur Schichtebene
 #
+# support_gap_factor Luft zwischen Stütze und Teil als Vielfaches der Schichthöhe
+# support_gap_min    kleinster Stützabstand in mm, darunter verschweißt die Kontaktschicht
+# support_gap_max    größter Stützabstand in mm, darüber sackt die Fläche durch
+# support_interface_cooling  volle Kühlung an der Trennschicht löst die Stütze leichter
+# support_tip_gap    Luft über Baumspitzen ohne Trennschicht in mm, nur wo gemessen
+#
+# Die Stützabstände stammen aus der Recherche vom 08.10.2026
+# (`konzepte/recherche-slicer-einstellungen-2026-10.md`, Abschnitt 2.2): PLA
+# ausgezählt aus dem Prusa-Bündel, PETG aus Foren und Herstellerhinweisen, kein
+# Herstellerprofil ändert den Abstand mit dem Material. Ausgangswerte wie alles
+# hier; ABS und ASA deshalb mit den Werten von PLA. Für TPU fehlt eine Quelle:
+# Ohne Werte ist der Abstand unbekannt und bleibt beim Hersteller.
+#
 # Die mechanischen Werte sind für alles, was federn soll: Schnapphaken,
 # Klemmzungen, Filmscharniere. Sie stehen hier als **Richtwerte gedruckter
 # Teile**, längs zur Schichtebene, wie sie Datenblätter für FDM-Filamente
@@ -40,6 +53,10 @@ calibrated = false
 youngs_modulus = 3500.0
 yield_strength = 50.0
 layer_bond_ratio = 0.6
+support_gap_factor = 1.0
+support_gap_min = 0.10
+support_gap_max = 0.25
+support_tip_gap = 0.40
 
 [petg]
 title = "PETG"
@@ -52,6 +69,10 @@ calibrated = false
 youngs_modulus = 2100.0
 yield_strength = 47.0
 layer_bond_ratio = 0.6
+support_gap_factor = 1.4
+support_gap_min = 0.12
+support_gap_max = 0.30
+support_interface_cooling = true
 
 [petg-cf]
 title = "PETG-CF"
@@ -64,6 +85,10 @@ calibrated = false
 youngs_modulus = 4200.0
 yield_strength = 55.0
 layer_bond_ratio = 0.6
+support_gap_factor = 1.4
+support_gap_min = 0.12
+support_gap_max = 0.30
+support_interface_cooling = true
 
 [asa]
 title = "ASA"
@@ -76,6 +101,9 @@ calibrated = false
 youngs_modulus = 2000.0
 yield_strength = 42.0
 layer_bond_ratio = 0.6
+support_gap_factor = 1.0
+support_gap_min = 0.10
+support_gap_max = 0.25
 
 [abs]
 title = "ABS"
@@ -88,6 +116,9 @@ calibrated = false
 youngs_modulus = 2000.0
 yield_strength = 40.0
 layer_bond_ratio = 0.6
+support_gap_factor = 1.0
+support_gap_min = 0.10
+support_gap_max = 0.25
 
 [tpu-95a]
 title = "TPU 95A"

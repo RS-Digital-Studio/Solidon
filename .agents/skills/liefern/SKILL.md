@@ -20,7 +20,9 @@ ausdrückliches „nicht pushen“ von Robert hält den Commit lokal — dann f�
 diesen Aufruf `SOLIDON_KEIN_PUSH=1`. Holen und Zusammenführen gehören dazu,
 wenn der Push daran scheitert. Tag, Release und Force-Push sind eigene Aufträge.
 
-Vorher ist das Entwicklungstor nach `.agents/skills/pruefen/SKILL.md` grün. Ein grüner Nachweis über
+Vor einem Merge oder Commit auf main ist das Entwicklungstor nach `.agents/skills/pruefen/SKILL.md` grün; auf
+einem Paket- oder Fixzweig genügen die betroffenen Tests, ruff, format und
+mypy (Entscheidung Robert). Ein grüner Nachweis über
 denselben Stand muss nicht wiederholt werden; was sich seither geändert hat,
 wird geprüft. Ein roter oder abgebrochener Lauf wird mit Ursache gemeldet und
 nicht committet.
@@ -38,20 +40,21 @@ keine weitere Runde (Entscheidung Robert). Mehrere Punkte, die zusammen
 hinausgehen, teilen sich ein Review. Weil `post-commit` pusht, ist das Review
 vor dem Commit das Review vor dem Push.
 
-**Vor dem Merge nach main laufen die betroffenen Fenster- und Slicertests auf
-Linux und macOS** (Entscheidung Robert, `.claude/rules/tests.md`, CI-09):
+**Nach dem Push nach main laufen die betroffenen Fenster- und Slicertests auf
+Linux und macOS, auf Zweigen nie** (Entscheidung Robert, `.claude/rules/tests.md`,
+CI-09):
 
-1. Die Einheit liegt auf einem eigenen Zweig, gepusht (Handstart braucht
-   einen Stand auf der Gegenstelle). Eine neue oder geänderte Oberfläche
-   bringt ihren Fenstertest mit, eine Änderung an Slicerübergabe, Profilen,
-   Druckerwahl, Druckzeit oder Slicererkennung ihren Test mit
-   `installed_slicer` und `@pytest.mark.slicer(<programm>)`.
-2. `.venv\Scripts\python.exe tools/ci_selection.py --diff origin/main...<zweig>`
-   nennt beide Listen und die zwei `gh workflow run …`-Befehle; mit
-   `--ref <zweig>` starten.
-3. Beide Läufe grün, bevor gemergt wird; ein roter wird behoben, nicht
-   übergangen. Meldet das Werkzeug keinen Fenster- und keinen Slicertest,
-   entfällt der Schritt. Die Laufnummern gehören in den Bericht.
+1. Eine neue oder geänderte Oberfläche bringt ihren Fenstertest mit, eine
+   Änderung an Slicerübergabe, Profilen, Druckerwahl, Druckzeit oder
+   Slicererkennung ihren Test mit `installed_slicer` und
+   `@pytest.mark.slicer(<programm>)`.
+2. Nach dem Push nennt `.venv\Scripts\python.exe tools/ci_selection.py --diff
+   <main vorher>...origin/main` beide Listen; die liefernde Sitzung startet
+   `fenster-auswahl.yml` und `slicer-auswahl.yml` mit `--ref main`, bis der
+   Push sie selbst auslöst (RM-344).
+3. Ein roter Lauf wird auf main vorwärts behoben, nicht übergangen. Meldet das
+   Werkzeug keinen Fenster- und keinen Slicertest, entfällt der Schritt. Die
+   Laufnummern gehören in den Bericht.
 
 **Vor dem Merge nach main steht der Kundenpunkt im Changelog** (Entscheidung
 Robert, `.claude/rules/auslieferung.md`): Merkt ein Kunde, was die Einheit

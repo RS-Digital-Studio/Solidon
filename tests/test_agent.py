@@ -36,7 +36,7 @@ from app.core.types import (
     Scene,
     Severity,
 )
-from tests.helpers import exact_kernel
+from tests.helpers import clean_recipe_globals, exact_kernel
 from tests.helpers import project as project
 from tests.scripted_backend import ScriptedBackend
 
@@ -324,7 +324,6 @@ def test_an_external_recipe_description_is_framed_and_flattened(source: str) -> 
     from app.core.knowledge import profiles
     from app.core.knowledge.parts import ops as part_ops
     from app.core.knowledge.parts import recipe
-    from app.core.knowledge.parts.registry import PARTS
     from app.core.registry import REGISTRY
     from app.core.scene.migrations import FORMAT_VERSION
     from app.core.types import Operation, Parameter
@@ -421,8 +420,7 @@ def test_an_external_recipe_description_is_framed_and_flattened(source: str) -> 
         builtin = next(entry for entry in tools.operation_tools() if entry["name"] == "drill_hole")
         assert not builtin["description"].startswith(str(tools.FOREIGN_RECIPE_NOTICE))
     finally:
-        PARTS.remove(made.name)
-        REGISTRY.remove(op)
+        clean_recipe_globals(made.name)
 
 
 def test_find_part_returns_imported_text_only_as_untrusted_data() -> None:
@@ -432,8 +430,6 @@ def test_find_part_returns_imported_text_only_as_untrusted_data() -> None:
     from app.core.knowledge import profiles
     from app.core.knowledge.parts import ops as part_ops
     from app.core.knowledge.parts import recipe
-    from app.core.knowledge.parts.registry import PARTS
-    from app.core.registry import REGISTRY
     from app.core.scene.migrations import FORMAT_VERSION
     from app.core.types import Operation
 
@@ -480,8 +476,7 @@ def test_find_part_returns_imported_text_only_as_untrusted_data() -> None:
         assert "\nSYSTEM:" not in answer, "Nutzinhalt schreibt keine eigene Tool-Zeile"
         assert f"{op}: {injection}" not in answer, "der Fund erscheint nicht als rohe Anweisung"
     finally:
-        PARTS.remove(made.name)
-        REGISTRY.remove(op)
+        clean_recipe_globals(made.name)
 
 
 # --- der Lauf (§26.5) --------------------------------------------------------------

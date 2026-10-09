@@ -35,6 +35,7 @@ from PySide6.QtGui import (
     QPalette,
     QPen,
     QPixmap,
+    QPixmapCache,
 )
 from PySide6.QtSvg import QSvgRenderer
 from PySide6.QtWidgets import QApplication, QWidget
@@ -44,6 +45,10 @@ from PySide6.QtWidgets import QApplication, QWidget
 #: (hier und in ``panels``) oder aus dem SVG selbst — ``manual_window``
 #: rastert ``renderer.defaultSize()`` hoch.
 OVERSAMPLING: Final = 2
+
+#: Womit die gerasterten Symbole im :class:`QPixmapCache` beginnen
+#: (:meth:`ThemedIcon.pixmap`) — der Cache gehört der ganzen Anwendung.
+PIXMAP_CACHE_PREFIX: Final = "solidon-icon:"
 
 _HEAD: Final = (
     '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" '
@@ -402,21 +407,6 @@ PATHS: Final[dict[str, str]] = {
         '<path d="M4 15.5v4h4" /><path d="M20 15.5v4h-4" />'
         '<path d="M9 12h6" /><path d="M12 9v6" />'
     ),
-    # Aus einem flachen Umriss wächst ein Körper nach oben. Die Beschriftung
-    # „Hochziehen“ bleibt daneben — das Zeichen macht die Richtung auf einen
-    # Blick unterscheidbar, es ersetzt das Wort nicht.
-    "sketch_pull": (
-        '<path d="M4 15.5 12 19.5l8-4-8-4z" />'
-        '<path d="M4 15.5V10l8-4 8 4v5.5" opacity="0.55" />'
-        '<path d="M12 12V3.5" /><path d="M8.8 6.7 12 3.5l3.2 3.2" />'
-    ),
-    # Derselbe Umriss als Aussparung: gestrichelter Taschenboden und ein
-    # Pfeil ins Material. Form plus Text tragen die Aussage auch ohne Farbe.
-    "sketch_cut": (
-        '<path d="M3.5 8h17v11h-17z" />'
-        '<path d="M7 13.5h10v3H7z" stroke-dasharray="2.5 2" opacity="0.65" />'
-        '<path d="M12 3.5v9" /><path d="M8.8 9.3 12 12.5l3.2-3.2" />'
-    ),
     # --- je Kategorie eines (Konzept P15 §7 Etappe 8, D5) ----------------------
     #
     # **Nicht je Operation.** Dreiundsiebzig Symbole zu unterscheiden ist
@@ -615,10 +605,30 @@ class ThemedIcon(QIconEngine):
             renderer.render(painter, QRectF(rect))
 
     def pixmap(self, size: QSize, mode: QIcon.Mode, state: QIcon.State) -> QPixmap:
-        source = svg_source(self._name, self._tone(mode).name())
+        """Das Symbol als Bild — einmal je Name, Farbe und Größe gerastert.
+
+        **Qt fragt bei jedem Neuzeichnen eines Knopfes neu**, nicht einmal je
+        Symbol. Ungemerkt rasterte jede Werkzeugzeile ihr SVG bei jedem Bild,
+        und neben einem rechnenden Arbeiter wartete jeder Qt-Aufruf darin, der
+        den GIL hergibt, auf ihn: Beim ersten Bild der Arbeitsfläche am
+        Mausoleum-Drachen kosteten sechzehn Symbole 30 bis 170 ms (RM-258).
+        Gemerkt wird in Qts eigenem :class:`QPixmapCache` — er ist begrenzt,
+        räumt mit der Anwendung ab, und ein Treffer gibt den GIL nicht her.
+        Die Farbe steht im Schlüssel, deshalb veraltet nach einem
+        Themenwechsel nichts.
+        """
+        colour = self._tone(mode).name()
+        edge = max(size.width(), size.height())
+        key = f"{PIXMAP_CACHE_PREFIX}{self._name}:{colour}:{edge}"
+        cached = QPixmap()
+        if QPixmapCache.find(key, cached):
+            return cached
+        source = svg_source(self._name, colour)
         if not source:
             return QPixmap()
-        return svg_pixmap(source, max(size.width(), size.height()))
+        drawn = svg_pixmap(source, edge)
+        QPixmapCache.insert(key, drawn)
+        return drawn
 
     def clone(self) -> QIconEngine:
         return ThemedIcon(self._name)

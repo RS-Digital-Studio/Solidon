@@ -98,8 +98,11 @@ def test_empty_measurements_leave_their_room_to_the_printer(qt_app: QApplication
         + 24
     )
     # Titel und Drucker teilen 2 : 3 — breit genug für den Drucker, wenn die
-    # leere Spalte nichts nimmt, zu schmal, wenn sie drei Teile behält.
-    header.resize(needed * 5 // 3 + 24, header.sizeHint().height())
+    # leere Spalte nichts nimmt, zu schmal, wenn sie drei Teile behält. Der
+    # Knopf *Filamente* steht fest daneben (RM-556).
+    header.resize(
+        needed * 5 // 3 + 24 + header._filament_width(words=True), header.sizeHint().height()
+    )
     header.show()
     QApplication.processEvents()
 
@@ -565,3 +568,343 @@ def _with_object(session: Session, name: str) -> None:
 
     scene = Scene(objects={"obj_1": make_object(name=name)})
     session.last_result = EvaluationResult(scene=scene)
+
+
+def test_the_filaments_open_from_the_header_and_lead_into_the_inventory(
+    window: MainWindow, qt_app: QApplication
+) -> None:
+    """RM-556: *Filamente* steht in der Kopfzeile, nicht mehr unten links.
+
+    Robert, 08.10.2026: Ein Klick öffnet eine kleine Liste der Filamente, die
+    das Projekt verwendet, und darunter den Weg ins Filamentlager. Die linke
+    Spalte trägt nur noch Objekte, Parameter und Verlauf.
+    """
+    from PySide6.QtWidgets import QAbstractButton
+
+    from app.i18n import tr
+    from app.ui.filament_assignment import QuickFilamentPicker
+
+    headings = {
+        button.text()
+        for button in window.findChildren(QAbstractButton)
+        if button.objectName() == "sectionHeading"
+    }
+    assert tr("Filamente") not in headings, f"links steht keine Filamentgruppe mehr: {headings}"
+    assert tr("Verlauf") in headings, "die Klappen werden gefunden"
+
+    import trimesh
+
+    from app.core.geom.mesh import MeshData
+    from app.core.types import SceneObject
+
+    body = SceneObject(
+        id="obj_1",
+        name="Teil",
+        mesh=MeshData.of(trimesh.creation.box(), slots=(1,) * 12),
+        material_slots=[MaterialSlot(index=1, name="PETG Rot", colour=(0.8, 0.1, 0.1))],
+    )
+    result = EvaluationResult(scene=Scene(objects={"obj_1": body}))
+    window._show_project_filaments(result, window.effective_print_settings())
+    button = window.header.filament_button
+    assert button.text() == tr("Filamente") and button.isVisibleTo(window.toolbar)
+    assert "PETG Rot" in button.toolTip(), "die Kurzhilfe nennt die Filamente"
+
+    button.click()
+    qt_app.processEvents()
+    popup = window.filament_popup
+    assert popup.isVisible(), "der Knopf öffnet die Liste"
+    rows = [popup.panel.list.item(row).text() for row in range(popup.panel.list.count())]
+    assert rows == ["PETG Rot — 1 Körper"], rows
+    assert not popup.panel.inventory_button.isHidden(), "darunter der Weg ins Lager"
+    assert not popup.findChildren(QuickFilamentPicker), "zugewiesen wird rechts, nicht hier"
+
+    popup.panel.inventory_button.click()
+    qt_app.processEvents()
+    assert not popup.isVisible(), "die Liste geht mit dem Wechsel ins Lager"
+    assert window.stack.currentWidget() is window._inventory_view
+    window._inventory_view.backRequested.emit()
+
+
+def test_the_filament_button_names_exactly_the_rows_of_its_list(window: MainWindow) -> None:
+    """Kurzhilfe und Liste hinter *Filamente* sagen dasselbe — eine Quelle (Review U2, Fund 3).
+
+    Die Kurzhilfe las die Projektvorgabe: Über einem Körper ohne Filament
+    stand „Im Projekt: PLA“, die Liste sagte „Ohne Filament“, und eine Spule
+    ohne Materialangabe hieß in der Kurzhilfe anders als in der Liste. In der
+    engen Kopfzeile ist die Kurzhilfe die einzige Auskunft des Knopfs.
+    """
+    import trimesh
+
+    from app.core.geom.mesh import MeshData
+    from app.core.types import SceneObject
+    from app.i18n import tr
+
+    plain = SceneObject(id="obj_1", name="Ohne", mesh=MeshData.of(trimesh.creation.box()))
+    red = SceneObject(
+        id="obj_2",
+        name="Rot",
+        mesh=MeshData.of(trimesh.creation.box(), slots=(1,) * 12),
+        material_slots=[MaterialSlot(index=1, name="PETG Rot", colour=(0.8, 0.1, 0.1))],
+    )
+    result = EvaluationResult(scene=Scene(objects={"obj_1": plain, "obj_2": red}))
+    window._show_project_filaments(result, window.effective_print_settings())
+    panel = window.filaments
+    rows = [panel.list.item(row).text() for row in range(panel.list.count())]
+    assert any("Ohne Filament" in row for row in rows), rows
+    said = window.header.filament_button.toolTip()
+    first_line_and_rows = said.split("\n")[: len(rows)]
+    expected = tr("Im Projekt: {filament}").format(filament="\n".join(rows)).split("\n")
+    assert first_line_and_rows == expected, (said, rows)
+    assert window.header.filament_button.accessibleDescription() == said
+
+    window._show_project_filaments(
+        EvaluationResult(scene=Scene(objects={})), window.effective_print_settings()
+    )
+    rows = [panel.list.item(row).text() for row in range(panel.list.count())]
+    assert len(rows) == 1, rows
+    said = window.header.filament_button.toolTip()
+    assert said.split("\n")[0] == rows[0], "leer: Kurzhilfe und Liste sagen denselben Satz"
+
+
+def test_the_search_keeps_its_word_beside_the_filament_button(
+    window: MainWindow, qt_app: QApplication
+) -> None:
+    """Die Suche behält ihr Wort, wo es neben dem Zeichen von *Filamente* Platz hat.
+
+    Mit dem Wort des Knopfs im Wunschmaß der Kopfzeile trug *Funktion suchen …*
+    sein Wort am echten Windows-Fenster erst ab 1415 px — 1366 × 768 ist die
+    häufigste Laptopbreite (Review U2, Fund 4; Entscheidung des Koordinators:
+    Die Suche geht vor, `grenzen.md`). Gemessen wird an der Breite, die genau
+    zwischen beiden Rechnungen liegt, aus den Maßen dieses Laufs: Offscreen
+    hat die Schrift eine andere Breite als am Fenster (`tests.md`), die
+    Breiten 1366 und 1400 belegt die Sonde am echten Fenster im Bericht.
+    """
+    import trimesh
+
+    from app.core.geom.mesh import MeshData
+    from app.core.types import SceneObject
+    from app.i18n import tr
+    from app.ui.header import READABLE_HEADER_WIDTH
+    from app.ui.main_window import TOOLBAR_HYSTERESIS
+    from app.ui.style import apply_style
+
+    previous_style = qt_app.styleSheet()
+    apply_style(qt_app, "dark")
+    try:
+        body = SceneObject(
+            id="obj_1",
+            name="Halter",
+            mesh=MeshData.of(trimesh.creation.box(extents=(60.0, 40.0, 20.0))),
+        )
+        result = EvaluationResult(scene=Scene(objects={"obj_1": body}))
+        window.header.show_project("Halter.p3d*", result, "mm")
+        window.header.show_profile(window.session.profile, result)
+        window.resize(1024, 720)
+        for _ in range(4):
+            qt_app.processEvents()
+        window._fit_toolbar()
+        search = window.function_search
+        assert not search.text(), "die Lage: schmal steht nur die Lupe"
+        header = window.header
+        # Das Wunschmaß, wie es sein soll: Leseraum plus das Zeichen des Knopfs.
+        sign_wish = max(
+            header._compact_width(), READABLE_HEADER_WIDTH + header._filament_width(words=False)
+        )
+        words_wish = (
+            sign_wish + header._filament_width(words=True) - header._filament_width(words=False)
+        )
+        # Der wahre Bedarf der Form mit Suchwort, ohne die gemerkten Bedarfe des
+        # Fensters anzufassen: Die stammen aus dem Aufbau ohne Projekt, und
+        # genau dort trugen sie das Mindestmaß der Kopfzeile mit.
+        remembered = dict(window._toolbar_needs)
+        window._set_toolbar_form(1)
+        search_need = window.toolbar.sizeHint().width() - header.sizeHint().width()
+        window._set_toolbar_form(0)
+        window._toolbar_needs = remembered
+        between = search_need + sign_wish + TOOLBAR_HYSTERESIS + 2
+        assert between < search_need + words_wish + TOOLBAR_HYSTERESIS, (
+            "die Breite unterscheidet beide Rechnungen"
+        )
+
+        window.resize(between, 768)
+        for _ in range(4):
+            qt_app.processEvents()
+        window._fit_toolbar()
+        qt_app.processEvents()
+        assert search.text().startswith(tr("Funktion suchen …")), (
+            f"bei {between} px ist die Suche nur noch eine Lupe"
+        )
+        # Geschrumpft wird erst, wenn die Leiste nicht mehr passt: Die Suche
+        # behält ihr Wort, die Kopfzeile hat weniger Luft, als das Wort an
+        # *Filamente* kostet — abgeleitet aus den Maßen dieses Laufs, damit es
+        # mit jeder Schrift gilt (offscreen, DejaVu Sans, echtes Fenster).
+        extra = header._filament_width(words=True) - header._filament_width(words=False)
+        narrow = search_need + sign_wish + extra // 2
+        window.resize(narrow, 768)
+        for _ in range(4):
+            qt_app.processEvents()
+        window._fit_toolbar()
+        qt_app.processEvents()
+        assert search.text().startswith(tr("Funktion suchen …")), (
+            f"bei {narrow} px ist die Suche nur noch eine Lupe"
+        )
+        button = header.filament_button
+        assert button.isVisibleTo(window.toolbar) and button.width() > 0
+        assert button.toolButtonStyle() == Qt.ToolButtonStyle.ToolButtonIconOnly, (
+            "ohne Platz über dem Wunschmaß trägt der Knopf nur sein Zeichen"
+        )
+        assert button.accessibleName() == tr("Filamente")
+
+        window.resize(2400, 900)
+        for _ in range(4):
+            qt_app.processEvents()
+        window._fit_toolbar()
+        qt_app.processEvents()
+        assert button.toolButtonStyle() == Qt.ToolButtonStyle.ToolButtonTextBesideIcon, (
+            "mit Platz trägt der Knopf sein Wort"
+        )
+    finally:
+        qt_app.setStyleSheet(previous_style)
+
+
+def test_a_remembered_toolbar_need_does_not_carry_the_header(
+    window: MainWindow, qt_app: QApplication
+) -> None:
+    """Was die Leiste ohne Kopfzeile braucht, gilt mit und ohne offenes Projekt gleich.
+
+    Gemerkt wird je Form der Bedarf ohne die Kopfzeile (``_fit_toolbar``). Ohne
+    Projekt ist ihr Wunschmaß null, ihr Mindestmaß nicht — und die Leiste rechnet
+    mit dem größeren. Der beim Aufbau gemerkte Bedarf der Suchform lag damit am
+    echten Fenster 57 px zu hoch, und die Suche bekam ihr Wort bei 1366 und
+    1400 px nie zurück (Review U2, Fund 4).
+    """
+    import trimesh
+
+    from app.core.geom.mesh import MeshData
+    from app.core.types import SceneObject
+
+    window.resize(900, 720)
+    for _ in range(4):
+        qt_app.processEvents()
+    window._set_toolbar_form(1)
+    window._fit_toolbar()
+    assert window.header.minimumSizeHint().width() > window.header.sizeHint().width(), (
+        "die Lage: ohne Projekt ist das Mindestmaß größer als der Wunsch"
+    )
+    window._set_toolbar_form(1)
+    window._toolbar_needs.clear()
+    window._fit_toolbar()
+    empty = window._toolbar_needs.get(1)
+    assert empty is not None
+
+    body = SceneObject(id="obj_1", name="Halter", mesh=MeshData.of(trimesh.creation.box()))
+    result = EvaluationResult(scene=Scene(objects={"obj_1": body}))
+    window.header.show_project("Halter.p3d*", result, "mm")
+    window.header.show_profile(window.session.profile, result)
+    window.resize(3000, 900)
+    for _ in range(4):
+        qt_app.processEvents()
+    window._set_toolbar_form(1)
+    window._toolbar_needs.clear()
+    window._fit_toolbar()
+    with_project = window._toolbar_needs.get(1)
+    assert empty == with_project, (empty, with_project)
+
+
+def test_a_second_click_on_filaments_closes_the_list(
+    window: MainWindow, qt_app: QApplication
+) -> None:
+    """Wie ein Menü: Der zweite Klick auf *Filamente* schließt die Liste (Review U2, Fund 5).
+
+    Zwei Wege führen dorthin. Über das Fenstersystem nimmt die offene Liste
+    den Druck selbst und schließt; der Knopf bekommt ihn nicht, solange Qt
+    ihn nicht nachspielt — das tut es unter X11, dort hält
+    ``WA_NoMouseReplay`` den Knopf still. Erreicht der Klick den Knopf bei
+    offener Liste doch (Bildschirmleser, ``click()``), schließt der Knopf
+    selbst. ``QTest.mouseClick`` am Knopf stellt am Popup vorbei zu und
+    prüft deshalb nur den zweiten Weg.
+    """
+    from PySide6.QtTest import QTest
+
+    button = window.header.filament_button
+    popup = window.filament_popup
+    window.show()
+    qt_app.processEvents()
+    handle = window.windowHandle()
+    point = button.mapTo(window, button.rect().center())
+    no_key = Qt.KeyboardModifier.NoModifier
+    left = Qt.MouseButton.LeftButton
+
+    QTest.mouseClick(handle, left, no_key, point)
+    qt_app.processEvents()
+    assert popup.isVisible(), "der erste Klick öffnet"
+    QTest.mousePress(handle, left, no_key, point)
+    qt_app.processEvents()
+    assert not popup.isVisible(), "der zweite Druck geht an die Liste und schließt sie"
+    QTest.mouseRelease(handle, left, no_key, point)
+    qt_app.processEvents()
+    assert not popup.isVisible(), "das Loslassen auf dem Knopf öffnet sie nicht wieder"
+    QTest.mouseClick(handle, left, no_key, point)
+    qt_app.processEvents()
+    assert popup.isVisible(), "der dritte öffnet wieder"
+
+    button.click()
+    qt_app.processEvents()
+    assert not popup.isVisible(), "ein Klick, der den Knopf bei offener Liste erreicht, schließt"
+    button.click()
+    qt_app.processEvents()
+    assert popup.isVisible(), "und der nächste öffnet"
+    popup.hide()
+
+
+def test_the_way_back_to_the_print_settings_stands_only_after_coming_from_there(
+    window: MainWindow, qt_app: QApplication
+) -> None:
+    """*Zurück zu Druckeinstellungen* nur nach dem Weg aus den Druckeinstellungen (Fund 6)."""
+    back = window.filaments.return_to_print_button
+    popup = window.filament_popup
+    window._focus_filaments()
+    qt_app.processEvents()
+    assert popup.isVisible() and not back.isHidden(), "aus den Druckeinstellungen: Rückweg"
+    popup.hide()
+    window.header.filament_button.click()
+    qt_app.processEvents()
+    assert popup.isVisible() and back.isHidden(), "aus der Kopfzeile: kein Rückweg ohne Hinweg"
+    popup.hide()
+
+
+@pytest.mark.parametrize("corner", ["bottom-right", "top-left"])
+def test_the_filament_list_stays_on_the_screen(qt_app: QApplication, corner: str) -> None:
+    """Am Schirmrand weicht die Liste nach oben aus und bleibt ganz sichtbar (Fund 9)."""
+    from PySide6.QtWidgets import QPushButton, QWidget
+
+    from app.ui.filament_picker import POPUP_WIDTH, FilamentPopup
+
+    host = QWidget()
+    popup = FilamentPopup(host)
+    anchor = QPushButton("Filamente")
+    anchor.resize(90, 28)
+    screen = qt_app.primaryScreen().availableGeometry()
+    if corner == "bottom-right":
+        anchor.move(screen.right() - 40, screen.bottom() - 30)
+    else:
+        anchor.move(screen.left() + 2, screen.top() + 2)
+    anchor.show()
+    qt_app.processEvents()
+    try:
+        popup.show_below(anchor)
+        qt_app.processEvents()
+        frame = popup.geometry()
+        assert screen.contains(frame), (frame.getRect(), screen.getRect())
+        assert frame.width() >= POPUP_WIDTH
+        top_of_anchor = anchor.mapToGlobal(anchor.rect().topLeft()).y()
+        bottom_of_anchor = anchor.mapToGlobal(anchor.rect().bottomLeft()).y()
+        if corner == "bottom-right":
+            assert frame.bottom() < top_of_anchor + 1, "unten fehlt Platz: die Liste steht darüber"
+        else:
+            assert frame.top() > bottom_of_anchor, "oben am Rand: die Liste steht darunter"
+    finally:
+        popup.hide()
+        anchor.close()
+        host.deleteLater()
+        anchor.deleteLater()

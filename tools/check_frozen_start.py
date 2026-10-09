@@ -59,6 +59,10 @@ from app.core.paths import PROFILE_VARIABLES  # noqa: E402
 from app.ui.start_check import FORMAT, REPORT_VARIABLE, SECONDS  # noqa: E402
 from tools.check_frozen_helper import application, image_of, is_the_application  # noqa: E402
 
+#: Was das Paket unter Linux aus Slicer-AppImages entpacken muss: zstd für die
+#: Orca-Familie, gzip für Cura (``app.core.export.squashfs``).
+IMAGE_COMPRESSIONS = ("gzip", "zstd")
+
 #: Bis das Fenster steht, höchstens, in Sekunden. Ein Runner startet ein frisch
 #: installiertes Programm langsamer als ein Kundengerät: macOS prüft beim
 #: ersten Start jede Datei des Bundles, Windows Defender jede DLL.
@@ -227,6 +231,14 @@ def judge(
             "Das Paket bringt kein IBus-Eingabemodul mit (platforminputcontexts: "
             f"{modules}): Fcitx- und IBus-Nutzer tippen ins Leere (RM-062). "
             "Die Qt-Plugins im Paket prüfen."
+        )
+    compressions = [str(name) for name in report.get("image_compressions", ())]
+    missing = [name for name in IMAGE_COMPRESSIONS if name not in compressions]
+    if linux and missing:
+        problems.append(
+            f"Das Paket entpackt {', '.join(missing)} nicht (image_compressions: "
+            f"{compressions}): Unter Linux fehlen dann die Drucker der Slicer-AppImages "
+            "(RM-549, RM-599). CPythons _zstd und zlib im Paket prüfen."
         )
     return problems
 

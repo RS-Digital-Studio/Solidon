@@ -355,6 +355,42 @@ def figure_sketch(plane: str) -> str:
     return sketch_to_text(replace(shapes.rectangle(50.0, 30.0), plane=plane))
 
 
+def extrude_the_figure_sketch(window: Any, app: QApplication) -> None:
+    """Aus der Skizze des Bilds *sketch-mode* eine neue Platte machen — mit Prüfung.
+
+    *Fertig* mit einer Höhe öffnet den Dialog von *Hochziehen* mit ihr
+    (``finish_sketch(given=…)``); ohne sie ginge der Umriss ins Aufziehen,
+    und auf der Fläche des gewählten Körpers würde er angefügt statt eine
+    neue Platte — der Alt-Text verspräche dann etwas anderes (RM-561).
+
+    Der Dialog ist **nicht modal** (``_open_operation_dialog``, wegen der
+    Vorschau) — er steht danach in ``window._op_dialog`` und wird von Hand
+    angenommen. **Erst ein neuer Schritt erlaubt das Zurücknehmen danach**:
+    Ohne ihn nähme ``session.undo()`` den letzten Schritt des Beispiels, und
+    jedes folgende Bild entstünde am beschädigten Projekt.
+    """
+    from app.core.registry import REGISTRY
+
+    session = window.session
+    steps = len(session.history.operations)
+    height = next(
+        float(entry.default)
+        for entry in REGISTRY.get("sketch_extrude").params.spec()
+        if entry.name == "height"
+    )
+    window.finish_sketch(keep=True, given={"height": height})
+    settle(app, 80)
+    dialog = window._op_dialog
+    if dialog is None or dialog.spec.name != "sketch_extrude":
+        raise SystemExit("Fertig öffnete den Dialog von Hochziehen nicht — kein Bild vom Ergebnis")
+    dialog.accept()
+    settle(app, 40)
+    if not await_result(app, session):
+        raise SystemExit("die Extrusion wurde nicht fertig — kein Bild vom Ergebnis")
+    if len(session.history.operations) != steps + 1:
+        raise SystemExit("die Extrusion legte keinen Schritt an — kein Bild vom Ergebnis")
+
+
 def frame_sketch(window: Any, app: QApplication) -> None:
     """Den Skizzenmodus so aufsetzen, dass ein Bild davon etwas zeigt.
 
@@ -404,10 +440,8 @@ def frame_sketch(window: Any, app: QApplication) -> None:
     object_id, feature_id = topmost[0][2:]
     plane_key = f"feature:{object_id}:{feature_id}"
 
-    # Eine Tasche braucht einen gewählten Körper. Die alte Aufnahme öffnete
-    # zwar auf seiner Fläche, ließ den Objektbaum aber ohne Wirtskörper — der
-    # sichtbare Knopf *Abtragen* war deshalb gesperrt. Die Aufnahme soll den
-    # echten Einstieg zeigen, auch wenn das Ergebnis unten extrudiert wird.
+    # Gezeichnet wird für den gewählten Körper: Die Aufnahme zeigt den echten
+    # Einstieg auf seiner Fläche, auch wenn das Ergebnis unten extrudiert wird.
     window.object_tree.select_object(object_id)
     settle(app, 4)
 
@@ -647,22 +681,8 @@ def take_all(app: QApplication, language: str) -> None:
     shoot(window, "sketch-mode", language, from_screen=True)
 
     # **Und was daraus wird.** Die Skizze allein zeigt die Hälfte; der Kunde
-    # will sehen, dass am Ende ein Körper steht. Gegangen wird der Weg, den er
-    # geht: *Fertig*, dann der Operationsdialog, dann *Übernehmen*.
-    #
-    # Der Dialog ist **nicht modal** (``_open_operation_dialog``, wegen der
-    # Vorschau) — er blockiert hier also nichts, sondern steht danach in
-    # ``window._op_dialog`` und wird von Hand angenommen. Ein Prüfstand, der
-    # das nicht weiß, misst die Szene vor der Antwort und hält den Weg für tot;
-    # genau das ist am 25.08.2026 einmal passiert.
-    window.finish_sketch(keep=True)
-    settle(app, 80)
-    dialog = window._op_dialog
-    if dialog is not None:
-        dialog.accept()
-        settle(app, 40)
-    if not await_result(app, session):
-        raise SystemExit("die Extrusion wurde nicht fertig — kein Bild vom Ergebnis")
+    # will sehen, dass am Ende ein Körper steht.
+    extrude_the_figure_sketch(window, app)
     # **Die Ansicht zurück auf die Übersicht.** Sie stand zuletzt eng auf der
     # Zeichenebene, weil das Skizzenbild sie dorthin gestellt hat — auf dem
     # Ergebnis wäre davon nur eine graue Fläche zu sehen, und was entstanden

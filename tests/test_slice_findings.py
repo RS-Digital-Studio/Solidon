@@ -38,23 +38,14 @@ from app.core.slice.analysis import (
     slice_body,
     spanning_width,
     support_on_model,
+    tip_islands,
     worth_support,
 )
-from app.core.types import Profile, SliceResult
+from app.core.types import PrintSettings, Profile, SettingAdvice, SliceResult
+from tests.helpers import brick, chin, chin_over_chest, column_table, on_bed
 
 #: Die Bahnbreite der Vorgabe: Zuschlag und Mindestbreite des Kanalraums.
 LINE = print_settings.resolve(profiles.make_profile()).layers.line_width
-
-
-def on_bed(*parts: trimesh.Trimesh) -> MeshData:
-    body = parts[0] if len(parts) == 1 else trimesh.boolean.union(list(parts))
-    return place_on_bed(MeshData.of(body))
-
-
-def brick(x: float, y: float, z: float, at: tuple[float, float, float]) -> trimesh.Trimesh:
-    body: trimesh.Trimesh = trimesh.creation.box(extents=(x, y, z))
-    body.apply_translation(at)
-    return body
 
 
 def petg() -> Profile:
@@ -198,19 +189,6 @@ def test_a_shoulder_over_a_real_hollow_still_speaks() -> None:
 # --- Stützen enden nicht überall auf dem Bett ----------------------------------
 
 
-def table() -> MeshData:
-    """Bodenplatte 40 auf 40, darauf eine Säule 10 auf 10, darauf eine Platte.
-
-    Keine Insel, 1 500 mm² Überhang auf einer Schicht — und jede Stütze
-    darunter endet auf der Bodenplatte, nicht auf dem Bett.
-    """
-    return on_bed(
-        brick(40.0, 40.0, 5.0, (0.0, 0.0, 2.5)),
-        brick(10.0, 10.0, 20.0, (0.0, 0.0, 15.0)),
-        brick(40.0, 40.0, 5.0, (0.0, 0.0, 27.5)),
-    )
-
-
 def bracket() -> MeshData:
     """Ein Kragarm: eine Wand vom Bett hoch, oben eine Platte quer darauf.
 
@@ -224,7 +202,7 @@ def bracket() -> MeshData:
 
 
 def test_a_column_that_lands_on_the_model_is_seen() -> None:
-    result = slice_body(table(), 0.5)
+    result = slice_body(column_table(), 0.5)
 
     assert not result.layers[0].islands, "der Tisch hat keine Insel — das war der Trugschluss"
     assert support_on_model(result), "die Säule endet auf der Bodenplatte"
@@ -250,7 +228,7 @@ def test_the_table_keeps_supports_everywhere() -> None:
     „keine Insel" geschlossen, und das ist etwas anderes als „alles erreicht
     das Bett".
     """
-    assert placement_advice(table()) is None, "everywhere bleibt stehen"
+    assert placement_advice(column_table()) is None, "everywhere bleibt stehen"
 
 
 def test_the_cantilever_may_stay_on_the_plate() -> None:
@@ -793,7 +771,7 @@ def test_supports_above_a_base_plate_must_be_allowed_on_the_model(style: str) ->
     """Eingeschaltete Stützen allein erreichen den Tischdeckel noch nicht."""
     settings = print_settings.with_path(print_settings.resolve(petg()), "support.style", style)
     settings = print_settings.with_path(settings, "support.placement", "build_plate")
-    entries = advise.advise(settings, petg(), slice_body(table(), 0.5))
+    entries = advise.advise(settings, petg(), slice_body(column_table(), 0.5))
     changed = advise.apply(settings, entries)
     assert changed.support.style != "none"
     assert changed.support.placement == "everywhere"
@@ -896,7 +874,7 @@ def test_combined_advice_preserves_support_needed_by_another_body() -> None:
     """Ein Würfel darf die schon nötigen Stützen seines Nachbarn nicht abschalten."""
     settings = print_settings.with_path(print_settings.resolve(petg()), "support.style", "grid")
     cube = slice_body(on_bed(brick(20.0, 20.0, 20.0, (0.0, 0.0, 10.0))), 0.5)
-    top = slice_body(table(), 0.5)
+    top = slice_body(column_table(), 0.5)
     groups = [(settings, advise.advise(settings, petg(), result)) for result in (cube, top)]
     entries = advise.combine(settings, groups)
     assert "support.style" not in {entry.path for entry in entries}
@@ -988,7 +966,7 @@ def test_the_channel_space_leaves_a_column_on_the_model_free() -> None:
     Brücke gar nicht (0,0 statt 2,0 m Stützbahn). Hier steht dieselbe Lage im
     Tunnel: eine Säule auf dem Tunnelboden neben der Kanaldecke.
     """
-    from app.core.types import Polygon
+    from tests.helpers import slice_contour
 
     result = slice_body(tunnel_block(20.0), 0.5)
     model = model_support(result)
@@ -997,7 +975,7 @@ def test_the_channel_space_leaves_a_column_on_the_model_free() -> None:
     blocked = unary_union([region for _low, _high, region in channel_space(result, model, LINE)])
     assert blocked.intersection(footprint).area > 15.0, "ohne die Säule sperrt der Tunnel sie mit"
 
-    beside = replace(model, open_columns=(*model.open_columns, (Polygon(column), 8.0, 27.0)))
+    beside = replace(model, open_columns=(*model.open_columns, (slice_contour(column), 8.0, 27.0)))
     slabs = channel_space(result, beside, LINE)
 
     assert slabs, "der Kanal bleibt gesperrt"
@@ -1011,12 +989,12 @@ def test_a_column_too_narrow_for_a_line_stays_blocked() -> None:
     im Kanal der Waschschüssel den OrcaSlicer 1,5 m Stütze hindurchstellen
     (08.10.2026). Hier eine Säule von 0,6 mm im Tunnel, schmaler als zwei
     Bahnbreiten."""
-    from app.core.types import Polygon
+    from tests.helpers import slice_contour
 
     result = slice_body(tunnel_block(20.0), 0.5)
     model = model_support(result)
     crumb = ((4.0, -0.3), (4.6, -0.3), (4.6, 0.3), (4.0, 0.3))
-    beside = replace(model, open_columns=(*model.open_columns, (Polygon(crumb), 8.0, 27.0)))
+    beside = replace(model, open_columns=(*model.open_columns, (slice_contour(crumb), 8.0, 27.0)))
 
     blocked = unary_union([region for _low, _high, region in channel_space(result, beside, LINE)])
 
@@ -1029,7 +1007,7 @@ def test_a_gap_too_narrow_for_a_support_line_stays_free() -> None:
     Zwickel zwischen Schwanz- und Kinnstacheln aus 60 000 Krümeln unter 100 mm³.
     Hier ein Schlitz von 0,6 mm neben dem Tunnel mit einer eigenen Säule darin;
     den Filter hielt bis zur Durchsicht des Merges vom 08.10.2026 kein Test."""
-    from app.core.types import Polygon
+    from tests.helpers import slice_contour
 
     body = trimesh.boolean.difference(
         [tunnel_block(20.0).raw, brick(0.6, 50.0, 20.0, (12.3, 0.0, 18.0))]
@@ -1037,7 +1015,9 @@ def test_a_gap_too_narrow_for_a_support_line_stays_free() -> None:
     result = slice_body(place_on_bed(MeshData.of(body)), 0.5)
     model = model_support(result)
     slit = ((12.0, -15.0), (12.6, -15.0), (12.6, 15.0), (12.0, 15.0))
-    beside = replace(model, channel_columns=(*model.channel_columns, (Polygon(slit), 8.0, 27.0)))
+    beside = replace(
+        model, channel_columns=(*model.channel_columns, (slice_contour(slit), 8.0, 27.0))
+    )
 
     blocked = unary_union([region for _low, _high, region in channel_space(result, beside, LINE)])
 
@@ -1067,7 +1047,7 @@ def test_in_an_enclosed_cavity_nothing_is_spared() -> None:
     selbst Stütze bräuchte; ausgespart, holte der ElegooSlicer sie mit einem Ast
     quer durch den Kanal (1,6 m), ohne Aussparung 0,0 m (08.10.2026). Hier dieselbe
     Säule wie im offenen Tunnel, in einer geschlossenen Kammer."""
-    from app.core.types import Polygon
+    from tests.helpers import slice_contour
 
     block = brick(60.0, 40.0, 40.0, (0.0, 0.0, 20.0))
     chamber = brick(20.0, 30.0, 20.0, (0.0, 0.0, 18.0))
@@ -1077,7 +1057,7 @@ def test_in_an_enclosed_cavity_nothing_is_spared() -> None:
     model = model_support(result)
     column = ((2.0, -2.0), (6.0, -2.0), (6.0, 2.0), (2.0, 2.0))
     footprint = box(2.0, -2.0, 6.0, 2.0)
-    beside = replace(model, open_columns=(*model.open_columns, (Polygon(column), 8.0, 27.0)))
+    beside = replace(model, open_columns=(*model.open_columns, (slice_contour(column), 8.0, 27.0)))
 
     blocked = unary_union([region for _low, _high, region in channel_space(result, beside, LINE)])
 
@@ -1277,18 +1257,6 @@ def jaw_in_a_pocket(underside_at_wall: float | None = None) -> MeshData:
     )
 
 
-def chin(underside_at_wall: float) -> trimesh.Trimesh:
-    """Der Kopf mit schräger Unterseite: an der Rückwand auf ``underside_at_wall``,
-    an der Spitze 18 mm davor auf 50 mm."""
-    return trimesh.convex.convex_hull(
-        [
-            (x, y, z)
-            for x in (-8.0, 8.0)
-            for y, z in ((15.0, underside_at_wall), (-3.0, 50.0), (15.0, 56.0), (-3.0, 56.0))
-        ]
-    )
-
-
 def test_a_sloped_chin_over_the_chest_keeps_its_supports_everywhere() -> None:
     """RM-570 schaltete am Kinn die Stützen ein, aber der Stützort fragte weiter
     das einzelne Stück: Im Schnitt zerfällt die Unterseite in Streifen unter
@@ -1360,14 +1328,9 @@ def test_trees_where_small_overhangs_rest_on_the_model_not_under_a_flat_ceiling(
         entries = advise.advise(print_settings.resolve(petg()), petg(), slice_body(body, 0.2))
         return next((entry.value for entry in entries if entry.path == "support.style"), None)
 
-    chin_over_chest = on_bed(
-        brick(80.0, 60.0, 4.0, (0.0, 0.0, 2.0)),
-        brick(40.0, 10.0, 60.0, (0.0, 20.0, 34.0)),
-        brick(60.0, 30.0, 20.0, (0.0, 0.0, 14.0)),
-        chin(44.0),
-    )
-    assert style(chin_over_chest) == "tree", "das Kinn setzt in Streifen auf der Brust auf"
-    assert style(table()) == "auto", "die Tischplatte ist eine flache Decke"
+    figure = chin_over_chest()
+    assert style(figure) == "tree", "das Kinn setzt in Streifen auf der Brust auf"
+    assert style(column_table()) == "auto", "die Tischplatte ist eine flache Decke"
     # Auch wenn die flache Decke über dem Bett hängt und nur das Kinn auf dem
     # Modell aufsetzt: Gefragt ist die Deckenform am Körper (Review vom 08.10.2026).
     with_arm = on_bed(
@@ -1385,8 +1348,506 @@ def test_trees_where_small_overhangs_rest_on_the_model_not_under_a_flat_ceiling(
         entries = advise.advise(settings, petg(), slice_body(body, 0.2))
         return [entry.value for entry in entries if entry.path == "support.style"]
 
-    assert changed(chin_over_chest, "grid") == ["tree"], "auch über einem gewählten Gitter"
-    assert changed(table(), "grid") == [], "die flache Decke behält ihr Gitter"
+    assert changed(figure, "grid") == ["tree"], "auch über einem gewählten Gitter"
+    assert changed(column_table(), "grid") == [], "die flache Decke behält ihr Gitter"
+
+
+def _support_advice(
+    body: MeshData,
+    profile: Profile,
+    values: dict[str, object],
+    *,
+    flavour: str | None = None,
+    paths: tuple[str, ...] = (
+        "support.z_gap",
+        "support.bottom_interface_layers",
+        "support.interface_spacing",
+        "support.interface_layers",
+        "cooling.support_interface_cooling",
+    ),
+    whole_layers: bool = False,
+    organic: frozenset[str] = frozenset(),
+) -> dict[str, object]:
+    """Die Vorschläge zu Abstand und Trennschicht für einen Körper (RM-583)."""
+    settings = print_settings.resolve(profile)
+    for path, value in values.items():
+        settings = print_settings.with_path(settings, path, value)
+    entries = advise.advise(
+        settings,
+        profile,
+        slice_body(body, 0.2),
+        flavour=flavour,  # type: ignore[arg-type]
+        whole_layers=whole_layers,
+        organic=organic,
+    )
+    return {entry.path: entry.value for entry in entries if entry.path in paths}
+
+
+def test_the_support_gap_follows_layer_height_and_material() -> None:
+    """Der Abstand zwischen Stütze und Teil folgt Schichthöhe und Material
+    (RM-583, Recherche vom 08.10.2026, Nr. 1): PLA etwa eine Schicht, PETG das
+    1,4-Fache, nie unter 0,1 und über 0,25 bzw. 0,3 mm. Cura rechnet in ganzen
+    Schichten. Was im Band liegt, bleibt beim Hersteller."""
+    pla = profiles.make_profile("centauri-carbon-2", "pla")
+    gap = "support.z_gap"
+
+    def proposed(
+        profile: Profile, layer: float, z_gap: float, flavour: str | None = None
+    ) -> object:
+        values = {"layers.layer_height": layer, gap: z_gap}
+        return _support_advice(column_table(), profile, values, flavour=flavour, paths=(gap,)).get(
+            gap
+        )
+
+    assert proposed(pla, 0.2, 0.2) is None, "eine Schicht bei PLA ist richtig"
+    assert proposed(pla, 0.2, 0.22) is None, "0,22 liegt im Band"
+    assert proposed(petg(), 0.2, 0.2) == pytest.approx(0.28), "PETG haftet an sich selbst"
+    assert proposed(petg(), 0.2, 0.2, "cura") is None, "Cura rundet auf eine Schicht"
+    assert proposed(pla, 0.12, 0.2) == pytest.approx(0.12), "bei feinen Schichten zu viel Luft"
+    assert proposed(pla, 0.06, 0.06) == pytest.approx(0.10), "nie unter 0,1 mm"
+    assert proposed(petg(), 0.32, 0.45) == pytest.approx(0.30), "nie über 0,3 mm bei PETG"
+
+
+@pytest.mark.parametrize(
+    ("material", "layer", "flavour", "gap"),
+    [
+        ("pla", 0.08, "cura", 0.16),
+        ("petg", 0.10, "cura", 0.20),
+        ("pla", 0.04, "cura", 0.12),
+        ("pla", 0.28, "cura", 0.28),
+        ("pla", 0.20, "cura", 0.20),
+        ("petg", 0.10, "orca", 0.14),
+        ("pla", 0.075, "cura", 0.15),
+    ],
+)
+def test_whole_layers_stay_inside_the_material_band(
+    material: str, layer: float, flavour: str, gap: float
+) -> None:
+    """Wo der Slicer in ganzen Schichten rechnet (Cura), liegt der Abstand
+    innerhalb der Grenzen des Materials: PLA bei 0,08 mm zwei Schichten statt
+    einer unter dem Minimum, PETG bei 0,1 mm 0,2 statt 0,1 (RM-583, Review).
+    Oberhalb des Maximums bleibt eine Schicht. Eine halbe Schicht rundet auf,
+    und ein Wert mit drei Stellen bleibt eine ganze Schicht."""
+    profile = profiles.make_profile("centauri-carbon-2", material)
+    target = advise.support_gap_target(layer, profile.material, flavour)  # type: ignore[arg-type]
+    assert target == pytest.approx(gap)
+    proposed = _support_advice(
+        column_table(),
+        profile,
+        {"layers.layer_height": layer, "support.z_gap": 0.6},
+        flavour=flavour,
+        paths=("support.z_gap",),
+    )
+    assert proposed["support.z_gap"] == pytest.approx(gap)
+
+
+def test_half_a_layer_rounds_up() -> None:
+    """Liegt das Ziel genau zwischen zwei Schichten, gilt die obere: mehr Luft
+    löst sich sicher, zu wenig klebt. Pythons ``round`` rundete 2,5 Schichten
+    auf zwei ab (RM-583, Nachprüfung L4)."""
+    pla = profiles.make_profile("centauri-carbon-2", "pla").material
+
+    assert advise.support_gap_target(
+        0.05, replace(pla, support_gap_factor=2.5), "cura"
+    ) == pytest.approx(0.15)
+    assert advise.support_gap_target(
+        0.1, replace(pla, support_gap_factor=1.5), "cura"
+    ) == pytest.approx(0.2)
+
+
+# Aus ``materials.toml``: PLA Faktor 1,0 zwischen 0,10 und 0,25 mm, PETG 1,4
+# zwischen 0,12 und 0,30 mm; neben dem Turm das Vielfache im Band, mindestens eins.
+@pytest.mark.parametrize(
+    ("material", "layer", "free", "beside_a_tower"),
+    [
+        ("pla", 0.08, 0.10, 0.16),
+        ("petg", 0.08, 0.12, 0.16),
+        ("petg", 0.20, 0.28, 0.20),
+        ("pla", 0.20, 0.20, 0.20),
+    ],
+)
+def test_beside_a_prime_tower_the_gap_comes_in_whole_layers(
+    material: str, layer: float, free: float, beside_a_tower: float
+) -> None:
+    """Mit Reinigungsturm legt die Orca-Familie die Stütze auf die Schichten des
+    Modells und rundet den Abstand zur nächsten Schicht (RM-622): PLA bei
+    0,08er Schichten bekäme aus 0,10 mm eine Schicht, also 0,08 — unter dem
+    Minimum des Materials. Neben dem Turm rät Solidon deshalb gleich ganze
+    Schichten im Band, wie bei Cura; ohne Turm bleibt der freie Wert."""
+    profile = profiles.make_profile("centauri-carbon-2", material)
+    gap = "support.z_gap"
+
+    assert advise.support_gap_target(layer, profile.material, "orca") == pytest.approx(free)
+    assert advise.support_gap_target(
+        layer, profile.material, "orca", whole_layers=True
+    ) == pytest.approx(beside_a_tower)
+    asked: dict[str, object] = {"layers.layer_height": layer, gap: 0.6}
+    assert _support_advice(
+        column_table(), profile, asked, flavour="orca", paths=(gap,), whole_layers=True
+    ) == {gap: pytest.approx(beside_a_tower)}
+    assert _support_advice(column_table(), profile, asked, flavour="orca", paths=(gap,)) == {
+        gap: pytest.approx(free)
+    }
+
+
+@pytest.mark.parametrize(
+    ("layer", "style", "organic", "gap"),
+    [
+        (0.2, "tree", {"tree"}, 0.2),
+        (0.2, "auto", {"tree", "auto"}, 0.2),
+        (0.2, "grid", {"tree", "auto"}, 0.28),
+        (0.2, "tree", set(), 0.28),
+        (0.1, "tree", {"tree"}, 0.2),
+        (0.1, "grid", {"tree"}, 0.14),
+    ],
+)
+def test_under_organic_trees_the_gap_comes_in_whole_layers(
+    layer: float, style: str, organic: set[str], gap: float
+) -> None:
+    """Organische Bäume legen alle sechs Programme der Orca-Familie und
+    PrusaSlicer auf die Schichten des Modells, auch mit eigener
+    Stützschichthöhe (RM-622): PETG bekam 0,28 mm geschrieben und 0,2 gedruckt.
+    Unter den Arten, die das Programm organisch druckt (``organic``, auch
+    „automatisch“ bei Elegoo und Bambu), rät Solidon ganze Schichten — bei 0,1er
+    Schichten zwei statt 0,14, das gerundet unter das Minimum fiele. Unter
+    Gitter und wo „Baum“ keiner ist (SuperSlicer), bleibt der freie Wert."""
+    profile = petg()
+    asked: dict[str, object] = {
+        "layers.layer_height": layer,
+        "support.style": style,
+        "support.z_gap": 0.6,
+    }
+    assert _support_advice(
+        column_table(),
+        profile,
+        asked,
+        flavour="orca",
+        paths=("support.z_gap",),
+        organic=frozenset(organic),
+    ) == {"support.z_gap": pytest.approx(gap)}
+
+
+def bearded_table(pins: int, side: float = 0.6) -> MeshData:
+    """Der Tisch mit einem Bart: ``pins`` dünne Stifte hängen unter der Platte,
+    jeder beginnt als Insel mit ``side`` mal ``side`` mm² — die Bartstacheln am
+    Kinn des Drachen im Kleinen (RM-584)."""
+    places = [
+        (x, y)
+        for x in (-18.0, -15.0, -12.0, -9.0, -6.5, 6.5, 9.0, 12.0, 15.0, 18.0)
+        for y in (-18.0, -15.0, -12.0, -9.0, -6.5, 6.5, 9.0, 12.0, 15.0, 18.0)
+    ][:pins]
+    assert len(places) == pins, "so viele Stifte trägt die Platte nicht"
+    return on_bed(
+        brick(40.0, 40.0, 5.0, (0.0, 0.0, 2.5)),
+        brick(10.0, 10.0, 20.0, (0.0, 0.0, 15.0)),
+        brick(40.0, 40.0, 5.0, (0.0, 0.0, 27.5)),
+        *(brick(side, side, 4.2, (x, y, 23.1)) for x, y in places),
+    )
+
+
+def test_small_islands_are_counted_as_tips() -> None:
+    """Jeder Stift unter 1 mm² beginnt als Insel ohne Trennschicht an seiner
+    Baumspitze (``minimum_roof_area``, RM-584); ein Stift von 1,44 mm² nicht."""
+    assert tip_islands(slice_body(bearded_table(12), 0.2)) == 12
+    assert tip_islands(slice_body(bearded_table(12, side=1.2), 0.2)) == 0
+    assert tip_islands(slice_body(column_table(), 0.2)) == 0, "die Platte ist keine Insel"
+
+
+@pytest.mark.parametrize(
+    ("layer", "style", "flavour", "organic", "gap"),
+    [
+        (0.2, "tree", "orca", {"tree"}, 0.4),
+        (0.2, "auto", "orca", {"tree", "auto"}, 0.4),
+        (0.12, "tree", "orca", {"tree"}, 0.36),
+        (0.2, "tree", "cura", set(), 0.4),
+        (0.2, "tree", "prusa", {"tree"}, 0.4),
+    ],
+)
+def test_many_tips_under_trees_get_air_in_whole_layers(
+    layer: float, style: str, flavour: str, organic: set[str], gap: float
+) -> None:
+    """Roberts Drache (PLA, 0,2 mm): Am Kinn und an den Kopfstacheln stand jede
+    Baumspitze eine Schicht unter dem Modell und schweißte an. Zwei Schichten
+    senkten die Kontaktfläche um 88 und 96 Prozent, in ElegooSlicer, PrusaSlicer
+    und Cura gemessen (RM-584). Der Rat gilt über dem Höchstwert des Materials
+    (0,25 mm) und in ganzen Schichten, mindestens zwei."""
+    proposed = _support_advice(
+        bearded_table(advise.TIP_ISLANDS),
+        profiles.make_profile("centauri-carbon-2", "pla"),
+        {"layers.layer_height": layer, "support.style": style, "support.z_gap": layer},
+        flavour=flavour,
+        paths=("support.z_gap",),
+        organic=frozenset(organic),
+    )
+    assert proposed == {"support.z_gap": pytest.approx(gap)}
+
+
+@pytest.mark.parametrize("case", ["few", "grid", "petg", "no slicer"])
+def test_tips_need_many_islands_trees_and_a_measured_material(case: str) -> None:
+    """Gegenproben: Wenige Inseln (ein Stift, eine Nase), Gitterstützen ohne
+    Spitzen, ein Material ohne gemessenen Spitzenabstand und ein Rat ohne
+    Slicer behalten den Abstand des Materials. Gefragt an :func:`advise.tip_gap`
+    selbst: Mit hundert Stiften schlägt der Rat Bäume vor, und unter dem
+    vorgeschlagenen Stil gälte der Abstand wieder."""
+    pins = advise.TIP_ISLANDS - 1 if case == "few" else advise.TIP_ISLANDS
+    need = advise.support_need(slice_body(bearded_table(pins), 0.2))
+    material = profiles.material("petg" if case == "petg" else "pla")
+    style = "grid" if case == "grid" else "tree"
+    flavour = None if case == "no slicer" else "orca"
+    organic = frozenset() if case == "no slicer" else frozenset({"tree"})
+
+    assert need.tips == pins
+    assert advise.tip_gap(0.2, material, need, flavour, style, organic) is None
+    if case == "few":
+        more = advise.support_need(slice_body(bearded_table(advise.TIP_ISLANDS), 0.2))
+        assert advise.tip_gap(0.2, material, more, flavour, style, organic) == pytest.approx(0.4), (
+            "die Gegenprobe: eine Insel mehr, und der Abstand gilt"
+        )
+
+
+def test_proposed_trees_bring_whole_layers_along() -> None:
+    """Schlägt der Rat selbst Bäume vor (Stützen auf dem Modell, RM-581), fragt
+    er den Abstand mit ihnen (RM-622): PETG am Kinn bei 0,1er Schichten mit
+    0,14 mm, dem freien Wert, bekommt 0,2 vorgeschlagen — gerundet lägen die
+    0,14 unter dem Minimum."""
+    profile = petg()
+    settings = print_settings.resolve(profile)
+    for path, value in (("layers.layer_height", 0.1), ("support.z_gap", 0.14)):
+        settings = print_settings.with_path(settings, path, value)
+    entries = advise.advise(
+        settings,
+        profile,
+        slice_body(chin_over_chest(), 0.1),
+        flavour="orca",
+        organic=frozenset({"tree"}),
+    )
+    proposed = {entry.path: entry.value for entry in entries}
+    assert proposed.get("support.style") == "tree"
+    assert proposed.get("support.z_gap") == pytest.approx(0.2)
+
+
+@pytest.mark.parametrize(("flavour", "whole_layers"), [("orca", True), ("cura", False)])
+def test_a_gap_between_two_layers_is_proposed_where_the_slicer_rounds(
+    flavour: str, whole_layers: bool
+) -> None:
+    """0,2 mm liegen bei 0,08er Schichten im Band um 0,16, sind aber zweieinhalb
+    Schichten. Wo der Slicer in ganzen Schichten rechnet — Cura, die
+    Orca-Familie neben einem Reinigungsturm —, druckt er sie nicht so, und der
+    Rat nennt die ganze Schicht (RM-622). Ohne Rundung bleibt ein Wert im Band
+    beim Hersteller."""
+    pla = profiles.make_profile("centauri-carbon-2", "pla")
+    gap = "support.z_gap"
+    between: dict[str, object] = {"layers.layer_height": 0.08, gap: 0.2}
+    whole: dict[str, object] = {"layers.layer_height": 0.08, gap: 0.16}
+
+    assert _support_advice(
+        column_table(), pla, between, flavour=flavour, paths=(gap,), whole_layers=whole_layers
+    ) == {gap: pytest.approx(0.16)}
+    # 0,2 liegt genau auf der Bandgrenze (1,25-mal 0,16), 0,18 mitten darin.
+    assert _support_advice(
+        column_table(),
+        pla,
+        {**between, gap: 0.18},
+        flavour=flavour,
+        paths=(gap,),
+        whole_layers=whole_layers,
+    ) == {gap: pytest.approx(0.16)}
+    assert (
+        _support_advice(
+            column_table(), pla, whole, flavour=flavour, paths=(gap,), whole_layers=whole_layers
+        )
+        == {}
+    )
+    assert (
+        _support_advice(column_table(), pla, {**between, gap: 0.11}, flavour="orca", paths=(gap,))
+        == {}
+    ), "ohne Turm gilt 0,11 genau und liegt im Band um 0,10"
+
+
+def test_the_interface_follows_the_ceiling_and_where_supports_stand() -> None:
+    """Unter einer großen flachen Decke eine dichte Trennschicht mit drei Lagen,
+    unter kleinen und gewölbten Flächen eine lockere mit zwei; wo die Stütze auf
+    dem Modell steht, zwei untere Lagen (RM-583, Recherche Nr. 2 und 3). Das
+    Profil des MK4S führt unten 0, Kobra 2 und MK4S oben 0,2 mm und drei Lagen,
+    Elegoo 0,5 mm und zwei."""
+    pla = profiles.make_profile("centauri-carbon-2", "pla")
+    prusa_like = {
+        "support.interface_spacing": 0.2,
+        "support.interface_layers": 3,
+        "support.bottom_interface_layers": 0,
+    }
+    elegoo_like = {
+        "support.interface_spacing": 0.5,
+        "support.interface_layers": 2,
+        "support.bottom_interface_layers": 2,
+    }
+
+    assert _support_advice(column_table(), pla, elegoo_like) == {
+        "support.interface_spacing": 0.2,
+        "support.interface_layers": 3,
+    }, "die Tischplatte ist eine flache Decke"
+    assert _support_advice(chin_over_chest(), pla, prusa_like) == {
+        "support.interface_spacing": 0.5,
+        "support.interface_layers": 2,
+        "support.bottom_interface_layers": 2,
+    }, "das Kinn ist klein und gewölbt und steht auf der Brust"
+    assert _support_advice(chin_over_chest(), pla, elegoo_like) == {}, "Elegoo passt dort"
+
+
+def test_without_material_values_the_gap_stays_with_the_maker() -> None:
+    """Für TPU fehlt eine Quelle zum Stützabstand: kein Rat, der Abstand bleibt
+    beim Hersteller. ABS trägt die Werte von PLA aus der Tabelle, volle Kühlung
+    nur PETG — ein eigener Materialwert, nicht der Abstandsfaktor (RM-583,
+    Review)."""
+    tpu = profiles.make_profile("centauri-carbon-2", "tpu-95a")
+    abs_profile = profiles.make_profile("centauri-carbon-2", "abs")
+    gap, cooling = "support.z_gap", "cooling.support_interface_cooling"
+
+    assert advise.support_gap_target(0.2, tpu.material) is None
+    assert gap not in _support_advice(column_table(), tpu, {gap: 0.6}, paths=(gap,))
+    assert _support_advice(column_table(), abs_profile, {gap: 0.6}, paths=(gap,)) == {
+        gap: pytest.approx(0.2)
+    }
+    assert cooling not in _support_advice(column_table(), abs_profile, {}, paths=(cooling,))
+    assert petg().material.support_interface_cooling
+
+
+def test_supports_on_the_bed_need_no_interface_below() -> None:
+    """Untere Trennschichten braucht nur eine Stütze, die auf dem Modell steht
+    (RM-583, Review): Ein Pilz, dessen Stütze auf dem Bett steht, bekommt keine;
+    der Tisch, dessen Stütze auf dem Sockel steht, zwei."""
+    pla = profiles.make_profile("centauri-carbon-2", "pla")
+    bare = {"support.bottom_interface_layers": 0}
+    mushroom = on_bed(
+        brick(10.0, 10.0, 20.0, (0.0, 0.0, 10.0)), brick(40.0, 40.0, 2.0, (0.0, 0.0, 21.0))
+    )
+    below = "support.bottom_interface_layers"
+
+    assert below not in _support_advice(mushroom, pla, bare, paths=(below,))
+    assert _support_advice(column_table(), pla, bare, paths=(below,)) == {below: 2}
+
+
+def test_sticky_material_gets_a_cool_interface() -> None:
+    """PETG haftet an sich selbst; volle Kühlung an der Trennschicht löst die
+    Stütze leichter (RM-583, Recherche Nr. 7). PLA kühlt ohnehin voll."""
+    cooling = "cooling.support_interface_cooling"
+    pla = profiles.make_profile("centauri-carbon-2", "pla")
+    assert _support_advice(column_table(), petg(), {}, paths=(cooling,)) == {cooling: True}
+    assert _support_advice(column_table(), pla, {}, paths=(cooling,)) == {}
+
+
+def _contact_advice(
+    body: MeshData, profile: Profile, values: dict[str, object]
+) -> tuple[PrintSettings, list[SettingAdvice]]:
+    """Der Rat eines Körpers zum Stützkontakt, wie der Druckdialog ihn sammelt."""
+    settings = print_settings.resolve(profile)
+    for path, value in values.items():
+        settings = print_settings.with_path(settings, path, value)
+    entries = advise.advise(settings, profile, slice_body(body, 0.2))
+    return settings, [entry for entry in entries if entry.path in advise.CONTACT_PATHS]
+
+
+def test_a_body_that_differs_keeps_its_contact_row() -> None:
+    """PLA will bei 0,15 mm Schicht 0,15 mm Abstand, PETG ist mit 0,2 zufrieden;
+    das Kinn will eine lockere Trennschicht, der Tisch die dichte der Platte. Nach
+    dem größten Wert zusammengeführt verschwand die Zeile, und kein Teil bekam
+    seinen Wert (RM-583, Review). Getrennt zusammengeführt bleibt sie."""
+    pla = profiles.make_profile("centauri-carbon-2", "pla")
+    fine = {"layers.layer_height": 0.15, "support.z_gap": 0.2}
+    groups = [
+        _contact_advice(column_table(), pla, fine),
+        _contact_advice(column_table(), petg(), fine),
+    ]
+
+    def rows(**options: object) -> dict[str, object]:
+        merged = advise.combine(groups[0][0], groups, **options)  # type: ignore[arg-type]
+        return {entry.path: entry.value for entry in merged}
+
+    assert "support.z_gap" not in rows(), "im Teil gilt der Wert, der beide einschließt"
+    assert rows(separate=advise.CONTACT_PATHS)["support.z_gap"] == pytest.approx(0.15)
+
+    dense = {
+        "support.interface_spacing": 0.2,
+        "support.interface_layers": 3,
+        "support.bottom_interface_layers": 2,
+    }
+    groups = [
+        _contact_advice(column_table(), pla, dense),
+        _contact_advice(chin_over_chest(), pla, dense),
+    ]
+    together = rows(separate=advise.CONTACT_PATHS)
+    assert together["support.interface_spacing"] == pytest.approx(0.5)
+    assert together["support.interface_layers"] == 2
+
+
+@pytest.mark.parametrize("flavour", ["orca", "cura"])
+@pytest.mark.parametrize("case", ["ceilings", "materials"])
+def test_the_contact_rows_settle_after_one_round(flavour: str, case: str) -> None:
+    """Der Druckdialog fragt den Stützkontakt je Körper gegen die Grundlage und
+    führt ihn getrennt zusammen: Nach einmal Übernehmen kommt keine Gegenzeile
+    (RM-583, Nachprüfung). Gegen die Übernahme gefragt, wechselte die Lücke
+    zwischen Tisch und Kinn bei jedem Übernehmen, der Abstand zwischen PLA und
+    PETG ebenso."""
+    from pathlib import Path
+
+    from app.core.export import handover
+
+    pla = profiles.make_profile("centauri-carbon-2", "pla")
+    executable = "orca-slicer.exe" if flavour == "orca" else "CuraEngine.exe"
+    setup = handover.SlicerSetup(executable=Path(executable), flavour=flavour)  # type: ignore[arg-type]
+    if case == "ceilings":
+        bodies = [(column_table(), pla), (chin_over_chest(), pla)]
+        values: dict[str, object] = {
+            "support.interface_spacing": 0.2,
+            "support.interface_layers": 3,
+            "support.bottom_interface_layers": 2,
+        }
+    else:
+        bodies = [(column_table(), pla), (column_table(), petg())]
+        values = {"layers.layer_height": 0.15, "support.z_gap": 0.2}
+    settings = print_settings.resolve(pla)
+    for path, value in values.items():
+        settings = print_settings.with_choice(settings, path, value)
+
+    def rows(current: PrintSettings) -> dict[str, object]:
+        separate, asking = handover.asked_for_contact(current, pla, setup, flavour)  # type: ignore[arg-type]
+        groups = []
+        for body, profile in bodies:
+            entries = advise.advise(asking, profile, slice_body(body, 0.2), flavour=flavour)  # type: ignore[arg-type]
+            groups.append((asking, [e for e in entries if e.path in advise.CONTACT_PATHS]))
+        merged = advise.combine(current, groups, separate=separate)
+        return {entry.path: entry.value for entry in merged}
+
+    first = rows(settings)
+    if flavour == "orca":
+        assert first, "ein Körper weicht ab und bekommt seine Zeile"
+    for path, value in first.items():
+        settings = print_settings.with_accepted(settings, path, value)
+    assert rows(settings) == {}, "nach dem Übernehmen keine Gegenzeile"
+
+
+def test_each_part_gets_the_contact_of_its_own_material() -> None:
+    """Zwei gleiche Tische auf einer Platte, einer aus PLA, einer aus PETG: Den
+    Abstand bekommt jeder nach dem Material seiner Spule, nicht nach dem der
+    Platte (RM-583; Robert: „immer nach dem verwendeten Material“)."""
+    from app.core.export import writer
+    from app.core.types import SceneObject
+
+    profile = profiles.make_profile("centauri-carbon-2", "pla")
+    settings = print_settings.resolve(profile)
+    body = column_table()
+    result = slice_body(body, 0.2)
+
+    def gap(material: str) -> object:
+        entry = SceneObject(id=material, name=material, mesh=body, material=material)
+        advice = writer.part_advice(
+            entry, body, settings, profile, None, {}, result=result, fit_kinds=(), flavour="orca"
+        )
+        return {item.path: item.value for item in advice}.get("support.z_gap")
+
+    assert settings.support.z_gap == pytest.approx(0.2)
+    assert gap("pla") is None, "PLA löst sich bei 0,2 mm schon sauber"
+    assert gap("petg") == pytest.approx(0.28), "PETG haftet stärker und braucht mehr Luft"
 
 
 def test_a_cantilever_in_a_narrow_pocket_is_no_channel() -> None:
@@ -2381,3 +2842,59 @@ def test_a_ceiling_footprint_without_any_held_edge_does_not_close(
     monkeypatch.setattr(ceilings, "_gap", lambda _name: 0.35)
 
     assert not ceilings.closes(frozenset({(1, 0)}))
+
+
+def test_separate_columns_keep_their_answer_without_the_subtraction(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Liegt eine Säule neben dem Material darunter, nimmt der Abzug nichts weg (RM-595).
+
+    Der Prüfbericht rechnete jeden Abzug in Clipper, auch für Säulen, deren
+    Hüllrechteck das Material der Schicht darunter nicht berührt — am Riser
+    zwei Drittel aller Abzüge. Übersprungen ist die Antwort dieselbe wie
+    gerechnet (Gegenprobe: jeder Abzug erzwungen).
+    """
+    from app.core.slice import analysis
+
+    skipped: list[bool] = []
+    real = analysis._apart
+
+    def counted(one: tuple[float, ...], other: tuple[float, ...]) -> bool:
+        apart = real(one, other)
+        skipped.append(apart)
+        return apart
+
+    bodies = [tunnels_side_by_side(5), tunnel_block(65.0), column_table()]
+    results = [slice_body(body, 0.5) for body in bodies]
+    monkeypatch.setattr(analysis, "_apart", counted)
+    quick = [analysis._model_support(result, analysis.CHANNEL_WIDTH, None) for result in results]
+    assert any(skipped), "Voraussetzung: getrennte Säulen kommen vor"
+    monkeypatch.setattr(analysis, "_apart", lambda one, other: False)
+    full = [analysis._model_support(result, analysis.CHANNEL_WIDTH, None) for result in results]
+    assert quick == full
+
+
+def test_each_layer_material_is_built_once_by_parallel_columns(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Ein Schloss je Schicht: Jede Schicht wird genau einmal gebaut, auch von vier Arbeitern."""
+    import sys
+    from collections import Counter
+
+    from app.core.slice import analysis
+
+    built: Counter[int] = Counter()
+    real = analysis._material
+
+    def counted(layer: object) -> object:
+        # Nur der gemeinsame Speicher der Säulen; die Ränder halten ihren eigenen.
+        if sys._getframe(1).f_code.co_name == "material_at":
+            built[id(layer)] += 1
+        return real(layer)  # type: ignore[arg-type]
+
+    result = slice_body(tunnels_side_by_side(5), 0.2)
+    assert len(result.layers) >= analysis.PARALLEL_FROM, "Voraussetzung: der parallele Weg"
+    monkeypatch.setattr(analysis, "_workers", lambda limit: 4)
+    monkeypatch.setattr(analysis, "_material", counted)
+    analysis._model_support(result, analysis.CHANNEL_WIDTH, None)
+    assert built and max(built.values()) == 1

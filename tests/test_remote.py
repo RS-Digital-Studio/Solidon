@@ -553,6 +553,52 @@ def test_a_recipe_that_runs_openscad_is_locked_like_the_operation_itself(
         remote.check_call(name, {"size": 10.0}, registry)
 
 
+def test_the_creator_of_such_a_recipe_is_locked_as_well(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Review G-e: Seit RM-574 hat ein Rezept einen zweiten Namen, ``create_<name>``.
+
+    Die Sperre suchte das Rezept über den Präfix von ``op_name`` und sah den
+    Erzeuger nicht: angeboten über die Leitung, obwohl er dieselben Schritte
+    rechnet wie das Einsetzen.
+    """
+    from app.core.knowledge.parts import ops as part_ops
+    from app.core.knowledge.parts.registry import PARTS, PartSpec
+    from app.core.registry import Registry, op_params, param
+    from app.core.types import BaseParams, PartResult
+
+    @op_params
+    class Params(BaseParams):
+        size: float = param(title="Größe", default=10.0, minimum=1.0, maximum=100.0)
+
+    def build(values: BaseParams) -> PartResult:  # pragma: no cover - nie gerechnet
+        raise AssertionError("dieser Baustein wird nicht gebaut")
+
+    spec = PartSpec(
+        name="scad_probe_eigen",
+        title="Probe aus Quelltext",
+        group="fasteners",
+        params=Params,
+        fn=build,
+        features=("body",),
+        doc="Ein Rezept, dessen Schritte ein fremdes Programm anwerfen.",
+        source="recipe",
+        standalone=True,
+        recipe_data={"document": {"ops": [{"op": "create_box", "params": {"width": 10.0}}]}},
+    )
+    monkeypatch.setattr(foreign, "SCRIPTED_OPS", frozenset({"create_box"}))
+    registry = Registry()
+    PARTS.register(spec)
+    try:
+        part_ops.register_one(spec, registry)
+        creator = part_ops.creator_name(spec.name)
+        assert registry.has(creator)
+        assert foreign.runs_foreign_source(creator)
+        assert creator not in {entry["name"] for entry in remote.remote_tools(registry)}
+        with pytest.raises(remote.RemoteRefusedError):
+            remote.check_call(creator, {"size": 10.0}, registry)
+    finally:
+        PARTS.remove(spec.name)
+
+
 def test_such_a_recipe_is_not_accepted_without_asking(scripted_recipe_part) -> None:
     """Dieselbe Frage an der zweiten Stelle (§26.5): Ein Vorschlag mit diesem
     Schritt galt als eindeutig umkehrbar und lief ohne Rückfrage durch.

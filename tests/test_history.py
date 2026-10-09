@@ -11,7 +11,13 @@ from typing import Any, Final
 
 import pytest
 
-from app.core.errors import RECOUNT_AND_RETRY, SPLIT_AND_RETRY, UserError, ValidationError
+from app.core.errors import (
+    RECOUNT_AND_RETRY,
+    SPLIT_AND_RETRY,
+    InternalError,
+    UserError,
+    ValidationError,
+)
 from app.core.registry import VARIABLE, Registry, op_params, param, register_op
 from app.core.scene import History, OperationDraft
 from app.core.scene.history import change_for
@@ -2167,6 +2173,58 @@ def test_an_insert_carries_its_named_dimensions_in_the_same_transaction(
     assert "breite" not in history.document.parameters
 
 
+def test_an_insert_can_give_a_later_step_new_values_in_the_same_transaction(
+    history: History,
+) -> None:
+    """Review F5: Eine wieder geöffnete Formsitzung legt das Angleichen vor
+    ihren Schritt und ihre neuen Züge hinein — ein Strg+Z nimmt beides, und
+    ein ungültiger Wert hält das Einfügen an, bevor etwas geschrieben ist."""
+    _chain(history)
+    old = history.operations
+    scatter = old[3]
+    before = document_to_data(history.document)
+    with pytest.raises(ValidationError):
+        history.plan_insert(
+            old[2].id,
+            _("Umbenennen"),
+            [OperationDraft(op="rename_object", inputs=("obj_1",))],
+            changed={scatter.id: {**scatter.params, "unbekannt": 1}},
+        )
+    assert document_to_data(history.document) == before
+    plan = history.plan_insert(
+        old[2].id,
+        _("Umbenennen"),
+        [OperationDraft(op="rename_object", inputs=("obj_1",))],
+        changed={scatter.id: {**scatter.params, "count": 5}},
+    )
+    transaction = history.commit(plan)
+    ops = history.operations
+    assert [entry.op for entry in ops][-3:] == ["rename_object", "split_object", "scatter"]
+    assert ops[-1].params["count"] == 5
+    assert ops[-1].seed == scatter.seed
+    assert str(transaction.title) == "Umbenennen", "Review N6: der Titel nennt die Änderung"
+    history.undo()
+    assert history.operations == old
+
+
+def test_an_insert_refuses_changed_values_it_cannot_place(history: History) -> None:
+    """Review N5: Eine Kennung vor ``before`` oder eine, die es nicht gibt, fiel
+    still weg. Jetzt ist sie ein Programmfehler, und nichts ist geplant."""
+    _chain(history)
+    old = history.operations
+    before = document_to_data(history.document)
+    for stray in (old[0].id, 999_999):
+        with pytest.raises(InternalError):
+            history.plan_insert(
+                old[2].id,
+                _("Umbenennen"),
+                [OperationDraft(op="rename_object", inputs=("obj_1",))],
+                changed={stray: {}},
+            )
+    assert document_to_data(history.document) == before
+    assert history.operations == old
+
+
 def test_moving_steps_keeps_their_values_and_undo_restores_the_order(history: History) -> None:
     """P7.2: Mehrere Schritte wandern gemeinsam und in ihrer Folge; Strg+Z stellt sie zurück."""
     history.apply(_("Anlegen"), [OperationDraft(op="make_object")])
@@ -2620,13 +2678,18 @@ def test_a_part_cut_into_an_insert_lives_on_in_its_pocket(profile: Profile) -> N
 def _hand_on_cases(profile: Profile) -> dict[str, tuple[list[Any], dict[str, Any]]]:
     """Je markierter Operation ein gültiger Auftrag: Eingänge und Werte."""
     from app.core.knowledge.parts import shapes
-    from app.core.knowledge.parts.build import bore
+    from app.core.knowledge.parts.build import bore, subtract
     from app.core.registry import REGISTRY
     from app.core.scene.cancel import NeverCancelled
     from app.core.types import Scene, SceneObject
 
+    # Die Bohrung ist geschnitten: An einer erklärten Bohrung ohne Hohlraum im
+    # Körper sagt *Stift für Bohrung* ab (Review G, F2).
     with shapes.building("mesh"):
-        plate = shapes.box(30.0, 30.0, 10.0)
+        plate = subtract(
+            shapes.box(30.0, 30.0, 10.0),
+            shapes.moved(shapes.cylinder(6.0, 12.0), (0.0, 0.0, -1.0)),
+        )
     key, hole = bore("hole_1", 6.0, (0.0, 0.0, 5.0), depth=10.0, through=True)
     carrier = SceneObject(id="obj_1", name="Platte", mesh=plate, kind="mesh", features={key: hole})
     spec = REGISTRY.get("create_container")

@@ -405,14 +405,23 @@ def test_the_rebuild_stands_at_one_chosen_body_in_the_card_of_actions(qt_app):
 
 @pytest.mark.parametrize("language", ["de", "en", "es", "fr", "it", "pt"])
 def test_rebuild_details_scroll_but_actions_stay_reachable(qt_app, profile, language):
+    """Lange Details rollen, die Knöpfe bleiben erreichbar — im übersetzten Dialog.
+
+    Ohne geladenen Katalog zeigte jede Sprache die deutschen Texte; ob der Lauf
+    übersetzt maß, hing davon ab, ob ein früherer Test die Kataloge geladen
+    hatte (Nachprüfung U2, Nebenbefund).
+    """
     from PySide6.QtCore import QRect
 
-    from app.i18n import get_language, set_language
+    from app.i18n import get_language, set_language, tr
+    from app.i18n.catalog import install_language
     from app.ui.settings import UiSettings
     from app.ui.theme import apply_theme
 
     previous = get_language()
+    install_language(language)
     set_language(language)
+    assert language == "de" or tr("Abbrechen") != "Abbrechen", "Katalog geladen"
     apply_theme(qt_app, UiSettings().theme)
     dialog = rebuild.RebuildDialog(RebuildSession(profile), "obj_1")
     try:

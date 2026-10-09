@@ -479,17 +479,30 @@ def _copy_operation_matches(
 
 
 #: Der Namensraum eingesetzter Bausteine im Stapel (``knowledge.parts.ops``).
-#: Nur er: Einen Stand zum Wählen haben allein Rezepte, und ein Rezept wird
-#: immer eingesetzt — ``create_`` teilt es sich mit den Grundkörpern.
 _PART_PREFIX: Final = "insert_"
+
+#: Der Namensraum der Erzeuger. Einen Stand zum Wählen haben allein Rezepte,
+#: und seit RM-574 entsteht ein Rezept auch als eigener Körper. ``create_``
+#: teilt es sich mit den Grundkörpern; gilt also nur, wo ein Baustein dahinter
+#: steht (``part_of``).
+_CREATOR_PREFIX: Final = "create_"
 
 
 def _part_state_target(op_name: str, states: Mapping[str, str]) -> str | None:
     """Der Operationsname desselben Schritts mit dem Baustein aus ``states``."""
-    if not op_name.startswith(_PART_PREFIX):
-        return None
-    wanted = states.get(op_name[len(_PART_PREFIX) :])
-    return f"{_PART_PREFIX}{wanted}" if wanted else None
+    for prefix in (_PART_PREFIX, _CREATOR_PREFIX):
+        if not op_name.startswith(prefix):
+            continue
+        wanted = states.get(op_name[len(prefix) :])
+        if not wanted:
+            return None
+        if prefix == _CREATOR_PREFIX:
+            from app.core.knowledge.parts.ops import part_of
+
+            if part_of(op_name) is None:
+                return None
+        return f"{prefix}{wanted}"
+    return None
 
 
 def restore(document: Document, state: DocumentState) -> None:
@@ -542,6 +555,34 @@ def restore(document: Document, state: DocumentState) -> None:
 #: Sie bekommt die geplanten Operationen — mit ihren Ausgabekennungen — und
 #: liefert die Dokumentänderung dazu. Siehe :meth:`History.apply`.
 ChangeFn = Callable[[Sequence["Operation"]], DocumentChange | None]
+
+
+def _merged_params(entry: Operation, spec: Any, params: Mapping[str, Any]) -> dict[str, Any]:
+    """Die Werte eines geänderten Schritts — seine alten mit den neuen darüber.
+
+    **Ein Altmarker gilt dem gespeicherten Schritt, nicht seiner Änderung**
+    (``ParamSpec.dropped_on_change``): Ändert sich ein anderer Wert — oder
+    einer der Werte, die der Marker nennt —, rechnet der Schritt wie heute.
+    Wer alle Werte durchreicht, reicht den Marker unverändert mit; nur ein
+    ausdrücklich anderer Markerwert bleibt stehen.
+    """
+    merged = {**entry.params, **params}
+    markers = [item for item in spec.params.spec() if item.dropped_on_change]
+    marker_names = {item.name for item in markers}
+    altered = {
+        name
+        for name in params
+        if name not in marker_names and merged.get(name) != entry.params.get(name)
+    }
+    for item in markers:
+        watched = (
+            altered
+            if item.dropped_on_change is True
+            else altered & set(item.dropped_on_change or ())
+        )
+        if watched and merged.get(item.name) == entry.params.get(item.name):
+            merged.pop(item.name, None)
+    return merged
 
 
 def change_for(
@@ -1344,11 +1385,18 @@ class History:
             ),
         )
         self._forget_undone()
+        # **Neu gefasst wie beim Einfügen, nicht gelöscht** (RM-547): Der Zug
+        # setzt einen Schritt vor den Suffix und plant ihn unter neuen
+        # Kennungen neu — genau, was ``insert`` sagt. Mit der Zuordnung blenden
+        # Verlauf und Steckbrief die alten Zeilen aus, und eigene Titel folgen
+        # ihrem Schritt (``step_titles``); Dateien älterer Versionen lesen beides.
         transaction = Transaction(
             id=f"t{next(self._next_transaction)}",
             title=title,
             ops=tuple(entry.id for entry in planned),
             changes=changes,
+            revision="insert",
+            renumbered=dict(replaced_ids),
         )
         self.document.ops.extend(planned)
         self.document.transactions.append(transaction)
@@ -1718,27 +1766,7 @@ class History:
         # Ausgabe bekommt neue Objekte, sobald die Zahl sich ändert. Also
         # dieselbe Ausrichtung wie vor jeder Transaktion (:meth:`_reseed`).
         self._reseed()
-        merged = {**entry.params, **params}
-        # **Ein Altmarker gilt dem gespeicherten Schritt, nicht seiner Änderung**
-        # (``ParamSpec.dropped_on_change``): Ändert sich ein anderer Wert — oder
-        # einer der Werte, die der Marker nennt —, rechnet der Schritt wie heute.
-        # Wer alle Werte durchreicht, reicht den Marker unverändert mit; nur ein
-        # ausdrücklich anderer Markerwert bleibt stehen.
-        markers = [item for item in spec.params.spec() if item.dropped_on_change]
-        marker_names = {item.name for item in markers}
-        altered = {
-            name
-            for name in params
-            if name not in marker_names and merged.get(name) != entry.params.get(name)
-        }
-        for item in markers:
-            watched = (
-                altered
-                if item.dropped_on_change is True
-                else altered & set(item.dropped_on_change or ())
-            )
-            if watched and merged.get(item.name) == entry.params.get(item.name):
-                merged.pop(item.name, None)
+        merged = _merged_params(entry, spec, params)
         draft = OperationDraft(op=entry.op, inputs=entry.inputs, params=merged)
         outputs = self._outputs_for(spec, draft) if spec.produces_from else entry.outputs
         # **Dieselbe Zahl heißt nicht dieselben Körper.** Eine Auswahl aus
@@ -1865,6 +1893,15 @@ class History:
         activation.require(activation.CHANGE)  # schreibt ins Dokument (kern.md)
         entry = self.operation(op_id)
         spec = self._spec_of(entry)
+        self._check_inputs(entry, spec, inputs)
+        changed = dataclasses.replace(
+            entry, inputs=tuple(inputs), outputs=_outputs_following(entry, inputs)
+        )
+        _log.info("changed inputs of op %s (%s) to %s", op_id, entry.op, list(inputs))
+        return self._swap_operation(spec.title, entry, changed)
+
+    def _check_inputs(self, entry: Operation, spec: Any, inputs: Sequence[ObjectId]) -> None:
+        """Ob ``inputs`` vor ``entry`` da sind und so viele, wie ``spec`` nimmt."""
         # Entscheidend ist der Zustand vor diesem Schritt: Seine bisherigen
         # Eingänge dürfen verbraucht sein, spätere Ausgänge existieren hier nicht.
         known = self._known_objects(before=entry.id)
@@ -1888,12 +1925,6 @@ class History:
                 values={"op": entry.op, "expected": expected, "given": len(inputs)},
                 suggestions=(CHANGE_SELECTION, CANCEL),
             )
-
-        changed = dataclasses.replace(
-            entry, inputs=tuple(inputs), outputs=_outputs_following(entry, inputs)
-        )
-        _log.info("changed inputs of op %s (%s) to %s", op_id, entry.op, list(inputs))
-        return self._swap_operation(spec.title, entry, changed)
 
     def change_kernel(self, op_id: OpId, op_name: str, params: Mapping[str, Any]) -> Operation:
         """Stellt einen Schritt auf seinen Zwilling um — denselben Schritt im
@@ -1924,6 +1955,10 @@ class History:
         if op_name != entry.op:
             pairs = {(hidden, shown) for hidden, shown in MENU_TWINS.items()}
             if (op_name, entry.op) not in pairs and (entry.op, op_name) not in pairs:
+                if self._is_drawing(entry.op) and self._is_drawing(op_name):
+                    # Die Arten einer Zeichnung sind kein Kernpaar, aber derselbe
+                    # Weg durch Vorschau und Übernehmen (*Art* im Schrittdialog).
+                    return self.change_kind(op_id, op_name, params)
                 raise ValidationError(
                     field="op",
                     detail=_(
@@ -1970,6 +2005,111 @@ class History:
         changed = dataclasses.replace(entry, op=op_name, params=dict(params))
         _log.info("switched op %s from %s to %s", op_id, entry.op, op_name)
         return self._swap_operation(spec.title, entry, changed)
+
+    def change_kind(self, op_id: OpId, op_name: str, params: Mapping[str, Any]) -> Operation:
+        """Stellt einen Zeichnungsschritt auf eine andere Art um — *Art* im Schrittdialog (§30.1).
+
+        Ein aufgezogener Quader ist ein ``sketch_extrude``; wer ihn danach
+        drehen, entlangführen oder als Tasche schneiden will, wählt die Art im
+        Dialog des Schritts, statt neu zu zeichnen (RM-559, E1). Die Zeichnung
+        reist in ``params`` mit; die Eingänge folgen der neuen Art
+        (:meth:`kind_inputs`).
+
+        **Nur innerhalb der Zeichnungsfamilie** (Kategorie ``sketch``): Dort
+        ist ein Umriss der gemeinsame Kern jeder Art. Beliebige Schritte
+        gegeneinander zu tauschen wäre kein Bearbeiten mehr, sondern ein
+        Umschreiben der Geschichte (:meth:`change_kernel`, das hierher
+        weiterreicht).
+
+        Ein frisch angelegter Körper behält seine Kennung, wenn auch die neue
+        Art einen anlegt; arbeitet sie auf einem Eingang, trägt das Ergebnis
+        dessen Kennung. Was ein späterer Schritt danach nicht mehr findet, sagt
+        die Auswertung, wie beim Kernwechsel. Rücknehmbar ist der Wechsel wie
+        jede Änderung (§15.5).
+        """
+        activation.require(activation.CHANGE)  # schreibt ins Dokument (kern.md)
+        entry = self.operation(op_id)
+        before = self._spec_of(entry)
+        spec = self._registry.get(op_name)
+        if before.category != "sketch" or spec.category != "sketch":
+            raise ValidationError(
+                field="op",
+                detail=_(
+                    "Nur Schritte aus einer Zeichnung lassen sich auf eine andere Art umstellen."
+                ),
+                constraint="not_a_drawing",
+                values={"op": entry.op, "wanted": op_name},
+                suggestions=(CANCEL,),
+            )
+        chosen = self.kind_inputs(op_id, op_name)
+        if chosen is None:
+            raise ValidationError(
+                field="in",
+                detail=_("Die Operation erwartet eine andere Anzahl an Objekten."),
+                constraint="consumes",
+                values={"op": op_name, "expected": needed_inputs(spec), "given": 0},
+                suggestions=(CHANGE_SELECTION, CANCEL),
+            )
+        self._check_inputs(entry, spec, chosen)
+        self._check_params(spec.name, spec.params.spec(), params)
+        if chosen and spec.produces == spec.consumes:
+            outputs = chosen
+        elif (
+            spec.produces != VARIABLE
+            and len(entry.outputs) == spec.produces
+            and not set(entry.outputs) & set(entry.inputs)
+        ):
+            outputs = entry.outputs
+        else:
+            outputs = self._outputs_for(
+                spec, OperationDraft(op=op_name, inputs=chosen, params=dict(params))
+            )
+        changed = dataclasses.replace(
+            entry, op=op_name, inputs=chosen, params=dict(params), outputs=outputs
+        )
+        _log.info("changed kind of op %s from %s to %s", op_id, entry.op, op_name)
+        return self._swap_operation(spec.title, entry, changed)
+
+    def _is_drawing(self, op_name: str) -> bool:
+        """Ob ``op_name`` eine Art der Zeichnungsfamilie ist (Kategorie ``sketch``)."""
+        return self._registry.has(op_name) and self._registry.get(op_name).category == "sketch"
+
+    def kind_inputs(self, op_id: OpId, op_name: str) -> tuple[ObjectId, ...] | None:
+        """Worauf die Art ``op_name`` dieses Zeichnungsschritts arbeiten würde.
+
+        Leer für eine Art, die einen Körper anlegt. Eine Art mit Eingang nimmt
+        den Körper des Schritts, sonst den, auf dessen Fläche gezeichnet wurde.
+        ``None`` heißt: Sie bräuchte einen Körper, und es gibt keinen — die
+        Oberfläche sperrt sie dann in der Liste *Art* mit Grund.
+        """
+        entry = self.operation(op_id)
+        spec = self._registry.get(op_name)
+        wanted = needed_inputs(spec)
+        if wanted == 0:
+            return ()
+        body = entry.inputs[0] if entry.inputs else self._drawing_body(entry)
+        if wanted != 1 or not body or body not in self._known_objects(before=entry.id):
+            return None
+        return (body,)
+
+    def _drawing_body(self, entry: Operation) -> ObjectId | None:
+        """Der Körper, auf dessen Fläche die Zeichnung des Schritts liegt — oder keiner."""
+        from app.core.sketch.planes import feature_plane_parts, is_feature_plane
+        from app.core.sketch.serialize import sketch_from_text
+
+        for item in self._spec_of(entry).params.spec():
+            text = entry.params.get(item.name) if item.kind == "sketch" else None
+            if not isinstance(text, str) or not text.strip():
+                continue
+            try:
+                plane = sketch_from_text(text).plane
+            except AppError:
+                return None
+            if not is_feature_plane(plane):
+                return None
+            object_id, _feature = feature_plane_parts(plane)
+            return ObjectId(object_id) if object_id else None
+        return None
 
     def removal_closure(self, op_ids: Sequence[OpId]) -> tuple[OpId, ...]:
         """Die gewählten Schritte samt späteren, die ohne sie unerfüllbar wären.
@@ -2363,6 +2503,7 @@ class History:
         drafts: Sequence[OperationDraft],
         origin: Origin = USER_ORIGIN,
         changes: DocumentChange | ChangeFn | None = None,
+        changed: Mapping[OpId, Mapping[str, Any]] | None = None,
     ) -> RevisionPlan:
         """Neue Schritte **vor** ``before`` einfügen — geplant, nicht geschrieben (P7.1).
 
@@ -2379,6 +2520,17 @@ class History:
         Verbraucht ein neuer Schritt einen Körper, den ein späterer noch
         braucht, gibt es die Stelle nicht — das sagt die Absage, bevor
         irgendetwas gerechnet wird.
+
+        ``changed`` gibt einem späteren Schritt neue Werte, geprüft wie bei
+        :meth:`change_params` und in derselben Transaktion: Eine wieder
+        geöffnete Formsitzung legt so das Angleichen vor ihren Schritt und
+        ihre neuen Züge hinein — ein Strg+Z nimmt beides (Review F5). Die
+        Transaktion heißt dann wie ``title`` selbst, nicht „Eingefügt: …“ —
+        sie ist eine Änderung des späteren Schritts (Review N6). Eine Kennung,
+        die nicht ab ``before`` steht, oder ein Schritt, dessen Werte seine
+        Ausgänge nennen (``produces_from``), ist ein Programmfehler (Review N5):
+        Hier gibt es keine Hürde für andere Ausgänge, also auch keine solche
+        Änderung.
         """
         activation.require(activation.CHANGE)
         if not drafts:
@@ -2392,6 +2544,16 @@ class History:
         operations = self.operations
         index = self._position_of(before)
         prefix, suffix = operations[:index], operations[index:]
+        if changed:
+            later = {entry.id: entry for entry in suffix}
+            stray = sorted(set(changed) - set(later))
+            if stray:
+                raise InternalError(detail=f"plan_insert changed ids not after {before}: {stray}")
+            counting = [op_id for op_id in changed if self._spec_of(later[op_id]).produces_from]
+            if counting:
+                raise InternalError(
+                    detail=f"plan_insert cannot change steps that name their outputs: {counting}"
+                )
         self._reseed()
         active = _living_objects(prefix)
         structural = _structural_objects(prefix)
@@ -2406,8 +2568,20 @@ class History:
         subjects = tuple(entry.id for entry in planned)
         renumbered: dict[OpId, OpId] = {}
         for entry in suffix:
+            values = (changed or {}).get(entry.id)
+            edited = (
+                OperationDraft(
+                    op=entry.op,
+                    inputs=entry.inputs,
+                    params=_merged_params(entry, self._spec_of(entry), values),
+                    outputs=entry.outputs,
+                    seed=entry.seed,
+                )
+                if values is not None
+                else None
+            )
             try:
-                cloned = self._clone(entry, structural, renumbered)
+                cloned = self._clone(entry, structural, renumbered, edited)
             except ValidationError as problem:
                 if problem.constraint != "unknown_object":
                     raise
@@ -2425,7 +2599,7 @@ class History:
             renumbered[entry.id] = cloned.id
         transaction = Transaction(
             id=f"t{next(self._next_transaction)}",
-            title=_("Eingefügt: {step}", step=title),
+            title=title if changed else _("Eingefügt: {step}", step=title),
             ops=tuple(entry.id for entry in planned),
             origin=origin,
             changes=self._revision_changes(suffix, renumbered, settled),

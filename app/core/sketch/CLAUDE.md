@@ -34,7 +34,7 @@ schweigt, wenn sie sich nicht auflösen lässt, `frame_for_sketch` sagt warum;
 |---|---|
 | `solver.py` | Der 2D-Löser (`solve_sketch`) samt Zugmodus, Rang (`_matrix_rank`), Redundanz (`_losses`), Elementgleichungen (`_element_equations`), Kurvenbedingungen (`_curve_equation`, `CURVE_SLOTS`), `closest_on_spline` |
 | `profile.py` | Vom gelösten Element zum Umriss: `arc_sweep` (wie weit ein Bogen läuft), `EllipseFrame`/`ellipse_turn`, `spline_controls`, `path_of`, `flat_curve` (Punktfolge der Ansicht) |
-| `shapes.py` | Grundformen und Lochbilder; `grid_centres`, die mittige Rasterlage für Skizze und Feldschnitt |
+| `shapes.py` | Grundformen und Lochbilder; `grid_centres`, die mittige Rasterlage für Skizze und Feldschnitt; `rectangle_between`/`circle_around` (bemaßt, für das Aufziehen) und `simple_shape` (Einfachform für den Schrittdialog) |
 | `planes.py` | Wo eine Skizze liegt (oben) |
 | `edit.py` | Trimmen (so entsteht der Ellipsenbogen), Verlängern, Versetzen, Spiegeln; Ecken (`corner_at`, `fillet`, `chamfer`); Formen aus zwei Klicks (`polygon_at`, `slot_between`, `hole_grid_between`, `bolt_circle_at`); `project` (exakt über `brep.section`), `face_outline`, `ellipse_from_clicks`, Splinepunkte, `removed`; Strecken auf ein Maß (`scaled`, `stretched`); die Pläne der Kurvenbedingungen (`tangent_plan`, `curvature_plan`, `on_curve_plan`, `equal_axes_plan`, `taken_back`) |
 | `ops.py` | Die Operationen der Kategorie „Skizze"; `cut_regions`/`_cut_span` für Tasche und Übergangsschnitt; `_cut_with_tool` für die Schnitte mit Werkzeug; `sketch_join` teilt mit `sketch_extrude` `RaisedOutlineParams` |

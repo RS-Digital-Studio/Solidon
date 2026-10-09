@@ -231,6 +231,7 @@ class RibParams(BaseParams):
 
 @register_part(
     name="rib",
+    standalone=True,
     title=_("Versteifungsrippe"),
     group="structure",
     params=RibParams,
@@ -657,6 +658,7 @@ def _clip_closed(params: CableClipParams) -> TranslatableText | None:
 
 @register_part(
     name="cable_clip",
+    standalone=True,
     grip_from_profile=False,
     title=_("Kabelclip"),
     group="routing",
@@ -784,6 +786,7 @@ class GussetParams(BaseParams):
 
 @register_part(
     name="gusset",
+    standalone=True,
     title=_("Eckwinkel"),
     group="structure",
     params=GussetParams,

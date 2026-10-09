@@ -43,8 +43,16 @@ from PySide6.QtWidgets import (
 )
 
 from app.core.knowledge.parts import GROUPS, PARTS
+from app.core.knowledge.parts.ops import (
+    catalog_operation,
+    cuts_by_parameter,
+    fitting_places,
+    op_name,
+)
 from app.core.knowledge.parts.preview import SIZE, render
 from app.core.knowledge.parts.registry import PartSpec
+from app.core.registry.registry import FEATURE_TITLES
+from app.core.registry.surfaces import choice_label
 from app.i18n import tr
 from app.ui.leash import stop_watching_the_dying, weak_slot
 from app.ui.palette import ROLES
@@ -169,6 +177,23 @@ def _origin_words(spec: PartSpec) -> str:
     if spec.own:
         return tr("eigener Baustein")
     return ""
+
+
+def _in_own_library(spec: PartSpec) -> bool:
+    """Ob der Baustein als Datei im eigenen Bausteinordner liegt.
+
+    Gespeicherte Rezepte und aus Datei hinzugefügte Bausteine: nur sie lassen
+    sich weitergeben, bearbeiten und entfernen. **Nicht** ``PartSpec.own`` —
+    das zählt den ``.py``-Baustein mit und den hinzugefügten nicht, und ein
+    mitgereister gehört der Projektdatei. Eine Quelle für Weitergabe,
+    Verwaltungsknöpfe und den offenen Abschnitt (RM-680).
+    """
+    return getattr(spec, "source", "") in ("recipe", "imported")
+
+
+def _own_library_is_empty() -> bool:
+    """Ob es noch keinen Baustein im eigenen Bausteinordner gibt (RM-680)."""
+    return not any(_in_own_library(spec) for spec in PARTS.all())
 
 
 def describe(spec: PartSpec) -> str:
@@ -461,6 +486,7 @@ class PartCatalog(QDialog):
         self._way: str | None = None
         self._insert_allowed = True
         self._insert_reason = ""
+        self._chosen_kinds: tuple[str, ...] = ()
         self._feature_chosen = True
         """Ob im Objektbaum eine Fläche oder Bohrung gewählt ist.
 
@@ -596,10 +622,16 @@ class PartCatalog(QDialog):
             management_layout.addWidget(action, index // 2, index % 2)
         management_layout.addWidget(self.save_hint, 3, 0, 1, 2)
         management_layout.addWidget(self.share_hint, 4, 0, 1, 2)
+        # **Offen, solange es keinen eigenen Baustein gibt** (RM-680): Wer noch
+        # keinen hat, kommt über *Speichern* und *Hinzufügen* zu einem, und die
+        # Sperrgründe daneben sagen, was fehlt (§2.7). Hinter der zugeklappten
+        # Kopfzeile (48ffcf145) fand das niemand; in 0.5.1 lag es offen. Danach
+        # gilt der Merker (``remember``) — auch, wenn :meth:`_show_detail` den
+        # Abschnitt für einen eigenen Baustein geöffnet hat (RM-658).
         self.management_section = collapsible(
             tr("Bausteine verwalten"),
             management,
-            open_now=False,
+            open_now=_own_library_is_empty(),
             contents=tr(
                 "Eigene Bausteine speichern, aus Datei hinzufügen, weitergeben, "
                 "als OpenSCAD schreiben, bearbeiten, entfernen"
@@ -726,13 +758,18 @@ class PartCatalog(QDialog):
         self._way = key
         self.reject()
 
-    def set_feature_chosen(self, chosen: bool) -> None:
+    def set_feature_chosen(self, chosen: bool, kinds: Sequence[str] = ()) -> None:
         """Ob eine Fläche oder Bohrung gewählt ist — die zweite Bedingung.
 
-        Sie gilt **je Baustein** und nicht für den ganzen Katalog: Von den
-        Bausteinen wird der größere Teil an eine Stelle gesetzt, der Rest steht
-        frei (``standalone``; gezählt am 02.10.2026: 25 und 10 von 35). Eine
-        pauschale Sperre nähme den freistehenden den Weg, den sie haben.
+        ``kinds`` sind die Arten der gewählten Stellen; an ihnen entscheidet
+        ``catalog_operation``, ob ein eigenständiger Baustein dort ansetzt oder
+        frei entsteht.
+
+        Sie gilt **je Baustein** und nicht für den ganzen Katalog: Ein Teil der
+        Bausteine wird an eine Stelle gesetzt, der Rest steht frei
+        (``standalone``; wie viele, sagt das Register) und entsteht ohne Stelle
+        als eigener Körper. Eine pauschale Sperre nähme den freistehenden den
+        Weg, den sie haben.
 
         Und sie **sperrt nicht, sie sagt es** — anders als die Bedingung des
         Fensters darüber. Ein Baustein lässt sich auch über eine eingetragene
@@ -744,6 +781,7 @@ class PartCatalog(QDialog):
         Körper, hier die fehlende Stelle daran).
         """
         self._feature_chosen = chosen
+        self._chosen_kinds = tuple(kinds) if chosen else ()
         self._show_detail()
 
     def _insert_state(self, spec: PartSpec | None) -> tuple[bool, str]:
@@ -754,7 +792,15 @@ class PartCatalog(QDialog):
         Hinweis, weil der Weg über eine eingetragene Position offen bleibt.
         """
         if spec is not None and spec.standalone:
-            return True, ""
+            # Ohne passende Stelle entsteht er als eigener Körper (RM-562,
+            # ``catalog_operation``). Wo es einen Körper gäbe, an den er passt,
+            # sagt der Satz das vorher, statt ihn still daneben zu legen.
+            creates = catalog_operation(spec.name, at=self._chosen_kinds) != op_name(spec.name)
+            # Ohne Auskunft über die Art bleibt es beim Katalog wie zuvor.
+            told = not self._feature_chosen or bool(self._chosen_kinds)
+            if not (creates and told and (spec.at_face or spec.at_hole) and self._insert_allowed):
+                return True, ""
+            return True, standalone_note(spec, chosen=bool(self._chosen_kinds))
         if not self._insert_allowed:
             return False, self._insert_reason
         if spec is None:
@@ -1129,14 +1175,20 @@ class PartCatalog(QDialog):
         gebunden und wird nicht still in eine eigenständige Datei umgedeutet.
         """
         if spec is None:
+            # Ohne eigenen Baustein steht dieser Satz vorn im offenen Abschnitt
+            # (RM-680); „wählen Sie einen" schickte zu einem eingebauten und
+            # damit in die nächste Absage.
+            if _own_library_is_empty():
+                return False, tr(
+                    "Speichern Sie zuerst einen eigenen Baustein, um ihn weiterzugeben."
+                )
             return False, tr("Wählen Sie einen Baustein, den Sie als Datei weitergeben möchten.")
-        source = getattr(spec, "source", "")
-        if source == "travelled":
+        if getattr(spec, "source", "") == "travelled":
             return False, tr(
                 "Dieser Baustein gehört zur geöffneten Projektdatei. Speichern Sie ihn "
                 "zuerst als eigenen Baustein, um ihn weiterzugeben."
             )
-        if source not in ("recipe", "imported"):
+        if not _in_own_library(spec):
             return False, tr(
                 "Eingebaute Bausteine sind bereits in Solidon enthalten. Speichern Sie "
                 "zuerst einen eigenen Baustein, um ihn weiterzugeben."
@@ -1185,7 +1237,7 @@ class PartCatalog(QDialog):
         self.set_can_write_scad(
             spec is not None, tr("Wählen Sie zuerst einen Baustein aus der Bibliothek.")
         )
-        own = spec is not None and getattr(spec, "source", "") in ("recipe", "imported")
+        own = spec is not None and _in_own_library(spec)
         self.remove_part.setVisible(own)
         # Dieselbe Bedingung, und trotzdem eine eigene Zeile: Entfernen und
         # Bearbeiten sind zwei Handlungen, und die nächste Voraussetzung, die
@@ -1295,6 +1347,38 @@ def _range_warning(spec: PartSpec) -> str:
     if spec.range_passed is False:
         return tr("an den Grenzen kam kein brauchbarer Körper heraus")
     return tr("der Bereichstest ist für diesen Baustein nie gelaufen")
+
+
+def standalone_note(spec: PartSpec, *, chosen: bool) -> str:
+    """Der Satz über *Einsetzen*, wenn ein eigenständiger Baustein frei entsteht.
+
+    Ist eine Stelle gewählt, die nicht passt, nennt er die passende Art —
+    eine Schraube setzt an einer Bohrung an, an einer Fläche entsteht sie frei
+    (Review M3). Lässt der Erzeuger eine abtragende Wahl weg, sagt er, welche
+    Form bleibt: Der *Passstift und Passbohrung* entsteht frei nur als Stift.
+    """
+    if chosen:
+        fits = ", ".join(str(FEATURE_TITLES.get(kind, kind)) for kind in fitting_places(spec.name))
+        text = str(
+            tr("Passende Stelle: {fits}. An der gewählten entsteht er als eigener Körper.").format(
+                fits=fits
+            )
+        )
+    else:
+        text = str(
+            tr(
+                "Ohne passende Stelle entsteht er als eigener Körper. Wählen Sie im "
+                "Objektbaum die Stelle, an der er ansetzen soll."
+            )
+        )
+    cutting = cuts_by_parameter(spec.params)
+    if cutting is not None:
+        kept = next(entry.default for entry in spec.params.spec() if entry.name == cutting[0])
+        form = str(tr("Als eigener Körper entsteht nur die Form „{form}“.")).format(
+            form=choice_label(str(kept))
+        )
+        text = f"{text} {form}"
+    return text
 
 
 def detail(spec: PartSpec | None) -> str:

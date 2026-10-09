@@ -1869,6 +1869,19 @@ def _promoted_fields(spec: OperationSpec, given: Mapping[str, Any]) -> frozenset
     return frozenset(promoted)
 
 
+def simple_shape_of(text: str) -> str | None:
+    """``rectangle`` oder ``circle``, wenn die Zeichnung genau diese Form ist (RM-559, E11)."""
+    if not text.strip():
+        return None
+    from app.core.sketch.serialize import sketch_from_text
+    from app.core.sketch.shapes import simple_shape
+
+    try:
+        return simple_shape(sketch_from_text(text))
+    except AppError:
+        return None
+
+
 def even_value_fields(fields: Iterable[ValueField]) -> None:
     """Zahlenfelder, die untereinander stehen, so breit wie das breiteste.
 
@@ -1957,6 +1970,7 @@ class OperationDialog(QDialog):
         naming_default: bool = False,
         centre_objects: Sequence[SceneObject] = (),
         promote_values: bool = True,
+        front_fields: Sequence[str] = (),
     ) -> None:
         """``extra`` hängt ein Widget des Aufrufers unter „Weitere
         Einstellungen" — die zusammengelegten Menü-Zwillinge tragen dort
@@ -1974,6 +1988,8 @@ class OperationDialog(QDialog):
 
         ``promote_values=False`` behält beim Wiederöffnen die Schemaplätze:
         gespeicherte Werte und Ausdrücke sind keine neue Vorbelegung.
+        ``front_fields`` holt diese Felder trotzdem nach vorn — die Maße eines
+        aufgezogenen Quaders oder Zylinders (RM-559, E11), die man ändern will.
 
         ``extra_label`` beschriftet es. Leer für einen Haken: Der trägt
         seinen Text selbst, und eine Beschriftung daneben stünde zweimal
@@ -1992,6 +2008,7 @@ class OperationDialog(QDialog):
         super().__init__(parent)
         self.spec = spec
         self._promote_values = promote_values
+        self._front_fields = frozenset(front_fields)
         self._height = ContentHeight()
         self.setWindowTitle(str(spec.title))
         self.setMinimumWidth(380)
@@ -2128,7 +2145,7 @@ class OperationDialog(QDialog):
             # eines Vektors tippt niemand von Hand, und ihre zwei Geschwister
             # blieben hinten. Richtung und Achse bleiben, wo das Schema sie
             # hinlegt; der Wert gilt trotzdem.
-            decided = entry.name in promoted
+            decided = entry.name in promoted or entry.name in self._front_fields
             target = (
                 front
                 if entry.placement == "front" or isinstance(editor, ArmatureField) or decided
@@ -2377,7 +2394,18 @@ class OperationDialog(QDialog):
         layout.addLayout(hidden_expression_row)
         self._advanced_summary: QLabel | None = None
         self._advanced_section: QWidget | None = None
-        if advanced.rowCount() or extra is not None:
+        # Nur verborgene Migrationsmarker hinten öffnen keine Klappe, hinter
+        # der nichts Sichtbares liegt (``fixed_rest`` am Stellungsdialog); ihre
+        # Zeilen hängen dann an einem verborgenen Träger.
+        shown_behind = any(
+            self._rows.get(entry.name) is advanced and not entry.internal
+            for entry in spec.params.spec()
+        )
+        if advanced.rowCount() and not shown_behind and extra is None:
+            holder = QWidget(self)
+            holder.setLayout(advanced)
+            holder.hide()
+        elif advanced.rowCount() or extra is not None:
             # **Dieselbe Klappe wie in jedem anderen Dialog** (``panels.collapsible``,
             # RM-513): flache Überschrift mit Linie, und zugeklappt nennt sie die
             # ersten Felder dahinter. Die eigene Bauart davor sagte nicht, was
@@ -3510,6 +3538,22 @@ class OperationDialog(QDialog):
         # hoch. Waagerecht und senkrecht gelten auf jeder Ebene so, wie die
         # Zeichnung im Editor steht.
         drawn_titles = {"length": tr("Zeichnung waagerecht"), "width": tr("Zeichnung senkrecht")}
+        # **Ein Quader heißt nach seinen Maßen** (RM-559, E11): Breite und Tiefe,
+        # bei der Tasche Breite und Länge — dort heißt die dritte Zahl schon
+        # *Tiefe*, und zweimal derselbe Name in einem Dialog wäre eine Frage
+        # ohne Antwort. Ein Zylinder hat einen Durchmesser und keine zweite.
+        simple_titles = {
+            "rectangle": {
+                "length": tr("Breite"),
+                "width": tr("Länge") if self.spec.name == "sketch_pocket" else tr("Tiefe"),
+            },
+            "circle": {"length": tr("Durchmesser"), "width": tr("Zeichnung senkrecht")},
+        }
+        every_title = {
+            str(title)
+            for titles in (drawn_titles, *simple_titles.values())
+            for title in titles.values()
+        }
         docs = {name: str(entry.doc or "") for name, entry in declared.items()}
         seen_text: dict[str, str] = {}
         seen_extent: dict[str, tuple[float, float] | None] = {}
@@ -3580,13 +3624,19 @@ class OperationDialog(QDialog):
             from app.core.errors import AppError
             from app.core.sketch.edit import stretched
             from app.core.sketch.serialize import sketch_from_text, sketch_to_text
+            from app.core.sketch.shapes import held_point
             from app.ui.sketch_editor import SketchField
 
             field = self._editors.get(sketch_field)
             if not isinstance(field, SketchField):
                 return
             try:
-                result = stretched(sketch_from_text(text), factor, axis, self._parameter_values)
+                drawing = sketch_from_text(text)
+                # **Ein aufgezogener Körper wächst von seinem Ansatz weg**
+                # (RM-559, §30.1): Mit den Maßen vorn steht die erste Ecke
+                # bzw. die Mitte fest, nicht der Punkt am Ebenenursprung.
+                anchor = held_point(drawing) if self._front_fields else None
+                result = stretched(drawing, factor, axis, self._parameter_values, anchor)
             except AppError:
                 # Eine halbfertige Zeichnung ist im Dialog kein Fehlerfall —
                 # dieselbe Haltung wie in ``sketch_extent``.
@@ -3671,7 +3721,7 @@ class OperationDialog(QDialog):
                     if (
                         isinstance(label, QLabel)
                         and name in drawn_titles
-                        and label.text() == str(drawn_titles[name])
+                        and label.text() in every_title
                     ):
                         label.setText(str(declared[name].title))
                     if name in hidden:
@@ -3684,6 +3734,21 @@ class OperationDialog(QDialog):
                         _explain(editor, label, docs[name])
                     continue
                 if name in axis_of and isinstance(editor, ValueField):
+                    simple = simple_shape_of(text)
+                    titles = simple_titles.get(simple or "", drawn_titles)
+                    if name == "width" and simple == "circle":
+                        # Der Kreis hat keine zweite Zahl: Die senkrechte
+                        # Ausdehnung ist derselbe Durchmesser. Der Wert zieht
+                        # trotzdem mit, nur die Zeile steht nicht da.
+                        with QSignalBlocker(editor):
+                            editor.set_value(extent[axis_of[name]])
+                        if name not in hidden:
+                            hidden.add(name)
+                            self._rows[name].setRowVisible(editor, False)
+                        continue
+                    if name == "width" and name in hidden:
+                        hidden.discard(name)
+                        self._rows[name].setRowVisible(editor, True)
                     drawn = extent[axis_of[name]]
                     typed = editor.value()
                     # **Eine getippte Zahl ist eine Ansage, keine Anzeige.**
@@ -3725,7 +3790,7 @@ class OperationDialog(QDialog):
                     if label is not None:
                         label.setEnabled(True)
                     if isinstance(label, QLabel):
-                        label.setText(str(drawn_titles[name]))
+                        label.setText(str(titles[name]))
                     # **Ein geklemmtes Feld sagt, dass es klemmt.** Sonst
                     # steht dort 0,1, während die Zeichnung 0,06 misst — eine
                     # stille Ungenauigkeit ist schlimmer als eine genannte,
@@ -4249,7 +4314,7 @@ class OperationDialog(QDialog):
                 self._watch(editor)
                 if entry.kind in ("feature", "features") or entry.targets_feature:
                     editor.installEventFilter(self)
-                decided = entry.name in promoted
+                decided = entry.name in promoted or entry.name in self._front_fields
                 form = (
                     self._front
                     if entry.placement == "front" or isinstance(editor, ArmatureField) or decided
