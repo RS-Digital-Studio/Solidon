@@ -1008,13 +1008,18 @@ def test_the_way_out_stays_open_while_it_runs(
 
 
 def _wait_for_comfy_probe(dialog: Any, qt_app: QApplication) -> None:
-    """Stellt die entkoppelte Ordnerprüfung zu, statt synchrone Ergebnisse anzunehmen."""
-    from PySide6.QtTest import QTest
+    """Stellt die entkoppelte Ordnerprüfung zu, statt synchrone Ergebnisse anzunehmen.
 
-    deadline = time.monotonic() + 5
+    **Gewartet wird mit freigegebener GIL** (``ui_helpers.wait_until``):
+    ``QTest.qWait`` hält sie, und der Prüffaden bekam sie nach jedem Dateiblick
+    erst zurück, wenn das Warten endete. ``shutil.which`` sucht ``nvidia-smi``
+    unter Windows über jeden PATH-Eintrag und jede Endung — auf dem Läufer ohne
+    Treiber rund tausend Blicke, die in fünf Sekunden nicht durchkamen.
+    """
+    deadline = time.monotonic() + 60
     while dialog._probe_pending and time.monotonic() < deadline:
         qt_app.processEvents()
-        QTest.qWait(10)
+        time.sleep(0.01)
     qt_app.processEvents()
     assert not dialog._probe_pending, "Ordnerprüfung blieb im Wartezustand"
 
@@ -1381,7 +1386,7 @@ def test_slow_and_outdated_comfy_folder_probes_do_not_freeze_or_change_the_dialo
         deadline = time.monotonic() + 5
         while dialog._probe_running_generations and time.monotonic() < deadline:
             qt_app.processEvents()
-            QTest.qWait(10)
+            time.sleep(0.01)
         qt_app.processEvents()
         assert not dialog._probe_running_generations
         assert not dialog.weights.isEnabled() and dialog.weights.text() == "Modell ist schon da", (
@@ -1398,7 +1403,6 @@ def test_slow_and_outdated_comfy_folder_probes_do_not_freeze_or_change_the_dialo
 def test_a_late_failed_comfy_folder_probe_keeps_setup_locked_until_retry(
     qt_app: QApplication, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    from PySide6.QtTest import QTest
 
     from app.core.backends import comfy_setup
     from app.ui.comfy_dialog import ComfySetupDialog
@@ -1437,7 +1441,7 @@ def test_a_late_failed_comfy_folder_probe_keeps_setup_locked_until_retry(
         deadline = time.monotonic() + 2
         while not probe_started.is_set() and time.monotonic() < deadline:
             qt_app.processEvents()
-            QTest.qWait(10)
+            time.sleep(0.01)
         assert probe_started.is_set(), "die langsame Prüfung muss tatsächlich laufen"
 
         generation = dialog._probe_generation
@@ -1449,7 +1453,7 @@ def test_a_late_failed_comfy_folder_probe_keeps_setup_locked_until_retry(
         deadline = time.monotonic() + 2
         while generation in dialog._probe_running_generations and time.monotonic() < deadline:
             qt_app.processEvents()
-            QTest.qWait(10)
+            time.sleep(0.01)
         qt_app.processEvents()
 
         assert not dialog._probe_pending
@@ -1479,7 +1483,6 @@ def test_a_late_failed_comfy_folder_probe_keeps_setup_locked_until_retry(
 def test_a_late_successful_comfy_folder_probe_unlocks_setup_after_timeout(
     qt_app: QApplication, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    from PySide6.QtTest import QTest
 
     from app.core.backends import comfy_setup
     from app.ui.comfy_dialog import ComfySetupDialog
@@ -1509,7 +1512,7 @@ def test_a_late_successful_comfy_folder_probe_unlocks_setup_after_timeout(
         deadline = time.monotonic() + 2
         while not probe_started.is_set() and time.monotonic() < deadline:
             qt_app.processEvents()
-            QTest.qWait(10)
+            time.sleep(0.01)
         assert probe_started.is_set(), "die langsame Prüfung muss tatsächlich laufen"
 
         generation = dialog._probe_generation
@@ -1520,7 +1523,7 @@ def test_a_late_successful_comfy_folder_probe_unlocks_setup_after_timeout(
         deadline = time.monotonic() + 2
         while generation in dialog._probe_running_generations and time.monotonic() < deadline:
             qt_app.processEvents()
-            QTest.qWait(10)
+            time.sleep(0.01)
         qt_app.processEvents()
 
         assert dialog._probe_succeeded
@@ -1537,7 +1540,6 @@ def test_a_late_successful_comfy_folder_probe_unlocks_setup_after_timeout(
 def test_comfy_folder_probes_are_bounded_across_dialogs(
     qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from PySide6.QtTest import QTest
 
     from app.core.backends import comfy_setup
     from app.ui.comfy_dialog import ComfySetupDialog
@@ -1568,7 +1570,7 @@ def test_comfy_folder_probes_are_bounded_across_dialogs(
         deadline = time.monotonic() + 3
         while not probe_started.is_set() and time.monotonic() < deadline:
             qt_app.processEvents()
-            QTest.qWait(10)
+            time.sleep(0.01)
         assert probe_started.is_set(), "zwei Dateiblicke dürfen unabhängig geprüft werden"
         assert peak_active_probes == 2
 
@@ -1581,7 +1583,7 @@ def test_comfy_folder_probes_are_bounded_across_dialogs(
         deadline = time.monotonic() + 3
         while active_probes and time.monotonic() < deadline:
             qt_app.processEvents()
-            QTest.qWait(10)
+            time.sleep(0.01)
         for dialog in dialogs:
             dialog.release()
             dialog.deleteLater()
