@@ -230,6 +230,14 @@ Konstanten in Formelgestalt (`_cura_literal`).
   Kunststoff — geprüft wird an der **Modellbahn** mit und ohne Sperre, nicht
   an der Stütze. Geschrieben nur in die direkte Übergabe, nie in eine
   gespeicherte 3MF.
+- **Feine Schichten reisen als Höhenkurve je Objekt** (`slicer_keys.AS_HEIGHT_PROFILE`,
+  `writer._layer_heights`): `Metadata/layer_heights_profile.txt` für die Orca-Familie,
+  `Metadata/Slic3r_PE_layer_heights_profile.txt` für PrusaSlicer, beide mit
+  `object_id=<Stelle ab eins>|z;h;…`. Die Kurve beginnt mit der ersten Schicht als zweitem
+  Wert (sonst verwirft die Orca-Familie sie), endet genau auf der Oberkante des Objekts
+  (Toleranz 0,001 mm) und wird am Exportnetz gerechnet. Unter organischen Bäumen und neben
+  einem Reinigungsturm lehnen die Slicer sie ab (`Print::validate`); dort entfällt sie mit
+  Befund. Cura nimmt keine Kurve.
 - **CuraEngine bekommt kein 3MF, Curas Fenster schon** (`cura`): Für die
   Kommandozeile gibt `write_assembly` ein STL aller Teile der Platte, daneben
   je Teil ein Netz und eine Netzliste (`-s` nach `-l` gilt nur diesem Netz).

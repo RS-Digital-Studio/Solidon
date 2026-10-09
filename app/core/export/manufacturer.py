@@ -428,6 +428,7 @@ ORCA_PROCESS: Final[tuple[tuple[str, str, Reader], ...]] = (
     ("shell.wall_count", "wall_loops", _count),
     ("shell.top_layers", "top_shell_layers", _count),
     ("shell.bottom_layers", "bottom_shell_layers", _count),
+    ("shell.top_thickness", "top_shell_thickness", _number),
     (
         "shell.outer_wall_first",
         "wall_sequence",
@@ -1376,6 +1377,7 @@ PRUSA_PROCESS: Final[tuple[tuple[str, str, Reader], ...]] = (
     ("shell.wall_count", "perimeters", _count),
     ("shell.top_layers", "top_solid_layers", _count),
     ("shell.bottom_layers", "bottom_solid_layers", _count),
+    ("shell.top_thickness", "top_solid_min_thickness", _number),
     ("shell.outer_wall_first", "external_perimeters_first", _flag),
     (
         "shell.seam_position",

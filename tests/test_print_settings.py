@@ -1250,15 +1250,19 @@ UNREACHABLE: dict[str, dict[str, str]] = {
         "adhesion.kind": "kennt keine Art, nur die Maße — ``ADHESION_KEYS`` nullt die anderen.",
         "support.block_channels": "reist als Stützsperre in der 3MF (``AS_GEOMETRY``).",
         "support.spare_ledges": "reist als Stützsperre in der 3MF (``AS_GEOMETRY``).",
+        "layers.fine_layer_height": "reist als Höhenkurve in der 3MF (``AS_HEIGHT_PROFILE``).",
     },
     "orca": {
         "adhesion.kind": "in ``brim_type`` enthalten, das die Tabelle schreibt.",
         "support.block_channels": "reist als Stützsperre in der 3MF (``AS_GEOMETRY``).",
         "support.spare_ledges": "reist als Stützsperre in der 3MF (``AS_GEOMETRY``).",
+        "layers.fine_layer_height": "reist als Höhenkurve in der 3MF (``AS_HEIGHT_PROFILE``).",
     },
     "cura": {
         "support.block_channels": "reist als eigenes Netz (``AS_GEOMETRY``).",
         "support.spare_ledges": "reist als eigenes Netz (``AS_GEOMETRY``).",
+        "layers.fine_layer_height": "nimmt keine Höhenkurve, die Automatik wäre fast überall fein.",
+        "shell.top_thickness": "kennt keine Mindestdicke der Deckschichten, nur die Lagenzahl.",
         "shell.wall_generator": "CuraEngine rechnet immer mit variabler Bahnbreite.",
         "shell.precise_outer_wall": "wie oben — es gibt keinen Schalter dafür.",
         "adhesion.kind": "in ``adhesion_type`` enthalten, das die Tabelle schreibt.",
@@ -7242,6 +7246,18 @@ UNREACHED: Final[dict[tuple[str, str], str]] = {
         "Wirkt bei Cura, sobald die Lücke gewählt oder übernommen ist; ohne Wahl bleibt die "
         "Trennschicht zu einem Drittel dicht wie bei Creality und Elegoo "
         "(``handover._for_supports``). Diese Messung setzt den Wert ohne Wahl."
+    ),
+    ("layers.fine_layer_height", "prusa"): (
+        "Reist als Höhenkurve je Objekt in der 3MF, nicht als Wert "
+        "(``slicer_keys.AS_HEIGHT_PROFILE``); ``test_export`` prüft die Kurve."
+    ),
+    ("layers.fine_layer_height", "orca"): "Wie bei PrusaSlicer — dieselbe Kurve, eigener Name.",
+    ("layers.fine_layer_height", "cura"): (
+        "CuraEngine nimmt keine Höhenkurve; seine Automatik druckte den Drachen fast "
+        "überall fein (RM-586)."
+    ),
+    ("shell.top_thickness", "cura"): (
+        "Cura kennt keine Mindestdicke der Deckschichten, nur die Lagenzahl."
     ),
 }
 

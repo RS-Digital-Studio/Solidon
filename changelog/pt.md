@@ -85,6 +85,8 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Para PETG, o Solidon sugere arrefecimento total no suporte. Assim solta-se mais facilmente da peça.
 - Novo nas definições de impressão: *Camadas de separação inferiores*, *Folga na camada de separação* e *Arrefecimento total no suporte*.
 - O campo *Distância acima* chama-se agora *Distância acima e abaixo* e vale para os dois lados do suporte.
+- Onde cúpulas planas e formas pequenas mostrariam degraus, o Solidon sugere camadas finas só aí. A sugestão indica quanto mais tempo demora a impressão.
+- Novo nas definições de impressão: *Camadas finas* e *Espessura mínima superior*, para que as faces superiores sobre camadas finas fiquem fechadas.
 - Se o slicer recusar filamentos com temperaturas demasiado diferentes numa placa, o Solidon indica agora o motivo e o que fazer, em vez de dizer apenas que não foi criado nenhum ficheiro.
 - No diálogo de impressão, impressora, filamentos e qualidade ficam totalmente visíveis também com letra ampliada. As legendas longas passam para a linha seguinte.
 - O relatório de verificação calcula mais depressa e precisa de menos memória.

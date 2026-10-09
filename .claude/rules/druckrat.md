@@ -104,6 +104,17 @@ offenem Drucker. Übernommen wird auf Klick, nie von allein.
   `separate`); gegen die Übernahme gefragt, kam jede Zeile mit ihrer
   Gegenzeile wieder. Die Zeile nennt nur Teile mit ihrem Wert. Übergabe:
   `dateiformat.md`.
+- **Feine Schichten nur, wo Stufen zu sehen wären** (`advise._fine_layers`,
+  `slice/fine_layers.py`): aufwärts weisende Schrägen flacher als `STEP_SLOPE`
+  (dort wird die Stufe breiter als eine Bahn) über `STEPPED_AREA_WORTH` je
+  Millimeter Höhe; halbe Schicht, nie unter einem Viertel der Düse, nur wo sie
+  ein Viertel dünner wird. Der Grund nennt den Zeitanteil (`extra_time`).
+  Nicht für Cura (seine Automatik folgt dem flachsten Dreieck jeder Höhe und
+  wird fast überall fein), nicht neben einem Reinigungsturm und nicht unter
+  organischen Bäumen (`printed_style` in `organic`): Beides lehnen PrusaSlicer
+  und die Orca-Familie ab, und die Stütze geht vor. Ließe die Lagenzahl die
+  Oberseite unter `TOP_SHELL_MINIMUM`, kommt `shell.top_thickness` dazu.
+  Übergabe: `dateiformat.md`.
 - **Die kleine Standfläche wird auch je Fuß gefragt** (`advise._on_small_feet`):
   Erreicht keine von mehreren Inseln `SMALL_FOOTPRINT`, heißt es Brim — nur
   als Vorschlag. `for_part` fragt mit Profil jede Regel für `PART_PATHS`;

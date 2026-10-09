@@ -85,6 +85,8 @@ scrive in `website/version.json`.
 - Per il PETG Solidon suggerisce il raffreddamento pieno sul supporto. Così si stacca più facilmente dal pezzo.
 - Nuovo nelle impostazioni di stampa: *Strati di interfaccia inferiori*, *Spazio nell'interfaccia* e *Raffreddamento pieno sul supporto*.
 - Il campo *Spazio verso l'alto* ora si chiama *Spazio sopra e sotto* e vale per entrambi i lati del supporto.
+- Dove cupole piatte e forme piccole mostrerebbero gradini, Solidon suggerisce strati fini solo lì. Il suggerimento dice quanto dura in più la stampa.
+- Novità nelle impostazioni di stampa: *Strati fini* e *Spessore minimo superiore*, perché le superfici superiori sopra strati fini restino chiuse.
 - Se lo slicer rifiuta filamenti con temperature troppo diverse su un piatto, Solidon ora indica il motivo e la via d'uscita, invece di dire solo che non è stato creato alcun file.
 - Nella finestra di stampa, stampante, filamenti e qualità restano del tutto visibili anche con il testo ingrandito. Le etichette lunghe vanno a capo.
 - Il rapporto di verifica calcola più velocemente e richiede meno memoria.

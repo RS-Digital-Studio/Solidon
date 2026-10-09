@@ -86,6 +86,8 @@ dans `website/version.json`.
 - Pour le PETG, Solidon propose un refroidissement complet au support. Il se détache ainsi plus facilement de la pièce.
 - Nouveau dans les réglages d'impression : *Couches d'interface en bas*, *Écart dans l'interface* et *Refroidissement complet au support*.
 - Le champ *Espace au-dessus* s'appelle désormais *Espace dessus et dessous* et vaut pour les deux côtés du support.
+- Là où des dômes plats et de petites formes montreraient des marches, Solidon propose des couches fines, seulement là. La suggestion indique de combien l'impression s'allonge.
+- Nouveau dans les réglages d'impression : *Couches fines* et *Épaisseur minimale du dessus*, pour que les dessus sur des couches fines restent fermés.
 - Si le slicer refuse des filaments aux températures trop différentes sur un plateau, Solidon en donne désormais la raison et l'issue, au lieu de dire seulement qu'aucun fichier n'a été créé.
 - Dans la boîte de dialogue d'impression, imprimante, filaments et qualité restent entièrement visibles, même avec un texte agrandi. Les libellés longs passent à la ligne.
 - Le rapport de contrôle calcule plus vite et demande moins de mémoire.

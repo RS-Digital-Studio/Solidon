@@ -2628,3 +2628,158 @@ def test_the_rings_of_a_section_read_in_one_call_are_the_rings_one_by_one() -> N
         ring.wkb for ring in part.interiors
     ]
     assert analysis._without_slits(shape).equals_exact(shape, 0.0)
+
+
+# --- Feine Schichten: Schrägen mit sichtbaren Stufen (RM-586) -----------------------
+
+
+def _cap_area(radius: float, lowest: float, highest: float) -> float:
+    """Die Kugelzone, deren Normale zwischen ``lowest`` und ``highest`` Grad
+    gegen die Senkrechte steht: 2πR² (cos a − cos b)."""
+    return (
+        2.0
+        * math.pi
+        * radius**2
+        * (math.cos(math.radians(lowest)) - math.cos(math.radians(highest)))
+    )
+
+
+def test_only_the_shallow_cap_of_a_sphere_shows_steps() -> None:
+    """Eine Kugel legt Stufen nur oben, wo ihre Fläche flacher als 25° liegt —
+    eine Zone der Fläche 2πR²(cos 1° − cos 25°), ganz über R·cos 25°. Die
+    Unterseite zählt nicht (dort trägt die Stütze), und die ebene Spitze unter
+    einem Grad auch nicht."""
+    from app.core.slice import fine_layers
+
+    radius = 20.0
+    sphere = on_bed(trimesh.creation.icosphere(subdivisions=6, radius=radius))
+    edges = np.arange(0.0, 2.0 * radius + 0.2, 0.2)
+    areas = fine_layers.stepped_areas(sphere, edges)
+
+    expected = _cap_area(radius, fine_layers.FLAT_SLOPE, fine_layers.STEP_SLOPE)
+    assert float(areas.sum()) == pytest.approx(expected, rel=0.03)
+    lowest = radius + radius * math.cos(math.radians(fine_layers.STEP_SLOPE))
+    assert float(areas[edges[:-1] < lowest - 0.2].sum()) == pytest.approx(0.0, abs=1.0)
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        trimesh.creation.box(extents=(20.0, 20.0, 20.0)),
+        trimesh.creation.cylinder(radius=10.0, height=20.0, sections=128),
+        trimesh.creation.cone(radius=10.0, height=10.0, sections=128),
+    ],
+    ids=["Würfel", "Zylinder", "Kegel 45°"],
+)
+def test_walls_flat_tops_and_steep_slopes_show_no_steps(body: trimesh.Trimesh) -> None:
+    """Senkrechte Wände, ebene Deckflächen und eine Schräge von 45° legen keine
+    Stufe, die breiter ist als eine Bahn."""
+    from app.core.slice import fine_layers
+
+    mesh = on_bed(body)
+    edges = np.arange(0.0, mesh.bounds.maximum[2] + 0.4, 0.2)
+    assert float(fine_layers.stepped_areas(mesh, edges).sum()) == pytest.approx(0.0, abs=1e-9)
+
+
+def test_a_flat_cone_steps_over_its_whole_height() -> None:
+    """Ein Kegel mit 20° Neigung legt auf seiner ganzen Mantelfläche Stufen:
+    π·r·s, und der feine Bereich reicht vom Fuß bis zur Spitze."""
+    from app.core.slice import fine_layers
+
+    radius = 20.0
+    height = radius * math.tan(math.radians(20.0))
+    cone = on_bed(trimesh.creation.cone(radius=radius, height=height, sections=256))
+    centres = np.arange(0.1, height, 0.2)
+    edges = np.concatenate(([0.0], centres[1:] - 0.1, [height + 0.2]))
+    areas = fine_layers.stepped_areas(cone, edges)
+    slant = math.hypot(radius, height)
+    assert float(areas.sum()) == pytest.approx(math.pi * radius * slant, rel=0.01)
+
+    (band,) = fine_layers.fine_bands(centres, areas, 0.2)
+    assert band[0] == pytest.approx(0.0, abs=0.6)
+    assert band[1] == pytest.approx(height, abs=0.6)
+
+
+def test_the_analysis_carries_the_steps_of_each_layer() -> None:
+    """Die Druckanalyse trägt die Schrägfläche je Schicht, mit derselben
+    Summe wie die Messung am Netz; die Stützmessung fragt sie nicht."""
+    from app.core.slice import fine_layers
+
+    radius = 20.0
+    sphere = on_bed(trimesh.creation.icosphere(subdivisions=5, radius=radius))
+    full = slice_body(sphere, 0.2, first_layer_height=0.2, support_volume=False)
+    steps = [layer.stepped_area for layer in full.layers]
+    expected = _cap_area(radius, fine_layers.FLAT_SLOPE, fine_layers.STEP_SLOPE)
+    assert sum(steps) == pytest.approx(expected, rel=0.05)
+    assert all(
+        step == 0.0
+        for layer, step in zip(full.layers, steps, strict=True)
+        if layer.z < radius * (1.0 + math.cos(math.radians(fine_layers.STEP_SLOPE))) - 0.4
+    )
+    support = slice_body(sphere, 0.2, detail="support", support_volume=False)
+    assert all(layer.stepped_area == 0.0 for layer in support.layers)
+
+    (band,) = fine_layers.layer_bands(full.layers, 0.2)
+    assert band[0] > 2.0 * radius - 2.5 and band[1] == pytest.approx(2.0 * radius, abs=0.2)
+
+
+def test_the_height_profile_is_what_the_slicers_accept() -> None:
+    """Die Kurve, wie PrusaSlicer und die Orca-Familie sie annehmen: erste
+    Schicht fest und als zweiter Wert genau ihre Höhe, gerade Länge, der
+    letzte Punkt auf der Oberkante. Dazwischen normal, im Bereich fein, mit
+    einem Übergang von :data:`RAMP` davor und danach."""
+    from app.core.slice import fine_layers
+
+    profile = fine_layers.height_profile([(10.0, 14.0)], 30.0, 0.2, 0.1, 0.25)
+    assert len(profile) % 2 == 0 and len(profile) > 4
+    assert profile[:6] == (0.0, 0.25, 0.25, 0.25, 0.25, 0.2)
+    assert profile[-2] == 30.0
+    points = list(zip(profile[0::2], profile[1::2], strict=True))
+    assert (9.0, 0.2) in points and (10.0, 0.1) in points
+    assert (14.0, 0.1) in points and (15.0, 0.2) in points
+    assert all(a[0] <= b[0] for a, b in pairwise(points))
+
+    layers = fine_layers.printed_layers(profile, 30.0, 0.1)
+    assert layers[0] == (0.0, 0.25)
+    inside = [height for bottom, height in layers if 10.0 <= bottom < 14.0 - 0.1]
+    outside = [height for bottom, height in layers if 1.0 <= bottom < 8.8]
+    assert inside and all(height == pytest.approx(0.1) for height in inside)
+    assert outside and all(height == pytest.approx(0.2) for height in outside)
+    assert sum(height for _bottom, height in layers) == pytest.approx(30.0, abs=0.2)
+
+    # Ein Raft: Der Körper beginnt mit der normalen Schicht.
+    assert fine_layers.height_profile([(10.0, 14.0)], 30.0, 0.2, 0.1, None)[:2] == (0.0, 0.2)
+    # Kein Bereich, keine Kurve; ein Bereich bis zur Oberkante endet fein.
+    assert fine_layers.height_profile([], 30.0, 0.2, 0.1, 0.25) == ()
+    assert fine_layers.height_profile([(28.0, 31.0)], 30.0, 0.2, 0.1, 0.25)[-2:] == (30.0, 0.1)
+
+
+def test_short_bands_drop_and_close_ones_join() -> None:
+    """Ein Bereich unter :data:`MIN_BAND` bleibt normal; zwei, zwischen denen
+    weniger als :data:`JOIN_GAP` liegt, werden einer."""
+    from app.core.slice import fine_layers
+
+    centres = np.arange(0.1, 40.0, 0.2)
+    areas = np.zeros(len(centres))
+    areas[(centres > 5.0) & (centres < 8.0)] = 10.0
+    areas[(centres > 9.0) & (centres < 12.0)] = 10.0
+    areas[(centres > 20.0) & (centres < 20.3)] = 10.0
+    bands = fine_layers.fine_bands(centres, areas, 0.2)
+    assert len(bands) == 1
+    assert bands[0][0] == pytest.approx(4.6, abs=0.3) and bands[0][1] == pytest.approx(
+        12.4, abs=0.3
+    )
+
+
+@pytest.mark.parametrize(
+    ("layer", "nozzle", "expected"),
+    [(0.2, 0.4, 0.1), (0.28, 0.4, 0.14), (0.3, 0.6, 0.15), (0.16, 0.4, 0.1), (0.12, 0.4, None)],
+)
+def test_the_fine_height_halves_the_layer_but_not_below_a_quarter_nozzle(
+    layer: float, nozzle: float, expected: float | None
+) -> None:
+    """Halb so hoch, nie unter einem Viertel der Düse — und nur, wo es
+    wenigstens ein Viertel dünner wird als die normale Schicht."""
+    from app.core.slice import fine_layers
+
+    assert fine_layers.fine_height(layer, nozzle) == expected

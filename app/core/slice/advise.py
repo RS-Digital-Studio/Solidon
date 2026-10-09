@@ -36,6 +36,7 @@ from app.core.errors import (
 )
 from app.core.knowledge import print_settings as settings_table
 from app.core.log import get_logger
+from app.core.slice import fine_layers
 from app.core.slice.analysis import (
     OVERHANG_LAYER_WORTH_SUPPORT,
     OVERHANG_MARGIN,
@@ -424,6 +425,11 @@ def _combined_value(path: str, values: Sequence[object]) -> object:
     }
     if path in ranks:
         return max(values, key=lambda value: ranks[path].index(str(value)))
+    if path == "layers.fine_layer_height":
+        # Null heißt aus: Wo ein Körper feine Schichten will, bekommt er die
+        # feinste, die verlangt ist (RM-586).
+        wanted = [float(value) for value in values if isinstance(value, int | float) and value > 0]
+        return min(wanted) if wanted else values[0]
     if all(isinstance(value, bool) for value in values):
         return any(values)
     numbers = [value for value in values if isinstance(value, int | float)]
@@ -1353,6 +1359,19 @@ def _from_geometry(
             organic,
         )
 
+    # **Feine Schichten, wo das Modell feine Formen hat** (RM-586). Gefragt mit
+    # der Stützart, mit der das Teil druckt: Unter organischen Bäumen lehnen
+    # PrusaSlicer und die Orca-Familie eine Höhenkurve ab.
+    advice += _fine_layers(
+        settings,
+        profile,
+        result,
+        flavour,
+        whole_layers,
+        printed_style(settings, advice, declined),
+        organic,
+    )
+
     # **Über „automatisch“ nur, wo der Slicer nichts rechnet** (Entscheidung J,
     # :func:`_unanchored`): Orcas Auto-Brim fragt Höhe und Grundfläche selbst
     # und hält mehr als Solidons Brim fester Breite.
@@ -1588,6 +1607,91 @@ def _from_geometry(
     return advice
 
 
+def _fine_layers(
+    settings: PrintSettings,
+    profile: Profile,
+    result: SliceResult,
+    flavour: SlicerFlavour | None,
+    whole_layers: bool,
+    style: str,
+    organic: Collection[str],
+) -> list[SettingAdvice]:
+    """Feine Schichten an Kuppen und feinen Formen, dazwischen die normale Höhe
+    (RM-586, Recherche Nr. 9 und 10).
+
+    Vorgeschlagen, wo die Schichtanalyse flache Schrägen mit sichtbaren Stufen
+    findet (:func:`fine_layers.layer_bands`), mit dem Anteil, um den der Druck
+    länger dauert. Nicht neben einem Reinigungsturm (``whole_layers``): Er
+    verlangt auf der ganzen Platte dieselben Schichten. Und nicht unter
+    organischen Bäumen (``style`` in ``organic``): PrusaSlicer und die
+    Orca-Familie lehnen dann den Schnitt ab (``Print::validate``, „Variable
+    layer height is not supported with Organic supports“) — die Stütze geht
+    vor, denn ohne sie misslingt der Druck, ohne feine Schichten nur die Kuppe.
+    Und nicht für Cura: Es nimmt keine Kurve, und seine eigene Automatik
+    (``adaptive_layer_height_enabled``) richtet sich nach dem flachsten Dreieck
+    jeder Höhe — am Drachen 1 194 statt 650 Schichten, fein fast überall.
+
+    Mit feinen Schichten wird die Oberseite dünner; wo die Lagenzahl sie unter
+    :data:`fine_layers.TOP_SHELL_MINIMUM` ließe, kommt die Mindestdicke dazu.
+    """
+    layer = settings.layers.layer_height
+    if (
+        flavour == "cura"
+        or whole_layers
+        or (style != "none" and style in organic)
+        or not result.layers
+    ):
+        return []
+    advice: list[SettingAdvice] = []
+    fine = settings.layers.fine_layer_height
+    if fine <= EPS_GEOM:
+        candidate = fine_layers.fine_height(layer, profile.printer.nozzle_diameter)
+        if candidate is None:
+            return []
+        bands = fine_layers.layer_bands(result.layers, layer)
+        if not bands:
+            return []
+        first = settings.layers.first_layer_height
+        bottom = result.layers[0].z - first / 2.0
+        top = result.layers[-1].z + layer / 2.0 - bottom
+        heights = fine_layers.height_profile(
+            [(low - bottom, high - bottom) for low, high in bands],
+            top,
+            layer,
+            candidate,
+            None if settings.adhesion.kind == "raft" else first,
+        )
+        if not heights:
+            return []
+        share = fine_layers.extra_time(result.layers, heights, settings, bottom)
+        advice.append(
+            _advice(
+                settings,
+                path="layers.fine_layer_height",
+                value=candidate,
+                reason=_(
+                    "Glattere Kuppen und Details, rund {share} % mehr Druckzeit.",
+                    share=max(1, round(100.0 * share)),
+                ),
+            )
+        )
+        fine = candidate
+    minimum = fine_layers.TOP_SHELL_MINIMUM
+    if (
+        settings.shell.top_layers * fine < minimum - EPS_GEOM
+        and settings.shell.top_thickness < minimum - EPS_GEOM
+    ):
+        advice.append(
+            _advice(
+                settings,
+                path="shell.top_thickness",
+                value=minimum,
+                reason=_("Mit feinen Schichten bliebe die Oberseite sonst zu dünn."),
+            )
+        )
+    return advice
+
+
 def _from_fits(settings: PrintSettings, kinds: Sequence[str]) -> list[SettingAdvice]:
     """Wo Passungen im Spiel sind, entscheidet die Außenwand über das Maß.
 
@@ -1797,6 +1901,10 @@ PART_PATHS: Final = frozenset(
         "infill.density",
         "shell.wall_generator",
         "layers.line_width",
+        # Feine Schichten und die Oberseite darüber gehören dem Teil mit den
+        # feinen Formen (RM-586).
+        "layers.fine_layer_height",
+        "shell.top_thickness",
     }
 )
 
@@ -1843,6 +1951,8 @@ SLICED_PATHS: Final = frozenset(
         "speed.bridge",
         "cooling.minimum_layer_time",
         "cooling.minimum_speed",
+        "layers.fine_layer_height",
+        "shell.top_thickness",
     }
 )
 

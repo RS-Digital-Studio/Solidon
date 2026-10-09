@@ -86,6 +86,8 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Para PETG, Solidon sugiere refrigeración total en el soporte. Así se suelta más fácil de la pieza.
 - Nuevo en los ajustes de impresión: *Capas de separación inferiores*, *Hueco en la capa de separación* y *Refrigeración total en el soporte*.
 - El campo *Espacio superior* se llama ahora *Espacio arriba y abajo* y vale para ambos lados del soporte.
+- Donde cúpulas planas y formas pequeñas mostrarían escalones, Solidon sugiere capas finas solo allí. La sugerencia indica cuánto más dura la impresión.
+- Nuevo en los ajustes de impresión: *Capas finas* y *Grosor mínimo superior*, para que las caras superiores sobre capas finas queden cerradas.
 - Si el slicer rechaza filamentos con temperaturas demasiado distintas en una placa, Solidon indica ahora el motivo y qué hacer, en lugar de decir solo que no se creó ningún archivo.
 - En el diálogo de impresión, impresora, filamentos y calidad se ven enteros también con la letra ampliada. Las etiquetas largas pasan a la línea siguiente.
 - El informe de comprobación calcula más rápido y necesita menos memoria.

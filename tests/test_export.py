@@ -5846,3 +5846,92 @@ def test_the_binary_stl_is_byte_for_byte_what_trimesh_writes(
     ):
         expected = _trimesh.exchange.stl.export_stl(body)
         assert mesh_module.MeshData.of(body).to_stl() == expected
+
+
+# --- Feine Schichten als Höhenkurve (RM-586) ------------------------------------------
+
+
+def _dome_and_block() -> list[SceneObject]:
+    """Ein Klotz und eine Halbkugel: nur die Kuppe hat feine Formen."""
+    block = trimesh.creation.box(extents=(20.0, 20.0, 10.0))
+    block.apply_translation((-40.0, 0.0, 5.0))
+    sphere = trimesh.creation.icosphere(subdivisions=5, radius=20.0)
+    floor = trimesh.creation.box(extents=(60.0, 60.0, 30.0))
+    floor.apply_translation((0.0, 0.0, 15.0))
+    dome = trimesh.boolean.intersection([sphere, floor], engine="manifold")
+    return [
+        scene_object("obj_1", "Klotz", MeshData.of(block)),
+        scene_object("obj_2", "Kuppe", MeshData.of(dome)),
+    ]
+
+
+def _heights(written: Path, name: str) -> dict[int, list[float]]:
+    lines = zipfile.ZipFile(written).read(name).decode("utf-8").splitlines()
+    curves: dict[int, list[float]] = {}
+    for line in lines:
+        head, values = line.split("|")
+        curves[int(head.removeprefix("object_id="))] = [float(value) for value in values.split(";")]
+    return curves
+
+
+@pytest.mark.parametrize("flavour", ["orca", "prusa"])
+def test_fine_layers_travel_as_a_height_curve_of_the_part_that_wants_them(
+    tmp_path: Path, profile: Profile, flavour: SlicerFlavour
+) -> None:
+    """Übernommen sind feine Schichten; die Kuppe bekommt ihre Höhenkurve in
+    der Schreibweise beider Familien, der Klotz daneben keine. Die Kurve
+    beginnt mit der ersten Schicht als zweitem Wert — sonst verwirft die
+    Orca-Familie sie —, endet genau auf der Oberkante und wird nur oben fein."""
+    settings = print_settings.with_accepted(
+        print_settings.resolve(profile), "layers.fine_layer_height", 0.1
+    )
+    written, findings = write_assembly(
+        _dome_and_block(),
+        tmp_path,
+        project_name="t",
+        profile=profile,
+        settings=settings,
+        flavour=flavour,
+    )
+    first = settings.layers.first_layer_height
+    for name in (threemf.ORCA_LAYER_HEIGHTS_PATH, threemf.PRUSA_LAYER_HEIGHTS_PATH):
+        curves = _heights(written, name)
+        assert list(curves) == [2], "nur die Kuppe, das zweite Objekt"
+        curve = curves[2]
+        assert curve[:2] == [0.0, pytest.approx(first)]
+        assert curve[-2] == pytest.approx(20.0, abs=1e-3)
+        fine = [z for z, height in zip(curve[0::2], curve[1::2], strict=True) if height < 0.15]
+        assert fine and min(fine) > 15.0
+    assert "export.fine_layers_trees" not in {finding.code for finding in findings}
+
+
+def test_no_height_curve_under_organic_trees(tmp_path: Path, profile: Profile) -> None:
+    """Unter organischen Bäumen lehnt die Orca-Familie die Kurve ab
+    („Variable layer height is not supported with Organic supports“). Wer
+    beides wählt, bekommt die Bäume und einen Satz, warum die feinen Schichten
+    entfallen."""
+    settings = print_settings.with_choice(
+        print_settings.with_choice(
+            print_settings.resolve(profile), "layers.fine_layer_height", 0.1
+        ),
+        "support.style",
+        "tree",
+    )
+    written, findings = write_assembly(
+        _dome_and_block()[1:], tmp_path, project_name="t", profile=profile, settings=settings
+    )
+    assert threemf.ORCA_LAYER_HEIGHTS_PATH not in zipfile.ZipFile(written).namelist()
+    assert [
+        finding.object_id for finding in findings if finding.code == "export.fine_layers_trees"
+    ] == ["obj_2"]
+
+
+def test_cura_gets_no_height_curve(tmp_path: Path, profile: Profile) -> None:
+    """CuraEngine nimmt keine Kurve und bekommt auch keine Automatik als Ersatz
+    (``slicer_keys.NOT_TAKEN_BY``)."""
+    assert not slicer_keys.takes("cura", "layers.fine_layer_height")
+    settings = print_settings.with_choice(
+        print_settings.resolve(profile), "layers.fine_layer_height", 0.1
+    )
+    values = handover.as_mapping(settings, "cura")
+    assert not any(key.startswith("adaptive_layer_height") for key in values)

@@ -85,6 +85,8 @@ it into `website/version.json`.
 - For PETG, Solidon suggests full cooling at the support. It then comes off the part more easily.
 - New in the print settings: *Interface layers below*, *Interface gap* and *Full cooling at the support*.
 - The *Gap above* field is now called *Gap above and below* and applies to both sides of the support.
+- Where shallow domes and small shapes would show steps, Solidon suggests fine layers only there. The suggestion says how much longer the print takes.
+- New in the print settings: *Fine layers* and *Minimum top thickness*, so top surfaces over fine layers stay closed.
 - If the slicer refuses filaments whose temperatures are too far apart on one plate, Solidon now names the reason and the way out instead of only saying that no print file was made.
 - In the print dialog, printer, filaments and quality stay fully visible even with enlarged text. Long labels wrap instead.
 - The report calculates faster and needs less memory.

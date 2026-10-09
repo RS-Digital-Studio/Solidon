@@ -1458,3 +1458,106 @@ def test_every_reason_fits_under_the_table_of_the_print_dialog() -> None:
             if len(catalog.get(text, "")) > 70
         ]
         assert not wide, f"{language}: länger als 70 Zeichen: {wide}"
+
+
+# --- Feine Schichten (RM-586) ---------------------------------------------------------
+
+
+def _dome(radius: float = 20.0) -> MeshData:
+    """Eine Halbkugel auf der Platte: oben eine flache Kuppe, unten eine ebene
+    Standfläche, und keine Überhänge."""
+    sphere = trimesh.creation.icosphere(subdivisions=5, radius=radius)
+    floor = trimesh.creation.box(extents=(3.0 * radius, 3.0 * radius, 1.5 * radius))
+    floor.apply_translation((0.0, 0.0, 0.75 * radius))
+    dome = trimesh.boolean.intersection([sphere, floor], engine="manifold")
+    return MeshData.of(dome)
+
+
+def _fine_advice(
+    mesh: MeshData, settings: PrintSettings | None = None, **asked: object
+) -> list[SettingAdvice]:
+    profile = profiles.make_profile()
+    settings = settings or print_settings.resolve(profile)
+    result = slice_body(
+        mesh,
+        settings.layers.layer_height,
+        first_layer_height=settings.layers.first_layer_height,
+        support_volume=False,
+    )
+    return [
+        entry
+        for entry in advise.advise(settings, profile, result=result, bounds=mesh.bounds, **asked)  # type: ignore[arg-type]
+        if entry.path in {"layers.fine_layer_height", "shell.top_thickness"}
+    ]
+
+
+def test_a_dome_gets_fine_layers_with_the_extra_print_time() -> None:
+    """Die Kuppe einer Halbkugel legt Stufen; der Rat schlägt die halbe
+    Schichthöhe vor und nennt, um wie viel der Druck länger dauert. Mit fünf
+    Deckschichten zu 0,1 mm bliebe die Oberseite 0,5 mm dünn, also kommt die
+    Mindestdicke von 0,8 mm dazu."""
+    offered = {entry.path: entry for entry in _fine_advice(_dome(), flavour="orca")}
+    fine = offered["layers.fine_layer_height"]
+    assert fine.value == pytest.approx(0.1) and fine.was == pytest.approx(0.0)
+    share = fine.reason.values["share"]  # type: ignore[union-attr]
+    assert isinstance(share, int) and 1 <= share <= 30
+    assert "%" in str(fine.reason)
+    assert offered["shell.top_thickness"].value == pytest.approx(0.8)
+
+
+def test_a_box_gets_no_fine_layers() -> None:
+    """Ein Quader hat keine flache Schräge: kein Rat."""
+    raw = trimesh.creation.box(extents=(30.0, 30.0, 20.0))
+    raw.apply_translation((0.0, 0.0, 10.0))
+    assert _fine_advice(MeshData.of(raw), flavour="orca") == []
+
+
+@pytest.mark.parametrize(
+    "asked",
+    [
+        {"flavour": "cura"},
+        {"flavour": "orca", "whole_layers": True},
+    ],
+    ids=["Cura", "Reinigungsturm"],
+)
+def test_no_fine_layers_where_the_slicer_cannot_follow(asked: dict[str, object]) -> None:
+    """Cura nimmt keine Höhenkurve, und ein Reinigungsturm verlangt dieselben
+    Schichten auf der ganzen Platte: dort kein Rat."""
+    assert _fine_advice(_dome(), **asked) == []
+
+
+def test_no_fine_layers_under_organic_trees() -> None:
+    """Unter organischen Bäumen lehnen PrusaSlicer und die Orca-Familie eine
+    Höhenkurve ab; die Stütze geht vor. Gefragt wird die Art, mit der das Teil
+    druckt: Die Kuppe braucht keine Stütze, und mit dem Rat „keine“ gilt der
+    Rat zu den feinen Schichten — behält der Kunde seine Bäume, nicht."""
+    profile = profiles.make_profile()
+    settings = print_settings.with_path(print_settings.resolve(profile), "support.style", "tree")
+    trees = frozenset({"tree"})
+    kept = _fine_advice(
+        _dome(), settings, flavour="orca", organic=trees, declined=frozenset({"support.style"})
+    )
+    assert kept == []
+    paths = {entry.path for entry in _fine_advice(_dome(), settings, flavour="orca", organic=trees)}
+    assert "layers.fine_layer_height" in paths
+
+
+def test_a_thick_enough_top_needs_no_minimum() -> None:
+    """Trägt das Profil schon 0,8 mm Mindestdicke oder reichen die Lagen, bleibt
+    es beim Rat zu den feinen Schichten."""
+    profile = profiles.make_profile()
+    settings = print_settings.with_path(print_settings.resolve(profile), "shell.top_thickness", 1.0)
+    assert [entry.path for entry in _fine_advice(_dome(), settings, flavour="prusa")] == [
+        "layers.fine_layer_height"
+    ]
+    many = print_settings.with_path(print_settings.resolve(profile), "shell.top_layers", 8)
+    assert [entry.path for entry in _fine_advice(_dome(), many, flavour="prusa")] == [
+        "layers.fine_layer_height"
+    ]
+
+
+def test_fine_layers_combine_to_the_finest_wanted() -> None:
+    """Null heißt aus: Verlangt ein Körper feine Schichten, bekommt die Platte
+    sie, auch wenn der Würfel daneben nichts will."""
+    assert advise._combined_value("layers.fine_layer_height", [0.0, 0.1, 0.14]) == 0.1
+    assert advise._combined_value("layers.fine_layer_height", [0.0, 0.0]) == 0.0

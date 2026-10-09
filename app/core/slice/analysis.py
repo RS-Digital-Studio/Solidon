@@ -35,6 +35,7 @@ from app.core.errors import ValidationError
 from app.core.geom import kernel_process
 from app.core.geom.mesh import MeshData
 from app.core.knowledge.rules import OVERHANG_ANGLE_FACTOR, OVERHANG_LIMIT_DEGREES
+from app.core.slice import fine_layers
 from app.core.types import CancelToken, LayerInfo, Ring, SliceContour, SliceResult
 from app.core.units import EPS_GEOM, exact_cos, is_close, ring_area
 from app.i18n import _
@@ -413,8 +414,20 @@ def slice_body(
             bridge_from=span,
         )
 
-    for z, shape, metrics, contours in zip(
-        heights, sections, measured, section_contours, strict=True
+    # Die flachen Schrägen je Schicht (RM-586), in Bändern um die Schnitte: von
+    # der Unterkante bis zur Mitte zwischen zwei Schnitten, die letzte bis über
+    # die Oberkante. Die Orientierungssuche und die Stützmessung fragen sie nicht.
+    stepped = (
+        fine_layers.stepped_areas(
+            mesh,
+            np.concatenate(([low], (heights[1:] + heights[:-1]) / 2.0, [high + layer_height])),
+            cancelled=cancelled,
+        )
+        if detail == "full"
+        else np.zeros(len(heights))
+    )
+    for z, shape, metrics, contours, steps in zip(
+        heights, sections, measured, section_contours, stepped, strict=True
     ):
         if cancelled is not None:
             cancelled.raise_if_cancelled()
@@ -442,6 +455,7 @@ def slice_body(
                 else _to_polygons(metrics.overhang),
                 bridge_width=metrics.bridge_width,
                 taper_length=metrics.taper_length,
+                stepped_area=float(steps),
             )
         )
 

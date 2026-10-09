@@ -110,6 +110,8 @@ Nutzen da und sonst nichts.
 - Für PETG schlägt Solidon volle Kühlung an der Stütze vor. Sie löst sich so leichter vom Teil.
 - Neu in den Druckeinstellungen: *Trennschichten unten*, *Lücke in der Trennschicht* und *Volle Kühlung an der Stütze*.
 - Das Feld *Abstand nach oben* heißt jetzt *Abstand oben und unten* und gilt für beide Seiten der Stütze.
+- Wo flache Kuppen und kleine Formen Stufen zeigen würden, schlägt Solidon feine Schichten nur dort vor. Der Vorschlag sagt, wie viel länger der Druck dauert.
+- Neu in den Druckeinstellungen: *Feine Schichten* und *Deckschichten mindestens*, damit Oberseiten über feinen Schichten dicht bleiben.
 - Lehnt der Slicer Filamente mit zu verschiedenen Temperaturen auf einer Platte ab, nennt Solidon jetzt Grund und Ausweg, statt nur zu melden, dass keine Druckdatei entstand.
 - Im Druckdialog bleiben Drucker, Filamente und Qualität auch bei vergrößerter Schrift ganz sichtbar. Lange Beschriftungen brechen dafür um.
 - Der Prüfbericht rechnet schneller und braucht weniger Arbeitsspeicher.

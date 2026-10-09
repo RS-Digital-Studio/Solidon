@@ -2760,6 +2760,10 @@ def write_assembly(
                 entry, exported[entry.id], own_settings, profile, cancelled
             )
             findings += noted
+    heights, noted = _layer_heights(
+        chosen, exported, part_values, flavour, setup, towers, organic, cancelled
+    )
+    findings += noted
     parts = [
         threemf.AssemblyPart(
             mesh=exported[entry.id],
@@ -2767,6 +2771,7 @@ def write_assembly(
             slots=threemf.slots_for_object(entry),
             settings=part_values[entry.id].keys,
             support_blocker=blockers.get(entry.id),
+            layer_heights=heights.get(entry.id, ()),
             # Die Platte reist mit. Ohne Einschränkung auf eine gehen alle in
             # dieselbe Datei — und dann muss dort stehen, welches Teil auf
             # welche gehört, sonst legt der Slicer sie übereinander.
@@ -2935,6 +2940,79 @@ def _tower_cause(
     if "filaments" in causes:
         return "filaments"
     return "process" if "process" in causes else None
+
+
+def _layer_heights(
+    chosen: Sequence[SceneObject],
+    exported: Mapping[str, MeshData],
+    part_values: Mapping[str, _PartValues],
+    flavour: SlicerFlavour,
+    setup: SlicerSetup | None,
+    towers: Collection[int],
+    organic: Collection[str],
+    cancelled: CancelToken | None,
+) -> tuple[dict[str, tuple[float, ...]], list[Finding]]:
+    """Die Höhenkurve je Teil mit feinen Schichten (RM-586), für die 3MF.
+
+    Nur PrusaSlicer und die Orca-Familie lesen eine (Cura bekommt seine
+    Automatik als Wert, ``handover.as_mapping``). Gerechnet am Netz, das
+    hinausgeht (:func:`app.core.slice.fine_layers.profile_for`). Zwei Fälle
+    lehnt der Slicer ab, und dort entfällt die Kurve mit einem Satz: ein Teil
+    unter organischen Bäumen und eine Platte mit Reinigungsturm, der gleiche
+    Schichten für alle Teile verlangt (``Print::validate``).
+    """
+    from app.core.slice import fine_layers
+
+    heights: dict[str, tuple[float, ...]] = {}
+    findings: list[Finding] = []
+    if not slicer_keys.reads_assembly_file(flavour):
+        return heights, findings
+    for entry in chosen:
+        own = part_values[entry.id].effective
+        if own is None or own.layers.fine_layer_height <= EPS_GEOM:
+            continue
+        name = source_text(entry.name)
+        if own.support.style != "none" and own.support.style in organic:
+            findings.append(
+                Finding(
+                    code="export.fine_layers_trees",
+                    severity="warning",
+                    message=_(
+                        "„{name}“ stützt mit organischen Bäumen, und die druckt {slicer} nur mit "
+                        "gleichen Schichten. Mit Gitterstützen gelten die feinen Schichten.",
+                        name=name,
+                        slicer=setup.name if setup is not None else _("der Slicer"),
+                    ),
+                    values={"name": name},
+                    object_id=entry.id,
+                )
+            )
+            continue
+        if entry.plate in towers:
+            findings.append(
+                Finding(
+                    code="export.fine_layers_tower",
+                    severity="warning",
+                    message=_(
+                        "Neben „{name}“ steht ein Reinigungsturm, und der verlangt gleiche "
+                        "Schichten für alle Teile. Auf einer eigenen Platte gelten die feinen.",
+                        name=name,
+                    ),
+                    values={"name": name},
+                    object_id=entry.id,
+                )
+            )
+            continue
+        profile = fine_layers.profile_for(
+            exported[entry.id],
+            own.layers.layer_height,
+            own.layers.fine_layer_height,
+            None if own.adhesion.kind == "raft" else own.layers.first_layer_height,
+            cancelled=cancelled,
+        )
+        if profile:
+            heights[entry.id] = profile
+    return heights, findings
 
 
 def tower_plates(bodies: Sequence[SceneObject], setup: SlicerSetup | None) -> frozenset[int]:

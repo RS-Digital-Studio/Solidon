@@ -1233,6 +1233,13 @@ class LayerSettings:
     first_layer_height: float = 0.25
     line_width: float = 0.42
     first_layer_line_width: float = 0.45
+    fine_layer_height: float = 0.0
+    """Die Schichthöhe an Kuppen und feinen Formen (RM-586); null schaltet sie ab.
+
+    Wo genau, rechnet die Übergabe aus der Geometrie
+    (:mod:`app.core.slice.fine_layers`): PrusaSlicer und die Orca-Familie
+    bekommen eine Höhenkurve in der 3MF, Cura seine eigene Automatik mit
+    dieser Höhe als Untergrenze. Dazwischen bleibt :attr:`layer_height`."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -1242,6 +1249,13 @@ class ShellSettings:
     wall_count: int = 3
     top_layers: int = 5
     bottom_layers: int = 4
+    top_thickness: float = 0.0
+    """Wie dick die Deckschichten mindestens werden, in mm (RM-586).
+
+    Der Slicer legt so viele Lagen mehr, wie dafür nötig sind, in jeder Höhe
+    nach der Schicht, die dort liegt — mit feinen Schichten sonst dünner als
+    gedacht (Recherche Nr. 10). Null heißt: Solidon sagt nichts, es gilt die
+    Lagenzahl und was das Profil des Slicers trägt."""
     outer_wall_first: bool = False
     """Außenwand zuerst gibt die genauere Kontur, innen zuerst die bessere
     Haftung an Überhängen."""
@@ -2756,6 +2770,11 @@ class LayerInfo:
     Schicht, dazwischen fortgeschrieben — ein Keil ist eine Eigenschaft der
     Wand über ihre Höhe, und die Messung kostete an einer Vase ein Drittel der
     ganzen Analyse."""
+    stepped_area: float = 0.0
+    """Wie viel aufwärts weisende flache Schräge in dieser Schicht liegt, in mm²
+    (RM-586): Fläche, auf der jede Schicht eine sichtbare Stufe legt — Kuppen,
+    Schuppen, flache Rücken (:func:`app.core.slice.fine_layers.stepped_areas`).
+    Dort lohnen feine Schichten. Gemessen nur mit ``detail="full"``."""
 
 
 @dataclass(frozen=True, slots=True)

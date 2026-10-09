@@ -143,6 +143,20 @@ FIELDS: tuple[Field, ...] = (
         decimals=3,
         note=_("Breiter als die übrigen Bahnen — mehr Material auf dem Bett heißt mehr Haftung."),
     ),
+    Field(
+        "layers.fine_layer_height",
+        _("Feine Schichten"),
+        "layers",
+        unit="mm",
+        minimum=0.0,
+        maximum=0.6,
+        step=0.02,
+        decimals=3,
+        note=_(
+            "Schichthöhe an flachen Kuppen und feinen Formen, wo sonst Stufen zu sehen wären. "
+            "Dazwischen bleibt die normale Höhe. Null schaltet sie ab."
+        ),
+    ),
     # --- Wände ---
     Field(
         "shell.wall_count",
@@ -176,6 +190,20 @@ FIELDS: tuple[Field, ...] = (
         minimum=0,
         maximum=50,
         note=_("Volle Schichten auf dem Bett. Sie bestimmen, wie glatt die Unterseite wird."),
+    ),
+    Field(
+        "shell.top_thickness",
+        _("Deckschichten mindestens"),
+        "shell",
+        unit="mm",
+        minimum=0.0,
+        maximum=5.0,
+        step=0.1,
+        decimals=2,
+        note=_(
+            "So dick wird die Oberseite mindestens, auch wo die Schichten dünner sind. Der "
+            "Slicer legt dafür Lagen dazu. Null überlässt es der Lagenzahl."
+        ),
     ),
     Field(
         "shell.outer_wall_first",
