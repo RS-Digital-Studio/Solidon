@@ -404,9 +404,8 @@ Temperaturbefehle), nicht in `values_for`.
 ## CuraEngine rechnet keine Formeln
 
 In `fdmprinter.def.json` trägt jede abgeleitete Einstellung `value` und
-`default_value`; das Fenster rechnet den Ausdruck, die Rechenmaschine nimmt den
-Vorgabewert — ein geschriebener Wert erreicht die Schlüssel nicht, die aus ihm
-gerechnet werden. Die Erbkette (auch einer Druckerdefinition) löst CuraEngine
+`default_value`; CuraEngine nimmt den Vorgabewert, ein geschriebener Wert
+erreicht die aus ihm gerechneten Schlüssel nicht. Die Erbkette (auch einer Druckerdefinition) löst CuraEngine
 selbst auf und lädt Extruderzüge aus `machine_extruder_trains`, sofern `-d`
 den Ordner `extruders` nennt (mit `os.pathsep`).
 
@@ -436,7 +435,7 @@ Platzhalter, deshalb `handover._filled`:
 Setzt der Startcode selbst eine Temperatur (Platzhalter auf
 `material_bed_temperature…` oder eine Düsentemperatur, Kommentare
 ausgenommen), stehen `material_bed_temp_prepend`/`material_print_temp_prepend`
-auf `false`, wie Curas `StartSliceJob` im Fenster. Ohne Definition: `fdmprinter` und der Befund
+auf `false`, wie Curas `StartSliceJob`. Ohne Definition: `fdmprinter` und der Befund
 `slicer.cura_printer_unknown`, kein stiller Rückfall.
 
 ## Das Cura-Profil gehört dem Drucker, der in Cura aktiv ist
@@ -458,20 +457,20 @@ die **Horizontale** — für sie rechnet `_angle_from_horizontal` `90 − Wert`.
 
 Exit 0 und eine Datei sagen nicht, dass der Auftrag darin steht: **Nach** dem
 Lauf wird geprüft, was hineingehörte (`spools_left_out`). Jede neue Zusage an
-den Slicer braucht ein Merkmal, an dem man ihr Einlösen in der fertigen Datei
-erkennt. Gezählt werden **Flächen, nicht die Deklaration**.
+den Slicer braucht ein Merkmal, das ihr Einlösen in der fertigen Datei zeigt. Gezählt werden **Flächen, nicht die Deklaration**.
 
 ## Ein Absturz ist keine Absage
 
 `crashed()` trennt beide am Rückgabewert (POSIX: negative Signale; Windows:
 `NTSTATUS` ab `0xC0000000`) und steht **vor** den Ausgabeprüfungen.
+Absagecodes der Orca-Familie kommen unter Windows als DWORD, sonst als Byte
+(−62: 4294967234 oder 194); verglichen wird über `orca_refused`.
 
 ## Über Erfolg entscheidet die Druckdatei, nicht das Prozessende
 
 Läufe der Orca-Familie bekommen `finished=handover._result_written(target)`, und `process.run_limited`
 beendet den Baum `FINISHED_LINGER_SECONDS` nach dem gemeldeten Ergebnis.
-Gezählt wird nur eine **neue**, lesbare `result.json` dieses Laufs — eine
-ältere im Ordner des Kunden oder die des ersten Versuchs zählt nicht. Ein
+Gezählt wird nur eine **neue**, lesbare `result.json` dieses Laufs. Ein
 Slicer, der sein Ende sonst anzeigt, bekommt dieselbe Frage mit.
 
 ## Ein Wert gehört an einen Schlüssel, der dasselbe meint
