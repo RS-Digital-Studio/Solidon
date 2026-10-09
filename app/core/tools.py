@@ -25,6 +25,7 @@ muss, um weiterzukommen.
 
 from __future__ import annotations
 
+import re
 import subprocess
 import sys
 import time
@@ -92,11 +93,35 @@ class ExternalTool:
     über drei Minuten wäre die schlechtere Hälfte des Fehlers (§2.8).
     """
 
+    accepts: Callable[[Path], bool] | None = None
+    """Welche gefundenen Programme gelten — ``None``: jedes.
+
+    Der gemerkte Pfad steht bei :func:`discover.find_program` vorn, gleich was
+    er ist. Beim Slicer gilt nur, womit Solidon arbeitet
+    (:func:`is_supported_slicer`); sonst rechnete der Export mit einem
+    Programm, das keine Slicerliste mehr zeigt.
+    """
+
     def path(self) -> Path | None:
         """Die ausführbare Datei, wenn es eine gibt und sie gefunden wird."""
         if not self.executables:
             return None
-        return discover.find_program(self.id, self.executables)
+        found = discover.find_program(self.id, self.executables)
+        if found is None or self.accepts is None or self.accepts(found):
+            return found
+        # Den abgelehnten gemerkten Pfad übergehen; die Suche danach ist
+        # zwischengespeichert. Nur wenn auch ihr Fund nicht gilt, alle Fassungen.
+        found = discover.find_program(self.id, self.executables, remembered=False)
+        if found is None or self.accepts(found):
+            return found
+        return next(
+            (
+                entry
+                for entry in discover.find_programs(self.id, self.executables)
+                if self.accepts(entry)
+            ),
+            None,
+        )
 
     @property
     def startable(self) -> bool:
@@ -179,6 +204,60 @@ SLICERS: Final = (
     "cura",
 )
 
+#: Resin-Slicer, erkannt am Namen ihres Programms. Solidon übersetzt ihre
+#: Einstellungen nicht und sucht sie nicht; sie bekommen die Datei in ihr
+#: Fenster (§29, zweite Übergabeart) und werden über „Programm wählen …“
+#: gewählt. Verglichen wird ohne Leerzeichen und Bindestriche, damit „Lychee
+#: Slicer“ und „LycheeSlicer“ dasselbe Programm sind. Jedes andere Programm,
+#: dessen Familie Solidon nicht kennt, ist kein Slicer zur Wahl (Entscheidung
+#: Robert, 08.10.2026).
+RESIN_SLICERS: Final = (
+    "chitubox",
+    "lychee",
+    "photonworkshop",
+    "halotbox",
+    "voxeldance",
+    "preform",
+    "novamaker",
+    "formware",
+)
+
+#: Wie die Slicer heißen, die Solidon übersetzt — für den Satz, der ein fremdes
+#: Programm ablehnt. Jeder Name aus :data:`SLICERS` steckt in einem davon
+#: (``test_discover.py``), ein neuer Slicer bringt hier seinen Namen mit.
+SLICER_TITLES: Final = (
+    "PrusaSlicer",
+    "SuperSlicer",
+    "OrcaSlicer",
+    "Bambu Studio",
+    "ElegooSlicer",
+    "Creality Print",
+    "Anycubic Slicer Next",
+    "Cura",
+)
+
+
+def is_resin_slicer(name: str) -> bool:
+    """Ob ein Programm dieses Namens ein bekannter Resin-Slicer ist."""
+    plain = re.sub(r"[^0-9a-z]", "", name.casefold())
+    return any(fragment in plain for fragment in RESIN_SLICERS)
+
+
+def is_supported_slicer(program: Path | str) -> bool:
+    """Ob Solidon mit diesem Programm als Slicer arbeitet.
+
+    Eine Familie, deren Einstellungen es übersetzt
+    (:func:`app.core.export.slicer_keys.flavour_of`), oder ein Resin-Slicer, der
+    die Datei in sein Fenster bekommt (:func:`is_resin_slicer`). Ein anderes
+    Programm stand bis zum 08.10.2026 in jeder Slicerliste, sobald es einmal
+    gewählt war; seitdem bietet Solidon nur noch diese an (Entscheidung Robert).
+    """
+    from app.core.export.slicer_keys import flavour_of
+
+    name = Path(program).name
+    return flavour_of(name) is not None or is_resin_slicer(name)
+
+
 #: Die Slicer, die als Flatpak auf Flathub stehen, unter ihrer Kennung — samt
 #: Orcas früherer (``io.github.softfever``), die installiert weiterläuft.
 #: Gefunden wird jeder Slicer an seinem Namen (``discover.flatpak_app``); diese
@@ -198,6 +277,7 @@ TOOLS: Final[tuple[ExternalTool, ...]] = (
         title=_("Slicer"),
         what_for=_("Für die Druckdatei und die Gegenprobe aus dem G-Code."),
         executables=SLICERS,
+        accepts=is_supported_slicer,
     ),
     ExternalTool(
         id="ollama",
@@ -240,6 +320,26 @@ def by_id(tool_id: str) -> ExternalTool | None:
         if tool.id == tool_id:
             return tool
     return None
+
+
+def slicer_programs() -> tuple[Path, ...]:
+    """Die installierten Slicer, mit denen Solidon arbeitet, der gemerkte vorn.
+
+    Die eine Quelle für jede Slicerliste: Erststart, Einstellungen, Druckdialog
+    und Filamentübernahme. :func:`discover.find_programs` stellt den gemerkten
+    Pfad ungeprüft vorn hin; hier bleibt nur, was :func:`is_supported_slicer`
+    annimmt.
+    """
+    return tuple(
+        entry for entry in discover.find_programs("slicer", SLICERS) if is_supported_slicer(entry)
+    )
+
+
+def slicer_program() -> Path | None:
+    """Der Slicer, mit dem Solidon rechnet: der gemerkte, sonst der erste
+    gefundene — beide nur, wenn Solidon mit ihnen arbeitet."""
+    slicer = by_id("slicer")
+    return slicer.path() if slicer is not None else None
 
 
 @dataclass(frozen=True, slots=True)

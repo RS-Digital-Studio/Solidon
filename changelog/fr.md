@@ -44,6 +44,11 @@ dans `website/version.json`.
 
 - Sous Linux, Solidon crée désormais aussi le fichier d'impression avec Cura en Flatpak ou en AppImage.
 - La boîte de dialogue d'impression propose les imprimantes du slicer choisi, comme *Premiers pas* et *Réglages*. Une imprimante reprise ainsi reste liée à son slicer.
+- Dans la boîte de dialogue d'impression, le slicer se change comme dans *Premiers pas*, aussi via *Choisir le programme …* pour un slicer que Solidon ne trouve pas seul.
+- Une imprimante de la liste de Solidon et la même issue du slicer sont un seul appareil. La boîte de dialogue choisit le profil à la bonne buse, et le fichier contient le code de démarrage.
+- Seuls les slicers avec lesquels Solidon fonctionne sont proposés, plus les slicers pour résine comme ChituBox et Lychee. Bambu Studio en AppImage en fait désormais partie.
+- Le code de démarrage et le volume d'impression viennent uniquement de votre imprimante, pas d'un autre modèle de la même gamme.
+- La boîte de dialogue d'impression attribue les profils du slicer bien plus vite, à l'ouverture et après chaque changement de slicer.
 - La durée d'impression estimée est plus proche de celle du slicer, nettement plus pour les pièces avec supports.
 - La place des supports et du skirt sur le plateau se mesure désormais sous les seuls surplombs. Les pièces près du bord ne reçoivent plus d'avertissement injustifié.
 - Les suggestions acceptées ne laissent presque plus sans support les surplombs qui en ont besoin. *Garder les canaux libres* ne bloque plus que l'espace d'où un support ne pourrait plus être retiré.

@@ -11,6 +11,7 @@ from PySide6.QtCore import QSignalBlocker, Qt
 from PySide6.QtWidgets import QApplication, QDialog, QFileDialog
 
 from app.core import discover
+from app.core.errors import AppError
 from app.core.knowledge import profiles
 from app.core.types import PrinterProfile
 from app.ui import first_run
@@ -286,11 +287,12 @@ def test_slicer_survey_prefers_the_current_source_over_a_saved_namesake(
 def test_failed_slicer_worker_keeps_saved_custom_printers_and_current_choice(
     setup_dialog: FirstRunDialog, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Ein unbekannter Slicer verbirgt weder eigene Drucker noch deren aktuelle Auswahl.
+    """Ein Slicer ohne Familie verbirgt weder eigene Drucker noch deren aktuelle Auswahl.
 
-    Seit dem 22.09.2026 ist ein unbekanntes Programm kein Fehler mehr, sondern
+    Seit dem 22.09.2026 ist ein Programm ohne Familie kein Fehler mehr, sondern
     die Familie ``other`` (RM-071): Die Erhebung läuft durch und nennt keine
-    Drucker, und der Satz darunter sagt, warum.
+    Drucker, und der Satz darunter sagt, warum. Zur Wahl steht so eines seit
+    dem 08.10.2026 nur noch als Resin-Slicer.
     """
     monkeypatch.setattr(profiles, "user_profiles_dir", lambda: tmp_path)
     template = profiles.printer(profiles.DEFAULT_PRINTER)
@@ -298,7 +300,7 @@ def test_failed_slicer_worker_keeps_saved_custom_printers_and_current_choice(
     second = profiles.save_printer(replace(template, id="user-garage", title="Garage"))
     setup_dialog._fill_printers(tuple(profiles.printer_profiles()))
     setup_dialog.printer.setCurrentIndex(setup_dialog.printer.findData(first.id))
-    setup_dialog._fill_slicers((Path("unsupported-program.exe"),))
+    setup_dialog._fill_slicers((Path("CHITUBOX.exe"),))
     setup_dialog.slicer.setCurrentIndex(1)
 
     assert setup_dialog.wait_for_survey()
@@ -307,6 +309,70 @@ def test_failed_slicer_worker_keeps_saved_custom_printers_and_current_choice(
     assert setup_dialog.printer.findData(second.id) >= 0
     assert setup_dialog.printer.findData("__custom__") >= 0
     assert "kennt Solidon nicht" in setup_dialog.printer_state.text()
+
+
+def test_only_slicers_solidon_works_with_are_offered(
+    setup_dialog: FirstRunDialog, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """„erste schritte und druckdialog sollten auch nur die unterstützen slicer anzeigen“
+    (Robert, 08.10.2026).
+
+    Die Suche findet nur Namen aus Solidons Liste, aber der gemerkte Pfad steht
+    vorn, und über „Programm wählen …“ ließ sich jedes Programm wählen — danach
+    stand es in jeder Slicerliste. Die Liste filtert der Kern
+    (``test_discover.py::test_only_slicers_solidon_works_with_are_found``); hier
+    zählt, dass auch der gemerkte Eintrag beim Öffnen nicht erscheint.
+    """
+    foreign = tmp_path / "notepad.exe"
+    foreign.write_bytes(b"")
+    discover.remember_path("slicer", str(foreign))
+    again = FirstRunDialog(UiSettings())
+    try:
+        assert again.slicer.findData(str(foreign)) < 0, "auch nicht als gemerkter Slicer"
+    finally:
+        again.release()
+        discover.remember_path("slicer", "")
+
+
+def test_choosing_a_program_solidon_does_not_work_with_is_refused(
+    setup_dialog: FirstRunDialog, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """„Programm wählen …“ nimmt nur einen Slicer an — und sagt es, mit dem Weg zu einem anderen.
+
+    Ein Satz ohne Handlung wäre eine Sackgasse (Regel 17): Die Absage bietet
+    *Einen anderen Slicer auswählen* an, und der Knopf öffnet die Auswahl erneut.
+    """
+    monkeypatch.setattr(first_run.slicer_profiles, "discover_printers", lambda *_args: ())
+    monkeypatch.setattr(first_run.slicer_profiles, "chosen_machine", lambda *_args: "")
+    orca = tmp_path / "OrcaSlicer" / "orca-slicer.exe"
+    picks = iter([str(tmp_path / "notepad.exe"), str(orca)])
+    monkeypatch.setattr(
+        first_run.QFileDialog,
+        "getOpenFileName",
+        staticmethod(lambda *_args, **_kwargs: (next(picks), "")),
+    )
+    shown: list[AppError] = []
+
+    def refuse(error: AppError, _parent: object = None, handlers: object = None) -> None:
+        shown.append(error)
+        assert isinstance(handlers, dict)
+        handlers["choose_slicer"](error)
+
+    monkeypatch.setattr(first_run, "show_error", refuse)
+    setup_dialog._choose_slicer_file()
+
+    assert len(shown) == 1, "einmal abgelehnt"
+    assert "notepad.exe" in str(shown[0].detail)
+    assert "Bambu Studio" in str(shown[0].detail), "die Absage nennt die Slicer"
+    assert shown[0].suggestions[0].id == "choose_slicer"
+    assert Path(setup_dialog.slicer.currentData()) == orca, "die zweite Wahl gilt"
+
+    # *Abbrechen* lässt die Wahl, wie sie war.
+    picks = iter([str(tmp_path / "notepad.exe")])
+    monkeypatch.setattr(first_run, "show_error", lambda error, *_args: shown.append(error))
+    setup_dialog._choose_slicer_file()
+    assert len(shown) == 2
+    assert Path(setup_dialog.slicer.currentData()) == orca, "abgebrochen, nichts geändert"
 
 
 def test_choosing_a_slicer_printer_again_keeps_the_nozzle_from_the_print_dialog(
@@ -613,11 +679,13 @@ def test_a_remembered_slicer_in_another_case_is_the_one_used(
     first = tmp_path / "PrusaSlicer.exe"
     remembered = tmp_path / "OrcaSlicer.exe"
     found = (first, remembered)
+    for program in found:
+        program.write_bytes(b"")
     monkeypatch.setattr(discover, "remembered_path", lambda _key: _other_case(remembered))
     assert PrintSettingsDialog._choose_slicer(mock.Mock(), found) == remembered
 
     used: list[Path] = []
-    monkeypatch.setattr(filament_picker.discover, "find_programs", lambda *_args: found)
+    monkeypatch.setattr(discover, "find_programs", lambda *_args: found)
     monkeypatch.setattr(
         filament_picker, "detect", lambda path: used.append(path) or mock.Mock(flavour="orca")
     )
