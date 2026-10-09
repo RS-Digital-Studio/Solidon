@@ -81,6 +81,7 @@ it into `website/version.json`.
 - Where a support stands on the part, Solidon also suggests an interface layer below it so its foot leaves no marks. Under tree supports only with slicers that print it there.
 - Under tree supports and next to a prime tower, Solidon suggests the support gap in whole layers, the way the slicer prints it.
 - For PLA, Solidon suggests more clearance from tree supports beneath many fine tips. This leaves less residue from the tree tips there.
+- When many small overhangs need supports together, such as a chin with a sloped underside, the check report now names the spot.
 - For PETG, Solidon suggests full cooling at the support. It then comes off the part more easily.
 - New in the print settings: *Interface layers below*, *Interface gap* and *Full cooling at the support*.
 - The *Gap above* field is now called *Gap above and below* and applies to both sides of the support.

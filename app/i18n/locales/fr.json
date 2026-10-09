@@ -2629,6 +2629,7 @@
   "Diese Fläche hat keine geschlossene Öffnung. Wählen Sie eine andere Fläche oder zeichnen Sie den Dichtweg.": "Cette face ne comporte aucune ouverture fermée. Sélectionnez une autre face ou dessinez le tracé du joint.",
   "Diese Fläche hat keine geschlossene Öffnung. Zeichnen Sie einen Dichtweg oder wählen Sie eine andere Fläche.": "Cette face ne comporte aucune ouverture fermée. Dessinez un tracé de joint ou sélectionnez une autre face.",
   "Diese Fläche hängt frei über und braucht Stützen.": "Cette surface est en surplomb et a besoin de supports.",
+  "Viele kleine Überhänge hängen frei und brauchen zusammen Stützen.": "De nombreux petits porte-à-faux pendent librement et ont besoin ensemble de supports.",
   "Diese Fläche ist gewölbt — versetzen lässt sich nur eine ebene. Wählen Sie eine ebene Fläche, oder ändern Sie das Merkmal über seine Maße.": "Cette face est courbe — seule une face plane peut être déplacée. Choisissez une face plane, ou modifiez la caractéristique par ses cotes.",
   "Diese Fläche ist nicht eindeutig zusammenhängend. Wählen Sie eine andere Stelle auf dem Modell.": "La continuité de cette surface n'est pas établie sans ambiguïté. Choisissez un autre endroit sur le modèle.",
   "Diese Fläche ist nicht mehr vorhanden. Klicken Sie das Modell erneut an.": "Cette surface n'existe plus. Cliquez à nouveau sur le modèle.",

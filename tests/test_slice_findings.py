@@ -1880,6 +1880,27 @@ def test_a_cantilever_in_a_narrow_pocket_is_no_channel() -> None:
     assert "support.block_channels" not in {entry.path for entry in entries}
 
 
+@pytest.mark.parametrize("body", ["chin", "jaw"])
+def test_many_small_overhangs_get_a_finding_with_a_place(body: str) -> None:
+    """RM-572: Ein Kinn mit 18° flacher Unterseite zerfällt in Streifen bis
+    6,4 mm², zusammen 189 mm²; der Rat verlangt Stützen, der Bericht schwieg,
+    weil kein Stück 100 mm² erreicht. Jetzt nennt er die Stelle — an der
+    Unterseite, nicht irgendwo am Körper."""
+    from app.core.slice.findings import overhang_findings, small_overhang_findings
+
+    mesh = chin_over_chest() if body == "chin" else jaw_in_a_pocket(47.0)
+    result = slice_body(mesh, 0.2)
+    need = advise.support_need(result)
+
+    assert need.needed and overhang_findings("teil", result) == [], "kein großes Stück"
+    found = small_overhang_findings("teil", result, need)
+    assert [finding.code for finding in found] == ["slice.small_overhangs"]
+    location = found[0].location
+    assert location is not None
+    lowest = min(z for z in (layer.z for layer in result.layers) if z > 40.0)
+    assert lowest <= location[2] <= 50.0, "an der Unterseite des Kinns"
+
+
 @pytest.mark.parametrize("underside_at_wall", [47.0, 48.0])
 def test_a_sloped_cantilever_does_not_hold_on_to_itself(underside_at_wall: float) -> None:
     """Eine gewölbte Unterseite zerfällt im Schnitt in Streifen, und unter dem

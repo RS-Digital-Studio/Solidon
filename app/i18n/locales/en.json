@@ -2629,6 +2629,7 @@
   "Diese Fläche hat keine geschlossene Öffnung. Wählen Sie eine andere Fläche oder zeichnen Sie den Dichtweg.": "This face has no closed opening. Select another face or draw the seal path.",
   "Diese Fläche hat keine geschlossene Öffnung. Zeichnen Sie einen Dichtweg oder wählen Sie eine andere Fläche.": "This face has no closed opening. Draw a seal path or select another face.",
   "Diese Fläche hängt frei über und braucht Stützen.": "This surface overhangs freely and needs supports.",
+  "Viele kleine Überhänge hängen frei und brauchen zusammen Stützen.": "Many small overhangs hang free and together need supports.",
   "Diese Fläche ist gewölbt — versetzen lässt sich nur eine ebene. Wählen Sie eine ebene Fläche, oder ändern Sie das Merkmal über seine Maße.": "This face is curved — only a flat one can be pushed. Choose a flat face, or change the feature through its dimensions.",
   "Diese Fläche ist nicht eindeutig zusammenhängend. Wählen Sie eine andere Stelle auf dem Modell.": "This surface is not unambiguously connected. Choose another point on the model.",
   "Diese Fläche ist nicht mehr vorhanden. Klicken Sie das Modell erneut an.": "This surface no longer exists. Click the model again.",

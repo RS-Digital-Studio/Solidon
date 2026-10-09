@@ -42,6 +42,7 @@ from app.core.slice.analysis import (
     ledges,
     model_support,
     slice_body,
+    total_overhang,
 )
 from app.core.types import (
     CancelToken,
@@ -219,14 +220,26 @@ def body_findings(
     found = island_findings(entry.id, result, bottom)
     if profile.printer.is_resin:
         return found
-    found += overhang_findings(entry.id, result, cancelled=cancelled)
+    large = overhang_findings(entry.id, result, cancelled=cancelled)
+    found += large
+    # **Viele kleine Überhänge** (RM-572): Verlangt der Rat Stützen über die
+    # Summe vieler Streifen oder eine schräge Unterseite als Feld, schwieg der
+    # Bericht. Gefragt wird dieselbe Antwort wie im Rat, einmal je Körper und
+    # nur, wo kein großes Stück gemeldet ist und überhaupt Überhang steht.
+    need = (
+        advise.support_need(result, cancelled=cancelled)
+        if not large and total_overhang(result) > OVERHANG_REPORTED_FROM
+        else None
+    )
+    if need is not None:
+        found += small_overhang_findings(entry.id, result, need)
     found += [_placed(finding, entry.id) for finding in advise.located_warnings(result, profile)]
     # Eine Lage, die nach der Regel der Druckvorschläge keine Stütze braucht,
     # spart durch eine andere keine — dieselbe Frage wie ``orientation.stays``.
     if (
         search
         and result.support_volume >= ORIENT_WORTH_SUPPORT
-        and advise.support_need(result, cancelled=cancelled).needed
+        and (need or advise.support_need(result, cancelled=cancelled)).needed
     ):
         found += orientation_findings(entry.id, mesh, profile, cancelled=cancelled)
     return found
@@ -420,6 +433,58 @@ def overhang_findings(
             object_id=object_id,
             values={"z_mm": round(z, 2), "area_mm2": round(area, 1)},
             location=(float(spot.x), float(spot.y), float(z)),
+            source="internal",
+            suggestions=(ORIENT_FOR_PRINT, SHOW_SUPPORT_NEED),
+        )
+    ]
+
+
+def small_overhang_findings(
+    object_id: ObjectId, result: SliceResult, need: advise.SupportNeed
+) -> list[Finding]:
+    """Wo viele kleine Überhänge zusammen Stützen verlangen (RM-572).
+
+    Der Rat verlangt Stützen auch über die Summe vieler Streifen oder über eine
+    schräge Unterseite als Feld (RM-570); kein Stück davon erreicht
+    :data:`OVERHANG_REPORTED_FROM`, und :func:`overhang_findings` schwieg. Der
+    Drache: größtes Stück 23,7 mm², zusammen 1 492 mm². Gezeigt wird die
+    Schicht mit der meisten Überhangfläche außerhalb von Kanälen, an ihrem
+    größten Stück; Schichten, die ganz aus Kanal- und Randstücken bestehen
+    (``SupportNeed.quiet_layers``), zählen nicht. Ohne Stützbedarf nach dem Rat
+    — der Gitterbecher — gibt es keinen Befund, ebenso wenn nur Inseln ihn
+    tragen (die meldet :func:`island_findings`).
+    """
+    if not need.needed or need.overhang <= OVERHANG_REPORTED_FROM:
+        return []
+    best: tuple[float, int] | None = None
+    for index, layer in enumerate(result.layers):
+        if index in need.quiet_layers:
+            continue
+        area = sum(
+            ShapelyPolygon(piece.outline, piece.holes).area
+            for number, piece in enumerate(layer.overhangs)
+            if (index, number) not in need.model.channels
+        )
+        if area > 0.0 and (best is None or area > best[0]):
+            best = (area, index)
+    if best is None:
+        return []
+    _area, index = best
+    layer = result.layers[index]
+    pieces = [
+        ShapelyPolygon(piece.outline, piece.holes)
+        for number, piece in enumerate(layer.overhangs)
+        if (index, number) not in need.model.channels
+    ]
+    spot = max(pieces, key=lambda piece: piece.area).representative_point()
+    return [
+        Finding(
+            code="slice.small_overhangs",
+            severity="warning",
+            message=_("Viele kleine Überhänge hängen frei und brauchen zusammen Stützen."),
+            object_id=object_id,
+            values={"z_mm": round(layer.z, 2), "area_mm2": round(need.overhang, 1)},
+            location=(float(spot.x), float(spot.y), float(layer.z)),
             source="internal",
             suggestions=(ORIENT_FOR_PRINT, SHOW_SUPPORT_NEED),
         )

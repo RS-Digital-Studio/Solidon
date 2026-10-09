@@ -2629,6 +2629,7 @@
   "Diese Fläche hat keine geschlossene Öffnung. Wählen Sie eine andere Fläche oder zeichnen Sie den Dichtweg.": "Esta cara no tiene ninguna abertura cerrada. Seleccione otra cara o dibuje el recorrido de sellado.",
   "Diese Fläche hat keine geschlossene Öffnung. Zeichnen Sie einen Dichtweg oder wählen Sie eine andere Fläche.": "Esta cara no tiene ninguna abertura cerrada. Dibuje un recorrido de sellado o seleccione otra cara.",
   "Diese Fläche hängt frei über und braucht Stützen.": "Esta superficie sobresale sin apoyo y necesita soportes.",
+  "Viele kleine Überhänge hängen frei und brauchen zusammen Stützen.": "Muchos voladizos pequeños cuelgan libres y juntos necesitan soportes.",
   "Diese Fläche ist gewölbt — versetzen lässt sich nur eine ebene. Wählen Sie eine ebene Fläche, oder ändern Sie das Merkmal über seine Maße.": "Esta cara es curva: solo puede desplazarse una plana. Elija una cara plana o cambie la característica mediante sus medidas.",
   "Diese Fläche ist nicht eindeutig zusammenhängend. Wählen Sie eine andere Stelle auf dem Modell.": "No está claro que esta superficie sea continua. Elija otro punto del modelo.",
   "Diese Fläche ist nicht mehr vorhanden. Klicken Sie das Modell erneut an.": "Esta superficie ya no existe. Vuelva a hacer clic en el modelo.",

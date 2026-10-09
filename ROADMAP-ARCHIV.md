@@ -31,6 +31,7 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-09 | [RM-572: Der Prüfbericht nennt die Stelle, wo viele kleine Überhänge Stützen verlangen (09.10.2026)](#rm-572-der-prüfbericht-nennt-die-stelle-wo-viele-kleine-überhänge-stützen-verlangen-09102026) |
 | 2026-10-09 | [RM-680: Bausteine verwalten steht ohne eigenen Baustein offen (09.10.2026)](#rm-680-bausteine-verwalten-steht-ohne-eigenen-baustein-offen-09102026) |
 | 2026-10-09 | [RM-650: Ein eingefügtes Modell kommt in den Ausschnitt (09.10.2026)](#rm-650-ein-eingefügtes-modell-kommt-in-den-ausschnitt-09102026) |
 | 2026-10-09 | [RM-584 (Teil): Über Baumspitzen rät Solidon zwei Schichten Luft (09.10.2026)](#rm-584-teil-über-baumspitzen-rät-solidon-zwei-schichten-luft-09102026) |
@@ -27319,6 +27320,29 @@ nach einer Rücknahme bucht wirklich, eine abgewiesene Spule kommt in den Dialog
 zurück, die Übernahme aus dem Slicer überschreibt keine Handspule, Rücknahmen
 sind rücknehmbar, das Lager sichert seinen letzten lesbaren Stand selbst,
 Datumsfelder haben einen Kalender.
+
+## RM-572: Der Prüfbericht nennt die Stelle, wo viele kleine Überhänge Stützen verlangen (09.10.2026)
+
+<a id="rm-572-der-prüfbericht-nennt-die-stelle-wo-viele-kleine-überhänge-stützen-verlangen-09102026"></a>
+<a id="rm-572"></a>
+
+**Befund (08.10.2026, Review 3):** Der Überhangbefund meldete nur ein einzelnes Stück über
+100 mm². Verlangte der Rat Stützen über die Summe vieler Streifen oder eine schräge
+Unterseite als Feld (RM-570), schwieg der Bericht — am Kinn mit 18° (Streifen bis 6,4 mm²,
+zusammen 189 mm²) und am Drachen (größtes Stück 23,7 mm², zusammen 1 492 mm²).
+
+**Behoben:** `findings.small_overhang_findings` meldet „Viele kleine Überhänge hängen frei
+und brauchen zusammen Stützen.“ an der Schicht mit der meisten Überhangfläche außerhalb von
+Kanälen, an ihrem größten Stück, mit *Druckoptimal ausrichten* und *Stützbedarf zeigen*.
+Gefragt wird dieselbe Antwort wie im Rat (`advise.support_need`), einmal je Körper und nur
+ohne großes Stück; `body_findings` teilt sie mit der Lagensuche, die sie vorher ohnehin
+stellte. Ohne Stützbedarf nach dem Rat — der Gitterbecher — kein Befund.
+
+**Nachweis (09.10.2026):** `test_many_small_overhangs_get_a_finding_with_a_place` (Kinn und
+Kiefer mit schräger Unterseite, Ort an der Unterseite),
+`test_a_lattice_of_small_self_supporting_pieces_gets_no_supports` (Gitterbecher ohne
+Befund). Kosten: keine zusätzliche Feldfrage, wo der Bericht sie schon für die Lagensuche
+stellte. Changelog: ja.
 
 ## RM-027 entfällt mit dem privaten Index (09.09.2026)
 
