@@ -31,6 +31,7 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-10 | [RM-629: Ein schräger Schacht über einer Säule zählt, wenn der Kanalkreis Schicht für Schicht hindurchpasst (10.10.2026)](#rm-629-ein-schräger-schacht-über-einer-säule-zählt-wenn-der-kanalkreis-schicht-für-schicht-hindurchpasst-10102026) |
 | 2026-10-09 | [RM-571: Ein Sims im offenen Becher neben einem gesperrten Kanal behält seine Stütze (09.10.2026)](#rm-571-ein-sims-im-offenen-becher-neben-einem-gesperrten-kanal-behält-seine-stütze-09102026) |
 | 2026-10-09 | [RM-680: Bausteine verwalten steht ohne eigenen Baustein offen (09.10.2026)](#rm-680-bausteine-verwalten-steht-ohne-eigenen-baustein-offen-09102026) |
 | 2026-10-09 | [RM-650: Ein eingefügtes Modell kommt in den Ausschnitt (09.10.2026)](#rm-650-ein-eingefügtes-modell-kommt-in-den-ausschnitt-09102026) |
@@ -46283,3 +46284,40 @@ Himmel nicht mehr schneiden, werden übersprungen (Becher 0,64 → 0,28 s CPU, a
 gleich), und der senkrechte Schacht ist als Grenze benannt. Belege:
 `output/konsolidierung-2026-10-07/codex-claude/belege/lauf-a.md`. Changelog: nein (die
 Lücke entstand mit RM-566 im selben 0.6.0-Zyklus).
+
+## RM-629: Ein schräger Schacht über einer Säule zählt, wenn der Kanalkreis Schicht für Schicht hindurchpasst (10.10.2026)
+
+<a id="rm-629-ein-schräger-schacht-über-einer-säule-zählt-wenn-der-kanalkreis-schicht-für-schicht-hindurchpasst-10102026"></a>
+<a id="rm-629"></a>
+
+**Befund (Nachprüfung RM-571, 09.10.2026):** Ob eine Säule im umschlossenen Raum von oben
+erreichbar ist, fragte `_open_above` nur senkrecht. Ein schräges Loch der Weite 2R in einem
+Deckel der Dicke H zählte mit 2R / cos θ − H · tan θ: Am Becher mit Deckel und Loch Ø 34 mm um
+20° lag der Sims zu 64 statt 4 % im Sperrraum und druckte ohne Stütze. Ein Zickzackschacht brach
+die Rechnung mit einer `TopologyException` ab.
+
+**Behoben:** Ist senkrecht kein Schacht offen, schiebt `_shafts_pass` einen Kreis von
+`CHANNEL_WIDTH` Schicht für Schicht durch den Schacht, je Säule einmal für alle Scheiben: Ein
+freier Kreis bleibt, wo er ist, einer, den Material trifft, weicht um höchstens Schichthöhe ·
+`SHAFT_DRIFT` (Überhanggrenze) aus. Dass freie Kreise nicht wandern, hält die Entscheidung
+„offen über der Säule“ aus RM-571 (`test_open_sky_is_asked_at_each_slab`). `_clipped` repariert
+ungültige Zuschnitte. Warum, mit den beiden kleinen Grenzen (Unterkante eines Dachs, Lippe
+mitten im schrägen Schacht): `konzepte/begruendungen/regel-druckrat.md`, Abschnitt zur
+Kanalsperre.
+
+**Nachweis (10.10.2026):** Becher mit Deckel, Sims im Sperrraum vorher → nachher: Loch Ø 34 mm
+um 10°, 20°, 30°, 40°, −30° 64 → 4 %, Ø 30,2 mm um 20° 64 → 4 %, Ø 28 mm 64 → 64 %; Zickzack
+Ø 34 mm offen (vorher Abbruch), mit Ø 28 mm zu. Tests in `test_slice_findings.py`: Neigung 20°,
+30°, −30° und Zickzack (am Stand `219360698` rot), Engstelle in genau einer Schicht (29,5 zu,
+31 offen), Grenze synthetisch auch in einer Schicht (29,9 zu, 30,1 offen), Stufe mit 28 mm
+Überlappung (zu); Mutanten Drift 0, Drift 10, jede zweite Schicht, Radius 14 und „freie Kreise
+wandern“ werden je von mindestens einem Test gefangen. Im Slicer (Ø 34 mm um 20°, Vorschläge
+übernommen), Stützbahn unter dem Sims vorher → nachher (ohne Sperre): ElegooSlicer CC2 3,60 →
+7,49 m (6,33), OrcaSlicer Kobra 2 2,65 → 4,37 m (4,37), PrusaSlicer MK4S 1,78 → 3,83 m
+(3,81), Cura SV06 7,72 → 17,29 m (16,91); Tunnel 0,0 m wie vorher. Gegenprobe Ø 28 mm in
+ElegooSlicer und Cura vorher = nachher (2,69 und 7,69 m, Sperre bleibt). Becher, Drache 50 und
+130 %, Schüssel in Dateilage 55° und 60° und Eiffelturm: Scheiben gleich, CPU-Zeit des
+Sperrraums gleich (Becher 0,34 s, Drache 130 % 6,9 s); dort und an der Schüssel in Drucklage
+50° (186 704 mm³ wie vorher) fragt keine Säule nach dem Schacht;
+Drache im Druckrat (`sonde_rat.py`, CC2) gleich. Changelog: nein (die Sperre im umschlossenen
+Raum kam mit RM-566/RM-571 im selben 0.6.0-Zyklus, `git tag --contains` leer).
