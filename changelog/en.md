@@ -39,7 +39,7 @@ it into `website/version.json`.
 - In the parameter card, a dimension shows “Not used” only where that is true. The button says how many fixed numbers can be bound to dimensions.
 - The error report attaches a crash log only when Solidon actually crashed.
 - Large models load noticeably faster and need less memory, even with a long history and on computers with 8 GB.
-- Every new step is calculated as fast as the first, even when the history already has many steps.
+- Even in a long history, a new step takes hardly longer to calculate than the first.
 - Undo and redo are faster, and memory that is no longer needed is freed right away.
 - Resolving overlaps and exporting as 3MF are considerably faster.
 
@@ -58,7 +58,7 @@ it into `website/version.json`.
 - Where supports under small overhangs rest on the model, Solidon suggests tree supports. They leave fewer marks there.
 - For small tips, Solidon suggests a lower *Minimum slowdown speed* so they do not go soft. The setting reaches every slicer.
 - Narrow rims that hold up on their own stay free of support with *No support under rims*. Prints need noticeably less support that way.
-- The report and *Orient for printing* calculate faster and need less memory.
+- The report calculates faster and needs less memory.
 
 ### Threads, holes and standard parts
 

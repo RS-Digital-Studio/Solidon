@@ -40,7 +40,7 @@ dans `website/version.json`.
 - Dans la carte des paramètres, une cote n'affiche « Non utilisé » que si c'est le cas. Le bouton indique combien de nombres fixes peuvent être liés à des cotes.
 - Le rapport d'erreur ne joint un journal de plantage que si Solidon a vraiment planté.
 - Les grands modèles se chargent nettement plus vite et demandent moins de mémoire, même avec un long historique et sur des ordinateurs de 8 Go.
-- Chaque nouvelle étape se calcule aussi vite que la première, même quand l'historique compte déjà beaucoup d'étapes.
+- Même dans un long historique, une nouvelle étape ne prend guère plus de temps à calculer que la première.
 - Annuler et rétablir vont plus vite, et la mémoire devenue inutile est libérée aussitôt.
 - Résoudre les recouvrements et exporter en 3MF va nettement plus vite.
 
@@ -59,7 +59,7 @@ dans `website/version.json`.
 - Là où les supports sous de petits surplombs reposent sur le modèle, Solidon propose des supports arborescents. Ils y laissent moins de traces.
 - Pour les petites pointes, Solidon propose une *Vitesse minimale de ralentissement* plus basse afin qu'elles ne ramollissent pas. Le réglage parvient à chaque slicer.
 - Les rebords étroits qui se portent seuls restent libres avec *Rebords sans support*. L'impression demande ainsi nettement moins de support.
-- Le rapport de contrôle et *Orienter pour l'impression* calculent plus vite et demandent moins de mémoire.
+- Le rapport de contrôle calcule plus vite et demande moins de mémoire.
 
 ### Filetages, perçages et pièces normalisées
 

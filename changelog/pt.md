@@ -39,7 +39,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - No cartão de parâmetros, uma medida só mostra «Não utilizado» quando é o caso. O botão diz quantos números fixos se podem associar a medidas.
 - O relatório de erro só anexa um registo de falha quando o Solidon falhou mesmo.
 - Os modelos grandes carregam visivelmente mais depressa e precisam de menos memória, também com um histórico longo e em computadores com 8 GB.
-- Cada passo novo é calculado tão depressa como o primeiro, mesmo quando o histórico já tem muitos passos.
+- Mesmo num histórico longo, um passo novo quase não demora mais a calcular do que o primeiro.
 - Desfazer e refazer são mais rápidos, e a memória que já não é precisa fica logo livre.
 - Resolver sobreposições e exportar em 3MF é bastante mais rápido.
 
@@ -58,7 +58,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Onde os suportes sob pequenas saliências assentam no modelo, o Solidon sugere suportes em árvore. Aí deixam menos marcas.
 - Em pontas pequenas, o Solidon sugere uma *Velocidade mínima ao abrandar* mais baixa para que não amoleçam. A definição chega a qualquer slicer.
 - Os rebordos estreitos que se sustentam sozinhos ficam livres com *Rebordos sem suporte*. Assim a impressão precisa de bem menos suporte.
-- O relatório de verificação e *Orientar para impressão* calculam mais depressa e precisam de menos memória.
+- O relatório de verificação calcula mais depressa e precisa de menos memória.
 
 ### Roscas, furos e peças normalizadas
 

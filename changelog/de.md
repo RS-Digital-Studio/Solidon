@@ -64,7 +64,7 @@ Nutzen da und sonst nichts.
 - In der Parameterkarte steht unter einem Maß nur noch „Nicht verwendet“, wo das zutrifft. Wie viele feste Zahlen sich an Maße binden lassen, sagt der Knopf.
 - Der Fehlerbericht hängt ein Absturzprotokoll nur noch an, wenn Solidon wirklich abgestürzt ist.
 - Große Modelle laden spürbar schneller und brauchen weniger Arbeitsspeicher, auch mit langem Verlauf und auf Rechnern mit 8 GB.
-- Jeder neue Schritt rechnet so schnell wie der erste, auch wenn der Verlauf schon viele Schritte hat.
+- Auch in einem langen Verlauf rechnet ein neuer Schritt kaum länger als der erste.
 - Rückgängig und Wiederholen gehen schneller, und nicht mehr gebrauchter Arbeitsspeicher wird gleich wieder frei.
 - Das Auflösen von Überschneidungen und der Export als 3MF gehen deutlich schneller.
 
@@ -83,7 +83,7 @@ Nutzen da und sonst nichts.
 - Setzen Stützen unter kleinen Überhängen auf dem Modell auf, schlägt Solidon Baumstützen vor. Sie hinterlassen dort weniger Spuren.
 - Bei kleinen Spitzen schlägt Solidon ein niedrigeres *Mindesttempo beim Bremsen* vor, damit sie nicht weich werden. Die Einstellung geht an jeden Slicer.
 - Schmale Ränder, die sich selbst tragen, bleiben mit *Ränder ohne Stütze* frei. Der Druck braucht so deutlich weniger Stütze.
-- Der Prüfbericht und *Druckoptimal ausrichten* rechnen schneller und brauchen weniger Arbeitsspeicher.
+- Der Prüfbericht rechnet schneller und braucht weniger Arbeitsspeicher.
 
 ### Gewinde, Bohrungen und Normteile
 
