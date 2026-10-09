@@ -2510,7 +2510,7 @@ def _cura_appimage_dialog(
     """Ein Druckdialog mit einer AppImage-Cura, deren Kopie noch aussteht, im
     Betrieb der Anwendung: Der Fensterfaden wartet nie (``build_application``)."""
     from app.core.activation import store
-    from app.core.export import cura_linux
+    from app.core.export import appimage as image_copies
     from tests.cura_fakes import appimage_cura
 
     monkeypatch.setattr(store, "TRIAL_FROM", store.DEMO_FROM)
@@ -2518,8 +2518,8 @@ def _cura_appimage_dialog(
     mounts: list[Path] = []
     copies: list[Path] = []
     found, _point = appimage_cura(tmp_path, monkeypatch, mounts, copies=copies, **appimage)
-    monkeypatch.setattr(cura_linux, "_never_waits", None)
-    cura_linux.never_wait_in(threading.current_thread())
+    monkeypatch.setattr(image_copies, "_never_waits", None)
+    image_copies.never_wait_in(threading.current_thread())
     dialog = PrintSettingsDialog(session, UiSettings())
     assert dialog.wait_for_slicers(), "die Slicersuche kam nicht zurück"
     dialog._slicer_path = found
@@ -2597,6 +2597,41 @@ def test_a_dialog_closed_during_curas_copy_gets_no_rebase(
 
     assert closing < 1.0
     assert len(calls) == before
+
+
+def test_after_a_cleared_cache_a_new_search_brings_curas_printers_back(
+    qt_app: QApplication, session: Session, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Leert ein Aufräumprogramm den Nutzer-Cache, während Solidon läuft, fehlt die
+    Kopie von Curas Druckern. Die nächste Suche liest das Abbild neu, ohne
+    Neustart; der Fensterfaden nennt bis dahin keinen gelöschten Ordner. Vorher
+    behielt der Merker den Ordner, und Curas Drucker fehlten bis zum Neustart."""
+    import shutil
+
+    from app.core import discover
+    from app.core.export import cura_linux, slicer_profiles
+
+    monkeypatch.setattr(cura_linux.PRINTER_COPIES, "root", lambda: tmp_path / "cache")
+    dialog, copies = _cura_appimage_dialog(session, monkeypatch, tmp_path)
+    found = dialog._slicer_path
+    assert found is not None
+    dialog._start_profile_search()
+    assert dialog.wait_for_cura_printer(60_000)
+    QCoreApplication.processEvents()
+    assert slicer_profiles.install_root(found) is not None
+
+    shutil.rmtree(tmp_path / "cache")
+    gone = slicer_profiles.install_root(found)
+    discover.forget_cache()
+    dialog._start_profile_search()
+    assert dialog.wait_for_cura_printer(60_000)
+    QCoreApplication.processEvents()
+    again = slicer_profiles.install_root(found)
+    dialog.release()
+
+    assert gone is None, "kein gelöschter Ordner aus dem Fensterfaden"
+    assert again is not None and (again / "resources" / "definitions").is_dir()
+    assert copies == [found, found]
 
 
 @pytest.mark.parametrize("loader", [True, False])

@@ -23,6 +23,8 @@ import shutil
 import struct
 import subprocess
 import threading
+import time
+import tracemalloc
 from collections.abc import Callable, Mapping
 from pathlib import Path, PurePosixPath
 from typing import Any
@@ -89,9 +91,9 @@ AROUND: Tree = {
 @pytest.fixture(autouse=True)
 def _fresh_copies(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     """Kein Test erbt, was ein anderer schon kopiert oder verworfen hat."""
-    monkeypatch.setattr(appimage, "_copies", {})
-    monkeypatch.setattr(appimage, "_failed", {})
-    monkeypatch.setattr(appimage, "_cache_root", lambda: tmp_path / "cache")
+    monkeypatch.setattr(appimage.PROFILE_COPIES, "_kept", {})
+    monkeypatch.setattr(appimage.PROFILE_COPIES, "_failed", {})
+    monkeypatch.setattr(appimage.PROFILE_COPIES, "root", lambda: tmp_path / "cache")
     (tmp_path / "config").mkdir()
     monkeypatch.setattr(sp, "config_base", lambda _executable: str(tmp_path / "config"))
 
@@ -188,7 +190,7 @@ def test_a_fresh_orca_appimage_offers_the_printers_of_its_maker(
     assert [printer.title for printer in found] == ["Acme One 0.4 nozzle"]
     assert found[0].build_volume == pytest.approx((220, 220, 250))
     root = sp.install_root(image)
-    assert root is not None and root.is_relative_to(appimage._cache_root())
+    assert root is not None and root.is_relative_to(appimage.PROFILE_COPIES.root())
     names = {profile.name for profile in sp.find_profiles(image, "orca")}
     assert names == {"Acme One 0.4 nozzle", "0.20mm Standard @Acme"}
 
@@ -208,7 +210,7 @@ def test_the_copy_is_made_once_per_version_and_cleared_with_the_appimage(
     first = appimage.profiles(image)
     assert first is not None
     # Ein zweiter Solidon, oder dieser nach einem Neustart: die Marke genügt.
-    monkeypatch.setattr(appimage, "_copies", {})
+    monkeypatch.setattr(appimage.PROFILE_COPIES, "_kept", {})
     assert appimage.profiles(image) == first
     assert reads == [image]
 
@@ -234,7 +236,7 @@ def test_a_cleared_cache_is_read_again(tmp_path: Path) -> None:
     image = _orca(tmp_path)
     first = appimage.profiles(image)
     assert first is not None
-    shutil.rmtree(appimage._cache_root())
+    shutil.rmtree(appimage.PROFILE_COPIES.root())
     again = appimage.profiles(image)
     assert again is not None and (again / "Acme.json").is_file()
 
@@ -242,18 +244,38 @@ def test_a_cleared_cache_is_read_again(tmp_path: Path) -> None:
 def test_the_window_thread_never_waits_for_the_profile_copy(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Im Fensterfaden gilt nur, was schon abgelegt ist; die Erhebung legt es an."""
+    """Im Fensterfaden gilt nur, was schon abgelegt ist; die Erhebung legt es an.
+
+    Auch während ein Arbeiter gerade kopiert, antwortet der Fensterfaden sofort
+    mit „noch nicht“ — er nimmt die Sperre des Kopierers nicht. Die Kopie hier
+    dauert zwei Sekunden, gefragt wird mittendrin.
+    """
     image = _orca(tmp_path)
-    monkeypatch.setattr(cura_linux, "_never_waits", None)
-    cura_linux.never_wait_in(threading.current_thread())
+    copying = threading.Event()
+    original = appimage.copy_profiles
+
+    def slow(source: Path, target: Path) -> int:
+        copying.set()
+        time.sleep(2.0)
+        return original(source, target)
+
+    monkeypatch.setattr(appimage, "copy_profiles", slow)
+    monkeypatch.setattr(appimage, "_never_waits", None)
+    appimage.never_wait_in(threading.current_thread())
     assert sp.install_root(image) is None
-    assert not appimage._cache_root().exists()
+    assert not appimage.PROFILE_COPIES.root().exists()
 
     worker = threading.Thread(target=sp.install_root, args=(image,))
     worker.start()
+    assert copying.wait(10.0), "der Arbeiter hat nicht zu kopieren begonnen"
+    started = time.monotonic()
+    during = sp.install_root(image)
+    waited = time.monotonic() - started
     worker.join(60.0)
 
-    monkeypatch.setattr(appimage, "_copies", {})
+    assert during is None
+    assert waited < 1.0, f"der Fensterfaden wartete {waited:.1f} s auf den Arbeiter"
+    monkeypatch.setattr(appimage.PROFILE_COPIES, "_kept", {})
     root = sp.install_root(image)
     assert root is not None and (root / "Acme.json").is_file()
 
@@ -305,7 +327,11 @@ def test_an_unreadable_appimage_leaves_the_list_empty_without_failing(
 
     assert sp.install_root(image) is None
     assert sp.discover_printers(image, "orca") == ()
-    leftovers = list(appimage._cache_root().glob("*")) if appimage._cache_root().exists() else []
+    leftovers = (
+        list(appimage.PROFILE_COPIES.root().glob("*"))
+        if appimage.PROFILE_COPIES.root().exists()
+        else []
+    )
     assert leftovers == []
 
     folder = Path(sp.config_base(image)) / "OrcaSlicer"
@@ -337,12 +363,266 @@ def test_a_block_never_unpacks_beyond_its_size(compression: str) -> None:
         unpack(pack(bytes(1 << 24)), 4096)
 
 
+@pytest.mark.parametrize("kind", [1, 2, 4, 6], ids=["gzip", "lzma", "xz", "zstd"])
+def test_whatever_the_unpacker_calls_damaged_is_an_unreadable_image(kind: int) -> None:
+    """Jeder Entpacker meldet einen beschädigten Strom mit seiner eigenen
+    Ausnahme (``zlib.error``, ``LZMAError``, ``ZstdError``); hinaus geht für
+    alle dieselbe."""
+    unpack = squashfs._decompressor(kind)
+    with pytest.raises(squashfs.UnreadableImageError):
+        unpack(b"\x00 kein Strom dieser Kompression", 4096)
+
+
+def test_an_lzma_stream_gets_no_more_memory_than_a_block_needs() -> None:
+    """Der Kopf eines lzma-Stroms nennt die Größe seines Wörterbuchs, bis 4 GiB;
+    beschädigt verlangt er sie, bevor ein Byte entpackt ist (§32)."""
+    header = b"\x5d" + (0xFFFFFFFF).to_bytes(4, "little") + b"\xff" * 8 + bytes(64)
+    with pytest.raises(squashfs.UnreadableImageError, match="limit"):
+        squashfs._decompressor(2)(header, 4096)
+
+
+#: Ein Bestand mit einer Datei aus ganzen Blöcken (``Big.json``): Deren erster
+#: Block steht vorn im Datenbereich. Ohne sie steht dort der Block der Reste.
+_BLOCKS: Tree = {"resources": {"profiles": {**ACME, "Big.json": b'{"a": "' + b"x" * 9000 + b'"}'}}}
+
+
+def _damage_first_block(path: Path) -> None:
+    """Den Kopf des ersten gepackten Blocks hinter dem Superblock zerstören."""
+    data = bytearray(path.read_bytes())
+    for at in range(IMAGE_AT + 96, IMAGE_AT + 100):
+        data[at] ^= 0xFF
+    path.write_bytes(bytes(data))
+
+
+@pytest.mark.parametrize("compression", ["gzip", "xz", "zstd"])
+@pytest.mark.parametrize("block", ["data", "fragment"])
+def test_a_damaged_block_keeps_the_own_profiles_and_is_read_once(
+    tmp_path: Path, compression: str, block: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Ein gekipptes Bit in einem gepackten Block ist ein unlesbares Abbild: kein
+    Absturz, kein Zwischenordner im Cache, und die eigenen Profile des Kunden
+    bleiben in der Liste. Gelesen wird das Abbild einmal je Fassung, nicht bei
+    jeder Frage; eine neue Fassung der Datei wird wieder gelesen.
+
+    Vorher entkam bei gzip (Curas Kompression) ``zlib.error``: Die ganze
+    Profilliste fiel weg, und jede Frage las das Abbild erneut.
+    """
+    image = _orca(tmp_path, _BLOCKS if block == "data" else AROUND, compression=compression)
+    _damage_first_block(image)
+    reads: list[Path] = []
+    original = appimage.copy_profiles
+
+    def counted(source: Path, target: Path) -> int:
+        reads.append(source)
+        return original(source, target)
+
+    monkeypatch.setattr(appimage, "copy_profiles", counted)
+    own = Path(sp.config_base(image)) / "OrcaSlicer" / "user" / "default" / "process"
+    own.mkdir(parents=True)
+    (own / "Meine Feine.json").write_text(
+        json.dumps({"name": "Meine Feine", "instantiation": "true", "layer_height": "0.12"}),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(squashfs.UnreadableImageError):
+        original(image, tmp_path / "direkt")
+    assert sp.install_root(image) is None
+    assert sp.discover_printers(image, "orca") == ()
+    assert [profile.name for profile in sp.find_profiles(image, "orca")] == ["Meine Feine"]
+    assert reads == [image], "die Absage gilt für diese Fassung"
+    root = appimage.PROFILE_COPIES.root()
+    assert not root.exists() or not any(root.iterdir()), "kein halber Zwischenordner"
+
+    _orca(tmp_path, AROUND, compression=compression)
+    os.utime(image, ns=(1, 1))
+    assert sp.install_root(image) is not None, "eine neue Fassung wird wieder gelesen"
+    assert reads == [image, image]
+
+
+def test_a_copy_that_breaks_unexpectedly_leaves_no_half_folder(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Auch was niemand erwartet, bricht die Kopie ab, ohne einen Zwischenordner
+    im Nutzer-Cache liegen zu lassen."""
+    image = _orca(tmp_path)
+
+    def broken(source: Path, target: Path) -> int:
+        (target / "Acme").mkdir(parents=True)
+        (target / "Acme.json").write_bytes(b"{}")
+        raise RuntimeError("unerwartet")
+
+    monkeypatch.setattr(appimage, "copy_profiles", broken)
+    with pytest.raises(RuntimeError):
+        appimage.profiles(image)
+    assert list(appimage.PROFILE_COPIES.root().iterdir()) == []
+
+
+def _many(count: int) -> dict[str, bytes]:
+    return {f"Profil {number:04}.json": _json({"n": number}) for number in range(count)}
+
+
+@pytest.mark.parametrize("packed_metadata", [True, False], ids=["packed", "raw"])
+@pytest.mark.parametrize("extended", [False, True], ids=["basic", "extended"])
+def test_inodes_and_listings_run_across_metadata_blocks(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, packed_metadata: bool, extended: bool
+) -> None:
+    """Ein echter Bestand hat tausende Dateien: Inode-Tabelle und Verzeichnis
+    laufen über die Grenze eines Metadatenblocks (8 KiB) hinaus, und ein Eintrag
+    beginnt im einen Block und endet im nächsten. Jede Datei kommt trotzdem
+    byte-gleich heraus."""
+    profiles = _many(600)
+    image_path = _orca(
+        tmp_path,
+        {"resources": {"profiles": profiles}},
+        packed_metadata=packed_metadata,
+        extended=extended,
+    )
+    seen: list[int] = []
+    original = squashfs.SquashImage._metadata_block
+
+    def spy(self: squashfs.SquashImage, position: int) -> tuple[bytes, int]:
+        seen.append(position)
+        return original(self, position)
+
+    monkeypatch.setattr(squashfs.SquashImage, "_metadata_block", spy)
+    with image_path.open("rb") as handle:
+        image = squashfs.SquashImage.of(handle)
+        inodes, listings = image._inode_table, image._directory_table
+        top = image.find(PurePosixPath("resources/profiles"))
+        assert top is not None
+        count = squashfs.copy_folder(image, top, tmp_path / "copy", ".json")
+
+    assert len({at for at in seen if inodes <= at < listings}) >= 2, "Inodes in einem Block"
+    assert len({at for at in seen if at >= listings}) >= 2, "Verzeichnis in einem Block"
+    assert count == len(profiles)
+    for name, data in profiles.items():
+        assert (tmp_path / "copy" / name).read_bytes() == data
+
+
+def _deep(depth: int) -> Tree:
+    tree: Tree = {"Last.json": b"{}"}
+    for level in range(depth):
+        tree = {f"Ebene{level}": tree}
+    return tree
+
+
+@pytest.mark.parametrize(
+    ("limit", "value", "profiles"),
+    [
+        ("MAX_DEPTH", 3, _deep(5)),
+        ("MAX_COPIED_FILES", 3, ACME),
+        ("MAX_COPIED_BYTES", 100, ACME),
+        ("MAX_LISTING", 16, ACME),
+    ],
+    ids=["depth", "files", "bytes", "listing"],
+)
+def test_every_promised_limit_makes_the_image_unreadable(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    limit: str,
+    value: int,
+    profiles: Tree,
+    nothing_runs: None,
+) -> None:
+    """Tiefe, Dateizahl, Bytezahl und Verzeichnisgröße sind begrenzt (Modulkopf,
+    ``druckerwahl.md``). Wer darüber liegt, ist ein unlesbares Abbild — ohne
+    Kopie und ohne Zwischenordner. Gezeigt mit herabgesetzter Grenze."""
+    image = _orca(tmp_path, {"resources": {"profiles": profiles}})
+    assert appimage.copy_profiles(image, tmp_path / "vorher") > 0
+    monkeypatch.setattr(squashfs, limit, value)
+
+    with pytest.raises(squashfs.UnreadableImageError):
+        appimage.copy_profiles(image, tmp_path / "nachher")
+    assert appimage.profiles(image) is None
+    assert list(appimage.PROFILE_COPIES.root().iterdir()) == []
+
+
+def test_the_byte_limit_holds_before_a_file_is_unpacked(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Eine Lücke kostet im Abbild vier Byte, entpackt einen ganzen Block: Ein
+    Abbild von wenigen hundert Byte kann eine Datei von Gigabytes angeben. Die
+    Grenze greift an der angegebenen Größe, bevor Speicher dafür belegt wird
+    (§32)."""
+    hole = 16 << 20
+    image = _orca(
+        tmp_path, {"resources": {"profiles": {"Hole.json": bytes(hole)}}}, block_size=1 << 20
+    )
+    assert image.stat().st_size < 4096
+    monkeypatch.setattr(squashfs, "MAX_COPIED_BYTES", 1 << 20)
+
+    tracemalloc.start()
+    try:
+        with pytest.raises(squashfs.UnreadableImageError):
+            appimage.copy_profiles(image, tmp_path / "copy")
+        _current, peak = tracemalloc.get_traced_memory()
+    finally:
+        tracemalloc.stop()
+    assert peak < hole // 4, f"{peak} Byte belegt für eine Grenze von 1 MiB"
+
+
+def test_the_rest_of_an_aborted_profile_copy_is_cleared_once_it_is_old(tmp_path: Path) -> None:
+    """Wie bei Curas Druckern (dieselbe Verwaltung, ``ImageCopies``): Ein
+    Zwischenordner ohne Marke geht erst, wenn er älter ist als
+    :data:`appimage.STALE_SECONDS`; ein fremder Ordner bleibt."""
+    root = appimage.PROFILE_COPIES.root()
+    old = root / "0123456789abcdef-a1b2_c3d"
+    young = root / "fedcba9876543210-x9y8z7w6"
+    others = [root / "fremd", root / "0123456789abcdef-Abgebrochen"]
+    for folder in (old, young, *others):
+        (folder / "profiles").mkdir(parents=True)
+    past = time.time() - appimage.STALE_SECONDS - 60
+    for folder in (old, *others):
+        os.utime(folder, (past, past))
+
+    assert appimage.profiles(_orca(tmp_path)) is not None
+
+    assert not old.exists()
+    assert young.is_dir()
+    assert all(folder.is_dir() for folder in others), "fremde Ordner bleiben"
+
+
+@pytest.mark.parametrize("family", ["orca", "cura"])
+def test_after_a_cleared_cache_both_families_read_their_image_again(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, family: str
+) -> None:
+    """Den Nutzer-Cache darf jeder leeren, auch während Solidon läuft
+    (Aufräumprogramm). Die nächste Frage liest das Abbild neu, für Cura wie für
+    die Orca-Familie — vorher behielt Curas Merker den gelöschten Ordner, und
+    ihre Drucker fehlten bis zum Neustart, auch nach *Neu suchen*."""
+    from tests.cura_fakes import appimage_cura
+
+    copies: list[Path] = []
+    mounts: list[Path] = []
+    if family == "cura":
+        monkeypatch.setattr(cura_linux.PRINTER_COPIES, "_kept", {})
+        monkeypatch.setattr(cura_linux.PRINTER_COPIES, "_failed", {})
+        monkeypatch.setattr(cura_linux.PRINTER_COPIES, "root", lambda: tmp_path / "cura-cache")
+        image, _point = appimage_cura(tmp_path, monkeypatch, mounts, copies=copies)
+        store, wanted = cura_linux.PRINTER_COPIES, "Creality K1 Max"
+    else:
+        image = _orca(tmp_path)
+        store, wanted = appimage.PROFILE_COPIES, "Acme One 0.4 nozzle"
+
+    def names() -> set[str]:
+        return {profile.name for profile in sp.find_profiles(image, family, ("machine",))}
+
+    assert wanted in names()
+    shutil.rmtree(store.root())
+    assert wanted in names(), "nach dem Leeren sofort wieder da"
+    shutil.rmtree(store.root())
+    discover.forget_cache()
+    assert wanted in names(), "und nach Neu suchen ebenso"
+    if family == "cura":
+        assert len(copies) == 3 and not mounts
+
+
 def test_only_the_orca_family_is_read_from_its_image(tmp_path: Path, nothing_runs: None) -> None:
     """PrusaSlicer liest Bündel (``.ini``), nicht diesen Bestand; ein solches
     AppImage bleibt, wie es war."""
     image = appimage_file(tmp_path / "PrusaSlicer-2.8.1+linux-x64.AppImage", AROUND)
     assert sp.install_root(image) is None
-    assert not appimage._cache_root().exists()
+    assert not appimage.PROFILE_COPIES.root().exists()
 
 
 #: Ein AppDir mit Verknüpfungen, wie Curas: der Lader in ``lib64`` zeigt nach

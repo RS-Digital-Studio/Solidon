@@ -31,6 +31,7 @@ import pytest
 
 from app.core import discover
 from app.core.errors import ExternalToolError, OperationCancelled, ValidationError
+from app.core.export import appimage as image_copies
 from app.core.export import cura_linux, handover, slicer_profiles, squashfs
 from app.core.knowledge import print_settings, profiles
 from tests.cura_fakes import (
@@ -45,7 +46,7 @@ from tests.cura_fakes import (
     failing_mount,
     flatpak_cura,
 )
-from tests.squashfs_fakes import Link, appimage_file, tree_of
+from tests.squashfs_fakes import IMAGE_AT, Link, appimage_file, tree_of
 
 
 def _written(engine: Path, printer: str, tmp_path: Path) -> handover.SlicerConfig:
@@ -2227,8 +2228,8 @@ def test_the_window_thread_never_waits_for_the_printer_copy(
     mounts: list[Path] = []
     copies: list[Path] = []
     appimage, _point = appimage_cura(tmp_path, monkeypatch, mounts, delay=2.0, copies=copies)
-    monkeypatch.setattr(cura_linux, "_never_waits", None)
-    cura_linux.never_wait_in(threading.current_thread())
+    monkeypatch.setattr(image_copies, "_never_waits", None)
+    image_copies.never_wait_in(threading.current_thread())
 
     assert slicer_profiles.install_root(appimage) is None
     assert not mounts and not copies, "der Fensterfaden liest nichts"
@@ -2270,7 +2271,7 @@ def test_the_window_waits_for_no_copy_and_rebases_after_the_worker() -> None:
         raise AssertionError(names)
 
     build = body("app/ui/app.py", "build_application")
-    assert "cura_linux.never_wait_in(threading.current_thread())" in build
+    assert "appimage.never_wait_in(threading.current_thread())" in build
     work = body("app/ui/print_settings_dialog.py", "_CuraPrinterWorker", "work")
     assert work.index("install_root(self._executable)") < work.index("chosen_printer(")
     found = body("app/ui/print_settings_dialog.py", "PrintSettingsDialog", "_cura_printer_found")
@@ -2325,7 +2326,7 @@ def test_the_printers_of_an_appimage_are_copied_once_per_version(
     again = cura_linux.appimage_resources(appimage)
     assert first is not None and first == again
     assert len(copies) == 1 and not mounts
-    stamp = json.loads((first.parent.parent / cura_linux.STAMP).read_text(encoding="utf-8"))
+    stamp = json.loads((first.parent.parent / image_copies.STAMP).read_text(encoding="utf-8"))
     assert stamp["engine"] is True
 
     newer = appimage.stat().st_mtime_ns + 10**9
@@ -2385,6 +2386,37 @@ def test_a_failed_copy_is_tried_again_after_searching_anew(
     assert len(copies) == 2 and not mounts
 
 
+def test_a_damaged_gzip_block_in_curas_image_is_refused_once_without_a_half_copy(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Cura 5.13 packt mit gzip. Ein gekipptes Bit in einem Block ist ein
+    unlesbares Abbild: kein Absturz, kein Zwischenordner im Cache, gelesen einmal
+    je Fassung bis *Neu suchen* — am echt beschädigten Abbild, nicht an einer
+    Attrappe des Lesers. Vorher entkam ``zlib.error`` aus dem Druckdialog, und
+    jede Frage las das Abbild erneut."""
+    monkeypatch.setattr(cura_linux.PRINTER_COPIES, "root", lambda: tmp_path / "cache")
+    monkeypatch.setattr(cura_linux.PRINTER_COPIES, "_kept", {})
+    monkeypatch.setattr(cura_linux.PRINTER_COPIES, "_failed", {})
+    mounts: list[Path] = []
+    copies: list[Path] = []
+    appimage, _point = appimage_cura(tmp_path, monkeypatch, mounts, copies=copies)
+    data = bytearray(appimage.read_bytes())
+    for at in range(IMAGE_AT + 96, IMAGE_AT + 100):
+        data[at] ^= 0xFF
+    appimage.write_bytes(bytes(data))
+
+    for _question in range(3):
+        assert slicer_profiles.install_root(appimage) is None
+    assert slicer_profiles.find_profiles(appimage, "cura", ("machine",)) == []
+    assert handover.console_refusal(appimage) is None, "unbekannt sperrt nicht"
+    assert copies == [appimage]
+    assert list((tmp_path / "cache").iterdir()) == [], "kein halber Zwischenordner"
+
+    discover.forget_cache()
+    assert cura_linux.appimage_resources(appimage) is None
+    assert copies == [appimage, appimage] and not mounts
+
+
 def test_a_copy_that_cannot_replace_the_old_one_says_why(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
 ) -> None:
@@ -2397,7 +2429,7 @@ def test_a_copy_that_cannot_replace_the_old_one_says_why(
         raise PermissionError(13, "Zugriff verweigert", str(self))
 
     monkeypatch.setattr(Path, "rename", refuse)
-    with caplog.at_level("WARNING", logger="app.core.export.cura_linux"):
+    with caplog.at_level("WARNING", logger="app.core.export.appimage"):
         assert cura_linux.appimage_resources(appimage) is None
     assert "cannot replace the printers" in caplog.text and "Zugriff verweigert" in caplog.text
 
@@ -2618,15 +2650,15 @@ def test_the_rest_of_an_aborted_copy_is_cleared_once_it_is_old(
     """Bricht eine Kopie ab (Solidon stirbt), bleibt ein Zwischenordner ohne Marke.
     Geräumt wird er erst, wenn er älter ist als :data:`STALE_SECONDS` — ein
     junger kann gerade ein zweiter Solidon füllen. Geräumt wird nur die Form, die
-    ``_copy_resources`` anlegt (``mkdtemp``: 16 Hex-Zeichen, Bindestrich, acht
+    ``ImageCopies._copy`` anlegt (``mkdtemp``: 16 Hex-Zeichen, Bindestrich, acht
     Zeichen aus a–z, 0–9, _); ein fremder Ordner mit Bindestrich bleibt."""
-    root = cura_linux._cache_root()
+    root = cura_linux.PRINTER_COPIES.root()
     old = root / "0123456789abcdef-a1b2_c3d"
     young = root / "fedcba9876543210-x9y8z7w6"
     others = [root / "fremd", root / "meine-sicherung", root / "0123456789abcdef-Abgebrochen"]
     for folder in (old, young, *others):
         (folder / "share").mkdir(parents=True)
-    past = time.time() - cura_linux.STALE_SECONDS - 60
+    past = time.time() - image_copies.STALE_SECONDS - 60
     for folder in (old, *others):
         os.utime(folder, (past, past))
     mounts: list[Path] = []
@@ -2698,9 +2730,13 @@ def test_every_way_out_of_a_mount_closes_its_pipes(tmp_path: Path, way: str) -> 
     if way == "cancelled":
         token.cancel()
 
+    # Die kurze Frist nur für das stumme Einhängen: Mit Punkt brauchte ein unter
+    # Last startendes Python im Tor (-n 8) länger als eine Sekunde für seine
+    # erste Zeile, und der Fall endete als „no answer“.
+    seconds = 1.0 if way == "silent" else None
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always", ResourceWarning)
-        with cura_linux._mounted(command, token, seconds=1.0) as found:
+        with cura_linux._mounted(command, token, seconds=seconds) as found:
             assert (found.point == tmp_path) == (way == "point")
         gc.collect()
 

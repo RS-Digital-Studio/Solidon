@@ -255,7 +255,7 @@ def test_a_slicer_never_opened_offers_the_printers_of_its_maker(
     assert machine is not None, PROGRAMS[program]
     if cura_linux.is_appimage(installed_slicer):
         root = slicer_profiles.install_root(installed_slicer)
-        assert root is not None and root.is_relative_to(appimage._cache_root()), root
+        assert root is not None and root.is_relative_to(appimage.PROFILE_COPIES.root()), root
         started = time.perf_counter()
         count = appimage.copy_profiles(installed_slicer, tmp_path / "kopie")
         seconds = round(time.perf_counter() - started, 2)
@@ -275,9 +275,9 @@ def test_curas_printers_are_read_from_its_appimage_without_starting_it(
     Cache und ohne einen Prozess zu starten; ob CuraEngine samt Lader darin
     vollständig ist, beantwortet dasselbe Lesen. Andernorts (Mac-Bündel) liegt der
     Bestand neben dem Programm, und der Fall prüft nur, dass er gelesen wird."""
-    monkeypatch.setattr(cura_linux, "_cache_root", lambda: tmp_path / "cache")
-    monkeypatch.setattr(cura_linux, "_resources", {})
-    monkeypatch.setattr(cura_linux, "_failed", {})
+    monkeypatch.setattr(cura_linux.PRINTER_COPIES, "root", lambda: tmp_path / "cache")
+    monkeypatch.setattr(cura_linux.PRINTER_COPIES, "_kept", {})
+    monkeypatch.setattr(cura_linux.PRINTER_COPIES, "_failed", {})
 
     def forbidden(*_args: object, **_kwargs: object) -> None:
         pytest.fail("Zum Lesen der Drucker startet kein Programm")

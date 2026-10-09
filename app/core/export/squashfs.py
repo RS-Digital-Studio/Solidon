@@ -11,10 +11,11 @@ AppImage dafür nicht, auch nicht mit ``--appimage-extract`` oder
 
 Das Abbild ist fremde Eingabe. Jede Länge und jeder Versatz wird gegen die
 Datei geprüft, jeder Block nur bis zu seiner Höchstgröße entpackt, Namen mit
-Pfadtrennern verworfen, Tiefe, Dateizahl und Gesamtgröße begrenzt.
-Verknüpfungen folgt nur :meth:`SquashImage.resolve`, und nur innerhalb des
-Abbilds. Was davon reißt, ist ein unlesbares Abbild
-(:class:`UnreadableImageError`), kein Absturz.
+Pfadtrennern verworfen, Tiefe, Dateizahl, Verzeichnis- und Gesamtgröße
+begrenzt, ehe dafür Speicher belegt wird. Verknüpfungen folgt nur
+:meth:`SquashImage.resolve`, und nur innerhalb des Abbilds. Was davon reißt —
+auch ein Block, den der Entpacker als beschädigt meldet —, ist ein unlesbares
+Abbild (:class:`UnreadableImageError`), kein Absturz.
 """
 
 from __future__ import annotations
@@ -25,7 +26,7 @@ import zlib
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
-from typing import BinaryIO, Final
+from typing import BinaryIO, Final, Protocol
 
 try:
     # Oben und nicht in der Funktion, damit der Paketbau ihn sieht. Ein Python
@@ -57,8 +58,22 @@ MAX_DEPTH: Final = 32
 MAX_COPIED_FILES: Final = 60_000
 
 #: Wie viele Bytes eine Kopie höchstens umfasst. ElegooSlicer 1.5.3.5 trägt
-#: 21 MB, Cura 5.13 8 MB.
+#: 21 MB, Cura 5.13 8 MB. Geprüft an der Größe, die eine Datei angibt, bevor
+#: sie gelesen wird (§32): Eine Lücke kostet im Abbild vier Byte, entpackt
+#: einen ganzen Block.
 MAX_COPIED_BYTES: Final = 1 << 30
+
+#: Wie lang die Einträge eines Verzeichnisses zusammen sein dürfen: Platz für
+#: :data:`MAX_COPIED_FILES` Namen der größten Länge (256 Zeichen, je Eintrag
+#: acht Byte Kopf). Ein Verzeichnis darf bis zu 4 GiB angeben; gelesen wird
+#: es in einem Stück.
+MAX_LISTING: Final = 1 << 24
+
+#: Wie viel Speicher der xz- und lzma-Entpacker nehmen darf. ``mksquashfs``
+#: hält das Wörterbuch nicht größer als einen Block (höchstens 1 MiB); Raum
+#: bleibt für jeden Packer bis zur stärksten xz-Stufe (65 MiB). Der Kopf eines
+#: beschädigten Stroms kann bis zu 4 GiB verlangen.
+MAX_INFLATER_MEMORY: Final = 1 << 27
 
 #: Wie vielen Verknüpfungen :meth:`SquashImage.resolve` auf einem Weg folgt.
 MAX_LINKS: Final = 16
@@ -137,58 +152,57 @@ def image_offset(head: bytes) -> int:
     return int(table) + int(size) * int(count)
 
 
-def _decompressor(kind: int) -> Callable[[bytes, int], bytes]:
-    """Der Entpacker für die Kompression ``kind`` des Superblocks.
-
-    Er entpackt höchstens ``limit`` Bytes und verlangt einen vollständigen
-    Strom; mehr oder weniger ist ein beschädigter Block.
-    """
-    if kind == 1:
-
-        def gzip(data: bytes, limit: int) -> bytes:
-            engine = zlib.decompressobj()
-            out = engine.decompress(data, limit)
-            if not engine.eof:
-                raise UnreadableImageError("a gzip block does not end within its size")
-            return out
-
-        return gzip
-    if kind in {2, 4}:
-        form = lzma.FORMAT_ALONE if kind == 2 else lzma.FORMAT_XZ
-
-        def xz(data: bytes, limit: int) -> bytes:
-            engine = lzma.LZMADecompressor(form)
-            try:
-                out = engine.decompress(data, limit)
-            except lzma.LZMAError as problem:
-                raise UnreadableImageError(f"an xz block is damaged: {problem}") from problem
-            if not engine.eof:
-                raise UnreadableImageError("an xz block does not end within its size")
-            return out
-
-        return xz
-    if kind == 6:
-        if zstd is None:
-            raise UnreadableImageError("this Python has no zstd")
-        library = zstd
-
-        def zstandard(data: bytes, limit: int) -> bytes:
-            engine = library.ZstdDecompressor()
-            try:
-                out = engine.decompress(data, limit)
-            except library.ZstdError as problem:
-                raise UnreadableImageError(f"a zstd block is damaged: {problem}") from problem
-            if not engine.eof:
-                raise UnreadableImageError("a zstd block does not end within its size")
-            return out
-
-        return zstandard
-    raise UnreadableImageError(f"compression {kind} has no reader here (lzo or lz4)")
-
-
 #: Die Kompressionen, die Solidon gemessen in Slicer-AppImages vorfand: zstd
 #: (Orca-Familie), gzip (Cura 5.13). Die übrigen kann es auch.
 COMPRESSIONS: Final = {1: "gzip", 2: "lzma", 4: "xz", 6: "zstd"}
+
+
+class _Engine(Protocol):
+    """Was die Entpacker der Standardbibliothek gemeinsam haben."""
+
+    @property
+    def eof(self) -> bool: ...
+
+    def decompress(self, data: bytes, max_length: int = ..., /) -> bytes: ...
+
+
+def _inflater(
+    name: str, engine: Callable[[], _Engine], damage: type[Exception]
+) -> Callable[[bytes, int], bytes]:
+    """Ein Entpacker, der höchstens ``limit`` Bytes liefert und einen
+    vollständigen Strom verlangt. Was die Bibliothek an einem beschädigten
+    Strom meldet (``damage``), ist ein unlesbares Abbild wie jede andere
+    Beschädigung — für jede Kompression gleich."""
+
+    def inflate(data: bytes, limit: int) -> bytes:
+        running = engine()
+        try:
+            out = running.decompress(data, limit)
+        except damage as problem:
+            raise UnreadableImageError(f"a block ({name}) is damaged: {problem}") from problem
+        if not running.eof:
+            raise UnreadableImageError(f"a block ({name}) does not end within its size")
+        return out
+
+    return inflate
+
+
+def _decompressor(kind: int) -> Callable[[bytes, int], bytes]:
+    """Der Entpacker für die Kompression ``kind`` des Superblocks."""
+    if kind == 1:
+        return _inflater(COMPRESSIONS[kind], zlib.decompressobj, zlib.error)
+    if kind in {2, 4}:
+        form = lzma.FORMAT_ALONE if kind == 2 else lzma.FORMAT_XZ
+        return _inflater(
+            COMPRESSIONS[kind],
+            lambda: lzma.LZMADecompressor(form, memlimit=MAX_INFLATER_MEMORY),
+            lzma.LZMAError,
+        )
+    if kind == 6:
+        if zstd is None:
+            raise UnreadableImageError("this Python has no zstd")
+        return _inflater(COMPRESSIONS[kind], zstd.ZstdDecompressor, zstd.ZstdError)
+    raise UnreadableImageError(f"compression {kind} has no reader here (lzo or lz4)")
 
 
 def readable_compressions() -> tuple[str, ...]:
@@ -346,6 +360,8 @@ class SquashImage:
         remaining = directory.size - 3
         if remaining <= 0:
             return []
+        if remaining > MAX_LISTING:
+            raise UnreadableImageError(f"a directory listing of {remaining} bytes")
         data, *_ = self._metadata_bytes(
             self._directory_table + directory.block, directory.offset, remaining
         )
@@ -431,11 +447,21 @@ class SquashImage:
         found = self.resolve(path)
         return found is not None and found.kind == _FILE
 
-    def read(self, entry: Entry) -> bytes:
-        """Der Inhalt der Datei ``entry``."""
+    def read(self, entry: Entry, limit: int | None = None) -> bytes:
+        """Der Inhalt der Datei ``entry``, höchstens ``limit`` Bytes
+        (ohne Angabe :data:`MAX_COPIED_BYTES`).
+
+        Geprüft an der Größe, die die Datei angibt, bevor ein Block entpackt
+        wird — eine größere ist ein unlesbares Abbild.
+        """
         inode = self._inode(entry.reference)
         if not isinstance(inode, _File):
             raise UnreadableImageError(f"{entry.name} is not a file")
+        allowed = MAX_COPIED_BYTES if limit is None else limit
+        if inode.size > allowed:
+            raise UnreadableImageError(
+                f"{entry.name} holds {inode.size} bytes, more than {allowed}"
+            )
         out = bytearray()
         position = inode.start
         for word in inode.blocks:
@@ -516,10 +542,8 @@ def copy_folder(image: SquashImage, top: Entry, target: Path, suffix: str = "") 
         count += 1
         if count > MAX_COPIED_FILES:
             raise UnreadableImageError(f"more than {MAX_COPIED_FILES} files")
-        data = image.read(entry)
+        data = image.read(entry, MAX_COPIED_BYTES - written)
         written += len(data)
-        if written > MAX_COPIED_BYTES:
-            raise UnreadableImageError(f"more than {MAX_COPIED_BYTES} bytes")
         destination = target.joinpath(*relative.parts)
         if not destination.is_relative_to(target):
             raise UnreadableImageError(f"{relative} leads out of the copy")

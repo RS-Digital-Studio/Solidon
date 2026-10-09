@@ -27,18 +27,15 @@ Die Drucker einer AppImage-Cura liegen im Abbild. :func:`appimage_resources`
 liest sie einmal je Fassung aus dem Abbild, ohne das AppImage zu starten
 (:mod:`squashfs`, RM-599), und legt die Ordner, die Solidon liest, im
 Nutzer-Cache ab; ebenso, ob die Rechenmaschine darin vollständig ist.
-Eingehängt wird nur für einen Lauf. Der Fensterfaden wartet auf die Kopie nie
-(:func:`never_wait_in`).
+Eingehängt wird nur für einen Lauf. Die Kopie verwaltet
+:class:`appimage.ImageCopies` wie den Orca-Bestand; der Fensterfaden wartet
+auf sie nie (:func:`appimage.never_wait_in`).
 """
 
 from __future__ import annotations
 
-import hashlib
-import json
-import re
 import shutil
 import subprocess
-import tempfile
 import threading
 import time
 from collections.abc import Callable, Iterator, Mapping, Sequence
@@ -49,9 +46,9 @@ from typing import IO, Final
 
 from app.core import discover
 from app.core.errors import CHOOSE_SLICER, EXPORT_ONLY, ExternalToolError
-from app.core.export import squashfs
+from app.core.export import appimage, squashfs
 from app.core.log import get_logger
-from app.core.paths import ensure_dir, user_cache_dir
+from app.core.paths import ensure_dir
 from app.core.process import (
     process_group_options,
     terminate_process_tree,
@@ -97,21 +94,6 @@ MOUNT_SECONDS: Final = 30.0
 
 #: Wie viel von der Fehlerausgabe des Einhängens als Grund mitreist.
 REASON_BYTES: Final = 4096
-
-#: Die Marke einer abgelegten Kopie: Quelle, Stand und ob die Rechenmaschine da ist.
-STAMP: Final = "stamp.json"
-
-#: Ab wann ein Zwischenordner ohne Marke als Rest einer abgebrochenen Kopie gilt.
-#: Eine Kopie dauert Sekunden (am Runner 3,3 s); eine Stunde lässt jedem
-#: langsamen Rechner Luft.
-STALE_SECONDS: Final = 3600.0
-
-#: Der Name eines Zwischenordners, wie ``_copy_resources`` ihn anlegt: die
-#: Kennung (16 Hex-Zeichen aus ``_cache_folder``), Bindestrich und die acht
-#: Zeichen, die ``tempfile.mkdtemp`` anhängt (``_RandomNameSequence``:
-#: Kleinbuchstaben, Ziffern, Unterstrich). Nur diese Form wird geräumt; ein
-#: fremder Ordner bleibt.
-UNFINISHED: Final = re.compile(r"[0-9a-f]{16}-[a-z0-9_]{8}")
 
 #: Der Satz für Druckdialog und Absage, wenn Solidon mit dieser Cura nicht
 #: rechnen kann. Er nennt keine Ursache (Regel 21): Lader, ``AppRun.env``,
@@ -477,154 +459,41 @@ def _first_line(
     return box[0].decode("utf-8", errors="replace").strip() if box else ""
 
 
-#: Was über eine AppImage-Cura schon feststeht, je Pfad, Änderungszeit und Größe:
-#: der Ordner ``share/cura`` der Kopie und ob die Rechenmaschine da ist.
-_resources: dict[tuple[str, int, int], tuple[Path, bool]] = {}
-#: Fassungen, deren Kopie scheiterte, mit dem Stand der Suche
-#: (:func:`discover.cache_generation`): *Neu suchen* versucht es wieder.
-_failed: dict[tuple[str, int, int], int] = {}
-_building = threading.Lock()
-#: Der Faden, der nie auf eine Kopie wartet (:func:`never_wait_in`).
-_never_waits: threading.Thread | None = None
+#: Die Fassung des Kopierers für Curas Drucker. Eine neue verwirft ältere Kopien.
+PRINTER_COPY_VERSION: Final = 1
 
 
-def never_wait_in(thread: threading.Thread | None) -> None:
-    """Dieser Faden wartet nie auf eine Druckerkopie — die Oberfläche nennt ihren Fensterfaden.
-
-    Dort antworten :func:`appimage_resources` und :func:`appimage.profiles` nur
-    mit dem, was schon feststeht; die Kopie legen Arbeiter an
-    (``print_settings_dialog._CuraPrinterWorker``, die Druckererhebung).
-    Ohne Angabe wartet jeder Faden, und die Kommandozeile kopiert selbst.
-    """
-    global _never_waits
-    _never_waits = thread
+def _fill_printers(executable: Path, fresh: Path) -> dict[str, object] | None:
+    usable = _read_resources(executable, fresh / RESOURCES)
+    return None if usable is None else {"engine": usable}
 
 
-def may_wait() -> bool:
-    """Darf dieser Faden auf eine Kopie aus einem AppImage warten?
-
-    Nein im Faden aus :func:`never_wait_in` — das gilt auch für den
-    Profilbestand der Orca-Familie (:func:`appimage.profiles`).
-    """
-    return threading.current_thread() is not _never_waits
+#: Die Kopien von Curas Druckerbestand, mit der Antwort, ob die Rechenmaschine
+#: vollständig ist (``engine`` in der Marke).
+PRINTER_COPIES: Final = appimage.ImageCopies(
+    "cura-appimage", PurePosixPath("share/cura"), PRINTER_COPY_VERSION, _fill_printers, "printers"
+)
 
 
-def _key(appimage: Path) -> tuple[str, int, int] | None:
-    try:
-        info = appimage.stat()
-    except OSError:
-        return None
-    return (str(appimage), info.st_mtime_ns, info.st_size)
-
-
-def _cache_root() -> Path:
-    return user_cache_dir() / "cura-appimage"
-
-
-def _cache_folder(appimage: Path) -> Path:
-    digest = hashlib.sha256(str(appimage).encode("utf-8")).hexdigest()[:16]
-    return _cache_root() / digest
-
-
-def appimage_resources(appimage: Path) -> Path | None:
+def appimage_resources(executable: Path) -> Path | None:
     """``share/cura`` einer AppImage-Cura als beständige Kopie, oder ``None``.
 
-    Einmal je Fassung (Pfad, Änderungszeit, Größe) die Ordner aus
-    :data:`RESOURCE_FOLDERS` aus dem Abbild in den Nutzer-Cache lesen
-    (:func:`_read_resources`), ohne das AppImage zu starten. Danach
-    liest jede Frage die Kopie; ein neues AppImage ersetzt sie, und Kopien
-    verschwundener AppImages werden geräumt. Scheitert es, bleibt es beim
-    Nein, bis :func:`discover.forget_cache` neu suchen lässt. Im Faden aus
-    :func:`never_wait_in` antwortet es nur mit dem, was schon feststeht.
+    Die Ordner aus :data:`RESOURCE_FOLDERS`, aus dem Abbild gelesen
+    (:func:`_read_resources`), ohne das AppImage zu starten; Fassung, Merker,
+    Räumen und Fensterfaden wie jede Kopie aus einem AppImage
+    (:meth:`appimage.ImageCopies.kept`).
     """
-    key = _key(appimage)
-    if key is None:
-        return None
-    known = _resources.get(key)
-    if known is not None:
-        return known[0]
-    if not may_wait():
-        stamped = _stamped(appimage, key)
-        if stamped is None:
-            return None
-        _resources[key] = stamped
-        return stamped[0]
-    with _building:
-        if key not in _resources and _failed.get(key) != discover.cache_generation():
-            stamped = _stamped(appimage, key) or _copy_resources(appimage, key)
-            if stamped is None:
-                _failed[key] = discover.cache_generation()
-            else:
-                _failed.pop(key, None)
-                _resources[key] = stamped
-    known = _resources.get(key)
-    return known[0] if known is not None else None
+    found = PRINTER_COPIES.kept(executable)
+    return found.folder if found is not None else None
 
 
-def _known_engine(appimage: Path) -> bool | None:
+def _known_engine(executable: Path) -> bool | None:
     """Ob die Kopie dieser Fassung eine Rechenmaschine gesehen hat; ``None``: unbekannt."""
-    key = _key(appimage)
-    if key is None:
-        return None
-    known = _resources.get(key)
-    if known is None:
-        known = _stamped(appimage, key)
-        if known is not None:
-            _resources[key] = known
-    return known[1] if known is not None else None
+    found = PRINTER_COPIES.known(executable)
+    return bool(found.stamp.get("engine")) if found is not None else None
 
 
-def _stamped(appimage: Path, key: tuple[str, int, int]) -> tuple[Path, bool] | None:
-    """Die abgelegte Kopie, wenn ihre Marke zu dieser Fassung passt."""
-    folder = _cache_folder(appimage)
-    stamp = _read_stamp(folder)
-    if stamp is None or [stamp.get("source"), stamp.get("mtime_ns"), stamp.get("size")] != list(
-        key
-    ):
-        return None
-    return folder / "share" / "cura", bool(stamp.get("engine"))
-
-
-def _read_stamp(folder: Path) -> dict[str, object] | None:
-    try:
-        stamp = json.loads((folder / STAMP).read_text(encoding="utf-8"))
-    except OSError, ValueError:
-        return None
-    return stamp if isinstance(stamp, dict) else None
-
-
-def _copy_resources(appimage: Path, key: tuple[str, int, int]) -> tuple[Path, bool] | None:
-    folder = _cache_folder(appimage)
-    started = time.monotonic()
-    try:
-        fresh = Path(tempfile.mkdtemp(prefix=f"{folder.name}-", dir=ensure_dir(folder.parent)))
-    except OSError as problem:
-        _log.warning("cannot keep the printers of %s: %s", appimage.name, problem)
-        return None
-    try:
-        usable = _read_resources(appimage, fresh / RESOURCES)
-        if usable is None:
-            shutil.rmtree(fresh, ignore_errors=True)
-            return None
-        stamp = {"source": key[0], "mtime_ns": key[1], "size": key[2], "engine": usable}
-        (fresh / STAMP).write_text(json.dumps(stamp), encoding="utf-8")
-    except (OSError, squashfs.UnreadableImageError) as problem:
-        shutil.rmtree(fresh, ignore_errors=True)
-        _log.warning("cannot keep the printers of %s: %s", appimage.name, problem)
-        return None
-    kept = _replace(folder, fresh, appimage, key)
-    if kept is not None:
-        _log.info(
-            "kept the printers of %s in %.1f s (engine %s)",
-            appimage.name,
-            time.monotonic() - started,
-            "found" if usable else "missing",
-        )
-        _clear_vanished(folder)
-    return kept
-
-
-def _read_resources(appimage: Path, target: Path) -> bool | None:
+def _read_resources(executable: Path, target: Path) -> bool | None:
     """Curas Druckerbestand aus dem Abbild nach ``target``, ohne das AppImage zu
     starten (RM-599, Regel 11) — und ob die Rechenmaschine darin vollständig ist.
 
@@ -633,11 +502,11 @@ def _read_resources(appimage: Path, target: Path) -> bool | None:
     :meth:`squashfs.SquashImage.is_file` folgt ihr wie das Dateisystem eines
     eingehängten Abbilds.
     """
-    with appimage.open("rb") as handle:
+    with executable.open("rb") as handle:
         image = squashfs.SquashImage.of(handle)
         resources = image.find(RESOURCES)
         if resources is None or resources.kind != squashfs.DIRECTORY:
-            _log.warning("%s carries no cura resources", appimage.name)
+            _log.warning("%s carries no cura resources", executable.name)
             return None
         for name in RESOURCE_FOLDERS:
             found = image.find(RESOURCES / name)
@@ -645,70 +514,11 @@ def _read_resources(appimage: Path, target: Path) -> bool | None:
                 squashfs.copy_folder(image, found, target / name)
         environment = image.resolve(PurePosixPath(ENVIRONMENT))
         if environment is None or environment.kind != squashfs.FILE:
-            _tell("no readable %s inside %s", ENVIRONMENT, appimage)
+            _tell("no readable %s inside %s", ENVIRONMENT, executable)
             return False
         try:
             variables = read_environment(image.read(environment).decode("utf-8"))
         except UnicodeDecodeError as problem:
-            _tell("no readable %s inside %s: %s", ENVIRONMENT, appimage, problem)
+            _tell("no readable %s inside %s: %s", ENVIRONMENT, executable, problem)
             return False
-        return engine_complete(variables, image.is_file, appimage)
-
-
-def _replace(
-    folder: Path, fresh: Path, appimage: Path, key: tuple[str, int, int]
-) -> tuple[Path, bool] | None:
-    """Die neue Kopie an die Stelle der alten — oder die eines zweiten Solidon, wenn sie passt."""
-    try:
-        if folder.exists():
-            shutil.rmtree(folder)
-        fresh.rename(folder)
-    except OSError as problem:
-        shutil.rmtree(fresh, ignore_errors=True)
-        stamped = _stamped(appimage, key)
-        if stamped is None:
-            _log.warning(
-                "cannot replace the printers of %s at %s: %s", appimage.name, folder, problem
-            )
-        return stamped
-    stamp = _read_stamp(folder) or {}
-    return folder / "share" / "cura", bool(stamp.get("engine"))
-
-
-def _clear_vanished(keep: Path) -> None:
-    """Kopien von AppImages räumen, die es nicht mehr gibt — ein Update trägt die
-    Version im Dateinamen, und jede Kopie wiegt rund 26 MB.
-
-    Dazu die Zwischenordner abgebrochener Kopien (:data:`UNFINISHED`, ohne Marke),
-    sobald sie älter als :data:`STALE_SECONDS` sind; eine jüngere kann gerade ein
-    zweiter Solidon füllen. Was geräumt ist, verlässt auch den Merker — kommt
-    das AppImage zurück (ein Stick), wird neu kopiert.
-    """
-    try:
-        siblings = [entry for entry in _cache_root().iterdir() if entry.is_dir() and entry != keep]
-    except OSError:
-        return
-    for sibling in siblings:
-        stamp = _read_stamp(sibling)
-        source = stamp.get("source") if stamp is not None else None
-        if stamp is None:
-            if not UNFINISHED.fullmatch(sibling.name) or not _older_than(sibling, STALE_SECONDS):
-                continue
-        elif not isinstance(source, str) or Path(source).exists():
-            continue
-        try:
-            shutil.rmtree(sibling)
-        except OSError as problem:
-            _log.warning("cannot clear the old printers at %s: %s", sibling, problem)
-            continue
-        _log.info("cleared the printers at %s (%s)", sibling, source or "unfinished copy")
-        for key, (found, _usable) in list(_resources.items()):
-            if found.is_relative_to(sibling):
-                del _resources[key]
-
-
-def _older_than(folder: Path, seconds: float) -> bool:
-    try:
-        return time.time() - folder.stat().st_mtime > seconds
-    except OSError:
-        return False
+        return engine_complete(variables, image.is_file, executable)
