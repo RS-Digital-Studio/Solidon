@@ -1958,6 +1958,40 @@ def test_loading_a_saved_gesture_cannot_replace_a_newer_tool(
     assert (window._sketch_panel is not None) == (new_tool == "sketch")
 
 
+def test_the_samples_of_one_event_reach_the_view_once(
+    window: MainWindow, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """RM-576: Ein Mauszug füllt bis zu acht Proben in ein Ereignis. An einem
+    kleinen Netz übergab jede ihre Fläche — Fläche, Puffer und Normalen kosteten
+    das Siebenfache der Probe. Jetzt zählen Leiste und Vorschau jede Probe
+    sofort, und ins Bild kommt die Fläche einmal, nach allen."""
+    import numpy as np
+
+    from app.ui.viewport import DRAG_FILL_LIMIT
+
+    target = with_a_body(window)
+    window.start_sculpt(target)
+    shown: list[Any] = []
+    original = window.viewport.show_preview_mesh
+
+    def counted(object_id: str, mesh: Any) -> None:
+        shown.append(mesh)
+        original(object_id, mesh)
+
+    monkeypatch.setattr(window.viewport, "show_preview_mesh", counted)
+    window._begin_sculpt_gesture()
+    for index in range(DRAG_FILL_LIMIT):
+        window._on_sculpt((20.0, 0.0, float(index) * 0.5))
+    assert len(window._sculpt_strokes) == DRAG_FILL_LIMIT
+    assert window._sculpt_preview.strokes == tuple(window._sculpt_shown())
+    assert shown == [], "noch keine Übergabe je Probe"
+    QApplication.processEvents()
+    window._end_sculpt_gesture()
+    assert len(shown) == 1
+    expected = window._sculpt_preview.shown
+    assert np.array_equal(np.asarray(shown[0].raw.vertices), np.asarray(expected.raw.vertices))
+
+
 def _ops(window: MainWindow) -> list[str]:
     return [entry.op for entry in window.session.project.document.ops]
 

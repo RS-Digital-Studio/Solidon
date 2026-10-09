@@ -3799,6 +3799,14 @@ class MainWindow(QMainWindow):
         self._sculpt_check.setSingleShot(True)
         self._sculpt_check.setInterval(SCULPT_CHECK_MS)
         self._sculpt_check.timeout.connect(self._check_sculpted_walls)
+        self._sculpt_display = QTimer(self)
+        """Übergibt die Vorschau eines kleinen Netzes einmal je Ereignisrunde (RM-576):
+        Ein Mauszug füllt bis zu :data:`~app.ui.viewport.DRAG_FILL_LIMIT` Proben
+        in ein Ereignis, und je Probe Fläche, Puffer und Normalen neu kostete an
+        20 480 Dreiecken 2,75 ms gegen 0,38 ms für die Probe selbst."""
+        self._sculpt_display.setSingleShot(True)
+        self._sculpt_display.setInterval(0)
+        self._sculpt_display.timeout.connect(self._show_sculpt_display)
         self._sculpt_wall_worker: Any = None
         """Die laufende Wandprüfung der Formsitzung (:class:`_SculptWallWorker`)."""
         self._sculpt_wall_number = 0
@@ -13751,8 +13759,20 @@ class MainWindow(QMainWindow):
             )
         )
         self.undo_action.setEnabled(True)
-        self._show_sculpt_preview(mesh)
+        # Die Vorschau zählt den Zug sofort mit — der nächste Zug fragt sie —,
+        # die Fläche kommt einmal nach allen Proben dieses Ereignisses (RM-576).
+        preview.extend(self._sculpt_shown())
+        self._drop_sculpt_click()
+        self.sculpt_bar.show_count(stroke_count(self._sculpt_strokes))
         self._gesture_analysis_changed()
+        self._sculpt_display.start()
+
+    def _show_sculpt_display(self) -> None:
+        """Die gesammelten Proben ins Bild (RM-576)."""
+        target = self._sculpt_target
+        mesh = self._sculpt_mesh(target) if target is not None else None
+        if mesh is not None:
+            self._show_sculpt_preview(mesh)
 
     def _sculpt_order(self) -> _PreviewOrder:
         """Gesammelte Gesten und aktuelle Symmetrie bilden den gemeinsamen Auftrag.
@@ -13992,6 +14012,9 @@ class MainWindow(QMainWindow):
         """Prüfstände warten auf alle geordneten Antworten; die Oberfläche wartet nie."""
         from time import monotonic
 
+        if self._sculpt_display.isActive():
+            self._sculpt_display.stop()
+            self._show_sculpt_display()
         deadline = monotonic() + timeout_ms / 1000
         while self._sculpt_preview_worker is not None:
             remaining = max(0, int((deadline - monotonic()) * 1000))
