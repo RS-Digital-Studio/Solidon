@@ -437,6 +437,23 @@ def test_superslicer_gets_foot_and_holes_under_its_own_names() -> None:
     assert slicer_keys.takes("prusa", "shell.hole_offset", program="superslicer")
 
 
+def test_a_prusa_file_without_a_program_widens_holes_in_superslicers_sign() -> None:
+    """Eine 3MF der Prusa-Familie ohne Programm (Dateiexport) liest unter den
+    beiden nur SuperSlicer mit ``hole_size_compensation``; PrusaSlicer übergeht
+    den Schlüssel. Mit Solidons Vorzeichen geschrieben, machte SuperSlicer
+    ein gewähltes „Löcher weiten 0,1“ zu einem um 0,2 mm engeren Loch."""
+    profile = profiles.make_profile("prusa-mk4s", "petg")
+    settings = print_settings.with_choice(
+        print_settings.resolve(profile), "shell.hole_offset", 0.1
+    )
+
+    assert handover.as_mapping(settings, "prusa")["hole_size_compensation"] == "-0.1"
+    assert (
+        handover.as_mapping(settings, "prusa", program="superslicer")["hole_size_compensation"]
+        == "-0.1"
+    )
+
+
 def test_superslicers_compensation_is_read_back_with_its_sign() -> None:
     """Die Bündel von SuperSlicer setzen −0,05 bis −0,3 mm Einzug und −0,03
     bis −0,05 mm Lochausgleich; Solidon liest daraus Einzug und Weitung."""
@@ -450,6 +467,27 @@ def test_superslicers_compensation_is_read_back_with_its_sign() -> None:
     defaults = manufacturer.prusa_defaults("superslicer")
     assert "elefant_foot_compensation" not in defaults
     assert defaults["first_layer_size_compensation"] == "0"
+
+
+@pytest.mark.parametrize("program", sorted(manufacturer.PROGRAM_DEFAULTS))
+def test_a_process_without_foot_and_holes_reads_the_programs_zero(program: str) -> None:
+    """Review RM-589, L1: 19 MK3S-Prozesse in OrcaSlicer und ElegooSlicer und 21
+    in Creality Print nennen ``elefant_foot_compensation`` nicht, 27 bzw. 556
+    ``xy_hole_compensation`` nicht. Das Programm druckt dann mit seiner Vorgabe
+    null (Konfigurationsblock eines Laufs ohne Prozess); die Grundlage liest
+    dieselbe Null als Wert des Profils, damit der Dialog zeigt, was gedruckt
+    wird, und kein „→ 0“ anbietet, das nichts ändert."""
+    context = manufacturer._Context(nozzle=0.4)
+    read, foreign = manufacturer._read_process(
+        {"layer_height": "0.2"},
+        context,
+        manufacturer.PROGRAM_DEFAULTS[program],
+        program_name=program,
+    )
+
+    assert read["layers.elephant_foot"] == pytest.approx(0.0)
+    assert read["shell.hole_offset"] == pytest.approx(0.0)
+    assert not {"layers.elephant_foot", "shell.hole_offset"} & set(foreign)
 
 
 def test_a_choice_and_an_accepted_suggestion_are_told_apart() -> None:

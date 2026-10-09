@@ -256,10 +256,12 @@ PRUSA: Final[tuple[Row, ...]] = (
     ("layers.first_layer_line_width", "first_layer_extrusion_width", _number),
     # Einzug der ersten Schicht je Seite (RM-589); SuperSlicer liest ihn unter
     # eigenem Namen mit umgekehrtem Vorzeichen (:data:`PROGRAM_KEYS`). Einen
-    # Ausgleich nur für Löcher kennt nur SuperSlicer; ``xy_size_compensation``
-    # verschiebt jede Kontur und ist eine andere Sache.
+    # Ausgleich nur für Löcher kennt nur SuperSlicer, als Materialzugabe:
+    # negativ weitet. In seinem Vorzeichen geschrieben, auch in eine 3MF ohne
+    # Programm, die PrusaSlicer liest und dabei den Schlüssel übergeht.
+    # ``xy_size_compensation`` verschiebt jede Kontur und ist eine andere Sache.
     ("layers.elephant_foot", "elefant_foot_compensation", _number),
-    ("shell.hole_offset", "hole_size_compensation", _number),
+    ("shell.hole_offset", "hole_size_compensation", _negated),
     ("shell.wall_count", "perimeters", _integer),
     ("shell.top_layers", "top_solid_layers", _integer),
     ("shell.bottom_layers", "bottom_solid_layers", _integer),
@@ -1244,17 +1246,18 @@ PROGRAM_ALIASES: Final[dict[str, dict[str, tuple[str, ...]]]] = {
 #: Bambu behält den Plural; die übrige Orca-Familie führt den Singular.
 #: SuperSlicer 2.5 nennt den Einzug der ersten Schicht
 #: ``first_layer_size_compensation`` und zählt ihn als Ausdehnung, negativ
-#: (:data:`PROGRAM_NEGATED`); seine Profile setzen −0,05 bis −0,3 (RM-589).
+#: (:data:`PROGRAM_NEGATED`); seine Profile setzen -0,05 bis -0,3 (RM-589).
 PROGRAM_KEYS: Final[dict[str, dict[str, str]]] = {
     "bambustudio": {"chamber_temperature": "chamber_temperatures"},
     "superslicer": {"elefant_foot_compensation": "first_layer_size_compensation"},
 }
 
-#: Schlüssel der Familie, deren Wert das Programm mit umgekehrtem Vorzeichen liest.
-#: SuperSlicers hole_size_compensation gibt Material zu: positiv wird das
-#: Loch enger, gemessen an zwei Bohrplatten (2.5.59.13, 09.10.2026, RM-589).
+#: Schlüssel der Familie, deren Wert das Programm mit umgekehrtem Vorzeichen
+#: liest. Den Lochausgleich schreibt die Prusa-Zeile schon in SuperSlicers
+#: Vorzeichen (``hole_size_compensation``: positiv wird das Loch enger,
+#: gemessen an zwei Bohrplatten, 2.5.59.13, 09.10.2026, RM-589).
 PROGRAM_NEGATED: Final[dict[str, frozenset[str]]] = {
-    "superslicer": frozenset({"elefant_foot_compensation", "hole_size_compensation"}),
+    "superslicer": frozenset({"elefant_foot_compensation"}),
 }
 
 
