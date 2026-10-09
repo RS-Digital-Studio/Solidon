@@ -150,7 +150,11 @@ Weitere Eingänge:
 - **GLB/GLTF**: Neue Importe speichern am Ladeschritt `coordinates="gltf"`
   (Meter, Y oben); bestehende Projekte samt Undo-Fassungen, eingebetteten
   Generatorquellen und Rezeptdokumenten behalten `legacy_raw`. Eine erzeugte
-  GLB (Weg 3) speichert `gltf` mit `mm`; die Größe setzt `fit_to_size`. Eine
+  GLB (Weg 3) speichert `gltf` mit `mm`; die Größe setzt `fit_to_size` —
+  repariert wird an der Arbeitsgröße, das Kundenmaß samt Lage trägt ein
+  zweiter `fit_to_size` dahinter, damit *Größe ändern* nur ihn rechnet
+  (RM-676). Gespeicherte Ketten mit dem Maß vor der Reparatur bleiben, wie sie
+  sind: Umgebaut rechnete die Reparatur an einem anderen Maß. Eine
   ausdrückliche Einheit hat Vorrang; Rohleser und Zielgrößenskalierung
   behalten ihren Vertrag. **Unplausible Meter werden nicht geglaubt** (unter
   10 mm, über der doppelten Bauraumdiagonale): Einheitenfrage mit Meter zuerst

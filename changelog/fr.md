@@ -82,6 +82,7 @@ dans `website/version.json`.
 - Les parois minces, par exemple d'un vase, arrivent fermées et avec une épaisseur.
 - L'assistant répond dans la langue dans laquelle vous écrivez.
 - Avec un modèle local, l'assistant dispose d'autant de place qu'avec un modèle hébergé et mène des tâches jusqu'à douze étapes.
+- Sur un modèle généré, *Modifier la taille* ne recalcule que la nouvelle taille. La réparation faite avant reste telle quelle, et sur un grand modèle c'est plusieurs fois plus rapide.
 
 ## 0.5.3
 

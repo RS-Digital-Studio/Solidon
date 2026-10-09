@@ -82,6 +82,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Las paredes finas, por ejemplo de un jarrón, llegan cerradas y con grosor.
 - El asistente responde en el idioma en que usted escribe.
 - Con un modelo local, el asistente tiene tanto margen como con uno alojado y completa encargos de hasta doce pasos.
+- En un modelo generado, *Cambiar tamaño* solo recalcula la nueva medida. La reparación anterior se queda como está, y en modelos grandes es varias veces más rápido.
 
 ## 0.5.3
 

@@ -81,6 +81,7 @@ scrive in `website/version.json`.
 - Le pareti sottili, per esempio di un vaso, arrivano chiuse e con uno spessore.
 - L'assistente risponde nella lingua in cui scrivi.
 - Con un modello locale l'assistente ha tanto spazio quanto con uno ospitato e porta a termine compiti fino a dodici passaggi.
+- Su un modello generato, *Cambia dimensione* ricalcola solo la nuova misura. La riparazione fatta prima resta com'è, e sui modelli grandi è molte volte più veloce.
 
 ## 0.5.3
 

@@ -329,6 +329,44 @@ def test_fit_to_size_reaches_the_given_edge(profile: Profile) -> None:
     assert bodies[0].plate == 0
 
 
+def test_a_later_fit_to_size_settles_the_earlier_one(profile: Profile) -> None:
+    """RM-676: Nur der letzte *Auf Maß bringen* eines Körpers bietet *Größe ändern* an.
+
+    Ein späterer Schritt desselben Körpers bringt ihn ohnehin auf sein eigenes
+    Maß; das Maß des früheren zu ändern bewegte am Ende nichts außer der Rechnung
+    dazwischen. Weg 3 legt zwei davon an (Arbeitsgröße vor der Reparatur,
+    Kundenmaß danach), und im Bericht steht nur der zweite.
+    """
+    project = new_project("centauri-carbon-2", "pla")
+    project.document.sources["src_1"] = Source(
+        id="src_1", kind="import", path="sources/cube_clean.stl", sha256=""
+    )
+    project.sources["src_1"] = (MESHES / "cube_clean.stl").read_bytes()
+    history = History(project.document)
+    history.apply("Laden", [OperationDraft(op="load", params={"source": "src_1", "unit": "mm"})])
+    for largest in (80.0, 50.0):
+        history.apply(
+            "Auf Maß",
+            [
+                OperationDraft(
+                    op="fit_to_size",
+                    inputs=("obj_1",),
+                    outputs=("obj_1",),
+                    params={"largest": largest},
+                )
+            ],
+        )
+    later = project.document.ops[-1].id
+
+    result = evaluate(project.document, profile, sources=ProjectSources(project))
+
+    said = [f for f in result.scene.report.findings if f.code == "transform.fitted"]
+    assert [(f.op_id, f.values["to_mm"]) for f in said] == [(later, 50.0)], (
+        "der frühere Befund führte *Größe ändern* in einen Schritt ohne Wirkung aufs Maß"
+    )
+    assert max(result.scene.objects["obj_1"].mesh.bounds.size) == pytest.approx(50.0, abs=1e-6)
+
+
 def test_fit_to_size_refuses_a_body_without_extent() -> None:
     """Ein Maß braucht etwas, worauf es sich bezieht — sonst teilt die
     Rechnung durch null.

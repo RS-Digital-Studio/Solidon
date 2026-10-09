@@ -81,6 +81,7 @@ it into `website/version.json`.
 - Thin walls, for example on a vase, arrive closed and with thickness.
 - The assistant replies in the language you write in.
 - With a local model the assistant has as much room as with a hosted one and handles tasks of up to twelve steps.
+- On a generated model, *Change size* only recalculates the new size. The repair before it stays as it is, and on large models it is many times faster.
 
 ## 0.5.3
 

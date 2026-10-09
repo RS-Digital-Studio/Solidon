@@ -1904,6 +1904,12 @@ SETTLED_BY: Final[dict[str, frozenset[str]]] = {
         }
     ),
     "repair.self_intersections_incomplete": frozenset({"repair.self_intersections"}),
+    # **Das Maß sagt der letzte *Auf Maß bringen* eines Körpers** (RM-676). Ein
+    # späterer bringt ihn ohnehin auf seine eigene Kante; *Größe ändern* am
+    # früheren änderte am Ende nichts außer der Rechnung dazwischen. Weg 3
+    # legt zwei an — Arbeitsgröße vor der Reparatur, Kundenmaß dahinter
+    # (``generate.into_project``) —, und angeboten wird nur der zweite.
+    "transform.fitted": frozenset({"transform.fitted"}),
 }
 
 #: Wie :data:`SETTLED_BY`, aber nur für die Fassung eines Befunds, die diese

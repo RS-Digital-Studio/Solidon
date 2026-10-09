@@ -180,8 +180,9 @@ def from_image(
 
 
 def into_project(project: Project, result: GeneratedMesh, name: str = "") -> Generation:
-    """Datei einbetten, laden, auf Maß bringen, reparieren, aufsetzen — als
-    **eine** Transaktion, deren Schritte einzeln im Verlauf stehen (§15.5).
+    """Datei einbetten, laden, auf Arbeitsgröße bringen, reparieren, auf das
+    Kundenmaß bringen und dabei legen — als **eine** Transaktion, deren
+    Schritte einzeln im Verlauf stehen (§15.5).
 
     Getrennt von den zwei Aufrufen darüber, damit eine Oberfläche, die schon
     ein Ergebnis hat — weil sie den Generator auf ihrem eigenen Thread laufen
@@ -294,20 +295,13 @@ def into_project(project: Project, result: GeneratedMesh, name: str = "") -> Gen
     # Dreiecke. Kanten verfeinern — der andere Weg, ein Netz zu schließen — hätte
     # sie gekostet.
     #
-    # Geraten wird beim Maß nichts (Regel 21): dass ein Stuhl 75 mm hoch
-    # werden soll und ein Schrank 250, weiß nur der Nutzer. Was hier entsteht,
-    # ist eine Ausgangsgröße, von der aus er in einem Schritt auf sein Maß
-    # kommt — der Befund des Schritts trägt dafür *Größe ändern* (RM-374).
-    sizing = OperationDraft(
+    # Dieser Schritt bringt nur auf die Arbeitsgröße, an der die Reparatur
+    # rechnet; das Maß des Kunden trägt der letzte Schritt (``customer_size``).
+    working = OperationDraft(
         op="fit_to_size",
         inputs=(object_id,),
         outputs=(object_id,),
-        # **Und erst am fertigen Maß wird gelegt** (Robert, 28.09.2026): Ein
-        # erzeugtes Modell ist aus Kundensicht ein weiteres Modell — aufgesetzt
-        # an die freie Stelle nächst der Plattenmitte, wie beim Einfügen
-        # (§17.1, Schritt 6). In einem leeren Projekt heißt das: mittig auf
-        # Platte 1.
-        params={"largest": WORKING_SIZE_MM, "free_spot": True},
+        params={"largest": WORKING_SIZE_MM},
     )
     repairing = OperationDraft(op="repair", inputs=(object_id,), params=dict(GENERATED_REPAIR))
     # Und ein eigener Schritt, wenn das Netz zu fein ist, um damit zu arbeiten.
@@ -330,14 +324,41 @@ def into_project(project: Project, result: GeneratedMesh, name: str = "") -> Gen
                 params={"triangles": GENERATED_TRIANGLE_TARGET},
             ),
         )
-    # **Und zuletzt wieder aufs Bett.** Die Stelle steht seit ``fit_to_size``
-    # fest, die Höhe nicht: Die Reparaturkette nimmt lose Krümel weg, und lag
-    # einer unter dem Körper, schwebte er danach — gemessen 5,21 mm über dem
-    # Bett (Review F8). Aufgesetzt wird deshalb nach der ganzen Kette.
-    seating = OperationDraft(op="place_on_bed", inputs=(object_id,), outputs=(object_id,))
+    # **Zuletzt das Maß des Kunden, und dort wird gelegt und aufgesetzt.**
+    #
+    # Geraten wird beim Maß nichts (Regel 21): dass ein Stuhl 75 mm hoch
+    # werden soll und ein Schrank 250, weiß nur der Nutzer. Was hier entsteht,
+    # ist eine Ausgangsgröße, von der aus er in einem Schritt auf sein Maß
+    # kommt — der Befund dieses Schritts trägt dafür *Größe ändern* (RM-374);
+    # den des Arbeitsschritts davor hebt er auf (``evaluate.SETTLED_BY``).
+    #
+    # **Ein eigener Schritt hinter der Reparatur, weil eine Maßänderung sonst
+    # die ganze Kette neu rechnete** (RM-676). Stand das Kundenmaß im
+    # Arbeitsschritt, liefen nach *Größe ändern* Reparatur und Erkennung am
+    # vollen Netz noch einmal — am Stuhl mit 660 000 Dreiecken 113 s statt
+    # 29 s, gemessen am 09.10.2026. Die Reparatur bleibt an der Arbeitsgröße,
+    # wo ihre Toleranzen das Richtige treffen; eine frische Rechnung im neuen
+    # Maß ist dieselbe Kette mit derselben Zahl, also dasselbe Ergebnis.
+    #
+    # **Und erst am fertigen Maß wird gelegt** (Robert, 28.09.2026): Ein
+    # erzeugtes Modell ist aus Kundensicht ein weiteres Modell — aufgesetzt an
+    # die freie Stelle nächst der Plattenmitte, wie beim Einfügen (§17.1,
+    # Schritt 6); in einem leeren Projekt mittig auf Platte 1. Weil das nach
+    # der Reparatur geschieht, steht der Körper auch dann auf dem Bett, wenn
+    # sie einen losen Krümel unter ihm wegnimmt (Review F8: 5,21 mm darüber) —
+    # der eigene *Auf das Bett setzen*-Schritt, der das bisher einholte, ist
+    # damit überflüssig.
+    customer_size = OperationDraft(
+        op="fit_to_size",
+        inputs=(object_id,),
+        outputs=(object_id,),
+        params={"largest": WORKING_SIZE_MM, "free_spot": True},
+    )
     try:
         made = history.apply(
-            _("Modell erzeugen"), [loading, sizing, repairing, *thinning, seating], origin
+            _("Modell erzeugen"),
+            [loading, working, repairing, *thinning, customer_size],
+            origin,
         )
     except AppError:
         # Abgelehnt heißt: nichts geschrieben — auch die Quelle nicht, die

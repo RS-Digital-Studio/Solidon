@@ -81,6 +81,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - As paredes finas, por exemplo de um vaso, chegam fechadas e com espessura.
 - O assistente responde na língua em que escreve.
 - Com um modelo local, o assistente tem tanto espaço como com um alojado e cumpre tarefas até doze passos.
+- Num modelo gerado, *Alterar tamanho* só recalcula a nova medida. A reparação feita antes mantém-se, e em modelos grandes é várias vezes mais rápido.
 
 ## 0.5.3
 

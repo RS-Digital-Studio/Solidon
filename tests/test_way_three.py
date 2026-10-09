@@ -112,13 +112,15 @@ def test_the_generated_file_is_a_source_and_not_an_operation(project: Project) -
     assert source.origin.author == "scripted"
     assert project.sources[result.source_id] == result.result.payload
     # Vier Schritte: laden, auf Arbeitsgröße bringen (ein Bildmodell liefert
-    # auf einem Einheitswürfel), reparieren und zuletzt aufsetzen — nach der
-    # Kette, denn die Reparatur kann unter dem Körper etwas wegnehmen.
+    # auf einem Einheitswürfel), reparieren und zuletzt aufs Kundenmaß bringen,
+    # das zugleich legt und aufsetzt — nach der Kette, denn die Reparatur kann
+    # unter dem Körper etwas wegnehmen, und eine Maßänderung rechnet so nur
+    # diesen letzten Schritt neu (RM-676).
     assert [entry.op for entry in project.document.ops] == [
         "load",
         "fit_to_size",
         "repair",
-        "place_on_bed",
+        "fit_to_size",
     ]
 
 
@@ -481,13 +483,17 @@ def test_a_generated_mesh_arrives_workable(project: Project, profile: Profile) -
         "fit_to_size",
         "repair",
         "decimate_mesh",
-        "place_on_bed",
-    ], "Dezimieren nach der Reparatur, Aufsetzen zuletzt"
-    result = evaluated(project, profile)
+        "fit_to_size",
+    ], "Dezimieren nach der Reparatur, Kundenmaß und Aufsetzen zuletzt"
+    calls, result, fresh = _resized(project, profile, 180.0)
     entry = result.scene.objects[generation.object_id]
     assert entry.mesh.triangle_count <= GENERATED_TRIANGLE_TARGET * 1.1
     assert entry.mesh.is_watertight
     assert entry.mesh.component_count == 1
+    # RM-676 über dem Dreieckslimit: Weder Reparatur noch Dezimieren laufen
+    # für eine Maßänderung noch einmal.
+    assert dict(calls) == {"fit_to_size": 1}, calls
+    assert _summary(result, generation.object_id) == _summary(fresh, generation.object_id)
 
 
 def test_a_fine_generated_mesh_keeps_resolution_within_the_recognition_budget(
@@ -651,7 +657,13 @@ def test_a_generated_model_stays_seated_when_the_repair_takes_a_crumb_below_it(
     entry = scene.scene.objects[result.object_id]
     assert entry.mesh.bounds.minimum[2] == pytest.approx(0.0, abs=1e-6), "auf dem Bett"
     assert "arrange.above_bed" not in {finding.code for finding in scene.scene.report.findings}
-    assert [operation.op for operation in project.document.ops][-1] == "place_on_bed"
+    last = project.document.ops[-1]
+    assert (last.op, last.params.get("free_spot")) == ("fit_to_size", True), (
+        "gelegt und aufgesetzt wird im letzten Schritt, nach der Reparatur"
+    )
+    # Und am Kundenmaß, nicht an dem, was die Reparatur von der Arbeitsgröße
+    # übrig ließ: Der Krümel machte die Kante länger als die Kugel.
+    assert max(entry.mesh.bounds.size) == pytest.approx(100.0, abs=1e-3)
 
 
 def _fingerprints(result) -> dict[str, str]:
@@ -692,7 +704,7 @@ def test_a_generation_is_one_step_in_the_history(project: Project, profile: Prof
         "load",
         "fit_to_size",
         "repair",
-        "place_on_bed",
+        "fit_to_size",
     ], "die Schritte bleiben einzeln im Verlauf"
     before = _fingerprints(evaluate(project.document, profile, sources=ProjectSources(project)))
     assert generation.object_id in before
@@ -747,3 +759,129 @@ def test_a_generated_model_goes_to_the_next_plate_when_the_first_is_full(
     assert body.plate == 1
     assert fits_on_bed(body.mesh, profile.printer)
     assert body.mesh.bounds.centre[:2] == pytest.approx((0.0, 0.0), abs=1e-6)
+
+
+# --- *Größe ändern* rechnet nur das Maß neu (RM-676) ---------------------------
+
+
+def _summary(result, object_id: str) -> tuple[object, ...]:
+    """Was der Kunde vom Ergebnis sieht: Volumen, Maße, Lage und die Befunde."""
+    body = result.scene.objects[object_id]
+    return (
+        round(float(body.mesh.volume), 6),
+        tuple(round(float(value), 6) for value in body.mesh.bounds.size),
+        round(float(body.mesh.bounds.minimum[2]), 6),
+        body.plate,
+        sorted(
+            (entry.code, entry.severity, entry.op_id, entry.object_id)
+            for entry in result.scene.report.findings
+        ),
+    )
+
+
+def _resized(project: Project, profile: Profile, largest: float):
+    """*Größe ändern* wie am Befund: der Schritt, den ``transform.fitted`` anbietet,
+    bekommt ein neues Maß, und der Lauf danach nimmt den Cache des ersten.
+
+    Gibt zurück, welche Operationen dafür gerechnet haben, das Ergebnis und
+    zum Vergleich eine frische Rechnung desselben Dokuments ohne Cache.
+    """
+    import dataclasses
+    from collections import Counter
+
+    from app.core.registry import REGISTRY
+    from app.core.registry.registry import Registry
+    from app.core.scene import ResultCache
+
+    calls: Counter[str] = Counter()
+
+    def counted(name: str, fn):
+        def run(ctx):
+            calls[name] += 1
+            return fn(ctx)
+
+        return run
+
+    registry = Registry()
+    for spec in REGISTRY.all():
+        registry.register(dataclasses.replace(spec, fn=counted(spec.name, spec.fn)))
+    cache = ResultCache()
+    document = project.document
+
+    def run(into: ResultCache, with_registry: Registry | None):
+        return evaluate(
+            document, profile, sources=ProjectSources(project), cache=into, registry=with_registry
+        )
+
+    first = run(cache, registry)
+    offered = [
+        entry
+        for entry in first.scene.report.findings
+        if entry.code == "transform.fitted"
+        and any(action.id == "change_step" for action in entry.suggestions)
+    ]
+    assert [entry.op_id for entry in offered] == [document.ops[-1].id], (
+        "*Größe ändern* steht genau einmal im Bericht, am letzten Schritt"
+    )
+    step = History(document).operation(offered[0].op_id)
+    transactions = len(document.transactions)
+
+    calls.clear()
+    History(document).change_params(step.id, {**dict(step.params), "largest": largest})
+    assert len(document.transactions) == transactions + 1, "ein Rückgängig-Schritt"
+    after = run(cache, registry)
+    fresh = run(ResultCache(), None)
+    return calls, after, fresh
+
+
+def test_changing_the_size_of_a_generated_model_reruns_only_the_size(
+    project: Project, profile: Profile
+) -> None:
+    """RM-676: *Größe ändern* am erzeugten Stuhl rechnete Reparatur, Aufsetzen
+    und die Merkmalserkennung am vollen Netz neu — 67 bis 139 s statt der 18 bis
+    22 s, die das angehängte Skalieren in v0.5.1 brauchte.
+
+    Die Kette repariert jetzt an der Arbeitsgröße und trägt das Kundenmaß als
+    eigenen Schritt dahinter; eine Maßänderung rechnet nur ihn. Das Ergebnis ist
+    dasselbe wie eine frische Rechnung im neuen Maß, und ein Strg+Z holt das alte.
+    """
+    generation = from_text(project, backend(), "eine kleine Figur", seed=7)
+
+    calls, result, fresh = _resized(project, profile, 250.0)
+
+    assert dict(calls) == {"fit_to_size": 1}, calls
+    assert _summary(result, generation.object_id) == _summary(fresh, generation.object_id)
+    body = result.scene.objects[generation.object_id]
+    assert max(body.mesh.bounds.size) == pytest.approx(250.0, abs=1e-3)
+    assert body.mesh.bounds.minimum[2] == pytest.approx(0.0, abs=1e-6), "steht auf dem Bett"
+
+    History(project.document).undo()
+    back = evaluated(project, profile).scene.objects[generation.object_id]
+    assert max(back.mesh.bounds.size) == pytest.approx(100.0, abs=1e-3), "Strg+Z holt das Maß"
+    assert project.document.ops[-1].op == "fit_to_size"
+
+
+def test_a_project_saved_with_the_earlier_chain_computes_as_saved(profile: Profile) -> None:
+    """Gespeicherte Erzeugungen behalten ihre Kette (RM-676): erst das Maß, dann
+    die Reparatur, dann aufsetzen. Sie wird nicht umgebaut — die Reparatur an
+    einem anderen Maß rechnete ein anderes Netz —, und *Größe ändern* bleibt
+    dort am Maßschritt, wo es war. Beleg ist das mitgelieferte Beispiel, das
+    mit dieser Kette gebaut und eingecheckt wurde.
+    """
+    from app.core import examples
+    from app.core.scene.project import load as load_project
+
+    project = load_project(examples.directory() / "weg3-generiert-aufbereiten.p3d")
+    ops = project.document.ops
+    assert [entry.op for entry in ops][:4] == ["load", "fit_to_size", "repair", "place_on_bed"]
+
+    result = evaluated(project, profile)
+
+    assert result.complete
+    offered = [
+        entry.op_id
+        for entry in result.scene.report.findings
+        if entry.code == "transform.fitted"
+        and any(action.id == "change_step" for action in entry.suggestions)
+    ]
+    assert offered == [ops[1].id]

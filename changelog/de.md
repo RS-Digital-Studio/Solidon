@@ -106,6 +106,7 @@ Nutzen da und sonst nichts.
 - Dünne Wände, etwa an einer Vase, kommen geschlossen und mit Dicke an.
 - Der Assistent antwortet in der Sprache, in der Sie schreiben.
 - Mit lokalem Modell hat der Assistent so viel Raum wie mit einem gehosteten und schafft Aufträge mit bis zu zwölf Schritten.
+- Bei einem erzeugten Modell rechnet *Größe ändern* nur das neue Maß. Die Reparatur davor bleibt, wie sie ist, und bei großen Modellen geht es um ein Vielfaches schneller.
 
 ## 0.5.3
 
