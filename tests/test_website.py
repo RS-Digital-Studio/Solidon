@@ -1325,8 +1325,27 @@ def _signature_hint_problems(markup: str, language: str, published: str) -> list
     """Die Signatur- und Notarisierungshinweise an den Stellen, an denen sie stehen.
 
     Gelesen wird die Stelle, nicht ein Wortfilter: der Windows-Reiter, der
-    macOS-Reiter und die Zeile „Betriebssystem“ der Systemvoraussetzungen.
+    macOS-Reiter, die Zeile „Betriebssystem“ der Systemvoraussetzungen und die
+    Mac-Antwort der häufigen Fragen — sichtbar und in der Auszeichnung für
+    Suchmaschinen (JSON-LD), die ``make_seo.py`` daraus schreibt.
     """
+    problems = []
+    # Die Mac-Antwort ist die eine Frage, die arm64 nennt — in jeder Sprache.
+    answers = re.findall(r"<details>\s*<summary>.*?</summary>(.*?)</details>", markup, re.DOTALL)
+    faq = [_visible_text(body) for body in answers if "arm64" in body]
+    faq_ld = []
+    ld_blocks = re.findall(r'<script type="application/ld\+json">(.*?)</script>', markup, re.DOTALL)
+    for block in ld_blocks:
+        data = json.loads(block)
+        for question in (data.get("mainEntity") or []) if isinstance(data, dict) else []:
+            answer = question.get("acceptedAnswer") if isinstance(question, dict) else None
+            if isinstance(answer, dict) and "arm64" in str(answer.get("text", "")):
+                faq_ld.append(str(answer["text"]))
+    for place, texts in (("FAQ Mac", faq), ("FAQ Mac (JSON-LD)", faq_ld)):
+        if len(texts) != 1:
+            problems.append(f"{place}: {len(texts)} Treffer statt genau einem")
+            continue
+        problems += _since_problems(place, texts[0], language, (FIRST_NOTARISED_MAC,), published)
     places = {
         "Windows-Reiter": (
             r'<div data-tab="Windows"[^>]*>(.*?)</div>',
@@ -1338,7 +1357,6 @@ def _signature_hint_problems(markup: str, language: str, published: str) -> list
             (FIRST_SIGNED_WINDOWS, FIRST_NOTARISED_MAC),
         ),
     }
-    problems = []
     for place, (pattern, allowed) in places.items():
         found = re.search(pattern, markup, re.DOTALL)
         if found is None:
@@ -1410,6 +1428,20 @@ def test_the_signature_hints_name_only_the_first_signed_version(page: str) -> No
             "Windows-Reiter: der Hinweis",
         ),
         ("it/index.html", "Dalla versione 0.4.1", "La versione 0.4.1", None, "ohne „ab“"),
+        (
+            "index.html",
+            "deines Macs. Ab Version 0.4.1 sind die",
+            "deines Macs. Version 0.4.1 ist notarisiert, die",
+            None,
+            "FAQ Mac: 0.4.1 steht ohne",
+        ),
+        (
+            "index.html",
+            "0.4.1 sind die Pakete bei Apple",
+            "0.5.3 sind die Pakete bei Apple",
+            None,
+            "FAQ Mac (JSON-LD): nennt 0.5.3",
+        ),
     ],
     ids=[
         "ausgangssatz-de",
@@ -1421,6 +1453,8 @@ def test_the_signature_hints_name_only_the_first_signed_version(page: str) -> No
         "vor-der-ersten",
         "ohne-hinweis",
         "mac-ohne-ab",
+        "faq-mac-ohne-ab",
+        "faq-mac-json-ld",
     ],
 )
 def test_the_signature_guard_catches_a_manipulated_copy(

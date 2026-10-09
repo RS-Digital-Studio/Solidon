@@ -354,7 +354,10 @@ erste, seit 0.1.4: `603ec2d86e9f1b5232ccec58153b863f00c1f91cbc647a8696ecf6dfd4bb
    Passwortmanager, den öffentlichen ans Ende von `RELEASE_PUBLIC_KEYS` (der
    alte bleibt stehen), die ausgegebene Besitzprobe nach `KEY_PROOFS` in
    `tests/release_signing.py` — sie fängt jeden Tippfehler beim Eintragen.
-   Gegenprobe: `--private <neu>` lehnt ab und schreibt nichts.
+   Gegenprobe: `--private <neu>` muss melden, die Vorgängerin der Version
+   kenne den Schlüssel nicht, und schreibt nichts. Meldet es stattdessen
+   „steht nicht in updates.RELEASE_PUBLIC_KEYS“, ist der öffentliche Teil
+   falsch eingetragen.
 2. Diese Version veröffentlichen und ihre Versionsdatei noch mit dem **alten**
    Schlüssel unterschreiben. So sieht jede ältere Installation das Update und
    bekommt mit ihm den neuen Schlüssel.

@@ -1539,7 +1539,7 @@ def test_the_new_key_cannot_sign_the_version_that_introduces_it(
             sign_version.sign_file(
                 NEW_SEED,
                 after_switch=after_switch,
-                published=ONLY_OLD_PUBLISHED,
+                published=BOTH_PUBLISHED,
                 previous=OLD_KEY,
             )
     assert file.read_text(encoding="utf-8") == before, "die Datei wurde trotzdem beschrieben"
@@ -1581,7 +1581,7 @@ def test_check_and_upload_stop_a_file_the_last_release_cannot_read(
     file = website / "version.json"
     file.write_text(json.dumps(signed(_release("0.6.0"), NEW_SEED)), encoding="utf-8")
     monkeypatch.setattr(sign_version, "VERSION_FILE", file)
-    monkeypatch.setattr(sign_version, "published_key_lists", lambda: ONLY_OLD_PUBLISHED)
+    monkeypatch.setattr(sign_version, "published_key_lists", lambda: BOTH_PUBLISHED)
     monkeypatch.setattr(upload_website, "LOCAL_ROOT", website)
 
     assert sign_version.check_file() == 1
@@ -1637,16 +1637,79 @@ def test_the_key_list_is_read_from_both_source_forms() -> None:
 def test_the_published_version_file_uses_a_key_its_predecessor_knew() -> None:
     """Anschluss: die echte Datei gegen die echten Tags.
 
-    Ohne Tags (flacher Klon) lässt sich das nicht prüfen; das Werkzeug hält
+    Ohne ein älteres Tag (flacher Klon) lässt sich das nicht prüfen; das Werkzeug hält
     dort selbst an (``test_without_tags_the_signing_tool_stops_instead_of_guessing``).
     """
     published = sign_version.published_key_lists()
-    if not published:
-        pytest.skip("keine Tags mit Release-Schlüssel in diesem Klon")
     data = json.loads(PUBLISHED_VERSION_FILE.read_text(encoding="utf-8"))
+    target = sign_version.as_version(data.get("version"))
+    assert target is not None, "version.json nennt keine Versionsnummer"
+    if not any(number < target for number in published):
+        pytest.skip("kein Tag vor dieser Version im Klon — der Tag-Lauf holt nur sein eigenes")
 
     with mock.patch.object(updates, "RELEASE_PUBLIC_KEYS", REAL_PUBLIC_KEYS):
         assert sign_version.version_file_problem(data, published) is None
+
+
+@pytest.mark.parametrize("tag", [None, (0, 6, 0), (0, 7, 0)])
+def test_the_anchor_test_skips_without_a_predecessor_tag(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, tag: tuple[int, int, int] | None
+) -> None:
+    """Ein flacher Tag-Klon kennt die eigene Fassung, aber keinen Vorgänger."""
+    file = _version_file(tmp_path, monkeypatch)
+    monkeypatch.setattr(sys.modules[__name__], "PUBLISHED_VERSION_FILE", file)
+    published = {} if tag is None else {tag: REAL_PUBLIC_KEYS}
+    monkeypatch.setattr(sign_version, "published_key_lists", lambda: published)
+    with pytest.raises(pytest.skip.Exception):
+        test_the_published_version_file_uses_a_key_its_predecessor_knew()
+
+
+def test_the_anchor_test_checks_the_file_when_a_predecessor_is_available(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Der flache Klon darf die echte Ankerprüfung im vollständigen Klon nicht aushebeln."""
+    monkeypatch.setattr(sign_version, "published_key_lists", lambda: {(0, 0, 1): REAL_PUBLIC_KEYS})
+    with mock.patch.object(sign_version, "version_file_problem", return_value=None) as check:
+        test_the_published_version_file_uses_a_key_its_predecessor_knew()
+    check.assert_called_once()
+
+
+def test_the_key_refusal_names_the_predecessor_of_the_target() -> None:
+    """Die vorige Versionsdatei kann älter sein als die zuletzt veröffentlichte Fassung."""
+    problem = sign_version.key_problem(NEW_KEY, "0.6.0", BOTH_PUBLISHED)
+    assert problem is not None and "Version 0.5.3, die Vorgängerin von 0.6.0" in problem
+
+
+@pytest.mark.parametrize("unsigned", [None, "{", "[]", '{"version": "0.6.0"}'])
+def test_the_signer_is_found_behind_an_unsigned_or_unreadable_head(
+    monkeypatch: pytest.MonkeyPatch, unsigned: str | None
+) -> None:
+    """Der Verlauf nennt die letzte tragende Signatur, auch nach Entfernen ihres Schlüssels."""
+    monkeypatch.setattr(updates, "RELEASE_PUBLIC_KEYS", (NEW_KEY,))
+    previous = json.dumps(signed(_release("0.5.3"), OLD_SEED))
+
+    def git(*args: str) -> str | None:
+        if args[0] == "log":
+            return "neu\nalt\n"
+        return {"neu:website/version.json": unsigned, "alt:website/version.json": previous}[args[1]]
+
+    monkeypatch.setattr(sign_version, "_git", git)
+    assert sign_version.previous_signer((OLD_KEY,)) == OLD_KEY
+
+
+@pytest.mark.usefixtures("switching_keys")
+def test_an_unknown_previous_signature_cannot_be_confirmed_as_a_key_switch(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Ohne gültigen Vorgänger hilft auch die Bestätigung der Wartezeit nicht."""
+    file = _version_file(tmp_path, monkeypatch)
+    before = file.read_bytes()
+    monkeypatch.setattr(sign_version, "previous_signer", lambda _keys: None)
+    for confirmed in (False, True):
+        with pytest.raises(SystemExit, match=r"keine eine gültige Unterschrift(?s:.*)Zu tun"):
+            sign_version.sign_file(OLD_SEED, after_switch=confirmed, published=BOTH_PUBLISHED)
+    assert file.read_bytes() == before
 
 
 def test_the_signing_doc_describes_the_key_switch_step_by_step() -> None:

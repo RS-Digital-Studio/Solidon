@@ -49,7 +49,7 @@ import re
 import secrets
 import subprocess
 import sys
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from pathlib import Path
 from typing import Any
 
@@ -57,6 +57,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 from app.core import updates  # noqa: E402  — erst nach sys.path
+from app.core.activation import ed25519  # noqa: E402
 from tools.make_licence_keys import public_key, sign  # noqa: E402
 
 VERSION_FILE = ROOT / "website" / "version.json"
@@ -181,19 +182,44 @@ def published_key_lists() -> dict[Version, tuple[bytes, ...]]:
     return found
 
 
-def previous_signer() -> bytes | None:
-    """Welcher Schlüssel die zuletzt veröffentlichte Versionsdatei unterschrieb.
-
-    Gelesen aus ``HEAD:website/version.json`` — der Arbeitsbaum trägt nach
-    ``make_download.py`` schon die neue, noch unterschriebene oder nicht.
-    """
-    text = _git("show", "HEAD:website/version.json")
-    if text is None:
-        return None
+def _signer_among(data: Mapping[str, Any], keys: Iterable[bytes]) -> bytes | None:
+    """Welcher dieser Schlüssel die Unterschrift von ``data`` trägt."""
+    raw = data.get(updates.SIGNATURE_FIELD)
     try:
-        return updates.signing_key(json.loads(text))
+        signature = bytes.fromhex(raw) if isinstance(raw, str) else b""
     except ValueError:
         return None
+    payload = updates.signed_payload(data)
+    return next((key for key in keys if ed25519.verify(key, payload, signature)), None)
+
+
+#: Wie viele Fassungen von ``website/version.json`` zurück gesucht wird.
+HISTORY_DEPTH = 50
+
+
+def previous_signer(keys: Iterable[bytes] = ()) -> bytes | None:
+    """Welcher Schlüssel die zuletzt veröffentlichte Versionsdatei unterschrieb.
+
+    Gelesen aus dem Git-Verlauf von ``website/version.json``, die jüngste
+    Fassung mit gültiger Unterschrift — der Arbeitsbaum trägt nach
+    ``make_download.py`` schon die neue, und eingecheckt wurde auch schon eine
+    unsignierte (``0f0f6325a``). Geprüft gegen ``keys`` und die Liste des
+    Arbeitsbaums, damit ein inzwischen entfernter Schlüssel erkannt wird.
+    ``None``, wenn keine Fassung trägt.
+    """
+    candidates = (*updates.RELEASE_PUBLIC_KEYS, *keys)
+    log = _git("log", f"-{HISTORY_DEPTH}", "--format=%H", "HEAD", "--", "website/version.json")
+    for commit in (log or "").split():
+        text = _git("show", f"{commit}:website/version.json")
+        if text is None:
+            continue
+        try:
+            data = json.loads(text)
+        except ValueError:
+            continue
+        if isinstance(data, dict) and (signer := _signer_among(data, candidates)) is not None:
+            return signer
+    return None
 
 
 def _short(key: bytes) -> str:
@@ -229,7 +255,8 @@ def key_problem(
         return None
     name = ".".join(map(str, previous))
     return (
-        f"Version {name}, die zuletzt veröffentlichte, kennt den Schlüssel "
+        f"Version {name}, die Vorgängerin von {'.'.join(map(str, target))}, "
+        f"kennt den Schlüssel "
         f"{_short(key)} nicht. Jede Installation bis {name} verwürfe diese "
         "Versionsdatei still und sähe das Update nie.\n"
         f"  Zu tun: mit dem Schlüssel unterschreiben, den {name} kennt "
@@ -262,12 +289,23 @@ def sign_file(
             "mit einer Version hinaus (Schlüsselwechsel, Schritt 1 und 2)."
         )
     data = json.loads(VERSION_FILE.read_text(encoding="utf-8"))
-    problem = key_problem(
-        key, data.get("version"), published_key_lists() if published is None else published
-    )
+    known = published_key_lists() if published is None else published
+    problem = key_problem(key, data.get("version"), known)
     if problem is not None:
         raise SystemExit(problem)
-    signer = previous_signer() if previous is None else previous
+    signer = previous
+    if signer is None:
+        signer = previous_signer(k for keys in known.values() for k in keys)
+    if signer is None:
+        raise SystemExit(
+            f"In den letzten {HISTORY_DEPTH} Fassungen von website/version.json im "
+            "Git-Verlauf trägt keine eine gültige Unterschrift. Ob der Schlüssel "
+            "gegenüber der veröffentlichten Fassung wechselt, lässt sich so nicht "
+            "feststellen.\n"
+            "  Zu tun: die veröffentlichte version.json von "
+            "https://solidon3d.de/version.json holen, einchecken und erneut "
+            "unterschreiben."
+        )
     if signer != key and not after_switch:
         raise SystemExit(
             f"Die zuletzt veröffentlichte Versionsdatei unterschrieb ein anderer "
