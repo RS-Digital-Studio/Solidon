@@ -105,8 +105,8 @@ def held_by(
     Gemessen wird nicht einmal für immer: Ein Netz im Cache ist dasselbe
     Objekt wie in der Szene, und was später an ihm gerechnet wird —
     Nachbarschaften, die Schichtanalyse des Prüfberichts —, hängt sich an ihn
-    und wiegt mit. Netze, deren Nummer (``id``) in ``kept`` steht, hält die
-    Szene ohnehin; sie zählen hier nicht. Felder, deren Nummer in ``seen``
+    und wiegt mit. Netze, deren Nummer (``id``) oder die ihres ``raw`` in
+    ``kept`` steht, hält die Szene ohnehin; sie zählen hier nicht. Felder, deren Nummer in ``seen``
     steht, sind schon gezählt — ein bewegtes Netz teilt seine
     Nachbarschaften mit seinem Quellnetz (``transform._carry_cache``).
     ``freeable`` sammelt in seinem ersten Element, was schlanke Netze davon
@@ -120,22 +120,19 @@ def held_by(
     einmal; je Satz für sich gezählt, hielt die Grenze am Laptop-Riser nach
     vier Verschieben 150 statt 122 MB (Nachprüfung L, M-3).
     """
-    from app.core.memory import held_bytes, held_parts
+    from app.core.memory import held_bytes
 
     seen = set() if seen is None else seen
     total = 0
     for entry in result.objects:
-        if id(entry.mesh) in kept:
+        if id(entry.mesh) in kept or id(getattr(entry.mesh, "raw", None)) in kept:
             continue
         total += _mesh_bytes(entry.mesh, seen, freeable)
         if counted is None:
             total += held_bytes(entry.features, seen)
             continue
         features = entry.features
-        known = counted.get(id(features))
-        if known is None or known[0] is not features:
-            known = (features, *held_parts(features))
-            counted[id(features)] = known
+        known = _counted_features(features, counted)
         if id(features) in seen:
             continue
         total += known[1]
@@ -147,6 +144,79 @@ def held_by(
                 total += size
         seen.add(id(features))
     return total
+
+
+#: Ein Merkmalssatz, sein Rest und seine großen Behälter (``memory.held_parts``).
+_Counted = tuple[Any, int, dict[int, tuple[object, int]]]
+
+
+def _counted_features(features: Any, counted: dict[int, _Counted]) -> _Counted:
+    """Rest und große Behälter eines Merkmalssatzes, gemerkt je Satz.
+
+    **Ein neuer Satz aus denselben Merkmalen wird nicht noch einmal
+    durchlaufen** (RM-636). *Filament zuweisen*, *Umbenennen* und jeder
+    Schritt, der die Merkmale durchreicht, geben einen neuen Satz mit
+    denselben Merkmalsobjekten aus; die Zählung lief dann ein zweites Mal
+    über alle — am Eiffelturm 4 870 Merkmale je Schritt. Sie ist dieselbe bis
+    auf den Satz selbst: Seine Werte sind dieselben Objekte in derselben
+    Folge unter denselben Namen, also auch alles,
+    was sie erreichen, und nur Kopf und Schlüssel des Wörterbuchs sind neu
+    zu zählen (``memory._held_once``). Das gilt, wo der Satz selbst einer
+    seiner großen Behälter ist — sonst wird gezählt wie bisher.
+    """
+    known = counted.get(id(features))
+    if known is not None and known[0] is features:
+        return known
+    known = _alike(features, counted)
+    if known is None:
+        from app.core.memory import held_parts
+
+        known = (features, *held_parts(features))
+    counted[id(features)] = known
+    return known
+
+
+def _alike(features: Any, counted: dict[int, _Counted]) -> _Counted | None:
+    """Die Zählung eines gemerkten Satzes mit denselben Merkmalsobjekten, umgeschrieben."""
+    import sys
+
+    from app.core.memory import PART_BYTES
+
+    if not isinstance(features, dict) or not features:
+        return None
+    for other, rest, parts in list(counted.values()):
+        if (
+            other is features
+            or not isinstance(other, dict)
+            or len(other) != len(features)
+            or id(other) not in parts
+            or parts[id(other)][0] is not other
+            # In derselben Folge: Ein geteiltes Kleinteil zählt beim ersten
+            # Merkmal, das es erreicht, und das kann es über die Grenze eines
+            # eigenen Behälters heben.
+            or not all(
+                name == known and value is held
+                for (name, value), (known, held) in zip(
+                    features.items(), other.items(), strict=True
+                )
+            )
+        ):
+            continue
+        if not set(map(type, features)) <= {str} or not set(map(type, other)) <= {str}:
+            return None
+        size = (
+            parts[id(other)][1]
+            - sys.getsizeof(other)
+            - sum(map(sys.getsizeof, other))
+            + sys.getsizeof(features)
+            + sum(map(sys.getsizeof, features))
+        )
+        if size < PART_BYTES:
+            return None
+        renewed = {key: value for key, value in parts.items() if key != id(other)}
+        renewed[id(features)] = (features, size)
+        return (features, rest, renewed)
+    return None
 
 
 def _mesh_bytes(mesh: Mesh, seen: set[int], freeable: list[int] | None = None) -> int:
@@ -661,13 +731,7 @@ class ResultCache:
 
     def _feature_parts(self, features: object) -> dict[int, tuple[object, int]]:
         """Nur mit gehaltenem Schloss — die großen Behälter eines Merkmalssatzes, gemerkt."""
-        from app.core.memory import held_parts
-
-        known = self._features_held.get(id(features))
-        if known is None or known[0] is not features:
-            known = (features, *held_parts(features))
-            self._features_held[id(features)] = known
-        return known[2]
+        return _counted_features(features, self._features_held)[2]
 
     def trim(self, keep: Iterable[Mesh] = ()) -> None:
         """Hält die Bytegrenze der Speicherebene (RM-567).
@@ -709,7 +773,14 @@ class ResultCache:
         # Der jüngste Eintrag bleibt immer ganz, auch über der Grenze — ohne
         # ihn rechnete der nächste Schritt alles noch einmal.
         ids = {id(mesh) for mesh in kept}
-        held = sum(self._unkept(key, entry, ids) for key, entry in self._entries.items())
+        # Für die Schätzung zählt auch ein Netz als gehalten, das nur die Hülle
+        # um ein Netz der Szene ist (RM-636): *Filament zuweisen* und
+        # *Umbenennen* geben dieselben Ecken und Dreiecke in einer neuen Hülle
+        # aus (``with_slots`` teilt ``raw``). Der Eintrag davor verlor damit den
+        # Platz in der Szene, und sein Netz samt Erkennungsmerker wurde neu
+        # durchlaufen, als hielte er es allein — am Eiffelturm je Schritt.
+        shown = ids | {id(raw) for mesh in kept if (raw := getattr(mesh, "raw", None)) is not None}
+        held = sum(self._unkept(key, entry, shown) for key, entry in self._entries.items())
         if held + _memo_bytes() <= self._memory_budget:
             return 0
         # Die Schätzung je Eintrag zählt geteilte Felder mehrfach; über der
@@ -787,7 +858,10 @@ class ResultCache:
         an ihm etwas geändert hatte. Welche seiner Netze die Szene hält, steht
         deshalb mit im Merker.
         """
-        shown = tuple(id(body.mesh) in kept for body in entry.objects)
+        shown = tuple(
+            id(body.mesh) in kept or id(getattr(body.mesh, "raw", None)) in kept
+            for body in entry.objects
+        )
         signature = (*_held_signature(entry), shown)
         known = self._held.get(key)
         if known is None or known[0] != signature:

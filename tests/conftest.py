@@ -690,7 +690,8 @@ def _remembered_features_stay_out_of_it() -> None:
     oben (§38).
 
     Dasselbe gilt für die gemerkten örtlichen Nachmessungen
-    (``local.forget_known``), Zuordnungen (``matching.forget_matches``) und
+    (``local.forget_known``), Zuordnungen (``matching.forget_matches``),
+    Bewegungen (``matching.forget_transformed``) und
     Zuordnungsschritte der Auswertung (``evaluate.forget_remembered_steps``):
     Ein Test, der die Suche zählt oder abklemmt, bekäme sonst das Ergebnis
     eines Vorgängers mit denselben Merkmalen.
@@ -700,6 +701,7 @@ def _remembered_features_stay_out_of_it() -> None:
     features.forget_cache()
     local.forget_known()
     matching.forget_matches()
+    matching.forget_transformed()
     # Über das Modul: ``app.core.scene.evaluate`` ist im Paket die Funktion.
     importlib.import_module("app.core.scene.evaluate").forget_remembered_steps()
 

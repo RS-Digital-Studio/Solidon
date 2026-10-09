@@ -210,16 +210,21 @@ def _cost_matrix(
     return matrix
 
 
-def _query_radius() -> float:
+def _query_radius(limit: float = MATCH_THRESHOLD) -> float:
     """Nur Rundungsreserve für den Raumfilter, keine zusätzliche Annahmetoleranz.
 
     Bei u=eps/2 umfasst R/(1-u)^5 die Rundungen von Norm, Division und
     Koordinatendifferenz. Die Baumabfrage verwendet die Maximumsnorm und
     exakt dieselben gerundeten Positionen wie die Kostenformel. Nahe der
     festen Grenze R=0,08 sind Quadrat und Wurzel normal darstellbar.
+
+    ``limit`` ist die Kostengrenze, bis zu der jedes Paar gefunden werden
+    muss — die Annahmeschwelle, im Nahweg (:func:`_near_assignment`) die
+    Grenze der Mehrdeutigkeit. Die Lage allein kostet schon bis dahin; ab
+    ``limit`` = 0,05 ist R nicht kleiner als 0,004 und die Rechnung dieselbe.
     """
     unit = Fraction(float(np.finfo(float).eps)) / 2
-    radius = Fraction(POSITION_TOLERANCE) * Fraction(MATCH_THRESHOLD) / (1 - unit) ** 5
+    radius = Fraction(POSITION_TOLERANCE) * Fraction(limit) / (1 - unit) ** 5
     rounded = float(radius)
     return float(np.nextafter(rounded, np.inf)) if Fraction(rounded) < radius else rounded
 
@@ -337,6 +342,115 @@ def _not_finite(features: list[Feature], vectors: np.ndarray) -> list[str]:
     return [str(feature.id) for feature, good in zip(features, finite, strict=True) if not good]
 
 
+def _row_minima(
+    pairs: Iterator[tuple[int, np.ndarray, np.ndarray]], smaller: int, transposed: bool
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Je Zeile der kleineren Seite das kleinste, das zweitkleinste Paar und den Partner.
+
+    Der Partner ist das erste Paar mit dem kleinsten Wert in der Folge der
+    Paare; das zweitkleinste zählt Gleichstände mit — zwei Paare mit gleichem
+    kleinstem Wert machen beide gleich. Wie die Paare auf Blöcke verteilt
+    sind, ändert keine dieser drei Zahlen.
+    """
+    minima = np.full(smaller, np.inf)
+    runners = np.full(smaller, np.inf)
+    partners = np.full(smaller, -1, dtype=np.intp)
+    for row, columns, values in pairs:
+        if not len(columns):
+            continue
+        if transposed:
+            improve = values < minima[columns]
+            runners[columns] = np.minimum(
+                runners[columns], np.where(improve, minima[columns], values)
+            )
+            minima[columns] = np.minimum(minima[columns], values)
+            partners[columns[improve]] = row
+        else:
+            best = int(np.argmin(values))
+            value, column = float(values[best]), int(columns[best])
+            other = np.min(np.delete(values, best), initial=np.inf)
+            if value < minima[row]:
+                runners[row] = min(runners[row], minima[row], other)
+                minima[row], partners[row] = value, column
+            else:
+                runners[row] = min(runners[row], value)
+    return minima, runners, partners
+
+
+#: Bis zu welcher Grenze :func:`_near_assignment` sucht; darüber spart die
+#: kleinere Suche zu wenig, und es gilt der volle Weg.
+NEAR_LIMIT: Final = 0.25
+
+
+def _near_assignment(
+    first: list[Feature],
+    second: list[Feature],
+    one: np.ndarray,
+    two: np.ndarray,
+    check: Callable[[], None] | None,
+) -> _Assignment | None:
+    """Fast deckungsgleiche Merkmalsmengen aus der Nähe zuordnen — dieselbe Antwort.
+
+    **Nach einem Schritt, der die Merkmale nicht anrührt** — Filament
+    zuweisen, Verschieben, Umbenennen —, liegt jedes alte Merkmal auf seinem
+    neuen mit Kosten nahe null. Der volle Weg sucht trotzdem jedes Paar bis
+    zur Annahmeschwelle 1,0: am Eiffelturm (4 870 Merkmale, dicht gedrängt)
+    rund 600 Nachbarn je Merkmal, zweimal durchlaufen, 2,3 s je Schritt.
+    Gebraucht wird davon nur, was unter der Grenze der Mehrdeutigkeit liegt.
+
+    **Warum die Antwort dieselbe ist.** Eine vorläufige Paarung (über die
+    Kennung, sonst die Stelle) schätzt das größte Minimum m nach oben ab; die
+    Suche findet jedes Paar mit Kosten bis L = m·(1 + AMBIGUITY_MARGIN) +
+    AMBIGUITY_FLOOR (:func:`_query_radius`). Damit stehen je Zeile das
+    Minimum und alle gleich teuren Paare darin, also auch der Partner; liegt
+    das zweitkleinste draußen, ist es größer als L und damit größer als das
+    Minimum — für die Zertifizierung dasselbe. Zertifiziert, liest
+    :func:`_open_claims` nur Paare unter den Zeilen- und Spaltengrenzen, und
+    beide sind aus diesen Minima höchstens L. Ob die Abschätzung trägt,
+    prüft der Weg an den gefundenen Minima selbst; sonst, und ohne
+    Zertifikat, gilt der volle Weg.
+    """
+    count = len(first)
+    if count != len(second) or not count:
+        return None
+    named = {feature.id: index for index, feature in enumerate(second)}
+    order = (
+        np.fromiter((named[feature.id] for feature in first), dtype=np.intp, count=count)
+        if len(named) == count and all(feature.id in named for feature in first)
+        else np.arange(count, dtype=np.intp)
+    )
+    if any(first[row].kind != second[int(column)].kind for row, column in enumerate(order)):
+        return None
+    signless = np.fromiter(("axis" in feature.params for feature in first), dtype=bool, count=count)
+    largest = float(np.max(_vector_costs(one, two[order], signless)))
+    limit = largest * (1.0 + AMBIGUITY_MARGIN) + AMBIGUITY_FLOOR
+    if not limit <= NEAR_LIMIT:
+        return None
+    if check is not None:
+        check()
+    tree = cKDTree(two[:, :3])
+    radius = _query_radius(limit)
+    minima, runners, partners = _row_minima(
+        _candidate_costs(first, second, one, two, tree, radius, check), count, False
+    )
+    if not (
+        np.all(np.isfinite(minima))
+        and float(np.max(minima)) * (1.0 + AMBIGUITY_MARGIN) + AMBIGUITY_FLOOR <= limit
+        and np.all(minima <= MATCH_THRESHOLD)
+        and np.all(runners > minima)
+        and len(np.unique(partners)) == count
+    ):
+        return None
+    rows = np.arange(count)
+    return _Assignment(
+        rows,
+        partners,
+        minima,
+        None,
+        lambda: _candidate_costs(first, second, one, two, tree, radius, check),
+    )
+
+
 def _assignment(
     first: list[Feature],
     second: list[Feature],
@@ -360,32 +474,16 @@ def _assignment(
         )
     if check is not None:
         check()
+    near = _near_assignment(first, second, one, two, check)
+    if near is not None:
+        return near
     tree = cKDTree(two[:, :3])
     radius = _query_radius()
     smaller = min(len(first), len(second))
     transposed = len(first) > len(second)
-    minima = np.full(smaller, np.inf)
-    runners = np.full(smaller, np.inf)
-    partners = np.full(smaller, -1, dtype=np.intp)
-    for row, columns, values in _candidate_costs(first, second, one, two, tree, radius, check):
-        if not len(columns):
-            continue
-        if transposed:
-            improve = values < minima[columns]
-            runners[columns] = np.minimum(
-                runners[columns], np.where(improve, minima[columns], values)
-            )
-            minima[columns] = np.minimum(minima[columns], values)
-            partners[columns[improve]] = row
-        else:
-            best = int(np.argmin(values))
-            value, column = float(values[best]), int(columns[best])
-            other = np.min(np.delete(values, best), initial=np.inf)
-            if value < minima[row]:
-                runners[row] = min(runners[row], minima[row], other)
-                minima[row], partners[row] = value, column
-            else:
-                runners[row] = min(runners[row], value)
+    minima, runners, partners = _row_minima(
+        _candidate_costs(first, second, one, two, tree, radius, check), smaller, transposed
+    )
     certified = (
         np.all(minima <= MATCH_THRESHOLD)
         and np.all(runners > minima)
@@ -847,6 +945,8 @@ _MATCH_WAYS: Final = (
     "_costed",
     "_matrix_pairs",
     "_not_finite",
+    "_row_minima",
+    "_near_assignment",
     "_assignment",
     "_hull_limits",
     "_accepted_components",
@@ -1167,7 +1267,13 @@ def inherit_originators(
     inherited = dict(new)
     for old, name in result.mapping.items():
         feature, ancestor = inherited.get(name), previous.get(old)
-        if feature is not None and ancestor is not None and feature.created_by is None:
+        if (
+            feature is not None
+            and ancestor is not None
+            and feature.created_by is None
+            and ancestor.created_by is not None
+        ):
+            # Ohne Erzeuger beim Vorfahren wäre die Kopie dasselbe Merkmal.
             inherited[name] = replace(feature, created_by=ancestor.created_by)
     return inherited
 
@@ -1246,7 +1352,13 @@ def apply_mapping(
         # Tor in ``scene.evaluate._with_features``), trägt es: Gemessen gingen
         # sechs Merkmale mit ``created_by`` hinein und null kamen heraus. Ein
         # Feld, das später dazukommt, reist jetzt auch hier von selbst mit.
-        renamed[target] = replace(feature, id=target)
+        #
+        # **Behält es seinen Namen, bleibt es dasselbe Objekt** (RM-636): Die
+        # Kopie wäre in jedem Feld gleich, und ein Merkmal ist unveränderlich.
+        # Als neues Objekt traf es nach jedem Schritt, der nichts umbenennt,
+        # den Teilhash-Merker der Auswertung nicht (``hashing.object_hash``) —
+        # am Eiffelturm 4 870 Teilhashes je Filament zuweisen.
+        renamed[target] = feature if feature.id == target else replace(feature, id=target)
     return renamed
 
 
@@ -1686,7 +1798,68 @@ class FeatureTransform:
     exact: frozenset[FeatureId]
 
 
+#: Die letzten Antworten von :func:`transformed_features` — je Eintrag Schlüssel,
+#: die gehaltenen Eingänge (damit keine Kennung neu vergeben wird) und die Antwort.
+_TRANSFORMED: OrderedDict[tuple[Any, ...], tuple[tuple[Any, ...], FeatureTransform]] = OrderedDict()
+_TRANSFORMED_LOCK = threading.Lock()
+#: Zwei reichen: Die Operation und die Zuordnung danach fragen dasselbe nacheinander.
+TRANSFORMED_KEPT: Final = 2
+
+
 def transformed_features(
+    features: Mapping[FeatureId, Feature],
+    transform: Transform,
+    *,
+    mesh: MeshData | None = None,
+    check_cancelled: Callable[[], None] | None = None,
+) -> FeatureTransform:
+    """Maße einmal für globale und örtliche Zuordnung nachführen — dieselbe Frage einmal.
+
+    **Verschieben fragte zweimal dasselbe** (RM-636): Die Operation bewegt die
+    Merkmale ihres Eingangs (``geom.transform.moved_object``), und die
+    Zuordnung danach bewegt dieselben Merkmale mit derselben Matrix noch
+    einmal an demselben Netz (``scene.evaluate._with_features``) — am
+    Eiffelturm 4 870 Merkmale samt Teilträgern je Verschieben doppelt.
+    Gemerkt wird die Antwort für dieselben Merkmalsobjekte unter denselben
+    Namen in derselben Folge und dieselbe Matrix; die Rechenwege gehören zum
+    Schlüssel wie bei :func:`match`. Das Netz liest nur ein Hohlraum — mit
+    einem rechnet jede Frage neu, und gehalten wird so kein Netz. Jeder
+    Aufrufer bekommt ein eigenes Wörterbuch.
+    """
+    if any(feature.kind == "void" for feature in features.values()):
+        return _transformed_features(
+            features, transform, mesh=mesh, check_cancelled=check_cancelled
+        )
+    ways = (moved_features, transformed_patches, radial_scales, _transformed_features)
+    key = (
+        tuple((name, id(feature)) for name, feature in features.items()),
+        np.ascontiguousarray(np.asarray(transform, dtype=float)).tobytes(),
+        tuple(id(way) for way in ways),
+    )
+    with _TRANSFORMED_LOCK:
+        known = _TRANSFORMED.get(key)
+        if known is not None:
+            _TRANSFORMED.move_to_end(key)
+    if known is not None:
+        if check_cancelled is not None:
+            check_cancelled()
+        answer = known[1]
+        return FeatureTransform(dict(answer.candidates), answer.exact)
+    answer = _transformed_features(features, transform, mesh=mesh, check_cancelled=check_cancelled)
+    with _TRANSFORMED_LOCK:
+        _TRANSFORMED[key] = ((tuple(features.values()), ways), answer)
+        while len(_TRANSFORMED) > TRANSFORMED_KEPT:
+            _TRANSFORMED.popitem(last=False)
+    return FeatureTransform(dict(answer.candidates), answer.exact)
+
+
+def forget_transformed() -> None:
+    """Vergisst die gemerkten Bewegungen — für Tests und Messungen."""
+    with _TRANSFORMED_LOCK:
+        _TRANSFORMED.clear()
+
+
+def _transformed_features(
     features: Mapping[FeatureId, Feature],
     transform: Transform,
     *,
