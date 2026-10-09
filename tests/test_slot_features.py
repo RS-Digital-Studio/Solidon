@@ -3138,6 +3138,41 @@ def test_a_wedge_over_the_mouth_leaves_the_bore_free() -> None:
     assert hole_is_clear(mesh, holes[0])
 
 
+@pytest.mark.parametrize(
+    ("span", "kept"), [((0.0, 40.0), (10.0, 40.0)), ((-30.0, 10.0), (-30.0, 0.0))]
+)
+@pytest.mark.parametrize("kernel", ["mesh", "brep"])
+def test_pulling_a_slot_shortens_a_long_pin_only_inside_the_old_bore(
+    profile: Profile, kernel: str, span: tuple[float, float], kept: tuple[float, float]
+) -> None:
+    """*Zum Langloch ziehen* kürzt auch einen langen Stift nur im bisherigen Hohlraum (RM-253).
+
+    Den kurzen Stift über 0 … 15 mm kürzt der Zug seit RM-413 auf 10 … 15
+    (``test_parts_touching_far_from_the_bore_do_not_block_the_slot_at_a_free_pin``).
+    Den langen ließ er ganz stehen, weil die Bohrung über Dreiecksmitten als frei
+    galt — 500 mm³ Stift quer durch die neue Öffnung. Jetzt sieht der Zug ihn und
+    nimmt nur das Stück in der Platte: Es bleiben 30 mm Stift Ø 4, außerhalb der
+    Platte, und die Platte trägt das Langloch.
+    """
+    entry = _plate_with_a_second_body(kernel, inside=True, pin_span=span, pin_diameter=4.0)
+
+    output = run_op(
+        "slot_hole", entry, profile, at_feature=_bore_in(entry, "hole"), slot_length=12.0
+    )
+
+    plate, pin = sorted(
+        as_mesh_data(output.mesh).raw.split(only_watertight=False),
+        key=lambda piece: -abs(float(piece.volume)),
+    )
+    assert abs(float(plate.volume)) == pytest.approx(
+        8000.0 - (36.0 + 9.0 * math.pi) * 10.0, abs=2.0
+    )
+    # Das Vieleck des Stifts liegt unter 1 % unter dem Kreis.
+    assert abs(float(pin.volume)) == pytest.approx(math.pi * 2.0**2 * 30.0, abs=4.0)
+    assert float(pin.bounds[0, 2]) == pytest.approx(kept[0], abs=0.02)
+    assert float(pin.bounds[1, 2]) == pytest.approx(kept[1], abs=0.02)
+
+
 @pytest.mark.parametrize("kernel", ["mesh", "brep"])
 def test_pulling_a_bore_preserves_a_second_body_beyond_the_measured_depth(
     profile: Profile, kernel: str
