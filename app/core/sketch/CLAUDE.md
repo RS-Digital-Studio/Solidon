@@ -78,15 +78,25 @@ reichen `ctx.cancelled` an `brep.features.features_of` weiter.
   alles andere folgt mit der kleinsten Bewegung ab `start`; zwei Stufen im
   Docstring, `DRAG_STIFFNESS` ein Zwanzigstel wie in SolveSpace. Begrenzt über
   `DRAG_REACH_TRIES`/`DRAG_SLIDE_TRIES`; findet keine Stufe eine Lage oder
-  kehren die gezogenen Punkte ganz zurück, bleibt die Zeichnung stehen. Geprüft wird in Schritten wie die Maus
-  (`tests/test_sketch_edit.py`).
+  kehren die gezogenen Punkte ganz zurück, bleibt die Zeichnung stehen. Die
+  zweite Stufe beginnt am Stand vor dem Schritt, nie am Ende der ersten: Das
+  liegt in einem flachen Tal, wohin die Rundung es trägt. Geprüft wird in
+  Schritten wie die Maus (`tests/test_sketch_edit.py`).
 - **Gelöst wird je zusammenhängendem Teil, in Verschiebungen** (RM-541,
-  `_parts`, `_solve_part`): jeder Teil ab null, `x_scale` seine Streuung, die
-  dichte Rechnung höchstens `DENSE_FIRST_STEP`. So hängt der erste Schritt
-  weder am Nullpunkt noch an anderen Teilen; ein Teil ohne Spannung bleibt,
-  einer, der weiter als `FARTHEST_MOVE` liefe, auch. Im Zug rechnet ein
-  kleiner Teil über `dogbox` (kürzester Gauß-Newton-Schritt), nie über
+  `_parts`, `_solve_part`): jeder Teil ab null, `x_scale` seine Größe
+  (`_part_size`: Streuung aller Punkte, die er liest, gehaltene
+  eingeschlossen, mindestens sein größter Längenrest — nie ein Nulltest),
+  die dichte Rechnung höchstens `DENSE_FIRST_STEP`. So hängt der erste
+  Schritt weder am Nullpunkt noch an anderen Teilen; ein Teil ohne Spannung
+  bleibt, einer, der weiter als `FARTHEST_MOVE` liefe, auch. Im Zug rechnet
+  ein kleiner Teil über `dogbox` (kürzester Gauß-Newton-Schritt), nie über
   `lsmr` und nie über dichtes TRF; `DRAG_STIFFNESS` ist dort die Box.
+- **Der Löser rechnet über scipy mit BLAS und LAPACK** (SVD, `lstsq`,
+  `lsmr`) — die Ausnahme von „kein BLAS" in `.claude/rules/kern.md`.
+  Zugesagt ist dieselbe Lage bis `_TOL` an jedem Ort, gehalten von den
+  Ortswächtern in `tests/test_sketch.py` (`…_alike_wherever_it_lies`), die
+  jede Rundung über Versätze ändern; nur die Größe des Teils rechnet ohne
+  BLAS, weil sie den Weg wählt.
 - **Die Fassung des Lösers steht an der Skizze** (`Sketch.solver`,
   `types.SKETCH_SOLVER`): `1` rechnet über `_solve_in_coordinates` wie bis
   0.5 (Migration 49 → 50), der Editor ab der ersten Änderung mit der

@@ -154,6 +154,11 @@ _ANGLE_KINDS: Final[frozenset[str]] = frozenset({"angle"})
 #: Namen für dieselbe Bedingung sind eine Gelegenheit, sie doppelt zu legen.
 MOST_ANGLE_DEGREES: Final[float] = 180.0
 
+#: Bedingungen, deren Rest ein Sinus ist und keine Länge: Sie richten aus,
+#: statt zu messen. Alle anderen rechnen in Millimetern (``_curvature_scale``
+#: bringt auch die Krümmung dorthin).
+_TURNING_KINDS: Final[frozenset[str]] = frozenset({"parallel", "perpendicular", "angle", "smooth"})
+
 _ResidualFn = Callable[[np.ndarray], tuple[float, ...]]
 _GradientFn = Callable[[np.ndarray, np.ndarray], None]
 """Schreibt die Zeilen einer Gleichung in die übergebene Jacobimatrix.
@@ -168,12 +173,15 @@ class _Equation:
     """Eine Gleichungsgruppe: ihr Ursprung, ihre Residuen, ihre Ableitung.
 
     ``constraint`` ist der Index in ``sketch.constraints`` — oder ``None`` für
-    die implizite Bedingung eines Bogens (beide Schenkel gleich lang)."""
+    die implizite Bedingung eines Bogens (beide Schenkel gleich lang).
+    ``length`` sagt, ob der Rest eine Länge in Millimetern ist; bei einer
+    Richtung (:data:`_TURNING_KINDS`) ist er ein Sinus."""
 
     constraint: int | None
     rows: int
     fn: _ResidualFn
     grad: _GradientFn
+    length: bool = True
 
 
 #: Bis zu wie vielen freien Koordinaten ein Teil dicht rechnet
@@ -220,9 +228,10 @@ DRAG_REACH_TRIES: Final = 25
 #: Sie rutscht so weit, wie die Bedingungen es erlauben, und braucht dafür an
 #: gewöhnlichen Zeichnungen gemessen zwei bis fünf Auswertungen — ein
 #: festes Vieleck, ein bemaßtes Langloch, ein Lochkreis, ein verrundetes
-#: Rechteck, eine Kette aus fünf Linien über ihre Reichweite (RM-541). Nur
-#: eine lange, bis zum Anschlag gestreckte Kette braucht an die hundert, weil
-#: sie dort singulär steht. Findet die Stufe in dieser Zahl
+#: Rechteck, eine Kette aus fünf oder zehn Linien über ihre Reichweite
+#: (RM-541). Nur eine lange, bis zum Anschlag gestreckte Kette über ``lsmr``
+#: bräuchte 120 bis 200, weil sie dort singulär steht; sie bleibt beim
+#: Sprung stehen und rückt in Mausschritten nach. Findet die Stufe in dieser Zahl
 #: keine Lage, bleibt die Zeichnung, wo sie war: Ein Zug, der nicht folgt,
 #: ist eine Auskunft (die Zeile sagt, was hält); ein Zug, der das Fenster für
 #: Sekunden anhält, ist keine.
@@ -1462,7 +1471,7 @@ def _build_equations(
             rows, fn, grad = _curve_equation(constraint, sketch.elements, offsets, anchors, field)
         else:
             rows, fn, grad = _constraint_equation(constraint, measure, anchors)
-        equations.append(_Equation(index, rows, fn, grad))
+        equations.append(_Equation(index, rows, fn, grad, constraint.kind not in _TURNING_KINDS))
 
     # Punkte mit ``fixed`` — für die ganz festen Elemente darunter.
     held = {
@@ -1565,11 +1574,13 @@ DENSE_FIRST_STEP: Final[float] = 1.0
 
 @dataclass(frozen=True, slots=True)
 class _Part:
-    """Gleichungen, die über gemeinsame Punkte zusammenhängen, und die
-    Koordinaten ihrer freien Punkte (je Punkt ``x`` und ``y``, aufsteigend)."""
+    """Gleichungen, die über gemeinsame Punkte zusammenhängen, die
+    Koordinaten ihrer freien Punkte (je Punkt ``x`` und ``y``, aufsteigend)
+    und die aller Punkte, die sie lesen — gehaltene eingeschlossen."""
 
     equations: tuple[_Equation, ...]
     columns: np.ndarray
+    read: np.ndarray
 
 
 def _columns_of(points: Sequence[int]) -> np.ndarray:
@@ -1595,16 +1606,18 @@ def _parts(equations: Sequence[_Equation], flat: np.ndarray, held: np.ndarray) -
         return point
 
     touched: list[tuple[int, ...]] = []
+    seen: list[set[int]] = []
     for equation in equations:
         block = _SparseRows(0)
         equation.grad(pts, block)  # type: ignore[arg-type]
         if not block.entries:
             free_points = [int(point) for point in np.flatnonzero(~held)]
-            return [_Part(tuple(equations), _columns_of(free_points))]
-        reached = tuple(
-            sorted({point for (_row, point, _axis) in block.entries if not held[point]})
-        )
+            every = _columns_of(range(pts.shape[0]))
+            return [_Part(tuple(equations), _columns_of(free_points), every)]
+        read = {point for (_row, point, _axis) in block.entries}
+        reached = tuple(sorted(point for point in read if not held[point]))
         touched.append(reached)
+        seen.append(read)
         for point in reached[1:]:
             first, second = root(reached[0]), root(point)
             if first != second:
@@ -1617,24 +1630,44 @@ def _parts(equations: Sequence[_Equation], flat: np.ndarray, held: np.ndarray) -
         _Part(
             tuple(equations[index] for index in members),
             _columns_of(sorted({point for index in members for point in touched[index]})),
+            _columns_of(sorted({point for index in members for point in seen[index]})),
         )
         for members in grouped.values()
     ]
 
 
-def _spread(origin: np.ndarray, scale: np.ndarray) -> float:
-    """Wie weit die Punkte eines Teils um ihre Mitte liegen — sein erster
-    Vertrauensradius, gemessen wie die Schritte (``origin / scale``).
+def _spread(values: np.ndarray, scale: np.ndarray) -> float:
+    """Wie weit Punkte um ihre Mitte liegen, gemessen wie die Schritte
+    (``values / scale``).
 
     Ohne Norm aus BLAS und ohne Potenz (``.claude/rules/kern.md``): Die Zahl
     bestimmt den Weg zur Lösung und damit, wo eine unterbestimmte Zeichnung
     landet."""
-    centred = origin.copy()
-    centred[0::2] -= float(np.mean(origin[0::2]))
-    centred[1::2] -= float(np.mean(origin[1::2]))
+    centred = values.copy()
+    centred[0::2] -= float(np.mean(values[0::2]))
+    centred[1::2] -= float(np.mean(values[1::2]))
     ratio = centred / scale
-    reach = math.sqrt(float(np.sum(ratio * ratio)))
-    return reach if reach > 0.0 else 1.0
+    return math.sqrt(float(np.sum(ratio * ratio)))
+
+
+def _part_size(part: _Part, solution: np.ndarray, weight: np.ndarray, rest: np.ndarray) -> float:
+    """Die Größe eines Teils, an der sich sein erster Schritt misst (:func:`_solve_part`):
+    die Streuung der Punkte, die er liest, mindestens sein größter Rest in Millimetern.
+
+    Nur Längen zählen als Rest. Ein Winkelrest ist ein Sinus bis eins und
+    machte zwei Linien von einem Zehntelmillimeter zu einem Teil von einem
+    halben Millimeter: Der erste Schritt sprang dann über die nächste Lösung.
+    Liegen alle gelesenen Punkte aufeinander, ist jeder Richtungsrest null
+    (``_unit``), und ein Rest, der den Lauf auslöst, ist eine Länge — die
+    Größe bleibt so über null, ohne dass ein Nulltest den Weg wählt."""
+    longest = 0.0
+    row = 0
+    for equation in part.equations:
+        if equation.length:
+            for value in rest[row : row + equation.rows]:
+                longest = max(longest, abs(float(value)))
+        row += equation.rows
+    return max(_spread(solution[part.read], weight[part.read]), longest)
 
 
 def _solve_part(
@@ -1653,10 +1686,20 @@ def _solve_part(
     war, die der übrigen Teile. Ein Winkel tausend Millimeter neben dem
     Ursprung tat einen ersten Schritt von tausend Millimetern, sprang über die
     nächste Lösung, und welche er traf, entschied die Rundung der Maschine. Ab
-    null bestimmt ``x_scale`` den ersten Schritt: die Streuung des Teils
-    (:func:`_spread`) — für ``lsmr`` und den Zug, deren Budgets aus §31 und
-    Stufen auf einen Radius in der Größe der Zeichnung abgestimmt sind —, in
-    der dichten Rechnung höchstens :data:`DENSE_FIRST_STEP`.
+    null bestimmt ``x_scale`` den ersten Schritt: die Größe des Teils — für
+    ``lsmr`` und den Zug, deren Budgets aus §31 und Stufen auf einen Radius in
+    der Größe der Zeichnung abgestimmt sind —, in der dichten Rechnung
+    höchstens :data:`DENSE_FIRST_STEP`.
+
+    **Die Größe des Teils** ist die Streuung aller Punkte, die seine
+    Gleichungen lesen, gehaltene eingeschlossen (:func:`_spread`), mindestens
+    aber sein größter Rest. Gemessen nur an den freien Punkten war sie für ein
+    Gelenk aus zwei gedeckten Punkten das Rundungsrauschen der Deckung: Lagen
+    beide ein ULP auseinander, war der erste Schritt 10⁻¹³ mm, der Löser hörte
+    nach der ersten Auswertung auf, und der gezogene Punkt blieb 0,27 mm hinter
+    dem Zeiger (Review H-1). Ein Rückfall über einen Nulltest hätte das nur
+    für den bitgleichen Fall gefangen; der Rest hält die Größe, wo alle Punkte
+    zusammenfallen.
 
     **Je Teil**, weil ``lsmr`` sonst entartet: Steht nur eine Gleichung eines
     Teils unter Spannung, zeigen Gradient und Gauß-Newton-Schritt in dieselbe
@@ -1684,7 +1727,8 @@ def _solve_part(
     """
     columns = part.columns
     origin = solution[columns].copy()
-    if not np.any(_residuals_at(part.equations, solution)):
+    rest = _residuals_at(part.equations, solution)
+    if not np.any(rest):
         return
     scale = weight[columns]
     full = solution.copy()
@@ -1706,7 +1750,7 @@ def _solve_part(
     # der entartet bei einer einzelnen Bedingung (oben) — beim Lösen über TRF
     # mit kleinem ersten Schritt, im Zug über ``dogbox`` (Docstring).
     dense = columns.size <= EXACT_UP_TO
-    reach = _spread(origin, scale)
+    reach = _part_size(part, solution, weight, rest)
     first = min(reach, DENSE_FIRST_STEP) if dense and not dragging else reach
     precise = dense and not dragging
     result = least_squares(
@@ -2095,16 +2139,15 @@ def solve_sketch(
         # geprüft: Was hier noch übrig bleibt, war schon vor dem Zug ein
         # Widerspruch der Skizze selbst.
         #
-        # **Sie beginnt, wo die erste aufgehört hat**, mit den gezogenen
-        # Punkten am Zeiger. Dort hat die erste Stufe die übrigen Punkte
-        # schon so weit nachgezogen, wie es ohne die gezogenen ging; von der
-        # alten Lage aus brauchte die zweite gemessen 116 Auswertungen, von
-        # hier aus fünf (Kette aus fünf Linien, über ihre Länge gezogen).
-        reached = solution.reshape(-1, 2).copy()
-        for point in pinned:
-            reached[point] = begin[point]
+        # **Sie beginnt am Stand vor dem Schritt**, mit den gezogenen Punkten
+        # am Zeiger (RM-541, Review M-1) — nicht, wo die erste aufgehört hat.
+        # Die erste sucht einen Ort, den es nicht gibt, und endet in einem
+        # flachen Tal dort, wohin die Rundung sie trägt: Ein Langloch landete
+        # so je nach Lage der Zeichnung bis 4,5 mm woanders, ein Fünfeck sprang
+        # in einem Schritt von einem halben Millimeter um 3,5 mm. Vom Stand
+        # davor ist der Weg an jedem Ort derselbe.
         solution, residuals, jacobian = solve(
-            equations, reached, pinned=pinned, stiff=True, tries=DRAG_SLIDE_TRIES
+            equations, begin, pinned=pinned, stiff=True, tries=DRAG_SLIDE_TRIES
         )
         max_residual = float(np.max(np.abs(residuals))) if residuals.size else 0.0
         held = np.asarray(

@@ -641,6 +641,119 @@ def test_a_drag_solves_alike_wherever_it_lies(
     assert max(most) < solver.DRAG_REACH_TRIES, "jeder Schritt fertig gerechnet, nicht abgebrochen"
 
 
+_PLACES = ((0.0, 0.0), (1000.0, 0.0), (-1000.0, 1000.0), (12.3, 45.6), (1e5, -1e5))
+
+
+def _wobbled(sketch: Sketch, amount: float) -> Sketch:
+    """Die Skizze mit ungelöst verschobenen Punkten — fest, ohne Zufall; ``fixed`` bleibt."""
+    held = {
+        constraint.targets[0] for constraint in sketch.constraints if constraint.kind == "fixed"
+    }
+    return _placed(
+        sketch,
+        [
+            point
+            if index in held
+            else (
+                point[0] + amount * ((index * 0.6180339887) % 1.0 - 0.5),
+                point[1] + amount * ((index * 0.4142135623) % 1.0 - 0.5),
+            )
+            for index, point in enumerate(edit.flat_points(sketch))
+        ],
+    )
+
+
+@pytest.mark.parametrize("amount", [0.0, 1.0])
+@pytest.mark.parametrize("step", [(0.4, -0.3), (0.5, 0.5)])
+@pytest.mark.parametrize("shape", ["slot", "polygon"])
+def test_a_drag_the_shape_cannot_follow_lands_alike_wherever_it_lies(
+    shape: str, step: tuple[float, float], amount: float
+) -> None:
+    """Langloch und Fünfeck an einer Ecke gezogen, die sie nicht ganz hergeben:
+    an jedem Ort dieselbe Lage (RM-541, Review M-1).
+
+    Die Formen halten sich selbst und bleiben doch biegsam; der Zeiger ist
+    unerreichbar, also rutscht die zweite Stufe. Sie begann, wo die erste
+    aufgehört hatte — in einem flachen Tal, wohin die Rundung sie trug. Nach
+    zehn Mausschritten standen die Formen so je nach Ort bis 8,8 mm
+    woanders. Jetzt beginnt sie am Stand vor dem Schritt.
+    """
+    from app.core.sketch import shapes
+    from app.core.units import EPS_GEOM
+
+    drawn = _wobbled(
+        shapes.slot(30.0, 10.0) if shape == "slot" else shapes.polygon(30.0, 5), amount
+    )
+
+    def dragged(at: tuple[float, float]) -> list[tuple[float, float]]:
+        sketch = _placed(drawn, [(x + at[0], y + at[1]) for x, y in edit.flat_points(drawn)])
+        points = _flat(solve_sketch(sketch))
+        corner = points[3]
+        for count in range(1, 11):
+            target = (corner[0] + step[0] * count, corner[1] + step[1] * count)
+            points = _flat(solve_sketch(_placed(sketch, points), dragged={3: target}, start=points))
+        return [(x - at[0], y - at[1]) for x, y in points]
+
+    home = dragged((0.0, 0.0))
+    for at in ((1000.0, 0.0), (-1000.0, 1000.0), (1e5, -1e5)):
+        gap = max(math.dist(a, b) for a, b in zip(dragged(at), home, strict=True))
+        assert gap <= EPS_GEOM, (at, gap)
+
+
+@pytest.mark.parametrize("apart", [False, True])
+def test_a_joint_follows_the_drag_even_a_rounding_apart(apart: bool) -> None:
+    """Ein Gelenk aus zwei gedeckten Punkten folgt dem Zug, auch wenn beide um
+    ein ULP auseinanderliegen — so liegen sie nach einem Lösen, je nach
+    Rundung der Maschine (RM-541, Review H-1).
+
+    Zwei Linien, gedeckt an der Ecke, die zweite senkrecht; gezogen wird ihr
+    freies Ende. Im Zug steht es fest, und übrig bleibt ein Teil aus den
+    beiden Gelenkpunkten. Sein erster Schritt maß sich an der Streuung dieser
+    zwei Punkte, also am Rundungsrauschen der Deckung, und der Löser hörte
+    nach der ersten Auswertung auf: Der Punkt blieb 0,27 mm hinter dem Zeiger,
+    das Gelenk rückte 0,13 statt 0,4 mm — an jedem Ort.
+    """
+    for dx, dy in _PLACES:
+        corner = (10.0 + dx, dy)
+        other = (math.nextafter(corner[0], math.inf), corner[1]) if apart else corner
+        sketch = Sketch(
+            plane="plane:xy",
+            elements=(
+                SketchElement("line", ((dx, dy), corner)),
+                SketchElement("line", (other, (10.0 + dx, 10.0 + dy))),
+            ),
+            constraints=(
+                SketchConstraint("coincident", (1, 2)),
+                SketchConstraint("vertical", (2, 3)),
+            ),
+        )
+        start = edit.flat_points(sketch)
+        target = (start[3][0] + 0.4, start[3][1] - 0.3)
+        points = _flat(solve_sketch(sketch, dragged={3: target}, start=start))
+        assert points[3] == pytest.approx(target, abs=1e-9), ((dx, dy), "der Punkt am Zeiger")
+        assert points[2][0] - start[2][0] == pytest.approx(0.4, abs=1e-9), (dx, dy)
+        assert math.dist(points[1], points[2]) <= 1e-9, (dx, dy)
+
+
+def test_a_line_a_rounding_long_takes_its_measure_wherever_it_lies() -> None:
+    """Eine Linie, deren Enden ein ULP auseinanderliegen, bekommt ihr Maß an
+    jedem Ort (RM-541, Review H-1).
+
+    Der erste Schritt maß sich an der Streuung der zwei Punkte. Um ein ULP
+    gestreut war er so klein, dass der Löser stehen blieb — wo ein ULP
+    10⁻¹⁵ mm ist, hieß das Widerspruch, wo es 10⁻¹¹ mm ist, gelöst."""
+    for dx, dy in _PLACES:
+        tail = (5.0 + dx, dy)
+        head = (math.nextafter(tail[0], math.inf), dy)
+        sketch = Sketch(
+            plane="plane:xy",
+            elements=(SketchElement("line", (tail, head)),),
+            constraints=(SketchConstraint("distance", (0, 1), "10"),),
+        )
+        solved = solve_sketch(sketch)
+        assert span(*solved.elements[0].points) == pytest.approx(10.0, abs=1e-9), (dx, dy)
+
+
 def test_an_angle_outside_the_half_turn_is_refused() -> None:
     """Null und 180 Grad sind ``parallel``, und darüber wiederholt sich alles.
 
@@ -2360,8 +2473,9 @@ def _counting_evaluations(monkeypatch: pytest.MonkeyPatch) -> list[int]:
     return evaluations
 
 
-def test_a_drag_beyond_reach_stays_bounded_and_slides_the_chain_along(
-    monkeypatch: pytest.MonkeyPatch,
+@pytest.mark.parametrize("count", [20, 40])
+def test_a_drag_beyond_reach_stays_bounded_and_lands_alike_wherever_it_lies(
+    count: int, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Eine gestreckte Kette über ihre Länge hinaus zu ziehen, hielt das Fenster an.
 
@@ -2371,28 +2485,43 @@ def test_a_drag_beyond_reach_stays_bounded_and_slides_the_chain_along(
     Arbeit: Sie ist auf jeder Maschine dieselbe. Und die Zeichnung wird kein
     Widerspruch.
 
-    Bis RM-541 blieb die Kette hier stehen, weil die zweite Stufe in ihren
-    fünfzig Auswertungen keine Lage fand — am Nullpunkt; dieselbe Kette
-    tausend Millimeter daneben rutschte in siebzehn um 3,8 mm zum Zeiger. Seit
-    der Löser in Verschiebungen rechnet, rutscht sie an jedem Ort, wie die
-    kurze Kette darunter.
+    Eine lange Kette rechnet über ``lsmr`` und steht gestreckt singulär: Ihre
+    zweite Stufe fände erst nach 120 bis 200 Auswertungen eine Lage, und nach
+    :data:`DRAG_SLIDE_TRIES` bleibt sie stehen (RM-541, Review M-1). Am
+    Stand davor rutschte die Kette aus zwanzig Linien in dreizehn, weil die
+    zweite Stufe am lageabhängigen Ende der ersten begann — die aus dreißig
+    schon dort nicht mehr. Zugesagt ist, was an jedem Ort gilt: begrenzte
+    Arbeit, kein Widerspruch, nie weiter vom Zeiger und an jedem Ort dieselbe
+    Lage; die kurze Kette darunter rutscht.
     """
     from app.core.sketch import solver
+    from app.core.units import EPS_GEOM
 
-    sketch = _chain(20)
-    start = _flat(solve_sketch(sketch))
-    end = len(start) - 1
-    target = (start[end][0] + 3.0, start[end][1] + 4.0)
     evaluations = _counting_evaluations(monkeypatch)
+    home: list[tuple[float, float]] = []
+    for dx, dy in ((0.0, 0.0), (1000.0, 0.0), (1e5, -1e5)):
+        sketch = _placed(
+            _chain(count), [(x + dx, y + dy) for x, y in edit.flat_points(_chain(count))]
+        )
+        start = _flat(solve_sketch(sketch))
+        end = len(start) - 1
+        target = (start[end][0] + 3.0, start[end][1] + 4.0)
+        evaluations.clear()
 
-    solved = solve_sketch(sketch, dragged={end: target}, start=start)
-    landed = _flat(solved)[end]
+        solved = solve_sketch(sketch, dragged={end: target}, start=start)
+        points = _flat(solved)
+        landed = points[end]
 
-    assert sum(evaluations) <= solver.DRAG_REACH_TRIES + solver.DRAG_SLIDE_TRIES, evaluations
-    assert solved.max_residual <= 1e-6
-    assert _flat(solved)[0] == pytest.approx(start[0], abs=1e-6), "der feste Anfang bleibt"
-    assert math.dist(start[0], landed) <= 200.0 + 1e-6, "weiter als die Kette reicht nie"
-    assert math.dist(landed, target) < math.dist(start[end], target), "näher am Zeiger"
+        assert sum(evaluations) <= solver.DRAG_REACH_TRIES + solver.DRAG_SLIDE_TRIES, evaluations
+        assert solved.max_residual <= 1e-6
+        assert points[0] == pytest.approx(start[0], abs=1e-6), "der feste Anfang bleibt"
+        assert math.dist(start[0], landed) <= 10.0 * count + 1e-6, "weiter als die Kette reicht nie"
+        assert math.dist(landed, target) <= math.dist(start[end], target) + 1e-9, "nie weiter weg"
+        back = [(x - dx, y - dy) for x, y in points]
+        if not home:
+            home = back
+        gap = max(math.dist(a, b) for a, b in zip(back, home, strict=True))
+        assert gap <= EPS_GEOM, ((dx, dy), gap)
 
 
 def test_a_reachable_drag_is_untouched_by_the_bound(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -2412,11 +2541,12 @@ def test_a_reachable_drag_is_untouched_by_the_bound(monkeypatch: pytest.MonkeyPa
     assert len(evaluations) == 1 and evaluations[0] < solver.DRAG_REACH_TRIES
 
 
-def test_a_short_chain_still_slides_as_far_as_it_may() -> None:
-    """Die zweite Stufe beginnt, wo die erste aufgehört hat, und rutscht: Das
-    Ende einer Kette aus fünf Linien folgt über ihre Länge gezogen dem Zeiger,
-    so weit die Kette reicht — gemessen fünf statt 116 Auswertungen."""
-    sketch = _chain(5)
+@pytest.mark.parametrize("count", [5, 10])
+def test_a_short_chain_still_slides_as_far_as_it_may(count: int) -> None:
+    """Die zweite Stufe beginnt am Stand vor dem Schritt und rutscht: Das Ende
+    einer kurzen Kette folgt über ihre Länge gezogen dem Zeiger, so weit die
+    Kette reicht — gemessen in vier Auswertungen (RM-541)."""
+    sketch = _chain(count)
     start = _flat(solve_sketch(sketch))
     end = len(start) - 1
     target = (start[end][0] + 3.0, start[end][1] + 4.0)
@@ -2424,7 +2554,7 @@ def test_a_short_chain_still_slides_as_far_as_it_may() -> None:
     solved = solve_sketch(sketch, dragged={end: target}, start=start)
     landed = _flat(solved)[end]
 
-    assert math.dist(start[0], landed) <= 50.0 + 1e-6, "weiter als die Kette reicht nie"
+    assert math.dist(start[0], landed) <= 10.0 * count + 1e-6, "weiter als die Kette reicht nie"
     assert landed[1] > start[end][1] + 1.0, "in Richtung des Zeigers gedreht"
     assert math.dist(landed, target) < math.dist(start[end], target), "näher am Zeiger"
     assert solved.max_residual <= 1e-6
