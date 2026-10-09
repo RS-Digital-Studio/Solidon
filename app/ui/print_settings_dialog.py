@@ -123,7 +123,7 @@ from app.core.types import (
     SlotOverride,
     SlotProfileBinding,
 )
-from app.core.units import EPS_DISPLAY, is_close
+from app.core.units import EPS_DISPLAY, SMALLEST_NOZZLE, is_close
 from app.i18n import TranslatableText, _, format_decimal, source_text, tr
 from app.ui.dialogs import (
     confirm_handover,
@@ -261,7 +261,7 @@ def _offer_choices(combo: QComboBox, path: str, program: str) -> None:
 
 #: Die eigene Beschreibung eines Zahlenfelds, bevor Grenzhinweise dazukommen.
 _REFUSAL_BASE_DESCRIPTION: Final = "solidonRefusalBaseDescription"
-_NOZZLE_RANGE_MM: Final[tuple[float, float]] = (0.1, 2.0)
+_NOZZLE_RANGE_MM: Final[tuple[float, float]] = (SMALLEST_NOZZLE, 2.0)
 
 #: Wie weit der Dialog beim Wachsen vom Rand der nutzbaren Bildschirmfläche
 #: bleibt, in Punkten — Platz für Rahmen und Titelleiste des Fensters.
