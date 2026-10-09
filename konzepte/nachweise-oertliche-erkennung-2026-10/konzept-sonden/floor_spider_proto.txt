@@ -1,0 +1,18 @@
+obj_1_spiderman.stl: 885570 Dreiecke, kalt 26.09 s, 0 Merkmale
+Zwilling warm 15.62 s (mit Prototyp), 0 Merkmale
+  _fitted                           8.00  1
+  _large_facet_faces                5.27  1
+  _connected_patches                3.22  3
+  curvature_jumps                   1.02  1
+  detect_edge_loops                 0.72  1
+  _one_body                         0.62  1
+  find_helices                      0.28  1
+  _merged_cylinders                 0.00  1
+  detect_holes                      0.00  1
+  slots_instead_of_half_bores       0.00  1
+  patterns_instead_of_cells         0.00  1
+  _faces_finished_in                0.00  1
+  Prototyp Lesung Treffer       26
+Zwilling kalt ohne Prototyp 20.42 s
+Abdruck warm 71857576257465c7 kalt 71857576257465c7 GLEICH
+Exit: 0

@@ -1,0 +1,19 @@
+parametric-laptop-riser.stl: 173592 Dreiecke, kalt 21.30 s, 541 Merkmale
+Zwilling warm 9.34 s (mit Prototyp), 541 Merkmale
+  _fitted                           3.78  1
+  slots_instead_of_half_bores       2.17  1
+  _large_facet_faces                1.27  2
+  detect_holes                      1.16  1
+  find_helices                      1.11  1
+  curvature_jumps                   0.98  1
+  _connected_patches                0.48  3
+  patterns_instead_of_cells         0.16  1
+  _one_body                         0.09  2
+  detect_edge_loops                 0.09  1
+  _merged_cylinders                 0.05  1
+  _faces_finished_in                0.05  1
+  Prototyp Lesung Treffer       678
+  Prototyp Trennung Treffer     1574
+Zwilling kalt ohne Prototyp 21.39 s
+Abdruck warm 52c3c5903b751133 kalt 52c3c5903b751133 GLEICH
+Exit: 0

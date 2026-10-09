@@ -99,7 +99,8 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-541 — Der Skizzenlöser landet auf dem Intel-Mac im anderen Zweig einer Winkelbedingung](#rm-541) | Geometrie, Erkennung und Druckvorbereitung | Gefunden mit RM-531 (06.10.): 135° statt 45° unter macOS Intel; offen die Rechnung in Verschiebungen und ihre Wirkung auf unterbestimmte Skizzen |
 | [RM-542 — Die fünf offenen Entscheidungen der Erstkonfiguration](#rm-542) | Geometrie, Erkennung und Druckvorbereitung | Gefunden beim Umräumen der Konzepte (RM-099, 06.10.): nur im Konzept geführt; offen der Abgleich mit RM-281 und Roberts Entscheidung |
 | [RM-552 — *Stift für Bohrung* liest die Kette an einer Bausteinbohrung mit Senkung nicht](#rm-552) | Geometrie, Erkennung und Druckvorbereitung | Gefunden in der Nachprüfung von P2 (07.10.): Schraubenloch und Einpressbuchse sagen über Menü und Palette `chain_unreadable`, weil die Bausteinbohrung durch ihre Senkung läuft; die Karte bietet den Stift dort nicht mehr an. Offen: `bore_pin._following` liest eine überlappende Kette |
-| [RM-568 — Merkmalerkennung und die übrigen langen Wege schneller machen](#rm-568) | Geometrie, Erkennung und Druckvorbereitung | Selbstschnittsuche, Zuordnung, Ringvereinfachung, 3MF und gemerkte Zuordnungsschritte gebaut (Paket L, 08./09.10.); offen: Kandidatensuche der Selbstschnitte, örtliche Neuerkennung nach Booleschen Operationen |
+| [RM-568 — Merkmalerkennung und die übrigen langen Wege schneller machen](#rm-568) | Geometrie, Erkennung und Druckvorbereitung | Selbstschnittsuche, Zuordnung, Ringvereinfachung, 3MF und gemerkte Zuordnungsschritte gebaut (Paket L, 08./09.10.); offen: Kandidatensuche der Selbstschnitte (die Erkennung nach einem Schritt führt RM-592) |
+| [RM-592 — Nach einem Schritt erkennt die Auswertung fast so lange wie beim Laden](#rm-592) | Geometrie, Erkennung und Druckvorbereitung | Konzept steht (Gedächtnis je Fleck); Bau als Paket E: Messbank, wirkungslose Boolesche, Fleckabdruck, Einpassungsrunden, Langloch und Flächenabschluss, dann Abnahme A1 bis A6 |
 | [RM-070 — SpaceMouse auf macOS und Linux am echten Gerät abnehmen](#rm-070) | Bedienung und Darstellung | Die Rampe ist stetig und getestet, die Bildrate an 815 104 Dreiecken gemessen (`7ff34c67`: 16,7 → 8,7 ms im Median); offen bleiben Linux, die 3DxWare-Mausemulation, das Gerät selbst und die Rampe im Skizzenmodus (aus RM-183) |
 | [RM-204 — Ein Merkmalklick baut alle Handlungen des Fensters neu](#rm-204) | Bedienung und Darstellung | Abnahme am echten Fenster beim Release (RM-213) |
 | [RM-559 — Körper in der Szene mit drei Klicks aufziehen, als Körper oder als Ausschnitt](#rm-559) | Bedienung und Darstellung | Gebaut (Paket Z1, 08.10.): Werkzeug *Zeichnen*, Strg+Umschalt+E; offen die Abnahme am echten Fenster und die Nachzählung durch bedienlogik |
@@ -3306,9 +3307,22 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   **Offen:** Prüfbericht, Schichtanalyse und Orientierung liegen zu über 90 % in
   `slice/analysis.py` — mit RM-595 schneller (Archiv). Das Restwachstum je Verlaufsschritt ist mit
   RM-593 behoben (Archiv). Die Kandidatensuche der Selbstschnitte (`_candidates`, am Riser
-  9,7 von 11,5 s) und die Erkennung am ganzen Körper nach jeder Booleschen Operation (Riser,
-  Ø-6-Zylinder abziehen: 11,6 s; eine örtliche Neuerkennung wäre eine Architekturfrage an
-  §21.2) bleiben hier offen.
+  9,7 von 11,5 s) bleibt hier offen; die Erkennung am ganzen Körper nach jeder Booleschen
+  Operation führt [RM-592](#rm-592).
+
+<a id="rm-592"></a>
+
+- [~] **RM-592 — Nach einem Schritt erkennt die Auswertung fast so lange wie beim Laden.**
+  Robert, 08.10.2026: örtliche Neuerkennung nach einem Schritt, „mit Konzept zuerst“. Wer eine
+  Bohrung setzt oder ein Merkmal versetzt, wartet nach *Übernehmen* am Laptop-Ständer rund 6 s,
+  am Eiffelturm rund 20 s auf die Erkennung, obwohl sich unter einem Prozent der Oberfläche
+  geändert hat. **Weg** ([Konzept](konzepte/konzept-oertliche-erkennung-2026-10.md)): kein
+  Ausschnitt, sondern ein Gedächtnis je Fleck — die Vollerkennung (§21.1) läuft weiter über den
+  ganzen Körper, jede teure Frage an einen Fleck antwortet über die Körpergrenze, wenn alles,
+  was sie liest, Bit für Bit dasselbe ist (Pakete P0 bis P4, P5 nur über das Tor). **Abnahme**
+  (Konzept §10): A1 Bit für Bit gleich in mindestens 1 500 Zuständen mit Gegenprobe je
+  Schlüsselteil, A2 Kennungen, A3 Plattformen, A4 Tempo (Ständer ≤ 60 %, Eiffelturm ≤ 45 %,
+  Spiderman ≤ 75 % des Ausgangswerts), A5 kein Rückschritt, A6 Suite-Tests je neuer Frage.
 
 ## Bedienung und Darstellung
 

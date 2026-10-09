@@ -195,7 +195,7 @@ target-version = "py314"
 # läuft ohnehin nur über `files = ["app"]`. Dasselbe gilt für die Sonden der
 # Release-Durchsichten und der CAD-Durchsicht, die unverändert unter
 # `konzepte/nachweise-release-*/` und `konzepte/nachweise-cad-durchsicht-2026-09/`
-# liegen.
+# liegen, und für die Sonden des Konzepts zur örtlichen Neuerkennung.
 #
 # Und die Druckprojekte werden es auch nicht.
 #
@@ -207,6 +207,7 @@ extend-exclude = [
   "3D Drucker/",
   "konzepte/nachweise-release-*/",
   "konzepte/nachweise-cad-durchsicht-2026-09/",
+  "konzepte/nachweise-oertliche-erkennung-2026-10/konzept-sonden/",
 ]
 
 [tool.ruff.per-file-target-version]

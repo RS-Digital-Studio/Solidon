@@ -1,0 +1,58 @@
+Laden+Erkennen CPU 21.34 s; detect [(173592, 18.09, 541)]
+Koerper ['obj_1'] Dreiecke 173592 Merkmale 541
+Huelle min [-102.28, -136.23, 0.0] max [102.28, 136.23, 92.01]
+Bohrstelle -87.93 -6.81 Dreieck 66392 Flaeche 1120.47
+Abziehen gesamt CPU 31.95 s; detect [(173592, 0.0, 541), (192, 0.0, 3), (173984, 8.83, 544)]
+Dreiecke nachher 173984, bitgleich uebernommen 173588 (99.8%), neu 396; Merkmale 544
+Flecken 164 (164460 Dreiecke), beruehrt 16 (43501 Dreiecke); Ring um Neues 714 Dreiecke
+Stufen (CPU s, Aufrufe), aeusserste Ebene:
+  _fitted                             4.69  1
+  slots_instead_of_half_bores         1.66  1
+  _tangential_pieces                  1.64  1574
+  _read_surface_support               0.95  680
+  _large_facet_faces                  0.89  2
+  find_helices                        0.81  1
+  detect_holes                        0.78  1
+  curvature_jumps                     0.52  1
+  _connected_patches                  0.39  11
+  patterns_instead_of_cells           0.14  1
+  _one_body                           0.11  2
+  detect_curved_faces                 0.09  1
+  _split_patches_by_curvature         0.08  1
+  _merged_tori                        0.08  1
+  detect_edge_loops                   0.08  1
+  _merged_cylinders                   0.06  1
+  _merged_cones                       0.06  1
+  _torus_candidates                   0.06  2
+  detect_fillets                      0.06  1
+  _faces_finished_in                  0.05  1
+  _partial_cones_folded               0.05  1
+  _planar_face_entries                0.03  1
+  detect_cones                        0.03  1
+  _detect_voids                       0.03  1
+  _sphere_candidates                  0.02  2
+  detect_spheres                      0.02  1
+  detect_tori                         0.02  1
+  _faces_on_a_round_wall              0.02  1
+  narrowings_marked                   0.02  1
+  _screening                          0.00  3
+  detect_pins                         0.00  1
+  _face_candidates                    0.00  1
+  _threads_instead_of_phantoms        0.00  1
+  _partial_bores_marked               0.00  1
+  _corners_named_as_fillets           0.00  1
+Merker ueber die Koerpergrenze:
+  _cone_is_recognisable        Treffer  208
+  _sphere_is_recognisable      Treffer  58
+  _sphere_is_recognisable      neu      2
+  _torus_is_recognisable       Treffer  51
+  _torus_is_recognisable       neu      1
+  fit_cone                     Treffer  606
+  fit_cone                     neu      3
+  fit_cylinder                 Treffer  630
+  fit_cylinder                 neu      5
+  fit_sphere                   Treffer  376
+  fit_sphere                   neu      3
+  fit_torus                    Treffer  180
+  fit_torus                    neu      3
+Exit: 0

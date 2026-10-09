@@ -1,0 +1,11 @@
+Laden+Erkennen CPU 41.67 s; detect [(885570, 33.23, 0)]
+Koerper ['obj_1'] Dreiecke 885570 Merkmale 0
+Huelle min [-62.08, -51.63, 0.0] max [62.08, 51.63, 100.0]
+Reparieren CPU 77.73 s; detect [(885570, 0.0, 0), (885570, 0.0, 0)]
+nach Reparatur Dreiecke 885570
+evaluation stopped at op 4: op.subtract_objects.GeometryError: Der Schritt trifft ein Teil, dessen Oberfläche sich selbst kreuzt. Dort lässt er sich nicht verlässlich rechnen. Setzen Sie ihn an eine andere Stelle oder reparieren Sie das Teil in einem Netzprogramm.
+Abziehen gesamt CPU 3.56 s; detect [(885570, 0.0, 0), (885570, 0.0, 0), (192, 0.0, 3)]
+Dreiecke nachher 885570, bitgleich uebernommen 885570 (100.0%), neu 0; Merkmale 0
+Stufen (CPU s, Aufrufe), aeusserste Ebene:
+Merker ueber die Koerpergrenze:
+Exit: 0
