@@ -16352,9 +16352,7 @@ class Viewport(QWidget):
             self.finish_bend()
             self.jointAngleTyped.emit(float(value))
             return
-        unusable = (kind == "scale" and value is not None and value <= 0.0) or (
-            kind == "pull" and value is not None and not self._pull_takes(value)
-        )
+        unusable = kind == "scale" and value is not None and value <= 0.0
         if value is None or kind is None or unusable:
             self.drag_bar.value.selectAll()
             return
