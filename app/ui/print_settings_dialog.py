@@ -2824,7 +2824,7 @@ class PrintSettingsDialog(QDialog):
         # aus dem zugeklappten Kasten zog die Vorderseite sonst auf 168 Punkte,
         # wo 120 reichen, und in 560 Punkten Breite fehlten der Druckerauswahl
         # die 40, die „Allgemeiner FDM-Drucker 220 mm“ braucht.
-        align_forms(self, apart=(self.tabs, self.slicer_box))
+        align_forms(self, apart=(self.tabs, self.slicer_box), at_most=self._label_room())
         even_fields(self)
         self._built = True
         self._mark_origins()
@@ -2864,6 +2864,33 @@ class PrintSettingsDialog(QDialog):
         stored = self.ui_settings.print_quality
         known = print_settings.quality_presets()
         return stored if stored in known else print_settings.DEFAULT_QUALITY
+
+    def _label_room(self) -> int:
+        """So breit darf die Beschriftungsspalte werden, damit die Kopfzeile in
+        der Mindestbreite ganz dasteht (RM-630).
+
+        Abgezogen werden das breiteste Kopffeld in seiner Mindestbreite, der
+        Abstand zur Beschriftung und die Ränder bis zum Fenster samt
+        senkrechtem Rollbalken. Eine längere Beschriftung bricht um:
+        „Densidade de preenchimento“ schob die Felder sonst über den rechten
+        Rand, wo die Schrift breiter läuft als am Arbeitsplatz.
+        """
+        head = self._head
+        widest = 0
+        for row in range(head.rowCount()):
+            item = head.itemAt(row, QFormLayout.ItemRole.FieldRole)
+            if item is not None and not item.isEmpty():
+                widest = max(widest, item.minimumSize().width())
+        spacing = head.horizontalSpacing()
+        if spacing < 0:
+            spacing = max(0, head.spacing())
+        chrome = 2 * self._scroll.frameWidth() + self._scroll.verticalScrollBar().sizeHint().width()
+        content = self._scroll.widget()
+        for layout in (self.layout(), content.layout() if content is not None else None, head):
+            if layout is not None:
+                margins = layout.contentsMargins()
+                chrome += margins.left() + margins.right()
+        return self.minimumWidth() - chrome - spacing - widest
 
     def _build_head(self) -> QFormLayout:
         # **Welcher Slicer**, wenn mehr als einer installiert ist. Ohne diese
@@ -3091,7 +3118,7 @@ class PrintSettingsDialog(QDialog):
         # Kunde erst nach dem Druck bemerkt. Das zweite ist zu lang: Spalte
         # null trägt die längste Beschriftung, und „Diâmetro do bico" drückte
         # die Druckerauswahl auf 342 px, wo „Allgemeiner FDM-Drucker 220 mm"
-        # 400 braucht (``test_the_portuguese_header_keeps_every_control_visible``).
+        # 400 braucht (``test_the_translated_header_keeps_every_control_visible``).
         # Das Durchmesserzeichen sagt dasselbe auf einem Viertel der Breite;
         # vorgelesen wird der ``accessibleName``.
         nozzle_label = QLabel(tr("Düse ⌀"), self)
@@ -3115,6 +3142,7 @@ class PrintSettingsDialog(QDialog):
         # begannen ihre Felder bei 68 Punkten und die des Wichtigsten
         # darunter bei 170.
         head = QFormLayout()
+        self._head = head
         head.setRowWrapPolicy(QFormLayout.RowWrapPolicy.DontWrapRows)
         slicer_field = QHBoxLayout()
         slicer_field.setContentsMargins(0, 0, 0, 0)

@@ -585,6 +585,7 @@ entfernt hat.
 | 2026-10-08 | [RM-556: Die Filamente stehen hinter einem Knopf in der Kopfzeile (08.10.2026)](#rm-556-die-filamente-stehen-hinter-einem-knopf-in-der-kopfzeile-08102026) |
 | 2026-10-08 | [RM-135: Die Filamentkarte der linken Spalte gibt es nicht mehr (08.10.2026)](#rm-135-die-filamentkarte-der-linken-spalte-gibt-es-nicht-mehr-08102026) |
 | 2026-10-08 | [RM-569: Ein beim Zuweisen angelegtes Filament bleibt im Lager und im Projekt (08.10.2026)](#rm-569-ein-beim-zuweisen-angelegtes-filament-bleibt-im-lager-und-im-projekt-08102026) |
+| 2026-10-09 | [RM-630: Die Kopfzeile des Druckdialogs behält ihre Felder, wenn die Schrift breiter läuft (09.10.2026)](#rm-630-die-kopfzeile-des-druckdialogs-behält-ihre-felder-wenn-die-schrift-breiter-läuft-09102026) |
 
 ---
 
@@ -44611,3 +44612,40 @@ Spulenbindung, ohne etwas in sein Lager zu legen; Strg+Z nimmt Zuweisung und Bin
 behält die Spule. Gegenproben: Spulenbindung ohne Namen (`with_spool`) und ein Dialog, der bei
 jeder Projektmeldung schließt, machen den Test rot. Am Code war nichts zu beheben.
 Changelog: nein.
+
+## RM-630: Die Kopfzeile des Druckdialogs behält ihre Felder, wenn die Schrift breiter läuft (09.10.2026)
+
+<a id="rm-630-die-kopfzeile-des-druckdialogs-behält-ihre-felder-wenn-die-schrift-breiter-läuft-09102026"></a>
+<a id="rm-630"></a>
+
+**RM-630 — Im portugiesischen Druckdialog ragen Qualität, Drucker und *Filamentos …* bei 560 px
+über den Rand.** Fund der Nachprüfung U2: Der Test
+`test_the_portuguese_header_keeps_every_control_visible_at_manual_width` (heute
+`test_the_translated_header_keeps_every_control_visible_at_manual_width`) setzte Portugiesisch,
+ohne den Katalog zu laden. Er maß also deutsche Texte und war nur grün, solange kein früherer
+Test im Lauf die Kataloge geladen hatte.
+
+**Befund:** `panels.align_forms` gibt der Kopfzeile und *Das Wichtigste* eine
+Beschriftungsspalte. Die längste Beschriftung setzt sie, „Densidade de preenchimento“
+(Fülldichte). In der Offscreen-Schrift misst sie 312 px, und Qualität, Drucker und
+*Filamentos …* ragten bei 560 px 48 px über den Rand. Französisch und Italienisch schnitten den
+Druckernamen ab. Am echten Windows-Fenster (Segoe) und mit DejaVu ragt in keiner Sprache etwas
+hinaus; portugiesisch ist die Beschriftung dort 155 bis 178 px breit. Mit 150 % Schriftgröße
+ragt die portugiesische Kopfzeile am echten Fenster 4 px unter den Rollbalken. Das ist bei
+`v0.5.3` und `origin/main` gleich gebaut: Die gemeinsame Spalte kam mit `11c22886c`, den
+`git tag --contains` nur in `v0.5.3` findet. Ein Kunde merkt es bei vergrößerter Schrift.
+
+**Behebung:** `align_forms(..., at_most=)` deckelt die Spalte der Formulare außerhalb der
+Reiter. Eine längere Beschriftung bricht zwischen ihren Wörtern um, wie in
+`dialogs.align_to_the_front`; ein einzelnes längeres Wort behält seine Breite.
+`PrintSettingsDialog._label_room` rechnet den Deckel aus der Mindestbreite des Dialogs. Davon
+gehen ab: das breiteste Kopffeld in seiner Mindestbreite (der Drucker mit 20 Zeichen), der
+Abstand und die Ränder samt Rollbalken. Mit Arbeitsplatzschrift ändert sich nichts: Der Deckel
+liegt über der längsten Beschriftung.
+
+**Nachweis:** Der Test läuft für alle sechs Sprachen, lädt den Katalog selbst und sichert zu,
+dass er geladen ist. Gegenprobe: `align_forms` ohne `at_most` macht fr und pt rot (Felder rechts
+über dem Rand), mit Deckel sind alle sechs grün. Am echten Windows-Fenster sind alle sechs grün
+und die Spalten unverändert. Mit 150 % Schrift reichen die Felder bis 527 px statt 531 px.
+Changelog: ja, unter *Drucken und Übergabe an den Slicer* — mit vergrößerter Schrift hatte
+`v0.5.3` den Fehler.

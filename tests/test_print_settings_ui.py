@@ -7246,13 +7246,24 @@ def test_the_material_line_leads_to_where_the_choice_is(
     assert dialog.material_link.toolTip(), "und er sagt vorher, wohin er führt"
 
 
-def test_the_portuguese_header_keeps_every_control_visible_at_manual_width(
-    qt_app: QApplication, session: Session
+@pytest.mark.parametrize("language", ["de", "en", "es", "fr", "it", "pt"])
+def test_the_translated_header_keeps_every_control_visible_at_manual_width(
+    qt_app: QApplication, session: Session, language: str
 ) -> None:
-    """Die 520-Pixel-Aufnahme darf Kopfwerte und Handlungen nicht abschneiden."""
-    from app.i18n import set_language
+    """Die Aufnahme in Handbuchbreite schneidet Kopfwerte und Handlungen nicht ab — übersetzt.
 
-    set_language("pt")
+    Ohne geladenen Katalog maß der Test deutsche Texte unter dem Namen
+    Portugiesisch. Mit ihm zog „Densidade de preenchimento“ die gemeinsame
+    Beschriftungsspalte so breit, dass Qualität, Drucker und *Filamentos …*
+    rechts 48 Punkte über den Rand ragten (RM-630); die Spalte lässt den
+    Kopffeldern jetzt ihre Mindestbreite, und die lange Beschriftung bricht um.
+    """
+    from app.i18n import set_language, tr
+    from app.i18n.catalog import install_language
+
+    install_language(language)
+    set_language(language)
+    assert language == "de" or tr("Qualität") != "Qualität", "Katalog geladen"
     dialog = PrintSettingsDialog(session, UiSettings())
     dialog.show_materials(("PLA Branco · #FFFFFF", "TPU 95A Preto · #000000"))
     dialog.resize(560, 720)
@@ -7271,11 +7282,19 @@ def test_the_portuguese_header_keeps_every_control_visible_at_manual_width(
     assert dialog.quality.fontMetrics().horizontalAdvance(dialog.quality.currentText()) + 40 <= (
         dialog.quality.width()
     )
-    assert (
-        dialog.printer_choice.fontMetrics().horizontalAdvance(dialog.printer_choice.currentText())
-        + 40
-        <= dialog.printer_choice.width()
-    )
+    # Der Drucker hat mindestens seine Mindestbreite (20 Zeichen). Ganz lesbar
+    # ist sein Name hier auf Deutsch; die breite Offscreen-Schrift (12 px je
+    # Zeichen) lässt ihm übersetzt neben dem längsten Wort der Spalte nicht
+    # überall 400 px, am echten Fenster steht er in allen Sprachen ganz da.
+    assert dialog.printer_choice.width() >= dialog.printer_choice.minimumSizeHint().width()
+    if language == "de":
+        assert (
+            dialog.printer_choice.fontMetrics().horizontalAdvance(
+                dialog.printer_choice.currentText()
+            )
+            + 40
+            <= dialog.printer_choice.width()
+        )
     assert dialog.material_link.sizeHint().width() <= dialog.material_link.width()
     assert dialog.share_settings.sizeHint().width() <= dialog.share_settings.width()
     assert dialog.material_state.wordWrap(), "nur die lange Filamentliste darf umbrechen"

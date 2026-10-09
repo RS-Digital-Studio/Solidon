@@ -12008,7 +12008,9 @@ def least_number_width(spin: QDoubleSpinBox) -> int:
     return metrics.horizontalAdvance(spin.text() + "0") + frame
 
 
-def align_forms(dialog: QWidget, *, apart: tuple[QWidget, ...] = ()) -> None:
+def align_forms(
+    dialog: QWidget, *, apart: tuple[QWidget, ...] = (), at_most: int | None = None
+) -> None:
     """Alle Formularzeilen eines Dialogs auf eine Beschriftungsspalte legen.
 
     Ein ``QFormLayout`` rechnet seine linke Spalte für sich, und ein Dialog
@@ -12036,6 +12038,13 @@ def align_forms(dialog: QWidget, *, apart: tuple[QWidget, ...] = ()) -> None:
     um dessen Innenrand versetzt. Ihre Formulare teilen eine Spalte unter
     sich; die längste Beschriftung eines verborgenen Reiters („Linienbreite
     erste Schicht“) zog sonst die Vorderseite auf 170 Punkte, wo 110 reichen.
+
+    ``at_most`` deckelt die Spalte der Formulare außerhalb von ``apart``:
+    Eine längere Beschriftung bricht dann zwischen ihren Wörtern um, und das
+    längste Wort einer umbrechenden Beschriftung setzt die Spalte — eine
+    Kante bleibt. Sonst nahm eine lange Übersetzung („Densidade de
+    preenchimento“) den Feldern daneben den Platz, den sie in der
+    Mindestbreite des Dialogs brauchen (RM-630).
     """
 
     def inside(form: QFormLayout, area: QWidget) -> bool:
@@ -12045,7 +12054,7 @@ def align_forms(dialog: QWidget, *, apart: tuple[QWidget, ...] = ()) -> None:
     forms = dialog.findChildren(QFormLayout)
     groups = [[form for form in forms if inside(form, area)] for area in apart]
     rest = [form for form in forms if not any(inside(form, area) for area in apart)]
-    for group in (rest, *groups):
+    for group, limit in ((rest, at_most), *((group, None) for group in groups)):
         labels: list[QWidget] = []
         for form in group:
             for row in range(form.rowCount()):
@@ -12055,9 +12064,21 @@ def align_forms(dialog: QWidget, *, apart: tuple[QWidget, ...] = ()) -> None:
                     labels.append(widget)
         if not labels:
             continue
-        widest = max(widget.sizeHint().width() for widget in labels)
+        natural = {id(widget): widget.sizeHint().width() for widget in labels}
+        widest = max(natural.values())
+        if limit is not None and widest > limit:
+            # Umgebrochen wird zwischen Wörtern; das längste Wort einer
+            # umbrechenden Beschriftung setzt die Spalte, damit sie eine Kante
+            # bleibt.
+            widest = max(limit, 0)
+            for widget in labels:
+                if natural[id(widget)] > widest and isinstance(widget, QLabel):
+                    widget.setWordWrap(True)
+                    widest = max(widest, widget.minimumSizeHint().width())
         for widget in labels:
             widget.setMinimumWidth(widest)
+            if isinstance(widget, QLabel) and widget.wordWrap() and natural[id(widget)] > widest:
+                widget.setMaximumWidth(widest)
 
 
 def even_fields(dialog: QWidget) -> None:

@@ -58,6 +58,7 @@ it into `website/version.json`.
 - Where supports under small overhangs rest on the model, Solidon suggests tree supports. They leave fewer marks there.
 - For small tips, Solidon suggests a lower *Minimum slowdown speed* so they do not go soft. The setting reaches every slicer.
 - Narrow rims that hold up on their own stay free of support with *No support under rims*. Prints need noticeably less support that way.
+- In the print dialog, printer, filaments and quality stay fully visible even with enlarged text. Long labels wrap instead.
 
 ### Threads, holes and standard parts
 
