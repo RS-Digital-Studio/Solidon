@@ -135,6 +135,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-678 — Ein Merkmalsfeld im Operationsdialog übernimmt eine Vorbelegung, die nicht in seiner Liste steht](#rm-678) | Bedienung und Darstellung | *Zum Langloch ziehen* mit gewählter Fläche trägt `face_top` ins Feld *Bohrung* ein und hält danach an |
 | [RM-680 — Der Bausteinkatalog beginnt mit zugeklapptem Verwaltungsabschnitt, auch wenn noch kein eigener Baustein existiert](#rm-680) | Bedienung und Darstellung | Speichern, Hinzufügen und die Sperrgründe stehen hinter einer Kopfzeile, die man erst öffnen muss (seit `48ffcf145`) |
 | [RM-681 — Schriftzug: Zeichen, die die Schrift nicht hat, und Steuerzeichen werden still als Kasten gedruckt](#rm-681) | Bedienung und Darstellung | Nachprüfung RM-471 09.10.: fehlende Glyphe und Steuerzeichen ablehnen und eine Schrift vorschlagen, die die Zeichen hat |
+| [RM-679 — Kommandozeile und Agent nennen bei Befunden keinen Ausweg mehr](#rm-679) | Bedienung und Darstellung | Regression gegenüber v0.5.1 (in v0.5.3): RM-509 nahm die Handlung aus 118 Sätzen, Knöpfe gibt es nur im Fenster |
 | [RM-003 — Lizenzkette der Generatoren klären und TripoSG ersetzen](#rm-003) | KI und Generatoren | Weg 3 auf TRELLIS.2-4B und FLUX.2 [klein] 4B umgebaut, alte Einrichtung wird mit Ansage entfernt (Robert, 07.10.); offen die Kanzleifragen (DINOv3-Lizenz, Trainingsdaten, Apache-Hinweise), bis dahin nennt die Startseite den Prüfvorbehalt |
 | [RM-004 — Echte Text- und Bildgenerierung über alle Zielplattformen abnehmen](#rm-004) | KI und Generatoren | Windows mit TRELLIS.2 gefahren (07.10.): Text- und Bildweg bis zum Export, nach RM-550 5 von 7 Körpern geschlossen, Auswertung 15–60 s; offen RM-550-Rest, Linux und macOS |
 | [RM-550 — Erzeugte Körper aus Weg 3 bleiben nach der Reparatur offen](#rm-550) | KI und Generatoren | Ursachen behoben (07.10.): berührende Stücke, Textweg über das Bild, 200 000 Dreiecke, beide UDF-Hüllen; 5 von 7 Läufen geschlossen; offen die Warnung „kreuzt sich selbst“ und zerfallene Rohnetze einzelner Startwerte |
@@ -4668,6 +4669,37 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   Gegenprobe ohne Absage: weiches Trennzeichen, Nullbreite, „ÇÃÑÕÂÊÎÔÛ“ und die 93 Kernfälle.
   Bauplan §25, §2.7.
   Belege: `F:\solidon-review-reports\rm471\befunde.md` (B1), `rm471\bericht.md`.
+
+<a id="rm-679"></a>
+
+- [ ] **RM-679 — Kommandozeile und Agent nennen bei Befunden keinen Ausweg mehr.**
+  Commit-Review `09d8e9485..1b0c70948` (09.10.2026, R-3). **Regression gegenüber v0.5.1**, eingeführt
+  mit `e362f01f8` (RM-509, in v0.5.3): 118 Befundsätze verloren ihren Ausweg, „wo die Handlung
+  schon als Knopf an der Zeile steht“. Knöpfe gibt es nur im Fenster; Kommandozeile und
+  Steckbrief des Agenten drucken je Befund nur den Satz, das Werkzeugergebnis des Agenten
+  „code: Satz“. Beispiele alt → neu: `split.uncapped` „Die Schnittflächen bleiben offen: Das
+  Modell ist schon vor dem Schnitt nicht geschlossen. Reparieren Sie es und teilen Sie danach
+  erneut.“ → „Die Schnittflächen bleiben offen, weil das Modell schon vor dem Schnitt nicht
+  geschlossen war.“; `bore.breaks_out` „Bei dieser Tiefe tritt die Bohrung auf der anderen Seite
+  des Materials aus. Wählen Sie eine geringere Tiefe, wenn sie geschlossen bleiben soll.“ → „Bei
+  dieser Tiefe tritt die Bohrung auf der anderen Seite des Materials aus.“ Am Stand origin/main
+  unverändert, auch auf `origin/welle2`: `FINDING_ACTIONS` liegt im Oberflächenpaket.
+  **Stellen:** `app/cli/main.py:234` (`print_findings`, druckt `finding.message`),
+  `app/core/perceive/digest.py:1059–1074` (`_finding_lines`), `app/core/agent/checks.py:197`
+  (`as_lines`), `app/ui/panels.py:521` (`FINDING_ACTIONS`), `app/core/geom/prepare.py:2627–2632`
+  (`split.uncapped`), `app/core/geom/prepare_ops.py:8733` (`bore.breaks_out`); alle gekürzten
+  Sätze im Diff von `e362f01f8`.
+  **Fix (allgemein):** Die Handlungen eines Befunds an einer Stelle im Kern führen (Befundcode →
+  Handlungen, aus `panels.FINDING_ACTIONS` nach `app/core`, das Fenster liest dort), und
+  Kommandozeile, Steckbrief und Werkzeugergebnis nennen je Befund die Beschriftung seiner
+  Handlungen samt `suggestions` („→ Eingabe korrigieren“). Die Längengrenze von RM-509 und der
+  Satz im Fenster bleiben, wie sie sind.
+  **Abnahme:** Kommandozeile (`info` an einem Projekt) und Steckbrief an drei Befunden —
+  `bore.breaks_out`, `split.uncapped` und `slicer.machine_mismatch` — nennen je Zeile den Ausweg;
+  das Werkzeugergebnis des Agenten trägt ihn ebenso; das Fenster zeigt unverändert je Ziel einen
+  Knopf und keinen doppelten Satz; ein Wächter prüft, dass jeder Code mit Handlung im Fenster sie
+  auch im Kern hat. Bauplan §2.7, §26.1, Regel 17.
+  Belege: `F:\solidon-review-reports\commits-0910\befunde.md` (R-3).
 
 ## KI und Generatoren
 
