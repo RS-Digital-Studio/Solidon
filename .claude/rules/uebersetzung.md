@@ -2,6 +2,7 @@
 description: "Die Sprachkataloge — eine Sprache ist eine Datei, was nie übersetzt wird, verbindliche Glossare je Sprache und der Genus, der durch den Satz zieht, neu übersetzen statt flicken, neue Schlüssel ziehen überall nach"
 paths:
   - "app/i18n/**"
+  - "changelog/*.md"
 ---
 
 # Regeln für die Sprachkataloge
@@ -103,7 +104,7 @@ Rückgängig→deshacer · Skizze→boceto · Zwangsbedingung→restricción ·
 Bemaßung→acotación · Maß→cota · Netz→malla · wasserdicht→estanco ·
 Druckplatte→placa de impresión · Bauraum→volumen de impresión ·
 Schichtanalyse→análisis de capas · Schichthöhe→altura de capa · Düse→boquilla ·
-Überhang→voladizo · Insel→isla · Brücke→puente · Stützen→soportes ·
+Überhang→voladizo · Insel→isla · Brücke→puente · Stützen→soportes · Baumstützen→soportes en árbol ·
 Gewinde→rosca · Senkung→avellanado · Aushöhlen→vaciado · Passstift→pasador ·
 Trennebene→plano de corte · Startwert→semilla · Baugruppe→ensamblaje ·
 Merkmal→característica · Werkzeug→herramienta · Ansicht→vista ·
@@ -120,7 +121,7 @@ Zwangsbedingung→contrainte · Bemaßung→cotation · Maß→cote · Netz→ma
 wasserdicht→étanche · Druckplatte→plateau d'impression · Bauraum→volume
 d'impression · Schichtanalyse→analyse des couches · Schichthöhe→hauteur de
 couche · Düse→buse · Überhang→surplomb · Insel→îlot · Brücke→pont ·
-Stützen→supports · Gewinde→filetage · Senkung→fraisure · Aushöhlen→évidement ·
+Stützen→supports · Baumstützen→supports arborescents · Gewinde→filetage · Senkung→fraisure · Aushöhlen→évidement ·
 Passstift→goupille · Trennebene→plan de coupe · Startwert→graine ·
 Baugruppe→assemblage · Merkmal→caractéristique · Werkzeug→outil ·
 Ansicht→vue · Drucker→imprimante · Materialprofil→profil de matériau.
@@ -140,7 +141,7 @@ Zwangsbedingung→vincolo · Bemaßung→quotatura · Maß→quota · Netz→mes
 wasserdicht→a tenuta stagna · Druckplatte→piatto di stampa · Bauraum→volume di
 stampa · Schichtanalyse→analisi degli strati · Schichthöhe→altezza dello
 strato · Düse→ugello · Überhang→sbalzo · Insel→isola · Brücke→ponte ·
-Stützen→supporti · Gewinde→filettatura · Senkung→svasatura ·
+Stützen→supporti · Baumstützen→supporti ad albero · Gewinde→filettatura · Senkung→svasatura ·
 Aushöhlen→svuotamento · Passstift→spina · Trennebene→piano di taglio ·
 Startwert→seme · Baugruppe→assieme · Merkmal→caratteristica ·
 Werkzeug→strumento · Ansicht→vista · Drucker→stampante ·
@@ -165,7 +166,8 @@ Zwangsbedingung→restrição · Bemaßung→cotagem · Maß→cota · Netz→ma
 wasserdicht→estanque · Druckplatte→placa de impressão · Bauraum→volume de
 impressão · Schichtanalyse→análise de camadas · Schichthöhe→altura de camada ·
 Düse→bico · Überhang→saliência · Insel→ilha · Brücke→ponte ·
-Stützen→suportes · Gewinde→rosca · Senkung→escareamento ·
+Stützen→suportes · Baumstützen→suportes em árvore · Gewinde→rosca ·
+Senkung→escareamento ·
 Aushöhlen→esvaziamento · Passstift→pino de posicionamento · Trennebene→plano de
 corte · Startwert→semente · Baugruppe→conjunto · Merkmal→característica ·
 Werkzeug→ferramenta · Ansicht→vista · Drucker→impressora ·

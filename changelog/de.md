@@ -40,7 +40,7 @@ wieder heraus (Entscheidung Robert). Wo ein Nutzen bleibt, der ohne den
 Mechanismus auskommt — „die Meldung nennt den wirklichen Grund“ —, steht der
 Nutzen da und sonst nichts.
 
-## 0.5.4
+## 0.6.0
 
 ### Bedienung und System
 
@@ -70,6 +70,10 @@ Nutzen da und sonst nichts.
 - Der Druckdialog bietet die Drucker des gewählten Slicers an, wie *Erste Schritte* und *Einstellungen*. Ein so übernommener Drucker bleibt bei seinem Slicer.
 - Die geschätzte Druckzeit liegt näher an der des Slicers, bei Teilen mit Stützen deutlich näher.
 - Ob Stützen und Skirt auf dem Bett Platz haben, misst die Prüfung nur noch unter den Überhängen. Teile nahe am Rand bekommen keine grundlose Warnung mehr.
+- Übernommene Vorschläge lassen kaum noch Überhänge ohne Stütze, die eine brauchen. *Kanäle frei halten* sperrt nur noch Raum, aus dem keine Stütze mehr herauskäme.
+- Setzen Stützen unter kleinen Überhängen auf dem Modell auf, schlägt Solidon Baumstützen vor. Sie hinterlassen dort weniger Spuren.
+- Bei kleinen Spitzen schlägt Solidon ein niedrigeres *Mindesttempo beim Bremsen* vor, damit sie nicht weich werden. Die Einstellung geht an jeden Slicer.
+- Schmale Ränder, die sich selbst tragen, bleiben mit *Ränder ohne Stütze* frei. Der Druck braucht so deutlich weniger Stütze.
 
 ### Gewinde, Bohrungen und Normteile
 

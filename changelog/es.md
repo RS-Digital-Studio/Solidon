@@ -16,7 +16,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 `tools/make_download.py` toma el apartado de la versión actual y lo escribe en
 `website/version.json`.
 
-## 0.5.4
+## 0.6.0
 
 ### Manejo y sistema
 
@@ -46,6 +46,10 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - El diálogo de impresión ofrece las impresoras del slicer elegido, como *Primeros pasos* y *Ajustes*. Una impresora adoptada así se queda con su slicer.
 - El tiempo de impresión estimado se acerca más al del slicer, mucho más en piezas con soportes.
 - Si los soportes y el skirt caben en la cama, la comprobación lo mide ahora solo bajo los voladizos. Las piezas cerca del borde ya no reciben un aviso sin motivo.
+- Las sugerencias aceptadas ya casi no dejan sin soporte voladizos que lo necesitan. *Mantener libres los canales* solo bloquea el espacio del que ya no se podría sacar un soporte.
+- Donde los soportes bajo voladizos pequeños se apoyan en el modelo, Solidon sugiere soportes en árbol. Allí dejan menos marcas.
+- En puntas pequeñas, Solidon sugiere una *Velocidad mínima al frenar* más baja para que no se ablanden. El ajuste llega a cualquier slicer.
+- Los bordes estrechos que se sostienen solos quedan libres con *Bordes sin soporte*. Así la impresión necesita bastante menos soporte.
 
 ### Roscas, taladros y piezas normalizadas
 
