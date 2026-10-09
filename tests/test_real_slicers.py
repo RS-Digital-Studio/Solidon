@@ -224,7 +224,7 @@ def test_a_slicer_never_opened_offers_the_printers_of_its_maker(
     installed_slicer: Path,
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
-    record_property: Callable[[str, object], None],
+    record_testsuite_property: Callable[[str, object], None],
 ) -> None:
     """Frisch installiert, nie geöffnet: keine eigene Konfiguration, kein ``system/``.
 
@@ -232,7 +232,8 @@ def test_a_slicer_never_opened_offers_the_printers_of_its_maker(
     Druckers aus :data:`PROGRAMS`. Unter Linux kommen sie aus dem Abbild des
     AppImage, das dafür nicht startet (Regel 11); bis RM-549 sah Solidon dort
     keinen Herstellerdrucker, bis der Slicer einmal gelaufen war. Wie lange die
-    erste Kopie dort dauert, steht im Bericht des Laufs (``record_property``).
+    erste Kopie dort dauert, steht im Bericht des Laufs (``record_testsuite_property``;
+    ``record_property`` verträgt der ``xunit2``-Bericht des Workflows nicht).
     """
     empty = tmp_path / "konfiguration"
     empty.mkdir()
@@ -257,6 +258,7 @@ def test_a_slicer_never_opened_offers_the_printers_of_its_maker(
         assert root is not None and root.is_relative_to(appimage._cache_root()), root
         started = time.perf_counter()
         count = appimage.copy_profiles(installed_slicer, tmp_path / "kopie")
-        record_property("profile", count)
-        record_property("kopie_sekunden", round(time.perf_counter() - started, 2))
-        record_property("drucker", len(found))
+        seconds = round(time.perf_counter() - started, 2)
+        record_testsuite_property(f"{program}_profile", count)
+        record_testsuite_property(f"{program}_kopie_sekunden", seconds)
+        record_testsuite_property(f"{program}_drucker", len(found))
