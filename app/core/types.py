@@ -1257,6 +1257,12 @@ class CoolingSettings:
     """So viele erste Schichten laufen ohne Lüfter — sonst löst sich das Teil."""
     minimum_layer_time: float = 8.0
     """Sekunden. Kürzere Schichten werden gebremst, damit sie erstarren."""
+    minimum_speed: float = 10.0
+    """mm/s. Langsamer bremst der Slicer für die :attr:`minimum_layer_time`
+    nicht; eine kleinere Schicht bleibt kürzer. Am Drachen (08.10.2026) lagen
+    so die obersten 12 mm in jedem Slicer unter der Mindestzeit, die Spitzen
+    bei 0,1 bis 1,3 s je Schicht. Die Vorgabe ist die von Cura und
+    PrusaSlicer; die Herstellerfilamente bringen ihre eigene mit."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -1308,6 +1314,14 @@ class SupportSettings:
     einschaltet: Was ohne „Vorschläge übernehmen" zum Slicer geht, sind die
     Standardeinstellungen, nichts auf dieses Modell Zugeschnittenes
     (Entscheidung Robert, 26.09.2026)."""
+    spare_ledges: bool = False
+    """Keine Stütze unter Rändern, die sich selbst tragen (``analysis.ledges``).
+
+    Die Übergabe sperrt dafür die Überhangflächen dieser Ränder
+    (``analysis.ledge_space``). Der Slicer stützt nach seinem Winkel jede flache
+    Unterseite, auch einen Rand von einem Millimeter; am Eiffelturm stellte der
+    ElegooSlicer dafür 831 m Baum außen am Turm hoch (08.10.2026). Aus bis zu
+    einem Vorschlag, wie :attr:`block_channels`."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -2676,6 +2690,11 @@ class SliceResult:
     support_volume: float
     first_layer_area: float
     source: MetricSource = "internal"
+    bridge_from: float | None = None
+    """Ab welcher Breite eine freie Fläche als Brücke zählt, in mm — zwei Bahnen,
+    mit denen geschnitten wurde. Auch ein Schnitt ohne Brückenweiten
+    (``detail="support"``) trägt sie, denn die Randfrage braucht sie dort, wo die
+    Übergabe ihre Sperre baut. ``None`` bei einem Ergebnis aus Kennzahlen."""
 
 
 # --- Skizzen (§30.1) -----------------------------------------------------------

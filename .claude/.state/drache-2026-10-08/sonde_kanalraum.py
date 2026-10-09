@@ -19,7 +19,7 @@ import trimesh  # noqa: E402
 
 from app.core.geom.mesh import MeshData  # noqa: E402
 from app.core.slice import advise  # noqa: E402
-from app.core.slice.analysis import channel_space, model_support, slice_body  # noqa: E402
+from app.core.slice.analysis import channel_space, slice_body  # noqa: E402
 
 raw = trimesh.load(sys.argv[2], process=False)
 raw.apply_translation((0.0, 0.0, -raw.bounds[0][2]))

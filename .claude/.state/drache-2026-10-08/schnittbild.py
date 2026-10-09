@@ -30,7 +30,7 @@ from app.core.slice import analysis  # noqa: E402
 from app.core.types import SceneObject  # noqa: E402
 
 path = Path(sys.argv[2])
-if path.name.startswith('obj'):
+if path.name.startswith("obj"):
     raw = trimesh.load(path, process=False)
 else:
     from app.core.ingest.loader import read_local_payload, read_model
@@ -57,7 +57,11 @@ WINDOW = box(cx - half, cy - half, cx + half, cy + half)
 
 def parts(shape):
     clipped = shape.intersection(WINDOW)
-    return [p for p in getattr(clipped, 'geoms', [clipped]) if p.geom_type == 'Polygon' and not p.is_empty]
+    return [
+        p
+        for p in getattr(clipped, "geoms", [clipped])
+        if p.geom_type == "Polygon" and not p.is_empty
+    ]
 
 
 def points(ring, offset: int) -> list[tuple[float, float]]:

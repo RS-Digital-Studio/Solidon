@@ -36,7 +36,7 @@ Volltextsuche zu erreichen, und die findet nur, wer die Wörter schon kennt.
 | **Handbuch und Hilfe** | `konzept-handbuch-2026-09` · `nachweise-handbuch-2026-09/` (Kundenblick, Findbarkeit, Aufnahmetechnik) |
 | **Bedienung und Gestaltung** | `konzept-verschiebbare-karten-2026-10` · `konzept-bedienung` · `konzept-3d-maus-2026-08` · `konzept-merkmalbedienung-2026-09` |
 | **Durchsichten der Oberfläche** | nur im Archiv |
-| **Drucken: Material, Slicer, Einstellungen** | `konzept-filamentlager-2026-09` · `konzept-herstellerprofil-als-grundlage-2026-09` · `nachweise-herstellerprofil-2026-09/` (Prüfberichte je Slicerfamilie) · `konzept-slicer-uebergabe` · `konzept-erstkonfiguration-2026-09` · `konzept-resin-2026-08` |
+| **Drucken: Material, Slicer, Einstellungen** | `recherche-slicer-einstellungen-2026-10` · `konzept-filamentlager-2026-09` · `konzept-herstellerprofil-als-grundlage-2026-09` · `nachweise-herstellerprofil-2026-09/` (Prüfberichte je Slicerfamilie) · `konzept-slicer-uebergabe` · `konzept-erstkonfiguration-2026-09` · `konzept-resin-2026-08` |
 | **Bausteine und Bibliothek** | `konzept-tauschboerse-2026-08` |
 | **Agent, KI und Erzeugen** | `entscheidung-weg-3-lizenzkette` · `nachweise-generatoren-2026-10/` (Lizenzkette TripoSG, Ersatz durch TRELLIS.2, RM-003) · `product-quality-ai-libraries-2026-08` · `konzept-erzeugen-agent-oberflaeche-2026-08` |
 | **Produkt, Verkauf, Veröffentlichung** | `konzept-produktkompass-2026-08` · `konzept-demo-2026-10` · `konzept-demo-zu-1.0-2026-09` · `konzept-lizenzarten-2026-09` · `konzept-aktivierungsserver-2026-08` · `konzept-foerdermodell` · `konzept-versionspflege-2026-08` |
@@ -71,6 +71,7 @@ heute aus, nicht nach Datum. Was nur noch erklärt, steht im [Archiv](#archiv).
 
 | Dokument | Stand | Thema | Wie es dasteht |
 |---|---|---|---|
+| [recherche-slicer-einstellungen-2026-10.md](recherche-slicer-einstellungen-2026-10.md) | **08.10.** | Slicerwerte nach Modell: Stützen ohne Narben und ohne unerreichbare Stellen, häufige Nutzerprobleme, alle Stützschlüssel je Familie | **Datierte Recherche mit gemessenen Programmvorgaben.** Gebaut daraus RM-580 bis RM-582, offen RM-583 bis RM-589 im Register |
 | [konzept-verschiebbare-karten-2026-10.md](konzept-verschiebbare-karten-2026-10.md) | **06.10.** | Seitenkarten verschieben, einrasten, zurücklegen | **Umgesetzt** (Fragebogen S-20261006-5c132b, Entscheidung Robert); Soll-Ablauf des Agenten `bedienlogik` mit Abnahmekriterien; drei Abweichungen (Ortswörter bleiben, kurzer Reitername, beim Überdecken Stammlage) und das Offene (Abnahme 8, Fensterabnahme beim Release) oben vermerkt |
 | [nachweise-generatoren-2026-10/README.md](nachweise-generatoren-2026-10/README.md) | **06.10.** | Lizenzkette der gepinnten Generatoren und Ersatz für TripoSG | **Nachweise zu [RM-003](../ROADMAP.md#rm-003)**, an den gepinnten Revisionen abgerufen; Entscheidung Robert: TRELLIS.2-4B. Keine Rechtsauskunft — die Kanzleifragen stehen in beiden Dateien |
 | [nachweise-bibliotheken-2026-10/README.md](nachweise-bibliotheken-2026-10/README.md) | **03.10.** | Schriftzüge alt (matplotlib) gegen neu (HarfBuzz) und gegen die exakte Glyphenfläche | **Nachweise zu RM-471**, gemessen am 03.10.2026 unter Windows |

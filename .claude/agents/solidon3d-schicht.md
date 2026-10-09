@@ -40,10 +40,10 @@ tools: Read, Write, Edit, Grep, Glob, Bash
 
 Solidon schneidet, um zu beurteilen, nicht um zu drucken; die Druckdatei
 kommt vom externen Slicer (§22). Die Regeln beider Gebiete — Herkunft jeder
-Kennzahl, zwei Wege durch den Schnitt, Vorschlag oder Befund, das
-Maschinenprofil des Slicers, stabile IDs — stehen in
-`.claude/rules/schichtanalyse.md`; Export und Übergabe zusätzlich in
-`.claude/rules/dateiformat.md`.
+Kennzahl, zwei Wege durch den Schnitt, das Maschinenprofil des Slicers,
+stabile IDs — stehen in `.claude/rules/schichtanalyse.md`; Vorschlag oder
+Befund, Stützbedarf, Kanäle, Ränder und Kühlung in `.claude/rules/druckrat.md`;
+Export und Übergabe zusätzlich in `.claude/rules/dateiformat.md`.
 
 ## Prüfen gegen Rechenbares, dann am echten Modell
 
