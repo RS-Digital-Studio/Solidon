@@ -544,7 +544,7 @@ def test_cura_instance_identity_is_kept_and_cli_unknown_finding_survives(
         bed=(350.0, 300.0),
     )
     monkeypatch.setattr(slicer_profiles, "cura_active_machine", lambda _executable: active)
-    monkeypatch.setattr(slicer_profiles, "chosen_printer", lambda *_args: "")
+    monkeypatch.setattr(slicer_profiles, "chosen_printer", lambda *_args, **_kwargs: "")
 
     mismatch = handover.cura_active_printer_mismatch(setup, known)
     assert mismatch is not None

@@ -67,14 +67,15 @@ from app.branding import APP_NAME
 from app.core import activation, discover, tools
 from app.core.activation import TRIAL_DAYS
 from app.core.backends import llm
-from app.core.errors import AppError
+from app.core.errors import CANCEL, CHOOSE_SLICER, AppError, UserError
 from app.core.export import slicer_profiles
 from app.core.export.handover import detect
 from app.core.knowledge import print_settings, profiles
 from app.core.log import get_logger
 from app.core.types import PrinterProfile, PrintTechnology
-from app.i18n import format_decimal, language_name, set_language, tr
+from app.i18n import _, format_decimal, language_name, set_language, tr
 from app.i18n.catalog import available_languages, install_language
+from app.ui.dialogs import show_error
 from app.ui.icons import icon
 from app.ui.labels import (
     NumberSpin,
@@ -140,7 +141,7 @@ class _Survey(Worker):
             Findings(
                 tools=tools.survey(),
                 chat=_chat_text(),
-                slicers=discover.find_programs("slicer", tools.SLICERS),
+                slicers=tools.slicer_programs(),
             )
         )
 
@@ -386,7 +387,7 @@ class FirstRunDialog(QDialog):
         self.slicer.setMinimumContentsLength(20)
         self.slicer.addItem(tr("Später auswählen"), "")
         remembered = discover.remembered_path("slicer")
-        if remembered:
+        if remembered and tools.is_supported_slicer(remembered):
             self.slicer.addItem(slicer_title(Path(remembered)), remembered)
             self.slicer.setItemData(1, remembered, Qt.ItemDataRole.ToolTipRole)
             self.slicer.setCurrentIndex(1)
@@ -1416,16 +1417,53 @@ class FirstRunDialog(QDialog):
         self._printers_known()
 
 
+def ask_slicer_program(parent: QWidget) -> str:
+    """Fragt nach dem Slicer-Programm — leer, wenn keines gewählt wurde.
+
+    Die eine Abfrage für Erststart, Einstellungen und Druckdialog (RM-601).
+    Ein Programm, mit dem Solidon nicht arbeitet, nimmt sie nicht an: Der
+    Kunde erfährt es und kann gleich ein anderes wählen (Regel 17).
+    """
+    while True:
+        filename, _filter = QFileDialog.getOpenFileName(parent, tr("Slicer-Programm auswählen"))
+        if not filename:
+            return ""
+        # Das Programm hinter der Wahl: der Starter hinter einer Portalkopie im
+        # Flatpak, der Slicer im Mac-Bündel — sonst sucht die Druckerliste
+        # darunter vergeblich.
+        program = discover.program_path(str(discover.host_program(Path(filename))))
+        if tools.is_supported_slicer(program):
+            return program
+        if not _another_program(parent, program):
+            return ""
+
+
+def _another_program(parent: QWidget, program: str) -> bool:
+    """Sagt, dass Solidon mit diesem Programm nicht arbeitet — und ob ein anderes gewählt wird."""
+    again: list[bool] = []
+    show_error(
+        UserError(
+            title=_("Mit diesem Programm arbeitet Solidon nicht zusammen."),
+            detail=_(
+                "Solidon kennt {program} nicht als Slicer. Wählen Sie {slicers} oder einen "
+                "Resin-Slicer wie ChituBox.",
+                program=Path(program).name,
+                slicers=", ".join(tools.SLICER_TITLES),
+            ),
+            suggestions=(CHOOSE_SLICER, CANCEL),
+        ),
+        parent,
+        {"choose_slicer": lambda _error: again.append(True)},
+    )
+    return bool(again)
+
+
 def choose_slicer_file(parent: QWidget, box: QComboBox) -> None:
     """Portable Slicer und abweichende Installationspfade lassen sich ausdrücklich
     wählen — im Erststart wie in den Einstellungen."""
-    filename, _ = QFileDialog.getOpenFileName(parent, tr("Slicer-Programm auswählen"))
+    filename = ask_slicer_program(parent)
     if not filename:
         return
-    # Das Programm hinter der Wahl: der Starter hinter einer Portalkopie im
-    # Flatpak, der Slicer im Mac-Bündel — sonst sucht die Druckerliste
-    # darunter vergeblich.
-    filename = discover.program_path(str(discover.host_program(Path(filename))))
     if not select_program(box, filename):
         box.addItem(slicer_title(Path(filename)), filename)
         box.setItemData(box.count() - 1, filename, Qt.ItemDataRole.ToolTipRole)

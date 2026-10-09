@@ -43,6 +43,11 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 
 - No Linux, o Solidon cria agora o ficheiro de impressão também com o Cura em Flatpak ou AppImage.
 - O diálogo de impressão oferece as impressoras do slicer escolhido, como *Primeiros passos* e *Definições*. Uma impressora assim adotada fica ligada ao seu slicer.
+- No diálogo de impressão, o slicer muda-se como em *Primeiros passos*, também com *Escolher programa …* para um que o Solidon não encontra sozinho.
+- Uma impressora da lista do Solidon e a mesma do slicer contam como um só aparelho. O diálogo escolhe o perfil com o bico certo e o ficheiro leva o código de início.
+- Só são oferecidos os slicers com que o Solidon trabalha, além de slicers de resina como o ChituBox e o Lychee. O Bambu Studio em AppImage passa a contar também.
+- O código de início e o volume de impressão vêm só da sua impressora, não de outro modelo da mesma série.
+- O diálogo de impressão atribui os perfis do slicer muito mais depressa, ao abrir e após cada mudança de slicer.
 - O tempo de impressão estimado está mais perto do do slicer, muito mais perto em peças com suportes.
 - Se suportes e skirt cabem na mesa, a verificação mede-o agora só sob as saliências. As peças junto ao rebordo já não recebem um aviso sem razão.
 
