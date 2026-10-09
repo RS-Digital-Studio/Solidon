@@ -10261,8 +10261,30 @@ def _family_stock(
         )
     else:
         executable = cura_installation(folder)
+        # Der eingerichtete Drucker, wie Cura 5.13 ihn ablegt: Erst über ihn
+        # liest die Grundlage Maschinenstapel, Definitionen und Container.
+        own = folder / "config" / "cura" / "5.13"
+        (own / "machine_instances").mkdir(parents=True)
+        (own / "machine_instances" / "Creality+K1+Max.global.cfg").write_text(
+            "[general]\nversion = 5\nname = Creality K1 Max\nid = Creality K1 Max\n\n"
+            "[metadata]\nsetting_version = 27\ntype = machine\n\n"
+            "[containers]\n0 = empty_user_changes\n1 = empty_quality_changes\n"
+            "2 = empty_intent\n3 = empty_quality\n4 = empty_material\n5 = empty_variant\n"
+            "6 = Creality K1 Max_settings\n7 = creality_k1max\n",
+            encoding="utf-8",
+        )
+        (own / "definition_changes").mkdir()
+        (own / "definition_changes" / "Creality+K1+Max_settings.inst.cfg").write_text(
+            "[general]\nversion = 4\nname = Creality K1 Max_settings\n"
+            "definition = creality_k1max\n\n"
+            "[metadata]\ntype = definition_changes\nsetting_version = 27\n\n"
+            "[values]\nmachine_nozzle_size = 0.4\nmachine_width = 300\nmachine_depth = 300\n"
+            "machine_height = 300\n",
+            encoding="utf-8",
+        )
+        monkeypatch.setattr(slicer_profiles, "user_roots", lambda *_args: [own])
         profile = profiles.make_profile("creality-k1-max", "pla")
-        setup = handover.SlicerSetup(executable, "cura")
+        setup = handover.SlicerSetup(executable, "cura", machine_profile="Creality K1 Max")
     if grow is not None:
         grow(flavour, executable)
     past = 1_767_225_600.0
@@ -10410,6 +10432,49 @@ def test_the_remembered_stock_writes_the_file_a_fresh_read_writes(
     changed = _family_export(profile, setup, tmp_path / "geaendert" / "modell.3mf", monkeypatch)
     assert changed[1] != fresh[1], "der nächste Export sieht den geänderten Bestand"
     assert (changed[0] != fresh[0]) == (flavour != "cura"), "die Datei trägt die Änderung"
+
+
+@pytest.mark.parametrize(
+    ("flavour", "listings"),
+    [
+        ("orca", ("_names_in", "_machine_model_in")),
+        ("cura", ("_cura_installed", "_cura_own_containers")),
+    ],
+)
+def test_a_second_3mf_export_lists_no_stock_folder_again(
+    flavour: str,
+    listings: tuple[str, ...],
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """RM-670: Namensindizes der Erbketten, die Modelldatei der Orca-Familie und
+    Curas Auflistung der Definitionen und Container sagen nur, welches Profil
+    wo liegt. Je 3MF-Export entstanden sie neu — am ElegooSlicer 0,35 s für
+    die Indizes und 0,18 s für die Modelldatei, an Cura 5.13 1,2 s für die
+    Auflistung. Sie halten jetzt unter der Signatur des Bestands
+    (``slicer_profiles._once_per_stock``): Der zweite Export liest keinen
+    Ordner davon neu. Prusa liest seine Bündel über den eigenen Merker
+    (``_prusa_store``)."""
+    from app.core.export import slicer_profiles
+
+    profile, setup = _family_stock(flavour, tmp_path / "programme", monkeypatch)
+    calls: list[str] = []
+    for name in listings:
+        original = getattr(slicer_profiles, name)
+
+        def counted(*args: Any, original: Any = original, name: str = name, **kwargs: Any) -> Any:
+            calls.append(name)
+            return original(*args, **kwargs)
+
+        monkeypatch.setattr(slicer_profiles, name, counted)
+
+    _family_export(profile, setup, tmp_path / "erster" / "modell.3mf", monkeypatch)
+    first = list(calls)
+    calls.clear()
+    _family_export(profile, setup, tmp_path / "zweiter" / "modell.3mf", monkeypatch)
+
+    assert first, "der erste Export liest die Ordner — sonst prüfte der Test nichts"
+    assert calls == [], f"der zweite Export liest neu: {calls}"
 
 
 def _grow_family_stock(flavour: str, executable: Path) -> None:

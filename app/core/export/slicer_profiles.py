@@ -1643,6 +1643,48 @@ def _profile_numbers(value: Any) -> tuple[float, ...]:
     return numbers
 
 
+def _cura_installed(root: Path) -> tuple[dict[str, Path], dict[str, Path]]:
+    """Definitionen und mitgelieferte Container einer Cura-Wurzel, je Kennung die Datei.
+
+    Nur die Auflistung — welche Datei wo liegt —, darum hält sie über den
+    Lesedurchgang hinaus (:func:`_once_per_stock`). Je Export fragten
+    Lüfterkurve und Bewegung je zweimal, und jedes Mal liefen ``glob`` und
+    ``rglob`` über rund 4 000 Dateien: am Cura 5.13 1,2 s CPU (RM-670).
+    """
+    resources = cura_resources(root)
+    definitions: dict[str, Path] = {}
+    containers: dict[str, Path] = {}
+    for kind in _CURA_DEFINITIONS:
+        definitions.update(
+            {
+                cura_definition_id(path): path
+                for path in sorted((resources / kind).glob("*.def.json"))
+            }
+        )
+    for kind in _CURA_INSTALLED_CONTAINERS:
+        containers.update(
+            {
+                unquote_plus(path.name.removesuffix(".inst.cfg")): path
+                for path in sorted((resources / kind).rglob("*.inst.cfg"))
+            }
+        )
+    return definitions, containers
+
+
+def _cura_own_containers(folder: Path) -> dict[str, Path]:
+    """Die eigenen Container eines Cura-Konfigurationsordners, je Kennung die Datei
+    (wie :func:`_cura_installed`)."""
+    containers: dict[str, Path] = {}
+    for kind in _CURA_OWN_CONTAINERS:
+        containers.update(
+            {
+                unquote_plus(path.name.removesuffix(".inst.cfg")): path
+                for path in sorted((folder / kind).rglob("*.inst.cfg"))
+            }
+        )
+    return containers
+
+
 def _cura_machine_instances(
     roots: Sequence[Path],
     indexes: ProfileIndexes,
@@ -1661,32 +1703,18 @@ def _cura_machine_instances(
     definitions: dict[str, Path] = {}
     installed_containers: dict[str, Path] = {}
     for root in roots:
-        resources = cura_resources(root)
-        for kind in _CURA_DEFINITIONS:
-            definitions.update(
-                {
-                    cura_definition_id(path): path
-                    for path in sorted((resources / kind).glob("*.def.json"))
-                }
-            )
-        for kind in _CURA_INSTALLED_CONTAINERS:
-            installed_containers.update(
-                {
-                    unquote_plus(path.name.removesuffix(".inst.cfg")): path
-                    for path in sorted((resources / kind).rglob("*.inst.cfg"))
-                }
-            )
+        listed_definitions, listed_containers = _once_per_stock(
+            root, ("cura_installed", root), partial(_cura_installed, root)
+        )
+        definitions.update(listed_definitions)
+        installed_containers.update(listed_containers)
     for folder in roots:
         if not (folder / _CURA_MACHINES).is_dir():
             continue
         containers = dict(installed_containers)
-        for kind in _CURA_OWN_CONTAINERS:
-            containers.update(
-                {
-                    unquote_plus(path.name.removesuffix(".inst.cfg")): path
-                    for path in sorted((folder / kind).rglob("*.inst.cfg"))
-                }
-            )
+        containers.update(
+            _once_per_stock(folder, ("cura_own", folder), partial(_cura_own_containers, folder))
+        )
 
         def changes(
             stack: Mapping[str, str],
