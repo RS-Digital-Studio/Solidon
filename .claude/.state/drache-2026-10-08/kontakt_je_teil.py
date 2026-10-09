@@ -70,7 +70,15 @@ NATURAL = os.environ.get("SONDE_NATUERLICH") == "1"
 MATERIALS = dict(
     zip(("ziel", "bezug"), os.environ.get("SONDE_MATERIALIEN", "pla,petg").split(","), strict=True)
 )
-RUN = "natuerlich-" + "-".join(MATERIALS.values()) if NATURAL else MATERIAL
+#: Eine eigene Schichthöhe über dem Standardprozess (RM-622: 0,08 mm).
+LAYER = float(os.environ.get("SONDE_SCHICHT", "0") or 0.0)
+#: Der Stand vor RM-622: Der Rat weiß nichts vom Reinigungsturm.
+WITHOUT_TOWER = os.environ.get("SONDE_OHNE_TURM") == "1"
+RUN = (
+    ("natuerlich-" + "-".join(MATERIALS.values()) if NATURAL else MATERIAL)
+    + (f"-{LAYER:g}" if LAYER else "")
+    + ("-ohne-turm" if WITHOUT_TOWER else "")
+)
 PATHS = (
     "support.z_gap",
     "support.interface_layers",
@@ -221,6 +229,8 @@ def run(name: str) -> dict[str, object]:
             ("adhesion.kind", "skirt"),
         ):
             settings = h.print_settings.with_choice(settings, path, value)
+        if LAYER:
+            settings = h.print_settings.with_choice(settings, "layers.layer_height", LAYER)
         objects = [
             SceneObject(
                 id=ident,
@@ -230,6 +240,10 @@ def run(name: str) -> dict[str, object]:
             )
             for ident, x in (("ziel", -26.0), ("bezug", 26.0))
         ]
+        if WITHOUT_TOWER:
+            writer.tower_plates = lambda *_args, **_kwargs: frozenset()
+        towers = writer.tower_plates(objects, setup)
+        row["towers"] = sorted(towers)
         if NATURAL:
             limit = h.profiles.for_process(profile, settings, effective=True)
             genuine = {
@@ -248,6 +262,7 @@ def run(name: str) -> dict[str, object]:
                     ),
                     fit_kinds=(),
                     flavour=setup.flavour,
+                    whole_layers=obj.plate in towers,
                 )
                 for obj in objects
             }

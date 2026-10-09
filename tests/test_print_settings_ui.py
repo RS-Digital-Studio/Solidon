@@ -11178,6 +11178,65 @@ def test_the_contact_rows_settle_in_the_dialog(
     assert rows(settings) == {}, "nach dem Übernehmen keine Gegenzeile"
 
 
+@pytest.mark.parametrize("tower", [True, False])
+def test_beside_a_tower_the_dialog_proposes_the_gap_the_file_gets(
+    qt_app: QApplication, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, tower: bool
+) -> None:
+    """Neben einem Reinigungsturm rät der Druckdialog den Stützabstand in ganzen
+    Schichten wie der Export (RM-622): PLA und PETG bei 0,08er Schichten
+    bekommen 0,16 mm, und die Datei trägt an jedem Teil genau den Wert der
+    Zeile. Ohne Turm nennt die Zeile 0,12 am PETG-Teil, und dieses bekommt ihn."""
+    from tests.helpers import object_values, supported_table
+
+    monkeypatch.setattr(
+        handover,
+        "_native_process",
+        lambda _setup: {"enable_prime_tower": "1" if tower else "0"},
+    )
+    profile = profiles.make_profile("centauri-carbon-2", "pla")
+    settings = print_settings.with_choice(
+        print_settings.with_choice(
+            print_settings.resolve(profile, "standard"), "support.style", "grid"
+        ),
+        "layers.layer_height",
+        0.08,
+    )
+    objects = tuple(
+        SceneObject(
+            id=f"obj_{index}",
+            name=f"{material.upper()}-Tisch",
+            mesh=MeshData(supported_table(index)),
+            material=material,
+        )
+        for index, material in enumerate(("pla", "petg"))
+    )
+    setup = handover.SlicerSetup(executable=Path("orca-slicer.exe"), flavour="orca")
+    found: list[list[SettingAdvice]] = []
+    worker = print_dialog._AdviceWorker(
+        objects, settings, profile, setup, {}, (), (), {}, flavour="orca"
+    )
+    worker.done.connect(lambda entries, _measured: found.append(entries))
+    worker.work()
+    assert found, "der Arbeiter liefert"
+    row = next(entry for entry in found[-1] if entry.path == "support.z_gap")
+    assert row.value == pytest.approx(0.16 if tower else 0.12)
+    assert getattr(row, "parts", ()) == (() if tower else ("PETG-Tisch",))
+
+    path, _findings = writer.write_assembly(
+        list(objects),
+        tmp_path,
+        project_name="gemischt",
+        profile=profile,
+        settings=print_settings.with_accepted(settings, "support.z_gap", row.value),
+        flavour="orca",
+        setup=setup,
+    )
+    written = object_values(path, "Metadata/model_settings.config")
+    receivers = ("PLA-Tisch", "PETG-Tisch") if tower else ("PETG-Tisch",)
+    for name in receivers:
+        assert float(written[name]["support_top_z_distance"]) == pytest.approx(row.value), name
+
+
 def test_the_field_says_which_parts_get_a_suggestion_and_what_the_rest_prints(
     dialog: PrintSettingsDialog, monkeypatch: pytest.MonkeyPatch
 ) -> None:

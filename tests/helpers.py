@@ -2053,3 +2053,32 @@ def plate_on_a_sloped_foot(angle: float) -> MeshData:
     wide = 30.0 + reach
     top = [(x, y, z) for x in (-wide, wide) for y in (-wide, wide) for z in (4.0, 10.0)]
     return MeshData.of(trimesh.convex.convex_hull(np.array(foot + top)))
+
+
+def object_values(written: Path, member: str) -> dict[str, dict[str, str]]:
+    """Die Objektwerte einer Baugruppe je Objektname — aus
+    ``model_settings.config`` (Orca-Familie) oder ``Slic3r_PE_model.config``
+    (PrusaSlicer)."""
+    from xml.etree import ElementTree as ET
+
+    config = ET.fromstring(zipfile.ZipFile(written).read(member))
+    values: dict[str, dict[str, str]] = {}
+    for node in config.iter("object"):
+        own = {meta.get("key", ""): meta.get("value", "") for meta in node.findall("metadata")}
+        values[own.pop("name", node.get("id", ""))] = own
+    return values
+
+
+def supported_table(index: int) -> trimesh.Trimesh:
+    """Sockel, Säule und Platte darüber: Die Stütze steht auf dem Sockel. Je
+    ``index`` 45 mm weiter rechts, damit mehrere auf einer Platte Platz haben."""
+    parts = []
+    for extents, z in (
+        ((30.0, 30.0, 3.0), 1.5),
+        ((8.0, 8.0, 10.2), 8.0),
+        ((30.0, 30.0, 2.0), 14.0),
+    ):
+        brick = trimesh.creation.box(extents=extents)
+        brick.apply_translation([index * 45.0, 0.0, z])
+        parts.append(brick)
+    return trimesh.boolean.union(parts, engine="manifold")

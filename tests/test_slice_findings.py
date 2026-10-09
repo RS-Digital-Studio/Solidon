@@ -1408,12 +1408,19 @@ def _support_advice(
         "support.interface_layers",
         "cooling.support_interface_cooling",
     ),
+    whole_layers: bool = False,
 ) -> dict[str, object]:
     """Die Vorschläge zu Abstand und Trennschicht für einen Körper (RM-583)."""
     settings = print_settings.resolve(profile)
     for path, value in values.items():
         settings = print_settings.with_path(settings, path, value)
-    entries = advise.advise(settings, profile, slice_body(body, 0.2), flavour=flavour)  # type: ignore[arg-type]
+    entries = advise.advise(
+        settings,
+        profile,
+        slice_body(body, 0.2),
+        flavour=flavour,  # type: ignore[arg-type]
+        whole_layers=whole_layers,
+    )
     return {entry.path: entry.value for entry in entries if entry.path in paths}
 
 
@@ -1485,6 +1492,67 @@ def test_half_a_layer_rounds_up() -> None:
     assert advise.support_gap_target(
         0.1, replace(pla, support_gap_factor=1.5), "cura"
     ) == pytest.approx(0.2)
+
+
+@pytest.mark.parametrize(
+    ("material", "layer", "free", "beside_a_tower"),
+    [
+        ("pla", 0.08, 0.10, 0.16),
+        ("petg", 0.08, 0.12, 0.16),
+        ("petg", 0.20, 0.28, 0.20),
+        ("pla", 0.20, 0.20, 0.20),
+    ],
+)
+def test_beside_a_prime_tower_the_gap_comes_in_whole_layers(
+    material: str, layer: float, free: float, beside_a_tower: float
+) -> None:
+    """Mit Reinigungsturm legt die Orca-Familie die Stütze auf die Schichten des
+    Modells und rundet den Abstand zur nächsten Schicht (RM-622): PLA bei
+    0,08er Schichten bekäme aus 0,10 mm eine Schicht, also 0,08 — unter dem
+    Minimum des Materials. Neben dem Turm rät Solidon deshalb gleich ganze
+    Schichten im Band, wie bei Cura; ohne Turm bleibt der freie Wert."""
+    profile = profiles.make_profile("centauri-carbon-2", material)
+    gap = "support.z_gap"
+
+    assert advise.support_gap_target(layer, profile.material, "orca") == pytest.approx(free)
+    assert advise.support_gap_target(
+        layer, profile.material, "orca", whole_layers=True
+    ) == pytest.approx(beside_a_tower)
+    asked: dict[str, object] = {"layers.layer_height": layer, gap: 0.6}
+    assert _support_advice(
+        table(), profile, asked, flavour="orca", paths=(gap,), whole_layers=True
+    ) == {gap: pytest.approx(beside_a_tower)}
+    assert _support_advice(table(), profile, asked, flavour="orca", paths=(gap,)) == {
+        gap: pytest.approx(free)
+    }
+
+
+@pytest.mark.parametrize(("flavour", "whole_layers"), [("orca", True), ("cura", False)])
+def test_a_gap_between_two_layers_is_proposed_where_the_slicer_rounds(
+    flavour: str, whole_layers: bool
+) -> None:
+    """0,2 mm liegen bei 0,08er Schichten im Band um 0,16, sind aber zweieinhalb
+    Schichten. Wo der Slicer in ganzen Schichten rechnet — Cura, die
+    Orca-Familie neben einem Reinigungsturm —, druckt er sie nicht so, und der
+    Rat nennt die ganze Schicht (RM-622). Ohne Rundung bleibt ein Wert im Band
+    beim Hersteller."""
+    pla = profiles.make_profile("centauri-carbon-2", "pla")
+    gap = "support.z_gap"
+    between: dict[str, object] = {"layers.layer_height": 0.08, gap: 0.2}
+    whole: dict[str, object] = {"layers.layer_height": 0.08, gap: 0.16}
+
+    assert _support_advice(
+        table(), pla, between, flavour=flavour, paths=(gap,), whole_layers=whole_layers
+    ) == {gap: pytest.approx(0.16)}
+    assert (
+        _support_advice(
+            table(), pla, whole, flavour=flavour, paths=(gap,), whole_layers=whole_layers
+        )
+        == {}
+    )
+    assert (
+        _support_advice(table(), pla, {**between, gap: 0.11}, flavour="orca", paths=(gap,)) == {}
+    ), "ohne Turm gilt 0,11 genau und liegt im Band um 0,10"
 
 
 def test_the_interface_follows_the_ceiling_and_where_supports_stand() -> None:

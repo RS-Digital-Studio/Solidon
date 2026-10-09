@@ -39,6 +39,7 @@ from app.core.types import (
     SettingAdvice,
     SliceResult,
 )
+from tests.helpers import object_values, supported_table
 
 MESHES = Path(__file__).parent / "data" / "meshes"
 
@@ -3519,7 +3520,7 @@ def test_the_console_frees_the_support_layers_like_the_file(
             SceneObject(
                 id=f"teil-{index}",
                 name=f"Teil {index}",
-                mesh=MeshData(_supported_table(index)),
+                mesh=MeshData(supported_table(index)),
                 material="petg",
             )
             for index in range(2)
@@ -8957,20 +8958,6 @@ def test_cura_gets_a_gap_in_whole_layers_from_its_foundation(
         ]
 
 
-def _supported_table(index: int) -> trimesh.Trimesh:
-    """Sockel, Säule und Platte darüber: Die Stütze steht auf dem Sockel."""
-    parts = []
-    for extents, z in (
-        ((30.0, 30.0, 3.0), 1.5),
-        ((8.0, 8.0, 10.2), 8.0),
-        ((30.0, 30.0, 2.0), 14.0),
-    ):
-        brick = trimesh.creation.box(extents=extents)
-        brick.apply_translation([index * 45.0, 0.0, z])
-        parts.append(brick)
-    return trimesh.boolean.union(parts, engine="manifold")
-
-
 _TOWER = {"enable_prime_tower": "1"}
 _ELEGOO = {"enable_prime_tower": "1", "independent_support_layer_height": "0"}
 
@@ -9023,7 +9010,7 @@ def test_a_mixed_plate_says_that_the_gap_is_rounded(
         SceneObject(
             id=f"teil-{index}",
             name=f"Teil {index}",
-            mesh=MeshData(_supported_table(index)),
+            mesh=MeshData(supported_table(index)),
             material=material,
             material_slots=(
                 MaterialSlot(
@@ -9057,3 +9044,110 @@ def test_a_mixed_plate_says_that_the_gap_is_rounded(
         project = json.loads(archive.read(threemf.PROJECT_SETTINGS_PATH))
     assert (project.get("independent_support_layer_height") == "1") is freed
     assert (handover._frees_in_project([path]) is True) is freed
+
+
+@pytest.mark.parametrize(
+    ("native", "gaps", "freed"),
+    [
+        (_TOWER, {"Teil 0": "0.16", "Teil 1": "0.16"}, False),
+        ({"enable_prime_tower": "0"}, {"Teil 0": "0.1", "Teil 1": "0.12"}, True),
+    ],
+)
+def test_beside_a_tower_each_part_gets_its_gap_in_whole_layers(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    native: dict[str, str],
+    gaps: dict[str, str],
+    freed: bool,
+) -> None:
+    """PLA und PETG bei 0,08er Schichten auf einer Platte (RM-622): Mit
+    Reinigungsturm rundet die Orca-Familie den Abstand selbst, und aus 0,10 mm
+    für PLA würde eine Schicht, 0,08 — unter dem Minimum. Der Export rät neben
+    dem Turm ganze Schichten, schreibt jedem Teil 0,16 als eigenen Wert und
+    braucht weder eigene Stützschichthöhe noch einen Satz über eine Rundung.
+    Ohne Turm bekommt jedes Teil seinen freien Wert mit eigener Höhe."""
+    import zipfile
+
+    from app.core.export import threemf, writer
+    from app.core.geom.mesh import MeshData
+    from app.core.types import SceneObject
+
+    monkeypatch.setattr(handover, "_native_process", lambda _setup: native)
+    profile = profiles.make_profile("centauri-carbon-2", "pla")
+    settings = print_settings.with_choice(
+        print_settings.with_choice(print_settings.resolve(profile), "support.style", "grid"),
+        "layers.layer_height",
+        0.08,
+    )
+    # Übernommen ist der Pfad; jedes Teil bekommt seinen Wert (RM-583).
+    settings = print_settings.with_accepted(settings, "support.z_gap", 0.16)
+    objects = [
+        SceneObject(
+            id=f"teil-{index}",
+            name=f"Teil {index}",
+            mesh=MeshData(supported_table(index)),
+            material=material,
+        )
+        for index, material in enumerate(("pla", "petg"))
+    ]
+    setup = handover.SlicerSetup(executable=Path("orca-slicer.exe"), flavour="orca")
+
+    assert writer.tower_plates(objects, setup) == (frozenset({0}) if native is _TOWER else set())
+    path, findings = writer.write_assembly(
+        objects,
+        tmp_path,
+        project_name="gemischt",
+        profile=profile,
+        settings=settings,
+        flavour="orca",
+        setup=setup,
+    )
+
+    written = object_values(path, "Metadata/model_settings.config")
+    assert {name: own.get("support_top_z_distance") for name, own in written.items()} == gaps
+    codes = {entry.code for entry in findings}
+    assert "export.support_gap_rounded" not in codes
+    assert "export.part_setting_all" not in codes, "jedes Teil verlangt seinen Wert selbst"
+    with zipfile.ZipFile(path) as archive:
+        project = json.loads(archive.read(threemf.PROJECT_SETTINGS_PATH))
+    assert (project.get("independent_support_layer_height") == "1") is freed
+
+
+def test_the_part_advice_memo_knows_the_tower() -> None:
+    """Der letzte Rat je Teil bleibt am Netz (``writer.part_advice``), und der
+    Turm gehört zu seinem Schlüssel (RM-622): Dasselbe Teil auf einer Platte
+    ohne und dann mit Reinigungsturm bekommt 0,10 und danach 0,16 mm, nicht
+    zweimal den ersten Wert."""
+    from app.core.export import writer
+    from app.core.geom.mesh import MeshData
+    from app.core.slice.analysis import slice_body
+    from app.core.types import SceneObject
+
+    profile = profiles.make_profile("centauri-carbon-2", "pla")
+    settings = print_settings.with_choice(
+        print_settings.with_choice(print_settings.resolve(profile), "support.style", "grid"),
+        "layers.layer_height",
+        0.08,
+    )
+    mesh = MeshData(supported_table(0))
+    entry = SceneObject(id="teil-0", name="Teil 0", mesh=mesh, material="pla")
+    result = slice_body(mesh, 0.08)
+
+    def gap(whole_layers: bool) -> object:
+        advice = writer.part_advice(
+            entry,
+            mesh,
+            settings,
+            profile,
+            None,
+            {},
+            result=result,
+            fit_kinds=(),
+            flavour="orca",
+            whole_layers=whole_layers,
+        )
+        return next(item.value for item in advice if item.path == "support.z_gap")
+
+    assert gap(False) == pytest.approx(0.1)
+    assert gap(True) == pytest.approx(0.16)
+    assert gap(False) == pytest.approx(0.1)

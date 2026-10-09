@@ -1305,6 +1305,7 @@ def part_advice(
     fit_kinds: Sequence[str],
     flavour: SlicerFlavour | None = None,
     accepted: Mapping[str, object] | None = None,
+    whole_layers: bool = False,
 ) -> list[SettingAdvice]:
     """Was dieses Teil anders braucht als die Platte (§29, Entscheidung G).
 
@@ -1320,7 +1321,8 @@ def part_advice(
     Hüllquader: Ein Teil auf drei schmalen Armen hat eine große Grundfläche und
     kaum Halt. Passungen (``fit_kinds``) und Zapfen zählen nur, wenn dieses
     Teil sie trägt. ``flavour`` sagt, ob der Slicer unter „automatisch“ seinen
-    Brim selbst rechnet (:data:`advise.AUTO_BRIM_FLAVOURS`).
+    Brim selbst rechnet (:data:`advise.AUTO_BRIM_FLAVOURS`), ``whole_layers``,
+    ob seine Platte einen Reinigungsturm trägt (:func:`tower_plates`).
 
     **Eine Regel kann einen Wert je Teil voraussetzen** (``accepted``, die
     übernommenen Werte je Teil aus :meth:`handover.PartSplit.accepted_per_part`):
@@ -1351,6 +1353,7 @@ def part_advice(
         flavour,
         program,
         dict(accepted or {}),
+        whole_layers,
     )
     cache = getattr(mesh.raw, "_cache", None)
     name = f"solidon_export_advice|{entry.id}"
@@ -1379,6 +1382,7 @@ def part_advice(
                     fit_kinds=fit_kinds,
                     connectors=connectors,
                     flavour=flavour,
+                    whole_layers=whole_layers,
                 ),
             )
             for process in (
@@ -1441,6 +1445,7 @@ def _part_values(
     slot_profiles: Mapping[threemf.SlotKey, str],
     document: Document | None,
     cancelled: CancelToken | None,
+    whole_layers: bool = False,
 ) -> _PartValues:
     """Was dieses Teil anders braucht als die Platte (§29, Entscheidung G) — und warum.
 
@@ -1489,6 +1494,7 @@ def _part_values(
         fit_kinds=fit_kinds_for(document, {entry.id}) if document is not None else (),
         flavour=flavour,
         accepted=split.accepted_per_part(),
+        whole_layers=whole_layers,
     )
     if cancelled is not None:
         cancelled.raise_if_cancelled()
@@ -1650,6 +1656,7 @@ def _served_elsewhere(
     """
     open_paths = set(paths)
     served: set[str] = set()
+    towers = tower_plates(others, setup)
     for entry in others:
         if not open_paths:
             break
@@ -1663,6 +1670,7 @@ def _served_elsewhere(
             slot_profiles,
             document,
             cancelled,
+            whole_layers=entry.plate in towers,
         )
         hit = {item.path for item in (*values.applied, *values.unavailable)} & open_paths
         served |= hit
@@ -2489,6 +2497,7 @@ def write_assembly(
     # Einmal je Körper gerechnet: Der Schnitt knapp über dem Boden kostet, und
     # die Schlüssel wie der Grund kommen aus demselben Aufruf. Auch was der
     # Slicer je Teil nicht annimmt, wird benannt.
+    towers = tower_plates(chosen, setup) if split is not None else frozenset()
     part_values = {
         entry.id: _part_values(
             entry,
@@ -2500,6 +2509,7 @@ def write_assembly(
             slot_profiles,
             document,
             cancelled,
+            whole_layers=entry.plate in towers,
         )
         for entry in chosen
     }
@@ -2844,6 +2854,33 @@ def _tower_cause(
     if "filaments" in causes:
         return "filaments"
     return "process" if "process" in causes else None
+
+
+def tower_plates(bodies: Sequence[SceneObject], setup: SlicerSetup | None) -> frozenset[int]:
+    """Die Platten dieser Körper, auf denen der Herstellerprozess einen
+    Reinigungsturm baut (:func:`handover.tower_cause`).
+
+    Dort legt die Orca-Familie die Stütze auf die Schichten des Modells und
+    rundet den Stützabstand auf ganze Schichten; der Rat rechnet ihn dann
+    gleich in ganzen Schichten (``whole_layers``, RM-622). Druckdialog und
+    Export fragen hier, damit die Zeile den Wert nennt, den die Datei bekommt.
+    Gezählt werden die Spulen je Platte wie beim Schreiben (:func:`_tower_cause`).
+    """
+    if setup is None:
+        return frozenset()
+    from app.core.export import handover
+
+    plates: dict[int, list[threemf.AssemblyPart]] = {}
+    for body in bodies:
+        plates.setdefault(body.plate, []).append(
+            threemf.AssemblyPart(mesh=as_mesh_data(body.mesh), slots=threemf.slots_for_object(body))
+        )
+    return frozenset(
+        plate
+        for plate, here in plates.items()
+        if handover.tower_cause(setup, filaments=len(threemf.merge_slots(here)), objects=len(here))
+        is not None
+    )
 
 
 def _plate_settings(

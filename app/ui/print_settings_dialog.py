@@ -88,6 +88,7 @@ from app.core.export.writer import (
     part_advice,
     prepare_slicer_meshes,
     slicer_rim,
+    tower_plates,
     write_assembly,
 )
 from app.core.filament_usage import UsageRequest, from_gcode
@@ -1447,6 +1448,9 @@ class _AdviceWorker(Worker):
         """Je übernommenem Vorschlag, der je Teil geschrieben wird, die Teile, die
         ihn bekommen — leer heißt: keines verlangt ihn, er gilt allen
         (``writer._unserved``). Der Dialog nennt sie am Feld (RM-289, B6)."""
+        self.towers: frozenset[int] = frozenset()
+        """Die Platten mit Reinigungsturm (:func:`writer.tower_plates`), je Lauf
+        einmal gefragt."""
 
     def cancel(self) -> None:
         """Auch innerhalb eines großen Körpers kann die Schichtanalyse aufhören."""
@@ -1488,6 +1492,9 @@ class _AdviceWorker(Worker):
         separate, asking = handover.asked_for_contact(
             self.settings, self.profile, self.setup, self.flavour
         )
+        # Neben einem Reinigungsturm rundet die Orca-Familie den Stützabstand;
+        # der Rat rechnet dort in ganzen Schichten, wie im Export (RM-622).
+        self.towers = tower_plates(self.objects, self.setup)
         for index, body in enumerate(self.objects):
             self.cancelled.raise_if_cancelled()
             self.progressed.emit(index + 1, len(self.objects), str(body.name))
@@ -1555,6 +1562,7 @@ class _AdviceWorker(Worker):
                     fit_kinds=self.fit_kinds,
                     connectors=self.connectors,
                     flavour=self.flavour,
+                    whole_layers=body.plate in self.towers,
                 )
                 own.append(
                     (
@@ -1664,6 +1672,7 @@ class _AdviceWorker(Worker):
                 fit_kinds=self.part_fits.get(body.id, ()),
                 flavour=self.flavour,
                 accepted=chain,
+                whole_layers=body.plate in self.towers,
             ):
                 if entry.path in wanted and print_settings.same_value(
                     entry.value, print_settings.read_path(self.settings, entry.path)
@@ -1716,6 +1725,7 @@ class _AdviceWorker(Worker):
                 fit_kinds=self.part_fits.get(body.id, ()),
                 flavour=self.flavour,
                 accepted=chain,
+                whole_layers=body.plate in self.towers,
             ):
                 # Beim Stützkontakt bekommt jedes Teil seinen Wert; die Zeile nennt
                 # nur die Teile, die ihren bekommen (RM-583).

@@ -227,6 +227,7 @@ def advise(
     fit_kinds: Sequence[str] = (),
     connectors: Sequence[float] = (),
     flavour: SlicerFlavour | None = None,
+    whole_layers: bool = False,
 ) -> list[SettingAdvice]:
     """Was an diesen Einstellungen für dieses Teil nicht passt (§29).
 
@@ -240,6 +241,10 @@ def advise(
     sagt, wie dick der Zapfen dabei ist — und nur die zweite Angabe lässt sich
     gegen die Bahnbreite rechnen.
 
+    ``whole_layers`` sagt, dass der Slicer den Stützabstand auf der Platte
+    dieses Teils auf ganze Schichten rundet, weil dort ein Reinigungsturm steht
+    (:func:`support_gap_target`, RM-622).
+
     **Für einen Resin-Drucker bleibt die Liste leer.** Jede Regel hier spricht
     über Düse, Bahn, Bett, Lüfter oder Rückzug — für Resin nicht falsch
     justiert, sondern gegenstandslos. Ein Bericht, in dem neun von zwanzig
@@ -252,7 +257,7 @@ def advise(
     advice += _from_machine(settings, profile)
     advice += _from_material(settings, profile)
     if result is not None:
-        advice += _from_geometry(settings, profile, result, bounds, flavour)
+        advice += _from_geometry(settings, profile, result, bounds, flavour, whole_layers)
     if fit_kinds:
         advice += _from_fits(settings, fit_kinds)
     # Erst nach den Regeln oben, und gegen deren Stand gerechnet: Die
@@ -925,12 +930,18 @@ BOTTOM_INTERFACE_LAYERS: Final = 2
 #: Wo der Slicer den Stützabstand immer in ganzen Schichten rechnet (RM-583):
 #: CuraEngine (``support_top_distance`` je Schicht). Die Orca-Familie nur,
 #: solange die Stütze die Schichthöhe des Modells hat; die eigene Höhe schaltet
-#: die Übergabe dann ein (``slicer_keys.has_independent_support_layers``).
+#: die Übergabe dann ein (``slicer_keys.has_independent_support_layers``) — außer
+#: auf einer Platte mit Reinigungsturm, dort sagt es der Aufrufer
+#: (``whole_layers``, RM-622).
 WHOLE_LAYER_GAP_FLAVOURS: Final[frozenset[SlicerFlavour]] = frozenset({"cura"})
 
 
 def support_gap_target(
-    layer: float, material: MaterialProfile, flavour: SlicerFlavour | None = None
+    layer: float,
+    material: MaterialProfile,
+    flavour: SlicerFlavour | None = None,
+    *,
+    whole_layers: bool = False,
 ) -> float | None:
     """Der Stützabstand, mit dem sich die Stütze von diesem Material sauber löst
     (RM-583): ein Vielfaches der Schichthöhe, begrenzt nach dem Materialprofil.
@@ -941,7 +952,13 @@ def support_gap_target(
     Schicht. Liegt keines darin, das kleinste über dem Minimum — oberhalb des
     Maximums bleibt nur eine Schicht (PLA ab 0,28 mm). Die Orca-Familie rundet
     nur ohne eigene Stützschichthöhe; die schaltet die Übergabe ein
-    (``handover.frees_support_layers``)."""
+    (``handover.frees_support_layers``).
+
+    **Mit Reinigungsturm rundet auch die Orca-Familie** (``whole_layers``,
+    RM-622): Sie legt die Stütze dann auf die Schichten des Modells und rundet
+    auf die nächste (``SupportMaterial.cpp``). PLA bei 0,08er Schichten bekäme
+    aus 0,10 mm eine Schicht, also 0,08 — unter dem Minimum; in ganzen
+    Schichten gerechnet sind es 0,16."""
     factor, low, high = (
         material.support_gap_factor,
         material.support_gap_min,
@@ -950,7 +967,7 @@ def support_gap_target(
     if factor is None or low is None or high is None or layer <= 0.0:
         return None
     target = min(max(layer * factor, low), high)
-    if flavour not in WHOLE_LAYER_GAP_FLAVOURS:
+    if not whole_layers and flavour not in WHOLE_LAYER_GAP_FLAVOURS:
         return target
     first = max(1, math.ceil(low / layer - EPS_GEOM))
     last = math.floor(high / layer + EPS_GEOM)
@@ -966,23 +983,34 @@ def _support_contact(
     need: SupportNeed,
     on_model: bool,
     flavour: SlicerFlavour | None,
+    whole_layers: bool = False,
 ) -> list[SettingAdvice]:
     """Abstand und Trennschicht der Stütze nach Material, Schichthöhe und
     Fläche (RM-583) — die häufigsten Ursachen für Narben und festsitzende Stützen
     (``konzepte/recherche-slicer-einstellungen-2026-10.md``, Nr. 1, 2, 3, 7).
 
     Der Abstand oben ist ein Vielfaches der Schichthöhe aus dem Materialprofil,
-    begrenzt nach unten und oben (Regel 7); Cura rechnet ihn in ganzen
-    Schichten. Unter einer großen flachen Decke (ein Stück über
-    ``OVERHANG_LAYER_WORTH_SUPPORT``) wird die Trennschicht dicht, sonst locker.
-    Material, das an sich selbst haftet (``support_interface_cooling`` im
-    Profil), bekommt volle Kühlung an der Trennschicht.
+    begrenzt nach unten und oben (Regel 7); Cura und die Orca-Familie neben
+    einem Reinigungsturm (``whole_layers``) rechnen ihn in ganzen
+    Schichten. Dort passt auch ein Abstand im Band nicht, der keine ganze
+    Schicht ist: Der Slicer rundet ihn selbst, Cura auf, die Orca-Familie zur
+    nächsten (0,2 mm sind bei 0,08er Schichten zweieinhalb). Unter einer großen
+    flachen Decke (ein Stück über ``OVERHANG_LAYER_WORTH_SUPPORT``) wird die
+    Trennschicht dicht, sonst locker. Material, das an sich selbst haftet
+    (``support_interface_cooling`` im Profil), bekommt volle Kühlung an der
+    Trennschicht.
     """
     advice: list[SettingAdvice] = []
     material = profile.material
-    target = support_gap_target(settings.layers.layer_height, material, flavour)
+    layer = settings.layers.layer_height
+    target = support_gap_target(layer, material, flavour, whole_layers=whole_layers)
     low, high = SUPPORT_GAP_BAND
-    if target is not None and not low * target <= settings.support.z_gap <= high * target:
+    gap = settings.support.z_gap
+    whole = whole_layers or flavour in WHOLE_LAYER_GAP_FLAVOURS
+    if target is not None and (
+        not low * target <= gap <= high * target
+        or (whole and not is_close(gap / layer, round(gap / layer)))
+    ):
         advice.append(
             _advice(
                 settings,
@@ -1039,6 +1067,7 @@ def _from_geometry(
     result: SliceResult,
     bounds: BoundingBox | None,
     flavour: SlicerFlavour | None = None,
+    whole_layers: bool = False,
 ) -> list[SettingAdvice]:
     """Der eigentliche Gewinn: das Teil bestimmt seine Einstellungen mit."""
     advice: list[SettingAdvice] = []
@@ -1199,7 +1228,7 @@ def _from_geometry(
             )
         )
     if needs_support:
-        advice += _support_contact(settings, profile, need, on_model, flavour)
+        advice += _support_contact(settings, profile, need, on_model, flavour, whole_layers)
 
     # **Über „automatisch“ nur, wo der Slicer nichts rechnet** (Entscheidung J,
     # :func:`_unanchored`): Orcas Auto-Brim fragt Höhe und Grundfläche selbst
@@ -1742,6 +1771,7 @@ def for_part(
     fit_kinds: Sequence[str] = (),
     connectors: Sequence[float] = (),
     flavour: SlicerFlavour | None = None,
+    whole_layers: bool = False,
 ) -> list[SettingAdvice]:
     """Was dieses eine Teil anders braucht als die Platte (§29).
 
@@ -1770,6 +1800,7 @@ def for_part(
                 fit_kinds=fit_kinds,
                 connectors=connectors,
                 flavour=flavour,
+                whole_layers=whole_layers,
             )
             if entry.path in PART_PATHS
         ]

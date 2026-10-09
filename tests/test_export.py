@@ -51,6 +51,7 @@ from app.core.types import (
 )
 from app.core.units import MAX_FACET_SAG, format_length
 from app.i18n import source_text
+from tests.helpers import object_values
 
 MESHES = Path(__file__).parent / "data" / "meshes"
 
@@ -3054,18 +3055,6 @@ def test_a_typed_name_still_loses_what_no_disc_can_hold(tmp_path: Path, profile:
     assert write_plan(leer, tmp_path)[0].stem == "projekt", "ein leerer Rest bekommt den Rückfall"
 
 
-def _object_values(written: Path, member: str) -> dict[str, dict[str, str]]:
-    """Die Objektwerte einer Baugruppe je Objektname — aus
-    ``model_settings.config`` (Orca-Familie) oder ``Slic3r_PE_model.config``
-    (PrusaSlicer)."""
-    config = ET.fromstring(zipfile.ZipFile(written).read(member))
-    values: dict[str, dict[str, str]] = {}
-    for node in config.iter("object"):
-        own = {meta.get("key", ""): meta.get("value", "") for meta in node.findall("metadata")}
-        values[own.pop("name", node.get("id", ""))] = own
-    return values
-
-
 def _plate_value(written: Path, flavour: SlicerFlavour, key: str) -> object:
     """Ein Wert der Platte, wie die Baugruppe ihn trägt."""
     archive = zipfile.ZipFile(written)
@@ -3113,7 +3102,7 @@ def test_an_accepted_brim_goes_only_to_the_part_that_needs_it(
     treffer = [finding for finding in findings if finding.code == "export.part_setting"]
     assert [finding.object_id for finding in treffer] == ["obj_1"], "nur der Turm"
     assert _plate_value(written, "orca", "brim_type") == "no_brim", "die Platte bleibt"
-    values = _object_values(written, "Metadata/model_settings.config")
+    values = object_values(written, "Metadata/model_settings.config")
     assert values["Turm"]["brim_type"] == "outer_only"
     assert "brim_type" not in values["Platte"]
 
@@ -3153,7 +3142,7 @@ def test_an_accepted_suggestion_no_part_asks_for_goes_to_every_part(
     )
 
     assert _plate_value(written, "orca", "enable_support") in ("0", ["0"]), "die Platte bleibt"
-    values = _object_values(written, "Metadata/model_settings.config")
+    values = object_values(written, "Metadata/model_settings.config")
     assert values["Klotz"]["enable_support"] == "1"
     assert values["Platte"]["enable_support"] == "1"
     said = [
@@ -3179,7 +3168,7 @@ def test_an_accepted_width_below_display_precision_is_still_exported(
         _two_blocks(), tmp_path, project_name="Bahnbreite", profile=profile, settings=settings
     )
 
-    values = _object_values(written, "Metadata/model_settings.config")
+    values = object_values(written, "Metadata/model_settings.config")
     assert all(float(item["line_width"]) == pytest.approx(width) for item in values.values())
     assert any(
         finding.code == "export.part_setting_all"
@@ -3233,7 +3222,7 @@ def test_calm_walls_of_a_slender_rod_go_only_to_the_rod(tmp_path: Path, profile:
         if finding.code == "export.part_setting"
     }
     assert treffer == {("obj_1", path) for path in calm}, treffer
-    values = _object_values(written, "Metadata/model_settings.config")
+    values = object_values(written, "Metadata/model_settings.config")
     for key in ("outer_wall_speed", "inner_wall_speed", "default_acceleration"):
         assert key in values["Stange"], (key, values["Stange"])
         assert key not in values["Block"], (key, values["Block"])
@@ -3513,7 +3502,7 @@ def test_supports_go_only_to_the_part_whose_geometry_needs_them(
     )
 
     assert _plate_value(written, flavour, key) in ("0", ["0"]), "die Platte stützt nicht"
-    values = _object_values(written, member)
+    values = object_values(written, member)
     assert values["Pilz"][key] == "1"
     assert key not in values["Klotz"]
     if flavour == "prusa":
@@ -3589,7 +3578,7 @@ def test_the_scarf_seam_goes_to_the_round_part_only(tmp_path: Path, profile: Pro
 
     orca, findings = written("orca")
     assert _plate_value(orca, "orca", "seam_slope_type") == "none", "die Platte bleibt"
-    values = _object_values(orca, "Metadata/model_settings.config")
+    values = object_values(orca, "Metadata/model_settings.config")
     assert values["Rohr"]["seam_slope_type"] == "external"
     assert values["Rohr"]["seam_slope_min_length"] == "20"
     assert "seam_slope_type" not in values["Klotz"]
@@ -3597,7 +3586,7 @@ def test_the_scarf_seam_goes_to_the_round_part_only(tmp_path: Path, profile: Pro
     assert said == ["obj_1"], "einmal, für das Rohr"
 
     prusa, _findings = written("prusa")
-    parts = _object_values(prusa, "Metadata/Slic3r_PE_model.config")
+    parts = object_values(prusa, "Metadata/Slic3r_PE_model.config")
     assert parts["Rohr"]["scarf_seam_placement"] == "contours"
     assert "scarf_seam_placement" not in parts["Klotz"]
 
@@ -3755,7 +3744,7 @@ def test_a_part_gets_what_its_second_spool_asks_for(tmp_path: Path, profile: Pro
         objects, tmp_path, project_name="Deckel", profile=profile, settings=settings
     )
 
-    values = _object_values(written, "Metadata/model_settings.config")
+    values = object_values(written, "Metadata/model_settings.config")
     assert float(values["Griff"]["outer_wall_speed"]) == pytest.approx(advise.FLEXIBLE_MAX_SPEED)
     assert "outer_wall_speed" not in values["Deckel"]
     treffer = [finding for finding in findings if finding.code == "export.part_setting"]
@@ -3849,7 +3838,7 @@ def test_a_native_flow_limit_does_not_spread_fitting_speed_to_the_plain_block(
             else "Metadata/Slic3r_PE_model.config"
         )
         key = "outer_wall_speed" if flavour == "orca" else "external_perimeter_speed"
-        values = _object_values(written, member)
+        values = object_values(written, member)
         assert float(values["Passungsteil"][key]) == pytest.approx(30.0)
         assert key not in values["Klotz"]
 
@@ -3910,7 +3899,7 @@ def test_a_rule_behind_an_accepted_part_value_is_asked_with_it(
     )
 
     assert _plate_value(written, "orca", "wall_generator") == "classic", "die Platte bleibt"
-    values = _object_values(written, "Metadata/model_settings.config")
+    values = object_values(written, "Metadata/model_settings.config")
     assert values["Becher"]["wall_generator"] == "arachne"
     assert values["Becher"]["wall_sequence"] == "outer wall/inner wall"
     assert "wall_sequence" not in values["Pilz"], "der Pilz braucht Stützen"

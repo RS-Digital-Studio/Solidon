@@ -480,9 +480,18 @@ ElegooSlicer druckt dann 0,28. Mit zwei Filamenten baut die Orca-Familie einen
 Reinigungsturm und schaltet die eigene Höhe selbst wieder ab
 (`PrintConfig.cpp`, `normalize_fdm_2`; „je Objekt“ mit mehreren Objekten baut
 keinen, glatter Zeitraffer immer einen) — Orca, Elegoo, Creality und Bambu
-druckten das PETG-Teil neben PLA mit 0,2, PrusaSlicer mit 0,28. Der Export
-sagt das, statt still zu runden, und dann nur das: Dass die eigene Höhe gilt,
-stimmt mit Turm nicht. Der Schalter richtet sich nach den
+druckten das PETG-Teil neben PLA mit 0,2, PrusaSlicer mit 0,28. Mit Turm legt
+die Orca-Familie die Stütze auf die Schichten des Modells und rundet zur
+nächsten (`SupportMaterial.cpp`); PLA bei 0,08 mm Schicht bekam so aus 0,10
+eine Schicht, 0,08, unter dem Minimum. Neben einem Turm rät Solidon deshalb
+wie bei Cura gleich ganze Schichten im Band (RM-622, `writer.tower_plates`,
+Dialog und Export aus derselben Frage), und ein Wert im Band zwischen zwei
+Schichten bekommt dort wie bei Cura die ganze Schicht vorgeschlagen, weil der
+Slicer ihn nicht so druckt. Gemessen im ElegooSlicer mit PLA und PETG bei
+0,08 mm: vorher 0,08 am PLA- und 0,16 am PETG-Teil (geschrieben 0,10 und
+0,12), nachher an beiden 0,16 wie geschrieben, oben und unten. Für einen
+eigenen Wert zwischen zwei Schichten sagt der Export die Rundung, statt still
+zu runden, und dann nur das: Dass die eigene Höhe gilt, stimmt mit Turm nicht. Der Schalter richtet sich nach den
 geschriebenen Abständen, nicht nach den Zielen aller Spulen, und steht er gegen
 den Herstellerprozess, sagt es ein Befund: Die Stütze liegt dann auch auf
 eigenen Höhen (0,47, 0,75, 1,02 mm statt nur auf denen des Modells). Cura
