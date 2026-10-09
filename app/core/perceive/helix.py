@@ -340,6 +340,7 @@ def find_helices(
     if len(body.faces) < MIN_CHAIN_EDGES:
         return []
     found: list[Helix] = []
+    measured_chains: list[tuple[Helix, NDArray[np.int64]]] = []
     for edges in _sharp_chain_edges(body, check_cancelled=check_cancelled):
         if check_cancelled is not None:
             check_cancelled()
@@ -352,14 +353,78 @@ def find_helices(
         # Vorschub und ihre Gangzahl; sonst bleibt, was das Spektrum fand.
         measured = _measured_helix(body, edges, hint=helix, check_cancelled=check_cancelled)
         if measured is not None:
-            found.append(measured)
+            measured_chains.append((measured, edges))
         elif helix is not None and _winds_around(body, edges, helix):
             found.append(helix)
+    found = [*_joined_starts(body, measured_chains, check_cancelled=check_cancelled), *found]
     if check_cancelled is not None:
         check_cancelled()
     if found:
         _log.info("found %d helices", len(found))
     return found
+
+
+def _same_screw(one: Helix, other: Helix) -> bool:
+    """Ob zwei gemessene Wendeln Gänge desselben Gewindes sein können.
+
+    Dieselbe Achse (bis auf die Sehnenhöhe), derselbe Vorschub
+    (:data:`LEAD_AGREEMENT`), derselbe Drehsinn, dieselbe Seite und derselbe
+    Kamm, und ihre Strecken überdecken sich.
+    """
+    if one.internal != other.internal or one.handedness != other.handedness:
+        return False
+    if abs(one.lead - other.lead) > LEAD_AGREEMENT * max(one.lead, other.lead):
+        return False
+    if abs(one.crest_radius - other.crest_radius) > MAX_FACET_SAG:
+        return False
+    axis = np.asarray(one.axis, dtype=float)
+    if abs(float(np.dot(axis, np.asarray(other.axis, dtype=float)))) < 1.0 - 1e-4:
+        return False
+    offset = np.asarray(other.centre, dtype=float) - np.asarray(one.centre, dtype=float)
+    along = float(np.dot(offset, axis))
+    if float(np.linalg.norm(offset - along * axis)) > MAX_FACET_SAG:
+        return False
+    return abs(along) < (one.length + other.length) / 2.0
+
+
+def _joined_starts(
+    body: trimesh.Trimesh,
+    chains: Sequence[tuple[Helix, NDArray[np.int64]]],
+    *,
+    check_cancelled: Callable[[], None] | None = None,
+) -> list[Helix]:
+    """Gänge eines mehrgängigen Gewindes, die als getrennte Züge kamen, als ein Gewinde.
+
+    Ein gedrucktes zweigängiges Gewinde (``build.threaded`` am Netz) hat zwei
+    Gänge, die sich nirgends berühren: Jeder ist ein eigener Kantenzug, und
+    jeder für sich ist ein eingängiges Gewinde mit der Steigung des Vorschubs.
+    Der Netzleser fand deshalb zwei Gewinde mit Steigung 2 statt eines mit zwei
+    Gängen zu je 1 (RM-544). Zusammen gemessen entscheidet dieselbe Regel wie
+    an einem Zug: die Periodizität aller Wendeln (:func:`starts_from_periodicity`).
+    Bestätigt sie die Gänge nicht, bleiben die Züge getrennt.
+    """
+    groups: list[list[tuple[Helix, NDArray[np.int64]]]] = []
+    for entry in chains:
+        for group in groups:
+            if _same_screw(group[0][0], entry[0]):
+                group.append(entry)
+                break
+        else:
+            groups.append([entry])
+    joined: list[Helix] = []
+    for group in groups:
+        if len(group) == 1:
+            joined.append(group[0][0])
+            continue
+        if check_cancelled is not None:
+            check_cancelled()
+        edges = np.concatenate([edges for _helix, edges in group])
+        together = _measured_helix(body, edges, hint=group[0][0], check_cancelled=check_cancelled)
+        if together is not None and together.starts == sum(helix.starts for helix, _e in group):
+            joined.append(together)
+        else:
+            joined.extend(helix for helix, _edges in group)
+    return joined
 
 
 def _winds_around(body: trimesh.Trimesh, edges: NDArray[np.int64], helix: Helix) -> bool:

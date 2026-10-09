@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import math
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import numpy as np
 import pytest
@@ -36,18 +36,40 @@ def _root(diameter: float, pitch: float) -> float:
     return shapes.ridge_profile(diameter, pitch)[0][0]
 
 
-def _built(kind: str, diameter: float, pitch: float, length: float, *, internal: bool) -> float:
+def _built(
+    kind: str,
+    diameter: float,
+    pitch: float,
+    length: float,
+    *,
+    internal: bool,
+    starts: int = 1,
+    form: str = "flat",
+    slope: float = 0.0,
+) -> float:
     """Das Volumen des Bausteingewindes, wie der jeweilige Kern es baut.
 
     Exakt nach Pappus — der genähte Körper trifft ihn auf 2 · 10⁻⁷ (gemessen
-    M8 × 1,25 × 8: 8 · 10⁻⁵ mm³). Am Netz das facettierte Netz selbst: Der Kern
-    ist ein 48-Eck, der Gang ein Sehnenzug, zusammen 1,4 Prozent unter der
-    Analytik. Geprüft wird hier, was die Operation zusammensetzt; wie treu
-    ``build.threaded`` am Netz facettiert, prüft ``test_exact_parts``.
+    M8 × 1,25 × 8: 8 · 10⁻⁵ mm³); die Gangzahl ändert ihn nicht. Am Netz das
+    facettierte Netz selbst: Der Kern ist ein 48-Eck, der Gang ein Sehnenzug,
+    zusammen 1,4 Prozent unter der Analytik. Geprüft wird hier, was die
+    Operation zusammensetzt; wie treu ``build.threaded`` am Netz facettiert,
+    prüft ``test_exact_parts``.
     """
-    if kind == "brep":
-        return thread_volume(diameter, pitch, length, internal=internal)
-    return float(build.threaded(diameter, pitch, length, internal=internal).volume)
+    if kind == "brep" and not slope:
+        return thread_volume(diameter, pitch, length, internal=internal, profile=form)
+    return float(
+        build.threaded(
+            diameter,
+            pitch,
+            length,
+            internal=internal,
+            starts=starts,
+            profile=cast(shapes.ThreadProfile, form),
+            taper=slope,
+            reference=length / 2.0,
+        ).volume
+    )
 
 
 def _cylinder(kind: str, radius: float, length: float) -> float:
@@ -97,6 +119,87 @@ def _thread_feature(
             ("diameter", "pitch", "centre", "axis", "length"), "parameter"
         ),
     )
+
+
+def _threaded_plate(
+    kind: str,
+    *,
+    internal: bool,
+    left: bool = False,
+    starts: int = 1,
+    slope: float = 0.0,
+    form: str = "flat",
+    diameter: float = 6.0,
+    pitch: float = 1.0,
+) -> SceneObject:
+    """Die Platte mit aufgesetztem oder durchgehendem Gewinde, links, mehrgängig oder kegelig.
+
+    Gebaut wie ein Baustein es baut (``build.threaded``), erklärt wie er es
+    erklärt (``build.thread``) — der Kegel mit seinem Maß in der Mitte.
+    """
+    exact_kernel()
+    profile = cast(shapes.ThreadProfile, form)
+    depth = shapes.ridge_depth(pitch, profile)
+    if internal:
+        length = PLATE[2]
+        bottom = -BOOLEAN_OVERLAP
+        built = length + 2.0 * BOOLEAN_OVERLAP
+        middle = PLATE[2] / 2.0
+        size = diameter - 2.0 * depth
+    else:
+        length = LENGTH
+        bottom = PLATE[2] - BOOLEAN_OVERLAP
+        built = length
+        middle = bottom + length / 2.0
+        size = diameter
+    options: dict[str, Any] = {
+        "internal": internal,
+        "bottom": bottom,
+        "profile": profile,
+        "starts": starts,
+        "left": left,
+        "taper": slope,
+        "reference": middle,
+    }
+    if kind == "brep":
+        with shapes.building("brep"):
+            tool = build.threaded(size, pitch, built, **options)
+    else:
+        tool = build.threaded(size, pitch, built, **options)
+    body = _joined(kind, _plate(kind), tool, "difference" if internal else "union")
+    _identifier, feature = build.thread(
+        "thread_1",
+        diameter,
+        pitch,
+        (0.0, 0.0, middle),
+        internal=internal,
+        length=length,
+        left=left,
+        starts=starts,
+        taper=slope,
+    )
+    if form != "flat":
+        feature = Feature(
+            id=feature.id,
+            kind=feature.kind,
+            provenance=feature.provenance,
+            params={**feature.params, "profile": form},
+            measure_sources=feature.measure_sources,
+        )
+    return SceneObject(
+        id="obj_1", name="Platte", mesh=body, kind=kind, features={feature.id: feature}
+    )
+
+
+def _read_threads(kind: str, output: SceneObject) -> list[Feature]:
+    """Die Gewinde, wie die Erkennung des jeweiligen Kerns sie unabhängig liest."""
+    if kind == "brep":
+        from app.core.brep.features import features_of
+
+        return [f for f in features_of(output.mesh).values() if f.kind == "thread"]
+    from app.core.perceive.features import detect
+
+    return [f for f in detect(as_mesh_data(output.mesh)).values() if f.kind == "thread"]
 
 
 def _plate(kind: str) -> Any:
@@ -225,13 +328,67 @@ def test_the_same_measures_change_nothing(kind: str, profile: Profile) -> None:
     assert [finding.code for finding in result.findings] == ["resize_feature.unchanged"]
 
 
-def test_a_left_hand_thread_is_refused_with_advice(kind: str, profile: Profile) -> None:
-    """Ein belegtes Linksgewinde wird nicht still rechts neu geschnitten."""
-    source = studded_thread_plate(kind, handedness="left")
-    with pytest.raises(ValidationError) as caught:
-        run("resize_feature", source, profile, at_feature="thread_1", diameter=8.0, pitch=1.25)
-    assert caught.value.constraint == "left_handed"
-    assert caught.value.suggestions
+def test_a_left_hand_thread_is_recut_left_handed(kind: str, profile: Profile) -> None:
+    """Ein Linksgewinde wird links neu geschnitten — nicht still rechts (RM-544).
+
+    Bis RM-544 sagte *Merkmal ändern* hier ab. Gespiegelt bleibt das Volumen
+    das des Rechtsgewindes; den Drehsinn liest die Erkennung unabhängig nach.
+    """
+    source = _threaded_plate(kind, internal=False, left=True)
+    result = run("resize_feature", source, profile, at_feature="thread_1", diameter=8.0, pitch=1.25)
+    output = _stays(result, kind)
+    stud = _built(kind, 8.0, 1.25, LENGTH, internal=False) - _sunk(kind, 8.0, 1.25, LENGTH)
+    assert float(output.mesh.volume) - PLATE_VOLUME == pytest.approx(stud, rel=_tolerance(kind))
+    assert output.features["thread_1"].params["handedness"] == "left"
+    found = _read_threads(kind, output)
+    assert len(found) == 1
+    assert found[0].params["handedness"] == "left"
+    assert found[0].params["diameter"] == pytest.approx(8.0, abs=0.05)
+
+
+def test_a_left_hand_inner_thread_is_recut_left_handed(kind: str, profile: Profile) -> None:
+    """Innen ebenso: füllen und links neu schneiden, mit dem Werkzeug in der Bohrung."""
+    source = _threaded_plate(kind, internal=True, left=True)
+    result = run("resize_feature", source, profile, at_feature="thread_1", diameter=8.0, pitch=1.25)
+    output = _stays(result, kind)
+    cut = _built(kind, _bore(8.0, 1.25), 1.25, PLATE[2], internal=True)
+    assert PLATE_VOLUME - float(output.mesh.volume) == pytest.approx(cut, rel=_tolerance(kind))
+    assert output.features["thread_1"].params["handedness"] == "left"
+    found = _read_threads(kind, output)
+    assert [thread.params["handedness"] for thread in found] == ["left"]
+
+
+def test_a_multi_start_thread_keeps_its_starts(kind: str, profile: Profile) -> None:
+    """Ein zweigängiges Gewinde bleibt zweigängig: Vorschub zwei Steigungen (RM-544).
+
+    Im Längsschnitt folgt Gang auf Gang im Abstand der Steigung, das Volumen
+    ist also das eines eingängigen mit derselben Steigung.
+    """
+    source = _threaded_plate(kind, internal=False, starts=2)
+    result = run("resize_feature", source, profile, at_feature="thread_1", diameter=8.0, pitch=1.25)
+    output = _stays(result, kind)
+    stud = _built(kind, 8.0, 1.25, LENGTH, internal=False, starts=2)
+    stud -= stud * BOOLEAN_OVERLAP / LENGTH
+    assert float(output.mesh.volume) - PLATE_VOLUME == pytest.approx(stud, rel=_tolerance(kind))
+    changed = output.features["thread_1"].params
+    assert changed["starts"] == 2 and changed["lead"] == pytest.approx(2.5)
+    found = _read_threads(kind, output)
+    assert len(found) == 1
+    assert found[0].params["starts"] == 2
+    assert found[0].params["pitch"] == pytest.approx(1.25, abs=0.02)
+
+
+def test_a_whitworth_thread_keeps_its_profile(kind: str, profile: Profile) -> None:
+    """Ein Whitworth-Gewinde (G) wird mit seinem 55°-Profil neu geschnitten, nicht flach."""
+    source = _threaded_plate(kind, internal=False, form="whitworth", diameter=20.955, pitch=1.814)
+    result = run(
+        "resize_feature", source, profile, at_feature="thread_1", diameter=26.441, pitch=1.814
+    )
+    output = _stays(result, kind)
+    stud = _built(kind, 26.441, 1.814, LENGTH, internal=False, form="whitworth")
+    stud -= stud * BOOLEAN_OVERLAP / LENGTH
+    assert float(output.mesh.volume) - PLATE_VOLUME == pytest.approx(stud, rel=_tolerance(kind))
+    assert output.features["thread_1"].params["profile"] == "whitworth"
 
 
 def test_a_pitch_that_leaves_no_core_is_refused(kind: str, profile: Profile) -> None:
@@ -380,11 +537,12 @@ def test_a_mesh_read_thread_is_not_refused_as_left_handed(profile: Profile) -> N
     assert output.features[thread.id].params["diameter"] == 8.0
 
 
-def test_a_mesh_read_left_hand_thread_is_refused(profile: Profile) -> None:
-    """Ein am Netz gemessenes Linksgewinde sperrt das Ändern — wie am exakten Körper.
+def test_a_mesh_read_left_hand_thread_is_recut_left_handed(profile: Profile) -> None:
+    """Ein am Netz gemessenes Linksgewinde wird links neu geschnitten — wie am exakten Körper.
 
     Vorher galt am Netz jede Händigkeit als geraten, und *Merkmal ändern*
-    schnitt ein Linksgewinde still rechts neu (P2.5).
+    schnitt ein Linksgewinde still rechts neu (P2.5); danach sagte es ab, bis
+    RM-544 den Drehsinn mitnahm.
     """
     exact_kernel()
     from tests.helpers import mirrored_thread
@@ -393,53 +551,166 @@ def test_a_mesh_read_left_hand_thread_is_refused(profile: Profile) -> None:
     source, thread = _recognised("mesh", mirrored_thread(_corpus("m6_rechts")))
     assert thread.params["handedness"] == "left"
     assert thread.measure_sources.get("handedness") == "facets"
-    with pytest.raises(ValidationError) as caught:
-        run("resize_feature", source, profile, at_feature=thread.id, diameter=8.0, pitch=1.25)
-    assert caught.value.constraint == "left_handed"
+    result = run("resize_feature", source, profile, at_feature=thread.id, diameter=8.0, pitch=1.25)
+    output = _stays(result, "mesh")
+    assert [found.params["handedness"] for found in _read_threads("mesh", output)] == ["left"]
 
 
-def test_a_natively_read_left_hand_thread_is_refused(profile: Profile) -> None:
-    """Ein an den Kanten gelesenes Linksgewinde sperrt das Ändern — der Beleg ist nativ."""
+def test_a_natively_read_left_hand_thread_is_recut_left_handed(profile: Profile) -> None:
+    """Ein an den Kanten gelesenes Linksgewinde wird links neu geschnitten — der Beleg ist nativ."""
     exact_kernel()
     from tests.helpers import mirrored_thread
 
     source, thread = _recognised("brep", mirrored_thread(_corpus("m6_rechts")))
     assert thread.params["handedness"] == "left"
-    with pytest.raises(ValidationError) as caught:
-        run("resize_feature", source, profile, at_feature=thread.id, diameter=8.0, pitch=1.25)
-    assert caught.value.constraint == "left_handed"
+    result = run("resize_feature", source, profile, at_feature=thread.id, diameter=8.0, pitch=1.25)
+    output = _stays(result, "brep")
+    threads = [f for f in output.features.values() if f.kind == "thread"]
+    assert [f.params["handedness"] for f in threads] == ["left"]
+    assert [found.params["handedness"] for found in _read_threads("brep", output)] == ["left"]
 
 
-def test_a_multi_start_thread_is_refused_instead_of_becoming_single(profile: Profile) -> None:
-    """Ein mehrgängiges Gewinde wird nicht still eingängig neu geschnitten."""
+def test_a_recognised_multi_start_rod_is_recut_with_its_starts(profile: Profile) -> None:
+    """``zweigaengig`` (Ø 8, Steigung 1, zwei Gänge) auf Ø 10 × 1,25: weiter zwei Gänge.
+
+    Bis RM-544 sagte das Ändern ab, statt still ein eingängiges daraus zu
+    machen. Die Hülle nimmt die ganze Stange; übrig ist das neue Gewinde.
+    """
     exact_kernel()
     source, thread = _recognised("brep", _corpus("zweigaengig"))
     assert thread.params["starts"] == 2
-    with pytest.raises(ValidationError) as caught:
-        run("resize_feature", source, profile, at_feature=thread.id, diameter=8.0, pitch=1.25)
-    assert caught.value.constraint == "multi_start"
-    assert caught.value.suggestions
+    result = run("resize_feature", source, profile, at_feature=thread.id, diameter=10.0, pitch=1.25)
+    output = _stays(result, "brep")
+    length = float(thread.params["length"])
+    assert float(output.mesh.volume) == pytest.approx(
+        thread_volume(10.0, 1.25, length, internal=False), rel=_tolerance("brep")
+    )
+    found = _read_threads("brep", output)
+    assert len(found) == 1
+    assert found[0].params["starts"] == 2
+    assert found[0].params["lead"] == pytest.approx(2.5, abs=0.01)
 
 
-@pytest.mark.parametrize("operation", ["resize_feature", "remove_feature"])
-def test_a_tapered_thread_is_refused_instead_of_cut_with_cylinders(
-    operation: str, profile: Profile
-) -> None:
-    """Ein kegeliges Rohrgewinde wird weder zylindrisch neu geschnitten noch entfernt.
+#: Der Kegel der Rohrgewinde, 1:16 auf den Durchmesser — Zuwachs des Halbmessers je mm.
+SLOPE = 1.0 / 32.0
 
-    Hülle, Kern und Füllung der Gewindehandlungen sind Zylinder; an einem
-    Kegel (1:16, ``konisch.step``) trügen sie ein Ende ab und ließen das andere
-    stehen. Der Leser kennt den Kegel seit dem 22.09.2026 (P2.5), die
-    Handlungen sagen deshalb ab statt still falsch zu schneiden.
+
+def _frustum(radius: float, slope: float, low: float, high: float) -> float:
+    """Ein Kegelstumpf um die Achse: Halbmesser ``radius + slope · z`` von ``low`` bis ``high``."""
+    return math.pi * (
+        radius**2 * (high - low)
+        + radius * slope * (high**2 - low**2)
+        + slope**2 * (high**3 - low**3) / 3.0
+    )
+
+
+def _tapered_thread(
+    diameter: float, pitch: float, low: float, high: float, *, internal: bool
+) -> float:
+    """Ein kegeliges Bausteingewinde nach Pappus, ``diameter`` in der Höhe null.
+
+    Das Volumen je Millimeter ist quadratisch im Durchmesser und der linear in
+    der Höhe — Simpson ist darauf genau (am genähten Körper Ø 10 × 1,5 gemessen:
+    3 · 10⁻¹⁰).
     """
+
+    def per_mm(z: float) -> float:
+        return thread_volume(diameter + 2.0 * SLOPE * z, pitch, 1.0, internal=internal)
+
+    return (high - low) / 6.0 * (per_mm(low) + 4.0 * per_mm((low + high) / 2.0) + per_mm(high))
+
+
+def test_removing_a_tapered_outer_thread_leaves_the_tapered_core(
+    kind: str, profile: Profile
+) -> None:
+    """*Merkmal entfernen* an einem Kegel: Übrig bleibt der kegelige Kern (RM-544).
+
+    Hülle und Kern des Werkzeugs folgen dem Kegel; Zylinder trügen ein Ende ab
+    und ließen am anderen den Gang stehen.
+    """
+    source = _threaded_plate(kind, internal=False, slope=SLOPE)
+    result = run("remove_feature", source, profile, at_feature="thread_1")
+    output = _stays(result, kind)
+    core = _frustum(_root(6.0, 1.0), SLOPE, -LENGTH / 2.0 + BOOLEAN_OVERLAP, LENGTH / 2.0)
+    if kind == "mesh":
+        # Am Netz ist der Kern das Vieleck des Werkzeugs, wie bei ``_cylinder``.
+        corners = shapes.SEGMENTS
+        core *= corners / (2.0 * math.pi) * math.sin(2.0 * math.pi / corners)
+    assert float(output.mesh.volume) - PLATE_VOLUME == pytest.approx(core, rel=_tolerance(kind))
+    assert "thread_1" not in output.features
+
+
+def test_closing_a_tapered_inner_thread_fills_the_bore(kind: str, profile: Profile) -> None:
+    """Ein kegeliges Innengewinde schließt sich zur vollen Platte."""
+    source = _threaded_plate(kind, internal=True, slope=SLOPE)
+    result = run("remove_feature", source, profile, at_feature="thread_1")
+    output = _stays(result, kind)
+    assert float(output.mesh.volume) == pytest.approx(
+        PLATE_VOLUME, rel=1e-9 if kind == "brep" else 1e-6
+    )
+
+
+def test_changing_a_tapered_outer_thread_keeps_its_taper(kind: str, profile: Profile) -> None:
+    """Neu geschnitten bleibt der Kegel; das neue Maß gilt in der Mitte wie das alte."""
+    source = _threaded_plate(kind, internal=False, slope=SLOPE)
+    result = run("resize_feature", source, profile, at_feature="thread_1", diameter=8.0, pitch=1.25)
+    output = _stays(result, kind)
+    half = LENGTH / 2.0
+    if kind == "brep":
+        stud = _tapered_thread(8.0, 1.25, -half + BOOLEAN_OVERLAP, half, internal=False)
+    else:
+        stud = _built(kind, 8.0, 1.25, LENGTH, internal=False, slope=SLOPE)
+        stud -= stud * BOOLEAN_OVERLAP / LENGTH
+    assert float(output.mesh.volume) - PLATE_VOLUME == pytest.approx(stud, rel=_tolerance(kind))
+    changed = output.features["thread_1"].params
+    assert changed["taper"] == pytest.approx(source.features["thread_1"].params["taper"])
+    if kind == "brep":
+        found = _read_threads(kind, output)
+        assert len(found) == 1
+        assert found[0].params["taper"] == pytest.approx(changed["taper"], rel=1e-3)
+        assert found[0].params["diameter"] == pytest.approx(8.0, abs=0.05)
+
+
+def test_changing_a_tapered_inner_thread_keeps_its_taper(kind: str, profile: Profile) -> None:
+    """Innen ebenso: füllen und kegelig neu schneiden, das Maß in der Mitte."""
+    source = _threaded_plate(kind, internal=True, slope=SLOPE)
+    result = run("resize_feature", source, profile, at_feature="thread_1", diameter=8.0, pitch=1.25)
+    output = _stays(result, kind)
+    half = PLATE[2] / 2.0
+    if kind == "brep":
+        cut = _tapered_thread(_bore(8.0, 1.25), 1.25, -half, half, internal=True)
+    else:
+        cut = _built(kind, _bore(8.0, 1.25), 1.25, PLATE[2], internal=True, slope=SLOPE)
+    assert PLATE_VOLUME - float(output.mesh.volume) == pytest.approx(cut, rel=_tolerance(kind))
+    assert output.features["thread_1"].params["taper"] > 0.0
+
+
+def test_a_recognised_tapered_rod_loses_its_thread_down_to_the_cone(profile: Profile) -> None:
+    """``konisch`` (Ø 10 × 1,5, Kegel 1:16): entfernt bleibt der Kegel unter dem Talgrund."""
     exact_kernel()
     source, thread = _recognised("brep", _corpus("konisch"))
     assert thread.params["taper"] > 0.0
-    values = {"diameter": 12.0, "pitch": 1.5} if operation == "resize_feature" else {}
-    with pytest.raises(ValidationError) as caught:
-        run(operation, source, profile, at_feature=thread.id, **values)
-    assert caught.value.constraint == "tapered"
-    assert caught.value.suggestions
+    slope = math.tan(math.radians(float(thread.params["taper"])))
+    inner = min(float(thread.params["root_radius"]), float(thread.params["crest_radius"]))
+    length = float(thread.params["length"])
+    result = run("remove_feature", source, profile, at_feature=thread.id)
+    output = _stays(result, "brep")
+    assert float(output.mesh.volume) == pytest.approx(
+        _frustum(inner - BOOLEAN_OVERLAP, slope, -length / 2.0, length / 2.0), rel=1e-6
+    )
+    assert thread.id not in output.features
+
+
+def test_a_recognised_tapered_rod_is_recut_tapered(profile: Profile) -> None:
+    """``konisch`` auf Ø 12 × 1,5 in der Mitte: wieder kegelig, mit demselben Kegel."""
+    exact_kernel()
+    source, thread = _recognised("brep", _corpus("konisch"))
+    result = run("resize_feature", source, profile, at_feature=thread.id, diameter=12.0, pitch=1.5)
+    output = _stays(result, "brep")
+    found = _read_threads("brep", output)
+    assert len(found) == 1
+    assert found[0].params["taper"] == pytest.approx(float(thread.params["taper"]), rel=1e-3)
+    assert found[0].params["diameter"] == pytest.approx(12.0, abs=0.05)
 
 
 def test_closing_a_blind_generated_thread_leaves_no_pocket(profile: Profile) -> None:

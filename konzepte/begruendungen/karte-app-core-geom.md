@@ -1278,9 +1278,9 @@ sagt Grenzen und Strecke über seine eigenen Ecken (`_thread_corners`,
 `_thread_bounds`) — der Fit über Dreiecksmitten liegt radial innerhalb der
 Kammecken und axial neben der Stange —, und sein Kern bleibt um den Überlapp
 unter dem gemessenen Fuß. Ist das Gewinde der ganze Körper, nimmt die Hülle
-alles, und das neue Gewinde ist danach allein der Körper. Linksgängig
-(belegt, `types.thread_is_left_handed`), mehrgängig und ohne Strecke sind
-Absagen mit Vorschlag. Versetzt, gedreht oder verdoppelt wird nicht das
+alles, und das neue Gewinde ist danach allein der Körper. Profil,
+Gangzahl, belegter Drehsinn und Kegel bleiben beim Neuschneiden
+(`_thread_kind`, RM-544); ohne Strecke ist es eine Absage mit Vorschlag. Versetzt, gedreht oder verdoppelt wird nicht das
 Gewinde, sondern der Körper oder die Bohrung.
 
 **Filament nehmen Wulst, Kehle und Gewinde seit P2.6 wie eine Fläche an**

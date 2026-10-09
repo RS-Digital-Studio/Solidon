@@ -37,7 +37,7 @@ from contextlib import contextmanager
 from datetime import date
 from functools import cache
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 from urllib.error import HTTPError, URLError
 from urllib.request import urlopen
 
@@ -1675,18 +1675,27 @@ def primitive_operation(
     )
 
 
-def thread_volume(diameter: float, pitch: float, length: float, *, internal: bool) -> float:
-    """Analytisches Volumen eines Bausteingewindes nach Pappus."""
+def thread_volume(
+    diameter: float, pitch: float, length: float, *, internal: bool, profile: str = "flat"
+) -> float:
+    """Analytisches Volumen eines Bausteingewindes nach Pappus.
+
+    Die Gangzahl ändert es nicht: Mehrere Gänge teilen sich den Vorschub, und
+    im Längsschnitt folgt Gang auf Gang im Abstand der Steigung wie bei einem.
+    """
     from itertools import pairwise
 
     from app.core.knowledge.parts import shapes
 
-    profile = list(shapes.ridge_profile(diameter, pitch, internal=internal))
-    root = profile[0][0]
-    corners = [*profile, profile[0]]
+    corners = shapes.ridge_profile(
+        diameter, pitch, internal=internal, profile=cast(shapes.ThreadProfile, profile)
+    )
+    profile_points = list(corners)
+    root = profile_points[0][0]
+    closed = [*profile_points, profile_points[0]]
     area = 0.0
     moment = 0.0
-    for (r_a, z_a), (r_b, z_b) in pairwise(corners):
+    for (r_a, z_a), (r_b, z_b) in pairwise(closed):
         cross = r_a * z_b - r_b * z_a
         area += cross
         moment += (r_a + r_b) * cross

@@ -21,7 +21,7 @@ import pytest
 import trimesh
 
 from app.core.bootstrap import load_operations
-from app.core.geom.mesh import MeshData
+from app.core.geom.mesh import MeshData, as_mesh_data
 from app.core.knowledge import profiles
 from app.core.perceive.features import detect
 from app.core.perceive.helix import Helix, find_helices
@@ -260,6 +260,28 @@ def test_a_mirrored_bolt_is_measured_left_handed() -> None:
     assert left.internal is right.internal
     assert left.diameter == pytest.approx(right.diameter, abs=1e-6)
     assert left.turns == pytest.approx(right.turns, abs=0.05)
+
+
+@pytest.mark.parametrize("starts", [2, 3])
+def test_a_printed_multi_start_thread_is_one_thread(starts: int) -> None:
+    """Ein gedrucktes mehrgängiges Gewinde ist **ein** Gewinde mit seiner Gangzahl (RM-544).
+
+    Auf einer Platte berühren sich die Gänge von ``build.threaded`` am Netz
+    nirgends — die Stirnfläche, die sie an der freien Stange verbindet, liegt
+    in der Platte. Jeder ist dann ein eigener Kantenzug, und jeder für sich
+    wäre ein eingängiges Gewinde mit der Steigung des Vorschubs: Vorher las der
+    Netzleser zwei Gewinde Ø 6 mit Steigung 2 statt eines mit zwei Gängen zu je 1.
+    """
+    from app.core.geom.boolean import BOOLEAN_OVERLAP, boolean
+    from app.core.knowledge.parts import build, shapes
+
+    stud = build.threaded(6.0, 1.0, 8.0, starts=starts, bottom=10.0 - BOOLEAN_OVERLAP)
+    body = boolean("union", [shapes.box(40.0, 40.0, 10.0), stud], quality="fine").mesh
+    helix = _only(find_helices(as_mesh_data(body)))
+    assert helix.starts == starts
+    assert helix.pitch == pytest.approx(1.0, abs=1e-4)
+    assert helix.lead == pytest.approx(starts * 1.0, abs=1e-4)
+    assert helix.diameter == pytest.approx(6.0, abs=0.01)
 
 
 def test_a_turned_bolt_keeps_its_thread_and_a_mirrored_one_is_read_again() -> None:
