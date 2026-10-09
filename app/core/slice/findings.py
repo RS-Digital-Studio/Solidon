@@ -35,9 +35,11 @@ from app.core.geom.mesh import MeshData, as_mesh_data
 from app.core.knowledge import profiles
 from app.core.slice import advise
 from app.core.slice.analysis import (
+    OVERHANG_LAYER_WORTH_SUPPORT,
     _material,
     _material_cross,
     largest_overhang_patch,
+    ledges,
     model_support,
     slice_body,
 )
@@ -76,8 +78,8 @@ ORIENT_SEARCH_BODIES: Final = 8
 
 #: Unter dieser zusammenhängenden Fläche in mm² trägt sich ein Überhang
 #: selbst — dieselbe Zahl, mit der die Druckvorschläge Stützen verlangen
-#: (:data:`app.core.slice.advise.OVERHANG_LAYER_WORTH_SUPPORT`).
-OVERHANG_REPORTED_FROM: Final = advise.OVERHANG_LAYER_WORTH_SUPPORT
+#: (:data:`app.core.slice.analysis.OVERHANG_LAYER_WORTH_SUPPORT`).
+OVERHANG_REPORTED_FROM: Final = OVERHANG_LAYER_WORTH_SUPPORT
 
 #: Der Schlüssel, unter dem das Netz seine Analyse für den Bericht behält.
 _CACHE_KEY: Final = "solidon_print_findings"
@@ -217,14 +219,14 @@ def body_findings(
     found = island_findings(entry.id, result, bottom)
     if profile.printer.is_resin:
         return found
-    found += overhang_findings(entry.id, result)
+    found += overhang_findings(entry.id, result, cancelled=cancelled)
     found += [_placed(finding, entry.id) for finding in advise.located_warnings(result, profile)]
     # Eine Lage, die nach der Regel der Druckvorschläge keine Stütze braucht,
     # spart durch eine andere keine — dieselbe Frage wie ``orientation.stays``.
     if (
         search
         and result.support_volume >= ORIENT_WORTH_SUPPORT
-        and advise.support_need(result).needed
+        and advise.support_need(result, cancelled=cancelled).needed
     ):
         found += orientation_findings(entry.id, mesh, profile, cancelled=cancelled)
     return found
@@ -363,7 +365,9 @@ def _column_under(
     return volume + float(pending.area()) * max(result.layers[0].z - bottom, 0.0)
 
 
-def overhang_findings(object_id: ObjectId, result: SliceResult) -> list[Finding]:
+def overhang_findings(
+    object_id: ObjectId, result: SliceResult, *, cancelled: CancelToken | None = None
+) -> list[Finding]:
     """Die größte frei hängende Fläche, wenn sie sich nicht selbst trägt.
 
     Gefragt wird das Stück, nicht die Schichtsumme (siehe
@@ -396,8 +400,14 @@ def overhang_findings(object_id: ObjectId, result: SliceResult) -> list[Finding]
     # Gefragt wird erst hier, wo ein Befund ansteht, und nur nach diesen
     # Stücken: Über alle sechzehntausend Stücke des Eiffelturms kostet die
     # Kanalfrage fünf Sekunden, über die wenigen großen ein Bruchteil davon.
-    channels = model_support(result, only=frozenset(entry[1] for entry in candidates)).channels
-    kept = [entry for entry in candidates if entry[1] not in channels]
+    # Ebenso kein Rand, der sich selbst trägt (:func:`ledges`), mit derselben
+    # Einschränkung: Am Eiffelturm ist das größte freie Stück der Kranz der
+    # obersten Plattform, 2,6 mm breit. Beide Fragen mit Abbruch; die
+    # Kanalfrage stellt dieselbe enge Randfrage noch einmal, sie ist billig.
+    asked = frozenset(entry[1] for entry in candidates)
+    edges = ledges(result, asked, cancelled=cancelled)
+    quiet = model_support(result, only=asked, cancelled=cancelled).channels | edges
+    kept = [entry for entry in candidates if entry[1] not in quiet]
     if not kept:
         return []
     area, _name, z, piece = max(kept, key=lambda entry: entry[0])

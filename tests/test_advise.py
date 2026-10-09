@@ -11,7 +11,6 @@ import math
 from dataclasses import replace
 from pathlib import Path
 
-import numpy as np
 import pytest
 import trimesh
 
@@ -19,7 +18,7 @@ from app.core.errors import ValidationError
 from app.core.geom.mesh import MeshData
 from app.core.knowledge import print_settings, profiles, rules
 from app.core.slice import advise
-from app.core.slice.analysis import WIDTH_INTERESTING, slice_body
+from app.core.slice.analysis import OVERHANG_LAYER_WORTH_SUPPORT, WIDTH_INTERESTING, slice_body
 from app.core.types import (
     LayerInfo,
     Polygon,
@@ -532,6 +531,43 @@ def test_a_minimum_layer_time_of_the_profile_stays() -> None:
     assert advised(0.0), "ohne Mindestzeit legt die Düse auf weiches Material"
 
 
+@pytest.mark.parametrize(
+    ("tip_layers", "area", "speed", "advised"),
+    [
+        pytest.param(20, 5.0, 20.0, True, id="spitze-bei-20-mm-s"),
+        pytest.param(20, 5.0, advise.TIP_SPEED, False, id="schon-langsam-genug"),
+        pytest.param(20, 400.0, 20.0, False, id="breite-schichten"),
+        pytest.param(3, 5.0, 20.0, False, id="nur-die-letzten-schichten"),
+    ],
+)
+def test_small_tips_get_a_slower_minimum_speed(
+    tip_layers: int, area: float, speed: float, advised: bool
+) -> None:
+    """Der Slicer bremst eine kurze Schicht nur bis zum Mindesttempo. Elegoo,
+    Bambu und Creality nennen für PLA 20 mm/s, und die obersten 12 mm des
+    Drachen (08.10.2026) druckten in jedem Slicer unter ihrer Mindestzeit, die
+    Spitzen in 0,1 bis 1,3 s je Schicht. Vorgeschlagen wird ein kleineres
+    Mindesttempo, nicht eine längere Mindestzeit: Die bleibt beim Hersteller.
+    Die letzten Schichten einer Kuppe allein lösen es nicht aus."""
+    profile = profiles.make_profile("centauri-carbon-2", "pla")
+    settings = print_settings.resolve(profile)
+    settings = print_settings.with_path(settings, "cooling.minimum_layer_time", 4.0)
+    settings = print_settings.with_path(settings, "cooling.minimum_speed", speed)
+    body = result_with([0.0] * 40)
+    layers = tuple(
+        replace(layer, area=area) if index >= len(body.layers) - tip_layers else layer
+        for index, layer in enumerate(body.layers)
+    )
+
+    entries = advise.advise(settings, profile, replace(body, layers=layers))
+
+    chosen = [entry for entry in entries if entry.path == "cooling.minimum_speed"]
+    assert bool(chosen) is advised
+    if advised:
+        assert chosen[0].value == pytest.approx(advise.TIP_SPEED)
+        assert "cooling.minimum_layer_time" not in {entry.path for entry in entries}
+
+
 # --- eine Überhanglinie, nicht zwei ---------------------------------------------
 
 
@@ -678,14 +714,30 @@ def _pieces(count: int, side: float) -> tuple[Polygon, ...]:
 
 
 def _overhang_layers(pieces: tuple[Polygon, ...], layers: int = 20) -> SliceResult:
-    """Ein Körper, dessen Schichten alle dieselben Überhangstücke tragen."""
+    """Ein Körper, dessen Schichten alle dieselben Überhangstücke tragen.
+
+    Das Material jeder Schicht ist ein Steg, an dem die Stücke hängen, wie im
+    Schnitt: Ein Stück liegt neben dem Material der Schicht darunter. Weit davon
+    entfernt hingen alle Stücke für die Decken (``analysis._Ceilings``)
+    aneinander, und der Stapel sah aus wie eine schräge Fläche (RM-570).
+    """
     from shapely.geometry import Polygon as ShapelyPolygon
+    from shapely.ops import unary_union
 
     area = sum(ShapelyPolygon(piece.outline).area for piece in pieces)
+    low_x, low_y, high_x, _high_y = unary_union(
+        [ShapelyPolygon(piece.outline) for piece in pieces]
+    ).bounds
+    web = (
+        (low_x - 1.0, low_y - 1.0),
+        (high_x + 1.0, low_y - 1.0),
+        (high_x + 1.0, low_y),
+        (low_x - 1.0, low_y),
+    )
     stack = tuple(
         LayerInfo(
             z=float(index) * 0.2,
-            contours=(Polygon(outline=SQUARE),),
+            contours=(Polygon(outline=web),),
             area=5000.0,
             overhang_area=area,
             islands=(),
@@ -695,6 +747,67 @@ def _overhang_layers(pieces: tuple[Polygon, ...], layers: int = 20) -> SliceResu
         for index in range(layers)
     )
     return SliceResult(layers=stack, support_volume=0.0, first_layer_area=5000.0, source="internal")
+
+
+def _slope(width: float, length: float, count: int) -> SliceResult:
+    """Eine schräge Unterseite aus ``count`` Streifen, je Schicht einer:
+    ``width`` breit, ``length`` lang, jeder neben dem Material der Schicht
+    darunter, das bis zum vorigen Streifen reicht."""
+    stack = tuple(
+        LayerInfo(
+            z=float(index) * 0.2,
+            contours=(
+                Polygon(
+                    outline=(
+                        (-10.0, 0.0),
+                        ((index + 1) * width, 0.0),
+                        ((index + 1) * width, length),
+                        (-10.0, length),
+                    )
+                ),
+            ),
+            area=10.0 * length,
+            overhang_area=width * length,
+            islands=(),
+            min_width=5.0,
+            overhangs=(
+                Polygon(
+                    outline=(
+                        (index * width, 0.0),
+                        ((index + 1) * width, 0.0),
+                        ((index + 1) * width, length),
+                        (index * width, length),
+                    )
+                ),
+            ),
+        )
+        for index in range(count)
+    )
+    return SliceResult(layers=stack, support_volume=0.0, first_layer_area=500.0, source="internal")
+
+
+@pytest.mark.parametrize(
+    ("width", "length", "count", "needed"),
+    [
+        pytest.param(0.4, 16.0, 30, True, id="kinn"),
+        pytest.param(0.4, 16.0, 22, True, id="kinn-unter-der-summe"),
+        pytest.param(0.4, 16.0, 16, False, id="feld-unter-hundert"),
+        pytest.param(0.03, 100.0, 100, False, id="rauschen-einer-wand"),
+    ],
+)
+def test_a_sloped_underside_is_one_field(
+    width: float, length: float, count: int, needed: bool
+) -> None:
+    """Eine schräge Unterseite zerfällt im Schnitt in Streifen unter 10 mm², und
+    der Rat sagte „keine Stützen“ — an einem Kinn mit 18° flacher Unterseite
+    (Review vom 08.10.2026, 31 Streifen bis 6,4 mm², zusammen 189 mm²). In der
+    Aufsicht ist sie ein Feld (``analysis.largest_sloped_patch``, RM-570).
+    Ein Feld über 100 mm² trägt allein, auch wenn die Summe unter 150 bleibt
+    (Review 3: 22 Streifen, Feld 134 mm²). Streifen schmaler als das
+    Vernetzungsrauschen bleiben eine Wand, die sich selbst auffängt."""
+    need = advise.support_need(_slope(width, length, count))
+
+    assert need.needed is needed
 
 
 def test_a_lattice_of_small_self_supporting_pieces_gets_no_supports() -> None:
@@ -708,7 +821,7 @@ def test_a_lattice_of_small_self_supporting_pieces_gets_no_supports() -> None:
     profile = profiles.make_profile()
     settings = print_settings.resolve(profile)
     lattice = _overhang_layers(_pieces(56, sqrt(5.0)))
-    assert lattice.layers[0].overhang_area > advise.OVERHANG_LAYER_WORTH_SUPPORT
+    assert lattice.layers[0].overhang_area > OVERHANG_LAYER_WORTH_SUPPORT
 
     entries = advise.advise(settings, profile, lattice)
 
@@ -963,27 +1076,15 @@ def test_a_large_part_with_long_narrow_webs_gets_a_slow_first_layer() -> None:
     assert not advice
 
 
-def _plate_on_a_sloped_foot(angle: float) -> MeshData:
-    """Eine Platte 60 mm im Quadrat, deren untere 4 mm ringsum unter ``angle``
-    gegen die Senkrechte nach außen laufen — die Bodenkante des Bahnteils
-    ``Gövde59`` aus dem Minigolf-Satz (``F:\\3D Dateien``, 27.09.2026):
-    2 mm Bodenplatte mit gut 50 Grad Fase, darüber 45 bis 50 Grad nach außen
-    geneigte Wände, zusammen 320 mm² Überhang über 45 Grad in Stücken bis
-    25 mm², darüber nichts."""
-    reach = 4.0 * math.tan(math.radians(angle))
-    foot = [(x, y, 0.0) for x in (-30.0, 30.0) for y in (-30.0, 30.0)]
-    wide = 30.0 + reach
-    top = [(x, y, z) for x in (-wide, wide) for y in (-wide, wide) for z in (4.0, 10.0)]
-    return MeshData.of(trimesh.convex.convex_hull(np.array(foot + top)))
-
-
 def test_a_sloped_foot_the_printer_carries_gets_no_supports() -> None:
     """Der Minigolf-Satz am Centauri Carbon 2 (Robert, 27.09.2026): Die
     Startregel verlangte für 52 Grad Stützen, der Slicer baute einen
     treppenförmigen Stützfuß, der Brim zerfiel. Elegoo stützt ab 60 Grad —
     mit derselben Grenze bleibt der Vorschlag weg. Die Gegenprobe ist der
     allgemeine Drucker: Dort gilt 45, und dort bleibt er."""
-    body = _plate_on_a_sloped_foot(52.0)
+    from tests.helpers import plate_on_a_sloped_foot
+
+    body = plate_on_a_sloped_foot(52.0)
 
     def support_advised(printer: str) -> bool:
         profile = profiles.make_profile(printer, "pla")

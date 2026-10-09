@@ -86,7 +86,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from app.core import discover, tools
+from app.core import tools
 from app.core.errors import AppError, InternalError
 from app.core.export import slicer_keys, slicer_profiles, threemf
 from app.core.export.handover import detect
@@ -573,11 +573,7 @@ def slicer_filaments() -> tuple[slicer_profiles.SlicerProfile, ...]:
     23.09.2026 an demselben Bestand mit der Programmsuche davor waren es
     26,6 s beim ersten Mal und 4,3 s danach (§2.8).
     """
-    found = discover.find_programs("slicer", tools.SLICERS)
-    remembered = discover.remembered_path("slicer")
-    chosen = next(
-        (entry for entry in found if discover.same_program(str(entry), remembered)), None
-    ) or (found[0] if found else None)
+    chosen = tools.slicer_program()
     if chosen is None:
         return ()
     try:

@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import math
 import threading
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, replace
 from typing import Any, Final, Literal, cast
 
@@ -336,7 +336,13 @@ def slice_body(
     bounds = mesh.bounds
     low, high = bounds.minimum[2], bounds.maximum[2]
     if high - low <= EPS_GEOM:
-        return SliceResult(layers=(), support_volume=0.0, first_layer_area=0.0, source="internal")
+        return SliceResult(
+            layers=(),
+            support_volume=0.0,
+            first_layer_area=0.0,
+            source="internal",
+            bridge_from=span,
+        )
 
     layers: list[LayerInfo] = []
 
@@ -402,6 +408,7 @@ def slice_body(
                 mesh, low, footing_height, first_area, cancelled=cancelled
             ),
             source="internal",
+            bridge_from=span,
         )
 
     for z, shape, metrics, contours in zip(
@@ -443,6 +450,7 @@ def slice_body(
             mesh, low, footing_height, layers[0].area if layers else None, cancelled=cancelled
         ),
         source="internal",
+        bridge_from=span,
     )
 
 
@@ -591,6 +599,24 @@ def _areas_of(shape: ShapelyPolygon) -> list[ShapelyPolygon]:
     """
     parts = getattr(shape, "geoms", [shape])
     return [part for part in parts if part.geom_type == "Polygon" and not part.is_empty]
+
+
+def _lines_of(shape: Any) -> list[Any]:
+    """Die Linienstücke einer Geometrie, einzeln — ohne Punkte, an denen sich
+    ein Rand und eine Fläche nur berühren."""
+    return [
+        part
+        for part in shapely.get_parts(shape)
+        if part.geom_type == "LineString" and not part.is_empty
+    ]
+
+
+def _merged_lines(shape: Any) -> list[Any]:
+    """Die Linienstücke einer Geometrie, wo sie aneinanderstoßen zusammengefügt."""
+    lines = _lines_of(shape)
+    if len(lines) < 2:
+        return lines
+    return _lines_of(shapely.line_merge(shapely.multilinestrings(lines)))
 
 
 def _same_layer(shape: ShapelyPolygon, previous: ShapelyPolygon) -> bool:
@@ -1815,6 +1841,40 @@ def _eroded(shape: ShapelyPolygon, radius: float) -> ShapelyPolygon:
     return shape.buffer(-radius, quad_segs=1, join_style="mitre")
 
 
+def _narrow(material: ShapelyPolygon, bounds: tuple[float, float, float, float]) -> Any:
+    """Der freie Raum um ``bounds``, zu eng für einen Kreis von ``CHANNEL_WIDTH``:
+    das Material morphologisch um dessen Radius geschlossen (:func:`channel_space`)."""
+    radius = CHANNEL_WIDTH / 2.0
+    low_x, low_y, high_x, high_y = bounds
+    near = shapely.clip_by_rect(
+        material,
+        low_x - 2.0 * radius,
+        low_y - 2.0 * radius,
+        high_x + 2.0 * radius,
+        high_y + 2.0 * radius,
+    )
+    closed = near.buffer(radius, quad_segs=CHANNEL_QUAD_SEGMENTS).buffer(
+        -radius, quad_segs=CHANNEL_QUAD_SEGMENTS
+    )
+    return closed.difference(material)
+
+
+def _enclosed(material: ShapelyPolygon) -> Any:
+    """Die Löcher der Fläche: freier Raum, ringsum von Material umschlossen."""
+    return unary_union(
+        [ShapelyPolygon(ring) for part in _areas_of(material) for ring in part.interiors]
+    ).difference(material)
+
+
+def _with_usable_holes(part: ShapelyPolygon, line_width: float) -> ShapelyPolygon:
+    """Die Fläche ohne die Löcher, in denen keine Bahn samt Abstand Platz hat
+    (:func:`channel_space`)."""
+    holes = [
+        ring for ring in part.interiors if not _eroded(ShapelyPolygon(ring), line_width).is_empty
+    ]
+    return ShapelyPolygon(part.exterior, holes)
+
+
 def _opening_loss(shape: ShapelyPolygon, width: float, *, exact: bool = True) -> float:
     """Wie viel Fläche eine morphologische Öffnung dieser Breite wegnimmt.
 
@@ -2976,13 +3036,63 @@ def _measure_batch(
 # --- Urteile über den ganzen Körper ---------------------------------------------
 
 
+def _field(shapes: Sequence[ShapelyPolygon]) -> float:
+    """Die Fläche einer Decke als Feld (RM-570): ihre Stücke in der Aufsicht
+    vereinigt, wo sie im Mittel breiter sind als :data:`OVERHANG_MARGIN`, das
+    Vernetzungsrauschen — schmaler fängt die Wand sie in sich auf —, sonst das
+    größte Stück. Vereinigt, nicht summiert: Stücke an derselben Stelle zählen
+    einmal."""
+    largest = max((float(shape.area) for shape in shapes), default=0.0)
+    if len(shapes) < 2:
+        return largest
+    area = math.fsum(shape.area for shape in shapes)
+    if area < OVERHANG_MARGIN * math.fsum(shape.length / 2.0 for shape in shapes):
+        return largest
+    return max(largest, float(unary_union(list(shapes)).area))
+
+
+def largest_sloped_patch(
+    result: SliceResult, *, without: frozenset[tuple[int, int]] = frozenset()
+) -> float:
+    """Die größte Decke als Feld (:func:`_field`, :class:`_Ceilings`), RM-570.
+
+    Eine schräge Unterseite zerfällt im Schnitt in Streifen, je Schicht einen.
+    Ein Kinn mit 18° flacher Unterseite (Review vom 08.10.2026, Bau wie
+    ``jaw_in_a_pocket``) bringt 31 Streifen von höchstens 6,4 mm², zusammen
+    189 mm²; das größte Stück blieb unter der Grenze für ein Feld, und der Rat
+    sagte „keine Stützen“. In der Aufsicht ist es eine Fläche von 189 mm².
+    """
+    layers = result.layers
+    materials: dict[int, ShapelyPolygon] = {}
+
+    def material(index: int) -> ShapelyPolygon:
+        if index not in materials:
+            materials[index] = _material(layers[index])
+        return materials[index]
+
+    ceilings = _Ceilings(layers, material)
+    seen: set[tuple[int, int]] = set()
+    largest = 0.0
+    for index, layer in enumerate(layers):
+        for number in range(len(layer.overhangs)):
+            name = (index, number)
+            if name in seen or name in without or ceilings.floats(name):
+                continue
+            group = ceilings.of(name)
+            seen |= group
+            largest = max(
+                largest, _field([ceilings.shape(member) for member in sorted(group - without)])
+            )
+    return largest
+
+
 def total_overhang(
     result: SliceResult, *, without: frozenset[tuple[int, int]] = frozenset()
 ) -> float:
     """Die Überhangfläche aller Schichten, in mm².
 
     ``without`` nennt Stücke (Schicht, Stück), die nicht zählen — die
-    Kanaldecken aus :func:`model_support`.
+    Kanaldecken aus :func:`model_support` und die Ränder aus :func:`ledges`.
     """
     total = float(sum(layer.overhang_area for layer in result.layers))
     for index, number in without:
@@ -3028,7 +3138,7 @@ def largest_overhang_patch(
     der NumPy-Weg 287 ms je Vorschlagsrechnung, dieser 19.
 
     ``without`` nennt Stücke (Schicht, Stück), die nicht zählen — die
-    Kanaldecken aus :func:`model_support`.
+    Kanaldecken aus :func:`model_support` und die Ränder aus :func:`ledges`.
     """
     largest = 0.0
     for index, layer in enumerate(result.layers):
@@ -3049,13 +3159,23 @@ def island_layers(result: SliceResult) -> tuple[float, ...]:
     return tuple(layer.z for layer in result.layers if layer.islands)
 
 
+#: Ab welcher freien Spannweite eine Decke gemeldet wird, in Millimetern.
+#:
+#: Zehn Millimeter überbrückt jeder Drucker, zwanzig hängen bei PETG sichtbar
+#: durch. Fünfzehn ist die Stelle dazwischen, an der ein Hinweis noch etwas
+#: ändern kann — gemessen wurde er an einem Satz Gewürzbehälter, deren
+#: Ringschulter der Slicer mit 27 mm freien Bahnen überspannte, und an dessen
+#: Deckeln mit 35 mm. Dieselbe Weite trennt einen Rand von einer Decke um eine
+#: Öffnung (:func:`_spans_an_opening`).
+SPAN_INTERESTING: Final = 15.0
+
 #: Bis zu welcher lichten Weite ein Raum, in dem eine Stützsäule auf dem
 #: Modell stünde, als **Kanal** gilt, in Millimetern (§22.2).
 #:
 #: Die Grenze ist eine Brücke, keine Toleranz: Eine Kanaldecke bis zu dieser
 #: Weite schließt sich als Gewölbe oder Brücke über den beiden Wänden, mit
 #: Durchhang, aber haltend — das Doppelte dessen, ab dem der Bericht eine
-#: Decke meldet (``advise.SPAN_INTERESTING``). Eine Stütze darin bekäme man
+#: Decke meldet (:data:`SPAN_INTERESTING`). Eine Stütze darin bekäme man
 #: nicht mehr heraus, und sie versperrt den Kanal. Gemessen an der
 #: Waschschüssel (25.09.2026): Der Wasserkanal vom Becher zur Düse ist 22 mm
 #: weit, und alle 412 mm² Überhang über Modellmaterial liegen darin. Zum
@@ -3065,12 +3185,62 @@ def island_layers(result: SliceResult) -> tuple[float, ...]:
 #: trägt die Decke nicht und die Stütze ist erreichbar.
 CHANNEL_WIDTH: Final = 30.0
 
+#: Überhangfläche in mm², ab der Stützen mehr nützen als kosten. Darunter
+#: trägt die Schicht darunter genug, dass ein Absacken in der Wand verschwindet.
+OVERHANG_WORTH_SUPPORT: Final = 150.0
+
+#: Und wie viel davon auf **einer** Schicht anfangen muss.
+#:
+#: Die Summe allein sprach ein Fehlurteil: ein Becher verteilt seine
+#: zweihundertvierzig Quadratmillimeter über dreihundertachtunddreißig
+#: Schichten, keine davon trägt mehr als knapp vier, und jede Wand fängt das in
+#: sich auf — er bekam trotzdem dieselbe Stützenwarnung wie ein Deckel, dessen
+#: Lochplatte mit achthundertfünfundvierzig auf einmal über einem Hohlraum
+#: beginnt.
+#:
+#: Hundert ist die Fläche, die eine Düse nicht mehr überspannt: ein Kreis von
+#: gut elf Millimetern, also das Doppelte dessen, was die Slicer als längste
+#: freie Brücke zulassen.
+OVERHANG_LAYER_WORTH_SUPPORT: Final = 100.0
+
+#: Und wie viel je Schicht mindestens anfallen muss, damit die **Summe**
+#: überhaupt zählt.
+#:
+#: Ohne diese Untergrenze wäre der Becher wieder drin: dreihundertachtunddreißig
+#: Schichten mit weniger als vier Quadratmillimetern, die jede Wand in sich
+#: auffängt. Zehn Quadratmillimeter sind ein Quadrat von gut drei Millimetern —
+#: darunter ist ein Überhang eine Kante und kein Feld.
+OVERHANG_LAYER_MINIMUM: Final = 10.0
+
+
+def worth_support(patch: float, total: float) -> bool:
+    """Lohnt dieser Überhang Stützen — mit ``patch`` mm² auf einer Schicht und
+    ``total`` mm² insgesamt?
+
+    Die zwei Wege des Stützbedarfs: viel auf einmal, oder viel insgesamt mit
+    einem Feld darunter. Eine Stelle für den Körper (``advise``), den Rat zu
+    „überall" und die Kanalsperre (:func:`_model_support`) — drei Abschriften
+    hätten sich getrennt nachziehen lassen (Review vom 08.10.2026).
+    """
+    return patch > OVERHANG_LAYER_WORTH_SUPPORT or (
+        total > OVERHANG_WORTH_SUPPORT and patch > OVERHANG_LAYER_MINIMUM
+    )
+
+
 #: Die Bogenauflösung der Kanalfrage und des Kanalraums, in Segmenten je
 #: Viertelkreis — die von ``BaseGeometry.buffer``; ``shapely.buffer`` nimmt
 #: ohne Angabe acht, und derselbe Umkreis kam damit um 6 mm² anders heraus.
 #: Bei 15 mm Radius liegt das Vieleck um höchstens 0,02 mm innerhalb seines
 #: Kreises; :func:`_in_channels` rechnet die umschriebene Scheibe daraus.
 CHANNEL_QUAD_SEGMENTS: Final = 16
+
+#: Welcher Anteil eines Deckengrundrisses in der Hülle seiner gehaltenen
+#: Randstücke liegen muss, damit er zwischen ihnen liegt
+#: (:meth:`_Ceilings.closes`). Brücke, U und Gewölbe liegen ganz darin, ein
+#: Eckregal an zwei angrenzenden Wänden zur Hälfte (die ferne Ecke überspannt
+#: keine Bahn), eine Platte mit einem Stift an der Wurzel ebenso. Drei Viertel
+#: trennen beide mit Abstand.
+CEILING_SPANNED: Final = 0.75
 
 #: Die Höhe einer Scheibe des Kanalraums (:func:`channel_space`), in
 #: Millimetern. Frei ist, was auf jeder Schicht der Scheibe frei ist, und jede
@@ -3090,29 +3260,41 @@ class ModelSupport:
     """
 
     open_patch: float = 0.0
-    """Die größte Fläche eines Stücks, die außerhalb eines Kanals auf dem Modell aufsetzt."""
+    """Die größte Fläche eines Stücks, die außerhalb eines Kanals auf dem Modell aufsetzt —
+    ohne Ränder, die sich selbst tragen (:func:`ledges`)."""
     open_area: float = 0.0
-    """Wie viel außerhalb von Kanälen insgesamt auf dem Modell aufsetzt."""
+    """Wie viel außerhalb von Kanälen insgesamt auf dem Modell aufsetzt, ohne Ränder."""
+    open_field: float = 0.0
+    """Die größte Decke davon als Feld (:func:`_field`, RM-570), höchstens so viel,
+    wie von ihr auf dem Modell aufsetzt; ``0.0``, wo es die Antwort nicht ändert."""
     channels: frozenset[tuple[int, int]] = frozenset()
     """Die Überhangstücke, deren Säule in einem Kanal auf dem Modell endet."""
-    channel_layers: frozenset[int] = frozenset()
-    """Schichten, deren Überhang ganz aus solchen Stücken besteht."""
     channel_area: float = 0.0
     channel_at: tuple[float, float, float] | None = None
-    """Wo das größte Kanalstück hängt — für den Ort eines Befunds."""
+    """Wo das größte Kanalstück hängt. Der Sperrbefund nennt nicht diesen Ort,
+    sondern das größte gesperrte Stück (``export.writer._support_blocker``)."""
     channel_columns: tuple[tuple[Polygon, float, float], ...] = ()
-    """Je Kanalstück sein Grundriss mit der Höhe, auf der seine Säule aufsetzt,
-    und der, auf der es hängt — daraus baut die Übergabe die Stützsperre."""
+    """Je Kanalstück, dessen Decke ohne sich selbst zu schließen Stütze
+    bräuchte, sein Grundriss mit der Höhe, auf der seine Säule aufsetzt, und der,
+    auf der es hängt — daraus baut die Übergabe die Stützsperre."""
+    ledges_on_model: bool = False
+    """Setzen Ränder, die sich selbst tragen (:func:`ledges`), auf dem Modell auf?
+    Dann stimmt „alle Überhänge erreichen das Bett“ nicht als Grund für „nur vom Bett“."""
     island_on_model: bool = False
     """Setzt eine **Insel** auf dem Modell auf? Sie druckt ohne Stütze in die
     Luft, gleich wie klein sie ist, und ist deshalb nie eine Kanaldecke."""
     open_pieces: frozenset[tuple[int, int]] = frozenset()
-    """Die Stücke, deren Säule außerhalb eines Kanals auf dem Modell aufsetzt —
-    an ihnen fragt der Rat, ob eine lange Brücke ihre Stütze auf dem Modell
-    braucht (:func:`open_bridge_width`)."""
+    """Die Stücke, deren Säule außerhalb eines Kanals auf dem Modell aufsetzt,
+    ohne Ränder (:func:`ledges`) — an ihnen fragt der Rat, ob eine lange Brücke
+    ihre Stütze auf dem Modell braucht (:func:`open_bridge_width`)."""
     open_columns: tuple[tuple[Polygon, float, float], ...] = ()
-    """Diese Stücke wie ``channel_columns``: Grundriss, Höhe der Auflage, Höhe
-    des Stücks. Die Stützsperre spart ihre Säulen aus (:func:`channel_space`)."""
+    """Von diesen Stücken die, die selbst Stütze brauchen (Insel, oder ihre Decke
+    genügt :func:`worth_support`), wie ``channel_columns``: Grundriss, Höhe der
+    Auflage, Höhe des Stücks. Die Stützsperre spart ihre Säulen aus
+    (:func:`channel_space`); leer ohne Sperre."""
+    bed_columns: tuple[tuple[Polygon, float, float], ...] = ()
+    """Ebenso die Stücke, deren Säule das Bett erreicht: Grundriss, Höhe der
+    untersten Schicht, Höhe des Stücks."""
 
 
 def overhang_outline(result: SliceResult) -> ShapelyPolygon | MultiPolygon | None:
@@ -3191,6 +3373,7 @@ def model_support(
     channel_width: float = CHANNEL_WIDTH,
     *,
     only: frozenset[tuple[int, int]] | None = None,
+    cancelled: CancelToken | None = None,
 ) -> ModelSupport:
     """Welche Stützsäulen auf dem Modell enden, und ob in einem Kanal (§22.2).
 
@@ -3228,12 +3411,13 @@ def model_support(
     wird am Schichttupel selbst (Identität, nicht Gleichheit), für die letzten
     :data:`_ANSWERS_KEPT` Fragen. Die Stückauswahl (``only``) gehört zum
     Schlüssel, damit auch der Prüfbericht seine Kanalfrage nur einmal stellt.
+    ``cancelled`` erreicht die Randfrage darin (:func:`ledges`).
     """
     with _ANSWERS_LOCK:
         for layers, width, selected, answer in _ANSWERS:
             if layers is result.layers and is_close(width, channel_width) and selected == only:
                 return answer
-    answer = _model_support(result, channel_width, only)
+    answer = _model_support(result, channel_width, only, cancelled)
     with _ANSWERS_LOCK:
         _ANSWERS.append((result.layers, channel_width, only, answer))
         del _ANSWERS[:-_ANSWERS_KEPT]
@@ -3248,6 +3432,265 @@ _ANSWERS: list[
     tuple[tuple[LayerInfo, ...], float, frozenset[tuple[int, int]] | None, ModelSupport]
 ] = []
 _ANSWERS_LOCK = threading.Lock()
+
+
+#: Wie weit eine Decke in der Aufsicht über das Material ragen darf, an dem sie
+#: ansetzt, und sich noch selbst trägt, in Millimetern (:func:`ledges`).
+LEDGE_REACH: Final = 3.0
+
+#: Welcher Anteil eines Rands weiter als :data:`LEDGE_REACH` reichen darf —
+#: die Rundung der Puffer und das Vernetzungsrauschen (:func:`_carried`).
+LEDGE_SPILL: Final = 0.05
+
+
+def ledges(
+    result: SliceResult,
+    only: frozenset[tuple[int, int]] | None = None,
+    *,
+    cancelled: CancelToken | None = None,
+) -> frozenset[tuple[int, int]]:
+    """Überhangstücke, deren Decke nicht weiter als :data:`LEDGE_REACH` über das
+    Material ragt, an dem sie ansetzt — Ränder, die sich selbst tragen.
+
+    Am Eiffelturm (08.10.2026, „一体无支撑“, ohne Stützen gedacht) verlangte
+    der Rat Stützen wegen der Ränder der Plattformen: oben ein Kranz, der in
+    drei Schichten 2,6 mm über den Schaft wächst, darunter Ränder unter 1 mm.
+    Der ElegooSlicer stellte dafür 831 m Baumstütze außen am Turm hoch. Gemessen
+    wird die ganze Decke (:class:`_Ceilings`), nicht das Stück: Die Streifen
+    einer schrägen Unterseite ragen je Schicht kaum über die vorige, ein Kinn
+    als Ganzes aber 18 mm über die Kehle. Wurzel ist die Schicht unter dem
+    untersten Stück. Inseln sind nie Ränder, und eine Decke um eine freie
+    Öffnung auch nicht (:func:`_spans_an_opening`).
+
+    ``only`` fragt nur die Decken dieser Stücke, wie bei :func:`model_support`:
+    Über alle Stücke des Eiffelturms kostet die Frage 7,5 s, der Prüfbericht
+    braucht sie für eine Handvoll. Für die gefragten Stücke sagt die Antwort
+    dasselbe wie die volle Frage. Gemerkt wird nur die volle Antwort, wie die
+    Kanalfrage, und sie dient auch jeder engeren Frage; eine enge ist billig
+    und verdrängte sonst volle Antworten anderer Körper aus dem Merker.
+    """
+    with _ANSWERS_LOCK:
+        for layers, answer in _LEDGES:
+            if layers is result.layers:
+                return answer
+    answer = _ledges(result, only, cancelled)
+    if only is None:
+        with _ANSWERS_LOCK:
+            _LEDGES.append((result.layers, answer))
+            del _LEDGES[:-_ANSWERS_KEPT]
+    return answer
+
+
+_LEDGES: list[tuple[tuple[LayerInfo, ...], frozenset[tuple[int, int]]]] = []
+
+
+def _ledges(
+    result: SliceResult,
+    only: frozenset[tuple[int, int]] | None,
+    cancelled: CancelToken | None,
+) -> frozenset[tuple[int, int]]:
+    """Die Randfrage selbst, ungemerkt (:func:`ledges`); abbrechbar je Decke."""
+    layers = result.layers
+    materials: dict[int, ShapelyPolygon] = {}
+
+    def material(index: int) -> ShapelyPolygon:
+        if index not in materials:
+            materials[index] = _material(layers[index])
+        return materials[index]
+
+    asked = (
+        sorted(only)
+        if only is not None
+        else [
+            (index, number)
+            for index, layer in enumerate(layers)
+            for number in range(len(layer.overhangs))
+        ]
+    )
+    ceilings = _Ceilings(layers, material)
+    seen: set[tuple[int, int]] = set()
+    found: set[tuple[int, int]] = set()
+    for name in asked:
+        if name in seen or ceilings.floats(name):
+            continue
+        if cancelled is not None:
+            cancelled.raise_if_cancelled()
+        group = ceilings.of(name)
+        seen |= group
+        low = min(member[0] for member in group)
+        if low < 1:
+            continue
+        field = unary_union([ceilings.shape(member) for member in sorted(group)])
+        root = material(low - 1)
+        if _carried(field, root) and not _spans_an_opening(
+            layers,
+            group,
+            material,
+            BRIDGE_FROM if result.bridge_from is None else result.bridge_from,
+        ):
+            found |= group
+    return frozenset(found)
+
+
+def ledge_space(
+    result: SliceResult, line_width: float
+) -> list[tuple[float, float, ShapelyPolygon]]:
+    """Wo die Stützsperre Ränder freihält, die sich selbst tragen (:func:`ledges`):
+    (unten, oben, Fläche) je :data:`CHANNEL_SLAB`.
+
+    Gesperrt wird die Überhangfläche der Ränder selbst, um eine Bahnbreite
+    hinaus — dort fragt der Slicer, ob er stützt; Stämme anderer Stützen laufen
+    durch eine Sperre hindurch. Jede Scheibe reicht eine Scheibenhöhe unter ihre
+    Ränder. Überhänge, die Stütze brauchen, bleiben frei: Ihre Fläche in dieser
+    und der Scheibe darunter wird ausgespart, ebenfalls um eine Bahnbreite.
+
+    Gemerkt wie :func:`channel_space`: Der Rat fragt je Prozess und in jeder
+    Runde, ob die Sperre Raum sperrt, die Schätzung je Gruppe, der Schreiber
+    noch einmal.
+    """
+    with _ANSWERS_LOCK:
+        for layers, width, known in _LEDGE_SPACES:
+            if layers is result.layers and abs(width - line_width) <= EPS_GEOM:
+                return list(known)
+    slabs = _ledge_space(result, line_width)
+    with _ANSWERS_LOCK:
+        _LEDGE_SPACES.append((result.layers, line_width, tuple(slabs)))
+        del _LEDGE_SPACES[:-_ANSWERS_KEPT]
+    return slabs
+
+
+_LEDGE_SPACES: list[
+    tuple[tuple[LayerInfo, ...], float, tuple[tuple[float, float, ShapelyPolygon], ...]]
+] = []
+
+
+def _ledge_space(
+    result: SliceResult, line_width: float
+) -> list[tuple[float, float, ShapelyPolygon]]:
+    """:func:`ledge_space`, ungemerkt."""
+    edges = ledges(result)
+    if not edges:
+        return []
+    found: dict[int, list[ShapelyPolygon]] = {}
+    needed: dict[int, list[ShapelyPolygon]] = {}
+    for index, layer in enumerate(result.layers):
+        slab = math.floor(layer.z / CHANNEL_SLAB)
+        for number, piece in enumerate(layer.overhangs):
+            shape = ShapelyPolygon(piece.outline, piece.holes)
+            target = found if (index, number) in edges else needed
+            target.setdefault(slab, []).append(shape)
+    slabs: list[tuple[float, float, ShapelyPolygon]] = []
+    for slab, shapes in sorted(found.items()):
+        own = unary_union(shapes)
+        region = own.buffer(line_width, join_style="mitre")
+        nearby = needed.get(slab, []) + needed.get(slab - 1, [])
+        if nearby:
+            region = region.difference(unary_union(nearby).buffer(line_width, join_style="mitre"))
+        # Was nur vom Zuschlag übrig bleibt, liegt unter keinem Rand: Die
+        # Ränder dieser Scheibe stecken ganz in der Aussparung.
+        if region.intersection(own).area <= EPS_GEOM:
+            continue
+        slabs.append(((slab - 1) * CHANNEL_SLAB, (slab + 1) * CHANNEL_SLAB, region))
+    return slabs
+
+
+def _carried(field: Any, root: ShapelyPolygon) -> bool:
+    """Trägt sich ``field`` an ``root``? Was weiter als :data:`LEDGE_REACH`
+    hinausragt, ist höchstens :data:`LEDGE_SPILL` des Felds und lohnt samt
+    seinem Ansatz für sich keine Stütze (:func:`worth_support`).
+
+    Gefragt wird die Fläche, nicht der Umriss: Eine flache Decke zwischen zwei
+    Wänden hat alle Ecken auf den Wänden und spannt in der Mitte trotzdem weit.
+    Der Anteil fängt das Rauschen der Puffer ab — am Kranz des Eiffelturms 1,0
+    von 214 mm², an einer Fase von 52° über 5 mm 124 von 281. Ein Saum entlang
+    des Umfangs taugte nicht: Die Streifen einer Fase haben zusammen zehn Meter
+    Umfang. Der Anteil allein auch nicht: Am Flansch einer 400-mm-Säule wären
+    5 % zweihundert Quadratmillimeter, und eine Lasche, die allein Stütze
+    bräuchte, ginge als Rand durch. Und keine feste kleine Grenze dazu: Ein
+    Flansch und eine kleine Lasche, die sich je für sich tragen, verlangten
+    zusammen Stützen unter dem ganzen Flansch (Reviews vom 08.10.2026).
+    """
+    if field.is_empty:
+        return True
+    low_x, low_y, high_x, high_y = field.bounds
+    # Nur Material bis zur Reichweite um das Feld kann es erreichen; der Puffer
+    # um einen doppelt so weiten Ausschnitt kostete am Eiffelturm 1,2 s.
+    margin = LEDGE_REACH + OVERHANG_MARGIN
+    near = shapely.clip_by_rect(
+        root, low_x - margin, low_y - margin, high_x + margin, high_y + margin
+    )
+    if near.is_empty:
+        return False
+    beyond = _areas_of(field.difference(near.buffer(LEDGE_REACH)))
+    spill = math.fsum(part.area for part in beyond)
+    if spill > LEDGE_SPILL * field.area:
+        return False
+    if not beyond:
+        return True
+    # Gemessen wird der Vorsprung mit seinem Ansatz: jeder Teil jenseits um die
+    # Reichweite zurück ins Feld gewachsen. Eine Lasche von 14,5 mm ab der Wand
+    # hat 92 mm² jenseits und 114 mm² für sich (drittes Review). Nur, was selbst
+    # über ``OVERHANG_LAYER_MINIMUM`` liegt: Die Spitze einer Außenecke ragt
+    # einen Splitter weit hinaus, gewachsen bekäme sie 20 mm² Flansch, und
+    # zwanzig Ecken verlangten Stützen ringsum (viertes Review).
+    tips = [part for part in beyond if part.area <= OVERHANG_LAYER_MINIMUM]
+    tongues = [part for part in beyond if part.area > OVERHANG_LAYER_MINIMUM]
+    grown = (
+        _areas_of(unary_union([part.buffer(LEDGE_REACH) for part in tongues]).intersection(field))
+        if tongues
+        else []
+    )
+    areas = [part.area for part in grown] + [part.area for part in tips]
+    return not worth_support(float(max(areas)), math.fsum(areas))
+
+
+def _spans_an_opening(
+    layers: tuple[LayerInfo, ...],
+    group: frozenset[tuple[int, int]],
+    material: Callable[[int], ShapelyPolygon],
+    bridge_from: float,
+) -> bool:
+    """Überspannt ein Stück dieser Decke eine Öffnung, weiter als
+    :data:`SPAN_INTERESTING`? Dann ist sie kein Rand (Reviews vom 08.10.2026).
+
+    Eine Ringschulter im Becher ist selbst nur drei Millimeter breit, aber
+    ihre Bahnen laufen als Sehnen frei über den Becher, an beiden Enden auf
+    der Wand — der Gewürzbehälter. Drei Bedingungen, alle aus der Brückenfrage
+    (:func:`_bridge_width`): Das freie Stück ist breiter als zwei Bahnen
+    (``bridge_from``, aus dem Schnitt), die Auflage fasst es **von außen**, und
+    seine Öffnung ist frei und weiter als die Grenze. Geometrisch gefragt, nicht
+    an der Brückenweite der Schicht: Der Stützschnitt der Übergabe
+    (``detail="support"``) misst keine Brücken, und die Sperre hätte die Schulter
+    wieder als Rand gesperrt (viertes Review vom 08.10.2026). Nur von außen
+    gibt es Bahnen mit Halt an beiden Enden: Der Kranz um einen hohlen Schaft
+    und der Rand einer Plattform mit offener Mitte hängen an ihrer Innenkante
+    und bleiben Ränder; eine Stufe schmaler als zwei Bahnen oder eine Fase
+    innen im Becher spannen nicht. Gefragt nur an Stücken mit
+    Loch und im Ausschnitt um sie.
+    """
+    for index, number in sorted(group):
+        piece = layers[index].overhangs[number]
+        if index < 1 or not piece.holes:
+            continue
+        shape = ShapelyPolygon(piece.outline, piece.holes)
+        low_x, low_y, high_x, high_y = shape.bounds
+        margin = 2.0 * LEDGE_REACH
+        window = (low_x - margin, low_y - margin, high_x + margin, high_y + margin)
+        supported = shapely.clip_by_rect(material(index - 1), *window).buffer(OVERHANG_MARGIN)
+        anchored = supported.buffer(EPS_GEOM)
+        free = shapely.clip_by_rect(material(index), *window).difference(supported)
+        for part in _areas_of(free):
+            if not part.interiors or not part.intersects(shape):
+                continue
+            if _eroded(part, bridge_from / 2.0).is_empty:
+                continue
+            if not anchored.covers(part.exterior):
+                continue
+            for ring in part.interiors:
+                opening = ShapelyPolygon(ring).difference(supported)
+                if not opening.is_empty and spanning_width(opening) > SPAN_INTERESTING:
+                    return True
+    return False
 
 
 class _Ceilings:
@@ -3271,7 +3714,10 @@ class _Ceilings:
         self._material = material
         self._shapes: dict[tuple[int, int], ShapelyPolygon] = {}
         self._floating: dict[int, ShapelyPolygon] = {}
+        self._floats: dict[tuple[int, int], bool] = {}
         self._gaps: dict[tuple[int, int], float] = {}
+        self._layer_gaps: dict[int, np.ndarray] = {}
+        self._boxes: dict[int, np.ndarray] = {}
         self._known: dict[tuple[int, int], frozenset[tuple[int, int]]] = {}
 
     def shape(self, name: tuple[int, int]) -> ShapelyPolygon:
@@ -3286,11 +3732,45 @@ class _Ceilings:
         layer = self._layers[name[0]]
         if not layer.islands:
             return False
-        if name[0] not in self._floating:
-            self._floating[name[0]] = unary_union(
-                [ShapelyPolygon(item.outline, item.holes) for item in layer.islands]
+        if name not in self._floats:
+            if name[0] not in self._floating:
+                self._floating[name[0]] = unary_union(
+                    [ShapelyPolygon(item.outline, item.holes) for item in layer.islands]
+                )
+            self._floats[name] = bool(
+                self.shape(name).intersection(self._floating[name[0]]).area > EPS_GEOM
             )
-        return bool(self.shape(name).intersection(self._floating[name[0]]).area > EPS_GEOM)
+        return self._floats[name]
+
+    def _boxes_of(self, index: int) -> np.ndarray:
+        """Die Hüllrechtecke der Stücke einer Schicht, (n, 4): links, unten, rechts, oben."""
+        if index not in self._boxes:
+            boxes = np.empty((len(self._layers[index].overhangs), 4), dtype=float)
+            for number, piece in enumerate(self._layers[index].overhangs):
+                points = np.asarray(piece.outline, dtype=float)
+                boxes[number, :2] = points.min(axis=0)
+                boxes[number, 2:] = points.max(axis=0)
+            self._boxes[index] = boxes
+        return self._boxes[index]
+
+    def _gaps_of(self, index: int) -> np.ndarray:
+        """:meth:`_gap` für alle Stücke einer Schicht, in einem Aufruf."""
+        if index not in self._layer_gaps:
+            count = len(self._layers[index].overhangs)
+            below = self._material(index - 1)
+            if below.is_empty:
+                gaps = np.full(count, math.inf)
+            else:
+                gaps = np.asarray(
+                    shapely.distance(
+                        [self.shape((index, number)) for number in range(count)], below
+                    ),
+                    dtype=float,
+                )
+            self._layer_gaps[index] = gaps
+            for number in range(count):
+                self._gaps.setdefault((index, number), float(gaps[number]))
+        return self._layer_gaps[index]
 
     def _gap(self, name: tuple[int, int]) -> float:
         """Wie weit das Stück vom Material der Schicht darunter entfernt ist."""
@@ -3302,21 +3782,146 @@ class _Ceilings:
         return self._gaps[name]
 
     def _neighbours(self, name: tuple[int, int], index: int) -> list[tuple[int, int]]:
-        """Die Stücke der Schicht ``index`` (darüber oder darunter), an die ``name`` anschließt."""
-        others = [
-            (index, number)
-            for number in range(len(self._layers[index].overhangs))
-            if not self.floats((index, number))
+        """Die Stücke der Schicht ``index`` (darüber oder darunter), an die ``name`` anschließt.
+
+        **Erst die Hüllrechtecke, dann der Abstand**: Zwei Flächen liegen nie
+        näher beieinander als ihre Hüllrechtecke, also fällt heraus, was schon
+        dort zu weit weg ist. Am Gitter des Eiffelturms fragte die Zuordnung
+        sonst jedes Stück gegen jedes der Nachbarschicht, 534 000 Lücken und
+        9 200 Abstandsaufrufe, 3,0 von 5,0 s der Randfrage.
+        """
+        count = len(self._layers[index].overhangs)
+        if not count:
+            return []
+        boxes = self._boxes_of(index)
+        own = self._boxes_of(name[0])[name[1]]
+        apart = np.hypot(
+            np.maximum(0.0, np.maximum(boxes[:, 0] - own[2], own[0] - boxes[:, 2])),
+            np.maximum(0.0, np.maximum(boxes[:, 1] - own[3], own[1] - boxes[:, 3])),
+        )
+        reach = (
+            np.full(count, self._gap(name)) if index < name[0] else self._gaps_of(index)
+        ) + OVERHANG_MARGIN
+        candidates = [
+            int(number)
+            for number in np.flatnonzero(apart <= reach + EPS_GEOM)
+            if not self.floats((index, int(number)))
         ]
-        if not others:
+        if not candidates:
             return []
         # Ein Aufruf je Nachbarschicht statt je Paar.
-        distances = shapely.distance(self.shape(name), [self.shape(other) for other in others])
+        distances = shapely.distance(
+            self.shape(name), [self.shape((index, number)) for number in candidates]
+        )
         return [
-            other
-            for other, distance in zip(others, distances, strict=True)
-            if float(distance) <= self._gap(name if index < name[0] else other) + OVERHANG_MARGIN
+            (index, number)
+            for number, distance in zip(candidates, distances, strict=True)
+            if float(distance) <= reach[number]
         ]
+
+    def closes(self, ceiling: frozenset[tuple[int, int]]) -> bool:
+        """Liegt die Decke auf wie eine Decke — ihr Grundriss in der Aufsicht
+        zwischen seinen Auflagen auf dem Material darunter oder ringsum
+        gehalten — und nicht wie eine Auskragung?
+
+        Gehalten ist, was dem Material unter einem Stück so nahe liegt wie das
+        Stück überhaupt (:meth:`_gap`, die Überhangzugabe), bis auf
+        :data:`OVERHANG_MARGIN`. Die Streifen eines Gewölbes hängen je an einer
+        Wand und liegen eine Zugabe auseinander; um diese Zugabe geschlossen ist
+        ihr Grundriss das Band zwischen beiden Wänden. Eine Brücke liegt an
+        zwei Stellen auf, die Decke einer Sackgasse an einem U aus drei Seiten
+        — so der Wasserkanal der Waschschüssel in Drucklage —, die Decke über
+        einem Hohlraum ringsum, ein Kiefer nur an der Kehle. Gefragt wird der
+        Grundriss und nicht das einzelne Stück: In Dateilage ist derselbe Kanal
+        ein gekrümmtes Band, und an seiner Mündung hängt im obersten Streifen
+        ein Splitter an nur einer Wand. Rand- und Haltestücke unter der
+        doppelten Zugabe sind Rauschen; entschieden wird nach Fläche
+        (:meth:`_spans`).
+
+        **Die Decke hält sich nicht an sich selbst** (Review vom 08.10.2026):
+        Unter dem Streifen k+1 einer schrägen Unterseite liegen die Streifen
+        1 bis k derselben Decke. Zählte dieses Material, galten die Seiten jeder
+        Konsole als gehalten, und ein Kiefer mit gewölbter Unterseite wurde in
+        einer engen Tasche Kanal. Gehalten wird deshalb nur von Material neben
+        dem Grundriss der Decke.
+        """
+        names = sorted(ceiling)
+        shapes = [self.shape(name) for name in names]
+        reaches = {
+            name: self._gap(name) + OVERHANG_MARGIN
+            for name in names
+            if math.isfinite(self._gap(name))
+        }
+        closing = max(reaches.values(), default=0.0)
+        footprint = unary_union(shapes).buffer(closing).buffer(-closing)
+        # Das eigene Material ist der geschlossene Grundriss, nicht nur die
+        # Stücke: Zwischen den Streifen einer schrägen Unterseite liegt je
+        # Schicht ein Band der Überhangzugabe, Material derselben Decke in
+        # keinem Stück. Ab gut 15° Neigung (60°-Grenze der Orca-Familie) hielt
+        # es die Seiten eines Kiefers wieder fest (Review 2 vom 08.10.2026).
+        own = footprint.buffer(OVERHANG_MARGIN / 2.0)
+        held: list[Any] = []
+        for name, shape in zip(names, shapes, strict=True):
+            if name not in reaches:
+                continue
+            reach = reaches[name]
+            # Nur das Material in Reichweite aufweiten, nicht die ganze
+            # Schicht — am Drachen hat eine Schicht tausende Ecken.
+            low_x, low_y, high_x, high_y = shape.bounds
+            near = shapely.clip_by_rect(
+                self._material(name[0] - 1),
+                low_x - 2.0 * reach,
+                low_y - 2.0 * reach,
+                high_x + 2.0 * reach,
+                high_y + 2.0 * reach,
+            ).difference(own)
+            # Splitter in den Kerben des gerundet geschlossenen Grundrisses
+            # sind Rauschen, kein Halt.
+            kept = [part for part in _areas_of(near) if part.area > closing * closing]
+            if kept:
+                held.append(unary_union(kept).buffer(reach))
+        if not held:
+            return False
+        anchored = unary_union(held)
+        spanned = asked = 0.0
+        for part in _areas_of(footprint):
+            spans = self._spans(part, anchored, closing)
+            if spans is None:
+                continue
+            asked += part.area
+            spanned += part.area if spans else 0.0
+        return spanned > 0.0 and 2.0 * spanned >= asked
+
+    @staticmethod
+    def _spans(part: ShapelyPolygon, anchored: Any, closing: float) -> bool | None:
+        """Liegt dieser Teil des Grundrisses zwischen seinen Auflagen?
+
+        Ringsum gehalten, oder zu :data:`CEILING_SPANNED` in der Hülle seiner
+        gehaltenen Randstücke: eine Brücke zwischen zwei Stirnseiten, ein U, ein
+        Gewölbe zwischen zwei Wänden. Ein Eckregal an zwei angrenzenden Wänden
+        füllt seine Hülle nur zur Hälfte, ein Kiefer an der Kehle fast nicht.
+        ``None`` für einen Teil ohne gehaltenen Rand: Seine Auflage liegt in der
+        Aufsicht unter einem anderen Stück derselben Decke, und er entscheidet
+        nicht mit.
+        """
+        rim = part.boundary
+        # Zusammengefügt, bevor nach Länge gesiebt wird: Ein Lauf über den
+        # Anfangspunkt des Rings kam sonst als zwei halbe heraus und fiel unter
+        # die Rauschgrenze, je nachdem, wo GEOS den Ring beginnt (Review 2).
+        loose = [
+            line for line in _merged_lines(rim.difference(anchored)) if line.length > 2.0 * closing
+        ]
+        if not loose:
+            return True
+        held = [
+            line
+            for line in _merged_lines(rim.difference(unary_union(loose).buffer(EPS_GEOM)))
+            if line.length > 2.0 * closing
+        ]
+        if not held:
+            return None
+        between = shapely.convex_hull(shapely.multilinestrings(held)).buffer(closing)
+        return bool(part.intersection(between).area >= CEILING_SPANNED * part.area)
 
     def of(self, start: tuple[int, int]) -> frozenset[tuple[int, int]]:
         """Die Decke, zu der ``start`` gehört, samt ``start``."""
@@ -3344,6 +3949,7 @@ def _model_support(
     result: SliceResult,
     channel_width: float,
     only: frozenset[tuple[int, int]] | None,
+    cancelled: CancelToken | None = None,
 ) -> ModelSupport:
     """Die Kanalfrage selbst, ungemerkt (:func:`model_support`)."""
     layers = result.layers
@@ -3483,6 +4089,7 @@ def _model_support(
     # offen und behält seine Stütze.
     owner_of = {name: owner for owner, name in enumerate(names)}
     settled: set[int] = set()
+    unblocked: set[int] = set()
     for owner in sorted(channels):
         if owner in settled:
             continue
@@ -3492,17 +4099,73 @@ def _model_support(
         hanging = math.fsum(areas[member] for member in ceiling if member not in channels)
         if hanging > inside:
             channels.difference_update(ceiling)
+            continue
+        # **Und sie liegt auf wie eine Decke, nicht wie eine Auskragung**
+        # (Drache, 08.10.2026, :meth:`_Ceilings.closes`): Die Kreisfrage misst,
+        # ob der Raum unter einem Stück schmal ist, nicht, ob die Decke darüber
+        # Halt findet. Ein Kiefer über der Brust hängt nur an der Kehle.
+        if not ceilings.closes(frozenset(names[member] for member in ceiling)):
+            channels.difference_update(ceiling)
+            continue
+        # **Eine Sperre bekommt nur eine Decke, die ohne sich selbst zu
+        # schließen Stütze bräuchte** — die zwei Wege von :func:`worth_support`,
+        # gefragt am größten **Stück**, nicht am Feld wie Stützbedarf und
+        # Aussparung: Wo eine Decke über Stütze oder keine entscheidet, fällt
+        # der Zweifel auf Stütze. Als Feld sperrte der Drache bei 130 % eine
+        # zweite Decke (149 mm² in 48 Streifen) und nahm fast doppelt so viel
+        # stützbedürftige Fläche unter die Sperre, 451 statt 236 mm² (Review 3).
+        # Nur dort stellte der Slicer nennenswert Stütze in den Kanal. Am
+        # Drachen schlossen sich Taschen zwischen Schuppen, Stacheln und
+        # Flügelhaut, die größte mit 96 mm²
+        # insgesamt; ihre Sperren nahmen den Überhängen daneben die Stütze, und
+        # im ElegooSlicer druckten Kopf und Flügel in die Luft. Der Wasserkanal
+        # der Waschschüssel hängt mit 922 mm² (in Drucklage 176 mm², 86 mm² auf
+        # einmal). Kanal bleibt die kleine Decke trotzdem: Sie trägt sich
+        # selbst, wie die Schlitze eines Kotschiebers aus dem Korpus, und zählt
+        # nicht zum Stützbedarf.
+        largest = max(areas[member] for member in ceiling)
+        total = math.fsum(areas[member] for member in ceiling)
+        if not worth_support(largest, total):
+            unblocked.update(ceiling)
 
+    # Die Kanalstücke aller gefragten Decken, bevor die Auswahl sie kürzt: Die
+    # Aussparung fragt eine Decke ohne sie, wie :func:`largest_sloped_patch`.
+    in_channel = frozenset(names[owner] for owner in channels)
     # Gemeldet wird, wonach gefragt war; die übrigen Stücke ihrer Decken
     # haben nur mitentschieden.
     reported = set(landed) if only is None else {owner for owner in landed if names[owner] in only}
     channels &= reported
     landed = {owner: entry for owner, entry in landed.items() if owner in reported}
     islands &= reported
-    outside = [area for owner, (_low, area) in landed.items() if owner not in channels]
+    # Ränder tragen sich selbst (:func:`ledges`) und verlangen keine Stütze auf
+    # dem Modell — am Eiffelturm die der Plattformen. Gefragt nur, wonach
+    # gefragt war.
+    edges = ledges(result, only, cancelled=cancelled)
+    bearing = {owner for owner in landed if owner not in channels and names[owner] not in edges}
+    resting_ledges = any(names[owner] in edges for owner in landed if owner not in channels)
+    outside = [area for owner, (_low, area) in landed.items() if owner in bearing]
     open_patch = max(outside, default=0.0)
     open_area = math.fsum(outside)
     island_on_model = bool(islands)
+    # **Und als Feld** (RM-570, Review 3): Ein Kinn mit schräger Unterseite
+    # über der Brust zerfällt in Streifen unter 10 mm². Je Stück gefragt,
+    # verlangte der Rat Stützen und zugleich „nur vom Bett“, und das Kinn
+    # druckte weiter in die Luft. Gezählt wird, was auf dem Modell aufsetzt;
+    # gefragt nur, wo ein Feld die Antwort ändern kann.
+    open_field = 0.0
+    if not worth_support(open_patch, open_area) and open_area > OVERHANG_LAYER_WORTH_SUPPORT:
+        resting = {names[owner]: area for owner, (_low, area) in landed.items() if owner in bearing}
+        seen: set[tuple[int, int]] = set()
+        for name in sorted(resting):
+            if name in seen:
+                continue
+            group = ceilings.of(name)
+            seen |= group
+            members = sorted(group & resting.keys())
+            field = _field([ceilings.shape(member) for member in members])
+            open_field = max(
+                open_field, min(field, math.fsum(resting[member] for member in members))
+            )
 
     chosen = frozenset(names[owner] for owner in channels)
     columns = tuple(
@@ -3511,28 +4174,50 @@ def _model_support(
             float(layers[landed[owner][0]].z),
             float(layers[names[owner][0]].z),
         )
-        for owner in sorted(channels, key=lambda owner: names[owner])
+        for owner in sorted(channels - unblocked, key=lambda owner: names[owner])
     )
-    counted: dict[int, int] = {}
-    for index, _number in chosen:
-        counted[index] = counted.get(index, 0) + 1
     widest = max(channels, key=lambda owner: (areas[owner], names[owner]), default=None)
     at = None
     if widest is not None:
         point = places[widest]
         at = (float(point.x), float(point.y), float(layers[names[widest][0]].z))
+
+    # **Ausgespart wird, was selbst Stütze braucht** (Waschschüssel, 08.10.2026):
+    # eine Insel, oder ein Stück, dessen Decke ohne ihre Kanalstücke als Feld
+    # (:func:`_field`) ``worth_support`` genügt — die Brücke am Wedge-Lock, der
+    # Kiefer, die Flughaut, auch in Streifen zerfallen. Was Solidon für
+    # selbsttragend hält, darf unter die Sperre: Ein Stachel neben einer
+    # gesperrten Tasche (Feld 12 bis 24 mm²) verliert dort bis zu 81 % seiner
+    # Unterseite (Review 2 und 3). An der Mündung des Wasserkanals hängt ein
+    # offenes Stück von 11 mm², das sich selbst trägt; ausgespart, holte der
+    # ElegooSlicer es mit einem Ast quer durch den Kanal (1,4 m Stütze darin).
+    # Gefragt wird nur, wenn gesperrt wird — sonst kosten die Decken nichts.
+    worth_of: dict[frozenset[tuple[int, int]], bool] = {}
+
+    def needs_own(owner: int) -> bool:
+        name = names[owner]
+        if ceilings.floats(name):
+            return True
+        group = ceilings.of(name)
+        if group not in worth_of:
+            shapes = [ceilings.shape(member) for member in sorted(group - in_channel)]
+            worth_of[group] = worth_support(
+                _field(shapes), math.fsum(shape.area for shape in shapes)
+            )
+        return worth_of[group]
+
+    spared = set() if not columns else {owner for owner in range(len(names)) if needs_own(owner)}
     return ModelSupport(
         open_patch=open_patch,
         open_area=open_area,
+        open_field=open_field,
+        ledges_on_model=resting_ledges,
         channels=chosen,
-        channel_layers=frozenset(
-            index for index, count in counted.items() if count == len(layers[index].overhangs)
-        ),
         channel_area=math.fsum(areas[owner] for owner in sorted(channels)),
         channel_at=at,
         channel_columns=columns,
         island_on_model=island_on_model,
-        open_pieces=frozenset(names[owner] for owner in landed if owner not in channels),
+        open_pieces=frozenset(names[owner] for owner in sorted(bearing)),
         open_columns=tuple(
             (
                 layers[names[owner][0]].overhangs[names[owner][1]],
@@ -3540,7 +4225,16 @@ def _model_support(
                 float(layers[names[owner][0]].z),
             )
             for owner in sorted(landed, key=lambda owner: names[owner])
-            if owner not in channels
+            if owner not in channels and owner in spared
+        ),
+        bed_columns=tuple(
+            (
+                layers[names[owner][0]].overhangs[names[owner][1]],
+                float(layers[0].z),
+                float(layers[names[owner][0]].z),
+            )
+            for owner in range(len(names))
+            if owner not in landed and (only is None or names[owner] in only) and owner in spared
         ),
     )
 
@@ -3560,20 +4254,64 @@ def _material(layer: LayerInfo) -> ShapelyPolygon:
 
 
 def channel_space(
-    result: SliceResult, model: ModelSupport
+    result: SliceResult, model: ModelSupport, line_width: float
 ) -> list[tuple[float, float, ShapelyPolygon]]:
     """Der freie Raum der Kanäle, in Höhenscheiben: (unten, oben, Fläche) (§22.2).
 
     Die Stützsperre der Übergabe baut daraus ihren Körper. Die Grundrisse der
     Deckenstücke allein reichen dafür nicht: Der Slicer liest Überhänge mit
-    seiner eigenen Regel und fand im Wasserkanal der Waschschüssel mehr als
-    Solidon — mit einer Sperre nur aus den Deckenstücken blieben 13,5 von
-    22,9 m Stütze darin (26.09.2026). Gesperrt wird deshalb der Raum selbst:
-    je Scheibe die freie Fläche im Umkreis ``CHANNEL_WIDTH / 2`` der
-    Kanalsäulen innerhalb der Hülle des Teils, und davon nur, was mit einer
-    Säule zusammenhängt — ein freier Raum jenseits der Wand bleibt frei, und
-    ebenso die Luft vor einer Mündung.
+    seiner eigenen Regel und findet im Kanal mehr als Solidon. In Drucklage der
+    Waschschüssel ließ eine Sperre nur unter den Deckenstücken im ElegooSlicer
+    1,05 m Stütze im Wasserkanal stehen, die mit Umkreis 0,0 m, ohne Sperre
+    9,7 m (08.10.2026). Gesperrt wird deshalb der Raum selbst: je Scheibe die
+    freie Fläche im Umkreis ``CHANNEL_WIDTH / 2`` der Kanalsäulen innerhalb der
+    Hülle des Teils, und davon nur, was mit einer Säule zusammenhängt — ein
+    freier Raum jenseits der Wand bleibt frei, und ebenso die Luft vor einer
+    Mündung.
+
+    Der Raum greift eine Bahnbreite (``line_width``) über sich hinaus, damit
+    auch der Rand darunter liegt, den der Slicer mit seinem eigenen Winkel noch
+    als Überhang liest; doppelt so breit muss er sein, damit er gesperrt wird —
+    eine Bahn samt Abstand. Fest auf die 0,4er Düse (0,5 mm) gerechnet, sperrte
+    er an der 0,8er Spalten, in die keine Bahn passt, und ließe an der 0,25er
+    welche offen — hergeleitet, nicht im Slicer gemessen (Review vom
+    08.10.2026, Regel 8).
+
+    Den Umkreis bekommt nur, was eine Sperre lohnt (``channel_columns``, Drache
+    vom 08.10.2026): Um die Taschen einer Figur nahm er Kiefer, Kopf und
+    Flügelbögen die Stütze.
+
+    **Gemerkt wie die Kanalfrage** (:func:`model_support`), an Schichttupel und
+    Antwort: Der Rat fragt je Prozess und nach jedem geänderten Feld, ob die
+    Sperre Raum sperrt, die Schätzung je Gruppe zweimal, der Schreiber noch
+    einmal — am Drachen bei 130 % je 2,0 s (Review vom 08.10.2026).
     """
+    with _SPACES_LOCK:
+        for layers, asked, width, known in _SPACES:
+            if layers is result.layers and asked is model and abs(width - line_width) <= EPS_GEOM:
+                return list(known)
+    slabs = _channel_space(result, model, line_width)
+    with _SPACES_LOCK:
+        _SPACES.append((result.layers, model, line_width, tuple(slabs)))
+        del _SPACES[:-_ANSWERS_KEPT]
+    return slabs
+
+
+_SPACES: list[
+    tuple[
+        tuple[LayerInfo, ...],
+        ModelSupport,
+        float,
+        tuple[tuple[float, float, ShapelyPolygon], ...],
+    ]
+] = []
+_SPACES_LOCK = threading.Lock()
+
+
+def _channel_space(
+    result: SliceResult, model: ModelSupport, line_width: float
+) -> list[tuple[float, float, ShapelyPolygon]]:
+    """:func:`channel_space`, ungemerkt."""
     columns = model.channel_columns
     if not columns:
         return []
@@ -3592,14 +4330,18 @@ def channel_space(
     # sie braucht.** Am Wedge-Lock (04.10.2026, Cura-Raster) lag ein Kanalstück
     # von 7 mm² unter einer Brücke von 25 mm, deren Säule auf dem Modell
     # aufsetzt; die Sperre um das Kanalstück füllte denselben Raum, und Cura
-    # stützte die Brücke gar nicht (0,0 statt 2,0 m). Die Säulen der übrigen
-    # Stücke auf dem Modell bleiben deshalb frei.
+    # stützte die Brücke gar nicht (0,0 statt 2,0 m). Die Säulen der Stücke,
+    # die selbst Stütze brauchen, bleiben deshalb frei — auf dem Modell und zum
+    # Bett (``open_columns``, ``bed_columns``). Genau, ohne Zuschlag: Mit einem
+    # halben Millimeter um jedes Stück wurde in Drucklage der Waschschüssel aus
+    # einem Krümel von 0,33 mm² im Kanal ein Loch, und der OrcaSlicer stellte
+    # 1,5 m Stütze hindurch (08.10.2026).
+    spared = (*model.open_columns, *model.bed_columns)
     others = np.asarray(
-        [ShapelyPolygon(item.outline, item.holes) for item, _low, _high in model.open_columns],
-        dtype=object,
+        [ShapelyPolygon(item.outline, item.holes) for item, _low, _high in spared], dtype=object
     )
-    other_lows = np.array([low for _outline, low, _high in model.open_columns])
-    other_highs = np.array([high for _outline, _low, high in model.open_columns])
+    other_lows = np.array([low for _outline, low, _high in spared])
+    other_highs = np.array([high for _outline, _low, high in spared])
     bottom = float(lows.min())
     top = float(highs.max())
     indices = [index for index, z in enumerate(heights) if bottom <= z <= top]
@@ -3622,22 +4364,62 @@ def channel_space(
         # **Und nur innerhalb des Teils**, in seiner konvexen Hülle: An einer
         # Mündung hängt der Kanal mit der Luft davor zusammen, und ohne diese
         # Grenze reichte die Sperre an einem Tunnel 15 mm aus ihr heraus.
-        # „Schmal" wäre die falsche Grenze gewesen: Die Säulen unter der
-        # Kanaldecke der Waschschüssel stehen im breiten Rohrbogen, und eine
-        # Sperre nur im schmalen Teil ließ 32 m Stütze darin (26.09.2026).
         free = reach.intersection(material.convex_hull).difference(material)
-        kept = [part for part in _areas_of(free) if part.intersects(seeds)]
+        # **Und nur Raum, an den man nicht hinkommt** (Drache in Cura,
+        # 08.10.2026): zu eng für einen Kreis von ``CHANNEL_WIDTH`` — derselbe
+        # Kreis wie in der Kanalfrage — oder ringsum von Material umschlossen.
+        # In einer Falte des Flügels hing eine echte Tasche; ihr Umkreis lief aus
+        # ihr heraus in den offenen Raum unter dem Flügel, und Cura stützte dort
+        # 96,3 statt 100 % der Überhangfläche außerhalb der Kanaldecken. Den
+        # Kanal hält das trotzdem frei: Die Schüssel in Dateilage verliert so den
+        # Sperrraum unter halber Säulenhöhe (147 906 → 28 862 mm³), und dort
+        # stellte weder der PrusaSlicer (vorher 140,6 m) noch der ElegooSlicer
+        # Stütze hin — sie trug nur die Decke, und die ist gesperrt (Review 2).
+        narrow = _narrow(material, reach.bounds)
+        enclosed = _enclosed(material)
+        free = free.intersection(unary_union([narrow, enclosed]))
+        # **Gesperrt wird nur Raum, in dem Stütze stehen könnte**: mindestens
+        # zwei Übergriffe breit, eine Bahn samt Abstand. Am Drachen bestand die
+        # Sperre um die Zwickel zwischen Schwanz- und Kinnstacheln aus 60 000
+        # Krümeln unter 100 mm³ — kein Slicer stellt in einen solchen Spalt
+        # eine Stütze.
+        kept = [
+            part
+            for part in _areas_of(free)
+            if part.intersects(seeds) and not _eroded(part, line_width).is_empty
+        ]
         if not kept:
             return None
+        # **Der Zuschlag, bevor ausgespart wird** (Review vom 08.10.2026): Der
+        # Schreiber schob den Umriss erst danach um diesen Zuschlag hinaus,
+        # und damit wieder in die ausgesparten Säulen — über dem Balkon neben
+        # dem Tunnel lagen 8 bis 13 mm² im Sperrkörper, Säulen unter 1 mm
+        # Breite schlossen sich ganz.
+        grown = unary_union(kept).buffer(line_width, join_style="mitre")
         crossing = (
             (other_lows <= z_high + CHANNEL_SLAB) & (other_highs >= z_low)
             if len(others)
             else np.zeros(0, dtype=bool)
         )
         if crossing.any():
-            kept = _areas_of(unary_union(kept).difference(shapely.union_all(others[crossing])))
-            if not kept:
-                return None
+            # **Nicht im umschlossenen Raum** (Waschschüssel, 08.10.2026): Eine
+            # Stütze dort holt niemand heraus. Im Rohrbogen des Wasserkanals
+            # hängt eine schräge Fläche, die selbst Stütze bräuchte; ausgespart,
+            # holte der ElegooSlicer sie mit einem Ast quer durch den Kanal
+            # (1,6 m), ohne Aussparung 0,0 m. Enger gefasst ließ es den Ast
+            # wieder hinein: „eng und umschlossen“ 0,7 m — der Rohrbogen ist
+            # weit —, „zur Hälfte überdacht“ nahm der Schüssel fast die ganze
+            # Sperre, weil ihr Kanal in einem oben offenen Hohlraum liegt. Die
+            # Grenze: Ein Sims in einem offenen Becher neben einem gesperrten
+            # Kanal verliert so Stütze (Review 2, RM-571).
+            spare = shapely.union_all(others[crossing]).difference(enclosed)
+            grown = grown.difference(spare)
+        # Ein Loch, in dem keine Bahn samt Abstand Platz hat, ist keine Säule:
+        # Ausgespart, ließ ein Krümel von 0,33 mm² im Wasserkanal der
+        # Waschschüssel den OrcaSlicer 1,5 m Stütze hindurchstellen.
+        kept = [_with_usable_holes(part, line_width) for part in _areas_of(grown)]
+        if not kept:
+            return None
         # **Eine Scheibe höher, in die Decke hinein.** Der Slicer fragt die
         # Sperre an der Überhangfläche, in deren eigener Schicht — und dort ist
         # die Decke Material, also kein freier Raum. Endete die Sperre unter

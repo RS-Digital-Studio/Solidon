@@ -217,9 +217,8 @@ def probe(stage: str) -> int:
         check("Druckdialog: dieselben Drucker", print_rows == first_rows, print_rows)
         check(
             "Druckdialog: Slicer heißt wie auf der Packung",
-            "Anycubic Slicer Next"
-            in (dialog.slicer_single.text(), dialog.slicer_choice.currentText()),
-            (dialog.slicer_single.text(), dialog.slicer_choice.currentText()),
+            dialog.slicer_choice.currentText() == "Anycubic Slicer Next",
+            dialog.slicer_choice.currentText(),
         )
         offered = not dialog.adopt_printer.isHidden()
         check(

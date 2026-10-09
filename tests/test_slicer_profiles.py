@@ -1735,6 +1735,124 @@ def test_the_machine_name_leads_to_the_printer_profile() -> None:
     assert sp.printer_for("Ratterkiste 3000", known) == "", "was nicht trifft, wird nicht geraten"
 
 
+def test_the_project_printer_wins_against_its_adopted_twin() -> None:
+    """Ein Gerät, zwei Identitäten: eingebaut und aus dem Slicer übernommen (RM-600).
+
+    Robert druckt auf seinem Centauri Carbon 2, den er aus dem ElegooSlicer
+    übernommen hat („Elegoo Centauri Carbon 2 0.4 nozzle"); der Drache trug den
+    eingebauten. Der längste Titel gewann, also der übernommene, und jeder
+    Vergleich mit dem Projektdrucker scheiterte: im Druckdialog fehlte die
+    0,4er Maschine, die Übergabe gab keine Maschinenseite mit. ``prefer`` sagt,
+    welcher Drucker gemeint ist, wenn zwei dasselbe Gerät sind.
+    """
+    built_in = profiles.printer("centauri-carbon-2")
+    twin = replace(
+        built_in, id="slicer-orca-af8733f715e1dfb0606b", title="Elegoo Centauri Carbon 2 0.4 nozzle"
+    )
+    known = {**profiles.printer_profiles(), twin.id: twin}
+
+    assert sp.printer_for("Elegoo Centauri Carbon 2 0.4 nozzle", known) == twin.id, (
+        "ohne Vorgabe bleibt es beim längsten Titel"
+    )
+    assert (
+        sp.printer_for("Elegoo Centauri Carbon 2 0.4 nozzle", known, prefer="centauri-carbon-2")
+        == "centauri-carbon-2"
+    )
+    assert (
+        sp.printer_for("Elegoo Centauri Carbon 2 0.2 nozzle", known, prefer=twin.id) == twin.id
+    ), "auch umgekehrt: der übernommene steht für jede Düsenvariante seines Geräts"
+    assert (
+        sp.printer_for("Elegoo Neptune 4 Plus 0.4 nozzle", known, prefer="elegoo-neptune-4")
+        == "elegoo-neptune-4-plus"
+    ), "ein anderes Gerät bleibt ein anderes, auch wenn sein Name den des Projekts beginnt"
+    assert (
+        sp.printer_for("Elegoo Centauri Carbon 2 0.4 nozzle", known, prefer="prusa-mk4s") == twin.id
+    ), "die Vorgabe gewinnt nur, wenn sie dasselbe Gerät ist"
+
+
+@pytest.mark.parametrize(
+    ("machine", "printer"),
+    [
+        ("Anycubic Kobra 2 Max 0.4 nozzle", "anycubic-kobra-2"),
+        ("Elegoo Neptune 4 Pro 0.4 nozzle", "elegoo-neptune-4"),
+        ("Elegoo Neptune 4 Max (0.4 nozzle)", "elegoo-neptune-4"),
+        ("Creality K1 SE 0.4 nozzle", "creality-k1"),
+        ("Creality K1_CFS-C 0.4 nozzle", "creality-k1"),
+        ("Sovol SV06 Plus 0.4 nozzle", "sovol-sv06"),
+        ("Prusa XL 5T 0.4 nozzle", "prusa-xl"),
+    ],
+)
+def test_a_longer_device_is_not_the_shorter_one(machine: str, printer: str) -> None:
+    """Hinter dem Drucker darf nur die Düse folgen (RM-600, Review).
+
+    Ein Leerzeichen reichte, und „Anycubic Kobra 2" meinte auch den Kobra 2
+    Max: Wo Solidon das längere Gerät nicht kennt, ging dessen Maschine samt
+    Startcode und Bauraum an den kürzeren Drucker — und mit ``prefer`` an
+    dessen übernommenen Zwilling. Der Neptune 4 Max hat 420 statt 225 mm Bett.
+    """
+    known = profiles.printer_profiles()
+    built_in = known[printer]
+    twin = replace(built_in, id="slicer-orca-twin", title=f"{built_in.title} 0.4 nozzle")
+    with_twin = {**known, twin.id: twin}
+
+    assert sp.printer_for(machine, known) == "", "kein bekannter Drucker"
+    assert sp.printer_for(machine, with_twin, prefer=twin.id) == "", "auch nicht der Zwilling"
+    assert sp.related_printer(machine, known) == printer, "aber ein Verwandter"
+    assert sp.printer_for(f"{built_in.title} 0.4 nozzle", known) == printer, "Gegenprobe"
+
+
+def test_prusa_names_its_mini_twice() -> None:
+    """PrusaSlicers Bündel führt „Original Prusa MINI && MINI+“ — Solidons MINI+."""
+    assert sp._names_the_printer("Original Prusa MINI && MINI+", "Prusa MINI+")
+    assert sp._names_the_printer("Original Prusa MINI & MINI+", "Prusa MINI+")
+    assert sp._names_the_printer("Prusa MINI IS 0.4 nozzle", "Prusa MINI+")
+
+
+@pytest.mark.parametrize(
+    ("machine", "printer"),
+    [
+        ("Original Prusa MK4S HF0.4 nozzle", "prusa-mk4s"),
+        ("Original Prusa MK4S HF0.6 nozzle", "prusa-mk4s"),
+        ("Prusa MK4S HF0.4 nozzle", "prusa-mk4s"),
+        ("Original Prusa XL Input Shaper 0.6 nozzle", "prusa-xl"),
+        ("Original Prusa MINI && MINI+ Input Shaper", "prusa-mini"),
+    ],
+)
+def test_a_printer_means_the_profile_it_keeps_in_prusas_bundle(machine: str, printer: str) -> None:
+    """Hinter dem Titel steht dort mehr als die Düse — das Profil gehört trotzdem dem Drucker.
+
+    Solidons MK4S hält „Original Prusa MK4S HF0.4 nozzle“ (``prusaslicer_printer``);
+    mit der strengen Grenze allein hätte die Übergabe sein eigenes Bündelprofil
+    abgelehnt (Tor RM-600, 15 rote Prusa-Fälle).
+    """
+    known = profiles.printer_profiles()
+    assert sp.printer_for(machine, known) == printer
+    assert sp.related_printer(machine, known) == ""
+
+
+@pytest.mark.parametrize("printer", ["prusa-mk4s", "prusa-xl", "prusa-mini"])
+def test_a_prusa_built_in_wins_against_its_adopted_twin(
+    printer: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Roberts Drachenfall an den eingebauten Prusa-Druckern (Review RM-600, Runde 2).
+
+    Ihr Zwilling aus PrusaSlicer heißt wie das Bündelprofil, das sie festhalten
+    („Original Prusa MK4S HF0.4 nozzle“). ``prefer`` verglich nur über den
+    Titel ohne Düse; HF und „Input Shaper“ machten daraus ein anderes Gerät,
+    und die Übergabe lehnte die eigene Maschine ab.
+    """
+    from app.core.export import handover
+
+    known = profiles.printer_profiles()
+    built_in = known[printer]
+    machine = built_in.prusaslicer_printer
+    twin = replace(built_in, id="slicer-prusa-twin", title=machine, prusaslicer_printer="")
+    monkeypatch.setattr(profiles, "printer_profiles", lambda: {**known, twin.id: twin})
+
+    assert sp.printer_for(machine, {**known, twin.id: twin}, prefer=printer) == printer
+    assert handover._fits_the_printer(machine, profiles.make_profile(printer, "pla"))
+
+
 @pytest.mark.parametrize(
     ("machine", "printer"),
     [
@@ -4796,3 +4914,28 @@ def test_an_appimage_offers_the_printers_its_slicer_copied_to_system(
     names = {entry.name for entry in sp.find_profiles(appimage, "orca")}
 
     assert {"Creality K1 (0.4 nozzle)", "Mein K1"} <= names
+
+
+def test_a_single_read_reads_each_profile_once_and_forgets_it_after(tmp_path: Path) -> None:
+    """Ein Lesedurchgang hält jede Datei einmal, nur in seinem Faden und nur solange er läuft.
+
+    Der Kunde ändert seine Profile im Slicer, während Solidon offen ist; länger
+    als der Durchgang darf nichts halten. Die Profilsuche im Arbeiter läuft in
+    einem anderen Faden und darf den Durchgang des Fensters nicht sehen.
+    """
+    import threading
+
+    path = tmp_path / "Elegoo PLA @base.json"
+    path.write_text(json.dumps({"name": "eins"}), encoding="utf-8")
+    with sp.single_read():
+        first = sp._load(path)
+        path.write_text(json.dumps({"name": "zwei"}), encoding="utf-8")
+        assert sp._load(path) is first, "im Durchgang einmal gelesen"
+        elsewhere: list[object] = []
+        worker = threading.Thread(target=lambda: elsewhere.append(sp._load(path)))
+        worker.start()
+        worker.join()
+        assert elsewhere == [{"name": "zwei"}], "ein anderer Faden liest selbst"
+        with sp.single_read():
+            assert sp._load(path) is first, "verschachtelt gilt der äußere"
+    assert sp._load(path) == {"name": "zwei"}, "danach verfällt der Speicher"

@@ -14,6 +14,7 @@ from dataclasses import replace
 import pytest
 import trimesh
 from shapely.geometry import Point, box
+from shapely.geometry import Polygon as ShapelyPolygon
 from shapely.geometry.base import BaseGeometry
 from shapely.ops import unary_union
 
@@ -22,8 +23,14 @@ from app.core.geom.transform import place_on_bed
 from app.core.knowledge import print_settings, profiles
 from app.core.slice import advise
 from app.core.slice.analysis import (
+    OVERHANG_LAYER_WORTH_SUPPORT,
+    OVERHANG_WORTH_SUPPORT,
+    SPAN_INTERESTING,
     WIDTH_INTERESTING,
     channel_space,
+    largest_sloped_patch,
+    ledge_space,
+    ledges,
     minimum_width,
     model_support,
     narrowest,
@@ -31,8 +38,12 @@ from app.core.slice.analysis import (
     slice_body,
     spanning_width,
     support_on_model,
+    worth_support,
 )
 from app.core.types import Profile, SliceResult
+
+#: Die Bahnbreite der Vorgabe: Zuschlag und Mindestbreite des Kanalraums.
+LINE = print_settings.resolve(profiles.make_profile()).layers.line_width
 
 
 def on_bed(*parts: trimesh.Trimesh) -> MeshData:
@@ -277,7 +288,7 @@ def test_a_long_bridge_over_the_model_lets_its_supports_start_there() -> None:
     result = slice_body(beam_over_a_plate(), 0.2)
     need = advise.support_need(result)
     assert need.needed, "die Brücke von 22 mm verlangt Stützen"
-    assert need.patch < advise.OVERHANG_LAYER_WORTH_SUPPORT, "allein über die Brückenregel"
+    assert need.patch < OVERHANG_LAYER_WORTH_SUPPORT, "allein über die Brückenregel"
     assert not need.model.channels, "der Raum unter dem Balken ist kein Kanal"
 
     assert placement_advice(beam_over_a_plate()) is None, "everywhere bleibt stehen"
@@ -318,15 +329,13 @@ def test_a_long_bridge_counts_on_the_model_only_where_it_hangs_there() -> None:
     result = slice_body(tunnel_beside_a_ledge(), 0.5)
     need = advise.support_need(result)
     ceiling = next(
-        index
-        for index, layer in enumerate(result.layers)
-        if layer.bridge_width > advise.SPAN_INTERESTING
+        index for index, layer in enumerate(result.layers) if layer.bridge_width > SPAN_INTERESTING
     )
     assert any(index == ceiling for index, _number in need.model.channels), "die Decke ist Kanal"
     assert any(index == ceiling for index, _number in need.model.open_pieces), (
         "der Sims hängt auf derselben Schicht außen über dem Modell"
     )
-    assert need.model.open_area < advise.OVERHANG_WORTH_SUPPORT, "der Sims ist klein"
+    assert need.model.open_area < OVERHANG_WORTH_SUPPORT, "der Sims ist klein"
 
     assert placement_advice(tunnel_beside_a_ledge()) == "build_plate"
     assert placement_advice(beam_over_a_plate()) is None, "die Brücke über dem Modell zählt"
@@ -954,13 +963,14 @@ def test_the_channel_space_stays_inside_the_tunnel() -> None:
     freie Luft, die mit dem Kanal nicht zusammenhängt. Nach oben reicht die
     Sperre eine Scheibe in die Decke — dort fragt der Slicer, ob er stützt."""
     result = slice_body(tunnel_block(20.0), 0.5)
-    slabs = channel_space(result, model_support(result))
+    slabs = channel_space(result, model_support(result), LINE)
 
     assert slabs, "der Tunnel hat eine Decke über dem Tunnelboden"
     low_x = min(region.bounds[0] for _low, _high, region in slabs)
     high_x = max(region.bounds[2] for _low, _high, region in slabs)
-    # Der Tunnel ist 20 mm breit und sitzt mittig im 60 mm breiten Block.
-    assert low_x >= -10.0 - 1e-6 and high_x <= 10.0 + 1e-6
+    # Der Tunnel ist 20 mm breit und sitzt mittig im 60 mm breiten Block; der
+    # Zuschlag ragt in die Wände, nicht weiter.
+    assert low_x >= -10.0 - LINE - 1e-6 and high_x <= 10.0 + LINE + 1e-6
     assert min(low for low, _high, _region in slabs) >= 8.0 - 1.0
     # Die Decke liegt bei 28 mm. Die oberste freie Scheibe endet je nach
     # Raster unter ihr, und von dort reicht die Sperre eine Scheibe höher —
@@ -984,15 +994,128 @@ def test_the_channel_space_leaves_a_column_on_the_model_free() -> None:
     model = model_support(result)
     column = ((2.0, -2.0), (6.0, -2.0), (6.0, 2.0), (2.0, 2.0))
     footprint = box(2.0, -2.0, 6.0, 2.0)
-    blocked = unary_union([region for _low, _high, region in channel_space(result, model)])
+    blocked = unary_union([region for _low, _high, region in channel_space(result, model, LINE)])
     assert blocked.intersection(footprint).area > 15.0, "ohne die Säule sperrt der Tunnel sie mit"
 
     beside = replace(model, open_columns=(*model.open_columns, (Polygon(column), 8.0, 27.0)))
-    slabs = channel_space(result, beside)
+    slabs = channel_space(result, beside, LINE)
 
     assert slabs, "der Kanal bleibt gesperrt"
     for _low, _high, region in slabs:
         assert region.intersection(footprint).area == pytest.approx(0.0, abs=1e-6)
+
+
+def test_a_column_too_narrow_for_a_line_stays_blocked() -> None:
+    """Ein Loch in der Sperre, in dem keine Bahn samt Abstand Platz hat, ist keine
+    Säule und schließt sich: Ausgespart mit Zuschlag ließ ein Krümel von 0,33 mm²
+    im Kanal der Waschschüssel den OrcaSlicer 1,5 m Stütze hindurchstellen
+    (08.10.2026). Hier eine Säule von 0,6 mm im Tunnel, schmaler als zwei
+    Bahnbreiten."""
+    from app.core.types import Polygon
+
+    result = slice_body(tunnel_block(20.0), 0.5)
+    model = model_support(result)
+    crumb = ((4.0, -0.3), (4.6, -0.3), (4.6, 0.3), (4.0, 0.3))
+    beside = replace(model, open_columns=(*model.open_columns, (Polygon(crumb), 8.0, 27.0)))
+
+    blocked = unary_union([region for _low, _high, region in channel_space(result, beside, LINE)])
+
+    assert blocked.intersection(box(4.0, -0.3, 4.6, 0.3)).area == pytest.approx(0.36, abs=1e-6)
+
+
+def test_a_gap_too_narrow_for_a_support_line_stays_free() -> None:
+    """Gesperrt wird nur Raum, in dem Stütze stehen könnte: mindestens zwei
+    Übergriffe breit, eine Bahn samt Abstand. Am Drachen bestand die Sperre um die
+    Zwickel zwischen Schwanz- und Kinnstacheln aus 60 000 Krümeln unter 100 mm³.
+    Hier ein Schlitz von 0,6 mm neben dem Tunnel mit einer eigenen Säule darin;
+    den Filter hielt bis zur Durchsicht des Merges vom 08.10.2026 kein Test."""
+    from app.core.types import Polygon
+
+    body = trimesh.boolean.difference(
+        [tunnel_block(20.0).raw, brick(0.6, 50.0, 20.0, (12.3, 0.0, 18.0))]
+    )
+    result = slice_body(place_on_bed(MeshData.of(body)), 0.5)
+    model = model_support(result)
+    slit = ((12.0, -15.0), (12.6, -15.0), (12.6, 15.0), (12.0, 15.0))
+    beside = replace(model, channel_columns=(*model.channel_columns, (Polygon(slit), 8.0, 27.0)))
+
+    blocked = unary_union([region for _low, _high, region in channel_space(result, beside, LINE)])
+
+    assert blocked.area > 100.0, "der Tunnel bleibt gesperrt"
+    assert blocked.intersection(box(12.0, -15.0, 12.6, 15.0)).area == pytest.approx(0.0, abs=1e-6)
+
+
+def test_the_channel_space_is_remembered_per_line_width() -> None:
+    """Der Sperrraum ist gemerkt (Rat, Schätzung und Schreiber fragen ihn), und
+    zwar je Bahnbreite: Sie ist Zuschlag und Mindestbreite des Raums."""
+    result = slice_body(tunnel_block(20.0), 0.5)
+    model = model_support(result)
+
+    narrow = unary_union([region for _low, _high, region in channel_space(result, model, 0.4)])
+    wide = unary_union([region for _low, _high, region in channel_space(result, model, 0.8)])
+
+    first, again = channel_space(result, model, 0.4), channel_space(result, model, 0.4)
+    assert first and all(old[2] is new[2] for old, new in zip(first, again, strict=True)), (
+        "die zweite Frage bekommt dieselben Scheiben, nicht neu gerechnete"
+    )
+    assert wide.area > narrow.area, "die breitere Bahn greift weiter in die Wände"
+
+
+def test_in_an_enclosed_cavity_nothing_is_spared() -> None:
+    """Ringsum umschlossen holt niemand eine Stütze heraus — dort spart die Sperre
+    nichts aus. Im Wasserkanal der Waschschüssel hängt eine schräge Fläche, die
+    selbst Stütze bräuchte; ausgespart, holte der ElegooSlicer sie mit einem Ast
+    quer durch den Kanal (1,6 m), ohne Aussparung 0,0 m (08.10.2026). Hier dieselbe
+    Säule wie im offenen Tunnel, in einer geschlossenen Kammer."""
+    from app.core.types import Polygon
+
+    block = brick(60.0, 40.0, 40.0, (0.0, 0.0, 20.0))
+    chamber = brick(20.0, 30.0, 20.0, (0.0, 0.0, 18.0))
+    result = slice_body(
+        place_on_bed(MeshData.of(trimesh.boolean.difference([block, chamber]))), 0.5
+    )
+    model = model_support(result)
+    column = ((2.0, -2.0), (6.0, -2.0), (6.0, 2.0), (2.0, 2.0))
+    footprint = box(2.0, -2.0, 6.0, 2.0)
+    beside = replace(model, open_columns=(*model.open_columns, (Polygon(column), 8.0, 27.0)))
+
+    blocked = unary_union([region for _low, _high, region in channel_space(result, beside, LINE)])
+
+    assert model.channel_columns, "die Kammerdecke ist Kanal und lohnt eine Sperre"
+    assert blocked.intersection(footprint).area > 15.0, "die Säule bleibt gesperrt"
+
+
+def bottle_cavity() -> MeshData:
+    """Ein Block mit geschlossenem Hohlraum: unten eine Kammer 44 auf 40 mm von 6
+    bis 22 mm Höhe, darüber ein Hals von 20 mm Weite bis 32 mm. Unter der
+    Halsdecke fasst der Raum keinen Kreis von ``CHANNEL_WIDTH``, die Kammer
+    darunter schon — wie der Rohrbogen der Waschschüssel, unter dem Gewölbe
+    22 mm weit, auf halber Höhe 42 mm. Die Schultern der Kammer hängen frei
+    über ihrem Boden und bräuchten selbst Stütze."""
+    block = brick(70.0, 50.0, 40.0, (0.0, 0.0, 20.0))
+    chamber = brick(44.0, 40.0, 16.0, (0.0, 0.0, 14.0))
+    neck = brick(20.0, 40.0, 10.0, (0.0, 0.0, 27.0))
+    hollow = trimesh.boolean.union([chamber, neck])
+    return place_on_bed(MeshData.of(trimesh.boolean.difference([block, hollow])))
+
+
+def test_a_wide_enclosed_chamber_under_a_channel_stays_blocked() -> None:
+    """Gesperrt wird auch umschlossener Raum, der weiter ist als der Kanalkreis,
+    und dort wird nichts ausgespart, auch nicht, was selbst Stütze bräuchte
+    (08.10.2026): Nur aus der Enge gesperrt, behielte die Schüssel in Drucklage
+    9 895 von 170 682 mm³ Sperrraum (Sonde, ohne Slicer); mit Aussparung im weiten
+    Rohrbogen holte der ElegooSlicer eine schräge Fläche darin mit einem Ast quer
+    durch den Kanal (0,7 m). Beides hielt bis zu Review 3 kein Test."""
+    result = slice_body(bottle_cavity(), 0.5)
+    model = model_support(result)
+    slabs = channel_space(result, model, LINE)
+    chamber = box(-22.0, -20.0, 22.0, 20.0)
+
+    assert model.channel_columns, "die Halsdecke ist Kanal und lohnt eine Sperre"
+    assert model.open_columns, "die Schultern der Kammer bräuchten selbst Stütze"
+    assert min(low for low, _high, _region in slabs) <= 6.0 + 1.0, "gesperrt bis zum Boden"
+    low = unary_union([region for _low, high, region in slabs if high <= 14.0])
+    assert low.intersection(chamber).area > 0.95 * chamber.area, "die ganze Kammer"
 
 
 # --- Eine Decke ist als Ganzes Kanal oder Brücke --------------------------------
@@ -1084,8 +1207,7 @@ def test_a_bridge_is_no_channel_because_its_foot_touches_a_wall(layer_height: fl
     assert max(spans) == pytest.approx(gap, abs=0.2), "die Brücke spannt von Bein zu Bein"
     assert need.needed, "eine Brücke von 25 mm braucht Stützen"
     assert not model.channels, "kein Stück dieser Decke ist eine Kanaldecke"
-    assert not model.channel_layers
-    assert channel_space(result, model) == [], "also keine Sperre unter der Brücke"
+    assert channel_space(result, model, LINE) == [], "also keine Sperre unter der Brücke"
     entries = advise.advise(print_settings.resolve(petg()), petg(), result)
     assert "support.block_channels" not in {entry.path for entry in entries}
     for name in gussets:
@@ -1117,9 +1239,1145 @@ def test_a_channel_ceiling_stays_a_channel_with_an_open_end(layer_height: float)
     )
 
     assert model.channels, "die Decke im Tunnel ist Kanaldecke"
-    assert channel_space(result, model), "und bekommt ihre Sperre"
+    assert channel_space(result, model, LINE), "und bekommt ihre Sperre"
     if layer_height < 0.1:
         assert front in model.open_pieces, "der vorderste Streifen hängt außerhalb"
         assert model.open_area < model.channel_area
     else:
         assert not model.open_pieces
+
+
+# --- Eine Kanaldecke spannt; eine Auskragung in einer engen Tasche nicht ---------
+
+
+def jaw_in_a_pocket(underside_at_wall: float | None = None) -> MeshData:
+    """Ein Kiefer, der 18 mm aus einer Rückwand ragt, über einer Tasche von 24 mm
+    Weite zwischen zwei Armen, die bis zu ihm hinaufreichen; vorn ist die Tasche
+    offen, unten trägt sie eine Grundplatte.
+
+    Der Bau des Drachen (``F:\\3D Dateien\\Drache.p3d``, 08.10.2026): Kiefer über
+    der Brust, Flügelbogen und Schuppen hängen in Räumen, die keinen Kreis von
+    30 mm fassen, und ihre Säulen setzen auf dem Modell auf. Gehalten sind sie
+    nur an einer Seite.
+
+    Mit ``underside_at_wall`` steigt die Unterseite von dieser Höhe an der Wand
+    bis 50 mm an der Spitze, wie ein Kinn: Im Schnitt zerfällt sie in Streifen.
+    """
+    head = (
+        brick(16.0, 18.0, 6.0, (0.0, 6.0, 53.0))
+        if underside_at_wall is None
+        else chin(underside_at_wall)
+    )
+    return on_bed(
+        brick(80.0, 60.0, 4.0, (0.0, 0.0, 2.0)),
+        brick(40.0, 10.0, 60.0, (0.0, 20.0, 34.0)),
+        brick(8.0, 30.0, 52.0, (-16.0, 0.0, 30.0)),
+        brick(8.0, 30.0, 52.0, (16.0, 0.0, 30.0)),
+        head,
+    )
+
+
+def chin(underside_at_wall: float) -> trimesh.Trimesh:
+    """Der Kopf mit schräger Unterseite: an der Rückwand auf ``underside_at_wall``,
+    an der Spitze 18 mm davor auf 50 mm."""
+    return trimesh.convex.convex_hull(
+        [
+            (x, y, z)
+            for x in (-8.0, 8.0)
+            for y, z in ((15.0, underside_at_wall), (-3.0, 50.0), (15.0, 56.0), (-3.0, 56.0))
+        ]
+    )
+
+
+def test_a_sloped_chin_over_the_chest_keeps_its_supports_everywhere() -> None:
+    """RM-570 schaltete am Kinn die Stützen ein, aber der Stützort fragte weiter
+    das einzelne Stück: Im Schnitt zerfällt die Unterseite in Streifen unter
+    10 mm², und der Rat hieß „Stützen, nur vom Bett“ — damit druckt ein Kinn über
+    der Brust weiter in die Luft, an jeder Büste (Review 3 vom 08.10.2026).
+    Was auf dem Modell aufsetzt, misst sich am selben Feld wie der Stützbedarf.
+    """
+    body = on_bed(
+        brick(80.0, 60.0, 4.0, (0.0, 0.0, 2.0)),
+        brick(40.0, 10.0, 60.0, (0.0, 20.0, 34.0)),
+        brick(60.0, 30.0, 20.0, (0.0, 0.0, 14.0)),
+        chin(44.0),
+    )
+    result = slice_body(body, 0.2)
+    need = advise.support_need(result)
+    model = need.model
+
+    assert need.needed, "das Kinn braucht Stützen"
+    assert not model.channels, "über der breiten Brust ist kein Kanal"
+    assert not worth_support(model.open_patch, model.open_area), "kein Streifen trägt es allein"
+    entries = advise.advise(print_settings.resolve(petg()), petg(), result)
+    assert "support.placement" not in {entry.path for entry in entries}, "everywhere bleibt"
+
+
+def test_only_what_rests_on_the_model_counts_as_its_field() -> None:
+    """Der Stützort fragt das Feld nur so weit, wie es auf dem Modell aufsetzt:
+    wie beim einzelnen Stück, dessen aufsetzende Fläche zählt. Hier steht das Kinn
+    zur Hälfte über einer Brust, zur Hälfte über dem Bett; als Ganzes trüge es,
+    was davon auf der Brust aufsetzt, nicht. Sonst verlangte jede Ecke eines
+    Feldes über einer Stufe des Modells, dass alle Stützen dort ansetzen dürfen.
+    Ein kleiner Sims daneben bringt das Aufsetzende über 100 mm², damit das Feld
+    überhaupt gefragt wird."""
+    rise = 4.0 * math.tan(math.radians(18.0))
+    ledge = trimesh.convex.convex_hull(
+        [
+            (x, y, z)
+            for x in (12.0, 20.0)
+            for y, z in ((15.0, 30.0), (11.0, 30.0 + rise), (15.0, 34.0), (11.0, 34.0))
+        ]
+    )
+    body = on_bed(
+        brick(40.0, 10.0, 60.0, (0.0, 20.0, 30.0)),
+        brick(30.0, 30.0, 24.0, (15.0, 0.0, 12.0)),
+        chin(44.0),
+        ledge,
+    )
+    result = slice_body(body, 0.2)
+    need = advise.support_need(result)
+    model = need.model
+
+    assert need.needed, "das Kinn braucht Stützen"
+    assert model.open_area > OVERHANG_LAYER_WORTH_SUPPORT, "die Feldfrage wird gestellt"
+    assert not worth_support(model.open_patch, model.open_area)
+    assert largest_sloped_patch(result) > OVERHANG_LAYER_WORTH_SUPPORT, "als Ganzes ein Feld"
+    assert model.open_field <= OVERHANG_LAYER_WORTH_SUPPORT, "auf der Brust nur die Hälfte"
+    entries = advise.advise(print_settings.resolve(petg()), petg(), result)
+    placement = [entry.value for entry in entries if entry.path == "support.placement"]
+    assert placement == ["build_plate"], "die Stützen erreichen das Kinn vom Bett"
+
+
+def test_trees_where_small_overhangs_rest_on_the_model_not_under_a_flat_ceiling() -> None:
+    """Wo Stützen auf dem Modell ansetzen, hinterlässt ein Gitter mit jeder Säule
+    eine Narbe; ein Baum setzt mit wenigen Füßen auf (Drache, 08.10.2026: 212 bis
+    324 mm² Auflage der Herstellergitter, 4 bis 66 mm² mit Bäumen). Unter einer
+    großen flachen Decke hängt die Unterseite zwischen den Baumspitzen durch —
+    dort bleibt die Art des Herstellers (Recherche vom 08.10.2026)."""
+
+    def style(body: MeshData) -> object:
+        entries = advise.advise(print_settings.resolve(petg()), petg(), slice_body(body, 0.2))
+        return next((entry.value for entry in entries if entry.path == "support.style"), None)
+
+    chin_over_chest = on_bed(
+        brick(80.0, 60.0, 4.0, (0.0, 0.0, 2.0)),
+        brick(40.0, 10.0, 60.0, (0.0, 20.0, 34.0)),
+        brick(60.0, 30.0, 20.0, (0.0, 0.0, 14.0)),
+        chin(44.0),
+    )
+    assert style(chin_over_chest) == "tree", "das Kinn setzt in Streifen auf der Brust auf"
+    assert style(table()) == "auto", "die Tischplatte ist eine flache Decke"
+    # Auch wenn die flache Decke über dem Bett hängt und nur das Kinn auf dem
+    # Modell aufsetzt: Gefragt ist die Deckenform am Körper (Review vom 08.10.2026).
+    with_arm = on_bed(
+        brick(80.0, 60.0, 4.0, (0.0, 0.0, 2.0)),
+        brick(40.0, 10.0, 60.0, (0.0, 20.0, 34.0)),
+        brick(60.0, 30.0, 20.0, (0.0, 0.0, 14.0)),
+        chin(44.0),
+        brick(28.0, 30.0, 3.0, (54.0, 0.0, 40.0)),
+        brick(4.0, 30.0, 40.0, (38.0, 0.0, 20.0)),
+    )
+    assert style(with_arm) == "auto", "der flache Arm über dem Bett bleibt beim Hersteller"
+
+    def changed(body: MeshData, before: str) -> list[object]:
+        settings = print_settings.with_path(print_settings.resolve(petg()), "support.style", before)
+        entries = advise.advise(settings, petg(), slice_body(body, 0.2))
+        return [entry.value for entry in entries if entry.path == "support.style"]
+
+    assert changed(chin_over_chest, "grid") == ["tree"], "auch über einem gewählten Gitter"
+    assert changed(table(), "grid") == [], "die flache Decke behält ihr Gitter"
+
+
+def test_a_cantilever_in_a_narrow_pocket_is_no_channel() -> None:
+    """Am Drachen galten 738 Überhangstücke als Kanaldecken, die Sperre daraus war
+    mit 259 000 mm³ größer als der Drache, und im ElegooSlicer druckten Kiefer,
+    Kopf und Flügelbögen ohne Stütze in die Luft (Druck Robert, 07.10.2026).
+
+    Gefragt war nur, ob der Raum unter einem Stück schmal ist. Eine Decke
+    schließt sich aber nur selbst, wenn sie aufliegt wie eine Decke — an zwei
+    Stellen, am halben Rand oder ringsum. Eine Auskragung hängt an einer Seite,
+    gleich wie eng es um sie ist.
+    """
+    result = slice_body(jaw_in_a_pocket(), 0.2)
+    need = advise.support_need(result)
+    model = need.model
+    jaw = [
+        (index, number)
+        for index, layer in enumerate(result.layers)
+        if 49.0 < layer.z < 51.0
+        for number, piece in enumerate(layer.overhangs)
+        if piece_area(piece) > 100.0
+    ]
+
+    assert jaw, "die Unterseite des Kiefers hängt über der Tasche"
+    assert need.needed, "der Kiefer braucht Stützen"
+    assert not model.channels, "ein Kiefer ist keine Kanaldecke"
+    assert set(jaw) <= model.open_pieces, "seine Säule setzt außerhalb eines Kanals auf"
+    assert channel_space(result, model, LINE) == [], "also sperrt nichts seine Stütze"
+    entries = advise.advise(print_settings.resolve(petg()), petg(), result)
+    assert "support.block_channels" not in {entry.path for entry in entries}
+
+
+@pytest.mark.parametrize("underside_at_wall", [47.0, 48.0])
+def test_a_sloped_cantilever_does_not_hold_on_to_itself(underside_at_wall: float) -> None:
+    """Eine gewölbte Unterseite zerfällt im Schnitt in Streifen, und unter dem
+    Streifen k+1 liegen die Streifen 1 bis k derselben Decke. Zählte dieses
+    Material als Auflage, galten die Seiten des Kiefers als gehalten: Er wurde
+    Kanal, und eine Sperre nahm ihm bis zu 187 von 288 mm² Stütze (Review vom
+    08.10.2026, Unterseite 47 und 48 mm an der Wand).
+    """
+    result = slice_body(jaw_in_a_pocket(underside_at_wall), 0.2)
+    need = advise.support_need(result)
+    model = need.model
+    jaw = [
+        (index, number)
+        for index, layer in enumerate(result.layers)
+        if underside_at_wall - 0.5 < layer.z < 51.0
+        for number, piece in enumerate(layer.overhangs)
+        if piece_area(piece) > 0.5
+    ]
+
+    assert len(jaw) > 5, "die Unterseite zerfällt in Streifen"
+    assert need.needed, "der Kiefer braucht Stützen"
+    assert not set(jaw) & model.channels, "auch ein gewölbter Kiefer ist keine Kanaldecke"
+    assert channel_space(result, model, LINE) == [], "also sperrt nichts seine Stütze"
+
+
+@pytest.mark.parametrize(("underside_at_wall", "angle"), [(45.0, 60.0), (44.0, 60.0), (42.0, 50.0)])
+def test_a_steep_cantilever_does_not_hold_on_to_its_own_bands(
+    underside_at_wall: float, angle: float
+) -> None:
+    """Zwischen den Streifen einer schrägen Unterseite liegt je Schicht ein Band
+    der Überhangzugabe: Material derselben Decke, aber in keinem Stück. Bei
+    60° (ElegooSlicer, OrcaSlicer) reicht es ab gut 15° Neigung in das Fenster
+    des nächsten Streifens, und die Seiten des Kiefers galten wieder als
+    gehalten (Review 2 vom 08.10.2026)."""
+    result = slice_body(jaw_in_a_pocket(underside_at_wall), 0.2, overhang_angle=angle)
+    model = model_support(result)
+    jaw = [
+        (index, number)
+        for index, layer in enumerate(result.layers)
+        if underside_at_wall - 0.5 < layer.z < 51.0
+        for number, piece in enumerate(layer.overhangs)
+        if piece_area(piece) > 0.5
+    ]
+
+    assert len(jaw) > 5, "die Unterseite zerfällt in Streifen"
+    assert not set(jaw) & model.channels, "auch ein steiler Kiefer ist keine Kanaldecke"
+
+
+def sloped_shelf_over_a_trench() -> MeshData:
+    """Eine Konsole von 40 mm Breite, die 14 mm aus einer Rückwand ragt, ihre
+    Unterseite mit 17° von 40 mm an der Wand ansteigend, über einem Graben von
+    26 mm zwischen Rückwand und einer Lippe vorn — der Raum darunter fasst
+    keinen Kreis von 30 mm."""
+    rise = 14.0 * math.tan(math.radians(17.0))
+    head = trimesh.convex.convex_hull(
+        [
+            (x, y, z)
+            for x in (-20.0, 20.0)
+            for y, z in ((15.0, 40.0), (1.0, 40.0 + rise), (15.0, 48.0), (1.0, 48.0))
+        ]
+    )
+    return on_bed(
+        brick(100.0, 60.0, 4.0, (0.0, 0.0, 2.0)),
+        brick(100.0, 10.0, 60.0, (0.0, 20.0, 34.0)),
+        brick(100.0, 4.0, 42.0, (0.0, -13.0, 25.0)),
+        head,
+    )
+
+
+def test_a_sloped_shelf_over_a_narrow_trench_keeps_its_supports() -> None:
+    """Die Konsole hängt nur an der Wand. Galt ihre Unterseite als Kanaldecke,
+    fiel sie aus dem Stützbedarf, und weil sie ``worth_support`` genügt, deckte
+    die Sperre sie ganz zu (Review 2 vom 08.10.2026: 21 gesperrte Säulen,
+    100 % ihrer Unterseite im Sperrraum)."""
+    result = slice_body(sloped_shelf_over_a_trench(), 0.2, overhang_angle=60.0)
+    need = advise.support_need(result)
+    under = unary_union(
+        [
+            ShapelyPolygon(piece.outline, piece.holes)
+            for layer in result.layers
+            if 39.5 < layer.z < 48.0
+            for piece in layer.overhangs
+        ]
+    )
+
+    assert under.area > 150.0, "die Unterseite hängt frei"
+    assert need.needed, "die Konsole braucht Stützen"
+    assert channel_space(result, need.model, LINE) == [], "und keine Sperre nimmt sie ihr"
+
+
+def _closes_over(material: ShapelyPolygon, *shapes: ShapelyPolygon, gap: float = 0.35) -> bool:
+    """``_Ceilings.closes`` für gebaute Grundrisse: je Stück eine Schicht, alle
+    über demselben Material."""
+    from app.core.slice import analysis
+
+    pieces = {(index + 1, 0): shape for index, shape in enumerate(shapes)}
+    ceilings = analysis._Ceilings((), lambda _index: material)
+    ceilings.shape = pieces.__getitem__  # type: ignore[method-assign]
+    ceilings._gap = lambda _name: gap  # type: ignore[method-assign]
+    return ceilings.closes(frozenset(pieces))
+
+
+#: Eine Wand links der Platte 0 bis 10, eine Zugabe (0,35 mm) entfernt.
+_LEFT = box(-5.0, -5.0, -0.35, 15.0)
+#: Und eine unter ihr.
+_BELOW = box(-5.0, -5.0, 25.0, -0.35)
+
+
+@pytest.mark.parametrize(
+    ("material", "plate", "spans"),
+    [
+        pytest.param(_LEFT, box(0.0, 0.0, 10.0, 10.0), False, id="kragplatte"),
+        pytest.param(unary_union([_LEFT, _BELOW]), box(0.0, 0.0, 20.0, 6.0), False, id="eckregal"),
+        pytest.param(
+            unary_union([_LEFT, Point(2.0, -0.4).buffer(0.05)]),
+            box(0.0, 0.0, 10.0, 10.0),
+            False,
+            id="stift-an-der-wurzel",
+        ),
+        pytest.param(
+            unary_union([_LEFT, box(20.35, -5.0, 25.0, 15.0)]),
+            box(0.0, 0.0, 20.0, 4.0),
+            True,
+            id="bruecke-zwischen-zwei-stirnseiten",
+        ),
+        pytest.param(
+            unary_union([_LEFT, _BELOW, box(10.35, -5.0, 15.0, 15.0)]),
+            box(0.0, 0.0, 10.0, 10.0),
+            True,
+            id="sackgasse",
+        ),
+    ],
+)
+def test_a_ceiling_closes_only_between_its_supports(
+    material: ShapelyPolygon, plate: ShapelyPolygon, spans: bool
+) -> None:
+    """Eine Decke schließt, wenn ihr Grundriss zwischen seinen Auflagen liegt:
+    zwischen zwei Stirnseiten, in einem U. Ein Eckregal an zwei angrenzenden
+    Wänden hält nicht — für seine ferne Ecke gibt es keine Bahn von Wand zu
+    Wand —, und ein Stift an der Wurzel einer Kragplatte macht sie nicht zur
+    Brücke (Review vom 08.10.2026: beide schlossen über „halber Rand“ und
+    „zwei Stellen“)."""
+    assert _closes_over(material, plate) is spans
+
+
+def test_a_crumb_of_the_same_ceiling_does_not_close_a_cantilever() -> None:
+    """Ein Krümel derselben Decke, der im Grundriss eine eigene Fläche bildet,
+    hat keinen losen Rand über der Rauschgrenze. Entschied der erste Teil, der
+    schließt, schloss er die ganze Kragplatte (Review vom 08.10.2026);
+    entschieden wird nach Fläche."""
+    plate = box(0.0, 0.0, 10.0, 10.0)
+    crumb = Point(10.6, 10.6).buffer(0.05)
+
+    assert not _closes_over(_LEFT, plate, crumb)
+
+
+def vaulted_tunnel() -> MeshData:
+    """Der Block aus :func:`tunnel_block` mit einem Tunnel von 20 mm, dessen Decke
+    ein Halbkreis ist: Wände bis 18 mm, Scheitel auf 28 mm, und außen die
+    Kragplatte. Das Gewölbe schließt sich Schicht für Schicht von beiden Seiten,
+    jeder Streifen hängt an einer Wand, erst der Scheitel an beiden.
+    """
+    block = brick(60.0, 40.0, 40.0, (0.0, 0.0, 20.0))
+    walls = brick(20.0, 50.0, 10.0, (0.0, 0.0, 13.0))
+    vault = trimesh.creation.cylinder(radius=10.0, height=50.0, sections=96)
+    vault.apply_transform(trimesh.transformations.rotation_matrix(math.pi / 2.0, (1, 0, 0)))
+    vault.apply_translation((0.0, 0.0, 18.0))
+    arm = brick(40.0, 40.0, 5.0, (50.0, 0.0, 37.5))
+    body = trimesh.boolean.union(
+        [trimesh.boolean.difference([block, trimesh.boolean.union([walls, vault])]), arm]
+    )
+    return place_on_bed(MeshData.of(body))
+
+
+def test_a_vaulted_channel_stays_a_channel_through_its_crown() -> None:
+    """Die Gegenprobe zum Kiefer: Ein Gewölbe besteht bis zum Scheitel aus
+    Streifen, die je an einer Wand hängen. Als Decke gefragt liegt sein
+    Grundriss an beiden Wänden auf, und es bleibt Kanaldecke mit Sperre."""
+    result = slice_body(vaulted_tunnel(), 0.2)
+    model = model_support(result)
+
+    assert model.channels, "das Gewölbe steht über dem Tunnelboden"
+    assert model.channel_at is not None and model.channel_at[2] > 20.0
+    assert channel_space(result, model, LINE), "und bekommt seine Sperre"
+    entries = advise.advise(print_settings.resolve(petg()), petg(), result)
+    assert [entry.value for entry in entries if entry.path == "support.block_channels"] == [True]
+
+
+def balcony_beside_a_tunnel() -> MeshData:
+    """Der Tunnelblock aus :func:`tunnel_block` mit einem Balkon 14 auf 12 mm auf
+    22 mm Höhe an seiner Vorderseite, neben der Tunnelmündung, und einem Pfosten
+    weiter vorn. Die Säule des Balkons erreicht das Bett; der Pfosten zieht die
+    Hülle der Schichten über sie, und der Raum unter ihr hängt durch die
+    Mündung mit dem Kanal zusammen, keine 15 mm von der Tunneldecke.
+
+    So lagen am Drachen Flügelbögen und Kiefer neben Taschen, die als Kanäle
+    galten, und die Sperre deckte sie mit.
+    """
+    return on_bed(
+        brick(60.0, 40.0, 40.0, (0.0, 0.0, 20.0)),
+        brick(40.0, 40.0, 5.0, (50.0, 0.0, 37.5)),
+        brick(14.0, 12.0, 3.0, (19.0, 26.0, 23.5)),
+        brick(4.0, 4.0, 30.0, (-28.0, 42.0, 15.0)),
+    )
+
+
+def fold_under_a_wing() -> MeshData:
+    """Eine Platte von 50 mm, die aus einer Rückwand ragt, mit einer Falte darunter,
+    35 mm vor der Wand: zwei Wände von 15 mm Tiefe, 5 mm auseinander, unten
+    offen. Ein Pfosten weit vorn zieht die Hülle über die freie Luft neben der
+    Platte.
+
+    Der Bau des Flügels am Drachen: In einer Falte der Flughaut hängt eine echte
+    Tasche, und daneben liegt offener Raum.
+    """
+    return on_bed(
+        brick(120.0, 40.0, 4.0, (20.0, 0.0, 2.0)),
+        brick(10.0, 40.0, 40.0, (-25.0, 0.0, 20.0)),
+        brick(50.0, 40.0, 3.0, (5.0, 0.0, 31.5)),
+        brick(2.0, 40.0, 15.0, (16.0, 0.0, 22.5)),
+        brick(2.0, 40.0, 15.0, (23.0, 0.0, 22.5)),
+        brick(4.0, 4.0, 30.0, (75.0, 0.0, 15.0)),
+    )
+
+
+def test_the_channel_space_stays_where_no_one_reaches() -> None:
+    """Gesperrt wird nur Raum, an den man nicht hinkommt: zu eng für den Kreis
+    der Kanalfrage oder ringsum umschlossen. Am Drachen hing in einer Falte des
+    Flügels eine echte Tasche; ihr Umkreis lief aus ihr heraus in den offenen Raum
+    unter dem Flügel, und Cura stützte dort 85 statt 100 % der Überhangfläche
+    (08.10.2026)."""
+    result = slice_body(fold_under_a_wing(), 0.2)
+    model = model_support(result)
+    slabs = channel_space(result, model, LINE)
+
+    assert model.channel_columns, "die Decke der Falte ist Kanal und lohnt eine Sperre"
+    assert slabs
+    for _low, _high, region in slabs:
+        low_x, _low_y, high_x, _high_y = region.bounds
+        # Die Falte liegt zwischen x = 17 und x = 22.
+        assert low_x >= 17.0 - LINE - 1e-6 and high_x <= 22.0 + LINE + 1e-6, (low_x, high_x)
+
+
+def test_the_channel_space_leaves_a_column_to_the_bed_free() -> None:
+    """Die Sperre hält Stützen aus dem Kanal fern, nicht von einer Decke, die sie
+    braucht — auch dann nicht, wenn deren Säule das Bett erreicht. Ausgespart
+    wurden bis hierher nur Säulen, die auf dem Modell aufsetzen."""
+    body = trimesh.boolean.difference(
+        [balcony_beside_a_tunnel().raw, brick(20.0, 50.0, 20.0, (0.0, 0.0, 18.0))]
+    )
+    result = slice_body(MeshData.of(body), 0.5)
+    model = model_support(result)
+    # Was der Balkon zu stützen hat: sein Überhangstück, ohne den Streifen der
+    # Überhangzugabe an der Wand, der sich selbst trägt.
+    under = unary_union(
+        [
+            ShapelyPolygon(piece.outline, piece.holes)
+            for layer in result.layers
+            if 21.0 < layer.z < 23.0
+            for piece in layer.overhangs
+            if piece_area(piece) > 50.0
+        ]
+    )
+    assert under.area > 100.0, "der Balkon hängt über dem Bett"
+
+    assert model.channels, "die Tunneldecke ist Kanal"
+    slabs = channel_space(result, model, LINE)
+    assert slabs, "der Tunnel bleibt gesperrt"
+    beside = [(low, high, region) for low, high, region in slabs if low <= 22.0 <= high + 1.0]
+    assert beside, "auf Höhe des Balkons sperrt die Scheibe den Tunnel"
+    for low, high, region in beside:
+        # Mit dem Zuschlag: Er kommt vor dem Aussparen, nicht danach.
+        assert region.intersection(under).area == pytest.approx(0.0, abs=1e-6), (low, high)
+
+
+def sloped_balcony_beside_a_tunnel(depth: float) -> MeshData:
+    """:func:`balcony_beside_a_tunnel` mit hohlem Tunnel, der Balkon aber 16 mm
+    breit, ``depth`` mm tief und mit schräger Unterseite: von 22 mm an der Wand
+    mit 18° zur Kante ansteigend. Im Schnitt zerfällt sie in Streifen unter
+    10 mm²; ihre Säulen erreichen das Bett."""
+    rise = depth * math.tan(math.radians(18.0))
+    balcony = trimesh.convex.convex_hull(
+        [
+            (x, y, z)
+            for x in (11.0, 27.0)
+            for y, z in (
+                (20.0, 22.0),
+                (20.0 + depth, 22.0 + rise),
+                (20.0, 27.0),
+                (20.0 + depth, 27.0),
+            )
+        ]
+    )
+    body = trimesh.boolean.union(
+        [
+            brick(60.0, 40.0, 40.0, (0.0, 0.0, 20.0)),
+            brick(40.0, 40.0, 5.0, (50.0, 0.0, 37.5)),
+            balcony,
+            brick(4.0, 4.0, 30.0, (-28.0, 42.0, 15.0)),
+        ]
+    )
+    tunnel = brick(20.0, 50.0, 20.0, (0.0, 0.0, 18.0))
+    return place_on_bed(MeshData.of(trimesh.boolean.difference([body, tunnel])))
+
+
+@pytest.mark.parametrize(("depth", "spared"), [(12.0, True), (4.0, False)])
+def test_a_sloped_underside_beside_a_channel_is_spared_as_a_field(
+    depth: float, spared: bool
+) -> None:
+    """Ausgespart wird, was selbst Stütze braucht, auch eine schräge Unterseite in
+    Streifen unter 10 mm², deren Decke als Feld ``worth_support`` genügt — der
+    Kiefer, die Flughaut (RM-570). Was sich selbst trägt, bleibt gesperrt: An der
+    Mündung des Wasserkanals holte der ElegooSlicer ein solches Stück mit einem Ast
+    quer durch den Kanal (1,4 m). Beides hielt bis zu Review 3 kein Test."""
+    result = slice_body(sloped_balcony_beside_a_tunnel(depth), 0.2)
+    model = model_support(result)
+    strips = [
+        piece
+        for layer in result.layers
+        if 22.0 < layer.z < 27.0
+        for piece in layer.overhangs
+        if ShapelyPolygon(piece.outline).centroid.y > 20.0
+    ]
+    assert len(strips) > 3, "die Unterseite des Balkons zerfällt in Streifen"
+    assert max(piece_area(strip) for strip in strips) < 10.0
+    assert model.channel_columns, "die Tunneldecke ist Kanal und lohnt eine Sperre"
+
+    kept = [outline for outline, _low, _high in model.bed_columns if outline in strips]
+    if spared:
+        assert len(kept) == len(strips), "das Feld behält seine Säulen"
+    else:
+        assert not kept, "der kleine Balkon trägt sich selbst und bleibt unter der Sperre"
+
+
+def hood_over_a_tunnel_mouth() -> MeshData:
+    """Der Tunnelblock aus :func:`tunnel_block` (20 mm), dessen Decke vor der
+    Mündung als Haube 4 mm weiterläuft, mit 18° ansteigend: eine Decke aus dem
+    Kanalstück und offenen Streifen, deren Säulen das Bett erreichen — wie die
+    Mündung des Wasserkanals der Waschschüssel."""
+    rise = 4.0 * math.tan(math.radians(18.0))
+    hood = trimesh.convex.convex_hull(
+        [
+            (x, y, z)
+            for x in (-10.0, 10.0)
+            for y, z in ((20.0, 28.0), (24.0, 28.0 + rise), (20.0, 32.0), (24.0, 32.0))
+        ]
+    )
+    return place_on_bed(MeshData.of(trimesh.boolean.union([tunnel_block(20.0).raw, hood])))
+
+
+def test_an_open_strip_at_a_channel_mouth_is_asked_without_the_channel() -> None:
+    """Die Aussparung fragt eine Decke ohne ihre Kanalstücke, wie der Stützbedarf
+    (``largest_sloped_patch``). Mit ihnen galt an der Mündung des Wasserkanals der
+    Waschschüssel jedes offene Stück als stützbedürftig, auch eines von 11 mm², das
+    sich selbst trägt — gehalten hat es nur, dass im umschlossenen Raum nichts
+    ausgespart wird (Review 3 vom 08.10.2026)."""
+    result = slice_body(hood_over_a_tunnel_mouth(), 0.2)
+    model = model_support(result)
+    hood = [
+        piece
+        for layer in result.layers
+        if 28.0 < layer.z < 30.0
+        for piece in layer.overhangs
+        if ShapelyPolygon(piece.outline).centroid.y > 20.0
+    ]
+
+    assert model.channel_columns, "die Tunneldecke ist Kanal und lohnt eine Sperre"
+    assert hood, "die Haube hängt in Streifen vor der Mündung"
+    assert model.bed_columns, "die Kragplatte behält ihre Säulen zum Bett"
+    assert not [outline for outline, _low, _high in model.bed_columns if outline in hood]
+
+
+def gabled_slot(length: float) -> trimesh.Trimesh:
+    """Ein Block mit einem Schlitz von 8 mm Weite und Satteldach, 18° steil: Die
+    Decke zerfällt im Schnitt in Streifen von gut 16 mm², zusammen über 150."""
+    body = brick(28.0, length, 20.0, (0.0, 0.0, 10.0))
+    rise = 4.0 * math.tan(math.radians(18.0))
+    cut = trimesh.convex.convex_hull(
+        [
+            (x, y, z)
+            for y in (-length / 2.0 - 5.0, length / 2.0 + 5.0)
+            for x, z in ((-4.0, 4.0), (4.0, 4.0), (-4.0, 10.0), (4.0, 10.0), (0.0, 10.0 + rise))
+        ]
+    )
+    return trimesh.boolean.difference([body, cut])
+
+
+def test_a_sloped_channel_vault_asks_for_no_supports() -> None:
+    """Ein Kanalgewölbe in Streifen trägt sich selbst und bekommt seine Sperre —
+    die Waschschüssel vom 25.09.2026 mit schrägem Dach."""
+    result = slice_body(place_on_bed(MeshData.of(gabled_slot(40.0))), 0.2)
+    need = advise.support_need(result)
+
+    assert need.model.channels, "das Satteldach ist Kanaldecke"
+    assert channel_space(result, need.model, LINE), "und lohnt eine Sperre"
+    assert not need.needed, "es trägt sich selbst"
+
+
+def test_a_channel_vault_is_blocked_by_its_largest_piece_not_its_field() -> None:
+    """Die Sperre fragt ``worth_support`` am größten Stück, nicht am Feld wie
+    Stützbedarf und Aussparung: Wo eine Decke über Stütze oder keine entscheidet,
+    fällt der Zweifel auf Stütze. Als Feld gefragt, sperrte der Drache bei 130 %
+    eine zweite Decke (149 mm² in 48 Streifen) und nahm fast doppelt so viel
+    stützbedürftige Fläche unter die Sperre (Review 3). Hier dasselbe am
+    Satteldach bei 60°: als Feld über 100 mm², als Stück und Summe darunter."""
+    result = slice_body(place_on_bed(MeshData.of(gabled_slot(40.0))), 0.2, overhang_angle=60.0)
+    model = model_support(result)
+
+    assert model.channels, "das Satteldach ist Kanaldecke"
+    assert largest_sloped_patch(result) > OVERHANG_LAYER_WORTH_SUPPORT, "als Feld trüge es"
+    assert not model.channel_columns, "nach dem größten Stück lohnt es keine Sperre"
+
+
+def test_a_strip_at_a_channel_mouth_does_not_borrow_the_channel_for_its_field() -> None:
+    """Der Stützbedarf fragt eine Decke als Feld ohne ihre Kanalstücke. Mit ihnen
+    lieh sich die Haube vor der Tunnelmündung die ganze Tunneldecke, und ein
+    Kanal schaltete die Stützen wieder ein — der Fehler der Waschschüssel vom
+    25.09.2026, auf dem Weg über das Feld (Review 3). Haube und ein schräger Sims
+    an der Seite bringen zusammen über 100 mm², damit das Feld gefragt wird."""
+    rise = 4.0 * math.tan(math.radians(18.0))
+    hood = trimesh.convex.convex_hull(
+        [
+            (x, y, z)
+            for x in (-10.0, 10.0)
+            for y, z in ((20.0, 28.0), (24.0, 28.0 + rise), (20.0, 32.0), (24.0, 32.0))
+        ]
+    )
+    ledge = trimesh.convex.convex_hull(
+        [
+            (x, y, z)
+            for y in (-14.0, 14.0)
+            for x, z in ((30.0, 20.0), (34.0, 20.0 + rise), (30.0, 24.0), (34.0, 24.0))
+        ]
+    )
+    body = trimesh.boolean.union([bare_tunnel(20.0).raw, hood, ledge])
+    need = advise.support_need(slice_body(place_on_bed(MeshData.of(body)), 0.2))
+
+    assert need.model.channels, "die Tunneldecke ist Kanal"
+    assert need.overhang > OVERHANG_LAYER_WORTH_SUPPORT, "die Feldfrage wird gestellt"
+    assert not need.needed, "Haube und Sims tragen sich selbst"
+
+
+def column_with_flange_and_arm(arm: float) -> MeshData:
+    """Eine Säule 30 auf 30 mm auf einer Grundplatte, auf 20 mm Höhe ringsum ein
+    Flansch von 2,5 mm (325 mm² Überhang an einem Stück), und knapp darüber an
+    einer Seite ein Arm von ``arm`` mm — die Ränder der Plattformen am
+    Eiffelturm und, wenn ``arm`` lang ist, ein Überhang, der Stütze braucht."""
+    parts = [
+        brick(60.0, 60.0, 2.0, (0.0, 0.0, 1.0)),
+        brick(30.0, 30.0, 40.0, (0.0, 0.0, 20.0)),
+        brick(35.0, 35.0, 1.0, (0.0, 0.0, 20.5)),
+    ]
+    if arm > 0.0:
+        parts.append(brick(arm, 10.0, 2.0, (15.0 + arm / 2.0, 0.0, 21.4)))
+    return on_bed(*parts)
+
+
+@pytest.mark.parametrize(("arm", "needed"), [(0.0, False), (15.0, True)])
+def test_a_ledge_of_a_few_millimetres_carries_itself(arm: float, needed: bool) -> None:
+    """Am Eiffelturm (08.10.2026, ohne Stützen gedacht) verlangte der Rat Stützen
+    wegen der Ränder der Plattformen, oben ein Kranz von 2,6 mm, und der
+    ElegooSlicer stellte 831 m Baum außen am Turm hoch. Was nicht weiter als
+    ``LEDGE_REACH`` über sein Material ragt, trägt sich selbst — auch als ein
+    Stück über 100 mm², und der Prüfbericht meldet es nicht. Ein Arm von 15 mm
+    trägt sich nicht."""
+    from app.core.slice import findings
+
+    result = slice_body(column_with_flange_and_arm(arm), 0.2)
+    flange = {
+        (index, number)
+        for index, layer in enumerate(result.layers)
+        if 19.5 < layer.z < 20.5
+        for number, _piece in enumerate(layer.overhangs)
+    }
+    assert flange, "der Flansch hängt über"
+    assert max(piece_area(result.layers[i].overhangs[n]) for i, n in flange) > 100.0
+    assert flange <= ledges(result), "der Flansch ist ein Rand"
+    assert advise.support_need(result).needed is needed
+    if not needed:
+        assert not findings.overhang_findings("obj_1", result), "der Bericht meldet keinen Rand"
+
+
+def test_the_ledge_question_asks_only_the_named_ceilings() -> None:
+    """``ledges(result, only)`` fragt nur die Decken dieser Stücke und antwortet
+    für sie wie die volle Frage: Der Prüfbericht braucht sie für eine Handvoll,
+    über alle Stücke kostet sie am Eiffelturm 7,5 s (Review vom 08.10.2026).
+    Abbrechbar je Decke, eine abgebrochene Antwort wird nicht gemerkt."""
+    from app.core.errors import OperationCancelled
+    from app.core.scene.cancel import CancelSignal
+
+    result = slice_body(column_with_flange_and_arm(15.0), 0.2)
+    pieces = {
+        (index, number)
+        for index, layer in enumerate(result.layers)
+        for number in range(len(layer.overhangs))
+    }
+    flange = {name for name in pieces if 19.5 < result.layers[name[0]].z < 20.5}
+    arm = {
+        name
+        for name in pieces
+        if result.layers[name[0]].z > 20.5
+        and ShapelyPolygon(result.layers[name[0]].overhangs[name[1]].outline)
+        .representative_point()
+        .x
+        > 18.0
+    }
+    assert flange and arm
+    token = CancelSignal()
+    token.cancel()
+    with pytest.raises(OperationCancelled):
+        ledges(result, cancelled=token)
+
+    asked = ledges(result, frozenset(arm))
+    assert not asked, "nach dem Arm gefragt, kommt kein Flansch zurück"
+    assert flange <= ledges(result, frozenset(flange))
+    full = ledges(result)
+    assert flange <= full and not arm & full, "die volle Frage sagt dasselbe"
+
+
+def test_build_plate_says_that_what_rests_on_the_model_carries_itself() -> None:
+    """Setzen auf dem Modell nur Ränder auf, die sich selbst tragen, heißt es „nur
+    vom Bett“ — aber nicht mit „Stützen erreichen alle Überhänge vom Druckbett
+    aus“: Unter dem Rand steht dann keine (Review vom 08.10.2026). Ein Rand zählt
+    nicht zu dem, was auf dem Modell aufsetzt (``open_area``)."""
+    body = on_bed(
+        brick(34.0, 34.0, 2.0, (0.0, 0.0, 1.0)),
+        brick(30.0, 30.0, 40.0, (0.0, 0.0, 20.0)),
+        brick(35.0, 35.0, 1.0, (0.0, 0.0, 20.5)),
+        brick(15.0, 10.0, 2.0, (25.0, 0.0, 21.4)),
+    )
+    result = slice_body(body, 0.2)
+    model = model_support(result)
+
+    assert model.ledges_on_model, "der Flansch setzt auf der Grundplatte auf"
+    assert model.open_area < OVERHANG_LAYER_WORTH_SUPPORT, "aber er zählt nicht als Auflage"
+    entries = advise.advise(print_settings.resolve(petg()), petg(), result)
+    placement = [entry for entry in entries if entry.path == "support.placement"]
+    assert [entry.value for entry in placement] == ["build_plate"]
+    assert "tragen sich selbst" in str(placement[0].reason)
+
+
+def test_a_shoulder_around_an_opening_is_no_ledge() -> None:
+    """Eine Schulter, die in einem Becher von 60 mm 2,5 mm nach innen ragt, ist
+    kein Rand: Ihre Bahnen laufen quer über die Öffnung, 48 mm frei — der
+    Schaden des Gewürzbehälters (``analysis._bridge_width``). Sie braucht
+    Stützen, und der Bericht nennt die Brücke. Als Rand bekam sie im
+    Prüfling weder das eine noch das andere (zweites Review vom 08.10.2026).
+    Dasselbe im Stützschnitt der Übergabe, der keine Brückenweiten misst: Dort
+    galt die Schulter als Rand, und „Ränder ohne Stütze“ sperrte ihre Stütze
+    (viertes Review)."""
+    cup = _cup_with_a_step(2.5)
+
+    def shoulder_of(result: SliceResult) -> set[tuple[int, int]]:
+        return {
+            (index, number)
+            for index, layer in enumerate(result.layers)
+            for number, piece in enumerate(layer.overhangs)
+            if piece.holes and piece_area(piece) > 100.0
+        }
+
+    result = slice_body(cup, 0.2)
+    shoulder = shoulder_of(result)
+
+    assert shoulder, "die Schulter hängt als Ring über"
+    assert max(layer.bridge_width for layer in result.layers) > SPAN_INTERESTING
+    assert not shoulder & ledges(result), "ein Ring um eine freie Öffnung ist kein Rand"
+    assert advise.support_need(result).needed, "die Schulter braucht Stützen"
+    codes = {finding.code for finding in advise.located_warnings(result, petg())}
+    assert "slice.long_bridge" in codes, "und der Bericht nennt die Brücke"
+
+    lean = slice_body(cup, 0.2, "support")
+    assert all(layer.bridge_width == 0.0 for layer in lean.layers), "keine Brückenweiten"
+    assert shoulder_of(lean) and not shoulder_of(lean) & ledges(lean), "auch im Stützschnitt"
+
+
+def test_many_outer_corners_do_not_turn_a_flange_into_supports() -> None:
+    """An jeder Außenecke ragt ein Flansch von 2,6 mm um einen Splitter über die
+    Reichweite (2,6 · √2 = 3,7 mm). Mit seinem Ansatz gemessen bekäme jeder
+    Splitter 20 mm² Flansch, und eine gezahnte Säule mit zwanzig Ecken verlangte
+    Stützen ringsum, obwohl jede Ecke so weit ragt wie am glatten Quadrat
+    (viertes Review vom 08.10.2026)."""
+    outline = box(-20.0, -20.0, 20.0, 20.0)
+    for offset in (-8.0, 8.0):
+        outline = outline.union(box(offset - 2.0, 19.0, offset + 2.0, 22.0))
+        outline = outline.union(box(offset - 2.0, -22.0, offset + 2.0, -19.0))
+        outline = outline.union(box(19.0, offset - 2.0, 22.0, offset + 2.0))
+        outline = outline.union(box(-22.0, offset - 2.0, -19.0, offset + 2.0))
+    column = trimesh.creation.extrude_polygon(outline, 30.0)
+    flange = trimesh.creation.extrude_polygon(outline.buffer(2.6, join_style="mitre"), 1.0)
+    flange.apply_translation((0.0, 0.0, 20.0))
+    result = slice_body(on_bed(column, flange), 0.2)
+    pieces = {
+        (index, number)
+        for index, layer in enumerate(result.layers)
+        for number in range(len(layer.overhangs))
+    }
+
+    assert len(list(outline.exterior.coords)) - 1 >= 20, "zwanzig Ecken und mehr"
+    assert pieces and pieces <= ledges(result), "der Flansch bleibt ein Rand"
+    assert not advise.support_need(result).needed
+
+
+def _crown_on_a_hollow_shaft() -> MeshData:
+    """Ein hohler Schaft 40 auf 40 mm, Wand 3 mm, oben offen, auf 20 mm ringsum
+    ein Kranz von 2,5 mm — er hängt an seiner Innenkante."""
+    shaft = trimesh.boolean.difference(
+        [brick(40.0, 40.0, 40.0, (0.0, 0.0, 20.0)), brick(34.0, 34.0, 50.0, (0.0, 0.0, 25.0))]
+    )
+    crown = trimesh.boolean.difference(
+        [brick(45.0, 45.0, 1.0, (0.0, 0.0, 20.5)), brick(40.0, 40.0, 1.2, (0.0, 0.0, 20.5))]
+    )
+    return on_bed(shaft, crown)
+
+
+def _cup_with_a_step(step: float) -> MeshData:
+    """Ein Becher von 60 mm mit einer waagerechten Innenstufe von ``step`` mm."""
+    outer = trimesh.creation.cylinder(radius=30.0, height=40.0, sections=96)
+    outer.apply_translation((0.0, 0.0, 20.0))
+    lower = trimesh.creation.cylinder(radius=27.0, height=26.0, sections=96)
+    lower.apply_translation((0.0, 0.0, 17.0))
+    upper = trimesh.creation.cylinder(radius=27.0 - step, height=12.0, sections=96)
+    upper.apply_translation((0.0, 0.0, 35.0))
+    return place_on_bed(
+        MeshData.of(trimesh.boolean.difference([outer, trimesh.boolean.union([lower, upper])]))
+    )
+
+
+@pytest.mark.parametrize("body", ["kranz-am-hohlen-schaft", "stufe-0,6-mm-im-becher"])
+def test_a_ring_around_a_hole_can_still_be_a_ledge(body: str) -> None:
+    """Ein Ring um ein Loch ist nur dann kein Rand, wenn er eine Öffnung
+    überspannt: Die Auflage fasst ihn von außen, und er ist zwei Bahnen breit.
+    Der Kranz um einen hohlen Schaft hängt an seiner Innenkante, seine Bahnen
+    haben außen keinen Halt; eine Stufe von 0,6 mm ist schmaler als zwei Bahnen
+    der 0,4er Düse (0,84 mm) und spannt nicht. Beide verlangten mit der ersten
+    Öffnungsregel Stützen (drittes Review vom 08.10.2026). Geschnitten mit der
+    Breite des Profils wie Bericht, Rat und Übergabe (fünftes Review)."""
+    mesh = _crown_on_a_hollow_shaft() if body == "kranz-am-hohlen-schaft" else _cup_with_a_step(0.6)
+    result = slice_body(mesh, 0.2, bridge_from=petg().minimum_wall_thickness)
+    rings = {
+        (index, number)
+        for index, layer in enumerate(result.layers)
+        for number, piece in enumerate(layer.overhangs)
+        if piece.holes
+    }
+
+    assert rings, "der Ring hängt über"
+    assert rings <= ledges(result), "und ist ein Rand"
+    assert not advise.support_need(result).needed
+
+
+def test_a_step_wider_than_two_lines_is_a_shoulder() -> None:
+    """Eine Stufe von 1 mm im Becher ist an der 0,4er Düse (zwei Bahnen 0,84 mm)
+    schon eine Schulter: Ihre Bahnen überspannen die Öffnung, sie braucht
+    Stützen — im vollen Schnitt wie im Stützschnitt der Übergabe (fünftes
+    Review vom 08.10.2026)."""
+    wall = petg().minimum_wall_thickness
+    assert wall < 1.0
+    for detail in ("full", "support"):
+        result = slice_body(_cup_with_a_step(1.0), 0.2, detail, bridge_from=wall)
+        step = {
+            (index, number)
+            for index, layer in enumerate(result.layers)
+            for number, piece in enumerate(layer.overhangs)
+            if piece.holes
+        }
+        assert step and not step & ledges(result), detail
+        assert advise.support_need(result).needed, detail
+
+
+def test_a_shelf_on_one_wall_is_a_ledge_and_no_bridge() -> None:
+    """Eine Konsole von 2,5 mm an einer Wand hat keine beidseitig getragene
+    Richtung; die Brückenweite ihrer Schicht ist deshalb ihre Diagonale, 40 mm
+    (``analysis._supported_span``). Sie ist ein Rand: Weder verlangt der Rat
+    Stützen über den Brückenweg, noch warnt der Bericht vor einer freien Decke —
+    beide lassen Schichten aus Rändern aus (``advise._quiet_layers``)."""
+    body = on_bed(
+        brick(40.0, 10.0, 40.0, (0.0, 0.0, 20.0)),
+        brick(40.0, 2.5, 1.0, (0.0, 5.0 + 1.25, 20.5)),
+    )
+    result = slice_body(body, 0.2)
+    pieces = {
+        (index, number)
+        for index, layer in enumerate(result.layers)
+        for number in range(len(layer.overhangs))
+    }
+
+    assert max(layer.bridge_width for layer in result.layers) > SPAN_INTERESTING
+    assert pieces and pieces <= ledges(result), "die Konsole ist ein Rand"
+    assert not advise.support_need(result).needed
+    codes = {finding.code for finding in advise.located_warnings(result, petg())}
+    assert "slice.long_bridge" not in codes
+
+
+def _flange_with_tab(column: float, tab: float, *, flange: bool = True) -> MeshData:
+    """Eine Säule ``column`` im Quadrat, auf 20 mm ringsum ein Flansch von 2,5 mm
+    und an einer Seite eine Lasche 8 mm breit, ``tab`` mm über den Flansch hinaus
+    (ohne Flansch ebenso weit über die Säulenwand)."""
+    edge = column / 2.0 + (2.5 if flange else 0.0)
+    parts = [brick(column, column, 30.0, (0.0, 0.0, 15.0))]
+    if flange:
+        parts.append(brick(column + 5.0, column + 5.0, 1.0, (0.0, 0.0, 20.5)))
+    parts.append(brick(8.0, tab, 1.0, (0.0, edge + tab / 2.0, 20.5)))
+    return on_bed(*parts)
+
+
+@pytest.mark.parametrize(
+    ("column", "tab", "ledge"),
+    [
+        # 45 mm² jenseits der Reichweite lohnen keine Stütze; als feste Grenze von
+        # 10 mm² verlangten Flansch und Lasche zusammen Stützen ringsum.
+        (200.0, 6.0, True),
+        # 116 mm² jenseits lohnen Stütze; als 5 % des Felds (rund 200 mm²) ging die
+        # Lasche am langen Flansch als Rand durch.
+        (400.0, 15.0, False),
+        # 92 mm² jenseits, mit ihrem Ansatz 114 mm²: Eine Lasche 14,5 mm ab der
+        # Wand braucht für sich Stütze, gemessen wird sie samt Ansatz (drittes
+        # Review vom 08.10.2026).
+        (400.0, 12.0, False),
+    ],
+)
+def test_what_reaches_beyond_a_ledge_is_judged_like_an_overhang(
+    column: float, tab: float, ledge: bool
+) -> None:
+    """Was weiter als ``LEDGE_REACH`` über die Wurzel ragt, wird gemessen wie ein
+    eigener Überhang (``worth_support``), nicht als Anteil des Felds und nicht an
+    einer festen Grenze (zwei Reviews vom 08.10.2026). Dann bleibt die Antwort
+    stimmig: Eine Lasche, die sich allein trägt, macht aus einem Flansch keinen
+    Fall für Stützen."""
+    sliced = slice_body(_flange_with_tab(column, tab), 0.2)
+    pieces = {
+        (index, number)
+        for index, layer in enumerate(sliced.layers)
+        if 19.5 < layer.z < 20.5
+        for number, piece in enumerate(layer.overhangs)
+        if ShapelyPolygon(piece.outline).bounds[3] > column / 2.0 + 2.5 + 1.0
+    }
+
+    assert pieces, "die Lasche hängt über"
+    assert (pieces <= ledges(sliced)) is ledge
+    assert advise.support_need(sliced).needed is not ledge
+    if ledge:
+        alone = slice_body(_flange_with_tab(column, tab, flange=False), 0.2)
+        assert not advise.support_need(alone).needed, "die Lasche trägt sich auch allein"
+
+
+def test_a_chamfer_of_52_degrees_is_no_ledge() -> None:
+    """Die Fase des schrägen Fußes (4 mm unter 52° gegen die Senkrechte, Bauart
+    aus ``test_advise``) ragt als Decke 124 von 281 mm² über die Reichweite: kein
+    Rand, beim allgemeinen Drucker braucht sie Stützen. Ein Saum entlang des
+    Umfangs hätte sie zum Rand gemacht — ihre Streifen haben zusammen zehn Meter
+    Umfang (``analysis._carried``)."""
+    from tests.helpers import plate_on_a_sloped_foot
+
+    profile = profiles.make_profile("generic-220", "pla")
+    settings = print_settings.resolve(profile)
+    result = slice_body(
+        plate_on_a_sloped_foot(52.0),
+        settings.layers.layer_height,
+        first_layer_height=settings.layers.first_layer_height,
+        overhang_angle=profile.overhang_limit_degrees,
+        bridge_from=profile.minimum_wall_thickness,
+        support_volume=False,
+    )
+
+    assert any(layer.overhangs for layer in result.layers), "die Fase hängt über"
+    assert not ledges(result), "keine Decke der Fase ist ein Rand"
+    assert advise.support_need(result).needed
+
+
+def test_a_slab_of_mere_margin_is_not_blocked() -> None:
+    """Eine Lippe unter einer Bahnbreite am Ende eines Arms, der Stütze braucht,
+    ist ein Rand, liegt aber ganz in der Aussparung des Arms. Übrig bliebe nur der
+    Zuschlag der Sperre, unter keinem Rand: Die Scheibe entfällt, und der
+    Schreiber endet ohne Befund statt mit einem Fehler (zweites Review vom
+    08.10.2026)."""
+    from app.core.export import writer
+    from app.core.types import SceneObject
+
+    body = on_bed(
+        brick(30.0, 30.0, 40.0, (0.0, 0.0, 20.0)),
+        brick(15.0, 10.0, 2.0, (22.5, 0.0, 21.4)),
+        brick(0.4, 10.0, 0.4, (30.2, 0.0, 21.0)),
+    )
+    result = slice_body(body, 0.2)
+    lip = {
+        (index, number)
+        for index, layer in enumerate(result.layers)
+        for number, piece in enumerate(layer.overhangs)
+        if ShapelyPolygon(piece.outline).bounds[0] > 29.9
+    }
+
+    assert lip and lip <= ledges(result), "die Lippe ist ein Rand"
+    assert ledge_space(result, LINE) == [], "sie liegt ganz in der Aussparung des Arms"
+    profile = petg()
+    settings = print_settings.with_path(print_settings.resolve(profile), "support.style", "auto")
+    settings = print_settings.with_path(settings, "support.spare_ledges", True)
+    entry = SceneObject(id="obj_1", name="Arm", mesh=body)
+    blocker, found = writer._support_blocker(entry, body, settings, profile, result=result)
+    assert blocker is None and found == []
+
+
+def test_the_ledge_space_is_remembered_per_line_width() -> None:
+    """Der Sperrraum unter Rändern ist gemerkt wie der Kanalraum: Rat, Schätzung
+    und Schreiber fragen ihn, der Rat in jeder Runde."""
+    result = slice_body(column_with_flange_and_arm(0.0), 0.2)
+
+    first, again = ledge_space(result, LINE), ledge_space(result, LINE)
+    assert first and all(old[2] is new[2] for old, new in zip(first, again, strict=True)), (
+        "die zweite Frage bekommt dieselben Scheiben, nicht neu gerechnete"
+    )
+    assert ledge_space(result, 2.0 * LINE)[0][2] is not first[0][2], "je Bahnbreite"
+
+
+def test_the_report_and_the_need_stop_in_the_ledge_question() -> None:
+    """Prüfbericht und Stützbedarf brechen in der Randfrage ab, ihrem teuersten
+    Schritt (am Eiffelturm 7,5 s über alle Stücke). Die Kanalfrage stellt dieselbe
+    Frage ohne Abbruch; deshalb kommt die Randfrage zuerst (zweites Review vom
+    08.10.2026)."""
+    from app.core.errors import OperationCancelled
+    from app.core.scene.cancel import CancelSignal
+    from app.core.slice import findings
+
+    token = CancelSignal()
+    token.cancel()
+    with pytest.raises(OperationCancelled):
+        findings.overhang_findings(
+            "obj_1", slice_body(column_with_flange_and_arm(15.0), 0.2), cancelled=token
+        )
+    with pytest.raises(OperationCancelled):
+        advise.support_need(slice_body(column_with_flange_and_arm(15.0), 0.2), cancelled=token)
+
+
+def test_the_ledge_blocker_covers_the_ledge_and_spares_the_arm() -> None:
+    """Die Sperre unter Rändern deckt deren Überhangfläche, nicht die des Arms
+    gleich daneben, der Stütze braucht — sonst nähme sie ihm, was er verlangt."""
+    result = slice_body(column_with_flange_and_arm(15.0), 0.2)
+    slabs = ledge_space(result, LINE)
+    flange = box(-17.5, -17.5, 17.5, 17.5).difference(box(-15.0, -15.0, 15.0, 15.0))
+    arm = box(17.5, -5.0, 30.0, 5.0)
+
+    assert slabs, "der Flansch bekommt eine Sperre"
+    at_flange = unary_union([region for low, high, region in slabs if low <= 20.0 <= high])
+    assert at_flange.intersection(flange).area > 0.8 * flange.area
+    near_arm = [region for low, high, region in slabs if low <= 20.6 <= high]
+    assert near_arm, "die Sperre des Flansches reicht in die Höhe des Arms"
+    for region in near_arm:
+        assert region.intersection(arm).area == pytest.approx(0.0, abs=1e-6)
+    entries = advise.advise(print_settings.resolve(petg()), petg(), result)
+    assert [entry.value for entry in entries if entry.path == "support.spare_ledges"] == [True]
+    lone = advise.advise(
+        print_settings.resolve(petg()), petg(), slice_body(column_with_flange_and_arm(0.0), 0.2)
+    )
+    assert "support.spare_ledges" not in {entry.path for entry in lone}, "ohne Stützen nichts"
+
+
+def slot(length: float) -> MeshData:
+    """Ein Block mit einem Schlitz von 5 mm Weite und 6 mm Höhe, ``length`` mm lang."""
+    block = brick(30.0, length, 20.0, (0.0, 0.0, 10.0))
+    cut = brick(5.0, length + 10.0, 6.0, (0.0, 0.0, 7.0))
+    return place_on_bed(MeshData.of(trimesh.boolean.difference([block, cut])))
+
+
+def slots(count: int, length: float) -> MeshData:
+    """``count`` Schlitze wie in :func:`slot` nebeneinander, 10 mm auseinander."""
+    block = brick(10.0 * count + 20.0, length, 20.0, (0.0, 0.0, 10.0))
+    first = -5.0 * (count - 1)
+    cuts = [
+        brick(5.0, length + 10.0, 6.0, (first + 10.0 * index, 0.0, 7.0)) for index in range(count)
+    ]
+    return place_on_bed(MeshData.of(trimesh.boolean.difference([block, *cuts])))
+
+
+@pytest.mark.parametrize(("count", "length", "blocked"), [(4, 16.0, False), (1, 40.0, True)])
+def test_only_a_ceiling_that_would_need_support_gets_a_blocker(
+    count: int, length: float, blocked: bool
+) -> None:
+    """Eine Sperre bekommt nur eine Kanaldecke, die ohne sich selbst zu schließen
+    Stütze bräuchte — nach den zwei Wegen von ``worth_support``, am größten
+    Stück. Am Drachen schlossen sich Taschen von höchstens 96 mm²; mit Umkreis
+    um jede stützte der ElegooSlicer 87,8 statt 97,7 % der Überhangfläche
+    außerhalb der Kanaldecken, und selbst eine Sperre von zwei Bahnbreiten um
+    jede Taschendecke kostete ihn noch einen Punkt (08.10.2026). Was eine kleine Decke
+    dafür offen lässt, ist erreichbar: Am Countercleaner aus dem Korpus stellt
+    der Slicer Stütze in eine Kehle, die nach zwei Seiten offen ist. Kanal
+    bleibt die kleine Decke trotzdem: Sie zählt nicht zum Stützbedarf — sonst
+    verlangte ein Kotschieber aus dem Korpus für seine Schlitze Stützen. Die
+    vier kurzen Schlitze messen je unter 80 mm², zusammen über 150; der lange um
+    200 mm², und seine Sperre bleibt im Schlitz."""
+    result = slice_body(slots(count, length), 0.2)
+    need = advise.support_need(result)
+    model = need.model
+    slabs = channel_space(result, model, LINE)
+
+    assert len(model.channel_columns) <= len(model.channels)
+    assert model.channels, "die Schlitzdecken tragen sich selbst"
+    assert not need.needed, "und verlangen keine Stütze"
+    assert bool(slabs) is blocked
+    for _low, high, region in slabs:
+        low_x, _low_y, high_x, _high_y = region.bounds
+        assert low_x >= -2.5 - LINE - 1e-6 and high_x <= 2.5 + LINE + 1e-6
+        assert high <= 10.0 + 0.2 + 1.0
+
+
+def blind_slot() -> MeshData:
+    """Ein Block mit einem Schlitz von 10 mm Weite, 6 mm Höhe und 30 mm Tiefe,
+    nur an einer Seite offen — eine Sackgasse wie der Wasserkanal der
+    Waschschüssel in Drucklage."""
+    block = brick(40.0, 40.0, 20.0, (0.0, 0.0, 10.0))
+    cut = brick(10.0, 30.0, 6.0, (0.0, -10.0, 7.0))
+    return place_on_bed(MeshData.of(trimesh.boolean.difference([block, cut])))
+
+
+def test_the_ceiling_of_a_dead_end_is_a_channel() -> None:
+    """Die Decke einer Sackgasse liegt an einem zusammenhängenden U auf, nicht
+    an zwei getrennten Stellen. Gezählt wurden zuerst nur getrennte Auflagen,
+    und der Wasserkanal der Waschschüssel verlor in Drucklage seine Sperre."""
+    result = slice_body(blind_slot(), 0.2)
+    model = model_support(result)
+
+    assert model.channels, "die Decke der Sackgasse ist Kanal"
+    assert channel_space(result, model, LINE)
+
+
+def shallow_slot_beside_an_arm() -> MeshData:
+    """Ein Block mit einem Schlitz von 5 mm Weite, 40 mm Länge und nur 0,6 mm
+    Höhe, dazu eine Kragplatte über dem Bett, die Stützen verlangt."""
+    block = brick(30.0, 40.0, 20.0, (0.0, 0.0, 10.0))
+    cut = brick(5.0, 50.0, 0.6, (0.0, 0.0, 6.3))
+    arm = brick(20.0, 40.0, 4.0, (25.0, 0.0, 18.0))
+    body = trimesh.boolean.union([trimesh.boolean.difference([block, cut]), arm])
+    return place_on_bed(MeshData.of(body))
+
+
+def test_the_blocker_is_offered_only_where_it_blocks_space() -> None:
+    """Am Drachen blieben Kerben unter einem Millimeter Tiefe Kanaldecken; die
+    Sperre darunter war leer, und trotzdem stand der Vorschlag da — eine
+    Übernahme, die nichts bewirkt."""
+    result = slice_body(shallow_slot_beside_an_arm(), 0.2)
+    model = model_support(result)
+    entries = advise.advise(print_settings.resolve(petg()), petg(), result)
+    paths = {entry.path for entry in entries}
+
+    assert model.channels, "die flache Schlitzdecke ist Kanaldecke"
+    assert channel_space(result, model, LINE) == [], "aber sie sperrt keinen Raum"
+    assert "support.style" in paths, "die Kragplatte braucht Stützen"
+    assert "support.block_channels" not in paths
+
+
+def test_a_ceiling_footprint_without_any_held_edge_does_not_close(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Liegen Stücke einer Decke in der Aufsicht übereinander, kann ein Teil des
+    Grundrisses ohne gehaltenen Rand bleiben: Die Stelle, an der ein Stück
+    aufliegt, liegt dann unter einem anderen. Die Frage brach damit ab, statt
+    „schließt sich nicht“ zu sagen."""
+    from app.core.slice import analysis
+
+    ceilings = analysis._Ceilings((), lambda _index: Point(10.6, 5.0).buffer(0.1))
+    monkeypatch.setattr(ceilings, "shape", lambda _name: box(0.0, 0.0, 10.0, 10.0))
+    monkeypatch.setattr(ceilings, "_gap", lambda _name: 0.35)
+
+    assert not ceilings.closes(frozenset({(1, 0)}))

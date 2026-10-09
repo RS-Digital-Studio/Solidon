@@ -562,6 +562,7 @@ def bestand(tmp_path: Path) -> Path:
             "textured_plate_temp_initial_layer": ["60"],
             "eng_plate_temp": ["0"],
             "slow_down_layer_time": ["4"],
+            "slow_down_min_speed": ["20"],
             "filament_retraction_length": ["nil"],
             "filament_z_hop": ["nil"],
             "compatible_printers": ["Elegoo Centauri Carbon 2 0.4 nozzle"],
@@ -779,6 +780,8 @@ def test_the_base_is_read_back_from_the_manufacturers_profile(
     assert base.retraction.z_hop == pytest.approx(0.4), "nil im Filament: der Wert der Maschine"
     assert base.retraction.length == pytest.approx(0.8)
     assert base.cooling.minimum_layer_time == pytest.approx(4.0)
+    # Das Mindesttempo am Filament (RM-580): an ihm hängt jetzt die Zeitschätzung.
+    assert base.cooling.minimum_speed == pytest.approx(20.0)
     assert not base.explicit
 
 
@@ -2967,6 +2970,7 @@ min_fan_speed = 85
 fan_always_on = 0
 fan_below_layer_time = 100
 slowdown_below_layer_time = 8
+min_print_speed = 15
 disable_fan_first_layers = 1
 extrusion_multiplier = 1
 filament_max_volumetric_speed = 24
@@ -3028,6 +3032,7 @@ def test_prusas_bundle_is_read_back_like_the_orca_family(prusa_bundle: Path) -> 
     assert base.retraction.length == pytest.approx(0.8), "das Filament überstimmt"
     assert base.retraction.z_hop == pytest.approx(0.2), "nil: der Wert des Druckers"
     assert base.cooling.minimum_fan_speed == pytest.approx(0.0), "ohne fan_always_on kein Minimum"
+    assert base.cooling.minimum_speed == pytest.approx(15.0), "das Mindesttempo am Filament"
     assert base.temperature.nozzle == 230
     assert base.filament.max_flow == pytest.approx(24.0)
     assert not base.explicit
