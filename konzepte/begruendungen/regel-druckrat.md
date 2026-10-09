@@ -345,18 +345,33 @@ offenen Becken (0–14 % des Lochs überdacht).
 
 Gefragt wird deshalb die Säule, je Scheibe (`_open_above`, RM-571, 09.10.2026):
 Liegt im Saum von zwei Bahnbreiten um ihren Grundriss, mit ihr durch freien
-Raum der Scheibe verbunden, freier Raum, über dem bis über das Teil hinaus kein
-Material liegt, und ist er mindestens eine Bahn breit, bleibt sie frei. Der Saum
-hängt an der Säule, weil hinter einer dünnen Wand die Luft außerhalb des Teils
-liegt; die Bahnbreite, weil durch einen Schlitz, in den keine Bahn passt,
-niemand eine Stütze herauszieht — dieselbe Grenze wie „zwei Übergriffe breit“
-für den Sperrraum. Am Becher berührt der Sims den offenen Himmel in allen elf
-Scheiben unter ihm und liegt bis auf die Naht an der Blockwand frei (2 %, die
-Bahnbreite, die sein Überhang an der Wand nicht mitzählt). An der Schüssel in
-Drucklage (50°, 55°, 60°) und in Dateilage (55°) berührt keines der 4 bis 32
-Überhangstücke im Sperrraum ihn — auch nicht die Stücke an der Mündung, die
-unter dem Dach des Ausgusses hängen —, und ihr Sperrraum bleibt gleich
-(169 243, 186 704 und 53 009 mm³). Im Slicer, Vorschläge übernommen, Stützbahn
+Raum der Scheibe verbunden, mindestens eine Bahn breit ein Schacht, über dem bis
+über das Teil hinaus kein Material liegt und der einen Kreis von `CHANNEL_WIDTH`
+fasst, bleibt sie frei. Der Saum hängt an der Säule, weil hinter einer dünnen
+Wand die Luft außerhalb des Teils liegt. Er ist rund, an jeder Ecke gleich weit:
+Mit Gehrung reichte er an einer spitzen Ecke bis zehn Bahnbreiten, und eine Nase,
+deren Spitze 3 mm vor einer Öffnung lag, machte einen Sims erreichbar, der ohne
+Nase gesperrt blieb (Review von RM-571). Die Weite des Schachts ist derselbe
+Kreis, an dem `_narrow` entscheidet, ob man an einen Raum herankommt; durch einen
+engeren Spalt holt niemand eine Stütze heraus. Zuerst genügte eine Bahn breit,
+und damit galt ein Becher mit Deckel und einem Schlitz ab 0,5 mm neben dem Sims
+als offen (4 statt 64 % des Simses im Sperrraum, Review). Unter einer Bahn kommt
+sicher nichts heraus, aber dass eine Bahn genügt, hatte niemand belegt. Die
+Bahnbreite bleibt als Mindestbreite, mit der Saum und Schacht sich berühren; der
+Sperrraum selbst verlangt mehr als zwei Bahnbreiten, eine Bahn samt Abstand.
+Ausgespart wird die ganze Säule, auch was von ihr unter einem Dach liegt: Ihr
+Stück braucht selbst Stütze, eine halb gesperrte Säule stützte der Slicer nur
+halb, und wer das offene Ende der Stütze greift, zieht auch den Rest heraus. Ein
+Streifen vom offenen Becher 14 mm in den Tunnel, an dem das im Review auffiel,
+ist mit dem Schacht nicht mehr erreichbar: Die Tasche zwischen Block und
+Becherwand, aus der er kommt, ist 16 mm weit. Am Becher berührt der Sims den
+Schacht in allen elf Scheiben unter ihm und liegt bis auf die Naht an der
+Blockwand frei (2 %, die Bahnbreite, die sein Überhang an der Wand nicht
+mitzählt). An der Schüssel in Drucklage (50°, 55°, 60°) und in Dateilage (55°,
+60°) berührt keines der 4 bis 32 Überhangstücke im Sperrraum den Himmel — auch
+nicht die Stücke an der Mündung, die unter dem Dach des Ausgusses hängen —, und
+ihr Sperrraum bleibt gleich (Drucklage 186 704, 177 017 und 169 243 mm³,
+Dateilage 53 009 und 46 468 mm³). Im Slicer, Vorschläge übernommen, Stützbahn
 unter dem Sims vorher und nachher, in Klammern der Slicer ohne Sperre:
 ElegooSlicer CC2 2,41 → 6,06 m (6,07), OrcaSlicer Kobra 2 2,62 → 4,35 m (4,35),
 PrusaSlicer MK4S 1,95 → 4,64 m (4,67), Cura SV06 2,57 → 4,40 m (4,40); im
@@ -371,7 +386,14 @@ Frage am Becher 0,08 → 0,17 s für den Sperrraum (Median aus acht Läufen im
 Wechsel, Wandzeit); an Schüssel, Drache und Eiffelturm, wo keine ausgesparte
 Säule im Umschlossenen steht, nichts — gefragt werden nur Säulen, die den
 Sperrraum schneiden, und die Schüssel in Dateilage wird damit schneller
-(5,6 → 2,9 s). Der
+(5,6 → 2,9 s). Der Schacht sucht seinen Himmel in einem Fenster, das 30 mm über
+den Saum hinausreicht; das kostet am Becher 0,23 → 0,58 s CPU-Zeit gegenüber
+dem Stand mit einer Bahn als Maß (Median aus acht Läufen im Wechsel, unter
+Fremdlast, die Wandzeit sagte dabei nichts). Ohne Vereinfachung des Himmels nach
+jeder Schicht waren es 1,1 s, denn jede Schicht schneidet die Becherwand an
+etwas anderen Punkten, und der Himmel wuchs auf 3 916 Ecken. Am Eiffelturm
+(8,6 → 8,7 s), an Schüssel und Drache fragt keine Säule nach dem Schacht, und
+der Sperrraum bleibt überall gleich. Der
 Zuschlag einer Bahnbreite kommt vor dem Aussparen; ein Loch, in dem keine Bahn
 samt Abstand Platz hat, schließt sich (ein Krümel von 0,33 mm² im Kanal,
 ausgespart mit Zuschlag: 1,5 m Stütze im OrcaSlicer). Vorgeschlagen wird die

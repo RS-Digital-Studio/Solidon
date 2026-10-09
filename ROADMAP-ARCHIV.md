@@ -27321,29 +27321,6 @@ zurück, die Übernahme aus dem Slicer überschreibt keine Handspule, Rücknahme
 sind rücknehmbar, das Lager sichert seinen letzten lesbaren Stand selbst,
 Datumsfelder haben einen Kalender.
 
-## RM-571: Ein Sims im offenen Becher neben einem gesperrten Kanal behält seine Stütze (09.10.2026)
-
-<a id="rm-571-ein-sims-im-offenen-becher-neben-einem-gesperrten-kanal-behält-seine-stütze-09102026"></a>
-<a id="rm-571"></a>
-
-**Befund (08.10.2026, Review 2 von RM-566):** Die Kanalsperre sparte im umschlossenen Raum
-nichts aus, und umschlossen hieß ein Loch im Schnitt — auch das Innere jedes oben offenen
-Gefäßes. Ein Sims im Becher (Ø 68 mm, Tunnelblock, Sims 14 × 14 mm) lag mit 65 % seines
-Grundrisses im Sperrraum und verlor seine Stütze.
-
-**Behoben:** Gefragt wird die Säule je Scheibe, nicht das Loch: Eine ausgesparte Säule im
-umschlossenen Raum bleibt frei, wenn im Saum von zwei Bahnbreiten um ihren Grundriss,
-durch freien Raum verbunden, mindestens eine Bahn breit Himmel liegt
-(`analysis._open_above`, `_sky_above`). Der Sperrraum selbst bleibt unverändert.
-
-**Nachweis (08./09.10.2026):** Stützbahn unter dem Sims alt → neu in ElegooSlicer 2,41 →
-6,06 m, OrcaSlicer 2,62 → 4,35 m, PrusaSlicer 1,95 → 4,64 m, Cura 2,57 → 4,40 m, der Tunnel
-bleibt frei; der Wasserkanal der Schüssel in allen vier Slicern weiter ohne Stütze; Korpus
-von 243 Körpern unverändert. Tests in `test_slice_findings.py` (Sims, überdachte Säule,
-Himmel je Scheibe, dünne Wand und Schlitz), am alten Stand rot. Belege:
-`output/konsolidierung-2026-10-07/codex-claude/belege/lauf-a.md`. Changelog: nein (die
-Lücke entstand mit RM-566 im selben 0.6.0-Zyklus).
-
 ## RM-027 entfällt mit dem privaten Index (09.09.2026)
 
 **RM-027 — Gewöhnlichen Commit aus veraltetem gemeinsamem Index absichern**
@@ -43905,7 +43882,7 @@ vorgeschlagen nur, wenn sie Raum sperrt. Aus drei Durchsichten dazu: Ort und Fl�
 Sperrbefunds aus den gesperrten Säulen, eine Stelle für die Stützbedarfsregel, der
 Sperrraum gemerkt, die Bahnbreite statt einer festen Zahl, die Schätzung fragt den
 Sperrraum. Bekannte Grenze, behoben: [RM-571](#rm-571). Warum, mit allen verworfenen Wegen:
-`konzepte/begruendungen/regel-schichtanalyse.md`; Sonden und Messwege unter
+`konzepte/begruendungen/regel-druckrat.md`; Sonden und Messwege unter
 `.claude/.state/drache-2026-10-08/` (`STAND.md`).
 
 **Nachweis (08.10.2026):** Anteil der Überhangfläche außerhalb der Kanaldecken mit
@@ -46266,3 +46243,38 @@ sechs Sprachen „ab 0.5.0“ neben „Version 0.5.3“, wie im Repository. Chan
   Belege: `F:\solidon-review-reports\verif-09d8e9485.md` (Abschnitt 3).
 
 **Abschluss:** Der Abschnitt *Bausteine verwalten* beginnt offen, solange der eigene Bausteinordner nichts hält (`PartCatalog`, `_own_library_is_empty`). Gezählt werden gespeicherte Rezepte und hinzugefügte Bausteine, dieselbe Frage wie für Weitergabe, *Bearbeiten* und *Entfernen* (`_in_own_library`, vorher dreimal hergeleitet); ein mitgereister und ein `.py`-Baustein zählen nicht, `PartSpec.own` zählte anders. Danach gilt der Merker (`remember`, RM-491), und ein eigener Baustein klappt den Abschnitt wie bisher auf (RM-455; dass dieses Aufklappen gemerkt wird, steht in [RM-658](ROADMAP.md#rm-658)). Damit stehen *Auswahl als Baustein speichern …*, *Baustein aus Datei hinzufügen …* und beide Sperrgründe ohne Klick da, wie in 0.5.1 (Rückschritt seit `48ffcf145`, in 0.5.2 und 0.5.3). Weil der Weitergabegrund jetzt vorn steht, sagt er ohne eigenen Baustein „Speichern Sie zuerst einen eigenen Baustein, um ihn weiterzugeben.“ statt zum Wählen aufzufordern, das bei einem eingebauten in die nächste Absage führte. Die Hinweistests prüfen den Grund ohne vorheriges Aufklappen und stellen die Bibliothek ohne eigene Bausteine selbst her (`no_own_parts`); `test_the_closed_management_names_what_it_holds` prüft den zugeklappten Zustand nach einem Klick; neu `test_a_fresh_catalogue_shows_its_management_without_a_click` und `test_only_a_part_in_the_own_library_closes_the_management` (Rezept und hinzugefügt zu, mitgereist und `.py` offen). Gegenprobe über ein Plugin, je Mutation von acht Tests rot: immer zu 6, immer offen 2, Prädikat über `PartSpec.own` 2, alter Weitergabegrund 3; Katalogtests 52 grün, Handbuch-, Katalog-, Wortlaut- und Changelogtests 539 grün. Die Handbuchseiten *Eigene Bausteine* und *Bausteindateien austauschen* nennen Abschnitt und Knopf in allen sechs Sprachen, der eingefrorene Musterbestand trägt die neuen Seitenschlüssel; Changelog 0.6.0. Fenstersonde am echten Fenster, frischer Nutzerordner: 4 von 4, *Speichern*, *Hinzufügen* und beide Sperrgründe ohne Klick sichtbar, der Weitergabegrund schickt zum Speichern. Umgesetzt von Claude (Thread „Bedienung und KI“).
+
+## RM-571: Ein Sims im offenen Becher neben einem gesperrten Kanal behält seine Stütze (09.10.2026)
+
+<a id="rm-571-ein-sims-im-offenen-becher-neben-einem-gesperrten-kanal-behält-seine-stütze-09102026"></a>
+<a id="rm-571"></a>
+
+**Befund (08.10.2026, Review 2 von RM-566):** Die Kanalsperre sparte im umschlossenen Raum
+nichts aus, und umschlossen hieß ein Loch im Schnitt — auch das Innere jedes oben offenen
+Gefäßes. Ein Sims im Becher (Ø 68 mm, Tunnelblock, Sims 14 × 14 mm) lag mit 65 % seines
+Grundrisses im Sperrraum und verlor seine Stütze.
+
+**Behoben:** Gefragt wird die Säule je Scheibe, nicht das Loch: Eine ausgesparte Säule im
+umschlossenen Raum bleibt frei, wenn im runden Saum von zwei Bahnbreiten um ihren Grundriss,
+durch freien Raum verbunden, mindestens eine Bahn breit ein Schacht liegt, der bis über das
+Teil offen ist und einen Kreis von `CHANNEL_WIDTH` fasst, wie in `_narrow`
+(`analysis._open_above`, `_sky_above`, `_sky_window`). Ausgespart wird dann die ganze Säule
+(Entscheidung im Docstring von `_open_above`). Der Sperrraum selbst bleibt unverändert. Aus
+dem Review des Zweigs (09.10.2026): Zuerst genügte eine Bahn breit Himmel, und ein Becher
+mit Deckel und Schlitz ab 0,5 mm galt als offen (4 statt 64 % des Simses im Sperrraum); der
+Saum mit Gehrung reichte an spitzen Ecken bis zehn Bahnbreiten. Warum, mit den verworfenen
+Wegen: `konzepte/begruendungen/regel-druckrat.md`, Abschnitt zur Kanalsperre.
+
+**Nachweis (08./09.10.2026):** Stützbahn unter dem Sims alt → neu in ElegooSlicer 2,41 →
+6,06 m, OrcaSlicer 2,62 → 4,35 m, PrusaSlicer 1,95 → 4,64 m, Cura 2,57 → 4,40 m, der Tunnel
+bleibt frei; der Wasserkanal der Schüssel in allen vier Slicern weiter ohne Stütze; Korpus
+von 243 Körpern unverändert. Mit den Fixen aus dem Review bleibt der Sperrraum von Becher und
+Schüssel in allen fünf Lagen gleich, die Slicerläufe gelten weiter; die 100 Körper des
+Korpus mit Kanalstücken (40 Dateien, 8 mit Sperre) bleiben in Vorschlägen und Sperrvolumen
+gleich. Tests in
+`test_slice_findings.py`: Sims im offenen Becher und Himmel je Scheibe, beide am Stand von
+RM-566 rot; überdachte Säule, dünne Wand und Schlitz in der Kammerdecke als Gegenproben;
+aus dem Review Deckel mit Schlitz 0,5/1/2 mm (mit einer Bahn als Maß rot), Deckel weiter
+offen als ein Kanal, Nase 3 mm vor dem Himmel (mit Gehrung rot). Belege:
+`output/konsolidierung-2026-10-07/codex-claude/belege/lauf-a.md`. Changelog: nein (die
+Lücke entstand mit RM-566 im selben 0.6.0-Zyklus).

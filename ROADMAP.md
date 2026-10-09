@@ -72,6 +72,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-588 — Die Naht liegt hinten, und große Oberseiten werden gebügelt](#rm-588) | Geometrie, Erkennung und Druckvorbereitung | Naht hinten bei Figuren, Bügeln der obersten Fläche |
 | [RM-589 — Bohrungen und Stifte passen ohne Nacharbeit](#rm-589) | Geometrie, Erkennung und Druckvorbereitung | Loch- und Elefantenfußausgleich aus dem Spiel des Materialprofils |
 | [RM-624 — Ein Slicertest misst Kontaktabstand und untere Trennschicht in allen Programmen](#rm-624) | Geometrie, Erkennung und Druckvorbereitung | Messung aus `kontakt_je_teil.py` als Testhilfe, sechs Programme |
+| [RM-626 — Eine Kanalsäule endet an ihrer höchsten Auflage, und der Kanal darunter bleibt ungesperrt](#rm-626) | Geometrie, Erkennung und Druckvorbereitung | Gefunden im Review von RM-571 (09.10.), mit Sonde belegt; nächster Schritt: Kammer mit Insel in den vier Slicern, dann unterste Auflage oder Höhe je Auflage |
 | [RM-218 — Am exakten Körper heißen Bohrungen nach ihrer Lage, und der Verlauf lässt sich dort nicht umbauen](#rm-218) | Geometrie, Erkennung und Druckvorbereitung | Code und Tor mit `d907d6036` in v0.5.2; offen allein die Fensterabnahme beim Release (RM-213) |
 | [RM-230 — Variable Verrundung und Formschräge: fünf Grenzen, die der Kunde merkt](#rm-230) | Geometrie, Erkennung und Druckvorbereitung | Grenzen 1 bis 3 gebaut oder benannt (06.10.: Mischecke exakt geprüft, Ring-Anfang und Zwischenstellen in den Feldhilfen); Tray: beide Kerne nennen die Fußrundung vor der Rechnung, aber der Weg über *Merkmal entfernen* trägt dort nicht; offen: Fußrundung als Kette entfernen, Netzschräge 2,3× langsamer, Fase am Fuß, B-Spline-Ecke und zweites Anstellen am Netz mit Kernen uneins |
 | [RM-253 — Am Laptop-Ständer tragen Kippen und Verdoppeln einer Bohrung falsch ab](#rm-253) | Geometrie, Erkennung und Druckvorbereitung | In Arbeit: Claude (Worktree `F:/solidon-claude-b`). 14 von 28 Bohrungen tragen ein fremdes Teil und sagen das jetzt mit Weg, statt es still zu verschmelzen (RM-413, 06.10.); offen an den freien `hole_1`/`hole_2`/`hole_4`: Verdoppeln ohne Wirkung, −127 mm³ bzw. +1,4–1,9 mm³ beim Versetzen und Kippen — gegen einen Sollwert ohne Boolesche an der kaputten Schale messen |
@@ -1003,6 +1004,25 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   Extrusionswerten verfälscht ein Rücksetzen deshalb die gezählte Bahnlänge. Ihre Mengen
   sind kein neu bestätigter Abnahmenachweis. Die Testhilfe muss dieselbe Bahn mit und ohne
   Extrusionsrücksetzung gleich messen und Rasterbeschreibung und Rasterwert zusammenhalten.
+
+<a id="rm-626"></a>
+
+- [ ] **RM-626 — Eine Kanalsäule endet an ihrer höchsten Auflage, und der Kanal darunter
+  bleibt ungesperrt.**
+  `analysis._model_support` merkt je Stück nur die erste, höchste Auflage
+  (`landed.get(owner, (index - 1, 0.0))`), und `channel_columns` wie `open_columns` tragen
+  sie als „Höhe, auf der seine Säule aufsetzt“. Setzt eine Säule auf mehreren Höhen auf,
+  gilt die oberste. In der geschlossenen Kammer aus
+  `test_open_sky_must_be_beside_the_column_and_a_line_wide` mit einem Schlitz von 1 mm in
+  der Decke sperrt `channel_space` ohne Insel 8,5–29,5 mm (20 Scheiben), mit einer Insel
+  4 × 4 mm in der Kammer nur 22,5–29,5 mm (6 Scheiben), denn die Kanalsäule gilt als auf der
+  Insel aufgesetzt (Review von RM-571, Sonde `probe_real_debug.py`, am Zweig von RM-571
+  nachgestellt). Die Decke selbst bleibt gesperrt. Nicht gemessen ist, ob ein Slicer dann
+  für andere Überhänge Stütze in den ungesperrten Teil des Kanals stellt und ob die
+  Schätzung dort Stütze zählt, die nicht gedruckt wird. Abnahme: die Kammer mit Insel und
+  einer schrägen Fläche darunter in ElegooSlicer, OrcaSlicer, PrusaSlicer und Cura mit
+  übernommenen Vorschlägen; steht Stütze im Kanal, reicht die Säule bis zur untersten
+  Auflage (oder trägt eine Höhe je Auflage), mit Test an der Kammer.
 
 <a id="rm-504"></a>
 

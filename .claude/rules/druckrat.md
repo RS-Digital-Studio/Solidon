@@ -61,8 +61,11 @@ offenem Drucker. Übernommen wird auf Klick, nie von allein.
   oder umschlossen), eine Bahnbreite Zuschlag **vor** dem Aussparen der Säulen
   der Überhänge, deren Decke ohne Kanalstücke als Feld Stütze braucht
   (`_field`); im umschlossenen Raum nur Säulen, die von oben erreichbar sind
-  (`_open_above`: offener Himmel neben der Säule, eine Bahn breit), denn ein
-  Loch im Schnitt ist auch das Innere jedes offenen Gefäßes. Ohne gesperrten
+  (`_open_above`: im runden Saum von zwei Bahnbreiten ein nach oben offener
+  Schacht, der einen Kreis von `CHANNEL_WIDTH` fasst wie `_narrow`, sonst
+  holt niemand die Stütze heraus), denn ein Loch im Schnitt ist auch das
+  Innere jedes offenen Gefäßes; ausgespart wird dann die ganze Säule, eine
+  halb gesperrte stützte der Slicer nur halb. Ohne gesperrten
   Raum kein Vorschlag. Familien: `dateiformat.md`.
   **Vorschlag, nicht Automatik** (Entscheidung Robert).
 - **Ränder tragen sich selbst** (`analysis.ledges`): Eine Decke, deren Teil

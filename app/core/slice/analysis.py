@@ -1879,39 +1879,50 @@ def _enclosed(material: ShapelyPolygon) -> Any:
 
 def _seam(column: ShapelyPolygon, line_width: float) -> ShapelyPolygon:
     """Der Saum, in dem eine Säule nach offenem Himmel fragt (:func:`_open_above`):
-    zwei Bahnbreiten um ihren Grundriss."""
-    return column.buffer(2.0 * line_width, join_style="mitre")
+    zwei Bahnbreiten um ihren Grundriss, an den Ecken rund — überall gleich
+    weit. Mit Gehrung reichte er an einer spitzen Ecke bis zehn Bahnbreiten
+    weit, und eine Nase, deren Spitze 3 mm vor einer Öffnung lag, machte den
+    ganzen Sims erreichbar (Review RM-571); gefast reichte er an derselben
+    Spitze kaum über sie hinaus."""
+    return column.buffer(2.0 * line_width)
 
 
-def _smallest_opening(line_width: float) -> float:
-    """Die Fläche eines Kreises von einer Bahnbreite — weniger fasst keine Bahn."""
-    return math.pi * (line_width / 2.0) ** 2
+def _sky_window(column: ShapelyPolygon, line_width: float) -> ShapelyPolygon:
+    """Wo der Himmel einer Säule gesucht wird: um ihren Saum (:func:`_seam`) so
+    weit, wie ein Kreis von ``CHANNEL_WIDTH`` reicht, der ihn berührt."""
+    return _seam(column, line_width).buffer(CHANNEL_WIDTH)
 
 
 def _sky_above(
-    seam: ShapelyPolygon,
+    window: ShapelyPolygon,
     starts: Iterable[int],
     shade_at: Callable[[int], ShapelyPolygon],
     count: int,
-    line_width: float,
 ) -> dict[int, ShapelyPolygon]:
-    """Je Schicht aus ``starts`` der Teil des Saums, über dem von ihr an bis über
-    das Teil hinaus (``count`` Schichten, ``shade_at`` ihr Material) kein
-    Material liegt.
+    """Je Schicht aus ``starts`` der Teil des Fensters (:func:`_sky_window`),
+    über dem von ihr an bis über das Teil hinaus (``count`` Schichten,
+    ``shade_at`` ihr Material) kein Material liegt.
 
     Von oben nach unten in einem Zug, einmal je Säule: Je Scheibe von unten
     nach oben gefragt, kostete der Sims im Becher jede Schicht über ihm einmal
     je Scheibe.
     """
-    smallest = _smallest_opening(line_width)
-    sky = seam
+    # Was keinen Kreis von ``CHANNEL_WIDTH`` fassen kann, wird unten nicht
+    # wieder weiter.
+    smallest = math.pi * (CHANNEL_WIDTH / 2.0) ** 2
+    sky = window
     index = count - 1
     found: dict[int, ShapelyPolygon] = {}
     for start in sorted(set(starts), reverse=True):
         while index >= start and not sky.is_empty:
-            sky = sky.difference(shapely.clip_by_rect(shade_at(index), *sky.bounds))
+            # Vereinfacht nach jeder Schicht (:data:`WIDTH_SIMPLIFY`): Jede
+            # schneidet dieselbe Wand an etwas anderen Punkten, und der Himmel
+            # über dem Sims im Becher wuchs ohne auf 3 916 Ecken und kostete
+            # 1,1 s statt 0,29 s.
+            sky = sky.difference(shapely.clip_by_rect(shade_at(index), *sky.bounds)).simplify(
+                WIDTH_SIMPLIFY
+            )
             index -= 1
-            # Was keine Bahn fasst, wird unten nicht wieder weiter.
             if sky.area < smallest:
                 sky = ShapelyPolygon()
         found[start] = sky
@@ -1927,26 +1938,40 @@ def _open_above(
     """Ist die Säule von oben erreichbar (:func:`channel_space`)?
 
     Erreichbar heißt: Neben ihr, im Saum von zwei Bahnbreiten und mit ihr durch
-    freien Raum der Scheibe (``material``) verbunden, liegt freier Raum, über
-    dem bis über das Teil hinaus kein Material liegt (``sky``, aus
-    :func:`_sky_above`) — mindestens eine Bahn breit. Ein Loch der Fläche ist
-    das nicht: Das Innere eines oben offenen Bechers ist in jedem Schnitt eins,
-    und der Wasserkanal der Waschschüssel liegt im oben offenen Becken unter
-    einem Dach.
+    freien Raum der Scheibe (``material``) verbunden, liegt mindestens eine Bahn
+    breit ein Schacht, der bis über das Teil hinaus offen ist (``sky``, aus
+    :func:`_sky_above`) und einen Kreis von ``CHANNEL_WIDTH`` fasst. Ein Loch
+    der Fläche ist das nicht: Das Innere eines oben offenen Bechers ist in jedem
+    Schnitt eins, und der Wasserkanal der Waschschüssel liegt im oben offenen
+    Becken unter einem Dach.
+
+    **Der Schacht so weit wie ein Kanal**, derselbe Kreis wie in
+    :func:`_narrow`: Durch einen engeren Spalt holt niemand eine Stütze heraus.
+    Eine Bahn breit genügte, und ein Becher mit Deckel und einem Schlitz von
+    0,5 mm neben dem Sims galt als offen (Review RM-571: 4 statt 64 % des
+    Simses im Sperrraum).
+
+    **Ausgespart wird die ganze Säule**, auch was von ihr unter einem Dach
+    liegt (Entscheidung, Review RM-571): Ihr Stück braucht selbst Stütze, und
+    eine zur Hälfte gesperrte Säule stützte der Slicer nur zur Hälfte — die
+    Lücke des Wedge-Locks (``open_columns``). Die Stütze darunter ist ein
+    Körper; wer ihr offenes Ende greift, zieht auch den Rest heraus.
     """
     if sky.is_empty:
         return False
+    radius = CHANNEL_WIDTH / 2.0
+    core = sky.buffer(-radius, quad_segs=CHANNEL_QUAD_SEGMENTS)
+    if core.is_empty:
+        return False
+    shaft = core.buffer(radius, quad_segs=CHANNEL_QUAD_SEGMENTS)
     seam = _seam(column, line_width).difference(material)
     # Nur, was mit der Säule zusammenhängt: Hinter einer dünnen Wand liegt der
     # Himmel außerhalb des Teils.
     reach = [part for part in _areas_of(seam) if part.intersects(column)]
     if not reach:
         return False
-    opening = unary_union(reach).intersection(sky)
-    return (
-        opening.area >= _smallest_opening(line_width)
-        and not _eroded(opening, line_width / 2.0).is_empty
-    )
+    opening = unary_union(reach).intersection(shaft)
+    return not _eroded(opening, line_width / 2.0).is_empty
 
 
 def _with_usable_holes(part: ShapelyPolygon, line_width: float) -> ShapelyPolygon:
@@ -4476,7 +4501,7 @@ def _channel_space(
     top = float(highs.max())
     indices = [index for index, z in enumerate(heights) if bottom <= z <= top]
     chunks = [indices[start : start + stride] for start in range(0, len(indices), stride)]
-    # Den offenen Himmel über dem Saum einer Säule (:func:`_sky_above`) fragt
+    # Den offenen Himmel um den Saum einer Säule (:func:`_sky_above`) fragt
     # nur, wer wissen will, ob sie von oben erreichbar ist — je Säule einmal für
     # alle Scheiben, die sie kreuzt, und jede Schicht dafür einmal gebaut.
     shades: dict[int, ShapelyPolygon] = {}
@@ -4498,7 +4523,7 @@ def _channel_space(
                     and other_highs[number] >= heights[chunk[0]]
                 ]
                 skies[number] = _sky_above(
-                    _seam(others[number], line_width), starts, shade_at, len(layers), line_width
+                    _sky_window(others[number], line_width), starts, shade_at, len(layers)
                 )
             return skies[number][start]
 

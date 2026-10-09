@@ -1065,11 +1065,12 @@ def test_in_an_enclosed_cavity_nothing_is_spared() -> None:
     assert blocked.intersection(footprint).area > 15.0, "die Säule bleibt gesperrt"
 
 
-def cup_with_a_ledge() -> MeshData:
+def cup_with_a_ledge(*extra: trimesh.Trimesh) -> MeshData:
     """Ein oben offener Becher, außen Ø 80 mm, innen Ø 68 mm, 60 mm hoch, Boden 4 mm.
     Innen an der Wand ein Block von 4 bis 34 mm Höhe mit einem Tunnel von 8 mm
     Weite bis 20 mm Höhe (eine Kanaldecke), daneben, 6 mm vom Tunnel, ein Sims
     14 × 14 mm auf 15 mm Höhe, der Stütze braucht (Review 2 zu RM-566, RM-571).
+    ``extra`` kommt dazu, etwa ein Deckel.
 
     In jedem waagerechten Schnitt ist das Innere des Bechers ein Loch der
     Fläche, wie das Innere jedes oben offenen Gefäßes."""
@@ -1081,7 +1082,23 @@ def cup_with_a_ledge() -> MeshData:
     block = trimesh.boolean.difference(
         [brick(22.0, 16.0, 30.0, (25.0, 0.0, 19.0)), brick(8.0, 30.0, 16.0, (24.0, 0.0, 12.0))]
     )
-    return on_bed(shell, block, brick(14.0, 14.0, 3.0, (7.0, 0.0, 16.5)))
+    return on_bed(shell, block, brick(14.0, 14.0, 3.0, (7.0, 0.0, 16.5)), *extra)
+
+
+def cup_lid(opening: trimesh.Trimesh) -> trimesh.Trimesh:
+    """Ein Deckel 3 mm auf dem Becher aus :func:`cup_with_a_ledge`, ohne ``opening``."""
+    lid = trimesh.creation.cylinder(radius=40.0, height=3.0, sections=96)
+    lid.apply_translation((0.0, 0.0, 61.5))
+    return trimesh.boolean.difference([lid, opening])
+
+
+def ledge_share_blocked(body: MeshData) -> float:
+    """Welcher Anteil des Simses unter ihm im Sperrraum liegt."""
+    result = slice_body(body, 0.5)
+    model = model_support(result)
+    under = [region for low, _high, region in channel_space(result, model, LINE) if low < 15.0]
+    assert model.channel_columns and len(under) > 5, "die Sperre reicht bis unter den Sims"
+    return unary_union(under).intersection(CUP_LEDGE).area / CUP_LEDGE.area
 
 
 #: Grundriss des Simses im Becher.
@@ -1124,19 +1141,63 @@ def test_a_column_under_a_cover_in_an_open_cup_stays_blocked() -> None:
     im oben offenen Becken; „zur Hälfte überdacht“, nach dem Loch gefragt, nahm
     ihr fast die ganze Sperre (169 209 → 9 468 mm³). Hier eine Säule im Tunnel
     desselben Bechers, unter dem Block: Sie bleibt gesperrt."""
-    from app.core.types import Polygon
+    from tests.helpers import slice_contour
 
     result = slice_body(cup_with_a_ledge(), 0.5)
     model = model_support(result)
     column = ((22.0, -2.0), (26.0, -2.0), (26.0, 2.0), (22.0, 2.0))
     footprint = box(22.0, -2.0, 26.0, 2.0)
-    beside = replace(model, open_columns=(*model.open_columns, (Polygon(column), 4.0, 19.0)))
+    beside = replace(model, open_columns=(*model.open_columns, (slice_contour(column), 4.0, 19.0)))
 
-    slabs = channel_space(result, beside, LINE)
+    covered = [region for _low, high, region in channel_space(result, beside, LINE) if high <= 18.0]
 
-    for _low, high, region in slabs:
-        if high <= 18.0:
-            assert region.intersection(footprint).area == pytest.approx(footprint.area, rel=1e-6)
+    assert len(covered) > 5, "die Sperre reicht durch den Tunnel"
+    for region in covered:
+        assert region.intersection(footprint).area == pytest.approx(footprint.area, rel=1e-6)
+
+
+@pytest.mark.parametrize("slit", [0.5, 1.0, 2.0])
+def test_a_slit_in_a_lid_does_not_open_the_cup(slit: float) -> None:
+    """Von oben erreichbar heißt durch einen Schacht so weit wie ein Kanal
+    (``CHANNEL_WIDTH``, derselbe Kreis wie für die Enge): Durch einen Schlitz
+    holt niemand eine Stütze unter einem Sims heraus. Eine Bahn breit genügte
+    bis zum Review von RM-571, und mit einem Schlitz ab 0,5 mm im Deckel lag
+    der Sims frei wie im offenen Becher (4 statt 64 %). Hier der Becher mit
+    Deckel, der Schlitz unmittelbar neben dem Sims."""
+    lid = cup_lid(brick(slit, 80.0, 5.0, (-slit / 2.0, 0.0, 61.5)))
+
+    assert ledge_share_blocked(cup_with_a_ledge(lid)) > 0.5
+
+
+def test_a_lid_open_wider_than_a_channel_opens_the_cup() -> None:
+    """Die Gegenprobe zum Schlitz: Ist der Deckel neben dem Sims weiter offen als
+    ein Kanal (34 mm), liegt der Sims frei wie im offenen Becher."""
+    lid = cup_lid(brick(40.0, 80.0, 5.0, (-20.0, 0.0, 61.5)))
+
+    assert ledge_share_blocked(cup_with_a_ledge(lid)) < 0.05
+
+
+def test_open_sky_is_asked_two_line_widths_around_a_column_even_at_a_tip() -> None:
+    """Der Saum, in dem eine Säule nach offenem Himmel fragt, ist überall zwei
+    Bahnbreiten weit, auch an einer spitzen Ecke. Mit Gehrung reichte er dort
+    bis zehn Bahnbreiten, und ein Sims mit einer spitzen Nase, deren Spitze 3 mm
+    vor der Öffnung lag, galt als erreichbar, derselbe Sims ohne Nase nicht
+    (Review RM-571). Gerechnet an der Frage selbst: Ein Becher mit Deckel fasst
+    neben einer Nase keinen Schacht von ``CHANNEL_WIDTH``."""
+    from app.core.slice.analysis import _open_above
+
+    square = box(0.0, -7.0, 14.0, 7.0)
+    nosed = unary_union([square, ShapelyPolygon([(0.5, -1.4), (0.5, 1.4), (-14.0, 0.0)])])
+    nothing = ShapelyPolygon()
+
+    def sky_from(edge: float) -> ShapelyPolygon:
+        return box(edge - 40.0, -40.0, edge, 40.0)
+
+    assert not _open_above(nosed, nothing, sky_from(-17.0), LINE), "Spitze 3 mm vor dem Himmel"
+    assert not _open_above(square, nothing, sky_from(-3.0), LINE), "Kante 3 mm vor dem Himmel"
+    # Gegenprobe: näher als zwei Bahnbreiten, mit Platz für eine Bahn, ist offen.
+    assert _open_above(nosed, nothing, sky_from(-14.2), LINE)
+    assert _open_above(square, nothing, sky_from(-0.2), LINE)
 
 
 def test_open_sky_is_asked_at_each_slab() -> None:
@@ -1145,13 +1206,13 @@ def test_open_sky_is_asked_at_each_slab() -> None:
     unter dem Sims des Bechers, die bis über ihn reicht; der Sims ist nur Dach,
     seine eigene Säule bleibt weg. Unter ihm bleibt sie gesperrt, über ihm
     nicht."""
-    from app.core.types import Polygon
+    from tests.helpers import slice_contour
 
     result = slice_body(cup_with_a_ledge(), 0.5)
     model = model_support(result)
     column = ((6.0, -3.0), (10.0, -3.0), (10.0, 3.0), (6.0, 3.0))
     footprint = box(6.0, -3.0, 10.0, 3.0)
-    under = replace(model, open_columns=((Polygon(column), 4.0, 21.0),))
+    under = replace(model, open_columns=((slice_contour(column), 4.0, 21.0),))
 
     slabs = channel_space(result, under, LINE)
 
@@ -1171,7 +1232,7 @@ def test_open_sky_must_be_beside_the_column_and_a_line_wide(opening: str) -> Non
     außerhalb des Teils, und durch einen Schlitz, schmaler als eine Bahn, holt
     niemand eine Stütze heraus. Hier eine geschlossene Kammer, die Säule an
     ihrer Wand von 0,2 mm bzw. unter einem Schlitz von 0,3 mm in der Decke."""
-    from app.core.types import Polygon
+    from tests.helpers import slice_contour
 
     if opening == "thin wall":
         block = brick(20.4, 30.4, 40.0, (0.0, 0.0, 20.0))
@@ -1188,7 +1249,7 @@ def test_open_sky_must_be_beside_the_column_and_a_line_wide(opening: str) -> Non
     result = slice_body(place_on_bed(MeshData.of(body)), 0.5)
     model = model_support(result)
     footprint = ShapelyPolygon(column)
-    beside = replace(model, open_columns=(*model.open_columns, (Polygon(column), 8.0, 27.0)))
+    beside = replace(model, open_columns=(*model.open_columns, (slice_contour(column), 8.0, 27.0)))
 
     blocked = unary_union(
         [region for _low, high, region in channel_space(result, beside, LINE) if high <= 27.0]
