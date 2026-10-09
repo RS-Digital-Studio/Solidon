@@ -27364,6 +27364,38 @@ Brückentest. Kein Slicerlauf: Die Übergabe ändert sich nur, wo der Rat bisher
 Rands Stützen einschaltete, und kehrt dort zum Herstellerprofil ohne Stützen zurück; dass Ränder
 ohne Stütze drucken, belegt [RM-582](#rm-582). Changelog: ja.
 
+**Review (09.10.2026 nachts), behoben:**
+- *Flanke:* Eine Flanke zwischen etwa 14° und 45° legt je Schicht ein Band frei (über der
+  Brückenzugabe, unter der des Überhangs), das Rand und Sporn zu einer freien Fläche verband; die
+  Konsole maß mit (Wand mit zwei Flanken unter 30°, Sporn 9 mm²: 40,1 statt 6,2 mm, Stützen und
+  Warnung). `analysis._widest_bridge` misst mit `touching` nur die Kerne, die ein übriges Stück
+  berühren (ein Kern liegt ganz in einem Überhangstück); gilt auch für `open_bridge_width`. Der Ort
+  der Warnung liegt an der gemessenen Brücke (`span_spot`).
+- *Kosten:* `span_beside` maß jede Schicht mit Rand bei jedem Bericht neu (Waschschüssel 2,8 s für
+  eine Schicht). Gemerkt je Schnitt, Schicht und Auswahl; nimmt die Auswahl nichts weg, gilt
+  `bridge_width` ohne Messung. Warm Waschschüssel 0,00 statt 2,1–3,3 s, Drache 0,00 statt 0,5 s.
+  `cancelled` reicht bis `span_beside`, und `support_need` gibt ihn der Kanalfrage, die ihn je
+  Schicht, Kreisfrage und Decke fragt (Drache 45°: 446 s ohne Abbruch).
+- *Matrix:* siehe oben, `support_ways`.
+- *Kanaldecke:* Der Bericht riet über einem Tunnel von 20 mm seit v0.5.3 „oder eine Stütze“, wo
+  der Rat keine verlangt. `_from_spans` fragt die Kanaldecken der spannenden Schichten
+  (`channel_pieces`, aus der gemerkten vollen Antwort, sonst eng und nur für Stücke, die weiter als
+  15 mm spannen können, `_may_span`): Spannt die Schicht ohne sie weiter, ist es eine Brücke,
+  gemessen und gezeigt ohne die Kanaldecke (Steg über 20 mm neben dem Tunnel: am Steg); sonst nennt
+  der Befund den Kanal und den Übergang unter 45°, ohne Stütze. Kalt am Drachen 45° 21 statt 3 s
+  (alle Stücke gefragt: 136 s), mit gemerktem Stützbedarf 0,9 statt 0,4 s.
+- *Beleg im Korpus:* Die Abschlussmessung „An Eiffelturm, Becher, Waschschüssel und Datei-Schnitt
+  ändert sich nichts“ lief auf drei Schnitten mit `detail="support"`, die keine Brückenweite tragen.
+  Nachgeholt mit vollem Schnitt (C2/PLA) über 22 Dateien aus `F:\3D Dateien` und dem
+  Drachenarbeitsplatz, 41 Körper, 7 mit spannender Schicht, 3 davon gemischt: Stützbedarf und
+  Brückenweite an keinem geändert. Der Ort der Warnung wandert am Arbeitsplattenreiniger (23,1 mm,
+  z 0,35) vom Rand (73,6; 51,3) an die gemessene Brücke (0,0; −56,2), am Drachen (15,4 mm) von
+  (41,2; 15,2) nach (39,4; 21,4). Den Kanaltext bekommt die Minigolfbahn `obj_1_Birleştir` (25,1 mm,
+  z 6,35, kein Stützbedarf, die Schicht ganz Kanaldecke) — dort stand bisher „oder eine Stütze
+  hilft“. Der Rat ändert sich auch, wo eine Kanaldecke neben einem kurzen Steg
+  liegt (Tunnel 20 mm, Steg über 12 mm vom Bett: vorher Stützen, jetzt keine — folgerichtig zur
+  Kanalregel); ein Slicerlauf zeigte dort nur den Slicer ohne Stützen.
+
 ## RM-572: Der Prüfbericht nennt die Stelle, wo viele kleine Überhänge Stützen verlangen (09.10.2026)
 
 <a id="rm-572-der-prüfbericht-nennt-die-stelle-wo-viele-kleine-überhänge-stützen-verlangen-09102026"></a>

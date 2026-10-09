@@ -82,7 +82,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Com suportes em árvore e junto a uma torre de purga, o Solidon propõe a distância do suporte em camadas inteiras, tal como o slicer a imprime.
 - Para PLA, o Solidon propõe mais espaço entre as muitas pontas finas e os suportes em árvore por baixo. Assim ficam menos resíduos das pontas dos suportes.
 - Se muitas saliências pequenas precisam de suportes juntas, como um queixo com a face inferior inclinada, o relatório indica agora o local.
-- Um rebordo estreito que se sustenta sozinho já não conta como ponte longa junto a outra saliência. O relatório já não avisa aí, e o Solidon não pede suportes por isso.
+- Um rebordo estreito que se sustenta sozinho já não conta como ponte longa, nem junto a outra saliência. O relatório já não avisa aí, e o Solidon não pede suportes por isso.
 - Sobre um canal, o relatório já não aconselha um suporte que depois não se conseguiria tirar. Indica o canal e uma transição abaixo de 45 graus.
 - Para PETG, o Solidon sugere arrefecimento total no suporte. Assim solta-se mais facilmente da peça.
 - Novo nas definições de impressão: *Camadas de separação inferiores*, *Folga na camada de separação* e *Arrefecimento total no suporte*.
