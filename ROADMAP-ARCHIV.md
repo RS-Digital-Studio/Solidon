@@ -44843,6 +44843,21 @@ tragen `targets:8`. Test `test_bore_pin.py::test_the_screw_bore_of_a_nut_trap_en
 (je Kern: Bohrung von z = 0 bis z = 12, der Stift lose und im Körper; am Stand davor rot mit
 -0,515 bis 22,01). Bereichsnachweis 49 von 49, Beispiele unverändert. Umgesetzt von Claude.
 
+**Nachtrag (09.10.2026, Paket G):** Die erste Fassung kürzte jede erklärte Durchgangsbohrung,
+auch die im eigenen Material eines anbauenden Bausteins, die am Träger vor dem Schritt in der
+Luft liegt: An Passungsleiter und Bajonett blieben 0,01 mm statt 3 und 11,625 mm, am
+Schlauchanschluss, der seinen Stutzen aufbaut, 3 statt 30 mm. **Zurückgenommen** ist damit die
+Aussage, außer der Mutternfalle bleibe alles, wie es war — Beispiele und Bereichsnachweis lesen
+die Länge erklärter Bohrungen nicht. Die Begrenzung gilt jetzt nur für bloß abtragende Bausteine
+(`only_cuts`), die Bausteinoperationen tragen `targets:9`. Test
+`test_bore_pin.py::test_a_part_that_builds_material_keeps_the_length_of_its_bores` (je Kern an
+Passungsleiter, Bajonett und Schlauchanschluss; ohne die Einschränkung sechs rot). An vier
+eingelesenen Modellen — Laptop-Ständer als Netz, drei exakte Körper — endet die Bohrung der
+Mutternfalle auf der größten Deckfläche im Körper statt 10,01 mm darüber in der Luft (am
+Teppichclip oben im Gegenbacken, den das Werkzeug mit durchbohrt), und *Stift für Bohrung* baut
+dort den Stift; ohne die Begrenzung sagte er an drei der vier ab, am vierten ragte der Stift
+10 mm aus der Fläche.
+
 ## RM-597: Ein exakt gesetztes Merkmal, das anderes Material nur auf einer Linie berührt, sagt es (09.10.2026)
 
 <a id="rm-597-ein-exakt-gesetztes-merkmal-das-anderes-material-nur-auf-einer-linie-berührt-sagt-es-09102026"></a>

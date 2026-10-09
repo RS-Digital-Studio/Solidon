@@ -78,10 +78,12 @@ Bauteil und nimmt nichts weg.
 - **Eine Einführfase wird als solche erklärt** (`build.bore(lead_in=True)`):
   Sie ist keine Bohrung, in die ein Stift gehört, und die Karte bietet dort
   keinen an (`perceive.actions.not_offered_at`).
-- **Eine erklärte Durchgangsbohrung endet an den Grenzen des Körpers**
-  (`ops._through_bores_in_the_body`, RM-598): Das Werkzeug darf über die Form
-  hinausreichen, damit es durch jede Wand geht, die Erklärung nicht. Gemessen
-  wird am Träger vor dem Schnitt, entlang der Achse.
+- **Die erklärte Durchgangsbohrung eines bloß abtragenden Bausteins endet im
+  Körper** (`ops._through_bores_in_the_body`, RM-598): Das Werkzeug darf über
+  die Form hinausreichen, damit es durch jede Wand geht, die Erklärung nicht.
+  Gemessen wird am Träger vor dem Schnitt, entlang der Achse — darum nur dort:
+  Die Bohrung eines anbauenden Bausteins oder seines Aufbaus (`host_add`) liegt
+  in Material, das der Träger noch nicht hat.
 - **Schräg zur Fläche gesetzt, öffnet er trotzdem bis über sie.** Die Richtung
   bleibt Eingabe; angehoben wird der Deckel der Öffnung
   (`ops._opened_to_the_face`) bis über die **Ebene der Fläche am

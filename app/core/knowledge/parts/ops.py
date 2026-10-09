@@ -497,9 +497,10 @@ def _register_one(spec: PartSpec, params: type[BaseParams], registry: Registry |
         # von davor trüge weder den Satz noch die freie Öffnung. targets:7 —
         # in einer Bohrung, die schon weiter ist, sagt er das statt „neben
         # dem Körper“ (``parts.bore_too_wide``). targets:8 — eine erklärte
-        # Durchgangsbohrung endet an den Grenzen des Körpers
-        # (:func:`_through_bores_in_the_body`, RM-598).
-        cache_version=f"{_result_version(spec)}:targets:8",
+        # Durchgangsbohrung endet im Körper (:func:`_through_bores_in_the_body`,
+        # RM-598). targets:9 — das nur bei einem bloß abtragenden Baustein; die
+        # Bohrungen eines anbauenden behalten ihre Länge.
+        cache_version=f"{_result_version(spec)}:targets:9",
         params=params,
         consumes=1,
         produces=1,
@@ -1255,7 +1256,10 @@ def _insert_at(ctx: OpContext, spec: PartSpec) -> OpResult:
         added_features,
     )
     features = _through_bores_in_the_body(
-        features, set(features) - set(source.features), as_mesh_data(body)
+        features,
+        set(features) - set(source.features),
+        as_mesh_data(body),
+        only_cuts=subtractive and spec.host_add is None,
     )
 
     # Und die Gegenprobe zu „hat nichts bewirkt": Er hat etwas hinzugefügt, nur
@@ -1578,24 +1582,33 @@ def _spring_finding(name: str, params: BaseParams, profile: Profile | None) -> F
 
 
 def _through_bores_in_the_body(
-    features: dict[str, Feature], fresh: Iterable[str], host: MeshData
+    features: dict[str, Feature], fresh: Iterable[str], host: MeshData, *, only_cuts: bool
 ) -> dict[str, Feature]:
-    """Eine erklärte Durchgangsbohrung endet an den Grenzen des Körpers (RM-598).
+    """Eine erklärte Durchgangsbohrung eines abtragenden Bausteins endet im Körper (RM-598).
 
-    Ein Baustein schneidet sein Durchgangsloch über die eigene Form hinaus,
-    damit es durch jede Wand geht — die Mutternfalle 10 mm über die Tasche
-    hinaus nach beiden Seiten —, und erklärte die Bohrung über diese ganze
-    Länge. Auf der Deckfläche eines 12 mm dicken Quaders lag sie von z = -0,5
-    bis z = 22, fast zur Hälfte in der Luft, und *Stift für Bohrung* sagte ab,
-    dort sei kein Hohlraum im Körper. Gemessen wird am Träger vor dem Schnitt,
-    entlang der Achse: Wo sie im Material liegt, wird gebohrt
-    (:func:`_material_span`). Liegt sie nirgends im Material oder ist der
+    Ein abtragender Baustein schneidet sein Durchgangsloch über die eigene Form
+    hinaus, damit es durch jede Wand geht — die Mutternfalle 10 mm über die
+    Tasche hinaus nach beiden Seiten —, und erklärte die Bohrung über diese
+    ganze Länge. Auf der Deckfläche eines 12 mm dicken Quaders lag sie von
+    z = -0,5 bis z = 22, fast zur Hälfte in der Luft, und *Stift für Bohrung*
+    sagte ab, dort sei kein Hohlraum im Körper. Gemessen wird am Träger vor dem
+    Schnitt, entlang der Achse: Wo sie im Material liegt, wird gebohrt
+    (:func:`_material_span`); ist der Träger dicker, als das Werkzeug reicht,
+    endet sie mit dem Werkzeug. Liegt sie nirgends im Material oder ist der
     Träger nicht dicht, bleibt die Erklärung, wie sie war.
+
+    **Nur, wo der Baustein bloß abträgt** (``only_cuts``). Die Bohrung im
+    eigenen Material eines anbauenden Bausteins oder in seinem Aufbau
+    (``host_add``) liegt am Träger vor dem Schritt in der Luft: An
+    Passungsleiter und Bajonett blieb von ihr das Hundertstel, mit dem sie in
+    den Träger sinken, am Schlauchanschluss 3 statt 30 mm.
     """
     import numpy as np
 
     from app.core.perceive.features import _triangle_bounds
 
+    if not only_cuts:
+        return features
     triangles = np.asarray(host.raw.triangles, dtype=np.float64)
     if not len(triangles) or not host.is_watertight:
         return features
@@ -1977,7 +1990,10 @@ def _insert_at_exact(
         added_features,
     )
     features = _through_bores_in_the_body(
-        features, set(features) - set(source.features), as_mesh_data(body)
+        features,
+        set(features) - set(source.features),
+        as_mesh_data(body),
+        only_cuts=subtractive and spec.host_add is None,
     )
     loose = (
         _host_split(original_body, prepared, spec, source)

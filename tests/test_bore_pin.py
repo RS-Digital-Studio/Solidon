@@ -1119,3 +1119,45 @@ def test_the_screw_bore_of_a_nut_trap_ends_in_the_body_and_takes_a_pin(
     highest = np.asarray(body.bounds.maximum, dtype=float) + TOLERANCE
     assert (np.asarray(made.bounds.minimum, dtype=float) >= lowest).all()
     assert (np.asarray(made.bounds.maximum, dtype=float) <= highest).all()
+
+
+@pytest.mark.parametrize("kind", ["mesh", "brep"])
+@pytest.mark.parametrize("part", ["fit_ladder", "bayonet", "hose_barb"])
+def test_a_part_that_builds_material_keeps_the_length_of_its_bores(
+    profile: Profile, kind: str, part: str
+) -> None:
+    """RM-598, Nachtrag: Die Begrenzung kürzte die Bohrungen anbauender Bausteine.
+
+    Gemessen wurde am Träger vor dem Schritt. Eine Bohrung im eigenen Material
+    eines Bausteins, der Material anbaut, liegt dort in der Luft, und übrig
+    blieb das Hundertstel, mit dem er in den Träger sinkt: an Passungsleiter
+    und Bajonett 0,01 mm statt 3 und 11,6 mm, am Schlauchanschluss, der seinen
+    Stutzen aufbaut, 3 statt 30 mm. Soll: Jede Durchgangsbohrung eines solchen
+    Bausteins behält die Länge, die er selbst erklärt.
+    """
+    from app.core.knowledge.parts.ops import _built_part
+    from app.core.knowledge.parts.registry import PARTS
+    from app.core.registry import REGISTRY
+
+    load_operations()
+    placement = {"z": 12.0, "nx": 0.0, "ny": 0.0, "nz": 1.0}
+    spec = PARTS.get(part)
+    _values, produced = _built_part(
+        spec, REGISTRY.get(f"insert_{part}").params(**placement), profile, "fine"
+    )
+    declared = {
+        key: feature
+        for key, feature in produced.features.items()
+        if feature.kind == "hole" and feature.params.get("through")
+    }
+    assert declared, part
+    carrier = _box(
+        kind,
+        profile,
+        OperationDraft(op=f"insert_{part}", inputs=("obj_1",), params=placement),
+    )
+    for key, feature in declared.items():
+        placed = carrier.features[f"{part}_{key}"]
+        assert float(placed.params["depth"]) == pytest.approx(
+            float(feature.params["depth"]), abs=TOLERANCE
+        ), key
