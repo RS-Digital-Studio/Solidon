@@ -34,10 +34,17 @@ Interpreter des Hauptklons.
 | `sonde_kinn.py <wurzel> [<unterseite> …]` | Stützbedarf an einer schrägen Unterseite: Streifen, Decke, Streifenbreite (RM-570) |
 | `sonde_zeit_bedarf.py <wurzel> <netz.stl>` | Zeit von `support_need` bei 0,2 und 1,0 mm |
 | `messe_kandidat.sh <ordner>` · `messe_paar.sh <alt> <neu> <name>` | Endmessungen eines Matrixordners; Stütze im alten Sperrkörper alt gegen neu |
+| `gcode_schichtzeit.py <aus.json> <name=gcode…>` | Schichtzeit je Schicht (Weg durch Vorschub), Tempo je Bahnart, Kühl- und Überhangschlüssel der Konfiguration (RM-580) |
+| `gcode_anschlag.py <mindesttempo> <gcode> …` | Schichten am Anschlag des Mindesttempos: dort erreicht der Slicer seine Mindestzeit nicht (RM-580) |
+| `stuetze_je_hoehe.py <gcode…>` | Stützbahn je 10-mm-Band mit Ausdehnung — wo am Turm die Stütze steht |
+| `sonde_offene_stuecke.py` · `sonde_kanten.py` · `sonde_reichweite.py` · `sonde_boegen.py` `<wurzel> <netz.stl>` | offene Überhänge nach Fläche, Breite, Reichweite über ihre Wurzel, ob sie sich schließen (RM-582, Eiffelturm) |
+| `elegoo_variante.py <übergabe.3mf> <ordner> <schlüssel=wert…>` | eine Elegoo-Übergabe mit geänderten Prozesswerten neu schneiden (Brücken nicht stützen: kaum Wirkung, 831 → 826 m) |
+| `seitenbild.py <netz.stl> <bild.png> [<z,…>]` | Schattenriss von der Seite mit Höhenmarken |
 
-`gcode_stuetzen.py` meldet zwei Anteile: alle Überhangstücke und die außerhalb
-der Kanaldecken (`open_share`, nach der Kanalfrage der Code-Wurzel). Verglichen
-wird der zweite — die Stütze unter einer Kanaldecke soll fehlen.
+`gcode_stuetzen.py` meldet drei Anteile: alle Überhangstücke, die außerhalb der
+Kanaldecken (`open_share`, nach der Kanalfrage der Code-Wurzel) und seit RM-582 die
+ohne Kanaldecken und Ränder (`needed_share`). Verglichen wird der dritte — unter
+Kanaldecken und Rändern soll die Stütze fehlen.
 
 Die Matrix über alle Slicer läuft mit `tools/matrix_unit.py <wurzel> <modell> <ordner> heim`
 und `GESAMT_BEHALTEN=1`, sonst löscht das Werkzeug unauffällige G-Codes, die

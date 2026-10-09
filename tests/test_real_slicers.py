@@ -142,3 +142,64 @@ def test_a_cube_comes_back_as_a_print_file_with_measured_figures(
     assert metrics.layer_count is not None and metrics.layer_count >= 50, metrics
     assert metrics.print_seconds is not None and metrics.print_seconds > 60, metrics
     assert metrics.filament_mm is not None and metrics.filament_mm > 100, metrics
+
+
+@pytest.mark.parametrize(
+    "program",
+    [pytest.param(program, marks=pytest.mark.slicer(program), id=program) for program in PROGRAMS],
+)
+def test_every_installed_slicer_stays_on_offer(program: str, installed_slicer: Path) -> None:
+    """„alle slicer bei linux und mac sollen dazu gehören“ (Robert, 08.10.2026).
+
+    Die Slicerlisten zeigen nur noch, was ``tools.is_supported_slicer`` annimmt
+    (RM-601). Hier gegen das Programm, wie die Suche es auf diesem Rechner
+    findet: als AppImage, Flatpak oder Paket unter Linux, als Bündel auf dem
+    Mac. Ein Unterstrich im AppImage-Namen hatte Bambu Studio dort aus der
+    Familie geworfen.
+    """
+    from app.core import tools
+
+    assert tools.is_supported_slicer(installed_slicer), installed_slicer
+    assert handover.detect(installed_slicer).flavour != "other", installed_slicer
+
+
+@pytest.mark.slicer("elegooslicer")
+def test_an_adopted_twin_and_its_built_in_printer_share_the_machine(
+    installed_slicer: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Eingebauter Centauri Carbon 2 im Projekt, derselbe aus dem Slicer übernommen (RM-600).
+
+    Am echten Bestand: Die Übergabe nimmt die 0,4er Maschine des Herstellers,
+    obwohl ein übernommener Drucker ihren Namen trägt.
+    """
+    machine = "Elegoo Centauri Carbon 2 0.4 nozzle"
+    monkeypatch.setattr(slicer_profiles, "chosen_machine", lambda *_args: machine)
+    built_in = profiles.make_profile("centauri-carbon-2", "pla")
+    profiles.save_printer(
+        replace(built_in.printer, id="slicer-orca-twin", title=machine), slicer="elegooslicer"
+    )
+    setup = handover.detect(installed_slicer)
+
+    assert handover.machine_for(setup, built_in) == machine
+    assert handover.machine_missing(setup, built_in) == []
+
+
+@pytest.mark.slicer("anycubicslicernext")
+def test_a_related_device_never_hands_its_machine_to_the_smaller_printer(
+    installed_slicer: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Steht der Slicer auf dem Kobra 2 Max, bekommt ein Kobra-2-Projekt dessen Maschine nicht.
+
+    Bis zum 08.10.2026 meinte „Anycubic Kobra 2" auch den Kobra 2 Max: Startcode
+    und Bauraum des größeren gingen in die Datei des kleineren (RM-600, Review).
+    """
+    monkeypatch.setattr(
+        slicer_profiles, "chosen_machine", lambda *_args: "Anycubic Kobra 2 Max 0.4 nozzle"
+    )
+    kobra = profiles.make_profile("anycubic-kobra-2", "pla")
+    setup = handover.detect(installed_slicer)
+
+    assert handover.machine_for(setup, kobra) == ""
+    assert [finding.code for finding in handover.machine_missing(setup, kobra)] == [
+        "slicer.machine_mismatch"
+    ]

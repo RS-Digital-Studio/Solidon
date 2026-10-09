@@ -23,7 +23,9 @@ stehen mit Nachweis im Archiv.
 
 Priorität: Kundenabstürze und blockierte Hauptwege, danach falsche Ergebnisse
 und Bedienfehler, danach Ausbau und interne Verbesserungen. Fristgebundene
-Auflagen werden daneben rechtzeitig bearbeitet. **Als Nächstes:** die Kundenblocker nach
+Auflagen werden daneben rechtzeitig bearbeitet. Die nächste Version ist **0.6.0**, ein
+0.5.4 gibt es nicht (Entscheidung Robert, `tools/bump_version.py --minor`).
+**Als Nächstes:** die Kundenblocker nach
 0.5.3 — das signierte Paket startet auf echten Intel-Macs nicht (RM-104; Ursache eingegrenzt,
 am Kundengerät von Hand gegengeprobt, Signierschritt korrigiert, kommt mit dem nächsten Tag),
 Cura unter Linux (RM-521, gebaut, Abnahme beim Kunden mit dem nächsten Paket) — und die mit
@@ -64,6 +66,13 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-217 — Die Zuordnungsfrage zeigt das alte Merkmal nicht im Bild](#rm-217) | Geometrie, Erkennung und Druckvorbereitung | Altmerkmal und Kandidat werden gemeinsam markiert; Kern-, Ansichts- und Regressionstests grün. Offen: echter Fensterbeleg im Release unter RM-213 |
 | [RM-571 — Ein Sims im offenen Becher neben einem gesperrten Kanal verliert Stütze](#rm-571) | Geometrie, Erkennung und Druckvorbereitung | Ein Maß für „von oben erreichbar“ finden, das den offenen Becher vom Rohrbogen der Schüssel trennt |
 | [RM-572 — Der Prüfbericht nennt keine Stelle, wo viele kleine Überhänge Stützen verlangen](#rm-572) | Geometrie, Erkennung und Druckvorbereitung | Text für „viele kleine Überhänge zusammen“ und eine Feldfrage im Budget §31 |
+| [RM-583 — Stützabstand und Kontaktlagen passen zu Material, Schichthöhe und Auflage](#rm-583) | Geometrie, Erkennung und Druckvorbereitung | Abstand und Kontaktlagen je Material und Schichthöhe, unten wie oben auf dem Modell, Kontaktlüfter |
+| [RM-584 — Die Stützart folgt der Deckenform, und hohe Bäume stehen stabil](#rm-584) | Geometrie, Erkennung und Druckvorbereitung | Hybrid oder normal unter flachen Decken, Baumwände und Fuß ab etwa 100 mm, Baumspitze |
+| [RM-585 — Bögen, die sich zwischen ihren Beinen schließen, tragen sich selbst](#rm-585) | Geometrie, Erkennung und Druckvorbereitung | Schließfrage für weite Bögen, Brückenregel für die letzte Spanne |
+| [RM-586 — Feine Schichten, wo das Modell feine Formen hat](#rm-586) | Geometrie, Erkennung und Druckvorbereitung | Variable Schichthöhe über die 3MF, Deckschichten mindestens 0,8 mm |
+| [RM-587 — Lange Brücken und steile Überhänge drucken sauber](#rm-587) | Geometrie, Erkennung und Druckvorbereitung | Dicke Brücke und Fluss über langen Brücken, Zusatzwände an steilen Überhängen |
+| [RM-588 — Die Naht liegt hinten, und große Oberseiten werden gebügelt](#rm-588) | Geometrie, Erkennung und Druckvorbereitung | Naht hinten bei Figuren, Bügeln der obersten Fläche |
+| [RM-589 — Bohrungen und Stifte passen ohne Nacharbeit](#rm-589) | Geometrie, Erkennung und Druckvorbereitung | Loch- und Elefantenfußausgleich aus dem Spiel des Materialprofils |
 | [RM-218 — Am exakten Körper heißen Bohrungen nach ihrer Lage, und der Verlauf lässt sich dort nicht umbauen](#rm-218) | Geometrie, Erkennung und Druckvorbereitung | Code und Tor mit `d907d6036` in v0.5.2; offen allein die Fensterabnahme beim Release (RM-213) |
 | [RM-230 — Variable Verrundung und Formschräge: fünf Grenzen, die der Kunde merkt](#rm-230) | Geometrie, Erkennung und Druckvorbereitung | Grenzen 1 bis 3 gebaut oder benannt (06.10.: Mischecke exakt geprüft, Ring-Anfang und Zwischenstellen in den Feldhilfen); Tray: beide Kerne nennen die Fußrundung vor der Rechnung, aber der Weg über *Merkmal entfernen* trägt dort nicht; offen: Fußrundung als Kette entfernen, Netzschräge 2,3× langsamer, Fase am Fuß, B-Spline-Ecke und zweites Anstellen am Netz mit Kernen uneins |
 | [RM-253 — Am Laptop-Ständer tragen Kippen und Verdoppeln einer Bohrung falsch ab](#rm-253) | Geometrie, Erkennung und Druckvorbereitung | 14 von 28 Bohrungen tragen ein fremdes Teil und sagen das jetzt mit Weg, statt es still zu verschmelzen (RM-413, 06.10.); offen an den freien `hole_1`/`hole_2`/`hole_4`: Verdoppeln ohne Wirkung, −127 mm³ bzw. +1,4–1,9 mm³ beim Versetzen und Kippen — gegen einen Sollwert ohne Boolesche an der kaputten Schale messen |
@@ -902,6 +911,70 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   8,2 s CPU, an Laptop-Riser, Spiderman und Kumiko 3,3 bis 4,8 s (gegen 42 bis 99 s Schnitt),
   der Bericht darf sie nicht ungefragt stellen (§31). Abnahme: Kinn und Drache bekommen
   einen Befund mit Ort, der Gitterbecher keinen, die Berichtszeit bleibt im Budget.
+
+<a id="rm-583"></a>
+
+- [ ] **RM-583 — Stützabstand und Kontaktlagen passen zu Material, Schichthöhe und Auflage.**
+  Solidon lässt Z-Abstand, Kontaktlagen, deren Abstand und Muster beim Hersteller
+  (`support.z_gap` hat ein Feld, aber keine Regel). Die Recherche vom 08.10.2026
+  (`konzepte/recherche-slicer-einstellungen-2026-10.md`, Nr. 1, 2, 3, 7) nennt die
+  häufigsten Ursachen für Narben und verschweißte Stützen: oberer Abstand nicht auf die
+  Schichthöhe abgestimmt (PLA etwa eine Schicht, PETG 1,25 bis 1,5), unten 0 Lagen und 0 mm,
+  wo Stützen auf dem Modell stehen (MK4S-Profil), Kontaktlagen zu dicht unter kleinen
+  gewölbten Flächen, Kontaktlüfter aus (alle Orca-Profile −1). Abnahme: je Material und
+  Schichthöhe ein Vorschlag mit Grund, gemessen am G-Code des Drachen (Abstand und Lagen an
+  der Kontaktfläche) in allen Slicerfamilien.
+
+<a id="rm-584"></a>
+
+- [ ] **RM-584 — Die Stützart folgt der Deckenform, und hohe Bäume stehen stabil.**
+  Bäume schlägt Solidon vor, wo kleine Überhänge auf dem Modell ansetzen (RM-581); unter
+  einer großen flachen Decke bleibt die Art des Herstellers. Orca kennt dafür Hybrid
+  (`tree_hybrid`), Prusa „snug“; dazu brechen hohe Bäume ohne zweite Wand und Fuß, und eine
+  Baumspitze unter der Stützbahn hinterlässt Punkte (Recherche Nr. 4, 5, 6). Abnahme: Stil
+  je Deckenform in allen Familien, Baumstabilität an einem hohen Körper im Slicer gemessen.
+
+<a id="rm-585"></a>
+
+- [ ] **RM-585 — Bögen, die sich zwischen ihren Beinen schließen, tragen sich selbst.**
+  Am Eiffelturm verlangt Solidon Stützen für die Bögen unten (Feld 360 mm², 19 mm
+  Reichweite): `_Ceilings.closes` lehnt die Gruppe ab, weil sie über das Gitter 1 056 Stücke
+  umfasst, und weite Räume gelten nie als Kanal. Ein Bogen trägt sich wie ein Gewölbe; nur
+  seine letzte Spanne ist eine Brücke. Abnahme: der Eiffelturm braucht keine Stützen, eine
+  flache Decke zwischen zwei Wänden weiter (Brückenregel), im Slicer geprüft.
+
+<a id="rm-586"></a>
+
+- [ ] **RM-586 — Feine Schichten, wo das Modell feine Formen hat.**
+  Solidon schlägt keine Schichthöhe nach Detail vor. OrcaSlicer, Bambu Studio und
+  ElegooSlicer lesen eine variable Schichthöhe aus `Metadata/layer_heights_profile.txt`,
+  PrusaSlicer aus `Slic3r_PE_layer_heights_profile.txt`, Cura hat
+  `adaptive_layer_height_enabled`; bei feinen Schichten werden Deckschichten unter 0,8 mm
+  dünn (Recherche Nr. 9, 10). Abnahme: am Drachen feine Schichten nur an Kuppen und
+  Schuppen, Druckzeit genannt, in allen Familien gemessen.
+
+<a id="rm-587"></a>
+
+- [ ] **RM-587 — Lange Brücken und steile Überhänge drucken sauber.**
+  Solidon meldet Brücken ab 15 mm und setzt nur Tempo und Lüfter. Dicke Brücken,
+  Brückenfluss und Zusatzwände an Überhängen zwischen 45° und der Stützgrenze bleiben beim
+  Hersteller, meist aus (Recherche Nr. 11, 12). Abnahme: Vorschläge mit Grund, an einer
+  Brücke und einem Überhang im Slicer gemessen.
+
+<a id="rm-588"></a>
+
+- [ ] **RM-588 — Die Naht liegt hinten, und große Oberseiten werden gebügelt.**
+  Die Naht wählt der Hersteller, gebügelt wird nur bei einer bündigen Passung. Eine Figur
+  zeigt die Naht als Linie auf der Schauseite, eine große flache Oberseite ihre Bahnen
+  (Recherche Nr. 14, 15). Abnahme: Vorschläge mit Grund in allen Familien.
+
+<a id="rm-589"></a>
+
+- [ ] **RM-589 — Bohrungen und Stifte passen ohne Nacharbeit.**
+  Ausgleich für Bohrungen, Polyholes und Elefantenfuß bleiben beim Hersteller; die Passungen
+  rechnet Solidon über das Spiel im Materialprofil (Recherche Nr. 13). Offen ist, wie beides
+  zusammenwirkt, ohne doppelt auszugleichen. Abnahme: ein Passungsteil aus dem Korpus im
+  Slicer gemessen, mit und ohne Ausgleich.
 
 <a id="rm-504"></a>
 

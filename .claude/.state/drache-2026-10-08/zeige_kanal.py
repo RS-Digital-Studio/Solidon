@@ -24,7 +24,7 @@ gcode = Path(sys.argv[3])
 levels = [float(value) for value in sys.argv[4].split(",")]
 out = Path(sys.argv[5])
 
-exec(  # noqa: S102 — die eigene Lesefunktion der Nachbarsonde, nicht fremder Code
+exec(
     (HERE / "gcode_im_kanal.py").read_text(encoding="utf-8").split("\n\n\nbody = ")[0],
     globals(),
 )
@@ -51,9 +51,7 @@ for level in levels:
         if section is None:
             continue
         for loop in section.discrete:
-            draw.polygon(
-                [point(x, y) for x, y, _z in loop], outline=colour, fill=fill if fill else None
-            )
+            draw.polygon([point(x, y) for x, y, _z in loop], outline=colour, fill=fill or None)
     pick = np.abs(segments[:, 4] - level) < 0.11 if len(segments) else np.zeros(0, bool)
     for x0, y0, x1, y1, _z in segments[pick]:
         draw.line(
