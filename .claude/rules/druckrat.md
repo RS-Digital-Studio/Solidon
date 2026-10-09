@@ -60,8 +60,10 @@ offenem Drucker. Übernommen wird auf Klick, nie von allein.
   (`worth_support` je Stück, im Zweifel Stütze), nur unerreichbaren Raum (eng
   oder umschlossen), eine Bahnbreite Zuschlag **vor** dem Aussparen der Säulen
   der Überhänge, deren Decke ohne Kanalstücke als Feld Stütze braucht
-  (`_field`), außer im umschlossenen Raum (RM-571). Ohne gesperrten Raum kein
-  Vorschlag. Familien: `dateiformat.md`.
+  (`_field`); im umschlossenen Raum nur Säulen, die von oben erreichbar sind
+  (`_open_above`: offener Himmel neben der Säule, eine Bahn breit), denn ein
+  Loch im Schnitt ist auch das Innere jedes offenen Gefäßes. Ohne gesperrten
+  Raum kein Vorschlag. Familien: `dateiformat.md`.
   **Vorschlag, nicht Automatik** (Entscheidung Robert).
 - **Ränder tragen sich selbst** (`analysis.ledges`): Eine Decke, deren Teil
   jenseits `LEDGE_REACH` um ihre Wurzel höchstens `LEDGE_SPILL` des Felds ist

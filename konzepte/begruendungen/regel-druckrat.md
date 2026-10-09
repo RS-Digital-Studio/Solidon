@@ -331,15 +331,34 @@ Tasche (Feld 12 bis 24 mm²) verliert dort bis zu 81 % seiner Unterseite
 11 mm², das sich selbst trägt; ausgespart, holte der ElegooSlicer es mit einem
 Ast quer durch den Kanal (1,4 m). Mit ihren Kanalstücken gefragt, galt jedes
 offene Stück dort als stützbedürftig, und gehalten hat es nur die Ausnahme im
-umschlossenen Raum (Review 3). **Im umschlossenen Raum wird nichts ausgespart**: Eine Stütze dort
-holt niemand heraus; eine schräge Fläche im Rohrbogen des Wasserkanals, die
-selbst Stütze bräuchte, holte der ElegooSlicer sonst ebenso (1,6 m). Enger
-gefasst kam der Ast wieder: „eng und umschlossen“ 0,7 m, denn der Rohrbogen ist
-weit; „zur Hälfte überdacht“ nahm der Schüssel den Sperrraum fast ganz
-(169 209 → 9 468 mm³), denn ihr Kanal liegt in einem oben offenen Hohlraum.
-Die Grenze davon: Das Innere eines oben offenen Bechers ist in jedem Schnitt
-ein Loch, und ein Sims darin neben einem gesperrten Kanal verliert Stütze
-(Review 2: 65 %) — RM-571. Der
+umschlossenen Raum (Review 3). **Im umschlossenen Raum wird nur ausgespart, was
+von oben erreichbar ist**: Eine Stütze in einer Kammer holt niemand heraus; eine
+schräge Fläche im Rohrbogen des Wasserkanals, die selbst Stütze bräuchte, holte
+der ElegooSlicer sonst ebenso (1,6 m). Enger gefasst kam der Ast wieder: „eng
+und umschlossen“ 0,7 m, denn der Rohrbogen ist weit. Umschlossen heißt aber ein
+Loch im Schnitt, und das ist auch das Innere jedes oben offenen Gefäßes: Ein
+Sims 14 × 14 mm in einem Becher von Ø 68 mm, 6 mm neben einem gesperrten
+Tunnel, lag zu 65 % im Sperrraum (Review 2, RM-571). Nach dem Loch gefragt,
+trennt nichts den Becher von der Schüssel: „zur Hälfte überdacht“ nahm ihr den
+Sperrraum fast ganz (169 209 → 9 468 mm³), denn ihr Kanal liegt im oben
+offenen Becken (0–14 % des Lochs überdacht).
+
+Gefragt wird deshalb die Säule, je Scheibe (`_open_above`, RM-571, 09.10.2026):
+Liegt im Saum von zwei Bahnbreiten um ihren Grundriss, mit ihr durch freien
+Raum der Scheibe verbunden, freier Raum, über dem bis über das Teil hinaus kein
+Material liegt, und ist er mindestens eine Bahn breit, bleibt sie frei. Der Saum
+hängt an der Säule, weil hinter einer dünnen Wand die Luft außerhalb des Teils
+liegt; die Bahnbreite, weil durch einen Schlitz, in den keine Bahn passt,
+niemand eine Stütze herauszieht — dieselbe Grenze wie „zwei Übergriffe breit“
+für den Sperrraum. Am Becher berührt der Sims den offenen Himmel in allen elf
+Scheiben unter ihm und liegt bis auf die Naht an der Blockwand frei (2 %, die
+Bahnbreite, die sein Überhang an der Wand nicht mitzählt). An der Schüssel in
+Drucklage (50°, 55°, 60°) und in Dateilage (55°) berührt keines der 4 bis 32
+Überhangstücke im Sperrraum ihn — auch nicht die Stücke an der Mündung, die
+unter dem Dach des Ausgusses hängen —, und ihr Sperrraum bleibt gleich
+(169 243, 186 704 und 53 009 mm³). Der Himmel über dem Saum entsteht je Säule
+einmal von oben nach unten (`_sky_above`); je Scheibe von unten gefragt, kostete
+der Becher jede Schicht über dem Sims einmal je Scheibe. Der
 Zuschlag einer Bahnbreite kommt vor dem Aussparen; ein Loch, in dem keine Bahn
 samt Abstand Platz hat, schließt sich (ein Krümel von 0,33 mm² im Kanal,
 ausgespart mit Zuschlag: 1,5 m Stütze im OrcaSlicer). Vorgeschlagen wird die

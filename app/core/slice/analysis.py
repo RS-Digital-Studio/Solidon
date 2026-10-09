@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import math
 import threading
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass, replace
 from typing import Any, Final, Literal, cast
 
@@ -1866,6 +1866,78 @@ def _enclosed(material: ShapelyPolygon) -> Any:
     ).difference(material)
 
 
+def _seam(column: ShapelyPolygon, line_width: float) -> ShapelyPolygon:
+    """Der Saum, in dem eine Säule nach offenem Himmel fragt (:func:`_open_above`):
+    zwei Bahnbreiten um ihren Grundriss."""
+    return column.buffer(2.0 * line_width, join_style="mitre")
+
+
+def _smallest_opening(line_width: float) -> float:
+    """Die Fläche eines Kreises von einer Bahnbreite — weniger fasst keine Bahn."""
+    return math.pi * (line_width / 2.0) ** 2
+
+
+def _sky_above(
+    seam: ShapelyPolygon,
+    starts: Iterable[int],
+    shade_at: Callable[[int], ShapelyPolygon],
+    count: int,
+    line_width: float,
+) -> dict[int, ShapelyPolygon]:
+    """Je Schicht aus ``starts`` der Teil des Saums, über dem von ihr an bis über
+    das Teil hinaus (``count`` Schichten, ``shade_at`` ihr Material) kein
+    Material liegt.
+
+    Von oben nach unten in einem Zug, einmal je Säule: Je Scheibe von unten
+    nach oben gefragt, kostete der Sims im Becher jede Schicht über ihm einmal
+    je Scheibe.
+    """
+    smallest = _smallest_opening(line_width)
+    sky = seam
+    index = count - 1
+    found: dict[int, ShapelyPolygon] = {}
+    for start in sorted(set(starts), reverse=True):
+        while index >= start and not sky.is_empty:
+            sky = sky.difference(shapely.clip_by_rect(shade_at(index), *sky.bounds))
+            index -= 1
+            # Was keine Bahn fasst, wird unten nicht wieder weiter.
+            if sky.area < smallest:
+                sky = ShapelyPolygon()
+        found[start] = sky
+    return found
+
+
+def _open_above(
+    column: ShapelyPolygon,
+    material: ShapelyPolygon,
+    sky: ShapelyPolygon,
+    line_width: float,
+) -> bool:
+    """Ist die Säule von oben erreichbar (:func:`channel_space`)?
+
+    Erreichbar heißt: Neben ihr, im Saum von zwei Bahnbreiten und mit ihr durch
+    freien Raum der Scheibe (``material``) verbunden, liegt freier Raum, über
+    dem bis über das Teil hinaus kein Material liegt (``sky``, aus
+    :func:`_sky_above`) — mindestens eine Bahn breit. Ein Loch der Fläche ist
+    das nicht: Das Innere eines oben offenen Bechers ist in jedem Schnitt eins,
+    und der Wasserkanal der Waschschüssel liegt im oben offenen Becken unter
+    einem Dach.
+    """
+    if sky.is_empty:
+        return False
+    seam = _seam(column, line_width).difference(material)
+    # Nur, was mit der Säule zusammenhängt: Hinter einer dünnen Wand liegt der
+    # Himmel außerhalb des Teils.
+    reach = [part for part in _areas_of(seam) if part.intersects(column)]
+    if not reach:
+        return False
+    opening = unary_union(reach).intersection(sky)
+    return (
+        opening.area >= _smallest_opening(line_width)
+        and not _eroded(opening, line_width / 2.0).is_empty
+    )
+
+
 def _with_usable_holes(part: ShapelyPolygon, line_width: float) -> ShapelyPolygon:
     """Die Fläche ohne die Löcher, in denen keine Bahn samt Abstand Platz hat
     (:func:`channel_space`)."""
@@ -3291,7 +3363,8 @@ class ModelSupport:
     """Von diesen Stücken die, die selbst Stütze brauchen (Insel, oder ihre Decke
     genügt :func:`worth_support`), wie ``channel_columns``: Grundriss, Höhe der
     Auflage, Höhe des Stücks. Die Stützsperre spart ihre Säulen aus
-    (:func:`channel_space`); leer ohne Sperre."""
+    (:func:`channel_space`), im umschlossenen Raum nur, was von oben erreichbar
+    ist (:func:`_open_above`); leer ohne Sperre."""
     bed_columns: tuple[tuple[Polygon, float, float], ...] = ()
     """Ebenso die Stücke, deren Säule das Bett erreicht: Grundriss, Höhe der
     untersten Schicht, Höhe des Stücks."""
@@ -4346,6 +4419,31 @@ def _channel_space(
     top = float(highs.max())
     indices = [index for index, z in enumerate(heights) if bottom <= z <= top]
     chunks = [indices[start : start + stride] for start in range(0, len(indices), stride)]
+    # Den offenen Himmel über dem Saum einer Säule (:func:`_sky_above`) fragt
+    # nur, wer wissen will, ob sie von oben erreichbar ist — je Säule einmal für
+    # alle Scheiben, die sie kreuzt, und jede Schicht dafür einmal gebaut.
+    shades: dict[int, ShapelyPolygon] = {}
+    skies: dict[int, dict[int, ShapelyPolygon]] = {}
+    sky_lock = threading.Lock()
+
+    def shade_at(index: int) -> ShapelyPolygon:
+        if index not in shades:
+            shades[index] = _material(layers[index])
+        return shades[index]
+
+    def sky_of(number: int, start: int) -> ShapelyPolygon:
+        with sky_lock:
+            if number not in skies:
+                starts = [
+                    chunk[-1] + 1
+                    for chunk in chunks
+                    if other_lows[number] <= heights[chunk[-1]] + CHANNEL_SLAB
+                    and other_highs[number] >= heights[chunk[0]]
+                ]
+                skies[number] = _sky_above(
+                    _seam(others[number], line_width), starts, shade_at, len(layers), line_width
+                )
+            return skies[number][start]
 
     def slab_of(chunk: list[int]) -> tuple[float, float, ShapelyPolygon] | None:
         z_low, z_high = heights[chunk[0]], heights[chunk[-1]]
@@ -4401,18 +4499,35 @@ def _channel_space(
             if len(others)
             else np.zeros(0, dtype=bool)
         )
-        if crossing.any():
-            # **Nicht im umschlossenen Raum** (Waschschüssel, 08.10.2026): Eine
-            # Stütze dort holt niemand heraus. Im Rohrbogen des Wasserkanals
-            # hängt eine schräge Fläche, die selbst Stütze bräuchte; ausgespart,
-            # holte der ElegooSlicer sie mit einem Ast quer durch den Kanal
-            # (1,6 m), ohne Aussparung 0,0 m. Enger gefasst ließ es den Ast
-            # wieder hinein: „eng und umschlossen“ 0,7 m — der Rohrbogen ist
-            # weit —, „zur Hälfte überdacht“ nahm der Schüssel fast die ganze
-            # Sperre, weil ihr Kanal in einem oben offenen Hohlraum liegt. Die
-            # Grenze: Ein Sims in einem offenen Becher neben einem gesperrten
-            # Kanal verliert so Stütze (Review 2, RM-571).
-            spare = shapely.union_all(others[crossing]).difference(enclosed)
+        numbers = np.flatnonzero(crossing)
+        if len(numbers):
+            numbers = numbers[shapely.intersects(others[numbers], grown)]
+        if len(numbers):
+            # **Nicht im umschlossenen Raum, an den man von oben nicht
+            # hinkommt** (Waschschüssel, 08.10.2026): Eine Stütze dort holt
+            # niemand heraus. Im Rohrbogen des Wasserkanals hängt eine schräge
+            # Fläche, die selbst Stütze bräuchte; ausgespart, holte der
+            # ElegooSlicer sie mit einem Ast quer durch den Kanal (1,6 m), ohne
+            # Aussparung 0,0 m. Umschlossen heißt aber nur ein Loch im Schnitt,
+            # und das ist auch das Innere jedes oben offenen Gefäßes: Ein Sims
+            # im Becher neben einem gesperrten Kanal lag zu 65 % im Sperrraum
+            # (RM-571). Nach dem Loch gefragt, trennt nichts die beiden — „zur
+            # Hälfte überdacht“ nahm der Schüssel fast die ganze Sperre, denn
+            # ihr Kanal liegt im oben offenen Becken. Gefragt wird deshalb die
+            # Säule: Liegt neben ihr offener Himmel, bleibt sie frei
+            # (:func:`_open_above`).
+            candidates = others[numbers]
+            reachable = np.zeros(len(numbers), dtype=bool)
+            for place in np.flatnonzero(shapely.intersects(candidates, enclosed)):
+                reachable[place] = _open_above(
+                    candidates[place],
+                    material,
+                    sky_of(int(numbers[place]), chunk[-1] + 1),
+                    line_width,
+                )
+            spare = shapely.union_all(candidates[~reachable]).difference(enclosed)
+            if reachable.any():
+                spare = spare.union(shapely.union_all(candidates[reachable]))
             grown = grown.difference(spare)
         # Ein Loch, in dem keine Bahn samt Abstand Platz hat, ist keine Säule:
         # Ausgespart, ließ ein Krümel von 0,33 mm² im Wasserkanal der
