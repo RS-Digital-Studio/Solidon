@@ -386,6 +386,33 @@ def test_tree_walls_change_the_print_only_where_the_program_reads_them(
         )
 
 
+@pytest.mark.slicer("elegooslicer")
+def test_hollow_trees_round_the_gap_like_organic_ones(
+    installed_slicer: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Hohle Bäume (``handover.hollow_trees``, Neptune 4) lesen ihre Wandzahl, liegen
+    aber wie organische auf den Schichten des Modells (RM-584, Nachprüfung):
+    0,28 mm Abstand oben bei 0,2 mm Schicht druckt wie 0,2 mm, 0,4 mm anders.
+    Der Rat rechnet dort in ganzen Schichten (``organic_styles``)."""
+    set_test_license(monkeypatch, active=True)
+    printer = PROGRAMS["elegooslicer"]
+    profile = profiles.make_profile(printer, "pla")
+    setup = _preselected(handover.detect(installed_slicer), profile)
+    assert handover.hollow_trees(setup), "der Prozess des Neptune 4 druckt Bäume hohl"
+    assert "tree" in handover.organic_styles(setup, profile)
+    moves = {
+        gap: _sliced_tower(
+            printer,
+            installed_slicer,
+            tmp_path / str(gap),
+            {"support.style": "tree", "support.placement": "build_plate", "support.z_gap": gap},
+        )[0]
+        for gap in (0.2, 0.28, 0.4)
+    }
+    assert moves[0.28] == moves[0.2], "0,28 mm rundet auf eine Schicht"
+    assert moves[0.4] != moves[0.2], "zwei Schichten Abstand drucken anders"
+
+
 @pytest.mark.parametrize(
     "program",
     [

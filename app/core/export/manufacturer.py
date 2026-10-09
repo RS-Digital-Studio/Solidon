@@ -525,6 +525,10 @@ PROGRAM_DEFAULTS: Final[Mapping[str, Mapping[str, str]]] = {
     "crealityprint": {
         "brim_type": "auto_brim",
         "precise_outer_wall": "0",
+        # Die Wände der Bäume unter Crealitys eigenem Namen
+        # (``slicer_keys.PROGRAM_KEYS``); kein Prozess nennt ihn, der
+        # Konfigurationsblock am K1 Max zeigt 0 (RM-584, 09.10.2026).
+        "tree_support_wall_count_tree": "0",
         "wall_generator": "arachne",
         "wall_sequence": "inner wall/outer wall",
     },
@@ -685,10 +689,17 @@ def _read_process(
     *,
     program_name: str = "",
 ) -> tuple[dict[str, object], dict[str, str]]:
-    """Die Prozesswerte in Solidons Pfaden, dazu, was sich nicht übersetzen ließ."""
+    """Die Prozesswerte in Solidons Pfaden, dazu, was sich nicht übersetzen ließ.
+
+    Gelesen wird der Schlüssel, den die Übergabe für dieses Programm schreibt
+    (``slicer_keys.native_key``): Creality Print druckt die Wände der Bäume aus
+    ``tree_support_wall_count_tree`` (RM-584), und gegen den gemeinsamen Namen
+    verglichen schlug der Rat vor, was schon galt, oder übersah eine Abweichung.
+    """
     read: dict[str, object] = {}
     foreign: dict[str, str] = {}
-    for path, key, reader in ORCA_PROCESS:
+    for path, common, reader in ORCA_PROCESS:
+        key = slicer_keys.native_key(common, program_name)
         text = _text(values.get(key))
         if text is None:
             text = defaults.get(key)

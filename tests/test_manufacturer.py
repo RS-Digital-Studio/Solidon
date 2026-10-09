@@ -3839,6 +3839,31 @@ def test_the_tree_walls_are_read_back(walls: str, read_as: int) -> None:
     assert not foreign
 
 
+@pytest.mark.parametrize(
+    ("program", "values", "read_as"),
+    [
+        ("crealityprint", {"tree_support_wall_count_tree": "2"}, 2),
+        # Den gemeinsamen Namen überliest Creality Print; ohne eigenen Schlüssel
+        # gilt seine Vorgabe 0, eine Wand.
+        ("crealityprint", {"tree_support_wall_count": "2"}, 1),
+        ("orcaslicer", {"tree_support_wall_count": "2", "tree_support_wall_count_tree": "1"}, 2),
+    ],
+)
+def test_the_foundation_reads_the_wall_key_the_program_prints(
+    program: str, values: dict[str, str], read_as: int
+) -> None:
+    """Creality Print druckt die Wände der Bäume aus ``tree_support_wall_count_tree``
+    (RM-584, Slicertest). Die Grundlage liest denselben Schlüssel, sonst schlüge
+    der Rat vor, was schon gilt, oder überginge eine Abweichung."""
+    read, _foreign = manufacturer._read_process(
+        values,
+        manufacturer._Context(nozzle=0.4),
+        manufacturer.PROGRAM_DEFAULTS.get(program, {}),
+        program_name=program,
+    )
+    assert read["support.tree_walls"] == read_as
+
+
 def test_prusas_double_wall_threshold_is_no_wall_count() -> None:
     """PrusaSlicer legt Doppelwände ab einem Astquerschnitt, ein Maß und keine
     Wandzahl (Review RM-584, M5): Die Grundlage liest daraus keine Baumwände,

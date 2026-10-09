@@ -3471,6 +3471,11 @@ def hollow_trees(setup: SlicerSetup | None) -> bool:
     (``rectilinear``) druckten mit einer und zwei Wänden denselben G-Code.
     Solidon schreibt das Muster nur für Gitter und Hybrid. Ohne lesbaren
     Prozess ``False``, wie am Centauri Carbon 2 gemessen.
+
+    **Organisch bleiben sie** (:func:`organic_styles`): Am Neptune 4 druckten
+    0,28 mm Abstand oben bei 0,2 mm Schicht dieselben Bewegungen wie 0,2 mm,
+    0,4 mm andere — der Slicer rundet auf ganze Schichten wie unter gefüllten
+    Bäumen, auch mit eigener Stützschichthöhe.
     """
     native = _native_process(setup)
     pattern = str(_printed(native.get("support_base_pattern", ""))).strip().casefold()

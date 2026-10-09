@@ -428,7 +428,10 @@ schlägt Solidon die Wände nicht vor. Das gilt gefüllten Bäumen: Der Slicerte
 der Durchsicht fand am Neptune 4, dessen Prozess das Grundmuster `default` führt
 und Bäume hohl druckt, mit zwei Wänden 13 234 statt 12 211 Bewegungen, auch ohne
 eigene Stützschichthöhe; mit `rectilinear` war der G-Code derselbe
-(`handover.hollow_trees`). Derselbe Test bestätigte OrcaSlicer und Anycubic
+(`handover.hollow_trees`). Den Abstand oben runden hohle Bäume wie organische:
+Am Neptune 4 druckten 0,28 mm bei 0,2 mm Schicht wie 0,2 mm, 0,4 mm anders.
+Creality Print liest die Wände als `tree_support_wall_count_tree`, mit Vorgabe 0,
+und die Grundlage liest denselben Schlüssel. Derselbe Test bestätigte OrcaSlicer und Anycubic
 Slicer Next; Bambu Studio (ohne die Schlüssel der organischen Äste) las die
 Wandzahl auch unter seinen Bäumen, Creality Print 7.2 überall, aber nur als
 `tree_support_wall_count_tree` — den gemeinsamen Namen überging es auch unter
