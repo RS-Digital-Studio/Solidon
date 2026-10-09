@@ -176,15 +176,20 @@ class _Equation:
     grad: _GradientFn
 
 
-#: Bis zu wie vielen freien Koordinaten der Löser dicht rechnet (``tr_solver``
-#: ``exact``, :func:`_solve`). Eine SVD über 64 Spalten kostet je Schritt weniger
-#: als ein Zehntel Millisekunde; über ``lsmr`` liefen kleine, unterbestimmte
-#: Skizzen in einen entarteten Schritt. Die großen Skizzen aus §31 bleiben bei
-#: ``lsmr``, wo die dichte Rechnung das Budget sprengt.
+#: Bis zu wie vielen freien Koordinaten ein Teil dicht rechnet
+#: (:func:`_solve_part`: beim Lösen TRF mit ``exact``, im Zug ``dogbox``). Eine
+#: Zerlegung über 64 Spalten kostet je Schritt weniger als ein Zehntel
+#: Millisekunde; über ``lsmr`` liefen kleine, unterbestimmte Skizzen in einen
+#: entarteten Schritt. Die großen Skizzen aus §31 bleiben bei ``lsmr``, wo die
+#: dichte Rechnung das Budget sprengt.
 EXACT_UP_TO: Final[int] = 64
 
 #: Wie zäh ein gezogener Punkt im **weichen** Zug ist, als Maßstab seiner
-#: Koordinaten (``x_scale`` in scipy — die Rechnung läuft in ``x / scale``).
+#: Koordinaten (``x_scale`` in scipy). Über ``lsmr`` läuft die Rechnung in
+#: ``x / scale``; ein kleiner Teil rechnet über ``dogbox``, und dort ist es die
+#: Box, in der ein Schritt den Punkt bewegt — ein Zwanzigstel der übrigen. In
+#: gewichteten Veränderlichen fand die zweite Stufe an der gestreckten Kette
+#: aus fünf Linien in fünfzig Auswertungen keine Lage, so in vier (RM-541).
 #:
 #: Der weiche Zug kommt nur zum Zug, wenn der harte nicht geht: Der gezogene
 #: Punkt soll dann so nah wie möglich am Zeiger bleiben, und die übrigen
@@ -198,23 +203,26 @@ DRAG_STIFFNESS: Final[float] = 1.0 / 20.0
 
 #: Wie viele Auswertungen die **erste** Zugstufe höchstens bekommt.
 #:
-#: Ist der Zeigerort erreichbar, findet der Löser ihn schnell: gemessen fünf
-#: bis zwölf Auswertungen, vom Rechteck über Vieleck, Lochkreis und Lochraster
-#: bis zur Kette aus hundert Linien. Ist er es nicht, suchte der Löser ohne
+#: Ist der Zeigerort erreichbar, findet der Löser ihn schnell: gemessen zwei
+#: bis fünf Auswertungen an kleinen Teilen — Rechteck, Vieleck, Langloch,
+#: Lochkreis, Lochraster, verrundetes Rechteck, zwei Linien mit einer
+#: Bedingung —, zwölf bis sechzehn an der Kette aus hundert Linien über
+#: ``lsmr`` (RM-541, in Mausschritten). Ist er es nicht, suchte der Löser ohne
 #: Grenze weiter, bis sich der Rest nicht mehr änderte — und das kostete an
 #: einer gestreckten Kette aus zwanzig Linien 646 Auswertungen und 2,7
 #: Sekunden, aus hundert Linien 103 Sekunden, **je Mausereignis** (Durchsicht
 #: 22.09.2026). Nach fünfundzwanzig ist die Antwort „nicht erreichbar", und
-#: die zweite Stufe übernimmt — das Doppelte des größten gemessenen Bedarfs.
+#: die zweite Stufe übernimmt — über dem größten gemessenen Bedarf.
 DRAG_REACH_TRIES: Final = 25
 
 #: Wie viele Auswertungen die **zweite** Zugstufe höchstens bekommt.
 #:
 #: Sie rutscht so weit, wie die Bedingungen es erlauben, und braucht dafür an
-#: gewöhnlichen Zeichnungen gemessen vier bis acht Auswertungen — ein
+#: gewöhnlichen Zeichnungen gemessen zwei bis fünf Auswertungen — ein
 #: festes Vieleck, ein bemaßtes Langloch, ein Lochkreis, ein verrundetes
-#: Rechteck. Nur eine bis zum Anschlag gestreckte Kette braucht an die
-#: hundert, weil sie dort singulär steht. Findet die Stufe in dieser Zahl
+#: Rechteck, eine Kette aus fünf Linien über ihre Reichweite (RM-541). Nur
+#: eine lange, bis zum Anschlag gestreckte Kette braucht an die hundert, weil
+#: sie dort singulär steht. Findet die Stufe in dieser Zahl
 #: keine Lage, bleibt die Zeichnung, wo sie war: Ein Zug, der nicht folgt,
 #: ist eine Auskunft (die Zeile sagt, was hält); ein Zug, der das Fenster für
 #: Sekunden anhält, ist keine.
@@ -1634,7 +1642,7 @@ def _solve_part(
     solution: np.ndarray,
     weight: np.ndarray,
     *,
-    dense_allowed: bool,
+    dragging: bool,
     tries: int | None,
 ) -> None:
     """Löst einen Teil und schreibt seine Koordinaten in ``solution``.
@@ -1656,6 +1664,19 @@ def _solve_part(
     Ein Winkel zwischen zwei Linien neben einer bemaßten Kette aus zwanzig
     Linien warf die Linien so bis zu vier Meter weit. Allein ist das
     Linienpaar klein genug für die dichte Rechnung.
+
+    **Im Zug** (``dragging``) rechnet ein kleiner Teil über ``dogbox``: Sein
+    Schritt ist der kürzeste Gauß-Newton-Schritt, solange er in die Box aus
+    der Streuung passt — die kleinste Bewegung, die der Zug verspricht. Über
+    ``lsmr`` blieb nach dem gezogenen Punkt oft genau eine gespannte
+    Gleichung übrig, und zwei Linien mit einer Bedingung standen nach zehn
+    Mausschritten tausend Millimeter daneben bis 38 mm woanders, jeder
+    Schritt nach allen :data:`DRAG_REACH_TRIES`. Dichtes TRF taugt dafür
+    nicht: Hat ein Teil weniger Gleichungen als Unbekannte, setzt scipy jeden
+    Schritt auf den Rand des Vertrauensbereichs, und ein Zugschritt am
+    Rechteck brauchte alle 25 statt 2 Auswertungen. Die Zähigkeit gezogener
+    Punkte (:data:`DRAG_STIFFNESS`) formt in ``dogbox`` die Box, nicht den
+    Schritt.
 
     Ein Teil, dessen Gleichungen am Start exakt null sind, bleibt stehen —
     TRF täte dort keinen Schritt. Ein Lauf weiter als :data:`FARTHEST_MOVE`
@@ -1682,18 +1703,19 @@ def _solve_part(
     # Unterschied zwischen 700 ms und dem Budget aus §31 — nachgemessen.
     # **Kleine Teile rechnen dicht** (:data:`EXACT_UP_TO`): Mit ``lsmr`` löst
     # TRF den Schritt im Zweierraum aus Gradient und Gauß-Newton-Schritt, und
-    # der entartet bei einer einzelnen Bedingung (oben). Ein Zug bleibt bei
-    # ``lsmr``: Er beginnt an einer gelösten Skizze, und seine Stufen
-    # (``tries``, ``stiff``) sind auf diesen Löser abgestimmt.
-    dense = dense_allowed and columns.size <= EXACT_UP_TO
+    # der entartet bei einer einzelnen Bedingung (oben) — beim Lösen über TRF
+    # mit kleinem ersten Schritt, im Zug über ``dogbox`` (Docstring).
+    dense = columns.size <= EXACT_UP_TO
     reach = _spread(origin, scale)
+    first = min(reach, DENSE_FIRST_STEP) if dense and not dragging else reach
+    precise = dense and not dragging
     result = least_squares(
         residuals,
         np.zeros(columns.size),
         jac=(lambda z: jacobian(z).toarray()) if dense else jacobian,
-        method="trf",
+        method="dogbox" if dense and dragging else "trf",
         tr_solver="exact" if dense else "lsmr",
-        x_scale=scale * (min(reach, DENSE_FIRST_STEP) if dense else reach),
+        x_scale=scale * first,
         # Ohne Grenze läuft LSMR hier bis zur kleineren Matrixkante. Bei der
         # langen, dünn besetzten Kette des §31-Korpus sind das 300 innere
         # Schritte je Versuch und 105 ms insgesamt. Mit 150 Schritten braucht
@@ -1702,9 +1724,9 @@ def _solve_part(
         # Grenze ist keine Genauigkeitsschranke: TRF setzt mit dem verbleibenden
         # Rest weiter an, statt eine unfertige Antwort zurückzugeben.
         tr_options={} if dense else {"maxiter": 150},
-        xtol=1e-14 if dense else 1e-10,
-        ftol=1e-14 if dense else 1e-10,
-        gtol=1e-14 if dense else 1e-10,
+        xtol=1e-14 if precise else 1e-10,
+        ftol=1e-14 if precise else 1e-10,
+        gtol=1e-14 if precise else 1e-10,
         max_nfev=tries,
     )
     moved = np.asarray(result.x, dtype=float)
@@ -1759,7 +1781,7 @@ def _solve(
             weight[2 * point : 2 * point + 2] = DRAG_STIFFNESS
     solution = np.asarray(flat, dtype=float).copy()
     for part in _parts(equations, flat, held):
-        _solve_part(part, solution, weight, dense_allowed=not pinned, tries=tries)
+        _solve_part(part, solution, weight, dragging=bool(pinned), tries=tries)
     return solution, _residuals_at(equations, solution), _jacobian(equations, solution)
 
 
@@ -2085,17 +2107,31 @@ def solve_sketch(
             equations, reached, pinned=pinned, stiff=True, tries=DRAG_SLIDE_TRIES
         )
         max_residual = float(np.max(np.abs(residuals))) if residuals.size else 0.0
-        if max_residual > _TOL:
+        held = np.asarray(
+            list(start) if start is not None and len(start) == anchors.shape[0] else anchors,
+            dtype=float,
+        ).reshape(-1, 2)
+        landed = solution.reshape(-1, 2)
+        returned = all(
+            (landed[point][0] - held[point][0]) * (landed[point][0] - held[point][0])
+            + (landed[point][1] - held[point][1]) * (landed[point][1] - held[point][1])
+            <= _TOL * _TOL
+            for point in pinned
+        )
+        if max_residual > _TOL or returned:
             # **Findet auch die zweite Stufe keine Lage, bleibt die Zeichnung
             # stehen** — sofern sie vor dem Zug in Ordnung war. Ein
             # Widerspruch der Skizze selbst bleibt einer und wird unten
             # gemeldet; ein Zug, den die Bedingungen nicht zulassen, ist
             # keiner: Der Punkt folgt dann nicht, und die Zeile sagt, was ihn
             # hält.
-            held = np.asarray(
-                list(start) if start is not None and len(start) == anchors.shape[0] else anchors,
-                dtype=float,
-            ).reshape(-1, 2)
+            #
+            # **Kehren die gezogenen Punkte ganz zurück, bleibt sie ebenso
+            # stehen** (RM-541): Der Zug hat nichts bewegt, und was die erste
+            # Stufe auf der Suche nach dem unerreichbaren Zeiger an freien
+            # Punkten verschob, ist kein Ergebnis. Ein biegsames Vieleck, an
+            # der Ecke neben seiner festen gezogen, stand sonst danach verbogen
+            # da — über ``lsmr`` um 0,26 mm, über ``dogbox`` um 10,7 mm.
             held_residuals = _residuals_at(equations, held)
             if not held_residuals.size or float(np.max(np.abs(held_residuals))) <= _TOL:
                 solution, residuals, jacobian = solve(equations, held, pinned=(), tries=0)

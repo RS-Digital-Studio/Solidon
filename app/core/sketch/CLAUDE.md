@@ -77,14 +77,16 @@ reichen `ctx.cancelled` an `brep.features.features_of` weiter.
   (`solve_sketch(..., dragged=, start=)`): Gezogene Punkte stehen am Zeiger,
   alles andere folgt mit der kleinsten Bewegung ab `start`; zwei Stufen im
   Docstring, `DRAG_STIFFNESS` ein Zwanzigstel wie in SolveSpace. Begrenzt über
-  `DRAG_REACH_TRIES`/`DRAG_SLIDE_TRIES`; findet keine Stufe eine Lage, bleibt
-  die Zeichnung stehen. Geprüft wird in Schritten wie die Maus
+  `DRAG_REACH_TRIES`/`DRAG_SLIDE_TRIES`; findet keine Stufe eine Lage oder
+  kehren die gezogenen Punkte ganz zurück, bleibt die Zeichnung stehen. Geprüft wird in Schritten wie die Maus
   (`tests/test_sketch_edit.py`).
 - **Gelöst wird je zusammenhängendem Teil, in Verschiebungen** (RM-541,
   `_parts`, `_solve_part`): jeder Teil ab null, `x_scale` seine Streuung, die
   dichte Rechnung höchstens `DENSE_FIRST_STEP`. So hängt der erste Schritt
   weder am Nullpunkt noch an anderen Teilen; ein Teil ohne Spannung bleibt,
-  einer, der weiter als `FARTHEST_MOVE` liefe, auch.
+  einer, der weiter als `FARTHEST_MOVE` liefe, auch. Im Zug rechnet ein
+  kleiner Teil über `dogbox` (kürzester Gauß-Newton-Schritt), nie über
+  `lsmr` und nie über dichtes TRF; `DRAG_STIFFNESS` ist dort die Box.
 - **Die Fassung des Lösers steht an der Skizze** (`Sketch.solver`,
   `types.SKETCH_SOLVER`): `1` rechnet über `_solve_in_coordinates` wie bis
   0.5 (Migration 49 → 50), der Editor ab der ersten Änderung mit der

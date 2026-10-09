@@ -152,7 +152,13 @@ bleibt dadurch abbrechbar, bevor ein Ergebnis in Szene oder Cache erscheint.
   zweite Stufe beginnt am Stand der ersten; findet auch sie keine Lage, bleibt
   eine vorher widerspruchsfreie Zeichnung stehen. Ohne Grenze hielt ein Zug
   über die Reichweite einer bemaßten Kette das Fenster je Mausereignis
-  Sekunden an.
+  Sekunden an. Kehren die gezogenen Punkte ganz zurück, bleibt sie ebenso
+  stehen (RM-541): Was die erste Stufe auf der Suche nach dem unerreichbaren
+  Zeiger an freien Punkten verschob, ist kein Ergebnis. Das biegsame Vieleck
+  der Grundformen, an der Ecke neben der festen gezogen, stand sonst verbogen
+  da, über `lsmr` um 0,26 mm, über `dogbox` um 10,7 mm an einer Ecke. Am
+  Ausgang statt am Ende der ersten Stufe zu beginnen, half dort auch, ließ
+  aber die Kette aus zwanzig Linien nicht mehr rutschen.
 
 - **Feste Punkte kosten die Zerlegung nichts** (`_matrix_rank`). Eine Zeile
   mit genau einem Eintrag trägt eins zum Rang bei und nimmt ihre Spalte mit;
@@ -195,6 +201,25 @@ bleibt dadurch abbrechbar, bevor ein Ergebnis in Szene oder Cache erscheint.
   mit entgegengesetzter Tangente. Ein Teil ohne Spannung (alle Reste exakt
   null) bleibt ohne Lauf stehen; das hält Lochbilder schnell (20 × 20 Löcher
   wie vorher um 30 ms).
+
+- **Im Zug rechnet ein kleiner Teil über `dogbox`** (RM-541). Im Zug steht
+  der gezogene Punkt fest, und oft bleibt genau eine gespannte Gleichung
+  übrig — zwei Linien mit *parallel*, *senkrecht*, *gleich lang* oder einem
+  Winkel. Über `lsmr` war der Schritt dann Rauschen: Nach zehn Mausschritten
+  standen die Linien tausend und hunderttausend Millimeter daneben 3,7 bis
+  38 mm woanders (mit dem Löser von 0.5.3 bis 440 m), jeder Schritt nach
+  allen 25 Auswertungen. Dichtes TRF hilft nicht: Hat ein Teil weniger
+  Gleichungen als Unbekannte, rechnet scipy jeden Schritt auf den Rand des
+  Vertrauensbereichs hoch, und ein Zugschritt am Rechteck brauchte alle 25
+  statt 2 Auswertungen. `dogbox` nimmt den kürzesten Gauß-Newton-Schritt
+  (`lstsq`), solange er in die Box aus der Streuung passt: höchstens
+  1,5·10⁻¹⁰ mm Unterschied an jedem Ort, zwei bis fünf Auswertungen je
+  Schritt, ein Zugschritt am Rechteck 1,9 statt 5,0 ms (unter Last, im
+  Wechsel gemessen). Die Zähigkeit gezogener Punkte formt dort nur die Box:
+  In gewichteten Veränderlichen fand die zweite Stufe an der gestreckten
+  Kette aus fünf Linien in fünfzig Auswertungen keine Lage, so in vier.
+  Beim Lösen bleibt dichtes TRF mit `DENSE_FIRST_STEP`; an ihm sind Korpus,
+  gespeicherte Stände und echte Projekte gemessen (oben).
 
 - **Ein Lauf ins Unendliche ist keine Lösung** (`FARTHEST_MOVE`). Eine Gerade
   und ein Bogen mit gleicher Krümmung erfüllen das nur mit unendlichem

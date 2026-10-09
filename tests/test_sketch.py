@@ -469,8 +469,23 @@ def _angle_pair(
         ),
     ]
     constraints = [SketchConstraint("angle", (0, 1, 2, 3), str(target))]
+    beside, held = _company(company, size, at)
+    return Sketch(
+        plane="plane:xy",
+        elements=(*elements, *beside),
+        constraints=(*constraints, *held),
+    )
+
+
+def _company(
+    company: str, size: float, at: tuple[float, float]
+) -> tuple[list[SketchElement], list[SketchConstraint]]:
+    """Was neben zwei Linien (Punkte 0 bis 3) liegt: nichts (``alone``), vierzig
+    freie Linien (``free``) oder eine bemaßte, gelöste Kette aus zwanzig Linien
+    mit festem Anfang (``chain``) — je mal ``size``, an ``at``."""
+    dx, dy = at
     if company == "free":
-        elements += [
+        return [
             SketchElement(
                 "line",
                 (
@@ -479,9 +494,9 @@ def _angle_pair(
                 ),
             )
             for i in range(40)
-        ]
+        ], []
     if company == "chain":
-        elements += [
+        elements = [
             SketchElement(
                 "line",
                 (
@@ -491,7 +506,7 @@ def _angle_pair(
             )
             for i in range(20)
         ]
-        constraints += [
+        constraints = [
             SketchConstraint("distance", (4 + 2 * i, 5 + 2 * i), repr(10.0 * size))
             for i in range(20)
         ]
@@ -499,7 +514,8 @@ def _angle_pair(
             SketchConstraint("coincident", (3 + 2 * i, 4 + 2 * i)) for i in range(1, 20)
         ]
         constraints.append(SketchConstraint("fixed", (4,)))
-    return Sketch(plane="plane:xy", elements=tuple(elements), constraints=tuple(constraints))
+        return elements, constraints
+    return [], []
 
 
 @pytest.mark.parametrize(
@@ -552,6 +568,77 @@ def test_a_sketch_solves_alike_wherever_it_lies(company: str, size: float) -> No
                 back = [(x - at[0], y - at[1]) for x, y in _flat(away)]
                 gap = max(math.dist(a, b) for a, b in zip(back, _flat(home), strict=True))
                 assert gap <= EPS_GEOM, (start, target, at, gap)
+
+
+def _related_lines(kind: str, value: str, at: tuple[float, float], company: str) -> Sketch:
+    """Zwei freie Linien mit genau einer Bedingung zwischen ihnen, an ``at``."""
+    dx, dy = at
+    beside, held = _company(company, 1.0, at)
+    return Sketch(
+        plane="plane:xy",
+        elements=(
+            SketchElement("line", ((dx, dy), (10.0 + dx, dy))),
+            SketchElement("line", ((2.0 + dx, 3.0 + dy), (9.0 + dx, 7.5 + dy))),
+            *beside,
+        ),
+        constraints=(SketchConstraint(kind, (0, 1, 2, 3), value), *held),
+    )
+
+
+def _placed(sketch: Sketch, points: list[tuple[float, float]]) -> Sketch:
+    """Die Skizze mit diesen Punkten — so schreibt der Editor jeden Zugschritt zurück."""
+    offsets = edit.offsets_of(sketch)
+    return replace(
+        sketch,
+        elements=tuple(
+            replace(element, points=tuple(points[begin : begin + len(element.points)]))
+            for element, begin in zip(sketch.elements, offsets, strict=True)
+        ),
+    )
+
+
+@pytest.mark.parametrize("company", ["alone", "chain"])
+@pytest.mark.parametrize(
+    ("kind", "value"), [("parallel", ""), ("perpendicular", ""), ("equal", ""), ("angle", "30")]
+)
+def test_a_drag_solves_alike_wherever_it_lies(
+    kind: str, value: str, company: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Zwei Linien mit einer Bedingung, am Ende gezogen wie mit der Maus: an jedem
+    Ort dieselbe Lage (RM-541).
+
+    Im Zug steht der gezogene Punkt fest, und übrig bleibt ein Teil mit genau
+    einer gespannten Gleichung. Gerechnet wurde der Zug über ``lsmr``, dessen
+    Zweierraum aus Gradient und Gauß-Newton-Schritt dort aus Rauschen besteht:
+    Nach denselben zehn Mausschritten standen die Linien an den Versätzen 3,7
+    bis 38 mm woanders (am Stand vor RM-541 bis 410 mm), und jeder Schritt
+    brauchte alle erlaubten Auswertungen. Neben der bemaßten Kette ist die
+    Skizze zu groß für die dichte Rechnung, das Linienpaar als Teil nicht.
+    """
+    from app.core.sketch import solver
+    from app.core.units import EPS_GEOM
+
+    evaluations = _counting_evaluations(monkeypatch)
+    most: list[int] = []
+
+    def dragged(at: tuple[float, float]) -> list[tuple[float, float]]:
+        sketch = _related_lines(kind, value, at, company)
+        points = _flat(solve_sketch(sketch))
+        end = points[3]
+        for step in range(1, 11):
+            target = (end[0] + 0.2 * step, end[1] + 0.3 * step)
+            evaluations.clear()
+            solved = solve_sketch(_placed(sketch, points), dragged={3: target}, start=points)
+            most.append(max(evaluations))
+            points = _flat(solved)
+            assert points[3] == pytest.approx(target, abs=1e-9), "der Punkt steht am Zeiger"
+        return [(x - at[0], y - at[1]) for x, y in points]
+
+    home = dragged((0.0, 0.0))
+    for at in ((1000.0, 0.0), (-1000.0, 1000.0), (1e5, -1e5)):
+        gap = max(math.dist(a, b) for a, b in zip(dragged(at), home, strict=True))
+        assert gap <= EPS_GEOM, (at, gap)
+    assert max(most) < solver.DRAG_REACH_TRIES, "jeder Schritt fertig gerechnet, nicht abgebrochen"
 
 
 def test_an_angle_outside_the_half_turn_is_refused() -> None:
@@ -2140,6 +2227,31 @@ def test_a_measured_box_moves_as_a_whole_and_a_fixed_one_not_at_all() -> None:
     nailed = _flat(solve_sketch(measured, dragged={3: (30.0, 20.0)}, start=before))
     for (bx, by), (ax, ay) in zip(before, nailed, strict=True):
         assert (ax, ay) == pytest.approx((bx, by), abs=1e-6), "der Festpunkt hält alles"
+
+
+@pytest.mark.parametrize("steps", [1, 10])
+def test_a_drag_the_drawing_holds_back_moves_nothing(steps: int) -> None:
+    """Hält die Zeichnung den gezogenen Punkt ganz fest, bleibt alles stehen —
+    auch was biegsam ist (RM-541).
+
+    Das Vieleck der Grundformen hält gleich lange Seiten, die untere Kante
+    waagerecht und eine Ecke fest; biegen lässt es sich trotzdem. An der Ecke
+    neben der festen gezogen, kommt diese zurück. Die zweite Stufe begann
+    aber, wo die erste auf der Suche nach dem unerreichbaren Zeiger aufgehört
+    hatte, und was die erste dabei verbog, blieb verbogen: über ``lsmr`` bis
+    0,26 mm an einer Ecke, über die dichte Rechnung bis 10,7 mm.
+    """
+    from app.core.sketch import shapes
+
+    sketch = shapes.polygon(40.0, 6)
+    before = _flat(solve_sketch(sketch))
+    corner = before[1]
+    points = before
+    for step in range(1, steps + 1):
+        target = (corner[0] + 5.0 * step / steps, corner[1] + 5.0 * step / steps)
+        points = _flat(solve_sketch(_placed(sketch, points), dragged={1: target}, start=points))
+    for was, now in zip(before, points, strict=True):
+        assert now == pytest.approx(was, abs=1e-9), "nichts verbogen"
 
 
 def test_a_point_held_by_a_constraint_slides_as_far_as_it_may() -> None:

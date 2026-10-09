@@ -120,7 +120,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Se houver um arredondamento junto a uma parede, *Aplicar o ângulo de saída* diz antes do cálculo que está a atrapalhar e indica *Remover característica* como saída.
 - Ao cortar uma parte de um corpo, desaparecem também chanfros, roscas e alojamentos de porcas dos blocos que lá estavam.
 - Em *Criar tampa* e *Criar tampa de rosca*, um campo vazio para a altura da abertura significa «Aresta superior», e 0 é a altura da mesa. Os projetos antigos mantêm a sua abertura.
-- Um esboço resolve-se da mesma forma em qualquer computador e em qualquer posição, e uma restrição de ângulo já não vira as linhas. Os projetos anteriores calculam-se como foram guardados.
+- Um esboço resolve-se da mesma forma em qualquer computador e posição, também ao arrastar, e uma restrição de ângulo já não vira as linhas. Os projetos anteriores calculam-se como foram guardados.
 - Um corpo levanta-se com três cliques: *Desenhar* na barra superior (Ctrl+Shift+E), depois canto, canto oposto, altura. Para fora une-se, para dentro recorta.
 - Ao levantar, as medidas podem ser escritas. Um duplo clique no passo abre as suas medidas, e em *Tipo* passa a sólido de revolução ou padrão de furos sem desenhar de novo.
 - No editor de esboços, *Concluído* leva de volta à vista e o clique seguinte põe a altura. Escape põe o contorno de lado, Ctrl+Z trá-lo de volta.
