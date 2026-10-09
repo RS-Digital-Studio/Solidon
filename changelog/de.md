@@ -44,6 +44,7 @@ Nutzen da und sonst nichts.
 
 ### Bedienung und System
 
+- Am Mac braucht Solidon jetzt macOS 14 oder neuer. Jeder Mac ab 2018 kann es kostenlos installieren.
 - Auf Intel-Macs mit macOS 26 startet Solidon jetzt. Version 0.5.3 blieb dort beim Start hängen.
 - Am Mac bricht *Abbrechen* eine laufende Antwort des lokalen Modells sofort ab.
 - Am Mac öffnet Return den gewählten Eintrag im Startbildschirm, in *Funktion suchen* und im Prüfbericht.
@@ -77,6 +78,7 @@ Nutzen da und sonst nichts.
 - Auch in einem langen Verlauf rechnet ein neuer Schritt kaum länger als der erste.
 - Rückgängig und Wiederholen gehen schneller, und nicht mehr gebrauchter Arbeitsspeicher wird gleich wieder frei.
 - Das Auflösen von Überschneidungen und der Export als 3MF gehen deutlich schneller.
+- Ein eingefügtes Modell steht danach im Bild, auch wenn es neben einem herangezoomten Modell landet.
 
 ### Drucken und Übergabe an den Slicer
 
@@ -96,6 +98,7 @@ Nutzen da und sonst nichts.
 - Lehnt der Slicer Filamente mit zu verschiedenen Temperaturen auf einer Platte ab, nennt Solidon jetzt Grund und Ausweg, statt nur zu melden, dass keine Druckdatei entstand.
 - Im Druckdialog bleiben Drucker, Filamente und Qualität auch bei vergrößerter Schrift ganz sichtbar. Lange Beschriftungen brechen dafür um.
 - Der Prüfbericht rechnet schneller und braucht weniger Arbeitsspeicher.
+- Unter Linux mit Flatpak meldet Solidon einen Absturz des Slicers jetzt als Absturz, statt nur zu sagen, dass keine Druckdatei entstand.
 
 ### Gewinde, Bohrungen und Normteile
 
@@ -281,7 +284,6 @@ Nutzen da und sonst nichts.
 - Das Füllmuster „Linien“ kommt in Bambu Studio und Creality Print als Linien an und wird nicht mehr durch Gitter oder Würfel ersetzt.
 - Solidon meldet nach dem Schneiden auch Einstellungen, die PrusaSlicer oder die Orca-Slicer verworfen haben. Abweichende Rand-, Wand- und Stützarten werden ebenfalls erkannt.
 - Die Filament-Vorwahl nimmt Generic oder die Marke Ihres Druckers statt eines fremden Sonderfilaments, etwa am Bambu A1 Generic PETG statt BETA PETG.
-- Exportieren und Slicen nehmen die feine Rechnung statt der schnelleren Ansicht im Fenster. Kegel und weich verschmolzene Teile kommen so glatt in der Datei an.
 - Auch an STEP-Flächenmodellen, bei Drehungen um fast 180° und an teilweise erkannten Flächen gelingen *Druckoptimal ausrichten*, *Drehen* und *Verschieben*. Der Körper bleibt exakt.
 - Eine langsamere Außenwand gilt in PrusaSlicer und der Orca-Familie auch für kleine Umfänge wie Bohrungen und Stiele.
 - Die eingestellte Stützdichte wird in PrusaSlicer und der Orca-Familie korrekt übernommen. Das Feld beginnt bei 1 %. Für einen Druck ohne Stützen wählen Sie „Keine“.
@@ -322,7 +324,7 @@ Nutzen da und sonst nichts.
 - Schneidet eine Bohrung den Körper durch, sagt der Prüfbericht es einmal, mit der Teilezahl am Ende, und schweigt, sobald der Körper wieder ein Stück ist.
 - Muster auf Zylinderflächen eingelesener Modelle bleiben beim Ändern geschlossen.
 - Im Verlauf eines STEP-Körpers lassen sich Schritte umstellen oder davor einfügen, auch wenn ein späterer Schritt eine Bohrung meint. Der Verweis folgt der Bohrung.
-- Eine Bohrung, mit neuer Richtung versetzt oder verdoppelt, bleibt an einem STEP-Körper exakt.
+- Eine einfache Bohrung oder ein Langloch, mit neuer Richtung versetzt oder verdoppelt, bleibt an einem STEP-Körper exakt.
 - Ein erkanntes Merkmal mehr als einen Meter vom Nullpunkt entfernt behält beim Ändern seinen Ort. Bisher kürzte das Feld die Zahl still, und die Bohrung wanderte.
 - Trifft ein Schritt ein Teil, dessen Oberfläche sich selbst kreuzt, hält er an und zeigt die Stelle. Daneben rechnet er weiter und warnt, dass sich die Teile nicht vereinigen ließen.
 - Eine Figur schneidet *Modell teilen* auch an ihrer Spiegelnaht geschlossen, und die Stifte sitzen schon in der Vorschau.

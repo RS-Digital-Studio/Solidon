@@ -5062,7 +5062,7 @@ class Viewport(QWidget):
         #: eingepassten Rahmen hinausreichen (:meth:`frame_if_beyond`).
         self._frame_beyond: bool = False
         #: Die Diagonale der Körper beim letzten Aufbau — ob ein Größenschritt
-        #: sie hat wachsen lassen (:meth:`frame_if_beyond`).
+        #: oder ein weiteres Modell sie hat wachsen lassen (:meth:`frame_if_beyond`).
         self._shown_extent: float | None = None
         self._scheme: NavigationScheme = "solidon"
         self._theme: str | None = None
@@ -16653,7 +16653,9 @@ class Viewport(QWidget):
         52 % im Bild (RM-280), weil :func:`outgrown` erst ab dem Fünffachen
         greift — eine Grenze, die das Nachbessern schützt und hier nicht passt.
         Wer vergrößert, will das Ergebnis sehen; was im Rahmen bleibt oder
-        kleiner wird, lässt die Kamera in Ruhe.
+        kleiner wird, lässt die Kamera in Ruhe. Dasselbe gilt für ein weiteres
+        Modell (RM-650). Wer fragt, fragt unmittelbar vor dem Aufbau, der die
+        Änderung trägt: Den Wunsch verbraucht der nächste Aufbau, welcher es auch ist.
         """
         self._frame_beyond = True
 

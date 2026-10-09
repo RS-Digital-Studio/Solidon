@@ -2844,9 +2844,18 @@ def test_the_minimum_system_versions_on_the_website_match_installer_and_bundle()
     }
     assert build.group(1) in releases, "Neuen Windows-Build in der Versionszuordnung ergänzen."
     release = releases[build.group(1)]
+    from app.branding import MACOS_MINIMUM
+    from tools import make_macos_package
+
+    # Plist und Installer nehmen die Zahl aus branding, die Startseiten nennen sie.
     spec = SPEC.read_text(encoding="utf-8")
-    mac = re.search(r'"LSMinimumSystemVersion": "(\d+)(?:\.\d+)?"', spec)
-    assert mac is not None, "LSMinimumSystemVersion fehlt in solidon3d.spec"
+    assert '"LSMinimumSystemVersion": MACOS_MINIMUM,' in spec
+    for architecture in ("arm64", "x86_64"):
+        assert f'<os-version min="{MACOS_MINIMUM}" />' in make_macos_package.distribution(
+            architecture
+        )
+    mac = re.fullmatch(r"(\d+)\.\d+", MACOS_MINIMUM)
+    assert mac is not None, MACOS_MINIMUM
     pages = [ROOT / "website" / "index.html", *sorted((ROOT / "website").glob("*/index.html"))]
     assert len(pages) == 6, [page.name for page in pages]
     for page in pages:

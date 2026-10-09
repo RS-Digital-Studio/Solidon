@@ -7,7 +7,7 @@ Diese Datei ist die **eine** Arbeitsanweisung für Schwachstellen,
 Datenschutzverletzungen und Produktsicherheitsvorfälle in Solidon3D.
 Verantwortlich ist Robert Schneider, RS Digital. Eingangskanal ist
 `support@solidon3d.de`; die öffentlich zugesagte Mindestunterstützung für
-Solidon 1.x endet am 31. Oktober 2031. Drei Rechtsuhren laufen gegebenenfalls
+Solidon 1.x endet am 30. November 2031. Drei Rechtsuhren laufen gegebenenfalls
 parallel und werden unter derselben Vorgangskennung nachgewiesen.
 
 ## Gemeinsamer Eingang für CRA, DSGVO und Produktsicherheit
@@ -77,8 +77,8 @@ Vorgangskennung, Zeitlinie und Beweissammlung geführt.
 
 ## Warum dieser Zeitraum gilt
 
-Der Verkaufsstart von Solidon 1 ist der 1. November 2026. Fünf volle Jahre
-führen zum 31. Oktober 2031. Das ist die Untergrenze, nicht automatisch das
+Der Verkaufsstart von Solidon 1 ist der 1. Dezember 2026. Fünf volle Jahre
+führen zum 30. November 2031. Das ist die Untergrenze, nicht automatisch das
 späteste rechtlich erforderliche Datum: Vor jeder später in Verkehr gebrachten
 1.x-Fassung wird geprüft, ob erwartete Nutzungsdauer oder Rechtslage eine
 Verlängerung verlangen. Der öffentlich genannte Termin wird nie nach vorn

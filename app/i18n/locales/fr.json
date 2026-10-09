@@ -4949,7 +4949,7 @@
   "Lege ein Hauptmaß als Projektparameter an, statt es als Zahl zu setzen.": "Crée une cote principale comme paramètre de projet au lieu de la saisir comme nombre.",
   "Lege ein Passungspaar an. Die Toleranz kommt aus dem Materialprofil.": "Crée une paire d'ajustement. La tolérance vient du profil de matériau.",
   "Legen Sie die Datei filaments.json beiseite und beginnen Sie leer.": "Mettez le fichier filaments.json de côté et repartez à vide.",
-  "Legen Sie wie in [Das erste eigene Teil](manual:first-part) einen Quader an und lassen Sie *Maße als Parameter anlegen* angehakt.": "Ajoutez un pavé comme dans [Votre première pièce](manual:first-part) et laissez *Créer les cotes comme paramètres* coché.",
+  "Legen Sie wie in [Das erste eigene Teil](manual:first-part) einen Quader an. *Maße als Parameter anlegen* muss angehakt sein.": "Ajoutez un pavé comme dans [Votre première pièce](manual:first-part). *Créer les cotes comme paramètres* doit être coché.",
   "Legen Sie wie in [Das erste eigene Teil](manual:first-part) einen Quader an. Danach ist er schon gewählt.": "Ajoutez un pavé comme dans [Votre première pièce](manual:first-part). Il est aussitôt sélectionné.",
   "Legen Sie zuerst Projektparameter an und binden Sie die Maße daran, die am Baustein einstellbar sein sollen.": "Créez d'abord des paramètres de projet et liez-y les cotes qui doivent être réglables sur le bloc.",
   "Legt Kopien in einer Reihe oder auf einem Kreis an — ein Lochbild, ein Kranz Schraubdome, eine Reihe Clips. Ein einziger Schritt im Verlauf, und die Anzahl bleibt änderbar.": "Dispose des copies en rangée ou sur un cercle — un schéma de perçage, une couronne de bossages de vissage, une rangée de clips. Une seule étape dans l'historique, et le nombre reste modifiable.",

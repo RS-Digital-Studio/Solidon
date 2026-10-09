@@ -4949,7 +4949,7 @@
   "Lege ein Hauptmaß als Projektparameter an, statt es als Zahl zu setzen.": "Cria uma cota principal como parâmetro do projeto, em vez de defini-la como número.",
   "Lege ein Passungspaar an. Die Toleranz kommt aus dem Materialprofil.": "Cria um par de ajuste. A tolerância vem do perfil de material.",
   "Legen Sie die Datei filaments.json beiseite und beginnen Sie leer.": "Ponha o ficheiro filaments.json de lado e comece do zero.",
-  "Legen Sie wie in [Das erste eigene Teil](manual:first-part) einen Quader an und lassen Sie *Maße als Parameter anlegen* angehakt.": "Crie um paralelepípedo como em [A sua primeira peça](manual:first-part) e deixe marcado *Criar as medidas como parâmetros*.",
+  "Legen Sie wie in [Das erste eigene Teil](manual:first-part) einen Quader an. *Maße als Parameter anlegen* muss angehakt sein.": "Crie um paralelepípedo como em [A sua primeira peça](manual:first-part). *Criar as medidas como parâmetros* tem de estar marcado.",
   "Legen Sie wie in [Das erste eigene Teil](manual:first-part) einen Quader an. Danach ist er schon gewählt.": "Crie um paralelepípedo como em [A sua primeira peça](manual:first-part). Fica logo selecionado.",
   "Legen Sie zuerst Projektparameter an und binden Sie die Maße daran, die am Baustein einstellbar sein sollen.": "Crie primeiro parâmetros de projeto e ligue-lhes as cotas que devem ser ajustáveis no bloco.",
   "Legt Kopien in einer Reihe oder auf einem Kreis an — ein Lochbild, ein Kranz Schraubdome, eine Reihe Clips. Ein einziger Schritt im Verlauf, und die Anzahl bleibt änderbar.": "Coloca cópias em fila ou num círculo — um padrão de furos, uma coroa de torres de parafuso, uma fileira de clipes. Um único passo no histórico, e a quantidade continua editável.",

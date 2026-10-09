@@ -3229,7 +3229,7 @@ Für die weitere CRA-Vorbereitung gelten diese Liefergegenstände:
    gesetzlichen Meldepfade. Die öffentliche Sicherheitsseite muss damit
    übereinstimmen; Bereitschaft wird praktisch nachgewiesen.
 3. **Unterstützungsdauer.** Für Solidon 1.x ist mindestens der
-   31. Oktober 2031 zugesagt. Erwartete Nutzungsdauer und gesetzliche
+   30. November 2031 zugesagt. Erwartete Nutzungsdauer und gesetzliche
    Mindestunterstützung werden vor jeder späteren Bereitstellung erneut
    geprüft; der feste Termin ersetzt diese Prüfung nicht. Art. 13 Abs. 8
    verlangt grundsätzlich mindestens fünf Jahre, bei kürzer erwarteter

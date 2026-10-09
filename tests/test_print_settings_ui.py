@@ -789,6 +789,7 @@ def test_plate_job_adds_its_identity_without_replacing_project_process_values(
         viewport=SimpleNamespace(show_protected=lambda _protected: None),
         _pending_split_reveal=frozenset(),
         _created_to_choose=(),
+        _placed_to_frame=None,
         _refresh_parameters=lambda: None,
         history_panel=SimpleNamespace(show_document=lambda *_args: None),
         chat=SimpleNamespace(show_document=lambda _document: None),

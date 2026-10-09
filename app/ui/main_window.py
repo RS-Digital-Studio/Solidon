@@ -3495,6 +3495,13 @@ class MainWindow(QMainWindow):
         Dieselbe Bauart wie die Hälften darüber: gemerkt werden die Ausgaben,
         gewählt wird, sobald sie im Bild stehen (:meth:`_choose_the_created`).
         """
+        self._placed_to_frame: ObjectId | None = None
+        """Der Körper eines eben eingefügten Modells, bis ein Aufbau ihn trägt (RM-650).
+
+        Dieselbe Bauart: gemerkt wird der Körper, nicht der Zeitpunkt. Eine
+        Bitte an die Ansicht gleich beim Einfügen verbrauchte der nächste
+        Aufbau, auch einer der alten Szene (Schichtansicht, Ausblenden).
+        """
 
         # §2.4: eine Zeile Umschalter statt sieben Dauerleisten. Wie ein
         # Werkzeug beim Schließen zurückgenommen wird, steht hier und nicht in
@@ -24887,6 +24894,7 @@ class MainWindow(QMainWindow):
         self.viewport.show_build_volume(self.session.profile)
         self.viewport.show_protected(self.session.project.document.protected)
         self._frame_after_resizing()
+        self._frame_the_placed(picture)
         gesture = self.sculpting() or self.setting_armature()
         self.viewport.show_scene(
             replace(picture, scene=self._gesture_scene)
@@ -25001,9 +25009,29 @@ class MainWindow(QMainWindow):
         Derselbe Weg für Datei, Download und erzeugtes Modell. Bis 0.5.1
         wechselte nur eine Datei vom Pfad die Platte, und das über den
         letzten Schritt des Stapels — an der Einfügemarke ist das ein fremder.
+
+        **Und es kommt ins Bild**, wenn es über den eingepassten Rahmen
+        hinausragt (:meth:`_frame_the_placed`, RM-650).
         """
         self._plate_of_import = body
+        self._placed_to_frame = body
         self._show_the_plate_of_the_import()
+
+    def _frame_the_placed(self, picture: EvaluationResult) -> None:
+        """Trägt dieser Aufbau das eben eingefügte Modell, rahmt die Ansicht einmal nach (RM-650).
+
+        Derselbe Weg wie nach einem Größenschritt (:meth:`Viewport.frame_if_beyond`):
+        gerahmt wird nur, wenn die Körper über den zuletzt eingepassten Rahmen
+        hinausreichen. Neben ein herangezoomtes Modell gesetzt, stand das neue
+        außerhalb des Bilds, und nur der Objektbaum verriet, dass es da war.
+        Gefragt wird unmittelbar vor dem Aufbau, der es trägt — ein Aufbau der
+        alten Szene dazwischen verbrauchte sonst die Bitte.
+        """
+        body = self._placed_to_frame
+        if body is None or body not in picture.scene.objects:
+            return
+        self._placed_to_frame = None
+        self.viewport.frame_if_beyond()
 
     def _on_import_confirmed(self) -> None:
         """Das eingelesene Modell steht — die Datei kommt nach „Zuletzt geöffnet“."""
@@ -25029,6 +25057,7 @@ class MainWindow(QMainWindow):
         self._recent_candidate = None
         self._recent_batch = ()
         self._plate_of_import = None
+        self._placed_to_frame = None
         if not self.session.project.document.ops and self.session.path is None:
             self._show_start_screen(True)
         self.status_message.setText(self._announcement)
@@ -25097,6 +25126,8 @@ class MainWindow(QMainWindow):
             self._pending_split_reveal = frozenset()
         if self._created_to_choose and not set(self._created_to_choose) <= produced:
             self._created_to_choose = ()
+        if self._placed_to_frame is not None and self._placed_to_frame not in produced:
+            self._placed_to_frame = None
         # Wer auf dem Startbildschirm etwas ins Dokument bringt — Einfügen,
         # Generieren, ein Baustein aus dem Katalog —, will es auch sehen. Von
         # acht Wegen wechselten sieben einzeln von Hand, und der achte war der
