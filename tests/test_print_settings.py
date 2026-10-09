@@ -401,7 +401,7 @@ def _layers(
             contours=(Polygon(outline=square),),
             area=area,
             overhang_area=overhang,
-            islands=(square,) if islands and index > 0 else (),
+            islands=(Polygon(outline=square),) if islands and index > 0 else (),
             min_width=min_width,
         )
         for index, area in enumerate(areas)
