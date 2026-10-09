@@ -45591,7 +45591,11 @@ die Wächterfamilie 20 Fälle in 6,9 s statt 20 in 10,9 s am ruhigen Rechner, Ze
 60 s. Rendererprobe auf dem Wegwerfzweig `wegwerf/renderer-probe`, Lauf 37894162728, alle grün,
 0 übersprungen außer den drei nativen Fällen von `test_render_factory` auf dem Intel-Mac
 (gewollt): Linux 6:40 min (Renderer 110 Fälle in 54 s), macOS ARM 8:15 min (91 s), Intel-Mac
-11:10 min (74 s), Windows unverändert 9:08 min, `latest` 5:48 min. Changelog: nein.
+11:10 min (74 s), Windows unverändert 9:08 min, `latest` 5:48 min. Nach den Review-Funden, vor
+der Vorgabe ohne CI auf Zweigen: zweite Rendererprobe 37942642659 (window-contracts auf drei
+Läufern, `window-contracts-intel`, `latest`) grün, Slicerauswahl 37942574165 auf drei Läufern
+grün; die Fensterauswahl 37942569808 war nur in Fällen rot, die auf welle2 a9e4d3f64 genauso
+rot sind (Lauf 37936316061). Changelog: nein.
 
 ## RM-593 und RM-594: Auswertung wächst nicht mehr je Schritt, losgelassene Netze werden frei (09.10.2026)
 
