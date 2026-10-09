@@ -76,6 +76,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-218 — Am exakten Körper heißen Bohrungen nach ihrer Lage, und der Verlauf lässt sich dort nicht umbauen](#rm-218) | Geometrie, Erkennung und Druckvorbereitung | Code und Tor mit `d907d6036` in v0.5.2; offen allein die Fensterabnahme beim Release (RM-213) |
 | [RM-230 — Variable Verrundung und Formschräge: fünf Grenzen, die der Kunde merkt](#rm-230) | Geometrie, Erkennung und Druckvorbereitung | Grenzen 1 bis 3 gebaut oder benannt (06.10.: Mischecke exakt geprüft, Ring-Anfang und Zwischenstellen in den Feldhilfen); Tray: beide Kerne nennen die Fußrundung vor der Rechnung, aber der Weg über *Merkmal entfernen* trägt dort nicht; offen: Fußrundung als Kette entfernen, Netzschräge 2,3× langsamer, Fase am Fuß, B-Spline-Ecke und zweites Anstellen am Netz mit Kernen uneins |
 | [RM-253 — Am Laptop-Ständer tragen Kippen und Verdoppeln einer Bohrung falsch ab](#rm-253) | Geometrie, Erkennung und Druckvorbereitung | In Arbeit: Claude (Worktree `F:/solidon-claude-b`). 14 von 28 Bohrungen tragen ein fremdes Teil und sagen das jetzt mit Weg, statt es still zu verschmelzen (RM-413, 06.10.); offen an den freien `hole_1`/`hole_2`/`hole_4`: Verdoppeln ohne Wirkung, −127 mm³ bzw. +1,4–1,9 mm³ beim Versetzen und Kippen — gegen einen Sollwert ohne Boolesche an der kaputten Schale messen |
+| [RM-660 — Die Teilefrage an Langloch, Senkung, Pfanne, Kehle und Gewinde sieht lange Dreiecke nicht](#rm-660) | Geometrie, Erkennung und Druckvorbereitung | Gefunden mit RM-253 (09.10.): Auf `paket/g-geometrie` misst `_inside_and_radial` nur Dreiecksmitten; beim Zusammenführen `_reaching_in` für alle Hohlraumarten übernehmen |
 | [RM-545 — Über Senkung, Langloch und Baustein Schraube verschmilzt ein getrenntes Teil still](#rm-545) | Geometrie, Erkennung und Druckvorbereitung | In Arbeit: Claude (Worktree `F:/solidon-claude-a`). Gefunden im Review von RM-413: Die Absage hängt an `kind == "hole"`; an der Senkung einer Kette, am Langloch und am gesenkten Baustein *Schraube* rechnen Versetzen, Entfernen, Kippen und Ändern weiter und verschmelzen oder beschneiden das Teil, exakt teils mit falschem Grund — die Frage an den Hohlraum hängen, auch an Kegeln ohne Kette |
 | [RM-247 — Die Waschschüssel ließ sich nach Solidons Übergabe nicht drucken](#rm-247) | Geometrie, Erkennung und Druckvorbereitung | Kanaldecken, Gitter als Gitter, Leerfahrt und Tempo vom Drucker, Kanalsperre je Slicerfamilie, Brim auf Füßen — gebaut und im ElegooSlicer und PrusaSlicer belegt; offen: Probedruck am Centauri |
 | [RM-281 — Die Übergabe auf dem Herstellerprofil: Stufen C bis F](#rm-281) | Geometrie, Erkennung und Druckvorbereitung | Paket 3 und Reste D abgenommen, Stützvorschlag für Brücken über dem Modell und Absturz der Schichtanalyse behoben, Matrixwerkzeug auf Dialogcode umgestellt (04.10.); Zeitschätzung rechnet mit dem, was der Slicer aus dem Profil macht, Stützmenge aus den Säulen der Zeit (07.10., Seitenablage Orca-Familie −18 → −3 bis −12 %, Stützmenge Prusa/Cura 0,94 bis 1,14 der Druckdatei); offen die Gesamtabnahme jedes Modell × jeder Slicer und die Zeitreste: Creality Prints Mindestschichtzeit über Bogensehnen, Auto-Brim, Lückenfüllung, Curas Leerfahrt, Prusa-Stützen auf eigenen Schichthöhen, Baumstützen, Rechenzeit am Reiniger — bis Curas Leerfahrt und die Baumstützen gebaut sind, prüft die Zeitgegenprobe dort mit Grund nicht (`estimate.time_comparison_blocked`, Review P2 Rest Z1), danach die Sperren wieder lösen |
@@ -2341,6 +2342,25 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   zu. Ob das richtig ist, sagt erst ein Sollwert ohne Boolesche gegen die kaputte Schale (je Teil
   Volumen und Dicke entlang der Achse). Sonden `m2_laptop_bohrungen.py`, `m3_hole3.py` unter
   `F:\solidon-review-reports\claude-2026-10-06\geometrie\rm253\`.
+
+<a id="rm-660"></a>
+
+- [ ] **RM-660 — Die Teilefrage an Langloch, Senkung, Pfanne, Kehle und Gewinde sieht lange Dreiecke
+  nicht.** Gefunden mit RM-253 (09.10.2026, Claude): `hole_is_clear` misst auf main seit dem
+  Commit „Ein Teil, dessen lange Dreiecke durch eine Bohrung laufen, steht darin“ jedes Dreieck an
+  seinem Stück zwischen den Mündungen (`prepare_ops._reaching_in`), nicht mehr nur an seiner Mitte.
+  Paket G (`paket/g-geometrie`, RM-545, Review G F1) hat dieselbe Frage auf alle Hohlräume
+  erweitert (`_inside_and_radial`), dort aber weiter über Dreiecksmitten: Ein Langloch Ø 6 × 12 in
+  einer 10-mm-Platte mit einem getrennten Stift Ø 4 über 0 … 40 mm gilt dort als frei, über
+  0 … 15 mm nicht, an beiden Kernen; die runde Bohrung mit demselben Stift ebenso — die Handlungen
+  sagen dort erst nachträglich mit anderem Satz ab („träfe ein getrenntes Teil daneben“), und das
+  Menü bietet ihre Zeilen an. **Weg:** beim Zusammenführen von Paket G `_reaching_in` in
+  `_inside_and_radial` übernehmen, je Art mit ihrem Abstand (Achsstück am Langloch, Kegelwand je
+  Höhe an der Senkung, Mitte bzw. Mittelkreis an Pfanne und Kehle, Kern am Innengewinde) und der
+  Grenze der eigenen Wand. **Abnahme:** je Art ein Fall mit langem Stift, am Stand davor rot;
+  `test_a_long_pin_in_the_bore_is_seen_beyond_its_mouths`,
+  `test_a_cross_pin_through_the_bore_is_seen_although_its_middles_lie_beside_it` und
+  `test_a_coarse_bore_with_a_cross_bore_stays_free` bleiben grün.
 
 <a id="rm-545"></a>
 
