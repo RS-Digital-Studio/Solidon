@@ -31,6 +31,7 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-09 | [RM-631: Eine Durchgangsbohrung geht genau durch das Teil (09.10.2026)](#rm-631-eine-durchgangsbohrung-geht-genau-durch-das-teil-09102026) |
 | 2026-10-09 | [RM-598: Die erklärte Schraubenbohrung der Mutternfalle endet im Körper (09.10.2026)](#rm-598-die-erklärte-schraubenbohrung-der-mutternfalle-endet-im-körper-09102026) |
 | 2026-10-09 | [RM-597: Ein exakt gesetztes Merkmal, das anderes Material nur auf einer Linie berührt, sagt es (09.10.2026)](#rm-597-ein-exakt-gesetztes-merkmal-das-anderes-material-nur-auf-einer-linie-berührt-sagt-es-09102026) |
 | 2026-10-09 | [RM-596: Merkmalshandlungen lassen fremde Teile, wie sie sind (09.10.2026)](#rm-596-merkmalshandlungen-lassen-fremde-teile-wie-sie-sind-09102026) |
@@ -44904,3 +44905,35 @@ Laptop-Ständer fängt dieselbe Frage drei Versetzungen um 0,5 mm, die vorher bi
 hinterließen, und kostet dort 0,3 bis 0,4 s. Test
 `test_slot_features.py::test_turning_a_shaft_half_does_not_swallow_the_loose_ring_in_its_groove`
 (je Kern; ohne die Frage rot). Cache-Versionen der acht Handlungen erhöht. Umgesetzt von Claude.
+
+## RM-631: Eine Durchgangsbohrung geht genau durch das Teil (09.10.2026)
+
+<a id="rm-631-eine-durchgangsbohrung-geht-genau-durch-das-teil-09102026"></a>
+<a id="rm-631"></a>
+
+**RM-631 — Eine Durchgangsbohrung geht genau durch das Teil.** Gefunden bei RM-598 (Paket G,
+09.10.2026): Das Schraubenloch der Mutternfalle reichte fest 10 mm über die Tasche hinaus. In
+einem 40 mm dicken Quader blieb es ein Sackloch (z = 27,485 bis 40) und hieß Durchgang, auf dem
+Boden eines Spalts bohrte es in den Backen darüber; *Schraubenloch mit Senkung* mit Tiefe 10 in
+12 mm hieß ebenso Durchgang. Entschieden (Koordinator Welle 2): Eine Durchgangsbohrung geht
+genau durch das Teil, auch durch einen dicken Träger, und nie über die Fläche hinaus in fremdes
+Material; mit gesetzter Tiefe ist sie ehrlich ein Sackloch. **Abnahme:** je Kern die Mutternfalle
+durch 40 mm und auf dem Boden eines Spalts, das Schraubenloch 10 in 12 mm als Sackloch,
+Bereichsnachweis und Beispiele neu.
+
+**Nachweis (09.10.2026, `a7177473d`, Paket G):** Die Mutternfalle baut ihr Schraubenloch nur über
+die Tasche und nennt es in `PartSpec.reaches_through`; die Operation verlängert es an jedem Ende
+bis zum ersten Austritt aus dem Träger (`parts.ops._reaching_through`: acht Punkte am Rand des
+Querschnitts, nur wenn alle im Material liegen), in einer Bohrung bis zu deren Enden, quer zu ihr
+sagt sie ab. *Von unten eingelegt* führt der Schlitz von der Mündung zur Tasche, Tasche und
+Bohrung sind dort erklärt, wo sie liegen. Jede erklärte Durchgangsbohrung, hinter deren Ende nach
+dem Schritt Material liegt, heißt Sackloch (`_through_bores_in_the_body`). `LIBRARY_VERSION` 26
+mit `NUT_TRAP_BORES_THROUGH_THE_PART`, Bausteinoperationen `targets:10`. Tests in `test_parts.py`
+(`test_a_nut_trap_bores_through_a_carrier_thicker_than_its_old_reach`,
+`…_on_the_floor_of_a_gap_leaves_the_jaw_above_alone`, `…_screw_hole_with_a_set_depth_says_whether_it_goes_through`,
+`…_cut_through_bore_of_set_length_is_blind_in_a_thicker_carrier`, `…_laid_in_from_below_…` (2),
+`…_in_a_bore_takes_its_screw_hole_along_the_bore`), je Kern 28 Fälle, am Stand davor 20 rot.
+Bereichsnachweis 49 von 49, Beispiele nur `parts_version` (Gehäuse: Volumen gleich, 1 268 statt
+1 274 Dreiecke). An eingelesenen Modellen: in einem 40 mm hohen Lochwandhalter durch das ganze
+Material statt 12,5 mm, auf dem Boden des Spalts einer Teppichklammer bleibt der Backen darüber
+voll (vorher bis z = 7 durchbohrt). Umgesetzt von Claude.
