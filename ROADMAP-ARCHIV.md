@@ -31,6 +31,10 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-09 | [RM-253: Am Laptop-Ständer rechnet keine Bohrungshandlung mehr durch ein fremdes Teil (09.10.2026)](#rm-253-am-laptop-ständer-rechnet-keine-bohrungshandlung-mehr-durch-ein-fremdes-teil-09102026) |
+| 2026-10-09 | [RM-660: Ein langes Teil steht in jedem Hohlraum mit dem Stück, das darin liegt (09.10.2026)](#rm-660-ein-langes-teil-steht-in-jedem-hohlraum-mit-dem-stück-das-darin-liegt-09102026) |
+| 2026-10-09 | [RM-661: Ein eng sitzender Stift ist ein getrenntes Teil in seiner Bohrung (09.10.2026)](#rm-661-ein-eng-sitzender-stift-ist-ein-getrenntes-teil-in-seiner-bohrung-09102026) |
+| 2026-10-09 | [RM-691: Der Stift an den Löchern der Halter ist an beiden Kernen derselbe (09.10.2026)](#rm-691-der-stift-an-den-löchern-der-halter-ist-an-beiden-kernen-derselbe-09102026) |
 | 2026-10-09 | [RM-680: Bausteine verwalten steht ohne eigenen Baustein offen (09.10.2026)](#rm-680-bausteine-verwalten-steht-ohne-eigenen-baustein-offen-09102026) |
 | 2026-10-09 | [RM-650: Ein eingefügtes Modell kommt in den Ausschnitt (09.10.2026)](#rm-650-ein-eingefügtes-modell-kommt-in-den-ausschnitt-09102026) |
 | 2026-10-09 | [RM-584 (Teil): Über Baumspitzen rät Solidon zwei Schichten Luft (09.10.2026)](#rm-584-teil-über-baumspitzen-rät-solidon-zwei-schichten-luft-09102026) |
@@ -32797,7 +32801,7 @@ früher geschlossene hat die Durchsicht an ihren Rändern nachgezogen.
   findet solche Familien, `boolean._nested_united` vereinigt sie wie gedruckt und prüft
   es am Volumen; ein Teil frei in einem Hohlraum bleibt eines. Lehnt das Auflösen ab,
   weil sich eine Schale selbst kreuzt, sagt es `boolean.parts_not_united` mit *Stelle
-  zeigen* (Laptop-Ständer, [RM-253](ROADMAP.md#rm-253)). `ae178de8c`, Tests
+  zeigen* (Laptop-Ständer, [RM-253](#rm-253)). `ae178de8c`, Tests
   `test_boolean.py::test_a_part_inside_the_material_of_another_is_united_first_and_it_says_so`,
   `::test_a_part_in_a_hollow_stays_a_part`, `::test_parts_that_cannot_be_united_say_so`.
 - **RM-249** (Kante innerhalb der Hülle, [Abschluss](#rm-249)): Die Kantenprüfung nannte
@@ -33086,7 +33090,7 @@ der Runde stehen als RM-273 bis RM-280 in `ROADMAP.md`.
   `tests/test_autosplit.py::test_a_seam_without_room_for_a_connector_is_judged_once` und
   `::test_the_seam_search_cuts_without_filaments`. `1d8dd68aa`. Was am Laptop-Ständer
   bleibt, ist nicht mehr die Stützschätzung: 8,3 s einmalige Eigenkreuzungssuche der
-  großen Hälfte (eine Schale kreuzt sich 1 121-mal selbst, [RM-253](ROADMAP.md#rm-253))
+  großen Hälfte (eine Schale kreuzt sich 1 121-mal selbst, [RM-253](#rm-253))
   und 7,7 s Schnitte über den GEOS-Weg, der den Interpreter-Lock hält. Naht- und
   Stiftlagen über BLAS (REST-TEILEN-06) stehen bei [RM-187](ROADMAP.md#rm-187).
 
@@ -42794,7 +42798,7 @@ Schritt mit der Warnung `boolean.parts_not_united`. Tests in `tests/test_boolean
 `test_a_crossing_scene_tool_stops_a_difference_with_its_own_id`. Am echten Laptop-Ständer am
 06.10.: `hole_1` bis `hole_4` rechnen mit `boolean.parts_not_united`, `hole_11` hält mit dem
 Satz zur sich selbst kreuzenden Oberfläche. Dass §17.2 den Halt nennt, steht mit Ansage bei
-[RM-385](#rm-385); die übrigen Fehlbilder am Original bei [RM-253](ROADMAP.md#rm-253).
+[RM-385](#rm-385); die übrigen Fehlbilder am Original bei [RM-253](#rm-253).
 
 ## RM-383: Viele getrennte Teile halten keine Boolesche mehr an (06.10.2026)
 
@@ -46242,3 +46246,273 @@ sechs Sprachen „ab 0.5.0“ neben „Version 0.5.3“, wie im Repository. Chan
   Belege: `F:\solidon-review-reports\verif-09d8e9485.md` (Abschnitt 3).
 
 **Abschluss:** Der Abschnitt *Bausteine verwalten* beginnt offen, solange der eigene Bausteinordner nichts hält (`PartCatalog`, `_own_library_is_empty`). Gezählt werden gespeicherte Rezepte und hinzugefügte Bausteine, dieselbe Frage wie für Weitergabe, *Bearbeiten* und *Entfernen* (`_in_own_library`, vorher dreimal hergeleitet); ein mitgereister und ein `.py`-Baustein zählen nicht, `PartSpec.own` zählte anders. Danach gilt der Merker (`remember`, RM-491), und ein eigener Baustein klappt den Abschnitt wie bisher auf (RM-455; dass dieses Aufklappen gemerkt wird, steht in [RM-658](ROADMAP.md#rm-658)). Damit stehen *Auswahl als Baustein speichern …*, *Baustein aus Datei hinzufügen …* und beide Sperrgründe ohne Klick da, wie in 0.5.1 (Rückschritt seit `48ffcf145`, in 0.5.2 und 0.5.3). Weil der Weitergabegrund jetzt vorn steht, sagt er ohne eigenen Baustein „Speichern Sie zuerst einen eigenen Baustein, um ihn weiterzugeben.“ statt zum Wählen aufzufordern, das bei einem eingebauten in die nächste Absage führte. Die Hinweistests prüfen den Grund ohne vorheriges Aufklappen und stellen die Bibliothek ohne eigene Bausteine selbst her (`no_own_parts`); `test_the_closed_management_names_what_it_holds` prüft den zugeklappten Zustand nach einem Klick; neu `test_a_fresh_catalogue_shows_its_management_without_a_click` und `test_only_a_part_in_the_own_library_closes_the_management` (Rezept und hinzugefügt zu, mitgereist und `.py` offen). Gegenprobe über ein Plugin, je Mutation von acht Tests rot: immer zu 6, immer offen 2, Prädikat über `PartSpec.own` 2, alter Weitergabegrund 3; Katalogtests 52 grün, Handbuch-, Katalog-, Wortlaut- und Changelogtests 539 grün. Die Handbuchseiten *Eigene Bausteine* und *Bausteindateien austauschen* nennen Abschnitt und Knopf in allen sechs Sprachen, der eingefrorene Musterbestand trägt die neuen Seitenschlüssel; Changelog 0.6.0. Fenstersonde am echten Fenster, frischer Nutzerordner: 4 von 4, *Speichern*, *Hinzufügen* und beide Sperrgründe ohne Klick sichtbar, der Weitergabegrund schickt zum Speichern. Umgesetzt von Claude (Thread „Bedienung und KI“).
+
+## RM-253: Am Laptop-Ständer rechnet keine Bohrungshandlung mehr durch ein fremdes Teil (09.10.2026)
+
+<a id="rm-253-am-laptop-ständer-rechnet-keine-bohrungshandlung-mehr-durch-ein-fremdes-teil-09102026"></a>
+<a id="rm-253"></a>
+
+**RM-253 — Am Laptop-Ständer tragen Kippen und Verdoppeln einer Bohrung falsch ab.**
+  Gefunden beim Abschluss von RM-246 (26.09.2026) an
+  `F:\3D Dateien\parametric-laptop-riser.stl`, das seitdem geschlossen aus
+  dem Import kommt (21 Teile, `repair.part_inside`) und genau rechnet. Die
+  Sonde der meldenden Sitzung (`.claude/.state/rm-246-laptop-staender-2026-09-25/probe_real.py`,
+  `PROBE_TREE=<baum> python probe_real.py "<datei>" 15`) zeigt an 18 Ketten
+  mit Senkung und sechs einzelnen Durchgängen drei Dinge, die nicht zum
+  Werkzeug passen: *Merkmal drehen* von `hole_11`+`cone_51` um 15° um x trägt
+  1 444,47 mm³ vor den alten Mündungen ab (`hole_1`+`cone_5`: 19,59 mm³, die
+  übrigen null); *Merkmal verdoppeln* 6,3 bis 11,1 mm daneben lässt an jeder
+  geprüften Bohrung das Volumen stehen (`boolean.without_effect`, an
+  `hole_11` dazu `duplicate_feature.no_longer_through`); *Merkmal versetzen*
+  um 1,5 mm meldet an `hole_1`, `hole_3` und `hole_11`
+  `move_feature.no_longer_through`. Zu klären, ob das an den 21
+  ineinandersteckenden Teilen liegt (eine Bohrung durch mehrere Teile, eine
+  Kopie im Hohlraum eines anderen) oder an den Handlungen. Abnahme: Kippen
+  trägt vor den Mündungen nur ab, was das gekippte Werkzeug überstreicht;
+  eine Kopie im Material trägt ab oder sagt, warum nicht; „nicht mehr
+  durchgehend" nur, wo die versetzte Bohrung wirklich endet.
+
+  **Durchsicht v0.5.1 (27.09.2026, bohrung):** Es liegt an den Teilen. Die 21 Teile
+  lassen sich nicht vereinigen: Teil 10 (9 166 Dreiecke) kreuzt sich 1 121-mal selbst,
+  `resolve_self_intersections` lehnt deshalb ab, und eine erzwungene Vereinigung aller
+  Teile gab 136 Teile mit 605 verbleibenden Eigenkreuzungen. Gebaut ist die Auskunft:
+  `boolean.parts_not_united` sagt, dass Teile ineinanderstecken und sich nicht
+  vereinigen ließen, weil sich eine Oberfläche selbst kreuzt, mit *Stelle zeigen*
+  (`ae178de8c`, Test `test_boolean.py::test_parts_that_cannot_be_united_say_so`).
+  Nachgemessen am neuen Stand (`konzepte/nachweise-release-0.5.1/sonden/bohrung/rm253_focus_out.txt`):
+  `hole_11`+`cone_51` um 15° gekippt trägt 32,6 mm³ jenseits der oberen alten Kappe
+  ab, Verdoppeln bleibt ohne Wirkung (jetzt mit Satz), Versetzen meldet weiter
+  `no_longer_through`. Am selben Modell (massbild): 13 von 28 Bohrungen gelten als „In
+  dieser Bohrung steht Material“ (`prepare_ops.hole_is_clear`), und ein Langloch aus
+  *Bohrung 2* (Ø 3,33, 43 mm durch mehrere Wände) wird schon ohne Versatz nicht wieder
+  erkannt — vermutlich dieselbe Ursache, eine Bohrung durch mehrere ineinandersteckende
+  Teile; nicht geprüft. Weg: die Eigenkreuzung innerhalb einer Schale auflösen, dann
+  vereinigen und die drei Handlungen neu messen.
+
+  **Sicherheitskorrektur 01.10.2026:** Scheitert die notwendige Vorvereinigung, hält
+  `boolean()` jetzt mit einem Handlungstext vor jeder Solverstufe an. Zuvor rechnete die
+  Kette mit den unveränderten, ineinanderliegenden Teilen weiter und konnte ein falsches
+  Ergebnis liefern. Die Zuordnungsliste `object_ids` trägt den betroffenen Op-Eingang in
+  den Prüfbericht; die Regression prüft auch, dass *Stellen zeigen* bei einer mehrteiligen
+  Vereinigung am fehlerhaften und nicht am ersten Körper landet. Der Test nutzt eine
+  geschlossene Schale, die sich selbst kreuzt, und einen zweiten überlappenden Körper.
+
+  Am Originalmodell `F:\3D Dateien\parametric-laptop-riser.stl` (8,67 MB) wurde der
+  vollständige Import- und Auswertungsweg erneut geprüft. *Merkmal versetzen* für
+  `hole_11` um 1,5 mm quer zur Achse hält mit `GeometryError`, `object_id=obj_1` und den
+  Handlungen `show_locations` und `cancel` an; es gibt kein unzuverlässiges Ergebnis aus.
+  Der Lauf belegt auch den Kettenzweig, der `_closed_at` umgeht. Eine Regression mit einer
+  erkannten Senkbohrung prüft die Objektkennung an genau dieser Verschlussvereinigung. Der
+  Detailtext empfiehlt die Reparatur im CAD- oder Netzprogramm. Das löst die Eigenkreuzung
+  nicht und führt die ursprünglichen Abnahmeschritte Kippen, Versetzen und Verdoppeln noch
+  nicht erfolgreich aus. RM-253 bleibt daher teilweise offen.
+
+  Die anschließende Diagnose am unveränderten Original bestätigt in der geschlossenen
+  9 166-Dreieck-Schale 1 243 Schnittpaare an 631 Flächen; darunter liegt ein echter
+  Schnitt schon in der STL. Blenders exakter Boolean machte die Kopie nicht wasserdicht.
+  Der 0,2-mm-Voxelremesh schloss sie zwar, verschob die Außenfläche aber bis 0,083878 mm
+  und die Höhe um 0,143410 mm; damit liegt er über `MAX_FACET_SAG = 0,05 mm`. Auch die
+  Kreuzungsfreiheit ließ sich wegen des Zeitlimits nicht belegen. Beide Reparaturkandidaten
+  sind verworfen. `hole_11` und `cone_51` werden lokal noch mit ihren ursprünglichen
+  Maßen erkannt, liegen aber in anderen, unveränderten Schalen. Es wurde weder die Kopie
+  weiterbearbeitet noch am Original eine neue Bearbeitung ausgeführt; die angefragte
+  Reparatur samt Kippen/Versetzen/Verdoppeln ist weiterhin nicht abgenommen.
+
+  **Gezielte Verifikation:** `test_boolean.py`, `test_profile_clamps.py` und
+  `test_finding_actions.py`, `test_errors.py`, `test_translations.py` und
+  `test_language_rules.py`: 1 051 Tests bestanden. Ruff und Formatprüfung der geänderten
+  Booleschen Geometriedatei und ihrer Regressionstests sind grün. Das unabhängige
+  Nachreview bestätigte die bedingte Handlung nach einem behobenen P2-Hinweis; das
+  vollständige Entwicklungstor und die Geometriereparatur stehen weiter aus. Der gezielte
+  Mypy-Aufruf meldete drei Unreachable-Befunde in der parallel geänderten
+  `app/core/perceive/refine.py`; für diesen Stand liegt daher kein grüner Mypy-Nachweis vor.
+  Nachprüfung (Review 02.10., Arbeitsbaum ungesichert): Sicherheitskorrektur unvollständig. `union_objects` und `subtract_objects` halten mit dem richtigen Objekt; `drill_hole` hält ohne `object_id`, auch im Prüfbericht, und ein selbstkreuzender Körper als Werkzeug rechnet weiter still. Belege `verif-E.md`, `sonden\v_e\`.
+  Nachprüfung am Stand `3fd3b1ace` (nach `eab5f4f47`): unvollständig. `drill_hole` hält weiter mit `object_id=None` und `correct_input`/`cancel`, auch im Prüfbericht; ein kaputter Körper als Werkzeug rechnet still (`subtract_objects [gut, kaputt]` → 118,5 mm³ ohne Befund, `boolean.py:412–414`); erfüllt ist nur der Fall mit dem kaputten Körper als erstem Eingang. Der neue generelle Halt kehrt die hier dokumentierte Entscheidung um (RM-382). Belege `review-3fd3b1ace.md`, Sonden `r_rm253_*.txt`.
+
+  **Die beiden Nachprüfungen sind durch [RM-382](ROADMAP-ARCHIV.md#rm-382) erledigt
+  (`6d395169c`, v0.5.2):** `drill_hole` reicht `object_ids` durch, ein Schritt abseits der
+  selbstkreuzenden Schale rechnet mit Warnung, am Treffer hält er mit Kennung, und ein kaputter
+  Szenenkörper als Werkzeug hält (`test_a_crossing_scene_tool_stops_a_difference_with_its_own_id`).
+  **Am Original weiter (Sonde am 06.10.2026, Kopie mit abgefangener Messboolescher):**
+  `hole_1` mit `cone_5` gekippt meldet `rotate_feature.no_longer_through` und `bore.over_the_edge`;
+  `hole_1`/`hole_3` versetzt `move_feature.no_longer_through`; Verdoppeln bleibt an allen vier
+  Bohrungen ohne Wirkung (`boolean.without_effect`, `duplicate_feature.feature_lost`);
+  `hole_2`/`hole_4` gekippt nehmen um 53 bzw. 104 mm³ **zu**; `hole_11` hält am Treffer der
+  kaputten Schale. Die Abtragsmessung „vor den Mündungen“ scheitert, weil die Messdifferenz der
+  Sonde selbst die kaputte Schale trifft — die ursprüngliche Abnahme ist so weder erfüllt noch
+  messbar; die Sonde braucht eine Messung ohne Differenz gegen die kaputte Schale.
+
+  **Stand 06.10.2026 (Claude, mit RM-413):** In 14 der 28 Bohrungen steht ein fremdes Teil;
+  dort sagen Menü und jede Merkmalshandlung jetzt „In dieser Bohrung liegt ein getrenntes Teil“
+  mit *In Einzelteile aufteilen*. Vorher rechneten die Handlungen dort: `hole_3` trägt seinen
+  Mantel auf zwei Platten mit einem Zapfen darin, *Merkmal versetzen* verschmolz die Platten, der
+  Zapfen verschwand im Stopfen, −531 mm³ und zwei Teile weniger ohne Befund. `hole_11` hält am
+  Treffer der kaputten Schale. **Offen** an den freien Bohrungen: Verdoppeln 8 mm quer bleibt ohne
+  Wirkung (`boolean.without_effect`, `feature_lost`), `hole_1` verliert beim Versetzen um 1,5 mm
+  und Kippen um 15° je rund 127 mm³ mit `no_longer_through`, `hole_2`/`hole_4` nehmen 1,4–1,9 mm³
+  zu. Ob das richtig ist, sagt erst ein Sollwert ohne Boolesche gegen die kaputte Schale (je Teil
+  Volumen und Dicke entlang der Achse). Sonden `m2_laptop_bohrungen.py`, `m3_hole3.py` unter
+  `F:\solidon-review-reports\claude-2026-10-06\geometrie\rm253\`.
+
+  **Stand 09.10.2026 (Claude, `_reaching_in`):** Neun der 14 freien Bohrungen trugen doch ein
+  fremdes Teil, dessen Manteldreiecke über die ganze Länge laufen und ihre Mitten hinter den
+  Mündungen haben: zwei geschlitzte Hülsen von 43 mm, jede durch zwei der vier
+  Plattenbohrungen Ø 5,33 (`hole_1`/`hole_12`, `hole_17`/`hole_28`), Schrauben in den Scheiben
+  von 0,9 mm (`hole_7`, `hole_11`, `hole_19`, `hole_23`) und ein Teil von 10 mm in `hole_16`
+  (Ø 10,47). Die Teilefrage misst jetzt das Stück jedes Dreiecks zwischen den
+  Mündungen; an allen neun sagen Menü und Handlungen „getrenntes Teil“ mit *In Einzelteile
+  aufteilen*, `hole_1` verliert keine 127 mm³ mehr, `hole_11` hält nicht mehr an der kaputten
+  Schale. Frei bleiben `hole_2`, `hole_4`, `hole_13`, `hole_24` und `hole_26`. **Offen** an
+  `hole_2`/`hole_4`: Verdoppeln 8 mm quer ohne Wirkung, Versetzen und Kippen nehmen 1,4–1,9 mm³
+  zu — Sollwert wie oben.
+
+**Abschluss (Paket I, Zweig `claude/integration`):** Am integrierten Stand — Lauf B
+(`_reaching_in`) mit Paket G (`_inside_and_radial`) zusammengeführt (`8de94fe8b`), dazu
+[RM-660](#rm-660) (`62ae9a9d4`) und [RM-661](#rm-661) (`b6f905568`) — rechnet an keiner der 28
+Bohrungen eine Handlung mehr durch ein fremdes Teil. Über den Kundenweg geladen (Projekt, Quelle,
+`load`, Auswertung: 22 Teile, 541 Merkmale) sagen 24 Bohrungen „In dieser Bohrung liegt ein
+getrenntes Teil“ mit *In Einzelteile aufteilen* (welle2 davor: 14). Frei sind `hole_2`, `hole_4`,
+`hole_24` und `hole_26` (Ø 3,33 mm, 43,07 mm lang, je in einem eigenen Teil von 537 mm³). Drehen
+um die eigene Achse ändert dort nichts (ΔV 0 mm³, `rotate_feature.unchanged`); Kippen um 15° um y,
+Versetzen um 1,5 mm und Verdoppeln 8 mm quer sagen ab — an `hole_2`/`hole_4` „Diese Handlung
+träfe ein getrenntes Teil daneben“, an `hole_24`/`hole_26` am Teil, dessen Oberfläche sich selbst
+kreuzt. Unabhängig nachgemessen (manifold3d: Zylinder mit dem Radius der Bohrung über ihre
+Spanne, gemeinsames Volumen mit jedem fremden Teil als eigenem Körper): an der alten Lage 0 mm³,
+versetzt 16,0–32,9 mm³, gekippt 42,9–75,2 mm³, verdoppelt 165,7–301,8 mm³ je getroffenem Teil —
+jede Absage stimmt. Auf dem Weg, den die Absage nennt — *In Einzelteile aufteilen* mit *Splitter
+behalten*, 22 Objekte —, rechnen die Handlungen am abgetrennten Teil (das in einer Bohrung Ø 5,33
+eines anderen steckt) gegen einen Sollwert aus manifold3d, (Teil ∪ alter Zylinder) − neuer
+Zylinder: Versetzen um 1,5 mm und Kippen um 15° tragen außerhalb des Werkzeugs nichts ab
+(Zuwenig 0,000 mm³), lassen an seinen Rändern, wo die Bohrung die 1-mm-Wand durchbricht,
+0,72–1,07 mm³ stehen (0,2 % des Teils) und sagen `bore.over_the_edge`; Verdoppeln 8 mm in die
+Luft bleibt ohne Wirkung und sagt es (`boolean.without_effect`, `duplicate_feature.feature_lost`).
+Ohne *Splitter behalten* verwirft die Zerlegung diese Teile als Splitter unter 1 % des größten.
+Damit gilt die Abnahme: Kippen trägt nur ab, was sein Werkzeug überstreicht, eine Kopie trägt ab
+oder sagt, warum nicht, und „nicht mehr durchgehend“ meldet keine Bohrung mehr. Die offene Messung
+gegen einen Sollwert ist am getrennten Teil gemacht, wo keine kaputte Schale im Weg steht; die
++1,4–1,9 mm³ am ungeteilten Körper gibt es nicht mehr, weil die Handlungen dort absagen. **Zurückgenommen:** Lauf B nannte `hole_13` frei; darin liegt
+eine Scheibe Ø 21,43 mm in Ø 21,53 mm (Spiel 0,053 mm), die `hole_is_clear` seit RM-661 sieht —
+die Handlungen sagten dort über die Teilefrage schon am Merge-Stand ab. Sonden `p253_hole2.py`,
+`p253_daneben.py`, `p253_teile.py`, `p253_geteilt2.py` und `p253_rest.py`, Bericht
+`output/konsolidierung-2026-10-07/paket-i.md`.
+
+## RM-660: Ein langes Teil steht in jedem Hohlraum mit dem Stück, das darin liegt (09.10.2026)
+
+<a id="rm-660-ein-langes-teil-steht-in-jedem-hohlraum-mit-dem-stück-das-darin-liegt-09102026"></a>
+<a id="rm-660"></a>
+
+**RM-660 — Die Teilefrage an Langloch, Senkung, Pfanne, Kehle und Gewinde sieht lange Dreiecke
+  nicht.** Gefunden mit RM-253 (09.10.2026, Claude): `hole_is_clear` misst auf main seit dem
+  Commit „Ein Teil, dessen lange Dreiecke durch eine Bohrung laufen, steht darin“ jedes Dreieck an
+  seinem Stück zwischen den Mündungen (`prepare_ops._reaching_in`), nicht mehr nur an seiner Mitte.
+  Paket G (`paket/g-geometrie`, RM-545, Review G F1) hat dieselbe Frage auf alle Hohlräume
+  erweitert (`_inside_and_radial`), dort aber weiter über Dreiecksmitten: Ein Langloch Ø 6 × 12 in
+  einer 10-mm-Platte mit einem getrennten Stift Ø 4 über 0 … 40 mm gilt dort als frei, über
+  0 … 15 mm nicht, an beiden Kernen; die runde Bohrung mit demselben Stift ebenso — die Handlungen
+  sagen dort erst nachträglich mit anderem Satz ab („träfe ein getrenntes Teil daneben“), und das
+  Menü bietet ihre Zeilen an. **Zusammenführen:** Der Commit `9f5e74214` (Zweig `claude/lauf-b`,
+  RM-253) ändert `_inside_the_bore`, das Paket G durch `_inside_and_radial` ersetzt — der Konflikt
+  dort ist erwartet; je Handlung bei `cache_version` den höheren der beiden Werte plus eins
+  nehmen. Die Changelog-Punkte zu getrennten Teilen in Hohlräumen — Bohrung (RM-413), lange
+  Dreiecke (RM-253), übrige Hohlräume (Paket G) — werden dabei einer. **Weg:** beim
+  Zusammenführen von Paket G `_reaching_in` in
+  `_inside_and_radial` übernehmen, je Art mit ihrem Abstand (Achsstück am Langloch, Kegelwand je
+  Höhe an der Senkung, Mitte bzw. Mittelkreis an Pfanne und Kehle, Kern am Innengewinde) und der
+  Grenze der eigenen Wand. **Abnahme:** je Art ein Fall mit langem Stift, am Stand davor rot;
+  die Fälle zu RM-253 in `tests/test_slot_features.py`, von
+  `test_a_long_pin_in_the_bore_is_seen_beyond_its_mouths` bis
+  `test_pulling_a_slot_shortens_a_long_pin_only_inside_the_old_bore`, bleiben grün.
+
+**Abschluss (Paket I, `62ae9a9d4`):** `_inside_and_radial` misst an jedem Hohlraum das Stück jedes
+Dreiecks zwischen den Grenzen des Hohlraums und dessen kleinsten Abstand vom Kern seiner Art
+(`_Core`): Achse an Bohrung und Innengewinde, Mittellinie am Langloch, Kegelwand je Höhe an der
+Senkung (projektiv auf den Einheitskegel abgebildet, so bleiben Geraden Geraden), Mittelpunkt an
+der Pfanne, Mittelkreis an der Kehle (Sehnen über `units.circle_point`, Vorauswahl der Sektoren).
+Eigenes Material zählt nur an der Bohrung über das ganze Netz; an den übrigen Hohlräumen und in
+Teilmengen zählen nur Dreiecke fremder Teile (`_foreign_triangles`). Neun `cache_version` je um
+eins erhöht; der Changelog fasst die Punkte zu getrennten Teilen in Hohlräumen in sechs Sprachen
+zu einem. Test zuerst: `test_a_long_part_through_any_cavity_says_so_at_every_row` — Langloch,
+Senkung, Innengewinde, Pfanne, Kehle, Stift in fremder Bohrung und in fremdem Langloch, je Kern
+und Handlung, 62 Fälle — war am Stand davor (`8de94fe8b`) vollständig rot und ist grün; der
+Gegenfall `test_a_slot_with_a_long_pin_still_pulls_and_keeps_the_pin_outside` (*Zum Langloch
+ziehen* bleibt frei, der Stift unverändert) ist an beiden Ständen grün. Die Fälle von RM-253
+bleiben grün (Fokus 2 930 bestanden; der eine rote Fall war eine Attrappe in
+`test_feature_moves_keep_shape.py` ohne die neuen Schlüsselwörter, nach der Anpassung grün).
+Laptop-Ständer über den Kundenweg: Merkmale mit Teilegrund 118 → 226 — 100 Senkungen und Kehlen
+von Teilen, die im Hohlraum eines anderen liegen, und acht Kehlen mit einem Teil darin; an
+`fillet_113` (r 1,6 mm) laufen die fremden Streifen 1,15–1,46 mm vom Mittelkreis, eine dichte
+Abtastung misst dasselbe. Erste Antwort der Karte, im Wechsel mit dem Stand davor je zweimal
+gemessen: `fillet_124` 0,10–0,12 → 0,16–0,20 s, `torus_1` 0,05–0,06 → 0,15 s, die übrigen
+gleich. **Zurückgenommen:** Der erste Entwurf fragte eigenes Material an jeder Art; am Ständer
+bekamen 24 Kehlen eigene Streifen bei 0,955–0,976 r, die ein fremdes Teil verdeckt hätten.
+
+## RM-661: Ein eng sitzender Stift ist ein getrenntes Teil in seiner Bohrung (09.10.2026)
+
+<a id="rm-661-ein-eng-sitzender-stift-ist-ein-getrenntes-teil-in-seiner-bohrung-09102026"></a>
+<a id="rm-661"></a>
+
+**RM-661 — Ein eng sitzender Stift gilt in seiner Bohrung als frei.**
+  Gefunden im Review von RM-253 (09.10.2026, Fund F8, Bericht im Scratchpad der Sitzung
+  `review-b.md`): Ein getrennter Stift Ø 5,9 in einer Bohrung Ø 6, dessen Enden an oder hinter den
+  Mündungen sitzen, gilt an beiden Kernen als frei — sein Spiel liegt unter 2 % des Radius, und
+  `hole_is_clear` lässt diesen Saum als eigene Wand gelten (`_CLEARANCE_MARGIN`). Die Handlungen
+  verschmelzen dann den Stift still, wie RM-413 und RM-253 es verhindern sollen; vor RM-253
+  genauso. **Weg:** die Grenze der eigenen Wand aus der Wand selbst messen statt mit einem Saum
+  um den Radius, oder den Saum an der Vernetzung der Bohrung bemessen; am Korpus prüfen, dass
+  keine freie Bohrung kippt. **Abnahme:** Stift Ø 5,9 und Ø 5,98 in Ø 6 an beiden Kernen als
+  getrenntes Teil erkannt, Menü und Handlungen sagen ab; die freien Bohrungen am Laptop-Ständer
+  und am Korpus bleiben frei.
+
+**Abschluss (Paket I, `b6f905568`):** Ein Stück eines fremden Teils misst sich gegen den Radius des
+Hohlraums abzüglich der Schweißtoleranz des Körpers (`units.weld_tolerance` seiner Diagonale),
+eigenes Material weiter gegen den Saum `_CLEARANCE_MARGIN` unter der gemessenen Wand. An der
+Netzbohrung Ø 6 liegt die Wand (Facetten) 2,99161 mm von der Achse, die Stifte Ø 5,9, 5,98 und 6,0
+bei 2,94175, 2,98164 und 2,99161 mm; die alte Grenze 0,98 × Wand = 2,93178 mm ließ alle drei als
+Wand gelten, die neue liegt bei 2,99995 mm. Neun `cache_version` erneut je um eins erhöht. Test zuerst: `test_a_tight_pin_in_its_bore_is_a_separate_part`
+(die drei Stifte in Ø 6, Enden an den Mündungen und 5 mm darüber, je Kern: 12 Fälle) war am Stand
+RM-660 rot und ist grün; die Gegenfälle `test_a_pin_resting_on_the_mouth_or_above_it_leaves_the_bore_free`
+(Luft über der Mündung) und `test_a_cross_pin_ending_at_the_bore_wall_leaves_the_bore_free`
+(Querstift bis an die Wand, beide Seiten) sind an beiden Ständen grün; Fokus 1 001 bestanden,
+4 übersprungen. Korpus über den Kundenweg, alle 41 mehrteiligen Modelle aus `F:\3D Dateien`,
+RM-660 gegen RM-661: Genau drei Hohlräume wechseln, alle am Laptop-Ständer und alle zu Recht —
+`hole_13` mit einer Scheibe Ø 21,43 in Ø 21,53 mm (Spiel 0,053 mm), `cone_49` und `cone_132` mit
+Schraubenköpfen (Spiel 0,069 mm). Ihr Teilegrund stand schon vorher; Karte und Handlungen ändern
+sich nicht, und keine andere freie Bohrung kippt. **Zurückgenommen:** Der erste Entwurf maß ein
+fremdes Stück gegen die Wand minus Toleranz und übersah den Stift ohne Spiel, dessen Facetten auf
+der Wand liegen.
+
+## RM-691: Der Stift an den Löchern der Halter ist an beiden Kernen derselbe (09.10.2026)
+
+<a id="rm-691-der-stift-an-den-löchern-der-halter-ist-an-beiden-kernen-derselbe-09102026"></a>
+<a id="rm-691"></a>
+
+**RM-691 — Stift am Schlüsselloch der Halter hat je Kern eine andere Form.**
+  Nachprüfung von Paket G, N-4 (09.10.2026): Auf einem Quader 40 × 40 × 12 mm
+  `holder_ring` oder `holder_shelf` bei z = 12 setzen, dann *Stift für Bohrung*
+  an `holder_ring_bore_1/2` beziehungsweise `holder_shelf_bore_1/2` aufrufen.
+  Bei PETG entsteht am Netz ein glatter Stift mit 67,19 mm³, exakt ein Stift
+  mit Kopf mit 90,82 mm³. Beide stehen lose und innerhalb der Trägerhülle;
+  die Kopfform ist verschieden. Der Unterschied besteht schon vor Paket G.
+  Offen: Die gelesene Hohlraumkette beider Kerne vergleichen und den Kopf aus
+  derselben Geometrie ableiten. Abnahme: beide Kerne liefern dieselbe Form
+  bis zur Vernetzungsabweichung, ohne gemeinsames Volumen mit dem Träger und
+  mit dem halben Profilspiel; Regression über beide Halter und beide Bohrungen.
+
+**Abschluss (Paket I, `4f16673fd`):** Am Kundenweg unterscheiden sich die Kerne nicht. Halter
+gesetzt, ausgewertet, dann *Stift für Bohrung* (PETG, `holder_ring` und `holder_shelf` bei
+z = 12): An den Schraublöchern des Ringhalters entsteht an beiden Kernen der Stift mit Senkkopf,
+91,189 mm³ am Netz gegen 90,819 mm³ exakt (0,4 %, Vernetzung), Hülle gleich bis 0,01 mm; an den
+Schlüssellöchern beider Halter 54,956 gegen 54,908 mm³; gemeinsames Volumen mit dem Träger 0 mm³.
+Die Schraublöcher der Ablage prüft der Test unten auf dieselbe Weise. Halter und
+Stift in einer Kette, in einer oder in zwei Transaktionen frisch ausgewertet, geben dieselben
+Werte. Die 67,19 mm³ der Nachprüfung kamen aus dem Aufruf von *Stift für Bohrung* direkt auf dem
+Ergebnis der Bausteinoperation, ohne Auswertung dazwischen: Am Netz gibt `insert_holder_*` nur
+seine erklärten Merkmale zurück, die Senkung (`cone`) erkennt erst die Auswertung, und ohne sie
+wird der Stift glatt; der exakte Kern liest die Flächen gleich mit. Festgehalten in
+`test_bore_pin.py::test_a_holder_bore_gets_the_same_pin_on_both_kernels` (beide Halter, Schraub-
+und Schlüsselloch, je Loch 1 und 2): Hülle beider Kerne auf die Facettenhöhe gleich, Rauminhalt
+auf 1 %, lose im Träger mit dem halben Spiel, am Schraubloch Senkwinkel 90° und Kopf = Senkung der
+Normteiltabelle − Spiel · √2. Gegenprobe: Ohne die erkannten Merkmale am Netz, wie beim direkten
+Aufruf, werden die vier Schraubfälle rot, die Schlüssellöcher bleiben grün. Kein Code geändert,
+kein Changelog. **Zurückgenommen:** Die Nachprüfung N-4 von Paket G nannte die Kopfform je Kern
+verschieden; das gilt nur für den Aufruf ohne Auswertung, den keine Bedienung nimmt.
