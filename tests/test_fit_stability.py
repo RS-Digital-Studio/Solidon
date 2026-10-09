@@ -1420,13 +1420,20 @@ def _a_split_target(monkeypatch: pytest.MonkeyPatch) -> tuple[Any, list[int]]:
 
 
 def _twin(body: Any, *, far_triangle: bool = False) -> Any:
-    """Dieselben Ecken und Dreiecke; mit ``far_triangle`` ein loses Dreieck weit weg dazu."""
+    """Dieselben Ecken und Dreiecke; mit ``far_triangle`` ein kleiner Tetraeder weit weg dazu.
+
+    Geschlossen und außen umlaufend, damit nur die Diagonale sich ändert und nicht
+    auch, ob das Netz dicht ist (:func:`_twin_open_inside`).
+    """
     vertices = np.array(body.vertices, dtype=np.float64)
     faces = np.array(body.faces, dtype=np.int64)
     if far_triangle:
         start = len(vertices)
-        vertices = np.vstack((vertices, [[500.0, 0.0, 0.0], [501.0, 0.0, 0.0], [500.0, 1.0, 0.0]]))
-        faces = np.vstack((faces, [[start, start + 1, start + 2]]))
+        corners = [[500.0, 0.0, 0.0], [501.0, 0.0, 0.0], [500.0, 1.0, 0.0], [500.0, 0.0, 1.0]]
+        vertices = np.vstack((vertices, corners))
+        faces = np.vstack(
+            (faces, start + np.array([[0, 2, 1], [0, 1, 3], [0, 3, 2], [1, 2, 3]], dtype=np.int64))
+        )
     return trimesh.Trimesh(vertices, faces, process=False)
 
 
@@ -1475,7 +1482,7 @@ def test_a_changed_ring_or_body_number_reads_the_patch_again() -> None:
 
     Ein drittes Dreieck an einer Randkante des Flecks nimmt ihm dort den
     Nachbarn: Der Ring ändert sich, Ecken und Folge nicht. Ein loses Dreieck
-    weit weg macht das Netz undicht. Beides verfehlt das Gedächtnis; ohne den
+    im Inneren macht das Netz undicht. Beides verfehlt das Gedächtnis; ohne den
     Teil im Schlüssel (Gegenprobe) träfe es.
     """
     mesh = features_module._one_body(_rounded_box())
@@ -1511,7 +1518,7 @@ def test_a_changed_ring_or_body_number_reads_the_patch_again() -> None:
         left_out.discard("ring")
     assert same, "ohne den Ring gälte das dritte Dreieck nicht"
 
-    wider = _twin(body, far_triangle=True)
+    wider = _twin_open_inside(body)
     assert not wider.is_watertight
     assert isinstance(
         features_module._support_handle(wider, patch), features_module._SurfaceSupport
@@ -1984,6 +1991,53 @@ def test_a_round_answer_needs_the_same_hull_and_the_same_body_numbers(
     twin = MeshData(raw=_twin(mesh.raw))
     blind = _fitted_print(features_module._fitted(twin))
     assert blind != _fresh_fitted(twin), "ohne die Rückfrage gälte die alte Hülle"
+
+
+def _twin_open_inside(body: Any) -> Any:
+    """Dieselben Ecken und Dreiecke, dazu ein loses Dreieck mitten im Körper.
+
+    Die Diagonale bleibt, jeder Fleckabdruck auch — nur ist das Netz nicht mehr dicht.
+    """
+    vertices = np.array(body.vertices, dtype=np.float64)
+    faces = np.array(body.faces, dtype=np.int64)
+    middle = (vertices.min(axis=0) + vertices.max(axis=0)) / 2.0
+    start = len(vertices)
+    loose = middle + np.array([[0.0, 0.0, 0.0], [0.01, 0.0, 0.0], [0.0, 0.01, 0.0]])
+    return trimesh.Trimesh(
+        np.vstack((vertices, loose)),
+        np.vstack((faces, [[start, start + 1, start + 2]])),
+        process=False,
+    )
+
+
+def test_a_round_answer_needs_the_same_closedness_as_its_reading(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """``classify`` liest die Stützpunkte so, wie dicht, umlauf und deckungsgleich es verlangen.
+
+    Die Lesung eines Flecks hängt daran, ob das Netz dicht und gleich umlaufend
+    ist und deckungsgleiche Ecken trägt (:func:`_support_handle`); der Schlüssel
+    von ``classify`` trug nur die Diagonale. Am Schwesterkörper derselben Diagonale
+    mit einem Loch im Netz kamen so die Fits des dichten Körpers zurück — an der
+    Messbank (A1, ``宠物便便器.3mf`` nach *Merkmal versetzen*) in der letzten
+    Stelle anders als die Rechnung.
+    """
+    mesh = features_module._one_body(plate("plate_chamfered_mouths.stl"))
+    counts = _classified_hits(monkeypatch)
+    forget_cache()
+    features_module._fitted(mesh)
+    hits = counts[0]
+    opened = MeshData(raw=_twin_open_inside(mesh.raw))
+    assert not opened.raw.is_watertight and mesh.raw.is_watertight
+    features_module._fitted(opened)
+    assert counts[0] == hits, "ein anderes ``dicht`` rechnet die Runde neu"
+    # Gegenprobe: ohne ``dicht`` im Schlüssel träfe das Gedächtnis.
+    monkeypatch.setattr(features_module, "_LEFT_OUT", {"dicht"})
+    forget_cache()
+    features_module._fitted(mesh)
+    hits = counts[0]
+    features_module._fitted(MeshData(raw=_twin_open_inside(mesh.raw)))
+    assert counts[0] > hits, "ohne ``dicht`` träfe der Körper mit dem Loch im Netz"
 
 
 def test_a_cancelled_round_leaves_no_answer_for_its_patch(monkeypatch: pytest.MonkeyPatch) -> None:

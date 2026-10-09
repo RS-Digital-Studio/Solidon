@@ -2759,6 +2759,8 @@ def _fitted(
 
         extents = np.asarray(body.extents, dtype=float)
         diagonal = math.sqrt(float((extents * extents).sum()))
+        closed = bool(body.is_watertight)
+        consistent = bool(body.is_winding_consistent)
 
         def classify(patch: list[int]) -> bool:
             """Die erste Form, die auf diesen Fleck passt — oder keine.
@@ -2780,9 +2782,17 @@ def _fitted(
                 return classify_read(patch)
             shape = _rigid_key(body, patch)
             known_shape = shape is not None and shape in no_cone_here
+            # Die Körperzahlen der Lesung dazu (:func:`_support_handle`): Ohne
+            # sie gab ein Körper mit Loch im Netz die Fits des dichten zurück,
+            # in der letzten Stelle anders (Messbank A1, P5).
             key = hashlib.blake2b(
                 _patch_print(body, patch)
-                + _body_numbers(diagonale=diagonal)
+                + _body_numbers(
+                    diagonale=diagonal,
+                    dicht=closed,
+                    umlauf=consistent,
+                    deckungsgleich=_coincident_vertices(body),
+                )
                 + _exact_bytes(("runde" in _LEFT_OUT or known_shape, _classify_settings())),
                 digest_size=16,
             ).digest()
