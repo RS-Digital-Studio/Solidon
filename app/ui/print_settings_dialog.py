@@ -7114,6 +7114,10 @@ class PrintSettingsDialog(QDialog):
         gefunden wird, übernimmt :meth:`_slicers_found`.
         """
         discover.forget_cache()
+        # Auch den gemerkten Profilbestand (RM-670): Wer den Slicer eben neu
+        # eingerichtet hat, soll seine Profile sehen, ohne dass sich eine
+        # Datei im Bestand geändert haben muss.
+        slicer_profiles.forget_holdings()
         self._start_slicer_search()
         self._refresh_advice()
 

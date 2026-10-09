@@ -1471,6 +1471,20 @@ class _ChosenSetup:
 
     key: tuple[object, ...]
     setup: handover.SlicerSetup | None
+    signature: object = None
+    """Die Signatur des Profilbestands, aus dem die Wahl kam
+    (:func:`slicer_profiles.stock_signature`). Legt der Kunde im Slicer ein
+    Profil an oder benennt das gewählte um, passt sie nicht mehr, und der
+    Export leitet die Wahl neu her (Review RM-670)."""
+
+    def current(self) -> bool:
+        """Gilt die Wahl noch für den Bestand, wie er jetzt ist?"""
+        if self.setup is None or self.signature is None:
+            return True
+        return (
+            slicer_profiles.stock_signature(self.setup.flavour, self.setup.executable)
+            == self.signature
+        )
 
 
 def _without_stage(key: tuple[object, ...]) -> tuple[object, ...]:
@@ -1531,17 +1545,21 @@ class _FoundationWorker(Worker):
         chosen = self._chosen
         if chosen is None:
             try:
-                chosen = _ChosenSetup(
-                    _without_stage(self._key),
-                    remembered_setup(
-                        self._ui,
-                        self._profile.material.id,
-                        self._profile.printer.id,
-                        cancelled=self.cancelled,
-                    ),
+                setup = remembered_setup(
+                    self._ui,
+                    self._profile.material.id,
+                    self._profile.printer.id,
+                    cancelled=self.cancelled,
                 )
             except OperationCancelled:
                 return
+            chosen = _ChosenSetup(
+                _without_stage(self._key),
+                setup,
+                slicer_profiles.stock_signature(setup.flavour, setup.executable)
+                if setup is not None
+                else None,
+            )
         # Die Stufe wählt den Prozess des Herstellers (Entscheidung I) — hier wie
         # im Druckdialog und beim Export, sonst rechnete die Zahlenzeile mit
         # einem anderen Prozess, als gedruckt wird.
@@ -1924,7 +1942,7 @@ class _ExportWorker(Worker):
         """Der Export aus :meth:`_assembly`, in dessen Lesedurchgang."""
         setup = (
             self._chosen.setup
-            if self._chosen is not None
+            if self._chosen is not None and self._chosen.current()
             else remembered_setup(
                 self._ui_settings,
                 self._material,

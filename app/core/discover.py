@@ -487,6 +487,11 @@ def _from_path(candidates: tuple[str, ...]) -> Path | None:
         if known is None or known.is_file():
             return known
     found = next((Path(hit) for name in candidates if (hit := shutil.which(name))), None)
+    # **Auch ein Nein bleibt** (Review RM-670 L5, entschieden): Unter Windows
+    # steht der Slicer fast nie im PATH, und ohne Merker suchte jeder Export
+    # wieder 0,4 s. Ein Installationsprogramm ändert den PATH des laufenden
+    # Prozesses nicht; einen neuen Ordner im PATH sieht der Schlüssel, und
+    # *Erneut suchen* fragt über :func:`forget_cache` neu.
     _on_path[key] = found
     return found
 

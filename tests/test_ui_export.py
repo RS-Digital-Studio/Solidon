@@ -1736,3 +1736,27 @@ def test_the_export_folder_stays_with_the_machine(
     window.action_export()
 
     assert asked[0][0].startswith(str(folder)), f"der Dialog beginnt dort: {asked[0][0]}"
+
+
+def test_a_remembered_choice_expires_with_its_slicer_stock(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Review RM-670 M2: Die Vorwahl aus dem Bestand hielt über alle Exporte,
+    ohne Signatur. Ein im Slicer neu angelegtes oder umbenanntes Profil
+    erreichte die Datei nie. Jetzt trägt sie die Signatur ihres Bestands."""
+    from pathlib import Path as PathType
+
+    from app.core.export import handover, slicer_profiles
+    from app.ui.main_window import _ChosenSetup
+
+    setup = handover.SlicerSetup(PathType("elegoo-slicer.exe"), "orca", machine_profile="CC2")
+    stock = {"now": ("vorher",)}
+    monkeypatch.setattr(slicer_profiles, "stock_signature", lambda *_args: stock["now"])
+    chosen = _ChosenSetup(("schluessel",), setup, ("vorher",))
+
+    assert chosen.current()
+    stock["now"] = ("nachher",)
+    assert not chosen.current(), "ein geänderter Bestand verlangt eine neue Wahl"
+    assert _ChosenSetup(("schluessel",), None).current(), (
+        "ohne Slicer gibt es nichts zu vergleichen"
+    )

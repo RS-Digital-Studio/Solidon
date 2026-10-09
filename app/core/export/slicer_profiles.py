@@ -2999,6 +2999,12 @@ _holdings: dict[
     tuple[tuple[tuple[str, int, int], ...], tuple[SlicerProfile, ...]],
 ] = {}
 
+#: Wie viele Bestände der Merker höchstens hält. Ein Bestand der Orca-Familie
+#: mit allen drei Profilarten belegt rund 24 MiB (gemessen am ElegooSlicer); je
+#: Slicer und Kombination von Arten einer kam ohne Grenze auf rund 60 MiB. Der
+#: zuletzt gefragte bleibt, der älteste geht.
+_HOLDINGS_LIMIT: Final = 4
+
 #: Die Modellnamen der Prusa-Bündel je Installationsordner, mit der Signatur
 #: ihrer Bündeldateien (:func:`_prusa_signature`).
 _prusa_models: dict[Path, tuple[tuple[tuple[str, int, int], ...], tuple[str, ...]]] = {}
@@ -3031,15 +3037,21 @@ def _held(
     geändert hat, wird nicht gemerkt (:func:`_settled`).
     """
     key = (str(executable), flavour, wanted)
+    # Die Uhr zum Zeitpunkt der Signatur, nicht nach dem Lesen: Ein langer
+    # Lesedurchgang ließe eine Änderung kurz davor sonst als beruhigt gelten.
+    asked_at = time.time_ns()
     signature = _holding_signature(flavour, executable)
     with _HOLDINGS_LOCK:
-        known = _holdings.get(key)
+        known = _holdings.pop(key, None)
         if known is not None and known[0] == signature:
+            _holdings[key] = known
             return known[1]
     listed = tuple(read())
-    if _settled(max((entry[1] for entry in signature), default=0)):
+    if _settled(max((entry[1] for entry in signature), default=0), asked_at):
         with _HOLDINGS_LOCK:
             _holdings[key] = (signature, listed)
+            while len(_holdings) > _HOLDINGS_LIMIT:
+                del _holdings[next(iter(_holdings))]
     return listed
 
 
@@ -3051,9 +3063,20 @@ def _held(
 SETTLE_NS: Final = 2_000_000_000
 
 
-def _settled(newest_ns: int) -> bool:
-    """Ob die jüngste Änderung lange genug zurückliegt, um ihr zu trauen."""
-    return time.time_ns() - newest_ns >= SETTLE_NS
+def _settled(newest_ns: int, asked_at: int | None = None) -> bool:
+    """Ob die jüngste Änderung lange genug zurückliegt, um ihr zu trauen —
+    gemessen an ``asked_at``, dem Zeitpunkt der Signatur."""
+    return (time.time_ns() if asked_at is None else asked_at) - newest_ns >= SETTLE_NS
+
+
+def stock_signature(flavour: SlicerFlavour, executable: Path) -> _Signature:
+    """Woran der Profilbestand dieses Slicers gerade erkannt wird (:func:`_holding_signature`).
+
+    Für alle, die eine aus dem Bestand gewonnene Wahl über Aufrufe halten —
+    die Vorwahl im Hauptfenster (RM-623) —: Ändert sich der Bestand, gilt sie
+    nicht mehr.
+    """
+    return _holding_signature(flavour, executable)
 
 
 #: Eine Signatur: je Eintrag Pfad, Zeitstempel und Größe (:func:`_holding_signature`).
@@ -3094,7 +3117,7 @@ def _holding_signature(flavour: SlicerFlavour, executable: Path) -> _Signature:
             parts.extend(_top_level(root))
         else:
             parts.append((f"own:{root}", 0, -1))
-            parts.extend(_all_files(root))
+            parts.extend(_all_files(root, _KIND_FOLDERS if flavour == "orca" else None))
     signature = tuple(parts)
     if shared is not None:
         shared[key] = signature
@@ -3135,15 +3158,27 @@ def _top_level(root: Path) -> _Signature:
     return tuple(sorted(found))
 
 
-def _all_files(root: Path) -> _Signature:
+#: Die Ordner, in denen die Orca-Familie Profile ablegt — dieselben, nach denen
+#: der Leser die Art bestimmt (:func:`_kind_of`).
+_KIND_FOLDERS: Final = frozenset({"machine", "process", "filament"})
+
+
+def _all_files(root: Path, kinds: frozenset[str] | None = None) -> _Signature:
     """Jede Profildatei unter ``root`` mit Zeitstempel und Größe.
 
     Über ``os.scandir`` statt ``rglob``: Unter Windows bringt der
     Verzeichniseintrag Zeitstempel und Größe schon mit, und es entsteht kein
     ``Path`` je Datei.
+
+    Mit ``kinds`` nur, was in einem dieser Ordner liegt. Im Kontoordner der
+    Orca-Familie schreibt ElegooSlicer laufend Telemetrie
+    (``telemetry_cache/runtime_state/<pid>.json``); jede solche Datei verwarf
+    den Merker, und der nächste Export las 1 001 Maschinen neu (1,64 s CPU statt
+    0,16 s, Review RM-670).
     """
     found: list[tuple[str, int, int]] = []
-    folders = [os.fspath(root)]
+    base = os.fspath(root)
+    folders = [base]
     while folders:
         folder = folders.pop()
         try:
@@ -3155,7 +3190,12 @@ def _all_files(root: Path) -> _Signature:
                 try:
                     if entry.is_dir():
                         folders.append(entry.path)
-                    elif entry.name.endswith(_HOLDING_SUFFIXES):
+                    elif entry.name.endswith(_HOLDING_SUFFIXES) and (
+                        kinds is None
+                        or kinds.intersection(
+                            entry.path[len(base) :].replace("\\", "/").split("/")[:-1]
+                        )
+                    ):
                         status = entry.stat()
                         found.append((entry.path, status.st_mtime_ns, status.st_size))
                 except OSError:

@@ -5202,6 +5202,8 @@ def test_the_program_folder_is_listed_again_only_when_its_parent_changes(
 
     (base / "OrcaSlicer").mkdir()
     assert sp._program_folders(base, "orcaslicer") == [base / "OrcaSlicer"]
+
+
 def test_a_single_read_walks_each_stock_folder_once(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -5235,3 +5237,35 @@ def test_a_single_read_walks_each_stock_folder_once(
     assert len(walks) == 1, "im Durchgang einmal"
     assert both() == inside, "dieselbe Liste, dieselben Profile"
     assert len(walks) == 3, "ohne Durchgang je Frage, danach verfallen"
+
+
+def test_telemetry_beside_the_profiles_keeps_the_held_stock(
+    own_profiles: Path, slicer: Path
+) -> None:
+    """Review RM-670 M1: ElegooSlicer schreibt im Kontoordner laufend Telemetrie
+    (``telemetry_cache/runtime_state/<pid>.json``). Sie gehört nicht zum
+    Bestand und darf den Merker nicht verwerfen; ein neues Maschinenprofil schon."""
+    before = sp.stock_signature("orca", slicer)
+    telemetry = own_profiles / "telemetry_cache" / "runtime_state" / "4711.json"
+    telemetry.parent.mkdir(parents=True)
+    telemetry.write_text("{}", encoding="utf-8")
+
+    assert sp.stock_signature("orca", slicer) == before, "Telemetrie ist kein Profil"
+    (own_profiles / "machine" / "neu.json").write_text("{}", encoding="utf-8")
+    assert sp.stock_signature("orca", slicer) != before, "ein neues Profil schon"
+
+
+def test_the_held_stock_keeps_only_the_latest_few(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Review RM-670 M3: Je Slicer und Profilarten ein Bestand von rund 24 MiB,
+    ohne Grenze kamen 60 MiB je Slicer zusammen. Der Merker hält höchstens
+    ``_HOLDINGS_LIMIT``, den zuletzt gefragten zuletzt."""
+    sp.forget_holdings()
+    monkeypatch.setattr(sp, "_holding_signature", lambda _flavour, _executable: (("x", 0, 0),))
+    names = [Path(f"slicer-{number}.exe") for number in range(sp._HOLDINGS_LIMIT + 2)]
+    for name in names:
+        sp._held(name, "orca", frozenset({"machine"}), list)
+
+    held = {key[0] for key in sp._holdings}
+    assert len(held) == sp._HOLDINGS_LIMIT
+    assert str(names[-1]) in held and str(names[0]) not in held
+    sp.forget_holdings()

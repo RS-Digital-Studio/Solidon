@@ -15,7 +15,7 @@ import pytest
 import trimesh
 
 from app.core.errors import FileWriteError, NeedsSolidError, ValidationError
-from app.core.export import handover, manufacturer, slicer_keys, threemf, writer
+from app.core.export import handover, manufacturer, slicer_keys, slicer_profiles, threemf, writer
 from app.core.export.handover import with_slot_profiles
 from app.core.export.slicer_keys import SlicerFlavour
 from app.core.export.writer import (
@@ -291,7 +291,7 @@ def test_file_worker_can_cancel_during_part_advice_without_a_window(
         node
         for node in worker.body
         if isinstance(node, ast.FunctionDef)
-        and node.name in {"work", "cancel", "_assembly", "_begin_write"}
+        and node.name in {"work", "cancel", "_assembly", "_assembly_in_one_read", "_begin_write"}
     ]
     isolated = ast.Module(
         body=[
@@ -312,6 +312,7 @@ def test_file_worker_can_cancel_during_part_advice_without_a_window(
         "manufacturer": manufacturer,
         "prepare_usage": lambda *_: (),
         "handover": handover,
+        "slicer_profiles": slicer_profiles,
         # Der Übergabebeleg (RM-090) ist Oberfläche; hier zählt nur der Abbruch.
         "handoff_receipt": lambda **_kwargs: None,
         # Seine Gegenprobe ebenso (``test_export_readback.py``).
