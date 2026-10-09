@@ -31,6 +31,8 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-09 | [RM-633: Eine Kabeldurchführung in einer dickeren Wand sagt es (09.10.2026)](#rm-633-eine-kabeldurchführung-in-einer-dickeren-wand-sagt-es-09102026) |
+| 2026-10-09 | [RM-632: Die Mutternfalle zeigt ihr Schraubenloch vor dem Setzen (09.10.2026)](#rm-632-die-mutternfalle-zeigt-ihr-schraubenloch-vor-dem-setzen-09102026) |
 | 2026-10-09 | [RM-631: Eine Durchgangsbohrung geht genau durch das Teil (09.10.2026)](#rm-631-eine-durchgangsbohrung-geht-genau-durch-das-teil-09102026) |
 | 2026-10-09 | [RM-598: Die erklärte Schraubenbohrung der Mutternfalle endet im Körper (09.10.2026)](#rm-598-die-erklärte-schraubenbohrung-der-mutternfalle-endet-im-körper-09102026) |
 | 2026-10-09 | [RM-597: Ein exakt gesetztes Merkmal, das anderes Material nur auf einer Linie berührt, sagt es (09.10.2026)](#rm-597-ein-exakt-gesetztes-merkmal-das-anderes-material-nur-auf-einer-linie-berührt-sagt-es-09102026) |
@@ -44937,3 +44939,47 @@ Bereichsnachweis 49 von 49, Beispiele nur `parts_version` (Gehäuse: Volumen gle
 1 274 Dreiecke). An eingelesenen Modellen: in einem 40 mm hohen Lochwandhalter durch das ganze
 Material statt 12,5 mm, auf dem Boden des Spalts einer Teppichklammer bleibt der Backen darüber
 voll (vorher bis z = 7 durchbohrt). Umgesetzt von Claude.
+
+## RM-632: Die Mutternfalle zeigt ihr Schraubenloch vor dem Setzen (09.10.2026)
+
+<a id="rm-632-die-mutternfalle-zeigt-ihr-schraubenloch-vor-dem-setzen-09102026"></a>
+<a id="rm-632"></a>
+
+**RM-632 — Katalogbild, Platzierungsgeist und SCAD-Export der Mutternfalle zeigen kein
+Schraubenloch.** Folge von RM-631 (Paket G, 09.10.2026): Seit der Schritt das Schraubenloch durch
+den Träger bohrt, baut der Baustein es nur über seine Tasche, wo es nicht zu sehen ist.
+**Abnahme:** In Vorschau, Geist und SCAD steht die Bohrung mit einer benannten Anzeigelänge, nie
+aus der Mündung heraus.
+
+**Nachweis (09.10.2026, `571f8dead`, Paket G):** `parts/through.py` zeigt die Bohrungen aus
+`reaches_through` drei Durchmesser weit (`SHOWN_REACH`, bei M3 10,2 mm), nur an den Enden, die
+nicht aus der Mündung zeigen; `preview.render`, `ops.placement_tools`, `ops.placed_tool` und
+`scad.to_scad` (Zylinder mit der Variable `through_length`) benutzen es, `ops._reaching_through`
+denselben Zylinder. Tests `test_parts_catalog.py::test_the_nut_trap_shows_its_screw_hole_in_the_preview_and_the_scad_file`
+(seitlich und von unten) und `…::test_the_nut_trap_ghost_shows_its_screw_hole_into_the_material_only`,
+am Stand `c12091b8d` rot (Vorschau mit und ohne Schraubenloch 38 Dreiecke, kein Zylinder in der
+SCAD-Datei). Maße unverändert. Umgesetzt von Claude.
+
+## RM-633: Eine Kabeldurchführung in einer dickeren Wand sagt es (09.10.2026)
+
+<a id="rm-633-eine-kabeldurchführung-in-einer-dickeren-wand-sagt-es-09102026"></a>
+<a id="rm-633"></a>
+
+**RM-633 — Die Kabeldurchführung mit Zugentlastung heißt im dicken Träger Durchgang.** Gefunden
+bei RM-631 (Paket G, 09.10.2026): Im 40-mm-Quader öffnete die Bohrung in den eigenen Klemmkanal,
+der eingeschlossen im Material lag; erklärt war sie als Durchgang, gesagt wurde nichts.
+**Abnahme:** je Kern Sackloch und ein Befund mit Weg zur Wandstärke; in der passenden Wand bleibt
+alles, wie es war.
+
+**Nachweis (09.10.2026, `571f8dead`, Paket G):** `_through_bores_in_the_body` fragt außer dem Körper
+nach dem Schritt den Träger davor; verschließt er die Bohrung, ist sie ein Sackloch. Ein abtragender
+Baustein mit Aufbau (`host_add`) und Feld `wall` meldet dann `parts.wall_thicker` (Warnung, gemessene
+Wand, *Diesen Schritt ändern* auf `wall`), Kabeldurchführung und Schlauchtülle; neuer Satz in allen
+Katalogen, Bausteinoperationen `targets:11`. Test
+`test_parts.py::test_a_part_built_for_a_thinner_wall_says_so` (je Kern, beide Bausteine, 40 mm und
+3 mm): am Stand `c12091b8d` die vier 40-mm-Fälle rot. **Zurückgenommen:** Die erste Fassung fragte
+den Träger direkt hinter der Bohrung und warnte an der Dose im Beispiel, deren ausgehöhlte Wand dort
+2,8 statt 2,4 mm misst (Raster der Aushöhlung) — der Klemmkanal schneidet den Rest durch (Torlauf).
+Gefragt wird jetzt hinter dem ganzen Werkzeug entlang der Achse; Gegenprobe
+`test_a_cable_gland_in_a_slightly_thicker_wall_cuts_through_the_rest` (je Kern). Die Beispiele
+bleiben unverändert. Umgesetzt von Claude.
