@@ -31,6 +31,7 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-09 | [RM-620: Ein Slicer, der Filamente mit zu verschiedenen Temperaturen ablehnt, sagt es (09.10.2026)](#rm-620-ein-slicer-der-filamente-mit-zu-verschiedenen-temperaturen-ablehnt-sagt-es-09102026) |
 | 2026-10-08 | [RM-602: Der Druckdialog ordnet die Profile in einem Lesedurchgang zu (08.10.2026)](#rm-602-der-druckdialog-ordnet-die-profile-in-einem-lesedurchgang-zu-08102026) |
 | 2026-10-08 | [RM-601: Die Slicerwahl im Druckdialog geht wie in Erste Schritte, und überall stehen nur unterstützte Slicer (08.10.2026)](#rm-601-die-slicerwahl-im-druckdialog-geht-wie-in-erste-schritte-und-überall-stehen-nur-unterstützte-slicer-08102026) |
 | 2026-10-08 | [RM-600: Ein Drucker, eingebaut und aus dem Slicer übernommen, ist ein Gerät (08.10.2026)](#rm-600-ein-drucker-eingebaut-und-aus-dem-slicer-übernommen-ist-ein-gerät-08102026) |
@@ -44090,6 +44091,32 @@ Grenze), Randsperre mit Aussparung, Scheibe aus reinem Zuschlag, Befund nur übe
 Ränder ihrer Höhe, eingeschränkte Frage, Abbruch, Merker, Sperre in allen drei Familien,
 Plattengegenprobe auch bei gemischten Teilen; 14 Gegenproben rot. Korpus: 45 von 242 Körpern bekommen „Ränder ohne Stütze“, 7 brauchen keine Stützen mehr (Besteck-Organizer, Carcassonne-Gitter, Herz-Deko-Sockel, CC2-Werkzeugkiste, drei Teile aus `chufang`), sonst ändern sich nur Folgevorschläge. Tor
 grün (24 839 bestanden, 116 übersprungen); Durchsicht sechs Runden `solidon3d-review`, die letzte ohne Befund.
+
+## RM-620: Ein Slicer, der Filamente mit zu verschiedenen Temperaturen ablehnt, sagt es (09.10.2026)
+
+<a id="rm-620-ein-slicer-der-filamente-mit-zu-verschiedenen-temperaturen-ablehnt-sagt-es-09102026"></a>
+<a id="rm-620"></a>
+
+**Befund (09.10.2026, Kontaktsonde von RM-583):** Anycubic Slicer Next 2.0 lehnte eine Platte
+mit PLA und PETG am Kobra 2 mit Rückgabewert −62 ab (Orcas `CLI_FILAMENTS_DIFFERENT_TEMP`),
+ohne ein Wort auf der Konsole; ElegooSlicer, OrcaSlicer, Bambu Studio und Creality Print
+rechneten dieselbe Platte. Der Kunde las „Der Slicer hat keine Druckdatei geschrieben“. Der
+Weg bestand seit Anycubic Slicer Next in v0.5.3.
+
+**Behoben:** `handover.ORCA_MIXED_TEMPERATURES` übersetzt −62 in der Orca-Familie in einen
+Satz, der das Urteil dem Slicer und seinen Profilen zuschreibt (ab OrcaSlicer 2.4.2 heißt
+derselbe Code auch „ungültiger Düsentemperaturbereich“), mit Anordnen als erster Handlung —
+sie legt verschiedene Filamente auf eigene Platten, wo der Drucker sie nicht zusammen druckt —,
+dazu anderer Slicer, nur exportieren und Ausgabe des Slicers. Ein zweiter Lauf ohne
+Anordnungsvorgabe entfällt bei −62. **Unter Linux und macOS griff keine der drei
+Orca-Erkennungen** (−50, −101, −62): Dort kommt der Rückgabewert als Byte an (194 statt
+4294967234); `handover.orca_refused` prüft beide Formen.
+
+**Nachweis (09.10.2026):** `test_an_orca_refusal_for_mixed_temperatures_says_so`,
+`…_for_parts_off_the_plate_…` und `…_for_crossing_paths_…` je mit Windows- und Byteform,
+dazu ein einziger Slicerlauf bei −62 mit Anordnungsvorgabe. Review `solidon3d-review` in
+zwei Runden (zwei mittlere, dann zwei leichte Befunde, behoben), Entwicklungstor grün
+(24 875 bestanden, 116 übersprungen). Changelog: ja (Behebung, seit v0.5.3).
 
 ## RM-104 (Teil): Abbruch des lokalen Modells auf macOS und HiDPI-Test unter Xvfb (06.10.2026)
 

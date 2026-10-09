@@ -3141,8 +3141,9 @@ def test_an_empty_print_from_creality_says_what_the_family_says(
     assert raised.value.suggestions, "Regel 17"
 
 
+@pytest.mark.parametrize("returncode", [4294967246, 206])
 def test_an_orca_refusal_for_parts_off_the_plate_says_so(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, returncode: int
 ) -> None:
     """KUNDE-09: Der Laptop-Ständer (205 × 272 mm) passt nicht auf den Centauri
     Carbon 2. Der ElegooSlicer lehnt mit -50 und „found error, exit" ab —
@@ -3157,7 +3158,7 @@ def test_an_orca_refusal_for_parts_off_the_plate_says_so(
     executable = tmp_path / "elegoo-slicer.exe"
     executable.write_bytes(b"")
     finished = _Finished(b"Slic3r::CLI::run found error, exit\n")
-    finished.returncode = 4294967246
+    finished.returncode = returncode  # Windows als DWORD, Linux und macOS als Byte
     monkeypatch.setattr(handover, "_run_slicer", lambda *args, **kwargs: finished)
     setup = handover.SlicerSetup(executable=executable, flavour="orca")
 
@@ -3184,8 +3185,9 @@ def test_an_orca_refusal_for_parts_off_the_plate_says_so(
         ),
     ],
 )
+@pytest.mark.parametrize("returncode", [4294967195, 155])
 def test_an_orca_refusal_for_crossing_paths_says_so(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, program: str, log: bytes
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, program: str, log: bytes, returncode: int
 ) -> None:
     """In der Slicer-Matrix (RM-312) endete chufang.3mf, Platte 2 (sieben Teile,
     sechs Farben), an OrcaSlicer und Creality Print mit -101: Der Reinigungsturm
@@ -3198,7 +3200,7 @@ def test_an_orca_refusal_for_crossing_paths_says_so(
     executable = tmp_path / program
     executable.write_bytes(b"")
     finished = _Finished(log)
-    finished.returncode = 4294967195
+    finished.returncode = returncode
     monkeypatch.setattr(handover, "_run_slicer", lambda *args, **kwargs: finished)
     setup = handover.SlicerSetup(executable=executable, flavour="orca")
 
@@ -3210,6 +3212,46 @@ def test_an_orca_refusal_for_crossing_paths_says_so(
     assert "kreuzen" in str(problem.detail)
     assert "keine Druckdatei" not in str(problem.detail)
     assert {action.id for action in problem.suggestions} >= {"export_only", "show_output"}
+    assert problem.values.get("exit_code") is None, "die Zahl gehört ins Protokoll"
+
+
+@pytest.mark.parametrize("returncode", [4294967234, 194])
+def test_an_orca_refusal_for_mixed_temperatures_says_so(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, returncode: int
+) -> None:
+    """Anycubic Slicer Next lehnte eine Platte mit PLA und PETG am Kobra 2 mit −62
+    ab (``CLI_FILAMENTS_DIFFERENT_TEMP``), ohne ein Wort auf der Konsole; der
+    Kunde las „Der Slicer hat keine Druckdatei geschrieben“ (RM-620)."""
+    profile = profiles.make_profile()
+    model = tmp_path / "model.stl"
+    model.write_bytes(b"solid x\nendsolid x\n")
+    executable = tmp_path / "AnycubicSlicerNext.exe"
+    executable.write_bytes(b"")
+    finished = _Finished(b"")
+    finished.returncode = returncode
+    runs: list[object] = []
+
+    def run(*args: object, **kwargs: object) -> _Finished:
+        runs.append(args)
+        return finished
+
+    monkeypatch.setattr(handover, "_run_slicer", run)
+    setup = handover.SlicerSetup(executable=executable, flavour="orca")
+
+    with pytest.raises(ExternalToolError) as raised:
+        # Mit Anordnungsvorgabe wie aus dem Druckdialog: Nur dort fragt der
+        # zweite Lauf ohne sie, und den gibt es bei -62 nicht.
+        handover.slice_model(
+            model, print_settings.resolve(profile), profile, setup, keep_arrangement=True
+        )
+
+    problem = raised.value
+    assert handover.signed_exit_code(4294967234) == -62
+    assert "Temperaturbereiche" in str(problem.detail)
+    assert "keine Druckdatei" not in str(problem.detail)
+    assert problem.suggestions[0].id == "arrange_on_bed", "Anordnen trennt nach Filament"
+    assert "open_print_settings" not in {action.id for action in problem.suggestions}
+    assert len(runs) == 1, "die Temperaturprüfung hängt nicht an der Anordnung"
     assert problem.values.get("exit_code") is None, "die Zahl gehört ins Protokoll"
 
 

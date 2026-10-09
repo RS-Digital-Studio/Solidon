@@ -6607,6 +6607,8 @@ def slice_model(
             and wanted_arrangement
             and setup.flavour == "orca"
             and not _creality_cli(setup)
+            # Die Temperaturprüfung hängt nicht an der Anordnung (RM-620).
+            and not orca_refused(completed.returncode, ORCA_MIXED_TEMPERATURES)
         ):
             refused_flag = _refuses_option(_tail(completed.stdout, completed.stderr), "arrange")
             # Die Rückfallstufe: einmal ohne die Anordnungsvorgabe — dieselbe
@@ -6674,10 +6676,7 @@ def slice_model(
                     # keiner Vermutung (§2.1).
                     suggestions=(CHOOSE_SLICER, RETRY, SHOW_SLICER_OUTPUT, EXPORT_ONLY),
                 )
-            if (
-                setup.flavour == "orca"
-                and signed_exit_code(completed.returncode) == ORCA_OFF_THE_PLATE
-            ):
+            if setup.flavour == "orca" and orca_refused(completed.returncode, ORCA_OFF_THE_PLATE):
                 # **Die Orca-Familie sagt es nur mit einer Zahl** (-50,
                 # „found error, exit"): Nicht jedes Teil liegt ganz auf ihrer
                 # Platte. Gemessen am ElegooSlicer (26.09.2026): halb neben der
@@ -6696,10 +6695,7 @@ def slice_model(
                     values={"output": output},
                     suggestions=(SPLIT_MODEL, SCALE_TO_FIT, ARRANGE_ON_BED, SHOW_SLICER_OUTPUT),
                 )
-            if (
-                setup.flavour == "orca"
-                and signed_exit_code(completed.returncode) == ORCA_PATHS_CROSS
-            ):
+            if setup.flavour == "orca" and orca_refused(completed.returncode, ORCA_PATHS_CROSS):
                 # OrcaSlicer sagt dazu auf der Konsole nur „found error“, Creality
                 # Print nennt im Protokoll Turm und Teil, Bambu Studio den Turm in
                 # ``result.json``. Der Turm ist der häufigste Fall, nicht der
@@ -6714,6 +6710,24 @@ def slice_model(
                     ),
                     values={"output": output},
                     suggestions=(ARRANGE_ON_BED, EXPORT_ONLY, SHOW_SLICER_OUTPUT),
+                )
+            if setup.flavour == "orca" and orca_refused(
+                completed.returncode, ORCA_MIXED_TEMPERATURES
+            ):
+                # Anycubic Slicer Next sagt auf der Konsole nichts dazu; die Zahl
+                # allein ließ den Kunden „keine Druckdatei“ lesen (RM-620).
+                raise ExternalToolError(
+                    tool=setup.name,
+                    title=SLICER_FAILED,
+                    detail=_(
+                        "Der Slicer druckt diese Filamente nicht zusammen, ihre "
+                        "Temperaturbereiche passen in seinen Profilen nicht. Verteilen Sie "
+                        "die Teile auf Platten oder wählen Sie andere Filamente."
+                    ),
+                    values={"output": output},
+                    # Anordnen legt verschiedene Filamente auf eigene Platten, wo der
+                    # Drucker sie nicht zusammen druckt (``prepare.filament_groups``).
+                    suggestions=(ARRANGE_ON_BED, CHOOSE_SLICER, EXPORT_ONLY, SHOW_SLICER_OUTPUT),
                 )
             if setup.flavour == "cura" and "failed to load model" in output.casefold():
                 raise ExternalToolError(
@@ -7501,6 +7515,14 @@ ORCA_OFF_THE_PLATE: Final = -50
 #: Gemessen an chufang.3mf (Slicer-Matrix RM-312): OrcaSlicer 2.4 und Creality
 #: Print 7.3 nach eigener Anordnung, Reinigungsturm gegen ein Teil.
 ORCA_PATHS_CROSS: Final = -101
+#: Der Rückgabewert, mit dem die Orca-Familie Filamente mit zu weit
+#: auseinanderliegenden Temperaturen auf einer Platte ablehnt (Orcas
+#: ``CLI_FILAMENTS_DIFFERENT_TEMP``). Gemessen an Anycubic Slicer Next 2.0 mit
+#: PLA und PETG am Kobra 2 (RM-620); ElegooSlicer, OrcaSlicer, Bambu Studio und
+#: Creality Print rechneten dieselbe Platte. Ab OrcaSlicer 2.4.2 heißt derselbe
+#: Code auch „ungültiger empfohlener Düsentemperaturbereich“ — das Urteil
+#: gehört dem Slicer und seinen Profilen.
+ORCA_MIXED_TEMPERATURES: Final = -62
 #: Der Titel, wenn der Slicer gelaufen ist und keine brauchbare Druckdatei
 #: hinterließ. ``ExternalToolError`` sagt sonst „hat nicht geantwortet" — der
 #: Slicer hat aber geantwortet, nur mit einem Fehler.
@@ -7687,6 +7709,16 @@ def _says_no_layers(output: str) -> bool:
     """Sagt die Ausgabe des Slicers, dass keine druckbare Schicht entstand?"""
     lowered = output.lower()
     return any(phrase in lowered for phrase in NO_LAYERS)
+
+
+def orca_refused(exit_code: int, code: int) -> bool:
+    """Hat die Orca-Familie mit diesem Fehlercode abgelehnt — auf jeder Plattform?
+
+    Ihr Programm endet mit ``return CLI().run(...)``: Windows liefert den
+    Rückgabewert als DWORD (-62 als 4294967234), Linux und macOS als Byte (194).
+    Mit :func:`signed_exit_code` allein griff die Erkennung dort nie (RM-620).
+    """
+    return exit_code in {code, code & 0xFFFFFFFF, code & 0xFF}
 
 
 def signed_exit_code(exit_code: int) -> int:
