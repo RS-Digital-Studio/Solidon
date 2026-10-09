@@ -4417,7 +4417,7 @@ _CLEARANCE_MARGIN: Final = 0.02
 _CAVITY_AXIS_SAMPLES: Final = 9
 
 
-def hole_is_clear(mesh: MeshData, feature: Feature) -> bool:
+def hole_is_clear(mesh: MeshData, feature: Feature, *, alone: bool = False) -> bool:
     """Ob der Zylinder dieser Bohrung leer ist — oder ob darin Material steht.
 
     Material im Zylinder hat eine Oberfläche im Zylinder: Gesucht werden
@@ -4457,6 +4457,11 @@ def hole_is_clear(mesh: MeshData, feature: Feature) -> bool:
     und Innengewinde messen sich in :func:`_inside_and_radial`. Welches
     Merkmal ein Hohlraum ist, sagt :func:`~app.core.types.is_a_cavity`; ein
     Lufteinschluss hat kein Maß und gilt als leer (:func:`_cavity_scope`).
+
+    ``alone`` sagt, dass das Netz nur die Teile trägt, die die Flächen des
+    Merkmals tragen (:func:`_own_part_bore_clear`): Dann gibt es kein fremdes
+    Teil zu fragen, und die Zählung der Teile entfällt — am Laptop-Ständer
+    kostete sie an diesen Netzen 8 s über alle Merkmale.
     """
     radius, depth = _cavity_size(feature)
     if feature.kind in ("hole", "slot"):
@@ -4472,7 +4477,7 @@ def hole_is_clear(mesh: MeshData, feature: Feature) -> bool:
         "hole_is_clear",
         mesh.raw,
         feature.face_indices,
-        lambda: _hole_is_clear_read(mesh, feature, radius, depth),
+        lambda: _hole_is_clear_read(mesh, feature, radius, depth, alone=alone),
         extra=(
             feature.kind,
             centre,
@@ -4483,14 +4488,17 @@ def hole_is_clear(mesh: MeshData, feature: Feature) -> bool:
             float(feature.params.get("length", 0.0) or 0.0),
             # Der Ringdurchmesser eines Torus — sein ``radius`` ist die Röhre.
             float(feature.params.get("diameter", 0.0) or 0.0),
+            alone,
         ),
     )
     return clear
 
 
-def _hole_is_clear_read(mesh: MeshData, feature: Feature, radius: float, depth: float) -> bool:
+def _hole_is_clear_read(
+    mesh: MeshData, feature: Feature, radius: float, depth: float, *, alone: bool = False
+) -> bool:
     """Der Rumpf von :func:`hole_is_clear` — die Rechnung über die Dreiecke im Zylinder."""
-    return not len(_inside_the_bore(mesh, feature, radius, depth))
+    return not len(_inside_the_bore(mesh, feature, radius, depth, alone=alone))
 
 
 def _cavity_size(feature: Feature) -> tuple[float, float]:
@@ -4761,7 +4769,8 @@ def _sticks_in_another_bore(
     1,9 s statt 0,006 s: Jeder Hohlraum las alle Dreiecke des Netzes. Jetzt
     verwirft der Hüllquader jedes Hohlraums (:func:`_cavity_boxes`, einmal je
     Netz), was das eigene Teil nicht erreicht, und gemessen wird nur über die
-    Dreiecke des eigenen Teils in diesem Quader.
+    Dreiecke des eigenen Teils, deren Quader diesen berührt — ein langes Dreieck
+    mit seinem Stück darin (RM-660).
     """
     from app.core.perceive.features import remembered
 
@@ -4879,9 +4888,14 @@ def _sticks_read(
         return None
     groups = face_components(mesh.raw)
     own = np.concatenate([groups[index] for index in own_parts])
-    centres = np.asarray(mesh.raw.triangles_center, dtype=np.float64)[own]
-    low = centres.min(axis=0) - FEATURE_OVERLAP
-    high = centres.max(axis=0) + FEATURE_OVERLAP
+    # Der Quader jedes eigenen Dreiecks, nicht seine Mitte: Ein langes Dreieck steht
+    # mit einem Stück im fremden Hohlraum, während seine Mitte weit draußen liegt
+    # (RM-660, der Stift über 40 mm in einer Platte von 10 mm).
+    corners = np.asarray(mesh.raw.vertices, dtype=np.float64)[np.asarray(mesh.raw.faces)[own]]
+    lowest = corners.min(axis=1)
+    highest = corners.max(axis=1)
+    low = lowest.min(axis=0) - FEATURE_OVERLAP
+    high = highest.max(axis=0) + FEATURE_OVERLAP
     reaching = np.flatnonzero(
         ~np.isin(boxes.parts, np.asarray(own_parts, dtype=np.int64))
         & (boxes.low <= high).all(axis=1)
@@ -4891,26 +4905,32 @@ def _sticks_read(
         if check_cancelled is not None:
             check_cancelled()
         within = (
-            (centres >= boxes.low[index] - FEATURE_OVERLAP)
-            & (centres <= boxes.high[index] + FEATURE_OVERLAP)
+            (highest >= boxes.low[index] - FEATURE_OVERLAP)
+            & (lowest <= boxes.high[index] + FEATURE_OVERLAP)
         ).all(axis=1)
         if not within.any():
             continue
         cavity = boxes.cavities[int(index)]
-        if _cavity_holds(mesh, cavity, own[within]):
+        if _cavity_holds(mesh, cavity, own[within], boxes.labels):
             return cavity.kind
     return None
 
 
-def _cavity_holds(mesh: MeshData, cavity: Feature, triangles: NDArray[np.int64]) -> bool:
-    """Ob eines dieser Dreiecke im Hohlraum ``cavity`` liegt."""
+def _cavity_holds(
+    mesh: MeshData,
+    cavity: Feature,
+    triangles: NDArray[np.int64],
+    labels: NDArray[np.int64] | None = None,
+) -> bool:
+    """Ob eines dieser Dreiecke im Hohlraum ``cavity`` liegt — ``labels`` je Dreieck
+    die Nummer seines Teils, wenn der Aufrufer sie schon hat (:func:`_cavity_boxes`)."""
     if cavity.kind == "void":
         return _void_holds(mesh, cavity, triangles)
     radius, depth = _cavity_size(cavity)
     if radius <= EPS_GEOM or (cavity.kind in ("hole", "slot") and depth <= EPS_GEOM):
         return False
     inside, _radial = _inside_and_radial(
-        mesh, cavity, radius, depth, triangles=triangles, end_planes=False
+        mesh, cavity, radius, depth, triangles=triangles, end_planes=False, labels=labels
     )
     return bool(inside.any())
 
@@ -4940,7 +4960,7 @@ def _own_part_bore_clear(mesh: MeshData, feature: Feature) -> bool:
     own_feature = dataclasses.replace(
         feature, face_indices=tuple(int(value) for value in np.searchsorted(own, chosen))
     )
-    return hole_is_clear(MeshData.of(part), own_feature)
+    return hole_is_clear(MeshData.of(part), own_feature, alone=True)
 
 
 def filled_bore_refusal(mesh: MeshData, feature: Feature) -> ValidationError:
@@ -5424,11 +5444,12 @@ def _slot_in_separate_carrier(
 
 
 def _inside_the_bore(
-    mesh: MeshData, feature: Feature, radius: float, depth: float
+    mesh: MeshData, feature: Feature, radius: float, depth: float, *, alone: bool = False
 ) -> NDArray[np.float64]:
     """Der Abstand von der Achse je Dreieck, das im Hohlraum liegt und nicht zu
-    ihm gehört — leer, wo er leer ist (:func:`hole_is_clear`)."""
-    inside, radial = _inside_and_radial(mesh, feature, radius, depth)
+    ihm gehört — leer, wo er leer ist (:func:`hole_is_clear`, ``alone`` wie dort)."""
+    labels = np.zeros(mesh.triangle_count, dtype=np.int64) if alone else None
+    inside, radial = _inside_and_radial(mesh, feature, radius, depth, labels=labels)
     return np.asarray(radial[inside], dtype=np.float64)
 
 
@@ -5447,6 +5468,7 @@ def _inside_and_radial(
     *,
     triangles: NDArray[np.int64] | None = None,
     end_planes: bool = True,
+    labels: NDArray[np.int64] | None = None,
 ) -> tuple[NDArray[np.bool_], NDArray[np.float64]]:
     """Je Dreieck, ob es im Hohlraum liegt, und sein Abstand von dessen Mitte.
 
@@ -5460,11 +5482,20 @@ def _inside_and_radial(
     Hüllquader der eigenen Flächen — die Pfanne ist nur eine Kappe, die Kehle
     ein Stück der Röhre. Die eigenen Dreiecke liegen nie darin.
 
-    **An der Bohrung zählt ein Dreieck mit dem Stück, das darin steht**
-    (RM-253): Gefragt wird zuerst seine Mitte, dann jedes übrige Dreieck an
-    seinem Stück zwischen den Mündungen (:func:`_reaching_in`) — ein langes
-    Dreieck hat seine Mitte draußen und steht trotzdem darin; sein Abstand ist
-    dann der kleinste dieses Stücks.
+    **Ein Dreieck zählt mit dem Stück, das darin steht** (RM-253 an der
+    Bohrung, RM-660 an jedem Hohlraum): Gefragt wird zuerst seine Mitte, dann
+    jedes übrige Dreieck an seinem Stück zwischen den Grenzen
+    (:func:`_reaching_in`) — zwischen den Mündungen, an Pfanne und Kehle im
+    Hüllquader der Flächen. Ein langes Dreieck hat seine Mitte draußen und steht
+    trotzdem darin; sein Abstand ist dann der kleinste dieses Stücks, am Kegel
+    als Anteil der Wand mal dem Halbmesser des Merkmals. **Eigenes Material
+    fragt so nur die Bohrung** über das ganze Netz — ihr Werkzeug nähme es mit
+    (``HOLE_IS_NOT_EMPTY``); jeder andere Hohlraum und jede Teilmenge fragen nur
+    die Dreiecke anderer Teile (:func:`_foreign_triangles`, ``labels`` je Dreieck
+    aus ``_part_labels``, wenn der Aufrufer sie schon hat). An 24 Kehlen des
+    Laptop-Ständers reichten sonst Streifen des eigenen Teils bis 0,955 des
+    Halbmessers in die Röhre, und ein fremdes Teil darin hätte niemand mehr
+    genannt — die Kehle galt dann als gefüllt, nicht als belegt.
 
     ``triangles`` beschränkt die Frage auf diese Dreiecke (die Rückgabe gilt
     dann je Eintrag), ``end_planes=False`` nimmt an der Bohrung die Spanne der
@@ -5494,8 +5525,11 @@ def _inside_and_radial(
             rim = transform.along(corners, axis)
             low, high = float(rim.min()), float(rim.max())
     slack = FEATURE_OVERLAP
+    bounds: list[tuple[NDArray[np.float64], float]] = []
     if feature.kind in ("sphere", "torus"):
         inside, radial = _round_cavity_inside(feature, middles, along, axis, corners, radius)
+        if corners is not None and len(corners):
+            bounds = _box_bounds(corners, slack)
     else:
         offset = middles - np.outer(along, axis)
         if feature.kind == "slot":
@@ -5511,10 +5545,7 @@ def _inside_and_radial(
         )
         # Dieselben Grenzen als Halbräume, relativ zur Mitte: Punkte ``p`` mit
         # ``n · p ≤ Abstand`` liegen zwischen den Mündungen.
-        bounds: list[tuple[NDArray[np.float64], float]] = [
-            (axis, high - slack),
-            (-axis, -(low + slack)),
-        ]
+        bounds = [(axis, high - slack), (-axis, -(low + slack))]
         planes = (
             _bore_end_planes(mesh, feature, {feature.id: feature}, grows=False)
             if feature.kind == "hole" and end_planes
@@ -5527,17 +5558,52 @@ def _inside_and_radial(
                 normal = np.asarray(plane.normal, dtype=np.float64)
                 inside &= transform.along(world, normal) < plane.position - slack
                 bounds.append((normal, plane.position - slack - units.dot3(normal, centre)))
-        if feature.kind == "hole" and triangles is None:
-            reach = _reaching_in(mesh, centre, axis, bounds, radius, own)
+    core = _core_of(feature, axis, radius, corners, low, high) if bounds else None
+    if core is not None:
+        whole_bore = feature.kind == "hole" and triangles is None
+        asked = None if whole_bore else _foreign_triangles(mesh, own, triangles, labels)
+        if whole_bore or (asked is not None and asked.any()):
+            reach = _reaching_in(
+                mesh,
+                centre,
+                axis,
+                bounds,
+                core.radius,
+                own,
+                core=core,
+                triangles=triangles,
+                asked=asked,
+            )
             reaching = ~inside & np.isfinite(reach)
             inside |= reaching
-            radial = np.where(reaching, reach, radial)
+            radial = np.where(reaching, reach * core.scale, radial)
     if len(own):
         if triangles is None:
             inside[own] = False
         else:
             inside &= ~np.isin(np.asarray(triangles, dtype=np.int64), own)
     return np.asarray(inside, dtype=np.bool_), np.asarray(radial, dtype=np.float64)
+
+
+def _foreign_triangles(
+    mesh: MeshData,
+    own: NDArray[np.int64],
+    triangles: NDArray[np.int64] | None,
+    labels: NDArray[np.int64] | None,
+) -> NDArray[np.bool_] | None:
+    """Je gefragtes Dreieck, ob es zu einem anderen Teil gehört als denen, die die
+    Flächen des Hohlraums tragen — ``None`` an einem Körper aus einem Teil oder
+    ohne eigene Flächen. Eigen sind alle tragenden Teile, wie in
+    :func:`_own_part_bore_clear` (eine Bohrung durch zwei Platten)."""
+    if not len(own):
+        return None
+    if labels is None:
+        if mesh.component_count < 2:
+            return None
+        labels = _part_labels(mesh)[0]
+    carriers = np.unique(labels[own])
+    asked = labels if triangles is None else labels[np.asarray(triangles, dtype=np.int64)]
+    return np.asarray(~np.isin(asked, carriers), dtype=np.bool_)
 
 
 def _round_cavity_inside(
@@ -5579,17 +5645,9 @@ def _off_the_slot_line(
     der Richtung des Langlochs; ohne Richtung oder Länge bleibt es der Abstand
     von der Achse, wie an einer Bohrung.
     """
-    direction = feature.params.get("direction")
-    length = float(feature.params.get("length", 0.0) or 0.0)
-    half = (length - 2.0 * radius) / 2.0
-    if direction is None or half <= EPS_GEOM:
+    line, half = _slot_line(feature, axis, radius)
+    if line is None:
         return offset
-    line = np.asarray(direction, dtype=np.float64)
-    line = line - axis * float(transform.along(line, axis))
-    size = float(math.hypot(*line))
-    if size <= EPS_GEOM:
-        return offset
-    line /= size
     reach = np.clip(transform.along(offset, line), -half, half)
     return np.asarray(offset - np.outer(reach, line), dtype=np.float64)
 
@@ -5602,17 +5660,28 @@ def _cone_wall_radius(
     high: float,
 ) -> NDArray[np.float64]:
     """Der Halbmesser der Kegelwand auf der Höhe jedes Dreiecks — linear zwischen
-    dem weitesten Punkt seines unteren und seines oberen Rands."""
+    dem weitesten Punkt seines unteren und seines oberen Rands (:func:`_cone_ends`)."""
+    start, end = _cone_ends(corners, axis, low, high)
+    if high - low <= EPS_GEOM:
+        return np.full(len(along), start)
+    share = np.clip((along - low) / (high - low), 0.0, 1.0)
+    return np.asarray(start + (end - start) * share, dtype=np.float64)
+
+
+def _cone_ends(
+    corners: NDArray[np.float64], axis: NDArray[np.float64], low: float, high: float
+) -> tuple[float, float]:
+    """Die Halbmesser der Kegelwand an ihrem unteren und oberen Rand: der weiteste Punkt
+    je Rand, ohne lesbare Ränder beide der weiteste Punkt überhaupt."""
     height = transform.along(corners, axis)
     spread = np.linalg.norm(corners - np.outer(height, axis), axis=1)
     reach = max(FEATURE_OVERLAP, (high - low) * 0.05)
     lower = spread[height <= low + reach]
     upper = spread[height >= high - reach]
     if not len(lower) or not len(upper) or high - low <= EPS_GEOM:
-        return np.full(len(along), float(spread.max()) if len(spread) else 0.0)
-    start, end = float(lower.max()), float(upper.max())
-    share = np.clip((along - low) / (high - low), 0.0, 1.0)
-    return np.asarray(start + (end - start) * share, dtype=np.float64)
+        widest = float(spread.max()) if len(spread) else 0.0
+        return widest, widest
+    return float(lower.max()), float(upper.max())
 
 
 def _reaching_in(
@@ -5622,9 +5691,13 @@ def _reaching_in(
     bounds: Sequence[tuple[NDArray[np.float64], float]],
     radius: float,
     own: NDArray[np.int64],
+    *,
+    core: _Core | None = None,
+    triangles: NDArray[np.int64] | None = None,
+    asked: NDArray[np.bool_] | None = None,
 ) -> NDArray[np.float64]:
-    """Je Dreieck der kleinste Achsabstand seines Stücks zwischen den Mündungen —
-    ``inf``, wo es nicht diesseits der eigenen Wand liegt.
+    """Je Dreieck der kleinste Abstand seines Stücks zwischen den Grenzen vom Kern des
+    Hohlraums — ``inf``, wo es nicht diesseits der eigenen Wand liegt.
 
     **Ein Dreieck steht im Zylinder, wenn ein Stück von ihm darin steht** (RM-253).
     Am Laptop-Ständer steckt in der Bohrung einer 10,27 mm starken Platte eine
@@ -5645,14 +5718,45 @@ def _reaching_in(
     nahe wie die Wand, die sie bestimmen —, und sie werden nicht gefragt. Ohne
     Achse gibt es keinen Zylinder und nichts, was hineinreicht — die Absage dafür
     sagt die Operation (``FEATURE_WITHOUT_AXIS``), nicht diese Frage.
+
+    **Je Hohlraumart ihr Kern** (RM-660, ``core``, :func:`_core_of`): an Bohrung
+    und Innengewinde die Achse, am Langloch das Stück seiner Mittellinie, am Kegel
+    die Achse auf seiner Einheitswand, an der Kugelpfanne die Mitte, an der Kehle
+    der Mittelkreis — gemessen wird in den Einheiten des Kerns (``radius``), und die
+    eigene Wand misst sich genauso (:func:`_own_core_limit`). Ohne ``core`` gilt
+    die Achse. ``triangles`` beschränkt die Frage auf diese Dreiecke, die Rückgabe
+    gilt dann je Eintrag, und die Vorauswahl liest nur ihre Ecken; ``asked``
+    beschränkt sie weiter auf die markierten (:func:`_foreign_triangles`), die
+    übrigen bleiben ``inf``.
     """
     raw = mesh.raw
-    found = np.full(len(raw.faces), np.inf, dtype=np.float64)
-    if not len(raw.faces) or math.hypot(*(float(value) for value in axis)) <= EPS_GEOM:
+    all_faces = np.asarray(raw.faces, dtype=np.int64)
+    chosen = (
+        np.arange(len(all_faces), dtype=np.int64)
+        if triangles is None
+        else np.asarray(triangles, dtype=np.int64)
+    )
+    found = np.full(len(chosen), np.inf, dtype=np.float64)
+    if not len(chosen) or math.hypot(*(float(value) for value in axis)) <= EPS_GEOM:
         return found
-    points = np.asarray(raw.vertices, dtype=np.float64)
-    faces = np.asarray(raw.faces, dtype=np.int64)
-    widest = radius * (1.0 - _CLEARANCE_MARGIN)
+    if asked is not None:
+        picked = np.flatnonzero(asked)
+        if len(picked):
+            found[picked] = _reaching_in(
+                mesh, centre, axis, bounds, radius, own, core=core, triangles=chosen[picked]
+            )
+        return found
+    all_points = np.asarray(raw.vertices, dtype=np.float64)
+    if triangles is None or 3 * len(chosen) > len(all_points):
+        # Eine große Teilmenge liest alle Ecken: Ein Gang über die Ecken kostet
+        # weniger als ``np.unique`` über ihre Dreiecke (am Laptop-Ständer 170 000).
+        points = all_points
+        faces = all_faces if triangles is None else all_faces[chosen]
+    else:
+        used, local = np.unique(all_faces[chosen], return_inverse=True)
+        points, faces = all_points[used], local.reshape(len(chosen), 3).astype(np.int64)
+    extent = radius if core is None or core.extent is None else core.extent
+    widest = extent * (1.0 - _CLEARANCE_MARGIN)
     # **Die Vorauswahl als Bitmuster je Ecke**: welche Seite jeder Grenze sie
     # erreicht — quer zur Achse über ``-widest`` und unter ``widest`` in zwei
     # Richtungen, diesseits jeder Mündung. Ein Dreieck bleibt, wenn seine drei
@@ -5671,10 +5775,7 @@ def _reaching_in(
     # Je Richtung eine Projektion, je Schranke ein Bit: ``True`` heißt „eine Ecke
     # darüber“, ``False`` „eine Ecke darunter“. Zwei Mündungen mit
     # entgegengesetzter Normale teilen sich eine Projektion.
-    checks: list[tuple[NDArray[np.float64], tuple[tuple[float, bool], ...]]] = [
-        (first, ((-widest, True), (widest, False))),
-        (second, ((-widest, True), (widest, False))),
-    ]
+    checks = _lateral_checks(core, axis, first, second, widest)
     if len(bounds) == 2 and np.array_equal(bounds[1][0], -bounds[0][0]):
         checks.append((bounds[0][0], ((bounds[0][1], False), (-bounds[1][1], True))))
     else:
@@ -5692,16 +5793,193 @@ def _reaching_in(
             bit += 1
     reached_by = pattern[faces[:, 0]] | pattern[faces[:, 1]] | pattern[faces[:, 2]]
     complete = reached_by == (1 << bit) - 1
-    complete[own] = False
+    if triangles is None:
+        complete[own] = False
+    elif len(own):
+        # Eine Maske über alle Dreiecke statt ``np.isin``: Das sortiert je Frage
+        # die ganze Teilmenge (am Laptop-Ständer 170 000 Dreiecke je Hohlraum).
+        owned = np.zeros(len(all_faces), dtype=np.bool_)
+        owned[own] = True
+        complete &= ~owned[chosen]
     candidates = np.flatnonzero(complete)
     if not len(candidates):
         return found
-    closest = _closest_to_the_axis(*_clipped_by(points[faces[candidates]] - centre, bounds), axis)
-    limit = _own_wall_limit(
-        points, faces, own, centre, bounds, axis, radius, closest, (first, second)
-    )
+    pieces = _clipped_by(points[faces[candidates]] - centre, bounds)
+    if core is None or core.shape == "axis":
+        closest = _closest_to_the_axis(*pieces, axis)
+        limit = _own_wall_limit(
+            all_points, all_faces, own, centre, bounds, axis, radius, closest, (first, second)
+        )
+    else:
+        closest = _core_distance(core, *pieces, axis)
+        limit = _own_core_limit(core, all_points, all_faces, own, centre, bounds, axis, closest)
     found[candidates] = np.where(closest < limit, closest, np.inf)
     return found
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class _Core:
+    """Wovon aus ein Hohlraum den Abstand eines Stücks misst (RM-660, :func:`_core_of`).
+
+    Bohrung und Innengewinde messen von der Achse, das Langloch vom Stück seiner
+    Mittellinie (``line``, halbe Länge ``half``), der Kegel von der Achse auf seiner
+    Einheitswand (``cone``: unterer und oberer Rand entlang der Achse, Halbmesser
+    dort), die Kugelpfanne von der Mitte, die Kehle vom Mittelkreis (``ring``).
+    """
+
+    shape: Literal["axis", "segment", "cone", "point", "ring"]
+    radius: float
+    """Die Wand in den Einheiten des Abstands — am Kegel 1, sonst Millimeter."""
+    scale: float = 1.0
+    """Millimeter je Einheit — was :func:`_inside_and_radial` als Abstand zurückgibt."""
+    extent: float | None = None
+    """Wie weit der Hohlraum quer zum Kern reicht, in Millimetern, für die Vorauswahl."""
+    line: NDArray[np.float64] | None = None
+    half: float = 0.0
+    cone: tuple[float, float, float, float] | None = None
+    ring: float = 0.0
+
+
+def _core_of(
+    feature: Feature,
+    axis: NDArray[np.float64],
+    radius: float,
+    corners: NDArray[np.float64] | None,
+    low: float,
+    high: float,
+) -> _Core | None:
+    """Der Kern, von dem aus ein Hohlraum ein Stück misst — ``None``, wo er keins misst.
+
+    Dieselben Maße wie die Frage nach den Mitten (:func:`_inside_and_radial`): der
+    Halbmesser aus :func:`_cavity_size`, die Mittellinie aus :func:`_slot_line`, die
+    Ränder des Kegels aus :func:`_cone_ends`, der Mittelkreis aus dem Durchmesser des
+    Rings. Ein Kegel ohne eigene Flächen misst wie ein Zylinder seines Halbmessers,
+    wie die Mitten auch.
+    """
+    if radius <= EPS_GEOM:
+        return None
+    if feature.kind == "slot":
+        line, half = _slot_line(feature, axis, radius)
+        if line is not None:
+            return _Core("segment", radius, line=line, half=half, extent=radius)
+        return _Core("axis", radius)
+    if feature.kind == "cone" and corners is not None and len(corners):
+        start, end = _cone_ends(corners, axis, low, high)
+        if max(start, end) <= EPS_GEOM:
+            return None
+        return _Core(
+            "cone", 1.0, scale=radius, extent=max(start, end), cone=(low, high, start, end)
+        )
+    if feature.kind == "sphere":
+        return _Core("point", radius)
+    if feature.kind == "torus":
+        ring = float(feature.params.get("diameter", 0.0) or 0.0) / 2.0
+        if ring <= EPS_GEOM:
+            return _Core("point", radius)
+        return _Core("ring", radius, ring=ring, extent=radius)
+    return _Core("axis", radius)
+
+
+def _slot_line(
+    feature: Feature, axis: NDArray[np.float64], radius: float
+) -> tuple[NDArray[np.float64] | None, float]:
+    """Richtung und halbe Länge der Mittellinie eines Langlochs, quer zur Achse —
+    ``None``, wo es keine Richtung oder keine Länge über der Breite hat."""
+    direction = feature.params.get("direction")
+    length = float(feature.params.get("length", 0.0) or 0.0)
+    half = (length - 2.0 * radius) / 2.0
+    if direction is None or half <= EPS_GEOM:
+        return None, 0.0
+    line = np.asarray(direction, dtype=np.float64)
+    line = line - axis * float(transform.along(line, axis))
+    size = float(math.hypot(*line))
+    if size <= EPS_GEOM:
+        return None, 0.0
+    return line / size, half
+
+
+def _box_bounds(
+    corners: NDArray[np.float64], slack: float
+) -> list[tuple[NDArray[np.float64], float]]:
+    """Der Hüllquader der eigenen Flächen um ``slack`` geweitet, als sechs Halbräume
+    ``n · p ≤ Abstand`` — dieselbe Grenze wie die Frage nach den Mitten an Pfanne
+    und Kehle (:func:`_round_cavity_inside`)."""
+    low = corners.min(axis=0) - slack
+    high = corners.max(axis=0) + slack
+    bounds: list[tuple[NDArray[np.float64], float]] = []
+    for index in range(3):
+        unit = np.zeros(3, dtype=np.float64)
+        unit[index] = 1.0
+        bounds.append((unit, float(high[index])))
+        bounds.append((-unit, -float(low[index])))
+    return bounds
+
+
+def _lateral_checks(
+    core: _Core | None,
+    axis: NDArray[np.float64],
+    first: NDArray[np.float64],
+    second: NDArray[np.float64],
+    widest: float,
+) -> list[tuple[NDArray[np.float64], tuple[tuple[float, bool], ...]]]:
+    """Die Schranken der Vorauswahl quer zum Kern, je Richtung ``(Schwelle, darüber)``.
+
+    Ein Dreieck bleibt nur, wenn seine Ecken zusammen jede erfüllen: Um Achse und
+    Kegel das Quadrat ±``widest``, am Langloch dazu die halbe Länge entlang seiner
+    Mittellinie, um die Pfanne der Würfel, um die Kehle das Quadrat bis über den
+    Mittelkreis und die Röhre entlang der Achse.
+    """
+    both = ((-widest, True), (widest, False))
+    if core is not None and core.shape == "segment" and core.line is not None:
+        reach = core.half + widest
+        return [(core.line, ((-reach, True), (reach, False))), (np.cross(axis, core.line), both)]
+    if core is not None and core.shape == "point":
+        return [(first, both), (second, both), (axis, both)]
+    if core is not None and core.shape == "ring":
+        reach = core.ring + widest
+        wide = ((-reach, True), (reach, False))
+        return [(first, wide), (second, wide), (axis, both)]
+    return [(first, both), (second, both)]
+
+
+def _core_distance(
+    core: _Core,
+    polygons: NDArray[np.float64],
+    counts: NDArray[np.int64],
+    axis: NDArray[np.float64],
+) -> NDArray[np.float64]:
+    """Der kleinste Abstand jedes konvexen Vielecks vom Kern, in dessen Einheiten."""
+    if core.shape == "segment" and core.line is not None:
+        return _closest_to_the_segment(polygons, counts, axis, core.line, core.half)
+    if core.shape == "cone" and core.cone is not None:
+        return _closest_to_the_axis(_onto_the_unit_cone(polygons, axis, core.cone), counts, axis)
+    if core.shape == "point":
+        return _closest_to_the_point(polygons, counts)
+    if core.shape == "ring":
+        return _closest_to_the_ring(polygons, counts, axis, core.ring, core.radius)
+    return _closest_to_the_axis(polygons, counts, axis)
+
+
+def _own_core_limit(
+    core: _Core,
+    points: NDArray[np.float64],
+    faces: NDArray[np.int64],
+    own: NDArray[np.int64],
+    centre: NDArray[np.float64],
+    bounds: Sequence[tuple[NDArray[np.float64], float]],
+    axis: NDArray[np.float64],
+    closest: NDArray[np.float64],
+) -> float:
+    """Wie :func:`_own_wall_limit`, für jeden Kern: der Saum unter der eigenen Wand,
+    höchstens unter dem Halbmesser — gemessen nur, wenn ein Stück näher kommt als der
+    Saum unter dem Halbmesser."""
+    widest = core.radius * (1.0 - _CLEARANCE_MARGIN)
+    if not len(own) or not (closest < widest).any():
+        return widest
+    reached = _core_distance(core, *_clipped_by(points[faces[own]] - centre, bounds), axis)
+    reached = reached[np.isfinite(reached)]
+    wall = min(core.radius, float(reached.min())) if len(reached) else core.radius
+    return wall * (1.0 - _CLEARANCE_MARGIN)
 
 
 def _own_wall_limit(
@@ -5840,6 +6118,268 @@ def _closest_to_the_axis(
     return np.asarray(np.where(around, 0.0, closest), dtype=np.float64)
 
 
+def _closest_to_the_segment(
+    polygons: NDArray[np.float64],
+    counts: NDArray[np.int64],
+    axis: NDArray[np.float64],
+    line: NDArray[np.float64],
+    half: float,
+) -> NDArray[np.float64]:
+    """Der kleinste Abstand jedes konvexen Vielecks von der Mittellinie eines Langlochs,
+    quer zur Achse — vom Stück ``[-half, half]`` entlang ``line`` durch den Nullpunkt.
+
+    In der Ebene quer zur Achse ist die Mittellinie eine Strecke. Null, wo sie eine
+    Kante kreuzt oder im Vieleck liegt (ihr Anfang dreht gleichsinnig, wie in
+    :func:`_closest_to_the_axis`), sonst der kleinste der Abstände von Ecken zur
+    Strecke und von ihren Enden zu den Kanten. Mit ``half`` null ist es der Abstand
+    von der Achse. Elementweise, ohne BLAS.
+    """
+    if not len(polygons):
+        return np.zeros(0, dtype=np.float64)
+    across = np.cross(axis, line)
+    width = polygons.shape[1]
+    rows = np.arange(len(polygons))[:, None]
+    index = np.arange(width)[None, :]
+    valid = index < counts[:, None]
+    following = np.where(index + 1 < counts[:, None], index + 1, 0)
+    u = polygons[..., 0] * line[0] + polygons[..., 1] * line[1] + polygons[..., 2] * line[2]
+    w = polygons[..., 0] * across[0] + polygons[..., 1] * across[1] + polygons[..., 2] * across[2]
+    u_ahead, w_ahead = u[rows, following], w[rows, following]
+    beyond = np.maximum(np.abs(u) - half, 0.0)
+    corner = np.sqrt(beyond * beyond + w * w)
+    edge_u, edge_w = u_ahead - u, w_ahead - w
+    square = edge_u * edge_u + edge_w * edge_w
+
+    def to_edges(point: float) -> NDArray[np.float64]:
+        toward = (point - u) * edge_u - w * edge_w
+        share = np.where(
+            square > 0.0, np.clip(toward / np.where(square > 0.0, square, 1.0), 0.0, 1.0), 0.0
+        )
+        off_u = u + share * edge_u - point
+        off_w = w + share * edge_w
+        return np.asarray(np.sqrt(off_u * off_u + off_w * off_w), dtype=np.float64)
+
+    ends = np.minimum(to_edges(-half), to_edges(half))
+    closest = np.where(valid, np.minimum(corner, ends), np.inf).min(axis=1)
+    # Eine Kante kreuzt die Gerade der Mittellinie innerhalb der Strecke.
+    sides = (w > 0.0) != (w_ahead > 0.0)
+    step = np.where(sides, w - w_ahead, 1.0)
+    crossing_u = u + np.where(sides, w / step, 0.0) * edge_u
+    crossed = (valid & sides & (np.abs(crossing_u) <= half)).any(axis=1)
+    # Oder der Anfang der Strecke liegt im Vieleck.
+    start_u = u + half
+    turn = np.where(valid, start_u * w_ahead - w * (u_ahead + half), 0.0)
+    flat = np.abs(turn.sum(axis=1)) <= EPS_GEOM * EPS_GEOM
+    around = ~flat & (counts >= 3) & (np.all(turn >= 0.0, axis=1) | np.all(turn <= 0.0, axis=1))
+    return np.asarray(np.where(crossed | around, 0.0, closest), dtype=np.float64)
+
+
+def _closest_to_the_point(
+    polygons: NDArray[np.float64], counts: NDArray[np.int64]
+) -> NDArray[np.float64]:
+    """Der kleinste Abstand jedes konvexen, ebenen Vielecks vom Nullpunkt — der Mitte
+    einer Kugelpfanne.
+
+    Liegt das Lot vom Nullpunkt auf die Ebene des Vielecks darin (jede Kante dreht
+    gleichsinnig um die Normale nach Newell), ist es der Abstand der Ebene, sonst der
+    nächste Punkt auf einer Kante. Elementweise, ohne BLAS.
+    """
+    if not len(polygons):
+        return np.zeros(0, dtype=np.float64)
+    width = polygons.shape[1]
+    rows = np.arange(len(polygons))[:, None]
+    index = np.arange(width)[None, :]
+    valid = index < counts[:, None]
+    following = np.where(index + 1 < counts[:, None], index + 1, 0)
+    ahead = polygons[rows, following]
+    edge = ahead - polygons
+    square = edge[..., 0] * edge[..., 0] + edge[..., 1] * edge[..., 1] + edge[..., 2] * edge[..., 2]
+    toward = -(
+        polygons[..., 0] * edge[..., 0]
+        + polygons[..., 1] * edge[..., 1]
+        + polygons[..., 2] * edge[..., 2]
+    )
+    share = np.where(
+        square > 0.0, np.clip(toward / np.where(square > 0.0, square, 1.0), 0.0, 1.0), 0.0
+    )
+    nearest = polygons + share[..., None] * edge
+    distance = np.sqrt(
+        nearest[..., 0] * nearest[..., 0]
+        + nearest[..., 1] * nearest[..., 1]
+        + nearest[..., 2] * nearest[..., 2]
+    )
+    closest = np.where(valid, distance, np.inf).min(axis=1)
+    normal = np.where(valid[..., None], np.cross(polygons, ahead), 0.0).sum(axis=1)
+    size = np.sqrt(
+        normal[:, 0] * normal[:, 0] + normal[:, 1] * normal[:, 1] + normal[:, 2] * normal[:, 2]
+    )
+    turned = np.cross(edge, -polygons)
+    turn = np.where(
+        valid,
+        turned[..., 0] * normal[:, None, 0]
+        + turned[..., 1] * normal[:, None, 1]
+        + turned[..., 2] * normal[:, None, 2],
+        0.0,
+    )
+    flat = size <= EPS_GEOM * EPS_GEOM
+    around = ~flat & (counts >= 3) & np.all(turn >= 0.0, axis=1)
+    height = np.abs(
+        polygons[:, 0, 0] * normal[:, 0]
+        + polygons[:, 0, 1] * normal[:, 1]
+        + polygons[:, 0, 2] * normal[:, 2]
+    ) / np.where(flat, 1.0, size)
+    return np.asarray(np.where(around, height, closest), dtype=np.float64)
+
+
+#: Wie weit die Sehnen, über die :func:`_closest_to_the_ring` den Mittelkreis einer
+#: Kehle misst, höchstens innerhalb des Kreises liegen dürfen — als Anteil des
+#: Saums an der Röhre (:data:`_CLEARANCE_MARGIN`): Der Fehler der Sehne bleibt ein
+#: Viertel des Saums, um den die Wand ohnehin unscharf ist.
+_RING_CHORD_SHARE: Final = 0.25
+
+#: Höchstens so viele Sehnen je Kreis — bei einem Ring Ø 2000 mit Röhre Ø 1 wären
+#: es sonst über zehntausend Schnitte je Frage.
+_MOST_RING_CHORDS: Final = 1024
+
+
+def _closest_to_the_ring(
+    polygons: NDArray[np.float64],
+    counts: NDArray[np.int64],
+    axis: NDArray[np.float64],
+    ring: float,
+    tube: float,
+) -> NDArray[np.float64]:
+    """Der kleinste Abstand jedes konvexen Vielecks vom Mittelkreis einer Kehle
+    (Halbmesser ``ring`` um ``axis`` durch den Nullpunkt).
+
+    Der Kreis als regelmäßiges Vieleck: Je Sektor zwischen zwei Halbebenen durch die
+    Achse wird das Vieleck beschnitten und sein Abstand von der Sehne gemessen
+    (:func:`_closest_to_the_axis` an ihrer Geraden). Die Sehne liegt höchstens um
+    ``ring · (1 - cos(π/n))`` innerhalb des Kreises; ``n`` ist die kleinste
+    Zweierpotenz ab acht, für die das unter :data:`_RING_CHORD_SHARE` des Saums an
+    der Röhre bleibt (abgeschätzt über ``ring · (π/n)² / 2``), höchstens
+    :data:`_MOST_RING_CHORDS`. Die Ecken kommen aus :func:`units.circle_point`,
+    plattformgleich.
+    """
+    found = np.full(len(polygons), np.inf, dtype=np.float64)
+    if not len(polygons):
+        return found
+    first = np.cross(axis, (1.0, 0.0, 0.0))
+    if math.hypot(*(float(value) for value in first)) < 0.5:
+        first = np.cross(axis, (0.0, 1.0, 0.0))
+    first /= math.hypot(*(float(value) for value in first))
+    second = np.cross(axis, first)
+    allowed = max(_RING_CHORD_SHARE * _CLEARANCE_MARGIN * tube, EPS_GEOM)
+    sections = 8
+    while (
+        sections < _MOST_RING_CHORDS
+        and ring * (math.pi / sections) * (math.pi / sections) / 2.0 > allowed
+    ):
+        sections *= 2
+    corners = [units.circle_point(sections, index) for index in range(sections)]
+    rows, sectors = _ring_sectors(polygons, counts, first, second, sections)
+    if not len(rows):
+        return found
+    order = np.argsort(sectors, kind="stable")
+    rows, sectors = rows[order], sectors[order]
+    bounds = np.flatnonzero(np.diff(sectors)) + 1
+    for chosen, sector in zip(
+        np.split(rows, bounds), sectors[np.concatenate(([0], bounds))], strict=True
+    ):
+        if not len(chosen):
+            continue
+        cos_a, sin_a = corners[int(sector)]
+        cos_b, sin_b = corners[(int(sector) + 1) % sections]
+        start = (first * cos_a + second * sin_a) * ring
+        end = (first * cos_b + second * sin_b) * ring
+        # Der Sektor: auf der Seite von ``end`` der Ebene durch Achse und ``start``,
+        # auf der Seite von ``start`` der Ebene durch Achse und ``end``.
+        pieces, kept = _clipped_by(
+            polygons[chosen], [(-np.cross(axis, start), 0.0), (np.cross(axis, end), 0.0)]
+        )
+        taken = np.flatnonzero(kept > 0)
+        if not len(taken):
+            continue
+        chord = end - start
+        chord = chord / math.hypot(*(float(value) for value in chord))
+        middle = (start + end) / 2.0
+        reached = _closest_to_the_axis(pieces[taken] - middle, kept[taken], chord)
+        found[chosen[taken]] = np.minimum(found[chosen[taken]], reached)
+    return found
+
+
+def _ring_sectors(
+    polygons: NDArray[np.float64],
+    counts: NDArray[np.int64],
+    first: NDArray[np.float64],
+    second: NDArray[np.float64],
+    sections: int,
+) -> tuple[NDArray[np.int64], NDArray[np.int64]]:
+    """Welche Vielecke welche Sektoren um die Achse erreichen — als Paare (Zeile, Sektor).
+
+    **Nur eine Vorauswahl:** Jeden Sektor schneidet :func:`_closest_to_the_ring`
+    exakt aus, und ein Vieleck, das ihn nicht erreicht, bleibt dort leer. Deshalb
+    darf der Winkel der Ecken hier aus :func:`stable_arctan2` kommen, und ein Sektor
+    Rand zu beiden Seiten deckt jede Rundung an einer Sektorgrenze. Ein konvexes
+    Vieleck, das die Achse nicht umschließt, sieht man von ihr aus unter weniger als
+    einer halben Drehung; reicht es so weit oder bis an die Achse, nimmt es jeden
+    Sektor. Eine Rille um eine Welle fragt so je Dreieck ein bis drei Sektoren statt
+    aller.
+    """
+    width = polygons.shape[1]
+    valid = np.arange(width)[None, :] < counts[:, None]
+    x = polygons[..., 0] * first[0] + polygons[..., 1] * first[1] + polygons[..., 2] * first[2]
+    y = polygons[..., 0] * second[0] + polygons[..., 1] * second[1] + polygons[..., 2] * second[2]
+    angle = np.asarray(stable_arctan2(y, x), dtype=np.float64)
+    reference = angle[:, 0]
+    delta = angle - reference[:, None]
+    delta = np.where(delta > math.pi, delta - 2.0 * math.pi, delta)
+    delta = np.where(delta <= -math.pi, delta + 2.0 * math.pi, delta)
+    delta = np.where(valid, delta, 0.0)
+    low, high = delta.min(axis=1), delta.max(axis=1)
+    touching = np.where(valid, x * x + y * y, np.inf).min(axis=1) <= EPS_GEOM * EPS_GEOM
+    whole = touching | (high - low >= math.pi) | (counts < 1)
+    step = 2.0 * math.pi / sections
+    begin = np.floor((reference + low) / step).astype(np.int64) - 1
+    finish = np.floor((reference + high) / step).astype(np.int64) + 1
+    partial = np.flatnonzero(~whole)
+    spans = finish[partial] - begin[partial] + 1
+    rows = np.repeat(partial, spans)
+    offsets = np.arange(int(spans.sum()), dtype=np.int64) - np.repeat(
+        np.cumsum(spans) - spans, spans
+    )
+    sectors = (np.repeat(begin[partial], spans) + offsets) % sections
+    everywhere = np.flatnonzero(whole)
+    rows = np.concatenate((rows, np.repeat(everywhere, sections)))
+    sectors = np.concatenate(
+        (sectors, np.tile(np.arange(sections, dtype=np.int64), len(everywhere)))
+    )
+    return rows.astype(np.int64), sectors.astype(np.int64)
+
+
+def _onto_the_unit_cone(
+    polygons: NDArray[np.float64],
+    axis: NDArray[np.float64],
+    cone: tuple[float, float, float, float],
+) -> NDArray[np.float64]:
+    """Die Ecken quer zur Achse, geteilt durch den Halbmesser der Kegelwand auf ihrer
+    Höhe — auf der Wand eins.
+
+    ``cone`` nennt unteren und oberen Rand entlang der Achse und den Halbmesser dort
+    (:func:`_cone_ends`). Der Halbmesser ist linear in der Höhe, die Teilung eine
+    Zentralprojektion: Sie erhält Geraden, und ein konvexes Vieleck zwischen den
+    Rändern bleibt eins — sein Abstand von der Achse (:func:`_closest_to_the_axis`)
+    ist der Anteil der Wand, bis zu dem es hineinreicht.
+    """
+    low, high, start, end = cone
+    along = polygons[..., 0] * axis[0] + polygons[..., 1] * axis[1] + polygons[..., 2] * axis[2]
+    span = high - low
+    share = np.clip((along - low) / span, 0.0, 1.0) if span > EPS_GEOM else np.zeros_like(along)
+    wall = start + (end - start) * share
+    lateral = polygons - along[..., None] * axis
+    return np.asarray(lateral / np.where(wall > 0.0, wall, 1.0)[..., None], dtype=np.float64)
+
+
 def only_a_rim_inside(mesh: MeshData, feature: Feature) -> bool:
     """Ob das Material im Zylinder einer Bohrung nur ein Rand an ihrer Wand ist —
     eine Haltelippe, eine Verengung an der Mündung — und kein Inhalt.
@@ -5947,7 +6487,9 @@ _NO_MOUTH_TO_GRIP: Final = _(
     # (``point_in_shell``, Nachprüfung G, N-4).
     # 20: ein Teil, dessen lange Dreiecke durch die Bohrung laufen, steht darin
     # (RM-253, mit Paket G zusammengeführt).
-    cache_version="20",
+    # 21: an jedem Hohlraum steht ein fremdes Teil mit dem Stück seiner Dreiecke darin, nicht nur
+    # mit ihrer Mitte, und am Stift entscheidet der Quader seiner Dreiecke (RM-660).
+    cache_version="21",
     title=_("Merkmal verschieben"),
     category="holes",
     params=MoveFeatureParams,
@@ -6329,7 +6871,9 @@ class DuplicateFeatureParams(FeaturePlacementParams):
     # (``point_in_shell``, Nachprüfung G, N-4).
     # 20: ein Teil, dessen lange Dreiecke durch die Bohrung laufen, steht darin
     # (RM-253, mit Paket G zusammengeführt).
-    cache_version="20",
+    # 21: an jedem Hohlraum steht ein fremdes Teil mit dem Stück seiner Dreiecke darin, nicht nur
+    # mit ihrer Mitte, und am Stift entscheidet der Quader seiner Dreiecke (RM-660).
+    cache_version="21",
     title=_("Merkmal verdoppeln"),
     category="holes",
     params=DuplicateFeatureParams,
@@ -6753,7 +7297,9 @@ class _PatternPlace:
     # Material nur auf einer Linie berührt, wie beim Verdoppeln (RM-597, N-3).
     # 13: ein Teil, dessen lange Dreiecke durch die Bohrung laufen, steht darin
     # (RM-253, mit Paket G zusammengeführt).
-    cache_version="13",
+    # 14: an jedem Hohlraum steht ein fremdes Teil mit dem Stück seiner Dreiecke darin, nicht nur
+    # mit ihrer Mitte, und am Stift entscheidet der Quader seiner Dreiecke (RM-660).
+    cache_version="14",
     title=_("Merkmal vervielfachen"),
     category="holes",
     params=PatternFeatureParams,
@@ -7560,7 +8106,9 @@ class RemoveFeatureParams(BaseParams):
     # (``point_in_shell``, Nachprüfung G, N-4).
     # 23: ein Teil, dessen lange Dreiecke durch die Bohrung laufen, steht darin
     # (RM-253, mit Paket G zusammengeführt).
-    cache_version="23",
+    # 24: an jedem Hohlraum steht ein fremdes Teil mit dem Stück seiner Dreiecke darin, nicht nur
+    # mit ihrer Mitte, und am Stift entscheidet der Quader seiner Dreiecke (RM-660).
+    cache_version="24",
     title=_("Merkmal entfernen"),
     category="holes",
     params=RemoveFeatureParams,
@@ -7804,7 +8352,9 @@ class RotateFeatureParams(BaseParams):
     # (``point_in_shell``, Nachprüfung G, N-4).
     # 17: ein Teil, dessen lange Dreiecke durch die Bohrung laufen, steht darin
     # (RM-253, mit Paket G zusammengeführt).
-    cache_version="17",
+    # 18: an jedem Hohlraum steht ein fremdes Teil mit dem Stück seiner Dreiecke darin, nicht nur
+    # mit ihrer Mitte, und am Stift entscheidet der Quader seiner Dreiecke (RM-660).
+    cache_version="18",
     title=_("Merkmal drehen"),
     category="holes",
     params=RotateFeatureParams,
@@ -9251,7 +9801,9 @@ class ResizeFeatureParams(BaseParams):
     # (``point_in_shell``, Nachprüfung G, N-4).
     # 26: ein Teil, dessen lange Dreiecke durch die Bohrung laufen, steht darin
     # (RM-253, mit Paket G zusammengeführt).
-    cache_version="26",
+    # 27: an jedem Hohlraum steht ein fremdes Teil mit dem Stück seiner Dreiecke darin, nicht nur
+    # mit ihrer Mitte, und am Stift entscheidet der Quader seiner Dreiecke (RM-660).
+    cache_version="27",
     title=_("Merkmal ändern"),
     category="holes",
     params=ResizeFeatureParams,
@@ -10109,7 +10661,9 @@ OPEN_BODY_DETAIL: Final = _(
     # (``point_in_shell``, Nachprüfung G, N-4).
     # 24: ein Teil, dessen lange Dreiecke durch die Bohrung laufen, steht darin
     # (RM-253, mit Paket G zusammengeführt).
-    cache_version="24",
+    # 25: an jedem Hohlraum steht ein fremdes Teil mit dem Stück seiner Dreiecke darin, nicht nur
+    # mit ihrer Mitte, und am Stift entscheidet der Quader seiner Dreiecke (RM-660).
+    cache_version="25",
     title=_("Bohrung ändern"),
     category="holes",
     params=ResizeHoleParams,
@@ -10839,7 +11393,9 @@ SLOT_FEATURE_RENAMED: Final = _(
     # (``point_in_shell``, Nachprüfung G, N-4).
     # 22: ein Teil, dessen lange Dreiecke durch die Bohrung laufen, steht darin
     # (RM-253, mit Paket G zusammengeführt).
-    cache_version="22",
+    # 23: an jedem Hohlraum steht ein fremdes Teil mit dem Stück seiner Dreiecke darin, nicht nur
+    # mit ihrer Mitte, und am Stift entscheidet der Quader seiner Dreiecke (RM-660).
+    cache_version="23",
     # **Kein „Bohrung zum Langloch".** Der Titel stand so, solange die
     # Operation nur an einer Bohrung galt; seit die Erkennung Langlöcher findet
     # (:mod:`app.core.perceive.slots`), gilt sie auch an einem und hieße dort
@@ -19237,7 +19793,9 @@ class PlugParams(BaseParams):
     # (``point_in_shell``, Nachprüfung G, N-4).
     # 12: ein Teil, dessen lange Dreiecke durch die Bohrung laufen, steht darin
     # (RM-253, mit Paket G zusammengeführt).
-    cache_version="12",
+    # 13: an jedem Hohlraum steht ein fremdes Teil mit dem Stück seiner Dreiecke darin, nicht nur
+    # mit ihrer Mitte, und am Stift entscheidet der Quader seiner Dreiecke (RM-660).
+    cache_version="13",
     title=_("Bohrung verschließen"),
     category="holes",
     params=PlugParams,

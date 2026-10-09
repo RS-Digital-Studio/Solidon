@@ -1379,6 +1379,29 @@ Dreieck queren kann, dessen Mitte und Kanten daneben liegen
 (`test_a_sheet_whose_one_triangle_covers_the_axis_stands_in_the_bore`).
 Die Dreiecksmitten bleiben die erste Frage; die zweite fügt nur hinzu.
 
+**An jedem Hohlraum, je Art von ihrem Kern** (RM-660, 09.10.2026). Paket G hatte
+die Teilefrage auf jeden Hohlraum ausgeweitet (`_inside_and_radial`), dort aber
+über Dreiecksmitten: Ein Stift Ø 4 über 40 mm im Langloch einer 10-mm-Platte, ein
+Blech quer durch eine Senkung, ein Kern über 45 mm im gedruckten Innengewinde,
+ein Stab quer durch eine Kugelpfanne und ein Draht tangential durch eine Kehle
+galten als frei, an beiden Kernen, und der Stift in einer fremden Bohrung fragte
+nur die Mitten im Hüllquader der Bohrung. Jetzt misst jede Art das Stück jedes
+Dreiecks von ihrem Kern (`_core_of`): das Langloch von seiner Mittellinie, der
+Kegel von der Achse auf seiner Einheitswand (eine Zentralprojektion, sie erhält
+Geraden), die Pfanne von ihrer Mitte, die Kehle von den Sehnen ihres
+Mittelkreises (je Sektor, höchstens ein Viertel des Saums innerhalb des Kreises),
+das Innengewinde von der Achse am Kern; am Stift entscheidet der Quader jedes
+Dreiecks, nicht seine Mitte (`_sticks_read`). **Eigenes Material fragt so nur die
+Bohrung:** An 24 Kehlen des Laptop-Ständers reichten Streifen des eigenen Teils
+bis 0,955 des Halbmessers in die Röhre (abgetastet bestätigt), und eine so
+gefüllte Kehle hätte ein fremdes Teil darin nicht mehr genannt —
+`filled_bore_reason` sagt dann „gefüllt“. An jedem anderen Hohlraum und am Stift
+fragt das Stück nur fremde Teile (`_foreign_triangles`). Am Laptop-Ständer (26
+Teile, 541 Merkmale) sind danach 226 statt 118 Merkmale mit Grund gesperrt: Teile,
+die mit langen Streifen in den Kehlrundungen und Senkungen anderer liegen (an
+`fillet_113`, r = 1,6, Streifen von Teil 0 bei 1,15 bis 1,46 mm von der Achse,
+abgetastet gleich); der erste Klick der Karte braucht dort bis 0,1 s mehr.
+
 **Und was für eine runde Bohrung an ihrer Mitte gefragt wird, wird an einem
 Langloch an beiden Enden gefragt** (`prepare.slot_ends`). Die Mitte steckt tief
 im Material, während ein Ende schon über die Kante ragt; wer nur sie fragt,

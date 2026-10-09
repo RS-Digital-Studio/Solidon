@@ -5725,8 +5725,11 @@ def _loose_compound(plate: Any, loose: Any, kernel: str) -> SceneObject:
     return SceneObject(id="obj_1", name="Teil", mesh=mesh, features=detect(mesh))
 
 
-def _threaded_plate_with_a_core(kernel: str, profile: Profile) -> SceneObject:
-    """Platte 30 × 30 × 12, Bohrung Ø 8 mit gedrucktem Innengewinde, darin lose ein Kern Ø 5 × 10.
+def _threaded_plate_with_a_core(
+    kernel: str, profile: Profile, core_span: tuple[float, float] = (1.0, 11.0)
+) -> SceneObject:
+    """Platte 30 × 30 × 12, Bohrung Ø 8 mit gedrucktem Innengewinde, darin lose ein Kern Ø 5
+    über ``core_span`` entlang z.
 
     Das Gewinde erklärt *Gewinde drucken* ohne eigene Flächen.
     """
@@ -5765,7 +5768,7 @@ def _threaded_plate_with_a_core(kernel: str, profile: Profile) -> SceneObject:
     result = evaluate(project.document, profile, sources=ProjectSources(project))
     assert result.complete
     plate = result.scene.objects["obj_1"]
-    core = edit.moved(edit.cylinder(5.0, 10.0), (0.0, 0.0, 1.0))
+    core = edit.moved(edit.cylinder(5.0, core_span[1] - core_span[0]), (0.0, 0.0, core_span[0]))
     if kernel == "brep":
         from OCP.BRep import BRep_Builder
         from OCP.TopoDS import TopoDS_Compound
@@ -6099,3 +6102,229 @@ def _bore_of_the_pin(entry: SceneObject, pin: str) -> str:
             entry.features[name].params["centre"][:2], (float(middle[0]), float(middle[1]))
         ),
     )
+
+
+# --- RM-660: die Teilefrage sieht lange Dreiecke an jedem Hohlraum -------------------------
+
+
+def _rod(start: Vec3, direction: Vec3, diameter: float, length: float) -> Any:
+    """Ein exakter Stab Ø ``diameter`` ab ``start`` entlang ``direction``."""
+    exact_kernel()
+    from OCP.BRepPrimAPI import BRepPrimAPI_MakeCylinder
+    from OCP.gp import gp_Ax2, gp_Dir, gp_Pnt
+
+    from app.core.brep.kernel import Solid
+
+    frame = gp_Ax2(gp_Pnt(*start), gp_Dir(*direction))
+    return Solid(BRepPrimAPI_MakeCylinder(frame, diameter / 2.0, length).Shape())
+
+
+def _sheet_at(height: float) -> Any:
+    """Ein Blech von 0,2 mm über dem Dreieck (−15, −12), (25, −12), (5, 22) ab ``height``:
+    oben und unten je ein Dreieck, dessen Mitte 5 mm neben der Achse liegt."""
+    exact_kernel()
+    from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeFace, BRepBuilderAPI_MakePolygon
+    from OCP.BRepPrimAPI import BRepPrimAPI_MakePrism
+    from OCP.gp import gp_Pnt, gp_Vec
+
+    from app.core.brep.kernel import Solid
+
+    outline = BRepBuilderAPI_MakePolygon(
+        gp_Pnt(-15.0, -12.0, height), gp_Pnt(25.0, -12.0, height), gp_Pnt(5.0, 22.0, height), True
+    )
+    face = BRepBuilderAPI_MakeFace(outline.Wire()).Face()
+    return Solid(BRepPrimAPI_MakePrism(face, gp_Vec(0.0, 0.0, 0.2)).Shape())
+
+
+def _long_part_case(case: str, kernel: str, profile: Profile) -> tuple[SceneObject, str, str]:
+    """Körper, gewähltes Merkmal und Hohlraum je Art, mit einem langen getrennten Teil darin.
+
+    Jedes Teil läuft mit Dreiecken durch den Hohlraum, deren Mitten außerhalb
+    liegen — bei einem Stab mit Streifen über die ganze Länge auf einem und zwei
+    Dritteln davon. Beim Stift (``…-stift``) ist das Merkmal der Stift und der
+    Hohlraum die Bohrung oder das Langloch der Platte.
+    """
+    from app.core.brep import edit
+
+    exact_kernel()
+    if case.startswith(("langloch", "bohrung")):
+        entry = _plate_with_a_second_body(
+            kernel,
+            inside=True,
+            slot=case.startswith("langloch"),
+            pin_span=(0.0, 40.0),
+            pin_diameter=4.0,
+        )
+        cavity = "slot" if case.startswith("langloch") else "hole"
+        kind = "pin" if case.endswith("stift") else cavity
+    elif case == "senkung":
+        plate = edit.cut_bore(
+            edit.box(40.0, 20.0, 10.0),
+            position=(0.0, 0.0, 5.0),
+            direction=(0.0, 0.0, 1.0),
+            diameter=6.0,
+            depth=12.0,
+        )
+        sink = edit._oriented_cone((0.0, 0.0, 10.2), (0.0, 0.0, -1.0), 5.2, 0.0, 5.2)
+        plate = edit.boolean("difference", [plate, sink])
+        # Das Blech steckt auf 9 mm in der Platte, über der Bohrung und quer durch die Senkung.
+        entry = _loose_compound(plate, _sheet_at(9.0), kernel)
+        cavity = kind = "cone"
+    elif case == "gewinde":
+        entry = _threaded_plate_with_a_core(kernel, profile, core_span=(-16.0, 29.0))
+        cavity = kind = "thread"
+    elif case == "pfanne":
+        plate = edit.boolean(
+            "difference",
+            [edit.box(30.0, 30.0, 12.0), edit.moved(edit.sphere(12.0), (0.0, 0.0, 9.0))],
+        )
+        # Ein Stab steckt quer durch Platte und Pfanne, 2 mm unter der Oberseite.
+        rod = _rod((-27.0, 0.0, 10.0), (1.0, 0.0, 0.0), 1.0, 60.0)
+        entry = _loose_compound(plate, rod, kernel)
+        cavity = kind = "sphere"
+    else:
+        shaft = edit.boolean(
+            "difference",
+            [edit.cylinder(20.0, 40.0), edit.torus((0.0, 0.0, 20.0), (0.0, 0.0, 1.0), 20.0, 4.0)],
+        )
+        # Ein Draht Ø 1 liegt tangential in der Kehle und ragt beidseits weit hinaus.
+        wire = _rod((9.0, -33.0, 20.0), (0.0, 1.0, 0.0), 1.0, 66.0)
+        entry = _loose_compound(shaft, wire, kernel)
+        cavity = kind = "torus"
+
+    def picked(wanted: str) -> list[str]:
+        return [
+            name
+            for name, feature in entry.features.items()
+            if feature.kind == wanted
+            and (wanted not in ("sphere", "torus") or feature.params.get("recess"))
+        ]
+
+    chosen, holders = picked(kind), picked(cavity)
+    assert len(chosen) == 1 and len(holders) == 1, (
+        case,
+        sorted((f.id, f.kind) for f in entry.features.values()),
+    )
+    return entry, chosen[0], holders[0]
+
+
+def _no_middle_of_the_loose_part_inside(entry: SceneObject, cavity: Feature) -> bool:
+    """Ob keine Dreiecksmitte des Teils, das den Hohlraum nicht trägt, in dessen
+    Hüllquader liegt — näher an seiner Mitte als sein halber Durchmesser. Ein
+    gedrucktes Innengewinde ohne Flächen nimmt die Wände seines Gangs."""
+    from app.core.geom.prepare_ops import _with_walls
+    from app.core.geom.repair import face_components
+
+    mesh = as_mesh_data(entry.mesh)
+    own = np.asarray(_with_walls(mesh, cavity).face_indices, dtype=np.int64)
+    assert len(own), "Voraussetzung: der Hohlraum hat Flächen"
+    loose = np.concatenate(
+        [group for group in face_components(mesh.raw) if not np.isin(own, group).any()]
+    )
+    corners = np.asarray(mesh.raw.vertices)[np.asarray(mesh.raw.faces)[own]].reshape(-1, 3)
+    middles = np.asarray(mesh.raw.triangles_center)[loose]
+    boxed = ((middles >= corners.min(axis=0)) & (middles <= corners.max(axis=0))).all(axis=1)
+    offset = middles - np.asarray(cavity.params["centre"], dtype=np.float64)
+    near = np.sqrt((offset * offset).sum(axis=1)) < float(cavity.params["diameter"]) / 2.0
+    return not bool((boxed & near).any())
+
+
+#: Je Fall die Zeilen, die die Karte am Stand davor anbot, und der Satz, der jetzt dasteht.
+_LONG_PART_ROWS: dict[str, tuple[tuple[str, ...], str]] = {
+    "langloch": (
+        ("move_feature", "resize_hole", "rotate_feature", "duplicate_feature", "remove_feature"),
+        "OTHER_PART_IN_THE_BORE",
+    ),
+    "senkung": (
+        ("move_feature", "resize_feature", "rotate_feature", "duplicate_feature", "remove_feature"),
+        "OTHER_PART_IN_THE_BORE",
+    ),
+    "gewinde": (("resize_feature", "remove_feature"), "OTHER_PART_IN_THE_BORE"),
+    "pfanne": (
+        ("move_feature", "resize_feature", "duplicate_feature", "remove_feature"),
+        "OTHER_PART_IN_THE_CAVITY",
+    ),
+    "kehle": (
+        ("move_feature", "resize_feature", "rotate_feature", "duplicate_feature", "remove_feature"),
+        "OTHER_PART_IN_THE_CAVITY",
+    ),
+    "bohrung-stift": (
+        ("move_feature", "resize_feature", "rotate_feature", "duplicate_feature", "remove_feature"),
+        "PART_IN_ANOTHER_BORE",
+    ),
+    "langloch-stift": (
+        ("move_feature", "resize_feature", "rotate_feature", "duplicate_feature", "remove_feature"),
+        "PART_IN_ANOTHER_BORE",
+    ),
+}
+
+_LONG_PART_CASES = [
+    (case, kernel, op)
+    for case, (rows, _sentence) in _LONG_PART_ROWS.items()
+    for kernel in ("mesh", "brep")
+    for op in rows
+]
+
+
+@pytest.mark.parametrize(("case", "kernel", "op"), _LONG_PART_CASES)
+def test_a_long_part_through_any_cavity_says_so_at_every_row(
+    profile: Profile, case: str, kernel: str, op: str
+) -> None:
+    """RM-660: Die Teilefrage las an Langloch, Senkung, Gewinde, Pfanne und Kehle nur
+    Dreiecksmitten — und am Stift, der in einer fremden Bohrung steckt, nur die Mitten
+    im Hüllquader der Bohrung.
+
+    Ein Stift Ø 4 über 40 mm im Langloch einer 10-mm-Platte, ein Blech quer durch
+    eine Senkung, ein Kern Ø 5 über 45 mm im gedruckten Innengewinde, ein Stab quer
+    durch eine Kugelpfanne, ein Draht tangential durch eine Kehle: Jedes Teil steht
+    mit langen Dreiecken darin, deren Mitten außerhalb liegen. Am Stand davor bot die
+    Karte jede Zeile an, und die Handlungen rechneten durch das Teil. Soll: die Zeile
+    grau mit dem Satz für ein getrenntes Teil, und die Operation sagt ihn mit *In
+    Einzelteile aufteilen* — an beiden Kernen.
+    """
+    from app.core.geom import prepare_ops
+    from app.core.perceive.actions import actions_for
+
+    load_operations()
+    entry, chosen, holder = _long_part_case(case, kernel, profile)
+    assert as_mesh_data(entry.mesh).component_count == 2, "Voraussetzung: zwei Teile"
+    assert _no_middle_of_the_loose_part_inside(entry, entry.features[holder]), (
+        "Voraussetzung: keine Dreiecksmitte des getrennten Teils steht im Hohlraum"
+    )
+    feature = entry.features[chosen]
+    expected = getattr(prepare_ops, _LONG_PART_ROWS[case][1])
+    (row,) = actions_for(feature, entry.features, mesh=as_mesh_data(entry.mesh), only=op)
+    assert row.op is None and row.reason == expected, (case, chosen, row)
+    values = _values_for(op, feature) if "centre" in feature.params else {}
+    if op == "resize_feature" and case == "gewinde":
+        values = {"diameter": float(feature.params["diameter"]) + 0.5}
+    with pytest.raises(ValidationError) as caught:
+        run_op(op, entry, profile, at_feature=chosen, **values)
+    assert caught.value.detail == expected
+    assert [action.id for action in caught.value.suggestions] == ["split_bodies", "cancel"]
+
+
+@pytest.mark.parametrize("kernel", ["mesh", "brep"])
+def test_a_slot_with_a_long_pin_still_pulls_and_keeps_the_pin_outside(
+    profile: Profile, kernel: str
+) -> None:
+    """RM-660, Gegenfall: *Zum Langloch ziehen* bleibt am Langloch mit langem Stift frei.
+
+    Wie am kurzen Stift (``test_the_slot_with_a_separate_pin_still_pulls_and_keeps_the_pin``):
+    Seit das Langloch den langen Stift sieht, fragt der Zug ihn als getrenntes Teil
+    (``hole_has_separate_contents``) und lässt ihn stehen — zwei Teile, der Stift
+    Ø 4 über 40 mm mit seinem Volumen.
+    """
+    from app.core.perceive.actions import actions_for
+
+    load_operations()
+    entry, chosen, _holder = _long_part_case("langloch", kernel, profile)
+    (row,) = actions_for(
+        entry.features[chosen], entry.features, mesh=as_mesh_data(entry.mesh), only="slot_hole"
+    )
+    assert row.op == "slot_hole", row
+    before = _parts_of(entry)
+    output = run_op("slot_hole", entry, profile, at_feature=chosen, slot_length=16.0)
+    after = _parts_of(output)
+    assert len(after) == 2, after
+    assert after[0] == pytest.approx(before[0], abs=0.2), (before, after)
