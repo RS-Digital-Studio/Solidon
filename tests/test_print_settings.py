@@ -3313,6 +3313,49 @@ def test_bambus_refusal_in_its_result_file_reaches_the_slicer_output(
     assert "alt" not in raised.value.values["output"]
 
 
+def test_a_refusal_in_the_result_file_is_no_crash_after_solidon_stopped_the_slicer(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Endet ein Slicer der Orca-Familie nach seiner ``result.json`` nicht, beendet
+    Solidon ihn (``process.FINISHED_LINGER_SECONDS``), und unter Linux und macOS
+    meldet der Prozess dann Solidons SIGTERM als -15. ``crashed`` hielt das für
+    einen Absturz, und die Absage in der Datei — hier -50, ein Teil neben der
+    Platte — ging unter (RM-621, Review). Ihr Code zählt."""
+    profile = profiles.make_profile()
+    model = tmp_path / "model.stl"
+    model.write_bytes(b"solid x\nendsolid x\n")
+    executable = tmp_path / "bambu-studio"
+    executable.write_bytes(b"")
+
+    def run(command: list[str], *args: object, **kwargs: object) -> _Finished:
+        target = Path(command[command.index("--outputdir") + 1])
+        (target / "result.json").write_text(
+            json.dumps({"error_string": "Some objects are outside the plate.", "return_code": -50}),
+            encoding="utf-8",
+        )
+        stopped = _Finished(b"")
+        stopped.returncode = -15
+        return stopped
+
+    monkeypatch.setattr(handover, "_run_slicer", run)
+    setup = handover.SlicerSetup(executable=executable, flavour="orca")
+
+    with pytest.raises(ExternalToolError) as raised:
+        handover.slice_model(
+            model,
+            print_settings.resolve(profile),
+            profile,
+            setup,
+            output_dir=tmp_path / "ausgabe",
+            keep_arrangement=False,
+        )
+
+    detail = str(raised.value.detail)
+    assert "abgestürzt" not in detail, detail
+    assert "Druckplatte" in detail, detail
+    assert "outside the plate" in raised.value.values["output"]
+
+
 def test_bambus_result_file_is_this_runs_or_none(tmp_path: Path) -> None:
     """Bambu Studio endet manchmal nicht nach seiner ``result.json`` — drei von
     rund hundert Läufen der Gesamtprüfung, auch auf gesunden Kernen
@@ -4479,19 +4522,28 @@ def test_a_crash_is_told_apart_from_a_refusal(code: int, expected: bool) -> None
         (136, True),
         (137, True),
         # Die Byteform der Orca-Absagen bleibt eine Absage (RM-620): -62, -50,
-        # -101; 155 wäre SIGPROF, an dem kein Slicer stirbt.
+        # -101; manche sind genau 128 + Signal, an dem kein Slicer stirbt.
         (194, False),
         (206, False),
+        # -101 (CLI_GCODE_PATH_CONFLICTS) = 128 + SIGPROF
         (155, False),
+        # -100 (CLI_SLICING_ERROR) = 128 + SIGWINCH
+        (156, False),
+        # -102 bis -104 = 128 + SIGVTALRM, SIGXFSZ, SIGXCPU
+        (154, False),
+        (153, False),
+        (152, False),
         (1, False),
         (0, False),
     ],
 )
 def test_a_crash_behind_flatpak_is_a_crash(code: int, expected: bool) -> None:
     """Hinter ``flatpak run`` oder ``flatpak-spawn`` kommt ein Signaltod als
-    128 + Signal an, nicht als negative Zahl (RM-621). Ein SIGSEGV war dort
-    139, und der Kunde las „keine Druckdatei geschrieben“ statt „abgestürzt“.
-    Ohne Starter bleibt 139 ein gewöhnlicher Rückgabewert."""
+    128 + Signal an, nicht als negative Zahl (RM-621, am Quelltext von bwrap
+    und flatpak-spawn hergeleitet): Ein SIGSEGV käme als 139 an, und der Kunde
+    läse „keine Druckdatei geschrieben“ statt „abgestürzt“. Nur die Signale,
+    an denen ein Programm stirbt, zählen; ohne Starter bleibt 139 ein
+    gewöhnlicher Rückgabewert."""
     assert handover.crashed(code, wrapped=True) is expected
     assert handover.crashed(code) is False
 

@@ -31,6 +31,7 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-09 | [RM-621: Ein Slicer, der hinter Flatpak abstürzt, heißt abgestürzt (09.10.2026)](#rm-621-ein-slicer-der-hinter-flatpak-abstürzt-heißt-abgestürzt-09102026) |
 | 2026-10-09 | [RM-620: Ein Slicer, der Filamente mit zu verschiedenen Temperaturen ablehnt, sagt es (09.10.2026)](#rm-620-ein-slicer-der-filamente-mit-zu-verschiedenen-temperaturen-ablehnt-sagt-es-09102026) |
 | 2026-10-08 | [RM-602: Der Druckdialog ordnet die Profile in einem Lesedurchgang zu (08.10.2026)](#rm-602-der-druckdialog-ordnet-die-profile-in-einem-lesedurchgang-zu-08102026) |
 | 2026-10-08 | [RM-601: Die Slicerwahl im Druckdialog geht wie in Erste Schritte, und überall stehen nur unterstützte Slicer (08.10.2026)](#rm-601-die-slicerwahl-im-druckdialog-geht-wie-in-erste-schritte-und-überall-stehen-nur-unterstützte-slicer-08102026) |
@@ -44117,6 +44118,42 @@ Orca-Erkennungen** (−50, −101, −62): Dort kommt der Rückgabewert als Byte
 dazu ein einziger Slicerlauf bei −62 mit Anordnungsvorgabe. Review `solidon3d-review` in
 zwei Runden (zwei mittlere, dann zwei leichte Befunde, behoben), Entwicklungstor grün
 (24 875 bestanden, 116 übersprungen). Changelog: ja (Behebung, seit v0.5.3).
+
+## RM-621: Ein Slicer, der hinter Flatpak abstürzt, heißt abgestürzt (09.10.2026)
+
+<a id="rm-621-ein-slicer-der-hinter-flatpak-abstürzt-heißt-abgestürzt-09102026"></a>
+<a id="rm-621"></a>
+
+**Befund (09.10.2026, am Quelltext beim Prüfen von RM-620):** Unter Linux startet ein Slicer
+als Flatpak über `flatpak run` (bubblewrap), und aus Solidons eigenem Flatpak geht jeder Start
+über `flatpak-spawn --host`. Beide melden einen Signaltod des Kindes wie eine Shell als
+128 + Signal (`bubblewrap.c`, `propagate_exit_status`; `flatpak-spawn.c`); ein SIGSEGV käme
+als 139 an. `handover.crashed` kannte nur die negative POSIX-Form und den Windows-`NTSTATUS`,
+und der Kunde läse „Der Slicer hat keine Druckdatei geschrieben“ samt Rat, das Profil zu
+prüfen. Der Weg bestand mit dem Flatpak-Start in v0.5.3. Das Review fand dazu: Endet ein
+Slicer der Orca-Familie nach seiner `result.json` nicht, beendet Solidon ihn, und unter Linux
+und macOS kam Solidons SIGTERM als −15 zurück — `crashed` hielt auch das für einen Absturz,
+und eine Absage in der Datei ging unter.
+
+**Behoben:** `handover.crashed(exit_code, wrapped=)` zählt hinter einem Starter nur
+128 + SIGILL, SIGABRT, SIGBUS, SIGFPE, SIGKILL und SIGSEGV als Absturz (`_FATAL_SIGNALS`):
+Die Orca-Absagen reichen von −1 bis −105, in Byteform 151 bis 255, und manche sind genau
+128 + Signal (−100 als 156 = 128 + SIGWINCH). `handover._wrapped` fragt
+`discover.sandboxed` — ein Flatpak auf einer der beiden Seiten ist zugleich Sandbox und
+Starter. Steht eine Absage in der `result.json`, die dieser Versuch geschrieben hat
+(`_result_refusal`, `_result_signature`), zählt ihr Code (`_exit_code`) für Absturz und
+Absagearten; die Absage eines ersten Versuchs gilt nicht für den zweiten ohne
+Anordnungsvorgabe (`test_retry_does_not_reuse_files_or_plate_report_from_the_failed_attempt`).
+
+**Nachweis (09.10.2026):** `test_a_crash_behind_flatpak_is_a_crash` (sechs Absturzsignale,
+Orca-Absagen in Byteform von 152 bis 206, 0 und 1, je mit und ohne Starter),
+`test_a_flatpak_slicer_that_crashes_says_so` (Kette bis zur Meldung mit „abgestürzt“ und
+Slicerwahl als erster Handlung), `test_both_flatpak_starters_count_as_a_wrapper`,
+`test_a_refusal_in_the_result_file_is_no_crash_after_solidon_stopped_the_slicer` (−15 mit
+−50 in der Datei: Platte statt Absturz); Gegenproben rot. Regel `dateiformat.md` („Ein
+Absturz ist keine Absage“) und Begründung nachgezogen. Review `solidon3d-review` (fünf
+leichte Befunde und ein Nebenbefund, behoben), Entwicklungstor grün (24 895 bestanden, 116 übersprungen). Changelog: ja
+(Behebung, seit v0.5.3).
 
 ## RM-104 (Teil): Abbruch des lokalen Modells auf macOS und HiDPI-Test unter Xvfb (06.10.2026)
 
