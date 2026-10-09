@@ -130,7 +130,9 @@ from tools import matrix_gcode  # noqa: E402
 
 assert Path(matrix_gcode.__file__).resolve().parent == HERE, matrix_gcode.__file__
 
-MATERIAL = "pla"
+#: Das Material der Messung; ``GESAMT_MATERIAL=petg`` misst mit PETG (RM-583:
+#: Stützabstand und Kontaktkühlung hängen am Material).
+MATERIAL = os.environ.get("GESAMT_MATERIAL", "pla")
 SLICE_TIMEOUT = float(os.environ.get("GESAMT_ZEITLIMIT", str(45 * 60)))
 FILAMENT_GROUPS = ("temperature", "cooling", "retraction", "filament")
 
@@ -364,7 +366,10 @@ def prepared(slicer: str, profile: Any) -> tuple[Any, dict[str, Any]]:
         return None, {**info, "skip": "kein Herstellerprofil für diesen Drucker"}
     roots = slicer_profiles.profile_roots(setup.flavour, exe)
     filament = slicer_profiles.match_filament(
-        found_profiles(exe, setup.flavour, ("filament",)), machine, "PLA", roots
+        found_profiles(exe, setup.flavour, ("filament",)),
+        machine,
+        slicer_keys.filament_type(MATERIAL, setup.flavour),
+        roots,
     )
     setup = replace(
         setup,

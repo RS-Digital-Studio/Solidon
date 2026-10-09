@@ -314,8 +314,17 @@ PRUSA: Final[tuple[Row, ...]] = (
     ("support.placement", "support_material_buildplate_only", _mapped({"build_plate": "1"}, "0")),
     ("support.threshold_angle", "support_material_threshold", _angle_from_horizontal),
     ("support.z_gap", "support_material_contact_distance", _number),
+    # Unten derselbe Abstand wie oben: Wo die Stütze auf dem Modell steht,
+    # haftet sie genauso (RM-583). PrusaSlicers 0 hieße „wie oben“ auch.
+    ("support.z_gap", "support_material_bottom_contact_distance", _number),
     ("support.xy_gap", "support_material_xy_spacing", _number),
     ("support.interface_layers", "support_material_interface_layers", _integer),
+    (
+        "support.bottom_interface_layers",
+        "support_material_bottom_interface_layers",
+        _integer,
+    ),
+    ("support.interface_spacing", "support_material_interface_spacing", _number),
     ("adhesion.skirt_loops", "skirts", _integer),
     ("adhesion.skirt_distance", "skirt_distance", _number),
     ("adhesion.brim_width", "brim_width", _number),
@@ -460,8 +469,20 @@ ORCA: Final[tuple[Row, ...]] = (
     ("support.placement", "support_on_build_plate_only", _mapped({"build_plate": "1"}, "0")),
     ("support.threshold_angle", "support_threshold_angle", _angle_from_horizontal),
     ("support.z_gap", "support_top_z_distance", _number),
+    # Unten derselbe Abstand wie oben (RM-583), siehe PrusaSlicer.
+    ("support.z_gap", "support_bottom_z_distance", _number),
     ("support.xy_gap", "support_object_xy_distance", _number),
     ("support.interface_layers", "support_interface_top_layers", _integer),
+    ("support.bottom_interface_layers", "support_interface_bottom_layers", _integer),
+    ("support.interface_spacing", "support_interface_spacing", _number),
+    # -1 heißt „wie die übrige Schicht“, die Vorgabe aller gemessenen Profile.
+    # Ein Filamentwert in der Orca-Familie (Filamentprofile der Hersteller).
+    (
+        "cooling.support_interface_cooling",
+        "support_material_interface_fan_speed",
+        _mapped({"True": "100"}, "-1"),
+        "filament",
+    ),
     # ``auto`` ist Orcas ``auto_brim`` (``advise.AUTO_BRIM_FLAVOURS``) und die
     # Vorgabe jedes Herstellerprofils. Bis zum 27.09.2026 kannte Solidon es
     # nicht und schrieb ``no_brim`` darüber.
@@ -569,6 +590,14 @@ CURA: Final[tuple[Row, ...]] = (
     # anderen beiden. Das obere Ende spiegelt ``CURA_MIRRORED`` aus
     # ``cool_fan_speed``, das untere stand dort bis zum 23.09.2026 mit.
     ("cooling.fan_speed", "cool_fan_speed", _percent),
+    # Curas Gegenstück kühlt die Haut über der Stütze, nicht die Stütze selbst
+    # — dieselbe Absicht: die Fläche löst sich leichter (RM-583).
+    ("cooling.support_interface_cooling", "support_fan_enable", _mapped({"True": "true"}, "false")),
+    (
+        "cooling.support_interface_cooling",
+        "support_supported_skin_fan_speed",
+        _only({"True": "100"}),
+    ),
     ("cooling.minimum_fan_speed", "cool_fan_speed_min", _percent),
     ("cooling.fan_below_layer_time", "cool_min_layer_time_fan_speed_max", _integer),
     ("cooling.bridge_fan_speed", "bridge_fan_speed", _percent),
@@ -1034,7 +1063,8 @@ def flavour_of(name: str) -> SlicerFlavour | None:
 #:
 #: ``tests/test_print_settings_ui.py`` hält die Liste gegen diese Messung.
 NOT_TAKEN_BY: Final[dict[SlicerFlavour, frozenset[str]]] = {
-    "prusa": frozenset({"shell.precise_outer_wall"}),
+    # Den Kontaktlüfter kennt nur SuperSlicer, nicht PrusaSlicer (RM-583).
+    "prusa": frozenset({"shell.precise_outer_wall", "cooling.support_interface_cooling"}),
     "orca": frozenset(),
     "cura": frozenset(
         {
@@ -1090,8 +1120,19 @@ LIMITED: Final[dict[SlicerFlavour, frozenset[str]]] = {
 #: gleicher Stand: SuperSlicer 2.5.59.13 kennt die Schrägnaht aus PrusaSlicer
 #: 2.9 nicht, und sein 3MF-Leser stürzt ab zwei unbekannten Schlüsseln mit
 #: 0xC0000005 ab (RM-459, gemessen je Schlüssel der Beilage).
+#: Einzelne Schlüssel, die ein Programm nicht kennt, obwohl es den Pfad
+#: darüber nimmt: SuperSlicer 2.5.59.13 kennt den oberen Stützabstand, den
+#: unteren eigens nicht (``tests/data/superslicer_3mf_keys.json``, RM-583). Dort
+#: gilt ohnehin oben wie unten derselbe.
+KEYS_UNKNOWN_TO_PROGRAM: Final[dict[str, frozenset[str]]] = {
+    "superslicer": frozenset({"support_material_bottom_contact_distance"}),
+}
+
 NOT_TAKEN_BY_PROGRAM: Final[dict[str, frozenset[str]]] = {
     "superslicer": frozenset({"shell.scarf_seam"}),
+    # Bambu Studio führt ``support_material_interface_fan_speed`` nicht; sein
+    # Konfigurationsblock nennt den Schlüssel nicht (P1S, 08.10.2026).
+    "bambustudio": frozenset({"cooling.support_interface_cooling"}),
 }
 
 #: Diese Programme lesen die Werte nur für die Platte. Gemessen mit zwei
@@ -1497,6 +1538,7 @@ def for_program(values: Mapping[str, str], flavour: SlicerFlavour, program: str)
     """
     dropped = NOT_TAKEN_BY_PROGRAM.get(program, frozenset())
     unknown = {entry.key for entry in TABLES[flavour] if entry.path in dropped}
+    unknown |= KEYS_UNKNOWN_TO_PROGRAM.get(program, frozenset())
     kept = {key: value for key, value in values.items() if key not in unknown}
     for old, new in PROGRAM_ALIASES.get(program, {}).items():
         if old not in kept:

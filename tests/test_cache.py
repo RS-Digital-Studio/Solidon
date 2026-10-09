@@ -388,6 +388,9 @@ _MATERIAL_FIELDS_NO_OPERATION_READS: dict[str, str] = {
     "title": "nur Anzeige; die Kennung steht im Schlüssel",
     "calibrated": "Hinweis im Steckbrief und im Rat, keine Geometrie",
     "technology": "Materialwahl am Drucker, keine Geometrie",
+    "support_gap_factor": "Druckrat und Slicerübergabe, keine Geometrie",
+    "support_gap_min": "Druckrat und Slicerübergabe, keine Geometrie",
+    "support_gap_max": "Druckrat und Slicerübergabe, keine Geometrie",
 }
 
 

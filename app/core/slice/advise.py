@@ -63,6 +63,7 @@ from app.core.types import (
     BoundingBox,
     CancelToken,
     Finding,
+    MaterialProfile,
     PrintSettings,
     Profile,
     SceneObject,
@@ -403,6 +404,9 @@ def _combined_value(path: str, values: Sequence[object]) -> object:
         if path.startswith(("speed.", "layers.")) or path in (
             "cooling.fan_speed",
             "cooling.minimum_speed",
+            # Die dichtere Trennschicht hält eine flache Decke auf der Platte;
+            # eine lockere ließe sie durchhängen (RM-583).
+            "support.interface_spacing",
         ):
             return min(numbers)
         return max(numbers)
@@ -883,6 +887,118 @@ def support_need(result: SliceResult, *, cancelled: CancelToken | None = None) -
     )
 
 
+#: Wie weit der Stützabstand vom Wert aus Material und Schichthöhe abweichen
+#: darf, bevor Solidon ihn vorschlägt, als Anteil (RM-583) — das Band der
+#: Recherche vom 08.10.2026: Prusa nimmt 0,17 bei 0,15er Schichten und 0,22 bei
+#: 0,2ern, beides hält ab, was es soll.
+SUPPORT_GAP_BAND: Final = (0.8, 1.25)
+
+#: Die Trennschicht unter großen flachen Decken: Lücke in mm und Lagen. Lockerer
+#: hängen die ersten Bahnen darüber durch (Recherche Nr. 3: 0,1 bis 0,2 mm,
+#: drei Lagen).
+DENSE_INTERFACE: Final = (0.2, 3)
+
+#: Unter kleinen und gewölbten Flächen — Schuppen, Kinn, Krallen: Dort sitzt
+#: eine dichte Trennschicht fest und reißt Material mit (Recherche Nr. 3: 0,4 bis
+#: 0,5 mm, zwei Lagen).
+OPEN_INTERFACE: Final = (0.5, 2)
+
+#: Untere Trennschichten, wo die Stütze auf dem Modell steht (Recherche Nr. 2).
+#: Ohne sie steht der rohe Stützfuß auf der Fläche und zeichnet sie; das Profil
+#: des MK4S führt 0.
+BOTTOM_INTERFACE_LAYERS: Final = 2
+
+
+def support_gap_target(
+    layer: float, material: MaterialProfile, flavour: SlicerFlavour | None = None
+) -> float:
+    """Der Stützabstand, mit dem sich die Stütze von diesem Material sauber löst
+    (RM-583): ein Vielfaches der Schichthöhe, begrenzt nach dem Materialprofil.
+    Cura rechnet ihn in ganzen Schichten. Die Orca-Familie tut es nur ohne
+    eigene Stützschichthöhe; die schaltet die Übergabe dann ein
+    (``handover.frees_support_layers``)."""
+    target = min(
+        max(layer * material.support_gap_factor, material.support_gap_min),
+        material.support_gap_max,
+    )
+    if flavour == "cura":
+        target = layer * max(1, round(target / layer))
+    return target
+
+
+def _support_contact(
+    settings: PrintSettings,
+    profile: Profile,
+    need: SupportNeed,
+    on_model: bool,
+    flavour: SlicerFlavour | None,
+) -> list[SettingAdvice]:
+    """Abstand und Trennschicht der Stütze nach Material, Schichthöhe und
+    Fläche (RM-583) — die häufigsten Ursachen für Narben und festsitzende Stützen
+    (``konzepte/recherche-slicer-einstellungen-2026-10.md``, Nr. 1, 2, 3, 7).
+
+    Der Abstand oben ist ein Vielfaches der Schichthöhe aus dem Materialprofil,
+    begrenzt nach unten und oben (Regel 7); Cura rechnet ihn in ganzen
+    Schichten. Unter einer großen flachen Decke (ein Stück über
+    ``OVERHANG_LAYER_WORTH_SUPPORT``) wird die Trennschicht dicht, sonst locker.
+    Material, das an sich selbst haftet (Abstandsfaktor über eins), bekommt volle
+    Kühlung an der Trennschicht.
+    """
+    advice: list[SettingAdvice] = []
+    material = profile.material
+    target = support_gap_target(settings.layers.layer_height, material, flavour)
+    low, high = SUPPORT_GAP_BAND
+    if not low * target <= settings.support.z_gap <= high * target:
+        advice.append(
+            _advice(
+                settings,
+                path="support.z_gap",
+                value=round(target, 2),
+                reason=_("Passend zu Schicht und Material löst sich die Stütze sauber."),
+            )
+        )
+    if on_model and settings.support.bottom_interface_layers < BOTTOM_INTERFACE_LAYERS:
+        advice.append(
+            _advice(
+                settings,
+                path="support.bottom_interface_layers",
+                value=BOTTOM_INTERFACE_LAYERS,
+                reason=_("Eine Trennschicht unter dem Stützfuß schont das Teil."),
+            )
+        )
+    flat = need.piece > OVERHANG_LAYER_WORTH_SUPPORT
+    spacing, layers = DENSE_INTERFACE if flat else OPEN_INTERFACE
+    middle = (DENSE_INTERFACE[0] + OPEN_INTERFACE[0]) / 2.0
+    reason = (
+        _("Eine dichte Trennschicht hält große flache Decken.")
+        if flat
+        else _("Lockere Trennschichten lösen sich von Details leichter.")
+    )
+    current = settings.support.interface_spacing
+    if (current > middle) if flat else (current < middle):
+        advice.append(
+            _advice(settings, path="support.interface_spacing", value=spacing, reason=reason)
+        )
+    if (
+        (settings.support.interface_layers < layers)
+        if flat
+        else (settings.support.interface_layers > layers)
+    ):
+        advice.append(
+            _advice(settings, path="support.interface_layers", value=layers, reason=reason)
+        )
+    if material.support_gap_factor > 1.0 and not settings.cooling.support_interface_cooling:
+        advice.append(
+            _advice(
+                settings,
+                path="cooling.support_interface_cooling",
+                value=True,
+                reason=_("Volle Kühlung löst die Stütze von diesem Material leichter."),
+            )
+        )
+    return advice
+
+
 def _from_geometry(
     settings: PrintSettings,
     profile: Profile,
@@ -1048,6 +1164,8 @@ def _from_geometry(
                 reason=_("Diese Ränder tragen sich selbst, Stütze ließe Narben."),
             )
         )
+    if needs_support:
+        advice += _support_contact(settings, profile, need, on_model, flavour)
 
     # **Über „automatisch“ nur, wo der Slicer nichts rechnet** (Entscheidung J,
     # :func:`_unanchored`): Orcas Auto-Brim fragt Höhe und Grundfläche selbst
@@ -1464,15 +1582,21 @@ def _from_connectors(settings: PrintSettings, diameters: Sequence[float]) -> lis
 #: Was je Teil geschrieben wird, wenn sein Grund an der Geometrie hängt
 #: (Konzept Herstellerprofil, Entscheidung G): Stützen mit Art, Ort und
 #: Sperre, die Haftung, die Werte einer Passung, Wände und Füllung um
-#: Verbinder, Wandgenerator und Bahnbreite an schmalen Stellen. Temperatur,
-#: Kühlung, Rückzug und Volumenstrom bleiben plattenweit — sie hängen an der
-#: Spule, nicht am Teil.
+#: Verbinder, Wandgenerator und Bahnbreite an schmalen Stellen. Dazu der
+#: Stützkontakt: Abstand und Trennschichten hängen am Material der Spule, die
+#: das Teil druckt, und nur das gestützte Teil braucht sie (RM-583).
+#: Temperatur, Kühlung, Rückzug und Volumenstrom gehen je Spule hinaus
+#: (``print_settings_dialog.FILAMENT_GROUPS``), nicht je Teil.
 PART_PATHS: Final = frozenset(
     {
         "support.style",
         "support.placement",
         "support.block_channels",
         "support.spare_ledges",
+        "support.z_gap",
+        "support.interface_layers",
+        "support.bottom_interface_layers",
+        "support.interface_spacing",
         "adhesion.kind",
         "adhesion.brim_gap",
         "shell.precise_outer_wall",
@@ -1502,6 +1626,10 @@ SLICED_PATHS: Final = frozenset(
         "support.placement",
         "support.block_channels",
         "support.spare_ledges",
+        "support.z_gap",
+        "support.interface_layers",
+        "support.bottom_interface_layers",
+        "support.interface_spacing",
         "adhesion.kind",
         "adhesion.brim_gap",
         "shell.wall_generator",

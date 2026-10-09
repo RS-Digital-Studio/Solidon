@@ -384,6 +384,19 @@ def _width(text: str, context: _Context) -> object:
     return number if number > 0.0 else None
 
 
+def _bottom_layers(text: str | None, top: object) -> object:
+    """Untere Kontaktlagen; -1 heißt in der Orca-Familie und bei PrusaSlicer
+    „wie oben“ und wird zur oberen Zahl (RM-583)."""
+    if text is None:
+        return None
+    number = _float(text)
+    if number is None or not number.is_integer():
+        return Foreign(text)
+    if number < 0.0:
+        return top if isinstance(top, int) else None
+    return int(number)
+
+
 def _flag(text: str, _context: _Context) -> object:
     lowered = text.casefold()
     if lowered in ("1", "true"):
@@ -450,6 +463,7 @@ ORCA_PROCESS: Final[tuple[tuple[str, str, Reader], ...]] = (
     ),
     ("support.z_gap", "support_top_z_distance", _number),
     ("support.interface_layers", "support_interface_top_layers", _count),
+    ("support.interface_spacing", "support_interface_spacing", _number),
     ("adhesion.skirt_loops", "skirt_loops", _count),
     ("adhesion.skirt_distance", "skirt_distance", _number),
     ("adhesion.brim_width", "brim_width", _number),
@@ -708,6 +722,15 @@ def _read_process(
     density = _support_density(values, read, context)
     if density is not None:
         read["support.density"] = density
+    bottom_text = _text(values.get("support_interface_bottom_layers"))
+    bottom = _bottom_layers(
+        bottom_text if bottom_text is not None else defaults.get("support_interface_bottom_layers"),
+        read.get("support.interface_layers"),
+    )
+    if isinstance(bottom, Foreign):
+        foreign["support.bottom_interface_layers"] = bottom.raw
+    elif bottom is not None:
+        read["support.bottom_interface_layers"] = bottom
     return read, foreign
 
 
@@ -1381,6 +1404,7 @@ PRUSA_PROCESS: Final[tuple[tuple[str, str, Reader], ...]] = (
     ),
     ("support.z_gap", "support_material_contact_distance", _number),
     ("support.interface_layers", "support_material_interface_layers", _count),
+    ("support.interface_spacing", "support_material_interface_spacing", _number),
     ("adhesion.skirt_loops", "skirts", _count),
     ("adhesion.skirt_distance", "skirt_distance", _number),
     ("adhesion.brim_width", "brim_width", _number),
@@ -1456,8 +1480,10 @@ PRUSA_PROGRAM_DEFAULTS: Final[Mapping[str, str]] = {
     "support_material": "0",
     "support_material_auto": "1",
     "support_material_buildplate_only": "0",
+    "support_material_bottom_interface_layers": "-1",
     "support_material_contact_distance": "0.2",
     "support_material_interface_layers": "3",
+    "support_material_interface_spacing": "0",
     "support_material_spacing": "2.5",
     "support_material_style": "grid",
     "support_material_threshold": "0",
@@ -1622,6 +1648,13 @@ def _read_prusa(
     take("support.xy_gap", _prusa_support_gap(values, outer_width))
     take("support.density", _prusa_support_density(values, read, context))
     take("adhesion.kind", _prusa_adhesion(values))
+    take(
+        "support.bottom_interface_layers",
+        _bottom_layers(
+            _prusa_first(values.get("support_material_bottom_interface_layers")),
+            read.get("support.interface_layers"),
+        ),
+    )
     read.update(_prusa_retraction(values))
     read.update(_prusa_material(values))
     return read, foreign

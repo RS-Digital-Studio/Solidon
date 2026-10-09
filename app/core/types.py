@@ -968,6 +968,14 @@ class MaterialProfile:
     """
     layer_bond_ratio: float = 0.0
     """Anteil der Streckgrenze quer zur Schichtebene, zwischen 0 und 1; 0 heißt unbekannt."""
+    support_gap_factor: float = 1.0
+    """Luft zwischen Stütze und Teil als Vielfaches der Schichthöhe (RM-583): PLA
+    etwa eine Schicht, PETG haftet an sich selbst und braucht das 1,25- bis
+    1,5-Fache. Begrenzt durch :attr:`support_gap_min` und :attr:`support_gap_max`."""
+    support_gap_min: float = 0.10
+    """Kleinster Stützabstand in mm — darunter verschweißt die Kontaktschicht."""
+    support_gap_max: float = 0.25
+    """Größter Stützabstand in mm — darüber sackt die gestützte Fläche durch."""
     minimum_wall: float | None = None
     """Gemessene druckbare Mindestwand in mm, ausschließlich für den gespeicherten Prozess."""
     overhang_angle: float | None = None
@@ -1263,6 +1271,11 @@ class CoolingSettings:
     so die obersten 12 mm in jedem Slicer unter der Mindestzeit, die Spitzen
     bei 0,1 bis 1,3 s je Schicht. Die Vorgabe ist die von Cura und
     PrusaSlicer; die Herstellerfilamente bringen ihre eigene mit."""
+    support_interface_cooling: bool = False
+    """Volle Kühlung an der Kontaktschicht der Stütze (RM-583); aus heißt wie die
+    übrige Schicht. Sie löst die Stütze vom Teil, vor allem bei Material, das
+    sonst gedrosselt kühlt und an sich selbst haftet. Die Recherche nennt nur
+    einen Wert, 100 %, deshalb ein Schalter."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -1322,6 +1335,14 @@ class SupportSettings:
     Unterseite, auch einen Rand von einem Millimeter; am Eiffelturm stellte der
     ElegooSlicer dafür 831 m Baum außen am Turm hoch (08.10.2026). Aus bis zu
     einem Vorschlag, wie :attr:`block_channels`."""
+    bottom_interface_layers: int = 2
+    """Dichte Schichten, wo die Stütze auf dem Modell steht (RM-583). Ohne sie
+    steht der rohe Stützfuß auf der Oberfläche und zeichnet sie; das Profil
+    des MK4S führt 0."""
+    interface_spacing: float = 0.5
+    """Lücke zwischen den Linien der Kontaktschicht in mm (RM-583): dicht unter
+    großen flachen Decken, damit die Unterseite nicht durchhängt, offen unter
+    kleinen und gewölbten Flächen, wo eine dichte Kontaktschicht festsitzt."""
 
 
 @dataclass(frozen=True, slots=True)

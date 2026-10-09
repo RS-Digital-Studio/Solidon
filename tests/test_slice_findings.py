@@ -1360,12 +1360,7 @@ def test_trees_where_small_overhangs_rest_on_the_model_not_under_a_flat_ceiling(
         entries = advise.advise(print_settings.resolve(petg()), petg(), slice_body(body, 0.2))
         return next((entry.value for entry in entries if entry.path == "support.style"), None)
 
-    chin_over_chest = on_bed(
-        brick(80.0, 60.0, 4.0, (0.0, 0.0, 2.0)),
-        brick(40.0, 10.0, 60.0, (0.0, 20.0, 34.0)),
-        brick(60.0, 30.0, 20.0, (0.0, 0.0, 14.0)),
-        chin(44.0),
-    )
+    chin_over_chest = _chin_over_chest()
     assert style(chin_over_chest) == "tree", "das Kinn setzt in Streifen auf der Brust auf"
     assert style(table()) == "auto", "die Tischplatte ist eine flache Decke"
     # Auch wenn die flache Decke über dem Bett hängt und nur das Kinn auf dem
@@ -1387,6 +1382,125 @@ def test_trees_where_small_overhangs_rest_on_the_model_not_under_a_flat_ceiling(
 
     assert changed(chin_over_chest, "grid") == ["tree"], "auch über einem gewählten Gitter"
     assert changed(table(), "grid") == [], "die flache Decke behält ihr Gitter"
+
+
+def _chin_over_chest() -> MeshData:
+    """Eine Figur im Kleinen: ein Kinn mit schräger Unterseite über der Brust,
+    dessen Streifen auf dem Modell aufsetzen — kleine, gewölbte Überhänge."""
+    return on_bed(
+        brick(80.0, 60.0, 4.0, (0.0, 0.0, 2.0)),
+        brick(40.0, 10.0, 60.0, (0.0, 20.0, 34.0)),
+        brick(60.0, 30.0, 20.0, (0.0, 0.0, 14.0)),
+        chin(44.0),
+    )
+
+
+def _support_advice(
+    body: MeshData,
+    profile: Profile,
+    values: dict[str, object],
+    *,
+    flavour: str | None = None,
+    paths: tuple[str, ...] = (
+        "support.z_gap",
+        "support.bottom_interface_layers",
+        "support.interface_spacing",
+        "support.interface_layers",
+        "cooling.support_interface_cooling",
+    ),
+) -> dict[str, object]:
+    """Die Vorschläge zu Abstand und Trennschicht für einen Körper (RM-583)."""
+    settings = print_settings.resolve(profile)
+    for path, value in values.items():
+        settings = print_settings.with_path(settings, path, value)
+    entries = advise.advise(settings, profile, slice_body(body, 0.2), flavour=flavour)  # type: ignore[arg-type]
+    return {entry.path: entry.value for entry in entries if entry.path in paths}
+
+
+def test_the_support_gap_follows_layer_height_and_material() -> None:
+    """Der Abstand zwischen Stütze und Teil folgt Schichthöhe und Material
+    (RM-583, Recherche vom 08.10.2026, Nr. 1): PLA etwa eine Schicht, PETG das
+    1,4-Fache, nie unter 0,1 und über 0,25 bzw. 0,3 mm. Cura rechnet in ganzen
+    Schichten. Was im Band liegt, bleibt beim Hersteller."""
+    pla = profiles.make_profile("centauri-carbon-2", "pla")
+    gap = "support.z_gap"
+
+    def proposed(
+        profile: Profile, layer: float, z_gap: float, flavour: str | None = None
+    ) -> object:
+        values = {"layers.layer_height": layer, gap: z_gap}
+        return _support_advice(table(), profile, values, flavour=flavour, paths=(gap,)).get(gap)
+
+    assert proposed(pla, 0.2, 0.2) is None, "eine Schicht bei PLA ist richtig"
+    assert proposed(pla, 0.2, 0.22) is None, "0,22 liegt im Band"
+    assert proposed(petg(), 0.2, 0.2) == pytest.approx(0.28), "PETG haftet an sich selbst"
+    assert proposed(petg(), 0.2, 0.2, "cura") is None, "Cura rundet auf eine Schicht"
+    assert proposed(pla, 0.12, 0.2) == pytest.approx(0.12), "bei feinen Schichten zu viel Luft"
+    assert proposed(pla, 0.06, 0.06) == pytest.approx(0.10), "nie unter 0,1 mm"
+    assert proposed(petg(), 0.32, 0.45) == pytest.approx(0.30), "nie über 0,3 mm bei PETG"
+
+
+def test_the_interface_follows_the_ceiling_and_where_supports_stand() -> None:
+    """Unter einer großen flachen Decke eine dichte Trennschicht mit drei Lagen,
+    unter kleinen und gewölbten Flächen eine lockere mit zwei; wo die Stütze auf
+    dem Modell steht, zwei untere Lagen (RM-583, Recherche Nr. 2 und 3). Das
+    Profil des MK4S führt unten 0, Kobra 2 und MK4S oben 0,2 mm und drei Lagen,
+    Elegoo 0,5 mm und zwei."""
+    pla = profiles.make_profile("centauri-carbon-2", "pla")
+    prusa_like = {
+        "support.interface_spacing": 0.2,
+        "support.interface_layers": 3,
+        "support.bottom_interface_layers": 0,
+    }
+    elegoo_like = {
+        "support.interface_spacing": 0.5,
+        "support.interface_layers": 2,
+        "support.bottom_interface_layers": 2,
+    }
+
+    assert _support_advice(table(), pla, elegoo_like) == {
+        "support.interface_spacing": 0.2,
+        "support.interface_layers": 3,
+    }, "die Tischplatte ist eine flache Decke"
+    assert _support_advice(_chin_over_chest(), pla, prusa_like) == {
+        "support.interface_spacing": 0.5,
+        "support.interface_layers": 2,
+        "support.bottom_interface_layers": 2,
+    }, "das Kinn ist klein und gewölbt und steht auf der Brust"
+    assert _support_advice(_chin_over_chest(), pla, elegoo_like) == {}, "Elegoo passt dort"
+
+
+def test_sticky_material_gets_a_cool_interface() -> None:
+    """PETG haftet an sich selbst; volle Kühlung an der Trennschicht löst die
+    Stütze leichter (RM-583, Recherche Nr. 7). PLA kühlt ohnehin voll."""
+    cooling = "cooling.support_interface_cooling"
+    pla = profiles.make_profile("centauri-carbon-2", "pla")
+    assert _support_advice(table(), petg(), {}, paths=(cooling,)) == {cooling: True}
+    assert _support_advice(table(), pla, {}, paths=(cooling,)) == {}
+
+
+def test_each_part_gets_the_contact_of_its_own_material() -> None:
+    """Zwei gleiche Tische auf einer Platte, einer aus PLA, einer aus PETG: Den
+    Abstand bekommt jeder nach dem Material seiner Spule, nicht nach dem der
+    Platte (RM-583; Robert: „immer nach dem verwendeten Material“)."""
+    from app.core.export import writer
+    from app.core.types import SceneObject
+
+    profile = profiles.make_profile("centauri-carbon-2", "pla")
+    settings = print_settings.resolve(profile)
+    body = table()
+    result = slice_body(body, 0.2)
+
+    def gap(material: str) -> object:
+        entry = SceneObject(id=material, name=material, mesh=body, material=material)
+        advice = writer.part_advice(
+            entry, body, settings, profile, None, {}, result=result, fit_kinds=(), flavour="orca"
+        )
+        return {item.path: item.value for item in advice}.get("support.z_gap")
+
+    assert settings.support.z_gap == pytest.approx(0.2)
+    assert gap("pla") is None, "PLA löst sich bei 0,2 mm schon sauber"
+    assert gap("petg") == pytest.approx(0.28), "PETG haftet stärker und braucht mehr Luft"
 
 
 def test_a_cantilever_in_a_narrow_pocket_is_no_channel() -> None:

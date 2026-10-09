@@ -4323,6 +4323,12 @@ def _standard_process(
     return min(pool, key=lambda entry: (not entry.from_user, len(entry.name), entry.name))
 
 
+def _full_cooling(percent: float) -> bool:
+    """Der Kontaktlüfter der Orca-Familie: 100 heißt volle Kühlung, -1 „wie die
+    übrige Schicht“ (RM-583). Einen Anteil dazwischen führt Solidon nicht."""
+    return percent >= 100.0
+
+
 #: Was ein Filamentprofil des Slicers über das Material sagt, in Solidons
 #: Worten. Die Gegenrichtung zu :mod:`slicer_keys`, und mit Absicht kurz: hier
 #: stehen nur die Werte, die *dem Filament* gehören und nicht der Maschine oder
@@ -4333,7 +4339,7 @@ def _standard_process(
 #: PRO fährt 5 mm³/s bei Bett 70. Der Unterschied ist kein Feinschliff: mit dem
 #: falschen Volumenstrom rechnet die Beratung an der Grenze vorbei, die das
 #: Material wirklich hat.
-FILAMENT_READBACK: Final[tuple[tuple[str, str, type], ...]] = (
+FILAMENT_READBACK: Final[tuple[tuple[str, str, Callable[[float], float | int]], ...]] = (
     ("temperature.nozzle", "nozzle_temperature", int),
     ("temperature.nozzle_first_layer", "nozzle_temperature_initial_layer", int),
     ("temperature.bed", "hot_plate_temp", int),
@@ -4349,6 +4355,7 @@ FILAMENT_READBACK: Final[tuple[tuple[str, str, type], ...]] = (
     ("cooling.disable_first_layers", "close_fan_the_first_x_layers", int),
     ("cooling.minimum_layer_time", "slow_down_layer_time", float),
     ("cooling.minimum_speed", "slow_down_min_speed", float),
+    ("cooling.support_interface_cooling", "support_material_interface_fan_speed", _full_cooling),
     ("filament.density", "filament_density", float),
     ("filament.flow_ratio", "filament_flow_ratio", float),
     ("filament.max_flow", "filament_max_volumetric_speed", float),

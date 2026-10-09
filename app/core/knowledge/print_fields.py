@@ -448,6 +448,16 @@ FIELDS: tuple[Field, ...] = (
             "sind kleine Spitzen zu schnell fertig und werden weich."
         ),
     ),
+    Field(
+        "cooling.support_interface_cooling",
+        _("Volle Kühlung an der Stütze"),
+        "cooling",
+        kind="bool",
+        note=_(
+            "Kühlt die Trennschicht der Stütze mit vollem Lüfter. Die Stütze löst sich "
+            "leichter, vor allem bei PETG."
+        ),
+    ),
     # --- Geschwindigkeit ---
     Field(
         "speed.outer_wall",
@@ -641,6 +651,32 @@ FIELDS: tuple[Field, ...] = (
         maximum=10,
         note=_(
             "Dichte Schichten zwischen Stütze und Teil. Sie machen die gestützte Fläche glatter."
+        ),
+    ),
+    Field(
+        "support.bottom_interface_layers",
+        _("Trennschichten unten"),
+        "support",
+        kind="int",
+        minimum=0,
+        maximum=10,
+        note=_(
+            "Dichte Schichten, wo die Stütze auf dem Teil steht. Ohne sie zeichnet ihr Fuß die "
+            "Fläche darunter."
+        ),
+    ),
+    Field(
+        "support.interface_spacing",
+        _("Lücke in der Trennschicht"),
+        "support",
+        unit="mm",
+        minimum=0.0,
+        maximum=2.0,
+        step=0.05,
+        decimals=2,
+        note=_(
+            "Abstand der Linien in der Trennschicht. Eng gibt glatte flache Unterseiten, weit "
+            "löst sich an kleinen und runden Flächen leichter."
         ),
     ),
     Field(

@@ -448,3 +448,30 @@ statt 592, in PrusaSlicer 81 statt 367 und in Cura 104 statt 358 m (gegen
 „Stützen automatisch“); der Rest steht unter den Bögen unten. Im Korpus
 bekommen 45 von 242 Körpern den Vorschlag, und 7 brauchen keine Stützen mehr:
 Ihr einziger Überhang waren Ränder.
+
+**Der Stützkontakt folgt dem Material der Spule (09.10.2026, RM-583).** Narben
+und verschweißte Stützen kommen am häufigsten von einem Abstand, der nicht zu
+Schicht und Material passt, von fehlenden Trennschichten, wo die Stütze auf dem
+Modell steht, und von einer Trennschicht, die unter kleinen Flächen zu dicht
+sitzt (`konzepte/recherche-slicer-einstellungen-2026-10.md`, Nr. 1, 2, 3, 7):
+PLA etwa eine Schicht, PETG das 1,25- bis 1,5-Fache, darüber volle Kühlung.
+Ein Projektmaterial gibt es dafür nicht (Robert, 08.10.2026: „immer nach dem
+verwendeten Material“) — PLA und PETG auf einer Platte brauchen verschiedene
+Abstände, deshalb gehen Abstand und Trennschichten je Teil und der Lüfter je
+Spule. Gemessen an zwei gestützten Stufenkörpern auf einer Platte, einer mit
+Objektwerten (`.claude/.state/drache-2026-10-08/kontakt_je_teil.py`): In allen
+acht Programmen kommen Abstand (0,4 gegen 0,2 mm), obere und untere
+Trennschichten und die Lücke (gut ein Drittel weniger Bahn je Ebene) am
+richtigen Körper an; Cura nimmt die Lücke nur für die ganze Platte, denn ihr
+Linienabstand gehört dem Stützextruder. Mit dem echten Rat bekommt das
+PLA-Teil 0,2 und das PETG-Teil 0,28 mm. **Die Orca-Familie rundet den Abstand
+auf ganze Schichten, wenn die Stütze die Schichthöhe des Modells hat**
+(`Slicing.cpp`), und Elegoos Prozesse für C2 und CC2 stellen es so ein: Aus
+0,28 wurden im ElegooSlicer 0,2. Setzt Solidon einen Abstand zwischen zwei
+Schichten, schaltet die Übergabe `independent_support_layer_height` ein; der
+ElegooSlicer druckt dann 0,28. Mit zwei Filamenten baut die Orca-Familie einen
+Reinigungsturm und schaltet die eigene Höhe selbst wieder ab
+(`PrintConfig.cpp`, `normalize_fdm`) — Orca, Elegoo, Creality und Bambu
+druckten das PETG-Teil neben PLA mit 0,2, PrusaSlicer mit 0,28. Der Export
+sagt das, statt still zu runden. Cura rundet immer, deshalb rät Solidon dort
+in ganzen Schichten.

@@ -1,5 +1,5 @@
 ---
-description: "Druckrat — Vorschläge aus Geometrie, Material und Maschine: ein Vorschlag je Einstellung mit Grund, Stützbedarf, Kanäle, Ränder, Bäume, Kühlung, Haftung; kein Vorschlag überstimmt das Profil für denselben Zweck"
+description: "Druckrat — Vorschläge aus Geometrie, Material und Maschine: ein Vorschlag je Einstellung mit Grund, Stützbedarf, Kanäle, Ränder, Bäume, Stützkontakt je Material, Kühlung, Haftung; kein Vorschlag überstimmt das Profil für denselben Zweck"
 paths:
   - "app/core/slice/**/*.py"
 ---
@@ -73,6 +73,19 @@ offenem Drucker. Übernommen wird auf Klick, nie von allein.
   einige Stücke prüft, fragt mit `only`. `support.spare_ledges` sperrt ihre
   Überhangfläche (`ledge_space`) und spart aus, was Stütze braucht;
   vorgeschlagen nur mit Stützen.
+- **Der Stützkontakt folgt dem Material der Spule** (`_support_contact`):
+  Abstand aus Schichthöhe × `support_gap_factor`, begrenzt durch
+  `support_gap_min`/`support_gap_max` des Materialprofils (Regel 7,
+  `support_gap_target`), vorgeschlagen außerhalb `SUPPORT_GAP_BAND`. Unter
+  einem flachen Stück über `OVERHANG_LAYER_WORTH_SUPPORT` eine dichte
+  Trennschicht, sonst eine lockere; steht die Stütze auf dem Modell, auch
+  unten (`BOTTOM_INTERFACE_LAYERS`). Faktor über eins heißt volle Kühlung an
+  der Trennschicht, ein Filamentwert je Spule. Abstand und Trennschichten
+  gehen je Teil (`PART_PATHS`), gefragt mit dem Material der Spule
+  (`handover.slot_processes`). Cura rechnet in ganzen Schichten; die
+  Orca-Familie nur ohne eigene Stützschichthöhe, die die Übergabe dann
+  einschaltet (`handover.frees_support_layers`) — mit mehreren Filamenten und
+  Reinigungsturm rundet sie trotzdem.
 - **Die kleine Standfläche wird auch je Fuß gefragt** (`advise._on_small_feet`):
   Erreicht keine von mehreren Inseln `SMALL_FOOTPRINT`, heißt es Brim — nur
   als Vorschlag. `for_part` fragt mit Profil jede Regel für `PART_PATHS`;

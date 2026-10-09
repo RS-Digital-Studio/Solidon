@@ -1249,6 +1249,8 @@ UNREACHABLE: dict[str, dict[str, str]] = {
         "adhesion.kind": "kennt keine Art, nur die Maße — ``ADHESION_KEYS`` nullt die anderen.",
         "support.block_channels": "reist als Stützsperre in der 3MF (``AS_GEOMETRY``).",
         "support.spare_ledges": "reist als Stützsperre in der 3MF (``AS_GEOMETRY``).",
+        "cooling.support_interface_cooling": "PrusaSlicer kennt keinen Lüfter für die "
+        "Kontaktschicht; nur SuperSlicer führt ihn.",
     },
     "orca": {
         "adhesion.kind": "in ``brim_type`` enthalten, das die Tabelle schreibt.",
@@ -6924,6 +6926,14 @@ UNREACHED: Final[dict[tuple[str, str], str]] = {
         "Reist als eigenes Netz mit ``anti_overhang_mesh`` neben den Teilen "
         "(``slicer_keys.takes_mesh_settings``); ``test_export`` prüft die Netzliste."
     ),
+    ("cooling.support_interface_cooling", "prusa"): (
+        "PrusaSlicer kennt keinen Lüfter für die Kontaktschicht; nur SuperSlicer führt ihn."
+    ),
+    ("support.interface_spacing", "cura"): (
+        "Wirkt bei Cura, sobald die Lücke gewählt oder übernommen ist; ohne Wahl bleibt die "
+        "Trennschicht zu einem Drittel dicht wie bei Creality und Elegoo "
+        "(``handover._for_supports``). Diese Messung setzt den Wert ohne Wahl."
+    ),
 }
 
 
@@ -8476,3 +8486,132 @@ def test_existing_output_and_sources_survive_the_return_path(
     assert len(captured) == 1
     assert not captured[0].exists()
     assert not list(target.parent.glob(f".{target.name}.*.tmp"))
+
+
+def test_the_support_gap_reaches_both_sides_and_curas_bottom_stands_alone() -> None:
+    """Der Stützabstand gilt oben und unten (RM-583): Wo die Stütze auf dem Modell
+    steht, haftet sie genauso. Cura bekommt die unteren Lagen eigens, nach dem
+    Spiegel der Trennschicht, und eine gewählte Lücke als Linienabstand."""
+    profile = profiles.make_profile("centauri-carbon-2", "petg")
+    settings = print_settings.with_choice(print_settings.resolve(profile), "support.style", "auto")
+    settings = print_settings.with_choice(settings, "support.z_gap", 0.28)
+
+    orca = handover.values_for(settings, profile, "orca")
+    assert orca["support_top_z_distance"] == orca["support_bottom_z_distance"] == "0.28"
+    prusa = handover.values_for(settings, profile, "prusa")
+    assert prusa["support_material_contact_distance"] == "0.28"
+    assert prusa["support_material_bottom_contact_distance"] == "0.28"
+
+    bare = print_settings.with_choice(settings, "support.bottom_interface_layers", 0)
+    cura = handover.values_for(bare, profile, "cura")
+    assert cura["support_bottom_enable"] == "false" and cura["support_bottom_height"] == "0"
+    assert cura["support_roof_enable"] == "true", "oben bleibt die Trennschicht"
+    spaced = print_settings.with_choice(bare, "support.interface_spacing", 0.2)
+    distance = handover.values_for(spaced, profile, "cura")["support_roof_line_distance"]
+    assert float(distance) == pytest.approx(settings.layers.line_width + 0.2)
+
+
+def test_the_contact_cooling_belongs_to_its_spool(tmp_path: Path) -> None:
+    """Die volle Kühlung an der Trennschicht hängt am Material (RM-583): Die
+    PETG-Spule bekommt sie in ihrer Filamentdatei, die PLA-Spule daneben nicht."""
+    from dataclasses import replace
+
+    from app.core.types import MaterialSlot, SlotOverride
+
+    profile = profiles.make_profile("centauri-carbon-2", "pla")
+    settings = print_settings.resolve(profile)
+    assert not settings.cooling.support_interface_cooling
+    cool = replace(settings.cooling, support_interface_cooling=True)
+    settings = replace(
+        settings,
+        slot_overrides=(None, SlotOverride(name="Deckel", material_type="PETG", cooling=cool)),
+    )
+    slots = (
+        MaterialSlot(index=0, name="Gehäuse", material_type="PLA"),
+        MaterialSlot(index=1, name="Deckel", material_type="PETG"),
+    )
+    setup = handover.SlicerSetup(executable=Path("orca-slicer.exe"), flavour="orca")
+
+    written = handover.write_config(settings, profile, setup, tmp_path, slots=slots)
+    pla, petg = (json.loads(path.read_text(encoding="utf-8")) for path in written.filaments)
+
+    assert pla["support_material_interface_fan_speed"] == ["-1"]
+    assert petg["support_material_interface_fan_speed"] == ["100"]
+    process = json.loads(written.process.read_text(encoding="utf-8"))
+    assert "support_material_interface_fan_speed" not in process, "kein Prozesswert"
+
+
+def test_a_gap_between_layers_frees_the_support_layers(tmp_path: Path) -> None:
+    """Ohne eigene Stützschichthöhe rundet die Orca-Familie den Stützabstand auf
+    ganze Schichten, und Elegoos CC2-Prozess schaltet sie ab: aus 0,28 mm für
+    PETG wurden im ElegooSlicer 0,2 (RM-583). Setzt Solidon einen Abstand
+    zwischen zwei Schichten, schaltet die Übergabe sie ein — auch wenn ihn nur
+    ein Teil nach dem Material seiner Spule bekommt."""
+    from app.core.types import MaterialSlot
+
+    profile = profiles.make_profile("centauri-carbon-2", "pla")
+    base = print_settings.resolve(profile)
+    petg = (MaterialSlot(index=0, name="Deckel", material_type="PETG"),)
+    pla = (MaterialSlot(index=0, name="Gehäuse", material_type="PLA"),)
+    frees = handover.frees_support_layers
+
+    assert not frees(base, profile, (), "orca"), (
+        "der Hersteller bleibt, solange Solidon nichts setzt"
+    )
+    between = print_settings.with_accepted(base, "support.z_gap", 0.28)
+    assert frees(between, profile, (), "orca")
+    assert not frees(between, profile, (), "cura"), "Cura bekommt ganze Schichten"
+    whole = print_settings.with_choice(base, "support.z_gap", 0.4)
+    assert not frees(whole, profile, (), "orca")
+    # Je Teil: Der übernommene Abstand der Platte ist eine ganze Schicht, PETG
+    # verlangt 0,28.
+    accepted = print_settings.with_accepted(base, "support.z_gap", 0.2)
+    assert frees(accepted, profile, petg, "orca")
+    assert not frees(accepted, profile, pla, "orca")
+
+    setup = handover.SlicerSetup(executable=Path("orca-slicer.exe"), flavour="orca")
+    written = handover.write_config(base, profile, setup, tmp_path, free_support_layers=True)
+    process = json.loads(written.process.read_text(encoding="utf-8"))
+    assert process["independent_support_layer_height"] == "1"
+    project = handover.project_settings(base, profile, setup, free_support_layers=True)
+    assert project["independent_support_layer_height"] == "1"
+    assert "independent_support_layer_height" not in handover.project_settings(base, profile, setup)
+
+
+@pytest.mark.parametrize(("second", "rounded"), [("petg", True), ("pla", False)])
+def test_a_mixed_plate_says_that_the_gap_is_rounded(
+    tmp_path: Path, second: str, rounded: bool
+) -> None:
+    """Mit PLA und PETG auf einer Platte baut die Orca-Familie einen
+    Reinigungsturm und schaltet die eigene Stützschichthöhe wieder ab: Im
+    ElegooSlicer bekam das PETG-Teil 0,2 statt 0,28 mm (RM-583). Der Export
+    sagt es, statt still zu runden; zweimal PLA rundet nichts."""
+    from app.core.export import writer
+    from app.core.geom.mesh import MeshData
+    from app.core.types import SceneObject
+
+    profile = profiles.make_profile("centauri-carbon-2", "pla")
+    base = print_settings.resolve(profile)
+    settings = print_settings.with_accepted(base, "support.z_gap", 0.2)
+    objects = []
+    for index, material in enumerate(("pla", second)):
+        block = trimesh.creation.box(extents=(20.0, 20.0, 10.0))
+        block.apply_translation([index * 30.0, 0.0, 5.0])
+        objects.append(
+            SceneObject(
+                id=f"teil-{index}", name=f"Teil {index}", mesh=MeshData(block), material=material
+            )
+        )
+    setup = handover.SlicerSetup(executable=Path("orca-slicer.exe"), flavour="orca")
+
+    _path, findings = writer.write_assembly(
+        objects,
+        tmp_path,
+        project_name="gemischt",
+        profile=profile,
+        settings=settings,
+        flavour="orca",
+        setup=setup,
+    )
+
+    assert ("export.support_gap_rounded" in {entry.code for entry in findings}) is rounded

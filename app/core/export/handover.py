@@ -1408,6 +1408,22 @@ class PartSplit:
         return {path: read_path(self.accepted, path) for path in sorted(self.per_part)}
 
 
+#: Was Cura je Netz aus einer Schichtzahl ableitet (:func:`_for_supports`,
+#: :func:`_cura_dependants`): Die
+#: Trennschicht ist dort eine Höhe samt Schalter, und beide nimmt CuraEngine je
+#: Netz an. Der Linienabstand der Trennschicht gilt dem Stützextruder, nicht
+#: dem Netz — die Lücke bleibt deshalb plattenweit (RM-583).
+CURA_DERIVED_PER_MESH: Final[dict[str, tuple[str, ...]]] = {
+    "support.interface_layers": (
+        "support_interface_height",
+        "support_roof_height",
+        "support_interface_enable",
+        "support_roof_enable",
+    ),
+    "support.bottom_interface_layers": ("support_bottom_height", "support_bottom_enable"),
+}
+
+
 def _part_paths(flavour: SlicerFlavour, program: str = "") -> frozenset[str]:
     """Welche Pfade dieser Slicer je Teil annehmen kann."""
     from app.core.slice import advise
@@ -1438,6 +1454,7 @@ def _part_paths(flavour: SlicerFlavour, program: str = "") -> frozenset[str]:
                 for entry in slicer_keys.TABLES["cura"]
                 if entry.path in supported and entry.key in CURA_PER_MESH
             )
+            | frozenset(path for path in CURA_DERIVED_PER_MESH if path in supported)
         ) - slicer_keys.PLATE_ONLY_BY_PROGRAM["cura"]
     return frozenset()
 
@@ -1450,7 +1467,7 @@ def cura_takes_whole(path: str) -> bool:
     die ganze Platte. Ein Teil bekommt dann den Wert der Platte, nicht seinen
     eigenen.
     """
-    if path in slicer_keys.AS_GEOMETRY:
+    if path in slicer_keys.AS_GEOMETRY or path in CURA_DERIVED_PER_MESH:
         return True
     if path in slicer_keys.PLATE_ONLY_BY_PROGRAM["cura"]:
         return False
@@ -1678,6 +1695,13 @@ def _cura_dependants(
         if copied is not None:
             for target in targets:
                 written[target] = copied
+    # Die unteren Kontaktlagen eigens und nach dem Spiegel, der sie sonst der
+    # oberen Höhe gleichsetzt (RM-583): Wo die Stütze auf dem Modell steht,
+    # zeichnet ihr roher Fuß die Fläche darunter.
+    if "support_interface_height" in written:
+        bottom = settings.support.bottom_interface_layers
+        written["support_bottom_height"] = f"{bottom * settings.layers.layer_height:g}"
+        written["support_bottom_enable"] = "true" if bottom > 0 else "false"
     for target, source, factor in slicer_keys.CURA_SCALED:
         number = _as_float(written.get(source))
         if number is not None:
@@ -1836,6 +1860,10 @@ def _for_supports(written: dict[str, str], settings: PrintSettings) -> None:
         for key in ("support_roof_pattern", "support_bottom_pattern"):
             written[key] = "lines"
         spacing = width * _INTERFACE_SPACING
+        # Eine eigene Lücke gilt erst, wenn sie gewählt oder übernommen ist
+        # (RM-583); sonst bleibt Curas Drittel der Hersteller.
+        if "support.interface_spacing" in settings.chosen | settings.accepted:
+            spacing = width + settings.support.interface_spacing
         for key in ("support_roof_line_distance", "support_bottom_line_distance"):
             written[key] = f"{spacing:g}"
         # Die Stütze wächst um eine Bahnbreite plus Curas festen Zuschlag —
@@ -2926,12 +2954,52 @@ def _prusa_values(
     return document, expected
 
 
+#: Der Schalter der Orca-Familie für die eigene Stützschichthöhe (RM-583).
+_FREE_SUPPORT_LAYERS: Final = "independent_support_layer_height"
+
+
+def frees_support_layers(
+    settings: PrintSettings,
+    profile: Profile,
+    slots: Sequence[MaterialSlot],
+    flavour: SlicerFlavour,
+) -> bool:
+    """Ob die Orca-Familie die Stütze in eigener Schichthöhe drucken muss,
+    damit Solidons Stützabstand gilt (RM-583).
+
+    Ohne ``independent_support_layer_height`` rundet sie den Abstand auf ganze
+    Schichten (``Slicing.cpp``), und Elegoos Prozesse für C2 und CC2 schalten
+    ihn ab: Aus 0,28 mm für PETG wurden im ElegooSlicer 0,2. Gefragt an den
+    Einstellungen **vor** der Trennung je Teil, nur wenn Solidon den Abstand
+    setzt, und nur, wenn einer keine ganze Schicht ist — der der Platte oder der
+    Rat je Teil nach dem Material jeder Spule. Mit mehreren Filamenten und
+    Reinigungsturm schaltet die Orca-Familie die eigene Höhe selbst wieder ab.
+    """
+    from app.core.slice import advise
+
+    if flavour != "orca":
+        return False
+    layer = settings.layers.layer_height
+    gaps = (
+        [settings.support.z_gap] if "support.z_gap" in settings.chosen | settings.accepted else []
+    )
+    if "support.z_gap" in settings.accepted:
+        materials = {profiles.material_id_for_type(slot.material_type or "") for slot in slots}
+        gaps += [
+            advise.support_gap_target(layer, profiles.material(material))
+            for material in sorted(material for material in materials if material)
+        ] or [advise.support_gap_target(layer, profile.material)]
+    return any(not is_close(gap / layer, round(gap / layer)) for gap in gaps)
+
+
 def write_config(
     settings: PrintSettings,
     profile: Profile,
     setup: SlicerSetup,
     directory: Path,
     slots: Sequence[MaterialSlot] = (),
+    *,
+    free_support_layers: bool = False,
 ) -> SlicerConfig:
     """Schreibt die Profile, die der Slicer gleich lädt.
 
@@ -2939,7 +3007,8 @@ def write_config(
     Filamentprofil, denn ein Slot *ist* ein Filament — zwei Farben sind zwei
     Spulen, und die fahren verschieden. Trägt ein Slot einen eigenen
     Profilnamen (``MaterialSlot.material``), wird der als Unterlage genommen;
-    sonst gilt für alle das eine aus dem ``setup``.
+    sonst gilt für alle das eine aus dem ``setup``. ``free_support_layers``
+    sagt :func:`frees_support_layers` vor der Trennung je Teil.
     """
     _refuse_untranslated(setup)
     setup = replace(setup, machine_profile=machine_for(setup, profile))
@@ -3004,6 +3073,8 @@ def write_config(
             foundation=foundation,
             nozzle=profile.printer.nozzle_diameter,
         )
+        if free_support_layers:
+            process_document[_FREE_SUPPORT_LAYERS] = "1"
         target.write_text(
             json.dumps(process_document, indent=2, ensure_ascii=False),
             encoding="utf-8",
@@ -3252,6 +3323,8 @@ def project_settings(
     setup: SlicerSetup,
     extruders: int = 1,
     slots: Sequence[MaterialSlot] = (),
+    *,
+    free_support_layers: bool = False,
 ) -> dict[str, object]:
     """Die Einstellungen einer Platte, wie eine Orca-Projektdatei sie führt.
 
@@ -3320,6 +3393,8 @@ def project_settings(
             nozzle=profile.printer.nozzle_diameter,
         )
     )
+    if free_support_layers:
+        document[_FREE_SUPPORT_LAYERS] = "1"
     document.update(_machine_keys(profile, setup.flavour))
 
     for key in ("type", "instantiation", "inherits"):
@@ -6468,6 +6543,7 @@ def slice_model(
     # Gefragt an der Wahl vor der Trennung: Ein Ersatz gilt der Platte wie dem
     # Teil, das den Wert als Objektwert trägt (RM-480).
     substituted = substituted_choices(settings, slicer_keys.program_of(setup.executable))
+    free_support_layers = frees_support_layers(settings, profile, slots, setup.flavour)
     # **Dieselbe Platte wie in der Datei** (Entscheidung G): Was je Teil gilt,
     # trägt das Modell aus ``write_assembly`` als Objektwert oder Netzwert.
     settings = split_for_parts(settings, profile, setup, setup.flavour).plate
@@ -6493,7 +6569,9 @@ def slice_model(
                 )
                 for index, entry in enumerate(cli_models)
             ]
-        config = write_config(settings, profile, setup, workspace, slots)
+        config = write_config(
+            settings, profile, setup, workspace, slots, free_support_layers=free_support_layers
+        )
         limited_settings = list(config.findings)
         requested_values = config.written
         config = _orca_cli_tower_position(config, setup, cli_models)
