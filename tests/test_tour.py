@@ -541,17 +541,41 @@ def test_only_the_current_tour_step_is_expanded(qt_app: object) -> None:
     session.release()
 
 
-def test_a_step_taller_than_the_card_shows_its_beginning(qt_app: object) -> None:
+def test_a_step_taller_than_the_card_shows_its_beginning(
+    qt_app: object, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """Review U1, Fund 4: Ist der aktuelle Schritt höher als der Ausschnitt, steht sein Anfang.
 
     ``ensureWidgetVisible`` mittet ein zu hohes Widget, und Nummer und erste
     Zeilen standen über dem Rand.
+
+    **Jedes Rollen trifft, nicht erst das letzte.** Gerollt wurde auch mitten in
+    Qts Größenrechnung, vor dem neuen Rollbereich, und dort stieß es an die
+    alte Grenze. Unter Windows rückte ein späterer Umbruch es zurecht; auf macOS
+    blieb der Schritt 46 Punkte unter dem Rand. Deshalb wird jeder Aufruf
+    geprüft, auch nach dem Verkleinern der Karte.
     """
     from PySide6.QtCore import QPoint
     from PySide6.QtWidgets import QApplication
 
     from app.ui.session import Session
     from app.ui.tour import TourPanel
+
+    missed: list[tuple[int, int]] = []
+    real_show_row = TourPanel._show_row
+
+    def show_row(self: TourPanel) -> None:
+        real_show_row(self)
+        if not 0 <= self._in_view < len(self._row_hosts):
+            return
+        row = self._row_hosts[self._in_view]
+        seen = self._scroll.viewport()
+        if row.height() > seen.height():
+            top = row.mapTo(seen, QPoint(0, 0)).y()
+            if top != 0:
+                missed.append((row.y(), top))
+
+    monkeypatch.setattr(TourPanel, "_show_row", show_row)
 
     example = next(entry for entry in examples.EXAMPLES if entry.id == "weg2-halter-konstruieren")
     project, history = _opened(example.id)
@@ -577,6 +601,17 @@ def test_a_step_taller_than_the_card_shows_its_beginning(qt_app: object) -> None
             f"({viewport.height()})"
         )
         assert host.mapTo(viewport, QPoint(0, 0)).y() == 0, "der Anfang des Schritts steht oben"
+
+        # Erst groß, dann klein: Die Karte schrumpft, der Inhalt mit ihr, und
+        # der Rollbereich bekommt seine Grenze erst nach dem Inhalt.
+        panel.resize(220, 2000)
+        for _ in range(6):
+            QApplication.processEvents()
+        panel.resize(220, 240)
+        for _ in range(6):
+            QApplication.processEvents()
+        assert host.mapTo(viewport, QPoint(0, 0)).y() == 0, "nach dem Verkleinern steht er oben"
+        assert not missed, f"gerollt vor dem neuen Rollbereich (Lage, Oberkante): {missed}"
     finally:
         panel.close()
         panel.deleteLater()
