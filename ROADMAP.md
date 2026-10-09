@@ -66,13 +66,13 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-217 — Die Zuordnungsfrage zeigt das alte Merkmal nicht im Bild](#rm-217) | Geometrie, Erkennung und Druckvorbereitung | Altmerkmal und Kandidat werden gemeinsam markiert; Kern-, Ansichts- und Regressionstests grün. Offen: echter Fensterbeleg im Release unter RM-213 |
 | [RM-571 — Ein Sims im offenen Becher neben einem gesperrten Kanal verliert Stütze](#rm-571) | Geometrie, Erkennung und Druckvorbereitung | In Arbeit: Claude (Worktree `F:/solidon-claude-a`). Ein Maß für „von oben erreichbar“ finden, das den offenen Becher vom Rohrbogen der Schüssel trennt |
 | [RM-572 — Der Prüfbericht nennt keine Stelle, wo viele kleine Überhänge Stützen verlangen](#rm-572) | Geometrie, Erkennung und Druckvorbereitung | Text für „viele kleine Überhänge zusammen“ und eine Feldfrage im Budget §31 |
-| [RM-583 — Stützabstand und Kontaktlagen passen zu Material, Schichthöhe und Auflage](#rm-583) | Geometrie, Erkennung und Druckvorbereitung | Abstand und Kontaktlagen je Material und Schichthöhe, unten wie oben auf dem Modell, Kontaktlüfter |
-| [RM-584 — Die Stützart folgt der Deckenform, und hohe Bäume stehen stabil](#rm-584) | Geometrie, Erkennung und Druckvorbereitung | Hybrid oder normal unter flachen Decken, Baumwände und Fuß ab etwa 100 mm, Baumspitze |
+| [RM-584 — Die Stützart folgt der Deckenform, und hohe Bäume stehen stabil](#rm-584) | Geometrie, Erkennung und Druckvorbereitung | Hybrid oder normal unter flachen Decken, Baumwände und Fuß ab etwa 100 mm, Spitzenabstand weiterer Materialien |
 | [RM-585 — Bögen, die sich zwischen ihren Beinen schließen, tragen sich selbst](#rm-585) | Geometrie, Erkennung und Druckvorbereitung | Schließfrage für weite Bögen, Brückenregel für die letzte Spanne |
 | [RM-586 — Feine Schichten, wo das Modell feine Formen hat](#rm-586) | Geometrie, Erkennung und Druckvorbereitung | Variable Schichthöhe über die 3MF, Deckschichten mindestens 0,8 mm |
 | [RM-587 — Lange Brücken und steile Überhänge drucken sauber](#rm-587) | Geometrie, Erkennung und Druckvorbereitung | Dicke Brücke und Fluss über langen Brücken, Zusatzwände an steilen Überhängen |
 | [RM-588 — Die Naht liegt hinten, und große Oberseiten werden gebügelt](#rm-588) | Geometrie, Erkennung und Druckvorbereitung | Naht hinten bei Figuren, Bügeln der obersten Fläche |
 | [RM-589 — Bohrungen und Stifte passen ohne Nacharbeit](#rm-589) | Geometrie, Erkennung und Druckvorbereitung | Loch- und Elefantenfußausgleich aus dem Spiel des Materialprofils |
+| [RM-624 — Ein Slicertest misst Kontaktabstand und untere Trennschicht in allen Programmen](#rm-624) | Geometrie, Erkennung und Druckvorbereitung | Messung aus `kontakt_je_teil.py` als Testhilfe, sechs Programme |
 | [RM-218 — Am exakten Körper heißen Bohrungen nach ihrer Lage, und der Verlauf lässt sich dort nicht umbauen](#rm-218) | Geometrie, Erkennung und Druckvorbereitung | Code und Tor mit `d907d6036` in v0.5.2; offen allein die Fensterabnahme beim Release (RM-213) |
 | [RM-230 — Variable Verrundung und Formschräge: fünf Grenzen, die der Kunde merkt](#rm-230) | Geometrie, Erkennung und Druckvorbereitung | Grenzen 1 bis 3 gebaut oder benannt (06.10.: Mischecke exakt geprüft, Ring-Anfang und Zwischenstellen in den Feldhilfen); Tray: beide Kerne nennen die Fußrundung vor der Rechnung, aber der Weg über *Merkmal entfernen* trägt dort nicht; offen: Fußrundung als Kette entfernen, Netzschräge 2,3× langsamer, Fase am Fuß, B-Spline-Ecke und zweites Anstellen am Netz mit Kernen uneins |
 | [RM-253 — Am Laptop-Ständer tragen Kippen und Verdoppeln einer Bohrung falsch ab](#rm-253) | Geometrie, Erkennung und Druckvorbereitung | In Arbeit: Claude (Worktree `F:/solidon-claude-b`). 14 von 28 Bohrungen tragen ein fremdes Teil und sagen das jetzt mit Weg, statt es still zu verschmelzen (RM-413, 06.10.); offen an den freien `hole_1`/`hole_2`/`hole_4`: Verdoppeln ohne Wirkung, −127 mm³ bzw. +1,4–1,9 mm³ beim Versetzen und Kippen — gegen einen Sollwert ohne Boolesche an der kaputten Schale messen |
@@ -949,19 +949,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   der Bericht darf sie nicht ungefragt stellen (§31). Abnahme: Kinn und Drache bekommen
   einen Befund mit Ort, der Gitterbecher keinen, die Berichtszeit bleibt im Budget.
 
-<a id="rm-583"></a>
-
-- [ ] **RM-583 — Stützabstand und Kontaktlagen passen zu Material, Schichthöhe und Auflage.**
-  Solidon lässt Z-Abstand, Kontaktlagen, deren Abstand und Muster beim Hersteller
-  (`support.z_gap` hat ein Feld, aber keine Regel). Die Recherche vom 08.10.2026
-  (`konzepte/recherche-slicer-einstellungen-2026-10.md`, Nr. 1, 2, 3, 7) nennt die
-  häufigsten Ursachen für Narben und verschweißte Stützen: oberer Abstand nicht auf die
-  Schichthöhe abgestimmt (PLA etwa eine Schicht, PETG 1,25 bis 1,5), unten 0 Lagen und 0 mm,
-  wo Stützen auf dem Modell stehen (MK4S-Profil), Kontaktlagen zu dicht unter kleinen
-  gewölbten Flächen, Kontaktlüfter aus (alle Orca-Profile −1). Abnahme: je Material und
-  Schichthöhe ein Vorschlag mit Grund, gemessen am G-Code des Drachen (Abstand und Lagen an
-  der Kontaktfläche) in allen Slicerfamilien.
-
 <a id="rm-584"></a>
 
 - [ ] **RM-584 — Die Stützart folgt der Deckenform, und hohe Bäume stehen stabil.**
@@ -970,6 +957,9 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   (`tree_hybrid`), Prusa „snug“; dazu brechen hohe Bäume ohne zweite Wand und Fuß, und eine
   Baumspitze unter der Stützbahn hinterlässt Punkte (Recherche Nr. 4, 5, 6). Abnahme: Stil
   je Deckenform in allen Familien, Baumstabilität an einem hohen Körper im Slicer gemessen.
+  Der Abstand über Baumspitzen ohne Trennschicht ist erledigt (Archiv, RM-584 Teil); offen
+  dort: `support_tip_gap` für PETG, ASA und ABS messen, und an der Baugruppe mit 49 und dem
+  Schachturm mit 34 Spitzeninseln prüfen, ob die Schwelle von 100 sinken kann.
 
 <a id="rm-585"></a>
 
@@ -1013,6 +1003,22 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   rechnet Solidon über das Spiel im Materialprofil (Recherche Nr. 13). Offen ist, wie beides
   zusammenwirkt, ohne doppelt auszugleichen. Abnahme: ein Passungsteil aus dem Korpus im
   Slicer gemessen, mit und ohne Ausgleich.
+
+<a id="rm-624"></a>
+
+- [ ] **RM-624 — Ein Slicertest misst Kontaktabstand und untere Trennschicht in allen
+  Programmen.**
+  Was RM-622 über die Programme sagt — organische Bäume runden den Abstand auf die Schichten
+  des Modells, Bambu Studio, Creality Print, Anycubic Slicer Next und PrusaSlicer drucken
+  unter Bäumen keine untere Trennschicht —, ist mit
+  `.claude/.state/drache-2026-10-08/kontakt_je_teil.py` gemessen, aber kein Test hält es; der
+  vorhandene Slicertest prüft nur, dass ein Würfel Druckbewegungen bekommt. Abnahme: die
+  Messung als Testhilfe in `tests/`, ein Slicertest je Programm mit Gitter und Baum, der bei
+  einem neuen Slicerstand rot wird, wenn sich eine der Eigenschaften ändert.
+  Die historischen Messleser berücksichtigen `G92 E…` noch nicht; unter absoluten
+  Extrusionswerten verfälscht ein Rücksetzen deshalb die gezählte Bahnlänge. Ihre Mengen
+  sind kein neu bestätigter Abnahmenachweis. Die Testhilfe muss dieselbe Bahn mit und ohne
+  Extrusionsrücksetzung gleich messen und Rasterbeschreibung und Rasterwert zusammenhalten.
 
 <a id="rm-504"></a>
 

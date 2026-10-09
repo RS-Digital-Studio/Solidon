@@ -3763,3 +3763,49 @@ def test_prusas_stage_takes_its_structural_process(prusa_bundle: Path) -> None:
     assert foundation.process == "0.20mm STRUCTURAL @MK4S HF0.4" and not foundation.staged
     assert foundation.settings.support.threshold_angle == pytest.approx(48.37, abs=0.01)
     assert manufacturer.for_stage(setup, _mk4s(), "fine") == setup
+
+
+@pytest.mark.parametrize(("bottom", "layers"), [("-1", 3), ("2", 2), ("0", 0)])
+def test_the_contact_layers_are_read_back_with_their_same_as_top(bottom: str, layers: int) -> None:
+    """Untere Kontaktlagen -1 heißen in der Orca-Familie „wie oben“ (Anycubic,
+    RM-583, Werte aus den Konfigurationsblöcken vom 08.10.2026)."""
+    values = {
+        "support_interface_top_layers": "3",
+        "support_interface_bottom_layers": bottom,
+        "support_interface_spacing": "0.2",
+    }
+    read, foreign = manufacturer._read_process(values, manufacturer._Context(nozzle=0.4), {})
+
+    assert read["support.interface_layers"] == 3
+    assert read["support.bottom_interface_layers"] == layers
+    assert read["support.interface_spacing"] == pytest.approx(0.2)
+    assert not foreign
+
+
+@pytest.mark.parametrize(("fan", "cooling"), [("-1", False), ("100", True)])
+def test_the_interface_fan_is_read_from_the_filament(fan: str, cooling: bool) -> None:
+    """Der Kontaktlüfter steht in der Orca-Familie am Filament: -1 heißt „wie die
+    übrige Schicht“, 100 volle Kühlung (RM-583)."""
+    read, _refuses = manufacturer._read_filament(
+        {"support_material_interface_fan_speed": [fan]}, {}, "", Path("filament.json")
+    )
+    assert read["cooling.support_interface_cooling"] is cooling
+
+
+def test_prusas_bottom_contact_layers_are_read_back() -> None:
+    """PrusaSlicer: -1 heißt „wie oben“ (Programmvorgabe), das MK4S-Profil führt 0;
+    die Lücke 0 ist eine geschlossene Trennschicht (``--help-fff``, 2.9.6)."""
+    context = manufacturer._Context(nozzle=0.4)
+    same = {
+        "support_material_interface_layers": "3",
+        "support_material_bottom_interface_layers": "-1",
+    }
+    none = {
+        "support_material_interface_layers": "3",
+        "support_material_bottom_interface_layers": "0",
+    }
+
+    assert manufacturer._read_prusa(same, context)[0]["support.bottom_interface_layers"] == 3
+    assert manufacturer._read_prusa(none, context)[0]["support.bottom_interface_layers"] == 0
+    spacing = {"support_material_interface_spacing": "0"}
+    assert manufacturer._read_prusa(spacing, context)[0]["support.interface_spacing"] == 0.0

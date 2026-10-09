@@ -4535,6 +4535,20 @@ def _standard_process(
     return min(pool, key=lambda entry: (not entry.from_user, len(entry.name), entry.name))
 
 
+def _full_cooling(percent: float) -> bool | None:
+    """Der Kontaktlüfter: 100 heißt volle Kühlung, -1 „wie die übrige Schicht“
+    (RM-583). Einen Anteil dazwischen, auch 0 (Lüfter aus), führt Solidon nicht;
+    er wird nicht umgedeutet, sondern nicht gelesen."""
+    if percent >= 100.0:
+        return True
+    if percent < 0.0:
+        return False
+    return None
+
+
+#: Wie ein Rücklesewert aus der Zahl des Profils wird; ``None`` heißt „nicht lesbar“.
+Readback = Callable[[float], float | int | None]
+
 #: Was ein Filamentprofil des Slicers über das Material sagt, in Solidons
 #: Worten. Die Gegenrichtung zu :mod:`slicer_keys`, und mit Absicht kurz: hier
 #: stehen nur die Werte, die *dem Filament* gehören und nicht der Maschine oder
@@ -4545,7 +4559,7 @@ def _standard_process(
 #: PRO fährt 5 mm³/s bei Bett 70. Der Unterschied ist kein Feinschliff: mit dem
 #: falschen Volumenstrom rechnet die Beratung an der Grenze vorbei, die das
 #: Material wirklich hat.
-FILAMENT_READBACK: Final[tuple[tuple[str, str, type], ...]] = (
+FILAMENT_READBACK: Final[tuple[tuple[str, str, Readback], ...]] = (
     ("temperature.nozzle", "nozzle_temperature", int),
     ("temperature.nozzle_first_layer", "nozzle_temperature_initial_layer", int),
     ("temperature.bed", "hot_plate_temp", int),
@@ -4561,6 +4575,7 @@ FILAMENT_READBACK: Final[tuple[tuple[str, str, type], ...]] = (
     ("cooling.disable_first_layers", "close_fan_the_first_x_layers", int),
     ("cooling.minimum_layer_time", "slow_down_layer_time", float),
     ("cooling.minimum_speed", "slow_down_min_speed", float),
+    ("cooling.support_interface_cooling", "support_material_interface_fan_speed", _full_cooling),
     ("filament.density", "filament_density", float),
     ("filament.flow_ratio", "filament_flow_ratio", float),
     ("filament.max_flow", "filament_max_volumetric_speed", float),
@@ -4733,7 +4748,7 @@ def machine_values(path: Path, roots: Sequence[Path] = ()) -> dict[str, Any]:
     return {key: resolved[key] for key in MACHINE_READBACK if key in resolved}
 
 
-PRUSA_FILAMENT_READBACK: Final[tuple[tuple[str, str, type], ...]] = (
+PRUSA_FILAMENT_READBACK: Final[tuple[tuple[str, str, Readback], ...]] = (
     ("temperature.nozzle", "temperature", int),
     ("temperature.nozzle_first_layer", "first_layer_temperature", int),
     ("temperature.bed", "bed_temperature", int),
@@ -4746,6 +4761,8 @@ PRUSA_FILAMENT_READBACK: Final[tuple[tuple[str, str, type], ...]] = (
     ("cooling.disable_first_layers", "disable_fan_first_layers", int),
     ("cooling.minimum_layer_time", "slowdown_below_layer_time", float),
     ("cooling.minimum_speed", "min_print_speed", float),
+    # Nur SuperSlicer führt ihn; im Bündel von PrusaSlicer fehlt er.
+    ("cooling.support_interface_cooling", "support_material_interface_fan_speed", _full_cooling),
     ("filament.density", "filament_density", float),
     ("filament.diameter", "filament_diameter", float),
     ("filament.flow_ratio", "extrusion_multiplier", float),
@@ -4852,7 +4869,9 @@ def filament_readback(
             continue
         if solidon in _AS_FRACTION:
             number /= 100.0
-        values[solidon] = kind(number)
+        value = kind(number)
+        if value is not None:
+            values[solidon] = value
     return FilamentReadback(values, True)
 
 

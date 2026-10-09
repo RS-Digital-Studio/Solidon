@@ -59,6 +59,7 @@ import sys
 import time
 import traceback
 import zipfile
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
@@ -129,7 +130,9 @@ from tools import matrix_gcode  # noqa: E402
 
 assert Path(matrix_gcode.__file__).resolve().parent == HERE, matrix_gcode.__file__
 
-MATERIAL = "pla"
+#: Das Material der Messung; ``GESAMT_MATERIAL=petg`` misst mit PETG (RM-583:
+#: Stützabstand und Kontaktkühlung hängen am Material).
+MATERIAL = os.environ.get("GESAMT_MATERIAL", "pla")
 SLICE_TIMEOUT = float(os.environ.get("GESAMT_ZEITLIMIT", str(45 * 60)))
 FILAMENT_GROUPS = ("temperature", "cooling", "retraction", "filament")
 
@@ -223,6 +226,23 @@ def load(model: Path) -> tuple[list[Any], list[str]]:
     findings = sorted(
         {f"{f.severity}:{f.code}" for f in result.scene.report.findings if f.severity != "info"}
     )
+    if os.environ.get("GESAMT_MATERIAL"):
+        # **Wie ein Kunde, der die Spule wechselt**: Die Datei bringt ihre Spulen
+        # mit (Roberts Drache: PLA). Gemessen wird das gewählte Material, also
+        # bekommt jede Spule dessen Art und das Filament des Herstellers dazu
+        # (RM-583; vorher maß ein PETG-Lauf die PLA-Spule der Datei).
+        kind = slicer_keys.filament_type(MATERIAL)
+        objects = [
+            replace(
+                entry,
+                material=MATERIAL,
+                material_slots=tuple(
+                    replace(slot, material=None, material_type=kind)
+                    for slot in entry.material_slots
+                ),
+            )
+            for entry in objects
+        ]
     LOADED["turned"] = turned
     LOADED["project"] = project
     LOADED["sources"] = sources

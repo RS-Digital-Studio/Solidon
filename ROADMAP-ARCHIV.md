@@ -32,6 +32,9 @@ entfernt hat.
 | Datum | Abschnitt |
 |---|---|
 | 2026-10-09 | [RM-650: Ein eingefügtes Modell kommt in den Ausschnitt (09.10.2026)](#rm-650-ein-eingefügtes-modell-kommt-in-den-ausschnitt-09102026) |
+| 2026-10-09 | [RM-584 (Teil): Über Baumspitzen rät Solidon zwei Schichten Luft (09.10.2026)](#rm-584-teil-über-baumspitzen-rät-solidon-zwei-schichten-luft-09102026) |
+| 2026-10-09 | [RM-622: Neben einem Reinigungsturm und unter organischen Bäumen rät Solidon den Stützabstand in ganzen Schichten (09.10.2026)](#rm-622-neben-einem-reinigungsturm-und-unter-organischen-bäumen-rät-solidon-den-stützabstand-in-ganzen-schichten-09102026) |
+| 2026-10-09 | [RM-583: Stützabstand und Trennschichten folgen dem Material der Spule, je Teil (09.10.2026)](#rm-583-stützabstand-und-trennschichten-folgen-dem-material-der-spule-je-teil-09102026) |
 | 2026-10-09 | [RM-467: Zweiter Bibliothekslauf, Qt 6.12 und macOS 14 (09.10.2026)](#rm-467-zweiter-bibliothekslauf-qt-612-und-macos-14-09102026) |
 | 2026-10-09 | [RM-496: Am echten Fenster laden reale Modelle so schnell wie in v0.5.1 (09.10.2026)](#rm-496-am-echten-fenster-laden-reale-modelle-so-schnell-wie-in-v051-09102026) |
 | 2026-10-09 | [RM-623: Ohne gemerkte Profilwahl kommt die Grundlage trotzdem vom Hersteller (09.10.2026)](#rm-623-ohne-gemerkte-profilwahl-kommt-die-grundlage-trotzdem-vom-hersteller-09102026) |
@@ -44033,6 +44036,30 @@ in der CI unter Linux und macOS). Sonde mit Roberts Bestand: Das Feld steht beim
 ElegooSlicer da, der Wechsel auf Anycubic Slicer Next bietet Kobra S1 und S1 Max. Changelog:
 ja.
 
+## RM-584 (Teil): Über Baumspitzen rät Solidon zwei Schichten Luft (09.10.2026)
+
+<a id="rm-584-teil-über-baumspitzen-rät-solidon-zwei-schichten-luft-09102026"></a>
+
+**Befund (09.10.2026, Roberts Drachendruck vom 08.10.2026, PLA am CC2):** An Kinn und
+Kopfstacheln blieben Reste der Bäume. Jede der 64 Bartstacheln beginnt als Insel von im
+Median 0,07 mm²; unter 1 mm² baut der Slicer an der Baumspitze keine Trennschicht
+(`TreeSupport3D.cpp:1151`), und die Spitze stand eine Schicht unter dem Modell, an 22 Punkten
+angedruckt. Zwei Schichten Abstand senkten die Kontaktfläche mit 0,2 mm Luft am Kinn von 59,4
+auf 6,9 mm², an den Stacheln von 92,4 auf 3,6 mm², für 1 min und 0,7 g, in ElegooSlicer,
+PrusaSlicer und Cura (`output/drache-2026-10-09/rueckstaende/bericht.md`).
+
+**Behoben:** `analysis.tip_islands` zählt die Inseln unter `TIP_ROOF_AREA`
+(`SupportNeed.tips`); ab `TIP_ISLANDS` (100) rät `advise.tip_gap` unter organischen und Curas
+Bäumen `support_tip_gap` des Materials in ganzen Schichten, mindestens zwei, auch über dem
+Höchstwert des Materials. Gemessen ist PLA (0,40 mm); andere Materialien behalten ihren
+Abstand. Schwelle an 165 Modellen: Drache 199, danach eine Baugruppe 49, ein Schachturm 34.
+
+**Nachweis (09.10.2026):** Am Drachen mit Roberts Stützwerten rät Solidon 0,4 statt 0,2 mm.
+Tests `test_small_islands_are_counted_as_tips`, `test_many_tips_under_trees_get_air_in_whole_layers`
+(Orca, „automatisch“, 0,12-mm-Schichten, Cura, PrusaSlicer),
+`test_tips_need_many_islands_trees_and_a_measured_material` (eine Insel weniger, Gitter, PETG,
+ohne Slicer; Gegenprobe mit einer Insel mehr). Changelog: ja.
+
 ## RM-602: Der Druckdialog ordnet die Profile in einem Lesedurchgang zu (08.10.2026)
 
 <a id="rm-602-der-druckdialog-ordnet-die-profile-in-einem-lesedurchgang-zu-08102026"></a>
@@ -44136,6 +44163,47 @@ Ränder ihrer Höhe, eingeschränkte Frage, Abbruch, Merker, Sperre in allen dre
 Plattengegenprobe auch bei gemischten Teilen; 14 Gegenproben rot. Korpus: 45 von 242 Körpern bekommen „Ränder ohne Stütze“, 7 brauchen keine Stützen mehr (Besteck-Organizer, Carcassonne-Gitter, Herz-Deko-Sockel, CC2-Werkzeugkiste, drei Teile aus `chufang`), sonst ändern sich nur Folgevorschläge. Tor
 grün (24 839 bestanden, 116 übersprungen); Durchsicht sechs Runden `solidon3d-review`, die letzte ohne Befund.
 
+## RM-622: Neben einem Reinigungsturm und unter organischen Bäumen rät Solidon den Stützabstand in ganzen Schichten (09.10.2026)
+
+<a id="rm-622-neben-einem-reinigungsturm-und-unter-organischen-bäumen-rät-solidon-den-stützabstand-in-ganzen-schichten-09102026"></a>
+<a id="rm-622"></a>
+
+**Befund (Abnahme RM-583, 09.10.2026):** Mit zwei Filamenten baut die Orca-Familie einen
+Reinigungsturm, schaltet die eigene Stützschichthöhe ab und rundet den Stützabstand zur
+nächsten Schicht (`PrintConfig.cpp`, `SupportMaterial.cpp`): Im ElegooSlicer bekam PLA bei
+0,08er Schichten aus 0,10 mm eine Schicht, 0,08, unter dem Minimum des Materials. Am
+PETG-Drachen kamen die geschriebenen 0,28 mm in keinem Programm an. Gegenprobe an zwei
+gestützten PETG-Körpern (`output/drache-2026-10-08/kontakt-stil`): Mit Gitter druckten
+ElegooSlicer, OrcaSlicer, Bambu Studio, Creality Print, Anycubic Slicer Next und PrusaSlicer
+0,28 mit eigenen Zwischenebenen, mit organischen Bäumen alle sechs 0,2 ohne eine; Bambu,
+Creality, Anycubic und PrusaSlicer druckten unter Bäumen auch keine untere Trennschicht.
+
+**Behoben:** `writer.tower_plates` nennt die Platten mit Turm, `handover.organic_styles` je
+Programm die Arten, die es organisch druckt (ohne Programm die Familie der Datei); Rat,
+Druckdialog, Feldsatz und Export fragen dieselbe Auskunft und raten dort ganze Schichten
+innerhalb der Materialgrenzen (`advise.rounds_to_whole_layers`). Gefragt wird mit der Art,
+mit der das Teil druckt (`advise.printed_style`): Ein abgewählter oder nicht übernommener
+Baum nimmt dem Gitter weder Abstand noch untere Trennschicht, und der Dialog fragt die
+Stützart je Teil gegen die Grundlage wie der Export (`handover.asked_for_contact`). Die
+untere Trennschicht fällt nur weg, wo das Programm sie unter Bäumen nicht druckt
+(`handover.ignored_under_trees`). Die eigene Stützschichthöhe schaltet der Export nur für
+Teile außerhalb organischer Bäume ein (`handover.support_gaps_by_style`); einen eigenen
+Abstand zwischen zwei Schichten nennt er gerundet (`export.support_gap_rounded`), auch für
+PrusaSlicer.
+
+**Nachweis (09.10.2026):** ElegooSlicer mit PLA und PETG bei 0,08 mm neben einem Turm:
+vorher 0,08 am PLA- und 0,16 am PETG-Teil (geschrieben 0,10 und 0,12), nachher an beiden
+0,16 wie geschrieben, oben und unten. Tests in `test_slice_findings.py`,
+`test_print_settings.py` und `test_print_settings_ui.py`: Turm je Platte und Auftrag,
+Bäume je Programm samt Prusa-Kette und ohne Programm, Rat und Feldsatz gleich, Zeile und
+Datei gleich nach Übernehmen in jeder Reihenfolge, abgewählter Baum, Schalter und Befund je
+Teil; jede Gegenprobe rot. Die Messung der Programme steht in
+`.claude/.state/drache-2026-10-08/kontakt_je_teil.py`; die in RM-624 festgehaltene Grenze bei
+Extrusionsrücksetzungen schränkt die historischen Mengenwerte ein. Der vollständige
+Entwicklungslauf des zusammengeführten Stands ist grün (25 025 bestanden, 118 übersprungen;
+Exit 0; ruff, Format und mypy grün). Durchsicht drei Runden
+`solidon3d-review`; der dauerhafte Kontaktabstands-Slicertest bleibt RM-624.
+
 ## RM-620: Ein Slicer, der Filamente mit zu verschiedenen Temperaturen ablehnt, sagt es (09.10.2026)
 
 <a id="rm-620-ein-slicer-der-filamente-mit-zu-verschiedenen-temperaturen-ablehnt-sagt-es-09102026"></a>
@@ -44161,6 +44229,69 @@ Orca-Erkennungen** (−50, −101, −62): Dort kommt der Rückgabewert als Byte
 dazu ein einziger Slicerlauf bei −62 mit Anordnungsvorgabe. Review `solidon3d-review` in
 zwei Runden (zwei mittlere, dann zwei leichte Befunde, behoben), Entwicklungstor grün
 (24 875 bestanden, 116 übersprungen). Changelog: ja (Behebung, seit v0.5.3).
+
+## RM-583: Stützabstand und Trennschichten folgen dem Material der Spule, je Teil (09.10.2026)
+
+<a id="rm-583-stützabstand-und-trennschichten-folgen-dem-material-der-spule-je-teil-09102026"></a>
+<a id="rm-583"></a>
+
+**Befund (Recherche 08.10.2026):** Solidon ließ Z-Abstand, Trennschichten, deren Lücke und
+den Kontaktlüfter beim Hersteller; `support.z_gap` hatte ein Feld, aber keine Regel. Die
+häufigsten Ursachen für Narben und verschweißte Stützen
+(`konzepte/recherche-slicer-einstellungen-2026-10.md`, Nr. 1, 2, 3, 7): Abstand nicht auf
+Schicht und Material abgestimmt (PLA etwa eine Schicht, PETG 1,25 bis 1,5), unten keine
+Trennschicht, wo die Stütze auf dem Modell steht (MK4S-Profil 0), dichte Trennschichten
+unter kleinen Flächen, Kontaktlüfter aus (alle Orca-Profile −1). Robert: „immer nach dem
+verwendeten Material, kein Projektmaterial“ — PLA und PETG auf einer Platte brauchen
+verschiedene Werte.
+
+**Behoben:** Das Materialprofil führt `support_gap_factor`, `support_gap_min`,
+`support_gap_max` und `support_interface_cooling` (Regel 7; PLA, ABS und ASA 1,0/0,10/0,25,
+PETG und PETG-CF 1,4/0,12/0,30 mit voller Kühlung, TPU ohne Quelle und damit ohne Rat).
+`advise._support_contact` schlägt den Abstand vor (`support_gap_target`; wo der Slicer in
+ganzen Schichten rechnet, das Vielfache im Band), unten Trennschichten, wo die Stütze auf
+dem Modell steht, unter flachen Decken dichte, sonst lockere Trennschichten, und volle
+Kühlung an der Trennschicht. Neue Felder *Trennschichten unten*, *Lücke in der
+Trennschicht* und *Volle Kühlung an der Stütze*, *Abstand nach oben* heißt *Abstand oben
+und unten*; Übergabe und Rücklesen in allen Familien (Prusa −1 = wie oben, Orca-Lüfter als
+Filamentwert, SuperSlicer mit unterem Abstand und Lüfter, PrusaSlicer und Bambu ohne Lüfter,
+Cura `support_fan_enable` und eigene untere Höhe, Cura sagt einen Abstand zwischen zwei
+Schichten an). Abstand und Trennschichten gehen je Teil (`PART_PATHS`, `SLICED_PATHS`,
+Cura `CURA_DERIVED_PER_MESH`), gefragt mit dem Material der Spule; der Druckdialog führt
+sie getrennt zusammen (`combine` mit `CONTACT_PATHS`). Die Orca-Familie rundet ohne eigene
+Stützschichthöhe auf ganze Schichten (`Slicing.cpp`, Elegoos CC2-Prozess hat sie aus); an
+den geschriebenen Abständen schaltet die Übergabe sie ein
+(`handover.frees_support_layers`, Befund `slicer.support_layers_freed`), mit Reinigungsturm
+(`handover.tower_cause` je Platte: mehrere Filamente außer „je Objekt“, glatter Zeitraffer,
+Wicklungserkennung) sagt der Export nur die Rundung (`export.support_gap_rounded`). Der
+Druckdialog fragt den Kontakt wie der Export gegen die Grundlage
+(`handover.asked_for_contact`), führt erst je Körper über die Spulen und dann nur die
+verlangenden Körper zusammen; die Zeile nennt nur Teile mit ihrem Wert. Die Cura-Grundlage
+trägt den Abstand in ganzen Schichten, Curas Satz dazu kommt nur mit Stützen, nennt das
+Feld und öffnet es. Ein vor 0.6.0 kalibriertes Material ergänzt fehlende Werte aus dem
+mitgelieferten Eintrag. Die Spule druckt das Material ihres gewählten Filamentprofils
+(`handover.slot_material_type`). Druckzeit und Stützmenge rechnen mit der geschriebenen
+Lücke; die Matrix misst mit dem Filament des Materials.
+
+**Nachweis (09.10.2026):** Kontaktsonde (`.claude/.state/drache-2026-10-08/kontakt_je_teil.py`,
+zwei gestützte Stufenkörper, einer mit Objektwerten, Raster 2 mm) in allen acht
+Programmen: Abstand oben wie geschrieben (0,4 gegen 0,2 mm; SuperSlicer bei 0,15er
+Schichten 0,53 gegen 0,33), Trennschichten bei Prusa und Cura genau, die Orca-Familie oben
+eine Übergangslage und unten die Kontaktlage mehr (`SupportCommon.cpp`), weite Lücke mit
+deutlich weniger Bahn je Ebene (Orca 1044 gegen 1617 mm), bei Cura plattenweit. Eine
+erste Messung mit 0,5-mm-Raster und Bambus Übergangslage als Modell hatte bei Cura 0,6
+statt 0,4 und bei Bambu unten fünf Lagen gezeigt; beide druckten wie geschrieben. Echter Rat
+auf einer Platte mit PLA und PETG: PrusaSlicer 0,2 und 0,28 mm; Orca, Elegoo, Creality und
+Bambu mit Reinigungsturm beide 0,2. PETG allein: ElegooSlicer und Creality Print 0,28.
+PETG-Drache (09.10.2026, `output/drache-2026-10-08/kontakt-drache-petg`): alle fünf Programme
+(ElegooSlicer, Anycubic am Kobra 2, Bambu Studio, PrusaSlicer, Cura) rechnen ohne Absturz; der
+Rat schreibt 0,28 mm als Objektwert, in der Orca-Familie mit eigener Stützschichthöhe, Cura bekommt
+keinen (0,2 ist dort die ganze Schicht). Gedruckt wurde 0,2: Der Drache stützt je Teil mit Bäumen,
+und Bäume liegen in allen Programmen auf den Schichten des Modells (Gegenprobe an zwei Körpern: mit
+Gitter 0,28 und Zwischenebenen in allen sechs, mit Bäumen 0,2 ohne eine) — weiter in RM-622.
+Tests in `test_slice_findings.py`, `test_print_settings.py`, `test_print_settings_ui.py`,
+`test_print_time.py`, `test_manufacturer.py`, `test_slicer_part_settings.py`,
+`test_calibration.py` und `test_export.py`. Review `solidon3d-review` mit Nachprüfung; Entwicklungstor grün (24 941 bestanden, 116 übersprungen); nach dem Merge von main 24 942 bestanden, vier unter Fremdlast rot und einzeln grün (22 Fälle); ruff, format und mypy grün. Changelog: ja (neu in 0.6.0).
 
 ## RM-467: Zweiter Bibliothekslauf, Qt 6.12 und macOS 14 (09.10.2026)
 

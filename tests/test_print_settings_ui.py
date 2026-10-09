@@ -30,6 +30,7 @@ from PySide6.QtWidgets import (
     QLabel,
     QPushButton,
     QToolButton,
+    QTreeWidgetItem,
     QWidget,
 )
 
@@ -7711,15 +7712,19 @@ def test_the_search_also_knows_the_name_from_the_slicer(
     # steht auch wirklich in der Übergabetabelle dieses Feldes.
     assert set(keys_for("shell.wall_count")) == {"perimeters", "wall_loops", "wall_line_count"}
 
-    # Ein Schlüssel darf nicht das halbe Fenster treffen — dieselbe Grenze, an
-    # der die Einheit „mm" gescheitert ist (22 von 56). Gemessen ist der
-    # breiteste `support_material` mit sieben: sechs Stützzeilen und die
-    # Bahnbreite, die seit den Rollenbreiten auch
-    # `support_material_extrusion_width` schreibt (3e501baaf).
-    breiteste = max(
-        len(dialog.search_hits(schluessel)) for feld in FIELDS for schluessel in keys_for(feld.path)
+    # Ein Schlüssel darf nicht das halbe Fenster treffen — die Einheit „mm"
+    # traf 22 von 56 Zeilen. Die Grenze ist ein Viertel der Zeilen und keine
+    # gemessene Zahl: `support_material` trifft jede Stützzeile, die PrusaSlicer
+    # unter diesem Namen führt, und jede neue Stützeinstellung zöge eine feste
+    # Zahl mit, ohne dass die Suche schlechter würde.
+    breiteste, schluessel = max(
+        (len(dialog.search_hits(schluessel)), schluessel)
+        for feld in FIELDS
+        for schluessel in keys_for(feld.path)
     )
-    assert breiteste <= 7, f"ein Schlüssel trifft {breiteste} von {len(FIELDS)} Zeilen"
+    assert breiteste * 4 <= len(FIELDS), (
+        f"„{schluessel}“ trifft {breiteste} von {len(FIELDS)} Zeilen"
+    )
 
     # Und die Abdeckung: Ohne sie wäre der Test grün, wenn die Tabelle
     # zusammenschrumpft — ein Filter über eine leere Menge findet nie etwas.
@@ -7992,8 +7997,16 @@ def test_every_group_holds_one_subject(qt_app: QApplication, session: Session) -
     assert not abweichung, f"Reiter und Bereich laufen auseinander: {abweichung}"
     assert "other" not in GROUPS, "die Sammelgruppe ist aufgelöst"
 
-    groesste = max(sum(1 for f in FIELDS if f.group == g and not f.front) for g in GROUPS)
-    assert groesste <= 9, f"die größte Gruppe trägt {groesste} Felder"
+    # Die Größe misst sich am Schnitt, an dem die Sammelgruppe scheiterte: fast
+    # dreimal so viele. Ein Thema darf doppelt so viele Zeilen tragen — die
+    # Stützen kommen mit den Trennschichten auf zehn, und keine davon gehört in
+    # einen anderen Reiter.
+    je_gruppe = {g: sum(1 for f in FIELDS if f.group == g and not f.front) for g in GROUPS}
+    groesste = max(je_gruppe, key=je_gruppe.__getitem__)
+    schnitt = sum(je_gruppe.values()) / len(je_gruppe)
+    assert je_gruppe[groesste] <= 2 * schnitt, (
+        f"„{groesste}“ trägt {je_gruppe[groesste]} Felder, der Schnitt {schnitt:.1f}"
+    )
 
 
 def test_the_spool_colour_is_big_enough_to_read(qt_app: QApplication) -> None:
@@ -10576,6 +10589,24 @@ def test_measures_of_other_bed_types_are_hidden_and_do_not_lock_slicing(
         assert not editor.refusal() or dialog._first_numeric_refusal() == ""
 
 
+@pytest.mark.parametrize("style", ["none", "tree"])
+def test_the_contact_cooling_row_follows_the_supports(
+    dialog: PrintSettingsDialog, style: str
+) -> None:
+    """Die volle Kühlung an der Stütze steht unter „Kühlung“, gehört aber zu den
+    Stützdetails: Ohne Stützen verschwindet sie dort (RM-583, Review). Gefragt
+    wurde das Formular der Stützen, Qt meldete „Invalid widget“, und die Zeile
+    blieb stehen."""
+    selector = dialog._editors["support.style"]
+    assert isinstance(selector, QComboBox)
+    selector.setCurrentIndex(selector.findData(style))
+    dialog._update_inactive_setting_rows()
+
+    path = "cooling.support_interface_cooling"
+    form = dialog._tab_forms["cooling"]
+    assert form.isRowVisible(dialog._labels[path]) is (style != "none")
+
+
 #: Der Schlüssel, an dem jede Haftungsart im Slicer wirkt, und die Felder, die
 #: dazugehören — von außen, aus den Schlüsselnamen der drei Familien.
 _ADHESION_EFFECT: dict[str, dict[str, tuple[str, ...]]] = {
@@ -11436,6 +11467,403 @@ def test_the_advice_worker_names_who_gets_an_accepted_suggestion(qt_app: QApplic
     }
 
     assert worker._accepted_targets(results) == {"adhesion.kind": ("Turm",)}
+
+
+@pytest.mark.parametrize("flavour", ["orca", "cura"])
+@pytest.mark.parametrize("case", ["ceilings", "materials"])
+def test_the_contact_rows_settle_in_the_dialog(
+    qt_app: QApplication, flavour: str, case: str
+) -> None:
+    """Der Rat zum Stützkontakt kommt nach einmal Übernehmen zur Ruhe (RM-583, H1).
+
+    Gegen die Übernahme gefragt, brachte jedes Übernehmen die Gegenzeile: am
+    Tisch die dichte Trennschicht, am Kinn die lockere und wieder zurück, bei
+    PLA und PETG der Abstand ebenso. Der Arbeiter fragt jetzt wie der Export
+    gegen die Grundlage, und die Zeile nennt nur das Teil, das ihren Wert
+    bekommt — nicht jedes, das einen anderen verlangt.
+    """
+    from app.core.slice import advise
+    from app.core.types import PrintSettings
+    from tests.helpers import chin_over_chest, column_table
+
+    profile = profiles.make_profile("centauri-carbon-2", "pla")
+    settings = print_settings.resolve(profile, "standard")
+    if case == "ceilings":
+        chosen: tuple[tuple[str, object], ...] = (
+            ("support.interface_spacing", 0.2),
+            ("support.interface_layers", 3),
+            ("support.bottom_interface_layers", 2),
+        )
+        objects = (
+            SceneObject(id="obj_1", name="Tisch", mesh=column_table()),
+            SceneObject(id="obj_2", name="Kinn", mesh=chin_over_chest()),
+        )
+        named: dict[str, tuple[str, ...]] = {
+            "support.interface_layers": ("Kinn",),
+            "support.interface_spacing": ("Kinn",),
+        }
+    else:
+        # PLA verlangt 0,15, PETG 0,21: Die Zeile zeigt den größeren Wert und
+        # nennt nur das Teil, das ihn bekommt.
+        chosen = (("layers.layer_height", 0.15), ("support.z_gap", 0.3))
+        objects = (
+            SceneObject(id="obj_1", name="PLA-Tisch", mesh=column_table(), material="pla"),
+            SceneObject(id="obj_2", name="PETG-Tisch", mesh=column_table(), material="petg"),
+        )
+        # Die dichte Trennschicht verlangen beide Tische: Sie gilt allen.
+        named = {
+            "support.z_gap": ("PETG-Tisch",),
+            "support.interface_layers": (),
+            "support.interface_spacing": (),
+        }
+    for path, value in chosen:
+        settings = print_settings.with_choice(settings, path, value)
+
+    def rows(current: PrintSettings) -> dict[str, SettingAdvice]:
+        found: list[list[SettingAdvice]] = []
+        worker = print_dialog._AdviceWorker(
+            objects, current, profile, None, {}, (), (), {}, flavour=flavour
+        )
+        worker.done.connect(lambda entries, _measured: found.append(entries))
+        worker.work()
+        assert found, "der Arbeiter liefert"
+        return {entry.path: entry for entry in found[-1] if entry.path in advise.CONTACT_PATHS}
+
+    first = rows(settings)
+    if flavour == "orca":
+        for path, entry in first.items():
+            parts = getattr(entry, "parts", ())
+            assert parts == named[path], (path, parts)
+        assert set(first) == set(named), first
+    elif case == "ceilings":
+        assert "support.interface_spacing" not in first, (
+            "Cura nimmt die Lücke nur für die Platte; die dichte des Tischs gilt allen"
+        )
+    for path, entry in first.items():
+        settings = print_settings.with_accepted(settings, path, entry.value)
+    assert rows(settings) == {}, "nach dem Übernehmen keine Gegenzeile"
+
+
+@pytest.mark.parametrize("case", ["tower", "trees", "free"])
+def test_beside_a_tower_the_dialog_proposes_the_gap_the_file_gets(
+    qt_app: QApplication, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, case: str
+) -> None:
+    """Neben einem Reinigungsturm rät der Druckdialog den Stützabstand in ganzen
+    Schichten wie der Export (RM-622): PLA und PETG bei 0,08er Schichten
+    bekommen 0,16 mm, die Zeile nennt beide Tische und nicht den Block ohne
+    Stütze daneben, und die Datei trägt an jedem Tisch genau den Wert der Zeile.
+    Ebenso unter „automatisch“, wenn das Herstellerprofil mit Bäumen stützt.
+    Frei nennt die Zeile 0,12 am PETG-Tisch, und dieser bekommt ihn. Nach dem
+    Übernehmen nennt das Feld dieselben Teile (``accepted_parts``)."""
+    import trimesh
+
+    from app.core.types import PrintSettings
+    from tests.helpers import object_values, supported_table
+
+    native = {
+        "tower": {"enable_prime_tower": "1"},
+        "trees": {"enable_prime_tower": "0", "support_type": "tree(auto)"},
+        "free": {"enable_prime_tower": "0"},
+    }[case]
+    monkeypatch.setattr(handover, "_native_process", lambda _setup: native)
+    tower = case != "free"
+    profile = profiles.make_profile("centauri-carbon-2", "pla")
+    settings = print_settings.with_choice(
+        print_settings.with_choice(
+            print_settings.resolve(profile, "standard"),
+            "support.style",
+            "auto" if case == "trees" else "grid",
+        ),
+        "layers.layer_height",
+        0.08,
+    )
+    objects = tuple(
+        SceneObject(
+            id=f"obj_{index}",
+            name=f"{material.upper()}-Tisch",
+            mesh=MeshData(supported_table(index)),
+            material=material,
+        )
+        for index, material in enumerate(("pla", "petg"))
+    )
+    cube = trimesh.creation.box(extents=(10.0, 10.0, 10.0))
+    cube.apply_translation([0.0, 60.0, 5.0])
+    objects += (SceneObject(id="obj_2", name="PLA-Block", mesh=MeshData(cube), material="pla"),)
+    setup = handover.SlicerSetup(executable=Path("orca-slicer.exe"), flavour="orca")
+
+    def worked(current: PrintSettings) -> tuple[list[SettingAdvice], print_dialog._AdviceWorker]:
+        found: list[list[SettingAdvice]] = []
+        worker = print_dialog._AdviceWorker(
+            objects, current, profile, setup, {}, (), (), {}, flavour="orca"
+        )
+        worker.done.connect(lambda entries, _measured: found.append(entries))
+        worker.work()
+        assert found, "der Arbeiter liefert"
+        return found[-1], worker
+
+    entries, _worker = worked(settings)
+    row = next(entry for entry in entries if entry.path == "support.z_gap")
+    tables = ("PLA-Tisch", "PETG-Tisch") if tower else ("PETG-Tisch",)
+    assert row.value == pytest.approx(0.16 if tower else 0.12)
+    assert getattr(row, "parts", ()) == tables
+    _entries, accepted = worked(print_settings.with_accepted(settings, "support.z_gap", row.value))
+    assert accepted.accepted_parts.get("support.z_gap") == tables
+
+    path, _findings = writer.write_assembly(
+        list(objects),
+        tmp_path,
+        project_name="gemischt",
+        profile=profile,
+        settings=print_settings.with_accepted(settings, "support.z_gap", row.value),
+        flavour="orca",
+        setup=setup,
+    )
+    written = object_values(path, "Metadata/model_settings.config")
+    for name in tables:
+        assert float(written[name]["support_top_z_distance"]) == pytest.approx(row.value), name
+
+
+@pytest.mark.parametrize(
+    ("program", "offered"), [("bambu-studio.exe", False), ("elegoo-slicer.exe", True)]
+)
+def test_the_dialog_skips_a_bottom_interface_the_program_does_not_print_under_trees(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch, program: str, offered: bool
+) -> None:
+    """Unter Bäumen drucken Bambu Studio, Creality Print, Anycubic Slicer Next und
+    PrusaSlicer keine untere Trennschicht (RM-622); der Druckdialog bietet sie dort
+    nicht an, wie der Export je Teil (``handover.ignored_under_trees``)."""
+    from tests.helpers import chin_over_chest
+
+    monkeypatch.setattr(handover, "_native_process", lambda _setup: {})
+    profile = profiles.make_profile("centauri-carbon-2", "pla")
+    settings = print_settings.resolve(profile, "standard")
+    for path, value in (("support.style", "tree"), ("support.bottom_interface_layers", 0)):
+        settings = print_settings.with_choice(settings, path, value)
+    objects = (SceneObject(id="obj_1", name="Figur", mesh=chin_over_chest(), material="pla"),)
+    setup = handover.SlicerSetup(executable=Path(program), flavour="orca")
+    found: list[list[SettingAdvice]] = []
+    worker = print_dialog._AdviceWorker(
+        objects, settings, profile, setup, {}, (), (), {}, flavour="orca"
+    )
+    worker.done.connect(lambda entries, _measured: found.append(entries))
+    worker.work()
+
+    assert found, "der Arbeiter liefert"
+    paths = {entry.path for entry in found[-1]}
+    assert ("support.bottom_interface_layers" in paths) is offered
+
+
+def test_the_dialog_filters_the_bottom_interface_per_body(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Je Körper, nicht für die Platte (RM-622, Review M2): Bei Creality Print
+    unter eigenem Gitter verlangt der Tisch eine untere Trennschicht, das Kinn
+    bekommt Bäume vorgeschlagen und braucht keine, weil Creality sie unter Bäumen
+    nicht druckt. Die Zeile bleibt für den Tisch."""
+    from tests.helpers import chin_over_chest, column_table
+
+    monkeypatch.setattr(handover, "_native_process", lambda _setup: {})
+    profile = profiles.make_profile("centauri-carbon-2", "pla")
+    settings = print_settings.resolve(profile, "standard")
+    for path, value in (("support.style", "grid"), ("support.bottom_interface_layers", 0)):
+        settings = print_settings.with_choice(settings, path, value)
+    objects = (
+        SceneObject(id="obj_1", name="Tisch", mesh=column_table(), material="pla"),
+        SceneObject(id="obj_2", name="Kinn", mesh=chin_over_chest(), material="pla"),
+    )
+    setup = handover.SlicerSetup(executable=Path("CrealityPrint.exe"), flavour="orca")
+    found: list[list[SettingAdvice]] = []
+    worker = print_dialog._AdviceWorker(
+        objects, settings, profile, setup, {}, (), (), {}, flavour="orca"
+    )
+    worker.done.connect(lambda entries, _measured: found.append(entries))
+    worker.work()
+
+    assert found, "der Arbeiter liefert"
+    assert "support.bottom_interface_layers" in {entry.path for entry in found[-1]}
+
+
+def test_an_accepted_tree_gets_the_same_gap_in_dialog_and_file(
+    qt_app: QApplication, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Elegoos Prozess stützt unter „automatisch“ mit organischen Bäumen, die
+    Grundlage hat Stützen aus, „Baum“ ist übernommen (RM-622, Review M1). Der
+    Dialog nennt den Abstand für PETG bei 0,2er Schichten in ganzen Schichten,
+    und die Datei trägt an beiden Körpern genau diesen Wert — gefragt mit der
+    Art, die jedes Teil wirklich bekommt."""
+    from app.core.types import PrintSettings
+    from tests.helpers import chin_over_chest, object_values, supported_table
+
+    monkeypatch.setattr(handover, "_native_process", lambda _setup: {"support_type": "tree(auto)"})
+    profile = profiles.make_profile("centauri-carbon-2", "petg")
+    settings: PrintSettings = print_settings.with_choice(
+        print_settings.resolve(profile, "standard"), "support.z_gap", 0.3
+    )
+    settings = print_settings.with_accepted(settings, "support.style", "tree")
+    objects = (
+        SceneObject(id="obj_1", name="Kinn", mesh=chin_over_chest(), material="petg"),
+        SceneObject(id="obj_2", name="Tisch", mesh=MeshData(supported_table(3)), material="petg"),
+    )
+    setup = handover.SlicerSetup(executable=Path("elegoo-slicer.exe"), flavour="orca")
+    found: list[list[SettingAdvice]] = []
+    worker = print_dialog._AdviceWorker(
+        objects, settings, profile, setup, {}, (), (), {}, flavour="orca"
+    )
+    worker.done.connect(lambda entries, _measured: found.append(entries))
+    worker.work()
+    assert found, "der Arbeiter liefert"
+    row = next(entry for entry in found[-1] if entry.path == "support.z_gap")
+    assert row.value == pytest.approx(0.2)
+
+    path, _findings = writer.write_assembly(
+        list(objects),
+        tmp_path,
+        project_name="baum",
+        profile=profile,
+        settings=print_settings.with_accepted(settings, "support.z_gap", row.value),
+        flavour="orca",
+        setup=setup,
+    )
+    written = object_values(path, "Metadata/model_settings.config")
+    for name in getattr(row, "parts", ()) or ("Kinn", "Tisch"):
+        assert float(written[name]["support_top_z_distance"]) == pytest.approx(0.2), name
+
+
+def _figure_and_table_on_bambu(
+    monkeypatch: pytest.MonkeyPatch,
+) -> tuple[tuple[SceneObject, ...], Profile, Any, handover.SlicerSetup]:
+    """Bambu Studio mit Gitter im Herstellerprozess, eigenes Gitter ohne untere
+    Trennschicht, PETG: Das Kinn bekommt Bäume vorgeschlagen, der Tisch nicht
+    (Nachprüfung RM-622, Sonden 7 und 8)."""
+    from tests.helpers import chin_over_chest, column_table
+
+    monkeypatch.setattr(handover, "_native_process", lambda _setup: {})
+    profile = profiles.make_profile("centauri-carbon-2", "petg")
+    settings = print_settings.resolve(profile, "standard")
+    for path, value in (("support.style", "grid"), ("support.bottom_interface_layers", 0)):
+        settings = print_settings.with_choice(settings, path, value)
+    objects = (
+        SceneObject(id="obj_1", name="Kinn", mesh=chin_over_chest(), material="petg"),
+        SceneObject(id="obj_2", name="Tisch", mesh=column_table(), material="petg"),
+    )
+    setup = handover.SlicerSetup(executable=Path("bambu-studio.exe"), flavour="orca")
+    return objects, profile, settings, setup
+
+
+def _support_rows(
+    objects: tuple[SceneObject, ...],
+    settings: Any,
+    profile: Profile,
+    setup: handover.SlicerSetup,
+    declined: frozenset[str] = frozenset(),
+) -> dict[str, tuple[object, tuple[str, ...]]]:
+    """Die Zeilen des Arbeiters zur Stütze: Wert und genannte Teile."""
+    found: list[list[SettingAdvice]] = []
+    worker = print_dialog._AdviceWorker(
+        objects, settings, profile, setup, {}, (), (), {}, flavour="orca", declined=declined
+    )
+    worker.done.connect(lambda entries, _measured: found.append(entries))
+    worker.work()
+    assert found, "der Arbeiter liefert"
+    return {
+        entry.path: (entry.value, getattr(entry, "parts", ()))
+        for entry in found[-1]
+        if entry.path.startswith("support.")
+    }
+
+
+def test_a_declined_tree_gives_the_figure_the_gap_of_its_grid(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Wählt der Kunde „Baum“ ab, fragt der Dialog Abstand und untere
+    Trennschicht mit dem Gitter, das das Kinn dann druckt (RM-622, Review M1):
+    Beide Zeilen gelten Kinn und Tisch. Mit dem Baum gefragt nannten sie nur den
+    Tisch, und das Kinn druckte sein Gitter mit 0,2 mm und ohne Trennschicht."""
+    objects, profile, settings, setup = _figure_and_table_on_bambu(monkeypatch)
+
+    offered = _support_rows(objects, settings, profile, setup)
+    declined = _support_rows(objects, settings, profile, setup, frozenset({"support.style"}))
+
+    assert offered["support.z_gap"] == (pytest.approx(0.28), ("Tisch",))
+    assert declined["support.style"][0] == "tree", "die Zeile bleibt, abgewählt"
+    assert declined["support.z_gap"] == (pytest.approx(0.28), ())
+    assert declined["support.bottom_interface_layers"] == (2, ())
+
+
+def test_an_accepted_tree_leaves_the_table_its_contact_rows(
+    qt_app: QApplication, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Erst nur „Baum“ übernommen, dann der Rest (RM-622, Review M2): Der Export
+    gibt den Baum nur dem Kinn, der Tisch druckt das Gitter der Platte. Der
+    Dialog fragt den Tisch deshalb mit dem Gitter, und Abstand wie untere
+    Trennschicht bleiben für ihn stehen; die Datei trägt sie am Tisch, gleich in
+    welcher Reihenfolge der Kunde übernimmt."""
+    from tests.helpers import object_values
+
+    objects, profile, settings, setup = _figure_and_table_on_bambu(monkeypatch)
+    first = _support_rows(objects, settings, profile, setup)
+    step = print_settings.with_accepted(settings, "support.style", first["support.style"][0])
+
+    second = _support_rows(objects, step, profile, setup)
+
+    assert second["support.z_gap"] == (pytest.approx(0.28), ("Tisch",))
+    assert second["support.bottom_interface_layers"] == (2, ("Tisch",))
+    for path, (value, _parts) in second.items():
+        step = print_settings.with_accepted(step, path, value)
+    written_path, _findings = writer.write_assembly(
+        list(objects),
+        tmp_path,
+        project_name="zwei",
+        profile=profile,
+        settings=step,
+        flavour="orca",
+        setup=setup,
+    )
+    written = object_values(written_path, "Metadata/model_settings.config")
+    assert float(written["Tisch"]["support_top_z_distance"]) == pytest.approx(0.28)
+    assert written["Tisch"]["support_interface_bottom_layers"] == "2"
+
+
+def test_declining_the_tree_asks_the_advice_again(
+    dialog: PrintSettingsDialog, qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An der Stützart hängen Abstand und Trennschicht (RM-622, Review M1): Wählt
+    der Kunde ihre Zeile ab, fragt der Dialog neu und gibt die Abwahl dem
+    Arbeiter mit; eine andere Zeile abzuwählen fragt nicht neu."""
+    asked: list[object] = []
+    monkeypatch.setattr(dialog, "_refresh_advice", lambda: asked.append(dialog._advice_context()))
+
+    def toggle(key: str) -> None:
+        item = QTreeWidgetItem(["", ""])
+        item.setData(0, Qt.ItemDataRole.UserRole, key)
+        item.setCheckState(0, Qt.CheckState.Unchecked)
+        dialog._advice_checked(item, 0)
+        QCoreApplication.processEvents()
+
+    toggle("support.z_gap")
+    assert asked == []
+    before = dialog._advice_context()
+    toggle("support.style")
+    assert len(asked) == 1
+    assert dialog._declined_advice() == frozenset({"support.style"})
+    assert asked[0] != before, "die Abwahl gehört zum Auftrag des Arbeiters"
+
+
+@pytest.mark.parametrize(("organic", "said"), [(frozenset({"tree"}), True), (frozenset(), False)])
+def test_the_gap_field_asks_the_trees_the_advice_asked(
+    dialog: PrintSettingsDialog, organic: frozenset[str], said: bool
+) -> None:
+    """Das Feld fragt dieselbe Auskunft wie der Rat daneben (RM-622, Review M3):
+    die Arten, die der letzte Arbeiter als organische Bäume gelesen hat. Ein
+    Prozess mit ``tree_hybrid`` hat keine, und das Feld schweigt."""
+    dialog._slicer_path = Path("elegoo-slicer.exe")
+    for path, value in (("support.style", "tree"), ("support.z_gap", 0.28)):
+        dialog.settings = print_settings.with_choice(dialog.settings, path, value)
+    dialog._organic = organic
+
+    dialog._mark_fields_this_slicer_ignores()
+
+    assert ("Baumstützen" in dialog._editors["support.z_gap"].toolTip()) is said
 
 
 def test_the_field_says_which_parts_get_a_suggestion_and_what_the_rest_prints(

@@ -73,6 +73,13 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Donde los soportes bajo voladizos pequeños se apoyan en el modelo, Solidon sugiere soportes en árbol. Allí dejan menos marcas.
 - En puntas pequeñas, Solidon sugiere una *Velocidad mínima al frenar* más baja para que no se ablanden. El ajuste llega a cualquier slicer.
 - Los bordes estrechos que se sostienen solos quedan libres con *Bordes sin soporte*. Así la impresión necesita bastante menos soporte.
+- Los soportes se quitan con más facilidad: el espacio sigue el material y la altura de capa de cada pieza, también con varios materiales en una placa. La separación sigue la superficie de encima.
+- Si un soporte se apoya en la pieza, Solidon sugiere también una capa de separación debajo para que su pie no deje marcas. Con soportes en árbol, solo en los slicers que la imprimen ahí.
+- Con soportes en árbol y junto a una torre de purga, Solidon propone el espacio del soporte en capas enteras, tal como lo imprime el slicer.
+- Para PLA, Solidon propone más espacio entre muchas puntas finas y los soportes en árbol situados debajo. Así quedan menos restos de las puntas de los soportes.
+- Para PETG, Solidon sugiere refrigeración total en el soporte. Así se suelta más fácil de la pieza.
+- Nuevo en los ajustes de impresión: *Capas de separación inferiores*, *Hueco en la capa de separación* y *Refrigeración total en el soporte*.
+- El campo *Espacio superior* se llama ahora *Espacio arriba y abajo* y vale para ambos lados del soporte.
 - Si el slicer rechaza filamentos con temperaturas demasiado distintas en una placa, Solidon indica ahora el motivo y qué hacer, en lugar de decir solo que no se creó ningún archivo.
 - En el diálogo de impresión, impresora, filamentos y calidad se ven enteros también con la letra ampliada. Las etiquetas largas pasan a la línea siguiente.
 - El informe de comprobación calcula más rápido y necesita menos memoria.
