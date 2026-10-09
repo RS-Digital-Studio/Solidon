@@ -50,7 +50,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - O código de início e o volume de impressão vêm só da sua impressora, não de outro modelo da mesma série.
 - O diálogo de impressão atribui os perfis do slicer muito mais depressa, ao abrir e após cada mudança de slicer.
 - O tempo de impressão estimado está mais perto do do slicer, muito mais perto em peças com suportes.
-- Se suportes e skirt cabem na mesa, a verificação mede-o agora só sob as saliências. As peças junto ao rebordo já não recebem um aviso sem razão.
+- A verificação do espaço para suportes e skirt na mesa mede agora só sob as saliências. As peças junto ao rebordo já não recebem um aviso sem razão.
 - As sugestões aceites quase já não deixam sem suporte as saliências que precisam dele. *Manter os canais livres* só bloqueia o espaço de onde um suporte já não se conseguiria retirar.
 - Onde os suportes sob pequenas saliências assentam no modelo, o Solidon sugere suportes em árvore. Aí deixam menos marcas.
 - Em pontas pequenas, o Solidon sugere uma *Velocidade mínima ao abrandar* mais baixa para que não amoleçam. A definição chega a qualquer slicer.
@@ -203,7 +203,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Peças altas e finas sobre uma base pequena recebem paredes mais calmas, a 60 mm/s e com menos aceleração. Na Centauri Carbon 2 essas hastes soltavam-se.
 - Com o Cura, o relatório de verificação indica as peças que só recebem esses valores por arrasto, porque o Cura só os aceita para toda a placa.
 - O Solidon só sugere «Parede exterior primeiro» para a peça que precisa dela, e nunca para uma com suportes.
-- Também na pesquisa rápida, «Orientar para impressão» verifica se uma peça fica de pé com segurança. Se uma não fica de pé em nenhuma posição, orienta mesmo assim as restantes e indica-a no relatório.
+- A pesquisa rápida de «Orientar para impressão» também verifica se uma peça fica de pé com segurança. Se uma não fica de pé em nenhuma posição, orienta mesmo assim as restantes e indica-a no relatório.
 - Com «Dispor na mesa», cada peça vai para a primeira placa onde tem espaço. O conjunto de minigolfe precisa assim de quatro placas em vez de seis.
 - Se arrastar um corpo na vista para outra mesa, ele fica na placa dessa mesa.
 - Quando chega outro modelo, de um ficheiro, de uma transferência ou gerado, a vista mostra a placa em que está.
@@ -219,8 +219,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - O preenchimento Linhas chega ao Bambu Studio e ao Creality Print como linhas, sem ser substituído por Grelha ou Cúbico.
 - Após o corte, o Solidon assinala definições descartadas pelo PrusaSlicer ou pelos slicers Orca, além de alterações à borda, ordem das paredes e tipo de suporte.
 - A pré-seleção de filamento escolhe Generic ou a marca da sua impressora em vez de um filamento especial de terceiros, por exemplo Generic PETG em vez de BETA PETG na Bambu A1.
-- Exportar e fatiar usam o cálculo fino em vez da vista mais rápida da janela. Cones e peças fundidas suavemente chegam assim lisos ao ficheiro.
-- Também em modelos de superfícies STEP, com rotações de quase 180° e em faces reconhecidas em parte funcionam «Orientar para impressão», «Rodar» e «Deslocar». O corpo continua exato.
+- Agora «Orientar para impressão», «Rodar» e «Deslocar» funcionam também em modelos de superfícies STEP, com rotações de quase 180° e em faces reconhecidas em parte. O corpo continua exato.
 - Uma parede exterior mais lenta aplica-se agora também a perímetros pequenos como furos e hastes no PrusaSlicer e na família Orca.
 - O PrusaSlicer e a família Orca respeitam a densidade de suporte escolhida. O campo começa em 1 %. Para imprimir sem suportes, escolha «Nenhum».
 - Nas impressões multicoloridas com OrcaSlicer, ElegooSlicer, Bambu Studio e Creality Print, a torre de purga recebe uma posição inicial adequada ao tamanho da mesa.
@@ -260,10 +259,10 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Se um furo corta o corpo em dois, o relatório di-lo uma só vez, com o número de peças no fim, e cala-se assim que o corpo volta a ser uma peça.
 - Os padrões em faces cilíndricas de modelos importados ficam fechados ao alterá-los.
 - No histórico de um corpo STEP pode reordenar passos ou inserir um antes, mesmo que um passo posterior se refira a um furo. A referência segue o furo.
-- Um furo deslocado ou duplicado com uma nova direção continua exato num corpo STEP.
+- Um furo simples ou um furo oblongo deslocado ou duplicado com uma nova direção continua exato num corpo STEP.
 - Uma característica reconhecida a mais de um metro da origem mantém o seu lugar ao alterá-la. Antes o campo cortava o número sem aviso, e o furo mudava de sítio.
 - Se um passo atinge uma peça cuja superfície se cruza a si própria, para e mostra o sítio. Fora dela continua a calcular e avisa que as peças não puderam ser unidas.
-- Também ao longo da costura de simetria de uma figura, «Dividir o modelo» corta sem a deixar aberta, e os pinos já estão no lugar na pré-visualização.
+- Agora «Dividir o modelo» corta uma figura também ao longo da sua costura de simetria sem a deixar aberta, e os pinos já estão no lugar na pré-visualização.
 - Se um corte só roça uma parede, «Dividir o modelo» indica o sítio e leva à posição do corte em vez de falhar nos pinos.
 - Cortar fora corta agora também em ângulo: em cima escolhe o «Plano» — num eixo com inclinação, paralelo a uma face, por uma aresta ou por três pontos que clica na vista.
 - Um corpo STEP continua um corpo STEP ao cortá-lo, com as suas faces, arestas e nomes.
@@ -313,7 +312,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - O editor de esqueleto mostra ossos e articulação na vista, e uma articulação fica no meio do corpo em vez de na pele, assim a figura dobra de forma uniforme.
 - A barra de modelação chama agora «Intensidade» ao valor do pincel, em vez de «Espessura», que fazia pensar numa parede.
 - Se um traço de modelação fura a parede ou a deixa fina demais, o relatório e a exportação indicam-no, com «Mostrar o ponto» e «Desfazer o traço».
-- Na janela, «Fundir suavemente» calcula agora fino, desde que o corpo não seja muito grande.
+- Agora «Fundir suavemente» calcula fino também na janela, desde que o corpo não seja muito grande.
 - Se um bloco como um buraco de fechadura passa a borda da sua face, mesmo que só com o escareamento ou o chanfro, ou entra numa parede atrás, o relatório indica-o.
 - Uma medida escrita como comprimento 40 estica o esboço só nessa direção. O corpo resultante fica fechado e assente na mesa.
 - Os desenhos SVG chegam corretos: rotações, inclinações, cantos arredondados, elipses e arcos elípticos estão certos, e as camadas ocultas ficam de fora.
@@ -332,7 +331,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 
 - Cancelar durante «Mais uma tentativa» só para a tentativa em curso. As terminadas continuam disponíveis para escolher.
 - Cada tentativa da lista indica a sua frase ou imagem e a semente. Se a sua entrada já não corresponder à tentativa escolhida, o diálogo diz qual será aplicada.
-- O modelo de imagem é descarregado por «Configurar modelo de imagem …» mesmo que os outros pesos já existam.
+- Agora «Configurar modelo de imagem …» descarrega o modelo de imagem mesmo que os outros pesos já existam.
 - Se um erro ao gerar indicar a configuração como saída, ela aparece como botão no diálogo.
 - Enquanto um modelo é gerado, a janela continua utilizável. O diálogo afasta-se, e a barra de estado mostra progresso, tempo e «Cancelar».
 - O diálogo de gerar indica o volume no tamanho com que a peça chega.

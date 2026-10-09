@@ -219,7 +219,6 @@ it into `website/version.json`.
 - The Lines infill pattern reaches Bambu Studio and Creality Print as lines, without being replaced by Grid or Cubic.
 - After slicing, Solidon also reports settings discarded by PrusaSlicer or Orca-based slicers. Changes to brim, wall order and support type are detected too.
 - The filament preselection takes Generic or your printer's brand instead of a third-party special filament, for example Generic PETG instead of BETA PETG on the Bambu A1.
-- Export and slicing use the fine calculation instead of the faster view in the window. Cones and smoothly blended parts now arrive smooth in the file.
 - On STEP surface models too, for turns of almost 180° and on partly recognised faces, *Orient for printing*, *Rotate* and *Move* now work. The body stays exact.
 - A slower outer wall now also applies to small perimeters such as holes and stems in PrusaSlicer and the Orca family.
 - PrusaSlicer and the Orca family now use the support density you set. The field starts at 1 %. To print without supports, choose “None”.
@@ -260,7 +259,7 @@ it into `website/version.json`.
 - If a hole cuts the body in two, the report says so once, with the number of pieces at the end, and falls silent as soon as the body is one piece again.
 - Patterns on cylindrical faces of imported models stay closed when you change them.
 - In the history of a STEP body you can reorder steps or insert one before, even when a later step refers to a hole. The reference follows the hole.
-- A hole moved or duplicated with a new direction stays exact on a STEP body.
+- A plain hole or a slot moved or duplicated with a new direction stays exact on a STEP body.
 - A detected feature more than a metre from the origin keeps its place when you change it. Until now the field quietly clipped the number, and the hole moved.
 - If a step hits a part whose surface crosses itself, it stops and shows the spot. Elsewhere it keeps calculating and warns that the parts could not be joined.
 - Even along its mirror seam, *Split the model* cuts a figure cleanly, and the pins sit in place already in the preview.
