@@ -27332,22 +27332,44 @@ unter Bäumen keine untere Trennschicht — war mit einer örtlichen Sonde gemes
 Test hielt es. Die Messleser kannten `G92 E…` nicht: Unter absoluten Extrusionswerten galt
 nach einem Rücksetzen jede Bahn als Leerfahrt.
 
-**Behoben:** `tests/helpers.support_contact` misst Abstand und Trennschichten im G-Code
-(Raster `CONTACT_CELL`, Kontakt bis `CONTACT_AIR`), zählt Extrusion relativ, absolut und mit
-`G92` wie der Drucker, und nimmt mit `inset` nur Zellen im Inneren der Modellfläche — am Rand
-teilen sich Außenwand und eine Stützsäule auf dem Bett eine Zelle (am ElegooSlicer 898
-Scheinkontakte mit 0 mm). `test_the_support_contact_arrives_as_solidon_says` schneidet eine
-Platte über einer Säule (PETG, 0,28 mm bei 0,2-mm-Schichten) in ElegooSlicer, OrcaSlicer,
-Bambu Studio, Creality Print, Anycubic Slicer Next und PrusaSlicer mit Gitter und Baum und
-prüft gegen `advise.rounds_to_whole_layers` und `handover.ignored_under_trees`: unter Gitter
-0,28 mm, unter organischen Bäumen 0,2 mm, die untere Trennschicht unter Bäumen nach Tabelle.
+**Behoben:** `tests/gcode_contact.support_contact` misst Abstand und Trennschichten im
+G-Code (Raster `CONTACT_CELL`, Kontakt bis `CONTACT_AIR`). Ein eigenes Modul, das nur
+`test_real_slicers.py` importiert: In `tests/helpers.py` wählte `tools/ci_selection.py` für
+jede Änderung daran 39 Fensterdateien und drei Slicerdateien, jetzt nur
+`test_real_slicers.py`. Die Messung zählt Extrusion relativ, absolut und mit `G92` wie der
+Drucker und Bögen (`G2`/`G3`) entlang ihrer Bahn mit nachgeführter Position — Bambu Studio
+und PrusaSlicer schreiben in Baumdrucken zehntausende davon. Die Unterseite rechnet mit der
+Höhe der eigenen Stützbahn (`;HEIGHT:`, Bambu `; LAYER_HEIGHT:`, ohne Angabe der Schritt im
+eigenen Stapel), nicht mit allen Stützebenen des Drucks zusammen. Eine Zelle, in der jenseits
+des Kontakts Modell steht, ist Nachbarschaft, kein Kontakt: Mit eigener Stützschichthöhe
+wechseln sich dort Wand- und Stützebenen ab und maßen −0,24 bis 0,13 mm. `inset` nimmt nur
+Zellen im Inneren der Aufsicht aller Modellbahnen; PrusaSlicers `Skirt/Brim` zählt nicht
+dazu. `test_the_support_contact_arrives_as_solidon_says` schneidet eine Platte über einer
+Säule (PETG, 0,2-mm-Schichten) in ElegooSlicer, OrcaSlicer, Bambu Studio, Creality Print,
+Anycubic Slicer Next und PrusaSlicer mit Gitter und Baum, mit Werten fern jedes
+Herstellerprozesses (dort 0,2 mm Abstand, Anycubic 0,1, untere Trennschichten 2, PrusaSlicer
+0): unter Gitter 0,28 mm und drei untere Trennschichten, unter Bäumen 0,44 mm, das sind 2,2
+Schichten und gerundet wie abgeschnitten 0,4. Zugesichert werden oben und unten der Abstand
+(±0,02 mm), mehr als 20 Zellen je Seite und die genaue Zahl unterer Trennschichten nach
+`advise.rounds_to_whole_layers` und `handover.ignored_under_trees`.
 
-**Nachweis (09.10.2026):** zwölf Fälle an den echten Programmen unter Windows grün;
-`test_the_contact_measure_counts_extrusion_as_the_printer_does` (relativ, absolut, absolut
-mit `G92 E0`) grün. Die Unterseite unter Gitter misst je Randabstand verschieden (Füllung
-und Stütze verschränkt mit eigener Stützhöhe), deshalb prüft der Test sie nur unter Bäumen,
-wo die Tabelle etwas behauptet. Cura und SuperSlicer fehlen: RM-622 hat sie nicht gemessen.
-Changelog: nein (Test).
+**Nachweis (09.10.2026):** zwölf Fälle an den echten Programmen unter Windows grün (12
+passed, Exit 0). Gemessen: unter Gitter oben und unten 0,28 mm, untere Trennschichten in der
+Orca-Familie vier (die geschriebenen drei und ihre Kontaktlage), in PrusaSlicer drei; unter
+Bäumen oben und unten 0,4 mm, unten drei Lagen in ElegooSlicer und OrcaSlicer, keine in den
+übrigen vier; 57 bis 201 Zellen je Seite. Die frühere Begründung, die Unterseite unter Gitter
+sei nicht messbar, war ein Messfehler (Stapel verschiedener Stellen vermischt); an den
+RM-622-G-Codes misst die Unterseite jetzt bei 4 und 6 mm Rand gleich 0,28 mm.
+Synthetische Gegenproben in `test_real_slicers.py`: Bögen, Bahnhöhe mit und ohne Angabe,
+Nachbarschaft, Rand und `Skirt/Brim` — jede verstümmelte Fassung der Messung und die alte
+aus `c95d542ed` werden dort rot. Linux und macOS (Anycubic 2.0.0.5 gegen 2.0.0.3, Laufzeit
+gegen das 120-Minuten-Limit) nimmt die Slicerauswahl beim Push auf main ab, denn die CI läuft
+nur dort (Entscheidung Robert). Cura und SuperSlicer fehlen: RM-622 hat sie nicht gemessen.
+Cura 5.13 an derselben Platte (Sonde, nicht eingecheckt): unter Gitter oben genau der
+geschriebene Abstand (0,28 und 0,44 mm, mit einer Bruchteillage der Stütze), unten
+aufgerundet (0,4 und 0,6); unter Bäumen oben und unten aufgerundet (0,4 und 0,6).
+`advise.WHOLE_LAYER_GAP_FLAVOURS` und `support_gap_target` nehmen für Cura dagegen ganze
+Schichten zum nächsten Vielfachen an. Changelog: nein (Test).
 
 ## RM-027 entfällt mit dem privaten Index (09.09.2026)
 
