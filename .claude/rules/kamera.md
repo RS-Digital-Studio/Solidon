@@ -143,11 +143,12 @@ Schemata — ein Nachbau, der neigt, wo sein Vorbild es nicht tut, ist keiner.
   `frame_next_scene`): Alle Platten stehen nebeneinander, eine einzelne im
   Nullpunkt. Die gespeicherte Lage der Körper bleibt, dieselbe Wahl rahmt
   nicht noch einmal.
-* **Ein Größenschritt rahmt einmal nach, wenn er über den Rahmen wächst**
-  (RM-280): `MainWindow._frame_after_resizing` meldet eine neue Transaktion mit
-  `RESIZING_OPERATIONS` an `Viewport.frame_if_beyond`; gerahmt wird nur, wenn die
-  Körper gewachsen sind und über `_fitted_bounds` hinausreichen (`reaches_beyond`).
-  Verkleinern, Verschieben und Undo lassen die Kamera in Ruhe.
+* **Ein Größenschritt oder ein weiteres Modell rahmt einmal nach, wenn es über
+  den Rahmen wächst** (RM-280, RM-650): `MainWindow._frame_after_resizing` und
+  `_frame_the_placed` melden an `Viewport.frame_if_beyond`, unmittelbar vor dem
+  Aufbau, der die Änderung trägt; gerahmt wird nur, wenn die Körper gewachsen
+  sind und über `_fitted_bounds` hinausreichen (`reaches_beyond`). Verkleinern,
+  Verschieben und Undo lassen die Kamera in Ruhe.
 * **Im Skizzenmodus weicht die Kamera der Werkzeugkarte**: Orthografisch
   verschiebt `occluded_view_shift` Position und Fokus um die halbe unten
   verdeckte Bildhöhe (gemeldet über `set_zone_margins`), ohne Richtung und

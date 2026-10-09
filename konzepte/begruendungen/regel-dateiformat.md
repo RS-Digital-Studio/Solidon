@@ -589,6 +589,25 @@ Orca-Familie (−50, −101, −62) endeten dort als „keine Druckdatei geschri
 Die ältere Fassung der Erkennung entfiel nur auf einer Plattform, also sah es
 niemand.
 
+Zu „hinter Flatpak 128 + Absturzsignal“ (RM-621, am Quelltext hergeleitet):
+`flatpak run` startet den Slicer über bubblewrap, und `flatpak-spawn --host`
+aus Solidons eigenem Flatpak ebenso über einen Vermittler. Beide sterben
+nicht mit dem Kind, sondern melden dessen Signaltod wie eine Shell als
+128 + Signal (`bubblewrap.c`, `propagate_exit_status`; `flatpak-spawn.c`
+ebenso). Ein SIGSEGV käme damit als 139 an, `crashed()` sähe eine
+gewöhnliche Rückgabe, und der Kunde läse „keine Druckdatei geschrieben“.
+Gezählt werden nur die Signale, an denen ein Programm stirbt (SIGILL, SIGABRT,
+SIGBUS, SIGFPE, SIGKILL, SIGSEGV), und nur hinter einem Starter. Andere
+Signale wären Absagen: Die Orca-Absagen reichen von −1 bis −105
+(`src/libslic3r/Utils.hpp` der fünf Programme), in Byteform 151 bis 255, und
+−100 kommt als 156 = 128 + SIGWINCH, −101 als 155 = 128 + SIGPROF. Ohne
+Starter bleibt 139 ein Rückgabewert wie jeder andere.
+
+Steht die Absage in `result.json`, zählt deren Code (`_exit_code`): Endet ein
+Slicer danach nicht, beendet Solidon ihn (`FINISHED_LINGER_SECONDS`), und der
+Prozess meldet unter Linux und macOS Solidons SIGTERM als −15 — das las
+`crashed()` als Absturz, und die Absage ging unter.
+
 ## Über Erfolg entscheidet die Druckdatei, nicht das Prozessende
 
 Bambu Studio legt Druckdatei und `result.json` ab und endet manchmal nicht

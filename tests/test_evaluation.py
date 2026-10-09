@@ -6672,7 +6672,7 @@ def test_the_window_gives_the_way_back_after_its_picture(monkeypatch) -> None:
     assert started.right_of_way.claimed, "der Lauf wartet auf das Fenster"
     # Ohne Ereignisschleife meldet sich der Lauf nie fertig; eine Millisekunde
     # Warten genügt, um zu sehen, ob der synchrone Warter freigibt.
-    session.wait_for_idle(1)
+    assert not session.wait_for_idle(1)
     assert not started.right_of_way.claimed, "wer synchron wartet, gibt den Vortritt sofort frei"
     assert started.wait(60_000)
     session.cancel_signal.reset()
