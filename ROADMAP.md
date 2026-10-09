@@ -104,7 +104,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-685 — *Druckoptimal ausrichten* behält eine stehende Lage mit dem Satz „braucht keine Stütze“, während die Schichtanalyse Stützraum zählt](#rm-685) | Geometrie, Erkennung und Druckvorbereitung | Regression gegenüber v0.5.0 im Stützraum (gewollt seit v0.5.1): Satz und Kennzahl widersprechen sich |
 | [RM-690 — Angeboten, aber mit den Vorgaben nicht ausführbar: Textur, Merkmal drehen, Formschräge, Einzelteile, Drehkörper](#rm-690) | Geometrie, Erkennung und Druckvorbereitung | Fünf Handlungen halten mit ihren eigenen Vorgaben an oder werden an Stellen angeboten, wo sie nicht gelten |
 | [RM-691 — Stift am Schlüsselloch der Halter hat je Kern eine andere Form](#rm-691) | Geometrie, Erkennung und Druckvorbereitung | Ringhalter und Ablage: am Netz glatt, exakt mit Kopf; Hohlraumkette angleichen und beide Kerne geometrisch gegenprüfen |
-| [RM-636 — Jeder Anwendungsfall schnell: Verschieben, Filament, Normalisieren, Auswahlkarte](#rm-636) | Geometrie, Erkennung und Druckvorbereitung | In Arbeit: Paket L3 (Worktree `F:/sl-l3`). Rangliste gemessen; offen: Zuordnung bei gleicher Geometrie abkürzen, Normalisieren am großen Netz, Auswahlkarte, Fensterabnahme |
+| [RM-636 — Jeder Anwendungsfall schnell: Verschieben, Filament, Normalisieren, Auswahlkarte](#rm-636) | Geometrie, Erkennung und Druckvorbereitung | In Arbeit: Paket L3 (Worktree `F:/sl-l3`). Zuordnung, Buchführung und Normalisieren gebaut (10.10.); offen: Gruppen nach dem Verschieben, Prüfbericht neben der Auswertung, Hauptfaden beim Szenenaufbau, Fensterabnahme |
 | [RM-695 — Ein gespeichertes Projekt erkennt nach jedem Neustart alle Merkmale neu](#rm-695) | Geometrie, Erkennung und Druckvorbereitung | Nach Paket E: Erkennungsergebnis bitgleich im Plattencache ablegen (Format, `cache_version`) |
 | [RM-070 — SpaceMouse auf macOS und Linux am echten Gerät abnehmen](#rm-070) | Bedienung und Darstellung | Die Rampe ist stetig und getestet, die Bildrate an 815 104 Dreiecken gemessen (`7ff34c67`: 16,7 → 8,7 ms im Median); offen bleiben Linux, die 3DxWare-Mausemulation, das Gerät selbst und die Rampe im Skizzenmodus (aus RM-183) |
 | [RM-204 — Ein Merkmalklick baut alle Handlungen des Fensters neu](#rm-204) | Bedienung und Darstellung | Abnahme am echten Fenster beim Release (RM-213) |
@@ -3591,6 +3591,15 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   Doppelrechnungen je Schritt entfernen; ohne Formatänderung am Plattencache. **Abnahme:** je
   Stelle Messung im Wechsel alt/neu in CPU-Zeit oder gezählten Aufrufen, Gleichheitstest grün,
   am echten Fenster die Standzeit der Fortschrittstexte und das erste Bild (RM-258). Bauplan §31.
+  **Teilstand 10.10.2026 (Paket L3):** Der Zuordner sucht bei fast deckungsgleichen Mengen nur
+  bis zur Grenze der Mehrdeutigkeit und belegt die Antwort des vollen Wegs selbst; Merkmale
+  behalten ihr Objekt, Zählung und Bewegung laufen je Schritt einmal; Normalisieren schneidet
+  Teile nicht mehr aus. Eiffelturm im Kernweg Filament zuweisen 5,42 → 1,19 s, Verschieben
+  6,33 → 3,22 s, Umbenennen 1,53 → 0,56 s; Spiderman Normalisieren 7,06 → 4,98 s; Ergebnisse in
+  261 Schritten über Korpus, Beispielprojekte und Kundenmodelle gleich. **Offen:** am Fenster
+  die Gruppen nach jedem Verschieben, der Prüfbericht neben der Auswertung und der Hauptfaden
+  beim Szenenaufbau (bis 3 s Lücke am Eiffelturm) — als neue Punkte gemeldet; die Abnahme am
+  echten Fenster mit Renderer.
 
 <a id="rm-695"></a>
 - [ ] **RM-695 — Ein gespeichertes Projekt erkennt nach jedem Neustart alle Merkmale neu.**
