@@ -31,6 +31,8 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-09 | [RM-638: In Einzelteile aufteilen hilft an jeder Teile-Absage (09.10.2026)](#rm-638-in-einzelteile-aufteilen-hilft-an-jeder-teile-absage-09102026) |
+| 2026-10-09 | [RM-639: In Einzelteile aufteilen behält jedes druckbare Teil (09.10.2026)](#rm-639-in-einzelteile-aufteilen-behält-jedes-druckbare-teil-09102026) |
 | 2026-10-09 | [RM-253: Am Laptop-Ständer rechnet keine Bohrungshandlung mehr durch ein fremdes Teil (09.10.2026)](#rm-253-am-laptop-ständer-rechnet-keine-bohrungshandlung-mehr-durch-ein-fremdes-teil-09102026) |
 | 2026-10-09 | [RM-660: Ein langes Teil steht in jedem Hohlraum mit dem Stück, das darin liegt (09.10.2026)](#rm-660-ein-langes-teil-steht-in-jedem-hohlraum-mit-dem-stück-das-darin-liegt-09102026) |
 | 2026-10-09 | [RM-661: Ein eng sitzender Stift ist ein getrenntes Teil in seiner Bohrung (09.10.2026)](#rm-661-ein-eng-sitzender-stift-ist-ein-getrenntes-teil-in-seiner-bohrung-09102026) |
@@ -46518,3 +46520,69 @@ Normteiltabelle − Spiel · √2. Gegenprobe: Ohne die erkannten Merkmale am Ne
 Aufruf, werden die vier Schraubfälle rot, die Schlüssellöcher bleiben grün. Kein Code geändert,
 kein Changelog. **Zurückgenommen:** Die Nachprüfung N-4 von Paket G nannte die Kopfform je Kern
 verschieden; das gilt nur für den Aufruf ohne Auswertung, den keine Bedienung nimmt.
+
+## RM-638: In Einzelteile aufteilen hilft an jeder Teile-Absage (09.10.2026)
+
+<a id="rm-638-in-einzelteile-aufteilen-hilft-an-jeder-teile-absage-09102026"></a>
+<a id="rm-638"></a>
+
+**RM-638 — *In Einzelteile aufteilen* an einer Teile-Absage tut nichts.**
+  Gefunden beim Abschluss von RM-253 (Paket I, 09.10.2026): Die fünf Absagen mit `SPLIT_BODIES`
+  in `prepare_ops` (`_refuse_if_another_part_changed`, `_refuse_like_the_card`,
+  `_refuse_another_part_in_the_bore`, `filled_bore_refusal`, `_slot_in_separate_carrier`) trugen
+  keine Stückzahl in `values`; `MainWindow._split_into_bodies_after_error` kehrte ohne
+  `values["components"]` still zurück. Dazu hält die angehaltene Kette jeden neuen Schritt an
+  (`Session.halt_in_the_way`). Nebenbei überschrieb `evaluate._finding_from` den Wert `kind` der
+  Absage mit dem Fehlertitel. **Abnahme:** Fenstersonde (Platte mit Stift als STL, *Merkmal
+  versetzen*): nach dem Klick zwei Objekte, der Schritt läuft am richtigen Teil, ein Strg+Z nimmt
+  alles zurück.
+
+**Abschluss (Paket I, `e4f58fac3`):** Jede der fünf Absagen trägt `components` und, wo die Flächen des
+Merkmals auf genau einem Teil liegen, `part_index` — dessen Stelle in der Reihenfolge der Zerlegung
+(`prepare_ops.split_offer`, dieselbe Ordnung wie `split_bodies`). Hält die Kette am Schritt der
+Absage, setzt der Knopf die Zerlegung mit *Splitter behalten* davor und den Schritt an das Teil mit
+dem Merkmal (`History.split_and_retry(..., keep_tiny=True, part_index=..., feature=...)`), alte und
+neue Fassung in einer Transaktion; sonst bleibt die Zerlegung als nächster Schritt. Ein neues Teil
+vergibt seine Merkmalsnamen frisch — am Ständer hieß `hole_2` auf seinem Teil `hole_1`, und der
+Schritt hielt erneut. Deshalb gibt die Zerlegung das eine Merkmal mit seinen Dreiecken im Teil aus
+(internes `carry_feature`, nur von diesem Weg gesetzt), und die Zuordnung gibt ihm seinen Namen
+zurück. `_finding_from` setzt den Titel nur noch, wo der Fehler keine eigene Art nennt. Test
+zuerst: `test_splitting_at_a_part_refusal_moves_the_feature_on_its_own_part` (Fenster, Platte
+allein und mit gebohrtem größerem Klotz daneben) war am Stand davor an beiden Fällen rot — zuerst
+an der Art, mit behobener Art an „Kette hält weiter an“ —, ist grün; die Mutationen „`part_index`
+unbeachtet“ und „Merkmal nicht mitgegeben“ machen den Fall mit Klotz rot. Kerntests:
+`test_every_bore_op_names_the_separate_pin` (48 Fälle) prüft Stückzahl und Teil,
+`test_a_bore_through_two_plates_with_a_pin_names_the_pin`, dass eine Bohrung auf zwei Platten
+kein Teil nennt, `test_splitting_carries_the_refused_feature_onto_its_part` die Dreiecke des
+mitgegebenen Merkmals, `test_split_and_retry_moves_the_halted_step_to_the_part_of_its_feature`
+den Verlauf, `test_a_technical_detail_stays_behind_the_readable_sentence` die eigene Art.
+Fenstersonde am Laptop-Ständer (offscreen, STL, *Merkmal versetzen* `hole_2` um 1,5 mm quer):
+Halt an Schritt 2 mit `components` 22 und `part_index` 15, ein Klick gibt 22 Objekte, der Schritt
+rechnet an `obj_16` (537 mm³), `hole_2` steht auf der Sollmitte, Befund `bore.over_the_edge` wie
+in RM-253 (1-mm-Wand); ein Strg+Z stellt `load`, `move_feature` und ein Objekt wieder her.
+
+## RM-639: In Einzelteile aufteilen behält jedes druckbare Teil (09.10.2026)
+
+<a id="rm-639-in-einzelteile-aufteilen-behält-jedes-druckbare-teil-09102026"></a>
+<a id="rm-639"></a>
+
+**RM-639 — *In Einzelteile aufteilen* verwirft am Ständer 13 von 22 echten Teilen als Splitter.**
+  Ohne *Splitter behalten* fiel weg, was unter 1 % des größten Teils lag (82 281 mm³): Stifte,
+  Scheiben, Schraubenköpfe zwischen 212 und 614 mm³. Entscheidung Robert: Splitter nach druckbarer
+  Größe aus dem Profil bzw. offener Schale bemessen, nicht relativ zum größten Teil. **Abnahme:**
+  am Ständer bleiben alle 22 Teile, echte Splitter fallen weiter weg; Geometrietest gegen den
+  Korpus.
+
+**Abschluss (Paket I, `e4f58fac3`):** Ein Splitter ist eine offene Schale, solange ein anderes Teil
+geschlossen ist, oder ein geschlossenes Teil unter `Profile.smallest_printable_volume`
+(`prepare_ops._splinters`, `_open_shells` über die Ecken nach ihrem Ort). Am Ständer bleiben alle
+22 Teile (vorher 9), mit Stückzahl 9 gehen die 13 übrigen mit Warnung an ihre Nachbarn.
+Korpus `plate_with_loose_parts.stl`: Platte, vier Stifte, zwei Scheiben, Klotz bleiben, loses
+Dreieck, Kasten ohne Deckel und Würfel 0,2 mm fallen; ein Harzdrucker behält den Würfel
+(`test_split_bodies_keeps_every_printable_part_and_drops_only_splinters`, am Stand davor rot);
+zwei offene Blätter allein bleiben zwei Teile. `split_bodies` `cache_version` 2; Format 50 mit
+Migration 49 → 50: gespeicherte Schritte bekommen `legacy_tiny_share` und rechnen wie damals
+(`split_splinters_v49.p3d`, `test_v49_split_bodies_drops_what_it_dropped_then`). Gebündelt:
+Volumen und Lage je Teil an den Dreiecken (`mesh.triangles_volume`), ein Netz nur für behaltene
+Teile; an Ständer und Korpus bitgleich zum Stand davor, Ständer CPU-Median 0,30 → 0,22 s, Spitze
+(tracemalloc) 32,0 → 12,6 MB. `Trimesh.volume` teilte an einem losen flachen Dreieck durch null.
