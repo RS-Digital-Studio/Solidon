@@ -49,6 +49,10 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Otro filamento se ve al instante, también en bloques y cuerpos STEP, y Solidon no recalcula nada por ello. Los cuerpos seleccionados muestran su color de filamento bajo el resaltado.
 - En la pestaña *Selección*, el campo de filamento solo asigna con un clic o Intro. Las flechas y la escritura solo recorren la lista, y la rueda del ratón desplaza la pestaña.
 - En las versiones traducidas, *Filamento nuevo* ya no se desplaza de lado cuando la ventana es más baja que su contenido.
+- Los modelos grandes se cargan notablemente más rápido y necesitan menos memoria, también con un historial largo y en equipos con 8 GB.
+- Incluso en un historial largo, un paso nuevo apenas tarda más en calcularse que el primero.
+- Deshacer y rehacer son más rápidos, y la memoria que ya no se necesita se libera enseguida.
+- Resolver solapamientos y exportar a 3MF es bastante más rápido.
 
 ### Imprimir y entregar al slicer
 
@@ -67,6 +71,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Los bordes estrechos que se sostienen solos quedan libres con *Bordes sin soporte*. Así la impresión necesita bastante menos soporte.
 - Si el slicer rechaza filamentos con temperaturas demasiado distintas en una placa, Solidon indica ahora el motivo y qué hacer, en lugar de decir solo que no se creó ningún archivo.
 - En el diálogo de impresión, impresora, filamentos y calidad se ven enteros también con la letra ampliada. Las etiquetas largas pasan a la línea siguiente.
+- El informe de comprobación calcula más rápido y necesita menos memoria.
 
 ### Roscas, taladros y piezas normalizadas
 

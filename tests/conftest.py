@@ -83,7 +83,7 @@ for _variable in PROFILE_VARIABLES:
 from app.core import discover
 from app.core.activation import store as activation_store
 from app.core.knowledge import profiles
-from app.core.perceive import features, local
+from app.core.perceive import features, local, matching
 from app.core.types import Document, Profile
 from tests.helpers import FakeMesh, first_start
 
@@ -695,11 +695,18 @@ def _remembered_features_stay_out_of_it() -> None:
     oben (§38).
 
     Dasselbe gilt für die gemerkten örtlichen Nachmessungen
-    (``local.forget_known``): Ein Test, der die Suche zählt oder abklemmt,
-    bekäme sonst das Ergebnis eines Vorgängers mit denselben Merkmalen.
+    (``local.forget_known``), Zuordnungen (``matching.forget_matches``) und
+    Zuordnungsschritte der Auswertung (``evaluate.forget_remembered_steps``):
+    Ein Test, der die Suche zählt oder abklemmt, bekäme sonst das Ergebnis
+    eines Vorgängers mit denselben Merkmalen.
     """
+    import importlib
+
     features.forget_cache()
     local.forget_known()
+    matching.forget_matches()
+    # Über das Modul: ``app.core.scene.evaluate`` ist im Paket die Funktion.
+    importlib.import_module("app.core.scene.evaluate").forget_remembered_steps()
 
 
 @pytest.fixture(autouse=True)

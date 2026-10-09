@@ -906,7 +906,11 @@ def test_self_intersection_cancels_in_each_phase(phase: str) -> None:
             return self.triggered
 
     token = CancelAtPhase()
-    raw = trimesh.creation.icosphere(subdivisions=3)
+    # Ein Ring mit ebenen Stirnflächen: Dort bleiben nach der Trennprüfung
+    # Paare für die genaue Prüfung. An einer Ikosphäre trennt die
+    # Nachbarprüfung seit RM-568 jedes Paar vorher, und die zweite Phase
+    # käme nie an die Reihe.
+    raw = trimesh.creation.annulus(r_min=2.0, r_max=4.0, height=3.0)
     assert not has_self_intersections(SimpleNamespace(raw=raw), token)
     assert token.triggered
 

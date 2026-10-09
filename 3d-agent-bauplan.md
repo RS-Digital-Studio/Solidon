@@ -619,15 +619,21 @@ class OpResult:
     feature_continuations: tuple[tuple[FeatureContinuation, ...], ...] = ()
 
 
+@dataclass(frozen=True, slots=True, eq=False)
+class SliceContour:
+    outline: Points2
+    holes: tuple[Points2, ...] = ()
+
+
 @dataclass(frozen=True, slots=True)
 class LayerInfo:
     z: float
-    contours: tuple[Polygon, ...]
+    contours: tuple[SliceContour, ...]
     area: float
     overhang_area: float
-    islands: tuple[Polygon, ...]
+    islands: tuple[SliceContour, ...]
     min_width: float
-    overhangs: tuple[Polygon, ...] = ()
+    overhangs: tuple[SliceContour, ...] = ()
     bridge_width: float = 0.0
     taper_length: float = 0.0
 
@@ -686,6 +692,11 @@ Die Typaliase und ihre Bedeutung gehören zu diesem Vertrag:
   wenn ihr Merkmal derzeit nicht sicher erkannt wird (§21.3).
 - `ObjectKind`: `mesh` oder `brep`; `Quality`: `draft` oder `fine`.
   `MetricSource`: `internal` oder `gcode` — nie vermischen (§22.5).
+- `Points2`: ein schreibgeschütztes `float64`-Feld der Form (n, 2), ein
+  geschlossener Ring. `SliceContour` trägt Umriss und Löcher einer Kontur
+  der Schichtanalyse so; gleich sind zwei Konturen mit denselben Zahlen, Bit
+  für Bit (Gleichheit und Hash über die Bytes der Felder). Als Felder hält
+  eine gemerkte Analyse ein Siebtel des Speichers von Punkt-Tupeln.
 - `SketchElementKind`: `point`, `line`, `arc`, `circle`, `spline`, `ellipse`,
   `elliptical_arc`. `construction` kennzeichnet Hilfsgeometrie.
 - `SketchConstraintKind`: `distance`, `radius`, `diameter`, `coincident`,

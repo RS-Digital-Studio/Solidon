@@ -49,6 +49,10 @@ dans `website/version.json`.
 - Un autre filament s'affiche aussitôt, aussi sur les blocs et les corps STEP, et Solidon ne recalcule rien pour cela. Les corps sélectionnés montrent leur couleur de filament sous la surbrillance.
 - Dans l'onglet *Sélection*, le champ du filament n'attribue qu'au clic ou avec Entrée. Les flèches et la saisie ne font que parcourir la liste, et la molette fait défiler l'onglet.
 - Dans les versions traduites, *Nouveau filament* ne défile plus de côté quand la fenêtre est moins haute que son contenu.
+- Les grands modèles se chargent nettement plus vite et demandent moins de mémoire, même avec un long historique et sur des ordinateurs de 8 Go.
+- Même dans un long historique, une nouvelle étape ne prend guère plus de temps à calculer que la première.
+- Annuler et rétablir vont plus vite, et la mémoire devenue inutile est libérée aussitôt.
+- Résoudre les recouvrements et exporter en 3MF va nettement plus vite.
 
 ### Imprimer et transmettre au slicer
 
@@ -67,6 +71,7 @@ dans `website/version.json`.
 - Les rebords étroits qui se portent seuls restent libres avec *Rebords sans support*. L'impression demande ainsi nettement moins de support.
 - Si le slicer refuse des filaments aux températures trop différentes sur un plateau, Solidon en donne désormais la raison et l'issue, au lieu de dire seulement qu'aucun fichier n'a été créé.
 - Dans la boîte de dialogue d'impression, imprimante, filaments et qualité restent entièrement visibles, même avec un texte agrandi. Les libellés longs passent à la ligne.
+- Le rapport de contrôle calcule plus vite et demande moins de mémoire.
 
 ### Filetages, perçages et pièces normalisées
 

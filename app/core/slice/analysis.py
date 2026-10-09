@@ -16,7 +16,9 @@ verschiedene Dinge, und der Bericht sagt, welches welches ist.
 
 from __future__ import annotations
 
+import functools
 import math
+import operator
 import threading
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, replace
@@ -33,7 +35,7 @@ from app.core.errors import ValidationError
 from app.core.geom import kernel_process
 from app.core.geom.mesh import MeshData
 from app.core.knowledge.rules import OVERHANG_ANGLE_FACTOR, OVERHANG_LIMIT_DEGREES
-from app.core.types import CancelToken, LayerInfo, Polygon, Ring, SliceResult
+from app.core.types import CancelToken, LayerInfo, Ring, SliceContour, SliceResult
 from app.core.units import EPS_GEOM, exact_cos, is_close, ring_area
 from app.i18n import _
 
@@ -490,10 +492,17 @@ def _material_cross(shape: ShapelyPolygon | None) -> manifold3d.CrossSection:
     if shape is None or shape.is_empty:
         return manifold3d.CrossSection()
     oriented = shapely.orient_polygons(shape, exterior_cw=False)
-    rings = []
-    for part in _areas_of(oriented):
-        rings.append(np.asarray(part.exterior.coords, dtype=np.float64)[:-1])
-        rings.extend(np.asarray(ring.coords, dtype=np.float64)[:-1] for ring in part.interiors)
+    parts = _areas_of(oriented)
+    if not parts:
+        return manifold3d.CrossSection([], manifold3d.FillRule.Positive)
+    # **Alle Ringe in einem Zug** (RM-595): je Teil die Außenkontur, dann seine
+    # Löcher, in derselben Folge wie über ``exterior`` und ``interiors`` — dort
+    # kostete jeder Ring ein Python-Objekt mit Typprüfungen, am Eiffelturm ein
+    # Zehntel des Schnitts.
+    every = shapely.get_rings(np.asarray(parts, dtype=object))
+    coordinates, owner = shapely.get_coordinates(every, return_index=True)
+    breaks = np.flatnonzero(np.diff(owner)) + 1
+    rings = [ring[:-1] for ring in np.split(coordinates, breaks)]
     return manifold3d.CrossSection(rings, manifold3d.FillRule.Positive)
 
 
@@ -876,17 +885,17 @@ def _cross_sections(
     capture_contours: bool,
     cancelled: CancelToken | None = None,
     shell_source: tuple[MeshData, np.ndarray] | None = None,
-) -> tuple[list[ShapelyPolygon | None], list[tuple[Polygon, ...] | None]]:
+) -> tuple[list[ShapelyPolygon | None], list[tuple[SliceContour, ...] | None]]:
     """Schnitte und optional ihre bereits vorhandenen Kernkonturen.
 
     ``cross_sections`` braucht nur GEOS-Geometrien. ``slice_body`` muss sie
-    danach in :class:`Polygon` zurückübersetzen; beim häufigen Ein-Ring-Fall
+    danach in :class:`SliceContour` zurückübersetzen; beim häufigen Ein-Ring-Fall
     wären das dieselben Koordinaten zum zweiten Mal. Der private gemeinsame
     Weg hält sie deshalb nur für diesen Aufrufer fest.
     """
     heights = np.asarray(heights, dtype=float)
     empty: list[ShapelyPolygon | None] = [None] * len(heights)
-    no_contours: list[tuple[Polygon, ...] | None] = [None] * len(heights)
+    no_contours: list[tuple[SliceContour, ...] | None] = [None] * len(heights)
     if not len(heights) or not len(mesh.raw.faces):
         return empty, no_contours
 
@@ -895,7 +904,7 @@ def _cross_sections(
     direct = _solid_sections(mesh, heights, cancelled=cancelled)
     if direct is not None:
         result: list[ShapelyPolygon | None] = []
-        contours: list[tuple[Polygon, ...] | None] = []
+        contours: list[tuple[SliceContour, ...] | None] = []
         for rings in direct:
             if cancelled is not None:
                 cancelled.raise_if_cancelled()
@@ -1495,7 +1504,7 @@ def _polygon_with_contours(
     *,
     capture_contours: bool,
     shell_ids: Callable[[np.ndarray], np.ndarray] | None = None,
-) -> tuple[ShapelyPolygon | None, tuple[Polygon, ...] | None]:
+) -> tuple[ShapelyPolygon | None, tuple[SliceContour, ...] | None]:
     """Baut die gefüllte Fläche einer Schicht aus ihren losen Segmenten.
 
     Zuerst über die Kantennummern verkettet (:func:`_rings_from`); trägt deren
@@ -1532,10 +1541,9 @@ def _polygon_with_contours(
                 coordinates = np.concatenate((coordinates[:1], coordinates[:0:-1]))
             shape = ShapelyPolygon(coordinates)
             if shape.is_valid:
-                own: tuple[Polygon, ...] | None = None
+                own: tuple[SliceContour, ...] | None = None
                 if capture_contours:
-                    closed = np.vstack((coordinates, coordinates[0]))
-                    own = (Polygon(outline=tuple(map(tuple, closed.tolist())), holes=()),)
+                    own = (SliceContour(outline=_frozen(np.vstack((coordinates, coordinates[0])))),)
                 return shape, own
             # Eine Ebene genau durch eine Ecke kann einen Rand auf derselben
             # Linie hinaus- und zurückführen. Nach Kantenidentität ist das ein
@@ -1620,7 +1628,7 @@ def _nested(
     *,
     capture_contours: bool,
     directed: bool = False,
-) -> tuple[ShapelyPolygon, tuple[Polygon, ...] | None] | None:
+) -> tuple[ShapelyPolygon, tuple[SliceContour, ...] | None] | None:
     """Mehrere verkettete Ringe zu Flächen mit Löchern — ohne ``polygonize``.
 
     Die Verkettung (:func:`_rings_from`) kennt die Ringe schon; was fehlt, ist
@@ -1705,11 +1713,13 @@ def _nested(
     if not capture_contours:
         return shape, None
 
-    def closed(ring: np.ndarray) -> tuple[tuple[float, float], ...]:
-        return tuple(map(tuple, np.vstack((ring, ring[:1])).tolist()))
+    def closed(ring: np.ndarray) -> np.ndarray:
+        return _frozen(np.vstack((ring, ring[:1])))
 
     return shape, tuple(
-        Polygon(outline=closed(outer[number]), holes=tuple(closed(hole) for hole in holes[number]))
+        SliceContour(
+            outline=closed(outer[number]), holes=tuple(closed(hole) for hole in holes[number])
+        )
         for number in shells
     )
 
@@ -1814,7 +1824,7 @@ def _without_slits(shape: ShapelyPolygon) -> ShapelyPolygon:
         if part.geom_type != "Polygon" or part.is_empty:
             continue
         rings = _real_holes(part)
-        if len(rings) == len(part.interiors):
+        if len(rings) == int(shapely.get_num_interior_rings(part)):
             kept.append(part)
             continue
         changed = True
@@ -1828,9 +1838,10 @@ def _without_slits(shape: ShapelyPolygon) -> ShapelyPolygon:
 
 def _real_holes(part: ShapelyPolygon) -> list[Any]:
     """Die Ringe, die überhaupt eine Weite haben, die die Suche auflöst."""
-    rings = list(part.interiors)
-    if not rings:
-        return rings
+    count = int(shapely.get_num_interior_rings(part))
+    if not count:
+        return []
+    rings = list(shapely.get_interior_ring(part, np.arange(count)))
     holes = shapely.polygons(rings)
     wide = 4.0 * shapely.area(holes) >= WIDTH_SIMPLIFY * shapely.length(holes)
     return [ring for ring, keep in zip(rings, wide.tolist(), strict=True) if keep]
@@ -2642,7 +2653,7 @@ def _bridge_width(
     return float(widest)
 
 
-def _to_polygons(shape: ShapelyPolygon) -> tuple[Polygon, ...]:
+def _to_polygons(shape: ShapelyPolygon) -> tuple[SliceContour, ...]:
     """Shapely zum eigenen Konturtyp des Kerns — der Kern behält sein eigenes
     Vokabular.
     """
@@ -2650,7 +2661,7 @@ def _to_polygons(shape: ShapelyPolygon) -> tuple[Polygon, ...]:
         return ()
     parts = getattr(shape, "geoms", [shape])
     return tuple(
-        Polygon(
+        SliceContour(
             outline=_ring(part.exterior),
             holes=tuple(_ring(ring) for ring in part.interiors),
         )
@@ -2662,12 +2673,19 @@ def _to_polygons(shape: ShapelyPolygon) -> tuple[Polygon, ...]:
     )
 
 
-def _ring(ring: Any) -> tuple[tuple[float, float], ...]:
+def _ring(ring: Any) -> np.ndarray:
     """Eine Kontur als nackte Zahlen. Eine detaillierte Schicht bringt
     tausende Punkte, die Koordinaten werden also in einem Aufruf herausgeholt
-    statt einzeln.
+    statt einzeln — und bleiben ein Feld (:class:`SliceContour`, RM-595).
     """
-    return tuple(map(tuple, shapely.get_coordinates(ring).tolist()))
+    return _frozen(shapely.get_coordinates(ring))
+
+
+def _frozen(points: np.ndarray) -> np.ndarray:
+    """Punkte einer Kontur als eigenes, schreibgeschütztes ``float64``-Feld (n, 2)."""
+    frozen = np.array(points, dtype=np.float64, order="C")
+    frozen.flags.writeable = False
+    return frozen
 
 
 # --- Gestapelte Messung (RM-201) ---------------------------------------------------
@@ -3273,7 +3291,7 @@ class ModelSupport:
     channel_at: tuple[float, float, float] | None = None
     """Wo das größte Kanalstück hängt. Der Sperrbefund nennt nicht diesen Ort,
     sondern das größte gesperrte Stück (``export.writer._support_blocker``)."""
-    channel_columns: tuple[tuple[Polygon, float, float], ...] = ()
+    channel_columns: tuple[tuple[SliceContour, float, float], ...] = ()
     """Je Kanalstück, dessen Decke ohne sich selbst zu schließen Stütze
     bräuchte, sein Grundriss mit der Höhe, auf der seine Säule aufsetzt, und der,
     auf der es hängt — daraus baut die Übergabe die Stützsperre."""
@@ -3287,12 +3305,12 @@ class ModelSupport:
     """Die Stücke, deren Säule außerhalb eines Kanals auf dem Modell aufsetzt,
     ohne Ränder (:func:`ledges`) — an ihnen fragt der Rat, ob eine lange Brücke
     ihre Stütze auf dem Modell braucht (:func:`open_bridge_width`)."""
-    open_columns: tuple[tuple[Polygon, float, float], ...] = ()
+    open_columns: tuple[tuple[SliceContour, float, float], ...] = ()
     """Von diesen Stücken die, die selbst Stütze brauchen (Insel, oder ihre Decke
     genügt :func:`worth_support`), wie ``channel_columns``: Grundriss, Höhe der
     Auflage, Höhe des Stücks. Die Stützsperre spart ihre Säulen aus
     (:func:`channel_space`); leer ohne Sperre."""
-    bed_columns: tuple[tuple[Polygon, float, float], ...] = ()
+    bed_columns: tuple[tuple[SliceContour, float, float], ...] = ()
     """Ebenso die Stücke, deren Säule das Bett erreicht: Grundriss, Höhe der
     untersten Schicht, Höhe des Stücks."""
 
@@ -3956,13 +3974,25 @@ def _model_support(
     # Material einmal je Schicht für alle Säulen und die unveränderte Kanalfrage.
     materials: dict[int, tuple[ShapelyPolygon, manifold3d.CrossSection]] = {}
     building = threading.Lock()
+    locks: dict[int, threading.Lock] = {}
 
     def material_at(index: int) -> tuple[ShapelyPolygon, manifold3d.CrossSection]:
+        # **Ein Schloss je Schicht** (RM-595): Unter dem einen für alle
+        # warteten die Säulen der anderen Arbeiter, während einer eine
+        # fremde Schicht baute — am Riser 64 s Wartezeit im Prüfbericht.
+        # Gebaut wird jede Schicht weiter genau einmal.
+        known = materials.get(index)
+        if known is not None:
+            return known
         with building:
-            if index not in materials:
+            lock = locks.setdefault(index, threading.Lock())
+        with lock:
+            known = materials.get(index)
+            if known is None:
                 shape = _material(layers[index])
-                materials[index] = shape, _material_cross(shape)
-            return materials[index]
+                known = (shape, _material_cross(shape))
+                materials[index] = known
+        return known
 
     ceilings = _Ceilings(layers, lambda index: material_at(index)[0])
     # Einzelne Stücke bekommen dieselbe Antwort wie im ganzen Durchgang — und
@@ -4009,8 +4039,14 @@ def _model_support(
             _shared, below = material_at(index - 1)
             if below.is_empty():
                 continue
+            under = below.bounds()
             kept = []
             for owner, column in pending:
+                # **Getrennte Hüllrechtecke nehmen nichts weg** (RM-595): Die
+                # Säule bleibt, wie sie ist, ohne Clipper-Aufruf.
+                if _apart(column.bounds(), under):
+                    kept.append((owner, column))
+                    continue
                 remaining = column - below
                 lost = float(column.area() - remaining.area())
                 if lost > EPS_GEOM:
@@ -4497,10 +4533,46 @@ def _total_area(parts: list[ShapelyPolygon]) -> float:
     return float(shapely.area(np.asarray(parts, dtype=object)).sum())
 
 
-def piece_area(piece: Polygon) -> float:
+def _apart(one: tuple[float, ...], other: tuple[float, ...]) -> bool:
+    """Ob zwei Hüllrechtecke (links, unten, rechts, oben) getrennt liegen; Berühren trennt nicht."""
+    return one[2] < other[0] or one[0] > other[2] or one[3] < other[1] or one[1] > other[3]
+
+
+def piece_area(piece: SliceContour) -> float:
     """Die Fläche einer Kontur samt Löchern, ohne GEOS — für viele kleine
-    Stücke schneller als der Umweg über ein Polygon (:func:`units.ring_area`)."""
-    return ring_area(piece.outline) - sum(ring_area(hole) for hole in piece.holes)
+    Stücke schneller als der Umweg über ein Polygon (:func:`units.ring_area`).
+
+    **Einmal je Kontur gerechnet und an ihr gemerkt** (Nachprüfung L, G-2):
+    Gesamtüberhang, größter Fleck, Stützsäulen und Fußflächen fragen dieselben
+    Stücke; als Felder kostete jede Frage das Umwandeln in Python-Zahlen neu,
+    am Kumiko-Organizer 6,3 statt 4,4 ms je Durchgang."""
+    known = piece._area
+    if known is None:
+        known = _ring_area(piece.outline) - sum(_ring_area(hole) for hole in piece.holes)
+        # Eingefroren ist die Kontur für ihre Gleichheit; die Fläche folgt aus
+        # ihr und steht außerhalb davon.
+        object.__setattr__(piece, "_area", known)
+    return known
+
+
+#: Ab wie vielen Punkten ein Ring seine Produkte in NumPy rechnet. Darunter
+#: ist die Schleife über eine Liste schneller (8 Punkte: 1 gegen 11 µs),
+#: darüber das Feld (4 096 Punkte: 560 gegen 120 µs).
+_VECTOR_RING: Final = 128
+
+
+def _ring_area(ring: Any) -> float:
+    """:func:`units.ring_area` eines Konturfelds, Bit für Bit.
+
+    Im Feld dieselben Produkte und Differenzen je Punkt, je für sich gerundet,
+    und dieselbe Summe in derselben Folge von links: ``functools.reduce`` über
+    ``float.__add__`` statt ``sum`` — das summiert seit Python 3.12 mit
+    Ausgleich und gäbe andere Bits."""
+    if len(ring) < _VECTOR_RING:
+        return ring_area(ring.tolist())
+    before = np.roll(ring, 1, axis=0)
+    terms = before[:, 0] * ring[:, 1] - ring[:, 0] * before[:, 1]
+    return abs(functools.reduce(operator.add, terms.tolist(), 0.0)) / 2.0
 
 
 def taper_length(shape: ShapelyPolygon) -> float:
@@ -4619,7 +4691,7 @@ def smooth_outline_height(result: SliceResult, min_length: float, arm: float) ->
     return smooth * spacing
 
 
-def _smooth_ring(ring: Ring, min_length: float, arm: float) -> bool:
+def _smooth_ring(ring: Ring | np.ndarray, min_length: float, arm: float) -> bool:
     """Ob dieser Umriss lang genug ist und nirgends über Arme von ``arm``
     stärker abknickt als :data:`SMOOTH_TURN_DEGREES`
     (:func:`smooth_outline_height`)."""

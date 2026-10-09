@@ -11,7 +11,7 @@ ist das ein Befund, kein zweiter Wahrheitsbegriff. Regeln:
 
 | Datei | Rolle |
 |---|---|
-| `kernel.py` | `Solid` und sein Weg ins Netz (ohne Dreiecke ohne Fläche, `_tessellated_body`), `available()`, `boolean_builder` (`SetRunParallel`, bitgleich), Merker je Körper (Volumen, Hüllquader, `is_closed`, `face_neighbours`), `nearest_distance`, `untrimmed_surface` |
+| `kernel.py` | `Solid` und sein Weg ins Netz (ohne Dreiecke ohne Fläche, `_tessellated_body`), `available()`, `boolean_builder` (`SetRunParallel`, bitgleich), Merker je Körper (Volumen, Hüllquader, `is_closed`, `face_neighbours`), `nearest_distance`, `untrimmed_surface`; `Solid.held_bytes`/`lean` für den Ergebniscache |
 | `profiles.py` | Vom Skizzenumriss zum Körper (§30.1): Gewinde, Formschräge, Bahn, Übergang, Querschnitte für Profilklemmen und Dichtnuten (`face_of`, `offset_face`, `face_boolean`, `prism`), `round_cord`, `shell_open_at`, `top_faces_of` |
 | `ops.py` | Die Operationen (§25, §10): `mesh_to_exact`, `brep_to_mesh`, `thread_exact`, `create_brep_box` …; `drill_brep_hole`, `shell_exact` versteckt, `prepare_ops.drill_hole` und `hollow_object` rufen sie |
 | `edit.py` | Einen Körper formen: Kanten, Bohrungen, Rundungen, Flächen, Lage; `fuse_solids` vereinigt berührende Volumenkörper mit nativer Flächenhistorie; `fillet_group` rundet eine belegte Gruppe und lässt je Kontur aus, was OpenCASCADE nicht baut (`GroupFillet`, Suche `_GroupSearch`, Kandidat `_group_candidate`, Ortung `_RoundsOf`); `fillet`/`chamfer` als exakte Hälfte von `geom/edge_ops.py` |

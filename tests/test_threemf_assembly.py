@@ -1236,3 +1236,67 @@ def test_every_part_keeps_its_own_geometry_in_a_long_assembly() -> None:
 
     built = [item.get("objectid") for item in root.findall(f".//{{{CORE}}}build/{{{CORE}}}item")]
     assert built == [node.get("id") for node in objects]
+
+
+def _geometry_row_by_row(
+    mesh: MeshData, group_id: str, order: dict[int, int], native: bool, blocker: MeshData | None
+) -> str:
+    """Die Geometrie, wie ``_write_geometry`` sie bis zum 08.10.2026 schrieb: Zeile für Zeile."""
+    lines = ["<vertices>"]
+    for body in (mesh, blocker):
+        if body is None:
+            continue
+        for point in body.raw.vertices:
+            lines.append(f'<vertex x="{point[0]:.17g}" y="{point[1]:.17g}" z="{point[2]:.17g}" />')
+    lines.append("</vertices><triangles>")
+    assignment = mesh.slots or ((0,) * len(mesh.raw.faces))
+    for face, slot in zip(mesh.raw.faces, assignment, strict=True):
+        painted = (
+            f' paint_color="{threemf._paint_code(order[int(slot)])}"'
+            f' slic3rpe:mmu_segmentation="{threemf._paint_code(order[int(slot)])}"'
+            if native
+            else ""
+        )
+        lines.append(
+            f'<triangle v1="{int(face[0])}" v2="{int(face[1])}" v3="{int(face[2])}"'
+            f' pid="{group_id}" p1="{order.get(int(slot), 0)}"{painted} />'
+        )
+    if blocker is not None:
+        start = len(mesh.raw.vertices)
+        for face in blocker.raw.faces:
+            lines.append(
+                f'<triangle v1="{int(face[0]) + start}" v2="{int(face[1]) + start}"'
+                f' v3="{int(face[2]) + start}" pid="{group_id}" p1="0" />'
+            )
+    lines.append("</triangles>")
+    return "".join(lines)
+
+
+@pytest.mark.parametrize("block", [65_536, 7], ids=["ein-block", "viele-bloecke"])
+@pytest.mark.parametrize("native", [False, True], ids=["einfach", "nativ"])
+def test_the_geometry_text_is_byte_for_byte_the_row_by_row_text(
+    native: bool, block: int, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Über Listen geschrieben statt Zeile für Zeile — dieselben Bytes (RM-568).
+
+    Am Murmelbrett (1,95 Mio. Dreiecke) kostete das Lesen der NumPy-Zeilen den
+    größten Teil der 6,4 s; über ``tolist`` sind es 4 s. Ecken mit siebzehn
+    Stellen, die nur float64 trägt, drei Slots mit Bemalung und eine
+    Stützsperre — alles muss Zeichen für Zeichen bleiben.
+    """
+    body = trimesh.creation.icosphere(subdivisions=2, radius=7.0)
+    body.apply_translation((0.1, 1e-7, 3.333333333333333))
+    slots = tuple(index % 3 for index in range(len(body.faces)))
+    mesh = MeshData(raw=body, slots=slots)
+    blocker = MeshData.of(trimesh.creation.box(extents=(1.0, 2.0, 0.3)))
+    order = {0: 0, 1: 2, 2: 1}
+    root = ET.Element("object")
+    # Blockweise gebaut (RM-567): Auch über Blockgrenzen dieselben Bytes.
+    monkeypatch.setattr(threemf, "_TEXT_BLOCK", block)
+
+    mark, written = threemf._write_geometry(
+        root, mesh, "7", order, native, number=3, blocker=blocker
+    )
+
+    assert mark in (root.find("mesh").text or "")  # type: ignore[union-attr]
+    assert written.decode("utf-8") == _geometry_row_by_row(mesh, "7", order, native, blocker)

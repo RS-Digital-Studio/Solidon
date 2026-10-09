@@ -1,7 +1,8 @@
 """Der Ergebnis-Cache über dem Operations-Hash (Bauplan §15, §38).
 
-Zwei Ebenen. Im Speicher ein LRU-Ablage, begrenzt über die Dreieckszahl —
-denn die ist es, die den Rechner wirklich füllt. Auf der Platte dieselben
+Zwei Ebenen. Im Speicher eine LRU-Ablage, begrenzt über die Bytes, die ihre
+Netze samt deren Cache halten, und über die Dreieckszahl (RM-567,
+:data:`MEMORY_SHARE`). Auf der Platte dieselben
 Ergebnisse unter demselben Hash, damit das Wiederöffnen eines Projekts nicht
 den ganzen Stapel neu rechnet (§31: unter einer Sekunde aus dem
 Platten-Cache).
@@ -25,6 +26,7 @@ import threading
 import zipfile
 import zlib
 from collections import OrderedDict
+from collections.abc import Callable, Collection, Iterable, Sequence
 from contextlib import suppress
 from dataclasses import dataclass, field, replace
 from pathlib import Path
@@ -60,6 +62,197 @@ _log = get_logger(__name__)
 #: Grobe Obergrenze im Speicher. Eine Million Dreiecke ist das
 #: Viewport-Ziel (§31).
 DEFAULT_TRIANGLE_BUDGET: Final = 20_000_000
+
+#: **Die Grenze, die wirklich hält, zählt Bytes** (RM-567). Die Dreiecke
+#: darüber sagen nicht, was ein Eintrag hält: ein Netz mit allem, was
+#: ``trimesh``, die Erkennung und der Prüfbericht an ihm merken, 157 bis 644
+#: Byte je Dreieck und eine Schichtanalyse von 108 MB dazu (Laptop-Riser,
+#: 08.10.2026). Zwanzig Millionen Dreiecke waren damit drei bis dreizehn
+#: Gigabyte; im Fenster hielt jedes Verschieben am Spiderman (886 000
+#: Dreiecke) 230 MB mehr fest, ohne dass je etwas verdrängt wurde. Die
+#: Speicherebene hält deshalb höchstens ein Achtel des eingebauten
+#: Arbeitsspeichers — auf 8 GB ein Gigabyte, auf 16 GB zwei —, mindestens
+#: :data:`MEMORY_FLOOR`, höchstens :data:`MEMORY_CEILING`. Was sie verdrängt,
+#: liegt weiter auf der Platte und kommt von dort zurück.
+MEMORY_SHARE: Final = 8
+MEMORY_FLOOR: Final = 512 * 1024 * 1024
+MEMORY_CEILING: Final = 4 * 1024 * 1024 * 1024
+#: Wovon die Grenze ausgeht, wenn der Rechner seinen Speicher nicht nennt.
+ASSUMED_MEMORY: Final = 8 * 1024 * 1024 * 1024
+#: Was ein Körper je Dreieck hält, der seinen Speicher nicht selbst nennt —
+#: ein exakter Körper oder ein Prüfnetz der Tests: Ecken und Dreiecke, ohne
+#: Cache.
+FALLBACK_BYTES_PER_TRIANGLE: Final = 36
+
+
+def default_memory_budget() -> int:
+    """Wie viel die Speicherebene auf diesem Rechner höchstens hält, in Bytes."""
+    from app.core.memory import physical_memory
+
+    installed = physical_memory() or ASSUMED_MEMORY
+    return max(MEMORY_FLOOR, min(MEMORY_CEILING, installed // MEMORY_SHARE))
+
+
+def held_by(
+    result: CachedResult,
+    kept: Collection[int] = (),
+    seen: set[int] | None = None,
+    freeable: list[int] | None = None,
+    counted: dict[int, tuple[Any, int, dict[int, tuple[object, int]]]] | None = None,
+) -> int:
+    """Wie viele Bytes ein Eintrag gerade hält — Netze samt Cache, Merkmale.
+
+    Gemessen wird nicht einmal für immer: Ein Netz im Cache ist dasselbe
+    Objekt wie in der Szene, und was später an ihm gerechnet wird —
+    Nachbarschaften, die Schichtanalyse des Prüfberichts —, hängt sich an ihn
+    und wiegt mit. Netze, deren Nummer (``id``) in ``kept`` steht, hält die
+    Szene ohnehin; sie zählen hier nicht. Felder, deren Nummer in ``seen``
+    steht, sind schon gezählt — ein bewegtes Netz teilt seine
+    Nachbarschaften mit seinem Quellnetz (``transform._carry_cache``).
+    ``freeable`` sammelt in seinem ersten Element, was schlanke Netze davon
+    freigäben (``MeshData.lean``).
+
+    ``counted`` merkt die Bytes je Merkmalssatz: Ein Eintrag ändert seine
+    Merkmale nie, und sie jedes Mal neu zu zählen kostete am Eiffelturm
+    (4 878 Merkmale, neun Einträge) 1,4 s je ``trim``. Gemerkt wird je Satz
+    sein Rest und seine großen Behälter (``memory.held_parts``): Was zwei
+    Sätze teilen — die Dreiecksnummern eines bewegten Merkmals —, zählt
+    einmal; je Satz für sich gezählt, hielt die Grenze am Laptop-Riser nach
+    vier Verschieben 150 statt 122 MB (Nachprüfung L, M-3).
+    """
+    from app.core.memory import held_bytes, held_parts
+
+    seen = set() if seen is None else seen
+    total = 0
+    for entry in result.objects:
+        if id(entry.mesh) in kept:
+            continue
+        total += _mesh_bytes(entry.mesh, seen, freeable)
+        if counted is None:
+            total += held_bytes(entry.features, seen)
+            continue
+        features = entry.features
+        known = counted.get(id(features))
+        if known is None or known[0] is not features:
+            known = (features, *held_parts(features))
+            counted[id(features)] = known
+        if id(features) in seen:
+            continue
+        total += known[1]
+        # Der Satz selbst kann einer seiner Teile sein; erst danach als
+        # gezählt vermerkt.
+        for identity, (_holder, size) in known[2].items():
+            if identity not in seen:
+                seen.add(identity)
+                total += size
+        seen.add(id(features))
+    return total
+
+
+def _mesh_bytes(mesh: Mesh, seen: set[int], freeable: list[int] | None = None) -> int:
+    """Ein Netz samt dem, was die Erkennung für seinen Körper gemerkt hat.
+
+    Die Merker der Erkennung hängen am Körper und gehen mit ihm
+    (``perceive.features.held_answers``); wer das Netz hält, hält sie mit.
+    """
+    from app.core.memory import held_bytes
+
+    measure = getattr(mesh, "held_bytes", None)
+    if not callable(measure):
+        return mesh.triangle_count * FALLBACK_BYTES_PER_TRIANGLE
+    total = int(measure(seen, freeable))
+    raw = getattr(mesh, "raw", None)
+    if raw is not None:
+        from app.core.perceive.features import held_answers
+
+        # Je Merker einzeln: Die Liste ist gemischt, und ihre Folge kommt
+        # aus einer Menge (Review L, M1). Sie hängen am alten Körper und
+        # gehen mit ihm, wenn ein schlankes Netz ihn ersetzt.
+        answers = sum(held_bytes(answer, seen) for answer in held_answers(raw))
+        total += answers
+        if freeable is not None:
+            freeable[0] += answers
+    return total
+
+
+def _held_signature(result: CachedResult) -> tuple[tuple[int, int, int], ...]:
+    """Woran zu sehen ist, ob ein Eintrag seit der letzten Messung gewachsen ist.
+
+    Je Körper sein Netz und die Zahl der Einträge in dessen Cache. Gewachsen
+    ist er nur, wenn dort etwas dazukam; neu zu messen kostet am Riser 5 ms
+    und mit Schichtanalyse 40 ms — je Ablegen über alle Einträge zu viel.
+    """
+    signature = []
+    for entry in result.objects:
+        raw = getattr(entry.mesh, "raw", None)
+        cache = getattr(getattr(raw, "_cache", None), "cache", None)
+        signature.append(
+            (id(entry.mesh), len(cache) if isinstance(cache, dict) else 0, len(entry.features))
+        )
+    return tuple(signature)
+
+
+def _memo_bytes(seen: set[int] | None = None) -> int:
+    """Was die Merker der Auswertung halten; sie zählen in derselben Grenze (Review L, G3).
+
+    Der Merker der Zuordnung (``perceive.matching.matched_bytes``) und der
+    gemerkten Zuordnungsschritte samt Teilhashes
+    (``scene.evaluate.remembered_bytes``, RM-593). Sie gehören keinem Eintrag
+    und werden hier nicht verdrängt — ihre eigenen Grenzen zählen Kennungen
+    und Merkmale.
+
+    Mit ``seen`` — den schon gezählten Feldern der Einträge — zählen die
+    Schritte nur, was sie darüber hinaus halten: Ihre bewegten Merkmale teilen
+    die Dreiecksnummern mit den Einträgen (Nachprüfung L, M-3). Ohne ``seen``
+    ihr Gewicht über den eigenen Eintrag hinaus, eine Obergrenze.
+    """
+    from app.core.perceive.matching import matched_bytes
+    from app.core.scene.evaluate import remembered_bytes, remembered_parts
+
+    if seen is None:
+        return matched_bytes() + remembered_bytes()
+    steps = 0
+    for rest, parts in remembered_parts():
+        steps += rest
+        for identity, (_holder, size) in parts.items():
+            if identity not in seen:
+                seen.add(identity)
+                steps += size
+    return matched_bytes() + steps
+
+
+def _release_steps(excess: int) -> int:
+    """Gibt gemerkte Zuordnungsschritte frei, wenn das allein die Grenze hält; nennt die Bytes.
+
+    Vor dem Verdrängen eines Eintrags (``ResultCache.trim``): Ein vergessener
+    Schritt kostet die nächste Auswertung seine Zuordnung, ein verdrängter
+    Eintrag sein ganzes Ergebnis. Reicht der ganze Merker nicht, bleibt er —
+    sonst gäbe jede Auswertung ihn frei und merkte ihn wieder, und am
+    Eiffelturm unter zu knapper Grenze ordnete jede Auswertung jeden Schritt
+    neu zu (Paket L). Der Merker der Zuordnung bleibt immer; seine Grenze
+    zählt Kennungen.
+    """
+    from app.core.scene.evaluate import release_remembered_steps, remembered_bytes
+
+    if remembered_bytes() < excess:
+        return 0
+    return release_remembered_steps(excess)
+
+
+def _leaner(result: CachedResult, kept: Collection[int]) -> CachedResult:
+    """Der Eintrag mit schlanken Netzen (``MeshData.lean``) außer denen der Szene."""
+    objects = []
+    changed = False
+    for body in result.objects:
+        lean = getattr(body.mesh, "lean", None)
+        if id(body.mesh) in kept or not callable(lean):
+            objects.append(body)
+            continue
+        mesh = lean()
+        changed |= mesh is not body.mesh
+        objects.append(body if mesh is body.mesh else replace(body, mesh=mesh))
+    return replace(result, objects=tuple(objects)) if changed else result
+
 
 #: Obergrenze des Platten-Caches; die ältesten Einträge gehen zuerst.
 DEFAULT_DISK_BUDGET_BYTES: Final = 2 * 1024 * 1024 * 1024
@@ -289,10 +482,17 @@ class ResultCache:
         self,
         triangle_budget: int = DEFAULT_TRIANGLE_BUDGET,
         disk: DiskCache | None = None,
+        memory_budget: int | None = None,
     ) -> None:
         self._entries: OrderedDict[str, CachedResult] = OrderedDict()
         self._cost = 0
         self._budget = triangle_budget
+        self._memory_budget = default_memory_budget() if memory_budget is None else memory_budget
+        self._held: dict[str, tuple[tuple[Any, ...], int]] = {}
+        #: Bytes je Merkmalssatz eines Eintrags (``held_by``, ``counted``).
+        self._features_held: dict[int, tuple[Any, int, dict[int, tuple[object, int]]]] = {}
+        """Je Schlüssel die zuletzt gemessenen Bytes und woran die Messung hing
+        (:func:`_held_signature`)."""
         self._disk = disk
         self._refusals: OrderedDict[str, AppError] = OrderedDict()
         """Das Urteil der vollen Kette über Schritte, an denen sie gescheitert ist (RM-534).
@@ -402,14 +602,209 @@ class ResultCache:
 
     def _store(self, key: str, result: CachedResult) -> None:
         """Nur mit gehaltenem Schloss aufrufen — siehe :attr:`_lock`."""
+        gone: list[CachedResult] = []
         if key in self._entries:
-            self._cost -= self._entries.pop(key).cost
+            gone.append(self._entries.pop(key))
+            self._cost -= gone[-1].cost
+            self._held.pop(key, None)
         self._entries[key] = result
         self._cost += result.cost
         while self._cost > self._budget and len(self._entries) > 1:
-            _, dropped = self._entries.popitem(last=False)
+            dropped_key, dropped = self._entries.popitem(last=False)
+            gone.append(dropped)
+            self._held.pop(dropped_key, None)
             self._cost -= dropped.cost
             self.statistics.evictions += 1
+        self._release_steps_of(gone)
+
+    def _release_steps_of(self, gone: Iterable[CachedResult]) -> int:
+        """Nur mit gehaltenem Schloss aufrufen — vergisst die Schritte verlassener Merkmale.
+
+        Ein gemerkter Zuordnungsschritt zählt die Merkmale seines Eintrags
+        nicht mit (``evaluate._remember_step``); verlässt der Eintrag die
+        Speicherebene, geht der Schritt mit, außer ein anderer Eintrag hält
+        dieselben Merkmale (Nachprüfung L, G-6). Gibt die Bytes zurück.
+        """
+        sources = {id(body.features) for entry in gone for body in entry.objects}
+        if not sources:
+            return 0
+        sources -= self._features_present()
+        if not sources:
+            return 0
+        from app.core.scene.evaluate import release_steps_of
+
+        return release_steps_of(sources)
+
+    def _features_present(self) -> set[int]:
+        """Nur mit gehaltenem Schloss — die Kennungen der Merkmalssätze aller Einträge."""
+        return {id(body.features) for entry in self._entries.values() for body in entry.objects}
+
+    def with_held_features(
+        self,
+        then: Callable[[frozenset[int], Callable[[object], dict[int, tuple[object, int]]]], None],
+    ) -> None:
+        """Ruft ``then`` mit den Kennungen der Merkmalssätze aller Einträge, unter dem Schloss.
+
+        Für den Merker der Zuordnungsschritte (``evaluate._keep_steps``): Er
+        nimmt nur Schritte, deren Merkmale hier liegen, und kein anderer Faden
+        verdrängt sie dazwischen. Das Zweite gibt die großen Behälter eines
+        dieser Sätze (``memory.held_parts``) aus demselben Merker, den
+        :meth:`trim` danach liest — gezählt wird jeder Satz einmal, hier oder
+        dort, wie vor dem Merker der Schritte.
+        """
+        with self._lock:
+            then(frozenset(self._features_present()), self._feature_parts)
+
+    def _feature_parts(self, features: object) -> dict[int, tuple[object, int]]:
+        """Nur mit gehaltenem Schloss — die großen Behälter eines Merkmalssatzes, gemerkt."""
+        from app.core.memory import held_parts
+
+        known = self._features_held.get(id(features))
+        if known is None or known[0] is not features:
+            known = (features, *held_parts(features))
+            self._features_held[id(features)] = known
+        return known[2]
+
+    def trim(self, keep: Iterable[Mesh] = ()) -> None:
+        """Hält die Bytegrenze der Speicherebene (RM-567).
+
+        Gerufen von der Auswertung am Ende jedes vollständigen Laufs, mit den
+        Netzen ihrer fertigen Szene in ``keep``: Die hält die Szene ohnehin,
+        sie zählen nicht und bleiben, wie sie sind. Am Ende und nicht beim
+        Ablegen, weil ein Netz wächst, nachdem es abgelegt wurde —
+        Zurücknehmen legt nichts ab und wertet doch einen älteren Stand aus,
+        dessen Netz seine Nachbarschaften neu rechnet, am Spiderman 256 MB je
+        Schritt zurück (08.10.2026).
+
+        Was dabei losgelassen wird, meldet sie der Speicherbereinigung
+        (``memory.note_released``, RM-594): Ein ``trimesh``-Netz hängt in
+        Ringen an sich selbst und wird erst frei, wenn sie läuft.
+        """
+        from app.core.memory import note_released
+
+        with self._lock:
+            released = self._trim(list(keep))
+        note_released(released)
+
+    def _trim(self, kept: Sequence[Mesh]) -> int:
+        """Nur mit gehaltenem Schloss aufrufen — siehe :attr:`_lock`.
+
+        Gibt zurück, wie viele Bytes schlanke Netze und verdrängte Einträge
+        losgelassen haben.
+        """
+        # Die Bytes zuletzt, in zwei Stufen. **Erst schrumpfen, dann
+        # verdrängen**: Eine Auswertung geht den Verlauf von vorn durch und
+        # fragt jeden Schritt hier ab. Wer die ältesten Einträge verdrängt,
+        # holt sie bei der nächsten Auswertung von der Platte und verdrängt
+        # dabei die nächsten — am Spiderman mit acht Schritten las jede
+        # Auswertung acht Netze von der Platte, 15 statt 2 s (08.10.2026). Was
+        # ein älterer Eintrag wirklich braucht, sind Ecken, Dreiecke und
+        # Merkmale; Kantentabellen und Nachbarschaften rechnet ein neues
+        # Netz aus denselben Feldern, wenn jemand fragt (``MeshData.lean``).
+        # Die Schichtanalyse des Prüfberichts behält es (Nachprüfung L, M-2).
+        # Der jüngste Eintrag bleibt immer ganz, auch über der Grenze — ohne
+        # ihn rechnete der nächste Schritt alles noch einmal.
+        ids = {id(mesh) for mesh in kept}
+        held = sum(self._unkept(key, entry, ids) for key, entry in self._entries.items())
+        if held + _memo_bytes() <= self._memory_budget:
+            return 0
+        # Die Schätzung je Eintrag zählt geteilte Felder mehrfach; über der
+        # Grenze wird **einmal** genau gezählt, jedes Feld einmal, beim
+        # jüngsten zuerst, und danach abgezogen, was frei wird (Review L,
+        # M2): Verdrängen ändert die Zurechnung der jüngeren Einträge nicht,
+        # und was ein schlankes Netz losließe, steht beim Zählen fest. Nach
+        # jedem Schritt neu zu zählen kostete am Riser unter 150 MB Grenze
+        # 3 s je Auswertung, mit dem Verlauf quadratisch wachsend.
+        sizes, freeable, held = self._exact(kept, ids)
+        released = 0
+        older = list(self._entries)[:-1]
+        for key in older:
+            if held <= self._memory_budget:
+                return released
+            if freeable[key] <= 0:
+                continue
+            entry = self._entries[key]
+            leaner = _leaner(entry, ids)
+            if leaner is entry:
+                continue
+            self._entries[key] = leaner
+            self._held.pop(key, None)
+            held -= freeable[key]
+            released += freeable[key]
+            sizes[key] -= freeable[key]
+        if held > self._memory_budget:
+            freed = _release_steps(held - self._memory_budget)
+            held -= freed
+            released += freed
+        gone: list[CachedResult] = []
+        for key in older:
+            if held <= self._memory_budget:
+                break
+            entry = self._entries[key]
+            if any(id(body.mesh) in ids for body in entry.objects):
+                continue
+            del self._entries[key]
+            gone.append(entry)
+            self._held.pop(key, None)
+            held -= sizes[key]
+            released += sizes[key]
+            self._cost -= entry.cost
+            self.statistics.evictions += 1
+        return released + self._release_steps_of(gone)
+
+    def _exact(
+        self, kept: Sequence[Mesh], ids: set[int]
+    ) -> tuple[dict[str, int], dict[str, int], int]:
+        """Je Eintrag seine Bytes und was schlanke Netze davon freigäben, dazu die Summe.
+
+        Jedes Feld einmal: erst die Szene, dann vom jüngsten Eintrag an, dann
+        die gemerkten Zuordnungsschritte (Nachprüfung L, M-3), zuletzt der
+        Merker der Zuordnung.
+        """
+        present = {id(body.features) for entry in self._entries.values() for body in entry.objects}
+        for gone in set(self._features_held) - present:
+            del self._features_held[gone]
+        seen: set[int] = set()
+        for mesh in kept:
+            _mesh_bytes(mesh, seen)
+        sizes: dict[str, int] = {}
+        freeable: dict[str, int] = {}
+        for key in reversed(list(self._entries)):
+            loose = [0]
+            sizes[key] = held_by(self._entries[key], ids, seen, loose, self._features_held)
+            freeable[key] = loose[0]
+        return sizes, freeable, sum(sizes.values()) + _memo_bytes(seen)
+
+    def _unkept(self, key: str, entry: CachedResult, kept: set[int]) -> int:
+        """Die Bytes eines Eintrags ohne die Netze der Szene; gemerkt, solange er nicht wächst.
+
+        Auch der Eintrag, dessen Netz die Szene zeigt: Neu gezählt kostete er
+        am Eiffelturm bei jeder Auswertung eine halbe Sekunde, ohne dass sich
+        an ihm etwas geändert hatte. Welche seiner Netze die Szene hält, steht
+        deshalb mit im Merker.
+        """
+        shown = tuple(id(body.mesh) in kept for body in entry.objects)
+        signature = (*_held_signature(entry), shown)
+        known = self._held.get(key)
+        if known is None or known[0] != signature:
+            known = (
+                signature,
+                held_by(entry, kept if any(shown) else (), counted=self._features_held),
+            )
+            self._held[key] = known
+        return known[1]
+
+    def _held_bytes(self) -> int:
+        """Die Bytes aller Einträge; neu gemessen wird nur, was gewachsen ist."""
+        total = 0
+        for key, entry in self._entries.items():
+            signature = (*_held_signature(entry), (False,) * len(entry.objects))
+            known = self._held.get(key)
+            if known is None or known[0] != signature:
+                known = (signature, held_by(entry, counted=self._features_held))
+                self._held[key] = known
+            total += known[1]
+        return total
 
     def clear(self) -> None:
         """Leert die **Speicher**ebene. Die Platte bleibt, und das ist der Sinn.
@@ -433,7 +828,11 @@ class ResultCache:
         ``test_the_memory_level_fills_itself_from_disk`` fest.
         """
         with self._lock:
+            gone = list(self._entries.values())
             self._entries.clear()
+            self._release_steps_of(gone)
+            self._held.clear()
+            self._features_held.clear()
             self._refusals.clear()
             self._cost = 0
 
@@ -441,6 +840,17 @@ class ResultCache:
     def cost(self) -> int:
         with self._lock:
             return self._cost
+
+    @property
+    def held_bytes(self) -> int:
+        """Wie viele Bytes die Speicherebene gerade hält (RM-567)."""
+        with self._lock:
+            return self._held_bytes()
+
+    @property
+    def memory_budget(self) -> int:
+        """Wie viele Bytes sie höchstens hält; den jüngsten Eintrag behält sie immer."""
+        return self._memory_budget
 
     def __len__(self) -> int:
         with self._lock:

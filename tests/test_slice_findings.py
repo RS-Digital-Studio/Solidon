@@ -988,7 +988,7 @@ def test_the_channel_space_leaves_a_column_on_the_model_free() -> None:
     Brücke gar nicht (0,0 statt 2,0 m Stützbahn). Hier steht dieselbe Lage im
     Tunnel: eine Säule auf dem Tunnelboden neben der Kanaldecke.
     """
-    from app.core.types import Polygon
+    from tests.helpers import slice_contour
 
     result = slice_body(tunnel_block(20.0), 0.5)
     model = model_support(result)
@@ -997,7 +997,7 @@ def test_the_channel_space_leaves_a_column_on_the_model_free() -> None:
     blocked = unary_union([region for _low, _high, region in channel_space(result, model, LINE)])
     assert blocked.intersection(footprint).area > 15.0, "ohne die Säule sperrt der Tunnel sie mit"
 
-    beside = replace(model, open_columns=(*model.open_columns, (Polygon(column), 8.0, 27.0)))
+    beside = replace(model, open_columns=(*model.open_columns, (slice_contour(column), 8.0, 27.0)))
     slabs = channel_space(result, beside, LINE)
 
     assert slabs, "der Kanal bleibt gesperrt"
@@ -1011,12 +1011,12 @@ def test_a_column_too_narrow_for_a_line_stays_blocked() -> None:
     im Kanal der Waschschüssel den OrcaSlicer 1,5 m Stütze hindurchstellen
     (08.10.2026). Hier eine Säule von 0,6 mm im Tunnel, schmaler als zwei
     Bahnbreiten."""
-    from app.core.types import Polygon
+    from tests.helpers import slice_contour
 
     result = slice_body(tunnel_block(20.0), 0.5)
     model = model_support(result)
     crumb = ((4.0, -0.3), (4.6, -0.3), (4.6, 0.3), (4.0, 0.3))
-    beside = replace(model, open_columns=(*model.open_columns, (Polygon(crumb), 8.0, 27.0)))
+    beside = replace(model, open_columns=(*model.open_columns, (slice_contour(crumb), 8.0, 27.0)))
 
     blocked = unary_union([region for _low, _high, region in channel_space(result, beside, LINE)])
 
@@ -1029,7 +1029,7 @@ def test_a_gap_too_narrow_for_a_support_line_stays_free() -> None:
     Zwickel zwischen Schwanz- und Kinnstacheln aus 60 000 Krümeln unter 100 mm³.
     Hier ein Schlitz von 0,6 mm neben dem Tunnel mit einer eigenen Säule darin;
     den Filter hielt bis zur Durchsicht des Merges vom 08.10.2026 kein Test."""
-    from app.core.types import Polygon
+    from tests.helpers import slice_contour
 
     body = trimesh.boolean.difference(
         [tunnel_block(20.0).raw, brick(0.6, 50.0, 20.0, (12.3, 0.0, 18.0))]
@@ -1037,7 +1037,9 @@ def test_a_gap_too_narrow_for_a_support_line_stays_free() -> None:
     result = slice_body(place_on_bed(MeshData.of(body)), 0.5)
     model = model_support(result)
     slit = ((12.0, -15.0), (12.6, -15.0), (12.6, 15.0), (12.0, 15.0))
-    beside = replace(model, channel_columns=(*model.channel_columns, (Polygon(slit), 8.0, 27.0)))
+    beside = replace(
+        model, channel_columns=(*model.channel_columns, (slice_contour(slit), 8.0, 27.0))
+    )
 
     blocked = unary_union([region for _low, _high, region in channel_space(result, beside, LINE)])
 
@@ -1067,7 +1069,7 @@ def test_in_an_enclosed_cavity_nothing_is_spared() -> None:
     selbst Stütze bräuchte; ausgespart, holte der ElegooSlicer sie mit einem Ast
     quer durch den Kanal (1,6 m), ohne Aussparung 0,0 m (08.10.2026). Hier dieselbe
     Säule wie im offenen Tunnel, in einer geschlossenen Kammer."""
-    from app.core.types import Polygon
+    from tests.helpers import slice_contour
 
     block = brick(60.0, 40.0, 40.0, (0.0, 0.0, 20.0))
     chamber = brick(20.0, 30.0, 20.0, (0.0, 0.0, 18.0))
@@ -1077,7 +1079,7 @@ def test_in_an_enclosed_cavity_nothing_is_spared() -> None:
     model = model_support(result)
     column = ((2.0, -2.0), (6.0, -2.0), (6.0, 2.0), (2.0, 2.0))
     footprint = box(2.0, -2.0, 6.0, 2.0)
-    beside = replace(model, open_columns=(*model.open_columns, (Polygon(column), 8.0, 27.0)))
+    beside = replace(model, open_columns=(*model.open_columns, (slice_contour(column), 8.0, 27.0)))
 
     blocked = unary_union([region for _low, _high, region in channel_space(result, beside, LINE)])
 
@@ -2381,3 +2383,59 @@ def test_a_ceiling_footprint_without_any_held_edge_does_not_close(
     monkeypatch.setattr(ceilings, "_gap", lambda _name: 0.35)
 
     assert not ceilings.closes(frozenset({(1, 0)}))
+
+
+def test_separate_columns_keep_their_answer_without_the_subtraction(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Liegt eine Säule neben dem Material darunter, nimmt der Abzug nichts weg (RM-595).
+
+    Der Prüfbericht rechnete jeden Abzug in Clipper, auch für Säulen, deren
+    Hüllrechteck das Material der Schicht darunter nicht berührt — am Riser
+    zwei Drittel aller Abzüge. Übersprungen ist die Antwort dieselbe wie
+    gerechnet (Gegenprobe: jeder Abzug erzwungen).
+    """
+    from app.core.slice import analysis
+
+    skipped: list[bool] = []
+    real = analysis._apart
+
+    def counted(one: tuple[float, ...], other: tuple[float, ...]) -> bool:
+        apart = real(one, other)
+        skipped.append(apart)
+        return apart
+
+    bodies = [tunnels_side_by_side(5), tunnel_block(65.0), table()]
+    results = [slice_body(body, 0.5) for body in bodies]
+    monkeypatch.setattr(analysis, "_apart", counted)
+    quick = [analysis._model_support(result, analysis.CHANNEL_WIDTH, None) for result in results]
+    assert any(skipped), "Voraussetzung: getrennte Säulen kommen vor"
+    monkeypatch.setattr(analysis, "_apart", lambda one, other: False)
+    full = [analysis._model_support(result, analysis.CHANNEL_WIDTH, None) for result in results]
+    assert quick == full
+
+
+def test_each_layer_material_is_built_once_by_parallel_columns(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Ein Schloss je Schicht: Jede Schicht wird genau einmal gebaut, auch von vier Arbeitern."""
+    import sys
+    from collections import Counter
+
+    from app.core.slice import analysis
+
+    built: Counter[int] = Counter()
+    real = analysis._material
+
+    def counted(layer: object) -> object:
+        # Nur der gemeinsame Speicher der Säulen; die Ränder halten ihren eigenen.
+        if sys._getframe(1).f_code.co_name == "material_at":
+            built[id(layer)] += 1
+        return real(layer)  # type: ignore[arg-type]
+
+    result = slice_body(tunnels_side_by_side(5), 0.2)
+    assert len(result.layers) >= analysis.PARALLEL_FROM, "Voraussetzung: der parallele Weg"
+    monkeypatch.setattr(analysis, "_workers", lambda limit: 4)
+    monkeypatch.setattr(analysis, "_material", counted)
+    analysis._model_support(result, analysis.CHANNEL_WIDTH, None)
+    assert built and max(built.values()) == 1

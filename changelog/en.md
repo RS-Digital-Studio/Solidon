@@ -48,6 +48,10 @@ it into `website/version.json`.
 - A different filament shows at once, on parts and STEP bodies too, and Solidon recomputes nothing for it. Selected bodies show their filament colour beneath the highlight.
 - In the *Selection* tab, the filament field assigns only on a click or Enter. Arrow keys and typing just browse, and the mouse wheel scrolls the tab.
 - In the translated versions, *New filament* no longer scrolls sideways when the window is shorter than its content.
+- Large models load noticeably faster and need less memory, even with a long history and on computers with 8 GB.
+- Even in a long history, a new step takes hardly longer to calculate than the first.
+- Undo and redo are faster, and memory that is no longer needed is freed right away.
+- Resolving overlaps and exporting as 3MF are considerably faster.
 
 ### Printing and slicer handover
 
@@ -66,6 +70,7 @@ it into `website/version.json`.
 - Narrow rims that hold up on their own stay free of support with *No support under rims*. Prints need noticeably less support that way.
 - If the slicer refuses filaments whose temperatures are too far apart on one plate, Solidon now names the reason and the way out instead of only saying that no print file was made.
 - In the print dialog, printer, filaments and quality stay fully visible even with enlarged text. Long labels wrap instead.
+- The report calculates faster and needs less memory.
 
 ### Threads, holes and standard parts
 

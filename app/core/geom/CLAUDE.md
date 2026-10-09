@@ -91,7 +91,7 @@ Dreiecksfolge/Koordinaten bleiben beim Kern. Regel/Messfall:
 `__init__.py` trägt nur den Paketdocstring.
 
 **Grundlage** — `mesh.py` (die Hülle um den Kern, §9; `read_mesh`,
-`unique_edges`, `edge_table`; `python_values` für Millionen Werte als
+`unique_edges`, `edge_table`; `MeshData.held_bytes`/`lean` für den Cache; `python_values` für Millionen Werte als
 Python-Zahlen, stückweise; `on_surface` über einen Index, den hält, wer
 denselben Körper mehrmals fragt — `prepare.surface_index_of`;
 `ray_hits_batch`, dessen Index nur wählt, welche Paare rechnen, nie ihren

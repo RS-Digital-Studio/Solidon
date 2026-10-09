@@ -32,6 +32,8 @@ entfernt hat.
 | Datum | Abschnitt |
 |---|---|
 | 2026-10-09 | [RM-620: Ein Slicer, der Filamente mit zu verschiedenen Temperaturen ablehnt, sagt es (09.10.2026)](#rm-620-ein-slicer-der-filamente-mit-zu-verschiedenen-temperaturen-ablehnt-sagt-es-09102026) |
+| 2026-10-09 | [RM-595: Prüfbericht und Schichtanalyse schneller, ihre Konturen als Felder (09.10.2026)](#rm-595-prüfbericht-und-schichtanalyse-schneller-ihre-konturen-als-felder-09102026) |
+| 2026-10-09 | [RM-593 und RM-594: Auswertung wächst nicht mehr je Schritt, losgelassene Netze werden frei (09.10.2026)](#rm-593-und-rm-594-auswertung-wächst-nicht-mehr-je-schritt-losgelassene-netze-werden-frei-09102026) |
 | 2026-10-08 | [RM-602: Der Druckdialog ordnet die Profile in einem Lesedurchgang zu (08.10.2026)](#rm-602-der-druckdialog-ordnet-die-profile-in-einem-lesedurchgang-zu-08102026) |
 | 2026-10-08 | [RM-601: Die Slicerwahl im Druckdialog geht wie in Erste Schritte, und überall stehen nur unterstützte Slicer (08.10.2026)](#rm-601-die-slicerwahl-im-druckdialog-geht-wie-in-erste-schritte-und-überall-stehen-nur-unterstützte-slicer-08102026) |
 | 2026-10-08 | [RM-600: Ein Drucker, eingebaut und aus dem Slicer übernommen, ist ein Gerät (08.10.2026)](#rm-600-ein-drucker-eingebaut-und-aus-dem-slicer-übernommen-ist-ein-gerät-08102026) |
@@ -45205,3 +45207,89 @@ dass er geladen ist. Gegenprobe: `align_forms` ohne `at_most` macht fr und pt ro
 und die Spalten unverändert. Mit 150 % Schrift reichen die Felder bis 527 px statt 531 px.
 Changelog: ja, unter *Drucken und Übergabe an den Slicer* — mit vergrößerter Schrift hatte
 `v0.5.3` den Fehler.
+
+## RM-593 und RM-594: Auswertung wächst nicht mehr je Schritt, losgelassene Netze werden frei (09.10.2026)
+
+<a id="rm-593-und-rm-594-auswertung-wächst-nicht-mehr-je-schritt-losgelassene-netze-werden-frei-09102026"></a>
+<a id="rm-593"></a>
+
+**RM-593 — Auswertung wächst je Verlaufsschritt (`transformed_features`, `object_hash`).**
+Gefunden in Paket L (RM-568): Eine Auswertung ging den ganzen Verlauf durch und ordnete nach
+jedem Schritt neu zu, auch aus dem Cache — bewegte Merkmale, Zuordnung, Teilhashes. Jedes
+Verschieben kostete am Eiffelturm (4 878 Merkmale) gut eine Sekunde mehr als das vorige.
+**Umsetzung** (Zweig `paket/l-leistung`): `scene/evaluate.py` merkt die Antwort von
+`_with_features` je Schritt (`_remembered_step`), geschlüsselt über den Ergebnisschlüssel und
+alles, was die Zuordnung sonst liest, nur aus demselben Operationsergebnis (Objekt der Merkmale)
+und unter denselben Rechenwegen; nicht gemerkt wird, was gefragt, eine Antwort festgehalten,
+eine fremde Ladewahl geändert oder die Erkennung ausgelassen hat. Die Teilhashes reisen mit dem
+Schritt. Begrenzt auf 256 MB, gezählt in der Bytegrenze des Ergebniscaches; verdrängt wird, was
+die laufende Auswertung nicht braucht, und vor einem Cacheeintrag, wenn das reicht.
+**Nachweis:** Eiffelturm, sechs Verschieben, CPU je Auswertung im Wechsel: vorher
+5,2/6,7/7,1/8,6/9,9/10,5 und 4,6/5,8/6,6/8,0/9,1/9,7 s, nachher 4,9/4,8/5,1/5,1/4,9/4,7 und
+4,6/4,9/4,8/4,9/5,0/5,1 s, Abdruck aller Merkmale gleich (`move_ab.py`). Unveränderte
+Auswertung nach acht Schritten bei 1 GB Grenze 9,5 → 0,5 s, Riser 1,5 → 0,03 s.
+`test_evaluation.py::test_an_unchanged_history_is_matched_once_across_evaluations`,
+`…matched_again`, `…keeps_what_this_evaluation_uses`, rot am Stand davor.
+
+<a id="rm-594"></a>
+
+**RM-594 — Verworfene Zwischennetze warten auf die Speicherbereinigung.** Ein `trimesh`-Netz
+hängt in Ringen an sich selbst; was der Ergebniscache schlank machte oder verdrängte, wurde erst
+frei, wenn die älteste Generation abgeräumt wurde — im Fenster selten, am Spiderman warteten bis
+zu 735 MB. **Umsetzung:** `ResultCache.trim` meldet die losgelassenen Bytes
+(`memory.note_released`), der Sammler im Hauptfaden räumt ab 128 MB alle Generationen ab
+(`ui/leash._collect_released`). Ein schlankes Netz behält Teile und Dreiecksflächen, die der
+Bericht nach dem Zurücknehmen fragt. **Nachweis:** Fenster offscreen, Spiderman, acht
+Verschieben, 8 GB nachgestellt, achtmal Zurück im Wechsel mit main (`g9_run.sh`): main
+4,8/6,1/5,7 s CPU, Zusage 4,1 → 5,6 GB; nachher 2,7/2,9/2,6 s, Zusage 2,0 GB ohne Anstieg.
+`test_leash.py::test_released_meshes_reach_the_oldest_generation` (Gegenprobe ohne Meldung),
+`test_cache.py::test_trimming_reports_what_waits_for_the_collector`,
+`…a_lean_mesh_keeps_what_the_report_asks_after_undo`.
+
+**Nachprüfung (09.10.2026).** Ein schlankes Netz behält auch die Schichtanalyse des Prüfberichts
+(`geom/mesh.RELEASABLE` ohne sie): Spiderman, 1 GB Grenze, acht Verschieben und zurück — die
+Analyse ist noch da, der Bericht danach 0,0 statt 51,6 s CPU. Merkmalssätze und gemerkte Schritte
+zählen jeden großen Behälter einmal (`memory.held_parts`, `ResultCache._exact`); ein Schritt wiegt,
+was er über die Merkmale seines Eintrags hinaus hält, kommt erst mit seinem Eintrag in den Merker
+und geht mit ihm, auch mit dem eigenen Cache der Varianten; passt er nicht, verdrängt er nichts.
+Grenze gegen Einmalzählung: Riser nach vier Verschieben 212 → 136 MB bei 138 MB, Eiffelturm nach
+sechs 447/456 → 367/376 MB bei 359/367 MB; Schrittgewicht Eiffelturm 19 → 12 MB, der Merker trägt
+dort 21 statt 13 Schritte. Die volle Bereinigung wartet bei gedrückter Maustaste, Meldungen
+während der Bereinigung bleiben. Tests, alle am Stand davor rot: `test_cache.py::
+test_the_report_keeps_its_analysis_after_undo_under_a_tight_bound`,
+`…the_byte_bound_counts_features_once_across_entries_and_remembered_steps`, `test_evaluation.py::
+test_a_step_that_does_not_fit_leaves_the_unused_steps_in_place`,
+`…a_step_leaves_the_memory_with_the_entry_it_came_from`, `test_calibration.py::
+test_the_variants_leave_no_remembered_step_behind`, `test_leash.py::
+test_a_full_collection_waits_for_the_drag_and_keeps_what_arrives_meanwhile`.
+
+## RM-595: Prüfbericht und Schichtanalyse schneller, ihre Konturen als Felder (09.10.2026)
+
+<a id="rm-595-prüfbericht-und-schichtanalyse-schneller-ihre-konturen-als-felder-09102026"></a>
+<a id="rm-595"></a>
+
+**RM-595 — Prüfbericht schneller: Schichtanalyse (Leistungspaket Runde 2).** Prüfbericht,
+Schichtanalyse und Orientierungssuche lagen zu über 90 % in `slice/analysis.py`. **Umsetzung**
+(Zweig `paket/l-leistung`): `_model_support.descend` lässt Säulen ohne Clipper-Abzug, deren
+Hüllrechteck das Material darunter nicht berührt (`_apart`); `_material_cross`, `_real_holes`
+und `_without_slits` lesen Ringe gesammelt über Shapely; `material_at` baut unter einem Schloss
+je Schicht statt einem für alle; `LayerInfo` trägt `SliceContour` (`types.py`) mit
+schreibgeschützten `float64`-Feldern statt Tupeln aus Punkt-Tupeln, Gleichheit und Hash über
+die Bytes; `piece_area` rechnet dieselbe Schleife über die Liste des Felds. `SliceResult.bridge_from`
+bleibt, wie es ist. **Nachweis** (CPU, im Wechsel, Abdrücke aus Befundcodes und -werten bzw.
+aus allen Konturzahlen gleich, `report_ab2.py`): Prüfbericht Riser 181/187 → 127/127 s,
+Eiffelturm 206 → 195 s; Schnitt Eiffelturm 68,8 → 62,1 s, Orientierung 105 → 107 s (Schritt 1
+allein 99,8 s, Rauschen); eine gemerkte Analyse 114 → 17 MB (Riser), 164 → 24 MB (Spiderman),
+168 → 31 MB (Eiffelturm, `slice_size.py`). Tests: `test_slice_findings.py::
+test_separate_columns_keep_their_answer_without_the_subtraction` (Gegenprobe: jeder Abzug
+erzwungen), `…each_layer_material_is_built_once_by_parallel_columns`, `test_slice.py::
+test_the_contours_of_an_analysis_are_frozen_float_fields`, `…rings_of_a_section_read_in_one_call…`.
+
+**Nachprüfung (09.10.2026).** `piece_area` merkt die Fläche an der Kontur und rechnet Ringe ab
+128 Punkten mit NumPy, Bit für Bit gleich; Weg des Berichts an frischen Konturen: Riser main
+28,6/34,2 ms, vorher 49,8/52,7 ms, jetzt 20,3/23,4 ms, jede weitere Frage unter 1 ms. Die Tests
+bauen Schichten über `tests.helpers.slice_contour`. Leistungsmarke `model_support_columns`
+(`test_performance.py::test_support_columns_beside_the_model_skip_the_subtraction`, Sieb mit 24
+Armen, 0,1 mm): 1,17–1,35 s, mit erzwungenem Abzug 1,78–1,90 s. Prüfbericht main gegen jetzt,
+gleicher Abdruck aus Code, Werten und Ort: Spiderman 216,8 → 186,5 s CPU, Riser 176,4 → 120,6 s,
+Kumiko 7,0 → 6,9 s, Schraubendreherhalter 14,5 → 12,9 s. Bauplan §9 führt `SliceContour`.

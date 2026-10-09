@@ -48,6 +48,10 @@ scrive in `website/version.json`.
 - Un altro filamento si vede subito, anche su blocchi e corpi STEP, e Solidon non ricalcola nulla per questo. I corpi selezionati mostrano il colore del filamento sotto l'evidenziazione.
 - Nella linguetta *Selezione*, il campo del filamento assegna solo con un clic o Invio. Le frecce e la digitazione scorrono soltanto l'elenco, e la rotellina scorre la linguetta.
 - Nelle versioni tradotte, *Nuovo filamento* non scorre più di lato quando la finestra è più bassa del suo contenuto.
+- I modelli grandi si caricano molto più velocemente e richiedono meno memoria, anche con una cronologia lunga e su computer con 8 GB.
+- Anche in una cronologia lunga, un nuovo passaggio richiede appena più tempo del primo.
+- Annulla e ripristina sono più veloci, e la memoria non più necessaria si libera subito.
+- Risolvere le sovrapposizioni ed esportare in 3MF è molto più veloce.
 
 ### Stampare e passare allo slicer
 
@@ -66,6 +70,7 @@ scrive in `website/version.json`.
 - I bordi stretti che si reggono da soli restano liberi con *Bordi senza supporto*. La stampa richiede così molto meno supporto.
 - Se lo slicer rifiuta filamenti con temperature troppo diverse su un piatto, Solidon ora indica il motivo e la via d'uscita, invece di dire solo che non è stato creato alcun file.
 - Nella finestra di stampa, stampante, filamenti e qualità restano del tutto visibili anche con il testo ingrandito. Le etichette lunghe vanno a capo.
+- Il rapporto di verifica calcola più velocemente e richiede meno memoria.
 
 ### Filettature, fori e componenti normalizzati
 

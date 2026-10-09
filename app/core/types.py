@@ -20,10 +20,17 @@ from __future__ import annotations
 import math
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
-from typing import Any, Final, Literal, Protocol, get_args, runtime_checkable
+from typing import TYPE_CHECKING, Any, Final, Literal, Protocol, get_args, runtime_checkable
 
 from app.core.knowledge.rules import OVERHANG_LIMIT_DEGREES
 from app.i18n import TranslatableText, _
+
+if TYPE_CHECKING:
+    import numpy as np
+    from numpy.typing import NDArray
+
+    Points2 = NDArray[np.float64]
+    """Punkte einer Kontur der Schichtanalyse, Form (n, 2) — nur für Annotationen."""
 
 # --- Bezeichner ----------------------------------------------------------------
 
@@ -213,11 +220,43 @@ class BoundingBox:
 
 @dataclass(frozen=True, slots=True)
 class Polygon:
-    """Eine geschlossene Kontur mit optionalen Löchern, benutzt von der
-    Schichtanalyse (§22)."""
+    """Eine geschlossene Kontur mit optionalen Löchern aus Punkt-Tupeln.
+
+    Die Schichtanalyse liefert ihre Konturen als :class:`SliceContour` (RM-595)."""
 
     outline: Ring
     holes: tuple[Ring, ...] = ()
+
+
+@dataclass(frozen=True, slots=True, eq=False)
+class SliceContour:
+    """Eine Kontur der Schichtanalyse (§22): Umriss und Löcher als schreibgeschützte
+    ``float64``-Felder der Form (n, 2), geschlossen wie die Ringe von :class:`Polygon`.
+
+    **Felder statt Tupel aus Punkt-Tupeln** (RM-595): Eine Analyse liegt im
+    Cache des Netzes, solange es lebt (``slice.findings.remembered_analysis``),
+    und hielt als Tupel 121 Byte je Punkt — am Laptop-Riser 114 MB, am
+    Eiffelturm 168 MB je gemerkter Analyse. Als Feld sind es 16 Byte. Wer die
+    Kontur liest, gibt sie an Shapely oder NumPy; beide nehmen das Feld, wie
+    es ist. Gleich sind zwei Konturen mit denselben Zahlen, Bit für Bit.
+    """
+
+    outline: Points2
+    holes: tuple[Points2, ...] = ()
+    _area: float | None = field(default=None, init=False, repr=False, compare=False)
+    """Die Fläche, einmal gerechnet (``slice.analysis.piece_area``); nicht Teil der
+    Gleichheit (Nachprüfung L, G-2)."""
+
+    def _key(self) -> tuple[tuple[tuple[int, ...], bytes], ...]:
+        return tuple((tuple(ring.shape), ring.tobytes()) for ring in (self.outline, *self.holes))
+
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, SliceContour):
+            return NotImplemented
+        return self._key() == other._key()
+
+    def __hash__(self) -> int:
+        return hash(self._key())
 
 
 @runtime_checkable
@@ -2653,12 +2692,12 @@ class LayerInfo:
     """Kennzahlen einer Schnittebene."""
 
     z: float
-    contours: tuple[Polygon, ...]
+    contours: tuple[SliceContour, ...]
     area: float
     overhang_area: float
-    islands: tuple[Polygon, ...]
+    islands: tuple[SliceContour, ...]
     min_width: float
-    overhangs: tuple[Polygon, ...] = ()
+    overhangs: tuple[SliceContour, ...] = ()
     """*Wo* die ungestützte Fläche dieser Schicht liegt, nicht nur wie viel.
 
     Aufgehoben, weil Stützkarte (§18.4) und Schichtvorschau (§18.10) auf die
