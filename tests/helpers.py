@@ -1982,65 +1982,6 @@ class LoopbackServer(http.server.HTTPServer):
         self.server_port = int(port)
 
 
-# --- Der erste Start eines Slicers der Orca-Familie als AppImage ------------------
-
-#: Wo die Orca-Familie ihre Konfiguration ablegt, unter ``slicer_profiles.config_base``.
-#: Creality Print 7 legt unter seinem Anwendungsschlüssel und der Version ab.
-ORCA_CONFIG_FOLDERS = {
-    "orcaslicer": "OrcaSlicer",
-    "bambustudio": "BambuStudio",
-    "elegooslicer": "ElegooSlicer",
-    "crealityprint": "Creality/Creality Print/7.2",
-}
-
-
-def first_start(executable: Path) -> Path | None:
-    """Was der erste Start eines AppImage der Orca-Familie beim Kunden hinterlässt.
-
-    Ein solches AppImage trägt seinen Herstellerbestand nur im Abbild, das zur
-    Laufzeit eingehängt ist; lesbar wird er erst, wenn der Slicer einmal lief
-    und die Bündel nach ``<Konfiguration>/<Programm>/system/`` kopiert hat,
-    neben ``user/default/``. Genau das legt diese Funktion an, aus dem
-    ausgepackten Abbild — ohne Bilder und Bettmodelle, die Solidon nicht
-    liest. Gibt den angelegten ``system``-Ordner zurück, sonst ``None``.
-    """
-    from app.core import discover
-    from app.core.export import slicer_profiles
-
-    folder = ORCA_CONFIG_FOLDERS.get(discover.program_mark(executable.name))
-    base = slicer_profiles.config_base(executable)
-    if folder is None or not base or executable.suffix.lower() != ".appimage":
-        return None
-    system = Path(base) / folder / "system"
-    if system.is_dir():
-        return system
-    unpacked = Path(base) / ".erststart"
-    unpacked.mkdir(parents=True, exist_ok=True)
-    subprocess.run(
-        [str(executable), "--appimage-extract"],
-        cwd=unpacked,
-        capture_output=True,
-        timeout=600,
-        check=True,
-    )
-    profiles = next(
-        (
-            candidate
-            for candidate in sorted((unpacked / "squashfs-root").rglob("profiles"))
-            if candidate.is_dir() and any(candidate.glob("*.json"))
-        ),
-        None,
-    )
-    if profiles is None:
-        return None
-    (Path(base) / folder / "user" / "default").mkdir(parents=True, exist_ok=True)
-    shutil.copytree(
-        profiles, system, ignore=shutil.ignore_patterns("*.stl", "*.png", "*.svg", "*.jpg")
-    )
-    shutil.rmtree(unpacked, ignore_errors=True)
-    return system
-
-
 def plate_on_a_sloped_foot(angle: float) -> MeshData:
     """Eine Platte 60 mm im Quadrat, deren untere 4 mm ringsum unter ``angle``
     gegen die Senkrechte nach außen laufen — die Bodenkante des Bahnteils

@@ -81,3 +81,17 @@ bekannten Drucker und ist trotzdem kein eigenes Profil (`related_printer` in
 hintereinander stellt, läuft in `slicer_profiles.single_read()` — jede Datei
 einmal gelesen, danach verworfen. Länger hält kein Speicher, denn der Kunde
 ändert seine Profile im Slicer.
+
+## Herstellerdrucker ohne ersten Start
+
+**Ein AppImage wird gelesen, nie gestartet** (RM-549, Regel 11): Den Bestand
+der Orca-Familie liest `export/appimage.py` aus dem SquashFS des Abbilds und
+legt ihn je Fassung im Nutzer-Cache ab (`install_root`) — kein
+`--appimage-extract`, kein Einhängen. Sonst sähe ein Kunde, der den Slicer nie
+geöffnet hat, keinen Herstellerdrucker. Der Fensterfaden wartet nie auf die
+Kopie (`cura_linux.may_wait`), die Erhebung im Arbeiter legt sie an. Alles aus
+dem Abbild ist fremde Eingabe: Längen gegen die Datei geprüft, Blöcke nur bis
+zur Blockgröße entpackt, Namen mit Trennern verworfen. Ist es unlesbar, bleibt
+die Liste leer, der Druckdialog rät, den Slicer einmal zu öffnen, und danach
+gilt `system/`. Ein Slicertest simuliert keinen ersten Start; wer einen braucht,
+legt ihn im Test selbst an.

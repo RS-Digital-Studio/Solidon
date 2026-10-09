@@ -449,6 +449,47 @@ Einhängen 0,01 s, erste Kopie 3,3 s; Würfel auf dem K1 Max mit Flatpak und
 AppImage, draußen und im Sandkasten, gleich wie CuraEngine unter Windows.
 Eine Kopie wiegt rund 26 MB in rund 9 900 Dateien (Cura 5.13).
 
+## Die Orca-Familie als AppImage (`appimage.py`, RM-549)
+
+Ein AppImage der Orca-Familie trägt seinen Herstellerbestand nur im
+eingebetteten SquashFS unter `resources/profiles`; erst sein erster Start legt
+die Bündel nach `<Konfiguration>/<Programm>/system/`. Bis RM-549 sah Solidon
+unter Linux deshalb keinen Herstellerdrucker, bis der Kunde den Slicer einmal
+geöffnet hatte, und die Konsole lehnte den Auftrag ohne vorgewähltes Profil ab.
+
+Gelesen wird das Abbild als Datei: Es beginnt hinter der Abschnittstabelle der
+Laufzeit (`image_offset`), Kompression über die Standardbibliothek (zlib,
+lzma, `compression.zstd`). Gestartet wird nichts, auch nicht
+`--appimage-extract` oder `--appimage-mount` (Regel 11); Curas Kopie hängt
+weiter ein, weil Cura zum Rechnen ohnehin über seinen Lader läuft. Gemessen an
+den Fassungen der Slicerauswahl (09.10.2026, alle Typ 2, SquashFS 4.0, zstd,
+128-KiB-Blöcke): OrcaSlicer 2.4.2 12 006 Profile, ElegooSlicer 1.5.3.5
+12 007, Creality Print 7.3.0 6 898, Bambu Studio 2.8.2 3 589, jede Datei
+byte-gleich mit dem Auszug von 7-Zip. Lesen aller Profile 0,2 s; die Kopie
+dauert unter Windows 6 bis 17 s, fast ganz im Anlegen der Dateien. Die
+Erhebung findet danach 997, 997, 491 und 202 Drucker.
+
+Die Kopie folgt Curas Muster (`stamp.json` mit Pfad, Änderungszeit, Größe und
+Fassung des Kopierers, Austausch über einen Zwischenordner, Räumen
+verschwundener AppImages); eine gelöschte Kopie wird neu angelegt, weil der
+Nutzer-Cache jederzeit geleert werden darf. Ist das Abbild unlesbar (andere
+Kompression, beschädigt), bleibt `install_root` leer wie zuvor; der
+Druckdialog rät dann, den Slicer einmal zu öffnen (`_profiles_found`), und
+danach gilt `system/`.
+
+## Curas Jerk-Steuerung
+
+Aus der Karte verschoben (09.10.2026): Curas Jerk-Steuerung folgt der
+gewählten Definitions- und Containerkette. Bekannte Abhängigkeiten werden
+aufgelöst, eigene Rollen und Schalter gehen vor.
+`resolve_profile(cura_motion=True)` prüft die Bewegungswerte erst für die
+konkrete Übergabe; Druckerliste und Bettlesen bleiben davon unabhängig.
+Unbekannte aktive Werte halten CLI und Fensterprofil mit derselben Handlung
+an. Beide schreiben denselben aufgelösten Bestand. Extrudercontainer beachten
+das geerbte `settable_per_extruder`; globale Schalter bleiben global.
+Verglichen werden wirksame Rollen; ausgeschaltete Druck- oder Leerfahrtwerte
+bleiben ohne Wirkung und ohne rohe Formeln in der strikten Ausgabe.
+
 ## Warum `slicer_keys.py` existiert
 
 Aus der Karte verschoben (05.10.2026): `NOT_TAKEN_BY_PROGRAM` gibt es, weil

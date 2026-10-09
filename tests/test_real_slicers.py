@@ -17,13 +17,14 @@ Apple Silicon und Intel-Mac, sobald eine Änderung die Übergabe berührt
 from __future__ import annotations
 
 import re
+import subprocess
 from dataclasses import replace
 from pathlib import Path
 
 import pytest
 import trimesh
 
-from app.core.export import handover, slicer_profiles
+from app.core.export import appimage, cura_linux, handover, slicer_profiles
 from app.core.geom.mesh import MeshData
 from app.core.knowledge import print_settings, profiles
 from app.core.types import Profile, SceneObject
@@ -203,3 +204,47 @@ def test_a_related_device_never_hands_its_machine_to_the_smaller_printer(
     assert [finding.code for finding in handover.machine_missing(setup, kobra)] == [
         "slicer.machine_mismatch"
     ]
+
+
+#: Die Orca-Familie, deren Linux-Fassung ein AppImage ist (RM-549).
+ORCA_APPIMAGES = ("orcaslicer", "bambustudio", "elegooslicer", "crealityprint")
+
+
+@pytest.mark.parametrize(
+    "program",
+    [
+        pytest.param(program, marks=pytest.mark.slicer(program), id=program)
+        for program in ORCA_APPIMAGES
+    ],
+)
+def test_a_slicer_never_opened_offers_the_printers_of_its_maker(
+    program: str, installed_slicer: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Frisch installiert, nie geöffnet: keine eigene Konfiguration, kein ``system/``.
+
+    Trotzdem stehen die Drucker des Herstellers zur Wahl und die Maschine des
+    Druckers aus :data:`PROGRAMS`. Unter Linux kommen sie aus dem Abbild des
+    AppImage, das dafür nicht startet (Regel 11); bis RM-549 sah Solidon dort
+    keinen Herstellerdrucker, bis der Slicer einmal gelaufen war.
+    """
+    empty = tmp_path / "konfiguration"
+    empty.mkdir()
+    monkeypatch.setattr(slicer_profiles, "config_base", lambda _executable: str(empty))
+
+    def forbidden(*_args: object, **_kwargs: object) -> None:
+        pytest.fail("Zum Lesen der Profile startet kein Programm")
+
+    monkeypatch.setattr(subprocess, "Popen", forbidden)
+    monkeypatch.setattr(subprocess, "run", forbidden)
+
+    found = slicer_profiles.discover_printers(installed_slicer, "orca")
+    machine, _process = slicer_profiles.match(
+        slicer_profiles.find_profiles(installed_slicer, "orca"),
+        profiles.make_profile(PROGRAMS[program], "pla").printer,
+    )
+
+    assert len(found) >= 10, [printer.title for printer in found]
+    assert machine is not None, PROGRAMS[program]
+    if cura_linux.is_appimage(installed_slicer):
+        root = slicer_profiles.install_root(installed_slicer)
+        assert root is not None and root.is_relative_to(appimage._cache_root()), root

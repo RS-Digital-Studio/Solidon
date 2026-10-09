@@ -67,21 +67,14 @@ MAX_DEPTH: Final = 32
 
 #: Wie viele Dateien eine Kopie höchstens umfasst. ElegooSlicer 1.5.3.5 trägt
 #: 12 007 Profile, OrcaSlicer 2.4.2 12 006.
-MAX_FILES: Final = 60_000
+MAX_PROFILES: Final = 60_000
 
 #: Wie viele Bytes eine Kopie höchstens umfasst. ElegooSlicer 1.5.3.5 trägt
 #: 21 MB, der größte Bestand der Familie.
 MAX_BYTES: Final = 1 << 30
 
-#: Die Marke einer abgelegten Kopie: Quelle und Stand.
-STAMP: Final = "stamp.json"
-
 #: Die Fassung des Kopierers. Eine neue verwirft ältere Kopien.
 COPY_VERSION: Final = 1
-
-#: Ab wann ein Zwischenordner ohne Marke als Rest einer abgebrochenen Kopie
-#: gilt — wie bei Curas Kopie (:data:`cura_linux.STALE_SECONDS`).
-STALE_SECONDS: Final = cura_linux.STALE_SECONDS
 
 #: Wo im Abbild ein Slicer der Orca-Familie seinen Bestand trägt, in dieser
 #: Reihenfolge gefragt. Gemessen an Orca 2.4.2, Bambu Studio 2.8.2,
@@ -465,8 +458,8 @@ def copy_profiles(appimage: Path, target: Path) -> int:
         written = 0
         for relative, entry in image.files(top, ".json"):
             count += 1
-            if count > MAX_FILES:
-                raise UnreadableImageError(f"more than {MAX_FILES} profiles")
+            if count > MAX_PROFILES:
+                raise UnreadableImageError(f"more than {MAX_PROFILES} profiles")
             data = image.read(entry)
             written += len(data)
             if written > MAX_BYTES:
@@ -511,7 +504,7 @@ def _cache_folder(appimage: Path) -> Path:
 
 def _read_stamp(folder: Path) -> dict[str, object] | None:
     try:
-        stamp = json.loads((folder / STAMP).read_text(encoding="utf-8"))
+        stamp = json.loads((folder / cura_linux.STAMP).read_text(encoding="utf-8"))
     except OSError, ValueError:
         return None
     return stamp if isinstance(stamp, dict) else None
@@ -575,7 +568,7 @@ def _copy(appimage: Path, key: tuple[str, int, int]) -> Path | None:
     try:
         count = copy_profiles(appimage, fresh / "profiles")
         stamp = {"source": key[0], "mtime_ns": key[1], "size": key[2], "version": COPY_VERSION}
-        (fresh / STAMP).write_text(json.dumps(stamp), encoding="utf-8")
+        (fresh / cura_linux.STAMP).write_text(json.dumps(stamp), encoding="utf-8")
     except (OSError, UnreadableImageError) as problem:
         shutil.rmtree(fresh, ignore_errors=True)
         _log.warning("cannot read the profiles inside %s: %s", appimage.name, problem)
@@ -599,7 +592,7 @@ def _copy(appimage: Path, key: tuple[str, int, int]) -> Path | None:
 
 def _clear_vanished(keep: Path) -> None:
     """Kopien von AppImages räumen, die es nicht mehr gibt, und Reste
-    abgebrochener Kopien, die älter als :data:`STALE_SECONDS` sind."""
+    abgebrochener Kopien, die älter als :data:`cura_linux.STALE_SECONDS` sind."""
     try:
         siblings = [entry for entry in _cache_root().iterdir() if entry.is_dir() and entry != keep]
     except OSError:
@@ -620,6 +613,6 @@ def _clear_vanished(keep: Path) -> None:
 
 def _older_than(folder: Path) -> bool:
     try:
-        return time.time() - folder.stat().st_mtime > STALE_SECONDS
+        return time.time() - folder.stat().st_mtime > cura_linux.STALE_SECONDS
     except OSError:
         return False
