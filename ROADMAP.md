@@ -105,8 +105,9 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-556 — Filamente aus der linken Spalte in die Kopfleiste](#rm-556) | Bedienung und Darstellung | Robert, 08.10.: Knopf oben, Klick zeigt die Filamente des Projekts und den Weg ins Filamentlager |
 | [RM-557 — Nach einem Filamentwechsel bleibt der Körper in der alten Farbe, und Solidon rechnet lange](#rm-557) | Bedienung und Darstellung | Robert, 08.10.: eine Farbänderung färbt sofort um, ohne die Geometrie neu zu rechnen |
 | [RM-559 — Körper in der Szene mit drei Klicks aufziehen, als Körper oder als Ausschnitt](#rm-559) | Bedienung und Darstellung | Gebaut (Paket Z1, 08.10.): Werkzeug *Zeichnen*, Strg+Umschalt+E; offen die Abnahme am echten Fenster und die Nachzählung durch bedienlogik |
-| [RM-560 — *Formen* arbeitet schwach](#rm-560) | Bedienung und Darstellung | Robert, 08.10.: erst messen, was nicht trägt, dann überarbeiten |
-| [RM-561 — *Zeichnen*, *Formen* und *Skelett* sind zu kompliziert bedient](#rm-561) | Bedienung und Darstellung | Zeichnen gebaut (Paket Z1, 08.10.): ein Weg vom Umriss zum Körper; offen Formen und Skelett (Paket Z2) und die Abnahme am echten Fenster |
+| [RM-560 — *Formen* arbeitet schwach](#rm-560) | Bedienung und Darstellung | Befunde H1–H11 behoben, je mit Test oder Messung, Review Z2 behoben; offen allein Roberts Abnahme am echten Fenster |
+| [RM-561 — *Zeichnen*, *Formen* und *Skelett* sind zu kompliziert bedient](#rm-561) | Bedienung und Darstellung | Zeichnen (Paket Z1), Formen und Skelett (Paket Z2) umgebaut, mit Fenstertests; offen die Nachzählung durch bedienlogik und die Abnahme am echten Fenster |
+| [RM-576 — Formen: Vorschau höchstens einmal je Bild übergeben (kleine Netze)](#rm-576) | Bedienung und Darstellung | gebaut und gemessen; offen allein der Blick auf die Bildrate am echten Fenster |
 | [RM-569 — Ein beim Zuweisen neu angelegtes Filament bleibt gespeichert, im Lager und im Projekt](#rm-569) | Bedienung und Darstellung | Robert, 08.10.: Code legt es sofort im Lager an, das Projekt trägt Name, Material und Farbe an der Bindung; Zusammenspiel mit Strg+Z, Speichern und fremdem Rechner fehlt als Test |
 | [RM-283 — Ein Handbuch, das man ohne Ausprobieren versteht](#rm-283) | Bedienung und Darstellung | Nummernplatzierung gebaut und in den Bildanleitungen von 0.5.3 erzeugt (`ee9a572f3`); offen allein die Feldabnahme nach §11 mit einem Kunden ohne CAD |
 | [RM-084 — Kundentexte gegen die vereinbarte Sprache prüfen](#rm-084) | Bedienung und Darstellung | Kataloge und Quelltexte durchgesehen und behoben (04.10., `871cc29e6`), Handbuch und Stempel mit 0.5.3 erzeugt; offen allein die Fensterabnahme der längeren Knopfnamen auf 1280 px (RM-213) |
@@ -4280,24 +4281,45 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
 
 <a id="rm-560"></a>
 
-- [ ] **RM-560 — *Formen* arbeitet schwach.** Robert, 08.10.2026: „Formen ist ziemlich
+- [~] **RM-560 — *Formen* arbeitet schwach.** Robert, 08.10.2026: „Formen ist ziemlich
   schlecht von der Funktion.“ Erst am echten Fenster messen, was nicht trägt (Wirkung der
   Pinsel, Ansprechen, Tempo, Ergebnis am Netz), dann überarbeiten. **Abnahme:** Erfüllt, wenn
   jeder Befund der Befundliste behoben ist, je Befund ein Test oder Messwert vorher und nachher
   (am echten Fenster an einem Korpusmodell), und Robert es am echten Fenster abgenommen hat.
+  **Stand:** `[~]` — die Befunde H1 bis H11 sind behoben (Pinselfassung 2: Stufe statt Stärke,
+  Geste als Etappe mit Sättigung, Radius aus der Körpergröße, Angleichen im Arbeiter,
+  angepasste Spiegelmitte, Richtung aus dem Pinselgebiet), je mit Test in `test_sculpt.py`,
+  `test_sculpt_session.py` und `test_project.py`. Die Durchsicht des Pakets fand eine
+  Auswertung mit hundert Gesten bei 39,6 s; eine Etappe rechnet jetzt nur ihr Gebiet,
+  bitgleich mit dem Neuaufbau, und dieselben tausend Proben brauchen in Fassung 2 nicht länger
+  als vorher in Fassung 1 (`test_performance.py`). Offen allein Roberts Abnahme am echten Fenster.
 
 <a id="rm-561"></a>
 
-- [ ] **RM-561 — *Zeichnen*, *Formen* und *Skelett* sind zu kompliziert bedient.** Robert,
+- [~] **RM-561 — *Zeichnen*, *Formen* und *Skelett* sind zu kompliziert bedient.** Robert,
   08.10.2026: „keine komplizierten Bedienungen, nicht mehrere Wege“. **Soll:** Je Werkzeug ein
   Weg zu jeder Aufgabe, wenige Schritte, keine verschachtelten Modi. **Abnahme:** `bedienlogik`
   zählt die Klicks je Hauptaufgabe vorher und nachher; kein zweiter Weg zur selben Sache;
   Fenstertests der neuen Abläufe; Handbuch.
-  **Stand Zeichnen (Paket Z1, 08.10.2026):** *Hochziehen*, *Abtragen*, *Mehr* und der Ziehgriff
-  der Querschau sind aus der Skizze genommen; *Fertig* führt jeden freien Umriss zurück in die
-  Ansicht, die Höhe entscheidet die Art (RM-559); *Freie Form …* öffnet den Editor mit der Linie.
-  Gemeinsame Regel der drei Werkzeuge in Bauplan §25. Offen: Formen und Skelett (Paket Z2), die
-  Nachzählung durch `bedienlogik` und die Abnahme am echten Fenster.
+  **Stand:** `[~]` — *Zeichnen* (Paket Z1): *Hochziehen*, *Abtragen*, *Mehr* und der Ziehgriff
+  der Querschau sind aus der Skizze genommen, *Fertig* führt jeden freien Umriss zurück in die
+  Ansicht, die Höhe entscheidet die Art (RM-559), *Freie Form …* öffnet den Editor mit der Linie.
+  *Formen* (vier Werkzeugknöpfe, *Spiegeln*, Stufe ohne Einheit, Angleichen ohne Knopf, auch am
+  wieder geöffneten Schritt erst mit *Fertig*) und *Skelett* (ein Klick je Knochen, Beugen am
+  Gelenk, *Fertig* ohne Dialog, gebundene Winkel bleiben) sind umgebaut (Paket Z2), mit
+  Fenstertests in `test_draw_ui.py`, `test_sculpt_session.py` und `test_pose_session.py` und
+  Handbuchseite. Gemeinsame Regel der drei Werkzeuge in Bauplan §25. Offen die Nachzählung durch
+  `bedienlogik` und die Abnahme am echten Fenster.
+
+<a id="rm-576"></a>
+
+- [~] **RM-576 — Formen: Vorschau höchstens einmal je Bild übergeben (kleine Netze).** Aus der
+  Durchsicht des Pakets Z2: Ein Mauszug füllt bis zu acht Proben in ein Ereignis, und an einem
+  Netz unter der Sofortgrenze übergab jede Probe ihre Fläche — Fläche, Puffer und Normalen
+  kosteten an 20 480 Dreiecken 2,75 ms gegen 0,38 ms für die Probe selbst. Jetzt zählen Leiste
+  und Vorschau jede Probe sofort, ins Bild kommt die Fläche einmal je Ereignisrunde
+  (`test_the_samples_of_one_event_reach_the_view_once`). **Abnahme:** Erfüllt, wenn ein schneller
+  Zug an einem kleinen Korpusmodell am echten Fenster flüssig folgt; offen allein dieser Blick.
 
 <a id="rm-569"></a>
 

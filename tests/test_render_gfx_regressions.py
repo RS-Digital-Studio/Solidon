@@ -1490,3 +1490,64 @@ def test_pointer_events_do_not_ask_the_gpu_for_a_pick(
     renderer._canvas._events.flush()
     renderer.screenshot()
     assert asked == []
+
+
+def test_a_preview_leaves_the_remembered_normals_of_the_body_alone() -> None:
+    """Review F1: Die Ansicht reicht vorbereitete Normalen ohne Kopie an
+    ``add_surface`` und merkt sie sich für das nächste Bild desselben Netzes.
+    Die Vorschau einer Formsitzung schrieb ihre Normalen in dieses Feld, und
+    der unveränderte Körper bekam danach ihre Beleuchtung. Jetzt bekommt der
+    Puffer ein eigenes Feld; das gemerkte bleibt, wie es war."""
+    import pygfx as gfx
+
+    from app.ui.render.gfx_renderer import _positions, _rewrite_surface
+
+    vertices, faces = cube()
+    known = GfxRenderer.surface_normals(vertices, faces)
+    assert known is not None
+    kept = known.copy()
+    indices = np.ascontiguousarray(np.asarray(faces, dtype=np.uint32).reshape(-1, 3))
+    # So gibt ``add_surface`` das Feld weiter: ``float32`` wird nicht kopiert.
+    handed = np.ascontiguousarray(known, dtype=np.float32)
+    geometry = gfx.Geometry(positions=_positions(vertices), indices=indices, normals=handed)
+    assert geometry.normals.data is known, "Voraussetzung: der Puffer hält das gemerkte Feld"
+    moved = np.asarray(vertices, dtype=float).copy()
+    moved[0] += (-6.0, -6.0, -6.0)
+
+    assert _rewrite_surface(geometry, _positions(moved))
+
+    assert np.array_equal(known, kept)
+    assert not np.array_equal(geometry.normals.data, kept), "Gegenprobe: neue Beleuchtung"
+    assert np.array_equal(geometry.positions.data, _positions(moved))
+
+
+def test_moving_a_lit_surface_rewrites_its_buffers_instead_of_a_new_geometry(
+    renderer: GfxRenderer,
+) -> None:
+    """RM-560, H6: Eine Vorschau der Formsitzung bekam je Zug eine neue
+    Geometrie, und pygfx baute dafür Bindungen und Pipeline neu — an 241 480
+    Dreiecken das Teuerste am ganzen Zug. Jetzt gehen Ecken und Normalen in die
+    vorhandenen Puffer; Bild, Hüllquader und Beleuchtung folgen trotzdem."""
+    from app.ui.render.gfx_renderer import _normals
+
+    vertices, faces = cube()
+    known = GfxRenderer.surface_normals(vertices, faces)
+    assert known is not None
+    kept = known.copy()
+    body = renderer.add_surface(vertices, faces, name="body", style=SurfaceStyle(), normals=known)
+    geometry = body.objects[0].geometry
+    look_down(renderer, body.bounds())
+    before = renderer.screenshot()
+    lower, upper = body.bounds()[0], body.bounds()[1]
+
+    moved = np.asarray(vertices, dtype=float) + np.asarray((4.0, 0.0, 0.0))
+    body.update_points(moved)
+
+    assert body.objects[0].geometry is geometry, "dieselbe Geometrie, neue Zahlen"
+    assert body.bounds()[0] == pytest.approx(lower + 4.0)
+    assert body.bounds()[1] == pytest.approx(upper + 4.0)
+    assert np.array_equal(
+        geometry.normals.data, _normals(moved.astype(np.float32), np.asarray(faces))
+    )
+    assert not np.array_equal(before, renderer.screenshot())
+    assert np.array_equal(known, kept), "das gemerkte Feld bleibt (Review F1)"

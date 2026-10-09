@@ -58,7 +58,7 @@ Merkmalen. Der Empfänger ordnet Callbackmeldungen der Auftragsrevision zu.
 | `cancel.py` | Kooperativer Abbruch (§15.6, §2.8) |
 | `fits.py` | Passungen (§14) — Verletzungen erkannt, nie still gerechnet; `fit_kinds_for` sagt, welche Passungsarten Körper tragen (Druckdialog, Export je Teil) |
 | `orphans.py` | Verweise ohne Merkmal (§21.3): `question_for()`, `candidates_of()`, `lineage()` |
-| `placement.py` | Dialogvorbelegung und Oberflächenplatzierung am Originalnetz (§18.5); `seat_on_face`: ein Erzeuger auf gewählter Fläche, in ihrer Ebene über das Bett gehoben; `seat_of`: wo sitzt, was schon da ist; `prepare_tool()` liefert in `PlacementTool` den effektiven Werkzeugwinkel und die Kernachse für die Vorschau; `slot_hole`/`resize_hole` verwenden bei markierten Altwinkeln die positive Merkmalsachse, ein migriertes `drill_hole` mit `measured_frame` behält seine gespeicherte Richtung, auch gegen die positive Normale; Nullnormalen verwenden dieselbe BRep-Hüllmittenentscheidung wie `_bore_span`, Mesh liest die lokale Materialsäule; `SIDE_NAMES` übernimmt die gemeinsamen Seitennamen aus `registry/surfaces.py` |
+| `placement.py` | Dialogvorbelegung und Oberflächenplatzierung am Originalnetz (§18.5); `seat_on_face`: ein Erzeuger auf gewählter Fläche, in ihrer Ebene über das Bett gehoben; `seat_of`: wo sitzt, was schon da ist; `prepare_tool()` liefert in `PlacementTool` den effektiven Werkzeugwinkel und die Kernachse für die Vorschau; Altwinkel, migrierte Richtungen und Nullnormalen: Begründungen, „Platzierung“ |
 | `ops.py` | Umbenennen, Löschen, Duplizieren, Muster |
 | `variants.py` | Der Variantengenerator (§28.3): `_marked` graviert den Wert ein, wo Material für drei Schichten plus Mindestwand steht (`label_ops.too_thin_to_print`), sonst `variants.no_mark`; fein, mit geteiltem Cache; ein Druckauftrag, kein Dokumentzustand (Regel 2) |
 
@@ -268,6 +268,8 @@ Merkmalen. Der Empfänger ordnet Callbackmeldungen der Auftragsrevision zu.
   `fit_sights`; `verdict` fragt Herkunft, Abdruck, Lage) → `commit`. Neu
   gefasst ab der ersten Änderung (`_moved_order`, `_clone`, alte Kennungen als
   `None` in `edited_ops`); `valid_targets` nennt Gründe (`_order_problem`).
+  `plan_insert(changed=)`: neue Werte späterer Schritte, eine Transaktion
+  unter `title`; fremde Kennung oder `produces_from` → `InternalError`.
 - **Ausgeschaltet** (`Operation.suppressed`): `history.step_off`,
   `step_resting`; `_absent_objects`, `_without_absent_inputs`,
   `needs_resting_step`, `fits.paused_fits`, `orphans.references` fragt nicht;

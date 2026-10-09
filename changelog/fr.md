@@ -83,6 +83,12 @@ dans `website/version.json`.
 - Pendant le tirage, les dimensions se saisissent au clavier. Un double-clic sur l'étape ouvre ses dimensions, et sous *Type* elle devient un corps de révolution ou un réseau de trous.
 - Depuis l'éditeur d'esquisse, *Terminé* ramène dans la vue, et le clic suivant pose la hauteur. Échap met le contour de côté, Ctrl+Z le rappelle.
 - Si une nouvelle étape ne peut pas être calculée, le brouillon reste dans la vue, et *Réparer et réessayer* la calcule sans nouveau clic.
+- Pour sculpter, il y a quatre outils, chacun avec son bouton et son raccourci. L'intensité est un niveau de 1 à 10, et repasser au même endroit n'empile plus de matière.
+- Le pinceau s'adapte à la taille du corps. Si le maillage est trop grossier, *Sculpter* uniformise les triangles au premier trait, et un Ctrl+Z annule les deux.
+- En miroir, le plan passe là où le corps se correspond, même si une partie dépasse loin sur le côté.
+- Sculpter suit la souris avec fluidité, et même une étape de centaines de coups de pinceau se calcule vite.
+- Dans *Squelette*, chaque clic après le premier pose un os, Entrée termine la chaîne, glisser une articulation la plie, et *Terminé* enregistre tout sans dialogue.
+- Un squelette ne plie que ce qui tient à ses os, le reste du corps ne bouge pas. Les anciens projets se calculent comme enregistrés.
 
 ### Générer avec l'IA
 

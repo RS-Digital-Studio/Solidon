@@ -30,11 +30,11 @@ Handlungen steht, sagt `grenzen.md`. Warum:
   Wiederherstellungsdaten gemeinsam ab.
 - Gespeicherte Gesten öffnen auf ihrem Eingang:
   `Session.scene_before_step_async` im Vorschauarbeiter, Antwort gebunden an
-  Dokumentidentität/Werkzeugnummer. Verfeinerung über `Session.insert_before`
-  im Revisionsarbeiter ersetzt Schrittkennung und Eingangsbindung.
+  Dokumentidentität/Werkzeugnummer.
 - Zeichnen, Formen, Skelett: Kürzel oben, Escape nimmt Unfertiges, Strg+Z
-  die letzte Geste, *Fertig* ohne Dialog (RM-561, für Formen und Skelett
-  Ziel von Z2). Leerer Editor nimmt keinen Schritt zurück.
+  die letzte Geste, *Fertig* ohne Dialog (RM-561). Formen/Skelett haben
+  denselben lokalen Undo-Weg für Menü und Strg+Z, Zeichnen deaktiviert die
+  globale Aktion. Leerer Editor nimmt keinen Dokument-Schritt zurück.
 - Drei Zonen: links Baum/Parameter/Verlauf, Mitte Viewport, rechts eine Karte
   mit den Reitern Auswahl, Prüfbericht, Chat (F9 blendet sie aus). Keine
   Betriebsarten. Die Karte misst die vordere Seite (`CurrentPageTabs`).
@@ -453,14 +453,17 @@ ein Programmfehler, nicht Ihre Schuld“ (§33.1).
   verwirft späte Antworten.
 
 
-### Formsitzung: Mauszüge und Analyse
+### Formen und Skelett: Gesten
 
-- Ein Pinselzug reicht vom Drücken bis zum Loslassen, auch außerhalb des
-  Modells. Seine räumlichen Proben teilen die optionale `Stroke.gesture`-Kennung
-  im vorhandenen Strichparameter. Kennung null hält alte Einzelzüge lesbar;
-  die Zusatzkennung verändert deren Geometrie nicht.
-- Zählung, lokales Rückgängig und Wiederholen verwenden diese Gruppe, einschließlich
-  noch wartender Arbeiterproben. Eine neue Geste leert lokales Wiederholen;
-  Beenden des Editors beendet auch einen noch gehaltenen Pinsel im Navigator.
-- Die sichtbare Gestenleiste trägt ihre eigene `MapLegend` mit Skala und Herkunft.
-  Ein Kartenwechsel entwertet alte Befunde und Wartehinweise zusammen.
+- Ein Pinselzug reicht vom Drücken bis zum Loslassen, auch neben dem Modell;
+  seine Proben teilen `Stroke.gesture`, jede Geste ist eine Etappe
+  (`Stroke.brush` 2, alte rechnen wie gespeichert). Zählung und lokales
+  Rückgängig nehmen die Gruppe samt wartender Proben; Beenden lässt den Pinsel los.
+- Zu grobes Netz gleicht der Arbeiter an, neu wie geöffnet; ins Dokument erst
+  mit *Fertig* und neuen Zügen, eine Transaktion (`insert_before(changed=)`).
+  Scheitert es, kein zweiter Versuch.
+- Skelett: n Knochen, n + 1 Klicks, Enter beendet die Kette, Ziehen am Gelenk
+  beugt (gebundener Winkel: Satz statt Zug), *Fertig* ohne Dialog. Escape
+  nimmt nur Unfertiges.
+- Die Gestenleiste trägt ihre `MapLegend`; ein Kartenwechsel entwertet Befund
+  und Wartehinweis.

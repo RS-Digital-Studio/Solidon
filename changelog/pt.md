@@ -82,6 +82,12 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Ao levantar, as medidas podem ser escritas. Um duplo clique no passo abre as suas medidas, e em *Tipo* passa a sólido de revolução ou padrão de furos sem desenhar de novo.
 - No editor de esboços, *Concluído* leva de volta à vista e o clique seguinte põe a altura. Escape põe o contorno de lado, Ctrl+Z trá-lo de volta.
 - Se um passo novo não puder ser calculado, o rascunho fica na vista e *Reparar e tentar de novo* calcula-o sem outro clique.
+- Para modelar há quatro ferramentas, cada uma com o seu botão e atalho. A intensidade é um nível de 1 a 10, e passar de novo no mesmo sítio já não acumula material.
+- O pincel ajusta-se ao tamanho do corpo. Se a malha for demasiado grosseira, *Modelar* uniformiza os triângulos no primeiro traço, e um Ctrl+Z desfaz ambos.
+- Ao espelhar, o plano fica onde o corpo coincide consigo próprio, mesmo quando uma parte sobressai muito para o lado.
+- Modelar acompanha o rato com fluidez, e até um passo com centenas de traços de pincel é calculado depressa.
+- Em *Esqueleto*, cada clique depois do primeiro coloca um osso, Enter termina a cadeia, arrastar uma articulação dobra-a e *Concluído* guarda tudo sem diálogo.
+- Um esqueleto só dobra o que está preso aos seus ossos, e o resto do corpo fica parado. Os projetos anteriores calculam-se como foram guardados.
 
 ### Gerar com IA
 

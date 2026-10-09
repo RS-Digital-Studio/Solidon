@@ -5104,10 +5104,18 @@ class Session(QObject):
         return self._start_revision(planned, None)
 
     def insert_before(
-        self, op_id: OpId, title: TranslatableText | str, drafts: list[OperationDraft]
+        self,
+        op_id: OpId,
+        title: TranslatableText | str,
+        drafts: list[OperationDraft],
+        *,
+        changed: Mapping[OpId, Mapping[str, Any]] | None = None,
     ) -> bool:
-        """Einen Editorschritt gezielt davor einfügen, ohne die sichtbare Einfügemarke zu ändern."""
-        return self._insert(title, drafts, None, None, before=op_id)
+        """Einen Editorschritt gezielt davor einfügen, ohne die sichtbare Einfügemarke zu ändern.
+
+        ``changed`` gibt späteren Schritten neue Werte in derselben Transaktion
+        (:meth:`History.plan_insert`)."""
+        return self._insert(title, drafts, None, None, before=op_id, changed=changed)
 
     def _insert(
         self,
@@ -5118,6 +5126,7 @@ class Session(QObject):
         *,
         raise_on_error: bool = False,
         before: OpId | None = None,
+        changed: Mapping[OpId, Mapping[str, Any]] | None = None,
     ) -> bool:
         """Die Schritte vor die Einfügemarke setzen (P7.1) — geplant sofort, gerechnet im Arbeiter.
 
@@ -5148,7 +5157,7 @@ class Session(QObject):
             return False
         by = origin or Origin(by="user")
         try:
-            self.history.plan_insert(marker, title, drafts, by, changes)
+            self.history.plan_insert(marker, title, drafts, by, changes, changed)
         except AppError as error:
             if raise_on_error:
                 raise
@@ -5159,7 +5168,7 @@ class Session(QObject):
             history: History, _context: Dependencies, run: Callable[[Any], EvaluationResult]
         ) -> RevisionPlan:
             settled = searched_at_the_end(history.document, title, drafts, evaluate=run)
-            return history.plan_insert(marker, title, settled, by, changes)
+            return history.plan_insert(marker, title, settled, by, changes, changed)
 
         return self._start_revision(planned, None)
 

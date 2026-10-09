@@ -119,6 +119,16 @@ def entries(menu_bar: QMenuBar | None, window: QWidget | None = None) -> list[tu
     for tool in listed.values():
         if tool.shortcut:
             found.append((strip_title(), _plain(str(tool.title)), _native(tool.shortcut)))
+    toolbar = getattr(window, "toolbar", None)
+    if toolbar is not None:
+        # Die Werkzeuge der oberen Leiste (*Formen*, *Skelett*) stehen in
+        # keinem Menü und tragen ihr Kürzel selbst (RM-561).
+        heading = _plain(toolbar.windowTitle())
+        for action in toolbar.actions():
+            if not action.shortcut().isEmpty():
+                found.append(
+                    (heading, _plain(action.text()), _native(action.shortcut().toString()))
+                )
     for sequence, title in WINDOW_KEYS:
         found.append((tr("Fenster"), str(title), _native(sequence)))
     # **Und die Werkzeuge der oberen Leiste** (RM-561): je eines ein Kürzel,

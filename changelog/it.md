@@ -82,6 +82,12 @@ scrive in `website/version.json`.
 - Mentre si tira su, le misure si possono digitare. Un doppio clic sul passaggio apre le sue misure, e alla voce *Tipo* diventa un solido di rivoluzione o un campo di fori.
 - Dall'editor di schizzi, *Fatto* riporta nella vista e il clic successivo mette l'altezza. Esc mette da parte il contorno, Ctrl+Z lo riporta.
 - Se un nuovo passaggio non si può calcolare, la bozza resta nella vista e *Ripara e riprova* lo calcola senza un altro clic.
+- Per modellare ci sono quattro strumenti, ognuno con il suo pulsante e la sua scorciatoia. L'intensità è un livello da 1 a 10, e ripassare lo stesso punto non accumula più materiale.
+- Il pennello si adatta alle dimensioni del corpo. Se la mesh è troppo grossolana, *Modella* uniforma i triangoli al primo tratto, e un Ctrl+Z annulla entrambe le cose.
+- Nello specchiare il piano sta dove il corpo corrisponde a sé stesso, anche quando una parte sporge molto di lato.
+- Modellare segue il mouse in modo fluido, e anche un passaggio con centinaia di tratti di pennello si calcola in fretta.
+- In *Scheletro* ogni clic dopo il primo crea un osso, Invio chiude la catena, trascinare un'articolazione la piega e *Fatto* salva tutto senza dialogo.
+- Uno scheletro piega solo ciò che è legato alle sue ossa, il resto del corpo resta fermo. I progetti precedenti si calcolano come salvati.
 
 ### Generare con l'IA
 

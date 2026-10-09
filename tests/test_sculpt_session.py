@@ -27,6 +27,26 @@ from tests.ui_helpers import with_a_body
 MESHES = Path(__file__).parent / "data" / "meshes"
 
 
+@pytest.fixture(autouse=True)
+def brush_for_the_figure(request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Ein Startradius, für den die Figur aus dem Korpus fein genug ist.
+
+    Die meisten Tests hier prüfen die Sitzung, nicht das selbsttätige
+    Angleichen (RM-561): Die Figur hat 2,8 mm Kanten, ab 12 mm Radius liegen
+    vier Kanten im Pinsel, und der Zug rechnet sofort im Hauptfaden. Wer das
+    Angleichen oder den Radius aus der Körpergröße prüft, fordert
+    ``body_sized_brush`` an und bekommt den echten.
+    """
+    if "body_sized_brush" in request.fixturenames:
+        return
+    monkeypatch.setattr("app.ui.main_window.brush_radius_for", lambda _mesh: 12.0)
+
+
+@pytest.fixture
+def body_sized_brush() -> None:
+    """Der Radius aus der Körpergröße, wie die Anwendung ihn wählt (H8)."""
+
+
 # --- hinein und heraus ----------------------------------------------------------
 
 
@@ -51,23 +71,26 @@ def test_exact_sculpt_requires_the_latest_strokes_and_symmetry_before_finishing(
     window: MainWindow, exact_body: str
 ) -> None:
     """Frühes Fertig schreibt nichts; neue Gesten entwerten die alte Vorschau
-    sofort — samt dem Klick, der an ihr hing."""
+    sofort — samt dem Klick, der an ihr hing. Der vernetzte Quader ist für den
+    Pinsel zu grob: Der erste Zug gleicht im Arbeiter an, und *Fertig* legt
+    Angleichen und Formen in **eine** Transaktion — ein Strg+Z nimmt beides,
+    und der Quader ist wieder exakt (RM-561)."""
     window.start_sculpt(exact_body)
+    window.sculpt_bar.radius.set_value_mm(6.0)
     before = len(window.session.project.document.ops)
-    # Der vernetzte Quader hat acht Ecken und sonst keinen Punkt: Ein Zug
-    # bewegt nur, was in seinem Radius liegt — also an eine Ecke, nicht in die
-    # Luft daneben und nicht auf die Mitte einer Fläche ohne Punkt.
     window._on_sculpt((10.0, 10.0, 20.0))
+    assert window.wait_for_sculpt_preview(60_000)
+    assert window._sculpt_refined is not None, "der erste Zug hat angeglichen"
+    window.finish_sculpt()
     first = window._preview_approval
     assert first is not None and first.owner is window.sculpt_bar.done
     # **Warten ist keine Sperre** (Entscheidung Robert, 21.09.2026): Der Knopf
     # bleibt frei, ein Klick vor dem Bild bindet sich an die Freigabe.
     assert window.sculpt_bar.done.isEnabled()
-    window.finish_sculpt()
     assert first.pending_click is not None
     assert window.sculpting() and len(window.session.project.document.ops) == before
     window._on_sculpt((-10.0, 10.0, 20.0))
-    window.sculpt_bar.symmetry.setCurrentIndex(1)
+    window.sculpt_bar.mirror.setChecked(True)
     latest = window._preview_approval
     assert latest is not first and latest.pending_click is None
     assert window.sculpt_bar.done.isEnabled()
@@ -75,46 +98,62 @@ def test_exact_sculpt_requires_the_latest_strokes_and_symmetry_before_finishing(
     assert latest.displayed and window.sculpt_bar.done.isEnabled()
     assert window.sculpting() and len(window.session.project.document.ops) == before
     assert "geraden Teilstücken" in window.viewport._preview_note
-    prepared = latest.order.drafts[0]
+    refine, prepared = latest.order.drafts
+    assert refine.op == "remesh_uniform" and refine.params["edge"] == pytest.approx(1.0)
     assert len(strokes_from_text(prepared.params["strokes"])) == 2
     assert prepared.params["symmetry"] == "x"
     window.sculpt_bar.done.click()
     assert window.session.wait_for_idle(30_000)
     assert not window.sculpting()
     assert window.session.project.document.ops[-1].params == prepared.params
+    assert len(window.session.project.document.ops) == before + 2
     assert window.session.last_result.scene.objects[exact_body].kind == "mesh"
     window.session.undo()
     assert window.session.wait_for_idle(30_000)
+    assert len(window.session.project.document.ops) == before, "ein Strg+Z nimmt beides"
     assert window.session.last_result.scene.objects[exact_body].kind == "brep"
 
 
-def test_exact_refinement_waits_for_the_current_brush_without_auto_applying(
-    window: MainWindow, exact_body: str
+def test_a_coarse_body_is_refined_and_sculpted_in_one_transaction(
+    window: MainWindow, body_sized_brush: None
 ) -> None:
-    """Die bestehende Vernetzungshandlung übernimmt nur ihren zuletzt geprüften Radius."""
-    window.start_sculpt(exact_body)
+    """H9 und RM-561: Am Würfel aus zwölf Dreiecken tat ein Zug nichts. Die
+    Sitzung nimmt den Radius aus der Körpergröße, sagt vorher, dass sie
+    angleicht, gleicht beim ersten Zug an, und *Fertig* legt Angleichen und
+    Formen als eine Transaktion ab — ohne Knopf, ohne eigenen Verlaufsschritt."""
+    import numpy as np
+
+    from app.core.geom.sculpt import REFINE_TO_EDGE, brush_radius_for
+
+    window.open_path(MESHES / "cube_clean.stl")
+    assert window.session.wait_for_idle(60_000)
+    object_id = str(next(iter(window.session.last_result.scene.objects)))
+    body = window.session.last_result.scene.objects[object_id].mesh
+    window.start_sculpt(object_id)
+    radius = brush_radius_for(body)
+    assert window.sculpt_bar.radius.value_mm() == pytest.approx(radius)
+    assert "angeglichen" in window.sculpt_bar.warning.text()
     before = len(window.session.project.document.ops)
-    window.refine_for_sculpt()
-    first = window._preview_approval
-    assert first is not None and first.owner is window.sculpt_bar.refine
-    first_edge = first.order.drafts[0].params["edge"]
-    window.refine_for_sculpt()
+    transactions = len(window.session.project.document.transactions)
+    crown = body.bounds.maximum
+
+    window._on_sculpt((0.0, 0.0, float(crown[2])))
+    assert window.wait_for_sculpt_preview(120_000)
+    assert window._sculpt_refined is not None
+    assert not window.sculpt_bar.warning.text(), "angeglichen, die Warnung ist fort"
+    assert len(window.session.project.document.ops) == before, "nichts geschrieben"
+    window.finish_sculpt()
+    assert window.session.wait_for_idle(120_000)
+
+    ops = window.session.project.document.ops
+    assert [entry.op for entry in ops[before:]] == ["remesh_uniform", "sculpt_strokes"]
+    assert ops[before].params["edge"] == pytest.approx(radius / REFINE_TO_EDGE)
+    assert len(window.session.project.document.transactions) == transactions + 1
+    after = window.session.last_result.scene.objects[object_id].mesh
+    assert float(np.asarray(after.raw.bounds)[1][2]) > float(crown[2]) + 0.1, "der Zug trägt"
+    window.session.undo()
+    assert window.session.wait_for_idle(60_000)
     assert len(window.session.project.document.ops) == before
-    assert first.pending_click is not None, "der frühe Klick wartet auf das Bild"
-    window.sculpt_bar.radius.set_value_mm(8.0)
-    latest = window._preview_approval
-    assert latest is not first and latest.order.drafts[0].params["edge"] > first_edge
-    # Der neue Radius entwertet die alte Vorschau samt dem Klick, der an ihr
-    # hing; der Knopf bleibt frei (Warten ist keine Sperre).
-    assert latest.pending_click is None and window.sculpt_bar.refine.isEnabled()
-    assert window.session.wait_for_idle(30_000)
-    assert latest.displayed and window.sculpt_bar.refine.isEnabled()
-    assert len(window.session.project.document.ops) == before
-    window.sculpt_bar.refine.click()
-    assert window.session.wait_for_idle(30_000)
-    assert window.sculpting()
-    assert window.session.project.document.ops[-1].params == latest.order.drafts[0].params
-    assert window.session.last_result.scene.objects[exact_body].kind == "mesh"
 
 
 def test_an_early_finish_waits_for_the_conversion_preview_and_closes_once(
@@ -123,15 +162,17 @@ def test_an_early_finish_waits_for_the_conversion_preview_and_closes_once(
     """*Fertig* vor dem Bild verfällt nicht: Es läuft, sobald die Vorschau
     steht — und genau einmal (Entscheidung Robert, 21.09.2026)."""
     window.start_sculpt(exact_body)
+    window.sculpt_bar.radius.set_value_mm(6.0)
     before = len(window.session.project.document.ops)
     window._on_sculpt((10.0, 10.0, 20.0))
+    assert window.wait_for_sculpt_preview(60_000)
     window.finish_sculpt()
     approval = window._preview_approval
     assert approval is not None and approval.pending_click is not None
     assert window.sculpting() and len(window.session.project.document.ops) == before
     assert window.session.wait_for_idle(30_000)
     assert not window.sculpting()
-    assert len(window.session.project.document.ops) == before + 1
+    assert len(window.session.project.document.ops) == before + 2
     assert window.session.project.document.ops[-1].op == "sculpt_strokes"
     assert window.session.last_result.scene.objects[exact_body].kind == "mesh"
 
@@ -154,8 +195,10 @@ def test_a_finish_waiting_for_the_evaluation_does_not_take_a_later_stroke(
     from app.i18n import tr
 
     window.start_sculpt(exact_body)
+    window.sculpt_bar.radius.set_value_mm(6.0)
     before = len(window.session.project.document.ops)
     window._on_sculpt((10.0, 10.0, 20.0))
+    assert window.wait_for_sculpt_preview(60_000)
     assert window.session.wait_for_idle(30_000)
     gate = threading.Event()
     evaluate = Session.run_evaluation
@@ -199,8 +242,8 @@ def test_a_finish_during_an_evaluation_closes_the_session_after_it(
     Die Statuszeile sagte „Wird übernommen, sobald die Berechnung fertig ist.“
     und danach „Nicht übernommen …“: Das Ende der Auswertung räumt die
     Vorschau der Sitzung ab, niemand band sie neu, und ein Klick ohne Freigabe
-    lief nie (Nachprüfung, Fund 3). Die Lage ist nicht selten: *Dreiecke jetzt
-    angleichen* stößt selbst eine Auswertung an. Jetzt baut *Fertig* seinen
+    lief nie (Nachprüfung, Fund 3). Die Lage ist nicht selten: Jede Änderung
+    am Verlauf stößt eine Auswertung an. Jetzt baut *Fertig* seinen
     Auftrag aus den Zügen neu, und der Vergleich mit dem gemerkten verwirft
     weiter einen späteren Zug (Test darüber).
     """
@@ -209,8 +252,10 @@ def test_a_finish_during_an_evaluation_closes_the_session_after_it(
     from app.i18n import tr
 
     window.start_sculpt(exact_body)
+    window.sculpt_bar.radius.set_value_mm(6.0)
     before = len(window.session.project.document.ops)
     window._on_sculpt((10.0, 10.0, 20.0))
+    assert window.wait_for_sculpt_preview(60_000)
     assert window.session.wait_for_idle(30_000)
     gate = threading.Event()
     evaluate = Session.run_evaluation
@@ -243,8 +288,8 @@ def test_a_finish_during_an_evaluation_closes_the_session_after_it(
 
     assert not window.sculpting(), "die Sitzung ist zu"
     ops = window.session.project.document.ops
-    assert len(ops) == before + 1, "genau ein Schritt"
-    assert ops[-1].op == "sculpt_strokes"
+    assert len(ops) == before + 2, "genau ein Formschritt, davor das Angleichen"
+    assert [entry.op for entry in ops[-2:]] == ["remesh_uniform", "sculpt_strokes"]
     assert "übernommen" not in window.status_message.text(), window.status_message.text()
 
 
@@ -325,82 +370,68 @@ def test_strokes_gather_without_touching_the_document(window: MainWindow) -> Non
     assert len(window.session.project.document.ops) == before
 
 
-def test_the_bar_counts_strokes_and_stages(window: MainWindow) -> None:
-    """Die Etappenzahl ist der Preis aus Entscheidung C und gehört sichtbar."""
+def test_the_bar_counts_strokes(window: MainWindow) -> None:
+    """Die Leiste zählt Züge; Etappen sind ein Begriff des Kerns (RM-561)."""
     object_id = with_a_body(window)
     window.start_sculpt(object_id)
 
     window._on_sculpt((20.0, 0.0, 0.0))
-    window.sculpt_bar.tool.setCurrentIndex(2)  # Glätten — beginnt eine Etappe
+    window.sculpt_bar.set_tool("smooth")
     window._on_sculpt((0.0, 20.0, 0.0))
 
     text = window.sculpt_bar.state.text()
     assert "2" in text, f"zwei Züge müssen dastehen: {text!r}"
+    assert "Etappe" not in text
 
 
-def test_a_forced_cut_applies_to_one_stroke_only(window: MainWindow) -> None:
-    """Der Schalter gilt für **einen** Zug.
+def test_each_mouse_gesture_is_its_own_stage(window: MainWindow) -> None:
+    """H4 im Fenster: Die Proben eines Mauszugs teilen eine Etappe, der nächste
+    Zug setzt auf das Ergebnis — ohne Schalter *Neu ansetzen* (RM-561)."""
+    from app.core.geom.sculpt import BRUSH, stages
 
-    Stehen zu bleiben hieße, dass jeder weitere Zug eine eigene Etappe bekommt
-    — und damit einen eigenen Durchgang, ohne dass jemand das verlangt hätte.
-    """
     object_id = with_a_body(window)
     window.start_sculpt(object_id)
 
-    window.sculpt_bar.cut.setChecked(True)
+    window._begin_sculpt_gesture()
     window._on_sculpt((20.0, 0.0, 0.0))
-    window._on_sculpt((0.0, 20.0, 0.0))
+    window._on_sculpt((20.0, 2.0, 0.0))
+    window._end_sculpt_gesture()
+    window._begin_sculpt_gesture()
+    window._on_sculpt((20.0, 4.0, 0.0))
+    window._end_sculpt_gesture()
 
-    assert not window.sculpt_bar.cut.isChecked(), "der Schalter fällt nach einem Zug zurück"
-    assert window._sculpt_strokes[0].cut is True
-    assert window._sculpt_strokes[1].cut is False
+    strokes = window._sculpt_strokes
+    assert all(stroke.brush == BRUSH for stroke in strokes)
+    assert [len(part) for part in stages(strokes)] == [2, 1]
 
 
-def test_a_second_carve_into_the_shown_pit_starts_its_own_stage(
-    window: MainWindow, tmp_path: Path
+def test_a_stroke_is_asked_against_the_shown_session_and_its_mirror(
+    window: MainWindow, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """RM-456 (Testlücke zu RM-438): Das Fenster reicht die Züge der Sitzung an
-    den neuen Zug weiter (``before=self._sculpt_shown()``).
+    """RM-456 und RM-454 im Fenster: Der neue Zug bekommt die Züge der Sitzung,
+    wie die Vorschau sie zeigt (``before``), und die Spiegelebenen, die
+    *Spiegeln* über alle legt (``mirrored``). Ohne beide fragte er an der
+    falschen Fläche, ob er wirkt — der Kerntest prüft ``stroke_at``, dieser
+    den Anschluss."""
+    import app.ui.main_window as module
 
-    Ohne sie misst der zweite Zug in die eben gegrabene Mulde gegen die Fläche
-    vor der Etappe, greift nichts und heißt verfehlt. Der Kerntest prüft
-    ``stroke_at``; dieser prüft den Anschluss im Fenster — bisher blieben alle
-    Fenstertests grün, wenn ``before`` fehlte.
-    """
-    import numpy as np
-    import trimesh
+    asked: list[dict[str, object]] = []
+    real = module.stroke_at
 
-    from app.core.geom.sculpt import apply_strokes
+    def spy(*args: object, **kwargs: object) -> object:
+        asked.append(dict(kwargs))
+        return real(*args, **kwargs)  # type: ignore[arg-type]
 
-    # Eine fein vernetzte Kugel wie im Kerntest: An der Figur liegt unter einer
-    # 4 mm tiefen Mulde schnell die Gegenseite eines Arms im Pinselradius.
-    ball = tmp_path / "kugel.stl"
-    trimesh.creation.icosphere(subdivisions=4, radius=20.0).export(ball)
-    window.open_path(ball)
-    assert window.session.wait_for_idle(60_000)
-    item = window.object_tree.tree.topLevelItem(0)
-    assert item is not None
-    item.setSelected(True)
-    object_id = window.object_tree.selected()
-    assert object_id
-    window.start_sculpt(str(object_id))
-    bar = window.sculpt_bar
-    bar.tool.setCurrentIndex(bar.tool.findData("carve"))
-    bar.radius.set_value_mm(3.0)
-    bar.strength.set_value_mm(4.0)
-    mesh = window._sculpt_mesh(window._sculpt_target)
-    assert mesh is not None
-    points = np.asarray(mesh.raw.vertices, dtype=float)
-    index = int(np.argmax(points[:, 0]))
+    monkeypatch.setattr(module, "stroke_at", spy)
+    object_id = with_a_body(window)
+    window.start_sculpt(object_id)
+    window.sculpt_bar.mirror.setChecked(True)
+    window._on_sculpt((20.0, 0.0, 0.0))
+    window._on_sculpt((20.0, 3.0, 0.0))
 
-    window._on_sculpt(tuple(points[index]))
-    shown = apply_strokes(mesh, window._sculpt_shown())
-    bottom = tuple(float(value) for value in np.asarray(shown.raw.vertices)[index])
-    window._on_sculpt(bottom)
-
-    first, second = window._sculpt_strokes
-    assert not first.cut
-    assert second.cut, "der Zug in die gezeigte Mulde beginnt eine eigene Etappe"
+    assert asked[0]["before"] == [] and asked[0]["mirrored"] == 1
+    assert asked[1]["before"] == window._sculpt_shown()[:1]
+    assert asked[1]["before"][0].symmetry & 1, "die Vorschau zeigt den Zug gespiegelt"
 
 
 def test_the_preview_does_not_redo_the_whole_session_after_each_stroke(
@@ -432,7 +463,7 @@ def test_the_preview_does_not_redo_the_whole_session_after_each_stroke(
     bar = window.sculpt_bar
     clicks = 40
     for click in range(clicks):
-        bar.tool.setCurrentIndex(bar.tool.findData("smooth" if click % 2 else "draw"))
+        bar.set_tool("smooth" if click % 2 else "draw")
         window._on_sculpt((0.0, 0.0, float(crown[2])))
 
     assert len(sculpt.stages(window._sculpt_shown())) == clicks, "jeder Zug eine Etappe"
@@ -441,41 +472,6 @@ def test_the_preview_does_not_redo_the_whole_session_after_each_stroke(
     assert preview is not None
     expected = sculpt.apply_strokes(mesh, window._sculpt_shown())
     assert np.array_equal(np.asarray(preview.shown.raw.vertices), np.asarray(expected.raw.vertices))
-
-
-def test_the_session_mirror_reaches_the_stage_decision_in_the_window(
-    window: MainWindow, tmp_path: Path
-) -> None:
-    """RM-454 im Fenster: Die Leiste *Symmetrie* liegt über allen Zügen; ob ein
-    Zug eine eigene Etappe braucht, fragt jetzt auch sein Spiegelbild. Am
-    schiefen Prisma greift ein Klick auf die rechte Wand selbst nichts, sein
-    Spiegelbild aber genau die Mulde, die der Zug davor links gegraben hat."""
-    import numpy as np
-    import trimesh
-
-    from tests.test_sculpt import lopsided_prism
-
-    path = tmp_path / "prisma.stl"
-    path.write_bytes(trimesh.exchange.stl.export_stl(lopsided_prism().raw))
-    window.open_path(path)
-    assert window.session.wait_for_idle(60_000)
-    object_id = str(next(iter(window.session.last_result.scene.objects)))
-    mesh = window._sculpt_mesh(object_id)
-    assert mesh is not None
-    shift = np.asarray(mesh.raw.bounds[0], dtype=float) - np.array([-10.0, -10.0, -10.0])
-    window.start_sculpt(object_id)
-    bar = window.sculpt_bar
-    bar.symmetry.setCurrentIndex(bar.symmetry.findData("x"))
-    bar.tool.setCurrentIndex(bar.tool.findData("carve"))
-    bar.radius.set_value_mm(0.4)
-    bar.strength.set_value_mm(1.0)
-
-    window._on_sculpt(tuple(float(value) for value in np.array([-10.0, 0.0, 0.0]) + shift))
-    window._on_sculpt(tuple(float(value) for value in np.array([9.0, 0.0, 0.0]) + shift))
-
-    first, second = window._sculpt_strokes
-    assert not first.cut
-    assert second.cut, "nur das Spiegelbild greift — auf der Fläche nach der ersten Etappe"
 
 
 def test_undo_takes_back_a_stroke_not_the_operation(window: MainWindow) -> None:
@@ -538,7 +534,7 @@ def test_the_chosen_symmetry_reaches_the_operation(window: MainWindow) -> None:
     deshalb nachträglich änderbar."""
     object_id = with_a_body(window)
     window.start_sculpt(object_id)
-    window.sculpt_bar.symmetry.setCurrentIndex(1)  # x
+    window.sculpt_bar.mirror.setChecked(True)
     window._on_sculpt((20.0, 0.0, 0.0))
 
     window.finish_sculpt()
@@ -567,19 +563,17 @@ def test_a_stroke_carries_the_surface_direction(window: MainWindow) -> None:
 def test_a_brush_finer_than_the_mesh_says_so_before_anyone_paints(
     window: MainWindow,
 ) -> None:
-    """Entscheidung E: Fehler als Vorschlag, bevor der Fehler passiert.
-
-    Die Warnung steht beim Öffnen da, nicht erst nach dem ersten vergeblichen
-    Zug — und sie verschwindet, sobald der Pinsel zum Netz passt.
-    """
+    """Entscheidung E, seit RM-561 ohne Knopf: Ist das Netz für den Pinsel zu
+    grob, sagt die Leiste vor dem Zug, dass angeglichen wird — und der Satz
+    geht, sobald der Pinsel zum Netz passt."""
     object_id = with_a_body(window)
-
-    window.sculpt_bar.radius.setValue(0.2)
     window.start_sculpt(object_id)
-    assert window.sculpt_bar.warning.text()
+    assert not window.sculpt_bar.warning.text()
 
-    window.sculpt_bar.radius.setValue(6.0)
-    window._on_sculpt((20.0, 0.0, 0.0))
+    window.sculpt_bar.radius.set_value_mm(1.0)
+    assert "angeglichen" in window.sculpt_bar.warning.text()
+
+    window.sculpt_bar.radius.set_value_mm(12.0)
     assert not window.sculpt_bar.warning.text()
 
 
@@ -637,24 +631,23 @@ def test_a_narrow_sculpt_bar_moves_its_tail_into_a_second_row(qt_app: QApplicati
     host = QWidget()
     bar = SculptBar(host)
     try:
-        bar.show_count(2, 1)
+        bar.show_count(2)
+        tool = bar.tool_buttons["draw"]
         host.resize(3000, 400)
         host.show()
         QApplication.processEvents()
         roomy = bar.sizeHint().width()
         bar.setGeometry(0, 0, roomy + 40, 200)
         QApplication.processEvents()
-        assert abs(bar.done.y() - bar.tool.y()) < bar.tool.height(), "breit eine Zeile"
+        assert abs(bar.done.y() - tool.y()) < tool.height(), "breit eine Zeile"
         bar.setGeometry(0, 0, int(roomy * 0.6), 200)
         QApplication.processEvents()
-        assert bar.done.y() > bar.tool.y() + bar.tool.height() // 2, (
-            "Fertig steht in der zweiten Zeile"
-        )
-        assert bar.state.y() > bar.tool.y() + bar.tool.height() // 2
+        assert bar.done.y() > tool.y() + tool.height() // 2, "Fertig steht in der zweiten Zeile"
+        assert bar.state.y() > tool.y() + tool.height() // 2
         assert bar.sizeHint().width() >= roomy, "die Wunschbreite bleibt die einer Zeile"
         bar.setGeometry(0, 0, roomy + 40, 200)
         QApplication.processEvents()
-        assert abs(bar.done.y() - bar.tool.y()) < bar.tool.height(), "breit wieder eine Zeile"
+        assert abs(bar.done.y() - tool.y()) < tool.height(), "breit wieder eine Zeile"
     finally:
         host.deleteLater()
 
@@ -745,6 +738,8 @@ def test_sculpting_reports_walls_that_are_too_thin(window: MainWindow, tmp_path:
     object_id = with_a_thin_shell(window, tmp_path)
     window.start_sculpt(object_id)
     window._on_sculpt((0.0, 0.0, 20.0))
+    # Die Schale hat 30-mm-Dreiecke: Der erste Zug gleicht im Arbeiter an.
+    assert window.wait_for_sculpt_preview(60_000)
 
     window._check_sculpted_walls()
     # Seit dem 22.09.2026 rechnet ein Arbeiter (Review Fenster 0.5.0): Die
@@ -814,6 +809,7 @@ def test_the_wall_check_does_not_hold_the_window(
     object_id = with_a_thin_shell(window, tmp_path)
     window.start_sculpt(object_id)
     window._on_sculpt((0.0, 0.0, 20.0))
+    assert window.wait_for_sculpt_preview(60_000)
     release = threading.Event()
     real = module.wall_thickness_map
 
@@ -1266,72 +1262,44 @@ def test_baking_something_that_is_not_a_session_does_nothing(window: MainWindow)
 # --- der Weg aus der Warnung heraus ---------------------------------------------
 
 
-def test_the_resolution_warning_carries_a_button(window: MainWindow) -> None:
-    """Ein Hinweis, der eine andere Operation verlangt, braucht den Weg dorthin.
+def test_the_warning_bar_has_no_refine_button_any_more(qt_app: QApplication) -> None:
+    """*Dreiecke jetzt angleichen* ist entfallen (RM-561): Die Sitzung gleicht
+    selbst an, und ein zweiter Weg zur selben Sache wäre einer zu viel. Acht
+    Bedienelemente: vier Werkzeugknöpfe als eine Gruppe, Radius, Stärke,
+    *Spiegeln*, Zustand, Warnung, Kartenwahl, *Fertig*."""
+    from PySide6.QtWidgets import QCheckBox, QPushButton, QSpinBox, QToolButton
 
-    Die Zeile „erst gleichmäßig vernetzen" stand allein da. Wer ihr folgen
-    wollte, musste die Sitzung verlassen, im Menü *Ändern → Netz* suchen, eine
-    Kantenlänge raten und von vorn anfangen — vier Schritte für einen Satz,
-    der die Antwort schon kennt.
-    """
-    with_a_body(window)
-    window.sculpt_bar.radius.setValue(1.0)
-    window.start_sculpt()
+    from app.ui.sculpt_bar import SculptBar
 
-    assert window.sculpt_bar.warning.text(), "die Figur ist für diesen Pinsel zu grob"
-    assert window.sculpt_bar.refine.isVisibleTo(window.sculpt_bar)
-
-
-def test_the_button_makes_the_mesh_fine_enough_for_the_brush(window: MainWindow) -> None:
-    """Und zwar fein genug, ohne zu fragen, wie fein.
-
-    Die Kantenlänge folgt aus dem eingestellten Radius über dieselbe Schwelle,
-    die die Warnung auslöst. Sie zu erfragen hieße, dem Nutzer eine Zahl
-    abzuverlangen, die das Fenster ausrechnen kann.
-    """
-    with_a_body(window)
-    window.sculpt_bar.radius.setValue(1.0)
-    window.start_sculpt()
-
-    window.sculpt_bar.refine.click()
-    # Das Vernetzen der Figur dauert unter Last länger als die Vorgabe von 10 s.
-    assert window.session.wait_for_idle(120_000)
-
-    assert [entry.op for entry in window.session.project.document.ops][-1] == "remesh_uniform"
-    mesh = window._sculpt_mesh(str(window.object_tree.selected()))
-    assert mesh is not None
-    assert window._sculpt_resolution_hint(mesh) == "", "die Warnung ist behoben, nicht verschoben"
-    assert window.sculpting(), "die Sitzung läuft weiter — kein Umweg über das Beenden"
+    bar = SculptBar()
+    try:
+        assert [button.text() for button in bar.findChildren(QPushButton)] == [bar.done.text()]
+        assert [button.text() for button in bar.findChildren(QCheckBox)] == [bar.mirror.text()]
+        assert len([b for b in bar.findChildren(QToolButton) if b.isCheckable()]) == 4
+        assert isinstance(bar.strength, QSpinBox) and bar.strength.suffix() == "", (
+            "die Stärke ist eine Stufe ohne Einheit (H3)"
+        )
+        assert (bar.strength.minimum(), bar.strength.maximum()) == (1, 10)
+    finally:
+        bar.deleteLater()
 
 
-def test_the_button_goes_when_the_warning_goes(window: MainWindow) -> None:
-    """Ein Knopf ohne Anlass ist ein Angebot, das ins Leere führt."""
-    with_a_body(window)
-    window.sculpt_bar.radius.setValue(1.0)
-    window.start_sculpt()
-    window.sculpt_bar.refine.click()
-    # Das Vernetzen der Figur dauert unter Last länger als die Vorgabe von 10 s.
-    assert window.session.wait_for_idle(120_000)
+def test_mirror_is_one_switch_and_keeps_a_plane_from_the_step(qt_app: QApplication) -> None:
+    """*Spiegeln* ist ein Schalter für links/rechts (RM-561). Ein Schritt, dem
+    der Dialog eine andere Ebene gegeben hat, behält sie, bis jemand schaltet."""
+    from app.ui.sculpt_bar import SculptBar
 
-    mesh = window._sculpt_mesh(str(window.object_tree.selected()))
-    assert mesh is not None
-    window.sculpt_bar.show_warning(window._sculpt_resolution_hint(mesh), refinable=True)
-
-    assert not window.sculpt_bar.refine.isVisibleTo(window.sculpt_bar)
-
-
-def test_the_thin_wall_warning_gets_no_button(window: MainWindow) -> None:
-    """Denn Vernetzen macht eine dünne Wand nicht dicker.
-
-    Beide Warnungen teilen sich dasselbe Feld; nur eine hat eine Handlung, die
-    von hier aus richtig ist. Deshalb sagt der Aufrufer es und nicht der Text.
-    """
-    with_a_body(window)
-    window.start_sculpt()
-    window.sculpt_bar.show_warning("Die Wand wird zu dünn.", refinable=False)
-
-    assert window.sculpt_bar.warning.text()
-    assert not window.sculpt_bar.refine.isVisibleTo(window.sculpt_bar)
+    bar = SculptBar()
+    try:
+        assert bar.plane() == "none"
+        bar.mirror.setChecked(True)
+        assert bar.plane() == "x"
+        bar.set_plane("yz")
+        assert bar.mirror.isChecked() and bar.plane() == "yz"
+        bar.mirror.setChecked(False)
+        assert bar.plane() == "none"
+    finally:
+        bar.deleteLater()
 
 
 def test_dragging_paints_strokes_with_spacing(window: MainWindow) -> None:
@@ -1341,15 +1309,14 @@ def test_dragging_paints_strokes_with_spacing(window: MainWindow) -> None:
     object_id = with_a_body(window)
     window.start_sculpt(object_id)
     view = window.viewport
-    window.sculpt_bar.radius.setValue(8.0)
-    view.set_brush_radius(8.0)
+    window.sculpt_bar.radius.set_value_mm(12.0)
 
     walked = iter(
         [
             (0.0, 0.0, 0.0),  # frischer Ansatz: erster Zug sitzt immer
-            (1.0, 0.0, 0.0),  # unter 4 mm zum letzten Zug: geschluckt
-            (6.0, 0.0, 0.0),  # über 4 mm: der zweite Zug
-            (6.5, 0.0, 0.0),  # neuer Ansatz daneben: sitzt trotz Nähe
+            (1.0, 0.0, 0.0),  # unter 6 mm zum letzten Zug: geschluckt
+            (8.0, 0.0, 0.0),  # über 6 mm: der zweite Zug
+            (8.5, 0.0, 0.0),  # neuer Ansatz daneben: sitzt trotz Nähe
         ]
     )
     view._world_at = lambda x, y: next(walked)  # type: ignore[method-assign]
@@ -1361,6 +1328,28 @@ def test_dragging_paints_strokes_with_spacing(window: MainWindow) -> None:
 
     view._on_paint_drag(3, 0, True)
     assert len(window._sculpt_strokes) == 3, "ein frischer Ansatz beginnt ohne Altlast"
+
+
+def test_a_fast_drag_fills_the_gap_between_two_events(window: MainWindow) -> None:
+    """H5: Proben gab es nur an Mausereignissen; ein schneller Zug lieferte
+    Proben bis 1,56 Radien auseinander, eine Perlenkette. Jetzt füllt der Zug
+    die Strecke bis zur neuen Stelle mit Proben im halben Radius auf, gepickt
+    an Bildpunkten dazwischen."""
+    import numpy as np
+
+    object_id = with_a_body(window)
+    window.start_sculpt(object_id)
+    view = window.viewport
+    window.sculpt_bar.radius.set_value_mm(12.0)
+    view._world_at = lambda x, y: (float(x), 0.0, 0.0)  # type: ignore[method-assign]
+
+    view._on_paint_drag(0, 0, True)
+    view._on_paint_drag(30, 0, False)
+
+    points = np.asarray([stroke.point for stroke in window._sculpt_strokes])
+    gaps = np.linalg.norm(np.diff(points, axis=0), axis=1)
+    assert len(points) == 6, points
+    assert float(gaps.max()) <= 6.0 + 1e-9, "höchstens ein halber Radius zwischen zwei Proben"
 
 
 # --- die Anzeigeeinheit endet nicht an der Leiste (§19.3) ------------------------
@@ -1381,22 +1370,19 @@ def test_a_stroke_in_inches_still_reaches_the_core_in_millimetres(
     from app.ui.labels import set_display_unit
 
     object_id = with_a_body(window)
-    window.sculpt_bar.radius.set_value_mm(5.0)
-    window.sculpt_bar.strength.set_value_mm(1.0)
-
+    window.start_sculpt(object_id)
     set_display_unit("in")
     window.sculpt_bar.radius.refresh_unit()
-    window.sculpt_bar.strength.refresh_unit()
-    assert window.sculpt_bar.radius.value() == pytest.approx(5.0 / 25.4, abs=1e-4), (
+    window.sculpt_bar.radius.set_value_mm(12.0)
+    assert window.sculpt_bar.radius.value() == pytest.approx(12.0 / 25.4, abs=1e-4), (
         "das Feld muss Zoll zeigen, sonst prüft der Test nichts"
     )
 
-    window.start_sculpt(object_id)
     window._on_sculpt((20.0, 0.0, 0.0))
 
     stroke = window._sculpt_strokes[0]
-    assert stroke.radius == pytest.approx(5.0), "der Zug rechnet in Millimetern"
-    assert stroke.strength == pytest.approx(1.0)
+    assert stroke.radius == pytest.approx(12.0), "der Zug rechnet in Millimetern"
+    assert stroke.strength == pytest.approx(5.0), "die Stärke ist eine Stufe ohne Einheit"
 
 
 def test_the_brush_ring_follows_the_slider_in_millimetres(window: MainWindow) -> None:
@@ -1780,7 +1766,8 @@ def test_project_switch_cancel_and_discard_include_local_gestures(
 def test_save_before_project_switch_waits_for_the_gesture_result_dialog(
     window: MainWindow, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, kind: str
 ) -> None:
-    """Speichern darf die offenen Knochen/Zeichnungen nicht als gesichert ausgeben."""
+    """Speichern darf die offene Zeichnung nicht als gesichert ausgeben; Formen
+    und Skelett schreiben ihren Schritt ohne Dialog (RM-561) und speichern mit."""
     from PySide6.QtTest import QTest
 
     target = with_a_body(window)
@@ -1790,7 +1777,7 @@ def test_save_before_project_switch_waits_for_the_gesture_result_dialog(
     _begin_unsaved_gesture(window, kind, target)
     monkeypatch.setattr("app.ui.main_window.confirm_unsaved", lambda *args: "save")
     permitted = window._may_discard()
-    if kind == "sculpt":
+    if kind in ("sculpt", "pose"):
         assert permitted
     elif kind == "sketch":
         # Fertig bringt den Umriss zurück in die Ansicht, die Höhe fehlt noch
@@ -1915,7 +1902,7 @@ def test_background_sculpt_cancellation_and_project_change_reject_late_answers(
     proceed.set()
     assert worker.wait(5000)
     QApplication.processEvents()
-    window._sculpt_preview_received(worker, number, None, [], 1.0)
+    window._sculpt_preview_received(worker, number, None, [], 1.0, None, 0.0, 0)
     assert window._sculpt_preview_worker is None
     assert not window.sculpting()
     assert not window.session.project.document.ops
@@ -1984,10 +1971,46 @@ def test_loading_a_saved_gesture_cannot_replace_a_newer_tool(
     assert (window._sketch_panel is not None) == (new_tool == "sketch")
 
 
-def test_refining_a_reopened_sculpt_inserts_before_it_and_keeps_local_strokes(
-    window: MainWindow,
+def test_the_samples_of_one_event_reach_the_view_once(
+    window: MainWindow, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """*Dreiecke jetzt angleichen* verfeinert den Eingang, nicht den später verschobenen Stand."""
+    """RM-576: Ein Mauszug füllt bis zu acht Proben in ein Ereignis. An einem
+    kleinen Netz übergab jede ihre Fläche — Fläche, Puffer und Normalen kosteten
+    das Siebenfache der Probe. Jetzt zählen Leiste und Vorschau jede Probe
+    sofort, und ins Bild kommt die Fläche einmal, nach allen."""
+    import numpy as np
+
+    from app.ui.viewport import DRAG_FILL_LIMIT
+
+    target = with_a_body(window)
+    window.start_sculpt(target)
+    shown: list[Any] = []
+    original = window.viewport.show_preview_mesh
+
+    def counted(object_id: str, mesh: Any) -> None:
+        shown.append(mesh)
+        original(object_id, mesh)
+
+    monkeypatch.setattr(window.viewport, "show_preview_mesh", counted)
+    window._begin_sculpt_gesture()
+    for index in range(DRAG_FILL_LIMIT):
+        window._on_sculpt((20.0, 0.0, float(index) * 0.5))
+    assert len(window._sculpt_strokes) == DRAG_FILL_LIMIT
+    assert window._sculpt_preview.strokes == tuple(window._sculpt_shown())
+    assert shown == [], "noch keine Übergabe je Probe"
+    QApplication.processEvents()
+    window._end_sculpt_gesture()
+    assert len(shown) == 1
+    expected = window._sculpt_preview.shown
+    assert np.array_equal(np.asarray(shown[0].raw.vertices), np.asarray(expected.raw.vertices))
+
+
+def _ops(window: MainWindow) -> list[str]:
+    return [entry.op for entry in window.session.project.document.ops]
+
+
+def _sculpted_then_moved(window: MainWindow) -> tuple[str, int]:
+    """Ein Formschritt mit einem Zug und ein Verschieben dahinter."""
     from app.core.scene.history import OperationDraft
 
     target = with_a_body(window)
@@ -2000,29 +2023,189 @@ def test_refining_a_reopened_sculpt_inserts_before_it_and_keeps_local_strokes(
         "Verschieben", [OperationDraft("translate_object", inputs=(target,), params={"x": 17.0})]
     )
     assert window.session.wait_for_idle()
+    return target, step
+
+
+def test_a_reopened_step_refines_for_the_brush_and_writes_it_once_on_finish(
+    window: MainWindow,
+) -> None:
+    """Review F5: Ein wieder geöffneter Schritt gleicht für einen kleineren
+    Pinsel selbsttätig an — im Arbeiter, wie eine neue Sitzung. Der Verlauf
+    bleibt bis *Fertig* unberührt; dann stehen Angleichen und die neuen Züge in
+    einer Transaktion vor dem späteren Verschieben, und ein Strg+Z nimmt beides."""
+    _target, step = _sculpted_then_moved(window)
+    before = _ops(window)
+    transactions = len(window.session.project.document.transactions)
     window.edit_operation(step)
     assert window.session.wait_for_idle()
     count = window._sculpt_source.triangle_count
+    window.sculpt_bar.radius.set_value_mm(6.0)
+    assert "angeglichen" in window.sculpt_bar.warning.text()
+
+    window._begin_sculpt_gesture()
     window._on_sculpt((0.0, 20.0, 0.0))
-    window.sculpt_bar.radius.setValue(6.0)
-    window.refine_for_sculpt()
-    assert window.session.wait_for_idle()
-    assert window.wait_for_sculpt_preview()
-    assert window.sculpting()
+    window._end_sculpt_gesture()
+    assert window.wait_for_sculpt_preview(120_000)
+    assert window._sculpt_refined is not None
+    assert window._sculpt_refined.triangle_count > count
+    assert _ops(window) == before, "solange die Sitzung offen ist, ändert sich nichts"
     assert len(window._sculpt_strokes) == 2
-    assert window._sculpt_source.triangle_count > count
+
+    window.finish_sculpt()
+    assert window.session.wait_for_idle(120_000)
     entries = window.session.project.document.ops
     assert [entry.op for entry in entries[-3:]] == [
         "remesh_uniform",
         "sculpt_strokes",
         "translate_object",
     ]
-    assert window._sculpt_step == entries[-2].id
-    assert window.session.inserting is None
-    window.finish_sculpt()
+    assert len(strokes_from_text(entries[-2].params["strokes"])) == 2
+    assert entries[-1].params["x"] == 17.0
+    assert len(window.session.project.document.transactions) == transactions + 1
+    title = str(window.session.project.document.transactions[-1].title)
+    assert title == "Formen (Dreiecke angeglichen)", "Review N6: Strg+Z nennt die Züge"
+    window.session.undo()
+    assert window.session.wait_for_idle(60_000)
+    assert _ops(window) == before
+    assert len(strokes_from_text(window.session.project.document.ops[-2].params["strokes"])) == 1
+
+
+@pytest.mark.parametrize("ending", ["cancelled", "refused"])
+def test_a_refined_finish_that_does_not_land_keeps_the_session_and_its_strokes(
+    window: MainWindow, monkeypatch: pytest.MonkeyPatch, ending: str
+) -> None:
+    """Review N1: *Fertig* am geöffneten, angeglichenen Schritt schreibt über
+    einen Umbau im Arbeiter. Die Sitzung schloss vorher; brach der Kunde den
+    Umbau ab oder lehnte er ab, waren alle Züge fort, und der Satz sagte, es sei
+    nichts geschehen. Jetzt bleibt sie mit allen Zügen offen und sagt es."""
+    import app.ui.session as session_module
+    from app.core.errors import UserError
+    from app.i18n import _
+
+    said: list[str] = []
+    _target, step = _sculpted_then_moved(window)
+    before = [(entry.op, dict(entry.params)) for entry in window.session.project.document.ops]
+    window.edit_operation(step)
     assert window.session.wait_for_idle()
-    assert len(strokes_from_text(window.session.project.document.ops[-2].params["strokes"])) == 2
-    assert window.session.project.document.ops[-1].params["x"] == 17.0
+    window.sculpt_bar.radius.set_value_mm(6.0)
+    window._begin_sculpt_gesture()
+    for index in range(4):
+        window._on_sculpt((0.0, 20.0, float(index)))
+    window._end_sculpt_gesture()
+    assert window.wait_for_sculpt_preview(120_000)
+    assert window._sculpt_refined is not None
+    made = len(window._sculpt_strokes)
+
+    def ends(*args: Any, **kwargs: Any) -> Any:
+        if ending == "cancelled":
+            raise session_module.OperationCancelled()
+        raise UserError(title=_("Abgelehnt."), detail=_("Abgelehnt."))
+
+    monkeypatch.setattr(session_module, "revise", ends)
+    monkeypatch.setattr("app.ui.main_window.show_error", lambda *args, **kwargs: None)
+    window.announce = lambda text, *args, **kwargs: said.append(str(text))  # type: ignore[method-assign]
+    window.finish_sculpt()
+    assert window.session.wait_for_idle(60_000)
+
+    assert window.sculpting(), "die Sitzung bleibt offen"
+    assert len(window._sculpt_strokes) == made == 5
+    after = [(entry.op, dict(entry.params)) for entry in window.session.project.document.ops]
+    assert after == before
+    assert said and "bleiben in der Sitzung" in said[-1]
+    assert window.sculpt_bar.isEnabled()
+    monkeypatch.undo()
+    window.finish_sculpt()
+    assert window.session.wait_for_idle(120_000)
+    assert not window.sculpting()
+    assert len(strokes_from_text(window.session.project.document.ops[-2].params["strokes"])) == 5
+
+
+def test_opening_a_large_step_shows_its_strokes_on_their_own_mesh(
+    window: MainWindow, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Review N3: Ein großer, wieder geöffneter Schritt glich schon beim Öffnen
+    an, und seine alten Züge standen auf einem anderen Netz, bevor jemand etwas
+    tat. Angeglichen wird für den ersten Zug."""
+    import app.ui.placement_flow as placement_flow
+
+    _target, step = _sculpted_then_moved(window)
+    monkeypatch.setattr(placement_flow, "AT_ONCE_BELOW", 1)
+    window.edit_operation(step)
+    assert window.session.wait_for_idle()
+    window.sculpt_bar.radius.set_value_mm(6.0)
+    window._refresh_sculpt_preview()
+    assert window.wait_for_sculpt_preview(120_000)
+    assert window._sculpt_refined is None, "beim Ansehen nicht angeglichen"
+    window._begin_sculpt_gesture()
+    window._on_sculpt((0.0, 20.0, 0.0))
+    window._end_sculpt_gesture()
+    assert window.wait_for_sculpt_preview(120_000)
+    assert window._sculpt_refined is not None, "der erste Zug gleicht an"
+
+
+def test_a_reopened_refinement_without_a_kept_stroke_leaves_the_history_alone(
+    window: MainWindow,
+) -> None:
+    """Review F5: Wiederöffnen, ein Zug, der angleicht, Strg+Z in der Sitzung,
+    *Fertig* — der Verlauf ist der von vorher, ohne Angleichschritt."""
+    _target, step = _sculpted_then_moved(window)
+    before = [(entry.op, dict(entry.params)) for entry in window.session.project.document.ops]
+    window.edit_operation(step)
+    assert window.session.wait_for_idle()
+    window.sculpt_bar.radius.set_value_mm(6.0)
+    window._begin_sculpt_gesture()
+    window._on_sculpt((0.0, 20.0, 0.0))
+    window._end_sculpt_gesture()
+    assert window.wait_for_sculpt_preview(120_000)
+    assert window._sculpt_refined is not None, "Voraussetzung: der Zug hat angeglichen"
+    assert window.undo_sculpt_stroke()
+    window.finish_sculpt()
+    assert window.session.wait_for_idle(60_000)
+    after = [(entry.op, dict(entry.params)) for entry in window.session.project.document.ops]
+    assert after == before
+
+
+def test_a_reopened_step_on_an_open_mesh_tries_once_and_says_why(
+    window: MainWindow, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Review F4: Ließ sich das Netz eines wieder geöffneten Schritts nicht
+    angleichen (offen), versuchte es jede Probe neu, und jede Absage war ein
+    Fehlerdialog. Jetzt versucht es der Arbeiter einmal, ohne Dialog, und die
+    Leiste sagt den Ausweg; geformt wird trotzdem."""
+    import app.core.geom.mesh_ops as mesh_ops
+
+    errors: list[Any] = []
+    monkeypatch.setattr(
+        "app.ui.main_window.show_error", lambda error, *a, **k: errors.append(error)
+    )
+    _target, step = _sculpted_then_moved(window)
+    before = _ops(window)
+    calls: list[float] = []
+
+    def refuses(mesh: Any, edge: float, deviation: float, **kwargs: Any) -> Any:
+        calls.append(edge)
+        raise mesh_ops._not_a_solid(mesh)
+
+    monkeypatch.setattr(mesh_ops, "uniform", refuses)
+    window.edit_operation(step)
+    assert window.session.wait_for_idle()
+    window.sculpt_bar.radius.set_value_mm(6.0)
+    window._begin_sculpt_gesture()
+    for index in range(6):
+        window._on_sculpt((0.0, 20.0, float(index)))
+        assert window.session.wait_for_idle()
+    window._end_sculpt_gesture()
+    assert window.wait_for_sculpt_preview(120_000)
+
+    assert len(calls) == 1
+    assert errors == []
+    assert "Erst reparieren" in window.sculpt_bar.warning.text()
+    assert _ops(window) == before
+    window.finish_sculpt()
+    assert window.session.wait_for_idle(60_000)
+    entries = window.session.project.document.ops
+    assert [entry.op for entry in entries] == before, "kein Angleichschritt"
+    assert len(strokes_from_text(entries[-2].params["strokes"])) == 7
 
 
 @pytest.mark.parametrize("kind", ["sculpt", "pose"])
@@ -2034,8 +2217,14 @@ def test_the_undo_menu_reaches_the_local_gesture_and_never_removes_the_import(
     before = len(window.session.project.document.ops)
     _begin_unsaved_gesture(window, kind, target)
     assert window.undo_action.isEnabled()
-    window.undo_action.trigger()
+    # Formen nimmt die Geste in einem Griff, das Skelett Klick für Klick
+    # (Knochen, dann Gelenk — RM-561).
+    for _ in range(3):
+        if not window.undo_action.isEnabled():
+            break
+        window.undo_action.trigger()
     assert not window._sculpt_strokes and not window._armature_bones
+    assert window._armature_head is None
     assert not window.undo_action.isEnabled()
     window.action_undo()
     assert len(window.session.project.document.ops) == before

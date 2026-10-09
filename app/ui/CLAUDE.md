@@ -148,8 +148,8 @@ trägt, sagt der Kopf von `oberflaeche.md`.
 | `split_bar.py` | Trennleiste (§25, §18.2) |
 | `draw_tool.py`, `draw_flow.py`, `draw_bar.py` | Aufziehen (§30.1): Klicks, Ablauf, Leiste |
 | `explode_bar.py` | Explosionsansicht (§18.8) |
-| `sculpt_bar.py` | Leiste der Formsitzung (§25); `GestureAnalysis` aus `analysis_bar` teilt Kartenwahl und Druckbefund mit dem Skelett |
-| `pose_bar.py` | Leiste des Skeletteditors (§25); nach Abschluss bleiben Kartenwahl, Druckbefund und Schließen erreichbar |
+| `sculpt_bar.py` | Leiste der Formsitzung (§25): vier Werkzeugknöpfe, Stufe 1–10, *Spiegeln*; `GestureAnalysis` teilt Karte und Befund mit dem Skelett |
+| `pose_bar.py` | Leiste des Skeletts (§25): Zustand, Hinweis, *Fertig*; danach bleiben Karte, Befund und Schließen |
 | `facts.py` | was das Teil kostet, während man daran baut (§22, §29) |
 
 ### Dialoge

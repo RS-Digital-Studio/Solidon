@@ -19,14 +19,14 @@ paths:
 
 # Regeln für Wartezeit und Nebenläufigkeit
 
-**Große Formsitzungen halten die inkrementelle Vorschau im Arbeiter.** Ab
-der gemeinsamen Sofortgrenze `placement_flow.AT_ONCE_BELOW` besitzt genau
-ein `_SculptPreviewWorker` die `SculptPreview`; Folgeklicks warten geordnet,
-während die letzte gültige Fläche sichtbar bleibt. Neues Werkzeug,
+**Große Form- und Skelettsitzungen rechnen im Arbeiter.** Ab
+`placement_flow.AT_ONCE_BELOW` oder zum Angleichen besitzt genau ein
+`_SculptPreviewWorker` die `SculptPreview` und nimmt alle wartenden Proben auf
+einmal; Gewichte und gebeugte Haut rechnet `_ArmatureSkinWorker`. Die letzte
+gültige Fläche bleibt sichtbar, ein Klick trifft sie. Neues Werkzeug,
 Symmetrie, Abbruch und Projektwechsel entwerten die Antwort über Nummer und
-Arbeiteridentität. Die Wand-/Überhangprüfung liest eine Kopie der bereits
-gezeigten Fläche und rechnet keine Gesten erneut. Prüfstände warten über
-`wait_for_sculpt_preview` auf die zugestellten Antworten.
+Arbeiteridentität. Die Wand-/Überhangprüfung liest eine Kopie der gezeigten
+Fläche. Prüfstände warten über `wait_for_sculpt_preview`/`…_armature_skin`.
 
 Was geschieht, während gerechnet wird (§2.8); die allgemeinen Regeln aus
 `oberflaeche.md` gelten zusätzlich. Messreihen, Anlässe und die Mechanik im
