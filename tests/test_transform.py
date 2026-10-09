@@ -367,6 +367,84 @@ def test_a_later_fit_to_size_settles_the_earlier_one(profile: Profile) -> None:
     assert max(result.scene.objects["obj_1"].mesh.bounds.size) == pytest.approx(50.0, abs=1e-6)
 
 
+@pytest.mark.parametrize(
+    "name", ["cube_clean.stl", "generated_figure.stl", "post_with_fillet.stl", "broken_open.stl"]
+)
+def test_fit_to_size_lays_a_mesh_down_moving_it_once(
+    name: str, profile: Profile, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """RM-676: *Auf Maß bringen* mit freier Stelle bewegt ein Netz einmal.
+
+    Die freie Stelle braucht nur die Hülle am neuen Maß. Vorher wurde dafür das
+    ganze Netz samt Merkmalen bewegt und danach ein zweites Mal mit der
+    Verschiebung — am erzeugten Drachen 0,42 s und 70 MiB Spitze je Rechnung.
+    Das Ergebnis bleibt Bit für Bit das der zwei Bewegungen.
+    """
+    import dataclasses
+
+    import numpy as np
+
+    from app.core.geom import ops
+    from app.core.geom.prepare import placed_at_free_spot
+    from app.core.geom.transform import (
+        anchor_point,
+        composed,
+        moved_object,
+        scaling,
+        translation,
+    )
+    from app.core.scene.cancel import NeverCancelled
+    from app.core.types import OpContext, Scene, SceneObject
+
+    mesh = normalise(read_mesh((MESHES / name).read_bytes(), name[-4:]), "mm").mesh
+    beside = SceneObject(id="obj_2", name="Daneben", mesh=cube())
+    entry = SceneObject(id="obj_1", name="Teil", mesh=mesh)
+    scene = Scene(objects={entry.id: entry, beside.id: beside})
+    spec = REGISTRY.get("fit_to_size")
+    context = OpContext(
+        scene=scene,
+        inputs=[entry],
+        params=spec.params(largest=137.0, free_spot=True),
+        profile=profile,
+        quality="fine",
+        seed=None,
+        progress=lambda fraction, text: None,
+        ask=lambda question, choices: choices[0],
+        cancelled=NeverCancelled(),
+    )
+    moves: list[object] = []
+
+    def counted(source, matrix, **kwargs):
+        moves.append(source)
+        return moved_object(source, matrix, **kwargs)
+
+    monkeypatch.setattr(ops, "moved_object", counted)
+
+    result = ops.fit_to_size(context)
+
+    assert len(moves) == 1, "ein Netz wird für die freie Stelle nicht vorab bewegt"
+    factor = 137.0 / max(mesh.bounds.size)
+    centre = anchor_point(mesh, "centre")
+    first = moved_object(entry, scaling((factor,) * 3, centre))
+    spot = placed_at_free_spot(
+        first.mesh.bounds,
+        profile,
+        scene,
+        spot=(None, None, 1),
+        ignore={entry.id},
+        objects=[first],
+    )
+    expected = dataclasses.replace(
+        moved_object(entry, composed(translation(spot.offset), scaling((factor,) * 3, centre))),
+        plate=spot.plate,
+    )
+    body = result.outputs[0]
+    assert np.array_equal(body.mesh.raw.vertices, expected.mesh.raw.vertices)
+    assert np.array_equal(body.mesh.raw.faces, expected.mesh.raw.faces)
+    assert body.plate == expected.plate
+    assert result.answered == spot.answered
+
+
 def test_fit_to_size_refuses_a_body_without_extent() -> None:
     """Ein Maß braucht etwas, worauf es sich bezieht — sonst teilt die
     Rechnung durch null.
