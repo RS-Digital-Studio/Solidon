@@ -31,6 +31,7 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-09 | [RM-650: Ein eingefügtes Modell kommt in den Ausschnitt (09.10.2026)](#rm-650-ein-eingefügtes-modell-kommt-in-den-ausschnitt-09102026) |
 | 2026-10-09 | [RM-620: Ein Slicer, der Filamente mit zu verschiedenen Temperaturen ablehnt, sagt es (09.10.2026)](#rm-620-ein-slicer-der-filamente-mit-zu-verschiedenen-temperaturen-ablehnt-sagt-es-09102026) |
 | 2026-10-08 | [RM-602: Der Druckdialog ordnet die Profile in einem Lesedurchgang zu (08.10.2026)](#rm-602-der-druckdialog-ordnet-die-profile-in-einem-lesedurchgang-zu-08102026) |
 | 2026-10-08 | [RM-601: Die Slicerwahl im Druckdialog geht wie in Erste Schritte, und überall stehen nur unterstützte Slicer (08.10.2026)](#rm-601-die-slicerwahl-im-druckdialog-geht-wie-in-erste-schritte-und-überall-stehen-nur-unterstützte-slicer-08102026) |
@@ -44523,3 +44524,13 @@ unverändert; `test_evaluation.py::test_a_pin_whose_plate_is_removed_says_nothin
 mit Gegenprobe (ohne `object_ids` rot). Die zwölf Beispielprojekte und `example_v48.p3d` tragen
 Format 48 und Bibliotheksversion 24. Changelog: ja — Stift für Bohrung baut Senkkopf,
 Zylinderkopf und Gewinde passend zur Bohrung.
+
+## RM-650: Ein eingefügtes Modell kommt in den Ausschnitt (09.10.2026)
+
+<a id="rm-650-ein-eingefügtes-modell-kommt-in-den-ausschnitt-09102026"></a>
+<a id="rm-650"></a>
+
+**RM-650 — Ein eingefügtes Modell kommt in den Ausschnitt.**
+Gefunden bei RM-306 (03.10.2026): Ein weiteres Modell kommt an die freie Stelle neben der Plattenmitte; war die Ansicht auf das erste Modell eingepasst, stand das neue außerhalb des Bilds, und nur der Objektbaum verriet, dass es angekommen war.
+
+**Abschluss:** Nach dem Einfügen eines weiteren Modells rahmt die Ansicht einmal nach, wenn es über den zuletzt eingepassten Rahmen hinausragt — derselbe Weg wie nach einem Größenschritt (RM-280). `MainWindow._on_model_placed` merkt sich den Körper (`_placed_to_frame`), und `_frame_the_placed` meldet unmittelbar vor dem Aufbau, der ihn trägt, an `Viewport.frame_if_beyond`; was im Rahmen liegt, lässt die Kamera in Ruhe. Gemerkt wird der Körper, nicht der Zeitpunkt: Eine Bitte gleich beim Einfügen verbrauchte das Review-Gegenbeispiel, ein Aufbau der alten Szene bei offener Schichtansicht. Ein abgewiesener Import und ein Dokument ohne den Körper räumen die Merkung ab. Gilt für Datei, Download, erzeugtes Modell und Einfügemarke (`Session.modelPlaced`, RM-303). Regel in `.claude/rules/kamera.md`, Changelog 0.6.0 in sechs Sprachen. Test `test_ui.py::test_a_further_model_beyond_the_view_comes_into_it` ohne und mit offener Schichtansicht; ohne Nachrahmen beide rot, mit der Bitte beim Einfügen der Fall mit Schichtansicht rot (Gegenproben). Fenstersonde am echten Fenster (zwei Würfel, der zweite neben dem ersten): vorher 3 von 4 — Ausschnitt blieb bei −10…10 mm, das neue Modell reichte bis 35 mm —, nachher 4 von 4, beide im Bild. Umgesetzt von Claude (Thread „Bedienung und KI“).
