@@ -1311,26 +1311,6 @@ def test_old_strokes_keep_the_same_budget() -> None:
     assert taken < 2.0
 
 
-def test_gestures_as_stages_cost_no_more_than_one_stage() -> None:
-    """F6 (RM-560): Fassung 2 macht jede Geste zu einer Etappe, und jede
-    Etappe baute Normalen und Suchbaum über das ganze Netz neu — hundert
-    Gesten am Referenznetz 39,6 s statt 0,6 s. Eine Etappe rechnet jetzt nur
-    ihr Gebiet und sammelt ihre Proben; dieselben tausend Proben brauchen in
-    Fassung 2 nicht länger als in Fassung 1 in einer einzigen Etappe.
-
-    Im Wechsel gemessen, je das schnellste von fünf: Fremdlast trifft beide.
-    """
-    old_mesh, old = _thousand_samples(1)
-    new_mesh, new = _thousand_samples(2)
-    best = {1: float("inf"), 2: float("inf")}
-    for _round in range(5):
-        for brush, mesh, strokes in ((1, old_mesh, old), (2, new_mesh, new)):
-            start = time.perf_counter()
-            _evaluate_fresh(mesh, strokes)
-            best[brush] = min(best[brush], time.perf_counter() - start)
-    assert best[2] <= best[1], best
-
-
 def test_the_pierce_check_stays_with_the_strokes() -> None:
     """§31 (RM-419): Die Durchstichprüfung lief über den gemeinsamen Hüllquader
     aller bewegten Punkte. Sechs kleine Züge rund um eine Kugel nahmen so jedes

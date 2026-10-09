@@ -2049,10 +2049,85 @@ def test_a_reopened_step_refines_for_the_brush_and_writes_it_once_on_finish(
     assert len(strokes_from_text(entries[-2].params["strokes"])) == 2
     assert entries[-1].params["x"] == 17.0
     assert len(window.session.project.document.transactions) == transactions + 1
+    title = str(window.session.project.document.transactions[-1].title)
+    assert title == "Formen (Dreiecke angeglichen)", "Review N6: Strg+Z nennt die Züge"
     window.session.undo()
     assert window.session.wait_for_idle(60_000)
     assert _ops(window) == before
     assert len(strokes_from_text(window.session.project.document.ops[-2].params["strokes"])) == 1
+
+
+@pytest.mark.parametrize("ending", ["cancelled", "refused"])
+def test_a_refined_finish_that_does_not_land_keeps_the_session_and_its_strokes(
+    window: MainWindow, monkeypatch: pytest.MonkeyPatch, ending: str
+) -> None:
+    """Review N1: *Fertig* am geöffneten, angeglichenen Schritt schreibt über
+    einen Umbau im Arbeiter. Die Sitzung schloss vorher; brach der Kunde den
+    Umbau ab oder lehnte er ab, waren alle Züge fort, und der Satz sagte, es sei
+    nichts geschehen. Jetzt bleibt sie mit allen Zügen offen und sagt es."""
+    import app.ui.session as session_module
+    from app.core.errors import UserError
+    from app.i18n import _
+
+    said: list[str] = []
+    _target, step = _sculpted_then_moved(window)
+    before = [(entry.op, dict(entry.params)) for entry in window.session.project.document.ops]
+    window.edit_operation(step)
+    assert window.session.wait_for_idle()
+    window.sculpt_bar.radius.set_value_mm(6.0)
+    window._begin_sculpt_gesture()
+    for index in range(4):
+        window._on_sculpt((0.0, 20.0, float(index)))
+    window._end_sculpt_gesture()
+    assert window.wait_for_sculpt_preview(120_000)
+    assert window._sculpt_refined is not None
+    made = len(window._sculpt_strokes)
+
+    def ends(*args: Any, **kwargs: Any) -> Any:
+        if ending == "cancelled":
+            raise session_module.OperationCancelled()
+        raise UserError(title=_("Abgelehnt."), detail=_("Abgelehnt."))
+
+    monkeypatch.setattr(session_module, "revise", ends)
+    monkeypatch.setattr("app.ui.main_window.show_error", lambda *args, **kwargs: None)
+    window.announce = lambda text, *args, **kwargs: said.append(str(text))  # type: ignore[method-assign]
+    window.finish_sculpt()
+    assert window.session.wait_for_idle(60_000)
+
+    assert window.sculpting(), "die Sitzung bleibt offen"
+    assert len(window._sculpt_strokes) == made == 5
+    after = [(entry.op, dict(entry.params)) for entry in window.session.project.document.ops]
+    assert after == before
+    assert said and "bleiben in der Sitzung" in said[-1]
+    assert window.sculpt_bar.isEnabled()
+    monkeypatch.undo()
+    window.finish_sculpt()
+    assert window.session.wait_for_idle(120_000)
+    assert not window.sculpting()
+    assert len(strokes_from_text(window.session.project.document.ops[-2].params["strokes"])) == 5
+
+
+def test_opening_a_large_step_shows_its_strokes_on_their_own_mesh(
+    window: MainWindow, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Review N3: Ein großer, wieder geöffneter Schritt glich schon beim Öffnen
+    an, und seine alten Züge standen auf einem anderen Netz, bevor jemand etwas
+    tat. Angeglichen wird für den ersten Zug."""
+    import app.ui.placement_flow as placement_flow
+
+    _target, step = _sculpted_then_moved(window)
+    monkeypatch.setattr(placement_flow, "AT_ONCE_BELOW", 1)
+    window.edit_operation(step)
+    assert window.session.wait_for_idle()
+    window.sculpt_bar.radius.set_value_mm(6.0)
+    window._refresh_sculpt_preview()
+    assert window.wait_for_sculpt_preview(120_000)
+    assert window._sculpt_refined is None, "beim Ansehen nicht angeglichen"
+    window._begin_sculpt_gesture()
+    window._on_sculpt((0.0, 20.0, 0.0))
+    window._end_sculpt_gesture()
+    assert window.wait_for_sculpt_preview(120_000)
+    assert window._sculpt_refined is not None, "der erste Zug gleicht an"
 
 
 def test_a_reopened_refinement_without_a_kept_stroke_leaves_the_history_alone(

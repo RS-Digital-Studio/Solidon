@@ -11,7 +11,13 @@ from typing import Any, Final
 
 import pytest
 
-from app.core.errors import RECOUNT_AND_RETRY, SPLIT_AND_RETRY, UserError, ValidationError
+from app.core.errors import (
+    RECOUNT_AND_RETRY,
+    SPLIT_AND_RETRY,
+    InternalError,
+    UserError,
+    ValidationError,
+)
 from app.core.registry import VARIABLE, Registry, op_params, param, register_op
 from app.core.scene import History, OperationDraft
 from app.core.scene.history import change_for
@@ -2191,12 +2197,31 @@ def test_an_insert_can_give_a_later_step_new_values_in_the_same_transaction(
         [OperationDraft(op="rename_object", inputs=("obj_1",))],
         changed={scatter.id: {**scatter.params, "count": 5}},
     )
-    history.commit(plan)
+    transaction = history.commit(plan)
     ops = history.operations
     assert [entry.op for entry in ops][-3:] == ["rename_object", "split_object", "scatter"]
     assert ops[-1].params["count"] == 5
     assert ops[-1].seed == scatter.seed
+    assert str(transaction.title) == "Umbenennen", "Review N6: der Titel nennt die Änderung"
     history.undo()
+    assert history.operations == old
+
+
+def test_an_insert_refuses_changed_values_it_cannot_place(history: History) -> None:
+    """Review N5: Eine Kennung vor ``before`` oder eine, die es nicht gibt, fiel
+    still weg. Jetzt ist sie ein Programmfehler, und nichts ist geplant."""
+    _chain(history)
+    old = history.operations
+    before = document_to_data(history.document)
+    for stray in (old[0].id, 999_999):
+        with pytest.raises(InternalError):
+            history.plan_insert(
+                old[2].id,
+                _("Umbenennen"),
+                [OperationDraft(op="rename_object", inputs=("obj_1",))],
+                changed={stray: {}},
+            )
+    assert document_to_data(history.document) == before
     assert history.operations == old
 
 

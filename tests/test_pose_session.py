@@ -555,7 +555,8 @@ def test_dragging_a_bound_angle_keeps_its_binding_and_says_where_to_change_it(
     assert written["hand"][1] == "=@w"
 
 
-def test_an_unreadable_angle_rests_only_its_own_bone(window: MainWindow) -> None:
+@pytest.mark.parametrize("broken", [1, 2])
+def test_an_unreadable_angle_rests_only_its_own_bone(window: MainWindow, broken: int) -> None:
     """Review G1: Ein einziger ungebundener Winkel stellte das ganze Skelett in
     Ruhe. Jetzt steht nur sein Knochen in Ruhe, die anderen in ihrer Stellung,
     und der Satz nennt ihn."""
@@ -567,8 +568,11 @@ def test_an_unreadable_angle_rests_only_its_own_bone(window: MainWindow) -> None
     gesetzt = [
         Bone(name="arm", head=(0.0, 0.0, 0.0), tail=(0.0, 0.0, 10.0), parent=""),
         Bone(name="bein", head=(5.0, 0.0, 0.0), tail=(5.0, 0.0, -10.0), parent=""),
+        Bone(name="fuss", head=(5.0, 0.0, -10.0), tail=(8.0, 0.0, -12.0), parent="bein"),
     ]
     koerper = with_a_body(window)
+    stellung: dict[str, list[Any]] = {"arm": [0.0, 20.0, 0.0], "bein": [0.0, "=@fehlt", 0.0]}
+    stellung["fuss"] = [0.0, "=@weg", 0.0] if broken == 2 else [0.0, 5.0, 0.0]
     window.session.apply(
         "Skelett",
         [
@@ -577,7 +581,7 @@ def test_an_unreadable_angle_rests_only_its_own_bone(window: MainWindow) -> None
                 inputs=(koerper,),
                 params={
                     "armature": armature_to_text(gesetzt),
-                    "pose": pose_text({"arm": [0.0, 20.0, 0.0], "bein": [0.0, "=@fehlt", 0.0]}),
+                    "pose": pose_text(stellung),
                 },
             )
         ],
@@ -589,6 +593,11 @@ def test_an_unreadable_angle_rests_only_its_own_bone(window: MainWindow) -> None
     assert window._armature_angles["arm"] == pytest.approx((0.0, 20.0, 0.0))
     assert "bein" not in window._armature_angles
     assert any("bein" in text for text in said)
+    sentence = next(text for text in said if "bein" in text)
+    if broken == 2:
+        assert "fuss" in sentence and sentence.startswith("Die Winkel"), "Review N7: Mehrzahl"
+    else:
+        assert sentence.startswith("Der Winkel")
 
 
 def test_a_new_chain_in_bent_skin_starts_where_the_skin_rests(window: MainWindow) -> None:

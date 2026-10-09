@@ -25,7 +25,7 @@ import dataclasses
 import json
 import math
 from collections.abc import Mapping, Sequence
-from typing import Final, cast
+from typing import Any, Final, cast
 
 import numpy as np
 
@@ -99,7 +99,60 @@ ON_THE_SKIN: Final = 0.05
 GRAZING: Final = 0.2
 
 
-def inside_the_body(mesh: MeshData, point: Vec3, direction: Vec3) -> Vec3:
+#: Wie viele nächste Ecken eines Klicks ihre Dreiecke zur Suche nach dem
+#: getroffenen geben (:class:`ClickSurface`). Großzügig: Das getroffene Dreieck
+#: hat fast immer die nächste Ecke; findet sich keins, sucht es über alle.
+NEAR_CORNERS: Final = 32
+
+
+class ClickSurface:
+    """Ein Netz, auf das geklickt wird: Suchbaum über seine Ecken und seine
+    längste Kante, einmal je Netz gerechnet (Review N4).
+
+    Ein Klick suchte sein Dreieck und den Blick zur Gegenwand über alle
+    Dreiecke — an 1,3 Millionen 2,1 s im Hauptfaden. Mit diesem Gegenstück
+    rechnet er nur die Dreiecke an den nächsten Ecken und die am Blickstrahl;
+    jedes Dreieck gibt dieselben Zahlen wie in der Rechnung über alle.
+    """
+
+    def __init__(self, mesh: MeshData) -> None:
+        raw = mesh.raw
+        self.mesh = mesh
+        self.vertices = np.asarray(raw.vertices, dtype=float)
+        self.faces = np.asarray(raw.faces, dtype=np.int64)
+        self._tree: Any = None
+        self._longest: float | None = None
+
+    def faces_near(self, point: np.ndarray) -> np.ndarray:
+        """Die Dreiecke an den :data:`NEAR_CORNERS` nächsten Ecken, aufsteigend."""
+        from app.core.deferred import cKDTree
+
+        if self._tree is None:
+            self._tree = cKDTree(self.vertices)
+        count = min(NEAR_CORNERS, len(self.vertices))
+        _away, index = self._tree.query(point, k=count)
+        chosen = np.zeros(len(self.vertices), dtype=bool)
+        chosen[np.atleast_1d(index)] = True
+        return np.flatnonzero(chosen[self.faces].any(axis=1))
+
+    def faces_along(self, start: np.ndarray, ray: np.ndarray) -> np.ndarray:
+        """Die Dreiecke, die der Strahl ab ``start`` treffen kann: Jede Ecke eines
+        getroffenen liegt höchstens eine Kantenlänge vom Treffpunkt."""
+        if self._longest is None:
+            corners = self.vertices[self.faces]
+            edges = corners - np.roll(corners, 1, axis=1)
+            self._longest = float(np.sqrt((edges * edges).sum(axis=2)).max())
+        reach = self._longest * (1.0 + 1e-6) + units.EPS_GEOM
+        offset = self.vertices - start
+        along = offset[:, 0] * ray[0] + offset[:, 1] * ray[1] + offset[:, 2] * ray[2]
+        square = offset[:, 0] ** 2 + offset[:, 1] ** 2 + offset[:, 2] ** 2
+        close = (square - along * along <= reach * reach) & (along >= -reach)
+        return np.flatnonzero(close[self.faces].any(axis=1))
+
+
+def inside_the_body(
+    mesh: MeshData, point: Vec3, direction: Vec3, *, surface: ClickSurface | None = None
+) -> Vec3:
     """Wohin ein Gelenk gehört, wenn auf die Haut geklickt wurde (RM-367, W4-7).
 
     Ein Klick trifft die Oberfläche; ein Knochen dort lag auf der Haut statt im
@@ -108,6 +161,8 @@ def inside_the_body(mesh: MeshData, point: Vec3, direction: Vec3) -> Vec3:
     das Gelenk sitzt in der Mitte dazwischen — unter dem Klick, in der Tiefe
     des Glieds, wie es der Kunde von vorn sieht. Liegt der Punkt nicht auf der
     Haut, schaut der Blick streifend oder trifft er nichts, bleibt der Punkt.
+    ``surface`` (:class:`ClickSurface` von ``mesh``) beschränkt die Suche auf
+    das Gebiet des Klicks, mit demselben Ergebnis.
     """
     raw = mesh.raw
     vertices = np.asarray(raw.vertices, dtype=float)
@@ -115,7 +170,11 @@ def inside_the_body(mesh: MeshData, point: Vec3, direction: Vec3) -> Vec3:
     if not len(vertices) or not len(faces):
         return point
     here = np.asarray(point, dtype=float)
-    found = _surface_normal_at(vertices, faces, here)
+    found = None
+    if surface is not None:
+        found = _surface_normal_at(vertices, faces[surface.faces_near(here)], here)
+    if found is None:
+        found = _surface_normal_at(vertices, faces, here)
     if found is None:
         return point
     normal, start, gap = found
@@ -131,8 +190,9 @@ def inside_the_body(mesh: MeshData, point: Vec3, direction: Vec3) -> Vec3:
     # Das eigene Dreieck und seine Nachbarn am Startpunkt sind kein Gegenüber:
     # Ein Klick auf eine Ecke trifft sie bei null. Ein Hundertstel Millimeter
     # ist dünner als jede druckbare Wand.
+    along = faces if surface is None else faces[surface.faces_along(start, ray)]
     depth, _hit = ray_hits_batch(
-        vertices[faces],
+        vertices[along],
         start[None, :],
         ray[None, :],
         edge_margin=units.EPS_GEOM,
@@ -219,7 +279,12 @@ def _carrying(
 
 
 def rest_of_click(
-    rest: MeshData, shown: MeshData, point: Vec3, direction: Vec3
+    rest: MeshData,
+    shown: MeshData,
+    point: Vec3,
+    direction: Vec3,
+    *,
+    surface: ClickSurface | None = None,
 ) -> tuple[Vec3, Vec3] | None:
     """Ein Klick auf die gebeugte Haut, in die Ruhelage gebracht (Review G1).
 
@@ -233,14 +298,20 @@ def rest_of_click(
     still = np.asarray(rest.raw.vertices, dtype=float)
     if not len(faces) or len(bent) != len(still):
         return None
-    found = _carrying(bent, faces, np.asarray(point, dtype=float))
+    here = np.asarray(point, dtype=float)
+    # Erst die Dreiecke an den nächsten Ecken (``surface``, Review N4), dann alle.
+    near = surface.faces_near(here) if surface is not None else None
+    found = _carrying(bent, faces[near], here) if near is not None else None
+    if found is None:
+        near = None
+        found = _carrying(bent, faces, here)
     if found is None:
         return None
     _cross, _unit, distance, touching, v, w = found
     best = int(touching[0])
     if abs(float(distance[best])) > ON_THE_SKIN:
         return None
-    corners = faces[best]
+    corners = faces[best] if near is None else faces[near[best]]
     share = (1.0 - float(v[best]) - float(w[best]), float(v[best]), float(w[best]))
     placed = sum(still[corner] * part for corner, part in zip(corners, share, strict=True))
 

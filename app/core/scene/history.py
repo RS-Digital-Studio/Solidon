@@ -2392,7 +2392,13 @@ class History:
         ``changed`` gibt einem späteren Schritt neue Werte, geprüft wie bei
         :meth:`change_params` und in derselben Transaktion: Eine wieder
         geöffnete Formsitzung legt so das Angleichen vor ihren Schritt und
-        ihre neuen Züge hinein — ein Strg+Z nimmt beides (Review F5).
+        ihre neuen Züge hinein — ein Strg+Z nimmt beides (Review F5). Die
+        Transaktion heißt dann wie ``title`` selbst, nicht „Eingefügt: …“ —
+        sie ist eine Änderung des späteren Schritts (Review N6). Eine Kennung,
+        die nicht ab ``before`` steht, oder ein Schritt, dessen Werte seine
+        Ausgänge nennen (``produces_from``), ist ein Programmfehler (Review N5):
+        Hier gibt es keine Hürde für andere Ausgänge, also auch keine solche
+        Änderung.
         """
         activation.require(activation.CHANGE)
         if not drafts:
@@ -2406,6 +2412,16 @@ class History:
         operations = self.operations
         index = self._position_of(before)
         prefix, suffix = operations[:index], operations[index:]
+        if changed:
+            later = {entry.id: entry for entry in suffix}
+            stray = sorted(set(changed) - set(later))
+            if stray:
+                raise InternalError(detail=f"plan_insert changed ids not after {before}: {stray}")
+            counting = [op_id for op_id in changed if self._spec_of(later[op_id]).produces_from]
+            if counting:
+                raise InternalError(
+                    detail=f"plan_insert cannot change steps that name their outputs: {counting}"
+                )
         self._reseed()
         active = _living_objects(prefix)
         structural = _structural_objects(prefix)
@@ -2451,7 +2467,7 @@ class History:
             renumbered[entry.id] = cloned.id
         transaction = Transaction(
             id=f"t{next(self._next_transaction)}",
-            title=_("Eingefügt: {step}", step=title),
+            title=title if changed else _("Eingefügt: {step}", step=title),
             ops=tuple(entry.id for entry in planned),
             origin=origin,
             changes=self._revision_changes(suffix, renumbered, settled),

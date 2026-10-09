@@ -17,6 +17,7 @@ from __future__ import annotations
 import dataclasses
 import itertools
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 import pytest
@@ -2084,6 +2085,50 @@ def test_a_stage_that_only_follows_its_area_computes_the_same_mesh(tool: str, sy
     for count in range(1, len(strokes) + 1):
         preview.extend(strokes[:count])
     assert np.array_equal(evaluated, np.asarray(preview.shown.raw.vertices))
+
+
+def test_gestures_build_nothing_over_the_whole_mesh_per_stage(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """F6, Review N2: Was eine Etappe teuer machte, war der Neuaufbau von
+    Suchbaum und Normalen über das ganze Netz — einer je Geste. Gezählt statt
+    gestoppt, damit es auf jedem Rechner gilt: Fünfzig Gesten bauen den Suchbaum
+    höchstens zweimal über alle Ecken und die Normalen nie; die Rechnung von
+    vorher baute beides je Etappe."""
+    import app.core.geom.sculpt as sculpt
+
+    mesh = ball(5)
+    count = len(mesh.raw.vertices)
+    trees: list[int] = []
+    normals: list[int] = []
+    built = sculpt.cKDTree
+
+    def tree(points: Any, *args: Any, **kwargs: Any) -> Any:
+        if len(points) == count:
+            trees.append(1)
+        return built(points, *args, **kwargs)
+
+    whole = sculpt._Stage.normals.fget
+    monkeypatch.setattr(sculpt, "cKDTree", tree)
+    monkeypatch.setattr(
+        sculpt._Stage, "normals", property(lambda stage: normals.append(1) or whole(stage))
+    )
+    generator = np.random.default_rng(11)
+    strokes = []
+    for gesture in range(1, 51):
+        aim = generator.normal(size=3)
+        aim /= np.linalg.norm(aim)
+        for _sample in range(5):
+            place = aim * 20.0 + generator.normal(scale=1.0, size=3)
+            place = place / np.linalg.norm(place) * 20.0
+            strokes.append(
+                Stroke(tuple(place), tuple(place / 20.0), 3.0, 5.0, gesture=gesture, brush=2)
+            )
+    apply_strokes(mesh, strokes, centre=(0.0, 0.0, 0.0))
+    assert len(trees) <= 2 and not normals, (len(trees), len(normals))
+    trees.clear()
+    _fresh_stages(mesh, strokes, (0.0, 0.0, 0.0))
+    assert len(trees) == 50, "Gegenprobe: je Etappe neu"
 
 
 def test_local_normals_are_the_normals_of_the_whole_mesh() -> None:

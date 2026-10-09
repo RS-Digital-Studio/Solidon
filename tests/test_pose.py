@@ -818,6 +818,38 @@ def test_a_click_on_bent_skin_comes_back_to_rest() -> None:
     assert rest_of_click(rest, shown, (100.0, 0.0, 0.0), (0.0, 0.0, 1.0)) is None
 
 
+def test_a_click_searches_only_its_area_with_the_same_answer() -> None:
+    """Review N4: Ein Klick auf die Haut suchte sein Dreieck und den Blick zur
+    Gegenwand über alle Dreiecke (an 1,3 Millionen 2,1 s je Klick). Mit
+    :class:`ClickSurface` rechnet er nur die Dreiecke an den nächsten Ecken und
+    am Strahl — und kommt genau dorthin, wohin die Rechnung über alle kommt."""
+    import trimesh
+
+    from app.core.geom.mesh import MeshData
+    from app.core.geom.pose import ClickSurface, Skin, inside_the_body, rest_of_click
+    from app.core.types import Bone
+
+    mesh = MeshData.of(trimesh.creation.icosphere(subdivisions=5, radius=50.0))
+    bones = [
+        Bone(name="a", head=(0.0, 0.0, -20.0), tail=(0.0, 0.0, 0.0), parent=""),
+        Bone(name="b", head=(0.0, 0.0, 0.0), tail=(0.0, 0.0, 20.0), parent="a"),
+    ]
+    shown = Skin(mesh, bones, fixed_rest=True).posed({"b": (0.0, 25.0, 0.0)})
+    bent = np.asarray(shown.raw.vertices)
+    near, still = ClickSurface(shown), ClickSurface(mesh)
+    checked = 0
+    for face in np.random.default_rng(5).integers(0, len(shown.raw.faces), 25):
+        place = tuple(float(v) for v in bent[shown.raw.faces[face]].mean(axis=0))
+        looking = tuple(float(-v) for v in np.asarray(place) / np.linalg.norm(place))
+        everywhere = rest_of_click(mesh, shown, place, looking)
+        assert rest_of_click(mesh, shown, place, looking, surface=near) == everywhere
+        if everywhere is not None:
+            whole = inside_the_body(mesh, everywhere[0], everywhere[1])
+            assert inside_the_body(mesh, everywhere[0], everywhere[1], surface=still) == whole
+            checked += 1
+    assert checked >= 20
+
+
 def test_a_dragged_turn_is_written_unrounded() -> None:
     """Review G3 (Regel 6): Ein Zug am Gelenk schreibt die Drehung, die er
     gezogen hat — nicht auf Hundertstel gerundet. Aus den Winkeln entsteht

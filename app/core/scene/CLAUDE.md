@@ -268,8 +268,8 @@ Merkmalen. Der Empfänger ordnet Callbackmeldungen der Auftragsrevision zu.
   `fit_sights`; `verdict` fragt Herkunft, Abdruck, Lage) → `commit`. Neu
   gefasst ab der ersten Änderung (`_moved_order`, `_clone`, alte Kennungen als
   `None` in `edited_ops`); `valid_targets` nennt Gründe (`_order_problem`).
-  `plan_insert(changed=)` gibt späteren Schritten neue Werte in derselben
-  Transaktion (`_merged_params`, wie `change_params`).
+  `plan_insert(changed=)`: neue Werte späterer Schritte, eine Transaktion
+  unter `title`; fremde Kennung oder `produces_from` → `InternalError`.
 - **Ausgeschaltet** (`Operation.suppressed`): `history.step_off`,
   `step_resting`; `_absent_objects`, `_without_absent_inputs`,
   `needs_resting_step`, `fits.paused_fits`, `orphans.references` fragt nicht;

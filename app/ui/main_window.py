@@ -3742,7 +3742,13 @@ class MainWindow(QMainWindow):
         self._armature_undo: list[tuple[Any, ...]] = []
         """Das Rückgängig des Werkzeugs: Klick, Knochen, Kettenende, Beugung."""
         self._armature_drag: _BendDrag | None = None
+        self._sculpt_committing: Any = None
+        """Das Dokument, in das die Formsitzung gerade über einen Umbau schreibt
+        (:meth:`_commit_sculpt_revision`) — bis dahin bleibt sie offen."""
+        self.session.revisionDone.connect(self._sculpt_commit_done)
+        self.session.failed.connect(self._sculpt_commit_refused)
         self._armature_skin: Any = None
+        self._armature_surfaces: list[Any] = []
         self._armature_shown: MeshData | None = None
         """Der Körper, wie das Bild ihn gerade zeigt — ein Klick trifft ihn (Review F3, G1)."""
         self._armature_skin_worker: _ArmatureSkinWorker | None = None
@@ -6653,6 +6659,10 @@ class MainWindow(QMainWindow):
             self.report.add_findings(list(revision.findings))
 
     def _on_revision_cancelled(self) -> None:
+        if self._sculpt_committing is not None:
+            # Die Formsitzung ist noch offen, und ihr Satz sagt mehr (Review N1).
+            self._sculpt_commit_refused()
+            return
         self.announce(tr("Abgebrochen — am Verlauf hat sich nichts geändert."))
 
     def _on_insertion_changed(self, marker: int | None) -> None:
@@ -7290,9 +7300,12 @@ class MainWindow(QMainWindow):
         self._cancel_armature_skin()
         self._armature_skin = None
         self._armature_shown = None
+        self._armature_surfaces = []
         self._armature_pose = {}
         self._armature_angles = {}
         self._pose_report_target = None
+        self._sculpt_committing = None
+        self.sculpt_bar.setEnabled(True)
         self.viewport.finish_bend()
         self.viewport.set_sculpting(False)
         self.viewport.set_boning(False)
@@ -13711,7 +13724,7 @@ class MainWindow(QMainWindow):
         geöffneten Schritt; ins Dokument kommt das Angleichen erst mit *Fertig*
         (:meth:`finish_sculpt`).
         """
-        if self._sculpt_target is None:
+        if self._sculpt_target is None or self._sculpt_committing is not None:
             return
         mesh = self._sculpt_mesh(self._sculpt_target)
         if mesh is None:
@@ -13901,7 +13914,10 @@ class MainWindow(QMainWindow):
             return
         preview = self._sculpt_preview if self._sculpt_preview_base is mesh else None
         refine = None
-        if not self._sculpt_refine_blocked:
+        # Angeglichen wird für einen Zug, nicht fürs Ansehen (Review N3): Ein
+        # geöffneter großer Schritt zeigte seine alten Züge sonst schon auf
+        # einem anderen Netz, bevor jemand etwas tat.
+        if not self._sculpt_refine_blocked and self._sculpt_pending:
             source = self._sculpt_input(self._sculpt_target)
             if source is not None:
                 refine = (source, self.sculpt_bar.radius.value_mm(), _finest_edge())
@@ -14320,6 +14336,8 @@ class MainWindow(QMainWindow):
         """
         if self._sculpt_target is None or not (self._sculpt_strokes or self._sculpt_pending):
             return False
+        if self._sculpt_committing is not None:
+            return True
         self._cancel_sculpt_preview(keep_points=True)
         self.viewport.stop_sculpt_gesture()
         gesture = (
@@ -14380,7 +14398,7 @@ class MainWindow(QMainWindow):
         """Die Sitzung schließen — und aus ihr genau eine Operation machen."""
         target = self._sculpt_target
         strokes = self._sculpt_strokes
-        if target is None:
+        if target is None or self._sculpt_committing is not None:
             return
         if self._sculpt_preview_worker is not None or self._sculpt_pending:
             self._sculpt_finish_pending = True
@@ -14408,8 +14426,74 @@ class MainWindow(QMainWindow):
             self.sculpt_bar.done, order, then=weak_slot(self, MainWindow.finish_sculpt)
         ):
             return
+        if order.change_op is not None and unchanged:
+            # Auch ein Angleichen der Sitzung bleibt draußen: Ohne neuen Zug
+            # gibt es keinen Grund für einen Schritt (Review F5).
+            self._close_sculpt_session()
+            return
+        if order.change_op is None and not strokes:
+            # Eine Sitzung ohne Zug hinterlässt nichts. Ein leerer Schritt im
+            # Verlauf wäre Rauschen an genau der Stelle, an der man sucht.
+            self._close_sculpt_session()
+            return
+        if order.change_op is not None and refined_edge:
+            # Angleichen davor und die neuen Züge im Schritt — eine
+            # Transaktion, ein Strg+Z (Review F5), gerechnet als Umbau.
+            change_op, values = order.change_op, dict(order.change_values or {})
+            self._commit_sculpt_revision(
+                lambda: self.session.insert_before(
+                    change_op,
+                    _("Formen (Dreiecke angeglichen)"),
+                    [self._refinement_draft_for(target, refined_edge)],
+                    changed={change_op: values},
+                )
+            )
+            return
+        if order.change_op is None and self.session.inserting is not None:
+            # Mit Einfügemarke wird auch ein neuer Schritt zum Umbau.
+            drafts = list(order.drafts)
+            self._commit_sculpt_revision(lambda: self.session.apply(_("Formen"), drafts))
+            return
+        self._close_sculpt_session()
+        if order.change_op is not None:
+            self._commit_preview_order(order)
+            return
+        self.session.apply(_("Formen"), list(order.drafts))
+
+    def _commit_sculpt_revision(self, start: Callable[[], bool]) -> None:
+        """Die Sitzung über einen Umbau im Arbeiter schreiben — und erst schließen,
+        wenn er übernommen ist (Review N1).
+
+        Ein Umbau lässt sich abbrechen, und er kann abgelehnt werden; beides ändert
+        den Verlauf nicht. Schloss die Sitzung vorher, waren ihre Züge dann fort,
+        ohne Strg+Z, und der Satz sagte, es sei nichts geschehen. Bis zur Antwort
+        nimmt die Sitzung keine Eingabe an."""
+        self._sculpt_committing = self.session.project.document
+        self.sculpt_bar.setEnabled(False)
+        if not start():
+            self._sculpt_commit_refused()
+
+    def _sculpt_commit_done(self, _revision: Any = None) -> None:
+        """Der Umbau der Sitzung steht im Verlauf: jetzt schließt sie."""
+        if self._sculpt_committing is None:
+            return
+        self._sculpt_committing = None
+        self.sculpt_bar.setEnabled(True)
+        self._close_sculpt_session()
+
+    def _sculpt_commit_refused(self, _error: Any = None) -> None:
+        """Abgebrochen oder abgelehnt: Die Sitzung bleibt mit allen Zügen offen."""
+        if self._sculpt_committing is None:
+            return
+        self._sculpt_committing = None
+        self.sculpt_bar.setEnabled(True)
+        self.announce(tr("Nicht übernommen — die Züge bleiben in der Sitzung."))
+
+    def _close_sculpt_session(self) -> None:
+        """Die Formsitzung abbauen: Ziel, Züge, Vorschau, Leiste und Ansicht."""
         self._clear_preview()
         self._cancel_sculpt_preview()
+        self._sculpt_display.stop()
         self._sculpt_target = None
         self._sculpt_step = None
         self._sculpt_source = None
@@ -14435,28 +14519,6 @@ class MainWindow(QMainWindow):
         self.tools.setVisible(True)
         self.statusBar().clearMessage()
         self._update_actions()
-        if order.change_op is not None:
-            if unchanged:
-                # Auch ein Angleichen der Sitzung bleibt draußen: Ohne neuen Zug
-                # gibt es keinen Grund für einen Schritt (Review F5).
-                return
-            if refined_edge:
-                # Angleichen davor und die neuen Züge im Schritt — eine
-                # Transaktion, ein Strg+Z (Review F5).
-                self.session.insert_before(
-                    order.change_op,
-                    tr("Dreiecke angleichen"),
-                    [self._refinement_draft_for(target, refined_edge)],
-                    changed={order.change_op: dict(order.change_values or {})},
-                )
-                return
-            self._commit_preview_order(order)
-            return
-        if not strokes:
-            # Eine Sitzung ohne Zug hinterlässt nichts. Ein leerer Schritt im
-            # Verlauf wäre Rauschen an genau der Stelle, an der man sucht.
-            return
-        self.session.apply(_("Formen"), list(order.drafts))
 
     # --- Skelettsitzung (§25, Konzept P16 §7.5, RM-561) ---------------------------
 
@@ -14518,6 +14580,7 @@ class MainWindow(QMainWindow):
         self._armature_drag = None
         self._armature_skin = None
         self._armature_shown = None
+        self._armature_surfaces = []
         self._armature_ended = None
         self.viewport.set_boning(True)
         self.tools.close_tool()
@@ -14536,12 +14599,18 @@ class MainWindow(QMainWindow):
         if unreadable:
             # Nur dieser Knochen steht in Ruhe, die übrigen in ihrer Stellung
             # (Review G1); was fehlt, sagt der Schrittdialog.
-            self.announce(
+            sentence = (
                 tr(
                     "Der Winkel von {bones} ist nicht lesbar. Bis er geklärt ist, "
                     "steht der Knochen in Ruhe."
-                ).format(bones=", ".join(unreadable))
+                )
+                if len(unreadable) == 1
+                else tr(
+                    "Die Winkel von {bones} sind nicht lesbar. Bis sie geklärt sind, "
+                    "stehen diese Knochen in Ruhe."
+                )
             )
+            self.announce(sentence.format(bones=", ".join(unreadable)))
 
     def _armature_of(self, target: str) -> tuple[int | None, list[Any]]:
         """Der letzte Skelettschritt dieses Körpers und seine Knochen.
@@ -14745,14 +14814,29 @@ class MainWindow(QMainWindow):
         direction = self.viewport.ray_toward(place)
         shown = self._armature_shown
         if shown is not None and shown is not rest:
-            mapped = rest_of_click(rest, shown, place, direction)
+            mapped = rest_of_click(
+                rest, shown, place, direction, surface=self._click_surface(shown)
+            )
             if mapped is None:
                 return self._rest_point(place)
             place, direction = mapped
         try:
-            return inside_the_body(rest, place, direction)
+            return inside_the_body(rest, place, direction, surface=self._click_surface(rest))
         except AppError:
             return place
+
+    def _click_surface(self, mesh: MeshData) -> Any:
+        """Suchbaum und längste Kante eines geklickten Netzes, je Netz einmal
+        (:class:`~app.core.geom.pose.ClickSurface`, Review N4) — gemerkt für die
+        Ruhelage und die gezeigte Haut."""
+        from app.core.geom.pose import ClickSurface
+
+        for known in self._armature_surfaces:
+            if known.mesh is mesh:
+                return known
+        made = ClickSurface(mesh)
+        self._armature_surfaces = [*self._armature_surfaces[-1:], made]
+        return made
 
     def _armature_bent(self) -> bool:
         """Ob die Stellung irgendeinen Knochen dreht."""
@@ -15125,6 +15209,7 @@ class MainWindow(QMainWindow):
         self._cancel_armature_skin()
         self._armature_skin = None
         self._armature_shown = None
+        self._armature_surfaces = []
         self._armature_pose = {}
         self._armature_angles = {}
         self.viewport.set_boning(False)
