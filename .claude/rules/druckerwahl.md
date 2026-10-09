@@ -1,5 +1,5 @@
 ---
-description: "Druckerwahl und Druckdialog — Slicer vor Drucker in Erststart, Einstellungen und Druckdialog, eine Erhebung der Drucker, Reihenfolge der Angaben im Druckdialog; Fenster allgemein steht in fenster.md"
+description: "Druckerwahl und Druckdialog — Slicer vor Drucker in Erststart, Einstellungen und Druckdialog, eine Erhebung der Drucker, Reihenfolge der Angaben im Druckdialog, Druckfelder und ihre Herkunft; Fenster allgemein steht in fenster.md"
 paths:
   - "app/ui/first_run.py"
   - "app/ui/settings_dialog.py"
@@ -23,6 +23,15 @@ Profile des Slicers, Grundlage, Werte; *Werte mitgeben* bei der Übergabe
 (`test_the_print_dialog_asks_in_the_order_its_answers_depend_on`). Register:
 `tests/test_dependency_order.py`. Vorn davon nur Fülldichte und Stützen;
 Zustand und Mitgabe über den Knöpfen, außerhalb des Rollbereichs.
+
+## Druckfelder und Kennung
+
+`manufacturer.base_settings`, Feldherkunft und Rücksetzen:
+`konzepte/begruendungen/karte-app-ui.md`. `_editor_changed` ändert nur das
+berührte Feld; gerundete Basiswerte anderer Felder bleiben unberührt.
+Suchtreffer in inaktiven Stützen-/Haftungsfeldern nennen den Umschalter, ändern
+keine Werte, stellen nach dessen Wahl den Fokus am Feld wieder her; der Hinweis
+bleibt scrollbar.
 
 ## Slicer vor Drucker
 

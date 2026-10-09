@@ -185,11 +185,7 @@ trägt, sagt der Kopf von `oberflaeche.md`.
 | `print_settings_dialog.py` | Druckeinstellungen und Slicer-Übergabe (§29, §2.4); Slicer vor Drucker, Erhebung aus `first_run` (`_PrinterSurvey`, `printers_on_offer`, `SlicerPrinters`); Düsenvariante nach Profilidentität, Modell und Hersteller; am Resin-Drucker nur, was gilt (`_reduce_for_resin`); `PlateRun.meshes`: Netze je Platte |
 | `print_disclosure.py` | der Hinweis vor der ersten Arbeit mit Druckeinstellungen (§29): Er sperrt nichts; die Wahl darunter entscheidet, ob die Erfahrungswerte mit einer 3MF mitreisen |
 
-**Druckfelder und Kennung:** `manufacturer.base_settings`, Feldherkunft und
-Rücksetzen: `konzepte/begruendungen/karte-app-ui.md`. `_editor_changed` ändert
-nur das berührte Feld; gerundete Basiswerte anderer Felder bleiben unberührt. Suchtreffer in
-inaktiven Stützen-/Haftungsfeldern nennen den Umschalter, ändern keine Werte,
-stellen nach dessen Wahl den Fokus am Feld wieder her; der Hinweis bleibt scrollbar.
+Druckfelder, ihre Herkunft und Suchtreffer: `druckerwahl.md`.
 
 ### Filamente und Lager
 
@@ -305,8 +301,7 @@ Bausteinherkunft: `MainWindow.part_step_of` liest Provenienz/Schrittkategorie;
   (`fenster.md`). Tests lösen Halt durch Undo, `change_params` oder
   `recount_and_retry`, Einfügen durch `stop_inserting`, dann `wait_for_idle`.
 - Kennzahlen/Hohlraumketten liest der Hauptthread nur; `_warm_metrics` wärmt
-  im Arbeiter. Dialogvorschau setzt `detect_features=False`, `preview_scene`
-  des Agenten erkennt Merkmale.
+  im Arbeiter.
 - Vor Zustandswechseln prüfen Nutzereinstiege `_quiet_command_allowed`,
   Werkzeugstarts `ToolStrip.activation_allowed`: Maßentwürfe behalten ihre
   Auswahl auch gegen Berichtsklicks, Gesteneditoren und lokale Erkennung.
@@ -356,8 +351,7 @@ Bausteinherkunft: `MainWindow.part_step_of` liest Provenienz/Schrittkategorie;
   ohne Netzscan. Der Prüfumfang scrollt höhenbegrenzt, nennt sichtbare Körpernamen
   und wiederholt offene Prüfungen nicht.
 - **Befundkarte**: `finding_meta` als eine Zeile; Nebenfolge `effect_worth_showing`.
-- **Änderung und Übergabe**: `ExplainedDifference` sagt in einer Zeile, was
-  sich ändert, `review_difference` nur Neues und Behobenes. Belege aus
+- **Änderung und Übergabe** (Band: `oberflaeche.md`): Belege aus
   dem eingefrorenen Auftrag, Dateien und Slicerstarts getrennt, Gegenprobe
   `export.readback` im Arbeiter. Gleiche Importbefunde einer Transaktion werden
   gebündelt; Originalwerte und Körper bleiben zugänglich.
