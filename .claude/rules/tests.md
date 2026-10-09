@@ -36,6 +36,10 @@ denselben Überschriften in `konzepte/begruendungen/regel-tests.md`.
   Slicerübergabe, Profilen, Druckerwahl, Druckzeit oder Slicererkennung ihren
   Slicertest mit echtem Programm. Sonst wählt die Auswahl nichts, und Linux
   und macOS sehen die Änderung erst beim Kunden.
+- **Ein Helfer, den nur eine Testdatei braucht, steht nicht in `helpers.py`**,
+  sondern bei ihr oder in einem eigenen Modul (`gcode_contact.py`): `helpers`
+  importieren über 170 Testdateien, und die Auswahl nähme für jede Änderung
+  daran Dutzende Fensterdateien auf Linux und macOS mit.
 - **Wer ein Widget baut, fordert `qt_app` an.** Getrennt wird je Test, nicht je
   Datei, über den Marker `windowed`, den `tests/conftest.py` jedem `qt_app`-Test
   gibt (wer ein Fenster im Unterprozess öffnet, setzt ihn selbst). Ohne die
