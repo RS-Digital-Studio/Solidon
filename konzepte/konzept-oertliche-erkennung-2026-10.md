@@ -528,3 +528,35 @@ Messbank nach.
   gemerkt, wenn `_without_notches` über das Ziel hinaus sucht (`_Patches.beyond`).
 - Testhaken `remember_across_bodies` (Konzept §9.4), `forget_cache` leert die neue
   Ablage mit (R8).
+- Ein Fleck, den der Stapel nur als Abdruck hielt, fragte beim Lesen den Stapel und bekam
+  sich selbst zurück (`RecursionError`, die Auswertung hielt beim Vereinigen an; Messbank
+  A1). Die Lesung eines Abdrucks geht am Stapel vorbei (`_remembered_support`).
+
+## Nachtrag P3 und P4 (Umsetzung, 09./10.10.2026)
+
+- **G2** `classify` in `_fitted` antwortet je Fleck über die Körpergrenze
+  (`PRINT_KEYED_ANSWERS` „classified“): Schlüssel Fleckabdruck, Diagonale, die Schwellen der
+  Runde und als Zustand der Runde allein, ob ein deckungsgleicher Fleck schon keinen Kegel
+  hatte (`no_cone_here`); gemerkt Antwort, Fits je Liste, ob der Fleck `no_cone_here`
+  ergänzte, und die Rückfragen an die Hülle. Am Eiffelturm nach der Bohrung 1 095 Treffer,
+  36 Rechnungen. Die Runden drei bis fünf (Stadion, Prismabögen, Naht, Zylinder neben
+  Ring) fragen ihre Stücke über `classify` und gewinnen damit mit; ihr eigener Rest kostet
+  am Eiffelturm unter 0,3 s und bleibt gerechnet. Der Stapel (`_screened_fits`) urteilt
+  je Zeile unabhängig von seiner Zusammensetzung (R2): Test, der jeden Fleck allein und alle
+  zusammen fragt (`test_the_stack_judges_each_patch_as_it_would_alone`).
+- **Hülle ohne Rechteck:** Die Rückfrage an die Hülle kostete am Eiffelturm 0,9 s in fünf
+  Rechteckfragen (`_rectangle_across`, je 0,18 s über 157 000 Ecken). Eine obere Schranke
+  aus dem achsparallelen Rahmen der Projektion (Rechteckdiagonale unter √2 mal dessen
+  Diagonale, mit 1,5 auf Abstand) verneint sie alle, mit derselben Antwort.
+- **Abdrücke gestapelt** (`_patch_prints`): je Runde in einem Zug, Byte für Byte wie einzeln
+  (Test); kleine Trennziele unter zwei Mindestflecken fragen weder Abdruck noch Prisma.
+- **G4, Leseanalyse:** `_reaches_through` (Durchsicht, je Langloch) liest jedes Dreieck des
+  Körpers im Abschnitt, `_shells_for`/`_shell_labels` die Quermaske aller Flächen,
+  `_face_roles` alle parallelen Flächen derselben Schale, `_open_slot_shell` flutet über den
+  Ring hinaus: Keine davon lässt sich je Fleck schlüsseln, eine Rückfrage kostete so viel
+  wie die Frage. Sie bleiben gerechnet und rechnen schneller, mit denselben Antworten: die
+  Durchsicht nur noch an Dreiecken, deren Kugel den Abschnitt und die Mittellinie erreichen
+  kann (projiziert je Zeile über Grundrechenarten statt `@`), die Mantelstücke nur über die
+  querstehenden Flächen. `planar_patch` je Fläche liest nur ihre Dreiecke, aber der
+  Schlüssel kostete so viel wie die Prüfung; gerechnet.
+

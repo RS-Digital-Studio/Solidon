@@ -1498,11 +1498,20 @@ def _shell_labels(across: np.ndarray, pairs: np.ndarray) -> _Components:
 
     count = len(across)
     inner = pairs[across[pairs[:, 0]] & across[pairs[:, 1]]]
+    # Der Graph nur über die querstehenden Flächen, eigens durchnummeriert: Die
+    # übrigen bekämen ohnehin ``-1``, und über alle Flächen des Körpers kostete
+    # jede Maske am Eiffelturm ein Vielfaches (RM-592).
+    members = np.flatnonzero(across)
+    local = np.full(count, -1, dtype=np.int64)
+    local[members] = np.arange(len(members))
     graph = coo_matrix(
-        (np.ones(len(inner), dtype=np.int8), (inner[:, 0], inner[:, 1])), shape=(count, count)
+        (np.ones(len(inner), dtype=np.int8), (local[inner[:, 0]], local[inner[:, 1]])),
+        shape=(len(members), len(members)),
     )
     _number, labels = connected_components(graph, directed=False)
-    return _Components(np.where(across, np.asarray(labels, dtype=np.int64), -1))
+    result = np.full(count, -1, dtype=np.int64)
+    result[members] = np.asarray(labels, dtype=np.int64)
+    return _Components(result)
 
 
 def _pairs_of(graph: tuple[np.ndarray, np.ndarray]) -> np.ndarray:
@@ -1737,7 +1746,8 @@ def _reaches_through(
     # Ein separat eingelesener Stift kann vor der Mündung stehen. Er ändert
     # nicht die Topologie des Langlochs im Träger. Echte Böden und Stege sind
     # mit seinen Mantelflächen verbunden; nur deren Komponenten zählen.
-    corners = np.asarray(body.triangles, dtype=float)
+    triangles = np.asarray(body.triangles, dtype=float)
+    rows: np.ndarray | None = None
     if patch is not None and len(patch):
         from app.core.geom.mesh import face_components
 
@@ -1746,9 +1756,42 @@ def _reaches_through(
             selected = np.zeros(len(body.faces), dtype=bool)
             selected[np.asarray(patch, dtype=np.intp)] = True
             carriers = [group for group in groups if bool(selected[group].any())]
-            corners = corners[np.concatenate(carriers)]
-    corners = corners - centre
-    along = corners @ axis
+            rows = np.concatenate(carriers)
+    # **Erst eine Kugel je Dreieck, dann die Ecken** (RM-592): Ein Dreieck,
+    # dessen Kugel mit Abstand außerhalb des Abschnitts liegt, liegt mit jeder
+    # Ecke außerhalb und fiele unten heraus. Gerechnet wird nur noch an dem,
+    # was den Abschnitt erreichen kann — am Eiffelturm 26 Fragen je Erkennung
+    # über 313 000 Dreiecke. Projiziert wird je Zeile über Grundrechenarten,
+    # nicht über ``@``: Dieselbe Zeile gibt so in jeder Auswahl dieselben Bits.
+    middles, radii, scale = _triangle_spheres(body)
+    along_axis = np.asarray(axis, dtype=float)
+    slack = depth / 2.0 + EPS_GEOM + _SPHERE_MARGIN * (1.0 + scale)
+    if rows is None:
+        rows = np.arange(len(middles))
+    relative = middles[rows] - centre
+    offset = (relative * along_axis).sum(axis=1)
+    # Und quer dazu: Eine Kugel, die die Mittellinie in der Projektion nicht
+    # erreicht, überdeckt keinen Endpunkt und kreuzt sie nicht — bei einem
+    # offenen Langloch reicht der Abschnitt durch den ganzen Körper, dann
+    # entscheidet allein diese Auswahl.
+    # Gemessen in denselben, nicht zwingend senkrechten Richtungen wie unten:
+    # Jede Richtung streckt die Kugel um ihre Länge.
+    sideways_axis = np.asarray(direction, dtype=float)
+    across_axis = np.cross(along_axis, sideways_axis)
+    sideways = (relative * sideways_axis).sum(axis=1)
+    beside = (relative * across_axis).sum(axis=1)
+    near = slack - depth / 2.0
+    stretch_along = math.sqrt(float((along_axis * along_axis).sum()))
+    stretch_side = math.sqrt(float((sideways_axis * sideways_axis).sum()))
+    stretch_across = math.sqrt(float((across_axis * across_axis).sum()))
+    own = radii[rows]
+    rows = rows[
+        (np.abs(offset) <= slack + own * stretch_along)
+        & (np.abs(sideways) <= travel / 2.0 + near + own * stretch_side)
+        & (np.abs(beside) <= near + own * stretch_across)
+    ]
+    corners = triangles[rows] - centre
+    along = (corners * along_axis).sum(axis=2)
     reach = (along.min(axis=1) <= depth / 2.0 + EPS_GEOM) & (
         along.max(axis=1) >= -depth / 2.0 - EPS_GEOM
     )
@@ -1756,11 +1799,44 @@ def _reaches_through(
     if not len(corners):
         return True
 
-    flat = np.stack([corners @ direction, corners @ np.cross(axis, direction)], axis=-1)
+    flat = np.stack(
+        [
+            (corners * np.asarray(direction, dtype=float)).sum(axis=2),
+            (corners * np.cross(along_axis, direction)).sum(axis=2),
+        ],
+        axis=-1,
+    )
     reach_x = travel / 2.0
     if _covers(flat, np.array([-reach_x, 0.0])) or _covers(flat, np.array([reach_x, 0.0])):
         return False
     return not _crosses(flat, reach_x)
+
+
+#: Wie weit die Kugelauswahl von :func:`_reaches_through` über Rundung hinaus
+#: großzügig ist, relativ zur größten Koordinate — eine Rechengrenze, keine
+#: Geometrietoleranz.
+_SPHERE_MARGIN: Final = 1e-9
+
+_SPHERES_KEY: Final = "solidon_triangle_spheres"
+
+
+def _triangle_spheres(body: Any) -> tuple[np.ndarray, np.ndarray, float]:
+    """Mitte und Radius einer Kugel um jedes Dreieck und die größte Koordinate, einmal je Körper.
+
+    Liegt im Cache des Netzes und verfällt mit seiner Geometrie.
+    """
+    cache = getattr(body, "_cache", None)
+    if cache is not None and _SPHERES_KEY in cache:
+        known: tuple[np.ndarray, np.ndarray, float] = cache[_SPHERES_KEY]
+        return known
+    triangles = np.asarray(body.triangles, dtype=float)
+    middles = triangles.mean(axis=1)
+    gaps = triangles - middles[:, None, :]
+    radii = np.sqrt((gaps * gaps).sum(axis=2)).max(axis=1) if len(triangles) else np.zeros(0)
+    spheres = (middles, radii, float(np.abs(triangles).max(initial=0.0)))
+    if cache is not None:
+        cache[_SPHERES_KEY] = spheres
+    return spheres
 
 
 def _covers(flat: np.ndarray, point: np.ndarray) -> bool:

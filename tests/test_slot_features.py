@@ -1358,6 +1358,104 @@ def test_a_slot_without_a_bridge_still_goes_through() -> None:
     assert only_slot(slot_in_a_plate(8.0, 30.0)).params["through"]
 
 
+def _reaches_through_everywhere(
+    body: Any,
+    centre: np.ndarray,
+    axis: np.ndarray,
+    direction: np.ndarray,
+    travel: float,
+    depth: float,
+) -> bool:
+    """Die Durchsicht über jedes Dreieck, ohne Kugelauswahl — der Vergleich für die Auswahl."""
+    from app.core.perceive.slots import _covers, _crosses
+    from app.core.units import EPS_GEOM
+
+    corners = np.asarray(body.triangles, dtype=float) - centre
+    along = (corners * axis).sum(axis=2)
+    reach = (along.min(axis=1) <= depth / 2.0 + EPS_GEOM) & (
+        along.max(axis=1) >= -depth / 2.0 - EPS_GEOM
+    )
+    corners = corners[reach]
+    if not len(corners):
+        return True
+    flat = np.stack(
+        [(corners * direction).sum(axis=2), (corners * np.cross(axis, direction)).sum(axis=2)],
+        axis=-1,
+    )
+    ends = (np.array([-travel / 2.0, 0.0]), np.array([travel / 2.0, 0.0]))
+    if any(_covers(flat, end) for end in ends):
+        return False
+    return not _crosses(flat, travel / 2.0)
+
+
+def test_the_shell_pieces_of_an_axis_are_the_components_over_all_faces() -> None:
+    """Mantelstücke nur über querstehende Flächen gebildet sind dieselben wie über alle (RM-592).
+
+    Die Nummern dürfen andere sein; gefragt wird nur, ob zwei Flächen dasselbe
+    Stück tragen.
+    """
+    from scipy.sparse import coo_matrix
+    from scipy.sparse.csgraph import connected_components
+
+    from app.core.perceive.slots import _shell_labels
+
+    body = with_a_bridge(slot_in_a_plate(5.0, 40.0), 1.0, 3.125, 5.0).raw
+    pairs = np.asarray(body.face_adjacency, dtype=np.int64)
+    pairs = np.vstack((pairs, pairs[:, ::-1]))
+    normals = np.asarray(body.face_normals, dtype=float)
+    rng = np.random.default_rng(592)
+    for axis in [(0.0, 0.0, 1.0), (1.0, 0.0, 0.0), (0.0, 1.0, 0.0), *rng.normal(size=(5, 3))]:
+        unit = np.asarray(axis, dtype=float) / np.linalg.norm(axis)
+        across = np.abs((normals * unit).sum(axis=1)) <= 0.0175
+        inner = pairs[across[pairs[:, 0]] & across[pairs[:, 1]]]
+        count = len(across)
+        whole = coo_matrix(
+            (np.ones(len(inner), dtype=np.int8), (inner[:, 0], inner[:, 1])), shape=(count, count)
+        )
+        _number, expected = connected_components(whole, directed=False)
+        found = _shell_labels(across, pairs).of
+        assert np.array_equal(found < 0, ~across)
+        chosen = np.flatnonzero(across)
+        first = {}
+        for face in chosen:
+            first.setdefault(int(expected[face]), int(found[face]))
+            assert first[int(expected[face])] == int(found[face]), "ein Stück, eine Nummer"
+        assert len(set(first.values())) == len(first), "zwei Stücke, zwei Nummern"
+
+
+def test_the_sight_through_reads_only_triangles_that_can_reach_the_section() -> None:
+    """Die Kugelauswahl je Dreieck ändert keine Antwort der Durchsicht (RM-592).
+
+    Gefragt an einer gelochten Platte mit Steg und an zufälligen Strecken quer
+    durch ein Kugelnetz, mit kurzem und langem Abschnitt entlang der Achse —
+    dieselbe Antwort wie über alle Dreiecke, und beide Antworten kommen vor.
+    """
+    from app.core.perceive.slots import _reaches_through
+
+    rng = np.random.default_rng(592)
+    bodies = [
+        with_a_bridge(slot_in_a_plate(5.0, 40.0), 1.0, 3.125, 5.0).raw,
+        trimesh.creation.icosphere(subdivisions=3, radius=12.0),
+    ]
+    answers = []
+    for body in bodies:
+        low, high = np.asarray(body.bounds, dtype=float)
+        for _ in range(60):
+            axis = rng.normal(size=3)
+            axis /= np.linalg.norm(axis)
+            direction = np.cross(axis, rng.normal(size=3))
+            direction /= np.linalg.norm(direction)
+            centre = low + rng.random(3) * (high - low)
+            travel = float(rng.random() * 20.0)
+            depth = float(rng.choice([0.5, 4.0, 60.0]))
+            answer = _reaches_through(body, centre, axis, direction, travel, depth)
+            assert answer == _reaches_through_everywhere(
+                body, centre, axis, direction, travel, depth
+            )
+            answers.append(answer)
+    assert any(answers) and not all(answers)
+
+
 # --- Was der Agent liest ----------------------------------------------------------
 
 
