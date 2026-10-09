@@ -466,7 +466,7 @@ class SquashImage:
         position = inode.start
         for word in inode.blocks:
             expected = min(self.block_size, inode.size - len(out))
-            stored = word & ~_UNCOMPRESSED_BLOCK
+            stored = self._stored(word)
             if stored == 0:
                 out += bytes(expected)
                 continue
@@ -481,6 +481,17 @@ class SquashImage:
             raise UnreadableImageError(f"{entry.name} reads {len(out)} of {inode.size} bytes")
         return bytes(out)
 
+    def _stored(self, word: int) -> int:
+        """Wie viele Bytes ein Block laut seinem Blockwort im Abbild belegt.
+
+        SquashFS legt keinen Block größer als die Blockgröße ab, roh oder
+        gepackt; ein längerer machte die Datei länger als angegeben.
+        """
+        stored = word & ~_UNCOMPRESSED_BLOCK
+        if stored > self.block_size:
+            raise UnreadableImageError(f"a block of {stored} bytes")
+        return stored
+
     def _fragment(self, index: int) -> bytes:
         known = self._fragment_cache.get(index)
         if known is not None:
@@ -491,7 +502,7 @@ class SquashImage:
         (pointer,) = struct.unpack("<Q", self._read(self._fragment_table + 8 * table, 8))
         entry, *_ = self._metadata_bytes(pointer, slot * 16, 16)
         start, word, _unused = struct.unpack("<QII", entry)
-        stored = word & ~_UNCOMPRESSED_BLOCK
+        stored = self._stored(word)
         raw = self._read(start, stored)
         data = raw if word & _UNCOMPRESSED_BLOCK else self._inflate(raw, self.block_size)
         if len(self._fragment_cache) > 64:
@@ -529,21 +540,38 @@ class SquashImage:
         yield from walk(top, PurePosixPath(), 0)
 
 
-def copy_folder(image: SquashImage, top: Entry, target: Path, suffix: str = "") -> int:
+class CopyBudget:
+    """Was eine Kopie noch umfassen darf, über alle Ordner, die sie liest:
+    :data:`MAX_COPIED_FILES` Dateien und :data:`MAX_COPIED_BYTES` Bytes."""
+
+    def __init__(self) -> None:
+        self.files = MAX_COPIED_FILES
+        self.size = MAX_COPIED_BYTES
+
+
+def copy_folder(
+    image: SquashImage,
+    top: Entry,
+    target: Path,
+    suffix: str = "",
+    budget: CopyBudget | None = None,
+) -> int:
     """Jede Datei mit Endung ``suffix`` unter ``top`` nach ``target``; ihre Zahl.
 
-    Verknüpfungen werden nicht kopiert. Mehr als :data:`MAX_COPIED_FILES`
-    Dateien oder :data:`MAX_COPIED_BYTES` Bytes, oder ein Name, der aus
-    ``target`` hinausführte, machen das Abbild unlesbar.
+    Verknüpfungen werden nicht kopiert. Mehr Dateien oder Bytes, als
+    ``budget`` noch zulässt (ohne Angabe eine eigene :class:`CopyBudget`),
+    oder ein Name, der aus ``target`` hinausführte, machen das Abbild
+    unlesbar. Wer mehrere Ordner zu einer Kopie liest, gibt allen dieselbe.
     """
+    budget = CopyBudget() if budget is None else budget
     count = 0
-    written = 0
     for relative, entry in image.files(top, suffix):
         count += 1
-        if count > MAX_COPIED_FILES:
+        budget.files -= 1
+        if budget.files < 0:
             raise UnreadableImageError(f"more than {MAX_COPIED_FILES} files")
-        data = image.read(entry, MAX_COPIED_BYTES - written)
-        written += len(data)
+        data = image.read(entry, budget.size)
+        budget.size -= len(data)
         destination = target.joinpath(*relative.parts)
         if not destination.is_relative_to(target):
             raise UnreadableImageError(f"{relative} leads out of the copy")

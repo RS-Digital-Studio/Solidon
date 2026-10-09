@@ -2417,6 +2417,41 @@ def test_a_damaged_gzip_block_in_curas_image_is_refused_once_without_a_half_copy
     assert copies == [appimage, appimage] and not mounts
 
 
+@pytest.mark.parametrize("limit", ["files", "bytes", "environment"])
+def test_curas_copy_counts_its_limits_over_all_folders(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, limit: str
+) -> None:
+    """Dateizahl und Bytezahl gelten für Curas ganze Kopie, nicht je Ordner
+    (``definitions``, ``extruders`` …), und ``AppRun.env`` hat eine eigene
+    kleine Grenze. Vorher durfte jeder der sechs Ordner die volle Grenze
+    nehmen und ``AppRun.env`` bis 1 GiB. Gezeigt mit herabgesetzten Grenzen,
+    die jeder Ordner für sich einhält, die Kopie als Ganzes aber nicht."""
+    monkeypatch.setattr(cura_linux.PRINTER_COPIES, "root", lambda: tmp_path / "cache")
+    monkeypatch.setattr(cura_linux.PRINTER_COPIES, "_kept", {})
+    monkeypatch.setattr(cura_linux.PRINTER_COPIES, "_failed", {})
+    mounts: list[Path] = []
+    appimage, point = appimage_cura(tmp_path, monkeypatch, mounts)
+    resources = point / "share" / "cura" / "resources"
+    folders = [
+        [path for path in (resources / name).rglob("*") if path.is_file()]
+        for name in cura_linux.RESOURCE_FOLDERS
+        if (resources / name).is_dir()
+    ]
+    assert len(folders) >= 2, "mehr als ein Ordner, sonst prüft der Fall nichts"
+    if limit == "files":
+        monkeypatch.setattr(squashfs, "MAX_COPIED_FILES", max(len(files) for files in folders))
+    elif limit == "bytes":
+        sizes = [sum(path.stat().st_size for path in files) for files in folders]
+        assert max(sizes) < sum(sizes)
+        monkeypatch.setattr(squashfs, "MAX_COPIED_BYTES", max(sizes))
+    else:
+        monkeypatch.setattr(cura_linux, "ENVIRONMENT_BYTES", 16)
+
+    assert cura_linux.appimage_resources(appimage) is None
+    assert list((tmp_path / "cache").iterdir()) == []
+    assert not mounts
+
+
 def test_a_copy_that_cannot_replace_the_old_one_says_why(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
 ) -> None:

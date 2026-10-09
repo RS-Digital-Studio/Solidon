@@ -617,6 +617,96 @@ def test_after_a_cleared_cache_both_families_read_their_image_again(
         assert len(copies) == 3 and not mounts
 
 
+def test_a_raw_block_longer_than_a_block_is_an_unreadable_image(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """SquashFS legt keinen Block größer als die Blockgröße ab. Ein Blockwort,
+    das einen längeren rohen Block angibt, machte die Datei länger als sie ist,
+    und eine folgende Lücke rechnete mit negativer Länge (``ValueError``) — die
+    ganze Profilliste fiel weg, und jede Frage las das Abbild neu."""
+    noise = random.Random(1).randbytes
+    profiles: Tree = {**ACME, "Hole.json": noise(4096) + bytes(4096), "Noise.json": noise(16384)}
+    image = _orca(tmp_path, {"resources": {"profiles": profiles}}, fragments=False)
+    data = bytearray(image.read_bytes())
+    (inodes,) = struct.unpack_from("<Q", data, IMAGE_AT + 64)
+    (listings,) = struct.unpack_from("<Q", data, IMAGE_AT + 72)
+    table = bytes(data[IMAGE_AT + inodes : IMAGE_AT + listings])
+    words = struct.pack("<II", 4096 | 1 << 24, 0)
+    assert table.count(words) == 1, "das Blockwort von Hole.json"
+    at = IMAGE_AT + inodes + table.index(words)
+    struct.pack_into("<I", data, at, 3 * 4096 | 1 << 24)
+    image.write_bytes(bytes(data))
+    reads: list[Path] = []
+    original = appimage.copy_profiles
+
+    def counted(source: Path, target: Path) -> int:
+        reads.append(source)
+        return original(source, target)
+
+    monkeypatch.setattr(appimage, "copy_profiles", counted)
+
+    with pytest.raises(squashfs.UnreadableImageError):
+        original(image, tmp_path / "direkt")
+    assert sp.install_root(image) is None
+    assert sp.install_root(image) is None
+    assert reads == [image], "die Absage gilt für diese Fassung"
+
+
+def _refused_renames(monkeypatch: pytest.MonkeyPatch, refusals: int) -> list[Path]:
+    """``Path.rename`` verweigert die ersten ``refusals`` Versuche wie ein
+    Virenscanner unter Windows (``WinError 5``); gewartet wird nicht."""
+    attempts: list[Path] = []
+    original = Path.rename
+
+    def rename(self: Path, target: Path) -> Path:
+        attempts.append(self)
+        if len(attempts) <= refusals:
+            raise PermissionError(13, "Zugriff verweigert", str(self))
+        return original(self, target)
+
+    monkeypatch.setattr(Path, "rename", rename)
+    monkeypatch.setattr(appimage.time, "sleep", lambda _seconds: None)
+    return attempts
+
+
+def test_a_rename_refused_for_a_moment_is_tried_again(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Hält ein Scanner die frisch geschriebenen Dateien kurz offen, gelingt
+    das Umbenennen beim dritten Versuch, und die Kopie ist da."""
+    image = _orca(tmp_path)
+    attempts = _refused_renames(monkeypatch, 2)
+
+    found = appimage.profiles(image)
+
+    assert found is not None and (found / "Acme.json").is_file()
+    assert len(attempts) == 3
+
+
+def test_a_rename_refused_for_good_gives_up_without_a_rest(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Bleibt es verweigert, gibt die Kopie nach :data:`appimage.RENAME_ATTEMPTS`
+    Versuchen auf: kein Rest im Cache, und bis *Neu suchen* wird nicht wieder
+    gelesen."""
+    image = _orca(tmp_path)
+    attempts = _refused_renames(monkeypatch, 10**6)
+    reads: list[Path] = []
+    original = appimage.copy_profiles
+
+    def counted(source: Path, target: Path) -> int:
+        reads.append(source)
+        return original(source, target)
+
+    monkeypatch.setattr(appimage, "copy_profiles", counted)
+
+    assert appimage.profiles(image) is None
+    assert appimage.profiles(image) is None
+    assert len(attempts) == appimage.RENAME_ATTEMPTS
+    assert reads == [image]
+    assert list(appimage.PROFILE_COPIES.root().iterdir()) == []
+
+
 def test_only_the_orca_family_is_read_from_its_image(tmp_path: Path, nothing_runs: None) -> None:
     """PrusaSlicer liest Bündel (``.ini``), nicht diesen Bestand; ein solches
     AppImage bleibt, wie es war."""

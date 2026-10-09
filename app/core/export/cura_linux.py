@@ -89,6 +89,10 @@ RESOURCES: Final = PurePosixPath("share/cura/resources")
 #: Material).
 RESOURCE_FOLDERS: Final = ("definitions", "extruders", "intent", "materials", "quality", "variants")
 
+#: Wie lang ``AppRun.env`` im Abbild sein darf. Sie hat ein gutes Dutzend
+#: Zeilen; eine längere ist ein unlesbares Abbild, gelesen wird sie nicht (§32).
+ENVIRONMENT_BYTES: Final = 64 << 10
+
 #: Wie lange das Einhängen dauern darf. Gemessen: 0,01 s.
 MOUNT_SECONDS: Final = 30.0
 
@@ -508,16 +512,17 @@ def _read_resources(executable: Path, target: Path) -> bool | None:
         if resources is None or resources.kind != squashfs.DIRECTORY:
             _log.warning("%s carries no cura resources", executable.name)
             return None
+        budget = squashfs.CopyBudget()
         for name in RESOURCE_FOLDERS:
             found = image.find(RESOURCES / name)
             if found is not None and found.kind == squashfs.DIRECTORY:
-                squashfs.copy_folder(image, found, target / name)
+                squashfs.copy_folder(image, found, target / name, budget=budget)
         environment = image.resolve(PurePosixPath(ENVIRONMENT))
         if environment is None or environment.kind != squashfs.FILE:
             _tell("no readable %s inside %s", ENVIRONMENT, executable)
             return False
         try:
-            variables = read_environment(image.read(environment).decode("utf-8"))
+            variables = read_environment(image.read(environment, ENVIRONMENT_BYTES).decode("utf-8"))
         except UnicodeDecodeError as problem:
             _tell("no readable %s inside %s: %s", ENVIRONMENT, executable, problem)
             return False
