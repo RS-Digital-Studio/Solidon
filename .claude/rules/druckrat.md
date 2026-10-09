@@ -108,6 +108,23 @@ offenem Drucker. Übernommen wird auf Klick, nie von allein.
   Erreicht keine von mehreren Inseln `SMALL_FOOTPRINT`, heißt es Brim — nur
   als Vorschlag. `for_part` fragt mit Profil jede Regel für `PART_PATHS`;
   seine Brim-Regeln aus dem Schnitt behalten das letzte Wort.
+- **Was frei druckt, soll halten** (`advise._bridges_and_overhangs`, RM-587).
+  Verlangt das Teil Stütze und druckt es mit Stützen, heißt es
+  `support.bridges` — PrusaSlicer ohne eigenen Wert und manche Profile
+  (OrcaSlicers Kobra 2) lassen sonst frei, was sie als Brücke lesen, und das
+  rechnet nur der Slicer; Solidons eigener Satz stützt
+  Brücken wie die Schichtanalyse, und die Gegenprobe fragt den wirksamen Wert,
+  nicht den Herstellerprozess. Druckt eine Brücke über `SPAN_INTERESTING`
+  frei (ohne Stützen, ohne Brückenstütze, als Kanaldecke), dicke Bahnen und
+  `BRIDGE_FLOW` über `BRIDGE_FLOW_ENOUGH`; ein Rand spannt nicht, seine Weite
+  ist die Kantenlänge. **Zusatzwände nur unter flachen Stücken ohne Stütze, die
+  an einer Seite hängen** (`analysis.cantilevers`) und breiter sind als die
+  Wände — zwischen 45 Grad und der Stützgrenze und an beidseitig gelagerten
+  Brücken ändert der Schalter in PrusaSlicer und OrcaSlicer nichts. **Steile
+  Wände dort** (`analysis.steep_overhang`) bekommen bei `CURLING_MATERIALS`
+  die Umkehr, nur in der Orca-Familie. Was ein Programm nicht kennt, steht in
+  `slicer_keys.NOT_TAKEN_BY*` (Cura keinen der fünf Werte, SuperSlicer nur die
+  Brückenstütze, sein Fluss ist ein Prozentwert).
 - **Eine runde Außenwand bekommt die Schrägnaht vorgeschlagen**: glatte
   Umrisse (kein Knick über `analysis.SMOOTH_TURN_DEGREES`, gemessen über Arme
   der Düsenbreite wie im Slicer, ab `advise.SCARF_MIN_LOOP` Umfang) über

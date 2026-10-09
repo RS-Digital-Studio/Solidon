@@ -462,7 +462,6 @@ def test_the_manufacturer_chain_names_speed_contact_and_kind_of_its_supports() -
             "support_line_width": "0.42",
             "support_interface_spacing": "0.5",
             "support_type": "tree(auto)",
-            "bridge_no_support": "1",
         },
         _ELEGOO_MACHINE,
         {"slow_down_min_speed": ["20"]},
@@ -487,12 +486,12 @@ def test_the_manufacturer_chain_names_speed_contact_and_kind_of_its_supports() -
     assert orca.support_interface_speed == manufacturer.ORCA_SUPPORT_INTERFACE_SPEED
     assert orca.support_interface_density == pytest.approx(0.42 / 0.92)
     assert orca.support_acceleration == 10000.0
-    assert orca.support_tree and orca.support_skips_bridges
+    assert orca.support_tree
     assert orca.support_closing == manufacturer.ORCA_SUPPORT_CLOSING
     assert prusa.support_speed == 120.0
     assert prusa.support_interface_speed == pytest.approx(60.0)
     assert prusa.support_interface_density == pytest.approx(0.4 / 0.6)
-    assert prusa.support_tree and not prusa.support_skips_bridges
+    assert prusa.support_tree
     assert prusa.support_closing == 2.0
 
 
@@ -593,7 +592,9 @@ def test_a_profile_without_bridge_supports_leaves_time_and_support_unchecked() -
     """Kobra 2 (``bridge_no_support = 1``): OrcaSlicer las die Pilzunterseite als
     Brücke und stützte nur ihren Rand — mit Stützen +96 % gerechnet, ohne −32 %.
     Welche Decke das ist, weiß nur der Slicer; Zeit und Stützmenge bleiben offen,
-    mit Grund, ohne Stützen wird verglichen wie immer."""
+    mit Grund, ohne Stützen wird verglichen wie immer. Gefragt wird der Wert, mit
+    dem das Teil druckt (``support.bridges``, RM-587): Stützt es Brücken, weil
+    Solidon es schreibt, misst die Gegenprobe mit."""
     from app.core.slice.estimate import plate_comparison
     from app.core.types import SceneObject
 
@@ -604,8 +605,8 @@ def test_a_profile_without_bridge_supports_leaves_time_and_support_unchecked() -
     mesh = MeshData.of(trimesh.boolean.union([stem, cap]))
     entry = SceneObject(id="pilz", name="Pilz", mesh=mesh)
     profile = profiles.make_profile("anycubic-kobra-2", "pla")
-    motion = _motion(support_skips_bridges=True)
-    supported = _supported()
+    motion = _motion()
+    supported = print_settings.with_path(_supported(), "support.bridges", False)
     bare = print_settings.with_path(supported, "support.style", "none")
 
     with_support = plate_comparison(
@@ -629,6 +630,16 @@ def test_a_profile_without_bridge_supports_leaves_time_and_support_unchecked() -
     assert with_support.support_material_mm3 is None and with_support.support_reason
     assert without.seconds is not None and without.seconds > 0.0
     assert not without.seconds_reason
+    held = plate_comparison(
+        0,
+        [(entry, mesh, print_settings.with_path(supported, "support.bridges", True))],
+        profile,
+        keep_arrangement=True,
+        separate_objects=True,
+        motion=motion,
+    )
+    assert held.seconds_reason != with_support.seconds_reason
+    assert held.support_material_mm3 is not None
 
 
 # --- Was der Slicer aus dem Herstellerprofil macht (RM-281, Zeitschätzung) ---------------

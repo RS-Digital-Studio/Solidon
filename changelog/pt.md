@@ -81,6 +81,8 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Se um suporte assenta na peça, o Solidon sugere também uma camada de separação por baixo, para que o seu pé não deixe marcas. Com suportes em árvore, só nos slicers que a imprimem aí.
 - Com suportes em árvore e junto a uma torre de purga, o Solidon propõe a distância do suporte em camadas inteiras, tal como o slicer a imprime.
 - Para PLA, o Solidon propõe mais espaço entre as muitas pontas finas e os suportes em árvore por baixo. Assim ficam menos resíduos das pontas dos suportes.
+- As pontes longas recebem o suporte que o Solidon prevê, também no PrusaSlicer. Se uma ponte longa ficar sem suporte, o Solidon propõe linhas grossas e um pouco menos de fluxo.
+- As saliências planas sem suporte recebem paredes extra como proposta. Com ABS, ASA e TPU o slicer imprime as saliências íngremes em sentido alternado para que não enrolem.
 - Para PETG, o Solidon sugere arrefecimento total no suporte. Assim solta-se mais facilmente da peça.
 - Novo nas definições de impressão: *Camadas de separação inferiores*, *Folga na camada de separação* e *Arrefecimento total no suporte*.
 - O campo *Distância acima* chama-se agora *Distância acima e abaixo* e vale para os dois lados do suporte.

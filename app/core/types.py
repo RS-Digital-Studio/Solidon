@@ -1260,6 +1260,24 @@ class ShellSettings:
     ironing: bool = False
     """Bügelt die oberste Fläche nach. Für Sicht- und Gleitflächen; sonst
     kostet es nur Zeit."""
+    thick_bridges: bool = False
+    """Legt Brücken als runde Bahnen in Düsenbreite statt flach in Schichthöhe
+    (RM-587). Sie tragen über eine lange freie Spanne, sehen unten aber rauer
+    aus. Aus wie in allen gemessenen Herstellerprofilen der Orca-Familie; der
+    Rat schaltet sie über langen Brücken ein, die ohne Stütze drucken."""
+    bridge_flow: float = 1.0
+    """Anteil des Materials, den eine Brückenbahn bekommt (RM-587). Etwas unter
+    1 zieht die Bahn straff und hängt weniger durch; die Vorgabe ist die der
+    Programme."""
+    overhang_walls: bool = False
+    """Zusätzliche Wandbahnen unter flachen Überhängen ohne Stütze (RM-587).
+    Der Slicer verankert sie an der Wand darunter, statt sie als lose Brücke zu
+    legen. Gemessen: Zwischen 45 Grad und der Stützgrenze ändert der Schalter
+    nichts, an einer Auskragung ohne Stütze ersetzt er die Brückenbahnen."""
+    overhang_reverse: bool = False
+    """Legt Wände über steilen Überhängen in jeder zweiten Schicht in
+    Gegenrichtung (RM-587). Das hält schrumpfende und weiche Materialien flach,
+    die sich an der Kante sonst aufrollen; nur die Orca-Familie kennt es."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -1391,6 +1409,12 @@ class SupportSettings:
     """Lücke zwischen den Linien der Kontaktschicht in mm (RM-583): dicht unter
     großen flachen Decken, damit die Unterseite nicht durchhängt, offen unter
     kleinen und gewölbten Flächen, wo eine dichte Kontaktschicht festsitzt."""
+    bridges: bool = True
+    """Stützen auch unter Brücken (RM-587). Die Schichtanalyse rechnet unter
+    jeder Decke jenseits der Stützgrenze Stütze; PrusaSlicer spannt Brücken ohne
+    eigenen Wert trotzdem frei (``dont_support_bridges = 1``), und eine
+    36-mm-Brücke blieb mit „Stützen überall“ ohne Stütze. Die Orca-Familie
+    stützt sie von sich aus; manche Herstellerprofile schalten es ab."""
 
 
 @dataclass(frozen=True, slots=True)

@@ -29,6 +29,7 @@ import trimesh
 from app.core.export import appimage, cura_linux, handover, slicer_profiles
 from app.core.geom.mesh import MeshData
 from app.core.knowledge import print_settings, profiles
+from app.core.slice.analysis import slice_body
 from app.core.types import Profile, SceneObject
 from tests.helpers import set_test_license
 
@@ -137,6 +138,223 @@ def test_a_cube_comes_back_as_a_print_file_with_measured_figures(
     assert metrics.layer_count is not None and metrics.layer_count >= 50, metrics
     assert metrics.print_seconds is not None and metrics.print_seconds > 60, metrics
     assert metrics.filament_mm is not None and metrics.filament_mm > 100, metrics
+
+
+#: Die 36-mm-Brücke der G-Code-Gegenprüfung (N1): ein Steg auf zwei Pfeilern.
+BRIDGE = Path(__file__).parent / "data" / "meshes" / "bridge_two_end_supports.ply"
+
+
+def _advised_gcode(
+    installed_slicer: Path,
+    tmp_path: Path,
+    body: trimesh.Trimesh,
+    printer: str,
+    material: str = "pla",
+    *,
+    vendor: bool = True,
+    declined: frozenset[str] = frozenset(),
+) -> tuple[str, list[str]]:
+    """Den Rat übernehmen wie *Vorschläge übernehmen* und die Platte schneiden.
+
+    Gibt die Druckdatei und die übernommenen Pfade zurück. ``vendor=False``
+    schneidet mit Solidons eigenem Satz (kein Herstellerprofil), ``declined``
+    sind abgelehnte Vorschläge (RM-587)."""
+    from app.core.slice import advise
+    from app.ui.print_settings_dialog import _PlateJob, _prepare_plate
+
+    body.apply_translation((0.0, 0.0, -body.bounds[0][2]))
+    mesh = MeshData.of(body)
+    entry = SceneObject("koerper", "Körper", mesh)
+    profile = profiles.make_profile(printer, material)
+    settings = print_settings.resolve(profile)
+    result = slice_body(
+        mesh,
+        settings.layers.layer_height,
+        first_layer_height=settings.layers.first_layer_height,
+        overhang_angle=profile.overhang_limit_degrees,
+        bridge_from=profile.minimum_wall_thickness,
+        support_volume=False,
+    )
+    setup = handover.detect(installed_slicer)
+    if vendor:
+        setup = _preselected(setup, profile)
+    entries = [
+        item
+        for item in advise.advise(
+            settings, profile, result, bounds=mesh.bounds, flavour=setup.flavour, declined=declined
+        )
+        if item.path not in declined
+    ]
+    settings = advise.apply(settings, entries)
+    folder = tmp_path / "platte"
+    folder.mkdir(parents=True)
+    job = _PlateJob(
+        objects=(entry,),
+        plates=(0,),
+        folder=folder,
+        name="koerper",
+        setup=setup,
+        settings=settings,
+        profile=profile,
+        slot_profiles={},
+    )
+    run = _prepare_plate(job, 0)
+    outcome = handover.slice_model(
+        [run.model],
+        settings,
+        profile,
+        setup,
+        output_dir=folder,
+        timeout=900,
+        keep_arrangement=run.keep_arrangement,
+        slots=run.slots,
+        model_height=run.model_height,
+        model_meshes=run.meshes,
+        expected_tools=run.used_tools,
+    )
+    text = outcome.gcode_path.read_text(encoding="utf-8", errors="replace")
+    return text, [item.path for item in entries]
+
+
+def _config(text: str, key: str) -> str:
+    """Ein Wert aus dem Konfigurationsblock der Druckdatei."""
+    found = re.search(rf"^; {re.escape(key)} = (.*)$", text, re.MULTILINE)
+    assert found is not None, f"{key} fehlt im Konfigurationsblock"
+    return found.group(1).strip()
+
+
+def _support_moves(text: str) -> int:
+    """Wie viele Druckbewegungen in Stützbahnen liegen (alle Familien)."""
+    count = 0
+    inside = False
+    for line in text.splitlines():
+        if line.startswith((";TYPE:", "; TYPE:")):
+            inside = "upport" in line
+        elif inside and _EXTRUSION.match(line):
+            count += 1
+    return count
+
+
+@pytest.mark.slicer("prusaslicer")
+def test_prusaslicer_supports_a_long_bridge_and_thickens_a_free_one(
+    installed_slicer: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """N1 der G-Code-Gegenprüfung: Mit Solidons eigenem Satz blieb die 36-mm-Brücke
+    in PrusaSlicer trotz Stützen frei (``dont_support_bridges = 1``, 0 mm Stütze).
+    Jetzt stützt sie. Lehnt der Kunde die Stützen ab, kommen dicke Brücken und
+    90 % Fluss an (RM-587)."""
+    set_test_license(monkeypatch, active=True)
+    raw = trimesh.load(BRIDGE, force="mesh")
+
+    held, _taken = _advised_gcode(
+        installed_slicer, tmp_path / "gestuetzt", raw.copy(), "generic-220", vendor=False
+    )
+    assert _config(held, "dont_support_bridges") == "0"
+    assert _support_moves(held) > 50, "Stütze unter der Brücke"
+
+    free, taken = _advised_gcode(
+        installed_slicer,
+        tmp_path / "frei",
+        raw.copy(),
+        "prusa-mk4s",
+        declined=frozenset({"support.style"}),
+    )
+    assert {"shell.thick_bridges", "shell.bridge_flow"} <= set(taken)
+    assert _config(free, "thick_bridges") == "1"
+    assert float(_config(free, "bridge_flow_ratio")) == pytest.approx(0.9)
+
+
+@pytest.mark.parametrize(
+    "program",
+    [
+        pytest.param(program, marks=pytest.mark.slicer(program), id=program)
+        for program in ("orcaslicer", "elegooslicer")
+    ],
+)
+def test_the_orca_family_takes_bridges_rims_and_alternating_walls(
+    program: str, installed_slicer: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """RM-587 in der Orca-Familie: Die freie 36-mm-Brücke bekommt dicke Bahnen und
+    90 % Fluss, ein 3-mm-Rand ohne Stütze Zusatzwände, und ein ABS-Trichter mit 50
+    Grad dreht seine Außenwand in jeder zweiten Schicht."""
+    set_test_license(monkeypatch, active=True)
+    printer = PROGRAMS[program]
+
+    bridge, _taken = _advised_gcode(
+        installed_slicer,
+        tmp_path / "bruecke",
+        trimesh.load(BRIDGE, force="mesh"),
+        printer,
+        declined=frozenset({"support.style"}),
+    )
+    assert _config(bridge, "thick_bridges") == "1"
+    assert float(_config(bridge, "bridge_flow")) == pytest.approx(0.9)
+
+    post = trimesh.creation.box((20.0, 20.0, 20.0))
+    post.apply_translation((0.0, 0.0, 10.0))
+    slab = trimesh.creation.box((26.0, 20.0, 3.0))
+    slab.apply_translation((0.0, 0.0, 21.5))
+    rim, _taken = _advised_gcode(
+        installed_slicer, tmp_path / "rand", trimesh.boolean.union([post, slab]), printer
+    )
+    assert _config(rim, "extra_perimeters_on_overhangs") == "1"
+
+    funnel, taken = _advised_gcode(
+        installed_slicer, tmp_path / "trichter", _funnel(50.0), printer, "abs"
+    )
+    assert "shell.overhang_reverse" in taken
+    assert _config(funnel, "overhang_reverse") == "1"
+    turns = _outer_wall_turns(funnel)
+    assert len(turns) > 40 and len(set(turns)) == 2, "die Außenwand wechselt die Richtung"
+
+
+def _funnel(angle: float, bottom: float = 6.0, height: float = 20.0) -> trimesh.Trimesh:
+    """Ein umgedrehter Kegelstumpf, Wand ``angle`` Grad gegen die Senkrechte."""
+    import math
+
+    import numpy as np
+
+    top = bottom + height * math.tan(math.radians(angle))
+    sides = 128
+    turn = np.linspace(0.0, 2.0 * np.pi, sides, endpoint=False)
+    lower = np.c_[bottom * np.cos(turn), bottom * np.sin(turn), np.zeros(sides)]
+    upper = np.c_[top * np.cos(turn), top * np.sin(turn), np.full(sides, height)]
+    vertices = np.vstack([lower, upper, [[0.0, 0.0, 0.0], [0.0, 0.0, height]]])
+    faces = []
+    for index in range(sides):
+        following = (index + 1) % sides
+        faces += [
+            [index, following, sides + following],
+            [index, sides + following, sides + index],
+            [2 * sides, following, index],
+            [2 * sides + 1, sides + index, sides + following],
+        ]
+    raw = trimesh.Trimesh(vertices, faces)
+    raw.fix_normals()
+    return raw
+
+
+def _outer_wall_turns(text: str) -> list[bool]:
+    """Je Schicht der Drehsinn der Außenwand (Vorzeichen der umfahrenen Fläche)."""
+    turns: list[bool] = []
+    area = 0.0
+    inside = False
+    x = y = 0.0
+    for line in text.splitlines():
+        if line.startswith(";LAYER_CHANGE"):
+            if area:
+                turns.append(area > 0.0)
+            area = 0.0
+        elif line.startswith(";TYPE:"):
+            inside = line[6:].strip() == "Outer wall"
+        elif line.startswith(("G1 ", "G0 ")):
+            words = {word[0]: word[1:] for word in line.split(";")[0].split()[1:]}
+            nx = float(words["X"]) if "X" in words else x
+            ny = float(words["Y"]) if "Y" in words else y
+            if inside and "E" in words and float(words["E"]) > 0.0:
+                area += x * ny - nx * y
+            x, y = nx, ny
+    return turns
 
 
 @pytest.mark.parametrize(

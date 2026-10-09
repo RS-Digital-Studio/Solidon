@@ -82,6 +82,8 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Si un soporte se apoya en la pieza, Solidon sugiere también una capa de separación debajo para que su pie no deje marcas. Con soportes en árbol, solo en los slicers que la imprimen ahí.
 - Con soportes en árbol y junto a una torre de purga, Solidon propone el espacio del soporte en capas enteras, tal como lo imprime el slicer.
 - Para PLA, Solidon propone más espacio entre muchas puntas finas y los soportes en árbol situados debajo. Así quedan menos restos de las puntas de los soportes.
+- Los puentes largos reciben el soporte que Solidon prevé, también en PrusaSlicer. Si un puente largo queda sin soporte, Solidon propone líneas gruesas y algo menos de flujo.
+- Los voladizos planos sin soporte reciben paredes extra como propuesta. Con ABS, ASA y TPU el slicer puede imprimir voladizos pronunciados en sentido alterno para que no se levanten.
 - Para PETG, Solidon sugiere refrigeración total en el soporte. Así se suelta más fácil de la pieza.
 - Nuevo en los ajustes de impresión: *Capas de separación inferiores*, *Hueco en la capa de separación* y *Refrigeración total en el soporte*.
 - El campo *Espacio superior* se llama ahora *Espacio arriba y abajo* y vale para ambos lados del soporte.

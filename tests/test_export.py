@@ -3319,7 +3319,7 @@ def test_every_path_the_cut_decides_makes_the_export_cut_the_part() -> None:
         return "." in text
 
     found: set[str] = set()
-    for rule in (advise._from_geometry, advise._calm_walls):
+    for rule in (advise._from_geometry, advise._calm_walls, advise._bridges_and_overhangs):
         tree = ast.parse(textwrap.dedent(inspect.getsource(rule)))
         found |= {
             node.value

@@ -263,6 +263,12 @@ PRUSA: Final[tuple[Row, ...]] = (
     # Sache Kompensation der Bahnbreite und ist immer an. Kein Eintrag ist
     # hier richtiger als eine Zuordnung auf etwas Ähnliches.
     ("shell.ironing", "ironing", _flag),
+    # Brücken und flache Überhänge ohne Stütze (RM-587). PrusaSlicer legt Brücken
+    # ohne eigenen Wert dick (``thick_bridges = 1``); die Umkehr an Überhängen
+    # kennt es nicht.
+    ("shell.thick_bridges", "thick_bridges", _flag),
+    ("shell.bridge_flow", "bridge_flow_ratio", _number),
+    ("shell.overhang_walls", "extra_perimeters_on_overhangs", _flag),
     ("speed.bridge", "bridge_speed", _number),
     ("speed.acceleration", "default_acceleration", _number),
     ("speed.outer_wall_acceleration", "external_perimeter_acceleration", _number),
@@ -314,6 +320,9 @@ PRUSA: Final[tuple[Row, ...]] = (
     # Bäume schweigt die Zeile: Dort gilt das Muster des Herstellers.
     ("support.style", "support_material_pattern", _only({"grid": "rectilinear-grid"})),
     ("support.placement", "support_material_buildplate_only", _mapped({"build_plate": "1"}, "0")),
+    # Ohne eigenen Wert spannt PrusaSlicer Brücken frei (``dont_support_bridges = 1``),
+    # auch mit „Stützen überall“ (RM-587, G-Code-Gegenprüfung N1).
+    ("support.bridges", "dont_support_bridges", _mapped({"True": "0"}, "1")),
     ("support.threshold_angle", "support_material_threshold", _angle_from_horizontal),
     ("support.z_gap", "support_material_contact_distance", _number),
     # Unten derselbe Abstand wie oben: Wo die Stütze auf dem Modell steht,
@@ -426,6 +435,12 @@ ORCA: Final[tuple[Row, ...]] = (
     # Orca kennt vier Stufen des Bügelns; Solidon entscheidet nur, **ob** —
     # wie stark und mit welchem Abstand weiß der Slicer besser.
     ("shell.ironing", "ironing_type", _mapped({"True": "top"}, "no ironing")),
+    # Brücken und Überhänge (RM-587); ``thick_internal_bridges`` bleibt beim
+    # Hersteller, der Rat meint die Brücke an der Außenseite.
+    ("shell.thick_bridges", "thick_bridges", _flag),
+    ("shell.bridge_flow", "bridge_flow", _number),
+    ("shell.overhang_walls", "extra_perimeters_on_overhangs", _flag),
+    ("shell.overhang_reverse", "overhang_reverse", _flag),
     ("speed.bridge", "bridge_speed", _number),
     ("speed.acceleration", "default_acceleration", _number),
     ("speed.outer_wall_acceleration", "outer_wall_acceleration", _number),
@@ -475,6 +490,8 @@ ORCA: Final[tuple[Row, ...]] = (
     # Dasselbe Kreuzmuster wie bei PrusaSlicer, siehe dort.
     ("support.style", "support_base_pattern", _only({"grid": "rectilinear-grid"})),
     ("support.placement", "support_on_build_plate_only", _mapped({"build_plate": "1"}, "0")),
+    # Manche Herstellerprofile spannen Brücken frei (Kobra 2: ``bridge_no_support = 1``).
+    ("support.bridges", "bridge_no_support", _mapped({"True": "0"}, "1")),
     ("support.threshold_angle", "support_threshold_angle", _angle_from_horizontal),
     ("support.z_gap", "support_top_z_distance", _number),
     # Unten derselbe Abstand wie oben (RM-583), siehe PrusaSlicer.
@@ -1084,12 +1101,22 @@ def flavour_of(name: str) -> SlicerFlavour | None:
 #:
 #: ``tests/test_print_settings_ui.py`` hält die Liste gegen diese Messung.
 NOT_TAKEN_BY: Final[dict[SlicerFlavour, frozenset[str]]] = {
-    "prusa": frozenset({"shell.precise_outer_wall"}),
+    # Die Umkehr an Überhängen führt PrusaSlicer nicht (``--help-fff`` von 2.9.6).
+    "prusa": frozenset({"shell.precise_outer_wall", "shell.overhang_reverse"}),
     "orca": frozenset(),
     "cura": frozenset(
         {
             "shell.wall_generator",
             "shell.precise_outer_wall",
+            # Dicke Brücken, Zusatzwände und Umkehr an Überhängen kennt CuraEngine
+            # nicht, Brücken stützt es immer. Seinen Brückenfluss (60 %) rechnet es
+            # auf eigene Bahnen (``bridge_skin_material_flow``), nicht auf
+            # Solidons Anteil (RM-587).
+            "shell.thick_bridges",
+            "shell.bridge_flow",
+            "shell.overhang_walls",
+            "shell.overhang_reverse",
+            "support.bridges",
             "retraction.wipe",
             "filament.density",
             "filament.cost_per_kg",
@@ -1141,12 +1168,29 @@ LIMITED: Final[dict[SlicerFlavour, frozenset[str]]] = {
 #: 2.9 nicht, und sein 3MF-Leser stürzt ab zwei unbekannten Schlüsseln mit
 #: 0xC0000005 ab (RM-459, gemessen je Schlüssel der Beilage).
 NOT_TAKEN_BY_PROGRAM: Final[dict[str, frozenset[str]]] = {
-    "superslicer": frozenset({"shell.scarf_seam"}),
+    # SuperSlicer 2.5.59.13 kennt ``thick_bridges`` und
+    # ``extra_perimeters_on_overhangs`` nicht (sie heißen dort ``bridge_type`` und
+    # ``extra_perimeters_overhangs``), und seinen Brückenfluss liest er in Prozent:
+    # 0,9 hieße dort 0,9 % (RM-587, ``--save``).
+    "superslicer": frozenset(
+        {"shell.scarf_seam", "shell.thick_bridges", "shell.bridge_flow", "shell.overhang_walls"}
+    ),
     # Den Kontaktlüfter führt nur SuperSlicer (``--help-fff`` von 2.9.6).
     "prusaslicer": frozenset({"cooling.support_interface_cooling"}),
     # Bambu Studio führt ``support_material_interface_fan_speed`` nicht; sein
-    # Konfigurationsblock nennt den Schlüssel nicht (P1S, 08.10.2026).
-    "bambustudio": frozenset({"cooling.support_interface_cooling"}),
+    # Konfigurationsblock nennt den Schlüssel nicht (P1S, 08.10.2026). Ebenso
+    # fehlen ``extra_perimeters_on_overhangs`` und ``overhang_reverse`` (RM-587).
+    "bambustudio": frozenset(
+        {
+            "cooling.support_interface_cooling",
+            "shell.overhang_walls",
+            "shell.overhang_reverse",
+        }
+    ),
+    # Anycubic Slicer Next 2.0.0.3 nimmt ``extra_perimeters_on_overhangs`` an und
+    # druckt dieselben Bahnen: unter einer 3-mm-Auskragung 333 mm Brücke mit und
+    # ohne, OrcaSlicer, ElegooSlicer und Creality Print ersetzen sie (RM-587).
+    "anycubicslicernext": frozenset({"shell.overhang_walls"}),
 }
 
 #: Was ein Programm unter Baumstützen nicht druckt (RM-622): Bambu Studio,

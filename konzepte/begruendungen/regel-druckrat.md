@@ -557,3 +557,45 @@ Modellen hat der Drache 199, danach eine Baugruppe 49 und ein Schachturm 34;
 die Schwelle steht bei 100.
 Gemessen ist nur PLA (`support_tip_gap`); ohne Wert bleibt der Abstand des
 Materials. Bericht: `output/drache-2026-10-09/rueckstaende/bericht.md`.
+
+**Was frei druckt, soll halten (09.10.2026, RM-587).** Die G-Code-Gegenprüfung
+vom 03.10. (N1) fand die 36-mm-Brücke aus `tests/data/meshes` in PrusaSlicer
+2.9.6 ohne Bündel ohne jede Stütze, obwohl „überall“ gewählt war und die
+Schichtanalyse 901 mm³ rechnete: Solidon schrieb `dont_support_bridges` nicht,
+und die Programmvorgabe ist 1. Nachgestellt am Stand davor 0 mm Stützbahn, jetzt
+4 317 mm, mit abgewählter Brückenstütze wieder 0. Welche Decke ein Slicer als
+Brücke liest, rechnet nur er: An OrcaSlicers Kobra 2 (`bridge_no_support = 1`)
+änderte der Schalter an der 36-mm-Brücke nichts (6 499 mm beide Male), am Pilz
+aus 30 × 30 mm Hut auf 10 × 10 mm Stiel 14 480 gegen 45 837 mm. Deshalb gilt die
+Brückenstütze, wo das Teil Stütze verlangt, nicht erst an langen Brücken. Die
+Gegenprobe fragt seitdem den wirksamen Wert des Teils statt des
+Herstellerprozesses; Solidons eigener Satz stützt Brücken und legt sie dünn, wie
+alle gemessenen Herstellerprofile der Orca-Familie (PrusaSlicer legt ohne eigenen
+Wert dick).
+
+Dicke Bahnen und 90 % Fluss nur über frei druckenden Brücken (Recherche Nr. 11:
+Fluss 0,85 bis 0,95, Creality und Anycubic 0,9, Prusas SV06-Bündel 0,95). Über
+der Stütze trägt die dünne Brücke und sieht besser aus. Angekommen in allen sechs
+Programmen (Konfigurationsblock), sichtbar in den Bahnen: In der Orca-Familie
+halbiert sich die Brückenbahn (126 → 63 mm bei OrcaSlicer und ElegooSlicer, mit
+weniger Material), PrusaSlicer fördert auf derselben Bahn dicker (4,5 → 6,6 mm
+Filament). Druckzeit gleich auf zwei Sekunden.
+
+Die Recherche (Nr. 12) riet zu Zusatzwänden an Flächen zwischen 45 Grad und der
+Stützgrenze. Gemessen ändern sie dort nichts: Trichter von 40 bis 80 Grad in
+PrusaSlicer und 58 Grad in OrcaSlicer schnitten mit und ohne bitgleich, ebenso
+die beidseitig gelagerte 36-mm-Brücke. Sie wirken unter flachen Stücken, die nur
+an einer Seite hängen und ohne Stütze bleiben: An einer Auskragung von 3 mm
+ersetzen sie die Brückenbahn (PrusaSlicer 1 254 → 996 mm, OrcaSlicer 335 → 0,
+ElegooSlicer 296 → 0, Creality Print 335 → 75); Anycubic Slicer Next nimmt den
+Schlüssel an und druckt dieselben Bahnen. Breiter als die Wände muss das Stück
+sein, sonst liegt es ganz unter ihnen (Auskragung 1 mm: nichts). Für die steilen
+Wände selbst wirkt Orcas Umkehr: Am ABS-Trichter mit 50 Grad dreht die Außenwand
+in OrcaSlicer, ElegooSlicer und Creality Print in jeder zweiten Schicht (50 von
+50), Anycubic Slicer Next dreht jede Schicht um; ohne den Schalter nie. Die
+Recherche nennt sie für schrumpfende und weiche Materialien, und nur dort wird
+sie vorgeschlagen. Das Band zählt `analysis.steep_overhang` — an Trichtern auf
+ein Prozent wie von Hand gerechnet (50 Grad: 431 gegen 432 mm²), am Korpus
+zwischen 0 (Behälter) und 1 976 mm² (Kumiko-Organizer); unter zehn ist es eine
+Kante. Gerechnet an vereinfachten, nicht vereinigten Konturen und abgebrochen,
+sobald es genug ist: am Besenhalter 0,16 s statt 2,1 s.

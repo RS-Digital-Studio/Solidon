@@ -3118,6 +3118,92 @@ def total_overhang(
     return max(total, 0.0)
 
 
+def steep_overhang(result: SliceResult, enough: float | None = None) -> float:
+    """Die Fläche in mm², die über ihre Schicht hinausragt, ohne dass der Slicer
+    sie stützt: steiler als die Startregel (45 Grad, :data:`OVERHANG_ANGLE_FACTOR`)
+    und flacher als der Winkel, mit dem geschnitten wurde (RM-587).
+
+    Je Schicht die Fläche jenseits der 45-Grad-Zugabe über der Schicht darunter,
+    abzüglich des Überhangs jenseits der Stützgrenze (``overhang_area``): Der
+    gehört der Stütze. Ein Schnitt mit einer Grenze unter 45 Grad hat kein Band
+    und gibt null. Ein Trichter von 20 mm Höhe aus Ø 12 mm trägt bei 50 Grad
+    431 mm² (gerechnet 432), bei 58 Grad 1656 (1659), bei 40 Grad nichts;
+    senkrechte Wände tragen nichts, ihr Vernetzungsrauschen bleibt in der Zugabe
+    einer Schichthöhe.
+
+    ``enough`` beendet die Messung, sobald die Summe darüber liegt — der Rat
+    fragt nur, ob es so viel gibt. Gerechnet blockweise (:data:`BATCH_LAYERS`),
+    als Fläche ohne Vereinigung (die Konturen einer Schicht sind getrennt) und
+    nach Douglas-Peucker um :data:`WIDTH_SIMPLIFY` vereinfacht wie
+    :func:`_width_outline`; wird eine Schicht dabei ungültig, bleibt sie, wie sie
+    ist. Am Besenhalter mit 1,7 Millionen Punkten kostete das 0,38 s Rechenzeit
+    statt 2,06 s mit vereinigten, unvereinfachten Konturen, bei 20,7 statt
+    20,9 mm².
+    """
+    layers = result.layers
+    total = 0.0
+    for start in range(1, len(layers), BATCH_LAYERS):
+        stop = min(start + BATCH_LAYERS, len(layers))
+        exact = np.asarray([_disjoint_shape(layer) for layer in layers[start - 1 : stop]])
+        shapes = shapely.simplify(exact, WIDTH_SIMPLIFY, preserve_topology=False)
+        broken = ~shapely.is_valid(shapes) | shapely.is_empty(shapes)
+        shapes[broken] = exact[broken]
+        steps = np.asarray(
+            [max(layers[index].z - layers[index - 1].z, 0.0) for index in range(start, stop)]
+        )
+        below = shapely.buffer(shapes[:-1], steps * OVERHANG_ANGLE_FACTOR, quad_segs=16)
+        free = shapely.area(shapely.difference(shapes[1:], below))
+        beyond = np.asarray([layer.overhang_area for layer in layers[start:stop]])
+        total += float(np.maximum(free - beyond, 0.0).sum())
+        if enough is not None and total > enough:
+            break
+    return total
+
+
+def _disjoint_shape(layer: LayerInfo) -> ShapelyPolygon | MultiPolygon:
+    """Die Konturen einer Schicht als eine Fläche, ohne sie zu vereinigen: Sie
+    stammen aus den Teilen einer gültigen Fläche (:func:`_to_polygons`) und
+    berühren sich nicht."""
+    parts = [ShapelyPolygon(contour.outline, contour.holes) for contour in layer.contours]
+    if not parts:
+        return ShapelyPolygon()
+    return parts[0] if len(parts) == 1 else MultiPolygon(parts)
+
+
+def cantilevers(
+    result: SliceResult, pieces: Sequence[tuple[int, int]], gap: float
+) -> frozenset[tuple[int, int]]:
+    """Welche dieser Überhangstücke (Schicht, Stück) nur an **einer** Seite an der
+    Schicht darunter hängen (RM-587).
+
+    Eine Auskragung, ein Rand oder ein Pilzhut grenzen an einem zusammenhängenden
+    Stück Umriss an den getragenen Rest ihrer Schicht; eine Brücke an zwei Enden.
+    Gefragt wird der Rest der eigenen Schicht und nicht die Schicht darunter: Das
+    Stück beginnt erst jenseits der Zugabe des Stützwinkels und berührt sie nie.
+    Gezählt werden die Berührungen, die weiter als ``gap`` auseinanderliegen —
+    eine Bahnbreite, damit eine vom Vernetzungsrauschen zerrissene Kante eine
+    bleibt. Eine Insel grenzt an nichts und ist keine Auskragung. Gemessen in
+    PrusaSlicer 2.9.6: Die Zusatzwände an Überhängen ersetzen unter einer
+    3-mm-Auskragung die Brückenbahnen und lassen eine beidseitig gelagerte
+    36-mm-Brücke unverändert.
+    """
+    found: set[tuple[int, int]] = set()
+    shapes: dict[int, Any] = {}
+    for index, number in pieces:
+        if index not in shapes:
+            shapes[index] = _layer_shape(result.layers[index])
+        piece = result.layers[index].overhangs[number]
+        outline = ShapelyPolygon(piece.outline, piece.holes)
+        rest = shapes[index].difference(outline).buffer(OVERHANG_MARGIN)
+        contact = outline.boundary.intersection(rest)
+        if contact.is_empty:
+            continue
+        joined = contact.buffer(gap / 2.0)
+        if len(getattr(joined, "geoms", [joined])) == 1:
+            found.add((index, number))
+    return frozenset(found)
+
+
 def worst_overhang(result: SliceResult) -> float:
     """Die größte Überhangfläche, die auf **einer** Schicht anfängt.
 

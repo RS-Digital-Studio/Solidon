@@ -1458,3 +1458,194 @@ def test_every_reason_fits_under_the_table_of_the_print_dialog() -> None:
             if len(catalog.get(text, "")) > 70
         ]
         assert not wide, f"{language}: länger als 70 Zeichen: {wide}"
+
+
+# --- Lange Brücken und steile Überhänge (RM-587) ---------------------------------
+
+#: Die 36-mm-Brücke der G-Code-Gegenprüfung (N1): ein Steg auf zwei Pfeilern.
+BRIDGE = Path(__file__).parent / "data" / "meshes" / "bridge_two_end_supports.ply"
+
+
+def _sliced(raw: trimesh.Trimesh, profile: Profile) -> tuple[MeshData, SliceResult]:
+    raw.apply_translation((0.0, 0.0, -raw.bounds[0][2]))
+    mesh = MeshData.of(raw)
+    return mesh, slice_body(
+        mesh,
+        0.2,
+        first_layer_height=0.2,
+        overhang_angle=profile.overhang_limit_degrees,
+        bridge_from=profile.minimum_wall_thickness,
+        support_volume=False,
+    )
+
+
+def _shelf(reach: float) -> trimesh.Trimesh:
+    """Ein Pfosten 20 × 20 × 20 mm mit einer Platte, die beidseitig ``reach`` auskragt."""
+    post = trimesh.creation.box((20.0, 20.0, 20.0))
+    post.apply_translation((0.0, 0.0, 10.0))
+    slab = trimesh.creation.box((20.0 + 2.0 * reach, 20.0, 3.0))
+    slab.apply_translation((0.0, 0.0, 21.5))
+    return trimesh.boolean.union([post, slab])
+
+
+def _funnel(angle: float, bottom: float = 6.0, height: float = 20.0) -> trimesh.Trimesh:
+    """Ein umgedrehter Kegelstumpf, dessen Wand um ``angle`` gegen die Senkrechte
+    nach außen läuft — 128 Seiten."""
+    import numpy as np
+
+    top = bottom + height * math.tan(math.radians(angle))
+    sides = 128
+    turn = np.linspace(0.0, 2.0 * np.pi, sides, endpoint=False)
+    lower = np.c_[bottom * np.cos(turn), bottom * np.sin(turn), np.zeros(sides)]
+    upper = np.c_[top * np.cos(turn), top * np.sin(turn), np.full(sides, height)]
+    vertices = np.vstack([lower, upper, [[0.0, 0.0, 0.0], [0.0, 0.0, height]]])
+    faces = []
+    for index in range(sides):
+        following = (index + 1) % sides
+        faces += [
+            [index, following, sides + following],
+            [index, sides + following, sides + index],
+            [2 * sides, following, index],
+            [2 * sides + 1, sides + index, sides + following],
+        ]
+    raw = trimesh.Trimesh(vertices, faces)
+    raw.fix_normals()
+    return raw
+
+
+def _advice_on(
+    raw: trimesh.Trimesh,
+    printer: str = "creality-k1-max",
+    material: str = "pla",
+    *,
+    flavour: str | None = "orca",
+    declined: frozenset[str] = frozenset(),
+    **values: object,
+) -> dict[str, object]:
+    profile = profiles.make_profile(printer, material)
+    settings = print_settings.resolve(profile)
+    for path, value in values.items():
+        settings = print_settings.with_path(settings, path.replace("__", "."), value)
+    mesh, result = _sliced(raw, profile)
+    entries = advise.advise(
+        settings, profile, result, bounds=mesh.bounds, flavour=flavour, declined=declined
+    )  # type: ignore[arg-type]
+    return {entry.path: entry.value for entry in entries}
+
+
+def test_a_long_bridge_under_supports_has_the_slicer_support_bridges() -> None:
+    """N1: PrusaSlicer ohne eigenen Wert und Profile wie der Kobra 2 spannen Brücken
+    frei, auch mit „Stützen überall“. Wo die Brücke selbst Stütze verlangt, schlägt
+    der Rat die Brückenstütze vor; steht sie schon, nichts."""
+    raw = trimesh.load(BRIDGE, force="mesh")
+
+    assert _advice_on(raw.copy(), support__bridges=False).get("support.bridges") is True
+    assert "support.bridges" not in _advice_on(raw.copy(), support__bridges=True)
+
+
+def test_a_mushroom_cap_under_supports_has_the_slicer_support_bridges_too() -> None:
+    """Welche Decke der Slicer als Brücke liest, rechnet nur er: Am Kobra 2 stützte
+    OrcaSlicer vom Pilzhut nur den Rand (``bridge_no_support = 1``). Der Hut ist
+    keine lange Brücke, verlangt aber Stütze — also gilt sie auch unter Brücken.
+    Ein Würfel ohne Stützbedarf bekommt nichts."""
+    stem = trimesh.creation.box((10.0, 10.0, 10.0))
+    stem.apply_translation((0.0, 0.0, 5.0))
+    cap = trimesh.creation.box((30.0, 30.0, 2.0))
+    cap.apply_translation((0.0, 0.0, 11.0))
+    mushroom = trimesh.boolean.union([stem, cap])
+
+    assert (
+        _advice_on(mushroom, "anycubic-kobra-2", support__bridges=False).get("support.bridges")
+        is True
+    )
+    cube = trimesh.creation.box((20.0, 20.0, 20.0))
+    assert "support.bridges" not in _advice_on(cube, support__bridges=False)
+
+
+def test_a_long_bridge_printed_without_support_gets_thick_lines_and_less_flow() -> None:
+    """Druckt die 36-mm-Brücke frei — Stützen abgelehnt oder Brückenstütze
+    abgelehnt —, tragen dicke Bahnen mit 90 % Fluss. Über einer Stütze trägt die
+    dünne Brücke und sieht besser aus. Zusatzwände nicht: An beiden Enden gelagert
+    legt der Slicer dieselben Bahnen (PrusaSlicer 2.9.6, gemessen)."""
+    raw = trimesh.load(BRIDGE, force="mesh")
+
+    free = _advice_on(raw.copy(), declined=frozenset({"support.style"}))
+    assert free.get("shell.thick_bridges") is True
+    assert free.get("shell.bridge_flow") == pytest.approx(advise.BRIDGE_FLOW)
+    assert "shell.overhang_walls" not in free
+    unheld = _advice_on(raw.copy(), declined=frozenset({"support.bridges"}), support__bridges=False)
+    assert unheld.get("shell.thick_bridges") is True
+
+    held = _advice_on(raw.copy())
+    assert "shell.thick_bridges" not in held and "shell.bridge_flow" not in held
+    enough = _advice_on(raw.copy(), declined=frozenset({"support.style"}), shell__bridge_flow=0.95)
+    assert "shell.bridge_flow" not in enough, "0,95 liegt im Band und bleibt"
+
+
+def test_a_rim_without_support_gets_extra_walls_but_no_thick_bridge() -> None:
+    """Eine Auskragung von 3 mm trägt sich selbst und bleibt ohne Stütze; der Slicer
+    legt sie als lose Brücke, die Zusatzwände verankern sie (PrusaSlicer 2.9.6:
+    Brückenbahnen 3 → 1). Dicke Brücken nicht: Die „Spannweite“ eines Rands ist die
+    Länge seiner Kante. Ein Rand von 1 mm liegt ganz unter den Wänden."""
+    rim = _advice_on(_shelf(3.0))
+    assert rim.get("shell.overhang_walls") is True
+    assert "shell.thick_bridges" not in rim and "support.style" not in rim
+
+    assert "shell.overhang_walls" not in _advice_on(_shelf(1.0))
+
+
+def test_steep_walls_of_curling_material_alternate_in_the_orca_family() -> None:
+    """Zwischen 45 Grad und der Stützgrenze (K1 Max: 60) rollen sich ABS, ASA und
+    TPU an der Kante auf. Orcas Umkehr dreht die Außenwand dort in jeder zweiten
+    Schicht (Trichter 58°: 50 von 50 Schichten). Nicht bei PLA, nicht unter 45
+    Grad, nicht in PrusaSlicer, das sie nicht kennt."""
+    assert _advice_on(_funnel(50.0), material="abs").get("shell.overhang_reverse") is True
+    assert "shell.overhang_reverse" not in _advice_on(_funnel(50.0), material="pla")
+    assert "shell.overhang_reverse" not in _advice_on(_funnel(40.0), material="abs")
+    prusa = _advice_on(_funnel(50.0), material="abs", flavour="prusa")
+    assert "shell.overhang_reverse" not in prusa
+
+
+@pytest.mark.parametrize(("angle", "expected"), [(40.0, 0.0), (50.0, 432.0), (58.0, 1659.0)])
+def test_the_steep_band_matches_the_funnel_by_hand(angle: float, expected: float) -> None:
+    """Je Schicht wächst der Trichter um 0,2 · tan(Winkel); jenseits der 45-Grad-Zugabe
+    (0,2 mm) bleibt ein Ring 0,2 · (tan − 1) breit. Summiert über 100 Schichten bei
+    Radien von 6 bis 6 + 20 · tan: 2π · Breite · Σr (K1 Max, Grenze 60 Grad)."""
+    from app.core.slice.analysis import steep_overhang
+
+    _mesh, result = _sliced(_funnel(angle), profiles.make_profile("creality-k1-max", "pla"))
+
+    assert steep_overhang(result) == pytest.approx(expected, rel=0.02, abs=1.0)
+    if expected:
+        partial = steep_overhang(result, enough=10.0)
+        assert 10.0 < partial < expected, "die Messung hört auf, sobald es genug ist"
+
+
+def test_a_box_and_a_limit_below_the_band_have_no_steep_band() -> None:
+    """Senkrechte Wände tragen nichts, und eine Grenze von 45 Grad lässt kein Band —
+    bis auf den Rest der Vereinfachung um ein Hundertstel Millimeter (0,25 mm² am
+    Trichter), weit unter einer Kante."""
+    from app.core.slice.analysis import steep_overhang
+
+    box = trimesh.creation.box((40.0, 40.0, 30.0))
+    _mesh, result = _sliced(box, profiles.make_profile("creality-k1-max", "pla"))
+    assert steep_overhang(result) == 0.0
+    _mesh, flat = _sliced(_funnel(58.0), profiles.make_profile("generic-220", "pla"))
+    assert steep_overhang(flat) < 1.0 < advise.OVERHANG_LAYER_MINIMUM
+
+
+def test_a_cantilever_hangs_from_one_side_and_a_bridge_from_two() -> None:
+    """Die Auskragung grenzt an einem Stück an ihre Schicht, die Brücke an zwei Enden."""
+    from app.core.slice.analysis import cantilevers
+
+    profile = profiles.make_profile("creality-k1-max", "pla")
+    for raw, hangs in ((_shelf(3.0), True), (trimesh.load(BRIDGE, force="mesh"), False)):
+        _mesh, result = _sliced(raw, profile)
+        pieces = [
+            (index, number)
+            for index, layer in enumerate(result.layers)
+            for number in range(len(layer.overhangs))
+            if index > 0 and layer.overhang_area > advise.OVERHANG_LAYER_MINIMUM
+        ]
+        assert pieces, "die Vorbedingung: ein Überhang"
+        assert bool(cantilevers(result, pieces, 0.42)) is hangs

@@ -691,6 +691,7 @@ SUPPORT_DETAILS: Final = (
     "support.interface_spacing",
     "support.block_channels",
     "support.spare_ledges",
+    "support.bridges",
     "cooling.support_interface_cooling",
 )
 

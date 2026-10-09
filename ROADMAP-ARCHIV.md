@@ -31,6 +31,7 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-09 | [RM-587: Lange Brücken und steile Überhänge drucken sauber (09.10.2026)](#rm-587-lange-brücken-und-steile-überhänge-drucken-sauber-09102026) |
 | 2026-10-09 | [RM-680: Bausteine verwalten steht ohne eigenen Baustein offen (09.10.2026)](#rm-680-bausteine-verwalten-steht-ohne-eigenen-baustein-offen-09102026) |
 | 2026-10-09 | [RM-650: Ein eingefügtes Modell kommt in den Ausschnitt (09.10.2026)](#rm-650-ein-eingefügtes-modell-kommt-in-den-ausschnitt-09102026) |
 | 2026-10-09 | [RM-584 (Teil): Über Baumspitzen rät Solidon zwei Schichten Luft (09.10.2026)](#rm-584-teil-über-baumspitzen-rät-solidon-zwei-schichten-luft-09102026) |
@@ -46242,3 +46243,41 @@ sechs Sprachen „ab 0.5.0“ neben „Version 0.5.3“, wie im Repository. Chan
   Belege: `F:\solidon-review-reports\verif-09d8e9485.md` (Abschnitt 3).
 
 **Abschluss:** Der Abschnitt *Bausteine verwalten* beginnt offen, solange der eigene Bausteinordner nichts hält (`PartCatalog`, `_own_library_is_empty`). Gezählt werden gespeicherte Rezepte und hinzugefügte Bausteine, dieselbe Frage wie für Weitergabe, *Bearbeiten* und *Entfernen* (`_in_own_library`, vorher dreimal hergeleitet); ein mitgereister und ein `.py`-Baustein zählen nicht, `PartSpec.own` zählte anders. Danach gilt der Merker (`remember`, RM-491), und ein eigener Baustein klappt den Abschnitt wie bisher auf (RM-455; dass dieses Aufklappen gemerkt wird, steht in [RM-658](ROADMAP.md#rm-658)). Damit stehen *Auswahl als Baustein speichern …*, *Baustein aus Datei hinzufügen …* und beide Sperrgründe ohne Klick da, wie in 0.5.1 (Rückschritt seit `48ffcf145`, in 0.5.2 und 0.5.3). Weil der Weitergabegrund jetzt vorn steht, sagt er ohne eigenen Baustein „Speichern Sie zuerst einen eigenen Baustein, um ihn weiterzugeben.“ statt zum Wählen aufzufordern, das bei einem eingebauten in die nächste Absage führte. Die Hinweistests prüfen den Grund ohne vorheriges Aufklappen und stellen die Bibliothek ohne eigene Bausteine selbst her (`no_own_parts`); `test_the_closed_management_names_what_it_holds` prüft den zugeklappten Zustand nach einem Klick; neu `test_a_fresh_catalogue_shows_its_management_without_a_click` und `test_only_a_part_in_the_own_library_closes_the_management` (Rezept und hinzugefügt zu, mitgereist und `.py` offen). Gegenprobe über ein Plugin, je Mutation von acht Tests rot: immer zu 6, immer offen 2, Prädikat über `PartSpec.own` 2, alter Weitergabegrund 3; Katalogtests 52 grün, Handbuch-, Katalog-, Wortlaut- und Changelogtests 539 grün. Die Handbuchseiten *Eigene Bausteine* und *Bausteindateien austauschen* nennen Abschnitt und Knopf in allen sechs Sprachen, der eingefrorene Musterbestand trägt die neuen Seitenschlüssel; Changelog 0.6.0. Fenstersonde am echten Fenster, frischer Nutzerordner: 4 von 4, *Speichern*, *Hinzufügen* und beide Sperrgründe ohne Klick sichtbar, der Weitergabegrund schickt zum Speichern. Umgesetzt von Claude (Thread „Bedienung und KI“).
+
+## RM-587: Lange Brücken und steile Überhänge drucken sauber (09.10.2026)
+
+<a id="rm-587-lange-brücken-und-steile-überhänge-drucken-sauber-09102026"></a>
+<a id="rm-587"></a>
+
+**RM-587 — Lange Brücken und steile Überhänge drucken sauber.**
+  Solidon meldete Brücken ab 15 mm und setzte nur Tempo und Lüfter. Dicke Brücken, Brückenfluss
+  und Zusatzwände an Überhängen zwischen 45° und der Stützgrenze blieben beim Hersteller, meist
+  aus (Recherche Nr. 11, 12). Dazu N1 der G-Code-Gegenprüfung vom 03.10.: PrusaSlicer 2.9.6 mit
+  Solidons eigenem Satz stützte die 36-mm-Brücke trotz „Stützen überall“ nicht (0 mm³, die
+  Schichtanalyse rechnete 901 mm³), weil Solidon `dont_support_bridges` nicht schrieb.
+  Belege: `F:\solidon-review-reports\gcode\schluss.md`, `befunde.md`.
+
+**Abschluss:** Fünf neue Felder mit Rat aus der Geometrie (`advise._bridges_and_overhangs`):
+*Brücken stützen* (`support.bridges`, Prusa `dont_support_bridges`, Orca `bridge_no_support`),
+vorgeschlagen, wo das Teil Stütze verlangt und mit Stützen druckt; *Dicke Brücken* und *Fluss bei
+Brücken* (0,9 über 0,95) über Brücken über 15 mm, die frei drucken; *Zusatzwände ohne Stütze*
+unter flachen, einseitig hängenden Stücken ohne Stütze, breiter als die Wände
+(`analysis.cantilevers`); *Wandrichtung wechseln* (`overhang_reverse`, nur Orca-Familie) für
+ABS, ASA und TPU an steilen Wänden zwischen 45 Grad und der Stützgrenze
+(`analysis.steep_overhang`). Rücklesung aus Orca- und Prusa-Ketten samt Programmvorgaben von
+PrusaSlicer (`--save`), Übergabe je Programm gemessen: Cura keiner der fünf, SuperSlicer nur die
+Brückenstütze (Fluss dort in Prozent, zwei Schlüssel unbekannt), Bambu Studio ohne Zusatzwände und
+Umkehr, Anycubic Slicer Next ohne Zusatzwände (angenommen, ohne Wirkung). Die Gegenprobe fragt die
+Brückenstütze am wirksamen Wert des Teils statt am Herstellerprozess (`Motion.support_skips_bridges`
+entfällt). Gemessen über den Druckdialogweg: N1 vorher 0 mm Stützbahn, jetzt 4 317 mm, abgewählt 0;
+Pilz an OrcaSlicers Kobra 2 14 480 → 45 837 mm; dicke Brücken und 0,9 kommen in allen sechs
+Programmen an, Brückenbahn in der Orca-Familie 126 → 63 mm, PrusaSlicer 4,5 → 6,6 mm Filament;
+Zusatzwände ersetzen unter einer 3-mm-Auskragung die Brückenbahn (PrusaSlicer 1 254 → 996 mm,
+OrcaSlicer 335 → 0, ElegooSlicer 296 → 0, Creality Print 335 → 75); die Umkehr dreht die Außenwand
+eines ABS-Trichters mit 50 Grad in jeder zweiten Schicht (OrcaSlicer, ElegooSlicer, Creality Print
+50 von 50). Abweichung von der Recherche: Zusatzwände wirken im Band 45 Grad bis Stützgrenze
+nicht (Trichter 40 bis 80 Grad bitgleich), dort schlägt Solidon die Umkehr vor. Tests in
+`test_advise.py` (Brücke, Pilz, Rand, Trichter, Band von Hand gerechnet, Auskragung gegen Brücke),
+`test_manufacturer.py`, `test_print_time.py`, `test_print_settings.py`, Slicertest
+`test_real_slicers.py` (PrusaSlicer, OrcaSlicer, ElegooSlicer, 3 von 3 grün); Messwerte und Begründung in
+`konzepte/begruendungen/regel-druckrat.md`. Umgesetzt von Claude (Worktree `F:/sl-bruecken`).

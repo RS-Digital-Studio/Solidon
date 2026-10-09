@@ -81,6 +81,8 @@ scrive in `website/version.json`.
 - Se un supporto poggia sul pezzo, Solidon suggerisce anche uno strato di interfaccia sotto, così il suo piede non lascia segni. Con i supporti ad albero solo negli slicer che lo stampano lì.
 - Con i supporti ad albero e accanto a una torre di spurgo, Solidon propone lo spazio del supporto in strati interi, come lo stampa lo slicer.
 - Per il PLA, Solidon propone più spazio tra le numerose punte sottili e i supporti ad albero sottostanti. In questo modo restano meno residui delle punte dei supporti.
+- I ponti lunghi ricevono il supporto previsto da Solidon, anche in PrusaSlicer. Se un ponte lungo resta senza supporto, Solidon propone linee spesse e un po' meno flusso.
+- Agli sbalzi piatti senza supporto Solidon propone pareti extra. Con ABS, ASA e TPU lo slicer stampa gli sbalzi ripidi in senso alternato, così non si arricciano.
 - Per il PETG Solidon suggerisce il raffreddamento pieno sul supporto. Così si stacca più facilmente dal pezzo.
 - Nuovo nelle impostazioni di stampa: *Strati di interfaccia inferiori*, *Spazio nell'interfaccia* e *Raffreddamento pieno sul supporto*.
 - Il campo *Spazio verso l'alto* ora si chiama *Spazio sopra e sotto* e vale per entrambi i lati del supporto.
