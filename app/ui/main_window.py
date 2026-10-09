@@ -14088,6 +14088,12 @@ class MainWindow(QMainWindow):
         einem echten Modell, und währenddessen formt man weiter. Ein neuer
         Zug stößt eine neue Prüfung an; die Antwort einer älteren verfällt.
         """
+        # Erst die wartende Übergabe der Vorschau (RM-576), dann die Prüfung: Die
+        # Übergabe schreibt die Warnzeile neu und löschte sonst die Antwort, wo
+        # Qt sie nach ihr zustellt (macOS, Linux).
+        if self._sculpt_display.isActive():
+            self._sculpt_display.stop()
+            self._show_sculpt_display()
         if self._sculpt_preview_worker is not None:
             return
         target = self._sculpt_target or self._armature_target or self._pose_report_target
