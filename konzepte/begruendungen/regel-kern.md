@@ -174,6 +174,23 @@ bis 0,9 s.
   Verhungern, keine Rechenzeit: Die Rechnung selbst braucht Millisekunden. Mit
   `PREPARATIONS` war derselbe Fall nach 6,2 s fertig, ganz ohne Zurückstellen
   nach 2,9 s (`hunger.py`, `hunger-last.txt`).
+- **Vorwärmen lädt alles, bis dahin bleibt Kleines hier, und wer verhungert,
+  wird gehoben** (RM-672, 09./10.10.2026, Paket E): Öffnete der Kunde gleich
+  nach dem Start, fand `face_components` den vorgewärmten Hilfsprozess noch im
+  Start, startete einen zweiten und wartete auf dessen Start und Import. Eine
+  Ikosphäre mit 327 680 Dreiecken kostete im Prozess 0,05 s
+  (`component_labels`), 0,5 s (`display_simplify`, `boolean`), über einen frisch
+  startenden Hilfsprozess unter Fremdlast 5,5 s, 73 s und 28 s; bei
+  1 310 720 Dreiecken im Prozess 0,16 / 1,8 / 1,7 s bei bis zu 1 s Stillstand —
+  daher die Grenze `STARTUP_IN_PROCESS_UP_TO` bei 400 000. Unter 100 %
+  Fremdlast brauchte eine Rechnung im bereiten Hilfsprozess zurückgestellt 73
+  bis 130 s, gehoben 0,9 bis 1,7 s, und der längste Stillstand des Fensters
+  lag zurückgestellt bei 94 bis 142 ms, gehoben bei 2 bis 57 ms: Das
+  Zurückstellen nützt dem Fenster nur, wo der Hilfsprozess freie Kerne findet.
+  Deshalb misst der Wartende dessen Rechenzeit und hebt ihn, sobald er in
+  0,25 s weniger als ein Viertel eines Kerns bekommt. Sonden mit Protokollen:
+  `nachweise-release-0.5.1/sonden/hilfsprozess/rm672_*.py`; Fenstersonde nach
+  `F:\solidon-review-reports\rm496\fahre.py`.
 - **Was nicht hinein- oder herauskommt, rechnet hier; fehlender Speicher ist
   `MemoryError`** (Durchsicht RM-212, B2, 28.09.2026): Ein nicht anlegbarer
   oder nicht zu öffnender gemeinsamer Speicher und ein Hilfsprozess, der vor

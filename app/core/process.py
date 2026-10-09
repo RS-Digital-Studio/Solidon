@@ -430,6 +430,39 @@ def hurry_helper(process: Any) -> None:
     kernel32.SetPriorityClass(ctypes.c_void_p(int(handle)), _WINDOWS_NORMAL_PRIORITY)
 
 
+class _FileTime(ctypes.Structure):
+    _fields_ = [("low", ctypes.c_uint32), ("high", ctypes.c_uint32)]
+
+
+def helper_cpu_seconds(process: Any) -> float | None:
+    """Wie viel Rechenzeit ein Hilfsprozess bisher bekam, in Sekunden — nur unter Windows.
+
+    Damit sieht der Wartende, ob ein zurückgestellter Hilfsprozess verhungert
+    (``kernel_process``, RM-672). Unter POSIX ``None``: Dort lässt ``nice``
+    niemanden verhungern, und zurücknehmen ließe es sich ohne Recht nicht.
+    """
+    if os.name != "nt":
+        return None
+    popen = getattr(process, "_popen", None)
+    handle = getattr(popen, "_handle", None)
+    if handle is None:
+        return None
+    kernel32 = _windows_ctypes.WinDLL("kernel32", use_last_error=True)
+    kernel32.GetProcessTimes.argtypes = (ctypes.c_void_p,) + (ctypes.POINTER(_FileTime),) * 4
+    kernel32.GetProcessTimes.restype = ctypes.c_int
+    created, ended, kernel, user = _FileTime(), _FileTime(), _FileTime(), _FileTime()
+    if not kernel32.GetProcessTimes(
+        ctypes.c_void_p(int(handle)),
+        ctypes.byref(created),
+        ctypes.byref(ended),
+        ctypes.byref(kernel),
+        ctypes.byref(user),
+    ):
+        return None
+    ticks = sum((int(part.high) << 32) | int(part.low) for part in (kernel, user))
+    return ticks / 1e7
+
+
 def _resume_windows_process(process_id: int) -> None:
     """Setzt den ersten Thread eines sicher gebunden gestarteten Prozesses fort."""
 

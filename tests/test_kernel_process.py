@@ -201,6 +201,9 @@ def _job_cases() -> list[tuple[str, Callable[[], tuple[dict[str, np.ndarray], di
             "volume_band": 1e-6 * body.area,
         }
 
+    def warmed() -> tuple[dict[str, np.ndarray], dict[str, Any]]:
+        return {}, {}
+
     return [
         ("slice_sections", sections),
         ("display_simplify", display),
@@ -215,6 +218,7 @@ def _job_cases() -> list[tuple[str, Callable[[], tuple[dict[str, np.ndarray], di
         ("min_gap", gap),
         ("component_labels", labels),
         ("voxel", voxel),
+        ("warm", warmed),
     ]
 
 
@@ -256,7 +260,9 @@ def test_a_job_gives_the_same_bytes_in_the_helper_as_here(
     same_bytes(here[0], there[0])
     assert here[1] == there[1]
     assert kernel_process.statistics().get(f"helper:{job}") == 1, "im Hilfsprozess gerechnet"
-    assert here[0] or here[1].get("gap") is not None, "der Fall tut etwas"
+    assert here[0] or here[1].get("gap") is not None or here[1].get("prepared"), (
+        "der Fall tut etwas"
+    )
     noted = [json.loads(line) for line in mark.read_text(encoding="utf-8").splitlines()]
     assert noted == [{"job": job, "loaded": []}], "zurückgestellt nichts nachgeladen"
 
@@ -617,6 +623,121 @@ def test_cancelling_a_real_kernel_call_in_the_helper(offloaded: None) -> None:
     assert not helper.is_alive()
 
 
+def test_the_warmed_helper_has_loaded_what_the_first_jobs_prepare(
+    offloaded: None, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """RM-672: Nach dem Vorwärmen lädt die erste Zusammenhangsfrage nichts mehr nach.
+
+    ``warm_up`` stellt dem bereiten Hilfsprozess die Rechnung ``warm``, deren
+    Vorbereitung jede andere aus ``PREPARATIONS`` lädt. Vorher lud erst die
+    erste ``component_labels`` beim Öffnen ``trimesh.graph`` — rund eine
+    CPU-Sekunde in der Auswertung.
+    """
+    from tests.kernel_helper_probe import serve_and_note_preparations
+
+    mark = tmp_path / "vorbereitet.jsonl"
+    monkeypatch.setenv(LOADED_MARK, str(mark))
+    monkeypatch.setattr(kernel_process, "_SERVE", serve_and_note_preparations)
+    assert kernel_process.warm_up()
+    from app.core.geom.mesh import _adjacency_by_place
+
+    body = welded("two_components.stl")
+    edges = np.asarray(_adjacency_by_place(body.raw), dtype=np.int64).reshape(-1, 2)
+    labels = in_a_worker(
+        lambda: kernel_process.run(
+            "component_labels", {"edges": edges}, {"count": body.triangle_count}, weight=1
+        )
+    )
+    here = kernel_jobs.component_labels({"edges": edges}, {"count": body.triangle_count}, _no_check)
+    same_bytes(labels[0], here[0])
+    noted = [json.loads(line) for line in mark.read_text(encoding="utf-8").splitlines()]
+    *warming, first_job = noted
+    assert {"prepare": "warm", "graph_loaded": True} in warming, noted
+    assert first_job == {"prepare": "component_labels", "graph_loaded": False}, noted
+    assert kernel_process.statistics()["started"] == 1
+
+
+def _no_check() -> None:
+    """Ohne Abbruch."""
+
+
+def test_while_warming_a_job_up_to_the_start_size_stays_here(
+    offloaded: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """RM-672: Solange das Vorwärmen läuft, startet keine Rechnung einen zweiten Hilfsprozess.
+
+    Bis ``STARTUP_IN_PROCESS_UP_TO`` Dreiecke rechnet sie im Prozess, mit
+    denselben Bytes; darüber geht sie wie bisher in einen Hilfsprozess. Steht
+    ein bereiter untätig, nimmt sie den.
+    """
+    arrays, values = dict(_job_cases())["boolean"]()
+    here = kernel_jobs.boolean(arrays, dict(values), _no_check)
+    weight = kernel_process.STARTUP_IN_PROCESS_UP_TO
+    with kernel_process._POOL.warming():
+        during = in_a_worker(lambda: kernel_process.run("boolean", arrays, values, weight=weight))
+        counts = kernel_process.statistics()
+        assert counts["while_warming"] == 1, counts
+        assert counts["started"] == 0, "kein zweiter Start neben dem Vorwärmen"
+        in_a_worker(lambda: kernel_process.run("boolean", arrays, values, weight=weight + 1))
+        assert kernel_process.statistics()["helper"] == 1, "darüber wie bisher im Hilfsprozess"
+        idle = in_a_worker(lambda: kernel_process.run("boolean", arrays, values, weight=1))
+        assert kernel_process.statistics()["helper"] == 2, "ein untätiger bereiter wird genommen"
+    same_bytes(during[0], here[0])
+    same_bytes(idle[0], here[0])
+    assert kernel_process.statistics()["while_warming"] == 1
+
+
+@pytest.mark.parametrize("starving", [True, False], ids=["verhungert", "rechnet"])
+def test_a_starving_helper_is_raised_for_its_job(
+    offloaded: None, monkeypatch: pytest.MonkeyPatch, starving: bool
+) -> None:
+    """RM-672: Bekommt der zurückgestellte Hilfsprozess keine Rechenzeit, hebt ihn der Wartende.
+
+    Unter Windows teilt der Planer die Zeit streng nach Klasse zu; unter
+    fremder Volllast kam eine Rechnung zurückgestellt erst nach 73 bis 130 s
+    statt nach rund einer Sekunde. Gehoben wird nur, wer verhungert — wer
+    rechnet, bleibt hinter dem Fenster. Die Rechenzeit ist hier nachgestellt;
+    dieselbe Rechnung gibt so oder so dieselben Bytes.
+    """
+    from app.core import process as boundary
+
+    clock = [0.0]
+
+    def spent(process: Any) -> float:
+        clock[0] += 0.0 if starving else 10.0
+        return clock[0]
+
+    raised: list[Any] = []
+    monkeypatch.setattr(boundary, "helper_cpu_seconds", spent)
+    monkeypatch.setattr(boundary, "hurry_helper", raised.append)
+    monkeypatch.setattr(kernel_process, "STARVED_WINDOW_SECONDS", 0.0)
+    arrays, values = dict(_job_cases())["boolean"]()
+    here = kernel_jobs.boolean(arrays, dict(values), _no_check)
+    there = in_a_worker(lambda: kernel_process.run("boolean", arrays, values, weight=1))
+    same_bytes(here[0], there[0])
+    counts = kernel_process.statistics()
+    assert counts["helper"] == 1, counts
+    assert counts["hurried"] == (1 if starving else 0), counts
+    assert len(raised) == (1 if starving else 0), "genau einmal je Rechnung gehoben"
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="Rechenzeit fremder Prozesse nur unter Windows")
+def test_the_helper_cpu_time_is_read_from_the_living_helper(offloaded: None) -> None:
+    """Die Rechenzeit, die der Hungerblick liest, kommt vom echten Hilfsprozess und wächst."""
+    from app.core import process as boundary
+
+    assert kernel_process.warm_up()
+    (helper,) = kernel_process.processes()
+    before = boundary.helper_cpu_seconds(helper)
+    assert before is not None and before > 0.0, "Start und Vorwärmen kosten Rechenzeit"
+    # Lang genug für mehr als einen Takt der Zeitmessung (15,6 ms unter Windows).
+    sphere = MeshData.of(trimesh.creation.icosphere(subdivisions=6, radius=20.0))
+    values = {"target": 2000, "limit": 5.0, "steps": 16, "resolution": 1e-9}
+    in_a_worker(lambda: kernel_process.run("simplify_search", mesh_input(sphere), values, weight=1))
+    after = boundary.helper_cpu_seconds(helper)
+    assert after is not None and after > before
+
+
 def test_the_voxel_stage_reaches_the_helper_with_its_cancel_signal(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -711,9 +832,14 @@ def _closes_its_end(connection: Any) -> None:
 
     Das ist ein untätiger Hilfsprozess, der zwischen dem Blick auf ``alive``
     und dem Senden der Rechnung stirbt: Der Elternprozess sieht ihn leben und
-    schreibt in eine geschlossene Leitung.
+    schreibt in eine geschlossene Leitung. Das Vorwärmen (die Rechnung
+    ``warm``, RM-672) beantwortet er noch, wie ein gesunder.
     """
     connection.send(("ready", os.getpid()))
+    _kind, job, *_rest = connection.recv()
+    assert job == "warm"
+    connection.send(("accepted",))
+    connection.send(("done", None, [], {"prepared": []}))
     connection.close()
     time.sleep(600.0)
 
@@ -1520,6 +1646,8 @@ class _PoolHelper:
         self.alive = True
         self.process = self
         self.pid = 42
+        self.hurried = False
+        self.watch = None
 
     def stop(self, *, graceful: bool = False) -> None:
         self.alive = False
