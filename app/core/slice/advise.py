@@ -230,6 +230,7 @@ def advise(
     flavour: SlicerFlavour | None = None,
     whole_layers: bool = False,
     organic: Collection[str] = (),
+    declined: Collection[str] = (),
 ) -> list[SettingAdvice]:
     """Was an diesen Einstellungen für dieses Teil nicht passt (§29).
 
@@ -247,6 +248,9 @@ def advise(
     dieses Teils auf ganze Schichten rundet, weil dort ein Reinigungsturm steht;
     ``organic`` sind die Stützarten, die das Programm als organische Bäume auf
     den Schichten des Modells druckt (:func:`rounds_to_whole_layers`, RM-622).
+    ``declined`` sind Pfade, deren Vorschlag der Kunde nicht übernimmt — im
+    Druckdialog abgewählt, im Export nicht übernommen: Abstand und untere
+    Trennschicht fragen dann mit der eigenen Stützart (:func:`printed_style`).
 
     **Für einen Resin-Drucker bleibt die Liste leer.** Jede Regel hier spricht
     über Düse, Bahn, Bett, Lüfter oder Rückzug — für Resin nicht falsch
@@ -260,7 +264,9 @@ def advise(
     advice += _from_machine(settings, profile)
     advice += _from_material(settings, profile)
     if result is not None:
-        advice += _from_geometry(settings, profile, result, bounds, flavour, whole_layers, organic)
+        advice += _from_geometry(
+            settings, profile, result, bounds, flavour, whole_layers, organic, declined
+        )
     if fit_kinds:
         advice += _from_fits(settings, fit_kinds)
     # Erst nach den Regeln oben, und gegen deren Stand gerechnet: Die
@@ -956,6 +962,28 @@ def rounds_to_whole_layers(
     return whole_layers or flavour in WHOLE_LAYER_GAP_FLAVOURS or style in organic
 
 
+#: Vorschläge, an deren Übernahme andere hängen (:func:`printed_style`): Wählt
+#: der Kunde einen davon ab, fragt der Druckdialog neu (RM-622).
+DECIDING_PATHS: Final = frozenset({"support.style"})
+
+
+def printed_style(
+    settings: PrintSettings, advice: Sequence[SettingAdvice], declined: Collection[str] = ()
+) -> str:
+    """Die Stützart, mit der ein Teil druckt (RM-622): die vorgeschlagene, solange
+    der Kunde sie nicht ablehnt (``declined``), sonst die eigene. Abstand und
+    untere Trennschicht hängen an ihr — unter organischen Bäumen rundet der
+    Slicer den Abstand, und manches Programm druckt dort keine untere
+    Trennschicht. Rat, Druckdialog und Export fragen hier, damit ein
+    abgelehnter Baum dem Gitter nicht Abstand und Trennschicht nimmt."""
+    if "support.style" in declined:
+        return settings.support.style
+    return next(
+        (str(entry.value) for entry in advice if entry.path == "support.style"),
+        settings.support.style,
+    )
+
+
 def in_whole_layers(gap: float, layer: float) -> bool:
     """Misst dieser Abstand ganze Schichten? Sonst rundet ein Slicer, der in ganzen
     Schichten rechnet, ihn selbst (RM-583, RM-622)."""
@@ -982,12 +1010,14 @@ def support_gap_target(
     nur ohne eigene Stützschichthöhe; die schaltet die Übergabe ein
     (``handover.frees_support_layers``).
 
-    **Mit Reinigungsturm und unter organischen Bäumen rundet auch die
-    Orca-Familie** (:func:`rounds_to_whole_layers`, RM-622): Sie legt die Stütze
-    dann auf die Schichten des Modells und rundet auf die nächste
-    (``SupportMaterial.cpp``). PLA bei 0,08er Schichten bekäme aus 0,10 mm eine
-    Schicht, also 0,08 — unter dem Minimum; in ganzen Schichten gerechnet sind
-    es 0,16."""
+    **Neben einem Reinigungsturm rundet auch die Orca-Familie, unter
+    organischen Bäumen jedes Programm, das sie so druckt — die Orca-Familie wie
+    PrusaSlicer** (:func:`rounds_to_whole_layers`, RM-622): Die Stütze liegt
+    dann auf den Schichten des Modells, und der Abstand rundet auf die nächste
+    (am Turm ``SupportMaterial.cpp``, unter Bäumen der organische Generator,
+    bei Orca ``TreeSupport3D.cpp``; gemessen in sechs Programmen). PLA
+    bei 0,08er Schichten bekäme aus 0,10 mm eine Schicht, also 0,08 — unter dem
+    Minimum; in ganzen Schichten gerechnet sind es 0,16."""
     factor, low, high = (
         material.support_gap_factor,
         material.support_gap_min,
@@ -1064,9 +1094,10 @@ def _support_contact(
 
     Der Abstand oben ist ein Vielfaches der Schichthöhe aus dem Materialprofil,
     begrenzt nach unten und oben (Regel 7); wo der Slicer in ganzen Schichten
-    rechnet (:func:`rounds_to_whole_layers`, mit der Art ``style``, die der Rat
-    hinterlässt), das Vielfache. Dort passt auch ein Abstand im Band nicht, der keine ganze
-    Schicht ist: Der Slicer rundet ihn selbst, Cura auf, die Orca-Familie zur
+    rechnet (:func:`rounds_to_whole_layers`, mit der Art ``style``, mit der das
+    Teil druckt, :func:`printed_style`), das Vielfache. Dort passt auch ein
+    Abstand im Band nicht, der keine ganze Schicht ist: Der Slicer rundet ihn
+    selbst, Cura auf, die Orca-Familie zur
     nächsten (0,2 mm sind bei 0,08er Schichten zweieinhalb). Unter einer großen
     flachen Decke (ein Stück über ``OVERHANG_LAYER_WORTH_SUPPORT``) wird die
     Trennschicht dicht, sonst locker. Material, das an sich selbst haftet
@@ -1150,6 +1181,7 @@ def _from_geometry(
     flavour: SlicerFlavour | None = None,
     whole_layers: bool = False,
     organic: Collection[str] = (),
+    declined: Collection[str] = (),
 ) -> list[SettingAdvice]:
     """Der eigentliche Gewinn: das Teil bestimmt seine Einstellungen mit."""
     advice: list[SettingAdvice] = []
@@ -1310,14 +1342,18 @@ def _from_geometry(
             )
         )
     if needs_support:
-        # Gefragt mit der Stützart, die dieser Rat hinterlässt: Schlägt er Bäume
-        # vor, liegt die Stütze auf den Schichten des Modells (RM-622).
-        style = next(
-            (str(entry.value) for entry in advice if entry.path == "support.style"),
-            settings.support.style,
-        )
+        # Gefragt mit der Stützart, mit der das Teil druckt: Schlägt der Rat
+        # Bäume vor und übernimmt der Kunde sie, liegt die Stütze auf den
+        # Schichten des Modells (RM-622).
         advice += _support_contact(
-            settings, profile, need, on_model, flavour, whole_layers, style, organic
+            settings,
+            profile,
+            need,
+            on_model,
+            flavour,
+            whole_layers,
+            printed_style(settings, advice, declined),
+            organic,
         )
 
     # **Über „automatisch“ nur, wo der Slicer nichts rechnet** (Entscheidung J,
@@ -1863,6 +1899,7 @@ def for_part(
     flavour: SlicerFlavour | None = None,
     whole_layers: bool = False,
     organic: Collection[str] = (),
+    declined: Collection[str] = (),
 ) -> list[SettingAdvice]:
     """Was dieses eine Teil anders braucht als die Platte (§29).
 
@@ -1893,6 +1930,7 @@ def for_part(
                 flavour=flavour,
                 whole_layers=whole_layers,
                 organic=organic,
+                declined=declined,
             )
             if entry.path in PART_PATHS
         ]

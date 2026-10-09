@@ -8051,6 +8051,7 @@ def test_without_a_slicer_the_dialog_advises_for_its_actual_export(
         _fits_in_play=lambda: (),
         _connector_diameters=lambda: (),
         _part_fits=dict,
+        _declined_advice=frozenset,
         _advice_ready=lambda _worker, _context, _analysis, entries, _results: received.extend(
             entries
         ),
@@ -9248,24 +9249,65 @@ def test_organic_trees_are_known_per_program(
     assert handover.organic_styles(setup) == frozenset(organic)
 
 
+@pytest.mark.parametrize(
+    ("chain", "organic"),
+    [("organic", {"tree", "auto"}), ("snug", {"tree"}), (None, {"tree"}), ("kaputt", {"tree"})],
+)
+def test_prusaslicer_prints_automatic_supports_as_trees_where_its_process_does(
+    monkeypatch: pytest.MonkeyPatch, chain: str | None, organic: set[str]
+) -> None:
+    """PrusaSlicer druckt „automatisch“ nach dem Stil seines Prozesses
+    (``support_material_style``): organisch dort als Baum, sonst als Gitter
+    (RM-622, Review L4). Ohne Kette oder mit einer, die sich nicht auflösen
+    lässt, bleibt „Baum“ allein."""
+    from app.core.export import manufacturer
+
+    def prusa_chain(*_args: object) -> object:
+        if chain == "kaputt":
+            raise ExternalToolError(tool="PrusaSlicer", title="kaputt", detail="fehlt")
+        if chain is None:
+            return None
+        return SimpleNamespace(values={"support_material_style": chain})
+
+    monkeypatch.setattr(manufacturer, "prusa_chain", prusa_chain)
+    setup = handover.SlicerSetup(executable=Path("prusa-slicer.exe"), flavour="prusa")
+
+    assert handover.organic_styles(setup, profiles.make_profile()) == frozenset(organic)
+
+
+@pytest.mark.parametrize(
+    ("flavour", "organic"), [("orca", {"tree"}), ("prusa", {"tree"}), ("cura", set())]
+)
+def test_without_a_program_the_family_says_which_trees_are_organic(
+    flavour: str, organic: set[str]
+) -> None:
+    """Ohne gefundenen Slicer gilt die Familie der Datei (RM-622, Review M3): Alle
+    gemessenen Programme der Orca-Familie und PrusaSlicer drucken „Baum“
+    organisch; „automatisch“ hängt am Prozess und bleibt offen, Cura rundet
+    ohnehin."""
+    assert handover.organic_styles(None, flavour=flavour) == frozenset(organic)  # type: ignore[arg-type]
+
+
 def test_a_gap_between_two_layers_under_trees_is_said_to_round(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Wählt der Kunde unter Bäumen einen Abstand zwischen zwei Schichten, rundet
     der Slicer ihn; der Export sagt es, statt zu behaupten, die eigene
-    Stützschichthöhe lasse ihn gelten (RM-622)."""
+    Stützschichthöhe lasse ihn gelten (RM-622). Die schaltet er dort auch nicht
+    gegen den Herstellerprozess ein: Unter Bäumen wirkt sie nicht (Review L1)."""
     from app.core.export import writer
     from app.core.geom.mesh import MeshData
     from app.core.types import SceneObject
 
-    monkeypatch.setattr(handover, "_native_process", lambda _setup: {"enable_prime_tower": "0"})
+    native = {"enable_prime_tower": "0", "independent_support_layer_height": "0"}
+    monkeypatch.setattr(handover, "_native_process", lambda _setup: native)
     profile = profiles.make_profile("centauri-carbon-2", "petg")
     settings = print_settings.with_choice(print_settings.resolve(profile), "support.style", "tree")
     settings = print_settings.with_choice(settings, "support.z_gap", 0.28)
     objects = [SceneObject(id="tisch", name="Tisch", mesh=MeshData(supported_table(0)))]
     setup = handover.SlicerSetup(executable=Path("orca-slicer.exe"), flavour="orca")
 
-    _path, findings = writer.write_assembly(
+    path, findings = writer.write_assembly(
         objects,
         tmp_path,
         project_name="baum",
@@ -9281,6 +9323,9 @@ def test_a_gap_between_two_layers_under_trees_is_said_to_round(
         "und unten*. Mit Gitter gilt er genau."
     ]
     assert "slicer.support_layers_freed" not in {entry.code for entry in findings}
+    with zipfile.ZipFile(path) as archive:
+        project = json.loads(archive.read(threemf.PROJECT_SETTINGS_PATH))
+    assert project.get("independent_support_layer_height", "0") == "0", "wie der Hersteller"
 
 
 @pytest.mark.parametrize(
@@ -9294,7 +9339,7 @@ def test_the_gap_finding_follows_what_the_part_prints(
     gedruckt wird (RM-622, Review M3): Elegoos Prozess stützt unter
     „automatisch“ mit organischen Bäumen, und der Abstand rundet; unter Gitter
     gilt die eigene Stützschichthöhe, und der Export sagt, dass Solidon sie
-    gegen das Herstellerprofil einschaltet."""
+    gegen das Herstellerprofil einschaltet — nur dann schreibt er sie auch."""
     from app.core.export import writer
     from app.core.geom.mesh import MeshData
     from app.core.types import SceneObject
@@ -9307,7 +9352,7 @@ def test_the_gap_finding_follows_what_the_part_prints(
     objects = [SceneObject(id="tisch", name="Tisch", mesh=MeshData(supported_table(0)))]
     setup = handover.SlicerSetup(executable=Path("elegoo-slicer.exe"), flavour="orca")
 
-    _path, findings = writer.write_assembly(
+    path, findings = writer.write_assembly(
         objects,
         tmp_path,
         project_name="tisch",
@@ -9320,6 +9365,161 @@ def test_the_gap_finding_follows_what_the_part_prints(
     codes = {entry.code for entry in findings}
     assert ("export.support_gap_rounded" in codes) is rounded
     assert ("slicer.support_layers_freed" in codes) is freed
+    with zipfile.ZipFile(path) as archive:
+        project = json.loads(archive.read(threemf.PROJECT_SETTINGS_PATH))
+    assert (project.get("independent_support_layer_height") == "1") is freed
+
+
+def test_prusaslicer_says_the_gap_rounds_under_trees(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Auch PrusaSlicer legt organische Bäume auf die Modellschichten und rundet
+    einen Abstand zwischen zwei Schichten (RM-622, Review L2); der Export sagt
+    es wie bei der Orca-Familie."""
+    from app.core.export import manufacturer, writer
+    from app.core.geom.mesh import MeshData
+    from app.core.types import SceneObject
+
+    monkeypatch.setattr(manufacturer, "prusa_chain", lambda *_args: None)
+    profile = profiles.make_profile("centauri-carbon-2", "petg")
+    settings = print_settings.with_choice(print_settings.resolve(profile), "support.style", "tree")
+    settings = print_settings.with_choice(settings, "support.z_gap", 0.28)
+    objects = [SceneObject(id="tisch", name="Tisch", mesh=MeshData(supported_table(0)))]
+    setup = handover.SlicerSetup(executable=Path("prusa-slicer.exe"), flavour="prusa")
+
+    _path, findings = writer.write_assembly(
+        objects,
+        tmp_path,
+        project_name="prusa",
+        profile=profile,
+        settings=settings,
+        flavour="prusa",
+        setup=setup,
+    )
+
+    assert "export.support_gap_rounded" in {entry.code for entry in findings}
+
+
+def test_only_gaps_outside_organic_trees_free_the_support_layers() -> None:
+    """Die geschriebenen Abstände je Teil nach der Art, mit der es stützt
+    (RM-622, Review L1): Unter organischen Bäumen rundet jedes Programm, dort
+    hilft keine eigene Stützschichthöhe. Ein Teil ohne eigenen Abstand druckt
+    den der Platte, eines ohne Stützen keinen."""
+    profile = profiles.make_profile("centauri-carbon-2", "petg")
+    plate = print_settings.with_accepted(print_settings.resolve(profile), "support.z_gap", 0.28)
+    trees = print_settings.with_path(plate, "support.style", "tree")
+    grid = print_settings.with_path(plate, "support.style", "grid")
+    bare = print_settings.with_path(plate, "support.style", "none")
+    own = {"support_top_z_distance": "0.3", "support_bottom_z_distance": "0.3"}
+    split = handover.support_gaps_by_style
+
+    assert split(trees, organic={"tree"}) == ([pytest.approx(0.28)], [])
+    assert split(grid, organic={"tree"}) == ([], [pytest.approx(0.28)])
+    assert split(plate, [({}, trees), (own, grid), ({}, bare)], {"tree"}) == (
+        [pytest.approx(0.28)],
+        [pytest.approx(0.3), pytest.approx(0.3)],
+    )
+
+
+def test_a_declined_tree_keeps_gap_and_bottom_interface_for_the_grid(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Der Kunde wählt „Baum“ ab und übernimmt Abstand und untere Trennschicht
+    (RM-622, Review M1): Das Kinn druckt dann das Gitter der Platte und bekommt
+    beide wie der Tisch — gefragt mit der Art, mit der es druckt. Vorher fragte
+    der Export mit dem abgelehnten Baum, und das Kinn bekam bei Bambu Studio
+    weder 0,28 mm noch eine untere Trennschicht."""
+    from app.core.export import writer
+    from app.core.types import SceneObject
+    from tests.helpers import chin_over_chest, column_table
+
+    monkeypatch.setattr(handover, "_native_process", lambda _setup: {})
+    profile = profiles.make_profile("centauri-carbon-2", "petg")
+    settings = print_settings.resolve(profile, "standard")
+    for path, value in (("support.style", "grid"), ("support.bottom_interface_layers", 0)):
+        settings = print_settings.with_choice(settings, path, value)
+    for path, value in (("support.z_gap", 0.28), ("support.bottom_interface_layers", 2)):
+        settings = print_settings.with_accepted(settings, path, value)
+    objects = [
+        SceneObject(id="obj_1", name="Kinn", mesh=chin_over_chest(), material="petg"),
+        SceneObject(id="obj_2", name="Tisch", mesh=column_table(), material="petg"),
+    ]
+    setup = handover.SlicerSetup(executable=Path("bambu-studio.exe"), flavour="orca")
+
+    path, _findings = writer.write_assembly(
+        objects,
+        tmp_path,
+        project_name="abgewaehlt",
+        profile=profile,
+        settings=settings,
+        flavour="orca",
+        setup=setup,
+    )
+
+    written = object_values(path, "Metadata/model_settings.config")
+    for name in ("Kinn", "Tisch"):
+        assert float(written[name]["support_top_z_distance"]) == pytest.approx(0.28), name
+        assert written[name]["support_interface_bottom_layers"] == "2", name
+        assert "support_type" not in written[name], name
+
+
+@pytest.mark.parametrize(
+    ("executable", "native", "style", "rounds"),
+    [
+        (
+            "elegoo-slicer.exe",
+            {"support_type": "tree(auto)", "support_style": "tree_hybrid"},
+            "tree",
+            False,
+        ),
+        (
+            "elegoo-slicer.exe",
+            {"support_type": "normal(auto)", "support_style": "tree_slim"},
+            "tree",
+            False,
+        ),
+        ("elegoo-slicer.exe", {"support_type": "tree(auto)"}, "auto", True),
+        ("orca-slicer.exe", {"support_type": "normal(auto)"}, "auto", False),
+        (None, {}, "tree", True),
+    ],
+)
+def test_field_and_advice_agree_on_trees(
+    monkeypatch: pytest.MonkeyPatch,
+    executable: str | None,
+    native: dict[str, str],
+    style: str,
+    rounds: bool,
+) -> None:
+    """Feldsatz und Rat fragen dieselbe Auskunft (RM-622, Review M3): Ein
+    Prozess mit ``tree_hybrid`` oder ``tree_slim`` plant eigene Stützebenen, der
+    Abstand von 0,28 mm für PETG bleibt, und das Feld schweigt; unter Elegoos
+    „automatisch“ mit Bäumen und ohne gefundenen Slicer unter „Baum“ rät Solidon
+    0,2, und das Feld sagt, dass der Slicer rundet."""
+    from app.core.slice.analysis import slice_body
+
+    monkeypatch.setattr(handover, "_native_process", lambda _setup: native)
+    profile = profiles.make_profile("centauri-carbon-2", "petg")
+    settings = print_settings.resolve(profile, "standard")
+    for path, value in (("support.style", style), ("support.z_gap", 0.28)):
+        settings = print_settings.with_choice(settings, path, value)
+    setup = (
+        handover.SlicerSetup(executable=Path(executable), flavour="orca") if executable else None
+    )
+    program = slicer_keys.program_of(setup.executable) if setup is not None else ""
+    organic = handover.organic_styles(setup, profile, flavour="orca")
+
+    advice = advise.advise(
+        settings,
+        profile,
+        slice_body(MeshData(supported_table(0)), 0.2),
+        flavour="orca",
+        organic=organic,
+    )
+    gap = next((entry.value for entry in advice if entry.path == "support.z_gap"), None)
+    note = slicer_keys.limitation("orca", "support.z_gap", settings, program, organic)
+
+    assert gap == (pytest.approx(0.2) if rounds else None)
+    assert (note is not None) is rounds, note
 
 
 @pytest.mark.parametrize(
@@ -9335,7 +9535,7 @@ def test_under_trees_no_bottom_interface_where_the_program_skips_it(
     from app.core.export import writer
     from app.core.slice.analysis import slice_body
     from app.core.types import SceneObject
-    from tests.test_slice_findings import chin_over_chest
+    from tests.helpers import chin_over_chest
 
     monkeypatch.setattr(handover, "_native_process", lambda _setup: {})
     profile = profiles.make_profile("centauri-carbon-2", "pla")
@@ -9363,27 +9563,37 @@ def test_under_trees_no_bottom_interface_where_the_program_skips_it(
 
 
 @pytest.mark.parametrize(
-    ("flavour", "path", "program", "said"),
+    ("flavour", "path", "executable", "said"),
     [
-        ("orca", "support.z_gap", "elegooslicer", True),
-        ("prusa", "support.z_gap", "prusaslicer", True),
-        ("prusa", "support.z_gap", "superslicer", False),
-        ("orca", "support.bottom_interface_layers", "bambustudio", True),
-        ("orca", "support.bottom_interface_layers", "elegooslicer", False),
+        ("orca", "support.z_gap", "elegoo-slicer.exe", True),
+        ("prusa", "support.z_gap", "prusa-slicer.exe", True),
+        ("prusa", "support.z_gap", "superslicer.exe", False),
+        ("orca", "support.bottom_interface_layers", "bambu-studio.exe", True),
+        ("orca", "support.bottom_interface_layers", "elegoo-slicer.exe", False),
     ],
 )
 def test_the_field_says_what_trees_do_to_it(
-    flavour: str, path: str, program: str, said: bool
+    monkeypatch: pytest.MonkeyPatch, flavour: str, path: str, executable: str, said: bool
 ) -> None:
     """Am Feld steht, was organische Bäume daraus machen (RM-622, Review L1): ein
     Abstand zwischen zwei Schichten wird gerundet, und Bambu, Creality, Anycubic
     und PrusaSlicer drucken darunter keine untere Trennschicht. SuperSlicer
-    druckt statt Bäumen Gitter, ElegooSlicer die untere Trennschicht."""
+    druckt statt Bäumen Gitter, ElegooSlicer die untere Trennschicht. Welche
+    Art organisch ist, sagt dieselbe Auskunft wie dem Rat (Review M3)."""
+    monkeypatch.setattr(handover, "_native_process", lambda _setup: {})
     settings = print_settings.resolve(profiles.make_profile())
     for setting, value in (("support.style", "tree"), ("support.z_gap", 0.28)):
         settings = print_settings.with_choice(settings, setting, value)
+    setup = handover.SlicerSetup(executable=Path(executable), flavour=flavour)  # type: ignore[arg-type]
+    program = slicer_keys.program_of(setup.executable)
 
-    note = slicer_keys.limitation(flavour, path, settings, program)  # type: ignore[arg-type]
+    note = slicer_keys.limitation(
+        flavour,  # type: ignore[arg-type]
+        path,
+        settings,
+        program,
+        handover.organic_styles(setup),
+    )
     assert (note is not None) is said, note
 
 

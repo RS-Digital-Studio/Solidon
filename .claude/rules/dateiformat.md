@@ -322,19 +322,18 @@ Herstellers, Solidon schreibt darüber nur die Abweichung.
   Betttemperatur der Grundlage kommt nur aus dem Schlüssel der aufliegenden
   Platte; 0 °C beim Hersteller sperrt sie für das Filament — die Grundlage
   liest dort nichts, `slicer.plate_refuses_filament` führt in die
-  Druckeinstellungen. Eine eigene Betttemperatur geht trotzdem in den
-  Schlüssel dieser Platte.
+  Druckeinstellungen. Eine eigene Betttemperatur geht trotzdem dorthin.
 - **Gedruckt wird, was der Slicer liest**: die Düsenart-Fassung der
   Maschinendüse, ein eigener Wert in jeder (`slicer_keys.NOZZLE_KIND_KEYS`);
   wo gestützt wird, keine Baumspitze unter der Stützbahn
   (`handover.organic_tree_fitted`); passt der genannte Standardprozess nicht,
   der seiner Schichthöhe, ohne Prozess `slicer.process_missing`; was die
   Konsole ablehnt, als Programmvorgabe (`slicer_keys.CONSOLE_LIMITS`); ein
-  Stützabstand zwischen zwei Schichten mit eigener Stützschichthöhe
-  (`handover.frees_support_layers`).
+  Stützabstand zwischen zwei Schichten mit eigener Stützschichthöhe, außer
+  unter organischen Bäumen (`handover.support_gaps_by_style`).
 - **Was sich nicht übersetzen lässt, wird nicht umgedeutet**
-  (`Foundation.foreign`): `crosshatch` bleibt, wird nicht geschrieben, und der
-  Dialog zeigt „Hersteller: crosshatch".
+  (`Foundation.foreign`): `crosshatch` bleibt ungeschrieben, der Dialog zeigt
+  „Hersteller: crosshatch".
 - **Ein mitbedienter Schlüssel wird nie schneller als beim Hersteller**
   (`handover._followers_not_faster`): Innenwand schreibt auch die
   Lückenfüllung, Füllung auch die innere Vollfüllung (Solidons eigener Satz

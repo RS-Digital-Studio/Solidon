@@ -80,7 +80,7 @@ Nutzen da und sonst nichts.
 - Bei kleinen Spitzen schlägt Solidon ein niedrigeres *Mindesttempo beim Bremsen* vor, damit sie nicht weich werden. Die Einstellung geht an jeden Slicer.
 - Schmale Ränder, die sich selbst tragen, bleiben mit *Ränder ohne Stütze* frei. Der Druck braucht so deutlich weniger Stütze.
 - Stützen lösen sich leichter und sauberer: Der Abstand folgt Material und Schichthöhe jedes Teils, auch bei mehreren Materialien auf einer Platte. Die Trennschicht folgt der Fläche darüber.
-- Steht eine Stütze auf dem Teil, schlägt Solidon auch darunter eine Trennschicht vor, damit ihr Fuß keine Spuren hinterlässt.
+- Steht eine Stütze auf dem Teil, schlägt Solidon auch darunter eine Trennschicht vor, damit ihr Fuß keine Spuren hinterlässt. Unter Baumstützen nur bei Slicern, die sie dort drucken.
 - Unter Baumstützen und neben einem Reinigungsturm schlägt Solidon den Stützabstand in ganzen Schichten vor, so wie der Slicer ihn druckt.
 - Hängen viele kleine Spitzen wie ein Bart oder Stacheln über Baumstützen, schlägt Solidon zwei Schichten Abstand vor. So bleiben dort kaum noch Reste der Baumspitzen.
 - Für PETG schlägt Solidon volle Kühlung an der Stütze vor. Sie löst sich so leichter vom Teil.

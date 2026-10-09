@@ -55,7 +55,7 @@ scrive in `website/version.json`.
 - Sulle punte piccole Solidon suggerisce una *Velocità minima di rallentamento* più bassa, così non si ammorbidiscono. L'impostazione arriva a ogni slicer.
 - I bordi stretti che si reggono da soli restano liberi con *Bordi senza supporto*. La stampa richiede così molto meno supporto.
 - I supporti si staccano più facilmente: lo spazio segue materiale e altezza dello strato di ogni pezzo, anche con più materiali su un piatto. L'interfaccia segue la superficie sopra.
-- Se un supporto poggia sul pezzo, Solidon suggerisce anche uno strato di interfaccia sotto, così il suo piede non lascia segni.
+- Se un supporto poggia sul pezzo, Solidon suggerisce anche uno strato di interfaccia sotto, così il suo piede non lascia segni. Con i supporti ad albero solo negli slicer che lo stampano lì.
 - Con i supporti ad albero e accanto a una torre di spurgo, Solidon propone lo spazio del supporto in strati interi, come lo stampa lo slicer.
 - Se molte piccole punte, come una barba o aculei, pendono sopra supporti ad albero, Solidon propone due strati di distanza. Così non restano quasi residui delle punte.
 - Per il PETG Solidon suggerisce il raffreddamento pieno sul supporto. Così si stacca più facilmente dal pezzo.

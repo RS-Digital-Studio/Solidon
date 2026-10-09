@@ -30,6 +30,7 @@ from PySide6.QtWidgets import (
     QLabel,
     QPushButton,
     QToolButton,
+    QTreeWidgetItem,
     QWidget,
 )
 
@@ -11118,7 +11119,7 @@ def test_the_contact_rows_settle_in_the_dialog(
     """
     from app.core.slice import advise
     from app.core.types import PrintSettings
-    from tests.test_slice_findings import chin_over_chest, table
+    from tests.helpers import chin_over_chest, column_table
 
     profile = profiles.make_profile("centauri-carbon-2", "pla")
     settings = print_settings.resolve(profile, "standard")
@@ -11129,7 +11130,7 @@ def test_the_contact_rows_settle_in_the_dialog(
             ("support.bottom_interface_layers", 2),
         )
         objects = (
-            SceneObject(id="obj_1", name="Tisch", mesh=table()),
+            SceneObject(id="obj_1", name="Tisch", mesh=column_table()),
             SceneObject(id="obj_2", name="Kinn", mesh=chin_over_chest()),
         )
         named: dict[str, tuple[str, ...]] = {
@@ -11141,8 +11142,8 @@ def test_the_contact_rows_settle_in_the_dialog(
         # nennt nur das Teil, das ihn bekommt.
         chosen = (("layers.layer_height", 0.15), ("support.z_gap", 0.3))
         objects = (
-            SceneObject(id="obj_1", name="PLA-Tisch", mesh=table(), material="pla"),
-            SceneObject(id="obj_2", name="PETG-Tisch", mesh=table(), material="petg"),
+            SceneObject(id="obj_1", name="PLA-Tisch", mesh=column_table(), material="pla"),
+            SceneObject(id="obj_2", name="PETG-Tisch", mesh=column_table(), material="petg"),
         )
         # Die dichte Trennschicht verlangen beide Tische: Sie gilt allen.
         named = {
@@ -11266,7 +11267,7 @@ def test_the_dialog_skips_a_bottom_interface_the_program_does_not_print_under_tr
     """Unter Bäumen drucken Bambu Studio, Creality Print, Anycubic Slicer Next und
     PrusaSlicer keine untere Trennschicht (RM-622); der Druckdialog bietet sie dort
     nicht an, wie der Export je Teil (``handover.ignored_under_trees``)."""
-    from tests.test_slice_findings import chin_over_chest
+    from tests.helpers import chin_over_chest
 
     monkeypatch.setattr(handover, "_native_process", lambda _setup: {})
     profile = profiles.make_profile("centauri-carbon-2", "pla")
@@ -11294,7 +11295,7 @@ def test_the_dialog_filters_the_bottom_interface_per_body(
     unter eigenem Gitter verlangt der Tisch eine untere Trennschicht, das Kinn
     bekommt Bäume vorgeschlagen und braucht keine, weil Creality sie unter Bäumen
     nicht druckt. Die Zeile bleibt für den Tisch."""
-    from tests.test_slice_findings import chin_over_chest, table
+    from tests.helpers import chin_over_chest, column_table
 
     monkeypatch.setattr(handover, "_native_process", lambda _setup: {})
     profile = profiles.make_profile("centauri-carbon-2", "pla")
@@ -11302,7 +11303,7 @@ def test_the_dialog_filters_the_bottom_interface_per_body(
     for path, value in (("support.style", "grid"), ("support.bottom_interface_layers", 0)):
         settings = print_settings.with_choice(settings, path, value)
     objects = (
-        SceneObject(id="obj_1", name="Tisch", mesh=table(), material="pla"),
+        SceneObject(id="obj_1", name="Tisch", mesh=column_table(), material="pla"),
         SceneObject(id="obj_2", name="Kinn", mesh=chin_over_chest(), material="pla"),
     )
     setup = handover.SlicerSetup(executable=Path("CrealityPrint.exe"), flavour="orca")
@@ -11326,8 +11327,7 @@ def test_an_accepted_tree_gets_the_same_gap_in_dialog_and_file(
     und die Datei trägt an beiden Körpern genau diesen Wert — gefragt mit der
     Art, die jedes Teil wirklich bekommt."""
     from app.core.types import PrintSettings
-    from tests.helpers import object_values, supported_table
-    from tests.test_slice_findings import chin_over_chest
+    from tests.helpers import chin_over_chest, object_values, supported_table
 
     monkeypatch.setattr(handover, "_native_process", lambda _setup: {"support_type": "tree(auto)"})
     profile = profiles.make_profile("centauri-carbon-2", "petg")
@@ -11362,6 +11362,143 @@ def test_an_accepted_tree_gets_the_same_gap_in_dialog_and_file(
     written = object_values(path, "Metadata/model_settings.config")
     for name in getattr(row, "parts", ()) or ("Kinn", "Tisch"):
         assert float(written[name]["support_top_z_distance"]) == pytest.approx(0.2), name
+
+
+def _figure_and_table_on_bambu(
+    monkeypatch: pytest.MonkeyPatch,
+) -> tuple[tuple[SceneObject, ...], Profile, Any, handover.SlicerSetup]:
+    """Bambu Studio mit Gitter im Herstellerprozess, eigenes Gitter ohne untere
+    Trennschicht, PETG: Das Kinn bekommt Bäume vorgeschlagen, der Tisch nicht
+    (Nachprüfung RM-622, Sonden 7 und 8)."""
+    from tests.helpers import chin_over_chest, column_table
+
+    monkeypatch.setattr(handover, "_native_process", lambda _setup: {})
+    profile = profiles.make_profile("centauri-carbon-2", "petg")
+    settings = print_settings.resolve(profile, "standard")
+    for path, value in (("support.style", "grid"), ("support.bottom_interface_layers", 0)):
+        settings = print_settings.with_choice(settings, path, value)
+    objects = (
+        SceneObject(id="obj_1", name="Kinn", mesh=chin_over_chest(), material="petg"),
+        SceneObject(id="obj_2", name="Tisch", mesh=column_table(), material="petg"),
+    )
+    setup = handover.SlicerSetup(executable=Path("bambu-studio.exe"), flavour="orca")
+    return objects, profile, settings, setup
+
+
+def _support_rows(
+    objects: tuple[SceneObject, ...],
+    settings: Any,
+    profile: Profile,
+    setup: handover.SlicerSetup,
+    declined: frozenset[str] = frozenset(),
+) -> dict[str, tuple[object, tuple[str, ...]]]:
+    """Die Zeilen des Arbeiters zur Stütze: Wert und genannte Teile."""
+    found: list[list[SettingAdvice]] = []
+    worker = print_dialog._AdviceWorker(
+        objects, settings, profile, setup, {}, (), (), {}, flavour="orca", declined=declined
+    )
+    worker.done.connect(lambda entries, _measured: found.append(entries))
+    worker.work()
+    assert found, "der Arbeiter liefert"
+    return {
+        entry.path: (entry.value, getattr(entry, "parts", ()))
+        for entry in found[-1]
+        if entry.path.startswith("support.")
+    }
+
+
+def test_a_declined_tree_gives_the_figure_the_gap_of_its_grid(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Wählt der Kunde „Baum“ ab, fragt der Dialog Abstand und untere
+    Trennschicht mit dem Gitter, das das Kinn dann druckt (RM-622, Review M1):
+    Beide Zeilen gelten Kinn und Tisch. Mit dem Baum gefragt nannten sie nur den
+    Tisch, und das Kinn druckte sein Gitter mit 0,2 mm und ohne Trennschicht."""
+    objects, profile, settings, setup = _figure_and_table_on_bambu(monkeypatch)
+
+    offered = _support_rows(objects, settings, profile, setup)
+    declined = _support_rows(objects, settings, profile, setup, frozenset({"support.style"}))
+
+    assert offered["support.z_gap"] == (pytest.approx(0.28), ("Tisch",))
+    assert declined["support.style"][0] == "tree", "die Zeile bleibt, abgewählt"
+    assert declined["support.z_gap"] == (pytest.approx(0.28), ())
+    assert declined["support.bottom_interface_layers"] == (2, ())
+
+
+def test_an_accepted_tree_leaves_the_table_its_contact_rows(
+    qt_app: QApplication, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Erst nur „Baum“ übernommen, dann der Rest (RM-622, Review M2): Der Export
+    gibt den Baum nur dem Kinn, der Tisch druckt das Gitter der Platte. Der
+    Dialog fragt den Tisch deshalb mit dem Gitter, und Abstand wie untere
+    Trennschicht bleiben für ihn stehen; die Datei trägt sie am Tisch, gleich in
+    welcher Reihenfolge der Kunde übernimmt."""
+    from tests.helpers import object_values
+
+    objects, profile, settings, setup = _figure_and_table_on_bambu(monkeypatch)
+    first = _support_rows(objects, settings, profile, setup)
+    step = print_settings.with_accepted(settings, "support.style", first["support.style"][0])
+
+    second = _support_rows(objects, step, profile, setup)
+
+    assert second["support.z_gap"] == (pytest.approx(0.28), ("Tisch",))
+    assert second["support.bottom_interface_layers"] == (2, ("Tisch",))
+    for path, (value, _parts) in second.items():
+        step = print_settings.with_accepted(step, path, value)
+    written_path, _findings = writer.write_assembly(
+        list(objects),
+        tmp_path,
+        project_name="zwei",
+        profile=profile,
+        settings=step,
+        flavour="orca",
+        setup=setup,
+    )
+    written = object_values(written_path, "Metadata/model_settings.config")
+    assert float(written["Tisch"]["support_top_z_distance"]) == pytest.approx(0.28)
+    assert written["Tisch"]["support_interface_bottom_layers"] == "2"
+
+
+def test_declining_the_tree_asks_the_advice_again(
+    dialog: PrintSettingsDialog, qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An der Stützart hängen Abstand und Trennschicht (RM-622, Review M1): Wählt
+    der Kunde ihre Zeile ab, fragt der Dialog neu und gibt die Abwahl dem
+    Arbeiter mit; eine andere Zeile abzuwählen fragt nicht neu."""
+    asked: list[object] = []
+    monkeypatch.setattr(dialog, "_refresh_advice", lambda: asked.append(dialog._advice_context()))
+
+    def toggle(key: str) -> None:
+        item = QTreeWidgetItem(["", ""])
+        item.setData(0, Qt.ItemDataRole.UserRole, key)
+        item.setCheckState(0, Qt.CheckState.Unchecked)
+        dialog._advice_checked(item, 0)
+        QCoreApplication.processEvents()
+
+    toggle("support.z_gap")
+    assert asked == []
+    before = dialog._advice_context()
+    toggle("support.style")
+    assert len(asked) == 1
+    assert dialog._declined_advice() == frozenset({"support.style"})
+    assert asked[0] != before, "die Abwahl gehört zum Auftrag des Arbeiters"
+
+
+@pytest.mark.parametrize(("organic", "said"), [(frozenset({"tree"}), True), (frozenset(), False)])
+def test_the_gap_field_asks_the_trees_the_advice_asked(
+    dialog: PrintSettingsDialog, organic: frozenset[str], said: bool
+) -> None:
+    """Das Feld fragt dieselbe Auskunft wie der Rat daneben (RM-622, Review M3):
+    die Arten, die der letzte Arbeiter als organische Bäume gelesen hat. Ein
+    Prozess mit ``tree_hybrid`` hat keine, und das Feld schweigt."""
+    dialog._slicer_path = Path("elegoo-slicer.exe")
+    for path, value in (("support.style", "tree"), ("support.z_gap", 0.28)):
+        dialog.settings = print_settings.with_choice(dialog.settings, path, value)
+    dialog._organic = organic
+
+    dialog._mark_fields_this_slicer_ignores()
+
+    assert ("Baumstützen" in dialog._editors["support.z_gap"].toolTip()) is said
 
 
 def test_the_field_says_which_parts_get_a_suggestion_and_what_the_rest_prints(

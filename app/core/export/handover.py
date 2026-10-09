@@ -1479,6 +1479,14 @@ def asked_for_contact(
     der je Teil gegen ``split_for_parts(...).base`` fragt. Gegen die Übernahme
     gefragt, brachte jedes Übernehmen die Gegenzeile: Der Tisch wollte 0,2 gegen
     die übernommenen 0,5 des Kinns, das Kinn danach wieder 0,5.
+
+    **Die Stützart steht ebenso auf der Grundlage**, wo sie je Teil geht
+    (RM-622): Der Export gibt einen übernommenen Baum nur dem Teil, das ihn
+    verlangt, und Abstand wie untere Trennschicht hängen an der Art, mit der
+    ein Teil druckt. Gegen die Übernahme gefragt, rechnete der Dialog den Tisch
+    unter dem Gitter der Platte als Baum, und seine Zeilen verschwanden.
+    ``advise.combine`` vergleicht weiter mit der Übernahme, eine Gegenzeile zur
+    Stützart entsteht nicht.
     """
     from app.core.slice import advise
 
@@ -1486,12 +1494,13 @@ def asked_for_contact(
         return frozenset(), settings
     # Ohne gefundenen Slicer trennt der Export ebenso, für die Familie der Datei.
     program = slicer_keys.program_of(setup.executable) if setup is not None else ""
-    separate = advise.CONTACT_PATHS & _part_paths(flavour, program)
+    per_part = _part_paths(flavour, program)
+    separate = advise.CONTACT_PATHS & per_part
     if not separate:
         return separate, settings
     base = split_for_parts(settings, profile, setup, flavour).base
     asking = settings
-    for path in sorted(separate):
+    for path in sorted(separate | (per_part & {"support.style"})):
         asking = with_path(asking, path, read_path(base, path))
     return separate, asking
 
@@ -3030,11 +3039,38 @@ def written_support_gaps(
     der Hersteller es eingestellt hat."""
     gaps = [plate.support.z_gap] if "support.z_gap" in plate.chosen | plate.accepted else []
     for keys in parts:
-        for key in _SUPPORT_GAP_KEYS:
-            number = _as_float(keys.get(key))
-            if number is not None:
-                gaps.append(number)
+        gaps += _object_gaps(keys)
     return gaps
+
+
+def _object_gaps(keys: Mapping[str, str]) -> list[float]:
+    """Die Stützabstände unter den Objektwerten eines Teils."""
+    return [number for key in _SUPPORT_GAP_KEYS if (number := _as_float(keys.get(key))) is not None]
+
+
+def support_gaps_by_style(
+    plate: PrintSettings,
+    parts: Sequence[tuple[Mapping[str, str], PrintSettings | None]] = (),
+    organic: Collection[str] = (),
+) -> tuple[list[float], list[float]]:
+    """Die geschriebenen Stützabstände (:func:`written_support_gaps`), getrennt nach
+    der Art, mit der jedes Teil stützt: unter organischen Bäumen (``organic``,
+    :func:`organic_styles`) und sonst (RM-622).
+
+    ``parts`` sind je Teil seine Objektwerte und die Einstellungen, mit denen es
+    druckt; ohne eigenen Abstand druckt es den der Platte, ohne Teile gilt die
+    Platte allein. Unter organischen Bäumen rundet jedes Programm den Abstand,
+    dort hilft keine eigene Stützschichthöhe (:func:`frees_support_layers`) —
+    sie wäre eine Abweichung vom Herstellerprofil ohne Wirkung."""
+    common = written_support_gaps(plate)
+    trees: list[float] = []
+    others: list[float] = []
+    for keys, effective in parts or (({}, None),):
+        style = (effective or plate).support.style
+        if style == "none":
+            continue
+        (trees if style in organic else others).extend(_object_gaps(keys) or common)
+    return trees, others
 
 
 def frees_support_layers(gaps: Iterable[float], layer: float, flavour: SlicerFlavour) -> bool:
@@ -3111,7 +3147,11 @@ _ORGANIC_ORCA_STYLES: Final = frozenset({"", "default", "organic"})
 
 
 def organic_styles(
-    setup: SlicerSetup | None, profile: Profile | None = None, program: str = ""
+    setup: SlicerSetup | None,
+    profile: Profile | None = None,
+    program: str = "",
+    *,
+    flavour: SlicerFlavour | None = None,
 ) -> frozenset[str]:
     """Welche Stützarten Solidons dieses Programm als organische Bäume druckt —
     die eine Auskunft für Rat, Übergabe und Befund (RM-622).
@@ -3129,16 +3169,22 @@ def organic_styles(
     führt; „automatisch“ ist es, wenn sein ``support_type`` ein Baum ist (Elegoo,
     Bambu). PrusaSlicer schreibt ``tree`` als ``organic``, „automatisch“ nach dem
     Stil seines Prozesses. SuperSlicer kennt keine Bäume (Ersatz Gitter), Cura
-    rundet ohnehin (:data:`advise.WHOLE_LAYER_GAP_FLAVOURS`). Ohne Programm gilt
-    die Familie: Orca und Prusa schreiben ``tree`` organisch.
+    rundet ohnehin (:data:`advise.WHOLE_LAYER_GAP_FLAVOURS`).
+
+    **Ohne Programm gilt die Familie** (``flavour``, die der Datei): Alle
+    gemessenen Programme der Orca-Familie und PrusaSlicer drucken ``tree``
+    organisch, ohne Prozess bleibt „automatisch“ offen. Ein Abstand in ganzen
+    Schichten gilt unter jeder Stütze genau, einer dazwischen nur mit Gitter.
     """
-    flavour = setup.flavour if setup is not None else ""
-    if setup is None or flavour not in ("orca", "prusa"):
+    family = setup.flavour if setup is not None else flavour
+    if family not in ("orca", "prusa"):
         return frozenset()
+    if setup is None:
+        return frozenset({"tree"})
     program = program or slicer_keys.program_of(setup.executable)
     if slicer_keys.substitute("support.style", "tree", program) is not None:
         return frozenset()
-    if flavour == "prusa":
+    if family == "prusa":
         styles = {"tree"}
         if profile is not None and _prusa_process_style(setup, profile) == "organic":
             styles.add("auto")
@@ -3162,16 +3208,15 @@ def _prusa_process_style(setup: SlicerSetup, profile: Profile) -> str:
     return str(chain.values.get("support_material_style", "")).strip().casefold()
 
 
-def ignored_under_trees(
-    settings: PrintSettings, organic: Collection[str], program: str
-) -> frozenset[str]:
-    """Pfade, die dieses Programm unter den Bäumen dieser Einstellungen nicht
-    druckt (:data:`slicer_keys.IGNORED_UNDER_TREES_BY_PROGRAM`) — leer, wo die Art
-    keine organischen Bäume sind (``organic``, :func:`organic_styles`). Ein
-    Vorschlag darauf änderte nichts am Druck. Druckdialog und Export fragen hier
-    je Körper (RM-622)."""
+def ignored_under_trees(style: str, organic: Collection[str], program: str) -> frozenset[str]:
+    """Pfade, die dieses Programm unter Bäumen nicht druckt
+    (:data:`slicer_keys.IGNORED_UNDER_TREES_BY_PROGRAM`) — leer, wo die Stützart
+    ``style``, mit der das Teil druckt (:func:`advise.printed_style`), keine
+    organischen Bäume sind (``organic``, :func:`organic_styles`). Ein Vorschlag
+    darauf änderte nichts am Druck. Druckdialog und Export fragen hier je Körper
+    (RM-622)."""
     ignored = slicer_keys.IGNORED_UNDER_TREES_BY_PROGRAM.get(program, frozenset())
-    if not ignored or settings.support.style not in organic:
+    if not ignored or style not in organic:
         return frozenset()
     return ignored
 
@@ -3239,7 +3284,8 @@ def write_config(
     Profilnamen (``MaterialSlot.material``), wird der als Unterlage genommen;
     sonst gilt für alle das eine aus dem ``setup``. ``free_support_layers``
     sagt :func:`frees_support_layers` an den geschriebenen Abständen von Platte
-    und Teilen (:func:`written_support_gaps`), beim Konsolenlauf aus der Beilage.
+    und Teilen außerhalb organischer Bäume (:func:`support_gaps_by_style`), beim
+    Konsolenlauf aus der Beilage.
     """
     _refuse_untranslated(setup)
     setup = replace(setup, machine_profile=machine_for(setup, profile))
@@ -6784,7 +6830,8 @@ def slice_model(
     # trägt das Modell aus ``write_assembly`` als Objektwert oder Netzwert.
     settings = split_for_parts(settings, profile, setup, setup.flavour).plate
     # Die eigene Stützschichthöhe hat der Export aus den Werten der Teile
-    # entschieden; ohne seine Beilage gilt der Abstand der Platte (RM-583).
+    # entschieden; ohne seine Beilage gilt der Abstand der Platte (RM-583),
+    # unter organischen Bäumen keiner (RM-622).
     free_support_layers = (
         _frees_in_project(models)
         if slicer_keys.has_independent_support_layers(setup.flavour)
@@ -6792,7 +6839,9 @@ def slice_model(
     )
     if free_support_layers is None:
         free_support_layers = frees_support_layers(
-            written_support_gaps(settings), settings.layers.layer_height, setup.flavour
+            support_gaps_by_style(settings, organic=organic_styles(setup, profile))[1],
+            settings.layers.layer_height,
+            setup.flavour,
         )
     # Ein Slicer als Flatpak sieht unser ``/tmp`` nicht
     # (``discover.workspace_for``).

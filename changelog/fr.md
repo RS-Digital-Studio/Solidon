@@ -56,7 +56,7 @@ dans `website/version.json`.
 - Pour les petites pointes, Solidon propose une *Vitesse minimale de ralentissement* plus basse afin qu'elles ne ramollissent pas. Le réglage parvient à chaque slicer.
 - Les rebords étroits qui se portent seuls restent libres avec *Rebords sans support*. L'impression demande ainsi nettement moins de support.
 - Les supports se retirent plus facilement : l'espace suit le matériau et la hauteur de couche de chaque pièce, même avec plusieurs matériaux sur un plateau. L'interface suit la surface au-dessus.
-- Quand un support repose sur la pièce, Solidon propose aussi une couche d'interface en dessous pour que son pied ne laisse pas de traces.
+- Quand un support repose sur la pièce, Solidon propose aussi une couche d'interface en dessous pour que son pied ne laisse pas de traces. Sous les supports arborescents, si le slicer l'y imprime.
 - Sous les supports arborescents et à côté d'une tour de purge, Solidon propose l'espace du support en couches entières, comme le slicer l'imprime.
 - Si de nombreuses petites pointes, barbe ou piquants, pendent sur des supports arborescents, Solidon propose deux couches d'espace. Il n'y reste presque plus de résidus.
 - Pour le PETG, Solidon propose un refroidissement complet au support. Il se détache ainsi plus facilement de la pièce.

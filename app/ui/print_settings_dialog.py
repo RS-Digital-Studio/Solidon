@@ -1423,6 +1423,7 @@ class _AdviceWorker(Worker):
         *,
         part_fits: Mapping[str, tuple[str, ...]] | None = None,
         flavour: SlicerFlavour = "orca",
+        declined: frozenset[str] = frozenset(),
     ) -> None:
         super().__init__()
         self.objects = objects
@@ -1439,6 +1440,10 @@ class _AdviceWorker(Worker):
         self.flavour = flavour
         """Die Familie, für die die Teile benannt werden; ohne Slicer die der
         gespeicherten 3MF."""
+        self.declined = declined
+        """Abgewählte Zeilen, an denen andere hängen (:data:`advise.DECIDING_PATHS`):
+        Ohne den Baum fragen Abstand und Trennschicht mit der eigenen Stützart,
+        wie der Export (RM-622)."""
         self.cancelled = CancelSignal()
         self.analysis_context: tuple[Any, ...] | None = None
         """Für welchen Geometriestand dieser Arbeiter misst (``_analysis_context``)."""
@@ -1503,7 +1508,7 @@ class _AdviceWorker(Worker):
         # Slicer den Stützabstand; der Rat rechnet dort in ganzen Schichten, wie
         # im Export (RM-622).
         self.towers = tower_plates(self.objects, self.setup)
-        self.organic = handover.organic_styles(self.setup, self.profile)
+        self.organic = handover.organic_styles(self.setup, self.profile, flavour=self.flavour)
         program = slicer_keys.program_of(self.setup.executable) if self.setup else ""
         for index, body in enumerate(self.objects):
             self.cancelled.raise_if_cancelled()
@@ -1574,12 +1579,15 @@ class _AdviceWorker(Worker):
                     flavour=self.flavour,
                     whole_layers=body.plate in self.towers,
                     organic=self.organic,
+                    declined=self.declined,
                 )
                 # Was das Programm unter den Bäumen dieses Körpers nicht druckt,
                 # schlägt der Dialog nicht vor — je Körper wie der Export
                 # (``writer.part_advice``, RM-622).
                 under_trees = handover.ignored_under_trees(
-                    advise.apply(process.settings, entries), self.organic, program
+                    advise.printed_style(process.settings, entries, self.declined),
+                    self.organic,
+                    program,
                 )
                 entries = [entry for entry in entries if entry.path not in under_trees]
                 own.append(
@@ -1720,8 +1728,14 @@ class _AdviceWorker(Worker):
         candidates = {entry.path for entry in entries if entry.path in advise.PART_PATHS}
         if not candidates:
             return entries
+        # Was abgewählt ist, wird nicht übernommen und geht an kein Teil.
         split = handover.split_for_parts(
-            advise.apply(self.settings, entries), self.profile, self.setup, self.flavour
+            advise.apply(
+                self.settings, [entry for entry in entries if entry.path not in self.declined]
+            ),
+            self.profile,
+            self.setup,
+            self.flavour,
         )
         candidates &= split.per_part
         if not candidates:
@@ -2628,6 +2642,10 @@ class PrintSettingsDialog(QDialog):
         drucken (RM-289, B6)."""
         self._accepted_parts: dict[str, tuple[str, ...]] = {}
         """Aus dem letzten Rat (:attr:`_AdviceWorker.accepted_parts`)."""
+        self._organic: frozenset[str] = frozenset()
+        """Die Stützarten, die das Programm als organische Bäume druckt, aus dem
+        letzten Rat (:attr:`_AdviceWorker.organic`): Das Feld sagt dasselbe wie
+        der Vorschlag daneben (RM-622)."""
         #: Wo die Suche gerade steht — Begriff, Trefferliste, Platz darin.
         self._search_term = ""
         self._search_hits: list[str] = []
@@ -6529,9 +6547,10 @@ class PrintSettingsDialog(QDialog):
             )
             # Mit den Einstellungen: Curas Lüfterhochlauf weicht erst ab zwei
             # Schichten ohne Lüfter ab, und nur dann steht ein Satz da. Ebenso
-            # eine Wahl, die das Programm nicht kennt (RM-480).
+            # eine Wahl, die das Programm nicht kennt (RM-480). Unter Bäumen mit
+            # derselben Auskunft wie der Rat (RM-622).
             specific = (
-                slicer_keys.limitation(flavour, path, self.settings, program)
+                slicer_keys.limitation(flavour, path, self.settings, program, self._organic)
                 if flavour is not None
                 else None
             )
@@ -7906,6 +7925,17 @@ class PrintSettingsDialog(QDialog):
             self.machine_choice.currentData(),
             self.process_choice.currentData(),
             self._filament_profile,
+            self._declined_advice(),
+        )
+
+    def _declined_advice(self) -> frozenset[str]:
+        """Abgewählte Zeilen, an denen andere Zeilen hängen
+        (:data:`advise.DECIDING_PATHS`): Ohne den Baum gelten Abstand und
+        Trennschicht der eigenen Stützart (RM-622)."""
+        return frozenset(
+            key
+            for key, chosen in self._advice_choices.items()
+            if not chosen and key in advise.DECIDING_PATHS
         )
 
     def _advice_scene_changed(self, *_args: object) -> None:
@@ -7989,6 +8019,7 @@ class PrintSettingsDialog(QDialog):
             part_fits=dict(self._part_fits()),
             # Ohne Slicer schreibt der Export die 3MF wie für die Orca-Familie.
             flavour=flavour or "orca",
+            declined=self._declined_advice(),
         )
         worker.analysis_context = analysis_context
         context = self._advice_request
@@ -8049,6 +8080,9 @@ class PrintSettingsDialog(QDialog):
             return
         self.slice_result = next(iter(results.values()))[2] if len(results) == 1 else None
         self._accepted_parts = dict(worker.accepted_parts)
+        if worker.organic != self._organic:
+            self._organic = worker.organic
+            self._mark_fields_this_slicer_ignores()
         self._mark_origins()
         self._advice_entries = entries
         self._advice_pending = False
@@ -8195,6 +8229,12 @@ class PrintSettingsDialog(QDialog):
         key = item.data(0, Qt.ItemDataRole.UserRole)
         if key is not None:
             self._advice_choices[key] = item.checkState(0) == Qt.CheckState.Checked
+        if key in advise.DECIDING_PATHS:
+            # An dieser Wahl hängen andere Zeilen: Ohne den Baum fragen Abstand
+            # und Trennschicht mit der eigenen Stützart (RM-622). Die Schichten
+            # bleiben gemessen, nur der Rat rechnet neu — erst nach diesem
+            # Signal, denn der Neuaufbau löscht die Zeile, die es sendet.
+            QTimer.singleShot(0, self, self._refresh_advice)
 
     def _show_advice(self) -> None:
         """Die aktuelle Messung anzeigen, ohne dabei eine neue anzufordern."""
