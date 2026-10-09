@@ -325,6 +325,90 @@ def test_the_corrected_brim_gap_reaches_only_the_rods_unless_it_is_a_choice(
     assert project["elefant_foot_compensation"] == "0.15"
 
 
+def test_a_part_that_compensates_itself_keeps_its_brim_at_the_foot(
+    bestand: Path, tmp_path: Path
+) -> None:
+    """RM-589: Die gebohrte und eingezogene Platte bekommt Lochausgleich und
+    Fußkorrektur null als Objektwert, die andere behält 0,1 und 0,15 mm des
+    Herstellers. Weil die Orca-Familie den Brim vom unkorrigierten Umriss misst
+    (RM-318), trägt die erste Platte dazu ihren eigenen Abstand: am Fuß bleibt
+    er 0,25 mm wie bei der zweiten — und kein Befund nennt ihn gesenkt."""
+    from xml.etree import ElementTree as ET
+
+    from app.core.export.writer import write_assembly
+    from app.core.scene import History, OperationDraft, evaluate
+    from app.core.scene.fits import allowances_for
+    from app.core.slice import advise
+    from app.core.types import Document
+
+    native = bestand.parent / "resources/profiles/Elegoo/process/ECC2/standard.json"
+    data = json.loads(native.read_text(encoding="utf-8"))
+    data.update(brim_object_gap="0.1", elefant_foot_compensation="0.15", xy_hole_compensation="0.1")
+    _write(native, data)
+    setup, profile = _setup(bestand), _cc2()
+    document = Document(format_version=1, app_version="0.0.1")
+    history = History(document)
+    for x in (-30.0, 30.0):
+        history.apply(
+            "Platte",
+            [
+                OperationDraft(
+                    op="create_box", params={"width": 40.0, "depth": 40.0, "height": 8.0, "x": x}
+                )
+            ],
+        )
+    history.apply(
+        "Bohrung",
+        [
+            OperationDraft(
+                op="drill_hole",
+                inputs=("obj_1",),
+                params={"diameter": 6.0, "x": -30.0, "y": 0.0, "z": 4.0, "axis": "z"},
+            )
+        ],
+    )
+    history.apply(
+        "Fuß", [OperationDraft(op="compensate_first_layer", inputs=("obj_1",), params={})]
+    )
+    scene = evaluate(document, profile).scene
+    base = manufacturer.base_settings(profile, "standard", setup).settings
+    assert base.layers.elephant_foot == pytest.approx(0.15)
+    assert base.shell.hole_offset == pytest.approx(0.1)
+    base = print_settings.with_choice(base, "adhesion.kind", "brim")
+    offered = [
+        entry
+        for entry in advise.advise(base, profile, allowances=allowances_for(document, {"obj_1"}))
+        if entry.path in {"shell.hole_offset", "layers.elephant_foot"}
+    ]
+    assert len(offered) == 2
+    path, findings = write_assembly(
+        list(scene.objects.values()),
+        tmp_path,
+        project_name="Ausgleich",
+        profile=profile,
+        settings=advise.apply(base, offered),
+        setup=setup,
+        flavour="orca",
+        document=document,
+    )
+    with zipfile.ZipFile(path) as archive:
+        config = ET.fromstring(archive.read("Metadata/model_settings.config"))
+        project = json.loads(archive.read("Metadata/project_settings.config"))
+    keys = [
+        {item.get("key"): item.get("value") for item in obj.findall("metadata")}
+        for obj in config.iter("object")
+    ]
+    assert project["elefant_foot_compensation"] == "0.15"
+    assert project["xy_hole_compensation"] == "0.1"
+    assert keys[0]["elefant_foot_compensation"] == "0"
+    assert keys[0]["xy_hole_compensation"] == "0"
+    assert float(keys[0]["brim_object_gap"]) == pytest.approx(0.25)
+    assert not {"elefant_foot_compensation", "xy_hole_compensation", "brim_object_gap"} & set(
+        keys[1]
+    )
+    assert not [item for item in findings if item.code == "export.brim_foot_lowered"]
+
+
 def test_a_choice_and_an_accepted_suggestion_are_told_apart() -> None:
     """Eine eigene Wahl und ein übernommener Vorschlag werden getrennt geführt
     — die Wahl gilt der Platte, der Vorschlag soll dem Körper gelten, der ihn

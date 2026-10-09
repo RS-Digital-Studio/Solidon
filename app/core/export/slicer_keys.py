@@ -98,6 +98,11 @@ def _optional_number(value: object) -> str:
     return "" if value is None else _number(value)
 
 
+def _negated(value: object) -> str:
+    """Ein Einzug als Ausdehnung: Cura zählt die erste Schicht nach außen."""
+    return f"{-float(value) + 0.0:g}"  # type: ignore[arg-type]
+
+
 def _integer(value: object) -> str:
     return str(int(value))  # type: ignore[call-overload]
 
@@ -249,6 +254,10 @@ PRUSA: Final[tuple[Row, ...]] = (
     ("layers.line_width", "top_infill_extrusion_width", _number),
     ("layers.line_width", "support_material_extrusion_width", _number),
     ("layers.first_layer_line_width", "first_layer_extrusion_width", _number),
+    # Einzug der ersten Schicht je Seite (RM-589). Einen Ausgleich nur für
+    # Löcher kennt PrusaSlicer nicht; ``xy_size_compensation`` verschiebt jede
+    # Kontur und ist eine andere Sache.
+    ("layers.elephant_foot", "elefant_foot_compensation", _number),
     ("shell.wall_count", "perimeters", _integer),
     ("shell.top_layers", "top_solid_layers", _integer),
     ("shell.bottom_layers", "bottom_solid_layers", _integer),
@@ -397,6 +406,9 @@ ORCA: Final[tuple[Row, ...]] = (
     ("layers.line_width", "internal_solid_infill_line_width", _number),
     ("layers.line_width", "top_surface_line_width", _number),
     ("layers.first_layer_line_width", "initial_layer_line_width", _number),
+    # Beide je Seite, beide Objektwerte (``PrintObjectConfig``, RM-589).
+    ("layers.elephant_foot", "elefant_foot_compensation", _number),
+    ("shell.hole_offset", "xy_hole_compensation", _number),
     ("shell.wall_count", "wall_loops", _integer),
     ("shell.top_layers", "top_shell_layers", _integer),
     ("shell.bottom_layers", "bottom_shell_layers", _integer),
@@ -562,6 +574,11 @@ CURA: Final[tuple[Row, ...]] = (
     ("layers.first_layer_height", "layer_height_0", _number),
     ("layers.line_width", "line_width", _number),
     ("layers.first_layer_line_width", "initial_layer_line_width_factor", _number),
+    # Curas Gegenstück zum Elefantenfuß ist die Ausdehnung der ersten Schicht,
+    # negativ gezählt; ``hole_xy_offset`` weitet Löcher je Seite (RM-589).
+    # Beide nimmt CuraEngine je Netz an.
+    ("layers.elephant_foot", "xy_offset_layer_0", _negated),
+    ("shell.hole_offset", "hole_xy_offset", _number),
     ("shell.wall_count", "wall_line_count", _integer),
     ("shell.top_layers", "top_layers", _integer),
     ("shell.bottom_layers", "bottom_layers", _integer),
@@ -1084,7 +1101,8 @@ def flavour_of(name: str) -> SlicerFlavour | None:
 #:
 #: ``tests/test_print_settings_ui.py`` hält die Liste gegen diese Messung.
 NOT_TAKEN_BY: Final[dict[SlicerFlavour, frozenset[str]]] = {
-    "prusa": frozenset({"shell.precise_outer_wall"}),
+    # Einen Ausgleich nur für Löcher führt PrusaSlicer nicht (RM-589).
+    "prusa": frozenset({"shell.precise_outer_wall", "shell.hole_offset"}),
     "orca": frozenset(),
     "cura": frozenset(
         {
@@ -1141,7 +1159,10 @@ LIMITED: Final[dict[SlicerFlavour, frozenset[str]]] = {
 #: 2.9 nicht, und sein 3MF-Leser stürzt ab zwei unbekannten Schlüsseln mit
 #: 0xC0000005 ab (RM-459, gemessen je Schlüssel der Beilage).
 NOT_TAKEN_BY_PROGRAM: Final[dict[str, frozenset[str]]] = {
-    "superslicer": frozenset({"shell.scarf_seam"}),
+    # Den Einzug der ersten Schicht führt SuperSlicer als
+    # ``first_layer_size_compensation`` mit umgekehrtem Vorzeichen; sein Leser
+    # kennt ``elefant_foot_compensation`` nicht (RM-589).
+    "superslicer": frozenset({"shell.scarf_seam", "layers.elephant_foot"}),
     # Den Kontaktlüfter führt nur SuperSlicer (``--help-fff`` von 2.9.6).
     "prusaslicer": frozenset({"cooling.support_interface_cooling"}),
     # Bambu Studio führt ``support_material_interface_fan_speed`` nicht; sein

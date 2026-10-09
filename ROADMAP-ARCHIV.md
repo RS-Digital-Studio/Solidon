@@ -31,6 +31,7 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-09 | [RM-589: Was das Modell schon ausgleicht, gleicht der Slicer nicht noch einmal aus (09.10.2026)](#rm-589-was-das-modell-schon-ausgleicht-gleicht-der-slicer-nicht-noch-einmal-aus-09102026) |
 | 2026-10-09 | [RM-680: Bausteine verwalten steht ohne eigenen Baustein offen (09.10.2026)](#rm-680-bausteine-verwalten-steht-ohne-eigenen-baustein-offen-09102026) |
 | 2026-10-09 | [RM-650: Ein eingefügtes Modell kommt in den Ausschnitt (09.10.2026)](#rm-650-ein-eingefügtes-modell-kommt-in-den-ausschnitt-09102026) |
 | 2026-10-09 | [RM-584 (Teil): Über Baumspitzen rät Solidon zwei Schichten Luft (09.10.2026)](#rm-584-teil-über-baumspitzen-rät-solidon-zwei-schichten-luft-09102026) |
@@ -46242,3 +46243,47 @@ sechs Sprachen „ab 0.5.0“ neben „Version 0.5.3“, wie im Repository. Chan
   Belege: `F:\solidon-review-reports\verif-09d8e9485.md` (Abschnitt 3).
 
 **Abschluss:** Der Abschnitt *Bausteine verwalten* beginnt offen, solange der eigene Bausteinordner nichts hält (`PartCatalog`, `_own_library_is_empty`). Gezählt werden gespeicherte Rezepte und hinzugefügte Bausteine, dieselbe Frage wie für Weitergabe, *Bearbeiten* und *Entfernen* (`_in_own_library`, vorher dreimal hergeleitet); ein mitgereister und ein `.py`-Baustein zählen nicht, `PartSpec.own` zählte anders. Danach gilt der Merker (`remember`, RM-491), und ein eigener Baustein klappt den Abschnitt wie bisher auf (RM-455; dass dieses Aufklappen gemerkt wird, steht in [RM-658](ROADMAP.md#rm-658)). Damit stehen *Auswahl als Baustein speichern …*, *Baustein aus Datei hinzufügen …* und beide Sperrgründe ohne Klick da, wie in 0.5.1 (Rückschritt seit `48ffcf145`, in 0.5.2 und 0.5.3). Weil der Weitergabegrund jetzt vorn steht, sagt er ohne eigenen Baustein „Speichern Sie zuerst einen eigenen Baustein, um ihn weiterzugeben.“ statt zum Wählen aufzufordern, das bei einem eingebauten in die nächste Absage führte. Die Hinweistests prüfen den Grund ohne vorheriges Aufklappen und stellen die Bibliothek ohne eigene Bausteine selbst her (`no_own_parts`); `test_the_closed_management_names_what_it_holds` prüft den zugeklappten Zustand nach einem Klick; neu `test_a_fresh_catalogue_shows_its_management_without_a_click` und `test_only_a_part_in_the_own_library_closes_the_management` (Rezept und hinzugefügt zu, mitgereist und `.py` offen). Gegenprobe über ein Plugin, je Mutation von acht Tests rot: immer zu 6, immer offen 2, Prädikat über `PartSpec.own` 2, alter Weitergabegrund 3; Katalogtests 52 grün, Handbuch-, Katalog-, Wortlaut- und Changelogtests 539 grün. Die Handbuchseiten *Eigene Bausteine* und *Bausteindateien austauschen* nennen Abschnitt und Knopf in allen sechs Sprachen, der eingefrorene Musterbestand trägt die neuen Seitenschlüssel; Changelog 0.6.0. Fenstersonde am echten Fenster, frischer Nutzerordner: 4 von 4, *Speichern*, *Hinzufügen* und beide Sperrgründe ohne Klick sichtbar, der Weitergabegrund schickt zum Speichern. Umgesetzt von Claude (Thread „Bedienung und KI“).
+
+## RM-589: Was das Modell schon ausgleicht, gleicht der Slicer nicht noch einmal aus (09.10.2026)
+
+<a id="rm-589-was-das-modell-schon-ausgleicht-gleicht-der-slicer-nicht-noch-einmal-aus-09102026"></a>
+<a id="rm-589"></a>
+
+**RM-589 — Bohrungen und Stifte passen ohne Nacharbeit.** Ausgleich für Bohrungen,
+Polyholes und Elefantenfuß bleiben beim Hersteller; die Passungen rechnet Solidon über das
+Spiel im Materialprofil (Recherche Nr. 13). Offen war, wie beides zusammenwirkt, ohne doppelt
+auszugleichen. Abnahme: ein Passungsteil aus dem Korpus im Slicer gemessen, mit und ohne
+Ausgleich.
+
+**Befund (09.10.2026, `assembly_fit.p3d`, PETG, Außenwandbahnen im G-Code):** Solidon schrieb
+keinen Loch- oder Fußausgleich, es galt der des Herstellers. Wo das Modell ihn schon trug,
+glich der Slicer ein zweites Mal aus: *Elefantenfuß ausgleichen* plus Einzug des Herstellers
+gab in der ersten Schicht 0,3 statt 0,2 mm je Seite am Centauri Carbon 2 (ElegooSlicer,
+0,1), 0,4 statt 0,2 am MK4S (PrusaSlicer, 0,2), 0,275 am Kobra 2 (Anycubic Slicer Next,
+0,075); eine Bohrung mit Materialzugabe wurde zusätzlich je Seite um 0,02 mm (Kobra 2) und
+0,025 mm (Ender-3 V3 KE, beide OrcaSlicer) geweitet. Polyholes führt kein Herstellerprofil;
+Cura glich weder Fuß noch Loch aus. Eingelesene Löcher ohne Zugabe bekamen den Ausgleich des
+Herstellers allein, dort war nichts doppelt.
+
+**Behoben:** Zwei neue Druckeinstellungen, *Erste Schicht einziehen* (`layers.elephant_foot`:
+Orca und Prusa `elefant_foot_compensation`, Cura `xy_offset_layer_0` negativ) und *Löcher
+weiten* (`shell.hole_offset`: Orca `xy_hole_compensation`, Cura `hole_xy_offset`;
+PrusaSlicer kennt keinen, SuperSlicer bekommt den Einzug nicht), zurückgelesen aus dem
+Herstellerprofil. Ohne Herstellerprofil kommt der Einzug aus dem Materialprofil.
+`scene.fits.allowances_for` sagt je Körper, was sein Modell schon ausgleicht: Löcher aus
+*Bohrung setzen*, *Bohrung ändern*, Langloch und Lochfeld mit Haken und aus den bauenden
+Passungsschritten (ein Stift ohne Bohrung nicht), den Fuß aus *Elefantenfuß ausgleichen*.
+Der Druckrat (`advise._from_allowances`) schlägt dort null vor, je Teil (`PART_PATHS`, Cura
+je Netz); die Orca-Familie bekommt dazu den Brim-Abstand des Teils, damit der Brim am Fuß
+bleibt. Druckdialog und Export fragen dieselbe Auskunft.
+
+**Gemessen nachher:** Mit dem Rat übernommen dieselben Teile ohne doppelten Ausgleich: CC2
+39,10 statt 38,90 mm Bahnbreite in Schicht 1, MK4S 39,10 statt 38,70, Kobra 2 in Anycubic
+Slicer Next 39,10, Cura 39,14; Loch am Kobra 2 6,635 statt 6,675, am KE 6,636 statt 6,686 mm.
+`test_a_part_that_compensates_itself_is_not_compensated_again` (`slicer`-Marker): zwei gleiche
+Bohrplatten, die Platte des Slicers mit 0,1 mm Lochausgleich und 0,15 mm Einzug, die
+ausgleichende mit Objektwert null — in OrcaSlicer, PrusaSlicer, Cura, Bambu Studio,
+ElegooSlicer, Creality Print und Anycubic Slicer Next Loch 0,199 bis 0,208 mm und Einzug
+0,300 mm Unterschied (PrusaSlicer ohne Lochausgleich: 0,000), sieben grün. Begründung:
+`konzepte/begruendungen/regel-druckrat.md`, Regel: `.claude/rules/druckrat.md`. Umgesetzt von
+Claude (Worktree `F:/sl-loecher`).

@@ -1353,16 +1353,22 @@ def object_keys(
             written.update(
                 organic_tree_fitted({**native, **written}, profile.printer.nozzle_diameter)
             )
+    foot = brim_foot_offset
+    if flavour == "orca" and foot and "elefant_foot_compensation" in written:
+        # Die Orca-Familie misst den Brim vom unkorrigierten Umriss (RM-318).
+        # Zieht dieses Teil die erste Schicht nicht mehr ein, weil sein Modell
+        # es tut (RM-589), bleibt der Abstand am Fuß nur mit eigenem Wert.
+        foot = float(written["elefant_foot_compensation"])
+        if "brim" in print_settings.adhesion_kinds(applied.adhesion.kind):
+            written["brim_object_gap"] = ""
     if flavour == "orca" and "brim_object_gap" in written:
         requested = any(entry.path == "adhesion.brim_gap" for entry in advice)
         if "brim" not in print_settings.adhesion_kinds(applied.adhesion.kind) or (
-            brim_foot_offset is None and not requested
+            foot is None and not requested
         ):
             written.pop("brim_object_gap")
         else:
-            written.update(
-                manufacturer.part_brim_gap(applied.adhesion.brim_gap, brim_foot_offset, program)
-            )
+            written.update(manufacturer.part_brim_gap(applied.adhesion.brim_gap, foot, program))
     return _with_automatic_prusa_support(written) if flavour == "prusa" else written
 
 
@@ -1518,6 +1524,9 @@ CURA_PER_MESH: Final = frozenset(
         "speed_wall_0",
         "acceleration_wall_0",
         "scarf_joint_seam_length",
+        # Was das Modell schon ausgleicht, gleicht das Netz nicht noch einmal aus (RM-589).
+        "hole_xy_offset",
+        "xy_offset_layer_0",
     }
 )
 

@@ -557,3 +557,32 @@ Modellen hat der Drache 199, danach eine Baugruppe 49 und ein Schachturm 34;
 die Schwelle steht bei 100.
 Gemessen ist nur PLA (`support_tip_gap`); ohne Wert bleibt der Abstand des
 Materials. Bericht: `output/drache-2026-10-09/rueckstaende/bericht.md`.
+
+**Was das Modell schon ausgleicht, gleicht der Slicer nicht noch einmal aus
+(09.10.2026, RM-589).** *Bohrung setzen* weitet mit gesetztem Haken um die
+Lochkorrektur des Materials (PETG Ø 6 → 6,2 mm), *Elefantenfuß ausgleichen*
+zieht die ersten 0,6 mm um den Fuß des Materials ein (PETG 0,2 mm je Seite).
+Die Herstellerprofile gleichen beides auch aus: `elefant_foot_compensation`
+0,1 am Centauri Carbon 2, 0,2 am MK4S, 0,075 am Kobra 2 in Anycubic Slicer
+Next; `xy_hole_compensation` 0,02 am Kobra 2 und 0,025 am Ender-3 V3 KE in
+OrcaSlicer (rund 30 Prozesse der Orca-Bestände führen einen Lochausgleich, fast
+alle einen Einzug). Gemessen an `assembly_fit.p3d` (Außenwandbahnen im G-Code,
+PETG): Die gebohrte Platte zog mit *Elefantenfuß ausgleichen* in der ersten
+Schicht 0,3 statt 0,2 mm je Seite ein (CC2, Bahnbreite 38,90 gegen 39,10 mm),
+am MK4S 0,4 statt 0,2 (38,70 gegen 39,10); das Loch des Kobra 2 lag 0,04 mm
+weiter als die Materialzugabe allein (Bahn 6,675 gegen 6,635 mm), am KE 0,05
+(6,686 gegen 6,636). Cura glich bis dahin weder Fuß noch Loch aus. Mit dem Rat
+übernommen trafen alle vier Fälle den Wert ohne doppelten Ausgleich, und eine
+Platte mit zwei gleichen Bohrplatten zeigte in allen sieben Programmen, dass
+der Wert je Teil ankommt (Loch 0,20, Einzug 0,30 mm Unterschied bei 0,1 und
+0,15 mm auf der Platte; `test_real_slicers.py`).
+Vorschlag statt Automatik, weil auf dem Herstellerprofil nur Gewähltes und
+Übernommenes geschrieben wird; je Teil, weil ein eingelesenes Loch daneben den
+Ausgleich des Herstellers weiter braucht. Eine nur eingetragene Passung baut
+kein Spiel ins Modell und zählt deshalb nicht. Den Einzug des Herstellers
+ersetzt das Materialprofil nicht: Sein Kalibrierkörper wird durch den Slicer
+mit dessen Einzug gedruckt, sein Wert wäre der Rest, nicht der ganze Fuß. Wo
+Solidon den Satz selbst schreibt (Cura, PrusaSlicer ohne Drucker im Bündel),
+kommt der Einzug aus dem Material; Lochausgleich führt Solidon dort keinen,
+denn die Zugabe steckt in der Bohrung. SuperSlicer heißt den Einzug
+`first_layer_size_compensation` mit umgekehrtem Vorzeichen und bekommt ihn nicht.

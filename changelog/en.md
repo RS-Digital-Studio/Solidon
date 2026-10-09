@@ -88,6 +88,8 @@ it into `website/version.json`.
 - In the print dialog, printer, filaments and quality stay fully visible even with enlarged text. Long labels wrap instead.
 - The report calculates faster and needs less memory.
 - On Linux with Flatpak, Solidon now reports a slicer crash as a crash instead of only saying that no print file was made.
+- New in the print settings: *Pull in first layer* and *Widen holes*. Without a manufacturer profile, as with Cura, Solidon pulls in the first layer by the material's value.
+- If a part already compensates in the model, with a bore including material allowance or *Compensate the elephant foot*, Solidon suggests that the slicer does not do it again.
 
 ### Threads, holes and standard parts
 

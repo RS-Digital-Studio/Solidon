@@ -72,7 +72,7 @@ from app.core.types import (
     Severity,
     SliceResult,
 )
-from app.core.units import EPS_GEOM, format_length, is_close, is_zero
+from app.core.units import EPS_GEOM, format_length, is_close, is_greater, is_zero
 from app.i18n import TranslatableText, _
 
 if TYPE_CHECKING:
@@ -231,6 +231,7 @@ def advise(
     whole_layers: bool = False,
     organic: Collection[str] = (),
     declined: Collection[str] = (),
+    allowances: Collection[str] = (),
 ) -> list[SettingAdvice]:
     """Was an diesen Einstellungen für dieses Teil nicht passt (§29).
 
@@ -251,6 +252,9 @@ def advise(
     ``declined`` sind Pfade, deren Vorschlag der Kunde nicht übernimmt — im
     Druckdialog abgewählt, im Export nicht übernommen: Abstand und untere
     Trennschicht fragen dann mit der eigenen Stützart (:func:`printed_style`).
+    ``allowances`` sagt, was das Modell schon selbst ausgleicht
+    (``scene.fits.allowances_for``): Dort stellt :func:`_from_allowances` den
+    Ausgleich des Slicers auf null.
 
     **Für einen Resin-Drucker bleibt die Liste leer.** Jede Regel hier spricht
     über Düse, Bahn, Bett, Lüfter oder Rückzug — für Resin nicht falsch
@@ -269,6 +273,7 @@ def advise(
         )
     if fit_kinds:
         advice += _from_fits(settings, fit_kinds)
+    advice += _from_allowances(settings, allowances)
     # Erst nach den Regeln oben, und gegen deren Stand gerechnet: Die
     # Wandzahl hängt an der Bahnbreite, und genau die senkt die Regel über die
     # dünnste Stelle. Vorher gerechnet stand im Bericht eine Wandzahl, die zu
@@ -1646,6 +1651,40 @@ def _from_fits(settings: PrintSettings, kinds: Sequence[str]) -> list[SettingAdv
     return advice
 
 
+def _from_allowances(settings: PrintSettings, allowances: Collection[str]) -> list[SettingAdvice]:
+    """Was das Modell schon ausgleicht, gleicht der Slicer nicht noch einmal aus (RM-589).
+
+    Eine Bohrung mit Materialzugabe ist um die Lochkorrektur des Materials
+    weiter, eine gebaute Passung trägt ihr Spiel; der Lochausgleich des
+    Slicers käme je Seite noch einmal dazu — am Kobra 2 mit 0,02 mm, am
+    Ender-3 V3 KE mit 0,025 mm aus dem Herstellerprofil. *Elefantenfuß
+    ausgleichen* zieht die ersten Schichten um den Wert des Materials ein; der
+    Einzug des Slicers käme in der ersten Schicht dazu: am Centauri Carbon 2
+    0,3 statt 0,2 mm je Seite, am MK4S 0,4 statt 0,2 mm (gemessen im G-Code,
+    09.10.2026). Vorgeschlagen wird null, nur wo der Slicer ausgleicht.
+    """
+    advice: list[SettingAdvice] = []
+    if "holes" in allowances and not is_zero(settings.shell.hole_offset):
+        advice.append(
+            _advice(
+                settings,
+                path="shell.hole_offset",
+                value=0.0,
+                reason=_("Das Spiel der Bohrungen steht schon im Modell."),
+            )
+        )
+    if "foot" in allowances and is_greater(settings.layers.elephant_foot, 0.0):
+        advice.append(
+            _advice(
+                settings,
+                path="layers.elephant_foot",
+                value=0.0,
+                reason=_("Das Modell zieht den Fuß schon selbst ein."),
+            )
+        )
+    return advice
+
+
 def solid_core(diameter: float, settings: PrintSettings) -> float:
     """Wie viel eines runden Querschnitts beim Drucken **nicht** massiv wird.
 
@@ -1797,6 +1836,9 @@ PART_PATHS: Final = frozenset(
         "infill.density",
         "shell.wall_generator",
         "layers.line_width",
+        # Was das Modell schon ausgleicht, gilt nur dem Teil, das es trägt (RM-589).
+        "shell.hole_offset",
+        "layers.elephant_foot",
     }
 )
 
@@ -1897,6 +1939,7 @@ def for_part(
     whole_layers: bool = False,
     organic: Collection[str] = (),
     declined: Collection[str] = (),
+    allowances: Collection[str] = (),
 ) -> list[SettingAdvice]:
     """Was dieses eine Teil anders braucht als die Platte (§29).
 
@@ -1928,6 +1971,7 @@ def for_part(
                 whole_layers=whole_layers,
                 organic=organic,
                 declined=declined,
+                allowances=allowances,
             )
             if entry.path in PART_PATHS
         ]

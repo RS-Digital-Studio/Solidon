@@ -143,6 +143,20 @@ FIELDS: tuple[Field, ...] = (
         decimals=3,
         note=_("Breiter als die übrigen Bahnen — mehr Material auf dem Bett heißt mehr Haftung."),
     ),
+    Field(
+        "layers.elephant_foot",
+        _("Erste Schicht einziehen"),
+        "layers",
+        unit="mm",
+        minimum=0.0,
+        maximum=1.0,
+        step=0.01,
+        decimals=3,
+        note=_(
+            "Wie weit der Slicer die erste Schicht je Seite einzieht, damit sie nicht breiter "
+            "wird als das Teil. Zieht schon das Modell den Fuß ein, gehört hier null hin."
+        ),
+    ),
     # --- Wände ---
     Field(
         "shell.wall_count",
@@ -229,6 +243,20 @@ FIELDS: tuple[Field, ...] = (
         note=_(
             "Rechnet die Außenwand auf ihr Sollmaß statt auf die Bahnmitte. Für Passungen "
             "richtig, sonst unnötig."
+        ),
+    ),
+    Field(
+        "shell.hole_offset",
+        _("Löcher weiten"),
+        "shell",
+        unit="mm",
+        minimum=-1.0,
+        maximum=1.0,
+        step=0.01,
+        decimals=3,
+        note=_(
+            "Wie weit der Slicer Löcher je Seite weitet. Trägt das Modell sein Spiel schon, "
+            "etwa eine Bohrung mit Materialzugabe, gehört hier null hin."
         ),
     ),
     Field(

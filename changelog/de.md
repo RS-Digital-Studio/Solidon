@@ -113,6 +113,8 @@ Nutzen da und sonst nichts.
 - Im Druckdialog bleiben Drucker, Filamente und Qualität auch bei vergrößerter Schrift ganz sichtbar. Lange Beschriftungen brechen dafür um.
 - Der Prüfbericht rechnet schneller und braucht weniger Arbeitsspeicher.
 - Unter Linux mit Flatpak meldet Solidon einen Absturz des Slicers jetzt als Absturz, statt nur zu sagen, dass keine Druckdatei entstand.
+- Neu in den Druckeinstellungen: *Erste Schicht einziehen* und *Löcher weiten*. Ohne Profil des Herstellers, etwa bei Cura, zieht Solidon die erste Schicht um den Wert des Materials ein.
+- Gleicht ein Teil schon im Modell aus, mit einer Bohrung samt Materialzugabe oder *Elefantenfuß ausgleichen*, schlägt Solidon vor, dass der Slicer es nicht noch einmal tut.
 
 ### Gewinde, Bohrungen und Normteile
 

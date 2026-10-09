@@ -335,6 +335,82 @@ def numbered_name(fits: Collection[Fit], key: str) -> str:
     return f"{key}_{number}"
 
 
+def _producing(document: Document, object_ids: Collection[str]) -> tuple[set[str], set[int]]:
+    """Die Körper und eingeschalteten Schritte, aus denen diese Körper entstanden sind.
+
+    Der Stapel wird rückwärts gegangen; jeder Schritt, der einen der Körper
+    erzeugt, bringt seine Eingänge dazu. Ausgeschaltete Schritte zählen nicht.
+    """
+    wanted = set(object_ids)
+    relevant_operations: set[int] = set()
+    for operation in reversed(document.ops):
+        if operation.suppressed is not None:
+            continue
+        if wanted.intersection(operation.outputs):
+            relevant_operations.add(operation.id)
+            wanted.update(operation.inputs)
+    return wanted, relevant_operations
+
+
+#: Schritte, die ein Loch um die Lochkorrektur des Materials weiten, wenn ihr
+#: Haken *Materialtoleranz berücksichtigen* steht (``compensate``). Der
+#: Stopfen (``plug_hole``) fehlt mit Absicht: Er füllt die geweitete Bohrung,
+#: danach bleibt kein Loch.
+COMPENSATING_HOLE_OPS: frozenset[str] = frozenset(
+    {"drill_hole", "drill_brep_hole", "resize_hole", "slot_hole", "field_cut"}
+)
+
+#: Der Schritt, der die ersten Schichten um den Elefantenfuß des Materials
+#: einzieht.
+FOOT_OP = "compensate_first_layer"
+
+#: Was das Modell eines Körpers schon selbst ausgleicht (RM-589): ``"holes"``
+#: — seine Löcher tragen Spiel oder Lochkorrektur aus dem Materialprofil —,
+#: ``"foot"`` — seine ersten Schichten sind um den Elefantenfuß eingezogen.
+MODEL_ALLOWANCES: tuple[str, ...] = ("holes", "foot")
+
+
+def allowances_for(document: Document, object_ids: Collection[str]) -> tuple[str, ...]:
+    """Welche Ausgleiche diese Körper schon im Modell tragen (RM-589).
+
+    Dieselben Körper und Schritte wie :func:`fit_kinds_for`. Löcher zählen,
+    wenn ein Schritt aus :data:`FITTING_OPS` sie mit Spiel baut oder ein
+    Schritt aus :data:`COMPENSATING_HOLE_OPS` mit gesetztem Haken bohrt; eine
+    nur eingetragene Passung ändert die Geometrie nicht und zählt deshalb
+    nicht. Der Druckrat stellt dann den gleichen Ausgleich des Slicers auf
+    null, sonst gleicht das Teil doppelt aus.
+    """
+    from app.core.registry import REGISTRY
+
+    _wanted, relevant = _producing(document, object_ids)
+    found: set[str] = set()
+    for operation in document.ops:
+        if operation.id not in relevant:
+            continue
+        if operation.op == FOOT_OP:
+            found.add("foot")
+            continue
+        if operation.op not in FITTING_OPS | COMPENSATING_HOLE_OPS:
+            continue
+        # Ohne Registereintrag (exakter Kern fehlt) gilt, was im Schritt steht.
+        schema = REGISTRY.get(operation.op).params.fields() if REGISTRY.has(operation.op) else ()
+        values = {entry.name: entry.default for entry in schema} | dict(operation.params)
+        if operation.op in COMPENSATING_HOLE_OPS:
+            if values.get("compensate") is True:
+                found.add("holes")
+            continue
+        # Ein Passungsschritt, der auch nur aufsetzen kann — der Stift statt
+        # seiner Bohrung —, weitet kein Loch (``subtractive_on``).
+        cutting = {
+            entry.name: entry.metadata["param"]["subtractive_on"]
+            for entry in schema
+            if entry.metadata.get("param", {}).get("subtractive_on") is not None
+        }
+        if not cutting or any(values[name] in wanted for name, wanted in cutting.items()):
+            found.add("holes")
+    return tuple(entry for entry in MODEL_ALLOWANCES if entry in found)
+
+
 def fit_kinds_for(document: Document, object_ids: Collection[str]) -> tuple[str, ...]:
     """Welche Passungen diese Körper tragen — eingetragene und gebaute.
 
@@ -350,14 +426,7 @@ def fit_kinds_for(document: Document, object_ids: Collection[str]) -> tuple[str,
     verlangt eine Einstellung mehr als ein Schiebesitz. Der Druckdialog fragt
     für die Körper der Platte, der Export je Teil (Entscheidung G).
     """
-    wanted = set(object_ids)
-    relevant_operations: set[int] = set()
-    for operation in reversed(document.ops):
-        if operation.suppressed is not None:
-            continue
-        if wanted.intersection(operation.outputs):
-            relevant_operations.add(operation.id)
-            wanted.update(operation.inputs)
+    wanted, relevant_operations = _producing(document, object_ids)
     kinds: list[str] = [
         entry.kind
         for entry in active_fits(document)

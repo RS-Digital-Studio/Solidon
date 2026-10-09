@@ -425,6 +425,8 @@ ORCA_PROCESS: Final[tuple[tuple[str, str, Reader], ...]] = (
     ("layers.first_layer_height", "initial_layer_print_height", _positive),
     ("layers.line_width", "line_width", _width),
     ("layers.first_layer_line_width", "initial_layer_line_width", _width),
+    ("layers.elephant_foot", "elefant_foot_compensation", _number),
+    ("shell.hole_offset", "xy_hole_compensation", _number),
     ("shell.wall_count", "wall_loops", _count),
     ("shell.top_layers", "top_shell_layers", _count),
     ("shell.bottom_layers", "bottom_shell_layers", _count),
@@ -1373,6 +1375,7 @@ _PRUSA_INFILL_BACK: Final = {prusa: solidon for solidon, prusa in slicer_keys._P
 PRUSA_PROCESS: Final[tuple[tuple[str, str, Reader], ...]] = (
     ("layers.layer_height", "layer_height", _positive),
     ("layers.first_layer_height", "first_layer_height", _positive),
+    ("layers.elephant_foot", "elefant_foot_compensation", _number),
     ("shell.wall_count", "perimeters", _count),
     ("shell.top_layers", "top_solid_layers", _count),
     ("shell.bottom_layers", "bottom_solid_layers", _count),
@@ -1430,6 +1433,8 @@ PRUSA_PROGRAM_DEFAULTS: Final[Mapping[str, str]] = {
     "chamber_temperature": "0",
     "default_acceleration": "0",
     "disable_fan_first_layers": "3",
+    # Gemessen mit ``--save`` aus einem leeren ``--datadir`` (2.9.6, 09.10.2026).
+    "elefant_foot_compensation": "0",
     # Nicht aus ``--save``, sondern aus dem Konfigurationsblock der Seitenablage
     # am MK4S (2.9.6, 06.10.2026): Das Bündel nennt den Schlüssel nicht.
     "ensure_vertical_shell_thickness": "enabled",

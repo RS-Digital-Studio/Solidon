@@ -614,13 +614,18 @@ def test_file_export_without_program_only_promises_shared_object_capabilities(
 # geschrieben 0,4 gegen 0,2 mm und so weiter, gemessen je Programm in
 # ``konzepte/begruendungen/regel-druckrat.md``; Cura nimmt die Lücke nicht je Netz. Die
 # Menge wird absichtlich nicht aus PART_PATHS oder den Schlüsseltabellen
-# gebaut: ein neuer Pfad braucht einen eigenen Wirkungsnachweis.
+# gebaut: ein neuer Pfad braucht einen eigenen Wirkungsnachweis. Lochausgleich
+# und Einzug der ersten Schicht (RM-589) belegt eine Platte mit zwei gleichen
+# Bohrplatten, eine mit Objektwerten null, am echten Programm
+# (``test_real_slicers.test_a_part_that_compensates_itself_is_not_compensated_again``).
 MEASURED_PART_PATHS = frozenset(
     {
         "adhesion.kind",
         "adhesion.brim_gap",
         "infill.density",
+        "layers.elephant_foot",
         "layers.line_width",
+        "shell.hole_offset",
         "shell.ironing",
         "shell.outer_wall_first",
         "shell.precise_outer_wall",
@@ -655,6 +660,7 @@ MEASURED_PART_PATHS = frozenset(
             "prusaslicer",
             "prusa",
             {
+                "shell.hole_offset",
                 "shell.precise_outer_wall",
                 "speed.acceleration",
                 "speed.outer_wall_acceleration",
@@ -664,6 +670,8 @@ MEASURED_PART_PATHS = frozenset(
             "superslicer",
             "prusa",
             {
+                "layers.elephant_foot",
+                "shell.hole_offset",
                 "shell.precise_outer_wall",
                 "shell.scarf_seam",
                 "speed.acceleration",

@@ -1233,6 +1233,11 @@ class LayerSettings:
     first_layer_height: float = 0.25
     line_width: float = 0.42
     first_layer_line_width: float = 0.45
+    elephant_foot: float = 0.0
+    """Um wie viel der Slicer die erste Schicht je Seite einzieht, gegen den
+    Elefantenfuß (RM-589). Mit Herstellerprofil dessen Wert, in Solidons
+    eigenem Satz der des Materialprofils. Zieht schon das Modell die ersten
+    Schichten ein (*Elefantenfuß ausgleichen*), gehört er auf null."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -1260,6 +1265,10 @@ class ShellSettings:
     ironing: bool = False
     """Bügelt die oberste Fläche nach. Für Sicht- und Gleitflächen; sonst
     kostet es nur Zeit."""
+    hole_offset: float = 0.0
+    """Um wie viel der Slicer Löcher je Seite weitet (RM-589). Steht das Spiel
+    schon im Modell — eine Bohrung mit Materialzugabe, eine gebaute Passung —,
+    gehört er auf null, sonst gleicht das Loch doppelt aus."""
 
 
 @dataclass(frozen=True, slots=True)

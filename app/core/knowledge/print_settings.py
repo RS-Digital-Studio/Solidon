@@ -309,6 +309,9 @@ def resolve(
             first_layer_height=round(first_layer, 3),
             line_width=line_width,
             first_layer_line_width=first_layer_line_width,
+            # Ohne Herstellerprofil kommt der Elefantenfuß aus dem Material
+            # (RM-589); 0.5.0 schrieb keinen und ließ ihn dem Slicer.
+            elephant_foot=0.0 if legacy else profile.material.elephant_foot,
         ),
         shell=ShellSettings(
             wall_count=int(stage["wall_count"]),

@@ -496,7 +496,9 @@ Kobra 2 in Orca; Prusa MK4S bzw. Prusa-Bündel). „Solidon“ bezieht sich auf
   Bambu rechnet Bohrungen über `hole_coef_*`/`hole_limit_*`.
 - **Solidon:** Rat genaue Außenwand, Außenwand zuerst, langsam (30 mm/s, 2000 mm/s²),
   Bügeln bei bündiger Passung. Spiel kommt aus dem Materialprofil (Regel 7); eine
-  Slicerkompensation käme dazu und muss mit ihm abgestimmt werden. Lücke 13.
+  Slicerkompensation käme dazu und muss mit ihm abgestimmt werden. Lücke 13, geschlossen
+  mit RM-589: *Löcher weiten* und *Erste Schicht einziehen* lesen den Herstellerwert, und
+  der Rat stellt beide an Teilen, die den Ausgleich schon im Modell tragen, je Teil auf null.
 
 ---
 
