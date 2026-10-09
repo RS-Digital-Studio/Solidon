@@ -1402,6 +1402,20 @@ die mit langen Streifen in den Kehlrundungen und Senkungen anderer liegen (an
 `fillet_113`, r = 1,6, Streifen von Teil 0 bei 1,15 bis 1,46 mm von der Achse,
 abgetastet gleich); der erste Klick der Karte braucht dort bis 0,1 s mehr.
 
+**Ein fremdes Teil misst sich gegen den Radius, nicht gegen den Saum** (RM-661,
+09.10.2026). Der Saum aus `_CLEARANCE_MARGIN` (2 % des Radius unter der eigenen
+Wand) fängt Rundung an der Wand des eigenen Teils. Ein getrennter Stift Ø 5,9 oder
+Ø 5,98 in einer Bohrung Ø 6, die Enden an den Mündungen oder dahinter, lag mit
+seinem ganzen Mantel in diesem Saum und galt an beiden Kernen als Wand — die
+Handlungen verschmolzen ihn still. Für Stücke fremder Teile gilt deshalb der
+Radius selbst bis auf die Verschweißweite des Körpers, und nicht die gemessene
+Wand: Bei gleicher Vernetzung liegt der Mantel eines Stifts Ø 6 ohne Spiel genau
+auf ihr (Wand und Stift 2,99161 mm von der Achse, gegen die Wand gemessen frei).
+Zwischen dem Lot auf die Facetten und dem Radius liegt an einem fremden Teil nur
+Luft der Bohrung oder Material des Trägers, in das es eindringt; ein Querstift,
+der in seiner Querbohrung auf dem Kreis der Bohrung endet, bleibt draußen
+(`test_a_cross_pin_ending_at_the_bore_wall_leaves_the_bore_free`).
+
 **Und was für eine runde Bohrung an ihrer Mitte gefragt wird, wird an einem
 Langloch an beiden Enden gefragt** (`prepare.slot_ends`). Die Mitte steckt tief
 im Material, während ein Ende schon über die Kante ragt; wer nur sie fragt,

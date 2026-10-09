@@ -98,7 +98,7 @@ dans `website/version.json`.
 - Vis, écrous et rondelles existent selon ISO de M1,6 à M64. Pour d'autres tailles, *Taille personnalisée* déduit les cotes des tailles voisines et le signale.
 - Avec *Ajustée au perçage*, *Goupille pour perçage* construit la contrepartie : une tête fraisée affleurante pour une fraisure, un filetage extérieur de même taille et même pas pour un intérieur.
 - Sur un filetage intérieur imprimé, la sélection propose directement *Goupille pour perçage*.
-- Si une pièce séparée se trouve dans une cavité comme un perçage, un trou oblong, une fraisure ou un filetage, les actions le disent. Jusqu'ici elle fusionnait ou était coupée.
+- Si une pièce séparée occupe une cavité comme un perçage, un trou oblong, une fraisure ou un filetage, même serrée ou très saillante, les actions le disent. Jusqu'ici elle fusionnait ou était coupée.
 - Nouveau : le *Goujon fileté*, une tige filetée ou un goujon sans tête, chanfreiné aux deux bouts, avec le même filetage imprimable que la vis et l'écrou.
 - Dans les perçages des blocs comme le trou de vis, l'insert à chaud ou le piège à écrou, *Goupille pour perçage* construit aussi la goupille adaptée, et prévient s'ils sont hors du corps.
 - Posé à la main sur une face, le piège à écrou creuse sa poche dans la matière. Jusqu'ici la poche restait au-dessus, et seul le trou de vis était percé.

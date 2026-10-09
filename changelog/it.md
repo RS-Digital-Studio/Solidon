@@ -97,7 +97,7 @@ scrive in `website/version.json`.
 - Viti, dadi e rondelle ci sono secondo ISO da M1,6 a M64. Per altre misure, *Misura personalizzata* ricava le dimensioni dalle misure vicine e lo dice.
 - Con *Adatto al foro*, *Perno per foro* costruisce la controparte: una testa svasata a filo per una svasatura, una filettatura esterna di pari misura e passo per una interna.
 - Su una filettatura interna stampata, la selezione offre direttamente *Perno per foro*.
-- Se un pezzo separato sta in una cavità come un foro, un'asola, una svasatura o una filettatura, le azioni lo dicono. Finora veniva fuso o tagliato.
+- Se un pezzo separato sta in una cavità come un foro, un'asola, una svasatura o una filettatura, anche stretto o molto sporgente, le azioni lo dicono. Finora veniva fuso o tagliato.
 - Nuovo il *Perno filettato*: una barra filettata o un prigioniero senza testa, smussato a entrambe le estremità, con la stessa filettatura stampabile di vite e dado.
 - Anche nei fori dei blocchi come il foro per vite, l'inserto a caldo o la sede per dado, *Perno per foro* crea il perno adatto, e avvisa se il foro non è nel corpo.
 - Posizionata a mano su una faccia, la sede per dado scava la sua tasca nel materiale. Finora la tasca restava sopra e veniva forato solo il foro per la vite.

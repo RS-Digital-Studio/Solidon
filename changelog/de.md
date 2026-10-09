@@ -122,7 +122,7 @@ Nutzen da und sonst nichts.
 - Schrauben, Muttern und Scheiben gibt es nach ISO von M1,6 bis M64. Für andere Größen leitet *Eigenes Maß* die Maße aus den Nachbargrößen ab und sagt das.
 - Mit *Passend zur Bohrung* baut *Stift für Bohrung* das Gegenstück: in eine Senkung einen bündigen Senkkopf, in ein Innengewinde ein Außengewinde gleicher Größe und Steigung.
 - An einem gedruckten Innengewinde bietet die Auswahl *Stift für Bohrung* direkt an.
-- Steckt ein getrenntes Teil in einem Hohlraum wie Bohrung, Langloch, Senkung oder Gewinde, sagen die Handlungen das. Bisher verschmolz es oder wurde abgeschnitten.
+- Steckt ein getrenntes Teil in einem Hohlraum wie Bohrung, Langloch, Senkung oder Gewinde, auch eng oder weit herausragend, sagen die Handlungen das. Bisher verschmolz es oder wurde abgeschnitten.
 - Neu ist der *Gewindebolzen*, eine Gewindestange oder Stiftschraube ohne Kopf, mit Fase an beiden Enden und demselben druckbaren Gewinde wie Schraube und Mutter.
 - Auch in Bohrungen von Bausteinen wie Schraubenloch, Einpressbuchse und Mutternfalle baut *Stift für Bohrung* den passenden Stift. Liegt die Bohrung nicht im Körper, sagt es das.
 - Von Hand auf eine Fläche gesetzt, schneidet die Mutternfalle ihre Tasche ins Material. Bisher stand die Tasche darüber, und nur das Schraubenloch wurde gebohrt.

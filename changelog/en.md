@@ -97,7 +97,7 @@ it into `website/version.json`.
 - Screws, nuts and washers are available to ISO from M1.6 to M64. For other sizes, *Custom size* derives the dimensions from the neighbouring sizes and says so.
 - With *To fit the hole*, *Pin for hole* builds the counterpart: a flush countersunk head for a countersink, an external thread of the same size and pitch for an internal thread.
 - On a printed internal thread, the selection offers *Pin for hole* directly.
-- If a separate part sits in a cavity such as a hole, slot, countersink or thread, the actions say so. Until now it was merged or cut off.
+- If a separate part sits in a cavity such as a hole, slot, countersink or thread, even tightly or sticking far out, the actions say so. Until now it was merged or cut off.
 - New is the *Threaded stud*, a headless threaded rod or stud with a chamfer at both ends and the same printable thread as screw and nut.
 - In holes of parts such as the screw hole, the heat-set insert and the nut trap, *Pin for hole* also builds the matching pin. If the hole does not lie in the body, it says so.
 - Placed by hand on a face, the nut trap cuts its pocket into the material. Until now the pocket sat above it, and only the screw hole was drilled.

@@ -97,7 +97,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Parafusos, porcas e anilhas existem segundo ISO de M1,6 a M64. Para outros tamanhos, *Medida própria* deriva as medidas dos tamanhos vizinhos e indica-o.
 - Com *Ajustado ao furo*, *Pino para furo* constrói a contrapeça: uma cabeça escareada à face para um escareamento, uma rosca externa do mesmo tamanho e passo para uma interna.
 - Numa rosca interna impressa, a seleção oferece diretamente *Pino para furo*.
-- Se uma peça separada estiver numa cavidade como um furo, um furo oblongo, um escareamento ou uma rosca, as ações dizem-no. Até agora era fundida ou cortada.
+- Se uma peça separada estiver numa cavidade como um furo, um furo oblongo, um escareamento ou uma rosca, mesmo justa ou muito saliente, as ações dizem-no. Até agora era fundida ou cortada.
 - Novo: o *Perno roscado*, uma barra roscada ou um perno sem cabeça, chanfrado nas duas pontas, com a mesma rosca imprimível do parafuso e da porca.
 - Também em furos de blocos como o furo de parafuso, a bucha de inserção a quente ou o alojamento de porca, *Pino para furo* cria o pino adequado, e avisa se o furo não está no corpo.
 - Colocado à mão numa face, o alojamento de porca corta a sua bolsa no material. Até agora a bolsa ficava por cima e só o furo do parafuso era furado.

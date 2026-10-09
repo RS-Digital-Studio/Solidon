@@ -98,7 +98,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Tornillos, tuercas y arandelas están disponibles según ISO de M1,6 a M64. Para otros tamaños, *Medida propia* deriva las medidas de los tamaños vecinos y lo indica.
 - Con *Ajustado al taladro*, *Pasador para taladro* construye la contrapieza: una cabeza avellanada enrasada para un avellanado, una rosca exterior del mismo tamaño y paso para una interior.
 - En una rosca interior impresa, la selección ofrece directamente *Pasador para taladro*.
-- Si una pieza separada está en una cavidad como un taladro, una ranura, un avellanado o una rosca, las acciones lo dicen. Hasta ahora se fundía o se cortaba.
+- Si una pieza separada está en una cavidad como un taladro, una ranura, un avellanado o una rosca, aunque esté ajustada o sobresalga mucho, las acciones lo dicen. Hasta ahora se fundía o se cortaba.
 - Nuevo: el *Perno roscado*, una varilla roscada o espárrago sin cabeza, con chaflán en ambos extremos y la misma rosca imprimible que el tornillo y la tuerca.
 - También en taladros de bloques como el agujero para tornillo, el inserto termofijado o el alojamiento de tuerca, *Pasador para taladro* crea el pasador adecuado, y avisa si no están en el cuerpo.
 - Colocado a mano sobre una cara, el alojamiento de tuerca corta su hueco en el material. Hasta ahora el hueco quedaba encima y solo se taladraba el agujero para tornillo.

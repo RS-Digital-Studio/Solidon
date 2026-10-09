@@ -4408,7 +4408,8 @@ _SHAPING_HANDLINGS: Final = (
 #: Wie weit innerhalb des gemessenen Radius :func:`hole_is_clear` nach
 #: Dreiecksmitten sucht, und wie weit innerhalb der eigenen Wand
 #: :func:`_reaching_in` nach dem Stück eines Dreiecks — die eigene Wand liegt
-#: auf dem Radius, ein Steg, eine Nabe oder ein Zapfen deutlich darunter.
+#: auf dem Radius, ein Steg, eine Nabe oder ein Zapfen deutlich darunter. Ein
+#: Stück eines fremden Teils misst sich gegen den Radius selbst (RM-661).
 _CLEARANCE_MARGIN: Final = 0.02
 
 #: Wie viele Punkte :func:`_without_cavities` entlang der Achse eines fremden
@@ -5561,7 +5562,8 @@ def _inside_and_radial(
     core = _core_of(feature, axis, radius, corners, low, high) if bounds else None
     if core is not None:
         whole_bore = feature.kind == "hole" and triangles is None
-        asked = None if whole_bore else _foreign_triangles(mesh, own, triangles, labels)
+        foreign = _foreign_triangles(mesh, own, triangles, labels)
+        asked = None if whole_bore else foreign
         if whole_bore or (asked is not None and asked.any()):
             reach = _reaching_in(
                 mesh,
@@ -5573,6 +5575,7 @@ def _inside_and_radial(
                 core=core,
                 triangles=triangles,
                 asked=asked,
+                foreign=foreign,
             )
             reaching = ~inside & np.isfinite(reach)
             inside |= reaching
@@ -5695,6 +5698,7 @@ def _reaching_in(
     core: _Core | None = None,
     triangles: NDArray[np.int64] | None = None,
     asked: NDArray[np.bool_] | None = None,
+    foreign: NDArray[np.bool_] | None = None,
 ) -> NDArray[np.float64]:
     """Je Dreieck der kleinste Abstand seines Stücks zwischen den Grenzen vom Kern des
     Hohlraums — ``inf``, wo es nicht diesseits der eigenen Wand liegt.
@@ -5728,6 +5732,18 @@ def _reaching_in(
     gilt dann je Eintrag, und die Vorauswahl liest nur ihre Ecken; ``asked``
     beschränkt sie weiter auf die markierten (:func:`_foreign_triangles`), die
     übrigen bleiben ``inf``.
+
+    **Ein fremdes Teil misst sich gegen den Halbmesser selbst** (RM-661, ``foreign``
+    je gefragtem Dreieck): Der Saum fängt Rundung an der Wand des eigenen Teils. Ein
+    Stift Ø 5,9 oder Ø 5,98 in einer Bohrung Ø 6 lag mit seinem ganzen Mantel in
+    diesem Saum und galt als Wand — Spiel unter 2 % des Radius, die Enden an den
+    Mündungen oder dahinter, an beiden Kernen. Für Stücke fremder Teile gilt der
+    Halbmesser bis auf die Verschweißweite des Körpers (:func:`units.weld_tolerance`),
+    nicht die gemessene Wand: Ein Stift, der die Bohrung ohne Spiel füllt, liegt bei
+    gleicher Vernetzung genau auf ihr. Zwischen dem Lot auf die Facetten und dem
+    Halbmesser liegt an einem fremden Teil nur Luft der Bohrung oder Material des
+    Trägers, in das es eindringt; der Querstift, der in seiner Querbohrung auf dem
+    Kreis der Bohrung endet, bleibt draußen.
     """
     raw = mesh.raw
     all_faces = np.asarray(raw.faces, dtype=np.int64)
@@ -5743,7 +5759,15 @@ def _reaching_in(
         picked = np.flatnonzero(asked)
         if len(picked):
             found[picked] = _reaching_in(
-                mesh, centre, axis, bounds, radius, own, core=core, triangles=chosen[picked]
+                mesh,
+                centre,
+                axis,
+                bounds,
+                radius,
+                own,
+                core=core,
+                triangles=chosen[picked],
+                foreign=None if foreign is None else foreign[picked],
             )
         return found
     all_points = np.asarray(raw.vertices, dtype=np.float64)
@@ -5756,7 +5780,12 @@ def _reaching_in(
         used, local = np.unique(all_faces[chosen], return_inverse=True)
         points, faces = all_points[used], local.reshape(len(chosen), 3).astype(np.int64)
     extent = radius if core is None or core.extent is None else core.extent
-    widest = extent * (1.0 - _CLEARANCE_MARGIN)
+    strangers = foreign is not None and bool(foreign.any())
+    # Fremde Stücke zählen bis an die Wand selbst; die Vorauswahl reicht dann bis
+    # zum Halbmesser, ohne Saum.
+    widest = extent if strangers else extent * (1.0 - _CLEARANCE_MARGIN)
+    scale = 1.0 if core is None else core.scale
+    tolerance = units.weld_tolerance(float(mesh.bounds.diagonal)) / scale
     # **Die Vorauswahl als Bitmuster je Ecke**: welche Seite jeder Grenze sie
     # erreicht — quer zur Achse über ``-widest`` und unter ``widest`` in zwei
     # Richtungen, diesseits jeder Mündung. Ein Dreieck bleibt, wenn seine drei
@@ -5805,19 +5834,25 @@ def _reaching_in(
     if not len(candidates):
         return found
     pieces = _clipped_by(points[faces[candidates]] - centre, bounds)
+    stranger = foreign[candidates] if strangers and foreign is not None else None
     if core is None or core.shape == "axis":
         closest = _closest_to_the_axis(*pieces, axis)
-        limit = _own_wall_limit(
-            all_points, all_faces, own, centre, bounds, axis, radius, closest, (first, second)
-        )
     else:
         closest = _core_distance(core, *pieces, axis)
-        limit = _own_core_limit(core, all_points, all_faces, own, centre, bounds, axis, closest)
+    # Die eigene Wand fragen nur Stücke des eigenen Teils.
+    others = closest if stranger is None else closest[~stranger]
+    if core is None or core.shape == "axis":
+        mine = _own_wall_limit(
+            all_points, all_faces, own, centre, bounds, axis, radius, others, (first, second)
+        )
+    else:
+        mine = _own_core_limit(core, all_points, all_faces, own, centre, bounds, axis, others)
+    limit = np.where(stranger, radius - tolerance, mine) if stranger is not None else mine
     found[candidates] = np.where(closest < limit, closest, np.inf)
     return found
 
 
-@dataclasses.dataclass(frozen=True, slots=True)
+@dataclasses.dataclass(frozen=True, slots=True, eq=False)
 class _Core:
     """Wovon aus ein Hohlraum den Abstand eines Stücks misst (RM-660, :func:`_core_of`).
 
@@ -6489,7 +6524,9 @@ _NO_MOUTH_TO_GRIP: Final = _(
     # (RM-253, mit Paket G zusammengeführt).
     # 21: an jedem Hohlraum steht ein fremdes Teil mit dem Stück seiner Dreiecke darin, nicht nur
     # mit ihrer Mitte, und am Stift entscheidet der Quader seiner Dreiecke (RM-660).
-    cache_version="21",
+    # 22: ein fremdes Teil steht darin, sobald es dem Halbmesser näher kommt als die
+    # Verschweißweite, auch ein eng sitzender Stift (RM-661).
+    cache_version="22",
     title=_("Merkmal verschieben"),
     category="holes",
     params=MoveFeatureParams,
@@ -6873,7 +6910,9 @@ class DuplicateFeatureParams(FeaturePlacementParams):
     # (RM-253, mit Paket G zusammengeführt).
     # 21: an jedem Hohlraum steht ein fremdes Teil mit dem Stück seiner Dreiecke darin, nicht nur
     # mit ihrer Mitte, und am Stift entscheidet der Quader seiner Dreiecke (RM-660).
-    cache_version="21",
+    # 22: ein fremdes Teil steht darin, sobald es dem Halbmesser näher kommt als die
+    # Verschweißweite, auch ein eng sitzender Stift (RM-661).
+    cache_version="22",
     title=_("Merkmal verdoppeln"),
     category="holes",
     params=DuplicateFeatureParams,
@@ -7299,7 +7338,9 @@ class _PatternPlace:
     # (RM-253, mit Paket G zusammengeführt).
     # 14: an jedem Hohlraum steht ein fremdes Teil mit dem Stück seiner Dreiecke darin, nicht nur
     # mit ihrer Mitte, und am Stift entscheidet der Quader seiner Dreiecke (RM-660).
-    cache_version="14",
+    # 15: ein fremdes Teil steht darin, sobald es dem Halbmesser näher kommt als die
+    # Verschweißweite, auch ein eng sitzender Stift (RM-661).
+    cache_version="15",
     title=_("Merkmal vervielfachen"),
     category="holes",
     params=PatternFeatureParams,
@@ -8108,7 +8149,9 @@ class RemoveFeatureParams(BaseParams):
     # (RM-253, mit Paket G zusammengeführt).
     # 24: an jedem Hohlraum steht ein fremdes Teil mit dem Stück seiner Dreiecke darin, nicht nur
     # mit ihrer Mitte, und am Stift entscheidet der Quader seiner Dreiecke (RM-660).
-    cache_version="24",
+    # 25: ein fremdes Teil steht darin, sobald es dem Halbmesser näher kommt als die
+    # Verschweißweite, auch ein eng sitzender Stift (RM-661).
+    cache_version="25",
     title=_("Merkmal entfernen"),
     category="holes",
     params=RemoveFeatureParams,
@@ -8354,7 +8397,9 @@ class RotateFeatureParams(BaseParams):
     # (RM-253, mit Paket G zusammengeführt).
     # 18: an jedem Hohlraum steht ein fremdes Teil mit dem Stück seiner Dreiecke darin, nicht nur
     # mit ihrer Mitte, und am Stift entscheidet der Quader seiner Dreiecke (RM-660).
-    cache_version="18",
+    # 19: ein fremdes Teil steht darin, sobald es dem Halbmesser näher kommt als die
+    # Verschweißweite, auch ein eng sitzender Stift (RM-661).
+    cache_version="19",
     title=_("Merkmal drehen"),
     category="holes",
     params=RotateFeatureParams,
@@ -9803,7 +9848,9 @@ class ResizeFeatureParams(BaseParams):
     # (RM-253, mit Paket G zusammengeführt).
     # 27: an jedem Hohlraum steht ein fremdes Teil mit dem Stück seiner Dreiecke darin, nicht nur
     # mit ihrer Mitte, und am Stift entscheidet der Quader seiner Dreiecke (RM-660).
-    cache_version="27",
+    # 28: ein fremdes Teil steht darin, sobald es dem Halbmesser näher kommt als die
+    # Verschweißweite, auch ein eng sitzender Stift (RM-661).
+    cache_version="28",
     title=_("Merkmal ändern"),
     category="holes",
     params=ResizeFeatureParams,
@@ -10663,7 +10710,9 @@ OPEN_BODY_DETAIL: Final = _(
     # (RM-253, mit Paket G zusammengeführt).
     # 25: an jedem Hohlraum steht ein fremdes Teil mit dem Stück seiner Dreiecke darin, nicht nur
     # mit ihrer Mitte, und am Stift entscheidet der Quader seiner Dreiecke (RM-660).
-    cache_version="25",
+    # 26: ein fremdes Teil steht darin, sobald es dem Halbmesser näher kommt als die
+    # Verschweißweite, auch ein eng sitzender Stift (RM-661).
+    cache_version="26",
     title=_("Bohrung ändern"),
     category="holes",
     params=ResizeHoleParams,
@@ -11395,7 +11444,9 @@ SLOT_FEATURE_RENAMED: Final = _(
     # (RM-253, mit Paket G zusammengeführt).
     # 23: an jedem Hohlraum steht ein fremdes Teil mit dem Stück seiner Dreiecke darin, nicht nur
     # mit ihrer Mitte, und am Stift entscheidet der Quader seiner Dreiecke (RM-660).
-    cache_version="23",
+    # 24: ein fremdes Teil steht darin, sobald es dem Halbmesser näher kommt als die
+    # Verschweißweite, auch ein eng sitzender Stift (RM-661).
+    cache_version="24",
     # **Kein „Bohrung zum Langloch".** Der Titel stand so, solange die
     # Operation nur an einer Bohrung galt; seit die Erkennung Langlöcher findet
     # (:mod:`app.core.perceive.slots`), gilt sie auch an einem und hieße dort
@@ -19795,7 +19846,9 @@ class PlugParams(BaseParams):
     # (RM-253, mit Paket G zusammengeführt).
     # 13: an jedem Hohlraum steht ein fremdes Teil mit dem Stück seiner Dreiecke darin, nicht nur
     # mit ihrer Mitte, und am Stift entscheidet der Quader seiner Dreiecke (RM-660).
-    cache_version="13",
+    # 14: ein fremdes Teil steht darin, sobald es dem Halbmesser näher kommt als die
+    # Verschweißweite, auch ein eng sitzender Stift (RM-661).
+    cache_version="14",
     title=_("Bohrung verschließen"),
     category="holes",
     params=PlugParams,

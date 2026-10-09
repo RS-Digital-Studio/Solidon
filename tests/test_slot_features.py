@@ -6328,3 +6328,71 @@ def test_a_slot_with_a_long_pin_still_pulls_and_keeps_the_pin_outside(
     after = _parts_of(output)
     assert len(after) == 2, after
     assert after[0] == pytest.approx(before[0], abs=0.2), (before, after)
+
+
+# --- RM-661: ein eng sitzender Stift ist ein getrenntes Teil in seiner Bohrung --------------
+
+
+@pytest.mark.parametrize("span", [(0.0, 10.0), (-5.0, 15.0)], ids=["an-den-muendungen", "darueber"])
+@pytest.mark.parametrize("pin_diameter", [5.9, 5.98, 6.0])
+@pytest.mark.parametrize("kernel", ["mesh", "brep"])
+def test_a_tight_pin_in_its_bore_is_a_separate_part(
+    profile: Profile, kernel: str, pin_diameter: float, span: tuple[float, float]
+) -> None:
+    """RM-661: Ein Stift Ø 5,9 oder Ø 5,98 in einer Bohrung Ø 6 galt als Wand.
+
+    Sein Spiel (0,05 und 0,01 mm) liegt unter dem Saum von 2 % des Radius, den die
+    Teilefrage unter der eigenen Wand lässt, und seine Enden liegen an den Mündungen
+    oder dahinter: Kein Dreieck des Stifts kam der Achse näher als 0,98 · 3 mm, und
+    *Versetzen*, *Verschließen* und *Entfernen* verschmolzen ihn still mit der Platte —
+    an beiden Kernen. Der Saum fängt Rundung an der eigenen Wand; ein fremdes Teil
+    misst sich gegen den Halbmesser selbst. Ø 6 ohne Spiel liegt mit seinem Mantel
+    genau auf der Wand — gegen sie gemessen stünde er nicht darin. Soll: Menü und
+    jede Handlung sagen das getrennte Teil, mit *In Einzelteile aufteilen*.
+    """
+    entry = _plate_with_a_second_body(kernel, inside=True, pin_span=span, pin_diameter=pin_diameter)
+    feature = entry.features[_bore_in(entry, "hole")]
+    mesh = as_mesh_data(entry.mesh)
+    assert mesh.component_count == 2, "Voraussetzung: Platte und Stift"
+    centres = np.asarray(mesh.raw.triangles_center, dtype=np.float64)
+    within = (np.hypot(centres[:, 0], centres[:, 1]) < 3.0 * 0.98) & (
+        (centres[:, 2] > 0.01) & (centres[:, 2] < 9.99)
+    )
+    assert not within.any(), "Voraussetzung: kein Dreieck des Stifts steht innerhalb des Saums"
+
+    _names_the_other_part(entry, feature, profile)
+
+
+@pytest.mark.parametrize("kernel", ["mesh", "brep"])
+def test_a_pin_resting_on_the_mouth_or_above_it_leaves_the_bore_free(kernel: str) -> None:
+    """RM-661, Gegenfall Luft: Ein Stift Ø 5,98 über der Bohrung steht nicht darin —
+    auf ihrer Mündung aufgesetzt oder 0,5 mm darüber in der Luft."""
+    from app.core.geom.prepare_ops import hole_is_clear
+
+    for span in ((10.0, 25.0), (10.5, 25.0)):
+        entry = _plate_with_a_second_body(kernel, inside=True, pin_span=span, pin_diameter=5.98)
+        feature = entry.features[_bore_in(entry, "hole")]
+        mesh = as_mesh_data(entry.mesh)
+        assert mesh.component_count == 2, span
+        assert hole_is_clear(mesh, feature), span
+
+
+@pytest.mark.parametrize("side", [1.0, -1.0], ids=["rechts", "links"])
+@pytest.mark.parametrize("kernel", ["mesh", "brep"])
+def test_a_cross_pin_ending_at_the_bore_wall_leaves_the_bore_free(kernel: str, side: float) -> None:
+    """RM-661, Gegenfall Querbohrung: Ein Querstift, der in seiner Querbohrung bis an die
+    Wand der Bohrung reicht, steht nicht darin.
+
+    Sein Ende liegt auf dem Kreis der Bohrung, an der Mündung der Querbohrung, wo die
+    Wand fehlt — nicht näher an der Achse als die eigene Wand. Die Bohrung bleibt frei,
+    und die Teilefrage nennt kein getrenntes Teil.
+    """
+    from app.core.geom.prepare_ops import hole_is_clear, separate_part_reason
+
+    start = 3.0 if side > 0 else -23.0
+    entry = _plate_with_a_cross_pin(kernel, start, 20.0)
+    feature = entry.features[_bore_in(entry, "hole")]
+    mesh = as_mesh_data(entry.mesh)
+    assert mesh.component_count == 2, "Voraussetzung: Platte und Stift"
+    assert hole_is_clear(mesh, feature)
+    assert separate_part_reason(mesh, feature, entry.features) is None
