@@ -79,7 +79,7 @@ def main() -> int:
     base = {"file": str(MODEL), "root": ROOT.name}
     try:
         objects = load(MODEL)
-    except Exception as problem:  # noqa: BLE001 — Sonde: jeder Fehler ist eine Zeile
+    except Exception as problem:
         emit({**base, "error": f"{type(problem).__name__}: {problem}"[:300]})
         return 1
     profile = profiles.make_profile(PRINTER, MATERIAL)
@@ -95,7 +95,11 @@ def main() -> int:
             need = advise.support_need(result)
             model = need.model
             # Seit dem Review vom 08.10. nimmt der Kanalraum die Bahnbreite.
-            width = (settings.layers.line_width,) if len(inspect.signature(channel_space).parameters) > 2 else ()
+            width = (
+                (settings.layers.line_width,)
+                if len(inspect.signature(channel_space).parameters) > 2
+                else ()
+            )
             slabs = channel_space(result, model, *width) if model.channels else []
             entries = advise.advise(settings, profile, result, bounds=mesh.bounds)
             row.update(
@@ -108,7 +112,7 @@ def main() -> int:
                 advice=sorted([item.path, str(item.value)] for item in entries),
                 seconds=round(time.perf_counter() - started, 1),
             )
-        except Exception as problem:  # noqa: BLE001
+        except Exception as problem:
             row.update(
                 error=f"{type(problem).__name__}: {problem}"[:300],
                 trace=traceback.format_exc()[-1200:],

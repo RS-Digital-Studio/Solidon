@@ -21,8 +21,13 @@ from app.core.slice import analysis  # noqa: E402
 raw = trimesh.load(sys.argv[2], process=False)
 raw.apply_translation((0.0, 0.0, -raw.bounds[0][2]))
 result = analysis.slice_body(
-    MeshData.of(raw), 0.2, first_layer_height=0.2, overhang_angle=float(sys.argv[3]),
-    bridge_from=0.84, detail="support", support_volume=False,
+    MeshData.of(raw),
+    0.2,
+    first_layer_height=0.2,
+    overhang_angle=float(sys.argv[3]),
+    bridge_from=0.84,
+    detail="support",
+    support_volume=False,
 )
 x, y, z = (float(value) for value in sys.argv[4:7])
 layers = result.layers
@@ -35,7 +40,9 @@ name = min(
 )
 group = ceilings.of(name)
 shapes = [ceilings.shape(member) for member in group]
-print(f"Stück {name} z {layers[index].z:.2f}, Decke {len(group)} Stücke, {sum(s.area for s in shapes):.1f} mm²")
+print(
+    f"Stück {name} z {layers[index].z:.2f}, Decke {len(group)} Stücke, {sum(s.area for s in shapes):.1f} mm²"
+)
 print("schließt:", ceilings.closes(group))
 footprint = unary_union(shapes)
 print("Grundriss", footprint.bounds, "Teile", len(getattr(footprint, "geoms", [footprint])))

@@ -39,7 +39,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from app.core import discover
+from app.core import discover, tools
 from app.core.errors import CANCEL, RETRY, FileWriteError
 from app.core.knowledge import profiles
 from app.core.log import get_logger
@@ -378,15 +378,19 @@ class SettingsDialog(QDialog):
         self.slicer.addItem(tr("Später auswählen"), "")
         self._stored_slicer_path = discover.remembered_path("slicer")
         selected_slicer = self._stored_slicer_path if slicer_path is None else slicer_path
-        if selected_slicer:
+        if selected_slicer and tools.is_supported_slicer(selected_slicer):
             self.slicer.addItem(slicer_title(Path(selected_slicer)), selected_slicer)
             self.slicer.setItemData(1, selected_slicer, Qt.ItemDataRole.ToolTipRole)
             self.slicer.setCurrentIndex(1)
         self.slicer.setAccessibleName(titles["slicer"])
         self.slicer.currentIndexChanged.connect(self._slicer_changed)
-        self.slicer_file = QPushButton(tr("Benutzerdefiniert …"), self)
+        # Derselbe Knopf mit demselben Namen wie im Erststart und im Druckdialog
+        # (RM-601). Hier hieß er noch „Benutzerdefiniert …“, und so heißt dort
+        # der Eintrag für einen eigenen Drucker (C4 im Erststart).
+        self.slicer_file = QPushButton(tr("Programm wählen …"), self)
         self.slicer_file.setIcon(icon("open", self.slicer_file))
         self.slicer_file.setToolTip(tr("Slicer-Programm auswählen"))
+        self.slicer_file.setAccessibleDescription(self.slicer_file.toolTip())
         self.slicer_file.clicked.connect(self._choose_slicer_file)
         self.search_again = QPushButton(tr("Erneut prüfen"), self)
         self.search_again.setIcon(icon("refresh", self.search_again))
@@ -733,7 +737,7 @@ class SettingsDialog(QDialog):
             ""
             if paths
             else tr(
-                "Kein Slicer gefunden. Wählen Sie über „Benutzerdefiniert …“ "
+                "Kein Slicer gefunden. Wählen Sie über „Programm wählen …“ "
                 "das installierte Programm aus."
             )
         )

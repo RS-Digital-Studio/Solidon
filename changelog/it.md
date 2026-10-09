@@ -15,7 +15,7 @@ gli stessi punti nello stesso ordine (`tests/test_changelog.py`).
 `tools/make_download.py` ne prende la sezione della versione corrente e la
 scrive in `website/version.json`.
 
-## 0.5.4
+## 0.6.0
 
 ### Uso e sistema
 
@@ -43,8 +43,17 @@ scrive in `website/version.json`.
 
 - Su Linux, Solidon crea ora il file di stampa anche con Cura come Flatpak o AppImage.
 - La finestra di stampa offre le stampanti dello slicer scelto, come *Primi passi* e *Impostazioni*. Una stampante ripresa così resta legata al suo slicer.
+- Nella finestra di stampa lo slicer si cambia come in *Primi passi*, anche con *Scegli programma …* per uno che Solidon non trova da solo.
+- Una stampante dell'elenco di Solidon e la stessa dello slicer contano come un solo apparecchio. La finestra sceglie il profilo con l'ugello giusto e il file porta il codice di avvio.
+- Vengono offerti solo gli slicer con cui Solidon lavora, più gli slicer per resina come ChituBox e Lychee. Ora vale anche Bambu Studio come AppImage.
+- Il codice di avvio e il volume di stampa vengono solo dalla tua stampante, non da un altro modello della stessa serie.
+- La finestra di stampa assegna i profili dello slicer molto più in fretta, all'apertura e dopo ogni cambio di slicer.
 - Il tempo di stampa stimato è più vicino a quello dello slicer, molto più vicino per i pezzi con supporti.
 - Se supporti e skirt stanno sul piano, il controllo lo misura ora solo sotto gli sbalzi. I pezzi vicini al bordo non ricevono più un avviso senza motivo.
+- I suggerimenti accettati non lasciano quasi più senza supporto gli sbalzi che ne hanno bisogno. *Tenere liberi i canali* blocca solo lo spazio da cui un supporto non si potrebbe più togliere.
+- Dove i supporti sotto piccoli sbalzi poggiano sul modello, Solidon suggerisce supporti ad albero. Lì lasciano meno segni.
+- Sulle punte piccole Solidon suggerisce una *Velocità minima di rallentamento* più bassa, così non si ammorbidiscono. L'impostazione arriva a ogni slicer.
+- I bordi stretti che si reggono da soli restano liberi con *Bordi senza supporto*. La stampa richiede così molto meno supporto.
 
 ### Filettature, fori e componenti normalizzati
 

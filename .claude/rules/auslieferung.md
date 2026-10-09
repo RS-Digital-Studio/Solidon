@@ -4,6 +4,7 @@ paths:
   - "tools/**/*.py"
   - "packaging/**"
   - ".github/workflows/*.yml"
+  - "changelog/*.md"
 ---
 
 # Regeln für Paket, Version und Veröffentlichung
@@ -106,12 +107,27 @@ ohne Nachfrage (Robert); ein Bau zum Messen nicht.
 
 **Der Changelog-Abschnitt der nächsten Version entsteht vor dem Sprung** und
 nimmt auch unfertige Arbeit auf — `changelog/<sprache>.md`, sechs Sprachen,
-Kundensprache, kein Verzeichnis der Änderungen. `test_changelog` prüft nur den
-Abschnitt von `APP_VERSION`; seine Grenzen (höchstens 200 Zeichen je Punkt,
-Großbuchstabe am Anfang, keine Bausteine mit „test" im Namen) greifen also
-erst nach `bump_version` — wer vorher schreibt, zählt selbst. Vor jedem Punkt
+Kundensprache, kein Verzeichnis der Änderungen. `test_changelog` prüft Länge
+(höchstens 200 Zeichen je Punkt) und Wörter der Testfamilie über den ganzen
+Verlauf, gleiche Punkte und Gliederung in jeder Sprache, Großbuchstabe,
+Satzende und Commitsprache im obersten Abschnitt und in dem von `APP_VERSION`.
+Vor jedem Punkt
 über einen behobenen Fehler steht `git tag --contains <ursache>`: Ein Fehler,
 den keine veröffentlichte Version hatte, gehört nicht in den Changelog.
+
+**Der Punkt reist mit dem Zweig** (Entscheidung Robert): Merkt ein Kunde, was
+ein Zweig ändert, trägt der Zweig den Punkt selbst in den offenen Abschnitt
+aller sechs `changelog/<sprache>.md` ein, bevor er nach main gemergt wird:
+Aus Git nachgebaut, fällt beim Release gelandete Arbeit durch; die
+Einzelcommits hinter den Merges zeigt `git log --no-merges <tag>..HEAD`.
+Offen ist der oberste Abschnitt, solange es zu seiner Nummer keinen Tag gibt
+(`git tag -l v<nummer>`); sonst legt der Zweig den nächsten an, mit der Nummer
+aus `tools/bump_version.py --zeigen` (`--minor` nur nach Produktentscheidung).
+
+**Ein Punkt spricht allgemein** (Entscheidung Robert): von dem, was der Kunde
+an seinem eigenen Modell merkt — nicht von Teilen oder Namen der Prüfmodelle,
+an denen gemessen wurde („Kinn und Flügel“, „am Eiffelturm“). Damit kann ein
+Leser nichts anfangen, der diese Modelle nicht kennt.
 
 ## Kein Release ohne frischen Bausteinnachweis
 

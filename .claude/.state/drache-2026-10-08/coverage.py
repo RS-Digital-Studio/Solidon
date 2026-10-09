@@ -23,7 +23,6 @@ print(f"stützbedürftig: {down.sum()} Dreiecke, {areas[down].sum():.0f} mm²")
 
 probe = centres[down] - np.array([0.0, 0.0, 0.3])
 import shapely
-from shapely.ops import unary_union
 
 levels = np.round(probe[:, 2] / 0.2) * 0.2
 inside = np.zeros(len(probe), dtype=bool)

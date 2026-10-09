@@ -32,6 +32,12 @@ entfernt hat.
 | Datum | Abschnitt |
 |---|---|
 | 2026-10-09 | [RM-593 und RM-594: Auswertung wächst nicht mehr je Schritt, losgelassene Netze werden frei (09.10.2026)](#rm-593-und-rm-594-auswertung-wächst-nicht-mehr-je-schritt-losgelassene-netze-werden-frei-09102026) |
+| 2026-10-08 | [RM-602: Der Druckdialog ordnet die Profile in einem Lesedurchgang zu (08.10.2026)](#rm-602-der-druckdialog-ordnet-die-profile-in-einem-lesedurchgang-zu-08102026) |
+| 2026-10-08 | [RM-601: Die Slicerwahl im Druckdialog geht wie in Erste Schritte, und überall stehen nur unterstützte Slicer (08.10.2026)](#rm-601-die-slicerwahl-im-druckdialog-geht-wie-in-erste-schritte-und-überall-stehen-nur-unterstützte-slicer-08102026) |
+| 2026-10-08 | [RM-600: Ein Drucker, eingebaut und aus dem Slicer übernommen, ist ein Gerät (08.10.2026)](#rm-600-ein-drucker-eingebaut-und-aus-dem-slicer-übernommen-ist-ein-gerät-08102026) |
+| 2026-10-08 | [RM-582: Ränder tragen sich selbst, und die Übergabe sperrt die Stütze unter ihnen (08.10.2026)](#rm-582-ränder-tragen-sich-selbst-und-die-übergabe-sperrt-die-stütze-unter-ihnen-08102026) |
+| 2026-10-08 | [RM-581: Wo kleine Überhänge auf dem Modell ansetzen, schlägt Solidon Bäume vor (08.10.2026)](#rm-581-wo-kleine-überhänge-auf-dem-modell-ansetzen-schlägt-solidon-bäume-vor-08102026) |
+| 2026-10-08 | [RM-580: Spitzen kühlen langsamer gedruckt ab, weil das Mindesttempo die Mindestzeit erst greifen lässt (08.10.2026)](#rm-580-spitzen-kühlen-langsamer-gedruckt-ab-weil-das-mindesttempo-die-mindestzeit-erst-greifen-lässt-08102026) |
 | 2026-10-08 | [RM-570: Eine schräge Unterseite ist ein Feld, und ein Kinn bekommt seine Stützen (08.10.2026)](#rm-570-eine-schräge-unterseite-ist-ein-feld-und-ein-kinn-bekommt-seine-stützen-08102026) |
 | 2026-10-08 | [RM-566: Der Drache bekommt seine Stützen, und die Kanalsperre sperrt nur Raum, an den man nicht hinkommt (08.10.2026)](#rm-566-der-drache-bekommt-seine-stützen-und-die-kanalsperre-sperrt-nur-raum-an-den-man-nicht-hinkommt-08102026) |
 | 2026-10-06 | [RM-104 (Teil): Abbruch des lokalen Modells auf macOS und HiDPI-Test unter Xvfb (06.10.2026)](#rm-104-teil-abbruch-des-lokalen-modells-auf-macos-und-hidpi-test-unter-xvfb-06102026) |
@@ -43881,6 +43887,210 @@ verlangen, nennt der Prüfbericht noch keine Stelle: [RM-572](ROADMAP.md#rm-572)
 und `test_only_what_rests_on_the_model_counts_as_its_field`, alle ohne den Fix rot; der
 Gitterbecher bleibt ohne Stütze; im Korpus am Endstand ändert sich außer der Sperre kein
 Vorschlag (RM-566).
+
+## RM-600: Ein Drucker, eingebaut und aus dem Slicer übernommen, ist ein Gerät (08.10.2026)
+
+<a id="rm-600-ein-drucker-eingebaut-und-aus-dem-slicer-übernommen-ist-ein-gerät-08102026"></a>
+<a id="rm-600"></a>
+
+**Befund (Roberts Drachendruck, übergeben von der Drachen-Sitzung):** Das Projekt trug den
+eingebauten `centauri-carbon-2`, Roberts Drucker ist der aus dem ElegooSlicer übernommene
+„Elegoo Centauri Carbon 2 0.4 nozzle“. `printer_for` gab bei gleichem Gerät den längeren
+Titel zurück, also den übernommenen, und jeder Vergleich mit dem Projektdrucker scheiterte.
+An einer Kopie seines Bestands nachgestellt: Die Maschinenliste des Druckdialogs zeigte die
+0,2er, 0,6er und 0,8er Maschine, nicht die 0,4er; gewählt war nichts, ein Prozess fehlte,
+das Filament fiel ohne Maschine auf „Elegoo PLA @0.2 nozzle“, und die Übergabe schrieb „no
+machine side handed over“. `tools/matrix_unit.py … elegoo:centauri-carbon-2` scheiterte
+seitdem an `slicer.machine_mismatch`. Robert: „es war der falsche Drucker ausgewählt und die
+falsche düse“.
+
+**Behoben:** `printer_for` und `chosen_printer` nehmen `prefer`: Der gemeinte Drucker
+gewinnt, wenn er dasselbe Gerät ist wie der Treffer (Name ohne Düse gleich) und dieser Name
+die Maschine meint. Übergabe (`machine_for`, `_fits_the_printer`) und Druckdialog
+(`_machines_worth_showing`, `_printer_of_the_slicer`, `_slicer_machine_for_project`) fragen
+mit dem Projektdrucker.
+
+**Review (hoch):** Mit `prefer` hätte der Zwilling eines Kobra 2 die Maschine des Kobra 2 Max
+bekommen — `_names_the_printer` ließ hinter dem Druckernamen jedes Wort zu. Dieselbe Lücke
+hatte der eingebaute Drucker schon auf main: „Anycubic Kobra 2“ meinte Kobra 2
+Max/Neo/Plus/Pro, „Elegoo Neptune 4“ den Neptune 4 Pro und Max (420 statt 225 mm Bett),
+„Creality K1“ den K1 SE und die CFS-C-Ausführungen, „Sovol SV06“ den SV06 Plus, „Prusa XL“
+den XL 5T; deren Maschine ging samt Startcode an den kleineren Drucker. Seitdem darf hinter
+dem Druckernamen nur die Düse folgen (`_NOZZLE_AFTER`); was ein Drucker in PrusaSlicers
+Bündel festhält („Original Prusa MK4S HF0.4 nozzle“, „… XL Input Shaper …“), meint er weiter
+(`names_the_printer_profile`) — ohne das lehnte das Tor 15 Prusa-Fälle ab —, und HF gilt
+als Düse. Gemessen über alle 3794 Maschinen von ElegooSlicer, OrcaSlicer, Bambu Studio,
+Creality Print, Anycubic Slicer Next und PrusaSlicer: 35, 35, 10, 22, 4 und 35 Zuordnungen
+fallen weg (141), jede zu einem anderen Gerät (dazu MK4S MMU3 und XL 2T/5T), keine wechselt zu einem
+anderen Drucker, neu zugeordnet sind nur PrusaSlicers „SV06“-Profile zum Sovol SV06, der
+genau dieses Bündelprofil festhält; Vorwahl (`match`) und
+`supports_printer` sind für alle 20 eingebauten Drucker an sechs Slicern unverändert (120
+Kombinationen), nachdem PrusaSlicers „MINI && MINI+“ in `_printer_name` gefaltet ist. Eine
+solche Maschine ist kein eigenes Profil: `_fits_the_printer` lehnt sie über
+`related_printer` ab.
+
+**Nachweis (08.10.2026):**
+`tests/test_slicer_profiles.py::test_the_project_printer_wins_against_its_adopted_twin`,
+`tests/test_print_settings.py::test_a_built_in_printer_gets_the_machine_side_of_its_adopted_twin`
+und `tests/test_print_settings_ui.py::test_an_adopted_twin_does_not_take_the_machines_of_the_project_printer`,
+die beiden letzten am Stand von main rot. Sonde mit Roberts Bestand: Maschine 0,4, Prozess
+„0.20mm Standard @Elegoo CC2 0.4 nozzle“, Filament „Elegoo PLA @ECC2“, die Maschinenseite
+geht mit; `matrix_unit` für den Centauri Carbon 2 grün, mit dem Code von main
+`slicer.machine_mismatch`. Zur Gerätegrenze `test_a_longer_device_is_not_the_shorter_one`
+(acht Verwandte), `test_prusa_names_its_mini_twice` und
+`test_a_related_device_is_not_handed_over_as_the_printers_own`; mit echtem Slicer
+`tests/test_real_slicers.py::test_an_adopted_twin_and_its_built_in_printer_share_the_machine`
+(ElegooSlicer) und `test_a_related_device_never_hands_its_machine_to_the_smaller_printer`
+(Anycubic Slicer Next, Kobra 2 gegen Kobra 2 Max). Changelog: ja.
+
+## RM-601: Die Slicerwahl im Druckdialog geht wie in Erste Schritte, und überall stehen nur unterstützte Slicer (08.10.2026)
+
+<a id="rm-601-die-slicerwahl-im-druckdialog-geht-wie-in-erste-schritte-und-überall-stehen-nur-unterstützte-slicer-08102026"></a>
+<a id="rm-601"></a>
+
+**Befund:** Robert: „den slicer kann ich in druckeinstellungen nicht auch noch in
+Druckeinstellungen tauschen, das soll wie in erste Schritte hier gehen“. Der Druckdialog
+zeigte während der Slicersuche (an Roberts Rechner mit sieben Slicern 1,5 s) und bei einem
+einzigen Slicer nur dessen Namen; ein Programm außerhalb der Suchorte ließ sich dort nicht
+wählen, und hatte es jemand in den Einstellungen gewählt, nahm ihm die Antwort der Suche den
+Platz. Dazu Robert: „erste schritte und druckdialog sollten auch nur die unterstützen slicer
+anzeigen“ — `find_programs` stellt den gemerkten Pfad ungeprüft vorn hin. Auf die Rückfrage,
+was mit Resin-Slicern geschieht: „Resin und die Slicer, Resinslicer kommen auch bald“.
+
+**Behoben:** Ein Auswahlfeld ab dem ersten bekannten Slicer, daneben „Programm wählen …“
+(`ask_slicer_program`, gemeinsam mit Erststart und Einstellungen, die den Knopf bis dahin
+„Benutzerdefiniert …“ nannten); ein selbst gewählter Slicer bleibt in der Liste und gewählt.
+`tools.is_supported_slicer` bejaht eine Familie, die Solidon übersetzt, oder einen
+Resin-Slicer aus `tools.RESIN_SLICERS` (ChituBox, Lychee, Photon Workshop, HALOT BOX,
+VoxelDance, PreForm, NovaMaker, Formware — am Namen erkannt, nicht gesucht). Jede Stelle, die
+den Slicer bestimmt, fragt `tools.slicer_programs()`/`slicer_program()`: Erststart,
+Einstellungen, Druckdialog, Menüexport, Grundlage und Filamentübernahme (Review: die drei
+letzten liefen am Filter vorbei). Die Programmwahl lehnt ein fremdes Programm mit *Einen
+anderen Slicer auswählen* ab und nennt die Slicer (`tools.SLICER_TITLES`); im Druckdialog
+öffnet dieselbe Handlung jetzt die Slicerwahl statt des Profilkastens. Der Druckdialog bietet
+kein „Später auswählen“. Ist ein fremdes Programm gemerkt, fragt `ExternalTool.path()` die
+zwischengespeicherte Suche ohne gemerkten Pfad (`find_program(..., remembered=False)`) statt
+jedes Mal alle Fassungen (zwei Sekunden, Review Runde 2). Auf Roberts Nachsatz „alle slicer
+bei linux und mac sollen dazu gehören“: `flavour_of` vergleicht auch ohne Trenner — Bambu Studios AppImage
+„Bambu_Studio_linux_….AppImage“ war bis dahin Familie `other` und rechnete nie. Bauplan §29
+nennt die Beschränkung.
+
+**Nachweis (08.10.2026):** `tests/test_print_settings.py::test_several_slicers_become_a_choice`
+(jetzt auch ein einzelner als Auswahl),
+`test_the_print_dialog_takes_a_slicer_the_search_does_not_find` (ohne den Erhalt des eigenen
+Slicers rot) und `test_the_print_dialog_offers_only_slicers_solidon_works_with`;
+`test_without_a_slicer_the_print_dialog_offers_the_program_choice` (ohne Zeilenabschluss
+rot); `tests/test_first_run_setup.py::test_only_slicers_solidon_works_with_are_offered` und
+`test_choosing_a_program_solidon_does_not_work_with_is_refused` (samt *Abbrechen*);
+`tests/test_discover.py::test_only_slicers_solidon_works_with_are_found` und
+`test_the_refusal_names_every_slicer_solidon_works_with`; mit echten Slicern
+`tests/test_real_slicers.py::test_every_installed_slicer_stays_on_offer` (sieben Programme,
+in der CI unter Linux und macOS). Sonde mit Roberts Bestand: Das Feld steht beim Öffnen mit
+ElegooSlicer da, der Wechsel auf Anycubic Slicer Next bietet Kobra S1 und S1 Max. Changelog:
+ja.
+
+## RM-602: Der Druckdialog ordnet die Profile in einem Lesedurchgang zu (08.10.2026)
+
+<a id="rm-602-der-druckdialog-ordnet-die-profile-in-einem-lesedurchgang-zu-08102026"></a>
+<a id="rm-602"></a>
+
+**Befund (beim Nachstellen von RM-600 gemessen):** Kommen im Druckdialog die Profile an, stand
+das Fenster an Roberts ElegooSlicer 2,4 bis 2,8 s. `_profiles_found` las 14 327-mal 1431
+Dateien („fdm_filament_common“ allein 1136-mal), baute 23 Ordnerindizes, bestimmte den
+Slicernamen samt Flatpak-Prüfung je Feld neu (932 Aufrufe, 0,27 s) und füllte die Prozesse
+zweimal — einmal über das Signal der Maschinenwahl, gleich danach mit dem passenden Profil.
+
+**Behoben:** `slicer_profiles.single_read()` hält Dokumente und Indizes einen Durchgang lang,
+threadlokal und danach verworfen; `_profiles_found` läuft darin, `binding` und
+`compatible_with` reichen ihn durch. Der Slicername steht einmal vor der Schleife,
+`_take_profiles` setzt die Maschine, ohne dass `_machine_chosen` die Prozesse vorab füllt.
+
+**Nachweis (08.10.2026):** gemessen mit Roberts Bestand (Kopie): 0,6 bis 0,8 s statt 2,4 bis
+2,8 s je Profilantwort, 1437 Lesungen statt 14 327; dieselbe Auswahl (Maschine, Prozess,
+Filament) vorher und nachher.
+`tests/test_slicer_profiles.py::test_a_single_read_reads_each_profile_once_and_forgets_it_after`
+(einmal gelesen, anderer Faden liest selbst, danach verworfen) und
+`tests/test_print_settings_ui.py::test_profiles_arrive_in_one_read_and_fill_the_processes_once`
+(ohne `_placing_machine` zwei Füllungen, rot). Changelog: ja.
+
+## RM-580: Spitzen kühlen langsamer gedruckt ab, weil das Mindesttempo die Mindestzeit erst greifen lässt (08.10.2026)
+
+<a id="rm-580-spitzen-kühlen-langsamer-gedruckt-ab-weil-das-mindesttempo-die-mindestzeit-erst-greifen-lässt-08102026"></a>
+<a id="rm-580"></a>
+
+**Befund (Drache, 08.10.2026):** Die obersten 12 mm des Drachen erreichten in keinem Slicer die
+Mindestschichtzeit des Herstellers; die Spitzen druckten in 0,1 bis 1,3 s je Schicht. Der
+Slicer bremst eine kurze Schicht nur bis zu seinem Mindesttempo, und Elegoo, Bambu und
+Creality nennen für PLA 20 mm/s. Solidon kannte das Mindesttempo nicht als Einstellung.
+
+**Behoben:** `cooling.minimum_speed` reist in allen drei Familien (Prusa `min_print_speed`,
+Orca-Familie `slow_down_min_speed` am Filament, auch je Bambu-Düsenvariante, Cura
+`cool_min_speed`) und wird aus dem Herstellerfilament gelesen. Der Rat schlägt
+`TIP_SPEED` 5 mm/s vor, wenn über einen Millimeter Höhe Schichten mit dem eingestellten Tempo
+nicht einmal die halbe Mindestzeit brauchen (`advise._tips_stay_too_short`); die Mindestzeit
+selbst bleibt beim Hersteller. Die Zeitschätzung rechnet mit dem Mindesttempo der
+Einstellungen; `Motion` trägt es nicht mehr, sie entsteht weiter nur, wo das Profil eines
+nennt (RM-465).
+
+**Nachweis (08.10.2026):** Schichten am Anschlag des Mindesttempos, also ohne erreichte
+Mindestzeit (`gcode_anschlag.py`), Drache vorher → nachher: ElegooSlicer 34 → 15, Bambu
+Studio 34 → 15, Creality Print 44 → 28, OrcaSlicer 36 → 27, Cura 21 → 16, PrusaSlicer
+19 → 19 bei viermal so langsamem Druck dieser Schichten. Übrig sind die letzten 2 bis 4 mm
+der Spitzen. `tests/test_advise.py::test_small_tips_get_a_slower_minimum_speed`, Gegenprobe
+rot; Rücklesen je Familie in `test_manufacturer.py`. Korpus: 47 von 242 Körpern bekommen den Vorschlag, alle mit kleinen Querschnitten.
+
+## RM-581: Wo kleine Überhänge auf dem Modell ansetzen, schlägt Solidon Bäume vor (08.10.2026)
+
+<a id="rm-581-wo-kleine-überhänge-auf-dem-modell-ansetzen-schlägt-solidon-bäume-vor-08102026"></a>
+<a id="rm-581"></a>
+
+**Befund:** „Automatisch“ heißt bei Orca, Prusa, Creality und Cura Gitter, und ein Gitter
+setzt mit jeder Säule auf dem Modell auf. Am Drachen setzten die Gitter der Hersteller 212
+bis 324 mm² auf, Solidons Bäume 4 bis 66 mm² (`gcode_auflage.py`).
+
+**Behoben:** Bäume, wo Stützen auf dem Modell ansetzen und kein einzelnes Stück über
+`OVERHANG_LAYER_WORTH_SUPPORT` hängt (`SupportNeed.piece`); unter einer großen flachen Decke
+bleibt die Art des Herstellers, weil die Unterseite dort zwischen den Baumspitzen durchhängt
+(`konzepte/recherche-slicer-einstellungen-2026-10.md`). Steht „Gitter“ ausdrücklich, schlägt
+der Rat dort ebenfalls Bäume vor. Hybridstützen und Baumstabilität:
+[RM-584](ROADMAP.md#rm-584).
+
+**Nachweis:** `tests/test_slice_findings.py::test_trees_where_small_overhangs_rest_on_the_model_not_under_a_flat_ceiling`
+(Kinn über der Brust: Baum; Arm von 796 mm²: Art des Herstellers; Gitter → Baum; Tisch:
+nichts), Gegenprobe rot. Korpus: 14 Körper bekommen Bäume statt der Art des Herstellers.
+
+## RM-582: Ränder tragen sich selbst, und die Übergabe sperrt die Stütze unter ihnen (08.10.2026)
+
+<a id="rm-582-ränder-tragen-sich-selbst-und-die-übergabe-sperrt-die-stütze-unter-ihnen-08102026"></a>
+<a id="rm-582"></a>
+
+**Befund (Robert, 08.10.2026):** Am Eiffelturm aus dem Korpus („一体无支撑“, ohne Stützen
+gedacht) standen Stützen, an die man nicht herankommt. Gemessen: Der Rat verlangte Stützen
+wegen der Ränder der Plattformen (oben ein Kranz von 2,6 mm, darunter Ränder unter 1 mm), und
+die Slicer stellten dafür Baumstämme außen am Turm hoch — ElegooSlicer 831 m, OrcaSlicer
+558 m, PrusaSlicer 294 m, Cura 311 m. Im Schaft sperrte die Kanalsperre schon. „Brücken nicht
+stützen“ im ElegooSlicer änderte fast nichts (831 → 826 m).
+
+**Behoben:** `analysis.ledges` nennt Decken, deren Teil jenseits `LEDGE_REACH` (3 mm) um
+ihre Wurzel höchstens `LEDGE_SPILL` des Felds ist und für sich keine Stütze lohnt
+(`worth_support`), und die keine freie Öffnung über `SPAN_INTERESTING` umschließen — eine
+Ringschulter legt ihre Bahnen quer über die Öffnung (Gewürzbehälter). Sie zählen nicht zum
+Stützbedarf, nicht zu „auf dem Modell“, nicht zum Überhang- und nicht zum Brückenbefund; der
+Prüfbericht fragt nur die Decken seiner Kandidaten (`only`), Bericht und Stützbedarf brechen
+in der Randfrage ab. Der neue Schalter „Ränder ohne Stütze“ (`support.spare_ledges`,
+Vorschlag nur mit Stützen) sperrt ihre Überhangfläche in der Übergabe (`ledge_space`,
+gemerkt) und spart aus, was Stütze braucht; eigener Befund `export.ledge_blocker` über die
+gesperrten Ränder, und die Plattengegenprobe kennt die Sperre. Die Bögen unten bleiben
+gestützt: [RM-585](ROADMAP.md#rm-585).
+
+**Nachweis (08.10.2026, Endstand):** Eiffelturm mit Solidons Vorschlägen: ElegooSlicer 216 statt 869 m Stütze, OrcaSlicer 163 statt 592, PrusaSlicer 81 statt 367, Cura 104 statt 358 (gegen „Stützen automatisch“); der
+Rest steht unter den Bögen. Drache: von den Überhängen, die Stütze brauchen (ohne Kanaldecken und Ränder, `gcode_stuetzen.py`, `needed_share`), sind gestützt: ElegooSlicer 99,8 %, OrcaSlicer 99,6 %, PrusaSlicer 100 %, Cura 96,5 %. Tests in `test_slice_findings.py`,
+`test_export.py` und `test_estimate.py`: Rand, Konsole an einer Wand ohne Brücke, Schulter um
+eine Öffnung mit Stützen und Brückenbefund, Fase von 52°, Lasche am Flansch (beide Seiten der
+Grenze), Randsperre mit Aussparung, Scheibe aus reinem Zuschlag, Befund nur über gesperrte
+Ränder ihrer Höhe, eingeschränkte Frage, Abbruch, Merker, Sperre in allen drei Familien,
+Plattengegenprobe auch bei gemischten Teilen; 14 Gegenproben rot. Korpus: 45 von 242 Körpern bekommen „Ränder ohne Stütze“, 7 brauchen keine Stützen mehr (Besteck-Organizer, Carcassonne-Gitter, Herz-Deko-Sockel, CC2-Werkzeugkiste, drei Teile aus `chufang`), sonst ändern sich nur Folgevorschläge. Tor
+grün (24 839 bestanden, 116 übersprungen); Durchsicht sechs Runden `solidon3d-review`, die letzte ohne Befund.
 
 ## RM-104 (Teil): Abbruch des lokalen Modells auf macOS und HiDPI-Test unter Xvfb (06.10.2026)
 

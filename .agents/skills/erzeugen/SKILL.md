@@ -97,9 +97,8 @@ Release-Bilder und gehören nicht in den Uploadpfad.
    der Drucke verdirbt, wartet der Tag, bis die Korrektur fertig und im echten
    Slicer belegt ist — auch wenn sie in einer anderen Sitzung läuft. Kein
    Teilrelease, ohne dass Robert es so will.
-2. **Changelog** der nächsten Version vor dem Sprung, in jeder Sprache
-   (Regeln in `auslieferung.md`). Die Grenzen von `test_changelog` greifen erst
-   nach dem Sprung: bis dahin je Punkt selbst zählen.
+2. **Changelog** der nächsten Version vor dem Sprung, in jeder Sprache (Regeln
+   und was `test_changelog` wann prüft: `auslieferung.md`).
 3. **Release-Tor** nach `/pruefen --release` — Kernsammlung, getrennte
    Fensterdateien, Leistungslauf, Ruff, Format, mypy — über den Stand, der
    ausgeliefert wird; ein grünes Entwicklungstor genügt nicht. Dann committen.
