@@ -285,7 +285,7 @@ def _moves(gcode: Path) -> list[str]:
 
 def _sliced_tower(
     printer: str,
-    installed_slicer: Path,
+    program: Path,
     folder: Path,
     chosen: dict[str, object],
     accepted: dict[str, object] | None = None,
@@ -300,7 +300,7 @@ def _sliced_tower(
         settings = print_settings.with_choice(settings, path, value)
     for path, value in (accepted or {}).items():
         settings = print_settings.with_accepted(settings, path, value)
-    setup = _preselected(handover.detect(installed_slicer), profile)
+    setup = _preselected(handover.detect(program), profile)
     folder.mkdir(parents=True)
     job = _PlateJob(
         objects=(_tower_with_island(),),
