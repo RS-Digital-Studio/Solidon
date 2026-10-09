@@ -106,6 +106,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-673 — Eine Bohrung mit neuer Richtung: die Kerne schneiden verschieden, der exakte warnt falsch, und das Verdoppeln hat keinen Test](#rm-673) | Geometrie, Erkennung und Druckvorbereitung | Netz dreht starr und meldet `no_longer_through`, exakt bohrt durch und meldet `mouth_covered` |
 | [RM-675 — SVG-Zeichnungen: gerundete Rechtecke mischen ihre Ringe, die Verschachtelung weicht ab, ein roher Fehler, und die Lage ist gespiegelt](#rm-675) | Geometrie, Erkennung und Druckvorbereitung | Regression seit `71b7ba0a8`: `<rect rx>` bildet ungültige Ringe; dazu deckungsgleiche Ringe, roher `ValueError` und spiegelverkehrte Schrift |
 | [RM-684 — *Druckoptimal ausrichten* kippt ein Teil, das in keiner stehenden Lage passt, schräg ohne Auflage](#rm-684) | Geometrie, Erkennung und Druckvorbereitung | Regression gegenüber v0.3.5: zu großes Teil kippt schräg, Stützraum 5 552 → 421 532 mm³ statt Hinweis zum Teilen |
+| [RM-685 — *Druckoptimal ausrichten* behält eine stehende Lage mit dem Satz „braucht keine Stütze“, während die Schichtanalyse Stützraum zählt](#rm-685) | Geometrie, Erkennung und Druckvorbereitung | Regression gegenüber v0.5.0 im Stützraum (gewollt seit v0.5.1): Satz und Kennzahl widersprechen sich |
 | [RM-070 — SpaceMouse auf macOS und Linux am echten Gerät abnehmen](#rm-070) | Bedienung und Darstellung | Die Rampe ist stetig und getestet, die Bildrate an 815 104 Dreiecken gemessen (`7ff34c67`: 16,7 → 8,7 ms im Median); offen bleiben Linux, die 3DxWare-Mausemulation, das Gerät selbst und die Rampe im Skizzenmodus (aus RM-183) |
 | [RM-204 — Ein Merkmalklick baut alle Handlungen des Fensters neu](#rm-204) | Bedienung und Darstellung | Abnahme am echten Fenster beim Release (RM-213) |
 | [RM-547 — Nach „Reparieren und erneut versuchen“ heißt ein weiterrechnender Schritt „gelöscht“](#rm-547) | Bedienung und Darstellung | Entschieden (Claude, Produktabwägung): wie ein beim Umbau neu gefasster Schritt behandeln, in Verlauf und Steckbrief |
@@ -3509,6 +3510,30 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   Kugel (steht in keiner Lage, passt aber) wird wie bisher behandelt. Bauplan §22, §25, §2.7.
   Belege: `F:\solidon-review-reports\regression-0.5.2\kern\befunde.md` (K-4), Bild
   `regression-0.5.2\kern\bilder\aktuell-Modern++Cutlery+Organizer+with+Divider-r1-orientierung.png`.
+
+<a id="rm-685"></a>
+
+- [ ] **RM-685 — *Druckoptimal ausrichten* behält eine stehende Lage mit dem Satz „braucht keine Stütze“, während die Schichtanalyse Stützraum zählt.**
+  Versionsvergleich Kern 0.5.2 (03.10.2026, K-2). **Regression gegenüber v0.5.0** in der Kennzahl;
+  das Behalten ist seit v0.5.1 entschieden (Durchsicht 0.5.1, N2 und N5: eine gelieferte Lage, die
+  steht und nach der Regel der Druckvorschläge keine Stütze braucht, bleibt). `pegboard-gs-100-v2.step`:
+  v0.5.0 legt das Teil hin (40 × 55 × 33 mm, Stützraum der Schichtanalyse 364,6 → 274,4 mm³); v0.5.1
+  und `09d8e9485` lassen es stehen (40 × 33 × 55 mm, 364,6 mm³) mit „Die Lage bleibt: Das Teil steht
+  und braucht keine Stütze.“ Der Satz folgt der Regel „Stützen nötig“ (`advise.support_need`), die
+  Kennzahl daneben dem Stützraum; für den Kunden widersprechen sie sich, und stehend sind es 55
+  statt 33 mm Höhe. Am Stand origin/main und auf `origin/welle2` unverändert.
+  **Stellen:** `app/core/slice/orientation.py:426` (`stays`), `:736–749` (`kept`), `:766–768`
+  (`orient.kept`).
+  **Fix (allgemein):** Der Satz nennt den Grund in den Größen, die der Prüfbericht zeigt: „Die Lage
+  bleibt: Das Teil steht, der Stützraum ist klein (… mm³); liegend wären es … mm³ bei … mm weniger
+  Höhe.“ Ob die stehende Lage auch bei deutlich mehr Höhe bleibt, ist eine Produktentscheidung;
+  bis sie fällt, bleibt die Regel von v0.5.1.
+  **Abnahme:** Pegboard, ein Minigolf-Schaft (Anlass der Regel) und eine Platte auf der Kante: der
+  Satz nennt Stützraum beider Lagen und die Höhe, keine Lage behauptet „keine Stütze“, solange die
+  Schichtanalyse Stützraum zählt; die gewählte Lage bleibt wie heute. Bauplan §22.5, §2.7.
+  Belege: `F:\solidon-review-reports\regression-0.5.2\kern\befunde.md` (K-2), Bilder
+  `regression-0.5.2\kern\bilder\v0.5.0-pegboard-gs-100-v2-r1-orientierung.png`,
+  `regression-0.5.2\kern\bilder\aktuell-pegboard-gs-100-v2-r1-orientierung.png`.
 
 ## Bedienung und Darstellung
 
