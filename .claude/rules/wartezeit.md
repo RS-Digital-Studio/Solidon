@@ -441,14 +441,11 @@ Wirkung prüfen (kommt die Ziffer an?). Für tatsächliche Sichtbarkeit
 
 `manifold3d` hält den GIL in jedem Aufruf; ein solcher Arbeiter steht für die
 Ereignisschleife im Hauptthread — deshalb rechnet der Kern an großen Körpern
-im Hilfsprozess (`kern.md`). **Gemessen wird der Hauptthread** — die größte
-Lücke eines Zeitgebers, solange der Arbeiter rechnet, zugeordnet über
-`faulthandler`-Abzüge (die laufen ohne GIL), nicht über einen Python-Faden, der
-in derselben Lücke steht. Für zwanzig Pixel genügt das Raster. `shapely` und
-`numpy` geben ihn meist her (`_SculptWallWorker`), `pickle`, `repr` und
-`tuple`/`sorted` über Millionen Python-Zahlen nicht; eine Prüfung, die nach
-jeder Geste neu anläuft, bekommt einen Abbruchschalter
-(`maps.wall_thickness_map`).
+im Hilfsprozess (`kern.md`). **Gemessen wird der Hauptthread**, nicht der
+Arbeiter (Begründung). `shapely` und `numpy` geben ihn meist her
+(`_SculptWallWorker`), `pickle`, `repr` und `tuple`/`sorted` über Millionen
+Python-Zahlen nicht; eine Prüfung, die nach jeder Geste neu anläuft, bekommt
+einen Abbruchschalter (`maps.wall_thickness_map`).
 
 **Der Hauptthread greift je Bild hundertmal nach dem GIL** — jeder
 Python-Filter, jede Python-Überschreibung, jeder Slot ist ein Griff, und neben
@@ -461,12 +458,16 @@ einem rechnenden Arbeiter wartet jeder. Daraus folgt:
   `leash.Worker`.
 * **Kein C-Aufruf im Arbeiter hält den GIL länger als wenige Millisekunden**:
   große Listen in Blöcken, großes XML in Stücken (`threemf.XML_CHUNK`,
-  `NUMBER_BLOCK`), keine Suche mit `.//` über ein ganzes Netz.
+  `NUMBER_BLOCK`), keine Suche durch Netz oder Farbtabelle
+  (`threemf._NOT_SEARCHED`).
+* **Löst eine Meldung ein großes Bild aus, wartet der Arbeiter, bis es
+  steht** (`leash.RightOfWay`: Start des Ladewegs, Bild vor der Erkennung).
 * **Was im Takt neu malt, malt nur, was sich ändert** — ein Rechteck statt
   der Fläche, ein deckendes Widget mit `WA_OpaquePaintEvent`
-  (`LoadingVeil._block_rect`); sonst malt jeder Takt das Fenster darunter mit.
-* **Gerätefragen laufen im Daemon-Faden** (`SpaceMouseController._search`), wie
-  Dateiblicke (nächster Abschnitt).
+  (`LoadingVeil._block_rect`); ein Symbol rastert einmal
+  (`ThemedIcon.pixmap`).
+* **Gerätefragen laufen im Daemon-Faden** (`SpaceMouseController._search`),
+  gestartet mit dem Fenster, wie Dateiblicke (nächster Abschnitt).
 * **Messfalle** einer Sonde am Takt: Begründung.
 
 ### Ein Blick auf eine Datei ist eine Netzfrage

@@ -45,13 +45,23 @@ from __future__ import annotations
 import ctypes
 import gc
 import sys
+import threading
+import time
 import weakref
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from threading import Lock
 from typing import Any, Final
 
-from PySide6.QtCore import QEvent, QMetaMethod, QObject, QThread, QTimer, Signal
+from PySide6.QtCore import (
+    QCoreApplication,
+    QEvent,
+    QMetaMethod,
+    QObject,
+    QThread,
+    QTimer,
+    Signal,
+)
 from shiboken6 import isValid
 
 from app.core.log import get_logger
@@ -259,6 +269,90 @@ def wait_for_all(timeout_ms: int = 2000) -> tuple[Any, ...]:
         # dort; so kann der Rückruf seine Leine geordnet aufräumen.
         QTimer.singleShot(0, _keeper_object(), lambda done=worker: _release_global(done))
     return tuple(stubborn)
+
+
+#: Wie lange ein Arbeiter höchstens auf den Hauptfaden wartet, dem er den
+#: Vortritt lässt (:class:`RightOfWay`). Ein Bild braucht ein paar hundert
+#: Millisekunden; steht das Fenster länger, rechnet der Arbeiter weiter.
+RIGHT_OF_WAY_S: Final = 1.0
+
+#: Nach wie vielen Runden der Ereignisschleife der Hauptfaden den Arbeiter
+#: freigibt (:meth:`RightOfWay.release_after_frame`). Die erste Runde zeichnet,
+#: was die Meldung ausgelöst hat; die zweite, was dabei nachgereicht wurde —
+#: die verschobene Kartenlage, ein Bericht, der seine Höhe neu misst.
+RIGHT_OF_WAY_ROUNDS: Final = 2
+
+#: Wie oft ein wartender Arbeiter nach dem Abbruch sieht.
+_RIGHT_OF_WAY_POLL_S: Final = 0.05
+
+
+class RightOfWay:
+    """Der Hauptfaden zeichnet zuerst: Ein Arbeiter hält an, bis das Bild steht.
+
+    **Ein Bild neben einem rechnenden Arbeiter kostet ein Vielfaches seiner
+    Rechenzeit** (RM-258). Jeder Einstieg aus Qt in Python und jeder Qt-Aufruf,
+    der den GIL hergibt, wartet auf das Umschaltintervall des Arbeiters
+    (:data:`GIL_SWITCH_S`); ein Bild hat davon Hunderte. Am Mausoleum-Drachen
+    standen so das erste Bild der Arbeitsfläche und das Modellbild vor der
+    Frage nach der Vollerkennung je 0,2 bis 1,4 s, bei 0,03 bis 0,09 s
+    Rechenzeit des Hauptfadens. Hält der Arbeiter an diesen zwei Stellen an,
+    bis das Fenster sie gezeichnet hat, rechnet der Hauptfaden ohne Warten —
+    und der Arbeiter verliert kaum etwas, denn den GIL hätte er ohnehin
+    abgeben müssen.
+
+    Der Arbeiter ruft :meth:`claim` vor der Meldung und :meth:`wait` danach;
+    der Hauptfaden gibt mit :meth:`release_after_frame` frei. Gewartet wird
+    höchstens :data:`RIGHT_OF_WAY_S` und nie im Hauptfaden selbst; ein
+    Abbruch beendet das Warten.
+    """
+
+    def __init__(self) -> None:
+        self._free = threading.Event()
+        self._free.set()
+
+    @property
+    def claimed(self) -> bool:
+        """Ob ein Arbeiter gerade auf die Freigabe wartet oder gleich warten wird."""
+        return not self._free.is_set()
+
+    def claim(self) -> None:
+        """Arbeiter, vor der Meldung: Ab jetzt wartet :meth:`wait` auf die Freigabe."""
+        self._free.clear()
+
+    def release(self) -> None:
+        """Sofort freigeben — auch, wenn niemand mehr zeichnet."""
+        self._free.set()
+
+    def wait(
+        self, cancelled: Callable[[], bool] | None = None, timeout_s: float | None = None
+    ) -> bool:
+        """Arbeiter: bis zur Freigabe warten; ``True``, wenn sie kam.
+
+        ``False`` nach Ablauf der Frist (ohne Angabe :data:`RIGHT_OF_WAY_S`),
+        nach einem Abbruch und im Hauptfaden, der nie auf sich selbst warten
+        darf.
+        """
+        if threading.current_thread() is threading.main_thread():
+            return not self.claimed
+        deadline = time.monotonic() + (RIGHT_OF_WAY_S if timeout_s is None else timeout_s)
+        while not self._free.wait(min(_RIGHT_OF_WAY_POLL_S, max(deadline - time.monotonic(), 0))):
+            if (cancelled is not None and cancelled()) or time.monotonic() >= deadline:
+                return False
+        return True
+
+    def release_after_frame(self, rounds: int = RIGHT_OF_WAY_ROUNDS) -> None:
+        """Hauptfaden: freigeben, wenn die Ereignisschleife ``rounds`` Runden gedreht hat.
+
+        Ein Zeitgeber, keine Zählung von Ereignissen: Er läuft erst, wenn die
+        Schleife abgearbeitet hat, was vor ihm anstand — auch das Neuzeichnen,
+        das die Meldung angestoßen hat.
+        """
+        if not self.claimed:
+            return
+        if rounds <= 0 or QCoreApplication.instance() is None:
+            self.release()
+            return
+        QTimer.singleShot(1, _keeper_object(), lambda: self.release_after_frame(rounds - 1))
 
 
 class Worker(QThread):

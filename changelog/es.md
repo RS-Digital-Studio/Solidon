@@ -39,6 +39,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - En el modo de dibujo, la pestaña *Selección* se oculta. La lista de restricciones muestra las de los puntos y líneas seleccionados, además de cualquier conflicto.
 - En la tarjeta de parámetros, una medida solo muestra «Sin utilizar» cuando es así. El botón dice cuántos números fijos se pueden vincular a medidas.
 - El informe de errores adjunta un registro de fallo solo cuando Solidon se ha cerrado de verdad por un fallo.
+- Al abrir archivos 3MF grandes, la ventana ya no se detiene cuando aparece el área de trabajo.
 
 ### Imprimir y entregar al slicer
 

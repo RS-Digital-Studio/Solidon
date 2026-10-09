@@ -7686,6 +7686,41 @@ def test_symbols_render_and_follow_the_text_colour(qt_app: QApplication) -> None
         assert "#ff0000" in source, name
 
 
+def test_a_symbol_is_rasterised_once_per_colour_and_size(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Jedes Neuzeichnen fragt das Symbol neu — gerastert wird es einmal (RM-258).
+
+    Neben einem rechnenden Arbeiter kostete das Rastern beim ersten Bild der
+    Arbeitsfläche bis 170 ms. Gegenprobe: eine andere Farbe — gesperrt, ein
+    anderes Thema — und eine andere Größe rastern neu, sonst stünde nach einem
+    Themenwechsel die alte Farbe da.
+    """
+    from PySide6.QtCore import QSize
+    from PySide6.QtGui import QIcon, QPixmapCache
+
+    from app.ui import icons
+
+    QPixmapCache.clear()
+    drawn: list[int] = []
+    real = icons.svg_pixmap
+
+    def counted(source: str, size: int) -> Any:
+        drawn.append(size)
+        return real(source, size)
+
+    monkeypatch.setattr(icons, "svg_pixmap", counted)
+    engine = icons.ThemedIcon(icons.known()[0])
+    normal, off = QIcon.Mode.Normal, QIcon.State.Off
+    first = engine.pixmap(QSize(24, 24), normal, off)
+    again = engine.pixmap(QSize(24, 24), normal, off)
+    assert not first.isNull() and again.cacheKey() == first.cacheKey()
+    assert drawn == [24], "dasselbe Symbol in derselben Farbe und Größe einmal"
+    engine.pixmap(QSize(24, 24), QIcon.Mode.Disabled, off)
+    engine.pixmap(QSize(32, 32), normal, off)
+    assert drawn == [24, 24, 32], "andere Farbe und andere Größe rastern neu"
+
+
 def test_the_application_icon_carries_every_size(qt_app: QApplication) -> None:
     """Das Fenster-Symbol kommt aus der SVG-Quelle — leer hieße: Windows zeigt
     sein Standardbild, und niemand merkt es vor dem ersten Screenshot.

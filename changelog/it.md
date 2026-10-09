@@ -38,6 +38,7 @@ scrive in `website/version.json`.
 - In modalità disegno la linguetta *Selezione* è nascosta. L'elenco dei vincoli mostra quelli dei punti e delle linee selezionati, più ogni conflitto.
 - Nella scheda dei parametri, una misura mostra «Non utilizzato» solo quando è così. Il pulsante dice quanti numeri fissi si possono collegare alle misure.
 - La segnalazione di errore allega un registro di arresto anomalo solo dopo un vero arresto anomalo di Solidon.
+- Aprendo file 3MF di grandi dimensioni, la finestra non si blocca più quando compare l'area di lavoro.
 
 ### Stampare e passare allo slicer
 

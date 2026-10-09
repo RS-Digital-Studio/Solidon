@@ -39,6 +39,7 @@ dans `website/version.json`.
 - En mode dessin, l'onglet *Sélection* est masqué. La liste des contraintes montre celles des points et lignes sélectionnés, ainsi que chaque conflit.
 - Dans la carte des paramètres, une cote n'affiche « Non utilisé » que si c'est le cas. Le bouton indique combien de nombres fixes peuvent être liés à des cotes.
 - Le rapport d'erreur ne joint un journal de plantage que si Solidon a vraiment planté.
+- À l'ouverture d'un gros fichier 3MF, la fenêtre ne se fige plus quand l'espace de travail apparaît.
 
 ### Imprimer et transmettre au slicer
 

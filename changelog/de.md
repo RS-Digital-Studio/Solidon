@@ -63,6 +63,7 @@ Nutzen da und sonst nichts.
 - Im Zeichenmodus ist der Reiter *Auswahl* ausgeblendet. Die Liste der Bedingungen zeigt die der gewählten Punkte und Linien und jeden Widerspruch.
 - In der Parameterkarte steht unter einem Maß nur noch „Nicht verwendet“, wo das zutrifft. Wie viele feste Zahlen sich an Maße binden lassen, sagt der Knopf.
 - Der Fehlerbericht hängt ein Absturzprotokoll nur noch an, wenn Solidon wirklich abgestürzt ist.
+- Beim Öffnen großer 3MF-Dateien stockt das Fenster nicht mehr, wenn die Arbeitsfläche erscheint.
 
 ### Drucken und Übergabe an den Slicer
 

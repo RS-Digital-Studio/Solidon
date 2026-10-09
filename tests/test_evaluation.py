@@ -6556,6 +6556,145 @@ def test_a_small_import_is_not_shown_twice(monkeypatch) -> None:
     assert not pictures
 
 
+def _counting_runs(monkeypatch, session: Any) -> tuple[list[bool], threading.Event]:
+    """Zählt die Läufe einer Sitzung — ``True`` heißt mit Erkennung — und meldet den ersten."""
+    runs: list[bool] = []
+    began = threading.Event()
+    real = session.run_evaluation
+
+    def counted(*args: Any, **kwargs: Any) -> Any:
+        runs.append(bool(kwargs.get("detect_features", True)))
+        began.set()
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(session, "run_evaluation", counted)
+    return runs, began
+
+
+def test_after_its_picture_the_load_waits_until_the_window_has_drawn_it(monkeypatch) -> None:
+    """Nach dem Bild rechnet der Ladeweg erst weiter, wenn das Fenster es gezeichnet hat (RM-258).
+
+    Das Bild baut Ansicht, Baum, Auswahl und Bericht auf — Hunderte Einstiege
+    aus Qt in Python, und neben der weiterlaufenden Erkennung wartete jeder
+    davon auf den GIL: Am Mausoleum-Drachen stand das Fenster vor der Frage
+    nach der Vollerkennung bis 0,55 s. Gegenprobe: Nach der Freigabe rechnet
+    der Lauf zu Ende.
+    """
+    import app.ui.leash as leash_module
+    from app.ui import session as session_module
+    from app.ui.session import _EvaluationWorker
+
+    monkeypatch.setattr(session_module, "PICTURE_FIRST_TRIANGLES", 1)
+    monkeypatch.setattr(leash_module, "RIGHT_OF_WAY_S", 60.0)
+    session = _session_with_unshown_import(MESHES / "plate_holes.stl")
+    worker = _EvaluationWorker(session, picture_first=True)
+    # Das Signal käme ohne Ereignisschleife nie an; gemeldet wird beim Bauen des Bildes.
+    shown = threading.Event()
+    real_picture = session_module._as_picture
+
+    def picture_of(result: Any) -> Any:
+        shown.set()
+        return real_picture(result)
+
+    monkeypatch.setattr(session_module, "_as_picture", picture_of)
+    runs, _began = _counting_runs(monkeypatch, session)
+    results: list[Any] = []
+    thread = threading.Thread(target=lambda: results.append(worker._evaluate(session)))
+    thread.start()
+    try:
+        assert shown.wait(60), "das Bild kam"
+        thread.join(0.3)
+        assert runs == [False], "vor der Freigabe beginnt die Erkennung nicht"
+    finally:
+        way = getattr(worker, "right_of_way", None)
+        if way is not None:
+            way.release()
+        thread.join(60)
+    assert runs == [False, True] and results, "nach der Freigabe rechnet der Lauf zu Ende"
+
+
+def test_the_load_begins_after_the_window_has_drawn_the_change(monkeypatch) -> None:
+    """Der Ladeweg beginnt erst, wenn das Fenster zur Arbeitsfläche gewechselt hat (RM-258).
+
+    Der Wechsel von der Startfläche ist das größte Bild des Imports; neben dem
+    Einlesen, das sofort losrechnete, stand das Fenster dabei bis 0,77 s.
+    Gegenprobe: Ein Lauf außerhalb des Ladewegs beginnt sofort.
+    """
+    import app.ui.leash as leash_module
+    from app.ui.session import _EvaluationWorker
+
+    monkeypatch.setattr(leash_module, "RIGHT_OF_WAY_S", 60.0)
+    session = _session_with_unshown_import(MESHES / "plate_holes.stl")
+    runs, began = _counting_runs(monkeypatch, session)
+    worker = _EvaluationWorker(session, picture_first=True)
+    thread = threading.Thread(target=worker.work)
+    thread.start()
+    try:
+        assert not began.wait(0.3), "vor der Freigabe liest der Ladeweg nichts"
+    finally:
+        way = getattr(worker, "right_of_way", None)
+        if way is not None:
+            way.release()
+        thread.join(60)
+    assert runs, "nach der Freigabe rechnet er"
+
+    runs.clear()
+    began.clear()
+    plain = _EvaluationWorker(session, picture_first=False)
+    thread = threading.Thread(target=plain.work)
+    thread.start()
+    try:
+        assert began.wait(60), "eine Änderung am Modell wartet auf niemanden"
+    finally:
+        thread.join(60)
+
+
+def test_the_window_gives_the_way_back_after_its_picture(monkeypatch) -> None:
+    """Die Sitzung gibt den Lauf frei: nach dem Start, nach dem Bild, und sofort,
+    wenn das Bild nicht mehr gilt oder jemand synchron wartet (RM-258).
+
+    Ohne Freigabe stünde jeder Ladeweg bis zur Frist still.
+    """
+    import app.ui.leash as leash_module
+    from app.ui.leash import RightOfWay
+    from app.ui.session import _EvaluationWorker
+
+    monkeypatch.setattr(leash_module, "RIGHT_OF_WAY_S", 60.0)
+    after_frame: list[RightOfWay] = []
+    monkeypatch.setattr(
+        RightOfWay, "release_after_frame", lambda way, *_rounds: after_frame.append(way)
+    )
+    session = _session_with_unshown_import(MESHES / "plate_holes.stl")
+
+    session.evaluate_async()
+    started = session._worker
+    assert started is not None and started.right_of_way in after_frame, "nach dem Start"
+    assert started.right_of_way.claimed, "der Lauf wartet auf das Fenster"
+    # Ohne Ereignisschleife meldet sich der Lauf nie fertig; eine Millisekunde
+    # Warten genügt, um zu sehen, ob der synchrone Warter freigibt.
+    session.wait_for_idle(1)
+    assert not started.right_of_way.claimed, "wer synchron wartet, gibt den Vortritt sofort frei"
+    assert started.wait(60_000)
+    session.cancel_signal.reset()
+
+    worker = _EvaluationWorker(session, picture_first=True)
+    session._worker = worker
+    picture = session.run_evaluation(session.quality, detect_features=False)
+    after_frame.clear()
+    worker.right_of_way.claim()
+    session._on_picture(picture, finished=worker)
+    assert after_frame == [worker.right_of_way], "nach dem Bild, wenn es gezeichnet ist"
+
+    stale = _EvaluationWorker(session, picture_first=True)
+    after_frame.clear()
+    stale.right_of_way.claim()
+    session._on_picture(picture, finished=stale)
+    assert not after_frame and not stale.right_of_way.claimed, (
+        "ein überholtes Bild gibt sofort frei"
+    )
+    session._worker = None
+
+
 def test_the_run_after_the_picture_does_not_ask_again(monkeypatch) -> None:
     """Was das Bild schon gefragt hat, beantwortet der Lauf danach selbst (KUNDE-14).
 

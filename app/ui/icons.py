@@ -35,6 +35,7 @@ from PySide6.QtGui import (
     QPalette,
     QPen,
     QPixmap,
+    QPixmapCache,
 )
 from PySide6.QtSvg import QSvgRenderer
 from PySide6.QtWidgets import QApplication, QWidget
@@ -44,6 +45,10 @@ from PySide6.QtWidgets import QApplication, QWidget
 #: (hier und in ``panels``) oder aus dem SVG selbst — ``manual_window``
 #: rastert ``renderer.defaultSize()`` hoch.
 OVERSAMPLING: Final = 2
+
+#: Womit die gerasterten Symbole im :class:`QPixmapCache` beginnen
+#: (:meth:`ThemedIcon.pixmap`) — der Cache gehört der ganzen Anwendung.
+PIXMAP_CACHE_PREFIX: Final = "solidon-icon:"
 
 _HEAD: Final = (
     '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" '
@@ -615,10 +620,30 @@ class ThemedIcon(QIconEngine):
             renderer.render(painter, QRectF(rect))
 
     def pixmap(self, size: QSize, mode: QIcon.Mode, state: QIcon.State) -> QPixmap:
-        source = svg_source(self._name, self._tone(mode).name())
+        """Das Symbol als Bild — einmal je Name, Farbe und Größe gerastert.
+
+        **Qt fragt bei jedem Neuzeichnen eines Knopfes neu**, nicht einmal je
+        Symbol. Ungemerkt rasterte jede Werkzeugzeile ihr SVG bei jedem Bild,
+        und neben einem rechnenden Arbeiter wartete jeder Qt-Aufruf darin, der
+        den GIL hergibt, auf ihn: Beim ersten Bild der Arbeitsfläche am
+        Mausoleum-Drachen kosteten sechzehn Symbole 30 bis 170 ms (RM-258).
+        Gemerkt wird in Qts eigenem :class:`QPixmapCache` — er ist begrenzt,
+        räumt mit der Anwendung ab, und ein Treffer gibt den GIL nicht her.
+        Die Farbe steht im Schlüssel, deshalb veraltet nach einem
+        Themenwechsel nichts.
+        """
+        colour = self._tone(mode).name()
+        edge = max(size.width(), size.height())
+        key = f"{PIXMAP_CACHE_PREFIX}{self._name}:{colour}:{edge}"
+        cached = QPixmap()
+        if QPixmapCache.find(key, cached):
+            return cached
+        source = svg_source(self._name, colour)
         if not source:
             return QPixmap()
-        return svg_pixmap(source, max(size.width(), size.height()))
+        drawn = svg_pixmap(source, edge)
+        QPixmapCache.insert(key, drawn)
+        return drawn
 
     def clone(self) -> QIconEngine:
         return ThemedIcon(self._name)

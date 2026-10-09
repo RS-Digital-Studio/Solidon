@@ -850,6 +850,43 @@ def test_the_controller_searches_off_the_main_thread(qt_app: QApplication) -> No
         controller.stop()
 
 
+def test_the_search_thread_starts_with_the_window_not_with_the_first_search(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Der Suchfaden läuft, sobald das Fenster steht — gesucht wird später (RM-258).
+
+    ``Thread.start`` wartet im Hauptfaden auf den neuen Faden; fiel die erste
+    Suche in einen Import, stand das Fenster daneben bis 0,43 s. Gegenprobe:
+    Ohne HID-Leser — der Treiberweg auf dem Mac — entsteht kein Faden.
+    """
+    from app.ui import spacemouse
+    from app.ui.spacemouse import HidReader
+
+    searcher = spacemouse._SearchThread()
+    monkeypatch.setattr(spacemouse, "_SEARCHER", searcher)
+    reader = HidReader()
+    reader._module = SimpleNamespace(enumerate=list)
+    controller = SpaceMouseController(_Viewport(), _Settings(), lambda: None, reader=reader)
+    try:
+        controller.start()
+        assert searcher._thread is not None and searcher._thread.is_alive(), "mit dem Fenster"
+        assert controller._scan.isActive() and not controller._collect.isActive(), (
+            "gesucht wird erst nach SCAN_FIRST_MS"
+        )
+    finally:
+        controller.stop()
+
+    quiet = spacemouse._SearchThread()
+    monkeypatch.setattr(spacemouse, "_SEARCHER", quiet)
+    driver = SimpleNamespace(is_open=False, close=lambda: None, blocked_device=None)
+    other = SpaceMouseController(_Viewport(), _Settings(), lambda: None, reader=driver)
+    try:
+        other.start()
+        assert quiet._thread is None, "ohne HID-Leser kein Suchfaden"
+    finally:
+        other.stop()
+
+
 def test_every_search_runs_in_one_thread_that_outlives_it() -> None:
     """Jede Suche läuft im selben Faden, auch nach einem Fehler, und er lebt weiter.
 

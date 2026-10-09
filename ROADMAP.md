@@ -121,7 +121,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-200 — Ein Zug am Griff soll flüssig sein](#rm-200) | Bedienung und Darstellung | Am echten Fenster prüfen, ob sich die Geste flüssig anfühlt (Release, RM-213) |
 | [RM-213 — Fensterabnahme und die Kundenwege am echten Fenster](#rm-213) | Bedienung und Darstellung | Beim Release: die offscreen belegten Änderungen am echten Fenster, die Kundenwege C14/A13/A4/C5/C1 und die vier Hauptwege mit Zeiten, die Fensterproben der Fensterwache und von C14. Vorbedingungen für 0.5.3 erfüllt (Taglauf 37409338027 mit allen Fensterdateien grün, Bereichsnachweis `534d69b79`), beim nächsten Release erneut; dazu die vier Handwege der Merkmalbedienung (§4) |
 | [RM-232 — Die Klickkette an einem Merkmal rechnet noch im Hauptfaden](#rm-232) | Bedienung und Darstellung | Doppelter Rollenlauf, 96 Sichtbarkeitswechsel, ein zusätzlicher Bildauftrag und ein verspäteter Hover-Neuaufbau entfernt (139/347 Fälle); am Fenster Baumklick 87–94 ms, Bildklick vor dem Hover-Fix 105–146 ms; offen: Abnahme unter 100 ms auf ruhiger Maschine am MSI |
-| [RM-258 — Zwei einmalige Stillstände beim Einlesen großer 3MF](#rm-258) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Ursache behoben (0.5.1, Paket 3mf); offen zwei einmalige Stellen über 200 ms je Import: erstes Bild der Arbeitsfläche, Rückfrage zur Vollerkennung |
+| [RM-258 — Zwei einmalige Stillstände beim Einlesen großer 3MF](#rm-258) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. An beiden Stellen rechnet kein Arbeiter mehr neben dem Fenster (Vortritt am Start des Ladewegs und nach dem Bild, Symbole rastern einmal, 09.10.); offen: Abnahme unter 200 ms am echten Fenster auf ruhiger Maschine |
 | [RM-285 — Feste Doppelpunkte hinter übersetzten Teilen](#rm-285) | Bedienung und Darstellung | Oberfläche, Kommandozeile, Agenten- und Steckbrieftexte und der ganze Kern gerahmt, der Wächter liest den ganzen Kern (07.10.); offen allein die Fensterabnahme beim Release (RM-213) |
 | [RM-312 — Die Düsengröße im Druckdialog kommt vom Drucker und ist eine Auswahl](#rm-312) | Bedienung und Darstellung | Alle 575 Matrixzeilen eingeordnet, neun Übergabefehler behoben, Auto-Brim mit fester Breite und Warnung, Stützfuß und Skirt am Bettrand aus dem Profil (04.10.), Brim und Skirt um die erste Schicht statt um die Aufsicht (05.10.); Stützfuß unter den Überhängen statt unter der ganzen Aufsicht (06.10.); offen: der Gesamtlauf jedes Modell × jeder Slicer (mit RM-281) und die Fensterabnahme beim Release; die Druckdauer am K1 ist ohne Gerät nicht messbar |
 | [RM-502 — Dialog-Durchsicht vom 29.09.: spätere Korrekturen abnehmen und verbliebene Hinweisorte klären](#rm-502) | Bedienung und Darstellung | Ziffernweg und Rückweg „Unbekannt“ in sechs Sprachen über den Spulendialog belegt, Speicherfehler und kleines Spulenfenster durch bestehende Fälle; offen allein die Fensterabnahme auf allen Plattformen beim Release (RM-213) |
@@ -3930,6 +3930,29 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   `konzepte/nachweise-release-0.5.1/sonden/3mf/` (Reihen `abt`, `ab4` in `out/`), Bericht
   `konzepte/nachweise-release-0.5.1/reports/3mf-schluss.md`. Abnahme: das Fenster bleibt während großer Importe flüssig,
   längste Lücke im Qt-Takt unter 200 ms, auch beim ersten Bild und bei der Rückfrage.
+
+  **Stand 09.10.2026:** Zugeordnet über die CPU-Zeit je Faden: In den Lücken des
+  ersten Bildes rechnete der Hauptfaden 0,03 bis 0,08 s, der Auswertungsarbeiter
+  daneben 0,22 bis 0,94 s — jeder der rund 500 Einstiege aus Qt in Python und
+  jeder Qt-Aufruf, der den GIL hergibt (`sizeHint`, SVG rastern,
+  `QPixmap.fromImage`), wartete auf ihn. Behoben: `leash.RightOfWay` — der
+  Ladeweg beginnt erst nach zwei Runden der Ereignisschleife und rechnet nach
+  dem Bild vor der Erkennung erst weiter, wenn es gezeichnet ist;
+  `ThemedIcon.pixmap` rastert einmal je Farbe und Größe (`QPixmapCache`, vorher
+  sechzehn Symbole je Bild, 30 bis 170 ms); `_outside_meshes` überspringt Farb-
+  und Texturtabellen (drei Millionen Einträge: 0,8 s CPU → 0); der Suchfaden der
+  3D-Maus startet mit dem Fenster statt mitten im Import. Messung offscreen im
+  Wechsel (Drache, Priorität BelowNormal, Rechner 100 % belastet): Arbeiter-CPU
+  in den Lücken des ersten Bildes und der Rückfrage jetzt 0,000 bis 0,016 s;
+  längste Lücke des ersten Bildes vorher 0,34 bis 1,40 s, nachher 0,11 bis
+  0,77 s, wobei der ganze Prozess in den verbliebenen Lücken nur 5 bis 25 %
+  einer CPU bekam (Verdrängung durch die Last, nicht Solidon). Den
+  Anwendungsfilter in C++ vorzufiltern geht mit PySide nicht; ihn zu ersetzen
+  wäre ein eigener Umbau (Begründung in
+  `konzepte/begruendungen/regel-wartezeit.md`). Offen: die Abnahme unter 200 ms
+  am echten Fenster auf ruhiger Maschine — unter der Volllast vom 09.10. lagen
+  dort auch zwischen den beiden Stellen alle paar Sekunden Lücken über 200 ms,
+  vorher wie nachher.
 
 <a id="rm-285"></a>
 
