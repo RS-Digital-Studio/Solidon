@@ -1228,6 +1228,19 @@ _VERTEX_TAG: Final = f"{{{CORE_NAMESPACE}}}vertex"
 _TRIANGLE_TAG: Final = f"{{{CORE_NAMESPACE}}}triangle"
 #: Die Hülle der beiden — was darin steht, sucht :func:`_outside_meshes` nicht ab.
 _MESH_TAG: Final = f"{{{CORE_NAMESPACE}}}mesh"
+#: Die Tabellen der Materialerweiterung: je Ecke eines bemalten Modells ein
+#: Eintrag, im Format nur Farben, Koordinaten und Verweise. Auch in sie steigt
+#: :func:`_outside_meshes` nicht hinab.
+_MATERIAL_NAMESPACE: Final = "http://schemas.microsoft.com/3dmanufacturing/material/2015/02"
+_NOT_SEARCHED: Final = frozenset(
+    {
+        _MESH_TAG,
+        *(
+            f"{{{_MATERIAL_NAMESPACE}}}{table}"
+            for table in ("colorgroup", "texture2dgroup", "compositematerials", "multiproperties")
+        ),
+    }
+)
 
 #: Wie viele Kinder ein geleerter Teilbaum hatte. Kein Attribut des Formats: Es
 #: steht nur in dem Baum, den :func:`_model_without_geometry` baut, und lebt
@@ -2133,6 +2146,10 @@ def _outside_meshes(model: ET.Element, tag: str) -> list[ET.Element]:
     ``konzepte/nachweise-release-0.5.1/sonden/3mf/p02_griffe.py``). Objekte und
     Materialgruppen stehen in den
     ``resources``, nie in einem Netz.
+
+    **Und ohne die Farb- und Texturtabellen** (:data:`_NOT_SEARCHED`): Ein
+    bemaltes Modell trägt dort je Ecke einen Eintrag, und diese Suche läuft in
+    Python — Millionen Schritte, die der Arbeiter neben dem Fenster rechnete.
     """
     found: list[ET.Element] = []
     pending = [model]
@@ -2140,7 +2157,7 @@ def _outside_meshes(model: ET.Element, tag: str) -> list[ET.Element]:
         node = pending.pop()
         if node.tag == tag:
             found.append(node)
-        if node.tag != _MESH_TAG:
+        if node.tag not in _NOT_SEARCHED:
             pending.extend(reversed(node))
     return found
 

@@ -54,6 +54,7 @@ dans `website/version.json`.
 - Même dans un long historique, une nouvelle étape ne prend guère plus de temps à calculer que la première.
 - Annuler et rétablir vont plus vite, et la mémoire devenue inutile est libérée aussitôt.
 - Résoudre les recouvrements et exporter en 3MF va nettement plus vite.
+- L'espace de travail s'affiche plus rapidement à l'ouverture de gros fichiers 3MF.
 - Un modèle ajouté est ensuite visible, même s'il se pose à côté d'un modèle sur lequel la vue était zoomée.
 - Dans le catalogue de blocs, *Gérer les blocs* est ouvert tant qu'il n'y a pas encore de bloc personnel.
 
