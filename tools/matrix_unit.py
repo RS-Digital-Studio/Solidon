@@ -59,7 +59,6 @@ import sys
 import time
 import traceback
 import zipfile
-from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
@@ -354,24 +353,32 @@ def prepared(slicer: str, profile: Any) -> tuple[Any, dict[str, Any]]:
     on_bundle = setup.flavour == "prusa"
     if setup.flavour != "orca" and not on_bundle:
         return setup, info
-    machine, process = slicer_profiles.match(
-        found_profiles(exe, setup.flavour, ("machine", "process")), profile.printer
-    )
-    if machine is None:
+    # Die Vorwahl selbst, wie Dialog, Export und Hauptfenster ohne gemerkte
+    # Maschine (``handover.standard_choice``, RM-623) — keine eigene Herleitung.
+    chosen = handover.standard_choice(setup, profile)
+    if chosen is None:
         if on_bundle:
             # Wie der Dialog: ohne Drucker im Bündel Solidons eigener Satz.
             return setup, {**info, "note": "kein Herstellerprofil für diesen Drucker"}
         return None, {**info, "skip": "kein Herstellerprofil für diesen Drucker"}
+    found = found_profiles(exe, setup.flavour, ("machine", "process", "filament"))
+    machine, process, filament = (
+        next(
+            (
+                entry
+                for entry in found
+                if entry.kind == kind and slicer_profiles.identity(entry) == wanted
+            ),
+            None,
+        )
+        for kind, wanted in (
+            ("machine", chosen.machine_profile),
+            ("process", chosen.base_process),
+            ("filament", chosen.base_filament),
+        )
+    )
     roots = slicer_profiles.profile_roots(setup.flavour, exe)
-    filament = slicer_profiles.match_filament(
-        found_profiles(exe, setup.flavour, ("filament",)), machine, "PLA", roots
-    )
-    setup = replace(
-        setup,
-        machine_profile=machine.name,
-        base_process=process.name if process else "",
-        base_filament=slicer_profiles.identity(filament) if filament else "",
-    )
+    setup = chosen
     # Die Stufe wählt den Prozess des Herstellers (Entscheidung I), wie im
     # Grundlagen- und Exportarbeiter des Hauptfensters; an „Standard“ bleibt
     # es der Standardprozess, die Kette unten liest dann denselben.

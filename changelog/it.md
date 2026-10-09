@@ -45,6 +45,7 @@ scrive in `website/version.json`.
 - La finestra di stampa offre le stampanti dello slicer scelto, come *Primi passi* e *Impostazioni*. Una stampante ripresa così resta legata al suo slicer.
 - Nella finestra di stampa lo slicer si cambia come in *Primi passi*, anche con *Scegli programma …* per uno che Solidon non trova da solo.
 - Una stampante dell'elenco di Solidon e la stessa dello slicer contano come un solo apparecchio. La finestra sceglie il profilo con l'ugello giusto e il file porta il codice di avvio.
+- Senza un profilo dello slicer memorizzato, esportazione e finestra principale usano quanto la finestra di stampa propone per la stampante, con macchina e processo del produttore.
 - Vengono offerti solo gli slicer con cui Solidon lavora, più gli slicer per resina come ChituBox e Lychee. Ora vale anche Bambu Studio come AppImage.
 - Il codice di avvio e il volume di stampa vengono solo dalla tua stampante, non da un altro modello della stessa serie.
 - La finestra di stampa assegna i profili dello slicer molto più in fretta, all'apertura e dopo ogni cambio di slicer.

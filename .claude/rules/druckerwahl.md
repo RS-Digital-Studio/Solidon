@@ -81,3 +81,16 @@ bekannten Drucker und ist trotzdem kein eigenes Profil (`related_printer` in
 hintereinander stellt, läuft in `slicer_profiles.single_read()` — jede Datei
 einmal gelesen, danach verworfen. Länger hält kein Speicher, denn der Kunde
 ändert seine Profile im Slicer.
+
+## Ohne gemerkte Maschine gilt die Vorwahl des Dialogs
+
+Wer ohne geltende gemerkte Maschine eine Einrichtung braucht — Export,
+Hauptfenster, Prüfstände (`_preselected`, `matrix_unit.prepared`) —, fragt
+`handover.standard_choice` und leitet nicht selbst her (RM-623); eine
+Abschrift läuft auseinander. `test_the_dialog_and_the_standard_choice_pick_alike`
+hält Dialog und Vorwahl auf einem Bestand mit je zwei Maschinen, Prozessen und
+Filamenten zusammen. Gemerkter Prozess, Filament und Platte sind Vorzug wie im
+Dialog; entschieden anders sind nur die Düse (die des Projekts) und „kein
+Prozess“ statt des ersten. Gelesen werden erst die Maschinen, Prozesse und
+Filamente nur bei feststehender Maschine; das Hauptfenster merkt die Wahl je
+Schlüssel ohne Stufe und gibt sie dem Export mit.

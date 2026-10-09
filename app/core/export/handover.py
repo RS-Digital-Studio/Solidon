@@ -53,6 +53,7 @@ from app.core.errors import (
     SHOW_LOCATIONS,
     SHOW_SLICER_OUTPUT,
     SPLIT_MODEL,
+    AppError,
     ExternalToolError,
     FileWriteError,
     OperationCancelled,
@@ -337,8 +338,17 @@ def profile_file(chosen: str, setup: SlicerSetup, kind: slicer_profiles.ProfileK
     return source.path if isinstance(source, slicer_profiles.SlicerProfile) else source
 
 
-def machine_for(setup: SlicerSetup, profile: Profile) -> str:
+def machine_for(
+    setup: SlicerSetup,
+    profile: Profile,
+    *,
+    available: list[slicer_profiles.SlicerProfile] | None = None,
+) -> str:
     """Das Maschinenprofil dieser Übergabe — gewählt, sonst das des Slicers.
+
+    ``available`` sind die schon gelesenen Maschinen dieses Slicers; wer sie
+    hat, reicht sie mit, sonst liest die Düsenfrage den Bestand ein zweites
+    Mal (:func:`standard_choice`, RM-623).
 
     **Warum es diesen Rückfall gibt.** Prozess und Filament schreibt Solidon
     selbst aus; die Maschine schreibt es **nicht**. Startcode,
@@ -380,7 +390,10 @@ def machine_for(setup: SlicerSetup, profile: Profile) -> str:
     """
     if setup.machine_profile:
         if setup.flavour == "orca" and profile.printer.id.startswith("slicer-orca-"):
-            available = slicer_profiles.find_profiles(setup.executable, setup.flavour, ("machine",))
+            if available is None:
+                available = slicer_profiles.find_profiles(
+                    setup.executable, setup.flavour, ("machine",)
+                )
             source_machine = slicer_profiles.machine_for_name(available, profile.printer.title)
             selected_machine = slicer_profiles.machine_for_name(available, setup.machine_profile)
             if source_machine is None or selected_machine is None:
@@ -426,7 +439,11 @@ def machine_for(setup: SlicerSetup, profile: Profile) -> str:
         if not _fits_the_printer(setup.machine_profile, profile):
             return ""
         return slicer_profiles.machine_with_nozzle(
-            setup.machine_profile, setup.flavour, setup.executable, profile.printer
+            setup.machine_profile,
+            setup.flavour,
+            setup.executable,
+            profile.printer,
+            available=available,
         )
     chosen = slicer_profiles.chosen_machine(setup.flavour, setup.executable)
     if not chosen:
@@ -449,7 +466,7 @@ def machine_for(setup: SlicerSetup, profile: Profile) -> str:
         )
         return ""
     fitting = slicer_profiles.machine_with_nozzle(
-        chosen, setup.flavour, setup.executable, profile.printer
+        chosen, setup.flavour, setup.executable, profile.printer, available=available
     )
     if fitting != chosen:
         _log.info(
@@ -497,6 +514,136 @@ def _fits_the_printer(machine_profile: str, profile: Profile) -> bool:
         slicer_profiles.related_printer(machine_profile, known)
         or slicer_profiles.related_printer(Path(machine_profile).stem, known)
     )
+
+
+def standard_choice(
+    setup: SlicerSetup, profile: Profile, *, cancelled: CancelToken | None = None
+) -> SlicerSetup | None:
+    """Maschine, Prozess und Filament, die der Druckdialog ohne gemerkte Maschine vorbelegt.
+
+    Für alle, die ohne gemerkte Maschine eine Grundlage brauchen —
+    Hauptfenster und Export über ``remembered_setup``. Ohne sie ging eine
+    Datei ohne Herstellerprozess hinaus, und der Slicer füllte, was Solidon
+    nicht schreibt, mit seinen eigenen Vorgaben statt mit denen des
+    Herstellers (RM-623).
+
+    **Dieselbe Wahl wie der Dialog** (``_take_profiles``, ``_fill_processes``,
+    ``_fill_filaments``); ``test_the_dialog_and_the_standard_choice_pick_alike``
+    hält beide auf einem Bestand mit je zwei Maschinen, Prozessen und
+    Filamenten zusammen. Die Maschine: die im Slicer eingestellte, wenn sie
+    dieser Drucker ist (:func:`machine_for`), sonst die zugeordnete
+    (:func:`slicer_profiles.match`), sonst die einzige des Bestands — die nur,
+    wenn sie diesem Drucker zugeordnet ist. ``base_process``,
+    ``base_filament`` und ``plate`` aus ``setup`` sind der Vorzug, wie im
+    Dialog die gemerkte Wahl: Prozess und Filament gelten, wenn sie zur
+    Maschine passen, sonst der Standardprozess der Maschine und das Filament
+    der Materialart (:func:`slicer_profiles.match_filament`); die Platte bleibt.
+    ``None``, wo kein Bestand den Drucker kennt — eine fremde Maschine wäre
+    geraten (Regel 21) —, und wo der Bestand sich nicht lesen lässt.
+
+    Zwei Abweichungen vom Dialog sind entschieden. **Die Düse bleibt die des
+    Projekts**: Steht der Slicer auf derselben Maschine mit anderer Düse,
+    übernimmt der Dialog sie in den Drucker, hier gilt die Schwestervariante
+    (:func:`slicer_profiles.machine_with_nozzle`) — eine Grundlage ändert das
+    Projekt nicht. **Ohne Standardprozess kein Prozess**: Der Dialog zeigt
+    dann den ersten der Liste, und der Kunde sieht ihn; hier wäre er
+    ungesehen geraten.
+
+    **Kosten:** Erst nur die Maschinen (ein Sechstel des Bestands), Prozesse
+    und Filamente nur, wenn eine Maschine feststeht, alle Folgefragen in einem
+    Lesedurchgang (:func:`slicer_profiles.single_read`). ``cancelled`` greift
+    zwischen den Schritten; ein begonnenes Lesen der Prozesse und Filamente
+    endet erst mit ihm, weil :func:`slicer_profiles.find_profiles` keinen
+    Abbruch kennt.
+    """
+    if setup.flavour not in ("orca", "prusa"):
+        return None
+    try:
+        with slicer_profiles.single_read():
+            return _standard_choice(setup, profile, cancelled)
+    except (AppError, OSError) as problem:
+        # Der Bestand ist eine Zugabe: Ein fremdes, kaputtes Profil kostet die
+        # Grundlage, nie den Export (wie ``filament_picker.slicer_filaments``).
+        _log.warning("slicer stock unreadable, no standard choice: %s", problem)
+        return None
+
+
+def _standard_choice(
+    setup: SlicerSetup, profile: Profile, cancelled: CancelToken | None
+) -> SlicerSetup | None:
+    """Die Schritte von :func:`standard_choice`, ohne Fehlerfang."""
+
+    def step() -> None:
+        if cancelled is not None:
+            cancelled.raise_if_cancelled()
+
+    available = slicer_profiles.find_profiles(setup.executable, setup.flavour, ("machine",))
+    step()
+    current = machine_for(replace(setup, machine_profile=""), profile, available=available)
+    matched, _process = slicer_profiles.match(
+        available, profile.printer, source=discover.program_mark(setup.executable.name)
+    )
+    machine = (slicer_profiles.machine_for_name(available, current) if current else None) or matched
+    machines = slicer_profiles.machines(available)
+    if machine is None and len(machines) == 1 and _assigned_to(machines[0], profile):
+        machine = machines[0]
+    if machine is None or not _fits_the_printer(machine.name, profile):
+        return None
+    # Die Zuordnung darf die nächste Düse finden; die Grundlage braucht
+    # dagegen die Projektdüse, bevor sie deren Prozess und Filament liest.
+    fitting_machine = machine_for(
+        replace(setup, machine_profile=slicer_profiles.identity(machine)),
+        profile,
+        available=available,
+    )
+    machine = (
+        slicer_profiles.machine_for_name(available, fitting_machine) if fitting_machine else None
+    )
+    if machine is None:
+        return None
+    step()
+    found = slicer_profiles.find_profiles(setup.executable, setup.flavour, ("process", "filament"))
+    step()
+    fitting = slicer_profiles.processes(found, machine)
+    process = _preferred(fitting, setup.base_process) or slicer_profiles.standard_process(
+        fitting, machine, profile.printer
+    )
+    filament = _preferred(slicer_profiles.filaments(found, machine), setup.base_filament)
+    if filament is None:
+        filament = slicer_profiles.match_filament(
+            found, machine, slicer_keys.filament_type(profile.material.id), _profile_roots(setup)
+        )
+    return replace(
+        setup,
+        machine_profile=slicer_profiles.identity(machine),
+        base_process=slicer_profiles.identity(process) if process is not None else "",
+        base_filament=slicer_profiles.identity(filament) if filament is not None else "",
+    )
+
+
+def _assigned_to(machine: slicer_profiles.SlicerProfile, profile: Profile) -> bool:
+    """Ordnet der Name diese Maschine dem Drucker des Projekts zu?
+
+    Strenger als :func:`_fits_the_printer`, das Unerkanntes durchlässt: Die
+    einzige Maschine eines Bestands („Mein Drucker") zeigt der Dialog, und der
+    Kunde sieht, was er nimmt. Hier sähe sie niemand, und ein MK4S- oder
+    Resin-Projekt bekäme sie samt Prozess (Regel 21, §29).
+    """
+    known = {**profiles.printer_profiles(), profile.printer.id: profile.printer}
+    mine = profile.printer.id
+    return slicer_profiles.printer_for(machine.name, known, prefer=mine) == mine
+
+
+def _preferred(
+    entries: Sequence[slicer_profiles.SlicerProfile], wanted: str
+) -> slicer_profiles.SlicerProfile | None:
+    """Der gemerkte Eintrag, wenn er unter den passenden steht — nach Kennung,
+    sonst nach Namen, wie ein Projekt ihn trägt (Regel 12)."""
+    if not wanted:
+        return None
+    return next(
+        (entry for entry in entries if slicer_profiles.identity(entry) == wanted), None
+    ) or next((entry for entry in entries if entry.name == wanted), None)
 
 
 def foundation_findings(

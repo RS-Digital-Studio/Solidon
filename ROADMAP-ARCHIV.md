@@ -31,6 +31,7 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-09 | [RM-623: Ohne gemerkte Profilwahl kommt die Grundlage trotzdem vom Hersteller (09.10.2026)](#rm-623-ohne-gemerkte-profilwahl-kommt-die-grundlage-trotzdem-vom-hersteller-09102026) |
 | 2026-10-09 | [RM-621: Ein Slicer, der hinter Flatpak abstürzt, heißt abgestürzt (09.10.2026)](#rm-621-ein-slicer-der-hinter-flatpak-abstürzt-heißt-abgestürzt-09102026) |
 | 2026-10-09 | [RM-620: Ein Slicer, der Filamente mit zu verschiedenen Temperaturen ablehnt, sagt es (09.10.2026)](#rm-620-ein-slicer-der-filamente-mit-zu-verschiedenen-temperaturen-ablehnt-sagt-es-09102026) |
 | 2026-10-08 | [RM-602: Der Druckdialog ordnet die Profile in einem Lesedurchgang zu (08.10.2026)](#rm-602-der-druckdialog-ordnet-die-profile-in-einem-lesedurchgang-zu-08102026) |
@@ -44118,6 +44119,45 @@ Orca-Erkennungen** (−50, −101, −62): Dort kommt der Rückgabewert als Byte
 dazu ein einziger Slicerlauf bei −62 mit Anordnungsvorgabe. Review `solidon3d-review` in
 zwei Runden (zwei mittlere, dann zwei leichte Befunde, behoben), Entwicklungstor grün
 (24 875 bestanden, 116 übersprungen). Changelog: ja (Behebung, seit v0.5.3).
+
+## RM-623: Ohne gemerkte Profilwahl kommt die Grundlage trotzdem vom Hersteller (09.10.2026)
+
+<a id="rm-623-ohne-gemerkte-profilwahl-kommt-die-grundlage-trotzdem-vom-hersteller-09102026"></a>
+<a id="rm-623"></a>
+
+**Befund (09.10.2026, an Roberts Drachendruck vom 08.10.2026):** Die Fensterdatei trug 5 KB
+nur mit Solidons Werten, ohne `printer_settings_id` und ohne Elegoos Prozess; ElegooSlicer
+füllte den Rest mit Orca-Vorgaben (`independent_support_layer_height` 1 statt 0, keine untere
+Trennschicht), und die Konsole stürzte an derselben Datei ab (`ElegooSlicer.cpp:1697`). In
+Roberts `settings.json` waren Maschine und Prozess leer. **Ursache, am Stand des Drucks
+(190a9e1a8) nachgestellt:** Das Projekt druckte auf dem eingebauten `centauri-carbon-2`,
+daneben lag sein Zwilling aus ElegooSlicer; die 0,4er Maschine wurde dem Zwilling zugeschlagen
+und fehlte in der Liste des Dialogs, Maschine und Prozess blieben leer, und das Öffnen im
+Fenster verlangt keine Maschine. RM-600 hat die Liste behoben (am heutigen Stand belegt der
+Dialog CC2 0.4, „0.20mm Standard“ und „Elegoo PLA @ECC2“ vor). Offen blieb
+`remembered_setup`: Ohne passende gemerkte Wahl gab es kein Setup, das Hauptfenster rechnete
+mit Solidons Tabelle, und der Menüexport schrieb keinen Herstellerprozess.
+
+**Behoben:** `handover.standard_choice` wählt ohne gemerkte Wahl, was der Dialog vorbelegt —
+die im Slicer eingestellte Maschine, wenn sie dieser Drucker ist, sonst die zugeordnete, sonst
+die einzige, aber nie die eines anderen bekannten Druckers; dazu ihren Standardprozess und das
+Filament der Materialart. `remembered_setup` nimmt sie, wo keine passende Wahl gemerkt ist.
+
+**Nachweis (09.10.2026):** Sonde mit Roberts Einstellungen: `remembered_setup` liefert CC2 0.4,
+„0.20mm Standard @Elegoo CC2 0.4 nozzle“ und „Elegoo PLA @ECC2“; der Menüexport eines Würfels
+trägt `printer_settings_id`, 289 Schlüssel und Elegoos Stützwerte, und die ElegooSlicer-Konsole
+schneidet ihn (Exit 0). Tests `test_without_a_choice_the_stock_names_machine_process_and_filament`,
+`test_the_standard_choice_takes_no_machine_of_another_printer` (Gegenprobe ohne Schutz rot),
+`test_without_a_fitting_choice_the_export_takes_the_dialogs_choice`. Changelog: ja (Behebung).
+
+**Abschlussprüfung (09.10.2026):** Die Vorwahl prüft die konkrete Maschine auch gegen die
+Projektdüse, bevor sie Prozess und Filament liest. Fehlt etwa die 0,8-mm-Schwester, gibt es
+keine Herstellergrundlage aus der 0,4-mm-Maschine; der Regressionstest war vor dem Fix rot.
+Die gemeinsame Einrichtung wird stufenunabhängig wiederverwendet, abgelöste Arbeiter werden
+abgesagt. Zweite Durchsicht: verbleibende Düsenlücke und Qt-Abbau im Verdrahtungstest behoben.
+Entwicklungstor auf dem reparierten Stand: 24.909 bestanden, 118 übersprungen, Exit 0;
+ruff, Format und mypy ebenfalls Exit 0. Die verpflichtenden Plattformauswahlen und der
+Abgleich mit dem aktuellen Hauptzweig gehören zur gemeinsamen Integration.
 
 ## RM-621: Ein Slicer, der hinter Flatpak abstürzt, heißt abgestürzt (09.10.2026)
 

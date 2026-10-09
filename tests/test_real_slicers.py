@@ -48,33 +48,25 @@ _EXTRUSION = re.compile(r"^G1 [^;\n]*\bE\.?\d", re.MULTILINE)
 def _preselected(setup: handover.SlicerSetup, profile: Profile) -> handover.SlicerSetup:
     """Maschine, Prozess und Filament des Herstellers, wie der Druckdialog sie vorwählt.
 
-    Dieselbe Wahl wie ``tools/matrix_unit.prepared`` (Stufe C): Die
-    Orca-Familie und PrusaSlicer bekommen das Herstellerprofil ihres
-    Bestands, Cura seine Druckerdefinition über die Übergabe selbst. Ohne
-    diese Wahl lehnt die Orca-Familie den Prozess ab („process not compatible
-    with printer“, Rückgabe -17).
+    Die Vorwahl selbst (:func:`handover.standard_choice`), die auch Export und
+    Hauptfenster ohne gemerkte Maschine nehmen (RM-623) — so läuft sie hier
+    auf Linux und beiden Macs am echten Bestand. Dieselbe Wahl wie
+    ``tools/matrix_unit.prepared`` (Stufe C): Die Orca-Familie und
+    PrusaSlicer bekommen das Herstellerprofil ihres Bestands, Cura seine
+    Druckerdefinition über die Übergabe selbst. Ohne diese Wahl lehnt die
+    Orca-Familie den Prozess ab („process not compatible with printer“,
+    Rückgabe -17).
     """
     if setup.flavour not in ("orca", "prusa"):
         return setup
-    executable = setup.executable
-    machine, process = slicer_profiles.match(
-        list(slicer_profiles.find_profiles(executable, setup.flavour, ("machine", "process"))),
-        profile.printer,
+    chosen = handover.standard_choice(setup, profile)
+    assert chosen is not None, (
+        f"kein Herstellerprofil für {profile.printer.id} bei {setup.executable}"
     )
-    assert machine is not None, f"kein Herstellerprofil für {profile.printer.id} bei {executable}"
-    roots = slicer_profiles.profile_roots(setup.flavour, executable)
-    filament = slicer_profiles.match_filament(
-        list(slicer_profiles.find_profiles(executable, setup.flavour, ("filament",))),
-        machine,
-        "PLA",
-        roots,
+    assert handover.machine_for(chosen, profile) == chosen.machine_profile, (
+        f"{chosen.machine_profile} gehört nicht zu {profile.printer.id}"
     )
-    return replace(
-        setup,
-        machine_profile=machine.name,
-        base_process=process.name if process else "",
-        base_filament=slicer_profiles.identity(filament) if filament else "",
-    )
+    return chosen
 
 
 @pytest.mark.parametrize(

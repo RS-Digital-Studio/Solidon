@@ -85,7 +85,7 @@ from PySide6.QtWidgets import (
 from shiboken6 import isValid
 
 from app.branding import APP_NAME, APP_VERSION, PART_FILE_SUFFIX, PROJECT_SUFFIX
-from app.core import activation, bootstrap, examples, feedback, manual, tools, updates
+from app.core import activation, bootstrap, discover, examples, feedback, manual, tools, updates
 from app.core.agent import apply as agent_apply
 from app.core.agent.analysis import ANALYSIS_KINDS, analysis_text, unknown_analysis
 from app.core.agent.remote import Deferred as RemoteDeferred
@@ -1290,19 +1290,49 @@ class _OllamaSizeWorker(Worker):
         self.done.emit(llm.ollama_size_warning(self._model))
 
 
+@dataclass(frozen=True, slots=True)
+class _ChosenSetup:
+    """Die Einrichtung aus :func:`remembered_setup` und wofür — auch ``None`` ist
+    eine Antwort.
+
+    Sie hängt nicht an der Stufe (``manufacturer.for_stage`` legt die erst
+    danach auf), kostet ohne gemerkte Maschine aber den Profilbestand des
+    Slicers (RM-623). Gemerkt je Schlüssel ohne Stufe
+    (:func:`_without_stage`), rechnen Stufenwechsel und Export mit ihr, statt
+    sie neu herzuleiten — und Zahlenzeile und Datei sicher mit derselben Wahl.
+    """
+
+    key: tuple[object, ...]
+    setup: handover.SlicerSetup | None
+
+
+def _without_stage(key: tuple[object, ...]) -> tuple[object, ...]:
+    """Der Grundlagenschlüssel ohne die Stufe (``MainWindow._foundation_key``)."""
+    return (key[0], *key[2:])
+
+
 class _FoundationWorker(Worker):
     """Die Grundlage aus dem gemerkten Slicerprofil, abseits des Oberflächen-Threads.
 
     Die Slicersuche in :func:`remembered_setup` kostet eine halbe Sekunde, auf
-    einer Maschine mit mehreren Slicern Sekunden, die Auflösung der Profile
-    ein Zehntel. Gefragt wurde nach jeder Auswertung, und bei jedem Wechsel
-    von Drucker, Material, Stufe oder Profilwahl stand das Fenster so lange
-    (Review Stufe A+B, R7). Die Slicersuche im Druckdialog läuft aus demselben
-    Grund seit dem 13.09.2026 in ``_SlicerWorker``.
+    einer Maschine mit mehreren Slicern Sekunden; ohne gemerkte Maschine kommt
+    die Vorwahl aus dem Profilbestand dazu (:func:`handover.standard_choice`),
+    an einem großen Bestand Sekunden CPU-Zeit. Gefragt wurde nach jeder
+    Auswertung, und bei jedem Wechsel von Drucker, Material, Stufe oder
+    Profilwahl stand das Fenster so lange (Review Stufe A+B, R7). Die
+    Slicersuche im Druckdialog läuft aus demselben Grund seit dem 13.09.2026
+    in ``_SlicerWorker``.
+
+    Ist die Einrichtung für diesen Schlüssel schon bekannt (``chosen``), wird
+    sie nicht neu hergeleitet: Ein Stufenwechsel kostet dann nur die Grundlage.
+    Abgelöst oder beim Schließen sagt das Fenster den Arbeiter ab
+    (:meth:`cancel`); die Vorwahl hält zwischen ihren Schritten an, ein
+    begonnenes Lesen des Bestands läuft zu Ende.
     """
 
-    done = Signal(object, object)
-    """Der Schlüssel, für den gerechnet wurde, und die Grundlage."""
+    done = Signal(object, object, object)
+    """Der Schlüssel, für den gerechnet wurde, die Grundlage und die Einrichtung
+    dazu (:class:`_ChosenSetup`)."""
 
     def __init__(
         self,
@@ -1310,23 +1340,41 @@ class _FoundationWorker(Worker):
         ui_settings: UiSettings,
         profile: Profile,
         quality: QualityPreset,
+        chosen: _ChosenSetup | None = None,
     ) -> None:
         super().__init__()
         self._key = key
         self._ui = ui_settings
         self._profile = profile
         self._quality = quality
+        self._chosen = chosen if chosen is not None and chosen.key == _without_stage(key) else None
+        self.cancelled = CancelSignal()
+
+    def cancel(self) -> None:
+        self.cancelled.cancel()
 
     def work(self) -> None:
+        chosen = self._chosen
+        if chosen is None:
+            try:
+                chosen = _ChosenSetup(
+                    _without_stage(self._key),
+                    remembered_setup(
+                        self._ui,
+                        self._profile.material.id,
+                        self._profile.printer.id,
+                        cancelled=self.cancelled,
+                    ),
+                )
+            except OperationCancelled:
+                return
         # Die Stufe wählt den Prozess des Herstellers (Entscheidung I) — hier wie
         # im Druckdialog und beim Export, sonst rechnete die Zahlenzeile mit
         # einem anderen Prozess, als gedruckt wird.
-        setup = manufacturer.for_stage(
-            remembered_setup(self._ui, self._profile.material.id, self._profile.printer.id),
-            self._profile,
-            self._quality,
+        setup = manufacturer.for_stage(chosen.setup, self._profile, self._quality)
+        self.done.emit(
+            self._key, manufacturer.base_settings(self._profile, self._quality, setup), chosen
         )
-        self.done.emit(self._key, manufacturer.base_settings(self._profile, self._quality, setup))
 
 
 class _DownloadWorker(Worker):
@@ -1492,10 +1540,14 @@ class _ExportWorker(Worker):
         document: Any = None,
         checked: list[Finding] | None = None,
         evaluated: Sequence[Finding] = (),
+        chosen: _ChosenSetup | None = None,
     ) -> None:
         super().__init__()
         self._objects = objects
         self._target = target
+        self._chosen = chosen
+        """Die Einrichtung, mit der das Hauptfenster schon rechnet — dann wird
+        sie nicht neu hergeleitet (:class:`_ChosenSetup`)."""
         self._format = export_format
         self._profile = profile
         self._sources = sources
@@ -1551,6 +1603,7 @@ class _ExportWorker(Worker):
             document=self._document,
             checked=list(findings),
             evaluated=self._evaluated,
+            chosen=self._chosen,
         )
 
     def work(self) -> None:
@@ -1646,9 +1699,23 @@ class _ExportWorker(Worker):
 
         Die Slicer-Suche in ``remembered_setup`` läuft hier mit: sie kostet
         eine knappe halbe Sekunde und hatte im Hauptthread einen Wartezeiger
-        über sich. Hier braucht sie keinen.
+        über sich. Hier braucht sie keinen. Ohne gemerkte Maschine kommt die
+        Vorwahl aus dem Profilbestand dazu (:func:`handover.standard_choice`),
+        an einem großen Bestand Sekunden CPU-Zeit — es sei denn, das
+        Hauptfenster hat sie für denselben Drucker, dasselbe Material und
+        dieselbe Profilwahl schon (``chosen``). Abbrechbar ist sie wie die
+        Vorbereitung über ``cancelled``, zwischen ihren Schritten.
         """
-        setup = remembered_setup(self._ui_settings, self._material, self._profile.printer.id)
+        setup = (
+            self._chosen.setup
+            if self._chosen is not None
+            else remembered_setup(
+                self._ui_settings,
+                self._material,
+                self._profile.printer.id,
+                cancelled=self.cancelled,
+            )
+        )
         if setup is None:
             found = tools.slicer_program()
             if found is not None:
@@ -2648,6 +2715,8 @@ class MainWindow(QMainWindow):
         self._foundation_worker: Any = None
         self._foundation_pending: tuple[object, ...] | None = None
         """Wofür der laufende Arbeiter rechnet — ``None``, wenn keiner rechnet."""
+        self._chosen_setup: _ChosenSetup | None = None
+        """Die zuletzt hergeleitete Slicerwahl, je Schlüssel ohne Stufe (RM-623)."""
         self._map_cache: dict[tuple[Any, ...], Any] = {}
         self._finding_awaiting_map: tuple[Finding, _MapRequest] | None = None
         """Der angeklickte Befund, dessen Analysekarte noch gerechnet wird.
@@ -9657,6 +9726,9 @@ class MainWindow(QMainWindow):
             # Und was die Auswertung schon fand: Ein durchstochener Formzug
             # stand im Prüfbericht und nicht vor dem Schreiben (RM-419).
             evaluated=result.scene.report.findings,
+            # Dieselbe Slicerwahl wie die Zahlenzeile, ohne den Bestand ein
+            # zweites Mal zu lesen (RM-623).
+            chosen=self._chosen_setup_now(),
         )
         self._run_export(worker)
 
@@ -24281,7 +24353,9 @@ class MainWindow(QMainWindow):
         return manufacturer.base_settings(self.session.profile, quality, None)
 
     def _foundation_key(self, quality: QualityPreset) -> tuple[object, ...]:
-        """Woraus die Grundlage entsteht — Drucker und Material, Stufe, Profilwahl."""
+        """Woraus die Grundlage entsteht — Drucker und Material, Stufe, Profilwahl,
+        und der Stand der Programmsuche: Ein anderer Slicer in den Einstellungen
+        heißt ein anderer Bestand (``discover.cache_generation``)."""
         profile = self.session.profile
         ui = self.settings
         return (
@@ -24293,27 +24367,54 @@ class MainWindow(QMainWindow):
             ui.slicer_profile_printer,
             ui.slicer_profile_slicer,
             ui.slicer_bed_plate,
+            discover.cache_generation(),
         )
 
+    def _chosen_setup_now(self) -> _ChosenSetup | None:
+        """Die gemerkte Slicerwahl, wenn sie zum jetzigen Stand gehört — sonst
+        ``None``, und wer sie braucht, leitet sie selbst her."""
+        chosen = self._chosen_setup
+        if chosen is None:
+            return None
+        current = _without_stage(self._foundation_key(print_settings.DEFAULT_QUALITY))
+        return chosen if chosen.key == current else None
+
     def _start_foundation(self, key: tuple[object, ...], quality: QualityPreset) -> None:
-        """Die Grundlage für ``key`` im Arbeiter rechnen lassen."""
+        """Die Grundlage für ``key`` im Arbeiter rechnen lassen.
+
+        Der abgelöste Arbeiter wird abgesagt: Seine Antwort gälte einem
+        Schlüssel, nach dem niemand mehr fragt, und schnelle Wechsel stapelten
+        sonst volle Lesedurchgänge des Profilbestands (RM-623).
+        """
         if self._close_requested:
             return
-        worker = _FoundationWorker(key, deepcopy(self.settings), self.session.profile, quality)
+        worker = _FoundationWorker(
+            key, deepcopy(self.settings), self.session.profile, quality, self._chosen_setup
+        )
         worker.done.connect(self._foundation_found)
         # Ein Absturz kostet die Herstellergrundlage, nicht das Fenster: Dann
         # rechnet es mit Solidons Tabelle weiter, und der Grund steht im Protokoll.
         worker.crashed.connect(self._foundation_crashed)
+        if self._foundation_worker is not None:
+            self._foundation_worker.cancel()
         self._retire(self._foundation_worker)
         self._foundation_worker = worker
         self._foundation_pending = key
         worker.finished.connect(lambda done=worker: self._foundation_worker_done(done))
         self._leash.start(worker)
 
-    def _foundation_found(self, key: tuple[object, ...], foundation: object) -> None:
-        """Die Grundlage ist da: merken, und was mit ihr rechnet, neu zeigen."""
+    def _foundation_found(
+        self, key: tuple[object, ...], foundation: object, chosen: object = None
+    ) -> None:
+        """Die Grundlage ist da: merken, und was mit ihr rechnet, neu zeigen.
+
+        Mit ihr die Slicerwahl (:class:`_ChosenSetup`), für die nächste Stufe
+        und den Export.
+        """
         if not isinstance(foundation, manufacturer.Foundation):
             return
+        if isinstance(chosen, _ChosenSetup):
+            self._chosen_setup = chosen
         self._foundation_cache = (key, foundation)
         if self._foundation_pending == key:
             self._foundation_pending = None
@@ -27559,6 +27660,10 @@ class MainWindow(QMainWindow):
         self._cancel_gcode()
         self._cancel_export()
         self._cancel_sculpt_check()
+        # Die Vorwahl aus dem Profilbestand hält zwischen ihren Schritten an,
+        # statt das Schließen Sekunden warten zu lassen (RM-623).
+        if self._foundation_worker is not None:
+            self._foundation_worker.cancel()
         if self._slice_worker is not None:
             self._slice_worker.cancel.cancel()
         # Der Erzeugen-Dialog ist nichtmodal und kann neben dem Fenster einen

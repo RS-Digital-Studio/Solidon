@@ -118,11 +118,28 @@ def single_read() -> Iterator[None]:
         return
     _SINGLE_READ.documents = {}
     _SINGLE_READ.indexes = {}
+    _SINGLE_READ.listings = {}
     try:
         yield
     finally:
         _SINGLE_READ.documents = None
         _SINGLE_READ.indexes = None
+        _SINGLE_READ.listings = None
+
+
+def _json_files(root: Path) -> list[Path]:
+    """Die JSON-Dateien unter ``root``, sortiert — im Lesedurchgang einmal je
+    Wurzel. Die Vorwahl ohne gemerkte Maschine liest erst die Maschinen, dann
+    Prozesse und Filamente (``handover.standard_choice``); der zweite
+    Durchlauf über ElegooSlicers zwölftausend Dateien kostete noch einmal
+    0,36 s CPU-Zeit."""
+    shared: dict[Path, list[Path]] | None = getattr(_SINGLE_READ, "listings", None)
+    if shared is not None and root in shared:
+        return shared[root]
+    found = sorted(root.rglob("*.json"))
+    if shared is not None:
+        shared[root] = found
+    return found
 
 
 def _pass_documents(documents: ProfileDocuments | None) -> ProfileDocuments | None:
@@ -2912,7 +2929,7 @@ def find_profiles(
     count = 0
     documents: ProfileDocuments = {}
     for root, from_user in roots:
-        for path in sorted(root.rglob("*.json")):
+        for path in _json_files(root):
             # Die Ordnertiefe ist nicht einheitlich: Bambu legt seine Profile
             # direkt in `machine/`, Elegoo eine Ebene tiefer in `machine/ECC2/`.
             # Gesucht wird deshalb nach dem Ordner irgendwo im Pfad, nicht nach
