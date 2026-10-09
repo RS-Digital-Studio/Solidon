@@ -27364,9 +27364,12 @@ Bäumen oben und unten 0,4 mm, unten drei Lagen in ElegooSlicer und OrcaSlicer, 
 übrigen vier; 57 bis 201 Zellen je Seite. Die frühere Begründung, die Unterseite unter Gitter
 sei nicht messbar, war ein Messfehler (Stapel verschiedener Stellen vermischt); an den
 RM-622-G-Codes misst die Unterseite jetzt bei 4 und 6 mm Rand gleich 0,28 mm.
-Synthetische Gegenproben in `test_real_slicers.py`: Bögen, Bahnhöhe mit und ohne Angabe,
-Nachbarschaft, Rand und `Skirt/Brim` — jede verstümmelte Fassung der Messung und die alte
-aus `c95d542ed` werden dort rot. Linux und macOS (Anycubic 2.0.0.5 gegen 2.0.0.3, Laufzeit
+Synthetische Gegenproben in `test_real_slicers.py`: `G92`, Bögen, Bahnhöhe mit und ohne
+Angabe (die unterste Stützlage mit eigener Höhe wie in den echten G-Codes), Nachbarschaft
+oben und unten, Rand und `Skirt/Brim` als Ring außen um das Dach. Jede der sieben
+verstümmelten Fassungen der Messung (ohne `G92`, ohne Bögen, Bogen als Sehne, ohne
+Bahnhöhe, ohne Nachbarschaft unten, ohne Nachbarschaft oben, `Skirt/Brim` als Modell) und
+die alte aus `c95d542ed` werden dort rot, jede an der Zusicherung ihres Falls. Linux und macOS (Anycubic 2.0.0.5 gegen 2.0.0.3, Laufzeit
 gegen das 120-Minuten-Limit) nimmt die Slicerauswahl beim Push auf main ab, denn die CI läuft
 nur dort (Entscheidung Robert). SuperSlicer fehlt: RM-622 hat es nicht gemessen. Cura
 fehlt, weil es aufrundet und Solidons Tabelle es nicht weiß; das richtet RM-628, und Cura

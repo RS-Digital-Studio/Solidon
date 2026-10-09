@@ -386,48 +386,71 @@ def test_the_contact_measure_follows_arcs() -> None:
 def test_the_contact_measure_takes_the_support_height_from_its_own_stack(marked: bool) -> None:
     """Die Unterseite misst mit der Höhe der eigenen Stützbahn (RM-624).
 
-    Auf einem Sockel bis 0,6 mm steht Stütze ab 1,16 mm, 0,28 mm hoch: 0,28 mm
-    Luft. Daneben eine Säule auf dem Bett mit Ebenen alle 0,28 mm — aus allen
-    Stützebenen zusammen gerechnet wäre die Stützlage auf 1,16 mm nur 0,04 mm
-    hoch, und die Unterseite mäße 0,52. Dazu eine Zelle, in der Wand und Stütze
-    nebeneinander stehen und ihre Ebenen sich abwechseln: kein Kontakt. Mit
-    ``;HEIGHT:`` wie die Orca-Familie und PrusaSlicer, ohne wie CuraEngine.
+    Auf einem Sockel bis 0,6 mm steht Stütze mit 0,28 mm Luft. Mit ``;HEIGHT:``
+    wie die Orca-Familie und PrusaSlicer hat die unterste Stützlage ihre eigene
+    Höhe, wie in den echten G-Codes unter Gitter: 0,2 mm auf 1,08, darüber
+    0,28. Der Schritt im Stapel mäße dort 0,2 mm Luft — die Angabe muss gelesen
+    werden. Ohne Angabe wie CuraEngine ist der Stapel gleichförmig (1,16, 1,44,
+    1,72), und der Schritt gilt. Daneben eine Säule auf dem Bett mit Ebenen
+    alle 0,28 mm: Aus allen Stützebenen zusammen gerechnet läge unter der
+    untersten Lage eine fremde auf 1,12 bzw. 0,84 mm, und die Unterseite mäße
+    0,52 bzw. 0,24. Dazu eine Zelle, in der Wand und Trennschicht nebeneinander
+    stehen und ihre Ebenen sich abwechseln: weder oben noch unten Kontakt.
     """
     height = [";HEIGHT:0.28"] if marked else []
     lines = ["M83", *_wall((0.2, 0.4, 0.6, 0.8, 1.0, 1.2, 1.4, 1.6))]
     for level in (0.2, 0.4, 0.6):
         lines += [";TYPE:Top surface", f"G0 X10.5 Y10.5 Z{level}", "G1 X11.5 Y11.5 E0.05"]
-    for kind, level in (
-        ("Support interface", 1.16),
-        ("Support interface", 1.44),
-        ("Support", 1.72),
-    ):
-        lines += [f";TYPE:{kind}", *height, f"G0 X10.5 Y10.5 Z{level}", "G1 X11.5 Y11.5 E0.05"]
+    stack = (
+        (
+            ("Support interface", 1.08, 0.2),
+            ("Support interface", 1.36, 0.28),
+            ("Support", 1.64, 0.28),
+        )
+        if marked
+        else (
+            ("Support interface", 1.16, None),
+            ("Support interface", 1.44, None),
+            ("Support", 1.72, None),
+        )
+    )
+    for kind, level, own in stack:
+        tall = [] if own is None else [f";HEIGHT:{own}"]
+        lines += [f";TYPE:{kind}", *tall, f"G0 X10.5 Y10.5 Z{level}", "G1 X11.5 Y11.5 E0.05"]
     for level in (0.28, 0.56, 0.84, 1.12, 1.4):
         lines += [";TYPE:Support", *height, f"G0 X30.5 Y30.5 Z{level}", "G1 X31.5 Y31.5 E0.05"]
     for level in (0.2, 0.4, 0.6, 0.8, 1.0, 1.2, 1.4, 1.6):
         lines += [";TYPE:Inner wall", f"G0 X20.5 Y20.5 Z{level}", "G1 X21.5 Y21.5 E0.05"]
     for level in (0.28, 0.56, 0.84, 1.12, 1.4):
-        lines += [";TYPE:Support", *height, f"G0 X20.5 Y20.5 Z{level}", "G1 X21.5 Y21.5 E0.05"]
+        lines += [
+            ";TYPE:Support interface",
+            *height,
+            f"G0 X20.5 Y20.5 Z{level}",
+            "G1 X21.5 Y21.5 E0.05",
+        ]
 
     measured = support_contact("\n".join(lines) + "\n")
 
     assert measured.bottom_cells == 1, measured
     assert measured.bottom_gap == pytest.approx(0.28), measured
     assert measured.bottom_interface_layers == pytest.approx(2.0), measured
+    assert measured.top_cells == 0, measured
 
 
 def test_the_contact_measure_keeps_to_the_inside_of_the_model() -> None:
     """``inset`` nimmt nur das Innere der Aufsicht, und ein Rand gehört nicht dazu (RM-624).
 
     Ein Dach von 10 × 10 mm über zwei Trennschichtflecken, einer am Rand, einer
-    in der Mitte; vier Millimeter Abstand lassen nur die Mitte. Darunter ein
-    Rand, wie PrusaSlicer ihn schreibt (``;TYPE:Skirt/Brim``): Als Modell
-    gezählt, verbreiterte er die Aufsicht, und der Fleck am Rand zählte mit.
+    in der Mitte; vier Millimeter Abstand lassen nur die Mitte. Außen um das
+    Dach liegt ein Rand, wie PrusaSlicer ihn schreibt (``;TYPE:Skirt/Brim``),
+    nicht unter den Flecken: Als Modell gezählt, verbreiterte er die Aufsicht,
+    und der Fleck am Rand zählte mit.
     """
     lines = ["M83", *_wall((0.2, 0.4, 0.6, 0.8, 1.0)), ";TYPE:Skirt/Brim"]
-    for row in range(7, 24, 2):
+    for row in (7, 9, 21, 23):
         lines += [f"G0 X6.5 Y{row} Z0.2", f"G1 X23.5 Y{row} E0.5"]
+    for column in (6.5, 8.5, 20.5, 22.5):
+        lines += [f"G0 X{column} Y7 Z0.2", f"G1 X{column} Y23 E0.5"]
     lines += [";TYPE:Support interface"]
     for x in (10.5, 14.5):
         lines += [f"G0 X{x} Y14.5 Z0.6", f"G1 X{x + 1} Y15.5 E0.05"]
