@@ -1261,14 +1261,14 @@ def test_the_corpus_fit_knows_which_part_carries_its_allowance() -> None:
     assert allowances_for(resting, body) == ()
 
 
-def _bare_body(features=()):
+def _bare_body(features=(), identifier="obj_1"):
     """Ein Körper mit den genannten Merkmalen, ohne Auswertung — für die
     Schritte, deren Auskunft am Schritt hängt."""
     from app.core.types import SceneObject
 
     raw = trimesh.creation.box((10.0, 10.0, 10.0))
     return SceneObject(
-        "obj_1", "Körper", MeshData.of(raw), features={entry.id: entry for entry in features}
+        identifier, "Körper", MeshData.of(raw), features={entry.id: entry for entry in features}
     )
 
 
@@ -1289,9 +1289,7 @@ def _bare_body(features=()):
         ("insert_hinge_eye", {}, ("holes",)),
         ("insert_barrel_hinge", {}, ("holes",)),
         ("insert_rod_connector", {}, ("holes",)),
-        # Passungsschritte außerhalb der Bausteine.
-        ("create_lid", {}, ("holes",)),
-        ("split_pinned", {}, ("holes",)),
+        ("insert_magnet_pocket", {}, ("holes",)),
         # Das Spiel außen oder gar keines: Stift, Rastnase, Gewindebolzen,
         # Schnapphaken, Wärmeeinsatz, *Schraube erstellen*.
         ("insert_dowel", {"kind": "pin"}, ()),
@@ -1300,6 +1298,10 @@ def _bare_body(features=()):
         ("insert_snap_fit", {}, ()),
         ("insert_heatset_m4", {}, ()),
         ("thread_exact", {}, ()),
+        # Der Toleranz-Testkörper misst mit dem Ausgleich des Slicers (M1):
+        # Bekäme er „Löcher weiten 0“, wäre die Kalibrierung eine andere.
+        ("create_fit_ladder", {}, ()),
+        ("insert_fit_ladder", {}, ()),
     ],
 )
 def test_only_a_step_that_puts_play_into_a_hole_counts(
@@ -1318,6 +1320,84 @@ def test_only_a_step_that_puts_play_into_a_hole_counts(
     )
 
     assert allowances_for(document, _bare_body()) == expected
+
+
+@pytest.mark.parametrize(
+    ("op", "params", "first", "second"),
+    [
+        # Der Hals trägt sein Spiel außen, die Kappe innen.
+        ("screw_lid", {}, (), ("holes",)),
+        # Die Bohrungen liegen an der Hälfte ohne Stifte.
+        ("split_pinned", {"pins": 2}, (), ("holes",)),
+        ("split_pinned", {"pins": 2, "pins_on_b": True}, ("holes",), ()),
+        ("split_pinned", {"pins": 0}, (), ()),
+        # Der Kragen ist um das Spiel schmaler; nur Scharnieraugen tragen es innen.
+        ("create_lid", {}, (), ()),
+        ("create_lid", {"hinge": "barrel"}, (), ("holes",)),
+        ("create_lid", {"hinge": "loose_pin"}, ("holes",), ("holes",)),
+    ],
+)
+def test_a_step_with_two_results_counts_only_where_the_play_is_inside(
+    op: str, params: dict[str, object], first: tuple[str, ...], second: tuple[str, ...]
+) -> None:
+    """Review RM-589, M2: Deckel, Drehdeckel und Teilen bauen zwei Körper, und
+    nur einer davon trägt das Spiel in einer Innenkontur. Der andere behält den
+    Lochausgleich des Slicers für seine übrigen Löcher."""
+    from app.core.bootstrap import load_operations
+    from app.core.scene.fits import allowances_for
+    from app.core.types import Document, Operation
+
+    load_operations()
+    document = Document(
+        format_version=1,
+        app_version="0.0.1",
+        ops=(Operation(id=1, op=op, params=params, outputs=("obj_1", "obj_2")),),
+    )
+
+    assert allowances_for(document, _bare_body(identifier="obj_1")) == first
+    assert allowances_for(document, _bare_body(identifier="obj_2")) == second
+
+
+@pytest.mark.parametrize("pins_on_b", [False, True])
+def test_the_split_half_with_the_bores_is_the_one_that_counts(pins_on_b: bool) -> None:
+    """Am gerechneten Körper: Die Hälfte, die die Bohrungen trägt, ist die
+    gezählte — die Reihenfolge der Ergebnisse in :func:`_play_outputs` stimmt
+    mit dem Schnitt überein."""
+    from app.core.bootstrap import load_operations
+    from app.core.scene import History, OperationDraft, evaluate
+    from app.core.scene.fits import allowances_for
+    from app.core.types import Document
+
+    load_operations()
+    profile = profiles.make_profile("centauri-carbon-2", "petg")
+    document = Document(format_version=1, app_version="0.0.1")
+    history = History(document)
+    history.apply(
+        "Block",
+        [OperationDraft(op="create_box", params={"width": 40.0, "depth": 30.0, "height": 30.0})],
+    )
+    history.apply(
+        "Teilen",
+        [
+            OperationDraft(
+                op="split_pinned",
+                inputs=("obj_1",),
+                params={"axis": "z", "position": 15.0, "pins": 2, "pins_on_b": pins_on_b},
+            )
+        ],
+    )
+    split = document.ops[-1]
+    scene = evaluate(document, profile).scene
+    seen = []
+    for output in split.outputs:
+        body = scene.objects[output]
+        bores = [
+            feature
+            for feature in body.features.values()
+            if feature.kind == "hole" and feature.created_by == split.id
+        ]
+        seen.append((bool(bores), allowances_for(document, body) == ("holes",)))
+    assert sorted(seen) == [(False, False), (True, True)], seen
 
 
 @pytest.mark.parametrize(
@@ -1434,9 +1514,11 @@ def test_a_cura_part_with_its_own_foot_gets_no_slicer_foot_without_a_click(
     tmp_path: Path,
 ) -> None:
     """Der Fall aus dem Review: ein Teil mit *Elefantenfuß ausgleichen* an Cura,
-    der Rat nicht übernommen. Weder die Platte noch das Netz zieht ein zweites
-    Mal ein."""
+    der Rat nicht übernommen. Weder die Platte, die CuraEngine als ``-s``
+    bekommt, noch das Netz zieht ein zweites Mal ein — bis zum Review stand
+    auf der Platte ``xy_offset_layer_0 = -0.2``."""
     from app.core.bootstrap import load_operations
+    from app.core.export import handover, manufacturer
     from app.core.export.writer import write_assembly
     from app.core.scene import History, OperationDraft, evaluate
     from app.core.types import Document
@@ -1453,16 +1535,24 @@ def test_a_cura_part_with_its_own_foot_gets_no_slicer_foot_without_a_click(
         "Fuß", [OperationDraft(op="compensate_first_layer", inputs=("obj_1",), params={})]
     )
     scene = evaluate(document, profile).scene
+    setup = handover.SlicerSetup(Path("CuraEngine.exe"), "cura")
+    base = manufacturer.base_settings(profile, "standard", setup).settings
+    offered = advise.advise(base, profile, allowances=("foot",))
+    assert not [entry for entry in offered if entry.path == "layers.elephant_foot"], (
+        "Cura zieht ohne Wahl nicht ein, also gibt es nichts auf null zu stellen"
+    )
+    assert "xy_offset_layer_0" not in handover.values_for(base, profile, "cura")
+
     write_assembly(
         list(scene.objects.values()),
         tmp_path,
         project_name="fuss",
         profile=profile,
-        settings=print_settings.resolve(profile),
+        settings=base,
+        setup=setup,
         flavour="cura",
         document=document,
     )
-
     written = " ".join(
         path.read_text(encoding="utf-8", errors="replace")
         for path in tmp_path.rglob("*")

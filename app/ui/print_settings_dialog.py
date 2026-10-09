@@ -7859,9 +7859,7 @@ class PrintSettingsDialog(QDialog):
         """Was das Modell je Körper schon ausgleicht — wie der Export je Teil
         (:func:`app.core.scene.fits.allowances_for`, RM-589). Im Hauptthread."""
         document = self.session.project.document
-        return tuple(
-            (body.id, allowances_for(document, body)) for body in self._plate_bodies()
-        )
+        return tuple((body.id, allowances_for(document, body)) for body in self._plate_bodies())
 
     def _bounds(self) -> BoundingBox | None:
         """Der Hüllquader über alles, was auf die Platte geht — daran hängt der

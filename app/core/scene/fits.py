@@ -15,7 +15,7 @@ from __future__ import annotations
 import math
 from collections.abc import Collection
 from dataclasses import dataclass, replace
-from typing import TYPE_CHECKING, cast
+from typing import cast
 
 import numpy as np
 
@@ -35,6 +35,7 @@ from app.core.perceive.features import EPS_ANGLE
 from app.core.scene.cancel import NeverCancelled
 from app.core.types import (
     AUTO_TOLERANCE_PREFIX,
+    BaseParams,
     CancelToken,
     Document,
     Feature,
@@ -52,9 +53,6 @@ from app.core.types import (
 )
 from app.core.units import EPS_DISPLAY, EPS_GEOM, format_length
 from app.i18n import TranslatableText, _
-
-if TYPE_CHECKING:
-    from app.core.registry.params import BaseParams
 
 _log = get_logger(__name__)
 
@@ -370,9 +368,10 @@ COMPENSATING_HOLE_OPS: frozenset[str] = frozenset(
 _COMPENSATED_FIELD_SHAPES: frozenset[str] = frozenset({"circle", "slot"})
 
 #: Passungsschritte außerhalb der Bausteine, die ihr Spiel in eine Innenkontur
-#: legen: die Öffnung unter dem Deckel, das Gewinde des Drehdeckels, die
-#: Bohrungen der Verbinder beim Teilen. *Schraube erstellen* trägt sein Spiel
-#: außen und fehlt deshalb.
+#: legen — aber nur an einem ihrer zwei Ergebnisse (:func:`_play_outputs`):
+#: das Innengewinde der Kappe, die Bohrungen der Verbinder an einer Hälfte, die
+#: Augen eines Scharnierdeckels. Der Kragen des Deckels und der Hals tragen
+#: ihr Spiel außen, ebenso *Schraube erstellen*, das deshalb fehlt.
 PLAY_HOLE_OPS: frozenset[str] = frozenset({"create_lid", "screw_lid", "split_pinned"})
 
 #: Der Schritt, der die ersten Schichten um den Elefantenfuß des Materials
@@ -391,18 +390,24 @@ def allowances_for(document: Document, body: SceneObject) -> tuple[str, ...]:
     Dieselben Schritte wie :func:`fit_kinds_for`. Löcher zählen, wenn ein
     Baustein sein Spiel in eine Innenkontur legt (abtragend mit Spiel oder
     Übermaß, oder ``PartSpec.play_inside``), wenn ein Schritt aus
-    :data:`PLAY_HOLE_OPS` es tut, oder wenn am Körper eine Bohrung steht, die
+    :data:`PLAY_HOLE_OPS` es an diesem Körper tut, oder wenn am Körper eine Bohrung steht, die
     ein Schritt aus :data:`COMPENSATING_HOLE_OPS` mit Haken gebohrt hat. Eine
     nur eingetragene Passung ändert die Geometrie nicht und zählt nicht. Der
     Druckrat stellt dann den gleichen Ausgleich des Slicers auf null.
     """
-    _wanted, relevant = _producing(document, {body.id})
+    ancestors, relevant = _producing(document, {body.id})
     steps = {operation.id: operation for operation in document.ops if operation.id in relevant}
     found: set[str] = set()
     for operation in steps.values():
         if operation.op == FOOT_OP:
             found.add("foot")
-        elif operation.op in PLAY_HOLE_OPS or _part_with_play_inside(operation):
+        elif operation.op in PLAY_HOLE_OPS:
+            if any(
+                index < len(operation.outputs) and operation.outputs[index] in ancestors
+                for index in _play_outputs(operation)
+            ):
+                found.add("holes")
+        elif _part_with_play_inside(operation):
             found.add("holes")
     for feature in body.features.values():
         creator = steps.get(feature.created_by) if feature.created_by is not None else None
@@ -424,6 +429,31 @@ def _step_values(operation: Operation) -> dict[str, object]:
     return {entry.name: entry.default for entry in schema} | dict(operation.params)
 
 
+def _play_outputs(operation: Operation) -> tuple[int, ...]:
+    """Welche Ergebnisse eines Schritts aus :data:`PLAY_HOLE_OPS` ihr Spiel innen tragen.
+
+    *Drehdeckel erzeugen*: die Kappe (zweites Ergebnis), der Hals trägt
+    außen. *An Ebene teilen*: die Hälfte mit den Bohrungen, mit
+    ``pins_on_b`` die erste; ohne Stifte keine. *Deckel erzeugen*: Der Kragen
+    ist um das Spiel schmaler, also außen; mit Steckstift bekommen Gehäuse und
+    Deckel Augen mit Spiel (``lid_hinge.hinge_parts``), mit mitgedrucktem
+    Bolzen nur der Deckel die Bohrung darum.
+    """
+    values = _step_values(operation)
+    if operation.op == "screw_lid":
+        return (1,)
+    if operation.op == "split_pinned":
+        if not values.get("pins"):
+            return ()
+        return (0,) if values.get("pins_on_b") is True else (1,)
+    hinge = values.get("hinge")
+    if hinge == "loose_pin":
+        return (0, 1)
+    if hinge == "barrel":
+        return (1,)
+    return ()
+
+
 def _part_with_play_inside(operation: Operation) -> bool:
     """Legt dieser Bausteinschritt sein Spiel in eine Innenkontur?
 
@@ -441,7 +471,7 @@ def _part_with_play_inside(operation: Operation) -> bool:
     fields = {entry.name for entry in spec.params.spec()}
     if not fields & {part_ops.PLAY_FIELD, part_ops.GRIP_FIELD}:
         return False
-    values = cast("BaseParams", SimpleNamespace(**_step_values(operation)))
+    values = cast(BaseParams, SimpleNamespace(**_step_values(operation)))
     return spec.play_inside or part_ops.cuts(spec, values)
 
 

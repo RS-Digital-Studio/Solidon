@@ -6072,9 +6072,11 @@ def test_only_the_part_that_pulls_in_its_own_foot_gets_the_zero(
     """RM-589, Review M3: Zwei Platten, nur die erste mit *Elefantenfuß
     ausgleichen*. Der Dialog liest im Hauptthread, was jedes Modell selbst
     ausgleicht, und die Zeile *Erste Schicht einziehen* nennt nur diese Platte —
-    dieselbe Auskunft wie der Export je Teil."""
+    dieselbe Auskunft wie der Export je Teil. Gerechnet über den Weg des
+    Dialogs (``_refresh_advice`` → ``_start_advice`` → Arbeiter): Reichte er
+    die Ausgleiche nicht weiter, käme keine Zeile."""
     from app.core.scene import History, OperationDraft
-    from app.ui.print_settings_dialog import PrintSettingsDialog, _AdviceWorker
+    from app.ui.print_settings_dialog import PrintSettingsDialog
 
     history = History(session.project.document)
     for x, name in ((-30.0, "Mit Fuß"), (30.0, "Ohne Fuß")):
@@ -6093,27 +6095,21 @@ def test_only_the_part_that_pulls_in_its_own_foot_gets_the_zero(
     session.evaluate_now()
     dialog = PrintSettingsDialog(session, UiSettings())
     try:
+        assert dialog.wait_for_slicers(), "die Slicersuche kam nicht zurück"
+        # Ohne Slicer schreibt der Export wie für die Orca-Familie; so hängt
+        # der Fall nicht an dem, was auf dieser Maschine installiert ist.
+        dialog._slicer_path = None
         assert dict(dialog._part_allowances()) == {"obj_1": ("foot",), "obj_2": ()}
-        settings = print_settings.with_choice(dialog.settings, "layers.elephant_foot", 0.15)
-        worker = _AdviceWorker(
-            tuple(dialog._plate_bodies()),
-            settings,
-            session.profile,
-            None,
-            {},
-            (),
-            (),
-            {},
-            part_allowances=dict(dialog._part_allowances()),
-        )
-        answer: dict[str, list[SettingAdvice]] = {}
-        worker.done.connect(lambda entries, _results: answer.setdefault("entries", entries))
-        worker._calculate()
+        dialog.settings = print_settings.with_choice(dialog.settings, "layers.elephant_foot", 0.15)
+        dialog._refresh_advice()
+        _wait_for_print_advice(dialog, qt_app)
+        rows = [entry for entry in dialog._advice_entries if entry.path == "layers.elephant_foot"]
     finally:
+        dialog.reject()
+        dialog.wait_for_workers()
         dialog.deleteLater()
 
-    rows = [entry for entry in answer["entries"] if entry.path == "layers.elephant_foot"]
-    assert len(rows) == 1, answer["entries"]
+    assert len(rows) == 1, rows
     assert rows[0].value == pytest.approx(0.0)
     assert getattr(rows[0], "parts", ()) == ("Mit Fuß",)
 
@@ -7728,6 +7724,35 @@ def test_the_search_finds_a_setting_by_its_words(qt_app: QApplication, session: 
 
     assert dialog.search_hits("") == [], "eine leere Suche hebt nichts"
     assert dialog.search_hits("gibtesnicht") == []
+
+
+@pytest.mark.parametrize("language", ["de", "en", "es", "fr", "it", "pt"])
+def test_the_search_finds_foot_and_holes_by_the_slicers_words(
+    qt_app: QApplication, session: Session, language: str
+) -> None:
+    """Review RM-589, L3: Jeder Slicer nennt die Einstellung „Elephant foot
+    compensation“, der Kalibrierdialog „Lochkorrektur“. Die Zeilen heißen
+    „Erste Schicht einziehen“ und „Löcher weiten“ und waren unter keinem der
+    Wörter zu finden, mit denen ein Kunde sucht."""
+    from app.i18n import get_language, set_language
+
+    dialog = PrintSettingsDialog(session, UiSettings())
+    before = get_language()
+    terms = {
+        "layers.elephant_foot": ["Elephant foot compensation", "elephant foot"],
+        "shell.hole_offset": ["hole compensation"],
+    }
+    if language == "de":
+        terms["layers.elephant_foot"].append("Elefantenfuß")
+        terms["shell.hole_offset"] += ["Lochkorrektur", "Lochausgleich"]
+    try:
+        set_language(language)
+        for path, words in terms.items():
+            for word in words:
+                assert path in dialog.search_hits(word), (language, word)
+    finally:
+        set_language(before)
+        dialog.deleteLater()
 
 
 def test_the_search_also_knows_the_name_from_the_slicer(
