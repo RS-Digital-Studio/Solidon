@@ -65,10 +65,12 @@ offenem Drucker. Übernommen wird auf Klick, nie von allein.
   Schacht, der einen Kreis von `CHANNEL_WIDTH` fasst wie `_narrow`, sonst
   holt niemand die Stütze heraus), denn ein Loch im Schnitt ist auch das
   Innere jedes offenen Gefäßes; ausgespart wird dann die ganze Säule, ihr
-  Stück braucht selbst Stütze. Der Schacht steht senkrecht: Ein schräges Loch
-  zählt nur mit seiner senkrechten Durchsicht, ein Sims daneben bleibt
-  gesperrt (bekannte Grenze, Docstring von `_open_above`). Ohne gesperrten
-  Raum kein Vorschlag. Familien: `dateiformat.md`.
+  Stück braucht selbst Stütze. Ein schräger oder geknickter Schacht zählt,
+  wenn sich der Kreis Schicht für Schicht hindurchschiebt (`_shafts_pass`,
+  nur gefragt, wenn senkrecht keiner offen ist): Er weicht nur aus, wo eine
+  Wand ihn schiebt, je Schicht höchstens um die Überhanggrenze
+  (`SHAFT_DRIFT`), sonst schöbe er sich unter einem Dach hervor. Ohne
+  gesperrten Raum kein Vorschlag. Familien: `dateiformat.md`.
   **Vorschlag, nicht Automatik** (Entscheidung Robert).
 - **Ränder tragen sich selbst** (`analysis.ledges`): Eine Decke, deren Teil
   jenseits `LEDGE_REACH` um ihre Wurzel höchstens `LEDGE_SPILL` des Felds ist

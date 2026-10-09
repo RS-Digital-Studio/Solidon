@@ -2001,7 +2001,7 @@ def _open_above(
     senkrecht über der Scheibe, einmal je Säule für alle Scheiben. Ein
     schräges Loch der Weite ``2R`` in einem Deckel der Dicke ``H`` sieht
     senkrecht nur ``2R / cos θ - H · tan θ``; ob der Kreis ihm Schicht für
-    Schicht folgt, fragt danach :func:`_shaft_passes` (RM-629).
+    Schicht folgt, fragt danach :func:`_shafts_pass` (RM-629).
 
     **Ausgespart wird die ganze Säule**, auch was von ihr unter einem Dach
     liegt (Entscheidung, Review RM-571): Ihr Stück braucht selbst Stütze. Am
@@ -2054,14 +2054,22 @@ def _shafts_pass(
     **Ausweichen nur, wo eine Wand schiebt, und nur so steil, wie sie ohne
     Stütze druckt.** Ein Kreis, der frei nach oben steigen kann, wandert nicht:
     Sonst schöbe er sich unter einem Dach schräg hervor, und eine Säule mitten
-    unter dem Sims des Bechers wäre erreichbar. Eine Wand, die flacher
-    überhängt als :data:`SHAFT_DRIFT`, ist selbst ein Dach.
+    unter dem Sims des Bechers wäre erreichbar (Test
+    ``test_open_sky_is_asked_at_each_slab``). Eine Wand, die flacher
+    überhängt als :data:`SHAFT_DRIFT`, ist selbst ein Dach. Nur an seiner
+    Unterkante weicht ein Kreis einmal um einen Schritt aus: Eine weite Öffnung
+    im Deckel des Bechers 0,5 mm neben dem Sims macht ihn bei 0,5 mm Schichthöhe
+    erreichbar (senkrecht gefragt erst 0,3 mm), 1 mm daneben nicht. Ebenso
+    folgt ein Kreis der Wand, die ihn schiebt, nicht der Achse: Eine
+    waagerechte Lippe mitten im schrägen Schacht, die ihn auf 31 mm verengt,
+    schließt ihn, denn die Kreise liegen an seiner hinteren Wand.
 
-    **Alle Scheiben einer Säule in einem Zug:** Je Scheibe für sich gefragt,
-    rechneten die elf Scheiben unter dem Sims des Bechers denselben schrägen
-    Deckel elfmal, zusammen 3,3 s. Jede Schicht wird einmal aufgeweitet, und
-    ein Weg, der einen schon laufenden trifft, geht in ihm auf
-    (:func:`_same_centres`).
+    **Alle Scheiben einer Säule in einem Zug:** Jede Schicht wird einmal
+    aufgeweitet, und ein Weg, der einen schon laufenden trifft, geht in ihm auf
+    (:func:`_same_centres`). Ohne das rechneten die elf Scheiben unter dem Sims
+    des Bechers denselben schrägen Deckel je für sich: Der Sperrraum kostete
+    beim Zickzack 1,8 statt 0,6 s CPU, beim Deckel mit 20° 0,8 statt 0,4 s,
+    bei gleichen Scheiben.
     """
     radius = CHANNEL_WIDTH / 2.0
     pending = sorted(materials)
@@ -2089,19 +2097,28 @@ def _shafts_pass(
             shade_at(index),
             (low_x - reach_out, low_y - reach_out, high_x + reach_out, high_y + reach_out),
         )
+        # **Übersprungen wird, was keinen Kreis trifft** — auch nicht um die
+        # Lücke, mit der das Vieleck eines Kreises in ihm liegt: Eine senkrechte
+        # Wand träfe sonst an jeder runden Ecke jede Schicht neu. Gefragt für
+        # alle Wege der Schicht auf einmal.
+        hits = (
+            np.zeros(len(moving), dtype=bool)
+            if shade.is_empty
+            else shapely.dwithin(
+                np.asarray([way[0] for way in moving], dtype=object),
+                shade,
+                radius - CHANNEL_POLYGON_GAP - SKY_SKIP_INSET,
+            )
+        )
         blocked: ShapelyPolygon | None = None
         ways = []
-        for centres, starts, step in moving:
-            # **Übersprungen wird, was keinen Kreis trifft** — auch nicht um
-            # die Lücke, mit der das Vieleck eines Kreises in ihm liegt: Eine
-            # senkrechte Wand träfe sonst an jeder runden Ecke jede Schicht neu.
-            if not shade.is_empty and shapely.dwithin(
-                centres, shade, radius - CHANNEL_POLYGON_GAP - SKY_SKIP_INSET
-            ):
+        for (centres, starts, step), hit in zip(moving, hits.tolist(), strict=True):
+            if hit:
                 if blocked is None:
                     # Vereinfacht um dieselbe Lücke, die das Vieleck des Kreises
                     # ohnehin lässt: Im Zickzack-Deckel kostete das Aufweiten der
-                    # Lochwand sonst drei Viertel der Frage (1,1 von 1,4 s).
+                    # Lochwand sonst die Hälfte der Frage (1,25 statt 0,59 s CPU
+                    # für den Sperrraum, alle Scheiben gleich).
                     blocked = shade.simplify(CHANNEL_POLYGON_GAP).buffer(
                         radius, quad_segs=CHANNEL_QUAD_SEGMENTS
                     )
@@ -2109,7 +2126,11 @@ def _shafts_pass(
                     fallen = centres.intersection(blocked)
                     if not fallen.is_empty:
                         centres = centres.union(fallen.buffer(step, quad_segs=SHAFT_STEP_SEGMENTS))
-                centres = centres.difference(blocked).simplify(WIDTH_SIMPLIFY)
+                # Vereinfacht vor der Differenz: Danach läge der Rand der
+                # Mitten bis ``WIDTH_SIMPLIFY`` im Gesperrten, und dieselbe Wand
+                # träfe sie jede Schicht neu (geschlossener Deckel 0,36 →
+                # 0,27 s, alle Scheiben gleich).
+                centres = centres.simplify(WIDTH_SIMPLIFY).difference(blocked)
                 # Was unter einem Quadrat der Vereinfachung bleibt, ist der Rest
                 # einer Differenz an einer gemeinsamen Kante, kein Platz für
                 # einen Kreis.
@@ -3561,13 +3582,13 @@ CHANNEL_QUAD_SEGMENTS: Final = 16
 
 #: Um wie viel dieses Vieleck höchstens innerhalb seines Kreises liegt, in mm
 #: (bei 15 mm Radius 0,018 mm) — so nah darf Material an einen Kreis des
-#: Schachts rücken, ohne ihn zu treffen (:func:`_shaft_passes`).
+#: Schachts rücken, ohne ihn zu treffen (:func:`_shafts_pass`).
 CHANNEL_POLYGON_GAP: Final = (
     CHANNEL_WIDTH / 2.0 * (1.0 - math.cos(math.pi / (4.0 * CHANNEL_QUAD_SEGMENTS)))
 )
 
 #: Wie weit der Kreis eines Schachts je Schicht zur Seite ausweichen darf, in
-#: Schichthöhen (:func:`_shaft_passes`): so weit, wie eine Wand ohne Stütze
+#: Schichthöhen (:func:`_shafts_pass`): so weit, wie eine Wand ohne Stütze
 #: überhängt. Ein schräger Schacht bis zu dieser Neigung hat Wände, die sich
 #: selbst tragen; eine flachere Wand ist ein Dach, und unter einem Dach ist eine
 #: Säule nicht erreichbar. Die Startregel und nicht die Grenze des Druckers,
