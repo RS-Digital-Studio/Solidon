@@ -105,7 +105,7 @@ from app.core.types import CancelToken, MaterialSlot, PrintSettings, SceneObject
 from app.i18n import tr
 from app.ui.dialogs import problem_text
 from app.ui.icons import icon
-from app.ui.labels import DateField, NumberSpin, localised, wheel_needs_focus
+from app.ui.labels import NO_BODIES_YET, DateField, NumberSpin, localised, wheel_needs_focus
 from app.ui.leash import RELEASE_RETRY_MS, WAIT_TIMEOUT_MS, Worker, WorkerLeash, weak_slot
 from app.ui.overlay import rows_height
 from app.ui.panels import (
@@ -124,6 +124,7 @@ from app.ui.style import (
     WIDE,
     ContentHeight,
     DialogScrollArea,
+    expanded_width,
     make_primary,
     set_level,
 )
@@ -780,6 +781,7 @@ class NewFilamentDialog(QDialog):
 
         self.more = QWidget(self)
         details = QFormLayout(self.more)
+        self._details = details
         details.setContentsMargins(0, 0, 0, 0)
         details.setVerticalSpacing(NORMAL)
         details.setHorizontalSpacing(NORMAL)
@@ -976,7 +978,16 @@ class NewFilamentDialog(QDialog):
         self._height.fit(self, self._scroll, intent="passive")
 
     def _fit_initial_content(self) -> None:
-        self._height.fit(self, self._scroll, grow_width=True, intent="initial")
+        """Beim Öffnen so breit, dass weder der senkrechte Rollbalken noch die
+        aufgeklappten *Weiteren Angaben* den Inhalt quer rollen lassen
+        (``style.expanded_width``)."""
+        self._height.fit(
+            self,
+            self._scroll,
+            grow_width=True,
+            intent="initial",
+            natural_width=expanded_width(self._scroll, self._details),
+        )
 
     def _fit_explicit_content(self) -> None:
         self._height.fit(self, self._scroll, intent="explicit")
@@ -2006,7 +2017,7 @@ class FilamentPanel(QWidget):
             item.setToolTip(f"{label}\n{said}")
             self.list.addItem(item)
         if not self._used:
-            item = QListWidgetItem(tr("Noch kein Körper im Projekt"))
+            item = QListWidgetItem(str(NO_BODIES_YET))
             item.setFlags(Qt.ItemFlag.NoItemFlags)
             self.list.addItem(item)
         self._selection_changed(self.list.currentItem())
@@ -2098,9 +2109,10 @@ class FilamentPopup(QFrame):
     def mousePressEvent(self, event: QMouseEvent) -> None:  # noqa: N802 — Qt-Name
         """Ein Druck auf den Knopf, der die Liste öffnete, schließt sie nur — wie ``QMenu``.
 
-        Qt schließt ein Popup beim Druck daneben und spielt den Druck dem
-        Widget darunter noch einmal zu; der Knopf öffnete die Liste damit
-        sofort wieder (Review U2, Fund 5).
+        Qt schließt ein Popup beim Druck daneben. Unter X11 spielt es den
+        Druck danach dem Widget darunter zu, und der Knopf öffnete die Liste
+        sofort wieder; unter Windows und offscreen bleibt der Druck bei der
+        Liste (Review U2, Fund 5 und Nachprüfung).
         """
         anchor = self._anchor
         if anchor is not None and anchor.isVisible():

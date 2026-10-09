@@ -38,7 +38,7 @@ from app.core.types import Profile, SceneObject
 from app.core.units import LengthUnit
 from app.i18n import tr
 from app.ui.icons import icon
-from app.ui.labels import length, printer_title
+from app.ui.labels import NO_BODIES_YET, length, printer_title
 from app.ui.style import TARGET_SIZE, TIGHT, divider, set_level
 from app.ui.tool_strip import BarComboBox
 
@@ -706,7 +706,7 @@ class HeaderBar(QWidget):
         said = (
             tr("Im Projekt: {filament}").format(filament="\n".join(rows))
             if rows
-            else tr("Noch kein Körper im Projekt")
+            else str(NO_BODIES_YET)
         )
         hint = f"{said}\n{tr('Zeigt die Filamente des Projekts und den Weg ins Filamentlager.')}"
         self.filament_button.setToolTip(hint)

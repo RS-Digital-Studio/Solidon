@@ -8579,9 +8579,9 @@ class MainWindow(QMainWindow):
     def _toggle_filament_list(self) -> None:
         """Der Knopf *Filamente* öffnet die Liste, ein zweiter Klick schließt sie (Fund 5).
 
-        Am Fenster nimmt die Liste den Druck selbst und spielt ihn nicht nach
-        (``FilamentPopup.mousePressEvent``); kommt der Klick trotzdem an — wo
-        die Plattform ihn zustellt —, schließt er hier.
+        Am Fenster nimmt die offene Liste den Druck selbst, auch unter X11
+        (``FilamentPopup.mousePressEvent``); erreicht ein Klick den Knopf bei
+        offener Liste doch — Bildschirmleser, ``click()`` —, schließt er hier.
         """
         if self.filament_popup.isVisible():
             self.filament_popup.hide()

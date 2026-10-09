@@ -164,16 +164,26 @@ def test_spool_form_columns_align_and_unknown_dates_have_one_label(qt_app) -> No
 
 @pytest.mark.parametrize("language", ["de", "en", "es", "fr", "it", "pt"])
 def test_spool_validation_stays_reachable_above_the_buttons_when_short(qt_app, language) -> None:
-    """Ein Preisfehler bleibt auch bei einem weit gerollten Formular erklärt."""
+    """Ein Preisfehler bleibt auch bei einem weit gerollten Formular erklärt.
+
+    Gemessen wird der übersetzte Dialog: Ohne geladenen Katalog zeigte jede
+    Sprache die deutschen Texte, und der Test war nur grün, solange kein
+    früherer Test im selben Lauf die Kataloge geladen hatte. Mit ihnen ragte
+    das Währungsfeld auf Spanisch, Französisch, Italienisch und Portugiesisch
+    unter den senkrechten Rollbalken (Nachprüfung U2, Nebenbefund).
+    """
     from PySide6.QtCore import QPoint
     from PySide6.QtWidgets import QDialogButtonBox
 
-    from app.i18n import get_language, set_language
+    from app.i18n import get_language, set_language, tr
+    from app.i18n.catalog import install_language
     from app.ui.settings import UiSettings
     from app.ui.theme import apply_theme
 
     before = get_language()
+    install_language(language)
     set_language(language)
+    assert language == "de" or tr("Weitere Angaben") != "Weitere Angaben", "Katalog geladen"
     apply_theme(qt_app, UiSettings().theme)
     dialog = NewFilamentDialog(name="Werkstattrolle")
 

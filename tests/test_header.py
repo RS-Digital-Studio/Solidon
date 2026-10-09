@@ -657,6 +657,14 @@ def test_the_filament_button_names_exactly_the_rows_of_its_list(window: MainWind
     assert first_line_and_rows == expected, (said, rows)
     assert window.header.filament_button.accessibleDescription() == said
 
+    window._show_project_filaments(
+        EvaluationResult(scene=Scene(objects={})), window.effective_print_settings()
+    )
+    rows = [panel.list.item(row).text() for row in range(panel.list.count())]
+    assert len(rows) == 1, rows
+    said = window.header.filament_button.toolTip()
+    assert said.split("\n")[0] == rows[0], "leer: Kurzhilfe und Liste sagen denselben Satz"
+
 
 def test_the_search_keeps_its_word_beside_the_filament_button(
     window: MainWindow, qt_app: QApplication
@@ -726,6 +734,20 @@ def test_the_search_keeps_its_word_beside_the_filament_button(
         assert search.text().startswith(tr("Funktion suchen …")), (
             f"bei {between} px ist die Suche nur noch eine Lupe"
         )
+        # Geschrumpft wird erst, wenn die Leiste nicht mehr passt: Die Suche
+        # behält ihr Wort, die Kopfzeile hat weniger Luft, als das Wort an
+        # *Filamente* kostet — abgeleitet aus den Maßen dieses Laufs, damit es
+        # mit jeder Schrift gilt (offscreen, DejaVu Sans, echtes Fenster).
+        extra = header._filament_width(words=True) - header._filament_width(words=False)
+        narrow = search_need + sign_wish + extra // 2
+        window.resize(narrow, 768)
+        for _ in range(4):
+            qt_app.processEvents()
+        window._fit_toolbar()
+        qt_app.processEvents()
+        assert search.text().startswith(tr("Funktion suchen …")), (
+            f"bei {narrow} px ist die Suche nur noch eine Lupe"
+        )
         button = header.filament_button
         assert button.isVisibleTo(window.toolbar) and button.width() > 0
         assert button.toolButtonStyle() == Qt.ToolButtonStyle.ToolButtonIconOnly, (
@@ -794,9 +816,13 @@ def test_a_second_click_on_filaments_closes_the_list(
 ) -> None:
     """Wie ein Menü: Der zweite Klick auf *Filamente* schließt die Liste (Review U2, Fund 5).
 
-    Qt schließt ein Popup beim Druck daneben und spielt den Druck dem Knopf
-    noch einmal zu — der öffnete die Liste sofort wieder. ``QMenu`` verhindert
-    das über ``WA_NoMouseReplay``.
+    Zwei Wege führen dorthin. Über das Fenstersystem nimmt die offene Liste
+    den Druck selbst und schließt; der Knopf bekommt ihn nicht, solange Qt
+    ihn nicht nachspielt — das tut es unter X11, dort hält
+    ``WA_NoMouseReplay`` den Knopf still. Erreicht der Klick den Knopf bei
+    offener Liste doch (Bildschirmleser, ``click()``), schließt der Knopf
+    selbst. ``QTest.mouseClick`` am Knopf stellt am Popup vorbei zu und
+    prüft deshalb nur den zweiten Weg.
     """
     from PySide6.QtTest import QTest
 
@@ -804,15 +830,30 @@ def test_a_second_click_on_filaments_closes_the_list(
     popup = window.filament_popup
     window.show()
     qt_app.processEvents()
-    QTest.mouseClick(button, Qt.MouseButton.LeftButton)
+    handle = window.windowHandle()
+    point = button.mapTo(window, button.rect().center())
+    no_key = Qt.KeyboardModifier.NoModifier
+    left = Qt.MouseButton.LeftButton
+
+    QTest.mouseClick(handle, left, no_key, point)
     qt_app.processEvents()
     assert popup.isVisible(), "der erste Klick öffnet"
-    QTest.mouseClick(button, Qt.MouseButton.LeftButton)
+    QTest.mousePress(handle, left, no_key, point)
     qt_app.processEvents()
-    assert not popup.isVisible(), "der zweite Klick schließt"
-    QTest.mouseClick(button, Qt.MouseButton.LeftButton)
+    assert not popup.isVisible(), "der zweite Druck geht an die Liste und schließt sie"
+    QTest.mouseRelease(handle, left, no_key, point)
+    qt_app.processEvents()
+    assert not popup.isVisible(), "das Loslassen auf dem Knopf öffnet sie nicht wieder"
+    QTest.mouseClick(handle, left, no_key, point)
     qt_app.processEvents()
     assert popup.isVisible(), "der dritte öffnet wieder"
+
+    button.click()
+    qt_app.processEvents()
+    assert not popup.isVisible(), "ein Klick, der den Knopf bei offener Liste erreicht, schließt"
+    button.click()
+    qt_app.processEvents()
+    assert popup.isVisible(), "und der nächste öffnet"
     popup.hide()
 
 

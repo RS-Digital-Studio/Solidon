@@ -557,12 +557,14 @@ def test_refresh_only_visits_each_whole_body_slot_array_once(
 
 
 def test_a_wheel_notch_without_focus_assigns_nothing(picker: QuickFilamentPicker) -> None:
-    """Eine Radraste über dem Schnellwähler färbt nur, wenn er den Fokus hat.
+    """Eine Radraste über dem Schnellwähler weist nie zu, auch nicht mit Fokus.
 
     Seit RM-557 ist jede Wahl am Wähler sofort eine Zuweisung mit eigenem
     Verlaufsschritt. Wer die Karte *Auswahl* mit dem Rad rollte, färbte den
-    gewählten Körper je Raste um (Review U2, Fund 2). Entscheidung Robert,
-    16.09.2026: erst hineinklicken (``labels.wheel_needs_focus``).
+    gewählten Körper je Raste um (Review U2, Fund 2) — nach der ersten Wahl
+    hat der Wähler den Fokus, und es ging wieder los (Nachprüfung, G1).
+    Entscheidung des Koordinators: Das Rad rollt die Karte, gewählt wird in
+    der Liste oder mit Enter.
     """
     from PySide6.QtCore import QPoint, QPointF
     from PySide6.QtGui import QWheelEvent
@@ -614,7 +616,12 @@ def test_a_wheel_notch_without_focus_assigns_nothing(picker: QuickFilamentPicker
         assert picker.picker.hasFocus()
         QApplication.sendEvent(picker.picker, notch())
         QApplication.processEvents()
-        assert len(chosen) == 1, "mit Fokus wählt die Raste wie gewohnt"
+        event = notch()
+        QApplication.sendEvent(picker.picker, event)
+        QApplication.processEvents()
+        assert chosen == [], "auch mit Fokus weist das Rad nichts zu"
+        assert not event.isAccepted(), "die Raste geht weiter — an die Karte, die rollt"
+        assert picker.picker.currentIndex() == 0
     finally:
         picker.setParent(None)
         host.close()
@@ -622,17 +629,19 @@ def test_a_wheel_notch_without_focus_assigns_nothing(picker: QuickFilamentPicker
 
 
 def test_arrows_browse_the_closed_picker_and_enter_assigns(picker: QuickFilamentPicker) -> None:
-    """Am geschlossenen Wähler blättern Pfeile, erst Enter weist zu — ein Schritt, nicht drei.
+    """Am geschlossenen Wähler weist nur Enter zu — Pfeile, Tippen, Umschalt und Alt blättern.
 
-    Jede Wahl ist seit RM-557 sofort ein Verlaufsschritt, und Qt meldete jeden
-    Pfeilschritt als Wahl (Entscheidung Koordinator, Review U2). Ohne Maus
-    bleibt alles erreichbar: Pfeile und Enter am geschlossenen Feld, Alt+Pfeil
-    runter öffnet die Liste, Enter wählt dort.
+    Jede Wahl ist seit RM-557 sofort ein Verlaufsschritt, und Qt meldet am
+    geschlossenen Feld jeden Pfeilschritt und jeden getippten Buchstaben als
+    Wahl (Entscheidung Koordinator, Review U2; Nachprüfung M1: „p“, „pl“,
+    Umschalt+Pfeil und Alt+Pfeil hoch wiesen weiter zu). Escape kehrt zur
+    Standzeile zurück. Ohne Maus bleibt alles erreichbar: Alt+Pfeil runter
+    öffnet die Liste, Enter wählt dort.
     """
     from PySide6.QtTest import QTest
     from PySide6.QtWidgets import QComboBox
 
-    for name, colour in (("PLA Rot", "#ff0000"), ("PLA Blau", "#0000ff"), ("PLA Grün", "#00ff00")):
+    for name, colour in (("PETG Grün", "#00ff00"), ("PLA Blau", "#0000ff"), ("PLA Rot", "#ff0000")):
         filaments.save(filaments.CatalogueFilament(name, colour, "PLA"))
     picker.set_context([_body("part", "Teil")])
     picker.show()
@@ -643,20 +652,45 @@ def test_arrows_browse_the_closed_picker_and_enter_assigns(picker: QuickFilament
     chosen: list[object] = []
     picker.spoolChosen.connect(chosen.append)
 
-    QTest.keyClick(combo, Qt.Key.Key_Down)
-    QTest.keyClick(combo, Qt.Key.Key_Down)
-    QApplication.processEvents()
+    def press(key: Qt.Key, modifier: Qt.KeyboardModifier = Qt.KeyboardModifier.NoModifier) -> None:
+        QTest.keyClick(combo, key, modifier)
+        QApplication.processEvents()
+
+    press(Qt.Key.Key_Down)
+    press(Qt.Key.Key_Down)
     assert chosen == [], "Pfeile ohne Enter weisen nichts zu"
     assert combo.currentIndex() == 2, "die Pfeile blättern"
     expected = combo.itemData(2)
-    QTest.keyClick(combo, Qt.Key.Key_Return)
-    QApplication.processEvents()
+    press(Qt.Key.Key_Return)
     assert [entry.identifier for entry in chosen] == [expected], "Enter weist genau einmal zu"
+
+    for keys in (
+        [(Qt.Key.Key_P, Qt.KeyboardModifier.NoModifier)],
+        [
+            (Qt.Key.Key_P, Qt.KeyboardModifier.NoModifier),
+            (Qt.Key.Key_L, Qt.KeyboardModifier.NoModifier),
+        ],
+        [(Qt.Key.Key_Down, Qt.KeyboardModifier.ShiftModifier)],
+        [
+            (Qt.Key.Key_Down, Qt.KeyboardModifier.NoModifier),
+            (Qt.Key.Key_Up, Qt.KeyboardModifier.AltModifier),
+        ],
+    ):
+        chosen.clear()
+        picker.set_context([_body("part", "Teil")])
+        combo.setFocus()
+        for key, modifier in keys:
+            press(key, modifier)
+        assert chosen == [], f"{keys}: geschlossen weist nur Enter zu"
+        assert not combo.view().isVisible(), f"{keys}: die Liste bleibt zu"
+        press(Qt.Key.Key_Escape)
+        assert combo.currentIndex() == 0, f"{keys}: Escape kehrt zur Standzeile zurück"
+        assert chosen == []
 
     chosen.clear()
     picker.set_context([_body("part", "Teil")])
     combo.setFocus()
-    QTest.keyClick(combo, Qt.Key.Key_Down)
+    press(Qt.Key.Key_Down)
     picker.inventory_button.setFocus()
     QApplication.processEvents()
     assert chosen == [] and combo.currentIndex() == 0, "geblättert und gegangen: nichts gewählt"

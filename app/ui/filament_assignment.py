@@ -8,7 +8,7 @@ Strg+Z nimmt die Zuweisung zurück (Regel 19).
 from __future__ import annotations
 
 from PySide6.QtCore import QSignalBlocker, Qt, Signal
-from PySide6.QtGui import QFocusEvent, QKeyEvent
+from PySide6.QtGui import QFocusEvent, QInputMethodEvent, QKeyEvent, QWheelEvent
 from PySide6.QtWidgets import QComboBox, QLabel, QPushButton, QVBoxLayout, QWidget
 
 from app.core.errors import AppError
@@ -31,43 +31,41 @@ from app.ui.labels import wheel_needs_focus
 from app.ui.leash import weak_slot
 from app.ui.style import TIGHT, set_level
 
-#: Tasten, mit denen ein geschlossener Wähler nur blättert.
-_BROWSING_KEYS = frozenset(
-    (
-        Qt.Key.Key_Up,
-        Qt.Key.Key_Down,
-        Qt.Key.Key_PageUp,
-        Qt.Key.Key_PageDown,
-        Qt.Key.Key_Home,
-        Qt.Key.Key_End,
-    )
-)
-
 
 class _SpoolChoice(QComboBox):
-    """Die Auswahlliste des Schnellwählers: Blättern ist noch keine Wahl.
+    """Die Auswahlliste des Schnellwählers: Am geschlossenen Feld weist nur Enter zu.
 
     Jede Wahl ist sofort eine Zuweisung mit eigenem Verlaufsschritt (RM-557).
-    Qt meldet am geschlossenen Feld jeden Pfeilschritt als Wahl — wer mit der
-    Tastatur zur dritten Spule wollte, legte zwei Schritte für die ersten an.
-    Geschlossen blättern die Pfeile deshalb nur, Enter weist zu; aus der
-    offenen Liste (Alt+Pfeil runter, F4, Leertaste) weisen Klick und Enter zu
-    wie gewohnt (Entscheidung Koordinator, Review U2; wie beim Rad nach
-    Roberts Entscheidung vom 16.09.2026).
+    Qt meldet am geschlossenen Feld jeden Pfeilschritt, jeden getippten
+    Buchstaben und jede Radraste als Wahl — wer mit der Tastatur zur dritten
+    Spule wollte, legte zwei Schritte für die ersten an. Geschlossen blättern
+    deshalb alle Tasten nur, Enter weist zu, Escape kehrt zur Standzeile
+    zurück; das Rad wählt nie, es rollt die Karte. Aus der offenen Liste
+    (Alt+Pfeil runter, F4, Leertaste) weisen Klick und Enter zu wie gewohnt
+    (Entscheidung Koordinator, Review U2).
     """
 
     def keyPressEvent(self, event: QKeyEvent) -> None:  # noqa: N802 — Qt-Name
-        modifiers = event.modifiers() & ~Qt.KeyboardModifier.KeypadModifier
-        browsing = event.key() in _BROWSING_KEYS and modifiers == Qt.KeyboardModifier.NoModifier
-        if browsing:
-            with QSignalBlocker(self):
-                super().keyPressEvent(event)
-            return
         if event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
             event.accept()
             self.activated.emit(self.currentIndex())
             return
-        super().keyPressEvent(event)
+        if event.key() == Qt.Key.Key_Escape and self.currentIndex() > 0:
+            event.accept()
+            with QSignalBlocker(self):
+                self.setCurrentIndex(0)
+            return
+        with QSignalBlocker(self):
+            super().keyPressEvent(event)
+
+    def inputMethodEvent(self, event: QInputMethodEvent) -> None:  # noqa: N802 — Qt-Name
+        """Was eine Eingabemethode tippt, sucht wie eine Taste — und wählt ebenso nicht."""
+        with QSignalBlocker(self):
+            super().inputMethodEvent(event)
+
+    def wheelEvent(self, event: QWheelEvent) -> None:  # noqa: N802 — Qt-Name
+        """Die Raste geht an den Rollbereich, auch mit Fokus: Rollen ist keine Wahl."""
+        event.ignore()
 
     def focusOutEvent(self, event: QFocusEvent) -> None:  # noqa: N802 — Qt-Name
         """Wer blättert und geht, hat nichts gewählt — das Feld zeigt wieder den Stand.
@@ -110,8 +108,8 @@ class QuickFilamentPicker(QWidget):
             QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon
         )
         self.picker.activated.connect(self._chosen)
-        # Jede Wahl ist sofort eine Zuweisung: Eine Raste beim Rollen der Karte
-        # darf keine sein (Robert, 16.09.2026, erst hineinklicken).
+        # Ohne Fokus geht die Raste an den Rollbereich (Regel aller Felder);
+        # mit Fokus reicht ``_SpoolChoice.wheelEvent`` sie ebenso weiter.
         wheel_needs_focus(self.picker)
         layout.addWidget(self.picker)
         self.notice = ErrorNotice(self)

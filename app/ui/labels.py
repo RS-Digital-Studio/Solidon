@@ -1129,6 +1129,10 @@ _HUES: tuple[tuple[int, TranslatableText], ...] = (
 #: Formulierung für denselben Fall.
 UNEXPECTED_CRASH = _("Dabei ist etwas schiefgegangen, womit hier niemand gerechnet hat.")
 
+#: Die Filamentliste einer leeren Szene und die Kurzhilfe des Knopfs davor
+#: sagen denselben Satz (Review U2, Nachprüfung G3).
+NO_BODIES_YET = _("Noch kein Körper im Projekt")
+
 
 _BLACK = _("Schwarz")
 _WHITE = _("Weiß")
