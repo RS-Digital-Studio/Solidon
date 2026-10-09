@@ -1015,23 +1015,48 @@ def test_changing_the_size_of_a_generated_model_reruns_only_the_size(
     assert project.document.ops[-1].op == "fit_to_size"
 
 
+#: Was ``generated_chain_before_rm676_v49.p3d`` am Stand vor RM-676 (welle2
+#: ``a9e4d3f64``) beim Schreiben ergab: Der Krümel bestimmte das Maß vor der
+#: Reparatur, übrig blieb ein Körper mit 39,84 mm Kante, gelegt um die Mitte
+#: von Schale und Krümel.
+SAVED_EARLIER_CHAIN = {
+    "volume": 63238.1004011136,
+    "size": (39.84063684470132, 39.84063684470132, 39.84063684470132),
+    "minimum": (-50.0, -50.0, 0.0),
+    "findings": [
+        ("arrange.free_spot", "info", 2),
+        ("repair.components_removed", "info", 3),
+        ("repair.holes_filled", "info", 3),
+        ("repair.welded", "info", 3),
+        ("repair.wide_hole_filled", "warning", 3),
+        ("transform.fitted", "info", 2),
+    ],
+}
+
+
 def test_a_project_saved_with_the_earlier_chain_computes_as_saved(profile: Profile) -> None:
     """Gespeicherte Erzeugungen behalten ihre Kette (RM-676): erst das Maß, dann
     die Reparatur, dann aufsetzen. Sie wird nicht umgebaut — die Reparatur an
     einem anderen Maß rechnete ein anderes Netz —, und *Größe ändern* bleibt
-    dort am Maßschritt, wo es war. Beleg ist das mitgelieferte Beispiel, das
-    mit dieser Kette gebaut und eingecheckt wurde.
+    dort am Maßschritt, wo es war.
     """
-    from app.core import examples
-    from app.core.scene.project import load as load_project
-
-    project = load_project(examples.directory() / "weg3-generiert-aufbereiten.p3d")
+    project = load(MESHES.parent / "projects" / "generated_chain_before_rm676_v49.p3d")
     ops = project.document.ops
-    assert [entry.op for entry in ops][:4] == ["load", "fit_to_size", "repair", "place_on_bed"]
+    assert [entry.op for entry in ops] == ["load", "fit_to_size", "repair", "place_on_bed"]
 
     result = evaluated(project, profile)
 
     assert result.complete
+    body = result.scene.objects["obj_1"]
+    assert float(body.mesh.volume) == pytest.approx(SAVED_EARLIER_CHAIN["volume"], rel=1e-9)
+    assert tuple(body.mesh.bounds.size) == pytest.approx(SAVED_EARLIER_CHAIN["size"], abs=1e-9)
+    assert tuple(body.mesh.bounds.minimum) == pytest.approx(
+        SAVED_EARLIER_CHAIN["minimum"], abs=1e-9
+    )
+    assert (
+        sorted((f.code, f.severity, f.op_id) for f in result.scene.report.findings)
+        == SAVED_EARLIER_CHAIN["findings"]
+    )
     offered = [
         entry.op_id
         for entry in result.scene.report.findings
