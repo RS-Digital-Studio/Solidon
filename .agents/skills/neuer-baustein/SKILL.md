@@ -74,7 +74,8 @@ Differenz belegen noch keine passende Verbindung.
 ## Abschluss
 
 `.agents/skills/pruefen/SKILL.md` mit den betroffenen Dateien, insbesondere `tests/test_parts.py` und
-`tests/test_parts_catalog.py`; das Entwicklungstor vor dem Commit. Melden:
+`tests/test_parts_catalog.py`, dazu ruff, format, mypy; das Entwicklungstor vor
+jedem Stand, der nach main geht. Melden:
 Name, Parameter mit Grenzen, Features, Bereichslauf mit Profil und Ergebnis,
 ob die Bibliotheksversion steigen musste, und ob der Katalogeintrag mit
 Vorschaubild steht.
