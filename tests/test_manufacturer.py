@@ -443,9 +443,7 @@ def test_a_prusa_file_without_a_program_widens_holes_in_superslicers_sign() -> N
     den Schlüssel. Mit Solidons Vorzeichen geschrieben, machte SuperSlicer
     ein gewähltes „Löcher weiten 0,1“ zu einem um 0,2 mm engeren Loch."""
     profile = profiles.make_profile("prusa-mk4s", "petg")
-    settings = print_settings.with_choice(
-        print_settings.resolve(profile), "shell.hole_offset", 0.1
-    )
+    settings = print_settings.with_choice(print_settings.resolve(profile), "shell.hole_offset", 0.1)
 
     assert handover.as_mapping(settings, "prusa")["hole_size_compensation"] == "-0.1"
     assert (
