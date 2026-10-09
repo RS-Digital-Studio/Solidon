@@ -63,6 +63,9 @@ dans `website/version.json`.
 - Avec *Ajustée au perçage*, *Goupille pour perçage* construit la contrepartie : une tête fraisée affleurante pour une fraisure, un filetage extérieur de même taille et même pas pour un intérieur.
 - Sur un filetage intérieur imprimé, la sélection propose directement *Goupille pour perçage*.
 - Si une pièce séparée, comme une goupille, occupe un perçage, ses actions le signalent et proposent *Diviser en pièces distinctes*. Avant, la goupille fusionnait sans bruit avec la plaque.
+- Dans les perçages des blocs comme le trou de vis, l'insert à chaud ou le piège à écrou, *Goupille pour perçage* construit aussi la goupille adaptée, et prévient s'ils sont hors du corps.
+- Posé à la main sur une face, le piège à écrou creuse sa poche dans la matière. Jusqu'ici la poche restait au-dessus, et seul le trou de vis était percé.
+- Si une pièce séparée se trouve dans une fraisure, un trou oblong, une cuvette, une gorge ou un filetage, les actions le disent. Jusqu'ici elle était coupée ou fusionnée.
 
 ### Modifier et esquisser
 
@@ -72,6 +75,12 @@ dans `website/version.json`.
 - Quand vous découpez une partie d'un corps, les chanfreins, filetages et logements d'écrou des blocs qui s'y trouvaient disparaissent aussi.
 - Dans *Créer un couvercle* et *Créer un couvercle vissé*, une hauteur d'ouverture vide signifie « Arête supérieure », et 0 est la hauteur du plateau. Les anciens projets gardent leur ouverture.
 - Une contrainte d'angle dans une petite esquisse ne renverse plus les lignes.
+- Avec Ctrl ou Maj, vous sélectionnez plusieurs arêtes et leur appliquez un congé ou un chanfrein en une étape. Un clic sur un coin sélectionne toutes les arêtes qui s'y rejoignent.
+- Sur un corps exact, la mise en évidence d'une arête montre aussi les arêtes tangentes voisines que *Congé* et *Ajouter un chanfrein* traitent avec elle.
+- Ce que la sélection propose sur une caractéristique, l'opération l'exécute avec exactement ces valeurs. Ce qui est grisé, elle le dit dans les mêmes termes, aussi par chat et en ligne de commande.
+- Comme emplacement de la copie, *Dupliquer la caractéristique* propose une largeur et demie à côté de l'original, avec une paroi entre les deux et jamais le long de son axe.
+- Sur une fraisure, *Faire pivoter la caractéristique* propose le plus grand angle qui la laisse fraisure, et prévient quand une rotation ne fait que la reposer sur elle-même.
+- Si une action touchait une pièce séparée voisine, ou si une caractéristique posée ne touchait une autre matière que sur une ligne, Solidon le dit au lieu d'abîmer le corps.
 
 ### Générer avec l'IA
 

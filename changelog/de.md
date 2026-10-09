@@ -87,6 +87,9 @@ Nutzen da und sonst nichts.
 - Mit *Passend zur Bohrung* baut *Stift für Bohrung* das Gegenstück: in eine Senkung einen bündigen Senkkopf, in ein Innengewinde ein Außengewinde gleicher Größe und Steigung.
 - An einem gedruckten Innengewinde bietet die Auswahl *Stift für Bohrung* direkt an.
 - Liegt in einer Bohrung ein getrenntes Teil wie ein Stift, sagen die Handlungen an der Bohrung das und bieten *In Einzelteile aufteilen* an. Bisher verschmolz der Stift still mit der Platte.
+- Auch in Bohrungen von Bausteinen wie Schraubenloch, Einpressbuchse und Mutternfalle baut *Stift für Bohrung* den passenden Stift. Liegt die Bohrung nicht im Körper, sagt es das.
+- Von Hand auf eine Fläche gesetzt, schneidet die Mutternfalle ihre Tasche ins Material. Bisher stand die Tasche darüber, und nur das Schraubenloch wurde gebohrt.
+- Liegt ein getrenntes Teil in einer Senkung, einem Langloch, einer Pfanne, einer Kehle oder einem Gewinde, sagen die Handlungen das. Bisher wurde es abgeschnitten oder verschmolz.
 
 ### Bearbeiten und Zeichnen
 
@@ -96,6 +99,12 @@ Nutzen da und sonst nichts.
 - Schneiden Sie einen Teil des Körpers weg, verschwinden auch Fasen, Gewinde und Mutterntaschen von Bausteinen, die darin lagen.
 - In *Deckel erzeugen* und *Drehdeckel erzeugen* heißt ein leeres Feld für die Höhe der Öffnung „Oberkante“, und 0 ist die Höhe des Betts. Ältere Projekte behalten ihre Öffnung.
 - Eine Winkelbedingung in einer kleinen Skizze wirft die Linien nicht mehr um.
+- Mit Strg oder Umschalt wählen Sie mehrere Kanten und verrunden oder fasen sie in einem Schritt. Ein Klick auf eine Ecke wählt alle Kanten, die dort zusammenlaufen.
+- An einem exakten Körper zeigt die Hervorhebung einer Kante auch die tangential anschließenden, die *Verrunden* und *Fase anbringen* mitnehmen.
+- Was die Auswahl an einem Merkmal anbietet, führt die Operation mit genau diesen Werten aus. Was grau steht, sagt sie mit demselben Satz, auch über Chat und Kommandozeile.
+- Als Stelle der Kopie schlägt *Merkmal verdoppeln* anderthalb Breiten neben dem Original vor, mit einer Wand dazwischen und nie entlang seiner Achse.
+- An einer Senkung schlägt *Merkmal drehen* den größten Winkel vor, unter dem sie eine bleibt, und sagt, wenn eine Drehung das Merkmal nur auf sich selbst legt.
+- Träfe eine Handlung ein getrenntes Teil neben dem Merkmal oder berührte ein gesetztes Merkmal anderes Material nur auf einer Linie, sagt Solidon das, statt den Körper zu beschädigen.
 
 ### Erzeugen mit KI
 

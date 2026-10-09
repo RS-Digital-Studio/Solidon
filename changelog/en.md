@@ -62,6 +62,9 @@ it into `website/version.json`.
 - With *To fit the hole*, *Pin for hole* builds the counterpart: a flush countersunk head for a countersink, an external thread of the same size and pitch for an internal thread.
 - On a printed internal thread, the selection offers *Pin for hole* directly.
 - If a separate part such as a pin sits in a hole, the actions on the hole say so and offer *Split into separate parts*. Until now the pin was silently merged with the plate.
+- In holes of parts such as the screw hole, the heat-set insert and the nut trap, *Pin for hole* also builds the matching pin. If the hole does not lie in the body, it says so.
+- Placed by hand on a face, the nut trap cuts its pocket into the material. Until now the pocket sat above it, and only the screw hole was drilled.
+- If a separate part sits in a countersink, slot, socket, groove or thread, the actions say so. Until now it was cut off or merged.
 
 ### Editing and sketching
 
@@ -71,6 +74,12 @@ it into `website/version.json`.
 - When you cut away part of a body, chamfers, threads and nut pockets of parts that lay inside it go too.
 - In *Create lid* and *Create screw lid*, an empty field for the opening height means “Top edge”, and 0 is the height of the bed. Older projects keep their opening.
 - An angle constraint in a small sketch no longer flips the lines over.
+- With Ctrl or Shift you select several edges and fillet or chamfer them in one step. A click on a corner selects all edges that meet there.
+- On an exact body, the highlight of an edge also shows the tangentially adjoining edges that *Fillet* and *Add a chamfer* take along.
+- What the selection offers for a feature, the operation carries out with exactly those values. What is greyed out, it states in the same words, also via chat and command line.
+- As the spot for the copy, *Duplicate feature* suggests one and a half widths beside the original, with a wall in between and never along its axis.
+- On a countersink, *Turn feature* suggests the largest angle at which it stays one, and says when a turn only lays the feature onto itself.
+- If an action would hit a separate part next to the feature, or a placed feature would touch other material only along a line, Solidon says so instead of damaging the body.
 
 ### Generating with AI
 

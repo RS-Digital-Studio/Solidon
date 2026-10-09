@@ -62,6 +62,9 @@ scrive in `website/version.json`.
 - Con *Adatto al foro*, *Perno per foro* costruisce la controparte: una testa svasata a filo per una svasatura, una filettatura esterna di pari misura e passo per una interna.
 - Su una filettatura interna stampata, la selezione offre direttamente *Perno per foro*.
 - Se in un foro c'è un pezzo separato come un perno, le azioni sul foro lo dicono e offrono *Dividi in pezzi distinti*. Finora il perno veniva fuso in silenzio con la piastra.
+- Anche nei fori dei blocchi come il foro per vite, l'inserto a caldo o la sede per dado, *Perno per foro* crea il perno adatto, e avvisa se il foro non è nel corpo.
+- Posizionata a mano su una faccia, la sede per dado scava la sua tasca nel materiale. Finora la tasca restava sopra e veniva forato solo il foro per la vite.
+- Se in una svasatura, un'asola, una coppa, una gola o una filettatura c'è un pezzo separato, le azioni lo dicono. Finora veniva tagliato o fuso.
 
 ### Modificare e disegnare
 
@@ -71,6 +74,12 @@ scrive in `website/version.json`.
 - Quando tagli via una parte di un corpo, spariscono anche smussi, filettature e sedi per dadi dei blocchi che vi si trovavano.
 - In *Crea coperchio* e *Crea coperchio a vite*, un campo vuoto per l'altezza dell'apertura significa «Bordo superiore», e 0 è l'altezza del piano. I progetti più vecchi mantengono la loro apertura.
 - Un vincolo d'angolo in uno schizzo piccolo non ribalta più le linee.
+- Con Ctrl o Maiusc selezioni più spigoli e li raccordi o smussi in un solo passaggio. Un clic su un angolo seleziona tutti gli spigoli che vi si incontrano.
+- Su un corpo esatto l'evidenziazione di uno spigolo mostra anche gli spigoli tangenti adiacenti che *Raccorda* e *Applica uno smusso* includono.
+- Ciò che la selezione offre su una caratteristica, l'operazione lo esegue con esattamente quei valori. Ciò che è in grigio lo dice con la stessa frase, anche via chat e riga di comando.
+- Come posto della copia, *Duplica caratteristica* propone una larghezza e mezza accanto all'originale, con una parete in mezzo e mai lungo il suo asse.
+- Su una svasatura, *Ruota caratteristica* propone l'angolo più grande con cui resta tale, e avvisa quando una rotazione rimette la caratteristica solo su sé stessa.
+- Se un'azione colpisse un pezzo separato accanto alla caratteristica, o una caratteristica posizionata toccasse altro materiale solo lungo una linea, Solidon lo dice invece di danneggiare il corpo.
 
 ### Generare con l'IA
 

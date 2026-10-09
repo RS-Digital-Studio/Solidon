@@ -62,6 +62,9 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Com *Ajustado ao furo*, *Pino para furo* constrói a contrapeça: uma cabeça escareada à face para um escareamento, uma rosca externa do mesmo tamanho e passo para uma interna.
 - Numa rosca interna impressa, a seleção oferece diretamente *Pino para furo*.
 - Se num furo estiver uma peça separada, como um pino, as ações no furo dizem-no e oferecem *Dividir em peças soltas*. Até agora, o pino fundia-se em silêncio com a placa.
+- Também em furos de blocos como o furo de parafuso, a bucha de inserção a quente ou o alojamento de porca, *Pino para furo* cria o pino adequado, e avisa se o furo não está no corpo.
+- Colocado à mão numa face, o alojamento de porca corta a sua bolsa no material. Até agora a bolsa ficava por cima e só o furo do parafuso era furado.
+- Se houver uma peça separada num escareamento, num furo oblongo, numa sede, numa garganta ou numa rosca, as ações dizem-no. Até agora era cortada ou fundida.
 
 ### Editar e esboçar
 
@@ -71,6 +74,12 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Ao cortar uma parte de um corpo, desaparecem também chanfros, roscas e alojamentos de porcas dos blocos que lá estavam.
 - Em *Criar tampa* e *Criar tampa de rosca*, um campo vazio para a altura da abertura significa «Aresta superior», e 0 é a altura da mesa. Os projetos antigos mantêm a sua abertura.
 - Uma restrição de ângulo num esboço pequeno já não vira as linhas.
+- Com Ctrl ou Shift escolhe várias arestas e arredonda-as ou chanfra-as num só passo. Um clique num canto escolhe todas as arestas que lá se encontram.
+- Num corpo exato, o realce de uma aresta mostra também as arestas tangentes contíguas que *Arredondar* e *Aplicar um chanfro* incluem.
+- O que a seleção oferece numa característica, a operação executa com exatamente esses valores. O que está a cinzento, diz com a mesma frase, também por chat e linha de comandos.
+- Como lugar da cópia, *Duplicar característica* propõe uma largura e meia ao lado do original, com uma parede entre ambas e nunca ao longo do seu eixo.
+- Num escareamento, *Rodar característica* propõe o maior ângulo com que continua a sê-lo, e avisa quando uma rotação só repõe a característica sobre si própria.
+- Se uma ação atingisse uma peça separada junto à característica, ou uma característica colocada tocasse outro material só numa linha, o Solidon diz isso em vez de danificar o corpo.
 
 ### Gerar com IA
 

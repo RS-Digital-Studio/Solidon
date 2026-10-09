@@ -63,6 +63,9 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Con *Ajustado al taladro*, *Pasador para taladro* construye la contrapieza: una cabeza avellanada enrasada para un avellanado, una rosca exterior del mismo tamaño y paso para una interior.
 - En una rosca interior impresa, la selección ofrece directamente *Pasador para taladro*.
 - Si en un taladro hay una pieza separada, como un pasador, las acciones del taladro lo dicen y ofrecen *Dividir en piezas sueltas*. Antes, el pasador se fundía en silencio con la placa.
+- También en taladros de bloques como el agujero para tornillo, el inserto termofijado o el alojamiento de tuerca, *Pasador para taladro* crea el pasador adecuado, y avisa si no están en el cuerpo.
+- Colocado a mano sobre una cara, el alojamiento de tuerca corta su hueco en el material. Hasta ahora el hueco quedaba encima y solo se taladraba el agujero para tornillo.
+- Si hay una pieza separada en un avellanado, una ranura, una cuenca, una garganta o una rosca, las acciones lo dicen. Hasta ahora se cortaba o se fundía.
 
 ### Editar y dibujar
 
@@ -72,6 +75,12 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Al recortar una parte de un cuerpo, desaparecen también los chaflanes, roscas y alojamientos de tuerca de los bloques que había en ella.
 - En *Generar tapa* y *Generar tapa roscada*, un campo vacío para la altura de la abertura significa «Borde superior», y 0 es la altura de la cama. Los proyectos antiguos conservan su abertura.
 - Una restricción de ángulo en un dibujo pequeño ya no voltea las líneas.
+- Con Ctrl o Mayús selecciona varias aristas y las redondea o achaflana en un solo paso. Un clic en una esquina selecciona todas las aristas que se juntan allí.
+- En un cuerpo exacto, el resaltado de una arista muestra también las aristas tangentes contiguas que *Redondear* y *Aplicar un chaflán* incluyen.
+- Lo que la selección ofrece en una característica, la operación lo ejecuta con esos mismos valores. Lo que aparece en gris lo dice con la misma frase, también por chat y línea de comandos.
+- Como lugar de la copia, *Duplicar característica* propone una anchura y media junto al original, con una pared entre ambas y nunca a lo largo de su eje.
+- En un avellanado, *Girar característica* propone el mayor ángulo con el que sigue siéndolo, y avisa cuando un giro solo deja la característica sobre sí misma.
+- Si una acción alcanzara una pieza separada junto a la característica, o una característica colocada tocara otro material solo en una línea, Solidon lo dice en vez de dañar el cuerpo.
 
 ### Generar con IA
 
