@@ -3280,6 +3280,10 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   Stellen zuerst, gemessen in CPU-Zeit ohne Fremdlast. **Abnahme:** Messbericht vorher und nachher
   je Stufe; Leistungstests (`pytest -m performance`, Budget §31) mit neuen, engeren Zielwerten für
   das Erreichte; Ergebnisse unverändert (Korpustests grün, gleiche Merkmale).
+  **Fund aus RM-493 (03.10., Thread „Bedienung und KI“):** *Bohrung ändern* am pegboard-STEP
+  dauert allein rund 2,3 s, im Profil fast ganz im Gewindelesen von `features_of` am Ergebnis,
+  obwohl das Teil kein Gewinde trägt (v0.4.1: ganze Auswertung 0,47 s); an einem Netz mit
+  392 612 Dreiecken (`garden-hose-holder.3mf`) rund 11 s.
 
 ## Bedienung und Darstellung
 
@@ -5392,6 +5396,11 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   ohne Auswahl als neues Objekt eingesetzt; welche das sind, sagt der Baustein selbst.
   **Abnahme:** Liste je Baustein mit Begründung; Test: jeder eigenständige setzt ohne Auswahl
   ein wasserdichtes Objekt; Fenstertest im Bausteinkatalog; Handbuch.
+  **Fund aus RM-306 (03.10., Thread „Bedienung und KI“):** Eigenständige Bausteine (`create_*`)
+  nutzen die freie Stelle nicht; sie liegen an ihren x/y/z-Werten und damit neben einem mittig
+  liegenden Modell vermutlich in ihm. Ein weiteres Modell kommt seit RM-306 an die freie Stelle
+  nächst der Plattenmitte (`prepare.first_free_spot`); ein eigenständig eingesetzter Baustein
+  sollte denselben Weg nehmen.
 
 <a id="rm-563"></a>
 
