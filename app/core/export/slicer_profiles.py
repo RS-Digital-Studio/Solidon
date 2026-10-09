@@ -27,6 +27,7 @@ import os
 import re
 import sys
 import threading
+import time
 from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass, replace
@@ -86,6 +87,8 @@ def _checked_paths(paths: Iterable[Path], cancelled: CancelToken | None) -> Iter
 #: sie um und löscht sie. Wer diesen Index an einem Dialog aufhebt, liefert
 #: danach Pfade aus, die es nicht mehr gibt — die Ersparnis wiegt das nicht
 #: auf. Wer ihn übergibt, hält ihn so kurz wie den Aufruf, in dem er entsteht.
+#: Länger hält nur, was vor jeder Antwort seine Signatur prüft
+#: (:data:`_holdings`, :data:`_prusa_cache`).
 ProfileIndexes = dict[tuple[Path, ProfileKind | None], dict[str, Path]]
 
 #: Die gelesenen Profildateien eines Durchgangs, Datei → Inhalt (``None`` für
@@ -111,18 +114,22 @@ def single_read() -> Iterator[None]:
     1136-mal, zusammen 2,5 s im Qt-Hauptthread. Länger als der Durchgang hält
     der Speicher nicht, denn der Kunde legt im Slicer Profile an und benennt sie
     um (:data:`ProfileIndexes`). Ausdrücklich übergebene Indizes und Dokumente
-    gehen vor; verschachtelt gilt der äußere Durchgang.
+    gehen vor; verschachtelt gilt der äußere Durchgang. Die Signatur des
+    gemerkten Bestands (:func:`_holding_signature`) erhebt ein Durchgang
+    einmal je Slicer.
     """
     if getattr(_SINGLE_READ, "documents", None) is not None:
         yield
         return
     _SINGLE_READ.documents = {}
     _SINGLE_READ.indexes = {}
+    _SINGLE_READ.signatures = {}
     try:
         yield
     finally:
         _SINGLE_READ.documents = None
         _SINGLE_READ.indexes = None
+        _SINGLE_READ.signatures = None
 
 
 def _pass_documents(documents: ProfileDocuments | None) -> ProfileDocuments | None:
@@ -400,14 +407,49 @@ def _program_folders(base: Path, mark: str) -> list[Path]:
     Version: ``Creality/Creality Print/7.3`` mit ``Creality.conf``. Unter der
     Programmmarke gesucht, fand Solidon dort auf keiner Plattform die eigenen
     Drucker und den zuletzt gewählten. Es gilt die neueste Version.
+
+    **Gemerkt, solange sich die Ordner nicht ändern** (RM-670): ``%APPDATA%``
+    aufzulisten kostete unter Last 0,1 bis 0,3 s, und ein Export fragte viermal.
+    Ein Ordner bekommt einen neuen Zeitstempel, sobald darin etwas angelegt,
+    umbenannt oder gelöscht wird; mit ihm verfällt die Antwort.
     """
+    places = (base, base / "Creality" / "Creality Print") if mark == "crealityprint" else (base,)
+    stamp = tuple(_folder_stamp(place) for place in places)
+    key = (str(base), mark)
+    known = _program_folders_seen.get(key)
+    if known is not None and known[0] == stamp:
+        return list(known[1])
+    found = _list_program_folders(base, mark)
+    if _settled(max(stamp)):
+        _program_folders_seen[key] = (stamp, tuple(found))
+    return found
+
+
+#: Die zuletzt gefundenen Datenordner je Konfigurationsordner und Programm,
+#: mit dem Zeitstempel der gelesenen Ordner (:func:`_program_folders`).
+_program_folders_seen: dict[tuple[str, str], tuple[tuple[int, ...], tuple[Path, ...]]] = {}
+
+
+def _folder_stamp(folder: Path) -> int:
+    """Der Änderungszeitpunkt eines Ordners, ``-1`` ohne Ordner."""
     try:
-        entries = sorted(base.iterdir())
+        return folder.stat().st_mtime_ns
+    except OSError:
+        return -1
+
+
+def _list_program_folders(base: Path, mark: str) -> list[Path]:
+    """:func:`_program_folders` ohne Merker."""
+    # Erst der Name, dann der Ordner: Unter ``%APPDATA%`` stehen Hunderte
+    # Einträge, und ``is_dir`` auf jedem kostete mehr als das Auflisten.
+    try:
+        with os.scandir(base) as listing:
+            named = [
+                base / entry.name for entry in listing if discover.plain_name(entry.name) == mark
+            ]
     except OSError:
         return []
-    found = [
-        entry for entry in entries if entry.is_dir() and discover.plain_name(entry.name) == mark
-    ]
+    found = [entry for entry in sorted(named) if entry.is_dir()]
     if mark == "crealityprint":
         try:
             versions = [
@@ -1982,10 +2024,28 @@ def supports_printer(flavour: SlicerFlavour, executable: Path, title: str) -> bo
 
 
 def _prusa_printer_models(executable: Path) -> tuple[str, ...]:
-    """Die Modellnamen aus den Herstellerbündeln von PrusaSlicer."""
+    """Die Modellnamen aus den Herstellerbündeln von PrusaSlicer.
+
+    Gemerkt je Ordner, solange keine Bündeldatei Größe oder Zeitstempel
+    ändert (:func:`_prusa_signature`, RM-670): Jeder 3MF-Export fragt danach.
+    """
     root = install_root(executable)
     if root is None:
         return ()
+    signature = _prusa_signature((root,))
+    with _HOLDINGS_LOCK:
+        known = _prusa_models.get(root)
+        if known is not None and known[0] == signature:
+            return known[1]
+    models = _read_prusa_printer_models(root)
+    if _settled(max((entry[1] for entry in signature), default=0)):
+        with _HOLDINGS_LOCK:
+            _prusa_models[root] = (signature, models)
+    return models
+
+
+def _read_prusa_printer_models(root: Path) -> tuple[str, ...]:
+    """Die Modellnamen aus den Bündeln unter ``root``, zeilenweise gelesen."""
     found: list[str] = []
     for path in sorted(root.glob("*.ini")):
         try:
@@ -2889,8 +2949,196 @@ def find_profiles(
     if flavour == "cura":
         # Eigene Ordnernamen, drei Formate: die Suche darunter findet dort
         # nichts (:data:`_CURA_DIRS`).
-        return _cura_profiles(executable, wanted)
+        return list(_held(executable, flavour, wanted, lambda: _cura_profiles(executable, wanted)))
+    return list(
+        _held(executable, flavour, wanted, lambda: _orca_profiles(executable, flavour, wanted))
+    )
 
+
+#: **Der gelesene Profilbestand je Slicer** (RM-670), über einen Aufruf hinaus.
+#: Jeder 3MF-Export fragt, ob der Slicer den Drucker kennt, und las dafür die
+#: rund 1 550 Maschinenprofile der Orca-Familie neu — eine bis drei Sekunden je Export,
+#: auch wenn nur eine Datei entstehen sollte.
+#:
+#: Gemerkt wird wie beim Prusa-Bestand (:data:`_prusa_cache`) mit einer
+#: Signatur, die vor jeder Antwort neu erhoben wird (:func:`_holding_signature`):
+#: Legt der Kunde im Slicer ein Profil an, benennt eines um oder löscht es,
+#: passt sie nicht mehr, und der Bestand wird neu gelesen. Je Slicer und
+#: Profilarten ein Eintrag, als Tupel unveränderlicher Profile.
+_HOLDINGS_LOCK: Final = threading.RLock()
+_holdings: dict[
+    tuple[str, SlicerFlavour, frozenset[ProfileKind]],
+    tuple[tuple[tuple[str, int, int], ...], tuple[SlicerProfile, ...]],
+] = {}
+
+#: Die Modellnamen der Prusa-Bündel je Installationsordner, mit der Signatur
+#: ihrer Bündeldateien (:func:`_prusa_signature`).
+_prusa_models: dict[Path, tuple[tuple[tuple[str, int, int], ...], tuple[str, ...]]] = {}
+
+#: Welche Dateien zum Profilbestand gehören. Was daneben liegt — Curas
+#: Protokoll, Vorschaubilder, Bettmodelle —, ändert sich ohne Folge für die
+#: Profile und darf den Merker nicht verwerfen.
+_HOLDING_SUFFIXES: Final = (".json", ".cfg", ".fdm_material", ".ini")
+
+
+def forget_holdings() -> None:
+    """Den gemerkten Profilbestand verwerfen — für Tests, die ihn zählen."""
+    with _HOLDINGS_LOCK:
+        _holdings.clear()
+        _prusa_models.clear()
+        _program_folders_seen.clear()
+
+
+def _held(
+    executable: Path,
+    flavour: SlicerFlavour,
+    wanted: frozenset[ProfileKind],
+    read: Callable[[], list[SlicerProfile]],
+) -> tuple[SlicerProfile, ...]:
+    """Der Bestand aus dem Merker, solange seine Signatur stimmt, sonst neu gelesen.
+
+    Gelesen wird außerhalb der Sperre, wie bei :func:`_prusa_store`. Ändert
+    sich der Bestand während des Lesens, trägt der Eintrag die Signatur von
+    davor, und der nächste Aufruf liest neu. Ein Bestand, der sich eben erst
+    geändert hat, wird nicht gemerkt (:func:`_settled`).
+    """
+    key = (str(executable), flavour, wanted)
+    signature = _holding_signature(flavour, executable)
+    with _HOLDINGS_LOCK:
+        known = _holdings.get(key)
+        if known is not None and known[0] == signature:
+            return known[1]
+    listed = tuple(read())
+    if _settled(max((entry[1] for entry in signature), default=0)):
+        with _HOLDINGS_LOCK:
+            _holdings[key] = (signature, listed)
+    return listed
+
+
+#: Wie alt die jüngste Änderung eines Bestands sein muss, damit er gemerkt wird.
+#: Ein Zeitstempel ist nur so fein wie die Uhr des Dateisystems — unter
+#: Windows etwa 16 ms, ext3 und HFS+ eine Sekunde, FAT zwei. Zwei Änderungen im
+#: selben Takt trügen denselben Stempel, und ein Merker, der zwischen ihnen
+#: entstand, sähe die zweite nie.
+SETTLE_NS: Final = 2_000_000_000
+
+
+def _settled(newest_ns: int) -> bool:
+    """Ob die jüngste Änderung lange genug zurückliegt, um ihr zu trauen."""
+    return time.time_ns() - newest_ns >= SETTLE_NS
+
+
+#: Eine Signatur: je Eintrag Pfad, Zeitstempel und Größe (:func:`_holding_signature`).
+_Signature = tuple[tuple[str, int, int], ...]
+
+
+def _holding_signature(flavour: SlicerFlavour, executable: Path) -> _Signature:
+    """Woran der Profilbestand eines Slicers erkannt wird.
+
+    **Alles, was der Kunde anlegt, Datei für Datei**: Die Wurzeln unter der
+    Konfiguration (``user/<Konto>``, der ``system``-Bestand der Orca-Familie,
+    Curas Versionsordner) gehen mit Pfad, Größe und Zeitstempel jeder
+    Profildatei hinein. Ein neues, umbenanntes oder gelöschtes Profil ändert
+    sie, auch ein überschriebenes.
+
+    **Die Installation über das Programm selbst**: Unter ``resources/profiles``
+    liegen bei Orca zwölftausend Dateien, und sie einzeln anzusehen kostete
+    unter Last so viel wie das Lesen, das gespart werden soll (gemessen
+    ein bis zwei Sekunden). Der Ordner gehört dem Installationsprogramm und ändert sich
+    nur mit einer neuen Fassung — dann ändern sich die Programmdatei, die
+    Herstellerbündel auf der obersten Ebene und bei Flatpak der aufgelöste
+    Pfad, der den Commit nennt.
+
+    Die Wurzeln selbst stehen mit darin: Legt der Kunde sein erstes eigenes
+    Profil an, entsteht ein Kontoordner und damit eine Wurzel mehr.
+
+    In einem Lesedurchgang (:func:`single_read`) wird sie einmal erhoben.
+    """
+    shared: dict[tuple[str, str], _Signature] | None = getattr(_SINGLE_READ, "signatures", None)
+    key = (str(executable), flavour)
+    if shared is not None and key in shared:
+        return shared[key]
+    installed = install_root(executable)
+    parts: list[tuple[str, int, int]] = [_file_mark(executable)]
+    for root in profile_roots(flavour, executable):
+        if root == installed:
+            parts.append((f"installed:{os.path.realpath(root)}", 0, -1))
+            parts.extend(_top_level(root))
+        else:
+            parts.append((f"own:{root}", 0, -1))
+            parts.extend(_all_files(root))
+    signature = tuple(parts)
+    if shared is not None:
+        shared[key] = signature
+    return signature
+
+
+def _file_mark(path: Path) -> tuple[str, int, int]:
+    """Pfad, Zeitstempel und Größe einer Datei; ohne Datei nur der Pfad."""
+    try:
+        status = path.stat()
+    except OSError:
+        return (str(path), 0, -1)
+    return (os.path.realpath(path), status.st_mtime_ns, status.st_size)
+
+
+def _top_level(root: Path) -> _Signature:
+    """Die oberste Ebene eines Ordners: Dateien mit Zeitstempel und Größe, Ordner beim Namen.
+
+    Den Zeitstempel eines Unterordners liefert die Auflistung unter Windows aus
+    dem Verzeichnis darüber, und NTFS schreibt ihn dort erst irgendwann nach —
+    zweimal gelesen, ergab er zwei Werte. Ob ein Herstellerordner dazukam oder
+    wegfiel, sagt sein Name.
+    """
+    found: list[tuple[str, int, int]] = []
+    try:
+        with os.scandir(root) as listing:
+            for entry in listing:
+                try:
+                    if entry.is_dir():
+                        found.append((entry.path, 0, -1))
+                        continue
+                    status = entry.stat()
+                except OSError:
+                    continue
+                found.append((entry.path, status.st_mtime_ns, status.st_size))
+    except OSError:
+        return ()
+    return tuple(sorted(found))
+
+
+def _all_files(root: Path) -> _Signature:
+    """Jede Profildatei unter ``root`` mit Zeitstempel und Größe.
+
+    Über ``os.scandir`` statt ``rglob``: Unter Windows bringt der
+    Verzeichniseintrag Zeitstempel und Größe schon mit, und es entsteht kein
+    ``Path`` je Datei.
+    """
+    found: list[tuple[str, int, int]] = []
+    folders = [os.fspath(root)]
+    while folders:
+        folder = folders.pop()
+        try:
+            listing = os.scandir(folder)
+        except OSError:
+            continue
+        with listing:
+            for entry in listing:
+                try:
+                    if entry.is_dir():
+                        folders.append(entry.path)
+                    elif entry.name.endswith(_HOLDING_SUFFIXES):
+                        status = entry.stat()
+                        found.append((entry.path, status.st_mtime_ns, status.st_size))
+                except OSError:
+                    continue
+    return tuple(sorted(found))
+
+
+def _orca_profiles(
+    executable: Path, flavour: SlicerFlavour, wanted: frozenset[ProfileKind]
+) -> list[SlicerProfile]:
+    """Der Bestand der Orca-Familie: mitgelieferte und eigene JSON-Profile."""
     found: list[SlicerProfile] = []
     seen: set[str] = set()
     roots: list[tuple[Path, bool]] = []

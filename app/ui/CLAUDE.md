@@ -108,7 +108,7 @@ Die konkrete Dateizuordnung steht ausschließlich dort.
 |---|---|
 | `app.py` | Einstieg (§38): lokaler Absturzschutz vor Qt nur in `main()`, idempotent; Rendereradapter früh abfragen |
 | `qt_platform.py` | Qt-Plattform der 3D-Ansicht und Eingabemodul — vor der `QGuiApplication`, ohne Qt-Import |
-| `main_window.py` | Menüs (`_reason_locked`), Auswahl, Vorschau, Export, Quittungen (`announce`), Panel-/Flussverdrahtung; Griff-/Panelwinkel löschen `measured_frame` nur bei Richtungsänderung |
+| `main_window.py` | Menüs (`_reason_locked`), Auswahl, Vorschau, Export samt `_warm_the_slicer`, Quittungen (`announce`), Panel-/Flussverdrahtung; Griff-/Panelwinkel löschen `measured_frame` nur bei Richtungsänderung |
 | `splash.py` | Ladebildschirm beim Start (§2.8) |
 | `start_check.py` | Starttest des Pakets (`auslieferung.md`), ohne Qt auf Modulebene |
 | `first_run.py` | Erstlauf (§38); `_PrinterSurvey`, `PrinterComboBox` mit fester Live-Suche; Druckerlisten je Modell gruppiert |

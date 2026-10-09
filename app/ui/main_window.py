@@ -128,7 +128,7 @@ from app.core.errors import (
     UserError,
     ValidationError,
 )
-from app.core.export import handover, manufacturer, readback
+from app.core.export import handover, manufacturer, readback, slicer_profiles
 from app.core.export.handover import GCODE_SUFFIXES as _CORE_GCODE_SUFFIXES
 from app.core.export.handover import SliceOutcome, override_for, with_slot_override
 from app.core.export.writer import (
@@ -1329,6 +1329,34 @@ class _FoundationWorker(Worker):
         self.done.emit(self._key, manufacturer.base_settings(self._profile, self._quality, setup))
 
 
+def _warm_the_slicer() -> None:
+    """Den Slicer suchen und seinen Druckerbestand lesen, bevor der erste Export fragt.
+
+    Jeder 3MF-Export fragt, ob der Slicer den Drucker kennt, und das hieß:
+    rund 1 550 Maschinenprofile der Orca-Familie lesen, eine bis drei Sekunden
+    (RM-670). Gemerkt wird der Bestand im Kern (``slicer_profiles._holdings``);
+    dieser Faden füllt den Merker, nachdem das Fenster steht und keine
+    Auswertung läuft (:meth:`MainWindow._warm_slicer`).
+
+    **Ein Daemon-Faden, nicht die Leine**, wie die Prüfung von „Zuletzt
+    geöffnet": Gelesen wird auch unter ``%APPDATA%``, das auf einem Netzlaufwerk
+    liegen kann, und ein ``QThread``, der beim Beenden darin hängt, reißt den
+    Prozess mit. Scheitert das Lesen, ist nichts versäumt — der Export liest
+    dann selbst.
+    """
+    try:
+        program = tools.slicer_program()
+        if program is None:
+            return
+        setup = handover.detect(program)
+        if handover.only_opens(setup):
+            return
+        slicer_profiles.find_profiles(setup.executable, setup.flavour, ("machine",))
+        slicer_profiles.known_printers(setup.flavour, setup.executable)
+    except Exception as error:  # ein Vorauslesen ist kein Absturzbericht wert, siehe oben
+        _log.info("slicer warmup failed: %s", error)
+
+
 class _DownloadWorker(Worker):
     """Eine Modelldatei aus dem Netz holen, abseits des Oberflächen-Threads
     (§2.8).
@@ -1431,6 +1459,10 @@ _BACKGROUND_PROGRESS: Final = frozenset({"generate"})
 #: Minuten, ein Zug des Agenten bis zu einer; was der Kunde währenddessen
 #: selbst tut, sagte bisher nur eine Blase, ein Hinweis gar nichts.
 _WORKED_ALONGSIDE: Final = frozenset({"generate", "agent"})
+
+#: Wann nach dem Start der Slicerbestand gelesen wird (:meth:`MainWindow._warm_slicer`):
+#: nach dem Vorabimport der Geometriebibliotheken, der rund eine Sekunde dauert.
+SLICER_WARMUP_DELAY_MS: Final = 2000
 
 #: Wie lange eine Ansage neben einem solchen Lauf in der Zeile steht —
 #: so lange wie ihre Blase mindestens (``_ActionNotice.show_message``).
@@ -2804,6 +2836,10 @@ class MainWindow(QMainWindow):
         self._export_waiting: tuple[Path, ExportFormat, Any] | None = None
         """Ein Export, der auf das nächste aktuelle Ergebnis wartet — Ziel,
         Format und das Projekt, für das er gemeint war (RM-352)."""
+        self._print_findings_after_export: Any = None
+        """Das Ergebnis, dessen Druckbefunde bis nach dem Export warten (RM-670)."""
+        self._slicer_warm_wanted = False
+        """Der Slicerbestand soll gelesen werden, sobald die Auswertung ruht (RM-670)."""
         self._history_shown: tuple[int, int, str | None] | None = None
         """Der Verlaufsstand beim letzten Bild (:meth:`_history_mark`) — ob eine
         verlorene Merkmalswahl Folge einer Handlung des Kunden ist."""
@@ -9712,7 +9748,14 @@ class MainWindow(QMainWindow):
             return
         self._export_waiting = None
         self._set_progress_state("export", active=False, cancellable=False, cancel_enabled=False)
-        target, export_format, project = waiting
+        try:
+            self._write_when_current(*waiting)
+        finally:
+            # Schreibt der Export, folgen die Befunde ihm; sonst kommen sie jetzt.
+            self._print_findings_after_export_ended()
+
+    def _write_when_current(self, target: Path, export_format: ExportFormat, project: Any) -> None:
+        """Der wartende Export, sobald das Ergebnis da ist — oder der Grund, warum nicht."""
         if self._close_requested or project is not self.session.project:
             return
         if not self.session.fine_current:
@@ -9739,6 +9782,7 @@ class MainWindow(QMainWindow):
                 "export", active=False, cancellable=False, cancel_enabled=False
             )
             self.announce(tr("Export abgebrochen."))
+            self._print_findings_after_export_ended()
             return
         if self._close_requested:
             self._export_attempt = None
@@ -10010,6 +10054,7 @@ class MainWindow(QMainWindow):
             if isValid(self) and not self._close_requested:
                 self._progress_idle()
                 self._update_actions()
+                self._print_findings_after_export_ended()
         self._hold_until_done(worker)
 
     def action_catalog(self) -> None:
@@ -24345,7 +24390,18 @@ class MainWindow(QMainWindow):
 
         Ob die Szene Passungen trägt, fragt das Dokument hier im Hauptthread,
         mit den gebauten: Nur dann gehört der Hinweis zur Kalibrierung dazu.
+
+        **Nicht neben einem Export** (RM-670): Die Schichtanalyse nähme dem
+        Schreiben den Rechner, und das feine Ergebnis, auf das ein Export
+        wartet, löste sie genau dann aus. Sie folgt dem Export
+        (:meth:`_print_findings_after_export_ended`).
         """
+        if self._exporting or self._export_waiting is not None:
+            self._print_findings.cancel()
+            self._print_findings_after_export = result
+            self._update_review_status()
+            return
+        self._print_findings_after_export = None
         fitted = bool(fit_checks.fit_kinds_for(self.session.project.document, result.scene.objects))
         self._print_findings.start(
             result,
@@ -24355,6 +24411,21 @@ class MainWindow(QMainWindow):
             missing_basis=missing_profile_basis(self.session.project.document),
         )
         self._update_review_status()
+
+    def _print_findings_after_export_ended(self) -> None:
+        """Die zurückgestellten Druckbefunde rechnen, sobald kein Export mehr läuft oder wartet."""
+        result = self._print_findings_after_export
+        if (
+            result is None
+            or self._exporting
+            or self._export_waiting is not None
+            or self._close_requested
+            or not isValid(self)
+        ):
+            return
+        self._print_findings_after_export = None
+        if self._is_current_result(result) and result is not self.session.picture:
+            self._start_print_findings(result, self.effective_print_settings())
 
     def _print_profile(self, settings: PrintSettings) -> Profile:
         """Das Profil der Druckbefunde: das des Projekts mit dem Raster und der
@@ -24622,6 +24693,8 @@ class MainWindow(QMainWindow):
             self._run_click_after_evaluation()
             self._resume_map_after_idle()
             self._export_when_current()
+            if self._slicer_warm_wanted:
+                self._warm_slicer()
 
     def _follow_the_run_in_the_report(self) -> None:
         """Der Bericht sagt, wenn seine Zeilen zum vorigen Stand gehören (RM-534).
@@ -26684,6 +26757,23 @@ class MainWindow(QMainWindow):
         # nichts.
         self._usage.start()
         self._announce_the_sale()
+        # Hinter dem Vorabimport (``app._ImportWarmup``), nicht neben ihm.
+        QTimer.singleShot(SLICER_WARMUP_DELAY_MS, self, self._warm_slicer)
+
+    def _warm_slicer(self) -> None:
+        """Slicer und Druckerbestand im Hintergrund lesen, sobald keine Auswertung läuft (RM-670).
+
+        Der erste 3MF-Export fände den Bestand sonst ungelesen und trüge die
+        Sekunden selbst. Rechnet gerade eine Auswertung — ein beim Start
+        geöffnetes Modell —, wartet das Lesen auf ihr Ende.
+        """
+        if self._close_requested or not isValid(self):
+            return
+        if self.session.busy:
+            self._slicer_warm_wanted = True
+            return
+        self._slicer_warm_wanted = False
+        threading.Thread(target=_warm_the_slicer, name="slicer-warmup", daemon=True).start()
 
     def _announce_the_sale(self) -> None:
         """Die letzte Demowoche sagt einmal je Sitzung, was danach kommt.

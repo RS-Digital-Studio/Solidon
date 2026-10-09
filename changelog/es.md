@@ -49,6 +49,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Solo se ofrecen los slicers con los que trabaja Solidon, además de slicers de resina como ChituBox y Lychee. Bambu Studio como AppImage ahora también cuenta.
 - El código de inicio y el volumen de impresión vienen solo de su impresora, no de otro modelo de la misma serie.
 - El diálogo de impresión asigna los perfiles del slicer mucho más rápido, al abrirse y tras cada cambio de slicer.
+- Con un slicer instalado, la exportación 3MF termina en una fracción de segundo, apenas más lenta que la exportación STL.
 - El tiempo de impresión estimado se acerca más al del slicer, mucho más en piezas con soportes.
 - Si los soportes y el skirt caben en la cama, la comprobación lo mide ahora solo bajo los voladizos. Las piezas cerca del borde ya no reciben un aviso sin motivo.
 - Las sugerencias aceptadas ya casi no dejan sin soporte voladizos que lo necesitan. *Mantener libres los canales* solo bloquea el espacio del que ya no se podría sacar un soporte.

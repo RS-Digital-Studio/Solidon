@@ -1612,3 +1612,60 @@ def test_the_refusal_names_every_slicer_solidon_works_with() -> None:
         assert tools.is_supported_slicer(title), title
     for resin in ("CHITUBOX.exe", "Lychee Slicer.exe", "PreForm.exe", "NovaMaker.exe"):
         assert tools.is_supported_slicer(resin), resin
+
+
+# --- der PATH, gemerkt (RM-670) ------------------------------------------------------
+
+
+def test_the_path_is_asked_once_until_it_or_the_program_changes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, isolated_search: None
+) -> None:
+    """Jeder 3MF-Export fragte den PATH nach sechzehn Slicernamen — 0,4 s
+    Rechenzeit unter Windows, unter Last drei Sekunden (RM-670).
+
+    Gemerkt wird die Antwort, solange PATH und PATHEXT gleich bleiben und der
+    Fund dasteht; :func:`discover.forget_cache` (nach einer Installation)
+    fragt neu.
+    """
+    program = tmp_path / "bin" / "orca-slicer"
+    program.parent.mkdir()
+    program.write_text("")
+    asked: list[str] = []
+
+    def which(name: str) -> str | None:
+        asked.append(name)
+        return str(program) if name == "orca-slicer" and program.exists() else None
+
+    monkeypatch.setattr(discover.shutil, "which", which)
+    names = ("prusa-slicer", "orca-slicer")
+    find = discover.unpatched_find_program
+
+    assert find("slicer", names) == program
+    assert asked == ["prusa-slicer", "orca-slicer"]
+    assert find("slicer", names) == program
+    assert len(asked) == 2, "gleicher PATH, gleiche Antwort"
+
+    monkeypatch.setenv("PATH", os.environ.get("PATH", "") + os.pathsep + str(tmp_path))
+    assert find("slicer", names) == program
+    assert len(asked) == 4, "ein neuer Ordner im PATH fragt neu"
+
+    discover.forget_cache()
+    assert find("slicer", names) == program
+    assert len(asked) == 6, "nach einer Installation wird neu gefragt"
+
+    program.unlink()
+    assert find("slicer", names) is None
+    assert len(asked) == 8, "ein verschwundener Fund wird nicht weitergereicht"
+
+
+def test_an_empty_answer_of_the_path_is_kept_too(
+    monkeypatch: pytest.MonkeyPatch, isolated_search: None
+) -> None:
+    """Auch „nicht im PATH“ ist eine Antwort — der häufigste Fall unter Windows."""
+    asked: list[str] = []
+    monkeypatch.setattr(discover.shutil, "which", lambda name: asked.append(name))
+    find = discover.unpatched_find_program
+
+    assert find("slicer", ("orca-slicer",)) is None
+    assert find("slicer", ("orca-slicer",)) is None
+    assert asked == ["orca-slicer"]

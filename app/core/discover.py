@@ -329,6 +329,9 @@ def use_local_address(tool_id: str) -> None:
 #: Neustart gesehen wird.
 _cache: dict[str, Path | None] = {}
 
+#: Was der PATH auf eine Namensliste antwortet, je PATH und PATHEXT (:func:`_from_path`).
+_on_path: dict[tuple[tuple[str, ...], str, str], Path | None] = {}
+
 #: Wie oft :func:`forget_cache` gelaufen ist. Wer selbst ein Nein merkt
 #: (``export.cura_linux``), vergleicht damit, statt hier eingetragen zu werden.
 _generation = 0
@@ -343,6 +346,7 @@ def forget_cache() -> None:
     """
     global _generation
     _cache.clear()
+    _on_path.clear()
     _hidden.clear()
     _generation += 1
 
@@ -448,10 +452,9 @@ def find_program(tool_id: str, names: Iterable[str], *, remembered: bool = True)
         return chosen
 
     candidates = tuple(names)
-    for name in candidates:
-        found = shutil.which(name)
-        if found:
-            return Path(found)
+    on_path = _from_path(candidates)
+    if on_path is not None:
+        return on_path
 
     if tool_id in _cache:
         return _cache[tool_id]
@@ -467,6 +470,25 @@ def find_program(tool_id: str, names: Iterable[str], *, remembered: bool = True)
     if found_path is not None:
         _log.info("found %s outside the PATH: %s", tool_id, found_path)
     return found_path
+
+
+def _from_path(candidates: tuple[str, ...]) -> Path | None:
+    """Der erste Name, den der PATH kennt — gemerkt, solange PATH und PATHEXT gleich bleiben.
+
+    Sechzehn Slicernamen gegen jeden Ordner des PATH und jede Endung aus
+    PATHEXT zu prüfen, kostete unter Windows je Aufruf 0,4 s Rechenzeit und
+    unter Last drei Sekunden Wartezeit — und jeder 3MF-Export fragte (RM-670).
+    Ein Fund gilt, solange die Datei dasteht; ein neuer Ordner im PATH
+    (:func:`refresh_path`) oder :func:`forget_cache` fragt neu.
+    """
+    key = (candidates, os.environ.get("PATH", ""), os.environ.get("PATHEXT", ""))
+    if key in _on_path:
+        known = _on_path[key]
+        if known is None or known.is_file():
+            return known
+    found = next((Path(hit) for name in candidates if (hit := shutil.which(name))), None)
+    _on_path[key] = found
+    return found
 
 
 def find_programs(tool_id: str, names: Iterable[str]) -> tuple[Path, ...]:

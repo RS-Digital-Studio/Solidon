@@ -369,6 +369,10 @@ def test_discovered_identity_survives_installation_move_and_separates_nozzles(
             "nozzle_diameter": ["0.2"],
         },
     )
+    # Eine Installation bekommt neue Profile nur mit einer neuen Fassung, und
+    # die bringt eine neue Programmdatei mit (RM-670: der gemerkte Bestand sieht
+    # die Installation an ihrer obersten Ebene und am Programm an).
+    (moved / "slicer.exe").write_bytes(b"neue Fassung")
     found = sp.discover_printers(moved / "slicer.exe", "orca")
     assert len({printer.id for printer in found}) == 2
     assert sorted(printer.nozzle_diameter for printer in found) == pytest.approx([0.2, 0.6])
@@ -1109,6 +1113,8 @@ def test_a_machine_reads_its_nozzle_from_the_profile_it_inherits(unknown_printer
     document = json.loads(base.read_text(encoding="utf-8"))
     del document["nozzle_diameter"]
     _write(base, document)
+    # Mit einer neuen Fassung des Slicers, wie in der Wirklichkeit (RM-670).
+    executable.write_bytes(b"neue Fassung")
     (machine,) = [
         entry
         for entry in sp.find_profiles(executable, "orca", kinds=("machine",))
@@ -1579,6 +1585,8 @@ def test_the_search_opens_every_profile_file_once(
         return original(self, *args, **kwargs)  # type: ignore[arg-type]
 
     monkeypatch.setattr(Path, "read_text", counted)
+    # Gezählt wird ein Lesedurchgang, nicht der gemerkte Bestand (RM-670).
+    sp.forget_holdings()
     found = sp.find_profiles(slicer, "orca")
 
     assert found == expected
@@ -4939,3 +4947,258 @@ def test_a_single_read_reads_each_profile_once_and_forgets_it_after(tmp_path: Pa
         with sp.single_read():
             assert sp._load(path) is first, "verschachtelt gilt der äußere"
     assert sp._load(path) == {"name": "zwei"}, "danach verfällt der Speicher"
+
+
+# --- Der gemerkte Bestand (RM-670) ---------------------------------------------------
+
+
+def _settle(root: Path) -> None:
+    """Alles unter ``root`` auf einen festen Zeitpunkt in der Vergangenheit —
+    ein Bestand, den gerade niemand ändert.
+
+    Was jünger ist als :data:`sp.SETTLE_NS`, merkt sich die Profilsuche nicht;
+    ohne das Altern läse jeder Aufruf neu, und keine Zusicherung über den
+    Merker sagte etwas. Fest, damit zweimal Altern nichts ändert.
+    """
+    import os
+
+    past = 1_767_225_600.0  # 01.01.2026
+    for path in (*root.rglob("*"), root):
+        os.utime(path, (past, past))
+
+
+def _counting(monkeypatch: pytest.MonkeyPatch, name: str) -> list[object]:
+    """Zählt die Aufrufe von ``sp.<name>``, ohne sie zu ändern."""
+    calls: list[object] = []
+    original = getattr(sp, name)
+
+    def counted(*args: object, **kwargs: object) -> object:
+        calls.append(args[0] if args else None)
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(sp, name, counted)
+    return calls
+
+
+@pytest.fixture
+def own_profiles(slicer: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """Der Kontoordner, in dem die Orca-Familie selbst angelegte Profile ablegt."""
+    user = tmp_path / "config" / "OrcaSlicer" / "user" / "4711"
+    (user / "machine").mkdir(parents=True)
+    monkeypatch.setattr(sp, "user_roots", lambda _flavour, _executable: [user])
+    return user
+
+
+def _own_machine(user: Path, file: str, name: str, model: str) -> Path:
+    path = user / "machine" / file
+    _write(
+        path,
+        {
+            "name": name,
+            "from": "User",
+            "inherits": "Elegoo Centauri Carbon 2 0.4 nozzle",
+            "printer_model": model,
+            "nozzle_diameter": ["0.4"],
+        },
+    )
+    return path
+
+
+def test_the_store_is_read_once_and_follows_every_change_in_the_slicer(
+    slicer: Path, own_profiles: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """RM-670: Jeder 3MF-Export las die rund 1 550 Maschinenprofile neu.
+
+    Gemerkt wird der Bestand jetzt — und trotzdem kennt der nächste Aufruf,
+    was der Kunde im Slicer angelegt, umbenannt, überschrieben oder gelöscht
+    hat. Vor jedem Schritt altert der Bestand, sonst merkte die Suche ihn gar
+    nicht, und jede Zusicherung wäre auch ohne Signatur grün.
+    """
+    reads = _counting(monkeypatch, "_read")
+    _settle(tmp_path)
+
+    first = sp.find_profiles(slicer, "orca", ("machine",))
+    assert reads, "der erste Aufruf liest den Bestand"
+    count = len(reads)
+    again = sp.find_profiles(slicer, "orca", ("machine",))
+    assert again == first
+    assert len(reads) == count, "unverändert wird nichts neu gelesen"
+    again.clear()
+    assert sp.find_profiles(slicer, "orca", ("machine",)) == first, "der Merker gibt Kopien"
+
+    def own() -> dict[str, Path]:
+        return {
+            entry.name: entry.path
+            for entry in sp.find_profiles(slicer, "orca", ("machine",))
+            if entry.from_user
+        }
+
+    created = _own_machine(own_profiles, "Werkstatt.json", "Werkstatt CC2", "Werkstatt")
+    assert own() == {"Werkstatt CC2": created}, "angelegt"
+
+    _settle(tmp_path)
+    own()
+    renamed = created.rename(created.with_name("Keller.json"))
+    assert own() == {"Werkstatt CC2": renamed}, "umbenannt"
+
+    _settle(tmp_path)
+    own()
+    _own_machine(own_profiles, "Keller.json", "Keller CC2", "Werkstatt")
+    assert own() == {"Keller CC2": renamed}, "überschrieben"
+
+    _settle(tmp_path)
+    own()
+    renamed.unlink()
+    assert own() == {}, "gelöscht"
+
+
+def test_a_printer_created_in_the_slicer_is_known_to_the_next_question(
+    slicer: Path, own_profiles: Path, tmp_path: Path
+) -> None:
+    """Die Frage jedes Exports, ob der Slicer den Drucker kennt (``machine_missing``)."""
+    _settle(tmp_path)
+    assert not sp.supports_printer("orca", slicer, "Eigenbau Voron")
+
+    _own_machine(own_profiles, "Voron.json", "Eigenbau Voron 0.4 nozzle", "Eigenbau Voron")
+
+    assert sp.supports_printer("orca", slicer, "Eigenbau Voron")
+
+
+def test_the_first_own_profile_of_an_account_is_seen(
+    slicer: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Der Kontoordner selbst entsteht mit dem ersten eigenen Profil — eine Wurzel mehr."""
+    config = tmp_path / "config" / "OrcaSlicer" / "user"
+    config.mkdir(parents=True)
+    monkeypatch.setattr(
+        sp,
+        "user_roots",
+        lambda _flavour, _executable: [entry for entry in config.iterdir() if entry.is_dir()],
+    )
+    _settle(tmp_path)
+    assert not sp.supports_printer("orca", slicer, "Eigenbau Voron")
+
+    _own_machine(config / "4711", "Voron.json", "Eigenbau Voron 0.4 nozzle", "Eigenbau Voron")
+
+    assert sp.supports_printer("orca", slicer, "Eigenbau Voron")
+
+
+def test_the_installation_is_read_again_with_a_new_version_only(
+    slicer: Path, bestand: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Die mitgelieferten Profile werden nicht Datei für Datei angesehen (RM-670).
+
+    Bei Orca sind es zwölftausend; sie je Export einzeln zu prüfen kostete so
+    viel wie das Lesen. Sie ändern sich nur mit einer neuen Fassung, und die
+    ändert die Programmdatei oder ein Herstellerbündel auf der obersten Ebene.
+    """
+    reads = _counting(monkeypatch, "_read")
+    _write(bestand / "Elegoo.json", {"name": "Elegoo", "version": "02.00.00.00"})
+    _settle(tmp_path)
+    sp.find_profiles(slicer, "orca", ("machine",))
+    count = len(reads)
+
+    _write(
+        bestand / "Elegoo" / "machine" / "ECC2" / "Neu.json",
+        {"type": "machine", "name": "Elegoo Neu 0.4 nozzle", "instantiation": "true"},
+    )
+    _settle(tmp_path)
+    names = {entry.name for entry in sp.find_profiles(slicer, "orca", ("machine",))}
+    assert len(reads) == count, "ohne neue Fassung wird die Installation nicht neu gelesen"
+    assert "Elegoo Neu 0.4 nozzle" not in names
+
+    slicer.write_bytes(b"2.3.1")
+    names = {entry.name for entry in sp.find_profiles(slicer, "orca", ("machine",))}
+    assert "Elegoo Neu 0.4 nozzle" in names, "die neue Programmdatei liest neu"
+
+    _settle(tmp_path)
+    sp.find_profiles(slicer, "orca", ("machine",))
+    count = len(reads)
+    _write(bestand / "Elegoo.json", {"name": "Elegoo", "version": "02.00.00.01"})
+    sp.find_profiles(slicer, "orca", ("machine",))
+    assert len(reads) > count, "ein erneuertes Herstellerbündel liest neu"
+
+
+def test_a_store_that_just_changed_is_not_kept(
+    slicer: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Zwei Änderungen im selben Takt der Dateisystemuhr tragen denselben Stempel.
+
+    Ein Bestand, dessen jüngste Datei jünger ist als :data:`sp.SETTLE_NS`, wird
+    deshalb nicht gemerkt — der nächste Aufruf liest ihn noch einmal.
+    """
+    reads = _counting(monkeypatch, "_read")
+    sp.find_profiles(slicer, "orca", ("machine",))
+    count = len(reads)
+
+    sp.find_profiles(slicer, "orca", ("machine",))
+
+    assert len(reads) == 2 * count
+
+
+def test_curas_store_ignores_its_log_and_sees_a_new_machine(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Curas Versionsordner trägt sein Protokoll neben den Profilen; es ändert
+    sich bei jedem Start und ist kein Grund, den Bestand neu zu lesen."""
+    installed = tmp_path / "Cura" / "share" / "cura"
+    (installed / "resources" / "definitions").mkdir(parents=True)
+    user = tmp_path / "config" / "cura" / "5.13"
+    (user / "machine_instances").mkdir(parents=True)
+    executable = tmp_path / "Cura" / "CuraEngine.exe"
+    executable.write_bytes(b"")
+    monkeypatch.setattr(sp, "install_root", lambda _executable: installed)
+    monkeypatch.setattr(sp, "user_roots", lambda _flavour, _executable: [user])
+    (user / "cura.log").write_text("Start\n", encoding="utf-8")
+    _settle(tmp_path)
+    before = sp._holding_signature("cura", executable)
+
+    (user / "cura.log").write_text("Start\nNoch ein Start\n", encoding="utf-8")
+    assert sp._holding_signature("cura", executable) == before
+
+    (user / "machine_instances" / "Werkstatt.global.cfg").write_text(
+        "[general]\nname = Werkstatt\n", encoding="utf-8"
+    )
+    assert sp._holding_signature("cura", executable) != before
+
+
+def test_prusas_printer_models_are_read_once_per_state_of_the_bundles(
+    prusa_mini: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """PrusaSlicer nennt seine Modelle in den Herstellerbündeln; jeder Export fragte sie ab."""
+    reads = _counting(monkeypatch, "_read_prusa_printer_models")
+    _settle(tmp_path)
+
+    first = sp.known_printers("prusa", prusa_mini)
+    assert sp.known_printers("prusa", prusa_mini) == first
+    assert len(reads) == 1
+
+    bundle = tmp_path / "resources" / "profiles" / "PrusaResearch.ini"
+    bundle.write_text(
+        bundle.read_text(encoding="utf-8")
+        + "\n[printer_model:CORE1]\nname = Prusa CORE One\nvariants = 0.4\n",
+        encoding="utf-8",
+    )
+    assert "Prusa CORE One" in sp.known_printers("prusa", prusa_mini)
+
+
+def test_the_program_folder_is_listed_again_only_when_its_parent_changes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """``%APPDATA%`` aufzulisten kostete unter Last eine halbe Sekunde je Frage.
+
+    Gemerkt bis zum nächsten Zeitstempel des Ordners: Installiert der Kunde
+    einen Slicer, legt dieser dort seinen Ordner an, und die nächste Frage
+    findet ihn.
+    """
+    base = tmp_path / "config"
+    (base / "Anderes Programm").mkdir(parents=True)
+    listings = _counting(monkeypatch, "_list_program_folders")
+    _settle(tmp_path)
+
+    assert sp._program_folders(base, "orcaslicer") == []
+    assert sp._program_folders(base, "orcaslicer") == []
+    assert len(listings) == 1
+
+    (base / "OrcaSlicer").mkdir()
+    assert sp._program_folders(base, "orcaslicer") == [base / "OrcaSlicer"]

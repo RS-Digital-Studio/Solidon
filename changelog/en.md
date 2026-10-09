@@ -48,6 +48,7 @@ it into `website/version.json`.
 - Only slicers Solidon works with are offered, plus resin slicers such as ChituBox and Lychee. Bambu Studio as an AppImage now counts too.
 - Start code and build volume come only from exactly your printer, not from another model of the same series.
 - The print dialog matches the slicer's profiles much faster, when opening and after every slicer change.
+- With a slicer installed, a 3MF export finishes in a fraction of a second, barely slower than an STL export.
 - The estimated print time is closer to the slicer's, much closer for parts with supports.
 - Whether supports and skirt fit on the bed is now measured only under the overhangs. Parts near the edge no longer get a needless warning.
 - Accepted suggestions hardly leave any overhang that needs support without it. *Keep channels clear* now only blocks space a support could never be removed from.

@@ -82,6 +82,7 @@ for _variable in PROFILE_VARIABLES:
 
 from app.core import discover
 from app.core.activation import store as activation_store
+from app.core.export import slicer_profiles
 from app.core.knowledge import profiles
 from app.core.perceive import features, local
 from app.core.types import Document, Profile
@@ -681,10 +682,16 @@ def _remembered_features_stay_out_of_it() -> None:
 
     Dasselbe gilt für die gemerkten örtlichen Nachmessungen
     (``local.forget_known``): Ein Test, der die Suche zählt oder abklemmt,
-    bekäme sonst das Ergebnis eines Vorgängers mit denselben Merkmalen.
+    bekäme sonst das Ergebnis eines Vorgängers mit denselben Merkmalen —
+    und für den gemerkten Profilbestand der Slicer
+    (``slicer_profiles.forget_holdings``, RM-670): Seine Signatur sieht die
+    Installation nur an ihrer obersten Ebene an, und ein Test, der einen
+    Profilbaum hinter einem gleichen Programmpfad baut, erbte sonst den
+    Bestand seines Vorgängers.
     """
     features.forget_cache()
     local.forget_known()
+    slicer_profiles.forget_holdings()
 
 
 @pytest.fixture(autouse=True)
