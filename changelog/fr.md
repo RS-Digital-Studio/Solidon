@@ -68,6 +68,7 @@ dans `website/version.json`.
 - Le trou de vis du piège à écrou traverse exactement la pièce, même épaisse. Jusqu'ici il s'arrêtait 10 mm sous la poche ou perçait le côté opposé au-delà d'un interstice.
 - Posé par en dessous, le piège à écrou a sa poche sous la face, et sa fente y descend. Jusqu'ici la poche était à moitié au-dessus, la vis dans la face.
 - Si le perçage d'un bloc ne traverse pas la pièce, il s'appelle désormais borgne. Jusqu'ici il s'appelait traversant.
+- Si la paroi est plus épaisse que celle saisie pour un *Passe-câble* ou un *Embout cannelé*, l'étape le signale et ouvre l'épaisseur de paroi. Jusqu'ici le passage finissait en silence dans la matière.
 - Si une pièce séparée se trouve dans une fraisure, un trou oblong, une cuvette, une gorge ou un filetage, les actions le disent. Jusqu'ici elle était coupée ou fusionnée.
 
 ### Modifier et esquisser

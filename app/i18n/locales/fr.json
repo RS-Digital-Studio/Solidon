@@ -2343,6 +2343,7 @@
   "Die Wand ist dünner, als dieser Drucker sie stehen lässt.": "La paroi est plus fine que ce que cette imprimante peut faire tenir.",
   "Die Wand ist für diese Steigung zu dünn — das Gewinde hätte keinen Kern.": "La paroi est trop mince pour ce pas — le filetage n'aurait pas de noyau.",
   "Die Wand ist für diesen Außendurchmesser zu dick — sie muss dünner als dessen Hälfte sein.": "La paroi est trop épaisse pour ce diamètre extérieur : elle doit être plus fine que sa moitié.",
+  "Die Wand ist hier {thickness} dick, der Baustein ist für {wall} gebaut. Sein Durchgang endet im Material.": "Ici la paroi fait {thickness}, mais le bloc est prévu pour {wall}. Son passage se termine dans la matière.",
   "Die Wand lässt keinen Durchgang: Er muss mindestens eine Wand weit sein. Einen größeren Schlauch oder eine dünnere Wand wählen.": "La paroi ne laisse pas de passage : il doit faire au moins une paroi de large. Choisissez un tuyau plus grand ou une paroi plus mince.",
   "Die Wand, an der die Rippe sitzt — sie bestimmt die Rippenstärke.": "La paroi sur laquelle repose la nervure — elle détermine l'épaisseur de la nervure.",
   "Die Wand, an der er sitzt — sie bestimmt die Vorgabe für die Dicke.": "La paroi contre laquelle il s'appuie — elle fixe la valeur par défaut de l'épaisseur.",

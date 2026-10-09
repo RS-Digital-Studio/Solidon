@@ -220,6 +220,8 @@ MEINT_DEN_SCHRITT: dict[str, str | dict[str, str] | None] = {
     "parts.thread_thin_wall": frozenset({"diameter", "size"}),
     "parts.bore_widened": frozenset({"diameter", "size"}),
     "parts.countersink_derived": "countersink",
+    # RM-633: die Wand ist dicker, als der Baustein eingetragen hat.
+    "parts.wall_thicker": "wall",
 }
 
 #: Die Operationen, deren Dialog der Knopf öffnet — das Feld muss es an jeder
@@ -251,6 +253,7 @@ OHNE_OPERATION: frozenset[str] = frozenset(
         "parts.thread_thin_wall",
         "parts.bore_widened",
         "parts.countersink_derived",
+        "parts.wall_thicker",
     }
 )
 

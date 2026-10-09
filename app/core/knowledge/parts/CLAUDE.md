@@ -29,6 +29,7 @@ Paketdocstring). Wer hier Code hinzufügt, prüft, dass er unter MIT stehen darf
 | `range_check.py` | Der Bereichstest in der Anwendung: Selbstdurchdringung über `geom.intersections`, Wandstärke über `geom.mesh.ray_hits_batch`, ohne VTK |
 | `range_proof.py` | Der Bereichsnachweis: Abdruck je Baustein gegen `data/part_ranges.toml` (`tools/check_part_ranges.py`) |
 | `preview.py` | Vorschaubilder — gerendert, nicht von Hand gepflegt |
+| `through.py` | Bohrungen durch den ganzen Träger (`reaches_through`): ihr Zylinder für `ops._reaching_through` und ihre Fortsetzung in Vorschau, Platzierungsgeist und SCAD mit der Anzeigelänge `SHOWN_REACH` |
 | `scad.py` | Export als OpenSCAD-Quelltext; schreibt, führt nichts aus |
 | `recipe.py` | Ein eigener Baustein als **Rezept**: Daten statt Programm (§24.5) |
 | `shared.py` · `shared_texts.py` | Der geschlossene Prüfvertrag lokaler Bausteindateien (Form, Mengen, Ops, Payloads, `MAX_EXPOSED`) · seine übersetzbaren Prüfgründe |

@@ -2343,6 +2343,7 @@
   "Die Wand ist dünner, als dieser Drucker sie stehen lässt.": "La parete è più sottile di quanto questa stampante riesca a far reggere.",
   "Die Wand ist für diese Steigung zu dünn — das Gewinde hätte keinen Kern.": "La parete è troppo sottile per questo passo — la filettatura non avrebbe nucleo.",
   "Die Wand ist für diesen Außendurchmesser zu dick — sie muss dünner als dessen Hälfte sein.": "La parete è troppo spessa per questo diametro esterno: deve essere più sottile della sua metà.",
+  "Die Wand ist hier {thickness} dick, der Baustein ist für {wall} gebaut. Sein Durchgang endet im Material.": "Qui la parete è spessa {thickness}, ma il blocco è fatto per {wall}. Il suo passaggio finisce nel materiale.",
   "Die Wand lässt keinen Durchgang: Er muss mindestens eine Wand weit sein. Einen größeren Schlauch oder eine dünnere Wand wählen.": "La parete non lascia passaggio: deve essere largo almeno una parete. Scegliere un tubo più grande o una parete più sottile.",
   "Die Wand, an der die Rippe sitzt — sie bestimmt die Rippenstärke.": "La parete su cui poggia la nervatura — determina lo spessore della nervatura.",
   "Die Wand, an der er sitzt — sie bestimmt die Vorgabe für die Dicke.": "La parete su cui appoggia: determina il valore predefinito dello spessore.",

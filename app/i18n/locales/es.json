@@ -2343,6 +2343,7 @@
   "Die Wand ist dünner, als dieser Drucker sie stehen lässt.": "La pared es más fina de lo que esta impresora puede mantener en pie.",
   "Die Wand ist für diese Steigung zu dünn — das Gewinde hätte keinen Kern.": "La pared es demasiado fina para este paso — la rosca no tendría núcleo.",
   "Die Wand ist für diesen Außendurchmesser zu dick — sie muss dünner als dessen Hälfte sein.": "La pared es demasiado gruesa para este diámetro exterior: debe ser más fina que su mitad.",
+  "Die Wand ist hier {thickness} dick, der Baustein ist für {wall} gebaut. Sein Durchgang endet im Material.": "Aquí la pared mide {thickness}, pero el bloque está hecho para {wall}. Su paso termina dentro del material.",
   "Die Wand lässt keinen Durchgang: Er muss mindestens eine Wand weit sein. Einen größeren Schlauch oder eine dünnere Wand wählen.": "La pared no deja paso: debe tener al menos el ancho de una pared. Elija una manguera más grande o una pared más delgada.",
   "Die Wand, an der die Rippe sitzt — sie bestimmt die Rippenstärke.": "La pared sobre la que se apoya la nervadura: ella determina su espesor.",
   "Die Wand, an der er sitzt — sie bestimmt die Vorgabe für die Dicke.": "La pared en la que se apoya: determina el valor por defecto del grosor.",

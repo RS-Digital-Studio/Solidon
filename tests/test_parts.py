@@ -5331,6 +5331,57 @@ def test_a_nut_trap_in_a_bore_takes_its_screw_hole_along_the_bore(
         assert _widest_bore(as_mesh_data(carrier.mesh), height) == pytest.approx(widened, abs=0.02)
 
 
+@pytest.mark.parametrize("kind", ["mesh", "brep"])
+@pytest.mark.parametrize(
+    ("part", "name"),
+    [("cable_gland", "cable_gland_bore_1"), ("hose_barb", "hose_barb_passage_1")],
+)
+@pytest.mark.parametrize(
+    ("shape", "top", "thick"), [("block40", 40.0, True), ("thin3", 3.0, False)]
+)
+def test_a_part_built_for_a_thinner_wall_says_so(
+    kind: str, part: str, name: str, shape: str, top: float, thick: bool
+) -> None:
+    """RM-633: Die Kabeldurchführung im dicken Träger hieß Durchgang und schwieg.
+
+    Kabeldurchführung und Schlauchanschluss bohren durch eine Wand der
+    eingetragenen Stärke (3 mm) und bauen dahinter auf. Im 40-mm-Quader lag der
+    Klemmkanal eingeschlossen im Material, die Bohrung öffnete in ihn und hieß
+    Durchgang, ohne Befund. Soll: Sackloch, und ein Befund nennt die gemessene
+    Wand (40 mm) und öffnet das Feld ``wall``. In der 3-mm-Platte bleibt alles,
+    wie es war.
+    """
+    result = _rm631_insert(kind, shape, part, top)
+    bore = result.outputs[0].features[name]
+    said = [finding for finding in result.findings if finding.code == "parts.wall_thicker"]
+    if not thick:
+        assert bore.params["through"] is True
+        assert not said
+        return
+    assert bore.params["through"] is False
+    (finding,) = said
+    assert finding.severity == "warning"
+    assert finding.values["field"] == "wall"
+    assert finding.values["wall_mm"] == pytest.approx(40.0, abs=0.05)
+    assert [action.id for action in finding.suggestions] == ["change_step"]
+
+
+@pytest.mark.parametrize("kind", ["mesh", "brep"])
+def test_a_cable_gland_in_a_slightly_thicker_wall_cuts_through_the_rest(kind: str) -> None:
+    """RM-633, Gegenprobe: Ein paar Zehntel mehr Wand schneidet der Klemmkanal mit.
+
+    Die ausgehöhlte Dose im Beispiel hat an ihrer linken Wand 2,8 statt 2,4 mm
+    (Raster der Aushöhlung). Die Bohrung endet 0,4 mm vor der Innenseite, der
+    Kanal dahinter geht durch den Rest — kein Sackloch, kein Befund. Die erste
+    Fassung fragte den Träger direkt hinter der Bohrung und meldete hier eine
+    Wand, die das Kabel nicht aufhält.
+    """
+    result = _rm631_insert(kind, "thin3", "cable_gland", 3.0, wall=2.6)
+    bore = result.outputs[0].features["cable_gland_bore_1"]
+    assert bore.params["through"] is True
+    assert not [finding for finding in result.findings if finding.code == "parts.wall_thicker"]
+
+
 def test_head_room_cuts_below_the_mouth_not_above_it(profile: Profile) -> None:
     """Die Kopffreiheit trägt Material ab, und zwar unter der Fläche (§24.1).
 

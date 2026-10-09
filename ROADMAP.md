@@ -57,6 +57,8 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-549 — Ein frisch installiertes Orca-AppImage unter Linux hat keine lesbaren Herstellerprofile](#rm-549) | Plattformen, Pakete und Grafik | Gefunden mit der Slicerauswahl (07.10.): ohne Vorwahl des Herstellerprofils lehnt die Orca-Familie den Auftrag ab; offen, ob der Druckdialog dann mit Grund und Weg endet |
 | [RM-022 — Nachbau als Operationsfolge](#rm-022) | Geometrie, Erkennung und Druckvorbereitung | Profilkörper am Netz gebaut (05.10.), Besenhalter angenommen; offen der Korpuslauf über diesen Stand samt fünf Teilen über 600 s, die Fensterabnahme beim Release und die Wiederholung der berichtigten Zahlenanzeige am Fenster |
 | [RM-188 — CAD-Ausbau, Bedienung und Resin für 0.5.x](#rm-188) | Geometrie, Erkennung und Druckvorbereitung | Nächster Schritt P0.8: die vier Konzepte je Anforderung dem Code oder einem Paket zuordnen; daneben P4.1 unter RM-022, P8.1, P9.1 und Zeichnen Z2. Reste der gebauten Pakete und Fragen an Robert stehen am Punkt; Abschluss mit P5.3 |
+| [RM-632 — Die Mutternfalle zeigt ihr Schraubenloch vor dem Setzen](#rm-632) | Geometrie, Erkennung und Druckvorbereitung | Gebaut auf `paket/g-geometrie`; offen die Nachprüfung G und der Merge nach main |
+| [RM-633 — Eine Kabeldurchführung in einer dickeren Wand sagt es](#rm-633) | Geometrie, Erkennung und Druckvorbereitung | Gebaut auf `paket/g-geometrie`; offen die Nachprüfung G und der Merge nach main |
 | [RM-191 — PrusaSlicer braucht für dieselbe Übergabe länger als die Orca-Familie](#rm-191) | Geometrie, Erkennung und Druckvorbereitung | Nachgemessen am Gewürzregal (`56f70000`): Material innerhalb von 3 %, Zeit Prusa 1,93× Orca — behoben bis 1,19× (volle Füllung und Lückenfüllung für Prusa und Orca, Bahnbreite je Orca-Rolle, `machine_limits_usage = ignore`); der Rest ist die Bauweise des Slicers (Füllanker, Zusatzwände). Mit Herstellerbündel neu gemessen (06.10.): am MK4S ist PrusaSlicer schneller als Orca (218 gegen 345 min, Material gleich); langsamer bleibt PrusaSlicer ohne Bündel am CC2 (407 gegen 232 min, +20 % Material), weil Solidons Satz die Wandzahl nicht setzt (`perimeters = 3`, `extra_perimeters = 1`); nächster Schritt: im Prusa-Zweig für Drucker ohne Bündel Wandzahl und `extra_perimeters = 0` setzen, dann prusa:CC2 gegen elegoo:CC2 |
 | [RM-209 — Die Rundform-Einpassung an Gittermodellen](#rm-209) | Geometrie, Erkennung und Druckvorbereitung | Stapelumbau (0.5.1) und bitgleiche Vektornorm im Löser gebaut; Kumiko-Schale 18,6–20,2 s unter Last, §31 (unter 5 s) nicht erreicht; offen: Aufbereitung großer Flecken und Fits beschleunigen, danach ruhige Vergleichsläufe |
 | [RM-132 — Freiformerkennung am Ein-Sekunden-Ziel messen](#rm-132) | Geometrie, Erkennung und Druckvorbereitung | Ziel neu gefasst (Bauplan §31, Robert 06.10.: mechanisch unter 1 s, organisch unter 2 s am Referenzrechner); offen die Messung am neuen Ziel |
@@ -882,6 +884,22 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   der die Grenze hält; kein Rückschritt im Leistungsbudget (§31).
 
 ## Geometrie, Erkennung und Druckvorbereitung
+
+<a id="rm-632"></a>
+
+- [~] **RM-632 — Die Mutternfalle zeigt ihr Schraubenloch vor dem Setzen.** Folge von RM-631
+  (Paket G, 09.10.2026): Seit der Schritt das Schraubenloch durch den Träger bohrt, baut der
+  Baustein es nur über seine Tasche. Katalogbild, Platzierungsgeist und SCAD-Export zeigten
+  deshalb kein Schraubenloch mehr. **Abnahme:** In Vorschau, Geist und SCAD steht die Bohrung mit
+  einer benannten Anzeigelänge, nie aus der Mündung heraus. Gebaut auf `paket/g-geometrie`.
+
+<a id="rm-633"></a>
+
+- [~] **RM-633 — Eine Kabeldurchführung in einer dickeren Wand sagt es.** Gefunden bei RM-631
+  (Paket G, 09.10.2026): Mit Zugentlastung in einem dicken Träger öffnet die Bohrung in den
+  eigenen Klemmkanal und hieß Durchgang, obwohl der Kanal eingeschlossen im Material liegt.
+  **Abnahme:** je Kern Sackloch und ein Befund mit Weg zur Wandstärke, in der passenden Wand
+  bleibt alles, wie es war. Gebaut auf `paket/g-geometrie`.
 
 <a id="rm-571"></a>
 

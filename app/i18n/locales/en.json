@@ -2343,6 +2343,7 @@
   "Die Wand ist dünner, als dieser Drucker sie stehen lässt.": "The wall is thinner than this printer can keep standing.",
   "Die Wand ist für diese Steigung zu dünn — das Gewinde hätte keinen Kern.": "The wall is too thin for this pitch — the thread would have no core.",
   "Die Wand ist für diesen Außendurchmesser zu dick — sie muss dünner als dessen Hälfte sein.": "The wall is too thick for this outside diameter — it must be thinner than half of it.",
+  "Die Wand ist hier {thickness} dick, der Baustein ist für {wall} gebaut. Sein Durchgang endet im Material.": "The wall here is {thickness} thick, but the part is built for {wall}. Its passage ends in the material.",
   "Die Wand lässt keinen Durchgang: Er muss mindestens eine Wand weit sein. Einen größeren Schlauch oder eine dünnere Wand wählen.": "The wall leaves no passage: it must be at least one wall wide. Choose a larger hose or a thinner wall.",
   "Die Wand, an der die Rippe sitzt — sie bestimmt die Rippenstärke.": "The wall the rib sits on — it sets the rib thickness.",
   "Die Wand, an der er sitzt — sie bestimmt die Vorgabe für die Dicke.": "The wall it sits against — it sets the default for the thickness.",

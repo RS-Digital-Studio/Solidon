@@ -67,6 +67,7 @@ it into `website/version.json`.
 - The nut trap's screw hole goes exactly through the part, even a thick one. Until now it ended 10 mm below the pocket or drilled into the opposite side across a gap.
 - Laid in from below, the nut trap's pocket sits under the face, its slot leading down to it. Until now it sat half above, with the screw in the face.
 - If the hole of a part does not go all the way through, it is now called blind. Until now it was called through.
+- If the wall is thicker than entered for a *Cable gland* or *Hose barb*, the step says so and opens the wall thickness. Until now the passage silently ended in the material.
 - If a separate part sits in a countersink, slot, socket, groove or thread, the actions say so. Until now it was cut off or merged.
 
 ### Editing and sketching

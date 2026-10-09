@@ -85,15 +85,19 @@ Bauteil und nimmt nichts weg.
   nur beim bloß abtragenden Baustein, am Träger vor dem Schnitt — die Bohrung
   eines anbauenden oder seines Aufbaus (`host_add`) liegt in Material, das der
   Träger noch nicht hat. Ob hinter einem Ende Material liegt, fragt der Körper
-  nach dem Schritt, bei jedem Baustein; eine eingetragene Tiefe bleibt die
-  Tiefe.
+  nach dem Schritt und der Träger davor, bei jedem Baustein; eine eingetragene
+  Tiefe bleibt die Tiefe. Wer hinter einer Wand eingetragener Stärke aufbaut
+  (`host_add`) und eine dickere trifft, sagt es mit `parts.wall_thicker` und
+  öffnet `wall` (`ops._wall_thicker`, RM-633).
 - **Eine Bohrung ohne eigene Tiefe geht durch den ganzen Träger**
   (`PartSpec.reaches_through`, `ops._reaching_through`, RM-631): Der Baustein
   baut sie nur über seine Strecke, der Schritt verlängert sie an jedem Ende bis
   zum ersten Austritt aus dem Material — nie über die Fläche hinaus in einen
   Spalt. Nur wo der ganze Rand ihres Querschnitts im Material liegt: Eine Achse
   in einer Fläche zöge sonst eine Rinne durch das Teil. In einer Bohrung muss
-  sie in deren Achse liegen.
+  sie in deren Achse liegen. Ohne Träger — Katalogbild, Platzierungsgeist,
+  SCAD — zeigt `through.with_shown_bores` sie drei Durchmesser weit, nie aus
+  der Mündung: Sonst läge sie unsichtbar im Baustein (RM-632).
 - **Schräg zur Fläche gesetzt, öffnet er trotzdem bis über sie.** Die Richtung
   bleibt Eingabe; angehoben wird der Deckel der Öffnung
   (`ops._opened_to_the_face`) bis über die **Ebene der Fläche am

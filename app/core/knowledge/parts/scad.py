@@ -15,10 +15,14 @@ das Netz.
 from __future__ import annotations
 
 import json
+from typing import TYPE_CHECKING
 
 from app.core.geom.mesh import MeshData, as_mesh_data
 from app.core.knowledge.parts.registry import PartSpec
 from app.core.types import BaseParams
+
+if TYPE_CHECKING:
+    from app.core.knowledge.parts.through import ShownBore
 
 #: In jede Datei geschrieben, damit niemand sie für ein parametrisches
 #: Modell hält.
@@ -30,8 +34,13 @@ HEADER = """// {title} ({name}, Version {version})
 
 def to_scad(spec: PartSpec, params: BaseParams | None = None) -> str:
     """Ein Baustein als OpenSCAD-Modul."""
+    from app.core.geom.boolean import BOOLEAN_OVERLAP
+    from app.core.knowledge.parts.through import shown_bores
+    from app.core.units import EPS_GEOM
+
     values = params or spec.params()
-    mesh = as_mesh_data(spec.fn(values).mesh)
+    produced = spec.fn(values)
+    mesh = as_mesh_data(produced.mesh)
 
     lines = [
         HEADER.format(title=spec.title, name=spec.name, version=spec.version),
@@ -50,8 +59,48 @@ def to_scad(spec: PartSpec, params: BaseParams | None = None) -> str:
             lines.extend(
                 ["", f"// {advice}", *_module(f"{spec.name}_{suffix}", as_mesh_data(extra.mesh))]
             )
+    upward = float(mesh.bounds.maximum[2]) > BOOLEAN_OVERLAP + EPS_GEOM
+    shown = shown_bores(spec, produced, upward=upward)
+    lines.extend(_shown_module(spec.name, shown))
     lines.extend(["", f"{spec.name}();"])
+    if shown:
+        lines.append(f"{spec.name}_through();")
     return "\n".join(lines)
+
+
+def _shown_module(name: str, shown: list[ShownBore]) -> list[str]:
+    """Die Bohrungen durch den Träger als Zylinder mit lesbarer Länge (RM-632).
+
+    Im Netz des Bausteins liegt eine solche Bohrung ganz in ihm; wie weit sie
+    reicht, misst in Solidon erst der Schritt am Träger. Hier steht sie mit
+    der Anzeigelänge da, als Variable, die man an den eigenen Träger anpasst.
+    """
+    from app.core.knowledge.parts.shapes import SEGMENTS
+    from app.core.knowledge.parts.through import SHOWN_REACH, turn_onto
+
+    if not shown:
+        return []
+    lines = [
+        "",
+        "// Bohrung durch den Träger: In Solidon reicht sie, so weit der Träger Material hat.",
+        f"// Hier {SHOWN_REACH:g} Durchmesser lang; through_length an den eigenen Träger anpassen.",
+        f"through_length = {shown[0].length:.4f};",
+        f"module {name}_through() {{",
+    ]
+    for entry in shown:
+        turn = turn_onto(entry.direction)
+        rotate = (
+            ""
+            if turn is None
+            else f"rotate(a = {turn[0]:.4f}, v = [{turn[1][0]:.4f}, {turn[1][1]:.4f}, "
+            f"{turn[1][2]:.4f}]) "
+        )
+        lines.append(
+            f"  translate([{entry.start[0]:.4f}, {entry.start[1]:.4f}, {entry.start[2]:.4f}]) "
+            f"{rotate}cylinder(d = {entry.diameter:.4f}, h = through_length, $fn = {SEGMENTS});"
+        )
+    lines.append("}")
+    return lines
 
 
 def _module(name: str, mesh: MeshData) -> list[str]:

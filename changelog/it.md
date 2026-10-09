@@ -67,6 +67,7 @@ scrive in `website/version.json`.
 - Il foro per la vite della sede per dado attraversa esattamente il pezzo, anche se spesso. Finora finiva 10 mm sotto la tasca o forava il lato opposto oltre una fessura.
 - Inserita da sotto, la sede per dado ha la tasca sotto la faccia e la fessura scende fino a essa. Finora la tasca stava per metà sopra, con la vite nella faccia.
 - Se il foro di un blocco non attraversa il pezzo, ora si chiama cieco. Finora si chiamava passante.
+- Se la parete è più spessa di quanto indicato per «Passacavo» o «Portagomma», il passaggio lo dice e apre lo spessore di parete. Finora il foro finiva in silenzio nel materiale.
 - Se in una svasatura, un'asola, una coppa, una gola o una filettatura c'è un pezzo separato, le azioni lo dicono. Finora veniva tagliato o fuso.
 
 ### Modificare e disegnare
