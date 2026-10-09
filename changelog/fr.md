@@ -29,6 +29,9 @@ dans `website/version.json`.
 - Suppr agit aussi quand l'onglet *Sélection* a le focus, et retire plusieurs corps marqués en une seule étape. Si la touche ne fait rien, la barre d'état en donne la raison.
 - Le clic droit sur les corps propose *Retirer l'objet* et, pour plusieurs, *Réunir*. *Évidement* figure aussi sur une face sélectionnée, qui devient l'ouverture.
 - Les panneaux de gauche et de droite se déplacent par leur poignée, s'ancrent à un bord ou flottent librement. *Vue → Panneaux à leur place* les remet en place.
+- Les panneaux se placent aussi en bas à gauche, en bas à droite et le long du bord inférieur.
+- Les onglets se réordonnent et se détachent dans des fenêtres, aussi sur un second écran. Fermer la fenêtre ou *Revenir dans Solidon* ramène son contenu.
+- Solidon mémorise la disposition. Les fenêtres restent accessibles même si un écran est débranché.
 - Pendant un nouveau calcul, le rapport de contrôle indique *Nouveau calcul en cours …* et garde les lignes précédentes comme état antérieur. Avant, d'anciennes erreurs semblaient encore valables.
 - Si le calcul rapide échoue à une étape, Solidon la recalcule à fond dans la même passe au lieu de s'arrêter.
 - Un constat indiquant qu'une étape n'a rien changé ouvre cette étape sur le champ concerné.

@@ -28,6 +28,9 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Delete também funciona quando o separador *Seleção* tem o foco, e remove vários corpos marcados num só passo. Se a tecla não fizer nada, a barra de estado diz porquê.
 - O clique direito nos corpos oferece *Remover objeto* e, com vários, *Unir*. *Esvaziar* está também numa face selecionada, que passa a ser a abertura.
 - Os painéis da esquerda e da direita movem-se pela pega, encaixam num rebordo ou ficam a flutuar. *Vista → Painéis para o seu lugar* repõe-nos.
+- Os painéis também podem ficar em baixo à esquerda, em baixo à direita e ao longo do rebordo inferior.
+- Pode reordenar os separadores e arrastá-los para janelas próprias, também num segundo ecrã. Fechar a janela ou *Voltar ao Solidon* traz o conteúdo de volta.
+- O Solidon guarda a disposição. As janelas continuam acessíveis mesmo quando um ecrã é desligado.
 - Enquanto recalcula, o relatório de verificação diz *A recalcular …* e mostra as linhas anteriores como estado anterior. Até agora, os erros antigos pareciam continuar válidos.
 - Se o cálculo rápido falhar num passo, o Solidon calcula-o a fundo na mesma execução em vez de parar.
 - Uma constatação que diz que um passo não teve efeito abre esse passo no campo certo.

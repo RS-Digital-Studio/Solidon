@@ -131,6 +131,7 @@ class SignalTabBar(QTabBar):
         self._pointed = -1
         """Der Reiter, auf den die Tour gerade zeigt, oder -1 (RM-573)."""
         self.currentChanged.connect(self._seen)
+        self.tabMoved.connect(self._moved)
 
     # --- Zähler --------------------------------------------------------------
 
@@ -321,6 +322,26 @@ class SignalTabBar(QTabBar):
         return QRectF(self.tabRect(index)).adjusted(1.0, 1.0, -1.0, -1.0)
 
     # --- Verwaltung ------------------------------------------------------------
+
+    def _moved(self, before: int, after: int) -> None:
+        """Marken und Ansagen folgen ihrem Reiter, auch beim Umordnen."""
+
+        def shifted(index: int) -> int:
+            if index == before:
+                return after
+            if before < index <= after:
+                return index - 1
+            if after <= index < before:
+                return index + 1
+            return index
+
+        self._signalled = shifted(self._signalled)
+        self._pointed = shifted(self._pointed)
+        self._badges = {shifted(index): badge for index, badge in self._badges.items()}
+        self._words = {shifted(index): words for index, words in self._words.items()}
+        for index in range(self.count()):
+            self._describe(index)
+        self.update()
 
     def tabInserted(self, index: int) -> None:  # noqa: N802 - Qt-Name
         super().tabInserted(index)

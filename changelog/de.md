@@ -53,6 +53,9 @@ Nutzen da und sonst nichts.
 - Entf wirkt auch, wenn der Reiter *Auswahl* den Fokus hat, und entfernt mehrere markierte Körper in einem Schritt. Tut die Taste nichts, nennt die Statuszeile den Grund.
 - Der Rechtsklick an Körpern bietet *Objekt entfernen* und bei mehreren *Vereinigen*. *Aushöhlen* steht auch an einer gewählten Fläche, sie wird die Öffnung.
 - Die Karten links und rechts lassen sich am Griff verschieben, an den Rand legen oder schweben lassen. *Ansicht → Karten an ihren Platz* legt sie zurück.
+- Die Karten lassen sich auch unten links, unten rechts und am unteren Rand anordnen.
+- Reiter lassen sich umordnen und in eigene Fenster ziehen, auch auf einen zweiten Bildschirm. Schließen oder *Zurück in Solidon* holt ihren Inhalt zurück.
+- Solidon merkt sich die Anordnung. Auch wenn ein Bildschirm fehlt, bleiben die Fenster erreichbar.
 - Während neu gerechnet wird, sagt der Prüfbericht *Wird neu berechnet …* und zeigt die bisherigen Zeilen als vorigen Stand. Bisher sahen alte Fehler dabei aus, als gälten sie noch.
 - Scheitert die schnelle Rechnung an einem Schritt, rechnet Solidon ihn im selben Lauf gründlich nach, statt anzuhalten.
 - Sagt ein Befund, dass ein Schritt nichts bewirkt hat, öffnet er diesen Schritt mit dem passenden Feld.

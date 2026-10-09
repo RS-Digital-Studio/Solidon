@@ -28,6 +28,9 @@ it into `website/version.json`.
 - Del also works while the *Selection* tab has focus, and it removes several marked bodies in one step. When the key does nothing, the status bar gives the reason.
 - Right-clicking bodies offers *Remove object* and, for several, *Unite*. *Hollow out* is also available on a selected face, which becomes the opening.
 - The left and right panels can be moved by their handle, docked to an edge or left floating. *View → Panels back to their place* puts them back.
+- Panels can also be placed at the bottom left, bottom right and along the bottom edge.
+- Tabs can be reordered or dragged into their own windows, also on a second screen. Closing the window or *Return to Solidon* brings the content back.
+- Solidon remembers the layout. The windows stay within reach even when a screen is disconnected.
 - While Solidon recalculates, the report says *Recalculating …* and shows the previous lines as the earlier state. Until now, old errors looked as if they still applied.
 - If the quick calculation fails at a step, Solidon calculates it thoroughly in the same run instead of stopping.
 - A finding that says a step had no effect opens that step at the matching field.

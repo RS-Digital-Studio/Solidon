@@ -70,6 +70,8 @@ class UiSettings:
     Millimetern."""
     language: str = SOURCE_LANGUAGE
     right_panel_visible: bool = True
+    tab_layout: dict[str, object] = field(default_factory=dict)
+    """Reiterreihenfolge und eigene Fenster, nur auf diesem Gerät."""
     card_places: dict[str, str] = field(default_factory=dict)
     """Wo die Seitenkarten liegen, wenn jemand sie verschoben hat
     (``overlay.CardPlace.text``: ``left``, ``right`` oder ``float:x:y``).

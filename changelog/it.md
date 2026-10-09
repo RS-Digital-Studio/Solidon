@@ -28,6 +28,9 @@ scrive in `website/version.json`.
 - Canc funziona anche quando la linguetta *Selezione* ha il focus, e rimuove più corpi contrassegnati in un solo passaggio. Se il tasto non fa nulla, la barra di stato ne dice il motivo.
 - Il clic destro sui corpi offre *Rimuovi oggetto* e, con più corpi, *Unisci*. *Svuota* c'è anche su una faccia selezionata, che diventa l'apertura.
 - I pannelli a sinistra e a destra si spostano con la maniglia, si agganciano a un bordo o restano sospesi. *Vista → Pannelli al loro posto* li rimette a posto.
+- I pannelli si possono disporre anche in basso a sinistra, in basso a destra e lungo il bordo inferiore.
+- Le linguette si riordinano e si trascinano in finestre proprie, anche su un secondo schermo. Chiudi la finestra o usa *Torna in Solidon* per riportare il contenuto.
+- Solidon ricorda la disposizione. Le finestre restano raggiungibili anche quando uno schermo viene scollegato.
 - Durante il ricalcolo, il rapporto di verifica dice *Ricalcolo in corso …* e mostra le righe di prima come stato precedente. Finora i vecchi errori sembravano ancora validi.
 - Se il calcolo rapido fallisce in un passaggio, Solidon lo ricalcola a fondo nella stessa esecuzione invece di fermarsi.
 - Un rilievo che dice che un passaggio non ha avuto effetto apre quel passaggio sul campo giusto.

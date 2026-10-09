@@ -29,6 +29,9 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Supr también funciona cuando la pestaña *Selección* tiene el foco, y quita varios cuerpos marcados en un solo paso. Si la tecla no hace nada, la barra de estado dice por qué.
 - El clic derecho en los cuerpos ofrece *Quitar objeto* y, con varios, *Unir*. *Vaciar* también está en una cara seleccionada, que pasa a ser la abertura.
 - Los paneles de la izquierda y la derecha se mueven por su asa, se acoplan a un borde o quedan flotando. *Vista → Paneles a su sitio* los devuelve.
+- Los paneles también se pueden colocar abajo a la izquierda, abajo a la derecha y en el borde inferior.
+- Puede reordenar las pestañas y arrastrarlas a ventanas propias, también en otra pantalla. Cerrar la ventana o *Volver a Solidon* devuelve su contenido.
+- Solidon recuerda la disposición. Las ventanas siguen al alcance aunque se desconecte una pantalla.
 - Mientras recalcula, el informe de comprobación dice *Recalculando …* y muestra las líneas anteriores como estado previo. Antes, los errores viejos parecían seguir vigentes.
 - Si el cálculo rápido falla en un paso, Solidon lo calcula a fondo en la misma pasada en lugar de detenerse.
 - Un hallazgo que dice que un paso no tuvo efecto abre ese paso en el campo correspondiente.
