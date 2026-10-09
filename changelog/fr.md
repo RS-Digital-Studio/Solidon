@@ -82,6 +82,7 @@ dans `website/version.json`.
 - Quand un support repose sur la pièce, Solidon propose aussi une couche d'interface en dessous pour que son pied ne laisse pas de traces. Sous les supports arborescents, si le slicer l'y imprime.
 - Sous les supports arborescents et à côté d'une tour de purge, Solidon propose l'espace du support en couches entières, comme le slicer l'imprime.
 - Sous une grande face inférieure plane, Solidon propose une grille plutôt que des arbres, et l'hybride si des détails fins en ont besoin. Pour les arbres hauts, Solidon propose deux parois.
+- Si une suggestion de la boîte de dialogue d'impression ne vaut que pour certaines pièces, la ligne et le champ nomment aussi celles qui reçoivent avec elle une autre valeur.
 - Pour le PLA, Solidon propose davantage d'espace entre les nombreuses pointes fines et les supports arborescents en dessous. Cela laisse moins de résidus des pointes des supports.
 - Pour le PETG, Solidon propose un refroidissement complet au support. Il se détache ainsi plus facilement de la pièce.
 - Nouveau dans les réglages d'impression : *Couches d'interface en bas*, *Écart dans l'interface* et *Refroidissement complet au support*.

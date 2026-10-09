@@ -5705,7 +5705,7 @@
   "Nur exportieren und selbst slicen": "Esporta soltanto e fai lo slicing da te",
   "Nur für den Weg aus Text. Wer ein Foto oder eine Zeichnung mitbringt, braucht es nie — und rund {size} GB für einen Weg, den ein vorhandenes Bild umgeht, lädt Solidon niemandem ungefragt herunter. Deshalb ist es in der Einrichtung ein eigenes Häkchen; fehlt es beim Erzeugen, führt der Knopf *Bildmodell einrichten …* direkt dorthin.": "Solo per la via dal testo. Chi porta una foto o un disegno non ne ha mai bisogno, e Solidon non scarica a nessuno senza chiedere circa {size} GB per una via che un'immagine esistente evita. Per questo nella configurazione ha una casella propria; se manca al momento di generare, il pulsante *Configura modello immagine …* porta direttamente lì.",
   "Nur für dieses Teil: {reason}": "Solo per questo pezzo: {reason}",
-  "Nur für {parts}. Die übrigen Teile drucken mit {value}.": "Solo per {parts}. Gli altri pezzi si stampano con {value}.",
+  "Die übrigen Teile drucken mit {value}.": "Gli altri pezzi si stampano con {value}.",
   "Nur nötig, wenn Sie eine Antwort möchten": "Serve solo se vuoi una risposta",
   "Nur vom Bett": "Solo dal piano",
   "Nur was diese Spule anders braucht. Ausgeschaltete Bereiche benutzen die Projektwerte.": "Solo ciò che questa bobina richiede di diverso. Le sezioni disattivate usano i valori del progetto.",

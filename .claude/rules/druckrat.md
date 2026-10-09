@@ -56,9 +56,10 @@ offenem Drucker. Übernommen wird auf Klick, nie von allein.
   flachen Stück über `OVERHANG_LAYER_WORTH_SUPPORT` Gitter** statt Bäumen —
   über „automatisch“ nur, wo es beim Programm Bäume heißt (`trees` aus
   `handover.tree_styles`, eine Quelle mit `Motion.support_tree`; ohne Programm
-  vorsichtig wie Bäume). Wo die Art der ganzen Platte gilt (Cura), sagt die
-  Decke ausdrücklich Gitter, auch über „automatisch“, sonst gewänne der Baum
-  eines anderen Körpers. Setzen daneben kleine Stücke auf dem Modell auf
+  vorsichtig wie Bäume; Curas Antwort gilt auch ohne Programm). Wo die Art der
+  ganzen Platte gilt (Cura), sagt die Decke ausdrücklich Gitter, auch über
+  „automatisch“, sonst gewänne der Baum eines anderen Körpers; was Cura danach
+  gleich druckt (`_cura_prints_alike`), zeigt der Dialog nicht. Setzen daneben kleine Stücke auf dem Modell auf
   (`ModelSupport.details_on_model`, nicht die Decke selbst) oder beginnen viele
   Inseln, **Hybrid** (`tree_hybrid`), wo das Programm es kennt; PrusaSlicer,
   SuperSlicer und Cura ersetzen es durch Gitter (`NOT_OFFERED_BY_PROGRAM`), der
@@ -68,8 +69,9 @@ offenem Drucker. Übernommen wird auf Klick, nie von allein.
   (`combine` ohne `separate`, `handover.style_per_part`), ohne Hybrid beim
   Programm Gitter (`combine(trees=)`). Geht die Art je Teil, nennt die Zeile die
   Teile mit ihrem Wert und die mit eigenem anderem Wert (`_TargetedAdvice.others`,
-  Feldhinweis ebenso); bei Cura nennt ein Wechsel der Art keine Teile, nur an
-  oder aus. Ein gewählter Baum über einem Hybridprozess geht als `default`
+  je Wert einmal; Feldhinweis ebenso, vor dem Rest); bei Cura nennen Zeile und
+  Feld bei einem Wechsel der Art keine Teile, nur bei an oder aus, und ein
+  eingeschaltetes Teil zählt mit der Art der Platte. Ein gewählter Baum über einem Hybridprozess geht als `default`
   hinaus (`tree_over_hybrid`).
 - **Zwei Wände für hohe Bäume** (`support.tree_walls`): ab `TALL_TREE_HEIGHT`
   Säulenhöhe (`ModelSupport.tallest_column`: bis zum Boden des Körpers oder zur

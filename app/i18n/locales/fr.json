@@ -5705,7 +5705,7 @@
   "Nur exportieren und selbst slicen": "Exporter seulement et trancher soi-même",
   "Nur für den Weg aus Text. Wer ein Foto oder eine Zeichnung mitbringt, braucht es nie — und rund {size} GB für einen Weg, den ein vorhandenes Bild umgeht, lädt Solidon niemandem ungefragt herunter. Deshalb ist es in der Einrichtung ein eigenes Häkchen; fehlt es beim Erzeugen, führt der Knopf *Bildmodell einrichten …* direkt dorthin.": "Uniquement pour la voie à partir d'un texte. Qui apporte une photo ou un dessin n'en a jamais besoin — et Solidon ne télécharge pour personne sans demander environ {size} Go pour une voie qu'une image existante évite. C'est pourquoi il a sa propre case à cocher dans la configuration ; s'il manque au moment de générer, le bouton *Configurer le modèle d'image …* y mène directement.",
   "Nur für dieses Teil: {reason}": "Pour cette pièce uniquement : {reason}",
-  "Nur für {parts}. Die übrigen Teile drucken mit {value}.": "Uniquement pour {parts}. Les autres pièces s'impriment avec {value}.",
+  "Die übrigen Teile drucken mit {value}.": "Les autres pièces s'impriment avec {value}.",
   "Nur nötig, wenn Sie eine Antwort möchten": "Nécessaire seulement si vous souhaitez une réponse",
   "Nur vom Bett": "Depuis le plateau uniquement",
   "Nur was diese Spule anders braucht. Ausgeschaltete Bereiche benutzen die Projektwerte.": "Uniquement ce dont cette bobine a besoin différemment. Les sections désactivées utilisent les valeurs du projet.",

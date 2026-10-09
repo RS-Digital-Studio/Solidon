@@ -1352,7 +1352,7 @@ def part_advice(
     processes = handover.slot_processes(entry, settings, profile, setup, slot_profiles)
     program = slicer_keys.program_of(setup.executable) if setup is not None else ""
     # Welche Arten das Programm als Bäume druckt (RM-584), wie im Druckdialog.
-    trees = handover.tree_styles(setup, profile, program)
+    trees = handover.tree_styles(setup, profile, program, flavour=flavour)
     inputs = (
         settings,
         processes,

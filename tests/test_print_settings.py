@@ -8280,17 +8280,22 @@ def _advice_of(bodies: tuple[Any, ...], settings: Any, profile: Any, flavour: An
     [
         ("orca", frozenset({"auto", "tree", "hybrid"}), "none", "tree"),
         ("cura", frozenset({"tree"}), "none", "grid"),
-        ("cura", frozenset({"tree"}), "auto", "grid"),
+        # Curas „automatisch“ druckt ``normal`` wie Gitter: keine Zeile, die
+        # nichts ändert, und kein Baum für die Figur (N1).
+        ("cura", frozenset({"tree"}), "auto", None),
         ("cura", frozenset({"tree"}), "tree", "grid"),
+        # Ohne gefundenes Cura antwortet die Familie dasselbe (``tree_styles``).
+        ("cura", None, "none", "grid"),
+        ("cura", None, "tree", "grid"),
     ],
 )
 def test_grid_and_tree_become_hybrid_only_where_the_style_is_the_plates(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     flavour: str,
-    trees: frozenset[str],
+    trees: frozenset[str] | None,
     start: str,
-    shown: str,
+    shown: str | None,
 ) -> None:
     """Ein Pilz unter Gitter und eine Figur unter Bäumen auf einer Platte (Review
     RM-584, M3): Die Orca-Familie bekommt die Stützart je Teil, also Gitter und
@@ -8298,14 +8303,17 @@ def test_grid_and_tree_become_hybrid_only_where_the_style_is_the_plates(
     keiner Datei ankam. Dort nennt die Zeile den Baum mit der Figur und den Pilz
     mit seinem Gitter (Nachprüfung N2). Bei Cura gilt die Art der Platte, und
     das Programm kennt kein Hybrid: Gitter trägt den Hut, der Export sagt, dass
-    die Figur ihren Baum nicht bekommt (N1), und ein Wechsel der Art nennt keine
-    Teile (N3). So, wie Cura gefunden antwortet (``tree_styles``)."""
+    die Figur ihren Baum nicht bekommt (N1), und ein Wechsel der Art nennt
+    weder in der Zeile noch am Feld Teile (N3). So, wie Cura gefunden antwortet
+    (``tree_styles``), und ohne Programm ebenso."""
     from app.core.export.writer import write_assembly
     from app.core.geom.transform import apply, translation
     from app.core.types import SceneObject
+    from app.ui.print_settings_dialog import _AdviceWorker
     from tests.helpers import brick, chin_over_chest, on_bed
 
-    monkeypatch.setattr(handover, "tree_styles", lambda *_args, **_kwargs: trees)
+    if trees is not None:
+        monkeypatch.setattr(handover, "tree_styles", lambda *_args, **_kwargs: trees)
     profile = profiles.make_profile("centauri-carbon-2", "petg")
     settings = print_settings.resolve(profile)
     if start != "none":
@@ -8322,6 +8330,9 @@ def test_grid_and_tree_become_hybrid_only_where_the_style_is_the_plates(
     entries = _advice_of(bodies, settings, profile, flavour)
 
     style = [entry for entry in entries if entry.path == "support.style"]
+    if shown is None:
+        assert style == []
+        return
     assert [entry.value for entry in style] == [shown]
     assert getattr(style[0], "parts", ()) == (("Figur",) if flavour == "orca" else ())
     assert getattr(style[0], "others", ()) == ((("Pilz", "grid"),) if flavour == "orca" else ())
@@ -8331,6 +8342,14 @@ def test_grid_and_tree_become_hybrid_only_where_the_style_is_the_plates(
     accepted = print_settings.with_accepted(settings, "support.style", shown)
     if flavour == "cura":
         assert handover.values_for(accepted, profile, "cura")["support_structure"] == "normal"
+        # Am Feld: Stützen an schalten beide Netze ein, beide mit Gitter; ein
+        # Wechsel der Art gilt der Platte und nennt keine Teile (N3).
+        worker = _AdviceWorker(bodies, accepted, profile, None, {}, (), (), {}, flavour="cura")
+        worker.work()
+        assert worker.accepted_parts.get("support.style") == (
+            None if start == "tree" else ("Pilz", "Figur")
+        )
+        assert not worker.accepted_others.get("support.style")
         _written, findings = write_assembly(
             list(bodies),
             tmp_path,
@@ -8350,8 +8369,6 @@ def test_grid_and_tree_become_hybrid_only_where_the_style_is_the_plates(
         # nicht bekommt.
         assert missing == ([] if start == "tree" else [("obj_figur", "tree")])
         return
-    from app.ui.print_settings_dialog import _AdviceWorker
-
     worker = _AdviceWorker(bodies, accepted, profile, None, {}, (), (), {}, flavour="orca")
     worker.work()
     assert worker.accepted_parts.get("support.style") == ("Figur",)
@@ -8560,6 +8577,93 @@ def test_a_row_names_the_parts_that_get_their_own_value_with_it() -> None:
 
     assert PrintSettingsDialog._advice_title(host, entry) == "Stützen · Figur, Pilz mit Gitter"
     assert PrintSettingsDialog._advice_parts(entry) == "Gilt für: Figur\nPilz bekommt Gitter."
+
+    # Viele Teile mit demselben eigenen Wert stehen einmal mit ihm da, gekürzt
+    # wie die übrigen Teilnamen; der Tooltip nennt jedes.
+    many = replace(
+        entry,
+        others=(
+            ("Pilz", "grid"),
+            ("Hut", "grid"),
+            ("Dach", "auto"),
+            ("Schirm", "grid"),
+            ("Tor", "grid"),
+        ),
+    )
+    assert (
+        PrintSettingsDialog._advice_title(host, many)
+        == "Stützen · Figur, Pilz, Hut und 2 weitere mit Gitter, Dach mit Automatisch"
+    )
+    assert PrintSettingsDialog._advice_parts(many).splitlines()[1:] == [
+        "Pilz bekommt Gitter.",
+        "Hut bekommt Gitter.",
+        "Dach bekommt Automatisch.",
+        "Schirm bekommt Gitter.",
+        "Tor bekommt Gitter.",
+    ]
+
+
+class _Note:
+    """Ein Feldhinweis ohne Fenster: merkt Text und Sichtbarkeit."""
+
+    def __init__(self) -> None:
+        self.text = ""
+        self.visible = False
+
+    def setText(self, text: str) -> None:  # noqa: N802 - Qt-Name
+        self.text = text
+
+    def setToolTip(self, _text: str) -> None:  # noqa: N802 - Qt-Name
+        pass
+
+    def setAccessibleDescription(self, _text: str) -> None:  # noqa: N802 - Qt-Name
+        pass
+
+    def show(self) -> None:
+        self.visible = True
+
+    def hide(self) -> None:
+        self.visible = False
+
+
+@pytest.mark.parametrize(
+    ("bodies", "expected"),
+    [
+        (2, "Nur für Figur. Pilz bekommt Gitter."),
+        (
+            3,
+            "Nur für Figur. Pilz bekommt Gitter. "
+            "Die übrigen Teile drucken mit Aus aus dem Herstellerprofil.",
+        ),
+    ],
+)
+def test_the_field_names_the_parts_that_print_their_own_value_with_it(
+    bodies: int, expected: str
+) -> None:
+    """Nach „Aus → Baum · Figur, Pilz mit Gitter“ sagte das Feld „Nur für Figur.
+    Die übrigen Teile drucken mit Aus“ — der Pilz druckte mit Gitter
+    (Nachprüfung RM-584, N2). Das Feld nennt ihn mit seinem Wert, vor dem Rest,
+    und schweigt vom Rest, wo es keinen gibt."""
+    from app.ui.print_settings_dialog import PrintSettingsDialog
+
+    names = {"grid": "Gitter", "tree": "Baum", "none": "Aus", "auto": "Automatisch"}
+    base = print_settings.with_path(
+        print_settings.resolve(profiles.make_profile()), "support.style", "none"
+    )
+    note = _Note()
+    host = SimpleNamespace(
+        _part_notes={"support.style": note},
+        _accepted_parts={"support.style": ("Figur",)},
+        _accepted_others={"support.style": (("Pilz", "grid"),)},
+        settings=print_settings.with_accepted(base, "support.style", "tree"),
+        _plate_bodies=lambda: ["Figur", "Pilz", "Würfel"][:bodies],
+        _shown=lambda _path, value: names[str(value)],
+    )
+
+    PrintSettingsDialog._mark_parts(host, base, "dem Herstellerprofil")  # type: ignore[arg-type]
+
+    assert note.visible
+    assert note.text == expected
 
 
 @pytest.mark.parametrize(
@@ -10144,6 +10248,11 @@ def test_the_tree_styles_say_what_each_program_prints_as_trees(
 
     assert handover.tree_styles(setup, profiles.make_profile()) == trees
     assert handover.tree_styles(None, profiles.make_profile()) is None
+    # Curas Antwort hängt an keinem Bestand: Ohne gefundenes Programm sagt die
+    # Familie dasselbe, sonst bekam die Platte dort Hybrid (Nachprüfung RM-584, N1).
+    assert handover.tree_styles(None, profiles.make_profile(), flavour=flavour) == (  # type: ignore[arg-type]
+        trees if flavour == "cura" else None
+    )
 
 
 def test_a_chosen_tree_prints_as_a_tree_over_a_hybrid_process() -> None:

@@ -3391,10 +3391,19 @@ def organic_styles(
 
 
 def tree_styles(
-    setup: SlicerSetup | None, profile: Profile | None = None, program: str = ""
+    setup: SlicerSetup | None,
+    profile: Profile | None = None,
+    program: str = "",
+    *,
+    flavour: SlicerFlavour | None = None,
 ) -> frozenset[str] | None:
     """Welche Stützarten Solidons dieses Programm als Bäume druckt (RM-584) —
     organisch, schlank, kräftig oder als Hybrid; ``None`` ohne Programm.
+
+    Curas Antwort hängt an keinem Bestand — ``support_structure`` kennt nur
+    ``tree`` und ``normal`` —, sie gilt deshalb auch ohne gefundenes Programm,
+    wenn die Datei für Cura geschrieben wird (``flavour``). Sonst schlug der Rat
+    dort Hybrid vor (Nachprüfung RM-584, N1).
 
     Der Rat fragt hier, ob „automatisch“ Bäume heißt — nur dann hängt eine
     große flache Decke darunter zwischen Baumspitzen durch, und Gitter oder
@@ -3407,14 +3416,15 @@ def tree_styles(
     sich der Prozess der Orca-Familie nicht lesen, zählt „automatisch“ als
     Baum: Ohne Auskunft bleibt der Rat vorsichtig, wie ohne Programm.
     """
-    if setup is None or setup.flavour not in ("orca", "prusa", "cura"):
+    if (setup.flavour if setup is not None else flavour) == "cura":
+        return frozenset({"tree"})
+    if setup is None or setup.flavour not in ("orca", "prusa"):
         return None
     program = program or slicer_keys.program_of(setup.executable)
     styles = {
         style
         for style in ("tree", "hybrid")
         if slicer_keys.substitute("support.style", style, program) is None
-        and (setup.flavour != "cura" or style == "tree")
     }
     if setup.flavour == "orca":
         native = _native_process(setup)

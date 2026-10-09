@@ -27335,8 +27335,10 @@ Cura, wo die Art der ganzen Platte gilt, ausdrücklich —, und Hybrid (`tree_hy
 das Programm es kennt und daneben kleine Stücke auf dem Modell aufsetzen
 (`details_on_model`) oder viele Inseln beginnen; PrusaSlicer und Cura bekommen Gitter.
 Gitter und Baum zweier Körper ergeben Hybrid nur, wo die Art der Platte gilt
-(`style_per_part`), ohne Hybrid Gitter; bei Orca und Prusa nennt die Zeile die Teile mit
-eigenem Wert. Neues Feld *Wände der Bäume* (`support.tree_walls`, Orca
+(`style_per_part`), ohne Hybrid Gitter; bei Orca und Prusa nennen Zeile und Feld die Teile
+mit eigenem Wert. Bei Cura gewinnt die flache Decke gegen den Baum eines anderen Körpers,
+ein Wechsel der Art nennt keine Teile, und was Cura gleich druckt („automatisch“ und
+Gitter), schlägt der Dialog nicht vor. Neues Feld *Wände der Bäume* (`support.tree_walls`, Orca
 `tree_support_wall_count`, Creality `tree_support_wall_count_tree`, Cura
 `support_wall_count`; PrusaSlicer nimmt es nicht); ab 100 mm Säulenhöhe vom Boden des
 Körpers (`ModelSupport.tallest_column`) zwei, gefragt mit `printed_style` gegen
@@ -27352,7 +27354,12 @@ Turm: Hybrid mit zwei Wänden 14 % mehr Stützmaterial, organisch derselbe G-Cod
 `test_print_settings.py` (Übergabe je Familie, Filter unter Bäumen, Feldhinweis),
 `test_manufacturer.py`, `test_print_time.py`; Slicertests in `test_real_slicers.py`
 (Wandzahl je Orca-Programm, Hybrid je Objekt, Abstand unter hohlen Bäumen). Messskript
-`output/drache-2026-10-08/stil-rm584/stil_je_decke.py`. Offen im Register: der Fuß hoher Bäume.
+`.claude/.state/drache-2026-10-08/stil_je_decke.py`. Pilz und Figur auf einer Platte
+(Nachprüfung N1, N2; `slicer_stil.py`, `hut_bander.py` daneben): Cura bekommt
+`support_structure=normal` statt `tree` und trägt den Hut auf senkrechten Säulen gleicher
+Dichte statt auf Ästen; ElegooSlicer gibt dem Pilz `normal(auto)` und der Figur
+`tree(auto)`, wie die Zeile „Stützen · Figur, Pilz mit Gitter“ sagt.
+Offen im Register: der Fuß hoher Bäume.
 Changelog: ja.
 
 ## RM-027 entfällt mit dem privaten Index (09.09.2026)

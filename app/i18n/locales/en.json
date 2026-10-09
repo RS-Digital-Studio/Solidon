@@ -5705,7 +5705,7 @@
   "Nur exportieren und selbst slicen": "Export only and slice it yourself",
   "Nur für den Weg aus Text. Wer ein Foto oder eine Zeichnung mitbringt, braucht es nie — und rund {size} GB für einen Weg, den ein vorhandenes Bild umgeht, lädt Solidon niemandem ungefragt herunter. Deshalb ist es in der Einrichtung ein eigenes Häkchen; fehlt es beim Erzeugen, führt der Knopf *Bildmodell einrichten …* direkt dorthin.": "Only for the route from text. Anyone who brings a photo or a drawing never needs it — and Solidon does not download about {size} GB unasked for a route that an existing image avoids. That is why it is a checkbox of its own in the setup; if it is missing when generating, the *Set up image model …* button leads straight there.",
   "Nur für dieses Teil: {reason}": "Only for this part: {reason}",
-  "Nur für {parts}. Die übrigen Teile drucken mit {value}.": "Only for {parts}. The other parts print with {value}.",
+  "Die übrigen Teile drucken mit {value}.": "The other parts print with {value}.",
   "Nur nötig, wenn Sie eine Antwort möchten": "Only needed if you would like an answer",
   "Nur vom Bett": "From the bed only",
   "Nur was diese Spule anders braucht. Ausgeschaltete Bereiche benutzen die Projektwerte.": "Only what this spool needs differently. Disabled sections use the project values.",
