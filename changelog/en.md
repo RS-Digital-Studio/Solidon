@@ -48,6 +48,7 @@ it into `website/version.json`.
 - A different filament shows at once, on parts and STEP bodies too, and Solidon recomputes nothing for it. Selected bodies show their filament colour beneath the highlight.
 - In the *Selection* tab, the filament field assigns only on a click or Enter. Arrow keys and typing just browse, and the mouse wheel scrolls the tab.
 - In the translated versions, *New filament* no longer scrolls sideways when the window is shorter than its content.
+- Updates stay visible even when the key that signs new versions changes.
 
 ### Printing and slicer handover
 

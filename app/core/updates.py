@@ -116,7 +116,17 @@ _DEFAULT_OPEN_UPDATE = _open_update
 #: Wo die Versionsdatei liegt. Eine Adresse, ein JSON-Objekt.
 VERSION_URL: Final = "https://solidon3d.de/version.json"
 
-#: Der öffentliche Schlüssel, gegen den die Versionsdatei geprüft wird (§37.2).
+#: Die öffentlichen Schlüssel, gegen die die Versionsdatei geprüft wird (§37.2).
+#: Sie trägt, wenn **einer** davon ihre Unterschrift bestätigt.
+#:
+#: **Eine Liste, weil ein Schlüssel wechseln können muss, bevor er es muss.**
+#: Eine Installation kennt nur die Schlüssel, mit denen sie ausgeliefert wurde.
+#: Unterschriebe die Website mit einem neuen, den sie nicht kennt, verwürfe sie
+#: jede Versionsdatei still und erführe nie wieder von einem Update. Deshalb
+#: kommt ein neuer Schlüssel zuerst **hierher**, reist mit einer Version hinaus,
+#: während der alte noch unterschreibt, und unterschreibt erst danach. Der
+#: Ablauf Schritt für Schritt steht in ``tools/sign_version.py``. Reihenfolge:
+#: der älteste zuerst, ein neuer kommt ans Ende.
 #:
 #: **Warum ein eigenes Paar und nicht das aus §8.** Der Lizenzschlüssel und die
 #: Versionsdatei haben verschiedene Aufgaben und verschiedene Lebensdauern. Ein
@@ -129,8 +139,9 @@ VERSION_URL: Final = "https://solidon3d.de/version.json"
 #: Prüfsumme nicht — sie steht in derselben Datei wie die Adresse, und er
 #: tauscht beide zusammen aus. Gegen ihn hilft nur eine Unterschrift, die er
 #: dort nicht erzeugen kann.
-RELEASE_PUBLIC_KEY: Final = bytes.fromhex(
-    "603ec2d86e9f1b5232ccec58153b863f00c1f91cbc647a8696ecf6dfd4bbee79"
+RELEASE_PUBLIC_KEYS: Final[tuple[bytes, ...]] = (
+    # Seit 0.1.4 der einzige.
+    bytes.fromhex("603ec2d86e9f1b5232ccec58153b863f00c1f91cbc647a8696ecf6dfd4bbee79"),
 )
 
 #: Wie das Feld heißt, in dem die Unterschrift steht.
@@ -624,20 +635,38 @@ def signed_payload(data: Mapping[str, Any]) -> bytes:
     return json.dumps(rest, sort_keys=True, separators=(",", ":")).encode("utf-8")
 
 
-def signature_ok(data: Mapping[str, Any]) -> bool:
-    """Ob die Versionsdatei von uns kommt.
+def accepted_key(payload: bytes, signature: bytes) -> bytes | None:
+    """Der zulässige Schlüssel, dessen Unterschrift über ``payload`` trägt.
+
+    ``None``, wenn es keiner ist. Jeder Ort, der eine Release-Unterschrift
+    prüft, geht hier durch — ein zweiter, der nur einen Schlüssel kennte,
+    verwürfe nach einem Wechsel, was dieser annimmt.
+    """
+    for key in RELEASE_PUBLIC_KEYS:
+        if ed25519.verify(key, payload, signature):
+            return key
+    return None
+
+
+def signing_key(data: Mapping[str, Any]) -> bytes | None:
+    """Mit welchem zulässigen Schlüssel die Versionsdatei unterschrieben ist.
 
     Ein fehlendes Feld ist kein Sonderfall, sondern derselbe Fall wie eine
     falsche Unterschrift: Sonst genügte es, sie wegzulassen.
     """
     raw = data.get(SIGNATURE_FIELD)
     if not isinstance(raw, str):
-        return False
+        return None
     try:
         signature = bytes.fromhex(raw)
     except ValueError:
-        return False
-    return ed25519.verify(RELEASE_PUBLIC_KEY, signed_payload(data), signature)
+        return None
+    return accepted_key(signed_payload(data), signature)
+
+
+def signature_ok(data: Mapping[str, Any]) -> bool:
+    """Ob die Versionsdatei von uns kommt."""
+    return signing_key(data) is not None
 
 
 def _user_agent() -> str:
@@ -1408,11 +1437,7 @@ def _package_authorized(package: Package) -> bool:
     """Prüft die signierte Paketangabe unmittelbar vor dem Start erneut."""
     if not package.signed_release or not package.release_signature or not package.release_key:
         return False
-    if not ed25519.verify(
-        RELEASE_PUBLIC_KEY,
-        package.signed_release,
-        package.release_signature,
-    ):
+    if accepted_key(package.signed_release, package.release_signature) is None:
         return False
     try:
         release = load_json(package.signed_release, max_bytes=MAX_ANSWER_BYTES)

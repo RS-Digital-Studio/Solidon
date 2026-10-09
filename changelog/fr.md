@@ -49,6 +49,7 @@ dans `website/version.json`.
 - Un autre filament s'affiche aussitôt, aussi sur les blocs et les corps STEP, et Solidon ne recalcule rien pour cela. Les corps sélectionnés montrent leur couleur de filament sous la surbrillance.
 - Dans l'onglet *Sélection*, le champ du filament n'attribue qu'au clic ou avec Entrée. Les flèches et la saisie ne font que parcourir la liste, et la molette fait défiler l'onglet.
 - Dans les versions traduites, *Nouveau filament* ne défile plus de côté quand la fenêtre est moins haute que son contenu.
+- Les mises à jour restent visibles même si la clé qui signe les nouvelles versions change.
 
 ### Imprimer et transmettre au slicer
 

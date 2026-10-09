@@ -1305,7 +1305,7 @@ def refuse_unsigned_version(files: list[Path]) -> None:
     raise SystemExit(
         "version.json trägt keine gültige Unterschrift und wird deshalb nicht "
         "hochgeladen.\n"
-        "  Jede Installation prüft sie gegen updates.RELEASE_PUBLIC_KEY und "
+        "  Jede Installation prüft sie gegen updates.RELEASE_PUBLIC_KEYS und "
         "verwirft sie ohne — das Update erreicht dann niemanden.\n"
         "  Zu tun: python tools/sign_version.py --private <datei>"
     )

@@ -48,6 +48,7 @@ scrive in `website/version.json`.
 - Un altro filamento si vede subito, anche su blocchi e corpi STEP, e Solidon non ricalcola nulla per questo. I corpi selezionati mostrano il colore del filamento sotto l'evidenziazione.
 - Nella linguetta *Selezione*, il campo del filamento assegna solo con un clic o Invio. Le frecce e la digitazione scorrono soltanto l'elenco, e la rotellina scorre la linguetta.
 - Nelle versioni tradotte, *Nuovo filamento* non scorre più di lato quando la finestra è più bassa del suo contenuto.
+- Gli aggiornamenti restano visibili anche se cambia la chiave con cui sono firmate le nuove versioni.
 
 ### Stampare e passare allo slicer
 

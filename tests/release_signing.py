@@ -5,7 +5,7 @@ kommt — und der private Schlüssel dafür liegt im Passwortmanager, nicht im
 Repository. Ein Test kann also keine echte Unterschrift erzeugen.
 
 Deshalb ein **eigenes Paar für die Suite**: Die Fixture setzt den öffentlichen
-Teil an die Stelle von :data:`app.core.updates.RELEASE_PUBLIC_KEY`, und
+Teil als einzigen zulässigen in :data:`app.core.updates.RELEASE_PUBLIC_KEYS`, und
 :func:`signed` unterschreibt eine Antwort mit dem passenden privaten Teil.
 Damit prüfen die Tests denselben Weg, den die Anwendung geht — nur mit einem
 Schlüssel, den sie kennen dürfen.
@@ -31,13 +31,13 @@ from tools.make_licence_keys import public_key, sign
 #: gegen einen anderen.
 TEST_SEED = bytes.fromhex("4a1d9e6c05b83f27ea94c1d0728b6f35a9c47e18d260b3fa815c9d4e70362bc1")
 
-#: Der **echte** öffentliche Schlüssel, festgehalten beim Import.
+#: Die **echten** öffentlichen Schlüssel, festgehalten beim Import.
 #:
-#: Beim Import und nicht später: Danach hat die Fixture ihn ersetzt, und wer
-#: ihn dann läse, bekäme den der Suite. Gebraucht wird er von genau einem Test
-#: — dem, der die ausgelieferte ``version.json`` prüft und dafür den Schlüssel
-#: braucht, gegen den die Kunden prüfen.
-REAL_PUBLIC_KEY = updates.RELEASE_PUBLIC_KEY
+#: Beim Import und nicht später: Danach hat die Fixture sie ersetzt, und wer
+#: sie dann läse, bekäme den der Suite. Gebraucht werden sie von den Tests,
+#: die die ausgelieferte ``version.json`` und die Liste selbst prüfen und dafür
+#: die Schlüssel brauchen, gegen die die Kunden prüfen.
+REAL_PUBLIC_KEYS = updates.RELEASE_PUBLIC_KEYS
 
 
 def signed(payload: dict[str, Any]) -> dict[str, Any]:
@@ -55,5 +55,5 @@ def accept_test_signatures(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     fehlenden Unterschrift — genau die Verwechslung, die diese Umstellung
     einmal gekostet hat.
     """
-    monkeypatch.setattr(updates, "RELEASE_PUBLIC_KEY", public_key(TEST_SEED))
+    monkeypatch.setattr(updates, "RELEASE_PUBLIC_KEYS", (public_key(TEST_SEED),))
     yield

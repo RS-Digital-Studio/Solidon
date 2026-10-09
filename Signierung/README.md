@@ -339,6 +339,34 @@ und Flathub würde ohnehin selbst signieren.
 
 ---
 
+## Versionsdatei — der Release-Schlüssel und sein Wechsel
+
+Die Versionsdatei unterschreibt ein eigener Ed25519-Schlüssel, unabhängig von
+Certum und Apple. Der private Teil liegt im Passwortmanager und auf Papier,
+nie im Repository und nie auf dem Server. Jede Installation prüft gegen die
+öffentlichen Schlüssel ihrer eigenen Version, `RELEASE_PUBLIC_KEYS` in
+`app/core/updates.py`, und verwirft still, was keiner davon bestätigt.
+
+Daraus folgt die Reihenfolge eines Wechsels (Werkzeug und Einzelheiten:
+`tools/sign_version.py`):
+
+1. `tools/sign_version.py --new-keypair`; den öffentlichen Teil **ans Ende**
+   von `RELEASE_PUBLIC_KEYS` setzen, der alte bleibt stehen.
+2. Diese Version veröffentlichen und ihre Versionsdatei noch mit dem **alten**
+   Schlüssel unterschreiben. So sieht jede ältere Installation das Update und
+   bekommt mit ihm den neuen Schlüssel.
+3. Erst wenn die Installationen dort angekommen sind (Statistik von
+   `count.php`), mit dem neuen unterschreiben: `--private <neu> --after-switch`.
+   Ohne den Schalter lehnt das Werkzeug jeden außer dem ältesten Schlüssel ab.
+4. In der nächsten Version den alten öffentlichen Schlüssel entfernen und den
+   alten privaten vernichten. Ist der alte verraten, folgen 3 und 4 ohne
+   Wartezeit.
+
+Eine Installation, die älter ist als Schritt 2, sieht nach Schritt 3 kein
+Update mehr und braucht den Download von der Website.
+
+---
+
 ## Wer baut wo
 
 Die CI baut weiter alle drei Plattformen, an dem Ablauf ändert sich nichts.

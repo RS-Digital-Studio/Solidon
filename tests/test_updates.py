@@ -27,7 +27,9 @@ from app.branding import APP_VERSION
 from app.core import updates
 from app.core.changes import Group
 from app.core.errors import ExternalToolError, FileWriteError, OperationCancelled
-from tests.release_signing import REAL_PUBLIC_KEY, accept_test_signatures, signed
+from tests.release_signing import REAL_PUBLIC_KEYS, accept_test_signatures, signed
+from tools import sign_version
+from tools.make_licence_keys import public_key, sign
 
 __all__ = ["accept_test_signatures"]  # die Fixture wirkt durch den Import, nicht durch Aufruf
 
@@ -1287,19 +1289,211 @@ def test_the_published_version_file_is_signed() -> None:
     Der Schaden wäre lautlos: Die Datei liegt richtig da, und trotzdem erfährt
     keine Installation je von dieser Fassung.
 
-    Kein ``monkeypatch``, keine Fixture — hier zählt der echte
-    ``RELEASE_PUBLIC_KEY``. Die autouse-Fixture wird dafür ausdrücklich
+    Kein ``monkeypatch``, keine Fixture — hier zählen die echten
+    ``RELEASE_PUBLIC_KEYS``. Die autouse-Fixture wird dafür ausdrücklich
     zurückgedreht.
     """
     file = Path(__file__).resolve().parent.parent / "website" / "version.json"
     data = json.loads(file.read_text(encoding="utf-8"))
     assert data, "version.json is empty — nothing was checked"
 
-    with mock.patch.object(updates, "RELEASE_PUBLIC_KEY", REAL_PUBLIC_KEY):
+    with mock.patch.object(updates, "RELEASE_PUBLIC_KEYS", REAL_PUBLIC_KEYS):
         assert updates.signature_ok(data), (
             "website/version.json carries no valid signature — sign it before "
             "uploading: python tools/sign_version.py --private <file>"
         )
+
+
+# --- Schlüsselwechsel: alter und neuer Schlüssel zugleich (§37.2, RM-528) ---------
+
+
+def _test_seed(name: str) -> bytes:
+    """Ein privater Testschlüssel, im Test erzeugt und reproduzierbar."""
+    return hashlib.sha256(f"solidon-release-testschluessel-{name}".encode()).digest()
+
+
+OLD_SEED = _test_seed("alt")
+NEW_SEED = _test_seed("neu")
+FOREIGN_SEED = _test_seed("fremd")
+
+
+def _signed_with(seed: bytes, payload: dict[str, Any]) -> dict[str, Any]:
+    body = {key: value for key, value in payload.items() if key != updates.SIGNATURE_FIELD}
+    return {**body, updates.SIGNATURE_FIELD: sign(seed, updates.signed_payload(body)).hex()}
+
+
+def _release(version: str = "9.0.0") -> dict[str, Any]:
+    return {
+        "version": version,
+        "url": "https://solidon3d.de/",
+        "packages": {
+            updates.PLATFORM_WINDOWS: {
+                "file": "Solidon3D-Setup-9.0.0.exe",
+                "url": "https://solidon3d.de/dl/Solidon3D-Setup-9.0.0.exe",
+                "size": 1,
+                "sha256": "ab" * 32,
+            }
+        },
+    }
+
+
+def _package(release: dict[str, Any]) -> updates.Package:
+    return updates._packages(release["packages"], origin=updates.VERSION_URL, release=release)[
+        updates.PLATFORM_WINDOWS
+    ]
+
+
+@pytest.fixture
+def switching_keys(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Die Installation mitten im Wechsel: alter und neuer Schlüssel, der alte zuerst."""
+    monkeypatch.setattr(
+        updates, "RELEASE_PUBLIC_KEYS", (public_key(OLD_SEED), public_key(NEW_SEED))
+    )
+
+
+@pytest.mark.usefixtures("switching_keys")
+@pytest.mark.parametrize("seed", [OLD_SEED, NEW_SEED], ids=["alt", "neu"])
+def test_during_a_key_switch_old_and_new_key_both_sign(seed: bytes) -> None:
+    """Beide zulässigen Schlüssel tragen — bei der Abfrage und vor dem Start.
+
+    Der Start prüft die gespeicherte Paketangabe ein zweites Mal
+    (``_package_authorized``). Hinge er noch an einem einzelnen Schlüssel,
+    sähe die Installation das Update nach dem Wechsel und verweigerte dann
+    den Start.
+    """
+    data = _signed_with(seed, _release())
+
+    assert updates.signing_key(data) == public_key(seed)
+    found = updates.check(fetch=raw_answering(data))
+    assert found is not None and found.version == "9.0.0"
+    assert updates._package_authorized(_package(data))
+
+
+@pytest.mark.usefixtures("switching_keys")
+def test_during_a_key_switch_a_foreign_key_does_not_sign() -> None:
+    data = _signed_with(FOREIGN_SEED, _release())
+
+    assert updates.signing_key(data) is None
+    assert updates.check(fetch=raw_answering(data)) is None
+    assert not updates._package_authorized(_package(data))
+
+
+@pytest.mark.usefixtures("switching_keys")
+@pytest.mark.parametrize("seed", [OLD_SEED, NEW_SEED], ids=["alt", "neu"])
+@pytest.mark.parametrize("damage", ["bit", "gekuerzt", "inhalt"])
+def test_during_a_key_switch_a_damaged_signature_is_refused(seed: bytes, damage: str) -> None:
+    """Ein zweiter zulässiger Schlüssel ist kein zweiter Versuch für eine kaputte Unterschrift."""
+    data = _signed_with(seed, _release())
+    if damage == "bit":
+        raw = bytearray.fromhex(data[updates.SIGNATURE_FIELD])
+        raw[17] ^= 0x01
+        data[updates.SIGNATURE_FIELD] = raw.hex()
+    elif damage == "gekuerzt":
+        data[updates.SIGNATURE_FIELD] = data[updates.SIGNATURE_FIELD][:-2]
+    else:
+        data["version"] = "9.0.1"
+
+    assert updates.signing_key(data) is None
+    assert updates.check(fetch=raw_answering(data)) is None
+    assert not updates._package_authorized(_package(data))
+
+
+def test_an_installation_without_the_new_key_ignores_what_it_signs(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Die Gegenprobe zum Wechsel: Darum kommt der neue Schlüssel zuerst in eine Version.
+
+    Eine Installation, die nur den alten kennt, verwirft still, was der neue
+    unterschreibt — genau das, was ein zu früher Wechsel bei jeder älteren
+    Installation anrichtete.
+    """
+    monkeypatch.setattr(updates, "RELEASE_PUBLIC_KEYS", (public_key(OLD_SEED),))
+
+    assert updates.check(fetch=raw_answering(_signed_with(OLD_SEED, _release()))) is not None
+    assert updates.check(fetch=raw_answering(_signed_with(NEW_SEED, _release()))) is None
+
+
+def test_the_shipped_release_keys_are_distinct_points_on_the_curve() -> None:
+    """Ein Tippfehler beim Eintragen eines neuen Schlüssels fiele sonst erst beim Wechsel auf.
+
+    Dann verwürfe jede Installation dieser Version, was der neue Schlüssel
+    unterschreibt — und gemerkt würde es erst, wenn niemand mehr Updates sieht.
+    """
+    from app.core.activation import ed25519
+
+    assert REAL_PUBLIC_KEYS, "die Installation kennt keinen Release-Schlüssel"
+    assert len(set(REAL_PUBLIC_KEYS)) == len(REAL_PUBLIC_KEYS), "ein Schlüssel steht doppelt"
+    for key in REAL_PUBLIC_KEYS:
+        assert ed25519.decompress(key) is not None, f"{key.hex()} ist kein Ed25519-Schlüssel"
+
+
+def _version_file(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    file = tmp_path / "version.json"
+    file.write_text(json.dumps(_release()), encoding="utf-8")
+    monkeypatch.setattr(sign_version, "VERSION_FILE", file)
+    return file
+
+
+@pytest.mark.usefixtures("switching_keys")
+def test_the_signing_tool_signs_with_the_oldest_key_without_asking(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    file = _version_file(tmp_path, monkeypatch)
+
+    assert sign_version.sign_file(OLD_SEED) == 0
+
+    data = json.loads(file.read_text(encoding="utf-8"))
+    assert updates.signing_key(data) == public_key(OLD_SEED)
+    assert sign_version.check_file() == 0
+
+
+@pytest.mark.usefixtures("switching_keys")
+def test_the_signing_tool_takes_the_new_key_only_after_the_switch(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Schritt 2 vor Schritt 3: Der neue unterschreibt nicht versehentlich zu früh.
+
+    Unterschriebe er schon die Versionsdatei der Version, die ihn einführt,
+    erführe keine ältere Installation je von ihr — und bekäme ihn nie.
+    """
+    file = _version_file(tmp_path, monkeypatch)
+    before = file.read_text(encoding="utf-8")
+
+    with pytest.raises(SystemExit, match="--after-switch"):
+        sign_version.sign_file(NEW_SEED)
+    assert file.read_text(encoding="utf-8") == before, "die Datei wurde trotzdem beschrieben"
+
+    assert sign_version.sign_file(NEW_SEED, after_switch=True) == 0
+    data = json.loads(file.read_text(encoding="utf-8"))
+    assert updates.signing_key(data) == public_key(NEW_SEED)
+
+
+@pytest.mark.usefixtures("switching_keys")
+def test_the_signing_tool_refuses_a_key_no_installation_knows(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    file = _version_file(tmp_path, monkeypatch)
+    before = file.read_text(encoding="utf-8")
+
+    with pytest.raises(SystemExit, match="RELEASE_PUBLIC_KEYS"):
+        sign_version.sign_file(FOREIGN_SEED, after_switch=True)
+    assert file.read_text(encoding="utf-8") == before
+    assert sign_version.check_file() == 1
+
+
+def test_the_signing_tool_describes_the_key_switch_step_by_step() -> None:
+    """Der Ablauf steht am Werkzeug, das ihn ausführt — in seiner Reihenfolge."""
+    doc = " ".join((sign_version.__doc__ or "").split())
+    steps = [
+        "--new-keypair",
+        "ans Ende",
+        "mit dem **alten** Schlüssel unterschreiben",
+        "--after-switch",
+        "alten öffentlichen Schlüssel",
+    ]
+    positions = [doc.find(step) for step in steps]
+    assert -1 not in positions, dict(zip(steps, positions, strict=True))
+    assert positions == sorted(positions), "die Schritte stehen nicht in ihrer Reihenfolge"
 
 
 # --- Die Datei, die der Client wirklich liest ------------------------------------
