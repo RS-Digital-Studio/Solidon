@@ -105,6 +105,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-672 — Laden gleich nach dem Start dauert doppelt so lang, und unter Fremdlast hungert der Hilfsprozess das Laden aus](#rm-672) | Geometrie, Erkennung und Druckvorbereitung | Seit v0.5.1: sofortiges Öffnen 3,0 → 6–7 s; unter Fremdlast vor RM-380 gemessen 150 s statt 15 s, die Rechnung läuft weiter zurückgestellt |
 | [RM-673 — Eine Bohrung mit neuer Richtung: die Kerne schneiden verschieden, der exakte warnt falsch, und das Verdoppeln hat keinen Test](#rm-673) | Geometrie, Erkennung und Druckvorbereitung | Netz dreht starr und meldet `no_longer_through`, exakt bohrt durch und meldet `mouth_covered` |
 | [RM-675 — SVG-Zeichnungen: gerundete Rechtecke mischen ihre Ringe, die Verschachtelung weicht ab, ein roher Fehler, und die Lage ist gespiegelt](#rm-675) | Geometrie, Erkennung und Druckvorbereitung | Regression seit `71b7ba0a8`: `<rect rx>` bildet ungültige Ringe; dazu deckungsgleiche Ringe, roher `ValueError` und spiegelverkehrte Schrift |
+| [RM-684 — *Druckoptimal ausrichten* kippt ein Teil, das in keiner stehenden Lage passt, schräg ohne Auflage](#rm-684) | Geometrie, Erkennung und Druckvorbereitung | Regression gegenüber v0.3.5: zu großes Teil kippt schräg, Stützraum 5 552 → 421 532 mm³ statt Hinweis zum Teilen |
 | [RM-070 — SpaceMouse auf macOS und Linux am echten Gerät abnehmen](#rm-070) | Bedienung und Darstellung | Die Rampe ist stetig und getestet, die Bildrate an 815 104 Dreiecken gemessen (`7ff34c67`: 16,7 → 8,7 ms im Median); offen bleiben Linux, die 3DxWare-Mausemulation, das Gerät selbst und die Rampe im Skizzenmodus (aus RM-183) |
 | [RM-204 — Ein Merkmalklick baut alle Handlungen des Fensters neu](#rm-204) | Bedienung und Darstellung | Abnahme am echten Fenster beim Release (RM-213) |
 | [RM-547 — Nach „Reparieren und erneut versuchen“ heißt ein weiterrechnender Schritt „gelöscht“](#rm-547) | Bedienung und Darstellung | Entschieden (Claude, Produktabwägung): wie ein beim Umbau neu gefasster Schritt behandeln, in Verlauf und Steckbrief |
@@ -3482,6 +3483,32 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   Belege: `F:\solidon-review-reports\lib-update\befunde.md` (LIB-1, N-1, N-2, N-4), Sonden
   `lib-update\sonden\s9_ringmischung.py`, `s10_fixprobe.py`, `s11_xor.py`, Dateien
   `lib-update\svg\mini\`.
+
+<a id="rm-684"></a>
+
+- [ ] **RM-684 — *Druckoptimal ausrichten* kippt ein Teil, das in keiner stehenden Lage passt, schräg ohne Auflage.**
+  Versionsvergleich Kern 0.5.2 (03.10.2026, K-4). **Regression gegenüber v0.3.5**, seit v0.4.4.
+  `Modern++Cutlery+Organizer+with+Divider.3mf` (231 × 231 × 160 mm) auf „Allgemeiner FDM-Drucker
+  220 mm“, *Druckoptimal ausrichten* mit Vorgaben: v0.3.5 lässt die Lage (Stützraum 5 552 mm³,
+  `arrange.out_of_build_volume`); v0.4.4 bis `09d8e9485` kippen auf 212 × 206 × 242 mm, Stützraum
+  5 552 → 421 532 mm³ (Faktor 76), Befunde „Keine geprüfte Lage steht auf genug Fläche — dieses
+  Teil braucht einen Brim.“ und „Der Schwerpunkt liegt außerhalb der Auflage.“. Ursache: Die
+  Ausgangslage passt nicht in den Bauraum und fällt aus dem Feld; steht danach keine Lage, nimmt
+  `best_of` das ganze Feld und wählt die Lage mit dem kleinsten Stützraum, auch ohne Auflage. Am
+  Stand origin/main und auf `origin/welle2` unverändert.
+  **Stellen:** `app/core/slice/orientation.py:613–616` (`matrix_for` über `fitting_transform`),
+  `:619–631` (Ausgangslage nur, wenn sie passt), `:163` (`best_of`: `or list(candidates)`), `:722`
+  (Aufruf), `:788` und `:808` (`orient.no_footing`, `orient.unstable`).
+  **Fix (allgemein):** Eine Lage ohne tragfähige Auflage wird nie gewählt, wenn keine Lage steht:
+  Dann bleibt die Ausgangslage, und der Befund sagt, dass das Teil in keiner stehenden Lage in den
+  Bauraum passt, mit der Handlung *Automatisch teilen* (§25). Die Regel „eine stehende Lage gewinnt“
+  bleibt für alle Teile, die irgendwo stehen.
+  **Abnahme:** Besteckkasten behält Lage und Stützraum, Befund mit *Automatisch teilen*; eine
+  Platte 240 × 150 × 5 mm auf dem 220er-Bett (passt nur schräg) bleibt ebenso; eine Leiste
+  240 × 30 × 20 mm, die aufrecht steht und passt (Bauhöhe 250 mm), wird weiter aufgestellt; eine
+  Kugel (steht in keiner Lage, passt aber) wird wie bisher behandelt. Bauplan §22, §25, §2.7.
+  Belege: `F:\solidon-review-reports\regression-0.5.2\kern\befunde.md` (K-4), Bild
+  `regression-0.5.2\kern\bilder\aktuell-Modern++Cutlery+Organizer+with+Divider-r1-orientierung.png`.
 
 ## Bedienung und Darstellung
 
