@@ -36,10 +36,11 @@ from xml.etree import ElementTree as ET
 
 from app.core import build_area, discover
 from app.core.errors import CHECK_SLICER_PROFILE, ExternalToolError, ValidationError
-from app.core.export import cura_linux, prusa_conditions
+from app.core.export import appimage, cura_linux, prusa_conditions
 from app.core.export.slicer_keys import (
     CURA_JERK_LINKS,
     SlicerFlavour,
+    flavour_of,
     for_the_nozzle,
     has_readable_profiles,
     has_user_profile_tree,
@@ -194,10 +195,19 @@ def install_root(executable: Path) -> Path | None:
     ist; gelesen wird eine Kopie im Nutzer-Cache (:func:`cura_linux.appimage_resources`).
     Im Fensterfaden (:func:`cura_linux.never_wait_in`) heißt ``None`` dort „noch
     nicht kopiert“, nicht „kein Bestand“.
+
+    **Die Orca-Familie als AppImage ebenso** (RM-549): Ihr Bestand liegt im
+    Abbild unter ``resources/profiles``, und erst ihr erster Start legte ihn
+    nach ``system/``. Solidon liest ihn aus dem Abbild, ohne das AppImage zu
+    starten (:func:`appimage.profiles`, Regel 11).
     """
     mark = discover.program_mark(executable.name)
     if mark == "cura" and cura_linux.is_appimage(executable):
         return cura_linux.appimage_resources(executable)
+    if cura_linux.is_appimage(executable) and has_user_profile_tree(
+        flavour_of(executable.name) or "other"
+    ):
+        return appimage.profiles(executable)
     app = discover.flatpak_app(executable)
     if mark == "cura" and app:
         # Curas AppDir bestimmt eine Stelle, für Bestand und Lader zugleich.

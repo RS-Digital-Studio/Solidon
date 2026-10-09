@@ -470,12 +470,22 @@ _never_waits: threading.Thread | None = None
 def never_wait_in(thread: threading.Thread | None) -> None:
     """Dieser Faden wartet nie auf eine Druckerkopie — die Oberfläche nennt ihren Fensterfaden.
 
-    Dort antwortet :func:`appimage_resources` nur mit dem, was schon feststeht;
-    die Kopie legen Arbeiter an (``print_settings_dialog._CuraPrinterWorker``).
+    Dort antworten :func:`appimage_resources` und :func:`appimage.profiles` nur
+    mit dem, was schon feststeht; die Kopie legen Arbeiter an
+    (``print_settings_dialog._CuraPrinterWorker``, die Druckererhebung).
     Ohne Angabe wartet jeder Faden, und die Kommandozeile kopiert selbst.
     """
     global _never_waits
     _never_waits = thread
+
+
+def may_wait() -> bool:
+    """Darf dieser Faden auf eine Kopie aus einem AppImage warten?
+
+    Nein im Faden aus :func:`never_wait_in` — das gilt auch für den
+    Profilbestand der Orca-Familie (:func:`appimage.profiles`).
+    """
+    return threading.current_thread() is not _never_waits
 
 
 def _key(appimage: Path) -> tuple[str, int, int] | None:
@@ -511,7 +521,7 @@ def appimage_resources(appimage: Path) -> Path | None:
     known = _resources.get(key)
     if known is not None:
         return known[0]
-    if threading.current_thread() is _never_waits:
+    if not may_wait():
         stamped = _stamped(appimage, key)
         if stamped is None:
             return None
