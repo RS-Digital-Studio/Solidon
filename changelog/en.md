@@ -15,7 +15,7 @@ carry the same points in the same order (`tests/test_changelog.py`).
 `tools/make_download.py` takes the section for the current version and writes
 it into `website/version.json`.
 
-## 0.5.4
+## 0.6.0
 
 ### Operation and system
 
@@ -43,8 +43,17 @@ it into `website/version.json`.
 
 - On Linux, Solidon now also creates the print file with Cura as a Flatpak or AppImage.
 - The print dialog offers the printers of the selected slicer, like *First steps* and *Settings*. A printer taken over this way stays with its slicer.
+- In the print dialog you can switch the slicer as in *First steps*, also via *Choose program …* for one that Solidon does not find by itself.
+- A printer from Solidon's list and the same one from the slicer count as one device. The print dialog picks the slicer profile with the right nozzle, and the print file carries the start code.
+- Only slicers Solidon works with are offered, plus resin slicers such as ChituBox and Lychee. Bambu Studio as an AppImage now counts too.
+- Start code and build volume come only from exactly your printer, not from another model of the same series.
+- The print dialog matches the slicer's profiles much faster, when opening and after every slicer change.
 - The estimated print time is closer to the slicer's, much closer for parts with supports.
 - Whether supports and skirt fit on the bed is now measured only under the overhangs. Parts near the edge no longer get a needless warning.
+- Accepted suggestions hardly leave any overhang that needs support without it. *Keep channels clear* now only blocks space a support could never be removed from.
+- Where supports under small overhangs rest on the model, Solidon suggests tree supports. They leave fewer marks there.
+- For small tips, Solidon suggests a lower *Minimum slowdown speed* so they do not go soft. The setting reaches every slicer.
+- Narrow rims that hold up on their own stay free of support with *No support under rims*. Prints need noticeably less support that way.
 
 ### Threads, holes and standard parts
 

@@ -1038,10 +1038,16 @@ def flavour_of(name: str) -> SlicerFlavour | None:
     läuft auch, wenn das Programm gerade nicht startbar ist, und ein
     umbenanntes Programm ist ein Fall für die Einstellungen, nicht für eine
     Rateroutine.
+
+    **Auch ohne Trenner verglichen**, wie :func:`program_of`: Bambu Studio
+    verteilt sein AppImage als „Bambu_Studio_linux_….AppImage“, und mit dem
+    Unterstrich fand keiner der Namen oben es — die Suche bot es an, gerechnet
+    hat es nie (Review RM-601, 08.10.2026).
     """
     lowered = name.casefold()
+    plain = "".join(character for character in lowered if character.isalnum())
     for fragment, flavour in FLAVOUR_BY_NAME:
-        if fragment in lowered:
+        if fragment in lowered or fragment.replace("-", "") in plain:
             return flavour
     return None
 

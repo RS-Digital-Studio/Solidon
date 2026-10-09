@@ -37,17 +37,27 @@ def test_the_current_version_has_a_section() -> None:
     )
 
 
+def _checked_versions() -> tuple[str, ...]:
+    """Der Abschnitt von ``APP_VERSION`` und der oberste, den die Zweige vor dem
+    Sprung füllen (``auslieferung.md``, „Der Punkt reist mit dem Zweig“): Ein
+    vergessener Punkt fiele sonst erst am Release-Tag auf."""
+    from app.core import changes
+
+    return tuple(dict.fromkeys((APP_VERSION, changes.history(SOURCE_LANGUAGE)[0].version)))
+
+
 @pytest.mark.parametrize("language", sorted(available_languages()))
 def test_every_language_carries_the_same_points(language: str) -> None:
     """Eine Sprache, die fehlt, fällt auf Deutsch zurück — sichtbar mitten im
     Fenster."""
-    source = changelog_for(APP_VERSION, SOURCE_LANGUAGE)
-    points = changelog_for(APP_VERSION, language)
+    for version in _checked_versions():
+        source = changelog_for(version, SOURCE_LANGUAGE)
+        points = changelog_for(version, language)
 
-    assert points, f"changelog/{language}.md kennt {APP_VERSION} nicht"
-    assert len(points) == len(source), (
-        f"{language}: {len(points)} Punkte gegen {len(source)} in {SOURCE_LANGUAGE}"
-    )
+        assert points, f"changelog/{language}.md kennt {version} nicht"
+        assert len(points) == len(source), (
+            f"{language} {version}: {len(points)} Punkte gegen {len(source)} in {SOURCE_LANGUAGE}"
+        )
 
 
 @pytest.mark.parametrize("language", sorted(available_languages()))
@@ -63,21 +73,25 @@ def test_every_language_carries_the_same_groups(language: str) -> None:
     """
     from app.core import changes
 
-    def shape(lang: str) -> list[int]:
+    def shape(lang: str, version: str) -> list[int]:
         for entry in changes.history(lang):
-            if entry.version == APP_VERSION:
+            if entry.version == version:
                 return [len(group.points) for group in entry.groups]
         return []
 
-    source = shape(SOURCE_LANGUAGE)
-    assert source, f"{SOURCE_LANGUAGE} kennt {APP_VERSION} nicht"
-    assert shape(language) == source, (
-        f"{language}: Gruppenform {shape(language)} gegen {source} in {SOURCE_LANGUAGE}"
-    )
-    for entry in changes.history(language):
-        if entry.version == APP_VERSION:
-            untitled = [i for i, group in enumerate(entry.groups) if not group.title]
-            assert not untitled, f"{language}: Gruppe(n) ohne Überschrift an {untitled}"
+    for version in _checked_versions():
+        source = shape(SOURCE_LANGUAGE, version)
+        assert source, f"{SOURCE_LANGUAGE} kennt {version} nicht"
+        assert shape(language, version) == source, (
+            f"{language} {version}: Gruppenform {shape(language, version)} gegen {source} "
+            f"in {SOURCE_LANGUAGE}"
+        )
+        for entry in changes.history(language):
+            if entry.version == version:
+                untitled = [i for i, group in enumerate(entry.groups) if not group.title]
+                assert not untitled, (
+                    f"{language} {version}: Gruppe(n) ohne Überschrift an {untitled}"
+                )
 
 
 #: Ab dieser Fassung tragen die Abschnitte ``###``-Gruppen.
@@ -146,8 +160,9 @@ def test_no_point_speaks_like_a_commit(language: str) -> None:
     """Der Adressat sitzt vor dem Programm, nicht im Repository."""
     verboten = re.compile(r"\.py\b|§|\bcommit\b|\bregistry\b|\bOpContext\b|\bmanifold3d\b")
 
-    for point in changelog_for(APP_VERSION, language):
-        assert not verboten.search(point), f"{language}: spricht wie ein Commit: {point}"
+    for version in _checked_versions():
+        for point in changelog_for(version, language):
+            assert not verboten.search(point), f"{language}: spricht wie ein Commit: {point}"
 
 
 @pytest.mark.parametrize("language", sorted(available_languages()))
@@ -193,9 +208,10 @@ def test_windows_update_distinguishes_the_in_app_path_from_manual_setup() -> Non
 @pytest.mark.parametrize("language", sorted(available_languages()))
 def test_a_point_is_a_sentence(language: str) -> None:
     """Kein Stichwort und keine halbe Zeile: Was hier steht, wird gelesen."""
-    for point in changelog_for(APP_VERSION, language):
-        assert point[0].isupper(), f"{language}: fängt klein an: {point}"
-        assert point.endswith((".", "!", "?")), f"{language}: hört ohne Punkt auf: {point}"
+    for version in _checked_versions():
+        for point in changelog_for(version, language):
+            assert point[0].isupper(), f"{language}: fängt klein an: {point}"
+            assert point.endswith((".", "!", "?")), f"{language}: hört ohne Punkt auf: {point}"
 
 
 def test_the_window_never_sees_more_than_it_shows() -> None:

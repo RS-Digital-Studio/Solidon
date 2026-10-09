@@ -438,7 +438,7 @@ def machine_for(setup: SlicerSetup, profile: Profile) -> str:
     same = (
         slicer_profiles.chosen_printer(setup.flavour, setup.executable, known)
         if setup.flavour == "cura"
-        else slicer_profiles.printer_for(chosen, known)
+        else slicer_profiles.printer_for(chosen, known, prefer=profile.printer.id)
     )
     if same != profile.printer.id:
         _log.info(
@@ -483,10 +483,20 @@ def _fits_the_printer(machine_profile: str, profile: Profile) -> bool:
     """
     known = {profile.printer.id: profile.printer, **profiles.printer_profiles()}
     known[profile.printer.id] = profile.printer
-    belongs = slicer_profiles.printer_for(machine_profile, known)
+    # Derselbe Drucker kann eingebaut und aus dem Slicer übernommen bekannt
+    # sein; die Maschine gehört dann beiden (RM-600).
+    mine = profile.printer.id
+    belongs = slicer_profiles.printer_for(machine_profile, known, prefer=mine)
     if not belongs:
-        belongs = slicer_profiles.printer_for(Path(machine_profile).stem, known)
-    return not belongs or belongs == profile.printer.id
+        belongs = slicer_profiles.printer_for(Path(machine_profile).stem, known, prefer=mine)
+    if belongs:
+        return belongs == mine
+    # Ein Verwandter eines bekannten Druckers („Creality K1 SE" zum K1) ist kein
+    # eigenes Profil, sondern das eines anderen Geräts (RM-600).
+    return not (
+        slicer_profiles.related_printer(machine_profile, known)
+        or slicer_profiles.related_printer(Path(machine_profile).stem, known)
+    )
 
 
 def foundation_findings(

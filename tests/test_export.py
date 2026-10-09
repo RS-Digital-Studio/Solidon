@@ -221,8 +221,7 @@ def test_file_worker_can_cancel_during_part_advice_without_a_window(
         "write_assembly": write_assembly,
         "check_before_export": check_before_export,
         "remembered_setup": lambda *_: None,
-        "discover": SimpleNamespace(find_program=lambda *_: None),
-        "tools": SimpleNamespace(SLICERS=()),
+        "tools": SimpleNamespace(SLICERS=(), slicer_program=lambda: None),
         "manufacturer": manufacturer,
         "prepare_usage": lambda *_: (),
         "handover": handover,
@@ -5650,7 +5649,7 @@ def test_cura_window_names_both_printers_and_keeps_solidon_settings(
     )
     actual_active_machine = slicer_profiles.cura_active_machine
     monkeypatch.setattr(slicer_profiles, "cura_active_machine", lambda _executable: active)
-    monkeypatch.setattr(slicer_profiles, "chosen_printer", lambda *_args: "")
+    monkeypatch.setattr(slicer_profiles, "chosen_printer", lambda *_args, **_kwargs: "")
     settings = print_settings.resolve(profile)
     settings = replace(
         settings,
@@ -5713,7 +5712,7 @@ def test_cura_window_without_print_settings_still_reports_the_active_printer(
             bed=(300.0, 300.0),
         ),
     )
-    monkeypatch.setattr(slicer_profiles, "chosen_printer", lambda *_args: "")
+    monkeypatch.setattr(slicer_profiles, "chosen_printer", lambda *_args, **_kwargs: "")
 
     window, findings = write_assembly(
         [scene_object("obj_1", "Klotz")],
