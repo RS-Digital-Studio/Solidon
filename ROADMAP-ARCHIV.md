@@ -46259,19 +46259,24 @@ Entfernung der Zeichnung vom Nullpunkt — und, weil alles ein Lauf war, an jede
 Zeichnung. Belegt ohne Intel-Rechner über Versätze, die die Rundung jeder Rechnung ändern wie eine
 andere Maschine: Am Stand davor (`78d39dec9`) lag dieselbe Winkelskizze 1000 mm daneben bis zu
 292 mm anders, neben vierzig freien Linien kippten 9 von 60 Paaren schon am Nullpunkt, und 69 von
-300 versetzten Läufen endeten in einem Widerspruch, den es nicht gab. Daneben zwei Ursachen, die
+300 versetzten Läufen endeten in einem Widerspruch, den es nicht gab. Daneben drei Ursachen, die
 erst beim Umbau auffielen: `lsmr` bildet bei einer einzelnen gespannten Bedingung einen Zweierraum
-aus Rauschen (ein Winkelpaar neben einer bemaßten Kette aus zwanzig Linien kippte), und eine
-Gerade mit gleicher Krümmung wie ein Bogen lief nach sechshundert Auswertungen zu einem Bogen mit
-240 km Radius, dessen Urteil die letzte Stelle des Rangs fällte.
+aus Rauschen (ein Winkelpaar neben einer bemaßten Kette aus zwanzig Linien kippte), im Zug, der
+immer über `lsmr` rechnete, genauso (zwei Linien mit *parallel*, *senkrecht*, *gleich lang* oder
+einem Winkel standen nach zehn Mausschritten 1000 mm daneben 3,7 bis 38 mm woanders, mit 0.5.3 bis
+440 m), und eine Gerade mit gleicher Krümmung wie ein Bogen lief nach sechshundert Auswertungen zu
+einem Bogen mit 240 km Radius, dessen Urteil die letzte Stelle des Rangs fällte.
 
 **Umsetzung** (Zweig `paket/sk-skizzenloeser`): `solver._solve` rechnet je zusammenhängendem Teil
 (`_parts`, `_solve_part`) in Verschiebungen ab null; `x_scale` ist die Streuung des Teils (`lsmr`,
 Zug), in der dichten Rechnung höchstens `DENSE_FIRST_STEP` = 1 mm. Ein Teil ohne Spannung bleibt,
-einer, der weiter als `FARTHEST_MOVE` = 100 m liefe, auch. Die Fassung steht an der Skizze
-(`Sketch.solver`, `types.SKETCH_SOLVER` = 2, Bauplan §9); Format 50 schreibt `"solver": 1` in jeden
-gespeicherten Skizzentext, der über `_solve_in_coordinates` wie 0.5.0 bis 0.5.3 rechnet. Der
-Editor rechnet ab der ersten Änderung mit der heutigen Fassung, die Fassung steht im Cache-Schlüssel.
+einer, der weiter als `FARTHEST_MOVE` = 100 m liefe, auch. Im Zug rechnet ein kleiner Teil über
+`dogbox` mit dem kürzesten Gauß-Newton-Schritt, ein großer weiter über `lsmr`; kehren die gezogenen
+Punkte in der zweiten Stufe ganz zurück, bleibt die Zeichnung stehen. Die Fassung steht an der
+Skizze (`Sketch.solver`, `types.SKETCH_SOLVER` = 2, Bauplan §9); Format 50 schreibt `"solver": 1`
+in jeden gespeicherten Skizzentext, der über `_solve_in_coordinates` wie 0.5.0 bis 0.5.3 rechnet.
+Der Editor rechnet ab der ersten Änderung mit der heutigen Fassung, die Fassung steht im
+Cache-Schlüssel. Die Beispielprojekte tragen Format 50.
 
 **Nachweis:** Wächter `test_sketch.py::test_a_sketch_solves_alike_wherever_it_lies` (Winkelpaar
 allein, im Maßstab 1:100, neben vierzig freien Linien und neben einer bemaßten Kette; Versätze
@@ -46283,5 +46288,15 @@ unverändert (höchstens 3,3·10⁻¹³ mm), unterbestimmte 96-mal näher und 18
 als mit 0.5.3, kein Urteil anders. §31-Kette: 8 Auswertungen wie vorher. Altdatei
 `tests/data/projects/sketch_solver_v49.p3d` rechnet wie mit 0.5.3 (2 656,656241 mm³), derselbe
 Text mit dem heutigen Löser anders. Die Kette aus zwanzig Linien, über ihre Reichweite gezogen,
-blieb am Nullpunkt stehen und rutschte 1000 mm daneben um 3,8 mm; jetzt rutscht sie überall.
-Changelog: ja — Skizzen rechnen auf jedem Rechner gleich.
+blieb am Nullpunkt stehen und rutschte 1000 mm daneben um 3,8 mm; jetzt rutscht sie überall. Im
+Zug: Wächter `test_a_drag_solves_alike_wherever_it_lies` (vier Bedingungen, allein und neben der
+bemaßten Kette) höchstens 2,4·10⁻¹¹ mm und drei Auswertungen je Schritt, über `lsmr` in allen acht
+Fällen rot; `test_a_drag_the_drawing_holds_back_moves_nothing` rot über `lsmr` (0,26 mm verbogen)
+und über `dogbox` ohne die Rückkehr (10,7 mm). Zugbudgets nachgemessen: erste Stufe zwei bis fünf
+Auswertungen an kleinen Teilen, zwölf bis sechzehn an der Kette aus hundert Linien, zweite zwei bis
+fünf; 25 und 50 bleiben. Ein Zugschritt am Rechteck kostet 1,6 statt 4,7 ms CPU, an zwei Linien
+mit einer Bedingung 1,6 statt 14 ms. §31-Kette im Wechsel mit `78d39dec9`, drei Durchgänge unter
+fremder Volllast: 8 Auswertungen wie vorher, CPU-Median 120 bis 127 gegen 108 bis 122 ms (die
+Teilzerlegung kostet je Lösung rund 3 ms). Editor- und Zeichentests der Fenstergruppe lokal grün;
+den Nachweis auf allen vier Plattformen liefert der Lauf beim Push nach main.
+Changelog: ja — Skizzen rechnen auf jedem Rechner gleich, auch beim Ziehen.
