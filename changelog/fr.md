@@ -20,6 +20,7 @@ dans `website/version.json`.
 
 ### Utilisation et système
 
+- Sur Mac, Solidon demande désormais macOS 14 ou plus récent. Tout Mac à partir de 2018 peut l'installer gratuitement.
 - Solidon démarre désormais sur les Mac Intel sous macOS 26. La version 0.5.3 y restait bloquée au démarrage.
 - Sur Mac, *Annuler* interrompt aussitôt une réponse en cours du modèle local.
 - Sur Mac, Retour ouvre l'entrée sélectionnée sur l'écran d'accueil, dans *Rechercher une fonction* et dans le rapport de contrôle.
