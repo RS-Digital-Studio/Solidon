@@ -112,6 +112,26 @@ offenem Drucker. Übernommen wird auf Klick, nie von allein.
   Umrisse (kein Knick über `analysis.SMOOTH_TURN_DEGREES`, gemessen über Arme
   der Düsenbreite wie im Slicer, ab `advise.SCARF_MIN_LOOP` Umfang) über
   `SCARF_MIN_HEIGHT`.
+- **Eine Figur bekommt die Naht hinten vorgeschlagen** (`shell.seam_position
+  = rear`): Außenkontur überwiegend frei geformt (`analysis.free_form_share`:
+  gebogen, keine Gerade ab `STRAIGHT_RUN`, in einer Schicht, die sich gegen
+  die darunter ändert) ab `advise.FIGURE_SHARE`, über `SCARF_MIN_HEIGHT`, und
+  nur wo der Slicer die Naht selbst sucht (`SEAM_SEEKING`) — „zufällig“ ist
+  eine eigene Antwort auf dieselbe Frage. Vorn ist, was der Slicer vorn nennt.
+- **Eine große flache Oberseite bekommt „oberste Fläche bügeln“**
+  (`shell.ironing_topmost`, `_from_top`): die letzte Schicht ab
+  `IRONING_TOP_AREA` und mindestens `IRONING_TOP_SHARE` des größten
+  Querschnitts — sonst ist oben ein Griff, keine Schauseite. Nicht neben einer
+  bündigen Passung (die bügelt jede Oberseite), ohne Deckschicht oder wo
+  schon gebügelt wird.
+- **Übergabe von Naht und Bügeln, je Teil in allen acht Programmen belegt**:
+  „hinten“ ist bei Orca `back`, bei Prusa `rear`, bei Cura `z_seam_type =
+  back` (`handover._cura_seam`). Die oberste Fläche ist bei Orca
+  `ironing_type = topmost`, bei Prusa dasselbe mit `ironing = 1`, bei Cura
+  `ironing_only_highest_layer`. Beide Bügelschalter schreiben dieselben
+  Schlüssel; steht „jede Oberseite“ an, schweigt die oberste
+  (`handover._ironing_in_order`), sonst verlöre eine bündige Passung ihre
+  Gleitfläche. Die Grundlage liest „topmost“ als oberste Fläche.
 - **Schmale Stege bekommen eine langsame erste Schicht**: Liegt mindestens
   `advise.NARROW_WEB_SHARE` der ersten Schicht in Stegen unter
   `NARROW_WEB_LINES` Bahnen (`analysis.narrow_share`) oder mehr als

@@ -5172,6 +5172,33 @@ def test_ironing_is_off_until_something_asks_for_it() -> None:
     assert handover.as_mapping(ironed, "orca")["ironing_type"] == "top"
 
 
+def test_ironing_the_topmost_surface_reaches_every_family() -> None:
+    """RM-588: „Oberste Fläche bügeln“ heißt in der Orca-Familie und bei Prusa
+    ``ironing_type = topmost`` — dort mit eingeschaltetem ``ironing`` —, bei Cura
+    ``ironing_only_highest_layer``. Steht „jede Oberseite“ daneben, gilt sie:
+    Sie schließt die oberste ein, und die bündige Passung bügelt weiter alles."""
+    settings = print_settings.resolve(profiles.make_profile())
+    topmost = print_settings.with_path(settings, "shell.ironing_topmost", True)
+
+    assert handover.as_mapping(topmost, "orca")["ironing_type"] == "topmost"
+    prusa = handover.as_mapping(topmost, "prusa")
+    assert (prusa["ironing"], prusa["ironing_type"]) == ("1", "topmost")
+    cura = handover.as_mapping(topmost, "cura")
+    assert (cura["ironing_enabled"], cura["ironing_only_highest_layer"]) == ("true", "true")
+
+    both = print_settings.with_path(topmost, "shell.ironing", True)
+    assert handover.as_mapping(both, "orca")["ironing_type"] == "top"
+    prusa = handover.as_mapping(both, "prusa")
+    assert prusa["ironing"] == "1"
+    assert "ironing_type" not in prusa, "die Art des Profils, Prusas Vorgabe ist „top“"
+    cura = handover.as_mapping(both, "cura")
+    assert (cura["ironing_enabled"], cura["ironing_only_highest_layer"]) == ("true", "false")
+
+    # Nur der übernommene Pfad geht über das Herstellerprofil.
+    paths = frozenset({"shell.ironing_topmost"})
+    assert handover.as_mapping(topmost, "orca", paths) == {"ironing_type": "topmost"}
+
+
 def test_a_part_on_little_ground_asks_for_a_brim_on_its_own() -> None:
     """Die Plattenhaftung ist die eine Einstellung, die je Teil zählt.
 

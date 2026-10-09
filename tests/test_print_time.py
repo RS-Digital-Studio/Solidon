@@ -672,6 +672,86 @@ def test_a_shell_thickness_adds_layers_where_the_count_falls_short() -> None:
     assert thick - plain == pytest.approx(5 * 324.0 / 0.5 / 200.0, rel=1e-3)
 
 
+def test_ironing_the_topmost_surface_costs_one_more_pass_over_it() -> None:
+    """RM-588: Gebügelt wird die Oberseite ein zweites Mal, Bahn neben Bahn im
+    Bügelabstand. Am Würfel liegt innerhalb der zwei Wände ``18²`` mm² oben;
+    bei 0,1 mm Abstand und 10 mm/s sind das genau 324 s mehr. Ohne Wert im
+    Profil gelten 0,1 mm und zwei Drittel des Oberflächentempos (Curas Formel)."""
+    settings = _settings(shell__top_layers=1)
+    result = _box(20.0, 20.0, 20.0)
+    plain = _seconds(result, settings, _motion())
+
+    ironed = _seconds(
+        result,
+        print_settings.with_path(settings, "shell.ironing_topmost", True),
+        _motion(ironing_speed=10.0, ironing_spacing=0.1),
+    )
+    fallback = _seconds(
+        result, print_settings.with_path(settings, "shell.ironing_topmost", True), _motion()
+    )
+
+    assert ironed - plain == pytest.approx(324.0 / 0.1 / 10.0, rel=1e-3)
+    assert fallback - plain == pytest.approx(
+        324.0 / print_time.IRONING_SPACING / (50.0 * print_time.IRONING_SHARE), rel=1e-3
+    )
+
+
+def test_every_top_surface_irons_the_step_below_the_topmost_too() -> None:
+    """Ein Sockel 30 × 30 mit einem Würfel 10 × 10 darauf: „oberste Fläche“
+    bügelt nur den Würfel, „jede Oberseite“ dazu den Ring des Sockels, und
+    beides zusammen ist „jede Oberseite“."""
+    base = trimesh.creation.box(extents=(30.0, 30.0, 10.0))
+    base.apply_translation((0.0, 0.0, 5.0))
+    block = trimesh.creation.box(extents=(10.0, 10.0, 10.0))
+    block.apply_translation((0.0, 0.0, 15.0))
+    stepped = trimesh.boolean.union([base, block], engine="manifold")
+    result = slice_body(MeshData.of(stepped), 0.2, first_layer_height=0.2, support_volume=False)
+    settings = _settings(shell__top_layers=1)
+    motion = _motion(ironing_speed=10.0, ironing_spacing=0.1)
+
+    def seconds(**ironing: bool) -> float:
+        chosen = settings
+        for name, value in ironing.items():
+            chosen = print_settings.with_path(chosen, f"shell.{name}", value)
+        return _seconds(result, chosen, motion)
+
+    plain = seconds()
+    topmost = seconds(ironing_topmost=True)
+    every = seconds(ironing=True)
+
+    assert topmost - plain == pytest.approx(8.0**2 / 0.1 / 10.0, rel=1e-2)
+    assert every - topmost > 0.5 * (28.0**2 - 10.0**2) / 0.1 / 10.0
+    assert seconds(ironing=True, ironing_topmost=True) == pytest.approx(every, rel=1e-9)
+
+
+def test_the_manufacturer_chain_names_its_ironing() -> None:
+    """Bügeltempo und -abstand aus dem Profil: Orca in mm/s, SuperSlicer als
+    Anteil der Oberseite, die selbst ein Anteil der Vollfüllung ist."""
+    from app.core.export import manufacturer
+
+    orca = manufacturer.orca_motion(
+        {**_ELEGOO_PROCESS, "ironing_speed": "30", "ironing_spacing": "0.15"},
+        _ELEGOO_MACHINE,
+        {"slow_down_min_speed": ["20"]},
+        0.4,
+    )
+    prusa = manufacturer.prusa_motion(
+        {
+            "min_print_speed": "15",
+            "infill_speed": "80",
+            "solid_infill_speed": "100%",
+            "top_solid_infill_speed": "50%",
+            "ironing_speed": "50%",
+            "ironing_spacing": "0.1",
+        },
+        0.4,
+    )
+
+    assert orca is not None and (orca.ironing_speed, orca.ironing_spacing) == (30.0, 0.15)
+    assert prusa is not None and prusa.ironing_speed == pytest.approx(20.0)
+    assert prusa.ironing_spacing == pytest.approx(0.1)
+
+
 def _frustum() -> SliceResult:
     """Ein Pyramidenstumpf 20 × 20 unten, 8 × 8 oben, 6 mm hoch: 45° Wände."""
     body = trimesh.Trimesh(

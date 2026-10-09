@@ -83,6 +83,7 @@ scrive in `website/version.json`.
 - Con i supporti ad albero e accanto a una torre di spurgo, Solidon propone lo spazio del supporto in strati interi, come lo stampa lo slicer.
 - Per il PLA, Solidon propone più spazio tra le numerose punte sottili e i supporti ad albero sottostanti. In questo modo restano meno residui delle punte dei supporti.
 - Per il PETG Solidon suggerisce il raffreddamento pieno sul supporto. Così si stacca più facilmente dal pezzo.
+- Sulle figure Solidon propone la cucitura dietro, senza linea davanti. Per una grande faccia superiore piana propone *Stira la faccia più alta*, nuovo nelle impostazioni di stampa.
 - Nuovo nelle impostazioni di stampa: *Strati di interfaccia inferiori*, *Spazio nell'interfaccia* e *Raffreddamento pieno sul supporto*.
 - Il campo *Spazio verso l'alto* ora si chiama *Spazio sopra e sotto* e vale per entrambi i lati del supporto.
 - Se lo slicer rifiuta filamenti con temperature troppo diverse su un piatto, Solidon ora indica il motivo e la via d'uscita, invece di dire solo che non è stato creato alcun file.

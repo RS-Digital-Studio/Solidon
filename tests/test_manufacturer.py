@@ -3809,3 +3809,24 @@ def test_prusas_bottom_contact_layers_are_read_back() -> None:
     assert manufacturer._read_prusa(none, context)[0]["support.bottom_interface_layers"] == 0
     spacing = {"support_material_interface_spacing": "0"}
     assert manufacturer._read_prusa(spacing, context)[0]["support.interface_spacing"] == 0.0
+
+
+@pytest.mark.parametrize(
+    ("kind", "every", "topmost"),
+    [("no ironing", False, False), ("top", True, False), ("topmost", False, True)],
+)
+def test_ironing_the_topmost_surface_is_read_back(kind: str, every: bool, topmost: bool) -> None:
+    """RM-588: „topmost“ bügelt nur die oberste Fläche — in der Orca-Familie ein
+    Wert von ``ironing_type``, bei Prusa derselbe neben ``ironing = 1``. Ein
+    Profil, das so bügelt, steht in Solidon als „oberste Fläche bügeln“, nicht
+    als „jede Oberseite“."""
+    context = manufacturer._Context(nozzle=0.4)
+    read, foreign = manufacturer._read_process({"ironing_type": kind}, context, {})
+    assert (read["shell.ironing"], read["shell.ironing_topmost"]) == (every, topmost)
+    assert not foreign
+
+    prusa = {"ironing": "0" if kind == "no ironing" else "1"}
+    if kind != "no ironing":
+        prusa["ironing_type"] = kind
+    read = manufacturer._read_prusa(prusa, context)[0]
+    assert (read["shell.ironing"], read["shell.ironing_topmost"]) == (every, topmost)

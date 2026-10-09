@@ -1292,6 +1292,117 @@ def test_a_tight_rounding_is_a_corner_for_the_slicer() -> None:
     )
 
 
+# --- Naht hinten an Figuren, Bügeln der obersten Fläche (RM-588) ----------------------
+
+MESHES = Path(__file__).parent / "data" / "meshes"
+
+
+def _corpus(name: str) -> SliceResult:
+    """Ein Netz aus ``tests/data/meshes``, auf das Bett gestellt."""
+    return _standing(trimesh.load(MESHES / name, force="mesh"))
+
+
+def test_free_form_share_tells_a_figure_from_walls_with_edges() -> None:
+    """Frei geformt ist gebogene Kontur in einer Schicht, die sich gegen die
+    darunter ändert. Der Ellipsoid und die Figur aus drei verschmolzenen Kugeln
+    tragen fast nur solche; Würfel und Zylinder keine — der Zylinder ist rund,
+    aber jede Schicht ist dieselbe —, die Pyramide ändert sich in jeder Schicht,
+    aber ihre Kontur sind Geraden mit Ecken. Mehrere Umrisse in einer Schicht
+    zählen zusammen (die Figur zerfällt oben in Kugelkappen)."""
+    from app.core.slice.analysis import free_form_share
+
+    assert free_form_share(_corpus("near_sphere_ellipsoid.stl")) > 0.95
+    assert free_form_share(_corpus("generated_figure.stl")) > 0.95
+    assert free_form_share(_corpus("cube_clean.stl")) == pytest.approx(0.0, abs=1e-9)
+    assert free_form_share(_corpus("dense_cylinder.stl")) == pytest.approx(0.0, abs=1e-9)
+    pyramid = _standing(trimesh.creation.cone(radius=20.0, height=40.0, sections=4))
+    assert free_form_share(pyramid) < 0.1
+
+
+def test_a_figure_asks_for_the_seam_at_the_back() -> None:
+    """Recherche Nr. 14: An einer frei geformten Außenwand findet der Slicer in
+    jeder Schicht eine andere Ecke für die Naht, auch vorn. Die Figur bekommt
+    „hinten“ vorgeschlagen, mit Grund; Würfel und Zylinder behalten die Naht des
+    Herstellers, und eine Figur unter :data:`advise.SCARF_MIN_HEIGHT` auch —
+    dort wird aus der Naht keine Linie. „Zufällig“ verteilt die Naht mit
+    Absicht und bleibt, „hinten“ ist schon hinten."""
+    profile = profiles.make_profile()
+    settings = print_settings.resolve(profile)
+    assert settings.shell.seam_position in advise.SEAM_SEEKING
+
+    def seam(result: SliceResult, chosen: PrintSettings = settings) -> list[SettingAdvice]:
+        return [
+            entry
+            for entry in advise.advise(chosen, profile, result)
+            if entry.path == "shell.seam_position"
+        ]
+
+    figure = _corpus("generated_figure.stl")
+    offered = seam(figure)
+    assert [(entry.value, entry.severity) for entry in offered] == [("rear", "info")]
+    assert offered[0].reason, "ohne Grund kein Vorschlag"
+    assert not seam(_corpus("cube_clean.stl"))
+    assert not seam(_corpus("dense_cylinder.stl"))
+    low = trimesh.creation.icosphere(subdivisions=4, radius=1.0)
+    low.apply_scale((20.0, 15.0, 4.0))
+    assert not seam(_standing(low)), "8 mm hoch: aus der Naht wird keine Linie"
+    for value in ("random", "rear"):
+        assert not seam(figure, print_settings.with_path(settings, "shell.seam_position", value))
+    assert "shell.seam_position" in advise.PART_PATHS
+    assert "shell.seam_position" in advise.SLICED_PATHS
+
+
+def test_a_large_flat_top_asks_for_ironing_the_topmost_surface() -> None:
+    """Recherche Nr. 15: Eine große, zur Platte parallele Oberseite zeigt ihre
+    Bahnen. Die Platte mit Bohrungen bekommt „oberste Fläche bügeln“; die
+    Figur, der Becher auf dem Stiel (oben nur der Rand) und ein Kasten mit einem
+    Knauf obenauf nicht — dort ist die oberste Fläche nicht die Schauseite. Ohne
+    Deckschicht gibt es nichts zu bügeln, und wer schon jede Oberseite bügelt,
+    bügelt die oberste mit."""
+    profile = profiles.make_profile()
+    settings = print_settings.resolve(profile)
+    assert not settings.shell.ironing and not settings.shell.ironing_topmost
+
+    def topmost(
+        result: SliceResult, chosen: PrintSettings = settings, kinds: tuple[str, ...] = ()
+    ) -> list[SettingAdvice]:
+        return [
+            entry
+            for entry in advise.advise(chosen, profile, result, fit_kinds=kinds)
+            if entry.path == "shell.ironing_topmost"
+        ]
+
+    plate = _corpus("plate_holes.stl")
+    offered = topmost(plate)
+    assert [(entry.value, entry.severity) for entry in offered] == [(True, "info")]
+    assert offered[0].reason
+    assert not topmost(_corpus("generated_figure.stl"))
+    assert not topmost(_corpus("cup_on_stem.stl"))
+    box = trimesh.creation.box(extents=(60.0, 40.0, 20.0))
+    knob = trimesh.creation.cylinder(radius=8.0, height=6.0, sections=64)
+    knob.apply_translation((0.0, 0.0, 13.0))
+    assert not topmost(_standing(trimesh.util.concatenate([box, knob]))), "oben nur der Knauf"
+    assert not topmost(plate, print_settings.with_path(settings, "shell.top_layers", 0))
+    assert not topmost(plate, print_settings.with_path(settings, "shell.ironing", True))
+    assert "shell.ironing_topmost" in advise.PART_PATHS
+    assert "shell.ironing_topmost" in advise.SLICED_PATHS
+
+
+def test_a_flush_fit_keeps_ironing_every_top_surface() -> None:
+    """Die bündige Passung bügelt jede Oberseite, auch eine unter dem Deckel;
+    daneben bleibt „nur die oberste“ aus, sonst stünden zwei Vorschläge für
+    dieselbe Sache im Dialog."""
+    profile = profiles.make_profile()
+    settings = print_settings.resolve(profile)
+
+    offered = paths(
+        advise.advise(settings, profile, _corpus("plate_holes.stl"), fit_kinds=("flush",))
+    )
+
+    assert "shell.ironing" in offered
+    assert "shell.ironing_topmost" not in offered
+
+
 # --- Unterschrittene Materialtemperatur bleibt nach der Auflösung sichtbar ------------
 
 

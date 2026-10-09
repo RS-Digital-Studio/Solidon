@@ -1258,8 +1258,12 @@ class ShellSettings:
     etwas Zeit und ist überall dort richtig, wo ein Maß eingehalten werden
     muss — also bei Passungen."""
     ironing: bool = False
-    """Bügelt die oberste Fläche nach. Für Sicht- und Gleitflächen; sonst
+    """Bügelt jede Oberseite nach. Für Sicht- und Gleitflächen; sonst
     kostet es nur Zeit."""
+    ironing_topmost: bool = False
+    """Bügelt nur die oberste Fläche des Teils, die letzte Schicht — den
+    Deckel einer Box, die Schauseite eines Schilds. Steht ``ironing`` daneben,
+    gilt ``ironing``: Jede Oberseite schließt die oberste ein."""
 
 
 @dataclass(frozen=True, slots=True)

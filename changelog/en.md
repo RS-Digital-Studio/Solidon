@@ -83,6 +83,7 @@ it into `website/version.json`.
 - Under tree supports and next to a prime tower, Solidon suggests the support gap in whole layers, the way the slicer prints it.
 - For PLA, Solidon suggests more clearance from tree supports beneath many fine tips. This leaves less residue from the tree tips there.
 - For PETG, Solidon suggests full cooling at the support. It then comes off the part more easily.
+- On figures, Solidon suggests the seam at the back, so no line runs down the front. For a large flat top it suggests *Iron the topmost face*, new in the print settings.
 - New in the print settings: *Interface layers below*, *Interface gap* and *Full cooling at the support*.
 - The *Gap above* field is now called *Gap above and below* and applies to both sides of the support.
 - If the slicer refuses filaments whose temperatures are too far apart on one plate, Solidon now names the reason and the way out instead of only saying that no print file was made.

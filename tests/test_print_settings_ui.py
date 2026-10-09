@@ -7767,12 +7767,13 @@ def test_the_search_lifts_the_hit_instead_of_hiding_the_rest(
     dialog = PrintSettingsDialog(session, UiSettings())
     assert dialog.tabs_toggle is not None and not dialog.tabs_toggle.isChecked()
 
-    # „Bügeln" liegt hinter der Klappe und trifft genau eine Zeile — an einem
-    # Begriff mit acht Treffern (etwa „Bett", das in fünf note-Sätzen steht)
-    # prüfte der Test die Reihenfolge statt das Heben.
-    assert dialog.search_hits("Bügeln") == ["shell.ironing"]
+    # „Oberfläche bügeln" liegt hinter der Klappe und trifft genau eine Zeile —
+    # an einem Begriff mit acht Treffern (etwa „Bett", das in fünf note-Sätzen
+    # steht) prüfte der Test die Reihenfolge statt das Heben. „Bügeln" allein
+    # trifft seit RM-588 auch „Oberste Fläche bügeln“.
+    assert dialog.search_hits("Oberfläche bügeln") == ["shell.ironing"]
 
-    dialog.jump_to("Bügeln")
+    dialog.jump_to("Oberfläche bügeln")
     qt_app.processEvents()
 
     assert dialog.tabs_toggle.isChecked(), "die Tiefe klappt auf, wenn der Treffer dort liegt"

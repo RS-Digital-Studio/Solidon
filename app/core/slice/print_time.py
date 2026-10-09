@@ -44,6 +44,11 @@ Schicht, was jeder Slicer selbst rechnet, bevor er G-Code schreibt:
   Art aus dem Herstellerprofil (:class:`Motion`). Die Mindestschichtzeit bremst
   und zählt sie nicht — gemessen am Pilz in fünf Slicern (04.10.2026): mit
   Abbremsen bis 28 % zu wenig, ohne höchstens 14 %.
+- **Bügeln** als zweiter Zug über die Oberseite, Bahn neben Bahn im
+  Bügelabstand mit dem Bügeltempo des Profils: jede Oberseite oder nur die der
+  letzten Schicht (RM-588). Am Pilz kostete das in ElegooSlicer, PrusaSlicer
+  und Cura 31 bis 68 % der Druckzeit; ohne diese Zeile wich die Gegenprobe
+  um genau so viel ab.
 
 Was sie nicht kennt: Haftungsränder, Lückenfüllung und ihre Anfahrten, die
 genaue Reihenfolge der Bahnen, die Gestalt eines Baums (seine Menge folgt
@@ -162,6 +167,23 @@ class Motion:
     """Das Füllmuster des Slicers, wie er es nennt (``sparse_infill_pattern``,
     ``fill_pattern``) — es entscheidet, wie viel Verbindung am Rand entsteht
     (:data:`CONNECTION_SHARE`)."""
+    ironing_speed: float | None = None
+    """Bügeltempo in mm/s (``ironing_speed``; SuperSlicer als Anteil der
+    Oberseite). Ohne Wert :data:`IRONING_SHARE` des Oberflächentempos, wie
+    Curas ``speed_ironing``."""
+    ironing_spacing: float | None = None
+    """Abstand der Bügelbahnen in mm (``ironing_spacing``, Cura
+    ``ironing_line_spacing``); ohne Wert :data:`IRONING_SPACING`."""
+
+
+#: Bügeltempo als Anteil des Oberflächentempos, wo das Profil keines nennt:
+#: Curas ``speed_ironing = speed_topbottom * 20 / 30`` (``fdmprinter``), so auch
+#: Solidons Übergabe an Cura (``handover.as_mapping``).
+IRONING_SHARE: Final = 20.0 / 30.0
+
+#: Abstand der Bügelbahnen ohne Profilwert, in mm: die Vorgabe von OrcaSlicer,
+#: PrusaSlicer, SuperSlicer und Cura (``ironing_line_spacing``).
+IRONING_SPACING: Final = 0.1
 
 
 @dataclass(frozen=True, slots=True)
@@ -204,6 +226,8 @@ class _Roles:
     w_sparse: float
     w_solid: float
     w_top: float
+    ironing: float
+    ironing_gap: float
 
 
 def _roles(settings: PrintSettings, motion: Motion) -> _Roles:
@@ -281,6 +305,8 @@ def _roles(settings: PrintSettings, motion: Motion) -> _Roles:
         w_sparse=wide(motion.sparse_width),
         w_solid=wide(motion.solid_width),
         w_top=wide(motion.top_width),
+        ironing=motion.ironing_speed or IRONING_SHARE * speed.top_surface,
+        ironing_gap=motion.ironing_spacing or IRONING_SPACING,
     )
 
 
@@ -531,6 +557,10 @@ def _layers(
     ]
     share = connection_share(settings, motion)
     solid_gap = spacing(roles.w_solid, height, motion)
+    # Gebügelt wird jede Oberseite oder nur die der letzten Schicht, über der
+    # keine mehr liegt (RM-588); „jede“ schließt die oberste ein.
+    iron_every = shell.ironing
+    iron_last = shell.ironing_topmost and not shell.ironing
     built: list[_Layer] = []
     sparse_below = _EMPTY
     for index, region in enumerate(regions):
@@ -629,6 +659,9 @@ def _layers(
                     )
                 )
             else:
+                # Gebügelt wird die ganze Oberseite, auch wo sie unten als
+                # Brücke liegt.
+                surface = top
                 bridge = inside ^ unsupported
                 nozzle = motion.nozzle
                 if not bridge.is_empty():
@@ -664,6 +697,11 @@ def _layers(
                         0.0,
                     )
                 )
+                if iron_every or (iron_last and index == count - 1):
+                    # Ein zweiter Zug über die Oberseite, Bahn neben Bahn im
+                    # Bügelabstand, mit kaum Material: kein Volumenstrom bremst.
+                    gap = roles.ironing_gap
+                    parts.append((surface, gap, gap, 1.0, roles.ironing, roles.a_top, 0.0))
                 if motion.narrow_solid_loops and not internal.is_empty():
                     narrow = _narrow(internal, solid_gap)
                     if not narrow.is_empty():

@@ -241,6 +241,16 @@ FIELDS: tuple[Field, ...] = (
             "Zeit und lohnt bei Sichtflächen."
         ),
     ),
+    Field(
+        "shell.ironing_topmost",
+        _("Oberste Fläche bügeln"),
+        "shell",
+        kind="bool",
+        note=_(
+            "Bügelt nur die oberste Fläche, etwa den Deckel einer Box. Kostet weniger Zeit, "
+            "als jede Oberseite zu bügeln."
+        ),
+    ),
     # --- Füllung ---
     Field(
         "infill.density",

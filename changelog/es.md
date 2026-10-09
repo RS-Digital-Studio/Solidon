@@ -84,6 +84,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Con soportes en árbol y junto a una torre de purga, Solidon propone el espacio del soporte en capas enteras, tal como lo imprime el slicer.
 - Para PLA, Solidon propone más espacio entre muchas puntas finas y los soportes en árbol situados debajo. Así quedan menos restos de las puntas de los soportes.
 - Para PETG, Solidon sugiere refrigeración total en el soporte. Así se suelta más fácil de la pieza.
+- En figuras, Solidon propone la costura detrás, sin línea por delante. Para una cara superior grande y plana propone *Planchar la cara más alta*, nuevo en los ajustes de impresión.
 - Nuevo en los ajustes de impresión: *Capas de separación inferiores*, *Hueco en la capa de separación* y *Refrigeración total en el soporte*.
 - El campo *Espacio superior* se llama ahora *Espacio arriba y abajo* y vale para ambos lados del soporte.
 - Si el slicer rechaza filamentos con temperaturas demasiado distintas en una placa, Solidon indica ahora el motivo y qué hacer, en lugar de decir solo que no se creó ningún archivo.

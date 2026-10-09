@@ -83,6 +83,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Com suportes em árvore e junto a uma torre de purga, o Solidon propõe a distância do suporte em camadas inteiras, tal como o slicer a imprime.
 - Para PLA, o Solidon propõe mais espaço entre as muitas pontas finas e os suportes em árvore por baixo. Assim ficam menos resíduos das pontas dos suportes.
 - Para PETG, o Solidon sugere arrefecimento total no suporte. Assim solta-se mais facilmente da peça.
+- Em figuras, o Solidon propõe a costura atrás, sem linha à frente. Para uma face superior grande e plana propõe *Engomar a face mais alta*, novo nas definições de impressão.
 - Novo nas definições de impressão: *Camadas de separação inferiores*, *Folga na camada de separação* e *Arrefecimento total no suporte*.
 - O campo *Distância acima* chama-se agora *Distância acima e abaixo* e vale para os dois lados do suporte.
 - Se o slicer recusar filamentos com temperaturas demasiado diferentes numa placa, o Solidon indica agora o motivo e o que fazer, em vez de dizer apenas que não foi criado nenhum ficheiro.

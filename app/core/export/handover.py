@@ -990,7 +990,7 @@ def as_mapping(
     in seiner Schreibweise (RM-480, RM-461). Nur Solidons eigene Werte gehen
     hier durch — die des Herstellerprofils sind schon in ihr.
     """
-    settings = _fan_curve_in_order(offered_settings(settings, program))
+    settings = _ironing_in_order(_fan_curve_in_order(offered_settings(settings, program)))
     if paths is not None:
         paths = _with_partners(paths, settings)
     written: dict[str, str] = {}
@@ -1074,6 +1074,22 @@ def _with_partners(paths: frozenset[str], settings: PrintSettings) -> frozenset[
             continue
         extra.update(partners)
     return paths | extra
+
+
+def _ironing_in_order(settings: PrintSettings) -> PrintSettings:
+    """Jede Oberseite bügeln schließt die oberste ein (RM-588).
+
+    Beide Schalter führen auf dieselben Schlüssel (``ironing_type`` der
+    Orca-Familie, ``ironing`` und ``ironing_type`` bei Prusa,
+    ``ironing_enabled`` bei Cura), und eine Zeile sieht nur ihren eigenen Wert.
+    Steht „jede Oberseite“ an, schweigt deshalb die Zeile der obersten: Sonst
+    bügelte eine übernommene Oberseite der Box die Gleitfläche einer bündigen
+    Passung darunter nicht mehr.
+    """
+    shell = settings.shell
+    if not (shell.ironing and shell.ironing_topmost):
+        return settings
+    return replace(settings, shell=replace(shell, ironing_topmost=False))
 
 
 def _fan_curve_in_order(settings: PrintSettings) -> PrintSettings:
@@ -1513,6 +1529,7 @@ CURA_PER_MESH: Final = frozenset(
         "infill_sparse_density",
         "line_width",
         "ironing_enabled",
+        "ironing_only_highest_layer",
         "inset_direction",
         "wall_line_count",
         "speed_wall_0",

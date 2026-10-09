@@ -263,6 +263,11 @@ PRUSA: Final[tuple[Row, ...]] = (
     # Sache Kompensation der Bahnbreite und ist immer an. Kein Eintrag ist
     # hier richtiger als eine Zuordnung auf etwas Ähnliches.
     ("shell.ironing", "ironing", _flag),
+    # Nur die oberste Fläche schaltet das Bügeln mit ein; steht „jede
+    # Oberseite“ daneben, nimmt ``handover`` die oberste vorher zurück
+    # (``_ironing_in_order``), und es bleibt bei der Art des Profils.
+    ("shell.ironing_topmost", "ironing", _only({"True": "1"})),
+    ("shell.ironing_topmost", "ironing_type", _only({"True": "topmost"})),
     ("speed.bridge", "bridge_speed", _number),
     ("speed.acceleration", "default_acceleration", _number),
     ("speed.outer_wall_acceleration", "external_perimeter_acceleration", _number),
@@ -426,6 +431,8 @@ ORCA: Final[tuple[Row, ...]] = (
     # Orca kennt vier Stufen des Bügelns; Solidon entscheidet nur, **ob** —
     # wie stark und mit welchem Abstand weiß der Slicer besser.
     ("shell.ironing", "ironing_type", _mapped({"True": "top"}, "no ironing")),
+    # „topmost“ bügelt nur die Schicht, über der keine mehr liegt.
+    ("shell.ironing_topmost", "ironing_type", _only({"True": "topmost"})),
     ("speed.bridge", "bridge_speed", _number),
     ("speed.acceleration", "default_acceleration", _number),
     ("speed.outer_wall_acceleration", "outer_wall_acceleration", _number),
@@ -579,6 +586,8 @@ CURA: Final[tuple[Row, ...]] = (
         _mapped({"True": f"{SCARF_LENGTH:g}"}, "0"),
     ),
     ("shell.ironing", "ironing_enabled", _boolean),
+    ("shell.ironing_topmost", "ironing_enabled", _only({"True": "true"})),
+    ("shell.ironing_topmost", "ironing_only_highest_layer", _boolean),
     # CuraEngine hat keinen umschaltbaren Wandgenerator und keine gesonderte
     # genaue Außenwand: es rechnet ohnehin mit variabler Bahnbreite. Was es
     # nicht kennt, bekommt keinen Eintrag — eine Zuordnung auf das

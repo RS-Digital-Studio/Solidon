@@ -612,7 +612,11 @@ def test_file_export_without_program_only_promises_shared_object_capabilities(
 # eine Platte mit zwei gestützten Stufenkörpern, einer mit Objektwerten, in allen
 # acht Programmen (``.claude/.state/drache-2026-10-08/kontakt_je_teil.py``):
 # geschrieben 0,4 gegen 0,2 mm und so weiter, gemessen je Programm in
-# ``konzepte/begruendungen/regel-druckrat.md``; Cura nimmt die Lücke nicht je Netz. Die
+# ``konzepte/begruendungen/regel-druckrat.md``; Cura nimmt die Lücke nicht je Netz. Naht
+# hinten und Bügeln der obersten Fläche (RM-588) belegen zwei Kegelstümpfe, einer mit
+# Objektwerten, in denselben acht Programmen
+# (``.claude/.state/naht-2026-10-09/naht_je_teil.py``): Naht hinten und Bügelbahn nur
+# in der obersten Schicht des einen, der andere ohne. Die
 # Menge wird absichtlich nicht aus PART_PATHS oder den Schlüsseltabellen
 # gebaut: ein neuer Pfad braucht einen eigenen Wirkungsnachweis.
 MEASURED_PART_PATHS = frozenset(
@@ -622,9 +626,11 @@ MEASURED_PART_PATHS = frozenset(
         "infill.density",
         "layers.line_width",
         "shell.ironing",
+        "shell.ironing_topmost",
         "shell.outer_wall_first",
         "shell.precise_outer_wall",
         "shell.scarf_seam",
+        "shell.seam_position",
         "shell.wall_count",
         "shell.wall_generator",
         "speed.acceleration",

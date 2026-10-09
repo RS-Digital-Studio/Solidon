@@ -84,6 +84,7 @@ dans `website/version.json`.
 - Sous les supports arborescents et à côté d'une tour de purge, Solidon propose l'espace du support en couches entières, comme le slicer l'imprime.
 - Pour le PLA, Solidon propose davantage d'espace entre les nombreuses pointes fines et les supports arborescents en dessous. Cela laisse moins de résidus des pointes des supports.
 - Pour le PETG, Solidon propose un refroidissement complet au support. Il se détache ainsi plus facilement de la pièce.
+- Sur les figurines, Solidon propose la couture à l'arrière, sans ligne devant. Pour une grande face supérieure plane, il propose *Repasser la face la plus haute*, nouveau réglage.
 - Nouveau dans les réglages d'impression : *Couches d'interface en bas*, *Écart dans l'interface* et *Refroidissement complet au support*.
 - Le champ *Espace au-dessus* s'appelle désormais *Espace dessus et dessous* et vaut pour les deux côtés du support.
 - Si le slicer refuse des filaments aux températures trop différentes sur un plateau, Solidon en donne désormais la raison et l'issue, au lieu de dire seulement qu'aucun fichier n'a été créé.
