@@ -6655,7 +6655,7 @@ def slice_model(
             )
             if _says_outside_the_volume(output):
                 raise _outside_the_volume(setup, profile, output, model_height)
-            if crashed(completed.returncode):
+            if crashed(completed.returncode, wrapped=_wrapped(setup)):
                 raise ExternalToolError(
                     tool=setup.name,
                     title=SLICER_FAILED,
@@ -7694,7 +7694,13 @@ def signed_exit_code(exit_code: int) -> int:
     return exit_code - (1 << 32) if exit_code >= (1 << 31) else exit_code
 
 
-def crashed(exit_code: int) -> bool:
+#: Signale, an denen ein Programm stirbt, statt aufzugeben: SIGILL, SIGABRT,
+#: SIGBUS, SIGFPE, SIGKILL und SIGSEGV in Linux' Zählung — einen Starter, der
+#: einen Signaltod als 128 + Signal meldet, gibt es nur dort.
+_FATAL_SIGNALS: Final = frozenset({4, 6, 7, 8, 9, 11})
+
+
+def crashed(exit_code: int, *, wrapped: bool = False) -> bool:
     """Ist der Slicer abgestürzt, statt ordentlich aufzugeben?
 
     Ein Absturz und ein abgelehnter Auftrag sehen für den Aufrufer gleich aus —
@@ -7713,12 +7719,32 @@ def crashed(exit_code: int) -> bool:
     ``NTSTATUS`` mit Fehlerschwere und freiem reserviertem Bit 28. Eigene
     negative Windows-Rückgabewerte kommen dagegen als unsigned DWORD an:
     Bambus ``-100`` ist ``0xFFFFFF9C`` und kein gültiger NTSTATUS.
+
+    **Hinter einem Starter** (``wrapped``, :func:`_wrapped`) kommt ein
+    Signaltod als 128 + Signal an: ``flatpak run`` endet in bwrap
+    (``bubblewrap.c``), ``flatpak-spawn --host`` ebenso. Ein SIGSEGV war dort
+    139, und der Kunde las „keine Druckdatei geschrieben“ (RM-621). Die
+    Byteform der Orca-Absagen (-1 bis -110, also 146 bis 255) trifft keines
+    der Signale aus :data:`_FATAL_SIGNALS`.
     """
     if exit_code < 0:
+        return True
+    if wrapped and exit_code - 128 in _FATAL_SIGNALS:
         return True
     # MS-ERREF §2.3: Schwere 11, N-Bit 0; das Customer-Bit bleibt frei,
     # damit auch nicht abgefangene C++-Ausnahmen (0xE06D7363) erkannt werden.
     return exit_code <= 0xFFFFFFFF and exit_code & 0xD0000000 == 0xC0000000
+
+
+def _wrapped(setup: SlicerSetup) -> bool:
+    """Startet der Slicer hinter ``flatpak run`` oder ``flatpak-spawn --host``?
+
+    Dann meldet der Starter einen Signaltod als 128 + Signal
+    (:func:`crashed`): ein Slicer als Flatpak (:func:`discover.flatpak_app`)
+    oder Solidon selbst im Flatpak (:func:`discover.in_flatpak`), das jeden
+    Start über :func:`discover.on_host` nach draußen reicht.
+    """
+    return bool(discover.flatpak_app(setup.executable)) or discover.in_flatpak()
 
 
 #: Die Datei, in die Bambu Studio neben die Druckdatei schreibt, wie der Lauf

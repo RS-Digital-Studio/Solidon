@@ -4425,6 +4425,92 @@ def test_a_crash_is_told_apart_from_a_refusal(code: int, expected: bool) -> None
     assert handover.crashed(code) is expected
 
 
+@pytest.mark.parametrize(
+    ("code", "expected"),
+    [
+        # bwrap meldet einen Signaltod als 128 + Signal (``bubblewrap.c``):
+        # SIGSEGV, SIGABRT, SIGBUS, SIGILL, SIGFPE, SIGKILL.
+        (139, True),
+        (134, True),
+        (135, True),
+        (132, True),
+        (136, True),
+        (137, True),
+        # Die Byteform der Orca-Absagen bleibt eine Absage (RM-620): -62, -50,
+        # -101; 155 wäre SIGPROF, an dem kein Slicer stirbt.
+        (194, False),
+        (206, False),
+        (155, False),
+        (1, False),
+        (0, False),
+    ],
+)
+def test_a_crash_behind_flatpak_is_a_crash(code: int, expected: bool) -> None:
+    """Hinter ``flatpak run`` oder ``flatpak-spawn`` kommt ein Signaltod als
+    128 + Signal an, nicht als negative Zahl (RM-621). Ein SIGSEGV war dort
+    139, und der Kunde las „keine Druckdatei geschrieben“ statt „abgestürzt“.
+    Ohne Starter bleibt 139 ein gewöhnlicher Rückgabewert."""
+    assert handover.crashed(code, wrapped=True) is expected
+    assert handover.crashed(code) is False
+
+
+def test_a_flatpak_slicer_that_crashes_says_so(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Die Kette bis zum Kunden: Orca als Flatpak stirbt an SIGSEGV (RM-621)."""
+    from app.core import discover
+
+    class _Crashed:
+        returncode = 139
+        stdout = b""
+        stderr = b""
+
+    model = tmp_path / "model.stl"
+    model.write_bytes(b"solid x\nendsolid x\n")
+    executable = tmp_path / "io.github.softfever.OrcaSlicer"
+    executable.write_bytes(b"")
+    monkeypatch.setattr(handover, "_run_slicer", lambda *args, **kwargs: _Crashed())
+    monkeypatch.setattr(
+        discover,
+        "flatpak_app",
+        lambda program: "io.github.softfever.OrcaSlicer" if Path(program) == executable else "",
+    )
+    profile = profiles.make_profile()
+    setup = handover.SlicerSetup(executable=executable, flavour="orca")
+
+    with pytest.raises(ExternalToolError) as raised:
+        handover.slice_model(model, print_settings.resolve(profile), profile, setup)
+
+    assert "abgestürzt" in str(raised.value.detail), str(raised.value.detail)
+    assert raised.value.suggestions[0].id == "choose_slicer"
+
+
+@pytest.mark.parametrize(
+    ("slicer_app", "inside", "expected"),
+    [
+        ("io.github.softfever.OrcaSlicer", False, True),
+        ("", True, True),
+        ("", False, False),
+    ],
+)
+def test_both_flatpak_starters_count_as_a_wrapper(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    slicer_app: str,
+    inside: bool,
+    expected: bool,
+) -> None:
+    """Ein Slicer als Flatpak und Solidon selbst im Flatpak (``flatpak-spawn
+    --host``) reichen den Signaltod beide als 128 + Signal weiter (RM-621)."""
+    from app.core import discover
+
+    monkeypatch.setattr(discover, "flatpak_app", lambda program: slicer_app)
+    monkeypatch.setattr(discover, "in_flatpak", lambda: inside)
+    setup = handover.SlicerSetup(executable=tmp_path / "orca-slicer", flavour="orca")
+
+    assert handover._wrapped(setup) is expected
+
+
 def test_a_crashed_slicer_says_so_instead_of_blaming_the_profile(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
