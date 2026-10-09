@@ -65,7 +65,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-201 — Ein hohler Körper hält die 300 ms der Schichtanalyse nicht](#rm-201) | Geometrie, Erkennung und Druckvorbereitung | Unabhängige Clipper-Säulen, gerichtete Verschachtelung und `ring_nesting` gebaut, Hohlkugel bitgleich in 1,2–1,4 s; Mitre-Öffnung über Clipper und Zertifikate gemessen und verworfen; 300 ms verfehlt; entschieden (Robert, 06.10.): das Ziel bleibt, ein weiterer Hebel wird gesucht |
 | [RM-217 — Die Zuordnungsfrage zeigt das alte Merkmal nicht im Bild](#rm-217) | Geometrie, Erkennung und Druckvorbereitung | Altmerkmal und Kandidat werden gemeinsam markiert; Kern-, Ansichts- und Regressionstests grün. Offen: echter Fensterbeleg im Release unter RM-213 |
 | [RM-572 — Der Prüfbericht nennt keine Stelle, wo viele kleine Überhänge Stützen verlangen](#rm-572) | Geometrie, Erkennung und Druckvorbereitung | Text für „viele kleine Überhänge zusammen“ und eine Feldfrage im Budget §31 |
-| [RM-584 — Die Stützart folgt der Deckenform, und hohe Bäume stehen stabil](#rm-584) | Geometrie, Erkennung und Druckvorbereitung | Hybrid oder normal unter flachen Decken, Baumwände und Fuß ab etwa 100 mm, Spitzenabstand weiterer Materialien |
+| [RM-584 — Die Stützart folgt der Deckenform, und hohe Bäume stehen stabil](#rm-584) | Geometrie, Erkennung und Druckvorbereitung | Fuß hoher Bäume, Spitzenabstand weiterer Materialien |
 | [RM-585 — Bögen, die sich zwischen ihren Beinen schließen, tragen sich selbst](#rm-585) | Geometrie, Erkennung und Druckvorbereitung | Schließfrage für weite Bögen, Brückenregel für die letzte Spanne |
 | [RM-586 — Feine Schichten, wo das Modell feine Formen hat](#rm-586) | Geometrie, Erkennung und Druckvorbereitung | Variable Schichthöhe über die 3MF, Deckschichten mindestens 0,8 mm |
 | [RM-587 — Lange Brücken und steile Überhänge drucken sauber](#rm-587) | Geometrie, Erkennung und Druckvorbereitung | Dicke Brücke und Fluss über langen Brücken, Zusatzwände an steilen Überhängen |
@@ -945,9 +945,11 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   (`tree_hybrid`), Prusa „snug“; dazu brechen hohe Bäume ohne zweite Wand und Fuß, und eine
   Baumspitze unter der Stützbahn hinterlässt Punkte (Recherche Nr. 4, 5, 6). Abnahme: Stil
   je Deckenform in allen Familien, Baumstabilität an einem hohen Körper im Slicer gemessen.
-  Der Abstand über Baumspitzen ohne Trennschicht ist erledigt (Archiv, RM-584 Teil); offen
-  dort: `support_tip_gap` für PETG, ASA und ABS messen, und an der Baugruppe mit 49 und dem
-  Schachturm mit 34 Spitzeninseln prüfen, ob die Schwelle von 100 sinken kann.
+  Erledigt (Archiv, RM-584 Teil und Teil 2): Abstand über Baumspitzen, Gitter oder Hybrid
+  nach Deckenform, zwei Wände für hohe Bäume, wo der Slicer sie liest. Offen: der Fuß hoher
+  Bäume (Recherche Nr. 5, Stabilität im Slicer messen); `support_tip_gap` für PETG, ASA und
+  ABS messen, und an der Baugruppe mit 49 und dem Schachturm mit 34 Spitzeninseln prüfen,
+  ob die Schwelle von 100 sinken kann.
 
 <a id="rm-585"></a>
 
