@@ -24,7 +24,7 @@ from __future__ import annotations
 
 import math
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any, Final
 
 import numpy as np
@@ -1549,6 +1549,28 @@ def _jacobian(equations: Sequence[_Equation], x: np.ndarray) -> csr_matrix:
     return csr_matrix((data, (rows, cols)), shape=(begin, pts.size))
 
 
+def _dense_jacobian(
+    equations: Sequence[_Equation], x: np.ndarray, where: Mapping[int, int]
+) -> np.ndarray:
+    """Die Jacobimatrix nur über die Spalten in ``where`` (Koordinate → Spalte), dicht.
+
+    Dieselben Einträge wie ``_jacobian(...)[:, columns]``: Jede Gleichung
+    schreibt je Zeile, Punkt und Koordinate einen Wert, und Spalten, die nicht
+    in ``where`` stehen (gehaltene Punkte), fallen weg."""
+    pts = np.asarray(x, dtype=float).reshape(-1, 2)
+    out = np.zeros((sum(equation.rows for equation in equations), len(where)))
+    begin = 0
+    for equation in equations:
+        block = _SparseRows(begin)
+        equation.grad(pts, block)  # type: ignore[arg-type]
+        for (row, point, coordinate), value in block.entries.items():
+            column = where.get(point * 2 + coordinate)
+            if column is not None:
+                out[begin + row, column] = value
+        begin += equation.rows
+    return out
+
+
 #: Wie weit ein Lauf einen Punkt höchstens verschiebt, in Millimetern.
 #:
 #: Weiter ist keine Lösung, sondern ein Lauf ins Unendliche: Eine Gerade und
@@ -1566,10 +1588,10 @@ FARTHEST_MOVE: Final[float] = 100_000.0
 #: hundert Auswertungen je Unbekannte: Eine Kette aus vierzig Linien, deren
 #: Ende ein Bogen mit gleicher Krümmung fortsetzen soll, kroch 16 600
 #: Auswertungen lang von 0,0256 auf 0,0246 Rest — 143 Sekunden im
-#: Qt-Hauptthread. Gelöste Läufe des Korpus brauchen höchstens elf
-#: Auswertungen; der langsamste Lauf überhaupt (ein Bogen, der ins
-#: Unendliche kriecht) halbiert seinen Rest in hundert noch, schlechtestes
-#: Verhältnis 0,375. Der Zug hat eigene Grenzen darunter.
+#: Qt-Hauptthread. Gelöste Läufe des Korpus (739 Eingaben der Testsuite)
+#: brauchen höchstens 59 Auswertungen, keiner erreicht das Fenster; ein
+#: Bogen, der früher in 509 Auswertungen ins Unendliche kroch, hält nach 48
+#: an :data:`FARTHEST_MOVE`. Der Zug hat eigene Grenzen darunter.
 STALL_WINDOW: Final = 100
 
 #: Wie weit der erste Schritt beim **dichten** Lösen höchstens reicht, in
@@ -1747,17 +1769,18 @@ def _solve_part(
     Linien warf die Linien so bis zu vier Meter weit. Allein ist das
     Linienpaar klein genug für die dichte Rechnung.
 
-    **Ein kleiner Teil rechnet über ``dogbox``**, beim Lösen wie im Zug: Sein
-    Schritt ist der kürzeste Gauß-Newton-Schritt, solange er in die Box
-    passt — die kleinste Bewegung, die der Löser verspricht. Über ``lsmr``
+    **Ein kleiner Teil mit vollem Rang rechnet über ``dogbox``**, beim Lösen
+    wie im Zug (mit Doppelungen über TRF, siehe unten): Sein Schritt ist der
+    kürzeste Gauß-Newton-Schritt, solange er in die Box passt — die kleinste
+    Bewegung, die der Löser verspricht. Über ``lsmr``
     blieb nach dem gezogenen Punkt oft genau eine gespannte Gleichung übrig,
     und zwei Linien mit einer Bedingung standen nach zehn Mausschritten
     tausend Millimeter daneben bis 38 mm woanders. Dichtes TRF taugt dafür
     nicht: Hat ein Teil weniger Gleichungen als Unbekannte, setzt scipy jeden
     Schritt auf den Rand des Vertrauensbereichs. Ein Zugschritt am Rechteck
     brauchte so alle 25 statt 2 Auswertungen, ein Kreis mit Durchmesser beim
-    Lösen 57 statt 3, und zweihundert getrennte Kreise kosteten 2,8 Sekunden
-    statt der 100 ms aus §31. Die Zähigkeit gezogener Punkte
+    Lösen 57 statt höchstens 5, und zweihundert getrennte Kreise kosteten
+    2,8 Sekunden statt der 100 ms aus §31. Die Zähigkeit gezogener Punkte
     (:data:`DRAG_STIFFNESS`) formt die Box, nicht den Schritt.
 
     **Ein Teil, dessen Gleichungen am Start schon bis ``_TOL`` gelten, bleibt
@@ -1785,6 +1808,14 @@ def _solve_part(
     def jacobian(z: np.ndarray) -> csr_matrix:
         return _jacobian(part.equations, placed(z))[:, columns]
 
+    # Kleine Teile bekommen ihre Matrix gleich dicht: Aufbau und Spaltenwahl
+    # über ``scipy.sparse`` kosteten bei zweihundert getrennten Kreisen mehr
+    # als die Rechnung selbst — dieselben Einträge, nur ohne Umweg.
+    where = {int(column): index for index, column in enumerate(columns)}
+
+    def dense_jacobian(z: np.ndarray) -> np.ndarray:
+        return _dense_jacobian(part.equations, placed(z), where)
+
     # ``lsmr`` statt der dichten SVD je Iteration: bei 200 Bedingungen der
     # Unterschied zwischen 700 ms und dem Budget aus §31 — nachgemessen.
     # **Kleine Teile rechnen dicht** (:data:`EXACT_UP_TO`): Mit ``lsmr`` löst
@@ -1792,14 +1823,26 @@ def _solve_part(
     # der entartet bei einer einzelnen Bedingung (oben) — dicht über
     # ``dogbox``, beim Lösen mit kleinem ersten Schritt (Docstring).
     dense = columns.size <= EXACT_UP_TO
+    # **``dogbox`` nur bei vollem Rang am Start.** Doppelt gesetzte
+    # Bedingungen lassen Singulärwerte im Rundungsrauschen (gemessen
+    # 3·10⁻¹⁷ bis 8·10⁻¹⁷), und ``lstsq`` in ``dogbox`` schneidet bei der
+    # Maschinengenauigkeit ab: Ob es das Rauschen als Richtung nahm, war ein
+    # Münzwurf je Ort und Rechner — einmal rannte der Lauf davon und die
+    # Meldung nannte einen Widerspruch, einmal fand er die Doppelung. TRF
+    # dämpft diesen Schritt. Die Rangschranke von ``matrix_rank`` liegt das
+    # Zeilenzahlfache über der von ``lstsq``, das Rauschen weit darunter.
+    boxed = False
+    if dense:
+        opening = dense_jacobian(np.zeros(columns.size))
+        boxed = int(np.linalg.matrix_rank(opening)) == min(opening.shape)
     reach = _part_size(part, solution, weight, rest)
     first = min(reach, DENSE_FIRST_STEP) if dense and not dragging else reach
     precise = dense and not dragging
     result = least_squares(
         residuals,
         np.zeros(columns.size),
-        jac=(lambda z: jacobian(z).toarray()) if dense else jacobian,
-        method="dogbox" if dense else "trf",
+        jac=dense_jacobian if dense else jacobian,
+        method="dogbox" if boxed else "trf",
         tr_solver="exact" if dense else "lsmr",
         x_scale=scale * first,
         # Ohne Grenze läuft LSMR hier bis zur kleineren Matrixkante. Bei der
@@ -1942,17 +1985,10 @@ def _row_blocks(equations: Sequence[_Equation]) -> list[range]:
     return blocks
 
 
-#: Wie nah zwei Restfehler beieinander liegen dürfen, um als gleich zu gelten —
-#: relativ zum größten. Keine Toleranz im Sinne von Regel 7, sondern die
-#: Rundung der Lösung: Ein Gleichstand, den die Rechnung auf die letzte
-#: Stelle genau träfe, entschiede sonst das Rauschen.
-_TIE_SHARE: Final[float] = 1e-9
-
-
 def _worst_constraints(
     equations: Sequence[_Equation], blocks: Sequence[range], residuals: np.ndarray
 ) -> list[int]:
-    """Bedingungsindizes nach ihrem größten Restfehler, absteigend, stabil.
+    """Die zwei Bedingungen mit dem größten Restfehler, die größere zuerst.
 
     **Bei Gleichstand die später gesetzte zuerst.** Eine Kette aus drei
     Bedingungen, die einander widersprechen, teilt den Fehler gleichmäßig
@@ -1960,18 +1996,33 @@ def _worst_constraints(
     tragen gemessen je ein Drittel. Mit der früheren zuerst nannte die Meldung
     die beiden Fixierungen und nie die Bedingung, die eben dazukam; die Liste
     ist aber in der Reihenfolge des Setzens, und der Widerspruch kam mit der
-    letzten (RM-188 P6.6b)."""
+    letzten (RM-188 P6.6b).
+
+    **Gleich heißt: höchstens ``_TOL`` auseinander** — die Schranke, unter der
+    der Löser alles null nennt. Ein Lauf auf einen Widerspruch hört auf, wenn
+    der Rest kaum noch fällt, und zwei Reste, die am wahren Minimum gleich
+    sind, lagen dort 4·10⁻⁸ auseinander, je nach Ort einmal so, einmal so
+    herum (RM-541). Die frühere Schranke relativ 10⁻⁹ in Stufen gerundet
+    entschied das am Abbruchpunkt."""
     worst: dict[int, float] = {}
     for equation, block in zip(equations, blocks, strict=True):
         if equation.constraint is None:
             continue
         peak = max((abs(float(residuals[row])) for row in block), default=0.0)
         worst[equation.constraint] = max(worst.get(equation.constraint, 0.0), peak)
-    largest = max(worst.values(), default=0.0)
-    if largest <= 0.0:
-        return sorted(worst)
-    step = largest * _TIE_SHARE
-    return sorted(worst, key=lambda index: (-round(worst[index] / step), -index))
+    order = sorted(worst, key=lambda index: -worst[index])
+    ranked: list[int] = []
+    while order and len(ranked) < 2:
+        top = worst[order[0]]
+        level = []
+        for index in order:
+            if worst[index] < top - _TOL:
+                break
+            level.append(index)
+        pick = max(level)
+        ranked.append(pick)
+        order.remove(pick)
+    return ranked
 
 
 def _conflict_pair(
@@ -1996,9 +2047,16 @@ def _conflict_pair(
 #: Hundertstel. Was darunter bleibt, ist Rundung der Zerlegung.
 _NULL_SHARE: Final[float] = 1e-9
 
+#: Wie nah zwei Beteiligungen am Nullraum liegen dürfen, um als gleich zu
+#: gelten (:func:`_redundant_pair`). Die Anteile sind höchstens eins, ein
+#: echtes Paar teilt sich je rund 0,7 bis auf die Rundung; was nur im
+#: Rauschen mitläuft, liegt gemessen bei 10⁻¹¹ bis 10⁻⁶.
+_SHARE_TIE: Final[float] = 1e-6
 
-def _losses(jacobian: np.ndarray, rank: int, blocks: Sequence[range]) -> list[int]:
-    """Um wie viel der Rang fiele, nähme man die Zeilen eines Blocks heraus.
+
+def _losses(jacobian: np.ndarray, rank: int, blocks: Sequence[range]) -> list[tuple[int, float]]:
+    """Um wie viel der Rang fiele, nähme man die Zeilen eines Blocks heraus —
+    und wie stark der Block an der Abhängigkeit beteiligt ist.
 
     **Eine Zerlegung statt einer je Bedingung.** Hier stand für jede
     Bedingung ein eigenes ``matrix_rank`` über die übrigen Zeilen — an einer
@@ -2010,18 +2068,26 @@ def _losses(jacobian: np.ndarray, rank: int, blocks: Sequence[range]) -> list[in
     eines Blocks liegen genau dann im Raum der übrigen, wenn die
     Nullraumvektoren auf diesem Block den vollen Rang haben — sie schreiben
     jede seiner Zeilen als Summe der anderen. Der Rangverlust ist deshalb die
-    Zeilenzahl des Blocks weniger dem Rang des Nullraums auf ihm.
+    Zeilenzahl des Blocks weniger dem Rang des Nullraums auf ihm. Die
+    Beteiligung ist der größte Singulärwert des Nullraums auf dem Block: bei
+    einem echten Paar um 0,7, bei einem Block, der nur im Rauschen der
+    Zerlegung mitläuft, um 10⁻⁹ (:func:`_redundant_pair`).
     """
     rows = jacobian.shape[0]
     if rank >= rows:
-        return [0 for _ in blocks]
+        return [(0, 0.0) for _ in blocks]
     left, _values, _right = np.linalg.svd(jacobian, full_matrices=True)
     null = left[:, rank:]
-    losses: list[int] = []
+    losses: list[tuple[int, float]] = []
     for block in blocks:
         share = null[list(block), :]
         values = np.linalg.svd(share, compute_uv=False) if share.size else np.zeros(0)
-        losses.append(len(block) - int(np.count_nonzero(values > _NULL_SHARE)))
+        losses.append(
+            (
+                len(block) - int(np.count_nonzero(values > _NULL_SHARE)),
+                float(np.max(values)) if values.size else 0.0,
+            )
+        )
     return losses
 
 
@@ -2054,11 +2120,26 @@ def _redundant_pair(
         if equation.constraint is not None:
             carried.append((equation.constraint, block))
     losses = _losses(jacobian, rank, [block for _index, block in carried])
-    for (index, _block), loss in zip(carried, losses, strict=True):
+    involved: dict[int, float] = {}
+    for (index, _block), (loss, share) in zip(carried, losses, strict=True):
         measured.append((loss, index))
+        involved[index] = max(involved.get(index, 0.0), share)
     candidates = [index for loss, index in measured if loss == 0]
     if len(candidates) >= 2:
-        return candidates[0], candidates[1]
+        # **Die am stärksten beteiligten zuerst**, bei gleicher Beteiligung
+        # die früher gesetzte. Nach der Nummer allein kam ein Block mit, der
+        # nur im Rauschen der Zerlegung am Nullraum hing — sein Anteil lag
+        # mit 10⁻⁹ an der Schranke ``_NULL_SHARE``, und je nach Ort stand
+        # er im Paar oder nicht (RM-541).
+        order = sorted(candidates, key=lambda index: -involved[index])
+        chosen: list[int] = []
+        while len(chosen) < 2:
+            top = involved[order[0]]
+            level = [index for index in order if involved[index] >= top - _SHARE_TIE]
+            pick = min(level)
+            chosen.append(pick)
+            order.remove(pick)
+        return chosen[0], chosen[1]
     if not candidates and measured:
         candidates = [min(measured)[1]]
     if candidates:
@@ -2116,7 +2197,76 @@ def solve_sketch(
 
     Ein ``fixed`` hält dabei auch gegen den Zug: Es heftet an die
     gespeicherte Koordinate, und die ändert ein Zug nicht — wer den Punkt
-    woandershin will, löst die Bedingung oder tippt Koordinaten."""
+    woandershin will, löst die Bedingung oder tippt Koordinaten.
+
+    **Gerechnet wird um die Mitte der Zeichnung** (RM-541): Alle Punkte,
+    gezogene Orte und Startstände rücken um die Mitte des Hüllrechtecks,
+    gelöst wird dort, und zurück rückt nur, was sich bewegt hat — der Rest
+    behält seine Zahl bitgleich. Die Ableitungen rechnen aus Differenzen von
+    Koordinaten, und hunderttausend Millimeter neben dem Nullpunkt trugen sie
+    ein Rauschen von 10⁻¹²: An einer Zeichnung mit doppelten Bedingungen
+    nahm der kürzeste Gauß-Newton-Schritt es für eine Richtung, der Lauf
+    rannte davon, und die Meldung nannte dort einen Widerspruch statt der
+    Doppelung. Eine Skizze in der Fassung von 0.5 rechnet wie gespeichert,
+    also ohne diesen Schritt."""
+    if sketch.solver < SKETCH_SOLVER or not sketch.elements:
+        return _solve_here(sketch, params, dragged=dragged, start=start)
+    drawn = [point for element in sketch.elements for point in element.points]
+    xs = [x for x, _y in drawn]
+    ys = [y for _x, y in drawn]
+    middle_x = (min(xs) + max(xs)) / 2.0
+    middle_y = (min(ys) + max(ys)) / 2.0
+
+    def inward(point: Point2) -> Point2:
+        return (float(point[0]) - middle_x, float(point[1]) - middle_y)
+
+    local = replace(
+        sketch,
+        elements=tuple(
+            replace(element, points=tuple(inward(point) for point in element.points))
+            for element in sketch.elements
+        ),
+    )
+    # Woher jeder Punkt kommt: gezeichnet, im Zug vom Startstand oder vom
+    # Zeiger. Steht er danach unverändert dort, geht seine Zahl unberührt zurück.
+    held = list(drawn)
+    if dragged and start is not None and len(start) == len(drawn):
+        held = [(float(x), float(y)) for x, y in start]
+    begun = list(held)
+    if dragged:
+        for point, target in dragged.items():
+            if 0 <= point < len(begun):
+                begun[point] = (float(target[0]), float(target[1]))
+    solved = _solve_here(
+        local,
+        params,
+        dragged={point: inward(target) for point, target in dragged.items()} if dragged else None,
+        start=[inward(point) for point in start] if start is not None else None,
+    )
+    elements: list[SketchElement] = []
+    offset = 0
+    for element in solved.elements:
+        points: list[Point2] = []
+        for x, y in element.points:
+            if (x, y) == inward(begun[offset]):
+                points.append(begun[offset])
+            elif (x, y) == inward(held[offset]):
+                points.append(held[offset])
+            else:
+                points.append((x + middle_x, y + middle_y))
+            offset += 1
+        elements.append(replace(element, points=tuple(points)))
+    return replace(solved, elements=tuple(elements))
+
+
+def _solve_here(
+    sketch: Sketch,
+    params: Mapping[str, float] | None = None,
+    *,
+    dragged: Mapping[int, Point2] | None = None,
+    start: Sequence[Point2] | None = None,
+) -> SolvedSketch:
+    """Der Löser selbst, in den Koordinaten, die er bekommt (:func:`solve_sketch`)."""
     values = params or {}
     equations, anchors = _build_equations(sketch, values)
     variables = anchors.size
@@ -2433,6 +2583,7 @@ def _blockwise_rank(matrix: Any) -> int:
 
     height, width = matrix.shape
     entries = matrix.tocoo()
+    entries.sum_duplicates()
     links = csr_matrix(
         (np.ones(entries.nnz), (entries.row, entries.col + height)),
         shape=(height + width, height + width),
@@ -2441,13 +2592,28 @@ def _blockwise_rank(matrix: Any) -> int:
     labels = np.asarray(found, dtype=np.int64)
     order = np.argsort(labels, kind="stable")
     bounds = np.flatnonzero(np.diff(labels[order])) + 1
-    values: list[np.ndarray] = []
+    # Je Knoten seine Stelle im Block, Zeilen und Spalten je aufsteigend —
+    # dieselbe Folge wie ``matrix[rows][:, columns]``, ohne dessen Aufwand
+    # (bei zweihundert getrennten Kreisen 84 ms je Rangprüfung).
+    local = np.zeros(height + width, dtype=np.int64)
+    shapes: dict[int, tuple[int, int]] = {}
     for group in np.split(order, bounds):
         rows = group[group < height]
-        columns = group[group >= height] - height
-        if rows.size and columns.size:
-            block = matrix[rows][:, columns].toarray()
-            values.append(np.linalg.svd(block, compute_uv=False))
+        columns = group[group >= height]
+        local[rows] = np.arange(rows.size)
+        local[columns] = np.arange(columns.size)
+        shapes[int(labels[group[0]])] = (rows.size, columns.size)
+    owner = labels[entries.row]
+    by_block = np.argsort(owner, kind="stable")
+    cuts = np.flatnonzero(np.diff(owner[by_block])) + 1
+    values: list[np.ndarray] = []
+    for chosen in np.split(by_block, cuts) if by_block.size else []:
+        label = int(owner[chosen[0]])
+        block = np.zeros(shapes[label])
+        block[local[entries.row[chosen]], local[entries.col[chosen] + height]] = entries.data[
+            chosen
+        ]
+        values.append(np.linalg.svd(block, compute_uv=False))
     if not values:
         return 0
     singular = np.concatenate(values)

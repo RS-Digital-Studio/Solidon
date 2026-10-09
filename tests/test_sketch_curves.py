@@ -1153,6 +1153,45 @@ def test_a_line_and_an_arc_cannot_share_their_curvature_and_it_says_which() -> N
     assert {caught.value.first, caught.value.second} == {1, 2}
 
 
+@pytest.mark.parametrize("held", [(), (3,)])
+def test_a_part_gets_the_same_jacobian_dense_as_sparse(held: tuple[int, ...]) -> None:
+    """Kleine Teile bauen ihre Jacobimatrix gleich dicht (RM-541): Eintrag für
+    Eintrag dieselbe wie die dünne mit Spaltenwahl — an Linie, Bogen, Ellipse
+    und Spline samt Kurvenbedingungen, auch ohne die Spalten eines gehaltenen
+    Punkts."""
+    sketch = _spline_joint(
+        SketchConstraint("smooth", (5, 2, 7, 6)),
+        SketchConstraint("curvature", (5, 2, 7, 6)),
+        SketchConstraint("smooth", (2, 2, 1, 0)),
+    )
+    sketch = Sketch(
+        plane=sketch.plane,
+        elements=(
+            *sketch.elements,
+            SketchElement("ellipse", ((1.3, -0.7), (18.2, 6.1), (-2.9, 9.4))),
+            SketchElement("arc", ((30.0, 0.0), (40.0, 0.5), (29.0, 10.0))),
+        ),
+        constraints=sketch.constraints,
+    )
+    equations, anchors = solver._build_equations(sketch, {})
+    flat = anchors.reshape(-1) + 0.01 * np.sin(np.arange(anchors.size))
+    columns = np.asarray(
+        [
+            2 * point + axis
+            for point in range(anchors.shape[0])
+            if point not in held
+            for axis in (0, 1)
+        ]
+    )
+    where = {int(column): index for index, column in enumerate(columns)}
+
+    sparse = solver._jacobian(equations, flat)[:, columns].toarray()
+    dense = solver._dense_jacobian(equations, flat, where)
+
+    assert dense.shape == sparse.shape
+    assert np.array_equal(dense, sparse), "bitgleich"
+
+
 def test_a_curvature_that_cannot_hold_stops_early_in_a_long_chain(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

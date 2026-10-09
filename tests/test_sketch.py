@@ -644,6 +644,141 @@ def test_a_drag_solves_alike_wherever_it_lies(
 _PLACES = ((0.0, 0.0), (1000.0, 0.0), (-1000.0, 1000.0), (12.3, 45.6), (1e5, -1e5))
 
 
+#: Gezeichnete Linienzüge, deren Bedingungen sich widersprechen oder doppeln —
+#: gefunden mit der Versatzsonde des Reviews (Zufall, Startwert 541).
+_UNSOLVABLE = {
+    "doubled": (
+        [
+            ((0.0, 0.0), (11.418647258393689, 0.3772043893773367)),
+            ((11.285466746204376, 0.899218288039189), (16.293232614750657, -4.357496513559995)),
+            ((17.108752676676446, -3.942278154223121), (26.21207146796181, -10.406345899048521)),
+            ((25.859323990146354, -9.342165871133291), (29.999900080820844, -15.29071108143754)),
+            ((29.75531320742086, -16.3222559920441), (33.87201362244849, -15.303683963644536)),
+            ((33.9113447279559, -13.994187644713586), (45.200920597562316, -17.662654690431836)),
+            ((45.36394957757005, -16.81728831462031), (54.82377150029633, -10.834961268109309)),
+        ],
+        [
+            *(("coincident", (2 * i + 1, 2 * i + 2), "") for i in range(6)),
+            ("parallel", (2, 3, 0, 1), ""),
+            ("angle", (4, 5, 0, 1), "53.0"),
+            ("perpendicular", (10, 11, 0, 1), ""),
+            ("perpendicular", (4, 5, 2, 3), ""),
+            ("horizontal", (2, 3), ""),
+            ("horizontal", (0, 1), ""),
+            ("fixed", (0,), ""),
+        ],
+    ),
+    "noise_share": (
+        [
+            ((0.0, 0.0), (13.038228155485973, 3.686622409038357)),
+            ((12.62008476354232, 3.0470259437952434), (20.581209906600456, 9.82646094252833)),
+            ((20.74987795624194, 10.533310436169577), (28.76492657814943, 18.631618499728635)),
+            ((27.64625695139281, 17.227911992561413), (42.46359282804533, 16.87148338794381)),
+            ((43.257980091700865, 15.591185998675329), (55.37646756450006, 19.219615026275473)),
+        ],
+        [
+            *(("coincident", (2 * i + 1, 2 * i + 2), "") for i in range(4)),
+            ("perpendicular", (8, 9, 6, 7), ""),
+            ("angle", (2, 3, 8, 9), "103.0"),
+            ("angle", (4, 5, 0, 1), "54.0"),
+            ("vertical", (6, 7), ""),
+            ("parallel", (0, 1, 6, 7), ""),
+            ("fixed", (0,), ""),
+        ],
+    ),
+    "tie": (
+        [
+            ((0.0, 0.0), (13.262088307196882, -4.550809131545043)),
+            ((13.336235830826372, -4.2756351403139385), (22.255488168818204, -11.268288758711247)),
+            ((22.071495391607236, -10.595882361332968), (28.93925198415845, -9.78451098428803)),
+        ],
+        [
+            ("coincident", (1, 2), ""),
+            ("coincident", (3, 4), ""),
+            ("perpendicular", (0, 1, 2, 3), ""),
+            ("angle", (2, 3, 0, 1), "158.0"),
+            ("fixed", (0,), ""),
+        ],
+    ),
+    "two_lengths": (
+        [
+            ((0.0, 0.0), (15.625723629630487, 0.4279727516049222)),
+            (
+                (15.16567941857119, -0.0076338422054593735),
+                (28.254185111112676, -0.7941997621835428),
+            ),
+            ((26.764897746283488, -1.5233581463318244), (31.643865642356563, -0.27159823207045775)),
+            ((31.8981731418392, -1.166749604004128), (45.88623123394727, 3.0702546808660425)),
+            ((45.125491952919035, 4.308004547546075), (57.4845150481231, -1.9466717087430885)),
+        ],
+        [
+            *(("coincident", (2 * i + 1, 2 * i + 2), "") for i in range(4)),
+            ("distance", (2, 3), "9.915"),
+            ("distance", (2, 3), "11.118"),
+            ("distance", (8, 9), "11.283"),
+            ("fixed", (0,), ""),
+        ],
+    ),
+}
+
+
+def test_what_the_solver_does_not_move_keeps_its_numbers() -> None:
+    """Der Löser rechnet um die Mitte der Zeichnung; zurück rückt nur, was sich
+    bewegt hat (RM-541). Ein gelöstes Rechteck neben einem Kreis, der noch sein
+    Maß bekommt, behält jede Zahl bitgleich — über die Mitte und zurück wäre
+    aus 0,07 hier 0,06999999999999999 geworden, und der Editor schriebe
+    Ecken zurück, die niemand bewegt hat."""
+    corners = [(0.1, 0.07), (20.4, 0.07), (20.4, 10.17), (0.1, 10.17)]
+    sketch = Sketch(
+        plane="plane:xy",
+        elements=(
+            *(SketchElement("line", (a, b)) for a, b in pairwise([*corners, corners[0]])),
+            SketchElement("circle", ((40.1, 3.4), (41.2, 3.4))),
+        ),
+        constraints=(
+            *(SketchConstraint("coincident", (2 * k + 1, (2 * k + 2) % 8)) for k in range(4)),
+            SketchConstraint("horizontal", (0, 1)),
+            SketchConstraint("vertical", (2, 3)),
+            SketchConstraint("horizontal", (4, 5)),
+            SketchConstraint("vertical", (6, 7)),
+            SketchConstraint("diameter", (8, 9), "4"),
+        ),
+    )
+    drawn = edit.flat_points(sketch)
+    points = _flat(solve_sketch(sketch))
+
+    assert points[:8] == drawn[:8], "bitgleich, nicht nur nah"
+    assert span(points[8], points[9]) == pytest.approx(2.0, abs=1e-9)
+
+
+@pytest.mark.parametrize("case", sorted(_UNSOLVABLE))
+def test_an_unsolvable_sketch_names_the_same_pair_wherever_it_lies(case: str) -> None:
+    """Widerspruch oder Doppelung: an jedem Ort dieselbe Meldung mit demselben
+    Paar (RM-541; Lagegleichheit heißt diskret gleich).
+
+    Vier Fälle, vier Ursachen. Zwei Reste, die am wahren Minimum gleich sind,
+    lagen am Abbruchpunkt 4·10⁻⁸ auseinander, je nach Ort einmal so, einmal so
+    herum (``tie``). Bei der Doppelung kam ein Block mit Nullraumanteil um
+    10⁻⁹ ins Paar, je nach Ort über oder unter der Schranke (``noise_share``).
+    An einer redundanten Zeichnung nahm ``dogbox`` Singulärwerte im
+    Rundungsrauschen für Richtungen und rannte davon, und hunderttausend
+    Millimeter neben dem Nullpunkt war das Rauschen der Ableitungen 10⁻¹²
+    (``doubled``, ``two_lengths``).
+    """
+    lines, rules = _UNSOLVABLE[case]
+    sketch = Sketch(
+        plane="plane:xy",
+        elements=tuple(SketchElement("line", line) for line in lines),
+        constraints=tuple(SketchConstraint(kind, targets, value) for kind, targets, value in rules),
+    )
+    said: set[tuple[str, int, int]] = set()
+    for dx, dy in (*_PLACES, (1e6, -1e6)):
+        with pytest.raises(SketchConflictError) as caught:
+            solve_sketch(_placed(sketch, [(x + dx, y + dy) for x, y in edit.flat_points(sketch)]))
+        said.add((str(caught.value.title), caught.value.first, caught.value.second))
+    assert len(said) == 1, said
+
+
 def _wobbled(sketch: Sketch, amount: float) -> Sketch:
     """Die Skizze mit ungelöst verschobenen Punkten — fest, ohne Zufall; ``fixed`` bleibt."""
     held = {
@@ -2606,7 +2741,13 @@ def test_the_single_decomposition_answers_like_the_rank_of_each_rest(seed: int) 
         rank - int(np.linalg.matrix_rank(np.delete(matrix, list(block), axis=0)))
         for block in blocks
     ]
-    assert _losses(matrix, rank, blocks) == expected
+    answered = _losses(matrix, rank, blocks)
+    assert [loss for loss, _share in answered] == expected
+    for (loss, share), block in zip(answered, blocks, strict=True):
+        # Beteiligt ist, wessen Zeilen der Nullraum trägt — nie mehr als eins.
+        assert 0.0 <= share <= 1.0 + 1e-12, (block, share)
+        if loss < len(block):
+            assert share > 1e-6, (block, share)
 
 
 def _fixed_ring(count: int) -> Sketch:

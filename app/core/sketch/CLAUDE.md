@@ -60,8 +60,9 @@ reichen `ctx.cancelled` an `brep.features.features_of` weiter.
 
 - **Der Löser rät nicht.** Unterbestimmt bleibt unterbestimmt, widersprüchlich
   heißt `SketchConflictError` mit Vorschlag; gezeichnete Skizzen melden ihre
-  Freiheitsgrade, vorgegebene Grundformen nicht. Bei gleichem Rest (relativ
-  10⁻⁹) nennt er die später gesetzte Bedingung (`_worst_constraints`).
+  Freiheitsgrade, vorgegebene Grundformen nicht. Bei gleichem Rest (bis
+  `_TOL`) nennt er die später gesetzte Bedingung (`_worst_constraints`), bei
+  einer Doppelung die am stärksten am Nullraum beteiligten (`_losses`).
 - **„Konzentrisch" ist keine Bedingungsart**, sondern die Deckung der Mitten,
   und es gibt ein `equal`, kein `equal_radius` — eine zweite Art wäre ein
   zweiter Weg, denselben Sachverhalt zu speichern, zu prüfen, zu migrieren.
@@ -90,10 +91,15 @@ reichen `ctx.cancelled` an `brep.features.features_of` weiter.
   Schritt weder am Nullpunkt noch an anderen Teilen; ein Teil, der schon bis
   `_TOL` gilt, bleibt, einer, der weiter als `FARTHEST_MOVE` liefe oder
   dessen Rest sich in `STALL_WINDOW` Auswertungen nicht halbiert, auch
-  (`_watchdog`). Ein kleiner Teil rechnet beim Lösen wie im Zug über
-  `dogbox` (kürzester Gauß-Newton-Schritt), nie über `lsmr` und nie über
-  dichtes TRF, das bei Unterbestimmtheit jeden Schritt auf den Rand setzt;
-  `DRAG_STIFFNESS` ist dort die Box.
+  (`_watchdog`). Ein kleiner Teil mit vollem Rang rechnet beim Lösen wie im
+  Zug über `dogbox` (kürzester Gauß-Newton-Schritt), nie über `lsmr` und nie
+  über dichtes TRF, das bei Unterbestimmtheit jeden Schritt auf den Rand
+  setzt; `DRAG_STIFFNESS` ist dort die Box. Mit Doppelungen bleibt er bei
+  TRF: `lstsq` nähme deren Rauschsingulärwerte für Richtungen.
+- **Gerechnet wird um die Mitte der Zeichnung** (`solve_sketch` um
+  `_solve_here`): Die Ableitungen rechnen aus Koordinatendifferenzen, und
+  weit vom Nullpunkt rauschen sie. Zurück rückt nur, was sich bewegt hat;
+  Unbewegtes behält seine Zahl bitgleich. Die Fassung 1 rechnet ohne.
 - **Der Löser rechnet über scipy mit BLAS und LAPACK** (SVD, `lstsq`,
   `lsmr`) — die Ausnahme von „kein BLAS" in `.claude/rules/kern.md`.
   Zugesagt ist dieselbe Lage bis `_TOL` an jedem Ort, gehalten von den
