@@ -20,10 +20,11 @@ from app.ui import dialogs, labels
 
 #: Stichtag und Verkaufsstart kommen aus den Konstanten, die die Anwendung
 #: liest: Getippt hielten die Tests den 30.10. und den 01.11. fest, als die
-#: Entscheidung längst auf den 30.11. und den 01.12. gewandert war.
-assert DEMO_UNTIL is not None
-LAST_DAY: date = DEMO_UNTIL
+#: Entscheidung längst auf den 30.11. und den 01.12. gewandert war. Die
+#: Verkaufsversion trägt ``DEMO_UNTIL = None``; dann steht der Tag vor dem
+#: Verkaufsstart als Stichtag der Attrappe, statt die Sammlung abzubrechen.
 SALE_DAY = PLANNED_SALE_START.date()
+LAST_DAY: date = DEMO_UNTIL or SALE_DAY - timedelta(days=1)
 
 
 def _demo(days: int) -> activation.Activation:
