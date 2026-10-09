@@ -56,6 +56,7 @@ from app.core.slice.analysis import (
     piece_area,
     smooth_outline_height,
     span_beside,
+    span_spot,
     tapered_layers,
     thinnest_spot,
     tip_islands,
@@ -2439,12 +2440,18 @@ def _from_spans(result: SliceResult) -> list[Finding]:
     layer = result.layers[worst]
     _log.info("%d layer(s) span more than %.0f mm", len(spanning), SPAN_INTERESTING)
     location = None
-    if worst > 0:
+    # Der Ort liegt an der Brücke, die gemessen wurde, nicht am Rand: Mit
+    # Rändern auf der Schicht über ihrer Fläche (:func:`span_spot`) — eine
+    # Flanke verbindet sonst Rand und Brücke zu einer freien Fläche —, ohne sie
+    # an der größten freien Fläche der Schicht.
+    spot = span_spot(result, worst, edges)
+    if spot is not None:
+        location = (spot[0], spot[1], float(layer.z))
+    elif worst > 0:
         free = _layer_shape(layer).difference(
             _layer_shape(result.layers[worst - 1]).buffer(OVERHANG_MARGIN)
         )
         pieces = [part for part in getattr(free, "geoms", [free]) if part.area > 0.0]
-        # Der Ort liegt an der freien Fläche, die gemessen wurde, nicht am Rand.
         kept = kept_overhang(result, worst, edges)
         if kept is not None:
             pieces = [part for part in pieces if part.intersects(kept)]

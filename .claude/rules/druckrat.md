@@ -71,8 +71,11 @@ offenem Drucker. Übernommen wird auf Klick, nie von allein.
   Stützschnitt misst keine Brücken), zählt nicht zum Stützbedarf, nicht zu
   „auf dem Modell“, nicht zum Überhang- und nicht zum Brückenbefund — je
   Stück, nicht je Schicht: Die Brückenweite einer Schicht mit Rändern misst
-  `span_beside` an den übrigen Stücken, sonst zählte ein Rand neben einem
-  fremden Überhang als lange Brücke (RM-627). Wer nur einige Stücke prüft,
+  `span_beside` an den Kernen der übrigen Stücke, sonst zählte ein Rand neben
+  einem fremden Überhang als lange Brücke (RM-627) — freie Flächen allein
+  reichen nicht, das Band einer Flanke unter 14 bis 45 Grad verbindet alles an
+  der Wand. Der Ort der Warnung liegt an der gemessenen Brücke (`span_spot`).
+  Wer nur einige Stücke prüft,
   fragt mit `only`. `support.spare_ledges` sperrt ihre
   Überhangfläche (`ledge_space`) und spart aus, was Stütze braucht;
   vorgeschlagen nur mit Stützen.

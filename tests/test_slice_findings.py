@@ -2657,6 +2657,76 @@ def test_a_real_bridge_beside_a_shelf_is_still_reported_at_the_bridge() -> None:
     assert bridge.location[0] == pytest.approx(-35.0, abs=2.0), "am Steg, nicht an der Konsole"
 
 
+#: Wie weit eine Flanke unter 30 Grad je Millimeter Höhe nach außen läuft.
+_FLANK = math.tan(math.radians(30.0))
+
+
+def _flanked_shelf(*others: trimesh.Trimesh) -> MeshData:
+    """Die Wand von oben, deren Seiten -x und +y zwischen z 18 und 24 unter
+    30 Grad nach außen laufen, und an der Flanke +y auf z 20 die Konsole von
+    2,5 mm. Eine Flanke legt je Schicht 0,115 mm frei: mehr als die Zugabe der
+    Brückenfrage (0,05 mm), weniger als die des Überhangs (0,2 mm) — kein
+    Überhangstück, aber freie Fläche, die alles an der Wand verbindet."""
+    grow = 6.0 * _FLANK
+    lower = brick(40.0, 10.0, 18.0, (0.0, 0.0, 9.0))
+    flank = trimesh.convex.convex_hull(
+        [(x, y, 18.0) for x in (-20.0, 20.0) for y in (-5.0, 5.0)]
+        + [(x, y, 24.0) for x in (-20.0 - grow, 20.0) for y in (-5.0, 5.0 + grow)]
+    )
+    upper = brick(40.0 + grow, 10.0 + grow, 16.0, (-grow / 2.0, grow / 2.0, 32.0))
+    face = 5.0 + 2.0 * _FLANK
+    shelf = brick(40.0, face + 2.5 - 5.0, 1.0, (0.0, (5.0 + face + 2.5) / 2.0, 20.5))
+    return on_bed(lower, flank, upper, shelf, *others)
+
+
+def test_a_shelf_stays_a_ledge_beside_a_spur_on_the_same_flank() -> None:
+    """Review zu RM-627: Die Konsole an der Flanke, und an der Nachbarflanke -x
+    ein Sporn von 1,5 auf 6 mm. Die freie Fläche der Schicht hängt über das
+    Band der Flanken zusammen; gemessen wurde sie als Ganzes, mit dem Kern der
+    Konsole, und die Schicht spannte wieder ihre 40 mm — Stützen und Warnung,
+    die dieselbe Konsole neben einem Sporn an einer Säule nicht bekommt. Der
+    Sporn selbst spannt 6 mm."""
+    face = 20.0 + 2.0 * _FLANK
+    body = _flanked_shelf(
+        brick(face + 6.0 - 20.0, 1.5, 1.0, (-(face + 6.0 + 20.0) / 2.0, 0.0, 20.5))
+    )
+    result = slice_body(body, 0.2)
+    pieces = {
+        (index, number)
+        for index, layer in enumerate(result.layers)
+        for number in range(len(layer.overhangs))
+    }
+
+    assert max(layer.bridge_width for layer in result.layers) > SPAN_INTERESTING
+    assert pieces - ledges(result), "der Sporn ist kein Rand"
+    assert not advise.support_need(result).needed
+    codes = {finding.code for finding in advise.located_warnings(result, petg())}
+    assert "slice.long_bridge" not in codes
+
+
+def test_a_bridge_on_the_flank_is_reported_with_its_own_span_and_place() -> None:
+    """Gegenstück: An der Flanke -x spannt ein Steg von 3 mm über 20 mm zu
+    einem Pfeiler. Er hängt über das Band mit der Konsole zusammen; Weite und
+    Ort der Warnung gehören dem Steg, nicht der Diagonale der Konsole."""
+    face = 20.0 + 2.0 * _FLANK
+    body = _flanked_shelf(
+        brick(3.0, 3.0, 20.0, (-(face + 21.5), 0.0, 10.0)),
+        brick(23.0, 3.0, 1.0, (-(face + 11.5), 0.0, 20.5)),
+    )
+    result = slice_body(body, 0.2)
+
+    assert advise.support_need(result).needed
+    (bridge,) = [
+        finding
+        for finding in advise.located_warnings(result, petg())
+        if finding.code == "slice.long_bridge"
+    ]
+    assert bridge.values["span_mm"] == pytest.approx(20.0, abs=1.0)
+    assert bridge.location is not None
+    assert bridge.location[0] < -face, "über der Lücke des Stegs"
+    assert abs(bridge.location[1]) < 1.5, "auf dem Steg, nicht an der Konsole"
+
+
 def _flange_with_tab(column: float, tab: float, *, flange: bool = True) -> MeshData:
     """Eine Säule ``column`` im Quadrat, auf 20 mm ringsum ein Flansch von 2,5 mm
     und an einer Seite eine Lasche 8 mm breit, ``tab`` mm über den Flansch hinaus

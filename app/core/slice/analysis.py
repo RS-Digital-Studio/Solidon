@@ -2568,11 +2568,36 @@ def _bridge_width(
     shape: ShapelyPolygon,
     previous: ShapelyPolygon | None,
     bridge_from: float = BRIDGE_FROM,
-    touching: ShapelyPolygon | None = None,
+    touching: ShapelyPolygon | MultiPolygon | None = None,
 ) -> float:
     """Die längste freie Spannweite dieser Schicht — was überbrückt werden
-    muss (§22.2). Mit ``touching`` nur die freien Flächen, die es berühren
-    (:func:`open_bridge_width`).
+    muss (§22.2); gemessen in :func:`_widest_bridge`."""
+    return _widest_bridge(shape, previous, bridge_from, touching)[0]
+
+
+def _widest_bridge(
+    shape: ShapelyPolygon,
+    previous: ShapelyPolygon | None,
+    bridge_from: float = BRIDGE_FROM,
+    touching: ShapelyPolygon | MultiPolygon | None = None,
+    *,
+    whole: float | None = None,
+) -> tuple[float, ShapelyPolygon | None]:
+    """Die längste freie Spannweite dieser Schicht und die Fläche, über der sie
+    liegt (§22.2). Mit ``touching`` nur, was es berührt (:func:`open_bridge_width`,
+    :func:`span_beside`): die freien Flächen und darin die Kerne, die breiter als
+    zwei Bahnen sind. Nimmt ``touching`` nichts weg, gilt ``whole`` — die Weite
+    der ganzen Schicht, schon gemessen — ohne Fläche.
+
+    **Je Kern, nicht nur je freier Fläche** (Review zu RM-627). Eine Flanke
+    zwischen etwa 14 und 45 Grad legt je Schicht ein Band frei, schmaler als die
+    Zugabe des Überhangs und damit kein Überhangstück, aber breiter als die der
+    Brücke. Es verbindet alles an der Wand zu einer freien Fläche: An einer Wand
+    mit zwei solchen Flanken maß die Konsole, ein Rand, mit, sobald an der
+    Nachbarflanke ein Sporn von 9 mm² hing, und die Schicht spannte 40 statt
+    6 mm. Ein Kern liegt dagegen ganz in einem Überhangstück — jeder Punkt ist
+    mindestens ``bridge_from/2`` von der freien Kante entfernt, das Band ist
+    schmaler als zwei Bahnen und trägt keinen.
 
     Zwei Fragen, in dieser Reihenfolge. Erst: ist die ungestützte Fläche
     überhaupt breiter als zwei Bahnen? Ein Kegel unter 45 Grad legt je Schicht
@@ -2604,22 +2629,27 @@ def _bridge_width(
     Seite die einzige getragene Richtung (:func:`_supported_span`).
     """
     if previous is None or previous.is_empty:
-        return 0.0
+        return 0.0, None
     supported = previous.buffer(OVERHANG_MARGIN)
     free = shape.difference(supported)
+    # Ob ``touching`` etwas wegnimmt — sonst gilt ``whole``.
+    dropped = False
     if touching is not None:
-        free = unary_union([part for part in _areas_of(free) if part.intersects(touching)])
+        areas = _areas_of(free)
+        near = [part for part in areas if part.intersects(touching)]
+        dropped = len(near) < len(areas)
+        free = unary_union(near)
     # Brücken werden gegen die Schicht selbst gemessen, nicht gegen die
     # 45-Grad-Zugabe: was durch freie Luft spannt, ist eine Brücke, egal in
     # welchem Winkel.
     if free.is_empty:
-        return 0.0
+        return 0.0, None
     # Eine einzelne Erosion statt einer Suche: gefragt ist nicht, wie breit die
     # Fläche ist, sondern ob sie über der Grenze liegt.
     if _eroded(free, bridge_from / 2.0).is_empty:
-        return 0.0
+        return 0.0, None
 
-    widest = 0.0
+    measured: list[tuple[list[ShapelyPolygon], bool]] = []
     for part in getattr(free, "geoms", [free]):
         if part.is_empty or not hasattr(part, "exterior"):
             continue
@@ -2643,14 +2673,27 @@ def _bridge_width(
             core = _eroded(part, half)
             if core.is_empty:
                 continue
+            if touching is not None:
+                cores = _areas_of(core)
+                kept = [piece for piece in cores if piece.intersects(touching)]
+                dropped = dropped or len(kept) < len(cores)
+                if not kept:
+                    continue
+                core = unary_union(kept)
             spans = _areas_of(core.buffer(half, quad_segs=1, join_style="mitre").intersection(part))
+        measured.append((spans, bool(holes)))
+    if whole is not None and not dropped:
+        return whole, None
+
+    widest, where = 0.0, None
+    for spans, around in measured:
         for span in spans:
-            if not span.is_empty:
-                widest = max(
-                    widest,
-                    spanning_width(span) if holes else _supported_span(span, supported),
-                )
-    return float(widest)
+            if span.is_empty:
+                continue
+            width = spanning_width(span) if around else _supported_span(span, supported)
+            if width > widest:
+                widest, where = width, span
+    return float(widest), where
 
 
 def _to_polygons(shape: ShapelyPolygon) -> tuple[SliceContour, ...]:
@@ -3434,22 +3477,41 @@ def span_beside(result: SliceResult, index: int, quiet: frozenset[tuple[int, int
     ein Rand (:func:`ledges`); stand er allein auf seiner Schicht, schwieg der
     Bericht, mit einem Kinnstreifen von 4 mm² daneben warnte er, und der Rat
     verlangte Stützen über den Brückenweg. Gemessen wird deshalb nur die freie
-    Fläche, die ein Stück außerhalb von ``quiet`` berührt, wie bei
-    :func:`open_bridge_width`. Steht kein Stück der Schicht in ``quiet``, gilt
-    ihre Zahl unverändert.
+    Fläche, die ein Stück außerhalb von ``quiet`` berührt, und darin nur deren
+    Kerne (:func:`_widest_bridge`), wie bei :func:`open_bridge_width`. Steht
+    kein Stück der Schicht in ``quiet``, gilt ihre Zahl unverändert.
     """
+    return _beside(result, index, quiet)[0]
+
+
+def span_spot(
+    result: SliceResult, index: int, quiet: frozenset[tuple[int, int]]
+) -> tuple[float, float] | None:
+    """Wo :func:`span_beside` die längste Brücke gemessen hat, in der Aufsicht —
+    ``None``, wenn die Schicht als Ganzes zählt; dann gilt der Ort der Schicht."""
+    return _beside(result, index, quiet)[1]
+
+
+def _beside(
+    result: SliceResult, index: int, quiet: frozenset[tuple[int, int]]
+) -> tuple[float, tuple[float, float] | None]:
+    """:func:`span_beside` und :func:`span_spot` aus einer Messung."""
     layer = result.layers[index]
     kept = kept_overhang(result, index, quiet)
     if kept is None or index == 0:
-        return layer.bridge_width
+        return layer.bridge_width, None
     if kept.is_empty:
-        return 0.0
-    return _bridge_width(
+        return 0.0, None
+    width, where = _widest_bridge(
         _material(layer),
         _material(result.layers[index - 1]),
         BRIDGE_FROM if result.bridge_from is None else result.bridge_from,
         touching=kept,
     )
+    if where is None:
+        return width, None
+    spot = where.representative_point()
+    return width, (float(spot.x), float(spot.y))
 
 
 def model_support(
