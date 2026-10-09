@@ -2032,9 +2032,40 @@ class SketchCanvas(QWidget):
     def _apply(self, sketch: Sketch) -> None:
         self._remember()
         # Eine Skizze aus einer älteren Datei rechnet wie gespeichert, bis
-        # jemand sie ändert; ab da mit dem heutigen Löser (RM-541).
+        # jemand sie ändert; ab da mit dem heutigen Löser (RM-541) — und von
+        # der Lage aus, die bis dahin zu sehen war, wie der Zug in
+        # ``_drag_solve`` (Review M-2).
+        if self.sketch.solver < SKETCH_SOLVER:
+            sketch = self._from_shown(sketch)
         self.sketch = replace(sketch, solver=SKETCH_SOLVER)
         self._resolve()
+
+    def _from_shown(self, sketch: Sketch) -> Sketch:
+        """Die Änderung an einer älteren Skizze, ihre unveränderten Elemente in
+        der Lage, die die alte Fassung gelöst hat und die zu sehen war.
+
+        Gelöst wurde sonst ab den gezeichneten Punkten, und die heutige
+        Fassung landet dort woanders: Ein Winkelpaar sprang beim Setzen einer
+        Bedingung an einer anderen Linie um 5,9 mm. Zugeordnet wird je
+        Element — gleiche Art, gleiche Punkte, gleiche Hilfslinie —, weil
+        Löschen und Zerlegen die Nummern verschieben; ein geändertes Element
+        bleibt, wie die Änderung es baut. Ohne gültige Lösung (Widerspruch)
+        gibt es nichts zu übernehmen.
+        """
+        solved = self.solved
+        if solved is None or self.conflict or len(solved.elements) != len(self.sketch.elements):
+            return sketch
+        shown: dict[tuple[str, tuple[tuple[float, float], ...], bool], list[SketchElement]] = {}
+        for drawn, result in zip(self.sketch.elements, solved.elements, strict=True):
+            key = (drawn.kind, tuple(drawn.points), drawn.construction)
+            shown.setdefault(key, []).append(result)
+        elements = []
+        for element in sketch.elements:
+            matches = shown.get((element.kind, tuple(element.points), element.construction))
+            if matches:
+                element = replace(element, points=matches.pop(0).points)
+            elements.append(element)
+        return replace(sketch, elements=tuple(elements))
 
     def _resolve(self) -> None:
         """Ein Lauf des Solvers nach jeder Änderung (§30.1).
