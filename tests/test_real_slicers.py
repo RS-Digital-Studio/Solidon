@@ -16,20 +16,22 @@ Apple Silicon und Intel-Mac, sobald eine Änderung die Übergabe berührt
 
 from __future__ import annotations
 
+import math
 import re
 import subprocess
 import time
 from collections.abc import Callable
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 import pytest
 import trimesh
 
-from app.core.export import appimage, cura_linux, handover, slicer_profiles
+from app.core.export import appimage, cura_linux, handover, slicer_keys, slicer_profiles
 from app.core.geom.mesh import MeshData
 from app.core.knowledge import print_settings, profiles
 from app.core.types import Profile, SceneObject
+from app.core.units import format_length
 from tests.helpers import set_test_license
 
 #: Je Programm ein Drucker, den sein Hersteller selbst führt — so läuft der
@@ -290,3 +292,215 @@ def test_curas_printers_are_read_from_its_appimage_without_starting_it(
         record_testsuite_property(
             "cura_dateien", sum(1 for path in root.rglob("*") if path.is_file())
         )
+
+
+#: Curas Bahnarten des Modells (``;TYPE:``); Stütze ist alles, was mit
+#: ``SUPPORT`` beginnt, samt Trennschicht. Rand und Turm zählen nicht.
+_CURA_MODEL = frozenset({"WALL-OUTER", "WALL-INNER", "SKIN", "FILL"})
+
+_CURA_WORD = re.compile(r"([XYZE])(-?\d*\.?\d+)")
+
+
+@dataclass(frozen=True)
+class _CuraGaps:
+    """Abstand oben und unten zwischen Curas Stütze und dem Modell, in mm, und
+    wie viele Bahnpunkte (je Millimeter einer) die oberste und die unterste
+    Stützlage im Ring tragen."""
+
+    top: float
+    bottom: float
+    top_points: int
+    bottom_points: int
+
+
+def _cura_support_gaps(text: str, layer: float, ring: tuple[float, float]) -> _CuraGaps:
+    """Misst Curas Stützabstand oben und unten (RM-628) in einem Ring um die Mitte
+    des Modells (``ring``: innerer und äußerer Abstand in mm, je Achse).
+
+    Höhen im G-Code sind Oberkanten; jede Lage ist ``layer`` hoch. Oben: die
+    Unterseite der ersten Modelllage über der höchsten Stützbahn minus diese —
+    auch, wenn Cura die oberste Stütze als Bruchteillage tiefer legt. Unten: die
+    Unterseite der tiefsten Stützlage minus die oberste Modellbahn darunter.
+    Gezählt werden Bahnen mit Förderung, absolut (``M82``, ``G92 E``) wie relativ
+    (``M83``)."""
+    relative = False
+    x = y = z = e = 0.0
+    kind = ""
+    moves: list[tuple[bool, float, float, float]] = []
+    for raw in text.splitlines():
+        line = raw.strip()
+        if line.startswith(";TYPE:"):
+            kind = line[len(";TYPE:") :].strip()
+            continue
+        command = line.split(";", 1)[0].split()
+        if not command:
+            continue
+        if command[0] in ("M82", "M83"):
+            relative = command[0] == "M83"
+            continue
+        words = {key: float(value) for key, value in _CURA_WORD.findall(" ".join(command[1:]))}
+        if command[0] == "G92":
+            e = words.get("E", e)
+            continue
+        if command[0] not in ("G0", "G1"):
+            continue
+        start_x, start_y = x, y
+        x, y, z = words.get("X", x), words.get("Y", y), words.get("Z", z)
+        if "E" not in words:
+            continue
+        fed = words["E"] if relative else words["E"] - e
+        e = e if relative else words["E"]
+        support = kind.startswith("SUPPORT")
+        if fed > 0.0 and command[0] == "G1" and (support or kind in _CURA_MODEL):
+            # Je Millimeter Bahn ein Punkt: Füllbahnen enden am Rand, nicht im Ring.
+            steps = max(1, math.ceil(math.hypot(x - start_x, y - start_y)))
+            moves += [
+                (
+                    support,
+                    start_x + (x - start_x) * t / steps,
+                    start_y + (y - start_y) * t / steps,
+                    z,
+                )
+                for t in range(1, steps + 1)
+            ]
+    model = [(px, py) for support, px, py, _pz in moves if not support]
+    assert model, "keine Modellbahn im G-Code"
+    centre_x = (min(px for px, _ in model) + max(px for px, _ in model)) / 2.0
+    centre_y = (min(py for _, py in model) + max(py for _, py in model)) / 2.0
+    inner, outer = ring
+    inside = [
+        (support, pz)
+        for support, px, py, pz in moves
+        if inner <= max(abs(px - centre_x), abs(py - centre_y)) <= outer
+    ]
+    held = [pz for support, pz in inside if support]
+    walls = [pz for support, pz in inside if not support]
+    assert held, "keine Stützbahn im Ring"
+    highest, lowest = max(held), min(held)
+    above = min(pz for pz in walls if pz > highest)
+    below = max(pz for pz in walls if pz < lowest)
+    return _CuraGaps(
+        top=round(above - layer - highest, 4),
+        bottom=round(lowest - layer - below, 4),
+        top_points=sum(1 for pz in held if math.isclose(pz, highest, abs_tol=1e-3)),
+        bottom_points=sum(1 for pz in held if math.isclose(pz, lowest, abs_tol=1e-3)),
+    )
+
+
+def test_the_cura_gap_measure_reads_fractions_resets_and_the_ring() -> None:
+    """Die Messung selbst (RM-628), an einem kleinen G-Code nach Curas Art: Sockel
+    bis 3,0 mm, Stütze ab 3,6 (unten 0,4 Luft), oberste Stützbahn als Bruchteillage
+    bei 12,72 unter der Platte ab 13,0 (oben 0,28). Absolute Förderung mit
+    ``G92 E0`` zwischen den Lagen; Stütze am Rand außerhalb des Rings, Rand und
+    Fahrten ohne Förderung zählen nicht."""
+    lines = ["M82", "G92 E0"]
+    e = 0.0
+
+    def lay(kind: str, z: float, xs: tuple[float, ...]) -> None:
+        nonlocal e
+        lines.append(f";TYPE:{kind}")
+        for x in xs:
+            lines.append(f"G0 X{x} Y-10 Z{z}")
+            e += 0.1
+            lines.append(f"G1 X{x} Y10 E{e:.5f}")
+
+    walls = (-18.0, -10.0, 10.0, 18.0)
+    for step in range(15):
+        lay("WALL-OUTER", round(0.2 * (step + 1), 3), walls)
+    lay("SKIRT", 3.6, (-30.0, 30.0))
+    for step in range(46):
+        lay("SUPPORT", round(3.6 + 0.2 * step, 3), (-10.0, 10.0, 17.5))
+        lines.append("G92 E0")
+        e = 0.0
+    lay("SUPPORT-INTERFACE", 12.72, (-10.0, 10.0))
+    lines.append("G0 X-10 Y-10 Z12.9")
+    for step in range(10):
+        lay("SKIN", round(13.2 + 0.2 * step, 3), walls)
+    text = "\n".join(lines) + "\n"
+
+    measured = _cura_support_gaps(text, 0.2, (7.0, 14.0))
+    assert measured == _CuraGaps(top=0.28, bottom=0.4, top_points=40, bottom_points=40), measured
+    relative = text.replace("M82", "M83").replace("G92 E0\n", "")
+    assert _cura_support_gaps(relative, 0.2, (7.0, 14.0)).bottom == pytest.approx(0.4)
+
+
+@pytest.mark.slicer("cura")
+@pytest.mark.parametrize(("style", "gap"), [("grid", 0.28), ("tree", 0.44)])
+def test_curas_support_gap_arrives_as_solidon_says(
+    style: str,
+    gap: float,
+    installed_slicer: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Cura druckt den Stützabstand, wie Solidon rät und anzeigt (RM-628).
+
+    Eine Platte über einer Säule auf einem Sockel, PETG bei 0,2-mm-Schichten,
+    Werte fern des Herstellers. CuraEngine rundet auf (``round_up_divide``):
+    unter Gitter nur unten, oben gilt der Abstand genau mit einer Bruchteillage
+    der Stütze; unter Bäumen oben und unten. 0,28 unter Gitter druckt oben 0,28
+    und unten 0,4, 0,44 unter Bäumen 0,6 — zur nächsten Schicht gerundet wären es
+    0,2 und 0,4. Der Satz am Feld nennt den Wert, den Cura unten druckt.
+    """
+    from app.core.slice import advise
+    from app.ui.print_settings_dialog import _PlateJob, _prepare_plate
+
+    set_test_license(monkeypatch, active=True)
+    parts = []
+    for side, height, z in ((36.0, 3.0, 1.5), (8.0, 10.2, 8.0), (36.0, 2.0, 14.0)):
+        part = trimesh.creation.box((side, side, height))
+        part.apply_translation((0.0, 0.0, z))
+        parts.append(part)
+    body = SceneObject("stufe", "Stufe", MeshData.of(trimesh.boolean.union(parts)))
+    profile = profiles.make_profile(PROGRAMS["cura"], "petg")
+    settings = print_settings.resolve(profile)
+    layer = 0.2
+    for path, value in (
+        ("layers.layer_height", layer),
+        ("support.style", style),
+        ("support.placement", "everywhere"),
+        ("support.z_gap", gap),
+        ("support.interface_layers", 2),
+        ("support.bottom_interface_layers", 3),
+    ):
+        settings = print_settings.with_choice(settings, path, value)
+    setup = _preselected(handover.detect(installed_slicer), profile)
+    assert setup.flavour == "cura", setup
+    folder = tmp_path / "platte"
+    folder.mkdir()
+    job = _PlateJob(
+        objects=(body,),
+        plates=(0,),
+        folder=folder,
+        name="stufe",
+        setup=setup,
+        settings=settings,
+        profile=profile,
+        slot_profiles={},
+    )
+    run = _prepare_plate(job, 0)
+    outcome = handover.slice_model(
+        [run.model],
+        settings,
+        profile,
+        setup,
+        output_dir=folder,
+        timeout=600,
+        keep_arrangement=run.keep_arrangement,
+        slots=run.slots,
+        model_height=run.model_height,
+        model_meshes=run.meshes,
+        expected_tools=run.used_tools,
+    )
+    # Vier Millimeter innerhalb des Plattenrands und drei außerhalb der Säule.
+    measured = _cura_support_gaps(
+        outcome.gcode_path.read_text(encoding="utf-8", errors="replace"), layer, (7.0, 14.0)
+    )
+
+    top = advise.printed_gap(gap, layer, advise.gap_rounding("cura", style=style))
+    bottom = advise.printed_gap(gap, layer, advise.gap_rounding("cura", style=style, below=True))
+    assert measured.top_points >= 10 and measured.bottom_points >= 10, measured
+    assert measured.top == pytest.approx(top, abs=0.02), measured
+    assert measured.bottom == pytest.approx(bottom, abs=0.02), measured
+    said = slicer_keys.limitation("cura", "support.z_gap", settings)
+    assert said is not None and said.values == {"gap": format_length(bottom)}, said

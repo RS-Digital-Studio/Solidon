@@ -2292,12 +2292,13 @@ def base_settings(
     if setup is not None and setup.flavour == "cura":
         from app.core.slice import advise
 
-        # Cura rechnet den Abstand in ganzen Schichten: Die Grundlage trägt das
-        # Vielfache, das zum Material passt, sonst das nächste (RM-583).
+        # Die Grundlage trägt den Abstand des Materials, wie Cura ihn mit der Art
+        # der Grundlage oben druckt: unter Gitter genau, unter Bäumen in ganzen
+        # Schichten (RM-583, RM-628). Ohne Werte des Materials bleibt Solidons.
         layer = fallback.layers.layer_height
-        gap = advise.support_gap_target(layer, profile.material, "cura")
-        if gap is None and layer > 0.0:
-            gap = max(1, round(fallback.support.z_gap / layer)) * layer
+        gap = advise.support_gap_target(
+            layer, profile.material, "cura", style=fallback.support.style
+        )
         fallback = replace(
             fallback,
             support=replace(

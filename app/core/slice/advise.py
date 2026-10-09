@@ -22,7 +22,7 @@ from __future__ import annotations
 import math
 from collections.abc import Collection, Sequence
 from dataclasses import dataclass, replace
-from typing import TYPE_CHECKING, Final
+from typing import TYPE_CHECKING, Final, Literal
 
 import numpy as np
 
@@ -939,13 +939,54 @@ OPEN_INTERFACE: Final = (0.5, 2)
 BOTTOM_INTERFACE_LAYERS: Final = 2
 
 
-#: Wo der Slicer den Stützabstand immer in ganzen Schichten rechnet (RM-583):
-#: CuraEngine (``support_top_distance`` je Schicht). Die Orca-Familie nur,
-#: solange die Stütze die Schichthöhe des Modells hat; die eigene Höhe schaltet
-#: die Übergabe dann ein (``slicer_keys.has_independent_support_layers``) — außer
-#: neben einem Reinigungsturm (``whole_layers``) und unter organischen Bäumen
-#: (``organic``), das sagt der Aufrufer (RM-622).
-WHOLE_LAYER_GAP_FLAVOURS: Final[frozenset[SlicerFlavour]] = frozenset({"cura"})
+#: Wie ein Slicer einen Stützabstand druckt, der zwischen zwei Schichten liegt
+#: (RM-628): genau, zur nächsten ganzen Schicht gerundet oder auf die nächste
+#: ganze Schicht aufgerundet.
+GapRounding = Literal["exact", "nearest", "up"]
+
+
+def gap_rounding(
+    flavour: SlicerFlavour | None,
+    whole_layers: bool = False,
+    style: str = "",
+    organic: Collection[str] = (),
+    *,
+    below: bool = False,
+) -> GapRounding:
+    """Wie der Slicer den Stützabstand oben druckt, mit ``below`` unten (RM-628).
+
+    **CuraEngine rundet auf** (``round_up_divide``): unter seinen Bäumen oben
+    und unten (``TreeSupportSettings.h``), unter Gitter unten (``support.cpp``,
+    ``generateSupportAreasForMesh`` und ``generateSupportBottom``). Oben hält
+    es unter Gitter den Abstand genau, mit einer Bruchteillage der Stütze
+    (``support_fractional_roof``). Gemessen in Cura 5.13 an einer Platte über
+    einer Säule bei 0,2er Schichten: 0,28 und 0,44 mm druckten unter Gitter
+    oben genau und unten 0,4 und 0,6, unter Bäumen oben und unten 0,4 und 0,6.
+
+    **Die Orca-Familie und PrusaSlicer runden zur nächsten Schicht** (``round``)
+    unter organischen Bäumen (``organic``, :func:`handover.organic_styles`): Sie
+    liegen auf den Schichten des Modells, auch mit eigener Stützschichthöhe
+    (RM-622). Ebenso die Orca-Familie neben einem Reinigungsturm
+    (``whole_layers``). Sonst gilt der Abstand dort genau; die eigene
+    Stützschichthöhe schaltet die Übergabe ein
+    (``slicer_keys.has_independent_support_layers``).
+    """
+    if flavour == "cura":
+        return "up" if below or style == "tree" else "exact"
+    if whole_layers or style in organic:
+        return "nearest"
+    return "exact"
+
+
+def printed_gap(gap: float, layer: float, rounding: GapRounding) -> float:
+    """Der Abstand, den der Slicer aus ``gap`` druckt (RM-628), nach
+    :func:`gap_rounding`. Ein Vielfaches der Schichthöhe druckt jeder genau."""
+    if rounding == "exact" or layer <= 0.0 or gap <= 0.0:
+        return gap
+    steps = gap / layer
+    if rounding == "up":
+        return math.ceil(steps - EPS_GEOM) * layer
+    return math.floor(steps + 0.5 + EPS_GEOM) * layer
 
 
 def rounds_to_whole_layers(
@@ -954,12 +995,12 @@ def rounds_to_whole_layers(
     style: str = "",
     organic: Collection[str] = (),
 ) -> bool:
-    """Rechnet der Slicer den Stützabstand hier in ganzen Schichten (RM-622)? Cura
-    immer; die Orca-Familie neben einem Reinigungsturm (``whole_layers``); jedes
-    Programm unter organischen Bäumen, also wenn ``style`` zu den Arten gehört,
-    die es so druckt (``organic``, :func:`handover.organic_styles`): Sie liegen
-    auf den Schichten des Modells, auch mit eigener Stützschichthöhe."""
-    return whole_layers or flavour in WHOLE_LAYER_GAP_FLAVOURS or style in organic
+    """Druckt der Slicer den Abstand **oben** hier in ganzen Schichten (RM-622,
+    RM-628)? Cura unter seinen Bäumen; die Orca-Familie neben einem
+    Reinigungsturm (``whole_layers``); jedes Programm unter organischen Bäumen,
+    also wenn ``style`` zu den Arten gehört, die es so druckt (``organic``).
+    Wie es rundet und wie unten, sagt :func:`gap_rounding`."""
+    return gap_rounding(flavour, whole_layers, style, organic) != "exact"
 
 
 #: Vorschläge, an deren Übernahme andere hängen (:func:`printed_style`): Wählt
@@ -986,7 +1027,7 @@ def printed_style(
 
 def in_whole_layers(gap: float, layer: float) -> bool:
     """Misst dieser Abstand ganze Schichten? Sonst rundet ein Slicer, der in ganzen
-    Schichten rechnet, ihn selbst (RM-583, RM-622)."""
+    Schichten rechnet, ihn selbst (RM-583, RM-622), wie :func:`printed_gap` sagt."""
     return layer > 0.0 and is_close(gap / layer, round(gap / layer))
 
 
@@ -1003,21 +1044,25 @@ def support_gap_target(
     (RM-583): ein Vielfaches der Schichthöhe, begrenzt nach dem Materialprofil.
     Ohne Werte im Profil ``None``: unbekannt, der Abstand bleibt beim Hersteller.
 
-    Wo der Slicer in ganzen Schichten rechnet (Cura), ist es das Vielfache
-    innerhalb der Grenzen, das dem Ziel am nächsten liegt, mindestens eine
-    Schicht. Liegt keines darin, das kleinste über dem Minimum — oberhalb des
-    Maximums bleibt nur eine Schicht (PLA ab 0,28 mm). Die Orca-Familie rundet
-    nur ohne eigene Stützschichthöhe; die schaltet die Übergabe ein
-    (``handover.frees_support_layers``).
+    Wo der Slicer den Abstand oben in ganzen Schichten druckt
+    (:func:`rounds_to_whole_layers`), ist es das Vielfache innerhalb der
+    Grenzen, das dem Ziel am nächsten liegt, mindestens eine Schicht. Liegt
+    keines darin, das kleinste über dem Minimum — oberhalb des Maximums bleibt
+    nur eine Schicht (PLA ab 0,28 mm). Ein Vielfaches druckt jeder Slicer
+    genau, ob er rundet oder aufrundet; welches passt, sagt das Material, nicht
+    der Slicer (RM-628).
 
-    **Neben einem Reinigungsturm rundet auch die Orca-Familie, unter
-    organischen Bäumen jedes Programm, das sie so druckt — die Orca-Familie wie
-    PrusaSlicer** (:func:`rounds_to_whole_layers`, RM-622): Die Stütze liegt
-    dann auf den Schichten des Modells, und der Abstand rundet auf die nächste
-    (am Turm ``SupportMaterial.cpp``, unter Bäumen der organische Generator,
-    bei Orca ``TreeSupport3D.cpp``; gemessen in sechs Programmen). PLA
-    bei 0,08er Schichten bekäme aus 0,10 mm eine Schicht, also 0,08 — unter dem
-    Minimum; in ganzen Schichten gerechnet sind es 0,16."""
+    **Wo das gilt** (:func:`gap_rounding`): Cura unter seinen Bäumen — unter
+    Gitter hält es den Abstand oben genau, dort gilt der Wert des Materials
+    (RM-628). Neben einem Reinigungsturm die Orca-Familie, unter organischen
+    Bäumen jedes Programm, das sie so druckt, die Orca-Familie wie PrusaSlicer
+    (RM-622): Die Stütze liegt dann auf den Schichten des Modells (am Turm
+    ``SupportMaterial.cpp``, unter Bäumen der organische Generator, bei Orca
+    ``TreeSupport3D.cpp``; gemessen in sechs Programmen). PLA bei 0,08er
+    Schichten bekäme aus 0,10 mm eine Schicht, also 0,08 — unter dem Minimum;
+    in ganzen Schichten gerechnet sind es 0,16. Ohne Turm und Baum druckt die
+    Orca-Familie den Abstand mit eigener Stützschichthöhe genau; die schaltet
+    die Übergabe ein (``handover.frees_support_layers``)."""
     factor, low, high = (
         material.support_gap_factor,
         material.support_gap_min,
@@ -1068,7 +1113,8 @@ def tip_gap(
     3,6 mm² — für eine Minute und 0,7 g. Gilt, wo der Slicer Baumspitzen setzt:
     unter organischen Bäumen (``organic``) und unter Curas Bäumen. In ganzen
     Schichten, mindestens :data:`TIP_GAP_LAYERS`, aus ``support_tip_gap`` des
-    Materials; ohne gemessenen Wert ``None``.
+    Materials; ohne gemessenen Wert ``None``. Ein Vielfaches druckt auch Cura
+    genau, das aufrundet (:func:`printed_gap`, RM-628).
     """
     if material.support_tip_gap is None or layer <= 0.0 or need.tips < TIP_ISLANDS:
         return None
@@ -1097,9 +1143,10 @@ def _support_contact(
     rechnet (:func:`rounds_to_whole_layers`, mit der Art ``style``, mit der das
     Teil druckt, :func:`printed_style`), das Vielfache. Dort passt auch ein
     Abstand im Band nicht, der keine ganze Schicht ist: Der Slicer rundet ihn
-    selbst, Cura auf, die Orca-Familie zur
-    nächsten (0,2 mm sind bei 0,08er Schichten zweieinhalb). Unter einer großen
-    flachen Decke (ein Stück über ``OVERHANG_LAYER_WORTH_SUPPORT``) wird die
+    selbst, Cura auf, die Orca-Familie zur nächsten (:func:`printed_gap`;
+    0,2 mm sind bei 0,08er Schichten zweieinhalb). Unter Curas Gitter gilt
+    oben der Wert des Materials genau, nur unten rundet Cura auf (RM-628).
+    Unter einer großen flachen Decke (ein Stück über ``OVERHANG_LAYER_WORTH_SUPPORT``) wird die
     Trennschicht dicht, sonst locker. Material, das an sich selbst haftet
     (``support_interface_cooling`` im Profil), bekommt volle Kühlung an der
     Trennschicht.

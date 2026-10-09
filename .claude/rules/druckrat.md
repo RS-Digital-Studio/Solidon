@@ -77,7 +77,11 @@ offenem Drucker. Übernommen wird auf Klick, nie von allein.
   Abstand aus Schichthöhe × `support_gap_factor`, begrenzt durch
   `support_gap_min`/`support_gap_max` des Materialprofils (Regel 7,
   `support_gap_target`; ohne Werte kein Rat), vorgeschlagen außerhalb
-  `SUPPORT_GAP_BAND`; wo der Slicer in ganzen Schichten rechnet — Cura, die
+  `SUPPORT_GAP_BAND`. **Wie jedes Programm einen Abstand zwischen zwei
+  Schichten druckt, oben und unten, sagt `gap_rounding` und `printed_gap`
+  allein** (RM-628): Cura rundet auf, unter Gitter nur unten — oben gilt dort
+  der Wert des Materials genau; die übrigen runden zur nächsten. Wo der Slicer
+  oben in ganzen Schichten druckt — Cura unter Bäumen, die
   Orca-Familie neben einem Reinigungsturm (`writer.tower_plates`,
   `whole_layers`), jedes Programm unter organischen Bäumen mit der Art, mit
   der das Teil druckt (`printed_style`: der Vorschlag, außer der Kunde lehnt
@@ -85,8 +89,10 @@ offenem Drucker. Übernommen wird auf Klick, nie von allein.
   übernommen; `handover.organic_styles`, ohne Programm die Familie; Rat,
   Feldsatz und Export fragen dieselbe Auskunft) —, das Vielfache innerhalb der
   Materialgrenzen, auch statt eines Werts in `SUPPORT_GAP_BAND`, der zwischen
-  zwei Schichten liegt (`in_whole_layers`); einen eigenen solchen Wert nennt
-  der Export gerundet (`export.support_gap_rounded`). **Über Baumspitzen ohne
+  zwei Schichten liegt (`in_whole_layers`) — welches Vielfache, sagt das
+  Material, nicht die Rundungsart; einen eigenen solchen Wert nennt der Export
+  gerundet (`export.support_gap_rounded`), bei Cura der Feldsatz mit dem
+  gedruckten Wert (`slicer_keys.limitation`). **Über Baumspitzen ohne
   Trennschicht** (ab `TIP_ISLANDS` Inseln unter `TIP_ROOF_AREA`, `tip_islands`)
   gilt unter organischen und Curas Bäumen `support_tip_gap` des Materials in
   ganzen Schichten, mindestens `TIP_GAP_LAYERS`, auch über `support_gap_max`

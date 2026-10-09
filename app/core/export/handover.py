@@ -3316,7 +3316,7 @@ def organic_styles(
     führt; „automatisch“ ist es, wenn sein ``support_type`` ein Baum ist (Elegoo,
     Bambu). PrusaSlicer schreibt ``tree`` als ``organic``, „automatisch“ nach dem
     Stil seines Prozesses. SuperSlicer kennt keine Bäume (Ersatz Gitter), Cura
-    rundet ohnehin (:data:`advise.WHOLE_LAYER_GAP_FLAVOURS`).
+    rundet unter seinen Bäumen selbst auf (:func:`advise.gap_rounding`, RM-628).
 
     **Ohne Programm gilt die Familie** (``flavour``, die der Datei): Alle
     gemessenen Programme der Orca-Familie und PrusaSlicer drucken ``tree``

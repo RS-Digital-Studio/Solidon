@@ -1581,15 +1581,16 @@ def for_program(values: Mapping[str, str], flavour: SlicerFlavour, program: str)
 CURA_INTERFACE_LINES: Final = 3.0
 
 
-def support_gap_in_whole_layers(flavour: SlicerFlavour | None) -> bool:
-    """Rechnet dieser Slicer den Stützabstand immer in ganzen Schichten (RM-583)?
+def rounds_support_gap_up(flavour: SlicerFlavour | None) -> bool:
+    """Rundet dieser Slicer einen Stützabstand zwischen zwei Schichten auf
+    (RM-628)? CuraEngine unten immer, unter seinen Bäumen auch oben.
 
-    Die Menge steht beim Rat (:data:`advise.WHOLE_LAYER_GAP_FLAVOURS`), wie
-    der Auto-Brim: Der Rat fragt sie, und ``slice`` importiert ``export`` nicht.
+    Die Auskunft steht beim Rat (:func:`advise.gap_rounding`), wie der
+    Auto-Brim: Der Rat fragt sie, und ``slice`` importiert ``export`` nicht.
     """
     from app.core.slice import advise
 
-    return advise.rounds_to_whole_layers(flavour)
+    return advise.gap_rounding(flavour, below=True) == "up"
 
 
 def has_independent_support_layers(flavour: SlicerFlavour | None) -> bool:
@@ -1598,8 +1599,8 @@ def has_independent_support_layers(flavour: SlicerFlavour | None) -> bool:
 
     Nur die Orca-Familie: Ohne den Schalter rundet sie auf ganze Schichten
     (``Slicing.cpp``). PrusaSlicer legt die Kontaktschicht unter Gitter ohnehin
-    in den gewünschten Abstand, Cura rechnet in Schichten
-    (:func:`support_gap_in_whole_layers`). Unter organischen Bäumen rundet jedes
+    in den gewünschten Abstand, Cura oben mit einer Bruchteillage und unten
+    aufgerundet (:func:`rounds_support_gap_up`). Unter organischen Bäumen rundet jedes
     Programm, auch mit eigener Höhe (``handover.organic_styles``, RM-622).
     """
     return flavour == "orca"
@@ -1657,22 +1658,27 @@ def limitation(
             "schrittweise hoch.",
             layer=settings.cooling.disable_first_layers + 1,
         )
-    # Ein Stützabstand zwischen zwei Schichten wird in Cura eine ganze (RM-583).
-    if support_gap_in_whole_layers(flavour) and path == "support.z_gap":
+    # Ein Stützabstand zwischen zwei Schichten wird in Cura aufgerundet, unter
+    # Gitter nur unten (RM-628): Der Satz nennt, was gedruckt wird.
+    if rounds_support_gap_up(flavour) and path == "support.z_gap":
         from app.core.slice import advise
 
         layer = settings.layers.layer_height if settings is not None else 0.0
         # Ohne Stützen druckt der Abstand nichts; ein Satz dazu wäre Lärm.
         if settings is None or layer <= 0.0 or settings.support.style == "none":
             return None
-        if advise.in_whole_layers(settings.support.z_gap, layer):
+        gap, style = settings.support.z_gap, settings.support.style
+        if advise.in_whole_layers(gap, layer):
             return None
-        field = print_fields.field_of(path)
-        return _(
-            "Cura rechnet „{setting}“ in ganzen Schichten zu {layer}.",
-            setting=field.title if field is not None else path,
-            layer=format_length(layer),
-        )
+        below = advise.gap_rounding(flavour, style=style, below=True)
+        printed = format_length(advise.printed_gap(gap, layer, below))
+        # Oben rundet Cura nur unter seinen Bäumen, dann wie unten.
+        if advise.gap_rounding(flavour, style=style) != "exact":
+            return _("Unter Baumstützen rundet Cura den Stützabstand auf {gap} auf.", gap=printed)
+        # Unten zählt der Abstand nur, wo die Stütze auf dem Modell stehen darf.
+        if settings.support.placement == "build_plate":
+            return None
+        return _("Cura druckt den Stützabstand oben genau, unten aufgerundet {gap}.", gap=printed)
     # Unter organischen Bäumen liegt die Stütze auf den Schichten des Modells
     # (RM-622): welche Art das ist, sagt ``organic``, eine Quelle für Feld und Rat.
     trees = settings is not None and settings.support.style in organic

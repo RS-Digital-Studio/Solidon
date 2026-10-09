@@ -9083,23 +9083,52 @@ def test_freed_support_layers_are_said_where_the_maker_had_them_off(
     assert not handover.support_layers_findings(setup, free=False)
 
 
-def test_cura_says_that_it_counts_the_gap_in_whole_layers() -> None:
-    """Cura rechnet den Stützabstand in ganzen Schichten; ein Wert dazwischen
-    bekommt einen Satz am Feld und bei der Übergabe (RM-583, Review)."""
+@pytest.mark.parametrize(
+    ("style", "placement", "gap", "said"),
+    [
+        ("grid", "everywhere", 0.28, "oben genau, unten aufgerundet 0,40 mm"),
+        ("grid", "everywhere", 0.44, "oben genau, unten aufgerundet 0,60 mm"),
+        ("auto", "everywhere", 0.28, "oben genau, unten aufgerundet 0,40 mm"),
+        ("grid", "build_plate", 0.28, None),
+        ("tree", "everywhere", 0.28, "Baumstützen rundet Cura den Stützabstand auf 0,40 mm"),
+        ("tree", "build_plate", 0.44, "Baumstützen rundet Cura den Stützabstand auf 0,60 mm"),
+        ("grid", "everywhere", 0.4, None),
+        ("tree", "everywhere", 0.4, None),
+        ("none", "everywhere", 0.28, None),
+    ],
+)
+def test_cura_says_what_it_prints_of_the_gap(
+    style: str, placement: str, gap: float, said: str | None
+) -> None:
+    """Cura rundet einen Stützabstand zwischen zwei Schichten auf, unter Gitter
+    nur unten (RM-628, gemessen in Cura 5.13 bei 0,2er Schichten). Der Satz am
+    Feld und bei der Übergabe nennt, was gedruckt wird; unten nur, wo die Stütze
+    auf dem Modell stehen darf, und ohne Stützen nichts (RM-583, Review)."""
+    profile = profiles.make_profile("centauri-carbon-2", "pla")
+    settings = print_settings.resolve(profile)
+    for path, value in (
+        ("layers.layer_height", 0.2),
+        ("support.style", style),
+        ("support.placement", placement),
+        ("support.z_gap", gap),
+    ):
+        settings = print_settings.with_choice(settings, path, value)
+
+    assert "support.z_gap" in slicer_keys.LIMITED["cura"]
+    message = slicer_keys.limitation("cura", "support.z_gap", settings)
+    if said is None:
+        assert message is None, message
+    else:
+        assert message is not None and said in message.translate("de"), message
+    assert slicer_keys.limitation("orca", "support.z_gap", settings) is None
+
+
+def test_curas_gap_sentence_arrives_at_the_handover() -> None:
+    """Der Satz am Feld kommt als Befund der Übergabe, und seine Handlung öffnet
+    das Feld (RM-583, Review)."""
     profile = profiles.make_profile("centauri-carbon-2", "pla")
     base = print_settings.with_choice(print_settings.resolve(profile), "support.style", "grid")
     between = print_settings.with_choice(base, "support.z_gap", 0.28)
-    whole = print_settings.with_choice(base, "support.z_gap", 0.4)
-    unsupported = print_settings.with_choice(between, "support.style", "none")
-
-    assert "support.z_gap" in slicer_keys.LIMITED["cura"]
-    said = slicer_keys.limitation("cura", "support.z_gap", between)
-    assert said is not None and "Abstand oben und unten" in str(said), said
-    assert slicer_keys.limitation("cura", "support.z_gap", whole) is None
-    assert slicer_keys.limitation("orca", "support.z_gap", between) is None
-    assert slicer_keys.limitation("cura", "support.z_gap", unsupported) is None, (
-        "ohne Stützen druckt der Abstand nichts"
-    )
     finding = next(
         entry
         for entry in handover.setting_limitations("cura", between)
@@ -9112,13 +9141,14 @@ def test_cura_says_that_it_counts_the_gap_in_whole_layers() -> None:
 @pytest.mark.parametrize("quality", ["draft", "standard", "fine", "strong"])
 @pytest.mark.parametrize("printer", ["sovol-sv06", "centauri-carbon-2"])
 @pytest.mark.parametrize("material", ["pla", "petg", "tpu-95a"])
-def test_cura_gets_a_gap_in_whole_layers_from_its_foundation(
+def test_cura_gets_the_materials_gap_from_its_foundation(
     quality: str, printer: str, material: str
 ) -> None:
-    """Cura rechnet den Stützabstand in ganzen Schichten. Solidons Vorgabe von
-    0,2 mm war bei 0,28 und 0,12 mm Schicht keine, und jede Übergabe in
-    Entwurf und Fein warnte, auch ohne Stützen (RM-583, Nachprüfung M2). Die
-    Grundlage trägt jetzt das Vielfache, das zum Material passt."""
+    """Die Grundlage für Cura trägt den Abstand des Materials, so wie Cura ihn
+    unter Gitter oben druckt: genau (RM-628) — PETG bei 0,2er Schichten 0,28,
+    nicht eine Schicht. Ohne Werte des Materials bleibt Solidons Vorgabe. Ohne
+    Stützen sagt keine Übergabe etwas dazu (RM-583, Nachprüfung M2); mit Gitter
+    nur, wenn Cura unten aufrundet."""
     from app.core.export import manufacturer
 
     profile = profiles.make_profile(printer, material)
@@ -9127,17 +9157,21 @@ def test_cura_gets_a_gap_in_whole_layers_from_its_foundation(
     supported = print_settings.with_choice(foundation, "support.style", "grid")
 
     layer = foundation.layers.layer_height
-    steps = foundation.support.z_gap / layer
-    assert steps >= 1.0 - 1e-9 and math.isclose(steps, round(steps), abs_tol=1e-6), (
-        foundation.support.z_gap,
-        layer,
-    )
-    for settings in (foundation, supported):
-        assert not [
+    target = advise.support_gap_target(layer, profile.material, "cura", style="grid")
+    expected = print_settings.resolve(profile, quality).support.z_gap if target is None else target
+    assert foundation.support.z_gap == pytest.approx(expected), (foundation.support.z_gap, layer)
+    if material == "petg" and math.isclose(layer, 0.2):
+        assert foundation.support.z_gap == pytest.approx(0.28)
+
+    def said(settings: Any) -> list[Any]:
+        return [
             entry
             for entry in handover.setting_limitations("cura", settings)
             if entry.values.get("path") == "support.z_gap"
         ]
+
+    assert not said(foundation)
+    assert bool(said(supported)) is not advise.in_whole_layers(foundation.support.z_gap, layer)
 
 
 _TOWER = {"enable_prime_tower": "1"}

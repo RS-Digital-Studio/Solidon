@@ -529,12 +529,32 @@ geschriebenen Abständen der Teile, die nicht unter organischen Bäumen drucken
 (`handover.support_gaps_by_style`), nicht nach den Zielen aller Spulen; unter
 Bäumen wirkte er nicht und wäre eine Abweichung vom Herstellerprofil ohne Grund.
 Steht er gegen den Herstellerprozess, sagt es ein Befund: Die Stütze liegt dann
-auch auf eigenen Höhen (0,47, 0,75, 1,02 mm statt nur auf denen des Modells). Cura
-rechnet immer in ganzen Schichten, deshalb rät Solidon dort das Vielfache
-innerhalb der Materialgrenzen — bei 0,08 mm Schicht für PLA zwei Schichten statt einer
-unter dem Minimum —, und die Cura-Grundlage trägt es auch: Solidons 0,2 war
-bei 0,28 und 0,12 mm Schicht keines, und jede Übergabe in Entwurf und Fein
-warnte, auch ohne Stützen. Über mehrere Körper führt der Druckdialog den
+auch auf eigenen Höhen (0,47, 0,75, 1,02 mm statt nur auf denen des Modells).
+
+**Cura rundet auf, unter Gitter nur unten** (RM-628). CuraEngine 5.13 zählt
+Abstandslagen mit `round_up_divide`: unter Bäumen oben und unten
+(`TreeSupportSettings.h:62–63`), unter Gitter unten (`support.cpp:1119`, `:1703`).
+Oben unter Gitter hält es den Abstand genau: Liegt er zwischen zwei Schichten,
+druckt es die oberste Stützlage als Bruchteillage tiefer
+(`support_fractional_roof`, `support.cpp:1757`, `PathConfigStorage.cpp:165`).
+Gemessen an der Platte über einer Säule (PETG, 0,2 mm Schicht,
+`tests/test_real_slicers.py`): Gitter mit 0,28 oben 0,28 und unten 0,4, Baum mit
+0,44 oben und unten 0,6; die Sonde zu RM-624 maß dasselbe für 0,44 unter Gitter
+(oben 0,44, unten 0,6) und 0,28 unter Bäumen (0,4). Bis dahin nahm Solidon für
+Cura immer ganze Schichten zur nächsten an: PETG bekam unter Gitter eine Schicht
+(0,2) statt 0,28 vorgeschlagen, und der Feldsatz nannte eine Rundung, die Cura
+oben nicht macht. Jetzt rät Solidon unter Curas Gitter den Wert des Materials
+genau und unter Curas Bäumen das Vielfache innerhalb der Materialgrenzen — bei
+0,08 mm Schicht für PLA zwei Schichten statt einer unter dem Minimum. Welches
+Vielfache passt, sagt das Material, nicht die Rundungsart: Ein Vielfaches druckt
+jeder Slicer genau, und aufgerundet bekäme PETG bei 0,2 mm Schicht unter Bäumen
+0,4 über seinem Höchstwert 0,3, anders als in der Orca-Familie. Der Feldsatz
+nennt, was Cura druckt: unter Bäumen den aufgerundeten Abstand, unter Gitter den
+unteren, wo die Stütze auf dem Modell stehen darf. Die Cura-Grundlage trägt den
+Wert des Materials (ihre Art ist „keine“, Cura druckt dann Gitter); ohne Stützen
+sagt keine Übergabe etwas dazu, denn früher warnte jede in Entwurf und Fein
+(RM-583, Nachprüfung M2). Die Druckzeit hängt nicht am Abstand: `print_time`
+lässt die Säulen bis an die Decke reichen. Über mehrere Körper führt der Druckdialog den
 Stützkontakt getrennt zusammen und fragt ihn wie der Export gegen die
 Grundlage: Gegen die Übernahme gefragt, brachte jedes Übernehmen die
 Gegenzeile (Tisch 0,2, Kinn 0,5 und zurück; PLA 0,15, PETG 0,21 und zurück),
