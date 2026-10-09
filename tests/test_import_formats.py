@@ -473,3 +473,35 @@ def test_a_glb_of_printable_size_is_still_read_in_metres_without_a_question(
     )
     _project, mesh = _evaluated_import(payload, ".glb", profile)
     assert sorted(mesh.bounds.size) == pytest.approx([12.0, 16.0, 20.0])
+
+
+@pytest.mark.parametrize("name", ["plate_holes.stl", "openscad_ascii.stl", "torus_ring.stl"])
+def test_an_stl_is_read_without_a_scene_and_without_leftovers(name: str) -> None:
+    """Dieselben Zahlen wie ``trimesh.load_mesh`` — ohne Szene, die als Ring liegen bleibt (RM-567).
+
+    Der Weg über die Szene hinterließ Szene und Original für die
+    Speicherbereinigung, am Spiderman 254 MB; im Fenster räumt sie nur der
+    Hauptfaden nach seinen Schwellen ab.
+    """
+    import gc
+    import io
+
+    from app.core.geom.mesh import read_mesh
+
+    payload = (Path(__file__).parent / "data" / "meshes" / name).read_bytes()
+    expected = trimesh.load_mesh(io.BytesIO(payload), file_type="stl", process=False)
+    gc.collect()
+    was_enabled = gc.isenabled()
+    gc.disable()
+    try:
+        found = read_mesh(payload, ".stl").raw
+        leftovers = gc.collect()
+    finally:
+        if was_enabled:
+            gc.enable()
+    assert np.array_equal(found.vertices, expected.vertices)
+    assert found.vertices.dtype == expected.vertices.dtype
+    assert np.array_equal(found.faces, expected.faces)
+    assert np.array_equal(found.face_normals, expected.face_normals)
+    assert set(found.face_attributes) == set(expected.face_attributes)
+    assert leftovers < 20, f"{leftovers} objects of a scene were left behind"

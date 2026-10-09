@@ -91,7 +91,7 @@ Dreiecksfolge/Koordinaten bleiben beim Kern. Regel/Messfall:
 `__init__.py` trägt nur den Paketdocstring.
 
 **Grundlage** — `mesh.py` (die Hülle um den Kern, §9; `read_mesh`,
-`unique_edges`, `edge_table`; `python_values` für Millionen Werte als
+`unique_edges`, `edge_table`; `MeshData.held_bytes`/`lean` für den Cache; `python_values` für Millionen Werte als
 Python-Zahlen, stückweise; `on_surface` über einen Index, den hält, wer
 denselben Körper mehrmals fragt — `prepare.surface_index_of`;
 `ray_hits_batch`, dessen Index nur wählt, welche Paare rechnen, nie ihren
@@ -187,6 +187,8 @@ Rundung, Radius aus `measured_radius`)
 
 **Merkmalshandlungen** (Regeln in `operationen.md`):
 
+- `_shell_prints` gruppiert Schalen einmal; Abbruch zwischen Blöcken und Ergebnissen.
+
 - Hohlraumwerkzeuge entscheiden Richtung und Gültigkeit über das körpernahe
   `signed_volume`; Schwerpunkt und Trägheit werden dafür nicht berechnet.
   `_bore_end_rims` prüft alle Mündungsränder gemeinsam über
@@ -212,6 +214,7 @@ Rundung, Radius aus `measured_radius`)
   (`PLACE_BOUND_FINDINGS`); exakt trägt der Neuschnitt die übrige Topologie
   (`_exact_rest_carried`). Ob ein Wert die Bohrung ändert, sagen
   `bore_is_unchanged` und `bore_depth_is_unchanged` für Op und Fenster.
+- `DrillParams`/`PlugParams`: `LARGEST_THREAD`; Sehnen: `shapes.turn_segments`.
 - **Maße und Nachprüfung**: `_with_nominal_bore` hält bekannte Maße nur, wenn
   alle Wandpunkte im Sehnenband liegen; `voxel` und `jittered` behaupten
   keine. Über `FEATURE_LIMIT_TRIANGLES` prüft `detect_known` im Radius des

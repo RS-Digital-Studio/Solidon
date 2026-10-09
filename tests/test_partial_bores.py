@@ -150,6 +150,47 @@ def test_a_bore_with_a_cross_hole_is_still_a_whole_bore() -> None:
         assert "partial" not in big[0].params, reading
 
 
+def test_a_bore_through_two_touching_plates_is_whole_on_both_cores() -> None:
+    """Zwei Platten 40 × 30 × 5 als ein Compound, die sich bei z = 5 berühren, und eine
+    Bohrung Ø 6 durch beide: Jede Platte trägt einen ganzen Mantel, und beide
+    teilen sich den Kreis an der Grenzfläche.
+
+    Der exakte Kern legte die zwei Mäntel zu einer Bohrung zusammen und maß
+    ihren Umfang an den Punkten der Tessellation. Ein ganzer Mantel kam dort
+    eine Facette unter der vollen Umdrehung an, 351,4 Grad, und die Bohrung
+    hieß angeschnitten: Jede Kettenhandlung an einer Senkbohrung durch
+    berührende Platten sagte am exakten Körper ab, der Hohlraum lasse sich
+    nicht als eine Bohrung lesen, und die Karte sperrte *Merkmal ändern* an
+    der Senkung, wo die Operation nach dem Verbinden rechnete (RM-548, Review G).
+    Am Netz war sie ganz. Soll an beiden Kernen: eine ganze Bohrung, durch.
+    """
+    edit = exact_kernel()
+    from OCP.BRep import BRep_Builder
+    from OCP.TopoDS import TopoDS_Compound
+
+    from app.core.brep.kernel import Solid
+
+    compound = TopoDS_Compound()
+    builder = BRep_Builder()
+    builder.MakeCompound(compound)
+    builder.Add(compound, edit.box(40.0, 30.0, 5.0).shape)
+    builder.Add(compound, edit.moved(edit.box(40.0, 30.0, 5.0), (0.0, 0.0, 5.0)).shape)
+    body = edit.cut_bore(
+        Solid(compound),
+        position=(0.0, 0.0, 5.0),
+        direction=(0.0, 0.0, 1.0),
+        diameter=6.0,
+        depth=10.0,
+    )
+    assert body.solid_count == 2, "Voraussetzung: zwei Platten, nicht verbunden"
+    for reading, (found, _mesh) in _both_readings(body).items():
+        (hole,) = _holes(found)
+        assert "partial" not in hole.params, reading
+        assert hole.params["through"] is True, reading
+        assert float(hole.params["depth"]) == pytest.approx(10.0, abs=1e-6), reading
+        assert float(hole.params["diameter"]) == pytest.approx(6.0, abs=1e-6), reading
+
+
 def test_a_mesh_bore_cut_open_by_a_flat_side_is_partial_but_not_touched() -> None:
     """Am Rand geöffnet ohne Nachbarhöhlung: angeschnitten, aber niemand berührt sie —
     was daraus wird, sagt der Randweg (``open_slots_instead_of_fillets``), nicht

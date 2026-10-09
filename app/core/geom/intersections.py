@@ -31,8 +31,8 @@ Gerechnet wird in drei Stufen:
   Besenhalter trennt sie 92 Prozent der Kandidaten — Nadeln desselben
   ebenen Fächers, die sich nur an der Nabe berühren —, und die Suche kommt
   unter dem Budget ans Ende; an einem organischen Netz teilen fast alle
-  Kandidaten eine Ecke und stehen schräg, und dort entscheidet schon der
-  Nummernvergleich, dass die genaue Prüfung folgt.
+  Kandidaten eine Ecke und stehen schräg, und dort trennt die Nachbarprüfung
+  (:func:`_touching_apart`) die meisten, ohne dass das Budget weiter reicht.
 * **Das Paar selbst**, je Block als ``(m, 3, 3)``: Ecken beider Dreiecke, die
   innerhalb ``EPS_GEOM`` zusammenfallen, sind *ein* topologischer Punkt und
   werden auf ihre gemeinsame Mitte gelegt. Ein Eckpunkt, der auf einer Kante
@@ -367,9 +367,13 @@ def _separated(
 ) -> tuple[np.ndarray, np.ndarray]:
     """Welche Kandidatenpaare beweisbar nicht schneiden, ohne die genaue Prüfung.
 
-    Dazu, welche Paare die ganze Trennprüfung durchlaufen haben — die übrigen
-    entscheidet schon der Nummernvergleich, und nur die ganze kostet das
-    Budget etwas (:data:`SEPARATION_COST`).
+    Dazu je Paar, was es das Budget kostet, ohne die genaue Prüfung der
+    Paare, die offen bleiben: :data:`SEPARATION_COST` für die ganze
+    Trennprüfung, null für die, die schon der Nummernvergleich entscheidet,
+    und eine ganze genaue Prüfung für schräge Nachbarn, die
+    :func:`_touching_apart` trennt — so viel kosteten sie, als sie noch durch
+    die genaue Prüfung gingen, und das Budget endet damit an derselben Stelle
+    wie vorher.
 
     Befund RM-244 (25.09.2026): Am Besenhalter mit seinen Nadeldreiecken
     überdecken sich 3,2 Millionen Hüllquader — 57 Prozent davon in derselben
@@ -444,10 +448,20 @@ def _separated(
         )
         result[alone[by_plane]] = True
         alone = alone[~by_plane]
-    # Mit gemeinsamer Ecke nur in derselben Ebene — schräg bleibt es der
-    # genauen Prüfung, ohne weitere Rechnung.
+    # Mit gemeinsamer Ecke: schräg zueinander die Nachbarprüfung der örtlichen
+    # Suche (:func:`_touching_apart`, RM-419), in derselben Ebene die
+    # Draufsicht unten. Was die Nachbarprüfung trennt, kostet das Budget eine
+    # genaue Prüfung — so viel wie vorher, als es noch durch sie ging; das
+    # Budget endet damit an derselben Stelle (RM-568). Gemessen am
+    # Laptop-Riser (08.10.2026): 1,29 Millionen offene Paare, fast alle
+    # Nachbarn eines geschlossenen Netzes, und die genaue Prüfung kostete zwei
+    # Drittel der Selbstschnittsuche vor dem Booleschen Abziehen.
     touching = np.flatnonzero((count == 1) | (count == 2))
+    charged = np.zeros(len(first), dtype=bool)
     if len(touching):
+        apart = _touching_apart(surface, first[touching], second[touching])
+        result[touching[apart]] = True
+        charged[touching[apart]] = True
         direction = np.cross(surface.normal[first[touching]], surface.normal[second[touching]])
         parallel = np.linalg.norm(direction, axis=1) <= (
             0.5
@@ -460,8 +474,9 @@ def _separated(
     searched = np.zeros(len(first), dtype=bool)
     searched[count == 0] = True
     searched[touching] = True
+    cost = np.where(searched, SEPARATION_COST, 0.0) + charged
     if not len(rest):
-        return result, searched
+        return result, cost
     # Die Draufsicht von coplanar_overlap: die Achse weg, die der Normale des
     # ersten am nächsten liegt.
     dominant = np.argmax(np.abs(surface.normal[first[rest]]), axis=1)
@@ -485,7 +500,7 @@ def _separated(
         margin,
     )
     result[rest] = split
-    return result, searched
+    return result, cost
 
 
 def _beyond_an_edge(
@@ -585,9 +600,9 @@ def _candidates(
             cost = np.zeros(len(first))
             for offset in range(0, len(first), PAIR_BLOCK):
                 piece = slice(offset, offset + PAIR_BLOCK)
-                separated, searched = _separated(surface, first[piece], second[piece])
+                separated, charge = _separated(surface, first[piece], second[piece])
                 open_pairs[piece] = ~separated
-                cost[piece] = np.where(searched, SEPARATION_COST, 0.0)
+                cost[piece] = charge
             cost += open_pairs
         spent = float(cost.sum()) if cost is not None else float(len(first))
         if search.max_pairs is not None and counted + spent > search.max_pairs:
@@ -1158,10 +1173,10 @@ def box_groups(
 def _touching_apart(surface: _Surface, first: np.ndarray, second: np.ndarray) -> np.ndarray:
     """Welche Paare beweisbar höchstens an ihren gemeinsamen Ecken anliegen.
 
-    :func:`_separated` trennt eine gemeinsame Ecke nur in derselben Ebene;
-    schräg zueinander gehen Nachbarn an die genaue Prüfung — an einer glatten
-    Fläche sind das fast alle Kandidaten, und an einem Formschritt kostete das
-    Sekunden (RM-419). Getrennt heißt hier: Die Ecken des einen, die das
+    Schräg zueinander gingen Nachbarn an die genaue Prüfung — an einer
+    glatten Fläche sind das fast alle Kandidaten, und an einem Formschritt
+    kostete das Sekunden (RM-419); seit RM-568 fragt auch :func:`_separated`
+    hier, bevor es sie durchlässt. Getrennt heißt hier: Die Ecken des einen, die das
     andere nicht trägt, liegen alle um ``surface.margin`` auf derselben Seite
     der Ebene des anderen. Dann trifft das eine die Ebene des anderen nur in
     den gemeinsamen Ecken, und eine gemeinsame Ecke oder Kante ist für

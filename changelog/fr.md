@@ -20,6 +20,7 @@ dans `website/version.json`.
 
 ### Utilisation et système
 
+- Sur Mac, Solidon demande désormais macOS 14 ou plus récent. Tout Mac à partir de 2018 peut l'installer gratuitement.
 - Solidon démarre désormais sur les Mac Intel sous macOS 26. La version 0.5.3 y restait bloquée au démarrage.
 - Sur Mac, *Annuler* interrompt aussitôt une réponse en cours du modèle local.
 - Sur Mac, Retour ouvre l'entrée sélectionnée sur l'écran d'accueil, dans *Rechercher une fonction* et dans le rapport de contrôle.
@@ -28,6 +29,9 @@ dans `website/version.json`.
 - Suppr agit aussi quand l'onglet *Sélection* a le focus, et retire plusieurs corps marqués en une seule étape. Si la touche ne fait rien, la barre d'état en donne la raison.
 - Le clic droit sur les corps propose *Retirer l'objet* et, pour plusieurs, *Réunir*. *Évidement* figure aussi sur une face sélectionnée, qui devient l'ouverture.
 - Les panneaux de gauche et de droite se déplacent par leur poignée, s'ancrent à un bord ou flottent librement. *Vue → Panneaux à leur place* les remet en place.
+- Les panneaux se placent aussi en bas à gauche, en bas à droite et le long du bord inférieur.
+- Les onglets se réordonnent et se détachent dans des fenêtres, aussi sur un second écran. Fermer la fenêtre ou *Revenir dans Solidon* ramène son contenu.
+- Solidon mémorise la disposition. Les fenêtres restent accessibles même si un écran est débranché.
 - Pendant un nouveau calcul, le rapport de contrôle indique *Nouveau calcul en cours …* et garde les lignes précédentes comme état antérieur. Avant, d'anciennes erreurs semblaient encore valables.
 - Si le calcul rapide échoue à une étape, Solidon la recalcule à fond dans la même passe au lieu de s'arrêter.
 - Un constat indiquant qu'une étape n'a rien changé ouvre cette étape sur le champ concerné.
@@ -49,13 +53,22 @@ dans `website/version.json`.
 - Un autre filament s'affiche aussitôt, aussi sur les blocs et les corps STEP, et Solidon ne recalcule rien pour cela. Les corps sélectionnés montrent leur couleur de filament sous la surbrillance.
 - Dans l'onglet *Sélection*, le champ du filament n'attribue qu'au clic ou avec Entrée. Les flèches et la saisie ne font que parcourir la liste, et la molette fait défiler l'onglet.
 - Dans les versions traduites, *Nouveau filament* ne défile plus de côté quand la fenêtre est moins haute que son contenu.
+- Les grands modèles se chargent nettement plus vite et demandent moins de mémoire, même avec un long historique et sur des ordinateurs de 8 Go.
+- Même dans un long historique, une nouvelle étape ne prend guère plus de temps à calculer que la première.
+- Annuler et rétablir vont plus vite, et la mémoire devenue inutile est libérée aussitôt.
+- Résoudre les recouvrements et exporter en 3MF va nettement plus vite.
+- L'espace de travail s'affiche plus rapidement à l'ouverture de gros fichiers 3MF.
+- Un modèle ajouté est ensuite visible, même s'il se pose à côté d'un modèle sur lequel la vue était zoomée.
+- Dans le catalogue de blocs, *Gérer les blocs* est ouvert tant qu'il n'y a pas encore de bloc personnel.
 
 ### Imprimer et transmettre au slicer
 
 - Sous Linux, Solidon crée désormais aussi le fichier d'impression avec Cura en Flatpak ou en AppImage.
+- Sous Linux, les imprimantes d'OrcaSlicer, Bambu Studio, ElegooSlicer et Creality Print en AppImage sont proposées tout de suite, même si le slicer n'a jamais été ouvert.
 - La boîte de dialogue d'impression propose les imprimantes du slicer choisi, comme *Premiers pas* et *Réglages*. Une imprimante reprise ainsi reste liée à son slicer.
 - Dans la boîte de dialogue d'impression, le slicer se change comme dans *Premiers pas*, aussi via *Choisir le programme …* pour un slicer que Solidon ne trouve pas seul.
 - Une imprimante de la liste de Solidon et la même issue du slicer sont un seul appareil. La boîte de dialogue choisit le profil à la bonne buse, et le fichier contient le code de démarrage.
+- Sans profil du slicer mémorisé, l'export et la fenêtre principale prennent ce que la boîte d'impression propose pour l'imprimante, machine et processus du fabricant compris.
 - Seuls les slicers avec lesquels Solidon fonctionne sont proposés, plus les slicers pour résine comme ChituBox et Lychee. Bambu Studio en AppImage en fait désormais partie.
 - Le code de démarrage et le volume d'impression viennent uniquement de votre imprimante, pas d'un autre modèle de la même gamme.
 - La boîte de dialogue d'impression attribue les profils du slicer bien plus vite, à l'ouverture et après chaque changement de slicer.
@@ -65,17 +78,34 @@ dans `website/version.json`.
 - Là où les supports sous de petits surplombs reposent sur le modèle, Solidon propose des supports arborescents. Ils y laissent moins de traces.
 - Pour les petites pointes, Solidon propose une *Vitesse minimale de ralentissement* plus basse afin qu'elles ne ramollissent pas. Le réglage parvient à chaque slicer.
 - Les rebords étroits qui se portent seuls restent libres avec *Rebords sans support*. L'impression demande ainsi nettement moins de support.
+- Les supports se retirent plus facilement : l'espace suit le matériau et la hauteur de couche de chaque pièce, même avec plusieurs matériaux sur un plateau. L'interface suit la surface au-dessus.
+- Quand un support repose sur la pièce, Solidon propose aussi une couche d'interface en dessous pour que son pied ne laisse pas de traces. Sous les supports arborescents, si le slicer l'y imprime.
+- Sous les supports arborescents et à côté d'une tour de purge, Solidon propose l'espace du support en couches entières, comme le slicer l'imprime.
+- Pour le PLA, Solidon propose davantage d'espace entre les nombreuses pointes fines et les supports arborescents en dessous. Cela laisse moins de résidus des pointes des supports.
+- Pour le PETG, Solidon propose un refroidissement complet au support. Il se détache ainsi plus facilement de la pièce.
+- Nouveau dans les réglages d'impression : *Couches d'interface en bas*, *Écart dans l'interface* et *Refroidissement complet au support*.
+- Le champ *Espace au-dessus* s'appelle désormais *Espace dessus et dessous* et vaut pour les deux côtés du support.
 - Si le slicer refuse des filaments aux températures trop différentes sur un plateau, Solidon en donne désormais la raison et l'issue, au lieu de dire seulement qu'aucun fichier n'a été créé.
 - Dans la boîte de dialogue d'impression, imprimante, filaments et qualité restent entièrement visibles, même avec un texte agrandi. Les libellés longs passent à la ligne.
+- Le rapport de contrôle calcule plus vite et demande moins de mémoire.
+- Sous Linux avec Flatpak, Solidon signale désormais un plantage du slicer comme tel, au lieu de dire seulement qu'aucun fichier n'a été créé.
 
 ### Filetages, perçages et pièces normalisées
 
 - Les filetages acceptent désormais tout diamètre jusqu'à 1000 mm, avec *Filetage imprimable*, dans un perçage, avec *Créer une vis* ou *Créer un couvercle vissé*.
+- Les perçages ordinaires peuvent aussi être créés et rebouchés jusqu’à 1000 mm de diamètre. Les grands perçages et fraisures conservent leur forme ronde.
 - Vis, écrous et rondelles existent selon ISO de M1,6 à M64. Pour d'autres tailles, *Taille personnalisée* déduit les cotes des tailles voisines et le signale.
 - Avec *Ajustée au perçage*, *Goupille pour perçage* construit la contrepartie : une tête fraisée affleurante pour une fraisure, un filetage extérieur de même taille et même pas pour un intérieur.
 - Sur un filetage intérieur imprimé, la sélection propose directement *Goupille pour perçage*.
 - Si une pièce séparée, comme une goupille, occupe un perçage, ses actions le signalent et proposent *Diviser en pièces distinctes*. Avant, la goupille fusionnait sans bruit avec la plaque.
 - Nouveau : le *Goujon fileté*, une tige filetée ou un goujon sans tête, chanfreiné aux deux bouts, avec le même filetage imprimable que la vis et l'écrou.
+- Dans les perçages des blocs comme le trou de vis, l'insert à chaud ou le piège à écrou, *Goupille pour perçage* construit aussi la goupille adaptée, et prévient s'ils sont hors du corps.
+- Posé à la main sur une face, le piège à écrou creuse sa poche dans la matière. Jusqu'ici la poche restait au-dessus, et seul le trou de vis était percé.
+- Le trou de vis du piège à écrou traverse exactement la pièce, même épaisse. Jusqu'ici il s'arrêtait 10 mm sous la poche ou perçait le côté opposé au-delà d'un interstice.
+- Posé par en dessous, le piège à écrou a sa poche sous la face, et sa fente y descend. Jusqu'ici la poche était à moitié au-dessus, la vis dans la face.
+- Si le perçage d'un bloc ne traverse pas la pièce, il s'appelle désormais borgne. Jusqu'ici il s'appelait traversant.
+- Si la paroi est plus épaisse que celle saisie pour un *Passe-câble* ou un *Embout cannelé*, l'étape le signale et ouvre l'épaisseur de paroi. Jusqu'ici le passage finissait en silence dans la matière.
+- Si une pièce séparée se trouve dans une fraisure, un trou oblong, une cuvette, une gorge ou un filetage, les actions le disent. Jusqu'ici elle était coupée ou fusionnée.
 
 ### Blocs
 
@@ -102,6 +132,12 @@ dans `website/version.json`.
 - Sculpter suit la souris avec fluidité, et même une étape de centaines de coups de pinceau se calcule vite.
 - Dans *Squelette*, chaque clic après le premier pose un os, Entrée termine la chaîne, glisser une articulation la plie, et *Terminé* enregistre tout sans dialogue.
 - Un squelette ne plie que ce qui tient à ses os, le reste du corps ne bouge pas. Les anciens projets se calculent comme enregistrés.
+- Avec Ctrl ou Maj, vous sélectionnez plusieurs arêtes et leur appliquez un congé ou un chanfrein en une étape. Un clic sur un coin sélectionne toutes les arêtes qui s'y rejoignent.
+- Sur un corps exact, la mise en évidence d'une arête montre aussi les arêtes tangentes voisines que *Congé* et *Ajouter un chanfrein* traitent avec elle.
+- Ce que la sélection propose sur une caractéristique, l'opération l'exécute avec exactement ces valeurs. Ce qui est grisé, elle le dit dans les mêmes termes, aussi par chat et en ligne de commande.
+- Comme emplacement de la copie, *Dupliquer la caractéristique* propose une largeur et demie à côté de l'original, avec une paroi entre les deux et jamais le long de son axe.
+- Sur une fraisure, *Faire pivoter la caractéristique* propose le plus grand angle qui la laisse fraisure, et prévient quand une rotation ne fait que la reposer sur elle-même.
+- Si une action touchait une pièce séparée voisine, ou si une caractéristique posée ne touchait une autre matière que sur une ligne, Solidon le dit au lieu d'abîmer le corps.
 
 ### Générer avec l'IA
 
@@ -252,7 +288,6 @@ dans `website/version.json`.
 - Le remplissage Lignes arrive dans Bambu Studio et Creality Print sous forme de lignes, sans être remplacé par Grille ou Cubique.
 - Après le découpage, Solidon signale les réglages rejetés par PrusaSlicer ou les slicers Orca, ainsi que les changements de bordure, d'ordre des parois et de support.
 - La présélection du filament prend Generic ou la marque de votre imprimante au lieu d'un filament spécial tiers, par exemple Generic PETG au lieu de BETA PETG sur la Bambu A1.
-- L'export et le tranchage utilisent le calcul fin au lieu de la vue plus rapide de la fenêtre. Les cônes et les pièces fusionnées en douceur arrivent ainsi lisses dans le fichier.
 - Sur les surfaces STEP aussi, pour des rotations de près de 180° et sur des faces reconnues en partie, « Orienter pour l'impression », « Pivoter » et « Déplacer » fonctionnent. Le corps reste exact.
 - Un mur extérieur plus lent s'applique aussi aux petits périmètres (trous, tiges) dans PrusaSlicer et la famille Orca.
 - PrusaSlicer et la famille Orca respectent la densité des supports choisie. Le champ commence à 1 %. Pour imprimer sans supports, choisissez « Aucun ».
@@ -293,7 +328,7 @@ dans `website/version.json`.
 - Si un perçage coupe le corps en deux, le rapport le dit une seule fois, avec le nombre de pièces à la fin, et se tait dès que le corps est de nouveau d'un seul tenant.
 - Les motifs sur les faces cylindriques des modèles importés restent fermés quand vous les modifiez.
 - Dans l'historique d'un corps STEP, on peut réordonner les étapes ou en insérer une avant, même si une étape ultérieure vise un perçage. La référence suit le perçage.
-- Un perçage déplacé ou dupliqué avec une nouvelle direction reste exact sur un corps STEP.
+- Un perçage simple ou un trou oblong déplacé ou dupliqué avec une nouvelle direction reste exact sur un corps STEP.
 - Une caractéristique reconnue à plus d'un mètre de l'origine garde sa place quand vous la modifiez. Avant, le champ tronquait le nombre sans rien dire, et le perçage bougeait.
 - Si une étape touche une pièce dont la surface se croise elle-même, elle s'arrête et montre l'endroit. Ailleurs, elle continue le calcul et signale que les pièces n'ont pas pu être réunies.
 - Même le long de sa couture de symétrie, « Diviser le modèle » coupe une figure proprement, et les goupilles sont en place dès l'aperçu.

@@ -70,6 +70,37 @@ Bauteil und nimmt nichts weg.
   verschoben kippt er um.
 - **Die Prüfung misst die Richtung**, nicht nur die Berührung: Sie sagt, an
   welchem Ende die Sperrfläche sitzt.
+- **Die Mutternfalle baut nach oben**, die Mutter sitzt im Material: An einer
+  Fläche, mit freier Richtung oder von Hand dort gesetzt, wo knapp über der
+  Stelle Luft liegt, wird sie gespiegelt (`ops._builds_upward_on_a_face`,
+  `_air_above`, RM-591). Gefragt wird knapp darüber, nicht auf halber Höhe
+  des Bausteins. *Von unten eingelegt* führt ihr Schlitz von der Mündung zur
+  Tasche, die Schraube liegt quer; der Einschubweg reicht mindestens über die
+  halbe Eckweite (`feasible`), an einer Bohrung sagt der Schritt ab.
+- **Eine Einführfase wird als solche erklärt** (`build.bore(lead_in=True)`):
+  Sie ist keine Bohrung, in die ein Stift gehört, und die Karte bietet dort
+  keinen an (`perceive.actions.not_offered_at`).
+- **Eine erklärte Durchgangsbohrung endet im Körper und geht durch ihn, sonst
+  heißt sie Sackloch** (`ops._through_bores_in_the_body`, RM-598, RM-631): Das
+  Werkzeug darf über die Form hinausreichen, die Erklärung nicht. Gekürzt wird
+  nur beim bloß abtragenden Baustein, am Träger vor dem Schnitt — die Bohrung
+  eines anbauenden oder seines Aufbaus (`host_add`) liegt in Material, das der
+  Träger noch nicht hat. Ob hinter einem Ende Material liegt, fragt der Körper
+  nach dem Schritt und der Träger davor, bei jedem Baustein; eine eingetragene
+  Tiefe bleibt die Tiefe. Wer hinter einer Wand eingetragener Stärke aufbaut
+  (`host_add`) und eine dickere trifft, sagt es mit `parts.wall_thicker` und
+  öffnet `wall` (`ops._wall_thicker`, RM-633).
+- **Eine Bohrung ohne eigene Tiefe geht durch den ganzen Träger**
+  (`PartSpec.reaches_through`, `ops._reaching_through`, RM-631): Der Baustein
+  baut sie nur über seine Strecke, der Schritt verlängert sie an jedem Ende
+  durch Material, berührende Fugen und die Luft der Bohrung, in der er sitzt,
+  bis zur ersten echten Luft — nie über die Fläche hinaus in einen Spalt
+  (`_run_through`). Nur wo der ganze Rand ihres Querschnitts Material erreicht:
+  Eine Achse in einer Fläche oder ein Loch am Rand zöge sonst eine Rinne; dann
+  sagt es `parts.through_cut_short`. In einer Bohrung muss sie in deren Achse
+  liegen. Ihre Länge ist gemessen, die Kürzung auf der Achse lässt sie aus. Ohne Träger — Katalogbild, Platzierungsgeist,
+  SCAD — zeigt `through.with_shown_bores` sie drei Durchmesser weit, nie aus
+  der Mündung: Sonst läge sie unsichtbar im Baustein (RM-632).
 - **Schräg zur Fläche gesetzt, öffnet er trotzdem bis über sie.** Die Richtung
   bleibt Eingabe; angehoben wird der Deckel der Öffnung
   (`ops._opened_to_the_face`) bis über die **Ebene der Fläche am

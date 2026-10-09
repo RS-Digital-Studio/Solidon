@@ -30,6 +30,7 @@ from PySide6.QtWidgets import (
     QLabel,
     QPushButton,
     QToolButton,
+    QTreeWidgetItem,
     QWidget,
 )
 
@@ -73,6 +74,7 @@ from app.ui.print_settings_dialog import (
 )
 from app.ui.session import Session
 from app.ui.settings import UiSettings
+from tests.helpers import cc2_stock
 from tests.ui_helpers import session as session
 
 
@@ -789,6 +791,7 @@ def test_plate_job_adds_its_identity_without_replacing_project_process_values(
         viewport=SimpleNamespace(show_protected=lambda _protected: None),
         _pending_split_reveal=frozenset(),
         _created_to_choose=(),
+        _placed_to_frame=None,
         _refresh_parameters=lambda: None,
         history_panel=SimpleNamespace(show_document=lambda *_args: None),
         chat=SimpleNamespace(show_document=lambda _document: None),
@@ -2511,26 +2514,27 @@ def _cura_appimage_dialog(
     """Ein Druckdialog mit einer AppImage-Cura, deren Kopie noch aussteht, im
     Betrieb der Anwendung: Der Fensterfaden wartet nie (``build_application``)."""
     from app.core.activation import store
-    from app.core.export import cura_linux
+    from app.core.export import appimage as image_copies
     from tests.cura_fakes import appimage_cura
 
     monkeypatch.setattr(store, "TRIAL_FROM", store.DEMO_FROM)
     monkeypatch.setattr(activation, "_cached", activation.Activation(days_left=5))
     mounts: list[Path] = []
-    found, _point = appimage_cura(tmp_path, monkeypatch, mounts, **appimage)
-    monkeypatch.setattr(cura_linux, "_never_waits", None)
-    cura_linux.never_wait_in(threading.current_thread())
+    copies: list[Path] = []
+    found, _point = appimage_cura(tmp_path, monkeypatch, mounts, copies=copies, **appimage)
+    monkeypatch.setattr(image_copies, "_never_waits", None)
+    image_copies.never_wait_in(threading.current_thread())
     dialog = PrintSettingsDialog(session, UiSettings())
     assert dialog.wait_for_slicers(), "die Slicersuche kam nicht zurück"
     dialog._slicer_path = found
-    return dialog, mounts
+    return dialog, copies
 
 
-def _until_mounted(mounts: list[Path]) -> None:
+def _until_copying(copies: list[Path]) -> None:
     deadline = time.monotonic() + 10.0
-    while not mounts and time.monotonic() < deadline:
+    while not copies and time.monotonic() < deadline:
         time.sleep(0.01)
-    assert mounts, "der Cura-Arbeiter hat nicht eingehängt"
+    assert copies, "der Cura-Arbeiter hat das Abbild nicht gelesen"
 
 
 def test_the_dialog_rebases_without_waiting_and_again_after_curas_copy(
@@ -2552,9 +2556,9 @@ def test_the_dialog_rebases_without_waiting_and_again_after_curas_copy(
         return result
 
     monkeypatch.setattr(manufacturer, "base_settings", spy)
-    dialog, mounts = _cura_appimage_dialog(session, monkeypatch, tmp_path, delay=3.0)
+    dialog, copies = _cura_appimage_dialog(session, monkeypatch, tmp_path, delay=3.0)
     dialog._start_profile_search()
-    _until_mounted(mounts)
+    _until_copying(copies)
     started = time.monotonic()
     dialog._foundation_key = None
     dialog._rebase()
@@ -2583,9 +2587,9 @@ def test_a_dialog_closed_during_curas_copy_gets_no_rebase(
         original(self, *args)
 
     monkeypatch.setattr(PrintSettingsDialog, "_rebase", counted)
-    dialog, mounts = _cura_appimage_dialog(session, monkeypatch, tmp_path, delay=2.0)
+    dialog, copies = _cura_appimage_dialog(session, monkeypatch, tmp_path, delay=2.0)
     dialog._start_profile_search()
-    _until_mounted(mounts)
+    _until_copying(copies)
     started = time.monotonic()
     dialog.reject()
     closing = time.monotonic() - started
@@ -2597,6 +2601,41 @@ def test_a_dialog_closed_during_curas_copy_gets_no_rebase(
 
     assert closing < 1.0
     assert len(calls) == before
+
+
+def test_after_a_cleared_cache_a_new_search_brings_curas_printers_back(
+    qt_app: QApplication, session: Session, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Leert ein Aufräumprogramm den Nutzer-Cache, während Solidon läuft, fehlt die
+    Kopie von Curas Druckern. Die nächste Suche liest das Abbild neu, ohne
+    Neustart; der Fensterfaden nennt bis dahin keinen gelöschten Ordner. Vorher
+    behielt der Merker den Ordner, und Curas Drucker fehlten bis zum Neustart."""
+    import shutil
+
+    from app.core import discover
+    from app.core.export import cura_linux, slicer_profiles
+
+    monkeypatch.setattr(cura_linux.PRINTER_COPIES, "root", lambda: tmp_path / "cache")
+    dialog, copies = _cura_appimage_dialog(session, monkeypatch, tmp_path)
+    found = dialog._slicer_path
+    assert found is not None
+    dialog._start_profile_search()
+    assert dialog.wait_for_cura_printer(60_000)
+    QCoreApplication.processEvents()
+    assert slicer_profiles.install_root(found) is not None
+
+    shutil.rmtree(tmp_path / "cache")
+    gone = slicer_profiles.install_root(found)
+    discover.forget_cache()
+    dialog._start_profile_search()
+    assert dialog.wait_for_cura_printer(60_000)
+    QCoreApplication.processEvents()
+    again = slicer_profiles.install_root(found)
+    dialog.release()
+
+    assert gone is None, "kein gelöschter Ordner aus dem Fensterfaden"
+    assert again is not None and (again / "resources" / "definitions").is_dir()
+    assert copies == [found, found]
 
 
 @pytest.mark.parametrize("loader", [True, False])
@@ -2613,9 +2652,9 @@ def test_slicing_waits_with_a_reason_until_curas_copy_tells(
     from app.core.export import cura_linux
 
     reading = str(tr("Curas Drucker werden gelesen …"))
-    dialog, mounts = _cura_appimage_dialog(session, monkeypatch, tmp_path, delay=2.0, loader=loader)
+    dialog, copies = _cura_appimage_dialog(session, monkeypatch, tmp_path, delay=2.0, loader=loader)
     dialog._start_profile_search()
-    _until_mounted(mounts)
+    _until_copying(copies)
     dialog._show_slicer_state()
 
     assert not dialog.slice_button.isEnabled()
@@ -4238,21 +4277,47 @@ def _pretend_a_slicer(monkeypatch: pytest.MonkeyPatch) -> None:
     )
 
 
+def _record_the_standard_choice(
+    monkeypatch: pytest.MonkeyPatch,
+) -> list[tuple[handover.SlicerSetup, str]]:
+    """Wer ohne geltende gemerkte Maschine nach der Vorwahl fragt (RM-623):
+    das Setup samt Vorzug und der Drucker. Die Antwort ist das Setup selbst."""
+    asked: list[tuple[handover.SlicerSetup, str]] = []
+
+    def standard(
+        setup: handover.SlicerSetup, profile: Profile, **_kwargs: object
+    ) -> handover.SlicerSetup:
+        asked.append((setup, profile.printer.id))
+        return setup
+
+    monkeypatch.setattr(print_dialog.handover, "standard_choice", standard)
+    return asked
+
+
 def test_a_profile_of_another_printer_is_not_reused(monkeypatch: pytest.MonkeyPatch) -> None:
     """A6: Ein Maschinenprofil gehört zu genau einem Drucker.
 
     Ohne diesen Abgleich trägt die 3MF eines Prusa-Projekts das Profil des
     Elegoo, mit dem zuletzt gearbeitet wurde — richtig gerechnet, falsch
     adressiert. Schlimmer als gar keines: Die Datei sieht vollständig aus.
+    Seit RM-623 gilt dann die Vorwahl für **diesen** Drucker, ohne die
+    gemerkte Maschine.
     """
     from app.ui.print_settings_dialog import remembered_setup
 
     _pretend_a_slicer(monkeypatch)
+    asked = _record_the_standard_choice(monkeypatch)
     settings = UiSettings()
     settings.slicer_machine_profile = "Centauri Carbon 0.4"
     settings.slicer_profile_printer = "centauri-carbon"
 
-    assert remembered_setup(settings, "petg", "prusa-mk4") is None, "anderer Drucker, nichts gilt"
+    other = remembered_setup(settings, "petg", "prusa-mk4s")
+    assert [printer for _setup, printer in asked] == ["prusa-mk4s"], (
+        "anderer Drucker: die Vorwahl für ihn"
+    )
+    assert other is not None and other.machine_profile == "", (
+        "die gemerkte Maschine reist nicht weiter"
+    )
 
     same = remembered_setup(settings, "petg", "centauri-carbon")
     assert same is not None
@@ -4300,7 +4365,13 @@ def test_a_profile_refresh_keeps_a_plate_only_in_its_current_context(
 def test_the_initial_plate_and_export_share_the_same_profile_ownership(
     monkeypatch: pytest.MonkeyPatch, saved_printer: str, saved_slicer: str, available: bool
 ) -> None:
-    """Alte leere Marker gelten weiter; bekannte fremde Marker und fehlende Programme nicht."""
+    """Alte leere Marker gelten weiter; bekannte fremde Marker und fehlende Programme nicht.
+
+    Gilt die gemerkte Maschine nicht, fragt der Export nach der Vorwahl
+    (RM-623) — mit gemerktem Prozess und Filament als Vorzug, mit derselben
+    Platte wie der Dialog und ohne die gemerkte Maschine.
+    """
+    asked = _record_the_standard_choice(monkeypatch)
     current = Path("elegoo-slicer.exe") if available else None
     settings = UiSettings()
     settings.slicer_machine_profile = "Ausgewählte Maschine"
@@ -4326,10 +4397,13 @@ def test_the_initial_plate_and_export_share_the_same_profile_ownership(
 
     valid = available and saved_printer != "generic-220" and saved_slicer != "orca-slicer.exe"
     assert host._bed_plate == ("Engineering Plate" if valid else "")
-    assert (exported is not None) is valid
+    assert (exported is not None) is available, "ohne Programm keine Einrichtung"
+    assert len(asked) == (1 if available and not valid else 0), "nur ohne geltende Maschine"
     if exported is not None:
         assert exported.plate == host._bed_plate
-        assert exported.machine_profile == "Ausgewählte Maschine"
+        assert exported.machine_profile == ("Ausgewählte Maschine" if valid else ""), (
+            "eine fremde gemerkte Maschine reist nicht weiter"
+        )
         assert exported.base_process == "Eigener Prozess"
         assert exported.base_filament == "Eigenes Filament"
 
@@ -4385,15 +4459,24 @@ def test_a_profile_of_another_slicer_is_not_reused(monkeypatch: pytest.MonkeyPat
     from app.ui.print_settings_dialog import remembered_setup
 
     _pretend_a_slicer(monkeypatch)
+    asked = _record_the_standard_choice(monkeypatch)
     settings = UiSettings()
     settings.slicer_machine_profile = "Centauri Carbon 0.4"
+    settings.slicer_bed_plate = "Engineering Plate"
     settings.slicer_profile_slicer = r"C:\anderswo\prusa-slicer.exe"
 
-    assert remembered_setup(settings, "petg") is None, "anderer Slicer, nichts gilt"
+    other = remembered_setup(settings, "petg")
+    assert len(asked) == 1, "anderer Slicer: die Vorwahl aus seinem Bestand"
+    assert other is not None and (other.machine_profile, other.plate) == ("", ""), (
+        "Maschine und Platte des fremden Slicers reisen nicht weiter"
+    )
 
     settings.slicer_profile_slicer = "elegoo-slicer.exe"
     same = remembered_setup(settings, "petg")
-    assert same is not None, "derselbe Slicer, alles gilt"
+    assert same is not None and same.machine_profile == "Centauri Carbon 0.4", (
+        "derselbe Slicer, alles gilt"
+    )
+    assert len(asked) == 1
 
     # Ohne Vermerk kein Vergleich — der Zustand jeder Installation, die vor
     # diesem Feld eingerichtet wurde (dieselbe Zusage wie beim Drucker).
@@ -4925,6 +5008,95 @@ def test_the_found_profiles_fill_both_choices(dialog: PrintSettingsDialog) -> No
     assert dialog.machine_choice.count() == 1
     assert dialog.machine_choice.isEnabled()
     assert dialog.process_choice.count() == 2
+
+
+@pytest.mark.parametrize("remembered", ["nichts", "ohne Maschine", "fremder Drucker"])
+def test_the_dialog_and_the_standard_choice_pick_alike(
+    qt_app: QApplication,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    request: pytest.FixtureRequest,
+    remembered: str,
+) -> None:
+    """Zwillingswächter RM-623: Was der Dialog vorbelegt, schreibt der Export
+    ohne gemerkte Maschine — Maschine, Prozess, Filament und Platte.
+
+    Auf einem Bestand mit je zwei Maschinen, Prozessen und Filamenten
+    (``tests.helpers.cc2_stock``), in dem jede falsche Regel eine andere Datei
+    trifft. „ohne Maschine“ ist Roberts Stand: Prozess, Filament und Platte
+    gemerkt, die Maschine nach einem Düsenwechsel leer (``_nozzle_changed``).
+    """
+    from copy import deepcopy
+
+    from app.core import tools
+    from app.core.export import manufacturer, slicer_profiles
+
+    executable = cc2_stock(tmp_path / "bestand")
+    stock = executable.parent / "resources" / "profiles" / "Elegoo"
+    monkeypatch.setattr(profiles, "user_profiles_dir", lambda: tmp_path / "drucker")
+    monkeypatch.setattr(profiles, "_printers", None)
+    monkeypatch.setattr(tools, "slicer_program", lambda: executable)
+    settings = UiSettings()
+    if remembered != "nichts":
+        settings.slicer_base_process = str(stock / "process" / "ECC2" / "fine.json")
+        settings.slicer_filament_per_material["pla"] = str(
+            stock / "filament" / "ECC2" / "petg.json"
+        )
+        settings.slicer_bed_plate = "Textured PEI Plate"
+        settings.slicer_profile_slicer = str(executable)
+        settings.slicer_profile_printer = "centauri-carbon-2"
+    if remembered == "fremder Drucker":
+        settings.slicer_machine_profile = "Original Prusa MK4S 0.4 nozzle"
+        settings.slicer_profile_printer = "prusa-mk4s"
+    session = Session()
+    session.start_new("centauri-carbon-2", "pla")
+    exported = manufacturer.for_stage(
+        print_dialog.remembered_setup(deepcopy(settings), "pla", "centauri-carbon-2"),
+        session.profile,
+        "standard",
+    )
+
+    dialog = PrintSettingsDialog(session, settings)
+    assert dialog.wait_for_slicers(), "die Slicersuche kam nicht zurück"
+    dialog._leash.wait_all(2000)
+
+    def close_dialog() -> None:
+        dialog.reject()
+        dialog.wait_for_workers()
+        dialog.deleteLater()
+        qt_app.processEvents()
+
+    request.addfinalizer(close_dialog)
+    dialog._slicer_path = executable
+    dialog._bed_plate_context = None
+    dialog._refresh_bed_plate_context()
+    dialog._profiles_pending = False
+    dialog.machine_choice.setCurrentIndex(-1)
+    dialog._profiles_found(
+        slicer_profiles.find_profiles(executable, "orca", ("machine", "process", "filament"))
+    )
+    shown = dialog._setup_snapshot()
+
+    assert dialog.settings.quality == "standard"
+    assert shown is not None and exported is not None
+
+    def files(setup: handover.SlicerSetup) -> tuple[str, str, str, str]:
+        return (
+            Path(setup.machine_profile).name,
+            Path(setup.base_process).name,
+            Path(setup.base_filament).name,
+            setup.plate,
+        )
+
+    assert files(exported) == files(shown)
+    expected = (
+        ("cc2.json", "standard.json", "pla.json", "")
+        if remembered == "nichts"
+        else ("cc2.json", "fine.json", "petg.json", "Textured PEI Plate")
+    )
+    if remembered == "fremder Drucker":
+        expected = (*expected[:3], "")
+    assert files(shown) == expected, "der Bestand unterscheidet die Regeln nicht mehr"
 
 
 def test_the_active_slicer_variant_and_nozzle_choice_stay_in_step(
@@ -7540,15 +7712,19 @@ def test_the_search_also_knows_the_name_from_the_slicer(
     # steht auch wirklich in der Übergabetabelle dieses Feldes.
     assert set(keys_for("shell.wall_count")) == {"perimeters", "wall_loops", "wall_line_count"}
 
-    # Ein Schlüssel darf nicht das halbe Fenster treffen — dieselbe Grenze, an
-    # der die Einheit „mm" gescheitert ist (22 von 56). Gemessen ist der
-    # breiteste `support_material` mit sieben: sechs Stützzeilen und die
-    # Bahnbreite, die seit den Rollenbreiten auch
-    # `support_material_extrusion_width` schreibt (3e501baaf).
-    breiteste = max(
-        len(dialog.search_hits(schluessel)) for feld in FIELDS for schluessel in keys_for(feld.path)
+    # Ein Schlüssel darf nicht das halbe Fenster treffen — die Einheit „mm"
+    # traf 22 von 56 Zeilen. Die Grenze ist ein Viertel der Zeilen und keine
+    # gemessene Zahl: `support_material` trifft jede Stützzeile, die PrusaSlicer
+    # unter diesem Namen führt, und jede neue Stützeinstellung zöge eine feste
+    # Zahl mit, ohne dass die Suche schlechter würde.
+    breiteste, schluessel = max(
+        (len(dialog.search_hits(schluessel)), schluessel)
+        for feld in FIELDS
+        for schluessel in keys_for(feld.path)
     )
-    assert breiteste <= 7, f"ein Schlüssel trifft {breiteste} von {len(FIELDS)} Zeilen"
+    assert breiteste * 4 <= len(FIELDS), (
+        f"„{schluessel}“ trifft {breiteste} von {len(FIELDS)} Zeilen"
+    )
 
     # Und die Abdeckung: Ohne sie wäre der Test grün, wenn die Tabelle
     # zusammenschrumpft — ein Filter über eine leere Menge findet nie etwas.
@@ -7821,8 +7997,16 @@ def test_every_group_holds_one_subject(qt_app: QApplication, session: Session) -
     assert not abweichung, f"Reiter und Bereich laufen auseinander: {abweichung}"
     assert "other" not in GROUPS, "die Sammelgruppe ist aufgelöst"
 
-    groesste = max(sum(1 for f in FIELDS if f.group == g and not f.front) for g in GROUPS)
-    assert groesste <= 9, f"die größte Gruppe trägt {groesste} Felder"
+    # Die Größe misst sich am Schnitt, an dem die Sammelgruppe scheiterte: fast
+    # dreimal so viele. Ein Thema darf doppelt so viele Zeilen tragen — die
+    # Stützen kommen mit den Trennschichten auf zehn, und keine davon gehört in
+    # einen anderen Reiter.
+    je_gruppe = {g: sum(1 for f in FIELDS if f.group == g and not f.front) for g in GROUPS}
+    groesste = max(je_gruppe, key=je_gruppe.__getitem__)
+    schnitt = sum(je_gruppe.values()) / len(je_gruppe)
+    assert je_gruppe[groesste] <= 2 * schnitt, (
+        f"„{groesste}“ trägt {je_gruppe[groesste]} Felder, der Schnitt {schnitt:.1f}"
+    )
 
 
 def test_the_spool_colour_is_big_enough_to_read(qt_app: QApplication) -> None:
@@ -9744,7 +9928,7 @@ def test_direct_3mf_export_preserves_format_and_native_settings(
     from app.ui import main_window
 
     setup = handover.SlicerSetup(tmp_path / "slicer.exe", flavour)
-    monkeypatch.setattr(main_window, "remembered_setup", lambda *args: setup)
+    monkeypatch.setattr(main_window, "remembered_setup", lambda *_args, **_kwargs: setup)
     worker = main_window._ExportWorker(
         [_cube_object()],
         tmp_path / "chosen.3mf",
@@ -9761,6 +9945,167 @@ def test_direct_3mf_export_preserves_format_and_native_settings(
         assert "3D/3dmodel.model" in archive.namelist()
         if flavour == "prusa":
             assert "Metadata/Slic3r_PE.config" in archive.namelist()
+
+
+# --- Die Vorwahl im Hauptfenster: einmal je Wahl, abbrechbar (RM-623, M1) ----------
+
+
+def test_the_foundation_worker_reuses_the_chosen_setup_and_stops_when_cancelled(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Ein Stufenwechsel liest den Profilbestand nicht neu, ein anderer Schlüssel
+    schon; abgesagt hält die Vorwahl nach den Maschinen an.
+
+    Der Grundlagenschlüssel trägt die Stufe, die Vorwahl hängt nicht an ihr —
+    vorher las jeder Stufenwechsel den ganzen Bestand (Durchsicht RM-623, M1).
+    """
+    from app.core import tools
+    from app.core.export import slicer_profiles
+
+    executable = cc2_stock(tmp_path)
+    monkeypatch.setattr(tools, "slicer_program", lambda: executable)
+    profile = profiles.make_profile("centauri-carbon-2", "pla")
+    reads: list[tuple[str, ...]] = []
+    original = slicer_profiles.find_profiles
+
+    def counted(
+        found: Path, flavour: Any, kinds: Any = slicer_profiles.DEFAULT_KINDS
+    ) -> list[slicer_profiles.SlicerProfile]:
+        reads.append(tuple(kinds))
+        return original(found, flavour, kinds)
+
+    monkeypatch.setattr(slicer_profiles, "find_profiles", counted)
+
+    def answers(worker: Any) -> list[tuple[Any, ...]]:
+        given: list[tuple[Any, ...]] = []
+        worker.done.connect(lambda *args: given.append(args))
+        worker.work()
+        return given
+
+    first = answers(
+        preflight_main._FoundationWorker(("p", "standard", "w"), UiSettings(), profile, "standard")
+    )
+    assert reads == [("machine",), ("process", "filament")], "erst die Maschinen, dann der Rest"
+    chosen = first[0][2]
+    assert Path(chosen.setup.machine_profile).name == "cc2.json"
+
+    staged = answers(
+        preflight_main._FoundationWorker(("p", "fine", "w"), UiSettings(), profile, "fine", chosen)
+    )
+    assert len(reads) == 2, "ein Stufenwechsel liest den Bestand nicht neu"
+    assert staged[0][2] is chosen
+    assert staged[0][1].settings.layers.layer_height == pytest.approx(0.12), (
+        "die Stufe wählt trotzdem ihren Prozess (Entscheidung I)"
+    )
+
+    answers(
+        preflight_main._FoundationWorker(("q", "fine", "w"), UiSettings(), profile, "fine", chosen)
+    )
+    assert len(reads) == 4, "ein anderer Drucker, ein anderes Material: neu hergeleitet"
+
+    stopped = preflight_main._FoundationWorker(
+        ("p", "standard", "w"), UiSettings(), profile, "standard"
+    )
+    stopped.cancel()
+    assert answers(stopped) == []
+    assert reads[4:] == [("machine",)], "abgesagt hält die Vorwahl nach den Maschinen an"
+
+
+def test_a_new_foundation_cancels_the_retired_worker(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Schnelle Wechsel stapelten volle Lesedurchgänge: Der abgelöste Arbeiter
+    lief ohne Abbruch zu Ende (Durchsicht RM-623, M1). Der neue bekommt die
+    gemerkte Wahl mit."""
+    from app.ui.main_window import MainWindow
+
+    class Old:
+        stopped = False
+
+        def cancel(self) -> None:
+            self.stopped = True
+
+    old = Old()
+    retired: list[object] = []
+    started: list[Any] = []
+    chosen = preflight_main._ChosenSetup(("p", "w"), None)
+
+    def new_worker(
+        _key: object, _settings: object, _profile: object, _quality: object, choice: object
+    ) -> SimpleNamespace:
+        signal = SimpleNamespace(connect=lambda _slot: None)
+        return SimpleNamespace(_chosen=choice, done=signal, crashed=signal, finished=signal)
+
+    monkeypatch.setattr(preflight_main, "_FoundationWorker", new_worker)
+    host = SimpleNamespace(
+        _close_requested=False,
+        settings=UiSettings(),
+        session=SimpleNamespace(profile=profiles.make_profile("centauri-carbon-2", "pla")),
+        _chosen_setup=chosen,
+        _foundation_worker=old,
+        _foundation_found=lambda *_args: None,
+        _foundation_crashed=lambda *_args: None,
+        _foundation_worker_done=lambda _worker: None,
+        _retire=retired.append,
+        _leash=SimpleNamespace(start=started.append),
+    )
+
+    MainWindow._start_foundation(host, ("p", "fine", "w"), "fine")  # type: ignore[arg-type]
+
+    assert old.stopped and retired == [old]
+    assert started[0]._chosen is chosen
+
+
+def test_the_export_gets_the_chosen_setup_only_for_the_same_choice() -> None:
+    """Zahlenzeile und Datei rechnen mit derselben Wahl — aber nur, solange
+    Drucker, Material, Profilwahl und Slicer dieselben sind."""
+    from app.core import discover
+    from app.ui.main_window import MainWindow
+
+    host = SimpleNamespace(
+        session=SimpleNamespace(profile=profiles.make_profile("centauri-carbon-2", "pla")),
+        settings=UiSettings(),
+        _chosen_setup=None,
+    )
+    host._foundation_key = lambda quality: MainWindow._foundation_key(host, quality)  # type: ignore[arg-type]
+    key = MainWindow._foundation_key(host, "fine")  # type: ignore[arg-type]
+    host._chosen_setup = preflight_main._ChosenSetup(preflight_main._without_stage(key), None)
+
+    assert MainWindow._chosen_setup_now(host) is host._chosen_setup  # type: ignore[arg-type]
+    host.settings.slicer_base_process = "ein anderer Prozess"
+    assert MainWindow._chosen_setup_now(host) is None  # type: ignore[arg-type]
+    host.settings.slicer_base_process = ""
+    discover.forget_cache()
+    assert MainWindow._chosen_setup_now(host) is None, "ein anderer Slicer in den Einstellungen"  # type: ignore[arg-type]
+
+
+def test_the_export_writes_with_the_chosen_setup_without_deriving_it(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Hat das Hauptfenster die Wahl schon, liest der Export den Bestand nicht
+    ein zweites Mal — und schreibt mit ihr."""
+    import zipfile
+
+    def derived(*_args: object, **_kwargs: object) -> None:
+        raise AssertionError("der Export leitet die Wahl nicht neu her")
+
+    monkeypatch.setattr(preflight_main, "remembered_setup", derived)
+    profile = profiles.make_profile("centauri-carbon-2", "pla")
+    setup = handover.SlicerSetup(tmp_path / "slicer.exe", "prusa")
+    worker = preflight_main._ExportWorker(
+        [_cube_object()],
+        tmp_path / "gemerkt.3mf",
+        "3mf",
+        profile=profile,
+        sources={},
+        settings=print_settings.resolve(profile),
+        ui_settings=UiSettings(),
+        material="pla",
+        chosen=preflight_main._ChosenSetup(("p", "w"), setup),
+    )
+
+    paths, _findings = worker._assembly()
+
+    with zipfile.ZipFile(paths[0]) as archive:
+        assert "Metadata/Slic3r_PE.config" in archive.namelist(), "geschrieben mit der Wahl"
 
 
 @pytest.mark.parametrize("language", ["en", "es", "fr", "it", "pt"])
@@ -10242,6 +10587,24 @@ def test_measures_of_other_bed_types_are_hidden_and_do_not_lock_slicing(
         assert isinstance(editor, BoundedSpin)
         editor.lineEdit().setText("99999")
         assert not editor.refusal() or dialog._first_numeric_refusal() == ""
+
+
+@pytest.mark.parametrize("style", ["none", "tree"])
+def test_the_contact_cooling_row_follows_the_supports(
+    dialog: PrintSettingsDialog, style: str
+) -> None:
+    """Die volle Kühlung an der Stütze steht unter „Kühlung“, gehört aber zu den
+    Stützdetails: Ohne Stützen verschwindet sie dort (RM-583, Review). Gefragt
+    wurde das Formular der Stützen, Qt meldete „Invalid widget“, und die Zeile
+    blieb stehen."""
+    selector = dialog._editors["support.style"]
+    assert isinstance(selector, QComboBox)
+    selector.setCurrentIndex(selector.findData(style))
+    dialog._update_inactive_setting_rows()
+
+    path = "cooling.support_interface_cooling"
+    form = dialog._tab_forms["cooling"]
+    assert form.isRowVisible(dialog._labels[path]) is (style != "none")
 
 
 #: Der Schlüssel, an dem jede Haftungsart im Slicer wirkt, und die Felder, die
@@ -11029,6 +11392,7 @@ def test_real_operation_entry_reaches_size_dialog_with_fixed_id_without_feature_
         "_spacing_for",
         "_plane_through",
         "_measured_from_body",
+        "_edges_from_view",
         "_source_names",
         "_parameter_values",
         "_feature_names",
@@ -11103,6 +11467,403 @@ def test_the_advice_worker_names_who_gets_an_accepted_suggestion(qt_app: QApplic
     }
 
     assert worker._accepted_targets(results) == {"adhesion.kind": ("Turm",)}
+
+
+@pytest.mark.parametrize("flavour", ["orca", "cura"])
+@pytest.mark.parametrize("case", ["ceilings", "materials"])
+def test_the_contact_rows_settle_in_the_dialog(
+    qt_app: QApplication, flavour: str, case: str
+) -> None:
+    """Der Rat zum Stützkontakt kommt nach einmal Übernehmen zur Ruhe (RM-583, H1).
+
+    Gegen die Übernahme gefragt, brachte jedes Übernehmen die Gegenzeile: am
+    Tisch die dichte Trennschicht, am Kinn die lockere und wieder zurück, bei
+    PLA und PETG der Abstand ebenso. Der Arbeiter fragt jetzt wie der Export
+    gegen die Grundlage, und die Zeile nennt nur das Teil, das ihren Wert
+    bekommt — nicht jedes, das einen anderen verlangt.
+    """
+    from app.core.slice import advise
+    from app.core.types import PrintSettings
+    from tests.helpers import chin_over_chest, column_table
+
+    profile = profiles.make_profile("centauri-carbon-2", "pla")
+    settings = print_settings.resolve(profile, "standard")
+    if case == "ceilings":
+        chosen: tuple[tuple[str, object], ...] = (
+            ("support.interface_spacing", 0.2),
+            ("support.interface_layers", 3),
+            ("support.bottom_interface_layers", 2),
+        )
+        objects = (
+            SceneObject(id="obj_1", name="Tisch", mesh=column_table()),
+            SceneObject(id="obj_2", name="Kinn", mesh=chin_over_chest()),
+        )
+        named: dict[str, tuple[str, ...]] = {
+            "support.interface_layers": ("Kinn",),
+            "support.interface_spacing": ("Kinn",),
+        }
+    else:
+        # PLA verlangt 0,15, PETG 0,21: Die Zeile zeigt den größeren Wert und
+        # nennt nur das Teil, das ihn bekommt.
+        chosen = (("layers.layer_height", 0.15), ("support.z_gap", 0.3))
+        objects = (
+            SceneObject(id="obj_1", name="PLA-Tisch", mesh=column_table(), material="pla"),
+            SceneObject(id="obj_2", name="PETG-Tisch", mesh=column_table(), material="petg"),
+        )
+        # Die dichte Trennschicht verlangen beide Tische: Sie gilt allen.
+        named = {
+            "support.z_gap": ("PETG-Tisch",),
+            "support.interface_layers": (),
+            "support.interface_spacing": (),
+        }
+    for path, value in chosen:
+        settings = print_settings.with_choice(settings, path, value)
+
+    def rows(current: PrintSettings) -> dict[str, SettingAdvice]:
+        found: list[list[SettingAdvice]] = []
+        worker = print_dialog._AdviceWorker(
+            objects, current, profile, None, {}, (), (), {}, flavour=flavour
+        )
+        worker.done.connect(lambda entries, _measured: found.append(entries))
+        worker.work()
+        assert found, "der Arbeiter liefert"
+        return {entry.path: entry for entry in found[-1] if entry.path in advise.CONTACT_PATHS}
+
+    first = rows(settings)
+    if flavour == "orca":
+        for path, entry in first.items():
+            parts = getattr(entry, "parts", ())
+            assert parts == named[path], (path, parts)
+        assert set(first) == set(named), first
+    elif case == "ceilings":
+        assert "support.interface_spacing" not in first, (
+            "Cura nimmt die Lücke nur für die Platte; die dichte des Tischs gilt allen"
+        )
+    for path, entry in first.items():
+        settings = print_settings.with_accepted(settings, path, entry.value)
+    assert rows(settings) == {}, "nach dem Übernehmen keine Gegenzeile"
+
+
+@pytest.mark.parametrize("case", ["tower", "trees", "free"])
+def test_beside_a_tower_the_dialog_proposes_the_gap_the_file_gets(
+    qt_app: QApplication, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, case: str
+) -> None:
+    """Neben einem Reinigungsturm rät der Druckdialog den Stützabstand in ganzen
+    Schichten wie der Export (RM-622): PLA und PETG bei 0,08er Schichten
+    bekommen 0,16 mm, die Zeile nennt beide Tische und nicht den Block ohne
+    Stütze daneben, und die Datei trägt an jedem Tisch genau den Wert der Zeile.
+    Ebenso unter „automatisch“, wenn das Herstellerprofil mit Bäumen stützt.
+    Frei nennt die Zeile 0,12 am PETG-Tisch, und dieser bekommt ihn. Nach dem
+    Übernehmen nennt das Feld dieselben Teile (``accepted_parts``)."""
+    import trimesh
+
+    from app.core.types import PrintSettings
+    from tests.helpers import object_values, supported_table
+
+    native = {
+        "tower": {"enable_prime_tower": "1"},
+        "trees": {"enable_prime_tower": "0", "support_type": "tree(auto)"},
+        "free": {"enable_prime_tower": "0"},
+    }[case]
+    monkeypatch.setattr(handover, "_native_process", lambda _setup: native)
+    tower = case != "free"
+    profile = profiles.make_profile("centauri-carbon-2", "pla")
+    settings = print_settings.with_choice(
+        print_settings.with_choice(
+            print_settings.resolve(profile, "standard"),
+            "support.style",
+            "auto" if case == "trees" else "grid",
+        ),
+        "layers.layer_height",
+        0.08,
+    )
+    objects = tuple(
+        SceneObject(
+            id=f"obj_{index}",
+            name=f"{material.upper()}-Tisch",
+            mesh=MeshData(supported_table(index)),
+            material=material,
+        )
+        for index, material in enumerate(("pla", "petg"))
+    )
+    cube = trimesh.creation.box(extents=(10.0, 10.0, 10.0))
+    cube.apply_translation([0.0, 60.0, 5.0])
+    objects += (SceneObject(id="obj_2", name="PLA-Block", mesh=MeshData(cube), material="pla"),)
+    setup = handover.SlicerSetup(executable=Path("orca-slicer.exe"), flavour="orca")
+
+    def worked(current: PrintSettings) -> tuple[list[SettingAdvice], print_dialog._AdviceWorker]:
+        found: list[list[SettingAdvice]] = []
+        worker = print_dialog._AdviceWorker(
+            objects, current, profile, setup, {}, (), (), {}, flavour="orca"
+        )
+        worker.done.connect(lambda entries, _measured: found.append(entries))
+        worker.work()
+        assert found, "der Arbeiter liefert"
+        return found[-1], worker
+
+    entries, _worker = worked(settings)
+    row = next(entry for entry in entries if entry.path == "support.z_gap")
+    tables = ("PLA-Tisch", "PETG-Tisch") if tower else ("PETG-Tisch",)
+    assert row.value == pytest.approx(0.16 if tower else 0.12)
+    assert getattr(row, "parts", ()) == tables
+    _entries, accepted = worked(print_settings.with_accepted(settings, "support.z_gap", row.value))
+    assert accepted.accepted_parts.get("support.z_gap") == tables
+
+    path, _findings = writer.write_assembly(
+        list(objects),
+        tmp_path,
+        project_name="gemischt",
+        profile=profile,
+        settings=print_settings.with_accepted(settings, "support.z_gap", row.value),
+        flavour="orca",
+        setup=setup,
+    )
+    written = object_values(path, "Metadata/model_settings.config")
+    for name in tables:
+        assert float(written[name]["support_top_z_distance"]) == pytest.approx(row.value), name
+
+
+@pytest.mark.parametrize(
+    ("program", "offered"), [("bambu-studio.exe", False), ("elegoo-slicer.exe", True)]
+)
+def test_the_dialog_skips_a_bottom_interface_the_program_does_not_print_under_trees(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch, program: str, offered: bool
+) -> None:
+    """Unter Bäumen drucken Bambu Studio, Creality Print, Anycubic Slicer Next und
+    PrusaSlicer keine untere Trennschicht (RM-622); der Druckdialog bietet sie dort
+    nicht an, wie der Export je Teil (``handover.ignored_under_trees``)."""
+    from tests.helpers import chin_over_chest
+
+    monkeypatch.setattr(handover, "_native_process", lambda _setup: {})
+    profile = profiles.make_profile("centauri-carbon-2", "pla")
+    settings = print_settings.resolve(profile, "standard")
+    for path, value in (("support.style", "tree"), ("support.bottom_interface_layers", 0)):
+        settings = print_settings.with_choice(settings, path, value)
+    objects = (SceneObject(id="obj_1", name="Figur", mesh=chin_over_chest(), material="pla"),)
+    setup = handover.SlicerSetup(executable=Path(program), flavour="orca")
+    found: list[list[SettingAdvice]] = []
+    worker = print_dialog._AdviceWorker(
+        objects, settings, profile, setup, {}, (), (), {}, flavour="orca"
+    )
+    worker.done.connect(lambda entries, _measured: found.append(entries))
+    worker.work()
+
+    assert found, "der Arbeiter liefert"
+    paths = {entry.path for entry in found[-1]}
+    assert ("support.bottom_interface_layers" in paths) is offered
+
+
+def test_the_dialog_filters_the_bottom_interface_per_body(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Je Körper, nicht für die Platte (RM-622, Review M2): Bei Creality Print
+    unter eigenem Gitter verlangt der Tisch eine untere Trennschicht, das Kinn
+    bekommt Bäume vorgeschlagen und braucht keine, weil Creality sie unter Bäumen
+    nicht druckt. Die Zeile bleibt für den Tisch."""
+    from tests.helpers import chin_over_chest, column_table
+
+    monkeypatch.setattr(handover, "_native_process", lambda _setup: {})
+    profile = profiles.make_profile("centauri-carbon-2", "pla")
+    settings = print_settings.resolve(profile, "standard")
+    for path, value in (("support.style", "grid"), ("support.bottom_interface_layers", 0)):
+        settings = print_settings.with_choice(settings, path, value)
+    objects = (
+        SceneObject(id="obj_1", name="Tisch", mesh=column_table(), material="pla"),
+        SceneObject(id="obj_2", name="Kinn", mesh=chin_over_chest(), material="pla"),
+    )
+    setup = handover.SlicerSetup(executable=Path("CrealityPrint.exe"), flavour="orca")
+    found: list[list[SettingAdvice]] = []
+    worker = print_dialog._AdviceWorker(
+        objects, settings, profile, setup, {}, (), (), {}, flavour="orca"
+    )
+    worker.done.connect(lambda entries, _measured: found.append(entries))
+    worker.work()
+
+    assert found, "der Arbeiter liefert"
+    assert "support.bottom_interface_layers" in {entry.path for entry in found[-1]}
+
+
+def test_an_accepted_tree_gets_the_same_gap_in_dialog_and_file(
+    qt_app: QApplication, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Elegoos Prozess stützt unter „automatisch“ mit organischen Bäumen, die
+    Grundlage hat Stützen aus, „Baum“ ist übernommen (RM-622, Review M1). Der
+    Dialog nennt den Abstand für PETG bei 0,2er Schichten in ganzen Schichten,
+    und die Datei trägt an beiden Körpern genau diesen Wert — gefragt mit der
+    Art, die jedes Teil wirklich bekommt."""
+    from app.core.types import PrintSettings
+    from tests.helpers import chin_over_chest, object_values, supported_table
+
+    monkeypatch.setattr(handover, "_native_process", lambda _setup: {"support_type": "tree(auto)"})
+    profile = profiles.make_profile("centauri-carbon-2", "petg")
+    settings: PrintSettings = print_settings.with_choice(
+        print_settings.resolve(profile, "standard"), "support.z_gap", 0.3
+    )
+    settings = print_settings.with_accepted(settings, "support.style", "tree")
+    objects = (
+        SceneObject(id="obj_1", name="Kinn", mesh=chin_over_chest(), material="petg"),
+        SceneObject(id="obj_2", name="Tisch", mesh=MeshData(supported_table(3)), material="petg"),
+    )
+    setup = handover.SlicerSetup(executable=Path("elegoo-slicer.exe"), flavour="orca")
+    found: list[list[SettingAdvice]] = []
+    worker = print_dialog._AdviceWorker(
+        objects, settings, profile, setup, {}, (), (), {}, flavour="orca"
+    )
+    worker.done.connect(lambda entries, _measured: found.append(entries))
+    worker.work()
+    assert found, "der Arbeiter liefert"
+    row = next(entry for entry in found[-1] if entry.path == "support.z_gap")
+    assert row.value == pytest.approx(0.2)
+
+    path, _findings = writer.write_assembly(
+        list(objects),
+        tmp_path,
+        project_name="baum",
+        profile=profile,
+        settings=print_settings.with_accepted(settings, "support.z_gap", row.value),
+        flavour="orca",
+        setup=setup,
+    )
+    written = object_values(path, "Metadata/model_settings.config")
+    for name in getattr(row, "parts", ()) or ("Kinn", "Tisch"):
+        assert float(written[name]["support_top_z_distance"]) == pytest.approx(0.2), name
+
+
+def _figure_and_table_on_bambu(
+    monkeypatch: pytest.MonkeyPatch,
+) -> tuple[tuple[SceneObject, ...], Profile, Any, handover.SlicerSetup]:
+    """Bambu Studio mit Gitter im Herstellerprozess, eigenes Gitter ohne untere
+    Trennschicht, PETG: Das Kinn bekommt Bäume vorgeschlagen, der Tisch nicht
+    (Nachprüfung RM-622, Sonden 7 und 8)."""
+    from tests.helpers import chin_over_chest, column_table
+
+    monkeypatch.setattr(handover, "_native_process", lambda _setup: {})
+    profile = profiles.make_profile("centauri-carbon-2", "petg")
+    settings = print_settings.resolve(profile, "standard")
+    for path, value in (("support.style", "grid"), ("support.bottom_interface_layers", 0)):
+        settings = print_settings.with_choice(settings, path, value)
+    objects = (
+        SceneObject(id="obj_1", name="Kinn", mesh=chin_over_chest(), material="petg"),
+        SceneObject(id="obj_2", name="Tisch", mesh=column_table(), material="petg"),
+    )
+    setup = handover.SlicerSetup(executable=Path("bambu-studio.exe"), flavour="orca")
+    return objects, profile, settings, setup
+
+
+def _support_rows(
+    objects: tuple[SceneObject, ...],
+    settings: Any,
+    profile: Profile,
+    setup: handover.SlicerSetup,
+    declined: frozenset[str] = frozenset(),
+) -> dict[str, tuple[object, tuple[str, ...]]]:
+    """Die Zeilen des Arbeiters zur Stütze: Wert und genannte Teile."""
+    found: list[list[SettingAdvice]] = []
+    worker = print_dialog._AdviceWorker(
+        objects, settings, profile, setup, {}, (), (), {}, flavour="orca", declined=declined
+    )
+    worker.done.connect(lambda entries, _measured: found.append(entries))
+    worker.work()
+    assert found, "der Arbeiter liefert"
+    return {
+        entry.path: (entry.value, getattr(entry, "parts", ()))
+        for entry in found[-1]
+        if entry.path.startswith("support.")
+    }
+
+
+def test_a_declined_tree_gives_the_figure_the_gap_of_its_grid(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Wählt der Kunde „Baum“ ab, fragt der Dialog Abstand und untere
+    Trennschicht mit dem Gitter, das das Kinn dann druckt (RM-622, Review M1):
+    Beide Zeilen gelten Kinn und Tisch. Mit dem Baum gefragt nannten sie nur den
+    Tisch, und das Kinn druckte sein Gitter mit 0,2 mm und ohne Trennschicht."""
+    objects, profile, settings, setup = _figure_and_table_on_bambu(monkeypatch)
+
+    offered = _support_rows(objects, settings, profile, setup)
+    declined = _support_rows(objects, settings, profile, setup, frozenset({"support.style"}))
+
+    assert offered["support.z_gap"] == (pytest.approx(0.28), ("Tisch",))
+    assert declined["support.style"][0] == "tree", "die Zeile bleibt, abgewählt"
+    assert declined["support.z_gap"] == (pytest.approx(0.28), ())
+    assert declined["support.bottom_interface_layers"] == (2, ())
+
+
+def test_an_accepted_tree_leaves_the_table_its_contact_rows(
+    qt_app: QApplication, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Erst nur „Baum“ übernommen, dann der Rest (RM-622, Review M2): Der Export
+    gibt den Baum nur dem Kinn, der Tisch druckt das Gitter der Platte. Der
+    Dialog fragt den Tisch deshalb mit dem Gitter, und Abstand wie untere
+    Trennschicht bleiben für ihn stehen; die Datei trägt sie am Tisch, gleich in
+    welcher Reihenfolge der Kunde übernimmt."""
+    from tests.helpers import object_values
+
+    objects, profile, settings, setup = _figure_and_table_on_bambu(monkeypatch)
+    first = _support_rows(objects, settings, profile, setup)
+    step = print_settings.with_accepted(settings, "support.style", first["support.style"][0])
+
+    second = _support_rows(objects, step, profile, setup)
+
+    assert second["support.z_gap"] == (pytest.approx(0.28), ("Tisch",))
+    assert second["support.bottom_interface_layers"] == (2, ("Tisch",))
+    for path, (value, _parts) in second.items():
+        step = print_settings.with_accepted(step, path, value)
+    written_path, _findings = writer.write_assembly(
+        list(objects),
+        tmp_path,
+        project_name="zwei",
+        profile=profile,
+        settings=step,
+        flavour="orca",
+        setup=setup,
+    )
+    written = object_values(written_path, "Metadata/model_settings.config")
+    assert float(written["Tisch"]["support_top_z_distance"]) == pytest.approx(0.28)
+    assert written["Tisch"]["support_interface_bottom_layers"] == "2"
+
+
+def test_declining_the_tree_asks_the_advice_again(
+    dialog: PrintSettingsDialog, qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An der Stützart hängen Abstand und Trennschicht (RM-622, Review M1): Wählt
+    der Kunde ihre Zeile ab, fragt der Dialog neu und gibt die Abwahl dem
+    Arbeiter mit; eine andere Zeile abzuwählen fragt nicht neu."""
+    asked: list[object] = []
+    monkeypatch.setattr(dialog, "_refresh_advice", lambda: asked.append(dialog._advice_context()))
+
+    def toggle(key: str) -> None:
+        item = QTreeWidgetItem(["", ""])
+        item.setData(0, Qt.ItemDataRole.UserRole, key)
+        item.setCheckState(0, Qt.CheckState.Unchecked)
+        dialog._advice_checked(item, 0)
+        QCoreApplication.processEvents()
+
+    toggle("support.z_gap")
+    assert asked == []
+    before = dialog._advice_context()
+    toggle("support.style")
+    assert len(asked) == 1
+    assert dialog._declined_advice() == frozenset({"support.style"})
+    assert asked[0] != before, "die Abwahl gehört zum Auftrag des Arbeiters"
+
+
+@pytest.mark.parametrize(("organic", "said"), [(frozenset({"tree"}), True), (frozenset(), False)])
+def test_the_gap_field_asks_the_trees_the_advice_asked(
+    dialog: PrintSettingsDialog, organic: frozenset[str], said: bool
+) -> None:
+    """Das Feld fragt dieselbe Auskunft wie der Rat daneben (RM-622, Review M3):
+    die Arten, die der letzte Arbeiter als organische Bäume gelesen hat. Ein
+    Prozess mit ``tree_hybrid`` hat keine, und das Feld schweigt."""
+    dialog._slicer_path = Path("elegoo-slicer.exe")
+    for path, value in (("support.style", "tree"), ("support.z_gap", 0.28)):
+        dialog.settings = print_settings.with_choice(dialog.settings, path, value)
+    dialog._organic = organic
+
+    dialog._mark_fields_this_slicer_ignores()
+
+    assert ("Baumstützen" in dialog._editors["support.z_gap"].toolTip()) is said
 
 
 def test_the_field_says_which_parts_get_a_suggestion_and_what_the_rest_prints(

@@ -1,0 +1,46 @@
+ollama:qwen3:14b — 39 Anfragen
+
+ok move                 translate_object
+ok rotate               rotate_object
+ok on_bed               place_on_bed
+ok scale                scale_object, scale_object, scale_object
+-- repair               translate_object  [1 nachgefordert]
+ok orient               orient_for_print, place_on_bed  [1 ungültig]  [1 nachgefordert]
+evaluation stopped at op 2: op.split_pinned.ValidationError: Diese Ebene teilt das Objekt nicht.
+ok split                split_pinned
+ok drill                drill_hole  [1 ungültig]
+ok drill_on_feature     drill_hole  [gefragt]
+ok duplicate            duplicate_object, translate_object  [1 nachgefordert]
+ok parameter            keine Operation
+ok question             keine Operation
+-- printable            translate_object  [1 nachgefordert]
+ok how_long             keine Operation
+ok core_hole            keine Operation
+ok switch_material      keine Operation
+-- where_menu           resize_hole  [gefragt]  [1 ungültig]
+-- where_hollow         hollow_object
+ok which_hole           keine Operation  [gefragt]  [1 nachgefordert]
+ok how_much_thinner     keine Operation  [gefragt]
+ok join_what            insert_heatset_m4  [gefragt]  [1 ungültig]  [1 nachgefordert]
+-- bracket              create_brep_box, drill_hole, drill_hole, drill_hole, drill_hole, drill_hole  [gefragt]  [3 ungültig]  [1 nachgefordert]
+ok magnet_lid           create_brep_box, insert_magnet_pocket, insert_magnet_pocket, insert_magnet_pocket, insert_magnet_pocket  [4 ungültig]
+ok wall_holder          create_brep_box, insert_wall_mount  [1 ungültig]
+evaluation stopped at op 3: op.resize_feature.ValidationError: Dafür ist „Bohrung ändern“ da.
+ok cable_exit           create_brep_box, insert_cable_gland  [gefragt]  [5 ungültig]  [1 nachgefordert]
+evaluation stopped at op 2: op.insert_printed_thread.AppError: Er wird an eine Fläche oder eine Bohrung gesetzt, und ohne sie weiß er weder wohin noch in welche Richtung. Es ist auch keine Position eingetragen — so säße er im Nullpunkt des Objekts, halb darin und halb darunter.
+ok threaded_stud        create_brep_cylinder, insert_printed_thread, insert_printed_thread  [4 ungültig]  [2 nachgefordert]
+ok nut_plate            create_brep_box, insert_nut_trap  [1 ungültig]
+-- spacer               create_brep_tube, drill_hole, drill_hole, drill_hole  [4 ungültig]  [1 nachgefordert]
+-- hinge                create_brep_box  [gefragt]  [3 ungültig]  [1 nachgefordert]
+-- snap_box             keine Operation  [24 ungültig]  [2 nachgefordert]
+ok keyhole_back         create_brep_box, insert_keyhole  [gefragt]
+evaluation stopped at op 2: op.insert_rib.AppError: Der Name muss eines der Merkmale sein, die dieses Objekt trägt — sie stehen unten als bekannte Namen.
+evaluation stopped at op 3: op.insert_rib.AppError: Der Name muss eines der Merkmale sein, die dieses Objekt trägt — sie stehen unten als bekannte Namen.
+evaluation stopped at op 4: op.insert_rib.AppError: Der Name muss eines der Merkmale sein, die dieses Objekt trägt — sie stehen unten als bekannte Namen.
+-- stiffen              create_brep_box  [6 ungültig]
+-- dowels               keine Operation  [gefragt]  [1 ungültig]
+ok inserts              create_brep_box, insert_heatset_m4, insert_heatset_m4, insert_heatset_m4, insert_heatset_m4, insert_heatset_m4, insert_heatset_m4, insert_heatset_m4, insert_heatset_m4, insert_heatset_m4, insert_heatset_m4, insert_heatset_m4, insert_heatset_m4, insert_heatset_m4, insert_heatset_m4, insert_heatset_m4, insert_heatset_m4  [gefragt]
+ok parameterise         create_brep_box  [1 ungültig]
+-- free_shape           keine Operation  [gefragt]
+ok hex_base             sketch_extrude
+-- pocket_plate         create_brep_box, create_brep_box  [10 ungültig]

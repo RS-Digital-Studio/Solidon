@@ -674,14 +674,14 @@ def test_the_about_dialog_localises_the_security_promise_and_links(
     from app.ui.dialogs import AboutDialog
 
     dates = {
-        "de": "31. Oktober 2031",
-        "en": "October 31, 2031",
-        "es": "31 de octubre de 2031",
-        "fr": "31 octobre 2031",
-        "it": "31 ottobre 2031",
-        "pt": "31 de outubro de 2031",
+        "de": "30. November 2031",
+        "en": "November 30, 2031",
+        "es": "30 de noviembre de 2031",
+        "fr": "30 novembre 2031",
+        "it": "30 novembre 2031",
+        "pt": "30 de novembro de 2031",
     }
-    assert SECURITY_SUPPORT_UNTIL.isoformat() == "2031-10-31"
+    assert SECURITY_SUPPORT_UNTIL.isoformat() == "2031-11-30"
 
     try:
         for language in available_languages():

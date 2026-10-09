@@ -446,12 +446,16 @@ dem GIL** und wartet neben einem rechnenden Arbeiter. Daraus folgt:
   `leash.Worker`.
 * **Kein C-Aufruf im Arbeiter hält den GIL länger als wenige Millisekunden**:
   große Listen in Blöcken, großes XML in Stücken (`threemf.XML_CHUNK`,
-  `NUMBER_BLOCK`), keine Suche mit `.//` über ein ganzes Netz.
+  `NUMBER_BLOCK`), keine Suche durch Netz oder Farbtabelle
+  (`threemf._NOT_SEARCHED`).
+* **Löst eine Meldung ein großes Bild aus, wartet der Arbeiter, bis es
+  steht** (`leash.RightOfWay`: Start des Ladewegs, Bild vor der Erkennung).
 * **Was im Takt neu malt, malt nur, was sich ändert** — ein Rechteck statt
   der Fläche, ein deckendes Widget mit `WA_OpaquePaintEvent`
-  (`LoadingVeil._block_rect`); sonst malt jeder Takt das Fenster darunter mit.
-* **Gerätefragen laufen im Daemon-Faden** (`SpaceMouseController._search`), wie
-  Dateiblicke (nächster Abschnitt).
+  (`LoadingVeil._block_rect`); ein Symbol rastert einmal
+  (`ThemedIcon.pixmap`).
+* **Gerätefragen laufen im Daemon-Faden** (`SpaceMouseController._search`),
+  gestartet mit dem Fenster, wie Dateiblicke (nächster Abschnitt).
 * **Messfalle** einer Sonde am Takt: Begründung.
 
 ### Ein Blick auf eine Datei ist eine Netzfrage

@@ -1813,9 +1813,15 @@ def test_the_graphics_card_is_never_asked_in_the_main_thread(
     from app.ui.main_window import _OllamaSizeWorker
 
     asked_in_main: list[bool] = []
+    # Die Karte antwortet erst auf Freigabe: Der Arbeiter des Dialogs fragt
+    # sofort, und auf einem schnellen Läufer stand seine Frage schon da, bevor
+    # die nächste Zeile hier lief (macOS Intel). Gefragt werden darf, nur nicht
+    # im Hauptthread — und vor der Antwort darf kein Urteil stehen.
+    answer = threading.Event()
 
     def card() -> tuple[str, float]:
         asked_in_main.append(threading.current_thread() is threading.main_thread())
+        answer.wait(10)
         return "NVIDIA GeForce RTX 4080", 16.0
 
     monkeypatch.setattr(keys, "_keyring", lambda: None)
@@ -1825,10 +1831,11 @@ def test_the_graphics_card_is_never_asked_in_the_main_thread(
     machine.detect.cache_clear()
     try:
         window._ollama_size_answered(None)
-        assert not asked_in_main, "der Satz der Chatleiste fragt nicht selbst"
+        assert True not in asked_in_main, "der Satz der Chatleiste fragt nicht selbst"
         dialog = KeyDialog()
-        assert not asked_in_main, "der Dialogbau fragt nicht"
+        assert True not in asked_in_main, "der Dialogbau fragt nicht"
         assert "NVIDIA-Karte" not in dialog.model_note.text(), "vor der Antwort kein Urteil"
+        answer.set()
         assert dialog.wait_for_look()
         qt_app = QApplication.instance()
         assert qt_app is not None
@@ -1848,6 +1855,7 @@ def test_the_graphics_card_is_never_asked_in_the_main_thread(
         side.join(10.0)
         assert asked_in_main == [False, False], "die Chatleiste fragt in ihrem Arbeiter"
     finally:
+        answer.set()
         machine.detect.cache_clear()
 
 
