@@ -274,9 +274,13 @@ def test_customer_parameter_table_names_choices_and_their_conditions() -> None:
         ),
         ParamSpec("armature", "armature", "Skelett", default="", placement="advanced"),
         ParamSpec("faces", "features", "Flächen", default=()),
+        ParamSpec("layout", "str", "Aufteilung", default='{"basis": "outer"}'),
     )
     customer = "\n".join(parameter_table(schema, technical=False))
     technical = "\n".join(parameter_table(schema))
+
+    assert '"basis"' not in customer, "eine gespeicherte Struktur ist keine lesbare Vorgabe"
+    assert '"basis"' in technical
 
     assert "Kreisförmig" in customer
     assert "Geradlinig, Kreisförmig" in customer
