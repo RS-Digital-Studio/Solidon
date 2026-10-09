@@ -51,46 +51,27 @@ def test_no_selection_keeps_inventory_reachable(picker: QuickFilamentPicker) -> 
     assert picker.clear_button.isHidden()
 
 
-def test_pending_assignment_keeps_choice_and_cancel_available(picker: QuickFilamentPicker) -> None:
-    """Nur die sichtbare Vorschau darf übernommen werden; Abbrechen bleibt offen."""
+def test_a_chosen_spool_is_reported_at_once_without_a_confirmation(
+    picker: QuickFilamentPicker,
+) -> None:
+    """Die Wahl ist die Zuweisung — kein *Übernehmen*, kein *Abbrechen* (RM-557).
+
+    Ein Filament ändert keine Geometrie; was es tut, nimmt Strg+Z zurück
+    (Regel 19). Am exakten Körper stand bis RM-557 ein Übernehmen dazwischen,
+    und bis dahin zeigte die Ansicht die alte Farbe.
+    """
+    from PySide6.QtWidgets import QPushButton
+
+    spool = filaments.save(filaments.CatalogueFilament("PLA Rot", "#ff0000", "PLA"))
     picker.set_context([_body("part", "Teil")])
-    accepted: list[bool] = []
-    cancelled: list[bool] = []
-    picker.stage_preview(lambda: accepted.append(True), lambda: cancelled.append(True))
-    reason = "Die aktuelle Vorschau abwarten und das Ergebnis prüfen."
-    picker.block_apply(reason)
-    assert picker.picker.isEnabled() and picker.cancel_button.isEnabled()
-    assert not picker.apply_button.isHidden() and not picker.can_accept()
-    assert picker.apply_button.toolTip() == reason
-    assert picker.apply_button.accessibleDescription() == reason
-    picker.apply_button.click()
-    picker.accept()
-    assert not accepted
-    picker.block_apply(None)
-    picker.preview_check = lambda: False
-    picker.apply_button.click()
-    assert not accepted
-    picker.preview_check = None
-    picker.apply_button.click()
-    assert accepted == [True]
-    picker.cancel_button.click()
-    assert cancelled == [True]
-    assert picker.apply_button.isHidden() and picker.cancel_button.isHidden()
-    picker.accept()
-    assert accepted == [True]
-
-
-def test_context_change_discards_pending_filament_assignment(picker: QuickFilamentPicker) -> None:
-    """Ein fremder Körper darf die vorbereitete Spulenwahl nicht erben."""
-    original = _body("first", "Erster")
-    picker.set_context([original])
-    cancelled: list[bool] = []
-    picker.stage_preview(lambda: pytest.fail("stale assignment"), lambda: cancelled.append(True))
-    picker.set_context([original])
-    assert not cancelled and not picker.apply_button.isHidden()
-    picker.set_context([_body("second", "Zweiter")])
-    assert cancelled == [True] and picker.apply_button.isHidden()
-    picker.accept()
+    chosen: list[object] = []
+    picker.spoolChosen.connect(chosen.append)
+    row = picker.picker.findData(spool.identifier)
+    picker.picker.setCurrentIndex(row)
+    picker.picker.activated.emit(row)
+    assert [entry.identifier for entry in chosen] == [spool.identifier]
+    texts = {button.text() for button in picker.findChildren(QPushButton)}
+    assert not texts & {"Übernehmen", "Abbrechen"}, texts
 
 
 def test_inventory_error_is_visible_and_repaired_file_refreshes_choices(
@@ -573,3 +554,155 @@ def test_refresh_only_visits_each_whole_body_slot_array_once(
     picker.set_context([first, second])
     assert len(calls) == 2
     assert picker.clear_button.isEnabled()
+
+
+def test_a_wheel_notch_without_focus_assigns_nothing(picker: QuickFilamentPicker) -> None:
+    """Eine Radraste über dem Schnellwähler weist nie zu, auch nicht mit Fokus.
+
+    Seit RM-557 ist jede Wahl am Wähler sofort eine Zuweisung mit eigenem
+    Verlaufsschritt. Wer die Karte *Auswahl* mit dem Rad rollte, färbte den
+    gewählten Körper je Raste um (Review U2, Fund 2) — nach der ersten Wahl
+    hat der Wähler den Fokus, und es ging wieder los (Nachprüfung, G1).
+    Entscheidung des Koordinators: Das Rad rollt die Karte, gewählt wird in
+    der Liste oder mit Enter.
+    """
+    from PySide6.QtCore import QPoint, QPointF
+    from PySide6.QtGui import QWheelEvent
+    from PySide6.QtWidgets import QLineEdit, QStyleFactory, QVBoxLayout, QWidget
+
+    filaments.save(filaments.CatalogueFilament("PLA Rot", "#ff0000", "PLA"))
+    filaments.save(filaments.CatalogueFilament("PLA Blau", "#0000ff", "PLA"))
+    picker.set_context([_body("part", "Teil")])
+    # Fusion wie in der Anwendung (``theme.py``): Dort dreht das Rad ein
+    # Auswahlfeld überhaupt.
+    fusion = QStyleFactory.create("Fusion")
+    picker.picker.setStyle(fusion)
+    host = QWidget()
+    layout = QVBoxLayout(host)
+    other = QLineEdit(host)
+    layout.addWidget(other)
+    picker.setParent(host)
+    layout.addWidget(picker)
+    host.show()
+    host.activateWindow()
+    other.setFocus()
+    QApplication.processEvents()
+    chosen: list[object] = []
+    picker.spoolChosen.connect(chosen.append)
+
+    def notch() -> QWheelEvent:
+        field = picker.picker
+        local = QPointF(field.width() / 2, field.height() / 2)
+        return QWheelEvent(
+            local,
+            field.mapToGlobal(local.toPoint()).toPointF(),
+            QPoint(0, 0),
+            QPoint(0, -120),
+            Qt.MouseButton.NoButton,
+            Qt.KeyboardModifier.NoModifier,
+            Qt.ScrollPhase.NoScrollPhase,
+            False,
+        )
+
+    try:
+        assert not picker.picker.hasFocus()
+        QApplication.sendEvent(picker.picker, notch())
+        QApplication.processEvents()
+        assert chosen == [], "ohne Fokus weist eine Raste nichts zu"
+        assert picker.picker.currentIndex() == 0
+
+        picker.picker.setFocus()
+        QApplication.processEvents()
+        assert picker.picker.hasFocus()
+        QApplication.sendEvent(picker.picker, notch())
+        QApplication.processEvents()
+        event = notch()
+        QApplication.sendEvent(picker.picker, event)
+        QApplication.processEvents()
+        assert chosen == [], "auch mit Fokus weist das Rad nichts zu"
+        assert not event.isAccepted(), "die Raste geht weiter — an die Karte, die rollt"
+        assert picker.picker.currentIndex() == 0
+    finally:
+        picker.setParent(None)
+        host.close()
+        host.deleteLater()
+
+
+def test_arrows_browse_the_closed_picker_and_enter_assigns(picker: QuickFilamentPicker) -> None:
+    """Am geschlossenen Wähler weist nur Enter zu — Pfeile, Tippen, Umschalt und Alt blättern.
+
+    Jede Wahl ist seit RM-557 sofort ein Verlaufsschritt, und Qt meldet am
+    geschlossenen Feld jeden Pfeilschritt und jeden getippten Buchstaben als
+    Wahl (Entscheidung Koordinator, Review U2; Nachprüfung M1: „p“, „pl“,
+    Umschalt+Pfeil und Alt+Pfeil hoch wiesen weiter zu). Escape kehrt zur
+    Standzeile zurück. Ohne Maus bleibt alles erreichbar: Alt+Pfeil runter
+    öffnet die Liste, Enter wählt dort.
+    """
+    from PySide6.QtTest import QTest
+    from PySide6.QtWidgets import QComboBox
+
+    for name, colour in (("PETG Grün", "#00ff00"), ("PLA Blau", "#0000ff"), ("PLA Rot", "#ff0000")):
+        filaments.save(filaments.CatalogueFilament(name, colour, "PLA"))
+    picker.set_context([_body("part", "Teil")])
+    picker.show()
+    picker.activateWindow()
+    combo: QComboBox = picker.picker
+    combo.setFocus()
+    QApplication.processEvents()
+    chosen: list[object] = []
+    picker.spoolChosen.connect(chosen.append)
+
+    def press(key: Qt.Key, modifier: Qt.KeyboardModifier = Qt.KeyboardModifier.NoModifier) -> None:
+        QTest.keyClick(combo, key, modifier)
+        QApplication.processEvents()
+
+    press(Qt.Key.Key_Down)
+    press(Qt.Key.Key_Down)
+    assert chosen == [], "Pfeile ohne Enter weisen nichts zu"
+    assert combo.currentIndex() == 2, "die Pfeile blättern"
+    expected = combo.itemData(2)
+    press(Qt.Key.Key_Return)
+    assert [entry.identifier for entry in chosen] == [expected], "Enter weist genau einmal zu"
+
+    for keys in (
+        [(Qt.Key.Key_P, Qt.KeyboardModifier.NoModifier)],
+        [
+            (Qt.Key.Key_P, Qt.KeyboardModifier.NoModifier),
+            (Qt.Key.Key_L, Qt.KeyboardModifier.NoModifier),
+        ],
+        [(Qt.Key.Key_Down, Qt.KeyboardModifier.ShiftModifier)],
+        [
+            (Qt.Key.Key_Down, Qt.KeyboardModifier.NoModifier),
+            (Qt.Key.Key_Up, Qt.KeyboardModifier.AltModifier),
+        ],
+    ):
+        chosen.clear()
+        picker.set_context([_body("part", "Teil")])
+        combo.setFocus()
+        for key, modifier in keys:
+            press(key, modifier)
+        assert chosen == [], f"{keys}: geschlossen weist nur Enter zu"
+        assert not combo.view().isVisible(), f"{keys}: die Liste bleibt zu"
+        press(Qt.Key.Key_Escape)
+        assert combo.currentIndex() == 0, f"{keys}: Escape kehrt zur Standzeile zurück"
+        assert chosen == []
+
+    chosen.clear()
+    picker.set_context([_body("part", "Teil")])
+    combo.setFocus()
+    press(Qt.Key.Key_Down)
+    picker.inventory_button.setFocus()
+    QApplication.processEvents()
+    assert chosen == [] and combo.currentIndex() == 0, "geblättert und gegangen: nichts gewählt"
+
+    chosen.clear()
+    picker.set_context([_body("part", "Teil")])
+    combo.setFocus()
+    QTest.keyClick(combo, Qt.Key.Key_Down, Qt.KeyboardModifier.AltModifier)
+    QApplication.processEvents()
+    view = combo.view()
+    assert view.isVisible(), "Alt+Pfeil runter öffnet die Liste ohne Maus"
+    QTest.keyClick(view, Qt.Key.Key_Down)
+    QTest.keyClick(view, Qt.Key.Key_Return)
+    QApplication.processEvents()
+    assert len(chosen) == 1, "Enter in der offenen Liste weist genau einmal zu"

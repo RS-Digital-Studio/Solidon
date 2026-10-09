@@ -538,6 +538,7 @@ def _hinge_feasible(raw: BaseParams) -> TranslatableText | None:
 
 @register_part(
     name="living_hinge",
+    standalone=True,
     title=_("Filmscharnier"),
     group="mechanics",
     params=HingeParams,
@@ -642,6 +643,7 @@ class DowelParams(BaseParams):
 
 @register_part(
     name="dowel",
+    standalone=True,
     title=_("Passstift und Passbohrung"),
     group="mechanics",
     params=DowelParams,
@@ -1207,6 +1209,7 @@ class BarrelHingeParams(BaseParams):
 
 @register_part(
     name="barrel_hinge",
+    standalone=True,
     title=_("Bolzenscharnier"),
     group="mechanics",
     params=BarrelHingeParams,

@@ -15,6 +15,7 @@ from PySide6.QtWidgets import QApplication
 from app.core.knowledge import filaments
 from app.core.types import MaterialSlot
 from app.ui.filament_picker import NEW_FILAMENT, FilamentField, NewFilamentDialog, hex_of
+from tests.ui_helpers import wait_for_catalogue
 
 
 def _assigned_body(slots: list[MaterialSlot], used: tuple[int, ...]):
@@ -163,16 +164,26 @@ def test_spool_form_columns_align_and_unknown_dates_have_one_label(qt_app) -> No
 
 @pytest.mark.parametrize("language", ["de", "en", "es", "fr", "it", "pt"])
 def test_spool_validation_stays_reachable_above_the_buttons_when_short(qt_app, language) -> None:
-    """Ein Preisfehler bleibt auch bei einem weit gerollten Formular erklärt."""
+    """Ein Preisfehler bleibt auch bei einem weit gerollten Formular erklärt.
+
+    Gemessen wird der übersetzte Dialog: Ohne geladenen Katalog zeigte jede
+    Sprache die deutschen Texte, und der Test war nur grün, solange kein
+    früherer Test im selben Lauf die Kataloge geladen hatte. Mit ihnen ragte
+    das Währungsfeld auf Spanisch, Französisch, Italienisch und Portugiesisch
+    unter den senkrechten Rollbalken (Nachprüfung U2, Nebenbefund).
+    """
     from PySide6.QtCore import QPoint
     from PySide6.QtWidgets import QDialogButtonBox
 
-    from app.i18n import get_language, set_language
+    from app.i18n import get_language, set_language, tr
+    from app.i18n.catalog import install_language
     from app.ui.settings import UiSettings
     from app.ui.theme import apply_theme
 
     before = get_language()
+    install_language(language)
     set_language(language)
+    assert language == "de" or tr("Weitere Angaben") != "Weitere Angaben", "Katalog geladen"
     apply_theme(qt_app, UiSettings().theme)
     dialog = NewFilamentDialog(name="Werkstattrolle")
 
@@ -227,48 +238,16 @@ def test_spool_validation_stays_reachable_above_the_buttons_when_short(qt_app, l
         set_language(before)
 
 
-def test_the_panel_offers_the_backup_and_setting_aside_as_buttons(qt_app, tmp_path, monkeypatch):
-    """Zurückholen und Beiseitelegen sind auch im Filamentbereich Knöpfe, nicht nur im Lager."""
-    from dataclasses import replace
-
-    from app.ui.filament_picker import FilamentPanel
-
-    path = tmp_path / "filaments.json"
-    monkeypatch.setattr(filaments, "catalogue_path", lambda: path)
-    first = filaments.save(filaments.CatalogueFilament("Spule", "#112233"))
-    filaments.save(replace(first, location="Kiste"))
-    path.write_text("{kaputt", encoding="utf-8")
-    panel = FilamentPanel()
-    try:
-        buttons = {button.text(): button for button in panel.hint._buttons}
-        assert "Letzten lesbaren Stand zurückholen" in buttons
-        assert "Beschädigte Datei beiseitelegen" in buttons
-        buttons["Letzten lesbaren Stand zurückholen"].click()
-        _wait_for_catalogue(panel)
-        assert [entry.identifier for entry in filaments.catalogue()] == [first.identifier]
-        assert any("Spule" in panel.list.item(row).text() for row in range(panel.list.count()))
-    finally:
-        panel.close()
-        panel.deleteLater()
-
-
 def test_broken_inventory_keeps_project_choice_and_reports_error(qt_app, tmp_path, monkeypatch):
-    """Vorwahl und Panel zeigen Lesefehler, Projektfilamente bleiben erhalten."""
-    from app.ui.filament_picker import FilamentPanel
-
+    """Die Vorwahl zeigt Lesefehler, Projektfilamente bleiben erhalten."""
     path = tmp_path / "filaments.json"
     monkeypatch.setattr(filaments, "catalogue_path", lambda: path)
     first = filaments.save(filaments.CatalogueFilament("Spule", "#112233"))
-    panel = FilamentPanel()
-    before = [panel.list.item(row).text() for row in range(panel.list.count())]
     field = FilamentField(2, slots=[MaterialSlot(2, "Projekt")])
     selected = next(row for row in range(field.count()) if "Spule" in field.itemText(row))
     seen = []
     field.choiceNotice.connect(seen.append)
     path.write_text("{kaputt", encoding="utf-8")
-    panel.refresh_catalogue()
-    assert "Sicherung" in panel.hint.text()
-    assert [panel.list.item(row).text() for row in range(panel.list.count())] == before
     field._chosen(selected)
     assert field.currentData() == 2
     assert "Sicherung" in seen[-1]
@@ -605,18 +584,15 @@ def test_a_cancelled_new_filament_leaves_a_usable_value(
     assert isinstance(field.currentData(), int)
 
 
-def test_the_panel_shows_what_the_project_uses_and_what_lies_in_the_rack(
+def test_the_list_shows_what_the_project_uses_and_nothing_from_the_rack(
     qt_app: QApplication, tmp_path, monkeypatch
 ) -> None:
-    """Beide Hälften, und je Filament eine Zeile.
+    """Je Filament des Projekts eine Zeile; das Regal steht im Filamentlager (RM-556).
 
-    Die Frage, die das Panel beantwortet, hieß „wo wähle ich die Filamente
-    und Farben aus?" — beide Antworten standen bis dahin in Dialogen. Oben,
-    was die Körper tragen (Anzeige, mit der Zahl der Körper); unten das
-    Regal, also die Vorwahl, die in jedem Filamentfeld zur Wahl steht.
-
-    Zusammengelegt wird über Name **und** Farbe, wie beim Export: Zwei Körper
-    in derselben Farbe sind eine Spule und nicht zwei.
+    Die Frage hieß „wo wähle ich die Filamente und Farben aus?" — die Liste
+    hinter *Filamente* in der Kopfzeile sagt, was die Körper tragen, mit der
+    Zahl der Körper. Zusammengelegt wird über Name **und** Farbe, wie beim
+    Export: Zwei Körper in derselben Farbe sind eine Spule und nicht zwei.
     """
     import trimesh
 
@@ -626,8 +602,7 @@ def test_the_panel_shows_what_the_project_uses_and_what_lies_in_the_rack(
     from app.ui.filament_picker import FilamentPanel
 
     monkeypatch.setattr(filaments, "catalogue_path", lambda: tmp_path / "filaments.json")
-    filaments.save(filaments.CatalogueFilament("PETG Rot", "#c0392b"))
-    filaments.save(filaments.CatalogueFilament("PLA Schwarz", "#1c1c1c"))
+    filaments.save(filaments.CatalogueFilament("TPU Gelb", "#f1c40f"))
 
     box = MeshData.of(trimesh.creation.box(extents=(10.0, 10.0, 10.0)))
     schwarz = MaterialSlot(index=0, name="PLA Schwarz", colour=(0.11, 0.11, 0.11))
@@ -641,17 +616,8 @@ def test_the_panel_shows_what_the_project_uses_and_what_lies_in_the_rack(
     )
 
     zeilen = [panel.list.item(index).text() for index in range(panel.list.count())]
-    assert "PLA Schwarz — 2 Körper" in zeilen, f"zwei Körper tragen es: {zeilen}"
-    assert "PETG Rot — 1 Körper" in zeilen, f"einer trägt es: {zeilen}"
-    # Die Regalzeile heißt seit RM-513 nur noch „PETG Rot“ (C16: das Material
-    # steht nicht zweimal, ein unbekannter Bestand gar nicht).
-    assert sum(line.startswith("PETG Rot —") for line in zeilen) == 1, zeilen
-    assert zeilen.count("PETG Rot") == 1, f"im Regal steht die Spule einmal: {zeilen}"
-    regal = [panel.list.item(index) for index in range(panel.list.count())]
-    assert not any(" g übrig" in item.text() for item in regal), "Altbestand wird nicht geraten"
-    assert any("Bestand unbekannt" in (item.toolTip() or "") for item in regal), (
-        "die Kurzhilfe sagt, dass der Bestand unbekannt ist"
-    )
+    assert zeilen == ["PLA Schwarz — 2 Körper", "PETG Rot — 1 Körper"], zeilen
+    assert not any("TPU Gelb" in zeile for zeile in zeilen), "das Regal steht im Lager"
 
 
 def test_a_choice_row_names_material_and_stock_only_when_they_tell_something() -> None:
@@ -670,36 +636,6 @@ def test_a_choice_row_names_material_and_stock_only_when_they_tell_something() -
         f"Blau · PETG · {spool_label(blau).split(' · ')[2]}",
     ]
     assert "Bestand unbekannt" in spool_label(rot), "die Kurzhilfe sagt es weiter"
-
-
-def test_refreshing_the_rack_keeps_the_project_summary(
-    qt_app: QApplication, tmp_path, monkeypatch
-) -> None:
-    """Ein Slicer-Abgleich aktualisiert nur die projektübergreifende Hälfte.
-
-    Das Panel ist beim Öffnen der Ersteinrichtung schon gebaut. Nach deren
-    Filamentimport sollen die neuen Spulen sofort erscheinen, ohne die gerade
-    gezeigten Projektfilamente oder ihre Druckwertmarken zu verlieren.
-    """
-    from app.core.knowledge import filaments
-    from app.core.types import MaterialSlot
-    from app.ui.filament_picker import FilamentPanel
-
-    monkeypatch.setattr(filaments, "catalogue_path", lambda: tmp_path / "filaments.json")
-    filaments.save(filaments.CatalogueFilament("PLA Weiß", "#ffffff", material_type="PLA"))
-    panel = FilamentPanel()
-    panel.show_scene(
-        [_assigned_body([MaterialSlot(index=1, name="PETG Grau", colour=(0.5, 0.5, 0.5))], (1,))]
-    )
-    project_state = panel._used
-
-    filaments.save(filaments.CatalogueFilament("TPU Schwarz", "#111111", material_type="TPU"))
-    panel.refresh_catalogue()
-
-    assert panel._used is project_state, "die Szenenzusammenfassung bleibt unangetastet"
-    lines = [panel.list.item(index).text() for index in range(panel.list.count())]
-    assert "PETG Grau — 1 Körper" in lines
-    assert any(line.startswith("TPU Schwarz") for line in lines), "die neue Regalspule erscheint"
 
 
 def test_project_summary_counts_used_surfaces_and_keeps_unassigned_faces(
@@ -737,8 +673,7 @@ def test_a_used_filament_separates_colour_from_print_values(
 
     Farbe und Flächenzuweisung bleiben am Merkmal und damit in einer
     Operation. Die Temperaturen derselben Spule sind Druckeinstellungen und
-    dürfen von hier erreichbar sein. Das Regal darunter bleibt unabhängig
-    davon vollständig bedienbar.
+    dürfen von hier erreichbar sein.
     """
     import trimesh
 
@@ -767,16 +702,10 @@ def test_a_used_filament_separates_colour_from_print_values(
         for index in range(panel.list.count())
         if "Körper" in panel.list.item(index).text()
     )
-    # Die Regalzeile nennt nur den Namen (RM-513, C16).
-    regal = next(
-        panel.list.item(index)
-        for index in range(panel.list.count())
-        if panel.list.item(index).text() == "PETG Rot"
-    )
 
     assert benutzt.flags() & Qt.ItemFlag.ItemIsSelectable, "Druckwerte müssen erreichbar sein"
-    assert regal.flags() & Qt.ItemFlag.ItemIsSelectable, "das Regal lässt sich bedienen"
     assert "unter Auswahl" in benutzt.toolTip(), "die Farbzuweisung bleibt an der Operation"
+    assert "unter Auswahl" in panel.hint.text(), "und der Satz unter der Liste sagt es"
     panel.list.setCurrentItem(benutzt)
     assert panel.settings_button.isEnabled(), "die sichtbare Handlung folgt der Auswahl"
 
@@ -819,121 +748,24 @@ def test_the_print_values_button_names_the_exact_filament(
     assert seen == [slot]
 
 
-def test_the_rack_is_written_through(qt_app: QApplication, tmp_path, monkeypatch) -> None:
-    """Was das Panel am Regal ändert, steht im Katalog — und umgekehrt.
-
-    Der Katalog ist die Vorwahl aller Projekte; das Panel ist nur die Stelle,
-    an der man sie pflegt. Ein Panel, das seine eigene Liste führte, wäre
-    beim nächsten Öffnen eine zweite Wahrheit.
-    """
-    from app.core.knowledge import filaments
-    from app.ui.filament_picker import FilamentPanel
-
-    monkeypatch.setattr(filaments, "catalogue_path", lambda: tmp_path / "filaments.json")
-    filaments.save(filaments.CatalogueFilament("PLA Weiß", "#f2f2f0"))
-    panel = FilamentPanel()
-    panel.show_scene([])
-    # Die Regalzeile nennt nur den Namen (RM-513, C16).
-    row = next(
-        index for index in range(panel.list.count()) if panel.list.item(index).text() == "PLA Weiß"
-    )
-    panel.list.setCurrentRow(row)
-
-    assert not panel.add_button.icon().isNull()
-    assert panel.delete_button.isEnabled()
-    assert not panel.delete_button.icon().isNull()
-    panel.delete_button.click()
-    _wait_for_catalogue(panel)
-
-    assert [entry.name for entry in filaments.catalogue()] == [], (
-        "aus dem Katalog, nicht nur aus der Liste"
-    )
-    assert not any(
-        panel.list.item(index).text() == "PLA Weiß" for index in range(panel.list.count())
-    )
-    assert filaments.catalogue(include_archived=True)[0].archived
-
-
-def test_rack_context_delete_selects_the_clicked_row(qt_app, tmp_path, monkeypatch):
-    """Rechtsklick auf die zweite Spule löscht niemals die vorher ausgewählte erste."""
-    from PySide6.QtWidgets import QMenu
-
-    from app.ui import filament_picker
-    from app.ui.filament_picker import FilamentPanel
-
-    monkeypatch.setattr(filaments, "catalogue_path", lambda: tmp_path / "filaments.json")
-    first = filaments.save(filaments.CatalogueFilament("Erste", "#123456"))
-    second = filaments.save(filaments.CatalogueFilament("Zweite", "#123456"))
-    panel = FilamentPanel()
-    panel.resize(400, 500)
-    panel.show()
-    qt_app.processEvents()
-    rows = [panel.list.item(row) for row in range(panel.list.count())]
-    panel.list.setCurrentItem(next(item for item in rows if item.text().startswith("Erste")))
-    target = next(item for item in rows if item.text().startswith("Zweite"))
-
-    class ChoosingMenu(QMenu):
-        def exec(self, _position):
-            assert self.toolTipsVisible()
-            next(
-                action for action in self.actions() if action.text() == "Spule archivieren"
-            ).trigger()
-
-    monkeypatch.setattr(filament_picker, "QMenu", ChoosingMenu)
-    try:
-        panel.list.customContextMenuRequested.emit(panel.list.visualItemRect(target).center())
-        _wait_for_catalogue(panel)
-        assert filaments.get(second.identifier).archived
-        assert not filaments.get(first.identifier).archived
-        assert not panel.delete_button.isEnabled()
-        # Nach dem Löschen steht der Rückweg da (B3, 19.09.2026).
-        assert "Archivierte Spulen anzeigen" in panel.hint.text()
-    finally:
-        panel.close()
-        panel.deleteLater()
-
-
-def _wait_for_catalogue(widget) -> None:
-    """Der Fachabschluss muss im Widget ankommen, nicht nur auf der Platte."""
-    from time import monotonic
-
-    from PySide6.QtTest import QTest
-
-    deadline = monotonic() + 5
-    while not widget.wait_for_workers(0) and monotonic() < deadline:
-        QTest.qWait(10)
-    assert widget.wait_for_workers(0)
-
-
-@pytest.mark.parametrize("action", ["create", "edit", "archive", "field"])
 def test_catalogue_writes_leave_qt_free_until_the_atomic_result_arrives(
-    qt_app: QApplication, tmp_path, monkeypatch: pytest.MonkeyPatch, action: str
+    qt_app: QApplication, tmp_path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Vier Schreibwege halten Qt frei und übernehmen nur den gespeicherten Stand."""
+    """*Neues Filament …* schreibt im Arbeiter und übernimmt nur den gespeicherten Stand."""
     from threading import Event, get_ident
 
     from PySide6.QtCore import QTimer
     from PySide6.QtWidgets import QDialog
 
-    from app.ui.filament_picker import FilamentPanel
-
     monkeypatch.setattr(filaments, "catalogue_path", lambda: tmp_path / "filaments.json")
-    original_entry = filaments.save(filaments.CatalogueFilament("Alt", "#ffffff"))
-    panel = FilamentPanel()
-    panel.list.setCurrentRow(
-        next(
-            row
-            for row in range(panel.list.count())
-            if panel.list.item(row).text().startswith("Alt")
-        )
-    )
+    filaments.save(filaments.CatalogueFilament("Alt", "#ffffff"))
     field = FilamentField(0)
     selected = []
     field.spoolChosen.connect(selected.append)
     entered, released = Event(), Event()
     qt_thread = get_ident()
     threads = []
-    original = filaments.archive if action == "archive" else filaments.save
+    original = filaments.save
 
     def write(*args, **kwargs):
         threads.append(get_ident())
@@ -946,75 +778,45 @@ def test_catalogue_writes_leave_qt_free_until_the_atomic_result_arrives(
         dialog.name.setText("Neu")
         return QDialog.DialogCode.Accepted
 
-    monkeypatch.setattr(filaments, "archive" if action == "archive" else "save", write)
+    monkeypatch.setattr(filaments, "save", write)
     monkeypatch.setattr(NewFilamentDialog, "exec", confirm)
-    owner = field if action == "field" else panel
     try:
-        if action == "create":
-            panel.add_button.click()
-        elif action == "edit":
-            panel.list.itemDoubleClicked.emit(panel.list.currentItem())
-        elif action == "archive":
-            panel._remove()
-        else:
-            field._make_one(field.findData(NEW_FILAMENT))
+        field._make_one(field.findData(NEW_FILAMENT))
         assert entered.wait(2)
         assert threads[0] != qt_thread
-        assert not owner.wait_for_workers(0)
+        assert not field.wait_for_workers(0)
         responsive = []
         QTimer.singleShot(0, lambda: responsive.append(True))
         QApplication.processEvents()
         assert responsive
-        if action == "field":
-            assert not field.isEnabled()
-            assert field.currentData() == 0
-            assert not selected
-        else:
-            assert not panel.list.isEnabled()
-            assert not panel.add_button.isEnabled()
-            assert "gespeichert" in panel.hint.text()
+        assert not field.isEnabled()
+        assert field.currentData() == 0
+        assert not selected
     finally:
         released.set()
-        if hasattr(owner, "wait_for_workers"):
-            _wait_for_catalogue(owner)
-    entries = filaments.catalogue(include_archived=True)
-    if action == "archive":
-        assert entries[0].archived
-    elif action == "edit":
-        assert len(entries) == 1
-        assert entries[0].name == "Neu"
-        assert entries[0].identifier == original_entry.identifier
-    else:
-        assert {entry.name for entry in entries} == {"Alt", "Neu"}
-    if action == "field":
-        assert field.isEnabled()
-        assert len(selected) == 1 and selected[0].name == "Neu"
-        assert "Neu" in field.currentText()
-    else:
-        assert panel.list.isEnabled()
-        assert panel.add_button.isEnabled()
+        wait_for_catalogue(field)
+    assert {entry.name for entry in filaments.catalogue(include_archived=True)} == {"Alt", "Neu"}
+    assert field.isEnabled()
+    assert len(selected) == 1 and selected[0].name == "Neu"
+    assert "Neu" in field.currentText()
 
 
-@pytest.mark.parametrize("owner_kind", ["field", "panel"])
 @pytest.mark.parametrize("failure", ["expected", "unexpected"])
 def test_a_failed_catalogue_write_keeps_the_old_selection_and_can_be_retried(
     qt_app: QApplication,
     tmp_path,
     monkeypatch: pytest.MonkeyPatch,
-    owner_kind: str,
     failure: str,
 ) -> None:
     """Eine Absage oder Ausnahme löst die Sperre und übernimmt keine ungespeicherte Spule."""
     from PySide6.QtWidgets import QDialog
 
     from app.core.errors import FileWriteError
-    from app.ui.filament_picker import FilamentPanel
 
     monkeypatch.setattr(filaments, "catalogue_path", lambda: tmp_path / "filaments.json")
-    owner = FilamentField(0) if owner_kind == "field" else FilamentPanel()
+    owner = FilamentField(0)
     notices = []
-    if owner_kind == "field":
-        owner.choiceNotice.connect(notices.append)
+    owner.choiceNotice.connect(notices.append)
     original = filaments.save
 
     def save(_entry):
@@ -1027,22 +829,16 @@ def test_a_failed_catalogue_write_keeps_the_old_selection_and_can_be_retried(
         return QDialog.DialogCode.Accepted
 
     def choose():
-        if owner_kind == "field":
-            owner._make_one(owner.findData(NEW_FILAMENT))
-        else:
-            owner.add_button.click()
-        _wait_for_catalogue(owner)
+        owner._make_one(owner.findData(NEW_FILAMENT))
+        wait_for_catalogue(owner)
 
     monkeypatch.setattr(filaments, "save", save)
     monkeypatch.setattr(NewFilamentDialog, "exec", confirm)
     choose()
-    assert "gesperrt" in (notices[-1] if owner_kind == "field" else owner.hint.text())
+    assert "gesperrt" in notices[-1]
     assert filaments.catalogue() == ()
-    if owner_kind == "field":
-        assert owner.isEnabled()
-        assert owner.currentData() == 0
-    else:
-        assert owner.add_button.isEnabled()
+    assert owner.isEnabled()
+    assert owner.currentData() == 0
     monkeypatch.setattr(filaments, "save", original)
     choose()
     assert [entry.name for entry in filaments.catalogue()] == ["Neue Spule"]
@@ -1098,7 +894,7 @@ def test_a_picker_built_on_a_broken_inventory_says_so_where_it_is_shown(
         dialog.deleteLater()
 
 
-@pytest.mark.parametrize("kind", ["quick", "inventory", "panel", "usage"])
+@pytest.mark.parametrize("kind", ["quick", "inventory", "usage"])
 def test_inventory_errors_keep_advice_and_retry_their_own_read(
     qt_app: QApplication, tmp_path, monkeypatch: pytest.MonkeyPatch, kind: str
 ) -> None:
@@ -1114,7 +910,6 @@ def test_inventory_errors_keep_advice_and_retry_their_own_read(
     from app.ui import filament_usage as usage_ui
     from app.ui.filament_assignment import QuickFilamentPicker
     from app.ui.filament_inventory import InventoryView
-    from app.ui.filament_picker import FilamentPanel
 
     monkeypatch.setattr(filaments, "catalogue_path", lambda: tmp_path / "filaments.json")
     filaments.save(filaments.CatalogueFilament("Vorhanden", "#123456"))
@@ -1124,9 +919,6 @@ def test_inventory_errors_keep_advice_and_retry_their_own_read(
     elif kind == "inventory":
         owner = InventoryView()
         notice, refresh = owner.message, owner.refresh
-    elif kind == "panel":
-        owner = FilamentPanel()
-        notice, refresh = owner.hint, owner._fill
     else:
         owner = usage_ui.UsageDialog(UsageRequest("geometry", "Projekt", 0, ()))
         notice, refresh = owner.state, owner._load
@@ -1189,16 +981,14 @@ def test_inventory_errors_keep_advice_and_retry_their_own_read(
         owner.deleteLater()
 
 
-@pytest.mark.parametrize("kind", ["panel", "operation"])
 def test_catalogue_error_retries_the_confirmed_spool_without_a_second_entry_dialog(
-    qt_app: QApplication, tmp_path, monkeypatch: pytest.MonkeyPatch, kind: str
+    qt_app: QApplication, tmp_path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Eine wieder verfügbare Datei erhält genau den bereits bestätigten Spuleneintrag."""
     from PySide6.QtWidgets import QDialog, QPushButton
 
     from app.core.errors import RETRY, FileWriteError
     from app.core.registry import REGISTRY
-    from app.ui.filament_picker import FilamentPanel
     from app.ui.op_dialog import OperationDialog
 
     monkeypatch.setattr(filaments, "catalogue_path", lambda: tmp_path / "filaments.json")
@@ -1219,18 +1009,13 @@ def test_catalogue_error_retries_the_confirmed_spool_without_a_second_entry_dial
 
     monkeypatch.setattr(filaments, "save", save)
     monkeypatch.setattr(NewFilamentDialog, "exec", confirm)
-    if kind == "panel":
-        owner = writer = FilamentPanel()
-        notice = owner.hint
-        owner.add_button.click()
-    else:
-        owner = OperationDialog(REGISTRY.get("assign_slot"), ["obj_1"], values={"slot": 0})
-        writer = owner.findChild(FilamentField)
-        assert writer is not None
-        notice = owner._filament_notice
-        writer._make_one(writer.findData(NEW_FILAMENT))
+    owner = OperationDialog(REGISTRY.get("assign_slot"), ["obj_1"], values={"slot": 0})
+    writer = owner.findChild(FilamentField)
+    assert writer is not None
+    notice = owner._filament_notice
+    writer._make_one(writer.findData(NEW_FILAMENT))
     try:
-        _wait_for_catalogue(writer)
+        wait_for_catalogue(writer)
         assert "gesperrt" in notice.text()
         retry = next(
             button
@@ -1239,7 +1024,7 @@ def test_catalogue_error_retries_the_confirmed_spool_without_a_second_entry_dial
         )
         broken = False
         retry.click()
-        _wait_for_catalogue(writer)
+        wait_for_catalogue(writer)
         assert len(writes) == 2 and writes[0] is writes[1]
         assert confirmations == [True]
         assert [entry.name for entry in filaments.catalogue()] == ["Bestätigte Spule"]
@@ -1341,99 +1126,6 @@ def test_the_unpainted_swatch_follows_the_theme() -> None:
         theme._ACTIVE = was
 
 
-def test_the_filament_card_shares_the_height_instead_of_taking_it(
-    qt_app: QApplication, tmp_path, monkeypatch
-) -> None:
-    """Die Karte nimmt an der Zuteilung teil, statt sich zu bedienen.
-
-    ``OverlayHost._share_room`` verteilt die Höhe der linken Spalte nur an
-    Kinder, die das ``RoomTaker``-Protokoll erfüllen; wer es nicht erfüllt,
-    „behält seine eigene Höhe" und steht damit außerhalb der Verteilung. Diese
-    Karte tat das, und bei einem vollen Regal wurde daraus eine Schieflage:
-    Gemessen am 30.08.2026 im echten Fenster mit fünfzehn Spulen nahm sie sich
-    424 Bildpunkte, während der Verlauf daneben auf 102 gedrückt wurde und 262
-    brauchte — die Karte, die laut §2.4 jeden Arbeitsschritt begleitet, verlor
-    gegen die, die man einmal am Anfang fragt.
-    """
-    from app.ui.filament_picker import FilamentPanel
-    from app.ui.overlay import is_room_taker
-
-    monkeypatch.setattr(filaments, "catalogue_path", lambda: tmp_path / "filaments.json")
-    panel = FilamentPanel()
-    assert is_room_taker(panel), (
-        "ohne wanted_height, least_height und set_room bleibt die Karte außerhalb der Zuteilung"
-    )
-
-    # Und die Zusagen des Protokolls: Der Boden liegt unter dem Wunsch, sonst
-    # verteilt _share_room unter etwas, das die Karte selbst durchsetzt.
-    assert panel.least_height() <= panel.wanted_height(), (
-        f"Boden {panel.least_height()} über Wunsch {panel.wanted_height()}"
-    )
-    knapp = panel.least_height()
-    panel.set_room(knapp)
-    assert panel.sizeHint().height() <= knapp + 1, (
-        "eine knapp bemessene Karte muss sich auch klein machen"
-    )
-
-    # **Und solange niemand zugeteilt hat, gilt der Deckel.** Der Augenblick
-    # vor der ersten Zuteilung ist real: Das Fenster baut die Karte, bevor die
-    # Überlagerung sie das erste Mal fragt, und ein Regal mit hundert Spulen
-    # nähme die Spalte, ehe irgendjemand etwas verteilt.
-    from app.ui.panels import MAX_ROWS
-
-    for nummer in range(100):
-        filaments.save(filaments.CatalogueFilament(f"Viel {nummer:03d}", "#2980b9"))
-    ungefragt = FilamentPanel()
-    assert ungefragt.list.count() > 2 * MAX_ROWS, "der Deckel wird nur bei vielen Zeilen geprüft"
-    zeile = ungefragt.list.sizeHintForRow(0)
-    assert ungefragt.list.height() <= (MAX_ROWS + 1) * zeile, (
-        f"ohne Zuteilung {ungefragt.list.height()} Punkte bei {ungefragt.list.count()} Zeilen — "
-        f"der Deckel von {MAX_ROWS} Zeilen greift nicht"
-    )
-
-
-def test_every_row_fits_when_the_card_gets_the_height_it_asked_for(
-    qt_app: QApplication, tmp_path, monkeypatch
-) -> None:
-    """Die letzte Zeile fehlte, obwohl ringsum Platz frei war.
-
-    Der Grund war eine Rechnung, die für diese Liste nicht passt:
-    ``fit_to_rows`` nimmt die Höhe der *ersten* Zeile mal die Zahl der Zeilen —
-    richtig für einen Baum, in dem jede Zeile gleich aussieht. Hier stehen
-    zwischen den Spulen zwei fette Überschriften („Im Projekt", „Im Regal"),
-    und die sind höher als eine Spulenzeile. Gemessen am 30.08.2026 bei fünf
-    Zeilen: 172 Bildpunkte gebraucht, 156 gesetzt, vier von fünf Zeilen zu
-    sehen — auch dann, wenn die Spalte ihre volle Wunschhöhe bekam.
-    """
-    from app.ui.filament_picker import FilamentPanel
-
-    monkeypatch.setattr(filaments, "catalogue_path", lambda: tmp_path / "filaments.json")
-    for nummer in range(4):
-        filaments.save(
-            filaments.CatalogueFilament(f"Spule {nummer}", "#c0392b", material_type="PETG")
-        )
-
-    panel = FilamentPanel()
-    panel.show_scene(
-        [_assigned_body([MaterialSlot(index=1, name="PETG Grau", colour=(0.5, 0.5, 0.5))], (1,))]
-    )
-    panel.resize(300, 400)
-    panel.set_room(panel.wanted_height())
-
-    liste = panel.list
-    hoehen = [liste.sizeHintForRow(reihe) for reihe in range(liste.count())]
-    # **Der Kontrollfall.** Sind alle Zeilen gleich hoch, rechnen beide Wege
-    # dasselbe und dieser Test prüft nichts — die Überschriften sind der Fall,
-    # um den es geht.
-    assert len(set(hoehen)) > 1, f"gleich hohe Zeilen prüfen die Sache nicht: {hoehen}"
-
-    platz = liste.height() - 2 * liste.frameWidth()
-    assert platz >= sum(hoehen), (
-        f"{liste.count()} Zeilen brauchen {sum(hoehen)} Punkte, die Liste bietet "
-        f"{platz} — die letzten passen nicht hinein"
-    )
-
-
 def test_a_colour_dot_is_no_bigger_than_the_field_it_replaced(
     qt_app: QApplication, tmp_path, monkeypatch
 ) -> None:
@@ -1441,8 +1133,8 @@ def test_a_colour_dot_is_no_bigger_than_the_field_it_replaced(
 
     Gezeichnet wird er in doppelter Auflösung; ein Symbol aus nur diesem Bild
     meldete Qt aber 28 statt 14 Punkte. Eine Spulenzeile wurde 34 statt 24
-    Punkte hoch, die linke Spalte reichte nicht mehr, und der Objektbaum oder
-    „Im Regal" fiel heraus — gemessen am echten Fenster bei 1920×1080.
+    Punkte hoch, und die linke Spalte reichte nicht mehr — gemessen am echten
+    Fenster bei 1920×1080.
     """
     from PySide6.QtCore import QSize
     from PySide6.QtGui import QPixmap
@@ -1467,10 +1159,10 @@ def test_a_colour_dot_is_no_bigger_than_the_field_it_replaced(
     reference = QListWidget()
     plain = QPixmap(SWATCH_PIXELS, SWATCH_PIXELS)
     plain.fill(Qt.GlobalColor.red)
-    reference.addItem(QListWidgetItem(plain, panel.list.item(1).text()))
+    reference.addItem(QListWidgetItem(plain, panel.list.item(0).text()))
     try:
-        assert panel.list.sizeHintForRow(1) <= reference.sizeHintForRow(0), (
-            f"Spulenzeile {panel.list.sizeHintForRow(1)} Punkte, mit dem alten Feld "
+        assert panel.list.sizeHintForRow(0) <= reference.sizeHintForRow(0), (
+            f"Spulenzeile {panel.list.sizeHintForRow(0)} Punkte, mit dem alten Feld "
             f"{reference.sizeHintForRow(0)}"
         )
     finally:
@@ -1483,17 +1175,13 @@ def test_a_long_filament_name_is_shortened_instead_of_rolled_sideways(
     """Kein waagrechter Balken in der Filamentliste; der volle Name steht im Tooltip.
 
     Ein waagrechter Balken nahm der schmalen Liste eine Zeile, die Rechnung
-    darüber wusste davon nichts, und dazu kam ein senkrechter Balken, hinter
-    dem „Im Regal" verschwand (RM-489).
+    darüber wusste davon nichts, und dazu kam ein senkrechter Balken (RM-489).
     """
     from PySide6.QtWidgets import QVBoxLayout, QWidget
 
     from app.ui.filament_picker import FilamentPanel
 
     monkeypatch.setattr(filaments, "catalogue_path", lambda: tmp_path / "filaments.json")
-    filaments.save(
-        filaments.CatalogueFilament("Polymaker PolyTerra Cotton White Sonderedition", "#f5f5f0")
-    )
     long_name = "Prusament PLA Galaxy Black mit einem sehr langen Namen"
     host = QWidget()
     host.setFixedWidth(260)
@@ -1509,9 +1197,6 @@ def test_a_long_filament_name_is_shortened_instead_of_rolled_sideways(
     try:
         for _ in range(8):
             qt_app.processEvents()
-        panel.set_room(panel.wanted_height())
-        for _ in range(8):
-            qt_app.processEvents()
         listing = panel.list
         width = listing.viewport().width()
         assert listing.horizontalScrollBar().maximum() == 0, "waagrecht gerollt statt gekürzt"
@@ -1522,7 +1207,7 @@ def test_a_long_filament_name_is_shortened_instead_of_rolled_sideways(
             if listing.visualRect(listing.model().index(row, 0)).width() > width
         ]
         assert not too_wide, f"breiter als die Liste ({width} Punkte): {too_wide}"
-        assert listing.verticalScrollBar().maximum() == 0, "bei voller Wunschhöhe rollt nichts"
+        assert listing.verticalScrollBar().maximum() == 0, "eine Zeile rollt nicht"
         for row in range(listing.count()):
             item = listing.item(row)
             if item.flags() & Qt.ItemFlag.ItemIsSelectable:
@@ -1532,58 +1217,6 @@ def test_a_long_filament_name_is_shortened_instead_of_rolled_sideways(
     finally:
         host.close()
         host.deleteLater()
-
-
-@pytest.mark.parametrize("font_points", [10, 16])
-@pytest.mark.parametrize("width", [260, 420])
-@pytest.mark.parametrize("row_count", [0, 25])
-def test_filament_card_room_includes_wrapped_hint_and_visible_controls(
-    qt_app: QApplication, tmp_path, monkeypatch, font_points, width, row_count
-) -> None:
-    """Knapper und freier Raum enthalten den Hinweis und lassen der Nachbarkarte Platz."""
-    from PySide6.QtGui import QFont
-    from PySide6.QtWidgets import QPushButton, QVBoxLayout, QWidget
-
-    from app.ui.filament_picker import FilamentPanel
-
-    monkeypatch.setattr(filaments, "catalogue_path", lambda: tmp_path / "filaments.json")
-    for index in range(row_count):
-        filaments.save(filaments.CatalogueFilament(f"Spule {index:02d}", "#2980b9"))
-    host = QWidget()
-    host.setFixedWidth(width)
-    layout = QVBoxLayout(host)
-    layout.setContentsMargins(0, 0, 0, 0)
-    layout.setSpacing(0)
-    panel = FilamentPanel()
-    panel.setFont(QFont(qt_app.font().family(), font_points))
-    panel.hint.setText("Der lange Hinweis erklärt die Auswahl und die Druckwerte. " * 5)
-    layout.addWidget(panel)
-    neighbour = QPushButton("Nachbarkarte")
-    neighbour.setFixedHeight(neighbour.sizeHint().height())
-    layout.addWidget(neighbour)
-    host.resize(width, 700)
-    host.show()
-    qt_app.processEvents()
-    try:
-        for back_visible in (False, True):
-            panel.return_to_print_button.setVisible(back_visible)
-            qt_app.processEvents()
-            for full_room in (False, True):
-                room = panel.wanted_height() if full_room else panel.least_height()
-                panel.set_room(room)
-                layout.activate()
-                host.resize(width, room + neighbour.height())
-                qt_app.processEvents()
-                assert panel.height() == room
-                assert panel.minimumHeight() <= room
-                assert panel.hint.height() >= panel.hint.heightForWidth(panel.hint.width())
-                assert neighbour.geometry().top() >= panel.geometry().bottom()
-                assert neighbour.geometry().bottom() < host.height()
-                assert panel.wanted_height() >= panel.least_height()
-                if full_room:
-                    assert panel.list.verticalScrollBar().maximum() == 0
-    finally:
-        host.close()
 
 
 def test_the_filter_dialog_narrows_by_vendor_material_and_text(qt_app: QApplication) -> None:
@@ -2088,25 +1721,23 @@ def test_an_unreadable_store_reads_as_its_title_in_the_list(
 
 
 def test_the_panel_buttons_say_why_they_rest(qt_app: QApplication) -> None:
-    """*Druckwerte …* und *Filament löschen* standen grau ohne Grund.
+    """*Druckwerte …* stand grau ohne Grund.
 
-    Beide warten auf eine Zeile — die eine unter „Im Projekt", die andere
-    unter „Im Regal"; gesagt hat es keiner, und der Statuskanal war leer
-    (Regel 18: Tooltip, Statuszeile, Bildschirmleser).
+    Der Knopf wartet auf eine Zeile der Liste; gesagt hat es keiner, und der
+    Statuskanal war leer (Regel 18: Tooltip, Statuszeile, Bildschirmleser).
     """
     from app.ui.filament_picker import FilamentPanel
 
     panel = FilamentPanel()
     try:
-        for button in (panel.settings_button, panel.delete_button):
-            assert not button.isEnabled()
-            said = (button.toolTip(), button.accessibleDescription())
-            assert all(text.strip() for text in said), (button.text(), said)
-            assert said[0] == said[1]
-        assert "Im Projekt" in panel.settings_button.toolTip()
-        assert "Im Regal" in panel.delete_button.toolTip()
+        button = panel.settings_button
+        assert not button.isEnabled()
+        said = (button.toolTip(), button.accessibleDescription())
+        assert all(text.strip() for text in said), (button.text(), said)
+        assert said[0] == said[1]
+        assert "Liste" in button.toolTip()
+        assert not panel.inventory_button.isHidden(), "der Weg ins Lager steht immer da"
     finally:
-        panel.release()
         panel.deleteLater()
 
 

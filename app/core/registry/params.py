@@ -759,6 +759,16 @@ def condition_text(entry: ParamSpec, schema: tuple[ParamSpec, ...], keys: bool =
     )
 
 
+def accepts_expression(spec: ParamSpec, literal_fields: tuple[str, ...] = ()) -> bool:
+    """Ob ein Wert an einem Projektparameter hängen darf (§13): jede Zahl außer den wörtlichen.
+
+    Wörtlich hält die Werkzeugbeschreibung des Agenten die Stückzahl
+    (``produces_from``); der Operationsdialog löst sie beim Übernehmen selbst
+    zur Zahl auf. Das fx im Merkmalfenster fragt hier ohne Ausnahme (RM-555).
+    """
+    return spec.kind in {"float", "int"} and spec.name not in literal_fields
+
+
 def json_schema(
     params_class: type[BaseParams], *, literal_fields: tuple[str, ...] = ()
 ) -> dict[str, Any]:
@@ -783,7 +793,7 @@ def json_schema(
             entry["items"] = {"type": "string", "minLength": 1}
             if spec.required and spec.depends_on is None:
                 entry["minItems"] = 1
-        bindable = spec.kind in {"float", "int"} and spec.name not in literal_fields
+        bindable = accepts_expression(spec, literal_fields)
         if bindable:
             # Grenzen prüfen den Zahlenzweig. Zeichenketten sind ausschließlich
             # Parameterverweise oder Ausdrücke; deren Grammatik und aufgelöste

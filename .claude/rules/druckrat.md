@@ -1,5 +1,5 @@
 ---
-description: "Druckrat — Vorschläge aus Geometrie, Material und Maschine: ein Vorschlag je Einstellung mit Grund, Stützbedarf, Kanäle, Ränder, Bäume, Kühlung, Haftung; kein Vorschlag überstimmt das Profil für denselben Zweck"
+description: "Druckrat — Vorschläge aus Geometrie, Material und Maschine: ein Vorschlag je Einstellung mit Grund, Stützbedarf, Kanäle, Ränder, Bäume, Stützkontakt je Material, Kühlung, Haftung; kein Vorschlag überstimmt das Profil für denselben Zweck"
 paths:
   - "app/core/slice/**/*.py"
 ---
@@ -75,6 +75,37 @@ offenem Drucker. Übernommen wird auf Klick, nie von allein.
   einige Stücke prüft, fragt mit `only`. `support.spare_ledges` sperrt ihre
   Überhangfläche (`ledge_space`) und spart aus, was Stütze braucht;
   vorgeschlagen nur mit Stützen.
+- **Der Stützkontakt folgt dem Material der Spule** (`_support_contact`):
+  Abstand aus Schichthöhe × `support_gap_factor`, begrenzt durch
+  `support_gap_min`/`support_gap_max` des Materialprofils (Regel 7,
+  `support_gap_target`; ohne Werte kein Rat), vorgeschlagen außerhalb
+  `SUPPORT_GAP_BAND`; wo der Slicer in ganzen Schichten rechnet — Cura, die
+  Orca-Familie neben einem Reinigungsturm (`writer.tower_plates`,
+  `whole_layers`), jedes Programm unter organischen Bäumen mit der Art, mit
+  der das Teil druckt (`printed_style`: der Vorschlag, außer der Kunde lehnt
+  ihn ab, `declined` — im Dialog abgewählt, dann fragt er neu, im Export nicht
+  übernommen; `handover.organic_styles`, ohne Programm die Familie; Rat,
+  Feldsatz und Export fragen dieselbe Auskunft) —, das Vielfache innerhalb der
+  Materialgrenzen, auch statt eines Werts in `SUPPORT_GAP_BAND`, der zwischen
+  zwei Schichten liegt (`in_whole_layers`); einen eigenen solchen Wert nennt
+  der Export gerundet (`export.support_gap_rounded`). **Über Baumspitzen ohne
+  Trennschicht** (ab `TIP_ISLANDS` Inseln unter `TIP_ROOF_AREA`, `tip_islands`)
+  gilt unter organischen und Curas Bäumen `support_tip_gap` des Materials in
+  ganzen Schichten, mindestens `TIP_GAP_LAYERS`, auch über `support_gap_max`
+  (`tip_gap`); ohne gemessenen Wert nicht. Unter einem flachen Stück über
+  `OVERHANG_LAYER_WORTH_SUPPORT` eine dichte Trennschicht, sonst eine lockere;
+  steht die Stütze auf dem Modell, auch unten (`BOTTOM_INTERFACE_LAYERS`) —
+  nicht, wo das Programm sie unter Bäumen nicht druckt
+  (`handover.ignored_under_trees`). Volle Kühlung an der Trennschicht,
+  wo das Material sie verlangt (`support_interface_cooling`), je Spule.
+  Abstand und Trennschichten gehen je Teil (`PART_PATHS`), gefragt mit dem
+  Material der Spule. Der Druckdialog fragt sie wie der Export gegen die
+  Grundlage, auch die Stützart, die je Teil geht
+  (`handover.asked_for_contact`), führt erst je Körper über die
+  Spulen zusammen und dann nur die verlangenden Körper (`combine` mit
+  `separate`); gegen die Übernahme gefragt, kam jede Zeile mit ihrer
+  Gegenzeile wieder. Die Zeile nennt nur Teile mit ihrem Wert. Übergabe:
+  `dateiformat.md`.
 - **Die kleine Standfläche wird auch je Fuß gefragt** (`advise._on_small_feet`):
   Erreicht keine von mehreren Inseln `SMALL_FOOTPRINT`, heißt es Brim — nur
   als Vorschlag. `for_part` fragt mit Profil jede Regel für `PART_PATHS`;

@@ -22,7 +22,7 @@ import math
 from typing import Final
 
 from PySide6.QtCore import QAbstractAnimation, QPointF, QRectF, Qt, QVariantAnimation
-from PySide6.QtGui import QColor, QPainter, QPaintEvent, QPalette
+from PySide6.QtGui import QColor, QPainter, QPaintEvent, QPalette, QPen
 from PySide6.QtWidgets import QHBoxLayout, QLabel, QTabBar, QWidget
 
 from app.i18n import tr
@@ -128,7 +128,10 @@ class SignalTabBar(QTabBar):
         self._badges: dict[int, AlertBadge] = {}
         self._words: dict[int, str] = {}
         """Die Zahlen je Reiter in Worten — für Tooltip und zugänglichen Namen."""
+        self._pointed = -1
+        """Der Reiter, auf den die Tour gerade zeigt, oder -1 (RM-573)."""
         self.currentChanged.connect(self._seen)
+        self.tabMoved.connect(self._moved)
 
     # --- Zähler --------------------------------------------------------------
 
@@ -174,17 +177,23 @@ class SignalTabBar(QTabBar):
         words = self._words.get(index, "")
         name = self.tabText(index)
         if not words:
-            self.setTabToolTip(index, "")
-            self.setAccessibleTabName(index, name)
-            return
-        if self.unseen(index):
-            self.setTabToolTip(index, tr("{counts}, ungelesen", counts=words))
-            self.setAccessibleTabName(
-                index, tr("{tab}, {counts}, ungelesen", tab=name, counts=words)
-            )
-            return
-        self.setTabToolTip(index, words)
-        self.setAccessibleTabName(index, tr("{tab}, {counts}", tab=name, counts=words))
+            tip, spoken = "", str(name)
+        elif self.unseen(index):
+            tip = str(tr("{counts}, ungelesen", counts=words))
+            spoken = str(tr("{tab}, {counts}, ungelesen", tab=name, counts=words))
+        else:
+            tip = str(words)
+            spoken = str(tr("{tab}, {counts}", tab=name, counts=words))
+        if index == self._pointed:
+            # Die Tour zeigt hierher — **angehängt**, nicht an die Stelle der
+            # Zahlen: Wer nicht sieht, hört sonst weder die Meldungen noch, dass
+            # sie ungelesen sind (Review U1, Nachprüfung, Fund 2). Der
+            # gestrichelte Rahmen sagt es dem Auge (Regel 18).
+            pointed = str(tr("Die Tour zeigt hierher. Ein Klick öffnet den Reiter."))
+            tip = f"{tip}\n{pointed}" if tip else pointed
+            spoken = str(tr("{tab}, die Tour zeigt hierher", tab=spoken))
+        self.setTabToolTip(index, tip)
+        self.setAccessibleTabName(index, spoken)
 
     # --- Blinken ---------------------------------------------------------------
 
@@ -272,13 +281,74 @@ class SignalTabBar(QTabBar):
     def _seen(self, index: int) -> None:
         if index == self._signalled:
             self.calm()
+        if index == self._pointed:
+            self.stop_pointing()
+
+    # --- Hinweis der Tour (RM-573) ---------------------------------------------
+
+    def point_at(self, index: int) -> None:
+        """Die Tour zeigt auf den Reiter ``index``, ohne ihn nach vorn zu holen.
+
+        Holte sie ihn nach vorn, verdeckte er die Tour, die sich die Karte mit
+        ihm teilt. Ein gestrichelter Rahmen um den Reiter und ein Satz in
+        Tooltip und Namen bleiben, bis der Kunde ihn selbst öffnet oder die
+        Tour weiterzieht.
+        """
+        if not 0 <= index < self.count() or index == self.currentIndex():
+            self.stop_pointing()
+            return
+        before, self._pointed = self._pointed, index
+        if before not in (-1, index):
+            self._describe(before)
+        self._describe(index)
+        self.update()
+
+    def stop_pointing(self) -> None:
+        """Kein Reiter trägt mehr den Hinweis der Tour."""
+        before, self._pointed = self._pointed, -1
+        if before >= 0:
+            self._describe(before)
+            self.update()
+
+    def pointed(self) -> int:
+        """Auf welchen Reiter die Tour zeigt, oder -1 — für Prüfungen."""
+        return self._pointed
+
+    def pointed_frame(self) -> QRectF | None:
+        """Wo der Rahmen um den gezeigten Reiter steht — ``None`` ohne. Für Prüfungen."""
+        index = self._pointed
+        if not 0 <= index < self.count() or not self.isTabVisible(index):
+            return None
+        return QRectF(self.tabRect(index)).adjusted(1.0, 1.0, -1.0, -1.0)
 
     # --- Verwaltung ------------------------------------------------------------
+
+    def _moved(self, before: int, after: int) -> None:
+        """Marken und Ansagen folgen ihrem Reiter, auch beim Umordnen."""
+
+        def shifted(index: int) -> int:
+            if index == before:
+                return after
+            if before < index <= after:
+                return index - 1
+            if after <= index < before:
+                return index + 1
+            return index
+
+        self._signalled = shifted(self._signalled)
+        self._pointed = shifted(self._pointed)
+        self._badges = {shifted(index): badge for index, badge in self._badges.items()}
+        self._words = {shifted(index): words for index, words in self._words.items()}
+        for index in range(self.count()):
+            self._describe(index)
+        self.update()
 
     def tabInserted(self, index: int) -> None:  # noqa: N802 - Qt-Name
         super().tabInserted(index)
         if 0 <= index <= self._signalled:
             self._signalled += 1
+        if 0 <= index <= self._pointed:
+            self._pointed += 1
         self._badges = {
             (spot + 1 if spot >= index else spot): badge for spot, badge in self._badges.items()
         }
@@ -292,6 +362,10 @@ class SignalTabBar(QTabBar):
             self.calm()
         elif index < self._signalled:
             self._signalled -= 1
+        if index == self._pointed:
+            self._pointed = -1
+        elif index < self._pointed:
+            self._pointed -= 1
         self._badges = {
             (spot - 1 if spot > index else spot): badge
             for spot, badge in self._badges.items()
@@ -335,6 +409,19 @@ class SignalTabBar(QTabBar):
             painter.setPen(Qt.PenStyle.NoPen)
             painter.setBrush(self.palette().color(QPalette.ColorRole.WindowText))
             painter.drawEllipse(mark)
+            painter.end()
+        # **Der Hinweis der Tour ist eine Form, nicht nur eine Farbe** (Regel 18):
+        # ein gestrichelter Rahmen in der Schriftfarbe um den ganzen Reiter.
+        frame = self.pointed_frame()
+        if frame is not None:
+            painter = QPainter(self)
+            painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+            pen = QPen(self.palette().color(QPalette.ColorRole.WindowText))
+            pen.setWidthF(2.0)
+            pen.setStyle(Qt.PenStyle.DashLine)
+            painter.setPen(pen)
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+            painter.drawRoundedRect(frame, SPACE, SPACE)
             painter.end()
 
 

@@ -733,3 +733,17 @@ Die Regel in `grenzen.md` sichern `test_naming_the_dimensions_makes_them_project
 es bei jedem Grundkörper, und musste den Haken bisher jedes Mal neu finden
 (RM-369, Entscheidung Robert). Gemerkt wird beim Übernehmen, nicht beim Klick
 auf den Haken; wer ihn nur ausprobiert und abbricht, hat nichts entschieden.
+
+## Name am wortlosen Knopf und Vorrang der Suche
+
+`_with_name` trennt den vorangestellten Namen mit dem Zeichen, das der Satz
+nicht schon führt: Gedankenstrich vor dem Zweck, Doppelpunkt vor einem Grund
+mit Gedankenstrich.
+
+Das Wort am Knopf *Filamente* (RM-556) kostete die Kopfzeile 62 px Wunschmaß;
+am echten Windows-Fenster trug *Funktion suchen …* sein Wort danach erst ab
+1415 px statt ab 1312 px. 1366 × 768 ist die häufigste Laptopbreite der
+Zielhardware, deshalb zählt im Wunschmaß nur das Zeichen (Koordinator,
+Review U2). Dabei fiel auf, dass der beim Aufbau gemerkte Bedarf der Suchform
+das Mindestmaß der leeren Kopfzeile mittrug (57 px); `_fit_toolbar` zieht
+seitdem das größere von Wunsch- und Mindestmaß ab, wie `QWidgetItem` rechnet.

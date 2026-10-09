@@ -1,0 +1,2891 @@
+diff --git a/.claude/.state/drache-2026-10-08/gcode_kontakt.py b/.claude/.state/drache-2026-10-08/gcode_kontakt.py
+index 204cec4de..93f234391 100644
+--- a/.claude/.state/drache-2026-10-08/gcode_kontakt.py
++++ b/.claude/.state/drache-2026-10-08/gcode_kontakt.py
+@@ -24,10 +24,13 @@ import sys
+ from collections import defaultdict
+ from pathlib import Path
+ 
+-CELL = 0.5
++# 2 mm statt 0,5: Eine weite Trennschicht (Lücke 1,2) traf mit 0,5 mm viele
++# Zellen ihrer obersten Lage nicht, und die Messung nahm eine Lage tiefer.
++CELL = 2.0
+ CONTACT = 1.0
+ INTERFACE = ("support interface", "support material interface", "support-interface")
+-SUPPORT = ("support", "support material")
++#: Gegenprobe: Bambus Übergangslage unter der Trennschicht ist Stütze, kein Modell.
++SUPPORT = ("support", "support material", "support transition")
+ SKIPPED = ("skirt", "brim", "custom", "prime tower", "wipe tower")
+ KEYS = (
+     "layer_height",
+@@ -133,8 +136,14 @@ def measure(path: Path, area: tuple[float, float, float, float] | None) -> dict[
+                 e = values["E"]
+             if extruded and kind is not None:
+                 level = round(z, 3)
+-                printed[kind].add(level)
+                 middle_x, middle_y = (x + new_x) / 2.0, (y + new_y) / 2.0
++                # Gegenprobe: Schichthöhen nur aus dem eigenen Bereich — mit
++                # eigener Stützschichthöhe liegen die Ebenen zweier Körper
++                # verschränkt.
++                if area is None or (
++                    area[0] <= middle_x <= area[1] and area[2] <= middle_y <= area[3]
++                ):
++                    printed[kind].add(level)
+                 if kind == "interface" and (new_x, new_y) != (x, y) and (
+                     area is None
+                     or (area[0] <= middle_x <= area[1] and area[2] <= middle_y <= area[3])
+diff --git a/.claude/rules/dateiformat.md b/.claude/rules/dateiformat.md
+index cbfac3ee9..5eee6f074 100644
+--- a/.claude/rules/dateiformat.md
++++ b/.claude/rules/dateiformat.md
+@@ -311,10 +311,8 @@ Herstellers, Solidon schreibt darüber nur die Abweichung.
+   ganze Gruppe (`handover.object_keys`). **Ein übernommener Vorschlag
+   verschwindet nie still**: Verlangt ihn kein Teil, geht er als Objektwert an
+   jedes (`writer._unserved`, `export.part_setting_all`); die Platte bleibt,
+-  damit `slice_model` dieselbe rechnet. „Kein Teil“ heißt keines des ganzen
+-  Auftrags: Jeder Aufrufer gibt `write_assembly` den Auftrag als `job` mit,
+-  der Druckdialog die gewählten Platten, der Dateiexport alle Körper, auch
+-  wenn nur einer gewählt ist.
++  damit `slice_model` dieselbe rechnet. „Kein Teil“ heißt keines des Auftrags
++  (`job`: im Druckdialog die gewählten Platten, beim Dateiexport alle Körper).
+ - **Die Druckplatte ist eine Angabe, keine Vermutung**: die im Druckdialog
+   gewählte (`SlicerSetup.plate`), sonst die Standardplatte der Maschine oder ihres
+   Modells, sonst die des Programms (`manufacturer.PROGRAM_PLATE`). Nur ohne
+@@ -325,13 +323,15 @@ Herstellers, Solidon schreibt darüber nur die Abweichung.
+   Platte; 0 °C beim Hersteller sperrt sie für das Filament — die Grundlage
+   liest dort nichts, `slicer.plate_refuses_filament` führt in die
+   Druckeinstellungen. Eine eigene Betttemperatur geht trotzdem in den
+-  Schlüssel dieser Platte — die Wahl des Kunden.
++  Schlüssel dieser Platte.
+ - **Gedruckt wird, was der Slicer liest**: die Düsenart-Fassung der
+   Maschinendüse, ein eigener Wert in jeder (`slicer_keys.NOZZLE_KIND_KEYS`);
+   wo gestützt wird, keine Baumspitze unter der Stützbahn
+   (`handover.organic_tree_fitted`); passt der genannte Standardprozess nicht,
+   der seiner Schichthöhe, ohne Prozess `slicer.process_missing`; was die
+-  Konsole ablehnt, als Programmvorgabe (`slicer_keys.CONSOLE_LIMITS`).
++  Konsole ablehnt, als Programmvorgabe (`slicer_keys.CONSOLE_LIMITS`); ein
++  Stützabstand zwischen zwei Schichten mit eigener Stützschichthöhe
++  (`handover.frees_support_layers`).
+ - **Was sich nicht übersetzen lässt, wird nicht umgedeutet**
+   (`Foundation.foreign`): `crosshatch` bleibt, wird nicht geschrieben, und der
+   Dialog zeigt „Hersteller: crosshatch".
+@@ -346,8 +346,8 @@ Herstellers, Solidon schreibt darüber nur die Abweichung.
+   Herstellerprozess nie schneller als dort; eine eigene Wahl darf beides.
+ - **Ein Vorschlag, der beim Slicer nichts ändert, wird nicht angeboten**:
+   Tempodeckel nach Volumenstrom (`advise.limits_flow`) fallen weg, wo der
+-  Slicer selbst deckelt (`slicer_keys.caps_volumetric_speed`: Orca-Familie,
+-  PrusaSlicer), und bleiben bei Cura.
++  Slicer selbst deckelt (`slicer_keys.caps_volumetric_speed`), und bleiben bei
++  Cura.
+ - **PrusaSlicer bekommt die ganze Kette seines Bündels in einer Datei**:
+   Drucker, Prozess und Filament aus seinem Bestand (`manufacturer.prusa_chain`),
+   aufgelöst und ohne die Profilverwaltungsschlüssel (`PRUSA_MANAGING_KEYS`),
+@@ -364,7 +364,7 @@ Herstellers, Solidon schreibt darüber nur die Abweichung.
+   (`slicer_profiles.identity`; `PrusaResearch.ini` trägt über neuntausend
+   Profile) — Auswahlen über Profile nehmen diese Kennung. Den gelesenen
+   Bestand hält `slicer_profiles._prusa_store`, geprüft an Größe und
+-  Zeitstempel jeder Bündeldatei.
++  Zeitstempel jeder Datei.
+ - **Bei PrusaSlicer erst der Hersteller, dann Liste und Bedingung**
+   (`slicer_profiles._prusa_fits`, wie PrusaSlicers
+   `is_compatible_with_printer`): Ein Systemprofil passt nur zum Drucker
+@@ -482,15 +482,16 @@ der Slicer einen Gegenwert (Minimum zum Maximum, Schwelle zur Kurve, Schalter
+ zum Anteil), braucht Solidon ein eigenes Feld, eine Zeile je Familie, eine in
+ den Rücklesetabellen und einen Wert im Materialprofil. Ein Anteil, der nur mit
+ einem Schalter wirkt, schreibt den Schalter mit (`_positive_switch`, etwa
+-`reduce_fan_stop_start_freq`).
++`reduce_fan_stop_start_freq`). Curas Kontaktlüfter kühlt die Haut über der
++Stütze, zum selben Zweck.
+ 
+ Kennt eine ältere Datei ein solches Feld nicht, ist es keine
+ Dataclass-Vorgabe, sondern eine Frage an dieselbe Stelle wie bei einem neuen
+ Projekt: Unteres Ende und Schwelle der Lüfterkurve kommen beim Öffnen aus dem
+ Material (`print_settings.fan_curve`); der alte eine Wert bleibt das obere
+ Ende, wie er im Dialog hieß. Kein Formatsprung, solange ein älteres Programm
+-neue Schlüssel still übergeht (`_group_from_data` filtert nach bekannten
+-Feldern) und die Datei dort druckt wie vorher.
++neue Schlüssel still übergeht (`_group_from_data`) und die Datei dort druckt
++wie vorher.
+ 
+ ## Wie eine Zuordnung geprüft wird
+ 
+diff --git a/.claude/rules/druckrat.md b/.claude/rules/druckrat.md
+index b842cee6c..377cb03f2 100644
+--- a/.claude/rules/druckrat.md
++++ b/.claude/rules/druckrat.md
+@@ -76,16 +76,19 @@ offenem Drucker. Übernommen wird auf Klick, nie von allein.
+ - **Der Stützkontakt folgt dem Material der Spule** (`_support_contact`):
+   Abstand aus Schichthöhe × `support_gap_factor`, begrenzt durch
+   `support_gap_min`/`support_gap_max` des Materialprofils (Regel 7,
+-  `support_gap_target`), vorgeschlagen außerhalb `SUPPORT_GAP_BAND`. Unter
+-  einem flachen Stück über `OVERHANG_LAYER_WORTH_SUPPORT` eine dichte
+-  Trennschicht, sonst eine lockere; steht die Stütze auf dem Modell, auch
+-  unten (`BOTTOM_INTERFACE_LAYERS`). Faktor über eins heißt volle Kühlung an
+-  der Trennschicht, ein Filamentwert je Spule. Abstand und Trennschichten
+-  gehen je Teil (`PART_PATHS`), gefragt mit dem Material der Spule
+-  (`handover.slot_processes`). Cura rechnet in ganzen Schichten; die
+-  Orca-Familie nur ohne eigene Stützschichthöhe, die die Übergabe dann
+-  einschaltet (`handover.frees_support_layers`) — mit mehreren Filamenten und
+-  Reinigungsturm rundet sie trotzdem.
++  `support_gap_target`; ohne Werte kein Rat), vorgeschlagen außerhalb
++  `SUPPORT_GAP_BAND`; wo der Slicer in ganzen Schichten rechnet, das Vielfache
++  im Band. Unter einem flachen Stück über `OVERHANG_LAYER_WORTH_SUPPORT` eine
++  dichte Trennschicht, sonst eine lockere; steht die Stütze auf dem Modell,
++  auch unten (`BOTTOM_INTERFACE_LAYERS`). Volle Kühlung an der Trennschicht,
++  wo das Material sie verlangt (`support_interface_cooling`), je Spule.
++  Abstand und Trennschichten gehen je Teil (`PART_PATHS`), gefragt mit dem
++  Material der Spule. Der Druckdialog fragt sie wie der Export gegen die
++  Grundlage (`handover.asked_for_contact`), führt erst je Körper über die
++  Spulen zusammen und dann nur die verlangenden Körper (`combine` mit
++  `separate`); gegen die Übernahme gefragt, kam jede Zeile mit ihrer
++  Gegenzeile wieder. Die Zeile nennt nur Teile mit ihrem Wert. Übergabe:
++  `dateiformat.md`.
+ - **Die kleine Standfläche wird auch je Fuß gefragt** (`advise._on_small_feet`):
+   Erreicht keine von mehreren Inseln `SMALL_FOOTPRINT`, heißt es Brim — nur
+   als Vorschlag. `for_part` fragt mit Profil jede Regel für `PART_PATHS`;
+diff --git a/app/core/export/CLAUDE.md b/app/core/export/CLAUDE.md
+index bf53cd965..3ad46c8a6 100644
+--- a/app/core/export/CLAUDE.md
++++ b/app/core/export/CLAUDE.md
+@@ -12,7 +12,7 @@ stehen in `.claude/rules/dateiformat.md`; Herleitungen in
+ | `writer.py` | Export und **die Prüfung, die davor läuft** (§29, §16.3): `check_before_export`, `default_scheme` (Namensmuster, im Dateidialog), `mesh_for_export` an allen drei Stellen des Schreibers, `export_part_scad` (erst `activation.require(EXPORT)`); bei Resin lässt `write_assembly` den FDM-Satz fallen (keine Haftungs- und Filamentbefunde, keine Beilage); `part_advice` ist der Rat je Körper und Spule (auch für die Zeile im Druckdialog), mit den übernommenen Werten je Teil bis zum Fixpunkt gefragt, `_part_values` schreibt daraus Objekt- oder Netzwerte |
+ | `readback.py` | Gegenprobe: liest Geschriebenes zurück (Dreiecke, Volumen, Außenmaße), `Readback` |
+ | `threemf.py` | 3MF **schreiben** — Körper oder Baugruppe, Farbgruppen, Slicer-Beilagen (§20, §29), `AssemblyPart.support_blocker` je nach `blocker_as_part`; Körper und Sperren behalten ihre float64-Koordinaten ohne Rundung; gelesen wird in `ingest/threemf.py` |
+-| `handover.py` | Übergabe an den Slicer (§29, §28.1): `write_config`, `project_settings`, `values_for`, `slice_model` und seine Gegenproben, `prusa_values`; `machine_for` bindet importierte Orca-Düsenvarianten an Quellprofil, Modell und belegten Hersteller; `project_settings` und `_machine_name` schreiben bei auflösbarer Maschinenkennung den nativen Profilnamen, während intern die stabile Kennung erhalten bleibt (`_source_profile_name`); `split_for_parts` trennt übernommene Werte nach gemessener Programmmarke in plattenweite und solche je Teil (`PartSplit`, `CURA_PER_MESH`; `PartSplit.accepted_per_part` trägt die Übernahmen in den Rat je Teil); `settings_for_slot` liest gebundene Bambu-Filamente mit derselben aktiven Variante, `_resolve_slot` hält Rücklesen, Ausgabe und Befund zusammen; eine nicht zuordenbare Variante verwirft das gebundene Profil und schreibt Projektwerte; in gemischten 3MFs löst `project_settings` je Slot nur ausdrücklich variantengebundene Bambu-Felder (`BAMBU_FILAMENT_VARIANT_SETTINGS`) bei passender Variantenanzahl auf; Profilvektoren anderer Semantik bleiben auch bei gleicher Länge vollständig; `_followers_not_faster` vergleicht Tempovorschläge mit dem aktiven Prozesswert; `organic_tree_fitted` hebt die Baumspitze; `slot_processes` nennt je Spule eines Körpers Profil und Einstellungen, `chosen_slot_profiles` die gewählten Filamentprofile |
++| `handover.py` | Übergabe an den Slicer (§29, §28.1): `write_config`, `project_settings`, `values_for`, `slice_model` und seine Gegenproben, `prusa_values`; `machine_for` bindet importierte Orca-Düsenvarianten an Quellprofil, Modell und belegten Hersteller; `project_settings` und `_machine_name` schreiben den nativen Profilnamen, intern bleibt die stabile Kennung (`_source_profile_name`); `split_for_parts` trennt übernommene Werte nach Programmmarke in plattenweite und solche je Teil (`PartSplit`, `CURA_PER_MESH`, `CURA_DERIVED_PER_MESH`; `PartSplit.accepted_per_part` trägt die Übernahmen in den Rat je Teil); `settings_for_slot` liest gebundene Bambu-Filamente mit derselben aktiven Variante, `_resolve_slot` hält Rücklesen, Ausgabe und Befund zusammen; eine nicht zuordenbare Variante verwirft das gebundene Profil und schreibt Projektwerte; in gemischten 3MFs löst `project_settings` je Slot nur ausdrücklich variantengebundene Bambu-Felder (`BAMBU_FILAMENT_VARIANT_SETTINGS`) bei passender Variantenanzahl auf; andere Profilvektoren bleiben auch bei gleicher Länge ganz; `_followers_not_faster` vergleicht Tempovorschläge mit dem aktiven Prozesswert; `organic_tree_fitted` hebt die Baumspitze, `frees_support_layers` gibt der Stütze eine eigene Schichthöhe; `slot_processes` nennt je Spule eines Körpers Profil und Einstellungen, `chosen_slot_profiles` die gewählten Filamentprofile |
+ | `cura_linux.py` | Curas Linux-Pakete: CuraEngine über ihren Lader (`engine`), `appimage_resources`, sonst `WINDOW_ONLY` |
+ | `manufacturer.py` | **Die Grundlage aus dem Herstellerprofil**: `base_settings` liest Prozess, Filament und Maschine des gewählten Slicerprofils in Solidons Felder zurück (`ORCA_PROCESS`, `slicer_profiles.FILAMENT_READBACK`); Bambu-Listen löst es über den vollständigen Variantennamen aus Extrudertyp und `nozzle_volume_type` auf, jedes Prozess-, Maschinen- und Filamentprofil mit seinem eigenen Variantenindex und Extruder (`_variant_selection`, `_variant_values`); mehrdeutige Varianten fallen auf Solidons Tabelle zurück, mit eigenem Befund (`Foundation.unresolved_variant`, `slicer.process_variant_unresolved`), nie als unlesbares Profil; ohne lesbare Variante (`nil`, leer, Zahl) ebenso, mit `slicer.process_variant_unreadable`. Die vier Orca-Programme ergänzen ihre gemessenen Vorgaben (`PROGRAM_DEFAULTS`), dazu kommen Druckplatte (`default_plate`, `PROGRAM_PLATE`, `PLATE_TEMPERATURES`), `Foundation.nozzle_type`, `process_missing` und Gemessenes (`Foundation.measured`, auf dem Raster der Probe: `measured_on`, Rückfall `Foundation.unmeasured`); die Stufe wählt den Prozess des Herstellers (`for_stage`), nur wo keiner passt, liegen ihre Werte über dem Standardprozess (`STAGE_PATHS`, `Foundation.staged`); `plate_temperatures`, `offers_plates`; `effective` (Grundlage plus Abweichung), `written_paths` (was die Übergabe davon schreibt), `findings` (Platte, unlesbares Profil, nicht zuordenbare Düsenvariante). Für PrusaSlicer löst `prusa_chain` Drucker, Prozess und Filament des Bündels auf (`PrusaChain`), `PRUSA_PROCESS` und `PRUSA_PROGRAM_DEFAULTS` lesen sie zurück |
+ | `prusa_conditions.py` | PrusaSlicers Verträglichkeitsbedingungen mit eigenem Parser, ohne `eval` (Regel 10); `slicer_profiles._prusa_fits` bindet damit Prozesse und Filamente an den Drucker |
+diff --git a/app/core/export/handover.py b/app/core/export/handover.py
+index f598b4285..4362c2199 100644
+--- a/app/core/export/handover.py
++++ b/app/core/export/handover.py
+@@ -31,7 +31,7 @@ from collections.abc import Callable, Iterable, Mapping, Sequence
+ from contextlib import ExitStack, suppress
+ from dataclasses import dataclass, field, replace
+ from pathlib import Path
+-from typing import TYPE_CHECKING, Any, Final
++from typing import TYPE_CHECKING, Any, Final, Literal
+ from xml.etree import ElementTree as ET
+ 
+ from app.core import activation, build_area, discover, expressions
+@@ -223,9 +223,6 @@ _DENSE_INFILL: Final = 0.95
+ #: Innenwand und zwei Drittel davon: 214 und 143 mm/s am Ender-3 V3.
+ _SUPPORT_SPEED: Final = 150.0
+ _SUPPORT_INTERFACE_SPEED: Final = 80.0
+-#: Die Schnittstelle zu einem Drittel dicht, wie Creality und Elegoo in Cura
+-#: (``support_interface_density`` 33,3 %): Linienabstand drei Bahnbreiten.
+-_INTERFACE_SPACING: Final = 3.0
+ #: So viel Fläche braucht ein Stützstück mindestens, in mm² (Creality in Cura).
+ _MINIMUM_SUPPORT_AREA: Final = 2.0
+ #: Wie überhängende Wände bremsen, wenn der Hersteller keine Stufen nennt
+@@ -1469,6 +1466,36 @@ def _part_paths(flavour: SlicerFlavour, program: str = "") -> frozenset[str]:
+     return frozenset()
+ 
+ 
++def asked_for_contact(
++    settings: PrintSettings,
++    profile: Profile,
++    setup: SlicerSetup | None,
++    flavour: SlicerFlavour | None,
++) -> tuple[frozenset[str], PrintSettings]:
++    """Wogegen der Druckdialog den Stützkontakt je Körper fragt (RM-583).
++
++    Die Pfade aus ``advise.CONTACT_PATHS``, die dieser Slicer je Teil annimmt,
++    und Einstellungen, in denen sie auf der Grundlage stehen — wie im Export,
++    der je Teil gegen ``split_for_parts(...).base`` fragt. Gegen die Übernahme
++    gefragt, brachte jedes Übernehmen die Gegenzeile: Der Tisch wollte 0,2 gegen
++    die übernommenen 0,5 des Kinns, das Kinn danach wieder 0,5.
++    """
++    from app.core.slice import advise
++
++    if flavour is None:
++        return frozenset(), settings
++    # Ohne gefundenen Slicer trennt der Export ebenso, für die Familie der Datei.
++    program = slicer_keys.program_of(setup.executable) if setup is not None else ""
++    separate = advise.CONTACT_PATHS & _part_paths(flavour, program)
++    if not separate:
++        return separate, settings
++    base = split_for_parts(settings, profile, setup, flavour).base
++    asking = settings
++    for path in sorted(separate):
++        asking = with_path(asking, path, read_path(base, path))
++    return separate, asking
++
++
+ def cura_takes_whole(path: str) -> bool:
+     """Ob CuraEngine jeden Schlüssel dieses Pfads je Netz annimmt.
+ 
+@@ -1705,13 +1732,6 @@ def _cura_dependants(
+         if copied is not None:
+             for target in targets:
+                 written[target] = copied
+-    # Die unteren Kontaktlagen eigens und nach dem Spiegel, der sie sonst der
+-    # oberen Höhe gleichsetzt (RM-583): Wo die Stütze auf dem Modell steht,
+-    # zeichnet ihr roher Fuß die Fläche darunter.
+-    if "support_interface_height" in written:
+-        bottom = settings.support.bottom_interface_layers
+-        written["support_bottom_height"] = f"{bottom * settings.layers.layer_height:g}"
+-        written["support_bottom_enable"] = "true" if bottom > 0 else "false"
+     for target, source, factor in slicer_keys.CURA_SCALED:
+         number = _as_float(written.get(source))
+         if number is not None:
+@@ -1777,7 +1797,7 @@ def _cura_computed(written: dict[str, str], settings: PrintSettings, profile: Pr
+     Cura-Fenster genauso gerechnet, bevor es die Werte weitergibt.
+     """
+     _from_line_width(written, settings)
+-    _for_supports(written, settings)
++    _for_supports(written, settings, profile)
+     _for_speeds(written, settings, profile)
+     _for_overhangs(written, profile.printer)
+     _factory_habits(written, profile)
+@@ -1841,7 +1861,7 @@ def _from_line_width(written: dict[str, str], settings: PrintSettings) -> None:
+         written["wall_0_inset"] = "0"
+ 
+ 
+-def _for_supports(written: dict[str, str], settings: PrintSettings) -> None:
++def _for_supports(written: dict[str, str], settings: PrintSettings, profile: Profile) -> None:
+     """Die Stützen, wie die Werksprofile sie in Cura legen (Prüfbericht Cura, B4).
+ 
+     Die Stütze selbst bleibt Curas ``zigzag``, eine verbundene Linienschar,
+@@ -1869,11 +1889,12 @@ def _for_supports(written: dict[str, str], settings: PrintSettings) -> None:
+         # die schwer abgeht und die Unterseite mit Ringen zeichnet.
+         for key in ("support_roof_pattern", "support_bottom_pattern"):
+             written[key] = "lines"
+-        spacing = width * _INTERFACE_SPACING
+         # Eine eigene Lücke gilt erst, wenn sie gewählt oder übernommen ist
+-        # (RM-583); sonst bleibt Curas Drittel der Hersteller.
+-        if "support.interface_spacing" in settings.chosen | settings.accepted:
+-            spacing = width + settings.support.interface_spacing
++        # (RM-583); sonst die der Grundlage, auch bei geänderter Bahnbreite.
++        gap = settings.support.interface_spacing
++        if "support.interface_spacing" not in settings.chosen | settings.accepted:
++            gap = manufacturer.cura_interface_gap(print_settings.resolve(profile, settings.quality))
++        spacing = width + gap
+         for key in ("support_roof_line_distance", "support_bottom_line_distance"):
+             written[key] = f"{spacing:g}"
+         # Die Stütze wächst um eine Bahnbreite plus Curas festen Zuschlag —
+@@ -1886,9 +1907,15 @@ def _for_supports(written: dict[str, str], settings: PrintSettings) -> None:
+     # Ohne den Schalter entsteht gar keine Schnittstelle, und ohne die Höhe
+     # wurden aus zwei Schichten zwei Millimeter — das Zehnfache bei 0,2ern.
+     layers = settings.support.interface_layers
+-    written["support_interface_height"] = f"{layers * settings.layers.layer_height:g}"
+-    for key in ("support_interface_enable", "support_roof_enable", "support_bottom_enable"):
+-        written[key] = "true" if layers > 0 else "false"
++    # Unten eigene Lagen (RM-583): Wo die Stütze auf dem Modell steht,
++    # zeichnet ihr roher Fuß die Fläche darunter.
++    bottom = settings.support.bottom_interface_layers
++    height = settings.layers.layer_height
++    written["support_interface_height"] = f"{layers * height:g}"
++    written["support_bottom_height"] = f"{bottom * height:g}"
++    written["support_roof_enable"] = "true" if layers > 0 else "false"
++    written["support_bottom_enable"] = "true" if bottom > 0 else "false"
++    written["support_interface_enable"] = "true" if layers > 0 or bottom > 0 else "false"
+     written["support_bottom_stair_step_height"] = "0" if layers > 0 else f"{_STAIR_STEP:g}"
+     written["support_tree_top_rate"] = "30" if layers > 0 else "10"
+     written["support_tree_rest_preference"] = (
+@@ -2331,6 +2358,28 @@ class _SlotResolution:
+         )
+ 
+ 
++def slot_material_type(slot: MaterialSlot, setup: SlicerSetup | None) -> str:
++    """Die Materialart, mit der diese Spule druckt (RM-583; Robert: „immer nach dem
++    verwendeten Material“): die des gewählten Filamentprofils, sonst die der Spule.
++
++    Eine geladene Datei bringt ihre Spulen samt Materialart mit; gibt der Kunde
++    einer davon ein Profil aus PETG, druckt sie PETG, und Rat wie Spulenwerte
++    folgen dem Profil, nicht der Herkunft der Datei.
++    """
++    if setup is not None and slot.material:
++        source = profile_source(slot.material, setup, "filament")
++        kind = ""
++        if isinstance(source, slicer_profiles.SlicerProfile):
++            kind = source.filament_type
++        elif source is not None:
++            values = slicer_profiles.resolve_values(source, roots=_profile_roots(setup))
++            raw = values.get("filament_type")
++            kind = str(raw[0] if isinstance(raw, list) and raw else raw or "")
++        if kind.strip():
++            return kind.strip()
++    return slot.material_type or ""
++
++
+ def _resolve_slot(
+     settings: PrintSettings,
+     profile: Profile,
+@@ -2352,7 +2401,7 @@ def _resolve_slot(
+     aus der ganzen Erbkette. Ausdrückliche Spulenwerte gewinnen anschließend
+     gruppenweise; Beratung und Ausgabe benutzen dieselbe Reihenfolge.
+     """
+-    material_id = profiles.material_id_for_type(slot.material_type or "")
++    material_id = profiles.material_id_for_type(slot_material_type(slot, setup))
+     if material_id and material_id != profile.material.id:
+         defaults = print_settings.resolve(
+             replace(profile, material=profiles.material(material_id)), settings.quality
+@@ -2456,7 +2505,7 @@ def slot_processes(
+             continue
+         chosen = slot_profiles.get(threemf.slot_identity(original), "")
+         slot = replace(original, material=chosen) if chosen else original
+-        material = profiles.material_id_for_type(slot.material_type or "")
++        material = profiles.material_id_for_type(slot_material_type(slot, setup))
+         material_profile = (
+             replace(own_profile, material=profiles.material(material)) if material else own_profile
+         )
+@@ -2968,38 +3017,124 @@ def _prusa_values(
+ _FREE_SUPPORT_LAYERS: Final = "independent_support_layer_height"
+ 
+ 
+-def frees_support_layers(
+-    settings: PrintSettings,
+-    profile: Profile,
+-    slots: Sequence[MaterialSlot],
+-    flavour: SlicerFlavour,
+-) -> bool:
+-    """Ob die Orca-Familie die Stütze in eigener Schichthöhe drucken muss,
+-    damit Solidons Stützabstand gilt (RM-583).
++#: Wo die Orca-Familie den Stützabstand schreibt, oben und unten.
++_SUPPORT_GAP_KEYS: Final = ("support_top_z_distance", "support_bottom_z_distance")
++
++
++def written_support_gaps(
++    plate: PrintSettings, parts: Iterable[Mapping[str, str]] = ()
++) -> list[float]:
++    """Die Stützabstände, die Solidon tatsächlich schreibt (RM-583): der der Platte,
++    wo Solidon ihn setzt (gewählt oder übernommen), und die Objektwerte der Teile.
++    Der Abstand des Herstellers steht hier nicht — ihn rundet der Slicer, wie
++    der Hersteller es eingestellt hat."""
++    gaps = [plate.support.z_gap] if "support.z_gap" in plate.chosen | plate.accepted else []
++    for keys in parts:
++        for key in _SUPPORT_GAP_KEYS:
++            number = _as_float(keys.get(key))
++            if number is not None:
++                gaps.append(number)
++    return gaps
+ 
+-    Ohne ``independent_support_layer_height`` rundet sie den Abstand auf ganze
+-    Schichten (``Slicing.cpp``), und Elegoos Prozesse für C2 und CC2 schalten
+-    ihn ab: Aus 0,28 mm für PETG wurden im ElegooSlicer 0,2. Gefragt an den
+-    Einstellungen **vor** der Trennung je Teil, nur wenn Solidon den Abstand
+-    setzt, und nur, wenn einer keine ganze Schicht ist — der der Platte oder der
+-    Rat je Teil nach dem Material jeder Spule. Mit mehreren Filamenten und
+-    Reinigungsturm schaltet die Orca-Familie die eigene Höhe selbst wieder ab.
+-    """
+-    from app.core.slice import advise
+ 
+-    if flavour != "orca":
++def frees_support_layers(gaps: Iterable[float], layer: float, flavour: SlicerFlavour) -> bool:
++    """Ob die Stütze eine eigene Schichthöhe braucht, damit diese Abstände gelten
++    (RM-583).
++
++    Ohne ``independent_support_layer_height`` rundet die Orca-Familie den
++    Abstand auf ganze Schichten (``Slicing.cpp``), und Elegoos Prozesse für C2
++    und CC2 schalten sie ab: Aus 0,28 mm für PETG wurden im ElegooSlicer 0,2.
++    Gefragt wird nur, wenn ein geschriebener Abstand keine ganze Schicht ist
++    (:func:`written_support_gaps`). Mit Reinigungsturm schaltet die
++    Orca-Familie die eigene Höhe selbst wieder ab (:func:`tower_cause`).
++    """
++    if not slicer_keys.has_independent_support_layers(flavour) or layer <= 0.0:
+         return False
+-    layer = settings.layers.layer_height
+-    gaps = (
+-        [settings.support.z_gap] if "support.z_gap" in settings.chosen | settings.accepted else []
+-    )
+-    if "support.z_gap" in settings.accepted:
+-        materials = {profiles.material_id_for_type(slot.material_type or "") for slot in slots}
+-        gaps += [
+-            advise.support_gap_target(layer, profiles.material(material))
+-            for material in sorted(material for material in materials if material)
+-        ] or [advise.support_gap_target(layer, profile.material)]
+-    return any(not is_close(gap / layer, round(gap / layer)) for gap in gaps)
++    return any(not is_close(gap / layer, round(gap / layer)) for gap in gaps if gap > 0.0)
++
++
++def _native_process(setup: SlicerSetup | None) -> Mapping[str, object]:
++    """Der aufgelöste Herstellerprozess der Orca-Familie, ohne Solidons Werte."""
++    if setup is None or setup.flavour != "orca" or not setup.base_process:
++        return {}
++    source = profile_file(setup.base_process, setup, "process")
++    if source is None:
++        return {}
++    return slicer_profiles.resolve_values(source, roots=_profile_roots(setup))
++
++
++def _switched_on(value: object) -> bool:
++    return str(_printed(value)).strip().casefold() in ("1", "true")
++
++
++def tower_cause(
++    setup: SlicerSetup | None, *, filaments: int, objects: int
++) -> Literal["filaments", "process"] | None:
++    """Warum der Herstellerprozess auf einer Platte einen Reinigungsturm baut.
++
++    Mit Turm schaltet die Orca-Familie die eigene Stützschichthöhe ab und
++    rundet den Stützabstand (``PrintConfig.cpp``, ``normalize_fdm_2``).
++    Mehrere Filamente bauen ihn, außer „je Objekt“ mit mehreren Objekten;
++    glatter Zeitraffer und Wicklungserkennung bauen ihn immer. ``None``: kein
++    Turm.
++    """
++    native = _native_process(setup)
++    if not _switched_on(native.get("enable_prime_tower", "0")):
++        return None
++    if str(_printed(native.get("timelapse_type", "0"))).strip() == "1" or _switched_on(
++        native.get("enable_wrapping_detection", "0")
++    ):
++        return "process"
++    by_object = str(_printed(native.get("print_sequence", ""))).strip() == "by object"
++    if filaments > 1 and not (by_object and objects > 1):
++        return "filaments"
++    return None
++
++
++def support_layers_findings(setup: SlicerSetup | None, free: bool) -> list[Finding]:
++    """Sagt, wenn Solidon die eigene Stützschichthöhe gegen den Herstellerprozess
++    einschaltet (RM-583): Die Stütze liegt dann auch auf eigenen Höhen, nicht
++    nur auf denen des Modells. Wie bei der gehobenen Baumspitze erfährt der
++    Kunde die Abweichung vom Herstellerprofil mit ihrem Grund."""
++    if not free or setup is None:
++        return []
++    native = _native_process(setup)
++    if _FREE_SUPPORT_LAYERS not in native or _switched_on(native[_FREE_SUPPORT_LAYERS]):
++        return []
++    return [
++        Finding(
++            code="slicer.support_layers_freed",
++            severity="info",
++            message=_(
++                "Damit der *Abstand oben und unten* gilt, druckt {slicer} die Stütze in "
++                "eigener Schichthöhe. Das Herstellerprofil hatte das abgeschaltet.",
++                slicer=setup.name,
++            ),
++            values={"setting": _FREE_SUPPORT_LAYERS, "slicer": setup.name},
++        )
++    ]
++
++
++def _frees_in_project(models: Sequence[Path]) -> bool | None:
++    """Was die Beilage einer Solidon-3MF zur eigenen Stützschichthöhe sagt.
++
++    Der Konsolenlauf lädt seinen Prozess über die Beilage hinweg; er muss
++    dasselbe schreiben, was :func:`app.core.export.writer.write_assembly` aus
++    den Werten der Teile entschieden hat. ``None``, wo keine Beilage es sagt."""
++    for model in models:
++        if model.suffix.casefold() != ".3mf" or not model.is_file():
++            continue
++        try:
++            with zipfile.ZipFile(model) as container:
++                if threemf.PROJECT_SETTINGS_PATH not in container.namelist():
++                    continue
++                embedded = json.loads(container.read(threemf.PROJECT_SETTINGS_PATH))
++        except zipfile.BadZipFile, OSError, ValueError:
++            # Keine lesbare Beilage: Dann sagt sie auch nichts dazu.
++            continue
++        if isinstance(embedded, dict) and _FREE_SUPPORT_LAYERS in embedded:
++            return _switched_on(embedded[_FREE_SUPPORT_LAYERS])
++    return None
+ 
+ 
+ def write_config(
+@@ -3018,7 +3153,8 @@ def write_config(
+     Spulen, und die fahren verschieden. Trägt ein Slot einen eigenen
+     Profilnamen (``MaterialSlot.material``), wird der als Unterlage genommen;
+     sonst gilt für alle das eine aus dem ``setup``. ``free_support_layers``
+-    sagt :func:`frees_support_layers` vor der Trennung je Teil.
++    sagt :func:`frees_support_layers` an den geschriebenen Abständen von Platte
++    und Teilen (:func:`written_support_gaps`), beim Konsolenlauf aus der Beilage.
+     """
+     _refuse_untranslated(setup)
+     setup = replace(setup, machine_profile=machine_for(setup, profile))
+@@ -4466,18 +4602,24 @@ def setting_limitations(
+     Was nur je nach Wert angenähert ankommt (``slicer_keys.LIMITED``), wird
+     erst mit den Einstellungen beurteilt — ohne sie gibt es dazu keinen Satz.
+     """
+-    paths = slicer_keys.NOT_TAKEN_BY[flavour] | slicer_keys.LIMITED[flavour]
+-    return [
+-        Finding(
+-            code="slicer.setting_not_transferred",
+-            severity="warning",
+-            message=message,
+-            values={"path": path},
+-            suggestions=(CHECK_SLICER_PROFILE,),
++    limited = slicer_keys.LIMITED[flavour]
++    findings = []
++    for path in sorted(slicer_keys.NOT_TAKEN_BY[flavour] | limited):
++        message = slicer_keys.limitation(flavour, path, settings)
++        if message is None:
++            continue
++        # Was je nach Wert angenähert ankommt, ändert der Kunde am Feld; was
++        # nie ankommt, nur im Profil seines Slicers (RM-583).
++        findings.append(
++            Finding(
++                code="slicer.setting_not_transferred",
++                severity="warning",
++                message=message,
++                values={"path": path, "field": path} if path in limited else {"path": path},
++                suggestions=(OPEN_PRINT_SETTINGS,) if path in limited else (CHECK_SLICER_PROFILE,),
++            )
+         )
+-        for path in sorted(paths)
+-        if (message := slicer_keys.limitation(flavour, path, settings)) is not None
+-    ]
++    return findings
+ 
+ 
+ def substituted_choices(settings: PrintSettings, program: str) -> list[Finding]:
+@@ -6553,10 +6695,20 @@ def slice_model(
+     # Gefragt an der Wahl vor der Trennung: Ein Ersatz gilt der Platte wie dem
+     # Teil, das den Wert als Objektwert trägt (RM-480).
+     substituted = substituted_choices(settings, slicer_keys.program_of(setup.executable))
+-    free_support_layers = frees_support_layers(settings, profile, slots, setup.flavour)
+     # **Dieselbe Platte wie in der Datei** (Entscheidung G): Was je Teil gilt,
+     # trägt das Modell aus ``write_assembly`` als Objektwert oder Netzwert.
+     settings = split_for_parts(settings, profile, setup, setup.flavour).plate
++    # Die eigene Stützschichthöhe hat der Export aus den Werten der Teile
++    # entschieden; ohne seine Beilage gilt der Abstand der Platte (RM-583).
++    free_support_layers = (
++        _frees_in_project(models)
++        if slicer_keys.has_independent_support_layers(setup.flavour)
++        else False
++    )
++    if free_support_layers is None:
++        free_support_layers = frees_support_layers(
++            written_support_gaps(settings), settings.layers.layer_height, setup.flavour
++        )
+     # Ein Slicer als Flatpak sieht unser ``/tmp`` nicht
+     # (``discover.workspace_for``).
+     with discover.workspace_for(setup.executable, "solidon-slice-", ascii_only=True) as workspace:
+diff --git a/app/core/export/manufacturer.py b/app/core/export/manufacturer.py
+index 2f5e3115e..3223ec5bb 100644
+--- a/app/core/export/manufacturer.py
++++ b/app/core/export/manufacturer.py
+@@ -1053,17 +1053,14 @@ def cura_motion(setup: SlicerSetup, profile: Profile) -> Motion | None:
+         return None
+     jerk = _cura_number(chain.get("machine_max_jerk_xy"))
+     limit = _cura_number(chain.get("machine_max_acceleration_x"))
+-    interface = _cura_number(chain.get("support_interface_density"))
+     return Motion(
+         nozzle=profile.printer.nozzle_diameter,
+         jerk=jerk if jerk is not None and jerk > 0.0 else None,
+         acceleration_limit=limit if limit is not None and limit > 0.0 else None,
+-        # Stütztempo und Beschleunigung folgen dem, was Solidon schreibt
+-        # (``speed_print``, ``print_time._roles``); die Kontaktdichte steht in
+-        # der Definition, in Prozent.
+-        support_interface_density=interface / 100.0
+-        if interface is not None and interface > 0.0
+-        else None,
++        # Stütztempo, Beschleunigung und Kontaktdichte folgen dem, was Solidon
++        # schreibt (``speed_print``, ``print_time._roles``,
++        # ``slicer_keys.CURA_INTERFACE_LINES``), nicht der Definition.
++        support_interface_density=1.0 / slicer_keys.CURA_INTERFACE_LINES,
+         support_closing=_cura_number(chain.get("support_join_distance")),
+     )
+ 
+@@ -1320,7 +1317,9 @@ def _read_filament(
+             continue
+         if solidon in slicer_profiles._AS_FRACTION:
+             number /= 100.0
+-        read[solidon] = kind(number)
++        value = kind(number)
++        if value is not None:
++            read[solidon] = value
+     refuses = False
+     key = PLATE_TEMPERATURES.get(plate)
+     if key is not None:
+@@ -1891,7 +1890,9 @@ def _prusa_material(values: Mapping[str, Any]) -> dict[str, object]:
+             continue
+         if solidon in slicer_profiles._AS_FRACTION:
+             number /= 100.0
+-        read[solidon] = kind(number)
++        value = kind(number)
++        if value is not None:
++            read[solidon] = value
+     always = (_prusa_first(values.get("fan_always_on")) or "0").casefold()
+     if always in ("0", "false") and "cooling.minimum_fan_speed" in read:
+         read["cooling.minimum_fan_speed"] = 0.0
+@@ -2271,6 +2272,12 @@ def _without_process(setup: SlicerSetup | None) -> str:
+     return handover._profile_name(setup.machine_profile)
+ 
+ 
++def cura_interface_gap(stage: PrintSettings) -> float:
++    """Die Lücke, die Cura ohne Wahl druckt: drei Bahnbreiten der Stufe
++    Linienabstand, wie Creality und Elegoo in Cura (RM-583)."""
++    return (slicer_keys.CURA_INTERFACE_LINES - 1.0) * stage.layers.line_width
++
++
+ def base_settings(
+     profile: Profile, quality: QualityPreset, setup: SlicerSetup | None
+ ) -> Foundation:
+@@ -2282,6 +2289,23 @@ def base_settings(
+     und die Übergabe schreibt sie dann vollständig.
+     """
+     fallback = cura_fan_curve(settings_table.resolve(profile, quality), profile, setup)
++    if setup is not None and setup.flavour == "cura":
++        from app.core.slice import advise
++
++        # Cura rechnet den Abstand in ganzen Schichten: Die Grundlage trägt das
++        # Vielfache, das zum Material passt, sonst das nächste (RM-583).
++        layer = fallback.layers.layer_height
++        gap = advise.support_gap_target(layer, profile.material, "cura")
++        if gap is None and layer > 0.0:
++            gap = max(1, round(fallback.support.z_gap / layer)) * layer
++        fallback = replace(
++            fallback,
++            support=replace(
++                fallback.support,
++                interface_spacing=cura_interface_gap(fallback),
++                z_gap=fallback.support.z_gap if gap is None else gap,
++            ),
++        )
+     if setup is None or setup.flavour not in ("orca", "prusa") or not setup.base_process:
+         return _table_foundation(
+             profile,
+diff --git a/app/core/export/slicer_keys.py b/app/core/export/slicer_keys.py
+index 2c41bc14a..90ee6c130 100644
+--- a/app/core/export/slicer_keys.py
++++ b/app/core/export/slicer_keys.py
+@@ -29,7 +29,9 @@ from dataclasses import replace
+ from pathlib import Path
+ from typing import TYPE_CHECKING, Final, Literal, NamedTuple
+ 
++from app.core.knowledge import print_fields
+ from app.core.knowledge.print_settings import SCARF_LENGTH
++from app.core.units import format_length
+ from app.i18n import TranslatableText, _
+ 
+ if TYPE_CHECKING:
+@@ -325,6 +327,12 @@ PRUSA: Final[tuple[Row, ...]] = (
+         _integer,
+     ),
+     ("support.interface_spacing", "support_material_interface_spacing", _number),
++    # Den Kontaktlüfter kennt SuperSlicer, PrusaSlicer nicht (RM-583).
++    (
++        "cooling.support_interface_cooling",
++        "support_material_interface_fan_speed",
++        _mapped({"True": "100"}, "-1"),
++    ),
+     ("adhesion.skirt_loops", "skirts", _integer),
+     ("adhesion.skirt_distance", "skirt_distance", _number),
+     ("adhesion.brim_width", "brim_width", _number),
+@@ -472,9 +480,15 @@ ORCA: Final[tuple[Row, ...]] = (
+     # Unten derselbe Abstand wie oben (RM-583), siehe PrusaSlicer.
+     ("support.z_gap", "support_bottom_z_distance", _number),
+     ("support.xy_gap", "support_object_xy_distance", _number),
++    # Gedruckt wird oben eine Übergangslage, unten die Kontaktlage dazu
++    # (``SupportCommon.cpp``); das Herstellerprofil meint dieselbe Zählung, und
++    # Solidon gleicht nichts aus (RM-583, Kontaktsonde).
+     ("support.interface_layers", "support_interface_top_layers", _integer),
+     ("support.bottom_interface_layers", "support_interface_bottom_layers", _integer),
+     ("support.interface_spacing", "support_interface_spacing", _number),
++    # Die untere Trennschicht hat eine eigene Lücke; alle fünf Programme der
++    # Familie führen sie (Konfigurationsblöcke vom 08.10.2026).
++    ("support.interface_spacing", "support_bottom_interface_spacing", _number),
+     # -1 heißt „wie die übrige Schicht“, die Vorgabe aller gemessenen Profile.
+     # Ein Filamentwert in der Orca-Familie (Filamentprofile der Hersteller).
+     (
+@@ -820,7 +834,8 @@ CURA_MIRRORED: Final[dict[str, tuple[str, ...]]] = {
+         "top_skin_expand_distance",
+     ),
+     "support_line_distance": ("support_initial_layer_line_distance",),
+-    "support_interface_height": ("support_bottom_height", "support_roof_height"),
++    # Die untere Höhe rechnet ``handover._for_supports`` aus den eigenen Lagen.
++    "support_interface_height": ("support_roof_height",),
+ }
+ 
+ #: Dasselbe mit einem Faktor davor — Curas Formel, als Zahl statt als Satz.
+@@ -1069,8 +1084,7 @@ def flavour_of(name: str) -> SlicerFlavour | None:
+ #:
+ #: ``tests/test_print_settings_ui.py`` hält die Liste gegen diese Messung.
+ NOT_TAKEN_BY: Final[dict[SlicerFlavour, frozenset[str]]] = {
+-    # Den Kontaktlüfter kennt nur SuperSlicer, nicht PrusaSlicer (RM-583).
+-    "prusa": frozenset({"shell.precise_outer_wall", "cooling.support_interface_cooling"}),
++    "prusa": frozenset({"shell.precise_outer_wall"}),
+     "orca": frozenset(),
+     "cura": frozenset(
+         {
+@@ -1116,7 +1130,7 @@ GEOMETRY_KEYS: Final[dict[str, tuple[str, ...]]] = {
+ LIMITED: Final[dict[SlicerFlavour, frozenset[str]]] = {
+     "prusa": frozenset(),
+     "orca": frozenset(),
+-    "cura": frozenset({"cooling.disable_first_layers"}),
++    "cura": frozenset({"cooling.disable_first_layers", "support.z_gap"}),
+     "other": frozenset(),
+ }
+ 
+@@ -1126,16 +1140,10 @@ LIMITED: Final[dict[SlicerFlavour, frozenset[str]]] = {
+ #: gleicher Stand: SuperSlicer 2.5.59.13 kennt die Schrägnaht aus PrusaSlicer
+ #: 2.9 nicht, und sein 3MF-Leser stürzt ab zwei unbekannten Schlüsseln mit
+ #: 0xC0000005 ab (RM-459, gemessen je Schlüssel der Beilage).
+-#: Einzelne Schlüssel, die ein Programm nicht kennt, obwohl es den Pfad
+-#: darüber nimmt: SuperSlicer 2.5.59.13 kennt den oberen Stützabstand, den
+-#: unteren eigens nicht (``tests/data/superslicer_3mf_keys.json``, RM-583). Dort
+-#: gilt ohnehin oben wie unten derselbe.
+-KEYS_UNKNOWN_TO_PROGRAM: Final[dict[str, frozenset[str]]] = {
+-    "superslicer": frozenset({"support_material_bottom_contact_distance"}),
+-}
+-
+ NOT_TAKEN_BY_PROGRAM: Final[dict[str, frozenset[str]]] = {
+     "superslicer": frozenset({"shell.scarf_seam"}),
++    # Den Kontaktlüfter führt nur SuperSlicer (``--help-fff`` von 2.9.6).
++    "prusaslicer": frozenset({"cooling.support_interface_cooling"}),
+     # Bambu Studio führt ``support_material_interface_fan_speed`` nicht; sein
+     # Konfigurationsblock nennt den Schlüssel nicht (P1S, 08.10.2026).
+     "bambustudio": frozenset({"cooling.support_interface_cooling"}),
+@@ -1544,7 +1552,6 @@ def for_program(values: Mapping[str, str], flavour: SlicerFlavour, program: str)
+     """
+     dropped = NOT_TAKEN_BY_PROGRAM.get(program, frozenset())
+     unknown = {entry.key for entry in TABLES[flavour] if entry.path in dropped}
+-    unknown |= KEYS_UNKNOWN_TO_PROGRAM.get(program, frozenset())
+     kept = {key: value for key, value in values.items() if key not in unknown}
+     for old, new in PROGRAM_ALIASES.get(program, {}).items():
+         if old not in kept:
+@@ -1555,6 +1562,36 @@ def for_program(values: Mapping[str, str], flavour: SlicerFlavour, program: str)
+     return kept
+ 
+ 
++#: Die Trennschicht zu einem Drittel dicht, wie Creality und Elegoo in Cura
++#: (``support_interface_density`` 33,3 %): Linienabstand drei Bahnbreiten.
++#: Ohne gewählte Lücke schreibt die Übergabe ihn, die Grundlage zeigt die
++#: Lücke daraus, und die Druckzeit rechnet mit dieser Dichte (RM-583).
++CURA_INTERFACE_LINES: Final = 3.0
++
++
++def support_gap_in_whole_layers(flavour: SlicerFlavour | None) -> bool:
++    """Rechnet dieser Slicer den Stützabstand immer in ganzen Schichten (RM-583)?
++
++    Die Menge steht beim Rat (:data:`advise.WHOLE_LAYER_GAP_FLAVOURS`), wie
++    der Auto-Brim: Der Rat fragt sie, und ``slice`` importiert ``export`` nicht.
++    """
++    from app.core.slice import advise
++
++    return flavour in advise.WHOLE_LAYER_GAP_FLAVOURS
++
++
++def has_independent_support_layers(flavour: SlicerFlavour | None) -> bool:
++    """Bekommt die Stütze hier eine eigene Schichthöhe, damit ein Abstand zwischen
++    zwei Schichten gilt (``independent_support_layer_height``, RM-583)?
++
++    Nur die Orca-Familie: Ohne den Schalter rundet sie auf ganze Schichten
++    (``Slicing.cpp``). PrusaSlicer legt die Kontaktschicht ohnehin in den
++    gewünschten Abstand, Cura rechnet in Schichten
++    (:func:`support_gap_in_whole_layers`).
++    """
++    return flavour == "orca"
++
++
+ def caps_volumetric_speed(flavour: SlicerFlavour) -> bool:
+     """Deckelt dieser Slicer das Tempo selbst nach dem Volumenstrom des Filaments?
+ 
+@@ -1599,6 +1636,21 @@ def limitation(
+             "schrittweise hoch.",
+             layer=settings.cooling.disable_first_layers + 1,
+         )
++    # Ein Stützabstand zwischen zwei Schichten wird in Cura eine ganze (RM-583).
++    if support_gap_in_whole_layers(flavour) and path == "support.z_gap":
++        layer = settings.layers.layer_height if settings is not None else 0.0
++        # Ohne Stützen druckt der Abstand nichts; ein Satz dazu wäre Lärm.
++        if settings is None or layer <= 0.0 or settings.support.style == "none":
++            return None
++        steps = settings.support.z_gap / layer
++        if math.isclose(steps, round(steps), abs_tol=1e-6):
++            return None
++        field = print_fields.field_of(path)
++        return _(
++            "Cura rechnet „{setting}“ in ganzen Schichten zu {layer}.",
++            setting=field.title if field is not None else path,
++            layer=format_length(layer),
++        )
+     return None
+ 
+ 
+diff --git a/app/core/export/slicer_profiles.py b/app/core/export/slicer_profiles.py
+index fb5e6046e..a2c705165 100644
+--- a/app/core/export/slicer_profiles.py
++++ b/app/core/export/slicer_profiles.py
+@@ -4504,12 +4504,20 @@ def _standard_process(
+     return min(pool, key=lambda entry: (not entry.from_user, len(entry.name), entry.name))
+ 
+ 
+-def _full_cooling(percent: float) -> bool:
+-    """Der Kontaktlüfter der Orca-Familie: 100 heißt volle Kühlung, -1 „wie die
+-    übrige Schicht“ (RM-583). Einen Anteil dazwischen führt Solidon nicht."""
+-    return percent >= 100.0
++def _full_cooling(percent: float) -> bool | None:
++    """Der Kontaktlüfter: 100 heißt volle Kühlung, -1 „wie die übrige Schicht“
++    (RM-583). Einen Anteil dazwischen, auch 0 (Lüfter aus), führt Solidon nicht;
++    er wird nicht umgedeutet, sondern nicht gelesen."""
++    if percent >= 100.0:
++        return True
++    if percent < 0.0:
++        return False
++    return None
+ 
+ 
++#: Wie ein Rücklesewert aus der Zahl des Profils wird; ``None`` heißt „nicht lesbar“.
++Readback = Callable[[float], float | int | None]
++
+ #: Was ein Filamentprofil des Slicers über das Material sagt, in Solidons
+ #: Worten. Die Gegenrichtung zu :mod:`slicer_keys`, und mit Absicht kurz: hier
+ #: stehen nur die Werte, die *dem Filament* gehören und nicht der Maschine oder
+@@ -4520,7 +4528,7 @@ def _full_cooling(percent: float) -> bool:
+ #: PRO fährt 5 mm³/s bei Bett 70. Der Unterschied ist kein Feinschliff: mit dem
+ #: falschen Volumenstrom rechnet die Beratung an der Grenze vorbei, die das
+ #: Material wirklich hat.
+-FILAMENT_READBACK: Final[tuple[tuple[str, str, Callable[[float], float | int]], ...]] = (
++FILAMENT_READBACK: Final[tuple[tuple[str, str, Readback], ...]] = (
+     ("temperature.nozzle", "nozzle_temperature", int),
+     ("temperature.nozzle_first_layer", "nozzle_temperature_initial_layer", int),
+     ("temperature.bed", "hot_plate_temp", int),
+@@ -4709,7 +4717,7 @@ def machine_values(path: Path, roots: Sequence[Path] = ()) -> dict[str, Any]:
+     return {key: resolved[key] for key in MACHINE_READBACK if key in resolved}
+ 
+ 
+-PRUSA_FILAMENT_READBACK: Final[tuple[tuple[str, str, type], ...]] = (
++PRUSA_FILAMENT_READBACK: Final[tuple[tuple[str, str, Readback], ...]] = (
+     ("temperature.nozzle", "temperature", int),
+     ("temperature.nozzle_first_layer", "first_layer_temperature", int),
+     ("temperature.bed", "bed_temperature", int),
+@@ -4722,6 +4730,8 @@ PRUSA_FILAMENT_READBACK: Final[tuple[tuple[str, str, type], ...]] = (
+     ("cooling.disable_first_layers", "disable_fan_first_layers", int),
+     ("cooling.minimum_layer_time", "slowdown_below_layer_time", float),
+     ("cooling.minimum_speed", "min_print_speed", float),
++    # Nur SuperSlicer führt ihn; im Bündel von PrusaSlicer fehlt er.
++    ("cooling.support_interface_cooling", "support_material_interface_fan_speed", _full_cooling),
+     ("filament.density", "filament_density", float),
+     ("filament.diameter", "filament_diameter", float),
+     ("filament.flow_ratio", "extrusion_multiplier", float),
+@@ -4828,7 +4838,9 @@ def filament_readback(
+             continue
+         if solidon in _AS_FRACTION:
+             number /= 100.0
+-        values[solidon] = kind(number)
++        value = kind(number)
++        if value is not None:
++            values[solidon] = value
+     return FilamentReadback(values, True)
+ 
+ 
+diff --git a/app/core/export/writer.py b/app/core/export/writer.py
+index 7cc1f33f3..206f0fcd3 100644
+--- a/app/core/export/writer.py
++++ b/app/core/export/writer.py
+@@ -2734,10 +2734,17 @@ def write_assembly(
+     ]
+     merged_slots = threemf.merge_slots(parts, across=whole_job)
+     configured_slots: Sequence[MaterialSlot] = merged_slots
++    free_support_layers = False
+     if settings is not None:
+         from app.core.export import handover
+ 
+         configured_slots = handover.configured_slots(merged_slots, settings)
++        # Gefragt an dem, was geschrieben wird: Platte und Objektwerte (RM-583).
++        free_support_layers = handover.frees_support_layers(
++            handover.written_support_gaps(settings, [part.settings for part in parts]),
++            settings.layers.layer_height,
++            flavour,
++        )
+         known_setup = setup if setup is not None else handover.SlicerSetup(Path(flavour), flavour)
+         findings += handover.unreachable_overrides(
+             settings, known_setup, configured_slots, profile=profile
+@@ -2753,17 +2760,26 @@ def write_assembly(
+                 findings += handover.foundation_findings(
+                     settings, profile, setup, slots=configured_slots
+                 )
+-            if accepted is not None and _rounds_support_gap(
+-                accepted, profile, parts, configured_slots, flavour
+-            ):
++            cause = _tower_cause(parts, setup) if free_support_layers else None
++            # Mit Turm gilt die eigene Stützschichthöhe nicht, also nur der eine
++            # Satz: Der Abstand wird gerundet (RM-583).
++            if cause is None:
++                findings += handover.support_layers_findings(setup, free_support_layers)
++            else:
+                 findings.append(
+                     Finding(
+                         code="export.support_gap_rounded",
+                         severity="info",
+                         message=_(
+-                            "Mit mehreren Filamenten rundet {slicer} den *Abstand nach oben* "
++                            "Mit mehreren Filamenten rundet {slicer} den *Abstand oben und unten* "
+                             "auf ganze Schichten. Auf getrennten Platten gilt er genau.",
+                             slicer=setup.name,
++                        )
++                        if cause == "filaments"
++                        else _(
++                            "Das Herstellerprofil baut einen Reinigungsturm, und damit rundet "
++                            "{slicer} den *Abstand oben und unten* auf ganze Schichten.",
++                            slicer=setup.name,
+                         ),
+                         values={"slicer": setup.name},
+                     )
+@@ -2779,7 +2795,7 @@ def write_assembly(
+             flavour,
+             setup,
+             configured_slots,
+-            accepted=accepted,
++            free_support_layers=free_support_layers,
+         ),
+         prusa_config=_plate_config(
+             settings,
+@@ -2808,25 +2824,26 @@ def write_assembly(
+     return target, findings
+ 
+ 
+-def _rounds_support_gap(
+-    settings: PrintSettings,
+-    profile: Profile,
+-    parts: Sequence[threemf.AssemblyPart],
+-    slots: Sequence[MaterialSlot],
+-    flavour: SlicerFlavour,
+-) -> bool:
+-    """Ob die Orca-Familie einen Stützabstand zwischen zwei Schichten trotzdem rundet
+-    (RM-583): Mit mehreren Filamenten auf einer Platte baut sie einen
+-    Reinigungsturm und schaltet dafür die eigene Stützschichthöhe ab
+-    (``PrintConfig.cpp``, ``normalize_fdm``), die
+-    :func:`handover.frees_support_layers` eingeschaltet hätte."""
++def _tower_cause(
++    parts: Sequence[threemf.AssemblyPart], setup: SlicerSetup
++) -> Literal["filaments", "process"] | None:
++    """Baut die Orca-Familie auf einer der Platten einen Reinigungsturm? Dann
++    schaltet sie die eigene Stützschichthöhe ab, die
++    :func:`handover.frees_support_layers` eingeschaltet hätte, und ein Abstand
++    zwischen zwei Schichten wird gerundet (RM-583). Gefragt wird je Platte
++    (:func:`handover.tower_cause`); mehrere Filamente gehen vor.
++    """
+     from app.core.export import handover
+ 
+-    mixed = any(
+-        len(threemf.merge_slots([part for part in parts if part.plate == plate])) > 1
+-        for plate in {part.plate for part in parts}
+-    )
+-    return mixed and handover.frees_support_layers(settings, profile, slots, flavour)
++    causes = set()
++    for plate in {part.plate for part in parts}:
++        here = [part for part in parts if part.plate == plate]
++        causes.add(
++            handover.tower_cause(setup, filaments=len(threemf.merge_slots(here)), objects=len(here))
++        )
++    if "filaments" in causes:
++        return "filaments"
++    return "process" if "process" in causes else None
+ 
+ 
+ def _plate_settings(
+@@ -2836,7 +2853,7 @@ def _plate_settings(
+     setup: SlicerSetup | None,
+     slots: Sequence[MaterialSlot] = (),
+     *,
+-    accepted: PrintSettings | None = None,
++    free_support_layers: bool = False,
+ ) -> dict[str, object]:
+     """Die Druckeinstellungen, die mit der Datei reisen (§29).
+ 
+@@ -2848,8 +2865,7 @@ def _plate_settings(
+     Ist kein Slicer bekannt, werden trotzdem Solidons Werte geschrieben, nur
+     ohne das Systemprofil darunter: die Maschine kennt Solidon aus dem eigenen
+     Profil, und ein Wert, der dasteht, ist mehr als einer, der fehlt.
+-    ``accepted`` sind die Einstellungen vor der Trennung je Teil
+-    (:func:`handover.frees_support_layers`).
++    ``free_support_layers`` sagt :func:`handover.frees_support_layers`.
+     """
+     if settings is None:
+         return {}
+@@ -2861,9 +2877,7 @@ def _plate_settings(
+         profile,
+         known,
+         slots=slots,
+-        free_support_layers=handover.frees_support_layers(
+-            accepted or settings, profile, slots, flavour
+-        ),
++        free_support_layers=free_support_layers,
+     )
+ 
+ 
+diff --git a/app/core/knowledge/data/materials.toml b/app/core/knowledge/data/materials.toml
+index 09dbd8c33..c6f57e4a7 100644
+--- a/app/core/knowledge/data/materials.toml
++++ b/app/core/knowledge/data/materials.toml
+@@ -18,12 +18,14 @@
+ # support_gap_factor Luft zwischen Stütze und Teil als Vielfaches der Schichthöhe
+ # support_gap_min    kleinster Stützabstand in mm, darunter verschweißt die Kontaktschicht
+ # support_gap_max    größter Stützabstand in mm, darüber sackt die Fläche durch
++# support_interface_cooling  volle Kühlung an der Trennschicht löst die Stütze leichter
+ #
+ # Die Stützabstände stammen aus der Recherche vom 08.10.2026
+ # (`konzepte/recherche-slicer-einstellungen-2026-10.md`, Abschnitt 2.2): PLA
+ # ausgezählt aus dem Prusa-Bündel, PETG aus Foren und Herstellerhinweisen, kein
+ # Herstellerprofil ändert den Abstand mit dem Material. Ausgangswerte wie alles
+-# hier; ABS, ASA und TPU ohne eigene Quelle mit den Werten von PLA.
++# hier; ABS und ASA deshalb mit den Werten von PLA. Für TPU fehlt eine Quelle:
++# Ohne Werte ist der Abstand unbekannt und bleibt beim Hersteller.
+ #
+ # Die mechanischen Werte sind für alles, was federn soll: Schnapphaken,
+ # Klemmzungen, Filmscharniere. Sie stehen hier als **Richtwerte gedruckter
+@@ -68,6 +70,7 @@ layer_bond_ratio = 0.6
+ support_gap_factor = 1.4
+ support_gap_min = 0.12
+ support_gap_max = 0.30
++support_interface_cooling = true
+ 
+ [petg-cf]
+ title = "PETG-CF"
+@@ -83,6 +86,7 @@ layer_bond_ratio = 0.6
+ support_gap_factor = 1.4
+ support_gap_min = 0.12
+ support_gap_max = 0.30
++support_interface_cooling = true
+ 
+ [asa]
+ title = "ASA"
+@@ -95,6 +99,9 @@ calibrated = false
+ youngs_modulus = 2000.0
+ yield_strength = 42.0
+ layer_bond_ratio = 0.6
++support_gap_factor = 1.0
++support_gap_min = 0.10
++support_gap_max = 0.25
+ 
+ [abs]
+ title = "ABS"
+@@ -107,6 +114,9 @@ calibrated = false
+ youngs_modulus = 2000.0
+ yield_strength = 40.0
+ layer_bond_ratio = 0.6
++support_gap_factor = 1.0
++support_gap_min = 0.10
++support_gap_max = 0.25
+ 
+ [tpu-95a]
+ title = "TPU 95A"
+diff --git a/app/core/knowledge/print_fields.py b/app/core/knowledge/print_fields.py
+index a1b6a8ebe..5eeb92bcf 100644
+--- a/app/core/knowledge/print_fields.py
++++ b/app/core/knowledge/print_fields.py
+@@ -454,7 +454,7 @@ FIELDS: tuple[Field, ...] = (
+         "cooling",
+         kind="bool",
+         note=_(
+-            "Kühlt die Trennschicht der Stütze mit vollem Lüfter. Die Stütze löst sich "
++            "Kühlt mit vollem Lüfter, wo Stütze und Teil sich berühren. Die Stütze löst sich "
+             "leichter, vor allem bei PETG."
+         ),
+     ),
+@@ -603,7 +603,7 @@ FIELDS: tuple[Field, ...] = (
+     ),
+     Field(
+         "support.z_gap",
+-        _("Abstand nach oben"),
++        _("Abstand oben und unten"),
+         "support",
+         unit="mm",
+         minimum=0.0,
+@@ -611,8 +611,8 @@ FIELDS: tuple[Field, ...] = (
+         step=0.05,
+         decimals=2,
+         note=_(
+-            "Luft zwischen Stütze und Teil nach oben. Mehr heißt leichter abnehmen und rauere "
+-            "Fläche darüber."
++            "Luft zwischen Stütze und Teil, oben wie unten. Mehr heißt leichter abnehmen und "
++            "rauere Fläche."
+         ),
+     ),
+     Field(
+diff --git a/app/core/knowledge/profiles.py b/app/core/knowledge/profiles.py
+index 31ed5b208..dfc525fbd 100644
+--- a/app/core/knowledge/profiles.py
++++ b/app/core/knowledge/profiles.py
+@@ -303,6 +303,10 @@ def _bed_origin(value: Any, field: str, source: Path) -> tuple[float, float] | N
+     return across, along
+ 
+ 
++def _optional_float(table: Mapping[str, Any], key: str) -> float | None:
++    return float(table[key]) if key in table else None
++
++
+ def _material_from_table(
+     identifier: str, table: Mapping[str, Any], source: Path
+ ) -> MaterialProfile:
+@@ -322,9 +326,12 @@ def _material_from_table(
+             youngs_modulus=float(table.get("youngs_modulus", 0.0)),
+             yield_strength=float(table.get("yield_strength", 0.0)),
+             layer_bond_ratio=float(table.get("layer_bond_ratio", 0.0)),
+-            support_gap_factor=float(table.get("support_gap_factor", 1.0)),
+-            support_gap_min=float(table.get("support_gap_min", 0.10)),
+-            support_gap_max=float(table.get("support_gap_max", 0.25)),
++            # Der Stützabstand ohne Vorgabe wie die Mechanik: unbekannt, und der
++            # Abstand bleibt beim Hersteller (RM-583).
++            support_gap_factor=_optional_float(table, "support_gap_factor"),
++            support_gap_min=_optional_float(table, "support_gap_min"),
++            support_gap_max=_optional_float(table, "support_gap_max"),
++            support_interface_cooling=bool(table.get("support_interface_cooling", False)),
+             minimum_wall=(float(table["minimum_wall"]) if "minimum_wall" in table else None),
+             overhang_angle=(float(table["overhang_angle"]) if "overhang_angle" in table else None),
+             calibration_printer=str(table.get("calibration_printer", "")),
+@@ -355,11 +362,18 @@ def _load_printers() -> dict[str, PrinterProfile]:
+ 
+ def _load_materials() -> dict[str, MaterialProfile]:
+     profiles: dict[str, MaterialProfile] = {}
+-    for path in (_DATA_DIR / "materials.toml", user_profiles_dir() / "materials.toml"):
+-        if not path.is_file():
+-            continue
+-        for identifier, table in _read_table(path).items():
+-            profiles[identifier] = _material_from_table(identifier, table, path)
++    data = _DATA_DIR / "materials.toml"
++    shipped = _read_table(data)
++    for identifier, table in shipped.items():
++        profiles[identifier] = _material_from_table(identifier, table, data)
++    own = user_profiles_dir() / "materials.toml"
++    if own.is_file():
++        for identifier, table in _read_table(own).items():
++            # Je Eintrag, nicht je Datei (wie ``print_settings._load``): Eine
++            # Kalibrierung von vor 0.6.0 kennt den Stützabstand nicht und
++            # bekommt ihn aus dem mitgelieferten Eintrag (RM-583).
++            merged = {**shipped.get(identifier, {}), **table}
++            profiles[identifier] = _material_from_table(identifier, merged, own)
+     for identifier, entry in _carried_materials.items():
+         profiles.setdefault(identifier, entry)
+     return _by_title(profiles)
+diff --git a/app/core/slice/advise.py b/app/core/slice/advise.py
+index a06d0f7b0..da955d714 100644
+--- a/app/core/slice/advise.py
++++ b/app/core/slice/advise.py
+@@ -20,7 +20,7 @@ Werten aus dem G-Code wird es nie vermischt (Regel 14, §22.5).
+ from __future__ import annotations
+ 
+ import math
+-from collections.abc import Sequence
++from collections.abc import Collection, Sequence
+ from dataclasses import dataclass, replace
+ from typing import TYPE_CHECKING, Final
+ 
+@@ -355,6 +355,8 @@ def _merged(settings: PrintSettings, advice: list[SettingAdvice]) -> list[Settin
+ def combine(
+     settings: PrintSettings,
+     groups: Sequence[tuple[PrintSettings, Sequence[SettingAdvice]]],
++    *,
++    separate: Collection[str] = frozenset(),
+ ) -> list[SettingAdvice]:
+     """Vereint Anforderungen mehrerer Körper an gemeinsame Einstellungen.
+ 
+@@ -363,6 +365,13 @@ def combine(
+     Würfel kann die schon eingeschalteten Stützen seines Nachbarn nicht
+     abschalten. Filamentabhängige Werte werden nur innerhalb desselben
+     Materialslots zusammengeführt; verschiedene Spulen behalten eigene Werte.
++
++    **Was je Teil geschrieben wird** (``separate``, im Druckdialog die
++    Kontaktpfade aus ``handover.asked_for_contact``), zählt nur, wo ein Körper
++    es verlangt: Die übrigen behalten ihren Wert, jedes Teil bekommt seinen
++    eigenen (RM-583). Gefragt wird dafür gegen die Grundlage, nicht gegen die
++    Übernahme. Innerhalb eines Teils mit mehreren Spulen gilt weiter der Wert,
++    der alle einschließt — der Dialog führt erst je Körper zusammen.
+     """
+     candidates: dict[str, list[SettingAdvice]] = {}
+     final = [apply(base, list(entries)) for base, entries in groups]
+@@ -375,7 +384,11 @@ def combine(
+         if path == "support.placement":
+             relevant = [value for value in final if value.support.style != "none"] or final
+         values = [settings_table.read_path(value, path) for value in relevant]
+-        value = _combined_value(path, values)
++        # Was je Teil geschrieben wird, zählt nur, wo ein Körper es verlangt;
++        # die übrigen behalten ihren Wert ohnehin (RM-583).
++        value = _combined_value(
++            path, [entry.value for entry in entries] if path in separate else values
++        )
+         was = settings_table.read_path(settings, path)
+         if not _differs(value, was):
+             continue
+@@ -909,21 +922,42 @@ OPEN_INTERFACE: Final = (0.5, 2)
+ BOTTOM_INTERFACE_LAYERS: Final = 2
+ 
+ 
++#: Wo der Slicer den Stützabstand immer in ganzen Schichten rechnet (RM-583):
++#: CuraEngine (``support_top_distance`` je Schicht). Die Orca-Familie nur,
++#: solange die Stütze die Schichthöhe des Modells hat; die eigene Höhe schaltet
++#: die Übergabe dann ein (``slicer_keys.has_independent_support_layers``).
++WHOLE_LAYER_GAP_FLAVOURS: Final[frozenset[SlicerFlavour]] = frozenset({"cura"})
++
++
+ def support_gap_target(
+     layer: float, material: MaterialProfile, flavour: SlicerFlavour | None = None
+-) -> float:
++) -> float | None:
+     """Der Stützabstand, mit dem sich die Stütze von diesem Material sauber löst
+     (RM-583): ein Vielfaches der Schichthöhe, begrenzt nach dem Materialprofil.
+-    Cura rechnet ihn in ganzen Schichten. Die Orca-Familie tut es nur ohne
+-    eigene Stützschichthöhe; die schaltet die Übergabe dann ein
++    Ohne Werte im Profil ``None``: unbekannt, der Abstand bleibt beim Hersteller.
++
++    Wo der Slicer in ganzen Schichten rechnet (Cura), ist es das Vielfache
++    innerhalb der Grenzen, das dem Ziel am nächsten liegt, mindestens eine
++    Schicht. Liegt keines darin, das kleinste über dem Minimum — oberhalb des
++    Maximums bleibt nur eine Schicht (PLA ab 0,28 mm). Die Orca-Familie rundet
++    nur ohne eigene Stützschichthöhe; die schaltet die Übergabe ein
+     (``handover.frees_support_layers``)."""
+-    target = min(
+-        max(layer * material.support_gap_factor, material.support_gap_min),
++    factor, low, high = (
++        material.support_gap_factor,
++        material.support_gap_min,
+         material.support_gap_max,
+     )
+-    if flavour == "cura":
+-        target = layer * max(1, round(target / layer))
+-    return target
++    if factor is None or low is None or high is None or layer <= 0.0:
++        return None
++    target = min(max(layer * factor, low), high)
++    if flavour not in WHOLE_LAYER_GAP_FLAVOURS:
++        return target
++    first = max(1, math.ceil(low / layer - EPS_GEOM))
++    last = math.floor(high / layer + EPS_GEOM)
++    if first > last:
++        return first * layer
++    # Eine halbe Schicht rundet auf, auch wenn die Division knapp darunter landet.
++    return min(max(math.floor(target / layer + 0.5 + EPS_GEOM), first), last) * layer
+ 
+ 
+ def _support_contact(
+@@ -941,19 +975,19 @@ def _support_contact(
+     begrenzt nach unten und oben (Regel 7); Cura rechnet ihn in ganzen
+     Schichten. Unter einer großen flachen Decke (ein Stück über
+     ``OVERHANG_LAYER_WORTH_SUPPORT``) wird die Trennschicht dicht, sonst locker.
+-    Material, das an sich selbst haftet (Abstandsfaktor über eins), bekommt volle
+-    Kühlung an der Trennschicht.
++    Material, das an sich selbst haftet (``support_interface_cooling`` im
++    Profil), bekommt volle Kühlung an der Trennschicht.
+     """
+     advice: list[SettingAdvice] = []
+     material = profile.material
+     target = support_gap_target(settings.layers.layer_height, material, flavour)
+     low, high = SUPPORT_GAP_BAND
+-    if not low * target <= settings.support.z_gap <= high * target:
++    if target is not None and not low * target <= settings.support.z_gap <= high * target:
+         advice.append(
+             _advice(
+                 settings,
+                 path="support.z_gap",
+-                value=round(target, 2),
++                value=round(target, 4),
+                 reason=_("Passend zu Schicht und Material löst sich die Stütze sauber."),
+             )
+         )
+@@ -987,7 +1021,7 @@ def _support_contact(
+         advice.append(
+             _advice(settings, path="support.interface_layers", value=layers, reason=reason)
+         )
+-    if material.support_gap_factor > 1.0 and not settings.cooling.support_interface_cooling:
++    if material.support_interface_cooling and not settings.cooling.support_interface_cooling:
+         advice.append(
+             _advice(
+                 settings,
+@@ -1614,6 +1648,19 @@ PART_PATHS: Final = frozenset(
+     }
+ )
+ 
++#: Der Stützkontakt (RM-583): je Teil geschrieben, und der Rat geht je Körper
++#: in beide Richtungen — PLA will weniger Abstand als PETG, eine Figur eine
++#: lockere Trennschicht als eine flache Decke. Der Druckdialog führt diese Pfade
++#: deshalb getrennt zusammen (:func:`combine`, ``separate``).
++CONTACT_PATHS: Final = frozenset(
++    {
++        "support.z_gap",
++        "support.interface_layers",
++        "support.bottom_interface_layers",
++        "support.interface_spacing",
++    }
++)
++
+ #: Was nur der Schnitt des Körpers sagen kann (:func:`_from_geometry` samt
+ #: :func:`_calm_walls`). Der Export schneidet ein Teil eigens, wenn einer
+ #: dieser Pfade je Teil geht (``writer._part_values``); fehlt hier ein Pfad,
+diff --git a/app/core/slice/print_time.py b/app/core/slice/print_time.py
+index 3e9f8da55..8a6bf06a1 100644
+--- a/app/core/slice/print_time.py
++++ b/app/core/slice/print_time.py
+@@ -992,6 +992,15 @@ def uses_tree_supports(settings: PrintSettings, motion: Motion) -> bool:
+     return style == "tree" or (style == "auto" and motion.support_tree)
+ 
+ 
++def _contact_density(settings: PrintSettings, motion: Motion) -> float:
++    """Wie dicht die Trennschicht liegt: aus der Lücke, die Solidon schreibt, wo
++    sie gewählt oder übernommen ist (RM-583), sonst die des Herstellerprozesses."""
++    width = settings.layers.line_width
++    if "support.interface_spacing" in settings.chosen | settings.accepted and width > 0.0:
++        return width / (width + max(settings.support.interface_spacing, 0.0))
++    return motion.support_interface_density or 1.0
++
++
+ def _support_lines(
+     layer: _Layer,
+     supports: Sequence[manifold3d.CrossSection],
+@@ -1010,7 +1019,7 @@ def _support_lines(
+     body, contact = _support_parts(supports, index, settings)
+     tree = uses_tree_supports(settings, motion)
+     density = max(settings.support.density, 0.0)
+-    contact_density = motion.support_interface_density or 1.0
++    contact_density = _contact_density(settings, motion)
+     for area, share, speed, joined in (
+         (body, density, roles.support, not tree),
+         (contact, contact_density, roles.support_interface, False),
+@@ -1061,7 +1070,7 @@ def support_material(
+     _material, columns = _columns_of(result, settings, motion, cancelled)
+     width = settings.layers.line_width
+     density = max(settings.support.density, 0.0)
+-    contact_density = motion.support_interface_density or 1.0
++    contact_density = _contact_density(settings, motion)
+     tree = uses_tree_supports(settings, motion)
+     total = 0.0
+     for index, column in enumerate(columns):
+diff --git a/app/core/types.py b/app/core/types.py
+index 4ba01c88b..9d7332829 100644
+--- a/app/core/types.py
++++ b/app/core/types.py
+@@ -968,14 +968,18 @@ class MaterialProfile:
+     """
+     layer_bond_ratio: float = 0.0
+     """Anteil der Streckgrenze quer zur Schichtebene, zwischen 0 und 1; 0 heißt unbekannt."""
+-    support_gap_factor: float = 1.0
++    support_gap_factor: float | None = None
+     """Luft zwischen Stütze und Teil als Vielfaches der Schichthöhe (RM-583): PLA
+     etwa eine Schicht, PETG haftet an sich selbst und braucht das 1,25- bis
+-    1,5-Fache. Begrenzt durch :attr:`support_gap_min` und :attr:`support_gap_max`."""
+-    support_gap_min: float = 0.10
++    1,5-Fache. Begrenzt durch :attr:`support_gap_min` und :attr:`support_gap_max`.
++    **None heißt unbekannt**: Dann bleibt der Abstand beim Hersteller."""
++    support_gap_min: float | None = None
+     """Kleinster Stützabstand in mm — darunter verschweißt die Kontaktschicht."""
+-    support_gap_max: float = 0.25
++    support_gap_max: float | None = None
+     """Größter Stützabstand in mm — darüber sackt die gestützte Fläche durch."""
++    support_interface_cooling: bool = False
++    """Ob sich die Stütze von diesem Material mit voller Kühlung an der
++    Trennschicht leichter löst (RM-583, Recherche Nr. 7: PETG)."""
+     minimum_wall: float | None = None
+     """Gemessene druckbare Mindestwand in mm, ausschließlich für den gespeicherten Prozess."""
+     overhang_angle: float | None = None
+diff --git a/app/i18n/locales/en.json b/app/i18n/locales/en.json
+index 5b942e1ea..ee9b5f950 100644
+--- a/app/i18n/locales/en.json
++++ b/app/i18n/locales/en.json
+@@ -89,7 +89,7 @@
+   "Abstand der Schalen in der noch nicht angezogenen Montagelage.": "Gap between the shells before tightening.",
+   "Abstand der beiden Schalen vor dem Anziehen.": "Gap between the two shells before tightening.",
+   "Abstand messen": "Measure distance",
+-  "Abstand nach oben": "Gap above",
++  "Abstand oben und unten": "Gap above and below",
+   "Abstand und Plattentiefe richten sich jetzt auch nach der größten Bohrung; Nennmaße, Spielstufen und Höhe bleiben unverändert.": "Spacing and plate depth now also follow the largest hole; nominal sizes, clearance steps and height stay the same.",
+   "Abstand und Winkel": "Distance and angle",
+   "Abstand vergrößern oder Platz auslassen": "Increase the spacing or skip this position",
+@@ -953,6 +953,7 @@
+   "Cura kennt keine Lüfterpause und fährt den Lüfter bis Schicht {layer} schrittweise hoch.": "Cura has no fan pause and ramps the fan up gradually until layer {layer}.",
+   "Cura kennt keine Lüfterpause: Der Lüfter läuft schon in Schicht {layer} mit {percent} %.": "Cura has no fan pause: the fan is already running at {percent} % in layer {layer}.",
+   "Cura kennt „{printer}“ nicht. Die Druckdatei beginnt deshalb ohne den Startcode des Herstellers, ohne Spüllinie und ohne Bettnetz.": "Cura does not know “{printer}”. The print file therefore starts without the manufacturer's start G-code, without a purge line and without a bed mesh.",
++  "Cura rechnet „{setting}“ in ganzen Schichten zu {layer}.": "Cura counts “{setting}” in whole layers of {layer}.",
+   "Cura übernimmt Einstellungen nur als Profil. Es liegt neben dem Modell: in Cura unter Profile verwalten → Importieren wählen.": "Cura imports settings as a profile file, saved beside the model. In Cura, choose Manage profiles → Import.",
+   "Cura-Drucker": "Cura printer",
+   "Curas AppImage ließ sich nicht einhängen. Prüfen Sie, ob Cura selbst startet, oder wählen Sie einen anderen Slicer.": "Cura's AppImage could not be mounted. Check whether Cura starts on its own, or choose a different slicer.",
+@@ -974,6 +975,7 @@
+   "Dafür ist „{title}“ da.": "That is what “{title}” is for.",
+   "Dafür muss ein Körper ausgewählt sein.": "A body has to be selected for that.",
+   "Dafür muss zuerst etwas gerechnet sein.": "Something has to be computed first.",
++  "Damit der *Abstand oben und unten* gilt, druckt {slicer} die Stütze in eigener Schichthöhe. Das Herstellerprofil hatte das abgeschaltet.": "So that the *Gap above and below* applies, {slicer} prints the support at its own layer height. The manufacturer profile had turned that off.",
+   "Damit der Brim anliegt, steht die Fußkorrektur dieses Teils auf {value}. Die erste Schicht wird so breit wie das Modell.": "So that the brim touches, this part's base compensation is set to {value}. The first layer becomes as wide as the model.",
+   "Damit hilft der Support weiter: {address}": "Support can help with this: {address}",
+   "Damit käme „{field}“ in Schritt {number} ({operation}) auf {result} — erlaubt sind höchstens {limit}.": "This would set “{field}” in step {number} ({operation}) to {result}; the maximum is {limit}.",
+@@ -1050,6 +1052,7 @@
+   "Das Graustufenbild, dessen Helligkeit zur Höhe wird. Hell steht hoch.": "A greyscale image used as a height map. Lighter areas are raised higher.",
+   "Das Hauptfenster mit einem geladenen Modell im Viewport, dem Objektbaum links und dem Prüfbericht rechts.": "The main window with a loaded model in the viewport, the object tree on the left and the report on the right.",
+   "Das Hauptfenster von Solidon3D mit Modell, Verlauf und Prüfbericht": "The Solidon3D main window with model, history and report",
++  "Das Herstellerprofil baut einen Reinigungsturm, und damit rundet {slicer} den *Abstand oben und unten* auf ganze Schichten.": "The manufacturer profile builds a prime tower, so {slicer} rounds the *Gap above and below* to whole layers.",
+   "Das Herstellerprofil nennt {key} = {value}, das lehnt der Slicer ab. Solidon übergibt seine Vorgabe {default}.": "The manufacturer profile sets {key} = {value}, which the slicer refuses. Solidon passes on its default {default}.",
+   "Das Herstellerprofil stützt keine Brücken, und welche Decke der Slicer als Brücke liest, rechnet nur er.": "The manufacturer profile does not support bridges, and only the slicer knows which ceiling it treats as a bridge.",
+   "Das Installationsprogramm ließ sich nicht starten.": "The installer could not be started.",
+@@ -4846,7 +4849,7 @@
+   "Körper „{object}“: {question}": "Body “{object}”: {question}",
+   "Körperauswahl": "Body selection",
+   "Kühle Platte": "Cool plate",
+-  "Kühlt die Trennschicht der Stütze mit vollem Lüfter. Die Stütze löst sich leichter, vor allem bei PETG.": "Cools the support interface with the fan at full speed. The support comes off more easily, especially with PETG.",
++  "Kühlt mit vollem Lüfter, wo Stütze und Teil sich berühren. Die Stütze löst sich leichter, vor allem bei PETG.": "Cools with the fan at full speed where support and part touch. The support comes off more easily, especially with PETG.",
+   "Kühlung": "Cooling",
+   "Kürzel": "Shortcut",
+   "Kürzen Sie den Text, oder hängen Sie ihn als Datei an.": "Shorten the text, or attach it as a file.",
+@@ -5027,8 +5030,8 @@
+   "Loslassen lässt die Karte hier schweben, die andere rückt beiseite.": "Releasing leaves the panel floating here; the other one moves aside.",
+   "Loslassen lässt die Karte hier schweben.": "Releasing leaves the panel floating here.",
+   "Loslassen tauscht die beiden Karten.": "Releasing swaps the two panels.",
+-  "Luft zwischen Stütze und Teil nach oben. Mehr heißt leichter abnehmen und rauere Fläche darüber.": "Clearance between support and part upwards. More means easier removal and a rougher surface above.",
+   "Luft zwischen Stütze und Teil zur Seite. Zu wenig verschweißt beides miteinander.": "Clearance between support and part sideways. Too little welds the two together.",
++  "Luft zwischen Stütze und Teil, oben wie unten. Mehr heißt leichter abnehmen und rauere Fläche.": "Clearance between support and part, above and below. More means easier removal and a rougher surface.",
+   "Luft zwischen den Teilen beim Anordnen.": "Clearance between the parts when arranging.",
+   "Luft zwischen den Teilen. Genug, dass ein Elefantenfuß zwei Teile nicht am Rand zusammenwachsen lässt.": "Air between the parts. Enough that an elephant foot does not fuse two of them at the edge.",
+   "Luft zwischen der Unterlage und der ersten Schicht des Teils. Ohne eigene Zahl bleibt die Vorgabe des Slicers.": "Air gap between the raft and the first layer of the part. Leave it unset to use the slicer's default.",
+@@ -5267,7 +5270,7 @@
+   "Mit echten Flächen und Kanten rechnen": "Compute with true faces and edges",
+   "Mit einem kalibrierten Profil wird das runde Ende enger oder weiter, statt bei 0,6 mm zu bleiben.": "With a calibrated profile the round end becomes narrower or wider instead of staying at 0.6 mm.",
+   "Mit ihnen entwickle und prüfe ich jede Version.": "I use them to build and test every version.",
+-  "Mit mehreren Filamenten rundet {slicer} den *Abstand nach oben* auf ganze Schichten. Auf getrennten Platten gilt er genau.": "With several filaments, {slicer} rounds the *Gap above* to whole layers. On separate plates it applies exactly.",
++  "Mit mehreren Filamenten rundet {slicer} den *Abstand oben und unten* auf ganze Schichten. Auf getrennten Platten gilt er genau.": "With several filaments, {slicer} rounds the *Gap above and below* to whole layers. On separate plates it applies exactly.",
+   "Mit so viel Spiel würde eine Nocke schmaler als null. Wählen Sie weniger Spiel.": "With this much clearance a lug would become narrower than zero. Choose less clearance.",
+   "Mit so wenig Spiel ginge ein Weg oder eine Mulde ganz zu. Wählen Sie einen Wert näher an null.": "With this little clearance a track or notch would close completely. Choose a value closer to zero.",
+   "Mit „Rastzunge“ wird der Einhänger bei SKÅDIS 15,47 statt 11,25 mm hoch, ausgeschaltet bleibt er wie vorher.": "With “Latch tongue” the hook is 15.47 instead of 11.25 mm tall for SKÅDIS; switched off it stays as before.",
+diff --git a/app/i18n/locales/es.json b/app/i18n/locales/es.json
+index c4c0719e6..72c45ad57 100644
+--- a/app/i18n/locales/es.json
++++ b/app/i18n/locales/es.json
+@@ -89,7 +89,7 @@
+   "Abstand der Schalen in der noch nicht angezogenen Montagelage.": "Separación entre las carcasas antes de apretar.",
+   "Abstand der beiden Schalen vor dem Anziehen.": "Separación entre las dos carcasas antes de apretar.",
+   "Abstand messen": "Medir distancia",
+-  "Abstand nach oben": "Espacio superior",
++  "Abstand oben und unten": "Espacio arriba y abajo",
+   "Abstand und Plattentiefe richten sich jetzt auch nach der größten Bohrung; Nennmaße, Spielstufen und Höhe bleiben unverändert.": "La separación y la profundidad de la placa se rigen ahora también por el taladro más grande; las medidas nominales, los escalones de holgura y la altura no cambian.",
+   "Abstand und Winkel": "Distancia y ángulo",
+   "Abstand vergrößern oder Platz auslassen": "Aumentar la separación u omitir el puesto",
+@@ -953,6 +953,7 @@
+   "Cura kennt keine Lüfterpause und fährt den Lüfter bis Schicht {layer} schrittweise hoch.": "Cura no tiene pausa del ventilador y lo acelera gradualmente hasta la capa {layer}.",
+   "Cura kennt keine Lüfterpause: Der Lüfter läuft schon in Schicht {layer} mit {percent} %.": "Cura no tiene pausa del ventilador: ya funciona al {percent} % en la capa {layer}.",
+   "Cura kennt „{printer}“ nicht. Die Druckdatei beginnt deshalb ohne den Startcode des Herstellers, ohne Spüllinie und ohne Bettnetz.": "Cura no conoce «{printer}». Por eso el archivo de impresión empieza sin el código de inicio del fabricante, sin línea de purga y sin malla de la placa.",
++  "Cura rechnet „{setting}“ in ganzen Schichten zu {layer}.": "Cura calcula «{setting}» en capas enteras de {layer}.",
+   "Cura übernimmt Einstellungen nur als Profil. Es liegt neben dem Modell: in Cura unter Profile verwalten → Importieren wählen.": "Cura solo acepta ajustes como perfil. Está junto al modelo: en Cura, elija Administrar perfiles → Importar.",
+   "Cura-Drucker": "Impresora de Cura",
+   "Curas AppImage ließ sich nicht einhängen. Prüfen Sie, ob Cura selbst startet, oder wählen Sie einen anderen Slicer.": "No se pudo montar el AppImage de Cura. Compruebe si Cura se inicia por sí solo o elija otro slicer.",
+@@ -974,6 +975,7 @@
+   "Dafür ist „{title}“ da.": "Para eso está «{title}».",
+   "Dafür muss ein Körper ausgewählt sein.": "Para eso hay que seleccionar un cuerpo.",
+   "Dafür muss zuerst etwas gerechnet sein.": "Antes hay que calcular algo.",
++  "Damit der *Abstand oben und unten* gilt, druckt {slicer} die Stütze in eigener Schichthöhe. Das Herstellerprofil hatte das abgeschaltet.": "Para que se aplique el *Espacio arriba y abajo*, {slicer} imprime el soporte con su propia altura de capa. El perfil del fabricante lo tenía desactivado.",
+   "Damit der Brim anliegt, steht die Fußkorrektur dieses Teils auf {value}. Die erste Schicht wird so breit wie das Modell.": "Para que el brim toque la pieza, su compensación de la base queda en {value}. La primera capa será tan ancha como el modelo.",
+   "Damit hilft der Support weiter: {address}": "Con esto el soporte puede ayudar: {address}",
+   "Damit käme „{field}“ in Schritt {number} ({operation}) auf {result} — erlaubt sind höchstens {limit}.": "Así «{field}» en el paso {number} ({operation}) llegaría a {result}; el máximo permitido es {limit}.",
+@@ -1050,6 +1052,7 @@
+   "Das Graustufenbild, dessen Helligkeit zur Höhe wird. Hell steht hoch.": "La imagen en escala de grises cuyo brillo se convierte en altura. Lo claro queda alto.",
+   "Das Hauptfenster mit einem geladenen Modell im Viewport, dem Objektbaum links und dem Prüfbericht rechts.": "La ventana principal con un modelo cargado en el viewport, el árbol de objetos a la izquierda y el informe de comprobación a la derecha.",
+   "Das Hauptfenster von Solidon3D mit Modell, Verlauf und Prüfbericht": "La ventana principal de Solidon3D con modelo, historial e informe de comprobación",
++  "Das Herstellerprofil baut einen Reinigungsturm, und damit rundet {slicer} den *Abstand oben und unten* auf ganze Schichten.": "El perfil del fabricante construye una torre de purga, y con ella {slicer} redondea el *Espacio arriba y abajo* a capas enteras.",
+   "Das Herstellerprofil nennt {key} = {value}, das lehnt der Slicer ab. Solidon übergibt seine Vorgabe {default}.": "El perfil del fabricante indica {key} = {value}, que el slicer rechaza. Solidon transmite su valor predeterminado {default}.",
+   "Das Herstellerprofil stützt keine Brücken, und welche Decke der Slicer als Brücke liest, rechnet nur er.": "El perfil del fabricante no pone soportes bajo los puentes, y solo el slicer sabe qué techo trata como puente.",
+   "Das Installationsprogramm ließ sich nicht starten.": "No se ha podido iniciar el instalador.",
+@@ -4846,7 +4849,7 @@
+   "Körper „{object}“: {question}": "Cuerpo «{object}»: {question}",
+   "Körperauswahl": "Selección de cuerpos",
+   "Kühle Platte": "Placa fría",
+-  "Kühlt die Trennschicht der Stütze mit vollem Lüfter. Die Stütze löst sich leichter, vor allem bei PETG.": "Enfría la capa de separación del soporte con el ventilador al máximo. El soporte se suelta más fácil, sobre todo con PETG.",
++  "Kühlt mit vollem Lüfter, wo Stütze und Teil sich berühren. Die Stütze löst sich leichter, vor allem bei PETG.": "Enfría con el ventilador al máximo donde el soporte y la pieza se tocan. El soporte se suelta más fácil, sobre todo con PETG.",
+   "Kühlung": "Refrigeración",
+   "Kürzel": "Atajo",
+   "Kürzen Sie den Text, oder hängen Sie ihn als Datei an.": "Acorte el texto o adjúntelo como archivo.",
+@@ -5027,8 +5030,8 @@
+   "Loslassen lässt die Karte hier schweben, die andere rückt beiseite.": "Al soltar, el panel queda flotando aquí y el otro se aparta.",
+   "Loslassen lässt die Karte hier schweben.": "Al soltar, el panel queda flotando aquí.",
+   "Loslassen tauscht die beiden Karten.": "Al soltar, los dos paneles se intercambian.",
+-  "Luft zwischen Stütze und Teil nach oben. Mehr heißt leichter abnehmen und rauere Fläche darüber.": "Espacio entre soporte y pieza hacia arriba. Más significa quitarlo con más facilidad y una superficie más rugosa encima.",
+   "Luft zwischen Stütze und Teil zur Seite. Zu wenig verschweißt beides miteinander.": "Espacio entre soporte y pieza hacia los lados. Demasiado poco suelda ambos.",
++  "Luft zwischen Stütze und Teil, oben wie unten. Mehr heißt leichter abnehmen und rauere Fläche.": "Espacio entre soporte y pieza, arriba y abajo. Más significa quitarlo con más facilidad y una superficie más rugosa.",
+   "Luft zwischen den Teilen beim Anordnen.": "Espacio entre las piezas al organizar.",
+   "Luft zwischen den Teilen. Genug, dass ein Elefantenfuß zwei Teile nicht am Rand zusammenwachsen lässt.": "Aire entre las piezas. Suficiente para que un pie de elefante no fusione dos de ellas por el borde.",
+   "Luft zwischen der Unterlage und der ersten Schicht des Teils. Ohne eigene Zahl bleibt die Vorgabe des Slicers.": "Espacio entre el raft y la primera capa de la pieza. Si no introduce un valor, se mantiene el del slicer.",
+@@ -5267,7 +5270,7 @@
+   "Mit echten Flächen und Kanten rechnen": "Calcular con caras y aristas reales",
+   "Mit einem kalibrierten Profil wird das runde Ende enger oder weiter, statt bei 0,6 mm zu bleiben.": "Con un perfil calibrado, el extremo redondo se estrecha o se ensancha en lugar de quedarse en 0,6 mm.",
+   "Mit ihnen entwickle und prüfe ich jede Version.": "Con ellas desarrollo y pruebo cada versión.",
+-  "Mit mehreren Filamenten rundet {slicer} den *Abstand nach oben* auf ganze Schichten. Auf getrennten Platten gilt er genau.": "Con varios filamentos, {slicer} redondea el *Espacio superior* a capas enteras. En placas separadas se aplica con exactitud.",
++  "Mit mehreren Filamenten rundet {slicer} den *Abstand oben und unten* auf ganze Schichten. Auf getrennten Platten gilt er genau.": "Con varios filamentos, {slicer} redondea el *Espacio arriba y abajo* a capas enteras. En placas separadas se aplica con exactitud.",
+   "Mit so viel Spiel würde eine Nocke schmaler als null. Wählen Sie weniger Spiel.": "Con tanta holgura, un tetón quedaría más estrecho que cero. Elija menos holgura.",
+   "Mit so wenig Spiel ginge ein Weg oder eine Mulde ganz zu. Wählen Sie einen Wert näher an null.": "Con tan poca holgura, un recorrido o una muesca se cerraría por completo. Elija un valor más cercano a cero.",
+   "Mit „Rastzunge“ wird der Einhänger bei SKÅDIS 15,47 statt 11,25 mm hoch, ausgeschaltet bleibt er wie vorher.": "Con «Lengüeta de retención», el gancho mide en SKÅDIS 15,47 en lugar de 11,25 mm de alto; desactivada, queda como antes.",
+diff --git a/app/i18n/locales/fr.json b/app/i18n/locales/fr.json
+index 90afae4cc..bc7c562f6 100644
+--- a/app/i18n/locales/fr.json
++++ b/app/i18n/locales/fr.json
+@@ -89,7 +89,7 @@
+   "Abstand der Schalen in der noch nicht angezogenen Montagelage.": "Écart entre les coques avant serrage.",
+   "Abstand der beiden Schalen vor dem Anziehen.": "Écart entre les deux coques avant serrage.",
+   "Abstand messen": "Mesurer la distance",
+-  "Abstand nach oben": "Espace au-dessus",
++  "Abstand oben und unten": "Espace dessus et dessous",
+   "Abstand und Plattentiefe richten sich jetzt auch nach der größten Bohrung; Nennmaße, Spielstufen und Höhe bleiben unverändert.": "L'espacement et la profondeur de la plaque suivent désormais aussi le plus grand perçage ; les cotes nominales, les paliers de jeu et la hauteur restent inchangés.",
+   "Abstand und Winkel": "Distance et angle",
+   "Abstand vergrößern oder Platz auslassen": "Augmenter l'espacement ou laisser la place libre",
+@@ -953,6 +953,7 @@
+   "Cura kennt keine Lüfterpause und fährt den Lüfter bis Schicht {layer} schrittweise hoch.": "Cura n'a pas de pause du ventilateur et l'accélère progressivement jusqu'à la couche {layer}.",
+   "Cura kennt keine Lüfterpause: Der Lüfter läuft schon in Schicht {layer} mit {percent} %.": "Cura n'a pas de pause du ventilateur : il tourne déjà à {percent} % à la couche {layer}.",
+   "Cura kennt „{printer}“ nicht. Die Druckdatei beginnt deshalb ohne den Startcode des Herstellers, ohne Spüllinie und ohne Bettnetz.": "Cura ne connaît pas « {printer} ». Le fichier d'impression commence donc sans le code de démarrage du fabricant, sans ligne de purge et sans maillage du plateau.",
++  "Cura rechnet „{setting}“ in ganzen Schichten zu {layer}.": "Cura compte « {setting} » en couches entières de {layer}.",
+   "Cura übernimmt Einstellungen nur als Profil. Es liegt neben dem Modell: in Cura unter Profile verwalten → Importieren wählen.": "Cura n'accepte les réglages que sous forme de profil. Il se trouve à côté du modèle : dans Cura, choisissez Gérer les profils → Importer.",
+   "Cura-Drucker": "Imprimante Cura",
+   "Curas AppImage ließ sich nicht einhängen. Prüfen Sie, ob Cura selbst startet, oder wählen Sie einen anderen Slicer.": "L'AppImage de Cura n'a pas pu être monté. Vérifiez que Cura démarre seul, ou choisissez un autre slicer.",
+@@ -974,6 +975,7 @@
+   "Dafür ist „{title}“ da.": "C'est à cela que sert « {title} ».",
+   "Dafür muss ein Körper ausgewählt sein.": "Il faut pour cela sélectionner un corps.",
+   "Dafür muss zuerst etwas gerechnet sein.": "Il faut d'abord qu'un calcul ait eu lieu.",
++  "Damit der *Abstand oben und unten* gilt, druckt {slicer} die Stütze in eigener Schichthöhe. Das Herstellerprofil hatte das abgeschaltet.": "Pour que l'*Espace dessus et dessous* s'applique, {slicer} imprime le support avec sa propre hauteur de couche. Le profil du fabricant l'avait désactivé.",
+   "Damit der Brim anliegt, steht die Fußkorrektur dieses Teils auf {value}. Die erste Schicht wird so breit wie das Modell.": "Pour que le brim touche la pièce, sa compensation de la base est réglée sur {value}. La première couche sera aussi large que le modèle.",
+   "Damit hilft der Support weiter: {address}": "Avec cela, le support peut aider : {address}",
+   "Damit käme „{field}“ in Schritt {number} ({operation}) auf {result} — erlaubt sind höchstens {limit}.": "Ainsi « {field} » à l'étape {number} ({operation}) atteindrait {result} ; le maximum autorisé est {limit}.",
+@@ -1050,6 +1052,7 @@
+   "Das Graustufenbild, dessen Helligkeit zur Höhe wird. Hell steht hoch.": "L'image en niveaux de gris dont la luminosité devient la hauteur. Le clair est en haut.",
+   "Das Hauptfenster mit einem geladenen Modell im Viewport, dem Objektbaum links und dem Prüfbericht rechts.": "La fenêtre principale avec un modèle chargé dans le viewport, l'arbre des objets à gauche et le rapport de contrôle à droite.",
+   "Das Hauptfenster von Solidon3D mit Modell, Verlauf und Prüfbericht": "La fenêtre principale de Solidon3D avec le modèle, l'historique et le rapport de contrôle",
++  "Das Herstellerprofil baut einen Reinigungsturm, und damit rundet {slicer} den *Abstand oben und unten* auf ganze Schichten.": "Le profil du fabricant construit une tour de purge, et {slicer} arrondit alors l'*Espace dessus et dessous* à des couches entières.",
+   "Das Herstellerprofil nennt {key} = {value}, das lehnt der Slicer ab. Solidon übergibt seine Vorgabe {default}.": "Le profil du fabricant indique {key} = {value}, ce que le slicer refuse. Solidon transmet sa valeur par défaut {default}.",
+   "Das Herstellerprofil stützt keine Brücken, und welche Decke der Slicer als Brücke liest, rechnet nur er.": "Le profil du fabricant ne met pas de supports sous les ponts, et seul le slicer sait quel plafond il traite comme un pont.",
+   "Das Installationsprogramm ließ sich nicht starten.": "Le programme d'installation n'a pas pu démarrer.",
+@@ -4846,7 +4849,7 @@
+   "Körper „{object}“: {question}": "Corps « {object} » : {question}",
+   "Körperauswahl": "Sélection des corps",
+   "Kühle Platte": "Plateau froid",
+-  "Kühlt die Trennschicht der Stütze mit vollem Lüfter. Die Stütze löst sich leichter, vor allem bei PETG.": "Refroidit l'interface du support avec le ventilateur à fond. Le support se détache plus facilement, surtout en PETG.",
++  "Kühlt mit vollem Lüfter, wo Stütze und Teil sich berühren. Die Stütze löst sich leichter, vor allem bei PETG.": "Refroidit avec le ventilateur à fond là où le support et la pièce se touchent. Le support se détache plus facilement, surtout en PETG.",
+   "Kühlung": "Refroidissement",
+   "Kürzel": "Raccourci",
+   "Kürzen Sie den Text, oder hängen Sie ihn als Datei an.": "Raccourcissez le texte, ou joignez-le comme fichier.",
+@@ -5027,8 +5030,8 @@
+   "Loslassen lässt die Karte hier schweben, die andere rückt beiseite.": "Relâcher laisse le panneau flotter ici ; l'autre se décale.",
+   "Loslassen lässt die Karte hier schweben.": "Relâcher laisse le panneau flotter ici.",
+   "Loslassen tauscht die beiden Karten.": "Relâcher échange les deux panneaux.",
+-  "Luft zwischen Stütze und Teil nach oben. Mehr heißt leichter abnehmen und rauere Fläche darüber.": "Espace entre le support et la pièce vers le haut. Plus d'espace : support plus facile à retirer, surface plus rugueuse au-dessus.",
+   "Luft zwischen Stütze und Teil zur Seite. Zu wenig verschweißt beides miteinander.": "Espace entre le support et la pièce sur le côté. Trop peu, et les deux se soudent.",
++  "Luft zwischen Stütze und Teil, oben wie unten. Mehr heißt leichter abnehmen und rauere Fläche.": "Espace entre le support et la pièce, dessus comme dessous. Plus d'espace : support plus facile à retirer, surface plus rugueuse.",
+   "Luft zwischen den Teilen beim Anordnen.": "Espace entre les pièces lors de la disposition.",
+   "Luft zwischen den Teilen. Genug, dass ein Elefantenfuß zwei Teile nicht am Rand zusammenwachsen lässt.": "Espace entre les pièces. Assez pour qu'un pied d'éléphant ne fasse pas fusionner deux pièces au bord.",
+   "Luft zwischen der Unterlage und der ersten Schicht des Teils. Ohne eigene Zahl bleibt die Vorgabe des Slicers.": "Espace entre le raft et la première couche de la pièce. Sans valeur saisie, celle du slicer est conservée.",
+@@ -5267,7 +5270,7 @@
+   "Mit echten Flächen und Kanten rechnen": "Calculer avec de vraies faces et arêtes",
+   "Mit einem kalibrierten Profil wird das runde Ende enger oder weiter, statt bei 0,6 mm zu bleiben.": "Avec un profil calibré, l'extrémité ronde devient plus étroite ou plus large au lieu de rester à 0,6 mm.",
+   "Mit ihnen entwickle und prüfe ich jede Version.": "Avec eux, je développe et je teste chaque version.",
+-  "Mit mehreren Filamenten rundet {slicer} den *Abstand nach oben* auf ganze Schichten. Auf getrennten Platten gilt er genau.": "Avec plusieurs filaments, {slicer} arrondit l'*Espace au-dessus* à des couches entières. Sur des plateaux séparés, il s'applique exactement.",
++  "Mit mehreren Filamenten rundet {slicer} den *Abstand oben und unten* auf ganze Schichten. Auf getrennten Platten gilt er genau.": "Avec plusieurs filaments, {slicer} arrondit l'*Espace dessus et dessous* à des couches entières. Sur des plateaux séparés, il s'applique exactement.",
+   "Mit so viel Spiel würde eine Nocke schmaler als null. Wählen Sie weniger Spiel.": "Avec autant de jeu, un ergot deviendrait plus étroit que zéro. Choisissez moins de jeu.",
+   "Mit so wenig Spiel ginge ein Weg oder eine Mulde ganz zu. Wählen Sie einen Wert näher an null.": "Avec si peu de jeu, une rampe ou un cran se fermerait complètement. Choisissez une valeur plus proche de zéro.",
+   "Mit „Rastzunge“ wird der Einhänger bei SKÅDIS 15,47 statt 11,25 mm hoch, ausgeschaltet bleibt er wie vorher.": "Avec « Languette d'arrêt », le crochet mesure 15,47 au lieu de 11,25 mm de haut pour SKÅDIS ; désactivée, il reste comme avant.",
+diff --git a/app/i18n/locales/it.json b/app/i18n/locales/it.json
+index 68687422e..c52731e8e 100644
+--- a/app/i18n/locales/it.json
++++ b/app/i18n/locales/it.json
+@@ -84,12 +84,12 @@
+   "Abstand der Explosion": "Distanza dell'esploso",
+   "Abstand der Innenkante des Querschnitts von der Drehachse — bei einer Ringnut an einer Welle der Radius des Nutgrunds.": "Distanza del bordo interno della sezione dall'asse di rotazione — per una gola su un albero, il raggio del fondo della gola.",
+   "Abstand der Innenkante des Querschnitts von der Drehachse. Null macht den Körper voll bis zur Mitte.": "Distanza del bordo interno della sezione dall'asse di rotazione. Zero rende il corpo pieno fino al centro.",
+-  "Abstand der Linien in der Trennschicht. Eng gibt glatte flache Unterseiten, weit löst sich an kleinen und runden Flächen leichter.": "Distanza tra le linee dell'interfaccia. Stretta dà sottosquadri piatti e lisci, larga si stacca più facilmente da superfici piccole e arrotondate.",
++  "Abstand der Linien in der Trennschicht. Eng gibt glatte flache Unterseiten, weit löst sich an kleinen und runden Flächen leichter.": "Distanza tra le linee dell'interfaccia. Stretta dà superfici inferiori piatte e lisce, larga si stacca più facilmente da superfici piccole e arrotondate.",
+   "Abstand der Löcher zur Deckelmitte. Null verwendet ein Viertel der Innenweite.": "Distanza dei fori dal centro del coperchio. Zero usa un quarto della larghezza interna.",
+   "Abstand der Schalen in der noch nicht angezogenen Montagelage.": "Distanza tra i gusci prima del serraggio.",
+   "Abstand der beiden Schalen vor dem Anziehen.": "Distanza tra i due gusci prima del serraggio.",
+   "Abstand messen": "Misura distanza",
+-  "Abstand nach oben": "Spazio verso l'alto",
++  "Abstand oben und unten": "Spazio sopra e sotto",
+   "Abstand und Plattentiefe richten sich jetzt auch nach der größten Bohrung; Nennmaße, Spielstufen und Höhe bleiben unverändert.": "La distanza e la profondità della piastra seguono ora anche il foro più grande; quote nominali, gradini di gioco e altezza restano invariati.",
+   "Abstand und Winkel": "Distanza e angolo",
+   "Abstand vergrößern oder Platz auslassen": "Aumenta la distanza o lascia libero il posto",
+@@ -953,6 +953,7 @@
+   "Cura kennt keine Lüfterpause und fährt den Lüfter bis Schicht {layer} schrittweise hoch.": "Cura non ha una pausa della ventola e la accelera gradualmente fino allo strato {layer}.",
+   "Cura kennt keine Lüfterpause: Der Lüfter läuft schon in Schicht {layer} mit {percent} %.": "Cura non ha una pausa della ventola: gira già al {percent} % nello strato {layer}.",
+   "Cura kennt „{printer}“ nicht. Die Druckdatei beginnt deshalb ohne den Startcode des Herstellers, ohne Spüllinie und ohne Bettnetz.": "Cura non conosce «{printer}». Il file di stampa inizia quindi senza il codice di avvio del produttore, senza linea di spurgo e senza mesh del piatto.",
++  "Cura rechnet „{setting}“ in ganzen Schichten zu {layer}.": "Cura conta «{setting}» in strati interi da {layer}.",
+   "Cura übernimmt Einstellungen nur als Profil. Es liegt neben dem Modell: in Cura unter Profile verwalten → Importieren wählen.": "Cura accetta le impostazioni solo come profilo. Si trova accanto al modello: in Cura scegli Gestisci profili → Importa.",
+   "Cura-Drucker": "Stampante Cura",
+   "Curas AppImage ließ sich nicht einhängen. Prüfen Sie, ob Cura selbst startet, oder wählen Sie einen anderen Slicer.": "Non è stato possibile montare l'AppImage di Cura. Verifica che Cura si avvii da solo oppure scegli un altro slicer.",
+@@ -974,6 +975,7 @@
+   "Dafür ist „{title}“ da.": "A questo serve «{title}».",
+   "Dafür muss ein Körper ausgewählt sein.": "Per questo occorre selezionare un corpo.",
+   "Dafür muss zuerst etwas gerechnet sein.": "Prima dev'essere stato calcolato qualcosa.",
++  "Damit der *Abstand oben und unten* gilt, druckt {slicer} die Stütze in eigener Schichthöhe. Das Herstellerprofil hatte das abgeschaltet.": "Perché lo *Spazio sopra e sotto* valga, {slicer} stampa il supporto con una propria altezza dello strato. Il profilo del produttore l'aveva disattivato.",
+   "Damit der Brim anliegt, steht die Fußkorrektur dieses Teils auf {value}. Die erste Schicht wird so breit wie das Modell.": "Perché il brim tocchi il pezzo, la sua compensazione della base è impostata a {value}. Il primo strato sarà largo quanto il modello.",
+   "Damit hilft der Support weiter: {address}": "Con questo l'assistenza può aiutare: {address}",
+   "Damit käme „{field}“ in Schritt {number} ({operation}) auf {result} — erlaubt sind höchstens {limit}.": "Così «{field}» al passaggio {number} ({operation}) arriverebbe a {result}; il massimo consentito è {limit}.",
+@@ -1050,6 +1052,7 @@
+   "Das Graustufenbild, dessen Helligkeit zur Höhe wird. Hell steht hoch.": "L'immagine in scala di grigi la cui luminosità diventa altezza. Il chiaro sta in alto.",
+   "Das Hauptfenster mit einem geladenen Modell im Viewport, dem Objektbaum links und dem Prüfbericht rechts.": "La finestra principale con un modello caricato nel viewport, l'albero degli oggetti a sinistra e il rapporto di verifica a destra.",
+   "Das Hauptfenster von Solidon3D mit Modell, Verlauf und Prüfbericht": "La finestra principale di Solidon3D con modello, cronologia e rapporto di verifica",
++  "Das Herstellerprofil baut einen Reinigungsturm, und damit rundet {slicer} den *Abstand oben und unten* auf ganze Schichten.": "Il profilo del produttore costruisce una torre di spurgo, e così {slicer} arrotonda lo *Spazio sopra e sotto* a strati interi.",
+   "Das Herstellerprofil nennt {key} = {value}, das lehnt der Slicer ab. Solidon übergibt seine Vorgabe {default}.": "Il profilo del produttore indica {key} = {value}, che lo slicer rifiuta. Solidon passa il suo valore predefinito {default}.",
+   "Das Herstellerprofil stützt keine Brücken, und welche Decke der Slicer als Brücke liest, rechnet nur er.": "Il profilo del produttore non mette supporti sotto i ponti, e solo lo slicer sa quale soffitto tratta come ponte.",
+   "Das Installationsprogramm ließ sich nicht starten.": "Non è stato possibile avviare il programma di installazione.",
+@@ -4846,7 +4849,7 @@
+   "Körper „{object}“: {question}": "Corpo «{object}»: {question}",
+   "Körperauswahl": "Selezione dei corpi",
+   "Kühle Platte": "Piatto freddo",
+-  "Kühlt die Trennschicht der Stütze mit vollem Lüfter. Die Stütze löst sich leichter, vor allem bei PETG.": "Raffredda l'interfaccia del supporto con la ventola al massimo. Il supporto si stacca più facilmente, soprattutto con il PETG.",
++  "Kühlt mit vollem Lüfter, wo Stütze und Teil sich berühren. Die Stütze löst sich leichter, vor allem bei PETG.": "Raffredda con la ventola al massimo dove supporto e pezzo si toccano. Il supporto si stacca più facilmente, soprattutto con il PETG.",
+   "Kühlung": "Raffreddamento",
+   "Kürzel": "Scorciatoia",
+   "Kürzen Sie den Text, oder hängen Sie ihn als Datei an.": "Accorcia il testo, oppure allegalo come file.",
+@@ -5027,8 +5030,8 @@
+   "Loslassen lässt die Karte hier schweben, die andere rückt beiseite.": "Rilasciando, il pannello resta sospeso qui e l'altro si sposta.",
+   "Loslassen lässt die Karte hier schweben.": "Rilasciando, il pannello resta sospeso qui.",
+   "Loslassen tauscht die beiden Karten.": "Rilasciando, i due pannelli si scambiano.",
+-  "Luft zwischen Stütze und Teil nach oben. Mehr heißt leichter abnehmen und rauere Fläche darüber.": "Spazio tra supporto e pezzo verso l'alto. Di più: si stacca più facilmente, ma la superficie sopra è più ruvida.",
+   "Luft zwischen Stütze und Teil zur Seite. Zu wenig verschweißt beides miteinander.": "Spazio tra supporto e pezzo di lato. Troppo poco, e i due si saldano.",
++  "Luft zwischen Stütze und Teil, oben wie unten. Mehr heißt leichter abnehmen und rauere Fläche.": "Spazio tra supporto e pezzo, sopra e sotto. Di più: si stacca più facilmente, ma la superficie è più ruvida.",
+   "Luft zwischen den Teilen beim Anordnen.": "Spazio tra i pezzi durante la disposizione.",
+   "Luft zwischen den Teilen. Genug, dass ein Elefantenfuß zwei Teile nicht am Rand zusammenwachsen lässt.": "Spazio tra i pezzi. Abbastanza perché un piede d'elefante non saldi due pezzi lungo il bordo.",
+   "Luft zwischen der Unterlage und der ersten Schicht des Teils. Ohne eigene Zahl bleibt die Vorgabe des Slicers.": "Spazio tra il raft e il primo strato del pezzo. Senza un valore proprio, resta quello dello slicer.",
+@@ -5267,7 +5270,7 @@
+   "Mit echten Flächen und Kanten rechnen": "Calcolare con facce e spigoli veri",
+   "Mit einem kalibrierten Profil wird das runde Ende enger oder weiter, statt bei 0,6 mm zu bleiben.": "Con un profilo calibrato l'estremità rotonda diventa più stretta o più larga invece di restare a 0,6 mm.",
+   "Mit ihnen entwickle und prüfe ich jede Version.": "Con questi sviluppo e verifico ogni versione.",
+-  "Mit mehreren Filamenten rundet {slicer} den *Abstand nach oben* auf ganze Schichten. Auf getrennten Platten gilt er genau.": "Con più filamenti, {slicer} arrotonda lo *Spazio verso l'alto* a strati interi. Su piatti separati vale esattamente.",
++  "Mit mehreren Filamenten rundet {slicer} den *Abstand oben und unten* auf ganze Schichten. Auf getrennten Platten gilt er genau.": "Con più filamenti, {slicer} arrotonda lo *Spazio sopra e sotto* a strati interi. Su piatti separati vale esattamente.",
+   "Mit so viel Spiel würde eine Nocke schmaler als null. Wählen Sie weniger Spiel.": "Con così tanto gioco un nottolino diventerebbe più stretto di zero. Scegli meno gioco.",
+   "Mit so wenig Spiel ginge ein Weg oder eine Mulde ganz zu. Wählen Sie einen Wert näher an null.": "Con così poco gioco un percorso o una tacca si chiuderebbe del tutto. Scegli un valore più vicino a zero.",
+   "Mit „Rastzunge“ wird der Einhänger bei SKÅDIS 15,47 statt 11,25 mm hoch, ausgeschaltet bleibt er wie vorher.": "Con «Linguetta di ritegno» il gancio per SKÅDIS è alto 15,47 invece di 11,25 mm, se la disattivi resta come prima.",
+diff --git a/app/i18n/locales/pt.json b/app/i18n/locales/pt.json
+index 7504cd806..61dc53bbf 100644
+--- a/app/i18n/locales/pt.json
++++ b/app/i18n/locales/pt.json
+@@ -89,7 +89,7 @@
+   "Abstand der Schalen in der noch nicht angezogenen Montagelage.": "Distância entre as carcaças antes do aperto.",
+   "Abstand der beiden Schalen vor dem Anziehen.": "Distância entre as duas carcaças antes do aperto.",
+   "Abstand messen": "Medir distância",
+-  "Abstand nach oben": "Distância acima",
++  "Abstand oben und unten": "Distância acima e abaixo",
+   "Abstand und Plattentiefe richten sich jetzt auch nach der größten Bohrung; Nennmaße, Spielstufen und Höhe bleiben unverändert.": "O espaçamento e a profundidade da placa passam a seguir também o furo maior; as cotas nominais, os degraus de folga e a altura mantêm-se.",
+   "Abstand und Winkel": "Distância e ângulo",
+   "Abstand vergrößern oder Platz auslassen": "Aumentar o espaçamento ou deixar o lugar livre",
+@@ -953,6 +953,7 @@
+   "Cura kennt keine Lüfterpause und fährt den Lüfter bis Schicht {layer} schrittweise hoch.": "O Cura não tem pausa da ventoinha e acelera-a gradualmente até à camada {layer}.",
+   "Cura kennt keine Lüfterpause: Der Lüfter läuft schon in Schicht {layer} mit {percent} %.": "O Cura não tem pausa da ventoinha: já funciona a {percent} % na camada {layer}.",
+   "Cura kennt „{printer}“ nicht. Die Druckdatei beginnt deshalb ohne den Startcode des Herstellers, ohne Spüllinie und ohne Bettnetz.": "O Cura não conhece «{printer}». Por isso, o ficheiro de impressão começa sem o código de arranque do fabricante, sem linha de purga e sem malha da mesa.",
++  "Cura rechnet „{setting}“ in ganzen Schichten zu {layer}.": "O Cura conta «{setting}» em camadas inteiras de {layer}.",
+   "Cura übernimmt Einstellungen nur als Profil. Es liegt neben dem Modell: in Cura unter Profile verwalten → Importieren wählen.": "O Cura só aceita definições como perfil. Está junto ao modelo: no Cura, escolha Gerir perfis → Importar.",
+   "Cura-Drucker": "Impressora Cura",
+   "Curas AppImage ließ sich nicht einhängen. Prüfen Sie, ob Cura selbst startet, oder wählen Sie einen anderen Slicer.": "Não foi possível montar o AppImage do Cura. Verifique se o Cura arranca sozinho ou escolha outro slicer.",
+@@ -974,6 +975,7 @@
+   "Dafür ist „{title}“ da.": "É para isso que serve «{title}».",
+   "Dafür muss ein Körper ausgewählt sein.": "Para isso é preciso selecionar um corpo.",
+   "Dafür muss zuerst etwas gerechnet sein.": "Primeiro tem de existir algo calculado.",
++  "Damit der *Abstand oben und unten* gilt, druckt {slicer} die Stütze in eigener Schichthöhe. Das Herstellerprofil hatte das abgeschaltet.": "Para que a *Distância acima e abaixo* se aplique, o {slicer} imprime o suporte com a sua própria altura de camada. O perfil do fabricante tinha-o desativado.",
+   "Damit der Brim anliegt, steht die Fußkorrektur dieses Teils auf {value}. Die erste Schicht wird so breit wie das Modell.": "Para que o brim encoste na peça, a sua compensação da base fica em {value}. A primeira camada fica tão larga como o modelo.",
+   "Damit hilft der Support weiter: {address}": "Com isto o suporte pode ajudar: {address}",
+   "Damit käme „{field}“ in Schritt {number} ({operation}) auf {result} — erlaubt sind höchstens {limit}.": "Assim «{field}» no passo {number} ({operation}) chegaria a {result}; o máximo permitido é {limit}.",
+@@ -1050,6 +1052,7 @@
+   "Das Graustufenbild, dessen Helligkeit zur Höhe wird. Hell steht hoch.": "A imagem em tons de cinzento cujo brilho se torna altura. O claro fica alto.",
+   "Das Hauptfenster mit einem geladenen Modell im Viewport, dem Objektbaum links und dem Prüfbericht rechts.": "A janela principal com um modelo carregado no viewport, a árvore de objetos à esquerda e o relatório de verificação à direita.",
+   "Das Hauptfenster von Solidon3D mit Modell, Verlauf und Prüfbericht": "A janela principal do Solidon3D com modelo, histórico e relatório de verificação",
++  "Das Herstellerprofil baut einen Reinigungsturm, und damit rundet {slicer} den *Abstand oben und unten* auf ganze Schichten.": "O perfil do fabricante constrói uma torre de purga e, com ela, o {slicer} arredonda a *Distância acima e abaixo* para camadas inteiras.",
+   "Das Herstellerprofil nennt {key} = {value}, das lehnt der Slicer ab. Solidon übergibt seine Vorgabe {default}.": "O perfil do fabricante indica {key} = {value}, o que o slicer recusa. O Solidon passa o seu valor predefinido {default}.",
+   "Das Herstellerprofil stützt keine Brücken, und welche Decke der Slicer als Brücke liest, rechnet nur er.": "O perfil do fabricante não coloca suportes sob as pontes, e só o slicer sabe que teto trata como ponte.",
+   "Das Installationsprogramm ließ sich nicht starten.": "Não foi possível iniciar o instalador.",
+@@ -4846,7 +4849,7 @@
+   "Körper „{object}“: {question}": "Corpo «{object}»: {question}",
+   "Körperauswahl": "Seleção de corpos",
+   "Kühle Platte": "Placa fria",
+-  "Kühlt die Trennschicht der Stütze mit vollem Lüfter. Die Stütze löst sich leichter, vor allem bei PETG.": "Arrefece a camada de separação do suporte com o ventilador no máximo. O suporte solta-se mais facilmente, sobretudo com PETG.",
++  "Kühlt mit vollem Lüfter, wo Stütze und Teil sich berühren. Die Stütze löst sich leichter, vor allem bei PETG.": "Arrefece com o ventilador no máximo onde o suporte e a peça se tocam. O suporte solta-se mais facilmente, sobretudo com PETG.",
+   "Kühlung": "Refrigeração",
+   "Kürzel": "Atalho",
+   "Kürzen Sie den Text, oder hängen Sie ihn als Datei an.": "Encurte o texto ou anexe-o como ficheiro.",
+@@ -5027,8 +5030,8 @@
+   "Loslassen lässt die Karte hier schweben, die andere rückt beiseite.": "Ao largar, o painel fica a flutuar aqui e o outro afasta-se.",
+   "Loslassen lässt die Karte hier schweben.": "Ao largar, o painel fica a flutuar aqui.",
+   "Loslassen tauscht die beiden Karten.": "Ao largar, os dois painéis trocam de lugar.",
+-  "Luft zwischen Stütze und Teil nach oben. Mehr heißt leichter abnehmen und rauere Fläche darüber.": "Distância entre suporte e peça para cima. Mais significa retirá-lo com mais facilidade e uma superfície mais rugosa acima.",
+   "Luft zwischen Stütze und Teil zur Seite. Zu wenig verschweißt beides miteinander.": "Distância entre suporte e peça para o lado. Demasiado pouco solda os dois um ao outro.",
++  "Luft zwischen Stütze und Teil, oben wie unten. Mehr heißt leichter abnehmen und rauere Fläche.": "Distância entre suporte e peça, acima e abaixo. Mais significa retirá-lo com mais facilidade e uma superfície mais rugosa.",
+   "Luft zwischen den Teilen beim Anordnen.": "Espaço entre as peças ao dispor.",
+   "Luft zwischen den Teilen. Genug, dass ein Elefantenfuß zwei Teile nicht am Rand zusammenwachsen lässt.": "Ar entre as peças. O suficiente para que um pé de elefante não funda duas delas pela borda.",
+   "Luft zwischen der Unterlage und der ersten Schicht des Teils. Ohne eigene Zahl bleibt die Vorgabe des Slicers.": "Espaço entre o raft e a primeira camada da peça. Sem um valor próprio, mantém-se o valor do slicer.",
+@@ -5267,7 +5270,7 @@
+   "Mit echten Flächen und Kanten rechnen": "Calcular com faces e arestas verdadeiras",
+   "Mit einem kalibrierten Profil wird das runde Ende enger oder weiter, statt bei 0,6 mm zu bleiben.": "Com um perfil calibrado, a extremidade redonda fica mais estreita ou mais larga em vez de ficar em 0,6 mm.",
+   "Mit ihnen entwickle und prüfe ich jede Version.": "Com elas desenvolvo e testo cada versão.",
+-  "Mit mehreren Filamenten rundet {slicer} den *Abstand nach oben* auf ganze Schichten. Auf getrennten Platten gilt er genau.": "Com vários filamentos, o {slicer} arredonda a *Distância acima* para camadas inteiras. Em placas separadas aplica-se com exatidão.",
++  "Mit mehreren Filamenten rundet {slicer} den *Abstand oben und unten* auf ganze Schichten. Auf getrennten Platten gilt er genau.": "Com vários filamentos, o {slicer} arredonda a *Distância acima e abaixo* para camadas inteiras. Em placas separadas aplica-se com exatidão.",
+   "Mit so viel Spiel würde eine Nocke schmaler als null. Wählen Sie weniger Spiel.": "Com tanta folga, um ressalto ficaria mais estreito do que zero. Escolha menos folga.",
+   "Mit so wenig Spiel ginge ein Weg oder eine Mulde ganz zu. Wählen Sie einen Wert näher an null.": "Com tão pouca folga, um percurso ou um entalhe fechar-se-ia por completo. Escolha um valor mais próximo de zero.",
+   "Mit „Rastzunge“ wird der Einhänger bei SKÅDIS 15,47 statt 11,25 mm hoch, ausgeschaltet bleibt er wie vorher.": "Com «Lingueta de retenção», o gancho mede no SKÅDIS 15,47 em vez de 11,25 mm de altura; desativada, fica como antes.",
+diff --git a/app/ui/print_settings_dialog.py b/app/ui/print_settings_dialog.py
+index 4855add68..018c1d5ba 100644
+--- a/app/ui/print_settings_dialog.py
++++ b/app/ui/print_settings_dialog.py
+@@ -1482,6 +1482,12 @@ class _AdviceWorker(Worker):
+             threemf.SlotKey,
+             tuple[MaterialSlot, list[tuple[PrintSettings, Sequence[SettingAdvice]]]],
+         ] = {}
++        # Der Stützkontakt geht je Teil und wird gegen die Grundlage gefragt,
++        # wie im Export; gegen die Übernahme gefragt, kam jede Zeile mit ihrer
++        # Gegenzeile wieder (RM-583).
++        separate, asking = handover.asked_for_contact(
++            self.settings, self.profile, self.setup, self.flavour
++        )
+         for index, body in enumerate(self.objects):
+             self.cancelled.raise_if_cancelled()
+             self.progressed.emit(index + 1, len(self.objects), str(body.name))
+@@ -1489,7 +1495,7 @@ class _AdviceWorker(Worker):
+             own_profile = profiles.for_object(self.profile, body)
+             # Dieselben Spulen, die der Export je Teil fragt (Entscheidung G).
+             processes = handover.slot_processes(
+-                body, self.settings, self.profile, self.setup, self.slot_profiles
++                body, asking, self.profile, self.setup, self.slot_profiles
+             )
+             angle = min(
+                 (process.profile.overhang_limit_degrees for process in processes),
+@@ -1537,6 +1543,9 @@ class _AdviceWorker(Worker):
+             results[body.id] = (angle, wall, result)
+             if not self.rules_wanted:
+                 continue
++            # Erst über die Spulen dieses Körpers: Ein Teil bekommt einen Wert,
++            # der alle seine Spulen einschließt (wie ``writer.part_advice``).
++            own: list[tuple[PrintSettings, Sequence[SettingAdvice]]] = []
+             for process in processes:
+                 entries = advise.advise(
+                     process.settings,
+@@ -1547,7 +1556,7 @@ class _AdviceWorker(Worker):
+                     connectors=self.connectors,
+                     flavour=self.flavour,
+                 )
+-                common.append(
++                own.append(
+                     (
+                         process.settings,
+                         [
+@@ -1570,7 +1579,11 @@ class _AdviceWorker(Worker):
+                         ],
+                     )
+                 )
+-        entries = self._with_parts(advise.combine(self.settings, common), results)
++            if own:
++                common.append((asking, advise.combine(asking, own)))
++        entries = self._with_parts(
++            advise.combine(self.settings, common, separate=separate), results
++        )
+         if self.rules_wanted:
+             self.accepted_parts = self._accepted_targets(results)
+         for slot, groups in materials.values():
+@@ -1687,6 +1700,7 @@ class _AdviceWorker(Worker):
+             return entries
+         chain = split.accepted_per_part()
+         wanted: dict[str, list[str]] = {}
++        shown = {entry.path: entry.value for entry in entries}
+         for body in self.objects:
+             self.cancelled.raise_if_cancelled()
+             if not self.rules_wanted:
+@@ -1703,7 +1717,12 @@ class _AdviceWorker(Worker):
+                 flavour=self.flavour,
+                 accepted=chain,
+             ):
+-                if entry.path in candidates:
++                # Beim Stützkontakt bekommt jedes Teil seinen Wert; die Zeile nennt
++                # nur die Teile, die ihren bekommen (RM-583).
++                if entry.path in candidates and (
++                    entry.path not in advise.CONTACT_PATHS
++                    or print_settings.same_value(entry.value, shown[entry.path])
++                ):
+                     wanted.setdefault(entry.path, []).append(str(body.name))
+         named: list[SettingAdvice] = []
+         for entry in entries:
+@@ -4624,11 +4643,16 @@ class PrintSettingsDialog(QDialog):
+         parent_print_settings = known.get("open_print_settings")
+ 
+         def open_print_settings(error: AppError) -> None:
+-            if error.values.get("constraint") == "empty_first_layer":
++            field = str(error.values.get("field") or "")
++            if (
++                error.values.get("constraint") == "empty_first_layer"
++                or print_fields.field_of(field) is not None
++            ):
+                 if context is not None and context == self._print_context():
+                     # Haftung bei einer leeren ersten Schicht, Wandbahnen bei
+-                    # einer, die schmaler ist als eine Bahn (RM-312).
+-                    self._lift(str(error.values.get("field") or "adhesion.kind"))
++                    # einer, die schmaler ist als eine Bahn (RM-312), und jedes
++                    # Feld, das ein Befund nennt (RM-583).
++                    self._lift(field or "adhesion.kind")
+             elif parent_print_settings is not None:
+                 parent_print_settings(error)
+ 
+@@ -7527,12 +7551,11 @@ class PrintSettingsDialog(QDialog):
+     def _update_inactive_setting_rows(self) -> None:
+         """Keine Detailwerte zeigen, wenn Stützen oder Bettart ausgeschaltet sind."""
+         inactive = self._inactive_paths()
+-        for tab, paths in (
+-            ("support", print_settings.SUPPORT_DETAILS),
+-            ("adhesion", tuple(print_settings.ADHESION_DETAILS)),
+-        ):
+-            form = self._tab_forms[tab]
++        for paths in (print_settings.SUPPORT_DETAILS, tuple(print_settings.ADHESION_DETAILS)):
+             for path in paths:
++                # Das Formular der Gruppe des Felds: Die volle Kühlung an der
++                # Stütze steht unter „Kühlung“, nicht unter „Stützen“ (RM-583).
++                form = self._tab_forms[self._fields[path].group]
+                 active = path not in inactive
+                 form.setRowVisible(self._labels[path], active)
+                 editor = self._editors[path]
+diff --git a/changelog/de.md b/changelog/de.md
+index 3162f5d53..c3d6e7404 100644
+--- a/changelog/de.md
++++ b/changelog/de.md
+@@ -79,6 +79,11 @@ Nutzen da und sonst nichts.
+ - Setzen Stützen unter kleinen Überhängen auf dem Modell auf, schlägt Solidon Baumstützen vor. Sie hinterlassen dort weniger Spuren.
+ - Bei kleinen Spitzen schlägt Solidon ein niedrigeres *Mindesttempo beim Bremsen* vor, damit sie nicht weich werden. Die Einstellung geht an jeden Slicer.
+ - Schmale Ränder, die sich selbst tragen, bleiben mit *Ränder ohne Stütze* frei. Der Druck braucht so deutlich weniger Stütze.
++- Stützen lösen sich leichter und sauberer: Der Abstand folgt Material und Schichthöhe jedes Teils, auch bei mehreren Materialien auf einer Platte. Die Trennschicht folgt der Fläche darüber.
++- Steht eine Stütze auf dem Teil, schlägt Solidon auch darunter eine Trennschicht vor, damit ihr Fuß keine Spuren hinterlässt.
++- Für PETG schlägt Solidon volle Kühlung an der Stütze vor. Sie löst sich so leichter vom Teil.
++- Neu in den Druckeinstellungen: *Trennschichten unten*, *Lücke in der Trennschicht* und *Volle Kühlung an der Stütze*.
++- Das Feld *Abstand nach oben* heißt jetzt *Abstand oben und unten* und gilt für beide Seiten der Stütze.
+ 
+ ### Gewinde, Bohrungen und Normteile
+ 
+diff --git a/changelog/en.md b/changelog/en.md
+index 9aea001fc..5f5523db9 100644
+--- a/changelog/en.md
++++ b/changelog/en.md
+@@ -54,6 +54,11 @@ it into `website/version.json`.
+ - Where supports under small overhangs rest on the model, Solidon suggests tree supports. They leave fewer marks there.
+ - For small tips, Solidon suggests a lower *Minimum slowdown speed* so they do not go soft. The setting reaches every slicer.
+ - Narrow rims that hold up on their own stay free of support with *No support under rims*. Prints need noticeably less support that way.
++- Supports come off more easily and cleanly: the gap follows the material and layer height of each part, even with several materials on one plate. The interface follows the surface above.
++- Where a support stands on the part, Solidon also suggests an interface layer below it so its foot leaves no marks.
++- For PETG, Solidon suggests full cooling at the support. It then comes off the part more easily.
++- New in the print settings: *Interface layers below*, *Interface gap* and *Full cooling at the support*.
++- The *Gap above* field is now called *Gap above and below* and applies to both sides of the support.
+ 
+ ### Threads, holes and standard parts
+ 
+diff --git a/changelog/es.md b/changelog/es.md
+index d439f2a1e..a080d1459 100644
+--- a/changelog/es.md
++++ b/changelog/es.md
+@@ -55,6 +55,11 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
+ - Donde los soportes bajo voladizos pequeños se apoyan en el modelo, Solidon sugiere soportes en árbol. Allí dejan menos marcas.
+ - En puntas pequeñas, Solidon sugiere una *Velocidad mínima al frenar* más baja para que no se ablanden. El ajuste llega a cualquier slicer.
+ - Los bordes estrechos que se sostienen solos quedan libres con *Bordes sin soporte*. Así la impresión necesita bastante menos soporte.
++- Los soportes se quitan con más facilidad: el espacio sigue el material y la altura de capa de cada pieza, también con varios materiales en una placa. La separación sigue la superficie de encima.
++- Si un soporte se apoya en la pieza, Solidon sugiere también una capa de separación debajo para que su pie no deje marcas.
++- Para PETG, Solidon sugiere refrigeración total en el soporte. Así se suelta más fácil de la pieza.
++- Nuevo en los ajustes de impresión: *Capas de separación inferiores*, *Hueco en la capa de separación* y *Refrigeración total en el soporte*.
++- El campo *Espacio superior* se llama ahora *Espacio arriba y abajo* y vale para ambos lados del soporte.
+ 
+ ### Roscas, taladros y piezas normalizadas
+ 
+diff --git a/changelog/fr.md b/changelog/fr.md
+index 67d78c651..c6a25558b 100644
+--- a/changelog/fr.md
++++ b/changelog/fr.md
+@@ -55,6 +55,11 @@ dans `website/version.json`.
+ - Là où les supports sous de petits surplombs reposent sur le modèle, Solidon propose des supports arborescents. Ils y laissent moins de traces.
+ - Pour les petites pointes, Solidon propose une *Vitesse minimale de ralentissement* plus basse afin qu'elles ne ramollissent pas. Le réglage parvient à chaque slicer.
+ - Les rebords étroits qui se portent seuls restent libres avec *Rebords sans support*. L'impression demande ainsi nettement moins de support.
++- Les supports se retirent plus facilement : l'espace suit le matériau et la hauteur de couche de chaque pièce, même avec plusieurs matériaux sur un plateau. L'interface suit la surface au-dessus.
++- Quand un support repose sur la pièce, Solidon propose aussi une couche d'interface en dessous pour que son pied ne laisse pas de traces.
++- Pour le PETG, Solidon propose un refroidissement complet au support. Il se détache ainsi plus facilement de la pièce.
++- Nouveau dans les réglages d'impression : *Couches d'interface en bas*, *Écart dans l'interface* et *Refroidissement complet au support*.
++- Le champ *Espace au-dessus* s'appelle désormais *Espace dessus et dessous* et vaut pour les deux côtés du support.
+ 
+ ### Filetages, perçages et pièces normalisées
+ 
+diff --git a/changelog/it.md b/changelog/it.md
+index 25e73ead2..1780cf23f 100644
+--- a/changelog/it.md
++++ b/changelog/it.md
+@@ -54,6 +54,11 @@ scrive in `website/version.json`.
+ - Dove i supporti sotto piccoli sbalzi poggiano sul modello, Solidon suggerisce supporti ad albero. Lì lasciano meno segni.
+ - Sulle punte piccole Solidon suggerisce una *Velocità minima di rallentamento* più bassa, così non si ammorbidiscono. L'impostazione arriva a ogni slicer.
+ - I bordi stretti che si reggono da soli restano liberi con *Bordi senza supporto*. La stampa richiede così molto meno supporto.
++- I supporti si staccano più facilmente: lo spazio segue materiale e altezza dello strato di ogni pezzo, anche con più materiali su un piatto. L'interfaccia segue la superficie sopra.
++- Se un supporto poggia sul pezzo, Solidon suggerisce anche uno strato di interfaccia sotto, così il suo piede non lascia segni.
++- Per il PETG Solidon suggerisce il raffreddamento pieno sul supporto. Così si stacca più facilmente dal pezzo.
++- Nuovo nelle impostazioni di stampa: *Strati di interfaccia inferiori*, *Spazio nell'interfaccia* e *Raffreddamento pieno sul supporto*.
++- Il campo *Spazio verso l'alto* ora si chiama *Spazio sopra e sotto* e vale per entrambi i lati del supporto.
+ 
+ ### Filettature, fori e componenti normalizzati
+ 
+diff --git a/changelog/pt.md b/changelog/pt.md
+index 47d8d0911..e41a2c459 100644
+--- a/changelog/pt.md
++++ b/changelog/pt.md
+@@ -54,6 +54,11 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
+ - Onde os suportes sob pequenas saliências assentam no modelo, o Solidon sugere suportes em árvore. Aí deixam menos marcas.
+ - Em pontas pequenas, o Solidon sugere uma *Velocidade mínima ao abrandar* mais baixa para que não amoleçam. A definição chega a qualquer slicer.
+ - Os rebordos estreitos que se sustentam sozinhos ficam livres com *Rebordos sem suporte*. Assim a impressão precisa de bem menos suporte.
++- Os suportes saem com mais facilidade: a distância segue o material e a altura de camada de cada peça, também com vários materiais numa placa. A camada de separação segue a superfície acima.
++- Se um suporte assenta na peça, o Solidon sugere também uma camada de separação por baixo, para que o seu pé não deixe marcas.
++- Para PETG, o Solidon sugere arrefecimento total no suporte. Assim solta-se mais facilmente da peça.
++- Novo nas definições de impressão: *Camadas de separação inferiores*, *Folga na camada de separação* e *Arrefecimento total no suporte*.
++- O campo *Distância acima* chama-se agora *Distância acima e abaixo* e vale para os dois lados do suporte.
+ 
+ ### Roscas, furos e peças normalizadas
+ 
+diff --git a/konzepte/begruendungen/regel-druckrat.md b/konzepte/begruendungen/regel-druckrat.md
+index 12be3e847..9c9741e18 100644
+--- a/konzepte/begruendungen/regel-druckrat.md
++++ b/konzepte/begruendungen/regel-druckrat.md
+@@ -459,19 +459,42 @@ Ein Projektmaterial gibt es dafür nicht (Robert, 08.10.2026: „immer nach dem
+ verwendeten Material“) — PLA und PETG auf einer Platte brauchen verschiedene
+ Abstände, deshalb gehen Abstand und Trennschichten je Teil und der Lüfter je
+ Spule. Gemessen an zwei gestützten Stufenkörpern auf einer Platte, einer mit
+-Objektwerten (`.claude/.state/drache-2026-10-08/kontakt_je_teil.py`): In allen
+-acht Programmen kommen Abstand (0,4 gegen 0,2 mm), obere und untere
+-Trennschichten und die Lücke (gut ein Drittel weniger Bahn je Ebene) am
+-richtigen Körper an; Cura nimmt die Lücke nur für die ganze Platte, denn ihr
+-Linienabstand gehört dem Stützextruder. Mit dem echten Rat bekommt das
+-PLA-Teil 0,2 und das PETG-Teil 0,28 mm. **Die Orca-Familie rundet den Abstand
++Objektwerten (`.claude/.state/drache-2026-10-08/kontakt_je_teil.py`, Lagen je
++Höhe gezählt, Raster 2 mm, Bambus Übergangslage als Stütze): Der Abstand oben
++kommt in allen acht Programmen an, 0,4 mm gegen 0,2 am Bezug (Anycubic 0,1;
++SuperSlicer bei 0,15er Schichten 0,53 gegen 0,33). Die Trennschichten kommen
++wie geschrieben an, Prusa und Cura genau (geschrieben 5 oben und 0 unten gegen
++2 und 2). Die Orca-Familie zählt anders: oben eine Übergangslage mehr (Orca,
++Elegoo, Creality und Anycubic 6 gegen 3), unten die Kontaktlage dazu (Bezug 3
++statt 2; Bambu druckt sie bei null als gewöhnliche Stütze,
++`SupportCommon.cpp`). Das Herstellerprofil meint dieselbe Zählung, also gleicht
++Solidon nichts aus. Die weite Lücke legt je Ebene deutlich weniger Bahn (Orca
++1044 gegen 1617 mm, Prusa 944 gegen 2512); Cura nimmt sie nur für die ganze
++Platte, denn ihr Linienabstand gehört dem Stützextruder. Mit dem echten Rat
++bekommt das PLA-Teil 0,2 und das PETG-Teil 0,28 mm. **Die Orca-Familie rundet den Abstand
+ auf ganze Schichten, wenn die Stütze die Schichthöhe des Modells hat**
+ (`Slicing.cpp`), und Elegoos Prozesse für C2 und CC2 stellen es so ein: Aus
+ 0,28 wurden im ElegooSlicer 0,2. Setzt Solidon einen Abstand zwischen zwei
+ Schichten, schaltet die Übergabe `independent_support_layer_height` ein; der
+ ElegooSlicer druckt dann 0,28. Mit zwei Filamenten baut die Orca-Familie einen
+ Reinigungsturm und schaltet die eigene Höhe selbst wieder ab
+-(`PrintConfig.cpp`, `normalize_fdm`) — Orca, Elegoo, Creality und Bambu
++(`PrintConfig.cpp`, `normalize_fdm_2`; „je Objekt“ mit mehreren Objekten baut
++keinen, glatter Zeitraffer immer einen) — Orca, Elegoo, Creality und Bambu
+ druckten das PETG-Teil neben PLA mit 0,2, PrusaSlicer mit 0,28. Der Export
+-sagt das, statt still zu runden. Cura rundet immer, deshalb rät Solidon dort
+-in ganzen Schichten.
++sagt das, statt still zu runden, und dann nur das: Dass die eigene Höhe gilt,
++stimmt mit Turm nicht. Der Schalter richtet sich nach den
++geschriebenen Abständen, nicht nach den Zielen aller Spulen, und steht er gegen
++den Herstellerprozess, sagt es ein Befund: Die Stütze liegt dann auch auf
++eigenen Höhen (0,47, 0,75, 1,02 mm statt nur auf denen des Modells). Cura
++rechnet immer in ganzen Schichten, deshalb rät Solidon dort das Vielfache im
++Band des Materials — bei 0,08 mm Schicht für PLA zwei Schichten statt einer
++unter dem Minimum —, und die Cura-Grundlage trägt es auch: Solidons 0,2 war
++bei 0,28 und 0,12 mm Schicht keines, und jede Übergabe in Entwurf und Fein
++warnte, auch ohne Stützen. Über mehrere Körper führt der Druckdialog den
++Stützkontakt getrennt zusammen und fragt ihn wie der Export gegen die
++Grundlage: Gegen die Übernahme gefragt, brachte jedes Übernehmen die
++Gegenzeile (Tisch 0,2, Kinn 0,5 und zurück; PLA 0,15, PETG 0,21 und zurück),
++und nach dem größten Wert verschwand die Zeile des PLA-Teils ganz. Ein vor
++0.6.0 kalibriertes Material kennt die neuen Werte nicht und bekommt sie aus
++dem mitgelieferten Eintrag, wie die Druckeinstellungen je Eintrag. Für TPU nennt
++keine Quelle einen Abstand; ohne Werte bleibt er beim Hersteller.
+diff --git a/tests/data/superslicer_3mf_keys.json b/tests/data/superslicer_3mf_keys.json
+index e612fbea2..889e80012 100644
+--- a/tests/data/superslicer_3mf_keys.json
++++ b/tests/data/superslicer_3mf_keys.json
+@@ -1,7 +1,7 @@
+ {
+  "program": "superslicer",
+  "version": "2.5.59.13",
+- "source": "Gemessen je Schlüssel der Prusa-Beilage (Slic3r_PE.config) gegen einen Fantasieschlüssel: Der 3MF-Leser stürzt ab zwei unbekannten Schlüsseln ab (G-Code-Gegenprüfung 02.10.2026, RM-459). top_fill_pattern und bottom_fill_pattern nachgemessen: prusa-mini mit Bündelkette schneidet mit beiden durch (02.10.2026).",
++ "source": "Gemessen je Schlüssel der Prusa-Beilage (Slic3r_PE.config) gegen einen Fantasieschlüssel: Der 3MF-Leser stürzt ab zwei unbekannten Schlüsseln ab (G-Code-Gegenprüfung 02.10.2026, RM-459). top_fill_pattern und bottom_fill_pattern nachgemessen: prusa-mini mit Bündelkette schneidet mit beiden durch (02.10.2026). support_material_bottom_contact_distance und support_material_interface_fan_speed stehen im eigenen Konfigurationsblock von 2.5.59.13; den unteren Abstand als Objektwert schnitt SuperSlicer ohne Absturz (Kontaktsonde, 08.10.2026, RM-583).",
+  "known": [
+   "avoid_crossing_perimeters",
+   "bed_shape",
+@@ -203,6 +203,7 @@
+   "support_material",
+   "support_material_angle",
+   "support_material_auto",
++  "support_material_bottom_contact_distance",
+   "support_material_bottom_interface_layers",
+   "support_material_buildplate_only",
+   "support_material_contact_distance",
+@@ -211,6 +212,7 @@
+   "support_material_extrusion_width",
+   "support_material_interface_contact_loops",
+   "support_material_interface_extruder",
++  "support_material_interface_fan_speed",
+   "support_material_interface_layers",
+   "support_material_interface_spacing",
+   "support_material_interface_speed",
+diff --git a/tests/test_cache.py b/tests/test_cache.py
+index 7abd53c53..84512c904 100644
+--- a/tests/test_cache.py
++++ b/tests/test_cache.py
+@@ -391,6 +391,7 @@ _MATERIAL_FIELDS_NO_OPERATION_READS: dict[str, str] = {
+     "support_gap_factor": "Druckrat und Slicerübergabe, keine Geometrie",
+     "support_gap_min": "Druckrat und Slicerübergabe, keine Geometrie",
+     "support_gap_max": "Druckrat und Slicerübergabe, keine Geometrie",
++    "support_interface_cooling": "Druckrat und Slicerübergabe, keine Geometrie",
+ }
+ 
+ 
+diff --git a/tests/test_calibration.py b/tests/test_calibration.py
+index fc4bce94e..3b7215183 100644
+--- a/tests/test_calibration.py
++++ b/tests/test_calibration.py
+@@ -145,6 +145,40 @@ def test_a_measurement_lands_in_the_material_profile(own_profiles: Path) -> None
+     assert (own_profiles / "materials.toml").is_file()
+ 
+ 
++@pytest.mark.parametrize("material", ["pla", "petg"])
++def test_an_older_calibration_keeps_the_shipped_support_values(
++    own_profiles: Path, material: str
++) -> None:
++    """Eine Kalibrierung von vor 0.6.0 kennt den Stützabstand nicht (RM-583).
++
++    Der eigene Eintrag ersetzte den mitgelieferten als Ganzes, und seit ein
++    fehlender Wert „unbekannt" heißt, bekam gerade wer kalibriert hatte weder
++    Abstandsrat noch Kontaktkühlung. Was dem eigenen Eintrag fehlt, kommt aus
++    dem mitgelieferten derselben Kennung; was er trägt, gilt.
++    """
++    shipped = profiles.material(material)
++    assert shipped.support_gap_factor is not None
++    own_profiles.mkdir(parents=True, exist_ok=True)
++    older = {
++        name: value
++        for name, value in dataclasses.asdict(shipped).items()
++        if name != "id" and value is not None and not name.startswith("support_")
++    }
++    older.update(clearance=0.18, calibrated=True)
++    text = calibration._as_toml({material: older})
++    (own_profiles / calibration.USER_MATERIALS).write_text(text, encoding="utf-8")
++    profiles.reload()
++
++    calibrated = profiles.material(material)
++
++    assert calibrated.calibrated
++    assert calibrated.clearance == pytest.approx(0.18)
++    assert calibrated.support_gap_factor == pytest.approx(shipped.support_gap_factor)
++    assert calibrated.support_gap_min == pytest.approx(shipped.support_gap_min)
++    assert calibrated.support_gap_max == pytest.approx(shipped.support_gap_max)
++    assert calibrated.support_interface_cooling is shipped.support_interface_cooling
++
++
+ @pytest.mark.parametrize("stage", ["write", "fsync", "replace"])
+ def test_a_failed_calibration_preserves_the_previous_file(
+     own_profiles: Path, monkeypatch: pytest.MonkeyPatch, stage: str
+diff --git a/tests/test_export.py b/tests/test_export.py
+index d559be42f..3c3712804 100644
+--- a/tests/test_export.py
++++ b/tests/test_export.py
+@@ -2611,6 +2611,21 @@ def test_every_flavour_answers_every_property() -> None:
+         # die Orca-Familie selbst; ein Tempodeckel als Vorschlag ändert dort
+         # nichts am Druck (Gesamtprüfung, 27.09.2026). Cura liest den Wert nicht.
+         "caps_volumetric_speed": {"prusa": True, "orca": True, "cura": False, "other": False},
++        # CuraEngine rechnet den Stützabstand in ganzen Schichten (RM-583).
++        "support_gap_in_whole_layers": {
++            "prusa": False,
++            "orca": False,
++            "cura": True,
++            "other": False,
++        },
++        # Eine eigene Stützschichthöhe, damit ein Abstand zwischen zwei Schichten
++        # gilt: nur die Orca-Familie (``independent_support_layer_height``).
++        "has_independent_support_layers": {
++            "prusa": False,
++            "orca": True,
++            "cura": False,
++            "other": False,
++        },
+     }
+     flavours = set(get_args(SlicerFlavour))
+     assert len(flavours) >= 4, f"zu wenige Familien gefunden: {flavours}"
+diff --git a/tests/test_print_settings.py b/tests/test_print_settings.py
+index 21471beae..7ddce6c9d 100644
+--- a/tests/test_print_settings.py
++++ b/tests/test_print_settings.py
+@@ -1249,8 +1249,6 @@ UNREACHABLE: dict[str, dict[str, str]] = {
+         "adhesion.kind": "kennt keine Art, nur die Maße — ``ADHESION_KEYS`` nullt die anderen.",
+         "support.block_channels": "reist als Stützsperre in der 3MF (``AS_GEOMETRY``).",
+         "support.spare_ledges": "reist als Stützsperre in der 3MF (``AS_GEOMETRY``).",
+-        "cooling.support_interface_cooling": "PrusaSlicer kennt keinen Lüfter für die "
+-        "Kontaktschicht; nur SuperSlicer führt ihn.",
+     },
+     "orca": {
+         "adhesion.kind": "in ``brim_type`` enthalten, das die Tabelle schreibt.",
+@@ -3490,6 +3488,71 @@ def test_the_console_gets_the_same_plate_as_the_file(
+     assert processes[0]["enable_support"] in ("0", ["0"])
+ 
+ 
++@pytest.mark.parametrize(
++    ("source", "gap", "freed"),
++    [("file", None, True), ("stl", 0.28, True), ("stl", 0.2, False)],
++)
++def test_the_console_frees_the_support_layers_like_the_file(
++    tmp_path: Path,
++    monkeypatch: pytest.MonkeyPatch,
++    source: str,
++    gap: float | None,
++    freed: bool,
++) -> None:
++    """Der Konsolenlauf schaltet die eigene Stützschichthöhe ein, wo der Export
++    es entschieden hat (RM-583, Nachprüfung L4). Die Beilage einer
++    Solidon-3MF sagt es aus den Werten der Teile; die Platte allein trägt dort
++    die Grundlage von 0,2 mm und hätte nein gesagt. Ohne Beilage gilt der
++    Abstand der Platte."""
++    from app.core.export import writer
++    from app.core.geom.mesh import MeshData
++    from app.core.types import SceneObject
++
++    profile = profiles.make_profile("centauri-carbon-2", "petg")
++    base = print_settings.with_choice(print_settings.resolve(profile), "support.style", "grid")
++    executable = tmp_path / "elegoo-slicer.exe"
++    executable.write_bytes(b"")
++    setup = handover.SlicerSetup(executable=executable, flavour="orca")
++    if source == "file":
++        settings = print_settings.with_accepted(base, "support.z_gap", 0.28)
++        objects = [
++            SceneObject(
++                id=f"teil-{index}",
++                name=f"Teil {index}",
++                mesh=MeshData(_supported_table(index)),
++                material="petg",
++            )
++            for index in range(2)
++        ]
++        model, _findings = writer.write_assembly(
++            objects,
++            tmp_path,
++            project_name="petg",
++            profile=profile,
++            settings=settings,
++            flavour="orca",
++            setup=setup,
++        )
++    else:
++        settings = print_settings.with_choice(base, "support.z_gap", gap)
++        model = tmp_path / "model.stl"
++        model.write_bytes(b"solid x\nendsolid x\n")
++    processes: list[dict[str, object]] = []
++
++    def run(command: list[str], *args: object, **kwargs: object) -> _Finished:
++        path = Path(command[command.index("--load-settings") + 1].split(";")[-1])
++        processes.append(json.loads(path.read_text(encoding="utf-8")))
++        target = Path(command[command.index("--outputdir") + 1])
++        (target / "plate_1.gcode").write_text(_gcode_printing_at(1.0, 5.0), encoding="utf-8")
++        return _Finished(b"")
++
++    monkeypatch.setattr(handover, "_run_slicer", run)
++    handover.slice_model(model, settings, profile, setup)
++
++    assert processes
++    assert (processes[0].get("independent_support_layer_height") == "1") is freed
++
++
+ def test_an_unknown_arrange_flag_falls_back_and_reports(
+     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+ ) -> None:
+@@ -6994,9 +7057,6 @@ UNREACHED: Final[dict[tuple[str, str], str]] = {
+         "Reist als eigenes Netz mit ``anti_overhang_mesh`` neben den Teilen "
+         "(``slicer_keys.takes_mesh_settings``); ``test_export`` prüft die Netzliste."
+     ),
+-    ("cooling.support_interface_cooling", "prusa"): (
+-        "PrusaSlicer kennt keinen Lüfter für die Kontaktschicht; nur SuperSlicer führt ihn."
+-    ),
+     ("support.interface_spacing", "cura"): (
+         "Wirkt bei Cura, sobald die Lücke gewählt oder übernommen ist; ohne Wahl bleibt die "
+         "Trennschicht zu einem Drittel dicht wie bei Creality und Elegoo "
+@@ -8723,6 +8783,47 @@ def test_the_support_gap_reaches_both_sides_and_curas_bottom_stands_alone() -> N
+     assert float(distance) == pytest.approx(settings.layers.line_width + 0.2)
+ 
+ 
++def test_a_spool_prints_the_material_of_its_chosen_profile(
++    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
++) -> None:
++    """Roberts Drache kam mit PLA-Spulen aus seiner Datei. Gibt der Kunde der
++    Spule ein PETG-Profil, druckt sie PETG — und der Rat fragt PETG, nicht die
++    Herkunft der Datei (RM-583; Robert: „immer nach dem verwendeten Material“)."""
++    from app.core.export import threemf
++    from app.core.geom.mesh import MeshData
++    from app.core.types import MaterialSlot, SceneObject
++
++    source = tmp_path / "Elegoo PETG.json"
++    source.write_text(
++        json.dumps({"type": "filament", "name": "Elegoo PETG", "filament_type": ["PETG"]}),
++        encoding="utf-8",
++    )
++    chosen = slicer_profiles.SlicerProfile(
++        path=source, name="Elegoo PETG", kind="filament", filament_type="PETG"
++    )
++    monkeypatch.setattr(handover, "profile_source", lambda name, _setup, _kind: chosen)
++    profile = profiles.make_profile("centauri-carbon-2", "pla")
++    slot = MaterialSlot(index=0, name="Drache", material="Elegoo PLA", material_type="PLA")
++    body = SceneObject(
++        id="drache",
++        name="Drache",
++        mesh=MeshData(trimesh.creation.box(extents=(10.0, 10.0, 10.0))),
++        material_slots=(slot,),
++    )
++    setup = handover.SlicerSetup(executable=Path("elegoo-slicer.exe"), flavour="orca")
++
++    assert handover.slot_material_type(slot, None) == "PLA", "ohne Slicer die Spule"
++    assert handover.slot_material_type(slot, setup) == "PETG"
++    processes = handover.slot_processes(
++        body,
++        print_settings.resolve(profile),
++        profile,
++        setup,
++        {threemf.slot_identity(slot): "Elegoo PETG"},
++    )
++    assert [process.profile.material.id for process in processes] == ["petg"]
++
++
+ def test_the_contact_cooling_belongs_to_its_spool(tmp_path: Path) -> None:
+     """Die volle Kühlung an der Trennschicht hängt am Material (RM-583): Die
+     PETG-Spule bekommt sie in ihrer Filamentdatei, die PLA-Spule daneben nicht."""
+@@ -8756,30 +8857,22 @@ def test_the_contact_cooling_belongs_to_its_spool(tmp_path: Path) -> None:
+ def test_a_gap_between_layers_frees_the_support_layers(tmp_path: Path) -> None:
+     """Ohne eigene Stützschichthöhe rundet die Orca-Familie den Stützabstand auf
+     ganze Schichten, und Elegoos CC2-Prozess schaltet sie ab: aus 0,28 mm für
+-    PETG wurden im ElegooSlicer 0,2 (RM-583). Setzt Solidon einen Abstand
+-    zwischen zwei Schichten, schaltet die Übergabe sie ein — auch wenn ihn nur
+-    ein Teil nach dem Material seiner Spule bekommt."""
+-    from app.core.types import MaterialSlot
+-
++    PETG wurden im ElegooSlicer 0,2 (RM-583). Gefragt wird an dem, was Solidon
++    schreibt — dem Abstand der Platte, wo Solidon ihn setzt, und den
++    Objektwerten der Teile."""
+     profile = profiles.make_profile("centauri-carbon-2", "pla")
+     base = print_settings.resolve(profile)
+-    petg = (MaterialSlot(index=0, name="Deckel", material_type="PETG"),)
+-    pla = (MaterialSlot(index=0, name="Gehäuse", material_type="PLA"),)
++    gaps = handover.written_support_gaps
+     frees = handover.frees_support_layers
+ 
+-    assert not frees(base, profile, (), "orca"), (
+-        "der Hersteller bleibt, solange Solidon nichts setzt"
+-    )
++    assert gaps(base) == [], "den Abstand des Herstellers schreibt Solidon nicht"
+     between = print_settings.with_accepted(base, "support.z_gap", 0.28)
+-    assert frees(between, profile, (), "orca")
+-    assert not frees(between, profile, (), "cura"), "Cura bekommt ganze Schichten"
+-    whole = print_settings.with_choice(base, "support.z_gap", 0.4)
+-    assert not frees(whole, profile, (), "orca")
+-    # Je Teil: Der übernommene Abstand der Platte ist eine ganze Schicht, PETG
+-    # verlangt 0,28.
+-    accepted = print_settings.with_accepted(base, "support.z_gap", 0.2)
+-    assert frees(accepted, profile, petg, "orca")
+-    assert not frees(accepted, profile, pla, "orca")
++    assert gaps(between) == [pytest.approx(0.28)]
++    assert frees(gaps(between), 0.2, "orca")
++    assert not frees(gaps(between), 0.2, "cura"), "Cura bekommt ganze Schichten"
++    assert not frees([0.4, 0.2], 0.2, "orca")
++    object_values = [{"support_top_z_distance": "0.28", "support_bottom_z_distance": "0.28"}]
++    assert frees(gaps(base, object_values), 0.2, "orca"), "auch ein Objektwert"
+ 
+     setup = handover.SlicerSetup(executable=Path("orca-slicer.exe"), flavour="orca")
+     written = handover.write_config(base, profile, setup, tmp_path, free_support_layers=True)
+@@ -8790,33 +8883,164 @@ def test_a_gap_between_layers_frees_the_support_layers(tmp_path: Path) -> None:
+     assert "independent_support_layer_height" not in handover.project_settings(base, profile, setup)
+ 
+ 
+-@pytest.mark.parametrize(("second", "rounded"), [("petg", True), ("pla", False)])
++@pytest.mark.parametrize(("native", "said"), [("0", True), ("1", False), (None, False)])
++def test_freed_support_layers_are_said_where_the_maker_had_them_off(
++    monkeypatch: pytest.MonkeyPatch, native: str | None, said: bool
++) -> None:
++    """Die eigene Stützschichthöhe ändert mehr als den Abstand: Die Stütze liegt
++    dann auch auf eigenen Höhen. Schaltet Solidon sie gegen den Herstellerprozess
++    ein, erfährt der Kunde es mit dem Grund (RM-583, Review)."""
++    values = {} if native is None else {"independent_support_layer_height": native}
++    monkeypatch.setattr(handover, "_native_process", lambda _setup: values)
++    setup = handover.SlicerSetup(executable=Path("elegoo-slicer.exe"), flavour="orca")
++
++    codes = {entry.code for entry in handover.support_layers_findings(setup, free=True)}
++
++    assert ("slicer.support_layers_freed" in codes) is said
++    assert not handover.support_layers_findings(setup, free=False)
++
++
++def test_cura_says_that_it_counts_the_gap_in_whole_layers() -> None:
++    """Cura rechnet den Stützabstand in ganzen Schichten; ein Wert dazwischen
++    bekommt einen Satz am Feld und bei der Übergabe (RM-583, Review)."""
++    profile = profiles.make_profile("centauri-carbon-2", "pla")
++    base = print_settings.with_choice(print_settings.resolve(profile), "support.style", "grid")
++    between = print_settings.with_choice(base, "support.z_gap", 0.28)
++    whole = print_settings.with_choice(base, "support.z_gap", 0.4)
++    unsupported = print_settings.with_choice(between, "support.style", "none")
++
++    assert "support.z_gap" in slicer_keys.LIMITED["cura"]
++    said = slicer_keys.limitation("cura", "support.z_gap", between)
++    assert said is not None and "Abstand oben und unten" in str(said), said
++    assert slicer_keys.limitation("cura", "support.z_gap", whole) is None
++    assert slicer_keys.limitation("orca", "support.z_gap", between) is None
++    assert slicer_keys.limitation("cura", "support.z_gap", unsupported) is None, (
++        "ohne Stützen druckt der Abstand nichts"
++    )
++    finding = next(
++        entry
++        for entry in handover.setting_limitations("cura", between)
++        if entry.values.get("path") == "support.z_gap"
++    )
++    assert [action.id for action in finding.suggestions] == ["open_print_settings"]
++    assert finding.values["field"] == "support.z_gap", "die Handlung öffnet das Feld"
++
++
++@pytest.mark.parametrize("quality", ["draft", "standard", "fine", "strong"])
++@pytest.mark.parametrize("printer", ["sovol-sv06", "centauri-carbon-2"])
++@pytest.mark.parametrize("material", ["pla", "petg", "tpu-95a"])
++def test_cura_gets_a_gap_in_whole_layers_from_its_foundation(
++    quality: str, printer: str, material: str
++) -> None:
++    """Cura rechnet den Stützabstand in ganzen Schichten. Solidons Vorgabe von
++    0,2 mm war bei 0,28 und 0,12 mm Schicht keine, und jede Übergabe in
++    Entwurf und Fein warnte, auch ohne Stützen (RM-583, Nachprüfung M2). Die
++    Grundlage trägt jetzt das Vielfache, das zum Material passt."""
++    from app.core.export import manufacturer
++
++    profile = profiles.make_profile(printer, material)
++    setup = handover.SlicerSetup(executable=Path("CuraEngine.exe"), flavour="cura")
++    foundation = manufacturer.base_settings(profile, quality, setup).settings
++    supported = print_settings.with_choice(foundation, "support.style", "grid")
++
++    layer = foundation.layers.layer_height
++    steps = foundation.support.z_gap / layer
++    assert steps >= 1.0 - 1e-9 and math.isclose(steps, round(steps), abs_tol=1e-6), (
++        foundation.support.z_gap,
++        layer,
++    )
++    for settings in (foundation, supported):
++        assert not [
++            entry
++            for entry in handover.setting_limitations("cura", settings)
++            if entry.values.get("path") == "support.z_gap"
++        ]
++
++
++def _supported_table(index: int) -> trimesh.Trimesh:
++    """Sockel, Säule und Platte darüber: Die Stütze steht auf dem Sockel."""
++    parts = []
++    for extents, z in (
++        ((30.0, 30.0, 3.0), 1.5),
++        ((8.0, 8.0, 10.2), 8.0),
++        ((30.0, 30.0, 2.0), 14.0),
++    ):
++        brick = trimesh.creation.box(extents=extents)
++        brick.apply_translation([index * 45.0, 0.0, z])
++        parts.append(brick)
++    return trimesh.boolean.union(parts, engine="manifold")
++
++
++_TOWER = {"enable_prime_tower": "1"}
++_ELEGOO = {"enable_prime_tower": "1", "independent_support_layer_height": "0"}
++
++
++@pytest.mark.parametrize(
++    ("materials", "native", "said"),
++    [
++        (("pla", "petg"), _TOWER, {"export.support_gap_rounded"}),
++        (("pla", "petg"), {"enable_prime_tower": "0"}, set()),
++        (("petg", "petg"), _TOWER, set()),
++        (("pla", "pla"), _TOWER, set()),
++        # Je Objekt mit mehreren Objekten fällt der Turm weg (``normalize_fdm_2``).
++        (("pla", "petg"), {**_TOWER, "print_sequence": "by object"}, set()),
++        # Glatter Zeitraffer baut ihn auch bei einem Filament.
++        (("petg", "petg"), {**_TOWER, "timelapse_type": "1"}, {"export.support_gap_rounded"}),
++        # Wo der Turm die eigene Höhe wieder abschaltet, kein Satz, dass sie gilt.
++        (("pla", "petg"), _ELEGOO, {"export.support_gap_rounded"}),
++        (("petg", "petg"), _ELEGOO, {"slicer.support_layers_freed"}),
++    ],
++)
+ def test_a_mixed_plate_says_that_the_gap_is_rounded(
+-    tmp_path: Path, second: str, rounded: bool
++    tmp_path: Path,
++    monkeypatch: pytest.MonkeyPatch,
++    materials: tuple[str, str],
++    native: dict[str, str],
++    said: set[str],
+ ) -> None:
+     """Mit PLA und PETG auf einer Platte baut die Orca-Familie einen
+     Reinigungsturm und schaltet die eigene Stützschichthöhe wieder ab: Im
+     ElegooSlicer bekam das PETG-Teil 0,2 statt 0,28 mm (RM-583). Der Export
+-    sagt es, statt still zu runden; zweimal PLA rundet nichts."""
+-    from app.core.export import writer
++    sagt es, statt still zu runden — nur mit Turm, und nur, wenn ein
++    geschriebener Abstand keine ganze Schicht ist (zwei Farben PLA). Ein Satz,
++    dass die eigene Höhe gilt, kommt dann nicht dazu. Die Beilage trägt den
++    Schalter, und der Konsolenlauf liest ihn dort."""
++    import zipfile
++
++    from app.core.export import threemf, writer
+     from app.core.geom.mesh import MeshData
+-    from app.core.types import SceneObject
++    from app.core.types import MaterialSlot, SceneObject
+ 
++    monkeypatch.setattr(handover, "_native_process", lambda _setup: native)
+     profile = profiles.make_profile("centauri-carbon-2", "pla")
+-    base = print_settings.resolve(profile)
+-    settings = print_settings.with_accepted(base, "support.z_gap", 0.2)
+-    objects = []
+-    for index, material in enumerate(("pla", second)):
+-        block = trimesh.creation.box(extents=(20.0, 20.0, 10.0))
+-        block.apply_translation([index * 30.0, 0.0, 5.0])
+-        objects.append(
+-            SceneObject(
+-                id=f"teil-{index}", name=f"Teil {index}", mesh=MeshData(block), material=material
++    base = print_settings.with_choice(print_settings.resolve(profile), "support.style", "grid")
++    # Übernommen, was der Dialog anbietet: 0,28 nur, wo ein Teil PETG ist.
++    settings = (
++        print_settings.with_accepted(base, "support.z_gap", 0.28) if "petg" in materials else base
++    )
++    colours = ((1.0, 0.0, 0.0), (0.0, 0.0, 1.0))
++    objects = [
++        SceneObject(
++            id=f"teil-{index}",
++            name=f"Teil {index}",
++            mesh=MeshData(_supported_table(index)),
++            material=material,
++            material_slots=(
++                MaterialSlot(
++                    index=0,
++                    name=f"Spule {index}",
++                    colour=colours[index],
++                    material_type=material.upper(),
++                ),
+             )
++            if materials == ("pla", "pla")
++            else (),
+         )
++        for index, material in enumerate(materials)
++    ]
+     setup = handover.SlicerSetup(executable=Path("orca-slicer.exe"), flavour="orca")
+ 
+-    _path, findings = writer.write_assembly(
++    path, findings = writer.write_assembly(
+         objects,
+         tmp_path,
+         project_name="gemischt",
+@@ -8826,4 +9050,10 @@ def test_a_mixed_plate_says_that_the_gap_is_rounded(
+         setup=setup,
+     )
+ 
+-    assert ("export.support_gap_rounded" in {entry.code for entry in findings}) is rounded
++    codes = {entry.code for entry in findings}
++    assert codes & {"export.support_gap_rounded", "slicer.support_layers_freed"} == said
++    freed = "petg" in materials
++    with zipfile.ZipFile(path) as archive:
++        project = json.loads(archive.read(threemf.PROJECT_SETTINGS_PATH))
++    assert (project.get("independent_support_layer_height") == "1") is freed
++    assert (handover._frees_in_project([path]) is True) is freed
+diff --git a/tests/test_print_settings_ui.py b/tests/test_print_settings_ui.py
+index 16ce71f8c..960158634 100644
+--- a/tests/test_print_settings_ui.py
++++ b/tests/test_print_settings_ui.py
+@@ -10224,6 +10224,24 @@ def test_measures_of_other_bed_types_are_hidden_and_do_not_lock_slicing(
+         assert not editor.refusal() or dialog._first_numeric_refusal() == ""
+ 
+ 
++@pytest.mark.parametrize("style", ["none", "tree"])
++def test_the_contact_cooling_row_follows_the_supports(
++    dialog: PrintSettingsDialog, style: str
++) -> None:
++    """Die volle Kühlung an der Stütze steht unter „Kühlung“, gehört aber zu den
++    Stützdetails: Ohne Stützen verschwindet sie dort (RM-583, Review). Gefragt
++    wurde das Formular der Stützen, Qt meldete „Invalid widget“, und die Zeile
++    blieb stehen."""
++    selector = dialog._editors["support.style"]
++    assert isinstance(selector, QComboBox)
++    selector.setCurrentIndex(selector.findData(style))
++    dialog._update_inactive_setting_rows()
++
++    path = "cooling.support_interface_cooling"
++    form = dialog._tab_forms["cooling"]
++    assert form.isRowVisible(dialog._labels[path]) is (style != "none")
++
++
+ #: Der Schlüssel, an dem jede Haftungsart im Slicer wirkt, und die Felder, die
+ #: dazugehören — von außen, aus den Schlüsselnamen der drei Familien.
+ _ADHESION_EFFECT: dict[str, dict[str, tuple[str, ...]]] = {
+@@ -11085,6 +11103,81 @@ def test_the_advice_worker_names_who_gets_an_accepted_suggestion(qt_app: QApplic
+     assert worker._accepted_targets(results) == {"adhesion.kind": ("Turm",)}
+ 
+ 
++@pytest.mark.parametrize("flavour", ["orca", "cura"])
++@pytest.mark.parametrize("case", ["ceilings", "materials"])
++def test_the_contact_rows_settle_in_the_dialog(
++    qt_app: QApplication, flavour: str, case: str
++) -> None:
++    """Der Rat zum Stützkontakt kommt nach einmal Übernehmen zur Ruhe (RM-583, H1).
++
++    Gegen die Übernahme gefragt, brachte jedes Übernehmen die Gegenzeile: am
++    Tisch die dichte Trennschicht, am Kinn die lockere und wieder zurück, bei
++    PLA und PETG der Abstand ebenso. Der Arbeiter fragt jetzt wie der Export
++    gegen die Grundlage, und die Zeile nennt nur das Teil, das ihren Wert
++    bekommt — nicht jedes, das einen anderen verlangt.
++    """
++    from app.core.slice import advise
++    from app.core.types import PrintSettings
++    from tests.test_slice_findings import chin_over_chest, table
++
++    profile = profiles.make_profile("centauri-carbon-2", "pla")
++    settings = print_settings.resolve(profile, "standard")
++    if case == "ceilings":
++        chosen: tuple[tuple[str, object], ...] = (
++            ("support.interface_spacing", 0.2),
++            ("support.interface_layers", 3),
++            ("support.bottom_interface_layers", 2),
++        )
++        objects = (
++            SceneObject(id="obj_1", name="Tisch", mesh=table()),
++            SceneObject(id="obj_2", name="Kinn", mesh=chin_over_chest()),
++        )
++        named: dict[str, tuple[str, ...]] = {
++            "support.interface_layers": ("Kinn",),
++            "support.interface_spacing": ("Kinn",),
++        }
++    else:
++        # PLA verlangt 0,15, PETG 0,21: Die Zeile zeigt den größeren Wert und
++        # nennt nur das Teil, das ihn bekommt.
++        chosen = (("layers.layer_height", 0.15), ("support.z_gap", 0.3))
++        objects = (
++            SceneObject(id="obj_1", name="PLA-Tisch", mesh=table(), material="pla"),
++            SceneObject(id="obj_2", name="PETG-Tisch", mesh=table(), material="petg"),
++        )
++        # Die dichte Trennschicht verlangen beide Tische: Sie gilt allen.
++        named = {
++            "support.z_gap": ("PETG-Tisch",),
++            "support.interface_layers": (),
++            "support.interface_spacing": (),
++        }
++    for path, value in chosen:
++        settings = print_settings.with_choice(settings, path, value)
++
++    def rows(current: PrintSettings) -> dict[str, SettingAdvice]:
++        found: list[list[SettingAdvice]] = []
++        worker = print_dialog._AdviceWorker(
++            objects, current, profile, None, {}, (), (), {}, flavour=flavour
++        )
++        worker.done.connect(lambda entries, _measured: found.append(entries))
++        worker.work()
++        assert found, "der Arbeiter liefert"
++        return {entry.path: entry for entry in found[-1] if entry.path in advise.CONTACT_PATHS}
++
++    first = rows(settings)
++    if flavour == "orca":
++        for path, entry in first.items():
++            parts = getattr(entry, "parts", ())
++            assert parts == named[path], (path, parts)
++        assert set(first) == set(named), first
++    elif case == "ceilings":
++        assert "support.interface_spacing" not in first, (
++            "Cura nimmt die Lücke nur für die Platte; die dichte des Tischs gilt allen"
++        )
++    for path, entry in first.items():
++        settings = print_settings.with_accepted(settings, path, entry.value)
++    assert rows(settings) == {}, "nach dem Übernehmen keine Gegenzeile"
++
++
+ def test_the_field_says_which_parts_get_a_suggestion_and_what_the_rest_prints(
+     dialog: PrintSettingsDialog, monkeypatch: pytest.MonkeyPatch
+ ) -> None:
+diff --git a/tests/test_print_time.py b/tests/test_print_time.py
+index cee185ae2..c1a458eea 100644
+--- a/tests/test_print_time.py
++++ b/tests/test_print_time.py
+@@ -840,6 +840,34 @@ def test_the_support_reaches_the_whole_overhang_not_only_beyond_the_angle() -> N
+     assert volume == pytest.approx(1000.0, rel=0.05)
+ 
+ 
++def test_a_chosen_interface_gap_sets_the_contact_density() -> None:
++    """Druckzeit und Stützmenge rechnen mit der Lücke, die Solidon schreibt
++    (RM-583, Review): Elegoos Prozess sagt 0,5 mm, eine dichte Trennschicht
++    0,2 mm legt mehr Material. Ohne Wahl gilt die Dichte des Herstellers."""
++    stem = trimesh.creation.box(extents=(10.0, 10.0, 10.0))
++    stem.apply_translation((0.0, 0.0, 5.0))
++    cap = trimesh.creation.box(extents=(30.0, 30.0, 2.0))
++    cap.apply_translation((0.0, 0.0, 11.0))
++    result = slice_body(
++        MeshData.of(trimesh.boolean.union([stem, cap])),
++        0.2,
++        first_layer_height=0.2,
++        support_volume=False,
++    )
++    settings = _supported(support__interface_layers=3)
++    width = settings.layers.line_width
++    motion = _motion(support_interface_density=width / (width + 0.5))
++    dense = print_settings.with_accepted(settings, "support.interface_spacing", 0.2)
++
++    makers = print_time.support_material(result, settings, motion)
++    chosen = print_time.support_material(result, dense, motion)
++
++    assert chosen > makers * 1.02, "die dichte Trennschicht legt mehr Material"
++    assert print_time.support_material(
++        result, print_settings.with_path(settings, "support.interface_spacing", 0.2), motion
++    ) == pytest.approx(makers), "ein Wert ohne Wahl bleibt beim Hersteller"
++
++
+ def test_the_plate_comparison_takes_its_support_from_the_columns_of_the_time() -> None:
+     """Mit :class:`Motion` rechnet die Gegenprobe die Stützmenge aus denselben
+     Säulen wie die Druckzeit (:func:`print_time.support_material`), nicht aus
+diff --git a/tests/test_rm484_raft_ui.py b/tests/test_rm484_raft_ui.py
+index 4752cc797..0747ba062 100644
+--- a/tests/test_rm484_raft_ui.py
++++ b/tests/test_rm484_raft_ui.py
+@@ -191,7 +191,9 @@ def test_actual_row_refresh_matches_effective_raft_without_supports(monkeypatch,
+         _refusals={},
+         _tab_forms={
+             group: SimpleNamespace(setRowVisible=lambda row, visible: shown.update({row: visible}))
+-            for group in ("support", "adhesion")
++            # Jedes Formular, in dem eine Detailzeile steht: Die volle Kühlung an
++            # der Stütze steht unter „Kühlung“ (RM-583).
++            for group in {fields[path].group for path in rows}
+         },
+         _queue_refit=lambda reason: None,
+     )
+diff --git a/tests/test_slice_findings.py b/tests/test_slice_findings.py
+index 4a2d510ef..b8c523021 100644
+--- a/tests/test_slice_findings.py
++++ b/tests/test_slice_findings.py
+@@ -40,7 +40,7 @@ from app.core.slice.analysis import (
+     support_on_model,
+     worth_support,
+ )
+-from app.core.types import Profile, SliceResult
++from app.core.types import PrintSettings, Profile, SettingAdvice, SliceResult
+ 
+ #: Die Bahnbreite der Vorgabe: Zuschlag und Mindestbreite des Kanalraums.
+ LINE = print_settings.resolve(profiles.make_profile()).layers.line_width
+@@ -1360,8 +1360,8 @@ def test_trees_where_small_overhangs_rest_on_the_model_not_under_a_flat_ceiling(
+         entries = advise.advise(print_settings.resolve(petg()), petg(), slice_body(body, 0.2))
+         return next((entry.value for entry in entries if entry.path == "support.style"), None)
+ 
+-    chin_over_chest = _chin_over_chest()
+-    assert style(chin_over_chest) == "tree", "das Kinn setzt in Streifen auf der Brust auf"
++    figure = chin_over_chest()
++    assert style(figure) == "tree", "das Kinn setzt in Streifen auf der Brust auf"
+     assert style(table()) == "auto", "die Tischplatte ist eine flache Decke"
+     # Auch wenn die flache Decke über dem Bett hängt und nur das Kinn auf dem
+     # Modell aufsetzt: Gefragt ist die Deckenform am Körper (Review vom 08.10.2026).
+@@ -1380,11 +1380,11 @@ def test_trees_where_small_overhangs_rest_on_the_model_not_under_a_flat_ceiling(
+         entries = advise.advise(settings, petg(), slice_body(body, 0.2))
+         return [entry.value for entry in entries if entry.path == "support.style"]
+ 
+-    assert changed(chin_over_chest, "grid") == ["tree"], "auch über einem gewählten Gitter"
++    assert changed(figure, "grid") == ["tree"], "auch über einem gewählten Gitter"
+     assert changed(table(), "grid") == [], "die flache Decke behält ihr Gitter"
+ 
+ 
+-def _chin_over_chest() -> MeshData:
++def chin_over_chest() -> MeshData:
+     """Eine Figur im Kleinen: ein Kinn mit schräger Unterseite über der Brust,
+     dessen Streifen auf dem Modell aufsetzen — kleine, gewölbte Überhänge."""
+     return on_bed(
+@@ -1440,6 +1440,53 @@ def test_the_support_gap_follows_layer_height_and_material() -> None:
+     assert proposed(petg(), 0.32, 0.45) == pytest.approx(0.30), "nie über 0,3 mm bei PETG"
+ 
+ 
++@pytest.mark.parametrize(
++    ("material", "layer", "flavour", "gap"),
++    [
++        ("pla", 0.08, "cura", 0.16),
++        ("petg", 0.10, "cura", 0.20),
++        ("pla", 0.04, "cura", 0.12),
++        ("pla", 0.28, "cura", 0.28),
++        ("pla", 0.20, "cura", 0.20),
++        ("petg", 0.10, "orca", 0.14),
++        ("pla", 0.075, "cura", 0.15),
++    ],
++)
++def test_whole_layers_stay_inside_the_material_band(
++    material: str, layer: float, flavour: str, gap: float
++) -> None:
++    """Wo der Slicer in ganzen Schichten rechnet (Cura), liegt der Abstand
++    innerhalb der Grenzen des Materials: PLA bei 0,08 mm zwei Schichten statt
++    einer unter dem Minimum, PETG bei 0,1 mm 0,2 statt 0,1 (RM-583, Review).
++    Oberhalb des Maximums bleibt eine Schicht. Eine halbe Schicht rundet auf,
++    und ein Wert mit drei Stellen bleibt eine ganze Schicht."""
++    profile = profiles.make_profile("centauri-carbon-2", material)
++    target = advise.support_gap_target(layer, profile.material, flavour)  # type: ignore[arg-type]
++    assert target == pytest.approx(gap)
++    proposed = _support_advice(
++        table(),
++        profile,
++        {"layers.layer_height": layer, "support.z_gap": 0.6},
++        flavour=flavour,
++        paths=("support.z_gap",),
++    )
++    assert proposed["support.z_gap"] == pytest.approx(gap)
++
++
++def test_half_a_layer_rounds_up() -> None:
++    """Liegt das Ziel genau zwischen zwei Schichten, gilt die obere: mehr Luft
++    löst sich sicher, zu wenig klebt. Pythons ``round`` rundete 2,5 Schichten
++    auf zwei ab (RM-583, Nachprüfung L4)."""
++    pla = profiles.make_profile("centauri-carbon-2", "pla").material
++
++    assert advise.support_gap_target(
++        0.05, replace(pla, support_gap_factor=2.5), "cura"
++    ) == pytest.approx(0.15)
++    assert advise.support_gap_target(
++        0.1, replace(pla, support_gap_factor=1.5), "cura"
++    ) == pytest.approx(0.2)
++
++
+ def test_the_interface_follows_the_ceiling_and_where_supports_stand() -> None:
+     """Unter einer großen flachen Decke eine dichte Trennschicht mit drei Lagen,
+     unter kleinen und gewölbten Flächen eine lockere mit zwei; wo die Stütze auf
+@@ -1462,12 +1509,45 @@ def test_the_interface_follows_the_ceiling_and_where_supports_stand() -> None:
+         "support.interface_spacing": 0.2,
+         "support.interface_layers": 3,
+     }, "die Tischplatte ist eine flache Decke"
+-    assert _support_advice(_chin_over_chest(), pla, prusa_like) == {
++    assert _support_advice(chin_over_chest(), pla, prusa_like) == {
+         "support.interface_spacing": 0.5,
+         "support.interface_layers": 2,
+         "support.bottom_interface_layers": 2,
+     }, "das Kinn ist klein und gewölbt und steht auf der Brust"
+-    assert _support_advice(_chin_over_chest(), pla, elegoo_like) == {}, "Elegoo passt dort"
++    assert _support_advice(chin_over_chest(), pla, elegoo_like) == {}, "Elegoo passt dort"
++
++
++def test_without_material_values_the_gap_stays_with_the_maker() -> None:
++    """Für TPU fehlt eine Quelle zum Stützabstand: kein Rat, der Abstand bleibt
++    beim Hersteller. ABS trägt die Werte von PLA aus der Tabelle, volle Kühlung
++    nur PETG — ein eigener Materialwert, nicht der Abstandsfaktor (RM-583,
++    Review)."""
++    tpu = profiles.make_profile("centauri-carbon-2", "tpu-95a")
++    abs_profile = profiles.make_profile("centauri-carbon-2", "abs")
++    gap, cooling = "support.z_gap", "cooling.support_interface_cooling"
++
++    assert advise.support_gap_target(0.2, tpu.material) is None
++    assert gap not in _support_advice(table(), tpu, {gap: 0.6}, paths=(gap,))
++    assert _support_advice(table(), abs_profile, {gap: 0.6}, paths=(gap,)) == {
++        gap: pytest.approx(0.2)
++    }
++    assert cooling not in _support_advice(table(), abs_profile, {}, paths=(cooling,))
++    assert petg().material.support_interface_cooling
++
++
++def test_supports_on_the_bed_need_no_interface_below() -> None:
++    """Untere Trennschichten braucht nur eine Stütze, die auf dem Modell steht
++    (RM-583, Review): Ein Pilz, dessen Stütze auf dem Bett steht, bekommt keine;
++    der Tisch, dessen Stütze auf dem Sockel steht, zwei."""
++    pla = profiles.make_profile("centauri-carbon-2", "pla")
++    bare = {"support.bottom_interface_layers": 0}
++    mushroom = on_bed(
++        brick(10.0, 10.0, 20.0, (0.0, 0.0, 10.0)), brick(40.0, 40.0, 2.0, (0.0, 0.0, 21.0))
++    )
++    below = "support.bottom_interface_layers"
++
++    assert below not in _support_advice(mushroom, pla, bare, paths=(below,))
++    assert _support_advice(table(), pla, bare, paths=(below,)) == {below: 2}
+ 
+ 
+ def test_sticky_material_gets_a_cool_interface() -> None:
+@@ -1479,6 +1559,90 @@ def test_sticky_material_gets_a_cool_interface() -> None:
+     assert _support_advice(table(), pla, {}, paths=(cooling,)) == {}
+ 
+ 
++def _contact_advice(
++    body: MeshData, profile: Profile, values: dict[str, object]
++) -> tuple[PrintSettings, list[SettingAdvice]]:
++    """Der Rat eines Körpers zum Stützkontakt, wie der Druckdialog ihn sammelt."""
++    settings = print_settings.resolve(profile)
++    for path, value in values.items():
++        settings = print_settings.with_path(settings, path, value)
++    entries = advise.advise(settings, profile, slice_body(body, 0.2))
++    return settings, [entry for entry in entries if entry.path in advise.CONTACT_PATHS]
++
++
++def test_a_body_that_differs_keeps_its_contact_row() -> None:
++    """PLA will bei 0,15 mm Schicht 0,15 mm Abstand, PETG ist mit 0,2 zufrieden;
++    das Kinn will eine lockere Trennschicht, der Tisch die dichte der Platte. Nach
++    dem größten Wert zusammengeführt verschwand die Zeile, und kein Teil bekam
++    seinen Wert (RM-583, Review). Getrennt zusammengeführt bleibt sie."""
++    pla = profiles.make_profile("centauri-carbon-2", "pla")
++    fine = {"layers.layer_height": 0.15, "support.z_gap": 0.2}
++    groups = [_contact_advice(table(), pla, fine), _contact_advice(table(), petg(), fine)]
++
++    def rows(**options: object) -> dict[str, object]:
++        merged = advise.combine(groups[0][0], groups, **options)  # type: ignore[arg-type]
++        return {entry.path: entry.value for entry in merged}
++
++    assert "support.z_gap" not in rows(), "im Teil gilt der Wert, der beide einschließt"
++    assert rows(separate=advise.CONTACT_PATHS)["support.z_gap"] == pytest.approx(0.15)
++
++    dense = {
++        "support.interface_spacing": 0.2,
++        "support.interface_layers": 3,
++        "support.bottom_interface_layers": 2,
++    }
++    groups = [_contact_advice(table(), pla, dense), _contact_advice(chin_over_chest(), pla, dense)]
++    together = rows(separate=advise.CONTACT_PATHS)
++    assert together["support.interface_spacing"] == pytest.approx(0.5)
++    assert together["support.interface_layers"] == 2
++
++
++@pytest.mark.parametrize("flavour", ["orca", "cura"])
++@pytest.mark.parametrize("case", ["ceilings", "materials"])
++def test_the_contact_rows_settle_after_one_round(flavour: str, case: str) -> None:
++    """Der Druckdialog fragt den Stützkontakt je Körper gegen die Grundlage und
++    führt ihn getrennt zusammen: Nach einmal Übernehmen kommt keine Gegenzeile
++    (RM-583, Nachprüfung). Gegen die Übernahme gefragt, wechselte die Lücke
++    zwischen Tisch und Kinn bei jedem Übernehmen, der Abstand zwischen PLA und
++    PETG ebenso."""
++    from pathlib import Path
++
++    from app.core.export import handover
++
++    pla = profiles.make_profile("centauri-carbon-2", "pla")
++    executable = "orca-slicer.exe" if flavour == "orca" else "CuraEngine.exe"
++    setup = handover.SlicerSetup(executable=Path(executable), flavour=flavour)  # type: ignore[arg-type]
++    if case == "ceilings":
++        bodies = [(table(), pla), (chin_over_chest(), pla)]
++        values: dict[str, object] = {
++            "support.interface_spacing": 0.2,
++            "support.interface_layers": 3,
++            "support.bottom_interface_layers": 2,
++        }
++    else:
++        bodies = [(table(), pla), (table(), petg())]
++        values = {"layers.layer_height": 0.15, "support.z_gap": 0.2}
++    settings = print_settings.resolve(pla)
++    for path, value in values.items():
++        settings = print_settings.with_choice(settings, path, value)
++
++    def rows(current: PrintSettings) -> dict[str, object]:
++        separate, asking = handover.asked_for_contact(current, pla, setup, flavour)  # type: ignore[arg-type]
++        groups = []
++        for body, profile in bodies:
++            entries = advise.advise(asking, profile, slice_body(body, 0.2), flavour=flavour)  # type: ignore[arg-type]
++            groups.append((asking, [e for e in entries if e.path in advise.CONTACT_PATHS]))
++        merged = advise.combine(current, groups, separate=separate)
++        return {entry.path: entry.value for entry in merged}
++
++    first = rows(settings)
++    if flavour == "orca":
++        assert first, "ein Körper weicht ab und bekommt seine Zeile"
++    for path, value in first.items():
++        settings = print_settings.with_accepted(settings, path, value)
++    assert rows(settings) == {}, "nach dem Übernehmen keine Gegenzeile"
++
++
+ def test_each_part_gets_the_contact_of_its_own_material() -> None:
+     """Zwei gleiche Tische auf einer Platte, einer aus PLA, einer aus PETG: Den
+     Abstand bekommt jeder nach dem Material seiner Spule, nicht nach dem der
+diff --git a/tests/test_slicer_part_settings.py b/tests/test_slicer_part_settings.py
+index 9d72d48ae..011bdcc30 100644
+--- a/tests/test_slicer_part_settings.py
++++ b/tests/test_slicer_part_settings.py
+@@ -611,8 +611,8 @@ def test_file_export_without_program_only_promises_shared_object_capabilities(
+ # Stütze, dieselbe Stützsperre wie die Kanäle). Den Stützkontakt (RM-583) belegt
+ # eine Platte mit zwei gestützten Stufenkörpern, einer mit Objektwerten, in allen
+ # acht Programmen (``.claude/.state/drache-2026-10-08/kontakt_je_teil.py``):
+-# Abstand 0,4 gegen 0,2 mm, mehr Trennschichten oben, keine unten, weniger
+-# Trennschichtbahn bei weiter Lücke; Cura nimmt die Lücke nicht je Netz. Die
++# geschrieben 0,4 gegen 0,2 mm und so weiter, gemessen je Programm in
++# ``konzepte/begruendungen/regel-druckrat.md``; Cura nimmt die Lücke nicht je Netz. Die
+ # Menge wird absichtlich nicht aus PART_PATHS oder den Schlüsseltabellen
+ # gebaut: ein neuer Pfad braucht einen eigenen Wirkungsnachweis.
+ MEASURED_PART_PATHS = frozenset(
+diff --git a/tools/matrix_unit.py b/tools/matrix_unit.py
+index 1890f037f..e37755d65 100644
+--- a/tools/matrix_unit.py
++++ b/tools/matrix_unit.py
+@@ -226,6 +226,23 @@ def load(model: Path) -> tuple[list[Any], list[str]]:
+     findings = sorted(
+         {f"{f.severity}:{f.code}" for f in result.scene.report.findings if f.severity != "info"}
+     )
++    if os.environ.get("GESAMT_MATERIAL"):
++        # **Wie ein Kunde, der die Spule wechselt**: Die Datei bringt ihre Spulen
++        # mit (Roberts Drache: PLA). Gemessen wird das gewählte Material, also
++        # bekommt jede Spule dessen Art und das Filament des Herstellers dazu
++        # (RM-583; vorher maß ein PETG-Lauf die PLA-Spule der Datei).
++        kind = slicer_keys.filament_type(MATERIAL)
++        objects = [
++            replace(
++                entry,
++                material=MATERIAL,
++                material_slots=tuple(
++                    replace(slot, material=None, material_type=kind)
++                    for slot in entry.material_slots
++                ),
++            )
++            for entry in objects
++        ]
+     LOADED["turned"] = turned
+     LOADED["project"] = project
+     LOADED["sources"] = sources

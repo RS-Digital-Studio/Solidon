@@ -239,6 +239,7 @@ def _run_identity(planned: list[tuple[Path, str]]) -> dict[str, object]:
         "orient": os.environ.get("GESAMT_AUSRICHTEN", "1"),
         "slice_timeout": os.environ.get("GESAMT_ZEITLIMIT", str(45 * 60)),
         "keep_files": bool(os.environ.get("GESAMT_BEHALTEN")),
+        "material": os.environ.get("GESAMT_MATERIAL", "pla"),
     }
 
 
@@ -402,6 +403,7 @@ def worker(
             "GESAMT_AUSRICHTEN": str(RUN_IDENTITY["orient"]),
             "GESAMT_ZEITLIMIT": str(RUN_IDENTITY["slice_timeout"]),
             "GESAMT_BEHALTEN": "1" if RUN_IDENTITY["keep_files"] else "",
+            "GESAMT_MATERIAL": str(RUN_IDENTITY["material"]),
         }
         safe = result_key(model)
         model_out = OUT / safe

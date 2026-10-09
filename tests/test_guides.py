@@ -599,7 +599,6 @@ def test_the_fixed_targets_resolve_on_a_real_window(qt_app: object) -> None:
         "dialog.naming",
         "dialog.more",
         "parameters.first",
-        "sketch.plane",
         "report.action",
         "history.last",
         *printing,
@@ -615,7 +614,6 @@ def test_the_fixed_targets_resolve_on_a_real_window(qt_app: object) -> None:
             "dialog.naming",
             "dialog.more",
             "parameters.first",
-            "sketch.plane",
             *printing,
         ):
             with pytest.raises(guide_targets.MissingTargetError):

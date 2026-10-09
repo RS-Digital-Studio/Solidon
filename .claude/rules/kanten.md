@@ -32,6 +32,9 @@ allen Zügen der Auswahl (`_why_it_does_not_fit`), nicht nur an den belegten.
   derselbe Körper je Fassung eine andere Zahl.
 - **Ausgelassen wird je Kontur**: OpenCASCADE setzt eine Rundung über
   tangentiale Kanten fort; eine Kante allein wegzulassen ließe sie gerundet.
+  Welche Kanten eine Kontur trägt, liest `contour_keys` aus demselben Builder,
+  und die Hervorhebung zeigt sie — sonst sieht der Kunde erst in der Vorschau,
+  was mitgeht.
   Die Wand prüft `fillet_group` je Kontur vor jedem Bau, auch an fortgesetzten
   Kanten (`edges.thin_wall` statt Absage der ganzen Gruppe).
 - **Zuerst fragen, was der Bau sagt**: Fehlkonturen und Fehlecken, ungültige

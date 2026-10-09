@@ -159,7 +159,7 @@ Es gelten die gesetzlichen Mängelrechte. Für digitale Produkte gelten
 insbesondere die §§ 327 ff. BGB einschließlich unserer
 Aktualisierungspflicht. Sicherheits- und Funktionserhaltungsaktualisierungen,
 die das Gesetz für den maßgeblichen Bereitstellungszeitraum verlangt, werden
-mindestens bis zum 31. Oktober 2031 bereitgestellt und angekündigt, für beide
+mindestens bis zum 30. November 2031 bereitgestellt und angekündigt, für beide
 Lizenzarten gleich. Eine weitergehende Zusage für neue Funktionen oder eine
 neue Hauptversion ist das nicht.
 

@@ -17,8 +17,7 @@ import os
 import sys
 import weakref
 from collections.abc import Callable, Collection, Iterable, Mapping, Sequence
-from dataclasses import replace
-from itertools import pairwise, product
+from itertools import product
 from typing import Any, Final, Literal, NamedTuple
 
 from PySide6.QtCore import (
@@ -54,6 +53,7 @@ from PySide6.QtWidgets import (
 
 from app.branding import ENVIRONMENT_PREFIX
 from app.core.geom.measure import (
+    CORNER_EDGES,
     Measurement,
     MeasurementList,
     SnapResult,
@@ -93,7 +93,12 @@ from app.core.perceive.relations import (
 )
 from app.core.scene import EdgeTarget, EvaluationResult
 from app.core.scene.cancel import CancelSignal
-from app.core.sketch.planes import axis_hit, image_normal, ray_hit, to_plane, to_world
+from app.core.sketch.planes import (
+    BASE_FRAMES,
+    image_normal,
+    ray_hit,
+    to_world,
+)
 from app.core.sketch.profile import SketchCurve
 from app.core.types import (
     Feature,
@@ -759,44 +764,6 @@ def gizmo_sentence(feature: Feature | None, *, part: bool = False) -> str:
     return tr("Der Griff bewegt das gewählte Merkmal, nicht das ganze Teil.")
 
 
-#: Wie weit der Ziehgriff höchstens gestreckt wird, wenn der Blick flach steht.
-#:
-#: Er zeigt entlang der Ebenennormalen und erscheint deshalb um den Sinus des
-#: Kippwinkels verkürzt. Damit er im Bild seine Länge behält, wird er im Raum
-#: gestreckt — und das wächst gegen unendlich, je flacher der Blick steht.
-#:
-#: **Sechs, und die Zahl kommt aus dem Einrasten:** Unter zehn Grad rastet die
-#: Kamera auf die nächste Hauptansicht (``_settle_sketch_view``), dort gibt es
-#: also keinen Griff mehr zu strecken. Bei genau zehn Grad ist der nötige
-#: Faktor ``1/sin(10°) = 5,76``; sechs liegt knapp darüber, damit die Grenze
-#: jenseits des Einrastens greift und nicht davor.
-PULL_HANDLE_STRETCH = 6.0
-
-#: Länge des sichtbaren Ziehgriffs in Bildpunkten.
-#:
-#: Er bleibt beim Zoomen gleich groß wie ein Werkzeuggriff. Achtunddreißig
-#: Bildpunkte sind lang genug, dass Pfeilspitze und Kreuz nicht im Umriss
-#: verschwinden, aber kurz genug, um neben einem kleinen Profil zu bleiben.
-#:
-#: **Bildpunkte heißt hier Logikpunkte** — die Größe, die ein Mensch am
-#: Bildschirm sieht. Zeiger und Projektion antworten in Gerätepixeln;
-#: umgerechnet wird beim Vergleich, über :meth:`Viewport._device_pixels`
-#: (Regel in ``ansicht.md``).
-PULL_HANDLE_PIXELS = 38.0
-
-#: Greifweite des ausdrücklichen Pfeil-/Kreuzgriffs in Bildpunkten.
-#:
-#: Der Griff ist eine primäre Handlung und keine dünne Kante. Vierzehn
-#: Bildpunkte geben ihm eine fehlertolerante Trefferfläche, ohne die
-#: Zeichnung daneben mitzunehmen. Der Umriss selbst behält die engere
-#: Fangweite von :data:`CURSOR_PIXELS`.
-#:
-#: **Bildpunkte heißt hier Logikpunkte** — die Größe, die ein Mensch am
-#: Bildschirm sieht. Zeiger und Projektion antworten in Gerätepixeln;
-#: umgerechnet wird beim Vergleich, über :meth:`Viewport._device_pixels`
-#: (Regel in ``ansicht.md``).
-PULL_HIT_PIXELS = 14.0
-
 #: Wie weit die Vorschau einer Schnittebene über den Körper hinausragt.
 #:
 #: Innerhalb eines undurchsichtigen Körpers ist selbst eine durchscheinende
@@ -889,7 +856,7 @@ def axis_view_near(
 #:
 #: **Zwei Felder hängen daran**, und deshalb steht die Zahl hier statt zweimal:
 #: das Maßfeld der Zeichenfläche (``sketch_editor.SketchCanvas._show_pointer``)
-#: und die Zahl zum Zug am Ziehgriff (:meth:`DragValueBar.place`). Dieselbe
+#: und die Zahl zum Zug an einem Griff (:meth:`DragValueBar.place`). Dieselbe
 #: Frage, dieselbe Antwort — und kein Vielfaches von :data:`app.ui.style.SPACE`,
 #: denn es ist kein Layoutabstand, sondern der Sicherheitsabstand zu einem
 #: Ereignisempfänger.
@@ -936,7 +903,7 @@ AXIS_LABEL_PIXELS = 64.0
 #: Deckkraft des bestehenden Körpers während des Zeichnens.
 #:
 #: Er bleibt als räumlicher Zusammenhang sichtbar, tritt aber klar hinter
-#: Raster, Kurven, Maße und Ziehgriff zurück. Die normale transparente
+#: Raster, Kurven und Maße zurück. Die normale transparente
 #: Darstellung mit 45 % war im Handbuchbild lauter als die Skizze selbst.
 SKETCH_CONTEXT_OPACITY = 0.16
 
@@ -1063,8 +1030,8 @@ def hatch_lines(
     Eine geschützte Sichtfläche trägt eine Tönung. Tönung allein ist Farbe, und
     Farbe allein trägt keine Bedeutung: Wer sie nicht unterscheiden kann, sieht
     eine Fläche wie jede andere. Die Striche sind das zweite Merkmal, und sie
-    sind Geometrie wie das Kreuz in :func:`cross_marks` und der Pfeil in
-    :func:`pull_handle` — keine Textur, die beim Drehen mitwandert.
+    sind Geometrie wie das Kreuz in :func:`cross_marks` — keine Textur, die
+    beim Drehen mitwandert.
 
     ``corners`` sind die Eckpunkte je Dreieck (drei Zeilen je Dreieck), wie der
     Merkmals-Patch sie ohnehin baut. Geschnitten wird mit einer Schar von
@@ -1197,229 +1164,6 @@ def body_hatch(
     if not found:
         return np.zeros((0, 3))
     return np.concatenate(found).reshape(-1, 3)
-
-
-def pull_handle(
-    frame: PlaneFrame,
-    curves: Sequence[SketchCurve],
-    size: float,
-    across: float | None = None,
-) -> list[tuple[tuple[float, float, float], tuple[float, float, float]]]:
-    """Pfeil nach außen und Kreuz nach innen am längsten Profilrand.
-
-    Der Fuß sitzt auf dem greifbaren Umriss. Pfeil und Kreuz sind die zweite
-    Kodierung neben der Richtung (Regel 18): nach außen entsteht Material,
-    nach innen wird es entfernt.
-
-    **Zwei Größen, weil zwei Richtungen verschieden verkürzt werden.** ``size``
-    misst entlang der Normalen — dorthin zeigt der Schaft, und genau die
-    Richtung schrumpft im Bild, je flacher der Blick auf die Ebene steht.
-    ``across`` misst die Querstücke: Pfeilflügel und Kreuz liegen **in** der
-    Ebene und werden dort nicht verkürzt.
-
-    Ohne diese Trennung ging das Strecken schief, und zwar sichtbar: Wer den
-    Schaft bei zehn Grad Kippung um das Sechsfache streckt, damit er im Bild
-    seine Länge behält, bläst Flügel und Kreuz mit auf — gemessen am
-    30.08.2026 eine Griffspanne von 156 statt 69 Bildpunkten. Aus einem Griff,
-    den man nicht findet, wurde einer, der das Profil verdeckt.
-
-    ``across`` ohne Wert heißt ``size`` — dann verhält sich die Funktion wie
-    vorher, und in der Seitenansicht sind beide ohnehin gleich.
-    """
-    across = size if across is None else across
-    if size <= 0.0:
-        return []
-    usable = [curve for curve in curves if not curve.construction and len(curve.points) > 1]
-    if not usable:
-        return []
-
-    def curve_length(curve: SketchCurve) -> float:
-        return sum(math.dist(first, second) for first, second in pairwise(curve.points))
-
-    chosen = max(usable, key=curve_length)
-    total = curve_length(chosen)
-    if total <= EPS_GEOM:
-        return []
-    halfway = total / 2.0
-    walked = 0.0
-    base = chosen.points[0]
-    for first, second in pairwise(chosen.points):
-        segment = math.dist(first, second)
-        if walked + segment >= halfway and segment > EPS_GEOM:
-            share = (halfway - walked) / segment
-            base = (
-                float(first[0] + (second[0] - first[0]) * share),
-                float(first[1] + (second[1] - first[1]) * share),
-                float(first[2] + (second[2] - first[2]) * share),
-            )
-            break
-        walked += segment
-
-    def shifted(point: Sequence[float], vector: Sequence[float], amount: float) -> Vec3:
-        return (
-            float(point[0] + vector[0] * amount),
-            float(point[1] + vector[1] * amount),
-            float(point[2] + vector[2] * amount),
-        )
-
-    outward = shifted(base, frame.normal, size)
-    inward = shifted(base, frame.normal, -size)
-    neck = shifted(outward, frame.normal, -size * 0.32)
-    arrow_a = shifted(neck, frame.x_axis, across * 0.24)
-    arrow_b = shifted(neck, frame.x_axis, -across * 0.24)
-    cross_a = shifted(inward, frame.x_axis, across * 0.18)
-    cross_b = shifted(inward, frame.x_axis, -across * 0.18)
-    cross_c = shifted(inward, frame.y_axis, across * 0.18)
-    cross_d = shifted(inward, frame.y_axis, -across * 0.18)
-    return [
-        (inward, outward),
-        (outward, arrow_a),
-        (outward, arrow_b),
-        (cross_a, cross_b),
-        (cross_c, cross_d),
-    ]
-
-
-#: Wie viele Sprossen die Vorschau des Ziehgriffs je Kurve höchstens zeichnet.
-#:
-#: Die Sprossen sind die senkrechten Striche zwischen Umriss und angehobener
-#: Kopie — sie machen aus zwei Umrissen einen Körper. Bei einem Rechteck sind
-#: es fünf Punkte und damit fünf Sprossen, also alle; bei einem Kreis mit
-#: vierundsechzig Segmenten wären es vierundsechzig, und das ist keine
-#: Drahtform mehr, sondern eine Wand. Zwölf lesen sich als Körper und bleiben
-#: durchsichtig genug, um die Zeichnung darunter zu sehen.
-MOST_PULL_RIBS = 12
-
-
-def pull_cage(
-    frame: PlaneFrame,
-    curves: Sequence[SketchCurve],
-    height: float,
-    ribs: int = MOST_PULL_RIBS,
-) -> list[tuple[tuple[float, float, float], tuple[float, float, float]]]:
-    """Die Drahtform, die beim Ziehen einer Höhe wächst — als Weltpunktpaare.
-
-    Der Ziehgriff (§30.1): In der Querschau zieht man am Umriss, und der Körper
-    soll dabei entstehen, nicht erst danach. Gezeichnet wird der angehobene
-    Umriss plus Sprossen dorthin — zwei Umrisse und ein paar Striche dazwischen
-    sind das Wenigste, das man als Körper liest.
-
-    **Und ausdrücklich keine Fläche.** Eine echte Vorschau ginge über
-    ``session.preview_async``, also über den Kern, einen Arbeiter-Thread und
-    einen Neuaufbau der Aktoren — gemessen kostet allein das Neuzeichnen der
-    Skizze 7,8 ms, und bei sechzig Mausereignissen in der Sekunde ist das der
-    Qt-Hauptthread. Die Drahtform kostet nichts dergleichen und sagt dasselbe:
-    wie hoch es wird. Der Körper selbst entsteht beim Loslassen, aus der
-    Operation, mit ihrer eigenen Vorschau.
-
-    **Konstruktionsgeometrie bleibt draußen.** Sie trägt Bedingungen und bildet
-    kein Profil — angehoben wäre sie eine Wand, die im Ergebnis nicht vorkommt.
-
-    ``height`` ist die Höhe entlang ``frame.normal``, also entlang genau der
-    Richtung, in die :func:`app.core.brep.profiles.extrude` aufzieht. Nichts
-    kommt zurück, wo nichts zu zeichnen ist — eine Höhe von null ist kein
-    Sonderfall, sondern ein Körper ohne Ausdehnung.
-    """
-    if abs(height) <= EPS_GEOM or ribs < 2:
-        return []
-    lift = (
-        frame.normal[0] * height,
-        frame.normal[1] * height,
-        frame.normal[2] * height,
-    )
-
-    def raised(point: Sequence[float]) -> tuple[float, float, float]:
-        return (point[0] + lift[0], point[1] + lift[1], point[2] + lift[2])
-
-    lines: list[tuple[tuple[float, float, float], tuple[float, float, float]]] = []
-    for curve in curves:
-        if curve.construction or len(curve.points) < 2:
-            continue
-        top = [raised(point) for point in curve.points]
-        lines.extend(pairwise(top))
-        # Die Sprossen gleichmäßig verteilt, erste und letzte immer dabei: An
-        # den Enden hängt die Form, in der Mitte hängt nur der Eindruck.
-        count = len(curve.points)
-        stride = max(1, -(-(count - 1) // (ribs - 1)))
-        chosen = list(range(0, count, stride))
-        if chosen[-1] != count - 1:
-            chosen.append(count - 1)
-        for index in chosen:
-            point = curve.points[index]
-            lines.append(((point[0], point[1], point[2]), top[index]))
-    return lines
-
-
-def pulled_height(reach: float, step: float, limits: tuple[float, float]) -> float:
-    """Aus dem Rohmaß am Zeiger die Höhe, die der Ziehgriff zeigt.
-
-    Zwei Schritte, und beide haben einen doppelten Grund.
-
-    **Gefangen auf das Raster, das im Bild steht.** Eine aufgezogene Höhe soll
-    eine runde Zahl sein — 20 mm und nicht 19,7 —, und ein Zug, der zwischen
-    zwei Rasterpunkten nichts ändert, muss nicht neu zeichnen: dasselbe Mittel,
-    mit dem die Fangmarke ihre 6,9 ms je Mausbewegung los ist. Eine Weite von
-    null heißt „kein Raster" und fängt nicht.
-
-    **Geklemmt auf die Grenzen der Operation, mit erhaltenem Vorzeichen.**
-    Positiv baut Material auf, negativ schneidet hinein. Beide Richtungen
-    tragen ihre eigene Operation, aber dieselbe Maßgrenze; eine erfundene
-    Grenze wäre schlechter als keine.
-
-    Eine freie Funktion, weil die Hälfte davor (:meth:`Viewport._pick_ray`)
-    offscreen nicht läuft: Was hinter dem Renderer liegt, prüft in der Suite
-    niemand mehr (§35).
-    """
-    if step > 0.0:
-        reach = round(reach / step) * step
-    if abs(reach) <= EPS_GEOM:
-        # **Ein auf null gefangener Zug ist kein Zug.** Bis zum 02.09.2026
-        # hob die Klemmung ihn auf die Untergrenze — und weil ``round(-0.3)``
-        # ``-0.0`` ist und ``-0.0 < 0.0`` nicht gilt, wurde aus einem kurzen
-        # Zug nach unten ein Aufbau von 0,1 mm nach oben.
-        return 0.0
-    least, most = limits
-    if most > least:
-        return math.copysign(min(max(abs(reach), least), most), reach)
-    return reach
-
-
-def polyline_distance(points: Sequence[tuple[float, float]], at: tuple[float, float]) -> float:
-    """Wie weit eine Bildstelle vom Zug durch diese Punkte entfernt ist.
-
-    Gemessen gegen die **Strecken** und nicht gegen die Punkte: Der Umriss
-    eines Rechtecks hat vier Ecken, und ein Griff, der nur dort greift,
-    verlangt, dass man eine Ecke trifft. Dieselbe Unterscheidung wie bei der
-    Merkmalssuche, die gegen die Dreiecke misst statt gegen die Eckpunkte.
-
-    In Bildpunkten, weil der Griff in Bildpunkten gedacht ist: Wie weit daneben
-    noch „am Umriss" heißt, hängt am Bild und nicht an der Zeichnung. Ein
-    einzelner Punkt zählt als er selbst; eine leere Folge gibt ``inf``, denn
-    von nichts ist alles gleich weit weg.
-    """
-    if not points:
-        return math.inf
-    if len(points) == 1:
-        return math.dist(points[0], at)
-    best = math.inf
-    for start, end in pairwise(points):
-        span = (end[0] - start[0], end[1] - start[1])
-        length = span[0] * span[0] + span[1] * span[1]
-        # **Gegen null und nicht gegen eine Toleranz.** Hier stand `EPS_GEOM`,
-        # und das ist eine Fertigungstoleranz in Millimetern (§11.2), während
-        # `length` das Quadrat eines Abstands in **Bildpunkten** ist — zwei
-        # Einheiten, von denen keine zur anderen passt. Wirkungslos war es,
-        # aber ein Leser hält so etwas für eine geprüfte Wahl. Die Frage
-        # lautet „sind das zwei gleiche Punkte", und darauf antwortet null.
-        if length <= 0.0:
-            best = min(best, math.dist(start, at))
-            continue
-        # Der Fußpunkt auf der Strecke, geklemmt auf ihre Enden.
-        share = ((at[0] - start[0]) * span[0] + (at[1] - start[1]) * span[1]) / length
-        share = min(max(share, 0.0), 1.0)
-        foot = (start[0] + share * span[0], start[1] + share * span[1])
-        best = min(best, math.dist(foot, at))
-    return best
 
 
 def orientation_corner(width: int, height: int) -> tuple[float, float, float, float]:
@@ -1561,6 +1305,20 @@ SSAO_RADIUS = 2.0
 #: übers Bild keine hundert Suchen auslöst.
 HOVER_DELAY_MS = 90
 
+#: Wie lange der Pinselring nach der letzten Mausbewegung wartet, bevor er auf
+#: die Fläche darunter springt — ein Bildtakt (H1, RM-560). Er wartete auf die
+#: Ruhepause der Merkmalssuche und stand nie dort, wo der Zug gerade war.
+BRUSH_FOLLOW_MS = 16
+
+#: Wie viele Zwischenpunkte ein gezogener Pinselzug zwischen zwei
+#: Mausereignissen höchstens einfügt (H5). Ein schneller Zug lieferte Proben
+#: bis 1,56 Radien auseinander, eine Perlenkette statt eines Strichs.
+DRAG_FILL_LIMIT = 8
+
+#: Wie nah ein Klick oder Druck an einem Gelenk liegen muss, um es zu greifen,
+#: in logischen Bildpunkten (RM-561) — so weit wie die Kante eines Klickziels.
+JOINT_PIXELS = 10
+
 #: Wie weit zwei Tiefen auseinanderliegen müssen, damit eine die andere
 #: verdeckt. Zu klein, und eine ebene Fläche verdeckt sich selbst — das ist
 #: das Streifenmuster, an dem man schlecht eingestellte Verdeckung erkennt.
@@ -1595,6 +1353,11 @@ FEATURE_EDGE_WIDTH = 1.5
 #: (:data:`FEATURE_REACH_SHARE`): Wer die Kante meint, zielt genauer als wer
 #: die Fläche meint.
 EDGE_REACH_PIXELS = 10.0
+
+#: Wie nah ein Klick an einer Ecke liegen muss, damit er sie meint (RM-590) —
+#: halb so weit wie an einer Kante. Nahe einer Ecke liegen alle ihre Kanten in
+#: Reichweite; wer eine davon kurz vor ihrem Ende meint, trifft sie so noch.
+CORNER_REACH_PIXELS = EDGE_REACH_PIXELS / 2.0
 
 #: Strichstärke der gewählten Kante. Dick genug, dass sie neben der
 #: Körperkante darunter als eigene Linie zu sehen ist — Farbe allein trüge die
@@ -1683,6 +1446,9 @@ TURN_MAGNET_ZONE = 4.0
 #: hier neun eigene Werte, die kein Thema kannten und keine andere Stelle.
 OBJECT_COLOUR = "#b9c4d0"
 SELECTED_COLOUR = ROLES["select"]
+
+#: Das Bett als Zeichenebene — der Rahmen, den ``sketch_extrude`` auf ``plane:xy`` nimmt.
+BED_FRAME: Final = BASE_FRAMES["plane:xy"]
 BACKFACE_COLOUR = ROLES["backface"]
 PROTECTED_COLOUR = ROLES["protected"]
 
@@ -2102,18 +1868,83 @@ def source_colours(mesh: Any, face_count: int) -> Any | None:
     return np.clip(np.rint(colours * 255.0), 0.0, 255.0).astype(np.uint8)
 
 
-def shows_face_colours(
-    object_id: ObjectId, highlighted: Sequence[ObjectId], map_owner: ObjectId | None
-) -> bool:
-    """Ob ein Körper seine Farben je Dreieck zeigt oder die eine Farbe.
+def slot_cell_colours(
+    mesh: Any, entry: Any, face_count: int, body_colour: str
+) -> CellColours | None:
+    """Die Zellfarben eines Körpers — aus seinen Materialslots oder aus der
+    Datei, aus der er kam; ``None`` heißt Körperfarbe.
 
-    Gewählt gilt die Auswahlfarbe, sonst sähe man die Auswahl an einem Teil
-    mit Filament nicht. **Eine Analysekarte besitzt die Farbe ihres Körpers
-    trotzdem** (§19.1) — dieselbe Ausnahme, die die Auswahlfarbe schon
-    beachtete; ohne sie verschwand die Karte am gewählten Körper, und in der
-    Formsitzung ist er immer gewählt.
+    Ein Slot ohne eigene Farbe bekommt eine aus der Ersatzpalette
+    (``theme.slot_colour``): Der Pinsel legt Slots mit ``colour=None`` an,
+    und mit der Körperfarbe an dieser Stelle war das Bemalen im Bild
+    folgenlos — zwei Striche in zwei Slots sahen aus wie keiner. Ein
+    einziger unbenannter Slot ohne Farbe bleibt die Vorgabe. Eine
+    ausdrücklich gesetzte Farbe gilt auch bei nur einem Slot.
     """
-    return object_id == map_owner or object_id not in highlighted
+    slots = getattr(entry, "material_slots", None)
+    # **Ein exakter Körper trägt seine Slots an der Vernetzung**, nicht an
+    # sich selbst (RM-557): ``Solid`` hat kein ``slots``, und gelesen als
+    # leer blieb jeder zugewiesene Baustein im Bild grau.
+    indices = getattr(getattr(mesh, "mesh", mesh), "slots", ())
+    import numpy as np
+
+    if not slots or len(indices) != face_count:
+        colours = source_colours(mesh, face_count)
+        if colours is None:
+            return None
+        return CellColours(np.asarray(colours, dtype=float) / 255.0)
+
+    known = {slot.index: slot for slot in slots}
+    highest = max(known)
+    table: list[str] = []
+    for index in range(highest + 1):
+        slot = known.get(index)
+        colour = slot.colour if slot is not None else None
+        if colour is not None:
+            table.append(hex_of(colour))
+            continue
+        table.append(slot_colour(index) or body_colour)
+    # **Gefragt wird der Slot mit dem Index null, nicht der zuerst
+    # deklarierte.** Die Tabelle ist über den Slot**index** aufgebaut;
+    # ``slots[0]`` stand hier und ist etwas anderes. Bei zweimal
+    # vergebenem Index gewinnt in ``known`` der letzte und in dieser
+    # Prüfung der erste — dann fiele eine gesetzte Farbe auf die
+    # Körperfarbe zurück. ``get`` und nicht ``[0]``, und ein fehlender
+    # Slot zählt als „keine Farbe": genau die Behandlung, die die Schleife
+    # darüber ihm gibt.
+    first = known.get(0)
+    if len(table) < 2 and (first is None or first.colour is None):
+        return None
+    return CellColours(
+        np.asarray(indices, dtype=np.int32),
+        colormap=tuple(table),
+        limits=(0.0, float(highest)),
+        categorical=True,
+    )
+
+
+#: Wie stark die Auswahlfarbe über den Filamentfarben eines gewählten Körpers
+#: liegt (RM-557): genug, dass die Auswahl zu sehen ist, wenig genug, dass ein
+#: neues Filament gleich im ersten Bild erkennbar bleibt.
+SELECTION_TINT_SHARE = 0.35
+
+
+def face_tint(
+    object_id: ObjectId, highlighted: Sequence[ObjectId], map_owner: ObjectId | None
+) -> str | None:
+    """Der Ton über den Farben je Dreieck eines Körpers — ``None`` heißt keiner.
+
+    Gewählt liegt die Auswahlfarbe darüber, sonst sähe man die Auswahl an
+    einem Teil mit Filament nicht. **Nur als Ton** (RM-557): Deckend stand sie,
+    solange der Körper gewählt war — und gewählt ist er, während man ihm am
+    Schnellwähler ein Filament gibt; der Wechsel zeigte sich erst nach dem
+    Abwählen. **Eine Analysekarte bleibt ungetönt** (§19.1), sonst
+    verschwände sie am gewählten Körper, und in der Formsitzung ist er immer
+    gewählt.
+    """
+    if object_id == map_owner or object_id not in highlighted:
+        return None
+    return SELECTED_COLOUR
 
 
 MeasureMode = Literal["off", "distance", "thickness", "angle"]
@@ -3010,9 +2841,7 @@ GIZMO_LINE_RADIUS = 0.035
 #: Schaft. Wie viele Bildpunkte daraus werden, entscheidet der Zoom.
 #:
 #: Achtzig ist doppelt so viel, wie der Kommentar an :data:`GIZMO_SCALE` als
-#: „zu klein" nennt (vierzig), und liegt in der Größenordnung des räumlichen
-#: Ziehgriffs (:data:`PULL_HANDLE_PIXELS`, 38 — dort ist es allerdings die
-#: **halbe** Länge, gemessen vom Mittelpunkt).
+#: „zu klein" nennt (vierzig).
 GIZMO_LEAST_PIXELS = 80.0
 
 
@@ -3825,10 +3654,9 @@ class DragValueBar(QFrame):
         self.anchor: QPoint | None = None
         """Wo das Feld stehen soll — ``None`` heißt oben mittig.
 
-        **Beim Ziehgriff der Skizze steht es am Zeiger** (§30.1), und das ist
-        dieselbe Entscheidung wie beim Maßfeld der Zeichenfläche: Wer eine Höhe
-        aufzieht, sieht auf ihre Spitze, und eine Zahl am Fensterrand liest
-        dort niemand. Bei den Griffen von §18.11 bleibt es oben — dort zieht
+        Ein Anker stellt es an den Zeiger, wie das Maßfeld der Zeichenfläche:
+        Eine Zahl am Fensterrand liest dort niemand. Bei den Griffen von §18.11
+        bleibt es oben — dort zieht
         man an einem Gizmo, den man ansieht, und ein Feld unter dem Zeiger
         verdeckte gerade ihn."""
         self._length_unit: LengthUnit | None = None
@@ -3912,10 +3740,8 @@ class DragValueBar(QFrame):
         **Angehoben wird hier und nicht bei den Aufrufern**, aus demselben
         Grund wie bei :meth:`ViewBar.place`: Hinter der nativen Renderfläche
         nimmt das Feld keinen Fokus, und §18.11 („Zahleneingabe während des
-        Ziehens") wäre für **jeden** Zug unerreichbar, nicht nur für den
-        Ziehgriff der Skizze. Vor dem 07.09.2026 stand das Anheben in
-        ``continue_sketch_pull``, also an genau einem der fünf Wege hierher.
-        Vor der Verzweigung, weil der Ankerzweig früh zurückkehrt.
+        Ziehens") wäre für **jeden** Zug unerreichbar. Vor der Verzweigung,
+        weil der Ankerzweig früh zurückkehrt.
         """
         parent = self.parentWidget()
         if parent is None:
@@ -4176,41 +4002,6 @@ class SketchSelectionBadge(QLabel):
         self.raise_()
 
 
-class SketchActionBadge(QLabel):
-    """Der nächste räumliche Schritt, als ruhige Karte im Blickfeld.
-
-    Der Ziehgriff ist eine Fusion-artige Geste. Wer sie nicht schon kennt,
-    entdeckt sie nicht in einer langen Zeile unterhalb des Viewports. Die
-    Karte steht deshalb nur dann im Bild, wenn aus dem geschlossenen Umriss
-    tatsächlich Material aufgebaut oder entfernt werden kann.
-    """
-
-    def __init__(self, parent: QWidget | None = None) -> None:
-        super().__init__("", parent)
-        self.setObjectName("sketchActionBadge")
-        self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
-        self.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.setContentsMargins(ROOMY, TIGHT, ROOMY, TIGHT)
-        self.set_theme("dark")
-        self.hide()
-
-    def set_theme(self, theme: str) -> None:
-        colours = THEMES["light" if theme == "light" else "dark"]
-        self.setStyleSheet(
-            f"#sketchActionBadge {{ color: {colours['text']};"
-            f" background: {colours['window']}; border: 2px solid {colours['accent_line']};"
-            " border-radius: 8px; font-weight: 600; }"
-        )
-
-    def place(self) -> None:
-        parent = self.parentWidget()
-        if parent is None:
-            return
-        self.adjustSize()
-        self.move(max((parent.width() - self.width()) // 2, 0), BANNER_TOP)
-        self.raise_()
-
-
 def layout_feature_labels(
     anchors: Sequence[tuple[float, float]],
     sizes: Sequence[tuple[float, float]],
@@ -4360,8 +4151,7 @@ def spread_sketch_cards(
 ) -> list[tuple[float, float]]:
     """Die Mitten der Skizzenkarten so, dass keine eine andere verdeckt.
 
-    Maßkarten und die Karten des Ziehgriffs stehen mittig auf ihrem Anker.
-    Fallen zwei an denselben Ort — die Anker des Ziehgriffs in der Draufsicht,
+    Maßkarten stehen mittig auf ihrem Anker. Fallen zwei an denselben Ort —
     zwei Maße an einem Punkt —, lagen sie deckungsgleich und ergaben ein
     unlesbares Wortgemisch. Hier behält die erste ihren Platz, jede weitere
     rückt zum nächsten freien Platz um ihren Anker. Wer frei steht, bleibt
@@ -4473,6 +4263,11 @@ class _Same:
 MESH_MEMO_KEPT: Final = 2
 
 
+def _triangles_of(mesh: Any) -> Any:
+    """Die Dreiecke eines Netzes oder exakten Körpers — gleich, welche Slots sie tragen."""
+    return getattr(mesh, "raw", mesh)
+
+
 class _MeshMemo:
     """Je Körper die Antworten zu den zuletzt gezeigten Netzen — nach Identität.
 
@@ -4487,7 +4282,10 @@ class _MeshMemo:
     kein Wachstum über die Sitzung.
 
     Verglichen wird mit ``is``: Ein Hash über Millionen Dreiecke wäre nicht
-    billiger als die Rechnung, die der Merker spart.
+    billiger als die Rechnung, die der Merker spart. **Verglichen werden die
+    Dreiecke** (``raw``), nicht die Hülle darum (RM-557): Ein Filamentwechsel
+    baut ein neues Netz um dieselben Dreiecke, und Kanten, Hüllen und Normalen
+    hängen nicht an der Farbe.
     """
 
     __slots__ = ("_entries",)
@@ -4496,20 +4294,23 @@ class _MeshMemo:
         self._entries: dict[ObjectId, list[tuple[Any, Any]]] = {}
 
     def has(self, object_id: ObjectId, mesh: Any) -> bool:
-        """Ob zu genau diesem Netz eine Antwort steht."""
-        return any(known is mesh for known, _value in self._entries.get(object_id, ()))
+        """Ob zu genau diesen Dreiecken eine Antwort steht."""
+        shape = _triangles_of(mesh)
+        return any(known is shape for known, _value in self._entries.get(object_id, ()))
 
     def get(self, object_id: ObjectId, mesh: Any) -> Any:
-        """Die Antwort zu genau diesem Netz, sonst ``None``."""
+        """Die Antwort zu genau diesen Dreiecken, sonst ``None``."""
+        shape = _triangles_of(mesh)
         for known, value in self._entries.get(object_id, ()):
-            if known is mesh:
+            if known is shape:
                 return value
         return None
 
     def remember(self, object_id: ObjectId, mesh: Any, value: Any) -> None:
-        """Die Antwort zu diesem Netz merken; die älteste des Körpers weicht."""
-        kept = [entry for entry in self._entries.get(object_id, ()) if entry[0] is not mesh]
-        self._entries[object_id] = [(mesh, value), *kept][:MESH_MEMO_KEPT]
+        """Die Antwort zu diesen Dreiecken merken; die älteste des Körpers weicht."""
+        shape = _triangles_of(mesh)
+        kept = [entry for entry in self._entries.get(object_id, ()) if entry[0] is not shape]
+        self._entries[object_id] = [(shape, value), *kept][:MESH_MEMO_KEPT]
 
     def keep_only(self, object_ids: Collection[ObjectId]) -> None:
         """Was einem Körper gehört, den es nicht mehr gibt, fällt weg."""
@@ -5064,21 +4865,8 @@ class Viewport(QWidget):
     Zeichenkoordinaten, und die Umrechnung gehört an eine Stelle."""
     sketchPointHovered = Signal(object)
     """Der Zeiger steht auf der Zeichenebene — für die Vorschau."""
-    sketchPulled = Signal(float)
-    """Aus der Querschau ist eine Höhe gezogen worden — in Millimetern (§30.1).
-
-    Das Fenster macht daraus ``sketch_extrude``; die Ansicht ändert nie selbst
-    Geometrie (Regel 2). Was während des Zugs im Bild steht, ist eine
-    Drahtform (:func:`pull_cage`) und kein Dokumentzustand."""
     sketchPlaneChosen = Signal(str)
     """Eine der drei Ebenenkarten im Bild wurde angeklickt."""
-    sketchPullBlocked = Signal(str)
-    """Am Ziehgriff wurde gezogen, und es ging nicht — trägt den Grund.
-
-    Ein Griff, der stumm nichts tut, ist die schlechtere Hälfte von
-    „fehlgeschlagen": Er sagt nicht einmal, dass etwas nicht ging (Regel 17).
-    Der Satz kommt vom Fenster, das die Frage auch beantwortet
-    (:meth:`set_sketch_pull`)."""
     faceDragged = Signal(str, float)
     """Ein Zug an einer Fläche — **welche** und wie weit entlang ihrer Normalen.
 
@@ -5102,10 +4890,11 @@ class Viewport(QWidget):
     edgePicked = Signal(str, str)
     """Ein Klick hat eine bearbeitbare Kante getroffen — Körper und Schlüssel.
 
-    Zwei Felder und kein `add`, anders als bei :attr:`featurePicked`: Eine
-    Kante wird einzeln gewählt. Wer mehrere verrunden will, nimmt die Gruppen
-    der Operation — „alle senkrechten" ist eine Auswahl und keine Sammlung
-    von Klicks.
+    Zwei Felder und kein `add`, anders als bei :attr:`featurePicked`: Die
+    Sammlung führt hier die Ansicht und nicht der Baum, denn eine Kante steht
+    in keiner seiner Zeilen. Wer mit Strg oder Umschalt weitere dazunimmt oder
+    herausnimmt (RM-563), meldet die getroffene; was gilt, sagt
+    :meth:`Viewport.highlighted_edges` — leer, wenn die letzte herausging.
 
     Der Schlüssel kommt aus der Geometrie (``brep.edit.edge_key``) und
     überlebt damit eine zweite Auswertung; er ist genau das, was die
@@ -5143,6 +4932,18 @@ class Viewport(QWidget):
     Derselbe Vertrag wie beim Formen und beim Bemalen: Die Ansicht meldet
     einen Ort, das Fenster macht daraus einen Knochen, und Geometrie ändert
     einzig die Operation."""
+    jointPicked = Signal(int)
+    """Ein Klick auf ein Gelenk des Skelettwerkzeugs: dort setzt die Kette fort."""
+    jointDragStarted = Signal(int)
+    jointDragged = Signal(int, int)
+    """Ziehen an einem Gelenk, Bildpunkt in Gerätepixeln — es beugt (RM-561)."""
+    jointDragFinished = Signal()
+    jointAngleTyped = Signal(float)
+    """Während des Beugens getippt: genau dieser Winkel, Grad (§18.11)."""
+    jointDragCancelled = Signal()
+    """Escape während des Beugens: die Stellung von vor dem Zug."""
+    chainEnded = Signal()
+    """Enter im Skelettwerkzeug: die Kette ist zu Ende."""
     splitPointRequested = Signal(object)
     """Ein Ende der Trennlinie (§25).
 
@@ -5268,7 +5069,7 @@ class Viewport(QWidget):
         #: eingepassten Rahmen hinausreichen (:meth:`frame_if_beyond`).
         self._frame_beyond: bool = False
         #: Die Diagonale der Körper beim letzten Aufbau — ob ein Größenschritt
-        #: sie hat wachsen lassen (:meth:`frame_if_beyond`).
+        #: oder ein weiteres Modell sie hat wachsen lassen (:meth:`frame_if_beyond`).
         self._shown_extent: float | None = None
         self._scheme: NavigationScheme = "solidon"
         self._theme: str | None = None
@@ -5395,14 +5196,6 @@ class Viewport(QWidget):
         Wie die Fangmarke gehört sie der Maus und nicht dem Dokument. Das
         Netz bleibt stehen und bekommt neue Punkte, solange die Form gleich
         bleibt; so braucht ein Zeigerschritt nur einen gemeinsamen Render."""
-        self._sketch_curves: tuple[SketchCurve, ...] = ()
-        """Die Kurven, die zuletzt gezeigt wurden — für den Ziehgriff.
-
-        Er muss zwei Dinge aus ihnen wissen: wo der Umriss im **Bild** liegt
-        (dort wird gegriffen) und wie die Drahtform aussieht, die beim Ziehen
-        wächst. Beides steht in denselben Punkten, die :meth:`show_sketch`
-        ohnehin bekommt — sie ein zweites Mal vom Fenster zu erfragen wäre die
-        zweite Zahl für dieselbe Sache."""
         self._sketch_selected_curves: tuple[int, ...] = ()
         """Welche Kurven im letzten Skizzenbild ausgewählt gezeichnet wurden."""
         self._sketch_control_points: tuple[Vec3, ...] = ()
@@ -5414,45 +5207,8 @@ class Viewport(QWidget):
         self._sketch_edit_move: Callable[[tuple[float, float]], None] | None = None
         self._sketch_edit_end: Callable[[], None] | None = None
         """Die vier Phasen eines Skizzenzugs im sichtbaren Viewport."""
-        self._sketch_gesture: Literal["pull", "edit"] | None = None
+        self._sketch_gesture: Literal["edit"] | None = None
         """Welcher Griff den laufenden Linkszug besitzt."""
-        self._sketch_pull_offer: Callable[[], str] | None = None
-        """Ob der Ziehgriff gerade angeboten wird — vom Fenster gesetzt.
-
-        Es beantwortet die Frage, weil sie am Zustand der Zeichnung hängt:
-        Querschau, geschlossener Umriss, und eine Operation, für die eine Höhe
-        überhaupt etwas bedeutet. Die Ansicht kennt davon nichts, sie kennt die
-        Geste (siehe :meth:`set_sketch_pull`)."""
-        self._sketch_cut_available: Callable[[], bool] | None = None
-        """Ob der Zug nach innen gerade ein echtes Ziel hat.
-
-        Die Tasche braucht einen ausgewählten, bearbeitbaren Körper. Das weiß
-        das Fenster; der Viewport nutzt die Antwort für Griff, Vorschau und
-        Richtungsprüfung gemeinsam, damit nichts Sichtbares mehr verspricht
-        als die spätere Operation halten kann.
-        """
-        self._sketch_cut_top: Callable[[], float] | None = None
-        """Wie weit die Oberkante des Zielkörpers über der Zeichenebene liegt —
-        dort beginnt die Tasche, also auch ihre Drahtform. Vom Fenster, das den
-        Körper kennt; null, wenn die Ebene selbst die Oberkante ist."""
-        self._pull_limits: tuple[float, float] = (0.0, 0.0)
-        """Die Grenzen der Höhe, aus dem Schema von ``sketch_extrude``.
-
-        Vom Fenster mitgegeben und nicht hier eingetippt: Wer sie abschreibt,
-        hat die zweite Wahrheit gebaut, und die fällt erst auf, wenn der Dialog
-        eine Zahl ablehnt, die der Griff gerade gezeigt hat."""
-        self._cut_limits: tuple[float, float] | None = None
-        """Grenzen der Taschentiefe; ``None`` heißt: nach innen nicht angeboten."""
-        self._pull_from: tuple[float, float] | None = None
-        """Wo der Zug begann, in Zeichenkoordinaten — ``None`` heißt: keiner.
-
-        Die Aufzugsachse läuft durch diesen Punkt; die Höhe ist der Ort, an dem
-        der Sichtstrahl ihr am nächsten kommt (:func:`axis_hit`)."""
-        self._pull_height = 0.0
-        """Die Höhe, die der Zug gerade zeigt — gefangen auf das Raster."""
-        self._pull_actors: list[Any] = []
-        """Die Drahtform des Zugs. Eigene Liste wie die Fangmarke: Sie hängt an
-        der Maus, die Zeichnung ändert sich beim Zeichnen."""
         self._sketch_step = 0.0
         """Die Rasterweite, die zuletzt **gezeichnet** wurde.
 
@@ -5494,6 +5250,18 @@ class Viewport(QWidget):
         self._gizmo: Gizmo | None = None
         self._preview_gizmo: Gizmo | None = None
         self._preview_gizmo_wanted = False
+        self._preview_drag_start: tuple[Any, Any] | None = None
+        """Der Aktor der Vorschau und seine Matrix vor dem Zug — für Esc und Enter.
+
+        Der Griff setzt die Matrix des Aktors schon im Zug; ohne Rückweg stand
+        die Vorschau nach Esc versetzt da, und der nächste Griff rechnete den
+        verworfenen Weg mit (Review U1, Nachprüfung, Fund 1)."""
+        self._preview_dragging = False
+        """Ob der laufende Zug am Griff der Vorschau hängt und nicht am Körper.
+
+        Beide teilen :meth:`_on_gizmo_interacted` und die Zahl dazu; eine getippte
+        Zahl gehört dann der Vorschau (``previewDragged``), nie dem gewählten
+        Körper (Review U1, Fund 3)."""
         self._placement_grip: Gizmo | None = None
         self._placement_grip_item: Item | None = None
         """Der Griff am Werkzeugkörper einer Platzierung, und woran er hängt.
@@ -5618,7 +5386,7 @@ class Viewport(QWidget):
         """Ein möglicher Langlochzug: erst die Klickschwelle unterscheidet ihn vom Klick."""
         self._drag_kind: str | None = None
         """Was gerade gezogen wird — ``move``, ``turn``, ``face``, ``scale``
-        oder ``pull``, ``None`` heißt kein Zug. Entscheidet, was eine getippte
+        oder ``slot``, ``None`` heißt kein Zug. Entscheidet, was eine getippte
         Zahl bedeutet (§18.11)."""
         self._drag_axis: Axis | None = None
         """Die Achse des laufenden Zugs, sobald sie sich gezeigt hat."""
@@ -5785,6 +5553,9 @@ class Viewport(QWidget):
         """Für welche Auswertung zuletzt geprüft wurde, ob die gewählte Kante
         sie überlebt hat. Ohne dieses Feld lief die Prüfung bei jedem
         Szenenaufbau — und die tastet alle Kanten des Körpers ab."""
+        self._edge_contours: dict[tuple[ObjectId, tuple[str, ...]], tuple[str, ...]] = {}
+        """Je Körper und gewählten Kanten die ganze Kontur, die eine Rundung
+        mitnimmt (:meth:`_contour_of_chosen_edges`) — einmal je Auswertung."""
         self._edge_info: dict[tuple[ObjectId, str], Any] = {}
         """Die ``EdgeInfo`` je Kante — was ihre Beschriftung braucht.
 
@@ -5800,8 +5571,15 @@ class Viewport(QWidget):
         Er steht neben der Merkmalsauswahl und nicht in ihr — eine Kante ist
         kein Merkmal, sie hat keine Kennung, die die Erkennung vergibt.
         """
+        self._more_edges: tuple[str, ...] = ()
+        """Die übrigen gewählten Kanten desselben Körpers, in Klickfolge (RM-563).
+
+        Strg- oder Umschalt-Klick nimmt sie dazu (:meth:`add_edge`). Die
+        zuletzt geklickte steht in ``_selected_edge`` und führt: Fasenmarken,
+        Titel und Auswahltiefe fragen nur sie, und ohne sie ist dieses Feld
+        leer."""
         self._edge_patch: Item | None = None
-        """Die Linie der gewählten Kante, vor dem Material gezeichnet
+        """Die Linie der gewählten Kanten, vor dem Material gezeichnet
         (:meth:`_redraw_edge_patch`)."""
         self._chamfer_values: dict[str, Any] | None = None
         """Die Werte der Fase im Merkmalfenster, solange sie die gewählte Kante
@@ -5918,12 +5696,23 @@ class Viewport(QWidget):
         self._boning = False
         self._splitting = False
         """§25: solange das an ist, setzen Klicks die Enden einer Trennlinie."""
+        self._drawing = False
+        """RM-559: solange das an ist, gehören Klicks dem Aufziehen (``draw_flow``)."""
         self._split_actors: list[Any] = []
+        self._draw_actors: list[Any] = []
+        """Was das Aufziehen gerade zeigt (RM-559) — Vorschau, kein Dokumentzustand."""
+        self.draw_shown: tuple[int, int, int] = (0, 0, 0)
+        """Durchgezogene, gestrichelte Striche und Karten des Aufziehens — ohne Renderer prüfbar."""
         self._bone_actors: list[Any] = []
         #: Was der Skeletteditor gerade zeigt: Knochen als Strecken, Gelenke
         #: als Punkte — eine Aussage über das Bild, auch ohne Renderer prüfbar.
         self.bones_shown: tuple[tuple[Vec3, Vec3], ...] = ()
         self.joint_shown: Vec3 | None = None
+        self.joints_shown: tuple[Vec3, ...] = ()
+        """Die Gelenke, die sich greifen lassen — Szenekoordinaten, in der Stellung."""
+        self._joints_target: ObjectId | None = None
+        self._hover_joint: int | None = None
+        self._joint_drag: int | None = None
         """Was von der gezeichneten Linie im Bild steht. Eine eigene Liste, weil
         sie ein anderes Leben hat als die Körper: Ein Szenenaufbau räumt sie
         nicht weg, ein Werkzeugwechsel schon."""
@@ -5948,6 +5737,20 @@ class Viewport(QWidget):
         """Der Ring, der ihn zeigt — als Weltmaß in der Szene und nicht am
         Zeiger: Ein Zeiger hat feste Punktgröße und weiß nichts von der Kamera,
         er behauptete beim ersten Zoom eine Größe, die er nicht mehr hat."""
+        self._brush_copies: list[Any] = []
+        """Die Spiegelbilder des Rings, solange *Spiegeln* an ist."""
+        self._brush_mirror: tuple[Vec3, int] | None = None
+        self._brush_timer = QTimer(self)
+        self._brush_timer.setSingleShot(True)
+        self._brush_timer.setInterval(BRUSH_FOLLOW_MS)
+        self._brush_timer.timeout.connect(self._draw_brush)
+        """Legt den Ring einen Takt nach der letzten Bewegung auf die Fläche (H1)."""
+        self._last_drag_screen: tuple[int, int] | None = None
+        """Wo im Bild die letzte Probe eines gezogenen Strichs lag — von dort aus
+        füllt ein schneller Zug auf (H5)."""
+        self._preview_meshes: dict[ObjectId, Any] = {}
+        """Die Netze, deren Koordinaten :meth:`show_preview_mesh` gerade zeigt —
+        der Ring liest dort die Fläche, die im Bild steht."""
         self._cursor_role = "select"
         """Welcher Zeiger gerade über dem Bild steht. Gemerkt, damit nicht bei
         jeder Mausbewegung derselbe neu gesetzt wird — Qt zeichnet ihn sonst
@@ -6020,8 +5823,6 @@ class Viewport(QWidget):
         """Die drei greifbaren Grundebenen beim freien Einstieg."""
         self.sketch_selection = SketchSelectionBadge(self)
         """Was in der Skizze gewählt ist — ruhig am Bildrand."""
-        self.sketch_action = SketchActionBadge(self)
-        """Aufziehen und Abtragen dort erklären, wo Umriss und Griff stehen."""
         self._compare = HoldToCompare(self)
         """Der Filter für die Leertaste. Er hängt an der Anwendung, solange das
         Band steht — nicht länger, sonst schluckt er anderswo Leerzeichen."""
@@ -6615,13 +6416,7 @@ class Viewport(QWidget):
         Abstand, Fokus und Parallelmaßstab ändern sich nicht; das Einrasten
         korrigiert ausschließlich die letzten Grad. **Warum es das tut:** Die
         letzten fünf Grad von Hand zu treffen ist Zielen ohne Gewinn — der
-        Kunde will *in* die Vorderansicht, nicht neben sie. Und im
-        Skizzenmodus hängt mehr daran als die Anmutung: Solange die Kamera
-        frei steht, bewirbt die Leiste den Ziehgriff (``_sketch_pull_offer``
-        vergleicht Blick gegen Zeichenebene), und der ist nahe der Draufsicht
-        unbrauchbar empfindlich — bei einem Grad Kippung bedeuten zehn Pixel
-        Mausbewegung rund siebzig Millimeter Höhe. Das Einrasten nimmt genau
-        den Bereich heraus, in dem die Geste angeboten wird und nicht taugt.
+        Kunde will *in* die Vorderansicht, nicht neben sie.
 
         Gemeldet wird der Name nur für die Skizze: ``sketchViewChanged``
         füllt das Ebenenfeld, und außerhalb gibt es keines.
@@ -7215,6 +7010,7 @@ class Viewport(QWidget):
             actor.update_points(points)
         except ValueError:
             return
+        self._preview_meshes[object_id] = mesh
         self.renderer.render()
 
     def clear_preview_mesh(self) -> None:
@@ -7224,6 +7020,7 @@ class Viewport(QWidget):
         wurde, war eine Vorschau, und der Dokumentzustand ist die einzige
         Wahrheit darüber, was danach zu sehen ist.
         """
+        self._preview_meshes.clear()
         self.show_scene(self._scene_for_rebuild())
 
     def _rebuild_layer(self) -> None:
@@ -7514,6 +7311,7 @@ class Viewport(QWidget):
         # wenn ihre Kante den Schritt nicht überlebt hat — sonst zeigte die
         # Hervorhebung auf einen Schlüssel, den es nicht mehr gibt.
         self._edge_geometry.clear()
+        self._edge_contours.clear()
         self._edge_boxes.clear()
         self._markings = {
             key: known for key, known in self._markings.items() if known[0]() is not None
@@ -7527,9 +7325,11 @@ class Viewport(QWidget):
         # Dieselbe Bauart wie ``_shadow_splits`` und ``_edge_meshes``: Was
         # sich merkt, wofür es gerechnet hat, rechnet nicht zweimal.
         if self._selected_edge is not None and result is not self._edges_checked:
-            owner, key = self._selected_edge
-            if key not in {name for name, _points in self._prepared_edges(owner)}:
-                self._selected_edge = None
+            owner = self._selected_edge[0]
+            present = {name for name, _points in self._prepared_edges(owner)}
+            kept = [name for name in self.highlighted_edges() if name in present]
+            self._selected_edge = (owner, kept[-1]) if kept else None
+            self._more_edges = tuple(kept[:-1])
         self._edges_checked = result
         # Eine Platte mehr heißt ein Bett mehr. Die Kulisse gehört
         # ``show_build_volume``, und die kennt die Szene nicht — hier ist die
@@ -8200,53 +8000,8 @@ class Viewport(QWidget):
             self.differenceApplied.emit(self._difference)
 
     def _slot_colours(self, mesh: Any, entry: Any, face_count: int) -> CellColours | None:
-        """Die Zellfarben eines Körpers — aus seinen Materialslots oder aus der
-        Datei, aus der er kam; ``None`` heißt Körperfarbe.
-
-        Ein Slot ohne eigene Farbe bekommt eine aus der Ersatzpalette
-        (``theme.slot_colour``): Der Pinsel legt Slots mit ``colour=None`` an,
-        und mit der Körperfarbe an dieser Stelle war das Bemalen im Bild
-        folgenlos — zwei Striche in zwei Slots sahen aus wie keiner. Ein
-        einziger unbenannter Slot ohne Farbe bleibt die Vorgabe. Eine
-        ausdrücklich gesetzte Farbe gilt auch bei nur einem Slot.
-        """
-        slots = getattr(entry, "material_slots", None)
-        indices = getattr(mesh, "slots", ())
-        import numpy as np
-
-        if not slots or len(indices) != face_count:
-            colours = source_colours(mesh, face_count)
-            if colours is None:
-                return None
-            return CellColours(np.asarray(colours, dtype=float) / 255.0)
-
-        known = {slot.index: slot for slot in slots}
-        highest = max(known)
-        table: list[str] = []
-        for index in range(highest + 1):
-            slot = known.get(index)
-            colour = slot.colour if slot is not None else None
-            if colour is not None:
-                table.append(hex_of(colour))
-                continue
-            table.append(slot_colour(index) or self._object_colour)
-        # **Gefragt wird der Slot mit dem Index null, nicht der zuerst
-        # deklarierte.** Die Tabelle ist über den Slot**index** aufgebaut;
-        # ``slots[0]`` stand hier und ist etwas anderes. Bei zweimal
-        # vergebenem Index gewinnt in ``known`` der letzte und in dieser
-        # Prüfung der erste — dann fiele eine gesetzte Farbe auf die
-        # Körperfarbe zurück. ``get`` und nicht ``[0]``, und ein fehlender
-        # Slot zählt als „keine Farbe": genau die Behandlung, die die Schleife
-        # darüber ihm gibt.
-        first = known.get(0)
-        if len(table) < 2 and (first is None or first.colour is None):
-            return None
-        return CellColours(
-            np.asarray(indices, dtype=np.int32),
-            colormap=tuple(table),
-            limits=(0.0, float(highest)),
-            categorical=True,
-        )
+        """Die Zellfarben eines Körpers in diesem Thema (:func:`slot_cell_colours`)."""
+        return slot_cell_colours(mesh, entry, face_count, self._object_colour)
 
     def _feature_edges_for(
         self, object_id: ObjectId, vertices: Any, faces: Any, source: Any
@@ -8952,13 +8707,11 @@ class Viewport(QWidget):
         }
         self._shown_colours = wanted
         # **Ein Körper mit Filament trägt Farben je Dreieck, und die schlagen
-        # jede Körperfarbe.** Ohne diese Umschaltung schriebe die Blende unten
-        # in eine Farbe, die pygfx gar nicht liest: Im Objektbaum markiert, im
-        # Bild grau wie alle anderen (Befund Robert, 08.09.2026). Für die
-        # Dauer der Auswahl gilt deshalb die eine Farbe, danach wieder der
-        # Werkstoff je Dreieck.
+        # jede Körperfarbe**: Die Blende unten schreibt in eine Farbe, die
+        # pygfx dort nicht liest. Die Auswahl liegt deshalb als Ton über dem
+        # Werkstoff (:func:`face_tint`).
         for identifier, actor in self._actors.items():
-            actor.set_face_colours_visible(shows_face_colours(identifier, highlighted, map_owner))
+            actor.set_face_tint(face_tint(identifier, highlighted, map_owner), SELECTION_TINT_SHARE)
         if not changed:
             return
         # Die neue Blende löst die ganze laufende Animation ab. Deren noch
@@ -9292,7 +9045,6 @@ class Viewport(QWidget):
         self.drag_bar.set_theme(theme)
         self.plane_picker.set_theme(theme)
         self.sketch_selection.set_theme(theme)
-        self.sketch_action.set_theme(theme)
         if self.renderer is None:
             return
         self.renderer.set_background(colours["bottom"], top=colours["top"])
@@ -9525,6 +9277,7 @@ class Viewport(QWidget):
         pending: Vec3 | None = None,
         *,
         target: ObjectId | None = None,
+        joints: Sequence[Vec3] = (),
     ) -> None:
         """Die Knochen des Skeletteditors und das gesetzte Gelenk (RM-367, W4-6).
 
@@ -9537,6 +9290,8 @@ class Viewport(QWidget):
 
         self.bones_shown = tuple(bones)
         self.joint_shown = pending
+        self.joints_shown = tuple(joints)
+        self._joints_target = target
         self.clear_bones(keep=True)
         if self.renderer is None or (not bones and pending is None):
             return
@@ -9583,6 +9338,8 @@ class Viewport(QWidget):
         if not keep:
             self.bones_shown = ()
             self.joint_shown = None
+            self.joints_shown = ()
+            self._hover_joint = None
         if self.renderer is None:
             self._bone_actors.clear()
             return
@@ -9600,6 +9357,152 @@ class Viewport(QWidget):
             self.renderer.remove(actor)
         self._split_actors.clear()
         self.renderer.render()
+
+    # --- Körper aufziehen (RM-559) ---------------------------------------------
+
+    def set_drawing(self, active: bool) -> None:
+        """Das Aufziehen ist offen: der Zeiger wird zum Fadenkreuz."""
+        self._drawing = active
+        self._update_cursor()
+
+    def ray_at(self, x: int, y: int) -> tuple[Vec3, Vec3] | None:
+        """Der Sichtstrahl durch einen Bildpunkt, in Koordinaten der Ansicht.
+
+        Wer ihn in die Szene braucht, zieht den Ansichtsversatz des Ziels ab —
+        den kennt er vom ersten Klick (mehrere Platten, §25).
+        """
+        return self._pick_ray(x, y)
+
+    def surface_under(self, x: int, y: int) -> tuple[ObjectId, Vec3, Vec3, FeatureId | None] | None:
+        """Körper, Szenen- und Ansichtspunkt und Merkmal unter dem Zeiger — für das Aufziehen.
+
+        Gefragt wird wie beim Messen nur unter den Körpern (:meth:`_world_at`),
+        das Merkmal über die Dreieckszuordnung des Kerns, sonst über die
+        Reichweite (:meth:`_feature_at`). ``None`` heißt: Dort liegt kein
+        Körper, ein Klick meint das Bett.
+        """
+        if self.renderer is None:
+            return None
+        self._world_at(x, y)
+        hit = self._selection_hit
+        if hit is None:
+            return None
+        feature = self._feature_on_cell(hit.object_id, hit.cell)
+        if feature is None:
+            feature = self._feature_at(hit.scene_point)
+        return hit.object_id, hit.scene_point, hit.view_point, feature
+
+    def view_offset_of(self, object_id: ObjectId | None) -> Vec3:
+        """Wie weit dieser Körper im Bild von seinem Ort in der Szene steht — null ohne Körper."""
+        result = self._result
+        entry = result.scene.objects.get(object_id) if result is not None and object_id else None
+        if entry is None or result is None:
+            return (0.0, 0.0, 0.0)
+        offset = self._view_offset(entry, result)
+        return (float(offset[0]), float(offset[1]), float(offset[2]))
+
+    def bed_point_at(self, x: int, y: int) -> tuple[Vec3, Vec3] | None:
+        """Wo der Sichtstrahl das Bett trifft — Szenen- und Ansichtspunkt, oder nichts.
+
+        Gerechnet wie der Zeiger auf einer Zeichenebene (:func:`ray_hit`), in
+        der Ansicht; die Szene bekommt den Punkt über :meth:`_from_view`, also
+        auf der Platte, über der er im Bild liegt (§25).
+        """
+        ray = self._pick_ray(x, y)
+        if ray is None:
+            return None
+        flat = ray_hit(BED_FRAME, ray[0], ray[1])
+        if flat is None:
+            return None
+        view = (float(flat[0]), float(flat[1]), 0.0)
+        return self._from_view(view), view
+
+    def show_draw(
+        self,
+        solid: Sequence[tuple[Vec3, Vec3]] = (),
+        dashed: Sequence[tuple[Vec3, Vec3]] = (),
+        labels: Sequence[tuple[Vec3, str]] = (),
+        *,
+        inward: bool = False,
+        patch: tuple[Any, Any] | None = None,
+        shift: Vec3 = (0.0, 0.0, 0.0),
+    ) -> None:
+        """Den Entwurf des Aufziehens zeigen: Striche, Karten und die Fläche unter dem Zeiger.
+
+        Alles ungreifbar und mit dem Ansichtsversatz ``shift``. Nach außen in
+        der Farbe für Hinzugefügtes, nach innen in der für Entferntes und
+        gestrichelt — die Linienart ist die zweite Kodierung (Regel 18), das
+        Wort an der Karte die dritte. ``patch`` sind Ecken und Dreiecke einer
+        Fläche, die aufleuchtet (Füllung **und** Umriss).
+        """
+        self.draw_shown = (len(solid), len(dashed), len(labels))
+        self.clear_draw(render=False)
+        renderer = self.renderer
+        if renderer is None:
+            return
+        import numpy as np
+
+        offset = np.asarray(shift, dtype=float)
+        colours = DIFF_PALETTES[self._diff_palette]
+        colour = colours.removed.colour if inward else colours.added.colour
+        if patch is not None:
+            vertices, faces = patch
+            self._draw_actors.append(
+                renderer.add_surface(
+                    np.asarray(vertices, dtype=float) + offset,
+                    np.asarray(faces),
+                    name="draw:face",
+                    style=SurfaceStyle(
+                        colour=SELECTED_COLOUR,
+                        opacity=0.28,
+                        lighting=False,
+                        pickable=False,
+                        coplanar_overlay=True,
+                    ),
+                )
+            )
+        for segments, width, name in (
+            (solid, 2.5, "draw:lines"),
+            (dashed, 2.5, "draw:dashes"),
+        ):
+            if not segments:
+                continue
+            points = np.asarray([end for pair in segments for end in pair], dtype=float) + offset
+            tint = SELECTED_COLOUR if name == "draw:lines" and not inward else colour
+            self._draw_actors.append(
+                renderer.add_lines(points, name=name, colour=tint, width=width, keep_in_front=True)
+            )
+        if labels:
+            self._draw_actors.append(
+                renderer.add_labels(
+                    np.asarray([point for point, _text in labels], dtype=float) + offset,
+                    [text for _point, text in labels],
+                    name="draw:measures",
+                    style=LabelStyle(
+                        text_colour=self._sketch_label_colour,
+                        font_size=SKETCH_CARD_FONT_PIXELS,
+                        bold=True,
+                        always_visible=True,
+                        background=self._sketch_label_background,
+                        background_opacity=0.94,
+                        margin=5,
+                    ),
+                )
+            )
+        renderer.render()
+
+    def clear_draw(self, *, render: bool = True) -> None:
+        """Nimmt den Entwurf des Aufziehens aus dem Bild."""
+        if render:
+            self.draw_shown = (0, 0, 0)
+        if self.renderer is None:
+            self._draw_actors.clear()
+            return
+        for actor in self._draw_actors:
+            self.renderer.remove(actor)
+        self._draw_actors.clear()
+        if render:
+            self.renderer.render()
 
     def view_direction(self) -> Vec3:
         """Wohin die Kamera schaut — von ihr weg auf den Brennpunkt zu.
@@ -9634,7 +9537,70 @@ class Viewport(QWidget):
         der beides gleichzeitig kann, kann keines von beidem verlässlich.
         """
         self._boning = active
+        self._hover_joint = None
+        self._joint_drag = None
         self._update_cursor()
+
+    def joint_at(self, x: int, y: int) -> int | None:
+        """Welches gezeigte Gelenk unter diesem Bildpunkt liegt (Gerätepixel), oder keins.
+
+        Gemessen im Bild und nicht im Raum: Ein Gelenk sitzt im Körper, und
+        der Klick trifft die Haut darüber. Das nächste innerhalb von
+        :data:`JOINT_PIXELS` gewinnt.
+        """
+        import numpy as np
+
+        if self.renderer is None or not self.joints_shown or self._result is None:
+            return None
+        entry = self._result.scene.objects.get(self._joints_target or "")
+        shift = self._view_offset(entry, self._result) if entry is not None else np.zeros(3)
+        reach = self._device_pixels(JOINT_PIXELS)
+        best: tuple[float, int] | None = None
+        for index, joint in enumerate(self.joints_shown):
+            at = np.asarray(joint, dtype=float) + shift
+            sx, sy, _depth = self.renderer.world_to_display(
+                (float(at[0]), float(at[1]), float(at[2]))
+            )
+            away = math.hypot(sx - x, sy - y)
+            if away <= reach and (best is None or away < best[0]):
+                best = (away, index)
+        return None if best is None else best[1]
+
+    def show_bend_angle(self, degrees: float, x: int, y: int) -> None:
+        """Den Winkel des Beugens am Zeiger zeigen — tippbar wie jeder Zug (§18.11)."""
+        ratio = self.renderer.device_ratio() if self.renderer is not None else 1.0
+        self.drag_bar.anchor = QPoint(int(x / ratio), int(y / ratio))
+        self.drag_bar.follow(str(tr("Winkel")), degrees, "°", 0)
+
+    def finish_bend(self) -> None:
+        """Das Beugen ist vorbei — gezogen, getippt oder abgebrochen."""
+        if self._drag_kind == "bend":
+            self._drag_kind = None
+        self._joint_drag = None
+        self.drag_bar.dismiss()
+
+    def point_beside(self, x: int, y: int, through: Vec3) -> Vec3 | None:
+        """Der Punkt unter dem Bildpunkt in der Bildebene durch ``through`` (Szene).
+
+        Beugen dreht in der Ebene senkrecht zum Blick; was die Maus dort zieht,
+        ist der Winkel. Szenekoordinaten hinein und heraus — der Ansichtsversatz
+        des Körpers fällt dazwischen weg.
+        """
+        import numpy as np
+
+        if self.renderer is None or self._result is None:
+            return None
+        entry = self._result.scene.objects.get(self._joints_target or "")
+        shift = self._view_offset(entry, self._result) if entry is not None else np.zeros(3)
+        anchor = np.asarray(through, dtype=float) + shift
+        depth = self.renderer.world_to_display(
+            (float(anchor[0]), float(anchor[1]), float(anchor[2]))
+        )[2]
+        found = self.renderer.display_to_world(x, y, depth)
+        if found is None:
+            return None
+        back = np.asarray(found, dtype=float) - shift
+        return (float(back[0]), float(back[1]), float(back[2]))
 
     def set_sculpting(self, active: bool, radius: float = 0.0) -> None:
         """Macht aus Klicks Pinselzüge (§25).
@@ -9647,7 +9613,9 @@ class Viewport(QWidget):
         self._brush_radius = radius if active else 0.0
         if not active:
             self.stop_sculpt_gesture()
+            self._brush_timer.stop()
             self._hide_brush()
+            self._preview_meshes.clear()
         self._update_cursor()
 
     def stop_sculpt_gesture(self) -> None:
@@ -9663,45 +9631,126 @@ class Viewport(QWidget):
         if self._sculpting:
             self._draw_brush()
 
+    def set_brush_mirror(self, centre: Vec3 | None, planes: int) -> None:
+        """Wo der Ring sein Spiegelbild zeigt: die Spiegelmitte der Sitzung in
+        Szenekoordinaten und die Bitmaske der Ebenen (wie ``Stroke.symmetry``).
+
+        *Spiegeln* ist ein Schalter in der Leiste; was er bewirkt, soll man vor
+        dem Zug sehen und nicht erst danach (Konzept P16 §7.3)."""
+        wanted = (centre, planes) if centre is not None and planes else None
+        if wanted == self._brush_mirror:
+            # Unverändert kein neuer Pick: Die Vorschau meldet sich je Zug.
+            return
+        self._brush_mirror = wanted
+        if self._sculpting:
+            self._draw_brush()
+
     def _hide_brush(self) -> None:
-        if self._brush_actor is not None and self.renderer is not None:
-            self.renderer.remove(self._brush_actor)
+        if self.renderer is not None and (self._brush_actor is not None or self._brush_copies):
+            for actor in (self._brush_actor, *self._brush_copies):
+                if actor is not None:
+                    self.renderer.remove(actor)
             self.renderer.render()
         self._brush_actor = None
+        self._brush_copies = []
 
     def _draw_brush(self) -> None:
-        """Den Pinselradius als Ring auf der Fläche unter dem Zeiger zeigen (§20).
+        """Den Pinselradius als Ring auf der Fläche unter dem Zeiger zeigen (§20, H1).
 
         Als Weltmaß in der Szene und nicht am Zeiger: Ein Zeiger hat feste
-        Punktgröße und weiß nichts von der Kamera. Der Ring liegt in der
-        Ebene der nächsten Ecke des Netzes.
+        Punktgröße und weiß nichts von der Kamera. **Auf der Fläche**, die der
+        Pick trifft (:meth:`_world_at`), nicht auf der Fokusebene der Kamera:
+        Dort lag er bis RM-560 im Median 7 mm hinter der Fläche, verdeckt, und
+        stand hochkant (90° zur Flächennormale gemessen, 28 von 28 Orten).
         """
-        import numpy as np
-
         if self.renderer is None or self._hover_at is None or self._brush_radius <= 0.0:
             return
         x, y = self._hover_at
-        point = self.renderer.display_to_world(x, y, self.renderer.focal_depth())
+        point = self._world_at(x, y)
         if point is None:
             self._hide_brush()
             return
-        mesh = self._nearest_mesh(point)
-        if mesh is None:
+        self._place_brush(point)
+
+    def _place_brush(self, point: Vec3) -> None:
+        """Den Ring flach auf die Fläche am Pickpunkt legen.
+
+        ``point`` steht in Ansichtskoordinaten und kommt aus dem letzten
+        :meth:`_world_at`; dessen Dreieck nennt ``_selection_hit``. Ein
+        gezogener Zug ruft das mit seinem eigenen Pick — der Ring folgt dem
+        Strich, ohne ein zweites Mal zu picken.
+        """
+        import numpy as np
+
+        if self.renderer is None or self._brush_radius <= 0.0:
+            return
+        normal = self._surface_normal_at_hit()
+        if normal is None:
             self._hide_brush()
             return
-        vertices = np.asarray(mesh.raw.vertices, dtype=float)
-        nearest = int(np.argmin(np.linalg.norm(vertices - np.asarray(point), axis=1)))
-        normal = np.asarray(mesh.raw.vertex_normals, dtype=float)[nearest]
-        ring = _ring_points(np.asarray(point, dtype=float), normal, self._brush_radius)
-        self._hide_brush()
+        for actor in (self._brush_actor, *self._brush_copies):
+            if actor is not None:
+                self.renderer.remove(actor)
+        self._brush_copies = []
+        rings = [_ring_points(np.asarray(point, dtype=float), normal, self._brush_radius)]
+        hit = self._selection_hit
+        if self._brush_mirror is not None and hit is not None:
+            centre, planes = self._brush_mirror
+            shift = np.asarray(hit.view_point, dtype=float) - np.asarray(hit.scene_point)
+            places = [(np.asarray(hit.scene_point, dtype=float), np.asarray(normal, dtype=float))]
+            for bit, axis in ((1, 0), (2, 1), (4, 2)):
+                if planes & bit:
+                    flip = np.ones(3)
+                    flip[axis] = -1.0
+                    middle = np.asarray(centre, dtype=float)
+                    places += [((at - middle) * flip + middle, way * flip) for at, way in places]
+            rings += [_ring_points(at + shift, way, self._brush_radius) for at, way in places[1:]]
         self._brush_actor = self.renderer.add_lines(
-            shapes.closed_ring(ring),
+            shapes.closed_ring(rings[0]),
             name="brush",
             colour=SELECTED_COLOUR,
             width=2.0,
             connected=True,
         )
+        self._brush_copies = [
+            self.renderer.add_lines(
+                shapes.closed_ring(ring),
+                name="brush:mirror",
+                colour=SELECTED_COLOUR,
+                width=1.0,
+                connected=True,
+            )
+            for ring in rings[1:]
+        ]
         self.renderer.render()
+
+    def _surface_normal_at_hit(self) -> Any:
+        """Die Normale der Fläche, die der letzte Pick traf, in der gezeigten Lage.
+
+        Das getroffene Dreieck, wenn die Dreiecke des Bildes die der Szene sind
+        (``_original_pick_cells``) — aus dem Netz, das die Vorschau gerade zeigt.
+        Sonst die Normale der nächsten Ecke um den getroffenen Punkt.
+        """
+        import numpy as np
+
+        hit = self._selection_hit
+        if hit is None or self._result is None:
+            return None
+        entry = self._result.scene.objects.get(hit.object_id)
+        mesh = self._preview_meshes.get(hit.object_id) or (entry.mesh if entry else None)
+        if mesh is None:
+            return None
+        raw = as_mesh_data(mesh).raw
+        faces = np.asarray(raw.faces)
+        vertices = np.asarray(raw.vertices, dtype=float)
+        if hit.object_id in self._original_pick_cells and 0 <= hit.cell < len(faces):
+            a, b, c = vertices[faces[hit.cell]]
+            normal = np.cross(b - a, c - a)
+            length = float(np.sqrt((normal * normal).sum()))
+            if length > EPS_GEOM:
+                return normal / length
+        nearest = int(np.argmin(np.linalg.norm(vertices - np.asarray(hit.scene_point), axis=1)))
+        return np.asarray(raw.vertex_normals, dtype=float)[nearest]
 
     # --- der Zeiger (§19.3) -----------------------------------------------------
 
@@ -9734,16 +9783,8 @@ class Viewport(QWidget):
         if self._sketch_frame is not None:
             if self._hover_at is not None:
                 x, y = self._hover_at
-                ready_to_pull = self._pull_is_offered()
-                # Der ausdrückliche Pfeil/Kreuz-Griff gewinnt immer. So kann
-                # seine sichtbare Fläche nicht in einen Kamerazug fallen.
-                if ready_to_pull and self.pull_handle_reach(x, y) <= self._device_pixels(
-                    PULL_HIT_PIXELS
-                ):
-                    return "move"
-                # Danach vorhandene Geometrie: Im Auswahlwerkzeug bedeutet
-                # ein Griff auf Linie oder Punkt bearbeiten, nicht die Kamera
-                # bewegen und nicht versehentlich eine Höhe ziehen.
+                # Vorhandene Geometrie: Im Auswahlwerkzeug bedeutet ein Griff
+                # auf Linie oder Punkt bearbeiten, nicht die Kamera bewegen.
                 hit = self._sketch_hit(x, y)
                 if (
                     hit is not None
@@ -9751,13 +9792,15 @@ class Viewport(QWidget):
                     and self._sketch_edit_ready(hit)
                 ):
                     return "move"
-                if ready_to_pull and self.grip_reach(x, y) <= self._device_pixels(CURSOR_PIXELS):
-                    return "move"
             # **Ganz vorn, wie im Klick selbst.** Im Skizzenmodus meint jeder
             # Klick eine Stelle auf der Ebene; ein Zeiger, der daneben ein
             # Merkmal verspricht, verspricht etwas, das nicht eintritt. Die
             # Rolle ist dieselbe wie auf der Zeichenfläche (`draw`), damit
             # derselbe Handgriff dasselbe Bild hat.
+            return "draw"
+        if self._drawing:
+            # Das Aufziehen setzt Punkte auf Bett und Fläche — derselbe Zeiger
+            # wie auf der Zeichenebene (RM-559).
             return "draw"
         if self._splitting:
             # Das Fadenkreuz des Messens: Beide setzen einen Punkt, der eine
@@ -9765,10 +9808,10 @@ class Viewport(QWidget):
             # haben.
             return "measure"
         if self._boning:
-            # Derselbe Zeiger wie beim Formen: Beide setzen einen Punkt auf der
-            # Fläche, und ein dritter Ring wäre eine Unterscheidung ohne
-            # Unterschied.
-            return "sculpt"
+            # Über einem Gelenk zeigt der Zeiger, dass es sich ziehen lässt
+            # (RM-561); sonst derselbe wie beim Formen: Beide setzen einen
+            # Punkt auf der Fläche.
+            return "move" if self._hover_joint is not None else "sculpt"
         if self._sculpting:
             return "sculpt"
         if self._measure_mode != "off":
@@ -9927,18 +9970,26 @@ class Viewport(QWidget):
         # Der Schnitt mit der Zeichenebene kostet nichts dergleichen — er ist
         # eine Division —, und eine Linie, die dem Zeiger erst nach neunzig
         # Millisekunden folgt, sieht aus wie ein hängendes Programm.
+        if self._sculpting:
+            # **Der Ring folgt dem Zeiger einen Takt später, nicht nach der
+            # Ruhepause** (H1). Die Merkmalssuche, auf die er wartete, ist beim
+            # Formen ohnehin nicht gemeint.
+            self._brush_timer.start()
+            return
+        if self._boning:
+            # Ein paar Gelenke ins Bild zu rechnen kostet nichts; der Zeiger
+            # sagt sofort, was sich greifen lässt.
+            joint = self.joint_at(*self._hover_at)
+            if joint != self._hover_joint:
+                self._hover_joint = joint
+                self._update_cursor()
+            return
         if self._sketch_frame is not None:
-            if self._pull_from is not None:
-                # **Während eines Zugs am Ziehgriff hält die Zeichnung still.**
-                # Sonst zöge die Vorschau der angefangenen Linie dem Zug
-                # hinterher, und im Bild wüchsen zwei Dinge zugleich.
-                return
-            # **Und der Zeiger wird hier gesetzt, nicht nach einer Ruhepause.**
+            # **Der Zeiger wird hier gesetzt, nicht nach einer Ruhepause.**
             # Der Weg über ``_hover_timer`` gilt der Merkmalssuche und läuft im
-            # Skizzenmodus gar nicht; ohne diese Zeile erfuhr niemand, dass der
-            # Umriss ein Griff ist. Teuer ist das nicht: Die Frage kostet erst
-            # etwas, wenn der Griff überhaupt angeboten wird (Querschau), und
-            # gesetzt wird nur, wenn die Rolle wechselt.
+            # Skizzenmodus gar nicht; ohne diese Zeile erfuhr niemand, dass
+            # Punkt oder Linie unter dem Zeiger ein Griff ist. Gesetzt wird nur,
+            # wenn die Rolle wechselt.
             self._update_cursor()
             hit = self._sketch_hit(*self._hover_at)
             if hit is not None:
@@ -9960,6 +10011,7 @@ class Viewport(QWidget):
         Regler führt hinaus.
         """
         self._hover_timer.stop()
+        self._brush_timer.stop()
         self._hover_at = None
         self._set_hover_target(None, None)
         self._clear_snap_preview()
@@ -9973,18 +10025,42 @@ class Viewport(QWidget):
         darüber hinaus — sonst schluckte ein neuer Ansatz neben dem alten
         Endpunkt seinen ersten Zug. Die Kosten sprechen nicht dagegen:
         ``apply_strokes`` liegt gemessen bei zwei Millisekunden für 25 Züge.
+
+        **Und er ist auch ein Höchstabstand** (H5): Liegt die neue Stelle mehr
+        als einen halben Radius hinter der letzten Probe, setzt der Zug
+        dazwischen Proben auf die Fläche, gepickt an Bildpunkten auf der
+        Strecke dorthin (höchstens :data:`DRAG_FILL_LIMIT`). Ein schneller Zug
+        ist ein Strich, keine Perlenkette. Der Ring folgt dabei der Probe.
         """
         if fresh:
             self._last_drag_stroke = None
+            self._last_drag_screen = None
             self.sculptGestureStarted.emit()
         point = self._world_at(x, y)
         if point is None:
             return
+        if self._sculpting:
+            self._place_brush(point)
         last = self._last_drag_stroke
         spacing = self._brush_radius * 0.5
         if last is not None and spacing > 0.0 and math.dist(last, point) < spacing:
             return
+        before = self._last_drag_screen
+        if last is not None and before is not None and spacing > 0.0:
+            gaps = min(int(math.dist(last, point) / spacing), DRAG_FILL_LIMIT + 1)
+            for step in range(1, gaps):
+                share = step / gaps
+                between = self._world_at(
+                    round(before[0] + (x - before[0]) * share),
+                    round(before[1] + (y - before[1]) * share),
+                )
+                if between is not None and math.dist(self._last_drag_stroke or last, between) >= (
+                    spacing * 0.5
+                ):
+                    self._last_drag_stroke = between
+                    self._on_picked(between)
         self._last_drag_stroke = point
+        self._last_drag_screen = (x, y)
         self._on_picked(point)
 
     def _on_picked(self, point: Any, add: bool = False) -> None:
@@ -10588,8 +10664,18 @@ class Viewport(QWidget):
         Umgekehrt räumt jede Merkmalsauswahl sie weg, denn zwei hervorgehobene
         Stellen an einem Körper behaupten zwei Antworten auf eine Frage.
         """
-        chosen = (object_id, key) if object_id is not None and key else None
-        if chosen == self._selected_edge:
+        self.select_edges(object_id, (key,) if key else ())
+
+    def select_edges(self, object_id: ObjectId | None, keys: Sequence[str]) -> None:
+        """Mehrere Kanten eines Körpers hervorheben, die letzte führt (RM-563).
+
+        Derselbe Weg wie :meth:`select_edge`, nur mit der ganzen Sammlung:
+        Das Fenster stellt sie so wieder her, wenn es den Baum räumt.
+        """
+        unique = tuple(dict.fromkeys(key for key in keys if key))
+        chosen = (object_id, unique[-1]) if object_id is not None and unique else None
+        more = unique[:-1] if chosen is not None else ()
+        if chosen == self._selected_edge and more == self._more_edges:
             return
         # **Erst das Merkmal räumen, dann die Kante setzen.** Andersherum
         # entstünde ein Ring: :meth:`select_feature` lässt seinerseits die
@@ -10603,6 +10689,7 @@ class Viewport(QWidget):
         if chosen is not None and self.highlighted_feature_refs():
             self.select_feature(None)
         self._selected_edge = chosen
+        self._more_edges = more
         # Die Werte der Fase gehörten der vorigen Kante; die neue bekommt
         # ihre eigenen, sobald das Merkmalfenster sie meldet.
         self._chamfer_values = None
@@ -10615,8 +10702,46 @@ class Viewport(QWidget):
         if self.renderer is not None:
             self._draw()
 
+    def add_edge(self, object_id: ObjectId, key: str) -> None:
+        """Eine Kante desselben Körpers dazunehmen — oder eine gewählte herausnehmen.
+
+        Der Weg von Strg- und Umschalt-Klick an einer gewählten Kante
+        (RM-563), dieselbe Umschaltung wie bei Merkmalen und Körpern. Die
+        dazugenommene führt; wird die führende herausgenommen, führt die
+        zuletzt davor gewählte. Ohne gewählte Kante dieses Körpers ist es ein
+        gewöhnliches :meth:`select_edge`, und die letzte herausgenommen lässt
+        keine stehen.
+        """
+        self.add_edges(object_id, (key,))
+
+    def add_edges(self, object_id: ObjectId, keys: Sequence[str]) -> None:
+        """Mehrere Kanten desselben Körpers dazunehmen — oder herausnehmen, wenn
+        schon alle gewählt sind: die Kanten einer Ecke (RM-590) wie eine einzelne
+        (:meth:`add_edge`). Die zuletzt genannte führt."""
+        current = (
+            self.highlighted_edges()
+            if self._selected_edge is not None and self._selected_edge[0] == object_id
+            else ()
+        )
+        named = tuple(dict.fromkeys(key for key in keys if key))
+        if named and all(key in current for key in named):
+            chosen = [key for key in current if key not in named]
+        else:
+            chosen = [*(key for key in current if key not in named), *named]
+        self.select_edges(object_id if chosen else None, chosen)
+
+    def highlighted_edges(self) -> tuple[str, ...]:
+        """Die Schlüssel aller gewählten Kanten in Klickfolge, die führende zuletzt.
+
+        Sie gehören dem Körper aus :meth:`highlighted_edge`; ohne gewählte
+        Kante ist die Folge leer.
+        """
+        if self._selected_edge is None:
+            return ()
+        return (*self._more_edges, self._selected_edge[1])
+
     def _drop_edge(self) -> None:
-        """Die gewählte Kante fallen lassen — die eine Stelle dafür.
+        """Die gewählten Kanten fallen lassen — die eine Stelle dafür.
 
         Sie hängt an mehreren Wegen, und jeder einzeln geschriebene wäre
         einer, den der nächste vergisst: Ein anderer Körper im Baum, ein
@@ -10627,6 +10752,7 @@ class Viewport(QWidget):
         if self._selected_edge is None:
             return
         self._selected_edge = None
+        self._more_edges = ()
         self._chamfer_values = None
         self._chamfer_shown = None
         self._redraw_edge_patch()
@@ -11459,7 +11585,6 @@ class Viewport(QWidget):
             self.drag_bar,
             self.plane_picker,
             self.sketch_selection,
-            self.sketch_action,
         ):
             if not card.isVisibleTo(self):
                 continue
@@ -11995,14 +12120,16 @@ class Viewport(QWidget):
         return self._candidates
 
     def _redraw_edge_patch(self) -> None:
-        """Die gewählte Kante als eigene Linie über dem Körper.
+        """Die gewählten Kanten als eigene Linie über dem Körper.
 
         Sie liegt genau auf der Körperkante darunter, und deshalb trägt die
         Aussage nicht die Farbe allein: Die Linie ist mehr als dreimal so
         breit wie die Kantendarstellung (:data:`SELECTED_EDGE_WIDTH` gegen
         :data:`FEATURE_EDGE_WIDTH`), und sie wird vor dem Material gezeichnet
         (``keep_in_front``) — eine Marke, die im Material verschwindet, sagt
-        nichts über die Stelle, die sie meint (Regel 18, ``api.py``).
+        nichts über die Stelle, die sie meint (Regel 18, ``api.py``). Mehrere
+        Kanten (RM-563) sind ein Element mit einer Kette je Kante: Es folgt
+        dem Körper wie die eine (:meth:`_sync_feature_preview`).
         """
         if self.renderer is None:
             return
@@ -12019,10 +12146,17 @@ class Viewport(QWidget):
 
         import numpy as np
 
-        object_id, key = self._selected_edge
+        object_id = self._selected_edge[0]
         entry = self._result.scene.objects.get(object_id)
-        points = next((pts for name, pts in self._prepared_edges(object_id) if name == key), None)
-        if entry is None or points is None or len(points) < 2:
+        prepared: dict[str, Any] = {}
+        for name, points in self._prepared_edges(object_id):
+            prepared.setdefault(name, points)
+        chains = [
+            np.asarray(prepared[name], dtype=float)
+            for name in self._contour_of_chosen_edges(object_id)
+            if name in prepared and len(prepared[name]) >= 2
+        ]
+        if entry is None or not chains:
             return
         # **Nur an einem sichtbaren Körper**, wie die Merkmalsfläche daneben
         # (`_redraw_feature_patch` über `_face_indices`). Ohne diese Frage
@@ -12033,13 +12167,42 @@ class Viewport(QWidget):
             return
         offset = np.asarray(self._shown_offset(entry, self._result), dtype=float)
         self._edge_patch = self.renderer.add_lines(
-            np.asarray(points, dtype=float) + offset,
+            np.vstack(chains) + offset,
             name=f"edge:{object_id}",
             colour=SELECTED_COLOUR,
             width=SELECTED_EDGE_WIDTH,
-            connected=True,
+            connected=len(chains) == 1,
+            polylines=[len(chain) for chain in chains] if len(chains) > 1 else None,
             keep_in_front=True,
         )
+
+    def _contour_of_chosen_edges(self, object_id: ObjectId) -> tuple[str, ...]:
+        """Die gewählten Kanten samt allem, was eine Rundung an ihnen mitnimmt (RM-579).
+
+        Am exakten Körper rundet OpenCASCADE eine Kante mit jeder tangential
+        anschließenden (``brep.edit.contour_keys``): An einem Quader mit
+        gerundeten senkrechten Kanten geht die Rundung an einer oberen Strecke
+        über den ganzen oberen Rand. Die Linie zeigte nur die geklickte, und
+        welche Kanten mitgingen, sah der Kunde erst in der Vorschau. Das Netz
+        hat keine solche Kontur; dort gilt, was gewählt ist.
+        """
+        chosen = self.highlighted_edges()
+        entry = self._result.scene.objects.get(object_id) if self._result is not None else None
+        if entry is None or entry.kind != "brep" or not chosen:
+            return chosen
+        known = self._edge_contours.get((object_id, chosen))
+        if known is None:
+            from app.core.brep import edit as brep_edit
+            from app.core.brep.kernel import Solid, available
+
+            body = entry.mesh
+            known = (
+                brep_edit.contour_keys(body, chosen)
+                if available() and isinstance(body, Solid)
+                else chosen
+            )
+            self._edge_contours[(object_id, chosen)] = known
+        return known
 
     def _feature_patch_state(self) -> tuple[Any, ...]:
         """Wovon die Merkmalsmarkierung abhängt — und nur davon.
@@ -13327,12 +13490,12 @@ class Viewport(QWidget):
 
         Vier Bedingungen, und jede hat ihren Grund:
 
-        * **Kein Dazunehmen.** Eine Kante wird einzeln gewählt — wer mehrere
-          verrunden will, nimmt die Gruppen der Operation („alle senkrechten"
-          ist eine Auswahl und keine Sammlung von Klicks, siehe
-          :attr:`edgePicked`). Umschalt und Strg meinen also den Körper oder
-          das Merkmal, und ein Kantentreffer dazwischen verschluckte das
-          Dazunehmen: Die Linie leuchtete, und der Objektbaum erfuhr nichts.
+        * **Dazunehmen nur an einer gewählten Kante** (:meth:`_add_edge_click`,
+          RM-563). Dort nimmt Umschalt oder Strg weitere Kanten desselben
+          Körpers dazu, wie an einem Merkmal weitere Merkmale. Sonst meinen
+          beide Tasten den Körper oder das Merkmal, und ein Kantentreffer
+          dazwischen verschluckte das Dazunehmen: Die Linie leuchtete, und der
+          Objektbaum erfuhr nichts.
         * **Eine Stufe tiefer** (:meth:`_goes_deeper`). Der erste Klick auf
           einen Körper meint den Körper — auch dann, wenn er zufällig neben
           einer Kante landet. ``add`` geht dorthin mit und wird nicht
@@ -13357,11 +13520,17 @@ class Viewport(QWidget):
         direkten Klick die Linie, und *Verrunden* daneben fände nichts, woran
         es ansetzen könnte. Auf dem gestuften Weg kostet das nichts: Dort ist
         der Körper längst gewählt, sonst käme der Klick gar nicht hierher.
+
+        **Eine Ecke bringt ihre Kanten** (:meth:`_corner_at`, RM-590): Trifft
+        der Klick eine, wählt er alle, die dort zusammenlaufen, und meldet die
+        letzte.
         """
         if not self.user_selection_allowed():
             return True
-        if add or self._direct_picking:
+        if self._direct_picking:
             return False
+        if add:
+            return self._add_edge_click(x, y, point)
         # **In einer Mündung meint der Klick die Bohrung** (Durchsicht 0.5.1,
         # KUNDE-05). Eine Bohrung Ø 4,4 hat in der Übersicht zehn Bildpunkte
         # Durchmesser; jede Stelle darin lag in der Reichweite ihres Rands, und
@@ -13378,14 +13547,113 @@ class Viewport(QWidget):
         object_id = self._object_at_view(point)
         if object_id is None or not self._goes_deeper(object_id, direct=direct, add=add):
             return False
-        key = self._edge_at(x, y, object_id, behind=point)
+        corner = self._corner_at(x, y, object_id, behind=point)
+        key = corner[-1] if corner else self._edge_at(x, y, object_id, behind=point)
         if key is None:
             return False
         if object_id != self._selected:
             self.objectPicked.emit(object_id, False)
-        self.select_edge(object_id, key)
+        self.select_edges(object_id, corner or (key,))
         self.edgePicked.emit(object_id, key)
         return True
+
+    def _add_edge_click(self, x: int, y: int, point: Vec3) -> bool:
+        """Strg- oder Umschalt-Klick — eine weitere Kante, wenn schon eine gewählt ist.
+
+        Ohne gewählte Kante gehört der Klick dem Körper oder dem Merkmal wie
+        bisher, und an einem anderen Körper dessen Dazunehmen. Am selben
+        Körper nimmt er die getroffene Kante dazu oder heraus, an einer Ecke
+        ihre Kanten (:meth:`add_edges`, :meth:`_corner_at`), und meldet die
+        letzte über :attr:`edgePicked`; das Fenster liest die ganze Sammlung
+        aus :meth:`highlighted_edges`. **Trifft er
+        keine Kante, geschieht nichts** — dieselbe Regel wie beim Klick ins
+        Leere mit Taste: Wer dazunehmen will und danebentrifft, verliert
+        seine Sammlung nicht. In einer Mündung trifft er keine, wie ohne Taste.
+        """
+        chosen = self._selected_edge
+        if chosen is None:
+            return False
+        object_id = self._object_at_view(point)
+        if object_id is not None and object_id != chosen[0]:
+            return False
+        if object_id is None or self._aim_in_opening is not None:
+            return True
+        corner = self._corner_at(x, y, object_id, behind=point)
+        key = corner[-1] if corner else self._edge_at(x, y, object_id, behind=point)
+        if key is not None:
+            self.add_edges(object_id, corner or (key,))
+            self.edgePicked.emit(object_id, key)
+        return True
+
+    def _corner_at(
+        self, x: int, y: int, object_id: ObjectId | None, behind: Vec3 | None = None
+    ) -> tuple[str, ...]:
+        """Die Kanten der Ecke unter einem Bildpunkt — leer, wo dort keine ist (RM-590).
+
+        Die Kunden-E-Mail zu RM-563 nannte „Kanten und Ecken“: Wer eine Ecke
+        verrunden will, meint die drei Kanten, die dort zusammenlaufen, und
+        musste sie bis hierher einzeln mit Strg zusammenklicken. Eine Ecke ist
+        ein Endpunkt, an dem sich mindestens ``measure.CORNER_EDGES`` Kanten
+        treffen, und getroffen ist sie, wenn sie im Bild höchstens
+        :data:`CORNER_REACH_PIXELS` vom Klick liegt — die nächste gewinnt.
+        Dieselben Kanten wie bei :meth:`_edge_at`, an beiden Körperarten, und
+        derselbe Vorfilter über den getroffenen Punkt: Eine verdeckte Ecke
+        auf der Rückseite nimmt nicht teil.
+        """
+        prepared = self._prepared_edges(object_id)
+        if not prepared or self.renderer is None or self._result is None or object_id is None:
+            return ()
+        entry = self._result.scene.objects.get(object_id)
+        if entry is None:
+            return ()
+
+        import numpy as np
+
+        from app.core.units import weld_tolerance
+
+        offset = np.asarray(self._shown_offset(entry, self._result), dtype=float)
+        near = self._edges_near(prepared, offset, behind, entry)
+        ends = [
+            (np.asarray(points[end], dtype=float), name)
+            for name, points in (prepared[index] for index in near)
+            if len(points) >= 2
+            for end in (0, -1)
+        ]
+        if len(ends) < CORNER_EDGES:
+            return ()
+        corners = np.asarray([point for point, _name in ends])
+        span = corners.max(axis=0) - corners.min(axis=0)
+        tolerance = weld_tolerance(float(np.linalg.norm(span)))
+        reach = CORNER_REACH_PIXELS * self._device_ratio()
+        best: tuple[float, tuple[str, ...]] | None = None
+        for point, _name in ends:
+            shown = point + offset
+            across, down, _depth = self.renderer.world_to_display(
+                (float(shown[0]), float(shown[1]), float(shown[2]))
+            )
+            distance = float(np.hypot(across - x, down - y))
+            if distance > reach or (best is not None and distance >= best[0]):
+                continue
+            meeting = np.linalg.norm(corners - point, axis=1) <= tolerance
+            names = tuple(
+                dict.fromkeys(name for (_p, name), hit in zip(ends, meeting, strict=True) if hit)
+            )
+            if len(names) >= CORNER_EDGES:
+                best = (distance, names)
+        return best[1] if best is not None else ()
+
+    def _picks_a_chosen_edge(self, x: int, y: int, point: Vec3) -> bool:
+        """Ob ein Klick auf eine von **mehreren** gewählten Kanten zeigt.
+
+        Der Rechtsklick fragt danach (:meth:`_on_right_click`): Eine Gruppe
+        bleibt eine Gruppe, wie bei mehreren Körpern, und das Menü gilt allen.
+        """
+        if not self._more_edges or self._selected_edge is None:
+            return False
+        if self._object_at_view(point) != self._selected_edge[0]:
+            return False
+        key = self._edge_at(x, y, self._selected_edge[0], behind=point)
+        return key is not None and key in self.highlighted_edges()
 
     def _goes_deeper(self, object_id: ObjectId, *, direct: bool, add: bool) -> bool:
         """Ob ein Klick auf diesen Körper die zweite Stufe meint (§18.5).
@@ -13921,7 +14189,6 @@ class Viewport(QWidget):
         self.drag_bar.place()
         self.plane_picker.place()
         self.sketch_selection.place()
-        self.sketch_action.place()
         if self._sketch_frame is not None and self._apply_sketch_occlusion():
             self._draw()
         self._place_orientation_widget()
@@ -14593,9 +14860,8 @@ class Viewport(QWidget):
         Bildpunkte ausdrücklich als **zu klein** (3d-druck-85, 03.09.2026).
 
         **Treffbarkeit ist eine Größe in Bildpunkten, keine in Millimetern**
-        — sie hängt am Zoom. Dieselbe Datei weiß das an drei anderen Stellen
-        (:data:`PULL_HIT_PIXELS`, :data:`CURSOR_PIXELS`,
-        :data:`PULL_HANDLE_PIXELS`), und hier fehlte es. Der Anteil gilt
+        — sie hängt am Zoom. Dieselbe Datei weiß das an anderer Stelle
+        (:data:`CURSOR_PIXELS`), und hier fehlte es. Der Anteil gilt
         deshalb weiter als Vorgabe; unterschreitet er
         :data:`GIZMO_LEAST_PIXELS`, wächst der Griff auf dieses Maß.
 
@@ -14666,6 +14932,8 @@ class Viewport(QWidget):
             # sobald die Vorschau geht.
             self._detach_gizmo()
         elif war and not active:
+            # Ein Dialog, der mitten im Zug schließt, nimmt dessen Zahl mit.
+            self._end_preview_drag()
             self.set_gizmo(self._gizmo_wanted)
         if not active or self.renderer is None:
             return
@@ -14678,7 +14946,7 @@ class Viewport(QWidget):
             scale=self._gizmo_scale_for(actor),
             line_radius=GIZMO_LINE_RADIUS,
             release_callback=self._on_preview_released,
-            interact_callback=self._on_gizmo_interacted,
+            interact_callback=self._on_preview_interacted,
         )
 
     def grip_placement(self, item: Item | None, *, rotation: bool = True) -> None:
@@ -14816,8 +15084,80 @@ class Viewport(QWidget):
         """
         import numpy as np
 
+        if self.drag_bar.typing:
+            # Der Zug gehört der Tastatur (§18.11), wie am Körpergriff: Das
+            # Loslassen wendet nichts an, die Eingabetaste tut es. Der Griff
+            # wird frisch gebaut, die Zahl bleibt stehen.
+            self.set_preview_gizmo(self._preview_gizmo_wanted)
+            return
         self.previewDragged.emit(np.asarray(matrix, dtype=float))
+        self._end_preview_drag()
         self.set_preview_gizmo(self._preview_gizmo_wanted)
+
+    def _on_preview_interacted(self, matrix: Any) -> Any:
+        """Ein Zwischenstand am Griff der Vorschau — gekennzeichnet, sonst wie am Körper."""
+        gizmo = self._preview_gizmo
+        if not self._preview_dragging and gizmo is not None:
+            self._preview_drag_start = (gizmo.target, gizmo.target.matrix().copy())
+        self._preview_dragging = True
+        return self._on_gizmo_interacted(matrix)
+
+    def _put_the_preview_back(self) -> None:
+        """Die Vorschau steht wieder, wo sie vor dem Zug stand — vor dem neuen Griff."""
+        start, self._preview_drag_start = self._preview_drag_start, None
+        if start is not None:
+            target, matrix = start
+            target.set_matrix(matrix)
+
+    def _apply_typed_to_the_preview(self, kind: str, value: float) -> None:
+        """Die getippte Zahl als Zug an die Vorschau, ohne Rasterfang (§18.11).
+
+        Dieselbe Matrix, die der Griff beim Loslassen schickte: verschoben
+        entlang der Achse des Zugs, gedreht um seine Achse durch den Ursprung
+        des Griffs, an einer Fläche entlang ihrer Richtung.
+        """
+        import numpy as np
+
+        matrix = np.eye(4)
+        if kind == "move" and self._drag_axis is not None:
+            matrix[("x", "y", "z").index(self._drag_axis), 3] = float(value)
+        elif kind == "face" and self._drag_normal is not None:
+            matrix[:3, 3] = np.asarray(self._drag_normal, dtype=float) * float(value)
+        elif kind == "turn" and self._drag_axis is not None and self._preview_gizmo is not None:
+            direction = self._preview_gizmo.axes[("x", "y", "z").index(self._drag_axis)]
+            matrix = rotation_about(
+                (float(direction[0]), float(direction[1]), float(direction[2])),
+                self._preview_gizmo.origin,
+                float(value),
+            )
+        else:
+            return
+        self.previewDragged.emit(matrix)
+
+    def _end_preview_drag(self) -> None:
+        """Mit dem Zug an der Vorschau gehen seine Zahl und sein Zustand (RM-558).
+
+        Der Griff teilt :meth:`_on_gizmo_interacted` mit dem Körpergriff und
+        zeigt dieselbe Zahl („Y 60,62 mm“); das Loslassen räumte sie aber
+        nicht ab. Sie stand nach *Einsetzen*, *Übernehmen* und *Abbrechen*
+        weiter über der Ansicht, und eine dort getippte Zahl hätte mit der
+        Eingabetaste den gewählten Körper verschoben statt der Vorschau.
+        :meth:`_end_drag` ist nicht der Weg: Er hängt den Griff der Auswahl
+        an, den die Vorschau gerade abgenommen hat. Was kein Zug am Griff war
+        (ein wartender Langlochzug, der Ziehgriff der Skizze), bleibt stehen.
+        """
+        self._preview_dragging = False
+        self._preview_drag_start = None
+        if self._drag_kind not in ("face", "turn", "move"):
+            return
+        self._drag_kind = "slot" if self._slot_target else None
+        self._drag_axis = None
+        self._drag_normal = None
+        self._drag_face = None
+        self._drop_ghost()
+        self._drop_turn_arc()
+        self._reset_shadow_offset()
+        self.drag_bar.dismiss()
 
     def _detach_gizmo(self) -> None:
         """Nimmt Griff, Beschriftung und Flächenscheibe aus dem Bild.
@@ -16216,18 +16556,7 @@ class Viewport(QWidget):
         self._end_drag()
 
     def _end_drag(self) -> None:
-        """Der Zug ist vorbei: Zahl weg, Zustand weg, Griff frisch.
-
-        **Der Ziehgriff der Skizze geht einen anderen Weg zurück.** Er hat
-        keinen Bewegungsgriff, den es frisch zu bauen gäbe, und keinen Ring,
-        Geist oder Schatten abzuräumen; was dort weg muss, ist die Drahtform,
-        und die kennt nur :meth:`_end_pull`. (Bis zum 05.09.2026 kam dazu,
-        dass ``set_navigation`` von hier aus den VTK-Interaktionsstil mitten
-        in der Geste neu gebaut hätte.)
-        """
-        if self._drag_kind == "pull":
-            self._end_pull()
-            return
+        """Der Zug ist vorbei: Zahl weg, Zustand weg, Griff frisch."""
         # **Ein anderer Zug lässt den wartenden Langlochzug stehen.** Wer am
         # Bewegungsgriff zieht, während das gezogene Langloch auf sein
         # Übernehmen wartet, meint beides zusammen — Länge und Stelle in einem
@@ -16258,11 +16587,26 @@ class Viewport(QWidget):
         """
         value = self.drag_bar.typed_value()
         kind = self._drag_kind
-        unusable = (kind == "scale" and value is not None and value <= 0.0) or (
-            kind == "pull" and value is not None and not self._pull_takes(value)
-        )
+        if kind == "bend":
+            if value is None:
+                self.drag_bar.value.selectAll()
+                return
+            self.finish_bend()
+            self.jointAngleTyped.emit(float(value))
+            return
+        unusable = kind == "scale" and value is not None and value <= 0.0
         if value is None or kind is None or unusable:
             self.drag_bar.value.selectAll()
+            return
+        if self._preview_dragging and kind in ("face", "turn", "move"):
+            # **Die Zahl gehört der Vorschau, nicht dem gewählten Körper**
+            # (Review U1, Fund 3): Hier lief sie über ``transformDragged`` an
+            # die Auswahl. Danach wird der Griff frisch gebaut; der alte meldet
+            # kein Loslassen mehr, das den Zug ein zweites Mal anwendete.
+            self._put_the_preview_back()
+            self._apply_typed_to_the_preview(kind, float(value))
+            self._end_preview_drag()
+            self.set_preview_gizmo(self._preview_gizmo_wanted)
             return
         if kind == "face" and self._drag_face is not None:
             if abs(value) > EPS_DISPLAY:
@@ -16291,23 +16635,6 @@ class Viewport(QWidget):
             self.apply_slot_drag(float(value), self._slot_handle.angle)
         elif kind == "scale" and abs(value - 1.0) > SCALE_UNCHANGED:
             self.scaleDragged.emit(float(value))
-        elif kind == "pull":
-            # Der Ziehgriff: Getippt wird die Höhe, und die geht denselben Weg
-            # wie die gezogene — über :meth:`finish_sketch_pull`, damit die
-            # Grenze der Operation an **einer** Stelle geprüft wird.
-            #
-            # **Vorher gibt die Tastatur den Zug zurück.** Solange ``typing``
-            # steht, wendet ``finish_sketch_pull`` nichts an — das ist die
-            # Zusage gegenüber dem *Loslassen*, und die Eingabetaste ist genau
-            # der Moment, in dem sie endet. Ohne diese Zeile lief die getippte
-            # Zahl in dieselbe Wache und verschwand.
-            self.drag_bar.typing = False
-            self._pull_height = float(value)
-            # Die getippte Zahl ersetzt den Zeiger, also auch dessen Richtung:
-            # Wer tippt, hat die Frage nach der Richtung beantwortet, und
-            # ``_pull_takes`` prüft gegen genau diese Höhe.
-            self.finish_sketch_pull()
-            return
         self._end_drag()
 
     def eventFilter(self, watched: Any, event: Any) -> bool:  # noqa: N802 — Qt-Name
@@ -16412,7 +16739,17 @@ class Viewport(QWidget):
             return True
         if key == Qt.Key.Key_Escape:
             # Esc verwirft den Zug: nichts angewandt, das Bild zurück zur Szene.
-            self._end_drag()
+            if self._drag_kind == "bend":
+                self.finish_bend()
+                self.jointDragCancelled.emit()
+                return True
+            # Am Griff der Vorschau gibt es keinen Körpergriff zurückzuholen.
+            if self._preview_dragging:
+                self._put_the_preview_back()
+                self._end_preview_drag()
+                self.set_preview_gizmo(self._preview_gizmo_wanted)
+            else:
+                self._end_drag()
             return True
         if watched is self.drag_bar.value:
             return False
@@ -16529,7 +16866,9 @@ class Viewport(QWidget):
         52 % im Bild (RM-280), weil :func:`outgrown` erst ab dem Fünffachen
         greift — eine Grenze, die das Nachbessern schützt und hier nicht passt.
         Wer vergrößert, will das Ergebnis sehen; was im Rahmen bleibt oder
-        kleiner wird, lässt die Kamera in Ruhe.
+        kleiner wird, lässt die Kamera in Ruhe. Dasselbe gilt für ein weiteres
+        Modell (RM-650). Wer fragt, fragt unmittelbar vor dem Aufbau, der die
+        Änderung trägt: Den Wunsch verbraucht der nächste Aufbau, welcher es auch ist.
         """
         self._frame_beyond = True
 
@@ -17017,8 +17356,8 @@ class Viewport(QWidget):
         measure_labels: Sequence[tuple[Vec3, str]] = (),
         preview: Sequence[SketchCurve] = (),
     ) -> None:
-        """Die Zeichnung in die Szene legen: Raster, Achsen, Kurven, Punkte,
-        Maßkarten und der Ziehgriff (§30.1).
+        """Die Zeichnung in die Szene legen: Raster, Achsen, Kurven, Punkte
+        und Maßkarten (§30.1).
 
         Alles ungreifbar (``pickable=False``): Kein Stück Zeichnung fängt einen
         Klick von Zeichenebene oder Umriss ab. Breite und Deckkraft sind die
@@ -17031,11 +17370,9 @@ class Viewport(QWidget):
         # bevor Raster, Maße und Griff projiziert werden.
         self._apply_sketch_occlusion()
         self._sketch_step = step
-        # **Vor der Wache gemerkt, nicht danach.** Der Ziehgriff fragt diese
-        # Kurven nach dem Umriss im Bild, und offscreen gibt es keinen
-        # Renderer: Eine Zuweisung hinter dem ``return`` prüfte in der Suite
-        # niemand (§35).
-        self._sketch_curves = tuple(curves)
+        # **Vor der Wache gemerkt, nicht danach**: Offscreen gibt es keinen
+        # Renderer, und eine Zuweisung hinter dem ``return`` prüfte in der
+        # Suite niemand (§35).
         self._sketch_selected_curves = tuple(selected_curves)
         self._sketch_control_points = tuple(control_points)
         self._sketch_selected_points = tuple(selected_points)
@@ -17229,41 +17566,6 @@ class Viewport(QWidget):
         cards: list[tuple[Vec3, str, int, str]] = [
             (point, text, 5, "sketch_measures") for point, text in measure_labels
         ]
-        full_handle = self._pull_handle_segments()
-        handle = self._visible_pull_handle_segments(full_handle)
-        if handle and self._pull_is_offered():
-            self._sketch_actors.append(
-                renderer.add_lines(
-                    np.asarray([point for pair in handle for point in pair], dtype=float),
-                    name="sketch_pull_handle",
-                    colour=SELECTED_COLOUR,
-                    width=5.0,
-                )
-            )
-            inward, outward = full_handle[0]
-            size = math.dist(inward, outward) / 2.0
-            label_shift = tuple(frame.x_axis[axis] * size * 1.1 for axis in range(3))
-            label_points: list[Vec3] = [
-                (
-                    outward[0] + label_shift[0],
-                    outward[1] + label_shift[1],
-                    outward[2] + label_shift[2],
-                )
-            ]
-            labels = [str(tr("Hochziehen"))]
-            if self._cut_pull_available():
-                label_points.append(
-                    (
-                        inward[0] + label_shift[0],
-                        inward[1] + label_shift[1],
-                        inward[2] + label_shift[2],
-                    )
-                )
-                labels.append(str(tr("Abtragen")))
-            cards.extend(
-                (point, text, 4, "sketch_pull_labels")
-                for point, text in zip(label_points, labels, strict=True)
-            )
         if cards:
             shown = place_sketch_cards(
                 renderer,
@@ -17271,7 +17573,7 @@ class Viewport(QWidget):
                 self._sketch_card_sizes([(text, margin) for _point, text, margin, _name in cards]),
                 gap=self._device_pixels(TIGHT),
             )
-            for name in ("sketch_measures", "sketch_pull_labels"):
+            for name in ("sketch_measures",):
                 group = [
                     (point, text, margin)
                     for point, (_anchor, text, margin, owner) in zip(shown, cards, strict=True)
@@ -17299,13 +17601,6 @@ class Viewport(QWidget):
         self.sketch_selection.setVisible(bool(text))
         if text:
             self.sketch_selection.place()
-
-    def show_sketch_action(self, text: str) -> None:
-        """Zeigt den nächsten räumlichen Schritt; leer nimmt die Karte weg."""
-        self.sketch_action.setText(text)
-        self.sketch_action.setVisible(bool(text))
-        if text:
-            self.sketch_action.place()
 
     def _set_sketch_cursor(self, point: tuple[float, float] | None) -> bool:
         """Die Fangmarke setzen oder wegnehmen; wahr, wenn sich im Bild etwas ändert.
@@ -17509,10 +17804,7 @@ class Viewport(QWidget):
     def _span_in_pixels(self, here: Sequence[float], there: Sequence[float]) -> float:
         """Wie weit zwei Weltpunkte im Bild auseinanderliegen, in Bildpunkten.
 
-        Der gemeinsame Kern von :meth:`pixels_per_mm` und
-        :meth:`pixels_per_mm_upright` — die beiden unterschieden sich bis zum
-        04.09.2026 in genau einer Zeile (welchen zweiten Punkt sie nehmen) und
-        führten dieselben neunzehn davor doppelt.
+        Der Kern von :meth:`pixels_per_mm`.
 
         **Erst messen, wenn es etwas zu messen gibt.** Solange das Layout nicht
         steht, meldet Qt die Startgröße eines Widgets (100 mal 30), und die
@@ -17534,39 +17826,6 @@ class Viewport(QWidget):
             return FALLBACK_SCALE
         span = math.dist(first, second)
         return span if span > EPS_GEOM else FALLBACK_SCALE
-
-    def pixels_per_mm_upright(self, frame: PlaneFrame) -> float:
-        """Wie viele Bildpunkte ein Millimeter **senkrecht** zur Ebene misst.
-
-        Das Gegenstück zu :meth:`pixels_per_mm`, und der Unterschied ist der
-        ganze Grund: Jene misst zwei Punkte *auf* der Ebene, diese zwei entlang
-        ihrer Normalen. In der Draufsicht sind das zwei verschiedene Welten —
-        die Ebene liegt in voller Größe da, ihre Normale zeigt zum Betrachter
-        und ist ein Punkt.
-
-        **Wofür das gebraucht wird:** Der Ziehgriff zeigt entlang der Normalen.
-        Seine Länge wurde bisher über die Skalierung *in* der Ebene gerechnet,
-        und damit stimmte sie nur in der Seitenansicht. Gemessen am
-        30.08.2026, bei 38 Bildpunkten Sollgröße:
-
-        | Kippung | Griff im Bild |
-        |---|---|
-        | 10° | 6,6 px |
-        | 20° | 13,0 px |
-        | 45° | 26,9 px |
-        | 90° | 38,0 px |
-
-        Bis etwa 25° war der Griff damit **kürzer als seine eigene
-        Trefferzone** (:data:`PULL_HIT_PIXELS`, 14 Bildpunkte): ein Stummel,
-        um den unsichtbar ein Ring lag, der Zeichenklicks schluckte.
-
-        Gemessen und nicht aus dem Kippwinkel gerechnet — dieselbe Begründung
-        wie bei :meth:`pixels_per_mm`: Durch die echte Projektion geschickt
-        stimmt die Zahl bei Parallel- wie bei Zentralprojektion.
-        """
-        here = to_world(frame, (0.0, 0.0))
-        there = tuple(here[axis] + frame.normal[axis] for axis in range(3))
-        return self._span_in_pixels(here, there)
 
     def _plane_distance(self) -> float:
         """Wie weit die Kamera von der Zeichenebene wegrückt.
@@ -17611,6 +17870,10 @@ class Viewport(QWidget):
         das System vor der ersten Wiederholung wartet.
         """
         if self._surface_picker_key(event):
+            return
+        if self._boning and event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
+            self.chainEnded.emit()
+            event.accept()
             return
         if self._scheme != "solidon" or self.renderer is None:
             super().keyPressEvent(event)
@@ -17851,6 +18114,10 @@ class Viewport(QWidget):
             self._selected,
             *self._selected_more,
         ):
+            self.contextMenuAt.emit(x, y)
+            return
+        # Dasselbe für mehrere gewählte Kanten (RM-563): Das Menü gilt allen.
+        if self._picks_a_chosen_edge(x, y, point):
             self.contextMenuAt.emit(x, y)
             return
         if not self._edge_click(x, y, point, direct=True):
@@ -18157,54 +18424,7 @@ class Viewport(QWidget):
             return
         self.transformDragged.emit(TransformSteps(offset=(offset[0], offset[1], 0.0)))
 
-    # --- die Höhe aus der Querschau ziehen (§30.1, Ziehgriff) -----------------
-
-    def set_sketch_pull(
-        self,
-        offer: Callable[[], str] | None,
-        limits: tuple[float, float] = (0.0, 0.0),
-        cut_limits: tuple[float, float] | None = None,
-        cut_available: Callable[[], bool] | None = None,
-        cut_top: Callable[[], float] | None = None,
-    ) -> None:
-        """Verdrahtet den Ziehgriff des Skizzenmodus.
-
-        ``offer()`` beantwortet, ob am Umriss gerade gezogen werden darf, und
-        gibt eines von drei Dingen zurück:
-
-        * ``"ready"`` — die Geste gilt,
-        * einen **Grund** (übersetzt), wenn sie gerade nicht kann,
-        * eine leere Zeichenkette, wenn sie hier gar nicht angeboten wird.
-
-        **Die Frage stellt das Fenster, weil sie am Zustand der Zeichnung
-        hängt** — Querschau, geschlossener Umriss, eine Operation, für die eine
-        Höhe etwas bedeutet. Die Ansicht kennt davon nichts; sie kennt die
-        Geste, den Griff im Bild und die Zahl am Zeiger.
-
-        ``limits`` und ``cut_limits`` sind die Grenzen von Aufbau und Tasche
-        **aus ihren Schemata**. ``cut_available`` beantwortet zusätzlich, ob
-        ein ausgewählter Körper die Tasche gerade wirklich aufnehmen kann.
-        Beides kommt von außen, damit die Ansicht weder Geometriezustand noch
-        Zahlen nachbaut.
-
-        ``None`` löst alles wieder — das Fenster tut es beim Verlassen des
-        Modus, sonst hielte die Ansicht einen Rückruf auf ein gestorbenes Panel.
-        """
-        self._sketch_pull_offer = offer
-        self._pull_limits = limits
-        self._cut_limits = cut_limits
-        self._sketch_cut_available = cut_available
-        self._sketch_cut_top = cut_top
-        if offer is None:
-            self._end_pull()
-
-    def pulling(self) -> bool:
-        """Ob gerade eine Höhe gezogen wird.
-
-        Von außen gefragt und nicht abgeleitet: Solange der Zug läuft, meint
-        eine Mausbewegung die Höhe und nicht den Zeiger auf der Ebene — die
-        Vorschau der Zeichnung muss dann stillhalten."""
-        return self._pull_from is not None
+    # --- Bildpunkte einer Weltstelle ---------------------------------------------
 
     def _display_of(self, world: Sequence[float]) -> tuple[float, float] | None:
         """Ein Weltpunkt im Bild — in Gerätepixeln, gezählt wie Qt (oben links),
@@ -18215,460 +18435,6 @@ class Viewport(QWidget):
             (float(world[0]), float(world[1]), float(world[2]))
         )
         return (x, y)
-
-    def grip_reach(self, x: int, y: int) -> float:
-        """Wie weit diese Bildstelle vom Umriss der Zeichnung entfernt ist.
-
-        In Bildpunkten, und über **alle** Kurven: Der Griff ist der Umriss
-        selbst. In der Querschau liegt er als Strich im Bild — dort ist „am
-        Umriss" eine Handbreit Genauigkeit und keine Zielübung.
-
-        Konstruktionsgeometrie zählt nicht mit: An ihr entsteht kein Körper,
-        also gibt es dort nichts zu ziehen — dieselbe Grenze wie in
-        :func:`pull_cage`.
-
-        ``inf``, wenn es kein Bild oder keine Zeichnung gibt.
-        """
-        best = math.inf
-        for curve in self._sketch_curves:
-            if curve.construction:
-                continue
-            spots = [self._display_of(point) for point in curve.points]
-            inside = [spot for spot in spots if spot is not None]
-            if len(inside) != len(spots):
-                # Ein Punkt, der nicht projiziert werden konnte, macht die
-                # ganze Kurve unbrauchbar: Der Abstand zu einem Zug mit einem
-                # fehlenden Glied wäre eine Zahl über einer anderen Form.
-                continue
-            best = min(best, polyline_distance(inside, (float(x), float(y))))
-        return best
-
-    def _pull_handle_segments(
-        self,
-    ) -> list[tuple[tuple[float, float, float], tuple[float, float, float]]]:
-        """Die sichtbare Griffgeometrie in genau der gezeichneten Größe."""
-        if self._sketch_frame is None:
-            return []
-        # **Gemessen senkrecht zur Ebene, denn dorthin zeigt der Griff.**
-        # Über die Skalierung *in* der Ebene gerechnet stimmte die Länge nur
-        # in der Seitenansicht; bei zehn Grad Kippung blieben von achtunddreißig
-        # Bildpunkten sechseinhalb übrig — weniger als die Trefferzone um ihn
-        # herum. Siehe :meth:`pixels_per_mm_upright`.
-        upright = self.pixels_per_mm_upright(self._sketch_frame)
-        flat = self.pixels_per_mm(self._sketch_frame)
-        # **Und eine Grenze nach oben**, sonst wächst der Griff bei flachem
-        # Blick ins Unendliche: Bei einem Zehntelgrad wäre er sechshundertmal
-        # so lang und läge quer durch den Bauraum. Unter zehn Grad rastet die
-        # Kamera ohnehin ein (:meth:`_settle_sketch_view`), und dort ist der
-        # Faktor 1/sin(10°) = 5,76 — aufgerundet sechs, damit die Grenze erst
-        # jenseits des Einrastens greift und nicht davor.
-        least = max(flat, EPS_GEOM) / PULL_HANDLE_STRETCH
-        size = self._device_pixels(PULL_HANDLE_PIXELS) / max(upright, least, EPS_GEOM)
-        # **Quer bleibt quer.** Flügel und Kreuz liegen in der Ebene und
-        # werden nicht verkürzt; mitgestreckt verdeckten sie das Profil.
-        across = self._device_pixels(PULL_HANDLE_PIXELS) / max(flat, EPS_GEOM)
-        return pull_handle(self._sketch_frame, self._sketch_curves, size, across)
-
-    def _pull_is_offered(self) -> bool:
-        """Ob der räumliche Griff in diesem Zustand eine gültige Geste ist."""
-        return self._sketch_pull_offer is not None and self._sketch_pull_offer() == "ready"
-
-    def _cut_pull_available(self) -> bool:
-        """Ob die sichtbare Richtung nach innen gerade angewandt werden kann."""
-        if self._cut_limits is None:
-            return False
-        return self._sketch_cut_available is None or self._sketch_cut_available()
-
-    def _visible_pull_handle_segments(
-        self,
-        handle: Sequence[tuple[Vec3, Vec3]] | None = None,
-    ) -> list[tuple[Vec3, Vec3]]:
-        """Nur die Richtungen des Griffs, die beim Loslassen auch gelten.
-
-        Ohne bearbeitbaren Zielkörper bleibt der Pfeil nach außen stehen. Der
-        innere Schaft und das Kreuz verschwinden gemeinsam mit „Abtragen" —
-        eine fehlende Handlung wird nicht als bloß gesperrte Dekoration im
-        Modell gezeigt.
-        """
-        complete = list(handle if handle is not None else self._pull_handle_segments())
-        if not complete or self._cut_pull_available():
-            return complete
-        inward, outward = complete[0]
-        base: Vec3 = (
-            (float(inward[0]) + float(outward[0])) / 2.0,
-            (float(inward[1]) + float(outward[1])) / 2.0,
-            (float(inward[2]) + float(outward[2])) / 2.0,
-        )
-        return [(base, outward), *complete[1:3]]
-
-    def pull_handle_reach(self, x: int, y: int) -> float:
-        """Wie weit die Bildstelle von Pfeil oder Kreuz des Ziehgriffs liegt."""
-        best = math.inf
-        for first, second in self._visible_pull_handle_segments():
-            spots = (self._display_of(first), self._display_of(second))
-            if any(spot is None for spot in spots):
-                continue
-            best = min(
-                best,
-                polyline_distance(
-                    [spot for spot in spots if spot is not None],
-                    (float(x), float(y)),
-                ),
-            )
-        return best
-
-    def _pull_handle_base(self, x: int, y: int) -> tuple[float, float] | None:
-        """Der Fuß des Griffs, wenn Pfeil oder Kreuz getroffen wurden."""
-        if self._sketch_frame is None or self.pull_handle_reach(x, y) > self._device_pixels(
-            PULL_HIT_PIXELS
-        ):
-            return None
-        handle = self._pull_handle_segments()
-        if not handle:
-            return None
-        inward, outward = handle[0]
-        base: Vec3 = (
-            (inward[0] + outward[0]) / 2.0,
-            (inward[1] + outward[1]) / 2.0,
-            (inward[2] + outward[2]) / 2.0,
-        )
-        return to_plane(self._sketch_frame, base)
-
-    def sketch_pull_ready(self, x: int, y: int) -> bool:
-        """Ob hier ein Zug am Ziehgriff beginnen darf (§30.1).
-
-        Zwei Bedingungen, und die Reihenfolge ist Absicht: **erst der Griff im
-        Bild**, dann die Frage an das Fenster. Umgekehrt käme der Grund („der
-        Umriss ist noch nicht geschlossen") bei jedem Druck irgendwo in der
-        Ansicht, und ein Hinweis, der zu allem erscheint, sagt nichts.
-
-        Der Griff reicht so weit wie die Fangmarke groß ist
-        (:data:`CURSOR_PIXELS`) — was man sieht, kann man greifen. Eine zweite
-        Zahl daneben wäre ein Bereich, in dem die Marke steht und der Griff
-        nicht hält.
-
-        **Und dass sich von hier aus überhaupt eine Höhe ablesen lässt**
-        (:meth:`pull_height_at`). Das ist die dritte Bedingung, und sie fehlte:
-        Angeboten wurde der Griff über die Ebenen**wahl**, gearbeitet wird mit
-        der Blick**richtung**, und die beiden fallen bei einer Skizze auf einer
-        angeklickten Fläche auseinander — dort hat der Blick nie denselben
-        Namen wie die Zeichenebene, und bei frontaler Ansicht gab ``axis_hit``
-        nichts zurück: Der Griff nahm die Taste und tat stumm nichts (gefunden
-        von der Review-Sitzung, 27.08.2026). Keine zweite Schwelle, sondern
-        dieselbe wie in :func:`axis_hit` — gefragt wird die Rechnung selbst.
-
-        ``False`` heißt: Die linke Taste bleibt, was sie im jeweiligen
-        Navigationsschema war. Ohne diese Trennung wäre der Ziehgriff ein Modus
-        mit anderem Namen — wer die Ansicht drehen will, dürfte nicht erst
-        wegklicken müssen.
-        """
-        if self._sketch_frame is None or self._sketch_pull_offer is None:
-            return False
-        on_outline = self.grip_reach(x, y) <= self._device_pixels(CURSOR_PIXELS)
-        on_handle = self.pull_handle_reach(x, y) <= self._device_pixels(PULL_HIT_PIXELS)
-        if not on_outline and not on_handle:
-            return False
-        base = self.pull_base_at(x, y)
-        if base is None or self.pull_height_at(base, x, y) is None:
-            return False
-        answer = self._sketch_pull_offer()
-        if answer == "ready":
-            return True
-        if answer and on_outline:
-            self.sketchPullBlocked.emit(answer)
-        return False
-
-    def pull_base_at(self, x: int, y: int) -> tuple[float, float] | None:
-        """Der Ort auf der Zeichenebene, durch den die Aufzugsachse läuft.
-
-        Die Stelle, an der gegriffen wurde — nicht der Ursprung der Skizze. Das
-        ist der Unterschied, den man sieht: Wer am rechten Rand eines Umrisses
-        greift, zieht dort, und die Zahl am Zeiger gehört zu seiner Hand.
-
-        Gefragt von :meth:`sketch_pull_ready` **und** von
-        :meth:`begin_sketch_pull`, damit beide dieselbe Achse meinen: Eine
-        Bereitschaft, die eine andere Stelle prüft als der Zug danach benutzt,
-        wäre keine.
-        """
-        if self._sketch_frame is None:
-            return None
-        handle_base = self._pull_handle_base(x, y)
-        if handle_base is not None:
-            return handle_base
-        base = self._sketch_hit(x, y)
-        if base is not None:
-            return base
-        # In der Querschau streift der Blick die Ebene, und ``ray_hit`` gibt
-        # dort nichts. Gegriffen wurde trotzdem am Umriss, also wird der Zug
-        # nicht abgesagt: Die Achse bekommt den Punkt der Zeichnung, der im
-        # Bild am nächsten liegt.
-        return self._nearest_sketch_point(x, y)
-
-    def pull_height_at(self, base: tuple[float, float], x: int, y: int) -> float | None:
-        """Welche Höhe der Zeiger an dieser Bildstelle bedeutet — **ungeklemmt**.
-
-        Die eine Stelle, an der aus einem Mausereignis ein Maß entlang der
-        Aufzugsachse wird (:func:`axis_hit`). ``None`` heißt: von hier aus ist
-        keine Höhe ablesbar — es gibt kein Bild, oder der Blick läuft entlang
-        der Achse, und dann liegt sie als Punkt im Bild.
-
-        Rasterfang und Grenzen kommen erst danach (:func:`pulled_height`); wer
-        die **Richtung** eines Zugs beurteilen will, braucht das rohe Maß
-        (:meth:`_pull_takes` im Loslassen).
-        """
-        if self._sketch_frame is None:
-            return None
-        ray = self._pick_ray(x, y)
-        if ray is None:
-            return None
-        start, step = ray
-        return axis_hit(self._sketch_frame, base, self._from_view(start), step)
-
-    def begin_sketch_pull(self, x: int, y: int) -> bool:
-        """Der Zug beginnt: Die Aufzugsachse steht ab jetzt fest."""
-        base = self.pull_base_at(x, y) if self._sketch_frame is not None else None
-        if base is None:
-            return False
-        self._pull_from = base
-        self._pull_height = 0.0
-        self._drag_kind = "pull"
-        # Der Zeiger auf der Ebene hält still, solange gezogen wird — sonst
-        # zeichnete die Vorschau der Skizze dem Zug hinterher.
-        self.show_sketch_cursor(None)
-        self.set_drag_cursor("move")
-        return True
-
-    def _nearest_sketch_point(self, x: int, y: int) -> tuple[float, float] | None:
-        """Der Zeichenpunkt, der im Bild dieser Stelle am nächsten liegt.
-
-        Der Rückfall für :meth:`begin_sketch_pull`: Er braucht einen Ort auf
-        der Ebene, und genau in der Querschau — dort, wo gezogen wird — liefert
-        der Schnitt mit ihr keinen. Gefragt werden die Punkte, die ohnehin im
-        Bild stehen; einer davon ist immer der richtige, denn gegriffen wurde
-        am Umriss.
-        """
-        if self._sketch_frame is None:
-            return None
-        best: tuple[float, float] | None = None
-        closest = math.inf
-        for curve in self._sketch_curves:
-            if curve.construction:
-                continue
-            for point in curve.points:
-                spot = self._display_of(point)
-                if spot is None:
-                    continue
-                reach = math.dist(spot, (float(x), float(y)))
-                if reach < closest:
-                    closest = reach
-                    best = to_plane(self._sketch_frame, (point[0], point[1], point[2]))
-        return best
-
-    def continue_sketch_pull(self, x: int, y: int) -> None:
-        """Die Höhe folgt dem Zeiger — als Drahtform und als Zahl.
-
-        Gerechnet wird die Höhe in :func:`pulled_height` (Rasterfang und die
-        Grenzen der Operation, mit Begründung); hier steht der Weg vom
-        Mausereignis dorthin und zurück ins Bild.
-
-        **Neu gezeichnet wird nur, wenn sich die Höhe geändert hat.** Sie sitzt
-        am gefangenen Ort, ändert sich also zwischen zwei Rasterpunkten nicht —
-        dieselbe Ersparnis, an der die Fangmarke hängt.
-        """
-        if self._pull_from is None:
-            return
-        reach = self.pull_height_at(self._pull_from, x, y)
-        if reach is None:
-            return
-        # **Das rohe Maß wird gemerkt, nicht nur das geklemmte.** Beim
-        # Loslassen entscheidet es, ob überhaupt in die Richtung gezogen wurde,
-        # in die der Körper wächst — geklemmt sind beide Richtungen gleich weit
-        # von null entfernt.
-        if reach < 0.0 and not self._cut_pull_available():
-            # Ohne ausgewählten, bearbeitbaren Körper gibt es im Bild weder
-            # Kreuz noch Tasche. Auch während eines versehentlichen Zugs nach
-            # innen darf deshalb kein Drahtkörper samt „Tiefe" aufscheinen,
-            # der beim Loslassen kommentarlos wieder verschwindet.
-            if abs(self._pull_height) > EPS_GEOM:
-                self._pull_height = 0.0
-                self._show_pull_cage()
-                self.drag_bar.dismiss()
-            return
-        height = pulled_height(reach, self._sketch_step, self._limits_for(reach))
-        if abs(height - self._pull_height) <= EPS_GEOM:
-            return
-        self._pull_height = height
-        # Das Maß steht an der Drahtform selbst, wie beim Zeichnen einer Linie
-        # (Robert, 02.09.2026: „ein Maß daneben, wie wenn wir eine Linie
-        # zeichnen") — keines in der Leiste unten, die hatte Robert am selben
-        # Tag abgelehnt. Die genaue Zahl bekommt der Dialog beim Loslassen.
-        self._show_pull_cage()
-        # **Und ein Feld am Zeiger, damit die Höhe auch getippt werden kann.**
-        # Es fehlte, und damit war die Tastatur am Ziehgriff nur halb
-        # verdrahtet: :meth:`eventFilter` schreibt die Ziffer in
-        # ``drag_bar.value`` und holt den Fokus dorthin, aber die Leiste wurde
-        # nie gezeigt — ein unsichtbares Feld nimmt keinen Fokus, und die
-        # Eingabetaste lief ins Leere. Gemeldet von Robert am 07.09.2026:
-        # „beim hochziehen … ich kann auch keinen wert eingeben"; gemessen war
-        # ``drag_bar.isVisible()`` während des ganzen Zugs falsch.
-        #
-        # **Gezeigt wird die Zahl mit Vorzeichen**, nicht ihr Betrag. Sonst
-        # bekäme die Eingabetaste eine falsche Richtung: ``_apply_typed`` nimmt
-        # den Feldwert unverändert als Höhe, und ein Betrag machte aus einer
-        # Tasche kommentarlos einen Aufbau. Die Richtung steht zusätzlich im
-        # Namen, weil eine Zahl mit Minus allein sie schlecht erklärt.
-        #
-        # Das Anheben über die native Renderfläche tut ``DragValueBar.place``
-        # selbst — dort gilt es für alle fünf Wege zur Leiste und nicht nur für
-        # diesen einen.
-        ratio = self._device_ratio()
-        self.drag_bar.anchor = QPoint(int(x / ratio), int(y / ratio))
-        self.drag_bar.follow_length(str(tr("Tiefe") if height < 0.0 else tr("Höhe")), height)
-
-    def _pull_frame(self) -> PlaneFrame:
-        """Die Ebene, von der die Drahtform ausgeht.
-
-        Nach außen ist das die Zeichenebene. Nach innen ist es die Oberkante
-        des Körpers, der abgetragen wird — ``sketch_pocket`` schneidet dort,
-        wenn die Zeichnung tiefer liegt (der Fusion-Weg: Umriss auf dem Bett,
-        Teil darüber). Bis zum 02.09.2026 wuchs die Drahtform von der
-        Zeichenebene in die Luft unter dem Teil, geschnitten wurde oben:
-        Tiefe richtig, Ort falsch.
-        """
-        frame = self._sketch_frame
-        assert frame is not None
-        if self._pull_height >= 0.0 or self._sketch_cut_top is None:
-            return frame
-        shift = float(self._sketch_cut_top())
-        if shift <= EPS_GEOM:
-            return frame
-        normal = frame.normal
-        origin = (
-            frame.origin[0] + normal[0] * shift,
-            frame.origin[1] + normal[1] * shift,
-            frame.origin[2] + normal[2] * shift,
-        )
-        return replace(frame, origin=origin)
-
-    def _show_pull_cage(self) -> None:
-        """Legt die Drahtform des Zugs in die Szene — oder nimmt sie weg."""
-        actors = tuple(self._pull_actors)
-        self._pull_actors.clear()
-        if self.renderer is None:
-            return
-        for actor in actors:
-            self.renderer.remove(actor)
-        segments = (
-            pull_cage(self._pull_frame(), self._sketch_curves, self._pull_height)
-            if self._sketch_frame is not None
-            else []
-        )
-        if not segments:
-            self._draw()
-            return
-
-        import numpy as np
-
-        points = np.asarray([end for pair in segments for end in pair], dtype=float)
-        self._pull_actors.append(
-            self.renderer.add_lines(
-                points, name="sketch_pull", colour=self._sketch_colour, width=2.0
-            )
-        )
-        # Die Maßkarte am oberen Rand der Drahtform — dieselbe Karte, die die
-        # Skizze an ihre Linien hängt, damit der Zug aussieht wie das Zeichnen.
-        if self._sketch_frame is not None:
-            along = points @ np.asarray(self._sketch_frame.normal, dtype=float)
-            extreme = along.max() if self._pull_height >= 0.0 else along.min()
-            rim = points[np.abs(along - extreme) <= EPS_GEOM]
-            self._pull_actors.append(
-                self.renderer.add_labels(
-                    np.asarray([rim.mean(axis=0)]),
-                    [length(abs(self._pull_height))],
-                    name="sketch_pull_measure",
-                    style=LabelStyle(
-                        text_colour=self._sketch_label_colour,
-                        font_size=SKETCH_CARD_FONT_PIXELS,
-                        bold=True,
-                        always_visible=True,
-                        background=self._sketch_label_background,
-                        background_opacity=0.94,
-                        margin=5,
-                    ),
-                )
-            )
-        self._draw()
-
-    def finish_sketch_pull(self) -> None:
-        """Aus dem Zug wird eine Operation — oder gar nichts.
-
-        Die Drahtform bleibt stehen, bis das Ergebnis sie ersetzt; dieselbe
-        Begründung wie beim Körperzug (:meth:`finish_body_drag`). Nur wenn kein
-        Signal geht, wird hier abgeräumt — dann kommt auch keine neue Szene.
-        """
-        if self.drag_bar.typing:
-            # Der Zug gehört der Tastatur (§18.11): Loslassen wendet nichts an,
-            # die Eingabetaste wird es tun. Dieselbe Zusage wie beim Gizmo —
-            # das Feld bleibt mit der getippten Zahl stehen.
-            return
-        height = self._pull_height
-        if self._pull_from is None or not self._pull_takes(height):
-            # Ein Klick ist kein Zug.
-            self._end_pull()
-            return
-        self._pull_from = None
-        self._drag_kind = None
-        self.drag_bar.dismiss()
-        self.set_drag_cursor(None)
-        self.sketchPulled.emit(float(height))
-
-    def _pull_takes(self, height: float) -> bool:
-        """Ob diese Höhe eine Operation ergibt — die Grenze an **einer** Stelle.
-
-        Gefragt vom Loslassen und von der Eingabetaste, und zwar über die Höhe,
-        die auch angewandt würde. Vorher stand die Untergrenze an zwei Stellen
-        und die Obergrenze an keiner: Eine getippte Höhe von 4000 mm ging bei
-        einem Höchstwert von 1000 durch, und der Dialog klemmte sie danach
-        kommentarlos — genau die Zusage, die der Kommentar an
-        :func:`pulled_height` gibt.
-
-        **Nicht** gefragt von der Richtungsprüfung. Die sieht das ungeklemmte
-        Maß und hat nur eine Grenze: Ein Zug bis zum Anschlag liegt über der
-        Obergrenze und ist trotzdem gemeint.
-
-        Die Obergrenze **lehnt ab statt zu klemmen**, anders als beim Ziehen.
-        Das ist kein Widerspruch, sondern die Regel von :meth:`_apply_typed`:
-        Wer zieht, meint eine Bewegung, und die darf am Anschlag stehen bleiben;
-        wer tippt, meint genau diese Zahl, und sie stillschweigend zu ändern
-        wäre eine Antwort auf eine andere Frage.
-        """
-        if height < 0.0 and not self._cut_pull_available():
-            return False
-        least, most = self._limits_for(height)
-        amount = abs(height)
-        if amount < max(least, EPS_GEOM):
-            return False
-        return not (most > least and amount > most)
-
-    def _limits_for(self, height: float) -> tuple[float, float]:
-        """Grenzen der Richtung: außen aufziehen, innen ausschneiden."""
-        if height < 0.0:
-            return self._cut_limits or (0.0, 0.0)
-        return self._pull_limits
-
-    def _end_pull(self) -> None:
-        """Der Zug ist vorbei, ohne Ergebnis: Drahtform weg, Zahl weg."""
-        self._pull_from = None
-        self._pull_height = 0.0
-        if self._drag_kind == "pull":
-            self._drag_kind = None
-        self.drag_bar.dismiss()
-        self._show_pull_cage()
-        self.set_drag_cursor(None)
-
-    def cancel_sketch_pull(self) -> None:
-        """Verwirft die Drahtvorschau, wenn das Fenster den Zug ablehnt."""
-        self._end_pull()
 
     def _undo_body_preview(self) -> None:
         """Setzt gezogene Aktoren an ihren Ausgangsort zurück — samt Schatten."""
@@ -18786,9 +18552,6 @@ class Viewport(QWidget):
         for actor in self._shadow_actors:
             actor.set_visible(frame is None)
         self._apply_selection_colour()
-        # Und ein Zug am Ziehgriff endet mit der Ebene, auf der er begann —
-        # aus demselben Grund wie die Marke darüber.
-        self._end_pull()
         self._update_cursor()
         self._draw()
 
@@ -18905,6 +18668,13 @@ class Viewport(QWidget):
             if hit is not None:
                 self.sketchPointPicked.emit(hit)
             return
+        if self._boning:
+            # Ein Klick auf ein Gelenk setzt dort fort — vor dem Pick der Haut
+            # darüber, die der Klick sonst träfe (RM-561).
+            joint = self.joint_at(x, y)
+            if joint is not None:
+                self.jointPicked.emit(joint)
+                return
         if self._means_a_feature() and not self.user_selection_allowed():
             self._refuse_selection()
             return
@@ -19087,11 +18857,10 @@ def _weak_callbacks(view: Viewport) -> NavigatorCallbacks:
     def on_body_drag(phase: str, x: int, y: int) -> bool:
         """Der Körperzug in vier Phasen — ``ready``, ``start``, ``move``, ``end``.
 
-        **Im Skizzenmodus zieht dieselbe Geste eine Höhe** (§30.1). Derselbe
-        Rückruf und keine zweite Zustandsmaschine daneben: Drücken, Schwelle,
-        Ziehen, Loslassen sind hier wie dort dieselben vier Schritte, und zwei
-        Schwellen für „ist das ein Klick oder ein Zug" wären das Loch, das der
-        Körperzug schon einmal hatte.
+        **Im Skizzenmodus zieht dieselbe Geste die Zeichnung** (§30.1): Punkt
+        oder Linie unter dem Zeiger. Derselbe Rückruf und keine zweite
+        Zustandsmaschine daneben — zwei Schwellen für „ist das ein Klick oder
+        ein Zug" wären das Loch, das der Körperzug schon einmal hatte.
         """
         found = weak()
         if found is None:
@@ -19099,14 +18868,6 @@ def _weak_callbacks(view: Viewport) -> NavigatorCallbacks:
         if found._sketch_frame is not None:
             if phase == "ready":
                 found._sketch_gesture = None
-                # Der gezeichnete Pfeil und das Kreuz sind der ausdrückliche
-                # Höhen-Griff. Sie haben Vorrang vor jeder Kurve, die im Bild
-                # zufällig darunterliegt, und vor der Kameranavigation.
-                if found.pull_handle_reach(x, y) <= found._device_pixels(
-                    PULL_HIT_PIXELS
-                ) and found.sketch_pull_ready(x, y):
-                    found._sketch_gesture = "pull"
-                    return True
                 point = found._sketch_hit(x, y)
                 if (
                     point is not None
@@ -19115,39 +18876,54 @@ def _weak_callbacks(view: Viewport) -> NavigatorCallbacks:
                 ):
                     found._sketch_gesture = "edit"
                     return True
-                if found.sketch_pull_ready(x, y):
-                    found._sketch_gesture = "pull"
-                    return True
+                return False
+            if found._sketch_gesture != "edit":
+                return phase != "start"
+            if phase == "start":
+                point = found._sketch_hit(x, y)
+                started = bool(
+                    point is not None
+                    and found._sketch_edit_begin is not None
+                    and found._sketch_edit_begin(point)
+                )
+                if not started:
+                    # Zwischen Vorprüfung und Zugbeginn kann sich die
+                    # Auswahl ändern. Dann darf die abgewiesene Geste
+                    # keinen späteren Mauszug mehr als Bearbeitung deuten.
+                    found._sketch_gesture = None
+                return started
+            if phase == "move":
+                point = found._sketch_hit(x, y)
+                if point is not None and found._sketch_edit_move is not None:
+                    found._sketch_edit_move(point)
+                return True
+            if found._sketch_edit_end is not None:
+                found._sketch_edit_end()
+            found._sketch_gesture = None
+            return True
+        if found._boning:
+            # **Ziehen an einem Gelenk beugt** (RM-561), mit derselben
+            # Klickschwelle wie der Körperzug: Bleibt die Maus darunter, ist es
+            # ein Klick, und der setzt am Gelenk fort.
+            if phase == "ready":
+                found._joint_drag = found.joint_at(x, y)
+                return found._joint_drag is not None
+            if found._joint_drag is None:
                 return False
             if phase == "start":
-                if found._sketch_gesture == "edit":
-                    point = found._sketch_hit(x, y)
-                    started = bool(
-                        point is not None
-                        and found._sketch_edit_begin is not None
-                        and found._sketch_edit_begin(point)
-                    )
-                    if not started:
-                        # Zwischen Vorprüfung und Zugbeginn kann sich die
-                        # Auswahl ändern. Dann darf die abgewiesene Geste
-                        # keinen späteren Mauszug mehr als Bearbeitung deuten.
-                        found._sketch_gesture = None
-                    return started
-                return found.begin_sketch_pull(x, y)
-            if phase == "move":
-                if found._sketch_gesture == "edit":
-                    point = found._sketch_hit(x, y)
-                    if point is not None and found._sketch_edit_move is not None:
-                        found._sketch_edit_move(point)
-                else:
-                    found.continue_sketch_pull(x, y)
-                return True
-            if found._sketch_gesture == "edit":
-                if found._sketch_edit_end is not None:
-                    found._sketch_edit_end()
+                found._drag_kind = "bend"
+                found.jointDragStarted.emit(found._joint_drag)
+            elif phase == "move":
+                if not found.drag_bar.typing:
+                    found.jointDragged.emit(x, y)
+            elif found.drag_bar.typing:
+                # Wer tippt, hat den Zug der Tastatur gegeben: Die
+                # Eingabetaste schließt ihn ab, nicht das Loslassen.
+                found._joint_drag = None
             else:
-                found.finish_sketch_pull()
-            found._sketch_gesture = None
+                found._joint_drag = None
+                found.finish_bend()
+                found.jointDragFinished.emit()
             return True
         if phase == "ready":
             # Nur die Frage, ob hier der gewählte Körper liegt — der Zug

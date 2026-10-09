@@ -99,7 +99,7 @@ bekommt:
 | Weg | Ort an der Oberfläche |
 |---|---|
 | Weg 1 — fremdes Modell anpassen | Auswahlfenster am Merkmal, Vorschlag im Prüfbericht, Werkzeugzeile (*Teilen*: zwei Klicks legen die Ebene, Verbinder vorgewählt) |
-| Weg 2 — neu konstruieren | obere Werkzeugleiste („Zeichnen“: erst skizzieren, die Erzeugungsart fragt der Dialog bei „Fertig“), Menü *Erzeugen*, Karte der Handlungen; Grundkörper tragen vorn *Maße als Parameter anlegen* (§13) |
+| Weg 2 — neu konstruieren | obere Werkzeugleiste („Zeichnen“: drei Klicks, die Richtung wählt die Art), Menü *Erzeugen*, Karte der Handlungen; Grundkörper tragen vorn *Maße als Parameter anlegen* (§13) |
 | Weg 3 — generieren | Chat, Generierungsdialog, Einladung der leeren Szene |
 | Weg 4 — organisch formen | obere Werkzeugleiste (*Formen*, *Skelett* — am gewählten oder einzigen Körper, sonst sagen sie es vorher) |
 | keiner der vier | Untermenü und Befehlspalette, sonst nichts |
@@ -282,7 +282,7 @@ Filter darin still mit.
 ## Eine Grenze steht dort, wo gewählt wird
 
 `caveat` im Registereintrag sagt, wann eine Operation die falsche Wahl ist.
-Vierundsiebzig von hundertachtundsiebzig Operationen tragen einen (die Zahl prüft
+Dreiundachtzig von hundertneunzig Operationen tragen einen (die Zahl prüft
 `tests/test_registry_consistency.py`). `caveat_line()` (`surfaces.py`) ist die
 eine Quelle und trägt das Wort davor, sonst liest sich die Grenze als
 Fortsetzung des `doc`-Satzes: im Tooltip unter dem Satz, beim Agenten in der
@@ -317,11 +317,11 @@ es kein Bild.
   Hinweis aus dem `statusTip` her — ein ungesetzter macht den Knopf nach dem
   Freischalten stumm; `_with_name` stellt am wortlosen Knopf den Namen voran
   (`wordless` am `QAction`), getrennt mit dem Zeichen, das der Satz nicht schon
-  führt (Gedankenstrich vor dem Zweck, Doppelpunkt vor einem Grund mit
-  Gedankenstrich).
+  führt.
 - **Die Kopfzeile geht vor:** Erst verlieren die sieben Knöpfe ihr Wort, dann
   die Suche *Funktion suchen …*, die als Lupe bleibt (`_fit_toolbar`, drei
-  Formen); gemerkt wird je Form, was sie ohne die Kopfzeile braucht.
+  Formen); gemerkt wird je Form, was sie ohne die Kopfzeile braucht. Die Suche
+  geht dem Wort an *Filamente* vor: Im Wunschmaß zählt sein Zeichen.
 - **Keiner der sieben Umschalter verschwindet:** `ToolStrip.set_tool_usable`
   graut ihn mit Grund (Explosion: „Dafür braucht es zwei Körper in der
   Szene.“), und `_update_actions` fragt ihn **nach** der Freigabe aller — eine

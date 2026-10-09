@@ -182,6 +182,45 @@ def test_affine_plane_uses_its_normal_covector_and_keeps_all_transformed_corners
     assert patch.params == {"centre": centre, "axis": (1.0, 1.0, 1.0)}
 
 
+def test_one_transform_is_checked_once_for_all_its_patches(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Je Merkmal dieselbe Matrix: Zerlegung und Prüfung einmal, dieselben Träger (RM-568).
+
+    Am Eiffelturm fragte ein Verschieben 14 634-mal; jede Frage zerlegte die
+    Matrix neu. Gemerkt wird je Abbildung, nur lesbar — ein Aufrufer, der
+    hineinschriebe, änderte sonst die Antwort für alle folgenden.
+    """
+    from app.core.perceive import surfaces
+
+    patches = tuple(_patch(kind) for kind in ("plane", "cylinder", "cone", "sphere", "torus"))
+    matrix = np.asarray(
+        (
+            (0.0, -1.0, 0.0, 4.0),
+            (1.0, 0.0, 0.0, -2.5),
+            (0.0, 0.0, 1.0, 7.0),
+            (0.0, 0.0, 0.0, 1.0),
+        )
+    )
+    surfaces._frame.cache_clear()
+    first = surfaces.transformed_patches(patches, matrix)
+    calls: list[int] = []
+    real = np.linalg.svd
+
+    def counted(*args: object, **kwargs: object) -> object:
+        calls.append(1)
+        return real(*args, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(np.linalg, "svd", counted)
+    again = [surfaces.transformed_patches((patch,), matrix) for patch in patches for _ in range(20)]
+    assert [part for found in again[::20] for part in found] == list(first)
+    shared = surfaces._frame(np.ascontiguousarray(matrix).tobytes())
+    assert shared is not None
+    assert not any(array.flags.writeable for array in shared[:3])
+    # Eine Drehung ist gleichmäßig: Die radiale Zerlegung fragt niemand.
+    assert not calls, "the matrix itself is not decomposed again"
+
+
 def test_patch_helpers_stop_before_publishing_a_partial_result() -> None:
     from app.core.errors import OperationCancelled
     from app.core.perceive.surfaces import clipped_patches, planar_patch, transformed_patches

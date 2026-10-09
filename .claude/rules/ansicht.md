@@ -37,7 +37,7 @@ Stufen: nichts, Körper, Merkmal oder Kante (`Viewport.selection_depth`).
   Operationen von Weg 1 stehen im Auswahlfenster; das Menü trägt davon nur
   *Entfernen* und *Vereinigen* (`grenzen.md`).
 * **Außer er trifft eine Mehrfachauswahl**: Liegt der Zeiger auf einem von
-  mehreren gewählten Körpern, bleibt die Auswahl, und das Menü gilt allen
+  mehreren gewählten Körpern oder Kanten, bleibt sie, und das Menü gilt allen
   (`_on_right_click`, Entscheidung Robert) — im Objektbaum ebenso, wenn die
   Zeile schon markiert ist (`ObjectTree._on_context_menu`).
 * **Ein offener Operationsdialog schaltet die Stufen ab**
@@ -71,7 +71,11 @@ beantwortet die Stufe für Merkmal und Kante.
   in `select`, `select_feature`, `_refresh_feature_selection`), **zählt in
   `selection_depth`** und **verschluckt keinen fremden Klick**
   (`_means_a_feature()`: Messen, Teilen, Skelett, Formen gehen vor). Umschalt
-  und Strg meinen den Körper; eine Kante wird einzeln gewählt.
+  und Strg nehmen an einer gewählten Kante weitere dazu (`add_edges`), sonst
+  den Körper.
+* **Eine Ecke bringt ihre Kanten** (`_corner_at`: ab `CORNER_EDGES`, halbe
+  Reichweite); am exakten Körper zeigt die Linie die ganze Kontur, die
+  Verrunden und Fase mitnehmen (`brep.edit.contour_keys`).
 * **Der Zeiger fragt `_edge_under`**, die Bedingungen von `_edge_click`; die
   Rolle bleibt `feature`.
 * **Rechts ohne Vorbedingung** (`_edge_click(direct=…)`); der Körper wird
@@ -132,8 +136,7 @@ Hüllnetz.
 
 Der Vergleich der Vorschau (`HoldToCompare`) hängt an der Anwendung und
 nimmt die Taste nur, wo der Fokus kein Bedienelement trifft, das sie selbst
-braucht (`answers_space`: Text, Haken, Knopf, Auswahlliste, Liste) — sonst
-schaltete während jeder Vorschau in keinem Fenster ein Haken (RM-448).
+braucht (`answers_space`: Text, Haken, Knopf, Auswahlliste, Liste).
 
 ## Messen
 
@@ -202,8 +205,8 @@ Rückkehrziel (`action_projection`).
   `FEATURE_PATCH_LIFT` hebt entlang der Normalen.
 * **Analysekarten verdrängen Umgebungsverdeckung und Kontaktschatten** über
   `ambient_occlusion`/`contact_shadows`, offscreen prüfbar ohne Renderer.
-* **Eine Karte behält ihre Farben am gewählten Körper** (`shows_face_colours`);
-  nur Filamentfarben weichen der Auswahl.
+* **Die Auswahl tönt Filamentfarben nur** (`face_tint`, RM-557); eine Karte
+  bleibt ungetönt.
 
 ## Schatten und Licht
 
@@ -458,16 +461,14 @@ aus dem Vorrat (`restyled`).
 `_apply_scene` vor dessen frühen Rückkehrpunkten (der leere Startaufbau kostet
 niemanden), einmal je Renderer (`_picker_warm`);
 `_warm_again_for_new_geometry` am **Ende** armiert neu, nur bei neuer
-Geometrie. Geprüft wird der Anschluss, nicht die Zeit
-(`test_the_picker_is_warmed_up_before_the_first_gesture`,
-`test_new_geometry_warms_the_picker_again`). Schriftzeichen ebenso
+Geometrie. Schriftzeichen ebenso
 (`_warm_the_glyphs`): **Neue Zeichen in Beschriftungen gehören in
 `LABEL_GLYPHS`.**
 
 ### Der Adapter wird einmal gefragt, und nicht im Hauptthread
 
 Ohne wgpu-Adapter stirbt der Renderer mit dem Prozess; die erste Frage kostet
-rund eine Sekunde, jede weitere 0,3 s, bei drei Sekunden Startbudget (§31). In
+rund eine Sekunde, jede weitere 0,3 s (Startbudget §31). In
 `app/ui/render/factory.py`: **Die Antwort bleibt liegen** (sie gilt für die
 Maschine); **gefragt wird nebenan** (`_AdapterProbe` aus `app.ui.app.main` an
 der Leine, bevor das Register lädt); **mit Frist** (`ADAPTER_TIMEOUT_SECONDS`,
@@ -487,12 +488,10 @@ geprüft.
   (`occluded_view_shift`, Regel in `kamera.md`).
 * **Fangmarke und unfertige Kurve haben eigene Actors**, die `show_sketch`
   zwischen zwei Gesten nicht abräumt; gleiche Topologie tauscht nur Punkte.
-  Maßkarten, Achsenbuchstaben und Ziehgriff-Beschriftungen sind
-  `pickable=False`.
-* **Schaft, Kreuz und *Abtragen* nur bei genau einem bearbeitbaren Körper**;
-  ohne ihn erzeugt ein Zug nach innen keine Operation.
+  Maßkarten, Achsenbuchstaben und die Wörter am Entwurf des Aufziehens
+  (`show_draw`) sind `pickable=False`.
 
-`sketch_grid`, `show_sketch_cursor`, `_sketch_hit`, `set_sketch_pull`,
+`sketch_grid`, `show_sketch_cursor`, `_sketch_hit`, `show_draw`,
 `MEASURE_GAP`, `view_on_plane` und `place_sketch_cards`
 regelt `zeichenflaeche.md`.
 

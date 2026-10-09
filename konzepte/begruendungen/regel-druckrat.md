@@ -480,3 +480,112 @@ statt 592, in PrusaSlicer 81 statt 367 und in Cura 104 statt 358 m (gegen
 „Stützen automatisch“); der Rest steht unter den Bögen unten. Im Korpus
 bekommen 45 von 242 Körpern den Vorschlag, und 7 brauchen keine Stützen mehr:
 Ihr einziger Überhang waren Ränder.
+
+**Der Stützkontakt folgt dem Material der Spule (09.10.2026, RM-583).** Narben
+und verschweißte Stützen kommen am häufigsten von einem Abstand, der nicht zu
+Schicht und Material passt, von fehlenden Trennschichten, wo die Stütze auf dem
+Modell steht, und von einer Trennschicht, die unter kleinen Flächen zu dicht
+sitzt (`konzepte/recherche-slicer-einstellungen-2026-10.md`, Nr. 1, 2, 3, 7):
+PLA etwa eine Schicht, PETG das 1,25- bis 1,5-Fache, darüber volle Kühlung.
+Ein Projektmaterial gibt es dafür nicht (Robert, 08.10.2026: „immer nach dem
+verwendeten Material“) — PLA und PETG auf einer Platte brauchen verschiedene
+Abstände, deshalb gehen Abstand und Trennschichten je Teil und der Lüfter je
+Spule. Gemessen an zwei gestützten Stufenkörpern auf einer Platte, einer mit
+Objektwerten (`.claude/.state/drache-2026-10-08/kontakt_je_teil.py`, Lagen je
+Höhe gezählt, Raster 2 mm, Bambus Übergangslage als Stütze): Der Abstand oben
+kommt in allen acht Programmen an, 0,4 mm gegen 0,2 am Bezug (Anycubic 0,1;
+SuperSlicer bei 0,15er Schichten 0,53 gegen 0,33). Die Trennschichten kommen
+wie geschrieben an, Prusa und Cura genau (geschrieben 5 oben und 0 unten gegen
+2 und 2). Die Orca-Familie zählt anders: oben eine Übergangslage mehr (Orca,
+Elegoo, Creality und Anycubic 6 gegen 3), unten die Kontaktlage dazu (Bezug 3
+statt 2; Bambu druckt sie bei null als gewöhnliche Stütze,
+`SupportCommon.cpp`). Das Herstellerprofil meint dieselbe Zählung, also gleicht
+Solidon nichts aus. Die weite Lücke legt je Ebene deutlich weniger Bahn (Orca
+1044 gegen 1617 mm, Prusa 944 gegen 2512); Cura nimmt sie nur für die ganze
+Platte, denn ihr Linienabstand gehört dem Stützextruder. Mit dem echten Rat
+bekommt das PLA-Teil 0,2 und das PETG-Teil 0,28 mm. **Die Orca-Familie rundet den Abstand
+auf ganze Schichten, wenn die Stütze die Schichthöhe des Modells hat**
+(`Slicing.cpp`), und Elegoos Prozesse für C2 und CC2 stellen es so ein: Aus
+0,28 wurden im ElegooSlicer 0,2. Setzt Solidon einen Abstand zwischen zwei
+Schichten, schaltet die Übergabe `independent_support_layer_height` ein; der
+ElegooSlicer druckt dann 0,28. Mit zwei Filamenten baut die Orca-Familie einen
+Reinigungsturm und schaltet die eigene Höhe selbst wieder ab
+(`PrintConfig.cpp`, `normalize_fdm_2`; „je Objekt“ mit mehreren Objekten baut
+keinen, glatter Zeitraffer immer einen) — Orca, Elegoo, Creality und Bambu
+druckten das PETG-Teil neben PLA mit 0,2, PrusaSlicer mit 0,28. Mit Turm legt
+die Orca-Familie die Stütze auf die Schichten des Modells und rundet zur
+nächsten (`SupportMaterial.cpp`); PLA bei 0,08 mm Schicht bekam so aus 0,10
+eine Schicht, 0,08, unter dem Minimum. Neben einem Turm rät Solidon deshalb
+wie bei Cura gleich ganze Schichten innerhalb der Materialgrenzen (RM-622, `writer.tower_plates`,
+Dialog und Export aus derselben Frage), und ein Wert im Band zwischen zwei
+Schichten bekommt dort wie bei Cura die ganze Schicht vorgeschlagen, weil der
+Slicer ihn nicht so druckt. Gemessen im ElegooSlicer mit PLA und PETG bei
+0,08 mm: vorher 0,08 am PLA- und 0,16 am PETG-Teil (geschrieben 0,10 und
+0,12), nachher an beiden 0,16 wie geschrieben, oben und unten. Für einen
+eigenen Wert zwischen zwei Schichten sagt der Export die Rundung, statt still
+zu runden, und dann nur das: Dass die eigene Höhe gilt, stimmt mit Turm nicht.
+
+**Unter Bäumen ebenso** (RM-622): Am PETG-Drachen kamen die geschriebenen 0,28 mm
+in keinem Programm an — alle Ebenen lagen auf dem 0,2-mm-Raster. Gegenprobe an zwei
+gestützten Körpern aus PETG (`output/drache-2026-10-08/kontakt-stil`): Mit Gitter
+druckten ElegooSlicer, OrcaSlicer, Bambu Studio, Creality Print, Anycubic Slicer
+Next und PrusaSlicer 0,28 mit eigenen Zwischenebenen, mit organischen Bäumen alle
+sechs 0,2 ohne eine. Bäume liegen auf den Schichten des Modells, auch mit
+`independent_support_layer_height`; Solidon rät unter ihnen ganze Schichten, auch
+unter „automatisch“, wenn der Herstellerprozess mit Bäumen stützt (Elegoo, Bambu),
+und sagt bei einem eigenen Wert die Rundung. Bambu Studio, Creality Print, Anycubic
+Slicer Next und PrusaSlicer druckten unter Bäumen auch keine untere Trennschicht
+(unter Gitter druckten sie untere Lagen, unter Bäumen keine); in diesen vier
+schlägt Solidon sie unter Bäumen nicht vor, ElegooSlicer und OrcaSlicer druckten
+zwei und bekommen sie. Organisch heißt der Generator `TreeSupport3D`,
+dessen Ebenen auf dem Raster des Modells liegen (`TreeSupportCommon.hpp:610` und
+`:289`, gleich in Orca, Bambu, Creality und Anycubic); `tree_hybrid`, `tree_slim`
+und `tree_strong` planen eigene Stützebenen (`TreeSupport.cpp:1756–1759`,
+`:3349–3408`). Deshalb fragt `handover.organic_styles` den Stil des
+Herstellerprozesses, und SuperSlicer, der statt Bäumen Gitter druckt, rundet nicht.
+Ohne gefundenes Programm gilt die Familie der Datei: „Baum“ ist organisch, denn alle
+sechs gemessenen Programme drucken ihn so, und eine ganze Schicht gilt unter jeder
+Stütze genau. Gefragt wird mit der Art, mit der das Teil druckt
+(`advise.printed_style`): Lehnt der Kunde den vorgeschlagenen Baum ab — im Dialog
+abgewählt, im Export nicht übernommen —, druckt das Teil das Gitter der Platte, und
+Abstand wie untere Trennschicht gelten ihm. Mit dem abgelehnten Baum gefragt, bekam
+das Kinn bei Bambu Studio weder 0,28 mm noch eine untere Trennschicht. Ebenso fragt
+der Dialog die Stützart gegen die Grundlage wie der Export, der einen übernommenen
+Baum nur dem Teil gibt, das ihn verlangt; sonst verschwanden die Zeilen des Tischs,
+sobald der Baum des Kinns übernommen war. Feldsatz und Rat lesen dieselbe Auskunft:
+Leitete das Feld „organisch“ selbst her, sagte es unter `tree_hybrid` „gerundet“
+neben einem Rat, der nicht rundete.
+
+Der Schalter `independent_support_layer_height` richtet sich nach den
+geschriebenen Abständen der Teile, die nicht unter organischen Bäumen drucken
+(`handover.support_gaps_by_style`), nicht nach den Zielen aller Spulen; unter
+Bäumen wirkte er nicht und wäre eine Abweichung vom Herstellerprofil ohne Grund.
+Steht er gegen den Herstellerprozess, sagt es ein Befund: Die Stütze liegt dann
+auch auf eigenen Höhen (0,47, 0,75, 1,02 mm statt nur auf denen des Modells). Cura
+rechnet immer in ganzen Schichten, deshalb rät Solidon dort das Vielfache
+innerhalb der Materialgrenzen — bei 0,08 mm Schicht für PLA zwei Schichten statt einer
+unter dem Minimum —, und die Cura-Grundlage trägt es auch: Solidons 0,2 war
+bei 0,28 und 0,12 mm Schicht keines, und jede Übergabe in Entwurf und Fein
+warnte, auch ohne Stützen. Über mehrere Körper führt der Druckdialog den
+Stützkontakt getrennt zusammen und fragt ihn wie der Export gegen die
+Grundlage: Gegen die Übernahme gefragt, brachte jedes Übernehmen die
+Gegenzeile (Tisch 0,2, Kinn 0,5 und zurück; PLA 0,15, PETG 0,21 und zurück),
+und nach dem größten Wert verschwand die Zeile des PLA-Teils ganz. Ein vor
+0.6.0 kalibriertes Material kennt die neuen Werte nicht und bekommt sie aus
+dem mitgelieferten Eintrag, wie die Druckeinstellungen je Eintrag. Für TPU nennt
+keine Quelle einen Abstand; ohne Werte bleibt er beim Hersteller.
+
+**Über Baumspitzen zwei Schichten** (RM-584): Roberts Drache (PLA, CC2, 0,2 mm)
+behielt an Kinn und Kopfstacheln Reste der Bäume. Jede der 64 Bartstacheln beginnt
+als Insel von im Median 0,07 mm²; unter 1 mm² baut der Slicer an der Spitze keine
+Trennschicht (`minimum_roof_area`, `TreeSupport3D.cpp:1151`), und die Spitze steht
+eine Schicht unter dem Modell. Zwei Schichten Abstand senkten die Kontaktfläche
+mit 0,2 mm Luft am Kinn von 59,4 auf 6,9 mm², an den Stacheln von 92,4 auf 3,6 mm²,
+für eine Minute und 0,7 g; PrusaSlicer und Cura gleich. XY-Abstand, Astabstand,
+Baumdichte, Trennschichtabstand und andere Baumarten halfen nicht; drei Schichten
+ließen die Bartspitzen durchhängen können. An großen Decken fällt dafür die
+Trennschicht weg — deshalb gilt der Abstand erst ab vielen solchen Inseln: An 165
+Modellen hat der Drache 199, danach eine Baugruppe 49 und ein Schachturm 34;
+die Schwelle steht bei 100.
+Gemessen ist nur PLA (`support_tip_gap`); ohne Wert bleibt der Abstand des
+Materials. Bericht: `output/drache-2026-10-09/rueckstaende/bericht.md`.

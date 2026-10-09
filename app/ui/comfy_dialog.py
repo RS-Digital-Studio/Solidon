@@ -37,7 +37,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from app.core.backends import comfy_setup, mesh
+from app.core.backends import comfy_setup, machine, mesh, needs
 from app.core.errors import InternalError
 from app.core.log import get_logger
 from app.i18n import format_decimal, tr
@@ -121,6 +121,8 @@ class _FolderProbeResult:
     legacy: tuple[str, ...] = ()
     """Die Ordner der alten TripoSG-Einrichtung, relativ zu ComfyUI."""
     legacy_gigabytes: float = 0.0
+    free_gigabytes: float | None = None
+    """Was auf dem Laufwerk von ``models`` frei ist — ``None``, wenn es schweigt."""
 
 
 def _probe_folder(generation: int, entered: str, results: Queue[_FolderProbeResult]) -> None:
@@ -131,6 +133,13 @@ def _probe_folder(generation: int, entered: str, results: Queue[_FolderProbeResu
         image_model = comfy_setup.image_model_present(found)
         leftovers = comfy_setup.legacy_leftovers(found)
         legacy_size = comfy_setup.legacy_gigabytes(leftovers)
+        try:
+            free: float | None = comfy_setup.free_gigabytes(found / "models")
+        except OSError:
+            free = None
+        # Die Grafikkarte hier erheben (``nvidia-smi`` ist ein Prozess), nie im
+        # Hauptthread (Nachprüfung K, N2).
+        machine.probe_card()
     except comfy_setup.SetupFailed as problem:
         results.put(_FolderProbeResult(generation, entered, reason=str(problem)))
     except Exception as problem:
@@ -153,6 +162,7 @@ def _probe_folder(generation: int, entered: str, results: Queue[_FolderProbeResu
                 image_model=image_model,
                 legacy=tuple(path.relative_to(found).as_posix() for path in leftovers),
                 legacy_gigabytes=legacy_size,
+                free_gigabytes=free,
             )
         )
 
@@ -234,6 +244,15 @@ class ComfySetupDialog(QDialog):
         # tippte einen Satz und las, dass ein Bild verlangt wird: Bis dahin
         # holte Solidon dieses Modell gar nicht.
         self.image_model = QCheckBox(self._image_model_label, self)
+        # **Platz und Dauer, bevor geladen wird** (RM-564): Ein Kunde mit
+        # MacBook las erst beim Laden, dass es Dutzende Gigabyte werden. Die
+        # Zeile rechnet mit den gewählten Häkchen und dem freien Platz.
+        self._free_gigabytes: float | None = None
+        self.needs = WrappedNote(self)
+        self.needs.grown.connect(self._fit_soon)
+        self.needs.setTextFormat(Qt.TextFormat.PlainText)
+        self.weights.toggled.connect(self._show_needs)
+        self.image_model.toggled.connect(self._show_needs)
         self._set_model_options(False, False)
 
         # **Was die Einrichtung entfernt, steht vorher da** (Entscheidung Robert,
@@ -284,6 +303,7 @@ class ComfySetupDialog(QDialog):
         content_layout.addLayout(row)
         content_layout.addWidget(self.weights)
         content_layout.addWidget(self.image_model)
+        content_layout.addWidget(self.needs)
         content_layout.addWidget(self.legacy)
         # **Zustand und Balken im Rollbereich** (RM-339): Eine gescheiterte
         # Einrichtung meldet jede Ausgabezeile des Prozesses. Außerhalb ließ
@@ -355,6 +375,24 @@ class ComfySetupDialog(QDialog):
         )
         self.image_model.setEnabled(not image_model_there and not self._probe_pending)
         self.image_model.setChecked(not image_model_there and self._image_model_wanted)
+        self._show_needs()
+
+    def _show_needs(self, *_args: object) -> None:
+        """Was die gewählten Modelle brauchen, ob dieser Rechner es hat, und wie lange
+        ein Auftrag dauert — vor *Einrichten* (RM-564, ``needs.generator_needs``).
+
+        Erst nach der Ordnerprüfung: Sie hat im Faden Platz und Rechner erhoben,
+        hier wird nur gelesen.
+        """
+        if not self._probe_succeeded:
+            self.needs.setText("")
+            return
+        said, short = needs.generator_needs(
+            self.weights.isEnabled() and self.weights.isChecked(),
+            self.image_model.isEnabled() and self.image_model.isChecked(),
+            self._free_gigabytes,
+        )
+        set_role(self.needs, "warning" if short else "info", said)
 
     def _set_start_enabled(self, enabled: bool, reason: str | None = None) -> None:
         """Eine laufende Ordnerprüfung auf allen Kanälen am Knopf erklären."""
@@ -486,6 +524,7 @@ class ComfySetupDialog(QDialog):
                     result.image_model,
                     legacy=result.legacy,
                     legacy_gigabytes=result.legacy_gigabytes,
+                    free_gigabytes=result.free_gigabytes,
                 )
             elif result.crashed:
                 self._folder_probe_crashed(result.generation, result.entered, result.reason)
@@ -502,6 +541,7 @@ class ComfySetupDialog(QDialog):
         *,
         legacy: tuple[str, ...] = (),
         legacy_gigabytes: float = 0.0,
+        free_gigabytes: float | None = None,
     ) -> None:
         """Nur die Antwort zum weiterhin sichtbaren Ordner darf die Häkchen setzen."""
         if (
@@ -519,6 +559,7 @@ class ComfySetupDialog(QDialog):
         self._probe_succeeded = True
         self._probe_timed_out_generation = None
         self.progress.setVisible(False)
+        self._free_gigabytes = free_gigabytes
         self._set_model_options(weights, image_model)
         self._show_legacy(legacy, legacy_gigabytes)
         self._set_start_enabled(True)

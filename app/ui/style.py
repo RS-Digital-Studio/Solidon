@@ -1734,6 +1734,11 @@ QFrame#tourStepRow[tourState="current"] {{
 QFrame#tourStepRow[tourState="skipped"] {{
     border-left: 3px dashed {line};
 }}
+/* Eine eingeklappte Zeile nimmt den Fokus (Leertaste klappt auf); der Rahmen
+   steht immer und wechselt nur die Farbe, damit der Text nicht springt. */
+QLabel#tourStepText {{ border: 2px solid transparent; }}
+QFrame#tourStepRow[tourState="upcoming"] QLabel#tourStepText {{ color: {muted}; }}
+QLabel#tourStepText:focus {{ border: 2px dashed {focus}; }}
 
 /* Der Unterstützen-Dialog zeigt als ruhige Karte, wofür das Geld ist: je
    Zeile ein Symbol, ein halbfettes Stichwort und ein Satz. Die zwei Wege
@@ -2014,6 +2019,7 @@ QMenuBar {{ background: {window}; border-bottom: 1px solid {line}; }}
 QMenuBar::item {{ padding: {TIGHT}px {ROOMY}px; background: transparent; }}
 QMenuBar::item:selected {{ background: {hover}; }}
 QMenu {{ background: {base}; border: 1px solid {line}; padding: {TIGHT}px; }}
+QFrame#filamentPopup {{ background: {base}; border: 1px solid {line}; }}
 QMenu::item {{ padding: {TIGHT}px {WIDE}px; border-radius: {SPACE}px; }}
 QMenu::item:selected {{ background: {highlight}; color: {on_highlight}; }}
 QMenu::separator {{ height: 1px; background: {line}; margin: {TIGHT}px {NORMAL}px; }}

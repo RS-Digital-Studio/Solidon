@@ -180,17 +180,20 @@ def _placed(mesh: MeshData, frame: PlaneFrame) -> MeshData:
 
 
 def _polygon_in_frame(polygon: Any, before: PlaneFrame, after: PlaneFrame) -> Any:
-    from shapely.ops import transform
+    import shapely
 
     matrix = np.linalg.inv(_matrix(after)) @ _matrix(before)
 
-    def point(x: Any, y: Any, z: Any = None) -> tuple[Any, Any]:
-        return (
-            matrix[0, 0] * x + matrix[0, 1] * y + matrix[0, 3],
-            matrix[1, 0] * x + matrix[1, 1] * y + matrix[1, 3],
+    def points(xy: np.ndarray) -> np.ndarray:
+        x, y = xy[:, 0], xy[:, 1]
+        return np.column_stack(
+            (
+                matrix[0, 0] * x + matrix[0, 1] * y + matrix[0, 3],
+                matrix[1, 0] * x + matrix[1, 1] * y + matrix[1, 3],
+            )
         )
 
-    return transform(point, polygon)
+    return shapely.transform(polygon, points)
 
 
 def _path(

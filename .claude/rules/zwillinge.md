@@ -6,10 +6,10 @@ paths:
 
 # Zwillinge: dieselbe Auskunft an zwei Stellen
 
-Das, was die projektübergreifende Arbeitsanweisung „parallele Code-Pfade"
-nennt; hier heißt es **Zwilling** wie im Werkzeug (`tools/twin_scan.py`), im
-Konzept (`konzepte/konzept-zwillinge-2026-09.md`) und in der ROADMAP. Das
-Warum steht in `konzepte/begruendungen/regel-zwillinge.md`.
+Was die projektübergreifende Arbeitsanweisung „parallele Code-Pfade" nennt,
+heißt hier **Zwilling** wie im Werkzeug (`tools/twin_scan.py`), im Konzept
+(`konzepte/konzept-zwillinge-2026-09.md`) und in der ROADMAP. Warum:
+`konzepte/begruendungen/regel-zwillinge.md`.
 
 **Ein Zwilling ist eine Auskunft, die an mehr als einer Stelle hergeleitet
 wird** — eine Zahl, eine Regel, ein Satz, eine Rechnung —, so dass ein
@@ -47,33 +47,25 @@ zusammenlegen.
 ```
 
 Das Werkzeug ist **kein Test** und steht nicht im Tor. **Die gefährlichen
-Zwillinge sind die, die schon auseinandergelaufen sind** — für jede Suche nach
-Gleichheit unsichtbar, ebenso eine Regel in zwei Fassungen, die weder wort-
-noch strukturgleich ist. Ein Skript findet Kopien; eine Regel in zwei Fassungen
-findet nur, wer die Sache kennt. Das Werkzeug ist der Zubringer der
-Durchsicht, nicht ihr Ersatz.
+Zwillinge sind die schon auseinandergelaufenen** — für jede Suche nach
+Gleichheit unsichtbar wie eine Regel in zwei Fassungen, und die findet nur,
+wer die Sache kennt. Das Werkzeug ist der Zubringer der Durchsicht, nicht ihr
+Ersatz.
 
 ## Woher sie kommen
 
-1. **Eine vermutete Schichtgrenze** — wer eine Grenze vermutet, statt sie
-   nachzulesen, kopiert.
-2. **Zwei Sitzungen, ein Problem** — die Nachbarstelle ist noch nicht
-   committet.
-3. **Ein Kommentar „dieselbe wie …" ist kein Teilen** — er wandert beim
-   nächsten Anfassen nicht mit.
-4. **Der Name statt der Eigenschaft** — wo hinter `== "orca"` eine Frage
-   steht, gehört ein Prädikat hin (`slicer_keys.py` führt sie).
-5. **Ein Geschwistermodul entsteht durch Kopieren** und nimmt die
-   Hilfsfunktion mit, statt sie herauszuziehen.
-6. **Jede Testdatei bringt ihre Fixture mit**, weil sie allein lauffähig sein
-   soll.
+Aus einer vermuteten statt nachgelesenen Schichtgrenze; aus zwei Sitzungen am
+selben Problem; aus einem Kommentar „dieselbe wie …", der kein Teilen ist und
+nicht mitwandert; aus dem Namen statt der Eigenschaft (hinter `== "orca"`
+gehört ein Prädikat aus `slicer_keys.py`); aus einem kopierten
+Geschwistermodul samt Hilfsfunktion; aus der Fixture, die jede Testdatei
+mitbringt.
 
 ## Was das Tor hält
 
 `tests/test_shared_constants.py` prüft die Konstanten der Anwendung in zwei
 Richtungen: derselbe Name mit demselben Wert an mehr als einer Stelle, und ein
-öffentlicher Name für zwei verschiedene Werte; beide Tests haben eine
-Untergrenze gegen einen kaputten Suchlauf. **Über Funktionskörper wacht
+öffentlicher Name für zwei verschiedene Werte. **Über Funktionskörper wacht
 nichts** — eine Entscheidung (§3 des Konzepts), keine Lücke. Wer einen
 Zwilling hält, hängt einen Test daran oder legt ihn zusammen; einen Kommentar,
 der einen Wächter behauptet, prüft niemand.

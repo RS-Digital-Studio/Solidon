@@ -796,3 +796,63 @@ def test_a_shared_edge_needs_no_collinearity_recheck(monkeypatch) -> None:
         first, second, np.array([[0, 1, 2]]), np.array([[1, 0, 3]]), with_coplanar=True
     )
     assert not hit.any() and not flat.any()
+
+
+def _crossed_spheres() -> tuple[np.ndarray, np.ndarray]:
+    """Zwei Kugeln, die sich durchdringen, als ein Netz — echte Schnitte und viele Nachbarn."""
+    first = trimesh.creation.icosphere(subdivisions=4, radius=10.0)
+    second = trimesh.creation.icosphere(subdivisions=4, radius=8.0)
+    second.apply_translation((9.0, 1.0, 0.5))
+    both = trimesh.util.concatenate([first, second])
+    return np.asarray(both.vertices), np.asarray(both.faces)
+
+
+def test_steep_neighbours_leave_the_search_before_the_exact_check() -> None:
+    """Schräge Nachbarn trennt schon die Trennprüfung, und sie kosten wie vorher (RM-568).
+
+    An einem geschlossenen Netz teilen fast alle Kandidaten eine Ecke; sie
+    gingen bis zum 08.10.2026 alle durch die genaue Prüfung — am Spiderman
+    68 s der Selbstschnittsuche, mit der Nachbarprüfung 17 s. Das Budget zählt
+    sie weiter als eine genaue Prüfung, damit es an derselben Stelle endet.
+    """
+    sphere = trimesh.creation.icosphere(subdivisions=3, radius=10.0)
+    surface = intersections._surface(np.asarray(sphere.vertices), np.asarray(sphere.faces))
+    assert surface is not None
+    first, second = next(
+        intersections._candidates(surface, None, intersections._Search(), separate=False)
+    )
+    same = surface.faces[second][:, :, None] == surface.faces[first][:, None, :]
+    touching = (same.any(axis=2).sum(axis=1) >= 1) & (same.any(axis=2).sum(axis=1) <= 2)
+    separated, cost = intersections._separated(surface, first, second)
+    assert touching.sum() > 1000, "Voraussetzung: die Kugel hat ihre Nachbarn"
+    assert separated[touching].all(), "a closed sphere has no crossing neighbours"
+    assert np.all(cost[touching] == 1.0), "a neighbour costs one exact check, as before"
+
+
+@pytest.mark.parametrize("budget", [None, 2_000, 20_000, 60_000])
+def test_the_neighbour_separation_changes_no_answer_of_the_search(
+    monkeypatch: pytest.MonkeyPatch, budget: int | None
+) -> None:
+    """Dieselben Paare, dieselbe Vollständigkeit, dieselben geprüften Dreiecke — mit Budget.
+
+    Die Gegenprobe ist der Stand davor: ohne Nachbarprüfung in der Trennung.
+    """
+    vertices, faces = _crossed_spheres()
+    now = intersections.crossing_face_pairs(vertices, faces, max_pairs=budget)
+    with monkeypatch.context() as patched:
+        patched.setattr(
+            intersections,
+            "_touching_apart",
+            lambda surface, first, second: np.zeros(len(first), dtype=bool),
+        )
+        before = intersections.crossing_face_pairs(vertices, faces, max_pairs=budget)
+    assert len(before.first) > 100 or budget is not None, "Voraussetzung: echte Schnitte"
+    np.testing.assert_array_equal(now.first, before.first)
+    np.testing.assert_array_equal(now.second, before.second)
+    np.testing.assert_array_equal(now.coplanar, before.coplanar)
+    assert now.complete == before.complete
+    if before.checked is None:
+        assert now.checked is None
+    else:
+        assert now.checked is not None
+        np.testing.assert_array_equal(now.checked, before.checked)

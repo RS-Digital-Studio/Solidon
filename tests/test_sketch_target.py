@@ -104,7 +104,7 @@ def test_the_selected_body_is_the_only_one_while_drawing(qt_app) -> None:
     try:
         clip, keil, stift = names["Clip"], names["Keil"], names["Stift"]
         window.object_tree.select_object(clip)
-        window.action_sketch_free()
+        window.start_sketch("")
         panel = window._sketch_panel
         assert window.sketch_body() == clip
         assert window.viewport.sketch_focus == (clip, False)
@@ -135,7 +135,7 @@ def test_showing_the_neighbours_keeps_them_out_of_reach(qt_app) -> None:
         renderer = RecordingRenderer()
         window.viewport.renderer = renderer
         window.object_tree.select_object(clip)
-        window.action_sketch_free()
+        window.start_sketch("")
         panel = window._sketch_panel
         window.toggle_sketch_neighbours()
         assert window.viewport.sketch_focus == (clip, True)
@@ -159,62 +159,57 @@ def test_showing_the_neighbours_keeps_them_out_of_reach(qt_app) -> None:
 
 def test_nothing_selected_means_drawing_a_new_body(qt_app) -> None:
     """Abnahme 7.4 (2): Nichts gewählt, Rechteck, *Fertig* — ein neuer
-    Körper; die alten bleiben unverändert. *Abtragen* steht nicht da, das
-    Ebenenfeld nennt nur die Grundebenen, und die Karte im Bild spricht nicht
-    vom Abtragen (E9)."""
+    Körper; die alten bleiben unverändert. Das Ebenenfeld nennt nur die
+    Grundebenen, und *Fertig* führt zurück in die Ansicht, wo die Höhe fehlt
+    (RM-561)."""
+    from app.ui.draw_tool import Lift
     from app.ui.main_window import PULL_OP
 
     window, _names = _window_with_three_bodies()
     try:
         window.object_tree.select_object(None)
-        window.action_sketch_free()
+        window.start_sketch("")
         panel = window._sketch_panel
         assert window.sketch_body() is None
         scene = window.session.last_result.scene
         assert not any(window.viewport._in_view(key, entry) for key, entry in scene.objects.items())
-        assert window.sketch_cut_button.isHidden()
         entries = [panel.plane_choice.itemText(i) for i in range(panel.plane_choice.count())]
         assert not any("Fläche" in entry for entry in entries), entries
         panel.canvas.set_sketch(shapes.rectangle(20.0, 20.0))
-        window._update_sketch_hint()
-        assert "Abtragen" not in window.viewport.sketch_action.text()
-        assert window._pull_op() == PULL_OP
-        opened: list[str] = []
-        window.run_operation = lambda spec, given=None, **kw: opened.append(spec.name)
         window.sketch_finish_button.click()
-        assert opened == [PULL_OP], "ohne Ziel wird Fertig ein neuer Körper"
+        flow = window.draw_flow()
+        assert flow.draft is not None and flow.draft.surface is not None
+        assert flow.draft.surface.body is None, "ohne Ziel wird es ein neuer Körper"
+        step = flow.draft.step(Lift(10.0))
+        assert step is not None and step.op == PULL_OP
     finally:
         _close(window)
 
 
 def test_pulling_on_the_target_joins_it(qt_app) -> None:
-    """E4: Auf der Oberseite des Ziels heißt *Hochziehen* anfügen — ein
-    Körper, ein Schritt. Die Liste unter *Mehr* bietet das Hochziehen als
-    neuer Körper ausdrücklich an und wiederholt die Knöpfe daneben nicht."""
-    from app.ui.main_window import JOIN_OP, POCKET_OP, PULL_OP
+    """E4: Auf der Oberseite des Ziels heißt ein Zug nach außen anfügen — ein
+    Körper, ein Schritt; nach innen schneidet er (RM-561)."""
+    from app.ui.draw_tool import Lift
+    from app.ui.main_window import JOIN_OP, POCKET_OP
 
     window, names = _window_with_three_bodies()
     try:
         clip = names["Clip"]
         window.object_tree.select_object(clip)
-        window.action_sketch_free()
+        window.start_sketch("")
         window.viewport.plane_picker._buttons["face"].click()
         panel = window._sketch_panel
         assert panel.canvas.sketch.plane.startswith(f"feature:{clip}:")
         panel.canvas.set_sketch(
             replace(shapes.rectangle(10.0, 10.0), plane=panel.canvas.sketch.plane)
         )
-        window._update_sketch_hint()
-        assert window._pull_op() == JOIN_OP
-        hidden = {name for name, action in window._finish_actions.items() if not action.isVisible()}
-        assert hidden == {JOIN_OP, POCKET_OP}
-        assert window._finish_actions[PULL_OP].isVisible()
-        opened: list[tuple[str, tuple[str, ...]]] = []
-        window.run_operation = lambda spec, given=None, **kw: opened.append(
-            (spec.name, window.object_tree.selected_objects())
-        )
-        window.sketch_pull_button.click()
-        assert opened == [(JOIN_OP, (clip,))], "angefügt wird an das Ziel, und es ist gewählt"
+        window.sketch_finish_button.click()
+        draft = window.draw_flow().draft
+        assert draft is not None
+        joined = draft.step(Lift(5.0))
+        assert joined is not None and (joined.op, joined.inputs) == (JOIN_OP, (clip,))
+        cut = draft.step(Lift(-2.0))
+        assert cut is not None and (cut.op, cut.inputs) == (POCKET_OP, (clip,))
     finally:
         _close(window)
 
@@ -226,7 +221,7 @@ def test_several_selected_bodies_are_a_question(qt_app) -> None:
     try:
         window.object_tree.select_object(names["Clip"])
         window.object_tree.select_object(names["Keil"], add=True)
-        window.action_sketch_free()
+        window.start_sketch("")
         assert window.sketch_body() is None
         assert not window._sketch_question.isHidden()
         from PySide6.QtWidgets import QPushButton
@@ -254,7 +249,7 @@ def test_a_vanished_target_leaves_the_drawing_and_says_so(qt_app) -> None:
     try:
         keil = names["Keil"]
         window.object_tree.select_object(keil)
-        window.action_sketch_free()
+        window.start_sketch("")
         window._sketch_panel.canvas.set_sketch(shapes.rectangle(5.0, 5.0))
         window.session.apply("weg", [OperationDraft(op="delete_object", inputs=(keil,))])
         assert window.session.wait_for_idle(60000)
@@ -271,7 +266,7 @@ def test_leaving_restores_the_view(qt_app) -> None:
     window, names = _window_with_three_bodies()
     try:
         window.object_tree.select_object(names["Clip"])
-        window.action_sketch_free()
+        window.start_sketch("")
         window.finish_sketch(keep=False)
         scene = window.session.last_result.scene
         assert window.viewport.sketch_focus is None
@@ -303,8 +298,8 @@ def test_finish_has_one_meaning_under_a_real_press(qt_app, monkeypatch) -> None:
     """E2: *Fertig* trug ein Menü **und** ``clicked``. Welche Bedeutung eine
     Geste traf, hing daran, wer das Loslassen bekam — mit ``QTest`` ging der
     Dialog der Vorgabe auf und das Menü nie. Jetzt ist *Fertig* ein Knopf ohne
-    Menü, die übrigen Arten stehen unter *Mehr*, und *Mehr* schließt nichts ab.
-    Geprüft mit Drücken und Loslassen am sichtbaren Knopf."""
+    Menü und der einzige Abschluss (RM-561). Geprüft mit Drücken und Loslassen
+    am sichtbaren Knopf."""
     from PySide6.QtCore import Qt
     from PySide6.QtTest import QTest
 
@@ -318,13 +313,9 @@ def test_finish_has_one_meaning_under_a_real_press(qt_app, monkeypatch) -> None:
         window.show()
         window.start_sketch("", sketch_to_text(shapes.rectangle(20.0, 10.0)))
         assert window.sketch_finish_button.menu() is None
-        assert window.sketch_more_button.menu() is window._finish_menu
+        assert not hasattr(window, "sketch_more_button"), "kein zweiter Abschluss"
         finished: list[bool] = []
         monkeypatch.setattr(window, "finish_sketch", lambda keep=True, **kw: finished.append(keep))
-        QTest.mousePress(window.sketch_more_button, Qt.MouseButton.LeftButton)
-        QTest.mouseRelease(window.sketch_more_button, Qt.MouseButton.LeftButton)
-        window._finish_menu.close()
-        assert finished == [], "Mehr schließt nichts ab"
         QTest.mousePress(window.sketch_finish_button, Qt.MouseButton.LeftButton)
         QTest.mouseRelease(window.sketch_finish_button, Qt.MouseButton.LeftButton)
         assert finished == [True], "ein Klick, eine Handlung"
