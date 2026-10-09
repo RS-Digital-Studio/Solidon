@@ -115,7 +115,7 @@ Fassungen: `konzepte/begruendungen/karte-tests.md`.
 | `cura_fakes.py` | Nachgebaute Cura 5.13 (`cura_installation`), ihr AppDir, Flatpak-Starter und AppImage als Abbild des AppDir mit nachgestelltem Einhängen für den Lauf — für `test_cura_machine.py` und die Cura-Fälle des Druckdialogs |
 | `squashfs_fakes.py` | AppImages vom Typ 2 nach dem SquashFS-4.0-Aufbau (`appimage_file`, `tree_of`, `Link`) — für `test_appimage_profiles.py` und `cura_fakes.py` |
 | `render_fakes.py` | Renderer-Doppel der Ansichtstests: schreibt Aktoren, Stile, Beschriftungen und Kamera mit, statt zu zeichnen — wer das Bild misst, nimmt den echten Renderer ohne Fenster |
-| `release_signing.py` | Eigenes Schlüsselpaar der Suite für unterschriebene Versionsdateien; ob die ausgelieferte Datei gegen den echten Schlüssel trägt, prüft `test_the_published_version_file_is_signed` |
+| `release_signing.py` | Eigenes Schlüsselpaar der Suite für unterschriebene Versionsdateien (`signed`, auch mit fremdem Schlüssel); die echten Schlüssel (`REAL_PUBLIC_KEYS`) samt Abdruck des ersten und Besitzproben (`KEY_PROOFS`) prüfen `test_the_published_version_file_is_signed` und `test_the_shipped_release_keys_are_proven` |
 | `workflow_helpers.py` | Grenzt Jobs und Schritte der Workflows ab, ohne allgemeiner YAML-Parser zu sein |
 | `php_probe.py` | Entscheidet für alle Endpunkttests über Skip oder Fehler und liefert die Befehlsbasis (`php_command()`, ohne OPcache: `WITHOUT_OPCACHE`) |
 | `native_window_probe.py` | Zeigt je Prozess einmal ein leeres natives Fenster vor und entscheidet für die Fixture `native_window_platform` über Lauf, Skip oder Fehler — überspringen darf in der CI nur der Intel-Mac; der Grund steht am Ende des Laufs |
