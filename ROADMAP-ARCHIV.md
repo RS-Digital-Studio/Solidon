@@ -38,8 +38,11 @@ entfernt hat.
 | 2026-10-08 | [RM-582: Ränder tragen sich selbst, und die Übergabe sperrt die Stütze unter ihnen (08.10.2026)](#rm-582-ränder-tragen-sich-selbst-und-die-übergabe-sperrt-die-stütze-unter-ihnen-08102026) |
 | 2026-10-08 | [RM-581: Wo kleine Überhänge auf dem Modell ansetzen, schlägt Solidon Bäume vor (08.10.2026)](#rm-581-wo-kleine-überhänge-auf-dem-modell-ansetzen-schlägt-solidon-bäume-vor-08102026) |
 | 2026-10-08 | [RM-580: Spitzen kühlen langsamer gedruckt ab, weil das Mindesttempo die Mindestzeit erst greifen lässt (08.10.2026)](#rm-580-spitzen-kühlen-langsamer-gedruckt-ab-weil-das-mindesttempo-die-mindestzeit-erst-greifen-lässt-08102026) |
+| 2026-10-08 | [RM-577: Ein erzeugter Körper, der nur eine dünne Haut um einen Hohlraum ist, wird erkannt und gemeldet (08.10.2026)](#rm-577-ein-erzeugter-körper-der-nur-eine-dünne-haut-um-einen-hohlraum-ist-wird-erkannt-und-gemeldet-08102026) |
 | 2026-10-08 | [RM-570: Eine schräge Unterseite ist ein Feld, und ein Kinn bekommt seine Stützen (08.10.2026)](#rm-570-eine-schräge-unterseite-ist-ein-feld-und-ein-kinn-bekommt-seine-stützen-08102026) |
 | 2026-10-08 | [RM-566: Der Drache bekommt seine Stützen, und die Kanalsperre sperrt nur Raum, an den man nicht hinkommt (08.10.2026)](#rm-566-der-drache-bekommt-seine-stützen-und-die-kanalsperre-sperrt-nur-raum-an-den-man-nicht-hinkommt-08102026) |
+| 2026-10-08 | [RM-564: Vor dem Herunterladen nennt Solidon die Voraussetzungen eines Modells und ob dieser Rechner sie erfüllt (08.10.2026)](#rm-564-vor-dem-herunterladen-nennt-solidon-die-voraussetzungen-eines-modells-und-ob-dieser-rechner-sie-erfüllt-08102026) |
+| 2026-10-08 | [RM-550: Erzeugte Körper aus Weg 3 schließen, Falten werden geglättet, und ein zerfallener Versuch sagt es vor dem Übernehmen (08.10.2026)](#rm-550-erzeugte-körper-aus-weg-3-schließen-falten-werden-geglättet-und-ein-zerfallener-versuch-sagt-es-vor-dem-übernehmen-08102026) |
 | 2026-10-06 | [RM-104 (Teil): Abbruch des lokalen Modells auf macOS und HiDPI-Test unter Xvfb (06.10.2026)](#rm-104-teil-abbruch-des-lokalen-modells-auf-macos-und-hidpi-test-unter-xvfb-06102026) |
 | 2026-10-06 | [RM-537: Im Bild vor der Erkennung stehen keine veralteten Merkmale mehr, und eine verschwundene Wahl fällt nicht auf den Körper (06.10.2026)](#rm-537-im-bild-vor-der-erkennung-stehen-keine-veralteten-merkmale-mehr-und-eine-verschwundene-wahl-fällt-nicht-auf-den-körper-06102026) |
 | 2026-10-07 | [RM-014: Der Agent setzt keine Pinselstriche und kein Skelett, er nennt dem Nutzer den Weg (07.10.2026)](#rm-014-der-agent-setzt-keine-pinselstriche-und-kein-skelett-er-nennt-dem-nutzer-den-weg-07102026) |
@@ -44717,3 +44720,172 @@ mit einer Tasche, die am offenen Netz mit `NotManifoldError(open_edges=3)` schei
 zurück, Satz mit „3 Stellen“, beide Knöpfe; nach *Reparieren* genau ein gerechneter
 `sketch_pocket`, Volumen 20³ − 4·4·1 mm³; Escape nimmt den Schritt und legt den Umriss ab;
 *Stellen zeigen* lässt den Schritt stehen. Am Stand `16734a262` alle drei rot.
+
+## RM-550: Erzeugte Körper aus Weg 3 schließen, Falten werden geglättet, und ein zerfallener Versuch sagt es vor dem Übernehmen (08.10.2026)
+
+<a id="rm-550-erzeugte-körper-aus-weg-3-schließen-falten-werden-geglättet-und-ein-zerfallener-versuch-sagt-es-vor-dem-übernehmen-08102026"></a>
+<a id="rm-550"></a>
+
+**RM-550 — Erzeugte Körper aus Weg 3 bleiben nach der Reparatur offen.** Gefunden am
+  07.10.2026 beim ersten echten Lauf der TRELLIS.2-Kette ([RM-004](ROADMAP.md#rm-004), Claude). Von
+  neun Läufen endete einer geschlossen; die übrigen melden `repair.still_open` („2 offene
+  Stellen ließen sich nicht sicher schließen“). Gemessen an den Rohnetzen: (a) `DecimateMesh`
+  ließ rund zwanzig Vierecklöcher je Netz offen — behoben mit einem zweiten `FillHoles` nach dem
+  Ausdünnen, danach hat das Rohnetz des Bildwegs keine offene Kante mehr, Solidon meldet trotzdem
+  offen; die Ursache liegt also zwischen Einlesen, *Auf Maß bringen* und *Reparieren*. (b) Der
+  Textweg liefert bei gleichem Bild und Startwert eine dünne Schale (2,3 statt 25,7 cm³), die
+  Vase ein Netz mit negativem Volumen und zwei langen offenen Rändern; beim Bildweg kam ähnliches an
+  zwei von sechs Läufen vor (Startwerte 8 und 9, lange offene Ränder, bis 388 Teile). Zu prüfen: das Bild des Textwegs als PNG durch den
+  Bildablauf schicken, `RemeshMesh` mit `sdf` gegen `udf`. (c) 700 000 Dreiecke kosten die
+  Auswertung bis 445 s; `target_face_count` gegen Druckbedarf abwägen. Rohnetze und Berichte:
+  `output/konsolidierung-2026-10-07/messung-ki/weg3*`. **Abnahme:** an mindestens fünf
+  Startwerten je Weg ein geschlossener Körper ohne Warnung, Test für die Stelle in Solidon, die
+  ein geschlossenes Rohnetz offen meldet. Bauplan §6, §17, §27.
+
+  **Stand 07.10.2026 abends (Claude), Ursachen behoben:** (a) Die Reparatur strich an Kanten
+  mit vier Flächen — zwei Stücke, die sich berühren, rund zwanzig je Netz — Flächen und ließ
+  Schlitze ohne Fläche zurück; `repair.separate_touching_sheets` verdoppelt solche Kanten
+  (Korpus `cubes_touching_edge.glb`, Test vorher rot). (b) Der Textweg fährt zwei Aufträge,
+  Bild und danach den Bildablauf (`mesh.WORKFLOW_STAGES`): Bei gleichem Bild und Startwert ist
+  das Netz jetzt dasselbe wie aus dem Bild (25,72 cm³ beide). (c) Der Bildablauf dünnt auf
+  200 000 Dreiecke aus (Referenzgröße aus §31); die Auswertung dauert 15–60 s statt bis 445 s.
+  (d) `RemeshMesh` behält beide UDF-Hüllen: An einer dünnen Wand sind sie die Wand — Vase und
+  Becher kamen vorher als offene Haut, jetzt geschlossen (9,3 und 8,9 cm³); die Innenhülle eines
+  vollen Körpers nimmt `repair(inner_shells=True)`. Gemessen an sieben Läufen (Rakete Bild
+  Startwert 7 bis 10, Vase, Becher, Haken aus Text): **fünf geschlossen**, davon zwei ohne jeden
+  Befund und drei mit der Warnung „Die Oberfläche kreuzt sich selbst“ — die Kreuzungspaare
+  liegen alle an Stellen, an denen sich zwei Stücke berühren. Offen bleiben die Startwerte 8
+  und 9 desselben Bilds: Deren Rohnetz zerfällt schon in ComfyUI (bis 389 Teile, Ränder über
+  2 000 Kanten). **Offen:** (1) die Warnung an berührenden Stücken — entweder dort keine
+  Kreuzung melden oder die Berührung beim Reparieren auflösen; (2) zerfallene Rohnetze
+  erkennen und dem Kunden einen anderen Startwert anbieten statt eines offenen Körpers.
+  Messordner `output/konsolidierung-2026-10-07/messung-ki/weg3-neu`, `weg3-udf2`, `weg3-udf3`.
+
+  **Abschluss 08.10.2026 (Paket K, Claude).** (1) Die Warnung „kreuzt sich selbst“ kam nicht nur
+  von berührenden Stücken: Die Paare sind Falten, 2 bis 24 Dreieckspaare unter einem Millimeter,
+  meist mit gemeinsamer Ecke, auch weit weg von jeder Berührkante. `repair.smooth_folds` rückt die
+  Ecken in die Mitte ihrer Nachbarn und füllt sonst die Stelle neu, übernommen nur bei vollem
+  Erfolg (`repair.folds_smoothed`, nur mit *Überschneidungen auflösen*). (2) Startwert 8 des
+  Bildwegs blieb nicht wegen des Generators offen: Die geometrisch bessere Paarung trennte 70 von
+  71 Berührkanten, die letzte trennt erst die andere (`separate_touching_sheets`, zweiter
+  Durchgang); dabei wurde die Eckensuche sortiert (an zerfallenen Netzen 1,7 bis 5,9 s statt 55 bis 192 s).
+  `repair` Cache 6, `load` 8. (3) Zerfallene Rohnetze erkennt `generate.fell_apart` am Anteil der
+  Kanten mit mehr als zwei Flächen, die das Trennen nicht auflöst (heil 0 bis 0,036 %, zerfallen
+  0,63 bis 3,4 %, Grenze 0,2 %); der Erzeugungsdialog schreibt „zerfallen“ in die Zeile und nennt
+  *Noch ein Versuch* (Regel 17), das Handbuch sagt es. Tests: `test_repair.py` (gefaltete Kugel,
+  Ausschnitt `generated_other_pairing.glb`), `test_way_three.py` (`generated_fell_apart.glb`,
+  `generated_touching.glb`, `cubes_touching_edge.glb`), `test_generate_ui.py`; Gegenproben am
+  Stand `3d900b428` rot.
+
+  **Echter Weg 3, Windows, RTX 4080, ComfyUI 0.37.0** (Rakete, Text „a small toy rocket with three
+  fins“ Startwert 7 bis 15, Bild aus dem FLUX-Bild von Startwert 7 mit Startwert 7 bis 14; Bericht,
+  Rohnetze und Protokolle `output/konsolidierung-2026-10-07/messung-ki/weg3-paket-k`): Bildweg 7
+  von 8, Textweg 7 von 9 geschlossen ohne jede Warnung; die übrigen drei (Bild 9, Text 8 und 10)
+  sind zerfallen und werden vor dem Übernehmen gemeldet. Derselbe Endstand mit `main` (`df4f04e63`):
+  Bild 8 offen, „kreuzt sich selbst“ an Bild 7 und 13 und Text 7, 12, 13 und 15. Erzeugen kalt
+  260 bis 290 s, warm 37 bis 67 s; Auswertung 38 bis 160 s, ein zerfallenes Netz bis 315 s.
+  **Dem Wortlaut nach erfüllt, in der Sache mit [RM-577](#rm-577):** Fünf der geschlossenen Körper
+  (Bild 11 und 12, Text 11, 14 und 15) sind eine Haut von rund 0,3 mm um einen Hohlraum, 2,1 bis
+  2,8 cm³ statt 20 bis 37 cm³ — der Generator lässt die Oberfläche offen, `RemeshMesh` (`udf`)
+  macht daraus ein dünnes Band. Volle Körper ohne Warnung sind es auf dem Bildweg 5 von 8, auf
+  dem Textweg 4 von 9; die Häute meldet seit RM-577 der Dialog und der Prüfbericht.
+
+  **Review K (08.10.2026), behoben:** Das Urteil „zerfallen“ rechnet einmal im Arbeiter und merkt
+  sich das Netz (`_remembered`), vorher je Zeilenwahl 2 bis 6 s im Hauptthread (H1). Die
+  Faltenglättung rückt nur Ecken, die am anderen Dreieck liegen, je höchstens um die längste
+  Kante ihres Fächers, füllt erst bei Bedarf neu (G2); Tests mit Zapfenfalte, Neufüllen und gegen
+  die unverformte Kugel, rot ohne Volumenwache (M6). Endstand mit dem Review-Stand:
+  `messung-ki/weg3-paket-k/endstand-review.log`.
+
+  **Nachprüfung K (08.10.2026), behoben:** Die Grenze je Ecke ist jetzt die längste Kante der
+  kreuzenden Dreiecke an ihr (`_fold_reach`), nicht die ihres Fächers — die band an CAD-Netzen
+  nicht (Zapfen: 10,1 mm, +2 %); der Zapfen bleibt jetzt auch ohne Volumenwache unverändert,
+  die Kugel glättet weiter. Ohne Ecke gibt es keine Stelle und keinen Befund (N9).
+
+
+## RM-577: Ein erzeugter Körper, der nur eine dünne Haut um einen Hohlraum ist, wird erkannt und gemeldet (08.10.2026)
+
+<a id="rm-577-ein-erzeugter-körper-der-nur-eine-dünne-haut-um-einen-hohlraum-ist-wird-erkannt-und-gemeldet-08102026"></a>
+<a id="rm-577"></a>
+
+**RM-577 — Ein erzeugter Körper, der nur eine dünne Haut um einen Hohlraum ist, wird erkannt und
+  gemeldet.** Gefunden am 08.10.2026 bei der Messung zu [RM-550](#rm-550) (Paket K): Fünf von 17
+  TRELLIS.2-Läufen endeten geschlossen und ohne Befund, aber als Haut von 0,26 bis 0,30 mm um
+  einen Hohlraum (2,1 bis 2,8 cm³ statt 20 bis 37 cm³). Vorgabe Koordinator/Robert: am Endstand
+  die mittlere Wanddicke 2·V/A gegen die kleinste druckbare Wand des Profils, Befund mit
+  Handlungsvorschlag, und der Erzeugungsdialog sagt es je Versuch.
+
+  **Erledigt 08.10.2026 (Paket K, Claude).** Endstandsprüfung `scene.thin_skins` nur an Körpern
+  aus erzeugten Quellen (`evaluate.check_thin_skins`, Grenze `analysis_limits`, Regel 7), Befund
+  `scene.thin_skin` mit *Neu erzeugen* (`errors.GENERATE_AGAIN`, öffnet *Modell erzeugen*). Im
+  Dialog misst `generate.skin_thickness` die dickste große Schale des Rohnetzes im Arbeiter
+  (heil 2,1 bis 7,7 mm, Haut 0,26 bis 0,30 mm) und schreibt „nur eine Haut“ in die Zeile, mit
+  *Noch ein Versuch*. Korpus `generated_skin.npz` (Text, Startwert 14). Am echten Endstand
+  meldet der Prüfbericht alle fünf Häute (`endstand-review.log`).
+
+  **Nachprüfung K (08.10.2026), behoben:** Dialog und Prüfbericht leiten „nur eine Haut“ aus
+  einer Funktion her (`geom.mesh.shell_thickness`, dickste große geschlossene Schale; Grenze
+  `only_a_skin`), der Dialog mit der Mindestwand des Auswertungsprofils (N7); ein Test belegt die
+  Grenze aus dem Profil (N8); Satz „druckt Wände erst ab“ (N11). `generated_skin.npz` geschlossen
+  ausgedünnt, 1,94 MB → 0,47 MB, Dicke unverändert 0,26 mm (N13).
+
+
+## RM-564: Vor dem Herunterladen nennt Solidon die Voraussetzungen eines Modells und ob dieser Rechner sie erfüllt (08.10.2026)
+
+<a id="rm-564-vor-dem-herunterladen-nennt-solidon-die-voraussetzungen-eines-modells-und-ob-dieser-rechner-sie-erfüllt-08102026"></a>
+<a id="rm-564"></a>
+
+**RM-564 — KI auf Apple Silicon und mit wenig Speicher: Dauer und Platzbedarf vorher
+  nennen.** Kunden-E-Mail vom 07.10.2026, MacBook mit M3 und 512 GB: qwen3:14b über Ollama
+  stand nach 30 Minuten bei Schritt 4 von 12; ComfyUI verlangte für ein Winkeleisen aus einem
+  Bild weitere Dutzende Gigabyte. **Soll:** Vor der Einrichtung nennt Solidon Platzbedarf und
+  erwartete Dauer für diesen Rechner und schlägt auf Apple Silicon ein passendes Modell vor;
+  die Systemanforderungen der Website (16 GB) stimmen mit den echten Modellen überein.
+  **Abnahme (geändert, Entscheidung Robert 08.10.2026: keine Mac-Messung, „bevor geladen wird,
+  Voraussetzungen nennen, ansonsten so lassen“):** *Chat einrichten* und *ComfyUI einrichten*
+  nennen vor jedem Herunterladen die Voraussetzungen — Grafikspeicher bzw. auf dem Mac den Anteil
+  des gemeinsamen Speichers, Platz auf dem Datenträger, ob eine Grafikkarte nötig ist — und ob
+  dieser Rechner sie erfüllt, mit Handlungsvorschlag (kleineres Modell, eigener Schlüssel); die
+  Angaben aus einer Quelle; Mac-Werte als gerechnet bzw. „auf einem Mac nicht gemessen“
+  gekennzeichnet; Website und Handbuch gleich.
+
+  **Stand 08.10.2026 (Paket K, Claude), gebaut:** `backends/machine.py` erkennt Apple Silicon
+  und Arbeitsspeicher ohne fremdes Programm; auf dem Mac zählt der Anteil, den macOS der Grafik
+  lässt (zwei Drittel bis 36 GB, darüber drei Viertel). Ohne eigene Wahl ist das beste gemessene
+  Modell, das ganz hineinpasst, die Vorgabe (16 GB: qwen3.5:9b, ab 24 GB: qwen3:14b, 8 GB: keines,
+  der Satz nennt den Schlüssel). *Chat einrichten* sagt unter jedem Modell vor dem Holen, ob es
+  auf diesem Mac zu groß ist und welches passt, und prüft den freien Platz am Modellordner von
+  Ollama; die Chatleiste sagt es auch. *ComfyUI einrichten* rechnet die gewählten Modelle gegen
+  den freien Platz und nennt die gemessene Dauer (RTX 4080), auf dem Mac, dass sie dort nicht
+  gemessen ist. Systemvoraussetzungen und KI-Seite der Website in sechs Sprachen: Mac-Speicher je
+  Modell, Platz für Download und ComfyUI; „16 GB für die größeren“ stimmte für qwen3:30b-a3b
+  nicht. Handbuch *Welche Modelle Solidon benutzt* zieht nach. **Offen:** die Messung auf einem
+  M-Chip mit mindestens 16 GB — belegter Speicher über Metal, ob qwen3.5:9b ganz auf der Grafik
+  läuft, Antwortzeit —, danach `OLLAMA_MEMORY_GB`, Website und Handbuch gegen die Messung; dazu
+  Weg 3 auf dem Mac (int8 hat dort kein `torch._int_mm`, ComfyUI rechnet die Gewichte voll aus).
+
+  **Abschluss 08.10.2026 (Paket K, Claude), nach Roberts Entscheidung.** Die freigegebene Messung
+  auf `macos-latest-xlarge` (M2, 14 GB) startete nicht — GitHub verlangt dafür ein Ausgabenlimit
+  über null oder eine gültige Zahlung im Konto; `macos-latest` taugt nicht (7 GB, Ollama fand
+  keine GPU, qwen3:1.7b schrieb 0,9 Token/s). Daraufhin entschied Robert: keine Mac-Messung.
+  Gebaut: `backends/needs.py` ist die eine Quelle für die Voraussetzungen (`chat_needs`,
+  `graphics_verdict`, `chat_disk_need`, `generator_needs`, `duration_text`); `machine.py` erkennt
+  dazu eine NVIDIA-Karte über `nvidia-smi` (§32, im Arbeiter). Review K behoben: Vorgabe auf einem
+  8-GB-Mac das kleinste Modell statt des größten (M3), ein entferntes Ollama wird nicht nach
+  diesem Rechner beurteilt (M4), die Platzprüfung zieht Geladenes ab, findet den Ordner wie Ollama
+  (`OLLAMA_MODELS`, systemd-Unit) oder sagt „unbekannt“ und warnt beim ersten Klick, statt zu
+  sperren (M5), Mac-Werte „sollte“/„gerechnet“ (M2), Dauer aus der Messung des heutigen Ablaufs
+  (M1: erster Auftrag nach dem Start Bild 209 bis 258 s, Text 270 bis 315 s, jeder weitere 35 bis
+  160 s), Luft und Dauersatz aus einer Quelle (G1), Chatleiste auf dem Mac ohne PC-Rat (G3),
+  Website mit freiem Platz statt Download (G4). Tests in `test_backends.py`, `test_chat_ui.py`,
+  `test_generate_ui.py`.
+
+  **Nachprüfung K (08.10.2026), behoben:** `nvidia-smi` lief beim ersten Fragen im Hauptthread;
+  jetzt erhebt nur ein Arbeiter die Karte (`machine.probe_card`), `this_machine()` startet keinen
+  Prozess, und vor der Antwort sagt kein Satz „keine Karte“ (N2, Test mit der echten Auskunft).
+  Im Flatpak über `discover.on_host`, Modellordner dort unbekannt (N3). Auf einem PC bleibt die
+  Vorgabe qwen3:14b, die Karte bestimmt nur den Satz (N4, Entscheidung Robert). Abgebrochene
+  Downloads zählen nicht mehr als geladen — Ollama legt `-partial` gleich in voller Größe an
+  (N5). Chatleiste auf einem PC mit erkannter Karte ohne Bedingungssatz (N10); Sätze nennen
+  „NVIDIA-Karte“ (N11); `PROGRAMFILES` hat einen Wächter (N6); die Ansicht von *Chat
+  einrichten* folgt dem Prüfergebnis nur, bis der Kunde selbst rollt (N12).

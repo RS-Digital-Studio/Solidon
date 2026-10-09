@@ -13,7 +13,7 @@ import pytest
 from PySide6.QtGui import QFont
 from PySide6.QtWidgets import QApplication, QPushButton
 
-from app.core.backends import llm
+from app.core.backends import llm, machine
 from app.core.backends.llm import Reply, ToolCall
 from app.core.scene.project import new_project
 from app.core.types import ChatEntry, Origin
@@ -22,6 +22,10 @@ from app.ui.main_window import MainWindow
 from app.ui.session import ProposalPreview, Session
 from app.ui.settings import UiSettings
 from tests.scripted_backend import ScriptedBackend
+
+#: Die echte Rechnerauskunft — ``tests/conftest.py`` setzt je Test einen
+#: neutralen Rechner ein.
+_REAL_THIS_MACHINE = machine.this_machine
 
 MESHES = Path(__file__).parent / "data" / "meshes"
 
@@ -1764,6 +1768,118 @@ def test_a_suggested_entry_separates_the_name_from_its_explanation(
     assert "Suite" not in note and "Probe" not in note, "Werkzeugnamen, die kein Kunde kennt"
 
 
+def test_on_a_small_mac_the_dialog_picks_the_fitting_model_and_says_why(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """MacBook M3 mit 16 GB: qwen3:14b stand nach 30 Minuten bei Schritt 4 von 12 (RM-564).
+
+    Ohne eigene Wahl steht das Modell vorn, das nach der Rechnung ganz über die
+    Grafik laufen sollte, und unter jedem stehen vor dem Herunterladen seine
+    Voraussetzungen, ob dieser Mac sie erfüllt und welches sonst passt.
+    """
+    from app.core.backends import keys, llm, machine
+    from app.ui.dialogs import KeyDialog
+
+    monkeypatch.setattr(keys, "_keyring", lambda: None)
+    monkeypatch.setattr(
+        machine, "this_machine", lambda: machine.Machine(apple_silicon=True, memory_gb=16.0)
+    )
+    llm.remember_ollama_model("")
+    dialog = KeyDialog()
+
+    assert dialog._chosen_model() == "qwen3.5:9b", "vorgewählt ist, was passen sollte"
+    note = dialog.model_note.text()
+    assert "Braucht" in note and "sollte" in note and "nicht nachgemessen" in note, note
+
+    dialog.model_field.setCurrentIndex(dialog.model_field.findData("qwen3:14b"))
+    note = dialog.model_note.text()
+    assert "Download: 9,3 GB" in note, "die Größe steht vor dem Herunterladen"
+    assert "voraussichtlich zu groß" in note and "qwen3.5:9b" in note, note
+
+
+def test_the_graphics_card_is_never_asked_in_the_main_thread(
+    window: MainWindow, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """``nvidia-smi`` hält bis 5 s an einem hängenden Treiber; gefragt wird nur in
+    einem Arbeiter, und der Satz nennt die Karte danach (Nachprüfung K, N2).
+
+    Geprüft mit der echten Rechnerauskunft: Dialogbau, Nachsehen, der Satz der
+    Chatleiste und ihr Arbeiter.
+    """
+    import threading
+
+    from app.core.backends import keys, machine
+    from app.ui.dialogs import KeyDialog
+    from app.ui.main_window import _OllamaSizeWorker
+
+    asked_in_main: list[bool] = []
+
+    def card() -> tuple[str, float]:
+        asked_in_main.append(threading.current_thread() is threading.main_thread())
+        return "NVIDIA GeForce RTX 4080", 16.0
+
+    monkeypatch.setattr(keys, "_keyring", lambda: None)
+    monkeypatch.setattr(machine, "this_machine", _REAL_THIS_MACHINE)
+    monkeypatch.setattr(machine, "_nvidia_card", card)
+    monkeypatch.setattr(machine, "_is_apple_silicon", lambda: False)
+    machine.detect.cache_clear()
+    try:
+        window._ollama_size_answered(None)
+        assert not asked_in_main, "der Satz der Chatleiste fragt nicht selbst"
+        dialog = KeyDialog()
+        assert not asked_in_main, "der Dialogbau fragt nicht"
+        assert "NVIDIA-Karte" not in dialog.model_note.text(), "vor der Antwort kein Urteil"
+        assert dialog.wait_for_look()
+        qt_app = QApplication.instance()
+        assert qt_app is not None
+        for _round in range(50):
+            qt_app.processEvents()
+            if "RTX 4080" in dialog.model_note.text():
+                break
+        assert asked_in_main == [False], "einmal, im Arbeiter"
+        assert "RTX 4080" in dialog.model_note.text(), dialog.model_note.text()
+        dialog.release()
+
+        machine.forget_card()
+        monkeypatch.setattr(llm, "ollama_size_warning", lambda _model: None)
+        worker = _OllamaSizeWorker("qwen3:14b")
+        side = threading.Thread(target=worker.work)
+        side.start()
+        side.join(10.0)
+        assert asked_in_main == [False, False], "die Chatleiste fragt in ihrem Arbeiter"
+    finally:
+        machine.detect.cache_clear()
+
+
+def test_a_model_that_may_not_fit_on_the_disk_is_fetched_on_the_second_click(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Der Platz wird vor dem Holen geprüft und genannt; der zweite Klick holt
+    trotzdem — die Rechnung kann irren (Review K, M5)."""
+    from app.core.backends import comfy_setup, keys, needs
+    from app.ui.dialogs import KeyDialog
+
+    monkeypatch.setattr(keys, "_keyring", lambda: None)
+    monkeypatch.setattr(needs, "ollama_models_folder", lambda: Path.home())
+    monkeypatch.setattr(comfy_setup, "free_gigabytes", lambda _where: 2.0)
+    dialog = KeyDialog()
+    started: list[object] = []
+    monkeypatch.setattr(dialog._leash, "start", started.append)
+    dialog.model_field.setCurrentIndex(dialog.model_field.findData("qwen3:14b"))
+
+    dialog._pull_model()
+
+    assert not started, "der erste Klick warnt nur"
+    assert "2,0 GB frei" in dialog.probe_result.text(), dialog.probe_result.text()
+    assert dialog.model_field.isEnabled(), "die Auswahl bleibt bedienbar"
+
+    dialog._pull_model()
+
+    assert len(started) == 1, "der zweite Klick holt"
+    if dialog._pull is not None:
+        dialog._pull.cancel()
+
+
 def test_an_installed_alias_keeps_its_known_explanation(
     qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -2234,6 +2350,40 @@ def test_the_probe_result_keeps_the_buttons_inside_the_visible_dialog(
     assert dialog.contentsRect().contains(buttons.geometry().bottomRight()), (
         "die vollständige Knopfleiste liegt im sichtbaren Dialog-Rechteck"
     )
+
+
+def test_the_view_belongs_to_the_reader_once_he_scrolls(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Das Prüfergebnis bleibt im Bild, bis der Kunde selbst rollt; danach zieht
+    ein wachsender Satz die Ansicht nicht mehr zurück (Nachprüfung K, N12). Ein
+    neues Ergebnis wird wieder nachgeführt."""
+    from PySide6.QtWidgets import QAbstractSlider
+
+    from app.core.backends import keys
+    from app.ui.dialogs import KeyDialog
+
+    monkeypatch.setattr(keys, "_keyring", lambda: None)
+    dialog = KeyDialog()
+    try:
+        dialog.show()
+        qt_app.processEvents()
+        dialog._probe_done(True, llm.Speed(tokens_per_second=850.0))
+        qt_app.processEvents()
+        assert dialog._probe_result_in_view
+
+        bar = dialog._scroll.verticalScrollBar()
+        bar.triggerAction(QAbstractSlider.SliderAction.SliderToMinimum)
+        assert not dialog._probe_result_in_view, "der Kunde rollt, die Ansicht gehört ihm"
+        dialog._fit_key_content("passive")
+        assert bar.value() == bar.minimum(), "kein Zurückziehen zum Ergebnis"
+
+        dialog._probe_done(False, llm.Speed())
+        assert dialog._probe_result_in_view, "ein neues Ergebnis wird wieder gezeigt"
+    finally:
+        dialog.release()
+        dialog.deleteLater()
+    qt_app.processEvents()
 
 
 def test_a_speed_that_was_not_measured_claims_nothing(qt_app: QApplication) -> None:

@@ -1539,6 +1539,13 @@ _VALUE_NAMES: dict[str, TranslatableText] = {
     "pair": _("Gegenstückpaar"),
     "plane": _("Ebene"),
     "play": _("Spiel"),
+    # ``geom.repair``: geglättete Falten, gezählt je Stelle (RM-550).
+    "places": _("Stellen"),
+    # ``backends.needs``: was ein Modell braucht und was dieser Rechner hat (RM-564).
+    "card": _("Grafikkarte"),
+    "disk": _("Freier Platz nötig"),
+    "graphics": _("Speicher der Grafik"),
+    "total": _("Arbeitsspeicher"),
     "points": _("Punkte"),
     "press": _("Pressmaß"),
     "previous": _("Bisher"),

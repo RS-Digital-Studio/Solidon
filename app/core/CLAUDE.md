@@ -92,7 +92,7 @@ laden für jede Datei hier; diese Karte sagt, **was wo liegt**. Das Warum:
 **Abläufe, die mehrere Operationen bündeln** — `lid_flow.py` (Deckel
 erzeugen; mit Stift folgt `pin_for_bore` an der Scharnierbohrung, `lid_drafts`
 für Vorschau und Übernehmen, die Scharnierpassung aus `hinge_fits_for_lid`) · `split.py` (Auto Split) · `generate.py` (Weg 3: Text oder Bild zu
-einem Körper) · `counterpart.py` (beide Hälften einer Verbindung). Ein Ablauf
+einem Körper; `fell_apart` und `skin_thickness` erkennen ein zerfallenes Rohnetz und eine dünne Haut) · `counterpart.py` (beide Hälften einer Verbindung). Ein Ablauf
 statt einer Op, weil eine Op ihre Szene nur liest (Regel 3) und die
 Auswertung rein ist (§15.1): Die Schritte gehen in **eine** Transaktion, was
 kein Schritt ist, reist als `DocumentChange` mit (§15.5).

@@ -28,6 +28,7 @@ plattformabhängig ist, sagt `kern.md`. Die Werkzeuge:
 | Normalen und Flächen je Dreieck, Eckennormalen | `mesh.stable_normals`, `mesh.stable_areas` (einzelne Dreiecke), `mesh.stable_vertex_normals` |
 | Summen, deren Gleichstand eine Lage entscheidet | `mesh.IntegerGrid` |
 | Spatprodukte, eingeschlossenes Volumen mit Vorzeichen | `mesh.triple_products`, `mesh.signed_volume` (körpernah) |
+| Nur eine Haut? | `mesh.shell_thickness`, `only_a_skin` |
 | Zufall (Stufe 3 der Kette) | `Generator.random` aus den Rohbits, nie `normal` |
 | Drehkörper, Kreispunkte | `lathe.cylinder`, `annulus`, `revolve`, `circle_points` |
 
@@ -111,11 +112,8 @@ Speicher. `_opened`: nur ENOMEM und Windows 8/14/1450/1455 werden
 `MemoryError`; ENOSPC bleibt Transfer-`OSError` und pausiert den Helfer.
 `kernel_process.py`: bitgleiches `run`, Vorrat, Abbruch/Tod/Rückfall,
 `warm_up`, `shutdown`; `NOT_A_KERNEL_FAILURE` schützt breite Fänge.
-Startplätze bleiben unter Poolschloss bis zum bestätigten Ende reserviert.
-Tote Stoppreste sammelt die nächste Anfrage; lebende sperren Starts/lokale
-Rückfälle, auch nach Vorabstart, mit Fehlerbericht. Dauerhafte Absagen bleiben.
-`shutdown` gibt trotz Fehler Wartende frei, erfasst offene Starts und trennt
-alte Reservierungen/Rückgaben/Absagen vom neuen Bestand. Vertrag: `kern.md`.
+Vertrag: `kern.md`; Startplätze, Stoppreste und Abbau: Begründungen,
+„Hilfsprozess: Startplätze und Abbau“.
 
 **Bewegen und Ausrichten** — `transform.py` (`moved_object` führt Körper,
 Merkmale und Teilträger gemeinsam; ein Teil einer nativen Fläche folgt nur
@@ -284,6 +282,8 @@ Die reine Schnittansicht darf die unveränderte Berührung zeigen.
   über Ohren (`_loop_triangles`), zuletzt als Fächer — **nie eine Fläche auf
   eine Kante, die schon zwei trägt**; Slot und Farbe vom Rand, eine Fläche
   ohne Dicke bleibt offen (`_flat_fills`).
+- `separate_touching_sheets` trennt Berührkanten, Rest mit anderer Paarung;
+  Falten glättet `smooth_folds` nur mit *Überschneidungen auflösen* (RM-550).
 - Die Schnittsuche läuft einmal je Netz (`crossings_of`); ihr Budget zählt
   genaue Paarprüfungen, am offenen Netz und über `MAP_LIMIT_TRIANGLES` nur der
   Sockel. Vereinigt werden nur verschiedene Schalen und Überlagerungen
@@ -297,8 +297,6 @@ Die reine Schnittansicht darf die unveränderte Berührung zeigen.
   positive Hohlrauminseln bleiben eigene Familien. Aufrufer belegen
   Dichtheit/Kontaktfreiheit; `None` gibt nichts frei. `material_part_count`
   zählt erst nach Vorbeleg.
-  Beide optionalen Abbruchtoken reichen durch `_Shells` bis Gitterzertifikat
-  und Kreuzungssuche; die Standardschnittstellen bleiben erhalten.
 
 **Anordnen und Ausrichten**:
 

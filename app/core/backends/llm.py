@@ -32,6 +32,8 @@ from dataclasses import dataclass, field
 from typing import Any, ClassVar, Final, Literal, Protocol
 
 from app.core.backends import keys
+from app.core.backends import machine as _machine
+from app.core.backends.machine import Machine
 from app.core.backends.resources import keep_warm, local_ai_slot
 from app.core.discover import PROBE_SECONDS, UNUSABLE_ADDRESS, is_local_address, opener_for
 from app.core.errors import (
@@ -1359,7 +1361,27 @@ def configured_ollama_model() -> str:
     """
     from app.core import discover
 
-    return discover.remembered(OLLAMA_MODEL_SETTING) or DEFAULT_OLLAMA_MODEL
+    return discover.remembered(OLLAMA_MODEL_SETTING) or default_ollama_model()
+
+
+def default_ollama_model() -> str:
+    """Die Vorgabe für diesen Rechner.
+
+    **Auf Apple Silicon** das beste Modell, das ganz über die Grafik läuft
+    (:func:`recommended_ollama_model`): Auf einem MacBook mit 16 GB war die
+    feste Vorgabe qwen3:14b zu groß, und der Chat rechnete zur Hälfte auf dem
+    Prozessor (RM-564). Passt keines, ist es das kleinste — nie das größte
+    (Review K, M3) —, und der Satz unter der Auswahl nennt den Schlüssel
+    (``needs.chat_needs``).
+
+    **Auf einem PC bleibt es** :data:`DEFAULT_OLLAMA_MODEL` (Entscheidung
+    Robert, „Voraussetzungen nennen, ansonsten so lassen“; Nachprüfung K, N4):
+    Die Karte bestimmt dort nur den Satz. Ein Kunde ohne gemerktes Modell, der
+    qwen3:14b geholt hat, fände nach einem Wechsel ein nicht installiertes vor.
+    """
+    if not _machine.this_machine().apple_silicon:
+        return DEFAULT_OLLAMA_MODEL
+    return recommended_ollama_model() or smallest_recommended_model()
 
 
 def remember_ollama_model(model: str) -> None:
@@ -1994,6 +2016,54 @@ def known_model_note(name: str) -> TranslatableText | None:
     return suggestion[1] if suggestion is not None else None
 
 
+#: Wie viel Grafikspeicher ein empfohlenes Modell mit ``num_ctx`` 32 768
+#: belegt — dieselbe Messung wie die Sätze in :data:`OLLAMA_SUGGESTIONS`
+#: (Unterschied in ``nvidia-smi``, RTX 4080). qwen3:30b-a3b passte dort nicht
+#: ganz; Ollama nannte 19 GB (``ollama ps``, 08.2026). Auf Apple Silicon
+#: entscheidet dieselbe Zahl, ob das Modell ganz über Metal läuft
+#: (:func:`machine_fit`).
+OLLAMA_MEMORY_GB: Final = {
+    "qwen3.5:9b": 7.4,
+    "qwen3:14b": 13.6,
+    "gpt-oss:20b": 12.9,
+    "qwen3:30b-a3b": 19.0,
+}
+
+#: In welcher Reihenfolge ein Modell für einen Rechner vorgeschlagen wird, das
+#: beste zuerst: gemessen an den 39 Testaufträgen (22, 21 und 10 Treffer).
+#: qwen3:30b-a3b fehlt, weil es dort nicht gemessen ist.
+RECOMMENDATION_ORDER: Final = ("qwen3:14b", "qwen3.5:9b", "gpt-oss:20b")
+
+
+def ollama_runs_here(url: str | None = None) -> bool:
+    """Ob das eingestellte Ollama auf diesem Rechner rechnet.
+
+    Die eine Frage hinter jedem Urteil über Speicher, Grafik und Platz
+    (Review K, M4): Ein Mac, der das Ollama seines PCs nutzt, rechnet dort.
+    """
+    return is_local_address(ollama_endpoint(url or _configured_ollama_url()))
+
+
+def recommended_ollama_model(machine: Machine | None = None, url: str | None = None) -> str | None:
+    """Das beste empfohlene Modell, das hier ganz über die Grafik läuft.
+
+    Die Grafik ist auf Apple Silicon der Anteil des gemeinsamen Speichers,
+    sonst eine erkannte Karte (``machine.Machine.graphics_gb``). ``None`` heißt:
+    Kein empfohlenes passt. Rechnet Ollama auf einem anderen Rechner oder ist
+    die Grafik unbekannt, ist es die Vorgabe.
+    """
+    found = machine or _machine.this_machine()
+    budget = found.graphics_gb if ollama_runs_here(url) else None
+    if budget is None:
+        return DEFAULT_OLLAMA_MODEL
+    return next((name for name in RECOMMENDATION_ORDER if OLLAMA_MEMORY_GB[name] <= budget), None)
+
+
+def smallest_recommended_model() -> str:
+    """Das empfohlene Modell mit dem kleinsten Speicherbedarf."""
+    return min(RECOMMENDATION_ORDER, key=OLLAMA_MEMORY_GB.__getitem__)
+
+
 #: Ein Download von mehreren Gigabyte. Die Grenze ist großzügig, weil eine
 #: langsame Leitung sonst mitten im Modell aufgibt.
 PULL_TIMEOUT_SECONDS = 7200.0
@@ -2234,6 +2304,27 @@ def local_model_expectation(model: str | None = None) -> TranslatableText:
         if note is None
         else _("{model}, gemessen auf einer RTX 4080: {note}", model=name, note=note)
     )
+    from app.core.backends import needs
+
+    # Dazu, ob es hier ganz über die Grafik läuft (RM-564); auf dem Mac ohne den
+    # Rat zur Grafikkarte und ohne die Zahl eines PCs (Review K, G3).
+    fit = needs.graphics_verdict(name)
+    if _machine.this_machine().apple_silicon and ollama_runs_here():
+        return _(
+            "{measured} Wie schnell es auf diesem Mac antwortet, ist nicht gemessen, "
+            "„Werkzeuge prüfen“ unter „Bearbeiten → Chat einrichten“ misst es. Nach zehn "
+            "Minuten ohne Antwort bricht Solidon ab.",
+            measured=f"{measured!s} {fit}" if fit else measured,
+        )
+    if fit is not None:
+        # Das Kartenurteil sagt schon, ob es reicht, und nennt den Ausweg; der
+        # Bedingungssatz und der Rat zur Grafikkarte widersprächen ihm
+        # (Nachprüfung K, N10).
+        return _(
+            "{measured} Nach zehn Minuten ohne Antwort bricht Solidon ab, und welcher Weg hier "
+            "rechnet, sagt „Werkzeuge prüfen“ unter „Bearbeiten → Chat einrichten“.",
+            measured=f"{measured!s} {fit}",
+        )
     return _(
         "{measured} Passt das Modell nicht ganz in den Grafikspeicher, rechnet der Prozessor mit "
         "7,8 Token je Sekunde beim Einlesen mit, und nach zehn Minuten ohne Antwort bricht "

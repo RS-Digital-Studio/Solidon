@@ -2108,7 +2108,7 @@ def models_text() -> str:
     eine Messung, ändert sich diese Seite mit — sonst stünde hier eine
     Empfehlung, die niemand mehr gibt.
     """
-    from app.core.backends import comfy_setup
+    from app.core.backends import comfy_setup, needs
     from app.core.backends.llm import (
         DEFAULT_OLLAMA_MODEL,
         OLLAMA_MIN_PARAMETERS,
@@ -2176,6 +2176,18 @@ def models_text() -> str:
                     "Größenordnung."
                 )
             ).format(n=decimal(OLLAMA_MIN_PARAMETERS, 0)),
+            "",
+            # RM-564: Auf Apple Silicon ist der Arbeitsspeicher der Grafikspeicher.
+            str(
+                _(
+                    "Vor dem Holen nennt *Bearbeiten → Chat einrichten* unter jedem Modell, was "
+                    "es braucht — Grafikspeicher, auf einem Mac mit Apple Silicon den Anteil des "
+                    "gemeinsamen Speichers, den macOS der Grafik lässt, und freien Platz —, und "
+                    "ob dieser Rechner das hat. Fehlt etwas, nennt der Satz ein kleineres Modell "
+                    "oder den eigenen Schlüssel. Für den Mac ist das aus der Messung auf einer "
+                    "RTX 4080 gerechnet und auf einem Mac nicht nachgemessen."
+                )
+            ),
             "",
             f"## {_('Für das Erzeugen: drei Modelle')}",
             "",
@@ -2268,11 +2280,23 @@ def models_text() -> str:
                 )
             ),
             "",
+            needs.duration_text(mac_note=True),
+            "",
             str(
                 _(
                     "Ohne passende Grafikkarte dauert beides ein Vielfaches. Was "
                     "abbricht, ist ein Fehler und keine Langsamkeit — dann steht der "
                     "Satz von ComfyUI im Dialog, samt dem Schritt, in dem es riss."
+                )
+            ),
+            "",
+            # RM-550: Ein zerfallenes Rohnetz hilft nur ein neuer Versuch.
+            str(
+                _(
+                    "Manche Versuche zerfallen schon beim Erzeugen, daraus macht keine "
+                    "Reparatur einen geschlossenen Körper. Der Dialog "
+                    "sagt das in der Zeile des Versuchs, und *Noch ein Versuch* erzeugt das "
+                    "Modell neu und anders."
                 )
             ),
         ]

@@ -22,7 +22,7 @@ from __future__ import annotations
 import dataclasses
 import math
 from collections import Counter
-from collections.abc import Callable, Collection, Mapping, Sequence
+from collections.abc import Callable, Collection, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from functools import cache, partial
 from pathlib import PurePath
@@ -34,6 +34,7 @@ from app.core.errors import (
     CHANGE_SELECTION,
     CORRECT_INPUT,
     DECIMATE_MESH,
+    GENERATE_AGAIN,
     REACTIVATE_STEP,
     RESOLVE_INTERSECTIONS,
     SHOW_DETAILS,
@@ -347,6 +348,7 @@ class _EvaluationChecks:
         "scene.placement": ("geometry", "printer"),
         "scene.coincident_bodies": ("geometry",),
         "scene.thin_walls": ("geometry", "printer", "material"),
+        "scene.thin_skins": ("geometry", "printer", "material"),
         "scene.form_deviation": ("geometry",),
     }
 
@@ -1647,6 +1649,20 @@ def _evaluate(
         if walls:
             findings.extend(walls)
             scene = dataclasses.replace(scene, report=Report(tuple(findings)))
+    # Und eine Frage nur an erzeugte Körper (RM-577): Ist das Modell überhaupt
+    # mehr als eine Haut? TRELLIS.2 liefert manchmal eine offene Fläche, aus der
+    # ``RemeshMesh`` ein Band von 0,3 mm macht — geschlossen, ohne jeden Befund.
+    if stopped_at is None:
+        generated = _generated_objects(document) & objects.keys()
+        skins = checks.run(
+            "scene.thin_skins",
+            lambda: check_thin_skins(scene, generated),
+            applicable=bool(generated),
+        )
+        token.raise_if_cancelled()
+        if skins:
+            findings.extend(skins)
+            scene = dataclasses.replace(scene, report=Report(tuple(findings)))
     # Und die vierte: Liegen belegte Punkte neben der Form, die sie tragen?
     # Bis zum 21.09.2026 stand hier an jedem Körper mit belegten Flächen
     # derselbe Satz — „lässt sich in der Analysekarte prüfen" —, und damit
@@ -1901,6 +1917,8 @@ SETTLED_BY: Final[dict[str, frozenset[str]]] = {
             "repair.self_intersections_unresolved",
             "repair.self_intersections_skipped",
             "repair.self_crossing",
+            # Geglättete Falten: danach kreuzt nichts mehr (RM-550).
+            "repair.folds_smoothed",
         }
     ),
     "repair.self_intersections_incomplete": frozenset({"repair.self_intersections"}),
@@ -6606,6 +6624,64 @@ def check_thin_walls(scene: Scene) -> list[Finding]:
                 location=None
                 if centre is None
                 else (float(centre[0]), float(centre[1]), float(centre[2])),
+            )
+        )
+    return findings
+
+
+def _generated_objects(document: Document) -> frozenset[ObjectId]:
+    """Die Körper, die ein Ladeschritt aus einer erzeugten Quelle (Weg 3) anlegt."""
+    found: set[ObjectId] = set()
+    for operation in document.ops:
+        if operation.op != "load":
+            continue
+        source = document.sources.get(str(operation.params.get("source", "")))
+        if source is not None and source.kind == "generated":
+            found.update(operation.outputs)
+    return frozenset(found)
+
+
+def check_thin_skins(scene: Scene, generated: Iterable[ObjectId]) -> list[Finding]:
+    """Ein erzeugter Körper, der im Mittel dünner ist als die dünnste Wand des Druckers (RM-577).
+
+    Gemessen wird die mittlere Dicke ``2·V/A`` der dicksten großen geschlossenen
+    Schale in echter Größe — dieselbe Herleitung wie im Dialog vor dem
+    Übernehmen (``geom.mesh.shell_thickness``, Nachprüfung K, N7). Eine Haut um
+    einen Hohlraum, wie sie TRELLIS.2 an fünf von 17 Läufen lieferte, liegt bei
+    0,26 bis 0,30 mm, ein voller Körper bei Millimetern. Die Grenze ist die des
+    Materials (``analysis_limits``, Regel 7) — für ein frisch erzeugtes Objekt
+    ohne eigenes Material dieselbe Mindestwand, die der Dialog nimmt. Ohne
+    Profil gibt es keine Aussage. Gefragt
+    wird nur an erzeugten Körpern: Ein konstruiertes dünnes Teil hat seine
+    Wand mit Absicht, und dort sagt es ``check_thin_walls``.
+    """
+    from app.core.geom.mesh import as_mesh_data, only_a_skin, shell_thickness
+
+    profile = scene.profile
+    if profile is None:
+        return []
+    findings: list[Finding] = []
+    for object_id in sorted(generated):
+        entry = scene.objects.get(object_id)
+        if entry is None:
+            continue
+        thickness = shell_thickness(as_mesh_data(entry.mesh))
+        least, _overhang = analysis_limits(profile, entry)
+        if thickness is None or not only_a_skin(thickness, least):
+            continue
+        findings.append(
+            Finding(
+                code="scene.thin_skin",
+                severity="warning",
+                message=_(
+                    "Das erzeugte Modell ist nur eine Haut von {thickness} mm, der Drucker druckt "
+                    "Wände erst ab {least} mm.",
+                    thickness=format_decimal(thickness, 1),
+                    least=format_decimal(least, 1),
+                ),
+                object_id=object_id,
+                values={"thickness_mm": round(thickness, 2), "least_mm": round(least, 2)},
+                suggestions=(GENERATE_AGAIN,),
             )
         )
     return findings
