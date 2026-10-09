@@ -22,7 +22,7 @@ gezielten Dateiauswahl bis zum Release zurückgestellt. Das ist keine fehlende
 Umgebung und kein Anlass, sie mit einem direkten Pytest-Aufruf nachzuholen.
 Keine vollständige Suite allein wegen eines kleinen Doku-Edits.
 
-Ohne Argument und vor jedem Merge nach main läuft das Entwicklungstor (auf
+Ohne Argument und vor jedem Merge oder Commit auf main läuft das Entwicklungstor (auf
 Paket- und Fixzweigen vor dem Commit nur die betroffenen Tests, ruff, format,
 mypy):
 alle Tests ohne Fenster (`not windowed`), ohne echte Renderer (`not rendering`),
@@ -30,8 +30,8 @@ ohne `performance` und ohne die
 Erzeugnisvergleiche (`not rendered` — sie brauchen einen Lauf von `/erzeugen`
 und gehören wie in der CI zum Release), dazu Ruff, Format und mypy.
 **Fenster-, Renderer- und Leistungsprüfungen laufen lokal ausschließlich beim
-Release**; auf Linux und macOS fährt sie die CI beim Push nach main, auf
-Zweigen nie.
+Release**; die betroffenen auf Linux und macOS startet nach dem Push nach main
+die liefernde Sitzung auf main (`/liefern`), auf Zweigen nie.
 Nur dort wählt `--release` das zusätzliche Release-Tor. Die Option autorisiert
 weder einen Paketbau noch eine Veröffentlichung.
 Ein bereits vollständig grüner Nachweis für denselben relevanten Stand muss
