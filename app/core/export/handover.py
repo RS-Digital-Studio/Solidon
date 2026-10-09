@@ -3048,19 +3048,31 @@ def frees_support_layers(gaps: Iterable[float], layer: float, flavour: SlicerFla
     (:func:`written_support_gaps`). Mit Reinigungsturm schaltet die
     Orca-Familie die eigene Höhe selbst wieder ab (:func:`tower_cause`).
     """
+    from app.core.slice import advise
+
     if not slicer_keys.has_independent_support_layers(flavour) or layer <= 0.0:
         return False
-    return any(not is_close(gap / layer, round(gap / layer)) for gap in gaps if gap > 0.0)
+    return any(not advise.in_whole_layers(gap, layer) for gap in gaps if gap > 0.0)
 
 
 def _native_process(setup: SlicerSetup | None) -> Mapping[str, object]:
-    """Der aufgelöste Herstellerprozess der Orca-Familie, ohne Solidons Werte."""
+    """Der aufgelöste Herstellerprozess der Orca-Familie, ohne Solidons Werte.
+
+    Eine Kette, die sich nicht auflösen lässt, sagt hier nichts: Gefragt wird
+    nach Turm und Stützschichthöhe, und der Druckdialog verlor sonst seinen
+    ganzen Rat (Review RM-622). Was an der Kette fehlt, meldet die Grundlage
+    (``manufacturer.base_settings``).
+    """
     if setup is None or setup.flavour != "orca" or not setup.base_process:
         return {}
     source = profile_file(setup.base_process, setup, "process")
     if source is None:
         return {}
-    return slicer_profiles.resolve_values(source, roots=_profile_roots(setup))
+    try:
+        return slicer_profiles.resolve_values(source, roots=_profile_roots(setup))
+    except ExternalToolError as problem:
+        _log.warning("cannot resolve the process %s: %s", setup.base_process, problem.title)
+        return {}
 
 
 def _switched_on(value: object) -> bool:

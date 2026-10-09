@@ -936,6 +936,18 @@ BOTTOM_INTERFACE_LAYERS: Final = 2
 WHOLE_LAYER_GAP_FLAVOURS: Final[frozenset[SlicerFlavour]] = frozenset({"cura"})
 
 
+def rounds_to_whole_layers(flavour: SlicerFlavour | None, whole_layers: bool = False) -> bool:
+    """Rechnet der Slicer den Stützabstand hier in ganzen Schichten — Cura immer,
+    die Orca-Familie neben einem Reinigungsturm (``whole_layers``, RM-622)?"""
+    return whole_layers or flavour in WHOLE_LAYER_GAP_FLAVOURS
+
+
+def in_whole_layers(gap: float, layer: float) -> bool:
+    """Misst dieser Abstand ganze Schichten? Sonst rundet ein Slicer, der in ganzen
+    Schichten rechnet, ihn selbst (RM-583, RM-622)."""
+    return layer > 0.0 and is_close(gap / layer, round(gap / layer))
+
+
 def support_gap_target(
     layer: float,
     material: MaterialProfile,
@@ -967,7 +979,7 @@ def support_gap_target(
     if factor is None or low is None or high is None or layer <= 0.0:
         return None
     target = min(max(layer * factor, low), high)
-    if not whole_layers and flavour not in WHOLE_LAYER_GAP_FLAVOURS:
+    if not rounds_to_whole_layers(flavour, whole_layers):
         return target
     first = max(1, math.ceil(low / layer - EPS_GEOM))
     last = math.floor(high / layer + EPS_GEOM)
@@ -1006,10 +1018,9 @@ def _support_contact(
     target = support_gap_target(layer, material, flavour, whole_layers=whole_layers)
     low, high = SUPPORT_GAP_BAND
     gap = settings.support.z_gap
-    whole = whole_layers or flavour in WHOLE_LAYER_GAP_FLAVOURS
     if target is not None and (
         not low * target <= gap <= high * target
-        or (whole and not is_close(gap / layer, round(gap / layer)))
+        or (rounds_to_whole_layers(flavour, whole_layers) and not in_whole_layers(gap, layer))
     ):
         advice.append(
             _advice(

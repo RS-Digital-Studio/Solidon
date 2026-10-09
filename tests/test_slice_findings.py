@@ -1494,6 +1494,8 @@ def test_half_a_layer_rounds_up() -> None:
     ) == pytest.approx(0.2)
 
 
+# Aus ``materials.toml``: PLA Faktor 1,0 zwischen 0,10 und 0,25 mm, PETG 1,4
+# zwischen 0,12 und 0,30 mm; neben dem Turm das Vielfache im Band, mindestens eins.
 @pytest.mark.parametrize(
     ("material", "layer", "free", "beside_a_tower"),
     [
@@ -1543,6 +1545,15 @@ def test_a_gap_between_two_layers_is_proposed_where_the_slicer_rounds(
 
     assert _support_advice(
         table(), pla, between, flavour=flavour, paths=(gap,), whole_layers=whole_layers
+    ) == {gap: pytest.approx(0.16)}
+    # 0,2 liegt genau auf der Bandgrenze (1,25-mal 0,16), 0,18 mitten darin.
+    assert _support_advice(
+        table(),
+        pla,
+        {**between, gap: 0.18},
+        flavour=flavour,
+        paths=(gap,),
+        whole_layers=whole_layers,
     ) == {gap: pytest.approx(0.16)}
     assert (
         _support_advice(

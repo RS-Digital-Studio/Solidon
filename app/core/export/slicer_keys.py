@@ -1577,7 +1577,7 @@ def support_gap_in_whole_layers(flavour: SlicerFlavour | None) -> bool:
     """
     from app.core.slice import advise
 
-    return flavour in advise.WHOLE_LAYER_GAP_FLAVOURS
+    return advise.rounds_to_whole_layers(flavour)
 
 
 def has_independent_support_layers(flavour: SlicerFlavour | None) -> bool:
@@ -1638,12 +1638,13 @@ def limitation(
         )
     # Ein Stützabstand zwischen zwei Schichten wird in Cura eine ganze (RM-583).
     if support_gap_in_whole_layers(flavour) and path == "support.z_gap":
+        from app.core.slice import advise
+
         layer = settings.layers.layer_height if settings is not None else 0.0
         # Ohne Stützen druckt der Abstand nichts; ein Satz dazu wäre Lärm.
         if settings is None or layer <= 0.0 or settings.support.style == "none":
             return None
-        steps = settings.support.z_gap / layer
-        if math.isclose(steps, round(steps), abs_tol=1e-6):
+        if advise.in_whole_layers(settings.support.z_gap, layer):
             return None
         field = print_fields.field_of(path)
         return _(

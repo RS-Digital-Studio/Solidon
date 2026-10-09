@@ -11184,8 +11184,13 @@ def test_beside_a_tower_the_dialog_proposes_the_gap_the_file_gets(
 ) -> None:
     """Neben einem Reinigungsturm rät der Druckdialog den Stützabstand in ganzen
     Schichten wie der Export (RM-622): PLA und PETG bei 0,08er Schichten
-    bekommen 0,16 mm, und die Datei trägt an jedem Teil genau den Wert der
-    Zeile. Ohne Turm nennt die Zeile 0,12 am PETG-Teil, und dieses bekommt ihn."""
+    bekommen 0,16 mm, die Zeile nennt beide Tische und nicht den Block ohne
+    Stütze daneben, und die Datei trägt an jedem Tisch genau den Wert der Zeile.
+    Ohne Turm nennt die Zeile 0,12 am PETG-Tisch, und dieser bekommt ihn. Nach
+    dem Übernehmen nennt das Feld dieselben Teile (``accepted_parts``)."""
+    import trimesh
+
+    from app.core.types import PrintSettings
     from tests.helpers import object_values, supported_table
 
     monkeypatch.setattr(
@@ -11210,17 +11215,28 @@ def test_beside_a_tower_the_dialog_proposes_the_gap_the_file_gets(
         )
         for index, material in enumerate(("pla", "petg"))
     )
+    cube = trimesh.creation.box(extents=(10.0, 10.0, 10.0))
+    cube.apply_translation([0.0, 60.0, 5.0])
+    objects += (SceneObject(id="obj_2", name="PLA-Block", mesh=MeshData(cube), material="pla"),)
     setup = handover.SlicerSetup(executable=Path("orca-slicer.exe"), flavour="orca")
-    found: list[list[SettingAdvice]] = []
-    worker = print_dialog._AdviceWorker(
-        objects, settings, profile, setup, {}, (), (), {}, flavour="orca"
-    )
-    worker.done.connect(lambda entries, _measured: found.append(entries))
-    worker.work()
-    assert found, "der Arbeiter liefert"
-    row = next(entry for entry in found[-1] if entry.path == "support.z_gap")
+
+    def worked(current: PrintSettings) -> tuple[list[SettingAdvice], print_dialog._AdviceWorker]:
+        found: list[list[SettingAdvice]] = []
+        worker = print_dialog._AdviceWorker(
+            objects, current, profile, setup, {}, (), (), {}, flavour="orca"
+        )
+        worker.done.connect(lambda entries, _measured: found.append(entries))
+        worker.work()
+        assert found, "der Arbeiter liefert"
+        return found[-1], worker
+
+    entries, _worker = worked(settings)
+    row = next(entry for entry in entries if entry.path == "support.z_gap")
+    tables = ("PLA-Tisch", "PETG-Tisch") if tower else ("PETG-Tisch",)
     assert row.value == pytest.approx(0.16 if tower else 0.12)
-    assert getattr(row, "parts", ()) == (() if tower else ("PETG-Tisch",))
+    assert getattr(row, "parts", ()) == tables
+    _entries, accepted = worked(print_settings.with_accepted(settings, "support.z_gap", row.value))
+    assert accepted.accepted_parts.get("support.z_gap") == tables
 
     path, _findings = writer.write_assembly(
         list(objects),
@@ -11232,8 +11248,7 @@ def test_beside_a_tower_the_dialog_proposes_the_gap_the_file_gets(
         setup=setup,
     )
     written = object_values(path, "Metadata/model_settings.config")
-    receivers = ("PLA-Tisch", "PETG-Tisch") if tower else ("PETG-Tisch",)
-    for name in receivers:
+    for name in tables:
         assert float(written[name]["support_top_z_distance"]) == pytest.approx(row.value), name
 
 

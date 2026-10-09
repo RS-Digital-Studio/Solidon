@@ -1644,6 +1644,7 @@ def _served_elsewhere(
     slot_profiles: Mapping[threemf.SlotKey, str],
     document: Document | None,
     cancelled: CancelToken | None,
+    towers: frozenset[int] = frozenset(),
 ) -> frozenset[str]:
     """Welche dieser Pfade ein Teil des Auftrags auf einer anderen Platte verlangt.
 
@@ -1652,11 +1653,11 @@ def _served_elsewhere(
     auf Platte 1, bekam auf Platte 2 jeder Klotz Stützen — der Ausgangsfehler
     von Entscheidung G, auf den übrigen Platten zurück. Gefragt wird derselbe
     Rat je Teil wie beim Schreiben (:func:`_part_values`), und nur, solange
-    ein Pfad noch offen ist.
+    ein Pfad noch offen ist. ``towers`` sind die Platten mit Reinigungsturm
+    (:func:`tower_plates`, über den ganzen Auftrag gefragt).
     """
     open_paths = set(paths)
     served: set[str] = set()
-    towers = tower_plates(others, setup)
     for entry in others:
         if not open_paths:
             break
@@ -2497,7 +2498,11 @@ def write_assembly(
     # Einmal je Körper gerechnet: Der Schnitt knapp über dem Boden kostet, und
     # die Schlüssel wie der Grund kommen aus demselben Aufruf. Auch was der
     # Slicer je Teil nicht annimmt, wird benannt.
-    towers = tower_plates(chosen, setup) if split is not None else frozenset()
+    # Der Turm hängt an allen Spulen einer Platte, auch an denen, die dieser
+    # Export nicht schreibt — gefragt über den ganzen Auftrag, einmal.
+    in_job = {entry.id for entry in job or ()}
+    every = [*(job or ()), *(entry for entry in chosen if entry.id not in in_job)]
+    towers = tower_plates(every, setup) if split is not None else frozenset()
     part_values = {
         entry.id: _part_values(
             entry,
@@ -2533,6 +2538,7 @@ def write_assembly(
             handover.chosen_slot_profiles(job, split.plate),
             document,
             cancelled,
+            towers,
         )
         everywhere = [item for item in everywhere if item.path not in served]
     if split is not None and everywhere:
@@ -2834,6 +2840,25 @@ def write_assembly(
     return target, findings
 
 
+def _tower_causes(
+    plates: Mapping[int, Sequence[threemf.AssemblyPart]], setup: SlicerSetup
+) -> dict[int, Literal["filaments", "process"] | None]:
+    """Warum die Orca-Familie auf welcher Platte einen Reinigungsturm baut
+    (:func:`handover.tower_cause`), gezählt nach den Spulen je Platte. Der
+    Herstellerprozess wird in einem Durchgang gelesen
+    (:func:`slicer_profiles.single_read`): Je Platte neu aufgelöst kostete er am
+    ElegooSlicer 39 ms, bei acht Platten 382 (Review RM-622)."""
+    from app.core.export import handover, slicer_profiles
+
+    with slicer_profiles.single_read():
+        return {
+            plate: handover.tower_cause(
+                setup, filaments=len(threemf.merge_slots(here)), objects=len(here)
+            )
+            for plate, here in plates.items()
+        }
+
+
 def _tower_cause(
     parts: Sequence[threemf.AssemblyPart], setup: SlicerSetup
 ) -> Literal["filaments", "process"] | None:
@@ -2841,16 +2866,12 @@ def _tower_cause(
     schaltet sie die eigene Stützschichthöhe ab, die
     :func:`handover.frees_support_layers` eingeschaltet hätte, und ein Abstand
     zwischen zwei Schichten wird gerundet (RM-583). Gefragt wird je Platte
-    (:func:`handover.tower_cause`); mehrere Filamente gehen vor.
+    (:func:`_tower_causes`); mehrere Filamente gehen vor.
     """
-    from app.core.export import handover
-
-    causes = set()
-    for plate in {part.plate for part in parts}:
-        here = [part for part in parts if part.plate == plate]
-        causes.add(
-            handover.tower_cause(setup, filaments=len(threemf.merge_slots(here)), objects=len(here))
-        )
+    plates: dict[int, list[threemf.AssemblyPart]] = {}
+    for part in parts:
+        plates.setdefault(part.plate, []).append(part)
+    causes = set(_tower_causes(plates, setup).values())
     if "filaments" in causes:
         return "filaments"
     return "process" if "process" in causes else None
@@ -2858,29 +2879,22 @@ def _tower_cause(
 
 def tower_plates(bodies: Sequence[SceneObject], setup: SlicerSetup | None) -> frozenset[int]:
     """Die Platten dieser Körper, auf denen der Herstellerprozess einen
-    Reinigungsturm baut (:func:`handover.tower_cause`).
+    Reinigungsturm baut (:func:`_tower_causes`).
 
     Dort legt die Orca-Familie die Stütze auf die Schichten des Modells und
     rundet den Stützabstand auf ganze Schichten; der Rat rechnet ihn dann
     gleich in ganzen Schichten (``whole_layers``, RM-622). Druckdialog und
-    Export fragen hier, damit die Zeile den Wert nennt, den die Datei bekommt.
-    Gezählt werden die Spulen je Platte wie beim Schreiben (:func:`_tower_cause`).
+    Export fragen hier, damit die Zeile den Wert nennt, den die Datei bekommt —
+    beide mit allen Körpern einer Platte, denn der Turm hängt an ihren Spulen.
     """
     if setup is None:
         return frozenset()
-    from app.core.export import handover
-
     plates: dict[int, list[threemf.AssemblyPart]] = {}
     for body in bodies:
         plates.setdefault(body.plate, []).append(
             threemf.AssemblyPart(mesh=as_mesh_data(body.mesh), slots=threemf.slots_for_object(body))
         )
-    return frozenset(
-        plate
-        for plate, here in plates.items()
-        if handover.tower_cause(setup, filaments=len(threemf.merge_slots(here)), objects=len(here))
-        is not None
-    )
+    return frozenset(plate for plate, cause in _tower_causes(plates, setup).items() if cause)
 
 
 def _plate_settings(

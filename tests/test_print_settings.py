@@ -9001,7 +9001,8 @@ def test_a_mixed_plate_says_that_the_gap_is_rounded(
     monkeypatch.setattr(handover, "_native_process", lambda _setup: native)
     profile = profiles.make_profile("centauri-carbon-2", "pla")
     base = print_settings.with_choice(print_settings.resolve(profile), "support.style", "grid")
-    # Übernommen, was der Dialog anbietet: 0,28 nur, wo ein Teil PETG ist.
+    # Übernommen 0,28 — ohne Turm der Wert, den der Dialog am PETG-Teil anbietet;
+    # neben dem Turm rät er ganze Schichten, und 0,28 gilt dann beiden Teilen.
     settings = (
         print_settings.with_accepted(base, "support.z_gap", 0.28) if "petg" in materials else base
     )
@@ -9111,6 +9112,104 @@ def test_beside_a_tower_each_part_gets_its_gap_in_whole_layers(
     with zipfile.ZipFile(path) as archive:
         project = json.loads(archive.read(threemf.PROJECT_SETTINGS_PATH))
     assert (project.get("independent_support_layer_height") == "1") is freed
+
+
+@pytest.mark.parametrize("tower", [True, False])
+def test_another_plate_beside_a_tower_is_asked_in_whole_layers(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, tower: bool
+) -> None:
+    """*Slicen* schreibt je Platte eine Datei und fragt die Teile der übrigen
+    Platten, ob sie einen übernommenen Wert für sich verlangen
+    (``writer._served_elsewhere``). Auch dort zählt der Turm (RM-622): Platte 0
+    trägt PLA- und PETG-Tisch bei 0,08er Schichten mit eigener Wahl 0,16, Platte
+    1 einen Block ohne Stütze, übernommen sind 0,24. Neben dem Turm verlangt
+    keiner der Tische etwas, und der Block bekommt die 0,24 mit dem Satz „gilt
+    für alle Teile“; ohne Turm verlangen die Tische 0,10 und 0,12, und der Block
+    bleibt still."""
+    import trimesh
+
+    from app.core.export import writer
+    from app.core.geom.mesh import MeshData
+    from app.core.types import SceneObject
+
+    monkeypatch.setattr(
+        handover, "_native_process", lambda _setup: _TOWER if tower else {"enable_prime_tower": "0"}
+    )
+    profile = profiles.make_profile("centauri-carbon-2", "pla")
+    settings = print_settings.resolve(profile)
+    for path, value in (
+        ("support.style", "grid"),
+        ("layers.layer_height", 0.08),
+        ("support.z_gap", 0.16),
+    ):
+        settings = print_settings.with_choice(settings, path, value)
+    settings = print_settings.with_accepted(settings, "support.z_gap", 0.24)
+    cube = trimesh.creation.box(extents=(10.0, 10.0, 10.0))
+    cube.apply_translation([0.0, 0.0, 5.0])
+    job = [
+        *(
+            SceneObject(
+                id=f"tisch-{index}",
+                name=f"{material.upper()}-Tisch",
+                mesh=MeshData(supported_table(index)),
+                material=material,
+                plate=0,
+            )
+            for index, material in enumerate(("pla", "petg"))
+        ),
+        SceneObject(id="block", name="Block", mesh=MeshData(cube), material="pla", plate=1),
+    ]
+    setup = handover.SlicerSetup(executable=Path("orca-slicer.exe"), flavour="orca")
+
+    path, findings = writer.write_assembly(
+        job,
+        tmp_path,
+        project_name="auftrag",
+        profile=profile,
+        plate=1,
+        settings=settings,
+        flavour="orca",
+        setup=setup,
+        job=job,
+    )
+
+    block = object_values(path, "Metadata/model_settings.config")["Block"]
+    said = {
+        entry.values.get("setting") for entry in findings if entry.code == "export.part_setting_all"
+    }
+    if tower:
+        assert block.get("support_top_z_distance") == "0.24"
+        assert "support.z_gap" in said
+    else:
+        assert "support_top_z_distance" not in block
+        assert "support.z_gap" not in said
+
+
+def test_a_process_that_does_not_resolve_builds_no_tower(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Lässt sich die Kette des Herstellerprozesses nicht auflösen, fragt die
+    Turmfrage nichts (Review RM-622): Vorher scheiterte daran der ganze Rat des
+    Druckdialogs. Was an der Kette fehlt, sagt die Grundlage."""
+    from app.core.errors import ExternalToolError
+    from app.core.export import slicer_profiles, writer
+    from app.core.geom.mesh import MeshData
+    from app.core.types import SceneObject
+
+    def broken(*_args: object, **_kwargs: object) -> dict[str, object]:
+        raise ExternalToolError(tool="OrcaSlicer", title="kaputt", detail="fehlt")
+
+    monkeypatch.setattr(handover, "profile_file", lambda *_args: Path("kaputt.json"))
+    monkeypatch.setattr(slicer_profiles, "resolve_values", broken)
+    setup = handover.SlicerSetup(
+        executable=Path("orca-slicer.exe"), flavour="orca", base_process="kaputt"
+    )
+    bodies = [
+        SceneObject(id="tisch", name="Tisch", mesh=MeshData(supported_table(0)), material="pla")
+    ]
+
+    assert handover.tower_cause(setup, filaments=2, objects=1) is None
+    assert writer.tower_plates(bodies, setup) == frozenset()
 
 
 def test_the_part_advice_memo_knows_the_tower() -> None:

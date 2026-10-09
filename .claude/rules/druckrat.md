@@ -79,8 +79,9 @@ offenem Drucker. Übernommen wird auf Klick, nie von allein.
   `support_gap_target`; ohne Werte kein Rat), vorgeschlagen außerhalb
   `SUPPORT_GAP_BAND`; wo der Slicer in ganzen Schichten rechnet — Cura, die
   Orca-Familie neben einem Reinigungsturm (`writer.tower_plates`,
-  `whole_layers`, Dialog und Export gleich) —, das Vielfache im Band, auch
-  statt eines Werts im Band zwischen zwei Schichten. Unter einem flachen Stück über `OVERHANG_LAYER_WORTH_SUPPORT` eine
+  `whole_layers`, Dialog und Export gleich) —, das Vielfache innerhalb der
+  Materialgrenzen, auch statt eines Werts in `SUPPORT_GAP_BAND`, der zwischen
+  zwei Schichten liegt (`in_whole_layers`). Unter einem flachen Stück über `OVERHANG_LAYER_WORTH_SUPPORT` eine
   dichte Trennschicht, sonst eine lockere; steht die Stütze auf dem Modell,
   auch unten (`BOTTOM_INTERFACE_LAYERS`). Volle Kühlung an der Trennschicht,
   wo das Material sie verlangt (`support_interface_cooling`), je Spule.

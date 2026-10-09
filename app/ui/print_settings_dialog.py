@@ -1470,9 +1470,13 @@ class _AdviceWorker(Worker):
         self.rules_wanted = False
 
     def work(self) -> None:
-        """Ein ausdrücklicher Abbruch ist kein unerwarteter Arbeiterfehler."""
+        """Ein ausdrücklicher Abbruch ist kein unerwarteter Arbeiterfehler.
+
+        Gerechnet wird in einem Lesedurchgang (:func:`slicer_profiles.single_read`):
+        Turm, Spulenprozesse und Grundlage fragen dieselben Profile."""
         try:
-            self._calculate()
+            with slicer_profiles.single_read():
+                self._calculate()
         except OperationCancelled:
             return
         except AppError as problem:
