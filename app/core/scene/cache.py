@@ -409,7 +409,11 @@ _REFUSALS_KEPT: Final = 256
 #: - 55 (RM-592): Eine Boolesche ohne Wirkung gibt ihren Eingang in dessen
 #:   Dreiecksfolge zurück (``attributes.in_source_layout``). Ein gespeichertes
 #:   Ergebnis trüge die Folge des Kerns und träfe den Merkmalscache nicht.
-CACHE_FORMAT_VERSION: Final = 55
+#: - 56 (RM-592): Der Merkmalscache unterscheidet ein bewegtes Netz mit
+#:   mitgetragenen Normalen und Flächen von einem frisch gebauten mit denselben
+#:   Ecken (``features._detection_key``). Ein gespeichertes Ergebnis trüge noch
+#:   die Erkennung des bewegten Zwillings.
+CACHE_FORMAT_VERSION: Final = 56
 
 
 @dataclass(frozen=True, slots=True)

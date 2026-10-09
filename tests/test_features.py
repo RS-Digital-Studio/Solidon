@@ -1305,6 +1305,40 @@ def test_a_ring_is_recognised_as_a_torus() -> None:
     assert abs(tori[0].params["axis"][2]) == pytest.approx(1.0, abs=0.01)
 
 
+def test_the_ring_axis_does_not_turn_with_the_corner_order() -> None:
+    """Die Achse eines Torus zeigt gleich, wie auch immer die Datei ihre Dreiecke schreibt.
+
+    Ein Ring hat kein Oben; die Einpassung (``fit_torus_samples``, SVD) gab
+    ihre Achse mit dem Vorzeichen zurück, das die letzten Stellen der Rechnung
+    ergaben. An ``torus_ring.stl`` kippte sie, wenn die Dreiecke gemischt und
+    ihre Ecken im Umlauf verdreht waren (Messbank Paket E, Sonde
+    ``probe_order.py``): derselbe Name, ``axis`` und ``surface_patches``
+    gespiegelt (RM-210, dieselbe Datei — dasselbe Teil). Jetzt steht sie
+    kanonisch, ihr Skalarprodukt mit (1, √2, √3) ist positiv — eine Richtung,
+    auf der keine Achse mit rationalen Anteilen senkrecht steht.
+    """
+    from app.core.geom.mesh import MeshData as Mesh
+
+    source = plate("torus_ring.stl").raw
+    toward = np.array([1.0, math.sqrt(2.0), math.sqrt(3.0)])
+    rng = np.random.default_rng(210)
+    axes = []
+    for trial in range(6):
+        faces = np.asarray(source.faces)
+        order = rng.permutation(len(faces)) if trial else np.arange(len(faces))
+        rolled = np.roll(faces[order], trial % 3, axis=1)
+        body = trimesh.Trimesh(np.array(source.vertices), rolled, process=False)
+        forget_cache()
+        (torus,) = detect_tori(Mesh.of(body))
+        axis = np.asarray(torus.params["axis"], dtype=float)
+        assert float(axis @ toward) > 0.0, f"Umordnung {trial}: Achse {axis}"
+        patch_axis = np.asarray(torus.surface_patches[0].params["axis"], dtype=float)
+        assert np.array_equal(axis, patch_axis)
+        axes.append(axis)
+    for trial, axis in enumerate(axes[1:], start=1):
+        assert np.allclose(axis, axes[0], rtol=0.0, atol=1e-9), f"Umordnung {trial}"
+
+
 def test_a_piece_of_a_ring_is_enough_for_the_two_radii() -> None:
     """Ein Torus**stück** reicht der Einpassung, ein ganzer Ring ist nicht nötig.
 

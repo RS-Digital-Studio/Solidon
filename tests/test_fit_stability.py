@@ -1696,6 +1696,47 @@ def test_a_moved_body_does_not_lend_its_carried_reading_to_a_fresh_twin() -> Non
     assert differs, "die Bewegung trägt Flächen mit, die nicht den Ecken folgen"
 
 
+def test_a_moved_body_does_not_lend_its_whole_detection_to_a_fresh_twin() -> None:
+    """Dasselbe für die ganze Erkennung: Der Netzabdruck kennt mitgetragene Maße.
+
+    Der Merkmalscache las nur Ecken und Dreiecke (``_mesh_key``), jetzt dazu die
+    mitgetragenen Maße (``_detection_key``). Ein frisch gebautes Netz mit
+    denselben Bits wie ein bewegtes bekam deshalb dessen Erkennung aus dem
+    Cache — gerechnet mit gedrehten Normalen und übernommenen Flächen, also in
+    den letzten Stellen anders als seine eigene. Gefunden an der Messbank: Die
+    Lochplatte nach dem Beispiel *Halterung anpassen* (dort auf das Bett
+    gesetzt) trug Mitten wie ``4.0`` statt ``3.9999999999999996`` und eine
+    Normale ``-0.0`` — je nachdem, was die Sitzung vorher geöffnet hatte.
+    """
+    from app.core.geom.transform import apply as carrying_move
+    from app.core.scene.cache import feature_to_data
+
+    def printed(found: dict[str, Any]) -> list[Any]:
+        return [[name, feature_to_data(found[name])] for name in sorted(found)]
+
+    source = plate()
+    turn = trimesh.transformations.rotation_matrix(math.pi / 2, [1.0, 0.0, 0.0])
+    detect(source)
+    carried = carrying_move(source, turn)
+    fresh = MeshData.of(
+        trimesh.Trimesh(np.array(carried.raw.vertices), np.array(carried.raw.faces), process=False)
+    )
+    forget_cache()
+    alone = printed(detect(fresh))
+    forget_cache()
+    detect(carried)
+    after = printed(
+        detect(
+            MeshData.of(
+                trimesh.Trimesh(
+                    np.array(carried.raw.vertices), np.array(carried.raw.faces), process=False
+                )
+            )
+        )
+    )
+    assert after == alone, "der frische Zwilling bekam die Erkennung des bewegten"
+
+
 def test_a_patch_known_only_by_its_print_is_read_inside_its_round() -> None:
     """Im Stapel steht für einen bekannten Fleck nur der Abdruck — gelesen wird trotzdem.
 

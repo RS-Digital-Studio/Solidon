@@ -1232,6 +1232,48 @@ def _mesh_key(mesh: MeshData) -> bytes:
     return hashlib.blake2b(key + units, digest_size=16).digest()
 
 
+def _detection_key(mesh: MeshData) -> bytes:
+    """Unter welchem Abdruck die Erkennung eines Netzes gemerkt wird (RM-592).
+
+    :func:`_mesh_key` sagt, ob zwei Netze dieselbe Geometrie sind — dafür
+    gelten Ecken und Dreiecke, und unter ihm reisen Bewegungs- und
+    Teilungsvermerke über die Platte. Die Erkennung liest aber mehr: Gedrehte
+    Normalen, übernommene Flächeninhalte, Facetten und Nahtwinkel, die eine
+    starre Bewegung vom Quellnetz mitträgt (``geom.transform._carry_cache``),
+    weichen in den letzten Stellen von dem ab, was ``trimesh`` aus denselben
+    Ecken rechnet. Unter dem Netzabdruck allein bekam ein frisch gebautes Netz
+    die Erkennung eines bewegten Zwillings, und dieselbe Datei trug je nach
+    Vorgeschichte der Sitzung zwei Merkmalsstände (Messbank A1: die Lochplatte
+    nach dem Beispiel *Halterung anpassen*). Ein Netz ohne mitgetragene Maße
+    behält seinen Netzabdruck; einmal je Netz gerechnet wie dieser.
+    """
+    from app.core.geom.transform import CARRIED_METRICS
+
+    key = _mesh_key(mesh)
+    cache = getattr(mesh.raw, "_cache", None)
+    if cache is None:
+        return key
+    names = cache.cache.get(CARRIED_METRICS)
+    if not names:
+        return key
+    known = cache.cache.get("solidon_detection_key")
+    if known is not None:
+        return bytes(known)
+    hasher = hashlib.blake2b(key, digest_size=16)
+    for name in names:
+        value = cache.cache.get(name)
+        hasher.update(name.encode("ascii"))
+        parts = value if isinstance(value, list) else [value]
+        for part in parts:
+            data = np.ascontiguousarray(np.asarray(part))
+            hasher.update(data.dtype.str.encode("ascii"))
+            hasher.update(np.asarray(data.shape, dtype=np.int64).tobytes())
+            hasher.update(data.tobytes())
+    detection_key = hasher.digest()
+    cache["solidon_detection_key"] = detection_key
+    return detection_key
+
+
 def forget_cache() -> None:
     """Vergisst die gemerkten Erkennungen — für Tests und Messungen."""
     with _CACHE_LOCK:
@@ -1436,7 +1478,7 @@ def detect(
     # Merkmale haben. Der Grund und die Zahlen stehen bei :data:`_FEATURE_CACHE`.
     if check_cancelled is not None:
         check_cancelled()
-    key = _mesh_key(mesh)
+    key = _detection_key(mesh)
     if check_cancelled is not None:
         check_cancelled()
     known = _cached_detection(key)
@@ -1634,7 +1676,7 @@ def known_detection(mesh: MeshData) -> dict[FeatureId, Feature] | None:
     Merkmale, und eine Erkennung von einer Sekunde je getippter Zahl wäre
     dort eine Sekunde für nichts (``scene.evaluate``, ``detect_features``).
     """
-    known = _cached_detection(_mesh_key(mesh))
+    known = _cached_detection(_detection_key(mesh))
     return None if known is None else dict(known)
 
 
@@ -1770,7 +1812,7 @@ def carry_detection(
 
     if check_cancelled is not None:
         check_cancelled()
-    source_key = _mesh_key(source)
+    source_key = _detection_key(source)
     with _CACHE_LOCK:
         known = _FEATURE_CACHE.get(source_key)
     if known is None:
@@ -1779,7 +1821,7 @@ def carry_detection(
         return False
     if check_cancelled is not None:
         check_cancelled()
-    moved_key = _mesh_key(moved)
+    moved_key = _detection_key(moved)
     if _cached_detection(moved_key) is not None:
         return True
     carried = transformed_features(known, transform, mesh=moved, check_cancelled=check_cancelled)
@@ -2085,12 +2127,12 @@ def carry_refined_detection(
     """
     if check_cancelled is not None:
         check_cancelled()
-    source_key = _mesh_key(source)
+    source_key = _detection_key(source)
     with _CACHE_LOCK:
         known = _FEATURE_CACHE.get(source_key)
     if known is None or any(feature.kind == "edge_loop" for feature in known.values()):
         return False
-    refined_key = _mesh_key(refined)
+    refined_key = _detection_key(refined)
     if _cached_detection(refined_key) is not None:
         return True
     carried = refined_features(known, origin, len(source.raw.faces))
@@ -2459,7 +2501,7 @@ def freeform_dropped(mesh: MeshData) -> int:
     verdrängt hat. Die Auswertung fragt unmittelbar nach ``detect`` und trifft
     damit immer den frischen Eintrag.
     """
-    return _FREEFORM_DROPPED.get(_mesh_key(mesh), 0)
+    return _FREEFORM_DROPPED.get(_detection_key(mesh), 0)
 
 
 def recognised_as_freeform(mesh: MeshData) -> bool:
@@ -2471,7 +2513,7 @@ def recognised_as_freeform(mesh: MeshData) -> bool:
     Haut ohne eingepasste Splitter hat nichts weggelassen und ist trotzdem
     eine Freiform, auf der keine Rundformen geführt werden.
     """
-    return _FREEFORM.get(_mesh_key(mesh), False)
+    return _FREEFORM.get(_detection_key(mesh), False)
 
 
 def unreadable_void_shells(mesh: MeshData) -> int:
@@ -2483,7 +2525,7 @@ def unreadable_void_shells(mesh: MeshData) -> int:
     :func:`freeform_dropped` und macht daraus einen Befund: Ein Einschluss,
     der fehlt, weil ein Schalenpaar nicht lesbar war, verschwindet sonst still.
     """
-    return _UNREADABLE_VOIDS.get(_mesh_key(mesh), 0)
+    return _UNREADABLE_VOIDS.get(_detection_key(mesh), 0)
 
 
 # --- Bohrungen -------------------------------------------------------------------
@@ -9886,6 +9928,7 @@ def _torus_from_plan(
     mid = _tube_centres(centre, axis, local_centres, ring)
     agreement = np.einsum("ij,ij->i", support.normals, local_centres - mid)
     world_centre = origin + centre * scale
+    axis = _ring_axis(axis)
     return TorusFit(
         axis=(float(axis[0]), float(axis[1]), float(axis[2])),
         centre=(float(world_centre[0]), float(world_centre[1]), float(world_centre[2])),
@@ -9895,6 +9938,29 @@ def _torus_from_plan(
         recess=float(agreement @ support.areas) < 0.0,
         fit_error=float(np.abs(residual(fitted)).max()) * scale,
     )
+
+
+#: Wohin eine Ringachse zeigt (:func:`_ring_axis`): (1, √2, √3). Auf dieser
+#: Richtung steht keine Achse mit rationalen Anteilen senkrecht, also keine,
+#: die eine Konstruktion meint — achsparallel, diagonal, in kleinen Verhältnissen.
+_RING_AXIS_TOWARD: Final = (1.0, math.sqrt(2.0), math.sqrt(3.0))
+
+
+def _ring_axis(axis: np.ndarray) -> np.ndarray:
+    """Die Achse eines Torus in kanonischer Richtung — ein Ring hat kein Oben.
+
+    Die Einpassung gab das Vorzeichen zurück, das die letzten Stellen ergaben:
+    An ``torus_ring.stl`` kippte die Achse, wenn die Datei ihre Dreiecke
+    anders ordnete oder ihre Ecken im Umlauf verdrehte (RM-210, Messbank
+    Paket E). Gezeigt wird dorthin, wo das Skalarprodukt mit
+    :data:`_RING_AXIS_TOWARD` positiv ist.
+    """
+    toward = (
+        axis[0] * _RING_AXIS_TOWARD[0]
+        + axis[1] * _RING_AXIS_TOWARD[1]
+        + axis[2] * _RING_AXIS_TOWARD[2]
+    )
+    return -axis if float(toward) < 0.0 else axis
 
 
 def fit_torus_samples(
@@ -9952,6 +10018,7 @@ def fit_torus_samples(
     # beim Zylinder, nur um einen Ring herum gestellt.
     mid = _tube_centres(centre, axis, centres, ring_radius)
     towards = np.einsum("ij,ij->i", normals, centres - mid)
+    axis = _ring_axis(axis)
     return TorusFit(
         axis=(float(axis[0]), float(axis[1]), float(axis[2])),
         centre=(float(centre[0]), float(centre[1]), float(centre[2])),

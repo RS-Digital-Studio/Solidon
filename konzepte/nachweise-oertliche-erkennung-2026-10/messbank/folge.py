@@ -29,6 +29,8 @@ den Testhaken ``features.remember_across_bodies`` wo es ihn gibt, sonst ``_by_ge
 als Rechnung. ``--weglassen TEIL`` lässt einen Schlüsselteil weg (Gegenprobe, A1).
 ``--pruefen`` rechnet je Zustand dieselbe Erkennung an einer Kopie ohne Gedächtnis und
 ohne Erkennungscache nach (``kopie_gleich``) — die Zeiten zählen dann nicht.
+``--bis-anders`` prüft ebenso und endet beim ersten abweichenden Zustand mit Exit 3:
+Mit ``--weglassen`` ist das die Gegenprobe, ohne den ganzen Korpus zu fahren.
 """
 
 from __future__ import annotations
@@ -83,6 +85,9 @@ OUTPUT = Path(ARGS[1])
 MEMORY = option("--gedaechtnis", "an")
 LEAVE_OUT = option("--weglassen")
 CHECK = "--pruefen" in ARGS
+# Gegenprobe: beim ersten Zustand, der von der Kopie abweicht, ist der Teil belegt.
+UNTIL_DIFFERENT = "--bis-anders" in ARGS
+CHECK = CHECK or UNTIL_DIFFERENT
 MINIMUM = int(option("--min", "1000") or 1000)
 MAXIMUM = int(option("--max", "1000000") or 1000000)
 PER_CASE = int(option("--objekte", "8") or 8)
@@ -357,6 +362,9 @@ class Case:
         if CHECK and raw is not None:
             line["kopie_gleich"] = detection_print(fresh_detection(mesh)) == line["erkennung"]
         self.write(line)
+        if UNTIL_DIFFERENT and line.get("kopie_gleich") is False and not line["getragen"]:
+            self.write({"fall": self.name, "schritt": "ende", "warum": "anders", "objekt": objekt})
+            os._exit(3)
         return line
 
     def write(self, line: dict) -> None:

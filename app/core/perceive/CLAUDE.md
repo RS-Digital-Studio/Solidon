@@ -83,7 +83,7 @@ Frage; der Aufrufer legt fest, welche Antwort ohne eindeutigen Beleg schützt.
   ein unbelegbarer Träger bleibt eine ausdrückliche Ablehnung.
 - **Erst der Merker.** Die Auswertung fragt vor jeder Erkennung
   (`scene.evaluate._with_features`): `detect` legt jede vollständige Erkennung
-  unter `_mesh_key` ab; `carry_detection` (starr bewegt, Beleg `moved_twin`;
+  unter `_detection_key` ab (Netzabdruck samt mitgetragener Maße); `carry_detection` (starr bewegt, Beleg `moved_twin`;
   ohne gemeldete Matrix nennt der Bewegungsvermerk `note_movement` aus
   `geom.transform.apply` Eingang und Matrix, geglaubt über `moved_from`, auf
   der Platte als `moved_from` im Eintrag),
