@@ -73,20 +73,27 @@ offenem Drucker. Übernommen wird auf Klick, nie von allein.
   einige Stücke prüft, fragt mit `only`. `support.spare_ledges` sperrt ihre
   Überhangfläche (`ledge_space`) und spart aus, was Stütze braucht;
   vorgeschlagen nur mit Stützen.
-- **Bögen tragen sich selbst, ihre letzte Spanne ist eine Brücke**
-  (`analysis.vaults`): Schließt sich eine Decke zwischen ihren Auflagen
-  (`_Ceilings.closes`, die ganze Decke samt Kanalstücken), zählen ihre Stücke
-  unter der obersten Schicht, die nicht weiter als `LEDGE_REACH` über ihre
-  eigene Schicht darunter ragen (`_hangs_on`) und zu `CEILING_SPANNED`
-  zwischen den Auflagen liegen (`_Ceilings.spanned`, keine Haube vor einer
-  Mündung), nicht zur Fläche: weder zum Stützbedarf noch zu „auf dem Modell“
-  noch zum Überhangbefund; keine Sperre. **Die Brückenregel gilt weiter für
-  jede Schicht** — die Streifen einer schwach geneigten Decke zwischen zwei
-  Beinen sind je eine Brücke —, und die oberste Schicht zählt auch mit ihrer
-  Fläche: Eine flache Decke zwischen zwei Wänden bleibt, was sie war, eine
-  Konsole mit gewölbter Unterseite ein Feld. Die Schließfrage ist teuer:
-  gestellt nur über `OVERHANG_LAYER_MINIMUM` Streifenfläche und je Schichten
-  gemerkt (`_closing_answers`).
+- **Ein Bogen druckt als zwei Kragarme, seine letzte Spanne ist eine
+  Brücke** (`analysis.vaults`, `_Ceilings.arch`): Schließt sich eine Decke
+  zwischen ihren Auflagen (`_Ceilings.closes`, die ganze Decke samt
+  Kanalstücken), trägt sich ein Streifen unter der obersten Schicht, der zu
+  `CEILING_SPANNED` zwischen den Auflagen liegt (keine Haube vor einer
+  Mündung), wenn er nicht weiter als seine Zugabe und `CANTILEVER_LAYERS`
+  Schichthöhen über seine eigene Schicht darunter kragt — in Schichthöhen,
+  weil eine flache Decke bei feinen Schichten je Schicht weniger kragt —,
+  wenn er zwischen zwei Auflagen liegt (`_held_twice`, Inkreis über
+  Reichweite), oder als Teil eines Scheitels, der sich als Rand
+  (`LEDGE_REACH` je Kragarm) oder als Brücke zwischen den Flanken
+  (`SPAN_INTERESTING`, quer gemessen) trägt. Solche Streifen zählen nicht zur
+  Fläche, nicht zu „auf dem Modell“ und nicht zum Überhangbefund; keine
+  Sperre. Pult-, Sattel- und Flachbogendecken kragen weiter und bleiben ein
+  Feld. **Die Brückenregel gilt für Streifen zwischen zwei Auflagen**, nicht
+  für die an einer Seite hängenden (`hanging_vaults`, ihre Brückenweite wäre
+  die Diagonale), in Stützbedarf, Bericht und `open_pieces` gleich. Die
+  oberste Schicht zählt mit ihrer Fläche. **Eine Kanaldecke, deren Scheitel
+  weiter kragt, als er sich trägt, ist keine** (`_Arch.overhanging`). Wer
+  nur Ränder fragt, rechnet keine Bögen; Schließ- und Bogenantwort sind je
+  Schichten gemerkt (`_closing_answers`).
 - **Der Stützkontakt folgt dem Material der Spule** (`_support_contact`):
   Abstand aus Schichthöhe × `support_gap_factor`, begrenzt durch
   `support_gap_min`/`support_gap_max` des Materialprofils (Regel 7,

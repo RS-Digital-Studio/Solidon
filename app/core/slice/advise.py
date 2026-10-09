@@ -43,6 +43,7 @@ from app.core.slice.analysis import (
     ModelSupport,
     _layer_shape,
     channel_space,
+    hanging_vaults,
     island_layers,
     largest_overhang_patch,
     largest_sloped_patch,
@@ -877,11 +878,11 @@ def support_need(result: SliceResult, *, cancelled: CancelToken | None = None) -
     # stellte 831 m Baum außen am Turm hoch. Gefragt vor der Kanalfrage, die
     # dieselbe Antwort ohne Abbruch aus dem Merker liest.
     edges = ledges(result, cancelled=cancelled) if asked else frozenset()
-    # **Und kein Bogen, der sich zwischen seinen Beinen schließt** (RM-585,
+    # **Und kein Bogenstreifen, der sich selbst trägt** (RM-585,
     # :func:`vaults`): Am Eiffelturm verlangten die Bögen unten als Feld von
-    # 360 mm² Stützen. Ihre Streifen zählen nicht zur Fläche; die Brückenregel
-    # gilt weiter für jede Schicht — die Streifen einer schwach geneigten Decke
-    # zwischen zwei Beinen sind je eine Brücke. Aus dem Merker der Randfrage.
+    # 360 mm² Stützen. Ihre Streifen zählen nicht zur Fläche. Eine Pult-,
+    # Sattel- oder Flachbogendecke kragt Schicht für Schicht weiter, als sie
+    # trägt, und bleibt ein Feld.
     arches = vaults(result, cancelled=cancelled) if asked else frozenset()
     model = model_support(result) if asked else ModelSupport()
     quiet = model.channels | edges | arches
@@ -911,7 +912,14 @@ def support_need(result: SliceResult, *, cancelled: CancelToken | None = None) -
     # darin dieselbe Decke wie beim Deckel. Gefragt wird deshalb das größte
     # zusammenhängende Stück (:func:`largest_overhang_patch`); lange freie
     # Stege fängt die Brückenregel darunter weiter ab.
-    resting = _quiet_layers(result, model.channels | edges)
+    #
+    # **Die Brückenregel gilt für Bogenstreifen zwischen zwei Auflagen**, nicht
+    # für die, die an einer Seite hängen (:func:`hanging_vaults`): Ihre
+    # Brückenweite ist die Diagonale, und ein Rundbogen in einer 16 mm tiefen
+    # Wand verlangte Stützen für eine Decke von 16 mm (Review RM-585). Ob sie
+    # sich tragen, hat die Bogenfrage schon beantwortet.
+    hanging = hanging_vaults(result, cancelled=cancelled) if asked else frozenset()
+    resting = _quiet_layers(result, model.channels | edges | hanging)
     return SupportNeed(
         needed=_may_need_support(result, islands, overhang, patch, resting),
         islands=islands,
@@ -2448,7 +2456,17 @@ def _from_spans(result: SliceResult) -> list[Finding]:
         for index in spanning
         for number in range(len(result.layers[index].overhangs))
     )
-    resting = _quiet_layers(result, ledges(result, asked))
+    rims = ledges(result, asked)
+    resting = _quiet_layers(result, rims)
+    spanning = [index for index in spanning if index not in resting]
+    if not spanning:
+        return []
+    # Ebenso kein Bogenstreifen, der an einer Seite hängt (:func:`hanging_vaults`,
+    # Review RM-585): Seine Brückenweite ist die Diagonale, praktisch die
+    # Wandtiefe. Gefragt erst nach den Rändern und nur, wo dann noch eine
+    # Schicht spannt — die Bogenfrage kostet die Schließfrage ihrer Decke.
+    asked = frozenset(name for name in asked if name[0] in spanning)
+    resting = _quiet_layers(result, rims | hanging_vaults(result, asked))
     spanning = [index for index in spanning if index not in resting]
     if not spanning:
         return []
