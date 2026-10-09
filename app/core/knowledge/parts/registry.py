@@ -827,7 +827,10 @@ def register_part(
 #: (``THREAD_MESH_WHOLE_TURNS`` an Gewinde, Schraube und Mutter): Die Maße
 #: bleiben, das Netz eines Gewindes mit krummer Umlaufzahl ändert sich.
 #: Schmalere Laschen und alle übrigen Bausteine bleiben maßgleich.
-LIBRARY_VERSION: Final = "24"
+#: Version 25: Eine Mutternfalle, von Hand ohne Fläche und Richtung auf eine
+#: Oberfläche gesetzt, baut ihre Tasche ins Material statt darüber (RM-591);
+#: im Material gesetzt und alle übrigen Bausteine bleiben maßgleich.
+LIBRARY_VERSION: Final = "25"
 
 #: Version 2 hat eine einzige Ursache, und die betrifft drei Bausteine: sie
 #: bauten über ihrem Ursprung statt darunter. Der Eintrag steht hier statt

@@ -900,3 +900,176 @@ def test_the_migration_marks_every_saved_pin_and_only_pins(saved: int) -> None:
     assert migrated["ops"][2]["params"]["shape"] == "to_the_bore", "eine genannte Form bleibt"
     edited = migrated["transactions"][0]["changes"]["before"]["edited_ops"]["2"]
     assert edited["params"]["shape"] == "plain_pin"
+
+
+# --- Review G, F2: an jeder Bausteinbohrung ein Stift im Körper oder eine Absage ----------
+
+#: Die abtragenden Bausteine, die Bohrungen erklären — jeder von Hand auf die Deckfläche.
+_SUBTRACTIVE_PARTS: Final = (
+    "bearing_seat",
+    "cable_gland",
+    "heatset_m4",
+    "hose_barb",
+    "keyhole",
+    "magnet_pocket",
+    "nut_trap",
+    "screw_hole",
+    "seal_groove",
+)
+
+
+def test_the_list_of_subtractive_parts_is_complete() -> None:
+    """Die Liste oben ist die des Registers — ein neuer Baustein fällt hier auf."""
+    from app.core.knowledge.parts.registry import PARTS
+
+    assert {spec.name for spec in PARTS.all() if spec.subtractive} == set(_SUBTRACTIVE_PARTS)
+
+
+@pytest.mark.parametrize("kind", ["mesh", "brep"])
+@pytest.mark.parametrize("part", _SUBTRACTIVE_PARTS)
+def test_every_offered_pin_at_a_part_bore_stands_in_the_body_or_says_why(
+    profile: Profile, kind: str, part: str
+) -> None:
+    """Review G, F2: Die Karte bot *Stift für Bohrung* an Bausteinbohrungen an, an
+    denen er Unsinn baute.
+
+    An der Einführfase der Einpressbuchse eine Scheibe Ø 4,75 × 0,5, an
+    Tasche und Schraubenloch einer Mutternfalle Stifte über dem Körper, 12,5 mm
+    aus dem Teil heraus — ohne Befund. Soll: An jeder Bohrung, an der die Karte
+    ihn anbietet, steht der Stift lose im Körper (dicht, ohne gemeinsames
+    Volumen, überall das halbe Spiel entfernt, innerhalb seiner Grenzen),
+    oder die Operation sagt ab, mit einem Weg.
+    """
+    from app.core.knowledge.profiles import for_object
+    from app.core.perceive.actions import OFFERED_AT_A_PART
+
+    if kind == "brep":
+        exact_kernel()
+    project = new_project("centauri-carbon-2", "petg")
+    History(project.document).apply(
+        "Quader",
+        [
+            OperationDraft(
+                op="create_box" if kind == "mesh" else "create_brep_box",
+                params={"width": 30.0, "depth": 30.0, "height": 12.0},
+            ),
+            OperationDraft(op=f"insert_{part}", inputs=("obj_1",), params={"z": 12.0}),
+        ],
+    )
+    result = evaluate(project.document, profile, sources=ProjectSources(project))
+    if not result.complete:
+        # Ein Baustein, der eine Stelle verlangt (die Dichtungsnut eine Kante),
+        # sagt von Hand gesetzt mit Weg ab — dann gibt es keine Bohrung zu fragen.
+        assert all(finding.suggestions for finding in result.scene.report.findings), part
+        return
+    carrier = next(iter(result.scene.objects.values()))
+    clearance = for_object(profile, carrier).material.clearance
+    body = as_mesh_data(carrier.mesh)
+    offered = [
+        name
+        for name, feature in sorted(carrier.features.items())
+        if feature.provenance == "generated"
+        and feature.kind in OFFERED_AT_A_PART["pin_for_bore"]
+        and "pin_for_bore" not in not_offered_at(feature)
+    ]
+    for name in offered:
+        try:
+            result = run("pin_for_bore", carrier, profile, at_feature=name)
+        except ValidationError as refusal:
+            assert refusal.suggestions, (part, name, refusal.constraint)
+            continue
+        pin = result.outputs[1]
+        _loose(pin, carrier, clearance)
+        made = as_mesh_data(pin.mesh)
+        lowest = np.asarray(body.bounds.minimum) - 0.02
+        highest = np.asarray(body.bounds.maximum) + 0.02
+        assert (np.asarray(made.bounds.minimum) >= lowest).all(), (part, name)
+        assert (np.asarray(made.bounds.maximum) <= highest).all(), (part, name)
+
+
+@pytest.mark.parametrize("kind", ["mesh", "brep"])
+def test_the_lead_in_of_an_insert_is_no_bore_for_a_pin(profile: Profile, kind: str) -> None:
+    """Review G, F2: Die Einführfase der Einpressbuchse ist als Bohrung erklärt.
+
+    Die Karte bot dort *Stift für Bohrung* an, und der Stift war eine Scheibe
+    Ø 4,75 × 0,5 mm. Soll: Die Karte bietet ihn dort nicht an, und die
+    Operation sagt mit dem Weg zur Bohrung darunter ab.
+    """
+    carrier = _box(
+        kind,
+        profile,
+        OperationDraft(op="insert_heatset_m4", inputs=("obj_1",), params={"z": 12.0}),
+    )
+    (lead_in,) = [
+        name
+        for name, feature in carrier.features.items()
+        if feature.kind == "hole" and feature.params.get("lead_in")
+    ]
+    assert "pin_for_bore" in not_offered_at(carrier.features[lead_in])
+    with pytest.raises(ValidationError) as refusal:
+        run("pin_for_bore", carrier, profile, at_feature=lead_in)
+    assert refusal.value.constraint == "lead_in"
+    assert [action.id for action in refusal.value.suggestions] == ["change_selection", "cancel"]
+
+
+@pytest.mark.parametrize("kind", ["mesh", "brep"])
+def test_a_plain_pin_stands_off_the_floor_of_a_blind_bore(profile: Profile, kind: str) -> None:
+    """Review G, F2: Der glatte Stift stand auf dem Boden eines Sacklochs, Abstand null.
+
+    Gedruckt wären Stift und Boden eins. Soll wie beim Stift mit Kopf: vor
+    Material um das halbe Spiel davor, an der offenen Mündung bündig — Sackloch
+    Ø 6, 8 mm tief von oben, der Stift von z = 4 + c/2 bis z = 12.
+    """
+    from app.core.knowledge.profiles import for_object
+
+    carrier = _box(
+        kind,
+        profile,
+        OperationDraft(
+            op="drill_hole",
+            inputs=("obj_1",),
+            params={"diameter": 6.0, "depth": 8.0, "z": 12.0, "compensate": False},
+        ),
+    )
+    (bore,) = [name for name, feature in carrier.features.items() if feature.kind == "hole"]
+    clearance = for_object(profile, carrier).material.clearance
+    result = run("pin_for_bore", carrier, profile, at_feature=bore, shape=bore_pin.PLAIN_PIN)
+    pin = result.outputs[1]
+    made = as_mesh_data(pin.mesh)
+    assert float(made.bounds.minimum[2]) == pytest.approx(4.0 + clearance / 2.0, abs=TOLERANCE)
+    assert float(made.bounds.maximum[2]) == pytest.approx(12.0, abs=TOLERANCE)
+    _loose(pin, carrier, clearance)
+
+
+@pytest.mark.parametrize("kind", ["mesh", "brep"])
+def test_a_bore_that_is_not_in_the_body_gets_no_pin(profile: Profile, kind: str) -> None:
+    """Review G, F2: Der Stift fragte nicht, ob der gelesene Hohlraum im Körper liegt.
+
+    Eine erklärte Bohrung Ø 4, die halb über die Deckfläche hinausreicht, und
+    eine, die ganz im vollen Material liegt: Beide sind kein Hohlraum im
+    Körper. Soll: Absage mit dem Weg, eine andere Bohrung zu wählen.
+    """
+    from app.core.types import Feature
+
+    carrier = _box(kind, profile)
+    for name, centre in (("oben_hinaus", (0.0, 0.0, 12.0)), ("im_material", (0.0, 0.0, 6.0))):
+        declared = Feature(
+            id=name,
+            kind="hole",
+            provenance="generated",
+            params={
+                "diameter": 4.0,
+                "centre": centre,
+                "axis": (0.0, 0.0, 1.0),
+                "depth": 6.0,
+                "through": False,
+            },
+        )
+        entry = dataclasses.replace(carrier, features={**carrier.features, name: declared})
+        with pytest.raises(ValidationError) as refusal:
+            run("pin_for_bore", entry, profile, at_feature=name)
+        assert refusal.value.constraint == "not_in_the_body", name
+        assert [action.id for action in refusal.value.suggestions] == [
+            "change_selection",
+            "cancel",
+        ]

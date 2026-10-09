@@ -5296,3 +5296,370 @@ def test_the_slot_with_a_separate_pin_still_pulls_and_keeps_the_pin(
     after = _parts_of(output)
     assert len(after) == 2, after
     assert after[0] == pytest.approx(before[0], abs=0.2), (before, after)
+
+
+# --- Review G, F1: jeder Hohlraum fragt nach einem getrennten Teil ----------------------
+
+
+def _loose_compound(plate: Any, loose: Any, kernel: str) -> SceneObject:
+    """Ein exakter Verbund aus Körper und losem Teil — am Netz dessen Tessellierung."""
+    exact_kernel()
+    from OCP.BRep import BRep_Builder
+    from OCP.TopoDS import TopoDS_Compound
+
+    from app.core.brep.features import features_of
+    from app.core.brep.kernel import Solid
+
+    compound = TopoDS_Compound()
+    builder = BRep_Builder()
+    builder.MakeCompound(compound)
+    builder.Add(compound, plate.shape)
+    builder.Add(compound, loose.shape)
+    solid = Solid(compound)
+    if kernel == "brep":
+        return SceneObject(
+            id="obj_1", name="Teil", mesh=solid, kind="brep", features=features_of(solid)
+        )
+    mesh = MeshData.of(as_mesh_data(solid).raw.copy())
+    return SceneObject(id="obj_1", name="Teil", mesh=mesh, features=detect(mesh))
+
+
+def _threaded_plate_with_a_core(kernel: str, profile: Profile) -> SceneObject:
+    """Platte 30 × 30 × 12, Bohrung Ø 8 mit gedrucktem Innengewinde, darin lose ein Kern Ø 5 × 10.
+
+    Das Gewinde erklärt *Gewinde drucken* ohne eigene Flächen.
+    """
+    from app.core.brep import edit
+    from app.core.scene import History, OperationDraft, evaluate
+    from app.core.scene.project import ProjectSources, new_project
+
+    exact_kernel()
+    project = new_project("centauri-carbon-2", "petg")
+    history = History(project.document)
+    box = "create_brep_box" if kernel == "brep" else "create_box"
+    history.apply(
+        "Platte",
+        [OperationDraft(op=box, params={"width": 30.0, "depth": 30.0, "height": 12.0})],
+    )
+    history.apply(
+        "Bohrung",
+        [
+            OperationDraft(
+                op="drill_hole",
+                inputs=("obj_1",),
+                params={"diameter": 8.0, "depth": 0.0, "compensate": False},
+            )
+        ],
+    )
+    history.apply(
+        "Gewinde",
+        [
+            OperationDraft(
+                op="insert_printed_thread",
+                inputs=("obj_1",),
+                params={"at_feature": "hole_1", "internal": True},
+            )
+        ],
+    )
+    result = evaluate(project.document, profile, sources=ProjectSources(project))
+    assert result.complete
+    plate = result.scene.objects["obj_1"]
+    core = edit.moved(edit.cylinder(5.0, 10.0), (0.0, 0.0, 1.0))
+    if kernel == "brep":
+        from OCP.BRep import BRep_Builder
+        from OCP.TopoDS import TopoDS_Compound
+
+        from app.core.brep.kernel import Solid
+
+        compound = TopoDS_Compound()
+        builder = BRep_Builder()
+        builder.MakeCompound(compound)
+        builder.Add(compound, plate.mesh.shape)
+        builder.Add(compound, core.shape)
+        return dataclasses.replace(plate, mesh=Solid(compound))
+    joined = trimesh.util.concatenate([as_mesh_data(plate.mesh).raw.copy(), as_mesh_data(core).raw])
+    return dataclasses.replace(plate, mesh=MeshData.of(joined))
+
+
+def _loose_part_case(case: str, kernel: str, profile: Profile) -> tuple[SceneObject, str]:
+    """Körper und gewähltes Merkmal je Hohlraumart aus Review G, F1."""
+    from app.core.brep import edit
+
+    exact_kernel()
+    if case.startswith("pfanne"):
+        plate = edit.boolean(
+            "difference",
+            [edit.box(30.0, 30.0, 12.0), edit.moved(edit.sphere(12.0), (0.0, 0.0, 9.0))],
+        )
+        entry = _loose_compound(plate, edit.moved(edit.sphere(10.0), (0.0, 0.0, 9.0)), kernel)
+        recess = case == "pfanne"
+        chosen = [
+            name
+            for name, feature in entry.features.items()
+            if feature.kind == "sphere" and bool(feature.params.get("recess")) is recess
+        ]
+    elif case == "kehle":
+        shaft = edit.boolean(
+            "difference",
+            [edit.cylinder(20.0, 40.0), edit.torus((0.0, 0.0, 20.0), (0.0, 0.0, 1.0), 20.0, 4.0)],
+        )
+        ring = edit.torus((0.0, 0.0, 20.0), (0.0, 0.0, 1.0), 20.0, 3.0)
+        entry = _loose_compound(shaft, ring, kernel)
+        chosen = [
+            name
+            for name, feature in entry.features.items()
+            if feature.kind == "torus" and feature.params.get("recess")
+        ]
+    elif case == "einschluss":
+        block = edit.boolean(
+            "difference",
+            [edit.box(30.0, 30.0, 20.0), edit.moved(edit.sphere(12.0), (0.0, 0.0, 10.0))],
+        )
+        entry = _loose_compound(block, edit.moved(edit.sphere(8.0), (0.0, 0.0, 10.0)), kernel)
+        chosen = [name for name, feature in entry.features.items() if feature.kind == "void"]
+    else:
+        entry = _threaded_plate_with_a_core(kernel, profile)
+        chosen = [name for name, feature in entry.features.items() if feature.kind == "thread"]
+    assert len(chosen) == 1, (case, sorted((f.id, f.kind) for f in entry.features.values()))
+    return entry, chosen[0]
+
+
+#: Je Fall die Zeilen, die die Karte vorher anbot, und der Satz, der jetzt dasteht.
+_LOOSE_PART_ROWS: dict[str, tuple[tuple[str, ...], str]] = {
+    "pfanne": (
+        ("move_feature", "resize_feature", "duplicate_feature", "remove_feature"),
+        "OTHER_PART_IN_THE_CAVITY",
+    ),
+    "pfanne-kugel": (
+        ("move_feature", "resize_feature", "duplicate_feature", "remove_feature"),
+        "PART_IN_ANOTHER_CAVITY",
+    ),
+    "kehle": (
+        ("move_feature", "resize_feature", "rotate_feature", "duplicate_feature", "remove_feature"),
+        "OTHER_PART_IN_THE_CAVITY",
+    ),
+    "gewinde": (("resize_feature", "remove_feature"), "OTHER_PART_IN_THE_BORE"),
+}
+
+_LOOSE_PART_CASES = [
+    (case, kernel, op)
+    for case, (rows, _sentence) in _LOOSE_PART_ROWS.items()
+    for kernel in ("mesh", "brep")
+    for op in rows
+]
+
+
+@pytest.mark.parametrize(("case", "kernel", "op"), _LOOSE_PART_CASES)
+def test_a_loose_part_in_any_cavity_says_so_at_every_row(
+    profile: Profile, case: str, kernel: str, op: str
+) -> None:
+    """Review G, F1: Die Teilefrage hing wieder an einer Artenliste (Bohrung, Langloch, Kegel).
+
+    Kugelpfanne, Kehle und Innengewinde fragte niemand. Am Kugelgelenk zum
+    Drucken in einem Stück schnitt *Merkmal ändern* an der Pfanne die Kugel
+    ab, Versetzen und Entfernen verschmolzen sie still mit der Platte; an der
+    Kehle einer Welle verschmolz der lose Ring, im Innengewinde blieb vom
+    losen Kern ein Splitter. Soll:
+    Jede Zeile, die die Karte anbot, steht grau mit dem Satz für ein getrenntes
+    Teil — am Hohlraum, der keine Bohrung ist, mit „Hohlraum“ —, und die
+    Operation sagt ihn mit *In Einzelteile aufteilen*.
+    """
+    from app.core.geom import prepare_ops
+    from app.core.perceive.actions import actions_for
+
+    load_operations()
+    entry, chosen = _loose_part_case(case, kernel, profile)
+    feature = entry.features[chosen]
+    expected = getattr(prepare_ops, _LOOSE_PART_ROWS[case][1])
+    (row,) = actions_for(feature, entry.features, mesh=as_mesh_data(entry.mesh), only=op)
+    assert row.op is None and row.reason == expected, (case, chosen, row)
+    values = _values_for(op, feature) if "centre" in feature.params else {}
+    if op == "resize_feature" and case == "gewinde":
+        values = {"diameter": float(feature.params["diameter"]) + 0.5}
+    with pytest.raises(ValidationError) as caught:
+        run_op(op, entry, profile, at_feature=chosen, **values)
+    assert caught.value.detail == expected
+    assert [action.id for action in caught.value.suggestions] == ["split_bodies", "cancel"]
+
+
+@pytest.mark.parametrize("kernel", ["mesh", "brep"])
+def test_a_void_takes_its_loose_ball_along_and_fills_it_on_purpose(
+    profile: Profile, kernel: str
+) -> None:
+    """Review G, F1, die Ausnahme: Der Lufteinschluss fragt nicht nach seiner Insel.
+
+    Seine zwei Handlungen sind um sie gebaut, so veröffentlicht
+    (``test_brep_voids``): *Merkmal verschieben* nimmt die Kugel mit, *Merkmal
+    entfernen* füllt die Kammer samt Kugel. Block 30 × 30 × 20 mit einer
+    Kugelkammer Ø 12, darin lose eine Kugel Ø 8 (268,1 mm³) — an beiden
+    Kernen bleibt die Zeile offen, und die Kugel reist als eigenes Teil mit.
+    """
+    from app.core.perceive.actions import actions_for
+
+    load_operations()
+    entry, chosen = _loose_part_case("einschluss", kernel, profile)
+    body = as_mesh_data(entry.mesh)
+    rows = actions_for(entry.features[chosen], entry.features, mesh=body)
+    assert {"move_feature", "remove_feature"} <= {row.op for row in rows if row.op}, rows
+    ball = 4.0 / 3.0 * math.pi * 4.0**3
+    before = _parts_of(entry)
+    assert before[0] == pytest.approx(ball, rel=0.03), before
+
+    moved = run_op("move_feature", entry, profile, at_feature=chosen, x=3.0, y=0.0, z=10.0)
+    after = _parts_of(moved)
+    assert len(after) == len(before), (before, after)
+    assert after[0] == pytest.approx(before[0], abs=0.2), "die Kugel reist mit, ganz"
+
+    removed = run_op("remove_feature", entry, profile, at_feature=chosen)
+    assert _parts_of(removed) == [pytest.approx(18000.0, rel=1e-3)], "Kammer samt Kugel gefüllt"
+
+
+def test_the_ball_in_its_socket_stays_a_loose_ball(profile: Profile) -> None:
+    """Das Kugelgelenk aus dem Korpus (``ball_in_socket.stl``, Review G F1).
+
+    Platte 30 × 30 × 12 mit Pfanne Ø 12, darin lose eine Kugel Ø 10, zwei Teile
+    mit 10 038,06 und 522,47 mm³. Vor dem Fix ließ *Merkmal ändern* an der
+    Pfanne von der Kugel 41,4 mm³ übrig, *Merkmal verschieben* und *Merkmal
+    entfernen* machten aus beiden ein Teil, und an der Kugel verschmolz das
+    Versetzen um 1,5 mm sie mit der Wand. Soll: alle vier sagen ab, mit dem
+    Weg über die Einzelteile.
+    """
+    from app.core.geom.mesh import read_mesh
+    from app.core.geom.prepare_ops import OTHER_PART_IN_THE_CAVITY, PART_IN_ANOTHER_CAVITY
+
+    load_operations()
+    corpus = Path(__file__).parent / "data" / "meshes" / "ball_in_socket.stl"
+    mesh = read_mesh(corpus.read_bytes(), ".stl")
+    entry = SceneObject(id="obj_1", name="Kugelgelenk", mesh=mesh, features=detect(mesh))
+    assert mesh.component_count == 2
+    socket = next(
+        name
+        for name, feature in entry.features.items()
+        if feature.kind == "sphere" and feature.params.get("recess")
+    )
+    ball = next(
+        name
+        for name, feature in entry.features.items()
+        if feature.kind == "sphere" and not feature.params.get("recess")
+    )
+    assert entry.features[socket].params["diameter"] == pytest.approx(12.0, abs=0.05)
+    assert entry.features[ball].params["diameter"] == pytest.approx(10.0, abs=0.05)
+    centre = [float(value) for value in entry.features[socket].params["centre"]]
+    for op, chosen, values, expected in (
+        ("resize_feature", socket, {"diameter": 13.0}, OTHER_PART_IN_THE_CAVITY),
+        (
+            "move_feature",
+            socket,
+            {"x": centre[0] + 1.0, "y": centre[1], "z": centre[2]},
+            OTHER_PART_IN_THE_CAVITY,
+        ),
+        ("remove_feature", socket, {}, OTHER_PART_IN_THE_CAVITY),
+        (
+            "move_feature",
+            ball,
+            {"x": centre[0] + 1.5, "y": centre[1], "z": centre[2]},
+            PART_IN_ANOTHER_CAVITY,
+        ),
+    ):
+        with pytest.raises(ValidationError) as caught:
+            run_op(op, entry, profile, at_feature=chosen, **values)
+        assert caught.value.detail == expected, (op, chosen)
+        assert [action.id for action in caught.value.suggestions] == ["split_bodies", "cancel"]
+
+
+def _plate_with_six_bores_and_two_loose_parts() -> SceneObject:
+    """Platte 60 × 40 × 10 mit sechs Bohrungen Ø 6, ein loser Stift Ø 5 in der ersten,
+    ein loser Würfel weit daneben — am Netz, drei Teile."""
+    exact_kernel()
+    from OCP.BRep import BRep_Builder
+    from OCP.TopoDS import TopoDS_Compound
+
+    from app.core.brep import edit
+    from app.core.brep.kernel import Solid
+
+    plate = edit.box(60.0, 40.0, 10.0)
+    for x in (-24.0, -14.0, -4.0, 6.0, 16.0, 26.0):
+        plate = edit.cut_bore(
+            plate, position=(x, 0.0, 5.0), direction=(0.0, 0.0, 1.0), diameter=6.0, depth=12.0
+        )
+    compound = TopoDS_Compound()
+    builder = BRep_Builder()
+    builder.MakeCompound(compound)
+    builder.Add(compound, plate.shape)
+    builder.Add(compound, edit.moved(edit.cylinder(5.0, 15.0), (-24.0, 0.0, 0.0)).shape)
+    builder.Add(compound, edit.moved(edit.box(8.0, 8.0, 8.0), (45.0, 0.0, 0.0)).shape)
+    mesh = MeshData.of(as_mesh_data(Solid(compound)).raw.copy())
+    return SceneObject(id="obj_1", name="Platte", mesh=mesh, features=detect(mesh))
+
+
+def test_the_separate_part_question_reads_what_reaches_and_is_asked_once(
+    profile: Profile, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Review G, F5: Die Teilefrage las jeden Hohlraum über alle Dreiecke, jedes Mal.
+
+    Am Laptop-Ständer (173 592 Dreiecke, 22 Teile) kostete die Karte an einem
+    Zapfen so 1,9 s statt 0,006 s, und jede Merkmalshandlung fragte zweimal.
+    Soll: Am Stift misst nur die Bohrung, die sein Teil erreicht, und nur über
+    dessen Dreiecke; der zweite Klick rechnet nicht mehr; eine Handlung fragt
+    einmal.
+    """
+    from app.core.geom import prepare_ops
+    from app.core.perceive.actions import actions_for
+
+    load_operations()
+    entry = _plate_with_six_bores_and_two_loose_parts()
+    mesh = as_mesh_data(entry.mesh)
+    assert mesh.component_count == 3
+    pin = next(name for name, feature in entry.features.items() if feature.kind == "pin")
+    bores = [name for name, feature in entry.features.items() if feature.kind == "hole"]
+    assert len(bores) == 6, sorted((f.id, f.kind) for f in entry.features.values())
+    measured: list[int] = []
+    original = prepare_ops._inside_and_radial
+
+    def counting(*args: Any, **kwargs: Any) -> Any:
+        triangles = kwargs.get("triangles")
+        measured.append(-1 if triangles is None else len(triangles))
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(prepare_ops, "_inside_and_radial", counting)
+    (row,) = actions_for(entry.features[pin], entry.features, mesh=mesh, only="move_feature")
+    assert row.op is None and row.reason == prepare_ops.PART_IN_ANOTHER_BORE, row
+    stick_reads = [count for count in measured if count >= 0]
+    assert measured and -1 not in measured, f"über alle Dreiecke gelesen: {measured}"
+    assert len(stick_reads) <= 1, f"nur die Bohrung des Stifts: {measured}"
+    assert max(stick_reads) < mesh.triangle_count / 4, measured
+    measured.clear()
+    actions_for(entry.features[pin], entry.features, mesh=mesh)
+    assert not measured, f"der zweite Klick rechnete noch einmal: {measured}"
+
+    asked: list[str] = []
+    real = prepare_ops.separate_part_reason
+
+    def once(mesh: Any, feature: Any, features: Any, **kwargs: Any) -> Any:
+        asked.append(str(feature.id))
+        return real(mesh, feature, features, **kwargs)
+
+    monkeypatch.setattr(prepare_ops, "separate_part_reason", once)
+    free = next(name for name in bores if name != _bore_of_the_pin(entry, pin))
+    centre = [float(value) for value in entry.features[free].params["centre"]]
+    run_op(
+        "move_feature",
+        entry,
+        profile,
+        at_feature=free,
+        x=centre[0],
+        y=centre[1] + 4.0,
+        z=centre[2],
+    )
+    assert asked.count(free) == 1, f"die Handlung fragte {asked.count(free)}-mal: {asked}"
+
+
+def _bore_of_the_pin(entry: SceneObject, pin: str) -> str:
+    """Die Bohrung, in der der Stift steht — die mit seiner Mitte in X und Y."""
+    middle = entry.features[pin].params["centre"]
+    return min(
+        (name for name, feature in entry.features.items() if feature.kind == "hole"),
+        key=lambda name: math.dist(
+            entry.features[name].params["centre"][:2], (float(middle[0]), float(middle[1]))
+        ),
+    )

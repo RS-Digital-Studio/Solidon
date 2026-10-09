@@ -188,6 +188,82 @@ class Cavity:
 #: Die Auswege jeder Absage über die Kette: anders wählen, die Form ändern, lassen.
 _WAYS: Final = (CORRECT_INPUT, CHANGE_SELECTION, CANCEL)
 
+#: Wenn an der Stelle eines Abschnitts kein Hohlraum im Körper ist (Review G, F2): Ein
+#: Baustein erklärt seine Bohrungen aus seinen Parametern, und eine falsch
+#: gesetzte Mutternfalle erklärte Tasche und Schraubenloch in der Luft über
+#: der Platte — der Stift stand 12,5 mm aus dem Teil heraus.
+NOT_IN_THE_BODY: Final = _(
+    "An der Stelle dieser Bohrung ist kein Hohlraum im Körper. "
+    "Wählen Sie eine Bohrung, die im Körper liegt."
+)
+
+#: Wie weit die nächste Wand vom gelesenen Halbmesser entfernt sein darf: Ein
+#: Schlüsselloch ist als Bohrung seines Schlitzes erklärt und hat darunter den
+#: Kopfkanal, fast doppelt so weit. Eine Bohrung, die frei in einer Ecke des
+#: Körpers schwebt, trifft keine Wand in dieser Reichweite.
+_WALL_SHARE: Final = 3.0
+_WALL_SLACK: Final = 0.5
+
+
+def check_in_the_body(
+    mesh: MeshData,
+    origin: NDArray[np.float64],
+    axis: NDArray[np.float64],
+    sections: Sequence[Section],
+    value: str,
+) -> None:
+    """Sagt ab, wenn der Hohlraum dieser Abschnitte nicht im Körper liegt.
+
+    Gefragt wird an drei Stellen je Abschnitt — Mitte und je ein Zehntel vor
+    den Enden. Jede muss im Hüllquader des Körpers liegen und in Luft
+    (``perceive.features._point_inside_shell``, das an Kanten die Richtung
+    wechselt — eine bloße Zählung der Treffer zählt eine geteilte Kante
+    mehrfach); eine unentscheidbare Zählung gilt als Luft. **Eine Wand in
+    Reichweite** (:func:`room_beyond`, acht Strahlen von der Achse nach außen)
+    braucht nur eine der Stellen: Die Bohrung eines Deckelscharniers läuft durch
+    Augen mit Lücken dazwischen, und in der Lücke steht keine Wand — dort sagte
+    *Stift für Bohrung* am Klappdeckel ab. Eine Bohrung, die frei neben dem
+    Körper schwebt, hat an keiner Stelle eine.
+    """
+    from app.core.perceive.features import _point_inside_shell, _triangle_bounds
+
+    triangles = np.asarray(mesh.raw.triangles, dtype=np.float64)
+    bounds = _triangle_bounds(triangles) if mesh.is_watertight else None
+    lowest = np.asarray(mesh.bounds.minimum, dtype=np.float64) - SECTION_REACH
+    highest = np.asarray(mesh.bounds.maximum, dtype=np.float64) + SECTION_REACH
+    walled = False
+    asked = False
+    for section in sections:
+        if section.virtual or section.end - section.start <= EPS_GEOM:
+            continue
+        for share in (0.5, 0.1, 0.9):
+            asked = True
+            place = section.start + share * (section.end - section.start)
+            radius = section.inner + (section.outer - section.inner) * share
+            point = origin + axis * place
+            outside = bool((point < lowest).any() or (point > highest).any())
+            solid = bounds is not None and _point_inside_shell(point, triangles, bounds) is True
+            if outside or solid:
+                raise _not_in_the_body(section.feature or value, value)
+            walled = walled or (
+                room_beyond(mesh, origin, axis, place, 1.0, 0.0)
+                <= radius * _WALL_SHARE + _WALL_SLACK
+            )
+    if asked and not walled:
+        raise _not_in_the_body(value, value)
+
+
+def _not_in_the_body(feature: str, value: str) -> ValidationError:
+    """Die Absage aus :func:`check_in_the_body`, mit dem Weg zu einer anderen Bohrung."""
+    return ValidationError(
+        field="at_feature",
+        detail=NOT_IN_THE_BODY,
+        value=value,
+        values={"feature": feature},
+        constraint="not_in_the_body",
+        suggestions=(CHANGE_SELECTION, CANCEL),
+    )
+
 
 def _unreadable(value: str, **values: Any) -> ValidationError:
     """Die Kette lässt sich nicht eindeutig lesen."""

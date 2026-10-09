@@ -17,6 +17,7 @@ wirklich ist — und beide Kerne antworten dasselbe.
 from __future__ import annotations
 
 import dataclasses
+import functools
 import math
 from collections.abc import Sequence
 from itertools import pairwise
@@ -38,6 +39,7 @@ from tests.helpers import (
     BOTH_ENDS,
     cavity_under,
     contains,
+    countersunk_project,
     exact_kernel,
     narrowest_hole,
     sloped_slot_plate,
@@ -2603,6 +2605,7 @@ def _changing(op: str, feature: Feature) -> dict[str, Any]:
     centre = [float(value) for value in feature.params["centre"]]
     width = float(feature.params.get("diameter", 0.0) or 4.0)
     return {
+        "move_feature": {"x": centre[0] + 0.3, "y": centre[1] + 0.2, "z": centre[2]},
         "duplicate_feature": {"x": centre[0] + 20.0, "y": centre[1], "z": centre[2]},
         "rotate_feature": {"axis": "x", "angle": 10.0},
         "resize_feature": {"diameter": width + 1.0},
@@ -2650,11 +2653,21 @@ def test_the_card_offers_each_handling_exactly_where_the_operation_computes(
     endete mit „Von dem Körper bleibt nichts übrig“; am Ring, der der ganze
     Körper ist, sagten beide Verschiedenes.
     """
+    assert _card_against_operation(_corpus_object(name), profile, op), name
+
+
+def _card_against_operation(entry: SceneObject, profile: Profile, op: str) -> int:
+    """Je Merkmal einer bewegbaren Art die Zeile ``op`` der Karte gegen ihre Operation.
+
+    Wo die Karte die Zeile mit Feldern zeigt, rechnet die Operation mit genau
+    diesen Werten — beim Versetzen um einen Weg daneben, denn die Karte belegt
+    die heutige Stelle vor. Wo sie grau steht, sagt die Operation denselben
+    Satz, mit einem Weg. Zurück kommt die Zahl der geprüften Merkmale.
+    """
     from app.core.errors import AppError
     from app.core.perceive.actions import ACTION_ORDER
     from app.core.registry import REGISTRY
 
-    entry = _corpus_object(name)
     names = next(row for row in ACTION_ORDER if op in row)
     checked = 0
     for chosen, feature in entry.features.items():
@@ -2669,10 +2682,12 @@ def test_the_card_offers_each_handling_exactly_where_the_operation_computes(
                 else field.value
                 for field in row.fields
             }
+            if row.op == "move_feature":
+                values.update(_changing(row.op, feature))
             try:
                 _raw(row.op, entry, profile, at_feature=chosen, **dict(row.fixed), **values)
             except AppError as refused:
-                pytest.fail(f"{name} {chosen} {row.op}: Karte bietet an, Operation: {refused}")
+                pytest.fail(f"{entry.name} {chosen} {row.op}: Karte bietet an, Absage: {refused}")
             continue
         # Gefahren wird, was die Zeile an dieser Art meint — wie ``fitting`` der Karte.
         operation = next(
@@ -2680,9 +2695,80 @@ def test_the_card_offers_each_handling_exactly_where_the_operation_computes(
         )
         with pytest.raises(AppError) as caught:
             _raw(operation, entry, profile, at_feature=chosen, **_changing(operation, feature))
-        assert str(caught.value.detail) == str(row.reason), (name, chosen, operation)
-        assert caught.value.suggestions, (name, chosen, operation)
-    assert checked, name
+        assert str(caught.value.detail) == str(row.reason), (entry.name, chosen, operation)
+        assert caught.value.suggestions, (entry.name, chosen, operation)
+    return checked
+
+
+#: Exakte Körper für denselben Vergleich, je einer zu den Familien des Netzkorpus —
+#: gebaut aus den Grundkörpern und Booleschen des exakten Kerns, wie
+#: ``create_brep_*`` und die Bohrungen des Kunden sie bauen.
+_EXACT_CASES: Final = (
+    "plate_with_holes",
+    "pocket_with_pin",
+    "sphere_socket",
+    "torus_ring",
+    "cylinder",
+    "countersunk_plate",
+    "touching_plates",
+    "touching_plates_sunk",
+)
+
+
+@functools.cache
+def _exact_case(name: str) -> SceneObject:
+    """Der exakte Körper ``name`` aus :data:`_EXACT_CASES`, mit seinen nativen Merkmalen."""
+    from app.core.brep.features import features_of
+
+    load_operations()
+    edit = exact_kernel()
+    if name == "touching_plates":
+        return _touching_plates("brep", sunk=False)
+    if name == "touching_plates_sunk":
+        # Der Aufbau aus RM-386: Die Operationen verbinden die Platten, bevor
+        # sie die Kette lesen; die Karte liest den Compound.
+        return _touching_plates("brep", sunk=True)
+    if name == "countersunk_plate":
+        project, _history = countersunk_project("brep", 10.0)
+        result = evaluate(project.document, _plates_profile(), sources=ProjectSources(project))
+        return result.scene.objects["obj_1"]
+    if name == "plate_with_holes":
+        body = edit.box(60.0, 40.0, 8.0)
+        body = edit.bore(body, position=(-18.0, 0.0, 8.0), axis="z", diameter=5.0)
+        body = edit.bore(body, position=(0.0, 0.0, 8.0), axis="z", diameter=6.0, depth=4.0)
+        body = edit.bore(body, position=(18.0, 0.0, 8.0), axis="z", diameter=8.0)
+    elif name == "pocket_with_pin":
+        body = edit.box(40.0, 40.0, 12.0)
+        body = edit.bore(body, position=(0.0, 0.0, 12.0), axis="z", diameter=14.0, depth=6.0)
+        pin = edit.moved(edit.cylinder(6.0, 6.0), (0.0, 0.0, 6.0))
+        body = edit.boolean("union", [body, pin])
+    elif name == "sphere_socket":
+        ball = edit.moved(edit.sphere(12.0), (0.0, 0.0, 12.0))
+        body = edit.boolean("difference", [edit.box(30.0, 30.0, 12.0), ball])
+    elif name == "torus_ring":
+        body = edit.torus((0.0, 0.0, 0.0), (0.0, 0.0, 1.0), 34.0, 6.0)
+    else:
+        assert name == "cylinder", name
+        body = edit.cylinder(20.0, 10.0)
+    return SceneObject("obj_1", name, body, kind="brep", features=features_of(body))
+
+
+@pytest.mark.parametrize("op", ("move_feature", *_OTHER_ROWS))
+@pytest.mark.parametrize("name", _EXACT_CASES)
+def test_the_card_offers_each_handling_exactly_where_the_operation_computes_on_exact_bodies(
+    profile: Profile, name: str, op: str
+) -> None:
+    """RM-548 am exakten Kern (Review G, F8): derselbe Vergleich über exakte Körper.
+
+    Belegt war die Gleichheit nur am Netz, und gerade am exakten Kern wichen
+    beide ab: An einer Senkbohrung durch zwei berührende Platten sperrte die
+    Karte *Merkmal ändern* an der Senkung, wo die Operation nach dem Verbinden
+    rechnete, und bot *Verdoppeln* an, wo die Operation absagte, der Hohlraum
+    lasse sich nicht als eine Bohrung lesen. Der Grund lag in der Erkennung:
+    Sie nannte die Bohrung durch beide Platten angeschnitten
+    (``test_partial_bores``).
+    """
+    assert _card_against_operation(_exact_case(name), profile, op), name
 
 
 @pytest.mark.parametrize("kernel", ["mesh", "brep"])
@@ -2699,9 +2785,6 @@ def test_the_card_tilts_a_countersink_only_as_far_as_it_stays_one(
     eine 90°-Senkung aus der Rechnung: unter 45°, der größte ganze Winkel ist
     44°, und mit den Werten der Karte rechnet die Operation.
     """
-    from app.core.scene.project import ProjectSources
-    from tests.helpers import countersunk_project
-
     project, _history = countersunk_project(kernel, 10.0)
     result = evaluate(project.document, profile, sources=ProjectSources(project))
     body = result.scene.objects["obj_1"]
@@ -2881,6 +2964,30 @@ def test_a_turn_onto_itself_changes_nothing_and_says_so(
     assert told[0].values["field"] == field
     assert told[0].suggestions == (CHANGE_THIS_STEP,)
     assert told[0].feature_ids == (chosen,)
+
+
+@pytest.mark.parametrize("kernel", ["mesh", "brep"])
+@pytest.mark.parametrize(("case", "axis", "angle"), [("hole", "x", 0.05), ("slot", "z", 180.05)])
+def test_a_tiny_turn_is_a_turn(
+    profile: Profile, kernel: str, case: str, axis: str, angle: float
+) -> None:
+    """Review G, F3: Die Schranke lag am Kosinus und war eine Länge (``EPS_GEOM``).
+
+    Als Winkel hieß sie 0,081°: Eine Bohrung um 0,05° quer gekippt galt als
+    „liegt wieder, wo es lag", und der Eingang blieb unverändert. Soll: gefragt
+    wird am Winkel — eine volle Umdrehung ist ein Vielfaches von 360°, am
+    Langloch um die eigene Achse von 180°, jeweils auf ``EPS_DISPLAY`` (0,01°)
+    genau. 0,05° und 180,05° sind Drehungen und werden gerechnet.
+    """
+    from tests.helpers import run_operation
+
+    load_operations()
+    entry, chosen = _turning_case(kernel, case, profile)
+    result = run_operation(
+        "rotate_feature", entry, profile, at_feature=chosen, axis=axis, angle=angle
+    )
+    assert "rotate_feature.unchanged" not in [finding.code for finding in result.findings]
+    assert result.outputs[0] is not entry
 
 
 @pytest.mark.parametrize("kernel", ["mesh", "brep"])

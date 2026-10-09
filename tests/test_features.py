@@ -2522,9 +2522,12 @@ def test_the_panel_offers_duplicating_beside_the_original() -> None:
     Sonst gilt im Panel die gemessene Zahl (``_FROM_FEATURE``), damit ein Klick
     auf Übernehmen nichts still ändert. Beim Verdoppeln wäre die gemessene
     Mitte die Stelle, an der das Merkmal schon liegt: eine Boolesche auf sich
-    selbst, ein Schritt im Verlauf und dasselbe Teil im Bild. Um einen
-    Durchmesser versetzt liegt die Kopie neben dem Original und ist zu sehen
-    (Vorschlag 3d-druck-d4, 03.09.2026).
+    selbst, ein Schritt im Verlauf und dasselbe Teil im Bild. Daneben liegt
+    die Kopie um anderthalb Durchmesser versetzt, mit einer Wand von einem
+    halben Durchmesser zum Original (Vorschlag 3d-druck-d4, 03.09.2026). Bis
+    zu Review G war es ein Durchmesser: Die Kopie berührte das Original auf
+    einer Linie, und am exakten Körper sagte *Übernehmen* an jeder Bohrung ab,
+    das Ergebnis bliebe offen.
 
     Y und Z bleiben dagegen gemessen — versetzt wird in **eine** Richtung, und
     welche das ist, soll man an der Zahl erkennen.
@@ -2550,9 +2553,36 @@ def test_the_panel_offers_duplicating_beside_the_original() -> None:
     row = next(entry for entry in actions_for(bore) if entry.op == "duplicate_feature")
     fields = {field.name: field.value for field in row.fields}
 
-    assert fields["x"] == pytest.approx(-7.0), fields
+    assert fields["x"] == pytest.approx(-3.0), fields
     assert fields["y"] == pytest.approx(2.0), fields
     assert fields["z"] == pytest.approx(3.0), fields
+
+
+@pytest.mark.parametrize("kind", ["hole", "cone"])
+def test_the_panel_duplicates_a_countersunk_bore_beside_its_countersink(kind: str) -> None:
+    """Verdoppelt wird die ganze Kette, also liegt die Kopie neben ihrem weitesten Abschnitt.
+
+    An der Bohrung einer Senkbohrung versetzte die Vorgabe um den Durchmesser
+    der Bohrung, und die kopierte Senkung schnitt in die alte. Soll an Bohrung
+    und Senkung derselbe Ort: anderthalb Senkungsdurchmesser neben der Mitte,
+    Y und Z gemessen.
+    """
+    load_operations()
+    mesh = plate("plate_countersunk.stl")
+    found = detect(mesh)
+    (chosen,) = [feature for feature in found.values() if feature.kind == kind]
+    (sink,) = [feature for feature in found.values() if feature.kind == "cone"]
+    row = next(
+        entry for entry in actions_for(chosen, found, mesh=mesh) if entry.op == "duplicate_feature"
+    )
+    fields = {field.name: field.value for field in row.fields}
+    centre = [float(value) for value in chosen.params["centre"]]
+
+    widest = float(sink.params["diameter"])
+    assert widest > float(next(f for f in found.values() if f.kind == "hole").params["diameter"])
+    assert fields["x"] == pytest.approx(centre[0] + 1.5 * widest), fields
+    assert fields["y"] == pytest.approx(centre[1]), fields
+    assert fields["z"] == pytest.approx(centre[2]), fields
 
 
 def test_one_countersink_is_one_cone(profile: Profile) -> None:

@@ -2620,13 +2620,18 @@ def test_a_part_cut_into_an_insert_lives_on_in_its_pocket(profile: Profile) -> N
 def _hand_on_cases(profile: Profile) -> dict[str, tuple[list[Any], dict[str, Any]]]:
     """Je markierter Operation ein gültiger Auftrag: Eingänge und Werte."""
     from app.core.knowledge.parts import shapes
-    from app.core.knowledge.parts.build import bore
+    from app.core.knowledge.parts.build import bore, subtract
     from app.core.registry import REGISTRY
     from app.core.scene.cancel import NeverCancelled
     from app.core.types import Scene, SceneObject
 
+    # Die Bohrung ist geschnitten: An einer erklärten Bohrung ohne Hohlraum im
+    # Körper sagt *Stift für Bohrung* ab (Review G, F2).
     with shapes.building("mesh"):
-        plate = shapes.box(30.0, 30.0, 10.0)
+        plate = subtract(
+            shapes.box(30.0, 30.0, 10.0),
+            shapes.moved(shapes.cylinder(6.0, 12.0), (0.0, 0.0, -1.0)),
+        )
     key, hole = bore("hole_1", 6.0, (0.0, 0.0, 5.0), depth=10.0, through=True)
     carrier = SceneObject(id="obj_1", name="Platte", mesh=plate, kind="mesh", features={key: hole})
     spec = REGISTRY.get("create_container")

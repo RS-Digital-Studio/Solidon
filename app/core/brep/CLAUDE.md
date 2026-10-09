@@ -108,7 +108,9 @@ unveränderten Ergebnis (`HasSourceDeviation`).
   auch an einer Eckrundung der Mittelpunkt ihrer Trägerkugel.
 - **Orientierung**: `TopAbs_REVERSED` dreht die Ebenennormale; Bohrung gegen
   Zapfen, Senkung gegen Kegel sagen Orientierung **und** `Position().Direct()`
-  zusammen. Unvollständige U-Spanne heißt `partial`.
+  zusammen. Unvollständige U-Spanne heißt `partial`; zusammengelegte Mäntel
+  sind ganz, sobald einer selbst die volle Umdrehung trägt
+  (`_cylinder_group_extent`).
 - **`SurfacePatch`** trägt echte Tessellierungsdreiecke; Langloch, Ring und
   Kammer bekommen nur ihre Teilflächen, native Belege verdrängen Netzfits,
   Reste bekommen keinen erfundenen Träger. `measure_sources` nennt jedes native

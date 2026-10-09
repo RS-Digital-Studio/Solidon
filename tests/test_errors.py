@@ -355,6 +355,10 @@ _NOT_A_RANGE = frozenset(
         "checksum", "choices",
         # Ein getrenntes Teil in der Bohrung (geom/prepare_ops.py): die Form, keine Zahl.
         "separate_bore_contents",
+        # Stift für Bohrung an einer Stelle ohne Hohlraum im Körper und an einer
+        # Einführfase (geom/bore_pin.py, geom/lid_hinge.py, Review G): die Lage
+        # und die Art der gewählten Bohrung, keine Zahl im Feld.
+        "not_in_the_body", "lead_in",
         # Eine Berührlinie hängt von der Modellform ab, nicht von einer Zahlenspanne.
         "cut_surface_contact",
         # Die Zeichenfläche als Ziel von „Bis zur Fläche" (sketch/ops.py): eine

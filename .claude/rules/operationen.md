@@ -11,7 +11,7 @@ paths:
 
 Eine Operation ist die einzige Stelle, an der Geometrie entsteht oder sich
 ändert (Regel 2, §30.1). Messwerte und Anlässe, gegliedert wie hier:
-`konzepte/begruendungen/regel-operationen.md`.
+`konzepte/begruendungen/regel-operationen.md`; Kantengruppen: `kanten.md`.
 
 ## Vollständig oder gar nicht
 
@@ -94,10 +94,6 @@ Ring: Punkt kleinster Lage (`LOOP_START`), Richtung `LOOP_WAY` — nie
 Knotennummer oder erster Punkt; beide Kerne und jeder Verbraucher fragen
 dieselben Funktionen. Ohne Form (Ring mit verschiedenen Endradien, verschiedene
 Radien an einer Ecke) eine Absage mit Weg (Regel 21).
-
-### Kantengruppen und gebogene Züge
-
-Stehen in `kanten.md`.
 
 ### Eine angestellte Fläche darf nicht durch fremdes Material laufen
 
@@ -189,8 +185,8 @@ Grund (`CavityState.reason`: `NO_OWN_BODY` oder `CAVITY_TOPOLOGY_UNKNOWN`, im
 Gruppenweg `cavity_topology_unavailable`), und wer den Zustand liest, liest ihn
 mit. Geteilt steht einmal (`relations.cavity_is_shared`). Was einen geteilten
 Hohlraum nicht nehmen kann, sagt ab statt still ein Stück zu bearbeiten — nur
-noch *Zum Langloch ziehen* (`NEEDS_A_PLAIN_BORE`, derselbe Satz im
-Merkmalfenster); Versetzen, Drehen und Verdoppeln nehmen die ganze Kette mit.
+*Zum Langloch ziehen* (`NEEDS_A_PLAIN_BORE`, wie die Karte); Versetzen, Drehen
+und Verdoppeln nehmen die ganze Kette mit.
 
 ## Gekippt wird bis zur alten Randebene
 
@@ -287,7 +283,8 @@ eine dünner gewordene unter der Mindestwand meldet `thread.thin_wall`.
 - **Eine Bohrung, in deren Zylinder Material steht, ist keine** (`hole_is_clear`
   über jede Oberfläche, `HOLE_IS_NOT_EMPTY`); ob man hindurchsieht, sagt die
   ganze Mündung. Getrennte Teile fragt `separate_part_reason` an jedem
-  Hohlraum und in fremder Bohrung; nur `slot_hole` schneidet ein freies mit.
+  Hohlraum außer dem Einschluss, der seine Insel mitnimmt, und in jedem
+  fremden; nur `slot_hole` schneidet ein freies mit.
 - **Jeder Weg, der eine Bohrung neu setzt, fragt nach der Kante**
   (`prepare_ops._edge_findings`, am gefüllten Körper vor dem Schnitt, über die
   Schnittlänge; den Zerfall gegen den Körper davor, `_split_counted_from`):
@@ -329,8 +326,8 @@ Stopfen, der umschreiben muss, bekommt `units.inscribed_ratio`. Falle:
 
 `clearance` und `press` gelten im Durchmesser (`diameter + play`,
 `hole_diameter - pin_diameter`); wer einzieht, nimmt die Hälfte, im Hohlraum
-senkrecht zur Wand (`geom.bore_pin`). Keine Konstante als Fertigungszugabe
-(Regel 7).
+senkrecht zur Wand und vor dem Boden (`geom.bore_pin`, nur im Körper). Keine
+Konstante als Fertigungszugabe (Regel 7).
 
 ## Ein Langloch in neuer Richtung ist ein gedrehtes Langloch
 

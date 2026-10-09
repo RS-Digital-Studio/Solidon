@@ -4980,6 +4980,64 @@ def test_a_nut_trap_on_a_top_face_sinks_into_the_material(profile: Profile) -> N
     )
 
 
+@pytest.mark.parametrize("screw", [False, True])
+@pytest.mark.parametrize(("height", "floor"), [(10.0, 10.0), (8.0, 4.0)])
+def test_a_nut_trap_set_by_hand_cuts_its_pocket(
+    profile: Profile, height: float, floor: float, screw: bool
+) -> None:
+    """RM-591: Von Hand gesetzt, ohne Fläche und Richtung, schnitt die Mutternfalle nichts.
+
+    Mit nur einer Stelle — über Chat, Kommandozeile oder den Dialog ohne Fläche —
+    zeigte sie entlang Z, und auf der Deckfläche stand ihre Tasche ganz
+    darüber: Der Körper verlor nur das Schraubenloch, und *Stift für Bohrung*
+    baute an Tasche und Bohrung in die Luft (Review G). Soll: Auf der Deckfläche
+    (z = 10) liegt die Tasche darunter, ihre Öffnung an der Fläche. Im Material
+    gesetzt — das Gehäuse-Beispiel setzt seine Mutternfalle in die Mitte des
+    8 mm dicken Bodens — bleibt sie über der Stelle, wo sie war.
+
+    **Auch mit Schraubenloch.** Die erste Fassung fragte die Luft auf halber
+    Höhe des ganzen Bausteins, und das Schraubenloch reicht über jeden Boden
+    hinaus: Im Gehäuse-Beispiel rückte die Tasche um 2,5 mm nach unten, bei
+    gleichem Volumen — gesehen erst an der neu gerenderten Vorschau. Gemessen
+    wird an der Schlüsselweite der M6-Mutter (10 mm, ISO 4032): Wo die Tasche
+    liegt, ist das Loch weiter, darunter bleibt nur das Schraubenloch.
+    """
+    project = new_project("centauri-carbon-2", "petg")
+    History(project.document).apply(
+        "Quader",
+        [OperationDraft(op="create_box", params={"width": 40.0, "depth": 40.0, "height": height})],
+    )
+    History(project.document).apply(
+        "Mutternfalle",
+        [
+            OperationDraft(
+                op="insert_nut_trap",
+                inputs=("obj_1",),
+                params={"size": "M6", "slide": 0.0, "screw_hole": screw, "z": floor},
+            )
+        ],
+    )
+    result = evaluate(project.document, profile, sources=ProjectSources(project))
+
+    assert result.complete, [str(f.message) for f in result.scene.report.findings]
+    codes = [f.code for f in result.scene.report.findings]
+    assert "boolean.without_effect" not in codes, "die Tasche liegt neben dem Körper statt darin"
+    mesh = result.scene.objects["obj_1"].mesh
+    assert mesh.raw.volume < 40.0 * 40.0 * height - 1.0, "die Mutternfalle hat nichts abgetragen"
+    assert mesh.bounds.maximum[2] == pytest.approx(height, abs=0.02)
+    across_flats = 10.0
+    if floor == height:
+        assert _widest_bore(mesh, floor - 0.5) > across_flats, "unter der Fläche fehlt die Tasche"
+        return
+    assert _widest_bore(mesh, floor + 1.0) > across_flats, "über der Stelle fehlt die Tasche"
+    if screw:
+        assert _widest_bore(mesh, floor - 1.0) < across_flats, "die Tasche rückte unter die Stelle"
+        return
+    cut = mesh.raw.section(plane_origin=[0.0, 0.0, floor - 1.0], plane_normal=[0.0, 0.0, 1.0])
+    inner = np.hypot(*np.asarray(cut.vertices, dtype=float)[:, :2].T)
+    assert (inner >= 15.0).all(), "unter der Stelle ist kein Loch, die Tasche bleibt oben"
+
+
 def test_head_room_cuts_below_the_mouth_not_above_it(profile: Profile) -> None:
     """Die Kopffreiheit trägt Material ab, und zwar unter der Fläche (§24.1).
 

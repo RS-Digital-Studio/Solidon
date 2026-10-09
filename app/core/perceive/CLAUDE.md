@@ -174,18 +174,21 @@ hält beide Wege zusammen.
   Änderung. `ActionField.measurement` ist der Ausgangswert.
 - **Jede Zeile fragt eine Funktion**: `action_refusal(op, …)` ist die Zeile
   der Operation (`actions_for(only=)`); jede Merkmalshandlung sagt mit ihrem
-  Satz ab (`prepare_ops._refuse_like_the_card`), der Griff liest
+  Satz ab, ohne Ausnahme (`prepare_ops._refuse_like_the_card`), der Griff liest
   `move_refusal` (`FeaturePanel.refuses`). `move_blocked` sperrt das Versetzen
   zusätzlich (Zapfen desselben Teils in der Bohrung; ein getrenntes Teil dort
   nennt `OTHER_PART_IN_THE_BORE`); ein Zapfen oder eine Kuppel als ganzer
   Körper sperrt Versetzen, Ändern, Drehen und Entfernen
   (`FEATURE_SPANS_THE_BODY`); eine Haltelippe (`only_a_rim_inside`) sperrt
   das Versetzen nicht. An der Fläche steht in dieser Zeile *Fläche
-  versetzen*, der Weg beginnt bei 0 (`_STARTS_AT_ZERO`).
+  versetzen*, der Weg beginnt bei 0 (`_STARTS_AT_ZERO`). *Verdoppeln* legt
+  die Kopie anderthalb Breiten neben die ganze Kette, entlang X oder Y, nie
+  entlang der eigenen Achse (`_beside_the_original`).
 - **Grau mit dem Satz der Operation**: geteilter Hohlraum
   (`_shares_its_cavity`; ohne Netz keine Sperre), kein eigener Körper
-  (`no_own_body`), ein getrenntes Teil im Hohlraum jeder Art oder das Merkmal
-  selbst in fremder Bohrung (`prepare_ops.separate_part_reason`, jede Zeile),
+  (`no_own_body`), ein getrenntes Teil im Hohlraum jeder Art außer dem
+  Einschluss oder das Merkmal selbst in einem fremden
+  (`prepare_ops.separate_part_reason`, jede Zeile),
   Verengung (`cone_reason`, `not_offered_at`), Bohrung einer
   Kette mit Verengung (`narrowing_reason`), Kegel einer Kette bei *Merkmal
   ändern* (`_countersink_unsized` → `countersink_resize_refusal`), Verrundung

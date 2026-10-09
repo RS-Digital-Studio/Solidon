@@ -7379,6 +7379,8 @@ WHOLE_BODY_ANSWERS: Final[frozenset[str]] = frozenset(
         "prepared_surface",
         "surfaces_near",
         "radii_near",
+        # Teil und Hüllquader je Hohlraum: ein Feld je Dreieck (Review G, F5).
+        "cavity_boxes",
     }
 )
 
@@ -7447,6 +7449,9 @@ SHARED_ANSWERS: Final[frozenset[str]] = frozenset(
         "hole_is_clear",
         "own_part_bore_clear",
         "hole_has_separate_contents",
+        "sticks_in_another_bore",
+        "cavity_boxes",
+        "thread_walls",
         "has_own_body",
         "moved_twin",
         "voids",

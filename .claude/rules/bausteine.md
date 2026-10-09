@@ -70,6 +70,14 @@ Bauteil und nimmt nichts weg.
   verschoben kippt er um.
 - **Die Prüfung misst die Richtung**, nicht nur die Berührung: Sie sagt, an
   welchem Ende die Sperrfläche sitzt.
+- **Die Mutternfalle baut nach oben**, die Mutter sitzt im Material: An einer
+  Fläche, mit freier Richtung oder von Hand dort gesetzt, wo knapp über der
+  Stelle Luft liegt, wird sie gespiegelt (`ops._builds_upward_on_a_face`,
+  `_air_above`, RM-591). Gefragt wird knapp darüber, nicht auf halber Höhe
+  des Bausteins: Das Schraubenloch reicht über jeden Boden hinaus.
+- **Eine Einführfase wird als solche erklärt** (`build.bore(lead_in=True)`):
+  Sie ist keine Bohrung, in die ein Stift gehört, und die Karte bietet dort
+  keinen an (`perceive.actions.not_offered_at`).
 - **Schräg zur Fläche gesetzt, öffnet er trotzdem bis über sie.** Die Richtung
   bleibt Eingabe; angehoben wird der Deckel der Öffnung
   (`ops._opened_to_the_face`) bis über die **Ebene der Fläche am

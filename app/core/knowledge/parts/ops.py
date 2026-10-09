@@ -2508,14 +2508,56 @@ def _builds_upward_on_a_face(source: SceneObject, params: Any, built: Mesh) -> b
     Danach liegt seine Öffnung an der Fläche und die Tasche darunter im Material
     — genau wie bei jedem anderen abtragenden Baustein. An einer Bohrung
     geschieht nichts: Dort hält ``_at_the_mouth`` die Tasche schon in der Mitte.
+
+    **Von Hand gesetzt, ohne Richtung, entscheidet die Stelle** (RM-591): Mit
+    nur einer Position — über Chat, Kommandozeile oder den Dialog ohne Fläche —
+    zeigt der Baustein entlang seiner Achse, und auf der Deckfläche einer
+    Platte stand die Tasche ganz darüber; der Körper verlor nur das
+    Schraubenloch (Review G). Liegt über der Stelle Luft, wird gespiegelt wie
+    an einer Fläche (:func:`_air_above`). Liegt sie im Material — das
+    Gehäuse-Beispiel setzt seine Mutternfalle in die Mitte des Bodens —, bleibt
+    die Tasche, wo sie war.
     """
     name = str(_placement_value(params, "at_feature", "") or "")
     feature = source.features.get(name) if name else None
-    if not name and _free_direction(params) is not None:
-        return _extends_above_mouth(built)
+    if not name:
+        if not _extends_above_mouth(built):
+            return False
+        return _free_direction(params) is not None or _air_above(source, params)
     if feature is None or feature.kind != "face":
         return False
     return _extends_above_mouth(built)
+
+
+def _air_above(source: SceneObject, params: Any) -> bool:
+    """Ob über der von Hand gesetzten Stelle Luft liegt — dorthin wüchse der Baustein.
+
+    Gefragt wird knapp über der Stelle, zwei Überlappungsmaße entlang der
+    gewählten Achse (``axis``), im Körper des Trägers
+    (``perceive.features._point_inside_shell``). Eine unentscheidbare Zählung
+    gilt als Material: Dann bleibt es beim Bisherigen.
+
+    **Knapp darüber, nicht auf halber Höhe des Bausteins.** So stand es in der
+    ersten Fassung, und das Schraubenloch der Mutternfalle reicht über jeden
+    Boden hinaus: In der Mitte des 8 mm dicken Bodens im Gehäuse-Beispiel lag
+    die halbe Höhe in der Luft, und die Tasche rückte um 2,5 mm nach unten.
+    """
+    import numpy as np
+
+    from app.core.perceive.features import _point_inside_shell, _triangle_bounds
+
+    up = {"x": (1.0, 0.0, 0.0), "y": (0.0, 1.0, 0.0)}.get(
+        str(_placement_value(params, "axis", "z")), (0.0, 0.0, 1.0)
+    )
+    reach = 2.0 * BOOLEAN_OVERLAP
+    position = np.asarray(
+        [float(_placement_value(params, name, 0.0)) for name in ("x", "y", "z")], dtype=np.float64
+    )
+    triangles = np.asarray(as_mesh_data(source.mesh).raw.triangles, dtype=np.float64)
+    if not len(triangles):
+        return False
+    point = position + np.asarray(up, dtype=np.float64) * reach
+    return _point_inside_shell(point, triangles, _triangle_bounds(triangles)) is False
 
 
 def _extends_above_mouth(built: Mesh) -> bool:

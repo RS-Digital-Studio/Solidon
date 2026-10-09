@@ -1033,7 +1033,13 @@ def heatset_insert(raw: BaseParams) -> PartResult:
         lead = shapes.cone(hole, hole + 2.0 * chamfer, chamfer)
         parts.append(shapes.moved(lead, (0.0, 0.0, -chamfer)))
         features.append(
-            bore("chamfer_1", hole + 2.0 * chamfer, (0.0, 0.0, -chamfer / 2.0), depth=chamfer)
+            bore(
+                "chamfer_1",
+                hole + 2.0 * chamfer,
+                (0.0, 0.0, -chamfer / 2.0),
+                depth=chamfer,
+                lead_in=True,
+            )
         )
 
     return result(union(*parts), *features)
@@ -1094,6 +1100,20 @@ class NutTrapParams(BaseParams):
     )
 
 
+NUT_TRAP_SINKS_WITHOUT_A_FACE = PartChange(
+    version="25",
+    date="2026-10-08",
+    reason=(
+        "Von Hand auf eine Oberfläche gesetzt, ohne Fläche und ohne Richtung, baute die "
+        "Mutternfalle ihre Tasche nach oben in die Luft über der Stelle und trug nur das "
+        "Schraubenloch ab (RM-591)."
+    ),
+    effect=_(
+        "Von Hand auf eine Oberfläche gesetzt, liegt die Tasche jetzt im Material statt darüber."
+    ),
+)
+
+
 @register_part(
     name="nut_trap",
     title=_("Mutternfalle"),
@@ -1124,6 +1144,7 @@ class NutTrapParams(BaseParams):
         NUT_HEIGHT_FROM_ISO,
         NUT_TRAP_SINKS_ON_A_FACE,
         MATERIAL_OF_TARGET,
+        NUT_TRAP_SINKS_WITHOUT_A_FACE,
     ],
 )
 def nut_trap(raw: BaseParams) -> PartResult:
