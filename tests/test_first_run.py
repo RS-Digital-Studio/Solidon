@@ -1257,10 +1257,9 @@ def test_flatpak_mail_composer_receives_plain_text(
     portal_error: bool,
 ) -> None:
     """Der Mailentwurf erhält Satzzeichen und Zeilenwechsel ohne Prozentkodierung."""
-    from PySide6.QtTest import QTest
-
     from app.core.support import Ticket
     from app.ui import support_dialog as module
+    from tests.ui_helpers import wait_until
 
     bus = mail_portal_bus
     bus.error = portal_error
@@ -1272,7 +1271,13 @@ def test_flatpak_mail_composer_receives_plain_text(
     monkeypatch.setattr(dialog, "ticket", lambda: ticket)
 
     dialog._open_mail()
-    QTest.qWait(10)
+    # Die Antwort des Portals kommt über die Ereignisschleife; zehn feste
+    # Millisekunden reichten dem Intel-Mac-Läufer nicht (Fensterauswahl
+    # 37887289131).
+    wait_until(
+        qt_app,
+        lambda: dialog.by_mail.isEnabled() if portal_error else bool(dialog.state.text()),
+    )
 
     assert len(bus.calls) == 1
     assert bus.calls[0].interface() == "org.freedesktop.portal.Email"
