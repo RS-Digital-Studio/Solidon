@@ -219,8 +219,10 @@ und geht mit der letzten.
 **Gedächtnis je Fleck (RM-592).** Der Fleckabdruck trägt, was eine Frage an einen
 Fleck vom Körper liest: die Ecken seiner Dreiecke in Fleck- und Eckenfolge, welche
 Ecken dieselben sind (in der Folge ihrer Nummern, daraus auch die Folge der Kanten,
-denn `face_adjacency` ordnet nach Ecken), den ersten Nachbarring und den Ursprung vor
-*Kanten verfeinern*. Körperzahlen — Verschweißtoleranz aus der Diagonale, Dichtheit,
+denn `face_adjacency` ordnet nach Ecken), den ersten Nachbarring, den Ursprung vor
+*Kanten verfeinern* und Normalen, Flächen und Nahtwinkel, wie der Körper sie hält — eine
+starre Bewegung trägt sie vom Quellnetz mit, sie folgen dann nicht Bit für Bit den Ecken
+(an der Messbank 449 von 2 282 Zuständen anders, bevor sie im Abdruck standen). Körperzahlen — Verschweißtoleranz aus der Diagonale, Dichtheit,
 Umlauf, deckungsgleiche Ecken — gibt der Aufrufer ausdrücklich mit; im Rumpf vom
 Körper gelesen, fehlten sie im Schlüssel (Konzept R1). Die Hülle gehört dem ganzen
 Körper: Was eine Rechnung `cylinder_fits_in_the_body` fragte, wird am neuen Körper

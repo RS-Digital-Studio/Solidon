@@ -505,8 +505,14 @@ Messbank nach.
 
 - **P1** wie 5.6. `CACHE_FORMAT_VERSION` steht nach dem Zusammenführen mit Welle 2 auf 55
   (G belegte 53, der gemeinsame Stand 54).
-- **P2, Fleckabdruck**: Teile `ecken`, `eckennummern`, `ring`, `ursprung`
-  (`features.PATCH_PRINT_PARTS`), Körperzahlen `dicht`, `umlauf`, `deckungsgleich` für die
+- **P2, Fleckabdruck**: Teile `ecken`, `eckennummern`, `ring`, `ursprung`, `normalen`,
+  `flaechen`, für die Trennung dazu `winkel` (`features.PATCH_PRINT_PARTS`). Normalen,
+  Flächen und Nahtwinkel stehen darin, weil eine starre Bewegung sie vom Quellnetz
+  mitträgt (`geom.transform._carry_cache`) und sie dann nicht Bit für Bit den Ecken
+  folgen: Ohne sie gab die Messbank am Patchstand des Vorgängers 449 von 2 282 Zuständen
+  anders aus (die Lesung eines frisch gebauten Netzes bekam den Abdruck der
+  mitgetragenen); das hält jetzt ein Test fest. 5.2 „Normalen und Flächen rechnet trimesh
+  aus den Ecken“ gilt nur für ein frisches Netz. Körperzahlen `dicht`, `umlauf`, `deckungsgleich` für die
   Lesung, `diagonale` für die Trennung (`BODY_NUMBERS`). Die in 5.2 Punkt 4 vorgesehene
   Folge der inneren Nähte und die Folge der Dreiecksnummern stehen **nicht** im Abdruck:
   Die tangentiale Trennung las ihre Bänder und Keime nach Dreiecksnummern und hing damit

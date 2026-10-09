@@ -8212,7 +8212,15 @@ def _support_handle(
 
 #: Die Teile des Fleckabdrucks (Konzept §5.2), je mit seinem Namen. Die
 #: Messbank lässt für ihre Gegenprobe einen davon weg (``folge.py --weglassen``).
-PATCH_PRINT_PARTS: Final = ("ecken", "eckennummern", "ring", "ursprung")
+PATCH_PRINT_PARTS: Final = (
+    "ecken",
+    "eckennummern",
+    "ring",
+    "ursprung",
+    "normalen",
+    "flaechen",
+    "winkel",
+)
 
 #: Die Körperzahlen, die eine Frage liest und die der Aufrufer mitgibt (§5.2).
 BODY_NUMBERS: Final = ("dicht", "umlauf", "deckungsgleich", "diagonale")
@@ -8225,14 +8233,19 @@ def _body_numbers(**numbers: Any) -> bytes:
     )
 
 
-def _patch_print(body: trimesh.Trimesh, patch: Sequence[int]) -> bytes:
+def _patch_print(body: trimesh.Trimesh, patch: Sequence[int], *, seams: bool = False) -> bytes:
     """Der Fleckabdruck (Konzept §5.2), einmal je Körper und Fleck gerechnet.
 
     Ändert sich ein Dreieck im Fleck oder in seinem ersten Nachbarring, ändert
-    sich der Abdruck, und jede Frage an diesen Fleck rechnet.
+    sich der Abdruck, und jede Frage an diesen Fleck rechnet. ``seams`` nimmt
+    die Winkel der inneren Nähte dazu (:func:`_tangential_pieces`).
     """
     printed: bytes = remembered(
-        "patch_print", body, patch, lambda: _print_of(_patch_print_parts(body, patch))
+        "patch_print",
+        body,
+        patch,
+        lambda: _print_of(_patch_print_parts(body, patch, seams=seams)),
+        extra=seams,
     )
     return printed
 
@@ -8247,7 +8260,9 @@ def _print_of(parts: Sequence[tuple[str, bytes]]) -> bytes:
     return digest.digest()
 
 
-def _patch_print_parts(body: trimesh.Trimesh, patch: Sequence[int]) -> list[tuple[str, bytes]]:
+def _patch_print_parts(
+    body: trimesh.Trimesh, patch: Sequence[int], *, seams: bool = False
+) -> list[tuple[str, bytes]]:
     """Was eine Frage an einen Fleck vom Körper liest, als Bytes ohne Arithmetik.
 
     1. ``ecken``: die Ecken seiner Dreiecke in Fleckfolge und Eckenfolge;
@@ -8258,7 +8273,13 @@ def _patch_print_parts(body: trimesh.Trimesh, patch: Sequence[int]) -> list[tupl
     3. ``ring``: je Dreieck seine Kantennachbarn — die Lage im Fleck, sonst
        „außen“; eine Kante ohne Nachbarn (offen oder mit drei Dreiecken) trägt
        keinen;
-    4. ``ursprung``: welche Dreiecke vor *Kanten verfeinern* eines waren.
+    4. ``ursprung``: welche Dreiecke vor *Kanten verfeinern* eines waren;
+    5. ``normalen`` und ``flaechen``: Normale und Inhalt jedes Dreiecks, wie der
+       Körper sie hält — eine starre Bewegung trägt beide vom Quellnetz mit
+       (``geom.transform._carry_cache``), sie folgen dann nicht Bit für Bit
+       den Ecken;
+    6. mit ``seams``: ``winkel``, der Knickwinkel jeder Naht zu einem Nachbarn
+       im Fleck, in der Folge des Rings — ebenso mitgetragen.
 
     Nicht darin steht die Folge der Dreiecksnummern: Lesung und Trennung lesen
     den Fleck in seiner Folge und in der Ordnung des Körpers, nie nach Nummern
@@ -8273,18 +8294,27 @@ def _patch_print_parts(body: trimesh.Trimesh, patch: Sequence[int]) -> list[tupl
         ("ecken", np.ascontiguousarray(corners).tobytes()),
         ("eckennummern", np.asarray(local, dtype=np.int64).tobytes()),
     ]
-    neighbours, _pair_rows = _neighbour_index(body)
+    neighbours, pair_rows = _neighbour_index(body)
     if len(index) and neighbours.shape[1]:
         ranked = index[order]
         around = neighbours[index]
         spot = np.minimum(np.searchsorted(ranked, np.maximum(around, 0)), len(index) - 1)
         inside = (around >= 0) & (ranked[spot] == around)
         place = np.where(inside, order[spot], np.where(around >= 0, -1, -2))
-        place = -np.sort(-place, axis=1)
+        ranking = np.argsort(-place, axis=1, kind="stable")
+        place = np.take_along_axis(place, ranking, axis=1)
         width = int((place > -2).sum(axis=1).max())
         parts.append(("ring", np.ascontiguousarray(place[:, :width]).tobytes()))
+        if seams:
+            angles = np.asarray(body.face_adjacency_angles, dtype=np.float64)[
+                np.maximum(pair_rows[index], 0)
+            ]
+            angles = np.take_along_axis(np.where(inside, angles, 0.0), ranking, axis=1)
+            parts.append(("winkel", np.ascontiguousarray(angles[:, :width]).tobytes()))
     else:
         parts.append(("ring", b""))
+    parts.append(("normalen", np.asarray(body.face_normals, dtype=np.float64)[index].tobytes()))
+    parts.append(("flaechen", np.asarray(body.area_faces, dtype=np.float64)[index].tobytes()))
     units = refined_units(body)
     if units is not None:
         own_units = units[index]
@@ -11411,7 +11441,7 @@ def _tangential_pieces(
     extents = np.asarray(body.extents, dtype=float)
     diagonal = math.sqrt(float((extents * extents).sum()))
     key = hashlib.blake2b(
-        _patch_print(body, patch)
+        _patch_print(body, patch, seams=True)
         + _body_numbers(diagonale=diagonal)
         + _exact_bytes(_tangential_settings()),
         digest_size=16,

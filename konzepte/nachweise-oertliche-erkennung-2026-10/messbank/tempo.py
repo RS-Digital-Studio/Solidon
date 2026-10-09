@@ -125,7 +125,22 @@ DEEP = (
     "_support_handle",
     "_patch_print",
     "is_a_freeform",
-    "detect_slots",
+    "_cylinder_fits",
+    "_rectangle_across",
+    "_merged_cylinders",
+    "_joined_cylinders",
+    "_lies_on_the_cylinder",
+    "_face_roles",
+    "_finished_faces",
+    "_large_facet_faces_read",
+    "_facet_verdicts",
+    "slots:find_slots",
+    "slots:open_slots_instead_of_fillets",
+    "slots:_reaches_through",
+    "slots:_shells_for",
+    "slots:_shell_labels",
+    "slots:_slot_from",
+    "slots:_open_slot_shell",
 )
 if "--tief" in ARGS:
     STAGES = STAGES + DEEP
@@ -136,8 +151,14 @@ ARMED = [False]
 
 
 def watch(name: str) -> None:
-    """Eine Stufe in CPU-Sekunden zählen, nur auf ihrer äußersten Ebene."""
-    original = getattr(feats, name, None)
+    """Eine Stufe in CPU-Sekunden zählen, nur auf ihrer äußersten Ebene.
+
+    ``modul:name`` misst eine Funktion aus einem anderen Modul von ``perceive``.
+    """
+    module = feats
+    if ":" in name:
+        module = importlib.import_module("app.core.perceive." + name.split(":")[0])
+    original = getattr(module, name.split(":")[-1], None)
     if original is None:
         return
 
@@ -156,7 +177,7 @@ def watch(name: str) -> None:
             SPENT[name] = SPENT.get(name, 0.0) + time.process_time() - started
             STACK.pop()
 
-    setattr(feats, name, wrapped)
+    setattr(module, name.split(":")[-1], wrapped)
 
 
 for stage in STAGES:

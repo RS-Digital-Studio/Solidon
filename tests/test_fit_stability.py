@@ -1658,3 +1658,39 @@ def test_the_tangential_split_does_not_follow_the_triangle_order(
         other_asked, other_pieces = run(other, sorted(int(back[i]) for i in patch), shuffle)
         assert other_asked == asked, f"Umordnung {trial}: andere Keime, Kreise oder Achsen"
         assert other_pieces == pieces, f"Umordnung {trial}: andere Stücke"
+
+
+def test_a_moved_body_does_not_lend_its_carried_reading_to_a_fresh_twin() -> None:
+    """Normalen und Flächen, die eine Bewegung mitträgt, stehen im Fleckabdruck.
+
+    Eine starre Bewegung gibt dem bewegten Netz Normalen und Flächeninhalte des
+    Quellnetzes mit (``geom.transform._carry_cache``); sie folgen dann nicht Bit
+    für Bit seinen Ecken. Ein frisch gebautes Netz mit denselben Ecken liest
+    dieselben Flecken mit eigenen Flächen. Ohne diese Felder im Abdruck gab das
+    Gedächtnis der frischen Lesung den Abdruck der mitgetragenen, und die
+    Einpassungen kamen aus einer anderen Lesung (Messbank A1, Paket E: 449 von
+    2 282 Zuständen anders).
+    """
+    from app.core.geom.transform import apply as moved
+
+    shift = np.eye(4)
+    shift[:3, 3] = (0.123456789, -7.654321, 31.41592653)
+    source = features_module._one_body(_rounded_box())
+    # Was das Quellnetz schon weiß, trägt die Bewegung mit.
+    assert len(source.raw.area_faces) and len(source.raw.face_normals)
+    carried = moved(source, shift).raw
+    fresh = trimesh.Trimesh(np.array(carried.vertices), np.array(carried.faces), process=False)
+    forget_cache()
+    patches = features_module._connected_patches(carried, list(range(len(carried.faces))))
+    assert patches
+    differs = 0
+    for patch in patches:
+        held = features_module._support_handle(carried, patch)
+        if held is None:
+            continue
+        answer = features_module._support_handle(fresh, patch)
+        own = features_module._read_surface_support(fresh, list(patch), None)
+        assert own is not None and answer is not None
+        assert answer.digest == own.digest, "die Lesung des frischen Netzes, nicht die getragene"
+        differs += held.digest != own.digest
+    assert differs, "die Bewegung trägt Flächen mit, die nicht den Ecken folgen"
