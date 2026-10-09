@@ -400,7 +400,10 @@ _REFUSALS_KEPT: Final = 256
 #:   ``prepare_ops`` rechnen ohne BLAS, LAPACK und die Winkelfunktionen der
 #:   Plattform. Gespeicherte Ergebnisse und Mustererkennungen trügen noch die
 #:   letzte Stelle der Maschine, auf der sie entstanden.
-CACHE_FORMAT_VERSION: Final = 52
+#: - 53 (RM-592): Eine Boolesche ohne Wirkung gibt ihren Eingang in dessen
+#:   Dreiecksfolge zurück (``attributes.in_source_layout``). Ein gespeichertes
+#:   Ergebnis trüge die Folge des Kerns und träfe den Merkmalscache nicht.
+CACHE_FORMAT_VERSION: Final = 53
 
 
 @dataclass(frozen=True, slots=True)

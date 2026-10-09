@@ -59,7 +59,8 @@ dessen Docstring nennt Rundungsgrenzen/Ursprung. Nicht Vereinbares bleibt.
 
 `attributes.in_source_layout`/`prepare_ops._without_scars` erhalten nach jeder
 Stufe bitgleich übernommene Dreiecksecken und deren Eingangsfolge;
-Dreiecksfolge/Koordinaten bleiben beim Kern. Regel/Messfall:
+Dreiecksfolge/Koordinaten bleiben beim Kern; ändert der Schritt nichts, kommt der
+Eingang in seiner Folge zurück. Regel/Messfall:
 `operationen.md`, „Boolesches geht durch die Rückfallkette“.
 
 - **Native Stufen** übergeben `Mesh64` und lesen Status und Volumen vor der

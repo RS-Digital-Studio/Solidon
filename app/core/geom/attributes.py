@@ -289,6 +289,15 @@ def in_source_layout(result: MeshData, sources: Sequence[MeshData]) -> MeshData:
     Gleich heißt bitgleich (:func:`_places`). Mehrere Eingänge gelten in ihrer
     Reihenfolge; ein Dreieck, das in keiner Drehung auf seinem Vorbild liegt
     (umgekehrter Umlauf, entartet), bleibt, wie der Kern es lieferte.
+
+    **Hat der Schritt nichts geändert, kommt der Eingang zurück** (RM-592):
+    Liegt jedes Dreieck bitgleich und gleich umlaufend auf genau einem Dreieck
+    desselben Eingangs, und hat der so viele wie das Ergebnis, ist die Folge
+    des Kerns nur eine andere Darstellung desselben Körpers — ein Werkzeug
+    neben dem Teil, ein Vereinigen mit einem Körper ganz im Material. Dann
+    trägt das Ergebnis die Ecken und Dreiecke des Eingangs in dessen Folge, als
+    eigenes Netz, und die Erkennung trifft ihren Cache, statt den Körper neu zu
+    lesen (am Laptop-Ständer 12,6 s unter Last für einen Zylinder daneben).
     """
     body = result.raw
     faces = np.asarray(body.faces, dtype=np.int64)
@@ -314,6 +323,17 @@ def in_source_layout(result: MeshData, sources: Sequence[MeshData]) -> MeshData:
                 fits = (turn < 0) & np.all(given[:, (turns + shift) % 3] == wanted, axis=1)
                 turn[fits] = shift
             kept = turn >= 0
+            if (
+                len(model) == len(faces)
+                and bool(kept.all())
+                and len(rows) == len(faces)
+                and len(np.unique(match[rows])) == len(faces)
+            ):
+                return result.replacing(
+                    trimesh.Trimesh(
+                        np.array(raw.vertices, dtype=np.float64), model.copy(), process=False
+                    )
+                )
             rows, turn = rows[kept], turn[kept]
             corners[rows] = faces[rows][np.arange(len(rows))[:, None], (turns + turn[:, None]) % 3]
             np.minimum.at(rank, corners[rows].ravel(), model[match[rows]].ravel() + offset)

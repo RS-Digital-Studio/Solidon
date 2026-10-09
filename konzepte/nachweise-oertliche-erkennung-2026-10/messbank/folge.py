@@ -113,10 +113,10 @@ if MEMORY == "aus":
         feats._by_geometry = lambda name, body, support, compute, *read: compute()
         feats._answered_by_geometry = lambda name, support, *read: False
 if LEAVE_OUT:
-    hook = getattr(feats, "_leave_out_for_counterproof", None)
-    if hook is None:
+    left_out = getattr(feats, "_LEFT_OUT", None)
+    if left_out is None:
         raise SystemExit(f"dieser Baum kennt keine Gegenprobe ({LEAVE_OUT})")
-    hook(LEAVE_OUT)
+    left_out.add(LEAVE_OUT)
 
 # --- Zähler -------------------------------------------------------------------------
 
@@ -179,8 +179,23 @@ def counting(name: str) -> None:
 
 
 if MEMORY == "an":
-    for memo in ("_by_geometry", "_by_patch_print"):
-        counting(memo)
+    counting("_by_geometry")
+    shipped_known = getattr(feats, "_known_across", None)
+    shipped_keep = getattr(feats, "_keep_across", None)
+    if shipped_known is not None and shipped_keep is not None:
+
+        def known_across(question: str, body: Any, key: bytes) -> Any:
+            value = shipped_known(question, body, key)
+            found = "Treffer" if value is not feats._UNKNOWN else "neu"
+            ANSWERS[f"{PHASE['name']} {question} {found}"] += 1
+            return value
+
+        def keep_across(question: str, body: Any, key: bytes, value: Any) -> None:
+            ANSWERS[f"{PHASE['name']} {question} abgelegt"] += 1
+            shipped_keep(question, body, key, value)
+
+        feats._known_across = known_across
+        feats._keep_across = keep_across
 
 
 def ask(question: Any, choices: Any) -> Any:
