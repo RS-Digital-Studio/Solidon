@@ -1892,6 +1892,32 @@ def _seam(column: ShapelyPolygon, line_width: float) -> ShapelyPolygon:
     return column.buffer(2.0 * line_width)
 
 
+def _clipped(shape: ShapelyPolygon, bounds: tuple[float, float, float, float]) -> ShapelyPolygon:
+    """``shape`` auf das Rechteck ``bounds`` beschnitten — und gültig.
+
+    ``clip_by_rect`` verspricht keine gültige Fläche. Läuft der Rand des
+    Rechtecks genau auf einer Kante entlang, kann ein Ring sich selbst berühren:
+    Im Deckel mit dem Zickzack-Schacht (RM-629) lag die Grenze des Himmels auf
+    der Lochwand der Schicht darüber, und die Differenz brach mit einer
+    ``TopologyException`` ab. Repariert wird nur, was ungültig ist.
+    """
+    clipped = shapely.clip_by_rect(shape, *bounds)
+    if shapely.is_valid(clipped):
+        return clipped
+    return cast(
+        ShapelyPolygon, shapely.make_valid(clipped, method="structure", keep_collapsed=False)
+    )
+
+
+def _seam_reach(column: ShapelyPolygon, material: ShapelyPolygon, line_width: float) -> Any:
+    """Wo eine Säule an offenen Himmel grenzen kann: der freie Teil ihres Saums
+    (:func:`_seam`), der mit ihr durch freien Raum der Scheibe (``material``)
+    verbunden ist — hinter einer dünnen Wand liegt der Himmel außerhalb des
+    Teils. Leer, wenn nichts davon bleibt."""
+    seam = _seam(column, line_width).difference(material)
+    return unary_union([part for part in _areas_of(seam) if part.intersects(column)])
+
+
 def _sky_window(column: ShapelyPolygon, line_width: float) -> ShapelyPolygon:
     """Wo der Himmel einer Säule gesucht wird: um ihren Saum (:func:`_seam`) so
     weit, wie ein Kreis von ``CHANNEL_WIDTH`` reicht, der ihn berührt."""
@@ -1927,7 +1953,7 @@ def _sky_above(
     stable = False
     for start in sorted(set(starts), reverse=True):
         while index >= start and not sky.is_empty:
-            shade = shapely.clip_by_rect(shade_at(index), *sky.bounds)
+            shade = _clipped(shade_at(index), sky.bounds)
             index -= 1
             if stable:
                 if inner is None:
@@ -1971,15 +1997,11 @@ def _open_above(
     0,5 mm neben dem Sims galt als offen (Review RM-571: 4 statt 64 % des
     Simses im Sperrraum).
 
-    **Der Schacht steht senkrecht** (bekannte Grenze, Nachprüfung RM-571): Der
-    Himmel wird Schicht für Schicht senkrecht über der Scheibe gesucht. Ein
-    schräges Loch der Weite ``2R`` in einem Deckel der Dicke ``H`` zählt nur
-    mit seiner senkrechten Durchsicht ``2R / cos θ - H · tan θ``. Quer zu
-    seiner Achse bliebe es weit genug, aber ein Sims daneben bleibt gesperrt
-    und druckt ohne Stütze: Ein Loch Ø 34 mm in einem Deckel von 20 mm, um 20°
-    geneigt, sieht senkrecht 28,9 mm und sperrt den Sims zu 64 % (senkrecht
-    4 %). Den Schacht entlang seiner Achse zu suchen hieße, den Himmel je
-    Richtung neu zu schichten.
+    **Senkrecht ist nur der schnelle Weg.** Gefragt wird hier der Himmel
+    senkrecht über der Scheibe, einmal je Säule für alle Scheiben. Ein
+    schräges Loch der Weite ``2R`` in einem Deckel der Dicke ``H`` sieht
+    senkrecht nur ``2R / cos θ - H · tan θ``; ob der Kreis ihm Schicht für
+    Schicht folgt, fragt danach :func:`_shaft_passes` (RM-629).
 
     **Ausgespart wird die ganze Säule**, auch was von ihr unter einem Dach
     liegt (Entscheidung, Review RM-571): Ihr Stück braucht selbst Stütze. Am
@@ -1995,14 +2017,150 @@ def _open_above(
     if core.is_empty:
         return False
     shaft = core.buffer(radius, quad_segs=CHANNEL_QUAD_SEGMENTS)
-    seam = _seam(column, line_width).difference(material)
-    # Nur, was mit der Säule zusammenhängt: Hinter einer dünnen Wand liegt der
-    # Himmel außerhalb des Teils.
-    reach = [part for part in _areas_of(seam) if part.intersects(column)]
-    if not reach:
+    reach = _seam_reach(column, material, line_width)
+    if reach.is_empty:
         return False
-    opening = unary_union(reach).intersection(shaft)
+    opening = reach.intersection(shaft)
     return not _eroded(opening, line_width / 2.0).is_empty
+
+
+def _shafts_pass(
+    column: ShapelyPolygon,
+    materials: dict[int, ShapelyPolygon],
+    shade_at: Callable[[int], ShapelyPolygon],
+    heights: Sequence[float],
+    line_width: float,
+) -> dict[int, bool]:
+    """Schiebt sich ein Kreis von ``CHANNEL_WIDTH`` von der Säule aus Schicht
+    für Schicht bis über das Teil hinaus (:func:`channel_space`, RM-629)? Je
+    Schicht aus ``materials`` die Antwort — dort beginnt der Weg über einer
+    Scheibe, deren Material der Wert ist.
+
+    Die Frage nach dem Schacht, wenn der senkrechte Himmel
+    (:func:`_open_above`) keinen fasst. Gestartet wird mit den Kreisen, die den
+    Saum der Säule (:func:`_seam_reach`) mindestens eine Bahn breit berühren.
+    Je Schicht darüber bleibt jeder Kreis, der frei ist, wo er ist; wen das
+    Material der Schicht trifft, der weicht um höchstens :data:`SHAFT_DRIFT`
+    Schichthöhen aus. Offen ist der Schacht, wenn über der obersten Schicht ein
+    Kreis übrig ist.
+
+    **Weit wie ein Kanal quer zur Achse:** Ein Loch Ø 34 mm in einem Deckel von
+    20 mm, um 20° geneigt, sieht senkrecht nur 28,9 mm; nach der senkrechten
+    Schnittmenge gefragt, lag der Sims darunter zu 64 % im Sperrraum und
+    druckte ohne Stütze (Nachprüfung RM-571). Gemessen wird der waagerechte
+    Schnitt; ein Schlitz, quer zu seiner schmalen Seite geneigt, zählt deshalb
+    mit ``w / cos θ`` — bis zur Überhanggrenze höchstens das 1,4-Fache.
+
+    **Ausweichen nur, wo eine Wand schiebt, und nur so steil, wie sie ohne
+    Stütze druckt.** Ein Kreis, der frei nach oben steigen kann, wandert nicht:
+    Sonst schöbe er sich unter einem Dach schräg hervor, und eine Säule mitten
+    unter dem Sims des Bechers wäre erreichbar. Eine Wand, die flacher
+    überhängt als :data:`SHAFT_DRIFT`, ist selbst ein Dach.
+
+    **Alle Scheiben einer Säule in einem Zug:** Je Scheibe für sich gefragt,
+    rechneten die elf Scheiben unter dem Sims des Bechers denselben schrägen
+    Deckel elfmal, zusammen 3,3 s. Jede Schicht wird einmal aufgeweitet, und
+    ein Weg, der einen schon laufenden trifft, geht in ihm auf
+    (:func:`_same_centres`).
+    """
+    radius = CHANNEL_WIDTH / 2.0
+    pending = sorted(materials)
+    answers: dict[int, bool] = {}
+    # Je Weg die Mitten der Kreise, die noch durchkommen, und die Scheiben, für
+    # die er gilt.
+    ways: list[tuple[ShapelyPolygon, list[int]]] = []
+    for index in range(pending[0] if pending else len(heights), len(heights)):
+        drift = (heights[index] - heights[index - 1]) * SHAFT_DRIFT
+        moving = [(centres, starts, drift) for centres, starts in ways]
+        if pending and pending[0] == index:
+            start = pending.pop(0)
+            first = _touching_centres(column, materials[start], line_width)
+            if first is None:
+                answers[start] = False
+            else:
+                moving.append((first, [start], 0.0))
+        if not moving:
+            if pending:
+                continue
+            break
+        reach_out = radius + drift
+        low_x, low_y, high_x, high_y = shapely.total_bounds([way[0] for way in moving]).tolist()
+        shade = _clipped(
+            shade_at(index),
+            (low_x - reach_out, low_y - reach_out, high_x + reach_out, high_y + reach_out),
+        )
+        blocked: ShapelyPolygon | None = None
+        ways = []
+        for centres, starts, step in moving:
+            # **Übersprungen wird, was keinen Kreis trifft** — auch nicht um
+            # die Lücke, mit der das Vieleck eines Kreises in ihm liegt: Eine
+            # senkrechte Wand träfe sonst an jeder runden Ecke jede Schicht neu.
+            if not shade.is_empty and shapely.dwithin(
+                centres, shade, radius - CHANNEL_POLYGON_GAP - SKY_SKIP_INSET
+            ):
+                if blocked is None:
+                    # Vereinfacht um dieselbe Lücke, die das Vieleck des Kreises
+                    # ohnehin lässt: Im Zickzack-Deckel kostete das Aufweiten der
+                    # Lochwand sonst drei Viertel der Frage (1,1 von 1,4 s).
+                    blocked = shade.simplify(CHANNEL_POLYGON_GAP).buffer(
+                        radius, quad_segs=CHANNEL_QUAD_SEGMENTS
+                    )
+                if step > 0.0:
+                    fallen = centres.intersection(blocked)
+                    if not fallen.is_empty:
+                        centres = centres.union(fallen.buffer(step, quad_segs=SHAFT_STEP_SEGMENTS))
+                centres = centres.difference(blocked).simplify(WIDTH_SIMPLIFY)
+                # Was unter einem Quadrat der Vereinfachung bleibt, ist der Rest
+                # einer Differenz an einer gemeinsamen Kante, kein Platz für
+                # einen Kreis.
+                if centres.area <= WIDTH_SIMPLIFY**2:
+                    answers.update(dict.fromkeys(starts, False))
+                    continue
+            for joined, others in ways:
+                if _same_centres(joined, centres):
+                    others.extend(starts)
+                    break
+            else:
+                ways.append((centres, starts))
+    for start in pending:
+        answers[start] = _touching_centres(column, materials[start], line_width) is not None
+    for _centres, starts in ways:
+        answers.update(dict.fromkeys(starts, True))
+    return answers
+
+
+def _touching_centres(
+    column: ShapelyPolygon, material: ShapelyPolygon, line_width: float
+) -> ShapelyPolygon | None:
+    """Die Mitten der Kreise von ``CHANNEL_WIDTH``, die den Saum der Säule
+    (:func:`_seam_reach`) mindestens eine Bahn breit berühren — wie die
+    Öffnung in :func:`_open_above`. ``None``, wenn keiner es tut."""
+    reach = _seam_reach(column, material, line_width)
+    if reach.is_empty:
+        return None
+    touching = _eroded(reach, line_width / 2.0)
+    if touching.is_empty:
+        return None
+    radius = CHANNEL_WIDTH / 2.0
+    return cast(
+        ShapelyPolygon,
+        touching.buffer(radius - line_width / 2.0, quad_segs=CHANNEL_QUAD_SEGMENTS),
+    )
+
+
+def _same_centres(one: ShapelyPolygon, other: ShapelyPolygon) -> bool:
+    """Sind zwei Wege eines Schachts (:func:`_shafts_pass`) derselbe — bis auf
+    einen Saum der Vereinfachung (:data:`WIDTH_SIMPLIFY`) um ihren Rand?
+
+    Die Scheiben unter dem Sims des Bechers beginnen mit denselben Kreisen,
+    aber aus Schichten mit anderem Rundungsrauschen; genau gleich sind sie nie.
+    Ein Schritt erhält die Ordnung — aus einer Teilmenge der Kreise wird wieder
+    eine Teilmenge —, also gehen fast gleiche Wege gleich aus.
+    """
+    allowed = WIDTH_SIMPLIFY * (one.length + other.length) / 2.0
+    if abs(one.area - other.area) > allowed:
+        return False
+    return bool(one.symmetric_difference(other).area <= allowed)
 
 
 def _with_usable_holes(part: ShapelyPolygon, line_width: float) -> ShapelyPolygon:
@@ -3401,6 +3559,26 @@ def worth_support(patch: float, total: float) -> bool:
 #: Kreises; :func:`_in_channels` rechnet die umschriebene Scheibe daraus.
 CHANNEL_QUAD_SEGMENTS: Final = 16
 
+#: Um wie viel dieses Vieleck höchstens innerhalb seines Kreises liegt, in mm
+#: (bei 15 mm Radius 0,018 mm) — so nah darf Material an einen Kreis des
+#: Schachts rücken, ohne ihn zu treffen (:func:`_shaft_passes`).
+CHANNEL_POLYGON_GAP: Final = (
+    CHANNEL_WIDTH / 2.0 * (1.0 - math.cos(math.pi / (4.0 * CHANNEL_QUAD_SEGMENTS)))
+)
+
+#: Wie weit der Kreis eines Schachts je Schicht zur Seite ausweichen darf, in
+#: Schichthöhen (:func:`_shaft_passes`): so weit, wie eine Wand ohne Stütze
+#: überhängt. Ein schräger Schacht bis zu dieser Neigung hat Wände, die sich
+#: selbst tragen; eine flachere Wand ist ein Dach, und unter einem Dach ist eine
+#: Säule nicht erreichbar. Die Startregel und nicht die Grenze des Druckers,
+#: denn der Sperrraum hängt nur an den Schichten (:func:`channel_space`).
+SHAFT_DRIFT: Final = OVERHANG_ANGLE_FACTOR
+
+#: Die Bogenauflösung dieses Ausweichens, in Segmenten je Viertelkreis. Der
+#: Schritt ist eine Schichthöhe weit; bei 0,5 mm liegt das Vieleck um 0,01 mm
+#: innerhalb seines Kreises, und der Kreis weicht eher zu wenig aus als zu weit.
+SHAFT_STEP_SEGMENTS: Final = 4
+
 #: Welcher Anteil eines Deckengrundrisses in der Hülle seiner gehaltenen
 #: Randstücke liegen muss, damit er zwischen ihnen liegt
 #: (:meth:`_Ceilings.closes`). Brücke, U und Gewölbe liegen ganz darin, ein
@@ -4537,6 +4715,7 @@ def _channel_space(
     # alle Scheiben, die sie kreuzt, und jede Schicht dafür einmal gebaut.
     shades: dict[int, ShapelyPolygon] = {}
     skies: dict[int, dict[int, ShapelyPolygon]] = {}
+    passages: dict[int, dict[int, bool]] = {}
     sky_lock = threading.Lock()
 
     def shade_at(index: int) -> ShapelyPolygon:
@@ -4544,19 +4723,37 @@ def _channel_space(
             shades[index] = _material(layers[index])
         return shades[index]
 
+    def crossed_by(number: int) -> list[list[int]]:
+        return [
+            chunk
+            for chunk in chunks
+            if other_lows[number] <= heights[chunk[-1]] + CHANNEL_SLAB
+            and other_highs[number] >= heights[chunk[0]]
+        ]
+
     def sky_of(number: int, start: int) -> ShapelyPolygon:
         with sky_lock:
             if number not in skies:
-                starts = [
-                    chunk[-1] + 1
-                    for chunk in chunks
-                    if other_lows[number] <= heights[chunk[-1]] + CHANNEL_SLAB
-                    and other_highs[number] >= heights[chunk[0]]
-                ]
+                starts = [chunk[-1] + 1 for chunk in crossed_by(number)]
                 skies[number] = _sky_above(
                     _sky_window(others[number], line_width), starts, shade_at, len(layers)
                 )
             return skies[number][start]
+
+    def reachable_from(number: int, start: int, material: ShapelyPolygon) -> bool:
+        column = others[number]
+        if _open_above(column, material, sky_of(number, start), line_width):
+            return True
+        # Senkrecht kein Schacht: Folgt der Kreis einem schrägen? (RM-629) Je
+        # Säule einmal für alle Scheiben, die sie kreuzt.
+        with sky_lock:
+            if number not in passages:
+                materials = {
+                    chunk[-1] + 1: unary_union([shade_at(index) for index in chunk])
+                    for chunk in crossed_by(number)
+                }
+                passages[number] = _shafts_pass(column, materials, shade_at, heights, line_width)
+            return passages[number][start]
 
     def slab_of(chunk: list[int]) -> tuple[float, float, ShapelyPolygon] | None:
         z_low, z_high = heights[chunk[0]], heights[chunk[-1]]
@@ -4632,12 +4829,7 @@ def _channel_space(
             candidates = others[numbers]
             reachable = np.zeros(len(numbers), dtype=bool)
             for place in np.flatnonzero(shapely.intersects(candidates, enclosed)):
-                reachable[place] = _open_above(
-                    candidates[place],
-                    material,
-                    sky_of(int(numbers[place]), chunk[-1] + 1),
-                    line_width,
-                )
+                reachable[place] = reachable_from(int(numbers[place]), chunk[-1] + 1, material)
             spare = shapely.union_all(candidates[~reachable]).difference(enclosed)
             if reachable.any():
                 spare = spare.union(shapely.union_all(candidates[reachable]))

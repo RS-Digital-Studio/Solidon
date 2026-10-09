@@ -11,6 +11,7 @@ from __future__ import annotations
 import math
 from dataclasses import replace
 
+import numpy as np
 import pytest
 import trimesh
 from shapely.geometry import Point, box
@@ -1180,6 +1181,87 @@ def test_a_lid_open_wider_than_a_channel_opens_the_cup(opening: float) -> None:
     lid = cup_lid(brick(opening, 80.0, 5.0, (-opening / 2.0, 0.0, 61.5)))
 
     assert ledge_share_blocked(cup_with_a_ledge(lid)) < 0.05
+
+
+def shaft_lid(
+    path: list[tuple[float, float]], diameters: list[float], *, radius: float = 40.0
+) -> trimesh.Trimesh:
+    """Ein Deckel auf dem Becher aus :func:`cup_with_a_ledge`, von seinem Rand in
+    z = 60 bis zum letzten Punkt von ``path`` hoch, durchbohrt von einem runden
+    Schacht entlang ``path`` (Punkte x, z in der Ebene y = 0), je Strecke mit
+    ihrem Durchmesser, an den Knicken mit einer Kugel gerundet. Unten und oben
+    reicht er über den Deckel hinaus."""
+    top = path[-1][1]
+    lid = trimesh.creation.cylinder(radius=radius, height=top - 60.0, sections=96)
+    lid.apply_translation((0.0, 0.0, (60.0 + top) / 2.0))
+    points = [np.array([x, 0.0, z]) for x, z in path]
+    cuts = []
+    for number, (start, end, diameter) in enumerate(
+        zip(points[:-1], points[1:], diameters, strict=True)
+    ):
+        axis = (end - start) / np.linalg.norm(end - start)
+        low = start - 10.0 * axis if number == 0 else start
+        high = end + 10.0 * axis if number == len(diameters) - 1 else end
+        cuts.append(
+            trimesh.creation.cylinder(radius=diameter / 2.0, sections=128, segment=[low, high])
+        )
+        if number:
+            joint = trimesh.creation.icosphere(subdivisions=3, radius=diameters[number - 1] / 2.0)
+            joint.apply_translation(start)
+            cuts.append(joint)
+    return trimesh.boolean.difference([lid, trimesh.boolean.union(cuts)])
+
+
+def tilted_shaft(tilt: float, diameter: float = 34.0) -> trimesh.Trimesh:
+    """Ein Deckel von 20 mm mit einem Loch, um ``tilt`` Grad geneigt — positiv
+    nach oben zum Sims hin. Unten reicht es 2 mm über die Kante des Simses;
+    senkrecht schaut man nur ``d / cos θ - 20 · tan θ`` weit hindurch."""
+    theta = math.radians(tilt)
+    start = 2.0 - diameter / 2.0 / math.cos(theta)
+    return shaft_lid([(start, 60.0), (start + 20.0 * math.tan(theta), 80.0)], [diameter])
+
+
+@pytest.mark.parametrize("tilt", [20.0, 30.0, -30.0])
+def test_a_tilted_shaft_as_wide_as_a_channel_opens_the_cup(tilt: float) -> None:
+    """Ein schräger Schacht zählt mit seiner Weite quer zur Achse, nicht mit
+    seiner senkrechten Durchsicht: Schicht für Schicht schiebt sich der Kreis
+    von ``CHANNEL_WIDTH`` durch ihn hindurch. Ein Loch Ø 34 mm in einem Deckel
+    von 20 mm sieht bei 20° senkrecht 28,9 mm, bei 30° 27,7 mm; nach der
+    senkrechten Schnittmenge gefragt, lag der Sims darunter zu 64 % im Sperrraum
+    und druckte ohne Stütze (Nachprüfung RM-571, RM-629)."""
+    assert ledge_share_blocked(cup_with_a_ledge(tilted_shaft(tilt))) < 0.05
+
+
+def test_a_tilted_shaft_narrower_than_a_channel_keeps_the_cup_closed() -> None:
+    """Die Gegenprobe zum schrägen Schacht: Ø 28 mm ist quer zur Achse enger als
+    ein Kanal, und daran ändert die Neigung nichts."""
+    assert ledge_share_blocked(cup_with_a_ledge(tilted_shaft(20.0, 28.0))) > 0.5
+
+
+def zigzag_shaft(second: float) -> trimesh.Trimesh:
+    """Ein Deckel von 110 mm mit einem Schacht im Zickzack: Ø 34 mm um 40° zum
+    Sims hin geneigt, nach 55 mm Höhe um 40° zurück, die zweite Strecke mit
+    ``second`` mm. Unten reicht er 2 mm über die Kante des Simses. Die Strecke
+    versetzt ihn weiter, als er waagerecht weit ist — senkrecht schaut man
+    nirgends hindurch."""
+    theta = math.radians(40.0)
+    width = 34.0 / math.cos(theta)
+    start = 2.0 - width / 2.0
+    shift = 55.0 * math.tan(theta)
+    assert shift > width, "senkrecht nirgends durchschaubar"
+    path = [(start, 60.0), (start + shift, 115.0), (start, 170.0)]
+    return shaft_lid(path, [34.0, second], radius=52.0)
+
+
+@pytest.mark.parametrize(("second", "open_"), [(34.0, True), (28.0, False)])
+def test_a_zigzag_shaft_counts_as_open_where_a_channel_passes(second: float, open_: bool) -> None:
+    """Der Kreis folgt dem Schacht auch durch einen Knick, solange keine Wand
+    flacher ist als die Überhanggrenze. Ein Zickzack, durch den man senkrecht
+    nirgends hindurchschaut, ist offen, wenn er überall so weit ist wie ein
+    Kanal; wird er irgendwo enger, bleibt der Sims gesperrt."""
+    share = ledge_share_blocked(cup_with_a_ledge(zigzag_shaft(second)))
+
+    assert share < 0.05 if open_ else share > 0.5
 
 
 def test_open_sky_is_asked_two_line_widths_around_a_column_even_at_a_tip() -> None:
