@@ -31,6 +31,7 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-09 | [RM-496: Am echten Fenster laden reale Modelle so schnell wie in v0.5.1 (09.10.2026)](#rm-496-am-echten-fenster-laden-reale-modelle-so-schnell-wie-in-v051-09102026) |
 | 2026-10-09 | [RM-621: Ein Slicer, der hinter Flatpak abstürzt, heißt abgestürzt (09.10.2026)](#rm-621-ein-slicer-der-hinter-flatpak-abstürzt-heißt-abgestürzt-09102026) |
 | 2026-10-09 | [RM-620: Ein Slicer, der Filamente mit zu verschiedenen Temperaturen ablehnt, sagt es (09.10.2026)](#rm-620-ein-slicer-der-filamente-mit-zu-verschiedenen-temperaturen-ablehnt-sagt-es-09102026) |
 | 2026-10-08 | [RM-602: Der Druckdialog ordnet die Profile in einem Lesedurchgang zu (08.10.2026)](#rm-602-der-druckdialog-ordnet-die-profile-in-einem-lesedurchgang-zu-08102026) |
@@ -44560,3 +44561,24 @@ unverändert; `test_evaluation.py::test_a_pin_whose_plate_is_removed_says_nothin
 mit Gegenprobe (ohne `object_ids` rot). Die zwölf Beispielprojekte und `example_v48.p3d` tragen
 Format 48 und Bibliotheksversion 24. Changelog: ja — Stift für Bohrung baut Senkkopf,
 Zylinderkopf und Gewinde passend zur Bohrung.
+
+## RM-496: Am echten Fenster laden reale Modelle so schnell wie in v0.5.1 (09.10.2026)
+
+<a id="rm-496-am-echten-fenster-laden-reale-modelle-so-schnell-wie-in-v051-09102026"></a>
+<a id="rm-496"></a>
+
+**RM-496 — Reale Modelle laden im Prüfstand fast doppelt so lang wie in v0.5.1 — am echten Fenster nachmessen.**
+  Versionsvergleich 0.5.2 (02.10.2026), Weg 1, unter Vorbehalt. Laden bis Ruhe: Rucksack-Halter
+  2,9–3,3 s (v0.5.1) → 5,3–6,1 s, pegboard-STEP ähnlich. Im Profil sind 2,2 s davon nachgeholte
+  Importe von trimesh/networkx und 1,4 s Merkmalserkennung. Der Prüfstand läuft ohne das
+  Vorwärmen beim Programmstart; ob der Kunde die Importzeit sieht, ist offen.
+  **Stellen:** Ladeweg `app/core/ingest/`, Vorwärmen in `app/ui/app.py`; Profil
+  `weg1\sonden\ladeprof.py`.
+  **Fix (allgemein):** am echten Fenster über den Startweg messen; sieht der Kunde die Importe,
+  gehören sie ins Vorwärmen, und die Erkennung darf das Bild nicht aufhalten (vgl. RM-492).
+  **Abnahme:** drei reale Modelle (Rucksack-Halter, pegboard-STEP, ein drittes) am echten Fenster
+  nicht langsamer als v0.5.1. Bauplan §31.
+  Belege: `F:\solidon-review-reports\regression-0.5.2\weg1\befunde.md` (W1-5), Rohwerte in `weg1\ergebnisse\`.
+  Vermerk 09.10.2026: Am echten Fenster kein Rückschritt (03.10., Stand `1e4a03d75`): Über den echten Startweg mit Vorwärmen laden Rucksack, STEP und 3MF so schnell wie in v0.5.1 (3,7 / 3,3 / 14,9 s gegen 3,5 / 3,6 / 14,2 s; v0.4.1 Rucksack 3,1 s); die Verdopplung des Prüfstands kam vom fehlenden Vorwärmen und von Fremdlast. Seit v0.5.1 offen und als [RM-672](ROADMAP.md#rm-672) übernommen, samt der Messung des Bibliothekseinflusses: sofortiges Öffnen nach dem Start dauert doppelt so lang wie in v0.4.1, und unter Fremdlast hungerte der zurückgestellte Hilfsprozess das Laden bis über 150 s aus (vor RM-380 gemessen). Beleg: `F:\solidon-review-reports\rm496\bericht.md`.
+
+**Abschluss:** Am echten Fenster gemessen (03.10.2026, `F:\solidon-review-reports\rm496\bericht.md`, Startweg `app.ui.app.main()` mit Ladebildschirm und Vorwärmen, Prozessbaum auf HIGH, je Zelle 3–4 Läufe im Wechsel): Öffnen bis Ruhe nach 3 s Rucksack-Halter 3,74 s (v0.5.1: 3,46, v0.4.1: 3,13), pegboard-STEP 3,30 s (3,55 / 3,67), `elegoo_grease_tool.3mf` mit 7 Körpern 14,87 s (14,24; v0.4.1 lädt die Datei nicht). Die Verdopplung des Prüfstands kam vom fehlenden Vorwärmen (2,2 s Importe) und von Fremdlast; kein Rückschritt gegenüber v0.5.1. Was offen blieb — sofortiges Öffnen direkt nach dem Start doppelt so lang wie in v0.4.1, der zurückgestellte Hilfsprozess unter Fremdlast und der Einfluss der neuen Bibliotheksstände (+0,3 bis 1,5 s) — steht in [RM-672](ROADMAP.md#rm-672). Abgeschlossen von Claude (Review-Thread).
