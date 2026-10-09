@@ -27368,12 +27368,16 @@ Synthetische Gegenproben in `test_real_slicers.py`: Bögen, Bahnhöhe mit und oh
 Nachbarschaft, Rand und `Skirt/Brim` — jede verstümmelte Fassung der Messung und die alte
 aus `c95d542ed` werden dort rot. Linux und macOS (Anycubic 2.0.0.5 gegen 2.0.0.3, Laufzeit
 gegen das 120-Minuten-Limit) nimmt die Slicerauswahl beim Push auf main ab, denn die CI läuft
-nur dort (Entscheidung Robert). Cura und SuperSlicer fehlen: RM-622 hat sie nicht gemessen.
-Cura 5.13 an derselben Platte (Sonde, nicht eingecheckt): unter Gitter oben genau der
-geschriebene Abstand (0,28 und 0,44 mm, mit einer Bruchteillage der Stütze), unten
-aufgerundet (0,4 und 0,6); unter Bäumen oben und unten aufgerundet (0,4 und 0,6).
+nur dort (Entscheidung Robert). SuperSlicer fehlt: RM-622 hat es nicht gemessen. Cura
+fehlt, weil es aufrundet und Solidons Tabelle es nicht weiß; das richtet RM-628, und Cura
+kommt mit ihm in den Test. Cura 5.13 an derselben Platte (Sonde, nicht eingecheckt): unter
+Gitter oben genau der geschriebene Abstand (0,28 und 0,44 mm, mit einer Bruchteillage der
+Stütze), unten aufgerundet (0,4 und 0,6); unter Bäumen oben und unten aufgerundet (0,4 und
+0,6). Am Weg des Tests mit `support_contact` nachgemessen: Gitter 0,28 → oben 0,28, unten
+0,40; Baum 0,44 → oben und unten 0,60; je drei untere Lagen.
 `advise.WHOLE_LAYER_GAP_FLAVOURS` und `support_gap_target` nehmen für Cura dagegen ganze
-Schichten zum nächsten Vielfachen an. Changelog: nein (Test).
+Schichten zum nächsten Vielfachen an — mit dem heutigen Sollwert wären alle vier
+Abstandszusicherungen rot. Changelog: nein (Test).
 
 ## RM-027 entfällt mit dem privaten Index (09.09.2026)
 

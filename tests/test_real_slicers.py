@@ -484,8 +484,10 @@ def test_the_support_contact_arrives_as_solidon_says(
     Die gewählten Prozesse führen 0,2 mm Abstand (Anycubic 0,1) und zwei untere
     Trennschichten (PrusaSlicer 0, Anycubic „wie oben“). Unter Gitter 0,28 mm.
     Unter Bäumen 0,44 mm, 2,2 Schichten: Ob ein Programm rundet oder abschneidet,
-    es druckt 0,4. Cura steht nicht in der Liste: Es rundet anders, als
-    ``rounds_to_whole_layers`` annimmt (gemessen im Archiv, RM-624).
+    es druckt 0,4. Cura steht nicht in der Liste: Es rundet auf (unter Gitter
+    unten 0,40, unter Bäumen 0,60), während ``rounds_to_whole_layers`` ganze
+    Schichten zur nächsten annimmt. Das richtet RM-628, und Cura kommt mit ihm
+    hierher.
     """
     from app.core.slice import advise
     from app.ui.print_settings_dialog import _PlateJob, _prepare_plate

@@ -72,6 +72,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-588 — Die Naht liegt hinten, und große Oberseiten werden gebügelt](#rm-588) | Geometrie, Erkennung und Druckvorbereitung | Naht hinten bei Figuren, Bügeln der obersten Fläche |
 | [RM-589 — Bohrungen und Stifte passen ohne Nacharbeit](#rm-589) | Geometrie, Erkennung und Druckvorbereitung | Loch- und Elefantenfußausgleich aus dem Spiel des Materialprofils |
 | [RM-626 — Eine Kanalsäule endet an ihrer höchsten Auflage, und eine Insel im umschlossenen Kanalraum verliert ihre Säule](#rm-626) | Geometrie, Erkennung und Druckvorbereitung | Gefunden im Review von RM-571 (09.10.), mit Sonden belegt; nächster Schritt: Inseln behalten ihre Säule (Test an der Kammer), Schätzung messen, Kammer mit Insel in den vier Slicern |
+| [RM-628 — Solidon rechnet mit Curas Aufrunden des Stützabstands](#rm-628) | Geometrie, Erkennung und Druckvorbereitung | In Arbeit: Claude (Zweig `einstellungen/cura-rundung-rm628`). Cura druckt unter Gitter oben 0,28 / unten 0,40, unter Bäumen 0,60 / 0,60 (geschrieben 0,28 bzw. 0,44), Solidon rät PETG unter Gitter 0,2; danach Cura in den Kontakttest von RM-624 |
 | [RM-218 — Am exakten Körper heißen Bohrungen nach ihrer Lage, und der Verlauf lässt sich dort nicht umbauen](#rm-218) | Geometrie, Erkennung und Druckvorbereitung | Code und Tor mit `d907d6036` in v0.5.2; offen allein die Fensterabnahme beim Release (RM-213) |
 | [RM-230 — Variable Verrundung und Formschräge: fünf Grenzen, die der Kunde merkt](#rm-230) | Geometrie, Erkennung und Druckvorbereitung | Grenzen 1 bis 3 gebaut oder benannt (06.10.: Mischecke exakt geprüft, Ring-Anfang und Zwischenstellen in den Feldhilfen); Tray: beide Kerne nennen die Fußrundung vor der Rechnung, aber der Weg über *Merkmal entfernen* trägt dort nicht; offen: Fußrundung als Kette entfernen, Netzschräge 2,3× langsamer, Fase am Fuß, B-Spline-Ecke und zweites Anstellen am Netz mit Kernen uneins |
 | [RM-253 — Am Laptop-Ständer tragen Kippen und Verdoppeln einer Bohrung falsch ab](#rm-253) | Geometrie, Erkennung und Druckvorbereitung | In Arbeit: Claude (Worktree `F:/solidon-claude-b`). 14 von 28 Bohrungen tragen ein fremdes Teil und sagen das jetzt mit Weg, statt es still zu verschmelzen (RM-413, 06.10.); offen an den freien `hole_1`/`hole_2`/`hole_4`: Verdoppeln ohne Wirkung, −127 mm³ bzw. +1,4–1,9 mm³ beim Versetzen und Kippen — gegen einen Sollwert ohne Boolesche an der kaputten Schale messen |
@@ -1029,6 +1030,24 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   der Inselsäulen, mit Test. Stellt heute keiner Stütze in den ungesperrten Teil, bleibt die
   Höhe der Kanalsäule, wie sie ist, und der Punkt schließt mit der Inselbehebung, der
   Schätzung und den Slicerzahlen als Beleg.
+
+<a id="rm-628"></a>
+
+- [~] **RM-628 — Solidon rechnet mit Curas Aufrunden des Stützabstands.**
+  In Arbeit: Claude (Zweig `einstellungen/cura-rundung-rm628`). Befund aus der Nachprüfung
+  von RM-624 (10.10.2026), gemessen mit `tests/gcode_contact.support_contact` am Weg des
+  Kontakttests (Platte über einer Säule, PETG, 0,2-mm-Schichten, Cura 5.13): Unter Gitter
+  druckt Cura geschriebene 0,28 mm oben genau 0,28 und unten aufgerundet 0,40, unter Bäumen
+  0,44 mm oben und unten 0,60. Solidon nimmt für Cura dagegen immer ganze Schichten zur
+  nächsten an (`advise.WHOLE_LAYER_GAP_FLAVOURS`, `rounds_to_whole_layers`), rät einem
+  Cura-Kunden mit PETG unter Gitter deshalb geratene 0,2 mm statt 0,28
+  (`support_gap_target`) und sagt am Feld, Cura rechne den Abstand oben und unten in ganzen
+  Schichten zu 0,20 mm (`app/core/export/slicer_keys.py:1661–1672`). Deshalb fehlt Cura in
+  `test_the_support_contact_arrives_as_solidon_says` (RM-624): Mit der heutigen Tabelle wären
+  alle vier Abstandszusicherungen rot. Abnahme: Solidon rät und beschreibt Curas Rundung, wie
+  Cura druckt, und Cura steht in `_CONTACT_PROGRAMS` mit Sollwerten aus derselben Auskunft
+  oben und unten (Gitter 0,28 / 0,40, Baum 0,60 / 0,60, drei untere Lagen); die eigene
+  Cura-Messung des Zweigs geht dabei in `support_contact` auf.
 
 <a id="rm-504"></a>
 
