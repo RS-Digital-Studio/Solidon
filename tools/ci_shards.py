@@ -4,7 +4,7 @@
     .venv\\Scripts\\python.exe tools/ci_shards.py core \\
         berichte/tests-core-windows-latest-*/junit.xml
     .venv\\Scripts\\python.exe tools/ci_shards.py windows berichte/tests-windows-*/tests__*.xml \\
-        berichte/tests-contracts-windows-latest/tests__*.xml
+        berichte/tests-contracts-windows-latest/contracts/tests__*.xml
 
 ``gh run download`` legt je Artefakt einen Ordner mit dessen Namen an. Die
 Kerntabelle nimmt die Berichte **einer** Plattform — alle drei Teile, sonst
