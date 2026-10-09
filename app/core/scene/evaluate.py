@@ -1810,7 +1810,9 @@ def _evaluate(
         for key, result, to_disk in pending:
             cache.put(key, result, to_disk=to_disk)
     if cache is not None:
-        cache.with_held_features(lambda held: _keep_steps(fresh_steps, step_generation, held))
+        cache.with_held_features(
+            lambda held, parts_of: _keep_steps(fresh_steps, step_generation, held, parts_of)
+        )
     if cache is not None and stopped_at is None:
         # Auch ohne neuen Eintrag: Ein Lauf aus lauter Treffern — Zurücknehmen —
         # lässt die Netze älterer Stände wachsen (RM-567). Die Netze der
@@ -4339,7 +4341,8 @@ class _RememberedStep:
     trägt sie ein —, ``None``, wenn er sie nicht angefasst hat."""
     weight: int
     """Bytes über die Merkmale seines Eintrags hinaus, für die Grenze des Merkers
-    (:data:`REMEMBERED_BYTES_KEPT`) — :attr:`rest` und alle :attr:`parts`."""
+    (:data:`REMEMBERED_BYTES_KEPT`) — :attr:`rest` und die :attr:`parts`, die der
+    Eintrag nicht schon hält; gewogen in :func:`_keep_steps`."""
     rest: int
     """Was nur er hält, samt der Schätzung für die Teilhashes."""
     parts: dict[int, tuple[object, int]]
@@ -4587,26 +4590,20 @@ def _remember_step(
     den Schritt zu mehr als einer Funktion seiner Eingänge; er wird dann nicht
     gemerkt (``quiet``). Ebenso, wenn die Ausgabe ein anderes Netz trägt.
 
-    **Gewogen wird, was er über seinen Eintrag hinaus hält** (Nachprüfung L,
-    M-3): Die Merkmale der Operation (``source``) hält der Eintrag der
-    Speicherebene, und die bewegten Merkmale teilen ihre Dreiecksnummern mit
-    ihnen. Je Schritt ganz gezählt, wog er am Laptop-Riser 12,3 MB, über den
-    Eintrag hinaus hält er 0,24 MB. Darum kommt er erst in den Merker, wenn
-    sein Ergebnis in der Speicherebene liegt (:func:`_keep_steps`), und geht,
-    wenn es sie verlässt (:func:`release_steps_of`).
+    Gezählt wird hier, was er hält, zerlegt in Rest und große Behälter
+    (``memory.held_parts``); was davon schon der Eintrag hält, aus dem er kam,
+    zieht :func:`_keep_steps` ab.
     """
     if not quiet or produced.mesh is not placed.mesh:
         return None
-    from app.core.memory import held_parts, mark_held
+    from app.core.memory import held_parts
 
     changed: dict[str, Any] = {}
     for item in dataclasses.fields(produced):
         value = getattr(produced, item.name)
         if value is not getattr(placed, item.name):
             changed[item.name] = _own_copy(value)
-    seen: set[int] = set()
-    mark_held(placed.features, seen)
-    rest, parts = held_parts((changed, findings), seen)
+    rest, parts = held_parts((changed, findings))
     rest += _DIGEST_BYTES * len(produced.features)
     return _RememberedStep(
         ways,
@@ -4623,7 +4620,10 @@ def _remember_step(
 
 
 def _keep_steps(
-    fresh: Sequence[tuple[bytes, _RememberedStep]], generation: int, held: Collection[int]
+    fresh: Sequence[tuple[bytes, _RememberedStep]],
+    generation: int,
+    held: Collection[int],
+    parts_of: Callable[[object], Mapping[int, tuple[object, int]]],
 ) -> None:
     """Legt die neu gemerkten Schritte einer Auswertung in den Merker.
 
@@ -4631,6 +4631,14 @@ def _keep_steps(
     ``held`` nennt deren Kennungen, gelesen unter dem Schloss des Caches
     (``ResultCache.with_held_features``). Ein abgebrochener Lauf legt nichts
     ab, und ein Schritt ohne Eintrag träfe nie wieder.
+
+    **Gewogen wird, was er über seinen Eintrag hinaus hält** (Nachprüfung L,
+    M-3): Die bewegten Merkmale teilen ihre Dreiecksnummern mit den
+    Merkmalen der Operation, und die hält der Eintrag — ``parts_of`` nennt
+    dessen große Behälter aus dem Merker des Caches, den die Grenze ohnehin
+    füllt. Je Schritt ganz gezählt, wog er am Eiffelturm 19 MB, über den
+    Eintrag hinaus 10 MB; am Laptop-Riser 12,3 statt 1,6 MB. Er geht, wenn
+    der Eintrag die Speicherebene verlässt (:func:`release_steps_of`).
 
     **Verdrängt wird, was diese Auswertung nicht gebraucht hat** — Schritte
     eines geänderten Verlaufs. Eine Auswertung geht den Verlauf von vorn
@@ -4640,9 +4648,18 @@ def _keep_steps(
     ungemerkt, und verdrängt wird nichts (Nachprüfung L, G-5).
     """
     global _REMEMBERED_BYTES
+    weighed = []
+    for key, step in fresh:
+        if id(step.source) not in held:
+            continue
+        shared = parts_of(step.source)
+        weight = step.rest + sum(
+            size for identity, (_holder, size) in step.parts.items() if identity not in shared
+        )
+        weighed.append((key, dataclasses.replace(step, weight=weight)))
     with _REMEMBERED_LOCK:
-        for key, known in fresh:
-            if id(known.source) not in held or known.weight > REMEMBERED_BYTES_KEPT:
+        for key, known in weighed:
+            if known.weight > REMEMBERED_BYTES_KEPT:
                 continue
             replaced = _REMEMBERED_STEPS.pop(key, None)
             if replaced is not None:

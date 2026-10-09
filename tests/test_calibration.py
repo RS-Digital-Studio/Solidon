@@ -543,8 +543,8 @@ def test_the_variants_leave_no_remembered_step_behind(
     kept: list[int] = []
     real = module._keep_steps
 
-    def counted(fresh: Any, generation: int, held: Any) -> None:
-        real(fresh, generation, held)
+    def counted(fresh: Any, generation: int, held: Any, parts_of: Any) -> None:
+        real(fresh, generation, held, parts_of)
         kept.append(len(module._REMEMBERED_STEPS))
 
     monkeypatch.setattr(module, "_keep_steps", counted)

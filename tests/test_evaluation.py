@@ -1948,7 +1948,7 @@ def test_a_result_that_came_from_a_question_stays_out_of_the_long_lived_cache() 
             return None
 
         def with_held_features(self, then: Any) -> None:
-            then(frozenset())
+            then(frozenset(), lambda features: {})
 
     load_operations()
     meshes = Path(__file__).parent / "data" / "meshes"

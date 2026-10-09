@@ -298,45 +298,6 @@ def held_parts(
     return rest, parts
 
 
-def mark_held(value: object, seen: set[int], depth: int = 0) -> None:
-    """Trägt in ``seen`` ein, was ``value`` erreicht, ohne es zu zählen (Nachprüfung L, M-3).
-
-    Für den, der danach nur wissen will, was ein zweiter Wert darüber hinaus
-    hält (``held_parts(other, seen)``). Eine Folge, deren erstes Element eine
-    Zahl, ein Text oder ein Zahlentupel ist, wird nicht durchlaufen — die
-    Dreiecksnummern eines Merkmals, hunderttausend Zahlen, kosteten sonst so
-    viel wie ihre Zählung. Was dabei unerkannt bleibt, zählt der zweite Wert
-    mit: eher zu viel als zu wenig.
-    """
-    if value is None or isinstance(value, (bool, int, float, complex, str, bytes)):
-        return
-    identity = id(value)
-    if identity in seen:
-        return
-    seen.add(identity)
-    if hasattr(value, "dtype"):
-        seen.add(id(_array_root(value)))
-        return
-    if depth >= DEPTH or isinstance(value, type) or callable(value):
-        return
-    items: Any
-    if isinstance(value, dict):
-        items = list(dict(value).values())
-    elif isinstance(value, (tuple, list, set, frozenset)):
-        items = list(value)
-        if items and (type(items[0]) in _FLAT or _points(items[:1])):
-            return
-    else:
-        names = _field_names(type(value))
-        if names is not None:
-            items = [getattr(value, name, None) for name in names]
-        else:
-            attributes = getattr(value, "__dict__", None)
-            items = [attributes] if isinstance(attributes, dict) else []
-    for item in items:
-        mark_held(item, seen, depth + 1)
-
-
 def _held(
     value: object, seen: set[int], depth: int, parts: dict[int, tuple[object, int]] | None
 ) -> int:

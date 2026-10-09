@@ -639,15 +639,31 @@ class ResultCache:
         """Nur mit gehaltenem Schloss — die Kennungen der Merkmalssätze aller Einträge."""
         return {id(body.features) for entry in self._entries.values() for body in entry.objects}
 
-    def with_held_features(self, then: Callable[[frozenset[int]], None]) -> None:
+    def with_held_features(
+        self,
+        then: Callable[[frozenset[int], Callable[[object], dict[int, tuple[object, int]]]], None],
+    ) -> None:
         """Ruft ``then`` mit den Kennungen der Merkmalssätze aller Einträge, unter dem Schloss.
 
         Für den Merker der Zuordnungsschritte (``evaluate._keep_steps``): Er
         nimmt nur Schritte, deren Merkmale hier liegen, und kein anderer Faden
-        verdrängt sie dazwischen.
+        verdrängt sie dazwischen. Das Zweite gibt die großen Behälter eines
+        dieser Sätze (``memory.held_parts``) aus demselben Merker, den
+        :meth:`trim` danach liest — gezählt wird jeder Satz einmal, hier oder
+        dort, wie vor dem Merker der Schritte.
         """
         with self._lock:
-            then(frozenset(self._features_present()))
+            then(frozenset(self._features_present()), self._feature_parts)
+
+    def _feature_parts(self, features: object) -> dict[int, tuple[object, int]]:
+        """Nur mit gehaltenem Schloss — die großen Behälter eines Merkmalssatzes, gemerkt."""
+        from app.core.memory import held_parts
+
+        known = self._features_held.get(id(features))
+        if known is None or known[0] is not features:
+            known = (features, *held_parts(features))
+            self._features_held[id(features)] = known
+        return known[2]
 
     def trim(self, keep: Iterable[Mesh] = ()) -> None:
         """Hält die Bytegrenze der Speicherebene (RM-567).
