@@ -187,6 +187,13 @@ reicht dafür selten. Sprache in `tests/`: `AGENTS.md`, „Sprachregelung“.
   bloße Anweisung, auch im Aufräumen: Ein ungeprüftes Warten ließ auf dem
   langsamen Intel-Läufer Tests auf halbem Stand weiterlaufen. Der Wächter steht
   in `test_toolchain.py`.
+- **Wer auf einen Arbeiterfaden wartet, wartet mit `processEvents()` und
+  `time.sleep`, nie mit `QTest.qWait`** (`ui_helpers.wait_until`): `qWait` hält
+  die GIL, und ein Faden mit vielen Dateiblicken (`shutil.which` über einen
+  langen PATH) kam auf dem Windows-Läufer in Sekunden nicht durch.
+- **Eine Arbeiterfrage im Test steht auf einer Freigabe** (`threading.Event`),
+  wenn der Test prüft, was vor ihrer Antwort gilt: Auf einem schnellen Läufer
+  ist sie sonst schon beantwortet, bevor die nächste Zeile läuft.
 
 ## Den Lauf messen, nicht einen Filter darüber
 
