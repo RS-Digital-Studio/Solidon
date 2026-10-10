@@ -10606,3 +10606,54 @@ def test_the_part_advice_memo_knows_the_tower() -> None:
     assert gap(False) == pytest.approx(0.1)
     assert gap(True) == pytest.approx(0.16)
     assert gap(False) == pytest.approx(0.1)
+
+
+@pytest.mark.parametrize(
+    ("with_block", "offered"), [(False, True), (True, False)], ids=["allein", "neben Klotz"]
+)
+def test_the_dialog_offers_fine_layers_only_where_the_tower_lets_them_through(
+    monkeypatch: pytest.MonkeyPatch, with_block: bool, offered: bool
+) -> None:
+    """Der Druckdialog fragt, wie der Export, auf welchen Platten der Turm allen
+    Teilen dieselben Schichten abverlangt (Nachprüfung RM-586, N5): Eine
+    zweifarbige Kuppe allein bekommt den Vorschlag feiner Schichten, neben einem
+    Klotz derselben Platte nicht — sonst schlüge der Dialog vor, was der Export
+    mit einem Befund verwirft."""
+    from app.core.types import MaterialSlot, SceneObject
+    from app.ui.print_settings_dialog import _AdviceWorker
+
+    monkeypatch.setattr(handover, "_native_process", lambda _setup: {"enable_prime_tower": "1"})
+    profile = profiles.make_profile("centauri-carbon-2", "pla")
+    settings = print_settings.resolve(profile)
+    sphere = trimesh.creation.icosphere(subdivisions=5, radius=20.0)
+    floor = trimesh.creation.box(extents=(60.0, 60.0, 30.0))
+    floor.apply_translation((0.0, 0.0, 15.0))
+    dome = trimesh.boolean.intersection([sphere, floor], engine="manifold")
+    white = MaterialSlot(0, "Weiß", (1.0, 1.0, 1.0), material_type="PLA")
+    red = MaterialSlot(1, "Rot", (0.8, 0.1, 0.1), material_type="PLA")
+    slots = tuple(int(z > 10.0) for z in dome.triangles_center[:, 2])
+    bodies: tuple[SceneObject, ...] = (
+        SceneObject(
+            id="kuppe",
+            name="Kuppe",
+            mesh=MeshData(raw=dome, slots=slots),
+            material_slots=[white, red],
+        ),
+    )
+    if with_block:
+        block = trimesh.creation.box(extents=(20.0, 20.0, 10.0))
+        block.apply_translation((50.0, 0.0, 5.0))
+        bodies += (
+            SceneObject(id="klotz", name="Klotz", mesh=MeshData(block), material_slots=[white]),
+        )
+    setup = handover.SlicerSetup(executable=Path("orca-slicer.exe"), flavour="orca")
+    worker = _AdviceWorker(bodies, settings, profile, setup, {}, (), (), {}, flavour="orca")
+    got: list[list] = []
+    worker.done.connect(lambda entries, _results: got.append(entries))
+    worker.work()
+
+    assert got, "der Arbeiter kam ohne Rat zurück"
+    assert worker.towers == frozenset({0})
+    assert worker.shared == (frozenset({0}) if with_block else frozenset())
+    paths = {entry.path for entry in got[0]}
+    assert ("layers.fine_layer_height" in paths) is offered
