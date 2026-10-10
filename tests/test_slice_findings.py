@@ -1275,6 +1275,20 @@ def test_a_tilted_shaft_as_wide_as_a_channel_opens_the_cup(tilt: float) -> None:
     assert ledge_share_blocked(cup_with_a_ledge(tilted_shaft(tilt))) < 0.05
 
 
+def test_a_shaft_bent_upright_stays_open() -> None:
+    """Ein Loch Ø 34 mm, erst 20 mm um 40° geneigt, dann gerundet 20 mm
+    senkrecht. Über dem Knick schiebt die Wand die Kreise noch einige
+    Millimeter schräg zur Achse; nach diesem Schub allein geschätzt, passte die
+    Ellipse eines 40°-Wegs nicht in den senkrechten Teil, und der Schacht blieb
+    zu. Das Wandern der Mitte des Lochs zeigt die Achse (``SHAFT_SLOPE_TURN``)."""
+    theta = math.radians(40.0)
+    start = 2.0 - 17.0 / math.cos(theta)
+    bend = start + 20.0 * math.tan(theta)
+    lid = shaft_lid([(start, 60.0), (bend, 80.0), (bend, 100.0)], [34.0, 34.0])
+
+    assert ledge_share_blocked(cup_with_a_ledge(lid)) < 0.05
+
+
 def tilted_slit(tilt: float, width: float) -> trimesh.Trimesh:
     """Ein Deckel von 20 mm mit einem Schlitz, quer zu seiner Achse ``width``
     weit und 60 mm lang, um ``tilt`` Grad zum Sims hin geneigt. Unten reicht er
@@ -1454,8 +1468,64 @@ def test_a_step_narrower_than_a_channel_keeps_the_shaft_closed() -> None:
     überhängt (``SHAFT_DRIFT``). Zwei Löcher Ø 34 mm, um 6 mm versetzt,
     überlappen an ihrer Stufe 28 mm — da passt kein Kreis von 30 mm durch,
     auch nicht in Schritten: Der Kreis müsste an der Stufe 2 mm auf einmal
-    springen."""
+    springen. Am Becher sperrt schon die Decke des Simses (auch bei 3 mm
+    Versatz, Review RM-629); die Stufe selbst misst
+    :func:`test_a_step_is_open_where_a_channel_circle_passes`."""
     assert ledge_share_blocked(cup_with_a_ledge(stepped_shaft(6.0))) > 0.5
+
+
+def test_two_slabs_on_different_ways_keep_their_own_answers() -> None:
+    """Zwei Scheiben einer Säule gehen nur dann einen gemeinsamen Weg, wenn ihre
+    Kreise dieselben sind (:func:`_same_centres`). Synthetisch: Die untere
+    Scheibe beginnt bei z = 1,25; ein Block bis y = 0 von z = 3 bis 5 nimmt
+    ihr die Kreise auf der Seite -y. Die obere beginnt bei z = 5,25 darüber
+    mit allen Kreisen. Der Deckel von z = 20 bis 23 ist nur auf der Seite -y
+    offen: Die obere kommt hinaus, die untere nicht (Review RM-629, Fund 4)."""
+    from app.core.slice.analysis import _shafts_pass
+
+    heights = [0.25 + 0.5 * index for index in range(60)]
+    column = box(-2.0, -2.0, 2.0, 2.0)
+    outer = box(-120.0, -120.0, 120.0, 120.0)
+
+    def shade_at(index: int) -> BaseGeometry:
+        z = heights[index]
+        if 3.0 <= z < 5.0:
+            return box(-60.0, -60.0, 60.0, 0.0)
+        if 20.0 <= z < 23.0:
+            return outer.difference(box(-60.0, -60.0, 60.0, 3.0))
+        return ShapelyPolygon()
+
+    lower, upper = 2, 10
+    materials = {lower: ShapelyPolygon(), upper: ShapelyPolygon()}
+
+    assert _shafts_pass(column, materials, shade_at, heights, LINE) == {
+        lower: False,
+        upper: True,
+    }
+
+
+@pytest.mark.parametrize(("offset", "open_"), [(3.0, True), (6.0, False)])
+def test_a_step_is_open_where_a_channel_circle_passes(offset: float, open_: bool) -> None:
+    """Die Stufe selbst, ohne den Sims des Bechers: zwei senkrechte Löcher Ø 34 mm
+    übereinander, das obere um ``offset`` versetzt. Bei 3 mm passt ein Kreis
+    von ``CHANNEL_WIDTH`` senkrecht durch beide (die Mitten überlappen), bei 6 mm
+    müsste er 2 mm auf einmal ausweichen, mehr als einen Schritt (Review RM-629,
+    Fund 4: am Becher sperrte schon die Decke des Simses)."""
+    from app.core.slice.analysis import _shafts_pass
+
+    heights = [0.25 + 0.5 * index for index in range(90)]
+    column = box(-2.0, -2.0, 2.0, 2.0)
+    plate = box(-80.0, -80.0, 80.0, 80.0)
+
+    def shade_at(index: int) -> BaseGeometry:
+        z = heights[index]
+        if 10.0 <= z < 25.0:
+            return plate.difference(Point(0.0, 0.0).buffer(17.0, quad_segs=64))
+        if 25.0 <= z < 40.0:
+            return plate.difference(Point(offset, 0.0).buffer(17.0, quad_segs=64))
+        return ShapelyPolygon()
+
+    assert _shafts_pass(column, {4: ShapelyPolygon()}, shade_at, heights, LINE) == {4: open_}
 
 
 def test_open_sky_is_asked_two_line_widths_around_a_column_even_at_a_tip() -> None:
