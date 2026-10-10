@@ -100,6 +100,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - En Linux con Flatpak, Solidon indica ahora que el slicer se ha bloqueado, en lugar de decir solo que no se creó ningún archivo.
 - También con impresoras que PrusaSlicer o SuperSlicer no conocen, ambos calculan el tiempo de impresión con las aceleraciones entregadas, y el archivo indica el material de la bobina.
 - Incluso con el ordenador a plena carga, Solidon indica el motivo real al detener un slicer, en lugar de un tiempo agotado. Un archivo de impresión terminado se aprovecha.
+- Una impresión cuyo consumo se descontó antes de la actualización se reconoce después en el almacén de filamentos.
 
 ### Roscas, taladros y piezas normalizadas
 

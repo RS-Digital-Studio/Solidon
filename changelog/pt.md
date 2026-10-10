@@ -99,6 +99,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - No Linux com Flatpak, o Solidon indica agora que o slicer encerrou inesperadamente, em vez de dizer apenas que não foi criado nenhum ficheiro.
 - Também com impressoras que o PrusaSlicer ou o SuperSlicer não conhecem, ambos calculam o tempo de impressão com as acelerações entregues, e o ficheiro indica o material da bobina.
 - Mesmo com o computador em plena carga, o Solidon indica o motivo real ao parar um slicer, em vez de um tempo esgotado. Um ficheiro de impressão terminado é aproveitado.
+- Uma impressão cujo consumo foi descontado antes da atualização é reconhecida depois no armazém de filamentos.
 
 ### Roscas, furos e peças normalizadas
 

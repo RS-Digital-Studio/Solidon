@@ -31,6 +31,7 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-10 | [RM-705: Ein vor dem Update gebuchter Druck wird danach wiedererkannt (10.10.2026)](#rm-705-ein-vor-dem-update-gebuchter-druck-wird-danach-wiedererkannt-10102026) |
 | 2026-10-10 | [RM-754: Mit und ohne Cache derselbe Satz zur freien Stelle (10.10.2026)](#rm-754-mit-und-ohne-cache-derselbe-satz-zur-freien-stelle-10102026) |
 | 2026-10-09 | [RM-638: In Einzelteile aufteilen hilft an jeder Teile-Absage (09.10.2026)](#rm-638-in-einzelteile-aufteilen-hilft-an-jeder-teile-absage-09102026) |
 | 2026-10-09 | [RM-639: In Einzelteile aufteilen behält jedes druckbare Teil (09.10.2026)](#rm-639-in-einzelteile-aufteilen-behält-jedes-druckbare-teil-09102026) |
@@ -47191,3 +47192,43 @@ festgehaltener Stelle gibt `placed_at_free_spot` denselben Befund unter derselbe
 **Nachweis:** `test_free_spot_kept.py::test_the_spot_finding_is_the_same_with_and_without_the_cache`
 (verschoben und mittig) am Stand davor rot, jetzt grün; *weg3* warm gegen kalt jetzt gleich
 (vorher fehlte kalt genau dieser Befund). Changelog 0.6.0: ja, als Behebung.
+
+## RM-705: Ein vor dem Update gebuchter Druck wird danach wiedererkannt (10.10.2026)
+
+<a id="rm-705-ein-vor-dem-update-gebuchter-druck-wird-danach-wiedererkannt-10102026"></a>
+<a id="rm-705"></a>
+
+**RM-705 — Der Abdruck der Verbrauchsbuchung änderte sich mit jedem neuen Einstellungsfeld.**
+Gefunden im Review von RM-704 (`reviews-2026-10-10/review_rm704.md`, „Format, Cache und ältere
+Stände“): `filament_usage.prepare` bildet den Abdruck über alle Werte von
+`print_settings_to_data`. Seit 0.5.3 kamen sechs Felder dazu (`support.spare_ledges`,
+`bottom_interface_layers`, `interface_spacing`, `tree_walls`, `cooling.minimum_speed`,
+`support_interface_cooling`; RM-704 bringt `support.tip_diameter`). Derselbe Würfel mit
+denselben Einstellungen ergab unter 0.5.3 und welle3 verschiedene Abdrücke, keiner stand unter
+den Altabdrücken des anderen — nach dem Update auf 0.6.0 hätte jeder Kunde die Wiedererkennung
+seiner Buchungen verloren. Die Ursache liegt in keinem Tag (die Felder kamen nach `v0.5.3`),
+deshalb im Changelog als Eigenschaft.
+
+**Gemessen an Codekopien der Tags** (`git archive`, Sonden in der Sitzung „Einstellungen nach
+dem Modell“): Die übrigen Werte sind zwischen 0.5.3 und dem Zweig in Wert und Typ gleich, auch
+mit Grundlage aus dem ElegooSlicer. Dort steht aber `cooling.minimum_speed` auf 20 statt der 10
+der Dataclass — eine Regel „neues Feld nur abseits der Dataclass-Vorgabe“ hätte jeden
+Elegoo-Kunden weiter verloren.
+
+**Behoben:** `FINGERPRINT_FIELDS` friert die Felder von 0.5.3 ein. Ein späteres Feld zählt nur,
+wo es vom Herstellerprofil abweichen soll: eigene Wahl oder übernommener Vorschlag, oder ein
+Wert einer Spule abseits der Vorgabe (eine Spule aus 0.5.3 liest das Feld mit der Vorgabe ein).
+Dazu ein Altabdruck in der Gestalt von 0.5.1 (ohne Brim-, Raftabstand und leere Wahl der
+Platte): Eine Buchung aus 0.5.1 kommt als frühere Buchung zur Prüfung, die 0.5.3 nicht kannte.
+Regel: `.claude/rules/verbrauch.md`.
+
+**Nachweis:** `test_filament_usage_fingerprint_history.py` — Sollwerte aus der Kopie von 0.5.3
+(`158d8f5d…` für den Würfel, `aa373e5e…` für die Buchung) und 0.5.1 (`3cae285a…`, `c62cddf4…`);
+Projekt und Lager in `tests/data` schrieb 0.5.3 selbst. Am Stand `083dab2f6` 7 von 8 rot, danach
+grün. Der Wächter zählt jedes Feld über `all_paths()` und erfasst `support.tip_diameter` nach
+dem Merge von RM-704 ohne Zutun; vier Mutationen der Regel (Wahl, Spule, Altgestalt, ganzer
+Filter) machen ihn rot. Am Kundenweg (Projekt öffnen, Grundlage darunter, neu ansehen) erkennt
+der Zweig Buchungen aus 0.5.2 und 0.5.3 genau, aus 0.5.1 als frühere Buchung, aus 0.5.0 nicht:
+Dort weichen die Tempi der Stufe und der Profilschlüssel ab (`resolve(legacy=True)`), das ist
+kein billiger Altabdruck. Über fünf Drucker, PLA und PETG, Tabelle, ElegooSlicer und
+OrcaSlicer, mit und ohne eigene Wahl gleicht jeder Abdruck dem von 0.5.3.

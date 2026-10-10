@@ -10,7 +10,8 @@ import hashlib
 import math
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, replace
-from typing import TYPE_CHECKING, Literal
+from types import MappingProxyType
+from typing import TYPE_CHECKING, Any, Final, Literal
 
 from app.core.export import threemf
 from app.core.export.handover import (
@@ -20,7 +21,7 @@ from app.core.export.handover import (
     settings_for_slot,
 )
 from app.core.geom.mesh import as_mesh_data
-from app.core.knowledge import profiles
+from app.core.knowledge import print_settings, profiles
 from app.core.scene.hashing import digest, profile_key
 from app.core.scene.serialise import print_settings_to_data
 from app.core.slice.estimate import estimate
@@ -32,6 +33,99 @@ if TYPE_CHECKING:
     from app.core.knowledge.filaments import BookingPosition, CatalogueFilament
 
 UsageSource = Literal["internal", "gcode", "manual"]
+
+#: Die Einstellungsfelder, über die Solidon 0.5.3 den Abdruck einer Buchung
+#: bildete, je Gruppe (RM-705, gelesen aus ``git show v0.5.3:app/core/types.py``).
+#: Ein Feld, das danach dazukam, zählt nur, wo es vom Herstellerprofil abweichen
+#: soll (:func:`_without_later_fields`) — sonst fände Solidon nach jedem Update
+#: keine Buchung von davor. Die Menge wächst nie; der Test
+#: ``test_filament_usage_fingerprint_history.py`` hält sie gegen den Tag.
+FINGERPRINT_FIELDS: Final[Mapping[str, frozenset[str]]] = MappingProxyType(
+    {
+        "layers": frozenset(
+            {"first_layer_height", "first_layer_line_width", "layer_height", "line_width"}
+        ),
+        "shell": frozenset(
+            {
+                "bottom_layers",
+                "ironing",
+                "outer_wall_first",
+                "precise_outer_wall",
+                "scarf_seam",
+                "seam_position",
+                "top_layers",
+                "wall_count",
+                "wall_generator",
+            }
+        ),
+        "infill": frozenset({"angle", "density", "pattern"}),
+        "filament": frozenset(
+            {"colour", "cost_per_kg", "density", "diameter", "flow_ratio", "max_flow"}
+        ),
+        "temperature": frozenset(
+            {"bed", "bed_first_layer", "chamber", "nozzle", "nozzle_first_layer"}
+        ),
+        "cooling": frozenset(
+            {
+                "bridge_fan_speed",
+                "disable_first_layers",
+                "fan_below_layer_time",
+                "fan_speed",
+                "minimum_fan_speed",
+                "minimum_layer_time",
+            }
+        ),
+        "speed": frozenset(
+            {
+                "acceleration",
+                "bridge",
+                "first_layer",
+                "infill",
+                "inner_wall",
+                "outer_wall",
+                "outer_wall_acceleration",
+                "top_surface",
+                "travel",
+            }
+        ),
+        "support": frozenset(
+            {
+                "block_channels",
+                "density",
+                "interface_layers",
+                "placement",
+                "style",
+                "threshold_angle",
+                "xy_gap",
+                "z_gap",
+            }
+        ),
+        "adhesion": frozenset(
+            {
+                "brim_gap",
+                "brim_width",
+                "kind",
+                "raft_gap",
+                "raft_layers",
+                "skirt_distance",
+                "skirt_loops",
+            }
+        ),
+        "retraction": frozenset({"avoid_crossing_walls", "length", "speed", "wipe", "z_hop"}),
+    }
+)
+
+#: Die Altkennungen: welche Brim-/Raftfelder fehlen und ob die Wahl der Platte
+#: fehlt. 0.5.1 kannte weder die Abstände noch ``plate_choices`` (RM-705).
+_LEGACY_SHAPES: Final = (
+    ((), False),
+    (("brim_gap",), False),
+    (("raft_gap",), False),
+    (("brim_gap", "raft_gap"), False),
+    (("brim_gap", "raft_gap"), True),
+)
+
+_DEFAULTS: Final = PrintSettings()
 
 
 @dataclass(frozen=True, slots=True)
@@ -56,7 +150,7 @@ class UsageRequest:
     plate: int
     lines: tuple[UsageLine, ...]
     legacy_fingerprints: tuple[str, ...] = ()
-    """Mögliche Altkennungen vor Brim-/Raftfeldern; niemals belegte Gleichheiten."""
+    """Mögliche Altkennungen vor Brim-/Raftfeldern (bis 0.5.1); niemals belegte Gleichheiten."""
 
 
 def costs_for(
@@ -127,6 +221,37 @@ def _material_properties(
         density if math.isfinite(density) and density > 0.0 else None,
         diameter if math.isfinite(diameter) and diameter > 0.0 else None,
     )
+
+
+def _without_later_fields(
+    values: dict[str, Any], settings: PrintSettings, slot: MaterialSlot
+) -> None:
+    """Nimmt jedes Feld nach 0.5.3 aus dem Abdruck, das nur Grundlage ist (RM-705).
+
+    Unter 0.5.3 kannte Solidon diese Felder nicht, der Slicer nahm sie aus dem
+    Herstellerprofil. Als Grundlage sagen sie dasselbe — auch wenn der Wert
+    nicht die Vorgabe der Dataclass ist: Der ElegooSlicer bringt
+    ``cooling.minimum_speed`` 20 statt 10 mit. Es zählt nur, was abweichen
+    soll: eigene Wahl und übernommener Vorschlag (``explicit``) oder ein Wert
+    der Spule abseits der Vorgabe. Eine Spule aus 0.5.3 liest das Feld mit der
+    Vorgabe ein (``serialise._group_from_data``) und behält so ihre Kennung.
+    """
+    override = override_for(settings, slot)
+    for group in print_settings.GROUPS:
+        section = values.get(group)
+        if not isinstance(section, dict):
+            continue
+        known = FINGERPRINT_FIELDS.get(group, frozenset())
+        own = getattr(override, group, None) if override is not None else None
+        for name in [name for name in section if name not in known]:
+            if f"{group}.{name}" in settings.explicit:
+                continue
+            default = getattr(getattr(_DEFAULTS, group), name)
+            if own is not None and not print_settings.same_value(section[name], default):
+                continue
+            del section[name]
+        if not section and group not in FINGERPRINT_FIELDS:
+            del values[group]
 
 
 def prepare(
@@ -212,8 +337,7 @@ def prepare(
                 )
         lines = []
         effective = []
-        omitted_fields = ((), ("brim_gap",), ("raft_gap",), ("brim_gap", "raft_gap"))
-        legacy_effective: list[list[object]] = [[] for _omitted in omitted_fields]
+        legacy_effective: list[list[object]] = [[] for _shape in _LEGACY_SHAPES]
         for original in slots:
             key = threemf.slot_identity(original)
             if key not in active_keys:
@@ -241,6 +365,7 @@ def prepare(
                 "accepted",
             ):
                 values.pop(field, None)
+            _without_later_fields(values, mine, slot)
             # Alle Kennungen teilen dieselben gebundenen Werte. Unbekannte
             # oder sicher abgeschaltete Rafts bleiben ohne Feld; Auto ist offen.
             if values["adhesion"].get("raft_gap") is None or (
@@ -248,20 +373,19 @@ def prepare(
                 and mine.adhesion.kind in {"none", "skirt", "brim", "skirt_brim"}
             ):
                 values["adhesion"].pop("raft_gap", None)
-            for omitted, entries in zip(omitted_fields, legacy_effective, strict=True):
-                entries.append(
-                    (
-                        identities[key],
-                        {
-                            **values,
-                            "adhesion": {
-                                name: value
-                                for name, value in values["adhesion"].items()
-                                if name not in omitted
-                            },
-                        },
-                    )
-                )
+            for (omitted, no_plate), entries in zip(_LEGACY_SHAPES, legacy_effective, strict=True):
+                legacy = {
+                    **values,
+                    "adhesion": {
+                        name: value
+                        for name, value in values["adhesion"].items()
+                        if name not in omitted
+                    },
+                }
+                # Eine leere Wahl der Platte ist derselbe Druck wie vor ihr.
+                if no_plate and not legacy.get("plate_choices"):
+                    legacy.pop("plate_choices", None)
+                entries.append((identities[key], legacy))
             # Genau der additive Vorgabewert null behält die alte Kennung.
             # Sein früher roh geschriebenes Feld bleibt oben ein Altkandidat.
             brim_gap = values["adhesion"].get("brim_gap")

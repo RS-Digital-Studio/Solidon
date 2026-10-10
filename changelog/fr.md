@@ -100,6 +100,7 @@ dans `website/version.json`.
 - Sous Linux avec Flatpak, Solidon signale désormais un plantage du slicer comme tel, au lieu de dire seulement qu'aucun fichier n'a été créé.
 - Même pour des imprimantes inconnues de PrusaSlicer ou SuperSlicer, tous deux estiment la durée d'impression avec les accélérations transmises, et le fichier indique le matériau de la bobine.
 - Même sur un ordinateur entièrement chargé, Solidon indique la vraie raison après l'arrêt d'un slicer, au lieu d'un délai dépassé. Un fichier d'impression terminé est repris.
+- Une impression dont la consommation a été décomptée avant la mise à jour est reconnue ensuite dans le stock de filament.
 
 ### Filetages, perçages et pièces normalisées
 

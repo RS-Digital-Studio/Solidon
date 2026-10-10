@@ -99,6 +99,7 @@ it into `website/version.json`.
 - On Linux with Flatpak, Solidon now reports a slicer crash as a crash instead of only saying that no print file was made.
 - Even for printers that PrusaSlicer or SuperSlicer do not know themselves, both estimate the print time with the accelerations handed over, and the file names the material of the spool.
 - Even on a fully loaded computer, Solidon gives the real reason after stopping a slicer instead of a timeout. A finished print file is used.
+- A print booked before the update is recognised in the filament inventory afterwards.
 
 ### Threads, holes and standard parts
 

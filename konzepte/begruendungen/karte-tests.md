@@ -63,7 +63,7 @@ abgewiesene und wiederholte Anfragen bleiben außerhalb dieses Zählers.
 
 `test_filament_inventory.py` prüft Migration und atomare Mehrspulenbuchungen
 einschließlich echter Prozesskonkurrenz. `test_filament_usage.py` verbindet
-Projektbindung, Ausgabeumfang und werkzeugweise Mengen. Die getrennten
+Projektbindung, Ausgabeumfang und werkzeugweise Mengen. `test_filament_usage_fingerprint_history.py` hält den Abdruck einer Buchung über Updates fest: Sollwerte aus der Codekopie von 0.5.3, Projekt und Lager von 0.5.3 selbst geschrieben, jedes spätere Einstellungsfeld gezählt (RM-705). Die getrennten
 Fensterdateien `test_filament_inventory_ui.py`, `test_filament_assignment.py`,
 `test_filament_usage_ui.py` und `test_filament_workflow.py` decken Regal,
 Zuweisung, Buchungsdialog und erfolgreiche beziehungsweise abgebrochene
