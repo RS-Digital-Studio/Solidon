@@ -392,6 +392,85 @@ def test_two_stacked_balls_blend_round_and_stay_on_the_bed(profile: Profile) -> 
     assert body.is_watertight and body.component_count == 1
 
 
+def test_two_floating_balls_blend_round_below_as_well(profile: Profile) -> None:
+    """Nachprüfung F, N2: Begrenzt wird an der Bettebene, nicht an der untersten Höhe der Eingänge.
+
+    Zwei Kugeln Ø 10, die sich bei z = 20 berühren, schweben über dem Bett.
+    Begrenzt an ihrer untersten Höhe (z = 15) wurde der Hals unten flach,
+    74,5 mm² bei Übergang 12 — oben blieb er rund. Die Grenze ist das Bett;
+    der Übergang darf über ihm nach unten wachsen, solange er es nicht
+    erreicht.
+    """
+    left = trimesh.creation.icosphere(subdivisions=4, radius=5.0)
+    left.apply_translation((-5.0, 0.0, 20.0))
+    right = trimesh.creation.icosphere(subdivisions=4, radius=5.0)
+    right.apply_translation((5.0, 0.0, 20.0))
+
+    body = run(MeshData.of(left), MeshData.of(right), profile, radius=12.0, grid=0.5)
+    merged = body.outputs[0].mesh
+
+    assert _flat_area(merged, 2, 15.0) == 0.0, "unten nicht flach"
+    assert float(merged.raw.bounds[0][2]) < 15.0, "der Hals wölbt sich unter die Kugeln"
+    assert float(merged.raw.bounds[0][2]) > 0.0, "und erreicht das Bett nicht"
+
+
+def _crossing_grid(radius: float, grid: float) -> tuple[np.ndarray, tuple[int, ...]]:
+    """Das Raster, auf dem :func:`blend.blend_bodies` die gekreuzten Rohre rechnet."""
+    low, shape = blend._grid(rod("z"), rod("y"), radius, grid)
+    axes = [low[axis] + np.arange(shape[axis]) * grid for axis in range(3)]
+    return np.stack(np.meshgrid(*axes, indexing="ij"), axis=-1).reshape(-1, 3), shape
+
+
+def test_the_banded_field_gives_the_same_body_as_the_full_one(
+    profile: Profile, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Review-Fix F: Genau nur im Band — und das Netz ist Bit für Bit dasselbe.
+
+    Marching Cubes liest Werte nur an Rasterkanten mit Vorzeichenwechsel; ein
+    Feld weiter als Raster plus Übergang plus Viertelübergang von der Fläche
+    braucht dafür nur sein Vorzeichen. Gegenprobe ist die volle Rechnung an
+    jedem Rasterpunkt: Das Netz aus Marching Cubes muss gleich sein, und an
+    jedem Punkt, an dem das verschmolzene Feld nahe null liegt, der Wert.
+    """
+    full_field = blend.distance_field
+
+    def everywhere(*args: object, **kwargs: object) -> np.ndarray:
+        kwargs.pop("shape", None)
+        kwargs.pop("beyond", None)
+        return full_field(*args, **kwargs)  # type: ignore[arg-type]
+
+    banded = blend.blend_bodies(rod("z"), rod("y"), 4.0, 1.0)
+    monkeypatch.setattr(blend, "distance_field", everywhere)
+    full = blend.blend_bodies(rod("z"), rod("y"), 4.0, 1.0)
+
+    assert np.array_equal(np.asarray(banded.raw.vertices), np.asarray(full.raw.vertices))
+    assert np.array_equal(np.asarray(banded.raw.faces), np.asarray(full.raw.faces))
+
+
+def test_the_banded_field_computes_only_near_the_surface(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Review-Fix F: Gezählt wird, wie viele Rasterpunkte genau gerechnet werden.
+
+    Bis dahin rechnete das Feld jeden Punkt gegen acht Bewerber; am §31-Fall
+    (gekreuzte Rohre, Übergang 6, Raster 1) kostete es so das 1,35-Fache des
+    Ebenenfelds vor RM-671 an CPU-Zeit. Im Band liegt nur ein Teil des
+    Rasters: Beide Felder des Falls rechnen 191 706 von 486 798 Zeilen genau.
+    """
+    points, shape = _crossing_grid(6.0, 1.0)
+    asked: list[int] = []
+    signed = blend._Surface.signed
+
+    def counted(self: blend._Surface, where: np.ndarray, candidates: np.ndarray) -> np.ndarray:
+        asked.append(len(where))
+        return signed(self, where, candidates)
+
+    monkeypatch.setattr(blend._Surface, "signed", counted)
+
+    field = blend.distance_field(rod("z"), points, 1.0, shape=shape, beyond=1.0 + 6.0 * 1.25)
+
+    assert len(field) == len(points)
+    assert sum(asked) < 0.5 * len(points), f"{sum(asked)} von {len(points)} genau gerechnet"
+
+
 def test_a_curved_body_keeps_its_volume_when_blended(profile: Profile) -> None:
     """Und die Gegenprobe: An Rundungen ändert sich nichts Wesentliches.
 

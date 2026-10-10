@@ -198,6 +198,10 @@ class _Surface:
     corner_normals: np.ndarray
     owners: np.ndarray
     tree: Any
+    #: Wie weit ein Punkt eines geteilten Stücks höchstens von dessen Stützpunkt
+    #: liegt: Der Abstand zum nächsten Stützpunkt weniger diesem ist eine
+    #: Untergrenze des Abstands zur Fläche.
+    reach: float
 
     @classmethod
     def of(cls, mesh: MeshData, spacing: float) -> _Surface:
@@ -226,6 +230,8 @@ class _Surface:
         )
         piece_corners = np.asarray(dense, dtype=np.float64)[np.asarray(pieces, dtype=np.int64)]
         samples = (piece_corners[:, 0] + piece_corners[:, 1] + piece_corners[:, 2]) / 3.0
+        offsets = piece_corners - samples[:, None, :]
+        reach = float(np.sqrt(row_dots(offsets, offsets).max(initial=0.0)))
         return cls(
             vertices=vertices,
             corners=corners,
@@ -240,6 +246,7 @@ class _Surface:
             corner_normals=stable_vertex_normals(raw),
             owners=np.asarray(owners, dtype=np.int64),
             tree=cKDTree(samples),
+            reach=reach,
         )
 
     def signed(self, points: np.ndarray, candidates: np.ndarray) -> np.ndarray:
@@ -322,6 +329,8 @@ def distance_field(
     *,
     progress: ProgressFn | None = None,
     cancelled: CancelToken | None = None,
+    shape: tuple[int, ...] | None = None,
+    beyond: float | None = None,
 ) -> np.ndarray:
     """Abstand zur Oberfläche für jeden Rasterpunkt: positiv innen, negativ außen.
 
@@ -338,9 +347,21 @@ def distance_field(
     nächsten Stützpunkte, gerechnet je Paar in :meth:`_Surface.signed`. Fehlt
     es — an CAD-Netzen mit Nadelfächern —, misst das Feld zum nächsten
     Bewerber und liegt dort um Zehntelmillimeter zu weit (siehe
-    :data:`NEAREST_SAMPLES`). Die Splitter des Verfahrens kamen nicht von dem
-    Sprung — mit dem neuen Feld sind es gleich viele —, sondern aus Marching
-    Cubes selbst (:data:`NEEDLE`).
+    :data:`NEAREST_SAMPLES`, RM-769). Je Zeile nachzuweisen, dass es dabei
+    ist, kostete über Stützpunkte am §31-Fall das 23-Fache: Weiter von der
+    Fläche braucht der Nachweis immer mehr von ihnen (Review-Fix F). Die
+    Splitter des Verfahrens kamen nicht von dem Sprung — mit dem neuen Feld
+    sind es gleich viele —, sondern aus Marching Cubes selbst (:data:`NEEDLE`).
+
+    **Genau nur im Band** (``beyond`` und ``shape``, Review-Fix F): Marching
+    Cubes liest Werte nur an Rasterkanten, an denen das Vorzeichen wechselt,
+    und ein Abstandsfeld ändert sich längs einer Kante höchstens um deren
+    Länge. Wer weiter als ``beyond`` von der Fläche liegt — sicher, denn der
+    Abstand zum nächsten Stützpunkt weniger :attr:`_Surface.reach` unterschätzt
+    ihn —, braucht nur sein Vorzeichen, und das tragen die Nachbarn: Zwischen
+    zwei Rasterpunkten außerhalb des Bands wechselt es nicht, also hat jede
+    zusammenhängende Gruppe das Vorzeichen eines Bandpunkts an ihrem Rand
+    (:func:`_signs_from_the_band`). Ihr Wert ist ``±(beyond + 2·spacing)``.
 
     **Das Vorzeichen kommt aus der Normale, nicht aus einem Strahl** und
     nicht aus einem Belegungsgitter: ``Trimesh.contains`` lief über
@@ -358,33 +379,45 @@ def distance_field(
     surface = _Surface.of(mesh, spacing)
     count = min(NEAREST_SAMPLES, len(surface.owners))
     field = np.empty(len(grid), dtype=float)
+    banded = shape is not None and beyond is not None
+    far = np.zeros(len(grid), dtype=bool)
     workers = max(1, min(PAIR_WORKERS, os.cpu_count() or 1))
     with ThreadPoolExecutor(max_workers=workers) as pool:
         for start in range(0, len(grid), FIELD_CHUNK):
             if cancelled is not None:
                 cancelled.raise_if_cancelled()
             block = np.asarray(grid[start : start + FIELD_CHUNK], dtype=np.float64)
-            _away, near = surface.tree.query(block, k=count, workers=-1)
-            candidates = surface.owners[np.asarray(near, dtype=np.int64).reshape(len(block), count)]
+            away, near = surface.tree.query(block, k=count, workers=-1)
+            away = np.asarray(away, dtype=np.float64).reshape(len(block), count)
+            near = np.asarray(near, dtype=np.int64).reshape(len(block), count)
+            if banded:
+                # Eine Rasterweite Rand über ``beyond``: Was knapp an der Grenze anders
+                # eingeordnet wird, liegt so oder so außerhalb dessen, was zählt.
+                apart = away[:, 0] - surface.reach > cast(float, beyond) + spacing
+                far[start : start + len(block)] = apart
+                rows = np.flatnonzero(~apart)
+            else:
+                rows = np.arange(len(block))
+            values = np.empty(len(rows), dtype=float)
+            candidates = surface.owners[near[rows]]
             part = functools.partial(
-                _signed_part,
-                surface,
-                field[start : start + len(block)],
-                block,
-                candidates,
-                cancelled,
+                _signed_part, surface, values, block[rows], candidates, cancelled
             )
-            list(pool.map(part, range(0, len(block), PAIR_CHUNK)))
+            list(pool.map(part, range(0, len(rows), PAIR_CHUNK)))
+            field[start + rows] = values
             if progress is not None:
                 done = min(start + FIELD_CHUNK, len(grid)) / max(len(grid), 1)
                 progress(done, str(_("Abstandsfeld rechnen")))
+    if banded and far.any():
+        far_value = cast(float, beyond) + 2.0 * spacing
+        _signs_from_the_band(surface, field, far, grid, cast(tuple[int, ...], shape), far_value)
     return field
 
 
 def _signed_part(
     surface: _Surface,
     into: np.ndarray,
-    block: np.ndarray,
+    points: np.ndarray,
     candidates: np.ndarray,
     cancelled: CancelToken | None,
     first: int,
@@ -393,7 +426,55 @@ def _signed_part(
     if cancelled is not None:
         cancelled.raise_if_cancelled()
     last = first + PAIR_CHUNK
-    into[first:last] = surface.signed(block[first:last], candidates[first:last])
+    into[first:last] = surface.signed(points[first:last], candidates[first:last])
+
+
+def _signs_from_the_band(
+    surface: _Surface,
+    field: np.ndarray,
+    far: np.ndarray,
+    grid: np.ndarray,
+    shape: tuple[int, ...],
+    value: float,
+) -> None:
+    """Gibt jedem Punkt außerhalb des Bands ``±value`` mit dem Vorzeichen seiner Nachbarn.
+
+    Die Punkte außerhalb hängen über Rasterkanten zu Gruppen zusammen
+    (``scipy.ndimage.label``, sechs Nachbarn); jede Gruppe nimmt das
+    Vorzeichen des ersten Bandpunkts an ihrem Rand, in fester Folge der Achsen
+    und Richtungen. Eine Gruppe ohne Bandpunkt daneben fragt einen ihrer
+    Punkte genau.
+    """
+    from scipy import ndimage
+
+    outside = far.reshape(shape)
+    labels, groups = ndimage.label(outside)
+    inner = field.reshape(shape)
+    found: list[np.ndarray] = []
+    signs: list[np.ndarray] = []
+    for axis in range(3):
+        low = [slice(None)] * 3
+        high = [slice(None)] * 3
+        low[axis] = slice(0, -1)
+        high[axis] = slice(1, None)
+        for here, there in ((tuple(low), tuple(high)), (tuple(high), tuple(low))):
+            edge = outside[here] & ~outside[there]
+            found.append(labels[here][edge])
+            signs.append(inner[there][edge] > 0.0)
+    listed = np.concatenate(found)
+    chosen, first = np.unique(listed, return_index=True)
+    positive = np.zeros(groups + 1, dtype=bool)
+    known = np.zeros(groups + 1, dtype=bool)
+    positive[chosen] = np.concatenate(signs)[first]
+    known[chosen] = True
+    flat_labels = labels.reshape(-1)
+    for label in np.flatnonzero(~known[1:]) + 1:
+        point = np.asarray(grid[int(np.flatnonzero(flat_labels == label)[0])], dtype=np.float64)
+        count = min(NEAREST_SAMPLES, len(surface.owners))
+        _away, near = surface.tree.query(point[None, :], k=count)
+        candidates = surface.owners[np.asarray(near, dtype=np.int64).reshape(1, count)]
+        positive[label] = bool(surface.signed(point[None, :], candidates)[0] > 0.0)
+    field[far] = np.where(positive[flat_labels[far]], value, -value)
 
 
 def _share(progress: ProgressFn | None, offset: float) -> ProgressFn | None:
@@ -424,24 +505,26 @@ def _smooth_maximum(first: np.ndarray, second: np.ndarray, radius: float) -> np.
 
 
 def _above_the_floor(points: np.ndarray, first: MeshData, second: MeshData) -> np.ndarray:
-    """Abstand zur untersten Höhe beider Eingänge, positiv darüber — exakt, eine Subtraktion.
+    """Abstand zur Bettebene, positiv darüber — exakt, eine Subtraktion.
 
-    **Das Ergebnis reicht nicht unter die Eingänge** (F5, RM-671; Entscheidung
-    Koordinator nach Review F). Wo beide Felder gleich sind, hebt
+    **Das Ergebnis wächst nicht unter das Bett** (F5, RM-671; Entscheidung
+    Koordinator nach Review F und Nachprüfung). Wo beide Felder gleich sind, hebt
     :func:`_smooth_maximum` das Feld um bis zu ein Viertel des Übergangs, und an
     Flächen, die bei beiden Körpern bündig liegen, wächst das Ergebnis so über
     die Eingänge hinaus. An den Böden zweier versetzter Quader 40 x 30 x 10 auf
     dem Bett reichte es 1,69 mm darunter, und der Prüfbericht meldete ein
     Objekt unter dem Druckbett.
 
-    **Nur nach unten.** Begrenzt auf den ganzen Hüllquader wurde jeder runde
-    Übergang flach abgeschnitten, der eine Seite des Quaders überragt: an zwei
-    gekreuzten Rohren Ø 20 mit Übergang 4 lagen 269 mm² eben auf x = ±10, wo
-    sich das Ergebnis bis v0.5.3 glatt um fast einen Millimeter hinauswölbte.
-    Über bündigen Deckeln und Seiten bleibt die Beule deshalb, wie sie war
-    (RM-763).
+    **Nur nach unten, und nur am Bett.** Begrenzt auf den ganzen Hüllquader
+    wurde jeder runde Übergang flach abgeschnitten, der eine Seite des Quaders
+    überragt: an zwei gekreuzten Rohren Ø 20 mit Übergang 4 lagen 269 mm² eben
+    auf x = ±10. Begrenzt an der untersten Höhe der Eingänge wurde ein
+    schwebendes Paar unten flach (zwei Kugeln bei z = 20: 74,5 mm²). Die Grenze
+    ist deshalb die Bettebene ``z = 0``; reicht schon ein Eingang darunter,
+    seine unterste Höhe — was dort liegt, wird nicht weiter beschnitten. Über
+    bündigen Deckeln und Seiten bleibt die Beule, wie sie war (RM-763).
     """
-    floor = min(float(first.raw.bounds[0][2]), float(second.raw.bounds[0][2]))
+    floor = min(0.0, float(first.raw.bounds[0][2]), float(second.raw.bounds[0][2]))
     return np.asarray(points[:, 2] - floor)
 
 
@@ -586,9 +669,30 @@ def blend_bodies(
     axes = [low[axis] + np.arange(shape[axis]) * grid for axis in range(3)]
     points = np.stack(np.meshgrid(*axes, indexing="ij"), axis=-1).reshape(-1, 3)
 
+    # Genau braucht jedes Feld nur, wo Marching Cubes oder die Mischung seinen
+    # Wert lesen: eine Rasterkante um die Nullfläche, dazu die Breite des
+    # Übergangs, in der beide Felder ineinander laufen, und die Beule darüber
+    # (:func:`_smooth_maximum`, höchstens ein Viertel des Übergangs).
+    beyond = grid + radius + radius / 4.0
     merged = _smooth_maximum(
-        distance_field(first, points, grid, progress=_share(progress, 0.0), cancelled=cancelled),
-        distance_field(second, points, grid, progress=_share(progress, 0.5), cancelled=cancelled),
+        distance_field(
+            first,
+            points,
+            grid,
+            progress=_share(progress, 0.0),
+            cancelled=cancelled,
+            shape=shape,
+            beyond=beyond,
+        ),
+        distance_field(
+            second,
+            points,
+            grid,
+            progress=_share(progress, 0.5),
+            cancelled=cancelled,
+            shape=shape,
+            beyond=beyond,
+        ),
         radius,
     )
     merged = np.minimum(merged, _above_the_floor(points, first, second))
