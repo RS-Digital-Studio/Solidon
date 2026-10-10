@@ -1032,32 +1032,64 @@ def test_changing_the_size_of_a_generated_model_reruns_only_the_size(
     assert project.document.ops[-1].op == "fit_to_size"
 
 
+@pytest.mark.parametrize(
+    "layout", ["erzeugt", "letzter aus", "dritter Maßschritt", "zweiter Körper"]
+)
 def test_the_working_size_step_names_the_step_that_sets_the_size(
-    project: Project, profile: Profile
+    layout: str, project: Project, profile: Profile
 ) -> None:
-    """Review D, M1: Zwei gleich benannte *Auf Maß bringen* stehen im Verlauf. Der
-    Bericht bietet *Größe ändern* nur am letzten an (``SETTLED_BY``), und dieselbe
-    Auskunft kennt der Verlauf: Der frühere nennt den späteren, der letzte keinen.
-    Zwei Wege zu derselben Antwort — hier gegeneinander gehalten.
+    """Review D, M1 und N1: Zwei gleich benannte *Auf Maß bringen* stehen im
+    Verlauf. Der Bericht bietet *Größe ändern* nur am letzten an (``SETTLED_BY``),
+    und dieselbe Auskunft kennt der Verlauf: Der frühere nennt den späteren, der
+    letzte keinen. Zwei Wege zu derselben Antwort, hier gegeneinander gehalten.
+
+    Die Lagen fangen je eine Abkürzung: Ein ausgeschalteter Kundenmaßschritt
+    setzt kein Maß (Sonde s06 der Nachprüfung), bei drei Maßschritten zählt der
+    letzte und nicht der nächste, und der Maßschritt eines zweiten Körpers
+    überholt den des ersten nicht.
     """
     from app.core.scene.evaluate import size_set_by
 
-    from_text(project, backend(), "eine kleine Figur", seed=7)
+    first = from_text(project, backend(), "eine kleine Figur", seed=7)
+    history = History(project.document)
+    if layout == "letzter aus":
+        last = [entry for entry in project.document.ops if entry.op == "fit_to_size"][-1]
+        history.commit(history.plan_suppress([last.id]))
+    elif layout == "dritter Maßschritt":
+        history.apply(
+            "Auf Maß bringen",
+            [
+                OperationDraft(
+                    op="fit_to_size", inputs=(first.object_id,), params={"largest": 120.0}
+                )
+            ],
+        )
+    elif layout == "zweiter Körper":
+        from_text(project, backend(), "eine zweite Figur", seed=8)
+
     ops = project.document.ops
-    sizing = [entry.id for entry in ops if entry.op == "fit_to_size"]
-    assert len(sizing) == 2, [entry.op for entry in ops]
+    sizing = [entry.id for entry in ops if entry.op == "fit_to_size" and entry.suppressed is None]
+    # Je Lage: welcher eingeschaltete Maßschritt welchen späteren nennt, als
+    # Stellen in ``sizing``.
+    pairs = {
+        "erzeugt": ((0, 1), (1, None)),
+        "letzter aus": ((0, None),),
+        "dritter Maßschritt": ((0, 2), (1, 2), (2, None)),
+        "zweiter Körper": ((0, 1), (1, None), (2, 3), (3, None)),
+    }[layout]
+    assert len(sizing) == len(pairs), [(entry.op, entry.suppressed) for entry in ops]
+    expected = {sizing[own]: None if later is None else sizing[later] for own, later in pairs}
 
     result = evaluated(project, profile)
-    offered = [
+    offered = sorted(
         entry.op_id
         for entry in result.scene.report.findings
         if entry.code == "transform.fitted"
         and any(action.id == "change_step" for action in entry.suggestions)
-    ]
+    )
 
-    assert size_set_by(ops, sizing[0]) == sizing[1]
-    assert size_set_by(ops, sizing[1]) is None
-    assert offered == [step for step in sizing if size_set_by(ops, step) is None]
+    assert {step: size_set_by(ops, step) for step in sizing} == expected
+    assert offered == sorted(step for step in sizing if size_set_by(ops, step) is None)
     assert size_set_by(ops, ops[0].id) is None, "nur ein Maßschritt wird überholt"
 
 

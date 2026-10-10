@@ -2052,7 +2052,8 @@ def size_set_by(operations: Sequence[Operation], op_id: OpId) -> OpId | None:
     Verlauf: Der Bericht bietet *Größe ändern* nur am letzten Maßschritt an,
     der Verlauf zeigt aber jeden, und zwei gleich benannte Schritte ließen den
     Kunden raten, welcher das Maß setzt (Review D, M1). Der Dialog des
-    früheren nennt den späteren. ``None``, wenn ``op_id`` kein
+    früheren nennt den späteren. Ein ausgeschalteter Schritt setzt kein Maß und
+    zählt nicht (Nachprüfung D, N1). ``None``, wenn ``op_id`` kein
     *Auf Maß bringen* ist oder selbst das Maß setzt.
     """
     position = next((i for i, entry in enumerate(operations) if entry.id == op_id), None)
@@ -2063,7 +2064,9 @@ def size_set_by(operations: Sequence[Operation], op_id: OpId) -> OpId | None:
     later = [
         entry.id
         for entry in operations[position + 1 :]
-        if entry.op == "fit_to_size" and body & set(entry.outputs or entry.inputs)
+        if entry.op == "fit_to_size"
+        and entry.suppressed is None
+        and body & set(entry.outputs or entry.inputs)
     ]
     return later[-1] if later else None
 
