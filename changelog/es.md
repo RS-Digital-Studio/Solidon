@@ -23,6 +23,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Tras un taladro o una característica desplazada, las características de una pieza grande se reconocen alrededor de un tercio más rápido.
 - Un modelo que abre justo después de iniciar el programa se puede editar hasta una cuarta parte antes.
 - Con un slicer, un juego o un renderizado en marcha, los cálculos en modelos grandes terminan en segundos en lugar de minutos.
+- Un proyecto guardado con un modelo grande se abre tras un reinicio en uno o dos segundos en lugar de medio minuto: las características reconocidas se conservan.
 
 ## 0.6.0
 

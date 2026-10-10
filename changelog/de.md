@@ -47,6 +47,7 @@ Nutzen da und sonst nichts.
 - Nach einer Bohrung oder einem versetzten Merkmal sind die Merkmale eines großen Teils rund ein Drittel schneller wieder erkannt.
 - Ein Modell, das Sie gleich nach dem Programmstart öffnen, ist bis zu ein Viertel schneller bearbeitbar.
 - Läuft nebenher ein Slicer, ein Spiel oder ein Rendering, kommen Rechnungen an großen Modellen in Sekunden statt in Minuten zurück.
+- Ein gespeichertes Projekt mit einem großen Modell ist nach einem Neustart in ein, zwei Sekunden offen statt nach einer halben Minute: Die erkannten Merkmale bleiben gemerkt.
 
 ## 0.6.0
 
