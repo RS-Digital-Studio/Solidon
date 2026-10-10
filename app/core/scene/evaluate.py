@@ -109,6 +109,7 @@ from app.core.perceive.matching import (
     apply_mapping,
     declared_partners,
     faces_in_plane,
+    forget_transformed,
     inherit_originators,
     match,
     moved_features,
@@ -546,6 +547,11 @@ def evaluate(
     except Exception:
         checks.finish("failed")
         raise
+    finally:
+        # Die gemerkten Bewegungen verbinden nur Operation und Zuordnung desselben
+        # Schritts; danach hielten sie Merkmale außerhalb der Bytegrenze des
+        # Caches (Review L3, G1).
+        forget_transformed()
     checks.finish("completed" if result.complete else "failed")
     result = dataclasses.replace(result, check_states=tuple(checks.states.values()))
     try:

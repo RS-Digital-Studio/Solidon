@@ -1798,12 +1798,25 @@ class FeatureTransform:
     exact: frozenset[FeatureId]
 
 
-#: Die letzten Antworten von :func:`transformed_features` — je Eintrag Schlüssel,
-#: die gehaltenen Eingänge (damit keine Kennung neu vergeben wird) und die Antwort.
-_TRANSFORMED: OrderedDict[tuple[Any, ...], tuple[tuple[Any, ...], FeatureTransform]] = OrderedDict()
-_TRANSFORMED_LOCK = threading.Lock()
+#: Die letzten Antworten von :func:`transformed_features`, **je Faden** — je Eintrag
+#: Schlüssel, die gehaltenen Eingänge (damit keine Kennung neu vergeben wird) und die
+#: Antwort. Je Faden, weil Operation und Zuordnung desselben Schritts im Faden der
+#: Auswertung nacheinander fragen; ``scene.evaluate.evaluate`` leert ihn am Ende
+#: (Review L3, G1: am Eiffelturm hielt er bis 41 MB außerhalb der Bytegrenze).
+_TRANSFORMED = threading.local()
 #: Zwei reichen: Die Operation und die Zuordnung danach fragen dasselbe nacheinander.
 TRANSFORMED_KEPT: Final = 2
+
+
+def _transformed_memory() -> OrderedDict[tuple[Any, ...], tuple[tuple[Any, ...], FeatureTransform]]:
+    """Der Merker der Bewegungen dieses Fadens."""
+    memory: OrderedDict[tuple[Any, ...], tuple[tuple[Any, ...], FeatureTransform]] | None = getattr(
+        _TRANSFORMED, "answers", None
+    )
+    if memory is None:
+        memory = OrderedDict()
+        _TRANSFORMED.answers = memory
+    return memory
 
 
 def transformed_features(
@@ -1836,27 +1849,24 @@ def transformed_features(
         np.ascontiguousarray(np.asarray(transform, dtype=float)).tobytes(),
         tuple(id(way) for way in ways),
     )
-    with _TRANSFORMED_LOCK:
-        known = _TRANSFORMED.get(key)
-        if known is not None:
-            _TRANSFORMED.move_to_end(key)
+    memory = _transformed_memory()
+    known = memory.get(key)
     if known is not None:
+        memory.move_to_end(key)
         if check_cancelled is not None:
             check_cancelled()
         answer = known[1]
         return FeatureTransform(dict(answer.candidates), answer.exact)
     answer = _transformed_features(features, transform, mesh=mesh, check_cancelled=check_cancelled)
-    with _TRANSFORMED_LOCK:
-        _TRANSFORMED[key] = ((tuple(features.values()), ways), answer)
-        while len(_TRANSFORMED) > TRANSFORMED_KEPT:
-            _TRANSFORMED.popitem(last=False)
+    memory[key] = ((tuple(features.values()), ways), answer)
+    while len(memory) > TRANSFORMED_KEPT:
+        memory.popitem(last=False)
     return FeatureTransform(dict(answer.candidates), answer.exact)
 
 
 def forget_transformed() -> None:
-    """Vergisst die gemerkten Bewegungen — für Tests und Messungen."""
-    with _TRANSFORMED_LOCK:
-        _TRANSFORMED.clear()
+    """Vergisst die gemerkten Bewegungen dieses Fadens — am Ende jeder Auswertung."""
+    _transformed_memory().clear()
 
 
 def _transformed_features(

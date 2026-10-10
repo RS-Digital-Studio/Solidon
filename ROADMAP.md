@@ -3585,7 +3585,9 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   behalten ihr Objekt, Zählung und Bewegung laufen je Schritt einmal; Normalisieren schneidet
   Teile nicht mehr aus. Eiffelturm im Kernweg Filament zuweisen 5,42 → 1,19 s, Verschieben
   6,33 → 3,22 s, Umbenennen 1,53 → 0,56 s; Spiderman Normalisieren 7,06 → 4,98 s; Ergebnisse in
-  261 Schritten über Korpus, Beispielprojekte und Kundenmodelle gleich. **Offen:** am Fenster
+  261 Schritten über Korpus, Beispielprojekte und Kundenmodelle gleich; das Review bestätigt es an
+  846 Schritten und 103 Netzen. Gegen v0.5.3 (§11.2) trägt L3 nichts bei: Es ist bitgleich zum
+  Stand davor, und gespeicherte Bits ändern sich nur mit RM-754. **Offen:** am Fenster
   die Gruppen nach jedem Verschieben, der Prüfbericht neben der Auswertung und der Hauptfaden
   beim Szenenaufbau (bis 3 s Lücke am Eiffelturm) — als neue Punkte gemeldet; die Abnahme am
   echten Fenster mit Renderer.
