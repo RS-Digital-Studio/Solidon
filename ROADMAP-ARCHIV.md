@@ -47177,6 +47177,10 @@ durch eine gekippte dünne Platte gebohrte Öffnung zählt nicht mehr: Hat der L
 Ränder, entscheidet, ob der tiefste Punkt des oberen über dem höchsten des unteren liegt
 (`_closes_between_mouths`, gegen den Schnitt belegt, auch bei geknicktem Rand). S3 Test für
 `measured` im Projektweg (`carry`, Speichern und Öffnen auf einem zweiten Rechner).
+Kontrolle (`review_rm589_kontrolle.md`), K1: Nach *Abschneiden* oder *Abziehen* unten und
+nach Kippen, Einziehen und Zurückdrehen zählte der Fuß weiter; jetzt bestätigen zwei
+Schnitte am fertigen Körper, dass das Band unten noch eingezogen ist (`_band_drawn_in`).
+Ein Vereinigen, bei dem nur ein Teil eingezogen war, zählt deshalb nicht mehr.
 
 **Gemessen nachher:** Mit dem Rat übernommen dieselben Teile ohne doppelten Ausgleich: CC2
 39,10 statt 38,90 mm Bahnbreite in Schicht 1, MK4S 39,10 statt 38,70, Kobra 2 in Anycubic

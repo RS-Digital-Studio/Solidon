@@ -1321,21 +1321,42 @@ def test_a_neighbour_on_the_bed_keeps_its_own_allowance(last: str) -> None:
     assert fit_kinds_for(document, {"obj_2"}) == ()
 
 
-def test_a_union_keeps_what_it_takes_in() -> None:
+@pytest.mark.parametrize(
+    ("steps", "expected"),
+    [
+        pytest.param(
+            [
+                ("compensate_first_layer", ("obj_2",), {}),
+                ("translate_object", ("obj_2",), {"dx": -50.0}),
+                ("union_objects", ("obj_1", "obj_2"), {}),
+            ],
+            (),
+            id="nur B eingezogen",
+        ),
+        pytest.param(
+            [
+                ("compensate_first_layer", ("obj_1",), {}),
+                ("compensate_first_layer", ("obj_2",), {}),
+                ("translate_object", ("obj_2",), {"dx": -50.0}),
+                ("union_objects", ("obj_1", "obj_2"), {}),
+            ],
+            ("foot",),
+            id="beide eingezogen",
+        ),
+    ],
+)
+def test_a_union_keeps_what_it_takes_in(
+    steps: list[tuple[str, tuple[str, ...], dict[str, object]]], expected: tuple[str, ...]
+) -> None:
     """Was ein Schritt in einen Körper aufnimmt, bleibt seine Herkunft: Nach dem
-    Vereinigen trägt A den Fuß des aufgenommenen B."""
+    Vereinigen findet A den Fuß des aufgenommenen B. Er zählt aber nur, wenn
+    das Band rundum eingezogen ist (Kontrolle RM-589, K1) — nur B eingezogen,
+    druckte A's Teil der ersten Schicht ohne Einzug mit Elefantenfuß."""
     from app.core.scene.fits import allowances_for
 
-    document, scene = _built(
-        [
-            *_two_boxes(),
-            ("compensate_first_layer", ("obj_2",), {}),
-            ("translate_object", ("obj_2",), {"dx": -50.0}),
-            ("union_objects", ("obj_1", "obj_2"), {}),
-        ]
-    )
+    document, scene = _built([*_two_boxes(), *steps])
 
-    assert allowances_for(document, scene.objects["obj_1"]) == ("foot",)
+    assert allowances_for(document, scene.objects["obj_1"]) == expected
 
 
 TOWER = ("create_box", (), {"width": 10.0, "depth": 10.0, "height": 60.0})
@@ -1385,6 +1406,8 @@ FOOT = ("compensate_first_layer", ("obj_1",), {})
                 FOOT,
                 ("split_pinned", ("obj_1",), {"axis": "z", "position": 30.0, "pins": 0}),
             ],
+            # Die untere Hälfte trägt das Band unten; `()` ist hier die bewusst
+            # sichere Seite der Linienbedingung, nicht die Lage des Bands.
             {"obj_2": (), "obj_3": ()},
             id="waagerecht geteilt",
         ),
@@ -1419,6 +1442,90 @@ def test_the_foot_counts_where_the_drawn_in_band_lies_on_the_bed(
         identifier: allowances_for(document, scene.objects[identifier]) for identifier in expected
     }
     assert seen == expected
+
+
+@pytest.mark.parametrize(
+    ("steps", "expected"),
+    [
+        pytest.param(
+            [
+                TOWER,
+                FOOT,
+                ("cut_away", ("obj_1",), {"axis": "z", "position": 30.0, "keep": "below"}),
+            ],
+            ("foot",),
+            id="oben abgeschnitten",
+        ),
+        pytest.param(
+            [
+                TOWER,
+                FOOT,
+                ("cut_away", ("obj_1",), {"axis": "z", "position": 5.0, "keep": "above"}),
+            ],
+            (),
+            id="unten abgeschnitten",
+        ),
+        pytest.param(
+            [
+                TOWER,
+                FOOT,
+                ("create_box", (), {"width": 20.0, "depth": 20.0, "height": 5.0, "z": -1.0}),
+                ("subtract_objects", ("obj_1", "obj_2"), {}),
+            ],
+            (),
+            id="unten abgezogen",
+        ),
+        pytest.param(
+            [
+                TOWER,
+                ("rotate_object", ("obj_1",), {"axis": "x", "angle": 90.0}),
+                FOOT,
+                ("rotate_object", ("obj_1",), {"axis": "x", "angle": -90.0}),
+            ],
+            (),
+            id="gekippt eingezogen und zurückgedreht",
+        ),
+        pytest.param(
+            [
+                ("create_box", (), {"width": 30.0, "depth": 30.0, "height": 10.0}),
+                ("rotate_object", ("obj_1",), {"axis": "x", "angle": 180.0}),
+                FOOT,
+                ("rotate_object", ("obj_1",), {"axis": "x", "angle": 180.0}),
+            ],
+            (),
+            id="gewendet eingezogen und zurückgewendet",
+        ),
+    ],
+)
+def test_the_foot_counts_only_while_the_band_on_the_bed_is_drawn_in(
+    steps: list[tuple[str, tuple[str, ...], dict[str, object]]], expected: tuple[str, ...]
+) -> None:
+    """Kontrolle RM-589, K1: Linie und Rahmen sagen nicht, ob das Band noch
+    unten liegt. *Abschneiden* oder *Abziehen* nehmen es an Ort und Stelle
+    weg, und wer vor dem Einziehen kippt und danach zurückdreht, hat es an
+    einer Seite oder oben — der Rat „Erste Schicht einziehen → 0“ druckte dort
+    mit Elefantenfuß. Der Sollwert kommt aus dem Schnitt: Der Umriss 0,1 mm
+    über der Unterseite liegt rundum in dem 1,0 mm darüber, eingezogen um
+    0,05 mm."""
+    from app.core.geom.mesh import as_mesh_data
+    from app.core.scene.fits import allowances_for
+    from app.core.slice.analysis import cross_section
+
+    document, scene = _built(steps)
+    body = scene.objects["obj_1"]
+    mesh = as_mesh_data(body.mesh)
+    bottom = float(mesh.bounds.minimum[2])
+    low, high = cross_section(mesh, bottom + 0.1), cross_section(mesh, bottom + 1.0)
+    drawn_in = bool(
+        low is not None
+        and high is not None
+        and not low.is_empty
+        and low.area < high.area - 0.05
+        and high.buffer(-0.05).contains(low)
+    )
+
+    assert drawn_in is bool(expected)
+    assert allowances_for(document, body) == expected
 
 
 @pytest.mark.parametrize("op", ["duplicate_object", "pattern"])

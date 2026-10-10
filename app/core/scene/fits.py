@@ -582,12 +582,14 @@ def _foot_on_the_bed(document: Document, body: SceneObject) -> bool:
     Kopien (:data:`COPY_OPS`). Baut ein Schritt den Körper aus einem anderen
     neu (die Hälften eines Teilens, der Deckel), liegt das Band nicht unten
     oder fehlt ganz. Dazu muss die Z-Achse des Rahmens nach oben zeigen, mit
-    Vorzeichen: Gekippt liegt das Band an einer Seite, gewendet oben. Wie bei
-    :func:`_pocket_closes` gilt die Annahme, dass der Körper beim Einziehen
-    aufrecht stand; wurde er vorher gekippt, zählt er nicht. Im Zweifel
-    behält der Slicer seinen Ausgleich: Doppelt eingezogen wird die erste
-    Schicht etwas schmaler, ohne Einzug druckt sie den Wulst (Schlussprüfung
-    RM-589, S1).
+    Vorzeichen: Gekippt liegt das Band an einer Seite, gewendet oben. Und am
+    fertigen Körper muss das Band unten noch eingezogen sein
+    (:func:`_band_drawn_in`): *Abschneiden* oder *Abziehen* nehmen es an Ort
+    und Stelle weg, und wer vor dem Einziehen kippt und danach zurückdreht,
+    hat es an einer Seite oder oben, obwohl der Rahmen wieder aufrecht steht.
+    Im Zweifel behält der Slicer seinen Ausgleich: Doppelt eingezogen wird die
+    erste Schicht etwas schmaler, ohne Einzug druckt sie den Wulst
+    (Schlussprüfung RM-589, S1; Kontrolle, K1).
     """
     up = _frame_up(body)
     if up is None or up < math.cos(math.radians(EPS_ANGLE)):
@@ -601,12 +603,52 @@ def _foot_on_the_bed(document: Document, body: SceneObject) -> bool:
             continue
         in_place = made.intersection(operation.inputs)
         if in_place and operation.op == FOOT_OP:
-            return True
+            return _band_drawn_in(document, body, operation)
         if in_place:
             wanted.update(set(operation.inputs).difference(operation.outputs))
         if made.difference(in_place) and operation.op in COPY_OPS:
             wanted.update(operation.inputs)
     return False
+
+
+def _band_drawn_in(document: Document, body: SceneObject, operation: Operation) -> bool:
+    """Ist der Körper am Bett noch so eingezogen, wie dieser Fußschritt es tat?
+
+    Zwei Schnitte am fertigen Körper: in der Mitte des Bands (Unterseite plus
+    halbe Höhe ``h`` des Schritts) und eine halbe Höhe über dem Band. Der
+    untere muss im oberen liegen, rundum um den halben Betrag ``a`` eingezogen
+    — derselbe Schnitt, mit dem der Schritt das Band baut
+    (``geom.prepare.compensate_elephant_foot``). Der Betrag kommt aus dem
+    Schritt oder, ohne eigenen, aus dem Material des Körpers. Ein Körper, der
+    über dem Band breiter wird, besteht die Probe auch ohne Band; dort
+    entscheiden Linie und Rahmen.
+    """
+    from app.core.geom.mesh import as_mesh_data
+    from app.core.knowledge.profiles import material
+    from app.core.slice.analysis import cross_section
+
+    values = _step_values(operation)
+    height, given = values.get("height"), values.get("amount")
+    if not isinstance(height, (int, float)) or not height > EPS_GEOM:
+        return False
+    amount = float(given) if isinstance(given, (int, float)) else 0.0
+    if not amount > EPS_GEOM:
+        try:
+            amount = material(body.material or document.material or "").elephant_foot
+        except AppError:
+            return False
+    if not amount > EPS_GEOM:
+        return False
+    mesh = as_mesh_data(body.mesh)
+    bottom = float(mesh.bounds.minimum[2])
+    band = cross_section(mesh, bottom + height / 2.0)
+    above = cross_section(mesh, bottom + 1.5 * height)
+    if band is None or above is None or band.is_empty or above.is_empty:
+        return False
+    # Was übersteht, darf nur Rundungsrest der Schnitte sein — ein Streifen von
+    # EPS_GEOM Breite entlang des Umrisses; ein fehlendes Band steht um a/2 über.
+    outside = band.difference(above.buffer(-amount / 2.0))
+    return bool(outside.area <= EPS_GEOM * band.length)
 
 
 def _puts_allowance_into(operation: Operation) -> bool:

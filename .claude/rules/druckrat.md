@@ -166,9 +166,11 @@ offenem Drucker. Übernommen wird auf Klick, nie von allein.
   Schritt mit Spiel oder Lochkorrektur (`_puts_allowance_into`); die Taschen
   von *Gegenform einlassen* über Entnahmerichtung und Rahmen. **Der Fuß zählt
   nur, wo das eingezogene Band am Bett liegt** (`_foot_on_the_bed`): Rahmen-Z
-  nach oben, mit Vorzeichen, und der Schritt auf der eigenen Linie des Körpers
-  oder einer reinen Kopie (`COPY_OPS`) — nicht nach Kippen, Wenden, an einer
-  Teilhälfte oder am Deckel; im Zweifel behält der Slicer seinen Einzug. Eine nur
+  nach oben, mit Vorzeichen, der Schritt auf der eigenen Linie des Körpers
+  oder einer reinen Kopie (`COPY_OPS`), und am fertigen Körper ist das Band
+  unten noch eingezogen (`_band_drawn_in`, zwei Schnitte) — nicht nach Kippen,
+  Wenden, Abschneiden oder Abziehen unten, an einer Teilhälfte oder am Deckel;
+  im Zweifel behält der Slicer seinen Einzug. Eine nur
   eingetragene Passung ändert keine Geometrie und zählt nicht, ein Stift,
   Haken oder Bolzen auch nicht.
   **Ein gemessener Wert bekommt keinen Vorschlag**: Sein Prüfkörper ging
