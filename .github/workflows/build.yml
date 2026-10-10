@@ -435,7 +435,11 @@ jobs:
             python tools/ci_selection.py --diff "$base..$HEAD_SHA" > selection.txt
           else
             echo "Keine geprüfte Basis: jede Datei"
-            mapfile -d '' files < <(git ls-files -z app tools tests)
+            # Ohne mapfile: Die Bash 3.2 des Macs kennt es nicht, und der
+            # Workflowtest fährt diesen Schritt auf jeder Plattform.
+            files=()
+            while IFS= read -r -d '' file; do files+=("$file"); done \
+              < <(git ls-files -z app tools tests)
             python tools/ci_selection.py "${files[@]}" > selection.txt
           fi
           cat selection.txt

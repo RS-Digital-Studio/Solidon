@@ -682,7 +682,12 @@ def test_the_3mf_export_reads_the_slicer_stock_in_one_pass(
 
     Mit einem Slicer, dessen Bestand den Drucker kennt — ohne ihn läse der
     Export nichts, und der Test sagte nichts (Review RM-670 L7). Gezählt wird
-    jedes echte Lesen einer Profildatei je Faden: höchstens einmal."""
+    jedes echte Lesen einer Profildatei je Faden: höchstens einmal.
+
+    Den Faden erkennt eine Marke in ``threading.local``, nicht
+    ``threading.get_ident()``: Linux vergibt die Kennung eines beendeten
+    Fadens gleich wieder, und die Lesungen der Arbeiter vor dem Export zählten
+    dort zum Exportfaden (CI auf main, Ubuntu)."""
     import os
     from collections import Counter
 
@@ -699,21 +704,29 @@ def test_the_3mf_export_reads_the_slicer_stock_in_one_pass(
     for path in (tmp_path / "programme").rglob("*"):
         os.utime(path, (past, past))
     monkeypatch.setattr(tools, "slicer_program", lambda: executable)
-    loads: Counter[tuple[int, Path]] = Counter()
+    marks = threading.local()
+
+    def reader() -> object:
+        mark = getattr(marks, "mark", None)
+        if mark is None:
+            mark = marks.mark = object()
+        return mark
+
+    loads: Counter[tuple[object, Path]] = Counter()
     original_load = slicer_profiles._load
 
     def counted(path: Path, documents: Any = None) -> Any:
         shared = slicer_profiles._pass_documents(documents)
         if shared is None or path not in shared:
-            loads[(threading.get_ident(), path)] += 1
+            loads[(reader(), path)] += 1
         return original_load(path, documents)
 
     monkeypatch.setattr(slicer_profiles, "_load", counted)
-    writers: list[int] = []
+    writers: list[object] = []
     original_write = main_window_module.write_assembly
 
     def write(*args: Any, **kwargs: Any) -> Any:
-        writers.append(threading.get_ident())
+        writers.append(reader())
         return original_write(*args, **kwargs)
 
     monkeypatch.setattr(main_window_module, "write_assembly", write)
