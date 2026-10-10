@@ -437,9 +437,30 @@ def _leaves(value: object) -> tuple[tuple[int, Any], ...]:
 def _part_versions(operation: Operation) -> list[str]:
     """Die Fassung des Bausteins, den ein Schritt setzt: Maßänderungen tragen
     eine neue (``PartChange``), eigene Bausteine den Abdruck ihrer Datei."""
+    from app.core.knowledge.parts import recipe
     from app.core.knowledge.parts.registry import PARTS, used_parts
 
-    return [PARTS.get(name).version for name in used_parts([operation]) if PARTS.has(name)]
+    versions: list[str] = []
+    pending = list(used_parts([operation]))
+    seen: set[str] = set()
+    while pending:
+        name = pending.pop(0)
+        if name in seen or not PARTS.has(name):
+            continue
+        seen.add(name)
+        spec = PARTS.get(name)
+        versions.append(spec.version)
+        if spec.recipe_data is None:
+            continue
+        # Ein Rezept setzt Bibliotheksbausteine; deren Maßänderung ändert den
+        # Druck, nicht aber das Rezept (Review RM-706, L3) — wie
+        # ``recipe._collect_dependencies`` durch die Rezepte hindurch.
+        try:
+            nested = recipe.from_data(dict(spec.recipe_data)).document.ops
+        except AppError, ValueError, KeyError, TypeError:
+            continue
+        pending.extend(used_parts(nested))
+    return versions
 
 
 def _owned_settings(settings: PrintSettings, slot: MaterialSlot) -> dict[str, object]:

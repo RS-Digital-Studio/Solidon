@@ -228,6 +228,34 @@ def test_a_part_with_a_new_version_changes_the_body(monkeypatch: pytest.MonkeyPa
     assert stored.bodies() != reference
 
 
+def test_a_recipe_names_the_versions_of_the_parts_it_sets(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Review RM-706, L3: Ein Rezept setzt Bibliotheksbausteine. Ändert einer davon
+    seine Maße (``PartChange``), ändert sich der Druck, auch wenn das Rezept selbst
+    — und mit ihm seine Fassung — gleich bleibt."""
+    from app.core.knowledge.parts import recipe
+
+    inner = Operation(id=1, op="insert_screw_hole", inputs=("obj_1",), outputs=("obj_1",))
+    monkeypatch.setitem(
+        PARTS._parts,
+        "rm706_rezept",
+        SimpleNamespace(
+            name="rm706_rezept", version="rezept-1", recipe_data={"rezept": 1}, standalone=False
+        ),
+    )
+    monkeypatch.setattr(
+        recipe,
+        "from_data",
+        lambda data: SimpleNamespace(document=SimpleNamespace(ops=[inner])),
+    )
+    outer = Operation(id=2, op="insert_rm706_rezept", inputs=("obj_1",), outputs=("obj_1",))
+    reference = usage._part_versions(outer)
+    spec = PARTS.get("screw_hole")
+    monkeypatch.setitem(PARTS._parts, "screw_hole", replace(spec, version=spec.version + "0"))
+    assert usage._part_versions(outer) != reference
+
+
 def test_a_new_implementation_keeps_the_body(monkeypatch: pytest.MonkeyPatch) -> None:
     """Eine neue Fassung der Umsetzung (``cache_version``) ist kein anderer Druck —
     sie steigt genau bei einer druckgleichen Beschleunigung."""
