@@ -153,7 +153,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - El pincel se ajusta al tamaño del cuerpo. Si la malla es demasiado gruesa, *Modelar* iguala los triángulos en el primer trazo, y un Ctrl+Z deshace ambas cosas.
 - Al reflejar, el plano queda donde el cuerpo coincide consigo mismo, aunque una parte sobresalga mucho hacia un lado.
 - Modelar sigue al ratón con fluidez, y hasta un paso con cientos de trazos de pincel se calcula rápido.
-- Con *Fusionar suavemente* la malla sale uniforme, casi sin astillas finas, y se queda dentro del contorno de los cuerpos. Una pieza sobre la placa de impresión ya no queda por debajo.
+- Con *Fusionar suavemente* la malla sale uniforme, casi sin astillas finas. Una pieza sobre la placa de impresión ya no queda por debajo.
 - Con *Igualar los triángulos* ninguna arista supera la longitud indicada y en las superficies planas quedan menos astillas finas. La forma no cambia.
 - En *Esqueleto*, cada clic después del primero pone un hueso, Intro termina la cadena, arrastrar una articulación la dobla y *Terminado* lo guarda todo sin diálogo.
 - Un esqueleto solo dobla lo que cuelga de sus huesos, y el resto del cuerpo se queda quieto. Los proyectos anteriores se calculan como se guardaron.

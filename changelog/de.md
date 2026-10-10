@@ -177,7 +177,7 @@ Nutzen da und sonst nichts.
 - Der Pinsel passt zur Größe des Körpers. Ist das Netz für ihn zu grob, gleicht *Formen* die Dreiecke beim ersten Zug selbst an, und ein Strg+Z nimmt beides zurück.
 - Beim Spiegeln liegt die Ebene dort, wo der Körper sich selbst gleicht, auch wenn ein Teil weit zur Seite ragt.
 - Formen folgt der Maus flüssig, und auch ein Schritt mit hunderten Pinselzügen ist schnell gerechnet.
-- Mit *Weich verschmelzen* entsteht ein gleichmäßiges Netz mit kaum noch schmalen Splittern, das in den Umrissen der Körper bleibt. Ein Teil auf dem Druckbett reicht nicht mehr darunter.
+- Mit *Weich verschmelzen* entsteht ein gleichmäßiges Netz mit kaum noch schmalen Splittern. Ein Teil auf dem Druckbett reicht nicht mehr darunter.
 - Mit *Dreiecke angleichen* ist keine Kante länger als verlangt, und auf ebenen Flächen bleiben weniger schmale Splitter stehen. Die Form ändert sich dabei nicht.
 - Im *Skelett* setzt jeder Klick nach dem ersten einen Knochen, Enter beendet die Kette, Ziehen an einem Gelenk beugt, und *Fertig* legt alles ohne Dialog ab.
 - Ein Skelett beugt nur, was an seinen Knochen hängt, der Rest des Körpers bleibt stehen. Ältere Projekte rechnen wie gespeichert.

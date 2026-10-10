@@ -31,7 +31,7 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
-| 2026-10-10 | [RM-671: Weich verschmelzen gibt ein gleichmäßiges Netz in der Hülle der Eingänge, und Dreiecke angleichen hält seine Kantenlänge (10.10.2026)](#rm-671-weich-verschmelzen-gibt-ein-gleichmäßiges-netz-in-der-hülle-der-eingänge-und-dreiecke-angleichen-hält-seine-kantenlänge-10102026) |
+| 2026-10-10 | [RM-671: Weich verschmelzen gibt ein gleichmäßiges Netz, das nicht unter das Bett reicht, und Dreiecke angleichen hält seine Kantenlänge (10.10.2026)](#rm-671-weich-verschmelzen-gibt-ein-gleichmäßiges-netz-das-nicht-unter-das-bett-reicht-und-dreiecke-angleichen-hält-seine-kantenlänge-10102026) |
 | 2026-10-09 | [RM-587: Lange Brücken und steile Überhänge drucken sauber (09.10.2026)](#rm-587-lange-brücken-und-steile-überhänge-drucken-sauber-09102026) |
 | 2026-10-10 | [RM-707: Spulenwerte aus 0.5.3 überschreiben das Herstellerprofil nicht mehr (10.10.2026)](#rm-707-spulenwerte-aus-053-überschreiben-das-herstellerprofil-nicht-mehr-10102026) |
 | 2026-10-10 | [RM-705: Ein vor dem Update gebuchter Druck wird danach wiedererkannt (10.10.2026)](#rm-705-ein-vor-dem-update-gebuchter-druck-wird-danach-wiedererkannt-10102026) |
@@ -47548,9 +47548,9 @@ Sonde endete der Prozess so viermal mit Exit 127). `release` hält `_sculpt_chec
 **Nachweis:** `test_sculpt_session.py::test_a_released_window_starts_no_wall_check` am Stand
 davor rot, jetzt grün. Changelog: nein.
 
-## RM-671: Weich verschmelzen gibt ein gleichmäßiges Netz in der Hülle der Eingänge, und Dreiecke angleichen hält seine Kantenlänge (10.10.2026)
+## RM-671: Weich verschmelzen gibt ein gleichmäßiges Netz, das nicht unter das Bett reicht, und Dreiecke angleichen hält seine Kantenlänge (10.10.2026)
 
-<a id="rm-671-weich-verschmelzen-gibt-ein-gleichmäßiges-netz-in-der-hülle-der-eingänge-und-dreiecke-angleichen-hält-seine-kantenlänge-10102026"></a>
+<a id="rm-671-weich-verschmelzen-gibt-ein-gleichmäßiges-netz-das-nicht-unter-das-bett-reicht-und-dreiecke-angleichen-hält-seine-kantenlänge-10102026"></a>
 <a id="rm-671"></a>
 
 **RM-671 — *Weich verschmelzen* lieferte ein splittriges Netz, und *Dreiecke angleichen* hielt
@@ -47570,17 +47570,34 @@ bündigen Flächen wuchs das Ergebnis über die Eingänge hinaus, mit dem Ebenen
 unter das Bett.
 
 **Behoben.** `blend.distance_field` misst zum nächsten Punkt auf dem Dreieck, das Vorzeichen aus
-Pseudonormalen, ohne `einsum`; das Feld endet an der Hülle beider Eingänge (Entscheidung
-Koordinator, alle Seiten), Werte nahe null gelten als knapp außen (`CLEAR_OF_ZERO`), die Ecken
-stehen in doppelter Genauigkeit (`_in_double`, `skimage` gibt `float32`), und Nadeln unter 0,2
-Raster werden zusammengelegt (`NEEDLE`). `mesh_ops.uniform` vereinfacht ohne Abweichung nicht
+Pseudonormalen, ohne `einsum`; das Feld reicht nicht unter die unterste Höhe der Eingänge
+(`_above_the_floor`, Entscheidung Koordinator nach Review F — die Begrenzung auf alle Seiten des
+Hüllquaders schnitt runde Übergänge flach ab, an gekreuzten Rohren 269 mm² auf x = ±10), Werte
+nahe null gelten als knapp außen (`CLEAR_OF_ZERO`), die Ecken stehen in doppelter Genauigkeit
+(`_in_double`, `skimage` gibt `float32`), und Nadeln unter 0,2 Raster werden zusammengelegt
+(`NEEDLE`). Das Feld ist exakt, solange das nächste Dreieck unter den Bewerbern der acht nächsten
+Stützpunkte ist; an CAD-Netzen mit Nadelfächern fehlt es manchmal (Besenhalter: bis 0,19 mm,
+eines von 351 120 Vorzeichen falsch, das Ebenenfeld lag dort bis 1,81 mm daneben). `mesh_ops.uniform` vereinfacht ohne Abweichung nicht
 mehr, tauscht zu lange Kanten in der Ebene (`mesh_edits.flip_long`), teilt den Rest
 (`split_long`) und räumt um spitze Dreiecke in der Ebene auf: nach Delaunay tauschen, die
 kürzeste Seite einer Nadel zusammenlegen, wo das die spitzen Dreiecke weniger macht. Aufgeräumt
 wird nur in Ebenen, die breiter sind als tan 15° / 2 der Kante und nicht feiner als verlangt
 (`mesh_edits.plane_measures`, `EVEN_NARROW`, `EVEN_FINEST`); je Runde wird gewählt, bis kein
 Schritt mehr frei ist, in einer über das Netz gestreuten Folge (`_claimed`, `_scattered`). Neues
-Modul `app/core/geom/mesh_edits.py`; `cache_version` 6 und 2.
+Modul `app/core/geom/mesh_edits.py`; `cache_version` 7 und 2.
+
+**Review F.** Mit der Kantenzusage teilt das Angleichen die Diagonalen der Gitterzellen und trägt
+bei gleicher Kante bis doppelt so viele Dreiecke. Es zählt vorab deshalb wie *Kanten verfeinern*
+(`_uniform_ahead`, am Quader 100 × 80 × 60 auf 1 mm 176 946 statt 90 113 bei 161 644 Ergebnis),
+die Decke gilt dem Netz nach dem Kern und nach dem Teilen (`_below_the_ceiling`). Das
+Angleichen beim Formen verlangt seine Kante als längste, das √2-Fache der mittleren
+(`sculpt.EVEN_LONGEST`), und hält die Dreiecksgrenze über eine Schranke der Zählung mit Luft
+(`_longest_within_budget`, `REFINE_RESERVE`): Quader, Kugel, Zylinder und großer Quader 0,60
+bis 0,97 der Grenze statt 1,87 bis 2,03, jeder Fall mit höchstens so vielen Dreiecken wie vor
+RM-671 (Platte 40 × 40 × 20 mit Pinsel 6: 14 972 statt 15 644). Der Hänger an CAD-Netzen steht
+als Test (Zylinder mit 1 500 Abschnitten, gezählt an `surface_of`: am ersten angeschlossenen
+Stand 1 263 642 aktive Dreiecke und 202 s, jetzt keines und 0,7 s). Zwillinge in
+`mesh_edits.py` zusammengelegt (`_level_pair`, `_in_plane`, `_facing_along`).
 
 **Echte Modelle.** Am ersten angeschlossenen Stand hing das Angleichen an CAD-Netzen aus
 `F:\3D Dateien` über zehn Minuten: An einem Besenhalter (Zylinderfacetten 0,01 bis 0,08 mm
@@ -47592,8 +47609,9 @@ zur Sättigung.
 **Messung** (fein, Splitter = Winkel unter 10°, vorher → nachher): Kugel auf Zylinder 11,81 →
 1,34 % nach dem Verschmelzen, 30,59 → 0,98 % nach dem Angleichen auf 1,2 mm, längste Kante
 2,389 → 1,200 mm; *Figur formen* 6,27 → 0,41 % und 17,78 → 0,32 %, 3,102 → 1,499 mm (verlangt
-1,5); zwei kreuzende Zylinder 10,85 → 0,59 % und 28,26 → 0,47 %, 2,664 → 1,200 mm; zwei Quader auf
-dem Bett z −1,69 bis 11,44 → 0 bis 10 mm, 16 575,6 → 14 341,5 mm³ (Vereinigung 14 400).
+1,5); zwei kreuzende Zylinder 10,85 → 0,71 % und 28,26 → 0,58 %, 2,664 → 1,200 mm, rund bis
+x = ±10,978 wie bis v0.5.3; zwei Quader auf dem Bett z −1,69 bis 11,44 → 0 bis 10,75 mm,
+16 575,6 → 15 671,9 mm³ (Vereinigung 14 400, die Beule über Deckel und Seiten bleibt, RM-763).
 Angleichen ohne Abweichung lässt Volumen und Fläche gleich, auch an den Splitternetzen aus W4-3
 (11,81 → 7,79 % und 7,18 → 4,30 %). `plate_holes` auf 1,5 mm: 58,9 → 1,6 % Splitter, längste Kante
 2,784 → 1,500 mm. Die drei CAD-Netze (Kante 1,0, 0,5 und 1,0 mm): längste Kante 2,19 → 1,00,
@@ -47604,10 +47622,14 @@ Beispielprojekte außer *Figur formen*, das beide Schritte enthält, sind in Vol
 Dreiecken, Merkmalen und Befunden bitgleich.
 
 **Nachweis:** `test_blend.py` (exakter Abstand gegen `mesh.on_surface`, die drei Abnahmefälle,
-zwei Quader auf dem Bett), `test_subdivision.py` (die Splitternetze
-`meshes/blend_splinters_*.npz`), `test_platform_identity.py` (`blend_field`, `blend_union`,
-`remesh_uniform`; dazu ein, vier und rückwärts abgeschlossene Fäden bitgleich); die neuen Fälle
-am Stand davor rot, jetzt grün. Changelog: ja, 0.6.0 (die Ursache `2006fc7d1` steckt in v0.4.4
+zwei Quader auf dem Bett, runde Übergänge an Rohren und gestapelten Kugeln ohne ebene Flecken),
+`test_subdivision.py` (die Splitternetze `meshes/blend_splinters_*.npz`, Zählung vorab, Decke am
+Ergebnis, CAD-Zylinder, Ebenen wie beim Tausch), `test_sculpt.py` (Dreiecksgrenze am Netz, nicht
+dichter als vor RM-671), `test_platform_identity.py` (`blend_field`, `blend_union`,
+`remesh_uniform`; dazu ein, vier und rückwärts abgeschlossene Fäden bitgleich), §31-Fall
+`remesh_uniform_flat`; die neuen Fälle am Stand davor rot, jetzt grün. Die Leistungsmarken
+`blend_union` und `remesh_uniform` sind verworfen: Das genaue Feld und die Kantenzusage kosten
+an den §31-Fällen im Wechsel 1,2- bis 1,65-mal so viel Rechenzeit. Changelog: ja, 0.6.0 (die Ursache `2006fc7d1` steckt in v0.4.4
 bis v0.5.3).
 
 ## RM-704 (Teil): Mit zwei Schichten Luft trägt jede Baumspitze eine Trennschicht (10.10.2026)

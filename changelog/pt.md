@@ -152,7 +152,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - O pincel ajusta-se ao tamanho do corpo. Se a malha for demasiado grosseira, *Modelar* uniformiza os triângulos no primeiro traço, e um Ctrl+Z desfaz ambos.
 - Ao espelhar, o plano fica onde o corpo coincide consigo próprio, mesmo quando uma parte sobressai muito para o lado.
 - Modelar acompanha o rato com fluidez, e até um passo com centenas de traços de pincel é calculado depressa.
-- Com *Fundir suavemente* a malha fica uniforme, quase sem lascas finas, e dentro do contorno dos corpos. Uma peça na mesa de impressão já não passa para baixo dela.
+- Com *Fundir suavemente* a malha fica uniforme, quase sem lascas finas. Uma peça na mesa de impressão já não passa para baixo dela.
 - Com *Uniformizar os triângulos* nenhuma aresta passa do comprimento definido e nas superfícies planas ficam menos lascas finas. A forma não muda.
 - Em *Esqueleto*, cada clique depois do primeiro coloca um osso, Enter termina a cadeia, arrastar uma articulação dobra-a e *Concluído* guarda tudo sem diálogo.
 - Um esqueleto só dobra o que está preso aos seus ossos, e o resto do corpo fica parado. Os projetos anteriores calculam-se como foram guardados.

@@ -109,6 +109,10 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-752 — Bei jedem Übernehmen und Öffnen läuft eine volle Erkennung am Einheitswürfel](#rm-752) | Geometrie, Erkennung und Druckvorbereitung | Gemessen in D: 7–73 s CPU je Modell seit v0.5.1, findet nie ein Merkmal; `scene/evaluate.py`, löst §21.2 |
 | [RM-753 — Beim Skalieren wächst die Normale einer gerundeten Seite um 1/f](#rm-753) | Geometrie, Erkennung und Druckvorbereitung | Gefunden in D: mitgetragen hat die Normale die Länge \|n\|/f, frisch erkannt \|n\|; `perceive/matching.py` |
 | [RM-758 — Der Plattencache friert übersetzbare Befundwerte ein](#rm-758) | Geometrie, Erkennung und Druckvorbereitung | Gefunden im Review 1 zu RM-698: `serialise.finding_to_data` schreibt `values` mit `str(value)`, nach dem Öffnen nennt ein Befund den Körper in der Sprache des Caches |
+| [RM-763 — Die Beule der weichen Mischung nur, wo Flächen unter einem Winkel zusammenlaufen](#rm-763) | Geometrie, Erkennung und Druckvorbereitung | Rest aus Review F zu RM-671: über bündigen Deckeln und Seiten und an gekippten bündigen Flächen wächst das Ergebnis bis ein Viertel des Übergangs hinaus; begrenzt ist nur nach unten |
+| [RM-764 — Der nächste Punkt auf einem Dreieck einmal und plattformgleich](#rm-764) | Geometrie, Erkennung und Druckvorbereitung | Review F zu RM-671: `mesh.on_surface` und `_SurfaceIndex.bound` rechnen über `closest_point` mit `np.dot`, `blend._Surface` plattformgleich; dazu `float32`-Ecken in `lattice.py` |
+| [RM-766 — Das Verschweißen nach dem Kern ist der größte Posten des Angleichens](#rm-766) | Geometrie, Erkennung und Druckvorbereitung | Paket F: `_as_mesh` mit `merge_vertices` kostet an der Kugel aus §31 1,0–1,5 von 3,2–3,4 s |
+| [RM-767 — An CAD-Fächern bleibt das Angleichen splittrig, an unterteilten dauert es Minuten](#rm-767) | Geometrie, Erkennung und Druckvorbereitung | Paket F und Review-Fix F: Besenhalter 89 % Splitter; viermal unterteilte Lochplatte 262 s statt 0,3 s vor RM-671 |
 | [RM-070 — SpaceMouse auf macOS und Linux am echten Gerät abnehmen](#rm-070) | Bedienung und Darstellung | Die Rampe ist stetig und getestet, die Bildrate an 815 104 Dreiecken gemessen (`7ff34c67`: 16,7 → 8,7 ms im Median); offen bleiben Linux, die 3DxWare-Mausemulation, das Gerät selbst und die Rampe im Skizzenmodus (aus RM-183) |
 | [RM-204 — Ein Merkmalklick baut alle Handlungen des Fensters neu](#rm-204) | Bedienung und Darstellung | Abnahme am echten Fenster beim Release (RM-213) |
 | [RM-559 — Körper in der Szene mit drei Klicks aufziehen, als Körper oder als Ausschnitt](#rm-559) | Bedienung und Darstellung | Gebaut (Paket Z1, 08.10.): Werkzeug *Zeichnen*, Strg+Umschalt+E; offen die Abnahme am echten Fenster und die Nachzählung durch bedienlogik |
@@ -3712,6 +3716,58 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   **Abnahme:** Test zuerst (Befund mit übersetzbarem Wert durch den Plattencache, nach
   Sprachwechsel in der neuen Sprache), Auswertung mit und ohne Cache gleich, `cache_version`
   bzw. `CACHE_FORMAT_VERSION` steigt.
+
+<a id="rm-763"></a>
+
+- [ ] **RM-763 — Die Beule der weichen Mischung nur, wo Flächen unter einem Winkel zusammenlaufen.**
+  Rest aus Review F zu [RM-671](ROADMAP-ARCHIV.md#rm-671) (H2 b, N1): *Weich verschmelzen* hebt das
+  Feld, wo beide Felder gleich sind, um bis zu ein Viertel des Übergangs. Seit Review F ist nur
+  nach unten begrenzt (`blend._above_the_floor`); über bündigen Deckeln und Seiten bleibt die Beule
+  wie bis v0.5.3, und zwei um 30° gekippte bündige Quader 40 × 30 × 10 reichten (mit der Begrenzung
+  auf den Hüllquader gemessen) 0,75 mm über ihre Deckel- und unter ihre Bodenebene, 15 883 statt
+  14 400 mm³. Vorschlag: den Anteil der Beule aus dem Winkel zwischen den Richtungen zum nächsten
+  Punkt beider Körper (`_Surface._to_triangles` rechnet sie schon).
+  **Abnahme:** Test zuerst (gekippte bündige Quader ohne Überstand, gekreuzte Rohre ohne Fläche
+  auf x = ±10, zwei berührende Kugeln ohne flache Flecken), Gegenprobe am Stand davor rot,
+  `cache_version` von `blend_union`, druckgleich an den Beispielprojekten außer *Figur formen*.
+
+<a id="rm-764"></a>
+
+- [ ] **RM-764 — Der nächste Punkt auf einem Dreieck einmal und plattformgleich.**
+  Review F zu [RM-671](ROADMAP-ARCHIV.md#rm-671) (G2, N2) und offener Plattformpunkt aus Paket F:
+  Der nächste Punkt auf einem Dreieck wird zweimal hergeleitet — `blend._Surface._to_triangles`
+  mit Grundrechenarten und Pseudonormalen, `mesh.on_surface` und `_SurfaceIndex.bound` über
+  `trimesh.triangles.closest_point` mit `np.dot` (BLAS, `kern.md`). Dazu legt `lattice.py` die
+  Ecken aus Marching Cubes in `float32` (blind für ULP-Rauschen wie `blend.py` vor `_in_double`).
+  **Abnahme:** eine Rechnung für beide, die Wege in `tests/test_platform_identity.py` (`_WAYS`),
+  druckgleich gegen den Stand davor an Korpus und Beispielprojekten.
+
+<a id="rm-766"></a>
+
+- [ ] **RM-766 — Das Verschweißen nach dem Kern ist der größte Posten des Angleichens.**
+  Offener Punkt 1 aus Paket F (RM-671): An der Kugel aus §31 (2,46 Mio. Dreiecke) kostet
+  `mesh_ops._as_mesh` mit `trimesh.merge_vertices` 1,0–1,5 der 3,2–3,4 s von *Dreiecke
+  angleichen* (unter Last); *Fläche unterteilen* und jeder Weg über `_as_mesh` zahlen dasselbe.
+  Der Kern gibt ein per Index dichtes Netz heraus, verschweißt wird für den seltenen Fall
+  geteilter Ecken.
+  **Abnahme:** dieselben Netze (Ecken, Dreiecke, Dichtheit) an Korpus und Beispielprojekten, Zeit
+  im Wechsel mit CPU-Zeit an den §31-Fällen.
+
+<a id="rm-767"></a>
+
+- [ ] **RM-767 — An CAD-Fächern bleibt das Angleichen splittrig, an unterteilten dauert es Minuten.**
+  Offener Punkt 2 aus Paket F und Fund beim Review-Fix F (RM-671): Facettenstreifen und
+  Nadelfächer lassen sich ohne neue Punkte nicht formtreu aufräumen. In schmalen und sehr feinen
+  Ebenen räumt das Angleichen deshalb nicht auf (`EVEN_NARROW`, `EVEN_FINEST`) und lässt am
+  CAD-Besenhalter aus `F:\3D Dateien` 89 % Splitter. Wo die Ebene breit genug ist, die Fächer aber
+  schon unterteilt waren, räumt es auf und kommt nicht durch: `plate_holes` zweimal unterteilt
+  auf 1 mm 300 927 Tausche in allen 64 Runden, 11,6–14,8 s statt 0,3 s ohne Aufräumen und 0,0 s
+  vor RM-671, danach 30 % Splitter; viermal unterteilt (`mechanical_feature_mesh` aus
+  `test_performance.py`) auf die halbe Kante 262 s statt 0,3 s vor RM-671. Vorschlag: je Ebene neu
+  vernetzen (eingeschränktes Delaunay mit Innenpunkten), bis dahin die Arbeit des Aufräumens an
+  einem Budget begrenzen (§11.3: nie über die Uhr).
+  **Abnahme:** die unterteilten Platten unter dem Budget §31 (3 s) als Leistungsfall, Splitter
+  unter 5 % an Besenhalter und Würfel W6, druckgleich an Korpus und Beispielprojekten.
 
 ## Bedienung und Darstellung
 

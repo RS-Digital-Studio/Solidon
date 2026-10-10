@@ -153,7 +153,7 @@ dans `website/version.json`.
 - Le pinceau s'adapte à la taille du corps. Si le maillage est trop grossier, *Sculpter* uniformise les triangles au premier trait, et un Ctrl+Z annule les deux.
 - En miroir, le plan passe là où le corps se correspond, même si une partie dépasse loin sur le côté.
 - Sculpter suit la souris avec fluidité, et même une étape de centaines de coups de pinceau se calcule vite.
-- Avec *Fusionner en douceur*, le maillage est régulier, presque sans éclats fins, et reste dans le contour des corps. Une pièce posée sur le plateau d'impression ne passe plus en dessous.
+- Avec *Fusionner en douceur*, le maillage est régulier, presque sans éclats fins. Une pièce posée sur le plateau d'impression ne passe plus en dessous.
 - Avec *Uniformiser les triangles*, aucune arête ne dépasse la longueur demandée et il reste moins d'éclats fins sur les surfaces planes. La forme ne change pas.
 - Dans *Squelette*, chaque clic après le premier pose un os, Entrée termine la chaîne, glisser une articulation la plie, et *Terminé* enregistre tout sans dialogue.
 - Un squelette ne plie que ce qui tient à ses os, le reste du corps ne bouge pas. Les anciens projets se calculent comme enregistrés.

@@ -152,7 +152,7 @@ scrive in `website/version.json`.
 - Il pennello si adatta alle dimensioni del corpo. Se la mesh è troppo grossolana, *Modella* uniforma i triangoli al primo tratto, e un Ctrl+Z annulla entrambe le cose.
 - Nello specchiare il piano sta dove il corpo corrisponde a sé stesso, anche quando una parte sporge molto di lato.
 - Modellare segue il mouse in modo fluido, e anche un passaggio con centinaia di tratti di pennello si calcola in fretta.
-- Con *Fondi dolcemente* la mesh è uniforme, quasi senza schegge sottili, e resta entro il contorno dei corpi. Un pezzo sul piano di stampa non scende più al di sotto.
+- Con *Fondi dolcemente* la mesh è uniforme, quasi senza schegge sottili. Un pezzo sul piano di stampa non scende più al di sotto.
 - Con *Uniforma i triangoli* nessuno spigolo supera la lunghezza impostata e sulle superfici piane restano meno schegge sottili. La forma non cambia.
 - In *Scheletro* ogni clic dopo il primo crea un osso, Invio chiude la catena, trascinare un'articolazione la piega e *Fatto* salva tutto senza dialogo.
 - Uno scheletro piega solo ciò che è legato alle sue ossa, il resto del corpo resta fermo. I progetti precedenti si calcolano come salvati.
