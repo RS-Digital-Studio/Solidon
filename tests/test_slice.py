@@ -2937,13 +2937,20 @@ def test_the_fine_height_halves_the_layer_but_not_below_a_quarter_nozzle(
     assert fine_layers.fine_height(layer, nozzle) == expected
 
 
-def test_the_shallow_faces_are_those_of_the_stable_normals() -> None:
+@pytest.mark.parametrize("block", [None, 997], ids=["ein Block", "viele Blöcke"])
+def test_the_shallow_faces_are_those_of_the_stable_normals(
+    block: int | None, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """Die schnelle Auswahl (nur aufwärts weisende Dreiecke, im Quadrat
     verglichen) wählt an einer Kugel dieselben Dreiecke wie die Normalen aus
-    ``stable_normals`` und gibt ihre Flächen auf die letzte Stelle genau."""
+    ``stable_normals`` und gibt ihre Flächen auf die letzte Stelle genau —
+    auch in Blöcken gerechnet, wie am Drachen (Nachprüfung RM-586, N3): Die
+    Kugel hat 20 480 Dreiecke, bei 997 je Block also 21 Blöcke."""
     from app.core.geom.mesh import stable_normals
     from app.core.slice import fine_layers
 
+    if block is not None:
+        monkeypatch.setattr(fine_layers, "_FACE_BLOCK", block)
     raw = trimesh.creation.icosphere(subdivisions=5, radius=20.0)
     steep = math.cos(math.radians(fine_layers.step_slope(FINE_LAYER, FINE_LINE)))
     flat = math.cos(math.radians(fine_layers.FLAT_SLOPE))
