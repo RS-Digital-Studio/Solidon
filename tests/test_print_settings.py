@@ -8899,6 +8899,10 @@ def test_the_file_export_of_a_selection_asks_the_whole_job(
             cancelled=None,
             _begin_write=lambda: None,
         )
+        # Der Lesedurchgang (RM-670) ruft den Rest über die Instanz.
+        worker._assembly_in_one_read = lambda: main_window._ExportWorker._assembly_in_one_read(
+            worker  # type: ignore[arg-type]
+        )
         (written,), findings = main_window._ExportWorker._assembly(worker)  # type: ignore[arg-type]
         return _supported_parts(written, "orca"), {entry.code for entry in findings}
 

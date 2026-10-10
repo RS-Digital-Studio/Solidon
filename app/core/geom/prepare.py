@@ -3558,24 +3558,26 @@ def placed_at_free_spot(
     seat = -float(group.minimum[2])
     spot_x, spot_y, spot_plate = spot
     if spot_x is not None and spot_y is not None:
+        # **Mit der festgehaltenen Stelle derselbe Bericht** (RM-754, §15.1):
+        # Der Satz gehört zur Stelle, nicht zur Suche. Ohne ihn fehlte er jeder
+        # Auswertung ohne Cache — nach dem Wiederöffnen —, während die Sitzung
+        # ihn aus dem Cache zeigte. Dieselbe Bedingung wie beim Rechnen: eine
+        # Platte hinter der ersten oder eine Verschiebung.
         target, plate = (spot_x, spot_y), max(spot_plate, 1) - 1
-        return FreeSpot((target[0] - centre[0], target[1] - centre[1], seat), plate, {}, [])
+        offset = (target[0] - centre[0], target[1] - centre[1])
+        kept: list[Finding] = []
+        if keep_layout:
+            if plate:
+                kept.append(_plates_behind(plate))
+        elif plate > 0 or not (is_close(offset[0], 0.0) and is_close(offset[1], 0.0)):
+            kept.append(_came_to_free_spot(plate))
+        return FreeSpot((offset[0], offset[1], seat), plate, {}, kept)
     findings: list[Finding] = []
     if keep_layout:
         plate = max((at for _bounds, at in standing_in(scene, ignore)), default=-1) + 1
         target = centre
         if plate:
-            findings.append(
-                Finding(
-                    code="arrange.plates_behind",
-                    severity="info",
-                    message=_(
-                        "Die Platten der Datei kommen hinter die vorhandenen, ab Platte {number}.",
-                        number=plate + 1,
-                    ),
-                    values={"plate": plate + 1},
-                )
-            )
+            findings.append(_plates_behind(plate))
     else:
         standing = [entry for key, entry in scene.objects.items() if key not in ignore]
         avoid = _foreign_filament_plates(profile, standing, objects) if objects else set()
@@ -3599,23 +3601,39 @@ def placed_at_free_spot(
                 )
             )
         elif moved:
-            findings.append(
-                Finding(
-                    code="arrange.free_spot",
-                    severity="info",
-                    message=_(
-                        "Das Modell kam an die freie Stelle, die der Mitte von Platte "
-                        "{number} am nächsten liegt.",
-                        number=plate + 1,
-                    ),
-                    values={"plate": plate + 1},
-                )
-            )
+            findings.append(_came_to_free_spot(plate))
     return FreeSpot(
         (target[0] - centre[0], target[1] - centre[1], seat),
         plate,
         {"spot_x": target[0], "spot_y": target[1], "spot_plate": plate + 1},
         findings,
+    )
+
+
+def _plates_behind(plate: int) -> Finding:
+    """Der Satz zu den Platten einer Datei hinter den vorhandenen (ab Platte ``plate`` + 1)."""
+    return Finding(
+        code="arrange.plates_behind",
+        severity="info",
+        message=_(
+            "Die Platten der Datei kommen hinter die vorhandenen, ab Platte {number}.",
+            number=plate + 1,
+        ),
+        values={"plate": plate + 1},
+    )
+
+
+def _came_to_free_spot(plate: int) -> Finding:
+    """Der Satz zur freien Stelle auf Platte ``plate`` + 1."""
+    return Finding(
+        code="arrange.free_spot",
+        severity="info",
+        message=_(
+            "Das Modell kam an die freie Stelle, die der Mitte von Platte "
+            "{number} am nächsten liegt.",
+            number=plate + 1,
+        ),
+        values={"plate": plate + 1},
     )
 
 

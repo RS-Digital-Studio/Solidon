@@ -2322,15 +2322,69 @@ def _machine_keys(profile: Profile, flavour: SlicerFlavour) -> dict[str, str]:
         "nozzle_diameter": f"{printer.nozzle_diameter:g}",
         "bed_shape": corners,
         "max_print_height": f"{height:g}",
-        # **Die Grenzen der Maschine kennt Solidon nicht** (RM-191). Mit der
-        # Vorgabe ``time_estimate_only`` schätzte PrusaSlicer mit seinen
-        # eingebauten 1500 mm/s² — ein Fünftel der Beschleunigung, die die
-        # Datei selbst anfordert —, und die Druckzeit stand doppelt so hoch
-        # wie bei Orca für dieselbe Platte. ``ignore`` schreibt keine Grenzen
-        # in den G-Code (die Firmware behält ihre) und schätzt mit den
-        # Werten, die Solidon verlangt.
-        "machine_limits_usage": "ignore",
     }
+
+
+#: Was PrusaSlicer ohne Drucker seines Bündels aus seinen eingebauten Vorgaben
+#: nähme, obwohl Prusas eigener Bestand es in jedem Prozess anders setzt
+#: (``[print:*common*]`` in ``PrusaResearch.ini``, 2.9). ``extra_perimeters``
+#: legt an schrägen Flächen Wände über Solidons Wandzahl hinaus, die die
+#: Orca-Familie nicht kennt; ``solid_infill_below_area`` füllt jede Fläche
+#: unter 70 mm² voll (RM-191).
+PRUSA_WITHOUT_BUNDLE: Final[Mapping[str, str]] = {
+    "extra_perimeters": "0",
+    "solid_infill_below_area": "0",
+}
+
+#: Die Beschleunigungen, die Solidons Satz bei PrusaSlicer anfordern kann.
+_PRUSA_ACCELERATIONS: Final = (
+    "default_acceleration",
+    "first_layer_acceleration",
+    "travel_acceleration",
+    *slicer_keys.ACCELERATION_ROLES["prusa"],
+)
+
+
+def _prusa_time_estimate(written: Mapping[str, str]) -> dict[str, str]:
+    """Damit PrusaSlicer ohne Bündel die Zeit schätzt, die die Datei fordert (RM-191).
+
+    Die Grenzen der Maschine kennt Solidon nicht, und in die Druckdatei gehen
+    keine (``time_estimate_only``: die Firmware behält ihre). Seine
+    Zeitrechnung aber nimmt sie: Mit ``ignore`` die eingebauten 1500 mm/s²
+    (``GCodeProcessor``, ``MachineEnvelopeConfig``), und als Dialekt
+    ``reprap`` — PrusaSlicers Vorgabe — liest sie überhaupt keine. Deshalb
+    stehen die schnellste angeforderte Beschleunigung und das schnellste
+    Tempo als Grenze da, und der Dialekt ist ``marlin``: Er schreibt wie
+    ``reprap`` ``M204 S`` (am Gewürzregal Byte für Byte derselbe G-Code ohne
+    Kommentare), das Marlin, Klipper und Bambus Firmware verstehen; Marlin 2
+    schriebe ``M204 P`` ohne ``T``, das Klipper übergeht. Gemessen am
+    Centauri Carbon 2 mit zwei Wänden: 334 statt 231 min geschätzt, gegen
+    232 min im ElegooSlicer.
+    """
+    accelerations = [
+        number
+        for key in _PRUSA_ACCELERATIONS
+        if (number := _as_float(written.get(key))) is not None and number > 0.0
+    ]
+    speeds = [
+        number
+        for entry in slicer_keys.TABLES["prusa"]
+        if entry.path.startswith("speed.")
+        and not entry.key.endswith("acceleration")
+        and (number := _as_float(written.get(entry.key))) is not None
+        and number > 0.0
+    ]
+    estimate = {"gcode_flavor": "marlin", "machine_limits_usage": "time_estimate_only"}
+    if accelerations:
+        fastest = f"{max(accelerations):g}"
+        for axis in ("extruding", "travel", "x", "y"):
+            # Zwei Werte: normaler und leiser Modus; geschätzt wird der erste.
+            estimate[f"machine_max_acceleration_{axis}"] = f"{fastest},{fastest}"
+    if speeds:
+        quickest = f"{max(speeds):g}"
+        for axis in ("x", "y"):
+            estimate[f"machine_max_feedrate_{axis}"] = f"{quickest},{quickest}"
+    return estimate
 
 
 def _cura_seam(depth: float, shift: tuple[float, float]) -> dict[str, str]:
@@ -3107,8 +3161,11 @@ def prusa_values(
     liest. Die 3MF behält das binäre Format des Herstellers.
 
     **Ohne Drucker des Bestands** bleibt es bei Solidons vollständigem Satz
-    samt Maschine (:func:`_machine_keys`), und der Filamenttyp geht mit: Ohne
-    ihn ging PETG als PLA hinaus (Prüfbericht Prusa, B11).
+    samt Maschine (:func:`_machine_keys`), Zeitschätzung
+    (:func:`_prusa_time_estimate`) und dem, was Prusas Bündel jedem Prozess
+    mitgibt (:data:`PRUSA_WITHOUT_BUNDLE`). Der Filamenttyp der Spule geht mit
+    (:func:`_spool_filament_type`): Ohne ihn ging PETG als PLA hinaus
+    (Prüfbericht Prusa, B11).
 
     **Beides nur mit Schlüsseln, die das Programm lesen kann**
     (:func:`slicer_keys.for_program`): SuperSlicer stürzte an der Schrägnaht
@@ -3148,7 +3205,9 @@ def _prusa_values(
             if flat.get(key) == default:
                 del flat[key]
         flat.update(_speed_roles({}, flat, "prusa", program=program))
-        flat["filament_type"] = slicer_keys.filament_type(profile.material.id, "prusa")
+        flat.update(PRUSA_WITHOUT_BUNDLE)
+        flat.update(_prusa_time_estimate(flat))
+        flat["filament_type"] = _spool_filament_type(slots[0] if slots else None, profile, "prusa")
         return flat, flat
     foundation = manufacturer.base_settings(profile, settings.quality, setup)
     preserve_native_adhesion = effective.adhesion.kind == "auto" and foundation.has_profile
@@ -3186,7 +3245,9 @@ def _prusa_values(
     if chain.filament:
         document["filament_settings_id"] = chain.filament
     else:
-        document["filament_type"] = slicer_keys.filament_type(profile.material.id, "prusa")
+        document["filament_type"] = _spool_filament_type(
+            slots[0] if slots else None, profile, "prusa"
+        )
     document["printer_settings_id"] = chain.printer
     document["print_settings_id"] = chain.process
     if console:
@@ -3196,6 +3257,21 @@ def _prusa_values(
         if key in document:
             expected[key] = document[key]
     return document, expected
+
+
+def _spool_filament_type(
+    slot: MaterialSlot | None, profile: Profile, flavour: SlicerFlavour
+) -> str:
+    """Die Materialart, unter der eine Spule beim Slicer ankommt.
+
+    Die Art der Spule, ohne Spule oder ohne Art das Material des Projekts, in
+    der Schreibweise der Familie. Die Orca-Familie fragt es je Spule
+    (:func:`_orca_filament`), PrusaSlicer für die erste, die seinen einen Satz
+    fährt (:func:`settings_for_shared_slicer`) — deren Temperaturen und Dichte
+    stehen dann schon darin.
+    """
+    material = slot.material_type if slot is not None and slot.material_type else ""
+    return slicer_keys.filament_type(material or profile.material.id, flavour)
 
 
 #: Der Schalter der Orca-Familie für die eigene Stützschichthöhe (RM-583).
@@ -4711,11 +4787,7 @@ def _orca_filament(
         "name": f"Solidon {brand or settings.title}",
         "from": "User",
         "instantiation": "true",
-        "filament_type": [
-            slicer_keys.filament_type(slot.material_type, "orca")
-            if slot is not None and slot.material_type
-            else slicer_keys.filament_type(profile.material.id)
-        ],
+        "filament_type": [_spool_filament_type(slot, profile, "orca")],
         "filament_is_support": ["0"],
         # Neutraler Slicerstandard, bis eine Herstellerunterlage ihn ersetzt.
         # Bambu indiziert diese Liste ohne Längenprüfung für jedes Filament;
@@ -4789,7 +4861,7 @@ def _orca_filament(
     # hat einen Typ, aber kein eigenes Herstellerprofil. Ein geerbter
     # ``filament_type`` darf die sichtbare Wahl nicht überschreiben.
     if slot is not None and slot.material_type:
-        document["filament_type"] = [slicer_keys.filament_type(slot.material_type, "orca")]
+        document["filament_type"] = [_spool_filament_type(slot, profile, "orca")]
     # Die Farbe gehört dem Slot, nicht der Einstellung: sie ist der Grund,
     # warum es diesen Slot überhaupt gibt (§20). Ein Schriftzug in Weiß auf
     # schwarzem Gehäuse sind zwei Spulen, und beide bekämen sonst die eine

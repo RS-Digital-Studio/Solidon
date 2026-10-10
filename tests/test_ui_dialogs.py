@@ -153,6 +153,27 @@ def test_a_feature_parameter_offers_the_features(qt_app: QApplication) -> None:
         dialog.deleteLater()
 
 
+def test_keeping_a_feature_together_is_chosen_from_the_features(qt_app: QApplication) -> None:
+    """*Merkmal beisammen halten* ist eine Auswahl, kein Textfeld (Nachprüfung I, N2).
+
+    Wie ``reference_feature``: „— keines —“ heißt jedes Teil einzeln, und
+    gewählt wird über die Beschriftung, nicht durch Tippen von ``hole_1``.
+    """
+    from PySide6.QtWidgets import QComboBox
+
+    spec = REGISTRY.get("split_bodies")
+    features = {"hole_1": "hole_1 · Ø6,00 mm"}
+    dialog = OperationDialog(spec, ["obj_1"], features=features)
+    try:
+        editor = dialog._editors["carry_feature"]
+        assert isinstance(editor, QComboBox), "eine Liste, kein Textfeld"
+        assert editor.itemData(0) == "", "leer gilt: jedes Teil einzeln"
+        editor.setCurrentIndex(editor.findText("hole_1 · Ø6,00 mm"))
+        assert dialog.values()["carry_feature"] == "hole_1"
+    finally:
+        dialog.deleteLater()
+
+
 def test_an_unknown_feature_is_shown_not_replaced(qt_app: QApplication) -> None:
     """Ein gespeicherter Wert, den die Liste nicht kennt, bleibt stehen.
 

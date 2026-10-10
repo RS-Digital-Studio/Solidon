@@ -26,7 +26,9 @@ einmal; Gewichte und gebeugte Haut rechnet `_ArmatureSkinWorker`. Die letzte
 gültige Fläche bleibt sichtbar, ein Klick trifft sie. Neues Werkzeug,
 Symmetrie, Abbruch und Projektwechsel entwerten die Antwort über Nummer und
 Arbeiteridentität. Die Wand-/Überhangprüfung liest eine Kopie der gezeigten
-Fläche. Prüfstände warten über `wait_for_sculpt_preview`/`…_armature_skin`.
+Fläche. Prüfstände warten über `wait_for_sculpt_preview`/`…_armature_skin`;
+`wait_for_sculpt_check` stellt erst die Vorschau, dann eine noch geschuldete
+Prüfung und wartet auf die Antwort zum jüngsten Stand.
 
 Was geschieht, während gerechnet wird (§2.8); die allgemeinen Regeln aus
 `oberflaeche.md` gelten zusätzlich. Messreihen, Anlässe, Nachweise,
@@ -80,8 +82,7 @@ Schritten sofort (`begin(..., at_once=True)`) — und deckend
 Fenster zeigt die Fensterfarbe. **Solange er steht, ist die Ansicht verborgen,
 nicht nur verdeckt** (`middle_stack.setVisible`): Die Grafikfläche ist ein
 natives Fenster, liegt über jedem gemalten Geschwister und zeigt bis zu ihrem
-ersten Bild alte Pixel. `widget.grab()` sieht das nicht; Beweisbilder nur über
-`grabWindow` (`ansicht.md`, „Was nur das Bild zeigt").
+ersten Bild alte Pixel.
 **Gelesen ist nicht gezeigt:** Bereitet der Ansichtsarbeiter das erste Bild
 vor (`Viewport.preparing_an_empty_view`), bleibt er mit „Das Modell wird
 angezeigt …“ stehen, bis `sceneApplied` oder `sceneFailed` kommt
@@ -118,8 +119,8 @@ angezeigt …“ stehen, bis `sceneApplied` oder `sceneFailed` kommt
   `Session.fine_current` und bestellen sie über `request_fine` — der Klick
   bindet sich an das Ergebnis, der Knopf bleibt frei. Die Güte legt
   `evaluate_async` beim Start des Arbeiters fest (`_EvaluationWorker.quality`),
-  nie der Lauf selbst: Sonst nimmt ein Arbeiter am Stand davor dem Nachlauf
-  die bestellte Güte weg.
+  nie der Lauf selbst (Grund: Herleitung). Die Schichtanalyse folgt dem Export;
+  `_warm_the_slicer` liest nach dem Start, wenn keine Auswertung läuft.
 * **Ein Import ohne Modell wird kein Schritt:** Hält sein erstes Bild am
   Ladeschritt mit `ValidationError`, nimmt `Session._settle_import` ihn ohne
   Redo zurück (`History.withdraw`), `importRejected` bietet *Andere Datei

@@ -49,6 +49,7 @@ from app.core.scene.serialise import (
     transaction_to_data,
 )
 from app.core.types import (
+    SKETCH_SOLVER,
     Action,
     ChatEntry,
     Document,
@@ -4925,3 +4926,93 @@ def test_v48_sculpting_and_posing_compute_as_saved(profile) -> None:
     assert abs(float(bodies()["kugel"].volume) - 32742.854319) > 1.0, (
         "Gegenprobe: in Fassung 2 rechnen dieselben Züge anders"
     )
+
+
+def test_v49_drawn_sketches_compute_as_saved(profile) -> None:
+    """49 → 50: Eine gezeichnete Skizze aus einer älteren Datei rechnet wie gespeichert (RM-541).
+
+    ``sketch_solver_v49.p3d`` hat der Stand vor der Umstellung geschrieben
+    (``78d39dec9``, Format 49): eine Platte 5 hoch aus vier schief gezeichneten
+    Linien mit Deckung, die untere waagerecht, die rechte 80° zur unteren —
+    unterbestimmt, und gespeichert sind die gezeichneten Punkte, wie der Editor
+    sie nach einer neuen Bedingung schreibt. Gerechnet mit dem Löser von 0.5.3
+    (Code aus dem Tag) beim Schreiben: 2 656,656241 mm³, die linke untere Ecke
+    der Hülle bei (0,030846 | −0,011202). Nach der Migration trägt der
+    Skizzentext ``"solver": 1`` und rechnet so; derselbe Text ohne die Angabe
+    rechnet mit dem heutigen Löser anders (gemessen 2 626,81 mm³).
+    """
+    from app.core.scene.evaluate import evaluate
+    from app.core.sketch.serialize import sketch_from_text, sketch_to_text
+
+    path = Path(__file__).parent / "data" / "projects" / "sketch_solver_v49.p3d"
+    assert project_data(path)["format_version"] == 49
+    assert '"solver"' not in project_data(path)["ops"][0]["params"]["sketch"]
+
+    project = load(path)
+    (plate,) = project.document.ops
+    drawing = sketch_from_text(plate.params["sketch"])
+    assert drawing.solver == 1
+
+    def volume_and_corner() -> tuple[float, float, float]:
+        result = evaluate(project.document, profile, sources=ProjectSources(project))
+        assert result.complete, [str(f.message) for f in result.scene.report.findings]
+        mesh = result.scene.objects["obj_1"].mesh
+        low = mesh.raw.bounds[0]
+        return float(mesh.volume), float(low[0]), float(low[1])
+
+    volume, left, bottom = volume_and_corner()
+    assert volume == pytest.approx(2656.656241, abs=1e-3)
+    assert (left, bottom) == pytest.approx((0.030846, -0.011202), abs=1e-4)
+
+    renewed = sketch_to_text(dataclasses.replace(drawing, solver=SKETCH_SOLVER))
+    History(project.document).change_params(plate.id, {**plate.params, "sketch": renewed})
+    assert abs(volume_and_corner()[0] - 2656.656241) > 1.0, (
+        "Gegenprobe: mit dem heutigen Löser landet dieselbe Zeichnung anders"
+    )
+
+
+def test_v49_split_bodies_drops_what_it_dropped_then(profile) -> None:
+    """Vor RM-639: *In Einzelteile aufteilen* verwirft in älteren Dateien, was es damals verwarf.
+
+    ``split_splinters_v49.p3d`` hat der Stand vor RM-639 geschrieben
+    (``0ceb7e9ff``): Platte 100 × 60 × 10, Klotz 20 × 20 × 10 und drei Stifte
+    Ø 6 × 10, vereint und in zwei Teile zerlegt. Die Stifte lagen unter einem
+    Prozent der Platte und fielen weg; gemessen beim Schreiben 60 000 und
+    4 000 mm³, je ein Stück. Nach der Migration trägt der Schritt
+    ``legacy_tiny_share`` und rechnet wie gespeichert. Gegenprobe: Ohne Marker
+    sind die Stifte Teile und gehen zur Platte, ihrem nächsten Nachbarn.
+    """
+    from app.core.geom.mesh import as_mesh_data
+    from app.core.scene.evaluate import evaluate
+
+    path = Path(__file__).parent / "data" / "projects" / "split_splinters_v49.p3d"
+    assert project_data(path)["format_version"] == 49
+
+    project = load(path)
+    (split,) = [entry for entry in project.document.ops if entry.op == "split_bodies"]
+    assert split.params["legacy_tiny_share"] is True
+
+    def bodies() -> dict[str, Any]:
+        result = evaluate(project.document, profile, sources=ProjectSources(project))
+        assert result.complete, [str(f.message) for f in result.scene.report.findings]
+        return {entry.name: as_mesh_data(entry.mesh) for entry in result.scene.objects.values()}
+
+    saved = bodies()
+    assert sorted(saved) == ["platte 1", "platte 2"]
+    assert float(saved["platte 1"].volume) == pytest.approx(60000.0, abs=1e-6)
+    assert saved["platte 1"].component_count == 1
+    assert float(saved["platte 2"].volume) == pytest.approx(4000.0, abs=1e-6)
+
+    history = History(project.document)
+    history.change_params(split.id, {**split.params, "legacy_tiny_share": False})
+    today = bodies()
+    assert sorted(today) == ["platte 1", "platte 2"]
+    assert today["platte 1"].component_count == 4, "Gegenprobe: die Stifte sind Teile"
+    assert float(today["platte 1"].volume) > 60000.0 + 3 * 250.0
+
+    project = load(path)
+    (split,) = [entry for entry in project.document.ops if entry.op == "split_bodies"]
+    History(project.document).change_params(split.id, {**split.params, "count": 3})
+    (changed,) = [entry for entry in project.document.ops if entry.op == "split_bodies"]
+    assert "legacy_tiny_share" not in changed.params, "eine Änderung rechnet wie heute"
+    assert len(bodies()) == 3, "mit dem Marker fände die Zerlegung nur zwei Teile"

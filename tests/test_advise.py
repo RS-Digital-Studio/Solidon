@@ -827,6 +827,11 @@ def test_a_lattice_of_small_self_supporting_pieces_gets_no_supports() -> None:
     entries = advise.advise(settings, profile, lattice)
 
     assert "support.style" not in paths(entries)
+    # Und der Bericht meldet keine vielen kleinen Überhänge (RM-572): Er fragt
+    # dieselbe Antwort wie der Rat.
+    from app.core.slice.findings import small_overhang_findings
+
+    assert small_overhang_findings("becher", lattice, advise.support_need(lattice)) == []
 
 
 def test_one_ceiling_of_the_same_area_still_gets_supports() -> None:
