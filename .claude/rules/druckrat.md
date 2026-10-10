@@ -46,7 +46,11 @@ offenem Drucker. Übernommen wird auf Klick, nie von allein.
   nur von Material daneben (`_Ceilings.closes`), schließt sie sich selbst.
   Gefragt wird die ganze Decke (Flächenmehrheit). Außen auf dem Modell zählt
   `worth_support`, auch als `open_field`. Wer das anfasst, misst Schüssel und
-  Drache.
+  Drache. Der Brückenbefund rät über einer Kanaldecke zum Übergang, nicht zur
+  Stütze, und eine Brücke daneben misst er ohne sie (`advise._from_spans`);
+  gefragt nur, was weiter als `SPAN_INTERESTING` spannen kann (`_may_span`),
+  denn die Kanalfrage kostet je Decke den Durchgang bis zum Bett
+  (`channel_pieces` liest die gemerkte volle Antwort).
 - **Eine Insel ist nie eine Kanaldecke**: Auf dem Modell heißt es „überall“,
   gleich wie klein (`ModelSupport.island_on_model`), ebenso für eine lange
   Brücke, die selbst dort hängt (`open_bridge_width`); über dem Bett bleibt
@@ -106,8 +110,14 @@ offenem Drucker. Übernommen wird auf Klick, nie von allein.
   ohne Ansatz), und die keine Öffnung über `SPAN_INTERESTING` überspannt
   (zwei Bahnen breit, von außen gefasst, Öffnung frei — geometrisch, denn der
   Stützschnitt misst keine Brücken), zählt nicht zum Stützbedarf, nicht zu
-  „auf dem Modell“, nicht zum Überhang- und nicht zum Brückenbefund. Wer nur
-  einige Stücke prüft, fragt mit `only`. `support.spare_ledges` sperrt ihre
+  „auf dem Modell“, nicht zum Überhang- und nicht zum Brückenbefund — je
+  Stück, nicht je Schicht: Die Brückenweite einer Schicht mit Rändern misst
+  `span_beside` an den Kernen der übrigen Stücke, sonst zählte ein Rand neben
+  einem fremden Überhang als lange Brücke (RM-627) — freie Flächen allein
+  reichen nicht, das Band einer Flanke unter 14 bis 45 Grad verbindet alles an
+  der Wand. Der Ort der Warnung liegt an der gemessenen Brücke (`span_spot`).
+  Wer nur einige Stücke prüft,
+  fragt mit `only`. `support.spare_ledges` sperrt ihre
   Überhangfläche (`ledge_space`) und spart aus, was Stütze braucht;
   vorgeschlagen nur mit Stützen.
 - **Der Stützkontakt folgt dem Material der Spule** (`_support_contact`):

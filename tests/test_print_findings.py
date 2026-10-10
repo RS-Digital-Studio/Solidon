@@ -2,8 +2,9 @@
 
 Geprüft gegen Körper, deren Zahlen sich ausrechnen lassen: ein schwebender
 Würfel (eine Insel, 10 × 10 mm, 20 mm über dem Bett — 2 cm³ Raum darunter),
-ein Pilz (ein Hut, der frei überhängt), ein Steg über einer Lücke, ein Winkel,
-der liegend keine Stütze braucht. Jede Zeile trägt ihren Ort, eine Handlung
+ein Pilz (ein Hut, der frei überhängt), ein Steg über einer Lücke, ein Kinn
+mit schräger Unterseite aus vielen kleinen Streifen, ein Winkel, der liegend
+keine Stütze braucht. Jede Zeile trägt ihren Ort, eine Handlung
 und die Herkunft ``internal`` (Regel 14).
 """
 
@@ -21,6 +22,7 @@ from app.core.perceive import maps
 from app.core.slice import advise, findings
 from app.core.slice.findings import print_findings
 from app.core.types import Scene, SceneObject
+from tests.helpers import brick, chin, chin_over_chest, on_bed
 
 
 def _box(size: tuple[float, float, float], at: tuple[float, float, float]) -> trimesh.Trimesh:
@@ -39,12 +41,12 @@ def _scene(*meshes: MeshData) -> Scene:
     )
 
 
-def _floating_cube() -> MeshData:
-    """Ein Sockel 20 × 20 × 10 und daneben ein Würfel von 10 mm, dessen
-    Unterseite 20 mm über dem Bett schwebt."""
+def _floating_cube(size: float = 10.0) -> MeshData:
+    """Ein Sockel 20 × 20 × 10 und daneben ein Würfel der Kante ``size``,
+    10 mm hoch, dessen Unterseite 20 mm über dem Bett schwebt."""
     return MeshData.of(
         trimesh.util.concatenate(
-            [_box((20.0, 20.0, 10.0), (0.0, 0.0, 5.0)), _box((10.0, 10.0, 10.0), (30.0, 0.0, 25.0))]
+            [_box((20.0, 20.0, 10.0), (0.0, 0.0, 5.0)), _box((size, size, 10.0), (30.0, 0.0, 25.0))]
         )
     )
 
@@ -133,6 +135,146 @@ def test_a_long_bridge_points_at_the_gap(petg) -> None:
     assert spans[0].location is not None
     assert abs(spans[0].location[0]) < 10.0, "über der Lücke, nicht am Ursprung eines Pfeilers"
     assert spans[0].object_id == "obj_1"
+
+
+def _slice_codes(found: list[object]) -> list[str]:
+    return [code for code in _codes(found) if code.startswith("slice.")]
+
+
+def test_many_small_overhangs_point_at_the_underside_of_the_chin(petg) -> None:
+    """RM-572: Ein Kinn mit 18° flacher Unterseite zerfällt im Schnitt in
+    Streifen unter 10 mm²; kein Stück erreicht die Meldeschwelle, der Rat
+    verlangt trotzdem Stützen. Der Bericht nennt die Stelle — auf der
+    Unterseite, an der Höhe ihrer Schicht. Die Unterseite steigt von 44 mm an
+    der Rückwand (y = 15) bis 50 mm an der Spitze (y = −3); ein Streifen auf
+    der Höhe z liegt also bei y = −3 + 3·(50 − z)."""
+    profile, settings = petg
+
+    found = print_findings(_scene(chin_over_chest()), profile, settings)
+
+    assert "slice.large_overhang" not in _codes(found), "kein Stück über der Meldeschwelle"
+    small = [entry for entry in found if entry.code == "slice.small_overhangs"]
+    assert len(small) == 1
+    finding = small[0]
+    assert finding.object_id == "obj_1"
+    assert finding.source == "internal", "Regel 14: geschätzt, nicht aus G-Code"
+    assert finding.values["area_mm2"] > findings.OVERHANG_REPORTED_FROM
+    assert finding.location is not None
+    x, y, z = finding.location
+    assert -8.0 < x < 8.0 and -3.0 < y < 15.0, "im Grundriss des Kinns"
+    assert 44.0 < z < 50.2
+    # Ein Streifen ist eine Schicht hoch, in y also 3 · 0,2 mm breit.
+    assert y == pytest.approx(-3.0 + 3.0 * (50.0 - z), abs=1.1), "auf der Unterseite"
+    assert finding.values["z_mm"] == pytest.approx(z, abs=0.01)
+    assert [action.id for action in finding.suggestions] == [
+        "orient_for_print",
+        "show_support_need",
+    ]
+    assert maps.map_for(finding) == "overhang", "der Klick öffnet die Überhangkarte"
+
+
+def test_the_small_overhangs_are_not_shown_on_a_self_supporting_collar(petg) -> None:
+    """Ein Kragen ragt 2 mm um die Rückwand, auf der Höhe der Kinnstreifen. Er
+    trägt sich selbst (``ledges``), bringt seiner Schicht aber die meiste
+    Überhangfläche; der Ort gehört trotzdem unter das Kinn (Review RM-572)."""
+    profile, settings = petg
+    body = on_bed(
+        brick(80.0, 60.0, 4.0, (0.0, 0.0, 2.0)),
+        brick(40.0, 10.0, 60.0, (0.0, 20.0, 34.0)),
+        brick(60.0, 30.0, 20.0, (0.0, 0.0, 14.0)),
+        chin(44.0),
+        brick(44.0, 14.0, 2.0, (0.0, 20.0, 47.0)),
+    )
+
+    found = print_findings(_scene(body), profile, settings)
+
+    small = [entry for entry in found if entry.code == "slice.small_overhangs"]
+    assert len(small) == 1
+    assert small[0].location is not None
+    x, y, z = small[0].location
+    assert -8.0 < x < 8.0 and -3.0 < y < 15.0, "unter dem Kinn, nicht am Kragen"
+    assert y == pytest.approx(-3.0 + 3.0 * (50.0 - z), abs=1.1)
+
+
+def test_a_small_island_beside_the_chin_keeps_the_field_of_the_advice(petg) -> None:
+    """Kinn und eine schwebende Insel von 3 mm zugleich: Kein Stück trägt den
+    Flächenweg (Insel 9 mm², Kinnstreifen unter 10 mm², zusammen 128 mm²), die
+    schräge Unterseite als Feld schon. Ohne Inselstücke wird der Weg neu
+    gefragt, mit dem Feld des Rats — gefragt nach dem größten Stück allein
+    schwiege der Bericht am Kinn. Die Insel hat ihre eigene Zeile und zählt
+    nicht in die Fläche (Review RM-572)."""
+    profile, settings = petg
+    alone = print_findings(_scene(chin_over_chest()), profile, settings)
+    body = on_bed(
+        brick(80.0, 60.0, 4.0, (0.0, 0.0, 2.0)),
+        brick(40.0, 10.0, 60.0, (0.0, 20.0, 34.0)),
+        brick(60.0, 30.0, 20.0, (0.0, 0.0, 14.0)),
+        chin(44.0),
+        brick(3.0, 3.0, 3.0, (35.0, -20.0, 30.0)),
+    )
+
+    found = print_findings(_scene(body), profile, settings)
+
+    assert _slice_codes(found) == ["slice.island_needs_support", "slice.small_overhangs"]
+    island, small = (entry for entry in found if entry.code.startswith("slice."))
+    assert island.location is not None and island.location[0] == pytest.approx(35.0, abs=1.0)
+    assert small.location is not None
+    x, y, _z = small.location
+    assert -8.0 < x < 8.0 and -3.0 < y < 15.0, "unter dem Kinn, nicht an der Insel"
+    (before,) = (entry for entry in alone if entry.code == "slice.small_overhangs")
+    assert small.values["area_mm2"] == pytest.approx(before.values["area_mm2"], abs=0.1), (
+        "die Insel zählt nicht in die Fläche"
+    )
+
+
+@pytest.mark.parametrize("size", [12.0, 20.0])
+def test_a_larger_floating_cube_is_only_an_island(petg, size: float) -> None:
+    """Ein schwebender Würfel ist ein Überhangstück über 100 mm², und der
+    Überhangweg des Rats ist wahr. Er ist aber eine Insel und hat seine Zeile;
+    „viele kleine Überhänge“ stand daneben an derselben Stelle (Review RM-572)."""
+    profile, settings = petg
+
+    found = print_findings(_scene(_floating_cube(size)), profile, settings)
+
+    assert _slice_codes(found) == ["slice.island_needs_support"]
+
+
+def test_two_long_narrow_bridges_are_only_long_bridges(petg) -> None:
+    """Zwei Stege von 3 mm Breite über 20 mm Lücke, je 58 mm² Überhang: Der Rat
+    verlangt Stützen wegen der Brücke; zusammen 115,8 mm² trägt keiner der
+    beiden Flächenwege. Dafür gibt es ``slice.long_bridge`` — keinen zweiten
+    Befund über kleine Überhänge (Review RM-572)."""
+    profile, settings = petg
+    parts = [_box((40.0, 30.0, 2.0), (0.0, 0.0, 1.0))]
+    for y in (-8.0, 8.0):
+        parts += [
+            _box((3.0, 3.0, 10.0), (-11.5, y, 7.0)),
+            _box((3.0, 3.0, 10.0), (11.5, y, 7.0)),
+            _box((26.0, 3.0, 2.0), (0.0, y, 13.0)),
+        ]
+    bridges = MeshData.of(trimesh.boolean.union(parts))
+
+    found = print_findings(_scene(bridges), profile, settings)
+
+    assert _slice_codes(found) == ["slice.long_bridge"]
+
+
+def test_the_support_need_is_asked_only_where_a_turn_is_searched(
+    petg, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Der Stützbedarf ist die teuerste Frage des Berichts. Ohne Lagensuche —
+    mehr als acht Körper — stellt ihn auch der Befund über kleine Überhänge
+    nicht (Review RM-572: ein Schachsatz zahlte je Figur Sekunden)."""
+    profile, settings = petg
+    entry = _scene(chin_over_chest()).objects["obj_1"]
+
+    def refused(*_args: object, **_kwargs: object) -> None:
+        raise AssertionError("support_need ohne Lagensuche gefragt")
+
+    monkeypatch.setattr(advise, "support_need", refused)
+    found = findings.body_findings(entry, profile, settings, search=False)
+
+    assert "slice.small_overhangs" not in _codes(found)
 
 
 def test_a_rib_below_the_nozzle_is_located_at_the_rib(petg) -> None:
