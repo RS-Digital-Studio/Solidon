@@ -269,6 +269,21 @@ def test_a_step_that_only_names_or_checks_keeps_the_body() -> None:
     assert usage.StoredInputs(renamed.document).bodies() == plain
 
 
+def test_a_step_that_passes_its_input_through_keeps_the_body() -> None:
+    """*Duplizieren* reicht das Original unverändert durch (``leaves_inputs_unchanged``):
+    Es bleibt derselbe Körper, nur die Kopie ist neu."""
+    plain = usage.StoredInputs(build().document).bodies()
+    duplicated = usage.StoredInputs(
+        build(
+            extra=(OperationDraft(op="duplicate_object", params={"count": 2}, inputs=("obj_1",)),),
+        ).document
+    ).bodies()
+    assert len(duplicated) == 2
+    assert duplicated["obj_1"] == plain["obj_1"]
+    (copy,) = set(duplicated) - {"obj_1"}
+    assert duplicated[copy] != plain["obj_1"]
+
+
 def test_a_suppressed_step_and_a_halt_count_like_the_evaluation() -> None:
     """Ein ausgeschalteter Schritt rechnet nicht, nach dem Halt rechnet nichts."""
     project = build(
