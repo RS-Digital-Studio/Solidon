@@ -31,6 +31,8 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-10 | [RM-751: Ein freigegebenes Fenster startet keine Wandprüfung mehr (10.10.2026)](#rm-751-ein-freigegebenes-fenster-startet-keine-wandprüfung-mehr-10102026) |
+| 2026-10-10 | [RM-750: Ein wartender Klick behält seine Zusage, während die Analysekarte rechnet (10.10.2026)](#rm-750-ein-wartender-klick-behält-seine-zusage-während-die-analysekarte-rechnet-10102026) |
 | 2026-10-09 | [RM-627: Ein Rand neben einem anderen Überhang ist keine lange Brücke (09.10.2026)](#rm-627-ein-rand-neben-einem-anderen-überhang-ist-keine-lange-brücke-09102026) |
 | 2026-10-09 | [RM-572: Der Prüfbericht nennt die Stelle, wo viele kleine Überhänge Stützen verlangen (09.10.2026)](#rm-572-der-prüfbericht-nennt-die-stelle-wo-viele-kleine-überhänge-stützen-verlangen-09102026) |
 | 2026-10-09 | [RM-584 (Teil 2): Unter flachen Decken Gitter oder Hybrid, und hohe Bäume bekommen zwei Wände (09.10.2026)](#rm-584-teil-2-unter-flachen-decken-gitter-oder-hybrid-und-hohe-bäume-bekommen-zwei-wände-09102026) |
@@ -46642,3 +46644,32 @@ Himmel nicht mehr schneiden, werden übersprungen (Becher 0,64 → 0,28 s CPU, a
 gleich), und der senkrechte Schacht ist als Grenze benannt. Belege:
 `output/konsolidierung-2026-10-07/codex-claude/belege/lauf-a.md`. Changelog: nein (die
 Lücke entstand mit RM-566 im selben 0.6.0-Zyklus).
+
+## RM-750: Ein wartender Klick behält seine Zusage, während die Analysekarte rechnet (10.10.2026)
+
+<a id="rm-750-ein-wartender-klick-behält-seine-zusage-während-die-analysekarte-rechnet-10102026"></a>
+<a id="rm-750"></a>
+
+**RM-750 — Wartete *Fertig* einer Formsitzung auf die Auswertung, verschwand „Wird übernommen,
+sobald die Berechnung fertig ist.“, sobald die Wandprüfung des Zugs ihre Analysekarte rechnete.**
+Gefunden im Review des macOS-Fixes `fix/sculpt-macos` (`review-fix-sculpt.md`, M-2): Die Karte
+steht in `_PROGRESS_PRIORITY` vor der Auswertung, und `_render_progress_state` zeigte die Zusage
+nur, wenn die Auswertung die Zeile trug; der Klick sah verschluckt aus. Jetzt steht die Zusage,
+solange ein Klick wartet und die Auswertung läuft, gleich welcher Lauf die Zeile trägt.
+**Nachweis:** `test_sculpt_session.py::test_a_waiting_click_keeps_its_promise_while_the_map_is_computed`
+am Stand davor rot, jetzt grün; die Formsitzungsdatei 96 grün. Neben Erzeugung und Agent folgt
+der Zusage wie dort der Hinweis oder die Ansage. Changelog: nein (die Zusage kam mit `4c5a52e12`
+am 08.10.2026 und steckt in keinem Tag).
+
+## RM-751: Ein freigegebenes Fenster startet keine Wandprüfung mehr (10.10.2026)
+
+<a id="rm-751-ein-freigegebenes-fenster-startet-keine-wandprüfung-mehr-10102026"></a>
+<a id="rm-751"></a>
+
+**RM-751 — Nach `MainWindow.release` startete der Zeitgeber eines letzten Zugs noch eine
+Wandprüfung, deren Arbeiter niemand mehr abwartete.** Gefunden im selben Review (M-3; in der
+Sonde endete der Prozess so viermal mit Exit 127). `release` hält `_sculpt_check` und die wartende
+Übergabe der Vorschau (`_sculpt_display`) an und gibt die laufende Prüfung auf,
+`_check_sculpted_walls` fängt nach dem Schließen nichts mehr an.
+**Nachweis:** `test_sculpt_session.py::test_a_released_window_starts_no_wall_check` am Stand
+davor rot, jetzt grün. Changelog: nein.
