@@ -690,3 +690,97 @@ def test_every_measured_part_path_matches_the_program_capability(program, flavou
 
     assert advise.PART_PATHS == MEASURED_PART_PATHS
     assert handover._part_paths(flavour, program) == MEASURED_PART_PATHS - absent
+
+
+def _cura_gap_split(plate_gap, base_gap, material="petg"):
+    """Eine Cura-Platte (Gitter, 0,2er Schichten) mit dem übernommenen Abstand
+    ``plate_gap``; die Grundlage trägt ``base_gap``."""
+    profile = profiles.make_profile("sovol-sv06", material)
+    base = print_settings.resolve(profile)
+    for path, value in (
+        ("layers.layer_height", 0.2),
+        ("support.style", "grid"),
+        ("support.placement", "everywhere"),
+        ("support.z_gap", base_gap),
+    ):
+        base = print_settings.with_choice(base, path, value)
+    plate = print_settings.with_accepted(base, "support.z_gap", plate_gap)
+    split = handover.PartSplit(
+        plate, base, frozenset({"support.z_gap"}), revert=True, accepted=plate
+    )
+    return profile, base, split
+
+
+@pytest.mark.parametrize(
+    ("plate_gap", "wanted", "written"),
+    [
+        # Gemessen in Cura 5.13 (zwei Teile, PETG, 0,2er Schichten): 0,28 je Teil
+        # druckte auf einer Platte mit 0,2 oben 0,20, auf einer mit 0,44 0,24.
+        (0.2, 0.28, 0.2),
+        (0.44, 0.28, 0.2),
+        # Ein Vielfaches und ein Wert mit dem Rest der Platte drucken genau.
+        (0.28, 0.2, 0.2),
+        (0.44, 0.24, 0.24),
+    ],
+)
+def test_a_part_on_a_cura_plate_gets_the_gap_it_prints(plate_gap, wanted, written):
+    """Je Teil gilt Curas Bruchteillage oben nur mit dem Rest der Platte (RM-628):
+    CuraEngine legt sie um ``support_top_distance % layer_height`` der Platte
+    tiefer. Ein Teil bekommt deshalb nur einen Wert, der mit der Platte genau
+    druckt, sonst das Vielfache im Band seiner Spule — und der Befund nennt ihn."""
+    profile, _base, split = _cura_gap_split(plate_gap, plate_gap)
+    own = _advice("support.z_gap", wanted, split.plate)
+
+    values = writer._values_for(
+        split, [own], [], "cura", profile=profile, material=profile.material
+    )
+
+    assert float(values.keys["support_z_distance"]) == pytest.approx(written)
+    top = values.keys.get("support_top_distance", f"{split.plate.support.z_gap:g}")
+    assert float(top) == pytest.approx(written), "sonst gilt oben der Wert der Platte"
+    assert [entry.value for entry in values.applied] == [pytest.approx(written)]
+    assert not values.unavailable, "das Teil bekommt seinen Abstand, nur genau"
+    assert values.effective.support.z_gap == pytest.approx(written)
+
+
+def test_a_part_given_back_its_foundation_gets_a_gap_that_prints_exactly():
+    """Trägt die Platte die Übernahme eines anderen Teils, bekommt dieses Teil die
+    Grundlage je Netz zurück (RM-628, M1): PETGs 0,28 auf einer Platte mit 0,2
+    druckte oben 0,20 — geschrieben wird es so, nicht 0,28."""
+    profile, _base, split = _cura_gap_split(0.2, 0.28)
+
+    values = writer._values_for(split, [], [], "cura", profile=profile, material=profile.material)
+
+    assert float(values.keys["support_z_distance"]) == pytest.approx(0.2)
+    assert values.effective.support.z_gap == pytest.approx(0.2)
+
+
+def test_a_part_chooses_its_cura_bottom_gap_in_the_band_of_its_spool():
+    """Die Unterseite eines Teils wählt im Band der Spule, die es druckt, nicht des
+    Auftrags (RM-628, L1): bei 0,1er Schichten liegt 0,14 im Band von PLA (ab 0,10)
+    und von PETG (ab 0,12) — eine Schicht reicht PLA, PETG braucht zwei."""
+    profile = profiles.make_profile("sovol-sv06", "pla")
+    petg = profiles.make_profile("sovol-sv06", "petg").material
+    base = print_settings.resolve(profile)
+    for path, value in (
+        ("layers.layer_height", 0.1),
+        ("support.style", "grid"),
+        ("support.placement", "everywhere"),
+        ("support.z_gap", 0.3),
+    ):
+        base = print_settings.with_choice(base, path, value)
+    advice = [SettingAdvice("support.z_gap", 0.14, 0.3, "Grund des Teils")]
+
+    as_pla = handover.object_keys(base, advice, "cura", profile=profile)
+    as_petg = handover.object_keys(base, advice, "cura", profile=profile, material=petg)
+
+    assert as_pla["support_bottom_distance"] == "0.1"
+    assert as_petg["support_bottom_distance"] == "0.2"
+    # Am Export je Teil (``writer._values_for``): Oben passt 0,14 nicht zum Rest
+    # der Platte (0,3), also das Vielfache im Band der Spule, unten ebenso.
+    split = handover.PartSplit(base, base, frozenset({"support.z_gap"}), revert=True)
+    own = [_advice("support.z_gap", 0.14, base)]
+    for material, whole in ((profile.material, "0.1"), (petg, "0.2")):
+        part = writer._values_for(split, own, [], "cura", profile=profile, material=material)
+        assert part.keys["support_z_distance"] == whole, part.keys
+        assert part.keys["support_bottom_distance"] == whole, part.keys

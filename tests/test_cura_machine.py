@@ -34,6 +34,7 @@ from app.core.errors import ExternalToolError, OperationCancelled, ValidationErr
 from app.core.export import appimage as image_copies
 from app.core.export import cura_linux, handover, slicer_profiles, squashfs
 from app.core.knowledge import print_settings, profiles
+from app.core.types import MaterialSlot, PrintSettings, Profile
 from tests.cura_fakes import (
     APPRUN_ENV,
     FAILING_MOUNT,
@@ -1339,6 +1340,118 @@ def test_cura_window_profile_and_parts_keep_limits_and_report_the_original_choic
         machine=handover.cura_window_motion(handover.SlicerSetup(engine, "cura"), profile),
     )
     assert part["acceleration_wall_0"] == "500"
+
+
+def _cura_window_values(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    settings: PrintSettings,
+    profile: Profile,
+    slots: tuple[MaterialSlot, ...] = (),
+) -> dict[str, dict[str, str]]:
+    """Die Container der ``.curaprofile``, wie Cura sie beim Import liest, je Name."""
+    import configparser
+    import zipfile
+
+    engine = cura_installation(tmp_path)
+    definition = engine.parent / "share/cura/resources/definitions/creality_k1max.def.json"
+    monkeypatch.setattr(
+        slicer_profiles,
+        "cura_active_machine",
+        lambda _exe: slicer_profiles.CuraActiveMachine("Werkstatt", definition),
+    )
+    monkeypatch.setattr(slicer_profiles, "chosen_machine", lambda *_args: "")
+    monkeypatch.setattr(
+        slicer_profiles, "cura_quality_types", lambda *_args, **_kwargs: {"draft": 0.2}
+    )
+    model = tmp_path / "part.3mf"
+    handover.cura_profile_beside(
+        model, settings, profile, handover.SlicerSetup(engine, "cura"), slots
+    )
+    containers: dict[str, dict[str, str]] = {}
+    with zipfile.ZipFile(model.with_suffix(".curaprofile")) as archive:
+        for name in archive.namelist():
+            parser = configparser.ConfigParser(interpolation=None)
+            parser.read_string(archive.read(name).decode("utf-8"))
+            containers[name] = dict(parser["values"])
+    return containers
+
+
+@pytest.mark.parametrize(
+    ("material", "layer", "gap", "bottom"),
+    [
+        # Gemessen in Cura 5.13 an der Konsole (RM-628): Ohne eigenen Wert unten
+        # rundet Cura PETGs 0,28 bei 0,2er Schichten auf 0,40 auf, 0,30 bei 0,28er
+        # auf 0,56 — über dem Höchstwert 0,30.
+        ("petg", 0.2, 0.28, 0.2),
+        ("petg", 0.28, 0.3, 0.28),
+        # Im Band, nicht das nächste Vielfache: PETG 0,30 → 0,20 statt 0,40,
+        # PLA 0,10 bei 0,08 → 0,16 statt 0,08.
+        ("petg", 0.2, 0.3, 0.2),
+        ("pla", 0.08, 0.1, 0.16),
+    ],
+)
+def test_curas_window_gets_the_bottom_gap_of_the_console(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    material: str,
+    layer: float,
+    gap: float,
+    bottom: float,
+) -> None:
+    """Das Cura-Fenster bekommt Curas Abstand unten wie die Konsole (RM-628, S1).
+
+    Die ``.curaprofile`` trägt nur die Einstellungsseite, und Cura rechnet
+    ``support_bottom_distance`` sonst aus ``support_z_distance`` und rundet
+    auf. Über *Im Slicer öffnen* lag der Stützfuß damit 0,40 bzw. 0,56 über dem
+    Modell, während der Satz am Feld 0,20 nannte."""
+    profile = profiles.make_profile("creality-k1-max", material)
+    settings = print_settings.resolve(profile)
+    for path, value in (
+        ("layers.layer_height", layer),
+        ("support.style", "grid"),
+        ("support.placement", "everywhere"),
+        ("support.z_gap", gap),
+    ):
+        settings = print_settings.with_choice(settings, path, value)
+
+    window = _cura_window_values(tmp_path, monkeypatch, settings, profile)["solidon"]
+    console = handover.values_for(settings, profile, "cura")
+
+    assert window["support_bottom_distance"] == console["support_bottom_distance"]
+    assert float(window["support_bottom_distance"]) == pytest.approx(bottom)
+    assert float(window["support_z_distance"]) == pytest.approx(gap)
+
+
+def test_each_extruder_profile_gets_the_bottom_gap_of_its_spool(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Je Spule ihr eigenes Band (RM-628, S1 und L1): 0,30 bei 0,2er Schichten
+    liegt im Band von PETG (bis 0,30) und unten wird eine Schicht daraus; für PLA
+    (bis 0,25) liegt es darüber, und unten bleibt das nächste Vielfache, 0,40. Die
+    Platte druckt mit der ersten Spule, Fenster wie Konsole."""
+    profile = profiles.make_profile("creality-k1-max", "petg")
+    settings = print_settings.resolve(profile)
+    for path, value in (
+        ("layers.layer_height", 0.2),
+        ("support.style", "grid"),
+        ("support.placement", "everywhere"),
+        ("support.z_gap", 0.3),
+    ):
+        settings = print_settings.with_choice(settings, path, value)
+    slots = (
+        MaterialSlot(index=0, name="Gehäuse", material_type="PLA"),
+        MaterialSlot(index=1, name="Deckel", material_type="PETG"),
+    )
+
+    window = _cura_window_values(tmp_path, monkeypatch, settings, profile, slots)
+    setup = handover.SlicerSetup(cura_installation(tmp_path / "konsole"), "cura")
+    console = handover.write_config(settings, profile, setup, tmp_path, slots=slots).written
+
+    assert window["solidon"]["support_bottom_distance"] == "0.4"
+    assert window["solidon_extruder_0"]["support_bottom_distance"] == "0.4"
+    assert window["solidon_extruder_1"]["support_bottom_distance"] == "0.2"
+    assert console["support_bottom_distance"] == "0.4", "die erste Spule ist PLA"
 
 
 def _with_jerk(engine: Path, overrides: dict[str, object] | None = None) -> Path:

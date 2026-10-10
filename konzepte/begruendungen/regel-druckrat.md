@@ -671,8 +671,8 @@ Oben unter Gitter hält es den Abstand genau: Liegt er zwischen zwei Schichten,
 druckt es die oberste Stützlage als Bruchteillage tiefer
 (`support_fractional_roof`, `support.cpp:1757`, `PathConfigStorage.cpp:165`).
 Gemessen an der Platte über einer Säule (PETG, 0,2 mm Schicht,
-`tests/test_real_slicers.py`): Gitter mit 0,28 oben 0,28 und unten 0,4, Baum mit
-0,44 oben und unten 0,6; die Sonde zu RM-624 maß dasselbe für 0,44 unter Gitter
+`tests/test_real_slicers.py`, damals mit dem gespiegelten Wert unten): Gitter
+mit 0,28 oben 0,28 und unten 0,4, Baum mit 0,44 oben und unten 0,6; die Sonde zu RM-624 maß dasselbe für 0,44 unter Gitter
 (oben 0,44, unten 0,6) und 0,28 unter Bäumen (0,4). Bis dahin nahm Solidon für
 Cura immer ganze Schichten zur nächsten an: PETG bekam unter Gitter eine Schicht
 (0,2) statt 0,28 vorgeschlagen, und der Feldsatz nannte eine Rundung, die Cura
@@ -692,7 +692,17 @@ der Wert darin liegt), und Cura druckt es genau — gemessen bei 0,12, 0,2 und
 0,28 mm Schicht (Archiv RM-628). Unter Bäumen bleibt unten der Wert von oben:
 Dort rundet Cura beide Seiten gleich, und Solidons Rat ist schon ein Vielfaches.
 Der Feldsatz nennt, was Cura druckt: unter Bäumen den aufgerundeten Abstand,
-unter Gitter den unteren, wo die Stütze auf dem Modell stehen darf. Die Cura-Grundlage trägt den
+unter Gitter den unteren, wo die Stütze auf dem Modell stehen darf. Nachgemessen
+in Cura 5.13 (RM-628, Review): Je Teil gilt „oben genau“ nur mit dem Rest der
+Platte, denn CuraEngine legt die Bruchteillage um `support_top_distance %
+layer_height` der Platte tiefer — 0,28 an einem Teil druckte auf einer Platte mit
+0,2 oben 0,20, mit 0,44 0,24; ein solches Teil bekommt das Vielfache im Band
+seiner Spule (`cura_part_gap`), und unten wählt jedes Teil ebenfalls im Band
+seiner Spule. Unter Curas Bäumen ohne obere Trennschicht baut Cura die Spitzen
+als Ersatzdach und druckt oben eine Schicht mehr (0,20 → 0,40, 0,28 → 0,60);
+der Rat schlägt dort die Trennschicht vor. Den Halbfall unter organischen Bäumen
+(0,30 bei 0,2 mm Schicht) runden Bambu Studio und Creality Print ohne Toleranz
+auf 0,20, die übrigen auf 0,40. Die Cura-Grundlage trägt den
 Wert des Materials (ihre Art ist „keine“, Cura druckt dann Gitter); ohne Stützen
 sagt keine Übergabe etwas dazu, denn früher warnte jede in Entwurf und Fein
 (RM-583, Nachprüfung M2). Die Druckzeit hängt nicht am Abstand: `print_time`

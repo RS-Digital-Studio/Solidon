@@ -84,6 +84,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Sob uma face inferior grande e plana, o Solidon propõe grelha em vez de árvores, e híbrido se também houver detalhes finos. Para árvores altas, o Solidon propõe duas paredes.
 - Se uma sugestão do diálogo de impressão só vale para algumas peças, a linha e o campo nomeiam também as peças que recebem com ela outro valor.
 - Com o Cura e suportes em grelha, a distância do suporte segue o material: exata em cima, em camadas inteiras em baixo. Onde o Cura arredonda para cima, o campo mostra o valor impresso.
+- Sob os suportes em árvore do Cura, o Solidon propõe uma camada de separação superior, porque sem ela o Cura deixa uma camada de ar a mais.
 - Para PLA, o Solidon propõe mais espaço entre as muitas pontas finas e os suportes em árvore por baixo. Assim ficam menos resíduos das pontas dos suportes.
 - Se muitas saliências pequenas precisam de suportes juntas, como um queixo com a face inferior inclinada, o relatório indica agora o local.
 - Um rebordo estreito que se sustenta sozinho já não conta como ponte longa, nem junto a outra saliência. O relatório já não avisa aí, e o Solidon não pede suportes por isso.

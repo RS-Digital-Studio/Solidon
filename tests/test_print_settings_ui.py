@@ -11880,6 +11880,29 @@ def test_the_gap_field_asks_the_trees_the_advice_asked(
     assert ("Baumstützen" in dialog._editors["support.z_gap"].toolTip()) is said
 
 
+def test_curas_gap_field_names_the_bottom_gap_in_the_band_of_the_material(
+    dialog: PrintSettingsDialog,
+) -> None:
+    """Das Feld nennt Curas Abstand unten so, wie die Übergabe ihn wählt: im Band
+    des Materials (RM-628, M3), gemessen in Cura 5.13 — PLA mit 0,10 bei 0,08er
+    Schichten druckt unten 0,16, nicht eine Schicht 0,08 unter dem Mindestwert
+    0,10."""
+    assert dialog.session.profile.material.id == "pla"
+    dialog._slicer_path = Path("CuraEngine.exe")
+    for path, value in (
+        ("layers.layer_height", 0.08),
+        ("support.style", "grid"),
+        ("support.placement", "everywhere"),
+        ("support.z_gap", 0.1),
+    ):
+        dialog.settings = print_settings.with_choice(dialog.settings, path, value)
+
+    dialog._mark_fields_this_slicer_ignores()
+
+    said = dialog._editors["support.z_gap"].toolTip()
+    assert "0,16 mm" in said, said
+
+
 def test_the_field_says_which_parts_get_a_suggestion_and_what_the_rest_prints(
     dialog: PrintSettingsDialog, monkeypatch: pytest.MonkeyPatch
 ) -> None:

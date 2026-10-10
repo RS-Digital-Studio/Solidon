@@ -126,8 +126,13 @@ offenem Drucker. Übernommen wird auf Klick, nie von allein.
   `support_gap_target`; ohne Werte kein Rat), vorgeschlagen außerhalb
   `SUPPORT_GAP_BAND`. **Wie jedes Programm einen Abstand zwischen zwei
   Schichten druckt, oben und unten, sagt `gap_rounding` und `printed_gap`
-  allein** (RM-628): Cura rundet auf, unter Gitter nur unten — oben gilt dort
-  der Wert des Materials genau; die übrigen runden zur nächsten. **Unten unter
+  allein** (RM-628): Cura rundet auf, unter Gitter nur unten — oben druckt es
+  dort den geschriebenen Wert genau, je Teil nur mit dem Rest der Platte
+  (`cura_part_gap`, sonst schreibt die Übergabe dem Teil das Vielfache im Band
+  seiner Spule); unter Curas Bäumen ohne obere Trennschicht kommt eine Schicht
+  dazu (`up_and_one`, der Rat schlägt die Trennschicht vor). Die übrigen runden
+  zur nächsten, wo sie runden (unter organischen Bäumen, neben einem Turm); den
+  Halbfall entscheidet dort das Programm (`HALF_LAYER_UNGUARDED`). **Unten unter
   Curas Gitter schreibt die Übergabe das Vielfache selbst**
   (`support_bottom_distance` aus `advise.cura_bottom_gap`, nicht gespiegelt):
   aufgerundet läge der Fuß über `support_gap_max` in der Luft (PETG bei

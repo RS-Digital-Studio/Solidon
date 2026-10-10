@@ -1095,7 +1095,12 @@ def _fan_curve_in_order(settings: PrintSettings) -> PrintSettings:
 
 
 def values_for(
-    settings: PrintSettings, profile: Profile, flavour: SlicerFlavour, *, program: str = ""
+    settings: PrintSettings,
+    profile: Profile,
+    flavour: SlicerFlavour,
+    *,
+    program: str = "",
+    material: MaterialProfile | None = None,
 ) -> dict[str, str]:
     """Alles, was dieser Slicer bekommt — Einstellungen, Maschine, Abgeleitetes.
 
@@ -1104,10 +1109,14 @@ def values_for(
     Bahnbreite zwölf weitere und aus dem Düsendurchmesser sieben, und der
     Düsendurchmesser steht in der Maschine. Wer die Ableitung vor dem
     Zusammenführen laufen ließe, bekäme die Hälfte.
+
+    ``material`` ist das Material der Spule, die druckt (RM-628), sonst das
+    des Profils: Danach wählt Cura seinen Abstand unten (:func:`_cura_bottom_gap`).
     """
     written = as_mapping(effective_adhesion(settings, profile, flavour), flavour, program=program)
     written |= _machine_keys(profile, flavour)
     if flavour == "cura":
+        written = _cura_bottom_gap(written, settings, material or profile.material)
         written = _cura_dependants(
             _cura_accelerations(written, settings, profile), settings, profile
         )
@@ -1302,8 +1311,12 @@ def object_keys(
     profile: Profile | None = None,
     native: Mapping[str, object] | None = None,
     brim_foot_offset: float | None = 0.0,
+    material: MaterialProfile | None = None,
 ) -> dict[str, str]:
     """Die Abweichungen eines Teils in der Sprache des Slicers (§29).
+
+    ``material`` ist das Material der Spule, die das Teil druckt (RM-628,
+    :func:`values_for`).
 
     Geschrieben werden die Pfade des Rats und ihre Partner aus
     :data:`COUPLED_PATHS`, nicht die ganze Gruppe. Wer die Haftungsart auf
@@ -1333,12 +1346,12 @@ def object_keys(
     # CuraEngine wertet die Formeln seines Fensters nicht aus. Objektwerte
     # und Rücknahmen brauchen dieselben Ableitungen wie die ganze Platte.
     before = (
-        values_for(settings, profile, flavour, program=program)
+        values_for(settings, profile, flavour, program=program, material=material)
         if flavour == "cura" and profile is not None
         else as_mapping(settings, flavour, program=program)
     )
     changed = (
-        values_for(applied, profile, flavour, program=program)
+        values_for(applied, profile, flavour, program=program, material=material)
         if flavour == "cura" and profile is not None
         else as_mapping(applied, flavour, program=program)
     )
@@ -1966,6 +1979,29 @@ def _cura_fan_start(written: dict[str, str], settings: PrintSettings) -> dict[st
     return written
 
 
+def _cura_bottom_gap(
+    written: dict[str, str], settings: PrintSettings, material: MaterialProfile
+) -> dict[str, str]:
+    """Curas Abstand unten (``support_bottom_distance``, RM-628).
+
+    Unten rundet Cura auf; unter Gitter, wo oben der Abstand genau gilt, steht
+    hier deshalb das Vielfache im Band von ``material``, dem Material der Spule,
+    die druckt (:func:`advise.cura_bottom_gap`). Eine eigene Wahl Solidons und
+    keine Formel aus der Definition, darum nicht in :func:`_cura_computed`: Das
+    Cura-Fenster bekommt nur die Einstellungsseite (:func:`cura_profile_beside`)
+    und rechnet ohne den Schlüssel unten wie oben, aufgerundet — PETG mit 0,28
+    bei 0,2er Schichten 0,40 statt 0,20.
+    """
+    from app.core.slice import advise
+
+    support = settings.support
+    below = advise.cura_bottom_gap(
+        support.z_gap, settings.layers.layer_height, support.style, material
+    )
+    written["support_bottom_distance"] = f"{below:g}"
+    return written
+
+
 def _cura_computed(written: dict[str, str], settings: PrintSettings, profile: Profile) -> None:
     """Die gerechneten Ableitungen — je Zeile die Formel aus der Definition.
 
@@ -2101,14 +2137,6 @@ def _for_supports(written: dict[str, str], settings: PrintSettings, profile: Pro
     # Der Baum bekommt seinen eigenen Winkel, gedeckelt wie in der Definition.
     angle = settings.support.threshold_angle
     written["support_tree_angle"] = f"{max(min(angle, 85.0), 20.0):g}"
-    # Unten rundet Cura auf (RM-628). Unter Gitter steht dort deshalb das
-    # Vielfache, das Solidon meint; oben gilt der Abstand genau.
-    from app.core.slice import advise
-
-    below = advise.cura_bottom_gap(
-        settings.support.z_gap, height, settings.support.style, profile.material
-    )
-    written["support_bottom_distance"] = f"{below:g}"
 
 
 def _for_speeds(written: dict[str, str], settings: PrintSettings, profile: Profile) -> None:
@@ -2563,6 +2591,18 @@ def slot_material_type(slot: MaterialSlot, setup: SlicerSetup | None) -> str:
         if kind.strip():
             return kind.strip()
     return slot.material_type or ""
+
+
+def slot_material(
+    profile: Profile, slots: Sequence[MaterialSlot], setup: SlicerSetup | None
+) -> MaterialProfile:
+    """Das Material, mit dem die erste dieser Spulen druckt (:func:`slot_material_type`),
+    ohne Spule oder bekannte Art das des Profils — wie :func:`settings_for_shared_slicer`
+    den einen Wertsatz wählt (RM-628)."""
+    material_id = (
+        profiles.material_id_for_type(slot_material_type(slots[0], setup)) if slots else ""
+    )
+    return profiles.material(material_id) if material_id else profile.material
 
 
 def _resolve_slot(
@@ -3580,6 +3620,7 @@ def write_config(
             settings_for_handover(settings, profile, setup.flavour, slots, setup),
             profile,
             setup.flavour,
+            material=slot_material(profile, slots, setup),
         )
 
     if setup.flavour == "prusa":
@@ -5023,6 +5064,19 @@ def setting_limitations(
         message = slicer_keys.limitation(flavour, path, settings, material=material)
         if message is None:
             continue
+        # Curas Abstand unten unter Gitter wählt die Übergabe selbst im Band
+        # des Materials (RM-628): Verloren geht nichts, und am Feld gibt es
+        # nichts zu verbessern — ein Hinweis ohne Handlung.
+        if flavour == "cura" and path == "support.z_gap" and _cura_grid(settings):
+            findings.append(
+                Finding(
+                    code="slicer.setting_not_transferred",
+                    severity="info",
+                    message=message,
+                    values={"path": path},
+                )
+            )
+            continue
         # Was je nach Wert angenähert ankommt, ändert der Kunde am Feld; was
         # nie ankommt, nur im Profil seines Slicers (RM-583).
         findings.append(
@@ -5035,6 +5089,16 @@ def setting_limitations(
             )
         )
     return findings
+
+
+def _cura_grid(settings: PrintSettings | None) -> bool:
+    """Hält Cura den Stützabstand oben genau, also unter Gitter (RM-628)?"""
+    from app.core.slice import advise
+
+    return (
+        settings is not None
+        and advise.gap_rounding("cura", style=settings.support.style) == "exact"
+    )
 
 
 def substituted_choices(settings: PrintSettings, program: str) -> list[Finding]:
@@ -7786,7 +7850,9 @@ def cura_profile_beside(
     Curas eigenen Leser (``plugins/CuraProfileReader`` und
     ``CuraContainerRegistry.importProfile`` in Cura 5.13).
 
-    Was hineingeht, ist die **Einstellungsseite** (:func:`as_mapping`) —
+    Was hineingeht, ist die **Einstellungsseite** (:func:`as_mapping`) samt
+    dem Abstand unten, den Solidon selbst wählt (:func:`_cura_bottom_gap`, je
+    Extruderprofil mit dem Material seiner Spule) —
     nicht die Maschine und nicht das Abgeleitete: Das Fenster rechnet seine
     Formeln selbst, und ein festgeschriebener Linienabstand bliebe stehen,
     wenn der Kunde danach in Cura die Füllung ändert. Wahrheitswerte schreibt
@@ -7868,14 +7934,25 @@ def cura_profile_beside(
             lines.append(f"{key} = {value}")
         return "\n".join(lines) + "\n"
 
+    # Den Abstand unten wählt Solidon selbst (RM-628); ohne ihn rechnete das
+    # Fenster unten wie oben und rundete auf.
     resolved = settings_for_handover(settings, profile, "cura", slots, setup)
-    shared = _cura_accelerations(as_mapping(resolved, "cura"), resolved, profile)
+    shared = _cura_accelerations(
+        _cura_bottom_gap(
+            as_mapping(resolved, "cura"), resolved, slot_material(profile, slots, setup)
+        ),
+        resolved,
+        profile,
+    )
     _without_line_break(shared, setup.name)
     entries = [("solidon", container(shared, None))]
     if len(slots) > 1:
         for position, slot in enumerate(slots):
             resolved = settings_for_slot(settings, profile, slot, setup)
-            own = _cura_accelerations(as_mapping(resolved, "cura"), resolved, profile)
+            mine = slot_material(profile, (slot,), setup)
+            own = _cura_accelerations(
+                _cura_bottom_gap(as_mapping(resolved, "cura"), resolved, mine), resolved, profile
+            )
             _without_line_break(own, setup.name)
             entries.append((f"solidon_extruder_{position}", container(own, position)))
     target = model.with_suffix(CURA_PROFILE_SUFFIX)

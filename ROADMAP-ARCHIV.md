@@ -46699,6 +46699,25 @@ Feldsatz. Stichprobe der übrigen Familien mit 0,24 mm bei 0,2 mm Schicht (PETG)
 Elegoo, Creality, Anycubic und PrusaSlicer drucken unter Gitter oben und unten 0,24 (genau),
 unter organischen Bäumen oben und unten 0,20 (zur nächsten, nicht aufgerundet). Changelog
 0.6.0: ja, als Eigenschaft (Ursache `fafcd4841` liegt in keinem Tag).
+
+**Nacharbeit nach Review (10.10.2026):** Curas Fenster bekommt die Unterseite wie die Konsole
+(`cura_profile_beside` über `_cura_bottom_gap`), und Übergabe, Schreiber und Dialog fragen mit
+dem Material der Spule. Je Teil schreibt der Export oben nur einen Wert, der mit dem Rest der
+Platte genau druckt, sonst das Vielfache im Band der Spule (`advise.cura_part_gap`). Unter
+Curas Bäumen ohne obere Trennschicht rechnet Solidon mit einer Schicht mehr (`up_and_one`) und
+rät die Trennschicht. Den Halbfall unter organischen Bäumen rundet `nearest_raw` für Bambu
+Studio und Creality Print (`HALF_LAYER_UNGUARDED`). Der Gitter-Satz ist ein Hinweis ohne
+Handlung, der Feldsatz nennt den Abstand unten „mit {gap}, einem Vielfachen der Schichthöhe“.
+Die eigene Cura-Messung im Slicertest ist dem Kontakttest gewichen (RM-624, Cura dort mit
+Gitter, Baum und Gitter bei 0,28 mm). Gegenproben je Fund im Prozess: Schreiber ohne Material
+1 rot, Dialog ohne Material 1 rot (Fenster), Übergabe unten ohne Band 6, Fenster ohne
+Unterseite 5, Teilwert unverändert 7, Trennschicht übergangen 7, Spule übergangen 3, Programm
+übergangen 2, Gitter-Satz als Warnung 3, Grundlauf 987 grün. Nachprobe an Cura 5.13 (Ender-3
+V3 SE, PETG, 0,2 mm, zwei Teile, gepinnt), Werte je Teil aus `writer._values_for`: Platte 0,2
+mit Teil 0,28 schreibt 0,2 und druckt 0,20/0,20; Platte 0,44 mit Teil 0,28 schreibt 0,2 und
+druckt 0,20/0,20; Platte 0,28 mit Teil 0,2 druckt 0,20/0,20; Platte 0,24 mit Teil 0,44 (gleicher
+Rest) schreibt 0,44 und druckt 0,44/0,40 — jeweils wie Solidon sagt, das andere Teil wie seine
+Platte.
 ## RM-571: Ein Sims im offenen Becher neben einem gesperrten Kanal behält seine Stütze (09.10.2026)
 
 <a id="rm-571-ein-sims-im-offenen-becher-neben-einem-gesperrten-kanal-behält-seine-stütze-09102026"></a>

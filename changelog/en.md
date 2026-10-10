@@ -84,6 +84,7 @@ it into `website/version.json`.
 - Under a large flat underside, Solidon suggests grid instead of tree supports, and hybrid where fine details need support too. For tall tree supports, Solidon suggests two walls.
 - If a suggestion in the print dialog applies to some parts only, its row and field also name the parts that get a different value with it.
 - With Cura and grid supports, the support gap follows the material: exact on top, in whole layers below. Where Cura rounds up, the field shows the printed value.
+- Under Cura's tree supports, Solidon suggests a top interface layer, because without one Cura leaves an extra layer of air.
 - For PLA, Solidon suggests more clearance from tree supports beneath many fine tips. This leaves less residue from the tree tips there.
 - When many small overhangs need supports together, such as a chin with a sloped underside, the check report now names the spot.
 - A narrow rim that holds up on its own no longer counts as a long bridge, even next to another overhang. The check report no longer warns there, and Solidon asks for no supports for it.

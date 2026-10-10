@@ -85,6 +85,7 @@ dans `website/version.json`.
 - Sous une grande face inférieure plane, Solidon propose une grille plutôt que des arbres, et l'hybride si des détails fins en ont besoin. Pour les arbres hauts, Solidon propose deux parois.
 - Si une suggestion de la boîte de dialogue d'impression ne vaut que pour certaines pièces, la ligne et le champ nomment aussi celles qui reçoivent avec elle une autre valeur.
 - Avec Cura et des supports en grille, l'espace du support suit le matériau : exact au-dessus, en couches entières au-dessous. Si Cura arrondit vers le haut, le champ indique la valeur imprimée.
+- Sous les supports arborescents de Cura, Solidon propose une couche d'interface supérieure, car sans elle Cura laisse une couche d'air de plus.
 - Pour le PLA, Solidon propose davantage d'espace entre les nombreuses pointes fines et les supports arborescents en dessous. Cela laisse moins de résidus des pointes des supports.
 - Si de nombreux petits surplombs ont besoin ensemble de supports, comme un menton à face inférieure inclinée, le rapport indique désormais l'endroit.
 - Un rebord étroit qui se porte seul ne compte plus comme un long pont, même à côté d'un autre surplomb. Le rapport n'avertit plus à cet endroit, et Solidon n'y demande plus de supports.

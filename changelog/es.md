@@ -85,6 +85,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Bajo una cara inferior grande y plana, Solidon propone cuadrícula en lugar de árboles, e híbrido si también hay detalles finos. Para soportes de árbol altos, Solidon propone dos paredes.
 - Si una sugerencia del diálogo de impresión solo vale para algunas piezas, la fila y el campo nombran también las piezas que reciben con ella otro valor.
 - Con Cura y soportes de rejilla, el espacio del soporte sigue al material: exacto arriba, en capas enteras abajo. Donde Cura redondea hacia arriba, el campo indica el valor impreso.
+- Bajo los soportes de árbol de Cura, Solidon propone una capa de separación superior, porque sin ella Cura deja una capa más de aire.
 - Para PLA, Solidon propone más espacio entre muchas puntas finas y los soportes en árbol situados debajo. Así quedan menos restos de las puntas de los soportes.
 - Si muchos voladizos pequeños necesitan soportes juntos, como una barbilla con la cara inferior inclinada, el informe indica ahora el lugar.
 - Un borde estrecho que se sostiene solo ya no cuenta como puente largo, tampoco junto a otro voladizo. El informe ya no avisa ahí, y Solidon no pide soportes por ello.

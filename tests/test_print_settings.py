@@ -9323,25 +9323,30 @@ def test_the_support_gap_reaches_both_sides_and_curas_bottom_stands_alone() -> N
 
 
 @pytest.mark.parametrize(
-    ("style", "layer", "gap", "bottom"),
+    ("material", "style", "layer", "gap", "bottom"),
     [
-        ("grid", 0.2, 0.28, "0.2"),
-        ("auto", 0.2, 0.28, "0.2"),
-        ("grid", 0.28, 0.3, "0.28"),
-        ("grid", 0.12, 0.2, "0.24"),
-        ("grid", 0.2, 0.4, "0.4"),
-        ("tree", 0.2, 0.44, "0.44"),
+        ("petg", "grid", 0.2, 0.28, "0.2"),
+        ("petg", "auto", 0.2, 0.28, "0.2"),
+        ("petg", "grid", 0.28, 0.3, "0.28"),
+        ("petg", "grid", 0.12, 0.2, "0.24"),
+        ("petg", "grid", 0.2, 0.4, "0.4"),
+        ("petg", "tree", 0.2, 0.44, "0.44"),
+        # Wo das Band und das nächste Vielfache auseinandergehen (gemessen in
+        # Cura 5.13): PETG 0,30 bei 0,2 druckt unten 0,20, nicht 0,40; PLA 0,10
+        # bei 0,08 druckt 0,16, nicht 0,08 unter dem Mindestwert 0,10.
+        ("petg", "grid", 0.2, 0.3, "0.2"),
+        ("pla", "grid", 0.08, 0.1, "0.16"),
     ],
 )
 def test_cura_gets_the_bottom_gap_it_prints_as_meant(
-    style: str, layer: float, gap: float, bottom: str
+    material: str, style: str, layer: float, gap: float, bottom: str
 ) -> None:
     """Unten rundet Cura auf, unter Gitter druckt es oben genau (RM-628). Die
     Übergabe schreibt unten deshalb das Vielfache im Band des Materials selbst:
     PETG mit 0,28 bei 0,2er Schichten druckte unten 0,4, bei 0,28er Schichten
     aus 0,30 sogar 0,56 — über dem Höchstwert 0,30. Unter Bäumen rundet Cura
     oben wie unten, dort bleibt unten der Wert von oben. Ebenso je Teil."""
-    profile = profiles.make_profile("centauri-carbon-2", "petg")
+    profile = profiles.make_profile("centauri-carbon-2", material)
     settings = print_settings.resolve(profile)
     for path, value in (
         ("layers.layer_height", layer),
@@ -9480,29 +9485,42 @@ def test_freed_support_layers_are_said_where_the_maker_had_them_off(
     assert not handover.support_layers_findings(setup, free=False)
 
 
+_BELOW = "oben genau und unten mit {}, einem Vielfachen der Schichthöhe"
+_ROUNDED = "Baumstützen rundet Cura den Stützabstand auf {}"
+_NO_ROOF = "eine Schicht mehr Luft: Der Stützabstand wird {}"
+
+
 @pytest.mark.parametrize(
-    ("style", "placement", "gap", "said"),
+    ("style", "placement", "gap", "roof", "said"),
     [
-        ("grid", "everywhere", 0.28, "oben genau, unten in ganzen Schichten zu 0,20 mm"),
-        ("grid", "everywhere", 0.34, "oben genau, unten in ganzen Schichten zu 0,40 mm"),
-        ("auto", "everywhere", 0.28, "oben genau, unten in ganzen Schichten zu 0,20 mm"),
-        ("grid", "build_plate", 0.28, None),
-        ("tree", "everywhere", 0.28, "Baumstützen rundet Cura den Stützabstand auf 0,40 mm"),
-        ("tree", "build_plate", 0.44, "Baumstützen rundet Cura den Stützabstand auf 0,60 mm"),
-        ("grid", "everywhere", 0.4, None),
-        ("tree", "everywhere", 0.4, None),
-        ("none", "everywhere", 0.28, None),
+        ("grid", "everywhere", 0.28, 2, _BELOW.format("0,20 mm")),
+        ("grid", "everywhere", 0.34, 2, _BELOW.format("0,40 mm")),
+        # Im Band, nicht das nächste Vielfache (gemessen: PETG 0,30 → unten 0,20).
+        ("grid", "everywhere", 0.30, 2, _BELOW.format("0,20 mm")),
+        ("auto", "everywhere", 0.28, 2, _BELOW.format("0,20 mm")),
+        ("grid", "build_plate", 0.28, 2, None),
+        ("grid", "everywhere", 0.28, 0, _BELOW.format("0,20 mm")),
+        ("tree", "everywhere", 0.28, 2, _ROUNDED.format("0,40 mm")),
+        ("tree", "build_plate", 0.44, 2, _ROUNDED.format("0,60 mm")),
+        ("grid", "everywhere", 0.4, 2, None),
+        ("tree", "everywhere", 0.4, 2, None),
+        # Ohne obere Trennschicht eine Schicht mehr, auch bei einem Vielfachen
+        # (gemessen: 0,20 → 0,40, 0,28 → 0,60).
+        ("tree", "everywhere", 0.2, 0, _NO_ROOF.format("0,40 mm")),
+        ("tree", "everywhere", 0.28, 0, _NO_ROOF.format("0,60 mm")),
+        ("none", "everywhere", 0.28, 2, None),
     ],
 )
 def test_cura_says_what_it_prints_of_the_gap(
-    style: str, placement: str, gap: float, said: str | None
+    style: str, placement: str, gap: float, roof: int, said: str | None
 ) -> None:
     """Cura rundet einen Stützabstand zwischen zwei Schichten auf, unter Gitter
     nur unten (RM-628, gemessen in Cura 5.13 bei 0,12er, 0,2er und 0,28er
-    Schichten). Unter Gitter schreibt die Übergabe unten das Vielfache im Band
-    des Materials selbst (PETG: 0,28 wird 0,2, 0,34 wird 0,4). Der Satz am Feld
-    und bei der Übergabe nennt, was gedruckt wird; unten nur, wo die Stütze auf
-    dem Modell stehen darf, und ohne Stützen nichts (RM-583, Review)."""
+    Schichten); unter Bäumen ohne obere Trennschicht legt es oben eine Schicht
+    dazu. Unter Gitter schreibt die Übergabe unten das Vielfache im Band des
+    Materials selbst (PETG: 0,28 und 0,30 werden 0,2, 0,34 wird 0,4). Der Satz am
+    Feld und bei der Übergabe nennt, was gedruckt wird; unten nur, wo die Stütze
+    auf dem Modell stehen darf, und ohne Stützen nichts (RM-583, Review)."""
     profile = profiles.make_profile("centauri-carbon-2", "petg")
     settings = print_settings.resolve(profile)
     for path, value in (
@@ -9510,6 +9528,7 @@ def test_cura_says_what_it_prints_of_the_gap(
         ("support.style", style),
         ("support.placement", placement),
         ("support.z_gap", gap),
+        ("support.interface_layers", roof),
     ):
         settings = print_settings.with_choice(settings, path, value)
 
@@ -9523,18 +9542,76 @@ def test_cura_says_what_it_prints_of_the_gap(
 
 
 def test_curas_gap_sentence_arrives_at_the_handover() -> None:
-    """Der Satz am Feld kommt als Befund der Übergabe, und seine Handlung öffnet
-    das Feld (RM-583, Review)."""
+    """Der Satz am Feld kommt als Befund der Übergabe (RM-583, Review). Unter
+    Bäumen druckt Cura nicht, was das Feld sagt, und die Handlung öffnet das Feld.
+    Unter Gitter wählt die Übergabe den Abstand unten selbst im Band des
+    Materials (RM-628): Nichts geht verloren, und am Feld gibt es nichts zu
+    verbessern — ein Hinweis ohne Handlung, keine Warnung."""
     profile = profiles.make_profile("centauri-carbon-2", "pla")
-    base = print_settings.with_choice(print_settings.resolve(profile), "support.style", "grid")
-    between = print_settings.with_choice(base, "support.z_gap", 0.28)
-    finding = next(
-        entry
-        for entry in handover.setting_limitations("cura", between)
-        if entry.values.get("path") == "support.z_gap"
+
+    def said(style: str) -> Any:
+        base = print_settings.with_choice(print_settings.resolve(profile), "support.style", style)
+        between = print_settings.with_choice(base, "support.z_gap", 0.28)
+        return next(
+            entry
+            for entry in handover.setting_limitations("cura", between, profile.material)
+            if entry.values.get("path") == "support.z_gap"
+        )
+
+    tree = said("tree")
+    assert tree.severity == "warning"
+    assert [action.id for action in tree.suggestions] == ["open_print_settings"]
+    assert tree.values["field"] == "support.z_gap", "die Handlung öffnet das Feld"
+    grid = said("grid")
+    assert grid.severity == "info"
+    assert not grid.suggestions
+    assert "field" not in grid.values
+
+
+@pytest.mark.parametrize(("spool", "said"), [("PETG", "0,20 mm"), ("PLA", "0,40 mm")])
+def test_the_cura_export_says_the_bottom_gap_of_the_printing_spool(
+    tmp_path: Path, spool: str, said: str
+) -> None:
+    """Der Export nennt Curas Abstand unten im Band der Spule, die druckt (RM-628,
+    M3 und L1), gemessen in Cura 5.13: PETG mit 0,30 bei 0,2er Schichten druckt
+    unten 0,20 — im Band bis 0,30 —, nicht das nächste Vielfache 0,40. Für PLA
+    (bis 0,25) liegt 0,30 darüber, dort bleibt 0,40. Der Auftrag ist PLA; es
+    zählt die Spule."""
+    from app.core.export import writer
+    from app.core.geom.mesh import MeshData
+    from app.core.types import MaterialSlot, SceneObject
+    from tests.helpers import supported_table
+
+    profile = profiles.make_profile("centauri-carbon-2", "pla")
+    settings = print_settings.resolve(profile)
+    for path, value in (
+        ("layers.layer_height", 0.2),
+        ("support.style", "grid"),
+        ("support.placement", "everywhere"),
+        ("support.z_gap", 0.3),
+    ):
+        settings = print_settings.with_choice(settings, path, value)
+    body = SceneObject(
+        id="tisch",
+        name="Tisch",
+        mesh=MeshData(supported_table(0)),
+        material_slots=(MaterialSlot(index=0, name="Spule", material_type=spool),),
     )
-    assert [action.id for action in finding.suggestions] == ["open_print_settings"]
-    assert finding.values["field"] == "support.z_gap", "die Handlung öffnet das Feld"
+    setup = handover.SlicerSetup(executable=Path("CuraEngine.exe"), flavour="cura")
+
+    _path, findings = writer.write_assembly(
+        [body],
+        tmp_path,
+        project_name="tisch",
+        profile=profile,
+        settings=settings,
+        flavour="cura",
+        setup=setup,
+    )
+
+    [gap] = [entry for entry in findings if entry.values.get("path") == "support.z_gap"]
+    assert said in gap.message.translate("de"), gap.message.translate("de")
+    assert gap.severity == "info"
 
 
 @pytest.mark.parametrize("quality", ["draft", "standard", "fine", "strong"])

@@ -109,6 +109,7 @@ Nutzen da und sonst nichts.
 - Unter einer großen flachen Unterseite schlägt Solidon Gitter statt Bäumen vor, mit Hybrid, wo zugleich feine Details Stütze brauchen. Für hohe Baumstützen schlägt Solidon zwei Wände vor.
 - Gilt ein Vorschlag im Druckdialog nur einzelnen Teilen, nennen Zeile und Feld auch die Teile, die mit ihm einen anderen Wert bekommen.
 - Mit Cura und Gitterstützen folgt der Stützabstand dem Material: oben genau, unten in ganzen Schichten. Wo Cura aufrundet, nennt das Feld den gedruckten Wert.
+- Unter Curas Baumstützen schlägt Solidon eine obere Trennschicht vor, weil Cura ohne sie eine Schicht mehr Luft lässt.
 - Bei PLA schlägt Solidon für viele feine Spitzen mehr Abstand zu den Baumstützen darunter vor. Dadurch bleiben dort weniger Reste der Baumspitzen.
 - Verlangen viele kleine Überhänge zusammen Stützen, etwa an einem Kinn mit schräger Unterseite, nennt der Prüfbericht jetzt die Stelle.
 - Ein schmaler Rand, der sich selbst trägt, gilt nicht mehr als lange Brücke, auch neben einem anderen Überhang. Der Prüfbericht warnt dort nicht mehr, und Solidon verlangt dafür keine Stützen.

@@ -31,7 +31,7 @@ from typing import TYPE_CHECKING, Final, Literal, NamedTuple
 
 from app.core.knowledge import print_fields
 from app.core.knowledge.print_settings import SCARF_LENGTH
-from app.core.units import format_length
+from app.core.units import format_length, is_close
 from app.i18n import TranslatableText, _
 
 if TYPE_CHECKING:
@@ -1739,8 +1739,9 @@ def limitation(
             layer=settings.cooling.disable_first_layers + 1,
         )
     # Ein Stützabstand zwischen zwei Schichten wird in Cura aufgerundet, unter
-    # Gitter nur unten, und dort schreibt die Übergabe ganze Schichten (RM-628):
-    # Der Satz nennt, was gedruckt wird.
+    # Gitter nur unten, und dort schreibt die Übergabe ganze Schichten; unter
+    # Bäumen ohne obere Trennschicht kommt eine Schicht dazu (RM-628). Der Satz
+    # nennt, was gedruckt wird.
     if rounds_support_gap_up(flavour) and path == "support.z_gap":
         from app.core.slice import advise
 
@@ -1749,20 +1750,30 @@ def limitation(
         if settings is None or layer <= 0.0 or settings.support.style == "none":
             return None
         gap, style = settings.support.z_gap, settings.support.style
-        if advise.in_whole_layers(gap, layer):
-            return None
-        top, bottom = advise.printed_support_gaps(gap, layer, flavour, style, material=material)
+        roof = settings.support.interface_layers > 0
+        top, bottom = advise.printed_support_gaps(
+            gap, layer, flavour, style, material=material, roof=roof
+        )
         # Oben rundet Cura nur unter seinen Bäumen, dann wie unten.
         if advise.gap_rounding(flavour, style=style) != "exact":
+            if is_close(top, gap):
+                return None
+            if not roof:
+                return _(
+                    "Ohne obere Trennschicht lässt Cura unter Baumstützen eine Schicht mehr "
+                    "Luft: Der Stützabstand wird {gap}.",
+                    gap=format_length(top),
+                )
             return _(
                 "Unter Baumstützen rundet Cura den Stützabstand auf {gap} auf.",
                 gap=format_length(top),
             )
         # Unten zählt der Abstand nur, wo die Stütze auf dem Modell stehen darf.
-        if settings.support.placement == "build_plate":
+        if advise.in_whole_layers(gap, layer) or settings.support.placement == "build_plate":
             return None
         return _(
-            "Cura druckt den Stützabstand oben genau, unten in ganzen Schichten zu {gap}.",
+            "Cura druckt den Stützabstand oben genau und unten mit {gap}, einem Vielfachen "
+            "der Schichthöhe.",
             gap=format_length(bottom),
         )
     # Unter organischen Bäumen liegt die Stütze auf den Schichten des Modells
