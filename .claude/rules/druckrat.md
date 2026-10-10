@@ -208,8 +208,9 @@ offenem Drucker. Übernommen wird auf Klick, nie von allein.
   nichts. **Steile Wände dort** bekommen bei `CURLING_MATERIALS` die Umkehr,
   nur in der Orca-Familie — steil heißt, über die Höhe weiter als eine
   Bahnbreite über die 45-Grad-Linie hinaus (`analysis.steep_reach`, je Wand
-  über die Schichten verfolgt); der Rand einer Decke und eine Rundung an der
-  Kante sind keine Wand. Alle fünf gehen **je Teil**
+  über die Schichten verfolgt, je Schicht erst ab Orcas Umkehrschwelle
+  `REVERSE_THRESHOLD_SHARE`); der Streifen am Rand einer Decke und eine Rundung
+  an der Kante sind keine Wand, die Flanke neben einem Überhang schon. Alle fünf gehen **je Teil**
   (`PART_PATHS`): Jedes Programm, das einen nimmt, wendet ihn je Objekt an
   (zwei Teile, nur eines mit Wert, in acht Programmen gemessen). Was ein
   Programm nicht kennt oder nicht umsetzt, steht in `slicer_keys.NOT_TAKEN_BY*`

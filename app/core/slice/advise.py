@@ -2338,7 +2338,10 @@ def _bridges_and_overhangs(
         profile.material.id in CURLING_MATERIALS
         and (flavour is None or flavour in REVERSING_FLAVOURS)
         and not settings.shell.overhang_reverse
-        and steep_reach(result, enough=settings.layers.line_width) > settings.layers.line_width
+        and steep_reach(
+            result, enough=settings.layers.line_width, line_width=settings.layers.line_width
+        )
+        > settings.layers.line_width
     ):
         found.append(
             _advice(

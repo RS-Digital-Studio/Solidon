@@ -3297,7 +3297,17 @@ def total_overhang(
     return max(total, 0.0)
 
 
-def steep_reach(result: SliceResult, enough: float | None = None) -> float:
+#: Ab welchem Anteil der Bahnbreite die Orca-Familie eine Wand umkehrt: Die
+#: Außenbahn muss so weit über die Schicht darunter hinausragen
+#: (``overhang_reverse_threshold``, im Prozess des K1 Max
+#: ``fdm_process_creality_common.json`` 50 %). Bei 0,2 mm Schicht und 0,42 mm
+#: Bahn erst ab 46,4 Grad (Nachprüfung RM-587, N2).
+REVERSE_THRESHOLD_SHARE: Final = 0.5
+
+
+def steep_reach(
+    result: SliceResult, enough: float | None = None, *, line_width: float | None = None
+) -> float:
     """Wie weit die längste steile Wand über die 45-Grad-Linie hinauswandert, in mm
     (RM-587, Review M2).
 
@@ -3305,10 +3315,16 @@ def steep_reach(result: SliceResult, enough: float | None = None) -> float:
     :data:`OVERHANG_ANGLE_FACTOR`) und flacher als der Winkel, mit dem geschnitten
     wurde — dort stützt der Slicer nicht, und schrumpfendes Material rollt sich auf.
     Je Schicht das **Band**: die Fläche jenseits der 45-Grad-Zugabe über der Schicht
-    darunter, ohne die Stücke, die an einen Überhang jenseits der Stützgrenze
-    grenzen. Der gehört der Stütze, und der Streifen neben ihm ist der Rand einer
-    flachen Decke, keine Wand: Am Kasten mit Deckel waren das am K1 Max 14,9 mm² in
-    einer Schicht. Die mittlere Breite des Bands ist das Doppelte seiner Fläche
+    darunter, ohne die Überhangstücke jenseits der Stützgrenze und den Streifen
+    neben ihnen. Der Überhang gehört der Stütze, und der Streifen ist der Rand
+    einer flachen Decke, keine Wand: Am Kasten mit Deckel waren das am K1 Max
+    14,9 mm² in einer Schicht. Breit ist der Streifen um die Zugabe der
+    Stützgrenze weniger die 45-Grad-Zugabe; die Zugabe der Grenze steht in der
+    Schicht selbst, als Abstand der Überhangstücke zur Schicht darunter
+    (:func:`_measure_batch`). Nur der Streifen fällt heraus, nicht das ganze
+    zusammenhängende Band: Die Flanken eines um 65 Grad geneigten Zylinders
+    blieben sonst ungezählt, weil seine Unterseite überhängt (Nachprüfung
+    RM-587, N3). Die mittlere Breite des Bands ist das Doppelte seiner Fläche
     durch seinen Umfang — an einem Ring genau seine Breite, Schichthöhe ·
     (tan Winkel - 1).
 
@@ -3319,7 +3335,12 @@ def steep_reach(result: SliceResult, enough: float | None = None) -> float:
     Trichter von 20 mm Höhe (99 Schichtschritte zu 0,2 mm) trägt bei 50 Grad
     19,8 · 0,192 = 3,80 mm, bei 58 Grad 11,89 mm, bei 40 Grad nichts. Eine Rundung
     mit Radius r an der Unterkante bringt 0,048 · r: Ihr Stück zwischen 45 und 60
-    Grad ist 0,159 · r hoch und 0,207 · r breit. Ein Schnitt mit einer Grenze unter
+    Grad ist 0,159 · r hoch und 0,207 · r breit. Mit ``line_width`` zählt eine
+    Schicht nur, wenn ihr Band breiter ist als
+    :data:`REVERSE_THRESHOLD_SHARE` · Bahnbreite - Schichthöhe — erst dann ragt
+    die Außenbahn so weit hinaus, dass der Slicer umkehrt; sonst beginnt die Wand
+    neu. Ein Trichter mit 46 Grad wandert über 60 mm Höhe 2,1 mm hinaus, kehrt in
+    Orca aber nie um (Nachprüfung RM-587, N2). Ein Schnitt mit einer Grenze unter
     45 Grad hat kein Band und gibt null; senkrechte Wände tragen nichts, ihr
     Vernetzungsrauschen bleibt in der Zugabe einer Schichthöhe.
 
@@ -3344,22 +3365,35 @@ def steep_reach(result: SliceResult, enough: float | None = None) -> float:
             [max(layers[index].z - layers[index - 1].z, 0.0) for index in range(start, stop)]
         )
         below = shapely.buffer(shapes[:-1], steps * OVERHANG_ANGLE_FACTOR, quad_segs=16)
-        parts, owner = shapely.get_parts(shapely.difference(shapes[1:], below), return_index=True)
         ceilings = np.asarray(
             [_overhang_shape(layer) for layer in layers[start:stop]], dtype=object
         )
-        kept = ~shapely.intersects(parts, ceilings[owner])
-        parts, owner = parts[kept], owner[kept]
+        free = shapely.difference(shapes[1:], below)
+        # Nur Schichten mit Überhang haben einen Streifen; die übrigen kosteten
+        # am Drachen sonst ein Drittel der Messung.
+        hanging = ~shapely.is_empty(ceilings)
+        if hanging.any():
+            reach = shapely.distance(ceilings[hanging], exact[:-1][hanging])
+            grow = np.maximum(reach - steps[hanging], 0.0) + OVERHANG_MARGIN
+            strips = shapely.buffer(ceilings[hanging], grow, join_style="mitre")
+            free[hanging] = shapely.difference(free[hanging], strips)
+        parts, owner = shapely.get_parts(free, return_index=True)
+        sized = shapely.area(parts) > 0.0
+        parts, owner = parts[sized], owner[sized]
         count = stop - start
         area = np.bincount(owner, weights=shapely.area(parts), minlength=count)
         length = np.bincount(owner, weights=shapely.length(parts), minlength=count)
         width = np.divide(2.0 * area, length, out=np.zeros(count), where=length > 0.0)
+        counted = width > 0.0
+        if line_width is not None:
+            counted &= width > REVERSE_THRESHOLD_SHARE * line_width - steps
         bands = np.full(count, None, dtype=object)
         if len(owner):
             # ``get_parts`` liefert die Teile nach Schichten geordnet.
             cuts = np.flatnonzero(np.diff(owner)) + 1
             for position, group in zip(owner[np.r_[0, cuts]], np.split(parts, cuts), strict=True):
-                bands[position] = shapely.multipolygons(group)
+                if counted[position]:
+                    bands[position] = shapely.multipolygons(group)
         for position in range(count):
             band = bands[position]
             if band is None:

@@ -2750,6 +2750,62 @@ def test_the_steep_reach_follows_one_wall_upwards() -> None:
     assert width < steep_reach(one) < 0.86
 
 
+@pytest.mark.parametrize(("angle", "reverses"), [(46.0, False), (47.0, True), (50.0, True)])
+def test_a_tall_wall_just_past_45_degrees_does_not_reverse(angle: float, reverses: bool) -> None:
+    """Nachprüfung RM-587, N2: Ein Trichter mit 46 Grad wandert über 60 mm Höhe 2,1 mm
+    über die 45-Grad-Linie hinaus, aber je Schicht ragt die Außenbahn nur
+    0,2 · tan 46° = 0,21 mm hinaus — die Orca-Familie kehrt erst ab der halben
+    Bahnbreite um (``overhang_reverse_threshold`` 50 %). Ab 47 Grad schon."""
+    funnel = _funnel(angle, height=60.0)
+    advice = _advice_on(funnel, material="abs")
+    assert ("shell.overhang_reverse" in advice) is reverses
+
+
+def _tilted_cylinder(angle: float) -> trimesh.Trimesh:
+    """Ein Zylinder Ø 16 mm, die Achse ``angle`` Grad gegen die Senkrechte geneigt,
+    unten flach abgeschnitten, 40 mm lang."""
+    rod = trimesh.creation.cylinder(radius=8.0, height=80.0, sections=96)
+    rod.apply_transform(trimesh.transformations.rotation_matrix(math.radians(angle), (0, 1, 0)))
+    below = trimesh.creation.box((400.0, 400.0, 200.0))
+    below.apply_translation((0.0, 0.0, -100.0))
+    above = trimesh.creation.box((400.0, 400.0, 200.0))
+    above.apply_translation((0.0, 0.0, 100.0 + 40.0 * math.cos(math.radians(angle))))
+    return trimesh.boolean.difference([rod, below, above])
+
+
+def test_steep_flanks_beside_an_overhanging_underside_still_count() -> None:
+    """Nachprüfung RM-587, N3: Ein um 65 Grad geneigter Zylinder hängt mit seiner
+    Unterseite jenseits der Stützgrenze über, seine Flanken stehen zwischen 45 und
+    60 Grad über 17 mm Höhe. Herausgenommen wird nur der Streifen am Überhang, nicht
+    das ganze Band, und die Flanken bekommen die Umkehr; Kasten und Becher weiter
+    nicht."""
+    from app.core.slice.analysis import steep_reach
+
+    profile = profiles.make_profile("creality-k1-max", "abs")
+    _mesh, result = _sliced(_tilted_cylinder(65.0), profile)
+    assert steep_reach(result, line_width=0.42) > 0.42
+    assert _advice_on(_tilted_cylinder(65.0), material="abs").get("shell.overhang_reverse") is True
+    for build in (_lid_box, _cup_upside_down):
+        assert "shell.overhang_reverse" not in _advice_on(build(), material="abs")
+
+
+def test_the_reversal_starts_at_one_line_width() -> None:
+    """Nachprüfung RM-587, N5: Die Umkehr kommt, sobald eine Wand mehr als eine
+    Bahnbreite über die 45-Grad-Linie hinauswandert. Die Weitung um 55 Grad über
+    2 mm liegt mit 0,42 bis 0,86 mm knapp darüber und bekommt sie; zwei kurze
+    Weitungen an zwei Pfosten bleiben je darunter und bekommen sie nicht."""
+    from app.core.slice.analysis import steep_reach
+
+    profile = profiles.make_profile("creality-k1-max", "abs")
+    width = print_settings.resolve(profile).layers.line_width
+    post = _flared_post(0.0, 5.0, 2.0)
+    _mesh, result = _sliced(post.copy(), profile)
+    assert width < steep_reach(result, line_width=width) < 0.86
+    assert _advice_on(post.copy(), material="abs").get("shell.overhang_reverse") is True
+    pair = trimesh.util.concatenate([_flared_post(-10.0, 5.0, 0.6), _flared_post(10.0, 5.6, 0.6)])
+    assert "shell.overhang_reverse" not in _advice_on(pair, material="abs")
+
+
 def test_a_cantilever_hangs_from_one_side_and_a_bridge_from_two() -> None:
     """Die Auskragung grenzt an einem Stück an ihre Schicht, die Brücke an zwei Enden."""
     from app.core.slice.analysis import cantilevers
