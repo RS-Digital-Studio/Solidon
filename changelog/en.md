@@ -56,8 +56,7 @@ it into `website/version.json`.
 - Large models load noticeably faster and need less memory, even with a long history and on computers with 8 GB.
 - Even in a long history, a new step takes hardly longer to calculate than the first.
 - Undo and redo are faster, and memory that is no longer needed is freed right away.
-- Resolving overlaps and exporting as 3MF are considerably faster.
-- When repairing, Solidon finds overlaps in large models up to a quarter faster.
+- Repairing and resolving overlaps are up to four times as fast on large models, and exporting as 3MF is considerably faster.
 - The workspace appears faster when opening large 3MF files.
 - An added model is in view afterwards, even when it lands next to a model you zoomed in on.
 - In the part catalogue, *Manage parts* is open as long as there is no part of your own yet.
