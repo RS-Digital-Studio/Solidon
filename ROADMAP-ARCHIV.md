@@ -31,6 +31,9 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-09 | [RM-587: Lange Brücken und steile Überhänge drucken sauber (09.10.2026)](#rm-587-lange-brücken-und-steile-überhänge-drucken-sauber-09102026) |
+| 2026-10-10 | [RM-707: Spulenwerte aus 0.5.3 überschreiben das Herstellerprofil nicht mehr (10.10.2026)](#rm-707-spulenwerte-aus-053-überschreiben-das-herstellerprofil-nicht-mehr-10102026) |
+| 2026-10-10 | [RM-705: Ein vor dem Update gebuchter Druck wird danach wiedererkannt (10.10.2026)](#rm-705-ein-vor-dem-update-gebuchter-druck-wird-danach-wiedererkannt-10102026) |
 | 2026-10-10 | [RM-704 (Teil): Mit zwei Schichten Luft trägt jede Baumspitze eine Trennschicht (10.10.2026)](#rm-704-teil-mit-zwei-schichten-luft-trägt-jede-baumspitze-eine-trennschicht-10102026) |
 | 2026-10-10 | [RM-754: Mit und ohne Cache derselbe Satz zur freien Stelle (10.10.2026)](#rm-754-mit-und-ohne-cache-derselbe-satz-zur-freien-stelle-10102026) |
 | 2026-10-10 | [RM-676: *Größe ändern* an einem erzeugten Modell rechnet nur das Maß (10.10.2026)](#rm-676-größe-ändern-an-einem-erzeugten-modell-rechnet-nur-das-maß-10102026) |
@@ -54,6 +57,7 @@ entfernt hat.
 | 2026-10-09 | [RM-635: Prozesstests zählen ihre Zeit ab dem Zustand, und der Abbau wartet auf das Ende des Prozesses (09.10.2026)](#rm-635-prozesstests-zählen-ihre-zeit-ab-dem-zustand-und-der-abbau-wartet-auf-das-ende-des-prozesses-09102026) |
 | 2026-10-09 | [RM-344: Die Release-CI fährt die Rendererfälle ohne Fenster auf allen vier Paketplattformen (09.10.2026)](#rm-344-die-release-ci-fährt-die-rendererfälle-ohne-fenster-auf-allen-vier-paketplattformen-09102026) |
 | 2026-10-09 | [RM-571: Ein Sims im offenen Becher neben einem gesperrten Kanal behält seine Stütze (09.10.2026)](#rm-571-ein-sims-im-offenen-becher-neben-einem-gesperrten-kanal-behält-seine-stütze-09102026) |
+| 2026-10-09 | [RM-628: Solidon rechnet mit Curas Aufrunden des Stützabstands (09.10.2026)](#rm-628-solidon-rechnet-mit-curas-aufrunden-des-stützabstands-09102026) |
 | 2026-10-09 | [RM-680: Bausteine verwalten steht ohne eigenen Baustein offen (09.10.2026)](#rm-680-bausteine-verwalten-steht-ohne-eigenen-baustein-offen-09102026) |
 | 2026-10-09 | [RM-650: Ein eingefügtes Modell kommt in den Ausschnitt (09.10.2026)](#rm-650-ein-eingefügtes-modell-kommt-in-den-ausschnitt-09102026) |
 | 2026-10-09 | [RM-584 (Teil): Über Baumspitzen rät Solidon zwei Schichten Luft (09.10.2026)](#rm-584-teil-über-baumspitzen-rät-solidon-zwei-schichten-luft-09102026) |
@@ -27415,8 +27419,9 @@ Filamentauswahl 34 statt 72 MiB, die Filamentauswahl danach 0,19 statt 5,9 s. Te
 und Prusa, Ausschnitt, Warten, Suchstand), `test_discover.py`, `test_export_background.py`,
 `test_print_settings_ui.py` (leere Wahl, erneuerte Wahl), `test_ui_export.py`
 (`test_the_3mf_export_reads_the_slicer_stock_in_one_pass` mit echtem Bestand: jede Datei
-einmal je Faden); jede Behebung mit Gegenprobe. Offen im Register: die Abnahme mit Orca,
-PrusaSlicer, Cura, Figur und Beispielprojekt am echten Fenster. Changelog: ja.
+einmal je Faden); jede Behebung mit Gegenprobe. Offen im Register als
+[RM-759](ROADMAP.md#rm-759): die Abnahme mit Orca, PrusaSlicer, Cura, Figur und
+Beispielprojekt am echten Fenster. Changelog: ja.
 
 ## RM-627: Ein Rand neben einem anderen Überhang ist keine lange Brücke (09.10.2026)
 
@@ -27631,15 +27636,16 @@ Bahnhöhe, ohne Nachbarschaft unten, ohne Nachbarschaft oben, `Skirt/Brim` als M
 die alte aus `c95d542ed` werden dort rot, jede an der Zusicherung ihres Falls. Linux und macOS (Anycubic 2.0.0.5 gegen 2.0.0.3, Laufzeit
 gegen das 120-Minuten-Limit) nimmt die Slicerauswahl beim Push auf main ab, denn die CI läuft
 nur dort (Entscheidung Robert). SuperSlicer fehlt: RM-622 hat es nicht gemessen. Cura
-fehlt, weil es aufrundet und Solidons Tabelle es nicht weiß; das richtet RM-628, und Cura
-kommt mit ihm in den Test. Cura 5.13 an derselben Platte (Sonde, nicht eingecheckt): unter
-Gitter oben genau der geschriebene Abstand (0,28 und 0,44 mm, mit einer Bruchteillage der
-Stütze), unten aufgerundet (0,4 und 0,6); unter Bäumen oben und unten aufgerundet (0,4 und
-0,6). Am Weg des Tests mit `support_contact` nachgemessen: Gitter 0,28 → oben 0,28, unten
-0,40; Baum 0,44 → oben und unten 0,60; je drei untere Lagen.
-`advise.WHOLE_LAYER_GAP_FLAVOURS` und `support_gap_target` nehmen für Cura dagegen ganze
-Schichten zum nächsten Vielfachen an — mit dem heutigen Sollwert wären alle vier
-Abstandszusicherungen rot. Changelog: nein (Test).
+fehlte zuerst, weil es aufrundet und Solidons Tabelle es nicht wusste. Cura 5.13 an derselben
+Platte: unter Gitter oben genau der geschriebene Abstand (0,28 und 0,44 mm, mit einer
+Bruchteillage der Stütze), unten aufgerundet (0,4 und 0,6); unter Bäumen oben und unten
+aufgerundet (0,4 und 0,6). Mit [RM-628](#rm-628) steht Cura in `_CONTACT_PROGRAMS`: Die
+Sollwerte oben und unten kommen für alle sieben Programme aus
+`advise.printed_support_gaps` (statt `round(gap / layer)` nach `rounds_to_whole_layers`),
+für Cura sichert der Test dazu den Feldsatz mit dem gedruckten Wert zu, und ein dritter
+Cura-Fall schneidet bei 0,28-mm-Schichten (Gitter 0,30 → oben 0,30, unten 0,28). Unter Gitter
+schreibt die Übergabe Cura unten das Vielfache im Band selbst: 0,28 → oben 0,28, unten 0,20;
+unter Bäumen 0,44 → oben und unten 0,60; je drei untere Lagen. Changelog: nein (Test).
 
 ## RM-027 entfällt mit dem privaten Index (09.09.2026)
 
@@ -46693,6 +46699,246 @@ sechs Sprachen „ab 0.5.0“ neben „Version 0.5.3“, wie im Repository. Chan
 
 **Abschluss:** Der Abschnitt *Bausteine verwalten* beginnt offen, solange der eigene Bausteinordner nichts hält (`PartCatalog`, `_own_library_is_empty`). Gezählt werden gespeicherte Rezepte und hinzugefügte Bausteine, dieselbe Frage wie für Weitergabe, *Bearbeiten* und *Entfernen* (`_in_own_library`, vorher dreimal hergeleitet); ein mitgereister und ein `.py`-Baustein zählen nicht, `PartSpec.own` zählte anders. Danach gilt der Merker (`remember`, RM-491), und ein eigener Baustein klappt den Abschnitt wie bisher auf (RM-455; dass dieses Aufklappen gemerkt wird, steht in [RM-658](ROADMAP.md#rm-658)). Damit stehen *Auswahl als Baustein speichern …*, *Baustein aus Datei hinzufügen …* und beide Sperrgründe ohne Klick da, wie in 0.5.1 (Rückschritt seit `48ffcf145`, in 0.5.2 und 0.5.3). Weil der Weitergabegrund jetzt vorn steht, sagt er ohne eigenen Baustein „Speichern Sie zuerst einen eigenen Baustein, um ihn weiterzugeben.“ statt zum Wählen aufzufordern, das bei einem eingebauten in die nächste Absage führte. Die Hinweistests prüfen den Grund ohne vorheriges Aufklappen und stellen die Bibliothek ohne eigene Bausteine selbst her (`no_own_parts`); `test_the_closed_management_names_what_it_holds` prüft den zugeklappten Zustand nach einem Klick; neu `test_a_fresh_catalogue_shows_its_management_without_a_click` und `test_only_a_part_in_the_own_library_closes_the_management` (Rezept und hinzugefügt zu, mitgereist und `.py` offen). Gegenprobe über ein Plugin, je Mutation von acht Tests rot: immer zu 6, immer offen 2, Prädikat über `PartSpec.own` 2, alter Weitergabegrund 3; Katalogtests 52 grün, Handbuch-, Katalog-, Wortlaut- und Changelogtests 539 grün. Die Handbuchseiten *Eigene Bausteine* und *Bausteindateien austauschen* nennen Abschnitt und Knopf in allen sechs Sprachen, der eingefrorene Musterbestand trägt die neuen Seitenschlüssel; Changelog 0.6.0. Fenstersonde am echten Fenster, frischer Nutzerordner: 4 von 4, *Speichern*, *Hinzufügen* und beide Sperrgründe ohne Klick sichtbar, der Weitergabegrund schickt zum Speichern. Umgesetzt von Claude (Thread „Bedienung und KI“).
 
+## RM-628: Solidon rechnet mit Curas Aufrunden des Stützabstands (09.10.2026)
+
+<a id="rm-628-solidon-rechnet-mit-curas-aufrunden-des-stützabstands-09102026"></a>
+<a id="rm-628"></a>
+
+**Befund (09.10.2026, beim Beheben von RM-624):** Eine Sonde an Cura 5.13 (Platte über
+einer Säule, PETG, 0,2-mm-Schichten) druckte unter Gitter oben genau den geschriebenen
+Abstand (0,28 und 0,44 mm, mit einer Bruchteillage der Stütze) und unten aufgerundet (0,4
+und 0,6), unter Bäumen oben und unten aufgerundet (0,4 und 0,6); der Drachenbericht
+(`output/drache-2026-10-09/rueckstaende/bericht.md`, Abschnitt 5/6) las dasselbe aus
+`TreeSupportSettings.h:62`. `advise.WHOLE_LAYER_GAP_FLAVOURS`, `support_gap_target`,
+`rounds_to_whole_layers` und der Feldsatz „Cura rechnet … in ganzen Schichten“ nahmen
+dagegen für Cura immer ganze Schichten zur nächsten an. Folge: PETG bekam unter Curas Gitter
+eine Schicht (0,2) statt 0,28 vorgeschlagen, auch die Cura-Grundlage trug sie, und der Satz
+am Feld nannte eine Rundung, die Cura oben nicht macht, und verschwieg die, die es macht.
+
+**Quelltext (CuraEngine 5.13.0):** `round_up_divide` für die Abstandslagen unter Bäumen
+oben und unten (`include/TreeSupportSettings.h:62–63`) und unter Gitter unten
+(`src/support.cpp:1119` in `generateSupportAreasForMesh`, `:1703` in
+`generateSupportBottom`). Oben unter Gitter zieht `support.cpp:1011` ganze Lagen ab
+(`z_distance_top / layer_thickness + 1`), und liegt der Abstand zwischen zwei Schichten,
+druckt Cura die oberste Stützlage als Bruchteillage tiefer (`support_fractional_roof`,
+`support.cpp:1757`; `z_offset = -leftover_support_distance`,
+`src/settings/PathConfigStorage.cpp:165`; geschrieben bei `gcode_layer.z_ + z_offset`,
+`src/FffGcodeWriter.cpp:4000`).
+
+**Behoben:** Eine Auskunft für alle Programme, oben und unten: `advise.gap_rounding`
+(`exact`, `nearest`, `up`; Cura `up` unter Bäumen und immer unten, oben unter Gitter
+`exact`; die Orca-Familie und PrusaSlicer `nearest` unter organischen Bäumen, Orca auch neben
+dem Turm) und `advise.printed_gap`, der gedruckte Wert. `rounds_to_whole_layers` fragt sie
+für oben (Signatur unverändert), `WHOLE_LAYER_GAP_FLAVOURS` entfällt,
+`slicer_keys.support_gap_in_whole_layers` heißt `rounds_support_gap_up`. Unter Curas Gitter
+rät Solidon jetzt den Wert des Materials genau (PETG bei 0,2 mm 0,28, bei 0,12 mm 0,168),
+unter Curas Bäumen wie bisher das Vielfache innerhalb der Materialgrenzen — welches, sagt
+das Material, nicht die Rundungsart; ein Vielfaches druckt jeder Slicer genau, und
+„kleinstes Vielfaches ab Ziel“ hätte PETG bei 0,2 mm unter Bäumen 0,4 über dem Höchstwert
+0,3 gegeben, anders als in der Orca-Familie. Der Baumspitzenrat (`tip_gap`) liefert schon
+ganze Schichten und druckt in Cura so. Die Cura-Grundlage fragt mit ihrer Art (keine, also
+Gitter) und trägt den Wert des Materials; ohne Materialwerte (TPU) bleibt Solidons 0,2, statt
+auf die nächste Schicht gerundet zu werden.
+
+**Unten schreibt die Übergabe selbst** (Fertigstellung, 09.10.2026 abends): Mit dem genauen Wert oben
+hob Curas Aufrunden den Stützfuß unten über den Höchstwert des Materials — PETG bei 0,2 mm
+Schicht 0,4, bei 0,28 mm 0,56 statt höchstens 0,30; darüber liegt die erste Stützlage in der
+Luft. Solidon hat kein Feld für unten. `advise.cura_bottom_gap` sagt deshalb, was Cura als
+`support_bottom_distance` bekommt: unter Gitter das Vielfache, das Solidon meint
+(`advise.whole_layer_gap`: das nächste, im Materialband, wenn der Wert darin liegt; ein eigener
+Wert außerhalb bleibt beim nächsten), unter Bäumen den Wert von oben. `handover._for_supports`
+schreibt es, `slicer_keys.CURA_MIRRORED` spiegelt `support_z_distance` nur noch nach oben;
+je Teil geht es über dieselbe Ableitung (`object_keys`). `support_gap_target` wählt sein
+Vielfaches über dieselbe Funktion. Der Feldsatz nennt, was Cura druckt: „Unter Baumstützen
+rundet Cura den Stützabstand auf {gap} auf.“ und unter Gitter, wo die Stütze auf dem Modell
+stehen darf, „Cura druckt den Stützabstand oben genau, unten in ganzen Schichten zu {gap}.“
+(sechs Kataloge), mit den Materialgrenzen wie die Übergabe (`limitation(material=…)`,
+`setting_limitations`, Druckdialog). Die Druckzeit hängt nicht am Abstand
+(`print_time._support_columns` lässt die Säulen bis an die Decke reichen); dort war nichts zu
+ändern.
+
+**Nachweis (09.10.2026):** Test zuerst: `test_each_program_prints_the_gap_as_it_rounds`
+(Familie, Art, Seite als Tabelle, 24 Fälle), `test_under_curas_grid_the_gap_is_the_materials`,
+`test_cura_says_what_it_prints_of_the_gap` und
+`test_cura_gets_the_materials_gap_from_its_foundation`; am echten Programm
+`test_curas_support_gap_arrives_as_solidon_says` mit eigener kleiner Messung
+(`_cura_support_gaps`, je Millimeter Bahn ein Punkt im Ring zwischen Säule und Plattenrand,
+`;TYPE:`, `M82`/`M83`, `G92 E`; geprüft an `test_the_cura_gap_measure_reads_fractions_resets_and_the_ring`).
+Gemessen in Cura 5.13 (Ender-3 V3 SE, erste Lage 0,25 mm): Gitter mit 0,28 oben 0,28 und
+unten 0,40, Baum mit 0,44 oben und unten 0,60; je Seite 267 bis 482 Bahnpunkte. Gegenprobe
+mit dem alten Runden (`gap_rounding` für Cura `nearest`): 17 von 34 Fällen in Schnitt und
+Cura-Test rot, darunter beide Läufe am echten Programm, und 14 von 38 in den
+Druckeinstellungen. Betroffene Testdateien (Schnittbefunde, Druckeinstellungen, Export, Rat,
+Übersetzungen, Changelog, Roadmap, vier Cura-Dateien, Floß, Teilwerte, Schätzung,
+Sprachregeln, Karten, die zwei neuen Fälle aus `test_real_slicers.py`): siehe Commit.
+
+**Nachweis der Fertigstellung:** Test zuerst `test_a_whole_layer_gap_is_the_nearest_inside_the_material_band`
+(9 Fälle), `test_cura_gets_its_bottom_gap_in_whole_layers_under_grid` (7) und
+`test_cura_gets_the_bottom_gap_it_prints_as_meant` (6, Platte und je Teil); der Feldsatztest
+nennt den unteren Wert in ganzen Schichten. Gegenprobe über Plugins: `cura_bottom_gap` gibt den
+Wert von oben zurück — 11 von 57 Fällen rot; `CURA_MIRRORED` spiegelt wieder nach unten — 4 von
+6 rot. Der Cura-Slicertest läuft bei 0,2 mm Gitter 0,28, Baum 0,44, bei 0,28 mm Gitter 0,30 und
+bei 0,12 mm Baum 0,28, grün mit der Messprüfung (5 von 5). Sonde an Cura 5.13 (Ender-3 V3 SE,
+gepinnt), Platte über Säule, je Seite 100 bis 180 Zellen, zwei Messungen (Ring je Bahnmillimeter,
+Zellenmessung aus RM-624) gleich: Mit Solidons Rat druckte PETG unter Gitter bei 0,2 mm vorher
+(`d5ddfc217`) oben und unten 0,2, im Zwischenstand 0,28 und 0,40, jetzt 0,28 und 0,20; bei
+0,28 mm vorher 0,28 und 0,28, im Zwischenstand 0,30 und 0,56, jetzt 0,30 und 0,28; bei 0,12 mm
+vorher 0,12 und 0,12, jetzt 0,20 (im Band, kein Rat) und 0,24. Unter Bäumen und für PLA
+unverändert ganze Schichten, oben gleich unten. Feste Werte 0,28 und 0,44 bei 0,12, 0,2 und
+0,28 mm: oben unter Gitter genau, unter Bäumen aufgerundet (0,36/0,48, 0,40/0,60, 0,28/0,56),
+unten unter Gitter wie `cura_bottom_gap` (0,24, 0,48, 0,20, 0,40, 0,28, 0,56) und wie der
+Feldsatz. Stichprobe der übrigen Familien mit 0,24 mm bei 0,2 mm Schicht (PETG): Orca, Bambu,
+Elegoo, Creality, Anycubic und PrusaSlicer drucken unter Gitter oben und unten 0,24 (genau),
+unter organischen Bäumen oben und unten 0,20 (zur nächsten, nicht aufgerundet). Changelog
+0.6.0: ja, als Eigenschaft (Ursache `fafcd4841` liegt in keinem Tag).
+
+**Nacharbeit nach Review (10.10.2026):** Curas Fenster bekommt die Unterseite wie die Konsole
+(`cura_profile_beside` über `_cura_bottom_gap`), und Übergabe, Schreiber und Dialog fragen mit
+dem Material der Spule. Je Teil schreibt der Export oben nur einen Wert, der mit dem Rest der
+Platte genau druckt, sonst das Vielfache im Band der Spule (`advise.cura_part_gap`). Unter
+Curas Bäumen ohne obere Trennschicht rechnet Solidon mit einer Schicht mehr (`up_and_one`) und
+rät die Trennschicht. Den Halbfall unter organischen Bäumen rundet `nearest_raw` für Bambu
+Studio und Creality Print (`HALF_LAYER_UNGUARDED`). Der Gitter-Satz ist ein Hinweis ohne
+Handlung, der Feldsatz nennt den Abstand unten „mit {gap}, einem Vielfachen der Schichthöhe“.
+Die eigene Cura-Messung im Slicertest ist dem Kontakttest gewichen (RM-624, Cura dort mit
+Gitter, Baum und Gitter bei 0,28 mm). Gegenproben je Fund im Prozess: Schreiber ohne Material
+1 rot, Dialog ohne Material 1 rot (Fenster), Übergabe unten ohne Band 6, Fenster ohne
+Unterseite 5, Teilwert unverändert 7, Trennschicht übergangen 7, Spule übergangen 3, Programm
+übergangen 2, Gitter-Satz als Warnung 3, Grundlauf 987 grün. Nachprobe an Cura 5.13 (Ender-3
+V3 SE, PETG, 0,2 mm, zwei Teile, gepinnt), Werte je Teil aus `writer._values_for`: Platte 0,2
+mit Teil 0,28 schreibt 0,2 und druckt 0,20/0,20; Platte 0,44 mit Teil 0,28 schreibt 0,2 und
+druckt 0,20/0,20; Platte 0,28 mit Teil 0,2 druckt 0,20/0,20; Platte 0,24 mit Teil 0,44 (gleicher
+Rest) schreibt 0,44 und druckt 0,44/0,40 — jeweils wie Solidon sagt, das andere Teil wie seine
+Platte.
+
+**Nach der Nachprüfung (10.10.2026):** Die Trennschichten gehen auch ins Fensterprofil
+(`handover._cura_interface`, `_cura_window_choices`): Schalter als Werte, Höhen als Formel
+`=layer_height * N`, die obere ausdrücklich, je Extruderprofil; Cura liest einen Wert mit `=`
+als Formel (`UM/Settings/SettingInstance.py:172`). Vorher nahm das Fenster die Trennschicht der
+Maschine, und unter Bäumen ohne Werksvorgabe druckte PETG nach Solidons Rat 0,40 statt 0,20. Der
+Dialog fragt das Material der Platte wie der Export (`_plate_material` über
+`handover.slot_material`). `cura_part_gap` wählt unter allen genau druckbaren Werten
+(Vielfaches, Vielfaches plus Rest der Platte) den nächsten im Band: 0,28 auf einer Platte mit
+0,44 wird 0,24 statt 0,20. Exporttest für das Material je Teil durch `write_assembly`. Die
+Regel `dateiformat.md` sagt, dass Solidons eigene Wahl für Cura auch ins Fensterprofil gehört.
+Aus der Durchsicht: Im Fenster steht die Elternhöhe der Trennschicht nach der dickeren Seite
+(oben 0, unten 3 → `=layer_height * 3`; vorher zeigte Cura eine Warnung an 0 mm). Die
+Treppenstufe unter dem Stützfuß folgt der unteren Trennschicht wie Curas Formel
+(`0 if support_bottom_enable else 0.3`); seit `f934a4221` (v0.2.2) hing sie an der oberen.
+Gegenproben je 2 rot.
+
+## RM-587: Lange Brücken und steile Überhänge drucken sauber (09.10.2026)
+
+<a id="rm-587-lange-brücken-und-steile-überhänge-drucken-sauber-09102026"></a>
+<a id="rm-587"></a>
+
+**RM-587 — Lange Brücken und steile Überhänge drucken sauber.**
+  Solidon meldete Brücken ab 15 mm und setzte nur Tempo und Lüfter. Dicke Brücken, Brückenfluss
+  und Zusatzwände an Überhängen zwischen 45° und der Stützgrenze blieben beim Hersteller, meist
+  aus (Recherche Nr. 11, 12). Dazu N1 der G-Code-Gegenprüfung vom 03.10.: PrusaSlicer 2.9.6 mit
+  Solidons eigenem Satz stützte die 36-mm-Brücke trotz „Stützen überall“ nicht (0 mm³, die
+  Schichtanalyse rechnete 901 mm³), weil Solidon `dont_support_bridges` nicht schrieb.
+  Belege: `F:\solidon-review-reports\gcode\schluss.md`, `befunde.md`.
+
+**Abschluss:** Fünf neue Felder mit Rat aus der Geometrie (`advise._bridges_and_overhangs`):
+*Brücken stützen* (`support.bridges`, Prusa `dont_support_bridges`, Orca `bridge_no_support`),
+vorgeschlagen, wo das Teil Stütze verlangt und mit Stützen druckt; *Dicke Brücken* und *Fluss bei
+Brücken* (0,9 über 0,95) über Brücken über 15 mm, die frei drucken; *Zusatzwände ohne Stütze*
+unter flachen, einseitig hängenden Stücken ohne Stütze, breiter als die Wände
+(`analysis.cantilevers`); *Wandrichtung wechseln* (`overhang_reverse`, nur Orca-Familie) für
+ABS, ASA und TPU an steilen Wänden zwischen 45 Grad und der Stützgrenze
+(`analysis.steep_overhang`). Rücklesung aus Orca- und Prusa-Ketten samt Programmvorgaben von
+PrusaSlicer (`--save`), Übergabe je Programm gemessen: Cura und SuperSlicer keiner der fünf
+(SuperSlicer: Fluss in Prozent, zwei Schlüssel unbekannt, die Brückenstütze ohne Wirkung), Bambu Studio ohne Zusatzwände und
+Umkehr, Anycubic Slicer Next ohne Zusatzwände (angenommen, ohne Wirkung). Die Gegenprobe fragt die
+Brückenstütze am wirksamen Wert des Teils statt am Herstellerprozess (`Motion.support_skips_bridges`
+entfällt). Gemessen über den Druckdialogweg: N1 vorher 0 mm Stützbahn, jetzt 4 317 mm, abgewählt 0;
+Pilz an OrcaSlicers Kobra 2 14 480 → 45 837 mm; dicke Brücken und 0,9 kommen in allen sechs
+Programmen an, Brückenbahn in der Orca-Familie 126 → 63 mm, PrusaSlicer 4,5 → 6,6 mm Filament;
+Zusatzwände ersetzen unter einer 3-mm-Auskragung die Brückenbahn (PrusaSlicer 1 254 → 996 mm,
+OrcaSlicer 335 → 0, ElegooSlicer 296 → 0, Creality Print 335 → 75); die Umkehr dreht die Außenwand
+eines ABS-Trichters mit 50 Grad in jeder zweiten Schicht (OrcaSlicer, ElegooSlicer, Creality Print
+50 von 50). Abweichung von der Recherche: Zusatzwände wirken im Band 45 Grad bis Stützgrenze
+nicht (Trichter 40 bis 80 Grad bitgleich), dort schlägt Solidon die Umkehr vor. Tests in
+`test_advise.py` (Brücke, Pilz, Rand, Trichter, Band von Hand gerechnet, Auskragung gegen Brücke),
+`test_manufacturer.py`, `test_print_time.py`, `test_print_settings.py`, Slicertest
+`test_real_slicers.py` (PrusaSlicer, OrcaSlicer, ElegooSlicer, 3 von 3 grün); Messwerte und Begründung in
+`konzepte/begruendungen/regel-druckrat.md`. Umgesetzt von Claude (Worktree `F:/sl-bruecken`).
+
+**Je Teil (Entscheidung Robert, 09.10.2026):** Die fünf Werte stehen in `advise.PART_PATHS` und
+gehen als Objektwert an das Teil, dessen Rat sie verlangt; die Platte behält die Grundlage.
+Wirkungsnachweis mit zwei gleichen Teilen, nur das linke mit Wert, in allen acht Programmen
+(Kerne gepinnt, getrennt an den Objektmarken, Sonde `.claude/.state/drache-2026-10-08/bruecken_je_teil.py`),
+je links / rechts: Brückenstütze aus, Stütze in mm: OrcaSlicer 0 / 17 912, ElegooSlicer 0 / 18 984,
+Bambu Studio 0 / 18 963, Creality Print 0 / 17 912, Anycubic Slicer Next 0 / 55 435, PrusaSlicer
+0 / 22 358. Dicke Brücke, Förderung je mm Brückenbahn: 0,0461 / 0,0262, 0,0497 / 0,0282,
+0,0515 / 0,0413, 0,0455 / 0,0272, 0,0463 / 0,0279, 0,0529 / 0,0443. Fluss 0,7: 0,0204 / 0,0262,
+0,0198 / 0,0282, 0,0283 / 0,0413, 0,0210 / 0,0272, 0,0215 / 0,0279, 0,0301 / 0,0443. Zusatzwände,
+Brückenbahn in mm: OrcaSlicer 0 / 335, ElegooSlicer 0 / 296, Creality Print 75 / 335, PrusaSlicer
+996 / 1 254. Umkehr, Drehwechsel der Außenwand: OrcaSlicer und ElegooSlicer 99 / 0, Creality Print
+98 / 0, Anycubic Slicer Next 1 / 0 (dreht jede Schicht). Brückentempo und -lüfter an beiden Teilen
+gleich (je Spule). Gegenprobe am Stand davor (`badc464f9`): Werte auf der Platte, Wirkung an beiden
+Teilen (OrcaSlicer Brückenstütze aus 0 / 0, dicke Brücke 0,0461 / 0,0461, ebenso PrusaSlicer und
+Bambu Studio). Über den echten Rat mit zwei verschiedenen Teilen: Ohne Stützen bekommt nur die
+36-mm-Brücke mit Auskragung dicke Bahnen, 0,9 Fluss und Zusatzwände, die 8-mm-Brücke daneben nichts;
+am ABS-Trichter neben einem Zylinder dreht nur der Trichter; am Kobra 2 in OrcaSlicer
+(`bridge_no_support = 1`) bekommt nur die lange Brücke die Brückenstütze (49 789 gegen 867 mm
+Stütze, am Stand davor 8 393). Nicht geschrieben wird, was ein Programm nicht kennt oder nicht
+umsetzt: Cura und SuperSlicer keinen der fünf (SuperSlicer stützte mit `dont_support_bridges` 0 und
+1 gleich), Bambu Studio weder Zusatzwände noch Umkehr, Anycubic Slicer Next keine Zusatzwände; der
+Rat bietet sie dort nicht an, und das Feld sagt, dass der Slicer es nicht kennt. Was eine Familie
+gar nicht nimmt, zählt im Split nicht mehr als „nur plattenweit“ (sonst meldete Cura an jedem
+anderen Teil eine Übernahme, die es nie druckt). Wächter: `test_slicer_part_settings.py`
+(`MEASURED_PART_PATHS` samt Fehlstellen je Programm, Objektwerte nur am verlangenden Teil in
+PrusaSlicer und OrcaSlicer, Split ohne Scheinübernahme; am Stand davor 11 rot) und der Slicertest
+`test_the_bridge_flow_of_one_part_stays_with_that_part` in sechs Programmen (6 von 6 grün, am Stand
+davor rot). Umgesetzt von Claude (Worktree `F:/sl-bruecken-teil`).
+
+**Nachprüfung (Review RM-587 vom 10.10.2026, vier mittlere, drei leichte Befunde):**
+*M1:* `cantilevers` zählte eine Decke, die ringsum auf einem geschlossenen Wandring liegt (Kasten
+mit Deckel, umgedrehter Becher), als einseitig hängend und schlug Zusatzwände ohne Wirkung vor
+(PrusaSlicer legt den Deckel mit und ohne gleich, 3 575,0 / 2 825,0 mm). Eine Berührung, die den
+Außenring bis auf eine Bahnbreite ganz umläuft, zählt nicht mehr; Pilz (Innenring) und Auskragung
+bleiben einseitig. *M2:* Das Band zählte am Rand jeder flachen Decke einen Streifen mit und las die
+Kantengrenze 10 mm² als Summe über den Körper; ein ABS-Gehäuse mit Deckel bekam die Umkehr.
+`analysis.steep_reach` verfolgt das Band je Wand über die Schichten, ohne Stücke am Überhang
+jenseits der Stützgrenze, und misst, wie weit die Wand über die 45-Grad-Linie hinauswandert; die
+Umkehr kommt ab einer Bahnbreite (Trichter 50 Grad 3,80 mm wie von Hand, Rundung 2 mm 0,1 mm, Kasten
+und Becher 0; Besenhalter und Schraubendreherhalter verlieren die Umkehr, Okarina, Baum und Drache
+behalten sie). *M3:* SuperSlicer 2.5.59.13 stürzte an einer 3MF der Prusa-Familie ohne gewähltes
+Programm und an einer PrusaSlicer-Datei ab (Schrägnaht und `extra_perimeters_on_overhangs`, zwei
+fremde Schlüssel, RM-459). Eine Datei ohne bekanntes Programm lässt weg, was ein Programm der
+Familie gar nicht kennt (`slicer_keys.UNKNOWN_TO_PROGRAM`, `unknown_in_file`), und Solidons voller
+Prusa-Satz schreibt Schrägnaht „nowhere“ und Zusatzwände 0 nicht mehr (`QUIET_AT_DEFAULT`, beides
+PrusaSlicers eigener Wert). `thick_bridges` und `bridge_flow_ratio` nimmt SuperSlicer als alte
+Namen (mit einem Fantasieschlüssel daneben kein Absturz; 0,7 je Objekt fördert 0,0236 gegen
+0,0336 mm je mm) und bekommt beide jetzt je Teil; Slicertest
+`test_superslicer_opens_the_family_file_and_takes_the_bridge_flow_of_one_part` (am alten Stand
+0xC0000005). Die Suite sucht Slicer jetzt auch unter `%LOCALAPPDATA%\Programs` (SuperSlicer liegt
+dort). *M4:* „Brückenstütze abgewählt“ erreichte den Rat nie: `advise.DECIDING_PATHS` nennt jetzt
+auch `support.bridges` und `support.spare_ledges`, der Dialog fragt nach der Abwahl neu, der Export
+fragt jedes Teil ohne die nicht übernommenen. *L1:* Tests für dicke Bahnen über einer Kanaldecke
+bei Stützen und für den kleineren Brückenfluss zweier Körper. *L2:* Die Umkehr fragt
+`advise.REVERSING_FLAVOURS`, ein Wächter hält die Menge gleich mit `slicer_keys.NOT_TAKEN_BY`.
+*L3:* Cura-Feld *Fluss bei Brücken* sagt, dass Cura eigene Brückenbahnen mit eigenem Fluss legt
+(`slicer_keys.not_taken_reason`); PrusaSlicer und SuperSlicer drucken Brücken ohne
+Herstellerprofil jetzt dünn (Changelog). **Abhängigkeit von RM-701:** Die falsche Brückenweite
+am Rohr mit Flanke und Sporn (39,3 mm, RM-701 H5) zieht jetzt dicke Bahnen, 0,9 Fluss und am
+Kobra 2 die Brückenstütze nach sich; behoben wird das mit RM-701. Gegenproben je Befund am alten
+Stand oder per Mutation rot. Umgesetzt von Claude (Worktree `F:/sl-bruecken`, Kürzel rm587b).
+
+**Zweite Nachprüfung (10.10.2026, ein mittlerer, vier leichte Befunde):** *N1:* Eine Decke auf
+drei Seiten (Kasten, vorn offen) galt als einseitig; PrusaSlicer legt sie mit und ohne
+Zusatzwände gleich (3 588,7 mm). Einseitig ist ein Stück nur, wenn keine Bahnenrichtung über ihm
+an beiden Enden Halt hat (`analysis._anchored_span`); Decke auf zwei Nachbarseiten, Pilz und
+Auskragung behalten die Zusatzwände. *N2:* Eine Schicht zählt für die Umkehr erst, wenn ihr Band
+breiter ist als `REVERSE_THRESHOLD_SHARE` · Bahnbreite − Schichthöhe (Orcas
+`overhang_reverse_threshold` 50 %): Trichter 46 Grad, 60 mm hoch, ohne, 47 und 50 Grad mit.
+*N3:* Nur der Streifen neben einem Überhang fällt aus dem Band, nicht das ganze Stück; die
+Flanken eines um 65 Grad geneigten Zylinders bekommen die Umkehr. *N4:* Eine Kanaldecke gilt nur
+als frei, solange „nur vom Bett“ oder die Kanalsperre den Kanal freihält; beide stehen in
+`DECIDING_PATHS`. *N5:* Rattest für die Grenze bei einer Bahnbreite. Gegenproben je Befund rot.
+
 ## RM-567: Weniger Arbeitsspeicher — Cachegrenze, BLAS-Faden, Renderer am echten Fenster (09.10.2026)
 
 <a id="rm-567-weniger-arbeitsspeicher--cachegrenze-blas-faden-renderer-am-echten-fenster-09102026"></a>
@@ -47364,3 +47610,101 @@ festgehaltener Stelle gibt `placed_at_free_spot` denselben Befund unter derselbe
 **Nachweis:** `test_free_spot_kept.py::test_the_spot_finding_is_the_same_with_and_without_the_cache`
 (verschoben und mittig) am Stand davor rot, jetzt grün; *weg3* warm gegen kalt jetzt gleich
 (vorher fehlte kalt genau dieser Befund). Changelog 0.6.0: ja, als Behebung.
+
+## RM-705: Ein vor dem Update gebuchter Druck wird danach wiedererkannt (10.10.2026)
+
+<a id="rm-705-ein-vor-dem-update-gebuchter-druck-wird-danach-wiedererkannt-10102026"></a>
+<a id="rm-705"></a>
+
+**RM-705 — Der Abdruck der Verbrauchsbuchung änderte sich mit jedem neuen Einstellungsfeld.**
+Gefunden im Review von RM-704 (`reviews-2026-10-10/review_rm704.md`, „Format, Cache und ältere
+Stände“): `filament_usage.prepare` bildet den Abdruck über alle Werte von
+`print_settings_to_data`. Seit 0.5.3 kamen sechs Felder dazu (`support.spare_ledges`,
+`bottom_interface_layers`, `interface_spacing`, `tree_walls`, `cooling.minimum_speed`,
+`support_interface_cooling`; RM-704 bringt `support.tip_diameter`). Derselbe Würfel mit
+denselben Einstellungen ergab unter 0.5.3 und welle3 verschiedene Abdrücke, keiner stand unter
+den Altabdrücken des anderen — nach dem Update auf 0.6.0 hätte jeder Kunde die Wiedererkennung
+seiner Buchungen verloren. Dieser Bruch liegt in keinem Tag (die Felder kamen nach `v0.5.3`)
+und steht deshalb nicht im Changelog. Dort steht, was wirklich neu ist: Buchungen aus 0.5.1
+erscheinen wieder als frühere Buchung zur Prüfung, auch bei *Ohne Rückfrage buchen*. Diesen
+Bruch brachte `51c19d2f0` (`plate_choices` im Abdruck, in `v0.5.2` und `v0.5.3`) — eine
+Behebung (Review RM-705, M1).
+
+**Gemessen an Codekopien der Tags** (`git archive`, Sonden in der Sitzung „Einstellungen nach
+dem Modell“): Die übrigen Werte sind zwischen 0.5.3 und dem Zweig in Wert und Typ gleich, auch
+mit Grundlage aus dem ElegooSlicer. Dort steht aber `cooling.minimum_speed` auf 20 statt der 10
+der Dataclass — eine Regel „neues Feld nur abseits der Dataclass-Vorgabe“ hätte jeden
+Elegoo-Kunden weiter verloren.
+
+**Behoben:** `FINGERPRINT_FIELDS` friert die Felder von 0.5.3 ein. Ein späteres Feld zählt nur,
+wo es vom Herstellerprofil abweichen soll: eigene Wahl oder übernommener Vorschlag, oder ein
+Wert einer Spule, der vom Wert ohne Spule abweicht — dieselbe Auskunft wie
+`handover._for_the_slot` (nach RM-707; zuerst gegen die Vorgabe der Dataclass, Review L2).
+Dazu ein Altabdruck in der Gestalt von 0.5.1 (ohne Brim-, Raftabstand und leere Wahl der
+Platte): Eine Buchung aus 0.5.1 kommt als frühere Buchung zur Prüfung, die 0.5.3 nicht kannte.
+Regel: `.claude/rules/verbrauch.md`.
+
+**Nachweis:** `test_filament_usage_fingerprint_history.py` — Sollwerte aus der Kopie von 0.5.3
+(`158d8f5d…` für den Würfel, `aa373e5e…` für die Buchung) und 0.5.1 (`3cae285a…`, `c62cddf4…`);
+Projekt und Lager in `tests/data` schrieb 0.5.3 selbst. Am Stand `083dab2f6` 7 von 8 rot, danach
+grün. Der Wächter zählt jedes Feld über `all_paths()` und erfasst `support.tip_diameter` nach
+dem Merge von RM-704 ohne Zutun; vier Mutationen der Regel (Wahl, Spule, Altgestalt, ganzer
+Filter) machen ihn rot. Am Kundenweg (Projekt öffnen, Grundlage darunter, neu ansehen) erkennt
+der Zweig Buchungen aus 0.5.2 und 0.5.3 genau, aus 0.5.1 als frühere Buchung, aus 0.5.0 nicht:
+Dort weichen die Tempi der Stufe und der Profilschlüssel ab (`resolve(legacy=True)`), das ist
+kein billiger Altabdruck. Über fünf Drucker, PLA und PETG, Tabelle, ElegooSlicer und
+OrcaSlicer, mit und ohne eigene Wahl gleicht jeder Abdruck dem von 0.5.3. Der Wächter meldet
+alle Felder, die als Grundlage durchrutschen, auf einmal (L3); der Spulentest läuft über alle
+vier Spulengruppen (L1); der Kundenweg rechnet wie die Anwendung über
+`manufacturer.effective` (L4).
+
+**Grenzen** (Review RM-705, M2, gemessen an den zwölf Beispielprojekten aus `v0.5.3`): Der
+Abdruck kippt weiter, wo sich der Druck wirklich oder in seinen Bits ändert.
+- Netzbits: 11 von 12 Beispielen behalten ihren Abdruck, 19 von 21 Körpern sind bitgleich. Die
+  Ausnahme ist `gehaeuse-mit-bausteinen` (Bausteinänderungen, `LIBRARY_VERSION` 23 → 27,
+  Mutternfalle `PartChange` 25 und 26). Ebenso jede druckgleiche Beschleunigung, die Bits
+  verschiebt; Paket D trifft die Beispiele aus 0.5.3 nicht. Umbau auf gespeicherte Eingänge:
+  RM-706.
+- Solidons eigene neue Grundlage eines eingefrorenen Felds: Cura rechnet seit RM-583
+  (`fafcd4841`) `support.z_gap` in ganzen Schichten — Cura 2 von 4 Fällen verschieden (Generic
+  220, Fein 0,2 → 0,12 mm, Entwurf 0,2 → 0,28 mm); K1 auf Standard gleich.
+- Ein Slicer-Update, das einen Wert eines eingefrorenen Felds ändert, wie schon unter 0.5.3.
+
+## RM-707: Spulenwerte aus 0.5.3 überschreiben das Herstellerprofil nicht mehr (10.10.2026)
+
+<a id="rm-707-spulenwerte-aus-053-überschreiben-das-herstellerprofil-nicht-mehr-10102026"></a>
+<a id="rm-707"></a>
+
+**RM-707 — Spulenwerte aus 0.5.3 änderten nach dem Update still den Druck.** Gefunden im Review
+von RM-705 (`reviews-2026-10-10/review_rm705.md`, N1): `serialise._group_from_data` füllte ein
+Feld, das die Spulengruppe einer älteren Datei nicht kannte, mit der Vorgabe der Dataclass, und
+`handover._for_the_slot` schrieb es als Abweichung der Spule an den Slicer. Gemessen am echten
+ElegooSlicer (Würfel, CC2, PLA, Spule aus 0.5.3 mit Düse 215 °C und Lüfter 80 %): Der
+Konfigurationsblock des G-Codes trug `slow_down_min_speed = 10` statt der 20 des
+Herstellerprofils. `cooling.support_interface_cooling` träfe es ebenso, sobald die Grundlage ihn
+einschaltet (Projektwahl, Vorschlag) — am gemessenen Profil steht er aus, vorher wie nachher
+`-1` (Review RM-707, L4). Entstanden mit `5f68e51d8` und
+`fafcd4841`, beide in keinem Tag — deshalb kein Changelog.
+
+**Behoben:** `SlotOverride.inherited` nennt die Felder einer gesetzten Spulengruppe, die die
+Datei nicht kannte. Sie folgen dem Wert ohne Spule (`handover.override_section`, der einzige
+Ort, an dem eine Spule ihre Gruppen anlegt), werden nicht geschrieben und bleiben so über
+Speichern und Öffnen erhalten — ohne Formatschritt, denn ein älterer Leser übergeht fehlende
+Felder ohnehin. Ausnahme ist die Lüfterkurve, die der Leser bewusst aus dem Material ergänzt.
+Der Spulendialog zeigt dort den Projektwert und lässt das Feld geerbt, solange es unverändert
+bleibt; ein übernommener Vorschlag für die Spule nimmt seinen Pfad heraus. Die Spulenklausel
+des Abdrucks (RM-705) fragt jetzt wie `_for_the_slot` gegen den Wert ohne Spule, ohne Slicer
+gerechnet. Nach dem Review: „Alte Filamentwerte übernehmen“ zeigt geerbte Felder ebenfalls als
+Projektwert und lässt sie geerbt (M1), ein Übernehmen ohne Änderung gibt dieselbe Spule zurück
+(L2), der Vorschlag je Spule geht über `handover.with_slot_advice` (L1). Offen für welle4:
+Der Dialog zeigt bei einer Spule anderen Materials oder mit eigenem Filamentprofil den
+Projektwert, gedruckt wird der Wert der Spule ohne Übersteuerung (L3); die Vorbelegung einer
+solchen Spule mit Projektwerten besteht schon in 0.5.3 (N1).
+
+**Nachweis:** `test_slot_override_inherited.py` mit `tests/data/projects/usage_spool_v46.p3d`,
+geschrieben von 0.5.3 — am Stand davor 5 von 7 rot, danach grün; der Abdruck der Buchung
+(`613fd553…` aus der Kopie von 0.5.3) bleibt mit Tabelle und mit Herstellergrundlage gleich.
+Fenstertest `test_print_settings_ui.py::test_a_spool_from_053_shows_and_keeps_the_project_value_in_later_fields`.
+Am echten ElegooSlicer 1.5.3.5 danach `slow_down_min_speed = 20`, die Spule weicht nur noch in
+Düse, erster Schicht, Lüfter und Mindestschichtzeit ab (die Mindestschichtzeit trägt die Spule
+aus 0.5.3 als eigenen Wert, ein Feld von 0.5.3).

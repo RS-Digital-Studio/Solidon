@@ -634,6 +634,29 @@ def test_every_example_carries_the_parts_version_of_the_library() -> None:
     )
 
 
+def test_every_example_carries_the_current_file_format() -> None:
+    """Ändert sich das Dateiformat, werden die Beispiele neu gebaut
+    (`app/examples/CLAUDE.md`) — sie sind keine Migrationsbelege, die stehen in
+    `tests/data/projects/`. Gelesen wird die Zahl in der Datei selbst, nicht am
+    geladenen Dokument: ``load`` migriert und meldet danach immer
+    ``FORMAT_VERSION``. Ohne diese Prüfung blieben alle zwölf Beispiele auf
+    Format 50 stehen, als eine Migration im Zusammenführen zu 50 → 51 wurde.
+    """
+    from app.core.scene.migrations import FORMAT_VERSION
+    from app.core.scene.project import project_data
+
+    stale = [
+        f"{entry.id}: {version}"
+        for entry in examples.EXAMPLES
+        for version in (project_data(examples.directory() / entry.filename)["format_version"],)
+        if version != FORMAT_VERSION
+    ]
+    assert not stale, (
+        f"Beispiele hinter dem Dateiformat {FORMAT_VERSION}: {stale} — "
+        "neu erzeugen: python tools/make_examples.py"
+    )
+
+
 def test_every_example_can_still_be_built() -> None:
     """Nicht die eingecheckte Datei prüfen, sondern das Werkzeug, das sie macht.
 

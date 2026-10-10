@@ -174,7 +174,7 @@ ist `other` — Datei nur ins Fenster (§29), STL um den Ursprung, jedes Prädik
 (`_refuse_untranslated`, `only_opens`). Gleiche Familie heißt nicht gleicher
 Stand: Was ein Programm nicht kennt, steht je Programmmarke in
 `NOT_TAKEN_BY_PROGRAM` und `PROGRAM_ALIASES` (`takes(…, program)`,
-`for_program`), was es nicht ausgibt, in `OMITTED_FROM_GCODE`. Rat
+`for_program`, `unknown_in_file`), was es nicht ausgibt, in `OMITTED_FROM_GCODE`. Rat
 (`writer.part_advice`, `split_for_parts`), Beilage (`prusa_values`) und Dialog
 fragen es. Aufzählungen übersetzt `PROGRAM_VALUES` je Programm; nicht
 verfügbare Wahlen stehen mit Ersatz und Grund in `NOT_OFFERED_BY_PROGRAM`.

@@ -1647,6 +1647,126 @@ def test_filament_dialog_builds_one_groupwise_override(qt_app: QApplication) -> 
     assert dialog.override() is None, "ein sichtbarer Knopf nimmt alle eigenen Werte zurück"
 
 
+def test_confirming_an_unchanged_053_spool_returns_the_same_spool(
+    qt_app: QApplication,
+) -> None:
+    """Übernehmen ohne Änderung ändert das Projekt nicht (Review RM-707, L2)."""
+    from app.core.scene.serialise import _override_from_data
+
+    base = print_settings.resolve(profiles.make_profile("centauri-carbon-2", "pla"))
+    settings = print_settings.with_path(base, "cooling.minimum_speed", 20.0)
+    slot = MaterialSlot(index=1, name="PLA Weiß", colour=(1.0, 1.0, 1.0))
+    stored = {
+        "name": "PLA Weiß",
+        "colour": [1.0, 1.0, 1.0],
+        "material": None,
+        "material_type": None,
+        "cooling": {
+            "fan_speed": 0.5,
+            "minimum_fan_speed": 0.5,
+            "fan_below_layer_time": 30.0,
+            "bridge_fan_speed": 1.0,
+            "disable_first_layers": 1,
+            "minimum_layer_time": 8.0,
+        },
+    }
+    existing = _override_from_data(stored, "pla")
+    assert existing is not None and "cooling.minimum_speed" in existing.inherited
+    dialog = FilamentOverrideDialog(slot, settings, existing)
+    try:
+        assert dialog.override() == existing
+    finally:
+        dialog.reject()
+        qt_app.processEvents()
+        dialog.deleteLater()
+
+
+def test_taking_the_values_of_an_old_spool_keeps_the_project_value_in_later_fields(
+    qt_app: QApplication,
+) -> None:
+    """„Alte Filamentwerte übernehmen“ zeigt dort den Projektwert und lässt das Feld
+    geerbt — sonst übersteuerte die Spule mit der Vorgabe der Dataclass (Review RM-707, M1)."""
+    from app.core.scene.serialise import _override_from_data
+
+    base = print_settings.resolve(profiles.make_profile("centauri-carbon-2", "pla"))
+    settings = print_settings.with_path(base, "cooling.minimum_speed", 20.0)
+    # Eine Spule aus Format 19: ohne Materialkennung, die Kühlgruppe mit vier Feldern.
+    stored = {
+        "name": "PLA Weiß",
+        "colour": [1.0, 1.0, 1.0],
+        "material": None,
+        "material_type": None,
+        "cooling": {
+            "fan_speed": 0.8,
+            "bridge_fan_speed": 1.0,
+            "disable_first_layers": 1,
+            "minimum_layer_time": 8.0,
+        },
+    }
+    legacy = _override_from_data(stored, "pla")
+    assert legacy is not None
+    settings = replace(settings, slot_overrides=(legacy,))
+    slot = MaterialSlot(index=1, name="PLA Weiß", colour=(1.0, 1.0, 1.0), material_type="PLA")
+    assert handover.override_for(settings, slot) is None
+    dialog = FilamentOverrideDialog(slot, settings, None)
+    try:
+        dialog._take_legacy_values()
+        editor = dialog.editors["cooling.minimum_speed"]
+        assert isinstance(editor, BoundedSpin)
+        assert editor.value() == pytest.approx(20.0)
+        taken = dialog.override()
+        assert taken is not None and "cooling.minimum_speed" in taken.inherited
+        updated = handover.with_slot_override(settings, slot, taken)
+        profile = profiles.make_profile("centauri-carbon-2", "pla")
+        mine = handover.settings_for_slot(updated, profile, slot)
+        assert mine.cooling.minimum_speed == pytest.approx(20.0)
+        own = handover._for_the_slot(frozenset(), updated, slot, profile)
+        assert own is not None and "cooling.minimum_speed" not in own
+    finally:
+        dialog.reject()
+        qt_app.processEvents()
+        dialog.deleteLater()
+
+
+def test_a_spool_from_053_shows_and_keeps_the_project_value_in_later_fields(
+    qt_app: QApplication,
+) -> None:
+    """Was die Spule nicht übersteuert, zeigt der Dialog als Projektwert und lässt
+    es dabei; erst ein geänderter Wert gehört ihr (RM-707)."""
+    base = print_settings.resolve(profiles.make_profile("centauri-carbon-2", "pla"))
+    settings = print_settings.with_path(base, "cooling.minimum_speed", 20.0)
+    slot = MaterialSlot(index=1, name="PLA Weiß", colour=(1.0, 1.0, 1.0))
+    existing = SlotOverride(
+        name=slot.name,
+        colour=slot.colour,
+        cooling=replace(settings.cooling, fan_speed=0.8, minimum_speed=10.0),
+        inherited=frozenset({"cooling.minimum_speed"}),
+    )
+    dialog = FilamentOverrideDialog(slot, settings, existing)
+    try:
+        editor = dialog.editors["cooling.minimum_speed"]
+        assert isinstance(editor, BoundedSpin)
+        assert editor.value() == pytest.approx(20.0)
+        kept = dialog.override()
+        assert kept is not None and kept.cooling is not None
+        assert kept.cooling.fan_speed == pytest.approx(0.8)
+        assert "cooling.minimum_speed" in kept.inherited
+        assert handover.override_section(
+            kept, "cooling", settings.cooling
+        ).minimum_speed == pytest.approx(20.0)
+
+        editor.setValue(12.0)
+        own = dialog.override()
+        assert own is not None and "cooling.minimum_speed" not in own.inherited
+        assert handover.override_section(
+            own, "cooling", settings.cooling
+        ).minimum_speed == pytest.approx(12.0)
+    finally:
+        dialog.reject()
+        qt_app.processEvents()
+        dialog.deleteLater()
+
+
 def test_filament_override_refuses_a_number_until_it_is_corrected(
     qt_app: QApplication,
 ) -> None:
@@ -3181,6 +3301,19 @@ def test_slicer_hints_preserve_the_colour_last_chosen_in_the_dialog(
         assert dialog.settings.filament.colour == colour
         assert colour.upper() in editor.toolTip()
         assert editor.accessibleDescription() == own_description
+
+
+def test_the_cura_bridge_flow_field_says_cura_has_its_own(dialog: PrintSettingsDialog) -> None:
+    """Review RM-587, L3: Cura hat einen Brückenfluss, nur für seine eigenen
+    Brückenbahnen. Das ausgegraute Feld sagt das; dicke Brücken kennt Cura nicht."""
+    dialog._slicer_path = Path("CuraEngine.exe")
+    dialog._mark_fields_this_slicer_ignores()
+
+    flow = dialog._editors["shell.bridge_flow"]
+    assert not flow.isEnabled()
+    assert "eigenen Brückenfluss" in flow.toolTip()
+    thick = dialog._editors["shell.thick_bridges"]
+    assert "kennt diese Einstellung nicht" in thick.toolTip()
 
 
 @pytest.mark.parametrize(
@@ -12737,6 +12870,66 @@ def test_declining_the_tree_asks_the_advice_again(
     assert asked[0] != before, "die Abwahl gehört zum Auftrag des Arbeiters"
 
 
+@pytest.mark.parametrize(
+    "key",
+    ["support.bridges", "support.spare_ledges", "support.placement", "support.block_channels"],
+)
+def test_declining_the_bridge_support_asks_the_advice_again(
+    dialog: PrintSettingsDialog, qt_app: QApplication, monkeypatch: pytest.MonkeyPatch, key: str
+) -> None:
+    """Review RM-587, M4: Ohne Brückenstütze oder freie Ränder druckt die Brücke frei,
+    und erst dann schlägt der Rat dicke Bahnen und weniger Fluss vor. Die Abwahl kam
+    beim Arbeiter nie an — der Dialog gab nur die Stützart weiter."""
+    asked: list[object] = []
+    monkeypatch.setattr(dialog, "_refresh_advice", lambda: asked.append(dialog._advice_context()))
+    item = QTreeWidgetItem(["", ""])
+    item.setData(0, Qt.ItemDataRole.UserRole, key)
+    item.setCheckState(0, Qt.CheckState.Unchecked)
+
+    dialog._advice_checked(item, 0)
+    QCoreApplication.processEvents()
+
+    assert len(asked) == 1
+    assert dialog._declined_advice() == frozenset({key})
+
+
+def test_a_declined_bridge_support_gives_the_bridge_thick_lines_in_the_dialog(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Review RM-587, M4, Dialogweg: Am Kobra 2 stützt OrcaSlicers Herstellerprofil
+    Brücken nicht. Der Rat schlägt die Brückenstütze vor; wählt der Kunde sie ab,
+    fragt der Arbeiter mit der Abwahl und bietet für die freie 36-mm-Brücke dicke
+    Bahnen und 0,9 Fluss an."""
+    monkeypatch.setattr(handover, "_native_process", lambda _setup: {})
+    profile = profiles.make_profile("anycubic-kobra-2", "pla")
+    settings = print_settings.with_choice(
+        print_settings.resolve(profile, "standard"), "support.bridges", False
+    )
+    raw = trimesh.load(
+        Path(__file__).parent / "data" / "meshes" / "bridge_two_end_supports.ply", force="mesh"
+    )
+    raw.apply_translation((0.0, 0.0, -raw.bounds[0][2]))
+    objects = (SceneObject(id="obj_1", name="Brücke", mesh=MeshData.of(raw)),)
+    setup = handover.SlicerSetup(executable=Path("orca-slicer.exe"), flavour="orca")
+
+    def rows(declined: frozenset[str]) -> dict[str, object]:
+        found: list[list[SettingAdvice]] = []
+        worker = print_dialog._AdviceWorker(
+            objects, settings, profile, setup, {}, (), (), {}, flavour="orca", declined=declined
+        )
+        worker.done.connect(lambda entries, _measured: found.append(entries))
+        worker.work()
+        assert found, "der Arbeiter liefert"
+        return {entry.path: entry.value for entry in found[-1]}
+
+    offered = rows(frozenset())
+    assert offered.get("support.bridges") is True
+    assert "shell.thick_bridges" not in offered
+    free = rows(frozenset({"support.bridges"}))
+    assert free.get("shell.thick_bridges") is True
+    assert free.get("shell.bridge_flow") == pytest.approx(0.9)
+
+
 @pytest.mark.parametrize(("organic", "said"), [(frozenset({"tree"}), True), (frozenset(), False)])
 def test_the_gap_field_asks_the_trees_the_advice_asked(
     dialog: PrintSettingsDialog, organic: frozenset[str], said: bool
@@ -12752,6 +12945,56 @@ def test_the_gap_field_asks_the_trees_the_advice_asked(
     dialog._mark_fields_this_slicer_ignores()
 
     assert ("Baumstützen" in dialog._editors["support.z_gap"].toolTip()) is said
+
+
+def test_curas_gap_field_names_the_bottom_gap_in_the_band_of_the_material(
+    dialog: PrintSettingsDialog,
+) -> None:
+    """Das Feld nennt Curas Abstand unten so, wie die Übergabe ihn wählt: im Band
+    des Materials (RM-628, M3), gemessen in Cura 5.13 — PLA mit 0,10 bei 0,08er
+    Schichten druckt unten 0,16, nicht eine Schicht 0,08 unter dem Mindestwert
+    0,10."""
+    assert dialog.session.profile.material.id == "pla"
+    dialog._slicer_path = Path("CuraEngine.exe")
+    for path, value in (
+        ("layers.layer_height", 0.08),
+        ("support.style", "grid"),
+        ("support.placement", "everywhere"),
+        ("support.z_gap", 0.1),
+    ):
+        dialog.settings = print_settings.with_choice(dialog.settings, path, value)
+
+    dialog._mark_fields_this_slicer_ignores()
+
+    said = dialog._editors["support.z_gap"].toolTip()
+    assert "0,16 mm" in said, said
+
+
+def test_curas_gap_field_asks_the_material_of_the_printing_spool(
+    dialog: PrintSettingsDialog, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Der Satz am Feld fragt das Material wie der Export (RM-628, L-a): Eine
+    PETG-Spule im PLA-Auftrag druckt mit 0,14 bei 0,1er Schichten unten 0,20 —
+    im Band von PETG (ab 0,12) —, nicht 0,10 wie PLA."""
+    assert dialog.session.profile.material.id == "pla"
+    dialog._slicer_path = Path("CuraEngine.exe")
+    monkeypatch.setattr(
+        dialog,
+        "_plate_slots",
+        lambda **_kwargs: [MaterialSlot(index=0, name="Spule", material_type="PETG")],
+    )
+    for path, value in (
+        ("layers.layer_height", 0.1),
+        ("support.style", "grid"),
+        ("support.placement", "everywhere"),
+        ("support.z_gap", 0.14),
+    ):
+        dialog.settings = print_settings.with_choice(dialog.settings, path, value)
+
+    dialog._mark_fields_this_slicer_ignores()
+
+    said = dialog._editors["support.z_gap"].toolTip()
+    assert "0,20 mm" in said, said
 
 
 def test_the_field_says_which_parts_get_a_suggestion_and_what_the_rest_prints(

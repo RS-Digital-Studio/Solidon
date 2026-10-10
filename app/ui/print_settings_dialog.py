@@ -112,6 +112,7 @@ from app.core.types import (
     Document,
     Finding,
     HandoverKind,
+    MaterialProfile,
     MaterialSlot,
     PrinterProfile,
     PrintSettings,
@@ -797,7 +798,8 @@ class FilamentOverrideDialog(QDialog):
             body = QWidget(section)
             form = QFormLayout(body)
             form.setContentsMargins(WIDE + TIGHT, 0, 0, NORMAL)
-            source = own_section or getattr(settings, group)
+            # Was die Spule nicht übersteuert, zeigt den Projektwert (RM-707).
+            source = handover.override_section(existing, group, getattr(settings, group))
             for field in (
                 entry for entry in FILAMENT_FIELDS if entry.path.partition(".")[0] == group
             ):
@@ -933,7 +935,9 @@ class FilamentOverrideDialog(QDialog):
         self.existing = self._legacy
         for group, box in self.groups.items():
             own = getattr(self._legacy, group)
-            source = own or getattr(self.settings, group)
+            # Was die alte Spule nicht übersteuerte, zeigt den Projektwert —
+            # derselbe Weg wie beim Öffnen des Dialogs (RM-707, Review M1).
+            source = handover.override_section(self._legacy, group, getattr(self.settings, group))
             for field in FILAMENT_FIELDS:
                 section, _, name = field.path.partition(".")
                 if section == group:
@@ -979,6 +983,7 @@ class FilamentOverrideDialog(QDialog):
     def override(self) -> SlotOverride | None:
         """Die vier Gruppen aus den Feldern, oder Projektwerte für alle."""
         values: dict[str, Any] = {}
+        inherited: set[str] = set()
         for group in FILAMENT_GROUPS:
             if not self.groups[group].isChecked():
                 continue
@@ -989,7 +994,24 @@ class FilamentOverrideDialog(QDialog):
                 for field in FILAMENT_FIELDS
                 if field.path.partition(".")[0] == group
             }
-            values[group] = replace(section, **changed)
+            # Ein Feld, das die Spule nicht übersteuerte und das unverändert
+            # den Projektwert zeigt, übersteuert sie weiter nicht (RM-707). Es
+            # behält seinen Rohwert: Ein Übernehmen ohne Änderung gibt dieselbe
+            # Spule zurück und ändert das Projekt nicht (Review RM-707, L2).
+            kept: set[str] = set()
+            if self.existing is not None and previous is not None:
+                current = getattr(self.settings, group)
+                for path in self.existing.inherited:
+                    owner, _dot, name = path.partition(".")
+                    if owner == group and (
+                        name not in changed
+                        or print_settings.same_value(changed[name], getattr(current, name))
+                    ):
+                        inherited.add(path)
+                        kept.add(name)
+            values[group] = replace(
+                section, **{name: value for name, value in changed.items() if name not in kept}
+            )
         if not values:
             return None
         return SlotOverride(
@@ -997,6 +1019,7 @@ class FilamentOverrideDialog(QDialog):
             colour=self.slot.colour,
             material=self.slot.material,
             material_type=self.slot.material_type,
+            inherited=frozenset(inherited),
             **values,
         )
 
@@ -6258,6 +6281,19 @@ class PrintSettingsDialog(QDialog):
             ]
         )
 
+    def _plate_material(self) -> MaterialProfile:
+        """Das Material, mit dem die gewählten Platten drucken — dieselbe Frage wie
+        der Export (``handover.slot_material``): die erste Spule samt gewähltem
+        Filamentprofil, ohne Spule das des Auftrags (RM-628)."""
+        slots = self._plate_slots()
+        # Ohne Szene kommt die alte Wahl als Liste, die kürzer sein kann.
+        chosen = self._profiles_for(slots)
+        bound = [
+            replace(slot, material=(chosen[index] if index < len(chosen) else "") or slot.material)
+            for index, slot in enumerate(slots)
+        ]
+        return handover.slot_material(self.session.profile, bound, self._setup_snapshot())
+
     def _profiles_for(self, slots: Sequence[MaterialSlot]) -> tuple[str, ...]:
         """Ordnet die global gespeicherten Profile den angefragten Spulen zu.
 
@@ -6718,10 +6754,18 @@ class PrintSettingsDialog(QDialog):
         # Flatpak dahintersteht, und kostete je Profilantwort 0,27 s (932 Aufrufe
         # an Roberts ElegooSlicer, 08.10.2026).
         name = _slicer_title(self._slicer_path) if self._slicer_path else ""
+        # Das Material nur für Cura, und einmal: Dort nennt der Satz am Abstand
+        # die Unterseite im Band der Spule, die druckt (RM-628).
+        material = self._plate_material() if flavour == "cura" else self.session.profile.material
         for path, editor in self._editors.items():
             ignored = flavour is not None and not slicer_keys.takes(flavour, path, program)
+            own_reason = (
+                slicer_keys.not_taken_reason(flavour, path) if flavour is not None else None
+            )
             reason = (
-                str(
+                str(own_reason)
+                if ignored and own_reason is not None
+                else str(
                     tr("{slicer} kennt diese Einstellung nicht — der Wert bleibt ohne Wirkung.")
                 ).replace("{slicer}", name)
                 if ignored
@@ -6730,10 +6774,17 @@ class PrintSettingsDialog(QDialog):
             # Mit den Einstellungen: Curas Lüfterhochlauf weicht erst ab zwei
             # Schichten ohne Lüfter ab, und nur dann steht ein Satz da. Ebenso
             # eine Wahl, die das Programm nicht kennt (RM-480). Unter Bäumen mit
-            # derselben Auskunft wie der Rat (RM-622).
+            # derselben Auskunft wie der Rat (RM-622), Curas Abstand unten in den
+            # Grenzen des Materials wie die Übergabe (RM-628).
             specific = (
                 slicer_keys.limitation(
-                    flavour, path, self.settings, program, self._organic, hollow=self._hollow_trees
+                    flavour,
+                    path,
+                    self.settings,
+                    program,
+                    self._organic,
+                    material=material,
+                    hollow=self._hollow_trees,
                 )
                 if flavour is not None
                 else None
@@ -8659,17 +8710,9 @@ class PrintSettingsDialog(QDialog):
                 or entry.effective is None
             ):
                 continue
-            group = entry.path.partition(".")[0]
-            previous = handover.override_for(self.settings, entry.slot) or SlotOverride()
-            effective = replace(
-                entry.effective,
-                **{
-                    group: getattr(previous, group) or getattr(entry.effective, group),
-                },
+            self.settings = handover.with_slot_advice(
+                self.settings, entry.slot, entry.effective, entry.path, entry.value
             )
-            updated = print_settings.with_path(effective, entry.path, entry.value)
-            override = replace(previous, **{group: getattr(updated, group)})
-            self.settings = handover.with_slot_override(self.settings, entry.slot, override)
         self._load_into_editors()
         self._refresh_advice()
         # **Der Knopf sagt, was er getan hat.** Die Felder änderten sich

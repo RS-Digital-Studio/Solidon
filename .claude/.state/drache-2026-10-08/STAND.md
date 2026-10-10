@@ -40,6 +40,7 @@ Interpreter des Hauptklons.
 | `sonde_offene_stuecke.py` · `sonde_kanten.py` · `sonde_reichweite.py` · `sonde_boegen.py` `<wurzel> <netz.stl>` | offene Überhänge nach Fläche, Breite, Reichweite über ihre Wurzel, ob sie sich schließen (RM-582, Eiffelturm) |
 | `elegoo_variante.py <übergabe.3mf> <ordner> <schlüssel=wert…>` | eine Elegoo-Übergabe mit geänderten Prozesswerten neu schneiden (Brücken nicht stützen: kaum Wirkung, 831 → 826 m) |
 | `seitenbild.py <netz.stl> <bild.png> [<z,…>]` | Schattenriss von der Seite mit Höhenmarken |
+| `bruecken_je_teil.py <wurzel> <ausgabe> <fall> <programm…>` | RM-587: zwei Teile auf einer Platte, nur das linke mit Brückenstütze, dicker Brücke, Brückenfluss, Zusatzwänden oder Umkehr (kontrolliert) oder mit echtem Rat (`nat-…`); je Teil Stütze, Brückenbahn, Förderung je mm, Tempo, Lüfter und Drehwechsel, getrennt an den Objektmarken. `SONDE_DRUCKER=orca:anycubic-kobra-2`, `SONDE_KURZ`, `SONDE_OHNE_HERSTELLER`, `SONDE_NUR_MESSEN` |
 
 `gcode_stuetzen.py` meldet drei Anteile: alle Überhangstücke, die außerhalb der
 Kanaldecken (`open_share`, nach der Kanalfrage der Code-Wurzel) und seit RM-582 die

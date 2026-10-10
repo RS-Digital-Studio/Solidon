@@ -433,10 +433,11 @@ Doppelklick liegt unter `tools/start-solidon3d.cmd` eine Verknüpfung.
 Je Änderung laufen die betroffenen Tests, vor jedem Stand, der nach `main`
 geht, das Entwicklungstor aus Suite, Ruff, Formatprüfung und mypy. Fenster-,
 Renderer- und Leistungsprüfungen laufen lokal nur beim Release. In der CI
-fährt jeder Push nach `main` die Kernsuite und die Rendererprüfungen ohne
+fährt ein Push nach `main` die Kernsuite und die Rendererprüfungen ohne
 Fenster auf allen vier Paketplattformen, dazu die Fenster- und Slicertests,
 die seine Änderungen berühren; der Release-Tag fährt alle Fensterdateien
-unter Windows und baut die Pakete. Zweige lösen keine CI aus.
+unter Windows und baut die Pakete. Zweige und ein Push, der nur Unterlagen
+ändert, lösen keine CI aus.
 
 ### Lokale Sprachmodelle messen
 
