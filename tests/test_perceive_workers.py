@@ -165,3 +165,41 @@ def test_the_round_splits_by_weight_without_losing_a_patch() -> None:
         ranges = parallel.split(weights, parts)
         assert len(ranges) <= parts
         assert [index for part in ranges for index in part] == list(range(len(weights)))
+
+
+def _asked_inside_detect(mesh: MeshData, weights: list[float]) -> dict[str, Any]:
+    """Eine Runde, wie ``detect`` sie fragt — mit erlaubten Arbeitern."""
+    allowed = features._WORKERS_ALLOWED.set(True)
+    try:
+        return features._asked_by_workers(
+            mesh.raw,
+            "classify",
+            [[0, 1, 2]] * len(weights),
+            weights,
+            set(),
+            None,
+            features._UNHEARD,
+        )
+    finally:
+        features._WORKERS_ALLOWED.reset(allowed)
+
+
+def test_a_light_round_stays_in_this_process(workers: Any) -> None:
+    """Unter ``AHEAD_FROM_WEIGHT`` kostet der Weg zu den Arbeitern mehr als die Runde."""
+    parallel.use_workers(True)
+    mesh = features._one_body(_corpus("post_with_fillet.stl"))
+    before = parallel.statistics().get("tasks", 0)
+
+    assert _asked_inside_detect(mesh, [1.0] * 40) == {}
+    assert parallel.statistics().get("tasks", 0) == before
+
+
+def test_a_body_with_a_skin_asks_no_worker(workers: Any, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Ein Fleck über der Gedächtnisgrenze hält die ganze Runde im Prozess."""
+    mesh = features._one_body(_corpus("post_with_fillet.stl"))
+    monkeypatch.setattr(features, "REMEMBERED_PATCH_FACES", 0)
+    monkeypatch.setattr(features, "REMEMBERED_PATCH_SHARE", 0.0)
+    before = parallel.statistics().get("tasks", 0)
+
+    assert _asked_inside_detect(mesh, [500.0] * 40) == {}
+    assert parallel.statistics().get("tasks", 0) == before

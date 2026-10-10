@@ -560,3 +560,69 @@ Messbank nach.
   querstehenden Flächen. `planar_patch` je Fläche liest nur ihre Dreiecke, aber der
   Schlüssel kostete so viel wie die Prüfung; gerechnet.
 
+## Nachtrag P5, Abnahme und Folgepunkte (09./10.10.2026)
+
+**P5 ist das „gebündelt rechnen“ aus Roberts Vorgabe vom 09.10., nicht die große Fassung aus
+§11.** Klebstufen über die Körpergrenze (Facetten, Krümmungssprünge, Flecken mit ihrer
+Nummerierung) sind nicht gebaut. Gebaut ist, was am ganzen Körper rechnet und dieselben
+Antworten schneller gibt, je mit Zweikampf alt gegen neu Bit für Bit: Facettenmitten über
+`perceive/grouped.py` (Nachbau der paarweisen Summe von NumPy), Flächenrollen über einen
+Umrissbaum statt je Paar, die Durchsicht der Langlöcher über einen Kugelbaum, die Flutung der
+Langlochschale als Maske, die Zusammenlegung je Paar einmal, die Fleckabdrücke ohne Sortierung.
+Dazu drei Korrekturen am Gedächtnis selbst:
+
+- **`classify` merkte ohne `dicht`, `umlauf`, `deckungsgleich`** (A1 P4: 7 Zustände anders,
+  BowlingGame, 宠物便便器). Die Körperzahlen stehen jetzt im Schlüssel wie bei der Lesung.
+- **Erkennungsschlüssel** `_detection_key`: Ein bewegtes Netz trägt Maße vom Quellnetz mit, ein
+  frisch gebautes mit denselben Ecken rechnet sie; unter dem Netzabdruck allein erbte der
+  frische Zwilling die Erkennung des bewegten (in v0.5.0 bis v0.5.2 enthalten).
+- **Ein Fleck so groß wie eine Freiformhaut merkt nichts** (`REMEMBERED_PATCH_SHARE`,
+  `REMEMBERED_PATCH_FACES`): Sein Abdruck kostete kalt am Drachen und am Spiderman ein Zehntel
+  der Erkennung, und ein Schritt an einer Figur ändert die Haut fast immer. Der Preis steht
+  bei A4: Der Spiderman mit zwei vertauschten Dreiecken (die künstliche Untergrenze aus §4.2)
+  liest seine Haut neu.
+
+Außerdem kommt in den Stapel `_screened_fits` nur, was das Gedächtnis nicht schon
+beantwortet (`_Round.answered`), und die Runde merkt sich ihre Schlüssel je Fleck.
+
+**Abnahme (§10), Stand `bdf99067f`:**
+
+- **A1:** 3 386 Zustände, 0 anders (Stand `428ff99ce`, alle 230 Fälle); Kontrolle mit
+  `--bis-anders` über 219 Fälle ohne Abweichung; Endstand unten.
+- **Gegenprobe:** belegt durch die Messbank (`ecken`, `diagonale`, `flaechen`) oder je einen Test
+  (`ring`, `rueckfrage`, `dicht`, `normalen`, `eckennummern`, `ursprung`, `winkel`, `runde`,
+  `deckungsgleich`). `umlauf` ändert keine Antwort: Die Lesung wählt an ihm nur zwischen
+  schnellem Weg und Einzelweg, und wo die beiden auseinandergehen könnten, ändert sich der Ring
+  im Abdruck schon. Er bleibt als Sicherung im Schlüssel.
+- **A2:** Namen und `object_hash` in allen Zuständen gleich, Zuordnungsfragen gleich.
+- **A3:** Suite-Teilmenge grün, `test_platform_identity` grün (lokal); die CI fährt die übrigen
+  Plattformen beim Weg nach `main`.
+- **A4** (CPU, mit Vorrang, drei Runden im Wechsel, Stand `bdf99067f`): Ständer 0,66,
+  Eiffelturm 0,62, Spiderman 0,94, Gartenschlauchhalter 0,59, wirkungslose Boolesche 0 s.
+  **Ständer, Eiffelturm und Spiderman verfehlt**, Gartenschlauchhalter und Boolesche erreicht.
+  Nach einem Schritt trifft das Gedächtnis fast jeden Fleck; was bleibt, rechnet am ganzen
+  Körper — Langlöcher, Bohrungsdurchgang, Wendeln, Facettenurteil, am Ständer zusammen rund
+  4 s. Die Schätzung in §11 („Boden“ 0,29) nahm diese Stufen zu klein an. Weiter kommt nur
+  die große Fassung von P5 (Klebstufen über die Körpergrenze) — eigener Punkt mit Konzept.
+  Der Spiderman liest seine Haut nach den zwei vertauschten Dreiecken neu (siehe oben).
+- **A5** (kalte Erkennung der zehn Paket-L-Modelle, mit Vorrang, Median aus drei im Wechsel,
+  Stand `bdf99067f`): Summe −1,1 %; Ständer +1,7 %, Spiderman +1,7 %, Drache +0,9 %, die
+  übrigen großen −2,6 bis −12,5 %. Kumiko (0,12 s) und Lochwand (0,52 s) liegen mit +13 % und
+  +12 % bei ein bis vier Takten der Uhr (15,6 ms). Gehaltene Antworten am Eiffelturm nach
+  acht Bohrungen 63,6 → 60,5 MB.
+- **A6:** Tests je neuer Frage und je Schlüsselteil (`test_fit_stability.py`).
+
+**Was danach kam:** RM-695 legt die ganze Erkennung je Netz im Plattencache ab (anders als §12
+erwog: nicht das Gedächtnis je Fleck, sondern das fertige Ergebnis, Bit für Bit). Ein
+gespeichertes Projekt öffnet nach einem Neustart ohne Erkennung, am Eiffelturm 29,7 → 1,4 s.
+RM-637 verteilt drei Runden auf Arbeiter, die unter denselben Schlüsseln vorrechnen; die Runde
+läuft unverändert und findet ihre Antworten (Regel in `schichtanalyse.md`). Erste Erkennung im
+frischen Prozess, im Wechsel mit und ohne Arbeiter (drei Runden, Vorrang): Ständer 15,0 → 13,0 s,
+Eiffelturm 35,1 → 23,8 s Wanduhr bei gleichem Ergebnis; Besteckkasten, Würfel, Besenhalter,
+Spiderman und Drache fragen keine Arbeiter (Runde zu leicht oder Haut über der
+Gedächtnisgrenze) und rechnen wie zuvor. Mit stehenden Arbeitern einer laufenden Sitzung:
+Ständer 14,6 → 9,8 s, Eiffelturm 32,4 → 18,1 s.
+
+**A1 am Endstand** (`--bis-anders`, 227 Fälle mit 3 619 Zuständen, Arbeiter aus): 2 837
+nicht getragene Zustände gleich der Kopie ohne Gedächtnis, keiner anders.
+

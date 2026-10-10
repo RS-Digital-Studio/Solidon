@@ -1508,15 +1508,14 @@ def detect(
 
     share = _Share(progress)
     mesh = _one_body(mesh)
-    # Die Arbeiter starten und bauen ihre Kopie des Körpers, während hier noch
-    # Ebenen und Flecken gesucht werden (RM-637); bis zur ersten Runde stehen
-    # sie bereit.
-    prepared = _prepare_workers(mesh.raw)
+    # Arbeiter rechnen nur in diesem Durchgang mit (RM-637), und danach lassen
+    # sie den Körper los.
+    allowed = _WORKERS_ALLOWED.set(True)
     try:
         return _detected(mesh, key, share, check_cancelled, store)
     finally:
-        if prepared:
-            parallel.release()
+        _WORKERS_ALLOWED.reset(allowed)
+        parallel.release()
 
 
 def _detected(
@@ -2933,20 +2932,40 @@ def _asked_by_workers(
     """
     if not _ACROSS_BODIES[0] or not items:
         return {}
-    token = _detection_key(MeshData(raw=body))
-    count = parallel.worthwhile(len(body.faces), len(items))
-    if count <= 0 or not parallel.prepared(token):
+    whole = [item[0] for item in items] if kind == "pieces" else items
+    if not all(_worth_remembering(body, list(patch)) for patch in whole):
+        # Eine Haut über der Gedächtnisgrenze (eine Figur, ein Scan): Sie kostet
+        # hier das meiste, und an ihr hilft kein Arbeiter — ihre Antwort käme
+        # nicht zurück. Die übrigen Flecken rechnet der Stapel hier billig, und
+        # jeder Arbeiter baute den großen Körper umsonst auf (Drache: 8 s Warten
+        # für dieselbe Rechenzeit im Prozess).
         return {}
-    if kind == "classify":
-        # Zusammenhängend in der Folge der Runde: Deckungsgleiche Flecken landen
-        # beim selben Arbeiter, der den Zustand der Runde fortschreibt wie hier.
-        parts: Sequence[Sequence[int]] = parallel.split(
-            weights, parallel.chunk_count(len(items), count)
-        )
-    else:
-        # Jeder Fleck für sich, der schwerste zuerst: Wer fertig ist, nimmt den
-        # nächsten — ein großer Verbund hält sonst einen ganzen Teil auf.
-        parts = [[index] for index in sorted(range(len(items)), key=lambda at: -weights[at])]
+    if sum(weights) < parallel.least_weight():
+        # Eine kleine Runde rechnet hier schneller, als der Weg zu den Arbeitern
+        # kostet (Würfel, Besteckkasten: langsamer mit Arbeitern).
+        return {}
+    if not _WORKERS_ALLOWED.get():
+        return {}
+    count = parallel.worthwhile(len(body.faces), len(items))
+    if count <= 0:
+        return {}
+    token = _detection_key(MeshData(raw=body))
+    if not parallel.prepared(token):
+        # Erst hier, wo eine Runde sie braucht: Arbeiter, die beim Start jeder
+        # großen Erkennung anliefen, bremsten Besteckkasten, Besenhalter und
+        # Drachen, an denen keine Runde etwas fragt (gemessen im Wechsel).
+        parallel.warm(count)
+        if not parallel.prepare(_worker_arrays(body), token):
+            return {}
+    # Ausgewogene Fächer, die schwersten zuerst verteilt, je Fächer in der Folge
+    # der Runde: Ein zusammenhängender Teil hielt am Drachen die Runde 23 s auf
+    # (die großen Flecken alle bei einem Arbeiter), ein Fleck je Aufgabe ließ
+    # den Stapel leer — jeder Lauf ging an den echten Löser.
+    # Je Fächer genug Flecken für den Stapel (``refine.MIN_BATCH``): darunter
+    # ginge jeder Kegel- und Ringlauf an den echten Löser. Die Stückrunde lebt
+    # von der tangentialen Trennung, nicht vom Stapel.
+    least = 1 if kind == "pieces" else refine.MIN_BATCH
+    parts = parallel.bins(weights, parallel.chunk_count(len(items), count, least))
     held = frozenset(shapes)
     tasks = [
         parallel.Task(kind, tuple(items[index] for index in part), held, skin, token)
@@ -3008,19 +3027,10 @@ def _worker_arrays(body: trimesh.Trimesh) -> dict[str, np.ndarray]:
     return arrays
 
 
-def _prepare_workers(body: trimesh.Trimesh) -> bool:
-    """Arbeiter für diesen Körper starten und ihm seine Kopie schicken — ohne zu warten.
-
-    Ob es Arbeiter gibt, entscheidet die Größe (:func:`parallel.worthwhile`); wie
-    viele Flecken kommen, weiß hier noch niemand. ``False``: keine Arbeiter.
-    """
-    if not _ACROSS_BODIES[0]:
-        return False
-    count = parallel.worthwhile(len(body.faces), parallel.MOST_WORKERS * parallel.PATCHES_PER_TASK)
-    if count <= 0:
-        return False
-    parallel.warm(count)
-    return parallel.prepare(_worker_arrays(body), _detection_key(MeshData(raw=body)))
+#: Ob eine Runde gerade Arbeiter fragen darf: nur im Durchgang von :func:`detect`,
+#: der sie danach loslässt (RM-637) — nicht in einer Frage der örtlichen
+#: Nachmessung oder des Kantenwegs, die dieselben Runden ruft.
+_WORKERS_ALLOWED: ContextVar[bool] = ContextVar("solidon_workers_allowed", default=False)
 
 
 #: Der Körper, an dem dieser Prozess als Arbeiter zuletzt gefragt wurde — nur im
@@ -3059,16 +3069,21 @@ def answered_ahead(
                 for patch in patches:
                     _round_surface(body, mesh, patch)
         else:
-            for patch, pieces in task.items:
-                _pieces_ahead(
-                    state,
-                    body,
-                    mesh,
-                    list(patch),
-                    [list(piece) for piece in pieces],
-                    task.skin,
-                    splits,
-                )
+            # Der Stapel fragt die Stücke wie in der Runde selbst (``piece_screening``).
+            stacked = [
+                list(piece) for _patch, pieces in task.items if len(pieces) > 1 for piece in pieces
+            ]
+            with _screening(body, stacked, shapes=state.no_cone_here):
+                for patch, pieces in task.items:
+                    _pieces_ahead(
+                        state,
+                        body,
+                        mesh,
+                        list(patch),
+                        [list(piece) for piece in pieces],
+                        task.skin,
+                        splits,
+                    )
     answers: dict[str, dict[Any, Any]] = {}
     with _MEMORY_LOCK:
         for name, held_answers in _BY_GEOMETRY.items():
@@ -3090,10 +3105,10 @@ def held_body(
 ) -> tuple[bytes, trimesh.Trimesh, MeshData, set[tuple[str, bytes]]]:
     """Der Körper dieses Arbeiters — gebaut aus den Feldern des Aufrufers oder gehalten.
 
-    Gebaut wird er mit allem, was die Runden am ganzen Körper fragen
-    (Nachbarn, Dichtheit, Umlauf, deckungsgleiche Ecken), damit die erste Aufgabe
-    das nicht bezahlt. Ein anderer Abdruck lässt den alten Körper samt allem
-    Gemerkten los (:func:`forget_cache`).
+    Gebaut wird er bei der ersten Aufgabe an ihm, nicht schon beim Vorbereiten:
+    Acht Arbeiter, die eine Freiformhaut von 886 000 Dreiecken aufbauen, an der
+    keine Runde etwas fragt, bremsten die Erkennung im Prozess. Ein anderer
+    Abdruck lässt den alten Körper samt allem Gemerkten los (:func:`forget_cache`).
     """
     held = _WORKER_BODY[0]
     if held is not None and held[0] == token:
@@ -3110,10 +3125,6 @@ def held_body(
         if name in arrays:
             body._cache[name] = np.asarray(arrays[name], dtype=np.float64)
     body._cache.id_set()
-    with body._cache:
-        _neighbour_index(body)
-        _ = body.is_watertight, body.is_winding_consistent, body.extents
-        _coincident_vertices(body)
     held = (token, body, MeshData(raw=body), set())
     _WORKER_BODY[0] = held
     return held

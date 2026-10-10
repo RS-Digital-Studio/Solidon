@@ -53,6 +53,12 @@ PARALLEL_FROM_TRIANGLES: Final = 50_000
 #: Wie viele Flecken eine Aufgabe mindestens trägt; weniger lohnt den Weg nicht.
 PATCHES_PER_TASK: Final = 16
 
+#: Ab welchem Gewicht (``features._fit_weight``, Summe der Runde) die Arbeiter
+#: rechnen. Gemessen im Wechsel, je ein frischer Prozess: Am Würfel (126) und am
+#: Besteckkasten (109) war die Runde mit Arbeitern langsamer, am Ständer (252)
+#: und am Eiffelturm (637) schneller.
+AHEAD_FROM_WEIGHT: Final = 200.0
+
 #: Wie viele Aufgaben je Arbeiter eine Runde bekommt (:func:`chunk_count`).
 TASKS_PER_WORKER: Final = 3
 
@@ -101,6 +107,11 @@ def use_workers(enabled: bool, *, count: int | None = None) -> tuple[bool, int |
     _ENABLED[0] = bool(enabled)
     _FORCED[0] = count
     return before
+
+
+def least_weight() -> float:
+    """Ab welchem Gewicht eine Runde zu den Arbeitern geht; mit fester Zahl (Testhaken) jede."""
+    return 0.0 if _FORCED[0] is not None else AHEAD_FROM_WEIGHT
 
 
 def worthwhile(triangles: int, patches: int) -> int:
@@ -274,10 +285,9 @@ def warm(count: int) -> None:
 def prepare(arrays: Mapping[str, np.ndarray], token: bytes) -> bool:
     """Den Körper einmal in einen gemeinsamen Speicher und an jeden stehenden Arbeiter.
 
-    Ohne zu warten: Der Arbeiter baut seine Kopie samt Nachbarn und Dichtheit,
-    während die Erkennung noch Ebenen und Flecken sucht, und die Runden finden
-    sie fertig vor (``features.held_body``). Der Speicher bleibt bis
-    :func:`release`; eine Runde mit demselben Abdruck liest aus ihm.
+    Ohne zu warten; der Arbeiter liest ihn erst mit seiner ersten Aufgabe
+    (``features.held_body``). Der Speicher bleibt bis :func:`release`; jede
+    Runde mit demselben Abdruck liest aus ihm.
     ``False``: kein Speicher, die Runden packen dann selbst.
     """
     try:
@@ -288,7 +298,6 @@ def prepare(arrays: Mapping[str, np.ndarray], token: bytes) -> bool:
     with _PREPARED_LOCK:
         _close(_PREPARED[0])
         _PREPARED[0] = (token, segment, layout)
-    _POOL.tell(("body", segment.name if segment is not None else None, layout, token))
     return True
 
 
@@ -338,6 +347,24 @@ def statistics() -> dict[str, int]:
     with _COUNTS_LOCK:
         counted = dict(_COUNTS)
     return {"workers": _POOL.size, **counted}
+
+
+def bins(weights: Sequence[float], parts: int) -> list[list[int]]:
+    """Höchstens ``parts`` Fächer gleichen Gewichts, jeder in aufsteigender Folge.
+
+    Der schwerste Fleck kommt in den leichtesten Fächer, der nächste ebenso — die
+    letzte Runde hängt sonst an einem Arbeiter mit allen großen Flecken. In der
+    Folge der Runde, damit der Arbeiter deckungsgleiche Flecken wie hier fragt.
+    """
+    if not weights or parts <= 0:
+        return []
+    loads = [0.0] * min(parts, len(weights))
+    filled: list[list[int]] = [[] for _ in loads]
+    for index in sorted(range(len(weights)), key=lambda at: (-weights[at], at)):
+        lightest = min(range(len(loads)), key=lambda at: (loads[at], at))
+        loads[lightest] += weights[index]
+        filled[lightest].append(index)
+    return [sorted(part) for part in filled if part]
 
 
 def split(weights: Sequence[float], parts: int) -> list[range]:
@@ -448,8 +475,6 @@ def run(
                 if kind == "ready":
                     worker.ready = True
                     continue
-                if kind == "prepared":
-                    continue
                 entry = busy.pop(id(worker), None)
                 if entry is None:
                     continue
@@ -545,15 +570,6 @@ def serve(connection: Any) -> None:
             if message and message[0] == "forget":
                 features.forget_worker_body()
                 continue
-            if message and message[0] == "body":
-                _kind, name, layout, token = message
-                try:
-                    features.held_body(functools.partial(_read, name, layout), token)
-                except Exception:
-                    # Die Runde liest den Körper dann selbst, oder der Aufrufer rechnet.
-                    features.forget_worker_body()
-                connection.send(("prepared",))
-                continue
             if not message or message[0] != "ask":
                 return
             _kind, name, layout, task = message
@@ -575,10 +591,10 @@ def serve(connection: Any) -> None:
         return
 
 
-def chunk_count(patches: int, workers: int) -> int:
-    """Wie viele Aufgaben: je Arbeiter :data:`TASKS_PER_WORKER`, nie unter
-    :data:`PATCHES_PER_TASK` Flecken. Mehr Aufgaben als Arbeiter, weil die
-    Gewichte schätzen: Wer früher fertig ist, nimmt die nächste."""
+def chunk_count(patches: int, workers: int, least: int = PATCHES_PER_TASK) -> int:
+    """Wie viele Aufgaben: je Arbeiter :data:`TASKS_PER_WORKER`, nie unter ``least``
+    Flecken. Mehr Aufgaben als Arbeiter, weil die Gewichte schätzen: Wer früher
+    fertig ist, nimmt die nächste."""
     if workers <= 0:
         return 0
-    return max(1, min(workers * TASKS_PER_WORKER, math.ceil(patches / PATCHES_PER_TASK)))
+    return max(1, min(workers * TASKS_PER_WORKER, math.ceil(patches / max(1, least))))

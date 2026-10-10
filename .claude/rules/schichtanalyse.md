@@ -243,9 +243,12 @@ läuft unverändert und rechnet, was fehlt — so bleibt das Ergebnis Bit für B
 das des einen Prozesses. Ohne Schlüssel gilt eine Antwort nur am vorbereiteten
 Körper desselben Abdrucks (`_SPLIT_TARGETS`).
 
-- Gerechnet wird nur am Körper, den `detect` vorbereitet hat
-  (`parallel.prepared`); seine Felder (`_worker_arrays`) tragen alles, woraus
-  ein Abdruck entsteht — ein neues mitgetragenes Maß kommt dorthin.
+- Gerechnet wird nur im Durchgang von `detect` (`_WORKERS_ALLOWED`), der die
+  Arbeiter danach loslässt, erst ab `AHEAD_FROM_WEIGHT` und nie an einem
+  Körper mit Haut über der Gedächtnisgrenze: Laufende Arbeiter bremsen den
+  rechnenden Prozess. Die Felder des Körpers (`_worker_arrays`)
+  tragen alles, woraus ein Abdruck entsteht — ein neues mitgetragenes Maß
+  kommt dorthin.
 - Eine neue Runde für die Arbeiter ist eine Art in `answered_ahead` und bekommt
   in `tests/test_perceive_workers.py` den Gleichheitsfall samt weniger eigener
   Rechnungen.
