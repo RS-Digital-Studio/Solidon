@@ -36,8 +36,9 @@ Anlässe und Zahlen: `konzepte/begruendungen/karte-app-core-ingest.md`.
   unplausibel (`PLAUSIBLE_MIN_MM` bis `plausible_reach`) fragt `_unit_for`
   mit Meter zuerst. `load` dreht die schon angewandten Knoten von Y-oben nach
   Z-oben; `legacy_raw` erhält alte Quellen, eine erzeugte GLB
-  (`generate.into_project`) speichert `gltf` mit `mm`, die Zielgröße bleibt
-  der eigene Schritt `fit_to_size` — der mit `free_spot` auch die Lage setzt.
+  (`generate.into_project`) speichert `gltf` mit `mm`, die Größe bleibt
+  eigener Schritt: `fit_to_size` auf die Arbeitsgröße vor der Reparatur, ein
+  zweiter mit `free_spot` dahinter setzt Kundenmaß und Lage (RM-676).
 - **Offene Stellen werden geschlossen** (Regel: `dateiformat.md`): `normalise`
   ruft `geom.repair.repair` ohne die schon gefahrenen Schritte, sobald das
   verschweißte Netz nicht dicht ist. Der Ladeschritt trägt `mend` (*Offene
