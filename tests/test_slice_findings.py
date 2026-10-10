@@ -2608,6 +2608,108 @@ def test_tips_need_many_islands_trees_and_a_measured_material(case: str) -> None
         )
 
 
+@pytest.mark.parametrize(
+    ("flavour", "plate", "gap", "walls"),
+    [
+        # Cura druckt jede Art außer Baum als ``normal``: Unter Gitter gilt der
+        # Abstand des Materials genau, ohne Spitzenluft und ohne Baumwände.
+        ("cura", "grid", None, []),
+        ("cura", "auto", None, []),
+        # Gegenproben: Baum auf der Platte, die Platte unbekannt, und die
+        # Orca-Familie, in der die Art je Teil geht.
+        ("cura", "tree", 0.4, [2]),
+        ("cura", None, 0.4, [2]),
+        ("orca", "grid", 0.4, [2]),
+    ],
+)
+def test_under_curas_plate_grid_a_tree_asks_no_tip_air_and_no_walls(
+    flavour: str, plate: str | None, gap: float | None, walls: list[int]
+) -> None:
+    """Bei Cura gilt die Stützart der Platte jedem gestützten Teil (Nachtrag
+    RM-584): Neben der flachen Decke des Pilzes wird der Baum des Drachen zu
+    Gitter, und er fragte Abstand und Baumwände trotzdem mit seinem Baum —
+    „Abstand oben 0,4: Feine Spitzen brauchen mehr Luft über den Baumstützen“,
+    und Cura druckte 0,4 über Gitter. Gefragt wird mit der Art der Platte."""
+    profile = profiles.make_profile("centauri-carbon-2", "pla")
+    organic = frozenset() if flavour == "cura" else frozenset({"tree"})
+    trees = frozenset({"tree"}) if flavour == "cura" else None
+    settings = print_settings.resolve(profile)
+    for path, value in (
+        ("layers.layer_height", 0.2),
+        ("support.style", "tree"),
+        ("support.z_gap", 0.2),
+    ):
+        settings = print_settings.with_path(settings, path, value)
+
+    def asked(body: MeshData, path: str) -> list[object]:
+        entries = advise.advise(
+            settings,
+            profile,
+            slice_body(body, 0.2),
+            flavour=flavour,  # type: ignore[arg-type]
+            organic=organic,
+            declined=_KEEP_STYLE,
+            trees=trees,
+            plate_style=plate,
+        )
+        return [entry.value for entry in entries if entry.path == path]
+
+    tips = asked(bearded_table(advise.TIP_ISLANDS), "support.z_gap")
+    assert tips == ([] if gap is None else [pytest.approx(gap)])
+    assert asked(_tower_with_island(120.0), "support.tree_walls") == walls
+
+
+def test_on_the_plate_is_the_style_cura_prints() -> None:
+    """Dieselbe Übersetzung wie die Datei (``writer._values_for``): ``tree`` als
+    Baum, jede andere Art als Gitter, „aus“ bleibt aus; anderswo und ohne
+    bekannte Platte die eigene Art."""
+    assert advise.on_the_plate("tree", "grid", "cura") == "grid"
+    assert advise.on_the_plate("tree", "hybrid", "cura") == "grid"
+    assert advise.on_the_plate("grid", "tree", "cura") == "tree"
+    assert advise.on_the_plate("tree", "none", "cura") == "grid"
+    assert advise.on_the_plate("none", "tree", "cura") == "none"
+    assert advise.on_the_plate("tree", None, "cura") == "tree"
+    assert advise.on_the_plate("tree", "grid", "orca") == "tree"
+    assert advise.on_the_plate("tree", "grid", None) == "tree"
+
+
+def test_the_contact_follows_curas_plate_even_where_the_style_is_declined() -> None:
+    """Unter einer gestützten Cura-Platte druckt jedes Netz, das Stützen will, deren
+    Art, auch wenn der Kunde die Zeile zur Art ablehnt (Review des Nachtrags
+    RM-584); ohne Stützen auf der Platte und außerhalb von Cura gilt
+    ``on_the_plate``."""
+    assert advise.contact_style("none", "tree", "tree", "cura") == "tree"
+    assert advise.contact_style("none", "grid", "tree", "cura") == "tree"
+    assert advise.contact_style("none", "tree", "auto", "cura") == "grid"
+    assert advise.contact_style("none", "none", "tree", "cura") == "none", "will keine Stützen"
+    assert advise.contact_style("none", "tree", "none", "cura") == "none", "Platte ohne Stützen"
+    assert advise.contact_style("tree", "tree", "none", "cura") == "grid"
+    assert advise.contact_style("none", "tree", None, "cura") == "none"
+    assert advise.contact_style("none", "tree", "tree", "orca") == "none"
+
+
+def test_on_the_plate_names_the_trees_the_file_and_the_program_name() -> None:
+    """Curas Baum steht an drei Stellen: in ``on_the_plate``, in der Auskunft
+    ``handover.tree_styles`` (die ``_cura_prints_alike`` fragt) und in der
+    Übersetzung der Datei (``support_structure``). Für jede Stützart des Felds
+    sagen alle drei dasselbe (Review des Nachtrags RM-584, L2)."""
+    from app.core.export import handover
+    from app.core.knowledge import print_fields
+
+    field = print_fields.field_of("support.style")
+    assert field is not None
+    profile = profiles.make_profile("centauri-carbon-2", "pla")
+    trees = handover.tree_styles(None, profile, "", flavour="cura")
+    assert trees is not None
+    for style in field.choices:
+        if style == "none":
+            continue
+        settings = print_settings.with_path(print_settings.resolve(profile), "support.style", style)
+        written = handover.values_for(settings, profile, "cura")["support_structure"]
+        printed = advise.on_the_plate("grid", style, "cura")
+        assert (printed == "tree") == (style in trees) == (written == "tree"), style
+
+
 def test_the_roof_tip_is_the_smallest_with_a_roof() -> None:
     """Die Spitze, ab der die Orca-Familie jede Spitze mit Trennschicht deckt
     (RM-704): Ihr Querschnitt liegt über ``minimum_roof_area`` (1 mm²), eine
@@ -2965,16 +3067,31 @@ def test_each_part_gets_the_contact_of_its_own_material() -> None:
     body = column_table()
     result = slice_body(body, 0.2)
 
-    def gap(material: str) -> object:
+    def gap(material: str, accepted: dict[str, object] | None) -> object:
         entry = SceneObject(id=material, name=material, mesh=body, material=material)
         advice = writer.part_advice(
-            entry, body, settings, profile, None, {}, result=result, fit_kinds=(), flavour="orca"
+            entry,
+            body,
+            settings,
+            profile,
+            None,
+            {},
+            result=result,
+            fit_kinds=(),
+            flavour="orca",
+            accepted=accepted,
         )
         return {item.path: item.value for item in advice}.get("support.z_gap")
 
+    # Der Kunde hat die Stützen übernommen; ohne sie druckt die Platte keine,
+    # und der Abstand änderte nichts (Durchsicht der Fixe zum Nachtrag RM-584).
+    supported: dict[str, object] = {"support.style": "grid"}
     assert settings.support.z_gap == pytest.approx(0.2)
-    assert gap("pla") is None, "PLA löst sich bei 0,2 mm schon sauber"
-    assert gap("petg") == pytest.approx(0.28), "PETG haftet stärker und braucht mehr Luft"
+    assert gap("pla", supported) is None, "PLA löst sich bei 0,2 mm schon sauber"
+    assert gap("petg", supported) == pytest.approx(0.28), (
+        "PETG haftet stärker und braucht mehr Luft"
+    )
+    assert gap("petg", None) is None, "ohne Stützen kein Abstand"
 
 
 def test_a_cantilever_in_a_narrow_pocket_is_no_channel() -> None:
