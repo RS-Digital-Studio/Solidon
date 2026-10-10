@@ -771,10 +771,9 @@ def test_a_solid_body_leaves_the_warning_empty(window: MainWindow) -> None:
 
 def test_a_check_still_owed_by_the_timer_is_waited_for(window: MainWindow) -> None:
     """Feuert der Zeitgeber eines Zugs erst beim Zustellen, ersetzt seine
-    Prüfung die abgewartete — auf den macOS-Läufern stand so „wird geprüft“
-    stehen. Der Prüfstand wartet deshalb auf die Antwort zum jüngsten Stand."""
-    from app.i18n import tr
-
+    Prüfung die abgewartete — auf den macOS-Läufern fehlte so der Befund in
+    der Leiste, und die Statuszeile trug noch den Fortschritt der Karte. Der
+    Prüfstand wartet deshalb auf die Antwort zum jüngsten Stand."""
     object_id = with_a_body(window)
     window.start_sculpt(object_id)
     window._on_sculpt((0.0, 0.0, 82.0))
@@ -785,7 +784,9 @@ def test_a_check_still_owed_by_the_timer_is_waited_for(window: MainWindow) -> No
 
     assert window.wait_for_sculpt_check()
 
-    assert window.sculpt_bar.warning.text() != tr("Wandstärke wird geprüft …")
+    assert not window._sculpt_check.isActive(), "keine Prüfung steht mehr aus"
+    assert window._sculpt_wall_worker is None, "die letzte Antwort ist zugestellt"
+    assert not window.sculpt_bar.warning.text(), "ein voller Körper warnt nicht"
 
 
 def test_the_wall_check_waits_for_the_hand_to_rest(window: MainWindow) -> None:
@@ -1609,10 +1610,6 @@ def test_a_sculpt_preview_outside_the_printer_is_reported(
     window.start_sculpt(object_id)
     point = tuple(np.asarray(window._sculpt_mesh(object_id).raw.vertices)[0])
     window._on_sculpt(point)
-    # Die Prüfung startet erst, wenn die Vorschau steht — läuft ihr Arbeiter
-    # noch (Angleichen des groben Körpers), kehrt sie ohne Prüfung zurück; auf
-    # dem langsamen Intel-Mac kam der Aufruf so vor der Vorschau an.
-    assert window.wait_for_sculpt_preview(60_000)
     window._check_sculpted_walls()
     assert window.wait_for_sculpt_check()
     note = window.sculpt_bar.analysis.note.text()
