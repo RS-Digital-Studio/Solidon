@@ -3655,9 +3655,10 @@ def _beside(
     if not mine or index == 0:
         return layer.bridge_width, None
     with _ANSWERS_LOCK:
-        known = next((found for layers, found in _BESIDE if layers is result.layers), None)
-        if known is not None and (index, mine) in known:
-            return known[(index, mine)]
+        for number, (layers, found) in enumerate(_BESIDE):
+            if layers is result.layers and (index, mine) in found:
+                _recent(_BESIDE, number)
+                return found[(index, mine)]
     if cancelled is not None:
         cancelled.raise_if_cancelled()
     answer = _measured_beside(result, index, quiet)
@@ -3666,7 +3667,7 @@ def _beside(
         if known is None:
             known = {}
             _BESIDE.append((result.layers, known))
-            del _BESIDE[:-_ANSWERS_KEPT]
+            _keep_recent(_BESIDE)
         known[(index, mine)] = answer
     return answer
 
@@ -3744,21 +3745,22 @@ def model_support(
     Sie hängt nur an den Schichten, nicht an den Einstellungen — der
     Druckdialog stellte sie trotzdem bei jedem geänderten Feld und nach jeder
     nachgereichten Profilliste neu, an der Waschschüssel je 3,9 s. Gemerkt
-    wird am Schichttupel selbst (Identität, nicht Gleichheit), für die letzten
-    :data:`_ANSWERS_KEPT` Fragen. Die Stückauswahl (``only``) gehört zum
+    wird am Schichttupel selbst (Identität, nicht Gleichheit), für so viele
+    Schnitte, wie :func:`keep_answers` sagt. Die Stückauswahl (``only``) gehört zum
     Schlüssel, damit auch der Prüfbericht seine Kanalfrage nur einmal stellt.
     ``cancelled`` wird je Schicht des Durchgangs, je Kreisfrage und je Decke
     gefragt und erreicht die Randfrage darin (:func:`ledges`); eine
     abgebrochene Antwort wird nicht gemerkt.
     """
     with _ANSWERS_LOCK:
-        for layers, width, selected, answer in _ANSWERS:
+        for number, (layers, width, selected, answer) in enumerate(_ANSWERS):
             if layers is result.layers and is_close(width, channel_width) and selected == only:
+                _recent(_ANSWERS, number)
                 return answer
     answer = _model_support(result, channel_width, only, cancelled)
     with _ANSWERS_LOCK:
         _ANSWERS.append((result.layers, channel_width, only, answer))
-        del _ANSWERS[:-_ANSWERS_KEPT]
+        _keep_recent(_ANSWERS)
     return answer
 
 
@@ -3775,20 +3777,63 @@ def channel_pieces(
     den Befunden —, kommt die Antwort ohne neuen Durchgang daraus.
     """
     with _ANSWERS_LOCK:
-        for layers, width, selected, answer in _ANSWERS:
+        for number, (layers, width, selected, answer) in enumerate(_ANSWERS):
             if layers is result.layers and is_close(width, CHANNEL_WIDTH) and selected is None:
+                _recent(_ANSWERS, number)
                 return answer.channels & only
     return model_support(result, only=only, cancelled=cancelled).channels
 
 
-#: Wie viele beantwortete Kanalfragen :func:`model_support` behält — die
-#: jüngsten, meist die Körper des offenen Druckdialogs. Ihre Schichttupel
-#: bleiben dafür am Leben, und damit bleibt ihre Identität eindeutig.
+#: Wie viele Schnitte die Merker über die Körper der Szene hinaus behalten
+#: (:func:`keep_answers`), und wie viele Antworten je Schnitt — enge Fragen,
+#: Linienbreiten. Ihre Schichttupel bleiben dafür am Leben, und damit bleibt
+#: ihre Identität eindeutig.
 _ANSWERS_KEPT: Final = 4
 _ANSWERS: list[
     tuple[tuple[LayerInfo, ...], float, frozenset[tuple[int, int]] | None, ModelSupport]
 ] = []
 _ANSWERS_LOCK = threading.Lock()
+#: Wie viele Schnitte die Merker gerade behalten (:func:`keep_answers`).
+_CUTS_KEPT = [_ANSWERS_KEPT]
+
+
+def keep_answers(bodies: int) -> None:
+    """Die Merker behalten die Antworten für ``bodies`` Körper und
+    :data:`_ANSWERS_KEPT` Schnitte darüber hinaus — den Druckdialog mit eigenem
+    Raster, die Lagensuche (Nachprüfung zu RM-627).
+
+    Der Prüfbericht fragt nach jeder Auswertung jeden Körper, über acht Körpern
+    die enge Kanalfrage und die Brücke ohne Kanaldecken selbst
+    (``findings.print_findings``). Mit vier Plätzen verdrängte jeder weitere
+    Körper den ersten, und jeder Bericht zahlte dessen Fragen neu, am Drachen
+    45° rund 18 s. Gezählt werden Schnitte, nicht Fragen; was gefragt wird,
+    rückt nach hinten, und verdrängt wird der am längsten nicht gefragte
+    Schnitt — der eines geänderten Körpers, nicht einer der Szene. Die Schichten
+    eines Körpers der Szene hält ohnehin der Cache seines Netzes.
+    """
+    _CUTS_KEPT[0] = max(bodies, 0) + _ANSWERS_KEPT
+
+
+def _recent(entries: list[Any], number: int) -> None:
+    """Rückt den Eintrag ``number`` eines Merkers ans Ende: zuletzt gefragt,
+    zuletzt verdrängt. Unter dem Schloss des Merkers."""
+    entries.append(entries.pop(number))
+
+
+def _keep_recent(entries: list[Any]) -> None:
+    """Kürzt einen Merker auf die zuletzt gefragten Schnitte (:func:`keep_answers`)
+    und je Schnitt auf die letzten :data:`_ANSWERS_KEPT` Antworten. Vorn in jedem
+    Eintrag steht sein Schichttupel. Unter dem Schloss des Merkers."""
+    answers: dict[int, int] = {}
+    kept: list[Any] = []
+    for entry in reversed(entries):
+        cut = id(entry[0])
+        if cut not in answers and len(answers) >= _CUTS_KEPT[0]:
+            continue
+        answers[cut] = answers.get(cut, 0) + 1
+        if answers[cut] <= _ANSWERS_KEPT:
+            kept.append(entry)
+    entries[:] = kept[::-1]
 
 
 #: Wie weit eine Decke in der Aufsicht über das Material ragen darf, an dem sie
@@ -3822,23 +3867,27 @@ def ledges(
     ``only`` fragt nur die Decken dieser Stücke, wie bei :func:`model_support`:
     Über alle Stücke des Eiffelturms kostet die Frage 7,5 s, der Prüfbericht
     braucht sie für eine Handvoll. Für die gefragten Stücke sagt die Antwort
-    dasselbe wie die volle Frage. Gemerkt wird nur die volle Antwort, wie die
-    Kanalfrage, und sie dient auch jeder engeren Frage; eine enge ist billig
-    und verdrängte sonst volle Antworten anderer Körper aus dem Merker.
+    dasselbe wie die volle Frage. Gemerkt wie die Kanalfrage, mit der Auswahl
+    im Schlüssel; die volle Antwort dient auch jeder engeren Frage. Die enge
+    Frage des Berichts kostet am Drachen (45°) 2,7 s je Bericht; seit der
+    Merker Schnitte zählt (:func:`keep_answers`), verdrängt sie keine Antwort
+    eines anderen Körpers mehr. Abgebrochen wird nichts gemerkt.
     """
     with _ANSWERS_LOCK:
-        for layers, answer in _LEDGES:
-            if layers is result.layers:
+        for number, (layers, selected, answer) in enumerate(_LEDGES):
+            if layers is result.layers and (selected is None or selected == only):
+                _recent(_LEDGES, number)
                 return answer
     answer = _ledges(result, only, cancelled)
-    if only is None:
-        with _ANSWERS_LOCK:
-            _LEDGES.append((result.layers, answer))
-            del _LEDGES[:-_ANSWERS_KEPT]
+    with _ANSWERS_LOCK:
+        _LEDGES.append((result.layers, only, answer))
+        _keep_recent(_LEDGES)
     return answer
 
 
-_LEDGES: list[tuple[tuple[LayerInfo, ...], frozenset[tuple[int, int]]]] = []
+_LEDGES: list[
+    tuple[tuple[LayerInfo, ...], frozenset[tuple[int, int]] | None, frozenset[tuple[int, int]]]
+] = []
 
 
 def _ledges(
@@ -3906,13 +3955,14 @@ def ledge_space(
     noch einmal.
     """
     with _ANSWERS_LOCK:
-        for layers, width, known in _LEDGE_SPACES:
+        for number, (layers, width, known) in enumerate(_LEDGE_SPACES):
             if layers is result.layers and abs(width - line_width) <= EPS_GEOM:
+                _recent(_LEDGE_SPACES, number)
                 return list(known)
     slabs = _ledge_space(result, line_width)
     with _ANSWERS_LOCK:
         _LEDGE_SPACES.append((result.layers, line_width, tuple(slabs)))
-        del _LEDGE_SPACES[:-_ANSWERS_KEPT]
+        _keep_recent(_LEDGE_SPACES)
     return slabs
 
 
@@ -4736,13 +4786,14 @@ def channel_space(
     einmal — am Drachen bei 130 % je 2,0 s (Review vom 08.10.2026).
     """
     with _SPACES_LOCK:
-        for layers, asked, width, known in _SPACES:
+        for number, (layers, asked, width, known) in enumerate(_SPACES):
             if layers is result.layers and asked is model and abs(width - line_width) <= EPS_GEOM:
+                _recent(_SPACES, number)
                 return list(known)
     slabs = _channel_space(result, model, line_width)
     with _SPACES_LOCK:
         _SPACES.append((result.layers, model, line_width, tuple(slabs)))
-        del _SPACES[:-_ANSWERS_KEPT]
+        _keep_recent(_SPACES)
     return slabs
 
 

@@ -27389,7 +27389,16 @@ ohne Stütze drucken, belegt [RM-582](#rm-582). Changelog: ja.
   15 mm spannen können, `_may_span`): Spannt die Schicht ohne sie weiter, ist es eine Brücke,
   gemessen und gezeigt ohne die Kanaldecke (Steg über 20 mm neben dem Tunnel: am Steg); sonst nennt
   der Befund den Kanal und den Übergang unter 45°, ohne Stütze. Kalt am Drachen 45° 21 statt 3 s
-  (alle Stücke gefragt: 136 s), mit gemerktem Stützbedarf 0,9 statt 0,4 s.
+  (alle Stücke gefragt: 136 s), mit gemerktem Stützbedarf 0,9 statt 0,4 s. Kalt heißt: mehr als
+  acht Körper, ohne Bedarfsfrage. Dort hielt der Merker vier Antworten, jeder weitere Körper mit
+  spannender Schicht verdrängte den Drachen, und jeder Bericht nach einer Auswertung zahlte alles
+  neu (Drache und acht Wedge-Locks: 45° 19,8–20,1 s, 60° 6,8–7,1 s CPU je Bericht), dazu die nie
+  gemerkte enge Randfrage (2,7 s). Behoben (Nachprüfung, L1): Der Merker zählt Schnitte statt
+  Antworten, hält einen je Körper der Szene und vier darüber (`keep_answers` aus
+  `print_findings`), je Schnitt vier Antworten, und verdrängt den am längsten nicht gefragten; die
+  enge Randfrage wird mitgemerkt. Zweiter Bericht 0,0–0,1 s, Befunde gleich; die Antworten selbst
+  belegen 0,03–0,04 MiB, ein Schnitt des Drachen, den der Merker nach einer Änderung noch hält,
+  37–43 MiB.
 - *Beleg im Korpus:* Die Abschlussmessung „An Eiffelturm, Becher, Waschschüssel und Datei-Schnitt
   ändert sich nichts“ lief auf drei Schnitten mit `detail="support"`, die keine Brückenweite tragen.
   Nachgeholt mit vollem Schnitt (C2/PLA) über 22 Dateien aus `F:\3D Dateien` und dem

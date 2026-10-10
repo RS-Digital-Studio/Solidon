@@ -535,7 +535,9 @@ def test_the_channel_question_is_answered_once_per_measurement() -> None:
     assert model_support(again) == first
     single = frozenset({min(first.channels)})
     assert model_support(result, only=single) is model_support(result, only=single)
-    assert len(analysis._ANSWERS) <= analysis._ANSWERS_KEPT
+    cuts = [id(layers) for layers, *_rest in analysis._ANSWERS]
+    assert len(set(cuts)) <= analysis._CUTS_KEPT[0], "begrenzt auf die Schnitte der Szene"
+    assert max(cuts.count(cut) for cut in cuts) <= analysis._ANSWERS_KEPT, "und je Schnitt"
 
 
 def test_the_second_print_report_reuses_the_channel_answer(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -562,6 +564,87 @@ def test_the_second_print_report_reuses_the_channel_answer(monkeypatch: pytest.M
     assert findings.print_findings(scene, petg(), settings, check_status=events.append) == first
     assert len(questions) == count, "Auch die Teilfrage kommt aus dem Merker."
     assert events[-1].key == "slice.print_findings" and events[-1].state == "completed"
+
+
+def test_the_second_report_over_nine_bodies_asks_nothing_again(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Nachprüfung zu RM-627 (L1): Über acht Körpern stellt der Bericht die enge
+    Kanalfrage und misst die Brücke ohne Kanaldecke selbst, je Körper. Mit vier
+    Plätzen im Merker verdrängte jeder weitere Körper den ersten, und jeder
+    Bericht nach einer Auswertung fragte alles neu, am Drachen 45° rund 18 s,
+    dazu die enge Randfrage, die nie gemerkt wurde (2,7 s). Der Merker hält so
+    viele Schnitte, wie die Szene Körper hat."""
+    from app.core.slice import analysis, findings
+    from app.core.types import Scene, SceneObject
+
+    monkeypatch.setattr(analysis, "_CUTS_KEPT", [analysis._ANSWERS_KEPT])
+    questions: list[str] = []
+    asked, measured, edges = analysis._model_support, analysis._measured_beside, analysis._ledges
+
+    def channel(*args: object, **kwargs: object) -> analysis.ModelSupport:
+        questions.append("Kanal")
+        return asked(*args, **kwargs)  # type: ignore[arg-type]
+
+    def beside(*args: object, **kwargs: object) -> tuple[float, tuple[float, float] | None]:
+        questions.append("Brücke")
+        return measured(*args, **kwargs)  # type: ignore[arg-type]
+
+    def ledge(*args: object, **kwargs: object) -> frozenset[tuple[int, int]]:
+        questions.append("Rand")
+        return edges(*args, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(analysis, "_model_support", channel)
+    monkeypatch.setattr(analysis, "_measured_beside", beside)
+    monkeypatch.setattr(analysis, "_ledges", ledge)
+    bodies = [
+        SceneObject(id=f"obj_{number}", name="Tunnel", mesh=bare_tunnel(20.0))
+        for number in range(1, 10)
+    ]
+    scene = Scene(objects={body.id: body for body in bodies})
+    settings = print_settings.resolve(petg())
+
+    first = findings.print_findings(scene, petg(), settings)
+    assert questions.count("Kanal") >= 9 and questions.count("Brücke") == 9, questions
+    assert sum(finding.code == "slice.long_bridge" for finding in first) == 9
+    questions.clear()
+    assert findings.print_findings(scene, petg(), settings) == first
+    assert questions == [], "der zweite Bericht liest jeden Körper aus dem Merker"
+
+
+def test_the_merker_drops_the_cut_asked_longest_ago(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Verdrängt wird der Schnitt, nach dem am längsten niemand gefragt hat — der
+    eines geänderten Körpers, nicht einer, den jeder Bericht wieder fragt. Je
+    Schnitt bleiben die letzten vier Antworten."""
+    from app.core.slice import analysis
+
+    monkeypatch.setattr(analysis, "_CUTS_KEPT", [analysis._ANSWERS_KEPT])
+    analysis.keep_answers(1)
+    asked: list[object] = []
+    real = analysis._model_support
+
+    def counted(*args: object, **kwargs: object) -> analysis.ModelSupport:
+        asked.append(args[0])
+        return real(*args, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(analysis, "_model_support", counted)
+    cuts = [slice_body(bare_tunnel(20.0), 0.5) for _number in range(6)]
+    for cut in cuts[:5]:
+        model_support(cut)
+    model_support(cuts[0])
+    model_support(cuts[5])
+    assert len(asked) == 6, "der erste Schnitt kam aus dem Merker"
+
+    model_support(cuts[0])
+    assert len(asked) == 6, "gefragt, also behalten"
+    model_support(cuts[1])
+    assert asked[-1] is cuts[1], "am längsten nicht gefragt, also verdrängt"
+
+    for step in range(1, 6):
+        model_support(cuts[0], analysis.CHANNEL_WIDTH * (1.0 + step / 10.0))
+    mine = [entry for entry in analysis._ANSWERS if entry[0] is cuts[0].layers]
+    assert len(mine) == analysis._ANSWERS_KEPT, "je Schnitt die letzten vier Antworten"
+    assert len({id(entry[0]) for entry in analysis._ANSWERS}) <= analysis._CUTS_KEPT[0]
 
 
 @pytest.mark.parametrize("missing", [(), ("material",)])

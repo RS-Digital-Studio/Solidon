@@ -38,6 +38,7 @@ from app.core.slice.analysis import (
     OVERHANG_LAYER_WORTH_SUPPORT,
     _material,
     _material_cross,
+    keep_answers,
     largest_overhang_patch,
     ledges,
     model_support,
@@ -195,6 +196,9 @@ def print_findings(
         else:
             publish(replace(state, applicable=False, state="not_applicable"))
     search = len(bodies) <= ORIENT_SEARCH_BODIES and not profile.printer.is_resin
+    # Der nächste Bericht fragt dieselben Körper: Der Merker der Schichtanalyse
+    # behält sie alle, nicht nur die letzten vier.
+    keep_answers(len(bodies))
     for number, (entry, state) in enumerate(bodies):
         findings += checked(
             state,
