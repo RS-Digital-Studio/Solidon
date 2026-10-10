@@ -34,29 +34,32 @@ gezeigten Netz zählen die abgeleiteten Indextabellen.
 
 ## Messungen
 
-**Grunddaten**, Ecken auf float32 und Dreiecke auf int32 verengt:
+**Grunddaten**, Ecken auf float32 und Dreiecke auf int32 verengt. Zustand: wie
+Solidon lädt, aufgesetzt und zentriert. Alle Größen in MB (10⁶ Byte):
 
 | Modell | Dreiecke | im Speicher | Plattencache (komprimiert) | größte Rundung |
 |---|---|---|---|---|
-| Laptop-Riser | 173 592 | 6,0 → 3,0 MB | 1,4 → 1,2 MB | 3,8 nm (81 % der Ecken über `EPS_GEOM`) |
-| Eiffelturm 18 cm | 312 938 | 10,6 → 5,3 MB | 2,1 → 1,9 MB | 1,9 nm |
-| Spiderman | 885 570 | 30,4 → 15,2 MB | 8,3 → 7,8 MB | 0,95 nm |
-| Puppenbett (GLB) | 1 229 570 | 42,2 → 21,1 MB | 8,7 → 7,8 MB | 0,06 nm |
+| Laptop-Riser | 173 592 | 6,2 → 3,1 MB | 1,5 → 1,3 MB | 3,8 nm (81 % der Ecken über `EPS_GEOM`) |
+| Eiffelturm 18 cm | 312 938 | 11,1 → 5,6 MB | 2,2 → 2,0 MB | 1,9 nm |
+| Spiderman | 885 570 | 31,9 → 15,9 MB | 8,7 → 8,2 MB | 0,95 nm |
+| Puppenbett (GLB) | 1 229 570 | 44,3 → 22,1 MB | 9,1 → 8,2 MB | 0,06 nm |
 
 `trimesh` weitet beim Bau beides wieder: Ecken auf float64, Dreiecke auf int64.
 
 **Verlustfrei in float32?** Das ist der Anteil der Ecken, die float32 exakt
-trägt (`probe_narrow_lossless.py`):
+trägt (`probe_narrow_lossless.py`), in zwei Zuständen: wie die Datei sie
+bringt (nur verschweißt) und wie Solidon lädt (aufgesetzt und zentriert):
 
-| Modell | geladen | um 5 mm verschoben | um 30° gedreht |
-|---|---|---|---|
-| Laptop-Riser | 100 % | 95,4 % | 0 % |
-| Eiffelturm | 100 % | 83,8 % | 0 % |
-| Spiderman | 100 % | 93,4 % | 0 % |
-| Puppenbett | 100 % | 7,7 % | 0 % |
+| Modell | wie in der Datei | wie geladen | geladen, 5 mm verschoben | gedreht |
+|---|---|---|---|---|
+| Laptop-Riser | 100 % | 9,2 % | 9,2 % | 0 % |
+| Eiffelturm | 100 % | 99,7 % | 83,8 % | 0 % |
+| Spiderman | 100 % | 0 % | 0 % | 0 % |
+| Puppenbett | 100 % | 27,0 % | 1,1 % | 0 % |
 
-Ein STL trägt float32, daher stimmt jede geladene Ecke exakt. Nach der ersten
-Drehung stimmt keine mehr.
+Ein STL trägt float32, daher stimmt jede Ecke der Datei exakt. Das Aufsetzen
+und Zentrieren beim Laden verschiebt sie schon, nach einer Drehung stimmt
+keine mehr.
 
 **Rundung auf float32.** Eine Sonde des Koordinators hat am 09.10. neun
 Korpusnetze auf float32 gerundet, mit Versatz 0, 150 und 300 mm. Merkmale,
@@ -94,8 +97,8 @@ schneidet seinen Nachbarn. Die Ersparnis am gezeigten Netz liegt bei rund
 **Nicht empfohlen.**
 
 **B — Ecken in float32 nur halten, wo sie es exakt sind (verlustfrei).** Das
-ist bitgleich und berührt keinen Vertrag. Es trifft aber nur geladene und
-wenige verschobene Stände, und in `trimesh` geht es gar nicht: Ein schlanker
+ist bitgleich und berührt keinen Vertrag. Es trifft aber kaum einen Stand,
+schon der geladene ist meist nicht exakt, und in `trimesh` geht es gar nicht: Ein schlanker
 Stand müsste seine Felder außerhalb von `trimesh` tragen. Der Nutzen ist
 klein, deshalb nur zusammen mit C.
 
@@ -121,7 +124,8 @@ Nutzer von `edge_table` in `geom/repair.py`, `geom/mesh_ops.py` und
 `faces.tobytes()` des ausgewerteten Körpers. Jede Änderung dieser Bits lässt
 einen schon gebuchten Druck nach dem Update als neu erscheinen, auch eine
 druckgleiche wie das Runden auf float32 oder eine andere Dreiecksfolge.
-**RM-706 landet deshalb vor jeder Stufe, die Netzbits ändert.** Danach
+**RM-706 (Verbrauchsabdruck aus den Eingängen, andere Sitzung) landet deshalb
+vor jeder Stufe, die Netzbits ändert.** Danach
 entsteht der Geometrieteil des Abdrucks aus den gespeicherten Eingängen.
 Ändert sich der Abdruck trotzdem, gehört eine Gegenprobe dazu: Ein mit dem
 alten Stand gebuchter Druck wird wiedererkannt. C und D ändern die Bits des

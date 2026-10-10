@@ -102,13 +102,14 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-690 — Angeboten, aber mit den Vorgaben nicht ausführbar: Textur, Merkmal drehen, Formschräge, Einzelteile, Drehkörper](#rm-690) | Geometrie, Erkennung und Druckvorbereitung | Fünf Handlungen halten mit ihren eigenen Vorgaben an oder werden an Stellen angeboten, wo sie nicht gelten |
 | [RM-636 — Jeder Anwendungsfall schnell: Verschieben, Filament, Normalisieren, Auswahlkarte](#rm-636) | Geometrie, Erkennung und Druckvorbereitung | In Arbeit: Paket L3 (Worktree `F:/sl-l3`). Zuordnung, Buchführung und Normalisieren gebaut (10.10.); offen: Gruppen nach dem Verschieben, Prüfbericht neben der Auswertung, Hauptfaden beim Szenenaufbau, Fensterabnahme |
 | [RM-695 — Ein gespeichertes Projekt erkennt nach jedem Neustart alle Merkmale neu](#rm-695) | Geometrie, Erkennung und Druckvorbereitung | Nach Paket E: Erkennungsergebnis bitgleich im Plattencache ablegen (Format, `cache_version`) |
-| [RM-698 — Sparen, was der Druck nicht merkt: Speicher großer Modelle und ein gemeinsamer druckgleich-Vergleich](#rm-698) | Geometrie, Erkennung und Druckvorbereitung | Speicher am großen Modell messen; Vergleichshelfer für §11.2 bauen; Dreiecksindizes und einfach genau gehaltene Ecken mit Leitplanken prüfen |
+| [RM-698 — Sparen, was der Druck nicht merkt: Speicher großer Modelle und ein gemeinsamer druckgleich-Vergleich](#rm-698) | Geometrie, Erkennung und Druckvorbereitung | Vergleich steht, Bewegen und Öffnen gesenkt; als Nächstes Kantentabelle in int32 mit Überlaufwächter (Entwurf, Variante D), Entscheidung zu C, der wgpu-Block |
 | [RM-699 — Ersteinrichtung nimmt Düsen bis 10 mm an, der Druckdialog bis 2 mm](#rm-699) | Geometrie, Erkennung und Druckvorbereitung | Obergrenze an einer Konstante festmachen und entscheiden, ob große Düsen (Granulat) dazugehören |
 | [RM-637 — Die Merkmalserkennung auf mehrere Prozesse verteilen, mit gleichem Ergebnis](#rm-637) | Geometrie, Erkennung und Druckvorbereitung | Entschieden (Robert, 09.10.): ja. Baut nach Paket E auf dessen Zweig; Laden mechanischer Teile bleibt sonst drei- bis fünfmal langsamer als v0.4.4 (Rest K-3) |
 | [RM-692 — Funktionale Gruppen werden nach jedem Verschieben neu gerechnet](#rm-692) | Geometrie, Erkennung und Druckvorbereitung | Gemessen in L3: Eiffelturm 3,6 s, Besteckkasten 2,8 s je Verschieben vor dem Bild; Merker in `perceive/features.py`, nach Paket E |
 | [RM-697 — Ein unverändertes Netz wird bei jedem Schritt neu auf die Platte geschrieben](#rm-697) | Geometrie, Erkennung und Druckvorbereitung | Gemessen in L3: jede Filamentzuweisung schreibt das gleiche Netz komprimiert neu (Spiderman 0,8 s); Formatfrage im Plattencache, nach Paket E |
 | [RM-752 — Bei jedem Übernehmen und Öffnen läuft eine volle Erkennung am Einheitswürfel](#rm-752) | Geometrie, Erkennung und Druckvorbereitung | Gemessen in D: 7–63 s CPU je Modell seit v0.5.1, findet nie ein Merkmal; `scene/evaluate.py` |
 | [RM-753 — Beim Skalieren wächst die Normale einer gerundeten Seite um 1/f](#rm-753) | Geometrie, Erkennung und Druckvorbereitung | Gefunden in D: `transformed_features` behandelt die Normale nicht als Einheitsvektor; `perceive/matching.py` |
+| [RM-758 — Der Plattencache friert übersetzbare Befundwerte ein](#rm-758) | Geometrie, Erkennung und Druckvorbereitung | Gefunden im Review 1 zu RM-698: `serialise.finding_to_data` schreibt `values` mit `str(value)`, nach dem Öffnen nennt ein Befund den Körper in der Sprache des Caches |
 | [RM-070 — SpaceMouse auf macOS und Linux am echten Gerät abnehmen](#rm-070) | Bedienung und Darstellung | Die Rampe ist stetig und getestet, die Bildrate an 815 104 Dreiecken gemessen (`7ff34c67`: 16,7 → 8,7 ms im Median); offen bleiben Linux, die 3DxWare-Mausemulation, das Gerät selbst und die Rampe im Skizzenmodus (aus RM-183) |
 | [RM-204 — Ein Merkmalklick baut alle Handlungen des Fensters neu](#rm-204) | Bedienung und Darstellung | Abnahme am echten Fenster beim Release (RM-213) |
 | [RM-559 — Körper in der Szene mit drei Klicks aufziehen, als Körper oder als Ausschnitt](#rm-559) | Bedienung und Darstellung | Gebaut (Paket Z1, 08.10.): Werkzeug *Zeichnen*, Strg+Umschalt+E; offen die Abnahme am echten Fenster und die Nachzählung durch bedienlogik |
@@ -3741,6 +3742,20 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   gerundeten Seite wie einen Ort, sie ist danach kein Einheitsvektor mehr.
   **Abnahme:** Test zuerst (Skalierung um 2 und 0,5, Normale bleibt Einheitsvektor, Zuordnung
   unverändert), Gegenprobe am alten Stand rot.
+
+<a id="rm-758"></a>
+
+- [ ] **RM-758 — Der Plattencache friert übersetzbare Befundwerte ein.**
+  Gefunden im Review 1 zu RM-698 (Sonde `review-sparen-sonden/sonden/probe_cache_equal.py`,
+  Ausgabe `equal_vergleich.txt`): `serialise.finding_to_data` schreibt `values` mit
+  `str(value)`, `scene/cache.py` (`_finding_to_cache`) übernimmt das. Im Beispiel
+  *passung-nach-materialwechsel* trägt `prepare.material` im Wert `object` frisch einen
+  `TranslatableText` („Deckel“), nach dem Wiederöffnen die Zeichenkette. Nach einem
+  Sprachwechsel nennt der Befund den Körper in der Sprache, in der der Cache geschrieben wurde.
+  In jedem Stand gleich, nicht durch RM-698 entstanden.
+  **Abnahme:** Test zuerst (Befund mit übersetzbarem Wert durch den Plattencache, nach
+  Sprachwechsel in der neuen Sprache), Auswertung mit und ohne Cache gleich, `cache_version`
+  bzw. `CACHE_FORMAT_VERSION` steigt.
 
 ## Bedienung und Darstellung
 
