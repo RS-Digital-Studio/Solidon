@@ -4547,6 +4547,40 @@ def test_a_cantilever_that_runs_free_along_a_deep_wall_keeps_its_supports(
     assert advise.support_need(result).needed
 
 
+@pytest.mark.parametrize(
+    ("depth", "layer_height", "angle"),
+    [
+        pytest.param(20.0, 0.2, 45.0, id="tief20-0.2-45"),
+        pytest.param(20.0, 0.2, 60.0, id="tief20-0.2-60"),
+        pytest.param(20.0, 0.28, 45.0, id="tief20-0.28-45"),
+        pytest.param(8.0, 0.2, 60.0, id="tief8-0.2-60"),
+        pytest.param(8.0, 0.28, 45.0, id="tief8-0.28-45"),
+    ],
+)
+def test_a_steeper_ceiling_never_needs_more_support(
+    depth: float, layer_height: float, angle: float
+) -> None:
+    """Ob eine Pultdecke Stützen braucht, folgt ihrer Neigung, nicht dem
+    Schichtraster (Nachprüfung RM-585, N4): Eine Pultdecke unter 13° brauchte bei
+    0,2 mm/60° Stützen, unter 12° und 15° nicht. Ihr oberster Streifen endete
+    0,58 mm vor der hohen Wand, mehr als eine Zugabe; die nächste Schicht wuchs
+    von beiden Seiten darüber, und die Schließfrage fand den zweiten Halt nicht."""
+    needed = [
+        advise.support_need(
+            slice_body(
+                gate(ramp_deg(40.0, degrees), depth, height=50.0),
+                layer_height,
+                overhang_angle=angle,
+                bridge_from=TWO_LINES,
+            )
+        ).needed
+        for degrees in (11.0, 12.0, 13.0, 14.0, 15.0, 17.0, 20.0, 25.0, 30.0)
+    ]
+
+    assert needed == sorted(needed, reverse=True), needed
+    assert not needed[-1], "unter 30° trägt sich die Decke"
+
+
 def lattice_between_walls() -> MeshData:
     """Die Gitterplatte der Kumiko-Schale nachgebaut: 80 auf 40 mm zwischen zwei
     Seitenwänden, 78 Löcher, die sich nach oben schließen. Ihre erste Schicht ist

@@ -4863,8 +4863,8 @@ class _Ceilings:
     def _runs_free(shape: ShapelyPolygon, below: Any, reach: float) -> bool:
         """Läuft ein Teil des Stücks, der weiter als ``reach`` über ``below``
         ragt, länger als :data:`SPAN_INTERESTING`? Gemessen an der langen Seite
-        seines kleinsten umschriebenen Rechtecks; Teile unter
-        :data:`LEDGE_SPILL` des Stücks sind Rauschen der Puffer."""
+        seines kleinsten umschriebenen Rechtecks. Ragt zusammen nicht mehr als
+        :data:`LEDGE_SPILL` des Stücks hinaus, ist es Rauschen der Puffer."""
         low_x, low_y, high_x, high_y = shape.bounds
         margin = reach + OVERHANG_MARGIN
         near = shapely.clip_by_rect(
@@ -5017,9 +5017,18 @@ class _Ceilings:
         return [member for member in tops if self.shape(member).intersects(reach)]
 
     def _anchored(self, members: list[tuple[int, int]], own: Any, closing: float) -> Any | None:
-        """Wo diese Stücke Halt finden: das Material ihrer Schicht darunter in
-        Reichweite (:meth:`_gap` mit :data:`OVERHANG_MARGIN`), ohne den eigenen
-        Grundriss ``own``, um die Reichweite aufgeweitet — ``None`` ohne Halt.
+        """Wo diese Stücke Halt finden: das Material ihrer Schicht darunter bis
+        zur doppelten Zugabe (:meth:`_gap`, mit :data:`OVERHANG_MARGIN`), ohne den
+        eigenen Grundriss ``own``, um diese Reichweite aufgeweitet — ``None`` ohne
+        Halt.
+
+        **Die doppelte Zugabe** (Nachprüfung RM-585, N4): Bleibt zwischen dem
+        obersten Streifen und der hohen Wand ein Spalt bis zu zwei Zugaben, wächst
+        die nächste Schicht von beiden Seiten darüber, ohne ein Überhangstück zu
+        bilden — die Decke ist dort gehalten. Mit einer Zugabe hing es an der Lage
+        des Schichtrasters, ob eine Decke sich schloss: Eine Pultdecke unter 13°
+        brauchte bei 0,2 mm/60° Stützen, unter 12° und 15° nicht, und eine
+        Pultreihe von 11 bis 30° sprang bei jeder Einstellung mehrmals.
 
         Eine Rechnung für Schließfrage und Scheitel (:meth:`_closes`,
         :meth:`_crown_spans_short`; Nachprüfung RM-585, N6). Nur das Material in
@@ -5041,7 +5050,7 @@ class _Ceilings:
             gap = self._gap(member)
             if not math.isfinite(gap):
                 continue
-            reach = gap + OVERHANG_MARGIN
+            reach = 2.0 * gap + OVERHANG_MARGIN
             low_x, low_y, high_x, high_y = self.shape(member).bounds
             window = (
                 low_x - 2.0 * reach,

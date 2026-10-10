@@ -46795,14 +46795,17 @@ bei 0,2 mm. Rundbögen in Wänden über 15 mm Tiefe bekommen ihre Stütze zurüc
 RM-585, L1 zurückgenommen). N3 — der Kanal-Zwilling entschied je Decke nach Fläche; jetzt
 wird nur der kragende Scheitel samt letzter Spanne ausgespart. N5–N7 — Docstrings, eine
 Halt-Rechnung für Schließfrage und Scheitel (`_anchored`), `hanging` vor `arches` gesetzt.
-N4 (Schließfrage nicht monoton in der Neigung, vorsichtige Richtung) ist als neuer Punkt gemeldet.
+N4 — ob eine Decke sich schließt, hing am Schichtraster (Pultdecke 13° bei 0,2 mm/60° mit
+Stütze, 12° und 15° ohne): Der Spalt zur hohen Wand bis zur doppelten Zugabe gilt jetzt als
+Halt (`_anchored`), die nächste Schicht schließt ihn von beiden Seiten.
 
 **Nachweis der Nachprüfung (10.10.2026):** `test_a_cantilever_that_runs_free_along_a_deep_wall_keeps_its_supports`
 (Pultdecke 12° in 20 mm Wand bei 0,2 mm/45° und 60°, 15° bei 60°, Haut 15° bei 45° und 60°,
 Rundbogen R 20 in 16 und 20 mm Wand; mit zwei Bahnen des Centauri, 0,84 mm),
 `test_a_lattice_plate_between_two_walls_is_no_arch`, `test_a_flat_arch_over_the_model_spares_its_crown`,
-`test_a_mirrored_pocket_gets_the_same_blocker`. Gegenprobe am Stand `acc6283d5`: alle zehn
-Fälle rot. Sieben Mutationen (ohne Spannweitengrenze, ohne Zwei-Seiten-Halt, lange Läufe
+`test_a_mirrored_pocket_gets_the_same_blocker`, `test_a_steeper_ceiling_never_needs_more_support`
+(Pultreihe 11 bis 30° in 8 und 20 mm Wand). Gegenprobe am Stand `acc6283d5`: alle zehn
+Fälle rot; die Neigungsreihe vor N4 in drei von fünf Einstellungen rot. Sieben Mutationen (ohne Spannweitengrenze, ohne Zwei-Seiten-Halt, lange Läufe
 tragen, Kragarm ohne Bahnbreite, Scheitel bleibt Kanal, Scheitel ohne letzte Spanne, kurze
 Brücken ohne Deckel): je 1 bis 13 Fälle rot. Prüfkörper (`probe.py`, 41 Fälle je Bahnbreite
 1,0 und 0,84 mm): Rund-, Spitzbogen, Arkade, R 30, R 35 ohne Stütze; S1-Körper mit; Pultdecke

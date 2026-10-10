@@ -44,6 +44,9 @@ offenem Drucker. Übernommen wird auf Klick, nie von allein.
   (`analysis.model_support`): Fasst der Raum **unter** ihr keinen Kreis von
   `CHANNEL_WIDTH` und liegt ihr Grundriss zwischen seinen Auflagen, gehalten
   nur von Material daneben (`_Ceilings.closes`), schließt sie sich selbst.
+  Gehalten bis zur doppelten Zugabe (`_Ceilings._anchored`): Diesen Spalt
+  schließt die nächste Schicht von beiden Seiten ohne Überhangstück; mit
+  einer Zugabe hing die Antwort am Schichtraster.
   Gefragt wird die ganze Decke (Flächenmehrheit). Außen auf dem Modell zählt
   `worth_support`, auch als `open_field`. Wer das anfasst, misst Schüssel und
   Drache. Der Brückenbefund rät über einer Kanaldecke zum Übergang, nicht zur
