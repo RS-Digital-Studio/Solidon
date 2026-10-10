@@ -208,6 +208,7 @@ extend-exclude = [
   "konzepte/nachweise-release-*/",
   "konzepte/nachweise-cad-durchsicht-2026-09/",
   "konzepte/nachweise-oertliche-erkennung-2026-10/konzept-sonden/",
+  "konzepte/nachweise-oertliche-erkennung-2026-10/p5/",
 ]
 
 [tool.ruff.per-file-target-version]

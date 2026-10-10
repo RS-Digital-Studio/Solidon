@@ -42,12 +42,13 @@ from app.core.geom.mesh import (
     python_values,
     refined_units,
     refined_units_key,
+    row_dots,
     triple_products,
     unique_edges,
 )
 from app.core.geom.repair import merge_vertices
 from app.core.log import get_logger
-from app.core.perceive import refine
+from app.core.perceive import grouped, refine
 from app.core.perceive.helix import Helix, _facet_of_face, find_helices
 from app.core.perceive.patterns import patterns_instead_of_cells
 from app.core.perceive.slots import ACROSS_THE_AXIS, PARALLEL_AXES, slots_instead_of_half_bores
@@ -165,6 +166,17 @@ PARALLEL_FACE_COSINE: Final = 0.99
 #: Wie viele parallele Kandidatenflächen :func:`_face_roles` je Block prüft,
 #: bevor es beim ersten Treffer aufhört — ein Arbeitsstück, keine Toleranz.
 FACE_ROLE_BLOCK: Final = 64
+
+#: Um wie viel weiter :func:`_face_roles` den Vorrat des blockweisen Wegs zieht
+#: als :data:`PARALLEL_FACE_COSINE`: gerundete Richtungen gegen die eigene
+#: Normale jeder Facette, die dann entscheidet. Ein Arbeitsstück, keine Toleranz
+#: — es spart nur die Facetten, die keine Antwort ändern können.
+PARALLEL_POOL_MARGIN: Final = 1e-4
+
+#: Wie nah ein Wert der Masken von :func:`_parallel_candidates` an seiner
+#: Schwelle liegen darf, bevor die Rechnung über alle Facetten entscheidet — eine
+#: Rechengrenze für die letzten Stellen eines Skalarprodukts, keine Toleranz.
+PARALLEL_POOL_GUARD: Final = 1e-8
 
 #: Kleinster Durchmesser der automatischen geometrischen Einpassung.
 #:
@@ -3693,13 +3705,27 @@ def _merged_cylinders(
         radii[index] = fit.radius
         inward[index] = fit.inward
 
+    # **Dasselbe Paar einmal** (P5, RM-592): Die zweite Runde fragt jede
+    # Gruppe gegen jede spätere, bis sich nichts mehr ändert, und stellt
+    # dabei dieselben Paare immer wieder — am Eiffelturm 6 104 Fragen an 941
+    # verschiedene Paare. Die Antwort hängt nur an den zwei Fits und Flecken
+    # dieses Körpers; ein Treffer gibt eine Kopie der Flecken zurück.
+    asked: dict[tuple[Any, ...], tuple[CylinderFit, list[int]] | None] = {}
+
+    def join(
+        new: tuple[CylinderFit, list[int]], known: tuple[CylinderFit, list[int]]
+    ) -> tuple[CylinderFit, list[int]] | None:
+        key = (new[0], tuple(new[1]), known[0], tuple(known[1]))
+        if key not in asked:
+            asked[key] = _joined_cylinders(body, mesh, new, known, check_cancelled=check_cancelled)
+        answer = asked[key]
+        return None if answer is None else (answer[0], list(answer[1]))
+
     for fit, patch in found:
         if check_cancelled is not None:
             check_cancelled()
         for index in alike(fit, np.arange(len(merged))).tolist():
-            joined = _joined_cylinders(
-                body, mesh, (fit, patch), merged[index], check_cancelled=check_cancelled
-            )
+            joined = join((fit, patch), merged[index])
             if joined is not None:
                 merged[index] = joined
                 remember(index, joined[0])
@@ -3720,9 +3746,7 @@ def _merged_cylinders(
     return _joined_until_stable(
         merged,
         lambda index, later: alike(merged[index][0], later),
-        lambda new, known: _joined_cylinders(
-            body, mesh, new, known, check_cancelled=check_cancelled
-        ),
+        join,
         remember,
         check_cancelled,
     )
@@ -3865,8 +3889,28 @@ def _lies_on_the_cylinder(
     Zylinder, bezogen auf die Sehnenhöhe der Polygonnäherung dieses Flecks —
     und mit derselben Grenze (:data:`CYLINDER_SPREAD`). Eine Wand, die den
     Vertrag des Fits erfüllt, ohne dass er für sie gerechnet wurde, ist
-    dieselbe Wand.
+    dieselbe Wand. Einmal je Fleck und Fit (P5, RM-592): Die Zusammenlegung
+    fragt dasselbe Paar in jeder Runde wieder.
     """
+    result: bool = remembered(
+        "lies_on_the_cylinder",
+        body,
+        patch,
+        lambda: _lies_on_the_cylinder_read(body, fit, patch, check_cancelled=check_cancelled),
+        extra=fit,
+        check_cancelled=check_cancelled,
+    )
+    return result
+
+
+def _lies_on_the_cylinder_read(
+    body: trimesh.Trimesh,
+    fit: CylinderFit,
+    patch: list[int],
+    *,
+    check_cancelled: Callable[[], None] | None = None,
+) -> bool:
+    """Der Rumpf von :func:`_lies_on_the_cylinder`."""
     axis = np.asarray(fit.axis, dtype=float)
     points = np.asarray(body.vertices)[np.unique(np.asarray(body.faces)[patch])]
     relative = points - np.asarray(fit.centre, dtype=float)
@@ -5873,25 +5917,25 @@ def _facets_standing_apart_read(
     """Der Rumpf von :func:`_facets_standing_apart` — die Antwort merkt sich die Hülle."""
     if not facets or not len(body.face_adjacency):
         return set()
+    # Je Dreieck seine Facette und die ausgeschlossenen Facetten als Felder,
+    # nicht als Schleife und Menge (P5, RM-592): Facetten teilen kein Dreieck.
+    members, facet_of, sizes, touches_curved = _facet_table(facets, len(body.faces), curved)
     owner = np.full(len(body.faces), -1, dtype=np.int64)
-    for number, facet in enumerate(facets):
-        owner[np.asarray(facet, dtype=np.int64)] = number
+    owner[members] = facet_of
     pairs = np.asarray(body.face_adjacency, dtype=np.int64)
     angles = np.degrees(np.asarray(body.face_adjacency_angles, dtype=float))
     first, second = owner[pairs[:, 0]], owner[pairs[:, 1]]
     boundary = first != second
     soft = boundary & ((angles < CURVATURE_LIMIT) | (first < 0) | (second < 0))
-    disqualified = {int(index) for index in first[soft]} | {int(index) for index in second[soft]}
-    disqualified.discard(-1)
+    disqualified = np.unique(np.concatenate((first[soft], second[soft])))
+    disqualified = disqualified[disqualified >= 0]
     counted = np.zeros(len(facets), dtype=np.int64)
     inner = first == second
     np.add.at(counted, first[inner & (first >= 0)], 2)
     np.add.at(counted, first[boundary & (first >= 0)], 1)
     np.add.at(counted, second[boundary & (second >= 0)], 1)
-    _members, _owner, sizes, touches_curved = _facet_table(facets, len(body.faces), curved)
     eligible = (counted == 3 * sizes) & ~touches_curved
-    if disqualified:
-        eligible[np.fromiter(disqualified, dtype=np.int64, count=len(disqualified))] = False
+    eligible[disqualified] = False
     apart: set[int] = set()
     for number in np.flatnonzero(eligible).tolist():
         if _a_sliver(body, [int(index) for index in facets[number]]):
@@ -7714,6 +7758,8 @@ SHARED_ANSWERS: Final[frozenset[str]] = frozenset(
         "patch_print",
         "rectangle_across",
         "projected_span",
+        "axial_span",
+        "lies_on_the_cylinder",
     }
 )
 
@@ -10402,7 +10448,23 @@ def _fit_circle(points: np.ndarray) -> tuple[np.ndarray, float]:
 
 
 def _axial_span(body: trimesh.Trimesh, patch: list[int], axis: Vec3) -> tuple[float, float]:
-    """Von wo bis wo ein Fleck entlang einer Achse reicht."""
+    """Von wo bis wo ein Fleck entlang einer Achse reicht.
+
+    Einmal je Fleck und Achse (P5, RM-592): Die Zusammenlegung fragt dieselben
+    Flecken je Paar und Runde — am Eiffelturm 12 200 Mal für wenige hundert.
+    """
+    result: tuple[float, float] = remembered(
+        "axial_span",
+        body,
+        patch,
+        lambda: _axial_span_read(body, patch, axis),
+        extra=tuple(float(value) for value in axis),
+    )
+    return result
+
+
+def _axial_span_read(body: trimesh.Trimesh, patch: list[int], axis: Vec3) -> tuple[float, float]:
+    """Der Rumpf von :func:`_axial_span`."""
     points = np.asarray(body.vertices, dtype=float)[np.unique(np.asarray(body.faces)[patch])]
     along = points @ np.asarray(axis, dtype=float)
     return float(along.min()), float(along.max())
@@ -11193,20 +11255,28 @@ def facet_middles(
 
     Wo ein Dreieck allein steht — auf einer Kugel etwa —, ist die Flächenmitte
     sein Schwerpunkt, und es ändert sich nichts.
+
+    **Alle Facetten in einem Zug** (:mod:`grouped`, P5 RM-592): Je Facette eine
+    Schleifenrunde kostete am Eiffelturm eine Sekunde, am Drachen drei. Die
+    Summen bleiben Bit für Bit die der Facette allein, denn an ihrer letzten
+    Stelle hängen Radien und Trennungen.
     """
     middles = np.asarray(body.triangles_center, dtype=float).copy()
     areas = np.asarray(body.area_faces, dtype=float)
-    for number, facet in enumerate(body.facets):
-        # Je Facette eine Schleifenrunde, am Drachen 3 s am Stück: geprüft wird
-        # blockweise. Die Summe je Facette bleibt dieselbe — an ihrer letzten
-        # Stelle hängen Radien und Trennungen.
-        if check_cancelled is not None and number % FIT_SCAN_BLOCK == 0:
-            check_cancelled()
-        members = np.asarray(facet)
-        weight = areas[members].sum()
-        if weight <= EPS_GEOM:
-            continue
-        middles[members] = (middles[members] * areas[members][:, None]).sum(axis=0) / weight
+    facets = body.facets
+    if not len(facets):
+        return middles
+    if check_cancelled is not None:
+        check_cancelled()
+    sizes = np.fromiter((len(facet) for facet in facets), dtype=np.int64, count=len(facets))
+    members = np.concatenate([np.asarray(facet, dtype=np.int64) for facet in facets])
+    starts = np.concatenate(([0], np.cumsum(sizes)[:-1]))
+    own = areas[members]
+    weights = grouped.group_sums(own, starts, sizes)
+    sums = grouped.group_row_sums(middles[members] * own[:, None], starts, sizes)
+    kept = weights > EPS_GEOM
+    chosen = np.repeat(kept, sizes)
+    middles[members[chosen]] = np.repeat(sums[kept] / weights[kept][:, None], sizes[kept], axis=0)
     return middles
 
 
@@ -14123,7 +14193,6 @@ def _face_roles(
     # Öffnung nach oben freie Sicht besteht. Eine seitlich versetzte Lippe
     # oder ein zweiter Körper belegt dagegen keine Innenlage.
     import shapely
-    from shapely.geometry import MultiPoint
 
     normals = np.asarray([body.face_normals[facet[0]] for facet, _a, _c in entries], dtype=float)
     centres = np.asarray([centre for _f, _a, centre in entries], dtype=float)
@@ -14142,25 +14211,58 @@ def _face_roles(
     basis_u = basis_u / np.linalg.norm(basis_u, axis=1)[:, None]
     basis_v = np.cross(normals, basis_u)
     # Je Kandidatenfläche ihre Kontur in der eigenen Ebene — einmal gebildet,
-    # für jede Fläche, die sie fragt.
-    outlines: dict[int, Any] = {}
+    # für jede Fläche, die sie fragt. Ein Feld statt eines Wörterbuchs: Der
+    # blockweise Weg unten fragte am Eiffelturm 375 000 Konturen einzeln ab.
+    #
+    # **Gebündelt wird nur, was keine Zahl ändert** (P5, RM-592): Die Ecken
+    # jeder Kontur rechnen wie bisher je Fläche (``corners @ basis``, eine
+    # BLAS-Zeile hängt an ihrer Lage im Feld); gebündelt sind die Geometrien
+    # (``shapely.multipoints`` statt ``MultiPoint`` je Kontur, am Eiffelturm
+    # 1,1 s Python-Hülle), die Fragen an den Baum und die Masken. Ein Punkt auf
+    # dem Rand einer Kontur ist an CAD-Netzen die Regel; eine andere letzte
+    # Stelle seiner Lage kippte dort am Eiffelturm drei Innenlagen.
+    outlines = np.full(len(entries), None, dtype=object)
 
-    def outline_of(other: int) -> Any:
-        if other not in outlines:
-            corners = vertices[np.unique(faces[entries[other][0]])] - centres[other]
-            footprint = MultiPoint(
-                np.column_stack((corners @ basis_u[other], corners @ basis_v[other]))
+    def hulls(points: list[np.ndarray]) -> np.ndarray:
+        """Konvexe Hüllen mehrerer Punktwolken in einem Zug — wie ``MultiPoint(p).convex_hull``."""
+        sizes = np.fromiter((len(cloud) for cloud in points), dtype=np.int64, count=len(points))
+        made = shapely.multipoints(
+            np.concatenate(points), indices=np.repeat(np.arange(len(points)), sizes)
+        )
+        return np.asarray(shapely.convex_hull(made), dtype=object)
+
+    def footprint(corners: np.ndarray, other: int) -> np.ndarray:
+        """Ecken, schon um die Mitte von ``other`` versetzt, in dessen Ebene."""
+        return np.column_stack((corners @ basis_u[other], corners @ basis_v[other]))
+
+    def outlines_of(others: np.ndarray) -> np.ndarray:
+        """Die Konturen dieser Kandidaten, fehlende in einem Zug gebildet."""
+        missing = np.unique(others[[outlines[int(other)] is None for other in others]])
+        if len(missing):
+            made = hulls(
+                [
+                    footprint(
+                        vertices[np.unique(faces[entries[int(other)][0]])] - centres[int(other)],
+                        int(other),
+                    )
+                    for other in missing
+                ]
             )
-            outlines[other] = footprint.convex_hull
-        return outlines[other]
+            for other, hull in zip(missing.tolist(), made, strict=True):
+                outlines[other] = hull
+        return np.asarray(outlines[others], dtype=object)
 
     def covers_face(feature: Feature, other: int) -> bool:
         """Ein Schriftzug über der Mitte umschließt nicht die ganze Außenwand."""
         corners = vertices[np.unique(faces[list(feature.face_indices)])] - centres[other]
-        footprint = MultiPoint(
-            np.column_stack((corners @ basis_u[other], corners @ basis_v[other]))
-        ).convex_hull
-        return bool(outline_of(other).covers(footprint))
+        outline = shapely.convex_hull(shapely.multipoints(footprint(corners, other)))
+        return bool(shapely.covers(outlines_of(np.asarray([other]))[0], outline))
+
+    def covers_faces(feature: Feature, others: np.ndarray) -> np.ndarray:
+        """:func:`covers_face` für mehrere Kandidaten — dieselben Ecken je Kandidat, ein Zug."""
+        points = vertices[np.unique(faces[list(feature.face_indices)])]
+        made = hulls([footprint(points - centres[int(other)], int(other)) for other in others])
+        return np.asarray(shapely.covers(outlines_of(others), made), dtype=bool)
 
     # **Gleichgerichtete Flächen fragen einen Baum, nicht jede Fläche jede.**
     # Ein Kreuzrändel mit 6 645 Rauten trägt 32 140 Wände in vier Richtungen;
@@ -14188,49 +14290,85 @@ def _face_roles(
             # Eine Basis für alle — die des ersten Mitglieds. Nahe der
             # Hilfsvektorgrenze wählten zwei fast gleiche Normalen sonst zwei
             # verschiedene Basen, und der Punkt läge in der falschen Kontur.
-            along, across = basis_u[members[0]], basis_v[members[0]]
-            hulls = []
-            for other in members:
-                corners = vertices[np.unique(faces[entries[int(other)][0]])]
-                hulls.append(
-                    MultiPoint(np.column_stack((corners @ along, corners @ across))).convex_hull
-                )
-            trees[key] = (shapely.STRtree(hulls), members)
+            axis = int(members[0])
+            made = hulls(
+                [
+                    footprint(vertices[np.unique(faces[entries[int(other)][0]])], axis)
+                    for other in members
+                ]
+            )
+            trees[key] = (shapely.STRtree(made), members)
         return trees[key]
 
     # Welche anderen Richtungen einer Richtung noch nahe genug sind — eine
     # Frage je Richtungspaar, nicht je Fläche: Vier Wandrichtungen und zwei
     # Deckel sind sechs, die Flächen sind 32 000.
     unit_normals = unique_keys / np.maximum(np.linalg.norm(unique_keys, axis=1), EPS_GEOM)[:, None]
-    near = (unit_normals @ unit_normals.T > PARALLEL_FACE_COSINE) & ~np.eye(
-        len(unique_keys), dtype=bool
-    )
-    roles: dict[FeatureId, bool] = {}
-    for feature in features:
+    cosines = unit_normals @ unit_normals.T
+    alone = ~np.eye(len(unique_keys), dtype=bool)
+    near = (cosines > PARALLEL_FACE_COSINE) & alone
+    # Der Vorrat des blockweisen Wegs, mit Abstand gezogen: Was nicht darin
+    # liegt, steht so weit ab, dass keine letzte Stelle es nahe genug bringt.
+    nearby = (cosines > PARALLEL_FACE_COSINE - PARALLEL_POOL_MARGIN) & alone
+    pools: dict[int, np.ndarray] = {}
+
+    def pool_of(key: int) -> np.ndarray:
+        if key not in pools:
+            pools[key] = np.flatnonzero(nearby[key][key_of])
+        return pools[key]
+
+    count = len(features)
+    feature_normals = [np.asarray(feature.params["normal"], dtype=float) for feature in features]
+    feature_centres = [np.asarray(feature.params["centre"], dtype=float) for feature in features]
+    own_shells = [shell[feature.face_indices[0]] for feature in features]
+    own_keys = [key_index.get(tuple(np.round(normal, 6).tolist())) for normal in feature_normals]
+    inner = [False] * count
+
+    # **Die Fragen an den Baum gebündelt**: je Richtung alle Flächenmitten in
+    # einer Anfrage. Gerechnet wird die Lage jeder Mitte wie bisher je Fläche;
+    # Schale, Lage und ``covers_face`` fragen je Treffer bis zum ersten, der
+    # trägt — dieselbe Antwort, denn sie ist ein „gibt es“.
+    by_key: dict[int, list[int]] = {}
+    for number, own_key in enumerate(own_keys):
+        if own_key is not None:
+            by_key.setdefault(own_key, []).append(number)
+    for key, asking in by_key.items():
         if check_cancelled is not None:
             check_cancelled()
-        normal = np.asarray(feature.params["normal"], dtype=float)
-        centre = np.asarray(feature.params["centre"], dtype=float)
-        own_shell = shell[feature.face_indices[0]]
-        inner = False
-        own_key = key_index.get(tuple(np.round(normal, 6).tolist()))
-        if own_key is not None:
-            tree, members = tree_of(own_key)
-            axis = members[0]
-            flat = [[float(centre @ basis_u[axis]), float(centre @ basis_v[axis])]]
-            point = shapely.points(flat)[0]
-            # ``covered_by``: der Punkt, den eine Kontur des Baums deckt — das
-            # Prädikat gilt vom Anfragepunkt aus, nicht von der Kontur.
-            for other in members[tree.query(point, predicate="covered_by")]:
-                if (
-                    entry_shells[other] == own_shell
-                    and float((centres[other] - centre) @ normal) > EPS_GEOM
-                    and covers_face(feature, int(other))
-                    and (eligible is None or eligible(entries[int(other)][0]))
-                ):
-                    inner = True
-                    break
-        if inner:
+        tree, members = tree_of(key)
+        axis = int(members[0])
+        flat = np.asarray(
+            [
+                [
+                    float(feature_centres[number] @ basis_u[axis]),
+                    float(feature_centres[number] @ basis_v[axis]),
+                ]
+                for number in asking
+            ],
+            dtype=float,
+        )
+        # ``covered_by``: der Punkt, den eine Kontur des Baums deckt — das
+        # Prädikat gilt vom Anfragepunkt aus, nicht von der Kontur.
+        which, hit = tree.query(shapely.points(flat), predicate="covered_by")
+        for position, other in zip(which.tolist(), members[hit].tolist(), strict=True):
+            number = asking[position]
+            if inner[number]:
+                continue
+            centre, normal = feature_centres[number], feature_normals[number]
+            if (
+                entry_shells[other] == own_shells[number]
+                and float((centres[other] - centre) @ normal) > EPS_GEOM
+                and covers_face(features[number], other)
+                and (eligible is None or eligible(entries[other][0]))
+            ):
+                inner[number] = True
+
+    roles: dict[FeatureId, bool] = {}
+    for number, feature in enumerate(features):
+        if check_cancelled is not None:
+            check_cancelled()
+        own_key = own_keys[number]
+        if inner[number]:
             roles[feature.id] = True
             continue
         if own_key is not None and not near[own_key].any():
@@ -14238,15 +14376,24 @@ def _face_roles(
             # und keine Maske über alle Flächen für eine leere Antwort.
             roles[feature.id] = False
             continue
-        same_shell = entry_shells == own_shell
-        above = (centres - centre) @ normal > EPS_GEOM
-        alike = normals @ normal > PARALLEL_FACE_COSINE
-        candidates = np.flatnonzero(same_shell & alike & above & (key_of != own_key))
+        normal, centre = feature_normals[number], feature_centres[number]
+        candidates = _parallel_candidates(
+            normals,
+            centres,
+            entry_shells,
+            key_of,
+            normal,
+            centre,
+            own_shells[number],
+            own_key,
+            None if own_key is None else pool_of(own_key),
+        )
         # **Blockweise, nicht ein Punkt und ein ``covers`` je Kandidat** —
         # und wie bisher nur bis zum ersten Treffer: Am Kumiko-Gitter mit
         # 7 295 Flächen hat jede Fläche rund 200 parallele Kandidaten, und
         # ein Punkt je Kandidat kostete 5,5 s im Hauptweg der
         # Flächenerkennung (gemessen am 21.09.2026).
+        found = False
         for start in range(0, len(candidates), FACE_ROLE_BLOCK):
             block = candidates[start : start + FACE_ROLE_BLOCK]
             offsets = centre - centres[block]
@@ -14256,19 +14403,64 @@ def _face_roles(
                     np.einsum("ij,ij->i", offsets, basis_v[block]),
                 )
             )
-            covered = shapely.covers(
-                np.asarray([outline_of(int(other)) for other in block], dtype=object),
-                shapely.points(coordinates),
-            )
-            if any(
-                covers_face(feature, int(other))
-                and (eligible is None or eligible(entries[int(other)][0]))
-                for other in block[np.asarray(covered, dtype=bool)]
-            ):
-                inner = True
+            covered = shapely.covers(outlines_of(block), shapely.points(coordinates))
+            hits = block[np.asarray(covered, dtype=bool)]
+            if eligible is None and len(hits) > 1:
+                # Alle Treffer eines Blocks in einem Zug: dieselben Konturen,
+                # dieselbe Frage, ein „gibt es“ über alle.
+                found = bool(covers_faces(feature, hits).any())
+            else:
+                found = any(
+                    covers_face(feature, int(other))
+                    and (eligible is None or eligible(entries[int(other)][0]))
+                    for other in hits
+                )
+            if found:
                 break
-        roles[feature.id] = inner
+        roles[feature.id] = found
     return roles
+
+
+def _parallel_candidates(
+    normals: np.ndarray,
+    centres: np.ndarray,
+    entry_shells: np.ndarray,
+    key_of: np.ndarray,
+    normal: np.ndarray,
+    centre: np.ndarray,
+    own_shell: Any,
+    own_key: int | None,
+    pool: np.ndarray | None,
+) -> np.ndarray:
+    """Die fast gleichgerichteten Flächen derselben Schale über ``centre`` — wie über alle gefragt.
+
+    Die Masken liefen je Fläche über alle Facetten des Körpers (``normals @
+    normal``), am Eiffelturm 4 600 Mal über 6 000. Gefragt wird jetzt der
+    Vorrat der nahen Richtungen (``pool``), Zeile für Zeile ohne BLAS — und
+    wo ein Wert näher als :data:`PARALLEL_POOL_GUARD` an einer Schwelle liegt,
+    entscheidet die Rechnung von früher über alle Facetten. Dort könnte die
+    letzte Stelle der BLAS-Zeile anders ausfallen; sonst nirgends, denn die
+    Rundungsfehler eines Skalarprodukts dreier Zahlen liegen Größenordnungen
+    darunter. Dieselben Kandidaten in derselben Folge.
+    """
+    if pool is not None:
+        cosine = row_dots(normals[pool], np.broadcast_to(normal, (len(pool), 3)))
+        height = row_dots(centres[pool] - centre, np.broadcast_to(normal, (len(pool), 3)))
+        if not (
+            bool((np.abs(cosine - PARALLEL_FACE_COSINE) <= PARALLEL_POOL_GUARD).any())
+            or bool((np.abs(height - EPS_GEOM) <= PARALLEL_POOL_GUARD).any())
+        ):
+            chosen: np.ndarray = pool[
+                (entry_shells[pool] == own_shell)
+                & (cosine > PARALLEL_FACE_COSINE)
+                & (height > EPS_GEOM)
+                & (key_of[pool] != own_key)
+            ]
+            return chosen
+    same_shell = entry_shells == own_shell
+    above = (centres - centre) @ normal > EPS_GEOM
+    alike = normals @ normal > PARALLEL_FACE_COSINE
+    return np.flatnonzero(same_shell & alike & above & (key_of != own_key))
 
 
 def detect_curved_faces(
