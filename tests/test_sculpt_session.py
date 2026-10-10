@@ -228,10 +228,17 @@ def test_a_finish_waiting_for_the_evaluation_does_not_take_a_later_stroke(
 
     assert window.sculpting(), "die Sitzung bleibt offen"
     assert len(window.session.project.document.ops) == before, "nichts geschrieben"
-    assert window.status_message.text() == tr(
+    said = tr(
         "Nicht übernommen, weil sich die Werte geändert haben. "
         "Klicken Sie erneut, um den neuen Stand zu übernehmen."
     )
+    assert window._announcement == said
+    # Die Wandprüfung des Zugs legt ihren Fortschritt über die Statuszeile und
+    # gibt die Ansage danach wieder frei (``announce``); auf macOS lief sie
+    # zur Zeit der Abfrage noch. Erst wenn sie fertig ist, zählt die Zeile.
+    assert window.wait_for_sculpt_check()
+    QApplication.processEvents()
+    assert window.status_message.text() == said
 
 
 def test_a_waiting_click_keeps_its_promise_while_the_map_is_computed(
@@ -839,6 +846,26 @@ def test_a_solid_body_leaves_the_warning_empty(window: MainWindow) -> None:
     assert window.wait_for_sculpt_check()
 
     assert not window.sculpt_bar.warning.text()
+
+
+def test_a_check_still_owed_by_the_timer_is_waited_for(window: MainWindow) -> None:
+    """Feuert der Zeitgeber eines Zugs erst beim Zustellen, ersetzt seine
+    Prüfung die abgewartete — auf den macOS-Läufern fehlte so der Befund in
+    der Leiste, und die Statuszeile trug noch den Fortschritt der Karte. Der
+    Prüfstand wartet deshalb auf die Antwort zum jüngsten Stand."""
+    object_id = with_a_body(window)
+    window.start_sculpt(object_id)
+    window._on_sculpt((0.0, 0.0, 82.0))
+    assert window.wait_for_sculpt_preview(60_000)
+    window._check_sculpted_walls()
+    window._sculpt_check.setInterval(0)
+    window._sculpt_check.start()  # die Lage des langsamen Läufers: fällig beim Zustellen
+
+    assert window.wait_for_sculpt_check()
+
+    assert not window._sculpt_check.isActive(), "keine Prüfung steht mehr aus"
+    assert window._sculpt_wall_worker is None, "die letzte Antwort ist zugestellt"
+    assert not window.sculpt_bar.warning.text(), "ein voller Körper warnt nicht"
 
 
 def test_the_wall_check_waits_for_the_hand_to_rest(window: MainWindow) -> None:
@@ -1664,10 +1691,8 @@ def test_a_sculpt_preview_outside_the_printer_is_reported(
     window._on_sculpt(point)
     window._check_sculpted_walls()
     assert window.wait_for_sculpt_check()
-    assert any(
-        word in window.sculpt_bar.analysis.note.text()
-        for word in ("Bauraum", "Druckfläche", "Bett")
-    )
+    note = window.sculpt_bar.analysis.note.text()
+    assert any(word in note for word in ("Bauraum", "Druckfläche", "Bett")), note
 
 
 def test_a_new_sculpt_session_does_not_inherit_the_last_note(window: MainWindow) -> None:
