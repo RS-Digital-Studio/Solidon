@@ -2342,7 +2342,7 @@ def test_a_large_flat_top_asks_for_ironing_the_topmost_surface() -> None:
     bügelt die oberste mit."""
     profile = profiles.make_profile()
     settings = print_settings.resolve(profile)
-    assert not settings.shell.ironing and not settings.shell.ironing_topmost
+    assert settings.shell.ironing == "none"
 
     def topmost(
         result: SliceResult, chosen: PrintSettings = settings, kinds: tuple[str, ...] = ()
@@ -2350,12 +2350,12 @@ def test_a_large_flat_top_asks_for_ironing_the_topmost_surface() -> None:
         return [
             entry
             for entry in advise.advise(chosen, profile, result, fit_kinds=kinds)
-            if entry.path == "shell.ironing_topmost"
+            if entry.path == "shell.ironing"
         ]
 
     plate = _corpus("plate_holes.stl")
     offered = topmost(plate)
-    assert [(entry.value, entry.severity) for entry in offered] == [(True, "info")]
+    assert [(entry.value, entry.severity) for entry in offered] == [("topmost", "info")]
     assert offered[0].reason
     assert not topmost(_corpus("generated_figure.stl"))
     assert not topmost(_corpus("cup_on_stem.stl"))
@@ -2364,15 +2364,17 @@ def test_a_large_flat_top_asks_for_ironing_the_topmost_surface() -> None:
     knob.apply_translation((0.0, 0.0, 13.0))
     assert not topmost(_standing(trimesh.util.concatenate([box, knob]))), "oben nur der Knauf"
     assert not topmost(plate, print_settings.with_path(settings, "shell.top_layers", 0))
-    assert not topmost(plate, print_settings.with_path(settings, "shell.ironing", True))
-    assert "shell.ironing_topmost" in advise.PART_PATHS
-    assert "shell.ironing_topmost" in advise.SLICED_PATHS
+    every = print_settings.with_path(settings, "shell.ironing", "top_surfaces")
+    assert not topmost(plate, every)
+    assert "shell.ironing" in advise.PART_PATHS
+    assert "shell.ironing" in advise.SLICED_PATHS
 
 
 def test_a_flush_fit_keeps_ironing_every_top_surface() -> None:
     """Die bündige Passung bügelt jede Oberseite, auch eine unter dem Deckel;
     daneben bleibt „nur die oberste“ aus, sonst stünden zwei Vorschläge für
-    dieselbe Sache im Dialog."""
+    dieselbe Sache im Dialog. Wer schon die oberste bügelt, bekommt jede
+    vorgeschlagen."""
     profile = profiles.make_profile()
     settings = print_settings.resolve(profile)
 
@@ -2380,8 +2382,21 @@ def test_a_flush_fit_keeps_ironing_every_top_surface() -> None:
         advise.advise(settings, profile, _corpus("plate_holes.stl"), fit_kinds=("flush",))
     )
 
+    ironing = [
+        entry.value
+        for entry in advise.advise(
+            settings, profile, _corpus("plate_holes.stl"), fit_kinds=("flush",)
+        )
+        if entry.path == "shell.ironing"
+    ]
     assert "shell.ironing" in offered
-    assert "shell.ironing_topmost" not in offered
+    assert ironing == ["top_surfaces"]
+    topmost = print_settings.with_path(settings, "shell.ironing", "topmost")
+    assert [
+        entry.value
+        for entry in advise.advise(topmost, profile, fit_kinds=("flush",))
+        if entry.path == "shell.ironing"
+    ] == ["top_surfaces"]
 
 
 # --- Unterschrittene Materialtemperatur bleibt nach der Auflösung sichtbar ------------

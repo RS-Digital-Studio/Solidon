@@ -1093,7 +1093,10 @@ Bügeln lohnt, wo man die Bahnen sieht: auf einer großen flachen Oberseite
 400 mm² und der Hälfte des größten Querschnitts — sonst ist oben ein Griff oder
 eine Kante (Kasten mit Knauf, Becher, Figur: nichts). Die übrigen Oberseiten
 liegen im Teil, ihr Bügeln kostete Zeit, die niemand sieht. Neben einer
-bündigen Passung bleibt es bei „jede Oberseite“, die die oberste einschließt.
+bündigen Passung bleibt es bei „alle Oberseiten“. Bügeln ist seit Format 52 eine
+Wahl (keine, oberste Fläche, alle Oberseiten) statt zweier Schalter mit Vorrangregel —
+so nennen es die Slicer selbst; am Sockel mit Würfel bügelt „oberste Fläche“ in allen
+acht Programmen nur den Würfel, „alle Oberseiten“ auch den Ring des Sockels.
 Angekommen in allen acht Programmen als Objektwert, nur am Teil mit Rat
 (Kegelstümpfe, `test_ironing_the_topmost_face_stays_with_that_part` in sechs).
 

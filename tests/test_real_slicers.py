@@ -564,8 +564,8 @@ def test_ironing_the_topmost_face_stays_with_that_part(
     set_test_license(monkeypatch, active=True)
     profile = profiles.make_profile(PROGRAMS[program], "pla")
     settings = print_settings.resolve(profile)
-    assert not settings.shell.ironing
-    settings = print_settings.with_accepted(settings, "shell.ironing_topmost", True)
+    assert settings.shell.ironing == "none"
+    settings = print_settings.with_accepted(settings, "shell.ironing", "topmost")
     setup = _preselected(handover.detect(installed_slicer), profile)
 
     def asks(
@@ -573,8 +573,8 @@ def test_ironing_the_topmost_face_stays_with_that_part(
     ) -> list[SettingAdvice]:
         if entry.id != "links":
             return []
-        was = print_settings.read_path(base, "shell.ironing_topmost")
-        return [SettingAdvice("shell.ironing_topmost", True, was, "Probe")]
+        was = print_settings.read_path(base, "shell.ironing")
+        return [SettingAdvice("shell.ironing", "topmost", was, "Probe")]
 
     monkeypatch.setattr(writer, "part_advice", asks)
 

@@ -480,12 +480,7 @@ ORCA_PROCESS: Final[tuple[tuple[str, str, Reader], ...]] = (
     (
         "shell.ironing",
         "ironing_type",
-        _choice({"no ironing": False, "top": True, "topmost": False}),
-    ),
-    (
-        "shell.ironing_topmost",
-        "ironing_type",
-        _choice({"no ironing": False, "top": False, "topmost": True}),
+        _choice({"no ironing": "none", "top": "top_surfaces", "topmost": "topmost"}),
     ),
     ("shell.thick_bridges", "thick_bridges", _flag),
     ("shell.bridge_flow", "bridge_flow", _ratio),
@@ -1485,7 +1480,6 @@ PRUSA_PROCESS: Final[tuple[tuple[str, str, Reader], ...]] = (
         "perimeter_generator",
         _choice({"classic": "classic", "arachne": "arachne"}),
     ),
-    ("shell.ironing", "ironing", _flag),
     ("shell.thick_bridges", "thick_bridges", _flag),
     ("shell.bridge_flow", "bridge_flow_ratio", _ratio),
     ("shell.overhang_walls", "extra_perimeters_on_overhangs", _flag),
@@ -1765,10 +1759,7 @@ def _read_prusa(
     take("speed.outer_wall_acceleration", _prusa_outer_wall_acceleration(values))
     take("support.style", _prusa_support_style(values))
     take("shell.scarf_seam", _prusa_scarf_seam(values))
-    topmost = _prusa_ironing_topmost(values)
-    take("shell.ironing_topmost", topmost)
-    if topmost:
-        read["shell.ironing"] = False
+    take("shell.ironing", _prusa_ironing(values))
     # SuperSlicer führt Einzug und Lochausgleich unter eigenen Namen, beide
     # als Materialzugabe, also mit umgekehrtem Vorzeichen
     # (``slicer_keys.PROGRAM_NEGATED``, RM-589).
@@ -1905,13 +1896,16 @@ def _prusa_scarf_seam(values: Mapping[str, Any]) -> bool | None:
     return length is None or (_float(length) or 0.0) > 0.0
 
 
-def _prusa_ironing_topmost(values: Mapping[str, Any]) -> bool | None:
-    """Nur die oberste Fläche gebügelt: ``ironing`` an und ``ironing_type``
-    „topmost“ (RM-588). Ohne Angabe gilt Prusas Vorgabe „top“."""
+def _prusa_ironing(values: Mapping[str, Any]) -> str | None:
+    """Was gebügelt wird: ``ironing`` als Schalter, ``ironing_type`` als Art
+    (RM-588). Ohne Art gilt Prusas Vorgabe „top“, jede Oberseite; „solid“, jede
+    Vollschicht, ist davon die nächste Wahl."""
     ironing = _prusa_first(values.get("ironing"))
     if ironing is None:
         return None
-    return ironing == "1" and _prusa_first(values.get("ironing_type")) == "topmost"
+    if ironing != "1":
+        return "none"
+    return "topmost" if _prusa_first(values.get("ironing_type")) == "topmost" else "top_surfaces"
 
 
 def _prusa_outer_width(values: Mapping[str, Any], context: _Context) -> float | None:

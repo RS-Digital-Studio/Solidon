@@ -385,9 +385,8 @@ Herstellers, Solidon schreibt darüber nur die Abweichung.
   Namen, Objektmarken und `filament_self_index`.
 - **Ältere Dateien ordnet die Migration gegen jede Auflösung ein, mit der eine
   Version schrieb** (`print_settings.legacy_choices`: heutige und 0.5.0,
-  `resolve(..., legacy=True)`); wer die Auflösung ändert, prüft an einer von
-  der alten Version gespeicherten Datei
-  (`tests/data/projects/print_settings_v33.p3d`).
+  `resolve(..., legacy=True)`), einen Wert mit neuem Typ vorher umgerechnet
+  (Bügeln, Format 52); geprüft an `tests/data/projects/print_settings_v33.p3d`.
 
 ## Die drei Stufen der Übergabe
 

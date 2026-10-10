@@ -559,8 +559,8 @@ def _layers(
     solid_gap = spacing(roles.w_solid, height, motion)
     # Gebügelt wird jede Oberseite oder nur die der letzten Schicht, über der
     # keine mehr liegt (RM-588); „jede“ schließt die oberste ein.
-    iron_every = shell.ironing
-    iron_last = shell.ironing_topmost and not shell.ironing
+    iron_every = shell.ironing == "top_surfaces"
+    iron_last = shell.ironing == "topmost"
     built: list[_Layer] = []
     sparse_below = _EMPTY
     for index, region in enumerate(regions):

@@ -26,7 +26,7 @@ from app.i18n import _
 _log = get_logger(__name__)
 
 #: Aktuelle Version von ``project.json``.
-FORMAT_VERSION: Final = 51
+FORMAT_VERSION: Final = 52
 
 #: Unter diesem Schlüssel steht während der Kette, mit welcher Version die Datei
 #: gespeichert wurde — für einen Schritt, der davon abhängt, ob das Projekt mit
@@ -934,7 +934,12 @@ def _mark_own_print_settings(data: dict[str, Any]) -> dict[str, Any]:
     scene: dict[str, Any] = found if isinstance(found, dict) else {}
     printer = str(scene.get("printer", ""))
     material = profiles.material_for(printer, str(scene.get("material", "")))
-    settings = print_settings_from_data(stored, material)
+    # Heute ist Bügeln eine Wahl (RM-588): Verglichen wird der Schalter der
+    # Datei so, wie ihn der spätere Schritt liest — sonst wäre jeder Satz mit
+    # „aus“ eine eigene Wahl, weil ``False`` nicht „none“ gleicht.
+    readable = {**stored, "shell": dict(stored.get("shell", {}))}
+    _ironing_becomes_a_choice({"print_settings": readable})
+    settings = print_settings_from_data(readable, material)
     carried = data.get("carried_profiles")
     references: tuple[PrintSettings, ...]
     try:
@@ -1553,6 +1558,35 @@ def _keep_split_splinters_as_they_were(data: dict[str, Any]) -> dict[str, Any]:
     return data
 
 
+#: Format 51 speicherte das Bügeln als Schalter; ``True`` bügelte jede Oberseite.
+_SAVED_IRONING: Final = {True: "top_surfaces", False: "none"}
+
+
+def _ironing_becomes_a_choice(data: dict[str, Any]) -> dict[str, Any]:
+    """Bügeln wird eine Wahl: keine Oberseite, die oberste Fläche oder jede (RM-588).
+
+    Der Schritt trägt keine Nummer im Text, damit er wandern kann; seine
+    Nummern stehen allein in :data:`MIGRATIONS` und :data:`FORMAT_VERSION`.
+    Bis dahin war *Oberfläche bügeln* ein Schalter, und an hieß jede Oberseite
+    (Orca ``top``, Prusa ``ironing = 1`` mit der Vorgabe ``top``, Cura
+    ``ironing_enabled``). Der Schalter wird zur gleichen Wahl, im Satz der
+    Druckeinstellungen und in der Wahl der Platte unter einem übernommenen
+    Vorschlag (``plate_choices``); ein anderer Wert bleibt, wie er ist, die
+    Datei öffnet dann mit der Vorgabe. Festgehalten an
+    ``tests/data/projects/ironing_v51.p3d``, geschrieben vom Stand davor.
+    """
+    stored = data.get("print_settings")
+    if not isinstance(stored, dict):
+        return data
+    shell = stored.get("shell")
+    if isinstance(shell, dict) and isinstance(shell.get("ironing"), bool):
+        shell["ironing"] = _SAVED_IRONING[shell["ironing"]]
+    choices = stored.get("plate_choices")
+    if isinstance(choices, dict) and isinstance(choices.get("shell.ironing"), bool):
+        choices["shell.ironing"] = _SAVED_IRONING[choices["shell.ironing"]]
+    return data
+
+
 #: Alle bekannten Schritte, älteste zuerst.
 MIGRATIONS: Final[tuple[Step, ...]] = (
     Step(from_version=1, to_version=2, apply=_add_chat),
@@ -1605,6 +1639,7 @@ MIGRATIONS: Final[tuple[Step, ...]] = (
     Step(from_version=48, to_version=49, apply=_keep_gestures_as_they_were),
     Step(from_version=49, to_version=50, apply=_keep_sketch_solutions_as_they_were),
     Step(from_version=50, to_version=51, apply=_keep_split_splinters_as_they_were),
+    Step(from_version=51, to_version=52, apply=_ironing_becomes_a_choice),
 )
 
 

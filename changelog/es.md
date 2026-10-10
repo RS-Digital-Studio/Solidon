@@ -103,7 +103,8 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Para PETG, Solidon sugiere *Refrigeración total en el soporte*. Así se suelta más fácil de la pieza.
 - En figuras, Solidon propone la costura detrás, sin línea por delante. Para una cara superior grande y plana propone planchar.
 - El tiempo de impresión estimado incluye ahora el planchado.
-- Nuevos ajustes de impresión: *Capas de separación inferiores*, *Paredes de los árboles*, *Punta del árbol* y *Planchar la cara más alta*.
+- Nuevos ajustes de impresión: *Capas de separación inferiores*, *Paredes de los árboles* y *Punta del árbol*.
+- En *Planchar la superficie* ahora elige entre *Cara más alta* y *Todas las caras superiores*.
 - También son nuevos *Contraer la primera capa* y *Ensanchar agujeros*. Ambos siguen al slicer si no elige.
 - El campo *Espacio superior* se llama ahora *Espacio arriba y abajo* y vale para ambos lados del soporte.
 - Si el slicer rechaza filamentos con temperaturas demasiado distintas en una placa, Solidon indica ahora el motivo y qué hacer, en lugar de decir solo que no se creó ningún archivo.

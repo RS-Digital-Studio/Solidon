@@ -645,7 +645,6 @@ MEASURED_PART_PATHS = frozenset(
         "layers.line_width",
         "shell.hole_offset",
         "shell.ironing",
-        "shell.ironing_topmost",
         "shell.outer_wall_first",
         "shell.precise_outer_wall",
         "shell.scarf_seam",

@@ -102,7 +102,8 @@ scrive in `website/version.json`.
 - Per il PETG Solidon suggerisce *Raffreddamento pieno sul supporto*. Così si stacca più facilmente dal pezzo.
 - Sulle figure Solidon propone la cucitura dietro, senza linea davanti. Per una grande faccia superiore piana propone la stiratura.
 - Il tempo di stampa stimato ora include la stiratura.
-- Nuove impostazioni di stampa: *Strati di interfaccia inferiori*, *Pareti degli alberi*, *Punta dell'albero* e *Stira la faccia più alta*.
+- Nuove impostazioni di stampa: *Strati di interfaccia inferiori*, *Pareti degli alberi* e *Punta dell'albero*.
+- In *Stira la superficie* ora scegli tra *Faccia più alta* e *Tutte le facce superiori*.
 - Nuovi anche *Restringi il primo strato* e *Allarga i fori*. Seguono lo slicer se non scegli.
 - Il campo *Spazio verso l'alto* ora si chiama *Spazio sopra e sotto* e vale per entrambi i lati del supporto.
 - Se lo slicer rifiuta filamenti con temperature troppo diverse su un piatto, Solidon ora indica il motivo e la via d'uscita, invece di dire solo che non è stato creato alcun file.

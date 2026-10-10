@@ -504,6 +504,20 @@ def _part_versions(operation: Operation) -> list[str]:
     return versions
 
 
+#: Wie Format 51 das Bügeln speicherte (RM-588): als Schalter, ``True`` für
+#: jede Oberseite. Der Abdruck einer Buchung aus 0.5.3 oder 0.6.0 trägt den
+#: Schalter; dieselbe Wahl heißt seit Format 52 „none“ oder „top_surfaces“
+#: und muss denselben Abdruck geben. „topmost“ gab es davor nicht.
+_SAVED_IRONING: Final[Mapping[str, bool]] = MappingProxyType({"none": False, "top_surfaces": True})
+
+
+def _as_saved(path: str, value: object) -> object:
+    """Ein Wert im Abdruck so, wie ihn die Datei vor Format 52 trug (RM-588)."""
+    if path == "shell.ironing" and isinstance(value, str):
+        return _SAVED_IRONING.get(value, value)
+    return value
+
+
 def _owned_settings(settings: PrintSettings, slot: MaterialSlot) -> dict[str, object]:
     """Was an den Einstellungen dieser Spule dem Projekt gehört (Review RM-705, N3).
 
@@ -528,9 +542,10 @@ def _owned_settings(settings: PrintSettings, slot: MaterialSlot) -> dict[str, ob
     return {
         "quality": settings.quality,
         "explicit": [
-            [path, print_settings.read_path(settings, path)] for path in sorted(settings.explicit)
+            [path, _as_saved(path, print_settings.read_path(settings, path))]
+            for path in sorted(settings.explicit)
         ],
-        "plate_choices": list(settings.plate_choices),
+        "plate_choices": [(path, _as_saved(path, value)) for path, value in settings.plate_choices],
         "spool": spool,
     }
 
@@ -890,6 +905,10 @@ def prepare(
             mine = settings_for_slot(settings, profile, slot)
             density, diameter = _material_properties(mine, slot)
             values = print_settings_to_data(mine)
+            values["shell"]["ironing"] = _as_saved("shell.ironing", values["shell"]["ironing"])
+            values["plate_choices"] = {
+                path: _as_saved(path, value) for path, value in values["plate_choices"].items()
+            }
             # Die aufgelösten Werte stehen bereits in ``mine`` und ``slot``.
             # Unbenutzte Profil-/Wertelisten sowie eine andere Werkzeugnummer
             # dürfen aus 3MF und anschließendem Slicen keine zwei Drucke machen.

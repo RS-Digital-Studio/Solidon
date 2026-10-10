@@ -4004,24 +4004,26 @@ def test_prusas_bottom_contact_layers_are_read_back() -> None:
 
 
 @pytest.mark.parametrize(
-    ("kind", "every", "topmost"),
-    [("no ironing", False, False), ("top", True, False), ("topmost", False, True)],
+    ("kind", "ironing"),
+    [("no ironing", "none"), ("top", "top_surfaces"), ("topmost", "topmost")],
 )
-def test_ironing_the_topmost_surface_is_read_back(kind: str, every: bool, topmost: bool) -> None:
+def test_ironing_the_topmost_surface_is_read_back(kind: str, ironing: str) -> None:
     """RM-588: „topmost“ bügelt nur die oberste Fläche — in der Orca-Familie ein
     Wert von ``ironing_type``, bei Prusa derselbe neben ``ironing = 1``. Ein
-    Profil, das so bügelt, steht in Solidon als „oberste Fläche bügeln“, nicht
-    als „jede Oberseite“."""
+    Profil, das so bügelt, steht in Solidon als „oberste Fläche“, nicht als
+    „alle Oberseiten“; ohne Art liest Prusa seine Vorgabe „top“."""
     context = manufacturer._Context(nozzle=0.4)
     read, foreign = manufacturer._read_process({"ironing_type": kind}, context, {})
-    assert (read["shell.ironing"], read["shell.ironing_topmost"]) == (every, topmost)
+    assert read["shell.ironing"] == ironing
     assert not foreign
 
     prusa = {"ironing": "0" if kind == "no ironing" else "1"}
     if kind != "no ironing":
         prusa["ironing_type"] = kind
     read = manufacturer._read_prusa(prusa, context)[0]
-    assert (read["shell.ironing"], read["shell.ironing_topmost"]) == (every, topmost)
+    assert read["shell.ironing"] == ironing
+    if kind == "top":
+        assert manufacturer._read_prusa({"ironing": "1"}, context)[0]["shell.ironing"] == ironing
 
 
 def test_bridges_and_overhangs_are_read_back_from_both_families() -> None:

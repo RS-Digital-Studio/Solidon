@@ -10051,7 +10051,7 @@ def test_secondary_filament_advice_is_visible_but_not_applicable_in_prusa(qt_app
     settings = print_settings.with_choice(settings, "cooling.minimum_layer_time", 0.0)
     # Die 40 mal 40 mm des großen Würfels sind eine große flache Oberseite; ohne
     # eigene Wahl stünde „oberste Fläche bügeln“ (RM-588) als übertragbar daneben.
-    settings = print_settings.with_choice(settings, "shell.ironing_topmost", True)
+    settings = print_settings.with_choice(settings, "shell.ironing", "topmost")
     dialog = _print_advice_dialog(qt_app, [large, small], settings=settings)
     dialog._slicer_path = Path("PrusaSlicer.exe")
     dialog._refresh_advice()

@@ -1403,6 +1403,8 @@ _CHOICE_NOTES: dict[str, TranslatableText] = {
         "Die Naht springt zufällig — keine durchgehende Linie, dafür überall kleine Punkte."
     ),
     "rear": _("Die Naht liegt gesammelt auf der Rückseite — die Schauseite bleibt frei."),
+    "topmost": _("Nur die oberste Fläche des Teils, etwa der Deckel einer Box."),
+    "top_surfaces": _("Jede Oberseite, auch die Gleitfläche einer Passung darunter."),
     "classic": _("Wandbahnen mit fester Breite — vorhersehbar und bewährt."),
     "arachne": _("Wandbahnen mit veränderlicher Breite — füllt dünne Stellen besser aus."),
     "gyroid": _(

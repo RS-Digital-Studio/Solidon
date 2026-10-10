@@ -274,6 +274,9 @@ _CHOICE_NAMES: dict[str, TranslatableText] = {
     # eine von ihnen das falsche Wort. (``TranslatableText`` kennt ein
     # ``context``-Feld, aber der Extraktor liest es nicht; siehe ROADMAP.)
     "rear": _("Auf der Rückseite"),
+    # Was gebügelt wird (RM-588), so wie die Slicer es nennen.
+    "topmost": _("Oberste Fläche"),
+    "top_surfaces": _("Alle Oberseiten"),
     "classic": _("Klassisch"),
     # Eigennamen wie „Gyroid": so heißt der Algorithmus, in jedem Slicer und in
     # jeder Sprache. Dasselbe gilt für die drei Haftarten — im Dialog heißen die

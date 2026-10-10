@@ -2175,12 +2175,12 @@ def _from_fits(settings: PrintSettings, kinds: Sequence[str]) -> list[SettingAdv
     """
     advice: list[SettingAdvice] = []
     careful = 30.0
-    if "flush" in kinds and not settings.shell.ironing:
+    if "flush" in kinds and settings.shell.ironing != "top_surfaces":
         advice.append(
             _advice(
                 settings,
                 path="shell.ironing",
-                value=True,
+                value="top_surfaces",
                 reason=_("Gebügelt gleiten die Flächen der bündigen Passung."),
             )
         )
@@ -2237,13 +2237,7 @@ def _from_top(
     über der keine mehr liegt.
     """
     shell = settings.shell
-    if (
-        "flush" in kinds
-        or shell.ironing
-        or shell.ironing_topmost
-        or shell.top_layers <= 0
-        or not result.layers
-    ):
+    if "flush" in kinds or shell.ironing != "none" or shell.top_layers <= 0 or not result.layers:
         return []
     top = result.layers[-1].area
     if top < IRONING_TOP_AREA or top < IRONING_TOP_SHARE * max(
@@ -2253,8 +2247,8 @@ def _from_top(
     return [
         _advice(
             settings,
-            path="shell.ironing_topmost",
-            value=True,
+            path="shell.ironing",
+            value="topmost",
             reason=_("Bügeln glättet die große Oberseite und kostet Druckzeit."),
         )
     ]
@@ -2477,7 +2471,6 @@ PART_PATHS: Final = frozenset(
         "shell.precise_outer_wall",
         "shell.outer_wall_first",
         "shell.ironing",
-        "shell.ironing_topmost",
         "shell.scarf_seam",
         "shell.seam_position",
         "speed.outer_wall",
@@ -2534,7 +2527,7 @@ SLICED_PATHS: Final = frozenset(
         "shell.outer_wall_first",
         "shell.scarf_seam",
         "shell.seam_position",
-        "shell.ironing_topmost",
+        "shell.ironing",
         "layers.line_width",
         "speed.outer_wall",
         "speed.inner_wall",

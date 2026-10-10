@@ -307,20 +307,11 @@ FIELDS: tuple[Field, ...] = (
         "shell.ironing",
         _("Oberfläche bügeln"),
         "shell",
-        kind="bool",
+        kind="enum",
+        choices=("none", "topmost", "top_surfaces"),
         note=_(
             "Fährt die Oberseite ein zweites Mal ab und glättet sie mit wenig Material. Kostet "
             "Zeit und lohnt bei Sichtflächen."
-        ),
-    ),
-    Field(
-        "shell.ironing_topmost",
-        _("Oberste Fläche bügeln"),
-        "shell",
-        kind="bool",
-        note=_(
-            "Bügelt nur die oberste Fläche, etwa den Deckel einer Box. Kostet weniger Zeit, "
-            "als jede Oberseite zu bügeln."
         ),
     ),
     Field(

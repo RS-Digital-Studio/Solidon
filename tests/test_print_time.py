@@ -698,11 +698,11 @@ def test_ironing_the_topmost_surface_costs_one_more_pass_over_it() -> None:
 
     ironed = _seconds(
         result,
-        print_settings.with_path(settings, "shell.ironing_topmost", True),
+        print_settings.with_path(settings, "shell.ironing", "topmost"),
         _motion(ironing_speed=10.0, ironing_spacing=0.1),
     )
     fallback = _seconds(
-        result, print_settings.with_path(settings, "shell.ironing_topmost", True), motion
+        result, print_settings.with_path(settings, "shell.ironing", "topmost"), motion
     )
 
     assert motion.nozzle == pytest.approx(0.4)
@@ -725,19 +725,16 @@ def test_every_top_surface_irons_the_step_below_the_topmost_too() -> None:
     settings = _settings(shell__top_layers=1)
     motion = _motion(ironing_speed=10.0, ironing_spacing=0.1)
 
-    def seconds(**ironing: bool) -> float:
-        chosen = settings
-        for name, value in ironing.items():
-            chosen = print_settings.with_path(chosen, f"shell.{name}", value)
+    def seconds(ironing: str = "none") -> float:
+        chosen = print_settings.with_path(settings, "shell.ironing", ironing)
         return _seconds(result, chosen, motion)
 
     plain = seconds()
-    topmost = seconds(ironing_topmost=True)
-    every = seconds(ironing=True)
+    topmost = seconds("topmost")
+    every = seconds("top_surfaces")
 
     assert topmost - plain == pytest.approx(9.6**2 / 0.1 / 10.0, rel=1e-2)
     assert every - topmost > 0.5 * (28.0**2 - 10.0**2) / 0.1 / 10.0
-    assert seconds(ironing=True, ironing_topmost=True) == pytest.approx(every, rel=1e-9)
 
 
 def test_the_manufacturer_chain_names_its_ironing() -> None:

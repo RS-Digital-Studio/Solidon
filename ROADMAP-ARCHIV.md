@@ -47868,14 +47868,14 @@ Bericht: `.claude/.state/drache-2026-10-08/berichte-2026-10-10/rm586b.md`.
 **Abschluss:** Zwei Regeln im Rat, beide je Teil (`advise.PART_PATHS`). *Naht hinten*
 (`shell.seam_position = rear`, Grund „Die Naht zöge sonst eine Linie über die Schauseite.“)
 für Körper ab 10 mm Höhe, deren Außenkontur zu mindestens 70 % frei geformt ist
-(`analysis.free_form_share`, je Schnitt gemerkt), wo der Slicer die Naht selbst sucht. Neues
-Feld *Oberste Fläche bügeln* (`shell.ironing_topmost`, Grund „Bügeln glättet die große
+(`analysis.free_form_share`, je Schnitt gemerkt), wo der Slicer die Naht selbst sucht. *Oberfläche
+bügeln: Oberste Fläche* (`shell.ironing = topmost`, Grund „Bügeln glättet die große
 Oberseite und kostet Druckzeit.“) für eine letzte Schicht ab 400 mm² und der Hälfte des
 größten Querschnitts, nicht neben einer bündigen Passung. Übergabe: Orca-Familie
 `seam_position = back`, `ironing_type = topmost`; PrusaSlicer und SuperSlicer `rear`,
 `ironing = 1` mit `ironing_type = topmost`; Cura `z_seam_type = back`,
-`ironing_enabled` mit `ironing_only_highest_layer`; „jede Oberseite“ schließt die oberste
-ein (`handover._ironing_in_order`). Rücklesen aus den Herstellerketten samt Bügeltempo und
+`ironing_enabled` mit `ironing_only_highest_layer`; „alle Oberseiten“ (bündige Passung)
+ist `top`. Rücklesen aus den Herstellerketten samt Bügeltempo und
 -abstand (`Motion`), Druckzeit mit Bügelzug über die ganze Oberseite, um eine halbe Düse
 eingezogen.
 
@@ -47894,3 +47894,19 @@ behoben. Tests in `test_advise.py`, `test_print_time.py`, `test_print_settings.p
 `test_ironing_the_topmost_face_stays_with_that_part` (6 von 6 grün); der RM-587-Test der
 Wandrichtung liest jetzt Orcas Bögen mit. Messwerte und Begründung in
 `konzepte/begruendungen/regel-druckrat.md`. Umgesetzt von Claude (Worktree `F:/sl-naht`).
+
+**Format 52 (Entscheidung Koordinator, 11.10.2026):** *Oberfläche bügeln* ist eine Wahl
+(`shell.ironing`: `none`, `topmost`, `top_surfaces`) statt zweier Schalter mit Vorrangregel;
+die Slicer kennen es selbst als eine Wahl, und der Reiter *Wände* blieb so unter seiner
+Grenze (16 → 15 Felder, `test_every_group_holds_one_subject`). Migration 51 → 52: an wird
+`top_surfaces`, aus `none`, im Satz und in `plate_choices`; die Einordnung 35 → 36 liest den
+Schalter vorher so um, sonst wäre jedes „aus“ eine eigene Wahl. Beispieldatei
+`ironing_v51.p3d` (von welle4 geschrieben), `example_v52.p3d`, Beispielprojekte neu.
+`shell.ironing_topmost` gab es nur auf diesem Zweig (kein Tag, kein anderer Zweig). Der
+Abdruck einer Buchung kippt nicht: Er trägt das Bügeln weiter als Schalter
+(`filament_usage._as_saved`); an sieben Projekten, von 0.5.3 und von welle4 geschrieben,
+darunter Bügeln als Wahl, als Vorschlag und aus, gibt der Stand mit Format 52 denselben
+Abdruck (7 von 7), ohne die Umrechnung keinen (0 von 7). Im Slicer, Sockel 30 × 30 × 10 mit
+Würfel 10 × 10 × 10: „oberste Fläche“ bügelt in allen acht Programmen nur z 20, „alle
+Oberseiten“ z 10 und 20 (Orca-Familie 594–614 gegen 5 732–5 789 mm Bahn, Anycubic, Prusa
+und SuperSlicer 912–922 gegen 8 644–8 706 mm, Cura 863 gegen 8 297 mm).
