@@ -59,6 +59,37 @@ def test_separate_gasket_stands_on_its_base_and_does_not_claim_a_flat_round_cont
         assert not built.features["gasket_bottom"].surface_patches
 
 
+def test_a_flat_seal_face_has_its_axis_normal_whichever_triangle_comes_first():
+    """Die Normale einer ebenen Dichtfläche hängt nicht an der Dreiecksfolge.
+
+    Die Vernetzung des exakten Körpers ordnet ihre Dreiecke auf macOS Intel
+    anders; ``trimesh`` normiert über den Kehrwert der Länge, und je nach
+    erstem Dreieck kam ``-0.9999999999999999`` oder ``-0.0`` heraus.
+    """
+    import math
+
+    import trimesh
+
+    from app.core.geom.mesh import MeshData
+    from app.core.sketch import shapes as sketch_shapes
+    from app.core.sketch.serialize import sketch_to_text
+
+    path = sketch_to_text(sketch_shapes.rectangle(20.0, 12.0))
+    built = seals.seal_gasket(seals.GasketParams(path_sketch=path, width=2.6, height=2.4))
+    raw = built.mesh.raw
+    for name, sign in (("gasket_contact", 1.0), ("gasket_bottom", -1.0)):
+        indices = built.features[name].face_indices
+        uneven = [index for index in indices if raw.face_normals[index][2] != sign]
+        # Ohne ein solches Dreieck prüfte der Test nichts.
+        assert uneven
+        for first in uneven:
+            order = [first, *(index for index in range(len(raw.faces)) if index != first)]
+            mesh = MeshData.of(trimesh.Trimesh(raw.vertices, raw.faces[order], process=False))
+            normal = seals.seal_features(mesh, gasket=True)[name].params["normal"]
+            assert normal == (0.0, 0.0, sign)
+            assert all(math.copysign(1.0, value) == 1.0 for value in normal[:2])
+
+
 def test_part_dimensions_rebuild_the_actual_gasket_cross_section():
     small = seals.seal_gasket(seals.GasketParams(height=2, width=2))
     large = seals.seal_gasket(seals.GasketParams(height=4, width=3))
