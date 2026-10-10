@@ -1061,12 +1061,13 @@ def test_the_export_names_the_print_by_its_stored_inputs(qt_app, tmp_path, monke
     monkeypatch.setattr(window, "_run_export", workers.append)
     try:
         window._start_export(tmp_path / "wuerfel.3mf", "3mf")
+        idle = False
         for _attempt in range(200):
             if workers:
                 break
-            session.wait_for_idle(100)
+            idle = session.wait_for_idle(100)
             QApplication.processEvents()
-        assert workers, "der Export kam nicht zum Schreiben"
+        assert workers, f"der Export kam nicht zum Schreiben (Sitzung im Leerlauf: {idle})"
         worker = workers[0]
         inputs = worker._inputs
         assert inputs is not None

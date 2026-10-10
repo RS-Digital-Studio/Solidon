@@ -3112,6 +3112,7 @@ def _layer_heights(
                     ),
                     values={"name": name},
                     object_id=entry.id,
+                    suggestions=(OPEN_PRINT_SETTINGS,),
                 )
             )
         elif entry.plate in shared:
@@ -3127,6 +3128,7 @@ def _layer_heights(
                     ),
                     values={"name": name},
                     object_id=entry.id,
+                    suggestions=(OPEN_PRINT_SETTINGS,),
                 )
             )
         else:
