@@ -123,7 +123,7 @@ def held_by(
     einmal; je Satz für sich gezählt, hielt die Grenze am Laptop-Riser nach
     vier Verschieben 150 statt 122 MB (Nachprüfung L, M-3).
     """
-    from app.core.memory import held_bytes, held_parts
+    from app.core.memory import held_bytes
 
     seen = set() if seen is None else seen
     total = 0
@@ -135,10 +135,7 @@ def held_by(
             total += held_bytes(entry.features, seen)
             continue
         features = entry.features
-        known = counted.get(id(features))
-        if known is None or known[0] is not features:
-            known = (features, *held_parts(features))
-            counted[id(features)] = known
+        known = _counted_features(features, counted)
         if id(features) in seen:
             continue
         total += known[1]
@@ -150,6 +147,79 @@ def held_by(
                 total += size
         seen.add(id(features))
     return total
+
+
+#: Ein Merkmalssatz, sein Rest und seine großen Behälter (``memory.held_parts``).
+_Counted = tuple[Any, int, dict[int, tuple[object, int]]]
+
+
+def _counted_features(features: Any, counted: dict[int, _Counted]) -> _Counted:
+    """Rest und große Behälter eines Merkmalssatzes, gemerkt je Satz.
+
+    **Ein neuer Satz aus denselben Merkmalen wird nicht noch einmal
+    durchlaufen** (RM-636). *Filament zuweisen*, *Umbenennen* und jeder
+    Schritt, der die Merkmale durchreicht, geben einen neuen Satz mit
+    denselben Merkmalsobjekten aus; die Zählung lief dann ein zweites Mal
+    über alle — am Eiffelturm 4 870 Merkmale je Schritt. Sie ist dieselbe bis
+    auf den Satz selbst: Seine Werte sind dieselben Objekte in derselben
+    Folge unter denselben Namen, also auch alles,
+    was sie erreichen, und nur Kopf und Schlüssel des Wörterbuchs sind neu
+    zu zählen (``memory._held_once``). Das gilt, wo der Satz selbst einer
+    seiner großen Behälter ist — sonst wird gezählt wie bisher.
+    """
+    known = counted.get(id(features))
+    if known is not None and known[0] is features:
+        return known
+    known = _alike(features, counted)
+    if known is None:
+        from app.core.memory import held_parts
+
+        known = (features, *held_parts(features))
+    counted[id(features)] = known
+    return known
+
+
+def _alike(features: Any, counted: dict[int, _Counted]) -> _Counted | None:
+    """Die Zählung eines gemerkten Satzes mit denselben Merkmalsobjekten, umgeschrieben."""
+    import sys
+
+    from app.core.memory import PART_BYTES
+
+    if not isinstance(features, dict) or not features:
+        return None
+    for other, rest, parts in list(counted.values()):
+        if (
+            other is features
+            or not isinstance(other, dict)
+            or len(other) != len(features)
+            or id(other) not in parts
+            or parts[id(other)][0] is not other
+            # In derselben Folge: Ein geteiltes Kleinteil zählt beim ersten
+            # Merkmal, das es erreicht, und das kann es über die Grenze eines
+            # eigenen Behälters heben.
+            or not all(
+                name == known and value is held
+                for (name, value), (known, held) in zip(
+                    features.items(), other.items(), strict=True
+                )
+            )
+        ):
+            continue
+        if not set(map(type, features)) <= {str} or not set(map(type, other)) <= {str}:
+            return None
+        size = (
+            parts[id(other)][1]
+            - sys.getsizeof(other)
+            - sum(map(sys.getsizeof, other))
+            + sys.getsizeof(features)
+            + sum(map(sys.getsizeof, features))
+        )
+        if size < PART_BYTES:
+            return None
+        renewed = {key: value for key, value in parts.items() if key != id(other)}
+        renewed[id(features)] = (features, size)
+        return (features, rest, renewed)
+    return None
 
 
 def _mesh_bytes(mesh: Mesh, seen: set[int], freeable: list[int] | None = None) -> int:
@@ -419,7 +489,9 @@ _REFUSALS_KEPT: Final = 256
 #: - 57 (RM-695): Merkmale stehen typgenau auf der Platte (``_exact_to_data``),
 #:   und die Erkennung eines Netzes liegt als eigener Eintrag daneben. Ein
 #:   älterer Eintrag gäbe Tupel als Listen zurück.
-CACHE_FORMAT_VERSION: Final = 57
+#: - 58: Paket E auf dem Stand von welle3 (``fcac08701``: D, I, L3); trennt ihn
+#:   von den Ergebnissen der einzelnen Zweige.
+CACHE_FORMAT_VERSION: Final = 58
 
 
 @dataclass(frozen=True, slots=True)
@@ -676,13 +748,7 @@ class ResultCache:
 
     def _feature_parts(self, features: object) -> dict[int, tuple[object, int]]:
         """Nur mit gehaltenem Schloss — die großen Behälter eines Merkmalssatzes, gemerkt."""
-        from app.core.memory import held_parts
-
-        known = self._features_held.get(id(features))
-        if known is None or known[0] is not features:
-            known = (features, *held_parts(features))
-            self._features_held[id(features)] = known
-        return known[2]
+        return _counted_features(features, self._features_held)[2]
 
     def trim(self, keep: Iterable[Mesh] = ()) -> None:
         """Hält die Bytegrenze der Speicherebene (RM-567).

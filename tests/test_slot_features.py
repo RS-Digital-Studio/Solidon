@@ -28,7 +28,7 @@ from shapely.geometry import Polygon
 from app.core.bootstrap import load_operations
 from app.core.errors import ValidationError
 from app.core.geom.boolean import boolean
-from app.core.geom.mesh import MeshData, as_mesh_data
+from app.core.geom.mesh import MeshData, as_mesh_data, face_components
 from app.core.geom.prepare import drill, shortest_slot
 from app.core.perceive.digest import _feature_line
 from app.core.perceive.features import _fitted, _one_body, detect
@@ -38,6 +38,7 @@ from app.core.types import (
     Feature,
     Finding,
     OpContext,
+    OpResult,
     Profile,
     Quality,
     Scene,
@@ -2842,7 +2843,7 @@ def test_moving_a_bore_with_a_separate_pin_names_the_other_part(
         run_op("move_feature", entry, profile, at_feature=feature_id, x=5.0, y=0.0, z=0.0)
 
     assert caught.value.detail is OTHER_PART_IN_THE_BORE
-    assert [action.id for action in caught.value.suggestions] == ["split_bodies", "cancel"]
+    assert [action.id for action in caught.value.suggestions] == ["split_and_retry", "cancel"]
 
 
 #: Die sechs Handlungen an einer Bohrung, mit Werten, die an der Platte aus
@@ -2884,7 +2885,11 @@ def test_every_bore_op_names_the_separate_pin(
         run_op(op, entry, profile, at_feature=_bore_in(entry, "hole"), **_BORE_OPS[op])
 
     assert caught.value.detail is OTHER_PART_IN_THE_BORE
-    assert [action.id for action in caught.value.suggestions] == ["split_bodies", "cancel"]
+    assert [action.id for action in caught.value.suggestions] == ["split_and_retry", "cancel"]
+    # Der Knopf braucht Stückzahl und Teil des Merkmals (RM-638): Ohne
+    # Stückzahl kehrte er still zurück; die Platte ist das größte Teil.
+    assert caught.value.values["count"] == "2"
+    assert caught.value.values["part_index"] == "0"
 
 
 @pytest.mark.parametrize("kernel", ["mesh", "brep"])
@@ -2936,11 +2941,598 @@ def test_a_bore_through_two_plates_with_a_pin_names_the_pin(profile: Profile, ke
         if feature.kind == "hole" and abs(float(feature.params["diameter"]) - 6.0) < 0.1
     ]
     assert bores, "Voraussetzung: die Bohrung ist erkannt"
+    groups = face_components(body.raw)
     for feature in bores:
         assert filled_bore_reason(body, feature) is OTHER_PART_IN_THE_BORE
         with pytest.raises(ValidationError) as caught:
             run_op("move_feature", entry, profile, at_feature=feature.id, x=8.0, y=0.0, z=10.0)
         assert caught.value.detail is OTHER_PART_IN_THE_BORE
+        # Liegt der Mantel auf beiden Platten, bleiben sie beisammen (Review I,
+        # M2): Die Zerlegung trennt nur den Stift, der Schritt rechnet am Verbund.
+        carriers = sum(bool(np.isin(feature.face_indices, group).any()) for group in groups)
+        assert caught.value.values["count"] == str(3 - carriers + 1)
+        assert "part_index" in caught.value.values
+
+
+def test_splitting_carries_the_refused_feature_onto_its_part(profile: Profile) -> None:
+    """Die Zerlegung aus einer Teile-Absage gibt das Merkmal auf seinem Teil mit (RM-638).
+
+    Ein neues Teil vergibt seine Merkmalsnamen frisch; der Schritt, der nach der
+    Zerlegung an ``hole_2`` weiterrechnen soll, fände dort nur ``hole_1``. Mit
+    ``carry_feature`` steht das Merkmal mit seinen eigenen Dreiecken im Teil —
+    dieselben Ecken wie im Körper —, und kein anderes Teil trägt es.
+    """
+    import trimesh
+
+    from app.core.geom.prepare_ops import split_offer
+
+    load_operations()
+    plate = as_mesh_data(_plate_with_a_second_body("mesh", inside=True).mesh).raw
+    block = trimesh.boolean.difference(
+        [
+            trimesh.creation.box(extents=(60.0, 60.0, 20.0)),
+            trimesh.creation.cylinder(radius=4.0, height=30.0, sections=48),
+        ]
+    )
+    block.apply_translation((-120.0, 0.0, 10.0))
+    # Der Klotz zuerst: Die Platte zählt ihre Dreiecke im Körper dann nicht ab null,
+    # und eine Umrechnung, die vergessen wird, fällt auf.
+    mesh = MeshData.of(trimesh.util.concatenate([block, plate]))
+    entry = SceneObject(id="obj_1", name="Teile", mesh=mesh, features=detect(mesh))
+    bore = next(
+        f
+        for f in entry.features.values()
+        if f.kind == "hole" and abs(float(f.params["diameter"]) - 6.0) < 0.1
+    )
+    offer = split_offer(mesh, bore)
+    assert offer == {"count": "3", "part_index": "1"}, "die Platte ist das zweite Teil"
+
+    result = _split(entry, profile, carry_feature=bore.id)
+
+    carriers = [part for part in result.outputs if part.features]
+    assert [part.id for part in carriers] == [result.outputs[1].id]
+    carried = carriers[0].features[bore.id]
+    corners = np.asarray(as_mesh_data(carriers[0].mesh).raw.triangles)[list(carried.face_indices)]
+    expected = np.asarray(mesh.raw.triangles)[list(bore.face_indices)]
+    assert np.array_equal(corners, expected), "dieselben Dreiecke, nur im Teil gezählt"
+    # Auch die Träger der Flächen zählen im Teil (Review I, G2): Mit den alten
+    # Nummern zeigte der Träger im Teil auf Dreiecke des ganzen Körpers.
+    assert bore.surface_patches, "Vorbedingung: die Bohrung hat einen Träger"
+    part_triangles = np.asarray(as_mesh_data(carriers[0].mesh).raw.triangles)
+    for patch, original in zip(carried.surface_patches, bore.surface_patches, strict=True):
+        assert np.array_equal(
+            part_triangles[list(patch.face_indices)],
+            np.asarray(mesh.raw.triangles)[list(original.face_indices)],
+        )
+
+    plain = _split(entry, profile)
+    assert not any(part.features for part in plain.outputs), "ohne Angabe bleibt alles frisch"
+
+
+def _plates_with_a_pin(two: bool) -> bytes:
+    """Eine oder zwei Platten 40 × 20 × 10 übereinander, Bohrung Ø 6 durch alle, darin
+    ein loser Stift Ø 3 × 16 — als STL, wie der Kunde sie lädt."""
+    import trimesh
+
+    parts = []
+    for low in (0.0, 10.0) if two else (0.0,):
+        box = trimesh.creation.box(extents=(40.0, 20.0, 10.0))
+        box.apply_translation((0.0, 0.0, low + 5.0))
+        bore = trimesh.creation.cylinder(radius=3.0, height=12.0, sections=64)
+        bore.apply_translation((0.0, 0.0, low + 5.0))
+        parts.append(trimesh.boolean.difference([box, bore]))
+    pin = trimesh.creation.cylinder(radius=1.5, height=16.0, sections=48)
+    pin.apply_translation((0.0, 0.0, 10.0 if two else 5.0))
+    parts.append(pin)
+    return bytes(trimesh.exchange.stl.export_stl(trimesh.util.concatenate(parts)))
+
+
+@pytest.mark.parametrize("two", [True, False], ids=["zwei_platten", "eine_platte"])
+def test_the_part_refusal_way_ends_with_the_feature_moved_on_its_parts(
+    profile: Profile, two: bool
+) -> None:
+    """Der Knopf an der Teile-Absage führt bis zum Ende, auch über zwei Platten (Review I, M2).
+
+    Eine Bohrung durch zwei aufeinanderliegende Platten trägt ihren Mantel auf
+    zwei Teilen. Bis Review I zerlegte der Knopf in drei Objekte und rechnete den
+    Schritt am größten nach — dort hieß die halbe Bohrung anders, und die Kette
+    hielt erneut. Jetzt bleiben die Platten beisammen, nur der Stift geht ab, und
+    der Schritt versetzt die ganze Bohrung; die berührenden Platten vereint er
+    dabei mit Befund, wie jede Merkmalshandlung (RM-386). Derselbe Weg wie das Fenster:
+    ``History.split_and_retry`` mit den Werten der Absage.
+    """
+    from app.core.scene import History, OperationDraft, evaluate
+    from app.core.scene.project import ProjectSources, new_project
+    from app.core.types import Source
+
+    load_operations()
+    project = new_project("centauri-carbon-2", "petg")
+    project.document.sources["src_1"] = Source(
+        id="src_1", kind="import", path="sources/platten.stl", sha256=""
+    )
+    project.sources["src_1"] = _plates_with_a_pin(two)
+    history = History(project.document)
+    history.apply("Laden", [OperationDraft(op="load", params={"source": "src_1", "unit": "mm"})])
+    sources = ProjectSources(project)
+    loaded = evaluate(project.document, profile, sources=sources)
+    (body,) = loaded.scene.objects.values()
+    bore = next(
+        f
+        for f in body.features.values()
+        if f.kind == "hole" and abs(float(f.params["diameter"]) - 6.0) < 0.1
+    )
+    centre = [float(value) for value in bore.params["centre"]]
+    history.apply(
+        "Merkmal versetzen",
+        [
+            OperationDraft(
+                op="move_feature",
+                inputs=(body.id,),
+                params={
+                    "at_feature": bore.id,
+                    "x": centre[0] + 3.0,
+                    "y": centre[1],
+                    "z": centre[2],
+                },
+            )
+        ],
+    )
+    halted = evaluate(project.document, profile, sources=sources)
+    assert halted.stopped_at is not None
+    (refusal,) = [
+        f
+        for f in halted.scene.report.findings
+        if f.op_id == halted.stopped_at and f.severity == "error"
+    ]
+    assert [action.id for action in refusal.suggestions] == ["split_and_retry", "cancel"]
+    assert refusal.values["count"] == "2", "die Träger der Bohrung zählen als ein Teil"
+
+    history.split_and_retry(
+        halted.stopped_at,
+        body.id,
+        int(refusal.values["count"]),
+        keep_tiny=True,
+        part_index=int(refusal.values["part_index"]),
+        feature=refusal.values["feature"],
+    )
+    after = evaluate(project.document, profile, sources=sources)
+
+    assert after.stopped_at is None, [str(f.message) for f in after.scene.report.findings]
+    assert len(after.scene.objects) == 2
+    moved = project.document.ops[-1]
+    carrier = after.scene.objects[moved.inputs[0]]
+    said = {f.code for f in after.scene.report.findings if f.op_id == moved.id}
+    # Berührende Platten vereint die Handlung vor dem Schnitt und sagt es (RM-386).
+    assert ("boolean.parts_united" in said) is two
+    assert as_mesh_data(carrier.mesh).component_count == 1
+    holes = [f for f in carrier.features.values() if f.kind == "hole"]
+    assert holes and all(
+        float(f.params["centre"][0]) == pytest.approx(centre[0] + 3.0, abs=0.05) for f in holes
+    ), "die ganze Bohrung steht an der neuen Stelle"
+
+
+def _split(entry: SceneObject, profile: Profile, **params: object) -> OpResult:
+    """*In Einzelteile aufteilen* in alle drei Teile, wie der Knopf es fährt."""
+    from app.core.scene.cancel import NeverCancelled
+
+    spec = REGISTRY.get("split_bodies")
+    return spec.fn(
+        OpContext(
+            scene=Scene(objects={entry.id: entry}),
+            inputs=[entry],
+            params=spec.params(count=3, keep_tiny=True, **params),
+            profile=profile,
+            quality="fine",
+            seed=7,
+            progress=lambda fraction, text: None,
+            ask=lambda question, options: options[0],
+            cancelled=NeverCancelled(),
+        )
+    )
+
+
+def _names_the_other_part(entry: SceneObject, feature: Feature, profile: Profile) -> None:
+    """Menü und jede Handlung an der Bohrung sagen das andere Teil, mit Weg."""
+    from app.core.geom.prepare_ops import OTHER_PART_IN_THE_BORE, filled_bore_reason, hole_is_clear
+    from app.core.perceive.actions import actions_for
+
+    load_operations()
+    mesh = as_mesh_data(entry.mesh)
+    assert not hole_is_clear(mesh, feature)
+    assert filled_bore_reason(mesh, feature) is OTHER_PART_IN_THE_BORE
+    rows = actions_for(feature, entry.features, mesh=mesh)
+    moved = [row for row in rows if row.op is None and str(row.title) == "Merkmal verschieben"]
+    assert moved and all(row.reason is OTHER_PART_IN_THE_BORE for row in moved)
+    for op, params in sorted(_BORE_OPS.items()):
+        with pytest.raises(ValidationError) as caught:
+            run_op(op, entry, profile, at_feature=feature.id, **params)
+        assert caught.value.detail is OTHER_PART_IN_THE_BORE, op
+        assert [action.id for action in caught.value.suggestions] == [
+            "split_and_retry",
+            "cancel",
+        ], op
+
+
+@pytest.mark.parametrize("span", [(0.0, 40.0), (-30.0, 10.0), (-25.0, 35.0)])
+@pytest.mark.parametrize("kernel", ["mesh", "brep"])
+def test_a_long_pin_in_the_bore_is_seen_beyond_its_mouths(
+    profile: Profile, kernel: str, span: tuple[float, float]
+) -> None:
+    """Ein Stift, der weit aus der Platte ragt, steht trotzdem in ihrer Bohrung (RM-253).
+
+    Am Laptop-Ständer steckt in ``hole_1`` (Platte 10,27 mm) eine geschlitzte
+    Hülse von 43 mm. Ihre Manteldreiecke laufen über die ganze Länge, ihre
+    Mitten lagen 9 bis 23 mm vor der Bohrungsmitte und damit hinter den
+    Mündungen bei ±4,93 mm: Die Prüfung über Dreiecksmitten sah nichts,
+    *Merkmal versetzen* und *Drehen* rechneten durch die Hülse (−127 mm³, „geht
+    nicht mehr durch“), *Bohrung ändern* auf Ø 4,5 nahm 64 mm³ weg, statt
+    Material zuzugeben. Hier die Platte 10 mm mit Bohrung Ø 6 und ein Stift Ø 4
+    über ``span``: Keine seiner Dreiecksmitten liegt in der Bohrung, ein Stück
+    jedes Manteldreiecks schon. Am Stand davor galt die Bohrung als frei.
+    """
+    entry = _plate_with_a_second_body(kernel, inside=True, pin_span=span, pin_diameter=4.0)
+    feature = entry.features[_bore_in(entry, "hole")]
+    mesh = as_mesh_data(entry.mesh)
+    assert mesh.component_count == 2, "Voraussetzung: Platte und Stift"
+    centres = np.asarray(mesh.raw.triangles_center, dtype=np.float64)
+    within = (np.hypot(centres[:, 0], centres[:, 1]) < 2.9) & (
+        (centres[:, 2] > 0.0) & (centres[:, 2] < 10.0)
+    )
+    assert not within.any(), "Voraussetzung: keine Dreiecksmitte steht in der Bohrung"
+
+    _names_the_other_part(entry, feature, profile)
+
+
+def _plate_with_a_cross_pin(kernel: str, start: float, length: float) -> SceneObject:
+    """Platte 40 x 20 x 10, Bohrung Ø 6 längs z, Querbohrung Ø 3 längs x auf halber
+    Höhe, darin ein getrennter Stift Ø 2,4 von ``start`` über ``length`` entlang x."""
+    exact_kernel()
+    from OCP.BRep import BRep_Builder
+    from OCP.BRepPrimAPI import BRepPrimAPI_MakeCylinder
+    from OCP.gp import gp_Ax2, gp_Dir, gp_Pnt
+    from OCP.TopoDS import TopoDS_Compound
+
+    from app.core.brep import edit
+    from app.core.brep.features import features_of
+    from app.core.brep.kernel import Solid
+
+    plate = edit.cut_bore(
+        edit.box(40.0, 20.0, 10.0),
+        position=(0.0, 0.0, 5.0),
+        direction=(0.0, 0.0, 1.0),
+        diameter=6.0,
+        depth=12.0,
+    )
+    plate = edit.cut_bore(
+        plate, position=(0.0, 0.0, 5.0), direction=(1.0, 0.0, 0.0), diameter=3.0, depth=42.0
+    )
+    pin = BRepPrimAPI_MakeCylinder(
+        gp_Ax2(gp_Pnt(start, 0.0, 5.0), gp_Dir(1.0, 0.0, 0.0)), 1.2, length
+    ).Shape()
+    compound = TopoDS_Compound()
+    builder = BRep_Builder()
+    builder.MakeCompound(compound)
+    builder.Add(compound, plate.shape)
+    builder.Add(compound, pin)
+    solid = Solid(compound)
+    if kernel == "brep":
+        return SceneObject(
+            id="obj_1", name="Platte", mesh=solid, kind="brep", features=features_of(solid)
+        )
+    mesh = MeshData.of(as_mesh_data(solid).raw.copy())
+    return SceneObject(id="obj_1", name="Platte", mesh=mesh, features=detect(mesh))
+
+
+@pytest.mark.parametrize("pin", [(-18.0, 36.0), (-35.0, 40.0)])
+@pytest.mark.parametrize("kernel", ["mesh", "brep"])
+def test_a_cross_pin_through_the_bore_is_seen_although_its_middles_lie_beside_it(
+    profile: Profile, kernel: str, pin: tuple[float, float]
+) -> None:
+    """Derselbe Fehler quer zur Achse: Ein Querstift läuft mitten durch die Bohrung (RM-253).
+
+    Seine Manteldreiecke reichen über die ganze Stiftlänge, ihre Mitten liegen
+    bei x = ±6 (mittig) oder −22 und −8 (einseitig) — weit außerhalb des Radius
+    3, obwohl jedes von ihnen die Bohrung quert. Am Stand davor galt die
+    Bohrung als frei; die Querbohrung der Platte endet auf der Bohrungswand und
+    zählt nicht.
+    """
+    entry = _plate_with_a_cross_pin(kernel, *pin)
+    feature = entry.features[_bore_in(entry, "hole")]
+    assert as_mesh_data(entry.mesh).component_count == 2, "Voraussetzung: Platte und Stift"
+    assert float(feature.params["depth"]) == pytest.approx(10.0, abs=0.05)
+
+    _names_the_other_part(entry, feature, profile)
+
+
+def test_a_cross_bore_alone_leaves_the_bore_free() -> None:
+    """Gegenfall: Ohne Stift darin ist die Bohrung mit Querbohrung frei — deren Wand
+    endet auf der Bohrungswand und steht nicht darin, an beiden Kernen. Der Stift
+    liegt hier weit neben der Platte."""
+    from app.core.geom.prepare_ops import hole_is_clear
+
+    for kernel in ("mesh", "brep"):
+        entry = _plate_with_a_cross_pin(kernel, 60.0, 5.0)
+        feature = entry.features[_bore_in(entry, "hole")]
+        assert hole_is_clear(as_mesh_data(entry.mesh), feature), kernel
+
+
+@pytest.mark.parametrize("sections", [13, 15])
+def test_a_coarse_bore_with_a_cross_bore_stays_free(sections: int) -> None:
+    """Gegenfall zur Grenze der eigenen Wand: Ein grobes Vieleck liegt mit seinen
+    Seitenmitten innerhalb des Saums am Radius, und die Querbohrung endet dort.
+
+    Ein 13- bis 15-Eck Ø 6 hat seine Seitenmitten 2,91 bis 2,93 mm von der Achse,
+    unter 0,98 · 3. Gegen den Radius gemessen galten die Enden der Querbohrung als
+    Material in der Bohrung; gegen die eigene Wand (``_reaching_in``) bleibt sie
+    frei.
+    """
+    from app.core.geom.prepare_ops import hole_is_clear
+
+    plate = trimesh.creation.box(extents=(40.0, 20.0, 10.0))
+    plate.apply_translation((0.0, 0.0, 5.0))
+    bore = trimesh.creation.cylinder(radius=3.0, height=14.0, sections=sections)
+    bore.apply_translation((0.0, 0.0, 5.0))
+    cross = trimesh.creation.cylinder(radius=1.5, height=44.0, sections=sections)
+    cross.apply_transform(trimesh.transformations.rotation_matrix(math.pi / 2.0, (0, 1, 0)))
+    cross.apply_translation((0.0, 0.0, 5.0))
+    body = boolean("difference", [MeshData.of(plate), MeshData.of(bore), MeshData.of(cross)]).mesh
+    mesh = MeshData.of(body.raw.copy())
+    holes = [
+        feature
+        for feature in detect(mesh).values()
+        if feature.kind == "hole" and abs(float(feature.params["diameter"]) - 6.0) < 0.1
+    ]
+    assert len(holes) == 1, "Voraussetzung: die grobe Bohrung ist erkannt"
+    assert float(holes[0].params["radial_min"]) < 3.0 * 0.98, "Voraussetzung: grobes Vieleck"
+    assert hole_is_clear(mesh, holes[0])
+
+
+def test_triangles_lying_in_a_mouth_plane_do_not_break_the_clipping() -> None:
+    """Ein Dreieck, das in der Ebene einer Mündung liegt, bricht die Frage nicht ab.
+
+    ``_clipped_by`` beschneidet jedes Dreieck an den Grenzen zwischen den
+    Mündungen: die erste macht aus ihm ein Viereck, und liegt dieses in der
+    zweiten, entscheidet das Rundungsrauschen das Vorzeichen jeder Ecke.
+    Wechselt es reihum, kreuzt jede Kante, und die Eckenzahl überstieg die
+    Spalten des Felds — ``_closest_to_the_axis`` griff dahinter und warf
+    ``IndexError`` (Review RM-253: an diesen schrägen Grenzen 159 der 20 000
+    Dreiecke). Gefragt wird jede Lage auf einmal; keine darf die Spalten
+    überschreiten.
+    """
+    from app.core.geom.prepare_ops import _clipped_by, _closest_to_the_axis
+
+    def unit(values: tuple[float, float, float]) -> np.ndarray:
+        vector = np.asarray(values, dtype=np.float64)
+        return vector / math.sqrt(float((vector * vector).sum()))
+
+    top, bottom = unit((0.3, 0.1, 1.0)), unit((0.2, -0.4, -1.0))
+    corners = np.random.default_rng(253).uniform(-40.0, 40.0, size=(20_000, 3, 3))
+    lying = corners - ((corners * bottom).sum(axis=-1) - 4.98)[..., None] * bottom
+    above = (lying * top).sum(axis=-1) > 4.98
+    assert (above.any(axis=1) & ~above.all(axis=1)).sum() > 1_000, (
+        "Voraussetzung: die erste Grenze schneidet die Dreiecke"
+    )
+    noise = (lying * bottom).sum(axis=-1) - 4.98
+    assert np.abs(noise).max() < 1e-12 and (noise > 0.0).any() and (noise < 0.0).any(), (
+        "Voraussetzung: die Ecken liegen bis aufs Rauschen in der zweiten Grenze, zu beiden Seiten"
+    )
+
+    polygons, counts = _clipped_by(lying, [(top, 4.98), (bottom, 4.98)])
+
+    assert int(counts.max()) <= polygons.shape[1]
+    assert len(_closest_to_the_axis(polygons, counts, unit((0.0, 0.0, 1.0)))) == len(lying)
+
+
+def test_bounds_that_cut_nothing_do_not_change_what_reaches_in() -> None:
+    """Grenzen, die nichts beschneiden, ändern die Antwort nicht — auch fünf und mehr.
+
+    ``_reaching_in`` nimmt beliebig viele Halbräume. Die Vorauswahl setzt je
+    Grenze ein Bit, und mit einem Byte je Ecke war nach acht Bits Schluss: Ab
+    fünf Grenzen neben den vier Bits quer zur Achse fand sie nichts mehr, und
+    ein Streifen 1 mm neben der Achse galt still als fern (Review RM-253). Hier
+    kommen zum Mündungspaar vier Ebenen 100 mm entfernt dazu, eine nach der
+    anderen.
+    """
+    from app.core.geom.prepare_ops import _reaching_in
+
+    def unit(values: tuple[float, float, float]) -> np.ndarray:
+        vector = np.asarray(values, dtype=np.float64)
+        return vector / math.sqrt(float((vector * vector).sum()))
+
+    strip = trimesh.Trimesh(
+        vertices=[(-30.0, 1.0, -20.0), (30.0, 1.0, -20.0), (0.0, 1.0, 20.0)],
+        faces=[(0, 1, 2)],
+        process=False,
+    )
+    axis = unit((0.0, 0.0, 1.0))
+    mouths = [(axis, 5.0), (-axis, 5.0)]
+    far = [
+        (unit(normal), 100.0)
+        for normal in ((1.0, 0.0, 0.2), (-1.0, 0.0, 0.2), (0.0, 1.0, -0.2), (0.0, -1.0, -0.2))
+    ]
+    own = np.zeros(0, dtype=np.int64)
+
+    reached = [
+        float(
+            _reaching_in(MeshData.of(strip), np.zeros(3), axis, mouths + far[:count], 3.0, own)[0]
+        )
+        for count in range(len(far) + 1)
+    ]
+
+    assert reached == pytest.approx([1.0] * (len(far) + 1))
+
+
+def test_a_clear_bore_clips_none_of_its_own_triangles(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Die Teilefrage an einer freien Bohrung beschneidet keines ihrer eigenen Dreiecke.
+
+    ``_reaching_in`` maß die eigene Wand an jedem eigenen Dreieck und nahm dieselben
+    Dreiecke danach noch einmal als Kandidaten — an einer Bohrung mit 200 000
+    eigenen Dreiecken 2,1 s und 268 MB je Frage statt 0,25 s und 77 MB (Review
+    RM-253). Die Wand braucht es nur, wenn ein fremdes Stück dem Radius näher kommt
+    als ihre untere Schranke; die eigenen Dreiecke stehen nie in der eigenen
+    Bohrung. Hier beschnitt die Frage 896 Dreiecke, alle eigene.
+    """
+    from app.core.geom import prepare_ops
+
+    plate = trimesh.creation.box(extents=(40.0, 20.0, 10.0))
+    plate.apply_translation((0.0, 0.0, 5.0))
+    bore = trimesh.creation.cylinder(radius=3.0, height=14.0, sections=256)
+    bore.apply_translation((0.0, 0.0, 5.0))
+    mesh = MeshData.of(boolean("difference", [MeshData.of(plate), MeshData.of(bore)]).mesh.raw)
+    holes = [feature for feature in detect(mesh).values() if feature.kind == "hole"]
+    assert len(holes) == 1 and len(holes[0].face_indices) >= 512, "Voraussetzung: feine Bohrung"
+    clipped: list[int] = []
+    original = prepare_ops._clipped_by
+
+    def counted(
+        triangles: np.ndarray, bounds: list[tuple[np.ndarray, float]]
+    ) -> tuple[np.ndarray, np.ndarray]:
+        clipped.append(len(triangles))
+        return original(triangles, bounds)
+
+    monkeypatch.setattr(prepare_ops, "_clipped_by", counted)
+
+    assert prepare_ops._hole_is_clear_read(mesh, holes[0], 3.0, 10.0)
+    assert sum(clipped) == 0
+
+
+def _plate_with_a_sheet(kernel: str) -> SceneObject:
+    """Platte 60 x 50 x 10 mit Bohrung Ø 6 längs z und ein getrenntes Blech von
+    0,2 mm, das auf halber Höhe in ihr steckt: ein Prisma über dem Dreieck
+    (−15, −12), (25, −12), (5, 22), dessen Deckflächen je ein Dreieck sind."""
+    exact_kernel()
+    from OCP.BRep import BRep_Builder
+    from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeFace, BRepBuilderAPI_MakePolygon
+    from OCP.BRepPrimAPI import BRepPrimAPI_MakePrism
+    from OCP.gp import gp_Pnt, gp_Vec
+    from OCP.TopoDS import TopoDS_Compound
+
+    from app.core.brep import edit
+    from app.core.brep.features import features_of
+    from app.core.brep.kernel import Solid
+
+    plate = edit.cut_bore(
+        edit.box(60.0, 50.0, 10.0),
+        position=(0.0, 0.0, 5.0),
+        direction=(0.0, 0.0, 1.0),
+        diameter=6.0,
+        depth=12.0,
+    )
+    outline = BRepBuilderAPI_MakePolygon(
+        gp_Pnt(-15.0, -12.0, 4.9), gp_Pnt(25.0, -12.0, 4.9), gp_Pnt(5.0, 22.0, 4.9), True
+    )
+    sheet = BRepPrimAPI_MakePrism(
+        BRepBuilderAPI_MakeFace(outline.Wire()).Face(), gp_Vec(0.0, 0.0, 0.2)
+    ).Shape()
+    compound = TopoDS_Compound()
+    builder = BRep_Builder()
+    builder.MakeCompound(compound)
+    builder.Add(compound, plate.shape)
+    builder.Add(compound, sheet)
+    solid = Solid(compound)
+    if kernel == "brep":
+        return SceneObject(
+            id="obj_1", name="Platte", mesh=solid, kind="brep", features=features_of(solid)
+        )
+    mesh = MeshData.of(as_mesh_data(solid).raw.copy())
+    return SceneObject(id="obj_1", name="Platte", mesh=mesh, features=detect(mesh))
+
+
+@pytest.mark.parametrize("kernel", ["mesh", "brep"])
+def test_a_sheet_whose_one_triangle_covers_the_axis_stands_in_the_bore(
+    profile: Profile, kernel: str
+) -> None:
+    """Ein Blech quer durch die Bohrung steht darin, auch mit einem einzigen Dreieck
+    über der Achse (Review RM-253).
+
+    Ineinandersteckende Teile wie am Laptop-Ständer: Ein Blech von 0,2 mm steckt
+    auf halber Höhe in der Platte und läuft quer durch ihre Bohrung. Seine
+    Unterseite ist ein Dreieck, dessen Mitte 5 mm neben der Achse liegt und dessen
+    Kanten 6,8 bis 15,5 mm. Die Achse geht trotzdem durch das Stück zwischen den
+    Mündungen — das sieht nur die Umlaufprobe in ``_closest_to_the_axis``; ohne
+    sie und am Stand vor RM-253 galt die Bohrung als frei.
+    """
+    entry = _plate_with_a_sheet(kernel)
+    feature = entry.features[_bore_in(entry, "hole")]
+    mesh = as_mesh_data(entry.mesh)
+    assert mesh.component_count == 2, "Voraussetzung: Platte und Blech"
+    centres = np.asarray(mesh.raw.triangles_center, dtype=np.float64)
+    within = (np.hypot(centres[:, 0], centres[:, 1]) < 2.94) & (
+        (centres[:, 2] > 0.0) & (centres[:, 2] < 10.0)
+    )
+    assert not within.any(), "Voraussetzung: keine Dreiecksmitte steht in der Bohrung"
+    assert np.count_nonzero(np.abs(centres[:, 2] - 4.9) < 1e-6) == 1, (
+        "Voraussetzung: die Unterseite des Blechs ist ein einziges Dreieck"
+    )
+
+    _names_the_other_part(entry, feature, profile)
+
+
+def test_a_wedge_over_the_mouth_leaves_the_bore_free() -> None:
+    """Gegenfall zum Beschnitt an den Mündungen: Ein Keil, der mit einer Kante 0,1 mm
+    in der Platte steckt und schräg über die Bohrung steigt, steht nicht darin.
+
+    Seine Flächen reichen mit dieser Kante zwischen die Mündungen, 15 mm neben der
+    Achse, und überdecken die Achse erst 2 mm über der Platte. Gezählt wird nur das
+    Stück zwischen den Mündungen (``_clipped_by``); das ganze Dreieck hätte die
+    Bohrung gefüllt.
+    """
+    from app.core.geom.prepare_ops import hole_is_clear
+
+    plate = trimesh.creation.box(extents=(40.0, 20.0, 10.0))
+    plate.apply_translation((0.0, 0.0, 5.0))
+    bore = trimesh.creation.cylinder(radius=3.0, height=14.0, sections=48)
+    bore.apply_translation((0.0, 0.0, 5.0))
+    body = boolean("difference", [MeshData.of(plate), MeshData.of(bore)]).mesh
+    wedge = trimesh.convex.convex_hull(
+        np.array([(-15.0, -8.0, 9.9), (-15.0, 8.0, 9.9), (15.0, 0.0, 14.0), (-15.0, 0.0, 12.0)])
+    )
+    assert wedge.is_watertight and len(wedge.faces) == 4, (
+        "Voraussetzung: ein Keil aus vier Dreiecken"
+    )
+    mesh = MeshData.of(trimesh.util.concatenate((body.raw, wedge)))
+    holes = [
+        feature
+        for feature in detect(mesh).values()
+        if feature.kind == "hole" and abs(float(feature.params["diameter"]) - 6.0) < 0.1
+    ]
+    assert len(holes) == 1, "Voraussetzung: die Bohrung ist erkannt"
+    assert hole_is_clear(mesh, holes[0])
+
+
+@pytest.mark.parametrize(
+    ("span", "kept"), [((0.0, 40.0), (10.0, 40.0)), ((-30.0, 10.0), (-30.0, 0.0))]
+)
+@pytest.mark.parametrize("kernel", ["mesh", "brep"])
+def test_pulling_a_slot_shortens_a_long_pin_only_inside_the_old_bore(
+    profile: Profile, kernel: str, span: tuple[float, float], kept: tuple[float, float]
+) -> None:
+    """*Zum Langloch ziehen* kürzt auch einen langen Stift nur im bisherigen Hohlraum (RM-253).
+
+    Den kurzen Stift über 0 … 15 mm kürzt der Zug seit RM-413 auf 10 … 15
+    (``test_parts_touching_far_from_the_bore_do_not_block_the_slot_at_a_free_pin``).
+    Den langen ließ er ganz stehen, weil die Bohrung über Dreiecksmitten als frei
+    galt — 500 mm³ Stift quer durch die neue Öffnung. Jetzt sieht der Zug ihn und
+    nimmt nur das Stück in der Platte: Es bleiben 30 mm Stift Ø 4, außerhalb der
+    Platte, und die Platte trägt das Langloch.
+    """
+    entry = _plate_with_a_second_body(kernel, inside=True, pin_span=span, pin_diameter=4.0)
+
+    output = run_op(
+        "slot_hole", entry, profile, at_feature=_bore_in(entry, "hole"), slot_length=12.0
+    )
+
+    plate, pin = sorted(
+        as_mesh_data(output.mesh).raw.split(only_watertight=False),
+        key=lambda piece: -abs(float(piece.volume)),
+    )
+    assert abs(float(plate.volume)) == pytest.approx(
+        8000.0 - (36.0 + 9.0 * math.pi) * 10.0, abs=2.0
+    )
+    # Das Vieleck des Stifts liegt unter 1 % unter dem Kreis.
+    assert abs(float(pin.volume)) == pytest.approx(math.pi * 2.0**2 * 30.0, abs=4.0)
+    assert float(pin.bounds[0, 2]) == pytest.approx(kept[0], abs=0.02)
+    assert float(pin.bounds[1, 2]) == pytest.approx(kept[1], abs=0.02)
 
 
 @pytest.mark.parametrize("kernel", ["mesh", "brep"])
@@ -3223,7 +3815,7 @@ def test_an_unproved_negative_skin_does_not_release_the_slot(
         with pytest.raises(ValidationError) as caught:
             run_op("slot_hole", entry, profile, at_feature=feature.id, slot_length=12.0)
         assert caught.value.detail is OTHER_PART_IN_THE_BORE
-        assert [action.id for action in caught.value.suggestions] == ["split_bodies", "cancel"]
+        assert [action.id for action in caught.value.suggestions] == ["split_and_retry", "cancel"]
 
 
 @pytest.mark.parametrize("kernel", ["mesh", "brep"])
@@ -3325,7 +3917,7 @@ def test_a_fixed_boss_is_not_a_separate_pin_for_the_slot(
     fused = connection == "fused"
     assert caught.value.detail is (HOLE_IS_NOT_EMPTY if fused else OTHER_PART_IN_THE_BORE)
     assert [action.id for action in caught.value.suggestions] == [
-        "change_selection" if fused else "split_bodies",
+        "change_selection" if fused else "split_and_retry",
         "cancel",
     ]
 
@@ -3417,7 +4009,7 @@ def test_a_buried_plate_is_not_a_separate_body_in_its_bore(
                 slot_length=12.0,
             )
         assert caught.value.detail is OTHER_PART_IN_THE_BORE
-        assert [action.id for action in caught.value.suggestions] == ["split_bodies", "cancel"]
+        assert [action.id for action in caught.value.suggestions] == ["split_and_retry", "cancel"]
     assert np.array_equal(mesh.raw.vertices, original.vertices)
     assert np.array_equal(mesh.raw.faces, original.faces)
 
@@ -3784,7 +4376,7 @@ def test_a_slot_cannot_silently_join_its_carrier_to_a_separate_pin(
             slot_length=12.0,
             **params,
         )
-    assert "split_bodies" in {action.id for action in caught.value.suggestions}
+    assert "split_and_retry" in {action.id for action in caught.value.suggestions}
     assert as_mesh_data(entry.mesh).to_bytes() == original
 
 
@@ -5369,7 +5961,7 @@ def test_a_separate_part_in_a_countersink_slot_or_screw_says_so_at_every_row(
     with pytest.raises(ValidationError) as caught:
         run_op(op, entry, profile, at_feature=chosen, **_values_for(op, feature))
     assert caught.value.detail is expected
-    assert [action.id for action in caught.value.suggestions] == ["split_bodies", "cancel"]
+    assert [action.id for action in caught.value.suggestions] == ["split_and_retry", "cancel"]
 
 
 @pytest.mark.parametrize("kernel", ["mesh", "brep"])
@@ -5422,8 +6014,11 @@ def _loose_compound(plate: Any, loose: Any, kernel: str) -> SceneObject:
     return SceneObject(id="obj_1", name="Teil", mesh=mesh, features=detect(mesh))
 
 
-def _threaded_plate_with_a_core(kernel: str, profile: Profile) -> SceneObject:
-    """Platte 30 × 30 × 12, Bohrung Ø 8 mit gedrucktem Innengewinde, darin lose ein Kern Ø 5 × 10.
+def _threaded_plate_with_a_core(
+    kernel: str, profile: Profile, core_span: tuple[float, float] = (1.0, 11.0)
+) -> SceneObject:
+    """Platte 30 × 30 × 12, Bohrung Ø 8 mit gedrucktem Innengewinde, darin lose ein Kern Ø 5
+    über ``core_span`` entlang z.
 
     Das Gewinde erklärt *Gewinde drucken* ohne eigene Flächen.
     """
@@ -5462,7 +6057,7 @@ def _threaded_plate_with_a_core(kernel: str, profile: Profile) -> SceneObject:
     result = evaluate(project.document, profile, sources=ProjectSources(project))
     assert result.complete
     plate = result.scene.objects["obj_1"]
-    core = edit.moved(edit.cylinder(5.0, 10.0), (0.0, 0.0, 1.0))
+    core = edit.moved(edit.cylinder(5.0, core_span[1] - core_span[0]), (0.0, 0.0, core_span[0]))
     if kernel == "brep":
         from OCP.BRep import BRep_Builder
         from OCP.TopoDS import TopoDS_Compound
@@ -5577,7 +6172,7 @@ def test_a_loose_part_in_any_cavity_says_so_at_every_row(
     with pytest.raises(ValidationError) as caught:
         run_op(op, entry, profile, at_feature=chosen, **values)
     assert caught.value.detail == expected
-    assert [action.id for action in caught.value.suggestions] == ["split_bodies", "cancel"]
+    assert [action.id for action in caught.value.suggestions] == ["split_and_retry", "cancel"]
 
 
 @pytest.mark.parametrize("kernel", ["mesh", "brep"])
@@ -5639,7 +6234,7 @@ def test_turning_a_shaft_half_does_not_swallow_the_loose_ring_in_its_groove(
     with pytest.raises(ValidationError) as caught:
         run_op("rotate_feature", entry, profile, at_feature=upper, axis="x", angle=10.0)
     assert caught.value.detail == prepare_ops.ANOTHER_PART_IN_THE_WAY
-    assert [action.id for action in caught.value.suggestions] == ["split_bodies", "cancel"]
+    assert [action.id for action in caught.value.suggestions] == ["split_and_retry", "cancel"]
 
     turned = run_op("rotate_feature", entry, profile, at_feature=upper, axis="x", angle=1.0)
     after = _parts_of(turned)
@@ -5697,7 +6292,7 @@ def test_the_ball_in_its_socket_stays_a_loose_ball(profile: Profile) -> None:
         with pytest.raises(ValidationError) as caught:
             run_op(op, entry, profile, at_feature=chosen, **values)
         assert caught.value.detail == expected, (op, chosen)
-        assert [action.id for action in caught.value.suggestions] == ["split_bodies", "cancel"]
+        assert [action.id for action in caught.value.suggestions] == ["split_and_retry", "cancel"]
 
 
 def _plate_with_six_bores_and_two_loose_parts() -> SceneObject:
@@ -5796,3 +6391,323 @@ def _bore_of_the_pin(entry: SceneObject, pin: str) -> str:
             entry.features[name].params["centre"][:2], (float(middle[0]), float(middle[1]))
         ),
     )
+
+
+# --- RM-660: die Teilefrage sieht lange Dreiecke an jedem Hohlraum -------------------------
+
+
+def _rod(start: Vec3, direction: Vec3, diameter: float, length: float) -> Any:
+    """Ein exakter Stab Ø ``diameter`` ab ``start`` entlang ``direction``."""
+    exact_kernel()
+    from OCP.BRepPrimAPI import BRepPrimAPI_MakeCylinder
+    from OCP.gp import gp_Ax2, gp_Dir, gp_Pnt
+
+    from app.core.brep.kernel import Solid
+
+    frame = gp_Ax2(gp_Pnt(*start), gp_Dir(*direction))
+    return Solid(BRepPrimAPI_MakeCylinder(frame, diameter / 2.0, length).Shape())
+
+
+def _sheet_at(height: float) -> Any:
+    """Ein Blech von 0,2 mm über dem Dreieck (−15, −12), (25, −12), (5, 22) ab ``height``:
+    oben und unten je ein Dreieck, dessen Mitte 5 mm neben der Achse liegt."""
+    exact_kernel()
+    from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeFace, BRepBuilderAPI_MakePolygon
+    from OCP.BRepPrimAPI import BRepPrimAPI_MakePrism
+    from OCP.gp import gp_Pnt, gp_Vec
+
+    from app.core.brep.kernel import Solid
+
+    outline = BRepBuilderAPI_MakePolygon(
+        gp_Pnt(-15.0, -12.0, height), gp_Pnt(25.0, -12.0, height), gp_Pnt(5.0, 22.0, height), True
+    )
+    face = BRepBuilderAPI_MakeFace(outline.Wire()).Face()
+    return Solid(BRepPrimAPI_MakePrism(face, gp_Vec(0.0, 0.0, 0.2)).Shape())
+
+
+def _long_part_case(case: str, kernel: str, profile: Profile) -> tuple[SceneObject, str, str]:
+    """Körper, gewähltes Merkmal und Hohlraum je Art, mit einem langen getrennten Teil darin.
+
+    Jedes Teil läuft mit Dreiecken durch den Hohlraum, deren Mitten außerhalb
+    liegen — bei einem Stab mit Streifen über die ganze Länge auf einem und zwei
+    Dritteln davon. Beim Stift (``…-stift``) ist das Merkmal der Stift und der
+    Hohlraum die Bohrung oder das Langloch der Platte.
+    """
+    from app.core.brep import edit
+
+    exact_kernel()
+    if case.startswith(("langloch", "bohrung")):
+        entry = _plate_with_a_second_body(
+            kernel,
+            inside=True,
+            slot=case.startswith("langloch"),
+            pin_span=(0.0, 40.0),
+            pin_diameter=4.0,
+        )
+        cavity = "slot" if case.startswith("langloch") else "hole"
+        kind = "pin" if case.endswith("stift") else cavity
+    elif case == "senkung":
+        plate = edit.cut_bore(
+            edit.box(40.0, 20.0, 10.0),
+            position=(0.0, 0.0, 5.0),
+            direction=(0.0, 0.0, 1.0),
+            diameter=6.0,
+            depth=12.0,
+        )
+        sink = edit._oriented_cone((0.0, 0.0, 10.2), (0.0, 0.0, -1.0), 5.2, 0.0, 5.2)
+        plate = edit.boolean("difference", [plate, sink])
+        # Das Blech steckt auf 9 mm in der Platte, über der Bohrung und quer durch die Senkung.
+        entry = _loose_compound(plate, _sheet_at(9.0), kernel)
+        cavity = kind = "cone"
+    elif case == "gewinde":
+        entry = _threaded_plate_with_a_core(kernel, profile, core_span=(-16.0, 29.0))
+        cavity = kind = "thread"
+    elif case == "pfanne":
+        plate = edit.boolean(
+            "difference",
+            [edit.box(30.0, 30.0, 12.0), edit.moved(edit.sphere(12.0), (0.0, 0.0, 9.0))],
+        )
+        # Ein Stab steckt quer durch Platte und Pfanne, 2 mm unter der Oberseite.
+        rod = _rod((-27.0, 0.0, 10.0), (1.0, 0.0, 0.0), 1.0, 60.0)
+        entry = _loose_compound(plate, rod, kernel)
+        cavity = kind = "sphere"
+    else:
+        shaft = edit.boolean(
+            "difference",
+            [edit.cylinder(20.0, 40.0), edit.torus((0.0, 0.0, 20.0), (0.0, 0.0, 1.0), 20.0, 4.0)],
+        )
+        # Ein Draht Ø 1 liegt tangential in der Kehle und ragt beidseits weit hinaus.
+        wire = _rod((9.0, -33.0, 20.0), (0.0, 1.0, 0.0), 1.0, 66.0)
+        entry = _loose_compound(shaft, wire, kernel)
+        cavity = kind = "torus"
+
+    def picked(wanted: str) -> list[str]:
+        return [
+            name
+            for name, feature in entry.features.items()
+            if feature.kind == wanted
+            and (wanted not in ("sphere", "torus") or feature.params.get("recess"))
+        ]
+
+    chosen, holders = picked(kind), picked(cavity)
+    assert len(chosen) == 1 and len(holders) == 1, (
+        case,
+        sorted((f.id, f.kind) for f in entry.features.values()),
+    )
+    return entry, chosen[0], holders[0]
+
+
+def _no_middle_of_the_loose_part_inside(entry: SceneObject, cavity: Feature) -> bool:
+    """Ob keine Dreiecksmitte des Teils, das den Hohlraum nicht trägt, in dessen
+    Hüllquader liegt — näher an seiner Mitte als sein halber Durchmesser. Ein
+    gedrucktes Innengewinde ohne Flächen nimmt die Wände seines Gangs."""
+    from app.core.geom.prepare_ops import _with_walls
+    from app.core.geom.repair import face_components
+
+    mesh = as_mesh_data(entry.mesh)
+    own = np.asarray(_with_walls(mesh, cavity).face_indices, dtype=np.int64)
+    assert len(own), "Voraussetzung: der Hohlraum hat Flächen"
+    loose = np.concatenate(
+        [group for group in face_components(mesh.raw) if not np.isin(own, group).any()]
+    )
+    corners = np.asarray(mesh.raw.vertices)[np.asarray(mesh.raw.faces)[own]].reshape(-1, 3)
+    middles = np.asarray(mesh.raw.triangles_center)[loose]
+    boxed = ((middles >= corners.min(axis=0)) & (middles <= corners.max(axis=0))).all(axis=1)
+    offset = middles - np.asarray(cavity.params["centre"], dtype=np.float64)
+    near = np.sqrt((offset * offset).sum(axis=1)) < float(cavity.params["diameter"]) / 2.0
+    return not bool((boxed & near).any())
+
+
+#: Je Fall die Zeilen, die die Karte am Stand davor anbot, und der Satz, der jetzt dasteht.
+_LONG_PART_ROWS: dict[str, tuple[tuple[str, ...], str]] = {
+    "langloch": (
+        ("move_feature", "resize_hole", "rotate_feature", "duplicate_feature", "remove_feature"),
+        "OTHER_PART_IN_THE_BORE",
+    ),
+    "senkung": (
+        ("move_feature", "resize_feature", "rotate_feature", "duplicate_feature", "remove_feature"),
+        "OTHER_PART_IN_THE_BORE",
+    ),
+    "gewinde": (("resize_feature", "remove_feature"), "OTHER_PART_IN_THE_BORE"),
+    "pfanne": (
+        ("move_feature", "resize_feature", "duplicate_feature", "remove_feature"),
+        "OTHER_PART_IN_THE_CAVITY",
+    ),
+    "kehle": (
+        ("move_feature", "resize_feature", "rotate_feature", "duplicate_feature", "remove_feature"),
+        "OTHER_PART_IN_THE_CAVITY",
+    ),
+    "bohrung-stift": (
+        ("move_feature", "resize_feature", "rotate_feature", "duplicate_feature", "remove_feature"),
+        "PART_IN_ANOTHER_BORE",
+    ),
+    "langloch-stift": (
+        ("move_feature", "resize_feature", "rotate_feature", "duplicate_feature", "remove_feature"),
+        "PART_IN_ANOTHER_BORE",
+    ),
+}
+
+_LONG_PART_CASES = [
+    (case, kernel, op)
+    for case, (rows, _sentence) in _LONG_PART_ROWS.items()
+    for kernel in ("mesh", "brep")
+    for op in rows
+]
+
+
+@pytest.mark.parametrize(("case", "kernel", "op"), _LONG_PART_CASES)
+def test_a_long_part_through_any_cavity_says_so_at_every_row(
+    profile: Profile, case: str, kernel: str, op: str
+) -> None:
+    """RM-660: Die Teilefrage las an Langloch, Senkung, Gewinde, Pfanne und Kehle nur
+    Dreiecksmitten — und am Stift, der in einer fremden Bohrung steckt, nur die Mitten
+    im Hüllquader der Bohrung.
+
+    Ein Stift Ø 4 über 40 mm im Langloch einer 10-mm-Platte, ein Blech quer durch
+    eine Senkung, ein Kern Ø 5 über 45 mm im gedruckten Innengewinde, ein Stab quer
+    durch eine Kugelpfanne, ein Draht tangential durch eine Kehle: Jedes Teil steht
+    mit langen Dreiecken darin, deren Mitten außerhalb liegen. Am Stand davor bot die
+    Karte jede Zeile an, und die Handlungen rechneten durch das Teil. Soll: die Zeile
+    grau mit dem Satz für ein getrenntes Teil, und die Operation sagt ihn mit *In
+    Einzelteile aufteilen* — an beiden Kernen.
+    """
+    from app.core.geom import prepare_ops
+    from app.core.perceive.actions import actions_for
+
+    load_operations()
+    entry, chosen, holder = _long_part_case(case, kernel, profile)
+    assert as_mesh_data(entry.mesh).component_count == 2, "Voraussetzung: zwei Teile"
+    assert _no_middle_of_the_loose_part_inside(entry, entry.features[holder]), (
+        "Voraussetzung: keine Dreiecksmitte des getrennten Teils steht im Hohlraum"
+    )
+    feature = entry.features[chosen]
+    expected = getattr(prepare_ops, _LONG_PART_ROWS[case][1])
+    (row,) = actions_for(feature, entry.features, mesh=as_mesh_data(entry.mesh), only=op)
+    assert row.op is None and row.reason == expected, (case, chosen, row)
+    values = _values_for(op, feature) if "centre" in feature.params else {}
+    if op == "resize_feature" and case == "gewinde":
+        values = {"diameter": float(feature.params["diameter"]) + 0.5}
+    with pytest.raises(ValidationError) as caught:
+        run_op(op, entry, profile, at_feature=chosen, **values)
+    assert caught.value.detail == expected
+    assert [action.id for action in caught.value.suggestions] == ["split_and_retry", "cancel"]
+
+
+@pytest.mark.parametrize("kernel", ["mesh", "brep"])
+def test_a_slot_with_a_long_pin_still_pulls_and_keeps_the_pin_outside(
+    profile: Profile, kernel: str
+) -> None:
+    """RM-660, Gegenfall: *Zum Langloch ziehen* bleibt am Langloch mit langem Stift frei.
+
+    Wie am kurzen Stift (``test_the_slot_with_a_separate_pin_still_pulls_and_keeps_the_pin``):
+    Seit das Langloch den langen Stift sieht, fragt der Zug ihn als getrenntes Teil
+    (``hole_has_separate_contents``) und lässt ihn stehen — zwei Teile, der Stift
+    Ø 4 über 40 mm mit seinem Volumen.
+    """
+    from app.core.perceive.actions import actions_for
+
+    load_operations()
+    entry, chosen, _holder = _long_part_case("langloch", kernel, profile)
+    (row,) = actions_for(
+        entry.features[chosen], entry.features, mesh=as_mesh_data(entry.mesh), only="slot_hole"
+    )
+    assert row.op == "slot_hole", row
+    before = _parts_of(entry)
+    output = run_op("slot_hole", entry, profile, at_feature=chosen, slot_length=16.0)
+    after = _parts_of(output)
+    assert len(after) == 2, after
+    assert after[0] == pytest.approx(before[0], abs=0.2), (before, after)
+
+
+# --- RM-661: ein eng sitzender Stift ist ein getrenntes Teil in seiner Bohrung --------------
+
+
+@pytest.mark.parametrize("span", [(0.0, 10.0), (-5.0, 15.0)], ids=["an-den-muendungen", "darueber"])
+@pytest.mark.parametrize("pin_diameter", [5.9, 5.98, 6.0])
+@pytest.mark.parametrize("kernel", ["mesh", "brep"])
+def test_a_tight_pin_in_its_bore_is_a_separate_part(
+    profile: Profile, kernel: str, pin_diameter: float, span: tuple[float, float]
+) -> None:
+    """RM-661: Ein Stift Ø 5,9 oder Ø 5,98 in einer Bohrung Ø 6 galt als Wand.
+
+    Sein Spiel (0,05 und 0,01 mm) liegt unter dem Saum von 2 % des Radius, den die
+    Teilefrage unter der eigenen Wand lässt, und seine Enden liegen an den Mündungen
+    oder dahinter: Kein Dreieck des Stifts kam der Achse näher als 0,98 · 3 mm, und
+    *Versetzen*, *Verschließen* und *Entfernen* verschmolzen ihn still mit der Platte —
+    an beiden Kernen. Der Saum fängt Rundung an der eigenen Wand; ein fremdes Teil
+    misst sich gegen den Halbmesser selbst. Ø 6 ohne Spiel liegt mit seinem Mantel
+    genau auf der Wand — gegen sie gemessen stünde er nicht darin. Soll: Menü und
+    jede Handlung sagen das getrennte Teil, mit *In Einzelteile aufteilen*.
+    """
+    entry = _plate_with_a_second_body(kernel, inside=True, pin_span=span, pin_diameter=pin_diameter)
+    feature = entry.features[_bore_in(entry, "hole")]
+    mesh = as_mesh_data(entry.mesh)
+    assert mesh.component_count == 2, "Voraussetzung: Platte und Stift"
+    centres = np.asarray(mesh.raw.triangles_center, dtype=np.float64)
+    within = (np.hypot(centres[:, 0], centres[:, 1]) < 3.0 * 0.98) & (
+        (centres[:, 2] > 0.01) & (centres[:, 2] < 9.99)
+    )
+    assert not within.any(), "Voraussetzung: kein Dreieck des Stifts steht innerhalb des Saums"
+
+    _names_the_other_part(entry, feature, profile)
+
+
+@pytest.mark.parametrize("kernel", ["mesh", "brep"])
+def test_a_pin_resting_on_the_mouth_or_above_it_leaves_the_bore_free(kernel: str) -> None:
+    """RM-661, Gegenfall Luft: Ein Stift Ø 5,98 über der Bohrung steht nicht darin —
+    auf ihrer Mündung aufgesetzt oder 0,5 mm darüber in der Luft."""
+    from app.core.geom.prepare_ops import hole_is_clear
+
+    for span in ((10.0, 25.0), (10.5, 25.0)):
+        entry = _plate_with_a_second_body(kernel, inside=True, pin_span=span, pin_diameter=5.98)
+        feature = entry.features[_bore_in(entry, "hole")]
+        mesh = as_mesh_data(entry.mesh)
+        assert mesh.component_count == 2, span
+        assert hole_is_clear(mesh, feature), span
+
+
+@pytest.mark.parametrize("side", [1.0, -1.0], ids=["rechts", "links"])
+@pytest.mark.parametrize("kernel", ["mesh", "brep"])
+def test_a_cross_pin_ending_at_the_bore_wall_leaves_the_bore_free(kernel: str, side: float) -> None:
+    """RM-661, Gegenfall Querbohrung: Ein Querstift, der in seiner Querbohrung bis an die
+    Wand der Bohrung reicht, steht nicht darin.
+
+    Sein Ende liegt auf dem Kreis der Bohrung, an der Mündung der Querbohrung, wo die
+    Wand fehlt — nicht näher an der Achse als die eigene Wand. Die Bohrung bleibt frei,
+    und die Teilefrage nennt kein getrenntes Teil.
+    """
+    from app.core.geom.prepare_ops import hole_is_clear, separate_part_reason
+
+    start = 3.0 if side > 0 else -23.0
+    entry = _plate_with_a_cross_pin(kernel, start, 20.0)
+    feature = entry.features[_bore_in(entry, "hole")]
+    mesh = as_mesh_data(entry.mesh)
+    assert mesh.component_count == 2, "Voraussetzung: Platte und Stift"
+    assert hole_is_clear(mesh, feature)
+    assert separate_part_reason(mesh, feature, entry.features) is None
+
+
+def test_a_part_refusal_without_an_offer_still_names_a_way(
+    profile: Profile, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Über der Höchstzahl der Teile bleibt nicht nur *Abbrechen* (Nachprüfung I, N3).
+
+    Ohne Angebot (mehr Teile, als *Anzahl* erlaubt, oder ein Merkmal ohne
+    Flächen) gibt es keinen Knopf zum Aufteilen; Regel 17 verlangt trotzdem
+    einen Weg: ein anderes Merkmal wählen.
+    """
+    from app.core.geom import prepare_ops
+    from app.core.geom.prepare_ops import OTHER_PART_IN_THE_BORE
+
+    load_operations()
+    entry = _plate_with_a_second_body("mesh", inside=True)
+    monkeypatch.setattr(prepare_ops, "_split_limit", lambda: 1)
+
+    with pytest.raises(ValidationError) as caught:
+        run_op(
+            "move_feature", entry, profile, at_feature=_bore_in(entry, "hole"), x=5.0, y=0.0, z=5.0
+        )
+
+    assert caught.value.detail is OTHER_PART_IN_THE_BORE
+    assert "count" not in caught.value.values
+    assert [action.id for action in caught.value.suggestions] == ["change_selection", "cancel"]

@@ -12,9 +12,13 @@ ohne ``type``.
 from __future__ import annotations
 
 import json
+import sys
+import threading
 import time
+from collections.abc import Callable
 from dataclasses import replace
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -369,6 +373,10 @@ def test_discovered_identity_survives_installation_move_and_separates_nozzles(
             "nozzle_diameter": ["0.2"],
         },
     )
+    # Eine Installation bekommt neue Profile nur mit einer neuen Fassung, und
+    # die bringt eine neue Programmdatei mit (RM-670: der gemerkte Bestand sieht
+    # die Installation an ihrer obersten Ebene und am Programm an).
+    (moved / "slicer.exe").write_bytes(b"neue Fassung")
     found = sp.discover_printers(moved / "slicer.exe", "orca")
     assert len({printer.id for printer in found}) == 2
     assert sorted(printer.nozzle_diameter for printer in found) == pytest.approx([0.2, 0.6])
@@ -1109,6 +1117,8 @@ def test_a_machine_reads_its_nozzle_from_the_profile_it_inherits(unknown_printer
     document = json.loads(base.read_text(encoding="utf-8"))
     del document["nozzle_diameter"]
     _write(base, document)
+    # Mit einer neuen Fassung des Slicers, wie in der Wirklichkeit (RM-670).
+    executable.write_bytes(b"neue Fassung")
     (machine,) = [
         entry
         for entry in sp.find_profiles(executable, "orca", kinds=("machine",))
@@ -1579,6 +1589,8 @@ def test_the_search_opens_every_profile_file_once(
         return original(self, *args, **kwargs)  # type: ignore[arg-type]
 
     monkeypatch.setattr(Path, "read_text", counted)
+    # Gezählt wird ein Lesedurchgang, nicht der gemerkte Bestand (RM-670).
+    sp.forget_holdings()
     found = sp.find_profiles(slicer, "orca")
 
     assert found == expected
@@ -4941,6 +4953,449 @@ def test_a_single_read_reads_each_profile_once_and_forgets_it_after(tmp_path: Pa
     assert sp._load(path) == {"name": "zwei"}, "danach verfällt der Speicher"
 
 
+# --- Der gemerkte Bestand (RM-670) ---------------------------------------------------
+
+
+def _settle(root: Path) -> None:
+    """Alles unter ``root`` auf einen festen Zeitpunkt in der Vergangenheit —
+    ein Bestand, den gerade niemand ändert.
+
+    Was jünger ist als :data:`sp.SETTLE_NS`, merkt sich die Profilsuche nicht;
+    ohne das Altern läse jeder Aufruf neu, und keine Zusicherung über den
+    Merker sagte etwas. Fest, damit zweimal Altern nichts ändert.
+    """
+    import os
+
+    past = 1_767_225_600.0  # 01.01.2026
+    for path in (*root.rglob("*"), root):
+        os.utime(path, (past, past))
+
+
+def _counting(monkeypatch: pytest.MonkeyPatch, name: str) -> list[object]:
+    """Zählt die Aufrufe von ``sp.<name>``, ohne sie zu ändern."""
+    calls: list[object] = []
+    original = getattr(sp, name)
+
+    def counted(*args: object, **kwargs: object) -> object:
+        calls.append(args[0] if args else None)
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(sp, name, counted)
+    return calls
+
+
+@pytest.fixture
+def own_profiles(slicer: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """Der Kontoordner, in dem die Orca-Familie selbst angelegte Profile ablegt."""
+    user = tmp_path / "config" / "OrcaSlicer" / "user" / "4711"
+    (user / "machine").mkdir(parents=True)
+    monkeypatch.setattr(sp, "user_roots", lambda _flavour, _executable: [user])
+    return user
+
+
+def _own_machine(user: Path, file: str, name: str, model: str) -> Path:
+    path = user / "machine" / file
+    _write(
+        path,
+        {
+            "name": name,
+            "from": "User",
+            "inherits": "Elegoo Centauri Carbon 2 0.4 nozzle",
+            "printer_model": model,
+            "nozzle_diameter": ["0.4"],
+        },
+    )
+    return path
+
+
+def test_the_store_is_read_once_and_follows_every_change_in_the_slicer(
+    slicer: Path, own_profiles: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """RM-670: Jeder 3MF-Export las die rund 1 550 Maschinenprofile neu.
+
+    Gemerkt wird der Bestand jetzt — und trotzdem kennt der nächste Aufruf,
+    was der Kunde im Slicer angelegt, umbenannt, überschrieben oder gelöscht
+    hat. Vor jedem Schritt altert der Bestand, sonst merkte die Suche ihn gar
+    nicht, und jede Zusicherung wäre auch ohne Signatur grün.
+    """
+    reads = _counting(monkeypatch, "_read")
+    _settle(tmp_path)
+
+    first = sp.find_profiles(slicer, "orca", ("machine",))
+    assert reads, "der erste Aufruf liest den Bestand"
+    count = len(reads)
+    again = sp.find_profiles(slicer, "orca", ("machine",))
+    assert again == first
+    assert len(reads) == count, "unverändert wird nichts neu gelesen"
+    again.clear()
+    assert sp.find_profiles(slicer, "orca", ("machine",)) == first, "der Merker gibt Kopien"
+
+    def own() -> dict[str, Path]:
+        return {
+            entry.name: entry.path
+            for entry in sp.find_profiles(slicer, "orca", ("machine",))
+            if entry.from_user
+        }
+
+    created = _own_machine(own_profiles, "Werkstatt.json", "Werkstatt CC2", "Werkstatt")
+    assert own() == {"Werkstatt CC2": created}, "angelegt"
+
+    _settle(tmp_path)
+    own()
+    renamed = created.rename(created.with_name("Keller.json"))
+    assert own() == {"Werkstatt CC2": renamed}, "umbenannt"
+
+    _settle(tmp_path)
+    own()
+    _own_machine(own_profiles, "Keller.json", "Keller CC2", "Werkstatt")
+    assert own() == {"Keller CC2": renamed}, "überschrieben"
+
+    _settle(tmp_path)
+    own()
+    renamed.unlink()
+    assert own() == {}, "gelöscht"
+
+
+def test_a_printer_created_in_the_slicer_is_known_to_the_next_question(
+    slicer: Path, own_profiles: Path, tmp_path: Path
+) -> None:
+    """Die Frage jedes Exports, ob der Slicer den Drucker kennt (``machine_missing``)."""
+    _settle(tmp_path)
+    assert not sp.supports_printer("orca", slicer, "Eigenbau Voron")
+
+    _own_machine(own_profiles, "Voron.json", "Eigenbau Voron 0.4 nozzle", "Eigenbau Voron")
+
+    assert sp.supports_printer("orca", slicer, "Eigenbau Voron")
+
+
+def test_the_first_own_profile_of_an_account_is_seen(
+    slicer: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Der Kontoordner selbst entsteht mit dem ersten eigenen Profil — eine Wurzel mehr."""
+    config = tmp_path / "config" / "OrcaSlicer" / "user"
+    config.mkdir(parents=True)
+    monkeypatch.setattr(
+        sp,
+        "user_roots",
+        lambda _flavour, _executable: [entry for entry in config.iterdir() if entry.is_dir()],
+    )
+    _settle(tmp_path)
+    assert not sp.supports_printer("orca", slicer, "Eigenbau Voron")
+
+    _own_machine(config / "4711", "Voron.json", "Eigenbau Voron 0.4 nozzle", "Eigenbau Voron")
+
+    assert sp.supports_printer("orca", slicer, "Eigenbau Voron")
+
+
+def test_the_installation_is_read_again_with_a_new_version_only(
+    slicer: Path, bestand: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Die mitgelieferten Profile werden nicht Datei für Datei angesehen (RM-670).
+
+    Bei Orca sind es zwölftausend; sie je Export einzeln zu prüfen kostete so
+    viel wie das Lesen. Sie ändern sich nur mit einer neuen Fassung, und die
+    ändert die Programmdatei oder ein Herstellerbündel auf der obersten Ebene.
+    """
+    reads = _counting(monkeypatch, "_read")
+    _write(bestand / "Elegoo.json", {"name": "Elegoo", "version": "02.00.00.00"})
+    _settle(tmp_path)
+    sp.find_profiles(slicer, "orca", ("machine",))
+    count = len(reads)
+
+    _write(
+        bestand / "Elegoo" / "machine" / "ECC2" / "Neu.json",
+        {"type": "machine", "name": "Elegoo Neu 0.4 nozzle", "instantiation": "true"},
+    )
+    _settle(tmp_path)
+    names = {entry.name for entry in sp.find_profiles(slicer, "orca", ("machine",))}
+    assert len(reads) == count, "ohne neue Fassung wird die Installation nicht neu gelesen"
+    assert "Elegoo Neu 0.4 nozzle" not in names
+
+    slicer.write_bytes(b"2.3.1")
+    names = {entry.name for entry in sp.find_profiles(slicer, "orca", ("machine",))}
+    assert "Elegoo Neu 0.4 nozzle" in names, "die neue Programmdatei liest neu"
+
+    _settle(tmp_path)
+    sp.find_profiles(slicer, "orca", ("machine",))
+    count = len(reads)
+    _write(bestand / "Elegoo.json", {"name": "Elegoo", "version": "02.00.00.01"})
+    sp.find_profiles(slicer, "orca", ("machine",))
+    assert len(reads) > count, "ein erneuertes Herstellerbündel liest neu"
+
+
+def test_a_store_that_just_changed_is_not_kept(
+    slicer: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Zwei Änderungen im selben Takt der Dateisystemuhr tragen denselben Stempel.
+
+    Ein Bestand, dessen jüngste Datei jünger ist als :data:`sp.SETTLE_NS`, wird
+    deshalb nicht gemerkt — der nächste Aufruf liest ihn noch einmal. Die Uhr
+    steht fest, sonst entschiede die Last der Maschine (Review RM-670 L7).
+    """
+    reads = _counting(monkeypatch, "_read")
+    newest = max(entry[1] for entry in sp.stock_signature("orca", slicer))
+    monkeypatch.setattr(sp.time, "time_ns", lambda: newest + sp.SETTLE_NS - 1)
+    sp.find_profiles(slicer, "orca", ("machine",))
+    count = len(reads)
+    assert count > 0, "der Bestand hat Maschinen"
+
+    sp.find_profiles(slicer, "orca", ("machine",))
+    assert len(reads) == 2 * count, "unberuhigt nicht gemerkt"
+
+    monkeypatch.setattr(sp.time, "time_ns", lambda: newest + sp.SETTLE_NS)
+    sp.find_profiles(slicer, "orca", ("machine",))
+    sp.find_profiles(slicer, "orca", ("machine",))
+    assert len(reads) == 3 * count, "beruhigt gemerkt"
+
+
+def test_the_settle_time_is_taken_before_the_read(
+    slicer: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Review RM-670 L2: Gemessen wird an der Uhr vor dem Lesen. Dauert das
+    Lesen über die Schwelle, sähe die Uhr danach einen Bestand als beruhigt,
+    der beim Erheben der Signatur eben erst geändert war."""
+    newest = max(entry[1] for entry in sp.stock_signature("orca", slicer))
+    clock = {"now": newest + sp.SETTLE_NS - 1}
+    monkeypatch.setattr(sp.time, "time_ns", lambda: clock["now"])
+    original = sp._orca_profiles
+
+    def slow(*args: Any) -> tuple[list[sp.SlicerProfile], bool]:
+        clock["now"] += sp.SETTLE_NS  # das Lesen dauert über die Schwelle
+        return original(*args)
+
+    monkeypatch.setattr(sp, "_orca_profiles", slow)
+    sp.find_profiles(slicer, "orca", ("machine",))
+
+    assert not sp._holdings, "gemessen vor dem Lesen, nicht danach"
+
+
+def test_the_settle_time_of_prusas_models_is_taken_before_the_read(
+    prusa_mini: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Der Zwilling für die Modellnamen der Prusa-Bündel (Review RM-670 N5)."""
+    root = sp.install_root(prusa_mini)
+    assert root is not None
+    newest = max(entry[1] for entry in sp._prusa_signature((root,)))
+    clock = {"now": newest + sp.SETTLE_NS - 1}
+    monkeypatch.setattr(sp.time, "time_ns", lambda: clock["now"])
+    original = sp._read_prusa_printer_models
+
+    def slow(found: Path) -> tuple[str, ...]:
+        clock["now"] += sp.SETTLE_NS
+        return original(found)
+
+    monkeypatch.setattr(sp, "_read_prusa_printer_models", slow)
+    assert sp.known_printers("prusa", prusa_mini)
+
+    assert not sp._prusa_models, "gemessen vor dem Lesen, nicht danach"
+
+
+def test_the_settle_time_of_the_program_folders_is_taken_before_the_listing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Der Zwilling für die Datenordner unter ``%APPDATA%`` (Review RM-670 N5)."""
+    base = tmp_path / "config"
+    (base / "OrcaSlicer").mkdir(parents=True)
+    newest = base.stat().st_mtime_ns
+    clock = {"now": newest + sp.SETTLE_NS - 1}
+    monkeypatch.setattr(sp.time, "time_ns", lambda: clock["now"])
+    original = sp._list_program_folders
+
+    def slow(found: Path, mark: str) -> list[Path]:
+        clock["now"] += sp.SETTLE_NS
+        return original(found, mark)
+
+    monkeypatch.setattr(sp, "_list_program_folders", slow)
+    assert sp._program_folders(base, "orcaslicer") == [base / "OrcaSlicer"]
+
+    assert not sp._program_folders_seen, "gemessen vor dem Auflisten, nicht danach"
+
+
+def test_prusas_store_is_kept_only_once_it_settled(
+    prusa_mini: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Review RM-670 L3: Der Prusa-Bestand merkt wie die übrigen erst, was älter
+    ist als :data:`sp.SETTLE_NS` — zwei Änderungen im selben Takt der
+    Dateisystemuhr tragen denselben Stempel."""
+    built = _counting(monkeypatch, "_PrusaStore")
+    roots = sp.profile_roots("prusa", prusa_mini)
+    newest = max(entry[1] for entry in sp._prusa_signature(roots))
+
+    monkeypatch.setattr(sp.time, "time_ns", lambda: newest + sp.SETTLE_NS - 1)
+    sp.find_profiles(prusa_mini, "prusa", ("machine",))
+    sp.find_profiles(prusa_mini, "prusa", ("machine",))
+    assert len(built) == 2, "unberuhigt nicht gemerkt"
+
+    monkeypatch.setattr(sp.time, "time_ns", lambda: newest + sp.SETTLE_NS)
+    sp.find_profiles(prusa_mini, "prusa", ("machine",))
+    sp.find_profiles(prusa_mini, "prusa", ("machine",))
+    assert len(built) == 3, "beruhigt gemerkt"
+
+
+def test_curas_store_ignores_its_log_and_sees_a_new_machine(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Curas Versionsordner trägt Protokoll und Programmeinstellungen neben den
+    Profilen; sie ändern sich bei jedem Start und zehn Sekunden nach jeder
+    Einstellung (``cura.cfg``) und sind kein Grund, den Bestand neu zu lesen
+    (Review RM-670 N3). Gezählt wird nur, was der Leser ansieht — die Ordner
+    der ersten Ebene aus ``_CURA_STOCK_FOLDERS``."""
+    installed = tmp_path / "Cura" / "share" / "cura"
+    (installed / "resources" / "definitions").mkdir(parents=True)
+    user = tmp_path / "config" / "cura" / "5.13"
+    (user / "machine_instances").mkdir(parents=True)
+    executable = tmp_path / "Cura" / "CuraEngine.exe"
+    executable.write_bytes(b"")
+    monkeypatch.setattr(sp, "install_root", lambda _executable: installed)
+    monkeypatch.setattr(sp, "user_roots", lambda _flavour, _executable: [user])
+    beside = {
+        user / "cura.log": "Start\n",
+        user / "cura.cfg": "[general]\nversion = 7\n",
+        user / "plugins.json": "{}",
+        user / "plugins" / "Werkzeug" / "plugin.json": "{}",
+        user / "setting_visibility" / "eigene.cfg": "[general]\n",
+    }
+    for path, text in beside.items():
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text, encoding="utf-8")
+    _settle(tmp_path)
+    before = sp._holding_signature("cura", executable)
+
+    for path, text in beside.items():
+        path.write_text(text + "\n", encoding="utf-8")
+    assert sp._holding_signature("cura", executable) == before, "nichts davon ist ein Profil"
+
+    (user / "machine_instances" / "Werkstatt.global.cfg").write_text(
+        "[general]\nname = Werkstatt\n", encoding="utf-8"
+    )
+    assert sp._holding_signature("cura", executable) != before
+
+
+def test_curas_signature_sees_every_folder_its_reader_opens(
+    cura: Path, cura_configured_printers: Path
+) -> None:
+    """Die Ordner der Signatur und die des Lesers sind eine Liste
+    (``_CURA_STOCK_FOLDERS``). Was der Leser unter einer eigenen Wurzel öffnet,
+    liegt in einem dieser Ordner — sonst sähe der Merker eine Änderung dort nie.
+
+    Gezählt über das Prüfereignis ``open``: Cura liest JSON, INI über
+    ``configparser`` und XML, jedes auf einem anderen Weg."""
+    user = cura_configured_printers
+    assert user in sp.user_roots("cura", cura)
+    (user / "quality_changes").mkdir(exist_ok=True)
+    (user / "quality_changes" / "eigen.inst.cfg").write_text(
+        "[general]\ndefinition = abax_pri3\nname = Eigen\nversion = 4\n\n"
+        "[metadata]\nquality_type = normal\ntype = quality_changes\n\n[values]\n",
+        encoding="utf-8",
+    )
+    opened: list[Path] = []
+    if not _HOOKED:
+        # Ein Prüfereignis lässt sich nicht wieder abmelden; ohne Zuhörer
+        # kostet es je geöffnete Datei einen Vergleich.
+        sys.addaudithook(_record_opening)
+        _HOOKED.append(True)
+    _RECORDING.append(opened)
+    try:
+        sp.find_profiles(cura, "cura", ("machine", "process", "filament"))
+    finally:
+        _RECORDING.remove(opened)
+
+    own = {path.relative_to(user) for path in opened if path.is_relative_to(user)}
+    assert {path.parts[0] for path in own} >= {"machine_instances", "extruders", "materials"}, own
+    outside = [path for path in own if path.parts[0].casefold() not in sp._CURA_STOCK_FOLDERS]
+    assert not outside, f"vom Leser geöffnet, von der Signatur nicht gesehen: {outside}"
+
+
+#: Wer gerade mitschreibt, welche Dateien geöffnet werden (:func:`_record_opening`).
+_RECORDING: list[list[Path]] = []
+
+#: Ob :func:`_record_opening` in diesem Prozess angemeldet ist.
+_HOOKED: list[bool] = []
+
+
+def _record_opening(event: str, arguments: tuple[Any, ...]) -> None:
+    """Prüfereignis ``open``: jede geöffnete Datei, solange jemand mitschreibt."""
+    if _RECORDING and event == "open" and isinstance(arguments[0], str):
+        for opened in _RECORDING:
+            opened.append(Path(arguments[0]))
+
+
+def test_prusas_signature_leaves_out_downloads_and_program_settings(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Review RM-670 N3: PrusaSlicer legt Update-Downloads unter ``cache/`` ab und
+    schreibt bei jedem Beenden ``PrusaSlicer.ini``. Beides ist kein Profil; ein
+    eigenes Druckprofil unter ``print/`` schon. Die Signatur der Vorwahl im
+    Hauptfenster und die des Prusa-Bestands sind eine."""
+    installed = tmp_path / "PrusaSlicer" / "resources" / "profiles"
+    installed.mkdir(parents=True)
+    (installed / "PrusaResearch.ini").write_text("[vendor]\nname = Prusa\n", encoding="utf-8")
+    config = tmp_path / "config" / "PrusaSlicer"
+    for folder in ("vendor", "print", "cache/vendor"):
+        (config / folder).mkdir(parents=True)
+    (config / "PrusaSlicer.ini").write_text("[presets]\nprint = A\n", encoding="utf-8")
+    (config / "cache" / "vendor" / "PrusaResearch.ini").write_text("[vendor]\n", encoding="utf-8")
+    executable = tmp_path / "PrusaSlicer" / "prusa-slicer.exe"
+    executable.write_bytes(b"")
+    monkeypatch.setattr(sp, "install_root", lambda _executable: installed)
+    monkeypatch.setattr(sp, "user_roots", lambda _flavour, _executable: [config])
+    _settle(tmp_path)
+    before = sp.stock_signature("prusa", executable)
+    reads = _counting(monkeypatch, "_PrusaStore")
+    sp.find_profiles(executable, "prusa", ("machine",))
+
+    (config / "PrusaSlicer.ini").write_text("[presets]\nprint = B\n", encoding="utf-8")
+    (config / "cache" / "vendor" / "PrusaResearch.ini").write_text("[vendor]\n\n", encoding="utf-8")
+    assert sp.stock_signature("prusa", executable) == before, "kein Profil darunter"
+    sp.find_profiles(executable, "prusa", ("machine",))
+    assert len(reads) == 1, "der Prusa-Bestand bleibt gemerkt"
+
+    (config / "print" / "Mein Druck.ini").write_text("layer_height = 0.2\n", encoding="utf-8")
+    assert sp.stock_signature("prusa", executable) != before, "ein eigenes Profil schon"
+
+
+def test_prusas_printer_models_are_read_once_per_state_of_the_bundles(
+    prusa_mini: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """PrusaSlicer nennt seine Modelle in den Herstellerbündeln; jeder Export fragte sie ab."""
+    reads = _counting(monkeypatch, "_read_prusa_printer_models")
+    _settle(tmp_path)
+
+    first = sp.known_printers("prusa", prusa_mini)
+    assert sp.known_printers("prusa", prusa_mini) == first
+    assert len(reads) == 1
+
+    bundle = tmp_path / "resources" / "profiles" / "PrusaResearch.ini"
+    bundle.write_text(
+        bundle.read_text(encoding="utf-8")
+        + "\n[printer_model:CORE1]\nname = Prusa CORE One\nvariants = 0.4\n",
+        encoding="utf-8",
+    )
+    assert "Prusa CORE One" in sp.known_printers("prusa", prusa_mini)
+
+
+def test_the_program_folder_is_listed_again_only_when_its_parent_changes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """``%APPDATA%`` aufzulisten kostete unter Last eine halbe Sekunde je Frage.
+
+    Gemerkt bis zum nächsten Zeitstempel des Ordners: Installiert der Kunde
+    einen Slicer, legt dieser dort seinen Ordner an, und die nächste Frage
+    findet ihn.
+    """
+    base = tmp_path / "config"
+    (base / "Anderes Programm").mkdir(parents=True)
+    listings = _counting(monkeypatch, "_list_program_folders")
+    _settle(tmp_path)
+
+    assert sp._program_folders(base, "orcaslicer") == []
+    assert sp._program_folders(base, "orcaslicer") == []
+    assert len(listings) == 1
+
+    (base / "OrcaSlicer").mkdir()
+    assert sp._program_folders(base, "orcaslicer") == [base / "OrcaSlicer"]
+
+
 def test_a_single_read_walks_each_stock_folder_once(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -4974,3 +5429,414 @@ def test_a_single_read_walks_each_stock_folder_once(
     assert len(walks) == 1, "im Durchgang einmal"
     assert both() == inside, "dieselbe Liste, dieselben Profile"
     assert len(walks) == 3, "ohne Durchgang je Frage, danach verfallen"
+
+
+def test_telemetry_beside_the_profiles_keeps_the_held_stock(
+    own_profiles: Path, slicer: Path
+) -> None:
+    """Review RM-670 M1: ElegooSlicer schreibt im Kontoordner laufend Telemetrie
+    (``telemetry_cache/runtime_state/<pid>.json``). Sie gehört nicht zum
+    Bestand und darf den Merker nicht verwerfen; ein neues Maschinenprofil schon."""
+    before = sp.stock_signature("orca", slicer)
+    telemetry = own_profiles / "telemetry_cache" / "runtime_state" / "4711.json"
+    telemetry.parent.mkdir(parents=True)
+    telemetry.write_text("{}", encoding="utf-8")
+
+    assert sp.stock_signature("orca", slicer) == before, "Telemetrie ist kein Profil"
+    (own_profiles / "machine" / "neu.json").write_text("{}", encoding="utf-8")
+    assert sp.stock_signature("orca", slicer) != before, "ein neues Profil schon"
+
+
+def _nothing_read(reads: list[Path], name: Path) -> Any:
+    """Ein Leser ohne Profile, der mitzählt, für wen er las."""
+
+    def read() -> tuple[list[sp.SlicerProfile], bool]:
+        reads.append(name)
+        return [], True
+
+    return read
+
+
+def test_the_held_stock_keeps_only_the_latest_few(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Review RM-670 M3: Ein Bestand der Orca-Familie belegt rund 34 MiB. Der
+    Merker hält höchstens ``_HOLDINGS_LIMIT`` Einträge, und ein Treffer rückt
+    nach hinten — der zuletzt gefragte bleibt, der am längsten nicht gefragte
+    geht (Review RM-670 N4)."""
+    monkeypatch.setattr(sp, "_holding_signature", lambda _flavour, _executable: (("x", 0, 0),))
+    names = [Path(f"slicer-{number}.exe") for number in range(sp._HOLDINGS_LIMIT + 1)]
+    reads: list[Path] = []
+
+    def ask(name: Path) -> None:
+        sp._held(name, "orca", frozenset({"machine"}), _nothing_read(reads, name))
+
+    for name in names[:-1]:
+        ask(name)
+    ask(names[0])
+    assert reads == names[:-1], "der älteste kam aus dem Merker"
+    ask(names[-1])
+
+    held = {key[0] for key in sp._holdings}
+    assert len(held) == sp._HOLDINGS_LIMIT
+    assert str(names[0]) in held, "gefragt, also nach hinten gerückt"
+    assert str(names[1]) not in held, "der am längsten nicht gefragte geht"
+
+
+@pytest.mark.parametrize("flavour", ["orca", "cura"])
+@pytest.mark.parametrize(
+    "kinds",
+    [
+        ("machine",),
+        ("process",),
+        ("filament",),
+        ("machine", "process"),
+        ("machine", "filament"),
+        ("process", "filament"),
+    ],
+)
+def test_fewer_kinds_come_from_the_held_stock_as_if_read_alone(
+    request: pytest.FixtureRequest,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    flavour: sp.SlicerFlavour,
+    kinds: tuple[sp.ProfileKind, ...],
+) -> None:
+    """Review RM-670 N4: Export und Grundlage fragen Maschinen und Prozess mit
+    Filament getrennt, der Druckdialog alle drei, die Filamentauswahl nur
+    Filamente. Je Frage ein Eintrag hielt am ElegooSlicer 72 MiB statt 34 —
+    manches Profil drei Mal. Wer weniger Arten fragt, bekommt jetzt den Ausschnitt
+    des größeren Eintrags, und der gleicht dem Lesen dieser Arten allein: bei
+    der Orca-Familie auch mit einem eigenen Profil, das ein mitgeliefertes
+    gleichen Namens ersetzt."""
+    if flavour == "orca":
+        program = request.getfixturevalue("slicer")
+        own = request.getfixturevalue("own_profiles")
+        _own_machine(own, "Eigen.json", "Elegoo Centauri Carbon 2 0.4 nozzle", "CC2")
+    else:
+        program = request.getfixturevalue("cura")
+    _settle(tmp_path)
+    alone = sp.find_profiles(program, flavour, kinds)
+    assert alone, "es gibt etwas zu vergleichen"
+    sp.forget_holdings()
+    sp.find_profiles(program, flavour, ("machine", "process", "filament"))
+    reads = _counting(monkeypatch, "_read" if flavour == "orca" else "_read_cura")
+
+    assert sp.find_profiles(program, flavour, kinds) == alone
+    assert reads == [], "aus dem Merker"
+
+
+def test_more_kinds_replace_the_entries_they_cover(
+    slicer: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Wer mehr Arten ablegt, verdrängt die Einträge desselben Slicers mit
+    weniger — sonst läge jedes Profil zweimal da (Review RM-670 N4)."""
+    _settle(tmp_path)
+    sp.find_profiles(slicer, "orca", ("machine",))
+    sp.find_profiles(slicer, "orca", ("process", "filament"))
+    assert len(sp._holdings) == 2, "keiner umfasst den anderen"
+
+    sp.find_profiles(slicer, "orca", ("machine", "process", "filament"))
+    assert [sorted(key[2]) for key in sp._holdings] == [["filament", "machine", "process"]]
+
+
+def test_a_stock_cut_at_the_file_limit_answers_only_its_own_question(
+    slicer: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Endete das Lesen an :data:`sp.MAX_FILES`, fehlen dem Ausschnitt Profile,
+    die das Lesen weniger Arten noch gefunden hätte — dann wird gelesen."""
+    _settle(tmp_path)
+    monkeypatch.setattr(sp, "MAX_FILES", 1)
+    sp.find_profiles(slicer, "orca", ("machine", "process", "filament"))
+    reads = _counting(monkeypatch, "_read")
+
+    sp.find_profiles(slicer, "orca", ("process",))
+
+    assert reads, "nicht aus einem abgeschnittenen Bestand"
+
+
+def _two_askers(
+    monkeypatch: pytest.MonkeyPatch, first: Any, second: Any, started: threading.Event
+) -> None:
+    """``first`` fragt und hält im Lesen an, bis ``started`` gesetzt ist;
+    ``second`` fragt danach. Zurück kommt der Aufruf, sobald ``second`` auf ein
+    Lesen wartet (``_held``) — sonst prüfte der Test nur den Merker. Daemon-Fäden:
+    Ein Fehler im Warten darf den Testlauf nicht aufhalten."""
+    waiting = threading.Event()
+
+    class Watched(threading.Event):
+        def wait(self, timeout: float | None = None) -> bool:
+            waiting.set()
+            return super().wait(timeout)
+
+    monkeypatch.setattr(sp.threading, "Event", Watched)
+    threading.Thread(target=first, daemon=True).start()
+    assert started.wait(30)
+    threading.Thread(target=second, daemon=True).start()
+    waiting.wait(30)
+
+
+def test_a_second_asker_waits_for_the_running_read(
+    slicer: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Review RM-670 L4: Vorwärmen, Grundlage und Export fragen kurz
+    nacheinander; jeder las die Maschinen sonst selbst. Wer denselben Bestand
+    fragt, während ein anderer Faden ihn liest, wartet und nimmt dessen Eintrag."""
+    _settle(tmp_path)
+    started, gate = threading.Event(), threading.Event()
+    original = sp._orca_profiles
+    reads: list[int] = []
+
+    def held_up(*args: Any) -> tuple[list[sp.SlicerProfile], bool]:
+        reads.append(threading.get_ident())
+        started.set()
+        gate.wait(30)
+        return original(*args)
+
+    monkeypatch.setattr(sp, "_orca_profiles", held_up)
+    answers: list[list[sp.SlicerProfile]] = []
+    finished = threading.Semaphore(0)
+
+    def ask() -> None:
+        answers.append(sp.find_profiles(slicer, "orca", ("machine",)))
+        finished.release()
+
+    _two_askers(monkeypatch, ask, ask, started)
+    gate.set()
+    assert finished.acquire(timeout=30) and finished.acquire(timeout=30), "beide antworten"
+
+    assert len(reads) == 1, "einmal gelesen"
+    assert len(answers) == 2 and answers[0] == answers[1] and answers[0]
+
+
+def test_a_failed_read_lets_the_waiting_asker_read_itself(
+    slicer: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Scheitert das Lesen, auf das gewartet wird, liest der Wartende selbst —
+    er wartet nie länger, als er selbst läse."""
+    _settle(tmp_path)
+    started, gate = threading.Event(), threading.Event()
+    original = sp._orca_profiles
+    reads: list[int] = []
+
+    def fails_first(*args: Any) -> tuple[list[sp.SlicerProfile], bool]:
+        reads.append(threading.get_ident())
+        if len(reads) == 1:
+            started.set()
+            gate.wait(30)
+            raise OSError("Netzlaufwerk weg")
+        return original(*args)
+
+    monkeypatch.setattr(sp, "_orca_profiles", fails_first)
+    failures: list[BaseException] = []
+    answers: list[list[sp.SlicerProfile]] = []
+    finished = threading.Semaphore(0)
+
+    def first_asker() -> None:
+        try:
+            sp.find_profiles(slicer, "orca", ("machine",))
+        except OSError as error:
+            failures.append(error)
+        finished.release()
+
+    def second_asker() -> None:
+        answers.append(sp.find_profiles(slicer, "orca", ("machine",)))
+        finished.release()
+
+    _two_askers(monkeypatch, first_asker, second_asker, started)
+    gate.set()
+    assert finished.acquire(timeout=30) and finished.acquire(timeout=30), "beide enden"
+
+    assert len(failures) == 1 and len(reads) == 2
+    assert answers and answers[0], "der Wartende las selbst"
+    assert not sp._reading, "kein Lesen bleibt vermerkt"
+
+
+def test_a_new_search_forgets_the_held_stock(
+    slicer: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Review RM-670 N6: Übersieht eine Signatur eine Änderung — unterhalb der
+    obersten Ebene der Installation sieht sie bewusst nicht hin —, hilft eine
+    neue Programmsuche: Der Kunde wählt seinen Slicer im Druckdialog noch
+    einmal, oder Solidon installiert einen (``discover.forget_cache``)."""
+    from app.core import discover
+
+    base = tmp_path / "config"
+    (base / "OrcaSlicer").mkdir(parents=True)
+    _settle(tmp_path)
+    sp.find_profiles(slicer, "orca", ("machine",))
+    sp._program_folders(base, "orcaslicer")
+    reads = _counting(monkeypatch, "_read")
+    listings = _counting(monkeypatch, "_list_program_folders")
+    sp.find_profiles(slicer, "orca", ("machine",))
+    sp._program_folders(base, "orcaslicer")
+    assert not (reads or listings), "gemerkt"
+
+    discover.forget_cache()
+    sp.find_profiles(slicer, "orca", ("machine",))
+    sp._program_folders(base, "orcaslicer")
+
+    assert reads and listings, "nach der neuen Suche neu gelesen"
+
+
+def test_a_new_search_forgets_the_held_prusa_stock(
+    prusa_mini: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Dasselbe für die beiden Prusa-Merker: Bestand und Modellnamen."""
+    from app.core import discover
+
+    _settle(tmp_path)
+    sp.find_profiles(prusa_mini, "prusa", ("machine",))
+    sp.known_printers("prusa", prusa_mini)
+    stores = _counting(monkeypatch, "_PrusaStore")
+    models = _counting(monkeypatch, "_read_prusa_printer_models")
+    sp.find_profiles(prusa_mini, "prusa", ("machine",))
+    sp.known_printers("prusa", prusa_mini)
+    assert not (stores or models), "gemerkt"
+
+    discover.forget_cache()
+    sp.find_profiles(prusa_mini, "prusa", ("machine",))
+    sp.known_printers("prusa", prusa_mini)
+
+    assert stores and models, "nach der neuen Suche neu gelesen"
+
+
+def test_a_kind_folder_counts_in_any_spelling(
+    own_profiles: Path, slicer: Path, tmp_path: Path
+) -> None:
+    """Review RM-670 N8: Der Leser vergleicht die Artordner mit ``casefold``
+    (``_kind_of``); die Signatur sah ``Machine/`` nicht und hätte ein Profil
+    dort nie bemerkt."""
+    (own_profiles / "Filament").mkdir()
+    _settle(tmp_path)
+    before = sp.stock_signature("orca", slicer)
+
+    (own_profiles / "Filament" / "eigen.json").write_text("{}", encoding="utf-8")
+
+    assert sp.stock_signature("orca", slicer) != before
+
+
+def _inheriting_process(own_profiles: Path, slicer: Path, tmp_path: Path) -> Callable[[], object]:
+    """Ein eigener Prozess, der vom Hersteller erbt, im beruhigten Bestand;
+    zurück kommt ein Lesedurchgang, der seine Wände auflöst — wie ein Export
+    über die Namensindizes, die ``_once_per_stock`` hält."""
+    own = own_profiles / "process"
+    own.mkdir()
+    _write(
+        own / "mein.json",
+        {
+            "type": "process",
+            "name": "Mein Prozess",
+            "from": "User",
+            "inherits": "0.20mm Standard @CC2",
+        },
+    )
+    _settle(tmp_path)
+    roots = sp.profile_roots("orca", slicer)
+
+    def walls() -> object:
+        with sp.single_read():
+            sp.stock_signature("orca", slicer)
+            return sp.resolve_values(own / "mein.json", roots=roots).get("wall_loops")
+
+    return walls
+
+
+def test_inheritance_indexes_hold_across_passes_until_the_stock_changes(
+    own_profiles: Path, slicer: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """RM-670: Jeder 3MF-Export baute die Namensindizes der Erbketten neu — am
+    ElegooSlicer 668 Dateien je Herstellerordner, dreimal je Export. Sie
+    halten jetzt über den Lesedurchgang hinaus, solange die Signatur des
+    Bestands gleich ist. Legt der Kunde im Slicer ein eigenes Profil mit dem
+    Namen der Basis an, erbt sein Profil von diesem, nicht mehr vom
+    Hersteller — der gehaltene Index darf das nicht verdecken."""
+    walls = _inheriting_process(own_profiles, slicer, tmp_path)
+    own = own_profiles / "process"
+    built = _counting(monkeypatch, "_names_in")
+
+    assert walls() is None, "der Herstellerprozess nennt keine Wände"
+    first = len(built)
+    assert first, "der erste Durchgang baut die Indizes"
+    assert walls() is None
+    assert len(built) == first, "der zweite Durchgang baut keinen Index neu"
+
+    _write(
+        own / "basis.json",
+        {
+            "type": "process",
+            "name": "0.20mm Standard @CC2",
+            "from": "User",
+            "inherits": "fdm_process_common",
+            "wall_loops": "5",
+        },
+    )
+
+    assert walls() == "5", "die neue eigene Basis gilt beim nächsten Durchgang"
+
+
+def test_inheritance_indexes_are_held_only_once_the_stock_settled(
+    own_profiles: Path, slicer: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Review RM-670 L1: Wie :func:`sp._held` hält ``_once_per_stock`` erst
+    einen Bestand, dessen jüngste Änderung älter ist als :data:`sp.SETTLE_NS`
+    — zwei Änderungen im selben Takt der Dateisystemuhr tragen denselben
+    Stempel, und ein Index aus dem Zwischenstand verdeckte die zweite."""
+    walls = _inheriting_process(own_profiles, slicer, tmp_path)
+    built = _counting(monkeypatch, "_names_in")
+    newest = max(entry[1] for entry in sp.stock_signature("orca", slicer))
+
+    monkeypatch.setattr(sp.time, "time_ns", lambda: newest + sp.SETTLE_NS - 1)
+    walls()
+    count = len(built)
+    assert count, "der Durchgang baut die Indizes"
+    walls()
+    assert len(built) == 2 * count, "unberuhigt nicht gehalten"
+
+    monkeypatch.setattr(sp.time, "time_ns", lambda: newest + sp.SETTLE_NS)
+    walls()
+    walls()
+    assert len(built) == 3 * count, "beruhigt gehalten"
+
+
+def test_held_inheritance_indexes_take_the_settle_time_before_the_read(
+    own_profiles: Path, slicer: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Review RM-670 L1, der Zwilling zu
+    :func:`test_the_settle_time_is_taken_before_the_read`: Gemessen wird an
+    der Uhr der Signatur. Dauert das Bauen eines Index über die Schwelle, sähe
+    die Uhr danach einen Bestand als beruhigt, der beim Erheben der Signatur
+    eben erst geändert war."""
+    walls = _inheriting_process(own_profiles, slicer, tmp_path)
+    newest = max(entry[1] for entry in sp.stock_signature("orca", slicer))
+    clock = {"now": newest + sp.SETTLE_NS - 1}
+    monkeypatch.setattr(sp.time, "time_ns", lambda: clock["now"])
+    original = sp._names_in
+
+    def slow(*args: Any, **kwargs: Any) -> Any:
+        clock["now"] += sp.SETTLE_NS  # das Bauen dauert über die Schwelle
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(sp, "_names_in", slow)
+    assert walls() is None
+
+    assert not sp._derived, "gemessen vor dem Bauen, nicht danach"
+
+
+def test_a_new_search_forgets_the_held_inheritance_indexes(
+    own_profiles: Path, slicer: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Review RM-670 L1, der Zwilling zu
+    :func:`test_a_new_search_forgets_the_held_stock`: Übersieht die Signatur
+    eine Änderung in der Installation, hilft eine neue Programmsuche
+    (``discover.forget_cache``) auch den gehaltenen Namensindizes."""
+    from app.core import discover
+
+    walls = _inheriting_process(own_profiles, slicer, tmp_path)
+    walls()
+    built = _counting(monkeypatch, "_names_in")
+    walls()
+    assert not built, "gehalten"
+
+    discover.forget_cache()
+    walls()
+
+    assert built, "nach der neuen Suche neu gebaut"

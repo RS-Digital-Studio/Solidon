@@ -10,6 +10,8 @@ from __future__ import annotations
 import dataclasses
 from typing import Any, cast
 
+import numpy as np
+
 from app.core.errors import (
     CANCEL,
     CHANGE_SIZE,
@@ -44,7 +46,9 @@ from app.core.geom.transform import (
     absolute_rotation,
     anchor_point,
     composed,
+    fitted_factor,
     moved_object,
+    moved_points,
     pattern_centre,
     pattern_centre_param,
     reference_point,
@@ -56,6 +60,7 @@ from app.core.registry import VARIABLE, op_params, param, register_op
 from app.core.registry.params import ZERO_UNCHANGED
 from app.core.types import (
     BaseParams,
+    BoundingBox,
     FeatureRef,
     Finding,
     MaterialSlot,
@@ -717,6 +722,33 @@ def scale_object(ctx: OpContext) -> OpResult:
     )
 
 
+def _bounds_after(
+    source: SceneObject, matrix: np.ndarray, ctx: OpContext
+) -> tuple[BoundingBox, SceneObject]:
+    """Die Hülle des bewegten Körpers, ohne ihn zu bewegen — und wessen
+    Filamente die freie Stelle fragt.
+
+    **Ein Netz wird für die Stelle nicht ein zweites Mal bewegt.** Die freie
+    Stelle braucht nur die Hülle; ``moved_object`` kopierte dafür das ganze
+    Netz samt Merkmalen, und danach noch einmal mit der Verschiebung. Die
+    Ecken kommen hier aus derselben Rechnung (:func:`moved_points`), über
+    dieselben Ecken, die ``trimesh`` für ``bounds`` nimmt — die Hülle ist
+    dieselbe Zahl. Die Filamente ändert eine Bewegung nicht; gefragt wird der
+    Eingang. Ein exakter Körper wird weiter bewegt: Seine Hülle misst der
+    B-Rep-Kern.
+    """
+    if not isinstance(source.mesh, MeshData):
+        moved = moved_object(source, matrix, cancelled=ctx.cancelled)
+        return moved.mesh.bounds, moved
+    raw = source.mesh.raw
+    points = moved_points(np.asarray(raw.vertices)[raw.referenced_vertices], matrix)
+    low, high = points.min(axis=0), points.max(axis=0)
+    return BoundingBox(
+        (float(low[0]), float(low[1]), float(low[2])),
+        (float(high[0]), float(high[1]), float(high[2])),
+    ), source
+
+
 @op_params
 class FitToSizeParams(BaseParams):
     largest: float = param(
@@ -752,7 +784,10 @@ class FitToSizeParams(BaseParams):
 
 @register_op(
     name="fit_to_size",
-    cache_version="5",
+    # 6: Mit festgehaltener Stelle steht der Satz zur freien Stelle im Ergebnis (RM-754).
+    # 7: Das Skalieren entfällt nur, wenn kein Punkt um PRINT_LIMIT wandert (RM-676).
+    # 8: beides zusammen.
+    cache_version="8",
     title=_("Auf Maß bringen"),
     category="transform",
     params=FitToSizeParams,
@@ -770,6 +805,10 @@ def fit_to_size(ctx: OpContext) -> OpResult:
     einen Einheitswürfel. Was ankommt, misst ein bis zwei Millimeter, und der
     Weg zurück führt über einen Faktor von hundertvierzig — eine Zahl, die
     niemand im Kopf hat und die ``scale_object`` obendrein ablehnte.
+
+    Die längste Kante trifft das Maß bis auf das, was kein Drucker sieht:
+    Verschöbe das Skalieren keinen Punkt um ``PRINT_LIMIT``, legt der Schritt
+    nur (``transform.fitted_factor``, Bauplan §11.2).
     """
     params = cast(FitToSizeParams, ctx.params)
     source = ctx.inputs[0]
@@ -781,30 +820,36 @@ def fit_to_size(ctx: OpContext) -> OpResult:
             detail=_("Ein Maß lässt sich nur auf etwas beziehen, das eine Größe hat."),
             suggestions=(Action(id="check_input", label=_("Eingangsobjekt prüfen.")),),
         )
-    factor = params.largest / current
     pivot = anchor_point(body, cast(Anchor, params.about))
+    # **Was der Drucker nicht sieht, wird nicht skaliert** (§11.2, RM-676):
+    # Verschöbe das Skalieren keinen Punkt um die Druckgrenze, legt der Schritt
+    # nur. Stehen bleibt der Bezug, mit freier Stelle die Mitte der Unterseite.
+    bottom = (body.bounds.centre[0], body.bounds.centre[1], body.bounds.minimum[2])
+    factor = fitted_factor(body.bounds, params.largest, bottom if params.free_spot else pivot)
     matrix = scaling((factor, factor, factor), pivot)
-    fitted = moved_object(source, matrix, cancelled=ctx.cancelled)
     placed: list[Finding] = []
     answered: dict[str, Any] = {}
+    plate: int | None = None
     if params.free_spot:
         # Gelegt wird am fertigen Maß, nicht am Einheitswürfel des Generators;
         # der eigene Eingang belegt keinen Platz neben sich selbst. Die Stelle
         # wird einmal gerechnet und festgehalten (``answered``, §15.7).
+        bounds, arriving = _bounds_after(source, matrix, ctx)
         spot = placed_at_free_spot(
-            fitted.mesh.bounds,
+            bounds,
             ctx.profile,
             ctx.scene,
             spot=(params.spot_x, params.spot_y, params.spot_plate),
             ignore={source.id},
-            objects=[fitted],
+            objects=[arriving],
         )
         matrix = composed(translation(spot.offset), matrix)
-        fitted = dataclasses.replace(
-            moved_object(source, matrix, cancelled=ctx.cancelled), plate=spot.plate
-        )
+        plate = spot.plate
         placed.extend(spot.findings)
         answered.update(spot.answered)
+    fitted = moved_object(source, matrix, cancelled=ctx.cancelled)
+    if plate is not None:
+        fitted = dataclasses.replace(fitted, plate=plate)
     return OpResult(
         outputs=[fitted],
         transform=as_transform(matrix),

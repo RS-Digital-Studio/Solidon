@@ -140,7 +140,7 @@ in `solver`, `jittered` mit Startwert.
   statt `EPS_GEOM`; ohne `profile` das Epsilon). Ein abtragender Baustein fragt
   die Tiefe (`parts.cuts_no_layer`); die Richtung wird nie aus der nächsten
   Fläche geraten (Regel 21).
-- **Was ein späterer Schritt am selben Körper behoben hat, wird gestrichen,
+- **Was ein späterer Schritt am Körper behebt oder überholt, fällt weg,
   nicht herabgestuft** (`SETTLED_BY`). **Was der Endstand widerlegt, fällt auch
   so** (`evaluate._without_outdated`); neue Befunde über Dichtheit, Teilezahl
   oder Wicklung gehören in `CLOSED_STATE_CODES`, `ONE_PIECE_CODES` oder
@@ -502,12 +502,12 @@ vergibt der Plan (`first_pin`), ein gleichnamiges Merkmal weicht aus
   Netzen.
 
 - **Objektzahländerung hält an** (`kern.md`); wer zerlegen will, schlägt es vor,
-  und das Fenster setzt die Zerlegung davor (`History.split_and_retry`), nur
-  wenn jedes Teil für sich passt. Reparieren, Verringern und Verfeinern setzen
-  ebenso einen Schritt davor und planen den Suffix atomar neu
-  (`repair_targets()` ohne Ops des exakten Kerns), mit nachgezählter Zahl
-  (`DECIMATE_AND_RETRY`) oder durchgespielter Länge (`REMESH_AND_RETRY`), nie
-  geschätzt.
+  das Fenster zerlegt davor (`History.split_and_retry`), wenn jedes Teil passt,
+  nach Teile-Absage an den Trägern (`split_offer`). Splitter: zu klein zum
+  Drucken, offen wie beim Laden (`_splinters`). Reparieren, Verringern,
+  Verfeinern planen atomar neu (`repair_targets()` ohne exakte Ops), mit
+  nachgezählter Zahl (`DECIMATE_AND_RETRY`) oder durchgespielter Länge
+  (`REMESH_AND_RETRY`), nie geschätzt.
 - **Wer die Dreieckszahl vorab zählt, deklariert es** (`expected_triangles`,
   dieselbe Prüfung in Op und Vorschau), **wer nur das Netz ändert, auch**
   (`retriangulates`) — beides nur bei einem Körper hinein und heraus.

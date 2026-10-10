@@ -19,6 +19,7 @@ nicht getroffen hat.
 
 from __future__ import annotations
 
+import re
 from collections import Counter
 from collections.abc import Callable, Collection, Iterable, Mapping, Sequence
 from dataclasses import KW_ONLY, dataclass, replace
@@ -99,7 +100,7 @@ from app.core.knowledge import filaments, print_fields, print_settings, profiles
 from app.core.knowledge.print_fields import FIELDS, Field
 from app.core.log import get_logger
 from app.core.scene.cancel import CancelSignal
-from app.core.scene.fits import fit_kinds_for
+from app.core.scene.fits import allowances_for, fit_kinds_for
 from app.core.slice import advise, gcode
 from app.core.slice.analysis import slice_body
 from app.core.slice.estimate import PlateComparison, estimate, plate_comparison
@@ -1475,6 +1476,7 @@ class _AdviceWorker(Worker):
         part_fits: Mapping[str, tuple[str, ...]] | None = None,
         flavour: SlicerFlavour = "orca",
         declined: frozenset[str] = frozenset(),
+        part_allowances: Mapping[str, tuple[str, ...]] | None = None,
     ) -> None:
         super().__init__()
         self.objects = objects
@@ -1488,6 +1490,9 @@ class _AdviceWorker(Worker):
         self.part_fits = part_fits or {}
         """Die Passungen je Körper, im Hauptthread aus dem Dokument gelesen —
         der Export fragt sie je Teil (:func:`writer.part_advice`)."""
+        self.part_allowances = part_allowances or {}
+        """Was das Modell je Körper schon ausgleicht, ebenso gelesen
+        (``scene.fits.allowances_for``, RM-589)."""
         self.flavour = flavour
         """Die Familie, für die die Teile benannt werden; ohne Slicer die der
         gespeicherten 3MF."""
@@ -1649,6 +1654,7 @@ class _AdviceWorker(Worker):
                     whole_layers=body.plate in self.towers,
                     organic=self.organic,
                     declined=self.declined,
+                    allowances=self.part_allowances.get(body.id, ()),
                     trees=trees,
                 )
                 # Was das Programm unter den Bäumen dieses Körpers nicht druckt,
@@ -1794,6 +1800,7 @@ class _AdviceWorker(Worker):
                 accepted=chain,
                 whole_layers=body.plate in self.towers,
                 organic=self.organic,
+                allowances=self.part_allowances.get(body.id, ()),
             ):
                 if entry.path not in wanted:
                     continue
@@ -1871,6 +1878,7 @@ class _AdviceWorker(Worker):
                 accepted=chain,
                 whole_layers=body.plate in self.towers,
                 organic=self.organic,
+                allowances=self.part_allowances.get(body.id, ()),
             ):
                 # Beim Stützkontakt bekommt jedes Teil seinen Wert, ebenso die
                 # Stützart, wo sie je Teil geht (``separate``); die Zeile nennt
@@ -4177,21 +4185,34 @@ class PrintSettingsDialog(QDialog):
         wanted = flatten(term).strip()
         if not wanted:
             return []
-        hits = []
-        for field in FIELDS:
-            haystack = flatten(
-                " ".join(
-                    (
-                        str(field.title),
-                        str(field.note),
-                        group_title(field.group),
-                        *keys_for(field.path),
+        # **Wort für Wort** (RM-589): Die Slicer nennen dieselbe Einstellung
+        # je Programm etwas anders — „Compensación de Pata de elefante“ hier,
+        # „Compensación del pie de elefante“ dort. Ein Treffer braucht jedes
+        # Wort irgendwo in der Zeile, nicht den ganzen Ausdruck am Stück.
+        words = [word for word in re.split(r"[^0-9a-z]+", wanted) if word]
+        stacks = [
+            (
+                field.path,
+                flatten(
+                    " ".join(
+                        (
+                            str(field.title),
+                            str(field.note),
+                            str(field.search_words),
+                            group_title(field.group),
+                            *keys_for(field.path),
+                        )
                     )
-                )
+                ),
             )
-            if wanted in haystack:
-                hits.append(field.path)
-        return hits
+            for field in FIELDS
+        ]
+        # Steht der Ausdruck am Stück irgendwo, gilt nur das: Ein Titel findet
+        # seine Zeile und nicht jede, deren Satz dieselben Wörter streut.
+        whole = [path for path, haystack in stacks if wanted in haystack]
+        if whole or not words:
+            return whole
+        return [path for path, haystack in stacks if all(word in haystack for word in words)]
 
     def highlighted(self) -> str:
         """Welche Zeile gerade hervorgehoben ist — leer, wenn keine."""
@@ -7221,6 +7242,10 @@ class PrintSettingsDialog(QDialog):
         Zustandszeile; alles andere im Dialog bleibt bedienbar. Was dann
         gefunden wird, übernimmt :meth:`_slicers_found`.
         """
+        # Mit dem Stand der Suche verfällt auch der gemerkte Profilbestand
+        # (``slicer_profiles._holdings``, RM-670): Wer den Slicer eben neu
+        # eingerichtet hat, sieht seine Profile, ohne dass sich eine Datei im
+        # Bestand geändert haben muss.
         discover.forget_cache()
         self._start_slicer_search()
         self._refresh_advice()
@@ -7969,6 +7994,12 @@ class PrintSettingsDialog(QDialog):
         document = self.session.project.document
         return tuple((body.id, fit_kinds_for(document, {body.id})) for body in self._plate_bodies())
 
+    def _part_allowances(self) -> tuple[tuple[str, tuple[str, ...]], ...]:
+        """Was das Modell je Körper schon ausgleicht — wie der Export je Teil
+        (:func:`app.core.scene.fits.allowances_for`, RM-589). Im Hauptthread."""
+        document = self.session.project.document
+        return tuple((body.id, allowances_for(document, body)) for body in self._plate_bodies())
+
     def _bounds(self) -> BoundingBox | None:
         """Der Hüllquader über alles, was auf die Platte geht — daran hängt der
         Hinweis auf hohe, schmale Teile."""
@@ -8095,6 +8126,7 @@ class PrintSettingsDialog(QDialog):
             self.settings,
             self.session.profile,
             self._part_fits(),
+            self._part_allowances(),
             self._connector_diameters(),
             self.session.busy,
             self._slicer_path,
@@ -8196,6 +8228,7 @@ class PrintSettingsDialog(QDialog):
             # Ohne Slicer schreibt der Export die 3MF wie für die Orca-Familie.
             flavour=flavour or "orca",
             declined=self._declined_advice(),
+            part_allowances=dict(self._part_allowances()),
         )
         worker.analysis_context = analysis_context
         context = self._advice_request

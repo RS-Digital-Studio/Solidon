@@ -26,7 +26,9 @@ geom = [
   "numpy>=1.26",
   # trimesh braucht einen Graphen für Wasserdichtheit und Komponenten; scipy
   # bringt zudem den Zuordnungslöser für das Feature-Matching aus §21.2 mit.
-  "scipy>=1.13",
+  # Ab 1.16: Der Skizzenlöser hält Läufe über ``least_squares(callback=…)`` an
+  # (``sketch.solver._watchdog``); davor kennt scipy das Argument nicht.
+  "scipy>=1.16",
   # Ab 5.0 typisiert (``py.typed``), und das gleichmäßige Vernetzen liefert
   # bei gleicher Kantenlänge einen Bruchteil der Dreiecke. Zusammengefügt wird
   # über die Engführung ``mesh.concatenated``, nicht ``trimesh.util.concatenate``.
@@ -42,7 +44,8 @@ geom = [
   # den schnellen Weg fährt und nicht nur die Entwicklungsumgebung. BSD-2.
   "xxhash>=3.4",
   # Polygonarbeit hinter dem gedeckelten Schnitt (§18.2). BSD-3, bündelt GEOS (LGPL).
-  "shapely>=2.0",
+  # Ab 2.1, weil die Schichtanalyse ``make_valid(method="structure")`` ruft.
+  "shapely>=2.1",
   # Konturhierarchie für denselben Schnitt: ohne den Graphen lässt sich ein
   # Schnitt durch eine Platte mit Loch nicht schließen. BSD-3.
   "networkx>=3.0",

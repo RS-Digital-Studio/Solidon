@@ -1814,6 +1814,7 @@ class PrintedNutParams(BaseParams):
 
 @register_part(
     name="printed_nut",
+    play_inside=True,
     standalone=True,
     title=_("Gedruckte Mutter"),
     group="fasteners",
