@@ -1586,7 +1586,7 @@ def _part_paths(flavour: SlicerFlavour, program: str = "") -> frozenset[str]:
 
     supported = frozenset(
         path for path in advise.PART_PATHS if slicer_keys.takes(flavour, path, program=program)
-    )
+    ) - slicer_keys.unknown_in_file(flavour, program)
     if flavour in ("orca", "prusa"):
         # Eine reine Datei kennt die spätere Programmauswahl noch nicht.
         # Deshalb gelten die gemessenen Objektgrenzen aller Programme der
@@ -1712,7 +1712,9 @@ def split_for_parts(
     # sonst als Übernahme der Platte gemeldet, die es nie druckt (RM-587).
     program = slicer_keys.program_of(setup.executable) if setup is not None else ""
     unknown = slicer_keys.NOT_TAKEN_BY_PROGRAM.get(program, frozenset()) | (
-        slicer_keys.NOT_TAKEN_BY[flavour] if flavour != "other" else frozenset()
+        slicer_keys.NOT_TAKEN_BY[flavour] | slicer_keys.unknown_in_file(flavour, program)
+        if flavour != "other"
+        else frozenset()
     )
     wanted = frozenset(settings.accepted) & advise.PART_PATHS - unknown
     if not wanted:
@@ -3142,6 +3144,9 @@ def _prusa_values(
             _log.warning("Prusa profile unreadable, writing Solidon's table: %s", problem)
     if setup is None or chain is None:
         flat = values_for(effective, profile, "prusa", program=program)
+        for key, default in slicer_keys.QUIET_AT_DEFAULT["prusa"].items():
+            if flat.get(key) == default:
+                del flat[key]
         flat.update(_speed_roles({}, flat, "prusa", program=program))
         flat["filament_type"] = slicer_keys.filament_type(profile.material.id, "prusa")
         return flat, flat

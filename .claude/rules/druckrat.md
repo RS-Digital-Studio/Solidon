@@ -155,15 +155,24 @@ offenem Drucker. Übernommen wird auf Klick, nie von allein.
   frei (ohne Stützen, ohne Brückenstütze, als Kanaldecke), dicke Bahnen und
   `BRIDGE_FLOW` über `BRIDGE_FLOW_ENOUGH`; ein Rand spannt nicht, seine Weite
   ist die Kantenlänge. **Zusatzwände nur unter flachen Stücken ohne Stütze, die
-  an einer Seite hängen** (`analysis.cantilevers`) und breiter sind als die
-  Wände — zwischen 45 Grad und der Stützgrenze und an beidseitig gelagerten
-  Brücken ändert der Schalter in PrusaSlicer und OrcaSlicer nichts. **Steile
-  Wände dort** (`analysis.steep_overhang`) bekommen bei `CURLING_MATERIALS`
-  die Umkehr, nur in der Orca-Familie. Alle fünf gehen **je Teil**
+  an einer Seite hängen** (`analysis.cantilevers`; eine Decke, die ringsum auf
+  ihrem Außenring liegt, hängt nicht) und breiter sind als die
+  Wände — zwischen 45 Grad und der Stützgrenze, an beidseitig gelagerten
+  Brücken und unter Deckeln ändert der Schalter in PrusaSlicer und OrcaSlicer
+  nichts. **Steile Wände dort** bekommen bei `CURLING_MATERIALS` die Umkehr,
+  nur in der Orca-Familie — steil heißt, über die Höhe weiter als eine
+  Bahnbreite über die 45-Grad-Linie hinaus (`analysis.steep_reach`, je Wand
+  über die Schichten verfolgt); der Rand einer Decke und eine Rundung an der
+  Kante sind keine Wand. Alle fünf gehen **je Teil**
   (`PART_PATHS`): Jedes Programm, das einen nimmt, wendet ihn je Objekt an
   (zwei Teile, nur eines mit Wert, in acht Programmen gemessen). Was ein
   Programm nicht kennt oder nicht umsetzt, steht in `slicer_keys.NOT_TAKEN_BY*`
-  (Cura und SuperSlicer keinen der fünf).
+  (Cura keinen der fünf, SuperSlicer nur dicke Brücken und Fluss als alte
+  Namen). **Was ein Programm gar nicht kennt** (`UNKNOWN_TO_PROGRAM`), trägt
+  eine Datei ohne bekanntes Programm weder auf der Platte noch je Teil
+  (`unknown_in_file`), und der vollständige Prusa-Satz schreibt solche
+  Schlüssel nur abweichend vom Programmwert (`QUIET_AT_DEFAULT`): SuperSlicers
+  3MF-Leser stürzt ab zwei fremden Schlüsseln ab (RM-459).
 - **Eine runde Außenwand bekommt die Schrägnaht vorgeschlagen**: glatte
   Umrisse (kein Knick über `analysis.SMOOTH_TURN_DEGREES`, gemessen über Arme
   der Düsenbreite wie im Slicer, ab `advise.SCARF_MIN_LOOP` Umfang) über

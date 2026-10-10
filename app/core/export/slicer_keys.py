@@ -1183,28 +1183,31 @@ LIMITED: Final[dict[SlicerFlavour, frozenset[str]]] = {
 }
 
 
-#: Was ein **Programm** seiner Familie nicht kennt — Schlüssel der
+#: Was ein **Programm** seiner Familie gar nicht kennt: Sein 3MF-Leser stürzt
+#: ab zwei unbekannten Schlüsseln mit 0xC0000005 ab (RM-459, gemessen je
+#: Schlüssel der Beilage), Platte und Objekte zusammengezählt. SuperSlicer
+#: 2.5.59.13 kennt die Schrägnaht aus PrusaSlicer 2.9 nicht und
+#: ``extra_perimeters_on_overhangs`` nicht (dort ``extra_perimeters_overhangs``);
+#: Schrägnaht und Zusatzwände zusammen brachten ihn zum Absturz (Review RM-587,
+#: M3). Eine Datei ohne bekanntes Programm lässt weg, was irgendein Programm
+#: ihrer Familie nicht kennt (:func:`unknown_in_file`).
+UNKNOWN_TO_PROGRAM: Final[dict[str, frozenset[str]]] = {
+    "superslicer": frozenset({"shell.scarf_seam", "shell.overhang_walls"}),
+}
+
+#: Was ein **Programm** seiner Familie nicht nimmt — Schlüssel der
 #: Programmmarke (``discover.program_mark``). Gleiche Familie heißt nicht
-#: gleicher Stand: SuperSlicer 2.5.59.13 kennt die Schrägnaht aus PrusaSlicer
-#: 2.9 nicht, und sein 3MF-Leser stürzt ab zwei unbekannten Schlüsseln mit
-#: 0xC0000005 ab (RM-459, gemessen je Schlüssel der Beilage).
+#: gleicher Stand: Was es gar nicht kennt, steht in :data:`UNKNOWN_TO_PROGRAM`.
 NOT_TAKEN_BY_PROGRAM: Final[dict[str, frozenset[str]]] = {
     # Die Baumwände kennt die ganze Familie nicht (:data:`NOT_TAKEN_BY`).
-    # SuperSlicer 2.5.59.13 kennt ``thick_bridges`` und
-    # ``extra_perimeters_on_overhangs`` nicht (sie heißen dort ``bridge_type`` und
-    # ``extra_perimeters_overhangs``), und seinen Brückenfluss liest er in Prozent:
-    # 0,9 hieße dort 0,9 % (RM-587, ``--save``). ``dont_support_bridges`` nimmt er
-    # an und stützt die 36-mm-Brücke trotzdem: 5 578 mm Stütze mit 0 und mit 1,
-    # an einem Teil und an beiden (RM-587).
-    "superslicer": frozenset(
-        {
-            "shell.scarf_seam",
-            "shell.thick_bridges",
-            "shell.bridge_flow",
-            "shell.overhang_walls",
-            "support.bridges",
-        }
-    ),
+    # ``thick_bridges`` und ``bridge_flow_ratio`` nimmt SuperSlicer 2.5.59.13 als
+    # alte Namen und setzt sie beim Laden um: ``thick_bridges = 0`` wird
+    # ``bridge_type = flow``, ``bridge_flow_ratio = 0.9`` steht im G-Code als 90 %
+    # und fördert 0,0465 statt 0,0517 mm je mm Brückenbahn, je Objekt wie auf der
+    # Platte (Review RM-587, M3). ``dont_support_bridges`` nimmt er an und stützt
+    # die 36-mm-Brücke trotzdem: 5 578 mm Stütze mit 0 und mit 1, an einem Teil und
+    # an beiden (RM-587).
+    "superslicer": UNKNOWN_TO_PROGRAM["superslicer"] | {"support.bridges"},
     # Den Kontaktlüfter führt nur SuperSlicer (``--help-fff`` von 2.9.6).
     "prusaslicer": frozenset({"cooling.support_interface_cooling"}),
     # Bambu Studio führt ``support_material_interface_fan_speed`` nicht; sein
@@ -1684,7 +1687,7 @@ def for_program(values: Mapping[str, str], flavour: SlicerFlavour, program: str)
     stehen. Ein Abkömmling stürzt an einem fremden Schlüssel ab, statt ihn zu
     übergehen — die Beilage einer Schrägnaht genügte bei SuperSlicer.
     """
-    dropped = NOT_TAKEN_BY_PROGRAM.get(program, frozenset())
+    dropped = NOT_TAKEN_BY_PROGRAM.get(program, frozenset()) | unknown_in_file(flavour, program)
     unknown = {entry.key for entry in TABLES[flavour] if entry.path in dropped}
     kept = {key: value for key, value in values.items() if key not in unknown}
     for old, new in PROGRAM_ALIASES.get(program, {}).items():
@@ -1694,6 +1697,35 @@ def for_program(values: Mapping[str, str], flavour: SlicerFlavour, program: str)
         for key in new:
             kept.setdefault(key, value)
     return kept
+
+
+def unknown_in_file(flavour: SlicerFlavour, program: str) -> frozenset[str]:
+    """Was eine Datei ohne bekanntes Programm dieser Familie nicht tragen darf.
+
+    Ein Dateiexport kennt das Programm nicht, das ihn öffnen wird: Er lässt weg,
+    was irgendein Programm der Familie gar nicht kennt (:data:`UNKNOWN_TO_PROGRAM`)
+    — auf der Platte wie je Teil. Mit bekanntem Programm gilt dessen eigene Liste
+    (:data:`NOT_TAKEN_BY_PROGRAM`), und dies gibt nichts.
+    """
+    if program and flavour_of(program) == flavour:
+        return frozenset()
+    return frozenset(
+        path
+        for name, paths in UNKNOWN_TO_PROGRAM.items()
+        if flavour_of(name) == flavour
+        for path in paths
+    )
+
+
+#: Was der vollständige Satz ohne Herstellerkette nur schreibt, wenn es vom
+#: eingebauten Wert des Programms abweicht — derselbe Wert ohne Schlüssel, und
+#: ein Verwandter, der den Schlüssel nicht kennt, öffnet die Datei weiter
+#: (:data:`UNKNOWN_TO_PROGRAM`): Eine PrusaSlicer-Datei trug sonst Schrägnaht und
+#: Zusatzwände mit ihrem Wert „aus“, und SuperSlicer stürzte an ihr ab (Review
+#: RM-587, M3). Die Werte nennt ``prusa-slicer-console --help-fff`` von 2.9.6.
+QUIET_AT_DEFAULT: Final[dict[SlicerFlavour, dict[str, str]]] = {
+    "prusa": {"scarf_seam_placement": "nowhere", "extra_perimeters_on_overhangs": "0"},
+}
 
 
 #: Die Trennschicht zu einem Drittel dicht, wie Creality und Elegoo in Cura
@@ -1740,6 +1772,20 @@ def caps_volumetric_speed(flavour: SlicerFlavour) -> bool:
     from app.core.knowledge.print_settings import caps_volumetric_speed as caps_flow
 
     return caps_flow(flavour)
+
+
+def not_taken_reason(flavour: SlicerFlavour, path: str) -> TranslatableText | None:
+    """Warum ein Feld ohne Wirkung bleibt, wo „kennt diese Einstellung nicht“ nicht
+    stimmt — für das ausgegraute Feld, nicht als Befund jeder Übergabe.
+
+    Cura hat einen Brückenfluss (``bridge_skin_material_flow``), aber nur für
+    seine eigenen Brückenbahnen; Solidons Anteil kommt dort nicht an (Review
+    RM-587, L3)."""
+    if flavour == "cura" and path == "shell.bridge_flow":
+        return _(
+            "Cura legt Brücken mit seinem eigenen Brückenfluss — dieser Wert bleibt ohne Wirkung."
+        )
+    return None
 
 
 def limitation(

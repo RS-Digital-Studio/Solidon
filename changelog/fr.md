@@ -88,6 +88,7 @@ dans `website/version.json`.
 - Les longs ponts reçoivent le support prévu par Solidon, dans PrusaSlicer aussi. Si un long pont reste sans support, Solidon propose des lignes épaisses et un peu moins de débit.
 - Les surplombs plats sans support se voient proposer des parois supplémentaires. Avec l'ABS, l'ASA et le TPU, le slicer imprime les surplombs raides en sens alterné pour qu'ils ne se recourbent pas.
 - Les réglages de pont, les parois supplémentaires et le sens alterné ne valent que pour la pièce qui en a besoin. Les autres pièces du plateau s'impriment comme avant.
+- Sans profil du fabricant, PrusaSlicer et SuperSlicer impriment désormais les ponts fins. Là où un pont a besoin de lignes épaisses et de moins de débit, Solidon les propose pour cette pièce.
 - Pour le PETG, Solidon propose un refroidissement complet au support. Il se détache ainsi plus facilement de la pièce.
 - Nouveau dans les réglages d'impression : *Couches d'interface en bas*, *Écart dans l'interface* et *Refroidissement complet au support*.
 - Le champ *Espace au-dessus* s'appelle désormais *Espace dessus et dessous* et vaut pour les deux côtés du support.

@@ -6699,8 +6699,13 @@ class PrintSettingsDialog(QDialog):
         name = _slicer_title(self._slicer_path) if self._slicer_path else ""
         for path, editor in self._editors.items():
             ignored = flavour is not None and not slicer_keys.takes(flavour, path, program)
+            own_reason = (
+                slicer_keys.not_taken_reason(flavour, path) if flavour is not None else None
+            )
             reason = (
-                str(
+                str(own_reason)
+                if ignored and own_reason is not None
+                else str(
                     tr("{slicer} kennt diese Einstellung nicht — der Wert bleibt ohne Wirkung.")
                 ).replace("{slicer}", name)
                 if ignored

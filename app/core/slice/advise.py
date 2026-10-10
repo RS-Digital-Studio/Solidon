@@ -1014,9 +1014,13 @@ def rounds_to_whole_layers(
     return whole_layers or flavour in WHOLE_LAYER_GAP_FLAVOURS or style in organic
 
 
-#: Vorschläge, an deren Übernahme andere hängen (:func:`printed_style`): Wählt
-#: der Kunde einen davon ab, fragt der Druckdialog neu (RM-622).
-DECIDING_PATHS: Final = frozenset({"support.style"})
+#: Vorschläge, an deren Übernahme andere hängen: Wählt der Kunde einen davon ab,
+#: fragt der Druckdialog neu, und der Export fragt jedes Teil ohne ihn. An der
+#: Stützart hängen Abstand und Trennschicht (:func:`printed_style`, RM-622), an
+#: Brückenstütze und freien Rändern dicke Bahnen, Brückenfluss und Zusatzwände
+#: (:func:`_bridges_and_overhangs`, Review RM-587, M4) — abgewählt druckt die
+#: Brücke frei.
+DECIDING_PATHS: Final = frozenset({"support.style", "support.bridges", "support.spare_ledges"})
 
 
 def printed_style(
@@ -2124,6 +2128,11 @@ BRIDGE_FLOW_ENOUGH: Final = 0.95
 #: (Recherche Nr. 12). Für sie lohnt die Umkehr der Wandrichtung.
 CURLING_MATERIALS: Final = WARPING_MATERIALS | FLEXIBLE_MATERIALS
 
+#: Die Familien, die die Umkehr an Überhängen führen: nur die Orca-Familie;
+#: PrusaSlicer 2.9.6 und Cura kennen sie nicht. Dieselbe Aussage steht in
+#: ``slicer_keys.NOT_TAKEN_BY``; ``test_advise.py`` hält beide gleich.
+REVERSING_FLAVOURS: Final[frozenset[SlicerFlavour]] = frozenset({"orca"})
+
 
 def _bridges_and_overhangs(
     settings: PrintSettings,
@@ -2141,7 +2150,8 @@ def _bridges_and_overhangs(
     spannt sie ohne eigenen Wert frei, auch mit „überall“ (G-Code-Gegenprüfung
     N1, 36-mm-Brücke ohne Stütze). **Dicke Brücken und weniger Fluss**, wo eine
     Brücke über :data:`SPAN_INTERESTING` frei druckt — ohne Stützen, ohne
-    Brückenstütze, oder als Kanaldecke oder Rand, die Solidon freihält. Über
+    Brückenstütze, oder als Kanaldecke, die Solidon freihält; ein Rand spannt
+    nicht und zählt nicht (``long_spans``). Über
     einer Stütze trägt die dünne Brücke und sieht besser aus.
 
     **Zusatzwände** unter flachen Überhängen ohne Stütze, die breiter sind als die
@@ -2219,7 +2229,7 @@ def _bridges_and_overhangs(
         )
     if (
         profile.material.id in CURLING_MATERIALS
-        and flavour not in ("prusa", "cura")
+        and (flavour is None or flavour in REVERSING_FLAVOURS)
         and not settings.shell.overhang_reverse
         and steep_reach(result, enough=settings.layers.line_width) > settings.layers.line_width
     ):

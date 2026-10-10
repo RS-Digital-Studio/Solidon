@@ -739,7 +739,7 @@ ABS-Trichter mit 50 Grad:
 | Anycubic Slicer Next 2.0 (Kobra 2) | 0 / 55 435 | 0,0463 / 0,0279 | 0,0215 / 0,0279 | nicht geschrieben (ohne Wirkung) | 1 / 0 (dreht jede Schicht) |
 | Bambu Studio 02.08 (A1) | 0 / 18 963 | 0,0515 / 0,0413 | 0,0283 / 0,0413 | kennt es nicht | kennt es nicht |
 | PrusaSlicer 2.9.6 (MK4S) | 0 / 22 358 | 0,0529 / 0,0443 | 0,0301 / 0,0443 | 996 / 1 254 | kennt es nicht |
-| SuperSlicer 2.5.59 (Mini) | nicht geschrieben, 9 748 / 9 748 | kennt es nicht | kennt es nicht | kennt es nicht | kennt es nicht |
+| SuperSlicer 2.5.59 (Mini) | nicht geschrieben, 9 748 / 9 748 | als alter Name, mit 0,9: 0,0466 / 0,0336 | 0,0236 / 0,0336 | kennt es nicht | kennt es nicht |
 | CuraEngine 5.13 (Ender 3 V3 SE) | kennt es nicht, 20 349 / 20 586 | kennt es nicht | kennt es nicht | kennt es nicht | kennt es nicht |
 
 Brückentempo und Brückenlüfter sind an beiden Teilen gleich (etwa OrcaSlicer
@@ -762,7 +762,23 @@ die lange Brücke sie, eine Brücke von 4 mm daneben nicht (Stütze 49 789 gegen
 übrigen gemessenen Drucker und Solidons eigener Satz stützen Brücken ohnehin.
 
 SuperSlicer stützte die Brücke mit `dont_support_bridges` 0 und 1 gleich, auch an
-beiden Teilen, und bekommt den Schlüssel nicht mehr. Was eine Familie gar nicht
+beiden Teilen, und bekommt den Schlüssel nicht mehr. `thick_bridges` und
+`bridge_flow_ratio` nimmt er dagegen als alte Namen und setzt sie beim Laden um:
+`thick_bridges = 0` wird `bridge_type = flow`, `bridge_flow_ratio = 0.7` je Objekt
+steht als 70 % und fördert links 0,0236 statt 0,0336 mm je mm Brückenbahn (Review
+RM-587, M3; Slicertest
+`test_superslicer_opens_the_family_file_and_takes_the_bridge_flow_of_one_part`).
+`extra_perimeters_on_overhangs` und die Schrägnaht kennt sein 3MF-Leser nicht und
+stürzt ab zwei fremden Schlüsseln ab, Platte und Objekte zusammengezählt
+(`slicer_keys.UNKNOWN_TO_PROGRAM`). Eine Datei der Prusa-Familie ohne gewähltes
+Programm lässt beide deshalb weg, auf der Platte und je Teil
+(`slicer_keys.unknown_in_file`), und Solidons vollständiger Satz für PrusaSlicer
+schreibt sie nur, wenn sie von PrusaSlicers eigenem Wert abweichen
+(`slicer_keys.QUIET_AT_DEFAULT`) — sonst stürzte SuperSlicer an beiden Dateien
+ab (0xC0000005; vorher trugen sie nur die Schrägnaht als fremden Schlüssel). Wie
+PrusaSlicer ohne Herstellerbündel druckt SuperSlicer Brücken mit Solidons Satz
+jetzt dünn, die Grundlage des Satzes; dicke Bahnen kommen mit dem Rat je Teil.
+Was eine Familie gar nicht
 nimmt, gilt im Split auch nicht als „nur plattenweit“: Cura hätte sonst an jedem
 anderen Teil eine Übernahme gemeldet, die es nie druckt. Die Lagetrennung allein
 führte in die Irre: Creality Print ordnet die Teile mal entlang Y, mal schräg an,

@@ -2862,6 +2862,7 @@
   "Dieser Slicer kann den gewünschten Brim-Abstand bei dieser Fußkorrektur nicht einhalten. Wählen Sie ein anderes Prozessprofil oder setzen Sie den Brim-Abstand zurück.": "Este slicer no puede mantener la separación del brim solicitada con esta compensación de la base. Elija otro perfil de proceso o restablezca la separación del brim.",
   "Dieser Slicer kennt kein Hybrid und stützt mit Gitter.": "Este slicer no tiene soporte híbrido y usa cuadrícula.",
   "PrusaSlicer zählt keine Baumwände und gibt dicken Ästen selbst zwei.": "PrusaSlicer no cuenta paredes de árbol y da dos a las ramas gruesas.",
+  "Cura legt Brücken mit seinem eigenen Brückenfluss — dieser Wert bleibt ohne Wirkung.": "Cura imprime los puentes con su propio flujo de puente: este valor no surte efecto.",
   "Dieser Slicer übernimmt Filamentwerte nur für das erste Filament der Platte. Wählen Sie für diese Empfehlung einen Slicer mit Filamentprofilen je Slot.": "Este slicer aplica los ajustes de filamento solo al primer filamento de la placa. Para usar esta recomendación, elija un slicer con un perfil de filamento para cada ranura.",
   "Dieser Slicer übernimmt den Vorschlag nicht für einzelne Teile. Für die ganze Platte prüfen oder einen anderen Slicer wählen.": "Este slicer no adopta la sugerencia para piezas sueltas. Compruébela para toda la placa o elija otro slicer.",
   "Dieser Stand des Bausteins ist hier nicht verfügbar.": "Este estado del bloque no está disponible aquí.",

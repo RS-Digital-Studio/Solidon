@@ -1648,6 +1648,40 @@ def test_a_long_bridge_printed_without_support_gets_thick_lines_and_less_flow() 
     assert "shell.bridge_flow" not in enough, "0,95 liegt im Band und bleibt"
 
 
+def test_a_channel_ceiling_under_supports_gets_thick_lines() -> None:
+    """Review RM-587, L1: Eine Kanaldecke hält Solidon frei, auch wenn das Teil mit
+    Stützen druckt — die Kragplatte daneben bekommt sie. Der Tunnel ist 20 mm weit,
+    über :data:`SPAN_INTERESTING`, und seine Decke druckt als freie Brücke: dicke
+    Bahnen und 0,9 Fluss."""
+    block = trimesh.creation.box((60.0, 40.0, 40.0))
+    block.apply_translation((0.0, 0.0, 20.0))
+    tunnel = trimesh.creation.box((20.0, 50.0, 20.0))
+    tunnel.apply_translation((0.0, 0.0, 18.0))
+    arm = trimesh.creation.box((40.0, 40.0, 5.0))
+    arm.apply_translation((50.0, 0.0, 37.5))
+    body = trimesh.boolean.union([trimesh.boolean.difference([block, tunnel]), arm])
+
+    advice = _advice_on(body)
+
+    assert advice.get("support.style") not in (None, "none"), "die Vorbedingung: Stützen"
+    assert advice.get("shell.thick_bridges") is True
+    assert advice.get("shell.bridge_flow") == pytest.approx(advise.BRIDGE_FLOW)
+
+
+def test_two_bodies_share_the_lower_bridge_flow() -> None:
+    """Review RM-587, L1: Weniger Fluss braucht nur die freie Brücke; ein Körper ohne
+    Brücke merkt ihn nicht. Zusammengeführt gilt deshalb der kleinere Wert, 0,9."""
+    profile = profiles.make_profile("creality-k1-max", "pla")
+    settings = print_settings.with_choice(print_settings.resolve(profile), "shell.bridge_flow", 1.0)
+    asks = SettingAdvice("shell.bridge_flow", advise.BRIDGE_FLOW, 1.0, "Brücke")
+
+    combined = advise.combine(settings, [(settings, [asks]), (settings, [])])
+
+    assert {entry.path: entry.value for entry in combined}.get("shell.bridge_flow") == (
+        pytest.approx(advise.BRIDGE_FLOW)
+    )
+
+
 def test_a_rim_without_support_gets_extra_walls_but_no_thick_bridge() -> None:
     """Eine Auskragung von 3 mm trägt sich selbst und bleibt ohne Stütze; der Slicer
     legt sie als lose Brücke, die Zusatzwände verankern sie (PrusaSlicer 2.9.6:
@@ -1670,6 +1704,25 @@ def test_steep_walls_of_curling_material_alternate_in_the_orca_family() -> None:
     assert "shell.overhang_reverse" not in _advice_on(_funnel(40.0), material="abs")
     prusa = _advice_on(_funnel(50.0), material="abs", flavour="prusa")
     assert "shell.overhang_reverse" not in prusa
+
+
+def test_the_reversing_families_are_those_that_take_the_reversal() -> None:
+    """Review RM-587, L2: Der Rat fragt die Umkehr über :data:`advise.REVERSING_FLAVOURS`,
+    die Übergabe über ``slicer_keys.NOT_TAKEN_BY``. Kennt eine Familie sie einmal,
+    ändern sich beide oder keiner."""
+    from typing import get_args
+
+    from app.core.export import slicer_keys
+
+    for flavour in get_args(slicer_keys.SlicerFlavour):
+        if flavour == "other":
+            continue
+        takes = slicer_keys.takes(flavour, "shell.overhang_reverse")
+        assert takes is (flavour in advise.REVERSING_FLAVOURS), flavour
+    for flavour in ("prusa", "cura", "other"):
+        assert "shell.overhang_reverse" not in _advice_on(
+            _funnel(50.0), material="abs", flavour=flavour
+        )
 
 
 @pytest.mark.parametrize(("angle", "expected"), [(40.0, 0.0), (50.0, 3.797), (58.0, 11.886)])

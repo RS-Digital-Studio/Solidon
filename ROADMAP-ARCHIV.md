@@ -46544,6 +46544,39 @@ PrusaSlicer und OrcaSlicer, Split ohne Scheinübernahme; am Stand davor 11 rot) 
 `test_the_bridge_flow_of_one_part_stays_with_that_part` in sechs Programmen (6 von 6 grün, am Stand
 davor rot). Umgesetzt von Claude (Worktree `F:/sl-bruecken-teil`).
 
+**Nachprüfung (Review RM-587 vom 10.10.2026, vier mittlere, drei leichte Befunde):**
+*M1:* `cantilevers` zählte eine Decke, die ringsum auf einem geschlossenen Wandring liegt (Kasten
+mit Deckel, umgedrehter Becher), als einseitig hängend und schlug Zusatzwände ohne Wirkung vor
+(PrusaSlicer legt den Deckel mit und ohne gleich, 3 575,0 / 2 825,0 mm). Eine Berührung, die den
+Außenring bis auf eine Bahnbreite ganz umläuft, zählt nicht mehr; Pilz (Innenring) und Auskragung
+bleiben einseitig. *M2:* Das Band zählte am Rand jeder flachen Decke einen Streifen mit und las die
+Kantengrenze 10 mm² als Summe über den Körper; ein ABS-Gehäuse mit Deckel bekam die Umkehr.
+`analysis.steep_reach` verfolgt das Band je Wand über die Schichten, ohne Stücke am Überhang
+jenseits der Stützgrenze, und misst, wie weit die Wand über die 45-Grad-Linie hinauswandert; die
+Umkehr kommt ab einer Bahnbreite (Trichter 50 Grad 3,80 mm wie von Hand, Rundung 2 mm 0,1 mm, Kasten
+und Becher 0; Besenhalter und Schraubendreherhalter verlieren die Umkehr, Okarina, Baum und Drache
+behalten sie). *M3:* SuperSlicer 2.5.59.13 stürzte an einer 3MF der Prusa-Familie ohne gewähltes
+Programm und an einer PrusaSlicer-Datei ab (Schrägnaht und `extra_perimeters_on_overhangs`, zwei
+fremde Schlüssel, RM-459). Eine Datei ohne bekanntes Programm lässt weg, was ein Programm der
+Familie gar nicht kennt (`slicer_keys.UNKNOWN_TO_PROGRAM`, `unknown_in_file`), und Solidons voller
+Prusa-Satz schreibt Schrägnaht „nowhere“ und Zusatzwände 0 nicht mehr (`QUIET_AT_DEFAULT`, beides
+PrusaSlicers eigener Wert). `thick_bridges` und `bridge_flow_ratio` nimmt SuperSlicer als alte
+Namen (mit einem Fantasieschlüssel daneben kein Absturz; 0,7 je Objekt fördert 0,0236 gegen
+0,0336 mm je mm) und bekommt beide jetzt je Teil; Slicertest
+`test_superslicer_opens_the_family_file_and_takes_the_bridge_flow_of_one_part` (am alten Stand
+0xC0000005). Die Suite sucht Slicer jetzt auch unter `%LOCALAPPDATA%\Programs` (SuperSlicer liegt
+dort). *M4:* „Brückenstütze abgewählt“ erreichte den Rat nie: `advise.DECIDING_PATHS` nennt jetzt
+auch `support.bridges` und `support.spare_ledges`, der Dialog fragt nach der Abwahl neu, der Export
+fragt jedes Teil ohne die nicht übernommenen. *L1:* Tests für dicke Bahnen über einer Kanaldecke
+bei Stützen und für den kleineren Brückenfluss zweier Körper. *L2:* Die Umkehr fragt
+`advise.REVERSING_FLAVOURS`, ein Wächter hält die Menge gleich mit `slicer_keys.NOT_TAKEN_BY`.
+*L3:* Cura-Feld *Fluss bei Brücken* sagt, dass Cura eigene Brückenbahnen mit eigenem Fluss legt
+(`slicer_keys.not_taken_reason`); PrusaSlicer und SuperSlicer drucken Brücken ohne
+Herstellerprofil jetzt dünn (Changelog). **Abhängigkeit von RM-701:** Die falsche Brückenweite
+am Rohr mit Flanke und Sporn (39,3 mm, RM-701 H5) zieht jetzt dicke Bahnen, 0,9 Fluss und am
+Kobra 2 die Brückenstütze nach sich; behoben wird das mit RM-701. Gegenproben je Befund am alten
+Stand oder per Mutation rot. Umgesetzt von Claude (Worktree `F:/sl-bruecken`, Kürzel rm587b).
+
 ## RM-571: Ein Sims im offenen Becher neben einem gesperrten Kanal behält seine Stütze (09.10.2026)
 
 <a id="rm-571-ein-sims-im-offenen-becher-neben-einem-gesperrten-kanal-behält-seine-stütze-09102026"></a>

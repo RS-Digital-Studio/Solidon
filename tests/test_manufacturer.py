@@ -3868,14 +3868,26 @@ def test_solidons_own_set_supports_bridges(flavour: str, key: str) -> None:
     assert handover.as_mapping(off, flavour)[key] == "1"
 
 
+def test_the_cura_field_says_cura_has_its_own_bridge_flow() -> None:
+    """Review RM-587, L3: Cura hat einen Brückenfluss, nur für seine eigenen
+    Brückenbahnen (``bridge_skin_material_flow``). Das Feld sagt das, statt zu
+    behaupten, Cura kenne die Einstellung nicht; die übrigen bleiben beim
+    allgemeinen Satz."""
+    said = slicer_keys.not_taken_reason("cura", "shell.bridge_flow")
+    assert said is not None and "Cura" in str(said)
+    assert slicer_keys.not_taken_reason("cura", "shell.thick_bridges") is None
+    assert slicer_keys.limitation("cura", "shell.bridge_flow") is None, "kein Befund je Übergabe"
+
+
 def test_bridge_and_overhang_keys_go_only_where_the_program_has_them() -> None:
     """Was ein Programm nicht kennt, bekommt es nicht (RM-587, gemessen in den
     Konfigurationsblöcken und mit ``--save``): Cura keinen der fünf Werte,
     PrusaSlicer keine Umkehr, Bambu Studio weder Zusatzwände noch Umkehr,
     Anycubic Slicer Next keine Zusatzwände (angenommen, aber ohne Wirkung), und
-    SuperSlicer keinen: Zwei Schlüssel kennt sein 3MF-Leser nicht und stürzt an
-    zwei fremden ab, den Fluss liest er in Prozent, und die Brückenstütze ändert
-    dort nichts."""
+    SuperSlicer nur dicke Brücken und Fluss: ``thick_bridges`` und
+    ``bridge_flow_ratio`` setzt er beim Laden als alte Namen um (0,9 wirkt als
+    90 %), ``extra_perimeters_on_overhangs`` kennt sein 3MF-Leser nicht, und die
+    Brückenstütze ändert dort nichts (Review RM-587, M3)."""
     paths = (
         "support.bridges",
         "shell.thick_bridges",
@@ -3898,7 +3910,7 @@ def test_bridge_and_overhang_keys_go_only_where_the_program_has_them() -> None:
     }
     assert taken[("cura", "cura")] == set()
     assert taken[("prusa", "prusaslicer")] == set(paths) - {"shell.overhang_reverse"}
-    assert taken[("prusa", "superslicer")] == set()
+    assert taken[("prusa", "superslicer")] == {"shell.thick_bridges", "shell.bridge_flow"}
     assert taken[("orca", "bambustudio")] == {
         "support.bridges",
         "shell.thick_bridges",

@@ -170,7 +170,8 @@ QApplication.instance().setStyleSheet(before)   # ins finally
 - `slicer("<programm>")` für Tests mit echtem, installiertem Slicer; das Programm
   liefert nur die Fixture `installed_slicer` (`test_slicer_selection.py` hält
   das). Fehlt es, überspringt sich der Fall; in `slicer-auswahl.yml`
-  (`SOLIDON_REQUIRE_SLICERS`) ist das rot, denn ein Skip belegt nichts.
+  (`SOLIDON_REQUIRE_SLICERS`) ist das rot, denn ein Skip belegt nichts. Ein
+  Programm ohne Rezept dort (SuperSlicer) trägt den Marker nur unter Windows.
 - `rendered` für Tests, deren Grün an einem **Erzeugerlauf** hängt (Handbuch,
   Referenz, Abbildungsstempel). CI und reguläres Tor fahren sie nicht
   (Entscheidung Robert): Eine neue Operation macht sie rot, und was dann fehlt,

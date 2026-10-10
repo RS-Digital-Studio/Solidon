@@ -88,6 +88,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Los puentes largos reciben el soporte que Solidon prevé, también en PrusaSlicer. Si un puente largo queda sin soporte, Solidon propone líneas gruesas y algo menos de flujo.
 - Los voladizos planos sin soporte reciben paredes extra como propuesta. Con ABS, ASA y TPU el slicer puede imprimir voladizos pronunciados en sentido alterno para que no se levanten.
 - Los ajustes de puente, las paredes extra y el sentido alterno solo se aplican a la pieza que los necesita. Las demás piezas de la misma placa se imprimen igual.
+- Sin perfil del fabricante, PrusaSlicer y SuperSlicer imprimen ahora los puentes finos. Donde un puente necesita líneas gruesas y menos flujo, Solidon las propone para esa pieza.
 - Para PETG, Solidon sugiere refrigeración total en el soporte. Así se suelta más fácil de la pieza.
 - Nuevo en los ajustes de impresión: *Capas de separación inferiores*, *Hueco en la capa de separación* y *Refrigeración total en el soporte*.
 - El campo *Espacio superior* se llama ahora *Espacio arriba y abajo* y vale para ambos lados del soporte.

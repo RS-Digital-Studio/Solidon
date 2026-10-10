@@ -3554,7 +3554,8 @@ def test_the_scarf_seam_goes_to_the_round_part_only(tmp_path: Path, profile: Pro
     keine Ecke, in der die Naht verschwindet, der Klotz daneben vier. Die
     Platte bleibt ohne, das Rohr bekommt sie als Objektwert bei der
     Orca-Familie und PrusaSlicer, und bei Cura nimmt das Netz des Klotzes sie
-    zurück."""
+    zurück. Eine Datei der Prusa-Familie ohne Programm trägt sie nicht: SuperSlicer
+    kennt sie nicht und stürzt ab zwei fremden Schlüsseln ab (Review RM-587, M3)."""
     tube = trimesh.creation.cylinder(radius=12.5, height=40.0, sections=128)
     tube.apply_translation((0.0, 0.0, 20.0))
     block = trimesh.creation.box(extents=(25.0, 25.0, 40.0))
@@ -3567,14 +3568,17 @@ def test_the_scarf_seam_goes_to_the_round_part_only(tmp_path: Path, profile: Pro
         print_settings.resolve(profile, "standard"), "shell.scarf_seam", True
     )
 
-    def written(flavour: SlicerFlavour) -> tuple[Path, list[Finding]]:
+    def written(
+        flavour: SlicerFlavour, setup: handover.SlicerSetup | None = None
+    ) -> tuple[Path, list[Finding]]:
         return write_assembly(
             objects,
-            tmp_path / flavour,
+            tmp_path / f"{flavour}-{setup is not None}",
             project_name="Rohre",
             profile=profile,
             settings=settings,
             flavour=flavour,
+            setup=setup,
         )
 
     orca, findings = written("orca")
@@ -3586,10 +3590,13 @@ def test_the_scarf_seam_goes_to_the_round_part_only(tmp_path: Path, profile: Pro
     said = [finding.object_id for finding in findings if finding.code == "export.part_setting"]
     assert said == ["obj_1"], "einmal, für das Rohr"
 
-    prusa, _findings = written("prusa")
+    prusa, _findings = written("prusa", handover.SlicerSetup(Path("PrusaSlicer.exe"), "prusa"))
     parts = object_values(prusa, "Metadata/Slic3r_PE_model.config")
     assert parts["Rohr"]["scarf_seam_placement"] == "contours"
     assert "scarf_seam_placement" not in parts["Klotz"]
+    unnamed, _findings = written("prusa")
+    parts = object_values(unnamed, "Metadata/Slic3r_PE_model.config")
+    assert "scarf_seam_placement" not in parts["Rohr"], "eine Datei ohne Programm trägt sie nicht"
 
     cura, _findings = written("cura")
     meshes = {mesh.path.name: dict(mesh.settings) for mesh in handover.cura_meshes(cura)}

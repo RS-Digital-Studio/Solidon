@@ -87,6 +87,7 @@ it into `website/version.json`.
 - Long bridges get the support Solidon plans for them, in PrusaSlicer too. If a long bridge stays without support, Solidon suggests thick lines and slightly less flow.
 - Flat overhangs without support get extra walls suggested. For ABS, ASA and TPU the slicer can print steep overhangs in alternating directions on request, so they do not curl up.
 - Bridge settings, extra walls and the alternating direction apply only to the part that needs them. The other parts on the same plate print as before.
+- Without a manufacturer profile, PrusaSlicer and SuperSlicer now print bridges thin. Where a bridge needs thick lines and less flow, Solidon suggests them for that part.
 - For PETG, Solidon suggests full cooling at the support. It then comes off the part more easily.
 - New in the print settings: *Interface layers below*, *Interface gap* and *Full cooling at the support*.
 - The *Gap above* field is now called *Gap above and below* and applies to both sides of the support.

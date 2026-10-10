@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import re
 import subprocess
+import sys
 import time
 from collections.abc import Callable
 from dataclasses import replace
@@ -146,7 +147,7 @@ BRIDGE = Path(__file__).parent / "data" / "meshes" / "bridge_two_end_supports.pl
 
 
 def _advised_gcode(
-    installed_slicer: Path,
+    slicer: Path,
     tmp_path: Path,
     body: trimesh.Trimesh,
     printer: str,
@@ -178,7 +179,7 @@ def _advised_gcode(
         bridge_from=profile.minimum_wall_thickness,
         support_volume=False,
     )
-    setup = handover.detect(installed_slicer)
+    setup = handover.detect(slicer)
     if vendor:
         setup = _preselected(setup, profile)
     entries = [
@@ -523,6 +524,112 @@ def test_the_bridge_flow_of_one_part_stays_with_that_part(
     assert left > 0.0 and right > 0.0, f"{program}: Brückenbahnen je Körper {lines}"
     assert left_feed / left < 0.85 * right_feed / right, (
         f"{program}: links {left_feed / left:.4f}, rechts {right_feed / right:.4f} mm je mm"
+    )
+
+
+def _superslicer_bridges(text: str) -> dict[str, tuple[float, float]]:
+    """Länge und Förderung der Brückenbahnen je ``M486``-Nummer in SuperSlicers
+    Druckdatei; er schreibt ``;TYPE:`` und fördert relativ oder absolut."""
+    found: dict[str, list[float]] = {}
+    label = "?"
+    inside = relative = False
+    x = y = extruded = 0.0
+    for line in text.splitlines():
+        marked = _PRUSA_OBJECT.match(line)
+        if marked:
+            label = marked.group(1)
+            continue
+        if line.startswith(";TYPE:"):
+            inside = "bridge" in line.casefold()
+            continue
+        if line.startswith(("M82", "M83")):
+            relative = line.startswith("M83")
+        if not line.startswith(("G1 ", "G0 ")):
+            continue
+        words = {word[0]: word[1:] for word in line.split(";")[0].split()[1:]}
+        nx = float(words["X"]) if "X" in words else x
+        ny = float(words["Y"]) if "Y" in words else y
+        amount = 0.0
+        if "E" in words:
+            value = float(words["E"])
+            amount = value if relative else value - extruded
+            extruded = extruded if relative else value
+        if inside and amount > 0.0 and label != "-1":
+            entry = found.setdefault(label, [0.0, 0.0])
+            entry[0] += ((nx - x) ** 2 + (ny - y) ** 2) ** 0.5
+            entry[1] += amount
+        x, y = nx, ny
+    return {name: (length, feed) for name, (length, feed) in found.items()}
+
+
+# SuperSlicer läuft nur hier: Die Slicerauswahl hat unter Linux und macOS kein
+# Installationsrezept für ihn, und ein Marker dort verlangte eines.
+@(
+    pytest.mark.slicer("superslicer")
+    if sys.platform == "win32"
+    else pytest.mark.skip(reason="SuperSlicer prüft nur die Windows-Maschine")
+)
+def test_superslicer_opens_the_family_file_and_takes_the_bridge_flow_of_one_part(
+    installed_slicer: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Review RM-587, M3: SuperSlicer stürzte an einer 3MF der Prusa-Familie ohne
+    gewähltes Programm ab (0xC0000005) — Schrägnaht und Zusatzwände sind ihm fremd.
+    Die Datei öffnet jetzt. Und dicke Brücken und Fluss nimmt er als alte Namen je
+    Teil: 0,7 an der linken Brücke fördert dort weniger als rechts."""
+    from app.core.export import writer
+    from app.core.types import SettingAdvice
+
+    set_test_license(monkeypatch, active=True)
+    profile = profiles.make_profile("prusa-mini", "pla")
+    settings = print_settings.with_choice(print_settings.resolve(profile), "support.style", "none")
+    settings = print_settings.with_choice(settings, "shell.scarf_seam", True)
+    wanted = {"shell.bridge_flow": 0.7, "shell.overhang_walls": True}
+    for path, value in wanted.items():
+        settings = print_settings.with_accepted(settings, path, value)
+
+    def asks(entry: SceneObject, _mesh: object, base: object, *_a: object, **_k: object):
+        if entry.id != "links":
+            return []
+        return [
+            SettingAdvice(path, value, print_settings.read_path(base, path), "Probe")  # type: ignore[arg-type]
+            for path, value in wanted.items()
+        ]
+
+    monkeypatch.setattr(writer, "part_advice", asks)
+    objects = [
+        SceneObject(name, name, MeshData.of(_two_pillar_bridge(x)))
+        for name, x in (("links", -34.0), ("rechts", 34.0))
+    ]
+    runs = {}
+    for case, setup in (("datei", None), ("superslicer", handover.detect(installed_slicer))):
+        folder = tmp_path / case
+        folder.mkdir()
+        path, _findings = writer.write_assembly(
+            objects,
+            folder,
+            project_name="bruecken",
+            profile=profile,
+            settings=settings,
+            flavour="prusa",
+            setup=setup,
+            for_slicer=False,
+        )
+        gcode = folder / "bruecken.gcode"
+        done = subprocess.run(
+            [str(installed_slicer), "--export-gcode", "--output", str(gcode), str(path)],
+            capture_output=True,
+            timeout=900,
+            check=False,
+        )
+        assert done.returncode == 0 and gcode.is_file(), (
+            f"{case}: SuperSlicer endet mit {done.returncode & 0xFFFFFFFF:#x}"
+        )
+        runs[case] = _superslicer_bridges(gcode.read_text(encoding="utf-8", errors="replace"))
+    lines = runs["superslicer"]
+    assert len(lines) == 2 and all(length > 0.0 for length, _feed in lines.values()), lines
+    (left, left_feed), (right, right_feed) = (lines[key] for key in sorted(lines, key=int))
+    assert left_feed / left < 0.85 * right_feed / right, (
+        f"links {left_feed / left:.4f}, rechts {right_feed / right:.4f} mm je mm"
     )
 
 
