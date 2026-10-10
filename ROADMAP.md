@@ -91,7 +91,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-527 — An der Kanalmündung entscheidet die Sperre gegen eine verlangte Stütze](#rm-527) | Geometrie, Erkennung und Druckvorbereitung | Entschieden (Robert, 06.10.): Mündung frei halten; Korpus gemessen (205 Körper, keine neuen Kanalstücke, kein geänderter Stützbedarf, keine neue Sperre); offen die Abnahme in Anycubic, Elegoo und Orca |
 | [RM-539 — Ein Baustein mit Trägeraufbau, auf der Innenseite gesetzt, baut nach außen ohne Befund](#rm-539) | Geometrie, Erkennung und Druckvorbereitung | Gefunden am Gehäuse-Beispiel (06.10.); offen der Befund beim Einsetzen und seine Handlung |
 | [RM-540 — Ein angeschnittenes erzeugtes Merkmal behält sein volles Maß, und die Schnittwege ordnen es verschieden zu](#rm-540) | Geometrie, Erkennung und Druckvorbereitung | Zwilling seit der Ausdehnungsregel (06.10.); ein Kriterium für alle Schnittwege festlegen |
-| [RM-541 — Der Skizzenlöser landet auf dem Intel-Mac im anderen Zweig einer Winkelbedingung](#rm-541) | Geometrie, Erkennung und Druckvorbereitung | Gefunden mit RM-531 (06.10.): 135° statt 45° unter macOS Intel; offen die Rechnung in Verschiebungen und ihre Wirkung auf unterbestimmte Skizzen |
+| [RM-541 — Der Skizzenlöser landet auf dem Intel-Mac im anderen Zweig einer Winkelbedingung](#rm-541) | Geometrie, Erkennung und Druckvorbereitung | Gebaut auf `paket/sk-skizzenloeser`, Review 1 und Nachprüfung behoben (10.10.); offen der Nachweis auf allen vier Plattformen mit dem Lauf beim Push nach main |
 | [RM-542 — Die fünf offenen Entscheidungen der Erstkonfiguration](#rm-542) | Geometrie, Erkennung und Druckvorbereitung | Gefunden beim Umräumen der Konzepte (RM-099, 06.10.): nur im Konzept geführt; offen der Abgleich mit RM-281 und Roberts Entscheidung |
 | [RM-568 — Merkmalerkennung und die übrigen langen Wege schneller machen](#rm-568) | Geometrie, Erkennung und Druckvorbereitung | Selbstschnittsuche, Zuordnung, Ringvereinfachung, 3MF und gemerkte Zuordnungsschritte gebaut (Paket L, 08./09.10.); Kandidatensuche der Selbstschnitte (Paket L2, K-1 erfüllt); offen: Laden mechanischer Teile (K-3; mit druckgleich nach §11.2 sind Löserbudget und früheres Freiformurteil zulässig, die Verteilung auf mehrere Prozesse folgt als RM-637), Formen und Skelett, örtliche Neuerkennung (RM-592) |
 | [RM-670 — Jeder 3MF-Export sucht den Slicer und liest dessen Profilbündel neu](#rm-670) | Geometrie, Erkennung und Druckvorbereitung | In Arbeit: Claude (Worktree `F:/solidon-claude-e`). Regression seit v0.4.0: 3MF eines Quaders 0,36 → 1,6 s, weil jeder Export Slicer und Druckerliste neu liest |
@@ -3224,19 +3224,107 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
 
 <a id="rm-541"></a>
 
-- [ ] **RM-541 — Der Skizzenlöser landet auf dem Intel-Mac im anderen Zweig einer
-  Winkelbedingung.** `test_sketch_editor.py::test_the_angle_button_asks_for_its_degrees` setzt
-  45° und bekommt unter `macos-26-intel` 135°, unter Windows, Linux und macOS ARM 45° (Sonde
-  zu [RM-531](#rm-531), Lauf 37495714708). `least_squares` mit `method="trf"`
-  (`app/core/sketch/solver.py`) beginnt mit dem Vertrauensradius ‖x₀‖, und weil die
-  Unbekannten absolute Koordinaten sind, ist das in diesem Fall rund 13 mm: Der erste Schritt
-  reicht über beide Zweige, und welchen er trifft, entscheidet die Rechnung der Plattform.
-  Belegt ist der Radius, nicht die Rundung, die unter Intel kippt; an einem Intel-Rechner ist
-  nichts nachgerechnet. **Fix:** in Verschiebungen gegen den Ausgangsstand rechnen, damit der
-  erste Schritt am Zug hängt und nicht an der Lage des Ursprungs. Das ändert die Lösung
-  unterbestimmter Skizzen; deshalb vorher und nachher gegen die Skizzentests und die Budgets
-  aus §31 messen. **Abnahme:** der Test auf allen vier Plattformen grün, unterbestimmte Skizzen
-  bleiben am nächsten Stand zu ihrem Ausgang, die Laufzeit im Budget.
+- [~] **RM-541 — Der Skizzenlöser landet auf dem Intel-Mac im anderen Zweig einer
+  Winkelbedingung.** `test_sketch_editor.py::test_the_angle_button_asks_for_its_degrees` setzte
+  45° und bekam unter `macos-26-intel` 135° (Lauf 37495714708, damals noch über `lsmr`).
+  **Stand:** gebaut auf `paket/sk-skizzenloeser`, Review 1 und seine Nachprüfung behoben
+  (10.10.2026). **Offen:** der Nachweis auf allen vier Plattformen mit dem Lauf beim Push nach
+  main; bleibt der Intel-Mac rot, ist der Punkt nicht erledigt. **Abnahme:** der Test auf allen
+  vier Plattformen grün, unterbestimmte Skizzen bleiben am nächsten Stand zu ihrem Ausgang, die
+  Laufzeit im Budget.
+
+  **Ursache:** `least_squares` mit `method="trf"` beginnt mit dem Vertrauensradius ‖x₀‖ und misst
+  `xtol` an ‖x‖; die Unbekannten waren absolute Koordinaten. Der erste Schritt hing so an der
+  Entfernung der Zeichnung vom Nullpunkt — und, weil alles ein Lauf war, an jedem anderen Teil
+  der Zeichnung. Belegt ohne Intel-Rechner über Versätze, die die Rundung jeder Rechnung ändern
+  wie eine andere Maschine: Am Stand `78d39dec9` lag dieselbe Winkelskizze 1000 mm daneben bis zu
+  292 mm anders, neben vierzig freien Linien kippten 9 von 60 Paaren schon am Nullpunkt, und 69
+  von 300 versetzten Läufen endeten in einem Widerspruch, den es nicht gab. Daneben: `lsmr` bildet
+  bei einer einzelnen gespannten Bedingung einen Zweierraum aus Rauschen, im Zug genauso (zwei
+  Linien mit einer Bedingung standen nach zehn Mausschritten 1000 mm daneben 3,7 bis 38 mm
+  woanders, mit 0.5.3 bis 440 m), und eine Gerade mit gleicher Krümmung wie ein Bogen lief nach
+  sechshundert Auswertungen zu einem Bogen mit 240 km Radius.
+
+  **Umsetzung:** Gelöst wird je zusammenhängendem Teil (`_parts`, `_solve_part`) in
+  Verschiebungen ab null, um die Mitte der Zeichnung (`solve_sketch` um `_solve_here`; zurück rückt
+  nur, was sich bewegt hat). `x_scale` ist die Größe des Teils (`_part_size`: Streuung aller
+  Punkte, die er liest, gehaltene eingeschlossen, mindestens sein größter Längenrest), beim dichten
+  Lösen höchstens `DENSE_FIRST_STEP`. Ein kleiner Teil mit vollem Rang rechnet beim Lösen und im
+  Zug über `dogbox`, mit Doppelungen und ein großer Teil über TRF. Beim Lösen gilt eine Wegfolge
+  (`dogbox`, dichtes TRF, `lsmr`), deren erster Lauf zählt, der löst, ohne eine Linie mit
+  Richtungsbedingung oder einen Kreis unter `SHRUNK_BELOW` zu bringen; schrumpft es in jedem Weg,
+  rechnen sie noch einmal mit gehaltener Länge, sonst nennt die Meldung die Bedingungen am Element.
+  Ein Teil, der schon bis `_TOL` gilt, bleibt stehen; `_watchdog` hält einen Lauf an, der weiter
+  als `FARTHEST_MOVE` liefe oder dessen Rest sich in `STALL_WINDOW` Auswertungen nicht halbiert.
+  Die zweite Zugstufe beginnt am Stand vor dem Schritt, mit `DRAG_SLIDE_TRIES` = 100; kehren die
+  gezogenen Punkte ganz zurück, bleibt die Zeichnung stehen. Die Rangprüfung zerlegt getrennte
+  Blöcke einzeln (`_blockwise_rank`); das Paar einer Meldung ordnet sich nach dem Setzen, und ein
+  erfüllter Partner weicht dem mit den meisten gemeinsamen Zielpunkten. Die Fassung steht an der
+  Skizze (`Sketch.solver`, `types.SKETCH_SOLVER` = 2, Bauplan §9); Format 50 schreibt `"solver": 1` in jeden gespeicherten
+  Skizzentext, der über `_solve_in_coordinates` wie 0.5.0 bis 0.5.3 rechnet. Der Editor rechnet ab
+  der ersten Änderung mit der heutigen Fassung, von der Lage aus, die zu sehen war; das Binden von
+  Projektmaßen behält die Fassung. Die Fassung steht im Cache-Schlüssel, die Beispielprojekte
+  tragen Format 50.
+
+  **Review 1 (09./10.10.2026), behoben:** H-1 (Gelenk im Rundungsabstand folgte dem Zug nicht,
+  0,27 mm hinter dem Zeiger), M-1 (unerreichbare Züge biegsamer Formen je Ort bis 4,47 mm, in
+  eigener Sonde 8,8 mm anders), M-2 (erste Änderung an einer älteren Skizze bewegte Unberührtes
+  um 5,9 mm), G-1 (Binden stellte die Fassung still um), G-2 (dieser Punkt stand vor der Abnahme
+  im Archiv), G-4 (Ausnahme von „kein BLAS/LAPACK“ in `app/core/sketch/CLAUDE.md`). G-3: Die
+  Änderung von Bauplan §9 (`solver: int = 2`) hat der Koordinator Robert angesagt (09./10.10.,
+  Nachprüfung G-D). Dazu aus den ungeprüften Punkten: viele getrennte Teile (200 Kreise 2,8 s
+  statt 0,3 s, eingeführt mit diesem Punkt), die dichte Rangzerlegung (150 Rechtecke rund 10 s,
+  seit 0.5.0), ein Krümmungswiderspruch in einer langen Kette (16 600 Auswertungen, 143 s, seit
+  0.5.0) und ortsabhängige Paare in Widerspruchsmeldungen (drei von acht Fällen der Versatzsonde).
+
+  **Nachprüfung (10.10.2026), behoben:** H-A (eine Linie mit Richtungsbedingung schrumpfte über
+  `dogbox` auf Länge null, und ein Widerspruch hieß „gelöst“; in 0.5.3 auch an sieben von 1000
+  gewöhnlich gezeichneten Skizzen), M-C (lange gestreckte Ketten ab 17 Gliedern folgten dem
+  Zeiger jenseits der Reichweite auch in Mausschritten nicht; die vorgeschlagene Wiederholung ab
+  der ersten Stufe half nirgends und verdoppelte den Sprung, sie entfiel), G-A (scipy ≥ 1.16 für
+  `callback`), G-B (Wächter über 100 Zufallsskizzen und zwei feste Fälle für die Paarregeln statt
+  vier ausgesuchter Fälle, Begründung auf das Gemessene),
+  G-D (dieser Text), G-E (die BLAS/LAPACK-Ausnahme steht in `.claude/rules/kern.md`, Karte und
+  Begründung verweisen dorthin). Nebenbei die Kosten des Schrumpfwächters: `_spans` las je
+  Element alle Bedingungen (Umriss aus 2624 festen Kanten 1,2 s statt 10 ms), und jeder Teil
+  fragte alle Spannen (200 Kreise 1,1 s statt 0,13 s, 150 Rechtecke 2,2 s statt 0,23 s); beide
+  lesen jetzt ein Verzeichnis je Punkt, bitgleich über den Korpus.
+
+  **Nachweis** (betroffene Tests, keine CI auf dem Zweig): Wächter in `tests/test_sketch.py` —
+  `test_a_sketch_solves_alike_wherever_it_lies`, `test_a_drag_solves_alike_wherever_it_lies`,
+  `test_a_joint_follows_the_drag_even_a_rounding_apart`,
+  `test_a_line_a_rounding_long_takes_its_measure_wherever_it_lies`,
+  `test_a_drag_the_shape_cannot_follow_lands_alike_wherever_it_lies`,
+  `test_an_unsolvable_sketch_names_the_same_pair_wherever_it_lies`,
+  `test_what_the_solver_does_not_move_keeps_its_numbers`,
+  `test_many_separate_parts_solve_in_few_steps_each`,
+  `test_separate_rectangles_are_decomposed_one_by_one`,
+  `test_a_contradiction_does_not_hide_behind_a_shrunk_line`,
+  `test_a_healthy_sketch_drawn_far_from_its_solution_solves`,
+  `test_random_sketches_say_the_same_wherever_and_however_they_are_rounded`,
+  `test_a_contradiction_names_the_later_constraint_and_its_true_partner`,
+  `test_a_long_chain_follows_the_mouse_beyond_its_reach`, dazu
+  `test_sketch_curves.py::test_a_curvature_that_cannot_hold_stops_early_in_a_long_chain`,
+  `test_sketch_editor.py::test_the_first_change_to_an_older_sketch_moves_nothing_it_does_not_touch`
+  und `test_parameter_binding.py::test_binding_keeps_the_solver_of_an_older_drawing`; jeder am
+  Stand davor rot. Versatzsonde des Reviews (184 Fälle, Versätze bis 3,7·10⁶ mm): Lösen und Zug
+  0 Fälle über 10⁻⁹ mm (vorher 17 und 21, Zug bis 4,47 mm), 0 diskret anders (vorher 3).
+  739 mitgeschriebene Löser-Eingaben der Testsuite gegen den Stand vor Review 1: diskret gleich,
+  an drei Versätzen höchstens 1,8·10⁻¹⁰ mm, 1 386 statt 9 705 Auswertungen; 91 unterbestimmte
+  Lösungen landen anders, 46 näher und 45 weiter an der Zeichnung, höchstens 3,6 % mehr Bewegung.
+  §31-Kette im Wechsel unter Last: 8 Auswertungen, CPU-Median 120 ms gegen 114 ms vor RM-541.
+  Altdatei `tests/data/projects/sketch_solver_v49.p3d` rechnet wie mit 0.5.3 (2 656,656241 mm³).
+  Dieselben 739 Eingaben gegen den Stand vor der Nachprüfung: Lage bitgleich, diskret anders nur
+  gewollt (zwei Paare in Setzfolge, zwei vorher mit Linie auf einem Punkt „gelöste“ melden den
+  Widerspruch), 1 835 statt 1 386 Auswertungen — ein Widerspruch probiert jeden Weg.
+  Sonden der Nachprüfung am Ende: Nahsonde 1000 Skizzen, nichts entartet gelöst, und die sieben
+  neuen Absagen sind genau die, die 0.5.3 mit einem Element auf einem Punkt löste; Breitensonde
+  800 Skizzen, 605 gelöst und 195 unlösbar, keine Lage über `PRINT_LIMIT`, 4 nennen je Ort oder
+  Rauschen ein anderes Paar (vorher 19 von 173); Rauschsonde 382 Skizzen, Lösen und beide
+  Zugstufen unter verrauschtem scipy höchstens 1,7·10⁻⁹ mm auseinander, nie ein anderes Ergebnis.
+  Changelog: ja — Skizzen rechnen auf jedem Rechner gleich, auch beim Ziehen; viele getrennte
+  Formen lösen schnell; ein unerfüllbares *Krümmungsstetig* meldet sich nach Sekunden; zwei
+  widersprüchliche Bedingungen werden genannt, statt eine Linie auf einen Punkt zu ziehen.
 
 <a id="rm-542"></a>
 

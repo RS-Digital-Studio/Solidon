@@ -24,7 +24,7 @@ from __future__ import annotations
 
 import math
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any, Final
 
 import numpy as np
@@ -32,7 +32,14 @@ import numpy as np
 from app.core.deferred import csr_matrix, least_squares
 from app.core.errors import SketchConflictError, ValidationError
 from app.core.expressions import evaluate
-from app.core.types import Point2, Sketch, SketchConstraint, SketchElement, SolvedSketch
+from app.core.types import (
+    SKETCH_SOLVER,
+    Point2,
+    Sketch,
+    SketchConstraint,
+    SketchElement,
+    SolvedSketch,
+)
 from app.core.units import EPS_GEOM
 from app.i18n import _
 
@@ -147,6 +154,11 @@ _ANGLE_KINDS: Final[frozenset[str]] = frozenset({"angle"})
 #: Namen für dieselbe Bedingung sind eine Gelegenheit, sie doppelt zu legen.
 MOST_ANGLE_DEGREES: Final[float] = 180.0
 
+#: Bedingungen, deren Rest ein Sinus ist und keine Länge: Sie richten aus,
+#: statt zu messen. Alle anderen rechnen in Millimetern (``_curvature_scale``
+#: bringt auch die Krümmung dorthin).
+_TURNING_KINDS: Final[frozenset[str]] = frozenset({"parallel", "perpendicular", "angle", "smooth"})
+
 _ResidualFn = Callable[[np.ndarray], tuple[float, ...]]
 _GradientFn = Callable[[np.ndarray, np.ndarray], None]
 """Schreibt die Zeilen einer Gleichung in die übergebene Jacobimatrix.
@@ -161,23 +173,31 @@ class _Equation:
     """Eine Gleichungsgruppe: ihr Ursprung, ihre Residuen, ihre Ableitung.
 
     ``constraint`` ist der Index in ``sketch.constraints`` — oder ``None`` für
-    die implizite Bedingung eines Bogens (beide Schenkel gleich lang)."""
+    die implizite Bedingung eines Bogens (beide Schenkel gleich lang).
+    ``length`` sagt, ob der Rest eine Länge in Millimetern ist; bei einer
+    Richtung (:data:`_TURNING_KINDS`) ist er ein Sinus."""
 
     constraint: int | None
     rows: int
     fn: _ResidualFn
     grad: _GradientFn
+    length: bool = True
 
 
-#: Bis zu wie vielen freien Koordinaten der Löser dicht rechnet (``tr_solver``
-#: ``exact``, :func:`_solve`). Eine SVD über 64 Spalten kostet je Schritt weniger
-#: als ein Zehntel Millisekunde; über ``lsmr`` liefen kleine, unterbestimmte
-#: Skizzen in einen entarteten Schritt. Die großen Skizzen aus §31 bleiben bei
-#: ``lsmr``, wo die dichte Rechnung das Budget sprengt.
+#: Bis zu wie vielen freien Koordinaten ein Teil dicht rechnet
+#: (:func:`_solve_part`: beim Lösen TRF mit ``exact``, im Zug ``dogbox``). Eine
+#: Zerlegung über 64 Spalten kostet je Schritt weniger als ein Zehntel
+#: Millisekunde; über ``lsmr`` liefen kleine, unterbestimmte Skizzen in einen
+#: entarteten Schritt. Die großen Skizzen aus §31 bleiben bei ``lsmr``, wo die
+#: dichte Rechnung das Budget sprengt.
 EXACT_UP_TO: Final[int] = 64
 
 #: Wie zäh ein gezogener Punkt im **weichen** Zug ist, als Maßstab seiner
-#: Koordinaten (``x_scale`` in scipy — die Rechnung läuft in ``x / scale``).
+#: Koordinaten (``x_scale`` in scipy). Über ``lsmr`` läuft die Rechnung in
+#: ``x / scale``; ein kleiner Teil rechnet über ``dogbox``, und dort ist es die
+#: Box, in der ein Schritt den Punkt bewegt — ein Zwanzigstel der übrigen. In
+#: gewichteten Veränderlichen fand die zweite Stufe an der gestreckten Kette
+#: aus fünf Linien in fünfzig Auswertungen keine Lage, so in vier (RM-541).
 #:
 #: Der weiche Zug kommt nur zum Zug, wenn der harte nicht geht: Der gezogene
 #: Punkt soll dann so nah wie möglich am Zeiger bleiben, und die übrigen
@@ -191,27 +211,35 @@ DRAG_STIFFNESS: Final[float] = 1.0 / 20.0
 
 #: Wie viele Auswertungen die **erste** Zugstufe höchstens bekommt.
 #:
-#: Ist der Zeigerort erreichbar, findet der Löser ihn schnell: gemessen fünf
-#: bis zwölf Auswertungen, vom Rechteck über Vieleck, Lochkreis und Lochraster
-#: bis zur Kette aus hundert Linien. Ist er es nicht, suchte der Löser ohne
+#: Ist der Zeigerort erreichbar, findet der Löser ihn schnell: gemessen zwei
+#: bis fünf Auswertungen an kleinen Teilen — Rechteck, Vieleck, Langloch,
+#: Lochkreis, Lochraster, verrundetes Rechteck, zwei Linien mit einer
+#: Bedingung —, zwölf bis sechzehn an der Kette aus hundert Linien über
+#: ``lsmr`` (RM-541, in Mausschritten). Ist er es nicht, suchte der Löser ohne
 #: Grenze weiter, bis sich der Rest nicht mehr änderte — und das kostete an
 #: einer gestreckten Kette aus zwanzig Linien 646 Auswertungen und 2,7
 #: Sekunden, aus hundert Linien 103 Sekunden, **je Mausereignis** (Durchsicht
 #: 22.09.2026). Nach fünfundzwanzig ist die Antwort „nicht erreichbar", und
-#: die zweite Stufe übernimmt — das Doppelte des größten gemessenen Bedarfs.
+#: die zweite Stufe übernimmt — über dem größten gemessenen Bedarf.
 DRAG_REACH_TRIES: Final = 25
 
 #: Wie viele Auswertungen die **zweite** Zugstufe höchstens bekommt.
 #:
 #: Sie rutscht so weit, wie die Bedingungen es erlauben, und braucht dafür an
-#: gewöhnlichen Zeichnungen gemessen vier bis acht Auswertungen — ein
+#: gewöhnlichen Zeichnungen gemessen zwei bis fünf Auswertungen — ein
 #: festes Vieleck, ein bemaßtes Langloch, ein Lochkreis, ein verrundetes
-#: Rechteck. Nur eine bis zum Anschlag gestreckte Kette braucht an die
-#: hundert, weil sie dort singulär steht. Findet die Stufe in dieser Zahl
-#: keine Lage, bleibt die Zeichnung, wo sie war: Ein Zug, der nicht folgt,
-#: ist eine Auskunft (die Zeile sagt, was hält); ein Zug, der das Fenster für
-#: Sekunden anhält, ist keine.
-DRAG_SLIDE_TRIES: Final = 50
+#: Rechteck, eine Kette aus fünf oder zehn Linien über ihre Reichweite
+#: (RM-541). Eine lange, bis zum Anschlag gestreckte Kette über ``lsmr`` steht
+#: dort singulär und braucht in Mausschritten rund achtzig: Mit fünfzig folgte
+#: sie ab siebzehn Gliedern dem Zeiger jenseits der Reichweite nicht mehr
+#: (Review M-C); mit hundert folgt sie bis hundert Glieder auf Hundertstel
+#: Grad. Eine Wiederholung ab dem Ende der ersten Stufe half dabei in keinem
+#: gemessenen Fall und verdoppelte den Sprung über die Reichweite, den auch
+#: 0.5.3 nicht folgen ließ. Findet die Stufe in dieser Zahl keine Lage,
+#: bleibt die Zeichnung, wo sie war: Ein Zug, der nicht folgt, ist eine
+#: Auskunft (die Zeile sagt, was hält); ein Zug, der das Fenster für Sekunden
+#: anhält, ist keine.
+DRAG_SLIDE_TRIES: Final = 100
 
 #: So groß darf die **dichte** Jacobimatrix werden, die die Rangprüfung nach
 #: dem Lösen braucht (Zeilen mal 2 Punkte mal 8 Byte). 256 MiB sind rund 4000
@@ -1447,7 +1475,7 @@ def _build_equations(
             rows, fn, grad = _curve_equation(constraint, sketch.elements, offsets, anchors, field)
         else:
             rows, fn, grad = _constraint_equation(constraint, measure, anchors)
-        equations.append(_Equation(index, rows, fn, grad))
+        equations.append(_Equation(index, rows, fn, grad, constraint.kind not in _TURNING_KINDS))
 
     # Punkte mit ``fixed`` — für die ganz festen Elemente darunter.
     held = {
@@ -1501,6 +1529,522 @@ def _residuals_at(equations: Sequence[_Equation], points: np.ndarray) -> np.ndar
     return np.asarray(rows, dtype=float)
 
 
+def _jacobian(equations: Sequence[_Equation], x: np.ndarray) -> csr_matrix:
+    """Die Jacobimatrix der Gleichungen an ``x``, über alle Koordinaten.
+
+    Dünn besetzt von Anfang an: Jede Ableitung berührt eine Handvoll Punkte,
+    und ein dichter Block über alle Punkte wuchs quadratisch — 3,2 GB bei
+    10 000 Punkten und 10 000 Bedingungen, angefordert bevor eine Zeile
+    gerechnet war (Gesamtreview 05.09.2026, G-09).
+    """
+    pts = np.asarray(x, dtype=float).reshape(-1, 2)
+    rows: list[int] = []
+    cols: list[int] = []
+    data: list[float] = []
+    begin = 0
+    for equation in equations:
+        block = _SparseRows(begin)
+        equation.grad(pts, block)  # type: ignore[arg-type]
+        for (row, point, coordinate), value in block.entries.items():
+            rows.append(begin + row)
+            cols.append(point * 2 + coordinate)
+            data.append(value)
+        begin += equation.rows
+    return csr_matrix((data, (rows, cols)), shape=(begin, pts.size))
+
+
+def _dense_jacobian(
+    equations: Sequence[_Equation], x: np.ndarray, where: Mapping[int, int]
+) -> np.ndarray:
+    """Die Jacobimatrix nur über die Spalten in ``where`` (Koordinate → Spalte), dicht.
+
+    Dieselben Einträge wie ``_jacobian(...)[:, columns]``: Jede Gleichung
+    schreibt je Zeile, Punkt und Koordinate einen Wert, und Spalten, die nicht
+    in ``where`` stehen (gehaltene Punkte), fallen weg."""
+    pts = np.asarray(x, dtype=float).reshape(-1, 2)
+    out = np.zeros((sum(equation.rows for equation in equations), len(where)))
+    begin = 0
+    for equation in equations:
+        block = _SparseRows(begin)
+        equation.grad(pts, block)  # type: ignore[arg-type]
+        for (row, point, coordinate), value in block.entries.items():
+            column = where.get(point * 2 + coordinate)
+            if column is not None:
+                out[begin + row, column] = value
+        begin += equation.rows
+    return out
+
+
+#: Wie weit ein Lauf einen Punkt höchstens verschiebt, in Millimetern.
+#:
+#: Weiter ist keine Lösung, sondern ein Lauf ins Unendliche: Eine Gerade und
+#: ein Bogen mit gleicher Krümmung trafen sich nach sechshundert Auswertungen
+#: mit einem Bogenradius von 240 km unter dem Restfehler, und ob das als
+#: gelöst oder als Widerspruch galt, entschied die letzte Stelle des Rangs
+#: (RM-541). Hundert Meter verschiebt keine Zeichnung für einen Drucker; der
+#: Teil bleibt dann, wo er war, und die Prüfung danach nennt den Widerspruch.
+FARTHEST_MOVE: Final[float] = 100_000.0
+
+#: In wie vielen Auswertungen sich der Rest eines Laufs beim Lösen
+#: mindestens halbieren muss, sonst hört er auf (:func:`_watchdog`).
+#:
+#: Ein Widerspruch in einem großen Teil lief bis zur Vorgabe von scipy,
+#: hundert Auswertungen je Unbekannte: Eine Kette aus vierzig Linien, deren
+#: Ende ein Bogen mit gleicher Krümmung fortsetzen soll, kroch 16 600
+#: Auswertungen lang von 0,0256 auf 0,0246 Rest — 143 Sekunden im
+#: Qt-Hauptthread. Gelöste Läufe des Korpus (739 Eingaben der Testsuite)
+#: brauchen höchstens 59 Auswertungen, keiner erreicht das Fenster; ein
+#: Bogen, der früher in 509 Auswertungen ins Unendliche kroch, hält nach 48
+#: an :data:`FARTHEST_MOVE`. Der Zug hat eigene Grenzen darunter.
+STALL_WINDOW: Final = 100
+
+#: Wie weit der erste Schritt beim **dichten** Lösen höchstens reicht, in
+#: Millimetern — kleiner, wenn der Teil kleiner ist (:func:`_solve_part`).
+#:
+#: Ein erster Schritt so groß wie die Zeichnung sprang über die nächste
+#: Lösung: Zwei Splines mit gleicher Krümmung trafen sich danach mit
+#: entgegengesetzter Tangente, eine Spitze statt eines Übergangs. ``dogbox``
+#: nimmt den kürzesten Gauß-Newton-Schritt, solange er in die Box passt; ein
+#: Millimeter ist der Schritt, mit dem scipy ab null beginnt, und die Box
+#: wächst von dort in Stufen.
+DENSE_FIRST_STEP: Final[float] = 1.0
+
+
+@dataclass(frozen=True, slots=True)
+class _Part:
+    """Gleichungen, die über gemeinsame Punkte zusammenhängen, die
+    Koordinaten ihrer freien Punkte (je Punkt ``x`` und ``y``, aufsteigend)
+    und die aller Punkte, die sie lesen — gehaltene eingeschlossen."""
+
+    equations: tuple[_Equation, ...]
+    columns: np.ndarray
+    read: np.ndarray
+
+
+def _columns_of(points: Sequence[int]) -> np.ndarray:
+    return np.asarray([2 * point + axis for point in points for axis in (0, 1)], dtype=np.intp)
+
+
+def _parts(equations: Sequence[_Equation], flat: np.ndarray, held: np.ndarray) -> list[_Part]:
+    """Die zusammenhängenden Teile der Skizze, in der Folge ihrer ersten Gleichung.
+
+    Zwei Punkte gehören zusammen, wenn eine Gleichung beide liest — gelesen
+    an den Einträgen ihrer Ableitung am Start, die jede Gleichung unabhängig
+    vom Wert schreibt. Gehaltene Punkte verbinden nichts: Sie sind Konstanten.
+    Schreibt eine Gleichung gar nichts, sagt sie nicht, was sie liest, und
+    alles rechnet als ein Teil.
+    """
+    pts = flat.reshape(-1, 2)
+    parent = list(range(pts.shape[0]))
+
+    def root(point: int) -> int:
+        while parent[point] != point:
+            parent[point] = parent[parent[point]]
+            point = parent[point]
+        return point
+
+    touched: list[tuple[int, ...]] = []
+    seen: list[set[int]] = []
+    for equation in equations:
+        block = _SparseRows(0)
+        equation.grad(pts, block)  # type: ignore[arg-type]
+        if not block.entries:
+            free_points = [int(point) for point in np.flatnonzero(~held)]
+            every = _columns_of(range(pts.shape[0]))
+            return [_Part(tuple(equations), _columns_of(free_points), every)]
+        read = {point for (_row, point, _axis) in block.entries}
+        reached = tuple(sorted(point for point in read if not held[point]))
+        touched.append(reached)
+        seen.append(read)
+        for point in reached[1:]:
+            first, second = root(reached[0]), root(point)
+            if first != second:
+                parent[max(first, second)] = min(first, second)
+    grouped: dict[int, list[int]] = {}
+    for index, reached in enumerate(touched):
+        if reached:
+            grouped.setdefault(root(reached[0]), []).append(index)
+    return [
+        _Part(
+            tuple(equations[index] for index in members),
+            _columns_of(sorted({point for index in members for point in touched[index]})),
+            _columns_of(sorted({point for index in members for point in seen[index]})),
+        )
+        for members in grouped.values()
+    ]
+
+
+def _spread(values: np.ndarray, scale: np.ndarray) -> float:
+    """Wie weit Punkte um ihre Mitte liegen, gemessen wie die Schritte
+    (``values / scale``).
+
+    Ohne Norm aus BLAS und ohne Potenz (``.claude/rules/kern.md``): Die Zahl
+    bestimmt den Weg zur Lösung und damit, wo eine unterbestimmte Zeichnung
+    landet."""
+    centred = values.copy()
+    centred[0::2] -= float(np.mean(values[0::2]))
+    centred[1::2] -= float(np.mean(values[1::2]))
+    ratio = centred / scale
+    return math.sqrt(float(np.sum(ratio * ratio)))
+
+
+def _part_size(part: _Part, solution: np.ndarray, weight: np.ndarray, rest: np.ndarray) -> float:
+    """Die Größe eines Teils, an der sich sein erster Schritt misst (:func:`_solve_part`):
+    die Streuung der Punkte, die er liest, mindestens sein größter Rest in Millimetern.
+
+    Nur Längen zählen als Rest. Ein Winkelrest ist ein Sinus bis eins und
+    machte zwei Linien von einem Zehntelmillimeter zu einem Teil von einem
+    halben Millimeter: Der erste Schritt sprang dann über die nächste Lösung.
+    Liegen alle gelesenen Punkte aufeinander, ist jeder Richtungsrest null
+    (``_unit``), und ein Rest, der den Lauf auslöst, ist eine Länge — die
+    Größe bleibt so über null, ohne dass ein Nulltest den Weg wählt."""
+    longest = 0.0
+    row = 0
+    for equation in part.equations:
+        if equation.length:
+            for value in rest[row : row + equation.rows]:
+                longest = max(longest, abs(float(value)))
+        row += equation.rows
+    return max(_spread(solution[part.read], weight[part.read]), longest)
+
+
+def _watchdog() -> Callable[[Any], None]:
+    """Hält einen Lauf an, der ins Weite läuft oder nicht mehr vorankommt.
+
+    Weiter als :data:`FARTHEST_MOVE` ist keine Lösung (der Teil bleibt danach
+    stehen), und ein Rest, der sich in :data:`STALL_WINDOW` Auswertungen
+    nicht halbiert, wird nicht mehr null: Was bleibt, ist ein Widerspruch,
+    und die Prüfung nach dem Lauf nennt ihn. scipy ruft das je Schritt mit
+    dem Stand (``nfev``, ``cost``, ``x``); ``StopIteration`` beendet den Lauf
+    am letzten angenommenen Stand.
+    """
+    history: list[tuple[int, float]] = []
+
+    def watch(intermediate_result: Any) -> None:
+        if float(np.max(np.abs(intermediate_result.x))) > FARTHEST_MOVE:
+            raise StopIteration
+        count = int(intermediate_result.nfev)
+        cost = float(intermediate_result.cost)
+        history.append((count, cost))
+        while len(history) > 1 and history[1][0] <= count - STALL_WINDOW:
+            history.pop(0)
+        then, before = history[0]
+        if count - then >= STALL_WINDOW and cost > before / 2.0:
+            raise StopIteration
+
+    return watch
+
+
+#: Bedingungen, die an einer Linie der Länge null leer gelten: Ihre Richtung
+#: ist dort null (``_unit`` klemmt die Länge auf ``EPS_GEOM``), und ein
+#: Widerspruch verschwindet mit der Linie (:func:`_spans`).
+_EMPTY_WHEN_SHRUNK: Final[frozenset[str]] = frozenset(
+    {
+        "horizontal",
+        "vertical",
+        "parallel",
+        "perpendicular",
+        "angle",
+        "tangent",
+        "symmetric",
+        "on_curve",
+        "smooth",
+        "curvature",
+        "equal",
+    }
+)
+
+
+@dataclass(frozen=True, slots=True)
+class _Span:
+    """Zwei Punkte, die nicht zusammenfallen dürfen — eine Linie mit einer
+    Richtungsbedingung, Mitte und Rand eines Kreises oder Bogens — und die
+    Bedingungen, die an ihnen hängen (Indizes in ``sketch.constraints``)."""
+
+    tail: int
+    head: int
+    constraints: tuple[int, ...]
+
+
+def _spans(sketch: Sketch) -> list[_Span]:
+    """Was beim Lösen nicht auf einen Punkt schrumpfen darf (Review H-A).
+
+    Die Bedingungen je Punkt stehen vorab in einem Verzeichnis: Ein Umriss
+    aus Tausenden fester Kanten fragte sonst jede Bedingung je Element."""
+    at_point: dict[int, list[int]] = {}
+    for index, constraint in enumerate(sketch.constraints):
+        for target in dict.fromkeys(constraint.targets):
+            at_point.setdefault(target, []).append(index)
+    spans: list[_Span] = []
+    offset = 0
+    for element in sketch.elements:
+        tail, head = offset, offset + 1
+        offset += len(element.points)
+        if element.kind not in ("line", "circle", "arc"):
+            continue
+        touching = tuple(sorted({*at_point.get(tail, ()), *at_point.get(head, ())}))
+        rounded = element.kind in ("circle", "arc") and bool(touching)
+        directed = element.kind == "line" and any(
+            sketch.constraints[index].kind in _EMPTY_WHEN_SHRUNK for index in touching
+        )
+        if rounded or directed:
+            spans.append(_Span(tail, head, touching))
+    return spans
+
+
+def _collapse_pair(sketch: Sketch, span: _Span) -> tuple[int, int]:
+    """Das Paar, das ein geschrumpftes Element nennt: Bedingungen, die an
+    einer Linie der Länge null leer gelten, zuerst, je die später gesetzte
+    vorn (wie :func:`_worst_constraints`). *Waagerecht* neben einem Winkel von
+    170° zu einer Waagerechten nennt so genau diese beiden."""
+    ranked = sorted(
+        span.constraints,
+        key=lambda index: (sketch.constraints[index].kind not in _EMPTY_WHEN_SHRUNK, -index),
+    )
+    first, second = ranked[0], ranked[1] if len(ranked) > 1 else ranked[0]
+    return max(first, second), min(first, second)
+
+
+#: Wie kurz eine beobachtete Spanne (:func:`_spans`) werden darf, bevor eine
+#: Lösung als geschrumpft gilt, in Millimetern: das Tausendfache von
+#: ``_TOL``. Eine Richtung hält an einer Linie der Länge L nur auf ``_TOL``/L
+#: genau — an 2·10⁻⁶ mm erfüllte *waagerecht* eine um 22° schräge Linie bis
+#: ``_TOL``. Ab einem Mikrometer ist die Richtung auf 10⁻³ rad gehalten.
+SHRUNK_BELOW: Final[float] = 1000.0 * _TOL
+
+
+def _shrunk(spans: Sequence[_Span], before: np.ndarray, after: np.ndarray) -> _Span | None:
+    """Die erste Spanne, die von wenigstens :data:`SHRUNK_BELOW` darunter fiel.
+
+    Ohne Wurzel und ohne ``hypot``: Die Antwort wählt den Weg."""
+    limit = SHRUNK_BELOW * SHRUNK_BELOW
+    for span in spans:
+        for points, small in ((before, False), (after, True)):
+            dx = float(points[2 * span.head] - points[2 * span.tail])
+            dy = float(points[2 * span.head + 1] - points[2 * span.tail + 1])
+            if (dx * dx + dy * dy < limit) != small:
+                break
+        else:
+            return span
+    return None
+
+
+def _solve_part(
+    part: _Part,
+    solution: np.ndarray,
+    weight: np.ndarray,
+    *,
+    dragging: bool,
+    tries: int | None,
+    spans: Sequence[_Span] = (),
+    collapsed: list[_Span] | None = None,
+) -> None:
+    """Löst einen Teil und schreibt seine Koordinaten in ``solution``.
+
+    **In Verschiebungen gegen den Ausgang** (RM-541). TRF beginnt mit dem
+    Vertrauensradius ‖x₀‖ und misst ``xtol`` an ‖x‖: In Koordinaten war das
+    die Entfernung der Zeichnung vom Nullpunkt — und, solange alles ein Lauf
+    war, die der übrigen Teile. Ein Winkel tausend Millimeter neben dem
+    Ursprung tat einen ersten Schritt von tausend Millimetern, sprang über die
+    nächste Lösung, und welche er traf, entschied die Rundung der Maschine. Ab
+    null bestimmt ``x_scale`` den ersten Schritt: die Größe des Teils — für
+    ``lsmr`` und den Zug, deren Budgets aus §31 und Stufen auf einen Radius in
+    der Größe der Zeichnung abgestimmt sind —, in der dichten Rechnung
+    höchstens :data:`DENSE_FIRST_STEP`.
+
+    **Die Größe des Teils** ist die Streuung aller Punkte, die seine
+    Gleichungen lesen, gehaltene eingeschlossen (:func:`_spread`), mindestens
+    aber sein größter Rest. Gemessen nur an den freien Punkten war sie für ein
+    Gelenk aus zwei gedeckten Punkten das Rundungsrauschen der Deckung: Lagen
+    beide ein ULP auseinander, war der erste Schritt 10⁻¹³ mm, der Löser hörte
+    nach der ersten Auswertung auf, und der gezogene Punkt blieb 0,27 mm hinter
+    dem Zeiger (Review H-1). Ein Rückfall über einen Nulltest hätte das nur
+    für den bitgleichen Fall gefangen; der Rest hält die Größe, wo alle Punkte
+    zusammenfallen.
+
+    **Je Teil**, weil ``lsmr`` sonst entartet: Steht nur eine Gleichung eines
+    Teils unter Spannung, zeigen Gradient und Gauß-Newton-Schritt in dieselbe
+    Richtung, und die zweite Richtung des Zweierraums ist Rundungsrauschen.
+    Ein Winkel zwischen zwei Linien neben einer bemaßten Kette aus zwanzig
+    Linien warf die Linien so bis zu vier Meter weit. Allein ist das
+    Linienpaar klein genug für die dichte Rechnung.
+
+    **Ein kleiner Teil mit vollem Rang rechnet über ``dogbox``**, beim Lösen
+    wie im Zug (mit Doppelungen über TRF, siehe unten): Sein Schritt ist der
+    kürzeste Gauß-Newton-Schritt, solange er in die Box passt — die kleinste
+    Bewegung, die der Löser verspricht. Über ``lsmr``
+    blieb nach dem gezogenen Punkt oft genau eine gespannte Gleichung übrig,
+    und zwei Linien mit einer Bedingung standen nach zehn Mausschritten
+    tausend Millimeter daneben bis 38 mm woanders. Dichtes TRF taugt dafür
+    nicht: Hat ein Teil weniger Gleichungen als Unbekannte, setzt scipy jeden
+    Schritt auf den Rand des Vertrauensbereichs. Ein Zugschritt am Rechteck
+    brauchte so alle 25 statt 2 Auswertungen, ein Kreis mit Durchmesser beim
+    Lösen 57 statt höchstens 5, und zweihundert getrennte Kreise kosteten
+    2,8 Sekunden statt der 100 ms aus §31. Die Zähigkeit gezogener Punkte
+    (:data:`DRAG_STIFFNESS`) formt die Box, nicht den Schritt.
+
+    **Ein Teil, dessen Gleichungen am Start schon bis ``_TOL`` gelten, bleibt
+    stehen**: Gelöst heißt bis ``_TOL``, und die Prüfung danach misst
+    dasselbe. Mit der Genauigkeit von 10⁻¹⁴ rechnete ein schon gelöster Teil
+    sonst im Rundungsrauschen nach, bis zu 49 Auswertungen — bei zweihundert
+    gelösten Kreisen dreitausend je Lösung.
+
+    **Beim Lösen gilt eine Wegfolge** (Kommentar unten, Review H-A): Ein Lauf,
+    der weiter als :data:`FARTHEST_MOVE` liefe, nicht löst oder ein Element
+    schrumpfen lässt (``spans``, die des Teils), gibt den nächsten Weg frei. Schrumpft auf
+    jedem Weg etwas, auch mit der Spanne auf ihrer Länge gehalten, bleibt der
+    Teil, wo er war, und die Spanne landet in ``collapsed``. Im Zug rechnet
+    ein Weg, und ein Lauf weiter als :data:`FARTHEST_MOVE` lässt den Teil
+    stehen.
+    """
+    columns = part.columns
+    origin = solution[columns].copy()
+    rest = _residuals_at(part.equations, solution)
+    if float(np.max(np.abs(rest))) <= _TOL:
+        return
+    scale = weight[columns]
+    full = solution.copy()
+
+    def placed(z: np.ndarray) -> np.ndarray:
+        full[columns] = origin + z
+        return full
+
+    # Kleine Teile bekommen ihre Matrix gleich dicht: Aufbau und Spaltenwahl
+    # über ``scipy.sparse`` kosteten bei zweihundert getrennten Kreisen mehr
+    # als die Rechnung selbst — dieselben Einträge, nur ohne Umweg.
+    where = {int(column): index for index, column in enumerate(columns)}
+
+    # ``lsmr`` statt der dichten SVD je Iteration: bei 200 Bedingungen der
+    # Unterschied zwischen 700 ms und dem Budget aus §31 — nachgemessen.
+    # **Kleine Teile rechnen dicht** (:data:`EXACT_UP_TO`): Mit ``lsmr`` löst
+    # TRF den Schritt im Zweierraum aus Gradient und Gauß-Newton-Schritt, und
+    # der entartet bei einer einzelnen Bedingung (oben) — dicht über
+    # ``dogbox``, beim Lösen mit kleinem ersten Schritt (Docstring).
+    dense = columns.size <= EXACT_UP_TO
+    # **``dogbox`` nur bei vollem Rang am Start.** Doppelt gesetzte
+    # Bedingungen lassen Singulärwerte im Rundungsrauschen (gemessen
+    # 3·10⁻¹⁷ bis 8·10⁻¹⁷), und ``lstsq`` in ``dogbox`` schneidet bei der
+    # Maschinengenauigkeit ab: Ob es das Rauschen als Richtung nahm, war ein
+    # Münzwurf je Ort und Rechner — einmal rannte der Lauf davon und die
+    # Meldung nannte einen Widerspruch, einmal fand er die Doppelung. TRF
+    # dämpft diesen Schritt. Die Rangschranke von ``matrix_rank`` liegt das
+    # Zeilenzahlfache über der von ``lstsq``, das Rauschen weit darunter.
+    boxed = False
+    if dense:
+        opening = _dense_jacobian(part.equations, placed(np.zeros(columns.size)), where)
+        boxed = int(np.linalg.matrix_rank(opening)) == min(opening.shape)
+    reach = _part_size(part, solution, weight, rest)
+    first = min(reach, DENSE_FIRST_STEP) if dense and not dragging else reach
+
+    def run(way: str, equations: Sequence[_Equation]) -> np.ndarray:
+        """Ein Lauf auf einem Weg über diese Gleichungen, als Verschiebung."""
+        thick = way in ("box", "trust")
+        precise = thick and not dragging
+        found = least_squares(
+            lambda z: _residuals_at(equations, placed(z)),
+            np.zeros(columns.size),
+            jac=(
+                (lambda z: _dense_jacobian(equations, placed(z), where))
+                if thick
+                else (lambda z: _jacobian(equations, placed(z))[:, columns])
+            ),
+            method="dogbox" if way == "box" else "trf",
+            tr_solver="exact" if thick else "lsmr",
+            x_scale=scale * (first if thick else reach),
+            # Ohne Grenze läuft LSMR hier bis zur kleineren Matrixkante. Bei der
+            # langen, dünn besetzten Kette des §31-Korpus sind das 300 innere
+            # Schritte je Versuch und 105 ms insgesamt. Mit 150 Schritten braucht
+            # der äußere Löser acht statt achtzehn Versuche, hält denselben Rest
+            # weit unter ``_TOL`` und löst die 200 Bedingungen in 42 ms. Die
+            # Grenze ist keine Genauigkeitsschranke: TRF setzt mit dem verbleibenden
+            # Rest weiter an, statt eine unfertige Antwort zurückzugeben.
+            tr_options={} if thick else {"maxiter": 150},
+            xtol=1e-14 if precise else 1e-10,
+            ftol=1e-14 if precise else 1e-10,
+            gtol=1e-14 if precise else 1e-10,
+            max_nfev=tries,
+            callback=_watchdog(),
+        )
+        return np.asarray(found.x, dtype=float)
+
+    primary = ("box" if boxed else "trust") if dense else "sparse"
+    if dragging:
+        # Im Zug ein Weg: Die Stufen und ihre Grenzen sind darauf abgestimmt.
+        moved = run(primary, part.equations)
+        if float(np.max(np.abs(moved))) <= FARTHEST_MOVE:
+            solution[columns] = origin + moved
+        return
+    # **Beim Lösen eine Wegfolge** (Review H-A): Angenommen wird der erste
+    # Lauf, der löst, ohne dass eine Linie mit Richtungsbedingung oder ein
+    # Kreis auf einen Punkt schrumpft (:func:`_spans`, :data:`SHRUNK_BELOW`).
+    # Dort gilt jede Richtung leer, und ein Widerspruch — *waagerecht* neben
+    # einem Winkel von 170° zu einer Waagerechten — kam als „gelöst“ samt
+    # Umriss heraus; umgekehrt endete eine gesunde Skizze mit geschrumpfter
+    # Achse als Doppelung. Kein Weg trägt allein: Je eine gesunde Skizze
+    # lösten nur TRF dicht oder nur ``lsmr``.
+    ways = (["box"] if boxed else []) + (["trust", "sparse"] if dense else ["sparse"])
+    shrank: list[_Span] = []
+    fallback: np.ndarray | None = None
+
+    def accepted(moved: np.ndarray) -> bool:
+        """Ob der Lauf löst und nichts schrumpfen ließ — merkt sich, was schrumpfte."""
+        nonlocal fallback
+        if float(np.max(np.abs(moved))) > FARTHEST_MOVE:
+            return False
+        candidate = solution.copy()
+        candidate[columns] = origin + moved
+        collapse = _shrunk(spans, solution, candidate)
+        if collapse is not None:
+            if collapse not in shrank:
+                shrank.append(collapse)
+            return False
+        if float(np.max(np.abs(_residuals_at(part.equations, candidate)))) <= _TOL:
+            return True
+        if fallback is None:
+            fallback = moved
+        return False
+
+    for way in ways:
+        moved = run(way, part.equations)
+        if accepted(moved):
+            solution[columns] = origin + moved
+            return
+    if shrank:
+        # **Was schrumpfte, bleibt so lang, wie es gezeichnet war**, und die
+        # Wege laufen noch einmal: Gibt es eine Lösung, in der nichts
+        # verschwindet, landet sie dort, wo das Element seine Länge behält —
+        # eine Symmetrieachse, die jeder Weg auf null zog, weil das billiger
+        # war, als den gespiegelten Punkt zu bewegen. Bleibt es ein
+        # Widerspruch, bleibt es einer.
+        held = tuple(part.equations) + tuple(
+            _Equation(
+                None,
+                1,
+                *_distance_equation(
+                    span.tail,
+                    span.head,
+                    _span(solution.reshape(-1, 2), span.tail, span.head),
+                ),
+            )
+            for span in shrank
+        )
+        for way in ways:
+            moved = run(way, held)
+            if accepted(moved):
+                solution[columns] = origin + moved
+                return
+    if fallback is not None:
+        # Kein Weg löst: Am ersten Lauf, der ohne zu schrumpfen endet, nennt
+        # die Prüfung danach den Widerspruch — auch wenn ein anderer Weg
+        # schrumpfte. Ob einer schrumpft, hängt an der Rundung, und die
+        # Meldung kam sonst je Ort aus zwei Quellen (Nachprüfung G-B).
+        solution[columns] = origin + fallback
+    elif shrank and collapsed is not None:
+        # Jeder Weg schrumpft: Der Teil bleibt, wo er war, und die
+        # Bedingungen am geschrumpften Element sind der Widerspruch.
+        collapsed.append(shrank[0])
+
+
 def _solve(
     equations: Sequence[_Equation],
     start: np.ndarray,
@@ -1508,12 +2052,17 @@ def _solve(
     pinned: Sequence[int] = (),
     stiff: bool = False,
     tries: int | None = None,
+    spans: Sequence[_Span] = (),
+    collapsed: list[_Span] | None = None,
 ) -> tuple[np.ndarray, np.ndarray, Any]:
     """Ein Lauf des Lösers: Koordinaten, Residuen, Jacobimatrix an der Lösung.
 
     Die Jacobimatrix kommt **dünn besetzt** zurück (``csr_matrix``). Dicht wird
     nur, was die Rangprüfung nach dem Abschälen noch braucht
     (:func:`_matrix_rank`), und im Fehlerfall die Suche nach dem Paar.
+
+    Gerechnet wird je zusammenhängendem Teil (:func:`_parts`,
+    :func:`_solve_part`); Punkte, die keine Gleichung liest, bleiben.
 
     ``pinned`` nennt Punkte, die ein Zug gerade hält (:func:`solve_sketch`).
     Ohne ``stiff`` sind sie **Konstanten**: Ihre Koordinaten stehen in
@@ -1522,54 +2071,79 @@ def _solve(
     ``stiff`` bleiben sie Variablen, nur zähe (:data:`DRAG_STIFFNESS`): Das
     ist der Rückfall, wenn die Bedingungen den Zeigerort nicht zulassen.
 
-    ``tries`` begrenzt die Zahl der Auswertungen — nur der Zug setzt sie
-    (:data:`DRAG_REACH_TRIES`, :data:`DRAG_SLIDE_TRIES`). Das gewöhnliche
+    ``tries`` begrenzt die Zahl der Auswertungen je Teil — nur der Zug setzt
+    sie (:data:`DRAG_REACH_TRIES`, :data:`DRAG_SLIDE_TRIES`). Das gewöhnliche
     Lösen bleibt unbegrenzt: Dort ist die Lösung, was gefragt ist, und nicht
     die Antwort auf die nächste Mausbewegung.
+
+    ``spans`` nennt, was beim Lösen nicht schrumpfen darf; schrumpft es auf
+    jedem Weg, landet die Spanne in ``collapsed`` (:func:`_solve_part`).
     """
     flat = start.reshape(-1)
-    total_rows = sum(equation.rows for equation in equations)
-    points = flat.size // 2
+    if not equations:
+        return flat, np.zeros(0), csr_matrix((0, flat.size))
+    held = np.zeros(flat.size // 2, dtype=bool)
+    if pinned and not stiff:
+        held[list(pinned)] = True
+    if held.all() or tries == 0:
+        # Alles hängt am Zeiger — oder gefragt ist nur, wie es an dieser
+        # Stelle steht: Es gibt nichts zu rechnen, nur zu prüfen, ob die
+        # Bedingungen hier gelten.
+        return flat, _residuals_at(equations, flat), _jacobian(equations, flat)
+    weight = np.ones(flat.size)
+    if pinned and stiff:
+        for point in pinned:
+            weight[2 * point : 2 * point + 2] = DRAG_STIFFNESS
+    solution = np.asarray(flat, dtype=float).copy()
+    # Die Spannen je Punkt, einmal: Je Teil alle zu fragen kostete bei
+    # zweihundert getrennten Kreisen eine Sekunde je Lösung.
+    at_point: dict[int, list[int]] = {}
+    for index, span in enumerate(spans):
+        for point in (span.tail, span.head):
+            at_point.setdefault(point, []).append(index)
+    for part in _parts(equations, flat, held):
+        points = (int(column) // 2 for column in part.columns[::2])
+        near = {index for point in points for index in at_point.get(point, ())}
+        _solve_part(
+            part,
+            solution,
+            weight,
+            dragging=bool(pinned),
+            tries=tries,
+            spans=[spans[index] for index in sorted(near)],
+            collapsed=collapsed,
+        )
+    return solution, _residuals_at(equations, solution), _jacobian(equations, solution)
+
+
+def _solve_in_coordinates(
+    equations: Sequence[_Equation],
+    start: np.ndarray,
+    *,
+    pinned: Sequence[int] = (),
+    stiff: bool = False,
+    tries: int | None = None,
+    spans: Sequence[_Span] = (),
+    collapsed: list[_Span] | None = None,
+) -> tuple[np.ndarray, np.ndarray, Any]:
+    """Der Löser bis Solidon 0.5 — für Skizzen mit ``solver == 1`` (RM-541).
+
+    Ein Lauf über alle Punkte, in Koordinaten, immer über ``lsmr``: So
+    rechneten 0.5.0 bis 0.5.3 jede Skizze, und eine Skizze aus einer solchen
+    Projektdatei rechnet hier wie gespeichert. Neues rechnet :func:`_solve`;
+    diese Fassung wird nicht verbessert, sonst rechnete sie nicht mehr wie
+    gespeichert — ``spans`` und ``collapsed`` nimmt sie an und lässt sie liegen.
+    """
+    flat = start.reshape(-1)
     held = np.zeros(flat.size, dtype=bool)
     if pinned and not stiff:
         for point in pinned:
             held[2 * point : 2 * point + 2] = True
     free = ~held
-
-    def fun(x: np.ndarray) -> np.ndarray:
-        return _residuals_at(equations, x)
-
-    def sparse_jac(x: np.ndarray) -> csr_matrix:
-        # Dünn besetzt von Anfang an: Jede Ableitung berührt eine Handvoll
-        # Punkte, und ein dichter Block über alle Punkte wuchs quadratisch —
-        # 3,2 GB bei 10 000 Punkten und 10 000 Bedingungen, angefordert
-        # bevor eine Zeile gerechnet war (Gesamtreview 05.09.2026, G-09).
-        pts = x.reshape(-1, 2)
-        rows: list[int] = []
-        cols: list[int] = []
-        data: list[float] = []
-        begin = 0
-        for equation in equations:
-            block = _SparseRows(begin)
-            equation.grad(pts, block)  # type: ignore[arg-type]
-            for (row, point, coordinate), value in block.entries.items():
-                rows.append(begin + row)
-                cols.append(point * 2 + coordinate)
-                data.append(value)
-            begin += equation.rows
-        return csr_matrix((data, (rows, cols)), shape=(total_rows, points * 2))
-
     if not equations:
         return flat, np.zeros(0), csr_matrix((0, flat.size))
     if not free.any() or tries == 0:
-        # Alles hängt am Zeiger — oder gefragt ist nur, wie es an dieser
-        # Stelle steht: Es gibt nichts zu rechnen, nur zu prüfen, ob die
-        # Bedingungen hier gelten.
-        return flat, fun(flat), sparse_jac(flat)
-
-    # Die gehaltenen Koordinaten werden vor dem Lösen aus dem System genommen:
-    # ``fun`` und ``sparse_jac`` sehen weiter alle Punkte, der Löser nur die
-    # freien Spalten. So bleibt jede Gleichung, wie sie ist.
+        return flat, _residuals_at(equations, flat), _jacobian(equations, flat)
     full = flat.copy()
 
     def widened(z: np.ndarray) -> np.ndarray:
@@ -1577,54 +2151,31 @@ def _solve(
         return full
 
     def free_fun(z: np.ndarray) -> np.ndarray:
-        return fun(widened(z))
+        return _residuals_at(equations, widened(z))
 
     def free_jac(z: np.ndarray) -> csr_matrix:
-        return sparse_jac(widened(z))[:, free]
+        return _jacobian(equations, widened(z))[:, free]
 
     scale: float | np.ndarray = 1.0
     if pinned and stiff:
         scale = np.ones(flat.size)
         for point in pinned:
             scale[2 * point : 2 * point + 2] = DRAG_STIFFNESS
-
-    # ``lsmr`` statt der dichten SVD je Iteration: bei 200 Bedingungen der
-    # Unterschied zwischen 700 ms und dem Budget aus §31 — nachgemessen.
-    # **Kleine Skizzen rechnen dicht** (:data:`EXACT_UP_TO`): Mit ``lsmr``
-    # löst TRF den Schritt in einem Zweierraum aus Gradient und
-    # Gauß-Newton-Schritt. Bei einer einzelnen Bedingung zeigen beide in
-    # dieselbe Richtung, der Raum entartet, und der Schritt lief bis an den
-    # Rand des Vertrauensbereichs — mit einer Richtung aus dem Rundungsrauschen.
-    # Ein Winkel warf so Linien um, je Plattform verschieden. Ein Zug bleibt
-    # bei ``lsmr``: Er beginnt an einer gelösten Skizze, und seine Stufen
-    # (``tries``, ``stiff``) sind auf diesen Löser abgestimmt.
-    dense = not pinned and int(free.sum()) <= EXACT_UP_TO
     result = least_squares(
         free_fun,
         flat[free],
-        jac=(lambda z: free_jac(z).toarray()) if dense else free_jac,
+        jac=free_jac,
         method="trf",
-        tr_solver="exact" if dense else "lsmr",
+        tr_solver="lsmr",
         x_scale=scale,
-        # Ohne Grenze läuft LSMR hier bis zur kleineren Matrixkante. Bei der
-        # langen, dünn besetzten Kette des §31-Korpus sind das 300 innere
-        # Schritte je Versuch und 105 ms insgesamt. Mit 150 Schritten braucht
-        # der äußere Löser acht statt achtzehn Versuche, hält denselben Rest
-        # weit unter ``_TOL`` und löst die 200 Bedingungen in 42 ms. Die
-        # Grenze ist keine Genauigkeitsschranke: TRF setzt mit dem verbleibenden
-        # Rest weiter an, statt eine unfertige Antwort zurückzugeben.
-        tr_options={} if dense else {"maxiter": 150},
-        xtol=1e-14 if dense else 1e-10,
-        ftol=1e-14 if dense else 1e-10,
-        gtol=1e-14 if dense else 1e-10,
+        tr_options={"maxiter": 150},
+        xtol=1e-10,
+        ftol=1e-10,
+        gtol=1e-10,
         max_nfev=tries,
     )
     solution = widened(np.asarray(result.x, dtype=float)).copy()
-    return (
-        solution,
-        np.asarray(result.fun, dtype=float),
-        sparse_jac(solution),
-    )
+    return solution, np.asarray(result.fun, dtype=float), _jacobian(equations, solution)
 
 
 def _row_blocks(equations: Sequence[_Equation]) -> list[range]:
@@ -1637,17 +2188,10 @@ def _row_blocks(equations: Sequence[_Equation]) -> list[range]:
     return blocks
 
 
-#: Wie nah zwei Restfehler beieinander liegen dürfen, um als gleich zu gelten —
-#: relativ zum größten. Keine Toleranz im Sinne von Regel 7, sondern die
-#: Rundung der Lösung: Ein Gleichstand, den die Rechnung auf die letzte
-#: Stelle genau träfe, entschiede sonst das Rauschen.
-_TIE_SHARE: Final[float] = 1e-9
-
-
 def _worst_constraints(
     equations: Sequence[_Equation], blocks: Sequence[range], residuals: np.ndarray
 ) -> list[int]:
-    """Bedingungsindizes nach ihrem größten Restfehler, absteigend, stabil.
+    """Die zwei Bedingungen mit dem größten Restfehler, die größere zuerst.
 
     **Bei Gleichstand die später gesetzte zuerst.** Eine Kette aus drei
     Bedingungen, die einander widersprechen, teilt den Fehler gleichmäßig
@@ -1655,32 +2199,75 @@ def _worst_constraints(
     tragen gemessen je ein Drittel. Mit der früheren zuerst nannte die Meldung
     die beiden Fixierungen und nie die Bedingung, die eben dazukam; die Liste
     ist aber in der Reihenfolge des Setzens, und der Widerspruch kam mit der
-    letzten (RM-188 P6.6b)."""
+    letzten (RM-188 P6.6b).
+
+    **Gleich heißt: höchstens ``_TOL`` auseinander** — die Schranke, unter der
+    der Löser alles null nennt. Ein Lauf auf einen Widerspruch hört auf, wenn
+    der Rest kaum noch fällt, und zwei Reste, die am wahren Minimum gleich
+    sind, lagen dort 4·10⁻⁸ auseinander, je nach Ort einmal so, einmal so
+    herum (RM-541). Die frühere Schranke relativ 10⁻⁹ in Stufen gerundet
+    entschied das am Abbruchpunkt."""
     worst: dict[int, float] = {}
     for equation, block in zip(equations, blocks, strict=True):
         if equation.constraint is None:
             continue
         peak = max((abs(float(residuals[row])) for row in block), default=0.0)
         worst[equation.constraint] = max(worst.get(equation.constraint, 0.0), peak)
-    largest = max(worst.values(), default=0.0)
-    if largest <= 0.0:
-        return sorted(worst)
-    step = largest * _TIE_SHARE
-    return sorted(worst, key=lambda index: (-round(worst[index] / step), -index))
+    order = sorted(worst, key=lambda index: -worst[index])
+    ranked: list[int] = []
+    while order and len(ranked) < 2:
+        top = worst[order[0]]
+        level = []
+        for index in order:
+            if worst[index] < top - _TOL:
+                break
+            level.append(index)
+        pick = max(level)
+        ranked.append(pick)
+        order.remove(pick)
+    return ranked
 
 
 def _conflict_pair(
-    equations: Sequence[_Equation], blocks: Sequence[range], residuals: np.ndarray
+    constraints: Sequence[SketchConstraint],
+    equations: Sequence[_Equation],
+    blocks: Sequence[range],
+    residuals: np.ndarray,
 ) -> tuple[int, int]:
-    """Das Paar mit den größten Restfehlern.
+    """Das Paar mit den größten Restfehlern, die später gesetzte vorn.
 
     Bei mehr als zwei Beteiligten ist das kein vollständiges Bild, aber der
     ehrliche Einstieg: die beiden Bedingungen, an denen der Löser am
-    weitesten scheitert, sind die, die man zuerst ansieht."""
+    weitesten scheitert, sind die, die man zuerst ansieht.
+
+    **Die Folge kommt aus dem Setzen, nicht aus den Resten** (Nachprüfung
+    G-B): Ein Lauf auf einen Widerspruch hört in einem flachen Tal auf, und
+    zwei Reste, die am wahren Minimum gleich sind, lagen dort je Ort einmal
+    so, einmal so herum. **Ist der zweitgrößte Rest erfüllt** (bis ``_TOL``),
+    war er Rauschen zwischen 10⁻⁸ und 10⁻⁴; Partner ist dann die Bedingung,
+    die mit der ersten die meisten Zielpunkte teilt — *senkrecht* neben
+    *parallel* auf denselben zwei Linien —, bei Gleichstand die später
+    gesetzte."""
     ranked = _worst_constraints(equations, blocks, residuals)
-    first = ranked[0] if ranked else 0
-    second = ranked[1] if len(ranked) > 1 else first
-    return first, second
+    if not ranked:
+        return 0, 0
+    first = ranked[0]
+    worst: dict[int, float] = {}
+    for equation, block in zip(equations, blocks, strict=True):
+        if equation.constraint is not None:
+            peak = max((abs(float(residuals[row])) for row in block), default=0.0)
+            worst[equation.constraint] = max(worst.get(equation.constraint, 0.0), peak)
+    if len(ranked) > 1 and worst[ranked[1]] > _TOL:
+        second = ranked[1]
+    else:
+        shared = set(constraints[first].targets)
+        others = [index for index in worst if index != first]
+        second = (
+            max(others, key=lambda index: (len(shared & set(constraints[index].targets)), index))
+            if others
+            else first
+        )
+    return max(first, second), min(first, second)
 
 
 #: Ab wann ein Anteil des linken Nullraums an einer Bedingung als null gilt.
@@ -1691,9 +2278,16 @@ def _conflict_pair(
 #: Hundertstel. Was darunter bleibt, ist Rundung der Zerlegung.
 _NULL_SHARE: Final[float] = 1e-9
 
+#: Wie nah zwei Beteiligungen am Nullraum liegen dürfen, um als gleich zu
+#: gelten (:func:`_redundant_pair`). Die Anteile sind höchstens eins, ein
+#: echtes Paar teilt sich je rund 0,7 bis auf die Rundung; was nur im
+#: Rauschen mitläuft, liegt gemessen bei 10⁻¹¹ bis 10⁻⁶.
+_SHARE_TIE: Final[float] = 1e-6
 
-def _losses(jacobian: np.ndarray, rank: int, blocks: Sequence[range]) -> list[int]:
-    """Um wie viel der Rang fiele, nähme man die Zeilen eines Blocks heraus.
+
+def _losses(jacobian: np.ndarray, rank: int, blocks: Sequence[range]) -> list[tuple[int, float]]:
+    """Um wie viel der Rang fiele, nähme man die Zeilen eines Blocks heraus —
+    und wie stark der Block an der Abhängigkeit beteiligt ist.
 
     **Eine Zerlegung statt einer je Bedingung.** Hier stand für jede
     Bedingung ein eigenes ``matrix_rank`` über die übrigen Zeilen — an einer
@@ -1705,18 +2299,26 @@ def _losses(jacobian: np.ndarray, rank: int, blocks: Sequence[range]) -> list[in
     eines Blocks liegen genau dann im Raum der übrigen, wenn die
     Nullraumvektoren auf diesem Block den vollen Rang haben — sie schreiben
     jede seiner Zeilen als Summe der anderen. Der Rangverlust ist deshalb die
-    Zeilenzahl des Blocks weniger dem Rang des Nullraums auf ihm.
+    Zeilenzahl des Blocks weniger dem Rang des Nullraums auf ihm. Die
+    Beteiligung ist der größte Singulärwert des Nullraums auf dem Block: bei
+    einem echten Paar um 0,7, bei einem Block, der nur im Rauschen der
+    Zerlegung mitläuft, um 10⁻⁹ (:func:`_redundant_pair`).
     """
     rows = jacobian.shape[0]
     if rank >= rows:
-        return [0 for _ in blocks]
+        return [(0, 0.0) for _ in blocks]
     left, _values, _right = np.linalg.svd(jacobian, full_matrices=True)
     null = left[:, rank:]
-    losses: list[int] = []
+    losses: list[tuple[int, float]] = []
     for block in blocks:
         share = null[list(block), :]
         values = np.linalg.svd(share, compute_uv=False) if share.size else np.zeros(0)
-        losses.append(len(block) - int(np.count_nonzero(values > _NULL_SHARE)))
+        losses.append(
+            (
+                len(block) - int(np.count_nonzero(values > _NULL_SHARE)),
+                float(np.max(values)) if values.size else 0.0,
+            )
+        )
     return losses
 
 
@@ -1749,11 +2351,26 @@ def _redundant_pair(
         if equation.constraint is not None:
             carried.append((equation.constraint, block))
     losses = _losses(jacobian, rank, [block for _index, block in carried])
-    for (index, _block), loss in zip(carried, losses, strict=True):
+    involved: dict[int, float] = {}
+    for (index, _block), (loss, share) in zip(carried, losses, strict=True):
         measured.append((loss, index))
+        involved[index] = max(involved.get(index, 0.0), share)
     candidates = [index for loss, index in measured if loss == 0]
     if len(candidates) >= 2:
-        return candidates[0], candidates[1]
+        # **Die am stärksten beteiligten zuerst**, bei gleicher Beteiligung
+        # die früher gesetzte. Nach der Nummer allein kam ein Block mit, der
+        # nur im Rauschen der Zerlegung am Nullraum hing — sein Anteil lag
+        # mit 10⁻⁹ an der Schranke ``_NULL_SHARE``, und je nach Ort stand
+        # er im Paar oder nicht (RM-541).
+        order = sorted(candidates, key=lambda index: -involved[index])
+        chosen: list[int] = []
+        while len(chosen) < 2:
+            top = involved[order[0]]
+            level = [index for index in order if involved[index] >= top - _SHARE_TIE]
+            pick = min(level)
+            chosen.append(pick)
+            order.remove(pick)
+        return chosen[0], chosen[1]
     if not candidates and measured:
         candidates = [min(measured)[1]]
     if candidates:
@@ -1811,7 +2428,76 @@ def solve_sketch(
 
     Ein ``fixed`` hält dabei auch gegen den Zug: Es heftet an die
     gespeicherte Koordinate, und die ändert ein Zug nicht — wer den Punkt
-    woandershin will, löst die Bedingung oder tippt Koordinaten."""
+    woandershin will, löst die Bedingung oder tippt Koordinaten.
+
+    **Gerechnet wird um die Mitte der Zeichnung** (RM-541): Alle Punkte,
+    gezogene Orte und Startstände rücken um die Mitte des Hüllrechtecks,
+    gelöst wird dort, und zurück rückt nur, was sich bewegt hat — der Rest
+    behält seine Zahl bitgleich. Die Ableitungen rechnen aus Differenzen von
+    Koordinaten, und hunderttausend Millimeter neben dem Nullpunkt trugen sie
+    ein Rauschen von 10⁻¹²: An einer Zeichnung mit doppelten Bedingungen
+    nahm der kürzeste Gauß-Newton-Schritt es für eine Richtung, der Lauf
+    rannte davon, und die Meldung nannte dort einen Widerspruch statt der
+    Doppelung. Eine Skizze in der Fassung von 0.5 rechnet wie gespeichert,
+    also ohne diesen Schritt."""
+    if sketch.solver < SKETCH_SOLVER or not sketch.elements:
+        return _solve_here(sketch, params, dragged=dragged, start=start)
+    drawn = [point for element in sketch.elements for point in element.points]
+    xs = [x for x, _y in drawn]
+    ys = [y for _x, y in drawn]
+    middle_x = (min(xs) + max(xs)) / 2.0
+    middle_y = (min(ys) + max(ys)) / 2.0
+
+    def inward(point: Point2) -> Point2:
+        return (float(point[0]) - middle_x, float(point[1]) - middle_y)
+
+    local = replace(
+        sketch,
+        elements=tuple(
+            replace(element, points=tuple(inward(point) for point in element.points))
+            for element in sketch.elements
+        ),
+    )
+    # Woher jeder Punkt kommt: gezeichnet, im Zug vom Startstand oder vom
+    # Zeiger. Steht er danach unverändert dort, geht seine Zahl unberührt zurück.
+    held = list(drawn)
+    if dragged and start is not None and len(start) == len(drawn):
+        held = [(float(x), float(y)) for x, y in start]
+    begun = list(held)
+    if dragged:
+        for point, target in dragged.items():
+            if 0 <= point < len(begun):
+                begun[point] = (float(target[0]), float(target[1]))
+    solved = _solve_here(
+        local,
+        params,
+        dragged={point: inward(target) for point, target in dragged.items()} if dragged else None,
+        start=[inward(point) for point in start] if start is not None else None,
+    )
+    elements: list[SketchElement] = []
+    offset = 0
+    for element in solved.elements:
+        points: list[Point2] = []
+        for x, y in element.points:
+            if (x, y) == inward(begun[offset]):
+                points.append(begun[offset])
+            elif (x, y) == inward(held[offset]):
+                points.append(held[offset])
+            else:
+                points.append((x + middle_x, y + middle_y))
+            offset += 1
+        elements.append(replace(element, points=tuple(points)))
+    return replace(solved, elements=tuple(elements))
+
+
+def _solve_here(
+    sketch: Sketch,
+    params: Mapping[str, float] | None = None,
+    *,
+    dragged: Mapping[int, Point2] | None = None,
+    start: Sequence[Point2] | None = None,
+) -> SolvedSketch:
+    """Der Löser selbst, in den Koordinaten, die er bekommt (:func:`solve_sketch`)."""
     values = params or {}
     equations, anchors = _build_equations(sketch, values)
     variables = anchors.size
@@ -1864,9 +2550,31 @@ def solve_sketch(
     dense_columns = anchors.size - 2 * len(set(fixed))
     if max(dense_rows, 0) * max(dense_columns, 0) * 8 > MAX_JACOBIAN_BYTES:
         raise _too_large(sketch, anchors)
-    solution, residuals, jacobian = _solve(
-        equations, begin, pinned=pinned, tries=DRAG_REACH_TRIES if pinned else None
+    # Eine Skizze aus einer älteren Projektdatei rechnet wie gespeichert (RM-541).
+    solve = _solve if sketch.solver >= SKETCH_SOLVER else _solve_in_coordinates
+    collapsed: list[_Span] = []
+    solution, residuals, jacobian = solve(
+        equations,
+        begin,
+        pinned=pinned,
+        tries=DRAG_REACH_TRIES if pinned else None,
+        spans=() if pinned else _spans(sketch),
+        collapsed=collapsed,
     )
+    if collapsed:
+        # **Gelöst nur mit einer Linie oder einem Kreis auf einem Punkt** ist
+        # nicht gelöst (Review H-A): Genannt werden die Bedingungen an dem
+        # Element, das geschrumpft wäre — Richtungsbedingungen zuerst, die
+        # später gesetzte vorn. 0.5.3 meldete hier den Widerspruch auch.
+        first, second = _collapse_pair(sketch, collapsed[0])
+        raise SketchConflictError(
+            first,
+            second,
+            values={
+                "first_kind": sketch.constraints[first].kind,
+                "second_kind": sketch.constraints[second].kind,
+            },
+        )
     max_residual = float(np.max(np.abs(residuals))) if residuals.size else 0.0
     if pinned and max_residual > _TOL:
         # Der Zeigerort ist mit den Bedingungen nicht zu haben — zweite Stufe:
@@ -1875,32 +2583,45 @@ def solve_sketch(
         # geprüft: Was hier noch übrig bleibt, war schon vor dem Zug ein
         # Widerspruch der Skizze selbst.
         #
-        # **Sie beginnt, wo die erste aufgehört hat**, mit den gezogenen
-        # Punkten am Zeiger. Dort hat die erste Stufe die übrigen Punkte
-        # schon so weit nachgezogen, wie es ohne die gezogenen ging; von der
-        # alten Lage aus brauchte die zweite gemessen 116 Auswertungen, von
-        # hier aus fünf (Kette aus fünf Linien, über ihre Länge gezogen).
-        reached = solution.reshape(-1, 2).copy()
-        for point in pinned:
-            reached[point] = begin[point]
-        solution, residuals, jacobian = _solve(
-            equations, reached, pinned=pinned, stiff=True, tries=DRAG_SLIDE_TRIES
+        # **Sie beginnt am Stand vor dem Schritt**, mit den gezogenen Punkten
+        # am Zeiger (RM-541, Review M-1) — nicht, wo die erste aufgehört hat.
+        # Die erste sucht einen Ort, den es nicht gibt, und endet in einem
+        # flachen Tal dort, wohin die Rundung sie trägt: Ein Langloch landete
+        # so je nach Lage der Zeichnung bis 4,5 mm woanders, ein Fünfeck sprang
+        # in einem Schritt von einem halben Millimeter um 3,5 mm. Vom Stand
+        # davor ist der Weg an jedem Ort derselbe.
+        solution, residuals, jacobian = solve(
+            equations, begin, pinned=pinned, stiff=True, tries=DRAG_SLIDE_TRIES
         )
         max_residual = float(np.max(np.abs(residuals))) if residuals.size else 0.0
-        if max_residual > _TOL:
+        held = np.asarray(
+            list(start) if start is not None and len(start) == anchors.shape[0] else anchors,
+            dtype=float,
+        ).reshape(-1, 2)
+        landed = solution.reshape(-1, 2)
+        returned = all(
+            (landed[point][0] - held[point][0]) * (landed[point][0] - held[point][0])
+            + (landed[point][1] - held[point][1]) * (landed[point][1] - held[point][1])
+            <= _TOL * _TOL
+            for point in pinned
+        )
+        if max_residual > _TOL or returned:
             # **Findet auch die zweite Stufe keine Lage, bleibt die Zeichnung
             # stehen** — sofern sie vor dem Zug in Ordnung war. Ein
             # Widerspruch der Skizze selbst bleibt einer und wird unten
             # gemeldet; ein Zug, den die Bedingungen nicht zulassen, ist
             # keiner: Der Punkt folgt dann nicht, und die Zeile sagt, was ihn
             # hält.
-            held = np.asarray(
-                list(start) if start is not None and len(start) == anchors.shape[0] else anchors,
-                dtype=float,
-            ).reshape(-1, 2)
+            #
+            # **Kehren die gezogenen Punkte ganz zurück, bleibt sie ebenso
+            # stehen** (RM-541): Der Zug hat nichts bewegt, und was die erste
+            # Stufe auf der Suche nach dem unerreichbaren Zeiger an freien
+            # Punkten verschob, ist kein Ergebnis. Ein biegsames Vieleck, an
+            # der Ecke neben seiner festen gezogen, stand sonst danach verbogen
+            # da — über ``lsmr`` um 0,26 mm, über ``dogbox`` um 10,7 mm.
             held_residuals = _residuals_at(equations, held)
             if not held_residuals.size or float(np.max(np.abs(held_residuals))) <= _TOL:
-                solution, residuals, jacobian = _solve(equations, held, pinned=(), tries=0)
+                solution, residuals, jacobian = solve(equations, held, pinned=(), tries=0)
                 max_residual = float(np.max(np.abs(residuals))) if residuals.size else 0.0
     rank = _matrix_rank(jacobian) if residuals.size else 0
     counted_rank = _rank_with_circle_gauges(sketch, solution, jacobian, rank, variables)
@@ -1917,7 +2638,7 @@ def solve_sketch(
     # eine implizite Gleichung dazustellt, die das bricht, merkt es hier und
     # nicht als „Im Programm ist ein unerwarteter Fehler aufgetreten".
     if max_residual > _TOL:
-        first, second = _conflict_pair(equations, blocks, residuals)
+        first, second = _conflict_pair(sketch.constraints, equations, blocks, residuals)
         assert max(first, second) < len(sketch.constraints), "conflict without a bearing constraint"
         raise SketchConflictError(
             first,
@@ -2095,4 +2816,57 @@ def _matrix_rank(matrix: Any) -> int:
     rest = table[np.flatnonzero(row_alive)][:, np.flatnonzero(column_alive)]
     if not rest.shape[0] or not rest.shape[1]:
         return peeled
-    return peeled + int(np.linalg.matrix_rank(rest.toarray()))
+    return peeled + _blockwise_rank(rest)
+
+
+def _blockwise_rank(matrix: Any) -> int:
+    """Der Rang einer dünnen Matrix aus ihren getrennten Blöcken — derselbe wie
+    ``np.linalg.matrix_rank`` über die ganze, ohne sie ganz zu zerlegen.
+
+    Zeilen und Spalten, die kein Eintrag verbindet, bilden getrennte Blöcke,
+    und die Singulärwerte der Matrix sind die ihrer Blöcke. Gezählt wird mit
+    derselben Schranke wie über die ganze Matrix: größter Singulärwert mal
+    größere Kante mal Maschinengenauigkeit. Die Zerlegung im Ganzen wuchs mit
+    der dritten Potenz: hundertfünfzig getrennte Rechtecke kosteten so rund
+    zehn Sekunden je Lösung, schon gelöst.
+    """
+    from scipy.sparse.csgraph import connected_components
+
+    height, width = matrix.shape
+    entries = matrix.tocoo()
+    entries.sum_duplicates()
+    links = csr_matrix(
+        (np.ones(entries.nnz), (entries.row, entries.col + height)),
+        shape=(height + width, height + width),
+    )
+    _count, found = connected_components(links, directed=False)
+    labels = np.asarray(found, dtype=np.int64)
+    order = np.argsort(labels, kind="stable")
+    bounds = np.flatnonzero(np.diff(labels[order])) + 1
+    # Je Knoten seine Stelle im Block, Zeilen und Spalten je aufsteigend —
+    # dieselbe Folge wie ``matrix[rows][:, columns]``, ohne dessen Aufwand
+    # (bei zweihundert getrennten Kreisen 84 ms je Rangprüfung).
+    local = np.zeros(height + width, dtype=np.int64)
+    shapes: dict[int, tuple[int, int]] = {}
+    for group in np.split(order, bounds):
+        rows = group[group < height]
+        columns = group[group >= height]
+        local[rows] = np.arange(rows.size)
+        local[columns] = np.arange(columns.size)
+        shapes[int(labels[group[0]])] = (rows.size, columns.size)
+    owner = labels[entries.row]
+    by_block = np.argsort(owner, kind="stable")
+    cuts = np.flatnonzero(np.diff(owner[by_block])) + 1
+    values: list[np.ndarray] = []
+    for chosen in np.split(by_block, cuts) if by_block.size else []:
+        label = int(owner[chosen[0]])
+        block = np.zeros(shapes[label])
+        block[local[entries.row[chosen]], local[entries.col[chosen] + height]] = entries.data[
+            chosen
+        ]
+        values.append(np.linalg.svd(block, compute_uv=False))
+    if not values:
+        return 0
+    singular = np.concatenate(values)
+    bound = float(np.max(singular)) * max(height, width) * float(np.finfo(float).eps)
+    return int(np.count_nonzero(singular > bound))
