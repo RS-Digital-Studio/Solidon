@@ -46285,12 +46285,27 @@ dieselbe Auskunft.
 Lochausgleich ungefragt (Cura zog ein Teil mit *Elefantenfuß ausgleichen* doppelt ein, Curas
 Fenster überschrieb Maschinenwerte): nur noch auf Wahl, der Rat je Teil gilt als übernommen.
 M1 kalibriertes Material ohne Vorschlag, denn sein Prüfkörper ging durch den Ausgleich des
-Slicers. M2 Schraube, Haken und Wärmeeinsatz zählen nicht mehr, Rastnase, Stecker, Fußtasche,
-Mutter, Scharniere und Stangenverbinder zählen, Deckel und Teilen nur am richtigen Ergebnis
-(gegen `e8c785abd` 16 von 24 Fällen falsch, jetzt 0). M3 Fenstertest über den Dialogweg. L1
+Slicers. M2 Schraube, Haken und Wärmeeinsatz zählen nicht mehr, Fußtasche, Mutter und
+Stangenverbinder zählen, Deckel und Teilen nur am richtigen Ergebnis (gegen `e8c785abd` 16
+von 24 Fällen falsch; Scharniere, Rastnase und Stecker nach der Nachprüfung nicht mehr). M3 Fenstertest über den Dialogweg. L1
 Programmvorgaben null für die fünf Programme der Orca-Familie, gemessen. L3 Suche unter den
 Wörtern der Slicer in sechs Sprachen. L5 SuperSlicer bekommt beides unter eigenem Namen; eine
 Prusa-3MF ohne Programm schreibt den Lochausgleich in seinem Vorzeichen (neuer Fund).
+
+**Nachprüfung (`review_rm589_nach.md`) behoben:** N1 Nach *Anordnen* und *Ausrichten*
+bekam jeder Körper den Ausgleich seiner Nachbarn — am OrcaSlicer druckte ein Körper ohne
+Modellausgleich mit dem Rat Elefantenfuß (Schicht 1 nur 0,080 statt 0,380 mm eingezogen);
+die Herkunft geht jetzt je Körperkennung, auch für die Passungsarten, und B behält seinen
+Einzug. N2 gezählt wird am Innenmerkmal des fertigen Körpers, das der Slicer in einer Schicht
+geschlossen sieht (`L·cos θ > d·sin θ`, am Schnitt belegt): waagerechte Bohrungen,
+Scharnieraugen, Bolzenscharnier und Kabelclip nicht mehr — eine senkrechte Bohrung daneben
+behält am Kobra 2 den Ausgleich des Herstellers (Bahn 6,439 statt 6,399 mm) —, dazu
+*An gezeichneter Linie teilen*, der Schraubdeckel aus *Behälter mit Deckel* und *Gegenform
+einlassen*. N3 gemessen ist je Wert (`MaterialProfile.measured`): Wer nur das Spiel
+kalibriert, bekommt beim Fuß weiter den Vorschlag. N5 die Suche kennt die Wörter der
+übersetzten Slicer und SuperSlicers `first_layer_size_compensation`. N4, N6–N10 Format-Tor,
+Docstrings, eine Quelle der Lochfeldformen, `play_inside` mit Wächter und Karte,
+Unterlagen, Changelog-Wort.
 
 **Gemessen nachher:** Mit dem Rat übernommen dieselben Teile ohne doppelten Ausgleich: CC2
 39,10 statt 38,90 mm Bahnbreite in Schicht 1, MK4S 39,10 statt 38,70, Kobra 2 in Anycubic

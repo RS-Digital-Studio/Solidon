@@ -584,11 +584,11 @@ kein Spiel ins Modell und zählt deshalb nicht.
 Gezählt wird, was Spiel in eine **Innenkontur** legt (Review M2): ein
 abtragender Baustein mit Spiel oder Übermaß (`parts.ops.cuts`, dieselbe
 Auskunft wie Operation und Vorschau), ein aufgesetzter mit Bohrung, die das
-Spiel trägt (`PartSpec.play_inside`: Mutter, Scharnierauge, Stangenverbinder),
+Spiel trägt (`PartSpec.play_inside`: Mutter, Stangenverbinder),
 eine gebohrte Bohrung mit Haken, die am fertigen Körper noch steht (ein
 gestopftes oder ohne Haken nachgebohrtes Loch nicht, ein Sechseck aus dem
 Lochfeld nicht), und von Deckel, Drehdeckel und Teilen nur das Ergebnis mit
-dem Spiel innen (Kappe, Hälfte mit Bohrungen, Scharnieraugen). Ein Stift, ein
+dem Spiel innen (Kappe, Hälfte mit Bohrungen). Ein Stift, ein
 Schnapphaken, ein Gewindebolzen, *Schraube erstellen* und der Wärmeeinsatz
 tragen kein Spiel innen; bis zum Review bekam die Schraube „Löcher weiten 0“,
 und der Haken des Drehdeckels nahm auch dem Hals den Lochausgleich.
