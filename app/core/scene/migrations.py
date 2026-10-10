@@ -26,7 +26,7 @@ from app.i18n import _
 _log = get_logger(__name__)
 
 #: Aktuelle Version von ``project.json``.
-FORMAT_VERSION: Final = 50
+FORMAT_VERSION: Final = 51
 
 #: Unter diesem Schlüssel steht während der Kette, mit welcher Version die Datei
 #: gespeichert wurde — für einen Schritt, der davon abhängt, ob das Projekt mit
@@ -1529,6 +1529,30 @@ def _keep_sketch_solutions_as_they_were(data: dict[str, Any]) -> dict[str, Any]:
     return data
 
 
+def _keep_split_splinters_as_they_were(data: dict[str, Any]) -> dict[str, Any]:
+    """Vor RM-639: *In Einzelteile aufteilen* verwirft in älteren Dateien, was es damals verwarf.
+
+    Der Schritt trägt keine Nummer im Text, damit er wandern kann (Review I,
+    G3): Seine Nummern stehen allein in :data:`MIGRATIONS` und
+    :data:`FORMAT_VERSION`. Bis RM-639 fiel ohne *Splitter behalten* jedes Teil
+    unter einem Prozent des größten weg; seither ist ein Splitter, was der
+    Drucker nicht abbildet oder als kleine offene Fläche keine Schale schließt.
+    Ein gespeicherter Schritt fände damit mehr Teile, schlüge die überzähligen
+    seinen Nachbarn zu und rechnete andere Körper. Er
+    bekommt deshalb ``legacy_tiny_share``, auch in den Fassungen jeder Änderung;
+    eine bewusste Änderung des Schritts nimmt den Marker heraus
+    (``ParamSpec.dropped_on_change``). Festgehalten an
+    ``tests/data/projects/split_splinters_v49.p3d``, geschrieben vom Stand davor.
+    """
+    for operation in _saved_operations(data):
+        if not isinstance(operation, dict) or operation.get("op") != "split_bodies":
+            continue
+        params = operation.setdefault("params", {})
+        if isinstance(params, dict) and not params.get("keep_tiny"):
+            params.setdefault("legacy_tiny_share", True)
+    return data
+
+
 #: Alle bekannten Schritte, älteste zuerst.
 MIGRATIONS: Final[tuple[Step, ...]] = (
     Step(from_version=1, to_version=2, apply=_add_chat),
@@ -1580,6 +1604,7 @@ MIGRATIONS: Final[tuple[Step, ...]] = (
     Step(from_version=47, to_version=48, apply=_keep_bore_pins_plain),
     Step(from_version=48, to_version=49, apply=_keep_gestures_as_they_were),
     Step(from_version=49, to_version=50, apply=_keep_sketch_solutions_as_they_were),
+    Step(from_version=50, to_version=51, apply=_keep_split_splinters_as_they_were),
 )
 
 
