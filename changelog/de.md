@@ -44,8 +44,8 @@ Nutzen da und sonst nichts.
 
 ### Formen
 
-- Mit *Weich verschmelzen* entsteht ein gleichmäßiges Netz ohne schmale Splitter, das in den Umrissen der Körper bleibt. Ein Teil auf dem Druckbett reicht nicht mehr darunter.
-- Mit *Dreiecke angleichen* ist keine Kante länger als verlangt, und auf ebenen Flächen bleiben keine schmalen Splitter stehen. Die Form ändert sich dabei nicht.
+- Mit *Weich verschmelzen* entsteht ein gleichmäßiges Netz mit kaum noch schmalen Splittern, das in den Umrissen der Körper bleibt. Ein Teil auf dem Druckbett reicht nicht mehr darunter.
+- Mit *Dreiecke angleichen* ist keine Kante länger als verlangt, und auf ebenen Flächen bleiben weniger schmale Splitter stehen. Die Form ändert sich dabei nicht.
 
 ## 0.6.0
 

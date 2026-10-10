@@ -20,8 +20,8 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 
 ### Modelar
 
-- Con «Fusionar suavemente» la malla sale uniforme, sin astillas finas, y se queda dentro del contorno de los cuerpos. Una pieza sobre la placa de impresión ya no queda por debajo.
-- Con «Igualar los triángulos» ninguna arista supera la longitud indicada y en las superficies planas no quedan astillas finas. La forma no cambia.
+- Con «Fusionar suavemente» la malla sale uniforme, casi sin astillas finas, y se queda dentro del contorno de los cuerpos. Una pieza sobre la placa de impresión ya no queda por debajo.
+- Con «Igualar los triángulos» ninguna arista supera la longitud indicada y en las superficies planas quedan menos astillas finas. La forma no cambia.
 
 ## 0.6.0
 

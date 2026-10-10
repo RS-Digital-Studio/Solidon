@@ -19,8 +19,8 @@ scrive in `website/version.json`.
 
 ### Modellare
 
-- Con «Fondi dolcemente» la mesh è uniforme, senza schegge sottili, e resta entro il contorno dei corpi. Un pezzo sul piano di stampa non scende più al di sotto.
-- Con «Uniforma i triangoli» nessuno spigolo supera la lunghezza impostata e sulle superfici piane non restano schegge sottili. La forma non cambia.
+- Con «Fondi dolcemente» la mesh è uniforme, quasi senza schegge sottili, e resta entro il contorno dei corpi. Un pezzo sul piano di stampa non scende più al di sotto.
+- Con «Uniforma i triangoli» nessuno spigolo supera la lunghezza impostata e sulle superfici piane restano meno schegge sottili. La forma non cambia.
 
 ## 0.6.0
 

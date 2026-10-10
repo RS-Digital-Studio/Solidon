@@ -19,8 +19,8 @@ it into `website/version.json`.
 
 ### Sculpting
 
-- With *Blend together*, the mesh comes out even, without thin slivers, and stays within the outline of the bodies. A part on the print bed no longer reaches below it.
-- With *Even out the triangles*, no edge is longer than the length you set, and flat areas keep no thin slivers. The shape does not change.
+- With *Blend together*, the mesh comes out even, with hardly any thin slivers, and stays within the outline of the bodies. A part on the print bed no longer reaches below it.
+- With *Even out the triangles*, no edge is longer than the length you set, and fewer thin slivers remain on flat areas. The shape does not change.
 
 ## 0.6.0
 

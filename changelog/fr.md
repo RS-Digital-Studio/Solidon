@@ -20,8 +20,8 @@ dans `website/version.json`.
 
 ### Sculpter
 
-- Avec « Fusionner en douceur », le maillage est régulier, sans éclats fins, et reste dans le contour des corps. Une pièce posée sur le plateau d'impression ne passe plus en dessous.
-- Avec « Uniformiser les triangles », aucune arête ne dépasse la longueur demandée et il ne reste plus d'éclats fins sur les surfaces planes. La forme ne change pas.
+- Avec « Fusionner en douceur », le maillage est régulier, presque sans éclats fins, et reste dans le contour des corps. Une pièce posée sur le plateau d'impression ne passe plus en dessous.
+- Avec « Uniformiser les triangles », aucune arête ne dépasse la longueur demandée et il reste moins d'éclats fins sur les surfaces planes. La forme ne change pas.
 
 ## 0.6.0
 

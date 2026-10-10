@@ -46759,21 +46759,37 @@ Koordinator, alle Seiten), Werte nahe null gelten als knapp außen (`CLEAR_OF_ZE
 stehen in doppelter Genauigkeit (`_in_double`, `skimage` gibt `float32`), und Nadeln unter 0,2
 Raster werden zusammengelegt (`NEEDLE`). `mesh_ops.uniform` vereinfacht ohne Abweichung nicht
 mehr, tauscht zu lange Kanten in der Ebene (`mesh_edits.flip_long`), teilt den Rest
-(`split_long`) und tauscht und legt um spitze Dreiecke in der Ebene zusammen. Neues Modul
-`app/core/geom/mesh_edits.py`; `cache_version` 6 und 2.
+(`split_long`) und räumt um spitze Dreiecke in der Ebene auf: nach Delaunay tauschen, die
+kürzeste Seite einer Nadel zusammenlegen, wo das die spitzen Dreiecke weniger macht. Aufgeräumt
+wird nur in Ebenen, die breiter sind als tan 15° / 2 der Kante und nicht feiner als verlangt
+(`mesh_edits.plane_measures`, `EVEN_NARROW`, `EVEN_FINEST`); je Runde wird gewählt, bis kein
+Schritt mehr frei ist, in einer über das Netz gestreuten Folge (`_claimed`, `_scattered`). Neues
+Modul `app/core/geom/mesh_edits.py`; `cache_version` 6 und 2.
+
+**Echte Modelle.** Am ersten angeschlossenen Stand hing das Angleichen an CAD-Netzen aus
+`F:\3D Dateien` über zehn Minuten: An einem Besenhalter (Zylinderfacetten 0,01 bis 0,08 mm
+breit) und einem Würfel (Nadelfächer zu den Augen) waren nach dem Teilen 95 % der Dreiecke
+spitz; Delaunay tauschte in 293 Runden eine Million Kanten und ließ 93,8 % spitz, das
+Zusammenlegen nahm je Runde 2 % der gültigen Schritte. Daraus die Ebenenregeln und die Wahl bis
+zur Sättigung.
 
 **Messung** (fein, Splitter = Winkel unter 10°, vorher → nachher): Kugel auf Zylinder 11,81 →
-1,33 % nach dem Verschmelzen, 30,59 → 0,84 % nach dem Angleichen auf 1,2 mm, längste Kante
-2,389 → 1,199 mm; *Figur formen* 6,27 → 0,38 % und 17,78 → 0,26 %, 3,102 → 1,499 mm (verlangt
-1,5); zwei kreuzende Zylinder 10,85 → 0,58 % und 28,26 → 0,39 %, 2,664 → 1,200 mm; zwei Quader auf
+1,34 % nach dem Verschmelzen, 30,59 → 0,98 % nach dem Angleichen auf 1,2 mm, längste Kante
+2,389 → 1,200 mm; *Figur formen* 6,27 → 0,41 % und 17,78 → 0,32 %, 3,102 → 1,499 mm (verlangt
+1,5); zwei kreuzende Zylinder 10,85 → 0,59 % und 28,26 → 0,47 %, 2,664 → 1,200 mm; zwei Quader auf
 dem Bett z −1,69 bis 11,44 → 0 bis 10 mm, 16 575,6 → 14 341,5 mm³ (Vereinigung 14 400).
 Angleichen ohne Abweichung lässt Volumen und Fläche gleich, auch an den Splitternetzen aus W4-3
-(11,81 → 7,67 % und 7,18 → 4,29 %). `plate_holes` auf 1,5 mm: 58,9 → 2,3 % Splitter, längste Kante
-2,784 → 1,500 mm. Druckgleich: Alle Beispielprojekte außer *Figur formen*, das beide Schritte
-enthält, sind in Volumen, Fläche, Hülle, Dreiecken, Merkmalen und Befunden bitgleich.
+(11,81 → 7,79 % und 7,18 → 4,30 %). `plate_holes` auf 1,5 mm: 58,9 → 1,6 % Splitter, längste Kante
+2,784 → 1,500 mm. Die drei CAD-Netze (Kante 1,0, 0,5 und 1,0 mm): längste Kante 2,19 → 1,00,
+1,05 → 0,50 und 6,16 → 1,00 mm, Volumen und Fläche gleich, Splitter 93,7 → 89,4, 84,9 → 83,4 und
+6,0 → 0,9 %; Zeit 3,2 → 6,3 s, 2,1 → 3,0 s und 1,0 → 4,7 s, im Wechsel unter Fremdlast gemessen —
+die Seitenablage hat für die gehaltene Kante 1,8-mal so viele Dreiecke. Druckgleich: Alle
+Beispielprojekte außer *Figur formen*, das beide Schritte enthält, sind in Volumen, Fläche, Hülle,
+Dreiecken, Merkmalen und Befunden bitgleich.
 
 **Nachweis:** `test_blend.py` (exakter Abstand gegen `mesh.on_surface`, die drei Abnahmefälle,
 zwei Quader auf dem Bett), `test_subdivision.py` (die Splitternetze
 `meshes/blend_splinters_*.npz`), `test_platform_identity.py` (`blend_field`, `blend_union`,
-`remesh_uniform`); die neuen Fälle am Stand davor rot, jetzt grün. Changelog: ja, 0.6.1 (die
-Ursache `2006fc7d1` steckt in v0.4.4 bis v0.5.3).
+`remesh_uniform`; dazu ein, vier und rückwärts abgeschlossene Fäden bitgleich); die neuen Fälle
+am Stand davor rot, jetzt grün. Changelog: ja, 0.6.1 (die Ursache `2006fc7d1` steckt in v0.4.4
+bis v0.5.3).
