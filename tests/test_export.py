@@ -293,7 +293,8 @@ def test_file_worker_can_cancel_during_part_advice_without_a_window(
         node
         for node in worker.body
         if isinstance(node, ast.FunctionDef)
-        and node.name in {"work", "cancel", "_assembly", "_assembly_in_one_read", "_begin_write"}
+        and node.name
+        in {"work", "cancel", "_assembly", "_assembly_in_one_read", "_usage_for", "_begin_write"}
     ]
     isolated = ast.Module(
         body=[

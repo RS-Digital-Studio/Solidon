@@ -111,6 +111,7 @@ dans `website/version.json`.
 - Même pour des imprimantes inconnues de PrusaSlicer ou SuperSlicer, tous deux estiment la durée d'impression avec les accélérations transmises, et le fichier indique le matériau de la bobine.
 - Même sur un ordinateur entièrement chargé, Solidon indique la vraie raison après l'arrêt d'un slicer, au lieu d'un délai dépassé. Un fichier d'impression terminé est repris.
 - Le stock de filament reconnaît de nouveau une consommation décomptée avec Solidon 0.5.1 et demande avant de décompter à nouveau la même impression.
+- Désormais, une consommation décomptée reste liée à son impression, même si une mise à jour calcule plus vite ou si le slicer change le profil du fabricant. Avant, l'impression comptait comme nouvelle.
 - Là où des dômes plats et des pentes montreraient des marches, Solidon propose des couches fines, seulement là. La suggestion indique de combien l'impression de la pièce s'allonge.
 - Nouveau dans les réglages d'impression : *Couches fines* et *Épaisseur minimale du dessus*, pour que les dessus sur des couches fines restent fermés.
 

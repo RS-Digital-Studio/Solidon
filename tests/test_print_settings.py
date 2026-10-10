@@ -110,6 +110,7 @@ def _old_spool_dialog_state():
             profile=profiles.make_profile(),
             last_result=SimpleNamespace(scene=scene, stopped_at=None),
             picture=None,
+            base_dir=None,
         ),
         _opened_with=settings,
         _handover_project_id="old-spools",
@@ -8929,6 +8930,8 @@ def test_the_file_export_of_a_selection_asks_the_whole_job(
             _chosen=None,
             cancelled=None,
             _begin_write=lambda: None,
+            # Der Bedarf gehört nicht zu dieser Frage (Review RM-706, M2).
+            _usage_for=lambda *_args: (),
         )
         # Der Lesedurchgang (RM-670) ruft den Rest über die Instanz.
         worker._assembly_in_one_read = lambda: main_window._ExportWorker._assembly_in_one_read(
@@ -10606,6 +10609,21 @@ def test_the_part_advice_memo_knows_the_tower() -> None:
     assert gap(False) == pytest.approx(0.1)
     assert gap(True) == pytest.approx(0.16)
     assert gap(False) == pytest.approx(0.1)
+
+
+def test_a_plate_job_carries_a_snapshot_of_the_stored_inputs(tmp_path: Path) -> None:
+    """Anschluss (RM-706): Jeder Plattenauftrag gibt dem Abdruck die gespeicherten
+    Eingänge mit, als festen Stand — das Fenster rechnet weiter."""
+    from app.ui.print_settings_dialog import PrintSettingsDialog
+
+    host, objects, _keys = _old_spool_dialog_state()
+    setup = handover.SlicerSetup(tmp_path / "orca.exe", "orca")
+    job = PrintSettingsDialog._plate_job(host, objects, (0, 1), tmp_path, "Altspulen", setup)
+    assert job.inputs is not None
+    document = host.session.project.document
+    assert job.inputs.document is not document
+    assert job.inputs.document.ops == document.ops
+    assert job.inputs.stopped_at is None
 
 
 @pytest.mark.parametrize(

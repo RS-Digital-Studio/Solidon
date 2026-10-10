@@ -33,6 +33,7 @@ entfernt hat.
 |---|---|
 | 2026-10-10 | [RM-586: Feine Schichten, wo das Modell feine Formen hat (10.10.2026)](#rm-586-feine-schichten-wo-das-modell-feine-formen-hat-10102026) |
 | 2026-10-09 | [RM-587: Lange Brücken und steile Überhänge drucken sauber (09.10.2026)](#rm-587-lange-brücken-und-steile-überhänge-drucken-sauber-09102026) |
+| 2026-10-10 | [RM-706: Der Abdruck einer Buchung hängt an den gespeicherten Eingängen (10.10.2026)](#rm-706-der-abdruck-einer-buchung-hängt-an-den-gespeicherten-eingängen-10102026) |
 | 2026-10-10 | [RM-707: Spulenwerte aus 0.5.3 überschreiben das Herstellerprofil nicht mehr (10.10.2026)](#rm-707-spulenwerte-aus-053-überschreiben-das-herstellerprofil-nicht-mehr-10102026) |
 | 2026-10-10 | [RM-705: Ein vor dem Update gebuchter Druck wird danach wiedererkannt (10.10.2026)](#rm-705-ein-vor-dem-update-gebuchter-druck-wird-danach-wiedererkannt-10102026) |
 | 2026-10-10 | [RM-704 (Teil): Mit zwei Schichten Luft trägt jede Baumspitze eine Trennschicht (10.10.2026)](#rm-704-teil-mit-zwei-schichten-luft-trägt-jede-baumspitze-eine-trennschicht-10102026) |
@@ -47665,7 +47666,7 @@ Abdruck kippt weiter, wo sich der Druck wirklich oder in seinen Bits ändert.
   Ausnahme ist `gehaeuse-mit-bausteinen` (Bausteinänderungen, `LIBRARY_VERSION` 23 → 27,
   Mutternfalle `PartChange` 25 und 26). Ebenso jede druckgleiche Beschleunigung, die Bits
   verschiebt; Paket D trifft die Beispiele aus 0.5.3 nicht. Umbau auf gespeicherte Eingänge:
-  RM-706.
+  [RM-706](#rm-706).
 - Solidons eigene neue Grundlage eines eingefrorenen Felds: Cura rechnet seit RM-583
   (`fafcd4841`) `support.z_gap` in ganzen Schichten — Cura 2 von 4 Fällen verschieden (Generic
   220, Fein 0,2 → 0,12 mm, Entwurf 0,2 → 0,28 mm); K1 auf Standard gleich.
@@ -47709,6 +47710,77 @@ Fenstertest `test_print_settings_ui.py::test_a_spool_from_053_shows_and_keeps_th
 Am echten ElegooSlicer 1.5.3.5 danach `slow_down_min_speed = 20`, die Spule weicht nur noch in
 Düse, erster Schicht, Lüfter und Mindestschichtzeit ab (die Mindestschichtzeit trägt die Spule
 aus 0.5.3 als eigenen Wert, ein Feld von 0.5.3).
+
+## RM-706: Der Abdruck einer Buchung hängt an den gespeicherten Eingängen (10.10.2026)
+
+<a id="rm-706-der-abdruck-einer-buchung-hängt-an-den-gespeicherten-eingängen-10102026"></a>
+<a id="rm-706"></a>
+
+**RM-706 — Jede druckgleiche Beschleunigung und jedes Slicer-Update machte aus einem gebuchten
+Druck einen neuen.** `filament_usage.prepare` bildete den Geometrieteil des Abdrucks als
+Prüfsumme über `vertices.tobytes()` und `faces.tobytes()` der ausgewerteten Netze, dazu
+`mesh.slots`, und die Einstellungen als wirksame Werte samt Grundlage des Herstellers
+(Review RM-705, N3). Druckgleich (Bauplan §11.2) erlaubt Bitänderungen innerhalb `PRINT_LIMIT`,
+eine andere Dreiecksfolge und schmalere Datentypen (RM-698); ein Slicer-Update oder eine neue
+Grundlage in Solidon (Cura `z_gap`, RM-583) ändert die Grundlage. Jede solche Änderung ließ
+Solidon die Buchung nicht mehr finden, bei *Ohne Rückfrage buchen* mit einem zweiten Abzug.
+Die Bildung stammt aus `39933e994` (in `v0.4.0` bis `v0.5.3`) — im Changelog als Behebung.
+
+**Behoben:** Ein Körper heißt nach seinen gespeicherten Eingängen (`StoredInputs.bodies`): Der
+Stapel wird wie in der Auswertung durchlaufen (nach Kennung, ausgeschaltete Schritte
+übersprungen, Halt bei `stopped_at` und an einem unbekannten Schritt), ohne ein Netz zu rechnen.
+Je Schritt gehen Name, gespeicherte Werte, Startwert, die Abdrücke der Eingänge, was er an ihnen
+vorbei liest (Quellen mit Inhaltsprüfsumme und Dateiname, Projektmaße als gespeicherte Angabe
+samt Kette, bei `reads_other_bodies`, `reads_scene`, Merkmal- und Zielparametern und einer
+Skizzenebene auf einem Merkmal alle lebenden Körper), die Fassung des Bausteins
+(`PartSpec.version`, bei Rezepten auch die der Bausteine darin) und die gespeicherten Kanten- und
+Merkmalsantworten als Entscheidung (Rang des gewählten Kandidaten nach Lage, Zahlen bis auf
+`PRINT_LIMIT` gleich, ohne `scope`) ein —
+keine Rückfallstufe und keine `cache_version`, die gerade bei druckgleichen Beschleunigungen
+steigt. Benennende und prüfende Schritte und unverändert durchgereichte Eingänge behalten den
+Abdruck ihres Körpers; überzählige Eingänge eines Erzeugers fallen wie in der Auswertung weg. Die
+Einstellungen zählen mit dem, was dem Projekt gehört (`_owned_settings`: Stufe, eigene Wahl und
+Vorschläge mit Wert, Wahl der Platte, eigene Spulenwerte ohne geerbte Felder), dazu die Wahl der
+Grundlage im Slicer (Slicerart, Maschine, Prozess, als Name und nie als Pfad), nicht ihr Inhalt. Drucker und Material zählen
+wie im Cache-Schlüssel (`profile_key` ohne Prozesswerte, je Körper sein Material, jedes Material
+eines Schrittfelds): Eine Kalibrierung (§28.3) ist ein anderer Druck. Der Abdruck von RM-705 reist als **Vorabdruck**
+mit (`former_fingerprints`) — eine belegte Gleichheit, kein Kandidat: Ein bestehender Vorgang
+bucht unter seinem eigenen Abdruck nach (`filaments.book` nähme einen anderen als Konflikt), das
+Angebot heißt nach sich selbst. Export und beide Slicerwege geben die Eingänge als festen Stand
+mit (`StoredInputs.snapshot`), dazu die Grundlage, die die Datei trägt; der Öffnen-Weg rechnet
+die Eingänge einmal je Auftrag statt je Platte (`settled`, vier Platten mit verknüpfter Quelle
+von 16,4 MB: CPU 594 → 141 ms). Nur die Bestandsanzeige rechnet ohne. Kein Format- und kein
+Cacheschritt, es ändert sich nichts Gespeichertes. Regel: `.claude/rules/verbrauch.md`.
+Das Review (`reviews-2026-10-10/review_rm706.md`) fand die Kalibrierung (S1), die
+Antworten (M1) und den eigenen Prozess (M2) als Drucke, die sich einen Abdruck teilten, dazu
+L1–L5; alle vor der Landung behoben.
+
+**Nachweis:** `test_filament_usage_stored_inputs.py` — umsortiert, um `PRINT_LIMIT/4`
+verschoben, über float32 gerundet und alles zusammen lässt den Abdruck stehen, an einem Quader
+und an einer eingelesenen Quelle, während der Vorabdruck (der Abdruck des alten Stands) jedes
+Mal kippt; jede Eingabe, eine Bausteinfassung und eine eigene Wahl ändern ihn, eine neue
+Grundlage, eine neue `cache_version` und eine Spulenbindung nicht. Die Buchung, die 0.5.3 selbst
+schrieb (`aa373e5e…`), steht unter dem Vorabdruck und wird ohne Rückfrage wiedererkannt;
+`PINNED_BOOKING` hält die neue Bildung fest. Eine Kalibrierung jedes festen Materialwerts, ein
+eigenes Material eines Körpers oder Schrittfelds, eine andere Kanten- oder Merkmalsantwort und ein
+eigener Prozess ergeben einen anderen Abdruck; eine gleich beantwortete neue Frage, ein
+Slicer-Update unter denselben Namen und ein anderer Ort des Slicers nicht. Ein Wächter hält die
+Lesarten neben den Eingängen über das ganze Register gleich denen des Cache-Schlüssels. Am
+Basisstand `80d623957` rot (ohne `StoredInputs`), jeder Reviewtest am Stand `35aef0b10` rot,
+danach 39 grün. 29 Mutationen, je eine Entscheidung zurückgenommen (darunter Netzbits,
+Grundlage, Projektprofil, Körper- und Schrittmaterial, Antworten, Wahl der Grundlage in Kern,
+Export und Slicerweg, Streueingänge, jede Lesart, Rezeptbausteine, ein Gang je Platte), machen
+die Tests je rot. Den Anschluss an Export und Slicerwege halten `test_filament_workflow.py` (mit
+Fenster) und `test_print_settings.py`. An den zwölf Beispielprojekten aus
+`v0.5.3` (13 Platten, 21 Körper): Buchungen des Stands vor RM-706 13 von 13 als Vorabdruck
+erkannt; Buchungen aus 0.5.3 12 von 13 — die Ausnahme bleibt `gehaeuse-mit-bausteinen` (bewusste
+Bausteinänderungen, RM-705); druckgleich verändert bleibt der Abdruck 13 von 13, der Vorabdruck
+kippt 13 von 13.
+
+**Grenzen:** Eine Migration, die gespeicherte Schrittwerte umschreibt, eine neue Lesart am
+Register und eine Maßänderung eines Bausteins ändern den Abdruck. Buchungen aus 0.5.2 und 0.5.3
+stehen nur unter dem Vorabdruck und kippen weiter mit Netzbits, Grundlage und Slicer-Updates
+(Cura Fein und Entwurf seit RM-583, siehe [RM-705](#rm-705)).
 
 ## RM-586: Feine Schichten, wo das Modell feine Formen hat (10.10.2026)
 
