@@ -2248,7 +2248,10 @@ def _shaft_step(
             back = radius * (1.0 / lean - 1.0)
             if back > WIDTH_SIMPLIFY:
                 length = math.hypot(axis_x, axis_y)
-                stay = centres.difference(fallen)
+                # Vereinfacht wie die geschobenen Mitten unten: Als bloße
+                # Differenz ``centres - fallen`` blieb ein Saum an der Wand,
+                # und ein Schlitz von 31 mm um 30° fiel zu.
+                stay = centres.simplify(WIDTH_SIMPLIFY).difference(blocked)
                 oval = _oval_centres(
                     local, (axis_x / length, axis_y / length), lean, fallen, step + back
                 ).buffer(back + SHAFT_OVAL_SPARE, quad_segs=SHAFT_STEP_SEGMENTS)
