@@ -17,9 +17,9 @@ scrive in `website/version.json`.
 
 ## 0.6.1
 
-### Filettature, fori e componenti normalizzati
+### Uso e sistema
 
-- Solidon riconosce le filettature di un corpo come filettature anche dopo averlo ruotato.
+- Un progetto salvato con molti passaggi su un modello grande si apre con molta meno memoria.
 
 ## 0.6.0
 

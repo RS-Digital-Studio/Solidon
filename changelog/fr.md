@@ -18,9 +18,9 @@ dans `website/version.json`.
 
 ## 0.6.1
 
-### Filetages, perçages et pièces normalisées
+### Utilisation et système
 
-- Solidon reconnaît les filetages d’un corps comme filetages, même après l’avoir tourné.
+- Un projet enregistré avec de nombreuses étapes sur un grand modèle s’ouvre avec beaucoup moins de mémoire.
 
 ## 0.6.0
 

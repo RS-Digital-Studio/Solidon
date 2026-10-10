@@ -18,9 +18,9 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 
 ## 0.6.1
 
-### Roscas, taladros y piezas normalizadas
+### Manejo y sistema
 
-- Solidon reconoce las roscas de un cuerpo como roscas también después de girarlo.
+- Un proyecto guardado con muchos pasos sobre un modelo grande se abre con mucha menos memoria.
 
 ## 0.6.0
 

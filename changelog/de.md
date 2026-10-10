@@ -42,9 +42,9 @@ Nutzen da und sonst nichts.
 
 ## 0.6.1
 
-### Gewinde, Bohrungen und Normteile
+### Bedienung und System
 
-- Auch nach dem Drehen eines Körpers erkennt Solidon seine Gewinde als Gewinde.
+- Ein gespeichertes Projekt mit vielen Schritten an einem großen Modell öffnet mit deutlich weniger Arbeitsspeicher.
 
 ## 0.6.0
 

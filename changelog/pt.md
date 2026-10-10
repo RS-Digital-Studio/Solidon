@@ -17,9 +17,9 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 
 ## 0.6.1
 
-### Roscas, furos e peças normalizadas
+### Utilização e sistema
 
-- O Solidon reconhece as roscas de um corpo como roscas também depois de o rodar.
+- Um projeto guardado com muitos passos num modelo grande abre com muito menos memória.
 
 ## 0.6.0
 

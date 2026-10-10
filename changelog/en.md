@@ -17,9 +17,9 @@ it into `website/version.json`.
 
 ## 0.6.1
 
-### Threads, holes and standard parts
+### Operation and system
 
-- Solidon recognises the threads of a body as threads even after the body has been rotated.
+- A saved project with many steps on a large model opens with much less memory.
 
 ## 0.6.0
 
