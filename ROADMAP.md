@@ -106,8 +106,11 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-637 — Die Merkmalserkennung auf mehrere Prozesse verteilen, mit gleichem Ergebnis](#rm-637) | Geometrie, Erkennung und Druckvorbereitung | Entschieden (Robert, 09.10.): ja. Baut nach Paket E auf dessen Zweig; Laden mechanischer Teile bleibt sonst drei- bis fünfmal langsamer als v0.4.4 (Rest K-3) |
 | [RM-692 — Funktionale Gruppen werden nach jedem Verschieben neu gerechnet](#rm-692) | Geometrie, Erkennung und Druckvorbereitung | Gemessen in L3: Eiffelturm 3,6 s, Besteckkasten 2,8 s je Verschieben vor dem Bild; Merker in `perceive/features.py`, nach Paket E |
 | [RM-697 — Ein unverändertes Netz wird bei jedem Schritt neu auf die Platte geschrieben](#rm-697) | Geometrie, Erkennung und Druckvorbereitung | Gemessen in L3: jede Filamentzuweisung schreibt das gleiche Netz komprimiert neu (Spiderman 0,8 s); Formatfrage im Plattencache, nach Paket E |
+| [RM-756 — Eine Merkmalshandlung an einem Merkmal ohne eigene Flächen schneidet ein getrenntes Teil still an](#rm-756) | Geometrie, Erkennung und Druckvorbereitung | Gefunden in der Nachprüfung von Paket I: an der Tasche einer Mutternfalle 66 mm³ eines getrennten Teils weg, ohne Befund; `_refuse_if_another_part_changed` findet das Teil nur über die Flächen des Merkmals (Lücke im Nachweis von RM-596) |
+| [RM-759 — Den gemerkten Slicerbestand am echten Fenster abnehmen](#rm-759) | Geometrie, Erkennung und Druckvorbereitung | Rest von RM-670: erster und zweiter 3MF-Export mit Orca, PrusaSlicer und Cura, Figur und Beispielprojekt am echten Fenster, beim Release (RM-213) |
 | [RM-752 — Bei jedem Übernehmen und Öffnen läuft eine volle Erkennung am Einheitswürfel](#rm-752) | Geometrie, Erkennung und Druckvorbereitung | Gemessen in D: 7–73 s CPU je Modell seit v0.5.1, findet nie ein Merkmal; `scene/evaluate.py`, löst §21.2 |
 | [RM-753 — Beim Skalieren wächst die Normale einer gerundeten Seite um 1/f](#rm-753) | Geometrie, Erkennung und Druckvorbereitung | Gefunden in D: mitgetragen hat die Normale die Länge \|n\|/f, frisch erkannt \|n\|; `perceive/matching.py` |
+| [RM-758 — Der Plattencache friert übersetzbare Befundwerte ein](#rm-758) | Geometrie, Erkennung und Druckvorbereitung | Gefunden im Review 1 zu RM-698: `serialise.finding_to_data` schreibt `values` mit `str(value)`, nach dem Öffnen nennt ein Befund den Körper in der Sprache des Caches |
 | [RM-070 — SpaceMouse auf macOS und Linux am echten Gerät abnehmen](#rm-070) | Bedienung und Darstellung | Die Rampe ist stetig und getestet, die Bildrate an 815 104 Dreiecken gemessen (`7ff34c67`: 16,7 → 8,7 ms im Median); offen bleiben Linux, die 3DxWare-Mausemulation, das Gerät selbst und die Rampe im Skizzenmodus (aus RM-183) |
 | [RM-204 — Ein Merkmalklick baut alle Handlungen des Fensters neu](#rm-204) | Bedienung und Darstellung | Abnahme am echten Fenster beim Release (RM-213) |
 | [RM-559 — Körper in der Szene mit drei Klicks aufziehen, als Körper oder als Ausschnitt](#rm-559) | Bedienung und Darstellung | Gebaut (Paket Z1, 08.10.): Werkzeug *Zeichnen*, Strg+Umschalt+E; offen die Abnahme am echten Fenster und die Nachzählung durch bedienlogik |
@@ -3695,6 +3698,31 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   **Abnahme:** gleiches Netz wird nicht erneut geschrieben (Inhaltsschlüssel), Auswertung mit und
   ohne Cache gleich, Zeit im Wechsel gemessen.
 
+<a id="rm-756"></a>
+
+- [ ] **RM-756 — Eine Merkmalshandlung an einem Merkmal ohne eigene Flächen schneidet ein getrenntes Teil still an.**
+  Gefunden in der Nachprüfung von Paket I (Welle 3): An der Tasche einer Mutternfalle, einem
+  Merkmal ohne eigene Flächen, nimmt eine Merkmalshandlung einem getrennten Teil 66 mm³ weg,
+  ohne Befund und ohne Absage. `_refuse_if_another_part_changed` (`geom/prepare_ops.py`) sucht
+  das betroffene Teil nur über die Flächen des Merkmals und findet bei einem Merkmal ohne
+  Flächen keines — eine Lücke im Nachweis von [RM-596](ROADMAP-ARCHIV.md#rm-596) (Merkmalshandlungen
+  lassen fremde Teile, wie sie sind). RM-757 war eine zweite Nummer für denselben Fund und entfällt.
+  **Abnahme:** Test zuerst (Mutternfalle neben einem getrennten Teil, Handlung an der Tasche:
+  das fremde Teil bleibt Bit für Bit, oder die Handlung sagt mit Weg ab, Regel 17), an beiden
+  Kernen, Gegenprobe am alten Stand rot.
+
+<a id="rm-759"></a>
+
+- [ ] **RM-759 — Den gemerkten Slicerbestand am echten Fenster abnehmen.**
+  Rest von RM-670 ([Archiv](ROADMAP-ARCHIV.md#rm-670-ein-zweiter-3mf-export-liest-den-slicerbestand-nicht-neu-10102026)):
+  Der Bestand je Slicer bleibt gemerkt, ein zweiter 3MF-Export liest ihn nicht neu. Belegt ist
+  das im Kern an ElegooSlicer, OrcaSlicer, PrusaSlicer und Cura mit Würfel, Figur, Dose und
+  Halter, am Fenster nur offscreen am Würfel.
+  **Abnahme:** am echten Fenster beim Release ([RM-213](#rm-213)) mit Orca, PrusaSlicer und
+  Cura, je mit der Figur aus Weg 4 und einem Beispielprojekt: Der zweite 3MF-Export liest den
+  Bestand nicht neu, eine Änderung im Slicer sieht der nächste Export, und die Datei gleicht
+  der aus einem ungemerkten Lesen.
+
 <a id="rm-752"></a>
 
 - [ ] **RM-752 — Bei jedem Übernehmen und Öffnen läuft eine volle Erkennung am Einheitswürfel.**
@@ -3722,6 +3750,20 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   über `transformed_features` (`exact`) in der örtlichen Nachmessung.
   **Abnahme:** Test zuerst (Skalierung um 2 und 0,5: mitgeführte Normale gleich der frisch
   erkannten, Zuordnung unverändert), Gegenprobe am alten Stand rot.
+
+<a id="rm-758"></a>
+
+- [ ] **RM-758 — Der Plattencache friert übersetzbare Befundwerte ein.**
+  Gefunden im Review 1 zu RM-698 (Sonde `review-sparen-sonden/sonden/probe_cache_equal.py`,
+  Ausgabe `equal_vergleich.txt`): `serialise.finding_to_data` schreibt `values` mit
+  `str(value)`, `scene/cache.py` (`_finding_to_cache`) übernimmt das. Im Beispiel
+  *passung-nach-materialwechsel* trägt `prepare.material` im Wert `object` frisch einen
+  `TranslatableText` („Deckel“), nach dem Wiederöffnen die Zeichenkette. Nach einem
+  Sprachwechsel nennt der Befund den Körper in der Sprache, in der der Cache geschrieben wurde.
+  In jedem Stand gleich, nicht durch RM-698 entstanden.
+  **Abnahme:** Test zuerst (Befund mit übersetzbarem Wert durch den Plattencache, nach
+  Sprachwechsel in der neuen Sprache), Auswertung mit und ohne Cache gleich, `cache_version`
+  bzw. `CACHE_FORMAT_VERSION` steigt.
 
 ## Bedienung und Darstellung
 
