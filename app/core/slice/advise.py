@@ -37,13 +37,16 @@ from app.core.errors import (
 from app.core.knowledge import print_settings as settings_table
 from app.core.log import get_logger
 from app.core.slice.analysis import (
+    BRIDGE_FROM,
     OVERHANG_LAYER_WORTH_SUPPORT,
     OVERHANG_MARGIN,
     SPAN_INTERESTING,
     ModelSupport,
     _layer_shape,
+    channel_pieces,
     channel_space,
     island_layers,
+    kept_overhang,
     largest_overhang_patch,
     largest_sloped_patch,
     ledge_space,
@@ -54,6 +57,8 @@ from app.core.slice.analysis import (
     open_bridge_width,
     piece_area,
     smooth_outline_height,
+    span_beside,
+    span_spot,
     tapered_layers,
     thinnest_spot,
     tip_islands,
@@ -866,9 +871,6 @@ class SupportNeed:
     piece: float = 0.0
     """Das größte einzelne Stück in mm², ohne Kanaldecken und Ränder — über
     ``OVERHANG_LAYER_WORTH_SUPPORT`` eine flache Decke."""
-    quiet_layers: frozenset[int] = frozenset()
-    """Schichten, deren Brücken nicht zählen: Ihr Überhang besteht ganz aus
-    Kanal- und Randstücken (:func:`_quiet_layers`)."""
     tips: int = 0
     """Inseln, deren Baumspitze keine Trennschicht bekommt (:func:`tip_islands`)."""
 
@@ -917,9 +919,10 @@ def support_need(result: SliceResult, *, cancelled: CancelToken | None = None) -
     # weiter als ``LEDGE_REACH`` über sein Material ragt, trägt sich selbst. Die
     # Ränder der Plattformen verlangten sonst Stützen, und der ElegooSlicer
     # stellte 831 m Baum außen am Turm hoch. Gefragt vor der Kanalfrage, die
-    # dieselbe Antwort ohne Abbruch aus dem Merker liest.
+    # dieselbe Antwort aus dem Merker liest. Beide sind abbrechbar; die
+    # Kanalfrage kostete am Drachen (45°) 446 s CPU ohne Abbruch.
     edges = ledges(result, cancelled=cancelled) if asked else frozenset()
-    model = model_support(result) if asked else ModelSupport()
+    model = model_support(result, cancelled=cancelled) if asked else ModelSupport()
     quiet = model.channels | edges
     overhang = total_overhang(result, without=quiet)
     piece = largest_overhang_patch(result, without=quiet)
@@ -947,15 +950,13 @@ def support_need(result: SliceResult, *, cancelled: CancelToken | None = None) -
     # darin dieselbe Decke wie beim Deckel. Gefragt wird deshalb das größte
     # zusammenhängende Stück (:func:`largest_overhang_patch`); lange freie
     # Stege fängt die Brückenregel darunter weiter ab.
-    resting = _quiet_layers(result, quiet)
     return SupportNeed(
-        needed=_may_need_support(result, islands, overhang, patch, resting),
+        needed=_may_need_support(result, islands, overhang, patch, quiet, cancelled),
         islands=islands,
         model=model,
         overhang=overhang,
         patch=patch,
         piece=piece,
-        quiet_layers=resting,
         tips=tip_islands(result),
     )
 
@@ -2086,34 +2087,24 @@ def for_part(
     return _merged(settings, advice)
 
 
-def _quiet_layers(result: SliceResult, quiet: frozenset[tuple[int, int]]) -> frozenset[int]:
-    """Schichten, deren Überhang ganz aus Kanal- und Randstücken besteht — ihre
-    Brücken tragen sich selbst oder verlangen keine Stütze."""
-    return frozenset(
-        index
-        for index, layer in enumerate(result.layers)
-        if layer.overhangs
-        and all((index, number) in quiet for number in range(len(layer.overhangs)))
-    )
-
-
 def _may_need_support(
     result: SliceResult,
     islands: tuple[float, ...],
     overhang: float,
     patch: float,
-    quiet_layers: frozenset[int] = frozenset(),
+    quiet: frozenset[tuple[int, int]] = frozenset(),
+    cancelled: CancelToken | None = None,
 ) -> bool:
     """Die zwei Wege aus :func:`_from_geometry` zum Stützbedarf, dazu Inseln
-    und lange Brücken außerhalb der Schichten aus Kanal- und Randstücken
-    (:func:`_quiet_layers`)."""
+    und lange Brücken außerhalb der Kanal- und Randstücke ``quiet``
+    (:func:`span_beside`, RM-627)."""
     return (
         bool(islands)
         or worth_support(patch, overhang)
         or any(
-            layer.bridge_width > SPAN_INTERESTING
+            span_beside(result, index, quiet, cancelled=cancelled) > SPAN_INTERESTING
             for index, layer in enumerate(result.layers)
-            if index not in quiet_layers
+            if layer.bridge_width > SPAN_INTERESTING
         )
     )
 
@@ -2484,7 +2475,9 @@ def warnings_for(
     return findings
 
 
-def located_warnings(result: SliceResult, profile: Profile) -> list[Finding]:
+def located_warnings(
+    result: SliceResult, profile: Profile, *, cancelled: CancelToken | None = None
+) -> list[Finding]:
     """Die Befunde aus der Geometrie — jeder mit der Stelle, an der er sitzt.
 
     Eine Rechnung für zwei Wege: :func:`warnings_for` nimmt sie für den
@@ -2492,7 +2485,7 @@ def located_warnings(result: SliceResult, profile: Profile) -> list[Finding]:
     zusätzlich an ihren Körper für den Prüfbericht. Der Ort ist die Mitte der
     Fläche, die an der dünnsten Stelle bei der Öffnung verloren geht, bzw. die
     Mitte der freien Fläche über der längsten Brücke; ohne Ort fliegt der
-    Klick zum Körper.
+    Klick zum Körper. ``cancelled`` erreicht die Brückenfrage (:func:`_from_spans`).
     """
     findings: list[Finding] = []
     least = NARROW_LINE_SHARE * profile.printer.nozzle_diameter
@@ -2524,7 +2517,7 @@ def located_warnings(result: SliceResult, profile: Profile) -> list[Finding]:
                 suggestions=(OPEN_PRINT_SETTINGS,),
             )
         )
-    findings += _from_spans(result)
+    findings += _from_spans(result, cancelled)
     # **Ein Brim, der nicht aufs Bett passt, wird nicht vorgeschlagen — aber
     # gesagt** (:func:`_brim_where_it_fits`). Gefragt wie dort: kleine
     # Standfläche oder kleine Füße.
@@ -2550,21 +2543,24 @@ def located_warnings(result: SliceResult, profile: Profile) -> list[Finding]:
     return findings
 
 
-def _from_spans(result: SliceResult) -> list[Finding]:
+def _from_spans(result: SliceResult, cancelled: CancelToken | None = None) -> list[Finding]:
     """Decken, die quer durch die Luft spannen (§22.2).
 
     Kein Vorschlag, sondern ein Befund: keine Einstellung macht aus einer
     27-mm-Brücke eine tragende Fläche. Was hilft, ist die Geometrie — ein
     Übergang unter 45 Grad statt einer waagerechten Schulter — oder eine
-    Stütze. Beides entscheidet der Nutzer, nicht die Regel.
+    Stütze; über einem Kanal nur der Übergang, denn eine Stütze käme dort
+    nicht mehr heraus. Was davon, entscheidet der Nutzer, nicht die Regel.
 
     Gemeldet wird die schlimmste Stelle mit ihrer Höhe, nicht jede einzelne:
     ein Bericht mit dreißig Zeilen derselben Sache wird nicht gelesen.
 
-    **Der Ort ist die freie Fläche, nicht die Achse.** Hier stand
+    **Der Ort ist die gemessene Brücke, nicht die Achse.** Hier stand
     ``(0, 0, z)``: die Höhe stimmte, der Klick flog aber zum Ursprung der
-    Szene, neben das Teil. Jetzt ist es die Mitte der größten freien Fläche
-    dieser Schicht über der darunter; ohne sie fliegt er zum Körper.
+    Szene, neben das Teil. Jetzt zeigt er dorthin, wo :func:`span_spot` die
+    längste Brücke gemessen hat, sonst auf die Mitte der größten freien Fläche
+    der Schicht, die ein übriges Stück berührt (:func:`_bridge_place`); ohne
+    sie fliegt er zum Körper.
     """
     spanning = [
         index for index, layer in enumerate(result.layers) if layer.bridge_width > SPAN_INTERESTING
@@ -2572,42 +2568,93 @@ def _from_spans(result: SliceResult) -> list[Finding]:
     if not spanning:
         return []
     # **Ein Rand, der sich selbst trägt, spannt nicht** (:func:`ledges`), wie im
-    # Stützbedarf (:func:`_quiet_layers`) — sonst warnte der Bericht, wo der Rat
-    # keine Stütze verlangt. Eine Schulter um eine freie Öffnung ist kein Rand
-    # (``analysis._spans_an_opening``): Ihre Bahnen laufen quer über die
-    # Öffnung, und der Befund bleibt (Gewürzbehälter, Review vom 08.10.2026).
-    # Gefragt erst hier, und nur nach den Stücken der spannenden Schichten.
+    # Stützbedarf (:func:`_may_need_support`) — sonst warnte der Bericht, wo der
+    # Rat keine Stütze verlangt. Gemessen wird je Schicht ohne die Ränder
+    # (:func:`span_beside`, RM-627): Ein Kragen um eine Wand meldete sonst
+    # 46 mm, sobald ein Kinnstreifen auf derselben Schicht lag. Eine Schulter um
+    # eine freie Öffnung ist kein Rand (``analysis._spans_an_opening``): Ihre
+    # Bahnen laufen quer über die Öffnung, und der Befund bleibt
+    # (Gewürzbehälter, Review vom 08.10.2026). Gefragt erst hier, und nur nach
+    # den Stücken der spannenden Schichten.
     asked = frozenset(
         (index, number)
         for index in spanning
         for number in range(len(result.layers[index].overhangs))
     )
-    resting = _quiet_layers(result, ledges(result, asked))
-    spanning = [index for index in spanning if index not in resting]
+    edges = ledges(result, asked, cancelled=cancelled)
+    widths = {index: span_beside(result, index, edges, cancelled=cancelled) for index in spanning}
+    spanning = [index for index in spanning if widths[index] > SPAN_INTERESTING]
     if not spanning:
         return []
-    worst = max(spanning, key=lambda index: result.layers[index].bridge_width)
+    # **Über einem Kanal hilft keine Stütze** (Review zu RM-627). Der Rat
+    # verlangt dort bewusst keine (:func:`model_support`, die Waschschüssel) und
+    # schlägt die Kanalsperre vor; der Bericht riet trotzdem „oder eine Stütze“.
+    # Spannt eine Schicht auch ohne ihre Kanaldecken, ist das eine Brücke wie
+    # jede andere, gemessen und gezeigt ohne sie — dieselbe Frage wie im
+    # Stützbedarf. Sonst hängt nur die Decke über dem Kanal durch, und der
+    # Befund sagt das, ohne Stütze, an ihr.
+    #
+    # **Gefragt wird so wenig wie möglich**, denn die Kanalfrage kostet je Decke
+    # den Durchgang bis zum Bett, am Drachen (45°) 17 bis 96 s je Stück; die
+    # sieben Stücke seiner einen spannenden Schicht kosteten zusammen 143 s,
+    # sechs davon unter 0,3 mm². Nur Stücke, die weiter spannen können
+    # (:func:`_may_span`), und nur Schichten, deren Weite ohne Kanaldecken die
+    # beste bisher noch übertreffen kann — die Weite fällt dadurch nur. Ein
+    # ungefragtes Stück zählt als offen: Im Zweifel bleibt der Befund, wie er war.
+    channels: frozenset[tuple[int, int]] = frozenset()
+    best, worst = 0.0, None
+    for index in sorted(spanning, key=lambda index: (-widths[index], index)):
+        if widths[index] <= max(best, SPAN_INTERESTING):
+            break
+        found = channel_pieces(
+            result,
+            frozenset(
+                (index, number)
+                for number in range(len(result.layers[index].overhangs))
+                if (index, number) not in edges and _may_span(result, (index, number))
+            ),
+            cancelled=cancelled,
+        )
+        channels |= found
+        width = (
+            span_beside(result, index, edges | found, cancelled=cancelled)
+            if found
+            else widths[index]
+        )
+        if width > best:
+            best, worst = width, index
+    over_channel = worst is None or best <= SPAN_INTERESTING
+    if worst is None or best <= SPAN_INTERESTING:
+        worst = max(spanning, key=lambda index: (widths[index], -index))
+        best = widths[worst]
     layer = result.layers[worst]
     _log.info("%d layer(s) span more than %.0f mm", len(spanning), SPAN_INTERESTING)
-    location = None
-    if worst > 0:
-        free = _layer_shape(layer).difference(
-            _layer_shape(result.layers[worst - 1]).buffer(OVERHANG_MARGIN)
+    # Gezeigt wird die Decke über dem Kanal, sonst die Brücke ohne Kanaldecken.
+    measured = (
+        frozenset(
+            (worst, number)
+            for number in range(len(layer.overhangs))
+            if (worst, number) not in channels
         )
-        pieces = [part for part in getattr(free, "geoms", [free]) if part.area > 0.0]
-        if pieces:
-            anchor = max(pieces, key=lambda part: part.area).representative_point()
-            location = (float(anchor.x), float(anchor.y), float(layer.z))
+        if over_channel
+        else edges | channels
+    )
+    location = _bridge_place(result, worst, measured)
     return [
         Finding(
             code="slice.long_bridge",
             severity="warning",
             message=_(
+                "Über diesem Kanal spannt die Decke frei, ihre Bahnen hängen durch. Hier hilft "
+                "ein Übergang unter 45 Grad, eine Stütze käme nicht mehr heraus."
+            )
+            if over_channel
+            else _(
                 "Hier spannt eine Decke frei, ihre Bahnen hängen durch. Ein Übergang unter 45 "
                 "Grad oder eine Stütze hilft."
             ),
             values={
-                "span_mm": round(layer.bridge_width, 1),
+                "span_mm": round(best, 1),
                 "z_mm": round(layer.z, 2),
                 "layers": len(spanning),
             },
@@ -2616,6 +2663,54 @@ def _from_spans(result: SliceResult) -> list[Finding]:
             suggestions=(SHOW_SUPPORT_NEED,),
         )
     ]
+
+
+def _may_span(result: SliceResult, name: tuple[int, int]) -> bool:
+    """Kann über dem Stück ``name`` (Schicht, Stück) eine Brücke weiter als
+    :data:`SPAN_INTERESTING` liegen?
+
+    Jeder Kern, den :func:`span_beside` misst, liegt in einem Stück, und die
+    gemessene Fläche reicht höchstens ``bridge_from/2`` darüber hinaus; keine
+    Weite ist größer als die Diagonale ihrer Hüllbox. Ein Stück, dessen um
+    ``bridge_from`` erweiterte Hüllbox diagonal nicht weiter reicht, trägt
+    keine lange Brücke.
+    """
+    piece = result.layers[name[0]].overhangs[name[1]]
+    reach = BRIDGE_FROM if result.bridge_from is None else result.bridge_from
+    low = piece.outline.min(axis=0)
+    high = piece.outline.max(axis=0)
+    width, depth = (high - low) + 2.0 * reach
+    return math.hypot(width, depth) > SPAN_INTERESTING
+
+
+def _bridge_place(
+    result: SliceResult, index: int, quiet: frozenset[tuple[int, int]]
+) -> tuple[float, float, float] | None:
+    """Wo die Brückenwarnung der Schicht ``index`` hinzeigt, ohne die Stücke aus
+    ``quiet`` (:func:`_from_spans`).
+
+    An der Brücke, die gemessen wurde, nicht am Rand: Mit Stücken aus ``quiet``
+    auf der Schicht über ihrer Fläche (:func:`span_spot`) — eine Flanke
+    verbindet sonst Rand und Brücke zu einer freien Fläche —, sonst an der
+    größten freien Fläche der Schicht, die ein übriges Stück berührt.
+    """
+    layer = result.layers[index]
+    spot = span_spot(result, index, quiet)
+    if spot is not None:
+        return (spot[0], spot[1], float(layer.z))
+    if index == 0:
+        return None
+    free = _layer_shape(layer).difference(
+        _layer_shape(result.layers[index - 1]).buffer(OVERHANG_MARGIN)
+    )
+    pieces = [part for part in getattr(free, "geoms", [free]) if part.area > 0.0]
+    kept = kept_overhang(result, index, quiet)
+    if kept is not None:
+        pieces = [part for part in pieces if part.intersects(kept)]
+    if not pieces:
+        return None
+    anchor = max(pieces, key=lambda part: part.area).representative_point()
+    return (float(anchor.x), float(anchor.y), float(layer.z))
 
 
 def apply(settings: PrintSettings, advice: list[SettingAdvice]) -> PrintSettings:
