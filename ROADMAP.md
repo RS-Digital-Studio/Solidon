@@ -101,6 +101,8 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-685 — *Druckoptimal ausrichten* behält eine stehende Lage mit dem Satz „braucht keine Stütze“, während die Schichtanalyse Stützraum zählt](#rm-685) | Geometrie, Erkennung und Druckvorbereitung | Regression gegenüber v0.5.0 im Stützraum (gewollt seit v0.5.1): Satz und Kennzahl widersprechen sich |
 | [RM-690 — Angeboten, aber mit den Vorgaben nicht ausführbar: Textur, Merkmal drehen, Formschräge, Einzelteile, Drehkörper](#rm-690) | Geometrie, Erkennung und Druckvorbereitung | Fünf Handlungen halten mit ihren eigenen Vorgaben an oder werden an Stellen angeboten, wo sie nicht gelten |
 | [RM-691 — Stift am Schlüsselloch der Halter hat je Kern eine andere Form](#rm-691) | Geometrie, Erkennung und Druckvorbereitung | Ringhalter und Ablage: am Netz glatt, exakt mit Kopf; Hohlraumkette angleichen und beide Kerne geometrisch gegenprüfen |
+| [RM-636 — Jeder Anwendungsfall schnell: Verschieben, Filament, Normalisieren, Auswahlkarte](#rm-636) | Geometrie, Erkennung und Druckvorbereitung | In Arbeit: Paket L3 (Worktree `F:/sl-l3`). Zuordnung, Buchführung und Normalisieren gebaut (10.10.); offen: Gruppen nach dem Verschieben, Prüfbericht neben der Auswertung, Hauptfaden beim Szenenaufbau, Fensterabnahme |
+| [RM-695 — Ein gespeichertes Projekt erkennt nach jedem Neustart alle Merkmale neu](#rm-695) | Geometrie, Erkennung und Druckvorbereitung | Nach Paket E: Erkennungsergebnis bitgleich im Plattencache ablegen (Format, `cache_version`) |
 | [RM-698 — Sparen, was der Druck nicht merkt: Speicher großer Modelle und ein gemeinsamer druckgleich-Vergleich](#rm-698) | Geometrie, Erkennung und Druckvorbereitung | Speicher am großen Modell messen; Vergleichshelfer für §11.2 bauen; Dreiecksindizes und einfach genau gehaltene Ecken mit Leitplanken prüfen |
 | [RM-699 — Ersteinrichtung nimmt Düsen bis 10 mm an, der Druckdialog bis 2 mm](#rm-699) | Geometrie, Erkennung und Druckvorbereitung | Obergrenze an einer Konstante festmachen und entscheiden, ob große Düsen (Granulat) dazugehören |
 | [RM-637 — Die Merkmalserkennung auf mehrere Prozesse verteilen, mit gleichem Ergebnis](#rm-637) | Geometrie, Erkennung und Druckvorbereitung | Entschieden (Robert, 09.10.): ja. Baut nach Paket E auf dessen Zweig; Laden mechanischer Teile bleibt sonst drei- bis fünfmal langsamer als v0.4.4 (Rest K-3) |
@@ -3651,6 +3653,47 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   derselben Geometrie ableiten. Abnahme: beide Kerne liefern dieselbe Form
   bis zur Vernetzungsabweichung, ohne gemeinsames Volumen mit dem Träger und
   mit dem halben Profilspiel; Regression über beide Halter und beide Bohrungen.
+
+<a id="rm-636"></a>
+- [~] **RM-636 — Jeder Anwendungsfall schnell: Verschieben, Filament, Normalisieren, Auswahlkarte.**
+  Robert, 08.10.2026: alle Anwendungsfälle messen und die teuren schneller machen (Paket L3).
+  Rangliste im Kernweg wie die Anwendung (Plattencache), CPU-Zeit unter Volllast, je ein Lauf:
+  Rang 1 bis 6 sind die Merkmalserkennung beim Laden und Öffnen (Eiffelturm 313 000 Dreiecke
+  47–49 s, Spiderman 886 000 Dreiecke 32–33 s für null Merkmale, Laptop-Ständer 19–20 s,
+  Besteckkasten 16–18 s); sie gehören zu [RM-568](#rm-568) und [RM-695](#rm-695). Rang 7 und 8
+  liegen hier: *Verschieben* am Eiffelturm 7,1 s, das erste *Filament zuweisen* 6,0 s, obwohl
+  die Geometrie gleich bleibt — die Merkmale werden voll zugeordnet (`matching.match` 4,4 s),
+  `memory.held_parts`/`trim` 2,1 s und `object_hash` 1,1 s je Schritt. Dazu *Normalisieren* am
+  großen Netz (Spiderman 7,6 s: Komponenten, Verschweißen, Schalen zweimal aufgebaut) und der
+  Ops-Durchlauf der Auswahlkarte. **Vorgehen:** die Zuordnung bei unveränderter Geometrie nur
+  abkürzen, wenn Bitgleichheit gegen den vollen Weg über Korpus und Beispielprojekte belegt ist;
+  Doppelrechnungen je Schritt entfernen; ohne Formatänderung am Plattencache. **Abnahme:** je
+  Stelle Messung im Wechsel alt/neu in CPU-Zeit oder gezählten Aufrufen, Gleichheitstest grün,
+  am echten Fenster die Standzeit der Fortschrittstexte und das erste Bild (RM-258). Bauplan §31.
+  **Teilstand 10.10.2026 (Paket L3):** Der Zuordner sucht bei fast deckungsgleichen Mengen nur
+  bis zur Grenze der Mehrdeutigkeit und belegt die Antwort des vollen Wegs selbst; Merkmale
+  behalten ihr Objekt, Zählung und Bewegung laufen je Schritt einmal; Normalisieren schneidet
+  Teile nicht mehr aus. Eiffelturm im Kernweg Filament zuweisen 5,42 → 1,19 s, Verschieben
+  6,33 → 3,22 s, Umbenennen 1,53 → 0,56 s; Spiderman Normalisieren 7,06 → 4,98 s; Ergebnisse in
+  261 Schritten über Korpus, Beispielprojekte und Kundenmodelle gleich; das Review bestätigt es an
+  846 Schritten und 103 Netzen. Gegen v0.5.3 (§11.2) trägt L3 nichts bei: Es ist bitgleich zum
+  Stand davor, und gespeicherte Bits ändern sich nur mit RM-754. **Offen:** am Fenster
+  die Gruppen nach jedem Verschieben, der Prüfbericht neben der Auswertung und der Hauptfaden
+  beim Szenenaufbau (bis 3 s Lücke am Eiffelturm) — als neue Punkte gemeldet; die Abnahme am
+  echten Fenster mit Renderer.
+
+<a id="rm-695"></a>
+- [ ] **RM-695 — Ein gespeichertes Projekt erkennt nach jedem Neustart alle Merkmale neu.**
+  Messung Paket L3 (09.10.2026, Kernweg mit `disk_backed_cache` wie die Anwendung, CPU-Zeit
+  unter Volllast, je ein Lauf): Der Plattencache hält Netze, aber keine Erkennung; jedes Öffnen
+  nach einem Neustart rechnet sie ganz neu. Eiffelturm (313 000 Dreiecke) 57 s, davon `detect`
+  47 s; Spiderman (886 000 Dreiecke, null Merkmale) 45 s, davon `detect` 33 s; Laptop-Ständer
+  19 s, Besteckkasten 16 s `detect`. Dazu `face_components` 1,1 bzw. 4,1 s neu.
+  **Weg:** das Erkennungsergebnis Bit für Bit im Plattencache ablegen (Format und
+  `cache_version`). Gebiet der Erkennung (Paket E ändert `perceive/` und das Format von
+  `scene/cache.py`), deshalb nach Paket E. **Abnahme:** zweites Öffnen nach Neustart ohne
+  `detect`, Merkmale und IDs bitgleich zum frischen Öffnen über Korpus und Beispielprojekte,
+  ein veralteter Eintrag wird verworfen und neu erkannt. Bauplan §21.2, §31.
 
 <a id="rm-698"></a>
 

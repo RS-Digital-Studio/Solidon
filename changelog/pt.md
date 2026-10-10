@@ -50,11 +50,13 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Depois de arrastar a pega de uma pré-visualização, nenhum número fica sobre a vista. Um número escrito durante o arrasto move a pré-visualização, não o corpo escolhido.
 - Depois de *Reparar e tentar de novo* e caminhos semelhantes, o histórico já não chama «eliminado» a um passo que continua a calcular. Se a cadeia voltar a parar, o passo fica marcado.
 - O botão *Filamentos* está agora no cabeçalho. Lista os filamentos do projeto e leva ao inventário de filamentos.
-- Outro filamento aparece de imediato, também em blocos e corpos STEP, e o Solidon não recalcula nada por isso. Os corpos selecionados mostram a cor do filamento sob o realce.
+- Outro filamento muda apenas a cor, também em blocos e corpos STEP. A forma não é recalculada. Os corpos selecionados mostram a cor do filamento sob o realce.
 - No separador *Seleção*, o campo de filamento só atribui com um clique ou Enter. As setas e a escrita apenas percorrem a lista, e a roda do rato desloca o separador.
 - Nas versões traduzidas, *Novo filamento* já não se desloca para o lado quando a janela é mais baixa do que o conteúdo.
 - Os modelos grandes carregam visivelmente mais depressa e precisam de menos memória, também com um histórico longo e em computadores com 8 GB.
 - Mesmo num histórico longo, um passo novo quase não demora mais a calcular do que o primeiro.
+- Em modelos com milhares de características, mover e outros passos que não alteram a forma terminam até duas vezes mais depressa.
+- Ao reabrir um projeto, o relatório de verificação continua a indicar para que lugar livre foi um modelo inserido.
 - Desfazer e refazer são mais rápidos, e a memória que já não é precisa fica logo livre.
 - Reparar e resolver sobreposições é até quatro vezes mais rápido em modelos grandes, e exportar em 3MF é bastante mais rápido.
 - A área de trabalho aparece mais depressa ao abrir ficheiros 3MF grandes.

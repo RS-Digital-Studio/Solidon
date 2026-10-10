@@ -114,7 +114,8 @@ class LoadStepParams(BaseParams):
 
 @register_op(
     name="load_step",
-    cache_version="3",
+    # 4: Mit festgehaltener Stelle steht der Satz zur freien Stelle im Ergebnis (RM-754).
+    cache_version="4",
     # Liest keinen Prozesswert (Beleg: ``_STEPS_WITHOUT_PROCESS`` in tests/test_cache.py).
     reads_process=False,
     title=_("STEP laden"),

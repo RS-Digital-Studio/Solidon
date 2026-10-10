@@ -109,6 +109,7 @@ from app.core.perceive.matching import (
     apply_mapping,
     declared_partners,
     faces_in_plane,
+    forget_transformed,
     inherit_originators,
     match,
     moved_features,
@@ -547,6 +548,11 @@ def evaluate(
     except Exception:
         checks.finish("failed")
         raise
+    finally:
+        # Die gemerkten Bewegungen verbinden nur Operation und Zuordnung desselben
+        # Schritts; danach hielten sie Merkmale außerhalb der Bytegrenze des
+        # Caches (Review L3, G1).
+        forget_transformed()
     checks.finish("completed" if result.complete else "failed")
     result = dataclasses.replace(result, check_states=tuple(checks.states.values()))
     try:
@@ -3078,13 +3084,23 @@ def _shift_between(before: BoundingBox, now: BoundingBox) -> Transform | None:
 def _inherited_features(
     features: Mapping[FeatureId, Feature], previous: Mapping[FeatureId, Feature]
 ) -> dict[FeatureId, Feature]:
-    """Unveränderte Einträge erkennen, auch mit JSON-Listen aus dem Plattencache."""
+    """Unveränderte Einträge erkennen, auch mit JSON-Listen aus dem Plattencache.
+
+    Dasselbe Objekt ist unverändert, ohne Vergleich (RM-636): Jedes Feld ist
+    dann dasselbe Objekt, und beide Prüfungen darunter fielen wahr aus — am
+    Eiffelturm 4 870 Kopien und 9 740 JSON-Hashes je Schritt.
+    """
     return {
         name: feature
         for name, feature in features.items()
         if (older := previous.get(name)) is not None
-        and dataclasses.replace(feature, params=older.params) == older
-        and digest(feature.params) == digest(older.params)
+        and (
+            feature is older
+            or (
+                dataclasses.replace(feature, params=older.params) == older
+                and digest(feature.params) == digest(older.params)
+            )
+        )
     }
 
 
@@ -4622,7 +4638,15 @@ def _remember_step(
         value = getattr(produced, item.name)
         if value is not getattr(placed, item.name):
             changed[item.name] = _own_copy(value)
-    rest, parts = held_parts((changed, findings))
+    # **Was der Eintrag schon hält, wird nicht noch einmal durchlaufen** (RM-636):
+    # Ein Merkmal, das der Schritt unverändert ausgibt, ist dasselbe Objekt wie
+    # in den Merkmalen der Operation (``source``), und die hält der Eintrag;
+    # ``_keep_steps`` nimmt den Schritt nur, solange es ihn gibt. Am Eiffelturm
+    # lief die Zählung je Filament zuweisen sonst ein zweites Mal über alle
+    # 4 870 Merkmale.
+    rest, parts = held_parts(
+        (changed, findings), {id(feature) for feature in placed.features.values()}
+    )
     rest += _DIGEST_BYTES * len(produced.features)
     return _RememberedStep(
         ways,
