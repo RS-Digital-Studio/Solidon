@@ -7703,12 +7703,14 @@ def test_subdividing_a_cone_rim_does_not_invent_measured_circle_points() -> None
 
 
 def test_a_flat_face_reports_its_axis_whichever_triangle_comes_first() -> None:
-    """Die Normale einer erkannten ebenen Fläche hängt nicht an ihrem ersten Dreieck.
+    """Eine erkannte achsparallele Fläche meldet genau ihre Achse, gleich welches Dreieck vorn steht.
 
     ``trimesh`` normiert über den Kehrwert der Länge; an der Dichtung gibt
     das je nach Dreieck ``±0.9999999999999999``. Die Vernetzung eines
     exakten Körpers ordnet ihre Dreiecke auf macOS Intel anders als
-    anderswo, die Normale kam dort mit anderen Bits heraus.
+    anderswo, die Normale kam dort mit anderen Bits heraus. Für eine schräge
+    Ebene sagt der Test nichts zu: Deren Dreiecke haben auch elementweise
+    normiert verschiedene letzte Bits (Review Intel G-1).
     """
     from app.core.knowledge.parts import seals
     from app.core.sketch import shapes as sketch_shapes
@@ -7736,3 +7738,100 @@ def test_a_flat_face_reports_its_axis_whichever_triangle_comes_first() -> None:
         normal = found[0].params["normal"]
         assert normal == (0.0, 0.0, sign)
         assert all(math.copysign(1.0, value) == 1.0 for value in normal[:2])
+
+
+def _forbid_trimesh_normals(monkeypatch: pytest.MonkeyPatch, module: Any, name: str) -> list[int]:
+    """Während ``module.name`` läuft, ist ``trimesh``s ``face_normals`` gesperrt; zählt die Aufrufe."""
+    original = trimesh.Trimesh.face_normals
+    inside = [0]
+    calls = [0]
+
+    def read(self: trimesh.Trimesh) -> Any:
+        assert not inside[0], f"{name} liest trimeshs face_normals statt stable_normals"
+        return original.fget(self)
+
+    monkeypatch.setattr(trimesh.Trimesh, "face_normals", property(read, original.fset))
+    function = getattr(module, name)
+
+    def guarded(*args: Any, **kwargs: Any) -> Any:
+        calls[0] += 1
+        inside[0] += 1
+        try:
+            return function(*args, **kwargs)
+        finally:
+            inside[0] -= 1
+
+    monkeypatch.setattr(module, name, guarded)
+    return calls
+
+
+def test_the_face_roles_read_the_normal_the_faces_report(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Innenlage und gemeldete Fläche teilen eine Normalenquelle (Review Intel G-2)."""
+    from app.core.knowledge.parts import seals
+    from app.core.sketch import shapes as sketch_shapes
+    from app.core.sketch.serialize import sketch_to_text
+
+    path = sketch_to_text(sketch_shapes.rectangle(20.0, 12.0))
+    raw = seals.seal_gasket(seals.GasketParams(path_sketch=path, width=2.6, height=2.4)).mesh.raw
+    forget_cache()
+    calls = _forbid_trimesh_normals(monkeypatch, features_module, "_face_roles")
+    found = detect(MeshData.of(trimesh.Trimesh(raw.vertices, raw.faces, process=False)))
+    assert calls[0] and any(feature.kind == "face" for feature in found.values())
+
+
+def test_a_rounded_side_reports_the_mean_of_the_stable_normals() -> None:
+    """Die Normale einer gerundeten Seite ist das flächengewichtete Mittel der ``stable_normals``.
+
+    Nicht ``trimesh``s ``face_normals`` (Kehrwert über ``np.dot``, BLAS): An
+    diesem schräg liegenden elliptischen Mantel weicht deren Mittel in den letzten Bits ab
+    (Review Intel G-4).
+    """
+    from app.core.geom.mesh import stable_normals
+    from app.core.units import EPS_GEOM
+
+    body = trimesh.creation.cylinder(radius=10.0, height=8.0, sections=96)
+    points = np.asarray(body.vertices) * (1.7, 1.0, 1.0)
+    turn = trimesh.transformations.rotation_matrix(math.radians(37.0), (1.0, 0.3, 0.0))[:3, :3]
+    body = trimesh.Trimesh(points @ turn.T, body.faces, process=False)
+    forget_cache()
+    curved = [
+        feature for feature in detect(MeshData.of(body)).values() if feature.kind == "curved_face"
+    ]
+    assert curved
+    areas = np.asarray(body.area_faces)
+    unit = stable_normals(body)[0]
+    trimesh_normals = np.asarray(body.face_normals)
+    differs = False
+    for feature in curved:
+        patch = np.asarray(feature.face_indices)
+        weights = areas[patch]
+        total = max(float(weights.sum()), EPS_GEOM)
+        expected = (unit[patch] * weights[:, None]).sum(axis=0) / total
+        older = (trimesh_normals[patch] * weights[:, None]).sum(axis=0) / total
+        differs |= bool(np.any(expected != older))
+        assert feature.params["normal"] == tuple(float(value) for value in expected)
+    # Ohne Abweichung zwischen beiden Quellen prüfte der Test nichts.
+    assert differs
+
+
+def test_a_slot_flank_carries_the_normal_the_faces_report(
+    monkeypatch: pytest.MonkeyPatch, profile: Any
+) -> None:
+    """Der Ebenenträger einer Langlochwand nimmt dieselbe Normalenquelle (Review Intel G-3)."""
+    from app.core.geom.prepare import drill
+    from app.core.perceive import slots
+
+    plate = MeshData.of(trimesh.creation.box(extents=(60.0, 40.0, 10.0)))
+    mesh = drill(
+        plate,
+        profile=profile,
+        position=(0.0, 0.0, 5.0),
+        axis="z",
+        diameter=5.0,
+        compensate=False,
+        slot_length=20.0,
+    ).mesh
+    forget_cache()
+    calls = _forbid_trimesh_normals(monkeypatch, slots, "_flank_surfaces")
+    found = detect(mesh)
+    assert calls[0] and any(feature.kind == "slot" for feature in found.values())
