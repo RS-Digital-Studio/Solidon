@@ -1855,29 +1855,47 @@ def test_a_cura_part_with_its_own_foot_gets_no_slicer_foot_without_a_click(
     assert "xy_offset_layer_0" not in written
 
 
-def test_a_calibrated_material_keeps_the_slicers_compensation() -> None:
-    """Review RM-589, M1: Der Prüfkörper der Kalibrierung geht durch denselben
-    Slicer mit dessen Ausgleich; was eingetragen ist, ist der Rest. Null
-    nähme dem Loch die Lochkorrektur des Slicers und ließe den Fuß stehen."""
+@pytest.mark.parametrize(
+    ("measured", "expected"),
+    [
+        (None, {"shell.hole_offset", "layers.elephant_foot"}),
+        # Nur das Spiel gemessen: Der Fuß ist Startwert und meint den ganzen
+        # Fuß, die Lochkorrektur ebenso (Nachprüfung RM-589, N3).
+        (("clearance",), {"shell.hole_offset", "layers.elephant_foot"}),
+        (("elephant_foot",), {"shell.hole_offset"}),
+        (("clearance", "hole_compensation"), {"layers.elephant_foot"}),
+        (("clearance", "elephant_foot", "hole_compensation"), set()),
+    ],
+)
+def test_a_measured_value_keeps_the_slicers_compensation(
+    measured: tuple[str, ...] | None, expected: set[str]
+) -> None:
+    """Review RM-589, M1 und nach N3: Der Prüfkörper der Kalibrierung geht durch
+    denselben Slicer mit dessen Ausgleich; was eingetragen ist, ist der Rest.
+    Null nähme dem Loch die Lochkorrektur des Slicers und ließe den Fuß
+    stehen — aber nur für die Werte, die gemessen sind."""
     profile = profiles.make_profile("anycubic-kobra-2", "petg")
     calibrated = Profile(
         profile.printer,
-        replace(profile.material, calibrated=True, calibration_printer=profile.printer.id),
+        replace(
+            profile.material,
+            calibrated=measured is not None,
+            measured=measured,
+            calibration_printer=profile.printer.id,
+        ),
     )
     settings = print_settings.resolve(profile)
     settings = print_settings.with_path(settings, "shell.hole_offset", 0.02)
     settings = print_settings.with_path(settings, "layers.elephant_foot", 0.1)
     paths = {"shell.hole_offset", "layers.elephant_foot"}
 
-    def offered(chosen: Profile) -> set[str]:
-        return {
-            entry.path
-            for entry in advise.advise(settings, chosen, allowances=("holes", "foot"))
-            if entry.path in paths
-        }
+    offered = {
+        entry.path
+        for entry in advise.advise(settings, calibrated, allowances=("holes", "foot"))
+        if entry.path in paths
+    }
 
-    assert offered(profile) == paths
-    assert offered(calibrated) == set()
+    assert offered == expected
 
 
 # --- Schrägnaht an runden Außenwänden -------------------------------------------

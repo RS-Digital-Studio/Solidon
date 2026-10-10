@@ -118,8 +118,12 @@ offenem Drucker. Übernommen wird auf Klick, nie von allein.
   Taschen von *Gegenform einlassen* über Entnahmerichtung und Rahmen. Eine nur
   eingetragene Passung ändert keine Geometrie und zählt nicht, ein Stift,
   Haken oder Bolzen auch nicht.
-  **Ein kalibriertes Material bekommt keinen Vorschlag**: Sein Prüfkörper ging
-  durch den Slicer mit dessen Ausgleich, gemessen ist der Rest dahinter.
+  **Ein gemessener Wert bekommt keinen Vorschlag**: Sein Prüfkörper ging
+  durch den Slicer mit dessen Ausgleich, gemessen ist der Rest dahinter. Das
+  gilt je Wert (`MaterialProfile.measured`, Fuß `elephant_foot`, Löcher erst
+  mit `clearance` und `hole_compensation`); ein Startwert meint den ganzen
+  Ausgleich und bekommt ihn. Der Kalibrierdialog schreibt nur eingetragene
+  Felder als gemessen.
   Übergabe (eigener Satz nur auf Wahl, Brim am Fuß): `dateiformat.md`.
 - **Die kleine Standfläche wird auch je Fuß gefragt** (`advise._on_small_feet`):
   Erreicht keine von mehreren Inseln `SMALL_FOOTPRINT`, heißt es Brim — nur

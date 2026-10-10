@@ -636,6 +636,21 @@ Dialog und Handbuch eine zweite Druckvorschrift für den Prüfkörper bräuchten
 So druckt ein kalibriertes Material ohne Klick richtig, und die Startwerte
 der Tabelle, die den ganzen Fuß meinen, bekommen den Vorschlag.
 
+Nach der Nachprüfung (N3) gilt das **je Wert**. Der Kalibrierdialog reichte
+jedes unberührte Feld mit seinem Startwert durch und setzte danach
+„kalibriert“ für das ganze Material; wer nur das Spiel maß, behielt beim Fuß
+den Startwert und bekam trotzdem keinen Vorschlag — der Fuß kam doppelt.
+`MaterialProfile.measured` nennt jetzt die gemessenen Werte; der Dialog
+schreibt nur eingetragene Felder. Der Lochvorschlag entfällt erst, wenn Spiel
+und Lochkorrektur gemessen sind: Ein falsch fehlender Vorschlag gleicht still
+doppelt aus, ein falsch stehender wartet auf einen Klick. Eine ältere
+Kalibrierdatei nennt `measured` nicht; gemessen ist dort, was vom
+mitgelieferten Startwert abweicht (`profiles._measured`) — ein Wert gleich dem
+Startwert ist für den Rat derselbe Wert. Ein Speichern ohne eingetragenen Wert
+kalibriert nichts. Im Projekt reist `measured` mit einem eigenen Material als
+weiterer Schlüssel der Tabelle; ältere Fassungen übergehen ihn, eine fehlende
+Angabe liest sich wie die ältere Datei.
+
 SuperSlicer heißt Einzug und Lochausgleich `first_layer_size_compensation`
 und `hole_size_compensation`, beide als Materialzugabe mit umgekehrtem
 Vorzeichen (`slicer_keys.PROGRAM_KEYS`, `PROGRAM_NEGATED`); seine Bündel

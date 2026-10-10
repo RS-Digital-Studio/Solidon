@@ -991,6 +991,11 @@ class MaterialProfile:
     """Relativer Schrumpf, 0.004 = 0,4 %."""
     calibrated: bool = False
     """False heißt: die Werte sind der mitgelieferte Startpunkt, nicht gemessen."""
+    measured: tuple[str, ...] | None = None
+    """Welche Werte die Kalibrierung gemessen hat (``calibration.FIELDS``,
+    sortiert); ``None`` heißt keiner. Ein Kalibrierlauf kann nur das Spiel
+    messen — der Elefantenfuß bleibt dann Startwert, und für ihn gilt der
+    Vorschlag des Druckrats weiter (RM-589, ``advise._from_allowances``)."""
     youngs_modulus: float = 0.0
     """Elastizitätsmodul in MPa; **0 heißt unbekannt**, nicht null.
 

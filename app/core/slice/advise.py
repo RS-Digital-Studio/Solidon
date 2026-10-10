@@ -1651,6 +1651,11 @@ def _from_fits(settings: PrintSettings, kinds: Sequence[str]) -> list[SettingAdv
     return advice
 
 
+#: Die Materialwerte hinter den Löchern eines Modells (RM-589): Spiel der
+#: gebauten Passungen und Lochkorrektur der gebohrten Löcher.
+HOLE_FIELDS: frozenset[str] = frozenset({"clearance", "hole_compensation"})
+
+
 def _from_allowances(
     settings: PrintSettings, profile: Profile, allowances: Collection[str]
 ) -> list[SettingAdvice]:
@@ -1665,15 +1670,23 @@ def _from_allowances(
     0,3 statt 0,2 mm je Seite, am MK4S 0,4 statt 0,2 mm (gemessen im G-Code,
     09.10.2026). Vorgeschlagen wird null, nur wo der Slicer ausgleicht.
 
-    **Nicht an einem kalibrierten Material.** Der Prüfkörper der Kalibrierung
-    geht durch denselben Slicer mit dessen Ausgleich; gemessen und
-    eingetragen ist deshalb, was nach dem Slicer fehlt. Modell und Slicer
-    treffen das Maß dann nur zusammen, und null nähme den Teil des Slicers weg.
+    **Nicht für einen gemessenen Wert.** Der Prüfkörper der Kalibrierung geht
+    durch denselben Slicer mit dessen Ausgleich; gemessen und eingetragen ist
+    deshalb, was nach dem Slicer fehlt. Modell und Slicer treffen das Maß dann
+    nur zusammen, und null nähme den Teil des Slicers weg. Das gilt je Wert
+    (``MaterialProfile.measured``): Wer nur das Spiel misst, behält beim Fuß
+    den Startwert, der den ganzen Fuß meint, und bekommt dort den Vorschlag.
+    Die Löcher des Modells tragen Spiel oder Lochkorrektur; ihr Vorschlag
+    entfällt erst, wenn beide gemessen sind — ein falsch fehlender Vorschlag
+    gleicht still doppelt aus, ein falsch stehender wartet auf einen Klick.
     """
     advice: list[SettingAdvice] = []
-    if profile.material.calibrated:
-        return advice
-    if "holes" in allowances and not is_zero(settings.shell.hole_offset):
+    measured = set(profile.material.measured or ())
+    if (
+        "holes" in allowances
+        and not measured >= HOLE_FIELDS
+        and not is_zero(settings.shell.hole_offset)
+    ):
         advice.append(
             _advice(
                 settings,
@@ -1682,7 +1695,11 @@ def _from_allowances(
                 reason=_("Das Spiel der Bohrungen steht schon im Modell."),
             )
         )
-    if "foot" in allowances and is_greater(settings.layers.elephant_foot, 0.0):
+    if (
+        "foot" in allowances
+        and "elephant_foot" not in measured
+        and is_greater(settings.layers.elephant_foot, 0.0)
+    ):
         advice.append(
             _advice(
                 settings,
