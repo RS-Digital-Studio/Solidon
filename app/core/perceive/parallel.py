@@ -85,11 +85,11 @@ READY_SECONDS: Final = 60.0
 #: Nach wie vielen Sekunden ohne Erkennung die stehenden Arbeiter enden.
 #: Ein Arbeiter gibt den Speicher eines großen Körpers nicht an das System
 #: zurück (Ständer 0,23 GB, Eiffelturm 0,29 GB je Arbeiter, acht davon), bis
-#: er endet; ein Neustart kostet die nächste Runde rund 2 s Warten und acht
-#: Arbeiter zusammen 15 s Rechenzeit — so viel, wie sie an einem Ständer
-#: sparen. Drei Minuten tragen eine Folge von Schritten am selben Modell:
-#: Auswerten (13 bis 35 s an den Modellen, für die Arbeiter rechnen), Ergebnis
-#: ansehen, nächsten Schritt wählen. Wer länger pausiert, schneidet meist
+#: er endet; ein Neustart kostet die nächste Runde rund 2 s Warten — so viel,
+#: wie die Arbeiter am Ständer sparen — und acht Arbeiter zusammen 15 s
+#: Rechenzeit (gemessen unter Fremdlast). Drei Minuten tragen eine Folge von
+#: Schritten am selben Modell: Auswerten (13 bis 35 s an den Modellen, für die
+#: Arbeiter rechnen), Ergebnis ansehen, nächsten Schritt wählen. Wer länger pausiert, schneidet meist
 #: schon im Slicer, und der braucht den Speicher.
 IDLE_WORKER_SECONDS: Final = 180.0
 
