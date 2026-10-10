@@ -484,7 +484,7 @@ date = "2026-10-10"
 [[parts]]
 name = "seal_gasket"
 version = "1"
-fingerprint = "618bcada02411daabcc6c3b47baaf04d7a2d72aa3cbc175ccbbaa22bbc958c85"
+fingerprint = "00027d329f0f1d06766246465e57313fec232a74d6b253baf1599e7afa5ef935"
 corners = 12
 checked = 12
 excluded = 0
@@ -495,7 +495,7 @@ date = "2026-10-10"
 [[parts]]
 name = "seal_groove"
 version = "1"
-fingerprint = "b95162ad8ff388d8b582d87de05a8ec9d453e3b2cf7e08dfbb0b3201bc24bf83"
+fingerprint = "e34dbfbe872de3d6a06d3a0ef6285a0cc204f4f04084dec4bdb63f65f3dcc39a"
 corners = 8
 checked = 8
 excluded = 0
