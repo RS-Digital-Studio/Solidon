@@ -31,6 +31,7 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-10 | [RM-754: Mit und ohne Cache derselbe Satz zur freien Stelle (10.10.2026)](#rm-754-mit-und-ohne-cache-derselbe-satz-zur-freien-stelle-10102026) |
 | 2026-10-10 | [RM-751: Ein freigegebenes Fenster startet keine Wandprüfung mehr (10.10.2026)](#rm-751-ein-freigegebenes-fenster-startet-keine-wandprüfung-mehr-10102026) |
 | 2026-10-10 | [RM-750: Ein wartender Klick behält seine Zusage, während die Analysekarte rechnet (10.10.2026)](#rm-750-ein-wartender-klick-behält-seine-zusage-während-die-analysekarte-rechnet-10102026) |
 | 2026-10-09 | [RM-627: Ein Rand neben einem anderen Überhang ist keine lange Brücke (09.10.2026)](#rm-627-ein-rand-neben-einem-anderen-überhang-ist-keine-lange-brücke-09102026) |
@@ -46673,3 +46674,24 @@ Sonde endete der Prozess so viermal mit Exit 127). `release` hält `_sculpt_chec
 `_check_sculpted_walls` fängt nach dem Schließen nichts mehr an.
 **Nachweis:** `test_sculpt_session.py::test_a_released_window_starts_no_wall_check` am Stand
 davor rot, jetzt grün. Changelog: nein.
+
+## RM-754: Mit und ohne Cache derselbe Satz zur freien Stelle (10.10.2026)
+
+<a id="rm-754-mit-und-ohne-cache-derselbe-satz-zur-freien-stelle-10102026"></a>
+<a id="rm-754"></a>
+
+**RM-754 — Eine Auswertung ohne Cache verlor den Befund `arrange.free_spot`.** Gefunden im
+Review L3 (10.10.2026) am Beispielprojekt *weg3*: Nach der ersten Auswertung steht die freie
+Stelle im Ladeschritt (`spot_x`, `spot_y`, `spot_plate`, Entscheidung Robert, `bc901772c`).
+Mit dem Cache kam das Ergebnis des ersten Laufs samt Satz „Das Modell kam an die freie
+Stelle …“, ohne Cache — nach dem Wiederöffnen — rechnete `prepare.placed_at_free_spot` mit der
+festgehaltenen Stelle und gab keinen Befund; 17 von 18 Schritten verschieden, gegen den
+Vertrag „Auswertung mit = ohne Cache“ (§15.1, §11.2). Seit v0.5.1 im Code
+(`git tag --contains bc901772c`), in v0.5.3 enthalten. **Behoben (Paket L3):** Mit
+festgehaltener Stelle gibt `placed_at_free_spot` denselben Befund unter derselben Bedingung
+(Platte hinter der ersten oder Verschiebung; bei einer Datei mit mehreren Platten
+`arrange.plates_behind`), beide Sätze aus einer Quelle (`_came_to_free_spot`,
+`_plates_behind`); `cache_version` von `load` 9, `load_step` 4, `fit_to_size` 6.
+**Nachweis:** `test_free_spot_kept.py::test_the_spot_finding_is_the_same_with_and_without_the_cache`
+(verschoben und mittig) am Stand davor rot, jetzt grün; *weg3* warm gegen kalt jetzt gleich
+(vorher fehlte kalt genau dieser Befund). Changelog 0.6.0: ja, als Behebung.

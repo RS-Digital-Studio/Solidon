@@ -51,12 +51,13 @@ dans `website/version.json`.
 - Après avoir tiré la poignée d'un aperçu, aucun nombre ne reste au-dessus de la vue. Un nombre saisi pendant le geste déplace l'aperçu, pas le corps sélectionné.
 - Après *Réparer et réessayer* et les chemins voisins, l'historique n'appelle plus « supprimée » une étape qui continue de calculer. Si la chaîne s'arrête de nouveau, l'étape est marquée.
 - Le bouton *Filaments* se trouve désormais dans l'en-tête. Il liste les filaments du projet et mène au stock de filament.
-- Un autre filament s'affiche aussitôt, aussi sur les blocs et les corps STEP, et Solidon ne recalcule rien pour cela. Les corps sélectionnés montrent leur couleur de filament sous la surbrillance.
+- Un autre filament ne change que la couleur, aussi sur les blocs et les corps STEP. La forme n'est pas recalculée. Les corps sélectionnés montrent leur couleur de filament sous la surbrillance.
 - Dans l'onglet *Sélection*, le champ du filament n'attribue qu'au clic ou avec Entrée. Les flèches et la saisie ne font que parcourir la liste, et la molette fait défiler l'onglet.
 - Dans les versions traduites, *Nouveau filament* ne défile plus de côté quand la fenêtre est moins haute que son contenu.
 - Les grands modèles se chargent nettement plus vite et demandent moins de mémoire, même avec un long historique et sur des ordinateurs de 8 Go.
 - Même dans un long historique, une nouvelle étape ne prend guère plus de temps à calculer que la première.
 - Sur les modèles à plusieurs milliers de caractéristiques, le déplacement et les autres étapes qui ne changent pas la forme se terminent jusqu'à deux fois plus vite.
+- Après la réouverture d'un projet, le rapport de contrôle indique toujours à quel emplacement libre un modèle inséré a été placé.
 - Annuler et rétablir vont plus vite, et la mémoire devenue inutile est libérée aussitôt.
 - Résoudre les recouvrements et exporter en 3MF va nettement plus vite.
 - L'espace de travail s'affiche plus rapidement à l'ouverture de gros fichiers 3MF.

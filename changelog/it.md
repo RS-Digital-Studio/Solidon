@@ -50,12 +50,13 @@ scrive in `website/version.json`.
 - Dopo aver trascinato la maniglia di un'anteprima, nessun numero resta sopra la vista. Un numero digitato durante il trascinamento sposta l'anteprima, non il corpo scelto.
 - Dopo *Ripara e riprova* e percorsi simili, la cronologia non chiama più «eliminato» un passaggio che continua a calcolare. Se la catena si ferma di nuovo, il passaggio è segnato.
 - Il pulsante *Filamenti* sta ora nell'intestazione. Elenca i filamenti del progetto e porta al magazzino filamenti.
-- Un altro filamento si vede subito, anche su blocchi e corpi STEP, e Solidon non ricalcola nulla per questo. I corpi selezionati mostrano il colore del filamento sotto l'evidenziazione.
+- Un altro filamento cambia solo il colore, anche su blocchi e corpi STEP. La forma non viene ricalcolata. I corpi selezionati mostrano il colore del filamento sotto l'evidenziazione.
 - Nella linguetta *Selezione*, il campo del filamento assegna solo con un clic o Invio. Le frecce e la digitazione scorrono soltanto l'elenco, e la rotellina scorre la linguetta.
 - Nelle versioni tradotte, *Nuovo filamento* non scorre più di lato quando la finestra è più bassa del suo contenuto.
 - I modelli grandi si caricano molto più velocemente e richiedono meno memoria, anche con una cronologia lunga e su computer con 8 GB.
 - Anche in una cronologia lunga, un nuovo passaggio richiede appena più tempo del primo.
 - Sui modelli con migliaia di caratteristiche, lo spostamento e gli altri passaggi che non cambiano la forma finiscono fino a due volte più in fretta.
+- Dopo la riapertura di un progetto, il rapporto di verifica indica ancora in quale posto libero è finito un modello inserito.
 - Annulla e ripristina sono più veloci, e la memoria non più necessaria si libera subito.
 - Risolvere le sovrapposizioni ed esportare in 3MF è molto più veloce.
 - L'area di lavoro viene visualizzata più rapidamente quando si aprono file 3MF di grandi dimensioni.

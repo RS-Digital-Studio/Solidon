@@ -51,12 +51,13 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Tras arrastrar el tirador de una vista previa, ya no queda ningún número sobre la vista. Un número tecleado al arrastrar mueve la vista previa, no el cuerpo elegido.
 - Tras *Reparar y volver a intentarlo* y caminos parecidos, el historial ya no llama «eliminado» a un paso que sigue calculando. Si la cadena vuelve a parar, el paso queda marcado.
 - El botón *Filamentos* está ahora en la cabecera. Muestra los filamentos del proyecto y lleva al inventario de filamentos.
-- Otro filamento se ve al instante, también en bloques y cuerpos STEP, y Solidon no recalcula nada por ello. Los cuerpos seleccionados muestran su color de filamento bajo el resaltado.
+- Otro filamento solo cambia el color, también en bloques y cuerpos STEP. La forma no se recalcula por ello. Los cuerpos seleccionados muestran su color de filamento bajo el resaltado.
 - En la pestaña *Selección*, el campo de filamento solo asigna con un clic o Intro. Las flechas y la escritura solo recorren la lista, y la rueda del ratón desplaza la pestaña.
 - En las versiones traducidas, *Filamento nuevo* ya no se desplaza de lado cuando la ventana es más baja que su contenido.
 - Los modelos grandes se cargan notablemente más rápido y necesitan menos memoria, también con un historial largo y en equipos con 8 GB.
 - Incluso en un historial largo, un paso nuevo apenas tarda más en calcularse que el primero.
 - En modelos con miles de características, mover y otros pasos que no cambian la forma terminan hasta el doble de rápido.
+- Al volver a abrir un proyecto, el informe de comprobación sigue indicando a qué lugar libre fue un modelo insertado.
 - Deshacer y rehacer son más rápidos, y la memoria que ya no se necesita se libera enseguida.
 - Resolver solapamientos y exportar a 3MF es bastante más rápido.
 - El área de trabajo aparece más rápido al abrir archivos 3MF grandes.

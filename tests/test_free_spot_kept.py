@@ -201,6 +201,54 @@ def test_the_spot_stands_in_the_step_and_its_key_reads_the_scene_no_longer(
     assert not reads_scene(spec.params, step.params), "danach liest er nicht mehr"
 
 
+@pytest.mark.parametrize("still", [False, True], ids=["moved", "in-the-middle"])
+def test_the_spot_finding_is_the_same_with_and_without_the_cache(
+    profile: Profile, still: bool
+) -> None:
+    """Mit und ohne Cache derselbe Bericht über die freie Stelle (RM-754, §15.1).
+
+    Nach der ersten Auswertung steht die Stelle im Schritt. Eine Auswertung
+    ohne Cache — das Wiederöffnen — rechnete den Schritt mit ihr und verlor den
+    Satz „Das Modell kam an die freie Stelle …“, der in der Sitzung stand.
+    Ein Modell, das nicht wanderte, bekommt in beiden Wegen keinen.
+    """
+    from app.core.scene.cache import ResultCache
+
+    project = new_project("centauri-carbon-2", "petg")
+    history = History(project.document)
+    if still:
+        body = trimesh.creation.box(extents=(20.0, 20.0, 20.0))
+        body.apply_translation((0.0, 0.0, 10.0))
+        project.document.sources["src_1"] = Source(
+            id="src_1", kind="import", path="sources/liegt.stl", sha256=""
+        )
+        project.sources["src_1"] = bytes(body.export(file_type="stl"))
+        chosen = import_plan(
+            "src_1", "liegt.stl", project.sources["src_1"], "mm", first_model=False
+        )
+        history.apply(chosen.title, [chosen.draft])
+    else:
+        _import(project, history, "a.stl", CUBE)
+        _import(project, history, "b.stl", BLOCK)
+    cache = ResultCache()
+    first = evaluate(project.document, profile, sources=ProjectSources(project), cache=cache)
+    History(project.document).record_answers(first.answers)
+    warm = evaluate(project.document, profile, sources=ProjectSources(project), cache=cache)
+    cold = evaluate(project.document, profile, sources=ProjectSources(project))
+
+    def spot_findings(result: Any) -> list[tuple[str, str, dict[str, Any]]]:
+        return [
+            (entry.code, str(entry.message), dict(entry.values))
+            for entry in result.scene.report.findings
+            if entry.code.startswith("arrange.")
+        ]
+
+    assert spot_findings(warm) == spot_findings(first)
+    assert spot_findings(cold) == spot_findings(warm)
+    codes = [code for code, _message, _values in spot_findings(cold)]
+    assert codes == ([] if still else ["arrange.free_spot"])
+
+
 def _box(x: float, y: float, z: float) -> bytes:
     return bytes(trimesh.creation.box(extents=(x, y, z)).export(file_type="stl"))
 
