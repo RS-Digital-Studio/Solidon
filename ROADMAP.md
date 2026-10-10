@@ -137,7 +137,6 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-004 — Echte Text- und Bildgenerierung über alle Zielplattformen abnehmen](#rm-004) | KI und Generatoren | Windows mit TRELLIS.2 gefahren (07./08.10.): Text- und Bildweg bis zum Export; nach RM-550 sind 14 von 17 Läufen geschlossen und ohne Warnung, fünf davon nur eine Haut (seit RM-577 gemeldet), drei zerfallene meldet der Dialog vor dem Übernehmen; offen Linux und macOS |
 | [RM-251 — Mehrteilige Aufträge enden lokal am Schrittlimit](#rm-251) | KI und Generatoren | (a) 12 Schritte, (b) gebündelte Aufrufe und das lokale Zugbudget gebaut, Quote gehalten (27–28 von 39, 07.10.); offen: zehn mehrteilige Fälle enden weiter am Limit, nur jetzt an den 12 Schritten |
 | [RM-016 — Agenten-Suite gegen das aktuelle Vorgabemodell messen](#rm-016) | KI und Generatoren | Lokal nach RM-513 ohne Verschlechterung (06.10.); gehostet freigegeben (Robert, 06.10.), wartet auf einen hinterlegten Anthropic-Schlüssel — misst dann auch Prompt-Version 9 (RM-251 (b), Sprachzeile, RM-014) |
-| [RM-676 — *Größe ändern* an einem erzeugten Modell rechnet die ganze Erzeugungskette neu](#rm-676) | KI und Generatoren | In Arbeit: Claude (Worktree `F:/solidon-claude-d`). Regression gegenüber v0.5.1: Stuhl auf 400 mm 18–22 s → 67–139 s, Reparatur und Erkennung laufen für eine Maßänderung neu |
 | [RM-103 — Große Kernfunktionen nach konkretem Wartungsbedarf aufteilen](#rm-103) | Tests und Entwicklungswerkzeuge | Auswertung und weitere große Funktionen nach Wartungsbedarf priorisieren |
 | [RM-134 — Doppelte Testhilfen zusammenführen](#rm-134) | Tests und Entwicklungswerkzeuge | Umgesetzt (07.10.): die offenen Helfer und zwölf Kopien der Fenster-Fixtures an einem Ort, 4508 = 4508 gesammelte Fälle; offen die Abnahme im nächsten Release-Tor (Robert, 06.10.) |
 | [RM-272 — Die Entwicklungsmaschine rechnet zeitweise falsch](#rm-272) | Tests und Entwicklungswerkzeuge | Entscheidung Robert: CPU-Tausch über Intels verlängerte Garantie, bis dahin Intel Default Settings; offen MemTest86 über Nacht und der Tausch selbst; die Pakete von 0.5.3 kommen aus der CI, Handbuch, Bilder und Signatur entstehen weiter hier |
@@ -5114,31 +5113,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   Sätze an `sculpt_strokes` und `pose_armature` (RM-014). Lokal ist Version 9 gemessen und nicht
   schlechter; gehostet vorher (Version 8) und nachher. Verschlechtert sich die Quote, gehen
   diese Sätze zurück.
-
-<a id="rm-676"></a>
-
-- [ ] **RM-676 — *Größe ändern* an einem erzeugten Modell rechnet die ganze Erzeugungskette neu.**
-  Versionsvergleich 0.5.2 (03.10.2026), Weg 3 (Abschnitt 2). **Regression gegenüber v0.5.1** in der
-  Zeit bis zum Ergebnis; der Weg selbst ist besser (3 statt 5 Klicks, das Modell steht danach auf
-  dem Bett). Erzeugter Stuhl, 325 244 Dreiecke, *Größe ändern* am Befund auf 400 mm: v0.5.1 18–22 s
-  (angehängtes Skalieren), v0.3.5 und v0.4.1 7–8 s, `09d8e9485` 67–79 s, im Wechsel bis 139 s — so
-  lange wie das Übernehmen selbst. *Größe ändern* ändert Schritt 2 der Kette (`fit_to_size` vor
-  `repair`), danach laufen Reparatur, Aufsetzen und zweimal die Merkmalserkennung am vollen Netz
-  neu. Die Reihenfolge „erst Größe, dann Reparatur“ ist begründet (Verschweißtoleranz am
-  Einheitswürfel) und bleibt; teuer ist, dass eine reine Maßänderung die vom Maßstab unabhängige
-  Arbeit wiederholt. Am Stand origin/main unverändert (Kette `load, fit_to_size, repair,
-  place_on_bed`).
-  **Stellen:** `app/core/generate.py:302` (`fit_to_size` vor `repair`), `:339` (Kette),
-  `app/core/geom/ops.py:766` (`fit_to_size`), `app/ui/main_window.py:25524` (*Größe ändern* öffnet
-  den Schritt).
-  **Fix (allgemein):** Die Erzeugungskette normiert auf die Arbeitsgröße, repariert dort und trägt
-  das Kundenmaß als eigenen, billigen Schritt dahinter; oder eine reine Maßänderung skaliert die
-  gemerkten Ergebnisse der Folgeschritte mit, statt sie neu zu rechnen.
-  **Abnahme:** Stuhl und zwei weitere erzeugte Modelle (eines über dem Dreieckslimit mit
-  `decimate_mesh`): *Größe ändern* höchstens so lange wie das angehängte Skalieren in v0.5.1, Volumen
-  und Befunde gleich einer frischen Rechnung im neuen Maß, ein Rückgängig-Schritt, alte Projekte
-  rechnen wie gespeichert. Bauplan §17.1, §31.
-  Belege: `F:\solidon-review-reports\regression-0.5.2\weg3\befunde.md` (Abschnitt 2).
 
 ## Tests und Entwicklungswerkzeuge
 

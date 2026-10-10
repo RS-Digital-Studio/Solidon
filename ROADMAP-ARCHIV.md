@@ -31,6 +31,7 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-10 | [RM-676: *Größe ändern* an einem erzeugten Modell rechnet nur das Maß (10.10.2026)](#rm-676-größe-ändern-an-einem-erzeugten-modell-rechnet-nur-das-maß-10102026) |
 | 2026-10-09 | [RM-624: Ein Slicertest hält Kontaktabstand und untere Trennschicht in sechs Programmen (09.10.2026)](#rm-624-ein-slicertest-hält-kontaktabstand-und-untere-trennschicht-in-sechs-programmen-09102026) |
 | 2026-10-09 | [RM-531 (Teil): Sieben Fenstertests außerhalb von Windows sind auf allen vier Plattformen grün (09.10.2026)](#rm-531-teil-sieben-fenstertests-außerhalb-von-windows-sind-auf-allen-vier-plattformen-grün-09102026) |
 | 2026-10-09 | [RM-635: Prozesstests zählen ihre Zeit ab dem Zustand, und der Abbau wartet auf das Ende des Prozesses (09.10.2026)](#rm-635-prozesstests-zählen-ihre-zeit-ab-dem-zustand-und-der-abbau-wartet-auf-das-ende-des-prozesses-09102026) |
@@ -46473,3 +46474,33 @@ Himmel nicht mehr schneiden, werden übersprungen (Becher 0,64 → 0,28 s CPU, a
 gleich), und der senkrechte Schacht ist als Grenze benannt. Belege:
 `output/konsolidierung-2026-10-07/codex-claude/belege/lauf-a.md`. Changelog: nein (die
 Lücke entstand mit RM-566 im selben 0.6.0-Zyklus).
+
+## RM-676: *Größe ändern* an einem erzeugten Modell rechnet nur das Maß (10.10.2026)
+
+<a id="rm-676-größe-ändern-an-einem-erzeugten-modell-rechnet-nur-das-maß-10102026"></a>
+<a id="rm-676"></a>
+
+**RM-676 — *Größe ändern* an einem erzeugten Modell rechnet die ganze Erzeugungskette neu.**
+  Versionsvergleich 0.5.2 (03.10.2026), Weg 3 (Abschnitt 2). **Regression gegenüber v0.5.1** in der
+  Zeit bis zum Ergebnis; der Weg selbst ist besser (3 statt 5 Klicks, das Modell steht danach auf
+  dem Bett). Erzeugter Stuhl, 325 244 Dreiecke, *Größe ändern* am Befund auf 400 mm: v0.5.1 18–22 s
+  (angehängtes Skalieren), v0.3.5 und v0.4.1 7–8 s, `09d8e9485` 67–79 s, im Wechsel bis 139 s — so
+  lange wie das Übernehmen selbst. *Größe ändern* ändert Schritt 2 der Kette (`fit_to_size` vor
+  `repair`), danach laufen Reparatur, Aufsetzen und zweimal die Merkmalserkennung am vollen Netz
+  neu. Die Reihenfolge „erst Größe, dann Reparatur“ ist begründet (Verschweißtoleranz am
+  Einheitswürfel) und bleibt; teuer ist, dass eine reine Maßänderung die vom Maßstab unabhängige
+  Arbeit wiederholt. Am Stand origin/main unverändert (Kette `load, fit_to_size, repair,
+  place_on_bed`).
+  **Stellen:** `app/core/generate.py:302` (`fit_to_size` vor `repair`), `:339` (Kette),
+  `app/core/geom/ops.py:766` (`fit_to_size`), `app/ui/main_window.py:25524` (*Größe ändern* öffnet
+  den Schritt).
+  **Fix (allgemein):** Die Erzeugungskette normiert auf die Arbeitsgröße, repariert dort und trägt
+  das Kundenmaß als eigenen, billigen Schritt dahinter; oder eine reine Maßänderung skaliert die
+  gemerkten Ergebnisse der Folgeschritte mit, statt sie neu zu rechnen.
+  **Abnahme:** Stuhl und zwei weitere erzeugte Modelle (eines über dem Dreieckslimit mit
+  `decimate_mesh`): *Größe ändern* höchstens so lange wie das angehängte Skalieren in v0.5.1, Volumen
+  und Befunde gleich einer frischen Rechnung im neuen Maß, ein Rückgängig-Schritt, alte Projekte
+  rechnen wie gespeichert. Bauplan §17.1, §31.
+  Belege: `F:\solidon-review-reports\regression-0.5.2\weg3\befunde.md` (Abschnitt 2).
+
+**Abschluss:** Kette `load, fit_to_size (Arbeitsgröße), repair, [decimate_mesh], fit_to_size (Kundenmaß, freie Stelle)`; *Größe ändern* ändert nur den letzten Schritt (`d9c567d92`). Ein Maßschritt, dem weniger als `PRINT_LIMIT` zum Maß fehlt, legt nur und trägt die Merkmale mit (`3efa05df1`; am Bett ließ das Ausdünnen 100,000222 mm stehen, und ohne ihn lief beim Übernehmen eine Erkennung mehr als vorher). Die freie Stelle bewegt das Netz nur noch einmal (`473ef2f36`, Spitze −16 %). Gezählt mit Sonde je Weg, v0.5.1 / vorher (`a9e4d3f64`) / nachher: volle Erkennungen bei *Größe ändern* Drache 1/1/1, Stuhl 1/1/1, Bett 1/2/1, Reparatur 1/1/0; beim Übernehmen und Öffnen gleich viele wie vorher (2, 2, 3). Job-CPU unter Volllast, zwei Läufe im Wechsel: *Größe ändern* Drache 37–39 / 29–32 / 24–26 s, Stuhl 51–72 / 62–67 / 28–44 s, Bett 99–143 / 230–248 / 44–69 s; Strg+Z danach vorher 17–138 s, nachher unter 3 s. Merkmale bei gleichmäßiger Skalierung mitzutragen ist geprüft und verworfen: 47 von 339 Paaren aus Korpus, Beispielprojekten und den drei Modellen sind diskret ungleich, bei jedem Faktor von 0,5 bis 4 (Bericht Paket D, Welle 3).

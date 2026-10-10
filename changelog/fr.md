@@ -153,7 +153,7 @@ dans `website/version.json`.
 - Si un modèle généré n'est qu'une fine peau autour d'une cavité, la boîte de dialogue le dit avant de l'accepter et le rapport de contrôle ensuite, avec la voie vers un nouvel essai.
 - Avant le téléchargement, *Configurer le chat* et *Configurer ComfyUI* indiquent la mémoire graphique et la place qu'un modèle demande, et si cet ordinateur les a.
 - Sur un Mac, *Configurer le chat* propose un modèle local qui tient dans la mémoire partagée et dit quand une clé pour un modèle hébergé vaut mieux.
-- Sur un modèle généré, *Modifier la taille* ne recalcule que la nouvelle taille. La réparation faite avant reste telle quelle, et sur un grand modèle c'est plusieurs fois plus rapide.
+- Sur un modèle généré, *Modifier la taille* ne recalcule que la nouvelle taille et ne refait plus la réparation. C'est plus rapide, et Ctrl+Z ensuite revient aussitôt.
 
 ## 0.5.3
 
