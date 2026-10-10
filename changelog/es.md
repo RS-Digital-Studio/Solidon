@@ -110,7 +110,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - También con impresoras que PrusaSlicer o SuperSlicer no conocen, ambos calculan el tiempo de impresión con las aceleraciones entregadas, y el archivo indica el material de la bobina.
 - Incluso con el ordenador a plena carga, Solidon indica el motivo real al detener un slicer, en lugar de un tiempo agotado. Un archivo de impresión terminado se aprovecha.
 - El almacén de filamentos vuelve a reconocer un consumo descontado con Solidon 0.5.1 y pregunta antes de descontar otra vez la misma impresión.
-- Un consumo descontado sigue unido a su impresión aunque una actualización calcule más rápido o cambie el perfil del fabricante en el slicer. Antes, la impresión contaba entonces como nueva.
+- Desde esta versión, un consumo descontado sigue unido a su impresión aunque una actualización calcule más rápido o cambie el perfil del fabricante en el slicer. Antes contaba como nueva.
 
 ### Roscas, taladros y piezas normalizadas
 

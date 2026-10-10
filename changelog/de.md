@@ -134,7 +134,7 @@ Nutzen da und sonst nichts.
 - Auch bei Druckern, die PrusaSlicer oder SuperSlicer nicht selbst kennen, rechnen beide die Druckzeit mit den übergebenen Beschleunigungen, und die Datei nennt das Material der Spule.
 - Auch auf einem voll ausgelasteten Rechner nennt Solidon nach dem Anhalten eines Slicers den wirklichen Grund statt einer Zeitüberschreitung. Eine fertige Druckdatei wird übernommen.
 - Das Filamentlager erkennt eine Buchung aus Solidon 0.5.1 wieder als frühere Buchung und fragt nach, bevor es denselben Druck erneut abbucht.
-- Eine Buchung im Filamentlager bleibt ihrem Druck zugeordnet, auch wenn ein späteres Update schneller rechnet oder sich das Herstellerprofil im Slicer ändert. Bisher galt der Druck dann als neu.
+- Ab dieser Version bleibt eine Buchung ihrem Druck zugeordnet, auch wenn ein Update schneller rechnet oder sich das Herstellerprofil im Slicer ändert. Bisher galt der Druck dann als neu.
 
 ### Gewinde, Bohrungen und Normteile
 
