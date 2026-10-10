@@ -150,9 +150,8 @@ Weitere Eingänge:
 - **GLB/GLTF**: Neue Importe speichern am Ladeschritt `coordinates="gltf"`
   (Meter, Y oben); bestehende Projekte samt Undo-Fassungen, eingebetteten
   Generatorquellen und Rezeptdokumenten behalten `legacy_raw`. Eine erzeugte
-  GLB speichert `gltf` mit `mm`; Maß per `fit_to_size`, alte Ketten
-  bleiben (RM-676). Eine
-  ausdrückliche Einheit hat Vorrang; Rohleser und Zielgrößenskalierung
+  GLB speichert `gltf` mit `mm`; Maß per `fit_to_size`, alte Ketten bleiben.
+  Eine ausdrückliche Einheit hat Vorrang; Rohleser und Zielgrößenskalierung
   behalten ihren Vertrag. **Unplausible Meter werden nicht geglaubt** (unter
   10 mm, über der doppelten Bauraumdiagonale): Einheitenfrage mit Meter zuerst
   (Regel 21). Eine 3MF-Einheit gilt ohne Frage.
