@@ -46,15 +46,49 @@ offenem Drucker. Übernommen wird auf Klick, nie von allein.
   nur von Material daneben (`_Ceilings.closes`), schließt sie sich selbst.
   Gefragt wird die ganze Decke (Flächenmehrheit). Außen auf dem Modell zählt
   `worth_support`, auch als `open_field`. Wer das anfasst, misst Schüssel und
-  Drache.
+  Drache. Der Brückenbefund rät über einer Kanaldecke zum Übergang, nicht zur
+  Stütze, und eine Brücke daneben misst er ohne sie (`advise._from_spans`);
+  gefragt nur, was weiter als `SPAN_INTERESTING` spannen kann (`_may_span`),
+  denn die Kanalfrage kostet je Decke den Durchgang bis zum Bett
+  (`channel_pieces` liest die gemerkte volle Antwort).
 - **Eine Insel ist nie eine Kanaldecke**: Auf dem Modell heißt es „überall“,
   gleich wie klein (`ModelSupport.island_on_model`), ebenso für eine lange
   Brücke, die selbst dort hängt (`open_bridge_width`); über dem Bett bleibt
   „nur vom Bett“.
 - **Bäume, wo kleine Überhänge auf dem Modell ansetzen** (`branching`): Ein
-  Baum setzt mit wenigen Füßen auf, ein Gitter mit jeder Säule. Nicht unter
-  einem flachen Stück über `OVERHANG_LAYER_WORTH_SUPPORT` — dort bleibt die
-  Art des Herstellers.
+  Baum setzt mit wenigen Füßen auf, ein Gitter mit jeder Säule. **Unter einem
+  flachen Stück über `OVERHANG_LAYER_WORTH_SUPPORT` Gitter** statt Bäumen —
+  über „automatisch“ nur, wo es beim Programm Bäume heißt (`trees` aus
+  `handover.tree_styles`, eine Quelle mit `Motion.support_tree`; ohne Programm
+  vorsichtig wie Bäume; Curas Antwort gilt auch ohne Programm). Wo die Art der
+  ganzen Platte gilt (Cura), sagt die Decke ausdrücklich Gitter, auch über
+  „automatisch“, sonst gewänne der Baum eines anderen Körpers; was Cura danach
+  gleich druckt (`_cura_prints_alike`), zeigt der Dialog nicht. Setzen daneben kleine Stücke auf dem Modell auf
+  (`ModelSupport.details_on_model`, nicht die Decke selbst) oder beginnen viele
+  Inseln, **Hybrid** (`tree_hybrid`), wo das Programm es kennt; PrusaSlicer,
+  SuperSlicer und Cura ersetzen es durch Gitter (`NOT_OFFERED_BY_PROGRAM`), der
+  Rat schlägt dort gleich Gitter vor. Über gewähltem Gitter nichts, über einem
+  Hybrid, den das Programm als Gitter druckt, Bäume für Details.
+  Gitter und Baum zweier Körper ergeben Hybrid nur, wo die Art der Platte gilt
+  (`combine` ohne `separate`, `handover.style_per_part`), ohne Hybrid beim
+  Programm Gitter (`combine(trees=)`). Geht die Art je Teil, nennt die Zeile die
+  Teile mit ihrem Wert und die mit eigenem anderem Wert (`_TargetedAdvice.others`,
+  je Wert einmal; Feldhinweis ebenso, vor dem Rest); bei Cura nennen Zeile und
+  Feld bei einem Wechsel der Art keine Teile, nur bei an oder aus, und ein
+  eingeschaltetes Teil zählt mit der Art der Platte. Ein gewählter Baum über einem Hybridprozess geht als `default`
+  hinaus (`tree_over_hybrid`).
+- **Zwei Wände für hohe Bäume** (`support.tree_walls`): ab `TALL_TREE_HEIGHT`
+  Säulenhöhe (`ModelSupport.tallest_column`: bis zum Boden des Körpers oder zur
+  letzten Auflage, ohne Ränder und Kanaldecken), gefragt mit `printed_style` gegen
+  `trees`. Die Orca-Familie liest die Wandzahl unter gefüllten organischen
+  Bäumen nicht (`IGNORED_UNDER_TREES_BY_PROGRAM`), unter hohlen schon
+  (`handover.hollow_trees`); Bambu Studio und Creality Print lesen sie überall,
+  Creality als `tree_support_wall_count_tree` (`PROGRAM_KEYS`). Der Druckdialog
+  filtert wie bei der unteren Trennschicht; der Slicertest
+  (`test_real_slicers.py`) hält die Tabelle gegen die Programme. PrusaSlicer zählt
+  keine Wände (`NOT_TAKEN_BY`). Plattenweit, nicht je Teil (`PART_PATHS`).
+  Unter Gitter ist das Feld inaktiv (`inactive_paths`), ebenso unter einer Art,
+  die das Programm als Gitter druckt (Ersatz, „automatisch“ außerhalb `trees`).
 - **`support.block_channels`**, weil „nur vom Bett“ Kanäle nicht freihält:
   `analysis.channel_space` sperrt um Decken, die sonst Stütze bräuchten
   (`worth_support` je Stück, im Zweifel Stütze), nur unerreichbaren Raum (eng
@@ -76,8 +110,14 @@ offenem Drucker. Übernommen wird auf Klick, nie von allein.
   ohne Ansatz), und die keine Öffnung über `SPAN_INTERESTING` überspannt
   (zwei Bahnen breit, von außen gefasst, Öffnung frei — geometrisch, denn der
   Stützschnitt misst keine Brücken), zählt nicht zum Stützbedarf, nicht zu
-  „auf dem Modell“, nicht zum Überhang- und nicht zum Brückenbefund. Wer nur
-  einige Stücke prüft, fragt mit `only`. `support.spare_ledges` sperrt ihre
+  „auf dem Modell“, nicht zum Überhang- und nicht zum Brückenbefund — je
+  Stück, nicht je Schicht: Die Brückenweite einer Schicht mit Rändern misst
+  `span_beside` an den Kernen der übrigen Stücke, sonst zählte ein Rand neben
+  einem fremden Überhang als lange Brücke (RM-627) — freie Flächen allein
+  reichen nicht, das Band einer Flanke unter 14 bis 45 Grad verbindet alles an
+  der Wand. Der Ort der Warnung liegt an der gemessenen Brücke (`span_spot`).
+  Wer nur einige Stücke prüft,
+  fragt mit `only`. `support.spare_ledges` sperrt ihre
   Überhangfläche (`ledge_space`) und spart aus, was Stütze braucht;
   vorgeschlagen nur mit Stützen.
 - **Der Stützkontakt folgt dem Material der Spule** (`_support_contact`):

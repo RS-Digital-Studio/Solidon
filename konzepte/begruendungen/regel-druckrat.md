@@ -85,6 +85,15 @@ Konstante: Tisch, Kasten mit Innenregal (74 mm), verschlossener Hohlkörper
 (54 mm) und weiter Tunnel (65 mm) behalten „überall". Wer die Grenze
 anfasst, misst beide Reihen nach und fährt die Schüssel im Slicer.
 
+Der Brückenbefund riet über einem Tunnel von 20 mm bis zum Review zu RM-627
+(09.10.2026) „oder eine Stütze“, wo der Rat keine verlangt. Er nennt jetzt den
+Kanal und den Übergang unter 45 Grad, und eine Brücke daneben misst und zeigt
+er ohne die Kanaldecke (Steg über 20 mm neben dem Tunnel: am Steg statt über
+dem Tunnel). Gefragt wird nur, was weiter als 15 mm spannen kann: Die
+Kanalfrage kostet am Drachen (45°) je Decke 17 bis 96 s, für die sieben Stücke
+seiner einen spannenden Schicht 143 s, sechs davon unter 0,3 mm²; mit der
+Auswahl 21 statt 3 s kalt, mit gemerktem Stützbedarf 0,9 statt 0,4 s.
+
 **Eine Insel ist nie eine Kanaldecke** (26.09.2026). Sie hat nichts unter
 sich, an dem eine Brücke ansetzen könnte; setzt sie auf dem Modell auf, heißt
 es „überall", gleich wie klein (`ModelSupport.island_on_model`). Die frühere
@@ -439,9 +448,16 @@ Summe von 150 gefragt, blieb ein Feld von 134 mm² „keine Stützen“ (Review 
 davon auf dem Modell aufsetzt): Sonst verlangte der Rat am Kinn über der Brust
 Stützen und zugleich „nur vom Bett“, und das Kinn druckte weiter in die Luft.
 Der Gitterbecher bleibt ohne Stütze, und im Korpus (242 Körper) ändert sich
-außer der Sperre kein Vorschlag. Die Feldfrage über den ganzen Körper kostet am Drachen 8,2 s CPU;
-der Prüfbericht stellt sie deshalb nicht, und wo viele kleine Überhänge
-Stützen verlangen, nennt er noch keine Stelle (RM-572).
+außer der Sperre kein Vorschlag. Die Feldfrage über den ganzen Körper kostet am
+Drachen 8,2 s CPU. **Der Prüfbericht nennt die Stelle** (RM-572,
+`findings.small_overhang_findings`): Wo der Rat über die Fläche Stützen
+verlangt und kein Stück die Meldeschwelle erreicht, zeigt er die Schicht mit
+der meisten Überhangfläche an ihrem größten Stück. Er fragt dieselbe Antwort
+(`support_need`), aber nur, wo er auch eine andere Lage sucht — höchstens acht
+Körper, ab 1 cm³ Stützraum —, denn sie ist seine teuerste Frage. Nur der
+Flächenweg zählt: Inseln und lange Brücken haben eigene Zeilen, und
+Inselstücke, Kanaldecken und Ränder gehen weder in die Fläche noch in den Ort
+ein.
 
 **Das Mindesttempo bremst Spitzen, damit die Mindestzeit greift (08.10.2026,
 RM-580).** Am Drachen erreichten die obersten 12 mm in keinem Slicer die
@@ -472,6 +488,45 @@ Unterseite zwischen den Baumspitzen durch, und die Wikis von OrcaSlicer und
 Prusa raten dort zu Hybrid- oder normaler Stütze
 (`konzepte/recherche-slicer-einstellungen-2026-10.md`); flach heißt
 ein Stück über `OVERHANG_LAYER_WORTH_SUPPORT` auf einer Schicht.
+
+**Gitter unter der flachen Decke, Hybrid bei beidem (09.10.2026, RM-584).** Bis
+dahin blieb unter einer flachen Decke die Art des Herstellers — bei Elegoo und
+Bambu also Bäume, unter denen sie durchhängt. Gemessen an einer Tischplatte mit
+Kinn in allen sieben Programmen (`output/drache-2026-10-08/stil-rm584*`): Hybrid
+kommt in Elegoo, Orca, Bambu, Creality und Anycubic als `tree_hybrid` an und
+stützt die Decke mit Gitter, die Details mit Ästen (ElegooSlicer 71 300 mm
+Stützbahn gegen 146 364 mm unter reinen Bäumen). PrusaSlicer und Cura kennen kein
+Hybrid; dort schlägt der Rat unter einem gewählten Baum gleich Gitter vor.
+**„Automatisch“ bleibt, wo es keine Bäume heißt** (Durchsicht RM-584, M1): Bei
+PrusaSlicer stützt es mit dem Stil des Prozesses, am MK4S `snug`, den die
+Recherche (Nr. 4) für flache Decken neben `tree_hybrid` empfiehlt; Cura schreibt
+dafür `normal`, dieselbe Übergabe wie Gitter. Der Grund „Große flache Decken
+hängen zwischen Baumspitzen durch“ stand dort über einer Stütze ohne Spitzen.
+Hybrid verlangt kleine Stücke auf dem Modell neben der Decke: Am Tisch setzt
+nur die Platte selbst auf dem Sockel auf, und „Bäume für Details“ stand über
+einem Teil ohne Detail (L7). Gitter und Baum zweier Körper werden nur Hybrid,
+wo die Art der Platte gilt; die Orca-Familie schrieb sonst je Objekt Gitter und
+Baum, und die Zeile zeigte Hybrid (M3). **Zwei Wände für hohe Bäume** (Recherche
+Nr. 5): Ab 100 mm brechen Bäume mit einer Wand. Am ElegooSlicer an einem 120 mm
+hohen Turm mit Insel ergab Hybrid mit zwei Wänden 14 % mehr Stützmaterial; unter
+organischen Bäumen war der G-Code mit einer und zwei Wänden derselbe — dort
+schlägt Solidon die Wände nicht vor. Das gilt gefüllten Bäumen: Der Slicertest
+der Durchsicht fand am Neptune 4, dessen Prozess das Grundmuster `default` führt
+und Bäume hohl druckt, mit zwei Wänden 13 234 statt 12 211 Bewegungen, auch ohne
+eigene Stützschichthöhe; mit `rectilinear` war der G-Code derselbe
+(`handover.hollow_trees`). Den Abstand oben runden hohle Bäume wie organische:
+Am Neptune 4 druckten 0,28 mm bei 0,2 mm Schicht wie 0,2 mm, 0,4 mm anders.
+Creality Print liest die Wände als `tree_support_wall_count_tree`, mit Vorgabe 0,
+und die Grundlage liest denselben Schlüssel. Derselbe Test bestätigte OrcaSlicer und Anycubic
+Slicer Next; Bambu Studio (ohne die Schlüssel der organischen Äste) las die
+Wandzahl auch unter seinen Bäumen, Creality Print 7.2 überall, aber nur als
+`tree_support_wall_count_tree` — den gemeinsamen Namen überging es auch unter
+Hybrid. PrusaSlicer zählt keine
+Wände: Seine Doppelwand ab einem Astquerschnitt (`support_tree_branch_diameter_double_wall`,
+Vorgabe 3 mm) ist ein Maß, und eine geschriebene Wand schaltete sie ohne Bündel
+ab (M5). Die Säulenhöhe reicht bis zum Bett, wenn ein Teil der Säule es
+erreicht: Bis zur ersten Berührung gemessen, war eine Platte auf 150 mm über
+einem Turm von 120 mm 30 mm hoch (L1). Der Fuß hoher Bäume ist noch offen (RM-584).
 
 **Ränder tragen sich selbst (08.10.2026, RM-582).** Der Eiffelturm aus dem
 Korpus ist ohne Stützen gedacht („一体无支撑“). Der Rat verlangte Stützen wegen
@@ -507,9 +562,17 @@ breit zwei Bahnen sind, sagt der Schnitt (an der 0,4er Düse 0,84 mm): Eine
 Stufe von 1 mm ist dort schon eine Schulter. Gefragt wird
 geometrisch, nicht an der Brückenweite der Schicht: Der Stützschnitt der
 Übergabe misst keine Brücken, und die Sperre hätte die Schulter wieder als
-Rand gesperrt. Eine Schicht, deren Überhang nur aus Rändern besteht, spannt
-deshalb wirklich keine Brücke — eine einseitige Konsole misst ihre Diagonale —,
-und Rat und Bericht schweigen dort gleich. Weil der Slicer nach seinem Winkel jede flache Unterseite stützt,
+Rand gesperrt. Ein Rand spannt deshalb wirklich keine Brücke — eine
+einseitige Konsole misst ihre Diagonale —, und Rat und Bericht schweigen dort
+gleich, **je Stück, nicht je Schicht** (RM-627, 09.10.2026): Ein Kragen von
+2 mm um eine Wand, vom Kinn unterbrochen, meldete 46,2 mm, sobald ein
+Kinnstreifen von 4 mm² auf seiner Schicht lag, und an einer Wand mit U-Kragen
+schaltete ein Sporn von 8,5 mm² daneben die Stützen ein. Gemessen werden
+deshalb nur die Kerne der übrigen Stücke (`span_beside`), nicht die freien
+Flächen, die sie berühren: Eine Flanke zwischen etwa 14 und 45 Grad legt je
+Schicht ein Band frei, schmaler als die Zugabe des Überhangs, das Rand und
+Sporn zu einer freien Fläche verbindet — an einer Wand mit zwei solchen
+Flanken spannte die Schicht wieder 40,1 statt 6,2 mm (Review). Weil der Slicer nach seinem Winkel jede flache Unterseite stützt,
 sperrt `support.spare_ledges` die Überhangfläche der Ränder in der Übergabe,
 um eine Bahnbreite hinaus und ohne die Überhänge, die Stütze brauchen; Stämme
 anderer Stützen laufen durch eine Sperre hindurch. Am Eiffelturm stehen mit

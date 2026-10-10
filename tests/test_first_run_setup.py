@@ -694,6 +694,18 @@ def test_a_remembered_slicer_in_another_case_is_the_one_used(
     assert used == [remembered]
 
 
+def test_setup_and_print_dialog_accept_the_same_smallest_nozzle(
+    setup_dialog: FirstRunDialog,
+) -> None:
+    """Die kleinste Düse ist eine Zahl: Sie trägt die Druckgrenze (§11.2), und
+    die Ersteinrichtung nahm 0,05 mm an, die der Druckdialog still auf 0,1 kürzte."""
+    from app.core.units import SMALLEST_NOZZLE
+    from app.ui import print_settings_dialog
+
+    assert setup_dialog.printer_nozzle.minimum() == pytest.approx(SMALLEST_NOZZLE)
+    assert print_settings_dialog._NOZZLE_RANGE_MM[0] == pytest.approx(SMALLEST_NOZZLE)
+
+
 def test_custom_printer_is_saved_with_entered_dimensions_before_inventory_opens(
     setup_dialog: FirstRunDialog, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
