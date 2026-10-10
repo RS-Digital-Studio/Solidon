@@ -124,7 +124,12 @@ def inventory(monkeypatch, tmp_path):
     slot = MaterialSlot(0, "PLA", (1.0, 1.0, 1.0), material_type="PLA")
     line = usage.UsageLine(slot, 42.0, entry.identifier)
     request = SimpleNamespace(
-        fingerprint="new", legacy_fingerprints=("old",), project_name="Part", plate=0, lines=(line,)
+        fingerprint="new",
+        identities=("new",),
+        legacy_fingerprints=("old",),
+        project_name="Part",
+        plate=0,
+        lines=(line,),
     )
     position = filaments.BookingPosition(
         entry.identifier, 42.0, "internal", ui._note(line), filament_key=ui._line_key(line)

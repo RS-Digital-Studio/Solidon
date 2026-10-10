@@ -376,6 +376,26 @@ Warum ein exakter Körper neu vernetzt hinausgeht: „die Datei geht in den
 Slicer, und an 50-µm-Pixeln ist eine Facette von fünf Hundertsteln eine
 Stufe."
 
+Feine Schichten als Höhenkurve (RM-586, aus der Regel verschoben):
+`Metadata/layer_heights_profile.txt` liest die Orca-Familie,
+`Metadata/Slic3r_PE_layer_heights_profile.txt` PrusaSlicer und SuperSlicer, beide als
+`object_id=<Stelle ab eins>|z;h;…`. Die Kurve beginnt mit der ersten Schicht als zweitem
+Wert und endet genau auf der Oberkante (Toleranz 0,001 mm,
+`PrintObject::update_layer_height_profile`), sonst verwirft der Slicer sie still — auch,
+wenn ihre erste Schicht nicht die des Profils ist: Mit Solidons 0,25 gegen die 0,2 des
+Neptune-4-Profils druckten vier Orca-Programme gleichmäßig. Deshalb rechnet die Übergabe
+mit `manufacturer.effective`. OrcaSlicer lehnt eine Kurve unter Bäumen mit `support_style`
+organisch oder Vorgabe ab, nimmt sie unter `tree_slim`, `tree_strong`, `tree_hybrid` an;
+mit Reinigungsturm verlangt sie dieselbe Kurve an allen Teilen („The prime tower is only
+supported if all objects have the same variable layer height.“), aber nur, wenn mehr als
+ein Objekt auf der Platte steht; PrusaSlicer ebenso, an jeder Maschine mit mehreren
+Werkzeugen und eingeschaltetem `wipe_tower` (`handover.same_layers_required`). Gemessen am Drachen (feine
+Schichten erzwungen, 650 → 817 Lagen): ElegooSlicer +29,7 %, Bambu Studio +22,2 %,
+OrcaSlicer +30,7 %, Anycubic Slicer Next +27,9 %, Creality Print +21,7 %, PrusaSlicer
++22,3 % Druckzeit; Cura unverändert. Je Teil (Kuppe neben Klotz) in allen sieben lesenden
+Programmen nur an der Kuppe. SuperSlicer zählt `top_solid_min_thickness` in Lagen der
+normalen Schicht und bewirkt mit feinen Schichten nichts.
+
 ## Auf dem Herstellerprofil wird nur die Abweichung geschrieben
 
 Der Anlass der Entscheidung (Robert, 27.09.2026):

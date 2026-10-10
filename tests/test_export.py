@@ -41,10 +41,12 @@ from app.core.slice import advise
 from app.core.types import (
     Finding,
     MaterialSlot,
+    PrintSettings,
     Profile,
     Scene,
     SceneObject,
     SettingAdvice,
+    SliceResult,
     SlotProfileBinding,
     Source,
     SourceOrigin,
@@ -291,7 +293,8 @@ def test_file_worker_can_cancel_during_part_advice_without_a_window(
         node
         for node in worker.body
         if isinstance(node, ast.FunctionDef)
-        and node.name in {"work", "cancel", "_assembly", "_assembly_in_one_read", "_begin_write"}
+        and node.name
+        in {"work", "cancel", "_assembly", "_assembly_in_one_read", "_usage_for", "_begin_write"}
     ]
     isolated = ast.Module(
         body=[
@@ -6028,3 +6031,251 @@ def test_the_binary_stl_is_byte_for_byte_what_trimesh_writes(
     ):
         expected = _trimesh.exchange.stl.export_stl(body)
         assert mesh_module.MeshData.of(body).to_stl() == expected
+
+
+# --- Feine Schichten als Höhenkurve (RM-586) ------------------------------------------
+
+
+def _dome_and_block() -> list[SceneObject]:
+    """Ein Klotz und eine Halbkugel: nur die Kuppe hat feine Formen."""
+    block = trimesh.creation.box(extents=(20.0, 20.0, 10.0))
+    block.apply_translation((-40.0, 0.0, 5.0))
+    sphere = trimesh.creation.icosphere(subdivisions=5, radius=20.0)
+    floor = trimesh.creation.box(extents=(60.0, 60.0, 30.0))
+    floor.apply_translation((0.0, 0.0, 15.0))
+    dome = trimesh.boolean.intersection([sphere, floor], engine="manifold")
+    return [
+        scene_object("obj_1", "Klotz", MeshData.of(block)),
+        scene_object("obj_2", "Kuppe", MeshData.of(dome)),
+    ]
+
+
+def _heights(written: Path, name: str) -> dict[int, list[float]]:
+    lines = zipfile.ZipFile(written).read(name).decode("utf-8").splitlines()
+    curves: dict[int, list[float]] = {}
+    for line in lines:
+        head, values = line.split("|")
+        curves[int(head.removeprefix("object_id="))] = [float(value) for value in values.split(";")]
+    return curves
+
+
+@pytest.mark.parametrize("flavour", ["orca", "prusa"])
+def test_fine_layers_travel_as_a_height_curve_of_the_part_that_wants_them(
+    tmp_path: Path, profile: Profile, flavour: SlicerFlavour
+) -> None:
+    """Übernommen sind feine Schichten; die Kuppe bekommt ihre Höhenkurve in
+    der Schreibweise beider Familien, der Klotz daneben keine. Die Kurve
+    beginnt mit der ersten Schicht als zweitem Wert — sonst verwirft die
+    Orca-Familie sie —, endet genau auf der Oberkante und wird nur oben fein."""
+    settings = print_settings.with_accepted(
+        print_settings.resolve(profile), "layers.fine_layer_height", 0.1
+    )
+    written, findings = write_assembly(
+        _dome_and_block(),
+        tmp_path,
+        project_name="t",
+        profile=profile,
+        settings=settings,
+        flavour=flavour,
+    )
+    first = settings.layers.first_layer_height
+    for name in (threemf.ORCA_LAYER_HEIGHTS_PATH, threemf.PRUSA_LAYER_HEIGHTS_PATH):
+        curves = _heights(written, name)
+        assert list(curves) == [2], "nur die Kuppe, das zweite Objekt"
+        curve = curves[2]
+        assert curve[:2] == [0.0, pytest.approx(first)]
+        assert curve[-2] == pytest.approx(20.0, abs=1e-3)
+        fine = [z for z, height in zip(curve[0::2], curve[1::2], strict=True) if height < 0.15]
+        assert fine and min(fine) > 15.0
+    assert "export.fine_layers_trees" not in {finding.code for finding in findings}
+
+
+def test_no_height_curve_under_organic_trees(tmp_path: Path, profile: Profile) -> None:
+    """Unter organischen Bäumen lehnt die Orca-Familie die Kurve ab
+    („Variable layer height is not supported with Organic supports“). Wer
+    beides wählt, bekommt die Bäume und einen Satz, warum die feinen Schichten
+    entfallen."""
+    settings = print_settings.with_choice(
+        print_settings.with_choice(
+            print_settings.resolve(profile), "layers.fine_layer_height", 0.1
+        ),
+        "support.style",
+        "tree",
+    )
+    written, findings = write_assembly(
+        _dome_and_block()[1:], tmp_path, project_name="t", profile=profile, settings=settings
+    )
+    assert threemf.ORCA_LAYER_HEIGHTS_PATH not in zipfile.ZipFile(written).namelist()
+    assert [
+        finding.object_id for finding in findings if finding.code == "export.fine_layers_trees"
+    ] == ["obj_2"]
+
+
+def test_cura_gets_no_height_curve(tmp_path: Path, profile: Profile) -> None:
+    """CuraEngine nimmt keine Kurve und bekommt auch keine Automatik als Ersatz
+    (``slicer_keys.NOT_TAKEN_BY``)."""
+    assert not slicer_keys.takes("cura", "layers.fine_layer_height")
+    settings = print_settings.with_choice(
+        print_settings.resolve(profile), "layers.fine_layer_height", 0.1
+    )
+    values = handover.as_mapping(settings, "cura")
+    assert not any(key.startswith("adaptive_layer_height") for key in values)
+
+
+def _painted(body: SceneObject) -> SceneObject:
+    """Der Körper zweifarbig: obere Hälfte Spule 2 — die Orca-Familie baut einen Turm."""
+    mesh = as_mesh_data(body.mesh)
+    centres = mesh.raw.triangles_center[:, 2]
+    middle = 0.5 * float(mesh.bounds.minimum[2] + mesh.bounds.maximum[2])
+    return replace(
+        body,
+        mesh=MeshData(raw=mesh.raw, slots=tuple(int(centre > middle) for centre in centres)),
+        material_slots=[_OLD_RED, _OLD_BLUE],
+    )
+
+
+def _prusa_chain(nozzles: str, tower: str = "1") -> manufacturer.PrusaChain:
+    return manufacturer.PrusaChain(
+        "Original Prusa XL - 2T 0.4 nozzle",
+        "0.20mm SPEED @XL 0.4",
+        "",
+        {"wipe_tower": tower, "nozzle_diameter": nozzles, "spiral_vase": "0"},
+    )
+
+
+@pytest.mark.parametrize(
+    ("flavour", "nozzles", "blocked"),
+    [
+        ("orca", "", True),
+        ("prusa", "0.4,0.4", True),
+        # Gegenprobe: Eine Maschine mit einem Werkzeug prüft PrusaSlicer nicht.
+        ("prusa", "0.4", False),
+    ],
+    ids=["Orca-Turm", "XL 2T", "MK4S"],
+)
+def test_beside_other_parts_a_tower_keeps_the_layers_even(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    profile: Profile,
+    flavour: SlicerFlavour,
+    nozzles: str,
+    blocked: bool,
+) -> None:
+    """Mit Reinigungsturm verlangen die Orca-Familie und PrusaSlicer gleiche
+    Kurven an allen Objekten einer Platte, sonst rechnen sie sie nicht („The
+    Wipe tower is only supported if all objects have the same variable layer
+    height“, Review RM-586 F1). PrusaSlicer 2.9.6 prüft schon, wenn die
+    Maschine zwei Werkzeuge hat, auch mit einer Spule. Dort keine Kurve, ein
+    Satz an der Kuppe — keiner am Klotz, der keine hätte — und kein Rat."""
+    monkeypatch.setattr(handover, "_native_process", lambda _setup: {"enable_prime_tower": "1"})
+    monkeypatch.setattr(
+        manufacturer, "prusa_chain", lambda _profile, _setup: _prusa_chain(nozzles or "0.4")
+    )
+    executable = Path("orca-slicer.exe" if flavour == "orca" else "prusa-slicer-console.exe")
+    setup = handover.SlicerSetup(executable=executable, flavour=flavour)
+    block, dome = _dome_and_block()
+    # Zwei Spulen für die Orca-Familie, eine für PrusaSlicer.
+    bodies = [block, _painted(dome)] if flavour == "orca" else [block, dome]
+    assert writer.shared_layer_plates(bodies, setup, profile) == (
+        frozenset({0}) if blocked else frozenset()
+    )
+    settings = print_settings.with_choice(
+        print_settings.resolve(profile), "layers.fine_layer_height", 0.1
+    )
+    written, findings = write_assembly(
+        bodies,
+        tmp_path,
+        project_name="t",
+        profile=profile,
+        settings=settings,
+        flavour=flavour,
+        setup=setup,
+    )
+    names = zipfile.ZipFile(written).namelist()
+    assert (threemf.PRUSA_LAYER_HEIGHTS_PATH in names) is not blocked
+    towered = [finding for finding in findings if finding.code == "export.fine_layers_tower"]
+    assert [finding.object_id for finding in towered] == (["obj_2"] if blocked else [])
+    plain = print_settings.resolve(profile)
+    offered = advise.advise(
+        plain,
+        profile,
+        _dome_result(as_mesh_data(dome.mesh), plain, profile),
+        flavour=flavour,
+        shared_layers=dome.plate in writer.shared_layer_plates(bodies, setup, profile),
+    )
+    assert any(entry.path == "layers.fine_layer_height" for entry in offered) is not blocked
+
+
+def _dome_result(mesh: MeshData, settings: PrintSettings, profile: Profile) -> SliceResult:
+    from app.core.slice.analysis import slice_body
+
+    return slice_body(
+        mesh,
+        settings.layers.layer_height,
+        first_layer_height=settings.layers.first_layer_height,
+        bridge_from=profile.minimum_wall_thickness,
+        support_volume=False,
+    )
+
+
+@pytest.mark.parametrize("flavour", ["orca", "prusa"])
+def test_a_part_alone_keeps_its_fine_layers_beside_its_tower(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, profile: Profile, flavour: SlicerFlavour
+) -> None:
+    """Ein Körper allein auf der Platte: Die Slicer vergleichen Kurven nur
+    zwischen mehreren Objekten, und ein bemalter Körper druckt seine Kurve
+    neben seinem Turm (Bambu Studio und ElegooSlicer, Review RM-586 F2). Er
+    bekommt sie, und keinen Satz über eine eigene Platte, auf der er schon
+    steht."""
+    monkeypatch.setattr(handover, "_native_process", lambda _setup: {"enable_prime_tower": "1"})
+    monkeypatch.setattr(
+        manufacturer, "prusa_chain", lambda _profile, _setup: _prusa_chain("0.4,0.4")
+    )
+    executable = Path("orca-slicer.exe" if flavour == "orca" else "prusa-slicer-console.exe")
+    setup = handover.SlicerSetup(executable=executable, flavour=flavour)
+    dome = _painted(_dome_and_block()[1])
+    if flavour == "orca":
+        assert writer.tower_plates([dome], setup) == frozenset({0}), "zwei Spulen, ein Turm"
+    assert writer.shared_layer_plates([dome], setup, profile) == frozenset()
+    settings = print_settings.with_choice(
+        print_settings.resolve(profile), "layers.fine_layer_height", 0.1
+    )
+    written, findings = write_assembly(
+        [dome],
+        tmp_path,
+        project_name="t",
+        profile=profile,
+        settings=settings,
+        flavour=flavour,
+        setup=setup,
+    )
+    assert list(_heights(written, threemf.PRUSA_LAYER_HEIGHTS_PATH)) == [1]
+    assert "export.fine_layers_tower" not in {finding.code for finding in findings}
+
+
+@pytest.mark.parametrize(
+    ("values", "objects", "wanted"),
+    [
+        ({"wipe_tower": "1", "nozzle_diameter": "0.4,0.4"}, 2, True),
+        ({"wipe_tower": "1", "nozzle_diameter": "0.4,0.4,0.4,0.4,0.4"}, 3, True),
+        ({"wipe_tower": "1", "nozzle_diameter": "0.4,0.4"}, 1, False),
+        ({"wipe_tower": "0", "nozzle_diameter": "0.4,0.4"}, 2, False),
+        ({"wipe_tower": "1", "nozzle_diameter": "0.4"}, 2, False),
+        ({"wipe_tower": "1", "nozzle_diameter": "0.4,0.4", "spiral_vase": "1"}, 2, False),
+    ],
+    ids=["XL 2T", "MMU3", "allein", "ohne Turm", "ein Werkzeug", "Vase"],
+)
+def test_prusaslicer_asks_for_the_same_layers_where_its_tower_validates(
+    monkeypatch: pytest.MonkeyPatch,
+    profile: Profile,
+    values: dict[str, str],
+    objects: int,
+    wanted: bool,
+) -> None:
+    """PrusaSlicer 2.9.6 vergleicht Höhenkurven, wenn der Prozess den Turm
+    einschaltet, die Maschine mehr als ein Werkzeug hat und mehr als ein
+    Objekt auf der Platte steht (``Print::validate``, ``has_wipe_tower``)."""
+    chain = manufacturer.PrusaChain("XL", "Prozess", "", values)
+    monkeypatch.setattr(manufacturer, "prusa_chain", lambda _profile, _setup: chain)
+    setup = handover.SlicerSetup(executable=Path("prusa-slicer-console.exe"), flavour="prusa")
+    assert handover.same_layers_required(setup, profile, filaments=1, objects=objects) is wanted

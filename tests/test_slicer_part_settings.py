@@ -613,6 +613,12 @@ def test_file_export_without_program_only_promises_shared_object_capabilities(
 # acht Programmen (``.claude/.state/drache-2026-10-08/kontakt_je_teil.py``):
 # geschrieben 0,4 gegen 0,2 mm und so weiter, gemessen je Programm in
 # ``konzepte/begruendungen/regel-druckrat.md``; Cura nimmt die Lücke nicht je Netz.
+# Feine Schichten und Deckschichtdicke (RM-586) belegt eine Kuppe neben einem
+# Klotz (``.claude/.state/drache-2026-10-08/slicer_fein.py``, Modell ``paar``,
+# Archiv RM-586): die Kuppe oben mit 0,1 mm, der Klotz gleichmäßig, in allen
+# sieben Programmen, die die Kurve lesen;
+# die Mindestdicke 0,8 bzw. 1,2 mm je Teil hebt die dünne Füllung um 0,1 bis 0,2 mm,
+# außer in SuperSlicer, der sie in Lagen der normalen Schicht zählt.
 # Brückenstütze, dicke Brücken, Brückenfluss, Zusatzwände und Umkehr (RM-587) belegt
 # dieselbe Bauart mit Brücke, Auskragung und ABS-Trichter in allen acht Programmen
 # (``bruecken_je_teil.py``): Wirkung nur am Teil mit dem Wert (Brückenstütze in
@@ -630,6 +636,7 @@ MEASURED_PART_PATHS = frozenset(
         "adhesion.kind",
         "adhesion.brim_gap",
         "infill.density",
+        "layers.fine_layer_height",
         "layers.elephant_foot",
         "layers.line_width",
         "shell.hole_offset",
@@ -637,6 +644,7 @@ MEASURED_PART_PATHS = frozenset(
         "shell.outer_wall_first",
         "shell.precise_outer_wall",
         "shell.scarf_seam",
+        "shell.top_thickness",
         "shell.wall_count",
         "shell.wall_generator",
         "speed.acceleration",
@@ -694,6 +702,7 @@ MEASURED_PART_PATHS = frozenset(
             {
                 "shell.precise_outer_wall",
                 "shell.scarf_seam",
+                "shell.top_thickness",
                 "speed.acceleration",
                 "speed.outer_wall_acceleration",
                 "shell.overhang_walls",
@@ -707,10 +716,12 @@ MEASURED_PART_PATHS = frozenset(
             {
                 "adhesion.kind",
                 "adhesion.brim_gap",
+                "layers.fine_layer_height",
                 "layers.line_width",
                 "support.interface_spacing",
                 "support.placement",
                 "shell.precise_outer_wall",
+                "shell.top_thickness",
                 "shell.wall_generator",
                 "shell.thick_bridges",
                 "shell.bridge_flow",
