@@ -1594,6 +1594,30 @@ def test_the_corner_numbers_are_part_of_the_reading_key() -> None:
     assert blind != own, "ohne eckennummern gälte die Lesung des Originals"
 
 
+def test_a_patch_too_large_to_be_worth_it_is_read_without_memory(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Ein Fleck über ``REMEMBERED_PATCH_SHARE`` des Körpers und ``REMEMBERED_PATCH_FACES``
+    Dreiecken merkt nichts über die Körpergrenze — er liest wie ohne Gedächtnis.
+
+    Die Haut einer Freiform ist oft ein Fleck; jeder Schritt trifft sie, und
+    ihr Abdruck kostete kalt am Spiderman und am Drachen ein Zehntel der
+    Erkennung (A5).
+    """
+    body, patch = _fillet_patch()
+    monkeypatch.setattr(features_module, "REMEMBERED_PATCH_FACES", 0)
+    monkeypatch.setattr(features_module, "REMEMBERED_PATCH_SHARE", 0.0)
+    forget_cache()
+    features_module._support_handle(body, patch)
+    twin = _twin(body)
+    assert isinstance(features_module._support_handle(twin, patch), features_module._SurfaceSupport)
+    assert not features_module._BY_GEOMETRY.get("support_digest")
+    monkeypatch.setattr(features_module, "REMEMBERED_PATCH_SHARE", 1.0)
+    forget_cache()
+    features_module._support_handle(body, patch)
+    assert isinstance(features_module._support_handle(twin, patch), features_module._SupportPrint)
+
+
 def test_a_cancelled_question_leaves_nothing_in_the_memory(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

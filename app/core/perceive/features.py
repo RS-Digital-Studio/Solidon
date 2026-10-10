@@ -2790,7 +2790,7 @@ def _fitted(
                 check_cancelled()
             if _face_count(body, patch) < MIN_PATCH_FACES:
                 return False
-            if not _ACROSS_BODIES[0]:
+            if not _ACROSS_BODIES[0] or not _worth_remembering(body, patch):
                 return classify_read(patch)
             shape = _rigid_key(body, patch)
             known_shape = shape is not None and shape in no_cone_here
@@ -8049,6 +8049,24 @@ def remembered(
     return value
 
 
+#: Ab welchem Anteil der Dreiecke seines Körpers ein Fleck nichts über die
+#: Körpergrenze merkt (P5, RM-592). Ein so großer Fleck — die Haut einer
+#: Freiform ist oft einer — trifft fast jeder Schritt, und sein Abdruck kostete
+#: kalt am Spiderman und am Drachen rund ein Zehntel der Erkennung (A5). Ein
+#: Arbeitsstück, keine Toleranz: Ein Fleck darüber rechnet wie ohne Gedächtnis.
+#: Gilt erst ab :data:`REMEMBERED_PATCH_FACES` Dreiecken — ein kleiner Körper aus
+#: wenigen Flecken kostet keinen spürbaren Abdruck.
+REMEMBERED_PATCH_SHARE: Final = 0.25
+REMEMBERED_PATCH_FACES: Final = 50_000
+
+
+def _worth_remembering(body: trimesh.Trimesh, patch: Sequence[int]) -> bool:
+    """Ob sich ein Fleck über die Körpergrenze merken lohnt (:data:`REMEMBERED_PATCH_SHARE`)."""
+    return len(patch) <= REMEMBERED_PATCH_FACES or (
+        len(patch) <= REMEMBERED_PATCH_SHARE * len(body.faces)
+    )
+
+
 def _remembered_already(
     name: str, body: trimesh.Trimesh, patch: Sequence[int], extra: Any = None
 ) -> bool:
@@ -8436,7 +8454,7 @@ def _support_handle(
         known = screened.supports.get(_patch_key(patch))
         if known is not None:
             return known
-    if not _ACROSS_BODIES[0]:
+    if not _ACROSS_BODIES[0] or not _worth_remembering(body, patch):
         return _surface_support(body, patch, check_cancelled)
     key = hashlib.blake2b(
         _patch_print(body, patch)
@@ -8554,7 +8572,9 @@ def _patch_prints(
     chosen = [
         patch
         for patch in patches
-        if len(patch) and not _remembered_already("patch_print", body, patch, seams)
+        if len(patch)
+        and _worth_remembering(body, patch)
+        and not _remembered_already("patch_print", body, patch, seams)
     ]
     if not chosen:
         return
@@ -11834,7 +11854,11 @@ def _tangential_pieces(
     Liest die Rechnung über den Ring hinaus — schließt :func:`_without_notches`
     eine Kerbe mit Dreiecken außerhalb —, wird nichts gemerkt.
     """
-    if not _ACROSS_BODIES[0] or _face_count(body, patch) < 2 * MIN_PATCH_FACES:
+    if (
+        not _ACROSS_BODIES[0]
+        or _face_count(body, patch) < 2 * MIN_PATCH_FACES
+        or not _worth_remembering(body, patch)
+    ):
         # Ein kleines Ziel trennt :func:`_tangential_cylinders` gar nicht erst;
         # sein Abdruck kostete mehr als die Antwort.
         return _tangential_pieces_read(body, mesh, patch, check_cancelled)
