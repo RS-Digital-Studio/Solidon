@@ -381,6 +381,7 @@ Prüfung prüft jede gefundene Datei, nicht die englische.
 | Rückfallkette | `solver chain` | Stufen bei gescheiterter Boolescher Op |
 | Passung | `Fit` | benannte Beziehung zweier Features |
 | Profil | `Profile` | Drucker- oder Materialeinstellungen |
+| Druckgrenze | `PRINT_LIMIT` | wie weit Maße und Positionen nach einer Beschleunigung abweichen dürfen; ein Ergebnis, das sie hält, diskret gleich bleibt und kein Netz verschlechtert, ist **druckgleich** (§11.2) |
 | Verfahren | `technology` | wie ein Drucker Material zu einem Körper macht: `fdm` legt Bahnen aus einer Düse, `resin` belichtet Schichten in einem Harzbad (§38) |
 | Saugglocke | `cupping` | ein nach unten offener Hohlraum, der beim Abziehen von der Folie Unterdruck zieht — Resin-Befund der zweiten Stufe (§22.2); geplant, [RM-188](ROADMAP.md#rm-188) P9 |
 | Abflussöffnung | `drain` | die Bohrung, durch die ungehärtetes Harz aus einem ausgehöhlten Körper abläuft (§25); geplant, [RM-188](ROADMAP.md#rm-188) P9 |
@@ -865,6 +866,42 @@ Toleranz in diesem Sinn, sondern die Auflösung, mit der beide Kerne Rundungen
 in Facetten zerlegen (§25, §30). Die Merkmalszuordnung aus
 §21.3 nutzt eigene, geprüfte Kosten und Annahmeschwellen in
 `app/core/perceive/matching.py`; diese Funktion steuert sie nicht.
+
+**Druckgleich** ist der Maßstab, an dem eine Beschleunigung oder
+Speicherersparnis gemessen wird (Entscheidung Robert: Was sich beim Druck
+nicht zeigt, darf gespart werden, solange die kleinste Düse sauber
+unterstützt wird und die Modelle sauber ein- und ausgelesen werden).
+Verglichen wird der Stand nach der Änderung mit dem davor und mit dem letzten
+veröffentlichten, über Korpus und Beispielprojekte; die größte Abweichung
+steht im Nachweis. Unterschiede zum veröffentlichten Stand, die eine gewollte
+Ergebnisänderung seither erklärt (Archiveintrag, Cache-Format), nennt der
+Nachweis getrennt; sie zählen nicht gegen die Beschleunigung.
+
+- **Diskret gleich:** Objekte und ihre Folge, Slots, Merkmale mit Art und
+  Kennung, Befunde, Fragen an den Nutzer, Rückfallstufe, dicht nach dem
+  Verschweißen wie im Slicer. Die letzte Anzeigestelle darf sich ändern, die
+  Dreiecksfolge auch — außer wo die Herkunftsfolge zugesagt ist
+  (`in_source_layout`).
+- **Maße und Positionen** weichen höchstens um die Druckgrenze
+  `PRINT_LIMIT` ab: ein Vierzigstel der kleinsten Düse, die Solidon annimmt
+  (`SMALLEST_NOZZLE`, 0,1 mm → 2,5 µm) — unter der Bahnauflösung der Slicer
+  (6–12,5 µm) und unter einem Fünftel der feinsten Harzpixel (14 µm).
+- **Kein Netz wird schlechter:** keine neue offene Kante, Selbstdurchdringung
+  oder entartetes Dreieck; Import und Export lesen und schreiben jedes Netz-
+  und CAD-Format wie vorher, inhaltlich druckgleich, nicht bytegleich.
+  Bausteindateien bleiben verlustfrei (§24.5).
+
+Druckgleich lockert keinen Gleichheitsvertrag zwischen zwei Wegen desselben
+Stands: gleicher Startwert (§11.3), jede Plattform (`.claude/rules/kern.md`),
+Hilfsprozess und Prozess, Auswertung mit und ohne Cache (§15.1), örtliche und
+ganze Erkennung, Vorschau und Op bleiben bitgleich, übersetzter Schichtkern und
+NumPy-Weg gleichwertig nach §22.1, Projektdateien inhaltsgleich. Gebündelt
+wird nach den Plattformregeln (kein BLAS, kein `einsum` in Wegen zu
+Geometrie). Ändert eine druckgleiche Änderung die Bits eines gespeicherten
+Ergebnisses, steigt `cache_version`, bei gemeinsamem Code
+`CACHE_FORMAT_VERSION`. `PRINT_LIMIT` ist keine Toleranz, mit der der Kern
+rechnet, und die Facettenauflösung `MAX_FACET_SAG` bleibt eine
+Modellentscheidung, keine Ersparnis.
 
 Numerische Genauigkeit, Erkennungsunsicherheit und Fertigungsspiel sind
 verschiedene Größen. Fertigungstoleranzen kommen aus dem Materialprofil,
