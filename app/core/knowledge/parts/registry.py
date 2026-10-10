@@ -505,7 +505,11 @@ class PartSpec:
     Innenkontur legt: die Bohrung der Lasche, das Innengewinde der Mutter, die
     Aufnahme des Stangenverbinders. Ein abtragender Baustein mit Spiel tut das
     immer (:func:`app.core.scene.fits.allowances_for`, RM-589); ein Stift, ein
-    Bolzen oder eine Feder trägt sein Spiel außen und weitet kein Loch."""
+    Bolzen oder eine Feder trägt sein Spiel außen und weitet kein Loch.
+    Gezählt wird am benannten Innenmerkmal des Bausteins (Bohrung,
+    Innengewinde), wenn seine Achse auf der Platte steht; ``test_parts.py``
+    prüft, dass jeder aufgesetzte Baustein, dessen Innenmerkmal mit dem Spiel
+    wächst, diese Angabe trägt."""
     feasible: Feasibility | None = None
     """Eine erklärte Bedingung **zwischen** Parametern, die keine Einzelgrenze
     ausdrücken kann: Gibt den fachlichen Grund zurück, wenn eine Kombination

@@ -71,6 +71,13 @@ Schnappverbindungen, dazu der Montageweg; ein Gewindepaar über den ganzen
 Eingriffsweg (`bausteine.md`). Zwei einzeln gültige Körper und eine Boolesche
 Differenz belegen noch keine passende Verbindung.
 
+Legt ein **aufgesetzter** Baustein sein Spiel in eine Bohrung, ein
+Innengewinde oder eine Aufnahme, steht `play_inside=True` und das Loch ist ein
+benanntes Innenmerkmal mit Achse und Tiefe: Der Druckrat stellt dann den
+Lochausgleich des Slicers für das Teil auf null, wenn die Achse auf der Platte
+steht (`scene.fits.allowances_for`, RM-589). Ohne die Angabe gleicht der Slicer
+das Spiel ein zweites Mal aus; `test_parts.py` prüft es am gebauten Baustein.
+
 ## Abschluss
 
 `/pruefen` mit den betroffenen Dateien, insbesondere `tests/test_parts.py` und
