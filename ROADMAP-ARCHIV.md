@@ -46621,16 +46621,19 @@ Stücken zusammen, davon 1 188 im Kanal; die übrigen 1 056 zählten als Feld.
 **Behoben:** `analysis.vaults` nennt die Streifen von Decken, die sich zwischen ihren
 Auflagen schließen (`_Ceilings.closes`, gefragt an der ganzen Decke samt Kanalstücken), und
 die sich selbst tragen (`_Ceilings.arch`): jedes Stück unter der obersten Schicht, das zu
-`CEILING_SPANNED` zwischen den Auflagen liegt (`_Ceilings.spanned`) und entweder nicht
-weiter als seine Zugabe und `CANTILEVER_LAYERS` (vier) Schichthöhen über seine eigene
-Schicht darunter kragt, zwischen zwei Auflagen liegt (`_held_twice`) oder zu einem Scheitel
-gehört, dessen Kragarme je als Rand tragen (`LEDGE_REACH`) oder der quer zwischen den
+`CEILING_SPANNED` zwischen den Auflagen liegt (`_Ceilings.spanned`) und entweder als
+Kragarm trägt — seine Außenbahn liegt höchstens eine Bahnbreite neben der Schicht darunter
+(`_cantilever`, Bahnbreite aus `bridge_from`) — oder als kurze Brücke längs der freien Kante
+(bis `SPAN_INTERESTING`, bis Zugabe plus zwei Bahnen und `CANTILEVER_LAYERS` Schichthöhen),
+zwischen zwei Auflagen liegt (`_held_twice`, bis `SPAN_INTERESTING`/2 vom Material) oder zu
+einem Scheitel gehört, dessen Kragarme je als Rand tragen (`LEDGE_REACH`) oder der quer zwischen den
 Flanken nicht weiter als `SPAN_INTERESTING` spannt. Sie zählen nicht zum Stützbedarf, nicht
 zu dem, was auf dem Modell aufsetzt, und nicht zum Überhangbefund. Die oberste Schicht ist
 die letzte Spanne und zählt mit ihrer Fläche weiter. Die an einer Seite hängenden Streifen
 (`hanging_vaults`) sind für die Brückenregel ruhig, in Stützbedarf, Hinweisen und
-`open_pieces` gleich; die gefassten bleiben darunter. In der Kanalfrage zählen die Streifen
-eines Scheitels, der weiter kragt, als er trägt (`_Arch.overhanging`), wie Stücke außerhalb.
+`open_pieces` gleich; die gefassten bleiben darunter. In der Kanalfrage wird ein Scheitel, der
+weiter kragt, als er trägt, samt letzter Spanne ausgespart (`_Arch.overhanging`); die Decke
+bleibt Kanal.
 Wer nur Ränder fragt, rechnet keine Bögen (`_self_carried`); Schließ- und Bogenantworten
 sind je Schichten gemerkt (`_closing_answers`), enge Rand- und Bogenantworten derselben
 Auswahl auch.
@@ -46655,7 +46658,7 @@ Wechsel: Eiffelturm 175,1 → 181,2 s (+3,5 %), Drache +0,5 % (Review).
 keine Stütze, ohne die Streifen bleibt nur die letzte Spanne, kein Brückenbefund),
 `test_a_ceiling_that_cantilevers_further_than_it_carries_keeps_its_supports` (Pultdecke,
 Decke unter 2°, Flachbogen 60/8, Satteldecke 40/3, Korbbogen 60/12 über 0,08/0,2/0,28 mm und
-45/55/60°), `test_a_flat_arch_over_the_model_is_no_channel`,
+45/55/60°), `test_a_flat_arch_over_the_model_spares_its_crown`,
 `test_a_flat_vault_over_an_enclosed_chamber_stays_a_channel`,
 `test_a_round_arch_over_the_model_stays_a_channel`,
 `test_a_channel_with_rounded_corners_stays_a_channel_at_fine_layers`,
@@ -46682,6 +46685,40 @@ Eiffelturm 21,5 → 11,7 s, Drache 13,3 → 14,8 s; nur Ränder 20,4 → 7,2 und
 Hinweise 17,2 → 8,2 und 5,2 → 6,6 s; Prüfbericht Eiffelturm 80,5 → 54,1 s (vier → ein
 Randlauf). Das Bündeln allein ändert keine Rand- und Bogenmenge (Eiffelturm, Drache
 hashgleich).
+
+**Nachprüfung (10.10.2026, `review_rm585_nach.md`, Urteil „nicht“) und Behebung:** N1 — ein
+Streifen „zwischen zwei Auflagen“ zählte ohne Spannweite; die Kumiko-Schale aus dem Korpus
+verlor am generischen Drucker (45°) ihre Stütze, ihre Gitterplatte spannt 81 mm. Jetzt trägt
+er sich nur bis `SPAN_INTERESTING`/2 vom Material darunter; weiter ist er eine Brücke, kein
+Scheitel (über einem Kanal Kanaldecke wie eine Tunneldecke). N2 — die Grenze Zugabe plus
+vier Schichthöhen entwarnte Decken zwischen 11,3° und gut 17°; in 20 mm tiefen Wänden und
+Häuten liefen Außenbahnen 0,54 bis 0,73 mm neben der Kante 20 mm frei. Jetzt die Bahnbreite
+(oben) und lange freie Läufe zum Scheitel; ein einseitiger Streifen gilt nur als gefasst,
+wenn sein Teil jenseits des Kragarms selbst zwischen Auflagen liegt (41 von 42 Streifen der
+Pultdecke unter 12° bei 60° kamen sonst so durch). Vier Schichthöhen bleiben als Grenze
+feiner Schichten: Ohne sie galten Satteldecke 8,5° bei 0,08 und 0,12 mm, Pultdecke 4,3° und
+Flachbögen bei 0,08 mm als Bogen; keine Breite in Millimetern trennt sie vom Rundbogen R 30
+bei 0,2 mm. Rundbögen in Wänden über 15 mm Tiefe bekommen ihre Stütze zurück (wie vor
+RM-585, L1 zurückgenommen). N3 — der Kanal-Zwilling entschied je Decke nach Fläche; jetzt
+wird nur der kragende Scheitel samt letzter Spanne ausgespart. N5–N7 — Docstrings, eine
+Halt-Rechnung für Schließfrage und Scheitel (`_anchored`), `hanging` vor `arches` gesetzt.
+N4 (Schließfrage nicht monoton in der Neigung, vorsichtige Richtung) ist als neuer Punkt gemeldet.
+
+**Nachweis der Nachprüfung (10.10.2026):** `test_a_cantilever_that_runs_free_along_a_deep_wall_keeps_its_supports`
+(Pultdecke 12° in 20 mm Wand bei 0,2 mm/45° und 60°, 15° bei 60°, Haut 15° bei 45° und 60°,
+Rundbogen R 20 in 16 und 20 mm Wand; mit zwei Bahnen des Centauri, 0,84 mm),
+`test_a_lattice_plate_between_two_walls_is_no_arch`, `test_a_flat_arch_over_the_model_spares_its_crown`,
+`test_a_mirrored_pocket_gets_the_same_blocker`. Gegenprobe am Stand `acc6283d5`: alle zehn
+Fälle rot. Sieben Mutationen (ohne Spannweitengrenze, ohne Zwei-Seiten-Halt, lange Läufe
+tragen, Kragarm ohne Bahnbreite, Scheitel bleibt Kanal, Scheitel ohne letzte Spanne, kurze
+Brücken ohne Deckel): je 1 bis 13 Fälle rot. Prüfkörper (`probe.py`, 41 Fälle je Bahnbreite
+1,0 und 0,84 mm): Rund-, Spitzbogen, Arkade, R 30, R 35 ohne Stütze; S1-Körper mit; Pultdecke
+und Haut unter 12 bis 15° in 20 mm Tiefe mit (15° bei 60° nur mit 0,84 mm; mit dem runden
+Millimeter ohne Profil 0,746 gegen 0,75 mm, frei). Eiffelturm 0,2 mm/45° und 60° ohne Stütze
+(Feld 0,5 bzw. 10,9 mm², 2 504 bzw. 392 Bogenstreifen); Kumiko-Schale bei 45° Stützen nötig
+(Feld 3 632 mm²). Drache 45° (`sonde_kanalraum.py`): Kanalstücke 1 836 / 1 795 / 1 827,
+gesperrte Säulen 70 / 29 / 61, Sperrraum 8 227 / 4 819 / 7 594 mm³ (welle3 / Stand der
+Nachprüfung / jetzt); bei 60° in allen drei ohne Sperrsäule.
 
 ## RM-567: Weniger Arbeitsspeicher — Cachegrenze, BLAS-Faden, Renderer am echten Fenster (09.10.2026)
 

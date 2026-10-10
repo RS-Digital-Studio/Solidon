@@ -9,8 +9,10 @@ Modell endet und als „erreicht das Bett" gemeldet wurde.
 from __future__ import annotations
 
 import math
+from collections.abc import Callable
 from dataclasses import replace
 
+import numpy as np
 import pytest
 import trimesh
 from shapely import affinity
@@ -46,6 +48,7 @@ from app.core.slice.analysis import (
     worth_support,
 )
 from app.core.types import PrintSettings, Profile, SettingAdvice, SliceResult
+from app.core.units import EPS_GEOM
 from tests.helpers import brick, chin, chin_over_chest, column_table, on_bed
 
 #: Die Bahnbreite der Vorgabe: Zuschlag und Mindestbreite des Kanalraums.
@@ -3911,8 +3914,6 @@ def test_an_arch_that_closes_between_its_legs_carries_itself(
         pytest.param(ROUND_ARCH, 60.0, 40.0, 8.0, 0.08, 45.0, id="r20-0.08-45"),
         pytest.param(ROUND_ARCH, 60.0, 40.0, 8.0, 0.28, 45.0, id="r20-0.28-45"),
         pytest.param(ROUND_ARCH, 60.0, 40.0, 8.0, 0.2, 60.0, id="r20-0.2-60"),
-        pytest.param(ROUND_ARCH, 60.0, 40.0, 16.0, 0.2, 45.0, id="r20-tief16"),
-        pytest.param(ROUND_ARCH, 60.0, 40.0, 20.0, 0.2, 55.0, id="r20-tief20"),
         pytest.param(WIDE_ARCH, 80.0, 55.0, 8.0, 0.2, 45.0, id="r30-0.2-45"),
         pytest.param(WIDE_ARCH, 80.0, 55.0, 8.0, 0.28, 45.0, id="r30-0.28-45"),
         pytest.param(WIDE_ARCH, 80.0, 55.0, 8.0, 0.08, 60.0, id="r30-0.08-60"),
@@ -3929,13 +3930,15 @@ def test_a_round_arch_carries_itself_at_any_layer_height_and_angle(
     angle: float,
 ) -> None:
     """Rund-, Spitzbogen und Arkade tragen sich bei jeder Schichthöhe und jedem
-    wirksamen Winkel (Review RM-585): Nur am Scheitel kragt ein Streifen weiter
-    als seine Zugabe und vier Schichthöhen, und der Scheitel spannt kürzer als
-    eine Brücke, die der Bericht meldet.
+    wirksamen Winkel (Review RM-585): Nur am Scheitel liegt die Außenbahn eines
+    Streifens weiter als eine Bahnbreite neben der Schicht darunter, und der
+    Scheitel spannt kürzer als eine Brücke, die der Bericht meldet. Die Flanken
+    darunter tragen als kurze Brücke längs der freien Kante.
 
-    Auch in einer tiefen Wand: Die Streifen hängen an einer Seite, und ihre
-    Brückenweite wäre die Diagonale, praktisch die Wandtiefe — ein Rundbogen in
-    einer 16 mm tiefen Mauer verlangte Stützen für eine Decke von 16 mm."""
+    Die Streifen hängen an einer Seite, und ihre Brückenweite wäre die Diagonale,
+    praktisch die Wandtiefe: Die Brückenregel fragt sie nicht. In einer Wand
+    tiefer als SPAN_INTERESTING läuft der Scheitel frei und behält seine
+    Stütze (test_a_cantilever_that_runs_free_along_a_deep_wall_keeps_its_supports)."""
     result = slice_body(gate(opening, depth, width, height), layer_height, overhang_angle=angle)
     arches = vaults(result)
     top = max(index for index, layer in enumerate(result.layers) if layer.overhangs)
@@ -3986,6 +3989,115 @@ def test_a_ceiling_that_cantilevers_further_than_it_carries_keeps_its_supports(
     assert advise.support_need(result).needed
 
 
+#: Zwei Bahnen der 0,4er Düse am Centauri Carbon 2 (``bridge_from`` des Druckdialogs).
+TWO_LINES = 0.84
+
+
+def ramp_deg(span: float, degrees: float, legs: float = 15.0) -> BaseGeometry:
+    """Eine Pultdecke über ``span`` mm, unter ``degrees`` gegen die Waagerechte."""
+    return ramp(span, span * math.tan(math.radians(degrees)), legs)
+
+
+def skin(degrees: float, depth: float = 20.0) -> MeshData:
+    """Eine Flügelhaut: eine 1,5 mm dünne Platte, 40 mm lang unter ``degrees``,
+    zwischen zwei Knochen (Säulen 4 mal ``depth``), vorn und hinten frei."""
+    rise = 40.0 * math.tan(math.radians(degrees))
+    plate = trimesh.creation.box(extents=(40.0 / math.cos(math.radians(degrees)) + 2.0, depth, 1.5))
+    plate.apply_transform(
+        trimesh.transformations.rotation_matrix(-math.radians(degrees), (0, 1, 0))
+    )
+    plate.apply_translation((0.0, 0.0, 10.0 + rise / 2.0))
+    height = 16.0 + rise
+    bones = [brick(4.0, depth, height, (side * 22.0, 0.0, height / 2.0)) for side in (-1.0, 1.0)]
+    return place_on_bed(MeshData.of(trimesh.boolean.union([*bones, plate])))
+
+
+@pytest.mark.parametrize(
+    ("body", "layer_height", "angle"),
+    [
+        pytest.param(
+            lambda: gate(ramp_deg(40.0, 12.0), 20.0, height=50.0), 0.2, 45.0, id="pult12-45"
+        ),
+        pytest.param(
+            lambda: gate(ramp_deg(40.0, 12.0), 20.0, height=50.0), 0.2, 60.0, id="pult12-60"
+        ),
+        pytest.param(
+            lambda: gate(ramp_deg(40.0, 15.0), 20.0, height=50.0), 0.2, 60.0, id="pult15-60"
+        ),
+        pytest.param(lambda: skin(15.0), 0.2, 45.0, id="haut15-45"),
+        pytest.param(lambda: skin(15.0), 0.2, 60.0, id="haut15-60"),
+        pytest.param(lambda: gate(ROUND_ARCH, 16.0), 0.2, 45.0, id="r20-tief16"),
+        pytest.param(lambda: gate(ROUND_ARCH, 20.0), 0.2, 55.0, id="r20-tief20"),
+    ],
+)
+def test_a_cantilever_that_runs_free_along_a_deep_wall_keeps_its_supports(
+    body: Callable[[], MeshData], layer_height: float, angle: float
+) -> None:
+    """Ein Streifen trägt sich als Kragarm nur, solange seine Außenbahn höchstens
+    eine Bahnbreite neben der Schicht darunter liegt (Nachprüfung RM-585, N2).
+    Ragt er weiter, druckt die Außenbahn ganz neben der Schicht darunter als
+    Brücke längs der freien Kante: in einer 8 mm tiefen Wand kurz, in einer
+    20 mm tiefen Wand oder Haut 20 mm frei je Schicht — im ElegooSlicer an der
+    Pultdecke unter 12° 0,73 mm neben der Kante über 20,5 mm, unter 15° 0,54 mm.
+    Mit vier Schichthöhen als Grenze galten sie als Bogen, und der Rat schaltete
+    die Stütze ab. Der Rundbogen in tiefer Wand bekommt seine Stütze zurück: Seine
+    Scheitelstreifen laufen ebenso weit frei."""
+    result = slice_body(body(), layer_height, overhang_angle=angle, bridge_from=TWO_LINES)
+
+    assert advise.support_need(result).needed
+
+
+def lattice_between_walls() -> MeshData:
+    """Die Gitterplatte der Kumiko-Schale nachgebaut: 80 auf 40 mm zwischen zwei
+    Seitenwänden, 78 Löcher, die sich nach oben schließen. Ihre erste Schicht ist
+    ein Stück, die Ringe um die Löcher darüber gehören zu derselben Decke."""
+    walls = [brick(4.0, 40.0, 30.0, (side * 42.0, 0.0, 15.0)) for side in (-1.0, 1.0)]
+    plate = brick(80.0, 40.0, 3.0, (0.0, 0.0, 21.5))
+    holes = [
+        trimesh.convex.convex_hull(
+            [(x + dx * 2.0, y + dy * 2.0, 19.9) for dx in (-1, 1) for dy in (-1, 1)]
+            + [(x + dx * 0.1, y + dy * 0.1, 21.0) for dx in (-1, 1) for dy in (-1, 1)]
+        )
+        for x in np.arange(-36.0, 36.5, 6.0)
+        for y in np.arange(-15.0, 15.5, 6.0)
+    ]
+    lattice = trimesh.boolean.difference([plate, trimesh.boolean.union(holes)])
+    return place_on_bed(MeshData.of(trimesh.boolean.union([*walls, lattice])))
+
+
+def test_a_lattice_plate_between_two_walls_is_no_arch() -> None:
+    """Ein Stück zwischen zwei Auflagen trägt sich nur bis zu einer Brücke, die der
+    Bericht meldet: Kein Punkt liegt weiter als ``SPAN_INTERESTING / 2`` vom
+    Material darunter (Nachprüfung RM-585, N1). Die Kumiko-Schale aus dem Korpus
+    beginnt ihre Gitterplatte als ein Stück von 3 587 mm², 40,6 mm vom Material
+    entfernt; die Brückenregel ihrer Schicht misst nur die Stäbe, und am
+    generischen Drucker verlor sie ihre Stütze — im G-Code 82 mm lange Bahnen in
+    der Luft."""
+    result = slice_body(lattice_between_walls(), 0.2)
+    plate = max(
+        (
+            (index, number)
+            for index, layer in enumerate(result.layers)
+            for number, piece in enumerate(layer.overhangs)
+        ),
+        key=lambda name: piece_area(result.layers[name[0]].overhangs[name[1]]),
+    )
+
+    assert result.layers[plate[0]].bridge_width < SPAN_INTERESTING, "nur die Stäbe sind Brücken"
+    assert plate not in vaults(result)
+    assert advise.support_need(result).needed
+
+
+def two_flat_arches_on_slabs() -> MeshData:
+    """Der flache Bogen auf der Platte zweimal, der zweite gespiegelt daneben."""
+    first = flat_arch_on_a_slab().raw.copy()
+    second = first.copy()
+    second.apply_transform(trimesh.transformations.reflection_matrix((0, 0, 0), (1, 0, 0)))
+    second.invert()
+    second.apply_translation((0.0, 30.0, 0.0))
+    return place_on_bed(MeshData.of(trimesh.util.concatenate([first, second])))
+
+
 def flat_arch_on_a_slab() -> MeshData:
     """Eine Wand mit flachem Bogen (Sehne 36, Stich 3) auf einer Platte, die 64 mm
     frei auskragt; das rechte Bein steht auf dem freien Teil (Review RM-585)."""
@@ -3998,18 +4110,50 @@ def flat_arch_on_a_slab() -> MeshData:
     return place_on_bed(MeshData.of(trimesh.boolean.union([pier, slab, upper])))
 
 
-def test_a_flat_arch_over_the_model_is_no_channel() -> None:
+def test_a_flat_arch_over_the_model_spares_its_crown() -> None:
     """Die Kanalfrage trug dieselbe Prämisse wie die Bogenfrage (Review RM-585):
     Unter seinem Scheitel ist ein Bogen schmal, und sein Grundriss schließt sich
     zwischen den Beinen — ein flacher Bogen auf einer Platte galt als Kanaldecke,
     und die Übergabe sperrte den Raum darunter. Gedruckt kragen seine Schichten
-    weiter, als sie tragen; er braucht Stützen dort, wo sie erreichbar sind."""
+    weiter, als sie tragen; er braucht Stützen dort, wo sie erreichbar sind.
+
+    Ausgespart wird der Scheitel, der weiter kragt, als er sich trägt, samt seiner
+    letzten Spanne — wie ein Stück, das selbst Stütze braucht. Nach Mehrheit
+    gezählt, fiel am Drachen die Sperre einer ganzen Flügeltasche wegen 25,6 mm²
+    Scheitel, die gespiegelte behielt ihren Scheitel darunter (Nachprüfung, N3)."""
     result = slice_body(flat_arch_on_a_slab(), 0.2)
     need = advise.support_need(result)
+    top = max(index for index, layer in enumerate(result.layers) if layer.overhangs)
+    crown = {(top, number) for number in range(len(result.layers[top].overhangs))}
 
     assert need.needed
-    assert not need.model.channels
-    assert channel_space(result, need.model, LINE) == []
+    assert not crown & need.model.channels, "der Scheitel ist kein Kanalstück"
+    assert any(
+        abs(high - result.layers[top].z) <= EPS_GEOM
+        for _outline, _low, high in need.model.open_columns
+    ), "und bleibt frei für seine Stütze"
+
+
+def test_a_mirrored_pocket_gets_the_same_blocker() -> None:
+    """Dieselbe Decke gespiegelt bekommt dieselbe Sperre und dieselbe Aussparung
+    (Nachprüfung RM-585, N3): Nach Mehrheit entschieden, kippte am Drachen die
+    eine Flügeltasche, die andere nicht."""
+    body = two_flat_arches_on_slabs()
+    result = slice_body(body, 0.2)
+    model = advise.support_need(result).model
+    middle = (float(body.bounds.minimum[1]) + float(body.bounds.maximum[1])) / 2.0
+
+    def side(names: frozenset[tuple[int, int]], low: bool) -> list[tuple[float, float]]:
+        found = []
+        for index, number in names:
+            piece = result.layers[index].overhangs[number]
+            if (ShapelyPolygon(piece.outline).centroid.y < middle) is low:
+                found.append((round(result.layers[index].z, 6), round(piece_area(piece), 1)))
+        return sorted(found)
+
+    assert model.channels, "die Decke über der Platte ist Kanal"
+    assert side(model.channels, True) == side(model.channels, False)
+    assert len(model.open_columns) % 2 == 0
 
 
 def test_a_flat_vault_over_an_enclosed_chamber_stays_a_channel() -> None:

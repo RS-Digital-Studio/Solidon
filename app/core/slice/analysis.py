@@ -3515,7 +3515,9 @@ class ModelSupport:
     tallest_column: float = 0.0
     """Die längste Stützsäule in mm: vom Stück bis zum Bett, wenn ein Teil der
     Säule es erreicht, sonst bis dorthin, wo sie zuletzt auf dem Modell aufsetzt;
-    ohne Ränder und Kanaldecken (RM-584: ab 100 mm brauchen Bäume zwei Wände)."""
+    ohne Ränder, Kanaldecken und Bogenstreifen (RM-584: ab 100 mm brauchen Bäume
+    zwei Wände; RM-585). Ohne Auflage auf dem Modell zählen die Bogenstreifen mit:
+    Die oberste Schicht ihrer Decke liegt höher und zählt in jedem Fall."""
     details_on_model: bool = False
     """Setzen **kleine** Stücke auf dem Modell auf, so viele, dass sie Stütze
     brauchen — außerhalb von Decken mit einem Stück über
@@ -3619,7 +3621,8 @@ def span_beside(
     cancelled: CancelToken | None = None,
 ) -> float:
     """Die längste Brücke der Schicht ``index``, ohne die Stücke aus ``quiet`` —
-    Kanaldecken und Ränder, die sich selbst tragen (RM-627).
+    Kanaldecken, Ränder und Bogenstreifen, die an einer Seite hängen
+    (:func:`hanging_vaults`) — was sich selbst trägt (RM-627, RM-585).
 
     ``LayerInfo.bridge_width`` gilt der ganzen Schicht. Ein Kragen von 2 mm um
     eine Wand, auf einer Seite vom Kinn unterbrochen, hat keine beidseitig
@@ -3850,22 +3853,22 @@ LEDGE_REACH: Final = 3.0
 #: die Rundung der Puffer und das Vernetzungsrauschen (:func:`_carried`).
 LEDGE_SPILL: Final = 0.05
 
-#: Wie weit der freie Teil eines Bogenstreifens über seine Überhangzugabe
-#: hinaus kragen darf und sich noch selbst trägt, in Schichthöhen
-#: (:meth:`_Ceilings.arch`, RM-585).
+#: Wie breit ein Bogenstreifen über seine Überhangzugabe hinaus höchstens sein
+#: darf, in Schichthöhen — die Grenze **feiner Schichten** neben der Bahnbreite
+#: aus dem Schnitt (:meth:`_Ceilings._cantilever`, :meth:`_Ceilings._carries`,
+#: RM-585).
 #:
 #: Ein Bogen druckt Schicht für Schicht als zwei Kragarme; dass er sich oben
-#: schließt, hilft keiner Schicht davor. Jede trägt die Zugabe des wirksamen
-#: Überhangwinkels (Schichthöhe mal Tangens des Winkels, der Abstand des Stücks zum Material
-#: darunter, §28.3) und darüber hinaus, was zwei Bahnen frei tragen — schmaler
-#: ist eine freie Fläche ein Überhang und keine Brücke (:data:`BRIDGE_FROM`).
-#: Zwei Bahnen sind an der Regelschicht, der halben Bahnbreite, vier
-#: Schichthöhen. Gezählt in Schichthöhen, nicht in Millimetern: Ein Kragarm
-#: aus einer dünneren Schicht trägt weniger, und eine Satteldecke unter 8,5°
-#: kragt bei 0,08 mm so flach wie bei 0,2 mm. Bei 45° kragen ihre Streifen
-#: je Schicht 5,7 Schichthöhen über die Zugabe, die einer Pultdecke unter 4,3°
-#: 12,3; am Rundbogen von 20 mm Halbmesser bei 0,2 mm nur der Scheitelstreifen
-#: mehr als vier (6,3), weiter kragt er nicht (:meth:`_Ceilings.arch`).
+#: schließt, hilft keiner Schicht davor. Was ein Kragarm trägt, misst die
+#: Bahnbreite: Die Außenbahn liegt höchstens eine Bahnbreite neben der Schicht
+#: darunter. Bei feinen Schichten genügt das allein nicht: Eine Satteldecke
+#: unter 8,5° kragt bei 0,08 mm je Schicht 0,45 mm über die Zugabe, weniger als
+#: eine Bahn, und galt ohne diese Grenze als Bogen; ebenso Pult- und
+#: Flachbogendecken bei 0,08 und 0,12 mm (Messreihe der Nachprüfung). Keine
+#: Breite in Millimetern trennt sie vom Rundbogen von 30 mm Halbmesser, dessen
+#: Flanken unter dem Scheitel bei 0,2 mm 0,57 mm über die Zugabe kragen und
+#: sich tragen müssen. Vier Schichthöhen sind zwei Bahnen an der Regelschicht,
+#: der halben Bahnbreite; bei 0,2 mm und darüber entscheidet die Bahnbreite.
 CANTILEVER_LAYERS: Final = 4.0
 
 
@@ -3919,12 +3922,14 @@ def vaults(
 
     **Gedruckt wird ein Bogen als zwei Kragarme**, Schicht für Schicht, die erst
     mit der letzten zusammenkommen; dass er sich schließt, hilft keiner Schicht
-    davor. Welche Streifen sich tragen, sagt :meth:`_Ceilings.arch`: einer, der
-    nicht weiter als seine Zugabe und :data:`CANTILEVER_LAYERS` Schichthöhen
-    über seine eigene Schicht darunter kragt; einer zwischen zwei Auflagen bis
-    zu einer Brücke von :data:`SPAN_INTERESTING`; und die weiter kragenden
-    eines Scheitels, der sich als Brücke oder Rand trägt. Eine Pult-, Sattel-
-    oder Flachbogendecke kragt Schicht für Schicht weiter und bleibt ein Feld.
+    davor. Welche Streifen sich tragen, sagt :meth:`_Ceilings.arch`: einer,
+    dessen Außenbahn höchstens eine Bahnbreite neben seiner Schicht darunter
+    liegt, oder dessen freier Teil als kurze Brücke längs der Kante läuft;
+    einer zwischen zwei Auflagen bis zu einer Brücke von
+    :data:`SPAN_INTERESTING`; und die weiter kragenden eines Scheitels, der
+    sich als Brücke oder Rand trägt. Eine Pult-, Sattel- oder Flachbogendecke
+    kragt Schicht für Schicht weiter und bleibt ein Feld, in einer tiefen Wand
+    auch unter 12 bis 15°.
     **Die oberste Schicht ist die letzte Spanne**: Sie zählt weiter mit ihrer
     Fläche, und eine flache Decke zwischen zwei Wänden ändert sich nicht.
 
@@ -3965,11 +3970,11 @@ class _Arch:
     hanging: frozenset[tuple[int, int]]
     """Davon die, die an einer Seite hängen (:func:`hanging_vaults`)."""
     overhanging: frozenset[tuple[int, int]]
-    """Die Streifen eines Scheitels, der weiter kragt, als er sich trägt —
-    leer, wenn es keinen gibt. Die Kanalfrage zählt sie wie Stücke, die
-    außerhalb hängen (:func:`_model_support`). In einer geschlossenen Kammer
-    kommt das nicht vor: Dort liegt jeder Streifen zwischen Wänden
-    (:meth:`_Ceilings._held_twice`)."""
+    """Die Streifen eines Scheitels, der weiter kragt, als er sich trägt, mit
+    den Stücken seiner letzten Spanne — leer, wenn es keinen gibt. Die
+    Kanalfrage nimmt sie aus der Kanaldecke und spart sie aus der Sperre aus
+    (:func:`_model_support`). In einer geschlossenen Kammer kommt das nicht vor:
+    Dort liegt jeder Streifen zwischen Wänden (:meth:`_Ceilings._held_twice`)."""
 
 
 @dataclass(slots=True)
@@ -4019,7 +4024,10 @@ def _self_carried(
     if arches and known.arches is None:
         found, hanging = _vaults(result, known.rest, known.asked, cancelled)
         # Zwei Fragesteller rechnen höchstens doppelt; die Antwort ist dieselbe.
-        known.arches, known.hanging = found, hanging
+        # Erst die hängenden Streifen, dann die Bögen: Wer ``arches`` gesetzt
+        # sieht, rechnet nicht mehr und liest ``hanging`` (Nachprüfung RM-585, N7).
+        known.hanging = hanging
+        known.arches = found
     return known
 
 
@@ -4134,7 +4142,12 @@ def _vaults(
             materials[index] = _material(layers[index])
         return materials[index]
 
-    ceilings = _Ceilings(layers, material, _closing_answers(layers))
+    ceilings = _Ceilings(
+        layers,
+        material,
+        _closing_answers(layers),
+        BRIDGE_FROM if result.bridge_from is None else result.bridge_from,
+    )
     found: set[tuple[int, int]] = set()
     hanging: set[tuple[int, int]] = set()
     for group in groups:
@@ -4356,9 +4369,12 @@ class _Ceilings:
         layers: tuple[LayerInfo, ...],
         material: Callable[[int], ShapelyPolygon],
         closing: _Closings | None = None,
+        bridge_from: float = BRIDGE_FROM,
     ) -> None:
         self._layers = layers
         self._material = material
+        # Eine Bahnbreite, aus dem Schnitt (:data:`BRIDGE_FROM` sind zwei).
+        self._bead = bridge_from / 2.0
         # Die Antworten der Schließ- und Bogenfrage, mit anderen Fragen über
         # dieselben Schichten geteilt (:func:`_closing_answers`).
         self._closing = _Closings() if closing is None else closing
@@ -4526,23 +4542,28 @@ class _Ceilings:
         Bogen druckt als zwei Kragarme, die erst mit ihr zusammenkommen. Ein
         Streifen trägt sich deshalb,
 
-        - wenn er nicht weiter als seine Zugabe (:meth:`_gap`) und
-          :data:`CANTILEVER_LAYERS` Schichthöhen über das Material seiner
-          eigenen Schicht darunter kragt (:func:`_hangs_on`);
+        - wenn er als Kragarm trägt oder als kurze Brücke längs seiner freien
+          Kante (:meth:`_carries`, :meth:`_cantilever`): Seine Außenbahn liegt
+          höchstens eine Bahnbreite neben der Schicht darunter, oder der freie
+          Teil läuft nicht weiter als :data:`SPAN_INTERESTING`;
         - wenn er zwischen zwei Auflagen liegt (:meth:`_held_twice`) — am
           Eiffelturm liegen die weitesten Streifen der Bögen so, je eine Brücke
-          von gut 7 mm. Wie weit er spannt, fragt die Brückenregel seiner
-          Schicht (:func:`hanging_vaults`); über :data:`SPAN_INTERESTING`
-          braucht er Stützen;
+          von gut 7 mm —, kein Punkt weiter als eine halbe meldbare Brücke
+          (:data:`SPAN_INTERESTING`) vom Material darunter. Die Kumiko-Schale
+          aus dem Korpus beginnt ihre Gitterplatte als ein Stück von 3 587 mm²
+          zwischen zwei Seitenwänden, 40,6 mm vom Material entfernt, und die
+          Brückenregel ihrer Schicht maß nur die Gitterstäbe (N1). Ein weiter
+          gefasster Streifen ist weder Bogen noch Scheitel: eine Brücke, über
+          einem Kanal Kanaldecke wie die Decke eines Tunnels;
         - und, wenn er an einer Seite weiter kragt, nur mit dem Scheitel, zu
           dem er gehört (:meth:`_crown_carries`): Am Rundbogen von 20 mm
           Halbmesser ist das bei 0,2 mm ein Streifen je Seite unter einem
           Scheitel von 6,5 mm, an einer Pult-, Sattel- oder Flachbogendecke
-          fast die ganze Decke.
+          fast die ganze Decke, in einer tiefen Wand auch unter 12 bis 15°.
 
         ``overhanging`` nennt die Streifen eines Scheitels, der weiter kragt,
-        als er sich trägt; die Kanalfrage zählt sie wie Stücke, die außerhalb
-        hängen (:func:`_model_support`, der flache Bogen auf einer auskragenden
+        als er sich trägt; die Kanalfrage spart sie aus der Sperre aus
+        (:func:`_model_support`, der flache Bogen auf einer auskragenden
         Platte, Review RM-585).
         """
         known = self._closing.arches
@@ -4562,16 +4583,26 @@ class _Ceilings:
                 carried.append(member)
                 hanging.append(member)
                 continue
-            if self._held_twice(member):
-                carried.append(member)
-            else:
+            if not self._held_twice(member):
                 crown.append(member)
-        if crown and self._crown_carries(crown, [m for m in ceiling if m[0] == top]):
+            elif _hangs_on(
+                self.shape(member), self._material(member[0] - 1), SPAN_INTERESTING / 2.0
+            ):
+                carried.append(member)
+            # Sonst eine Brücke, weiter als der Bericht meldet: Sie trägt sich
+            # nicht und ist kein Scheitel — über einem Kanal bleibt sie
+            # Kanaldecke, wie die Decke eines Tunnels (N1).
+        tops = [m for m in ceiling if m[0] == top]
+        if crown and self._crown_carries(crown, tops):
             carried += crown
             hanging += crown
             crown = []
+        # Ohne seine letzte Spanne bekommt ein Scheitel keine Stütze, die trägt.
+        overhanging = crown + self._crown_zone(crown, tops) if crown else []
         return _Arch(
-            strips=frozenset(carried), hanging=frozenset(hanging), overhanging=frozenset(crown)
+            strips=frozenset(carried),
+            hanging=frozenset(hanging),
+            overhanging=frozenset(overhanging),
         )
 
     def _inside(self, members: list[tuple[int, int]], between: Any) -> list[tuple[int, int]]:
@@ -4598,14 +4629,73 @@ class _Ceilings:
         """Die Höhe der Schicht ``index`` über der darunter."""
         return float(self._layers[index].z - self._layers[index - 1].z)
 
+    def _cantilever(self, member: tuple[int, int]) -> float:
+        """Wie weit das Stück über das Material seiner Schicht darunter ragen darf
+        und sich noch als Kragarm trägt, gleich wie lang es läuft.
+
+        Seine Außenbahn liegt höchstens eine Bahnbreite neben der Schicht
+        darunter (ihre Mitte, also anderthalb Bahnbreiten bis zur Kante), und es
+        ist über seine Zugabe hinaus höchstens eine Bahn breit. Die Bahnbreite
+        kommt aus dem Schnitt (``bridge_from``, zwei Bahnen). Am Rundbogen von
+        20 mm Halbmesser liegt die weiteste Außenbahn im G-Code 0,41 mm neben der
+        Schicht darunter; an einer Pultdecke unter 12° sind es 0,73 mm, in einer
+        20 mm tiefen Wand über 20 mm Länge (Nachprüfung RM-585, N2). Bei feinen
+        Schichten deckelt :data:`CANTILEVER_LAYERS`."""
+        gap = self._gap(member)
+        return min(
+            1.5 * self._bead,
+            gap + self._bead,
+            gap + CANTILEVER_LAYERS * self._step(member[0]),
+        )
+
     def _carries(self, member: tuple[int, int]) -> bool:
-        """Kragt das Stück nicht weiter als seine Zugabe und
-        :data:`CANTILEVER_LAYERS` Schichthöhen über die Schicht darunter?"""
+        """Trägt sich das Stück selbst, Schicht für Schicht?
+
+        Ja, wenn es nicht weiter ragt als :meth:`_cantilever` — ein Kragarm.
+        Ragt es weiter, ist der freie Teil eine Brücke längs seiner freien Kante,
+        an deren Enden gefasst; gedruckt liegt dort die Außenbahn ganz neben der
+        Schicht darunter. Kurz, bis :data:`SPAN_INTERESTING`, trägt sie sich, wenn
+        das Stück über seine Zugabe hinaus nicht breiter ist als zwei Bahnen und
+        nicht breiter als :data:`CANTILEVER_LAYERS` Schichthöhen: so die Flanken
+        unter einem Scheitel in einer 8 mm tiefen Wand. Läuft sie weiter, gehört
+        das Stück zum Scheitel (:meth:`_crown_carries`) — eine Pultdecke unter 12°
+        in einer 20 mm tiefen Wand druckte ihre Außenbahn 20 mm lang frei."""
         gap = self._gap(member)
         if not math.isfinite(gap):
             return False
-        reach = gap + CANTILEVER_LAYERS * self._step(member[0])
-        return _hangs_on(self.shape(member), self._material(member[0] - 1), reach)
+        shape = self.shape(member)
+        below = self._material(member[0] - 1)
+        reach = self._cantilever(member)
+        if _hangs_on(shape, below, reach):
+            return True
+        if self._runs_free(shape, below, reach):
+            return False
+        bound = gap + min(2.0 * self._bead, CANTILEVER_LAYERS * self._step(member[0]))
+        return _hangs_on(shape, below, bound)
+
+    @staticmethod
+    def _runs_free(shape: ShapelyPolygon, below: Any, reach: float) -> bool:
+        """Läuft ein Teil des Stücks, der weiter als ``reach`` über ``below``
+        ragt, länger als :data:`SPAN_INTERESTING`? Gemessen an der langen Seite
+        seines kleinsten umschriebenen Rechtecks; Teile unter
+        :data:`LEDGE_SPILL` des Stücks sind Rauschen der Puffer."""
+        low_x, low_y, high_x, high_y = shape.bounds
+        margin = reach + OVERHANG_MARGIN
+        near = shapely.clip_by_rect(
+            below, low_x - margin, low_y - margin, high_x + margin, high_y + margin
+        )
+        free = shape if near.is_empty else shape.difference(near.buffer(reach))
+        if free.area <= LEDGE_SPILL * shape.area:
+            return False
+        for part in _areas_of(free):
+            rectangle = part.minimum_rotated_rectangle
+            if rectangle.geom_type != "Polygon":
+                continue
+            corners = np.asarray(rectangle.exterior.coords, dtype=float)
+            sides = np.linalg.norm(np.diff(corners[:3], axis=0), axis=1)
+            if float(sides.max()) > SPAN_INTERESTING:
+                return True
+        return False
 
     def _held_twice(self, member: tuple[int, int]) -> bool:
         """Liegt das Stück zwischen seinen Auflagen, statt an einer Seite zu hängen?
@@ -4622,6 +4712,13 @@ class _Ceilings:
         Gitterstäbe darunter die weitesten Streifen der Bögen ringsum (Inkreis
         7,3 bis 7,5 mm bei 2,84 mm Reichweite, Review RM-585), und ein Ring
         unter einer Kuppel ist ringsum gehalten.
+
+        **Was weiter ragt als ein Kragarm** (:meth:`_cantilever`), **liegt selbst
+        zwischen seinen Auflagen** (Nachprüfung RM-585, N2): Ein schmaler
+        Streifen, der an einer Seite hängt, fasste mit den Stummeln an seinen
+        Enden seine eigene Hülle — an einer Pultdecke unter 12° bei 60° galten so
+        41 von 42 Streifen als gefasst. Wie weit ein gefasster Streifen spannt,
+        fragt :meth:`arch` danach.
         """
         gap = self._gap(member)
         if not math.isfinite(gap):
@@ -4639,7 +4736,29 @@ class _Ceilings:
         if near.is_empty:
             return False
         answer = self._spans(shape, near.buffer(reach), reach)
-        return answer is not None and answer[0]
+        if answer is None or not answer[0]:
+            return False
+        below = self._material(member[0] - 1)
+        free_reach = self._cantilever(member)
+        margin = free_reach + OVERHANG_MARGIN
+        near = shapely.clip_by_rect(
+            below, low_x - margin, low_y - margin, high_x + margin, high_y + margin
+        )
+        free = shape.difference(near.buffer(free_reach))
+        if free.area <= LEDGE_SPILL * shape.area:
+            return True
+        # Gehalten ist, was am Rand des Kragarms liegt; die Hülle ungepuffert
+        # bis auf diesen Saum, sonst fasst ein schmaler Streifen mit den Stummeln
+        # an seinen Enden sich selbst.
+        seam = OVERHANG_MARGIN / 2.0
+        anchored = near.buffer(free_reach + seam)
+        for part in _areas_of(free):
+            if part.area <= LEDGE_SPILL * shape.area:
+                continue
+            answer = self._spans(part, anchored, seam)
+            if answer is None or not answer[0]:
+                return False
+        return True
 
     def _crown_carries(self, crown: list[tuple[int, int]], tops: list[tuple[int, int]]) -> bool:
         """Trägt sich der Scheitel aus den Streifen ``crown``, die an einer Seite
@@ -4694,7 +4813,43 @@ class _Ceilings:
         wide = [part for part in _areas_of(zone) if _across(part) > SPAN_INTERESTING]
         if not wide:
             return True
-        own = zone.buffer(OVERHANG_MARGIN / 2.0)
+        anchored = self._anchored(members, zone.buffer(OVERHANG_MARGIN / 2.0), closing)
+        if anchored is None:
+            return False
+        # Vereinfacht wie für die Breitensuche (:func:`_simplified`): Am Drachen
+        # hat ein Scheitel tausende Ecken, und jede Kante kreuzt jede Abtastzeile.
+        return all(
+            _supported_span(_simplified(part), anchored) <= SPAN_INTERESTING for part in wide
+        )
+
+    def _crown_zone(
+        self, crown: list[tuple[int, int]], tops: list[tuple[int, int]]
+    ) -> list[tuple[int, int]]:
+        """Die Stücke der obersten Schicht, die an den Scheitel ``crown`` anschließen."""
+        closing = self._closing_of(crown + tops)
+        reach = unary_union([self.shape(member) for member in crown]).buffer(closing)
+        return [member for member in tops if self.shape(member).intersects(reach)]
+
+    def _anchored(self, members: list[tuple[int, int]], own: Any, closing: float) -> Any | None:
+        """Wo diese Stücke Halt finden: das Material ihrer Schicht darunter in
+        Reichweite (:meth:`_gap` mit :data:`OVERHANG_MARGIN`), ohne den eigenen
+        Grundriss ``own``, um die Reichweite aufgeweitet — ``None`` ohne Halt.
+
+        Eine Rechnung für Schließfrage und Scheitel (:meth:`_closes`,
+        :meth:`_crown_spans_short`; Nachprüfung RM-585, N6). Nur das Material in
+        Reichweite wird aufgeweitet, nicht die ganze Schicht — am Drachen hat
+        eine Schicht tausende Ecken —, und nur der eigene Grundriss im selben
+        Fenster abgezogen: Der Turmbogen des Eiffelturms hat 2 244 Stücke, und
+        jedes zog den ganzen Grundriss ab, 13,6 s für 6 344 Differenzen.
+
+        Das eigene Material ist der geschlossene Grundriss, nicht nur die
+        Stücke: Zwischen den Streifen einer schrägen Unterseite liegt je Schicht
+        ein Band der Überhangzugabe, Material derselben Decke in keinem Stück.
+        Ab gut 15° Neigung (60°-Grenze der Orca-Familie) hielt es die Seiten
+        eines Kiefers wieder fest (Review 2 vom 08.10.2026). Splitter unter
+        ``closing``² in den Kerben des gerundet geschlossenen Grundrisses sind
+        Rauschen, kein Halt.
+        """
         held: list[Any] = []
         for member in members:
             gap = self._gap(member)
@@ -4715,22 +4870,7 @@ class _Ceilings:
             kept = [part for part in _areas_of(near) if part.area > closing * closing]
             if kept:
                 held.append(unary_union(kept).buffer(reach))
-        if not held:
-            return False
-        anchored = unary_union(held)
-        # Vereinfacht wie für die Breitensuche (:func:`_simplified`): Am Drachen
-        # hat ein Scheitel tausende Ecken, und jede Kante kreuzt jede Abtastzeile.
-        return all(
-            _supported_span(_simplified(part), anchored) <= SPAN_INTERESTING for part in wide
-        )
-
-    def _crown_zone(
-        self, crown: list[tuple[int, int]], tops: list[tuple[int, int]]
-    ) -> list[tuple[int, int]]:
-        """Die Stücke der obersten Schicht, die an den Scheitel ``crown`` anschließen."""
-        closing = self._closing_of(crown + tops)
-        reach = unary_union([self.shape(member) for member in crown]).buffer(closing)
-        return [member for member in tops if self.shape(member).intersects(reach)]
+        return unary_union(held) if held else None
 
     def _closes(self, ceiling: frozenset[tuple[int, int]]) -> Any | None:
         """:meth:`spanned`, ungemerkt."""
@@ -4748,35 +4888,9 @@ class _Ceilings:
         # Schicht ein Band der Überhangzugabe, Material derselben Decke in
         # keinem Stück. Ab gut 15° Neigung (60°-Grenze der Orca-Familie) hielt
         # es die Seiten eines Kiefers wieder fest (Review 2 vom 08.10.2026).
-        own = footprint.buffer(OVERHANG_MARGIN / 2.0)
-        held: list[Any] = []
-        for name, shape in zip(names, shapes, strict=True):
-            if name not in reaches:
-                continue
-            reach = reaches[name]
-            # Nur das Material in Reichweite aufweiten, nicht die ganze
-            # Schicht — am Drachen hat eine Schicht tausende Ecken. Und nur den
-            # eigenen Grundriss im selben Fenster abziehen (Review RM-585): Der
-            # Turmbogen des Eiffelturms hat 2 244 Stücke, und jedes zog den
-            # ganzen Grundriss ab, 13,6 s für 6 344 Differenzen.
-            low_x, low_y, high_x, high_y = shape.bounds
-            window = (
-                low_x - 2.0 * reach,
-                low_y - 2.0 * reach,
-                high_x + 2.0 * reach,
-                high_y + 2.0 * reach,
-            )
-            near = shapely.clip_by_rect(self._material(name[0] - 1), *window)
-            if not near.is_empty:
-                near = near.difference(shapely.clip_by_rect(own, *window))
-            # Splitter in den Kerben des gerundet geschlossenen Grundrisses
-            # sind Rauschen, kein Halt.
-            kept = [part for part in _areas_of(near) if part.area > closing * closing]
-            if kept:
-                held.append(unary_union(kept).buffer(reach))
-        if not held:
+        anchored = self._anchored(names, footprint.buffer(OVERHANG_MARGIN / 2.0), closing)
+        if anchored is None:
             return None
-        anchored = unary_union(held)
         spanned = asked = 0.0
         regions: list[Any] = []
         for part in _areas_of(footprint):
@@ -4878,7 +4992,12 @@ def _model_support(
                 materials[index] = known
         return known
 
-    ceilings = _Ceilings(layers, lambda index: material_at(index)[0], _closing_answers(layers))
+    ceilings = _Ceilings(
+        layers,
+        lambda index: material_at(index)[0],
+        _closing_answers(layers),
+        BRIDGE_FROM if result.bridge_from is None else result.bridge_from,
+    )
     # Einzelne Stücke bekommen dieselbe Antwort wie im ganzen Durchgang — und
     # die hängt seit der Decke als Ganzes an den Stücken ihrer Decke: Gefragt
     # wird deshalb jede Decke, zu der ein gewähltes Stück gehört.
@@ -5046,6 +5165,7 @@ def _model_support(
     owner_of = {name: owner for owner, name in enumerate(names)}
     settled: set[int] = set()
     unblocked: set[int] = set()
+    crowned: set[int] = set()
     for owner in sorted(channels):
         if owner in settled:
             continue
@@ -5062,27 +5182,23 @@ def _model_support(
         # (Drache, 08.10.2026, :meth:`_Ceilings.closes`): Die Kreisfrage misst,
         # ob der Raum unter einem Stück schmal ist, nicht, ob die Decke darüber
         # Halt findet. Ein Kiefer über der Brust hängt nur an der Kehle.
-        # **Und sie trägt sich, während sie sich schließt** (Review RM-585,
-        # :meth:`_Ceilings.arch`): Ein flacher Bogen auf einer auskragenden
-        # Platte schließt sich, aber gedruckt kragen seine Schichten weiter,
-        # als sie tragen, und die Sperre nahm ihnen die Stütze. Ein Scheitel,
-        # der weiter kragt, als er sich trägt, zählt deshalb wie ein Stück, das
-        # außerhalb hängt — nach derselben Mehrheit wie oben. Als ganze Decke
-        # abgewiesen, verlor der Drache seine Sperre (70 Säulen) wegen 2 und 8
-        # Scheitelstreifen in Decken mit 475 und 100 Stücken; so bleiben 29.
         whole = frozenset(names[member] for member in ceiling)
         arch = ceilings.arch(whole)
         if arch is None:
             channels.difference_update(ceiling)
             continue
-        kragged = math.fsum(
-            areas[owner_of[name]]
-            for name in sorted(arch.overhanging)
-            if name in owner_of and owner_of[name] in channels
-        )
-        if hanging + kragged > inside - kragged:
-            channels.difference_update(ceiling)
-            continue
+        # **Und sie trägt sich, während sie sich schließt** (Review RM-585,
+        # :meth:`_Ceilings.arch`): Ein flacher Bogen auf einer auskragenden
+        # Platte schließt sich, aber gedruckt kragen seine Schichten weiter,
+        # als sie tragen, und die Sperre nahm ihnen die Stütze. Ein Scheitel,
+        # der weiter kragt, als er sich trägt, ist deshalb kein Kanalstück und
+        # wird ausgespart wie ein Stück, das selbst Stütze braucht; die Decke
+        # bleibt Kanal. Nach Mehrheit gezählt, kippte am Drachen (45°) die linke
+        # Flügeltasche wegen 25,6 mm² Scheitel ganz, die rechte behielt ihren
+        # Scheitel unter der Sperre (Nachprüfung RM-585, N3).
+        crown = {owner_of[name] for name in arch.overhanging if name in owner_of}
+        channels.difference_update(crown)
+        crowned |= crown
         # **Eine Sperre bekommt nur eine Decke, die ohne sich selbst zu
         # schließen Stütze bräuchte** — die zwei Wege von :func:`worth_support`,
         # gefragt am größten **Stück**, nicht am Feld wie Stützbedarf und
@@ -5225,7 +5341,11 @@ def _model_support(
             )
         return worth_of[group]
 
-    spared = set() if not columns else {owner for owner in range(len(names)) if needs_own(owner)}
+    spared = (
+        set()
+        if not columns
+        else {owner for owner in range(len(names)) if owner in crowned or needs_own(owner)}
+    )
     return ModelSupport(
         tallest_column=tallest(lambda owner: names[owner] in in_channel or names[owner] in edges),
         details_on_model=details_on_model,

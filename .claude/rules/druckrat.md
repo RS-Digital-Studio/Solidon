@@ -125,23 +125,34 @@ offenem Drucker. Übernommen wird auf Klick, nie von allein.
   zwischen ihren Auflagen (`_Ceilings.closes`, die ganze Decke samt
   Kanalstücken), trägt sich ein Streifen unter der obersten Schicht, der zu
   `CEILING_SPANNED` zwischen den Auflagen liegt (keine Haube vor einer
-  Mündung), wenn er nicht weiter als seine Zugabe und `CANTILEVER_LAYERS`
-  Schichthöhen über seine eigene Schicht darunter kragt — in Schichthöhen,
-  weil eine flache Decke bei feinen Schichten je Schicht weniger kragt —,
-  wenn er zwischen zwei Auflagen liegt (`_held_twice`, Inkreis über
-  Reichweite), oder als Teil eines Scheitels, der sich als Rand
-  (`LEDGE_REACH` je Kragarm) oder als Brücke zwischen den Flanken
-  (`SPAN_INTERESTING`, quer gemessen) trägt. Solche Streifen zählen nicht zur
-  Fläche, nicht zu „auf dem Modell“ und nicht zum Überhangbefund; keine
-  Sperre. Pult-, Sattel- und Flachbogendecken kragen weiter und bleiben ein
-  Feld. **Die Brückenregel gilt für Streifen zwischen zwei Auflagen**, nicht
-  für die an einer Seite hängenden (`hanging_vaults`, ihre Brückenweite wäre
-  die Diagonale), in Stützbedarf, Bericht und `open_pieces` gleich. Die
-  oberste Schicht zählt mit ihrer Fläche. **In der Kanalfrage zählt ein
-  Scheitel, der weiter kragt, als er sich trägt, wie ein Stück außerhalb**
-  (`_Arch.overhanging`, dieselbe Flächenmehrheit): Unter jedem Bogen ist der
-  Raum am Scheitel schmal. Wer nur Ränder fragt, rechnet keine Bögen;
-  Schließ- und Bogenantwort sind je Schichten gemerkt (`_closing_answers`).
+  Mündung), **als Kragarm, solange seine Außenbahn höchstens eine
+  Bahnbreite neben der Schicht darunter liegt** (`_cantilever`: anderthalb
+  Bahnbreiten, höchstens Zugabe und eine Bahn; die Bahn aus `bridge_from`
+  des Schnitts, nie in Schichthöhen umgerechnet); weiter Kragendes ist eine
+  Brücke längs der freien Kante und trägt sich nur kurz, bis
+  `SPAN_INTERESTING` (`_runs_free`), und nur bis Zugabe plus zwei Bahnen und
+  `CANTILEVER_LAYERS` Schichthöhen — die Grenze feiner Schichten: Keine
+  Breite in Millimetern trennt eine Satteldecke unter 8,5° bei 0,08 mm vom
+  Rundbogen R 30 bei 0,2 mm. Läuft sie weiter, gehört sie zum Scheitel:
+  Pultdecke unter 12° und Haut unter 15° in 20 mm Tiefe behalten ihre Stütze,
+  ein Rundbogen in einer Wand über 15 mm Tiefe auch. Ein Streifen zwischen
+  zwei Auflagen (`_held_twice`) trägt sich, wenn sein Teil jenseits des
+  Kragarms selbst zwischen Auflagen liegt (sonst fasst ein einseitiger
+  Streifen mit seinen Enden die eigene Hülle) und kein Punkt weiter als
+  `SPAN_INTERESTING / 2` vom Material darunter liegt — weiter ist er eine
+  Brücke, kein Bogen und kein Scheitel (Kumiko-Gitter, Tunneldecke). Ein
+  Scheitel trägt sich als Rand (`LEDGE_REACH` je Kragarm) oder als Brücke
+  zwischen den Flanken (`SPAN_INTERESTING`, quer gemessen). Bogenstreifen
+  zählen nicht zur Fläche, nicht zu „auf dem Modell“ und nicht zum
+  Überhangbefund; keine Sperre. **Die Brückenregel gilt für Streifen zwischen
+  zwei Auflagen**, nicht für die an einer Seite hängenden (`hanging_vaults`,
+  ihre Brückenweite wäre die Diagonale), in Stützbedarf, Bericht und
+  `open_pieces` gleich. Die oberste Schicht zählt mit ihrer Fläche. **In der
+  Kanalfrage wird ein Scheitel, der weiter kragt, als er sich trägt, samt
+  seiner letzten Spanne ausgespart** (`_Arch.overhanging`, `spared`), die
+  Decke bleibt Kanal — nach Mehrheit gezählt, kippte eine von zwei
+  gespiegelten Taschen. Wer nur Ränder fragt, rechnet keine Bögen; Schließ-
+  und Bogenantwort sind je Schichten gemerkt (`_closing_answers`).
 - **Der Stützkontakt folgt dem Material der Spule** (`_support_contact`):
   Abstand aus Schichthöhe × `support_gap_factor`, begrenzt durch
   `support_gap_min`/`support_gap_max` des Materialprofils (Regel 7,
