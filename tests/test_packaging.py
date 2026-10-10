@@ -1340,12 +1340,16 @@ def test_the_selection_starts_at_the_last_checked_main_run(tmp_path: Path) -> No
 #: Was die Bash 3.2 des Macs nicht kennt (Bash 4 und neuer).
 BASH_FOUR: Final = re.compile(
     r"\b(?:mapfile|readarray|coproc)\b"
-    r"|\b(?:declare|local|typeset)\s+-[a-zA-Z]*[Ang]\b"
-    r"|\$\{\w+(?:,,|\^\^)"
+    r"|\b(?:declare|local|typeset|readonly)\s+-[a-zA-Z]*[Anglu]"
+    r"|\$\{\w+(?:\[[^]]*\])?(?:,,?|\^\^?)"
+    r"|\$\{\w+\[-\d+\]\}|\$\{\w+:[^}:]+:-\d+\}"
     r"|&>>|\|&"
-    r"|\bshopt\s+-s\s+(?:globstar|lastpipe|inherit_errexit)\b"
-    r"|\[\[\s+-v\b"
-    r"|\$\{\w+@[QEPAa]\}"
+    r"|\bshopt\s+-s\b.*\b(?:globstar|lastpipe|inherit_errexit)\b"
+    r"|(?:\[\[|\[|\btest)\s+(?:!\s+)?-v\s"
+    r"|\$\{\w+(?:\[[^]]*\])?@[QEPAaKkUuL]\}"
+    r"|\$\{?(?:EPOCHSECONDS|EPOCHREALTIME|SRANDOM|BASHPID)\b"
+    r"|\bexec\s+\{\w+\}[<>]"
+    r"|;;?&\s*$"
     r"|\bwait\s+-n\b"
 )
 
@@ -1356,11 +1360,25 @@ BASH_FOUR: Final = re.compile(
         "mapfile -d '' -t files < <(git ls-files -z)",
         "readarray -t lines",
         "declare -A seen",
+        "declare -Ar fixed",
         "local -n target=$1",
+        "declare -l lower",
         'echo "${name,,}"',
+        'echo "${name^}"',
+        'echo "${parts[0],,}"',
+        'echo "${files[-1]}"',
+        'echo "${sha:0:-1}"',
         "make |& tee log",
+        "make &>> log",
         "shopt -s globstar",
+        "shopt -s nullglob globstar",
         "[[ -v GITHUB_ENV ]]",
+        "[[ ! -v GITHUB_ENV ]]",
+        "[ -v GITHUB_ENV ]",
+        'echo "${arr[@]@Q}"',
+        "start=$EPOCHSECONDS",
+        "exec {fd}>log",
+        "  a) echo a ;&",
         "wait -n",
     ],
 )
