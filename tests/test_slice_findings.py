@@ -1328,6 +1328,50 @@ def test_a_shaft_is_open_where_every_layer_holds_a_channel_circle(
     assert _shafts_pass(column, {4: ShapelyPolygon()}, shade_at, heights, LINE) == {4: open_}
 
 
+@pytest.mark.parametrize(
+    ("lean", "gap", "open_"),
+    [(0.0, 2.0, False), (0.57, 2.0, False), (2.9, 2.0, False), (0.0, 0.3, True), (2.9, 0.3, True)],
+)
+def test_a_leaning_wall_moves_a_circle_only_as_far_as_it_pushes(
+    lean: float, gap: float, open_: bool
+) -> None:
+    """Ein Kreis weicht nur so weit aus, wie die Wand ihn schiebt. Synthetisch:
+    eine Kammer von z = 2 bis 30, darüber ein Dach von 3 mm mit einer weiten
+    Öffnung, deren freie Mitten ``gap`` mm neben den Kreisen der Säule liegen;
+    die Wand bei -y hängt um ``lean`` Grad über und schiebt die Kreise in +y,
+    die Öffnung liegt in +x. Weitete sich jeder getroffene Kreis um den vollen
+    Schritt, wanderten die Enden des Streifens an der Wand entlang: Mit 0,57°
+    (0,005 mm je Schicht) lag die Öffnung 2 mm daneben offen, mit 2,9° 10 mm
+    (Review RM-629). 0,3 mm daneben öffnet schon der senkrechte Himmel die
+    Kammer nicht, wohl aber ein Schritt an der Dachkante."""
+    from app.core.slice.analysis import _open_above, _shafts_pass, _sky_above, _sky_window
+
+    heights = [0.25 + 0.5 * index for index in range(90)]
+    slope = math.tan(math.radians(lean))
+    column = box(-2.0, -2.0, 2.0, 2.0)
+    # Die Mitten der Startkreise reichen bis x = 2 + Saum von zwei Bahnen, um
+    # eine halbe Bahn eingerückt, und um den Radius weniger eine halbe Bahn
+    # zurück (``_touching_centres``); die Öffnung beginnt einen Radius davor.
+    reach = 2.0 + LINE + 15.0
+    edge = reach + gap - 15.0
+    outer = box(-120.0, -120.0, 120.0, 120.0)
+
+    def shade_at(index: int) -> BaseGeometry:
+        z = heights[index]
+        if z < 2.0:
+            return ShapelyPolygon()
+        if z < 30.0:
+            return outer.difference(box(-25.0, -25.0 + slope * (z - 2.0), 90.0, 25.0))
+        if z < 33.0:
+            return outer.difference(box(edge, -30.0, edge + 40.0, 30.0))
+        return ShapelyPolygon()
+
+    sky = _sky_above(_sky_window(column, LINE), [4], shade_at, len(heights))[4]
+
+    assert not _open_above(column, ShapelyPolygon(), sky, LINE), "senkrecht kein Schacht"
+    assert _shafts_pass(column, {4: ShapelyPolygon()}, shade_at, heights, LINE) == {4: open_}
+
+
 def stepped_shaft(offset: float) -> trimesh.Trimesh:
     """Ein Deckel von 30 mm auf dem Becher, durchbohrt von zwei senkrechten
     Löchern Ø 34 mm übereinander: das untere bis z = 75, 2 mm über die Kante

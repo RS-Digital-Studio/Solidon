@@ -2040,9 +2040,9 @@ def _shafts_pass(
     (:func:`_open_above`) keinen fasst. Gestartet wird mit den Kreisen, die den
     Saum der Säule (:func:`_seam_reach`) mindestens eine Bahn breit berühren.
     Je Schicht darüber bleibt jeder Kreis, der frei ist, wo er ist; wen das
-    Material der Schicht trifft, der weicht um höchstens :data:`SHAFT_DRIFT`
-    Schichthöhen aus. Offen ist der Schacht, wenn über der obersten Schicht ein
-    Kreis übrig ist.
+    Material der Schicht trifft, der weicht so weit aus, wie die Wand ihn
+    schiebt, höchstens um :data:`SHAFT_DRIFT` Schichthöhen. Offen ist der
+    Schacht, wenn über der obersten Schicht ein Kreis übrig ist.
 
     **Weit wie ein Kanal quer zur Achse:** Ein Loch Ø 34 mm in einem Deckel von
     20 mm, um 20° geneigt, sieht senkrecht nur 28,9 mm; nach der senkrechten
@@ -2125,7 +2125,17 @@ def _shafts_pass(
                 if step > 0.0:
                     fallen = centres.intersection(blocked)
                     if not fallen.is_empty:
-                        centres = centres.union(fallen.buffer(step, quad_segs=SHAFT_STEP_SEGMENTS))
+                        # **Nur so weit, wie die Wand schiebt** — so tief, wie
+                        # die getroffenen Mitten im Gesperrten liegen, dazu ein
+                        # Zuschlag für Vieleck und Vereinfachung. Um den vollen
+                        # Schritt aufgeweitet, wuchsen die Enden des Streifens
+                        # an einer Wand entlang, die ihn nur streift: Mit 0,57°
+                        # Überhang wanderte ein Kreis 2 mm, mit 2,9° 10 mm
+                        # seitwärts unter ein Dach (Review RM-629).
+                        corners = shapely.points(shapely.get_coordinates(fallen))
+                        depth = float(np.max(shapely.distance(corners, blocked.boundary)))
+                        push = min(step, SHAFT_PUSH_SPARE * depth + 2.0 * WIDTH_SIMPLIFY)
+                        centres = centres.union(fallen.buffer(push, quad_segs=SHAFT_STEP_SEGMENTS))
                 # Vereinfacht vor der Differenz: Danach läge der Rand der
                 # Mitten bis ``WIDTH_SIMPLIFY`` im Gesperrten, und dieselbe Wand
                 # träfe sie jede Schicht neu (geschlossener Deckel 0,36 →
@@ -3599,6 +3609,12 @@ SHAFT_DRIFT: Final = OVERHANG_ANGLE_FACTOR
 #: Schritt ist eine Schichthöhe weit; bei 0,5 mm liegt das Vieleck um 0,01 mm
 #: innerhalb seines Kreises, und der Kreis weicht eher zu wenig aus als zu weit.
 SHAFT_STEP_SEGMENTS: Final = 4
+
+#: Um wie viel ein Kreis weiter ausweicht, als die Wand ihn schiebt
+#: (:func:`_shafts_pass`): so viel, wie das Vieleck des Schritts innerhalb
+#: seines Kreises liegt (bei vier Segmenten 2 %). Sonst bliebe eine geschobene
+#: Mitte um diesen Anteil im Gesperrten.
+SHAFT_PUSH_SPARE: Final = 1.0 / math.cos(math.pi / (4.0 * SHAFT_STEP_SEGMENTS))
 
 #: Welcher Anteil eines Deckengrundrisses in der Hülle seiner gehaltenen
 #: Randstücke liegen muss, damit er zwischen ihnen liegt
