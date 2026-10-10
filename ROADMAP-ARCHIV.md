@@ -32,6 +32,10 @@ entfernt hat.
 | Datum | Abschnitt |
 |---|---|
 | 2026-10-10 | [RM-676: *Größe ändern* an einem erzeugten Modell rechnet nur das Maß (10.10.2026)](#rm-676-größe-ändern-an-einem-erzeugten-modell-rechnet-nur-das-maß-10102026) |
+| 2026-10-10 | [RM-751: Ein freigegebenes Fenster startet keine Wandprüfung mehr (10.10.2026)](#rm-751-ein-freigegebenes-fenster-startet-keine-wandprüfung-mehr-10102026) |
+| 2026-10-10 | [RM-750: Ein wartender Klick behält seine Zusage, während die Analysekarte rechnet (10.10.2026)](#rm-750-ein-wartender-klick-behält-seine-zusage-während-die-analysekarte-rechnet-10102026) |
+| 2026-10-09 | [RM-627: Ein Rand neben einem anderen Überhang ist keine lange Brücke (09.10.2026)](#rm-627-ein-rand-neben-einem-anderen-überhang-ist-keine-lange-brücke-09102026) |
+| 2026-10-09 | [RM-572: Der Prüfbericht nennt die Stelle, wo viele kleine Überhänge Stützen verlangen (09.10.2026)](#rm-572-der-prüfbericht-nennt-die-stelle-wo-viele-kleine-überhänge-stützen-verlangen-09102026) |
 | 2026-10-09 | [RM-584 (Teil 2): Unter flachen Decken Gitter oder Hybrid, und hohe Bäume bekommen zwei Wände (09.10.2026)](#rm-584-teil-2-unter-flachen-decken-gitter-oder-hybrid-und-hohe-bäume-bekommen-zwei-wände-09102026) |
 | 2026-10-09 | [RM-624: Ein Slicertest hält Kontaktabstand und untere Trennschicht in sechs Programmen (09.10.2026)](#rm-624-ein-slicertest-hält-kontaktabstand-und-untere-trennschicht-in-sechs-programmen-09102026) |
 | 2026-10-09 | [RM-531 (Teil): Sieben Fenstertests außerhalb von Windows sind auf allen vier Plattformen grün (09.10.2026)](#rm-531-teil-sieben-fenstertests-außerhalb-von-windows-sind-auf-allen-vier-plattformen-grün-09102026) |
@@ -27327,6 +27331,131 @@ zurück, die Übernahme aus dem Slicer überschreibt keine Handspule, Rücknahme
 sind rücknehmbar, das Lager sichert seinen letzten lesbaren Stand selbst,
 Datumsfelder haben einen Kalender.
 
+## RM-627: Ein Rand neben einem anderen Überhang ist keine lange Brücke (09.10.2026)
+
+<a id="rm-627-ein-rand-neben-einem-anderen-überhang-ist-keine-lange-brücke-09102026"></a>
+<a id="rm-627"></a>
+
+**RM-627 — Ein Rand, der sich selbst trägt, zählt als lange Brücke, sobald auf seiner Schicht
+ein anderer Überhang liegt.**
+  Gefunden bei RM-572 (09.10.2026): Kinn über der Brust mit einem Kragen von 2 mm um die Rückwand
+  auf Kinnhöhe. Der Kragen ist ein Rand (`ledges`), vom Kinn auf einer Seite unterbrochen und
+  damit ohne beidseitig getragene Richtung; seine Schicht trägt `bridge_width` 46,2 mm. Rat und
+  Bericht nahmen Ränder nur schichtweise aus (`advise._quiet_layers`: Schichten, deren Stücke
+  alle Ränder oder Kanaldecken sind). Mit einem Kinnstreifen von 4,1 mm² (eigene Spannweite 0)
+  daneben zählte die ganze Schicht: Der Bericht meldete „Hier spannt eine Decke frei“ mit
+  46,2 mm am Kragen, und der Rat verlangte Stützen über den Brückenweg. An einer Wand mit
+  U-förmigem Kragen und einem Sporn von 8,5 mm² an einer Säule daneben (Spannweite 6,1 mm)
+  schaltete allein das Stützen ein — ohne den Sporn nicht.
+  **Stellen:** `advise._may_need_support`, `advise._from_spans`.
+  **Fix:** Die Brückenweite einer Schicht ohne Ränder und Kanaldecken messen, an der freien
+  Fläche, die ein übriges Stück berührt, wie `open_bridge_width`; der Ort der Warnung liegt an
+  dieser Fläche.
+  **Abnahme:** Konsole an einer Wand mit Sporn auf derselben Schicht ohne Stützbedarf und ohne
+  Warnung; eine echte Brücke neben der Konsole bleibt gemeldet, mit ihrer Weite und an ihrem Ort.
+
+**Abschluss:** `analysis.span_beside` misst die längste Brücke einer Schicht ohne die Stücke aus
+`quiet`, an der freien Fläche, die ein übriges Stück berührt (`kept_overhang`, wie bei
+`open_bridge_width`); steht kein Stück der Schicht darin, gilt `bridge_width` unverändert, eine
+Schicht nur aus Rändern spannt 0. `_may_need_support` fragt damit die Kanaldecken und Ränder aus
+`support_need`, `_from_spans` die Ränder; Weite und Ort der Warnung kommen aus derselben Fläche.
+`_quiet_layers` und `SupportNeed.quiet_layers` entfallen; ihr letzter Leser,
+`tools/matrix_unit.support_ways` (Tabelle „Stützbedarf gegen das Urteil des Slicers“), warf danach
+`AttributeError` und zählt die Brücken jetzt mit `span_beside` wie der Stützbedarf (Review). Kinn mit
+Kragen: keine lange Brücke mehr, der Befund über kleine Überhänge bleibt (z 44,55, 119,3 mm²), der
+Rat unverändert (Stützen über den Flächenweg). Wand mit U-Kragen und Sporn: kein Stützbedarf,
+kein Stützvorschlag; Kragen allein wie vorher. Tests
+`test_a_shelf_stays_a_ledge_beside_another_small_overhang` und
+`test_a_real_bridge_beside_a_shelf_is_still_reported_at_the_bridge` (Steg 20 mm, Ort am Steg);
+Gegenproben: Schichtweite statt `span_beside` lässt beide und
+`test_a_shelf_on_one_wall_is_a_ledge_and_no_bridge` rot werden, der Ort ohne die Flächenwahl den
+Brückentest. Kein Slicerlauf: Die Übergabe ändert sich nur, wo der Rat bisher allein wegen eines
+Rands Stützen einschaltete, und kehrt dort zum Herstellerprofil ohne Stützen zurück; dass Ränder
+ohne Stütze drucken, belegt [RM-582](#rm-582). Changelog: ja.
+
+**Review (09.10.2026 nachts), behoben:**
+- *Flanke:* Eine Flanke zwischen etwa 14° und 45° legt je Schicht ein Band frei (über der
+  Brückenzugabe, unter der des Überhangs), das Rand und Sporn zu einer freien Fläche verband; die
+  Konsole maß mit (Wand mit zwei Flanken unter 30°, Sporn 9 mm²: 40,1 statt 6,2 mm, Stützen und
+  Warnung). `analysis._widest_bridge` misst mit `touching` nur die Kerne, die ein übriges Stück
+  berühren (ein Kern liegt ganz in einem Überhangstück); gilt auch für `open_bridge_width`. Der Ort
+  der Warnung liegt an der gemessenen Brücke (`span_spot`).
+- *Kosten:* `span_beside` maß jede Schicht mit Rand bei jedem Bericht neu (Waschschüssel 2,8 s für
+  eine Schicht). Gemerkt je Schnitt, Schicht und Auswahl; nimmt die Auswahl nichts weg, gilt
+  `bridge_width` ohne Messung. Warm Waschschüssel 0,00 statt 2,1–3,3 s, Drache 0,00 statt 0,5 s.
+  `cancelled` reicht bis `span_beside`, und `support_need` gibt ihn der Kanalfrage, die ihn je
+  Schicht, Kreisfrage und Decke fragt (Drache 45°: 446 s ohne Abbruch).
+- *Matrix:* siehe oben, `support_ways`.
+- *Kanaldecke:* Der Bericht riet über einem Tunnel von 20 mm seit v0.5.3 „oder eine Stütze“, wo
+  der Rat keine verlangt. `_from_spans` fragt die Kanaldecken der spannenden Schichten
+  (`channel_pieces`, aus der gemerkten vollen Antwort, sonst eng und nur für Stücke, die weiter als
+  15 mm spannen können, `_may_span`): Spannt die Schicht ohne sie weiter, ist es eine Brücke,
+  gemessen und gezeigt ohne die Kanaldecke (Steg über 20 mm neben dem Tunnel: am Steg); sonst nennt
+  der Befund den Kanal und den Übergang unter 45°, ohne Stütze. Kalt am Drachen 45° 21 statt 3 s
+  (alle Stücke gefragt: 136 s), mit gemerktem Stützbedarf 0,9 statt 0,4 s. Kalt heißt: mehr als
+  acht Körper, ohne Bedarfsfrage. Dort hielt der Merker vier Antworten, jeder weitere Körper mit
+  spannender Schicht verdrängte den Drachen, und jeder Bericht nach einer Auswertung zahlte alles
+  neu (Drache und acht Wedge-Locks: 45° 19,8–20,1 s, 60° 6,8–7,1 s CPU je Bericht), dazu die nie
+  gemerkte enge Randfrage (2,7 s). Behoben (Nachprüfung, L1): Der Merker zählt Schnitte statt
+  Antworten, hält einen je Körper der Szene und vier darüber (`keep_answers` aus
+  `print_findings`), je Schnitt vier Antworten, und verdrängt den am längsten nicht gefragten; die
+  enge Randfrage wird mitgemerkt. Zweiter Bericht 0,0–0,1 s, Befunde gleich; die Antworten selbst
+  belegen 0,03–0,04 MiB, ein Schnitt des Drachen, den der Merker nach einer Änderung noch hält,
+  37–43 MiB.
+- *Beleg im Korpus:* Die Abschlussmessung „An Eiffelturm, Becher, Waschschüssel und Datei-Schnitt
+  ändert sich nichts“ lief auf drei Schnitten mit `detail="support"`, die keine Brückenweite tragen.
+  Nachgeholt mit vollem Schnitt (C2/PLA) über 22 Dateien aus `F:\3D Dateien` und dem
+  Drachenarbeitsplatz, 41 Körper, 7 mit spannender Schicht, 3 davon gemischt: Stützbedarf und
+  Brückenweite an keinem geändert. Der Ort der Warnung wandert am Arbeitsplattenreiniger (23,1 mm,
+  z 0,35) vom Rand (73,6; 51,3) an die gemessene Brücke (0,0; −56,2), am Drachen (15,4 mm) von
+  (41,2; 15,2) nach (39,4; 21,4). Den Kanaltext bekommt die Minigolfbahn `obj_1_Birleştir` (25,1 mm,
+  z 6,35, kein Stützbedarf, die Schicht ganz Kanaldecke) — dort stand bisher „oder eine Stütze
+  hilft“. Der Rat ändert sich auch, wo eine Kanaldecke neben einem kurzen Steg
+  liegt (Tunnel 20 mm, Steg über 12 mm vom Bett: vorher Stützen, jetzt keine — folgerichtig zur
+  Kanalregel); ein Slicerlauf zeigte dort nur den Slicer ohne Stützen.
+
+## RM-572: Der Prüfbericht nennt die Stelle, wo viele kleine Überhänge Stützen verlangen (09.10.2026)
+
+<a id="rm-572-der-prüfbericht-nennt-die-stelle-wo-viele-kleine-überhänge-stützen-verlangen-09102026"></a>
+<a id="rm-572"></a>
+
+**Befund (08.10.2026, Review 3):** Der Überhangbefund meldete nur ein einzelnes Stück über
+100 mm². Verlangte der Rat Stützen über die Summe vieler Streifen oder eine schräge
+Unterseite als Feld (RM-570), schwieg der Bericht — am Kinn mit 18° (Streifen bis 6,4 mm²,
+zusammen 189 mm²) und am Drachen (größtes Stück 23,7 mm², zusammen 1 492 mm²).
+
+**Behoben:** `findings.small_overhang_findings` meldet „Viele kleine Überhänge hängen frei
+und brauchen zusammen Stützen.“ an der Schicht mit der meisten Überhangfläche, an ihrem
+größten Stück, mit *Druckoptimal ausrichten* und *Stützbedarf zeigen*. Gefragt wird nur der
+Flächenweg des Rats (`worth_support(need.patch, need.overhang)`), nicht `need.needed`, und
+Inselstücke, Kanaldecken und Ränder (`ledges`) zählen weder in der Fläche noch beim Ort;
+ohne sie muss der Weg weiter tragen und die Fläche über 100 mm² liegen. Ohne Stützbedarf
+nach dem Rat — der Gitterbecher — kein Befund. Die Antwort des Rats (`advise.support_need`)
+holt `body_findings` nur unter der Bedingung der Lagensuche (höchstens acht Körper,
+Stützraum ab 1 000 mm³) und teilt sie mit ihr.
+
+**Review (09.10.2026, `review_rm572_rm624.md`):** Der erste Stand fragte `need.needed` und
+zählte Inselflächen: Ein Sockel mit schwebendem 12- oder 20-mm-Würfel bekam neben der Insel
+„viele kleine Überhänge“ mit 144 bzw. 400 mm² an derselben Stelle, zwei 20-mm-Brücken von
+je 58 mm² (zusammen 115,8, kein Flächenweg) neben `slice.long_bridge` ebenso. Er stellte
+die Bedarfsfrage außerdem ohne Lagensuche: Von 17 kleinen Modellen eines neu
+(`carcassonne-4x4-grid`, +0,45 s, kein Befund), bei mehr als acht Körpern ein Schachsatz
+mit 3,7–7,0 s je Figur, fünf Figuren 23,9 s, kein Befund. Beides ist behoben, und
+der Ort meidet jetzt auch selbsttragende Ränder.
+
+**Nachweis (09.10.2026):** Profil Centauri Carbon 2/PETG über `print_findings`: Kinn
+(Stützraum 2 739 mm³) Befund bei z 44,55 an der Unterseite, 119,3 mm²; Kiefer (8 889 mm³)
+bei z 47,35, 200,1 mm²; Würfel 12 und 20 mm nur Insel; zwei Brücken nur lange Brücke.
+Drache (`obj3.stl`, 2 948 698 Dreiecke, generic-220/PLA): Stützraum 34 178 mm³, Bedarfsfrage
+wie vorher mit der Lagensuche; Befund unverändert bei z 102,75 (x −4,8, y −4,8), Fläche ohne
+Inselstücke 630,6 statt 663,3 mm². Der Befund selbst kostet dort 0,09 s CPU (vorher 0,06);
+die Feldfrage ohne Inselstücke neu zu stellen kostete 5,4 s, das Feld des Rats gilt weiter,
+wo es eine Decke ist. Tests in `test_print_findings.py`
+(Kinn mit Ort im Grundriss und auf der Unterseite, Kragen von 2 mm auf Kinnhöhe, Würfel,
+Brücken, keine Bedarfsfrage ohne Lagensuche), `test_many_small_overhangs_get_a_finding_with_a_place`
+(Kinn und Kiefer, Ort auf der Unterseite an seiner Höhe),
+`test_a_lattice_of_small_self_supporting_pieces_gets_no_supports` (Gitterbecher). Changelog: ja.
+
 ## RM-584 (Teil 2): Unter flachen Decken Gitter oder Hybrid, und hohe Bäume bekommen zwei Wände (09.10.2026)
 
 <a id="rm-584-teil-2-unter-flachen-decken-gitter-oder-hybrid-und-hohe-bäume-bekommen-zwei-wände-09102026"></a>
@@ -44032,7 +44161,7 @@ Streifen in der Aufsicht vereinigt, ohne Kanalstücke, nur wo sie im Mittel brei
 als `OVERHANG_MARGIN`. Dieselbe Feldfrage entscheidet den Stützort
 (`ModelSupport.open_field`: sonst „nur vom Bett“ am Kinn über der Brust) und welche
 Überhänge die Kanalsperre ausspart (RM-566). Wo viele kleine Überhänge Stützen
-verlangen, nennt der Prüfbericht noch keine Stelle: [RM-572](ROADMAP.md#rm-572).
+verlangen, nannte der Prüfbericht noch keine Stelle: [RM-572](#rm-572).
 
 **Nachweis (08.10.2026):** `tests/test_advise.py::test_a_sloped_underside_is_one_field`
 (Kinn, Feld unter der Summe 150, Feld unter 100, Rauschen einer Wand),
@@ -46546,3 +46675,32 @@ Lücke entstand mit RM-566 im selben 0.6.0-Zyklus).
   Belege: `F:\solidon-review-reports\regression-0.5.2\weg3\befunde.md` (Abschnitt 2).
 
 **Abschluss:** Kette `load, fit_to_size (Arbeitsgröße), repair, [decimate_mesh], fit_to_size (Kundenmaß, freie Stelle)`; *Größe ändern* ändert nur den letzten Schritt (`d9c567d92`). Ein Maßschritt, dem weniger als `PRINT_LIMIT` zum Maß fehlt, legt nur und trägt die Merkmale mit (`3efa05df1`; am Bett ließ das Ausdünnen 100,000222 mm stehen, und ohne ihn lief beim Übernehmen eine Erkennung mehr als vorher). Die freie Stelle bewegt das Netz nur noch einmal (`473ef2f36`, Spitze −16 %). Gezählt mit Sonde je Weg, v0.5.1 / vorher (`a9e4d3f64`) / nachher: volle Erkennungen bei *Größe ändern* Drache 1/1/1, Stuhl 1/1/1, Bett 1/2/1, Reparatur 1/1/0; beim Übernehmen und Öffnen gleich viele wie vorher (2, 2, 3). Job-CPU unter Volllast, zwei Läufe im Wechsel: *Größe ändern* Drache 37–39 / 29–32 / 24–26 s, Stuhl 51–72 / 62–67 / 28–44 s, Bett 99–143 / 230–248 / 44–69 s; Strg+Z danach vorher 17–138 s, nachher unter 3 s. Merkmale bei gleichmäßiger Skalierung mitzutragen ist geprüft und verworfen: 47 von 339 Paaren aus Korpus, Beispielprojekten und den drei Modellen sind diskret ungleich, bei jedem Faktor von 0,5 bis 4 (Bericht Paket D, Welle 3).
+
+## RM-750: Ein wartender Klick behält seine Zusage, während die Analysekarte rechnet (10.10.2026)
+
+<a id="rm-750-ein-wartender-klick-behält-seine-zusage-während-die-analysekarte-rechnet-10102026"></a>
+<a id="rm-750"></a>
+
+**RM-750 — Wartete *Fertig* einer Formsitzung auf die Auswertung, verschwand „Wird übernommen,
+sobald die Berechnung fertig ist.“, sobald die Wandprüfung des Zugs ihre Analysekarte rechnete.**
+Gefunden im Review des macOS-Fixes `fix/sculpt-macos` (`review-fix-sculpt.md`, M-2): Die Karte
+steht in `_PROGRESS_PRIORITY` vor der Auswertung, und `_render_progress_state` zeigte die Zusage
+nur, wenn die Auswertung die Zeile trug; der Klick sah verschluckt aus. Jetzt steht die Zusage,
+solange ein Klick wartet und die Auswertung läuft, gleich welcher Lauf die Zeile trägt.
+**Nachweis:** `test_sculpt_session.py::test_a_waiting_click_keeps_its_promise_while_the_map_is_computed`
+am Stand davor rot, jetzt grün; die Formsitzungsdatei 96 grün. Neben Erzeugung und Agent folgt
+der Zusage wie dort der Hinweis oder die Ansage. Changelog: nein (die Zusage kam mit `4c5a52e12`
+am 08.10.2026 und steckt in keinem Tag).
+
+## RM-751: Ein freigegebenes Fenster startet keine Wandprüfung mehr (10.10.2026)
+
+<a id="rm-751-ein-freigegebenes-fenster-startet-keine-wandprüfung-mehr-10102026"></a>
+<a id="rm-751"></a>
+
+**RM-751 — Nach `MainWindow.release` startete der Zeitgeber eines letzten Zugs noch eine
+Wandprüfung, deren Arbeiter niemand mehr abwartete.** Gefunden im selben Review (M-3; in der
+Sonde endete der Prozess so viermal mit Exit 127). `release` hält `_sculpt_check` und die wartende
+Übergabe der Vorschau (`_sculpt_display`) an und gibt die laufende Prüfung auf,
+`_check_sculpted_walls` fängt nach dem Schließen nichts mehr an.
+**Nachweis:** `test_sculpt_session.py::test_a_released_window_starts_no_wall_check` am Stand
+davor rot, jetzt grün. Changelog: nein.
