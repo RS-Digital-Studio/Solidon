@@ -105,6 +105,11 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-691 — Stift am Schlüsselloch der Halter hat je Kern eine andere Form](#rm-691) | Geometrie, Erkennung und Druckvorbereitung | Ringhalter und Ablage: am Netz glatt, exakt mit Kopf; Hohlraumkette angleichen und beide Kerne geometrisch gegenprüfen |
 | [RM-698 — Sparen, was der Druck nicht merkt: Speicher großer Modelle und ein gemeinsamer druckgleich-Vergleich](#rm-698) | Geometrie, Erkennung und Druckvorbereitung | Speicher am großen Modell messen; Vergleichshelfer für §11.2 bauen; Dreiecksindizes und einfach genau gehaltene Ecken mit Leitplanken prüfen |
 | [RM-699 — Ersteinrichtung nimmt Düsen bis 10 mm an, der Druckdialog bis 2 mm](#rm-699) | Geometrie, Erkennung und Druckvorbereitung | Obergrenze an einer Konstante festmachen und entscheiden, ob große Düsen (Granulat) dazugehören |
+| [RM-637 — Die Merkmalserkennung auf mehrere Prozesse verteilen, mit gleichem Ergebnis](#rm-637) | Geometrie, Erkennung und Druckvorbereitung | Entschieden (Robert, 09.10.): ja. Baut nach Paket E auf dessen Zweig; Laden mechanischer Teile bleibt sonst drei- bis fünfmal langsamer als v0.4.4 (Rest K-3) |
+| [RM-692 — Funktionale Gruppen werden nach jedem Verschieben neu gerechnet](#rm-692) | Geometrie, Erkennung und Druckvorbereitung | Gemessen in L3: Eiffelturm 3,6 s, Besteckkasten 2,8 s je Verschieben vor dem Bild; Merker in `perceive/features.py`, nach Paket E |
+| [RM-697 — Ein unverändertes Netz wird bei jedem Schritt neu auf die Platte geschrieben](#rm-697) | Geometrie, Erkennung und Druckvorbereitung | Gemessen in L3: jede Filamentzuweisung schreibt das gleiche Netz komprimiert neu (Spiderman 0,8 s); Formatfrage im Plattencache, nach Paket E |
+| [RM-752 — Bei jedem Übernehmen und Öffnen läuft eine volle Erkennung am Einheitswürfel](#rm-752) | Geometrie, Erkennung und Druckvorbereitung | Gemessen in D: 7–63 s CPU je Modell seit v0.5.1, findet nie ein Merkmal; `scene/evaluate.py` |
+| [RM-753 — Beim Skalieren wächst die Normale einer gerundeten Seite um 1/f](#rm-753) | Geometrie, Erkennung und Druckvorbereitung | Gefunden in D: `transformed_features` behandelt die Normale nicht als Einheitsvektor; `perceive/matching.py` |
 | [RM-070 — SpaceMouse auf macOS und Linux am echten Gerät abnehmen](#rm-070) | Bedienung und Darstellung | Die Rampe ist stetig und getestet, die Bildrate an 815 104 Dreiecken gemessen (`7ff34c67`: 16,7 → 8,7 ms im Median); offen bleiben Linux, die 3DxWare-Mausemulation, das Gerät selbst und die Rampe im Skizzenmodus (aus RM-183) |
 | [RM-204 — Ein Merkmalklick baut alle Handlungen des Fensters neu](#rm-204) | Bedienung und Darstellung | Abnahme am echten Fenster beim Release (RM-213) |
 | [RM-559 — Körper in der Szene mit drei Klicks aufziehen, als Körper oder als Ausschnitt](#rm-559) | Bedienung und Darstellung | Gebaut (Paket Z1, 08.10.): Werkzeug *Zeichnen*, Strg+Umschalt+E; offen die Abnahme am echten Fenster und die Nachzählung durch bedienlogik |
@@ -132,6 +137,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-687 — Ein wartendes Übernehmen im Merkmalfenster geht unter Last still verloren, obwohl die Statuszeile es zusagt](#rm-687) | Bedienung und Darstellung | Statuszeile sagt „Wird übernommen, sobald die Berechnung fertig ist.“, unter Last fällt der Klick still weg |
 | [RM-689 — Übernehmen ist frei, obwohl Text, Datei oder Bild fehlen; danach hält die Kette an](#rm-689) | Bedienung und Darstellung | Leerer Text oder fehlende Quelle: Übernehmen frei, angehaltener Schritt im Verlauf statt Sperre mit Grund |
 | [RM-658 — Ein Abschnitt, der sich selbst öffnet, merkt sich das als Wahl des Kunden](#rm-658) | Bedienung und Darstellung | Gefunden im Review von RM-680: `open_section` schreibt den Merker; ein Fix in `panels.open_section` deckt Katalog, Filamentangaben und Einstellungen |
+| [RM-696 — Der Prüfbericht des vorigen Stands rechnet neben der neuen Auswertung weiter](#rm-696) | Bedienung und Darstellung | Gemessen in L3: am Eiffelturm 37 s CPU in 19,8 s Wand beim Verschieben, beide teilen den GIL; ein neuer Stand sollte den alten Bericht abbrechen |
 | [RM-003 — Lizenzkette der Generatoren klären und TripoSG ersetzen](#rm-003) | KI und Generatoren | Weg 3 auf TRELLIS.2-4B und FLUX.2 [klein] 4B umgebaut, alte Einrichtung wird mit Ansage entfernt (Robert, 07.10.); offen die Kanzleifragen (DINOv3-Lizenz, Trainingsdaten, Apache-Hinweise), bis dahin nennt die Startseite den Prüfvorbehalt |
 | [RM-004 — Echte Text- und Bildgenerierung über alle Zielplattformen abnehmen](#rm-004) | KI und Generatoren | Windows mit TRELLIS.2 gefahren (07./08.10.): Text- und Bildweg bis zum Export; nach RM-550 sind 14 von 17 Läufen geschlossen und ohne Warnung, fünf davon nur eine Haut (seit RM-577 gemeldet), drei zerfallene meldet der Dialog vor dem Übernehmen; offen Linux und macOS |
 | [RM-251 — Mehrteilige Aufträge enden lokal am Schrittlimit](#rm-251) | KI und Generatoren | (a) 12 Schritte, (b) gebündelte Aufrufe und das lokale Zugbudget gebaut, Quote gehalten (27–28 von 39, 07.10.); offen: zehn mehrteilige Fälle enden weiter am Limit, nur jetzt an den 12 Schritten |
@@ -146,6 +152,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-467 — Bibliotheken alle drei Tage auf neue Versionen prüfen und aktualisieren](#rm-467) | Tests und Entwicklungswerkzeuge | Läufe 02.10. und 09.10. im Archiv, der nächste am 12.10.; Paketbeleg der Bauplattform unter RM-468 |
 | [RM-531 — Fenstertests und echte Slicer auch unter Linux und macOS in der CI](#rm-531) | Tests und Entwicklungswerkzeuge | Entschieden (Robert, 06.10.): Fenster- und Renderergruppe auf vier Plattformen am Tag, per Handstart und bei jedem Push auf main. 14 der 23 roten Fenstertests außerhalb von Windows behoben, auf allen vier grün (07.10.), der Intel-Kontrastfall danach (`58f768eb6`), Rendererfälle ohne Fenster seit RM-344 auf allen vier, die sieben übrigen Fälle grün in 37936316061, der Push nach main fährt Fenster- und Slicerauswahl selbst (Paket CI); offen die Abnahme am ersten main-Lauf |
 | [RM-688 — Der Test zu Curas Mindesttempo prüft das Mindesttempo nicht mehr](#rm-688) | Tests und Entwicklungswerkzeuge | Seit `9416f41ef` steht dort nur `assert motion is not None`; Attrappe und Vorgabe sind beide 10 |
+| [RM-755 — Ein Texturklick während der Auswertung ist als Fenstertest flatterhaft](#rm-755) | Tests und Entwicklungswerkzeuge | Gefunden in SK: `test_operation_ui.py::test_a_texture_panel_click_while_the_scene_evaluates_changes_the_step_after_it` einzeln 1 von 2 rot; Ursache klären wie bei der Formsitzung (Zeitgeber beim Zustellen) |
 | [RM-002 — netcup-AVV und Freigabe der Rechtstexte belegen](#rm-002) | Veröffentlichung, Betrieb und Vertrieb | netcup-AVV belegen und zugehörige Rechtstexte fachlich abgleichen |
 | [RM-006 — Nächsten messbaren Schritt für die Sichtbarkeit festlegen](#rm-006) | Veröffentlichung, Betrieb und Vertrieb | Roberts Bestätigung des Plans bis 01.11. und die Montagsmessungen; der Punkt schließt, wenn Robert den Plan bestätigt |
 | [RM-008 — DMARC-Eintrag öffentlich prüfen und gegebenenfalls einrichten](#rm-008) | Veröffentlichung, Betrieb und Vertrieb | DMARC einrichten und legitimen Mailversand prüfen |
@@ -3591,6 +3598,55 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   (Granulatdüsen, mit Folgen für Schichthöhe und Linienbreite) oder in der
   Ersteinrichtung mit Grund abgelehnt; Test hält beide Felder gleich.
 
+<a id="rm-637"></a>
+
+- [ ] **RM-637 — Die Merkmalserkennung auf mehrere Prozesse verteilen, mit gleichem Ergebnis.**
+  Rest von K-3 (Paket L2): Das Laden mechanischer Teile bleibt drei- bis fünfmal langsamer als
+  v0.4.4, und bitgleich ist in einem Prozess nichts mehr zu holen. Robert hat am 09.10.2026 den
+  Weg „Erkennung der Flecken auf mehrere Prozesse verteilen“ freigegeben. Baut auf dem Stand von
+  Paket E (örtliche Erkennung, P5), dessen Schnittstellen dafür vorbereitet sind.
+  **Abnahme:** gleiche Merkmale, Arten und Kennungen wie im Einzelprozess über Korpus und
+  Beispielprojekte (Zwei-Wege-Vertrag, bitgleich, Bauplan §11.2), auf jeder Plattform; Ladezeit
+  mechanischer Teile im Wechsel gemessen; Abbruch und Fortschritt wie heute; Speicher je
+  Prozess begrenzt.
+
+<a id="rm-692"></a>
+
+- [ ] **RM-692 — Funktionale Gruppen werden nach jedem Verschieben neu gerechnet.**
+  Gemessen in Paket L3 (paket-l3.md): Vor dem Bild rechnet ein Verschieben die funktionalen
+  Gruppen neu, am Fenster am Eiffelturm 3,6 s, am Besteckkasten 2,8 s, obwohl sich nur die Lage
+  ändert. Der Merker sitzt in `perceive/features.py` (Gebiet E).
+  **Abnahme:** Bei einer starren Bewegung werden die Gruppen mitgeführt statt neu gerechnet,
+  druckgleich gegen den vollen Weg (Zwei-Wege-Vertrag: bitgleich), Zeit im Wechsel gemessen.
+
+<a id="rm-697"></a>
+
+- [ ] **RM-697 — Ein unverändertes Netz wird bei jedem Schritt neu auf die Platte geschrieben.**
+  Gemessen in Paket L3: Jede Filamentzuweisung schreibt das gleiche Netz komprimiert in den
+  Plattencache, am Spiderman 0,8 s. Formatfrage im Plattencache, gehört nach Paket E (Format,
+  `cache_version`).
+  **Abnahme:** gleiches Netz wird nicht erneut geschrieben (Inhaltsschlüssel), Auswertung mit und
+  ohne Cache gleich, Zeit im Wechsel gemessen.
+
+<a id="rm-752"></a>
+
+- [ ] **RM-752 — Bei jedem Übernehmen und Öffnen läuft eine volle Erkennung am Einheitswürfel.**
+  Gefunden in Paket D (paket-d.md, Welle 3): Beim Übernehmen eines erzeugten Modells und beim
+  Öffnen läuft eine volle Merkmalserkennung am 1,9-mm-Einheitswürfel, die nie ein Merkmal findet.
+  Kosten: Drache 7–11 s, Stuhl 15–18 s, Bett 48–63 s CPU, in allen Ständen seit v0.5.1.
+  `scene/evaluate.py`.
+  **Abnahme:** Die Erkennung läuft nur am Netz, an dem sie gebraucht wird; Merkmale, Befunde und
+  Kennungen danach gleich (druckgleich gegen den Stand davor), Erkennungen gezählt, Zeit gemessen;
+  Changelog als Behebung (Ursache in v0.5.1).
+
+<a id="rm-753"></a>
+
+- [ ] **RM-753 — Beim Skalieren wächst die Normale einer gerundeten Seite um 1/f.**
+  Gefunden in Paket D: `transformed_features` (`perceive/matching.py`) skaliert die Normale einer
+  gerundeten Seite wie einen Ort, sie ist danach kein Einheitsvektor mehr.
+  **Abnahme:** Test zuerst (Skalierung um 2 und 0,5, Normale bleibt Einheitsvektor, Zuordnung
+  unverändert), Gegenprobe am alten Stand rot.
+
 ## Bedienung und Darstellung
 
 <a id="rm-283"></a>
@@ -4881,6 +4937,15 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   **Abnahme:** Je Abschnitt: zuklappen, Selbstöffnung auslösen, Dialog schließen und neu öffnen →
   zu; nach einem Klick des Kunden auf die Kopfzeile bleibt dessen Zustand. Bauplan §2.5.
 
+<a id="rm-696"></a>
+
+- [ ] **RM-696 — Der Prüfbericht des vorigen Stands rechnet neben der neuen Auswertung weiter.**
+  Gemessen in Paket L3: Beim Verschieben am Eiffelturm teilen sich der Prüfbericht des vorigen
+  Stands und die neue Auswertung den GIL, 37 s CPU in 19,8 s Wand. `print_findings_flow` löst
+  einen alten Lauf erst ab, wenn ein neuer Stand fertig ist.
+  **Abnahme:** Ein neuer Auswertungsauftrag hält den Bericht des alten Stands an (oder er gibt den
+  GIL her), der Bericht des neuen Stands kommt gleich; Zeit bis zum Bild im Wechsel gemessen.
+
 ## KI und Generatoren
 
 <a id="rm-003"></a>
@@ -5420,6 +5485,16 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   `types.py:1260`; Gegenprobe mit ausgeschalteter Zuordnung in `slicer_keys.py:576` rot. Bauplan
   §35, §28.
   Belege: `F:\solidon-review-reports\commits-0910\befunde.md` (T-2).
+
+<a id="rm-755"></a>
+
+- [ ] **RM-755 — Ein Texturklick während der Auswertung ist als Fenstertest flatterhaft.**
+  Gefunden in Paket SK (paket-sk.md, Welle 3):
+  `test_operation_ui.py::test_a_texture_panel_click_while_the_scene_evaluates_changes_the_step_after_it`
+  ist einzeln 1 von 2 rot, ohne Skizzenweg. Vermutlich dieselbe Familie wie der macOS-Fehler der
+  Formsitzung (ein Zeitgeber stellt beim Zustellen einen zweiten Auftrag; `wait_for_sculpt_check`).
+  **Abnahme:** Ursache belegt, Test deterministisch (zwanzig Läufe einzeln und unter Last grün),
+  eine Gegenprobe stellt die Lage nach.
 
 ## Veröffentlichung, Betrieb und Vertrieb
 
