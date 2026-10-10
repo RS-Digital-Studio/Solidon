@@ -78,7 +78,7 @@ from app.core.types import (
     Severity,
     SliceResult,
 )
-from app.core.units import EPS_GEOM, format_length, is_close, is_zero
+from app.core.units import EPS_GEOM, format_length, is_close, is_greater, is_zero
 from app.i18n import TranslatableText, _
 
 if TYPE_CHECKING:
@@ -245,6 +245,7 @@ def advise(
     whole_layers: bool = False,
     organic: Collection[str] = (),
     declined: Collection[str] = (),
+    allowances: Collection[str] = (),
     trees: Collection[str] | None = None,
 ) -> list[SettingAdvice]:
     """Was an diesen Einstellungen für dieses Teil nicht passt (§29).
@@ -266,6 +267,9 @@ def advise(
     ``declined`` sind Pfade, deren Vorschlag der Kunde nicht übernimmt — im
     Druckdialog abgewählt, im Export nicht übernommen: Abstand und untere
     Trennschicht fragen dann mit der eigenen Stützart (:func:`printed_style`).
+    ``allowances`` sagt, was das Modell schon selbst ausgleicht
+    (``scene.fits.allowances_for``): Dort stellt :func:`_from_allowances` den
+    Ausgleich des Slicers auf null.
     ``trees`` sind die Stützarten, die das Programm als Bäume druckt
     (``handover.tree_styles``, RM-584), ``None`` ohne Programm: Gitter oder
     Hybrid unter einer großen flachen Decke und die Wände hoher Bäume fragen
@@ -288,6 +292,7 @@ def advise(
         )
     if fit_kinds:
         advice += _from_fits(settings, fit_kinds)
+    advice += _from_allowances(settings, profile, allowances)
     # Erst nach den Regeln oben, und gegen deren Stand gerechnet: Die
     # Wandzahl hängt an der Bahnbreite, und genau die senkt die Regel über die
     # dünnste Stelle. Vorher gerechnet stand im Bericht eine Wandzahl, die zu
@@ -1809,6 +1814,66 @@ def _from_fits(settings: PrintSettings, kinds: Sequence[str]) -> list[SettingAdv
     return advice
 
 
+#: Die Materialwerte hinter den Löchern eines Modells (RM-589): Spiel der
+#: gebauten Passungen und Lochkorrektur der gebohrten Löcher.
+HOLE_FIELDS: frozenset[str] = frozenset({"clearance", "hole_compensation"})
+
+
+def _from_allowances(
+    settings: PrintSettings, profile: Profile, allowances: Collection[str]
+) -> list[SettingAdvice]:
+    """Was das Modell schon ausgleicht, gleicht der Slicer nicht noch einmal aus (RM-589).
+
+    Eine Bohrung mit Materialzugabe ist um die Lochkorrektur des Materials
+    weiter, eine gebaute Passung trägt ihr Spiel; der Lochausgleich des
+    Slicers käme je Seite noch einmal dazu — am Kobra 2 mit 0,02 mm, am
+    Ender-3 V3 KE mit 0,025 mm aus dem Herstellerprofil. *Elefantenfuß
+    ausgleichen* zieht die ersten Schichten um den Wert des Materials ein; der
+    Einzug des Slicers käme in der ersten Schicht dazu: am Centauri Carbon 2
+    0,3 statt 0,2 mm je Seite, am MK4S 0,4 statt 0,2 mm (gemessen im G-Code,
+    09.10.2026). Vorgeschlagen wird null, nur wo der Slicer ausgleicht.
+
+    **Nicht für einen gemessenen Wert.** Der Prüfkörper der Kalibrierung geht
+    durch denselben Slicer mit dessen Ausgleich; gemessen und eingetragen ist
+    deshalb, was nach dem Slicer fehlt. Modell und Slicer treffen das Maß dann
+    nur zusammen, und null nähme den Teil des Slicers weg. Das gilt je Wert
+    (``MaterialProfile.measured``): Wer nur das Spiel misst, behält beim Fuß
+    den Startwert, der den ganzen Fuß meint, und bekommt dort den Vorschlag.
+    Die Löcher des Modells tragen Spiel oder Lochkorrektur; ihr Vorschlag
+    entfällt erst, wenn beide gemessen sind — ein falsch fehlender Vorschlag
+    gleicht still doppelt aus, ein falsch stehender wartet auf einen Klick.
+    """
+    advice: list[SettingAdvice] = []
+    measured = set(profile.material.measured or ())
+    if (
+        "holes" in allowances
+        and not measured >= HOLE_FIELDS
+        and not is_zero(settings.shell.hole_offset)
+    ):
+        advice.append(
+            _advice(
+                settings,
+                path="shell.hole_offset",
+                value=0.0,
+                reason=_("Das Spiel der Bohrungen steht schon im Modell."),
+            )
+        )
+    if (
+        "foot" in allowances
+        and "elephant_foot" not in measured
+        and is_greater(settings.layers.elephant_foot, 0.0)
+    ):
+        advice.append(
+            _advice(
+                settings,
+                path="layers.elephant_foot",
+                value=0.0,
+                reason=_("Das Modell zieht den Fuß schon selbst ein."),
+            )
+        )
+    return advice
+
+
 def solid_core(diameter: float, settings: PrintSettings) -> float:
     """Wie viel eines runden Querschnitts beim Drucken **nicht** massiv wird.
 
@@ -1967,6 +2032,9 @@ PART_PATHS: Final = frozenset(
         "infill.density",
         "shell.wall_generator",
         "layers.line_width",
+        # Was das Modell schon ausgleicht, gilt nur dem Teil, das es trägt (RM-589).
+        "shell.hole_offset",
+        "layers.elephant_foot",
     }
 )
 
@@ -2068,6 +2136,7 @@ def for_part(
     whole_layers: bool = False,
     organic: Collection[str] = (),
     declined: Collection[str] = (),
+    allowances: Collection[str] = (),
     trees: Collection[str] | None = None,
 ) -> list[SettingAdvice]:
     """Was dieses eine Teil anders braucht als die Platte (§29).
@@ -2100,6 +2169,7 @@ def for_part(
                 whole_layers=whole_layers,
                 organic=organic,
                 declined=declined,
+                allowances=allowances,
                 trees=trees,
             )
             if entry.path in PART_PATHS

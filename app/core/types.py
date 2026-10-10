@@ -991,6 +991,11 @@ class MaterialProfile:
     """Relativer Schrumpf, 0.004 = 0,4 %."""
     calibrated: bool = False
     """False heißt: die Werte sind der mitgelieferte Startpunkt, nicht gemessen."""
+    measured: tuple[str, ...] | None = None
+    """Welche Werte die Kalibrierung gemessen hat (``calibration.FIELDS``,
+    sortiert); ``None`` heißt keiner. Ein Kalibrierlauf kann nur das Spiel
+    messen — der Elefantenfuß bleibt dann Startwert, und für ihn gilt der
+    Vorschlag des Druckrats weiter (RM-589, ``advise._from_allowances``)."""
     youngs_modulus: float = 0.0
     """Elastizitätsmodul in MPa; **0 heißt unbekannt**, nicht null.
 
@@ -1235,6 +1240,14 @@ class LayerSettings:
     first_layer_height: float = 0.25
     line_width: float = 0.42
     first_layer_line_width: float = 0.45
+    elephant_foot: float = 0.0
+    """Um wie viel der Slicer die erste Schicht je Seite einzieht, gegen den
+    Elefantenfuß (RM-589). Mit Herstellerprofil dessen Wert; ohne ihn null,
+    und Solidons eigener Satz schreibt ihn nur gewählt oder übernommen
+    (``slicer_keys.MAKER_OWNED``), so gilt die Vorgabe des Slicers. Zieht
+    schon das Modell die ersten Schichten ein (*Elefantenfuß ausgleichen*),
+    schlägt der Druckrat null vor — nicht, wenn der Elefantenfuß des
+    Materials gemessen ist (``MaterialProfile.measured``)."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -1262,6 +1275,12 @@ class ShellSettings:
     ironing: bool = False
     """Bügelt die oberste Fläche nach. Für Sicht- und Gleitflächen; sonst
     kostet es nur Zeit."""
+    hole_offset: float = 0.0
+    """Um wie viel der Slicer Löcher je Seite weitet (RM-589). Herkunft und
+    Schreiben wie bei ``LayerSettings.elephant_foot``. Steht das Spiel schon im
+    Modell — eine senkrechte Bohrung mit Materialzugabe, eine gebaute
+    Passung —, schlägt der Druckrat null vor, sonst gleicht das Loch doppelt
+    aus; nicht, wenn Spiel und Lochkorrektur des Materials gemessen sind."""
 
 
 @dataclass(frozen=True, slots=True)

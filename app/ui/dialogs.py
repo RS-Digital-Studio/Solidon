@@ -569,6 +569,13 @@ class CalibrationDialog(QDialog):
 
         Die Schwindung steht im Feld als Prozentwert und im Profil als Anteil —
         umgerechnet wird hier, an der einen Stelle, an der beide sich treffen.
+
+        **Nur was eingetragen wurde** (RM-589): Ein unberührtes Feld ist keine
+        Messung. Es behält im Profil seinen Wert, aber nicht das Kennzeichen
+        „gemessen“ — sonst bliebe nach einer reinen Spielmessung der
+        Startwert des Elefantenfußes als gemessen stehen, und der Druckrat
+        nähme dem Slicer seinen Einzug nicht ab. Wand und Überhang zählen, wenn
+        ihr Haken steht.
         """
         return calibration.from_measurements(
             self.material,
@@ -579,7 +586,11 @@ class CalibrationDialog(QDialog):
                 if name == "shrinkage"
                 else editor.value()
                 for name, editor in self.editors.items()
-                if name not in self.measured_fields or self.measured_fields[name].isChecked()
+                if (
+                    self.measured_fields[name].isChecked()
+                    if name in self.measured_fields
+                    else name in self._edited_fields
+                )
             },
         )
 
