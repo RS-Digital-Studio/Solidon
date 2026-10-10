@@ -395,6 +395,12 @@ COUNTER_FORM_OP = "cut_counter_form"
 #: einzieht.
 FOOT_OP = "compensate_first_layer"
 
+#: Schritte, deren neue Körper reine Kopien ihres Eingangs sind; das
+#: eingezogene Band einer Kopie liegt, wo es beim Original liegt. *Stift für
+#: Bohrung* und *Behältereinsatz erzeugen* geben ihren Eingang ebenfalls
+#: unverändert zurück, bauen daneben aber etwas Neues.
+COPY_OPS: frozenset[str] = frozenset({"duplicate_object", "pattern"})
+
 #: Was das Modell eines Körpers schon selbst ausgleicht (RM-589): ``"holes"``
 #: — seine Löcher tragen Spiel oder Lochkorrektur aus dem Materialprofil —,
 #: ``"foot"`` — seine ersten Schichten sind um den Elefantenfuß eingezogen.
@@ -413,17 +419,18 @@ def allowances_for(document: Document, body: SceneObject) -> tuple[str, ...]:
     :data:`PLAY_HOLE_OPS` oder ein Baustein mit Spiel innen
     (:func:`_part_with_play_inside`). Dazu die Taschen von *Gegenform
     einlassen* (:func:`_pocket_closes`). Eine nur eingetragene Passung ändert
-    die Geometrie nicht und zählt nicht. Der Druckrat stellt dann den gleichen
-    Ausgleich des Slicers auf null.
+    die Geometrie nicht und zählt nicht. Der Fuß zählt, wo das eingezogene
+    Band am Bett liegt (:func:`_foot_on_the_bed`). Der Druckrat stellt dann den
+    gleichen Ausgleich des Slicers auf null.
     """
     lineage, relevant = _producing(document, {body.id})
     active = {operation.id: operation for operation in document.ops if operation.suppressed is None}
     steps = [active[identifier] for identifier in sorted(relevant) if identifier in active]
     found: set[str] = set()
+    if _foot_on_the_bed(document, body):
+        found.add("foot")
     for operation in steps:
-        if operation.op == FOOT_OP:
-            found.add("foot")
-        elif operation.op == COUNTER_FORM_OP and _pocket_closes(operation, body, lineage):
+        if operation.op == COUNTER_FORM_OP and _pocket_closes(operation, body, lineage):
             found.add("holes")
     # Wer ein erzeugtes Merkmal ohne vermerkten Erzeuger gebaut hat: der
     # Schritt, mit dem der Körper ohne Eingang entstand (*Behälter mit
@@ -432,7 +439,7 @@ def allowances_for(document: Document, body: SceneObject) -> tuple[str, ...]:
     origins = tuple(operation for operation in steps if not operation.inputs)
     fields = tuple(operation for operation in steps if operation.op == "field_cut")
     for feature in body.features.values():
-        if not _closes_in_a_layer(feature):
+        if feature.kind not in ("hole", "thread", "slot"):
             continue
         if feature.created_by is not None:
             creators: tuple[Operation, ...] = (
@@ -442,19 +449,25 @@ def allowances_for(document: Document, body: SceneObject) -> tuple[str, ...]:
             creators = origins
         else:
             creators = fields if feature.kind == "slot" else ()
-        if any(_puts_allowance_into(creator) for creator in creators):
+        # Erst der billige Blick auf den Erzeuger, dann die Mündungen am Netz.
+        if any(_puts_allowance_into(creator) for creator in creators) and _closes_in_a_layer(
+            feature, body
+        ):
             found.add("holes")
             break
     return tuple(entry for entry in MODEL_ALLOWANCES if entry in found)
 
 
-def _closes_in_a_layer(feature: Feature) -> bool:
+def _closes_in_a_layer(feature: Feature, body: SceneObject | None = None) -> bool:
     """Sieht der Slicer dieses Innenmerkmal in einer Schicht als geschlossene Kontur?
 
     Nur eine solche weitet sein Lochausgleich (OrcaSlicer
-    ``_shrink_contour_holes``: die Löcher jedes Schichtumrisses). Solidons
-    Schritte bohren senkrecht in eine Fläche, die Enden eines Lochs stehen
-    also quer zu seiner Achse. Ist es um ``θ`` gegen die Senkrechte geneigt,
+    ``_shrink_contour_holes``: die Löcher jedes Schichtumrisses). Hat der
+    Mantel eines Lochs oder Langlochs am Körper zwei Ränder, entscheiden deren
+    Höhen (:func:`_closes_between_mouths`) — auch bei einer senkrecht
+    gebohrten, schrägen Mündung in einer gekippten Platte. Sonst gilt die
+    Annahme, dass die Enden quer zur Achse stehen. Ist es um ``θ`` gegen die
+    Senkrechte geneigt,
     schneidet eine Schicht die Wand um ein Loch der Länge ``L`` als Streifen
     der Breite ``L/sin θ`` und das Loch vom Durchmesser ``d`` als Ellipse der
     Länge ``d/cos θ``; geschlossen ist die Kontur, solange die Ellipse in den
@@ -483,9 +496,49 @@ def _closes_in_a_layer(feature: Feature) -> bool:
     norm = math.hypot(*axis)
     if not math.isfinite(norm) or norm <= EPS_GEOM:
         return False
+    if body is not None and feature.kind in ("hole", "slot"):
+        between = _closes_between_mouths(body, feature)
+        if between is not None:
+            return between
     upright = abs(axis[2]) / norm
     tilt = math.hypot(axis[0], axis[1]) / norm
     return length * upright > across * tilt
+
+
+def _closes_between_mouths(body: SceneObject, feature: Feature) -> bool | None:
+    """Liegt das Loch in einer waagerechten Schicht ganz zwischen seinen Mündungen?
+
+    Die Mündungen sind die zwei Randringe des Lochmantels in der verschweißten
+    Topologie (dieselben wie bei *Bohrung ändern*, am exakten Körper an seinem
+    Netz-Zwilling), schräg oder quer zur Achse, flach oder nicht. Eine Schicht
+    auf Höhe ``h`` schneidet den Mantel als geschlossene Kurve, wenn sie keinen
+    der beiden Ringe trifft und zwischen ihnen liegt: über jedem Punkt des
+    unteren Rings und unter jedem des oberen. Geschlossen ist die Kontur also,
+    wenn der tiefste Punkt des oberen Rings über dem höchsten des unteren
+    liegt. Für Enden quer zur Achse ist das ``L·cos θ > d·sin θ``; eine
+    senkrecht in eine gekippte Platte gebohrte Mündung liegt schräg, und eine
+    Bohrung, deren Boden die untere Plattenfläche gerade noch anschneidet, hat
+    einen geknickten Ring — beide misst der Ring selbst. Ein Sackloch rechnet
+    seinen Boden wie eine Mündung und zählt so eher zu wenig. ``None``, wo der
+    Mantel nicht genau zwei Ränder hat.
+    """
+    from app.core.geom.mesh import as_mesh_data
+    from app.core.geom.prepare_ops import _welded
+    from app.core.perceive.relations import boundary_rings
+
+    if not feature.face_indices:
+        return None
+    mesh = as_mesh_data(body.mesh)
+    if int(max(feature.face_indices)) >= len(mesh.raw.faces):
+        return None
+    welded = _welded(mesh)
+    rings = boundary_rings(welded, feature)
+    if rings is None or len(rings) != 2:
+        return None
+    heights = np.asarray(welded.vertices, dtype=np.float64)[:, 2]
+    spans = [heights[sorted({vertex for edge in ring for vertex in edge})] for ring in rings]
+    lower, upper = sorted(spans, key=lambda span: float(span.mean()))
+    return float(upper.min()) - float(lower.max()) > EPS_GEOM
 
 
 def _pocket_closes(operation: Operation, body: SceneObject, lineage: Collection[str]) -> bool:
@@ -502,13 +555,58 @@ def _pocket_closes(operation: Operation, body: SceneObject, lineage: Collection[
     """
     if not operation.outputs or operation.outputs[0] not in lineage:
         return False
-    if _step_values(operation).get("axis") != "z" or body.frame is None:
+    if _step_values(operation).get("axis") != "z":
         return False
+    up = _frame_up(body)
+    return up is not None and abs(up) >= math.cos(math.radians(EPS_ANGLE))
+
+
+def _frame_up(body: SceneObject) -> float | None:
+    """Wie weit die Z-Achse des Rahmens nach oben zeigt, als Kosinus mit
+    Vorzeichen — ``None`` ohne bekannten Rahmen."""
+    if body.frame is None:
+        return None
     column = tuple(float(body.frame[row][2]) for row in range(3))
     norm = math.hypot(*column)
     if not math.isfinite(norm) or norm <= EPS_GEOM:
+        return None
+    return column[2] / norm
+
+
+def _foot_on_the_bed(document: Document, body: SceneObject) -> bool:
+    """Liegt das Band, das *Elefantenfuß ausgleichen* eingezogen hat, am Bett?
+
+    Der Schritt zieht ein, was beim Einziehen unten lag. Gezählt wird er nur
+    auf der eigenen Linie des Körpers — Schritte, die ihn an Ort und Stelle
+    bearbeiten, mit dem, was sie in ihn aufnehmen (*Vereinigen*), und reine
+    Kopien (:data:`COPY_OPS`). Baut ein Schritt den Körper aus einem anderen
+    neu (die Hälften eines Teilens, der Deckel), liegt das Band nicht unten
+    oder fehlt ganz. Dazu muss die Z-Achse des Rahmens nach oben zeigen, mit
+    Vorzeichen: Gekippt liegt das Band an einer Seite, gewendet oben. Wie bei
+    :func:`_pocket_closes` gilt die Annahme, dass der Körper beim Einziehen
+    aufrecht stand; wurde er vorher gekippt, zählt er nicht. Im Zweifel
+    behält der Slicer seinen Ausgleich: Doppelt eingezogen wird die erste
+    Schicht etwas schmaler, ohne Einzug druckt sie den Wulst (Schlussprüfung
+    RM-589, S1).
+    """
+    up = _frame_up(body)
+    if up is None or up < math.cos(math.radians(EPS_ANGLE)):
         return False
-    return abs(column[2]) / norm >= math.cos(math.radians(EPS_ANGLE))
+    wanted = {body.id}
+    for operation in reversed(document.ops):
+        if operation.suppressed is not None:
+            continue
+        made = wanted.intersection(operation.outputs)
+        if not made:
+            continue
+        in_place = made.intersection(operation.inputs)
+        if in_place and operation.op == FOOT_OP:
+            return True
+        if in_place:
+            wanted.update(set(operation.inputs).difference(operation.outputs))
+        if made.difference(in_place) and operation.op in COPY_OPS:
+            wanted.update(operation.inputs)
+    return False
 
 
 def _puts_allowance_into(operation: Operation) -> bool:

@@ -1338,6 +1338,102 @@ def test_a_union_keeps_what_it_takes_in() -> None:
     assert allowances_for(document, scene.objects["obj_1"]) == ("foot",)
 
 
+TOWER = ("create_box", (), {"width": 10.0, "depth": 10.0, "height": 60.0})
+FOOT = ("compensate_first_layer", ("obj_1",), {})
+
+
+@pytest.mark.parametrize(
+    ("steps", "expected"),
+    [
+        pytest.param([TOWER, FOOT], {"obj_1": ("foot",)}, id="Turm unverändert"),
+        pytest.param(
+            [TOWER, FOOT, ("arrange_bed", ("obj_1",), {})], {"obj_1": ("foot",)}, id="angeordnet"
+        ),
+        pytest.param(
+            [TOWER, FOOT, ("rotate_object", ("obj_1",), {"axis": "z", "angle": 90.0})],
+            {"obj_1": ("foot",)},
+            id="um die Hochachse gedreht",
+        ),
+        pytest.param(
+            [TOWER, FOOT, ("duplicate_object", ("obj_1",), {})],
+            {"obj_1": ("foot",), "obj_2": ("foot",)},
+            id="Kopie",
+        ),
+        pytest.param(
+            [TOWER, FOOT, ("orient_for_print", ("obj_1",), {})],
+            {"obj_1": ()},
+            id="Ausrichten legt ihn hin",
+        ),
+        pytest.param(
+            [TOWER, FOOT, ("rotate_object", ("obj_1",), {"axis": "x", "angle": 90.0})],
+            {"obj_1": ()},
+            id="gekippt",
+        ),
+        pytest.param(
+            [TOWER, FOOT, ("rotate_object", ("obj_1",), {"axis": "x", "angle": 180.0})],
+            {"obj_1": ()},
+            id="gewendet",
+        ),
+        pytest.param(
+            [TOWER, FOOT, ("mirror_object", ("obj_1",), {"axis": "z"})],
+            {"obj_1": ()},
+            id="an z gespiegelt",
+        ),
+        pytest.param(
+            [
+                TOWER,
+                FOOT,
+                ("split_pinned", ("obj_1",), {"axis": "z", "position": 30.0, "pins": 0}),
+            ],
+            {"obj_2": (), "obj_3": ()},
+            id="waagerecht geteilt",
+        ),
+        pytest.param(
+            [
+                ("create_box", (), {"width": 30.0, "depth": 30.0, "height": 10.0}),
+                ("hollow_object", ("obj_1",), {"wall": 2.0, "open_top": True}),
+                FOOT,
+                ("create_lid", ("obj_1",), {}),
+            ],
+            {"obj_1": ("foot",), "obj_2": ()},
+            id="Deckel",
+        ),
+    ],
+)
+def test_the_foot_counts_where_the_drawn_in_band_lies_on_the_bed(
+    steps: list[tuple[str, tuple[str, ...], dict[str, object]]],
+    expected: dict[str, tuple[str, ...]],
+) -> None:
+    """Schlussprüfung RM-589, S1: Der Fuß zählte nach der Herkunft. Ein Turm,
+    den *Ausrichten* nach dem Einziehen hinlegte, die obere Hälfte eines
+    waagerechten Schnitts und ein Deckel bekamen den Rat „Erste Schicht
+    einziehen → 0“ und druckten im OrcaSlicer mit Elefantenfuß (Schicht 1
+    0,08 statt 0,38 mm schmaler als die Mitte). Gezählt wird nur, wo das
+    eingezogene Band am Bett liegt: aufrecht wie beim Einziehen, auf der
+    eigenen Linie des Körpers oder als reine Kopie davon."""
+    from app.core.scene.fits import allowances_for
+
+    document, scene = _built(steps)
+
+    seen = {
+        identifier: allowances_for(document, scene.objects[identifier]) for identifier in expected
+    }
+    assert seen == expected
+
+
+@pytest.mark.parametrize("op", ["duplicate_object", "pattern"])
+def test_the_copies_the_foot_follows_hand_their_input_on(op: str) -> None:
+    """Die Kopierschritte, denen der Fuß folgt, geben ihren Eingang unverändert
+    zurück; ein umbenannter Schritt fiele sonst still aus der Liste."""
+    from app.core.bootstrap import load_operations
+    from app.core.registry import REGISTRY
+    from app.core.scene.fits import COPY_OPS
+
+    load_operations()
+    assert op in COPY_OPS
+    assert REGISTRY.get(op).leaves_inputs_unchanged
+
+
 @pytest.mark.parametrize(
     ("example", "expected"),
     [
@@ -1536,6 +1632,51 @@ def test_a_tilted_hole_counts_while_a_layer_closes_around_it(
 
     assert closed is counts
     assert _closes_in_a_layer(hole) is closed
+
+
+@pytest.mark.parametrize(
+    ("thickness", "tilt", "expected"),
+    [(3.0, 60.0, ()), (10.0, 30.0, ("holes",)), (4.0, 45.0, ()), (6.0, 45.0, ("holes",))],
+)
+def test_a_hole_drilled_upright_into_a_tilted_plate_counts_by_its_mouths(
+    thickness: float, tilt: float, expected: tuple[str, ...]
+) -> None:
+    """Schlussprüfung RM-589, S2: Senkrecht durch eine gekippte Platte gebohrt,
+    münden die Enden schräg, und die Tiefe des Merkmals ist die Achsspanne der
+    Wand (16 mm bei 3 mm Platte unter 60°). Nach Achse und Tiefe zählte das
+    Loch, obwohl der Streifen der Platte in der Schicht (3/sin 60° = 3,5 mm)
+    die Ellipse (6,2 mm) nie umschließt. Die Mündungsebenen entscheiden; der
+    Sollwert kommt aus dem Schnitt alle 0,05 mm."""
+    from shapely.geometry import Polygon
+
+    from app.core.scene.fits import allowances_for
+
+    document, scene = _built(
+        [
+            ("create_box", (), {"width": 40.0, "depth": 40.0, "height": thickness}),
+            ("rotate_object", ("obj_1",), {"axis": "x", "angle": tilt}),
+            (
+                "drill_hole",
+                ("obj_1",),
+                {"diameter": 6.0, "x": 0.0, "y": 0.0, "z": 30.0, "axis": "z", "compensate": True},
+            ),
+        ]
+    )
+    body = scene.objects["obj_1"]
+    raw = body.mesh.raw
+    low, high = raw.bounds[:, 2]
+    closed = False
+    for height in np.arange(low + 0.025, high, 0.05):
+        section = raw.section(plane_origin=(0.0, 0.0, float(height)), plane_normal=(0.0, 0.0, 1.0))
+        if section is None:
+            continue
+        loops = [Polygon(points) for points in section.to_2D()[0].discrete if len(points) > 3]
+        if any(outer is not inner and outer.contains(inner) for outer in loops for inner in loops):
+            closed = True
+            break
+
+    assert closed is bool(expected)
+    assert allowances_for(document, body) == expected
 
 
 @pytest.mark.parametrize(

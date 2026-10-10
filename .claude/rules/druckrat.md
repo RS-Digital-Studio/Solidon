@@ -159,10 +159,16 @@ offenem Drucker. Übernommen wird auf Klick, nie von allein.
   der Slicer ausgleicht. Gefragt wird am fertigen Körper, Herkunft je
   Körperkennung (`fits._producing`; über alle Eingänge erbte nach *Anordnen*
   jeder Körper den Ausgleich seiner Nachbarn): ein Innenmerkmal, das der
-  Slicer in einer Schicht geschlossen sieht (`_closes_in_a_layer`,
-  `L·cos θ > d·sin θ` — eine waagerechte Bohrung weitet er nicht), gemacht von
-  einem Schritt mit Spiel oder Lochkorrektur (`_puts_allowance_into`); die
-  Taschen von *Gegenform einlassen* über Entnahmerichtung und Rahmen. Eine nur
+  Slicer in einer Schicht geschlossen sieht (`_closes_in_a_layer`: der tiefste
+  Punkt des oberen Mantelrands über dem höchsten des unteren, ohne zwei Ränder
+  `L·cos θ > d·sin θ` — eine waagerechte Bohrung weitet er nicht, eine
+  senkrechte durch eine schräge dünne Platte auch nicht), gemacht von einem
+  Schritt mit Spiel oder Lochkorrektur (`_puts_allowance_into`); die Taschen
+  von *Gegenform einlassen* über Entnahmerichtung und Rahmen. **Der Fuß zählt
+  nur, wo das eingezogene Band am Bett liegt** (`_foot_on_the_bed`): Rahmen-Z
+  nach oben, mit Vorzeichen, und der Schritt auf der eigenen Linie des Körpers
+  oder einer reinen Kopie (`COPY_OPS`) — nicht nach Kippen, Wenden, an einer
+  Teilhälfte oder am Deckel; im Zweifel behält der Slicer seinen Einzug. Eine nur
   eingetragene Passung ändert keine Geometrie und zählt nicht, ein Stift,
   Haken oder Bolzen auch nicht.
   **Ein gemessener Wert bekommt keinen Vorschlag**: Sein Prüfkörper ging
