@@ -11,7 +11,7 @@ außer dem Chat benutzbar. Einzuhalten ist `.claude/rules/agentenschicht.md`
 
 | Datei | Rolle |
 |---|---|
-| `llm.py` | Das Sprachmodell hinter dem Agenten — gehostet oder lokal (Ollama); `OLLAMA_CONTEXT_TOKENS`, `OLLAMA_ANSWER_TOKENS`, `prompt_was_cut`, `PROMPT_TOKENS`/`PROMPT_TOOL_COUNT` |
+| `llm.py` | Das Sprachmodell hinter dem Agenten — gehostet oder lokal (Ollama); `OLLAMA_CONTEXT_TOKENS`, `OLLAMA_ANSWER_TOKENS`, `prompt_was_cut`, `PROMPT_TOKENS`/`PROMPT_TOOL_COUNT`; Ablehnungen als Satz (`refusal`, `ModelNotInstalled`, `KeyRefused`, `key_refused`) |
 | `mesh.py` | Mesh-Erzeugung für Weg 3, lokal oder gehostet (Säule B) |
 | `resources.py` | Gemeinsame Schwerlastspur für lokale KI auf derselben Grafikkarte (`local_ai_slot`, `keep_warm`) |
 | `machine.py` | Was dieser Rechner mitbringt: Apple Silicon und Arbeitsspeicher über das System (`this_machine`, ohne Prozess), eine NVIDIA-Karte über `nvidia-smi` im Arbeiter (`probe_card`), `Machine.graphics_gb` |

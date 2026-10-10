@@ -40,6 +40,7 @@ from app.core.errors import (
     CANCEL,
     OPEN_SETTINGS,
     RETRY,
+    SET_UP_CHAT,
     AppError,
     ExternalToolError,
     OperationCancelled,
@@ -413,12 +414,11 @@ def post_json(
     except urllib.error.HTTPError as error:
         try:
             raw = read_limited(error, limit=MAX_ERROR_BYTES, deadline=deadline)
-            detail = redact_external(raw.decode("utf-8", errors="replace"))
         except ResponseDeadlineError, ResponseTooLargeError, ValueError:
-            detail = ""
+            raw = b""
         finally:
             error.close()
-        raise BackendUnavailable(status=error.code, detail=detail) from error
+        raise refusal(error.code, raw) from error
     except urllib.error.URLError as error:
         raise BackendUnavailable(detail=redact_external(error.reason)) from error
     except TimeoutError as error:
@@ -559,12 +559,7 @@ def post_json_local_cancelable(
             with connection.getresponse() as response:
                 raw = read_limited(response, limit=MAX_RESPONSE_BYTES, deadline=deadline)
                 if response.status >= 400:
-                    raise BackendUnavailable(
-                        status=response.status,
-                        # Fremder Text, also redigiert und gedeckelt — er steht
-                        # gleich in einer Meldung und im Protokoll (§33.2).
-                        detail=redact_external(raw.decode("utf-8", errors="replace"), limit=500),
-                    )
+                    raise refusal(response.status, raw)
                 answers.append(_as_object(raw, url))
         except TimeoutError as error:
             errors.append(BackendTooSlow(seconds=LOCAL_TIMEOUT_SECONDS))
@@ -651,6 +646,7 @@ class BackendUnavailable(ExternalToolError):
         status: int | None = None,
         detail: TranslatableText | str = "",
         provider: str = "",
+        reason: str = "",
     ) -> None:
         # **Der Anbieter gehört in die Meldung, und zwar aus einem gemessenen
         # Grund.** Ein Kunde richtete am 24.08.2026 sein lokales Ollama ein und
@@ -669,7 +665,142 @@ class BackendUnavailable(ExternalToolError):
             values["status"] = str(status)
         if provider:
             values["provider"] = provider
+        # Was die Gegenstelle selbst dazu sagt — ihr Satz, nicht ihr JSON
+        # (:func:`refusal`). Er steht unter „Grund" und nicht im Detail: Das
+        # Detail ist der übersetzte Satz, was jetzt hilft.
+        if reason:
+            values["reason"] = reason
         super().__init__(detail=detail or None, values=values)
+
+
+#: Was hilft, je nachdem, womit die Gegenstelle abgelehnt hat. Bis zum
+#: 11.10.2026 stand an dieser Stelle ihr Antwortkörper — beim Kunden
+#: ``{"error":"model 'qwen3:14b' not found"}`` und Anthropics Fehlerobjekt samt
+#: ``request_id`` unter „Das Sprachmodell hat nicht geantwortet."
+#: (S-20261010-e5014c). Gegen Regel 17 und kein Satz, den jemand liest.
+_CHECK_SETUP: Final = _(
+    "Die Gegenstelle hat die Anfrage abgelehnt. Prüfen Sie Adresse, Modell und Schlüssel unter "
+    "„Chat einrichten …“."
+)
+_NOT_THERE: Final = _(
+    "Unter dieser Adresse gibt es das Modell oder den Dienst nicht. Prüfen Sie Adresse und "
+    "Modell unter „Chat einrichten …“."
+)
+_TOO_MANY: Final = _(
+    "Der Anbieter nimmt gerade keine weiteren Anfragen an. Versuchen Sie es in ein paar "
+    "Minuten noch einmal."
+)
+_PROVIDER_TROUBLE: Final = _(
+    "Beim Anbieter ist gerade ein Fehler aufgetreten, oder er ist ausgelastet. Versuchen Sie "
+    "es in ein paar Minuten noch einmal."
+)
+
+
+def _refusal_detail(status: int) -> TranslatableText:
+    """Der Satz zu einem abgelehnten Aufruf: was jetzt hilft (Regel 17)."""
+    if status == 404:
+        return _NOT_THERE
+    if status == 429:
+        return _TOO_MANY
+    if status >= 500:
+        return _PROVIDER_TROUBLE
+    return _CHECK_SETUP
+
+
+def said_by(raw: bytes) -> str:
+    """Was die Gegenstelle in ihrer Ablehnung **sagt** — ihr Satz, nicht ihr JSON.
+
+    Ollama schickt ``{"error": "…"}``, Anthropic und OpenAI-kompatible Dienste
+    ``{"error": {"message": "…"}}``. Was kein JSON ist — eine HTML-Seite
+    eines Proxys —, bleibt als Text stehen: Sein Anfang ist dann die Auskunft.
+    Fremder Text, also redigiert und gedeckelt (§33.2).
+    """
+    text = raw.decode("utf-8", errors="replace").strip()
+    try:
+        loaded = load_json(text, max_bytes=MAX_ERROR_BYTES)
+    except ValueError:
+        loaded = None
+    if isinstance(loaded, dict):
+        found = loaded.get("error", loaded.get("message", ""))
+        if isinstance(found, dict):
+            found = found.get("message", "")
+        text = found if isinstance(found, str) else ""
+    return redact_external(text, limit=REASON_CHARS)
+
+
+#: Wie viel vom Satz der Gegenstelle mitgeht — genug für eine Fehlerzeile.
+REASON_CHARS: Final = 200
+
+
+def refusal(status: int, raw: bytes = b"") -> BackendUnavailable:
+    """Eine abgelehnte Anfrage als Fehler mit Satz und Ausweg.
+
+    Die Backends machen aus den zwei häufigen Lagen eigene Fehler mit eigenem
+    Titel (:class:`ModelNotInstalled`, :class:`KeyRefused`); alles andere
+    bekommt hier den Satz zu seinem Status.
+    """
+    error = BackendUnavailable(status=status, detail=_refusal_detail(status), reason=said_by(raw))
+    # Ausgelastet oder gestört heilt mit der Zeit, nicht im Einrichtungsdialog.
+    passing = status == 429 or status >= 500
+    error.suggestions = (RETRY, CANCEL) if passing else (SET_UP_CHAT, CANCEL)
+    return error
+
+
+class ModelNotInstalled(BackendUnavailable):
+    """Ollama läuft, das gewählte Modell aber liegt dort nicht.
+
+    Der häufigste Fall bei einem Chat, der nach einem abgelehnten Schlüssel
+    auf das lokale Modell wechselt: Die Vorgabe ist :data:`DEFAULT_OLLAMA_MODEL`,
+    geholt wurde aber ein anderes oder keines. Der Ausweg liegt im Dialog, der
+    Modelle herunterlädt und die geholten zur Wahl stellt.
+    """
+
+    default_title = _("Das gewählte Modell ist bei Ollama nicht installiert.")
+
+    def __init__(self, model: str = "", reason: str = "") -> None:
+        super().__init__(
+            status=404,
+            detail=_(
+                "Unter „Chat einrichten …“ laden Sie es herunter oder wählen ein Modell, das "
+                "schon installiert ist."
+            ),
+            provider="ollama",
+            reason=reason,
+        )
+        values = self.values
+        if model:
+            values["model"] = model
+        self.suggestions = (SET_UP_CHAT, CANCEL)
+
+
+#: Der Status, mit dem ein Anbieter sagt: *diesen Schlüssel gibt es nicht*.
+UNKNOWN_KEY: Final = 401
+
+
+class KeyRefused(BackendUnavailable):
+    """Der Anbieter hat den hinterlegten Schlüssel abgelehnt (401) oder ihm das
+    Modell verweigert (403). Beides ändert ein zweiter Versuch nicht."""
+
+    default_title = _("Der Anbieter hat den Schlüssel abgelehnt.")
+
+    def __init__(
+        self, status: int = UNKNOWN_KEY, provider: str = "anthropic", reason: str = ""
+    ) -> None:
+        detail = (
+            _(
+                "Der Anbieter kennt diesen Schlüssel nicht. Tragen Sie unter „Chat einrichten …“ "
+                "einen gültigen ein. Bis dahin antwortet ein lokales Modell, wenn eines "
+                "eingerichtet ist."
+            )
+            if status == UNKNOWN_KEY
+            else _(
+                "Der Schlüssel gilt, hat aber keinen Zugriff auf dieses Modell. Prüfen Sie Ihr "
+                "Konto beim Anbieter, oder tragen Sie unter „Chat einrichten …“ einen anderen "
+                "Schlüssel ein."
+            )
+        )
+        super().__init__(status=status, detail=detail, provider=provider, reason=reason)
+        self.suggestions = (SET_UP_CHAT, CANCEL)
 
 
 class BackendAnswerUnreadable(ExternalToolError):
@@ -935,8 +1066,11 @@ class AnthropicBackend:
     @property
     def available(self) -> bool:
         """Ein Schlüssel liegt vor — und die Gegenseite hat ihn nicht schon
-        abgelehnt (:data:`_rejected`)."""
-        return self.id not in _rejected and keys.read(self.id) is not None
+        abgelehnt (:data:`_rejected`, :func:`key_refused`)."""
+        if self.id in _rejected:
+            return False
+        key = keys.read(self.id)
+        return key is not None and not _marked_invalid(self.id, key)
 
     @property
     def supports_images(self) -> bool:
@@ -1002,8 +1136,12 @@ class AnthropicBackend:
             if error.status in AUTH_REFUSED:
                 # Ab hier gilt dieser Zugang als nicht verfügbar, und der Chat
                 # nimmt den nächsten — statt bei jedem Zug denselben abgelehnten
-                # Schlüssel erneut zu schicken.
-                reject(self.id)
+                # Schlüssel erneut zu schicken. Ein ungültiger (401) bleibt es
+                # auch über den Neustart hinaus, bis ein anderer dasteht.
+                reject(self.id, lasting=error.status == UNKNOWN_KEY)
+                raise KeyRefused(
+                    error.status, self.id, reason=str(error.values.get("reason", ""))
+                ) from error
             raise
         return _from_anthropic(answer)
 
@@ -1476,10 +1614,20 @@ class OllamaBackend:
         """
         address = ollama_endpoint(self.url)
         with local_ai_slot(address, cancelled, progress, holder=self.holder):
+            loaded = True
             try:
                 yield
+            except BackendUnavailable:
+                # Abgewiesen oder niemanden erreicht, und nie eine Antwort:
+                # Geladen hat dieser Zug nichts. Warm gehalten versuchte das
+                # Beenden sonst ein Modell zu entladen, das Ollama gar nicht
+                # hat (S-20261010-e5014c, ``qwen3:14b`` nach dem Wechsel).
+                loaded = self.on_gpu is not None
+                raise
             finally:
-                if self.on_gpu is False or not is_local_address(address):
+                if not loaded:
+                    pass
+                elif self.on_gpu is False or not is_local_address(address):
                     self.release()
                 else:
                     keep_warm(self.holder, self.release)
@@ -1500,6 +1648,12 @@ class OllamaBackend:
                 post_json(address, {}, payload, timeout=OLLAMA_RELEASE_SECONDS)
             else:
                 self.transport(address, {}, payload)
+        except BackendUnavailable as error:
+            if error.status == 404:
+                # Ollama kennt das Modell nicht — dann ist auch keines geladen.
+                _log.info("ollama model %s is not installed, nothing to unload", self.model)
+                return
+            _log.warning("Ollama-Modell %s konnte nicht entladen werden", self.model)
         except AppError, OSError, ValueError:
             # Freigabe ist Aufräumen. Ein fertiger Vorschlag bleibt gültig,
             # selbst wenn ein gerade beendetes Ollama dabei nicht mehr antwortet.
@@ -1602,6 +1756,11 @@ class OllamaBackend:
             # ist die Antwort auf „welches Modell denn?".
             error.provider = error.provider or self.id
             error.values.setdefault("provider", self.id)
+            reason = str(error.values.get("reason", ""))
+            # Ollamas 404 auf ``/api/chat`` nennt das fehlende Modell beim
+            # Namen; ein 404 ohne ihn ist eine falsche Adresse.
+            if error.status == 404 and self.model in reason:
+                raise ModelNotInstalled(self.model, reason=reason) from error
             raise
         self.on_gpu = _ran_on_gpu(answer)
         reply = _from_ollama(answer, self.model)
@@ -2776,19 +2935,62 @@ AUTH_REFUSED: Final = (401, 403)
 #: gilt mit jedem beliebigen Text als verfügbar und scheitert dann bei jedem
 #: Zug. Ein Kunde hat am 24.08.2026 drei Stunden dagegen gearbeitet.
 #:
-#: Der Merker lebt nur in dieser Sitzung und wird nicht gespeichert: Ein
-#: abgelehnter Schlüssel kann beim Anbieter wieder gültig werden, und ein
-#: neuer hebt ihn ohnehin auf (:func:`keys.store` ruft :func:`accept_again`).
+#: Der Merker lebt nur in dieser Sitzung: Ein Schlüssel ohne Recht auf das
+#: Modell (403) kann beim Anbieter wieder gültig werden, und ein neuer hebt ihn
+#: ohnehin auf (:func:`keys.store` ruft :func:`accept_again`). Einen
+#: **ungültigen** (401) merkt :func:`reject` zusätzlich über den Neustart
+#: hinaus (:data:`REJECTED_KEY_SETTING`).
 _rejected: set[str] = set()
 
+#: Unter welchem Namen ein ungültiger Schlüssel gemerkt wird — als
+#: Fingerabdruck, nie der Schlüssel selbst.
+#:
+#: Ohne ihn scheiterte bei jedem Start der erste Chatzug am selben Schlüssel,
+#: erst danach wählte der Chat das lokale Modell (S-20261010-e5014c, dreimal an
+#: einem Abend). Ein 401 heilt nicht von selbst; gemerkt ist er, bis ein
+#: anderer Schlüssel dasteht oder derselbe neu eingetragen wird.
+REJECTED_KEY_SETTING: Final = "{backend}_rejected_key"
 
-def reject(backend_id: str) -> None:
-    """Merken, dass dieser Zugang abgelehnt wurde."""
+
+def _fingerprint(key: str) -> str:
+    """Ein kurzer Fingerabdruck des Schlüssels — wiedererkennbar, nicht umkehrbar."""
+    import hashlib
+
+    return hashlib.sha256(key.encode("utf-8")).hexdigest()[:16]
+
+
+def key_refused(backend_id: str) -> bool:
+    """Ob der Anbieter genau den hinterlegten Schlüssel als ungültig abgelehnt hat."""
+    key = keys.read(backend_id)
+    return key is not None and _marked_invalid(backend_id, key)
+
+
+def _marked_invalid(backend_id: str, key: str) -> bool:
+    from app.core import discover
+
+    mark = discover.remembered(REJECTED_KEY_SETTING.format(backend=backend_id))
+    return bool(mark) and mark == _fingerprint(key)
+
+
+def reject(backend_id: str, *, lasting: bool = False) -> None:
+    """Merken, dass dieser Zugang abgelehnt wurde — mit ``lasting`` auch über
+    den Neustart hinaus, solange derselbe Schlüssel hinterlegt ist."""
     _rejected.add(backend_id)
+    key = keys.read(backend_id) if lasting else None
+    if key:
+        from app.core import discover
+
+        discover.remember(REJECTED_KEY_SETTING.format(backend=backend_id), _fingerprint(key))
 
 
 def accept_again(backend_id: str = "") -> None:
     """Die Ablehnung zurücknehmen — ohne Namen für alle."""
+    from app.core import discover
+
+    for account in (backend_id,) if backend_id else ("anthropic", *_rejected):
+        setting = REJECTED_KEY_SETTING.format(backend=account)
+        if discover.remembered(setting):
+            discover.remember(setting, "")
     if backend_id:
         _rejected.discard(backend_id)
     else:

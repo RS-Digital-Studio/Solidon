@@ -684,6 +684,34 @@ def test_quitting_the_application_frees_the_card_of_the_warm_model() -> None:
     )
 
 
+@pytest.mark.parametrize(
+    "refusal",
+    [
+        llm.BackendUnavailable(status=404, detail="model 'qwen3:14b' not found"),
+        llm.BackendUnavailable(detail="[WinError 10061] connection refused"),
+    ],
+    ids=["model_missing", "not_running"],
+)
+def test_a_turn_ollama_refused_leaves_nothing_to_unload(refusal: BackendUnavailable) -> None:
+    """Kundenprotokoll S-20261010-e5014c: Nach fünf Zügen, die an einem nicht
+    geholten ``qwen3:14b`` scheiterten, versuchte jedes Beenden, genau dieses
+    Modell zu entladen — „konnte nicht entladen werden", auch noch nach dem
+    Wechsel auf das inzwischen geholte ``qwen2.5:14b``. Geladen hatte es nie
+    jemand: Wer abgewiesen wurde oder niemanden erreichte, hält nichts warm.
+    """
+    from app.core.backends import resources
+
+    transport = Recorder(refusal)
+    backend = OllamaBackend(model="qwen3:14b", transport=transport)
+
+    with pytest.raises(BackendUnavailable), backend.resource_session(None):
+        backend.complete([Message(role="user", content="Halter")])
+
+    assert resources.warm_holders() == ()
+    assert resources.release_warm_before_exit() is True
+    assert len(transport.calls) == 1, "beim Beenden geht keine Entladeanfrage hinaus"
+
+
 def test_a_model_on_the_processor_is_unloaded_after_the_turn() -> None:
     """Auf dem Prozessor belegt das Modell den Arbeitsspeicher der Anwendung."""
     from app.core.backends import resources
@@ -2320,6 +2348,184 @@ def test_the_chat_falls_back_to_the_local_model(monkeypatch: pytest.MonkeyPatch)
     llm.reject("anthropic")
 
     assert llm.first_available().id == "ollama"
+
+
+# --- Was die Gegenstelle ablehnt, steht als Satz da, nicht als JSON ----------------
+
+
+def _refusing_server(status: int, body: bytes) -> tuple[LoopbackServer, threading.Thread]:
+    """Ein Dienst auf der Rückschleife, der jede Anfrage mit ``status`` ablehnt."""
+
+    class Refuse(http.server.BaseHTTPRequestHandler):
+        protocol_version = "HTTP/1.1"
+
+        def do_POST(self) -> None:
+            self.rfile.read(int(self.headers.get("Content-Length", "0")))
+            self.send_response(status)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        def log_message(self, _format: str, *_args: object) -> None:
+            pass
+
+    server = LoopbackServer(("127.0.0.1", 0), Refuse)
+    serving = threading.Thread(target=server.serve_forever, daemon=True)
+    serving.start()
+    return server, serving
+
+
+def _stop(server: LoopbackServer, serving: threading.Thread) -> None:
+    server.shutdown()
+    server.server_close()
+    serving.join(2.0)
+
+
+def _shown(error: AppError) -> str:
+    """Was der Fehlerdialog davon zeigt: Titel, Satz und die Werte."""
+    return " ".join([str(error.title), str(error.detail or ""), *map(str, error.values.values())])
+
+
+#: Wörtlich, was Ollama 0.12 auf ``/api/chat`` mit einem nicht geholten Modell
+#: antwortet — so stand es viermal im Kundenprotokoll S-20261010-e5014c.
+OLLAMA_MISSING_MODEL: Final = b'{"error":"model \'qwen3:14b\' not found"}'
+
+#: Wörtlich Anthropics Antwort auf einen ungültigen Schlüssel (dasselbe Protokoll).
+ANTHROPIC_INVALID_KEY: Final = (
+    b'{"type":"error","error":{"type":"authentication_error","message":"invalid x-api-key"},'
+    b'"request_id":"req_011Cfu8tzfzJB7VK3aP3SK8n"}'
+)
+
+
+@pytest.mark.parametrize("cancelable", [False, True], ids=["complete", "complete_cancelable"])
+def test_a_model_ollama_does_not_have_is_named_with_the_way_to_get_it(cancelable: bool) -> None:
+    """Der Kunde las ``{"error":"model 'qwen3:14b' not found"}`` unter „Das
+    Sprachmodell hat nicht geantwortet." — fünfmal, über zwei Starts, und als
+    Hauptknopf „Zusätzliche Programme …", das Ollama installiert, das schon
+    lief. Was hilft, ist das Modell zu holen oder ein geholtes zu wählen, und
+    beides geht unter „Chat einrichten …" (Regel 17).
+    """
+    from app.core.errors import SET_UP_CHAT
+    from app.core.scene.cancel import CancelSignal
+
+    server, serving = _refusing_server(404, OLLAMA_MISSING_MODEL)
+    try:
+        backend = OllamaBackend(model="qwen3:14b", url=f"http://127.0.0.1:{server.server_port}")
+        with pytest.raises(BackendUnavailable) as raised:
+            if cancelable:
+                backend.complete_cancelable(
+                    [Message(role="user", content="Hallo")], cancelled=CancelSignal()
+                )
+            else:
+                backend.complete([Message(role="user", content="Hallo")])
+    finally:
+        _stop(server, serving)
+
+    problem = raised.value
+    shown = _shown(problem)
+    assert "{" not in shown and '"error"' not in shown, f"rohes JSON beim Kunden: {shown!r}"
+    assert "nicht installiert" in str(problem.title), problem.title
+    assert problem.values["model"] == "qwen3:14b", "der Name dessen, was fehlt"
+    assert problem.suggestions[0] == SET_UP_CHAT, problem.suggestions
+
+
+def test_a_refused_key_says_to_check_the_key_not_json(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Dasselbe Protokoll, der andere Zugang: Unter dem Titel stand Anthropics
+    Fehlerobjekt samt ``request_id``. Der Satz sagt jetzt, was geschehen ist und
+    wo der Schlüssel geändert wird — und dass der Chat bis dahin das lokale
+    Modell nimmt.
+    """
+    from app.core.errors import SET_UP_CHAT
+
+    monkeypatch.setattr(keys, "read", lambda account: "sk-ant-ungueltig")
+    server, serving = _refusing_server(401, ANTHROPIC_INVALID_KEY)
+    address = f"http://127.0.0.1:{server.server_port}/v1/messages"
+    try:
+        # Über blankes HTTP reist kein Schlüssel (``post_json``); der Kopf
+        # bleibt darum hier, der echte Weg der Antwort nicht.
+        backend = AnthropicBackend(
+            transport=lambda _url, _headers, payload: llm.post_json(address, {}, payload)
+        )
+        with pytest.raises(BackendUnavailable) as raised:
+            backend.complete([Message(role="user", content="Hallo")])
+    finally:
+        _stop(server, serving)
+
+    problem = raised.value
+    shown = _shown(problem)
+    assert "{" not in shown and "request_id" not in shown, f"rohes JSON beim Kunden: {shown!r}"
+    assert "Schlüssel" in shown
+    assert problem.suggestions[0] == SET_UP_CHAT, problem.suggestions
+    assert backend.available is False
+
+
+def test_any_other_refusal_keeps_the_providers_words_and_drops_the_json() -> None:
+    """Für jeden anderen Status bleibt die Auskunft der Gegenstelle erhalten —
+    als ihr Satz unter „Grund", nicht als Objekt mit Klammern."""
+    body = b'{"type":"error","error":{"type":"overloaded_error","message":"Overloaded"}}'
+    server, serving = _refusing_server(529, body)
+    try:
+        with pytest.raises(BackendUnavailable) as raised:
+            llm.post_json(f"http://127.0.0.1:{server.server_port}/v1/messages", {}, {})
+    finally:
+        _stop(server, serving)
+
+    problem = raised.value
+    shown = _shown(problem)
+    assert "{" not in shown, shown
+    assert problem.values["reason"] == "Overloaded"
+    assert problem.detail, "ein Satz, was jetzt hilft (Regel 17)"
+    assert problem.suggestions[0].id == "retry", "ausgelastet heilt mit der Zeit, nicht im Dialog"
+
+
+def test_a_key_called_invalid_stays_refused_until_it_changes(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Bei jedem Start scheiterte der erste Chatzug am selben ungültigen
+    Schlüssel, erst danach nahm der Chat das lokale Modell (dreimal im
+    Protokoll). Ein 401 heilt nicht von selbst — er gilt, bis ein anderer
+    Schlüssel dasteht; ein 403 (gültig, aber ohne Recht) dagegen nur bis zum
+    Neustart.
+    """
+    stored = {"anthropic": "sk-ant-ungueltig"}
+    monkeypatch.setattr(keys, "read", lambda account: stored.get(account))
+
+    def refuse(status: int) -> Callable[..., dict[str, Any]]:
+        def transport(url: str, headers: dict[str, str], payload: dict[str, Any]) -> dict[str, Any]:
+            raise BackendUnavailable(status=status, detail="refused")
+
+        return transport
+
+    with pytest.raises(BackendUnavailable):
+        AnthropicBackend(transport=refuse(401)).complete([Message(role="user", content="x")])
+    llm._rejected.clear()  # ein Neustart: der Merker im Speicher ist fort
+
+    assert AnthropicBackend().available is False, "derselbe ungültige Schlüssel"
+    stored["anthropic"] = "sk-ant-der-neue"
+    assert AnthropicBackend().available is True, "ein anderer Schlüssel ist ein neuer Versuch"
+
+    with pytest.raises(BackendUnavailable):
+        AnthropicBackend(transport=refuse(403)).complete([Message(role="user", content="x")])
+    llm._rejected.clear()
+    assert AnthropicBackend().available is True, "ohne Recht ist nicht ungültig"
+
+
+def test_storing_the_same_key_again_lifts_the_lasting_refusal(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Wer den Schlüssel im Dialog neu einträgt, meint: noch einmal versuchen —
+    auch wenn es derselbe ist (beim Anbieter wieder freigeschaltet)."""
+    chain = _Keychain()
+    monkeypatch.setattr(keys, "_keyring", lambda: chain)
+    keys.store("anthropic", "sk-ant-gesperrt")
+    llm.reject("anthropic", lasting=True)
+    llm._rejected.clear()
+    assert AnthropicBackend().available is False
+
+    keys.store("anthropic", "sk-ant-gesperrt")
+
+    assert AnthropicBackend().available is True
 
 
 # --- Vier Wege zu Ollama, und drei fingen den Pfad nicht --------------------------

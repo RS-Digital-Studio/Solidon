@@ -1999,6 +1999,50 @@ def test_the_chat_wakes_up_even_when_the_dialog_was_cancelled(
     assert looked == [True], "nach dem Dialog wird in jedem Fall nachgesehen"
 
 
+@pytest.mark.parametrize("refused", ["model", "key"])
+def test_a_refused_chat_turn_leads_to_the_chat_setup(
+    window: MainWindow, monkeypatch: pytest.MonkeyPatch, refused: str
+) -> None:
+    """S-20261010-e5014c: Unter dem fehlenden Modell und dem abgelehnten
+    Schlüssel stand als Hauptknopf „Zusätzliche Programme …" — der Dialog, der
+    Ollama installiert, das längst lief. Der Ausweg liegt unter „Chat
+    einrichten …", und der Knopf öffnet genau diesen Dialog.
+    """
+    from app.core.errors import SET_UP_CHAT
+    from app.ui.dialogs import offered_actions
+
+    problem = (
+        llm.ModelNotInstalled("qwen3:14b", reason="model 'qwen3:14b' not found")
+        if refused == "model"
+        else llm.KeyRefused(401, "anthropic", reason="invalid x-api-key")
+    )
+    opened: list[bool] = []
+    monkeypatch.setattr(window, "action_llm_key", lambda: opened.append(True))
+    handlers = window.error_handlers()
+
+    offered = offered_actions(problem, handlers)
+
+    assert offered[0] == SET_UP_CHAT, [action.id for action in offered]
+    handlers[offered[0].id](problem)
+    assert opened == [True]
+
+
+def test_the_chat_setup_says_why_the_stored_key_is_passed_over(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Ein als ungültig abgelehnter Schlüssel wird übergangen, bis ein anderer
+    dasteht — der Dialog, in dem man ihn ändert, sagt es."""
+    from app.core.backends import keys
+    from app.ui.dialogs import _what_answers
+
+    monkeypatch.setattr(keys, "read", lambda account: "sk-ant-ungueltig")
+    assert "abgelehnt" not in _what_answers()
+
+    llm.reject("anthropic", lasting=True)
+
+    assert "abgelehnt" in _what_answers()
+
+
 def test_the_chat_dialog_is_there_before_the_answers_are(
     qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
 ) -> None:

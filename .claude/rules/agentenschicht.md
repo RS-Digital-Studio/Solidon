@@ -231,7 +231,19 @@ ausführen.
 
 Ohne Schlüssel sind die Agentenfunktionen ausgegraut, und die Anwendung bleibt
 voll nutzbar: ein Hinweis an der Chatleiste, kein Werbebanner, kein
-wiederholtes Nachfragen. Dasselbe für Slicer und Mesh-Erzeugung — fehlt das
+wiederholtes Nachfragen.
+
+- **Eine Ablehnung der Gegenstelle ist ein Satz, kein Antwortkörper**
+  (`llm.refusal`): Der Status wählt den Satz und den Ausweg *Chat einrichten*,
+  ihr eigener Text steht unter „Grund“. Fehlendes Ollama-Modell und
+  abgelehnter Schlüssel haben eigene Fehler (`ModelNotInstalled`,
+  `KeyRefused`) — sonst stand beim Kunden rohes JSON.
+- **Ein ungültiger Schlüssel (401) bleibt abgelehnt**, auch nach dem Neustart,
+  bis ein anderer dasteht oder er neu eingetragen wird (Fingerabdruck in
+  `discover`, nie der Schlüssel); 403 gilt nur bis zum Neustart.
+- **Ein abgewiesener Zug hält nichts warm**: Endet er mit
+  `BackendUnavailable`, ohne dass das Modell je antwortete, hat er nichts
+  geladen, und das Beenden entlädt nichts. Dasselbe für Slicer und Mesh-Erzeugung — fehlt das
 Programm, sagt die betroffene Funktion das in einem Satz mit Hinweis auf die
 Einstellung. Die Mesh-Schnittstelle kennt nur `text_to_mesh` und
 `image_to_mesh`: kein Nutzercode, keine Dateipfade, kein Zustand.

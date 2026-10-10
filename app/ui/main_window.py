@@ -27147,6 +27147,7 @@ class MainWindow(QMainWindow):
             # öffnete er die Liste der externen Programme, weil der Kern ihn
             # dafür benutzte — der Knopf log also seinen Namen.
             "open_settings": lambda _error: self.action_settings(),
+            "set_up_chat": lambda _error: self.action_llm_key(),
             # Die Wege am Verlauf selbst (P7): einschalten, ausschalten, den
             # Deckel mit seinem Hohlraum zusammen ausschalten, das Einfügen
             # beenden — alle rücknehmbar, alle ohne Nachfrage (Regel 19).

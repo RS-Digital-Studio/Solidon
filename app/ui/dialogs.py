@@ -1164,12 +1164,19 @@ def _what_answers() -> str:
     Eine Modulfunktion, weil der Arbeiter sie braucht: ``first_available``
     fragt ein Backend, und das ist ein HTTP-Aufruf.
     """
+    # Ein als ungültig abgelehnter Schlüssel bleibt es bis zum nächsten
+    # Eintragen (``llm.key_refused``) — hier steht, warum der Chat ihn übergeht.
+    refused = (
+        f"{tr('Der Anbieter hat ihn als ungültig abgelehnt.')} "
+        if llm.key_refused("anthropic")
+        else ""
+    )
     backend = llm.first_available()
     if backend is None:
-        return tr("Der Chat ist damit abgeschaltet — es antwortet gerade nichts.")
+        return refused + tr("Der Chat ist damit abgeschaltet — es antwortet gerade nichts.")
     if backend.id == "ollama":
-        return tr("Der Chat läuft trotzdem: über das lokale Modell.")
-    return tr("Der Chat läuft darüber.")
+        return refused + tr("Der Chat läuft trotzdem: über das lokale Modell.")
+    return refused + tr("Der Chat läuft darüber.")
 
 
 class KeyDialog(QDialog):
