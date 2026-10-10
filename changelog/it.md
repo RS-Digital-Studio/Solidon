@@ -15,15 +15,6 @@ gli stessi punti nello stesso ordine (`tests/test_changelog.py`).
 `tools/make_download.py` ne prende la sezione della versione corrente e la
 scrive in `website/version.json`.
 
-## 0.6.1
-
-### Uso e sistema
-
-- Dopo un foro o una caratteristica spostata, le caratteristiche di un pezzo grande vengono riconosciute circa un terzo più velocemente.
-- Un modello aperto subito dopo l'avvio del programma è modificabile fino a un quarto prima.
-- Con uno slicer, un gioco o un rendering in esecuzione, i calcoli sui modelli grandi terminano in secondi anziché in minuti.
-- Un progetto salvato con un modello grande si apre dopo un riavvio in uno o due secondi invece di mezzo minuto: le caratteristiche riconosciute restano memorizzate.
-
 ## 0.6.0
 
 ### Uso e sistema
@@ -71,6 +62,10 @@ scrive in `website/version.json`.
 - L'area di lavoro viene visualizzata più rapidamente quando si aprono file 3MF di grandi dimensioni.
 - Un modello aggiunto è poi visibile, anche se finisce accanto a un modello su cui la vista era ingrandita.
 - Nel catalogo dei blocchi, *Gestisci blocchi* è aperto finché non esiste ancora un blocco proprio.
+- Dopo un foro o una caratteristica spostata, le caratteristiche di un pezzo tecnico grande vengono riconosciute circa un terzo più velocemente.
+- Un modello aperto subito dopo l'avvio del programma è modificabile fino a un quarto prima.
+- Con uno slicer, un gioco o un rendering in esecuzione, i calcoli sui modelli grandi terminano in secondi anziché in minuti.
+- Un progetto salvato con un modello grande si apre dopo un riavvio in uno o due secondi invece di mezzo minuto: le caratteristiche riconosciute restano memorizzate.
 
 ### Stampare e passare allo slicer
 

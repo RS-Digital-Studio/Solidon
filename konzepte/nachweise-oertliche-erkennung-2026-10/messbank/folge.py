@@ -3,7 +3,7 @@
 Aufruf::
 
     python folge.py <baum> <ausgabe.jsonl> [--gedaechtnis an|aus] [--weglassen TEIL]
-        [--pruefen] [--min N] [--max N] [--objekte N] <fall> [<fall> ...]
+        [--pruefen] [--platte ORDNER] [--min N] [--max N] [--objekte N] <fall> [<fall> ...]
 
 ``<fall>`` ist eine Modelldatei oder ``beispiel:<kennung>`` (ein Beispielprojekt) oder
 ``@liste.txt`` (je Zeile ein Fall). Je Fall wie im Fenster: ein Projekt, Laden über
@@ -31,6 +31,10 @@ als Rechnung. ``--weglassen TEIL`` lässt einen Schlüsselteil weg (Gegenprobe, 
 ohne Erkennungscache nach (``kopie_gleich``) — die Zeiten zählen dann nicht.
 ``--bis-anders`` prüft ebenso und endet beim ersten abweichenden Zustand mit Exit 3:
 Mit ``--weglassen`` ist das die Gegenprobe, ohne den ganzen Korpus zu fahren.
+``--platte ORDNER`` rechnet mit Plattencache wie das Fenster (je Fall ein Unterordner) und
+öffnet nach der Folge wie nach einem Neustart neu (Schritt ``10_wieder``, ohne Gedächtnis im
+Speicher, frischer Cache über derselben Platte); ``wieder_gleich`` vergleicht die Erkennung
+jedes Körpers mit seinem letzten Zustand in der Sitzung (RM-695, Review 1 H1).
 """
 
 from __future__ import annotations
@@ -39,6 +43,7 @@ import hashlib
 import importlib
 import json
 import os
+import shutil
 import sys
 import threading
 import time
@@ -58,13 +63,13 @@ import numpy as np  # noqa: E402
 import trimesh  # noqa: E402
 
 from app.core.bootstrap import load_operations  # noqa: E402
-from app.core.geom.mesh import MeshData, as_mesh_data  # noqa: E402
+from app.core.geom.mesh import MeshCodec, MeshData, as_mesh_data  # noqa: E402
 from app.core.ingest.plan import import_plan  # noqa: E402
 from app.core.knowledge import profiles  # noqa: E402
 from app.core.perceive import features as feats  # noqa: E402
 from app.core.perceive import matching  # noqa: E402
 from app.core.scene import History, evaluate  # noqa: E402
-from app.core.scene.cache import ResultCache, feature_to_data  # noqa: E402
+from app.core.scene.cache import DiskCache, ResultCache, feature_to_data  # noqa: E402
 from app.core.scene.hashing import object_hash  # noqa: E402
 from app.core.scene.history import OperationDraft  # noqa: E402
 from app.core.scene.project import ProjectSources, load, new_project  # noqa: E402
@@ -91,7 +96,8 @@ CHECK = CHECK or UNTIL_DIFFERENT
 MINIMUM = int(option("--min", "1000") or 1000)
 MAXIMUM = int(option("--max", "1000000") or 1000000)
 PER_CASE = int(option("--objekte", "8") or 8)
-VALUED = {"--gedaechtnis", "--weglassen", "--min", "--max", "--objekte"}
+DISK = option("--platte")
+VALUED = {"--gedaechtnis", "--weglassen", "--min", "--max", "--objekte", "--platte"}
 CASES: list[str] = []
 skip = False
 for argument in ARGS[2:]:
@@ -121,7 +127,37 @@ if LEAVE_OUT:
     left_out = getattr(feats, "_LEFT_OUT", None)
     if left_out is None:
         raise SystemExit(f"dieser Baum kennt keine Gegenprobe ({LEAVE_OUT})")
-    left_out.add(LEAVE_OUT)
+    # Bis Review 1 hießen die Teile deutsch (``ecken`` …); ältere Bäume und
+    # Notizen nennen sie so. Gilt der Name, den dieser Baum kennt.
+    renamed = {
+        "ecken": "corners",
+        "eckennummern": "corner_numbers",
+        "ursprung": "origin",
+        "normalen": "normals",
+        "flaechen": "areas",
+        "winkel": "angles",
+        "dicht": "closed",
+        "umlauf": "consistent",
+        "deckungsgleich": "coincident",
+        "diagonale": "diagonal",
+        "runde": "round",
+        "rueckfrage": "hull_query",
+    }
+    known = (
+        set(getattr(feats, "PATCH_PRINT_PARTS", ()))
+        | set(getattr(feats, "BODY_NUMBERS", ()))
+        | (
+            {"round", "hull_query"}
+            if "corners" in getattr(feats, "PATCH_PRINT_PARTS", ())
+            else {"runde", "rueckfrage"}
+        )
+    )
+    names = {LEAVE_OUT, renamed.get(LEAVE_OUT, LEAVE_OUT)}
+    names |= {old for old, new in renamed.items() if new == LEAVE_OUT}
+    chosen = sorted(names & known)
+    if len(chosen) != 1:
+        raise SystemExit(f"Teil {LEAVE_OUT!r} unbekannt; dieser Baum kennt {sorted(known)}")
+    left_out.add(chosen[0])
 
 # --- Zähler -------------------------------------------------------------------------
 
@@ -285,7 +321,13 @@ class Case:
     def __init__(self, name: str, out: Any) -> None:
         self.name = name
         self.out = out
-        self.cache = ResultCache()
+        self.disk: DiskCache | None = None
+        self.last: dict[str, Any] = {}
+        if DISK:
+            folder = Path(DISK) / hashlib.blake2b(name.encode("utf-8"), digest_size=8).hexdigest()
+            shutil.rmtree(folder, ignore_errors=True)
+            self.disk = DiskCache(codec=MeshCodec(), directory=folder)
+        self.cache = ResultCache(disk=self.disk)
         if name.startswith("beispiel:"):
             from app.core import examples
 
@@ -361,6 +403,10 @@ class Case:
         line["getragen"] = feats.MOVED_FROM_KEY in mesh.raw._cache
         if CHECK and raw is not None:
             line["kopie_gleich"] = detection_print(fresh_detection(mesh)) == line["erkennung"]
+        if step == "10_wieder":
+            line["wieder_gleich"] = self.last.get(objekt) == line["erkennung"]
+        else:
+            self.last[objekt] = line["erkennung"]
         self.write(line)
         if UNTIL_DIFFERENT and line.get("kopie_gleich") is False and not line["getragen"]:
             self.write({"fall": self.name, "schritt": "ende", "warum": "anders", "objekt": objekt})
@@ -373,6 +419,15 @@ class Case:
 
     def apply(self, title: str, drafts: list[OperationDraft]) -> None:
         self.history.apply(title, drafts)
+
+    def reopen(self) -> None:
+        """Wie nach einem Neustart: kein Gedächtnis im Speicher, frischer Cache über der Platte."""
+        feats.forget_cache()
+        EVALUATE.forget_remembered_steps()
+        self.cache = ResultCache(disk=self.disk)
+        spent = self.run()
+        for objekt in sorted(self.last):
+            self.record(objekt, "10_wieder", spent, None)
 
 
 def axis_faces(entry: Any) -> list[tuple[float, Any, int]]:
@@ -646,6 +701,8 @@ def main() -> None:
                                 "warum": f"{type(error).__name__}: {error}"[:300],
                             }
                         )
+                if DISK:
+                    case.reopen()
             except Exception as error:
                 why = f"{type(error).__name__}: {error}"[:300]
                 traceback.print_exc()
@@ -663,6 +720,7 @@ def main() -> None:
                         "baum": TREE.name,
                         "gedaechtnis": MEMORY,
                         "weglassen": LEAVE_OUT,
+                        "platte": bool(DISK),
                     },
                     ensure_ascii=False,
                 )

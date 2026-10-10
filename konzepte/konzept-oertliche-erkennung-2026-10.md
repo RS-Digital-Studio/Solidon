@@ -589,7 +589,8 @@ beantwortet (`_Round.answered`), und die Runde merkt sich ihre Schlüssel je Fle
 
 - **A1:** 3 386 Zustände, 0 anders (Stand `428ff99ce`, alle 230 Fälle); Kontrolle mit
   `--bis-anders` über 219 Fälle ohne Abweichung; Endstand unten.
-- **Gegenprobe:** belegt durch die Messbank (`ecken`, `diagonale`, `flaechen`) oder je einen Test
+- **Gegenprobe** (Teilnamen hier wie damals; seit Review 1 englisch, `folge.py --weglassen` nimmt
+  beide): belegt durch die Messbank (`ecken`, `diagonale`, `flaechen`) oder je einen Test
   (`ring`, `rueckfrage`, `dicht`, `normalen`, `eckennummern`, `ursprung`, `winkel`, `runde`,
   `deckungsgleich`). `umlauf` ändert keine Antwort: Die Lesung wählt an ihm nur zwischen
   schnellem Weg und Einzelweg, und wo die beiden auseinandergehen könnten, ändert sich der Ring

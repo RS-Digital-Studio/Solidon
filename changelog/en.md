@@ -15,15 +15,6 @@ carry the same points in the same order (`tests/test_changelog.py`).
 `tools/make_download.py` takes the section for the current version and writes
 it into `website/version.json`.
 
-## 0.6.1
-
-### Operation and system
-
-- After a hole or a moved feature, the features of a large part are recognised about a third faster.
-- A model you open right after starting the program is ready to edit up to a quarter sooner.
-- With a slicer, a game or a render running alongside, calculations on large models finish in seconds instead of minutes.
-- A saved project with a large model now opens in a second or two after a restart instead of half a minute: the recognised features are kept.
-
 ## 0.6.0
 
 ### Operation and system
@@ -71,6 +62,10 @@ it into `website/version.json`.
 - The workspace appears faster when opening large 3MF files.
 - An added model is in view afterwards, even when it lands next to a model you zoomed in on.
 - In the part catalogue, *Manage parts* is open as long as there is no part of your own yet.
+- After a hole or a moved feature, the features of a large technical part are recognised about a third faster.
+- A model you open right after starting the program is ready to edit up to a quarter sooner.
+- With a slicer, a game or a render running alongside, calculations on large models finish in seconds instead of minutes.
+- A saved project with a large model now opens in a second or two after a restart instead of half a minute: the recognised features are kept.
 
 ### Printing and slicer handover
 

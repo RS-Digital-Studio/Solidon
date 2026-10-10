@@ -15,15 +15,6 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 `tools/make_download.py` retira daqui a secção da versão atual e escreve-a em
 `website/version.json`.
 
-## 0.6.1
-
-### Utilização e sistema
-
-- Depois de um furo ou de uma característica deslocada, as características de uma peça grande são reconhecidas cerca de um terço mais depressa.
-- Um modelo que abre logo após iniciar o programa fica editável até um quarto mais cedo.
-- Com um slicer, um jogo ou uma renderização a correr ao lado, os cálculos em modelos grandes terminam em segundos em vez de minutos.
-- Um projeto guardado com um modelo grande abre após um reinício em um ou dois segundos em vez de meio minuto: as características reconhecidas ficam guardadas.
-
 ## 0.6.0
 
 ### Utilização e sistema
@@ -71,6 +62,10 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - A área de trabalho aparece mais depressa ao abrir ficheiros 3MF grandes.
 - Um modelo adicionado passa a ficar à vista, mesmo quando aparece ao lado de um modelo em que a vista estava ampliada.
 - No catálogo de blocos, *Gerir blocos* aparece aberto enquanto ainda não existir nenhum bloco próprio.
+- Depois de um furo ou de uma característica deslocada, as características de uma peça técnica grande são reconhecidas cerca de um terço mais depressa.
+- Um modelo que abre logo após iniciar o programa fica editável até um quarto mais cedo.
+- Com um slicer, um jogo ou uma renderização a correr ao lado, os cálculos em modelos grandes terminam em segundos em vez de minutos.
+- Um projeto guardado com um modelo grande abre após um reinício em um ou dois segundos em vez de meio minuto: as características reconhecidas ficam guardadas.
 
 ### Imprimir e entregar ao slicer
 
