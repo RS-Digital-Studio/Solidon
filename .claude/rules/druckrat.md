@@ -191,10 +191,10 @@ offenem Drucker. Übernommen wird auf Klick, nie von allein.
   steht (`shared_layers`, `writer.shared_layer_plates`; PrusaSlicer prüft an
   jeder Maschine mit mehreren Werkzeugen, auch mit einer Spule), und nicht unter
   organischen Bäumen (`printed_style` in `organic`): Beides lehnen PrusaSlicer
-  und die Orca-Familie ab, und die Stütze geht vor; ein Körper allein behält
-  die feinen Schichten neben seinem Turm. Das Feld sagt es
-  (`slicer_keys.limitation`). Ließe die Lagenzahl die Oberseite unter
-  `TOP_SHELL_MINIMUM`, kommt `shell.top_thickness` dazu.
+  und die Orca-Familie ab, und die Stütze geht vor. Unter Bäumen sagt es das
+  Feld (`slicer_keys.limitation`), am Turm der Befund des Exports; ein Körper
+  allein behält die feinen Schichten neben seinem Turm. Ließe die Lagenzahl
+  die Oberseite unter `TOP_SHELL_MINIMUM`, kommt `shell.top_thickness` dazu.
   Übergabe: `dateiformat.md`.
 - **Was das Modell schon ausgleicht, gleicht der Slicer nicht noch einmal aus**
   (`_from_allowances`, RM-589): Legt ein Schritt des Körpers Spiel in eine

@@ -47731,9 +47731,9 @@ Stufen (`stepped_area_worth`, 25,9 mm²/mm bei 0,2/0,42). Der Rat `layers.fine_l
 (halbe Schicht, nie unter einem Viertel der Düse) nennt den Zeitanteil, gebremst bis zur
 Mindestschichtzeit; `shell.top_thickness` 0,8 mm kommt dazu, wo die Lagenzahl die Oberseite
 dünner ließe. Die Übergabe schreibt je Teil eine Höhenkurve mit dem Raster, das gedruckt wird
-(`manufacturer.effective`), nicht unter organischen Bäumen und nicht neben einem
-Reinigungsturm (beides lehnen die Slicer ab, `Print::validate`; Befund und Satz am Feld),
-nicht für Cura (`NOT_TAKEN_BY`). Die Plattengegenprobe zählt die Lagen der Kurve; vorher
+(`manufacturer.effective`), nicht unter organischen Bäumen (Befund und Satz am Feld) und
+nicht, wo ein Reinigungsturm neben weiteren Teilen steht (Befund beim Export) — beides lehnen
+die Slicer ab (`Print::validate`) —, nicht für Cura (`NOT_TAKEN_BY`). Die Plattengegenprobe zählt die Lagen der Kurve; vorher
 meldete jede Übergabe mit feinen Schichten „Modellschichten weichen ab“ (100 gegen 129).
 Die Schrägmessung rechnet ihre Normalen nur für aufwärts weisende Dreiecke, elementweise und
 damit auf jeder Maschine gleich (§31-Körper 28 statt 72 ms; Drache 1,1 s von 54 s Schnitt).
@@ -47764,3 +47764,20 @@ zählt (dort plattenweit). `test_fine_layers_arrive_where_solidon_says` hält di
 Programmen (vor der Rasterkorrektur fünf rot). Würfel 16 mm (abgerundete Kanten): kein Rat.
 Eiffelturm (ElegooSlicer-Raster): Bereiche 23–33, 37–40, 43–44 und 161–162 mm (Bogenscheitel, Plattformen). Bericht:
 `.claude/.state/drache-2026-10-08/berichte-2026-10-10/rm586.md`.
+
+**Review (`review_rm586.md`) behoben:** F1 PrusaSlicer verweigerte am XL 2T und am MK4S MMU3
+jede Platte mit zwei Teilen, sobald eines feine Schichten hatte, auch mit einer Spule: Die
+Sperre kennt jetzt PrusaSlicer (`wipe_tower`, mehrere Werkzeuge, `handover.same_layers_required`);
+XL 2T rechnet Kuppe und Klotz (51,6 min, eine Spule 32,6), MMU3 18,4 min. F2 Der Turm sperrt
+nur neben weiteren Objekten (`writer.shared_layer_plates`), wie die Slicer prüfen; eine bemalte
+Kuppe allein druckt ihre Kurve neben dem Turm (Bambu Studio, ElegooSlicer: 113 Lagen, 28 fein;
+XL 2T: 112 Lagen). F3 Der Slicertest zählt in Bambu Studio die Höhen mit Vorschub. F4 Der Grund
+nennt den Zeitanteil des Teils. F5 Die Sonde `slicer_fein.py` liegt versioniert. F6 Die
+Prüfanleitung „an der Modellbahn“ steht wieder in der Regel. F7 Die Grenze entscheidet ohne
+Winkelfunktion (`_step_cosine`); Keile 1:2 und 1:3 auf der Grenze kippten mit einem ULP, Weg
+`fine_layers` in `test_platform_identity.py`. F8 Wirksam ist die Mindestlänge: Kuppen bei 0,2 mm
+Schicht ab R 9,6 immer, unter R 8,3 nie; Changelog „flache Kuppen und Schrägen“. F9
+`_shallow_faces` rechnet in Blöcken, am Drachen 272 → 65 MB Spitze, bitgleich. F10 es:
+„cuadrícula“. **Nachprüfung (`review_rm586_nach.md`):** N1 it nennt die Zeit, N2 die
+gemessene Grenze, N3 Test über mehrere Blöcke, N4 Unterlagen, N5 Test des Druckdialogs.
+Bericht: `.claude/.state/drache-2026-10-08/berichte-2026-10-10/rm586b.md`.

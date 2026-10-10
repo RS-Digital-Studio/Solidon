@@ -2031,12 +2031,12 @@ def _fine_layers(
     style: str,
     organic: Collection[str],
 ) -> list[SettingAdvice]:
-    """Feine Schichten an Kuppen und feinen Formen, dazwischen die normale Höhe
+    """Feine Schichten an Kuppen und flachen Schrägen, dazwischen die normale Höhe
     (RM-586, Recherche Nr. 9 und 10).
 
     Vorgeschlagen, wo die Schichtanalyse flache Schrägen mit sichtbaren Stufen
-    findet (:func:`fine_layers.layer_bands`), mit dem Anteil, um den der Druck
-    länger dauert. Nicht, wo der Slicer allen Teilen der Platte dieselben
+    findet (:func:`fine_layers.layer_bands`), mit dem Anteil, um den das Teil
+    länger druckt. Nicht, wo der Slicer allen Teilen der Platte dieselben
     Schichten abverlangt (``shared_layers``): Reinigungsturm und mehr als ein
     Objekt (``handover.same_layers_required``); ein Körper allein behält die
     feinen Schichten auch neben seinem Turm. Und nicht unter
