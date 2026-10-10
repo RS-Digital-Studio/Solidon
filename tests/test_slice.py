@@ -2169,6 +2169,46 @@ def test_a_returning_seam_does_not_fill_a_window_between_parts(cut_path: None) -
     assert len(shape.interiors) == 1
 
 
+def test_an_empty_repaired_outline_stays_out_of_the_union(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Ein Umriss, den ``_repaired`` leer zurückgibt, kommt nicht in die Vereinigung.
+
+    GEOS setzt im Aufruf ``create_collection`` selbst das Ungültig-Flag, sobald
+    ein Glied leer ist — auf Intel-Macs, und NumPy meldet es als
+    ``RuntimeWarning`` (CI macOS Intel, ``test_rebuild``-Gravur quer übers
+    Profil). Hier wird ein leeres Glied auf jeder Plattform rot. Zwei Quadrate
+    gegen den Uhrzeigersinn, im ersten ein Loch mit ihm; das zweite gibt die
+    Attrappe leer zurück, das Loch liegt trotzdem in Fläche.
+    """
+    import shapely
+    from shapely.geometry import Polygon as ShapelyPolygon
+
+    rings = [
+        [(0.0, 0.0), (10.0, 0.0), (10.0, 10.0), (0.0, 10.0)],
+        [(20.0, 0.0), (30.0, 0.0), (30.0, 10.0), (20.0, 10.0)],
+        [(2.0, 2.0), (2.0, 8.0), (8.0, 8.0), (8.0, 2.0)],
+    ]
+    coordinates = np.asarray([point for ring in rings for point in ring])
+    ring_of = np.repeat(np.arange(len(rings)), 4)
+    repaired = analysis._repaired
+    collect = shapely.lib.create_collection
+
+    def emptied(shape: Any) -> Any:
+        return ShapelyPolygon() if shape.bounds[0] >= 20.0 else repaired(shape)
+
+    def checked(geometries: Any, *args: Any, **kwargs: Any) -> Any:
+        assert not shapely.is_empty(np.asarray(geometries, dtype=object)).any(), (
+            "ein leeres Glied erreicht create_collection"
+        )
+        return collect(geometries, *args, **kwargs)
+
+    monkeypatch.setattr(analysis, "_repaired", emptied)
+    monkeypatch.setattr(shapely.lib, "create_collection", checked)
+    section = analysis._positive_rings(coordinates, ring_of, np.zeros((12, 2)), None)
+
+    assert section is not None
+    assert section.area() == pytest.approx(100.0 + 100.0 - 36.0, abs=1e-9)
+
+
 @pytest.mark.parametrize("cut_path", ["direct", "compiled", "numpy"], indirect=True)
 def test_a_free_inverted_shell_survives_next_to_an_outward_neighbour(cut_path: None) -> None:
     """Ein Nachbar macht aus der freien invertierten Schale keinen Hohlraum.
