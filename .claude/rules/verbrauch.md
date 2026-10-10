@@ -41,6 +41,8 @@ nach einem Update bei jedem Kunden zugleich (RM-705, RM-706).
 - **Gespeicherte Antworten zählen als Entscheidung** (`_answers`): Kanten- und
   Merkmalsantworten mit dem Rang des gewählten Kandidaten nach Lage, ohne
   `scope` und Rohkoordinaten — eine gleich beantwortete neue Frage bleibt.
+  Zahlen näher als `PRINT_LIMIT` sind für den Rang gleich; nicht runden, ein
+  Raster kippt an seinen Kanten.
 - **Die Einstellungen zählen mit dem, was dem Projekt gehört**
   (`_owned_settings`): Stufe, eigene Wahl und Vorschläge mit Wert, Wahl der
   Platte, eigene Spulenwerte ohne geerbte Felder. Die Grundlage des

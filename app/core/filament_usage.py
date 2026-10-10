@@ -12,6 +12,7 @@ from collections.abc import Mapping, Sequence
 from contextlib import suppress
 from copy import deepcopy
 from dataclasses import dataclass, fields, replace
+from functools import cmp_to_key
 from pathlib import Path, PurePosixPath
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Any, Final, Literal
@@ -47,6 +48,7 @@ from app.core.types import (
     SourceAccess,
     SpoolBinding,
 )
+from app.core.units import PRINT_LIMIT
 from app.i18n import _, source_text
 
 if TYPE_CHECKING:
@@ -422,9 +424,35 @@ def _without_scope(record: object) -> object:
 
 
 def _rank(candidates: Sequence[Any], chosen: int, order: Sequence[str]) -> int:
-    """Die Stelle des gewählten Kandidaten, wenn alle nach ihrer Lage geordnet sind."""
-    ranked = sorted(range(len(candidates)), key=lambda index: _place(candidates[index], order))
+    """Die Stelle des gewählten Kandidaten, wenn alle nach ihrer Lage geordnet sind.
+
+    Zahlen, die näher als die Druckgrenze beieinanderliegen (``PRINT_LIMIT``), sind
+    für die Ordnung gleich, und das nächste Feld entscheidet (Nachprüfung RM-706,
+    N2): Liegen zwei Kanten eines Spalts in x bis auf Rauschen gleich, ordnet sie
+    y, nicht das letzte Bit von x. Gerundet wird nicht — ein Raster kippt an seinen
+    Kanten.
+    """
+    places = [_place(candidate, order) for candidate in candidates]
+    ranked = sorted(
+        range(len(candidates)),
+        key=cmp_to_key(lambda first, second: _compare(places[first], places[second])),
+    )
     return ranked.index(chosen)
+
+
+def _compare(first: Sequence[tuple[int, Any]], second: Sequence[tuple[int, Any]]) -> int:
+    """Vergleicht zwei Folgen aus :func:`_leaves`, Zahlen bis auf die Druckgrenze."""
+    for (kind, value), (other_kind, other) in zip(first, second, strict=False):
+        if kind != other_kind:
+            return -1 if kind < other_kind else 1
+        if kind == 1 and abs(value - other) <= PRINT_LIMIT:
+            continue
+        if value != other:
+            return -1 if value < other else 1
+    if len(first) != len(second):
+        return -1 if len(first) < len(second) else 1
+    # Bis auf die Druckgrenze gleich: Die genauen Zahlen halten die Ordnung bestimmt.
+    return (tuple(first) > tuple(second)) - (tuple(first) < tuple(second))
 
 
 def _place(candidate: Mapping[str, Any], order: Sequence[str]) -> tuple[tuple[int, Any], ...]:

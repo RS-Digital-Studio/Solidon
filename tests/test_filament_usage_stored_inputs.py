@@ -18,6 +18,7 @@ wiedererkannt werden, solange ihre Netzbits gleich sind.
 from __future__ import annotations
 
 import dataclasses
+import math
 import shutil
 from dataclasses import replace
 from pathlib import Path
@@ -701,6 +702,21 @@ def test_a_saved_answer_counts_as_its_decision_not_as_its_record() -> None:
     assert right == again
     assert right != left
     assert right != unanswered
+
+
+@pytest.mark.parametrize("noisy", [None, 0, 1])
+def test_the_rank_of_an_answer_ignores_rounding_noise(noisy: int | None) -> None:
+    """Nachprüfung RM-706, N2: Zwei Kanten eines Spalts liegen in x gleich und in y
+    vier Tausendstel auseinander. Ein Bit Rauschen in x entscheidet die Ordnung nicht —
+    was näher als die Druckgrenze beieinanderliegt, ist für sie gleich, und y entscheidet."""
+
+    def edge(y: float, *, noise: bool) -> dict[str, Any]:
+        x = math.nextafter(5.0, 6.0) if noise else 5.0
+        return {"middle": [x, y, 5.0], "direction": [0.0, 0.0, 1.0], "extent": 0.0, "length": 10.0}
+
+    candidates = [edge(0.0, noise=noisy == 0), edge(0.004, noise=noisy == 1)]
+    assert usage._rank(candidates, 1, usage._EDGE_ORDER) == 1
+    assert usage._rank(list(reversed(candidates)), 0, usage._EDGE_ORDER) == 1
 
 
 def test_a_feature_mapping_counts_with_its_decision() -> None:

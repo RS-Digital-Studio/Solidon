@@ -47733,13 +47733,14 @@ vorbei liest (Quellen mit Inhaltsprüfsumme und Dateiname, Projektmaße als gesp
 samt Kette, bei `reads_other_bodies`, `reads_scene`, Merkmal- und Zielparametern und einer
 Skizzenebene auf einem Merkmal alle lebenden Körper), die Fassung des Bausteins
 (`PartSpec.version`, bei Rezepten auch die der Bausteine darin) und die gespeicherten Kanten- und
-Merkmalsantworten als Entscheidung (Rang des gewählten Kandidaten nach Lage, ohne `scope`) ein —
+Merkmalsantworten als Entscheidung (Rang des gewählten Kandidaten nach Lage, Zahlen bis auf
+`PRINT_LIMIT` gleich, ohne `scope`) ein —
 keine Rückfallstufe und keine `cache_version`, die gerade bei druckgleichen Beschleunigungen
 steigt. Benennende und prüfende Schritte und unverändert durchgereichte Eingänge behalten den
 Abdruck ihres Körpers; überzählige Eingänge eines Erzeugers fallen wie in der Auswertung weg. Die
 Einstellungen zählen mit dem, was dem Projekt gehört (`_owned_settings`: Stufe, eigene Wahl und
 Vorschläge mit Wert, Wahl der Platte, eigene Spulenwerte ohne geerbte Felder), dazu die Wahl der
-Grundlage im Slicer (Slicerart, Maschine, Prozess), nicht ihr Inhalt. Drucker und Material zählen
+Grundlage im Slicer (Slicerart, Maschine, Prozess, als Name und nie als Pfad), nicht ihr Inhalt. Drucker und Material zählen
 wie im Cache-Schlüssel (`profile_key` ohne Prozesswerte, je Körper sein Material, jedes Material
 eines Schrittfelds): Eine Kalibrierung (§28.3) ist ein anderer Druck. Der Abdruck von RM-705 reist als **Vorabdruck**
 mit (`former_fingerprints`) — eine belegte Gleichheit, kein Kandidat: Ein bestehender Vorgang
