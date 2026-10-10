@@ -42,13 +42,14 @@ from app.core.geom.mesh import (
     python_values,
     refined_units,
     refined_units_key,
+    remember_refined_units,
     row_dots,
     triple_products,
     unique_edges,
 )
 from app.core.geom.repair import merge_vertices
 from app.core.log import get_logger
-from app.core.perceive import grouped, refine
+from app.core.perceive import grouped, parallel, refine
 from app.core.perceive.helix import Helix, _facet_of_face, find_helices
 from app.core.perceive.patterns import patterns_instead_of_cells
 from app.core.perceive.slots import ACROSS_THE_AXIS, PARALLEL_AXES, slots_instead_of_half_bores
@@ -1507,6 +1508,25 @@ def detect(
 
     share = _Share(progress)
     mesh = _one_body(mesh)
+    # Die Arbeiter starten und bauen ihre Kopie des Körpers, während hier noch
+    # Ebenen und Flecken gesucht werden (RM-637); bis zur ersten Runde stehen
+    # sie bereit.
+    prepared = _prepare_workers(mesh.raw)
+    try:
+        return _detected(mesh, key, share, check_cancelled, store)
+    finally:
+        if prepared:
+            parallel.release()
+
+
+def _detected(
+    mesh: MeshData,
+    key: bytes,
+    share: _Share,
+    check_cancelled: Callable[[], None] | None,
+    store: DetectionStore | None,
+) -> dict[FeatureId, Feature]:
+    """Der volle Durchgang von :func:`detect` an einem Körper, der kein Merker-Treffer war."""
     if check_cancelled is not None:
         check_cancelled()
     # Die Etappen und ihr gemessener Anteil (Median über fünf große Netze):
@@ -2643,6 +2663,523 @@ def _cylinders(mesh: MeshData) -> Cylinders:
     return _fitted(mesh).cylinders
 
 
+class _Round(NamedTuple):
+    """Eine Einpassungsrunde: ``classify`` und die Listen, in die sie einträgt (RM-637)."""
+
+    classify: Callable[[list[int]], bool]
+    answered: Callable[[list[int]], bool]
+    found: Cylinders
+    cones: Cones
+    spheres: Spheres
+    tori: _TorusCandidates
+    no_cone_here: set[tuple[Any, ...]]
+
+
+def _round(
+    body: trimesh.Trimesh,
+    mesh: MeshData,
+    check_cancelled: Callable[[], None] | None,
+    *,
+    ahead: Mapping[bytes, Any] | None = None,
+) -> _Round:
+    """Die Frage je Fleck, welche Form auf ihn passt, mit den Listen ihrer Antworten.
+
+    Aus :func:`_fitted` gehoben, damit ein Arbeiter dieselbe Frage mit demselben
+    Code stellt (:func:`classified_ahead`, RM-637). ``ahead`` sind Antworten, die
+    Arbeiter vorab gerechnet haben — unter dem Schlüssel, unter dem ``classify``
+    sie sonst im Gedächtnis sucht.
+    """
+    found: Cylinders = []
+    cones: Cones = []
+    spheres: Spheres = []
+    tori = _TorusCandidates(len(body.faces))
+    #: Kennzahlen von Flecken, an denen der Kegel nichts hergab. Wer
+    #: deckungsgleich zu einem davon ist, bekommt dieselbe leere Antwort,
+    #: ohne dass der Löser noch einmal hundert Auswertungen dafür braucht
+    #: (:func:`_rigid_key`).
+    no_cone_here: set[tuple[Any, ...]] = set()
+
+    def classify_read(patch: list[int]) -> bool:
+        """Die erste Form, die auf diesen Fleck passt — oder keine (gerechnet)."""
+        ball: SphereFit | None = None
+        # Ein bis zur Geometriegenauigkeit belegter Zylinder braucht keinen
+        # konkurrierenden Kegellauf. Bei einer nur angenäherten Zylinderhaut
+        # wird der Kegel weiterhin gefragt: Eine kurze, flache Verjüngung
+        # kann innerhalb der Wandtoleranz auch auf einen Zylinder passen.
+        fit = fit_cylinder(body, patch, check_cancelled=check_cancelled)
+        if check_cancelled is not None:
+            check_cancelled()
+        cylinder = fit if fit is not None and fit.good and _fits_in_the_body(mesh, fit) else None
+        if cylinder is not None and _cylinder_precludes_a_cone(body, cylinder, patch):
+            found.append((cylinder, patch))
+            return True
+        #
+        # **Ein Muster fragt dieselbe Frage hundertfach.** Die Streben eines
+        # Gitters sind deckungsgleich, und ein Kegelwinkel ändert sich unter
+        # einer starren Bewegung nicht: Wo der Kegel schon an einem
+        # deckungsgleichen Fleck nichts hergab, gibt er auch hier nichts her.
+        # Geteilt wird nur dieses Nein — ein gefundener Kegel wird weiterhin
+        # einzeln gerechnet, denn seine Achse und seine Spitze liegen woanders.
+        # An der Kumiko-Schale sind 1 325 der 1 990 Kegelfits Wiederholungen
+        # und kosten 7,71 der 21,66 Sekunden (22.09.2026).
+        shape = _rigid_key(body, patch)
+        if shape is not None and shape in no_cone_here:
+            cone = None
+        else:
+            cone = fit_cone(body, patch, check_cancelled=check_cancelled)
+            if cone is None and shape is not None:
+                no_cone_here.add(shape)
+        if check_cancelled is not None:
+            check_cancelled()
+        if (
+            cone is not None
+            and cone.half_angle >= CONE_MIN_ANGLE
+            and cone.good
+            and _cone_is_recognisable(body, cone, patch, check_cancelled=check_cancelled)
+        ):
+            ball = fit_sphere(body, patch, check_cancelled=check_cancelled)
+            if check_cancelled is not None:
+                check_cancelled()
+            if not _a_ball_fits_far_better(cone, ball):
+                # Beide vollständigen Nachweise lesen dieselbe Originalhaut.
+                # Ein zusätzlicher Freiheitsgrad verdrängt den Zylinder nur,
+                # wenn der Kegel diese Haut mindestens ebenso genau trifft.
+                if (
+                    cylinder is not None
+                    and cylinder.fit_error is not None
+                    and cone.fit_error is not None
+                    and cylinder.fit_error < cone.fit_error
+                ):
+                    found.append((cylinder, patch))
+                else:
+                    cones.append((cone, patch))
+                return True
+        if cylinder is not None:
+            found.append((cylinder, patch))
+            return True
+        # **Erst hier, und das ist die halbe Antwort auf §41.** Kugel und Torus
+        # werden gefragt, nachdem Zylinder und Kegel abgelehnt haben — nicht
+        # daneben. Eine Senkung passt auf eine Kugel besser, als man denkt
+        # (Rückstand 0,054), und ein `hole_1`, das plötzlich `sphere_1` hieße,
+        # wäre für jede Bohrungs-Operation unsichtbar. Die andere Hälfte der
+        # Antwort ist ``ROUND_TOLERANCE``.
+        if ball is None:
+            ball = fit_sphere(body, patch, check_cancelled=check_cancelled)
+        if check_cancelled is not None:
+            check_cancelled()
+        if ball is not None and ball.good:
+            spheres.append((ball, patch))
+            if _sphere_is_recognisable(body, ball, patch, check_cancelled=check_cancelled):
+                return True
+        ring = fit_torus(body, patch, check_cancelled=check_cancelled)
+        if check_cancelled is not None:
+            check_cancelled()
+        if ring is not None and ring.good:
+            tori.append((ring, patch))
+            # Ein algebraisch passender Ring ist erst mit passenden Normalen
+            # ein Treffer. Sonst muss die Nachtrennung seine Zylinderwand
+            # noch finden können. Der Kandidat bleibt für die Freiformauskunft.
+            return _torus_is_recognisable(body, ring, patch, check_cancelled=check_cancelled)
+        # Ein nur algebraisch passender, örtlich unbestimmter Kandidat
+        # bleibt Diagnose. Er darf die Suche nach belegten Teilflächen
+        # (etwa einer Bohrung mit Rastnasen) nicht als Treffer beenden.
+        return False
+
+    extents = np.asarray(body.extents, dtype=float)
+    diagonal = math.sqrt(float((extents * extents).sum()))
+    closed = bool(body.is_watertight)
+    consistent = bool(body.is_winding_consistent)
+
+    #: Die Schlüssel dieser Runde je Fleck und Zustand: ``answered`` und
+    #: ``classify`` fragen denselben Fleck, und der Weg über den Merker des
+    #: Abdrucks kostete am Eiffelturm 1,6 s für 6 685 Schlüssel.
+    keys: dict[tuple[tuple[int, ...], bool], bytes] = {}
+
+    def key_of(patch: list[int], known_shape: bool) -> bytes:
+        """Unter welchem Schlüssel ``classify`` die Antwort an diesem Fleck merkt.
+
+        Die Körperzahlen der Lesung gehören dazu (:func:`_support_handle`): Ohne
+        sie gab ein Körper mit Loch im Netz die Fits des dichten zurück, in der
+        letzten Stelle anders (Messbank A1, P5).
+        """
+        name = (tuple(patch), known_shape)
+        known = keys.get(name)
+        if known is None:
+            known = keys[name] = key_read(patch, known_shape)
+        return known
+
+    def key_read(patch: list[int], known_shape: bool) -> bytes:
+        """Der Schlüssel von :func:`key_of`, gerechnet."""
+        return hashlib.blake2b(
+            _patch_print(body, patch)
+            + _body_numbers(
+                diagonale=diagonal,
+                dicht=closed,
+                umlauf=consistent,
+                deckungsgleich=_coincident_vertices(body),
+            )
+            + _exact_bytes(("runde" in _LEFT_OUT or known_shape, _classify_settings())),
+            digest_size=16,
+        ).digest()
+
+    def answered(patch: list[int]) -> bool:
+        """Ob ``classify`` diesen Fleck vermutlich ohne Rechnung beantwortet.
+
+        Gefragt mit dem Zustand der Runde ohne deckungsgleichen Vorgänger — so
+        steht es für die meisten Flecken im Gedächtnis. Ein solcher Fleck kommt
+        nicht in den Stapel (:func:`_screened_fits`): Der plante Kegel- und
+        Ringläufe, die der Treffer nie stellt, am Ständer nach einer Bohrung
+        1,4 s. Liegt die Vermutung daneben, rechnet ``classify`` ohne das
+        Nein des Stapels — dieselbe Antwort, nur langsamer.
+        """
+        if not _ACROSS_BODIES[0] or not _worth_remembering(body, patch):
+            return False
+        key = key_of(patch, False)
+        if ahead and key in ahead:
+            return True
+        with _MEMORY_LOCK:
+            return key in _BY_GEOMETRY.get(_CLASSIFIED, ())
+
+    def classify(patch: list[int]) -> bool:
+        """Die erste Form, die auf diesen Fleck passt — oder keine.
+
+        **Auch aus dem Gedächtnis eines früheren Körpers** (RM-592, G2): Was
+        :func:`classify_read` liest, steht im Fleckabdruck (Lesung, Normalen,
+        Ursprung), in der Diagonale, aus der die Toleranzen der Einpassungen
+        kommen, und im Zustand der Runde — ob ein deckungsgleicher Fleck schon
+        keinen Kegel hatte (``no_cone_here``). Die Hülle des Körpers fragt ein
+        Treffer neu (:data:`_HULL_QUESTIONS`). Gemerkt werden Antwort, Fits und
+        ob der Fleck ``no_cone_here`` ergänzte; ein Treffer trägt sie in die
+        Listen dieser Runde ein wie die Rechnung.
+        """
+        if check_cancelled is not None:
+            check_cancelled()
+        if _face_count(body, patch) < MIN_PATCH_FACES:
+            return False
+        if not _ACROSS_BODIES[0] or not _worth_remembering(body, patch):
+            return classify_read(patch)
+        shape = _rigid_key(body, patch)
+        known_shape = shape is not None and shape in no_cone_here
+        key = key_of(patch, known_shape)
+        known = _known_across(_CLASSIFIED, body, key)
+        if known is _UNKNOWN and ahead:
+            # Vorab gerechnet von einem Arbeiter (RM-637, :mod:`parallel`): dieselbe
+            # Frage unter demselben Schlüssel, an einer Kopie des Körpers.
+            known = ahead.get(key, _UNKNOWN)
+            if known is not _UNKNOWN:
+                _keep_across(_CLASSIFIED, body, key, known)
+                parallel.count("used")
+        if known is not _UNKNOWN:
+            answer, cylinders, kegel, balls, rings, added, asked = known
+            if "rueckfrage" in _LEFT_OUT or all(
+                _cylinder_fits(mesh, axis, radius) == fits for axis, radius, fits in asked
+            ):
+                found.extend((fit, patch) for fit in cylinders)
+                cones.extend((fit, patch) for fit in kegel)
+                spheres.extend((fit, patch) for fit in balls)
+                for ring in rings:
+                    tori.append((ring, patch))
+                if added and shape is not None:
+                    no_cone_here.add(shape)
+                return bool(answer)
+        marks = (len(found), len(cones), len(spheres), len(tori.entries))
+        questions: list[tuple[tuple[float, ...], float, bool]] = []
+        asking = _HULL_QUESTIONS.set(questions)
+        try:
+            answer = classify_read(patch)
+        finally:
+            _HULL_QUESTIONS.reset(asking)
+        added = not known_shape and shape is not None and shape in no_cone_here
+        _keep_across(
+            _CLASSIFIED,
+            body,
+            key,
+            (
+                answer,
+                tuple(fit for fit, _patch in found[marks[0] :]),
+                tuple(fit for fit, _patch in cones[marks[1] :]),
+                tuple(fit for fit, _patch in spheres[marks[2] :]),
+                tuple(fit for fit, _patch in tori.entries[marks[3] :]),
+                added,
+                tuple(questions),
+            ),
+        )
+        return answer
+
+    return _Round(classify, answered, found, cones, spheres, tori, no_cone_here)
+
+
+def _asked_by_workers(
+    body: trimesh.Trimesh,
+    kind: str,
+    items: Sequence[Any],
+    weights: Sequence[float],
+    shapes: set[tuple[Any, ...]],
+    check_cancelled: Callable[[], None] | None,
+    share: _Share,
+    *,
+    skin: bool = False,
+) -> dict[str, dict[Any, Any]]:
+    """Antworten, die eine Runde von :func:`_fitted` gleich der Reihe nach fragt — vorab
+    von Arbeitern gerechnet (RM-637, :mod:`parallel`).
+
+    ``kind`` ist ``"classify"`` (``items`` sind Flecken) oder ``"pieces"``
+    (``items`` sind ungelöste Flecken mit ihren Stücken: deren ``classify`` und
+    die tangentiale Trennung dahinter, :func:`_pieces_ahead`). Jeder Arbeiter
+    bekommt eine Kopie des Körpers samt den Normalen, Flächen, Nahtwinkeln und
+    Ursprüngen, die er hält, und einen zusammenhängenden Teil in der Folge der
+    Runde. Zurück kommen je Frage die Antworten unter ihrem Schlüssel; die Runde
+    findet sie dort, was fehlt, rechnet sie selbst.
+    """
+    if not _ACROSS_BODIES[0] or not items:
+        return {}
+    token = _detection_key(MeshData(raw=body))
+    count = parallel.worthwhile(len(body.faces), len(items))
+    if count <= 0 or not parallel.prepared(token):
+        return {}
+    if kind == "classify":
+        # Zusammenhängend in der Folge der Runde: Deckungsgleiche Flecken landen
+        # beim selben Arbeiter, der den Zustand der Runde fortschreibt wie hier.
+        parts: Sequence[Sequence[int]] = parallel.split(
+            weights, parallel.chunk_count(len(items), count)
+        )
+    else:
+        # Jeder Fleck für sich, der schwerste zuerst: Wer fertig ist, nimmt den
+        # nächsten — ein großer Verbund hält sonst einen ganzen Teil auf.
+        parts = [[index] for index in sorted(range(len(items)), key=lambda at: -weights[at])]
+    held = frozenset(shapes)
+    tasks = [
+        parallel.Task(kind, tuple(items[index] for index in part), held, skin, token)
+        for part in parts
+    ]
+    ahead: dict[str, dict[Any, Any]] = {_CLASSIFIED: {}, _TANGENTIAL: {}}
+    for answers in parallel.run(
+        lambda: _worker_arrays(body),
+        tasks,
+        most=count,
+        check_cancelled=check_cancelled,
+        progress=share.reach,
+    ):
+        for name, found in (answers or {}).items():
+            ahead.setdefault(name, {}).update(found)
+    # Jede Antwort über die Körpergrenze auch ins Gedächtnis: Fits, Lesungen und
+    # Nachweise, die die Runde und der nächste Schritt dort suchen.
+    for name, found in ahead.items():
+        if name != _SPLIT_TARGETS and found:
+            _keep_all_across(name, body, found)
+    share.reach(1.0)
+    return ahead
+
+
+def _keep_all_across(name: str, body: trimesh.Trimesh, found: Mapping[bytes, Any]) -> None:
+    """Viele fertige Antworten über die Körpergrenze ablegen (:func:`_keep_across`)."""
+    for key, value in found.items():
+        _keep_across(name, body, key, value)
+
+
+#: Was ein Körper an Maßen halten kann, aus denen ein Abdruck entsteht
+#: (:func:`_patch_print_parts`) — ob gerechnet oder mitgetragen.
+_HELD_MEASURES: Final = ("face_normals", "area_faces", "face_adjacency_angles")
+
+
+def _worker_arrays(body: trimesh.Trimesh) -> dict[str, np.ndarray]:
+    """Was ein Arbeiter vom Körper bekommt: Ecken, Dreiecke und was der Körper an
+    Normalen, Flächen, Nahtwinkeln und Ursprüngen schon hält.
+
+    Was er nicht hält, rechnet der Arbeiter aus denselben Ecken und Dreiecken
+    selbst, Bit für Bit wie hier — rechnete der Prozess es nur zum Schicken, zahlte
+    er dafür, auch wenn keine Runde die Arbeiter fragt (am Spiderman die
+    Nahtwinkel von 1,3 Mio. Kanten). Mitgetragene Maße einer starren Bewegung
+    (``geom.transform._carry_cache``) hält er immer; sie reisen mit.
+    """
+    arrays = {
+        "vertices": np.ascontiguousarray(body.vertices, dtype=np.float64),
+        "faces": np.ascontiguousarray(body.faces, dtype=np.int64),
+    }
+    cache = body._cache
+    cache.verify()
+    for name in _HELD_MEASURES:
+        held = cache.cache.get(name)
+        if held is not None:
+            arrays[name] = np.ascontiguousarray(held, dtype=np.float64)
+    units = refined_units(body)
+    if units is not None:
+        arrays["units"] = np.asarray(units, dtype=np.int64)
+    return arrays
+
+
+def _prepare_workers(body: trimesh.Trimesh) -> bool:
+    """Arbeiter für diesen Körper starten und ihm seine Kopie schicken — ohne zu warten.
+
+    Ob es Arbeiter gibt, entscheidet die Größe (:func:`parallel.worthwhile`); wie
+    viele Flecken kommen, weiß hier noch niemand. ``False``: keine Arbeiter.
+    """
+    if not _ACROSS_BODIES[0]:
+        return False
+    count = parallel.worthwhile(len(body.faces), parallel.MOST_WORKERS * parallel.PATCHES_PER_TASK)
+    if count <= 0:
+        return False
+    parallel.warm(count)
+    return parallel.prepare(_worker_arrays(body), _detection_key(MeshData(raw=body)))
+
+
+#: Der Körper, an dem dieser Prozess als Arbeiter zuletzt gefragt wurde — nur im
+#: Arbeiter (:func:`answered_ahead`): Abdruck, Körper, Netz und die schon
+#: zurückgegebenen Schlüssel. Die zweite Runde derselben Erkennung baut ihn nicht
+#: neu und findet die Antworten der ersten im Gedächtnis.
+_WORKER_BODY: list[Any] = [None]
+
+
+def answered_ahead(
+    read: Callable[[], Mapping[str, np.ndarray]], task: Any
+) -> dict[str, dict[Any, Any]]:
+    """Die Seite des Arbeiters (RM-637): eine Runde von :func:`_fitted` für einen Teil.
+
+    Der Körper entsteht aus den Feldern des Aufrufers, mit den Normalen,
+    Flächen, Nahtwinkeln und Ursprüngen, die er hält — dieselben Abdrücke, also
+    dieselben Schlüssel. Kommt ein anderer Körper, vergisst der Arbeiter den
+    alten samt allem Gemerkten (:func:`forget_cache`). Zurück gehen die
+    Antworten von ``classify`` und der tangentialen Trennung, die er seit der
+    letzten Aufgabe neu gerechnet hat.
+    """
+    _token, body, mesh, sent = held_body(read, task.token)
+    splits: dict[tuple[int, ...], list[list[int]]] = {}
+    state = _round(body, mesh, None)
+    state.no_cone_here.update(task.shapes)
+    with body._cache:
+        if task.kind == "classify":
+            patches = [list(patch) for patch in task.items]
+            _patch_prints(body, patches)
+            with _screening(body, patches, shapes=state.no_cone_here):
+                for patch in patches:
+                    state.classify(patch)
+        elif task.kind == "surfaces":
+            patches = [list(patch) for patch in task.items]
+            with _screening(body, patches):
+                for patch in patches:
+                    _round_surface(body, mesh, patch)
+        else:
+            for patch, pieces in task.items:
+                _pieces_ahead(
+                    state,
+                    body,
+                    mesh,
+                    list(patch),
+                    [list(piece) for piece in pieces],
+                    task.skin,
+                    splits,
+                )
+    answers: dict[str, dict[Any, Any]] = {}
+    with _MEMORY_LOCK:
+        for name, held_answers in _BY_GEOMETRY.items():
+            fresh = {key: value for key, value in held_answers.items() if (name, key) not in sent}
+            sent.update((name, key) for key in fresh)
+            answers[name] = fresh
+    answers[_SPLIT_TARGETS] = splits
+    return answers
+
+
+#: Unter welchem Namen ein Arbeiter seine tangentialen Trennungen je Ziel
+#: zurückgibt — am selben Körper dieselbe Antwort, auch wo das Gedächtnis über
+#: die Körpergrenze nichts merkt (:func:`_tangential_pieces`, ``beyond``).
+_SPLIT_TARGETS: Final = "split_targets"
+
+
+def held_body(
+    read: Callable[[], Mapping[str, np.ndarray]], token: bytes
+) -> tuple[bytes, trimesh.Trimesh, MeshData, set[tuple[str, bytes]]]:
+    """Der Körper dieses Arbeiters — gebaut aus den Feldern des Aufrufers oder gehalten.
+
+    Gebaut wird er mit allem, was die Runden am ganzen Körper fragen
+    (Nachbarn, Dichtheit, Umlauf, deckungsgleiche Ecken), damit die erste Aufgabe
+    das nicht bezahlt. Ein anderer Abdruck lässt den alten Körper samt allem
+    Gemerkten los (:func:`forget_cache`).
+    """
+    held = _WORKER_BODY[0]
+    if held is not None and held[0] == token:
+        return held  # type: ignore[no-any-return]
+    _WORKER_BODY[0] = None
+    forget_cache()
+    arrays = read()
+    body = trimesh.Trimesh(arrays["vertices"], arrays["faces"], process=False)
+    units = arrays.get("units")
+    if units is not None:
+        remember_refined_units(body, units)
+    body._cache.verify()
+    for name in _HELD_MEASURES:
+        if name in arrays:
+            body._cache[name] = np.asarray(arrays[name], dtype=np.float64)
+    body._cache.id_set()
+    with body._cache:
+        _neighbour_index(body)
+        _ = body.is_watertight, body.is_winding_consistent, body.extents
+        _coincident_vertices(body)
+    held = (token, body, MeshData(raw=body), set())
+    _WORKER_BODY[0] = held
+    return held
+
+
+def warm_worker() -> None:
+    """Ein frischer Arbeiter lädt, was die Runden brauchen, bevor die erste Aufgabe kommt.
+
+    Die Bibliotheken der Erkennung kommen erst beim ersten Rechenschritt
+    (``app.core.deferred``); im Arbeiter bezahlte das die erste Aufgabe, und die
+    Runde wartete darauf. Eine Erkennung an einem kleinen Zylinder lädt sie alle
+    (RM-637).
+    """
+    detect(MeshData(raw=trimesh.creation.cylinder(radius=5.0, height=10.0, sections=48)))
+    forget_cache()
+
+
+def forget_worker_body() -> None:
+    """Der Arbeiter lässt Körper und Gemerktes los, wenn die Erkennung fertig ist (RM-637)."""
+    _WORKER_BODY[0] = None
+    forget_cache()
+
+
+def _pieces_ahead(
+    state: _Round,
+    body: trimesh.Trimesh,
+    mesh: MeshData,
+    patch: list[int],
+    pieces: list[list[int]],
+    skin: bool,
+    splits: dict[tuple[int, ...], list[list[int]]],
+) -> None:
+    """Was die Stückrunde von :func:`_fitted` an einem ungelösten Fleck fragt, im Gedächtnis.
+
+    Die Stücke eines geteilten Flecks, dann die sechste Runde (``divided``): die
+    tangentiale Trennung der Reste oder des ganzen Flecks und ``classify`` an
+    ihren Stücken und gezogenen Ketten. Ob die dritte bis fünfte Runde den Fleck
+    vorher schon erklären, weiß der Arbeiter nicht — er fragt die sechste auf
+    Vorrat; was die Runde nicht braucht, bleibt ungelesen.
+    """
+    split_apart = len(pieces) > 1
+    classified = [state.classify(piece) for piece in pieces] if split_apart else []
+    if skin:
+        return
+    if split_apart and any(classified):
+        targets = [piece for piece, known in zip(pieces, classified, strict=True) if not known]
+    else:
+        targets = [patch]
+    for target in targets:
+        split = _tangential_pieces(body, mesh, target)
+        splits[tuple(target)] = split
+        if not split:
+            continue
+        marks = len(state.found)
+        for piece in split:
+            state.classify(piece)
+        here = {id(piece): fit for fit, piece in state.found[marks:]}
+        for chain in _drawn_chains(
+            _touching_pieces(body, split), [here.get(id(piece)) for piece in split]
+        ):
+            (joined,) = in_body_order(
+                body, [[index for number in chain for index in split[number]]]
+            )
+            state.classify(joined)
+
+
 def _fitted(
     mesh: MeshData,
     *,
@@ -2709,10 +3246,6 @@ def _fitted(
         if not curved:
             return Fitted([], [], [], [], [], [], [])
 
-        found: Cylinders = []
-        cones: Cones = []
-        spheres: Spheres = []
-        tori = _TorusCandidates(len(body.faces))
         stadiums: Stadiums = []
         flat: list[tuple[int, ...]] = []
         areas = np.asarray(body.area_faces, dtype=float)
@@ -2725,176 +3258,14 @@ def _fitted(
         #: an ihnen fragt :func:`_between_corners_of`, ob ein Nachbarfleck
         #: dazugehört (RM-254).
         wandering = np.zeros(len(body.faces), dtype=bool)
-        #: Kennzahlen von Flecken, an denen der Kegel nichts hergab. Wer
-        #: deckungsgleich zu einem davon ist, bekommt dieselbe leere Antwort,
-        #: ohne dass der Löser noch einmal hundert Auswertungen dafür braucht
-        #: (:func:`_rigid_key`).
-        no_cone_here: set[tuple[Any, ...]] = set()
 
-        def classify_read(patch: list[int]) -> bool:
-            """Die erste Form, die auf diesen Fleck passt — oder keine (gerechnet)."""
-            ball: SphereFit | None = None
-            # Ein bis zur Geometriegenauigkeit belegter Zylinder braucht keinen
-            # konkurrierenden Kegellauf. Bei einer nur angenäherten Zylinderhaut
-            # wird der Kegel weiterhin gefragt: Eine kurze, flache Verjüngung
-            # kann innerhalb der Wandtoleranz auch auf einen Zylinder passen.
-            fit = fit_cylinder(body, patch, check_cancelled=check_cancelled)
-            if check_cancelled is not None:
-                check_cancelled()
-            cylinder = (
-                fit if fit is not None and fit.good and _fits_in_the_body(mesh, fit) else None
-            )
-            if cylinder is not None and _cylinder_precludes_a_cone(body, cylinder, patch):
-                found.append((cylinder, patch))
-                return True
-            #
-            # **Ein Muster fragt dieselbe Frage hundertfach.** Die Streben eines
-            # Gitters sind deckungsgleich, und ein Kegelwinkel ändert sich unter
-            # einer starren Bewegung nicht: Wo der Kegel schon an einem
-            # deckungsgleichen Fleck nichts hergab, gibt er auch hier nichts her.
-            # Geteilt wird nur dieses Nein — ein gefundener Kegel wird weiterhin
-            # einzeln gerechnet, denn seine Achse und seine Spitze liegen woanders.
-            # An der Kumiko-Schale sind 1 325 der 1 990 Kegelfits Wiederholungen
-            # und kosten 7,71 der 21,66 Sekunden (22.09.2026).
-            shape = _rigid_key(body, patch)
-            if shape is not None and shape in no_cone_here:
-                cone = None
-            else:
-                cone = fit_cone(body, patch, check_cancelled=check_cancelled)
-                if cone is None and shape is not None:
-                    no_cone_here.add(shape)
-            if check_cancelled is not None:
-                check_cancelled()
-            if (
-                cone is not None
-                and cone.half_angle >= CONE_MIN_ANGLE
-                and cone.good
-                and _cone_is_recognisable(body, cone, patch, check_cancelled=check_cancelled)
-            ):
-                ball = fit_sphere(body, patch, check_cancelled=check_cancelled)
-                if check_cancelled is not None:
-                    check_cancelled()
-                if not _a_ball_fits_far_better(cone, ball):
-                    # Beide vollständigen Nachweise lesen dieselbe Originalhaut.
-                    # Ein zusätzlicher Freiheitsgrad verdrängt den Zylinder nur,
-                    # wenn der Kegel diese Haut mindestens ebenso genau trifft.
-                    if (
-                        cylinder is not None
-                        and cylinder.fit_error is not None
-                        and cone.fit_error is not None
-                        and cylinder.fit_error < cone.fit_error
-                    ):
-                        found.append((cylinder, patch))
-                    else:
-                        cones.append((cone, patch))
-                    return True
-            if cylinder is not None:
-                found.append((cylinder, patch))
-                return True
-            # **Erst hier, und das ist die halbe Antwort auf §41.** Kugel und Torus
-            # werden gefragt, nachdem Zylinder und Kegel abgelehnt haben — nicht
-            # daneben. Eine Senkung passt auf eine Kugel besser, als man denkt
-            # (Rückstand 0,054), und ein `hole_1`, das plötzlich `sphere_1` hieße,
-            # wäre für jede Bohrungs-Operation unsichtbar. Die andere Hälfte der
-            # Antwort ist ``ROUND_TOLERANCE``.
-            if ball is None:
-                ball = fit_sphere(body, patch, check_cancelled=check_cancelled)
-            if check_cancelled is not None:
-                check_cancelled()
-            if ball is not None and ball.good:
-                spheres.append((ball, patch))
-                if _sphere_is_recognisable(body, ball, patch, check_cancelled=check_cancelled):
-                    return True
-            ring = fit_torus(body, patch, check_cancelled=check_cancelled)
-            if check_cancelled is not None:
-                check_cancelled()
-            if ring is not None and ring.good:
-                tori.append((ring, patch))
-                # Ein algebraisch passender Ring ist erst mit passenden Normalen
-                # ein Treffer. Sonst muss die Nachtrennung seine Zylinderwand
-                # noch finden können. Der Kandidat bleibt für die Freiformauskunft.
-                return _torus_is_recognisable(body, ring, patch, check_cancelled=check_cancelled)
-            # Ein nur algebraisch passender, örtlich unbestimmter Kandidat
-            # bleibt Diagnose. Er darf die Suche nach belegten Teilflächen
-            # (etwa einer Bohrung mit Rastnasen) nicht als Treffer beenden.
-            return False
-
-        extents = np.asarray(body.extents, dtype=float)
-        diagonal = math.sqrt(float((extents * extents).sum()))
-        closed = bool(body.is_watertight)
-        consistent = bool(body.is_winding_consistent)
-
-        def classify(patch: list[int]) -> bool:
-            """Die erste Form, die auf diesen Fleck passt — oder keine.
-
-            **Auch aus dem Gedächtnis eines früheren Körpers** (RM-592, G2): Was
-            :func:`classify_read` liest, steht im Fleckabdruck (Lesung, Normalen,
-            Ursprung), in der Diagonale, aus der die Toleranzen der Einpassungen
-            kommen, und im Zustand der Runde — ob ein deckungsgleicher Fleck schon
-            keinen Kegel hatte (``no_cone_here``). Die Hülle des Körpers fragt ein
-            Treffer neu (:data:`_HULL_QUESTIONS`). Gemerkt werden Antwort, Fits und
-            ob der Fleck ``no_cone_here`` ergänzte; ein Treffer trägt sie in die
-            Listen dieser Runde ein wie die Rechnung.
-            """
-            if check_cancelled is not None:
-                check_cancelled()
-            if _face_count(body, patch) < MIN_PATCH_FACES:
-                return False
-            if not _ACROSS_BODIES[0] or not _worth_remembering(body, patch):
-                return classify_read(patch)
-            shape = _rigid_key(body, patch)
-            known_shape = shape is not None and shape in no_cone_here
-            # Die Körperzahlen der Lesung dazu (:func:`_support_handle`): Ohne
-            # sie gab ein Körper mit Loch im Netz die Fits des dichten zurück,
-            # in der letzten Stelle anders (Messbank A1, P5).
-            key = hashlib.blake2b(
-                _patch_print(body, patch)
-                + _body_numbers(
-                    diagonale=diagonal,
-                    dicht=closed,
-                    umlauf=consistent,
-                    deckungsgleich=_coincident_vertices(body),
-                )
-                + _exact_bytes(("runde" in _LEFT_OUT or known_shape, _classify_settings())),
-                digest_size=16,
-            ).digest()
-            known = _known_across(_CLASSIFIED, body, key)
-            if known is not _UNKNOWN:
-                answer, cylinders, kegel, balls, rings, added, asked = known
-                if "rueckfrage" in _LEFT_OUT or all(
-                    _cylinder_fits(mesh, axis, radius) == fits for axis, radius, fits in asked
-                ):
-                    found.extend((fit, patch) for fit in cylinders)
-                    cones.extend((fit, patch) for fit in kegel)
-                    spheres.extend((fit, patch) for fit in balls)
-                    for ring in rings:
-                        tori.append((ring, patch))
-                    if added and shape is not None:
-                        no_cone_here.add(shape)
-                    return bool(answer)
-            marks = (len(found), len(cones), len(spheres), len(tori.entries))
-            questions: list[tuple[tuple[float, ...], float, bool]] = []
-            asking = _HULL_QUESTIONS.set(questions)
-            try:
-                answer = classify_read(patch)
-            finally:
-                _HULL_QUESTIONS.reset(asking)
-            added = not known_shape and shape is not None and shape in no_cone_here
-            _keep_across(
-                _CLASSIFIED,
-                body,
-                key,
-                (
-                    answer,
-                    tuple(fit for fit, _patch in found[marks[0] :]),
-                    tuple(fit for fit, _patch in cones[marks[1] :]),
-                    tuple(fit for fit, _patch in spheres[marks[2] :]),
-                    tuple(fit for fit, _patch in tori.entries[marks[3] :]),
-                    added,
-                    tuple(questions),
-                ),
-            )
-            return answer
+        ahead: dict[bytes, Any] = {}
+        ahead_split: dict[bytes, Any] = {}
+        split_targets: dict[tuple[int, ...], list[list[int]]] = {}
+        state = _round(body, mesh, check_cancelled, ahead=ahead)
+        found, cones, spheres, tori = state.found, state.cones, state.spheres, state.tori
+        no_cone_here = state.no_cone_here
+        classify = state.classify
 
         # **Nach Größe gefragt, nicht nach der Lage** (RM-210): Die Folge der
         # Flecken entscheidet, welcher von zwei deckungsgleichen zuerst seinen
@@ -2922,14 +3293,35 @@ def _fitted(
         fitting = [patch for patch in patches if _face_count(body, patch) >= MIN_PATCH_FACES]
         whole_weight = sum(_fit_weight(patch) for patch in fitting)
         weighed = 0.0
+        # Die Abdrücke aller Flecken in einem Zug: Arbeiter, Gedächtnis und
+        # Stapel fragen nach ihnen.
+        _patch_prints(body, fitting)
+        # **Arbeiter rechnen vor, was ``classify`` gleich der Reihe nach fragt**
+        # (RM-637): dieselben Fragen unter demselben Schlüssel, an Kopien des
+        # Körpers. Die Runde läuft danach unverändert und findet sie dort.
+        workers = parallel.worthwhile(len(body.faces), len(fitting)) > 0
+        if workers:
+            unanswered = [patch for patch in fitting if not state.answered(patch)]
+            asked = _asked_by_workers(
+                body,
+                "classify",
+                unanswered,
+                [_fit_weight(patch) for patch in unanswered],
+                no_cone_here,
+                check_cancelled,
+                whole.part(0.0, AHEAD_SHARE),
+            )
+            ahead.update(asked.get(_CLASSIFIED, {}))
+            whole = whole.part(AHEAD_SHARE, 1.0)
+        looping = whole.part(SCREEN_SHARE, 1.0)
         # **Erst der Stapel, dann die Flecken der Reihe nach** (RM-209): Er sagt
         # für alle zugleich, welcher Kegel- und Ringlauf sicher vergeblich
         # wäre; ``classify`` fragt danach wie immer, und nur diese Läufe
-        # entfallen (:func:`_screened_fits`).
-        looping = whole.part(SCREEN_SHARE, 1.0)
+        # entfallen (:func:`_screened_fits`). Was das Gedächtnis schon
+        # beantwortet, kommt nicht hinein (``_Round.answered``).
         with _screening(
             body,
-            fitting,
+            [patch for patch in fitting if not state.answered(patch)],
             shapes=no_cone_here,
             check_cancelled=check_cancelled,
             share=whole.part(0.0, SCREEN_SHARE),
@@ -3034,7 +3426,9 @@ def _fitted(
             Ringkandidaten des Ziels und, war das Ziel der ganze Fleck, die
             seiner Nachtrennungsstücke ``inside``.
             """
-            pieces = _tangential_pieces(body, mesh, target, check_cancelled)
+            pieces = _tangential_pieces(
+                body, mesh, target, check_cancelled, ahead=ahead_split, done=split_targets
+            )
             if not pieces:
                 return []
             marks = (len(found), len(cones), len(spheres))
@@ -3117,9 +3511,43 @@ def _fitted(
             for piece in pieces
             if heavy(piece) or not freeform_skin
         ]
+        _patch_prints(body, asked_pieces)
+        if workers and unresolved:
+            # Die Stücke jedes ungelösten Flecks und die sechste Runde dahinter
+            # bei den Arbeitern (RM-637, :func:`_pieces_ahead`).
+            units = [
+                (
+                    tuple(patches[patch_index]),
+                    tuple(
+                        tuple(piece)
+                        for piece in ordered_pieces[patch_index]
+                        if len(ordered_pieces[patch_index]) <= 1
+                        or heavy(piece)
+                        or not freeform_skin
+                    ),
+                )
+                for patch_index in unresolved
+            ]
+            asked = _asked_by_workers(
+                body,
+                "pieces",
+                units,
+                [
+                    _fit_weight(list(patch)) + sum(map(_fit_weight, pieces))
+                    for patch, pieces in units
+                ],
+                no_cone_here,
+                check_cancelled,
+                by_piece.part(0.0, AHEAD_SHARE),
+                skin=freeform_skin,
+            )
+            ahead.update(asked.get(_CLASSIFIED, {}))
+            ahead_split.update(asked.get(_TANGENTIAL, {}))
+            split_targets.update(asked.get(_SPLIT_TARGETS, {}))
+            by_piece = by_piece.part(AHEAD_SHARE, 1.0)
         piece_screening = _screening(
             body,
-            asked_pieces,
+            [piece for piece in asked_pieces if not state.answered(piece)],
             shapes=no_cone_here,
             check_cancelled=check_cancelled,
             share=by_piece.part(0.0, SCREEN_SHARE),
@@ -6621,11 +7049,25 @@ def _large_facet_faces_read(
     ]
     # Der Mantelnachweis fragt je Fleck Kegel und Ring; welcher Lauf sicher
     # vergeblich wäre, sagt der Stapel vorher für alle (RM-209).
+    asked_patches = [patch for patch, asked in zip(patches, proven, strict=True) if asked]
+    if parallel.worthwhile(len(body.faces), len(asked_patches)):
+        # Die Mantelnachweise bei den Arbeitern (RM-637): Ihre Fits und Nachweise
+        # liegen danach im Gedächtnis, der Nachweis hier liest sie dort.
+        _asked_by_workers(
+            body,
+            "surfaces",
+            asked_patches,
+            [_fit_weight(patch) for patch in asked_patches],
+            set(),
+            check_cancelled,
+            proofs.part(0.0, AHEAD_SHARE),
+        )
+        proofs = proofs.part(AHEAD_SHARE, 1.0)
     screening = proofs.part(0.0, SCREEN_SHARE)
     proofs = proofs.part(SCREEN_SHARE, 1.0)
     with _screening(
         body,
-        [patch for patch, asked in zip(patches, proven, strict=True) if asked],
+        asked_patches,
         check_cancelled=check_cancelled,
         share=screening,
     ):
@@ -9282,6 +9724,11 @@ def _patch_key(patch: Sequence[int]) -> bytes:
 #: Meshy-Murmelbrett und an der Kumiko-Schale — nur fürs Anzeigen, keine Toleranz.
 SCREEN_SHARE: Final = 0.2
 
+#: Welcher Anteil einer Runde am Balken auf die Arbeiter entfällt, wenn sie
+#: vorrechnen (RM-637): Danach findet die Runde fast jede Antwort im
+#: Gedächtnis. Nur fürs Anzeigen.
+AHEAD_SHARE: Final = 0.8
+
 
 def _screened_fits(
     body: trimesh.Trimesh,
@@ -11887,6 +12334,9 @@ def _tangential_pieces(
     mesh: MeshData,
     patch: Sequence[int],
     check_cancelled: Callable[[], None] | None = None,
+    *,
+    ahead: Mapping[bytes, Any] | None = None,
+    done: Mapping[tuple[int, ...], list[list[int]]] | None = None,
 ) -> list[list[int]]:
     """Die tangentiale Trennung eines Ziels — auch aus dem Gedächtnis eines früheren Körpers.
 
@@ -11904,6 +12354,13 @@ def _tangential_pieces(
     Liest die Rechnung über den Ring hinaus — schließt :func:`_without_notches`
     eine Kerbe mit Dreiecken außerhalb —, wird nichts gemerkt.
     """
+    if done:
+        # Ein Arbeiter hat dieses Ziel an einer Kopie desselben Körpers schon
+        # getrennt (RM-637, :func:`_pieces_ahead`): dieselbe Rechnung, dieselbe Antwort.
+        split = done.get(tuple(patch))
+        if split is not None:
+            parallel.count("used")
+            return [list(piece) for piece in split]
     if (
         not _ACROSS_BODIES[0]
         or _face_count(body, patch) < 2 * MIN_PATCH_FACES
@@ -11922,6 +12379,12 @@ def _tangential_pieces(
     ).digest()
     given = np.asarray(list(patch), dtype=np.int64)
     known = _known_across(_TANGENTIAL, body, key)
+    if known is _UNKNOWN and ahead:
+        # Vorab gerechnet von einem Arbeiter (RM-637, :func:`_pieces_ahead`).
+        known = ahead.get(key, _UNKNOWN)
+        if known is not _UNKNOWN:
+            _keep_across(_TANGENTIAL, body, key, known)
+            parallel.count("used")
     if known is not _UNKNOWN:
         places, asked = known
         if "rueckfrage" in _LEFT_OUT or all(

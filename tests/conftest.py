@@ -557,6 +557,21 @@ def _the_calendar_stays_out_of_it(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(activation_store, "TRIAL_FROM", activation_store.DEMO_FROM)
 
 
+@pytest.fixture(autouse=True)
+def _perceive_workers_stay_out_of_it(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Die Arbeiter der Erkennung (RM-637) rechnen nur in ihren eigenen Tests.
+
+    Ein Körper ab ``PARALLEL_FROM_TRIANGLES`` Dreiecken startete sonst in jedem
+    Testprozess bis zu acht Arbeiter, und die Suite liefe neben ihren eigenen
+    Prozessen. Ihr Ergebnis ist Bit für Bit das des einen Prozesses; das prüft
+    ``test_perceive_workers.py``, das sie ausdrücklich einschaltet.
+    """
+    from app.core.perceive import parallel
+
+    monkeypatch.setattr(parallel, "_ENABLED", [False])
+    monkeypatch.setattr(parallel, "_FORCED", [None])
+
+
 @pytest.fixture
 def shipped_demo_until() -> object:
     """Der Stichtag, mit dem tatsächlich ausgeliefert wird — oder ``None``."""
@@ -702,6 +717,13 @@ def _remembered_features_stay_out_of_it() -> None:
     matching.forget_matches()
     # Über das Modul: ``app.core.scene.evaluate`` ist im Paket die Funktion.
     importlib.import_module("app.core.scene.evaluate").forget_remembered_steps()
+    # Und die Erkennungen im Plattencache (RM-695): Sie überlebten den Test wie
+    # einen Neustart, und ein Ladeweg, der erst das Bild und dann die Erkennung
+    # zeigen soll, fände sie schon fertig vor.
+    from app.core.paths import results_cache_dir
+
+    for stored in results_cache_dir().glob("*/detection-*"):
+        shutil.rmtree(stored, ignore_errors=True)
 
 
 @pytest.fixture(autouse=True)

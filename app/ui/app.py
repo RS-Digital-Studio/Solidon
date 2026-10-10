@@ -688,9 +688,18 @@ def main(argv: list[str] | None = None) -> int:
     # Windows beendet ihn zusätzlich das Jobobjekt, falls dieser Prozess ohne
     # ``aboutToQuit`` endet.
     application.aboutToQuit.connect(kernel_process.shutdown)
+    # Ebenso die Arbeiter der Erkennung (RM-637) — nur, wenn es sie gab.
+    application.aboutToQuit.connect(_stop_perceive_workers)
 
     _log.info("%s %s started", APP_NAME, APP_VERSION)
     return int(application.exec())
+
+
+def _stop_perceive_workers() -> None:
+    """Beendet die Arbeiter der Erkennung, ohne ihr Modul beim Start zu laden."""
+    workers = sys.modules.get("app.core.perceive.parallel")
+    if workers is not None:
+        workers.shutdown()
 
 
 if __name__ == "__main__":

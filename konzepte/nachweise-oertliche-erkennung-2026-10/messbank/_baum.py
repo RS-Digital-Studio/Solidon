@@ -40,6 +40,14 @@ def setup(tree: str | Path) -> Path:
     where = Path(app.__file__).resolve()
     if root not in where.parents:
         raise SystemExit(f"app kommt nicht aus {root}: {where}")
+    # Die Arbeiter der Erkennung (RM-637) nur auf Verlangen: Die Messbank misst
+    # sonst die CPU-Zeit eines Prozesses, und die verteilte Arbeit fehlte darin.
+    try:
+        from app.core.perceive import parallel
+    except ImportError:
+        pass
+    else:
+        parallel.use_workers(os.environ.get("MESSBANK_ARBEITER") == "1")
     if os.environ.get("MESSBANK_VORRANG") == "1" and os.name == "nt":
         # Unter fremder Volllast einen ruhigen Rechner nachbilden: Die Messung
         # bekommt ihre Kerne, die CPU-Zeit streut weniger (wie RM-496/RM-672).

@@ -254,7 +254,7 @@ def fresh_detection(mesh: MeshData) -> dict[str, Any]:
         )
     )
     shipped_cached = feats._cached_detection
-    feats._cached_detection = lambda key: None
+    feats._cached_detection = lambda key, store=None: None
     switch = getattr(feats, "remember_across_bodies", None)
     shipped_geometry = feats._by_geometry
     shipped_answered = feats._answered_by_geometry

@@ -57,12 +57,15 @@ def main() -> None:
                 meshes = [normalise(read_mesh(model.read_bytes(), model.suffix.lower()), "mm").mesh]
             digest = hashlib.blake2b(digest_size=12)
             spent = 0.0
+            wall = 0.0
             count = 0
             for mesh in meshes:
                 feats.forget_cache()
                 started = time.process_time()
+                clock = time.perf_counter()
                 found = feats.detect(mesh)
                 spent += time.process_time() - started
+                wall += time.perf_counter() - clock
                 count += len(found)
                 rows = [[key, exact(feature_to_data(found[key]))] for key in sorted(found)]
                 digest.update(json.dumps(rows, sort_keys=True, default=repr).encode("utf-8"))
@@ -70,6 +73,8 @@ def main() -> None:
                 "modell": model.name,
                 "baum": TREE.name,
                 "cpu": round(spent, 3),
+                "wand": round(wall, 3),
+                "arbeiter": os.environ.get("MESSBANK_ARBEITER") == "1",
                 "merkmale": count,
                 "koerper": len(meshes),
                 "abdruck": digest.hexdigest(),

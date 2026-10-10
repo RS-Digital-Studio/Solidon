@@ -235,6 +235,24 @@ Nur `refine.exhausted` lässt einen Kegel- oder Ringlauf aus, kein Sieb aus
 Fleckmerkmalen. Seine Residuen folgen `_cone_from_plan`/`_torus_from_plan`
 (`tests/test_refine.py`).
 
+## Arbeiter rechnen vor, die Erkennung entscheidet
+
+Die Arbeiter (`perceive/parallel.py`, RM-637) liefern nur Antworten unter dem
+vollen Schlüssel, unter dem die Runde sonst im Gedächtnis sucht; die Runde
+läuft unverändert und rechnet, was fehlt — so bleibt das Ergebnis Bit für Bit
+das des einen Prozesses. Ohne Schlüssel gilt eine Antwort nur am vorbereiteten
+Körper desselben Abdrucks (`_SPLIT_TARGETS`).
+
+- Gerechnet wird nur am Körper, den `detect` vorbereitet hat
+  (`parallel.prepared`); seine Felder (`_worker_arrays`) tragen alles, woraus
+  ein Abdruck entsteht — ein neues mitgetragenes Maß kommt dorthin.
+- Eine neue Runde für die Arbeiter ist eine Art in `answered_ahead` und bekommt
+  in `tests/test_perceive_workers.py` den Gleichheitsfall samt weniger eigener
+  Rechnungen.
+- Suite und Messbank rechnen ohne Arbeiter, außer auf Verlangen
+  (`tests/conftest.py`, `MESSBANK_ARBEITER=1`): Gemessen wird sonst die
+  CPU-Zeit eines Prozesses.
+
 ## Auf einer Freiform sind Kugel, Ring, Kegel und Verrundung keine Merkmale
 
 `features.is_a_freeform` urteilt an der fertigen Liste

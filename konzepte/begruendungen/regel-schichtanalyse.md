@@ -626,6 +626,31 @@ Problemen; darunter rechnet der echte Löser (`MIN_BATCH`). Große Flecken mit
 Tausenden Stützpunkten spart der Stapel nicht: Dort ist die Rechnung, nicht der
 Aufruf, das Teure.
 
+## Arbeiter rechnen vor, die Erkennung entscheidet
+
+Roberts Freigabe für RM-637 (09.10.2026): die Erkennung auf mehrere Prozesse
+verteilen, mit gleichem Ergebnis. Der Weg nutzt das Gedächtnis je Fleck aus
+RM-592: Was eine Runde fragt, steht dort schon unter einem Schlüssel, der alles
+nennt, was die Antwort liest. Rechnet ein Arbeiter dieselbe Frage an einer
+Kopie des Körpers, ist seine Antwort die des Hauptprozesses — dasselbe
+Argument, das das Gedächtnis über die Körpergrenze trägt, und dieselbe
+Gegenprobe (Messbank A1, `test_perceive_workers.py`). Eine eigene,
+nebenläufige Fassung der Runden hätte dagegen eine zweite Rechnung gebraucht,
+die mit der ersten Schritt halten muss.
+
+Drei Runden gehen an die Arbeiter: der Mantelnachweis der Ebenenregel, die
+ganzen Flecken und die Stücke samt tangentialer Trennung. Was am ganzen Körper
+hängt (Facettenurteil, Langlöcher, Bohrungen, Wendeln), bleibt im Prozess. Die
+Arbeiter bauen ihre Kopie, während der Prozess noch Ebenen sucht, und laden
+ihre Bibliotheken vorab: Sonst wartete die erste Runde am Ständer 1,6 s auf
+das Nachladen. Gemessen mit stehenden Arbeitern (acht, i9-13900K, Vorrang,
+10.10.2026): Ständer 14,6 → 9,8 s, Eiffelturm 32,4 → 18,1 s Wanduhr, Merkmale
+Bit für Bit gleich. Der schwerste Fleck bestimmt die letzte Runde; deshalb
+gehen die Stücke einzeln und der schwerste zuerst.
+
+Die Messbank rechnet ohne Arbeiter: A4 und A5 messen die CPU-Zeit eines
+Prozesses, und die verteilte Arbeit fehlte darin.
+
 ## Auf einer Freiform sind Kugel, Ring, Kegel und Verrundung keine Merkmale
 
 *Ursprüngliche Überschrift: „Auf einer Freiform sind Kugel, Ring, Kegel und
