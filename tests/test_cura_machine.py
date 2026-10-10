@@ -1476,6 +1476,51 @@ def test_cura_window_and_cli_use_the_same_native_jerk(
     )
 
 
+def test_the_cura_window_leaves_foot_and_holes_to_the_active_machine(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Review RM-589, S1b: Curas Druckerdefinitionen und Qualitätsstufen setzen
+    ``xy_offset_layer_0`` und ``hole_xy_offset`` für 75 Drucker (AnkerMake M5
+    0,2 mm Lochausgleich, VzBot −0,3 mm Einzug). Das importierte Profil
+    überschriebe sie; es nennt beide deshalb nur als eigene Wahl, wie die
+    Lüfterkurve (RM-228)."""
+    import configparser
+    import zipfile
+
+    engine = cura_installation(tmp_path)
+    definition = engine.parent / "share/cura/resources/definitions/creality_k1max.def.json"
+    monkeypatch.setattr(
+        slicer_profiles,
+        "cura_active_machine",
+        lambda _exe: slicer_profiles.CuraActiveMachine("Werkstatt", definition),
+    )
+    monkeypatch.setattr(slicer_profiles, "chosen_machine", lambda *_args: "")
+    monkeypatch.setattr(
+        slicer_profiles, "cura_quality_types", lambda *_args, **_kwargs: {"draft": 0.2}
+    )
+    profile = profiles.make_profile("creality-k1-max", "petg")
+    setup = handover.SlicerSetup(engine, "cura")
+    model = tmp_path / "part.3mf"
+
+    def window(settings: print_settings.PrintSettings) -> dict[str, str]:
+        handover.cura_profile_beside(model, settings, profile, setup)
+        with zipfile.ZipFile(model.with_suffix(".curaprofile")) as archive:
+            parser = configparser.ConfigParser(interpolation=None)
+            parser.read_string(archive.read("solidon").decode("utf-8"))
+        return dict(parser["values"])
+
+    resolved = print_settings.resolve(profile)
+    untouched = window(resolved)
+    assert "xy_offset_layer_0" not in untouched
+    assert "hole_xy_offset" not in untouched
+
+    chosen = print_settings.with_choice(resolved, "layers.elephant_foot", 0.15)
+    chosen = print_settings.with_choice(chosen, "shell.hole_offset", 0.05)
+    written = window(chosen)
+    assert float(written["xy_offset_layer_0"]) == pytest.approx(-0.15)
+    assert float(written["hole_xy_offset"]) == pytest.approx(0.05)
+
+
 @pytest.mark.parametrize("value", [-1, float("nan"), float("inf"), True, None, "broken"])
 def test_invalid_native_jerk_is_not_sent_to_cura(tmp_path: Path, value: object) -> None:
     engine = cura_installation(tmp_path)

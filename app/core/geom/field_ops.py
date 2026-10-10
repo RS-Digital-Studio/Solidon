@@ -40,6 +40,11 @@ from app.i18n import TranslatableText, _
 
 MAX_FIELD_TOOLS: Final = 4096
 
+#: Die Öffnungsformen, die *Materialtoleranz berücksichtigen* um die
+#: Lochkorrektur weitet; ein Sechseck behält sein Eckmaß. Eine Quelle für
+#: Haken, Schnitt und Druckrat (``scene.fits``, RM-589).
+COMPENSATED_SHAPES: Final[tuple[str, ...]] = ("circle", "slot")
+
 
 def _invalid(detail: TranslatableText) -> ValidationError:
     return ValidationError(field="spacing", constraint="field_layout", detail=detail)
@@ -341,7 +346,7 @@ class FieldCutParams(BaseParams):
         title=_("Materialtoleranz berücksichtigen"),
         default=False,
         placement="advanced",
-        depends_on=("shape", ("circle", "slot")),
+        depends_on=("shape", COMPENSATED_SHAPES),
         doc=_(
             "Vergrößert Lochmaß und Langlochlänge um dieselbe Materialzugabe wie beim Bohren. "
             "Sechseckige Öffnungen behalten ihr Eckmaß."
@@ -398,7 +403,7 @@ def field_cut(ctx: OpContext) -> OpResult:
         exclusions = regions_of(_solved_drawing(ctx, params.exclusion_sketch, findings))
     profile = for_object(ctx.profile, ctx.inputs[0]) if ctx.profile is not None else None
     diameter = params.diameter
-    compensate = params.compensate and params.shape in ("circle", "slot")
+    compensate = params.compensate and params.shape in COMPENSATED_SHAPES
     if compensate:
         if profile is None:
             raise ValidationError(

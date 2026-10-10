@@ -158,6 +158,35 @@ offenem Drucker. Übernommen wird auf Klick, nie von allein.
   `separate`); gegen die Übernahme gefragt, kam jede Zeile mit ihrer
   Gegenzeile wieder. Die Zeile nennt nur Teile mit ihrem Wert. Übergabe:
   `dateiformat.md`.
+- **Was das Modell schon ausgleicht, gleicht der Slicer nicht noch einmal aus**
+  (`_from_allowances`, RM-589): Legt ein Schritt des Körpers Spiel in eine
+  Innenkontur (`scene.fits.allowances_for`, `"holes"`), heißt der Vorschlag
+  *Löcher weiten* null; zieht *Elefantenfuß ausgleichen* seine ersten
+  Schichten ein (`"foot"`), *Erste Schicht einziehen* null — je Teil, nur wo
+  der Slicer ausgleicht. Gefragt wird am fertigen Körper, Herkunft je
+  Körperkennung (`fits._producing`; über alle Eingänge erbte nach *Anordnen*
+  jeder Körper den Ausgleich seiner Nachbarn): ein Innenmerkmal, das der
+  Slicer in einer Schicht geschlossen sieht (`_closes_in_a_layer`: der tiefste
+  Punkt des oberen Mantelrands über dem höchsten des unteren, ohne zwei Ränder
+  `L·cos θ > d·sin θ` — eine waagerechte Bohrung weitet er nicht, eine
+  senkrechte durch eine schräge dünne Platte auch nicht), gemacht von einem
+  Schritt mit Spiel oder Lochkorrektur (`_puts_allowance_into`); die Taschen
+  von *Gegenform einlassen* über Entnahmerichtung und Rahmen. **Der Fuß zählt
+  nur, wo das eingezogene Band am Bett liegt** (`_foot_on_the_bed`): Rahmen-Z
+  nach oben, mit Vorzeichen, der Schritt auf der eigenen Linie des Körpers
+  oder einer reinen Kopie (`COPY_OPS`), und am fertigen Körper ist das Band
+  unten noch eingezogen (`_band_drawn_in`, zwei Schnitte) — nicht nach Kippen,
+  Wenden, Abschneiden oder Abziehen unten, an einer Teilhälfte oder am Deckel;
+  im Zweifel behält der Slicer seinen Einzug. Eine nur
+  eingetragene Passung ändert keine Geometrie und zählt nicht, ein Stift,
+  Haken oder Bolzen auch nicht.
+  **Ein gemessener Wert bekommt keinen Vorschlag**: Sein Prüfkörper ging
+  durch den Slicer mit dessen Ausgleich, gemessen ist der Rest dahinter. Das
+  gilt je Wert (`MaterialProfile.measured`, Fuß `elephant_foot`, Löcher erst
+  mit `clearance` und `hole_compensation`); ein Startwert meint den ganzen
+  Ausgleich und bekommt ihn. Der Kalibrierdialog schreibt nur eingetragene
+  Felder als gemessen.
+  Übergabe (eigener Satz nur auf Wahl, Brim am Fuß): `dateiformat.md`.
 - **Die kleine Standfläche wird auch je Fuß gefragt** (`advise._on_small_feet`):
   Erreicht keine von mehreren Inseln `SMALL_FOOTPRINT`, heißt es Brim — nur
   als Vorschlag. `for_part` fragt mit Profil jede Regel für `PART_PATHS`;

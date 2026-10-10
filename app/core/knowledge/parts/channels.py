@@ -376,6 +376,7 @@ RAMP_EDGE_SHARE: Final = 1.0 / 3.0
 
 @register_part(
     name="channel_joint",
+    play_inside=True,
     title=_("Kanalnaht"),
     group="routing",
     params=ChannelJointParams,
