@@ -2914,7 +2914,10 @@ def test_a_round_arch_carries_itself_at_any_layer_height_and_angle(
     assert arches, "die Streifen sind Bogenstreifen"
     assert not {name for name in arches if name[0] == top}, "die letzte Spanne zählt"
     assert hanging_vaults(result) <= arches
-    assert largest_sloped_patch(result, without=arches) <= OVERHANG_LAYER_WORTH_SUPPORT
+    last = max(piece_area(piece) for piece in result.layers[top].overhangs)
+    assert largest_sloped_patch(result, without=arches) == pytest.approx(last), (
+        "jeder Streifen trägt sich, auch der Scheitel; es bleibt die letzte Spanne"
+    )
     assert "slice.long_bridge" not in {
         entry.code for entry in advise.located_warnings(result, petg())
     }, "keine Decke über die Wandtiefe"
@@ -2976,6 +2979,20 @@ def test_a_flat_arch_over_the_model_is_no_channel() -> None:
     assert need.needed
     assert not need.model.channels
     assert channel_space(result, need.model, LINE) == []
+
+
+def test_a_flat_vault_over_an_enclosed_chamber_stays_a_channel() -> None:
+    """Die Gegenprobe zum flachen Bogen auf der Platte: Dieselbe Decke über einer
+    geschlossenen Kammer kragt nicht — jeder Streifen liegt zwischen Vorder- und
+    Rückwand der Kammer (``_Ceilings._held_twice``), und eine Stütze darin bekäme
+    man nicht mehr heraus (§22.2). Sie bleibt Kanaldecke (Review RM-585)."""
+    block = brick(50.0, 30.0, 30.0, (0.0, 0.0, 15.0))
+    chamber = cutter(segment(26.0, 1.5, legs=8.0), 6.0)
+    chamber.apply_translation((0.0, 0.0, 12.0))
+    body = place_on_bed(MeshData.of(trimesh.boolean.difference([block, chamber])))
+    result = slice_body(body, 0.2)
+
+    assert advise.support_need(result).model.channels
 
 
 def test_a_round_arch_over_the_model_stays_a_channel() -> None:

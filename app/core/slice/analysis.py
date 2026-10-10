@@ -3110,7 +3110,8 @@ def total_overhang(
     """Die Überhangfläche aller Schichten, in mm².
 
     ``without`` nennt Stücke (Schicht, Stück), die nicht zählen — die
-    Kanaldecken aus :func:`model_support` und die Ränder aus :func:`ledges`.
+    Kanaldecken aus :func:`model_support`, die Ränder aus :func:`ledges` und die
+    Bogenstreifen aus :func:`vaults`.
     """
     total = float(sum(layer.overhang_area for layer in result.layers))
     for index, number in without:
@@ -3156,7 +3157,8 @@ def largest_overhang_patch(
     der NumPy-Weg 287 ms je Vorschlagsrechnung, dieser 19.
 
     ``without`` nennt Stücke (Schicht, Stück), die nicht zählen — die
-    Kanaldecken aus :func:`model_support` und die Ränder aus :func:`ledges`.
+    Kanaldecken aus :func:`model_support`, die Ränder aus :func:`ledges` und die
+    Bogenstreifen aus :func:`vaults`.
     """
     largest = 0.0
     for index, layer in enumerate(result.layers):
@@ -3598,8 +3600,10 @@ class _Arch:
     """Davon die, die an einer Seite hängen (:func:`hanging_vaults`)."""
     overhanging: frozenset[tuple[int, int]]
     """Die Streifen eines Scheitels, der weiter kragt, als er sich trägt —
-    leer, wenn es keinen gibt. Dann schließt sich die Decke nur in einem
-    umschlossenen Kanal als Kanaldecke (:meth:`_Ceilings.enclosed`)."""
+    leer, wenn es keinen gibt. Dann schließt sich die Decke auch nicht als
+    Kanaldecke (:func:`_model_support`). In einer geschlossenen Kammer kommt
+    das nicht vor: Dort liegt jeder Streifen zwischen Wänden
+    (:meth:`_Ceilings._held_twice`)."""
 
 
 @dataclass(slots=True)
@@ -4184,9 +4188,9 @@ class _Ceilings:
           fast die ganze Decke.
 
         ``overhanging`` nennt die Streifen eines Scheitels, der weiter kragt,
-        als er sich trägt — dann ist die Decke nur in einem umschlossenen Kanal
-        eine Kanaldecke (:func:`_model_support`, der flache Bogen auf einer
-        auskragenden Platte, Review RM-585).
+        als er sich trägt — dann ist die Decke auch keine Kanaldecke
+        (:func:`_model_support`, der flache Bogen auf einer auskragenden Platte,
+        Review RM-585).
         """
         known = self._closing.arches
         if ceiling not in known:
@@ -4216,24 +4220,6 @@ class _Ceilings:
         return _Arch(
             strips=frozenset(carried), hanging=frozenset(hanging), overhanging=frozenset(crown)
         )
-
-    def enclosed(self, members: frozenset[tuple[int, int]]) -> bool:
-        """Liegt unter jedem dieser Stücke ein Raum, den das Material der
-        Schicht darunter ringsum umschließt (:func:`_enclosed`)?
-
-        Dort bekäme man eine Stütze nicht heraus (§22.2): Ein Kanal der
-        Waschschüssel steigt in Dateilage um 13°, jede Schicht legt eine Sichel
-        vor die vorige, und sein Scheitel kragt weiter, als er sich trägt — er
-        bleibt trotzdem Kanaldecke. Ein Bogen in einer Wand ist vorn und hinten
-        offen; unter ihm erreicht man die Stütze (Review RM-585).
-        """
-        holes: dict[int, Any] = {}
-        for index, number in sorted(members):
-            if index not in holes:
-                holes[index] = _enclosed(self._material(index - 1))
-            if not holes[index].contains(self.shape((index, number)).representative_point()):
-                return False
-        return True
 
     def _inside(self, members: list[tuple[int, int]], between: Any) -> list[tuple[int, int]]:
         """Die Stücke, die zu :data:`CEILING_SPANNED` in ``between`` liegen —
@@ -4691,7 +4677,7 @@ def _model_support(
         # als sie tragen, und die Sperre nahm ihnen die Stütze.
         whole = frozenset(names[member] for member in ceiling)
         arch = ceilings.arch(whole)
-        if arch is None or (arch.overhanging and not ceilings.enclosed(arch.overhanging)):
+        if arch is None or arch.overhanging:
             channels.difference_update(ceiling)
             continue
         # **Eine Sperre bekommt nur eine Decke, die ohne sich selbst zu

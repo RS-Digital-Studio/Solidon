@@ -818,16 +818,17 @@ class SupportNeed:
     """Höhen, auf denen eine Kontur in der Luft beginnt."""
     model: ModelSupport
     overhang: float
-    """Überhang in mm² ohne Kanaldecken und Ränder."""
+    """Überhang in mm² ohne Kanaldecken, Ränder und Bogenstreifen."""
     patch: float
     """Das größte Feld in mm²: das größte Stück oder eine schräge Decke als Feld,
-    ohne Kanaldecken und Ränder."""
+    ohne Kanaldecken, Ränder und Bogenstreifen."""
     piece: float = 0.0
-    """Das größte einzelne Stück in mm², ohne Kanaldecken und Ränder — über
+    """Das größte einzelne Stück in mm², ohne Kanaldecken, Ränder und Bogenstreifen — über
     ``OVERHANG_LAYER_WORTH_SUPPORT`` eine flache Decke."""
     quiet_layers: frozenset[int] = frozenset()
     """Schichten, deren Brücken nicht zählen: Ihr Überhang besteht ganz aus
-    Kanal- und Randstücken (:func:`_quiet_layers`)."""
+    Kanal- und Randstücken und Bogenstreifen, die an einer Seite hängen
+    (:func:`_quiet_layers`, :func:`hanging_vaults`)."""
     tips: int = 0
     """Inseln, deren Baumspitze keine Trennschicht bekommt (:func:`tip_islands`)."""
 
@@ -1961,8 +1962,9 @@ def for_part(
 
 
 def _quiet_layers(result: SliceResult, quiet: frozenset[tuple[int, int]]) -> frozenset[int]:
-    """Schichten, deren Überhang ganz aus Kanal- und Randstücken besteht — ihre
-    Brücken tragen sich selbst oder verlangen keine Stütze."""
+    """Schichten, deren Überhang ganz aus Kanal-, Rand- und hängenden Bogenstücken
+    besteht (:func:`hanging_vaults`) — ihre Brücken tragen sich selbst oder
+    verlangen keine Stütze."""
     return frozenset(
         index
         for index, layer in enumerate(result.layers)
