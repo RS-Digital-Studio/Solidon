@@ -1,0 +1,52 @@
+{
+  "format_version": 1,
+  "inventory_identifier": "c5b1ef0b31544d0db73e912cdb2a394a",
+  "spools": [
+    {
+      "name": "PLA Weiß",
+      "colour": "#ffffff",
+      "material_type": "",
+      "slicer_profile": "",
+      "identifier": "5ab9bd11ac81494a99995a1aa90a8edb",
+      "diameter_mm": null,
+      "spool_grams": null,
+      "remaining_grams": 991.4,
+      "location": "",
+      "opened_on": "",
+      "bought_on": "",
+      "price": null,
+      "currency": "",
+      "note": "",
+      "archived": false,
+      "revision": 2,
+      "stock_revision": 1,
+      "extra_colours": []
+    }
+  ],
+  "stock_counts": {
+    "5ab9bd11ac81494a99995a1aa90a8edb": 1000.0
+  },
+  "bookings": [
+    {
+      "operation_id": "rm705-druck",
+      "fingerprint": "aa373e5e86b4471cf557a31589dc8383",
+      "positions": [
+        {
+          "spool_identifier": "5ab9bd11ac81494a99995a1aa90a8edb",
+          "grams": 8.6,
+          "source": "manual",
+          "note": "",
+          "position_identifier": "",
+          "stock_revision": 1,
+          "filament_key": "4ece9f836cf206470de5dfcfb007135b"
+        }
+      ],
+      "created_at": "2026-10-10T09:11:49.007274+00:00",
+      "updated_at": "2026-10-10T09:11:49.007274+00:00",
+      "project_name": "Würfel",
+      "reversed_at": "",
+      "corrections": [],
+      "preserved_counts": []
+    }
+  ]
+}

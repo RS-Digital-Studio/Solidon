@@ -304,7 +304,7 @@ Herstellers, Solidon schreibt darüber nur die Abweichung.
   die das Teil verlangt (`PartSplit.accepted_per_part`). CuraEngine nimmt nur
   `CURA_PER_MESH` je Netz: Die Platte behält die Übernahme, ein Teil ohne
   Bedarf bekommt je Netz die Grundlage zurück (`PartSplit.revert`). Was ein
-  Slicer nicht je Teil annimmt, bleibt plattenweit; gefragt wird ohne die
+  Slicer nimmt, aber nicht je Teil, bleibt plattenweit; gefragt wird ohne die
   Übernahme (`PartSplit.base`), und wer sie nur mitbekommt, erfährt es
   (`export.part_setting_unavailable`). `write_assembly` und `slice_model`
   fragen dieselbe Trennung; Haftungsprüfung und Stützsperre fragen den Wert,
@@ -417,7 +417,8 @@ Eine neue Cura-Zuordnung prüft, was am Schlüssel hängt: Kopien in
 mit Begründung in `CURA_UNTOUCHED`; `tests/test_print_settings.py` lässt
 nichts dazwischen zu. **Wo Curas Werksprofile anders setzen als `fdmprinter`,
 gilt das Werksprofil** — als Konstante mit Herkunft in `handover`, nie als
-Meinung ohne Beleg.
+Meinung ohne Beleg. **Was Solidon für Cura selbst wählt, geht auch ins
+Fensterprofil** (`_cura_window_choices`), sonst gilt dort die Maschine.
 
 ## Der Startcode kommt vom Hersteller, die Platzhalter füllt Solidon
 
@@ -434,10 +435,9 @@ Platzhalter, deshalb `handover._filled`:
   Name, `{if …}`, Werte, die erst das Fenster nach dem Schneiden kennt
   (`{print_time}`).
 
-Setzt der Startcode selbst eine Temperatur (Platzhalter auf
-`material_bed_temperature…` oder eine Düsentemperatur, Kommentare
-ausgenommen), stehen `material_bed_temp_prepend`/`material_print_temp_prepend`
-auf `false`, wie Curas `StartSliceJob`. Ohne Definition: `fdmprinter` und der Befund
+Setzt der Startcode selbst eine Temperatur, stehen
+`material_bed_temp_prepend`/`material_print_temp_prepend` auf `false`.
+Ohne Definition: `fdmprinter` und der Befund
 `slicer.cura_printer_unknown`, kein stiller Rückfall.
 
 ## Das Cura-Profil gehört dem Drucker, der in Cura aktiv ist

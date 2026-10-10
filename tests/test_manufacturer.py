@@ -4003,6 +4003,116 @@ def test_prusas_bottom_contact_layers_are_read_back() -> None:
     assert manufacturer._read_prusa(spacing, context)[0]["support.interface_spacing"] == 0.0
 
 
+def test_bridges_and_overhangs_are_read_back_from_both_families() -> None:
+    """RM-587: Brückenstütze, dicke Brücken, Brückenfluss, Zusatzwände und Umkehr
+    kommen aus dem Herstellerprofil. Die Schalter, die Brücken frei lassen, heißen
+    umgekehrt; SuperSlicer schreibt den Fluss in Prozent („100%“, ``--save``)."""
+    context = manufacturer._Context(nozzle=0.4)
+    kobra = {
+        "bridge_no_support": "1",
+        "thick_bridges": "0",
+        "bridge_flow": "0.9",
+        "extra_perimeters_on_overhangs": "1",
+        "overhang_reverse": "1",
+    }
+    read, foreign = manufacturer._read_process(kobra, context, {})
+    assert read["support.bridges"] is False
+    assert read["shell.thick_bridges"] is False
+    assert read["shell.bridge_flow"] == pytest.approx(0.9)
+    assert read["shell.overhang_walls"] is True
+    assert read["shell.overhang_reverse"] is True
+    assert not foreign
+
+    sv06 = {"dont_support_bridges": "0", "thick_bridges": "1", "bridge_flow_ratio": "0.95"}
+    prusa, _foreign = manufacturer._read_prusa(sv06, context)
+    assert prusa["support.bridges"] is True
+    assert prusa["shell.thick_bridges"] is True
+    assert prusa["shell.bridge_flow"] == pytest.approx(0.95)
+    superslicer, _foreign = manufacturer._read_prusa({"bridge_flow_ratio": "100%"}, context)
+    assert superslicer["shell.bridge_flow"] == pytest.approx(1.0)
+
+
+def test_prusaslicer_without_its_own_value_leaves_bridges_free() -> None:
+    """Die Programmvorgaben von PrusaSlicer 2.9.6 (``--save``, 09.10.2026): Brücken
+    dick und ohne Stütze, voller Fluss, keine Zusatzwände. Ein Bündel ohne eigenen
+    Wert liest sich damit so, wie PrusaSlicer druckt (G-Code-Gegenprüfung N1)."""
+    defaults = manufacturer.PRUSA_PROGRAM_DEFAULTS
+    assert defaults["dont_support_bridges"] == "1"
+    assert defaults["thick_bridges"] == "1"
+    assert defaults["bridge_flow_ratio"] == "1"
+    assert defaults["extra_perimeters_on_overhangs"] == "0"
+    read, _foreign = manufacturer._read_prusa(dict(defaults), manufacturer._Context(nozzle=0.4))
+    assert read["support.bridges"] is False
+    assert read["shell.thick_bridges"] is True
+
+
+@pytest.mark.parametrize(
+    ("flavour", "key"), [("prusa", "dont_support_bridges"), ("orca", "bridge_no_support")]
+)
+def test_solidons_own_set_supports_bridges(flavour: str, key: str) -> None:
+    """N1: Ohne Herstellerprofil schrieb Solidon den Schalter nicht, und PrusaSlicer
+    ließ eine 36-mm-Brücke trotz „Stützen überall“ frei. Der eigene Satz stützt
+    Brücken wie die Schichtanalyse, abgewählt schreibt er das Gegenteil."""
+    settings = print_settings.resolve(profiles.make_profile("generic-220", "pla"))
+
+    assert handover.as_mapping(settings, flavour)[key] == "0"
+    off = print_settings.with_choice(settings, "support.bridges", False)
+    assert handover.as_mapping(off, flavour)[key] == "1"
+
+
+def test_the_cura_field_says_cura_has_its_own_bridge_flow() -> None:
+    """Review RM-587, L3: Cura hat einen Brückenfluss, nur für seine eigenen
+    Brückenbahnen (``bridge_skin_material_flow``). Das Feld sagt das, statt zu
+    behaupten, Cura kenne die Einstellung nicht; die übrigen bleiben beim
+    allgemeinen Satz."""
+    said = slicer_keys.not_taken_reason("cura", "shell.bridge_flow")
+    assert said is not None and "Cura" in str(said)
+    assert slicer_keys.not_taken_reason("cura", "shell.thick_bridges") is None
+    assert slicer_keys.limitation("cura", "shell.bridge_flow") is None, "kein Befund je Übergabe"
+
+
+def test_bridge_and_overhang_keys_go_only_where_the_program_has_them() -> None:
+    """Was ein Programm nicht kennt, bekommt es nicht (RM-587, gemessen in den
+    Konfigurationsblöcken und mit ``--save``): Cura keinen der fünf Werte,
+    PrusaSlicer keine Umkehr, Bambu Studio weder Zusatzwände noch Umkehr,
+    Anycubic Slicer Next keine Zusatzwände (angenommen, aber ohne Wirkung), und
+    SuperSlicer nur dicke Brücken und Fluss: ``thick_bridges`` und
+    ``bridge_flow_ratio`` setzt er beim Laden als alte Namen um (0,9 wirkt als
+    90 %), ``extra_perimeters_on_overhangs`` kennt sein 3MF-Leser nicht, und die
+    Brückenstütze ändert dort nichts (Review RM-587, M3)."""
+    paths = (
+        "support.bridges",
+        "shell.thick_bridges",
+        "shell.bridge_flow",
+        "shell.overhang_walls",
+        "shell.overhang_reverse",
+    )
+    taken = {
+        (flavour, program): {path for path in paths if slicer_keys.takes(flavour, path, program)}
+        for flavour, program in (
+            ("cura", "cura"),
+            ("prusa", "prusaslicer"),
+            ("prusa", "superslicer"),
+            ("orca", "bambustudio"),
+            ("orca", "orcaslicer"),
+            ("orca", "elegooslicer"),
+            ("orca", "crealityprint"),
+            ("orca", "anycubicslicernext"),
+        )
+    }
+    assert taken[("cura", "cura")] == set()
+    assert taken[("prusa", "prusaslicer")] == set(paths) - {"shell.overhang_reverse"}
+    assert taken[("prusa", "superslicer")] == {"shell.thick_bridges", "shell.bridge_flow"}
+    assert taken[("orca", "bambustudio")] == {
+        "support.bridges",
+        "shell.thick_bridges",
+        "shell.bridge_flow",
+    }
+    for program in ("orcaslicer", "elegooslicer", "crealityprint"):
+        assert taken[("orca", program)] == set(paths), program
+    assert taken[("orca", "anycubicslicernext")] == set(paths) - {"shell.overhang_walls"}
+
+
 @pytest.mark.parametrize(
     ("values", "style"),
     [

@@ -36,7 +36,7 @@ laden für jede Datei hier; diese Karte sagt, **was wo liegt**. Das Warum:
 | `action_effects.py` | Was jede angebotene Handlung außer ihrem Zweck verändert (`SIDE_EFFECTS`, `side_effect`; Befundkarte des Produktkompasses, Abschnitt 4.3); jede `Action`-Kennung des Kerns steht dort (`tests/test_action_effects.py`) |
 | `expressions.py` | Parameterausdrücke über den **eigenen** Auswerter (§13, §32) — kein `eval` |
 | `build_area.py` | Druckkontur, Sperrzonen, Druckhöhe und Auftragsrand für Anordnung, Orientierung und Ausgabe (§29); `machine_shift` rechnet Solidons Bettmitte in Maschinenkoordinaten um (`PrinterProfile.bed_origin`); `exclusion_boxes` liest Orcas Sperrliste als Rechtecke aus je vier Punkten; die Projektion eines geschlossenen Netzes kommt aus seinen Umrisskanten; `size_excess_uncertainty` begrenzt den Winkelfehler vor einer harten Größenabsage; `free_margin` misst den Rand in der besten Drehung, `rim_room` den Platz für einen Rand um die erste Schicht, `rim_of` die Außenkante der ersten Schicht (Brim und Skirt um ihren Schnitt, Stützfuß um die Aufsicht) für Übergabe und Rat |
-| `filament_usage.py` | Ausgabeumfang und Verbrauchsbedarf (§20, §29): Vorbereitungsfingerabdrücke, Spulenbindungen, werkzeugweise G-Code-Mengen; `costs_for` rechnet Kosten je Währung aus übergebenen Daten. Das Journal schreibt `knowledge/filaments.py` |
+| `filament_usage.py` | Ausgabeumfang und Verbrauchsbedarf (§20, §29): Vorbereitungsfingerabdrücke über die eingefrorenen Felder von 0.5.3 (`FINGERPRINT_FIELDS`, Regel `verbrauch.md`), Spulenbindungen, werkzeugweise G-Code-Mengen; `costs_for` rechnet Kosten je Währung aus übergebenen Daten. Das Journal schreibt `knowledge/filaments.py` |
 
 - **`Feature.measure_sources`** nennt je Parameter die Wertequelle (`native`,
   `facets`, `fit`, `parameter`); `measure_status(feature, name)` liefert die
@@ -61,7 +61,7 @@ laden für jede Datei hier; diese Karte sagt, **was wo liegt**. Das Warum:
 
 | Datei | Rolle |
 |---|---|
-| `paths.py` | Wo Nutzerdaten liegen (§38); `opened_path` (kanonischer Pfad hinter einem offenen Handle, für `scene/project` und `updates`); `lock_file()` als Lebensdauersperre für Wiederherstellung und Absturzprotokoll |
+| `paths.py` | Wo Nutzerdaten liegen (§38); `opened_path` (kanonischer Pfad hinter einem offenen Handle, für `scene/project` und `updates`); `lock_file()` als Lebensdauersperre für Wiederherstellung und Absturzprotokoll; `read_text_shared` liest ohne Löschsperre |
 | `log.py` | Lokales Protokoll (§33.2); `install_crash_logging()` beim Prozessstart, nie beim Import; `redact_user_paths` setzt `~` für den Nutzerordner |
 | `discover.py` · `tools.py` · `install.py` | Installierte Programme außerhalb des PATH finden · externe Programme · Fehlendes aus der Anwendung nachinstallieren (§36); `workspace_for(ascii_only=True)` liefert unter Windows bei Bedarf einen geprüften 8.3-Alias oder einen privaten Ordner im Windows-Temp |
 | `process.py` · `http.py` · `json_boundary.py` | Sichere Grenze für externe Prozesse (§32; `run_limited` beendet einen Prozess, der nach seinem gemeldeten Ergebnis nicht endet: `finished`, `linger`; `bind_helper` bindet die Hilfsprozesse des Netzkerns an diesen Prozess) · für kleine HTTP-Transporte (`apply_header_deadline`) · für JSON aus fremden Vertrauensräumen |
