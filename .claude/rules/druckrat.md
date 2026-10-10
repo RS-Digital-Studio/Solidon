@@ -65,11 +65,16 @@ offenem Drucker. Übernommen wird auf Klick, nie von allein.
   Schacht, der einen Kreis von `CHANNEL_WIDTH` fasst wie `_narrow`, sonst
   holt niemand die Stütze heraus), denn ein Loch im Schnitt ist auch das
   Innere jedes offenen Gefäßes; ausgespart wird dann die ganze Säule, ihr
-  Stück braucht selbst Stütze. Ein schräger oder geknickter Schacht zählt,
-  wenn sich der Kreis Schicht für Schicht hindurchschiebt (`_shafts_pass`,
-  nur gefragt, wenn senkrecht keiner offen ist): Er weicht nur aus, wo eine
-  Wand ihn schiebt, je Schicht höchstens um die Überhanggrenze
-  (`SHAFT_DRIFT`), sonst schöbe er sich unter einem Dach hervor. Ohne
+  Stück braucht selbst Stütze. Ein schräger oder gerundet geknickter Schacht
+  zählt, wenn sich der Kreis Schicht für Schicht hindurchschiebt
+  (`_shafts_pass`, nur gefragt, wenn senkrecht keiner offen ist): Er weicht
+  nur so weit aus, wie eine Wand ihn schiebt, je Schicht höchstens um den
+  Stützwinkel des Schnitts (`SliceResult.overhang_angle`), sonst schöbe er
+  sich unter einem Dach hervor; wer geschoben wird, braucht Platz für die
+  Ellipse seines schrägen Wegs (`_oval_centres`), sonst zählte ein schräger
+  Schlitz mit seiner waagerechten statt seiner Weite quer zur Achse. Der
+  Kreis folgt der hinteren Wand, nicht der Achse: Scharfe Knicke, Lippen und
+  enge Wendeln bleiben zu wie vor RM-629 (Grenzen in der Begründung). Ohne
   gesperrten Raum kein Vorschlag. Familien: `dateiformat.md`.
   **Vorschlag, nicht Automatik** (Entscheidung Robert).
 - **Ränder tragen sich selbst** (`analysis.ledges`): Eine Decke, deren Teil

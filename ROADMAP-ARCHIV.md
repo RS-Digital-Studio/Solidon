@@ -46298,20 +46298,39 @@ die Rechnung mit einer `TopologyException` ab.
 
 **Behoben:** Ist senkrecht kein Schacht offen, schiebt `_shafts_pass` einen Kreis von
 `CHANNEL_WIDTH` Schicht für Schicht durch den Schacht, je Säule einmal für alle Scheiben: Ein
-freier Kreis bleibt, wo er ist, einer, den Material trifft, weicht um höchstens Schichthöhe ·
-`SHAFT_DRIFT` (Überhanggrenze) aus. Dass freie Kreise nicht wandern, hält die Entscheidung
-„offen über der Säule“ aus RM-571 (`test_open_sky_is_asked_at_each_slab`). `_clipped` repariert
-ungültige Zuschnitte. Warum, mit den beiden kleinen Grenzen (Unterkante eines Dachs, Lippe
-mitten im schrägen Schacht): `konzepte/begruendungen/regel-druckrat.md`, Abschnitt zur
-Kanalsperre.
+freier Kreis bleibt, wo er ist, einer, den Material trifft, weicht so weit aus, wie die Wand ihn
+schiebt (`SHAFT_PUSH_SPARE`), höchstens um Schichthöhe · Tangens des Stützwinkels, mit dem
+geschnitten wurde (`SliceResult.overhang_angle`, ohne ihn `SHAFT_DRIFT`). Wer geschoben wird,
+braucht Platz für die Ellipse seines schrägen Wegs (`_oval_centres`, R / cos θ in
+Schubrichtung, R quer dazu; θ die flachere Schätzung aus Schub der Wand und Wandern der Mitte
+des Lochs). Dass freie Kreise nicht wandern, hält die Entscheidung „offen über der Säule“ aus
+RM-571 (`test_open_sky_is_asked_at_each_slab`). `_clipped` repariert ungültige Zuschnitte.
+Warum, mit den Grenzen (Unterkante eines Dachs je Schichthöhe; der Kreis folgt der hinteren
+Wand, nicht der Achse: scharfe Knicke, Lippen, enge Wendeln, enger schräger Kegel bleiben zu wie
+vorher): `konzepte/begruendungen/regel-druckrat.md`, Abschnitt zur Kanalsperre.
+
+**Review RM-629 (10.10.2026), behoben:** Ein getroffener Kreis weitete sich um den vollen Schritt
+in jede Richtung und kroch an einer leicht überhängenden Wand unter ein Dach (0,57° → 2 mm,
+2,9° → 10 mm seitwärts); ein schräger Schlitz zählte mit seiner waagerechten Weite (45° 22 mm
+offen); die Ausweichweite war die Startregel statt des Stützwinkels des Druckers. Die ersten
+beiden öffneten, was vor RM-629 zu war; beide sind wieder zu, und die Ausweichweite folgt dem
+Profil.
 
 **Nachweis (10.10.2026):** Becher mit Deckel, Sims im Sperrraum vorher → nachher: Loch Ø 34 mm
 um 10°, 20°, 30°, 40°, −30° 64 → 4 %, Ø 30,2 mm um 20° 64 → 4 %, Ø 28 mm 64 → 64 %; Zickzack
 Ø 34 mm offen (vorher Abbruch), mit Ø 28 mm zu. Tests in `test_slice_findings.py`: Neigung 20°,
 30°, −30° und Zickzack (am Stand `219360698` rot), Engstelle in genau einer Schicht (29,5 zu,
 31 offen), Grenze synthetisch auch in einer Schicht (29,9 zu, 30,1 offen), Stufe mit 28 mm
-Überlappung (zu); Mutanten Drift 0, Drift 10, jede zweite Schicht, Radius 14 und „freie Kreise
-wandern“ werden je von mindestens einem Test gefangen. Im Slicer (Ø 34 mm um 20°, Vorschläge
+Überlappung (zu). Nach dem Review dazu: Kammer mit überhängender Wand (0,57° und 2,9°, Öffnung
+2 mm daneben zu, 0,3 mm offen), schräge Schlitze (45° 22, 40° 24, 30° 27 mm zu, 45° 31 offen),
+Ø 34 um 40° offen, Deckel 60 mm mit Stützwinkel (44° offen / 50° zu bei 45°, 44° zu bei 40°,
+50° offen bei 55°), Stufe synthetisch (3 mm offen, 6 mm zu), getrennte Wege zweier Scheiben,
+gerundeter Knick 40° in die Senkrechte offen. Mutanten am fertigen Stand (47 Tests der Auswahl):
+freie Kreise wandern (6 rot), Drift 10 (4), Winkel doppelt (2), Startregel statt Winkel (2),
+voller Schritt statt Schub (2), ohne Ellipse (3), Ellipse ohne Abstand (10), nur Schub statt
+Achse (1), alle Wege zusammen (1), Zuschnitt ohne Reparatur (3), Saum ohne Säule (2) werden
+gefangen; nicht gefangen: `SHAFT_DRIFT` 1,5 und 2 (nur noch Rückfall ohne Winkel im Schnitt),
+Treffer immer (nur Leistung), Reste leben, oberste Scheibe offen (Randfälle). Im Slicer (Ø 34 mm um 20°, Vorschläge
 übernommen), Stützbahn unter dem Sims vorher → nachher (ohne Sperre): ElegooSlicer CC2 3,60 →
 7,49 m (6,33), OrcaSlicer Kobra 2 2,65 → 4,37 m (4,37), PrusaSlicer MK4S 1,78 → 3,83 m
 (3,81), Cura SV06 7,72 → 17,29 m (16,91); Tunnel 0,0 m wie vorher. Gegenprobe Ø 28 mm in
@@ -46319,5 +46338,9 @@ ElegooSlicer und Cura vorher = nachher (2,69 und 7,69 m, Sperre bleibt). Becher,
 130 %, Schüssel in Dateilage 55° und 60° und Eiffelturm: Scheiben gleich, CPU-Zeit des
 Sperrraums gleich (Becher 0,34 s, Drache 130 % 6,9 s); dort und an der Schüssel in Drucklage
 50° (186 704 mm³ wie vorher) fragt keine Säule nach dem Schacht;
-Drache im Druckrat (`sonde_rat.py`, CC2) gleich. Changelog: nein (die Sperre im umschlossenen
-Raum kam mit RM-566/RM-571 im selben 0.6.0-Zyklus, `git tag --contains` leer).
+Drache im Druckrat (`sonde_rat.py`, CC2) gleich. Nach dem Review: alle Becherfälle des Prüfers
+(67 bei 0,5 mm, 45 bei 0,2 mm) wie mit dem ersten Fix allein, die Schlitze zu; Becher, Drache 50
+%, Schüssel 50° Scheiben gleich und CPU gleich (Becher 0,27 / 0,25 s), Ellipse am Deckel mit 20°
+0,36 → 0,42 s, am Zickzack 0,50 → 0,88 s. Changelog: nein (die Sperre im umschlossenen Raum kam
+mit RM-566/RM-571 im selben 0.6.0-Zyklus, `git tag --contains` leer; der 0.6.0-Punkt zu *Kanäle
+frei halten* beschreibt die Eigenschaft).

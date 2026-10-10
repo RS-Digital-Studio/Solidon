@@ -367,19 +367,50 @@ im Sperrraum, obwohl das Loch quer zu seiner Achse weit genug ist. Seit RM-629
 folgt der Kreis dem Schacht Schicht für Schicht (`_shafts_pass`), wenn senkrecht
 keiner offen ist: Gestartet wird mit den Kreisen, die den Saum berühren; je
 Schicht bleibt ein freier Kreis, wo er ist, und einer, den Material trifft,
-weicht um höchstens eine Schichthöhe mal `SHAFT_DRIFT` aus, der Überhanggrenze.
+weicht so weit aus, wie die Wand ihn schiebt, höchstens um eine Schichthöhe mal
+dem Tangens des Stützwinkels, mit dem geschnitten wurde
+(`SliceResult.overhang_angle`, der wirksame des Druckers; ohne ihn
+`SHAFT_DRIFT`, 45°). Eine Wand, die der Drucker ohne Stütze druckt, trägt sich
+auch im Schacht, und mit demselben Winkel entstehen die Säulen, deren Weg
+gefragt wird; mit der Startregel allein blieb ein Loch um 50° auch bei einem
+Drucker mit 55° zu (Review RM-629). Weicht ein getroffener Kreis um den vollen
+Schritt in jede Richtung aus, wachsen die Enden seines Streifens an einer Wand
+entlang, die ihn nur streift: Mit 0,57° Überhang wanderte er 2 mm, mit 2,9°
+10 mm seitwärts unter ein Dach. Deshalb nur so tief, wie die Mitten im
+Gesperrten liegen, mit dem Zuschlag des Vielecks (`SHAFT_PUSH_SPARE`).
 Den Schacht entlang einer Achse zu suchen hätte je Richtung neu geschichtet; die
 Schichten liegen ohnehin vor. Dass nur die geschobenen Kreise ausweichen, hält
 die Entscheidung „offen über der Säule“: Ließe man jeden Kreis je Schicht um die
 Überhanggrenze wandern, schöbe er sich unter einem Dach schräg hervor, und die
 Säule unter dem Sims des Bechers wäre erreichbar
-(`test_open_sky_is_asked_at_each_slab`, mit dieser Mutante rot). Der Preis sind
-zwei kleine Grenzen. An der Unterkante eines Dachs weicht ein Kreis einmal um
-einen Schritt aus; eine weite Öffnung 0,5 mm neben dem Sims macht ihn bei
-0,5 mm Schichthöhe erreichbar, senkrecht gefragt erst bei 0,3 mm. Und eine
-waagerechte Lippe mitten in einem schrägen Schacht, die ihn auf 31 mm verengt,
-schließt ihn, weil die Kreise an seiner hinteren Wand liegen (erst ab 33 mm
-offen); eine Lippe ist ein flacher Überhang, also ein Dach. Gemessen am Becher
+(`test_open_sky_is_asked_at_each_slab`, mit dieser Mutante rot).
+Waagerecht geschnitten ist ein Schlitz der Weite w, um θ quer zu seiner
+schmalen Seite geneigt, w / cos θ weit; ein Schlitz von 22 mm um 45° zählte so
+als Kanal (31,1 mm), obwohl keine Stütze durch ihn herauskommt. Ein geschobener
+Kreis braucht deshalb in seiner Nähe Platz für die Ellipse seines schrägen
+Wegs, in Schubrichtung R / cos θ, quer dazu R (`_oval_centres`, gerechnet in
+einer um cos θ gestauchten Ebene, in der sie ein Kreis ist); an der hinteren
+Wand liegt seine Mitte bis R / cos θ − R hinter ihrer. θ ist die flachere von
+zwei Schätzungen: der Schub der Wand über 5 mm (`SHAFT_SLOPE_SPAN`) und das
+Wandern der Mitte des Lochs über 1 mm (`SHAFT_SLOPE_TURN`). Nur mit dem Schub
+blieben ein Knick in die Senkrechte (dort schiebt die Wand die Kreise noch
+schräg zur Achse) und ein schräger Kegel (seine hintere Wand steht steiler als
+die Achse) zu. Ein Schlitz zählt so ab 30 mm quer zur Achse, gleich wie
+geneigt. Grenzen, alle wie vor RM-629 zu, nie neu offen: Die Ellipse ist
+gerade, eine Wendel mit gekrümmtem Schnitt und ein enger Kegel können
+zubleiben. An der Unterkante eines Dachs weicht ein Kreis einmal um einen
+Schritt aus; am Becher steht die Säule unter zwei Kanten (Sims und Deckel), und
+eine weite Öffnung ist bei 0,5 mm Schichthöhe bis 0,9 mm neben dem Sims
+erreichbar, bei 0,2 mm bis 0,5 mm, senkrecht gefragt bis 0,3 mm. Und weil nur
+getroffene Kreise ausweichen, liegen sie in einem schrägen Schacht bald an der
+Wand, die schiebt, nicht auf der Achse: Eine Fortsetzung, deren freie Mitten
+mehr als einen Schritt von dieser Wand liegen, schließt ihn, obwohl ein Kreis
+entlang der Achse hindurchpasst — ein scharfer Knick ohne Rundung (20° Ø 34 →
+32 mm, 30° und 40° schon Ø 34 → 34 mm), eine waagerechte Lippe mitten im
+Schacht (Ø 34 mm um 20°: offen ab 33,5 mm bei 0,5 mm Schichthöhe, ab 33,9 mm
+bei 0,2 mm). Im Slicer heißt das am scharfen 40°-Knick, was vorher am
+20°-Becher galt: gut die Hälfte der Stütze unter dem Sims (Cura 7,70 statt 16,89
+m, ElegooSlicer 3,14 statt 6,09 m). Gemessen am Becher
 mit Deckel, Anteil des Simses im Sperrraum vorher → nachher: Loch Ø 34 mm um
 10°, 20°, 30°, 40° und −30° 64 → 4 %, Ø 30,2 mm um 20° 64 → 4 %, Ø 28 mm
 64 → 64 %, ein Zickzack Ø 34 mm um ±40°, durch den man senkrecht nirgends
@@ -387,6 +418,8 @@ schaut, 4 % (vorher brach die Rechnung mit einer `TopologyException` ab,
 `_clipped`), mit einer zweiten Strecke Ø 28 mm 64 %. Die Grenze liegt wie bei
 `_narrow` an `CHANNEL_WIDTH`: synthetisch offen ab 30,03 mm, zu bis 30,01 mm,
 gerade wie schräg; eine einzelne Schicht, die enger ist, schließt den Schacht.
+Schräge Schlitze, quer zur Achse gemessen, bleiben zu wie vorher: 45° 22 mm,
+40° 24 mm und 30° 27 mm 64 %; einer von 31 mm um 45° ist offen (4 %).
 Im Slicer, Becher mit Deckel und Loch Ø 34 mm um 20°, Vorschläge übernommen,
 Stützbahn unter dem Sims vorher → nachher, in Klammern der Slicer ohne Sperre:
 ElegooSlicer CC2 3,60 → 7,49 m (6,33), OrcaSlicer Kobra 2 2,65 → 4,37 m (4,37),
@@ -395,7 +428,9 @@ Tunnel bleibt es bei 0,0 m, im PrusaSlicer bei 0,01 m wie vorher (ohne Sperre
 2,3 bis 12,6 m).
 Am geschlossenen Deckel, wo der Schacht gefragt wird und nichts findet, kostet
 der Sperrraum 0,19 → 0,27 s CPU, am Deckel mit 20° 0,23 → 0,38 s, am Zickzack
-0,6 s (Median aus neun Läufen im Wechsel); am offenen Becher (0,33 → 0,31 s),
+0,6 s (Median aus neun Läufen im Wechsel); die Ellipse kostet am Deckel mit 20°
+0,36 → 0,42 s, am Zickzack 0,50 → 0,88 s (neun Läufe im Wechsel gegen den Stand
+ohne sie, Review RM-629); am offenen Becher (0,33 → 0,31 s),
 an Drache, Schüssel und Eiffelturm fragt keine Säule danach, und Zeit und
 Scheiben bleiben gleich.
 Ausgespart wird die ganze Säule, auch was von ihr unter einem Dach liegt: Ihr
