@@ -67,7 +67,6 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-572 — Der Prüfbericht nennt keine Stelle, wo viele kleine Überhänge Stützen verlangen](#rm-572) | Geometrie, Erkennung und Druckvorbereitung | Text für „viele kleine Überhänge zusammen“ und eine Feldfrage im Budget §31 |
 | [RM-584 — Die Stützart folgt der Deckenform, und hohe Bäume stehen stabil](#rm-584) | Geometrie, Erkennung und Druckvorbereitung | Hybrid oder normal unter flachen Decken, Baumwände und Fuß ab etwa 100 mm, Spitzenabstand weiterer Materialien |
 | [RM-585 — Bögen, die sich zwischen ihren Beinen schließen, tragen sich selbst](#rm-585) | Geometrie, Erkennung und Druckvorbereitung | Schließfrage für weite Bögen, Brückenregel für die letzte Spanne |
-| [RM-586 — Feine Schichten, wo das Modell feine Formen hat](#rm-586) | Geometrie, Erkennung und Druckvorbereitung | Variable Schichthöhe über die 3MF, Deckschichten mindestens 0,8 mm |
 | [RM-587 — Lange Brücken und steile Überhänge drucken sauber](#rm-587) | Geometrie, Erkennung und Druckvorbereitung | Dicke Brücke und Fluss über langen Brücken, Zusatzwände an steilen Überhängen |
 | [RM-588 — Die Naht liegt hinten, und große Oberseiten werden gebügelt](#rm-588) | Geometrie, Erkennung und Druckvorbereitung | Naht hinten bei Figuren, Bügeln der obersten Fläche |
 | [RM-589 — Bohrungen und Stifte passen ohne Nacharbeit](#rm-589) | Geometrie, Erkennung und Druckvorbereitung | Loch- und Elefantenfußausgleich aus dem Spiel des Materialprofils |
@@ -957,16 +956,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   umfasst, und weite Räume gelten nie als Kanal. Ein Bogen trägt sich wie ein Gewölbe; nur
   seine letzte Spanne ist eine Brücke. Abnahme: der Eiffelturm braucht keine Stützen, eine
   flache Decke zwischen zwei Wänden weiter (Brückenregel), im Slicer geprüft.
-
-<a id="rm-586"></a>
-
-- [ ] **RM-586 — Feine Schichten, wo das Modell feine Formen hat.**
-  Solidon schlägt keine Schichthöhe nach Detail vor. OrcaSlicer, Bambu Studio und
-  ElegooSlicer lesen eine variable Schichthöhe aus `Metadata/layer_heights_profile.txt`,
-  PrusaSlicer aus `Slic3r_PE_layer_heights_profile.txt`, Cura hat
-  `adaptive_layer_height_enabled`; bei feinen Schichten werden Deckschichten unter 0,8 mm
-  dünn (Recherche Nr. 9, 10). Abnahme: am Drachen feine Schichten nur an Kuppen und
-  Schuppen, Druckzeit genannt, in allen Familien gemessen.
 
 <a id="rm-587"></a>
 

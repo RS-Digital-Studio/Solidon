@@ -31,6 +31,7 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-10 | [RM-586: Feine Schichten, wo das Modell feine Formen hat (10.10.2026)](#rm-586-feine-schichten-wo-das-modell-feine-formen-hat-10102026) |
 | 2026-10-09 | [RM-624: Ein Slicertest hält Kontaktabstand und untere Trennschicht in sechs Programmen (09.10.2026)](#rm-624-ein-slicertest-hält-kontaktabstand-und-untere-trennschicht-in-sechs-programmen-09102026) |
 | 2026-10-09 | [RM-531 (Teil): Sieben Fenstertests außerhalb von Windows sind auf allen vier Plattformen grün (09.10.2026)](#rm-531-teil-sieben-fenstertests-außerhalb-von-windows-sind-auf-allen-vier-plattformen-grün-09102026) |
 | 2026-10-09 | [RM-635: Prozesstests zählen ihre Zeit ab dem Zustand, und der Abbau wartet auf das Ende des Prozesses (09.10.2026)](#rm-635-prozesstests-zählen-ihre-zeit-ab-dem-zustand-und-der-abbau-wartet-auf-das-ende-des-prozesses-09102026) |
@@ -46473,3 +46474,58 @@ Himmel nicht mehr schneiden, werden übersprungen (Becher 0,64 → 0,28 s CPU, a
 gleich), und der senkrechte Schacht ist als Grenze benannt. Belege:
 `output/konsolidierung-2026-10-07/codex-claude/belege/lauf-a.md`. Changelog: nein (die
 Lücke entstand mit RM-566 im selben 0.6.0-Zyklus).
+
+## RM-586: Feine Schichten, wo das Modell feine Formen hat (10.10.2026)
+
+<a id="rm-586-feine-schichten-wo-das-modell-feine-formen-hat-10102026"></a>
+<a id="rm-586"></a>
+
+**Befund:** Solidon schlug keine Schichthöhe nach Detail vor. OrcaSlicer, Bambu Studio,
+ElegooSlicer, Creality Print und Anycubic Slicer Next lesen eine Höhenkurve aus
+`Metadata/layer_heights_profile.txt`, PrusaSlicer und SuperSlicer aus
+`Metadata/Slic3r_PE_layer_heights_profile.txt`; Cura hat nur seine Automatik
+`adaptive_layer_height_enabled`, die dem flachsten Dreieck jeder Höhe folgt (am Drachen
+1 194 statt 650 Schichten). Mit feinen Schichten und fester Lagenzahl werden Oberseiten dünn
+(Recherche Nr. 9, 10).
+
+**Gebaut:** `app/core/slice/fine_layers.py` misst je Schicht die aufwärts weisende Schräge,
+deren Stufe breiter als eine Bahn wird (`step_slope = atan(h/Bahn)`, Bahn = halbe
+`bridge_from` der Analyse), und wählt Höhen, in denen sie über einen Übergang (fünf
+Schichten, wie die Glättung der Slicer) so dicht liegt wie auf der kleinsten Kuppe mit zwei
+Stufen (`stepped_area_worth`, 25,9 mm²/mm bei 0,2/0,42). Der Rat `layers.fine_layer_height`
+(halbe Schicht, nie unter einem Viertel der Düse) nennt den Zeitanteil, gebremst bis zur
+Mindestschichtzeit; `shell.top_thickness` 0,8 mm kommt dazu, wo die Lagenzahl die Oberseite
+dünner ließe. Die Übergabe schreibt je Teil eine Höhenkurve mit dem Raster, das gedruckt wird
+(`manufacturer.effective`), nicht unter organischen Bäumen und nicht neben einem
+Reinigungsturm (beides lehnen die Slicer ab, `Print::validate`; Befund und Satz am Feld),
+nicht für Cura (`NOT_TAKEN_BY`). Die Plattengegenprobe zählt die Lagen der Kurve; vorher
+meldete jede Übergabe mit feinen Schichten „Modellschichten weichen ab“ (100 gegen 129).
+Die Schrägmessung rechnet ihre Normalen nur für aufwärts weisende Dreiecke, elementweise und
+damit auf jeder Maschine gleich (§31-Körper 28 statt 72 ms; Drache 1,1 s von 54 s Schnitt).
+
+**Nachweis (10.10.2026):** Drache (`F:\3D Dateien\Drache.p3d`, 2,9 Mio. Dreiecke, CC2-Raster
+0,2 mm): feine Bereiche 1,2–16,0 (Schwanz, Füße), 40,8–44,7 (Knie), 69,3–79,3 (Schultern),
+110,7–118,9 mm (Kopf); Flügel und Rumpf gleichmäßig. Feine Schichten erzwungen, je Programm
+Druckzeit vorher → nachher (Lagen 650 → 817, davon 352 feiner als 0,2 mm):
+
+| Programm (Drucker) | ohne | mit | Anteil | Solidons Gegenprobe |
+|---|---|---|---|---|
+| ElegooSlicer (CC2) | 333,4 min | 432,5 min | +29,7 % | 258,3 → 318,8 |
+| Bambu Studio (P1S) | 249,1 | 304,3 | +22,2 % | 254,3 → 313,6 |
+| OrcaSlicer (Kobra 2, Rat) | 499,7 | 653,1 | +30,7 % (ohne Deckschicht 27,7 %) | 410,7 → 503,6 |
+| Anycubic Slicer Next (Kobra 2) | 464,1 | 593,6 | +27,9 % | 380,7 → 463,1 |
+| Creality Print (K1) | 234,5 | 285,5 | +21,7 % | 242,9 → 298,7 |
+| PrusaSlicer (MK4S) | 279,2 | 341,4 | +22,3 % | 325,2 → 395,1 |
+| SuperSlicer (Mini, 0,15 mm, Rat) | 878,5 | 900,1 | +2,5 % | 870,5 → 911,8 |
+| Cura (SV06) | 914,0 | 914,0 | 0 % (nimmt keine Kurve) | — |
+
+Rat am Drachen: 26,8 % (Schätzung), keine Warnung zur Lagenzahl in der Gegenprobe. Im Weg
+des Druckdialogs rät Solidon am Drachen Bäume; wo sie organisch gedruckt werden (Elegoo,
+Bambu, Anycubic, Creality, PrusaSlicer), kommt der Rat zu feinen Schichten nicht, das Feld
+nennt den Grund; in OrcaSlicer am Kobra 2 und SuperSlicer kommt er. Je Teil (Kuppe neben
+Klotz) in sieben Programmen: Kuppe fein 17,0–20,0 mm, Klotz gleichmäßig; Deckschicht 0,8 bzw.
+1,2 mm je Teil wirksam, außer SuperSlicer, der die Mindestdicke in Lagen der normalen Schicht
+zählt (dort plattenweit). `test_fine_layers_arrive_where_solidon_says` hält die Kurve in sechs
+Programmen (vor der Rasterkorrektur fünf rot). Würfel 16 mm (abgerundete Kanten): kein Rat.
+Eiffelturm (ElegooSlicer-Raster): Bereiche 23–33, 37–40, 43–44 und 161–162 mm (Bogenscheitel, Plattformen). Bericht:
+`.claude/.state/drache-2026-10-08/berichte-2026-10-10/rm586.md`.

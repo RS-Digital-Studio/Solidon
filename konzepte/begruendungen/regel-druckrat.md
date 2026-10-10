@@ -627,3 +627,40 @@ Modellen hat der Drache 199, danach eine Baugruppe 49 und ein Schachturm 34;
 die Schwelle steht bei 100.
 Gemessen ist nur PLA (`support_tip_gap`); ohne Wert bleibt der Abstand des
 Materials. Bericht: `output/drache-2026-10-09/rueckstaende/bericht.md`.
+
+## Feine Schichten, wo das Modell feine Formen hat (RM-586)
+
+Aus der Regel verschoben, mit Herleitung. Auf einer Schräge der Neigung α legt
+jede Schicht eine Stufe der Breite `h / tan α`. Ist sie breiter als eine Bahn,
+druckt der Slicer auf jeder Stufe eine eigene Deckbahn, und man sieht die
+Treppe; darunter deckt die Außenwand sie zu. Daraus die Grenze
+`step_slope = atan(h / Bahn)`: 25,5° bei 0,2/0,42, 31,9° bei 0,28/0,45, 16° bei
+0,12. Die Bahn ist die halbe Brückenbreite, mit der die Analyse schneidet
+(`bridge_from`, zwei Bahnen) — sie steht ohnehin in jedem Merkerschlüssel, und
+die Übergabe rechnet mit derselben (`wall/2` aus `analysis_limits`).
+
+Wie viel Schräge eine Höhe tragen muss: so viel wie die kleinste Kuppe, auf der
+zwei Stufen liegen (eine allein ist eine Kante). Eine Kugel vom Radius R hat je
+Millimeter Höhe 2πR Fläche, ihr flacher Scheitel ist `R·(1 − cos Grenze)` hoch;
+zwei Stufen verlangen `R = 2h / (1 − cos Grenze)`, bei 0,2 mm Schicht 4,12 mm,
+also 25,9 mm² je mm. Gemittelt wird über einen Übergang (fünf normale
+Schichten, wie die Glättung von PrusaSlicer und der Orca-Familie,
+`HeightProfileSmoothingParams.radius`): Kürzer als ein Übergang lohnt kein
+Bereich seine zwei Übergänge, und eine Lücke unter zwei Übergängen druckt sich
+schneller durch, als hinaus und wieder hinein zu wechseln. Der Zwischenstand
+hatte 25° fest und 20 mm²/mm, am Drachen gewählt; mit der Herleitung fällt dort
+die Flügelkrümmung bei 105 mm weg (Schwelle 20: fünf Bereiche, 37 mm; 25,9:
+vier, 30 mm — Schwanz und Füße 2–15, Knie 42–44, Schultern 70–78, Kopf 111–118).
+
+Der Zeitanteil bremst jede Schicht bis zur Mindestschichtzeit, nie unter das
+Mindesttempo: Die feinen Schichten liegen meist an kleinen Querschnitten. An der
+Halbkugel R 20 nannte die Rechnung ohne Bremse 4 %, ElegooSlicer druckte ab
+Schicht 1 7 % länger, die Druckdatei ohne Beschleunigung 10 % (Kappenschichten
+3,3–3,9 s an 4 s Mindestzeit); mit Bremse nennt der Rat 12 %. Das Druckzeitmodell
+(`print_time`) träfe 8 %, kostet am Drachen aber 153 s — für den Rat zu teuer.
+
+Organische Bäume gehen vor: OrcaSlicer lehnt eine Höhenkurve unter
+`support_style` organisch oder Vorgabe ab, PrusaSlicer unter organischen Bäumen
+(„Variable layer height is not supported with Organic supports.“,
+`Print::validate`). Am Drachen rät Solidon Bäume, also dort keine feinen
+Schichten; das Feld nennt den Grund (`slicer_keys.limitation`).
