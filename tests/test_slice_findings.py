@@ -1234,15 +1234,49 @@ def tilted_shaft(
     return shaft_lid([(start, 60.0), (start + 20.0 * math.tan(theta), 80.0)], [diameter], keep=keep)
 
 
-@pytest.mark.parametrize("tilt", [20.0, 30.0, -30.0])
+@pytest.mark.parametrize("tilt", [20.0, 30.0, 40.0, -30.0])
 def test_a_tilted_shaft_as_wide_as_a_channel_opens_the_cup(tilt: float) -> None:
     """Ein schräger Schacht zählt mit seiner Weite quer zur Achse, nicht mit
     seiner senkrechten Durchsicht: Schicht für Schicht schiebt sich der Kreis
     von ``CHANNEL_WIDTH`` durch ihn hindurch. Ein Loch Ø 34 mm in einem Deckel
     von 20 mm sieht bei 20° senkrecht 28,9 mm, bei 30° 27,7 mm; nach der
     senkrechten Schnittmenge gefragt, lag der Sims darunter zu 64 % im Sperrraum
-    und druckte ohne Stütze (Nachprüfung RM-571, RM-629)."""
+    und druckte ohne Stütze (Nachprüfung RM-571, RM-629). Bei 40° hat die
+    Ellipse des schrägen Wegs (:func:`_oval_centres`) noch Platz."""
     assert ledge_share_blocked(cup_with_a_ledge(tilted_shaft(tilt))) < 0.05
+
+
+def tilted_slit(tilt: float, width: float) -> trimesh.Trimesh:
+    """Ein Deckel von 20 mm mit einem Schlitz, quer zu seiner Achse ``width``
+    weit und 60 mm lang, um ``tilt`` Grad zum Sims hin geneigt. Unten reicht er
+    2 mm über die Kante des Simses."""
+    theta = math.radians(tilt)
+    start = 2.0 - width / math.cos(theta) / 2.0
+    end = start + 20.0 * math.tan(theta)
+    slab = trimesh.creation.box(extents=(width, 60.0, 60.0))
+    slab.apply_transform(trimesh.transformations.rotation_matrix(theta, (0.0, 1.0, 0.0)))
+    slab.apply_translation(((start + end) / 2.0, 0.0, 70.0))
+    lid = trimesh.creation.cylinder(radius=max(40.0, abs(end) + 25.0), height=20.0, sections=96)
+    lid.apply_translation((0.0, 0.0, 70.0))
+    return trimesh.boolean.difference([lid, slab])
+
+
+@pytest.mark.parametrize(
+    ("tilt", "width", "open_"),
+    [(45.0, 22.0, False), (40.0, 24.0, False), (30.0, 27.0, False), (45.0, 31.0, True)],
+)
+def test_a_tilted_slit_counts_with_its_width_across_the_axis(
+    tilt: float, width: float, open_: bool
+) -> None:
+    """Ein schräger Schlitz ist quer zu seiner Achse ``width`` weit,
+    waagerecht geschnitten aber ``width / cos θ`` — bei 45° und 22 mm 31,1 mm.
+    Nach dem waagerechten Schnitt gefragt, zählte er als Kanal, obwohl keine
+    Stütze durch ihn herauskommt (Review RM-629, Fund 6). Ein geschobener Kreis
+    braucht Platz für die Ellipse seines schrägen Wegs; ab 30 mm quer zur
+    Achse hat er ihn."""
+    share = ledge_share_blocked(cup_with_a_ledge(tilted_slit(tilt, width)))
+
+    assert share < 0.05 if open_ else share > 0.5
 
 
 def test_a_tilted_shaft_narrower_than_a_channel_keeps_the_cup_closed() -> None:

@@ -2030,6 +2030,7 @@ def _shafts_pass(
     shade_at: Callable[[int], ShapelyPolygon],
     heights: Sequence[float],
     line_width: float,
+    slope: float | None = None,
 ) -> dict[int, bool]:
     """Schiebt sich ein Kreis von ``CHANNEL_WIDTH`` von der Säule aus Schicht
     für Schicht bis über das Teil hinaus (:func:`channel_space`, RM-629)? Je
@@ -2047,9 +2048,17 @@ def _shafts_pass(
     **Weit wie ein Kanal quer zur Achse:** Ein Loch Ø 34 mm in einem Deckel von
     20 mm, um 20° geneigt, sieht senkrecht nur 28,9 mm; nach der senkrechten
     Schnittmenge gefragt, lag der Sims darunter zu 64 % im Sperrraum und
-    druckte ohne Stütze (Nachprüfung RM-571). Gemessen wird der waagerechte
-    Schnitt; ein Schlitz, quer zu seiner schmalen Seite geneigt, zählt deshalb
-    mit ``w / cos θ`` — bis zur Überhanggrenze höchstens das 1,4-Fache.
+    druckte ohne Stütze (Nachprüfung RM-571). Der waagerechte Schnitt allein
+    misst aber einen Schlitz, quer zu seiner schmalen Seite geneigt, mit
+    ``w / cos θ``: Ein Schlitz von 22 mm um 45° zählte als Kanal (Review
+    RM-629). Wer geschoben wird, braucht deshalb in seiner Nähe Platz für die
+    Ellipse seines schrägen Wegs (:func:`_oval_centres`), in Schubrichtung
+    ``R / cos θ`` weit, quer dazu ``R``; seine eigene Mitte liegt an der
+    hinteren Wand bis ``R / cos θ - R`` hinter ihrer. θ ist die flachere von
+    zwei Schätzungen (:func:`_shaft_step`). So zählt ein Schlitz ab 30 mm quer
+    zur Achse, gleich wie geneigt, ein Loch Ø 34 mm bis 44°. Die Ellipse ist
+    gerade: Eine Wendel, deren Schnitt sich krümmt, und ein enger schräger
+    Kegel können zubleiben, obwohl ein Kreis entlang der Achse hindurchpasst.
 
     **Ausweichen nur, wo eine Wand schiebt, und nur so steil, wie sie ohne
     Stütze druckt.** Ein Kreis, der frei nach oben steigen kann, wandert nicht:
@@ -2072,27 +2081,29 @@ def _shafts_pass(
     bei gleichen Scheiben.
     """
     radius = CHANNEL_WIDTH / 2.0
+    slope = SHAFT_DRIFT if slope is None else slope
     pending = sorted(materials)
     answers: dict[int, bool] = {}
-    # Je Weg die Mitten der Kreise, die noch durchkommen, und die Scheiben, für
-    # die er gilt.
-    ways: list[tuple[ShapelyPolygon, list[int]]] = []
+    ways: list[_ShaftWay] = []
     for index in range(pending[0] if pending else len(heights), len(heights)):
-        drift = (heights[index] - heights[index - 1]) * SHAFT_DRIFT
-        moving = [(centres, starts, drift) for centres, starts in ways]
+        z = heights[index]
+        drift = (z - heights[index - 1]) * slope
+        moving = [(way, drift) for way in ways]
         if pending and pending[0] == index:
             start = pending.pop(0)
             first = _touching_centres(column, materials[start], line_width)
             if first is None:
                 answers[start] = False
             else:
-                moving.append((first, [start], 0.0))
+                moving.append((_ShaftWay(first, [start], [], [], False), 0.0))
         if not moving:
             if pending:
                 continue
             break
         reach_out = radius + drift
-        low_x, low_y, high_x, high_y = shapely.total_bounds([way[0] for way in moving]).tolist()
+        low_x, low_y, high_x, high_y = shapely.total_bounds(
+            [way.centres for way, _step in moving]
+        ).tolist()
         shade = _clipped(
             shade_at(index),
             (low_x - reach_out, low_y - reach_out, high_x + reach_out, high_y + reach_out),
@@ -2105,14 +2116,15 @@ def _shafts_pass(
             np.zeros(len(moving), dtype=bool)
             if shade.is_empty
             else shapely.dwithin(
-                np.asarray([way[0] for way in moving], dtype=object),
+                np.asarray([way.centres for way, _step in moving], dtype=object),
                 shade,
                 radius - CHANNEL_POLYGON_GAP - SKY_SKIP_INSET,
             )
         )
         blocked: ShapelyPolygon | None = None
         ways = []
-        for (centres, starts, step), hit in zip(moving, hits.tolist(), strict=True):
+        for (way, step), hit in zip(moving, hits.tolist(), strict=True):
+            touching, way.touching = way.touching, hit
             if hit:
                 if blocked is None:
                     # Vereinfacht um dieselbe Lücke, die das Vieleck des Kreises
@@ -2122,42 +2134,177 @@ def _shafts_pass(
                     blocked = shade.simplify(CHANNEL_POLYGON_GAP).buffer(
                         radius, quad_segs=CHANNEL_QUAD_SEGMENTS
                     )
-                if step > 0.0:
-                    fallen = centres.intersection(blocked)
-                    if not fallen.is_empty:
-                        # **Nur so weit, wie die Wand schiebt** — so tief, wie
-                        # die getroffenen Mitten im Gesperrten liegen, dazu ein
-                        # Zuschlag für Vieleck und Vereinfachung. Um den vollen
-                        # Schritt aufgeweitet, wuchsen die Enden des Streifens
-                        # an einer Wand entlang, die ihn nur streift: Mit 0,57°
-                        # Überhang wanderte ein Kreis 2 mm, mit 2,9° 10 mm
-                        # seitwärts unter ein Dach (Review RM-629).
-                        corners = shapely.points(shapely.get_coordinates(fallen))
-                        depth = float(np.max(shapely.distance(corners, blocked.boundary)))
-                        push = min(step, SHAFT_PUSH_SPARE * depth + 2.0 * WIDTH_SIMPLIFY)
-                        centres = centres.union(fallen.buffer(push, quad_segs=SHAFT_STEP_SEGMENTS))
-                # Vereinfacht vor der Differenz: Danach läge der Rand der
-                # Mitten bis ``WIDTH_SIMPLIFY`` im Gesperrten, und dieselbe Wand
-                # träfe sie jede Schicht neu (geschlossener Deckel 0,36 →
-                # 0,27 s, alle Scheiben gleich).
-                centres = centres.simplify(WIDTH_SIMPLIFY).difference(blocked)
-                # Was unter einem Quadrat der Vereinfachung bleibt, ist der Rest
-                # einer Differenz an einer gemeinsamen Kante, kein Platz für
-                # einen Kreis.
-                if centres.area <= WIDTH_SIMPLIFY**2:
-                    answers.update(dict.fromkeys(starts, False))
+                if not _shaft_step(way, blocked, step, z, touching, shade_at(index), slope):
+                    answers.update(dict.fromkeys(way.starts, False))
                     continue
-            for joined, others in ways:
-                if _same_centres(joined, centres):
-                    others.extend(starts)
+            for joined in ways:
+                if _same_centres(joined.centres, way.centres):
+                    joined.starts.extend(way.starts)
                     break
             else:
-                ways.append((centres, starts))
+                ways.append(way)
     for start in pending:
         answers[start] = _touching_centres(column, materials[start], line_width) is not None
-    for _centres, starts in ways:
-        answers.update(dict.fromkeys(starts, True))
+    for way in ways:
+        answers.update(dict.fromkeys(way.starts, True))
     return answers
+
+
+@dataclass(slots=True)
+class _ShaftWay:
+    """Ein Weg durch einen Schacht (:func:`_shafts_pass`): die Mitten der
+    Kreise, die noch durchkommen, die Scheiben, für die er gilt, je Schicht der
+    Schub der Wand (Höhe, x, y) über die letzten :data:`SHAFT_SLOPE_SPAN`, die
+    Mitte seines Lochs (Höhe, x, y) über die letzten :data:`SHAFT_SLOPE_TURN`
+    und ob ihn in der Schicht davor Material traf."""
+
+    centres: ShapelyPolygon
+    starts: list[int]
+    pushes: list[tuple[float, float, float]]
+    middles: list[tuple[float, float, float]]
+    touching: bool
+
+
+def _shaft_step(
+    way: _ShaftWay,
+    blocked: ShapelyPolygon,
+    step: float,
+    z: float,
+    touching: bool,
+    shade: ShapelyPolygon,
+    slope: float,
+) -> bool:
+    """Eine Schicht eines Wegs, den Material trifft (:func:`_shafts_pass`):
+    ``blocked`` ist, wo kein Kreis mehr Platz hat, ``step`` wie weit er
+    höchstens ausweicht, ``z`` die Höhe der Schicht, ``touching`` ob ihn
+    schon die Schicht davor traf, ``shade`` ihr Material. ``False``, wenn kein
+    Kreis bleibt."""
+    radius = CHANNEL_WIDTH / 2.0
+    centres = way.centres
+    stay: ShapelyPolygon | None = None
+    oval: ShapelyPolygon | None = None
+    if step > 0.0:
+        fallen = centres.intersection(blocked)
+        if not fallen.is_empty:
+            # **Nur so weit, wie die Wand schiebt** — so tief, wie die
+            # getroffenen Mitten im Gesperrten liegen, dazu ein Zuschlag für
+            # Vieleck und Vereinfachung. Um den vollen Schritt aufgeweitet,
+            # wuchsen die Enden des Streifens an einer Wand entlang, die ihn nur
+            # streift: Mit 0,57° Überhang wanderte ein Kreis 2 mm, mit 2,9°
+            # 10 mm seitwärts unter ein Dach (Review RM-629).
+            corners = shapely.points(shapely.get_coordinates(fallen))
+            distances = shapely.distance(corners, blocked.boundary)
+            deepest = int(np.argmax(distances))
+            depth = float(distances[deepest])
+            push = min(step, SHAFT_PUSH_SPARE * depth + 2.0 * WIDTH_SIMPLIFY)
+            # **Wie steil der Weg steigt** — die flachere zweier Schätzungen.
+            # Der Schub der Wand über die letzten :data:`SHAFT_SLOPE_SPAN`
+            # misst den Weg der Kreise an der hinteren Wand; wer zum ersten Mal
+            # anstößt, schiebt nichts, denn seine Tiefe misst, wie weit die
+            # Scheibe unter ein neues Hindernis reicht. Das Wandern der Mitte
+            # des Lochs misst die Achse: In einem Kegel steht die hintere Wand
+            # steiler als sie, und über einem Knick wandert das Loch nicht mehr,
+            # während die Kreise noch zur Achse hin geschoben werden.
+            if touching and depth > 0.0:
+                line = shapely.shortest_line(corners[deepest], blocked.boundary)
+                (x0, y0), (x1, y1) = shapely.get_coordinates(line).tolist()
+                scale = min(depth, step) / depth
+                way.pushes.append((z, (x1 - x0) * scale, (y1 - y0) * scale))
+            way.pushes = [entry for entry in way.pushes if entry[0] > z - SHAFT_SLOPE_SPAN]
+            sum_x = math.fsum(entry[1] for entry in way.pushes)
+            sum_y = math.fsum(entry[2] for entry in way.pushes)
+            wide = step + 2.0 * radius * math.hypot(1.0, slope)
+            low_x, low_y, high_x, high_y = fallen.bounds
+            window = (low_x - wide, low_y - wide, high_x + wide, high_y + wide)
+            local = _clipped(shade, window)
+            middle = _hole_middle(local, window, centres)
+            if middle is not None:
+                way.middles.append((z, *middle))
+            way.middles = [entry for entry in way.middles if entry[0] > z - SHAFT_SLOPE_TURN]
+            rise = min(math.hypot(sum_x, sum_y) / SHAFT_SLOPE_SPAN, slope)
+            if len(way.middles) > 1:
+                first, last = way.middles[0], way.middles[-1]
+                axis_x, axis_y = last[1] - first[1], last[2] - first[2]
+                rise = min(rise, math.hypot(axis_x, axis_y) / (last[0] - first[0]))
+            else:
+                axis_x, axis_y = sum_x, sum_y
+            lean = math.cos(math.atan(rise))
+            back = radius * (1.0 / lean - 1.0)
+            if back > WIDTH_SIMPLIFY:
+                length = math.hypot(axis_x, axis_y)
+                stay = centres.difference(fallen)
+                oval = _oval_centres(
+                    local, (axis_x / length, axis_y / length), lean, fallen, step + back
+                ).buffer(back + SHAFT_OVAL_SPARE, quad_segs=SHAFT_STEP_SEGMENTS)
+            centres = centres.union(fallen.buffer(push, quad_segs=SHAFT_STEP_SEGMENTS))
+    # Vereinfacht vor der Differenz: Danach läge der Rand der Mitten bis
+    # ``WIDTH_SIMPLIFY`` im Gesperrten, und dieselbe Wand träfe sie jede
+    # Schicht neu (geschlossener Deckel 0,36 → 0,27 s, alle Scheiben gleich).
+    centres = centres.simplify(WIDTH_SIMPLIFY).difference(blocked)
+    if stay is not None and oval is not None:
+        # Wer bleibt, wo er ist, steigt senkrecht und braucht nur den Kreis;
+        # wer geschoben wurde, einen Platz für die Ellipse seines schrägen
+        # Wegs in seiner Nähe.
+        centres = stay.union(centres.intersection(oval))
+    way.centres = centres
+    # Was unter einem Quadrat der Vereinfachung bleibt, ist der Rest einer
+    # Differenz an einer gemeinsamen Kante, kein Platz für einen Kreis.
+    return bool(centres.area > WIDTH_SIMPLIFY**2)
+
+
+def _oval_centres(
+    shade: ShapelyPolygon,
+    direction: tuple[float, float],
+    lean: float,
+    near: ShapelyPolygon,
+    reach: float,
+) -> ShapelyPolygon:
+    """Wo die Mitte eines Kreises von ``CHANNEL_WIDTH`` liegen kann, der schräg
+    in ``direction`` steigt (:func:`_shafts_pass`), ``lean`` der Kosinus seiner
+    Neigung — gefragt nur bis ``reach`` um ``near``. ``shade`` ist das
+    Material der Schicht, mindestens ``reach + R / cos θ`` um ``near``.
+
+    Quer zur Achse ist ein schräger Schacht ``CHANNEL_WIDTH`` weit, wenn im
+    waagerechten Schnitt eine Ellipse Platz hat: in Richtung der Neigung
+    ``R / cos θ`` weit, quer dazu ``R``. Gerechnet in einer Ebene, die in
+    dieser Richtung um ``cos θ`` gestaucht ist — dort ist die Ellipse ein Kreis.
+    """
+    radius = CHANNEL_WIDTH / 2.0
+    low_x, low_y, high_x, high_y = near.bounds
+    window = (low_x - reach, low_y - reach, high_x + reach, high_y + reach)
+    # Nur, was eine Ellipse im Fenster berühren kann: Vereinfachen und
+    # Aufweiten kosten mit der Fläche (Zickzack 1,0 → 0,9 s CPU).
+    wide = reach + radius / lean + CHANNEL_POLYGON_GAP
+    local = _clipped(shade, (low_x - wide, low_y - wide, high_x + wide, high_y + wide))
+    # In Richtung ``u`` um ``f`` strecken: ``I + (f - 1) u uᵀ``, symmetrisch.
+    axis = np.asarray(direction, dtype=float)
+    outer = np.outer(axis, axis)
+    squeezed = shapely.transform(
+        local.simplify(CHANNEL_POLYGON_GAP),
+        lambda points: points @ (np.eye(2) + (lean - 1.0) * outer),
+    )
+    widened = shapely.transform(
+        squeezed.buffer(radius, quad_segs=CHANNEL_QUAD_SEGMENTS),
+        lambda points: points @ (np.eye(2) + (1.0 / lean - 1.0) * outer),
+    )
+    return cast(ShapelyPolygon, shapely.box(*window).difference(widened))
+
+
+def _hole_middle(
+    local: ShapelyPolygon, window: tuple[float, float, float, float], centres: ShapelyPolygon
+) -> tuple[float, float] | None:
+    """Der Schwerpunkt des Lochs, in dem die Mitten ``centres`` eines Wegs
+    liegen (:func:`_shaft_step`): die freien Teile des Fensters ``window``, das
+    ``local`` beschneidet, die sie berühren. ``None``, wenn keiner es tut."""
+    holes = [
+        part
+        for part in _areas_of(shapely.box(*window).difference(local))
+        if part.intersects(centres)
+    ]
+    if not holes:
+        return None
+    middle = shapely.union_all(holes).centroid
+    return (float(middle.x), float(middle.y))
 
 
 def _touching_centres(
@@ -3615,6 +3762,26 @@ SHAFT_STEP_SEGMENTS: Final = 4
 #: seines Kreises liegt (bei vier Segmenten 2 %). Sonst bliebe eine geschobene
 #: Mitte um diesen Anteil im Gesperrten.
 SHAFT_PUSH_SPARE: Final = 1.0 / math.cos(math.pi / (4.0 * SHAFT_STEP_SEGMENTS))
+
+#: Wie weit eine geschobene Mitte über den Rückstand ``R / cos θ - R`` hinaus
+#: von einer Mitte der Ellipse entfernt liegen darf (:func:`_shaft_step`), in
+#: mm: die Lücke der Kreisvielecke und zwei Vereinfachungen.
+SHAFT_OVAL_SPARE: Final = CHANNEL_POLYGON_GAP + 2.0 * WIDTH_SIMPLIFY
+
+#: Über welche Höhe die Neigung eines Schachts gemittelt wird, in mm
+#: (:func:`_shafts_pass`). Je Schicht steht die Wand nur bis auf die
+#: Vereinfachung genau (rund 0,02 mm), bei 0,2 mm Schichthöhe sind das 6° der
+#: Neigung; über 5 mm summiert noch 0,2°. Länger hinkte die Neigung einem Knick
+#: weiter nach.
+SHAFT_SLOPE_SPAN: Final = 5.0
+
+#: Über welche Höhe das Wandern der Mitte des Lochs die Neigung der Achse
+#: misst, in mm (:func:`_shaft_step`). Die Mitte rauscht nicht wie die Wand,
+#: also genügt eine kurze Höhe. Über :data:`SHAFT_SLOPE_SPAN` hinge die Achse
+#: eines um 40° geneigten Schachts, der senkrecht weitergeht, noch 5 mm über
+#: dem Knick nach, und die Ellipse passte nicht in den senkrechten Teil
+#: (Ø 34 mm blieb zu).
+SHAFT_SLOPE_TURN: Final = 1.0
 
 #: Welcher Anteil eines Deckengrundrisses in der Hülle seiner gehaltenen
 #: Randstücke liegen muss, damit er zwischen ihnen liegt
