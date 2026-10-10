@@ -98,6 +98,11 @@ def _optional_number(value: object) -> str:
     return "" if value is None else _number(value)
 
 
+def _negated(value: object) -> str:
+    """Ein Einzug als Ausdehnung: Cura zählt die erste Schicht nach außen."""
+    return f"{-float(value) + 0.0:g}"  # type: ignore[arg-type]
+
+
 def _integer(value: object) -> str:
     return str(int(value))  # type: ignore[call-overload]
 
@@ -255,6 +260,14 @@ PRUSA: Final[tuple[Row, ...]] = (
     ("layers.line_width", "top_infill_extrusion_width", _number),
     ("layers.line_width", "support_material_extrusion_width", _number),
     ("layers.first_layer_line_width", "first_layer_extrusion_width", _number),
+    # Einzug der ersten Schicht je Seite (RM-589); SuperSlicer liest ihn unter
+    # eigenem Namen mit umgekehrtem Vorzeichen (:data:`PROGRAM_KEYS`). Einen
+    # Ausgleich nur für Löcher kennt nur SuperSlicer, als Materialzugabe:
+    # negativ weitet. In seinem Vorzeichen geschrieben, auch in eine 3MF ohne
+    # Programm, die PrusaSlicer liest und dabei den Schlüssel übergeht.
+    # ``xy_size_compensation`` verschiebt jede Kontur und ist eine andere Sache.
+    ("layers.elephant_foot", "elefant_foot_compensation", _number),
+    ("shell.hole_offset", "hole_size_compensation", _negated),
     ("shell.wall_count", "perimeters", _integer),
     ("shell.top_layers", "top_solid_layers", _integer),
     ("shell.bottom_layers", "bottom_solid_layers", _integer),
@@ -414,6 +427,9 @@ ORCA: Final[tuple[Row, ...]] = (
     ("layers.line_width", "internal_solid_infill_line_width", _number),
     ("layers.line_width", "top_surface_line_width", _number),
     ("layers.first_layer_line_width", "initial_layer_line_width", _number),
+    # Beide je Seite, beide Objektwerte (``PrintObjectConfig``, RM-589).
+    ("layers.elephant_foot", "elefant_foot_compensation", _number),
+    ("shell.hole_offset", "xy_hole_compensation", _number),
     ("shell.wall_count", "wall_loops", _integer),
     ("shell.top_layers", "top_shell_layers", _integer),
     ("shell.bottom_layers", "bottom_shell_layers", _integer),
@@ -597,6 +613,11 @@ CURA: Final[tuple[Row, ...]] = (
     ("layers.first_layer_height", "layer_height_0", _number),
     ("layers.line_width", "line_width", _number),
     ("layers.first_layer_line_width", "initial_layer_line_width_factor", _number),
+    # Curas Gegenstück zum Elefantenfuß ist die Ausdehnung der ersten Schicht,
+    # negativ gezählt; ``hole_xy_offset`` weitet Löcher je Seite (RM-589).
+    # Beide nimmt CuraEngine je Netz an.
+    ("layers.elephant_foot", "xy_offset_layer_0", _negated),
+    ("shell.hole_offset", "hole_xy_offset", _number),
     ("shell.wall_count", "wall_line_count", _integer),
     ("shell.top_layers", "top_layers", _integer),
     ("shell.bottom_layers", "bottom_layers", _integer),
@@ -1049,6 +1070,15 @@ def keys_for(path: str) -> tuple[str, ...]:
     # Was als Geometrie reist, hat keinen Wertschlüssel, aber einen Namen im
     # Slicer (:data:`GEOMETRY_KEYS`).
     seen += [key for key in GEOMETRY_KEYS.get(path, ()) if key not in seen]
+    # Ein Programm, das den Schlüssel seiner Familie anders nennt
+    # (:data:`PROGRAM_KEYS`, SuperSlicers ``first_layer_size_compensation``),
+    # zählt mit seinem eigenen Namen.
+    seen += [
+        native
+        for renamed in PROGRAM_KEYS.values()
+        for key, native in renamed.items()
+        if key in seen and native not in seen
+    ]
     return tuple(seen)
 
 
@@ -1165,6 +1195,14 @@ NOT_TAKEN_BY: Final[dict[SlicerFlavour, frozenset[str]]] = {
     "other": frozenset(),
 }
 
+#: Was nur als eigene Wahl oder übernommener Vorschlag hinausgeht, auch dort,
+#: wo Solidon den ganzen Satz schreibt (RM-589). Loch- und Fußausgleich
+#: gehören der Maschine: Curas Druckerdefinitionen und Qualitätsstufen setzen
+#: sie für 75 Drucker und 70 Profile, und eine Kalibrierung misst, was nach
+#: ihnen fehlt. Ein Wert aus Solidons Tabelle überschriebe beides; so bleibt
+#: es beim Wert des Slicers, wie bei Curas Lüfterkurve (RM-228).
+MAKER_OWNED: Final[frozenset[str]] = frozenset({"layers.elephant_foot", "shell.hole_offset"})
+
 #: Einstellungen, die nicht als Wert reisen, sondern als **Geometrie**
 #: (``writer.write_assembly``) — die Messung über ``values_for`` sieht sie
 #: deshalb nicht. ``support.block_channels`` und ``support.spare_ledges``
@@ -1224,8 +1262,9 @@ NOT_TAKEN_BY_PROGRAM: Final[dict[str, frozenset[str]]] = {
     # die 36-mm-Brücke trotzdem: 5 578 mm Stütze mit 0 und mit 1, an einem Teil und
     # an beiden (RM-587).
     "superslicer": UNKNOWN_TO_PROGRAM["superslicer"] | {"support.bridges"},
-    # Den Kontaktlüfter führt nur SuperSlicer (``--help-fff`` von 2.9.6).
-    "prusaslicer": frozenset({"cooling.support_interface_cooling"}),
+    # Den Kontaktlüfter und einen Ausgleich nur für Löcher führt nur
+    # SuperSlicer (``--help-fff`` von 2.9.6; RM-589).
+    "prusaslicer": frozenset({"cooling.support_interface_cooling", "shell.hole_offset"}),
     # Bambu Studio führt ``support_material_interface_fan_speed`` nicht; sein
     # Konfigurationsblock nennt den Schlüssel nicht (P1S, 08.10.2026). Ebenso
     # fehlen ``extra_perimeters_on_overhangs`` und ``overhang_reverse`` (RM-587).
@@ -1346,9 +1385,21 @@ PROGRAM_ALIASES: Final[dict[str, dict[str, tuple[str, ...]]]] = {
 
 #: Bambu behält den Plural; die übrige Orca-Familie führt den Singular. Creality
 #: Print liest die Wände der Bäume unter eigenem Namen (RM-584, Slicertest).
+#: SuperSlicer 2.5 nennt den Einzug der ersten Schicht
+#: ``first_layer_size_compensation`` und zählt ihn als Ausdehnung, negativ
+#: (:data:`PROGRAM_NEGATED`); seine Profile setzen -0,05 bis -0,3 (RM-589).
 PROGRAM_KEYS: Final[dict[str, dict[str, str]]] = {
     "bambustudio": {"chamber_temperature": "chamber_temperatures"},
     "crealityprint": {"tree_support_wall_count": "tree_support_wall_count_tree"},
+    "superslicer": {"elefant_foot_compensation": "first_layer_size_compensation"},
+}
+
+#: Schlüssel der Familie, deren Wert das Programm mit umgekehrtem Vorzeichen
+#: liest. Den Lochausgleich schreibt die Prusa-Zeile schon in SuperSlicers
+#: Vorzeichen (``hole_size_compensation``: positiv wird das Loch enger,
+#: gemessen an zwei Bohrplatten, 2.5.59.13, 09.10.2026, RM-589).
+PROGRAM_NEGATED: Final[dict[str, frozenset[str]]] = {
+    "superslicer": frozenset({"elefant_foot_compensation"}),
 }
 
 
@@ -1670,8 +1721,11 @@ def program_value(key: str, value: str, program: str) -> str:
     """Ein geschriebener Aufzählungswert in der Sprache dieses Programms.
 
     Die Übersetzung steht in :data:`PROGRAM_VALUES`; ohne Eintrag bleibt der
-    Wert der Familie.
+    Wert der Familie. Ein Schlüssel aus :data:`PROGRAM_NEGATED` kehrt sein
+    Vorzeichen um.
     """
+    if key in PROGRAM_NEGATED.get(program, frozenset()):
+        return f"{-float(value) + 0.0:g}"
     return PROGRAM_VALUES.get(program, {}).get(key, {}).get(value, value)
 
 
@@ -1713,6 +1767,11 @@ def for_program(values: Mapping[str, str], flavour: SlicerFlavour, program: str)
     dropped = NOT_TAKEN_BY_PROGRAM.get(program, frozenset()) | unknown_in_file(flavour, program)
     unknown = {entry.key for entry in TABLES[flavour] if entry.path in dropped}
     kept = {key: value for key, value in values.items() if key not in unknown}
+    # Was noch unter dem Namen der Familie steht, bekommt den des Programms
+    # (:func:`native_key`). Den Wert in dessen Sprache schreibt schon
+    # :func:`app.core.export.handover.as_mapping` (:func:`program_value`).
+    for key in [key for key in kept if native_key(key, program) != key]:
+        kept.setdefault(native_key(key, program), kept.pop(key))
     for old, new in PROGRAM_ALIASES.get(program, {}).items():
         if old not in kept:
             continue

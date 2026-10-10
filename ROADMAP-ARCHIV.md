@@ -42,6 +42,7 @@ entfernt hat.
 | 2026-10-09 | [RM-691: Der Stift an den Löchern der Halter ist an beiden Kernen derselbe (09.10.2026)](#rm-691-der-stift-an-den-löchern-der-halter-ist-an-beiden-kernen-derselbe-09102026) |
 | 2026-10-10 | [RM-751: Ein freigegebenes Fenster startet keine Wandprüfung mehr (10.10.2026)](#rm-751-ein-freigegebenes-fenster-startet-keine-wandprüfung-mehr-10102026) |
 | 2026-10-10 | [RM-750: Ein wartender Klick behält seine Zusage, während die Analysekarte rechnet (10.10.2026)](#rm-750-ein-wartender-klick-behält-seine-zusage-während-die-analysekarte-rechnet-10102026) |
+| 2026-10-09 | [RM-589: Was das Modell schon ausgleicht, gleicht der Slicer nicht noch einmal aus (09.10.2026)](#rm-589-was-das-modell-schon-ausgleicht-gleicht-der-slicer-nicht-noch-einmal-aus-09102026) |
 | 2026-10-10 | [RM-670: Ein zweiter 3MF-Export liest den Slicerbestand nicht neu (10.10.2026)](#rm-670-ein-zweiter-3mf-export-liest-den-slicerbestand-nicht-neu-10102026) |
 | 2026-10-09 | [RM-670 (Teil): Der 3MF-Export liest den Slicerbestand nicht mehr je Export neu (09.10.2026)](#rm-670-teil-der-3mf-export-liest-den-slicerbestand-nicht-mehr-je-export-neu-09102026) |
 | 2026-10-09 | [RM-627: Ein Rand neben einem anderen Überhang ist keine lange Brücke (09.10.2026)](#rm-627-ein-rand-neben-einem-anderen-überhang-ist-keine-lange-brücke-09102026) |
@@ -47203,6 +47204,103 @@ dahin geordnet wurden (`Trimesh.volume` am Teilnetz), damit die Kennungen nicht 
 ältere Projekte rechnen mit genau der alten Zählung (`_parts_as_saved`). Tests für Ecken nach
 Ort, das entartete Dreieck, die Träger der Mitnahme und das alte Integral (G2); Texte ohne
 Formatnummer (G3), Einzahl „Ein Splitter wurde verworfen“ (G4).
+
+## RM-589: Was das Modell schon ausgleicht, gleicht der Slicer nicht noch einmal aus (09.10.2026)
+
+<a id="rm-589-was-das-modell-schon-ausgleicht-gleicht-der-slicer-nicht-noch-einmal-aus-09102026"></a>
+<a id="rm-589"></a>
+
+**RM-589 — Bohrungen und Stifte passen ohne Nacharbeit.** Ausgleich für Bohrungen,
+Polyholes und Elefantenfuß bleiben beim Hersteller; die Passungen rechnet Solidon über das
+Spiel im Materialprofil (Recherche Nr. 13). Offen war, wie beides zusammenwirkt, ohne doppelt
+auszugleichen. Abnahme: ein Passungsteil aus dem Korpus im Slicer gemessen, mit und ohne
+Ausgleich.
+
+**Befund (09.10.2026, `assembly_fit.p3d`, PETG, Außenwandbahnen im G-Code):** Solidon schrieb
+keinen Loch- oder Fußausgleich, es galt der des Herstellers. Wo das Modell ihn schon trug,
+glich der Slicer ein zweites Mal aus: *Elefantenfuß ausgleichen* plus Einzug des Herstellers
+gab in der ersten Schicht 0,3 statt 0,2 mm je Seite am Centauri Carbon 2 (ElegooSlicer,
+0,1), 0,4 statt 0,2 am MK4S (PrusaSlicer, 0,2), 0,275 am Kobra 2 (Anycubic Slicer Next,
+0,075); eine Bohrung mit Materialzugabe wurde zusätzlich je Seite um 0,02 mm (Kobra 2) und
+0,025 mm (Ender-3 V3 KE, beide OrcaSlicer) geweitet. Polyholes führt kein Herstellerprofil;
+CuraEngine mit den sieben Druckerdefinitionen der Solidon-Drucker glich weder Fuß noch Loch
+aus (75 andere der 706 Definitionen in Cura 5.13 setzen einen der beiden Werte). Eingelesene
+Löcher ohne Zugabe bekamen den Ausgleich des Herstellers allein, dort war nichts doppelt.
+
+**Behoben:** Zwei neue Druckeinstellungen, *Erste Schicht einziehen* (`layers.elephant_foot`:
+Orca und Prusa `elefant_foot_compensation`, SuperSlicer `first_layer_size_compensation`
+negativ, Cura `xy_offset_layer_0` negativ) und *Löcher weiten* (`shell.hole_offset`: Orca
+`xy_hole_compensation`, SuperSlicer `hole_size_compensation` negativ, Cura `hole_xy_offset`;
+PrusaSlicer kennt keinen), zurückgelesen aus dem Herstellerprofil. Ohne eigene Wahl schreibt
+kein Satz einen der beiden, auch Solidons eigener nicht (`slicer_keys.MAKER_OWNED`); es gilt
+der Wert des Slicers. `scene.fits.allowances_for` sagt je Körper, was sein Modell schon
+ausgleicht: Löcher, wo ein Schritt Spiel in eine Innenkontur legt (Bausteine über
+`parts.ops.cuts` oder `PartSpec.play_inside`, gebohrte Löcher mit Haken am Merkmal, das noch
+steht, von Deckel, Drehdeckel und Teilen nur das Ergebnis mit dem Spiel innen), den Fuß aus
+*Elefantenfuß ausgleichen*. Der Druckrat (`advise._from_allowances`) schlägt dort null vor, je
+Teil (`PART_PATHS`, Cura je Netz), nicht bei kalibriertem Material; die Orca-Familie bekommt
+dazu den Brim-Abstand des Teils, damit der Brim am Fuß bleibt. Druckdialog und Export fragen
+dieselbe Auskunft.
+
+**Review (`review_rm589.md`) behoben:** S1 Solidons eigener Satz schrieb Einzug und
+Lochausgleich ungefragt (Cura zog ein Teil mit *Elefantenfuß ausgleichen* doppelt ein, Curas
+Fenster überschrieb Maschinenwerte): nur noch auf Wahl, der Rat je Teil gilt als übernommen.
+M1 kalibriertes Material ohne Vorschlag, denn sein Prüfkörper ging durch den Ausgleich des
+Slicers. M2 Schraube, Haken und Wärmeeinsatz zählen nicht mehr, Fußtasche, Mutter und
+Stangenverbinder zählen, Deckel und Teilen nur am richtigen Ergebnis (gegen `e8c785abd` 16
+von 24 Fällen falsch; Scharniere, Rastnase und Stecker nach der Nachprüfung nicht mehr). M3 Fenstertest über den Dialogweg. L1
+Programmvorgaben null für die fünf Programme der Orca-Familie, gemessen. L3 Suche unter den
+Wörtern der Slicer in sechs Sprachen. L5 SuperSlicer bekommt beides unter eigenem Namen; eine
+Prusa-3MF ohne Programm schreibt den Lochausgleich in seinem Vorzeichen (neuer Fund).
+
+**Nachprüfung (`review_rm589_nach.md`) behoben:** N1 Nach *Anordnen* und *Ausrichten*
+bekam jeder Körper den Ausgleich seiner Nachbarn — am OrcaSlicer druckte ein Körper ohne
+Modellausgleich mit dem Rat Elefantenfuß (Schicht 1 nur 0,080 statt 0,380 mm eingezogen);
+die Herkunft geht jetzt je Körperkennung, auch für die Passungsarten, und B behält seinen
+Einzug. N2 gezählt wird am Innenmerkmal des fertigen Körpers, das der Slicer in einer Schicht
+geschlossen sieht (`L·cos θ > d·sin θ`, am Schnitt belegt): waagerechte Bohrungen,
+Scharnieraugen, Bolzenscharnier und Kabelclip nicht mehr — eine senkrechte Bohrung daneben
+behält am Kobra 2 den Ausgleich des Herstellers (Bahn 6,439 statt 6,399 mm) —, dazu
+*An gezeichneter Linie teilen*, der Schraubdeckel aus *Behälter mit Deckel* und *Gegenform
+einlassen*. N3 gemessen ist je Wert (`MaterialProfile.measured`): Wer nur das Spiel
+kalibriert, bekommt beim Fuß weiter den Vorschlag. N5 die Suche kennt die Wörter der
+übersetzten Slicer und SuperSlicers `first_layer_size_compensation`. N4, N6–N10 Format-Tor,
+Docstrings, eine Quelle der Lochfeldformen, `play_inside` mit Wächter und Karte,
+Unterlagen, Changelog-Wort.
+
+**Schlussprüfung (`review_rm589_schluss.md`) behoben:** S1 Der Fuß zählte an der Herkunft:
+Ein Turm, den *Ausrichten* hinlegte, ein gewendeter, die obere Hälfte eines waagerechten
+Schnitts und ein Deckel bekamen „Erste Schicht einziehen → 0“ und druckten mit Elefantenfuß.
+Er zählt jetzt nur, wo das eingezogene Band am Bett liegt (`fits._foot_on_the_bed`: Rahmen-Z
+mit Vorzeichen nach oben, Schritt auf der eigenen Linie oder einer reinen Kopie, `COPY_OPS`);
+am OrcaSlicer behält der liegende Turm den Einzug des Slicers (Schicht 1 0,380 mm schmaler als
+die Mitte), der stehende zieht nur im Modell ein (0,480, Objektwert 0). S2 Eine senkrecht
+durch eine gekippte dünne Platte gebohrte Öffnung zählt nicht mehr: Hat der Lochmantel zwei
+Ränder, entscheidet, ob der tiefste Punkt des oberen über dem höchsten des unteren liegt
+(`_closes_between_mouths`, gegen den Schnitt belegt, auch bei geknicktem Rand). S3 Test für
+`measured` im Projektweg (`carry`, Speichern und Öffnen auf einem zweiten Rechner).
+Kontrolle (`review_rm589_kontrolle.md`), K1: Nach *Abschneiden* oder *Abziehen* unten und
+nach Kippen, Einziehen und Zurückdrehen zählte der Fuß weiter; jetzt bestätigen zwei
+Schnitte am fertigen Körper, dass das Band unten noch eingezogen ist (`_band_drawn_in`).
+Ein Vereinigen, bei dem nur ein Teil eingezogen war, zählt deshalb nicht mehr.
+
+**Gemessen nachher:** Mit dem Rat übernommen dieselben Teile ohne doppelten Ausgleich: CC2
+39,10 statt 38,90 mm Bahnbreite in Schicht 1, MK4S 39,10 statt 38,70, Kobra 2 in Anycubic
+Slicer Next 39,10, Cura 39,14; Loch am Kobra 2 6,635 statt 6,675, am KE 6,636 statt 6,686 mm.
+`test_a_part_that_compensates_itself_is_not_compensated_again` (`slicer`-Marker): zwei gleiche
+Bohrplatten, die Platte des Slicers mit 0,1 mm Lochausgleich und 0,15 mm Einzug, die
+ausgleichende mit Objektwert null — in OrcaSlicer, PrusaSlicer, Cura, Bambu Studio,
+ElegooSlicer, Creality Print und Anycubic Slicer Next Loch 0,199 bis 0,208 mm und Einzug
+0,300 mm Unterschied (PrusaSlicer ohne Lochausgleich: 0,000), sieben grün. Nach dem Review
+dieselben Bohrplatten in allen acht Programmen samt SuperSlicer (MINI), je ohne Klick, mit
+Rat, mit Wahl und mit Solidons eigenem Satz: Ohne Herstellerprozess und bei Cura schreibt
+die Übergabe keinen der beiden Werte, die Programme drucken mit ihrer Vorgabe null
+(Konfigurationsblock), Cura zieht A nur um den Modelleinzug ein (39,14 gegen B 39,54 mm);
+mit Rat zieht A nirgends doppelt ein (Orca-Familie und PrusaSlicer 39,10, SuperSlicer 39,18
+wie B), mit Wahl Loch 0,198 bis 0,208 und Einzug 0,300 mm Unterschied in allen acht.
+Begründung:
+`konzepte/begruendungen/regel-druckrat.md`, Regel: `.claude/rules/druckrat.md`. Umgesetzt von
+Claude (Worktree `F:/sl-loecher`).
 
 ## RM-571: Ein Sims im offenen Becher neben einem gesperrten Kanal behält seine Stütze (09.10.2026)
 

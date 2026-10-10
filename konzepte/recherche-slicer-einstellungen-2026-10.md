@@ -2,9 +2,11 @@
 
 > **Stand 08.10.2026, datierte Ausgangsbefunde.** Daraus gebaut sind RM-580
 > (Mindesttempo für Spitzen), RM-581 (Bäume, wo kleine Überhänge auf dem Modell
-> ansetzen) und RM-582 (Ränder ohne Stütze); die übrigen Lücken stehen als
-> RM-583 bis RM-589 im Register von `ROADMAP.md` und verweisen auf die Nummern
-> unten. Die Spalte „Solidon“ beschreibt den Code vor diesen drei Punkten.
+> ansetzen), RM-582 (Ränder ohne Stütze), RM-583 (Stützkontakt je Material)
+> und RM-589 (kein doppelter Loch- und Fußausgleich, Nr. 13); die übrigen
+> Lücken stehen als RM-584 bis RM-588 im Register von `ROADMAP.md` und
+> verweisen auf die Nummern unten. Die Spalte „Solidon“ beschreibt den Code vor
+> diesen Punkten.
 
 Auftrag: Welche Slicerwerte verlangt die Geometrie anders, als der
 Hersteller sie vorgibt, und welche davon schreibt Solidon heute? Schwerpunkt Stützen
@@ -500,7 +502,9 @@ Kobra 2 in Orca; Prusa MK4S bzw. Prusa-Bündel). „Solidon“ bezieht sich auf
   Bambu rechnet Bohrungen über `hole_coef_*`/`hole_limit_*`.
 - **Solidon:** Rat genaue Außenwand, Außenwand zuerst, langsam (30 mm/s, 2000 mm/s²),
   Bügeln bei bündiger Passung. Spiel kommt aus dem Materialprofil (Regel 7); eine
-  Slicerkompensation käme dazu und muss mit ihm abgestimmt werden. Lücke 13.
+  Slicerkompensation käme dazu und muss mit ihm abgestimmt werden. Lücke 13, geschlossen
+  mit RM-589: *Löcher weiten* und *Erste Schicht einziehen* lesen den Herstellerwert, und
+  der Rat stellt beide an Teilen, die den Ausgleich schon im Modell tragen, je Teil auf null.
 
 ---
 

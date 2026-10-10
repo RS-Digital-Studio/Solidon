@@ -286,6 +286,7 @@ def _bayonet_reason(params: BayonetParams) -> TranslatableText | None:
 
 @register_part(
     name="bayonet",
+    play_inside=True,
     title=_("Bajonettverschluss"),
     group="mechanics",
     params=BayonetParams,
@@ -567,6 +568,7 @@ def _detent_reason(params: DetentDiscParams) -> TranslatableText | None:
 
 @register_part(
     name="detent_disc",
+    play_inside=True,
     title=_("Rastdrehscheibe"),
     group="mechanics",
     params=DetentDiscParams,

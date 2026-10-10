@@ -1067,6 +1067,7 @@ class HingeEyeParams(BaseParams):
 
 @register_part(
     name="hinge_eye",
+    play_inside=True,
     title=_("Scharnierauge"),
     group="mechanics",
     params=HingeEyeParams,
@@ -1209,6 +1210,7 @@ class BarrelHingeParams(BaseParams):
 
 @register_part(
     name="barrel_hinge",
+    play_inside=True,
     standalone=True,
     title=_("Bolzenscharnier"),
     group="mechanics",

@@ -811,6 +811,117 @@ Objektmarken: `; printing object` (Anycubic Slicer Next mit Anführungszeichen),
 `M486` bei PrusaSlicer, bei Bambu Studio die Kennungen aus `; model label id`
 in der Ladefolge.
 
+**Was das Modell schon ausgleicht, gleicht der Slicer nicht noch einmal aus
+(09.10.2026, RM-589).** *Bohrung setzen* weitet mit gesetztem Haken um die
+Lochkorrektur des Materials (PETG Ø 6 → 6,2 mm), *Elefantenfuß ausgleichen*
+zieht die ersten 0,6 mm um den Fuß des Materials ein (PETG 0,2 mm je Seite).
+Die Herstellerprofile gleichen beides auch aus: `elefant_foot_compensation`
+0,1 am Centauri Carbon 2, 0,2 am MK4S, 0,075 am Kobra 2 in Anycubic Slicer
+Next; `xy_hole_compensation` 0,02 am Kobra 2 und 0,025 am Ender-3 V3 KE in
+OrcaSlicer (rund 30 Prozesse der Orca-Bestände führen einen Lochausgleich, fast
+alle einen Einzug). Gemessen an `assembly_fit.p3d` (Außenwandbahnen im G-Code,
+PETG): Die gebohrte Platte zog mit *Elefantenfuß ausgleichen* in der ersten
+Schicht 0,3 statt 0,2 mm je Seite ein (CC2, Bahnbreite 38,90 gegen 39,10 mm),
+am MK4S 0,4 statt 0,2 (38,70 gegen 39,10); das Loch des Kobra 2 lag 0,04 mm
+weiter als die Materialzugabe allein (Bahn 6,675 gegen 6,635 mm), am KE 0,05
+(6,686 gegen 6,636). Cura glich bis dahin weder Fuß noch Loch aus. Mit dem Rat
+übernommen trafen alle vier Fälle den Wert ohne doppelten Ausgleich, und eine
+Platte mit zwei gleichen Bohrplatten zeigte in allen sieben Programmen, dass
+der Wert je Teil ankommt (Loch 0,20, Einzug 0,30 mm Unterschied bei 0,1 und
+0,15 mm auf der Platte; `test_real_slicers.py`).
+Vorschlag statt Automatik, weil auf dem Herstellerprofil nur Gewähltes und
+Übernommenes geschrieben wird; je Teil, weil ein eingelesenes Loch daneben den
+Ausgleich des Herstellers weiter braucht. Eine nur eingetragene Passung baut
+kein Spiel ins Modell und zählt deshalb nicht.
+
+Gezählt wird, was Spiel in eine **Innenkontur** legt (Review M2): ein
+abtragender Baustein mit Spiel oder Übermaß (`parts.ops.cuts`, dieselbe
+Auskunft wie Operation und Vorschau), ein aufgesetzter mit Bohrung, die das
+Spiel trägt (`PartSpec.play_inside`: Mutter, Stangenverbinder),
+eine gebohrte Bohrung mit Haken, die am fertigen Körper noch steht (ein
+gestopftes oder ohne Haken nachgebohrtes Loch nicht, ein Sechseck aus dem
+Lochfeld nicht), und von Deckel, Drehdeckel und Teilen nur das Ergebnis mit
+dem Spiel innen (Kappe, Hälfte mit Bohrungen). Ein Stift, ein
+Schnapphaken, ein Gewindebolzen, *Schraube erstellen* und der Wärmeeinsatz
+tragen kein Spiel innen; bis zum Review bekam die Schraube „Löcher weiten 0“,
+und der Haken des Drehdeckels nahm auch dem Hals den Lochausgleich.
+
+Nach der Nachprüfung (10.10.2026) wird **am Merkmal des fertigen Körpers**
+gezählt, nicht am Schritt. *Anordnen* und *Ausrichten* führen alle Körper als
+Ein- und Ausgang; über alle Eingänge bekam jeder Körper die Herkunft seiner
+Nachbarn, und mit dem Rat druckte der OrcaSlicer einen Körper ohne jeden
+Modellausgleich mit Elefantenfuß (Schicht 1 nur 0,080 statt 0,380 mm
+schmaler als die Mitte). Die Herkunft geht deshalb je Körperkennung, alle
+Eingänge nur, wo der Körper neu entsteht. Und der Lochausgleich des Slicers
+weitet nur geschlossene Konturen einer Schicht (OrcaSlicer
+`_shrink_contour_holes`): Eine waagerechte Bohrung hatte bei 0 und 0,1 mm
+dieselben 6206 Bahnen. Scharnieraugen, Bolzenscharnier, Rohrschelle und
+Kabelclip zählen deshalb nicht mehr, gekippte Bohrungen nur, solange eine
+Schicht sie umschließt; dazu kamen *An gezeichneter Linie teilen*, der
+Schraubdeckel aus *Behälter mit Deckel* und *Gegenform einlassen*. Eine
+Tasche ohne Achsmerkmal (Rastnasen-Aussparung, Schnappverbinder) zählt nicht —
+im Zweifel bleibt der Ausgleich des Herstellers.
+
+**Der Fuß zählt am Bett, nicht an der Herkunft** (Schlussprüfung S1, Kontrolle
+K1, 10.10.2026). Ein Turm, den *Ausrichten* nach dem Einziehen hinlegte, druckte
+mit dem Rat am OrcaSlicer mit Elefantenfuß (Schicht 1 0,080 statt 0,380 mm
+schmaler als die Mitte); ebenso die obere Hälfte eines waagerechten Schnitts,
+ein Deckel, ein gewendeter Körper und einer, dem *Abschneiden* oder *Abziehen*
+das Band unten nahm. Darum drei Bedingungen: Rahmen-Z nach oben, der Schritt auf
+der eigenen Linie (Teilen und Deckel bauen neu, das Band liegt dort nicht sicher
+unten) und zwei Schnitte am fertigen Körper, die das Band bestätigen. Die zu
+strenge Richtung — der Slicer zieht doppelt ein, die erste Schicht wird etwas
+schmaler — ist die harmlose. Ein Loch zählt nach den Höhen seiner Mantelränder:
+Senkrecht durch eine gekippte 3-mm-Platte gebohrt, maß die Tiefe die Achsspanne
+(16 mm), und keine Schicht umschloss das Loch.
+
+**Solidons eigener Satz schreibt beides nur auf Wahl** (Review S1). Wo kein
+Herstellerprozess darunter liegt — Cura, PrusaSlicer ohne Drucker im Bündel,
+die Orca-Familie ohne lesbaren Prozess, eine 3MF ohne Slicer —, gilt der Wert
+des Slicers. Zuerst kam dort der Einzug aus dem Material; dann zog Cura ein
+Teil mit *Elefantenfuß ausgleichen* ungefragt doppelt ein (0,4 statt 0,2 mm je
+Seite bei PETG), und Curas Fenster überschrieb, was 75 der 706
+Druckerdefinitionen und 70 Qualitätsstufen setzen (AnkerMake M5 0,2 mm
+Lochausgleich, VzBot −0,3 mm Einzug). `slicer_keys.MAKER_OWNED` lässt beide
+Pfade aus jedem Satz, solange sie weder gewählt noch übernommen sind, wie
+Curas Lüfterkurve (RM-228); der Rat je Teil schreibt sie als übernommen. Die
+sieben Cura-Definitionen der Solidon-Drucker setzen keinen der beiden
+Schlüssel, die Grundlage 0 stimmt dort mit dem, was Cura druckt.
+
+**Ein kalibriertes Material bekommt keinen Vorschlag** (Review M1). Der
+Toleranz-Testkörper geht durch denselben Slicer mit dessen Ausgleich (er
+selbst trägt keinen Modellausgleich, `allowances_for` ist leer); was der Kunde
+misst und einträgt, ist der Rest hinter dem Slicer. Modell und Slicer treffen
+das Maß dann nur zusammen, und „null“ machte das Loch um die Lochkorrektur des
+Slicers enger und ließe den Fuß um dessen Einzug stehen. Erwogen war der
+andere Weg: den Prüfkörper ohne Slicer-Ausgleich drucken, damit das Material
+den ganzen Fehler trägt. Verworfen, weil dann jedes Teil mit Modellausgleich
+nur nach einem Klick richtig druckt (ohne Klick doppelt), weil jede
+Kalibrierung aus 0.5.x ungültig würde, ohne dass der Kunde es merkt, und weil
+Dialog und Handbuch eine zweite Druckvorschrift für den Prüfkörper bräuchten.
+So druckt ein kalibriertes Material ohne Klick richtig, und die Startwerte
+der Tabelle, die den ganzen Fuß meinen, bekommen den Vorschlag.
+
+Nach der Nachprüfung (N3) gilt das **je Wert**. Der Kalibrierdialog reichte
+jedes unberührte Feld mit seinem Startwert durch und setzte danach
+„kalibriert“ für das ganze Material; wer nur das Spiel maß, behielt beim Fuß
+den Startwert und bekam trotzdem keinen Vorschlag — der Fuß kam doppelt.
+`MaterialProfile.measured` nennt jetzt die gemessenen Werte; der Dialog
+schreibt nur eingetragene Felder. Der Lochvorschlag entfällt erst, wenn Spiel
+und Lochkorrektur gemessen sind: Ein falsch fehlender Vorschlag gleicht still
+doppelt aus, ein falsch stehender wartet auf einen Klick. Eine ältere
+Kalibrierdatei nennt `measured` nicht; gemessen ist dort, was vom
+mitgelieferten Startwert abweicht (`profiles._measured`) — ein Wert gleich dem
+Startwert ist für den Rat derselbe Wert. Ein Speichern ohne eingetragenen Wert
+kalibriert nichts. Im Projekt reist `measured` mit einem eigenen Material als
+weiterer Schlüssel der Tabelle; ältere Fassungen übergehen ihn, eine fehlende
+Angabe liest sich wie die ältere Datei.
+
+SuperSlicer heißt Einzug und Lochausgleich `first_layer_size_compensation`
+und `hole_size_compensation`, beide als Materialzugabe mit umgekehrtem
+Vorzeichen (`slicer_keys.PROGRAM_KEYS`, `PROGRAM_NEGATED`); seine Bündel
+setzen −0,05 bis −0,3 mm Einzug und −0,03 bis −0,05 mm Lochausgleich, die die
+Grundlage zurückliest. PrusaSlicer kennt keinen Lochausgleich.
 **Und jede Spitze mit Trennschicht** (RM-704): Der dritte Drache (0,4 mm oben,
 volle Elegoo-Grundlage) hatte saubere Kopfstacheln, aber eine faserige,
 durchhängende Kieferunterseite. Gemessen im G-Code (ElegooSlicer, Unterseite

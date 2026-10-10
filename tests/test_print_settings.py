@@ -7433,6 +7433,10 @@ def test_every_setting_reaches_every_slicer_or_stands_in_the_list() -> None:
             # Die Wände gehören den Baumstämmen (RM-584).
             start = _with_value(base, "support.style", "tree")
         changed = _with_value(start, field.path, value)
+        if field.path in slicer_keys.MAKER_OWNED:
+            # Loch- und Fußausgleich gehen nur als eigene Wahl hinaus (RM-589),
+            # und genau so setzt sie das Feld im Dialog.
+            changed = print_settings.with_choice(start, field.path, value)
         for flavour in ("prusa", "orca", "cura"):
             if handover.values_for(start, profile, flavour) == handover.values_for(
                 changed, profile, flavour
@@ -8462,6 +8466,7 @@ def test_without_a_slicer_the_dialog_advises_for_its_actual_export(
         _fits_in_play=lambda: (),
         _connector_diameters=lambda: (),
         _part_fits=dict,
+        _part_allowances=dict,
         _declined_advice=frozenset,
         _advice_ready=lambda _worker, _context, _analysis, entries, _results: received.extend(
             entries

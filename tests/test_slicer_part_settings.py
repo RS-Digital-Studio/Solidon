@@ -620,13 +620,19 @@ def test_file_export_without_program_only_promises_shared_object_capabilities(
 # keinen, SuperSlicer dicke Brücken und Fluss (Review RM-587, M3). Den Brückenfluss
 # hält ``test_real_slicers.py`` im echten Programm je Teil. Die
 # Menge wird absichtlich nicht aus PART_PATHS oder den Schlüsseltabellen
-# gebaut: ein neuer Pfad braucht einen eigenen Wirkungsnachweis.
+# gebaut: ein neuer Pfad braucht einen eigenen Wirkungsnachweis. Lochausgleich
+# und Einzug der ersten Schicht (RM-589) belegt eine Platte mit zwei gleichen
+# Bohrplatten, eine mit Objektwerten null, am echten Programm
+# (``test_real_slicers.test_a_part_that_compensates_itself_is_not_compensated_again``;
+# SuperSlicer mit derselben Funktion außerhalb der Auswahl, 09.10.2026).
 MEASURED_PART_PATHS = frozenset(
     {
         "adhesion.kind",
         "adhesion.brim_gap",
         "infill.density",
+        "layers.elephant_foot",
         "layers.line_width",
+        "shell.hole_offset",
         "shell.ironing",
         "shell.outer_wall_first",
         "shell.precise_outer_wall",
@@ -675,6 +681,7 @@ MEASURED_PART_PATHS = frozenset(
             "prusaslicer",
             "prusa",
             {
+                "shell.hole_offset",
                 "shell.precise_outer_wall",
                 "shell.overhang_reverse",
                 "speed.acceleration",

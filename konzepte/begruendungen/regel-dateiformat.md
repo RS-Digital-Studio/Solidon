@@ -443,6 +443,9 @@ er gar keine. `marlin` schreibt wie `reprap` `M204 S` (Gewürzregal: derselbe
 G-Code ohne Kommentare); `marlin2` schriebe `M204 P` ohne `T`, das Klipper
 übergeht. Messung und Zerlegung stehen in `ROADMAP.md` unter RM-191.
 
+Fuß- und Lochausgleich bleiben beim Hersteller, solange niemand wählt oder den
+Rat übernimmt (RM-589, `slicer_keys.MAKER_OWNED`; Begründung in `regel-druckrat.md`).
+
 **Die Lüfterkurve bleibt beim Hersteller (RM-228, Konsolidierung 03.10.2026).**
 Orca und PrusaSlicer lesen sie aus dem Filamentprofil des Herstellers und
 schreiben sie nur auf eigene Wahl; Hilfs-, Kammer-, Überhang- und Bügellüfter
@@ -634,7 +637,9 @@ mehr (Gesamtprüfung, 27.09.2026).
 > selbst ein Herstellerprofil, das es richtig gelesen hatte.
 
 Zum Schalter eines Anteils: „Ohne `reduce_fan_stop_start_freq` schaltete der
-ElegooSlicer den Lüfter bei jeder PLA-Schicht über 60 s ganz ab."
+ElegooSlicer den Lüfter bei jeder PLA-Schicht über 60 s ganz ab." Curas
+Kontaktlüfter steht neben dem Lüfter der Stütze, weil er die Haut über der
+Stütze kühlt, zum selben Zweck (aus der Regel hierher verschoben).
 
 Warum der alte eine Wert das obere Ende bleibt: „(Entscheidung der
 Durchsicht, 23.09.2026: Der Mindestwert war nie eine Wahl des Kunden, sondern
@@ -644,6 +649,11 @@ mit alten Zeilennummern; er steht jetzt im zweiten Absatz dieses Abschnitts
 der Regel.
 
 ## Wie eine Zuordnung geprüft wird
+
+Einen falschen Schlüsselnamen meldet kein Slicer; deshalb vergleicht Solidon
+selbst. Ein Prusa-Bündelabschnitt wird am Namen erkannt, weil
+`PrusaResearch.ini` über neuntausend Profile trägt (beides aus der Regel
+hierher verschoben).
 
 > `verify()` vergleicht sie gegen das Geschriebene: 53 von 53 beim einen, 56
 > von 56 beim anderen. […] **CuraEngine schreibt dort nichts** — null von 47.
