@@ -181,6 +181,53 @@ def test_an_older_calibration_keeps_the_shipped_support_values(
     assert calibrated.support_tip_gap == shipped.support_tip_gap
 
 
+def test_a_calibration_records_which_values_were_measured(own_profiles: Path) -> None:
+    """Nachprüfung RM-589, N3: Gemessen ist je Wert, nicht je Material. Wer erst
+    das Spiel und später den Fuß misst, hat beide gemessen; die Lochkorrektur
+    bleibt Startwert."""
+    assert profiles.material("petg").measured is None
+
+    first = calibration.apply(calibration.from_measurements("petg", clearance=0.18))
+    assert first.calibrated
+    assert first.measured == ("clearance",)
+
+    second = calibration.apply(calibration.from_measurements("petg", elephant_foot=0.12))
+    assert second.measured == ("clearance", "elephant_foot")
+    assert second.clearance == pytest.approx(0.18)
+    text = (own_profiles / calibration.USER_MATERIALS).read_text(encoding="utf-8")
+    assert '"measured" = ["clearance", "elephant_foot"]' in text
+
+
+def test_saving_without_a_value_measures_nothing(own_profiles: Path) -> None:
+    """Ein Speichern ohne eingetragenen Wert macht aus Startwerten keine Messung."""
+    after = calibration.apply(calibration.from_measurements("petg"))
+
+    assert not after.calibrated
+    assert after.measured is None
+
+
+def test_an_older_calibration_counts_what_left_the_start_value(own_profiles: Path) -> None:
+    """Eine Kalibrierdatei von vor RM-589 nennt nicht, was gemessen war; ihr
+    Dialog schrieb jeden Wert, auch den unberührten Startwert. Gemessen ist,
+    was vom mitgelieferten Startwert abweicht."""
+    shipped = profiles.material("petg")
+    own_profiles.mkdir(parents=True, exist_ok=True)
+    older = {
+        name: value
+        for name, value in dataclasses.asdict(shipped).items()
+        if name not in ("id", "measured") and value is not None
+    }
+    older.update(clearance=shipped.clearance + 0.05, calibrated=True)
+    text = calibration._as_toml({"petg": older})
+    (own_profiles / calibration.USER_MATERIALS).write_text(text, encoding="utf-8")
+    profiles.reload()
+
+    assert profiles.material("petg").measured == ("clearance",)
+
+    after = calibration.apply(calibration.from_measurements("petg", elephant_foot=0.12))
+    assert after.measured == ("clearance", "elephant_foot")
+
+
 @pytest.mark.parametrize("stage", ["write", "fsync", "replace"])
 def test_a_failed_calibration_preserves_the_previous_file(
     own_profiles: Path, monkeypatch: pytest.MonkeyPatch, stage: str
@@ -975,6 +1022,40 @@ def test_the_dialog_saves_only_explicitly_selected_process_measurements(
     unchanged = calibration.apply(again.measured(), process=again.process)
     assert unchanged.minimum_wall == pytest.approx(0.55)
     again.close()
+
+
+def test_the_dialog_measures_only_the_fields_that_were_entered(
+    own_profiles: Path, qt_app: object
+) -> None:
+    """Nachprüfung RM-589, N3: Wer nur das Spiel am Toleranz-Testkörper misst,
+    reichte bisher jedes unberührte Feld mit; das Material galt als ganz
+    kalibriert, und der Druckrat nahm dem Slicer seinen Einzug nicht ab —
+    obwohl der Fuß der Startwert blieb, der den ganzen Fuß meint."""
+    from app.core.knowledge import print_settings
+    from app.core.slice import advise
+    from app.ui.dialogs import CalibrationDialog
+
+    assert qt_app is not None
+    dialog = CalibrationDialog("petg")
+    try:
+        dialog.editors["clearance"].setValue(0.3)
+        assert set(dialog.measured().as_table()) == {"clearance"}
+        after = calibration.apply(dialog.measured())
+    finally:
+        dialog.close()
+
+    assert after.measured == ("clearance",)
+    profile = profiles.make_profile("anycubic-kobra-2", "petg")
+    assert profile.material.measured == ("clearance",)
+    settings = print_settings.with_path(
+        print_settings.resolve(profile), "layers.elephant_foot", 0.1
+    )
+    offered = [
+        entry.path
+        for entry in advise.advise(settings, profile, allowances=("foot",))
+        if entry.path == "layers.elephant_foot"
+    ]
+    assert offered == ["layers.elephant_foot"]
 
 
 @pytest.mark.parametrize(

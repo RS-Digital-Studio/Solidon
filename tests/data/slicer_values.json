@@ -321,6 +321,9 @@
      "inner wall/outer wall",
      "inner-outer-inner wall",
      "outer wall/inner wall"
+    ],
+    "support_style": [
+     "tree_hybrid"
     ]
    },
    "unknown": {
@@ -392,6 +395,9 @@
      "inner wall/outer wall",
      "inner-outer-inner wall",
      "outer wall/inner wall"
+    ],
+    "support_style": [
+     "tree_hybrid"
     ]
    },
    "unknown": {
@@ -463,6 +469,9 @@
      "inner wall/outer wall",
      "inner-outer-inner wall",
      "outer wall/inner wall"
+    ],
+    "support_style": [
+     "tree_hybrid"
     ]
    },
    "unknown": {
@@ -534,6 +543,9 @@
      "inner wall/outer wall",
      "inner-outer-inner wall",
      "outer wall/inner wall"
+    ],
+    "support_style": [
+     "tree_hybrid"
     ]
    },
    "unknown": {
@@ -618,6 +630,9 @@
      "inner wall/outer wall",
      "inner-outer-inner wall",
      "outer wall/inner wall"
+    ],
+    "support_style": [
+     "tree_hybrid"
     ]
    }
   }

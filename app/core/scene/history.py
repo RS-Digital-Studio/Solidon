@@ -1045,7 +1045,16 @@ class History:
             living.update(repaired.outputs)
         return self._retried_after(planned, suffix, living, REPAIR_AND_RETRY.label)
 
-    def split_and_retry(self, stopped_at: OpId, target: ObjectId, count: int) -> Transaction:
+    def split_and_retry(
+        self,
+        stopped_at: OpId,
+        target: ObjectId,
+        count: int,
+        *,
+        keep_tiny: bool = False,
+        part_index: int | None = None,
+        feature: str = "",
+    ) -> Transaction:
         """Zerlegt einen Körper vor einem angehaltenen Schritt und plant neu.
 
         Dasselbe Muster wie :meth:`repair_and_retry`, mit *In Einzelteile
@@ -1064,6 +1073,17 @@ class History:
         behält seine Eingänge: Die erste Kennung der Zerlegung ist die des
         Ausgangskörpers, und sie trägt danach dessen größtes Teil — genau
         wie nach einer von Hand eingefügten Zerlegung.
+
+        **Außer dem angehaltenen Schritt selbst, wenn ``part_index`` sein Teil
+        nennt** (RM-638): Eine Merkmalshandlung, die abgesagt hat, weil ein
+        getrenntes Teil im Weg war, gilt dem Teil, das ihr Merkmal trägt — die
+        Teile-Absage nennt seine Stelle in der Zerlegung
+        (``prepare_ops.split_offer``), und der Schritt rechnet danach an dessen
+        Kennung. ``keep_tiny`` zerlegt mit *Splitter behalten*, denn die
+        Stückzahl der Absage zählt jedes Teil. ``feature`` ist das Merkmal des
+        Schritts: Die Zerlegung gibt es auf seinem Teil mit
+        (``carry_feature``), sonst trüge es dort den nächsten freien Namen, und
+        der Schritt fände es nicht.
         """
         activation.require(activation.CHANGE)
         operations = self.operations
@@ -1090,19 +1110,37 @@ class History:
 
         self._reseed()
         split = self._plan(
-            OperationDraft(op="split_bodies", inputs=(target,), params={"count": count}),
+            OperationDraft(
+                op="split_bodies",
+                inputs=(target,),
+                params={
+                    "count": count,
+                    **({"keep_tiny": True} if keep_tiny else {}),
+                    **({"carry_feature": feature} if feature and part_index is not None else {}),
+                },
+            ),
             living,
         )
         living.difference_update(set(split.inputs) - set(split.outputs))
         living.update(split.outputs)
-
-        return self._retried_after(
-            [split],
-            suffix,
-            living,
-            SPLIT_AND_RETRY.label,
-            redraft=lambda entry: self._with_replaced(entry, {target}, split.outputs),
+        carrier = (
+            split.outputs[part_index]
+            if part_index is not None and 0 <= part_index < len(split.outputs)
+            else None
         )
+
+        def redraft(entry: Operation) -> OperationDraft | None:
+            if entry.id == failed.id and carrier is not None and target in entry.inputs:
+                return OperationDraft(
+                    op=entry.op,
+                    inputs=tuple(carrier if given == target else given for given in entry.inputs),
+                    params=entry.params,
+                    outputs=None,
+                    seed=entry.seed,
+                )
+            return self._with_replaced(entry, {target}, split.outputs)
+
+        return self._retried_after([split], suffix, living, SPLIT_AND_RETRY.label, redraft=redraft)
 
     def recount_and_retry(self, op_id: OpId, count: int) -> Transaction:
         """Setzt die Stückzahl eines Schritts auf die gemessene und plant neu.

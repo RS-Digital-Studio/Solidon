@@ -690,17 +690,24 @@ def support_ways(results: dict) -> dict[str, Any]:
     from app.core.slice.analysis import (
         SPAN_INTERESTING,
         largest_overhang_patch,
+        ledges,
+        span_beside,
         total_overhang,
     )
 
     ways: dict[str, Any] = {}
     for body_id, (angle, wall, result) in results.items():
         need = advise.support_need(result)
-        bridges = [
-            round(layer.bridge_width, 1)
+        # Die Brücken, die der Stützbedarf zählt: je Schicht ohne Kanaldecken und
+        # Ränder (``span_beside``, RM-627). Die Randfrage nur, wo etwas spannt.
+        spanning = [
+            index
             for index, layer in enumerate(result.layers)
-            if layer.bridge_width > SPAN_INTERESTING and index not in need.quiet_layers
+            if layer.bridge_width > SPAN_INTERESTING
         ]
+        quiet = need.model.channels | ledges(result) if spanning else frozenset()
+        widths = (span_beside(result, index, quiet) for index in spanning)
+        bridges = [round(width, 1) for width in widths if width > SPAN_INTERESTING]
         ways[str(body_id)] = {
             "needed": need.needed,
             "angle": angle,

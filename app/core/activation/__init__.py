@@ -243,8 +243,8 @@ class Activation:
     def trial_offered(self) -> bool:
         """Ob diese Fassung überhaupt einen Testzeitraum anbietet.
 
-        Null Resttage reichen dafür nicht: Die Verkaufsversion vom 01.11.2026
-        startet bewusst **ohne** Testphase und hat ebenfalls null freie Tage.
+        Null Resttage reichen dafür nicht: Die Verkaufsversion startet bewusst
+        **ohne** Testphase und hat ebenfalls null freie Tage.
         Wer beide Fälle zusammenwirft, sagt einem Neukunden, sein nie
         angebotener Test sei abgelaufen. Die Angebotsentscheidung liegt bei
         :data:`store.TRIAL_FROM`; der Demo-Stichtag bezeichnet ein anderes

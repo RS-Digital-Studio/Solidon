@@ -2,7 +2,7 @@
 
 Stand: 31. August 2026 · Prozessfassung 1.0
 
-**Freigabestatus: GESPERRT.** Ab dem 1. November 2026 wird ein
+**Freigabestatus: GESPERRT.** Ab dem Verkaufsstart am 1. Dezember 2026 wird ein
 Verbrauchervertrag nicht online angeboten, solange die Widerrufsfunktion nach
 § 356a BGB nicht im tatsächlichen Checkout, Bestellbestand und Mailweg Ende zu
 Ende abgenommen ist. `WIDERRUF.md` bleibt die Belehrung; diese Akte beschreibt

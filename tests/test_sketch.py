@@ -4,6 +4,7 @@ Zahl, Konflikte mit benanntem Paar, Maße über die Parametergrammatik."""
 from __future__ import annotations
 
 import math
+import random
 from dataclasses import replace
 from itertools import pairwise
 
@@ -448,6 +449,1078 @@ def test_an_angle_turns_two_free_lines_to_the_nearest_solution() -> None:
             assert moved <= 10.0 + 8.5, (
                 f"von {start}° nach {target}° wandert ein Punkt {moved:.1f} mm"
             )
+
+
+def _angle_pair(
+    start: int, target: int, at: tuple[float, float], size: float, company: str
+) -> Sketch:
+    """Zwei freie Linien (10 und 8,5 lang, mal ``size``) mit einem Winkelmaß, an ``at``.
+
+    ``company``: allein, neben vierzig freien Linien (dann rechnet die Skizze
+    über ``lsmr``) oder neben einer bemaßten, schon gelösten Kette aus zwanzig
+    Linien — die Lage, in der nur das Linienpaar unter Spannung steht.
+    """
+    dx, dy = at
+    turn = math.radians(start)
+    elements = [
+        SketchElement("line", ((dx, dy), (10.0 * size + dx, dy))),
+        SketchElement(
+            "line",
+            ((dx, dy), (8.5 * size * math.cos(turn) + dx, 8.5 * size * math.sin(turn) + dy)),
+        ),
+    ]
+    constraints = [SketchConstraint("angle", (0, 1, 2, 3), str(target))]
+    beside, held = _company(company, size, at)
+    return Sketch(
+        plane="plane:xy",
+        elements=(*elements, *beside),
+        constraints=(*constraints, *held),
+    )
+
+
+def _company(
+    company: str, size: float, at: tuple[float, float]
+) -> tuple[list[SketchElement], list[SketchConstraint]]:
+    """Was neben zwei Linien (Punkte 0 bis 3) liegt: nichts (``alone``), vierzig
+    freie Linien (``free``) oder eine bemaßte, gelöste Kette aus zwanzig Linien
+    mit festem Anfang (``chain``) — je mal ``size``, an ``at``."""
+    dx, dy = at
+    if company == "free":
+        return [
+            SketchElement(
+                "line",
+                (
+                    ((20.0 + i) * size + dx, 5.0 * size + dy),
+                    ((21.0 + i) * size + dx, 7.0 * size + dy),
+                ),
+            )
+            for i in range(40)
+        ], []
+    if company == "chain":
+        elements = [
+            SketchElement(
+                "line",
+                (
+                    (10.0 * i * size + dx, 50.0 * size + dy),
+                    (10.0 * (i + 1) * size + dx, 50.0 * size + dy),
+                ),
+            )
+            for i in range(20)
+        ]
+        constraints = [
+            SketchConstraint("distance", (4 + 2 * i, 5 + 2 * i), repr(10.0 * size))
+            for i in range(20)
+        ]
+        constraints += [
+            SketchConstraint("coincident", (3 + 2 * i, 4 + 2 * i)) for i in range(1, 20)
+        ]
+        constraints.append(SketchConstraint("fixed", (4,)))
+        return elements, constraints
+    return [], []
+
+
+@pytest.mark.parametrize(
+    ("company", "size"), [("alone", 1.0), ("alone", 0.01), ("free", 1.0), ("chain", 1.0)]
+)
+def test_a_sketch_solves_alike_wherever_it_lies(company: str, size: float) -> None:
+    """Dieselbe Skizze tausend oder hunderttausend Millimeter daneben: dieselbe Lösung (RM-541).
+
+    Der Löser rechnete in Koordinaten, und TRF beginnt mit dem
+    Vertrauensradius ‖x₀‖ — der Entfernung der Zeichnung vom Nullpunkt. Der
+    erste Schritt reichte so über beide Lösungen eines Winkels, und welche er
+    traf, entschied die Rundung: 45° gesetzt, unter macOS Intel 135° bekommen
+    (Lauf 37495714708). Neben einer bemaßten Kette rechnete alles über
+    ``lsmr``, dessen Zweierraum bei einer einzelnen gespannten Bedingung aus
+    Rauschen besteht. Am Stand davor (``78d39dec9``) kippten in diesem Raster
+    5 von 60 Paaren schon am Nullpunkt und 9 von 180 versetzt, 16 Läufe
+    endeten in einem Widerspruch, und versetzt landeten Punkte bis 150 m
+    daneben; der Löser von 0.5.3 kippte auch zwei Paare ohne Begleiter.
+
+    Die Versätze ersetzen den Intel-Rechner: Sie ändern die Rundung jeder
+    Rechnung, wie eine andere Maschine es tut, und die Lösung darf sich davon
+    nicht rühren. Soll ist die nächste Lösung — der Winkel auf der Seite, auf
+    der die Zeichnung schon liegt, kein Punkt weiter als beide Linien lang.
+    """
+    from app.core.sketch.solver import EXACT_UP_TO
+    from app.core.units import EPS_GEOM
+
+    if company != "alone":
+        assert (
+            len(edit.flat_points(_angle_pair(5, 30, (0.0, 0.0), size, company))) * 2 > EXACT_UP_TO
+        )
+    for start in (5, 29, 53, 77, 89):
+        for target in (30, 45, 100):
+            nearest = target if abs(start - target) <= abs(start - (target - 180)) else target - 180
+            drawn = _angle_pair(start, target, (0.0, 0.0), size, company)
+            home = solve_sketch(drawn)
+            assert math.isclose(turn_between(*home.elements[:2]), nearest, abs_tol=1e-4), (
+                start,
+                target,
+                turn_between(*home.elements[:2]),
+            )
+            moved = max(
+                math.dist(before, after)
+                for old, new in zip(drawn.elements, home.elements, strict=True)
+                for before, after in zip(old.points, new.points, strict=True)
+            )
+            assert moved <= (10.0 + 8.5) * size, (start, target, moved)
+            for at in ((1000.0, 0.0), (-1000.0, 1000.0), (1e5, -1e5)):
+                away = solve_sketch(_angle_pair(start, target, at, size, company))
+                back = [(x - at[0], y - at[1]) for x, y in _flat(away)]
+                gap = max(math.dist(a, b) for a, b in zip(back, _flat(home), strict=True))
+                assert gap <= EPS_GEOM, (start, target, at, gap)
+
+
+def _related_lines(kind: str, value: str, at: tuple[float, float], company: str) -> Sketch:
+    """Zwei freie Linien mit genau einer Bedingung zwischen ihnen, an ``at``."""
+    dx, dy = at
+    beside, held = _company(company, 1.0, at)
+    return Sketch(
+        plane="plane:xy",
+        elements=(
+            SketchElement("line", ((dx, dy), (10.0 + dx, dy))),
+            SketchElement("line", ((2.0 + dx, 3.0 + dy), (9.0 + dx, 7.5 + dy))),
+            *beside,
+        ),
+        constraints=(SketchConstraint(kind, (0, 1, 2, 3), value), *held),
+    )
+
+
+def _placed(sketch: Sketch, points: list[tuple[float, float]]) -> Sketch:
+    """Die Skizze mit diesen Punkten — so schreibt der Editor jeden Zugschritt zurück."""
+    offsets = edit.offsets_of(sketch)
+    return replace(
+        sketch,
+        elements=tuple(
+            replace(element, points=tuple(points[begin : begin + len(element.points)]))
+            for element, begin in zip(sketch.elements, offsets, strict=True)
+        ),
+    )
+
+
+@pytest.mark.parametrize("company", ["alone", "chain"])
+@pytest.mark.parametrize(
+    ("kind", "value"), [("parallel", ""), ("perpendicular", ""), ("equal", ""), ("angle", "30")]
+)
+def test_a_drag_solves_alike_wherever_it_lies(
+    kind: str, value: str, company: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Zwei Linien mit einer Bedingung, am Ende gezogen wie mit der Maus: an jedem
+    Ort dieselbe Lage (RM-541).
+
+    Im Zug steht der gezogene Punkt fest, und übrig bleibt ein Teil mit genau
+    einer gespannten Gleichung. Gerechnet wurde der Zug über ``lsmr``, dessen
+    Zweierraum aus Gradient und Gauß-Newton-Schritt dort aus Rauschen besteht:
+    Nach denselben zehn Mausschritten standen die Linien an den Versätzen 3,7
+    bis 38 mm woanders (am Stand vor RM-541 bis 410 mm), und jeder Schritt
+    brauchte alle erlaubten Auswertungen. Neben der bemaßten Kette ist die
+    Skizze zu groß für die dichte Rechnung, das Linienpaar als Teil nicht.
+    """
+    from app.core.sketch import solver
+    from app.core.units import EPS_GEOM
+
+    evaluations = _counting_evaluations(monkeypatch)
+    most: list[int] = []
+
+    def dragged(at: tuple[float, float]) -> list[tuple[float, float]]:
+        sketch = _related_lines(kind, value, at, company)
+        points = _flat(solve_sketch(sketch))
+        end = points[3]
+        for step in range(1, 11):
+            target = (end[0] + 0.2 * step, end[1] + 0.3 * step)
+            evaluations.clear()
+            solved = solve_sketch(_placed(sketch, points), dragged={3: target}, start=points)
+            most.append(max(evaluations))
+            points = _flat(solved)
+            assert points[3] == pytest.approx(target, abs=1e-9), "der Punkt steht am Zeiger"
+        return [(x - at[0], y - at[1]) for x, y in points]
+
+    home = dragged((0.0, 0.0))
+    for at in ((1000.0, 0.0), (-1000.0, 1000.0), (1e5, -1e5)):
+        gap = max(math.dist(a, b) for a, b in zip(dragged(at), home, strict=True))
+        assert gap <= EPS_GEOM, (at, gap)
+    assert max(most) < solver.DRAG_REACH_TRIES, "jeder Schritt fertig gerechnet, nicht abgebrochen"
+
+
+_PLACES = ((0.0, 0.0), (1000.0, 0.0), (-1000.0, 1000.0), (12.3, 45.6), (1e5, -1e5))
+
+
+#: Gezeichnete Linienzüge, deren Bedingungen sich widersprechen oder doppeln —
+#: gefunden mit der Versatzsonde des Reviews (Zufall, Startwert 541).
+_UNSOLVABLE = {
+    "doubled": (
+        [
+            ((0.0, 0.0), (11.418647258393689, 0.3772043893773367)),
+            ((11.285466746204376, 0.899218288039189), (16.293232614750657, -4.357496513559995)),
+            ((17.108752676676446, -3.942278154223121), (26.21207146796181, -10.406345899048521)),
+            ((25.859323990146354, -9.342165871133291), (29.999900080820844, -15.29071108143754)),
+            ((29.75531320742086, -16.3222559920441), (33.87201362244849, -15.303683963644536)),
+            ((33.9113447279559, -13.994187644713586), (45.200920597562316, -17.662654690431836)),
+            ((45.36394957757005, -16.81728831462031), (54.82377150029633, -10.834961268109309)),
+        ],
+        [
+            *(("coincident", (2 * i + 1, 2 * i + 2), "") for i in range(6)),
+            ("parallel", (2, 3, 0, 1), ""),
+            ("angle", (4, 5, 0, 1), "53.0"),
+            ("perpendicular", (10, 11, 0, 1), ""),
+            ("perpendicular", (4, 5, 2, 3), ""),
+            ("horizontal", (2, 3), ""),
+            ("horizontal", (0, 1), ""),
+            ("fixed", (0,), ""),
+        ],
+    ),
+    "tie": (
+        [
+            ((0.0, 0.0), (13.262088307196882, -4.550809131545043)),
+            ((13.336235830826372, -4.2756351403139385), (22.255488168818204, -11.268288758711247)),
+            ((22.071495391607236, -10.595882361332968), (28.93925198415845, -9.78451098428803)),
+        ],
+        [
+            ("coincident", (1, 2), ""),
+            ("coincident", (3, 4), ""),
+            ("perpendicular", (0, 1, 2, 3), ""),
+            ("angle", (2, 3, 0, 1), "158.0"),
+            ("fixed", (0,), ""),
+        ],
+    ),
+    "two_lengths": (
+        [
+            ((0.0, 0.0), (15.625723629630487, 0.4279727516049222)),
+            (
+                (15.16567941857119, -0.0076338422054593735),
+                (28.254185111112676, -0.7941997621835428),
+            ),
+            ((26.764897746283488, -1.5233581463318244), (31.643865642356563, -0.27159823207045775)),
+            ((31.8981731418392, -1.166749604004128), (45.88623123394727, 3.0702546808660425)),
+            ((45.125491952919035, 4.308004547546075), (57.4845150481231, -1.9466717087430885)),
+        ],
+        [
+            *(("coincident", (2 * i + 1, 2 * i + 2), "") for i in range(4)),
+            ("distance", (2, 3), "9.915"),
+            ("distance", (2, 3), "11.118"),
+            ("distance", (8, 9), "11.283"),
+            ("fixed", (0,), ""),
+        ],
+    ),
+}
+
+
+def test_what_the_solver_does_not_move_keeps_its_numbers() -> None:
+    """Der Löser rechnet um die Mitte der Zeichnung; zurück rückt nur, was sich
+    bewegt hat (RM-541). Ein gelöstes Rechteck neben einem Kreis, der noch sein
+    Maß bekommt, behält jede Zahl bitgleich — über die Mitte und zurück wäre
+    aus 0,07 hier 0,06999999999999999 geworden, und der Editor schriebe
+    Ecken zurück, die niemand bewegt hat."""
+    corners = [(0.1, 0.07), (20.4, 0.07), (20.4, 10.17), (0.1, 10.17)]
+    sketch = Sketch(
+        plane="plane:xy",
+        elements=(
+            *(SketchElement("line", (a, b)) for a, b in pairwise([*corners, corners[0]])),
+            SketchElement("circle", ((40.1, 3.4), (41.2, 3.4))),
+        ),
+        constraints=(
+            *(SketchConstraint("coincident", (2 * k + 1, (2 * k + 2) % 8)) for k in range(4)),
+            SketchConstraint("horizontal", (0, 1)),
+            SketchConstraint("vertical", (2, 3)),
+            SketchConstraint("horizontal", (4, 5)),
+            SketchConstraint("vertical", (6, 7)),
+            SketchConstraint("diameter", (8, 9), "4"),
+        ),
+    )
+    drawn = edit.flat_points(sketch)
+    points = _flat(solve_sketch(sketch))
+
+    assert points[:8] == drawn[:8], "bitgleich, nicht nur nah"
+    assert span(points[8], points[9]) == pytest.approx(2.0, abs=1e-9)
+
+
+@pytest.mark.parametrize("case", sorted(_UNSOLVABLE))
+def test_an_unsolvable_sketch_names_the_same_pair_wherever_it_lies(case: str) -> None:
+    """Widerspruch oder Doppelung: an jedem Ort dieselbe Meldung mit demselben
+    Paar (RM-541; Lagegleichheit heißt diskret gleich).
+
+    Zwei Reste, die am wahren Minimum gleich sind, lagen am Abbruchpunkt
+    4·10⁻⁸ auseinander, je nach Ort einmal so, einmal so herum (``tie``). An
+    einer redundanten Zeichnung nahm ``dogbox`` Singulärwerte im
+    Rundungsrauschen für Richtungen und rannte davon, und hunderttausend
+    Millimeter neben dem Nullpunkt war das Rauschen der Ableitungen 10⁻¹²
+    (``doubled``, ``two_lengths``). Ein vierter Fall stand hier als Doppelung
+    mit Rauschanteil im Paar; er ist lösbar, und 0.5.3 löst ihn — er steht
+    jetzt unter den gesunden Skizzen (Review H-A, ``zufall_14``).
+    """
+    lines, rules = _UNSOLVABLE[case]
+    sketch = Sketch(
+        plane="plane:xy",
+        elements=tuple(SketchElement("line", line) for line in lines),
+        constraints=tuple(SketchConstraint(kind, targets, value) for kind, targets, value in rules),
+    )
+    said: set[tuple[str, int, int]] = set()
+    for dx, dy in (*_PLACES, (1e6, -1e6)):
+        with pytest.raises(SketchConflictError) as caught:
+            solve_sketch(_placed(sketch, [(x + dx, y + dy) for x, y in edit.flat_points(sketch)]))
+        said.add((str(caught.value.title), caught.value.first, caught.value.second))
+    assert len(said) == 1, said
+
+
+def _random_sketch(rng: random.Random) -> Sketch:
+    """Eine Zufallsskizze aus Linien und Kreisen mit gemischten Bedingungen —
+    wie die Breitensonde der Nachprüfung zu RM-541, ohne Bögen."""
+    elements: list[SketchElement] = []
+    for _ in range(rng.randint(2, 5)):
+        cx, cy = rng.uniform(-30, 30), rng.uniform(-30, 30)
+        if rng.random() < 0.6:
+            tip = (cx + rng.uniform(4, 20), cy + rng.uniform(-8, 8))
+            elements.append(SketchElement("line", ((cx, cy), tip)))
+        else:
+            rim = (cx + rng.uniform(2, 9), cy + rng.uniform(-0.5, 0.5))
+            elements.append(SketchElement("circle", ((cx, cy), rim)))
+    lines = [2 * i for i, element in enumerate(elements) if element.kind == "line"]
+    rounds = [2 * i for i, element in enumerate(elements) if element.kind == "circle"]
+    points = 2 * len(elements)
+    rules: list[SketchConstraint] = []
+    for _ in range(rng.randint(2, 7)):
+        kind = rng.choice(
+            ["coincident", "distance", "horizontal", "vertical", "parallel", "perpendicular",
+             "equal", "angle", "tangent", "midpoint", "diameter", "symmetric"]
+        )  # fmt: skip
+        if kind == "coincident":
+            a, b = rng.randrange(points), rng.randrange(points)
+            if a != b:
+                rules.append(SketchConstraint(kind, (a, b)))
+        elif kind == "distance" and lines:
+            line = rng.choice(lines)
+            rules.append(
+                SketchConstraint(kind, (line, line + 1), repr(round(rng.uniform(5, 20), 2)))
+            )
+        elif kind in ("horizontal", "vertical") and lines:
+            line = rng.choice(lines)
+            rules.append(SketchConstraint(kind, (line, line + 1)))
+        elif kind in ("parallel", "perpendicular", "equal", "angle") and len(lines) >= 2:
+            a, b = rng.sample(lines, 2)
+            value = repr(float(rng.randint(15, 165))) if kind == "angle" else ""
+            rules.append(SketchConstraint(kind, (a, a + 1, b, b + 1), value))
+        elif kind == "tangent" and lines and rounds:
+            line, round_ = rng.choice(lines), rng.choice(rounds)
+            rules.append(SketchConstraint(kind, (line, line + 1, round_, round_ + 1)))
+        elif kind == "midpoint" and lines:
+            line, point = rng.choice(lines), rng.randrange(points)
+            if point not in (line, line + 1):
+                rules.append(SketchConstraint(kind, (point, line, line + 1)))
+        elif kind == "diameter" and rounds:
+            round_ = rng.choice(rounds)
+            rules.append(
+                SketchConstraint(kind, (round_, round_ + 1), repr(round(rng.uniform(4, 16), 2)))
+            )
+        elif kind == "symmetric" and lines:
+            line = rng.choice(lines)
+            p, q = rng.randrange(points), rng.randrange(points)
+            if len({p, q, line, line + 1}) == 4:
+                rules.append(SketchConstraint(kind, (p, q, line, line + 1)))
+    rules.append(SketchConstraint("fixed", (0,)))
+    return Sketch(plane="plane:xy", elements=tuple(elements), constraints=tuple(rules))
+
+
+def test_random_sketches_say_the_same_wherever_and_however_they_are_rounded() -> None:
+    """Über eine Zufallsmenge: Ob eine Skizze lösbar ist, ändert weder der Ort
+    noch das Rauschen eines anderen Rechners — und was eine unlösbare meldet,
+    höchstens in so vielen Fällen, wie gemessen (RM-541, Nachprüfung G-B).
+    Gelöst heißt dabei nie: eine Linie mit Richtungsbedingung oder ein Kreis
+    auf einem Punkt (Review H-A).
+
+    Die Meldung nennt das Paar an den Resten eines Laufs auf einen
+    Widerspruch, und der endet in einem flachen Tal. Die Folge im Paar kommt
+    deshalb aus dem Setzen, ein erfüllter Partner wird durch den mit den
+    meisten gemeinsamen Zielpunkten ersetzt, und ob ein Weg ein Element
+    schrumpfen lässt, entscheidet nicht mehr die Quelle der Meldung. Was
+    bleibt, steht in der Begründung der Skizzenkarte; die Schranke hier ist
+    die Messung, kein Wunsch.
+    """
+    from app.core.sketch.solver import SHRUNK_BELOW
+    from tests.test_platform_identity import platform_noise
+
+    def said(sketch: Sketch) -> str:
+        try:
+            solved = solve_sketch(sketch)
+        except SketchConflictError as error:
+            return f"{error.title} {error.first} {error.second}"
+        starts = edit.offsets_of(sketch)
+        shrunk = [
+            index
+            for index, element in enumerate(solved.elements)
+            if math.dist(*element.points[:2]) < SHRUNK_BELOW
+            and (element.kind == "circle" or _directed(sketch, starts[index]))
+        ]
+        return f"gelöst, geschrumpft {shrunk}" if shrunk else "gelöst"
+
+    rng = random.Random(7541)
+    unsolvable = 0
+    wandering: list[str] = []
+    for index in range(100):
+        sketch = _random_sketch(rng)
+        home = said(sketch)
+        others = [
+            said(_placed(sketch, [(x + dx, y + dy) for x, y in edit.flat_points(sketch)]))
+            for dx, dy in ((12.3, 45.6), (1000.1, -0.7))
+        ]
+        for pattern in (0, 1):
+            with platform_noise(pattern):
+                others.append(said(sketch))
+        assert "geschrumpft" not in home, (index, home)
+        assert all((other == "gelöst") == (home == "gelöst") for other in others), (
+            index,
+            home,
+            others,
+        )
+        if home != "gelöst":
+            unsolvable += 1
+            if any(other != home for other in others):
+                wandering.append(f"{index}: {home} | {others}")
+    assert unsolvable >= 40, "die Menge prüft zu wenig Unlösbares"
+    assert len(wandering) * _WANDERING_SHARE <= unsolvable, wandering
+
+
+#: Höchstens jede so vielte unlösbare Skizze darf je Ort oder Rauschen einen
+#: anderen Partner nennen. Gemessen: hier keine von 50, in der Breitensonde
+#: der Nachprüfung 4 von 195 (2 %); vor Review H-A waren es hier 3 von 44.
+#: Die Schranke lässt einem anderen Rechner zwei Fälle.
+_WANDERING_SHARE = 20
+
+#: Bedingungen, deren Richtung an einer Linie der Länge null leer gilt — aus
+#: dem, was :func:`_random_sketch` setzt, unabhängig vom Löser aufgezählt.
+_DIRECTED = frozenset(
+    {
+        "horizontal",
+        "vertical",
+        "parallel",
+        "perpendicular",
+        "equal",
+        "angle",
+        "tangent",
+        "symmetric",
+    }
+)
+
+
+def _directed(sketch: Sketch, tail: int) -> bool:
+    """Trägt die Linie ab Punkt ``tail`` eine Richtungsbedingung?"""
+    return any(
+        constraint.kind in _DIRECTED and {tail, tail + 1} & set(constraint.targets)
+        for constraint in sketch.constraints
+    )
+
+
+#: Gezeichnete Skizzen aus der Nah- und Breitensonde der Nachprüfung zu
+#: RM-541 (Startwerte 1541, 2541, 541, 7541): verdeckte Widersprüche und
+#: gesunde Skizzen, die weit von ihrer Lösung gezeichnet sind.
+_HIDDEN_CONTRADICTIONS = {
+    "gross_17": (
+        [
+            (
+                "line",
+                (
+                    (0.2769653161776989, -0.033188102882082515),
+                    (17.80366998602637, -4.745685728719326),
+                ),
+            ),
+            (
+                "line",
+                ((17.506970088380818, -5.040962604921895), (42.40577268841871, -6.963586610510137)),
+            ),
+            (
+                "line",
+                ((42.325470076958304, -7.056274341812847), (42.376853173186, -0.8043468061751797)),
+            ),
+            (
+                "line",
+                (
+                    (42.35001073204633, -0.9019402293171869),
+                    (35.74178030219399, -0.6320788532402484),
+                ),
+            ),
+            ("line", ((35.58094665710971, -0.8736354513765043), (0.0, 0.0))),
+        ],
+        [
+            ("coincident", (1, 2), ""),
+            ("coincident", (3, 4), ""),
+            ("coincident", (5, 6), ""),
+            ("coincident", (7, 8), ""),
+            ("coincident", (9, 0), ""),
+            ("horizontal", (2, 3), ""),
+            ("vertical", (4, 5), ""),
+            ("horizontal", (6, 7), ""),
+            ("distance", (8, 9), "36.0"),
+            ("angle", (2, 3, 0, 1), "170.0"),
+            ("horizontal", (0, 1), ""),
+            ("fixed", (0,), ""),
+        ],
+    ),
+    "gross_48": (
+        [
+            (
+                "line",
+                (
+                    (0.11833932733172586, 0.11913394372708958),
+                    (-1.1237988648267838, 10.910539792101602),
+                ),
+            ),
+            (
+                "line",
+                (
+                    (-1.0003842853971991, 10.826276382331407),
+                    (-20.07536788467962, 15.238088657174657),
+                ),
+            ),
+            (
+                "line",
+                (
+                    (-19.856819540049013, 15.084030611616758),
+                    (-19.763980654095253, 34.589913045170206),
+                ),
+            ),
+            (
+                "line",
+                ((-20.043149342504158, 34.65419038468188), (-38.98328361884417, 40.34734524277671)),
+            ),
+            (
+                "line",
+                ((-38.87151520732539, 40.1419953386811), (-43.263066954471796, 14.224532909549243)),
+            ),
+            (
+                "circle",
+                (
+                    (-45.80431841490346, 27.985923748752896),
+                    (-41.05312874652748, 27.985923748752896),
+                ),
+            ),
+        ],
+        [
+            ("coincident", (1, 2), ""),
+            ("coincident", (3, 4), ""),
+            ("coincident", (5, 6), ""),
+            ("coincident", (7, 8), ""),
+            ("vertical", (0, 1), ""),
+            ("distance", (2, 3), "20.0"),
+            ("vertical", (4, 5), ""),
+            ("distance", (8, 9), "26.0"),
+            ("angle", (0, 1, 6, 7), "65.0"),
+            ("angle", (2, 3, 0, 1), "110.0"),
+            ("tangent", (8, 9, 10, 11), ""),
+            ("horizontal", (6, 7), ""),
+            ("fixed", (0,), ""),
+        ],
+    ),
+    "nah_108": (
+        [
+            (
+                "line",
+                (
+                    (-0.23090393305917575, 0.23746339438242353),
+                    (-7.118709581448391, -0.41524622325675153),
+                ),
+            ),
+            (
+                "line",
+                (
+                    (-7.000641374847483, -0.2631228044829941),
+                    (-6.5205683961069685, 9.084506625910624),
+                ),
+            ),
+            (
+                "line",
+                ((-6.619058597219485, 9.231063407574954), (1.1412831937353705, 33.99356504739975)),
+            ),
+            (
+                "line",
+                (
+                    (0.8609262323290301, 34.20285764364691),
+                    (-10.501032143549137, 38.231306408157884),
+                ),
+            ),
+            (
+                "line",
+                ((-10.361316026362157, 38.1244840416892), (-37.92180336622332, 38.402833744630215)),
+            ),
+            ("line", ((-37.79689332645539, 38.35389628737731), (0.0, 0.0))),
+        ],
+        [
+            ("coincident", (1, 2), ""),
+            ("coincident", (3, 4), ""),
+            ("coincident", (5, 6), ""),
+            ("coincident", (7, 8), ""),
+            ("coincident", (9, 10), ""),
+            ("coincident", (11, 0), ""),
+            ("horizontal", (0, 1), ""),
+            ("vertical", (2, 3), ""),
+            ("distance", (2, 3), "9.0"),
+            ("horizontal", (8, 9), ""),
+            ("distance", (10, 11), "54.0"),
+            ("angle", (0, 1, 10, 11), "130.0"),
+            ("angle", (2, 3, 10, 11), "50.0"),
+            ("angle", (6, 7, 8, 9), "20.0"),
+            ("fixed", (0,), ""),
+        ],
+    ),
+    "zufall_76": (
+        [
+            ("line", ((0.0, 0.0), (10.464148542261844, -7.471285297880894))),
+            (
+                "line",
+                ((10.791557358439597, -6.883787042713742), (25.2864210378375, 0.6259861680749528)),
+            ),
+            (
+                "line",
+                (
+                    (24.484759248351214, 0.06123161232460883),
+                    (36.620288835113215, -5.038929228211795),
+                ),
+            ),
+            (
+                "line",
+                ((36.690248325708545, -4.533627067909887), (49.23345830478776, 0.8335017234553337)),
+            ),
+        ],
+        [
+            ("coincident", (1, 2), ""),
+            ("coincident", (3, 4), ""),
+            ("coincident", (5, 6), ""),
+            ("angle", (0, 1, 4, 5), "68.0"),
+            ("distance", (0, 1), "13.775"),
+            ("horizontal", (4, 5), ""),
+            ("vertical", (0, 1), ""),
+            ("fixed", (0,), ""),
+        ],
+    ),
+}
+
+_HEALTHY_FAR_FROM_SOLVED = {
+    "zufall_14": (
+        [
+            ("line", ((0.0, 0.0), (13.038228155485973, 3.686622409038357))),
+            (
+                "line",
+                ((12.62008476354232, 3.0470259437952434), (20.581209906600456, 9.82646094252833)),
+            ),
+            (
+                "line",
+                ((20.74987795624194, 10.533310436169577), (28.76492657814943, 18.631618499728635)),
+            ),
+            (
+                "line",
+                ((27.64625695139281, 17.227911992561413), (42.46359282804533, 16.87148338794381)),
+            ),
+            (
+                "line",
+                ((43.257980091700865, 15.591185998675329), (55.37646756450006, 19.219615026275473)),
+            ),
+        ],
+        [
+            ("coincident", (1, 2), ""),
+            ("coincident", (3, 4), ""),
+            ("coincident", (5, 6), ""),
+            ("coincident", (7, 8), ""),
+            ("perpendicular", (8, 9, 6, 7), ""),
+            ("angle", (2, 3, 8, 9), "103.0"),
+            ("angle", (4, 5, 0, 1), "54.0"),
+            ("vertical", (6, 7), ""),
+            ("parallel", (0, 1, 6, 7), ""),
+            ("fixed", (0,), ""),
+        ],
+    ),
+    "gemischt_49": (
+        [
+            (
+                "arc",
+                (
+                    (-4.322454540260516, 22.946870775382706),
+                    (0.2470105598903114, 27.363594643867735),
+                    (-10.501112085988346, 21.459708388633256),
+                ),
+            ),
+            (
+                "line",
+                (
+                    (-24.338860682064883, -9.239092338675402),
+                    (-17.338289057894613, -2.0009469702504603),
+                ),
+            ),
+            (
+                "circle",
+                (
+                    (9.566989225048374, -22.755080872612297),
+                    (15.498059927420368, -22.884928209777534),
+                ),
+            ),
+        ],
+        [
+            ("horizontal", (3, 4), ""),
+            ("symmetric", (6, 0, 3, 4), ""),
+            ("fixed", (0,), ""),
+        ],
+    ),
+    "gemischt_205": (
+        [
+            (
+                "line",
+                (
+                    (10.434693650467239, -17.995286350306902),
+                    (28.551284181954816, -22.34374780570176),
+                ),
+            ),
+            (
+                "arc",
+                (
+                    (-4.6956461536060985, -25.74871794450464),
+                    (-1.556070402669513, -18.74649629064203),
+                    (-10.920976472837062, -21.26170263339245),
+                ),
+            ),
+        ],
+        [
+            ("tangent", (0, 1, 2, 3), ""),
+            ("vertical", (0, 1), ""),
+            ("fixed", (0,), ""),
+        ],
+    ),
+    "gemischt_301": (
+        [
+            (
+                "arc",
+                (
+                    (15.818403580212262, 11.01733052486911),
+                    (21.664882742264783, 12.669591478280518),
+                    (10.782040386089442, 14.415319728408068),
+                ),
+            ),
+            (
+                "line",
+                (
+                    (19.617687806248966, -27.07408524622863),
+                    (29.374637901251738, -19.98524494447522),
+                ),
+            ),
+            (
+                "circle",
+                (
+                    (-21.468158497220262, -1.765161226362654),
+                    (-16.659331354696366, -1.8362347446118998),
+                ),
+            ),
+            (
+                "arc",
+                (
+                    (15.60385951232358, 16.101903236967367),
+                    (23.68622872580986, 19.987696621936283),
+                    (6.65555730773473, 15.508632650194944),
+                ),
+            ),
+        ],
+        [
+            ("diameter", (7, 8), "5.87"),
+            ("coincident", (5, 2), ""),
+            ("symmetric", (8, 0, 3, 4), ""),
+            ("horizontal", (3, 4), ""),
+            ("fixed", (0,), ""),
+        ],
+    ),
+}
+
+
+def _from_literal(
+    elements: list[tuple[str, tuple[tuple[float, float], ...]]],
+    rules: list[tuple[str, tuple[int, ...], str]],
+) -> Sketch:
+    return Sketch(
+        plane="plane:xy",
+        elements=tuple(SketchElement(kind, points) for kind, points in elements),
+        constraints=tuple(SketchConstraint(kind, targets, value) for kind, targets, value in rules),
+    )
+
+
+_FAR_PLACES = (*_PLACES, (-7.77, 3.33), (1e6, -1e6))
+
+
+@pytest.mark.parametrize("case", sorted(_HIDDEN_CONTRADICTIONS))
+def test_a_contradiction_does_not_hide_behind_a_shrunk_line(case: str) -> None:
+    """Ein Widerspruch wird gemeldet, nicht mit einer Linie der Länge null
+    „gelöst“ — an jedem Ort mit demselben Paar (RM-541, Review H-A).
+
+    ``gross_17``: zwei Linien *waagerecht*, dazwischen ein Winkel von 170°.
+    An einer Linie ohne Länge gilt jede Richtung leer; der dichte Weg zog die
+    erste dorthin, meldete „gelöst, Rest null“, und aus der Zeichnung wurde
+    ein Umriss. 0.5.3 meldete den Widerspruch. In ``zufall_76`` schrumpfte
+    die Linie nur auf 2·10⁻⁶ mm — dort erfüllt *waagerecht* bis ``_TOL``
+    auch eine um 22° schräge Linie —, und wohin, hing je Ort um bis 15,8 mm
+    an der Rundung. Gefunden mit der Nah- und Breitensonde der Nachprüfung.
+    """
+    sketch = _from_literal(*_HIDDEN_CONTRADICTIONS[case])
+    said: set[tuple[int, int]] = set()
+    for dx, dy in _FAR_PLACES:
+        with pytest.raises(SketchConflictError) as caught:
+            solve_sketch(_placed(sketch, [(x + dx, y + dy) for x, y in edit.flat_points(sketch)]))
+        said.add((caught.value.first, caught.value.second))
+    assert len(said) == 1, said
+    if case == "gross_17":
+        assert set(next(iter(said))) == {9, 10}, "waagerecht gegen den Winkel"
+
+
+@pytest.mark.parametrize("case", sorted(_HEALTHY_FAR_FROM_SOLVED))
+def test_a_healthy_sketch_drawn_far_from_its_solution_solves(case: str) -> None:
+    """Eine gesunde Skizze, die 0.5.3 löst, löst auch hier — an jedem Ort
+    gleich, und kein Element liegt danach auf einem Punkt (RM-541, Review H-A).
+
+    Weit von der Lösung gezeichnet zog der dichte Weg eine Achse oder eine
+    Richtungslinie auf null, und die Rangprüfung meldete eine Doppelung oder
+    einen Widerspruch. Kein Weg trägt allein: ``zufall_14`` löst TRF dicht,
+    ``gemischt_205`` und ``gemischt_301`` löst ``lsmr``, ``gemischt_49`` (eine
+    Symmetrieachse, die jeder Weg schrumpfen ließ) erst mit der Achse auf
+    ihrer gezeichneten Länge.
+    """
+    from app.core.sketch.solver import SHRUNK_BELOW
+    from app.core.units import EPS_GEOM
+
+    sketch = _from_literal(*_HEALTHY_FAR_FROM_SOLVED[case])
+    home: list[tuple[float, float]] = []
+    for dx, dy in _FAR_PLACES:
+        solved = solve_sketch(
+            _placed(sketch, [(x + dx, y + dy) for x, y in edit.flat_points(sketch)])
+        )
+        for element in solved.elements:
+            assert math.dist(*element.points[:2]) > SHRUNK_BELOW, (dx, dy, element.kind)
+        back = [(x - dx, y - dy) for x, y in _flat(solved)]
+        if not home:
+            home = back
+        gap = max(math.dist(a, b) for a, b in zip(back, home, strict=True))
+        assert gap <= EPS_GEOM, ((dx, dy), gap)
+
+
+#: Zwei Widersprüche aus der Breitensonde der Nachprüfung zu RM-541
+#: (Startwert 7541) und das Paar, das ein Mensch nennt — die zuletzt gesetzte
+#: Bedingung vorn. ``gemischt_282``: eine Linie *waagerecht* und dreimal
+#: *senkrecht*; ``gemischt_294``: zwei Linien gleich lang, im Winkel von 96°
+#: und *parallel*.
+_PAIR_RULES = {
+    "gemischt_282": (
+        [
+            (
+                "arc",
+                (
+                    (-18.264723443767274, -19.966994406082122),
+                    (-17.560597558779875, -12.135356483081955),
+                    (-24.403761919346657, -24.880501546021947),
+                ),
+            ),
+            (
+                "circle",
+                (
+                    (-29.742696847820575, -23.012407579931256),
+                    (-25.088125403847734, -23.33727267457289),
+                ),
+            ),
+            (
+                "line",
+                (
+                    (-18.84833541389357, 4.887680967343762),
+                    (-1.6217651125400288, -1.7071029624300031),
+                ),
+            ),
+            (
+                "arc",
+                (
+                    (25.920504053936426, 21.545932316202645),
+                    (24.74991861446949, 25.466646752514286),
+                    (22.17635486594806, 23.196271317826426),
+                ),
+            ),
+        ],
+        [
+            ("horizontal", (5, 6), ""),
+            ("vertical", (5, 6), ""),
+            ("vertical", (5, 6), ""),
+            ("vertical", (5, 6), ""),
+            ("fixed", (0,), ""),
+        ],
+        (3, 0),
+    ),
+    "gemischt_294": (
+        [
+            (
+                "line",
+                ((2.785294079116703, 15.25433330805975), (20.987919322361034, 16.712307550003167)),
+            ),
+            (
+                "arc",
+                (
+                    (-4.437472490871627, 7.5141977680853955),
+                    (0.3569647979553583, 8.687926675356444),
+                    (-6.71854210458402, 3.136870971779647),
+                ),
+            ),
+            (
+                "line",
+                (
+                    (-16.774294634647163, 22.48610766217903),
+                    (-5.422926152454027, 16.327689380632215),
+                ),
+            ),
+            (
+                "line",
+                (
+                    (-6.737835650611526, -2.1904518256429704),
+                    (11.441655070042533, -6.9026557464776435),
+                ),
+            ),
+        ],
+        [
+            ("equal", (5, 6, 0, 1), ""),
+            ("angle", (5, 6, 0, 1), "96.0"),
+            ("parallel", (0, 1, 5, 6), ""),
+            ("coincident", (8, 7), ""),
+            ("coincident", (5, 2), ""),
+            ("fixed", (0,), ""),
+        ],
+        (2, 1),
+    ),
+}
+
+
+@pytest.mark.parametrize("case", sorted(_PAIR_RULES))
+def test_a_contradiction_names_the_later_constraint_and_its_true_partner(case: str) -> None:
+    """Das Paar einer Meldung ist an jedem Ort und unter dem Rauschen eines
+    anderen Rechners dasselbe — die später gesetzte Bedingung vorn, und ein
+    erfüllter Rest ist kein Partner (RM-541, Nachprüfung G-B).
+
+    Ein Lauf auf einen Widerspruch endet in einem flachen Tal, und dort lag
+    die Folge der Reste je Ort mal so, mal so herum (``gemischt_294``: der
+    Winkel vor *parallel* an drei von neun Stellen). Die zweitgrößte von vier
+    Achsenbedingungen war erfüllt bis auf Rauschen und kam je nach Ort als
+    Partner ins Paar — einmal die Fixierung eines Bogens, die mit der Linie
+    nichts zu tun hat (``gemischt_282``). In der Breitensonde wanderten ohne
+    die Folge 8, ohne den Partner 6 und ohne beide 10 von 195 Paaren statt 4.
+    """
+    from tests.test_platform_identity import platform_noise
+
+    elements, rules, pair = _PAIR_RULES[case]
+    sketch = _from_literal(elements, rules)
+    said: list[tuple[int, int]] = []
+    for dx, dy in _FAR_PLACES:
+        with pytest.raises(SketchConflictError) as caught:
+            solve_sketch(_placed(sketch, [(x + dx, y + dy) for x, y in edit.flat_points(sketch)]))
+        said.append((caught.value.first, caught.value.second))
+    for pattern in (0, 1):
+        with platform_noise(pattern), pytest.raises(SketchConflictError) as caught:
+            solve_sketch(sketch)
+        said.append((caught.value.first, caught.value.second))
+    assert set(said) == {pair}, said
+
+
+def _wobbled(sketch: Sketch, amount: float) -> Sketch:
+    """Die Skizze mit ungelöst verschobenen Punkten — fest, ohne Zufall; ``fixed`` bleibt."""
+    held = {
+        constraint.targets[0] for constraint in sketch.constraints if constraint.kind == "fixed"
+    }
+    return _placed(
+        sketch,
+        [
+            point
+            if index in held
+            else (
+                point[0] + amount * ((index * 0.6180339887) % 1.0 - 0.5),
+                point[1] + amount * ((index * 0.4142135623) % 1.0 - 0.5),
+            )
+            for index, point in enumerate(edit.flat_points(sketch))
+        ],
+    )
+
+
+@pytest.mark.parametrize("amount", [0.0, 1.0])
+@pytest.mark.parametrize("step", [(0.4, -0.3), (0.5, 0.5)])
+@pytest.mark.parametrize("shape", ["slot", "polygon"])
+def test_a_drag_the_shape_cannot_follow_lands_alike_wherever_it_lies(
+    shape: str, step: tuple[float, float], amount: float
+) -> None:
+    """Langloch und Fünfeck an einer Ecke gezogen, die sie nicht ganz hergeben:
+    an jedem Ort dieselbe Lage (RM-541, Review M-1).
+
+    Die Formen halten sich selbst und bleiben doch biegsam; der Zeiger ist
+    unerreichbar, also rutscht die zweite Stufe. Sie begann, wo die erste
+    aufgehört hatte — in einem flachen Tal, wohin die Rundung sie trug. Nach
+    zehn Mausschritten standen die Formen so je nach Ort bis 8,8 mm
+    woanders. Jetzt beginnt sie am Stand vor dem Schritt.
+    """
+    from app.core.sketch import shapes
+    from app.core.units import EPS_GEOM
+
+    drawn = _wobbled(
+        shapes.slot(30.0, 10.0) if shape == "slot" else shapes.polygon(30.0, 5), amount
+    )
+
+    def dragged(at: tuple[float, float]) -> list[tuple[float, float]]:
+        sketch = _placed(drawn, [(x + at[0], y + at[1]) for x, y in edit.flat_points(drawn)])
+        points = _flat(solve_sketch(sketch))
+        corner = points[3]
+        for count in range(1, 11):
+            target = (corner[0] + step[0] * count, corner[1] + step[1] * count)
+            points = _flat(solve_sketch(_placed(sketch, points), dragged={3: target}, start=points))
+        return [(x - at[0], y - at[1]) for x, y in points]
+
+    home = dragged((0.0, 0.0))
+    for at in ((1000.0, 0.0), (-1000.0, 1000.0), (1e5, -1e5)):
+        gap = max(math.dist(a, b) for a, b in zip(dragged(at), home, strict=True))
+        assert gap <= EPS_GEOM, (at, gap)
+
+
+@pytest.mark.parametrize("apart", [False, True])
+def test_a_joint_follows_the_drag_even_a_rounding_apart(apart: bool) -> None:
+    """Ein Gelenk aus zwei gedeckten Punkten folgt dem Zug, auch wenn beide um
+    ein ULP auseinanderliegen — so liegen sie nach einem Lösen, je nach
+    Rundung der Maschine (RM-541, Review H-1).
+
+    Zwei Linien, gedeckt an der Ecke, die zweite senkrecht; gezogen wird ihr
+    freies Ende. Im Zug steht es fest, und übrig bleibt ein Teil aus den
+    beiden Gelenkpunkten. Sein erster Schritt maß sich an der Streuung dieser
+    zwei Punkte, also am Rundungsrauschen der Deckung, und der Löser hörte
+    nach der ersten Auswertung auf: Der Punkt blieb 0,27 mm hinter dem Zeiger,
+    das Gelenk rückte 0,13 statt 0,4 mm — an jedem Ort.
+    """
+    for dx, dy in _PLACES:
+        corner = (10.0 + dx, dy)
+        other = (math.nextafter(corner[0], math.inf), corner[1]) if apart else corner
+        sketch = Sketch(
+            plane="plane:xy",
+            elements=(
+                SketchElement("line", ((dx, dy), corner)),
+                SketchElement("line", (other, (10.0 + dx, 10.0 + dy))),
+            ),
+            constraints=(
+                SketchConstraint("coincident", (1, 2)),
+                SketchConstraint("vertical", (2, 3)),
+            ),
+        )
+        start = edit.flat_points(sketch)
+        target = (start[3][0] + 0.4, start[3][1] - 0.3)
+        points = _flat(solve_sketch(sketch, dragged={3: target}, start=start))
+        assert points[3] == pytest.approx(target, abs=1e-9), ((dx, dy), "der Punkt am Zeiger")
+        assert points[2][0] - start[2][0] == pytest.approx(0.4, abs=1e-9), (dx, dy)
+        assert math.dist(points[1], points[2]) <= 1e-9, (dx, dy)
+
+
+def test_a_line_a_rounding_long_takes_its_measure_wherever_it_lies() -> None:
+    """Eine Linie, deren Enden ein ULP auseinanderliegen, bekommt ihr Maß an
+    jedem Ort (RM-541, Review H-1).
+
+    Der erste Schritt maß sich an der Streuung der zwei Punkte. Um ein ULP
+    gestreut war er so klein, dass der Löser stehen blieb — wo ein ULP
+    10⁻¹⁵ mm ist, hieß das Widerspruch, wo es 10⁻¹¹ mm ist, gelöst."""
+    for dx, dy in _PLACES:
+        tail = (5.0 + dx, dy)
+        head = (math.nextafter(tail[0], math.inf), dy)
+        sketch = Sketch(
+            plane="plane:xy",
+            elements=(SketchElement("line", (tail, head)),),
+            constraints=(SketchConstraint("distance", (0, 1), "10"),),
+        )
+        solved = solve_sketch(sketch)
+        assert span(*solved.elements[0].points) == pytest.approx(10.0, abs=1e-9), (dx, dy)
 
 
 def test_an_angle_outside_the_half_turn_is_refused() -> None:
@@ -957,11 +2030,22 @@ def test_a_sketch_without_area_is_a_user_error_not_a_crash() -> None:
             SketchConstraint(kind="vertical", targets=(0, 1)),
         ),
     )
-    solved = solve_sketch(degenerate)
-    assert solved.free_dof == 2, "der Solver loest das, und das ist richtig"
+    # Seit RM-541 (Review H-A) löst der Solver das nicht mehr auf eine Linie
+    # der Länge null, sondern nennt den Widerspruch: An einer Linie ohne
+    # Länge gilt jede Richtung leer, und 0.5.3 meldete daraus „gelöst“.
+    with pytest.raises(SketchConflictError) as conflict:
+        solve_sketch(degenerate)
+    assert {conflict.value.first, conflict.value.second} == {0, 1}
 
+    # Die Profilprüfung bleibt für jeden anderen Weg zu einem Umriss ohne
+    # Fläche — hier eine Linie, die so gezeichnet wurde.
+    collapsed = SolvedSketch(
+        elements=(SketchElement(kind="line", points=((5.0, 0.0), (5.0, 0.0))),),
+        free_dof=4,
+        max_residual=0.0,
+    )
     with pytest.raises(GeometryError) as caught:
-        profile_of(solved)
+        profile_of(collapsed)
     assert caught.value.suggestions, "ein Fehler ohne Ausweg ist fehlgeschlagen mit mehr Worten"
 
 
@@ -982,21 +2066,17 @@ def test_a_degenerate_loop_beside_a_good_one_is_dropped() -> None:
     from app.core.sketch import shapes
     from app.core.sketch.profile import _outline, regions_of
     from app.core.sketch.solver import solve_sketch
-    from app.core.types import SketchConstraint, SketchElement
+    from app.core.types import SketchElement
     from app.core.units import ring_area
 
     rectangle = shapes.rectangle(40.0, 30.0)
-    points = sum(len(element.points) for element in rectangle.elements)
+    # Die Linie liegt gezeichnet auf einem Punkt: *Waagerecht* und *senkrecht*
+    # zugleich nennt der Solver seit RM-541 als Widerspruch (Review H-A).
     mixed = dataclasses.replace(
         rectangle,
         elements=(
             *rectangle.elements,
-            SketchElement(kind="line", points=((60.0, 0.0), (70.0, 0.0))),
-        ),
-        constraints=(
-            *rectangle.constraints,
-            SketchConstraint(kind="horizontal", targets=(points, points + 1)),
-            SketchConstraint(kind="vertical", targets=(points, points + 1)),
+            SketchElement(kind="line", points=((60.0, 0.0), (60.0, 0.0))),
         ),
     )
 
@@ -2038,6 +3118,31 @@ def test_a_measured_box_moves_as_a_whole_and_a_fixed_one_not_at_all() -> None:
         assert (ax, ay) == pytest.approx((bx, by), abs=1e-6), "der Festpunkt hält alles"
 
 
+@pytest.mark.parametrize("steps", [1, 10])
+def test_a_drag_the_drawing_holds_back_moves_nothing(steps: int) -> None:
+    """Hält die Zeichnung den gezogenen Punkt ganz fest, bleibt alles stehen —
+    auch was biegsam ist (RM-541).
+
+    Das Vieleck der Grundformen hält gleich lange Seiten, die untere Kante
+    waagerecht und eine Ecke fest; biegen lässt es sich trotzdem. An der Ecke
+    neben der festen gezogen, kommt diese zurück. Die zweite Stufe begann
+    aber, wo die erste auf der Suche nach dem unerreichbaren Zeiger aufgehört
+    hatte, und was die erste dabei verbog, blieb verbogen: über ``lsmr`` bis
+    0,26 mm an einer Ecke, über die dichte Rechnung bis 10,7 mm.
+    """
+    from app.core.sketch import shapes
+
+    sketch = shapes.polygon(40.0, 6)
+    before = _flat(solve_sketch(sketch))
+    corner = before[1]
+    points = before
+    for step in range(1, steps + 1):
+        target = (corner[0] + 5.0 * step / steps, corner[1] + 5.0 * step / steps)
+        points = _flat(solve_sketch(_placed(sketch, points), dragged={1: target}, start=points))
+    for was, now in zip(before, points, strict=True):
+        assert now == pytest.approx(was, abs=1e-9), "nichts verbogen"
+
+
 def test_a_point_held_by_a_constraint_slides_as_far_as_it_may() -> None:
     """Die zweite Stufe des Zugs: Ein Punkt auf einer Waagerechten folgt dem
     Zeiger seitlich und bleibt in der Höhe; ein Punkt an einem festen Maß
@@ -2144,33 +3249,90 @@ def _counting_evaluations(monkeypatch: pytest.MonkeyPatch) -> list[int]:
     return evaluations
 
 
-def test_a_drag_beyond_reach_stays_bounded_and_leaves_the_sketch_standing(
-    monkeypatch: pytest.MonkeyPatch,
+@pytest.mark.parametrize("count", [20, 40])
+def test_a_drag_beyond_reach_stays_bounded_and_lands_alike_wherever_it_lies(
+    count: int, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Eine gestreckte Kette über ihre Länge hinaus zu ziehen, hielt das Fenster an.
 
     Gemessen am 22.09.2026: Die erste Zugstufe suchte ohne Grenze nach einem
     Ort, den es nicht gibt — an zwanzig Linien 646 Auswertungen, an hundert 103
     Sekunden je Mausereignis. Gezählt wird hier nicht die Zeit, sondern die
-    Arbeit: Sie ist auf jeder Maschine dieselbe. Und die Zeichnung bleibt
-    stehen, statt sich in einen Widerspruch zu verwandeln — die Zeile des
-    Editors sagt dann, was hält.
+    Arbeit: Sie ist auf jeder Maschine dieselbe. Und die Zeichnung wird kein
+    Widerspruch.
+
+    Eine lange Kette rechnet über ``lsmr`` und steht gestreckt singulär; im
+    Sprung so weit über ihre Reichweite findet die zweite Stufe in
+    :data:`DRAG_SLIDE_TRIES` keine Lage — wie 0.5.3 (RM-541, Reviews M-1 und
+    M-C). Zugesagt ist, was an jedem Ort gilt: begrenzte Arbeit — erste und
+    zweite Stufe —, kein Widerspruch, nie weiter vom Zeiger und an jedem Ort
+    dieselbe Lage; in Mausschritten folgt sie (unten).
     """
     from app.core.sketch import solver
+    from app.core.units import EPS_GEOM
 
-    sketch = _chain(20)
-    start = _flat(solve_sketch(sketch))
-    end = len(start) - 1
     evaluations = _counting_evaluations(monkeypatch)
+    home: list[tuple[float, float]] = []
+    for dx, dy in ((0.0, 0.0), (1000.0, 0.0), (1e5, -1e5)):
+        sketch = _placed(
+            _chain(count), [(x + dx, y + dy) for x, y in edit.flat_points(_chain(count))]
+        )
+        start = _flat(solve_sketch(sketch))
+        end = len(start) - 1
+        target = (start[end][0] + 3.0, start[end][1] + 4.0)
+        evaluations.clear()
 
-    solved = solve_sketch(
-        sketch, dragged={end: (start[end][0] + 3.0, start[end][1] + 4.0)}, start=start
-    )
+        solved = solve_sketch(sketch, dragged={end: target}, start=start)
+        points = _flat(solved)
+        landed = points[end]
 
-    assert sum(evaluations) <= solver.DRAG_REACH_TRIES + solver.DRAG_SLIDE_TRIES, evaluations
-    for before, after in zip(start, _flat(solved), strict=True):
-        assert after == pytest.approx(before, abs=1e-6), "die Kette bleibt, wo sie war"
-    assert solved.max_residual <= 1e-6
+        bound = solver.DRAG_REACH_TRIES + solver.DRAG_SLIDE_TRIES
+        assert sum(evaluations) <= bound, evaluations
+        assert solved.max_residual <= 1e-6
+        assert points[0] == pytest.approx(start[0], abs=1e-6), "der feste Anfang bleibt"
+        assert math.dist(start[0], landed) <= 10.0 * count + 1e-6, "weiter als die Kette reicht nie"
+        assert math.dist(landed, target) <= math.dist(start[end], target) + 1e-9, "nie weiter weg"
+        back = [(x - dx, y - dy) for x, y in points]
+        if not home:
+            home = back
+        gap = max(math.dist(a, b) for a, b in zip(back, home, strict=True))
+        assert gap <= EPS_GEOM, ((dx, dy), gap)
+
+
+@pytest.mark.parametrize("count", [17, 20])
+def test_a_long_chain_follows_the_mouse_beyond_its_reach(count: int) -> None:
+    """Das Ende einer langen gestreckten Kette, mit der Maus seitlich jenseits
+    ihrer Reichweite geführt, läuft auf seinem Kreis zum Zeiger hin — an
+    jedem Ort gleich (RM-541, Review M-C).
+
+    Seit die zweite Stufe am Stand vor dem Schritt beginnt (M-1), fand sie
+    an einer Kette über ``lsmr`` (ab siebzehn Gliedern) in fünfzig
+    Auswertungen keine Lage, und die Kette rührte sich nicht, wo 0.5.3 sie
+    folgen ließ. Mit hundert folgt sie bis auf Hundertstel Grad.
+    """
+    from app.core.units import EPS_GEOM
+
+    home: list[tuple[float, float]] = []
+    for dx, dy in ((0.0, 0.0), (1000.0, 0.0)):
+        drawn = _chain(count)
+        sketch = _placed(drawn, [(x + dx, y + dy) for x, y in edit.flat_points(drawn)])
+        points = _flat(solve_sketch(sketch))
+        anchor = points[0]
+        reach = math.dist(anchor, points[-1])
+        end = len(points) - 1
+        target = anchor
+        for step in range(1, 11):
+            target = (anchor[0] + reach + 2.0, anchor[1] + 0.5 * step)
+            solved = solve_sketch(_placed(sketch, points), dragged={end: target}, start=points)
+            points = _flat(solved)
+        wanted = math.atan2(target[1] - anchor[1], target[0] - anchor[0])
+        reached = math.atan2(points[end][1] - anchor[1], points[end][0] - anchor[0])
+        assert reached >= 0.95 * wanted, (count, math.degrees(reached), math.degrees(wanted))
+        back = [(x - dx, y - dy) for x, y in points]
+        if not home:
+            home = back
+        gap = max(math.dist(a, b) for a, b in zip(back, home, strict=True))
+        assert gap <= EPS_GEOM, ((dx, dy), gap)
 
 
 def test_a_reachable_drag_is_untouched_by_the_bound(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -2190,11 +3352,12 @@ def test_a_reachable_drag_is_untouched_by_the_bound(monkeypatch: pytest.MonkeyPa
     assert len(evaluations) == 1 and evaluations[0] < solver.DRAG_REACH_TRIES
 
 
-def test_a_short_chain_still_slides_as_far_as_it_may() -> None:
-    """Die zweite Stufe beginnt, wo die erste aufgehört hat, und rutscht: Das
-    Ende einer Kette aus fünf Linien folgt über ihre Länge gezogen dem Zeiger,
-    so weit die Kette reicht — gemessen fünf statt 116 Auswertungen."""
-    sketch = _chain(5)
+@pytest.mark.parametrize("count", [5, 10])
+def test_a_short_chain_still_slides_as_far_as_it_may(count: int) -> None:
+    """Die zweite Stufe beginnt am Stand vor dem Schritt und rutscht: Das Ende
+    einer kurzen Kette folgt über ihre Länge gezogen dem Zeiger, so weit die
+    Kette reicht — gemessen in vier Auswertungen (RM-541)."""
+    sketch = _chain(count)
     start = _flat(solve_sketch(sketch))
     end = len(start) - 1
     target = (start[end][0] + 3.0, start[end][1] + 4.0)
@@ -2202,7 +3365,7 @@ def test_a_short_chain_still_slides_as_far_as_it_may() -> None:
     solved = solve_sketch(sketch, dragged={end: target}, start=start)
     landed = _flat(solved)[end]
 
-    assert math.dist(start[0], landed) <= 50.0 + 1e-6, "weiter als die Kette reicht nie"
+    assert math.dist(start[0], landed) <= 10.0 * count + 1e-6, "weiter als die Kette reicht nie"
     assert landed[1] > start[end][1] + 1.0, "in Richtung des Zeigers gedreht"
     assert math.dist(landed, target) < math.dist(start[end], target), "näher am Zeiger"
     assert solved.max_residual <= 1e-6
@@ -2254,7 +3417,13 @@ def test_the_single_decomposition_answers_like_the_rank_of_each_rest(seed: int) 
         rank - int(np.linalg.matrix_rank(np.delete(matrix, list(block), axis=0)))
         for block in blocks
     ]
-    assert _losses(matrix, rank, blocks) == expected
+    answered = _losses(matrix, rank, blocks)
+    assert [loss for loss, _share in answered] == expected
+    for (loss, share), block in zip(answered, blocks, strict=True):
+        # Beteiligt ist, wessen Zeilen der Nullraum trägt — nie mehr als eins.
+        assert 0.0 <= share <= 1.0 + 1e-12, (block, share)
+        if loss < len(block):
+            assert share > 1e-6, (block, share)
 
 
 def _fixed_ring(count: int) -> Sketch:
@@ -2309,14 +3478,14 @@ def test_fixed_points_leave_the_decomposition_only_what_the_drawing_decides(
             SketchConstraint("diameter", (rim - 1, rim), "6"),
         ),
     )
-    real = np.linalg.matrix_rank
+    real = np.linalg.svd
     shapes: list[tuple[int, ...]] = []
 
     def recorded(matrix: np.ndarray, *args: object, **kwargs: object) -> object:
         shapes.append(np.shape(matrix))
         return real(matrix, *args, **kwargs)
 
-    monkeypatch.setattr(np.linalg, "matrix_rank", recorded)
+    monkeypatch.setattr(np.linalg, "svd", recorded)
     solved = solve_sketch(sketch)
 
     assert solved.free_dof == 0, "Kontur fest, Kreis an ihr, Durchmesser bemaßt"
@@ -2348,6 +3517,129 @@ def test_the_peeled_rank_is_the_rank(seed: int) -> None:
     from scipy.sparse import csr_matrix
 
     assert _matrix_rank(csr_matrix(matrix)) == int(np.linalg.matrix_rank(matrix)), "auch dünn"
+
+
+def _separate_circles(count: int) -> Sketch:
+    """``count`` getrennte Kreise mit Durchmesser 4, gezeichnet zu klein."""
+    elements = []
+    constraints = []
+    for index in range(count):
+        x, y = 12.0 * (index % 20), 12.0 * (index // 20)
+        rim = (x + 2.0 + 0.3 * (index % 4), y + 0.2)
+        elements.append(SketchElement("circle", ((x, y), rim)))
+        constraints.append(SketchConstraint("diameter", (2 * index, 2 * index + 1), "4"))
+    return Sketch(plane="plane:xy", elements=tuple(elements), constraints=tuple(constraints))
+
+
+def test_many_separate_parts_solve_in_few_steps_each(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Zweihundert getrennte Kreise mit Durchmesser: wenige Auswertungen je
+    Kreis, und eine schon gelöste Zeichnung rechnet gar nicht nach (RM-541).
+
+    Seit je Teil gerechnet wird, lief jeder Kreis allein — über dichtes TRF,
+    das bei weniger Gleichungen als Unbekannten jeden Schritt auf den Rand
+    des Vertrauensbereichs setzt: 57 Auswertungen je Kreis, zusammen
+    2,8 Sekunden statt der 100 ms aus §31. Schon gelöst rechnete jeder Kreis
+    mit der Genauigkeit 10⁻¹⁴ im Rundungsrauschen nach, bis zu 49
+    Auswertungen. Gezählt wird die Arbeit, sie ist auf jeder Maschine
+    dieselbe.
+    """
+    sketch = _separate_circles(200)
+    evaluations = _counting_evaluations(monkeypatch)
+
+    solved = solve_sketch(sketch)
+
+    assert len(evaluations) == 200, "je Kreis ein Lauf"
+    assert max(evaluations) <= 6, max(evaluations)
+    for element in solved.elements:
+        assert span(*element.points) == pytest.approx(2.0, abs=1e-9)
+
+    evaluations.clear()
+    solve_sketch(_placed(sketch, _flat(solved)))
+    assert evaluations == [], "gelöst ist gelöst"
+
+
+def test_separate_rectangles_are_decomposed_one_by_one(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Die Rangprüfung zerlegt getrennte Teile einzeln (RM-541): Hundertfünfzig
+    bemaßte Rechtecke kosteten im Ganzen rund zehn Sekunden je Lösung, auch
+    schon gelöst — die Zerlegung wächst mit der dritten Potenz."""
+    sketch = Sketch(
+        plane="plane:xy",
+        elements=tuple(
+            SketchElement("line", (a, b))
+            for index in range(150)
+            for a, b in pairwise(
+                [
+                    (30.0 * (index % 15) + x, 30.0 * (index // 15) + y)
+                    for x, y in ((0.0, 0.0), (20.0, 0.0), (20.0, 10.0), (0.0, 10.0), (0.0, 0.0))
+                ]
+            )
+        ),
+        constraints=tuple(
+            constraint
+            for index in range(150)
+            for base in (8 * index,)
+            for constraint in (
+                *(
+                    SketchConstraint("coincident", (base + 2 * k + 1, base + (2 * k + 2) % 8))
+                    for k in range(4)
+                ),
+                SketchConstraint("horizontal", (base, base + 1)),
+                SketchConstraint("vertical", (base + 2, base + 3)),
+                SketchConstraint("horizontal", (base + 4, base + 5)),
+                SketchConstraint("vertical", (base + 6, base + 7)),
+                SketchConstraint("distance", (base, base + 1), "20"),
+                SketchConstraint("distance", (base + 2, base + 3), "10"),
+            )
+        ),
+    )
+    shapes: list[tuple[int, ...]] = []
+    for name in ("svd", "matrix_rank"):
+        real = getattr(np.linalg, name)
+
+        def recorded(
+            matrix: np.ndarray, *args: object, _real: object = real, **kwargs: object
+        ) -> object:
+            shapes.append(np.shape(matrix))
+            return _real(matrix, *args, **kwargs)  # type: ignore[operator]
+
+        monkeypatch.setattr(np.linalg, name, recorded)
+    solved = solve_sketch(sketch)
+
+    assert solved.free_dof == 2 * 150, "jedes Rechteck darf noch wandern"
+    assert shapes, "zerlegt wird"
+    assert max(rows for rows, _columns in shapes) <= 14, "höchstens ein Rechteck je Zerlegung"
+
+
+@pytest.mark.parametrize("seed", range(6))
+def test_a_rank_taken_block_by_block_counts_like_the_whole(seed: int) -> None:
+    """Getrennte Blöcke werden einzeln zerlegt, gezählt wird mit der Schranke
+    der ganzen Matrix (RM-541): Ein Block, dessen kleinster Singulärwert nur
+    neben einem viel größeren Block verschwindet, zählt wie in
+    ``matrix_rank`` über alles — einzeln zerlegt hätte er eigene Maßstäbe.
+
+    Zerlegt im Ganzen kosteten hundertfünfzig getrennte Rechtecke rund zehn
+    Sekunden je Lösung."""
+    from scipy.linalg import block_diag
+
+    from app.core.sketch.solver import _matrix_rank
+
+    generator = np.random.default_rng(seed)
+    blocks = []
+    for index in range(5):
+        height, width = int(generator.integers(2, 6)), int(generator.integers(2, 7))
+        block = generator.random((height, width)) * 2.0 - 1.0
+        if index == 1:
+            block *= 1000.0
+        if index == 3:
+            # Fast abhängig: neben dem großen Block unter der Schranke, allein nicht.
+            block[-1] = block[0] + 1e-13 * (generator.random(width) * 2.0 - 1.0)
+        blocks.append(block)
+    whole = block_diag(*blocks)
+    rows = generator.permutation(whole.shape[0])
+    columns = generator.permutation(whole.shape[1])
+    mixed = whole[rows][:, columns]
+
+    assert _matrix_rank(mixed) == int(np.linalg.matrix_rank(mixed))
 
 
 def test_an_arc_with_all_three_points_fixed_is_determined_not_redundant() -> None:

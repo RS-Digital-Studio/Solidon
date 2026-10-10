@@ -118,7 +118,7 @@ Generatorabschnitt und die zweite Funktionsleiste waren genau so entstanden.
 - **Jeder Weg endet mit einem Verweis** (`.way-more`) auf die Seite, die ihn
   ausführt. Weg 3 trägt den alten Anker des Generatorabschnitts.
 - **Preis als drei gleichwertige Karten**: Demo, privat, gewerblich. Nur die
-  Demokarte hat einen Knopf; gekauft wird vor dem 1. November nichts.
+  Demokarte hat einen Knopf; gekauft wird vor dem Verkaufsstart nichts.
   `<article class="licence" data-summary>` bleibt den beiden Lizenzen
   vorbehalten, denn `make_seo.py` liest daraus `llms.txt`.
 - **Unterstützen**: oben „Der Weg bis 1.0" in zwei Spalten, Geschafft und

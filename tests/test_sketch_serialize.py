@@ -8,6 +8,9 @@ Auswertung erfahren können, welche das sind — daran hängt ihr Cache-Schlüss
 
 from __future__ import annotations
 
+import json
+from dataclasses import replace
+
 import pytest
 
 from app.core.errors import ValidationError
@@ -16,13 +19,31 @@ from app.core.sketch.serialize import (
     sketch_parameter_references,
     sketch_to_text,
 )
-from app.core.types import Sketch
+from app.core.types import SKETCH_SOLVER, Sketch
 from tests.helpers import rectangle
 
 
 def test_a_sketch_survives_the_round_trip() -> None:
     sketch = rectangle()
     assert sketch_from_text(sketch_to_text(sketch)) == sketch
+
+
+def test_only_an_older_solver_stands_in_the_text() -> None:
+    """Die Fassung des Lösers reist mit der Skizze (RM-541).
+
+    Eine neue Skizze schreibt denselben Text wie vor dem Feld — ohne Angabe
+    rechnet der heutige Löser. Eine Skizze aus einer älteren Datei trägt
+    ``"solver": 1`` und behält es auf jeder Reise durch Text und zurück.
+    """
+    sketch = rectangle()
+    assert sketch.solver == SKETCH_SOLVER == 2
+    assert '"solver"' not in sketch_to_text(sketch)
+
+    older = replace(sketch, solver=1)
+    text = sketch_to_text(older)
+    assert json.loads(text)["solver"] == 1
+    assert sketch_from_text(text) == older
+    assert sketch_from_text(sketch_to_text(sketch)).solver == SKETCH_SOLVER
 
 
 def test_the_references_name_what_the_measures_read() -> None:
@@ -81,6 +102,10 @@ def test_a_maliciously_deep_text_is_a_sentence_not_a_recursion_error() -> None:
         '{"elements": [], "constraints": [{"kind": "distance", "targets": [0, 1.5]}]}',
         '{"elements": [], "constraints": [{"kind": "distance", "targets": [0, true]}]}',
         '{"elements": [], "constraints": [{"kind": "distance", "targets": [0, 1], "value": 5}]}',
+        '{"elements": [], "solver": 0}',
+        '{"elements": [], "solver": 3}',
+        '{"elements": [], "solver": true}',
+        '{"elements": [], "solver": "1"}',
     ],
 )
 def test_what_does_not_fit_is_rejected_with_a_sentence(text: str) -> None:

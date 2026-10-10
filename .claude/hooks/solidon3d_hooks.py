@@ -624,8 +624,10 @@ def abschluss() -> None:
             "Testaufruf erfasst. Die Marke prüft weder Erfolg noch Testabdeckung. "
             "Die Arbeitsweise dieses Projekts verlangt nach jedem Schritt die "
             "betroffenen Kerntests: .venv\\Scripts\\python.exe tools/affected_tests.py --run "
-            f"— und vor dem Commit {'$pruefen' if is_codex() else '/pruefen'} für "
-            "das Entwicklungstor aus Kernsammlung, Ruff, Format und mypy. "
+            "— auf Paket- und Fixzweigen vor dem Commit dazu Ruff, Format und mypy. "
+            "Vor jedem Stand, der nach main geht (Merge oder Commit direkt auf main), "
+            f"läuft {'$pruefen' if is_codex() else '/pruefen'} für das Entwicklungstor "
+            "aus Kernsammlung, Ruff, Format und mypy. "
             "Fensterdateien und Leistungsprüfungen bleiben bis zum Release zurückgestellt. "
             "Der Hook sieht nur den Zeitstempel, nicht den Urheber.",
         )

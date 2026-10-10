@@ -857,8 +857,8 @@ class LicenceRequired(AppError):
     demselben Bau: sagen, was jetzt möglich ist. Die beiden Wege heißen
     Schlüssel eintragen und kaufen, und mehr Wege gibt es nicht.
 
-    Der Vorgabetitel ist absichtlich neutral: Die Verkaufsversion vom
-    01.11.2026 bietet zunächst keinen Testzeitraum an. Nur der Kern kennt den
+    Der Vorgabetitel ist absichtlich neutral: Die Verkaufsversion startet
+    bewusst ohne Testzeitraum. Nur der Kern kennt den
     wirklichen Zustand und setzt beim tatsächlich abgelaufenen Test einen
     genaueren Titel.
 

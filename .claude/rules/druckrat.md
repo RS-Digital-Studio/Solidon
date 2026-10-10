@@ -46,22 +46,63 @@ offenem Drucker. Übernommen wird auf Klick, nie von allein.
   nur von Material daneben (`_Ceilings.closes`), schließt sie sich selbst.
   Gefragt wird die ganze Decke (Flächenmehrheit). Außen auf dem Modell zählt
   `worth_support`, auch als `open_field`. Wer das anfasst, misst Schüssel und
-  Drache.
+  Drache. Der Brückenbefund rät über einer Kanaldecke zum Übergang, nicht zur
+  Stütze, und eine Brücke daneben misst er ohne sie (`advise._from_spans`);
+  gefragt nur, was weiter als `SPAN_INTERESTING` spannen kann (`_may_span`),
+  denn die Kanalfrage kostet je Decke den Durchgang bis zum Bett
+  (`channel_pieces` liest die gemerkte volle Antwort).
 - **Eine Insel ist nie eine Kanaldecke**: Auf dem Modell heißt es „überall“,
   gleich wie klein (`ModelSupport.island_on_model`), ebenso für eine lange
   Brücke, die selbst dort hängt (`open_bridge_width`); über dem Bett bleibt
   „nur vom Bett“.
 - **Bäume, wo kleine Überhänge auf dem Modell ansetzen** (`branching`): Ein
-  Baum setzt mit wenigen Füßen auf, ein Gitter mit jeder Säule. Nicht unter
-  einem flachen Stück über `OVERHANG_LAYER_WORTH_SUPPORT` — dort bleibt die
-  Art des Herstellers.
+  Baum setzt mit wenigen Füßen auf, ein Gitter mit jeder Säule. **Unter einem
+  flachen Stück über `OVERHANG_LAYER_WORTH_SUPPORT` Gitter** statt Bäumen —
+  über „automatisch“ nur, wo es beim Programm Bäume heißt (`trees` aus
+  `handover.tree_styles`, eine Quelle mit `Motion.support_tree`; ohne Programm
+  vorsichtig wie Bäume; Curas Antwort gilt auch ohne Programm). Wo die Art der
+  ganzen Platte gilt (Cura), sagt die Decke ausdrücklich Gitter, auch über
+  „automatisch“, sonst gewänne der Baum eines anderen Körpers; was Cura danach
+  gleich druckt (`_cura_prints_alike`), zeigt der Dialog nicht. Setzen daneben kleine Stücke auf dem Modell auf
+  (`ModelSupport.details_on_model`, nicht die Decke selbst) oder beginnen viele
+  Inseln, **Hybrid** (`tree_hybrid`), wo das Programm es kennt; PrusaSlicer,
+  SuperSlicer und Cura ersetzen es durch Gitter (`NOT_OFFERED_BY_PROGRAM`), der
+  Rat schlägt dort gleich Gitter vor. Über gewähltem Gitter nichts, über einem
+  Hybrid, den das Programm als Gitter druckt, Bäume für Details.
+  Gitter und Baum zweier Körper ergeben Hybrid nur, wo die Art der Platte gilt
+  (`combine` ohne `separate`, `handover.style_per_part`), ohne Hybrid beim
+  Programm Gitter (`combine(trees=)`). Geht die Art je Teil, nennt die Zeile die
+  Teile mit ihrem Wert und die mit eigenem anderem Wert (`_TargetedAdvice.others`,
+  je Wert einmal; Feldhinweis ebenso, vor dem Rest); bei Cura nennen Zeile und
+  Feld bei einem Wechsel der Art keine Teile, nur bei an oder aus, und ein
+  eingeschaltetes Teil zählt mit der Art der Platte. Ein gewählter Baum über einem Hybridprozess geht als `default`
+  hinaus (`tree_over_hybrid`).
+- **Zwei Wände für hohe Bäume** (`support.tree_walls`): ab `TALL_TREE_HEIGHT`
+  Säulenhöhe (`ModelSupport.tallest_column`: bis zum Boden des Körpers oder zur
+  letzten Auflage, ohne Ränder und Kanaldecken), gefragt mit `printed_style` gegen
+  `trees`. Die Orca-Familie liest die Wandzahl unter gefüllten organischen
+  Bäumen nicht (`IGNORED_UNDER_TREES_BY_PROGRAM`), unter hohlen schon
+  (`handover.hollow_trees`); Bambu Studio und Creality Print lesen sie überall,
+  Creality als `tree_support_wall_count_tree` (`PROGRAM_KEYS`). Der Druckdialog
+  filtert wie bei der unteren Trennschicht; der Slicertest
+  (`test_real_slicers.py`) hält die Tabelle gegen die Programme. PrusaSlicer zählt
+  keine Wände (`NOT_TAKEN_BY`). Plattenweit, nicht je Teil (`PART_PATHS`).
+  Unter Gitter ist das Feld inaktiv (`inactive_paths`), ebenso unter einer Art,
+  die das Programm als Gitter druckt (Ersatz, „automatisch“ außerhalb `trees`).
 - **`support.block_channels`**, weil „nur vom Bett“ Kanäle nicht freihält:
   `analysis.channel_space` sperrt um Decken, die sonst Stütze bräuchten
   (`worth_support` je Stück, im Zweifel Stütze), nur unerreichbaren Raum (eng
   oder umschlossen), eine Bahnbreite Zuschlag **vor** dem Aussparen der Säulen
   der Überhänge, deren Decke ohne Kanalstücke als Feld Stütze braucht
-  (`_field`), außer im umschlossenen Raum (RM-571). Ohne gesperrten Raum kein
-  Vorschlag. Familien: `dateiformat.md`.
+  (`_field`); im umschlossenen Raum nur Säulen, die von oben erreichbar sind
+  (`_open_above`: im runden Saum von zwei Bahnbreiten ein nach oben offener
+  Schacht, der einen Kreis von `CHANNEL_WIDTH` fasst wie `_narrow`, sonst
+  holt niemand die Stütze heraus), denn ein Loch im Schnitt ist auch das
+  Innere jedes offenen Gefäßes; ausgespart wird dann die ganze Säule, ihr
+  Stück braucht selbst Stütze. Der Schacht steht senkrecht: Ein schräges Loch
+  zählt nur mit seiner senkrechten Durchsicht, ein Sims daneben bleibt
+  gesperrt (bekannte Grenze, Docstring von `_open_above`). Ohne gesperrten
+  Raum kein Vorschlag. Familien: `dateiformat.md`.
   **Vorschlag, nicht Automatik** (Entscheidung Robert).
 - **Ränder tragen sich selbst** (`analysis.ledges`): Eine Decke, deren Teil
   jenseits `LEDGE_REACH` um ihre Wurzel höchstens `LEDGE_SPILL` des Felds ist
@@ -69,15 +110,37 @@ offenem Drucker. Übernommen wird auf Klick, nie von allein.
   ohne Ansatz), und die keine Öffnung über `SPAN_INTERESTING` überspannt
   (zwei Bahnen breit, von außen gefasst, Öffnung frei — geometrisch, denn der
   Stützschnitt misst keine Brücken), zählt nicht zum Stützbedarf, nicht zu
-  „auf dem Modell“, nicht zum Überhang- und nicht zum Brückenbefund. Wer nur
-  einige Stücke prüft, fragt mit `only`. `support.spare_ledges` sperrt ihre
+  „auf dem Modell“, nicht zum Überhang- und nicht zum Brückenbefund — je
+  Stück, nicht je Schicht: Die Brückenweite einer Schicht mit Rändern misst
+  `span_beside` an den Kernen der übrigen Stücke, sonst zählte ein Rand neben
+  einem fremden Überhang als lange Brücke (RM-627) — freie Flächen allein
+  reichen nicht, das Band einer Flanke unter 14 bis 45 Grad verbindet alles an
+  der Wand. Der Ort der Warnung liegt an der gemessenen Brücke (`span_spot`).
+  Wer nur einige Stücke prüft,
+  fragt mit `only`. `support.spare_ledges` sperrt ihre
   Überhangfläche (`ledge_space`) und spart aus, was Stütze braucht;
   vorgeschlagen nur mit Stützen.
 - **Der Stützkontakt folgt dem Material der Spule** (`_support_contact`):
   Abstand aus Schichthöhe × `support_gap_factor`, begrenzt durch
   `support_gap_min`/`support_gap_max` des Materialprofils (Regel 7,
   `support_gap_target`; ohne Werte kein Rat), vorgeschlagen außerhalb
-  `SUPPORT_GAP_BAND`; wo der Slicer in ganzen Schichten rechnet — Cura, die
+  `SUPPORT_GAP_BAND`. **Wie jedes Programm einen Abstand zwischen zwei
+  Schichten druckt, oben und unten, sagt `gap_rounding` und `printed_gap`
+  allein** (RM-628): Cura rundet auf, unter Gitter nur unten — oben druckt es
+  dort den geschriebenen Wert genau, je Teil nur mit dem Rest der Platte
+  (`cura_part_gap`, sonst schreibt die Übergabe dem Teil den nächsten genau
+  druckbaren Wert im Band seiner Spule: ein Vielfaches oder ein Vielfaches plus
+  den Rest der Platte); unter Curas Bäumen ohne obere Trennschicht kommt eine
+  Schicht dazu (`up_and_one`, der Rat schlägt die Trennschicht vor, Konsole und
+  Fenster bekommen sie). Die übrigen runden zur nächsten, wo sie runden (unter
+  organischen Bäumen, neben einem Turm); unter organischen Bäumen entscheidet
+  den Halbfall das Programm (`HALF_LAYER_UNGUARDED`). **Unten unter
+  Curas Gitter schreibt die Übergabe das Vielfache selbst**
+  (`support_bottom_distance` aus `advise.cura_bottom_gap`, nicht gespiegelt):
+  aufgerundet läge der Fuß über `support_gap_max` in der Luft (PETG bei
+  0,28er Schichten 0,56). Ein Vielfaches wählt `whole_layer_gap` — das nächste,
+  im Materialband, wenn der Wert darin liegt. Wo der Slicer
+  oben in ganzen Schichten druckt — Cura unter Bäumen, die
   Orca-Familie neben einem Reinigungsturm (`writer.tower_plates`,
   `whole_layers`), jedes Programm unter organischen Bäumen mit der Art, mit
   der das Teil druckt (`printed_style`: der Vorschlag, außer der Kunde lehnt
@@ -85,12 +148,21 @@ offenem Drucker. Übernommen wird auf Klick, nie von allein.
   übernommen; `handover.organic_styles`, ohne Programm die Familie; Rat,
   Feldsatz und Export fragen dieselbe Auskunft) —, das Vielfache innerhalb der
   Materialgrenzen, auch statt eines Werts in `SUPPORT_GAP_BAND`, der zwischen
-  zwei Schichten liegt (`in_whole_layers`); einen eigenen solchen Wert nennt
-  der Export gerundet (`export.support_gap_rounded`). **Über Baumspitzen ohne
+  zwei Schichten liegt (`in_whole_layers`) — welches Vielfache, sagt das
+  Material, nicht die Rundungsart; einen eigenen solchen Wert nennt der Export
+  gerundet (`export.support_gap_rounded`), bei Cura der Feldsatz mit dem
+  gedruckten Wert (`slicer_keys.limitation`). **Über Baumspitzen ohne
   Trennschicht** (ab `TIP_ISLANDS` Inseln unter `TIP_ROOF_AREA`, `tip_islands`)
   gilt unter organischen und Curas Bäumen `support_tip_gap` des Materials in
   ganzen Schichten, mindestens `TIP_GAP_LAYERS`, auch über `support_gap_max`
-  (`tip_gap`); ohne gemessenen Wert nicht. Unter einem flachen Stück über
+  (`tip_gap`); ohne gemessenen Wert nicht. Wo er gilt, Trennschichten
+  gedruckt werden und die Orca-Familie schneidet, dazu die kleinste Spitze mit
+  Trennschicht (`support.tip_diameter` = `ROOF_TIP_DIAMETER`, Querschnitt über
+  `TIP_ROOF_AREA`): Sonst hängt die Unterseite 0,4 mm über nackten Spitzen
+  (RM-704). Die Spitze geht für die ganze Platte (nicht in `PART_PATHS`, das Größte
+  der Teile), Abstand und Trennschichten je Teil. PrusaSlicer und Cura sind nicht gemessen (`NOT_TAKEN_BY`), Bambu
+  kennt den Schlüssel nicht, Creality Print liest ihn ohne Wirkung
+  (`NOT_TAKEN_BY_PROGRAM`). Unter einem flachen Stück über
   `OVERHANG_LAYER_WORTH_SUPPORT` eine dichte Trennschicht, sonst eine lockere;
   steht die Stütze auf dem Modell, auch unten (`BOTTOM_INTERFACE_LAYERS`) —
   nicht, wo das Programm sie unter Bäumen nicht druckt
@@ -104,10 +176,69 @@ offenem Drucker. Übernommen wird auf Klick, nie von allein.
   `separate`); gegen die Übernahme gefragt, kam jede Zeile mit ihrer
   Gegenzeile wieder. Die Zeile nennt nur Teile mit ihrem Wert. Übergabe:
   `dateiformat.md`.
+- **Was das Modell schon ausgleicht, gleicht der Slicer nicht noch einmal aus**
+  (`_from_allowances`, RM-589): Legt ein Schritt des Körpers Spiel in eine
+  Innenkontur (`scene.fits.allowances_for`, `"holes"`), heißt der Vorschlag
+  *Löcher weiten* null; zieht *Elefantenfuß ausgleichen* seine ersten
+  Schichten ein (`"foot"`), *Erste Schicht einziehen* null — je Teil, nur wo
+  der Slicer ausgleicht. Gefragt wird am fertigen Körper, Herkunft je
+  Körperkennung (`fits._producing`; über alle Eingänge erbte nach *Anordnen*
+  jeder Körper den Ausgleich seiner Nachbarn): ein Innenmerkmal, das der
+  Slicer in einer Schicht geschlossen sieht (`_closes_in_a_layer`: der tiefste
+  Punkt des oberen Mantelrands über dem höchsten des unteren, ohne zwei Ränder
+  `L·cos θ > d·sin θ` — eine waagerechte Bohrung weitet er nicht, eine
+  senkrechte durch eine schräge dünne Platte auch nicht), gemacht von einem
+  Schritt mit Spiel oder Lochkorrektur (`_puts_allowance_into`); die Taschen
+  von *Gegenform einlassen* über Entnahmerichtung und Rahmen. **Der Fuß zählt
+  nur, wo das eingezogene Band am Bett liegt** (`_foot_on_the_bed`): Rahmen-Z
+  nach oben, mit Vorzeichen, der Schritt auf der eigenen Linie des Körpers
+  oder einer reinen Kopie (`COPY_OPS`), und am fertigen Körper ist das Band
+  unten noch eingezogen (`_band_drawn_in`, zwei Schnitte) — nicht nach Kippen,
+  Wenden, Abschneiden oder Abziehen unten, an einer Teilhälfte oder am Deckel;
+  im Zweifel behält der Slicer seinen Einzug. Eine nur
+  eingetragene Passung ändert keine Geometrie und zählt nicht, ein Stift,
+  Haken oder Bolzen auch nicht.
+  **Ein gemessener Wert bekommt keinen Vorschlag**: Sein Prüfkörper ging
+  durch den Slicer mit dessen Ausgleich, gemessen ist der Rest dahinter. Das
+  gilt je Wert (`MaterialProfile.measured`, Fuß `elephant_foot`, Löcher erst
+  mit `clearance` und `hole_compensation`); ein Startwert meint den ganzen
+  Ausgleich und bekommt ihn. Der Kalibrierdialog schreibt nur eingetragene
+  Felder als gemessen.
+  Übergabe (eigener Satz nur auf Wahl, Brim am Fuß): `dateiformat.md`.
 - **Die kleine Standfläche wird auch je Fuß gefragt** (`advise._on_small_feet`):
   Erreicht keine von mehreren Inseln `SMALL_FOOTPRINT`, heißt es Brim — nur
   als Vorschlag. `for_part` fragt mit Profil jede Regel für `PART_PATHS`;
   seine Brim-Regeln aus dem Schnitt behalten das letzte Wort.
+- **Was frei druckt, soll halten** (`advise._bridges_and_overhangs`, RM-587).
+  Verlangt das Teil Stütze und druckt es mit Stützen, heißt es
+  `support.bridges` — PrusaSlicer ohne eigenen Wert und manche Profile
+  (OrcaSlicers Kobra 2) lassen sonst frei, was sie als Brücke lesen, und das
+  rechnet nur der Slicer; Solidons eigener Satz stützt
+  Brücken wie die Schichtanalyse, und die Gegenprobe fragt den wirksamen Wert,
+  nicht den Herstellerprozess. Druckt eine Brücke über `SPAN_INTERESTING`
+  frei (ohne Stützen, ohne Brückenstütze, als Kanaldecke, solange „nur vom Bett“
+  oder die Kanalsperre den Kanal freihält), dicke Bahnen und
+  `BRIDGE_FLOW` über `BRIDGE_FLOW_ENOUGH`; ein Rand spannt nicht, seine Weite
+  ist die Kantenlänge. **Zusatzwände nur unter flachen Stücken ohne Stütze, die
+  an einer Seite hängen** (`analysis.cantilevers`; hat eine Bahnenrichtung über
+  das Stück an beiden Enden Halt — Ring, U —, hängt es nicht) und breiter sind als die
+  Wände — zwischen 45 Grad und der Stützgrenze, an beidseitig gelagerten
+  Brücken und unter Deckeln ändert der Schalter in PrusaSlicer und OrcaSlicer
+  nichts. **Steile Wände dort** bekommen bei `CURLING_MATERIALS` die Umkehr,
+  nur in der Orca-Familie — steil heißt, über die Höhe weiter als eine
+  Bahnbreite über die 45-Grad-Linie hinaus (`analysis.steep_reach`, je Wand
+  über die Schichten verfolgt, je Schicht erst ab Orcas Umkehrschwelle
+  `REVERSE_THRESHOLD_SHARE`); der Streifen am Rand einer Decke und eine Rundung
+  an der Kante sind keine Wand, die Flanke neben einem Überhang schon. Alle fünf gehen **je Teil**
+  (`PART_PATHS`): Jedes Programm, das einen nimmt, wendet ihn je Objekt an
+  (zwei Teile, nur eines mit Wert, in acht Programmen gemessen). Was ein
+  Programm nicht kennt oder nicht umsetzt, steht in `slicer_keys.NOT_TAKEN_BY*`
+  (Cura keinen der fünf, SuperSlicer nur dicke Brücken und Fluss als alte
+  Namen). **Was ein Programm gar nicht kennt** (`UNKNOWN_TO_PROGRAM`), trägt
+  eine Datei ohne bekanntes Programm weder auf der Platte noch je Teil
+  (`unknown_in_file`), und der vollständige Prusa-Satz schreibt solche
+  Schlüssel nur abweichend vom Programmwert (`QUIET_AT_DEFAULT`): SuperSlicers
+  3MF-Leser stürzt ab zwei fremden Schlüsseln ab (RM-459).
 - **Eine runde Außenwand bekommt die Schrägnaht vorgeschlagen**: glatte
   Umrisse (kein Knick über `analysis.SMOOTH_TURN_DEGREES`, gemessen über Arme
   der Düsenbreite wie im Slicer, ab `advise.SCARF_MIN_LOOP` Umfang) über

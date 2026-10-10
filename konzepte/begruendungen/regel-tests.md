@@ -1062,8 +1062,9 @@ und wer eine geänderte Nicht-Python-Datei beim Namen nennt — `--why` nennt
 je Datei den Grund, `--split` die regulären Aufrufe, `--run` fährt sie ohne
 Fenstertests und Leistung. Nur beim Release schaltet `--release` die
 Fenstertests hinzu; die Leistungsprüfung bleibt ein eigener Release-Lauf.
-Die Auswahl ist das Werkzeug *zwischen* den Schritten; das Entwicklungstor
-vor dem Commit bleibt `/pruefen`. Eine Änderung an `types.py` oder `errors.py`
+Die Auswahl ist das Werkzeug *zwischen* den Schritten und auf Paket- und
+Fixzweigen mit ruff, format und mypy auch vor dem Commit; das Entwicklungstor
+vor jedem Stand, der nach main geht, bleibt `/pruefen`. Eine Änderung an `types.py` oder `errors.py`
 berührt über den Graphen fast alles, und das Werkzeug sagt das dann auch.
 
 ## Eine Fremdmeldung ist ein Zeitpunkt, keine Ursache

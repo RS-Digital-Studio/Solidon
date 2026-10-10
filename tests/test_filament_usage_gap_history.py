@@ -60,8 +60,11 @@ def candidates(request):
     return (request.legacy_fingerprint,) if request.legacy_fingerprint else ()
 
 
-def historical_key(monkeypatch, value, fields):
-    """Den echten gebundenen Hash-Eingang mit den damaligen additiven Feldern lesen."""
+def historical_key(monkeypatch, value, fields, *, plate=True):
+    """Den echten gebundenen Hash-Eingang mit den damaligen additiven Feldern lesen.
+
+    ``plate=False`` ist der Stand von 0.5.1: ohne die (leere) Wahl der Platte (RM-705).
+    """
     captured = []
 
     def observe(*args):
@@ -79,6 +82,8 @@ def historical_key(monkeypatch, value, fields):
             values["adhesion"].pop(name, None)
         for name in fields:
             values["adhesion"][name] = getattr(value[1].adhesion, name)
+        if not plate and not values["plate_choices"]:
+            del values["plate_choices"]
     payload[3] = sorted(payload[3], key=digest)
     return digest(*payload)
 
@@ -123,7 +128,8 @@ def test_all_historical_addition_orders_remain_possible(monkeypatch, brim):
     expected = {
         historical_key(monkeypatch, value, fields)
         for fields in ((), ("brim_gap",), ("raft_gap",), ("brim_gap", "raft_gap"))
-    } - {request.fingerprint}
+    } | {historical_key(monkeypatch, value, (), plate=False)}
+    expected -= {request.fingerprint}
     assert set(candidates(request)) == expected
     assert len(candidates(request)) == len(expected)
     assert request.fingerprint not in candidates(request)
@@ -150,7 +156,10 @@ def test_raft_normalization_applies_to_every_candidate(monkeypatch, kind, raft):
     reference = prepare(without_raft)
     assert current.fingerprint == reference.fingerprint
     assert candidates(current) == candidates(reference)
-    assert set(candidates(current)) == {historical_key(monkeypatch, value, ())}
+    assert set(candidates(current)) == {
+        historical_key(monkeypatch, value, ()),
+        historical_key(monkeypatch, value, (), plate=False),
+    }
 
 
 @pytest.mark.parametrize("native", [False, True])

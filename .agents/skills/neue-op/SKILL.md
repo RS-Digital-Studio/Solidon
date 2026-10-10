@@ -64,8 +64,8 @@ Merkmal, Befehlspalette, Agent, Kommandozeile.
 ## Abschluss
 
 Geometrie-Nachweise nach `.agents/skills/geometry-review/SKILL.md`, auch am echten Modell. Die
-betroffenen Tests über `.agents/skills/pruefen/SKILL.md` mit den Dateipfaden; das Entwicklungstor vor
-dem Commit. Melden: Name, Kategorie, Parameter vorn und hinten, welche Tests
+betroffenen Tests über `.agents/skills/pruefen/SKILL.md` mit den Dateipfaden, dazu ruff, format, mypy;
+das Entwicklungstor vor jedem Stand, der nach main geht. Melden: Name, Kategorie, Parameter vorn und hinten, welche Tests
 sie decken, beide Kerne, und was die Oberfläche braucht (Auswahlfenster am
 Merkmal, Kürzel, Katalogeintrag). Fehlt die Op im Bauplan-Katalog, das sagen —
 den Bauplan ändert nur eine Ansage von Robert.

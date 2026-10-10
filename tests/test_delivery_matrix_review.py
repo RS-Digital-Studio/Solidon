@@ -593,3 +593,36 @@ def test_the_report_counts_an_unknown_support_amount_on_its_own(
     assert "| plate.stl | anycubic/alt | 68.20 | — | 0.40 |" in output
     assert "| plate.stl | anycubic/stuetzt-nicht | 0.50 | 1.89 | 0.01 |" in output
     assert report._mm3(None) == "—"
+
+
+def test_support_ways_counts_the_bridges_the_need_counts(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Die Tabelle „Stützbedarf gegen das Urteil des Slicers“ liest ``support_ways``.
+    Nach RM-627 las es ``need.quiet_layers``, das es nicht mehr gab: Jede
+    Kombination verlor „vorschlaege“ und „stuetzen_auto“ an einen ``AttributeError``.
+    Gezählt wird wie im Stützbedarf, je Schicht ohne Ränder (``span_beside``)."""
+    from app.core.slice.analysis import slice_body
+    from tests.helpers import brick, on_bed
+
+    unit = _matrix_unit_for_flags(tmp_path, monkeypatch)
+    wall = brick(40.0, 10.0, 40.0, (0.0, 0.0, 20.0))
+    shelf = brick(40.0, 2.5, 1.0, (0.0, 6.25, 20.5))
+    spur = [brick(4.0, 4.0, 21.0, (30.0, -15.0, 10.5)), brick(6.0, 1.5, 1.0, (35.0, -15.0, 20.5))]
+    bridge = [
+        brick(3.0, 3.0, 20.0, (-35.0, -11.5, 10.0)),
+        brick(3.0, 3.0, 20.0, (-35.0, 11.5, 10.0)),
+        brick(3.0, 26.0, 1.0, (-35.0, 0.0, 20.5)),
+    ]
+    results = {
+        "sporn": (45.0, 1.0, slice_body(on_bed(wall, shelf, *spur), 0.2)),
+        "steg": (45.0, 1.0, slice_body(on_bed(wall, shelf, *bridge), 0.2)),
+    }
+
+    ways = unit.support_ways(results)
+
+    assert not ways["sporn"]["needed"]
+    assert ways["sporn"]["bridges_over"] == 0, "die Konsole spannt nicht"
+    assert ways["steg"]["needed"]
+    assert ways["steg"]["bridges_over"] == 1
+    assert ways["steg"]["bridge_max"] == pytest.approx(20.0, abs=1.0), "der Steg, nicht die Konsole"

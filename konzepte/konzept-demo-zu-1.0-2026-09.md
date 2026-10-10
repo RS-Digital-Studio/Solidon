@@ -1,5 +1,12 @@
 # Konzept: Übergang von der Demo zu Solidon3D 1.0
 
+> **Termine verschoben (Robert, 09.10.2026):** Die Demo läuft bis einschließlich
+> 30.11.2026 (`store.DEMO_UNTIL`), der Verkaufsstart ist der 01.12.2026 um 10:00 Uhr
+> Europe/Berlin (`branding.PLANNED_SALE_START`), der interne 1.0-Kandidat wandert auf
+> den 25.11. Die Datumsangaben unten beschreiben den Plan vom 16.09. (30.10./31.10./01.11.);
+> maßgeblich sind Code und Register (RM-061, RM-092). Der Hinweis zur Winterzeit am 25.10.
+> betrifft die neuen Termine nicht.
+
 **Stand: 16.09.2026. Untersucht: Commit `d20104b0`.**
 
 **Bestätigte Produktentscheidungen:** Die öffentliche Demo läuft einschließlich

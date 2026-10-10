@@ -28,8 +28,10 @@ Und ``tests/conftest.py`` ist die Ausnahme von allem: Wer es ändert, ändert
 jeden Test.
 
 **Was das nicht ist: das Tor.** Die Auswahl sagt, was eine Änderung *sicher*
-berührt; das Tor sagt, ob der Stand *insgesamt* trägt. Vor dem Commit läuft
-``/pruefen``, hier läuft, was dazwischen schnell Auskunft gibt.
+berührt; das Tor sagt, ob der Stand *insgesamt* trägt. Auf Paket- und
+Fixzweigen genügt vor dem Commit diese Auswahl mit ruff, format und mypy; vor
+jedem Stand, der nach main geht, läuft ``/pruefen`` als Entwicklungstor. Hier
+läuft, was dazwischen schnell Auskunft gibt.
 
 **Fenster, Renderer und Leistung nur beim Release.** Die reine Auswahl nennt
 weiter alle betroffenen Dateien. ``--run`` und ``--split`` fahren deren

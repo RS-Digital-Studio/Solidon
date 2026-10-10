@@ -69,7 +69,12 @@ jede Datei am tatsächlich gewählten Ziel bytegenau geprüft.
 
 *HEAD-Fassung, früher unter „Die Familien“.*
 
-Die CI benutzt `run_suite_isolated.py --release --ci-group contracts|windowed`.
+Die CI benutzt `run_suite_isolated.py --release --ci-group contracts|windowed|rendering`;
+`rendering` sammelt die Rendererfälle ohne Fenster außerhalb der zwei
+Vertragsdateien und läuft unter Linux und auf beiden Macs (RM-344). Mehrere
+`--ci-group` teilen sich eine Sammlung und schreiben je Gruppe in einen
+Unterordner von `--report-dir`; eine zweite Sammlung kostete je Läufer 10 bis
+25 Sekunden.
 Der Läufer sammelt die ausführbaren Fensterfälle, verteilt sie mit
 `tests/data/ci_window_durations.json` deterministisch und schreibt je Datei
 Prozessprotokoll und JUnit sowie `summary.json`/`summary.md` für die Gruppe.
