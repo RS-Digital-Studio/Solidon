@@ -187,7 +187,9 @@ Millionen-Dreieck-Modell wird bei Bedarf erzeugt, nicht eingecheckt.
 (`cylinder(radius=2.6)` → Ø 5,2), aus dem Korpus (`data/README.md`) oder als
 Formel im Assert (`24000.0 - math.pi * 9.0 * 20.0`). Eine aus einem Lauf
 abgeschriebene Zahl trägt ihre Herleitung als Kommentar — oder sie ist ein
-Determinismusnachweis, und der Test sagt das. Zwei Vernetzungen gegeneinander
+Determinismusnachweis, und der Test sagt das. Druckgleich (§11.2) weist
+`tests/print_equal.py` nach, über zwei Codestände `tools/check_print_equal.py` —
+kein eigener Vergleich je Paket. Zwei Vernetzungen gegeneinander
 zu halten fängt keinen Fehler, der beide gleich trifft.
 
 ## Beim Schreiben

@@ -246,3 +246,9 @@ prüft `test_language_rules.py` genau jene zwei Verzeichnisse und dieses nicht.
 Gezählt am 23.08.2026: 78 deutsche Bezeichner in 27 Dateien. Sie werden
 **nicht** umbenannt — eine Massenänderung in fremden Dateien kostet mehr, als
 sie einbringt. Assert-Meldungen bleiben ebenfalls beim Bestand der Datei.
+
+## Der Hilfsprozess des Netzkerns (`test_kernel_process.py`)
+
+*Aus der Karte verschoben, als sie Platz für den druckgleich-Vergleich brauchte.*
+
+| Rechnet der Hilfsprozess des Netzkerns bitgleich und zurückgestellt ohne Nachladen, endet er beim Abbrechen und — untätig — mit einem hart beendeten Elternprozess, fällt er zurück, wenn eine Rechnung nicht hinein- oder herauskommt, und sieht die Boolesche Kette seinen Tod? | `test_kernel_process.py` — echte Hilfsprozesse, dazu nachgestellte stumme, sterbende und abweisende; verspätetes Ende, Ressourcenfreigabe, bleibende Absage, ursprüngliche Startursache, Startkontingent und Generationswechsel auch am öffentlichen Aufruf; ENOSPC gegenüber echtem Speichermangel über pack/copied und den öffentlichen Call-/Serve-Transfer; Schwelle null, Aufruf aus einem Nebenfaden. Das gebaute Paket startet `tools/check_frozen_helper.py` im Paketjob; `test_packaging.py` prüft dessen eigenes Endebudget und harte Stopfehler mit Attrappen |

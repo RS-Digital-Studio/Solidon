@@ -3592,6 +3592,10 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   `a·n + b` laufen in int32 über. Abnahme: Spitze am großen Modell gemessen
   gesenkt, Ergebnisse druckgleich über Korpus und Beispielprojekte, alle
   Gleichheitsverträge aus §11.2 grün. Der 256-MB-Block von wgpu ist Teil (2).
+  **Teil (1) steht:** `tests/print_equal.py` nimmt Ergebnisse als Abbild auf und
+  urteilt (`compare`), `tools/check_print_equal.py` vergleicht zwei Codestände über
+  Beispielprojekte und Modelldateien; je Kriterium ein Gegenfall in
+  `tests/test_print_equal.py`.
 
 <a id="rm-699"></a>
 
