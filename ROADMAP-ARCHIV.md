@@ -31,6 +31,7 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-10 | [RM-670: Ein zweiter 3MF-Export liest den Slicerbestand nicht neu (10.10.2026)](#rm-670-ein-zweiter-3mf-export-liest-den-slicerbestand-nicht-neu-10102026) |
 | 2026-10-09 | [RM-670 (Teil): Der 3MF-Export liest den Slicerbestand nicht mehr je Export neu (09.10.2026)](#rm-670-teil-der-3mf-export-liest-den-slicerbestand-nicht-mehr-je-export-neu-09102026) |
 | 2026-10-09 | [RM-680: Bausteine verwalten steht ohne eigenen Baustein offen (09.10.2026)](#rm-680-bausteine-verwalten-steht-ohne-eigenen-baustein-offen-09102026) |
 | 2026-10-09 | [RM-650: Ein eingefügtes Modell kommt in den Ausschnitt (09.10.2026)](#rm-650-ein-eingefügtes-modell-kommt-in-den-ausschnitt-09102026) |
@@ -27320,6 +27321,41 @@ nach einer Rücknahme bucht wirklich, eine abgewiesene Spule kommt in den Dialog
 zurück, die Übernahme aus dem Slicer überschreibt keine Handspule, Rücknahmen
 sind rücknehmbar, das Lager sichert seinen letzten lesbaren Stand selbst,
 Datumsfelder haben einen Kalender.
+
+## RM-670: Ein zweiter 3MF-Export liest den Slicerbestand nicht neu (10.10.2026)
+
+<a id="rm-670-ein-zweiter-3mf-export-liest-den-slicerbestand-nicht-neu-10102026"></a>
+
+**Rest nach dem Teil vom 09.10.:** Je 3MF-Export entstand die Grundlage viermal (Datei, Befunde,
+Stützfuß, Projekteinstellungen; Cura zweimal), jedes Mal mit Namensindizes der Erbketten (am ElegooSlicer
+668 Dateien je Herstellerordner, 0,35 s), rekursiver Suche nach der Modelldatei (0,18 s) und bei Cura der
+Auflistung von Definitionen und Containern (rund 4 000 Dateien, 1,2 s). Der zweite Export lag am echten
+Bestand bei 0,42–0,73 s (Elegoo), 0,53–1,47 s (Orca) und 3,1–3,8 s (Cura mit eingerichtetem Drucker).
+
+**Behoben:** `slicer_profiles.once_per_read` rechnet im Lesedurchgang einmal, was allein aus Argumenten
+und gelesenem Bestand folgt — `manufacturer.base_settings` und `machine_model`. `_once_per_stock` hält
+Namensindizes, Modelldatei und Curas Auflistung (`_cura_installed`, `_cura_own_containers`) darüber hinaus
+unter der Signatur des Bestands und dem Stand der Programmsuche (`_derived`, `_root_owners`); gemerkt erst
+Beruhigtes (`SETTLE_NS` vor der Signatur). Gehalten wird nur, welches Profil wo liegt; Werte liest jeder
+Durchgang aus den Dateien.
+
+**Nachweis (10.10.2026, Roberts Slicer mit seinen Nutzerprofilen in einer Kopie von `%APPDATA%`, gepinnt,
+Rechner unter Fremdlast, CPU-Zeit des Prozesses):** Würfel, Figur aus Weg 4, `dose-mit-deckel.p3d` und
+`garden-hose-holder.3mf` an ElegooSlicer (Centauri Carbon 2), OrcaSlicer (P1S), PrusaSlicer (MK4S) und
+Cura 5.13 (Ender-3 V3 SE eingerichtet). Zweiter und dritter 3MF-Export Würfel 0,03–0,16 s, Figur
+0,06–0,20 s, Dose 0,25–0,41 s; der Halter 1,56–1,88 s bei 0,59–0,67 s STL — der Abstand ist der Schreiber der
+Geometrie, nicht der Bestand. Vor RM-670 (`a9e4d3f64`) Würfel 0,98–1,20 s (Elegoo), 2,70–3,12 (Orca), 5,3–5,5
+(Cura). Die 3MF ist in allen 16 Fällen byte-gleich zum Stand vor RM-670 und zu einem Lauf ohne jeden
+Merker, Würfel und Dose auch zum Stand vor diesem Schritt (`786ff615f`). Am Fenster (offscreen, Würfel, mit Vorwärmen und Auswertung) erster 3MF-Export
+0,12–0,24 s Wanduhr bei 0,06–0,08 s STL, die folgenden 0,05–0,19 s. Eine Änderung im Slicer — eigener Prozess
+geändert (Elegoo, Wände 2 → 4), neuer eigener Prozess (Orca, Prusa), Maschineneinstellung (Cura) — sieht der
+nächste Export sofort; die Datei gleicht dem ungemerkten Lesen. `test_real_slicers.py` 21 passed. Tests:
+`test_print_settings_ui.py` (`test_a_3mf_export_derives_the_foundation_once`,
+`test_the_remembered_stock_writes_the_file_a_fresh_read_writes`,
+`test_a_second_3mf_export_lists_no_stock_folder_again`, Leistung
+`test_a_second_3mf_export_of_a_large_stock_stays_under_half_a_second` je Familie: zweiter Export 0,03–0,09 s
+CPU), `test_slicer_profiles.py` (`test_inheritance_indexes_hold_across_passes_until_the_stock_changes`); jede
+mit Gegenprobe. Changelog: der Punkt vom 09.10. gilt.
 
 ## RM-670 (Teil): Der 3MF-Export liest den Slicerbestand nicht mehr je Export neu (09.10.2026)
 
