@@ -88,11 +88,12 @@ from app.core.export.writer import (
     arrangement_holds,
     part_advice,
     prepare_slicer_meshes,
+    shared_layer_plates,
     slicer_rim,
     tower_plates,
     write_assembly,
 )
-from app.core.filament_usage import UsageRequest, from_gcode
+from app.core.filament_usage import StoredInputs, UsageRequest, from_gcode
 from app.core.filament_usage import prepare as prepare_usage
 from app.core.geom.attributes import used_slots
 from app.core.geom.mesh import MeshData, as_mesh_data
@@ -1171,6 +1172,9 @@ class _PlateJob:
     #: Arbeiter selbst.
     for_window: bool = False
     with_comparison: bool = False
+    #: Die gespeicherten Eingänge der Körper, für den Abdruck der Buchung
+    #: (RM-706): ein fester Stand, das Fenster rechnet weiter.
+    inputs: StoredInputs | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -1371,6 +1375,7 @@ def _prepare_plate(job: _PlateJob, plate: int) -> PlateRun:
 
     def remember_comparison(
         parts: Sequence[tuple[SceneObject, MeshData, PrintSettings | None]],
+        heights: Mapping[str, tuple[float, ...]],
     ) -> None:
         nonlocal comparison
         # Die Zeitgegenprobe rechnet mit dem, was das Herstellerprofil über
@@ -1384,6 +1389,7 @@ def _prepare_plate(job: _PlateJob, plate: int) -> PlateRun:
             separate_objects=slicer_keys.reads_assembly_file(job.setup.flavour),
             cancelled=job.cancelled,
             motion=motion,
+            heights=heights,
         )
 
     written, findings = write_assembly(
@@ -1574,6 +1580,9 @@ class _AdviceWorker(Worker):
         self.towers: frozenset[int] = frozenset()
         """Die Platten mit Reinigungsturm (:func:`writer.tower_plates`), je Lauf
         einmal gefragt."""
+        self.shared: frozenset[int] = frozenset()
+        """Die Platten, deren Teile dieselben Schichten drucken müssen
+        (:func:`writer.shared_layer_plates`), je Lauf einmal gefragt."""
         self.organic: frozenset[str] = frozenset()
         """Die Stützarten, die das Programm als organische Bäume druckt
         (:func:`handover.organic_styles`), je Lauf einmal gefragt."""
@@ -1630,6 +1639,9 @@ class _AdviceWorker(Worker):
         # Slicer den Stützabstand; der Rat rechnet dort in ganzen Schichten, wie
         # im Export (RM-622).
         self.towers = tower_plates(self.objects, self.setup)
+        # Wo der Turm allen Teilen dieselben Schichten abverlangt, kein Rat zu
+        # feinen Schichten (RM-586).
+        self.shared = shared_layer_plates(self.objects, self.setup, self.profile)
         self.organic = handover.organic_styles(self.setup, self.profile, flavour=self.flavour)
         # Hohle Bäume bestehen aus ihren Wänden, dort wirkt die Wandzahl (RM-584).
         self.hollow = handover.hollow_trees(self.setup)
@@ -1675,6 +1687,7 @@ class _AdviceWorker(Worker):
                     declined=self.declined,
                     allowances=self.part_allowances.get(body.id, ()),
                     trees=trees,
+                    shared_layers=body.plate in self.shared,
                     plate_style=plate,
                 )
                 style = advise.printed_style(process.settings, entries, self.declined)
@@ -1913,6 +1926,7 @@ class _AdviceWorker(Worker):
                 flavour=self.flavour,
                 accepted=chain,
                 whole_layers=body.plate in self.towers,
+                shared_layers=body.plate in self.shared,
                 organic=self.organic,
                 allowances=self.part_allowances.get(body.id, ()),
                 plate_style=split.plate.support.style,
@@ -1992,6 +2006,7 @@ class _AdviceWorker(Worker):
                 flavour=self.flavour,
                 accepted=chain,
                 whole_layers=body.plate in self.towers,
+                shared_layers=body.plate in self.shared,
                 organic=self.organic,
                 allowances=self.part_allowances.get(body.id, ()),
                 plate_style=split.plate.support.style,
@@ -2245,6 +2260,8 @@ class _PrepareAndSliceWorker(_SliceWorker):
                 self._job.profile,
                 self._job.name,
                 slots_by_plate={run.plate: run.slots for run in runs},
+                inputs=self._job.inputs,
+                base=self._job.setup,
             )
         }
         super().work()
@@ -2343,6 +2360,8 @@ class _OpenInSlicerWorker(Worker):
             return
         findings = self._receipt_findings
         opened = 0
+        # Ein Gang über den Stapel für alle Platten (Review RM-706, L5).
+        inputs = self._job.inputs.settled() if self._job.inputs is not None else None
         for plate in self._job.plates:
             if self._was_cancelled():
                 self._report_receipt(
@@ -2360,6 +2379,8 @@ class _OpenInSlicerWorker(Worker):
                     self._job.profile,
                     self._job.name,
                     slots_by_plate={plate: run.slots},
+                    inputs=inputs,
+                    base=self._job.setup,
                 )
                 if self._was_cancelled():
                     self._report_receipt(
@@ -2424,6 +2445,8 @@ class _OpenInSlicerWorker(Worker):
                 self._job.profile,
                 self._job.name,
                 slots_by_plate=run.slots_by_plate,
+                inputs=self._job.inputs,
+                base=self._job.setup,
             )
             if self._was_cancelled():
                 self._report_receipt(
@@ -9177,6 +9200,15 @@ class PrintSettingsDialog(QDialog):
             with_settings=with_settings,
             scene=None if self.session.last_result is None else self.session.last_result.scene,
             document=self.session.project.document,
+            inputs=StoredInputs.snapshot(
+                self.session.project,
+                base_dir=self.session.base_dir,
+                stopped_at=(
+                    None
+                    if self.session.last_result is None
+                    else self.session.last_result.stopped_at
+                ),
+            ),
         )
 
     def _plate_run(

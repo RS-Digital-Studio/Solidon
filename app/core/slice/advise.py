@@ -36,6 +36,7 @@ from app.core.errors import (
 )
 from app.core.knowledge import print_settings as settings_table
 from app.core.log import get_logger
+from app.core.slice import fine_layers
 from app.core.slice.analysis import (
     BRIDGE_FROM,
     OVERHANG_LAYER_MINIMUM,
@@ -251,6 +252,7 @@ def advise(
     allowances: Collection[str] = (),
     trees: Collection[str] | None = None,
     plate_style: str | None = None,
+    shared_layers: bool = False,
 ) -> list[SettingAdvice]:
     """Was an diesen Einstellungen für dieses Teil nicht passt (§29).
 
@@ -268,6 +270,8 @@ def advise(
     dieses Teils auf ganze Schichten rundet, weil dort ein Reinigungsturm steht;
     ``organic`` sind die Stützarten, die das Programm als organische Bäume auf
     den Schichten des Modells druckt (:func:`rounds_to_whole_layers`, RM-622).
+    ``shared_layers`` sagt, dass der Slicer allen Teilen dieser Platte dieselben
+    Schichten abverlangt (:func:`_fine_layers`, RM-586).
     ``declined`` sind Pfade, deren Vorschlag der Kunde nicht übernimmt — im
     Druckdialog abgewählt, im Export nicht übernommen: Abstand und untere
     Trennschicht fragen dann mit der eigenen Stützart (:func:`printed_style`).
@@ -304,6 +308,7 @@ def advise(
             declined,
             trees,
             plate_style,
+            shared_layers,
         )
     if fit_kinds:
         advice += _from_fits(settings, fit_kinds)
@@ -493,6 +498,11 @@ def _combined_value(
         return "hybrid" if hybrid else "grid"
     if path in ranks:
         return max(values, key=lambda value: ranks[path].index(str(value)))
+    if path == "layers.fine_layer_height":
+        # Null heißt aus: Wo ein Körper feine Schichten will, bekommt er die
+        # feinste, die verlangt ist (RM-586).
+        wanted = [float(value) for value in values if isinstance(value, int | float) and value > 0]
+        return min(wanted) if wanted else values[0]
     if all(isinstance(value, bool) for value in values):
         return any(values)
     numbers = [value for value in values if isinstance(value, int | float)]
@@ -1534,6 +1544,7 @@ def _from_geometry(
     declined: Collection[str] = (),
     trees: Collection[str] | None = None,
     plate_style: str | None = None,
+    shared_layers: bool = False,
 ) -> list[SettingAdvice]:
     """Der eigentliche Gewinn: das Teil bestimmt seine Einstellungen mit."""
     advice: list[SettingAdvice] = []
@@ -1809,6 +1820,19 @@ def _from_geometry(
     # unter flachen Überhängen ohne Stütze und die Umkehr an steilen Wänden.
     advice += _bridges_and_overhangs(settings, profile, result, need, advice, declined, flavour)
 
+    # **Feine Schichten, wo das Modell feine Formen hat** (RM-586). Gefragt mit
+    # der Stützart, mit der das Teil druckt: Unter organischen Bäumen lehnen
+    # PrusaSlicer und die Orca-Familie eine Höhenkurve ab.
+    advice += _fine_layers(
+        settings,
+        profile,
+        result,
+        flavour,
+        shared_layers,
+        printed_style(settings, advice, declined),
+        organic,
+    )
+
     # **Über „automatisch“ nur, wo der Slicer nichts rechnet** (Entscheidung J,
     # :func:`_unanchored`): Orcas Auto-Brim fragt Höhe und Grundfläche selbst
     # und hält mehr als Solidons Brim fester Breite.
@@ -2039,6 +2063,99 @@ def _from_geometry(
                 path="cooling.minimum_speed",
                 value=TIP_SPEED,
                 reason=_("Kleine Spitzen kühlen nur langsamer gedruckt ab."),
+            )
+        )
+    return advice
+
+
+def _fine_layers(
+    settings: PrintSettings,
+    profile: Profile,
+    result: SliceResult,
+    flavour: SlicerFlavour | None,
+    shared_layers: bool,
+    style: str,
+    organic: Collection[str],
+) -> list[SettingAdvice]:
+    """Feine Schichten an Kuppen und flachen Schrägen, dazwischen die normale Höhe
+    (RM-586, Recherche Nr. 9 und 10).
+
+    Vorgeschlagen, wo die Schichtanalyse flache Schrägen mit sichtbaren Stufen
+    findet (:func:`fine_layers.layer_bands`), mit dem Anteil, um den das Teil
+    länger druckt. Nicht, wo der Slicer allen Teilen der Platte dieselben
+    Schichten abverlangt (``shared_layers``): Reinigungsturm und mehr als ein
+    Objekt (``handover.same_layers_required``); ein Körper allein behält die
+    feinen Schichten auch neben seinem Turm. Und nicht unter
+    organischen Bäumen (``style`` in ``organic``): PrusaSlicer und die
+    Orca-Familie lehnen dann den Schnitt ab (``Print::validate``, „Variable
+    layer height is not supported with Organic supports“) — die Stütze geht
+    vor, denn ohne sie misslingt der Druck, ohne feine Schichten nur die Kuppe.
+    Und nicht für Cura: Es nimmt keine Kurve, und seine eigene Automatik
+    (``adaptive_layer_height_enabled``) richtet sich nach dem flachsten Dreieck
+    jeder Höhe — am Drachen 1 194 statt 650 Schichten, fein fast überall.
+
+    Mit feinen Schichten wird die Oberseite dünner; wo die Lagenzahl sie unter
+    :data:`fine_layers.TOP_SHELL_MINIMUM` ließe, kommt die Mindestdicke dazu.
+    """
+    layer = settings.layers.layer_height
+    if (
+        flavour == "cura"
+        or shared_layers
+        or (style != "none" and style in organic)
+        or not result.layers
+    ):
+        return []
+    # Auch mit einer schon gewählten feinen Höhe nur für ein Teil mit feinen
+    # Formen: Ein Würfel daneben bekommt keine Kurve und braucht keine dickere
+    # Oberseite.
+    bands = fine_layers.layer_bands(result, layer)
+    if not bands:
+        return []
+    advice: list[SettingAdvice] = []
+    fine = settings.layers.fine_layer_height
+    if fine <= EPS_GEOM:
+        candidate = fine_layers.fine_height(layer, profile.printer.nozzle_diameter)
+        if candidate is None:
+            return []
+        first = settings.layers.first_layer_height
+        bottom = result.layers[0].z - first / 2.0
+        top = result.layers[-1].z + layer / 2.0 - bottom
+        heights = fine_layers.height_profile(
+            [(low - bottom, high - bottom) for low, high in bands],
+            top,
+            layer,
+            candidate,
+            None if settings.adhesion.kind == "raft" else first,
+        )
+        if not heights:
+            return []
+        share = fine_layers.extra_time(result.layers, heights, settings, bottom)
+        advice.append(
+            _advice(
+                settings,
+                path="layers.fine_layer_height",
+                value=candidate,
+                reason=_(
+                    "Glattere Kuppen: Dieses Teil druckt rund {share} % länger.",
+                    share=max(1, round(100.0 * share)),
+                ),
+            )
+        )
+        fine = candidate
+    elif fine >= layer - EPS_GEOM:
+        # Nicht feiner als die normale Schicht: Die Übergabe schreibt keine Kurve.
+        return []
+    minimum = fine_layers.TOP_SHELL_MINIMUM
+    if (
+        settings.shell.top_layers * fine < minimum - EPS_GEOM
+        and settings.shell.top_thickness < minimum - EPS_GEOM
+    ):
+        advice.append(
+            _advice(
+                settings,
+                path="shell.top_thickness",
+                value=minimum,
+                reason=_("Mit feinen Schichten bliebe die Oberseite sonst zu dünn."),
             )
         )
     return advice
@@ -2327,6 +2444,10 @@ PART_PATHS: Final = frozenset(
         "infill.density",
         "shell.wall_generator",
         "layers.line_width",
+        # Feine Schichten und die Oberseite darüber gehören dem Teil mit den
+        # feinen Formen (RM-586).
+        "layers.fine_layer_height",
+        "shell.top_thickness",
         # Was das Modell schon ausgleicht, gilt nur dem Teil, das es trägt (RM-589).
         "shell.hole_offset",
         "layers.elephant_foot",
@@ -2377,6 +2498,8 @@ SLICED_PATHS: Final = frozenset(
         "speed.bridge",
         "cooling.minimum_layer_time",
         "cooling.minimum_speed",
+        "layers.fine_layer_height",
+        "shell.top_thickness",
         "support.bridges",
         "shell.thick_bridges",
         "shell.bridge_flow",
@@ -2439,6 +2562,7 @@ def for_part(
     allowances: Collection[str] = (),
     trees: Collection[str] | None = None,
     plate_style: str | None = None,
+    shared_layers: bool = False,
 ) -> list[SettingAdvice]:
     """Was dieses eine Teil anders braucht als die Platte (§29).
 
@@ -2473,6 +2597,7 @@ def for_part(
                 allowances=allowances,
                 trees=trees,
                 plate_style=plate_style,
+                shared_layers=shared_layers,
             )
             if entry.path in PART_PATHS
         ]

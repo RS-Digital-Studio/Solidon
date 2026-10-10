@@ -297,6 +297,8 @@ def test_prepared_plate_and_writer_share_one_arranged_export_snapshot(
             # Die Zeitgegenprobe rechnet mit den Bewegungswerten derselben
             # Herstellergrundlage wie die Übergabe (RM-465).
             "motion": manufacturer.base_settings(profile, settings.quality, job.setup).motion,
+            # Die Höhenkurven der Übergabe (RM-586); ohne feine Schichten keine.
+            "heights": {},
         }
         assert tuple(entry.id for entry, _mesh, _settings in parts) == run.object_ids
         for (entry, mesh, effective), prepared, original in zip(
