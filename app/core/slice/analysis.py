@@ -5430,7 +5430,29 @@ def free_form_share(result: SliceResult) -> float:
     ein Kasten fast keine, ein Rohr keine: Seine Wand ist rund, aber jede
     Schicht dieselbe. Gezählt werden Umrisse, keine Löcher, gewichtet mit ihrer
     Länge.
+
+    Gemerkt je Schnitt wie die Kanalfrage (:func:`keep_answers`): Der
+    Druckdialog fragt den Rat bei jedem geänderten Feld, und am Drachen
+    (2,9 Mio. Dreiecke, 650 Schichten) kostet die Messung 0,5 s.
     """
+    with _ANSWERS_LOCK:
+        for number, (layers, answer) in enumerate(_FREE_FORM):
+            if layers is result.layers:
+                _recent(_FREE_FORM, number)
+                return answer
+    answer = _free_form_share(result)
+    with _ANSWERS_LOCK:
+        _FREE_FORM.append((result.layers, answer))
+        _keep_recent(_FREE_FORM)
+    return answer
+
+
+#: Gemessene Anteile frei geformter Kontur (:func:`free_form_share`) je Schnitt.
+_FREE_FORM: list[tuple[tuple[LayerInfo, ...], float]] = []
+
+
+def _free_form_share(result: SliceResult) -> float:
+    """Die Messung hinter :func:`free_form_share`, ungemerkt."""
     total = 0.0
     free = 0.0
     previous: np.ndarray | None = None

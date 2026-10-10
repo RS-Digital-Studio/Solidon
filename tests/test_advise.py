@@ -2278,6 +2278,27 @@ def test_free_form_share_tells_a_figure_from_walls_with_edges() -> None:
     assert free_form_share(pyramid) < 0.1
 
 
+def test_free_form_share_is_measured_once_per_cut(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Der Druckdialog fragt den Rat bei jedem geänderten Feld; der Anteil
+    hängt nur an den Schichten und wird je Schnitt einmal gemessen."""
+    from app.core.slice import analysis
+
+    figure = _corpus("generated_figure.stl")
+    measured: list[int] = []
+    measure = analysis._free_form_share
+
+    def counted(result: SliceResult) -> float:
+        measured.append(1)
+        return measure(result)
+
+    monkeypatch.setattr(analysis, "_free_form_share", counted)
+    first = analysis.free_form_share(figure)
+    assert analysis.free_form_share(figure) == first
+    assert len(measured) == 1
+    analysis.free_form_share(_corpus("generated_figure.stl"))
+    assert len(measured) == 2, "ein neuer Schnitt wird neu gemessen"
+
+
 def test_a_figure_asks_for_the_seam_at_the_back() -> None:
     """Recherche Nr. 14: An einer frei geformten Außenwand findet der Slicer in
     jeder Schicht eine andere Ecke für die Naht, auch vorn. Die Figur bekommt
