@@ -234,6 +234,63 @@ def test_a_finish_waiting_for_the_evaluation_does_not_take_a_later_stroke(
     )
 
 
+def test_a_waiting_click_keeps_its_promise_while_the_map_is_computed(
+    window: MainWindow, exact_body: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """RM-750: Die Analysekarte steht vor der Auswertung in der Statuszeile.
+    Lief sie, während *Fertig* auf die Auswertung wartete, verschwand die
+    Zusage, und der Klick sah verschluckt aus."""
+    import threading
+
+    from app.i18n import tr
+
+    window.start_sculpt(exact_body)
+    window.sculpt_bar.radius.set_value_mm(6.0)
+    window._on_sculpt((10.0, 10.0, 20.0))
+    assert window.wait_for_sculpt_preview(60_000)
+    assert window.session.wait_for_idle(30_000)
+    gate = threading.Event()
+    evaluate = Session.run_evaluation
+
+    def held(self: Session, *args: object, **kwargs: object) -> object:
+        gate.wait(15)
+        return evaluate(self, *args, **kwargs)
+
+    monkeypatch.setattr(Session, "run_evaluation", held)
+    monkeypatch.setattr(window.viewport, "is_difference_applied", lambda _difference: True)
+    monkeypatch.setattr(window.viewport, "is_scene_applied", lambda _result: True)
+    try:
+        window.session.evaluate_async()
+        assert window.session.busy, "die Lage: die Sitzung rechnet"
+        window.sculpt_bar.done.click()
+        assert window._click_after_evaluation is not None, "der Klick wartet"
+        window._check_sculpted_walls()
+        assert window._progress_states["map"].active, "die Lage: die Karte rechnet"
+
+        assert window.status_message.text().startswith(
+            tr("Wird übernommen, sobald die Berechnung fertig ist.")
+        )
+    finally:
+        gate.set()
+        assert window.session.wait_for_idle(30_000)
+        assert window.wait_for_sculpt_check()
+
+
+def test_a_released_window_starts_no_wall_check(window: MainWindow) -> None:
+    """RM-751: Nach dem Freigeben startete die Wandprüfung des letzten Zugs
+    noch einen Arbeiter, den niemand mehr abwartet."""
+    object_id = with_a_body(window)
+    window.start_sculpt(object_id)
+    window._on_sculpt((0.0, 0.0, 82.0))
+    assert window._sculpt_check.isActive(), "die Lage: eine Prüfung steht aus"
+
+    window.release()
+
+    assert not window._sculpt_check.isActive()
+    window._check_sculpted_walls()
+    assert window._sculpt_wall_worker is None
+
+
 def test_a_finish_during_an_evaluation_closes_the_session_after_it(
     window: MainWindow, exact_body: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
