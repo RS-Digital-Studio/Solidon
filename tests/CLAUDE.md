@@ -34,6 +34,7 @@ Fassungen: `konzepte/begruendungen/karte-tests.md`.
 | Kommt eine Rückmeldung an — und geht nur am Knopf hinaus? | `test_support.py` (§37.2) |
 | Bedeutung allein über Farbe? Neun Menüs, zwölf Zeilen, acht Umschalter, vier Felder vorn? | `test_theme_and_palette.py` · `test_interface_limits.py` |
 | Budget §31, Schwelle 25 % | `test_performance.py` (`-m performance`, nur beim Release) |
+| Erkennt der druckgleich-Vergleich (§11.2) jede Verletzung? | `test_print_equal.py` |
 | Verhindert eine abweisende Nachprüfung das Schreiben einer Vergleichsmarke und bleibt sie außerhalb der API-Zeit? | `test_performance_marks.py` — nachgestellte Prüfablehnungen, gestellte Uhr, eigene temporäre Marken; keine Leistungsmessung |
 | Abhängigkeiten gegen die Freigabeliste | `test_licences.py` |
 | Bleiben Tutorialreihenfolge, echte Gestendauer, Hook-Manifest, skalierte Dialogausschnitte und akustische Satzuntertitel an ihre Quellen gebunden? | `test_workshop_edit.py` — ohne Fenster, Sprachsynthese oder Filmexport |
@@ -69,7 +70,7 @@ Fassungen: `konzepte/begruendungen/karte-tests.md`.
 | Erkennt die Gruppenerkennung Kammer, Nut, Kanal, Gewinde, Verschluss, Scharnier, Schrift und Aufnahme samt Gegenproben und Korpus, und ändert *Kammer ändern* eine Kammer als Ganzes? Ändert *Verschluss ändern* Spiel und Drehweg aller Stellungen genau um ihren Umriss? | `test_functional_groups.py` · `test_chamber_ops.py` · `test_closure_ops.py` (Rohr mit L-Wegen, Plattendeckel als STL, Bausteinaufnahme); Baum und Merkmalfenster in `test_feature_panel.py`; der Kasten dazu ist `helpers.walled_bin` |
 | Findet die Bindungshilfe feste Zahlen, die zu Projektmaßen passen, wählt sie nur Sicheres vor, und folgt das gebundene Puppenhaus seinen Maßen? Zählt der Plattenwähler die Körper, und rahmt die Plattenwahl einmal? | `test_parameter_binding.py` · `test_parameter_binding_ui.py`; Platten in `test_plates.py`; das Puppenhaus ist `helpers.dollhouse_document` |
 | Liest der exakte Körper dieselben Muster wie sein STL-Zwilling? | `test_exact_patterns.py` — STEP und binäre STL derselben Konstruktion über den echten Einleseweg |
-| Erkennt die Erkennung mit Arbeitern Bit für Bit wie allein (RM-637)? | `test_perceive_workers.py` — echte Arbeiter, Abbruch, Rückfall |
+| Erkennungsarbeiter bitgleich, abbrechbar? | `test_perceive_workers.py` |
 | Ersetzt eine örtlich erkannte Textur die alten Einzelzellen auch nach Import, Speichern und Undo? | `test_local_detection.py` — echte Bereichssuche, reservierte Zellkennungen, leerer Cache und Plattencache; alte Zellbezüge halten mit Rückweg an |
 | Bleibt der exakte Körper bei Merkmalshandlungen exakt — Volumen, Kennungen, STEP-Umlauf? | `test_exact_feature_ops.py` |
 | Wulst und Kehle · Gewinde ändern und verschließen · Filament an Ringen und Gewinden, jeweils in beiden Kernen | `test_torus_feature_ops.py` · `test_thread_feature_ops.py` · `test_filament_on_rings_and_threads.py` |
@@ -117,6 +118,7 @@ Fassungen: `konzepte/begruendungen/karte-tests.md`.
 | `ui_helpers.py` | Qt-gebundene gemeinsame Helfer der Fenstertests; die Fixtures `window` und `session`, je Test frisch und eingebunden mit `from tests.ui_helpers import window as window` (eine Datei mit vorbereiteter Sitzung überschreibt nur `session`); `shown_window` für ein gezeigtes Fenster ohne Startbildschirm, `with_a_body` für die ausgewählte Korpusfigur, `on_the_bore_wall` für einen Klick auf eine Bohrungswand, `wait_until` für zugestellte Qt-Ereignisse, `wait_for_export` und `wait_for_print_findings` für Arbeiter, die `wait_for_idle` nicht sieht, sowie `PlacementItem`, `PlacementViewport` und `scene_with_a_hole_and_a_fillet` für Platzierungsfälle |
 | `cura_fakes.py` | Nachgebaute Cura 5.13 (`cura_installation`), ihr AppDir, Flatpak-Starter und AppImage als Abbild des AppDir mit nachgestelltem Einhängen für den Lauf — für `test_cura_machine.py` und die Cura-Fälle des Druckdialogs |
 | `squashfs_fakes.py` | AppImages vom Typ 2 nach dem SquashFS-4.0-Aufbau (`appimage_file`, `tree_of`, `Link`) — für `test_appimage_profiles.py` und `cura_fakes.py` |
+| `print_equal.py` | Druckgleich (§11.2): `shot`, `save`/`load`, `compare`; zwei Codestände: `tools/check_print_equal.py` |
 | `gcode_contact.py` | Stützkontakt im G-Code (`support_contact`): Abstand und Trennschichten oben und unten je Rasterzelle — nur für `test_real_slicers.py` |
 | `render_fakes.py` | Renderer-Doppel der Ansichtstests: schreibt Aktoren, Stile, Beschriftungen und Kamera mit, statt zu zeichnen — wer das Bild misst, nimmt den echten Renderer ohne Fenster |
 | `release_signing.py` | Eigenes Schlüsselpaar der Suite für unterschriebene Versionsdateien (`signed`, auch mit fremdem Schlüssel); die echten Schlüssel (`REAL_PUBLIC_KEYS`) samt Abdruck des ersten und Besitzproben (`KEY_PROOFS`) prüfen `test_the_published_version_file_is_signed` und `test_the_shipped_release_keys_are_proven` |

@@ -4375,3 +4375,86 @@ def test_the_load_step_separates_touching_sheets_under_a_new_cache_version(
     assert int(REGISTRY.get("load").cache_version) >= 7, (
         "das Ergebnis des Ladeschritts hat sich mit RM-550 geändert"
     )
+
+
+@pytest.mark.parametrize(
+    "case", ["single", "apart", "inside", "cavity", "rattle", "sheet", "plate"]
+)
+def test_whether_parts_can_merge_is_asked_without_copying_a_part(
+    case: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Ob *Überschneidungen auflösen* trägt, fragt jedes Teil nach seinem Volumen, ohne Kopie.
+
+    Je Teil entstand ein eigenes Netz (``submesh``) und rechnete Dichtheit,
+    Wicklung und Volumen noch einmal: am Spiderman, zwei Teile, eines mit
+    allen Dreiecken bis auf vier, 449 MB Spitze beim Einlesen (RM-636, gemessen
+    in RM-698). Ist der ganze Körper dicht und einheitlich gewickelt, ist es
+    jedes Teil. Sollwert ist die alte Rechnung über die Kopie, das Volumen je
+    Teil hier unabhängig vom Kern gerechnet; ``sheet`` ist ein dichtes Teil ohne
+    Volumen (zwei Dreiecke Rücken an Rücken) und hält die Grenze bei null.
+    """
+    from app.core.geom import repair as repair_module
+    from app.core.geom.mesh import face_components, signed_volume
+    from app.core.units import EPS_GEOM
+
+    def volume(piece: trimesh.Trimesh) -> float:
+        corners = np.asarray(piece.triangles, dtype=np.float64)
+        corners = corners - corners[0, 0]
+        return math.fsum(float(np.dot(a, np.cross(b, c))) for a, b, c in corners) / 6.0
+
+    if case == "plate":
+        body, _welded = merge_vertices(raw("plate_holes.stl"))
+    elif case == "rattle":
+        outer = trimesh.creation.icosphere(subdivisions=3, radius=20.0)
+        hollow = trimesh.creation.icosphere(subdivisions=3, radius=15.0)
+        hollow.invert()
+        ball = trimesh.creation.icosphere(subdivisions=2, radius=5.0)
+        body = MeshData.of(trimesh.util.concatenate([outer, hollow, ball]))
+    elif case == "sheet":
+        sheet = trimesh.Trimesh(
+            vertices=[[40.0, 0.0, 0.0], [50.0, 0.0, 0.0], [40.0, 10.0, 0.0]],
+            faces=[[0, 1, 2], [0, 2, 1]],
+            process=False,
+        )
+        body = MeshData.of(trimesh.util.concatenate([_box(20.0), sheet]))
+    else:
+        parts = [_box(20.0)]
+        if case == "apart":
+            parts.append(_box(10.0, at=(40.0, 0.0, 0.0)))
+        elif case in ("inside", "cavity"):
+            inner = _box(10.0)
+            if case == "cavity":
+                inner.invert()
+            parts.append(inner)
+        body = MeshData.of(trimesh.util.concatenate(parts))
+
+    def by_copy(mesh: MeshData) -> str | None:
+        if not mesh.is_watertight:
+            return "open"
+        if not mesh.raw.is_winding_consistent:
+            return "winding"
+        whole = signed_volume(mesh.raw)
+        if abs(whole) <= EPS_GEOM * mesh.area:
+            return "flat"
+        if whole < 0.0:
+            return "inverted"
+        for faces in face_components(mesh.raw):
+            piece = mesh.raw.submesh([faces], append=True, repair=False)
+            if not (piece.is_watertight and piece.is_winding_consistent and volume(piece) > 0.0):
+                return "cavity"
+        return None
+
+    expected = by_copy(MeshData.of(body.raw.copy()))
+    copies: list[object] = []
+    original = trimesh.Trimesh.submesh
+
+    def counted(self: trimesh.Trimesh, *args: object, **kwargs: object) -> object:
+        copies.append(args)
+        return original(self, *args, **kwargs)
+
+    monkeypatch.setattr(trimesh.Trimesh, "submesh", counted)
+    answer = repair_module._intersections_resolvable(body)
+
+    assert answer == expected
+    assert expected == ("cavity" if case in ("cavity", "rattle", "sheet") else None)
+    assert copies == []

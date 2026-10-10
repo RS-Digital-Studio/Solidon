@@ -54,6 +54,7 @@ scrive in `website/version.json`.
 - Nella linguetta *Selezione*, il campo del filamento assegna solo con un clic o Invio. Le frecce e la digitazione scorrono soltanto l'elenco, e la rotellina scorre la linguetta.
 - Nelle versioni tradotte, *Nuovo filamento* non scorre più di lato quando la finestra è più bassa del suo contenuto.
 - I modelli grandi si caricano molto più velocemente e richiedono meno memoria, anche con una cronologia lunga e su computer con 8 GB.
+- Un progetto salvato con molti passaggi su un modello grande si apre con molta meno memoria.
 - Anche in una cronologia lunga, un nuovo passaggio richiede appena più tempo del primo.
 - Sui modelli con migliaia di caratteristiche, lo spostamento e gli altri passaggi che non cambiano la forma finiscono fino a due volte più in fretta.
 - Dopo la riapertura di un progetto, il rapporto di verifica indica ancora in quale posto libero è finito un modello inserito.

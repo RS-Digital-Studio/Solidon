@@ -51,7 +51,7 @@ Merkmalen. Der Empfänger ordnet Callbackmeldungen der Auftragsrevision zu.
 | `bundling.py` | Welche Züge zu einem Schritt verschmelzen (§15.5), **opt-in je Operation** |
 | `evaluate.py` | Die Auswertung (§15.1); `EvaluationResult.question_reference` trägt bei einer offenen Zuordnungsfrage den bisherigen Bezug mit Ansichtsdreiecken nur vorübergehend zur Ansicht; gemerkte Zuordnungsschritte (RM-593) |
 | `edge_binding.py` | Gewählte Kanten **vor** dem Verbrauchercache binden (§21.3) |
-| `cache.py` | Ergebnis-Cache über dem Operations-Hash, Speicher und Platte; Speicherebene in Bytes begrenzt samt Merkern, ältere Einträge schrumpfen vor dem Verdrängen (RM-567) |
+| `cache.py` | Ergebnis-Cache über dem Operations-Hash, Speicher und Platte; Speicher in Bytes begrenzt samt Merkern; ältere Einträge schrumpfen vor dem Verdrängen (RM-567), beim Öffnen sobald der nächste kommt (RM-698) |
 | `hashing.py` | `operation_hash()`, `object_hash()`, `profile_key()`, `feature_digest` |
 | `parameter_usage.py` | Direkte und abgeleitete Parameterverwendung je Operationsfeld (§13) |
 | `parameter_binding.py` | Feste Zahlen, die zu Projektmaßen passen, und ihre Bindung (`projektmasse.md`) |
@@ -235,14 +235,14 @@ Merkmalen. Der Empfänger ordnet Callbackmeldungen der Auftragsrevision zu.
 - **Merkmale reisen typgenau durch beide Ebenen** (`_stored_feature_to_data`;
   `feature_to_data` ist der Folgehash): Maßquellen und `surface_patches`
   (Vertrag geprüft, im Speicherbudget; ein alter Name ohne Beleg behält keinen
-  Formnachweis). Die Erkennung je Netz ist ein eigener Eintrag
-  (`load_detection`). **Nicht geprüft wird die Dreieckszahl**: Der Cache
+  Formnachweis). Erkennungen je Netz: `load_detection`.
+  **Nicht geprüft wird die Dreieckszahl**: Der Cache
   trägt die **rohe** Ausgabe; erst `_with_features` bindet, Vorbereitetes
   cacht er nie. `_warm_figures` fasst Kennzahlen im Arbeiter an. Exakte
   Körper bleiben im Speicher, neue Träger rechnen neu;
   Teilungsvermerke (`_refinement_to_disk`) und mitgetragene Maße
   (`_carried_to_disk`) neben dem Netz, Bewegungsvermerke im Eintrag; belegt
-  erst die Erkennung am Eingang.
+  erst am Eingang.
 - **`object_hash(features=)`** bindet die veröffentlichten Merkmale
   (`feature_digest`: Nummern als `int64`, Zahlen über `float()`;
   `FeatureMemo`); gleiche reservierte Namen beweisen keine gleiche Bindung; der

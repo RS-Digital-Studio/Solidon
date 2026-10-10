@@ -313,6 +313,66 @@ def _release_steps(excess: int) -> int:
     return release_remembered_steps(excess)
 
 
+def _fields_of(mesh: Mesh) -> tuple[int, tuple[int, ...], int, tuple[int, ...]] | None:
+    """Woran eine schlanke Kopie ihr volles Netz erkennt: Lage und Form von Ecken und Dreiecken.
+
+    ``MeshData.lean`` baut ein neues Netz über denselben Feldern; ein bewegtes
+    Netz teilt nur die Dreiecke (``transform``), nie beide.
+    """
+    raw = getattr(mesh, "raw", None)
+    if raw is None:
+        return None
+    import numpy as np
+
+    vertices = np.asarray(raw.vertices)
+    faces = np.asarray(raw.faces)
+    if not len(faces):
+        return None
+    return (
+        vertices.__array_interface__["data"][0],
+        vertices.shape,
+        faces.__array_interface__["data"][0],
+        faces.shape,
+    )
+
+
+def _same_content(shown: Mesh, lean: Mesh) -> bool:
+    """Ob ``shown`` dasselbe Netz ist wie die schlanke Kopie ``lean``, bis auf die Ableitungen.
+
+    Dieselben Felder (``MeshData.lean`` teilt Ecken und Dreiecke), dieselben
+    Slots und derselbe Hohlraum; am exakten Körper dieselbe Form mit denselben
+    Flächenfilamenten und derselben Vernetzung. Was so gleich ist, darf die
+    Kopie im Eintrag ersetzen, gleich welches Objekt es ist.
+    """
+    if type(shown) is not type(lean):
+        return False
+    from app.core.brep.kernel import Solid
+
+    if isinstance(shown, Solid) and isinstance(lean, Solid):
+        if (
+            shown.shape is not lean.shape
+            or shown.face_slots != lean.face_slots
+            or shown.deflection != lean.deflection
+            or shown.converted_from is not lean.converted_from
+        ):
+            return False
+        shown_mesh, lean_mesh = shown._cache.get("mesh"), lean._cache.get("mesh")
+        if shown_mesh is None or lean_mesh is None:
+            return False
+        return _same_content(shown_mesh, lean_mesh)
+    fields = _fields_of(shown)
+    if fields is None or fields != _fields_of(lean):
+        return False
+    if getattr(shown, "slots", None) != getattr(lean, "slots", None):
+        return False
+    if getattr(shown, "cavity_open", None) != getattr(lean, "cavity_open", None):
+        return False
+    inner, lean_inner = getattr(shown, "cavity", None), getattr(lean, "cavity", None)
+    if inner is None or lean_inner is None:
+        return inner is lean_inner
+    return _same_content(inner, lean_inner)
+
+
 def _leaner(result: CachedResult, kept: Collection[int]) -> CachedResult:
     """Der Eintrag mit schlanken Netzen (``MeshData.lean``) außer denen der Szene."""
     objects = []
@@ -495,7 +555,11 @@ _REFUSALS_KEPT: Final = 256
 #: - 59 (RM-695): Ein bewegtes Netz trägt seine mitgetragenen Maße auf der
 #:   Platte (``_carried_to_disk``). Ein älterer Eintrag gäbe es ohne sie zurück,
 #:   und die Erkennung läse andere letzte Stellen als in der Sitzung.
-CACHE_FORMAT_VERSION: Final = 59
+#: - 60: Paket E auf dem Stand von welle4 (``02213548a``, RM-698): Ein bewegtes
+#:   Netz trägt seine Facettennormalen gedreht und die Aufpunkte mitbewegt, und
+#:   beide reisen mit den mitgetragenen Maßen auf die Platte. Ein Eintrag von 59
+#:   trüge die Normalen in der alten Richtung.
+CACHE_FORMAT_VERSION: Final = 60
 
 
 @dataclass(frozen=True, slots=True)
@@ -589,6 +653,10 @@ class ResultCache:
         """Je Schlüssel die zuletzt gemessenen Bytes und woran die Messung hing
         (:func:`_held_signature`)."""
         self._disk = disk
+        self._last_disk_hit: str | None = None
+        """Der Schlüssel des letzten Plattentreffers (:meth:`_lean_earlier_disk_hit`)."""
+        self._leaned: set[int] = set()
+        """Die Nummern der schlanken Kopien von dort, die :meth:`restore_shown` prüft."""
         self._refusals: OrderedDict[str, AppError] = OrderedDict()
         """Das Urteil der vollen Kette über Schritte, an denen sie gescheitert ist (RM-534).
 
@@ -641,11 +709,56 @@ class ResultCache:
             if from_disk is not None:
                 with self._lock:
                     self.statistics.disk_hits += 1
+                    released = self._lean_earlier_disk_hit(key)
                     self._store(key, from_disk)
+                    self._last_disk_hit = key
+                if released:
+                    from app.core.memory import note_released
+
+                    note_released(released)
                 return from_disk
         with self._lock:
             self.statistics.misses += 1
         return None
+
+    def _lean_earlier_disk_hit(self, key: str) -> int:
+        """Nur mit gehaltenem Schloss — der vorige Plattentreffer gibt seine Ableitungen ab.
+
+        Eine Auswertung geht den Verlauf von vorn durch; kommt der nächste
+        Stand von der Platte, ist der vorige nur noch Eintrag. Im Speicher
+        teilte ein bewegtes Netz Kantentabellen und Nachbarschaften mit seinem
+        Quellnetz (``transform._carry_cache``), von der Platte gelesen hält
+        jeder Stand eigene (``_warm_figures``, die Erkennung am geladenen
+        Netz): am Spiderman rund 290 MB je Verschieben, beim Öffnen eines
+        Verlaufs mit vier Schritten 1,1 GB mehr als derselbe Verlauf im
+        Speicher (RM-698). Der jüngste Treffer bleibt ganz. Ein Körper eines
+        früheren Schritts, den die Szene am Ende noch zeigt, bekommt sein volles
+        Netz in :meth:`trim` zurück (:meth:`_restore_shown`); hier ist die Szene
+        noch nicht bekannt. Gibt die Bytes zurück, die dabei losgelassen
+        werden — nur die der Netze: Merkmale bleiben, wie sie sind, und sie zu
+        zählen kostete am Eiffelturm 1,2 s unter dem Schloss (Review 1, G1).
+        """
+        earlier = self._last_disk_hit
+        if earlier is None or earlier == key:
+            return 0
+        entry = self._entries.get(earlier)
+        if entry is None:
+            return 0
+        loose = [0]
+        seen: set[int] = set()
+        for body in entry.objects:
+            _mesh_bytes(body.mesh, seen, loose)
+        leaner = _leaner(entry, ())
+        if leaner is entry:
+            return 0
+        for full, lean in zip(entry.objects, leaner.objects, strict=True):
+            if lean.mesh is not full.mesh:
+                # Keine Halterung des vollen Netzes: Es soll frei werden
+                # können, wenn die Szene es nicht zeigt.
+                self._leaned.add(id(lean.mesh))
+        self._entries[earlier] = leaner
+        self._held.pop(earlier, None)
+        return loose[0]
 
     def put(self, key: str, result: CachedResult, *, to_disk: bool = False) -> None:
         """Legt ein Ergebnis ab — im Speicher immer, auf der Platte auf Verlangen.
@@ -771,9 +884,58 @@ class ResultCache:
         """
         from app.core.memory import note_released
 
+        kept = list(keep)
         with self._lock:
-            released = self._trim(list(keep))
+            self._restore_shown(kept)
+            released = self._trim(kept)
         note_released(released)
+
+    def restore_shown(self, keep: Iterable[Mesh]) -> None:
+        """Nur die Rückgabe aus :meth:`trim` — für einen Lauf, der angehalten hat.
+
+        Ein angehaltener Lauf ruft kein ``trim``; ohne Rückgabe blieb ein
+        gezeigter Körper im Cache schlank, und nach Strg+Z war er getauscht und
+        seine Schichtanalyse weg (Nachprüfung zu RM-698, N2).
+        """
+        kept = list(keep)
+        with self._lock:
+            self._restore_shown(kept)
+
+    def _restore_shown(self, kept: Sequence[Mesh]) -> None:
+        """Nur mit gehaltenem Schloss — gezeigte Netze kommen in ihren Eintrag zurück (RM-698).
+
+        Beim Öffnen gibt ein Eintrag seine Ableitungen ab, sobald der nächste
+        von der Platte kommt (:meth:`_lean_earlier_disk_hit`). Zeigt die Szene
+        danach einen Körper dieses Eintrags — in einer Szene mit mehreren
+        Körpern stammt nicht jeder aus dem letzten Schritt —, hält sie das
+        volle Netz, der Eintrag eine schlanke Kopie derselben Felder. Ohne
+        Rückgabe holte die nächste Auswertung die Kopie, die Szene tauschte den
+        Körper gegen sie, und der Prüfbericht schnitt ihn neu: am Laptop-Riser
+        18,8 s CPU. Zurück kommt nur **gleicher Inhalt** (:func:`_same_content`):
+        dieselben Felder, gleiche Slots, gleicher Hohlraum. Gleiche Felder allein
+        genügen nicht — ein bemalter Körper legt neue Slots über dieselben Ecken
+        und Dreiecke —, und die Nummer des Originals auch nicht: Beim ``trim``
+        ist es oft schon frei, und ein bemaltes Netz kann sie erben (Nachprüfung
+        zu RM-698, N1).
+        """
+        leaned, self._leaned = self._leaned, set()
+        if not leaned or not kept:
+            return
+        for key, entry in list(self._entries.items()):
+            objects = []
+            changed = False
+            for body in entry.objects:
+                mesh = None
+                if id(body.mesh) in leaned:
+                    mesh = next((shown for shown in kept if _same_content(shown, body.mesh)), None)
+                if mesh is None or mesh is body.mesh:
+                    objects.append(body)
+                    continue
+                objects.append(replace(body, mesh=mesh))
+                changed = True
+            if changed:
+                self._entries[key] = replace(entry, objects=tuple(objects))
+                self._held.pop(key, None)
 
     def _trim(self, kept: Sequence[Mesh]) -> int:
         """Nur mit gehaltenem Schloss aufrufen — siehe :attr:`_lock`.
@@ -923,6 +1085,9 @@ class ResultCache:
             self._held.clear()
             self._features_held.clear()
             self._refusals.clear()
+            # Die Merker der Abgabe gehören zu den Einträgen (Nachprüfung zu RM-698, N2).
+            self._leaned.clear()
+            self._last_disk_hit = None
             self._cost = 0
 
     @property
@@ -1383,7 +1548,9 @@ def _carried_to_disk(folder: Path, position: int, mesh: Mesh) -> dict[str, Any] 
 _CARRIED_PER_FACE: Final = frozenset({"face_normals", "area_faces"})
 
 #: Mitgetragene Maße mit einem Eintrag je Facette; sie sind gleich lang.
-_CARRIED_PER_FACET: Final = frozenset({"facets", "facets_area", "facets_boundary", "facets_normal"})
+_CARRIED_PER_FACET: Final = frozenset(
+    {"facets", "facets_area", "facets_boundary", "facets_normal", "facets_origin"}
+)
 
 
 def _check_carried_shapes(values: dict[str, Any], mesh: MeshData) -> None:
