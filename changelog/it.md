@@ -95,14 +95,13 @@ scrive in `website/version.json`.
 - Se molti piccoli sbalzi richiedono insieme supporti, come un mento con la parte inferiore inclinata, il rapporto indica ora il punto.
 - Un bordo stretto che si regge da solo non conta più come ponte lungo, nemmeno accanto a un altro sbalzo. Il rapporto non avvisa più lì e Solidon non chiede supporti per questo.
 - Sopra un canale il rapporto non consiglia più un supporto che poi non si potrebbe togliere. Nomina il canale e un raccordo sotto i 45 gradi.
-- Per il PETG Solidon suggerisce il raffreddamento pieno sul supporto. Così si stacca più facilmente dal pezzo.
-- Nuovo nelle impostazioni di stampa: *Strati di interfaccia inferiori*, *Spazio nell'interfaccia* e *Raffreddamento pieno sul supporto*.
+- Per il PETG Solidon suggerisce *Raffreddamento pieno sul supporto*. Così si stacca più facilmente dal pezzo.
+- Nuove impostazioni di stampa: *Strati di interfaccia inferiori*, *Pareti degli alberi* e *Punta dell'albero*, più *Restringi il primo strato* e *Allarga i fori*, che seguono lo slicer se non scegli.
 - Il campo *Spazio verso l'alto* ora si chiama *Spazio sopra e sotto* e vale per entrambi i lati del supporto.
 - Se lo slicer rifiuta filamenti con temperature troppo diverse su un piatto, Solidon ora indica il motivo e la via d'uscita, invece di dire solo che non è stato creato alcun file.
 - Nella finestra di stampa, stampante, filamenti e qualità restano del tutto visibili anche con il testo ingrandito. Le etichette lunghe vanno a capo.
 - Il rapporto di verifica calcola più velocemente e richiede meno memoria.
 - Su Linux con Flatpak, Solidon ora segnala un arresto anomalo dello slicer come tale, invece di dire solo che non è stato creato alcun file.
-- Nuove nelle impostazioni di stampa: *Restringi il primo strato* e *Allarga i fori*. Finché non sceglie nulla, vale il valore dello slicer.
 - Se un pezzo compensa già nel modello, con un foro con *Considera la tolleranza del materiale* o *Compensa il piede d'elefante*, Solidon propone che lo slicer non lo faccia di nuovo.
 - Anche con stampanti che PrusaSlicer o SuperSlicer non conoscono, entrambi stimano il tempo di stampa con le accelerazioni trasmesse, e il file indica il materiale della bobina.
 - Anche con il computer a pieno carico, Solidon indica il vero motivo dopo l'arresto di uno slicer, invece di un tempo scaduto. Un file di stampa finito viene usato.

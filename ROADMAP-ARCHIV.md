@@ -27418,8 +27418,9 @@ Filamentauswahl 34 statt 72 MiB, die Filamentauswahl danach 0,19 statt 5,9 s. Te
 und Prusa, Ausschnitt, Warten, Suchstand), `test_discover.py`, `test_export_background.py`,
 `test_print_settings_ui.py` (leere Wahl, erneuerte Wahl), `test_ui_export.py`
 (`test_the_3mf_export_reads_the_slicer_stock_in_one_pass` mit echtem Bestand: jede Datei
-einmal je Faden); jede Behebung mit Gegenprobe. Offen im Register: die Abnahme mit Orca,
-PrusaSlicer, Cura, Figur und Beispielprojekt am echten Fenster. Changelog: ja.
+einmal je Faden); jede Behebung mit Gegenprobe. Offen im Register als
+[RM-759](ROADMAP.md#rm-759): die Abnahme mit Orca, PrusaSlicer, Cura, Figur und
+Beispielprojekt am echten Fenster. Changelog: ja.
 
 ## RM-627: Ein Rand neben einem anderen Überhang ist keine lange Brücke (09.10.2026)
 

@@ -96,14 +96,13 @@ dans `website/version.json`.
 - Si de nombreux petits surplombs ont besoin ensemble de supports, comme un menton à face inférieure inclinée, le rapport indique désormais l'endroit.
 - Un rebord étroit qui se porte seul ne compte plus comme un long pont, même à côté d'un autre surplomb. Le rapport n'avertit plus à cet endroit, et Solidon n'y demande plus de supports.
 - Au-dessus d'un canal, le rapport ne conseille plus un support qu'on ne pourrait plus retirer. Il nomme le canal et une transition sous 45 degrés.
-- Pour le PETG, Solidon propose un refroidissement complet au support. Il se détache ainsi plus facilement de la pièce.
-- Nouveau dans les réglages d'impression : *Couches d'interface en bas*, *Écart dans l'interface* et *Refroidissement complet au support*.
+- Pour le PETG, Solidon propose *Refroidissement complet au support*. Il se détache ainsi plus facilement de la pièce.
+- Nouveaux réglages : *Couches d'interface en bas*, *Parois des arbres* et *Pointe d'arbre*, plus *Resserrer la première couche* et *Élargir les trous*, qui suivent le slicer à défaut de votre choix.
 - Le champ *Espace au-dessus* s'appelle désormais *Espace dessus et dessous* et vaut pour les deux côtés du support.
 - Si le slicer refuse des filaments aux températures trop différentes sur un plateau, Solidon en donne désormais la raison et l'issue, au lieu de dire seulement qu'aucun fichier n'a été créé.
 - Dans la boîte de dialogue d'impression, imprimante, filaments et qualité restent entièrement visibles, même avec un texte agrandi. Les libellés longs passent à la ligne.
 - Le rapport de contrôle calcule plus vite et demande moins de mémoire.
 - Sous Linux avec Flatpak, Solidon signale désormais un plantage du slicer comme tel, au lieu de dire seulement qu'aucun fichier n'a été créé.
-- Nouveau dans les réglages d'impression : *Resserrer la première couche* et *Élargir les trous*. Tant que vous ne choisissez rien, la valeur du slicer s'applique.
 - Si une pièce compense déjà dans le modèle, avec un trou percé avec *Tenir compte de la tolérance du matériau* ou *Compenser le pied d'éléphant*, Solidon propose que le slicer ne le refasse pas.
 - Même pour des imprimantes inconnues de PrusaSlicer ou SuperSlicer, tous deux estiment la durée d'impression avec les accélérations transmises, et le fichier indique le matériau de la bobine.
 - Même sur un ordinateur entièrement chargé, Solidon indique la vraie raison après l'arrêt d'un slicer, au lieu d'un délai dépassé. Un fichier d'impression terminé est repris.
