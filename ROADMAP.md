@@ -3189,7 +3189,7 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   Skizzentext, der über `_solve_in_coordinates` wie 0.5.0 bis 0.5.3 rechnet. Der Editor rechnet ab
   der ersten Änderung mit der heutigen Fassung, von der Lage aus, die zu sehen war; das Binden von
   Projektmaßen behält die Fassung. Die Fassung steht im Cache-Schlüssel, die Beispielprojekte
-  tragen Format 50.
+  tragen Format 51.
 
   **Review 1 (09./10.10.2026), behoben:** H-1 (Gelenk im Rundungsabstand folgte dem Zug nicht,
   0,27 mm hinter dem Zeiger), M-1 (unerreichbare Züge biegsamer Formen je Ort bis 4,47 mm, in
