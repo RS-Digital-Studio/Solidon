@@ -22,6 +22,7 @@ it into `website/version.json`.
 - The demo now runs until 30 November 2026. Solidon3D 1.0 is planned for 1 December, and your projects are kept.
 - On the Mac, Solidon now needs macOS 14 or later. Every Mac from 2018 on can install it for free.
 - Solidon now starts on Intel Macs with macOS 26. Version 0.5.3 hung there at startup.
+- On Intel Macs, Solidon now reports when a fillet, chamfer or Boolean operation on an exact body cannot be built. Version 0.5.3 quit at that point.
 - On the Mac, *Cancel* stops a running answer from the local model at once.
 - On the Mac, Return opens the selected entry on the start screen, in *Search functions* and in the report.
 - On Linux, input through Fcitx5 and IBus now reaches the text field in the Flatpak and the AppImage too.
