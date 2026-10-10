@@ -913,9 +913,8 @@ def _check_pair(scene: Scene, fit: Fit, profile: Profile, cancelled: CancelToken
                     code="fit.not_measurable",
                     severity="warning",
                     message=_(
-                        "Ein kegeliges Gewinde hat sein Maß in der Bezugsebene, und die ist an "
-                        "diesem Gewinde nicht bekannt. Geprüft werden kegelige Paare aus der "
-                        "Bibliothek."
+                        "Die Bezugsebene dieses kegeligen Gewindes ist nicht bekannt, deshalb "
+                        "lässt sich die Passung nicht messen."
                     ),
                     values={"fit": fit.name},
                     object_id=fit.a.object_id,

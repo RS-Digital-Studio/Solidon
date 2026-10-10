@@ -142,13 +142,20 @@ def threaded(
             taper=taper,
             reference=level,
         )
-    if taper and _exact_available():
+    if taper:
         # **Ein Kegel entsteht genäht und wird vernetzt** (RM-544). Am Netz gebaut
         # — Kegelkern und kegelig gelegter Gang vereinigt — ließ die Boolesche
         # Kette an R 1/4 über 200 mm eine Falte von drei Dreiecken stehen, und ein
         # nachträglich verzogener Zylinder faltete seine Stirnflächen
         # (Bereichsnachweis). ``helical_thread`` legt den Kegel in die Flächen
         # selbst; vernetzt ist der Körper dicht und ohne Selbstdurchdringung.
+        # **Ohne exakten Kern sagt der Kegel ab** (Review GEW, G4): Der
+        # verzogene Zylinder als Rückfall gab still ein Netz mit gefalteten
+        # Stirnflächen. Im Paket ist der Kern immer da, im Quellklon ohne Extra
+        # nennt ``BRepUnavailable`` den Weg dorthin.
+        from app.core.brep import kernel
+
+        kernel.require()
         with shapes.building("brep"):
             solid = threaded(
                 diameter,
@@ -165,20 +172,13 @@ def threaded(
         return as_mesh_data(solid)
     depth = shapes.ridge_depth(pitch, profile)
     lead = starts * pitch
-    # Ohne exakten Kern ist ein Kegel ein verzogener Zylinder: Gebaut wird das
-    # zylindrische Gewinde mit dem Maß der Bezugsebene, danach rückt jede Ecke
-    # radial um ``taper`` je Millimeter Abstand von ihr (:func:`_tapered`). Höhe
-    # und Winkel bleiben, die Phase also auch. Sehnen und Kernecken richten sich
-    # nach der weitesten Stelle, denn dort wächst die Sehnentiefe mit.
-    spread = 2.0 * abs(taper) * max(abs(bottom - level), abs(bottom + length - level))
-    widest = diameter + spread
     core_diameter = diameter if internal else diameter - 2.0 * depth
     # Kern und Gang auf denselben Winkeln, so fein, wie der Kamm es verlangt.
-    segments = shapes.turn_segments(widest / 2.0 + depth if internal else widest / 2.0)
+    segments = shapes.turn_segments(diameter / 2.0 + depth if internal else diameter / 2.0)
     core = shapes.cylinder(
         core_diameter + 2.0 * BOOLEAN_OVERLAP,
         length,
-        segments=_core_segments((core_diameter + spread) / 2.0, segments),
+        segments=_core_segments(core_diameter / 2.0, segments),
     )
     # **Der Gang läuft über ganze Umläufe** und wird erst vom Schnittzylinder
     # gekürzt — wie beim Drehdeckel (``lid._thread_tool_height``) und beim
@@ -204,37 +204,7 @@ def threaded(
     body = union(core, ridge)
     limit = shapes.cylinder(diameter * 2.0 + 4.0, length)
     body = intersect(body, limit)
-    if taper:
-        body = _tapered(shapes.mesh_only(body), taper, level - bottom)
     return shapes.moved(body, (0.0, 0.0, bottom)) if bottom else body
-
-
-def _exact_available() -> bool:
-    """Ob der exakte Kern da ist: im Paket immer, in einem Quellklon ohne Extra nicht."""
-    from app.core.brep import kernel
-
-    return bool(kernel.available())
-
-
-def _tapered(body: MeshData, taper: float, reference: float) -> MeshData:
-    """Ein zylindrisches Netz radial zum Kegel verzogen: ``r + taper · (z - reference)``.
-
-    Jede Ecke behält Höhe und Winkel. Die Verschiebung ist an jeder Höhe für alle
-    Ecken gleich groß und ändert sich über die Länge um ein Zweiunddreißigstel je
-    Millimeter — weit zu wenig, als dass eine Fläche über eine andere klappte; die
-    Überdeckung zwischen Kern und Gang bleibt dieselbe.
-    """
-    import numpy as np
-
-    raw = body.raw.copy()
-    points = np.asarray(raw.vertices, dtype=np.float64)
-    radius = np.hypot(points[:, 0], points[:, 1])
-    grown = radius + taper * (points[:, 2] - reference)
-    scale = np.divide(grown, radius, out=np.ones_like(radius), where=radius > 0.0)
-    points[:, 0] *= scale
-    points[:, 1] *= scale
-    raw.vertices = points
-    return body.replacing(raw)
 
 
 def _core_segments(root: float, segments: int) -> int:

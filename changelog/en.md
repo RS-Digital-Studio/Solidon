@@ -130,7 +130,7 @@ it into `website/version.json`.
 - Which thread series the size lists show is set in the settings under *Thread series in the lists*.
 - Counterpart and *Pin for hole* also fit inch, pipe, left-hand, multi-start and tapered threads. If a measured thread fits two series, Solidon asks.
 - Left-hand, multi-start and tapered threads can be edited with *Change feature* and *Remove feature* and keep their hand, starts and taper.
-- Solidon recognises a multi-start thread in an imported mesh as one thread with its number of starts. Until now it showed several threads with double the pitch.
+- Solidon recognises a multi-start thread in an imported mesh as one thread with its number of starts. Until now it showed several threads with too coarse a pitch.
 
 ### Parts
 

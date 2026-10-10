@@ -82,7 +82,7 @@ _CHOICE_NAMES: dict[str, TranslatableText] = {
     # 1/4-20 UNC — sind Bezeichnungen und stehen in jeder Sprache gleich.
     "metric": _("Metrisch"),
     "whitworth": _("Whitworth 55°"),
-    "unified": _("Unified 60°"),
+    "unified": _("Unified"),
     "keep": _("Nur Bohrungsdurchmesser"),
     # Die Kette einer Magnettasche trägt statt der Senkung eine Verengung, und
     # die geht mit (RM-271) — der Name nennt, was mitgehen kann.

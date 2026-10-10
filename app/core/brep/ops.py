@@ -69,7 +69,7 @@ from app.core.geom.primitive_ops import (
     tube_fits_the_ring,
 )
 from app.core.geom.transform import Axis
-from app.core.knowledge.parts.fasteners import CUSTOM_FORMS, MOST_STARTS, MOST_TPI
+from app.core.knowledge.parts.fasteners import CUSTOM_FORMS, LEAST_TPI, MOST_STARTS, MOST_TPI
 from app.core.registry import NAME_DOC, op_params, param, register_op
 from app.core.registry.params import ZERO_AUTOMATIC
 from app.core.types import (
@@ -603,6 +603,7 @@ class ThreadParams(PositionedPrimitiveParams):
         title=_("Gänge je Zoll"),
         default=0.0,
         minimum=0.0,
+        least=LEAST_TPI,
         maximum=MOST_TPI,
         depends_on=("form", ("whitworth", "unified")),
         doc=_(
@@ -659,17 +660,15 @@ def _exact_pitch(params: ThreadParams) -> float:
     """Die Steigung des Bolzens: metrisch eingetragen, in Zoll aus den Gängen je Zoll (RM-544)."""
     from app.core.knowledge import standards
 
-    if params.form not in ("whitworth", "unified"):
-        return params.pitch
-    series = "G" if params.form == "whitworth" else "UNC"
-    count = params.tpi if params.tpi > 0.0 else standards.regular_tpi(params.diameter, series)
-    return 25.4 / count
+    inch = standards.form_pitch(params.form, params.tpi, params.diameter)
+    return params.pitch if inch is None else inch
 
 
 @register_op(
     name="thread_exact",
     # 1: Gewindeform, Gänge je Zoll, Gangzahl und Linksgewinde (RM-544).
-    cache_version="1",
+    # 2: Whitworth-Umriss und Kegelwinkel plattformgleich (Review GEW, M1/G1).
+    cache_version="2",
     title=_("Schraube erstellen"),
     # „primitive" und nicht „shaping": Der Bolzen verbraucht nichts und
     # erzeugt einen Körper — dasselbe wie der exakte Quader und der exakte

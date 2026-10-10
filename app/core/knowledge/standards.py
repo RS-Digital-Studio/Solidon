@@ -736,6 +736,25 @@ def regular_tpi(diameter: float, family: str) -> float:
     return reached[-1] if reached else rows[0].tpi
 
 
+#: Welche Reihe einem eigenen Maß in Zoll-Gewindeform die Gänge je Zoll gibt, wenn
+#: das Feld null ist: Whitworth nimmt G, Unified die grobe Reihe UNC (RM-544).
+FORM_SERIES: Final = {"whitworth": "G", "unified": "UNC"}
+
+
+def form_pitch(form: str, tpi: float, diameter: float) -> float | None:
+    """Die Steigung eines eigenen Maßes in Zoll-Gewindeform — oder ``None`` für metrisch.
+
+    **Die eine Umrechnung von Gänge je Zoll auf Millimeter** (Review GEW, M4):
+    Baustein, *Schraube erstellen* und Drehdeckel rechneten sie je selbst, und
+    zwei davon nahmen jede Zahl an. Null Gänge je Zoll heißt die Reihe der Form
+    beim Durchmesser (:data:`FORM_SERIES`, :func:`regular_tpi`).
+    """
+    if form not in FORM_SERIES:
+        return None
+    count = tpi if tpi > 0.0 else regular_tpi(diameter, FORM_SERIES[form])
+    return UNIT_TO_MM["in"] / count
+
+
 def thread_sizes_near(
     diameter: float,
     pitch: float,

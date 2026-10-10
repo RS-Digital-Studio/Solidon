@@ -49,7 +49,9 @@ def _corner_values(
         elif entry.kind == "bool":
             values = [True, False]
         elif entry.kind in ("float", "int"):
-            values = [entry.minimum, entry.maximum]
+            # ``least``: der kleinste Wert neben einer Null, die etwas anderes heißt
+            # (Gänge je Zoll: null ist die Reihe, ``least`` die gröbste Steigung).
+            values = [entry.minimum, entry.least, entry.maximum]
         values = list(dict.fromkeys(value for value in values if value is not None))
         if values:
             lists.append((entry.name, values))
@@ -541,8 +543,10 @@ def check(
                 if not declared:
                     raise
                 excluded.append(RangeExclusion(dict(entered), declared[:200]))
-                if mirrored_by and not _mirror_excluded(params, build, entered, mirrored_by):
-                    add(entered, _mirror_failure(mirrored_by))
+                if mirrored_by:
+                    mirror_problem = _mirror_excluded(params, build, entered, mirrored_by)
+                    if mirror_problem is not None:
+                        add(entered, mirror_problem)
                 checked += 1
                 announce(index, 4)
                 if checked % 16 == 0:
@@ -741,13 +745,20 @@ def _mirrored(values: dict[str, Any], field: str) -> dict[str, Any]:
 
 def _mirror_excluded(
     params: type[BaseParams], build: Any, values: dict[str, Any], field: str
-) -> bool:
-    """Ob eine erklärte Ausschlussecke auch in der anderen Stellung ausgeschlossen ist."""
+) -> str | None:
+    """Ob eine erklärte Ausschlussecke auch in der anderen Stellung ausgeschlossen ist.
+
+    ``None``, wenn ja. Baut die andere Stellung, spiegelt der Schalter nicht nur.
+    Bricht sie anders als mit der erklärten Absage, gehört der Grund an die Ecke
+    wie bei :func:`_mirror_problem` (Review GEW, G4), statt den Nachweis zu beenden.
+    """
     try:
         build(params(**_mirrored(values, field)))
     except ValidationError:
-        return True
-    return False
+        return None
+    except Exception as problem:  # Wie jede Ecke: der Grund gehört in den Bericht.
+        return str(problem)
+    return _mirror_failure(field)
 
 
 def _same_triangles(one: Any, other: Any) -> bool:

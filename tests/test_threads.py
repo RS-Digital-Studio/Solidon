@@ -22,9 +22,11 @@ import math
 import numpy as np
 import pytest
 
+from app.core.errors import ValidationError
 from app.core.geom.mesh import Mesh, as_mesh_data
 from app.core.knowledge.parts.fasteners import ThreadParams, printed_thread
 from app.core.knowledge.parts.shapes import RIDGE_SHARE
+from app.core.registry.params import validate
 
 #: Wo die Radien gemessen werden: innerhalb der Gewindelänge, abseits der
 #: Endkappen, die auf der Achse sitzen und einen Radius von null meldeten.
@@ -271,6 +273,56 @@ def test_every_thread_path_shares_the_same_limits() -> None:
     # Unten begrenzt die kleinste Schraube der Tabelle (Review RM-532, K6).
     smallest = standards.screw(standards.screw_sizes()[0]).nominal
     assert smallest == SMALLEST_THREAD
+
+    # Gänge je Zoll (Review GEW, M4): Null ist die Reihe der Form, darüber dieselben
+    # Grenzen in Zoll — *Schraube erstellen* und Drehdeckel nahmen 0,5 an (50,8 mm).
+    inch = 25.4
+    for params, finest in (
+        (PartThreadParams, FINEST_PITCH),
+        (ThreadedRodParams, FINEST_PITCH),
+        (ExactThreadParams, FINEST_PITCH),
+        (ScrewLidParams, 1.0),
+    ):
+        entry = next(item for item in params.spec() if item.name == "tpi")
+        assert entry.minimum == 0.0 and entry.zero_text is not None, params
+        assert entry.least == pytest.approx(inch / COARSEST_PITCH), params
+        assert entry.maximum == pytest.approx(inch / finest), params
+        with pytest.raises(ValidationError) as caught:
+            validate(params, {"form": "unified", "tpi": 0.5})
+        assert caught.value.constraint == "minimum", params
+        assert caught.value.values["minimum"] == pytest.approx(inch / COARSEST_PITCH)
+        validate(params, {"form": "unified", "tpi": 0.0})
+        validate(params, {"form": "unified", "tpi": inch / COARSEST_PITCH})
+
+
+def test_one_conversion_from_threads_per_inch_serves_every_path() -> None:
+    """Review GEW, M4: Gänge je Zoll werden an einer Stelle zu Millimetern.
+
+    Drei Wege rechneten es selbst, und der Drehdeckel kappte still auf 1 mm. Jetzt
+    rufen Baustein, *Schraube erstellen* und Drehdeckel ``standards.form_pitch``;
+    der Drehdeckel nimmt bei null die Reihe und höchstens seine feinste Steigung,
+    wie sein Feldtext sagt.
+    """
+    from app.core.brep.ops import ThreadParams as ExactThreadParams
+    from app.core.brep.ops import _exact_pitch
+    from app.core.geom.lid import ScrewLidParams, lid_thread
+    from app.core.knowledge import standards
+    from app.core.knowledge.parts.fasteners import thread_dims
+
+    assert standards.form_pitch("metric", 0.0, 10.0) is None
+    assert standards.form_pitch("whitworth", 0.0, 20.955) == pytest.approx(25.4 / 14.0)
+    assert standards.form_pitch("unified", 0.0, 6.35) == pytest.approx(25.4 / 20.0)
+    assert standards.form_pitch("unified", 1.27, 6.35) == pytest.approx(20.0)
+    for form, tpi, diameter in (("whitworth", 0.0, 20.955), ("unified", 1.27, 30.0)):
+        expected = standards.form_pitch(form, tpi, diameter)
+        assert thread_dims("custom_size", diameter, form=form, tpi=tpi).pitch == expected
+        exact = validate(ExactThreadParams, {"diameter": diameter, "form": form, "tpi": tpi})
+        assert _exact_pitch(exact) == expected
+        lid = validate(ScrewLidParams, {"form": form, "tpi": tpi})
+        assert lid_thread(lid, diameter)[0] == expected
+    # G1/8 hat 28 Gänge je Zoll, 0,907 mm — der Drehdeckel greift ab 1 mm.
+    lid = validate(ScrewLidParams, {"form": "whitworth", "tpi": 0.0})
+    assert lid_thread(lid, 9.728)[0] == 1.0
 
 
 def test_a_threaded_rod_builds_at_its_shortest_length() -> None:
@@ -1089,6 +1141,25 @@ def test_a_deep_tapered_internal_thread_is_refused_at_its_length() -> None:
         printed_thread(ThreadParams(size="R1/16", length=200.0, internal=True))
     assert caught.value.field == "length"
     assert caught.value.constraint == "taper_too_deep"
+
+
+def test_a_tapered_thread_without_the_exact_kernel_says_so(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Review GEW, G4: Ohne exakten Kern verzog der Netzweg einen Zylinder zum Kegel.
+
+    Sein eigener Kommentar sagte, dass das an R 1/4 × 150 mm die Stirnflächen
+    faltet; wer aus einem Quellklon ohne Extra baute, bekam still ein Netz mit
+    Selbstdurchdringung. Jetzt nennt die Absage des Kerns den Weg, ein
+    zylindrisches Gewinde baut weiter am Netz.
+    """
+    from app.core.brep import kernel
+
+    monkeypatch.setattr(kernel, "available", lambda: False)
+    with pytest.raises(kernel.BRepUnavailable) as caught:
+        printed_thread(ThreadParams(size="R1/4", length=12.0))
+    assert caught.value.suggestions
+    assert as_mesh_data(printed_thread(ThreadParams(size="G1/4", length=12.0)).mesh).is_watertight
 
 
 def test_an_own_inch_thread_at_a_bore_takes_the_series_of_its_form() -> None:

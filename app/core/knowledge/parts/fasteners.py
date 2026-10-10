@@ -83,7 +83,7 @@ _FORM_PROFILE: Final[dict[str, ThreadProfile]] = {
     "whitworth": "whitworth",
     "unified": "flat",
 }
-_FORM_SERIES: Final = {"whitworth": "G", "unified": "UNC"}
+_FORM_SERIES: Final = standards.FORM_SERIES
 
 #: Die meisten Gänge, die sich einen Vorschub teilen. Acht trägt jede Flasche und
 #: jede Trapezspindel eines Druckers (Tr8x8 hat vier); darüber stehen die Gänge
@@ -92,6 +92,11 @@ MOST_STARTS: Final = 8
 
 #: Die meisten Gänge je Zoll — die feinste Steigung als Gänge je Zoll.
 MOST_TPI: Final = UNIT_TO_MM["in"] / FINEST_PITCH
+
+#: Die wenigsten Gänge je Zoll außer der Null (die Reihe der Form): so grob wie
+#: ``units.COARSEST_PITCH``. Jeder Weg mit dem Feld trägt sie als ``least``
+#: (Review GEW, M4), und der Bereichsnachweis fährt sie als eigene Ecke.
+LEAST_TPI: Final = UNIT_TO_MM["in"] / COARSEST_PITCH
 
 #: Das längste Gewinde der Gewindebausteine: Gewinde, Schraube und Bolzen.
 LONGEST_PRINTED_THREAD: Final = 200.0
@@ -184,6 +189,7 @@ def _tpi_param() -> Any:
         title=_("Gänge je Zoll"),
         default=0.0,
         minimum=0.0,
+        least=LEAST_TPI,
         maximum=MOST_TPI,
         placement="advanced",
         depends_on=("form", ("whitworth", "unified")),
@@ -281,10 +287,8 @@ def thread_dims(
             size=entry.size,
         )
     profile = _FORM_PROFILE.get(form, "flat")
-    if form in _FORM_SERIES:
-        count = tpi if tpi > 0.0 else standards.regular_tpi(diameter, _FORM_SERIES[form])
-        step = UNIT_TO_MM["in"] / count
-    else:
+    step = standards.form_pitch(form, tpi, diameter)
+    if step is None:
         step = pitch if pitch > 0.0 else standards.regular_pitch(diameter)
     return ThreadDims(diameter, step, profile, starts=max(1, int(starts)), left=left)
 

@@ -131,7 +131,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Qué series de roscas muestran las listas de medidas se elige en los Ajustes, en *Series de roscas en las listas*.
 - La contraparte y el *Pasador para taladro* sirven también para roscas en pulgadas, de tubo, a izquierdas, de varias entradas y cónicas. Si una rosca medida encaja en dos series, Solidon pregunta.
 - Las roscas a izquierdas, de varias entradas y cónicas se editan con *Cambiar característica* y *Quitar característica* y conservan sentido, entradas y conicidad.
-- Solidon reconoce una rosca de varias entradas en una malla importada como una sola rosca con sus entradas. Hasta ahora aparecían varias roscas con el doble de paso.
+- Solidon reconoce una rosca de varias entradas en una malla importada como una sola rosca con sus entradas. Hasta ahora aparecían varias roscas con un paso demasiado grande.
 
 ### Bloques
 

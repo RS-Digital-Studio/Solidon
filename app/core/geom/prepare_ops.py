@@ -9838,7 +9838,9 @@ class ResizeFeatureParams(BaseParams):
     # mit ihrer Mitte, und am Stift entscheidet der Quader seiner Dreiecke (RM-660).
     # 28: ein fremdes Teil steht darin, sobald es dem Halbmesser näher kommt als die
     # Verschweißweite, auch ein eng sitzender Stift (RM-661).
-    cache_version="28",
+    # 29: Das geänderte Gewinde behält Profil, Gangzahl, Drehsinn und Kegel und nennt
+    # Vorschub und Drehsinn als Parameter (RM-544, Review GEW G6).
+    cache_version="29",
     title=_("Merkmal ändern"),
     category="holes",
     params=ResizeFeatureParams,

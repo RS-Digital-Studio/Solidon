@@ -26,11 +26,11 @@ Die Spiegelungsentscheidung für abtragende Bausteine liegt in
 | `builtin.py` | Lädt die Gruppen einmal (`bootstrap.load_operations()` ruft `builtin.load()`); der Paketimport registriert nichts |
 | `ops.py` | **Jeder Baustein wird zusätzlich eine Operation** (§24.1, §10) |
 | `build.py` | Gemeinsamer Boden: Vereinigen, Abziehen, Schneiden, `threaded`, Verbund, `form_of` — je Kern |
-| `shapes.py` | Kleine Formen; `building`/`building_exact` wählen den Kern, `mesh_only` benennt Netzstellen; `rounded_box` (Sehnen nach `MAX_FACET_SAG`, exakt vier Viertelkreise, Eckmitten aus `rounded_corners`) |
+| `shapes.py` | Kleine Formen; `building`/`building_exact` wählen den Kern, `mesh_only` benennt Netzstellen; `rounded_box` (Sehnen nach `MAX_FACET_SAG`, exakt vier Viertelkreise, Eckmitten aus `rounded_corners`); Gangprofile, Whitworth-Bögen nach `whitworth_splits` |
 | `section.py` | Querschnitte mit zwei Auswertern: `manifold3d.CrossSection` fürs Netz und die Prüfungen, eine ebene exakte Fläche für die Geometrie |
 | `exact.py` | Die exakten Zwillinge aus `shapes`/`build`: `Solid` mit demselben Rahmen, Vereinigung mit Körperzahlprüfung und Stufenleiter auf Kopien |
 | `range_check.py` | Der Bereichstest in der Anwendung: Selbstdurchdringung über `geom.intersections`, Wandstärke über `geom.mesh.ray_hits_batch`, ohne VTK |
-| `range_proof.py` | Der Bereichsnachweis: Abdruck je Baustein gegen `data/part_ranges.toml` (`tools/check_part_ranges.py`) |
+| `range_proof.py` | Der Bereichsnachweis: Abdruck je Baustein gegen `data/part_ranges.toml` (`tools/check_part_ranges.py`); `_SHARED` samt Kegelweg `exact.py`, `brep/profiles.py` |
 | `preview.py` | Vorschaubilder — gerendert, nicht von Hand gepflegt |
 | `through.py` | Bohrungen durch den ganzen Träger (`reaches_through`): ihr Zylinder für `ops._reaching_through` und ihre Fortsetzung in Vorschau, Platzierungsgeist und SCAD mit der Anzeigelänge `SHOWN_REACH` |
 | `scad.py` | Export als OpenSCAD-Quelltext; schreibt, führt nichts aus |

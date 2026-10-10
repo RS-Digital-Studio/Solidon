@@ -155,7 +155,7 @@ Nutzen da und sonst nichts.
 - Welche Gewindereihen die Größenlisten zeigen, stellen Sie in den Einstellungen unter *Gewindereihen in den Auswahllisten* ein.
 - Gegenstück und *Stift für Bohrung* passen auch zu Zoll-, Rohr-, Links-, mehrgängigen und kegeligen Gewinden. Passt ein gemessenes Gewinde zu zwei Reihen, fragt Solidon nach.
 - Links-, mehrgängige und kegelige Gewinde lassen sich mit *Merkmal ändern* und *Merkmal entfernen* bearbeiten und behalten dabei Drehsinn, Gangzahl und Kegel.
-- Ein mehrgängiges Gewinde in einem eingelesenen Netz erkennt Solidon als ein Gewinde mit seiner Gangzahl. Bisher standen dort mehrere Gewinde mit doppelter Steigung.
+- Ein mehrgängiges Gewinde in einem eingelesenen Netz erkennt Solidon als ein Gewinde mit seiner Gangzahl. Bisher standen dort mehrere Gewinde mit zu großer Steigung.
 
 ### Bausteine
 

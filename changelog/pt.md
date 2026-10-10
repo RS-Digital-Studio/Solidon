@@ -126,11 +126,11 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Se o furo de um bloco não atravessa a peça, chama-se agora cego. Até agora chamava-se passante.
 - Se a parede for mais espessa do que o indicado em *Passa-cabos* ou *Espigão para mangueira*, o passo diz isso e abre a espessura de parede. Até agora a passagem acabava sem aviso no material.
 - As roscas existem agora também como roscas de tubo G e R, roscas em polegadas UNC e UNF e NPT, na *Rosca imprimível*, em parafuso, porca e *Perno roscado*.
-- Todas as roscas existem também esquerdas. Uma medida própria aceita fios por polegada e várias entradas, também em *Criar parafuso* e *Criar tampa de rosca*.
+- Todas as roscas também existem como rosca esquerda. Uma medida própria aceita fios por polegada e várias entradas, também em *Criar parafuso* e *Criar tampa de rosca*.
 - Que séries de roscas as listas de medidas mostram escolhe-se nas Definições, em *Séries de roscas nas listas*.
 - A contraparte e o *Pino para furo* servem também para roscas em polegadas, de tubo, esquerdas, de várias entradas e cónicas. Se uma rosca medida corresponder a duas séries, o Solidon pergunta.
 - As roscas esquerdas, de várias entradas e cónicas editam-se com *Alterar característica* e *Remover característica* e mantêm sentido, entradas e conicidade.
-- O Solidon reconhece uma rosca de várias entradas numa malha importada como uma só rosca com as suas entradas. Até agora apareciam várias roscas com o dobro do passo.
+- O Solidon reconhece uma rosca de várias entradas numa malha importada como uma só rosca com as suas entradas. Até agora apareciam várias roscas com passo demasiado grande.
 
 ### Blocos
 

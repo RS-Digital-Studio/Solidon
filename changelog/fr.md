@@ -131,7 +131,7 @@ dans `website/version.json`.
 - Les séries de filetages que montrent les listes de tailles se choisissent dans les Réglages, sous *Séries de filetages dans les listes*.
 - La contrepartie et la *Goupille pour perçage* vont aussi aux filetages en pouces, de tuyauterie, à gauche, à plusieurs filets et coniques. Entre deux séries, Solidon demande laquelle.
 - Les filetages à gauche, à plusieurs filets et coniques se modifient avec *Modifier la caractéristique* et *Supprimer la caractéristique* et gardent sens, filets et conicité.
-- Solidon reconnaît un filetage à plusieurs filets dans un maillage importé comme un seul filetage avec son nombre de filets. Jusqu'ici, il en montrait plusieurs au pas double.
+- Solidon reconnaît un filetage à plusieurs filets dans un maillage importé comme un seul filetage avec son nombre de filets. Jusqu'ici, il en montrait plusieurs au pas trop grand.
 
 ### Blocs
 

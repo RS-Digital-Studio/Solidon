@@ -2217,6 +2217,16 @@ class ParamSpec:
     Namen hieße er „wie gemessen“. Die Höhe der Öffnung eines Deckels ist eine
     Welthöhe, in der die Null eine Zahl ist wie jede andere; leer heißt dort
     „Oberkante“."""
+    least: float | None = None
+    """Der kleinste Wert außer der Null an einem Feld, dessen Null etwas anderes heißt.
+
+    **Für Felder mit** :attr:`zero_text` **und Mindestwert 0, deren Zahlen erst
+    ab einer Grenze tragen** (Review GEW, M4): Null Gänge je Zoll nimmt die
+    Reihe, 0,5 Gänge je Zoll wären 50,8 mm Steigung, gröber als
+    ``units.COARSEST_PITCH``. Die Prüfung lehnt Werte zwischen null und
+    ``least`` ab, und der Bereichsnachweis fährt ``least`` als eigene Ecke
+    (``range_check._corner_values``) — an der Null allein sähe er das grobe
+    Ende nie."""
 
 
 @runtime_checkable

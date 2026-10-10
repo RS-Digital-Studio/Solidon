@@ -60,7 +60,7 @@ from app.core.types import (
     Vec3,
     vec3_or_none,
 )
-from app.core.units import COARSEST_PITCH, EPS_GEOM, LARGEST_THREAD
+from app.core.units import COARSEST_PITCH, EPS_GEOM, LARGEST_THREAD, UNIT_TO_MM
 from app.i18n import _
 
 _log = get_logger(__name__)
@@ -1673,8 +1673,15 @@ def _lifted(body: MeshData, z: float) -> MeshData:
     return body.replacing(raised)
 
 
-#: Die meisten Gänge je Zoll am Drehdeckel: so fein wie seine feinste Steigung, 1 mm.
-MOST_LID_TPI: Final = 25.4
+#: Die feinste Steigung des Drehdeckels — die benannte Ausnahme von
+#: ``units.FINEST_PITCH`` (``ScrewLidParams.pitch``).
+LID_FINEST_PITCH: Final = 1.0
+
+#: Die meisten Gänge je Zoll am Drehdeckel: so fein wie seine feinste Steigung.
+MOST_LID_TPI: Final = UNIT_TO_MM["in"] / LID_FINEST_PITCH
+
+#: Die wenigsten außer der Null: so grob wie ``units.COARSEST_PITCH`` (Review GEW, M4).
+LEAST_LID_TPI: Final = UNIT_TO_MM["in"] / COARSEST_PITCH
 
 
 @op_params
@@ -1695,7 +1702,7 @@ class ScrewLidParams(BaseParams):
         title=_("Steigung"),
         default=DEFAULT_PITCH,
         unit="mm",
-        minimum=1.0,
+        minimum=LID_FINEST_PITCH,
         maximum=COARSEST_PITCH,
         depends_on=("form", ("metric",)),
         doc=_("Abstand benachbarter Gewindegänge entlang der Achse."),
@@ -1704,11 +1711,12 @@ class ScrewLidParams(BaseParams):
         title=_("Gänge je Zoll"),
         default=0.0,
         minimum=0.0,
+        least=LEAST_LID_TPI,
         maximum=MOST_LID_TPI,
         depends_on=("form", ("whitworth", "unified")),
         doc=_(
-            "Wie viele Gänge auf einem Zoll liegen, höchstens so fein wie 1 mm Steigung. "
-            "Null nimmt G bei Whitworth und UNC bei Unified."
+            "Wie viele Gänge auf einem Zoll liegen. Null nimmt G bei Whitworth und UNC bei "
+            "Unified, die Steigung bleibt immer mindestens 1 mm."
         ),
         zero_text=ZERO_AUTOMATIC,
     )
@@ -1820,12 +1828,12 @@ def lid_thread(params: ScrewLidParams, major: float) -> tuple[float, ThreadProfi
     from app.core.knowledge import standards
 
     form = getattr(params, "form", "metric")
-    if form not in ("whitworth", "unified"):
+    inch = standards.form_pitch(form, params.tpi, major)
+    if inch is None:
         return params.pitch, "flat"
-    series = "G" if form == "whitworth" else "UNC"
-    count = params.tpi if params.tpi > 0.0 else standards.regular_tpi(major, series)
-    pitch = max(25.4 / count, 1.0)
-    return pitch, "whitworth" if form == "whitworth" else "flat"
+    # Die Reihe kann feiner sein als der Drehdeckel greift (G1/8: 28 Gänge je
+    # Zoll); dann gilt seine feinste Steigung, und der Feldtext sagt es.
+    return max(inch, LID_FINEST_PITCH), "whitworth" if form == "whitworth" else "flat"
 
 
 def _lid_profile(params: ScrewLidParams) -> ThreadProfile:
@@ -1850,7 +1858,8 @@ def _lid_lead(params: ScrewLidParams) -> float:
     # 7: Die Null der Höhe ist das Bett, leer die Oberkante (RM-526).
     # 8: Gang und Rundkörper über Ø 46 so fein wie die Facettenregel (``turn_sections``).
     # 9: Gewindeform, Gänge je Zoll, Gangzahl und Linksgewinde (RM-544).
-    cache_version="9",
+    # 10: Whitworth-Umriss plattformgleich und nach Sehnenregel geteilt (Review GEW, M1/G1).
+    cache_version="10",
     title=_("Drehdeckel erzeugen"),
     category="parts",
     params=ScrewLidParams,

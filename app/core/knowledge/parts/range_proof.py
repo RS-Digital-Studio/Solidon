@@ -65,19 +65,25 @@ _APP: Final = Path(__file__).resolve().parents[3]
 _PARTS: Final = Path(__file__).resolve().parent
 
 #: Die gemeinsamen Formen und die Prüfung — für jeden Baustein im Abdruck.
+#: ``exact.py`` und ``brep/profiles.py`` gehören dazu, weil ``build.threaded`` am
+#: Netz jedes kegelige Gewinde genäht baut und vernetzt (RM-544): Für R und NPT
+#: ist das der Netzweg, den der Nachweis fährt (Review GEW, M3).
 _SHARED: Final = (
     _PARTS / "shapes.py",
     _PARTS / "build.py",
+    _PARTS / "exact.py",
     _PARTS / "section.py",
     _PARTS / "range_check.py",
+    _APP / "core" / "brep" / "profiles.py",
     _APP / "core" / "geom" / "intersections.py",
     _APP / "core" / "knowledge" / "standards.py",
     _APP / "core" / "knowledge" / "data" / "standards.toml",
 )
 
 #: Module, die gelesen, aber nicht in den Abdruck genommen werden: der
-#: Netzkern (siehe oben), die exakten Zwillinge — der Bereichstest rechnet am
-#: Netz — und die Registerbuchhaltung, die keine Form trägt.
+#: Netzkern (siehe oben), die exakten Zwillinge als Einbindung eines Bausteins —
+#: der Bereichstest rechnet am Netz; wo der Netzweg selbst durch sie geht, stehen
+#: sie in :data:`_SHARED` — und die Registerbuchhaltung, die keine Form trägt.
 _NOT_SHAPE: Final = frozenset(
     {
         "app.core.geom.boolean",
@@ -186,6 +192,8 @@ def _declaration(spec: PartSpec) -> dict[str, object]:
                 repr(entry.minimum),
                 repr(entry.maximum),
                 repr(entry.default),
+                # ``least`` ist eine Ecke (``range_check._corner_values``).
+                repr(entry.least),
                 list(entry.choices or ()),
             ]
             for entry in spec.params.spec()

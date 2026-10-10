@@ -43,9 +43,9 @@ from numpy.typing import NDArray
 
 from app.core.errors import CANCEL, CHANGE_SELECTION, CORRECT_INPUT, ValidationError
 from app.core.geom.boolean import BOOLEAN_OVERLAP
-from app.core.geom.mesh import MeshData, as_mesh_data, ray_hit_distances
+from app.core.geom.mesh import MeshData, as_mesh_data, ray_hit_distances, stable_arctan2
 from app.core.types import Feature, FeatureId, Finding, is_a_cavity
-from app.core.units import EPS_GEOM, MAX_FACET_SAG, dot3, exact_tan_degrees
+from app.core.units import EPS_GEOM, MAX_FACET_SAG, circle_point, dot3, exact_tan_degrees
 from app.i18n import _
 
 #: Die zwei Formen des Stifts: passend zur Bohrung (mit Kopf und Gewinde, wo
@@ -352,7 +352,7 @@ def _narrow_above(value: str, **values: Any) -> ValidationError:
 
 def _unit(vector: Any) -> NDArray[np.float64]:
     values = np.asarray(vector, dtype=np.float64).reshape(3)
-    length = math.sqrt(float(values[0] ** 2 + values[1] ** 2 + values[2] ** 2))
+    length = math.sqrt(dot3(values, values))
     return values / length
 
 
@@ -875,13 +875,13 @@ def room_beyond(
     triangles = np.asarray(mesh.raw.triangles, dtype=np.float64)
     helper = np.array([1.0, 0.0, 0.0]) if abs(float(axis[0])) < 0.9 else np.array([0.0, 1.0, 0.0])
     first = np.cross(axis, helper)
-    first = first / math.sqrt(float(first[0] ** 2 + first[1] ** 2 + first[2] ** 2))
+    first = first / math.sqrt(dot3(first, first))
     second = np.cross(axis, first)
     start = origin + axis * (end + way * beyond)
     nearest = math.inf
     for step in range(8):
-        angle = step * math.pi / 4.0
-        direction = first * math.cos(angle) + second * math.sin(angle)
+        cosine, sine = circle_point(8, step)  # plattformgleich, nicht über ``math``
+        direction = first * cosine + second * sine
         hits = ray_hit_distances(triangles, start, direction)
         if hits.size:
             nearest = min(nearest, float(np.min(hits)))
@@ -1001,7 +1001,7 @@ def _samples(
     """
     helper = np.array([1.0, 0.0, 0.0]) if abs(float(axis[0])) < 0.9 else np.array([0.0, 1.0, 0.0])
     first = np.cross(axis, helper)
-    first = first / math.sqrt(float(first[0] ** 2 + first[1] ** 2 + first[2] ** 2))
+    first = first / math.sqrt(dot3(first, first))
     second = np.cross(axis, first)
     offset = np.asarray(vertices, dtype=np.float64) - origin
     s = offset[:, 0] * axis[0] + offset[:, 1] * axis[1] + offset[:, 2] * axis[2]
@@ -1014,7 +1014,9 @@ def _samples(
         keep = np.zeros_like(keep)
         keep[chosen[:: math.ceil(chosen.size / TURN_SAMPLES)]] = True
     advance = pitch if lead is None else lead
-    phase = np.mod(s[keep] - advance * np.arctan2(y[keep], x[keep]) / (2.0 * math.pi), pitch)
+    # ``stable_arctan2`` statt ``np.arctan2``: Die Drehung des Stifts folgt daraus und
+    # muss auf jeder Maschine dieselbe sein (``kern.md``, Review GEW).
+    phase = np.mod(s[keep] - advance * stable_arctan2(y[keep], x[keep]) / (2.0 * math.pi), pitch)
     return phase, r[keep] - slope * s[keep]
 
 

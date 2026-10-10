@@ -1203,9 +1203,11 @@ def colour_name(value: str) -> str:
 #: stehen wie oben nicht drin — wo der Name die ganze Auskunft ist, wäre ein
 #: Satz Tapete.
 _CHOICE_NOTES: dict[str, TranslatableText] = {
-    "metric": _("Steigung in Millimetern, Flanken 60° wie ISO-Gewinde."),
+    # Ohne Flankenwinkel: Die Bausteine bauen das druckbar abgeflachte Profil (49°),
+    # nur *Schraube erstellen* das ISO-nahe mit 60° (§39, Review GEW G5).
+    "metric": _("Steigung in Millimetern wie metrische ISO-Gewinde."),
     "whitworth": _("Gänge je Zoll, Flanken 55° gerundet wie Rohrgewinde G."),
-    "unified": _("Gänge je Zoll, Flanken 60° wie UNC und UNF."),
+    "unified": _("Gänge je Zoll wie UNC und UNF."),
     "mesh": _("Berechnet die Form als Dreiecksnetz."),
     "brep": _("Berechnet die Form mit dem exakten Kern aus Flächen und Kanten."),
     "motedis-2020-b6": _(
