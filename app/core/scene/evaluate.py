@@ -64,6 +64,8 @@ from app.core.knowledge.profiles import analysis_limits, for_process
 from app.core.log import get_logger
 from app.core.perceive.features import (
     DETECTABLE_KINDS,
+    DetectionStore,
+    StoredDetection,
     _mesh_key,
     carry_detection,
     carry_refined_detection,
@@ -685,6 +687,9 @@ def _evaluate(
     # Ein gemerkter Zuordnungsschritt bringt seine mit (RM-593).
     feature_memo: FeatureMemo = {}
     step_ways = _step_ways()
+    # Erkennungen auf die Platte erst mit dem vollständigen Lauf (§15.6, RM-695).
+    disk = cache.detections if cache is not None else None
+    detections = _DetectionsAfterTheRun(disk) if disk is not None else None
     step_generation = _next_generation()
     remembered_now: dict[ObjectId, _RememberedStep] = {}
     # Neu gemerkte Schritte; in den Merker kommen sie erst, wenn ihr Ergebnis
@@ -1469,6 +1474,7 @@ def _evaluate(
                         announced_gone=announced_here,
                         unrecognised=recognition_left_out,
                         features_complete=spec.features_complete,
+                        detections=detections,
                     )
                 )
                 if remembered is None and cache is not None:
@@ -1825,6 +1831,8 @@ def _evaluate(
     if cache is not None and stopped_at is None:
         for key, result, to_disk in pending:
             cache.put(key, result, to_disk=to_disk)
+        if detections is not None:
+            detections.write()
     if cache is not None:
         cache.with_held_features(
             lambda held, parts_of: _keep_steps(fresh_steps, step_generation, held, parts_of)
@@ -4729,6 +4737,32 @@ def _remember_digests(
         known.digests.update(digests)
 
 
+class _DetectionsAfterTheRun:
+    """Die Ablage der Erkennungen während eines Laufs: lesen sofort, schreiben am Ende.
+
+    Eine Erkennung hängt allein am Netz, aber der Cache wird erst nach einem
+    vollständigen Durchlauf geschrieben (§15.6): Ein Lauf, der an einer
+    Rückfrage oder einem Abbruch endet, hinterlässt auf der Platte nichts. Bis
+    dahin trägt der Merker der Erkennung jedes Ergebnis ohnehin (RM-695).
+    """
+
+    def __init__(self, disk: DetectionStore) -> None:
+        self._disk = disk
+        self._waiting: list[tuple[bytes, StoredDetection]] = []
+
+    def load_detection(self, key: bytes) -> StoredDetection | None:
+        return self._disk.load_detection(key)
+
+    def save_detection(self, key: bytes, detection: StoredDetection) -> None:
+        self._waiting.append((key, detection))
+
+    def write(self) -> None:
+        """Was der Lauf erkannt hat, jetzt auf die Platte."""
+        waiting, self._waiting = self._waiting, []
+        for key, detection in waiting:
+            self._disk.save_detection(key, detection)
+
+
 def _with_features(
     entry: SceneObject,
     previous: dict[str, Any],
@@ -4760,6 +4794,7 @@ def _with_features(
     unrecognised: set[ObjectId] | None = None,
     origin_features: Mapping[FeatureId, Feature] | None = None,
     features_complete: bool = False,
+    detections: DetectionStore | None = None,
 ) -> SceneObject:
     """Merkmale neu erkennen und die alten Bezeichner behalten, wo sie noch
     passen.
@@ -4804,6 +4839,10 @@ def _with_features(
     Flag stand seit je im Register und hatte bis heute keinen Leser. Es
     entscheidet hier, ob ein neu erkanntes Merkmal seinen Erzeuger bekommt;
     ``load`` und ``decimate_mesh`` tragen es nicht, und das ist der Punkt.
+
+    ``detections`` ist die Plattenebene des Caches, wenn es eine gibt: Dort
+    legt die Erkennung ihr Ergebnis ab und findet es nach einem Neustart
+    wieder, statt das Netz noch einmal zu untersuchen (RM-695).
 
     §21.2: die Erkennung läuft nach jeder Operation, sonst ist ``hole_3`` in
     Schritt fünf ein anderes Loch als in Schritt vier. Wo die Zuordnung
@@ -5315,7 +5354,7 @@ def _with_features(
             # sonst bleibt der Körper bei dem, was die Operation ausgab und
             # belegt (:func:`_proven_without_recognition`), ohne Zuordnung und
             # ohne Waisenbefund, wie bei ``perceive.too_many``.
-            remembered_features = known_detection(mesh)
+            remembered_features = known_detection(mesh, detections)
             if remembered_features is None:
                 if unrecognised is not None:
                     unrecognised.add(entry.id)
@@ -5359,7 +5398,7 @@ def _with_features(
                     and state.allowed is True
                     and state.answer is not None
                     and mesh.triangle_count > FEATURE_LIMIT_TRIANGLES
-                    and known_detection(mesh) is None
+                    and known_detection(mesh, detections) is None
                 ):
                     # **Eine gespeicherte Zustimmung wird gemeldet, wo sie die
                     # lange Erkennung startet** (Review B18, R5) — hier, nach
@@ -5376,7 +5415,12 @@ def _with_features(
                         {"object_id": entry.id, "scope": answer_scope, "allowed": True},
                     )
                 try:
-                    full = detect(mesh, check_cancelled=watch.raise_if_cancelled, progress=advance)
+                    full = detect(
+                        mesh,
+                        check_cancelled=watch.raise_if_cancelled,
+                        progress=advance,
+                        store=detections,
+                    )
                 except MemoryError:
                     if not fallback:
                         raise

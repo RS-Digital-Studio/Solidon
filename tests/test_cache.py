@@ -122,7 +122,7 @@ def test_a_recognised_flag_survives_the_cache() -> None:
     Erkennungsprüfung, fand keinen Partner und verwaiste — der Fehler, gegen den
     das Feld eingebaut wurde, nur eine Cache-Ebene weiter.
     """
-    from app.core.scene.cache import _feature_from_data, feature_to_data
+    from app.core.scene.cache import _stored_feature_from_data, _stored_feature_to_data
     from app.core.types import Feature
 
     named = Feature(
@@ -135,19 +135,9 @@ def test_a_recognised_flag_survives_the_cache() -> None:
         created_by=3,
     )
 
-    revived = _feature_from_data(feature_to_data(named))
+    revived = _stored_feature_from_data(json.loads(json.dumps(_stored_feature_to_data(named))))
     assert revived.recognised is False, "recognised überlebt den Cache"
-
-    # Rückwärtsverträglich wie ``created_by``: ein Eintrag ohne das Feld gilt als
-    # erkannt.
-    old_entry = {
-        "id": "x",
-        "kind": "hole",
-        "provenance": "detected",
-        "params": {},
-        "face_indices": [],
-    }
-    assert _feature_from_data(old_entry).recognised is True
+    assert revived == named
 
 
 def surface_result() -> CachedResult:
@@ -1974,24 +1964,37 @@ def test_follow_hash_uses_the_same_full_codec_after_json_and_a_new_process(
     import subprocess
     import sys
 
-    from app.core.scene.cache import _feature_from_data, feature_to_data
+    from app.core.scene.cache import _stored_feature_to_data
+
+    def listed(value: Any) -> Any:
+        return json.loads(json.dumps(value))
 
     before = object_hash("raw", 0, tuple(bound_faces), features=bound_faces)
-    data = {name: feature_to_data(feature) for name, feature in reversed(bound_faces.items())}
     revived = {
-        name: _feature_from_data(value) for name, value in json.loads(json.dumps(data)).items()
+        name: dataclasses.replace(
+            feature,
+            params=listed(feature.params),
+            surface_patches=tuple(
+                dataclasses.replace(patch, params=listed(patch.params))
+                for patch in feature.surface_patches
+            ),
+        )
+        for name, feature in reversed(bound_faces.items())
     }
     assert object_hash("raw", 0, tuple(revived), features=revived) == before
+    data = {
+        name: _stored_feature_to_data(feature) for name, feature in reversed(bound_faces.items())
+    }
     path = tmp_path / "features.json"
     path.write_text(json.dumps(data), encoding="utf-8")
     script = """
 import json
 import sys
 from pathlib import Path
-from app.core.scene.cache import _feature_from_data
+from app.core.scene.cache import _stored_feature_from_data
 from app.core.scene.hashing import object_hash
 data = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
-features = {key: _feature_from_data(value) for key, value in data.items()}
+features = {key: _stored_feature_from_data(value) for key, value in data.items()}
 print(object_hash("raw", 0, tuple(features), features=features))
 """
     child = subprocess.run(
@@ -4055,3 +4058,200 @@ def test_damaged_object_frame_is_never_used_from_disk(tmp_path: Path, value) -> 
     data["objects"][0]["frame"] = value
     path.write_text(json.dumps(data), encoding="utf-8")
     assert disk.get("frame") is None
+
+
+# --- Erkennungen auf der Platte (RM-695) ------------------------------------------
+
+_DETECTION_CORPUS = (
+    "plate_holes.stl",
+    "plate_coarse_slots.stl",
+    "post_with_fillet.stl",
+    "torus_ring.stl",
+    "sphere_socket.stl",
+    "parts_enclosing_air.stl",
+    "pocket_with_pin.stl",
+    "recognition_bayonet_lid.npz",
+    "recognition_short_thread.npz",
+    "recognition_waterfall.npz",
+)
+
+
+def _detection_corpus(name: str) -> Any:
+    import numpy as np
+    import trimesh
+
+    from app.core.geom.mesh import MeshData, read_mesh
+    from app.core.ingest.loader import normalise
+
+    path = Path(__file__).parent / "data" / "meshes" / name
+    if path.suffix == ".npz":
+        with np.load(path, allow_pickle=False) as data:
+            raw = trimesh.Trimesh(data["vertices"], data["faces"], process=False)
+        return MeshData(raw=raw)
+    return normalise(read_mesh(path.read_bytes(), path.suffix), "mm").mesh
+
+
+def _without_recognition(monkeypatch: pytest.MonkeyPatch) -> list[str]:
+    """Zählt jeden vollen Erkennungslauf; ein Treffer aus Merker oder Platte zählt nicht."""
+    from app.core.perceive import features
+
+    runs: list[str] = []
+    real = features._fitted
+
+    def counted(*args: Any, **kwargs: Any) -> Any:
+        if "planar" in kwargs:
+            # Nur der volle Lauf reicht die ebenen Facetten herein.
+            runs.append("detect")
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(features, "_fitted", counted)
+    return runs
+
+
+@pytest.mark.parametrize("name", _DETECTION_CORPUS)
+def test_a_detection_comes_back_from_the_disk_bit_for_bit(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, name: str
+) -> None:
+    """Nach einem Neustart liest die Erkennung ihr Ergebnis von der Platte (RM-695).
+
+    Gleich heißt hier typgenau und in derselben Reihenfolge: ``repr`` der
+    ganzen Zuordnung, dazu die drei Nebenauskünfte, die die Auswertung zu
+    Befunden macht. Die Platte rechnet nichts — kein voller Lauf beim zweiten Mal.
+    """
+    from app.core.perceive import features
+
+    mesh = _detection_corpus(name)
+    features.forget_cache()
+    fresh = features.detect(mesh, store=DiskCache(codec=FakeCodec(), directory=tmp_path))
+    sides = (
+        features.freeform_dropped(mesh),
+        features.recognised_as_freeform(mesh),
+        features.unreadable_void_shells(mesh),
+    )
+    features.forget_cache()
+    runs = _without_recognition(monkeypatch)
+
+    again = features.detect(
+        _detection_corpus(name), store=DiskCache(codec=FakeCodec(), directory=tmp_path)
+    )
+
+    assert runs == [], "die Erkennung lief trotz abgelegtem Ergebnis neu"
+    assert repr(again) == repr(fresh)
+    assert again == fresh
+    assert (
+        features.freeform_dropped(mesh),
+        features.recognised_as_freeform(mesh),
+        features.unreadable_void_shells(mesh),
+    ) == sides
+
+
+def test_a_detection_of_another_format_is_dropped_and_recognised_again(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Ein veralteter Eintrag wird verworfen, die Erkennung läuft neu und legt wieder ab."""
+    from app.core.perceive import features
+
+    mesh = _detection_corpus("plate_holes.stl")
+    disk = DiskCache(codec=FakeCodec(), directory=tmp_path)
+    features.forget_cache()
+    fresh = features.detect(mesh, store=disk)
+    key = features._detection_key(mesh)
+    path = next(tmp_path.rglob("detection.json"))
+    data = json.loads(path.read_text(encoding="utf-8"))
+    data["format_version"] = CACHE_FORMAT_VERSION - 1
+    path.write_text(json.dumps(data), encoding="utf-8")
+
+    assert disk.load_detection(key) is None
+    assert not path.exists(), "der veraltete Eintrag bleibt liegen"
+
+    features.forget_cache()
+    runs = _without_recognition(monkeypatch)
+    assert features.detect(mesh, store=disk) == fresh
+    assert runs == ["detect"]
+    assert json.loads(path.read_text(encoding="utf-8"))["format_version"] == CACHE_FORMAT_VERSION
+
+
+@pytest.mark.parametrize(
+    "damage",
+    [
+        lambda data: data.update(key="00" * 16),
+        lambda data: data["features"][0].update(face_indices=[-1]),
+        lambda data: data["features"][0].update(params={"dict": {"diameter": {"set": []}}}),
+        lambda data: data["features"][0].update(created_by="op_1"),
+        lambda data: data.update(freeform=1),
+    ],
+    ids=["fremder Abdruck", "negative Nummer", "fremde Gestalt", "Erzeuger", "Urteil"],
+)
+def test_a_damaged_detection_entry_is_dropped(tmp_path: Path, damage: Any) -> None:
+    """Was sich nicht sicher lesen lässt, kommt nicht als Erkennung zurück."""
+    from app.core.perceive import features
+
+    mesh = _detection_corpus("plate_holes.stl")
+    disk = DiskCache(codec=FakeCodec(), directory=tmp_path)
+    features.forget_cache()
+    features.detect(mesh, store=disk)
+    path = next(tmp_path.rglob("detection.json"))
+    data = json.loads(path.read_text(encoding="utf-8"))
+    damage(data)
+    path.write_text(json.dumps(data), encoding="utf-8")
+
+    assert disk.load_detection(features._detection_key(mesh)) is None
+    assert not path.exists()
+
+
+def test_a_value_that_is_not_stored_exactly_leaves_the_detection_unsaved(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Eine Unterklasse wie ``numpy.float64`` käme als ``float`` zurück — dann lieber gar nicht."""
+    import numpy as np
+
+    from app.core.perceive.features import StoredDetection
+    from app.core.types import Feature
+
+    disk = DiskCache(codec=FakeCodec(), directory=tmp_path)
+    feature = Feature(
+        id="hole_1",
+        kind="hole",
+        provenance="detected",
+        params={"diameter": np.float64(5.0)},
+        face_indices=(0, 1, 2),
+    )
+    key = b"\x01" * 16
+    with caplog.at_level(logging.WARNING):
+        disk.save_detection(key, StoredDetection({"hole_1": feature}, 0, 0, False))
+
+    assert disk.load_detection(key) is None
+    assert not list(tmp_path.rglob("detection.json*"))
+    assert "could not write detection entry" in caplog.text
+
+
+def test_lists_tuples_and_numbers_keep_their_type_on_the_disk(tmp_path: Path) -> None:
+    """Tupel bleibt Tupel, Liste bleibt Liste, ``-0.0`` und ``1e-300`` bleiben, was sie sind."""
+    from app.core.perceive.features import StoredDetection
+    from app.core.types import Feature
+
+    params = {
+        "axis": (0.0, -0.0, 1.0000000000000002),
+        "steps": [1, 2.0, (3, "vier")],
+        "tiny": 1e-300,
+        "nested": {"flag": True, "none": None},
+    }
+    feature = Feature(
+        id="hole_1",
+        kind="hole",
+        provenance="detected",
+        params=params,
+        face_indices=(4, 2, 9),
+        created_by=7,
+        measure_sources={"diameter": "fit"},
+    )
+    disk = DiskCache(codec=FakeCodec(), directory=tmp_path)
+    key = b"\x02" * 16
+    disk.save_detection(key, StoredDetection({"hole_1": feature}, 3, 1, True))
+
+    stored = disk.load_detection(key)
+
+    assert stored is not None
+    assert repr(stored.found) == repr({"hole_1": feature})
+    assert (stored.left_out, stored.unreadable, stored.freeform) == (3, 1, True)
+    assert str(stored.found["hole_1"].params["axis"][1]) == "-0.0"

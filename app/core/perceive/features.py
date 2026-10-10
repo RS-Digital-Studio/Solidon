@@ -29,7 +29,7 @@ from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass, field, replace
-from typing import Any, Final, NamedTuple, cast
+from typing import Any, Final, NamedTuple, Protocol, cast
 
 import numpy as np
 
@@ -1456,6 +1456,7 @@ def detect(
     *,
     check_cancelled: Callable[[], None] | None = None,
     progress: Callable[[float], None] | None = None,
+    store: DetectionStore | None = None,
 ) -> dict[FeatureId, Feature]:
     """Alles, was dieses Modul erkennen kann, mit stabilen Namen.
 
@@ -1468,6 +1469,10 @@ def detect(
 
     ``progress`` erfährt den erledigten Anteil, von null bis eins und nur
     wachsend (:class:`_Share`); eine Antwort aus dem Merker meldet nichts.
+
+    ``store`` ist die Ablage hinter dem Merker (:class:`DetectionStore`, RM-695):
+    Was der Merker nicht kennt, wird dort gesucht, und ein vollständiger
+    Durchgang wird auch dort abgelegt.
     """
     # **Einmal suchen, zweimal lesen** — hier, und nicht in den beiden
     # Aufrufern. Der Docstring von :func:`_cylinders` beschreibt genau das seit
@@ -1493,7 +1498,7 @@ def detect(
     key = _detection_key(mesh)
     if check_cancelled is not None:
         check_cancelled()
-    known = _cached_detection(key)
+    known = _cached_detection(key, store)
     if known is not None:
         # Eine Kopie, weil der Aufrufer sein Ergebnis behalten darf. Die
         # ``Feature``-Objekte selbst sind unveränderlich (``frozen=True``) und
@@ -1676,29 +1681,74 @@ def detect(
         " (skin)" if fitted.freeform_skin else "",
     )
     _remember(key, found, left_out, unreadable, freeform)
+    if store is not None:
+        store.save_detection(key, StoredDetection(found, left_out, unreadable, freeform))
     share.reach(1.0)
     return dict(found)
 
 
-def known_detection(mesh: MeshData) -> dict[FeatureId, Feature] | None:
+@dataclass(frozen=True, slots=True)
+class StoredDetection:
+    """Eine vollständige Erkennung mit ihren drei Nebenauskünften, wie sie abgelegt wird."""
+
+    found: dict[FeatureId, Feature]
+    left_out: int
+    """Die weggelassenen Rundformen (:func:`freeform_dropped`)."""
+    unreadable: int
+    """Die Schalenzahl, wenn die Einschlüsse unlesbar waren (:func:`unreadable_void_shells`)."""
+    freeform: bool
+    """Das Freiformurteil (:func:`recognised_as_freeform`)."""
+
+
+class DetectionStore(Protocol):
+    """Eine Ablage für Erkennungen über den Prozess hinaus (RM-695: der Plattencache).
+
+    Der Schlüssel ist :func:`_detection_key` des Netzes; unter ihm liefert
+    ``load_detection`` Bit für Bit, was ``save_detection`` bekam, oder ``None``.
+    Ein Eintrag, den die Ablage nicht sicher lesen kann, ist ``None`` — dann
+    erkennt :func:`detect` neu und legt das Ergebnis wieder ab.
+    """
+
+    def load_detection(self, key: bytes) -> StoredDetection | None: ...
+
+    def save_detection(self, key: bytes, detection: StoredDetection) -> None: ...
+
+
+def known_detection(
+    mesh: MeshData, store: DetectionStore | None = None
+) -> dict[FeatureId, Feature] | None:
     """Die gemerkte Erkennung dieses Netzes — oder ``None``, ohne zu rechnen.
 
     Für Aufrufer, die eine Antwort nehmen, wenn sie dasteht, und sonst ohne
     auskommen: die Live-Vorschau eines Dialogs zeigt Geometrie, keine
     Merkmale, und eine Erkennung von einer Sekunde je getippter Zahl wäre
     dort eine Sekunde für nichts (``scene.evaluate``, ``detect_features``).
+    Mit ``store`` zählt auch, was dort abgelegt ist.
     """
-    known = _cached_detection(_detection_key(mesh))
+    known = _cached_detection(_detection_key(mesh), store)
     return None if known is None else dict(known)
 
 
-def _cached_detection(key: bytes) -> dict[FeatureId, Feature] | None:
-    """Die gemerkte Erkennung unter diesem Abdruck, nach vorn gerückt — in einem Schritt."""
+def _cached_detection(
+    key: bytes, store: DetectionStore | None = None
+) -> dict[FeatureId, Feature] | None:
+    """Die gemerkte Erkennung unter diesem Abdruck, nach vorn gerückt — in einem Schritt.
+
+    Kennt der Merker sie nicht, fragt er ``store`` und merkt sich, was dort
+    liegt, samt den Nebenauskünften: Nach einem Neustart rechnete jedes
+    Öffnen die ganze Erkennung neu, am Eiffelturm 47 von 57 s (RM-695).
+    """
     with _CACHE_LOCK:
         known = _FEATURE_CACHE.get(key)
         if known is not None:
             _FEATURE_CACHE.move_to_end(key)
-        return known
+        if known is not None or store is None:
+            return known
+    stored = store.load_detection(key)
+    if stored is None:
+        return None
+    _remember(key, stored.found, stored.left_out, stored.unreadable, stored.freeform)
+    return stored.found
 
 
 def _remember(

@@ -30,7 +30,7 @@ from collections.abc import Callable, Collection, Iterable, Sequence
 from contextlib import suppress
 from dataclasses import dataclass, field, replace
 from pathlib import Path
-from typing import Any, Final, Protocol, cast
+from typing import TYPE_CHECKING, Any, Final, Protocol, cast
 
 from app.core.errors import AppError
 from app.core.log import get_logger
@@ -56,6 +56,9 @@ from app.core.types import (
     Transform,
 )
 from app.i18n import TranslatableText
+
+if TYPE_CHECKING:
+    from app.core.perceive.features import StoredDetection
 
 _log = get_logger(__name__)
 
@@ -413,7 +416,10 @@ _REFUSALS_KEPT: Final = 256
 #:   mitgetragenen Normalen und Flächen von einem frisch gebauten mit denselben
 #:   Ecken (``features._detection_key``). Ein gespeichertes Ergebnis trüge noch
 #:   die Erkennung des bewegten Zwillings.
-CACHE_FORMAT_VERSION: Final = 56
+#: - 57 (RM-695): Merkmale stehen typgenau auf der Platte (``_exact_to_data``),
+#:   und die Erkennung eines Netzes liegt als eigener Eintrag daneben. Ein
+#:   älterer Eintrag gäbe Tupel als Listen zurück.
+CACHE_FORMAT_VERSION: Final = 57
 
 
 @dataclass(frozen=True, slots=True)
@@ -861,6 +867,14 @@ class ResultCache:
             return self._held_bytes()
 
     @property
+    def detections(self) -> DiskCache | None:
+        """Wo die Auswertung Erkennungen über den Prozess hinaus ablegt (RM-695).
+
+        Die Platte, wenn es sie gibt; ohne sie lebt eine Erkennung nur im Prozess.
+        """
+        return self._disk
+
+    @property
     def memory_budget(self) -> int:
         """Wie viele Bytes sie höchstens hält; den jüngsten Eintrag behält sie immer."""
         return self._memory_budget
@@ -874,7 +888,12 @@ class ResultCache:
 
 
 def feature_to_data(feature: Feature) -> dict[str, Any]:
-    """Die gemeinsame vollständige Merkmalsauskunft für Plattencache und Folgehash."""
+    """Die vollständige Merkmalsauskunft für den Folgehash.
+
+    Tupel und Listen sind hier dasselbe, und das ist für einen Hash richtig. Die
+    Platte braucht mehr: Sie gibt zurück, was sie bekam, typgenau
+    (:func:`_stored_feature_to_data`).
+    """
     return {
         "id": feature.id,
         "kind": feature.kind,
@@ -902,6 +921,132 @@ def feature_to_data(feature: Feature) -> dict[str, Any]:
     }
 
 
+#: Die Datei einer abgelegten Erkennung in ihrem Eintragsordner (RM-695).
+_DETECTION_FILE: Final = "detection.json"
+
+
+def _detection_name(key: bytes) -> str:
+    """Der Eintragsname einer Erkennung — neben den Operationsschlüsseln, nie gleich einem."""
+    return f"detection-{key.hex()}"
+
+
+def _exact_to_data(value: object) -> Any:
+    """Ein Merkmalswert für JSON, so dass :func:`_exact_from_data` ihn Bit für Bit zurückgibt.
+
+    Typgenau: Ein Tupel kommt als Tupel zurück, eine Liste als Liste, eine
+    Gleitkommazahl als dieselbe Zahl (``repr`` ist in Python verlustfrei).
+    Was keiner dieser Typen genau ist — auch eine Unterklasse wie
+    ``numpy.float64`` —, wirft ``TypeError``: Dann bleibt die Erkennung
+    ungespeichert, statt verändert zurückzukommen (RM-695).
+    """
+    kind = type(value)
+    if value is None or kind in (bool, int, float, str):
+        return value
+    if kind is tuple:
+        items = cast(tuple[Any, ...], value)
+        if all(type(item) is int for item in items):
+            # Dreiecksnummern: hunderttausende, ohne einen Aufruf je Zahl.
+            return list(items)
+        return [_exact_to_data(item) for item in items]
+    if kind is list:
+        return {"list": [_exact_to_data(item) for item in cast(list[Any], value)]}
+    if kind is dict:
+        mapping = cast(dict[Any, Any], value)
+        if all(type(name) is str for name in mapping):
+            return {"dict": {name: _exact_to_data(item) for name, item in mapping.items()}}
+    raise TypeError(f"not stored exactly: {kind.__name__}")
+
+
+def _exact_from_data(data: Any) -> Any:
+    """Gegenstück zu :func:`_exact_to_data`; eine fremde Gestalt ist ein beschädigter Eintrag."""
+    kind = type(data)
+    if data is None or kind in (bool, int, float, str):
+        return data
+    if kind is list:
+        return tuple(_exact_from_data(item) for item in data)
+    if kind is dict and len(data) == 1:
+        if type(data.get("list")) is list:
+            return [_exact_from_data(item) for item in data["list"]]
+        if type(data.get("dict")) is dict:
+            return {str(name): _exact_from_data(item) for name, item in data["dict"].items()}
+    raise ValueError("invalid stored value")
+
+
+def _indices_from_data(data: Any) -> tuple[int, ...]:
+    """Dreiecksnummern einer abgelegten Erkennung: ganze Zahlen ab null, sonst beschädigt."""
+    if type(data) is not list or not all(type(index) is int and index >= 0 for index in data):
+        raise ValueError("invalid stored face indices")
+    return tuple(data)
+
+
+def _stored_feature_to_data(feature: Feature) -> dict[str, Any]:
+    """Ein Merkmal für die Platte — Ergebniseintrag und abgelegte Erkennung —, verlustfrei.
+
+    Über :func:`feature_to_data` kam aus jedem Tupel eine Liste zurück: Nach dem
+    Wiederöffnen trugen die Merkmale eines Bausteins andere Werte als beim
+    ersten Öffnen, gleich nur nach dem Hash (RM-695).
+    """
+    return {
+        "id": feature.id,
+        "kind": feature.kind,
+        "provenance": feature.provenance,
+        "params": _exact_to_data(feature.params),
+        "face_indices": _exact_to_data(feature.face_indices),
+        "recognised": feature.recognised,
+        "created_by": feature.created_by,
+        "measure_sources": _exact_to_data(feature.measure_sources),
+        "surface_patches": [
+            {
+                "kind": patch.kind,
+                "source": patch.source,
+                "params": _exact_to_data(patch.params),
+                "face_indices": _exact_to_data(patch.face_indices),
+            }
+            for patch in feature.surface_patches
+        ],
+    }
+
+
+def _stored_feature_from_data(data: dict[str, Any]) -> Feature:
+    """Gegenstück zu :func:`_stored_feature_to_data`; die Träger gegen denselben Vertrag
+    wie die Erkennung (``perceive.surfaces.valid_patch``)."""
+    from app.core.perceive.surfaces import valid_patch
+
+    if not all(type(data[name]) is str for name in ("id", "kind", "provenance")):
+        raise ValueError("invalid stored feature")
+    creator = data["created_by"]
+    if type(data["recognised"]) is not bool or not (creator is None or type(creator) is int):
+        raise ValueError("invalid stored feature")
+    params = _exact_from_data(data["params"])
+    sources = _exact_from_data(data["measure_sources"])
+    if type(params) is not dict or type(sources) is not dict:
+        raise ValueError("invalid stored feature")
+    indices = _indices_from_data(data["face_indices"])
+    allowed = frozenset(indices)
+    patches = []
+    for item in data["surface_patches"]:
+        patch = SurfacePatch(
+            kind=item["kind"],
+            source=item["source"],
+            params=_exact_from_data(item["params"]),
+            face_indices=_indices_from_data(item["face_indices"]),
+        )
+        if type(patch.params) is not dict or not valid_patch(patch, allowed_indices=allowed):
+            raise ValueError("invalid stored surface patch")
+        patches.append(patch)
+    return Feature(
+        id=data["id"],
+        kind=data["kind"],
+        provenance=data["provenance"],
+        params=params,
+        face_indices=indices,
+        recognised=data["recognised"],
+        created_by=creator,
+        measure_sources=sources,
+        surface_patches=tuple(patches),
+    )
+
+
 def _frame_from_data(value: Any) -> Transform | None:
     """Ein gespeicherter Bezugsrahmen ist endlich und affin, sonst ein Cachefehler."""
     if value is None:
@@ -924,44 +1069,6 @@ def _frame_from_data(value: Any) -> Transform | None:
     ):
         raise ValueError("nonaffine cached frame")
     return cast(Transform, tuple(rows))
-
-
-def _surface_patches_from_data(
-    data: object, indices: tuple[int, ...], face_count: int | None
-) -> tuple[SurfacePatch, ...]:
-    """Wegwerfbare Cache-Daten gegen denselben Trägervertrag wie die Erkennung lesen."""
-    from app.core.perceive.surfaces import valid_patch
-
-    if not isinstance(data, list):
-        raise ValueError("invalid cached surface patches")
-    if not data:
-        return ()
-    if any(not isinstance(index, int) or isinstance(index, bool) for index in indices):
-        raise ValueError("invalid cached feature indices")
-    allowed = frozenset(indices)
-    patches = []
-    for item in data:
-        if (
-            not isinstance(item, dict)
-            or not isinstance(item.get("kind"), str)
-            or not isinstance(item.get("source"), str)
-            or not isinstance(item.get("params"), dict)
-            or not isinstance(item.get("face_indices"), list)
-        ):
-            raise ValueError("invalid cached surface patch")
-        patch = SurfacePatch(
-            kind=item["kind"],
-            source=item["source"],
-            params={
-                key: tuple(value) if isinstance(value, list) else value
-                for key, value in item["params"].items()
-            },
-            face_indices=tuple(item["face_indices"]),
-        )
-        if not valid_patch(patch, face_count=face_count, allowed_indices=allowed):
-            raise ValueError("invalid cached surface geometry")
-        patches.append(patch)
-    return tuple(patches)
 
 
 def _continuations_from_data(
@@ -1152,33 +1259,6 @@ def _movement_from_disk(record: Any, mesh: Mesh) -> None:
             raise ValueError("moved_from")
         note.append((key, cells))
     restore_movement_note(mesh, tuple(note))
-
-
-def _feature_from_data(data: dict[str, Any], *, face_count: int | None = None) -> Feature:
-    indices = tuple(data["face_indices"])
-    return Feature(
-        id=data["id"],
-        kind=data["kind"],
-        provenance=data["provenance"],
-        params=data["params"],
-        face_indices=indices,
-        # **Mit ``get`` und nicht über den Index.** Der Cache ist hashbasiert
-        # und wegwerfbar — nur weggeworfen wird er nicht, wenn ein Feld
-        # dazukommt: Der Hash steht über dem Operationsstapel, nicht über der
-        # Gestalt dieser Datei. Ein Eintrag von gestern kennt ``created_by``
-        # nicht, und ein ``KeyError`` beim Lesen des Caches wäre ein Fehler
-        # ohne Handlungsvorschlag an einer Stelle, an der es nichts zu
-        # entscheiden gibt.
-        created_by=data.get("created_by"),
-        # ``get`` mit der Vorgabe wie oben: Ein Eintrag von vor diesem Feld
-        # kennt ``recognised`` nicht, und der Cache ist wegwerfbar, nicht
-        # versioniert.
-        recognised=data.get("recognised", True),
-        measure_sources=data.get("measure_sources", {}),
-        surface_patches=_surface_patches_from_data(
-            data.get("surface_patches", []), indices, face_count
-        ),
-    )
 
 
 def _name_to_data(name: TranslatableText | str) -> str | dict[str, Any]:
@@ -1432,7 +1512,7 @@ class DiskCache:
                         # 21.09.2026). Trägervertrag und Zugehörigkeit der
                         # Nummern zum Merkmal bleiben geprüft.
                         features={
-                            key_: _feature_from_data(value)
+                            key_: _stored_feature_from_data(value)
                             for key_, value in entry["features"].items()
                         },
                         material_slots=[_slot_from_data(slot) for slot in entry["material_slots"]],
@@ -1521,7 +1601,8 @@ class DiskCache:
                     "mesh": name,
                     "kind": entry.kind,
                     "features": {
-                        key_: feature_to_data(value) for key_, value in entry.features.items()
+                        key_: _stored_feature_to_data(value)
+                        for key_, value in entry.features.items()
                     },
                     "material_slots": [_slot_to_data(slot) for slot in entry.material_slots],
                     "material": entry.material,
@@ -1576,6 +1657,76 @@ class DiskCache:
             _log.warning("could not write cache entry %s: %s", key, problem)
             if folder is not None:
                 shutil.rmtree(folder, ignore_errors=True)
+            return
+        self._account_for(folder)
+
+    def load_detection(self, key: bytes) -> StoredDetection | None:
+        """Die abgelegte Erkennung unter diesem Netzabdruck (RM-695), Bit für Bit — oder ``None``.
+
+        Ein Eintrag eines anderen Formatstands oder einer, der sich nicht
+        sicher lesen lässt, wird verworfen: Dann erkennt ``detect`` neu und
+        legt wieder ab. Gelesen wird wie bei :meth:`get` im selben Fehlerpfad.
+        """
+        from app.core.perceive.features import StoredDetection
+
+        folder = self._folder(_detection_name(key))
+        index = folder / _DETECTION_FILE
+        if not index.is_file():
+            return None
+        try:
+            data = json.loads(index.read_text(encoding="utf-8"))
+            if data.get("format_version") != CACHE_FORMAT_VERSION or data.get("key") != key.hex():
+                raise ValueError("detection entry of another version")
+            found = {}
+            for entry in data["features"]:
+                feature = _stored_feature_from_data(entry)
+                found[feature.id] = feature
+            left_out = data["left_out"]
+            unreadable = data["unreadable"]
+            freeform = data["freeform"]
+            if type(left_out) is not int or type(unreadable) is not int:
+                raise ValueError("invalid detection counts")
+            if type(freeform) is not bool:
+                raise ValueError("invalid freeform verdict")
+        except _DAMAGED_ENTRY as problem:
+            _log.info(
+                "dropping detection entry %s: %s: %s", key.hex(), type(problem).__name__, problem
+            )
+            shutil.rmtree(folder, ignore_errors=True)
+            return None
+        with suppress(OSError):
+            os.utime(folder, None)
+        return StoredDetection(found, left_out, unreadable, freeform)
+
+    def save_detection(self, key: bytes, detection: StoredDetection) -> None:
+        """Eine vollständige Erkennung unter ihrem Netzabdruck ablegen (RM-695).
+
+        Ein Wert, den :func:`_exact_to_data` nicht verlustfrei schreiben kann,
+        lässt den Eintrag aus — dann erkennt das nächste Öffnen neu, wie vor
+        RM-695. Geschrieben wird über eine Nebendatei und ``os.replace``: Zwei
+        Fenster, die dasselbe Modell öffnen, lesen nie eine halbe Datei.
+        """
+        folder: Path | None = None
+        spare: Path | None = None
+        try:
+            payload = {
+                "format_version": CACHE_FORMAT_VERSION,
+                "key": key.hex(),
+                "left_out": detection.left_out,
+                "unreadable": detection.unreadable,
+                "freeform": detection.freeform,
+                "features": [_stored_feature_to_data(entry) for entry in detection.found.values()],
+            }
+            text = json.dumps(payload)
+            folder = ensure_dir(self._folder(_detection_name(key)))
+            spare = folder / f"{_DETECTION_FILE}.{os.getpid()}.{threading.get_ident()}"
+            spare.write_text(text, encoding="utf-8")
+            spare.replace(folder / _DETECTION_FILE)
+        except (OSError, TypeError, ValueError) as problem:
+            _log.warning("could not write detection entry %s: %s", key.hex(), problem)
+            if spare is not None:
+                with suppress(OSError):
+                    spare.unlink()
             return
         self._account_for(folder)
 

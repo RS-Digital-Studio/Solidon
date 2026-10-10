@@ -815,7 +815,7 @@ def test_a_finding_value_that_names_a_body_follows_the_language(profile: Profile
 
 @pytest.mark.parametrize("example", examples.EXAMPLES, ids=lambda entry: entry.id)
 def test_every_example_reopens_from_the_disk_cache_without_a_miss(
-    example: examples.Example, tmp_path: Path
+    example: examples.Example, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Zweimal über denselben Plattencache geöffnet, trifft der zweite Lauf jeden
     Schritt — bis auf die, deren Körper exakt sind, denn die liegen nur im
@@ -824,6 +824,7 @@ def test_every_example_reopens_from_the_disk_cache_without_a_miss(
     Dreiecksnummern des Eingangsnetzes, und die Kabeldurchführung wurde jedes
     Mal neu gerechnet."""
     from app.core.geom.mesh import MeshCodec
+    from app.core.perceive import features
     from app.core.scene.cache import DiskCache, ResultCache
 
     project = load(examples.directory() / example.filename)
@@ -834,8 +835,25 @@ def test_every_example_reopens_from_the_disk_cache_without_a_miss(
     assert cold.complete
     reopened = load(examples.directory() / example.filename)
     second = ResultCache(disk=DiskCache(codec=MeshCodec(), directory=tmp_path / "cache"))
+    # **Wie nach einem Neustart** (RM-695): Der Merker der Erkennung ist leer,
+    # und die Platte trägt sie trotzdem — kein Netz wird neu untersucht, und
+    # jeder Körper hat Bit für Bit dieselben Merkmale unter denselben Namen.
+    features.forget_cache()
+    real = features._fitted
+    runs: list[int] = []
+
+    def counted(*args, **kwargs):
+        if "planar" in kwargs:
+            runs.append(args[0].triangle_count)
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(features, "_fitted", counted)
     warm = evaluate(reopened.document, profile, sources=ProjectSources(reopened), cache=second)
+    monkeypatch.undo()
     assert warm.complete
+    assert runs == [], f"{example.id}: volle Erkennung nach dem Neustart an {runs} Dreiecken"
+    for name, entry in warm.scene.objects.items():
+        assert repr(entry.features) == repr(cold.scene.objects[name].features), (example.id, name)
     assert second.statistics.disk_hits + second.statistics.misses == len(project.document.ops)
     if any(entry.kind == "brep" for entry in cold.scene.objects.values()):
         # Exakte Körper schreibt der Codec nicht (§30); ihre Schritte rechnet

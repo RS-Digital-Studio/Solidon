@@ -1932,6 +1932,9 @@ def test_a_result_that_came_from_a_question_stays_out_of_the_long_lived_cache() 
     class Recorder:
         """Nimmt entgegen und merkt sich, was freigegeben wurde."""
 
+        #: Keine Platte, also auch keine Ablage der Erkennungen (RM-695).
+        detections = None
+
         def __init__(self) -> None:
             self.written: list[bool] = []
 
@@ -6406,7 +6409,7 @@ def test_a_saved_confirmation_is_told_when_the_long_recognition_starts(monkeypat
     assert reopen() == []
 
     # Kennt er es nicht, startet sie, und die gespeicherte Zustimmung kommt an.
-    monkeypatch.setattr(module, "known_detection", lambda _mesh: None)
+    monkeypatch.setattr(module, "known_detection", lambda _mesh, _store=None: None)
     told = reopen()
     assert told and {(op_id, record["allowed"]) for op_id, record in told} == {(1, True)}
     assert told[0][1]["object_id"] == "obj_1"

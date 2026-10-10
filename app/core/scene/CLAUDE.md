@@ -232,15 +232,16 @@ Merkmalen. Der Empfänger ordnet Callbackmeldungen der Auftragsrevision zu.
   wachenden Profil laufen lässt. Wer einer freigestellten Operation einen
   Prozesswert zu lesen gibt, nimmt `False` heraus. Der volle `profile_key`
   bleibt bytegleich — er benennt auch Filamentbuchungen.
-- **Merkmale reisen durch beide Ebenen** (`cache.feature_to_data`): Maßquellen
-  und `surface_patches` (Vertrag geprüft, im Speicherbudget; ein alter
-  Name ohne Beleg behält keinen Formnachweis). **Nicht geprüft wird die
-  Dreieckszahl**: Der Cache trägt die **rohe** Ausgabe; erst `_with_features`
-  bindet — vorbereitete Objekte zu cachen ist verworfen. `_warm_figures` fasst
-  Kennzahlen im Arbeiter an. Exakte Körper bleiben im Speicher, neu belegte
-  Träger werden neu gerechnet; Teilungsvermerke liegen neben dem Netz
-  (`_refinement_to_disk`), Bewegungsvermerke im Eintrag
-  (`_movement_to_disk`, `moved_from`) — beide bleiben Zusagen, die erst die
+- **Merkmale reisen typgenau durch beide Ebenen** (`_stored_feature_to_data`;
+  `feature_to_data` ist der Folgehash): Maßquellen und `surface_patches`
+  (Vertrag geprüft, im Speicherbudget; ein alter Name ohne Beleg behält keinen
+  Formnachweis). Die Erkennung je Netz ist ein eigener Eintrag
+  (`load_detection`). **Nicht geprüft wird die Dreieckszahl**: Der Cache
+  trägt die **rohe** Ausgabe; erst `_with_features` bindet, Vorbereitetes
+  cacht er nie. `_warm_figures` fasst Kennzahlen im Arbeiter an. Exakte
+  Körper bleiben im Speicher, neu belegte Träger rechnen neu;
+  Teilungsvermerke liegen neben dem Netz (`_refinement_to_disk`),
+  Bewegungsvermerke im Eintrag (`moved_from`) — Zusagen, die erst die
   Erkennung am Eingang belegt.
 - **`object_hash(features=)`** bindet die veröffentlichten Merkmale
   (`feature_digest`: Nummern als `int64`, Zahlen über `float()`;
