@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import replace
+from typing import Final
 
 import pytest
 import trimesh
@@ -1949,6 +1950,12 @@ def test_hybrid_only_where_the_program_knows_it() -> None:
         assert [entry.value for entry in entries if entry.path == "support.style"] == [expected]
 
 
+#: Die Stützart bleibt, wie gesetzt: Unter der flachen Tischplatte schlüge der Rat
+#: sonst Gitter oder Hybrid vor (RM-584), und Abstand und Trennschicht fragten mit
+#: dieser Art statt mit den Bäumen, um die es geht.
+_KEEP_STYLE: Final = frozenset({"support.style"})
+
+
 def _support_advice(
     body: MeshData,
     profile: Profile,
@@ -1985,8 +1992,9 @@ def _support_advice(
 def test_the_support_gap_follows_layer_height_and_material() -> None:
     """Der Abstand zwischen Stütze und Teil folgt Schichthöhe und Material
     (RM-583, Recherche vom 08.10.2026, Nr. 1): PLA etwa eine Schicht, PETG das
-    1,4-Fache, nie unter 0,1 und über 0,25 bzw. 0,3 mm. Cura rechnet in ganzen
-    Schichten. Was im Band liegt, bleibt beim Hersteller."""
+    1,4-Fache, nie unter 0,1 und über 0,25 bzw. 0,3 mm. Unter Curas Gitter gilt
+    der Wert genau, unter Curas Bäumen in ganzen Schichten (RM-628). Was im Band
+    liegt, bleibt beim Hersteller."""
     pla = profiles.make_profile("centauri-carbon-2", "pla")
     gap = "support.z_gap"
 
@@ -2001,7 +2009,20 @@ def test_the_support_gap_follows_layer_height_and_material() -> None:
     assert proposed(pla, 0.2, 0.2) is None, "eine Schicht bei PLA ist richtig"
     assert proposed(pla, 0.2, 0.22) is None, "0,22 liegt im Band"
     assert proposed(petg(), 0.2, 0.2) == pytest.approx(0.28), "PETG haftet an sich selbst"
-    assert proposed(petg(), 0.2, 0.2, "cura") is None, "Cura rundet auf eine Schicht"
+    for style, wanted in (("grid", 0.28), ("auto", 0.28), ("tree", None)):
+        asked: dict[str, object] = {
+            "layers.layer_height": 0.2,
+            gap: 0.2,
+            "support.style": style,
+        }
+        # Gefragt mit der Art, mit der der Kunde druckt: Unter der flachen
+        # Tischplatte schlüge der Rat sonst Gitter vor (RM-584).
+        got = _support_advice(
+            column_table(), petg(), asked, flavour="cura", paths=(gap,), declined=_KEEP_STYLE
+        )
+        assert got.get(gap) == (None if wanted is None else pytest.approx(wanted)), (
+            f"Cura {style}: oben unter Gitter genau, unter Bäumen eine ganze Schicht"
+        )
     assert proposed(pla, 0.12, 0.2) == pytest.approx(0.12), "bei feinen Schichten zu viel Luft"
     assert proposed(pla, 0.06, 0.06) == pytest.approx(0.10), "nie unter 0,1 mm"
     assert proposed(petg(), 0.32, 0.45) == pytest.approx(0.30), "nie über 0,3 mm bei PETG"
@@ -2022,20 +2043,26 @@ def test_the_support_gap_follows_layer_height_and_material() -> None:
 def test_whole_layers_stay_inside_the_material_band(
     material: str, layer: float, flavour: str, gap: float
 ) -> None:
-    """Wo der Slicer in ganzen Schichten rechnet (Cura), liegt der Abstand
-    innerhalb der Grenzen des Materials: PLA bei 0,08 mm zwei Schichten statt
-    einer unter dem Minimum, PETG bei 0,1 mm 0,2 statt 0,1 (RM-583, Review).
-    Oberhalb des Maximums bleibt eine Schicht. Eine halbe Schicht rundet auf,
-    und ein Wert mit drei Stellen bleibt eine ganze Schicht."""
+    """Wo der Slicer in ganzen Schichten rechnet (Cura unter Bäumen), liegt der
+    Abstand innerhalb der Grenzen des Materials: PLA bei 0,08 mm zwei Schichten
+    statt einer unter dem Minimum, PETG bei 0,1 mm 0,2 statt 0,1 (RM-583,
+    Review). Oberhalb des Maximums bleibt eine Schicht. Eine halbe Schicht rundet
+    auf, und ein Wert mit drei Stellen bleibt eine ganze Schicht."""
     profile = profiles.make_profile("centauri-carbon-2", material)
-    target = advise.support_gap_target(layer, profile.material, flavour)  # type: ignore[arg-type]
+    target = advise.support_gap_target(
+        layer,
+        profile.material,
+        flavour,  # type: ignore[arg-type]
+        style="tree",
+    )
     assert target == pytest.approx(gap)
     proposed = _support_advice(
         column_table(),
         profile,
-        {"layers.layer_height": layer, "support.z_gap": 0.6},
+        {"layers.layer_height": layer, "support.z_gap": 0.6, "support.style": "tree"},
         flavour=flavour,
         paths=("support.z_gap",),
+        declined=_KEEP_STYLE,
     )
     assert proposed["support.z_gap"] == pytest.approx(gap)
 
@@ -2047,11 +2074,359 @@ def test_half_a_layer_rounds_up() -> None:
     pla = profiles.make_profile("centauri-carbon-2", "pla").material
 
     assert advise.support_gap_target(
-        0.05, replace(pla, support_gap_factor=2.5), "cura"
+        0.05, replace(pla, support_gap_factor=2.5), "cura", style="tree"
     ) == pytest.approx(0.15)
     assert advise.support_gap_target(
-        0.1, replace(pla, support_gap_factor=1.5), "cura"
+        0.1, replace(pla, support_gap_factor=1.5), "cura", style="tree"
     ) == pytest.approx(0.2)
+
+
+#: Wie die Programme einen Abstand zwischen zwei Schichten drucken, oben und
+#: unten (RM-628): CuraEngine ``round_up_divide`` (``TreeSupportSettings.h:62`` und ``:63``,
+#: ``support.cpp:1119`` und ``:1703``), unter Gitter oben genau mit
+#: ``support_fractional_roof`` (``support.cpp:1757``); die Orca-Familie und
+#: PrusaSlicer unter organischen Bäumen ``round`` (``TreeSupportCommon``), Orca
+#: neben dem Turm ebenso; sonst genau. Gemessen bei 0,2er Schichten: Cura druckte
+#: 0,28 und 0,44 unter Gitter oben genau und unten 0,4 und 0,6, unter Bäumen oben
+#: und unten 0,4 und 0,6 (Archiv RM-624, RM-628).
+_PRINTED_GAPS = [
+    # Familie, Art, organisch, Turm, Seite, geschrieben, gedruckt
+    ("cura", "grid", (), False, "top", 0.28, 0.28),
+    ("cura", "grid", (), False, "top", 0.44, 0.44),
+    ("cura", "grid", (), False, "bottom", 0.28, 0.40),
+    ("cura", "grid", (), False, "bottom", 0.44, 0.60),
+    ("cura", "auto", (), False, "top", 0.28, 0.28),
+    ("cura", "auto", (), False, "bottom", 0.28, 0.40),
+    ("cura", "tree", (), False, "top", 0.28, 0.40),
+    ("cura", "tree", (), False, "top", 0.44, 0.60),
+    ("cura", "tree", (), False, "bottom", 0.28, 0.40),
+    ("cura", "tree", (), False, "bottom", 0.44, 0.60),
+    ("cura", "tree", (), False, "top", 0.40, 0.40),
+    ("orca", "tree", ("tree",), False, "top", 0.28, 0.20),
+    ("orca", "tree", ("tree",), False, "bottom", 0.28, 0.20),
+    ("orca", "tree", ("tree",), False, "top", 0.44, 0.40),
+    ("orca", "grid", ("tree",), False, "top", 0.28, 0.28),
+    ("orca", "grid", ("tree",), False, "bottom", 0.28, 0.28),
+    ("orca", "grid", ("tree",), True, "top", 0.28, 0.20),
+    ("orca", "grid", ("tree",), True, "bottom", 0.28, 0.20),
+    ("prusa", "tree", ("tree",), False, "top", 0.44, 0.40),
+    ("prusa", "tree", ("tree",), False, "bottom", 0.28, 0.20),
+    ("prusa", "grid", ("tree",), False, "top", 0.28, 0.28),
+    ("prusa", "grid", ("tree",), False, "bottom", 0.28, 0.28),
+    (None, "tree", (), False, "top", 0.28, 0.28),
+]
+
+
+@pytest.mark.parametrize(
+    ("flavour", "style", "organic", "tower", "side", "written", "printed"), _PRINTED_GAPS
+)
+def test_each_program_prints_the_gap_as_it_rounds(
+    flavour: str | None,
+    style: str,
+    organic: tuple[str, ...],
+    tower: bool,
+    side: str,
+    written: float,
+    printed: float,
+) -> None:
+    """Je Familie, Art und Seite der Abstand, den der Slicer aus einem Wert
+    zwischen zwei Schichten druckt (RM-628), bei 0,2er Schichten. Cura rundet
+    auf, unter Gitter nur unten; die übrigen runden zur nächsten Schicht, wo sie
+    in ganzen Schichten rechnen."""
+    rounding = advise.gap_rounding(
+        flavour,  # type: ignore[arg-type]
+        tower,
+        style,
+        organic,
+        below=side == "bottom",
+    )
+    assert advise.printed_gap(written, 0.2, rounding) == pytest.approx(printed)
+    if side == "top":
+        assert advise.rounds_to_whole_layers(
+            flavour,  # type: ignore[arg-type]
+            tower,
+            style,
+            organic,
+        ) is (rounding != "exact")
+
+
+@pytest.mark.parametrize(
+    ("program", "flavour", "gap", "layer", "printed"),
+    [
+        ("orcaslicer", "orca", 0.30, 0.2, 0.40),
+        ("elegooslicer", "orca", 0.30, 0.2, 0.40),
+        ("anycubicslicernext", "orca", 0.30, 0.2, 0.40),
+        ("prusaslicer", "prusa", 0.30, 0.2, 0.40),
+        ("bambustudio", "orca", 0.30, 0.2, 0.20),
+        ("crealityprint", "orca", 0.30, 0.2, 0.20),
+        ("orcaslicer", "orca", 0.18, 0.12, 0.24),
+        ("bambustudio", "orca", 0.18, 0.12, 0.24),
+    ],
+)
+def test_the_half_layer_under_organic_trees_rounds_as_each_program_does(
+    program: str, flavour: str, gap: float, layer: float, printed: float
+) -> None:
+    """Den Halbfall runden die Programme verschieden (RM-628, gemessen PETG unter
+    organischen Bäumen, oben und unten): 0,30 bei 0,2er Schichten sind in
+    Gleitkomma 1,4999999999999998 Schichten, und Bambu Studio und Creality Print
+    runden ohne Toleranz ab, die übrigen auf. 0,18 bei 0,12er sind genau 1,5, das
+    runden alle auf. Solidon rät nur Vielfache; nennt es eine gerundete Zahl,
+    dann die des Programms."""
+    assert advise.printed_support_gaps(
+        gap,
+        layer,
+        flavour,  # type: ignore[arg-type]
+        "tree",
+        ("tree",),
+        program=program,
+    ) == (pytest.approx(printed), pytest.approx(printed))
+
+
+@pytest.mark.parametrize(
+    ("style", "gap", "roof", "top", "bottom"),
+    [
+        ("tree", 0.20, False, 0.40, 0.20),
+        ("tree", 0.28, False, 0.60, 0.40),
+        ("tree", 0.40, False, 0.60, 0.40),
+        ("tree", 0.44, False, 0.80, 0.60),
+        ("tree", 0.20, True, 0.20, 0.20),
+        ("tree", 0.28, True, 0.40, 0.40),
+        ("grid", 0.28, False, 0.28, 0.20),
+    ],
+)
+def test_curas_trees_without_a_roof_print_one_layer_more(
+    style: str, gap: float, roof: bool, top: float, bottom: float
+) -> None:
+    """Ohne obere Trennschicht baut Cura die Spitzen seiner Bäume als Ersatzdach
+    und druckt oben eine Schicht mehr (RM-628, gemessen in Cura 5.13 bei 0,2er
+    Schichten, ``TreeSupportTipGenerator.cpp``, ``use_fake_roof_``); unten bleibt
+    das Aufrunden. Unter Gitter ändert die Trennschicht nichts."""
+    petg = profiles.make_profile("centauri-carbon-2", "petg").material
+    printed = advise.printed_support_gaps(gap, 0.2, "cura", style, material=petg, roof=roof)
+    assert printed == (pytest.approx(top), pytest.approx(bottom))
+
+
+def test_curas_trees_without_a_roof_get_one_advised() -> None:
+    """Unter Curas Bäumen ohne obere Trennschicht schlägt Solidon sie vor (RM-628):
+    Ohne sie druckte PETG aus geratenen 0,2 mm 0,4, über dem Höchstwert 0,30. Mit
+    allen Vorschlägen übernommen druckt der Abstand oben im Band."""
+    profile = profiles.make_profile("centauri-carbon-2", "petg")
+    values: dict[str, object] = {
+        "layers.layer_height": 0.2,
+        "support.style": "tree",
+        "support.interface_layers": 0,
+        "support.z_gap": 0.6,
+    }
+
+    def asked(changed: dict[str, object], flavour: str = "cura") -> dict[str, object]:
+        # Unter dem gewölbten Kinn ist die Trennschicht locker und bleibt bei
+        # zwei Lagen; die flache Tischplatte verlangte ohnehin drei.
+        return _support_advice(
+            chin_over_chest(),
+            profile,
+            {**values, **changed},
+            flavour=flavour,
+            organic=frozenset({"tree"}) if flavour != "cura" else frozenset(),
+            declined=_KEEP_STYLE,
+        )
+
+    proposed = asked({})
+    assert proposed.get("support.interface_layers") == 2, proposed
+    gap = float(proposed["support.z_gap"])  # type: ignore[arg-type]
+    top, _bottom = advise.printed_support_gaps(
+        gap, 0.2, "cura", "tree", material=profile.material, roof=True
+    )
+    high = profile.material.support_gap_max
+    assert high is not None and top <= high + 1e-9, (gap, top)
+    assert "support.interface_layers" not in asked({"support.interface_layers": 2}), (
+        "mit Dach kein Vorschlag mehr"
+    )
+    assert "support.interface_layers" not in asked({"support.style": "grid"}), (
+        "unter Gitter genau, auch ohne Dach"
+    )
+    assert "support.interface_layers" not in asked({}, flavour="orca"), (
+        "nur Cura baut ein Ersatzdach"
+    )
+
+
+@pytest.mark.parametrize(
+    ("gap", "plate", "written"),
+    [
+        # Gemessen in Cura 5.13, zwei Teile auf einer Platte (0,2er Schichten):
+        # 0,28 auf 0,2 druckte 0,20, auf 0,44 0,24; 0,2 auf 0,28 genau 0,20.
+        # Geschrieben wird der nächste genau druckbare Wert im Band: auf 0,44
+        # (Rest 0,04) 0,24 statt 0,20, auf 0,28 (Rest 0,08) aus 0,30 0,28.
+        (0.28, 0.20, 0.20),
+        (0.28, 0.44, 0.24),
+        (0.30, 0.28, 0.28),
+        (0.20, 0.28, 0.20),
+        # Derselbe Rest wie die Platte druckt genau.
+        (0.24, 0.44, 0.24),
+        (0.28, 0.48, 0.28),
+        # Außerhalb des Bands der nächste genau druckbare Wert.
+        (0.70, 0.20, 0.80),
+        (0.70, 0.44, 0.64),
+    ],
+)
+def test_a_part_on_a_cura_plate_gets_a_gap_that_prints_exactly(
+    gap: float, plate: float, written: float
+) -> None:
+    """Je Teil legt CuraEngine die Bruchteillage oben um den Rest des Abstands der
+    Platte tiefer (RM-628, ``PathConfigStorage.cpp``). Genau druckt ein Teil
+    deshalb nur ein Vielfaches oder ein Vielfaches plus den Rest der Platte; sonst
+    bekommt es den nächsten davon im Band seines Materials (PETG). Unter Bäumen gilt
+    die Art der Platte, und dort rundet Cura ohnehin auf."""
+    petg = profiles.make_profile("centauri-carbon-2", "petg").material
+    assert advise.cura_part_gap(gap, plate, 0.2, "grid", petg) == pytest.approx(written)
+    assert advise.cura_part_gap(gap, plate, 0.2, "tree", petg) == pytest.approx(gap)
+
+
+@pytest.mark.parametrize(
+    ("material", "layer", "style", "gap"),
+    [
+        ("petg", 0.2, "grid", 0.28),
+        ("petg", 0.2, "auto", 0.28),
+        ("petg", 0.2, "tree", 0.20),
+        ("petg", 0.12, "grid", 0.168),
+        ("petg", 0.12, "tree", 0.12),
+        ("pla", 0.08, "grid", 0.10),
+        ("pla", 0.08, "tree", 0.16),
+    ],
+)
+def test_under_curas_grid_the_gap_is_the_materials(
+    material: str, layer: float, style: str, gap: float
+) -> None:
+    """Unter Gitter hält Cura den Abstand oben genau, mit einer Bruchteillage der
+    Stütze (RM-628): PETG bei 0,2er Schichten bekommt 0,28 wie in den übrigen
+    Programmen, nicht eine Schicht, die anschweißt. Unter Curas Bäumen das
+    Vielfache im Band, das dort genau gedruckt wird."""
+    profile = profiles.make_profile("centauri-carbon-2", material)
+    target = advise.support_gap_target(layer, profile.material, "cura", style=style)
+    assert target == pytest.approx(gap)
+    proposed = _support_advice(
+        column_table(),
+        profile,
+        {"layers.layer_height": layer, "support.z_gap": 0.6, "support.style": style},
+        flavour="cura",
+        paths=("support.z_gap",),
+        declined=_KEEP_STYLE,
+    )
+    assert proposed["support.z_gap"] == pytest.approx(gap)
+    # Gedruckt wird, was Solidon vorschlägt — mit allen Vorschlägen übernommen,
+    # auch ohne obere Trennschicht vorher: Unter dem gewölbten Kinn bleibt die
+    # Trennschicht locker, und ohne sie legte Cura unter Bäumen eine Schicht dazu.
+    bare = {"layers.layer_height": layer, "support.style": style, "support.interface_layers": 0}
+    every = _support_advice(
+        chin_over_chest(),
+        profile,
+        {**bare, "support.z_gap": 0.6},
+        flavour="cura",
+        declined=_KEEP_STYLE,
+    )
+    assert every["support.z_gap"] == pytest.approx(gap)
+    applied = {**bare, **every}
+    top, _bottom = advise.printed_support_gaps(
+        float(applied["support.z_gap"]),  # type: ignore[arg-type]
+        layer,
+        "cura",
+        style,
+        material=profile.material,
+        roof=int(applied["support.interface_layers"]) > 0,  # type: ignore[call-overload]
+    )
+    assert top == pytest.approx(gap), applied
+
+
+@pytest.mark.parametrize(
+    ("material", "layer", "gap", "whole"),
+    [
+        ("petg", 0.2, 0.28, 0.20),
+        ("petg", 0.28, 0.30, 0.28),
+        ("petg", 0.12, 0.20, 0.24),
+        ("pla", 0.08, 0.10, 0.16),
+        ("pla", 0.28, 0.20, 0.28),
+        ("tpu-95a", 0.2, 0.28, 0.20),
+        ("tpu-95a", 0.2, 0.30, 0.40),
+        ("tpu-95a", 0.2, 0.05, 0.20),
+        ("petg", 0.2, 0.70, 0.80),
+    ],
+)
+def test_a_whole_layer_gap_is_the_nearest_inside_the_material_band(
+    material: str, layer: float, gap: float, whole: float
+) -> None:
+    """Das Vielfache der Schichthöhe, das einem Abstand am nächsten liegt, innerhalb
+    der Grenzen des Materials (RM-628): Aufgerundet bekäme PETG bei 0,28er
+    Schichten aus 0,30 zwei Schichten, 0,56 — fast das Doppelte des Höchstwerts
+    0,30, über dem die Fläche durchsackt. PLA bei 0,08er Schichten bekommt aus
+    0,10 zwei Schichten statt einer unter dem Mindestwert; liegt keines im Band,
+    bleibt eine Schicht. Ohne Werte des Materials (TPU) das nächste, mindestens
+    eine Schicht, eine halbe rundet auf. Ein eigener Wert außerhalb der Grenzen
+    bleibt beim nächsten Vielfachen."""
+    profile = profiles.make_profile("centauri-carbon-2", material)
+    assert advise.whole_layer_gap(gap, layer, profile.material) == pytest.approx(whole)
+
+
+@pytest.mark.parametrize(
+    ("style", "layer", "gap", "written", "printed"),
+    [
+        ("grid", 0.2, 0.28, 0.20, 0.20),
+        ("auto", 0.2, 0.28, 0.20, 0.20),
+        ("grid", 0.28, 0.30, 0.28, 0.28),
+        ("grid", 0.12, 0.168, 0.12, 0.12),
+        ("grid", 0.2, 0.40, 0.40, 0.40),
+        ("tree", 0.2, 0.44, 0.44, 0.60),
+        ("tree", 0.2, 0.40, 0.40, 0.40),
+    ],
+)
+def test_cura_gets_its_bottom_gap_in_whole_layers_under_grid(
+    style: str, layer: float, gap: float, written: float, printed: float
+) -> None:
+    """Unten rundet Cura immer auf (RM-628, gemessen in Cura 5.13): PETGs 0,28
+    unter Gitter druckten dort 0,40, über dem Höchstwert 0,30. Unter Gitter
+    schreibt die Übergabe deshalb unten das Vielfache im Band selbst, und Cura
+    druckt es genau; oben bleibt der Wert des Materials. Unter Curas Bäumen
+    gilt unten derselbe Wert wie oben, Cura rundet beide gleich auf."""
+    material = profiles.make_profile("centauri-carbon-2", "petg").material
+    bottom = advise.cura_bottom_gap(gap, layer, style, material)
+    assert bottom == pytest.approx(written)
+    rounding = advise.gap_rounding("cura", style=style, below=True)
+    assert advise.printed_gap(bottom, layer, rounding) == pytest.approx(printed)
+    _top, below = advise.printed_support_gaps(gap, layer, "cura", style, material=material)
+    assert below == pytest.approx(printed)
+
+
+@pytest.mark.parametrize(
+    ("flavour", "style", "organic", "gap", "top", "bottom"),
+    [
+        ("cura", "grid", (), 0.28, 0.28, 0.20),
+        ("cura", "tree", (), 0.44, 0.60, 0.60),
+        ("orca", "grid", ("tree",), 0.24, 0.24, 0.24),
+        ("orca", "tree", ("tree",), 0.24, 0.20, 0.20),
+        ("prusa", "grid", ("tree",), 0.24, 0.24, 0.24),
+        ("prusa", "tree", ("tree",), 0.44, 0.40, 0.40),
+    ],
+)
+def test_solidon_knows_what_each_program_prints_above_and_below(
+    flavour: str,
+    style: str,
+    organic: tuple[str, ...],
+    gap: float,
+    top: float,
+    bottom: float,
+) -> None:
+    """Oben und unten, wie es aus Solidons Übergabe gedruckt ankommt (RM-628),
+    PETG bei 0,2er Schichten — gemessen an Cura 5.13 und an Orca, Bambu, Elegoo,
+    Creality, Anycubic und PrusaSlicer (0,24 unter Gitter genau, unter
+    organischen Bäumen 0,20). Feldsatz und Slicertests fragen dieselbe Stelle."""
+    material = profiles.make_profile("centauri-carbon-2", "petg").material
+    printed = advise.printed_support_gaps(
+        gap,
+        0.2,
+        flavour,  # type: ignore[arg-type]
+        style,
+        organic,
+        material,
+    )
+    assert printed == (pytest.approx(top), pytest.approx(bottom))
 
 
 # Aus ``materials.toml``: PLA Faktor 1,0 zwischen 0,10 und 0,25 mm, PETG 1,4
@@ -2342,17 +2717,24 @@ def test_a_gap_between_two_layers_is_proposed_where_the_slicer_rounds(
     flavour: str, whole_layers: bool
 ) -> None:
     """0,2 mm liegen bei 0,08er Schichten im Band um 0,16, sind aber zweieinhalb
-    Schichten. Wo der Slicer in ganzen Schichten rechnet — Cura, die
-    Orca-Familie neben einem Reinigungsturm —, druckt er sie nicht so, und der
-    Rat nennt die ganze Schicht (RM-622). Ohne Rundung bleibt ein Wert im Band
-    beim Hersteller."""
+    Schichten. Wo der Slicer in ganzen Schichten rechnet — Cura unter Bäumen,
+    die Orca-Familie neben einem Reinigungsturm —, druckt er sie nicht so, und
+    der Rat nennt die ganze Schicht (RM-622, RM-628). Ohne Rundung bleibt ein
+    Wert im Band beim Hersteller, auch oben unter Curas Gitter."""
     pla = profiles.make_profile("centauri-carbon-2", "pla")
     gap = "support.z_gap"
-    between: dict[str, object] = {"layers.layer_height": 0.08, gap: 0.2}
-    whole: dict[str, object] = {"layers.layer_height": 0.08, gap: 0.16}
+    style = "tree" if flavour == "cura" else "grid"
+    between: dict[str, object] = {"layers.layer_height": 0.08, gap: 0.2, "support.style": style}
+    whole: dict[str, object] = {"layers.layer_height": 0.08, gap: 0.16, "support.style": style}
 
     assert _support_advice(
-        column_table(), pla, between, flavour=flavour, paths=(gap,), whole_layers=whole_layers
+        column_table(),
+        pla,
+        between,
+        flavour=flavour,
+        paths=(gap,),
+        whole_layers=whole_layers,
+        declined=_KEEP_STYLE,
     ) == {gap: pytest.approx(0.16)}
     # 0,2 liegt genau auf der Bandgrenze (1,25-mal 0,16), 0,18 mitten darin.
     assert _support_advice(
@@ -2362,17 +2744,25 @@ def test_a_gap_between_two_layers_is_proposed_where_the_slicer_rounds(
         flavour=flavour,
         paths=(gap,),
         whole_layers=whole_layers,
+        declined=_KEEP_STYLE,
     ) == {gap: pytest.approx(0.16)}
     assert (
         _support_advice(
-            column_table(), pla, whole, flavour=flavour, paths=(gap,), whole_layers=whole_layers
+            column_table(),
+            pla,
+            whole,
+            flavour=flavour,
+            paths=(gap,),
+            whole_layers=whole_layers,
+            declined=_KEEP_STYLE,
         )
         == {}
     )
-    assert (
-        _support_advice(column_table(), pla, {**between, gap: 0.11}, flavour="orca", paths=(gap,))
-        == {}
-    ), "ohne Turm gilt 0,11 genau und liegt im Band um 0,10"
+    exact = {**between, gap: 0.11, "support.style": "grid"}
+    for program in ("orca", "cura"):
+        assert _support_advice(column_table(), pla, exact, flavour=program, paths=(gap,)) == {}, (
+            f"{program}: ohne Turm und Baum gilt 0,11 oben genau und liegt im Band um 0,10"
+        )
 
 
 def test_the_interface_follows_the_ceiling_and_where_supports_stand() -> None:

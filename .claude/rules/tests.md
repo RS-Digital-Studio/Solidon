@@ -170,7 +170,8 @@ QApplication.instance().setStyleSheet(before)   # ins finally
 - `slicer("<programm>")` für Tests mit echtem, installiertem Slicer; das Programm
   liefert nur die Fixture `installed_slicer` (`test_slicer_selection.py` hält
   das). Fehlt es, überspringt sich der Fall; in `slicer-auswahl.yml`
-  (`SOLIDON_REQUIRE_SLICERS`) ist das rot, denn ein Skip belegt nichts.
+  (`SOLIDON_REQUIRE_SLICERS`) ist das rot, denn ein Skip belegt nichts. Ein
+  Programm ohne Rezept dort (SuperSlicer) trägt den Marker nur unter Windows.
 - `rendered` für Tests, deren Grün an einem **Erzeugerlauf** hängt (Handbuch,
   Referenz, Abbildungsstempel). CI und reguläres Tor fahren sie nicht
   (Entscheidung Robert): Eine neue Operation macht sie rot, und was dann fehlt,
@@ -187,9 +188,8 @@ Millionen-Dreieck-Modell wird bei Bedarf erzeugt, nicht eingecheckt.
 (`cylinder(radius=2.6)` → Ø 5,2), aus dem Korpus (`data/README.md`) oder als
 Formel im Assert (`24000.0 - math.pi * 9.0 * 20.0`). Eine aus einem Lauf
 abgeschriebene Zahl trägt ihre Herleitung als Kommentar — oder sie ist ein
-Determinismusnachweis, und der Test sagt das. Druckgleich (§11.2) prüft
-`tests/print_equal.py`, zwei Codestände `tools/check_print_equal.py`. Zwei
-Vernetzungen gegeneinander zu halten fängt keinen Fehler, der beide gleich trifft.
+Determinismusnachweis, und der Test sagt das. Zwei Vernetzungen gegeneinander
+zu halten fängt keinen Fehler, der beide gleich trifft.
 
 ## Beim Schreiben
 

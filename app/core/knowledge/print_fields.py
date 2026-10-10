@@ -285,6 +285,51 @@ FIELDS: tuple[Field, ...] = (
             "Zeit und lohnt bei Sichtflächen."
         ),
     ),
+    Field(
+        "shell.thick_bridges",
+        _("Dicke Brücken"),
+        "shell",
+        kind="bool",
+        note=_(
+            "Legt Brücken als runde Bahnen in Düsenbreite. Sie tragen über eine lange Spanne, "
+            "sehen unten aber rauer aus."
+        ),
+    ),
+    Field(
+        "shell.bridge_flow",
+        _("Fluss bei Brücken"),
+        "shell",
+        unit="%",
+        minimum=0.5,
+        maximum=1.5,
+        step=0.05,
+        decimals=0,
+        factor=100.0,
+        note=_(
+            "Wie viel Material eine Brückenbahn bekommt. Etwas weniger zieht sie straff, und "
+            "sie hängt weniger durch."
+        ),
+    ),
+    Field(
+        "shell.overhang_walls",
+        _("Zusatzwände ohne Stütze"),
+        "shell",
+        kind="bool",
+        note=_(
+            "Legt unter flachen Überhängen ohne Stütze zusätzliche Wandbahnen, die an der Wand "
+            "darunter hängen. Sie halten besser als eine lose Brücke."
+        ),
+    ),
+    Field(
+        "shell.overhang_reverse",
+        _("Wandrichtung wechseln"),
+        "shell",
+        kind="bool",
+        note=_(
+            "Druckt Wände über steilen Überhängen in jeder zweiten Schicht andersherum. So "
+            "rollen sich ABS, ASA und TPU an der Kante weniger auf."
+        ),
+    ),
     # --- Füllung ---
     Field(
         "infill.density",
@@ -764,6 +809,16 @@ FIELDS: tuple[Field, ...] = (
         note=_(
             "Sperrt Stützen unter Rändern, die nur wenige Millimeter überstehen. Sie tragen "
             "sich selbst, und jede Stütze dort hinterließe eine Narbe."
+        ),
+    ),
+    Field(
+        "support.bridges",
+        _("Brücken stützen"),
+        "support",
+        kind="bool",
+        note=_(
+            "Stellt Stützen auch unter Decken, die der Slicer sonst frei überspannt. Lange "
+            "Brücken hängen ohne Stütze durch."
         ),
     ),
     # --- Haftung ---
