@@ -1347,6 +1347,7 @@ def _prepare_plate(job: _PlateJob, plate: int) -> PlateRun:
 
     def remember_comparison(
         parts: Sequence[tuple[SceneObject, MeshData, PrintSettings | None]],
+        heights: Mapping[str, tuple[float, ...]],
     ) -> None:
         nonlocal comparison
         # Die Zeitgegenprobe rechnet mit dem, was das Herstellerprofil über
@@ -1360,6 +1361,7 @@ def _prepare_plate(job: _PlateJob, plate: int) -> PlateRun:
             separate_objects=slicer_keys.reads_assembly_file(job.setup.flavour),
             cancelled=job.cancelled,
             motion=motion,
+            heights=heights,
         )
 
     written, findings = write_assembly(

@@ -46,6 +46,16 @@ Textkonvertierung. Damit liegt er in derselben vom Manifest gedeckten Grenze
 wie die anderen Exporte. `knowledge.parts.scad.to_scad` bleibt als Teil der
 MIT-Bibliothek unabhängig verwendbar.
 
+Aus der Karte verschoben (RM-586, Größenbudget): Der Anzeigename der aktiven
+Cura-Maschine kommt aus `machine_instances/*.global.cfg`, nicht aus der
+internen Instanzkennung. `writer._layer_heights` rechnet die Höhenkurve je Teil
+mit feinen Schichten am Exportnetz, ohne den Körper noch einmal zu schneiden,
+mit Raster und Bahn der Analyse, aus der der Rat kam; unter organischen Bäumen
+und neben einem Reinigungsturm lässt es sie mit Befund weg. `threemf` schreibt
+sie in beiden Schreibweisen (`PRUSA_LAYER_HEIGHTS_PATH`,
+`ORCA_LAYER_HEIGHTS_PATH`); `slicer_keys.AS_HEIGHT_PROFILE` nennt, was als
+Höhenkurve reist.
+
 ## Auf dem Herstellerprofil schreibt die Übergabe nur die Abweichung
 
 *Früher unter „Die Karte“.*

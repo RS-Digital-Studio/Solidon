@@ -226,18 +226,10 @@ Konstanten in Formelgestalt (`_cura_literal`).
   in der Beilage, Modell mit `slic3rpe:Version3mf`), CuraEngine als eigenes
   Netz mit `anti_overhang_mesh=true` (`slicer_keys.takes_mesh_settings`),
   Curas Fenster als Komponente neben ihrem Körper mit
-  `cura:anti_overhang_mesh`. Jede Familie druckt die fremde Schreibweise als
-  Kunststoff — geprüft wird an der **Modellbahn** mit und ohne Sperre, nicht
-  an der Stütze. Geschrieben nur in die direkte Übergabe, nie in eine
+  `cura:anti_overhang_mesh`. Nur in die direkte Übergabe, nie in eine
   gespeicherte 3MF.
-- **Feine Schichten reisen als Höhenkurve je Objekt** (`slicer_keys.AS_HEIGHT_PROFILE`,
-  `writer._layer_heights`): `Metadata/layer_heights_profile.txt` für die Orca-Familie,
-  `Metadata/Slic3r_PE_layer_heights_profile.txt` für PrusaSlicer, beide mit
-  `object_id=<Stelle ab eins>|z;h;…`. Die Kurve beginnt mit der ersten Schicht als zweitem
-  Wert (sonst verwirft die Orca-Familie sie), endet genau auf der Oberkante des Objekts
-  (Toleranz 0,001 mm) und wird am Exportnetz gerechnet. Unter organischen Bäumen und neben
-  einem Reinigungsturm lehnen die Slicer sie ab (`Print::validate`); dort entfällt sie mit
-  Befund. Cura nimmt keine Kurve.
+- **Feine Schichten reisen als Höhenkurve je Teil** (`AS_HEIGHT_PROFILE`,
+  `writer._layer_heights`); nicht unter Bäumen, am Turm (Befund), für Cura.
 - **CuraEngine bekommt kein 3MF, Curas Fenster schon** (`cura`): Für die
   Kommandozeile gibt `write_assembly` ein STL aller Teile der Platte, daneben
   je Teil ein Netz und eine Netzliste (`-s` nach `-l` gilt nur diesem Netz).

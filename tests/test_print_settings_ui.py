@@ -10724,7 +10724,7 @@ def test_plate_preparation_compares_the_final_writer_snapshot(
     passed = []
 
     def write(objects, folder, *, comparison, **_kwargs):
-        comparison(((body, body.mesh, effective),))
+        comparison(((body, body.mesh, effective),), {})
         return folder / "actual.3mf", []
 
     def compare(plate, parts, actual_profile, **kwargs):

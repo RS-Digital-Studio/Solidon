@@ -1191,7 +1191,13 @@ PLATE_ONLY_BY_PROGRAM: Final[dict[str, frozenset[str]]] = {
             "speed.outer_wall_acceleration",
         }
     ),
-    "superslicer": frozenset({"speed.acceleration", "speed.outer_wall_acceleration"}),
+    # SuperSlicer zählt die Mindestdicke der Deckschichten in Lagen der normalen
+    # Schicht: Mit feinen Schichten je Teil bewirkt sie dort nichts (Kuppe am
+    # Prusa-Mini: 1,2 mm verlangt, als Objekt- wie als Plattenwert 0,8 gedruckt,
+    # RM-586). Plattenweit bleibt sie die Lagenzahl der normalen Schicht.
+    "superslicer": frozenset(
+        {"speed.acceleration", "speed.outer_wall_acceleration", "shell.top_thickness"}
+    ),
     "bambustudio": frozenset({"speed.acceleration", "speed.outer_wall_acceleration"}),
     # Die regulären Rollenbreiten gehen je Netz, der Erstschichtfaktor nur
     # je Extruder. Unterschiedliche Breiten würden die unabhängige absolute
@@ -1710,6 +1716,19 @@ def limitation(
         )
     if trees and path in IGNORED_UNDER_TREES_BY_PROGRAM.get(program, frozenset()):
         return _("Unter Baumstützen druckt dieses Programm keine untere Trennschicht.")
+    # Eine Höhenkurve lehnen PrusaSlicer und die Orca-Familie unter organischen
+    # Bäumen ab (``Print::validate``, RM-586); die Übergabe lässt sie weg
+    # (``writer._layer_heights``), das Feld sagt dasselbe.
+    if (
+        trees
+        and settings is not None
+        and path == "layers.fine_layer_height"
+        and settings.layers.fine_layer_height > 0.0
+    ):
+        return _(
+            "Unter Baumstützen druckt der Slicer nur gleiche Schichten. Mit Gitterstützen "
+            "gelten die feinen."
+        )
     return None
 
 

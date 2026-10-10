@@ -56,7 +56,7 @@ eine Näherung mit ausgewiesener Herkunft, keine Rechnung.
 from __future__ import annotations
 
 import math
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
@@ -315,8 +315,15 @@ def plate_comparison(
     separate_objects: bool,
     cancelled: CancelToken | None = None,
     motion: Motion | None = None,
+    heights: Mapping[str, Sequence[float]] | None = None,
 ) -> PlateComparison:
     """Vollständige Analyse der exportierten Netze mit deren wirksamen Teilwerten.
+
+    ``heights`` sind die Höhenkurven, die die Übergabe je Teil schreibt
+    (``writer._layer_heights``, RM-586): Ein solches Teil hat die Lagen der
+    Kurve, nicht die des gleichmäßigen Rasters. Ohne sie meldete jede Übergabe
+    mit feinen Schichten „Modellschichten weichen ab“ (100 gegen 129 an einer
+    Kuppe neben einem Klotz, in allen sechs Programmen, die die Kurve lesen).
 
     Der Schreiber ruft diesen Weg erst nach der Auflösung aller Teilwerte auf.
     Eine gemeinsame Platte wird gemeinsam geschnitten: Material eines zweiten
@@ -375,6 +382,21 @@ def plate_comparison(
 
     all_indices = tuple(range(len(known)))
     arranged_apart = separate_objects and not keep_arrangement and len(known) > 1
+    curves = {
+        index: tuple(heights[entry.id])
+        for index, (entry, _mesh, _settings) in enumerate(known)
+        if heights is not None and len(heights.get(entry.id, ())) >= 4
+    }
+
+    def printed(index: int, settings: PrintSettings) -> SliceResult:
+        """Die Analyse eines Teils mit den Lagen, die der Slicer druckt."""
+        result = measure((index,), settings)
+        if index not in curves:
+            return result
+        from app.core.slice.fine_layers import printed_result
+
+        return printed_result(result, curves[index], meshes[index].bounds.minimum[2])
+
     seconds: float | None = None
     seconds_reason: TranslatableText | str = ""
     # **Ein Profil, das keine Brücken stützt, entscheidet selbst, was gestützt
@@ -393,21 +415,30 @@ def plate_comparison(
             "Das Herstellerprofil stützt keine Brücken, und welche Decke der Slicer "
             "als Brücke liest, rechnet nur er."
         )
+    elif curves and len(known) > 1:
+        # Gleiche Schichtnummern laufen nicht mehr zusammen: Der Slicer legt
+        # die Lagen jedes Teils nach seiner Kurve und druckt sie, wo sie sich
+        # in der Höhe treffen. Das rechnet nur er.
+        seconds_reason = _(
+            "Mit feinen Schichten an einzelnen Teilen legt der Slicer die Lagen der "
+            "Platte selbst, und die Druckzeit rechnet nur er."
+        )
     elif motion is not None and same_grid:
         from app.core.slice.print_time import plate_seconds
 
         # Je Teil sein eigener Schnitt mit seinen eigenen Werten; gleiche
         # Schichtnummern laufen zusammen (vom Bett an, auch wenn der Slicer
         # die Teile anders anordnet: Die Schichtzeit hängt nicht an der Lage).
+        # Ein Teil mit Höhenkurve mit den Lagen, die der Slicer daraus legt.
         seconds = plate_seconds(
             [
-                (measure((index,), settings), settings)
+                (printed(index, settings), settings)
                 for index, (_e, _m, settings) in enumerate(known)
             ],
             motion,
             cancelled=cancelled,
         )
-    if same_grid and not arranged_apart:
+    if same_grid and not arranged_apart and not curves:
         shared = measure(all_indices, first)
         model_layers = sum(layer.area > EPS_GEOM * EPS_GEOM for layer in shared.layers)
     else:
@@ -423,21 +454,35 @@ def plate_comparison(
                 return float(first_top)
             return layer.z + settings.layers.layer_height / 2.0
 
-        heights = sorted(
-            printed_height(layer, meshes[index], settings)
-            for index, (_entry, _mesh, settings) in enumerate(known)
-            for layer in measure((index,), settings).layers
-            if layer.area > EPS_GEOM * EPS_GEOM
+        # Ein Teil mit Höhenkurve zählt die Oberkanten, die der Slicer daraus
+        # legt (RM-586).
+        from app.core.slice.fine_layers import printed_tops
+
+        tops = sorted(
+            [
+                printed_height(layer, meshes[index], settings)
+                for index, (_entry, _mesh, settings) in enumerate(known)
+                if index not in curves
+                for layer in measure((index,), settings).layers
+                if layer.area > EPS_GEOM * EPS_GEOM
+            ]
+            + [
+                meshes[index].bounds.minimum[2] + top
+                for index, curve in curves.items()
+                for top in printed_tops(curve)
+            ]
         )
         model_layers = 0
         previous: float | None = None
-        for height in heights:
+        for height in tops:
             if previous is None or not is_close(height, previous):
                 model_layers += 1
                 previous = height
 
     if all(settings.support.style == "none" for _entry, _mesh, settings in known):
-        return PlateComparison(plate, 0.0, model_layers, seconds=seconds)
+        return PlateComparison(
+            plate, 0.0, model_layers, seconds=seconds, seconds_reason=seconds_reason
+        )
     if skipped_bridges:
         return PlateComparison(
             plate,
@@ -514,6 +559,7 @@ def plate_comparison(
             model_layers,
             _("Der Slicer bestimmt die gemeinsame Anordnung der Teile erst beim Slicen."),
             seconds=seconds,
+            seconds_reason=seconds_reason,
             support_floor_mm3=floor_mm3,
             channels_blocked=blocked,
             ledges_blocked=spared,
@@ -533,6 +579,7 @@ def plate_comparison(
                         model_layers,
                         _("Überlappende Teile haben unterschiedliche Stützeinstellungen."),
                         seconds=seconds,
+                        seconds_reason=seconds_reason,
                         support_floor_mm3=floor_mm3,
                         channels_blocked=blocked,
                         ledges_blocked=spared,
@@ -572,6 +619,7 @@ def plate_comparison(
                     model_layers,
                     _("Die gemeinsame Stützmenge mit diesen Stützbegrenzungen ist unbekannt."),
                     seconds=seconds,
+                    seconds_reason=seconds_reason,
                     support_floor_mm3=floor_mm3,
                     channels_blocked=blocked,
                     ledges_blocked=spared,
@@ -591,6 +639,7 @@ def plate_comparison(
         model_layers,
         arrangement_dependent=len(known) > 1,
         seconds=seconds,
+        seconds_reason=seconds_reason,
         support_floor_mm3=floor_mm3,
         channels_blocked=blocked,
         ledges_blocked=spared,

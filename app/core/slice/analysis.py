@@ -421,11 +421,15 @@ def slice_body(
 
     # Die flachen Schrägen je Schicht (RM-586), in Bändern um die Schnitte: von
     # der Unterkante bis zur Mitte zwischen zwei Schnitten, die letzte bis über
-    # die Oberkante. Die Orientierungssuche und die Stützmessung fragen sie nicht.
+    # die Oberkante. Die Stufe ist sichtbar, wo sie breiter als eine Bahn wird —
+    # die halbe Brückenbreite (zwei Bahnen). Die Orientierungssuche und die
+    # Stützmessung fragen sie nicht.
     stepped = (
         fine_layers.stepped_areas(
             mesh,
             np.concatenate(([low], (heights[1:] + heights[:-1]) / 2.0, [high + layer_height])),
+            layer_height,
+            span / 2.0,
             cancelled=cancelled,
         )
         if detail == "full"

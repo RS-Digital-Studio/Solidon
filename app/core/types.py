@@ -1238,8 +1238,8 @@ class LayerSettings:
 
     Wo genau, rechnet die Übergabe aus der Geometrie
     (:mod:`app.core.slice.fine_layers`): PrusaSlicer und die Orca-Familie
-    bekommen eine Höhenkurve in der 3MF, Cura seine eigene Automatik mit
-    dieser Höhe als Untergrenze. Dazwischen bleibt :attr:`layer_height`."""
+    bekommen eine Höhenkurve in der 3MF; Cura nimmt keine, und seine eigene
+    Automatik würde fast überall fein. Dazwischen bleibt :attr:`layer_height`."""
 
 
 @dataclass(frozen=True, slots=True)

@@ -8,9 +8,11 @@ geurteilt haben — jeder mit dem Körper, der sie widerlegt hat.
 from __future__ import annotations
 
 import math
+from collections.abc import Callable
 from dataclasses import replace
 from pathlib import Path
 
+import numpy as np
 import pytest
 import trimesh
 
@@ -1482,6 +1484,9 @@ def _fine_advice(
         mesh,
         settings.layers.layer_height,
         first_layer_height=settings.layers.first_layer_height,
+        # Wie Druckdialog und Export: zwei Bahnen des Profils als Brückenbreite,
+        # die halbe ist die Bahn, gegen die die Stufen gemessen werden.
+        bridge_from=profile.minimum_wall_thickness,
         support_volume=False,
     )
     return [
@@ -1503,6 +1508,102 @@ def test_a_dome_gets_fine_layers_with_the_extra_print_time() -> None:
     assert isinstance(share, int) and 1 <= share <= 30
     assert "%" in str(fine.reason)
     assert offered["shell.top_thickness"].value == pytest.approx(0.8)
+
+
+def _grooved(flank: float | None) -> MeshData:
+    """Ein Klotz 30 × 30 × 20 mit fünf Rillen quer über die Oberseite.
+
+    ``flank`` ist die Neigung der Rillenflanken gegen die Waagerechte in Grad;
+    ``None`` heißt senkrechte Wände und ebener Grund wie bei eingelassener
+    Schrift. Jede Rille ist 4 mm breit."""
+    from shapely.geometry import Polygon
+
+    block = trimesh.creation.box(extents=(30.0, 30.0, 20.0))
+    block.apply_translation((0.0, 0.0, 10.0))
+    cutters = []
+    for centre in (-10.0, -5.0, 0.0, 5.0, 10.0):
+        if flank is None:
+            cutter = trimesh.creation.box(extents=(32.0, 2.0, 2.0))
+            cutter.apply_translation((0.0, centre, 20.0))
+        else:
+            depth = 2.0 * math.tan(math.radians(flank))
+            # Das Dreieck liegt in (y, z) und wird entlang x gezogen.
+            outline = Polygon(
+                [(centre - 2.0, 20.01), (centre + 2.0, 20.01), (centre, 20.0 - depth)]
+            )
+            cutter = trimesh.creation.extrude_polygon(outline, 32.0)
+            cutter.apply_transform(
+                np.array(
+                    [
+                        [0.0, 0.0, 1.0, -16.0],
+                        [1.0, 0.0, 0.0, 0.0],
+                        [0.0, 1.0, 0.0, 0.0],
+                        [0.0, 0.0, 0.0, 1.0],
+                    ]
+                )
+            )
+        cutters.append(cutter)
+    return MeshData.of(trimesh.boolean.difference([block, *cutters], engine="manifold"))
+
+
+def _flat_cone() -> MeshData:
+    """Ein Kegel mit 20° Neigung, Radius 20 mm: Stufen über die ganze Höhe."""
+    cone = trimesh.creation.cone(
+        radius=20.0, height=20.0 * math.tan(math.radians(20.0)), sections=256
+    )
+    return MeshData.of(cone)
+
+
+@pytest.mark.parametrize(
+    ("body", "wanted"),
+    [
+        (lambda: _dome(20.0), True),
+        (_flat_cone, True),
+        (lambda: _grooved(15.0), True),
+        (lambda: _dome(6.0), False),
+        (lambda: _grooved(45.0), False),
+        (lambda: _grooved(None), False),
+    ],
+    ids=[
+        "Kuppe R20",
+        "Kegel 20°",
+        "flache Rillen 15°",
+        "kleine Kuppe R6",
+        "Rillen 45°",
+        "Rillen senkrecht",
+    ],
+)
+def test_fine_layers_where_steps_would_show_and_nowhere_else(
+    body: Callable[[], MeshData], wanted: bool
+) -> None:
+    """Feine Schichten nur, wo flache Schrägen über einen ganzen Übergang so
+    dicht liegen wie auf der kleinsten Kuppe mit zwei Stufen: an einer großen
+    Kuppe, einem flachen Kegel, flachen Rillen. Nicht an einer kleinen Kuppe
+    (ihr Scheitel ist 0,58 mm hoch), nicht an Rillen mit 45°-Flanken (die
+    Stufe ist schmaler als eine Bahn) und nicht an Rillen mit senkrechten
+    Wänden wie eingelassener Schrift — dort liegt jede Schicht genau."""
+    offered = {entry.path for entry in _fine_advice(body(), flavour="orca")}
+    assert ("layers.fine_layer_height" in offered) is wanted, offered
+
+
+@pytest.mark.parametrize(("layer", "wanted"), [(0.2, None), (0.28, 0.14)])
+def test_the_step_limit_follows_the_layer_height(layer: float, wanted: float | None) -> None:
+    """Ein Kegel mit 30° Neigung: Bei 0,2 mm Schicht ist die Stufe
+    0,2 / tan 30° = 0,35 mm breit, schmaler als die Bahn von 0,42 mm — kein
+    Rat. Bei 0,28 mm sind es 0,48 mm, und auf jeder Stufe liegt eine eigene
+    Deckbahn: feine Schichten zu 0,14 mm."""
+    profile = profiles.make_profile()
+    settings = print_settings.with_path(
+        print_settings.resolve(profile), "layers.layer_height", layer
+    )
+    cone = trimesh.creation.cone(
+        radius=20.0, height=20.0 * math.tan(math.radians(30.0)), sections=256
+    )
+    offered = {
+        entry.path: entry.value
+        for entry in _fine_advice(MeshData.of(cone), settings, flavour="orca")
+    }
+    assert offered.get("layers.fine_layer_height") == wanted
 
 
 def test_a_box_gets_no_fine_layers() -> None:

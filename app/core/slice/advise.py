@@ -1642,14 +1642,17 @@ def _fine_layers(
         or not result.layers
     ):
         return []
+    # Auch mit einer schon gewählten feinen Höhe nur für ein Teil mit feinen
+    # Formen: Ein Würfel daneben bekommt keine Kurve und braucht keine dickere
+    # Oberseite.
+    bands = fine_layers.layer_bands(result, layer)
+    if not bands:
+        return []
     advice: list[SettingAdvice] = []
     fine = settings.layers.fine_layer_height
     if fine <= EPS_GEOM:
         candidate = fine_layers.fine_height(layer, profile.printer.nozzle_diameter)
         if candidate is None:
-            return []
-        bands = fine_layers.layer_bands(result.layers, layer)
-        if not bands:
             return []
         first = settings.layers.first_layer_height
         bottom = result.layers[0].z - first / 2.0
@@ -1676,6 +1679,9 @@ def _fine_layers(
             )
         )
         fine = candidate
+    elif fine >= layer - EPS_GEOM:
+        # Nicht feiner als die normale Schicht: Die Übergabe schreibt keine Kurve.
+        return []
     minimum = fine_layers.TOP_SHELL_MINIMUM
     if (
         settings.shell.top_layers * fine < minimum - EPS_GEOM

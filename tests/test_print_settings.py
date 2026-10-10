@@ -9802,6 +9802,52 @@ def test_the_field_says_what_trees_do_to_it(
     assert (note is not None) is said, note
 
 
+@pytest.mark.parametrize(
+    ("flavour", "executable", "said"),
+    [
+        ("orca", "elegoo-slicer.exe", True),
+        ("orca", "bambu-studio.exe", True),
+        ("prusa", "prusa-slicer.exe", True),
+        ("prusa", "superslicer.exe", False),
+        ("cura", "CuraEngine.exe", False),
+    ],
+)
+def test_the_fine_layer_field_says_that_trees_print_even_layers(
+    monkeypatch: pytest.MonkeyPatch, flavour: str, executable: str, said: bool
+) -> None:
+    """Unter organischen Bäumen lehnen PrusaSlicer und die Orca-Familie eine
+    Höhenkurve ab, und die Übergabe lässt sie weg (RM-586). Das Feld sagt es,
+    solange feine Schichten gesetzt sind; SuperSlicer druckt statt Bäumen
+    Gitter, und Cura nimmt die Kurve ohnehin nicht."""
+    monkeypatch.setattr(handover, "_native_process", lambda _setup: {})
+    trees = print_settings.with_choice(
+        print_settings.resolve(profiles.make_profile()), "support.style", "tree"
+    )
+    fine = print_settings.with_choice(trees, "layers.fine_layer_height", 0.1)
+    setup = handover.SlicerSetup(executable=Path(executable), flavour=flavour)  # type: ignore[arg-type]
+    program = slicer_keys.program_of(setup.executable)
+    organic = handover.organic_styles(setup)
+
+    note = slicer_keys.limitation(
+        flavour,  # type: ignore[arg-type]
+        "layers.fine_layer_height",
+        fine,
+        program,
+        organic,
+    )
+    assert (note is not None) is said, note
+    assert (
+        slicer_keys.limitation(
+            flavour,  # type: ignore[arg-type]
+            "layers.fine_layer_height",
+            trees,
+            program,
+            organic,
+        )
+        is None
+    )
+
+
 def test_the_part_advice_memo_knows_the_tower() -> None:
     """Der letzte Rat je Teil bleibt am Netz (``writer.part_advice``), und der
     Turm gehört zu seinem Schlüssel (RM-622): Dasselbe Teil auf einer Platte

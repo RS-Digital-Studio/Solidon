@@ -2366,7 +2366,13 @@ def write_assembly(
     job: Sequence[SceneObject] | None = None,
     mesh_plan: tuple[dict[str, MeshData], bool] | None = None,
     before_write: Callable[[], None] | None = None,
-    comparison: Callable[[Sequence[tuple[SceneObject, MeshData, PrintSettings | None]]], None]
+    comparison: Callable[
+        [
+            Sequence[tuple[SceneObject, MeshData, PrintSettings | None]],
+            Mapping[str, tuple[float, ...]],
+        ],
+        None,
+    ]
     | None = None,
 ) -> tuple[Path, list[Finding]]:
     """Alles auf einer Platte in eine Baugruppendatei (§20, §29).
@@ -2605,12 +2611,18 @@ def write_assembly(
             )
             for item in everywhere
         ]
+    # Die Höhenkurven je Teil (RM-586) vor der Gegenprobe: Sie zählt die Lagen,
+    # die der Slicer daraus legt.
+    heights, height_findings = _layer_heights(
+        chosen, exported, part_values, profile, flavour, setup, towers, organic, cancelled
+    )
     # Die Gegenprobe liest genau diese Vernetzung und diese endgültigen
     # Teilwerte, einschließlich der auf alle Teile verteilten Empfehlungen.
     # Der Aufrufer arbeitet bereits neben Qt; kein zweiter Empfehlungsdurchgang.
     if comparison is not None:
         comparison(
-            tuple((entry, exported[entry.id], part_values[entry.id].effective) for entry in chosen)
+            tuple((entry, exported[entry.id], part_values[entry.id].effective) for entry in chosen),
+            heights,
         )
     # Die Sperre nennt sich selbst, mit dem Namen des Teils
     # (``export.support_blocker``); ein zweiter Satz dazu wäre derselbe.
@@ -2760,10 +2772,7 @@ def write_assembly(
                 entry, exported[entry.id], own_settings, profile, cancelled
             )
             findings += noted
-    heights, noted = _layer_heights(
-        chosen, exported, part_values, flavour, setup, towers, organic, cancelled
-    )
-    findings += noted
+    findings += height_findings
     parts = [
         threemf.AssemblyPart(
             mesh=exported[entry.id],
@@ -2946,6 +2955,7 @@ def _layer_heights(
     chosen: Sequence[SceneObject],
     exported: Mapping[str, MeshData],
     part_values: Mapping[str, _PartValues],
+    profile: Profile,
     flavour: SlicerFlavour,
     setup: SlicerSetup | None,
     towers: Collection[int],
@@ -2954,13 +2964,16 @@ def _layer_heights(
 ) -> tuple[dict[str, tuple[float, ...]], list[Finding]]:
     """Die Höhenkurve je Teil mit feinen Schichten (RM-586), für die 3MF.
 
-    Nur PrusaSlicer und die Orca-Familie lesen eine (Cura bekommt seine
-    Automatik als Wert, ``handover.as_mapping``). Gerechnet am Netz, das
-    hinausgeht (:func:`app.core.slice.fine_layers.profile_for`). Zwei Fälle
+    Nur PrusaSlicer und die Orca-Familie lesen eine; Cura nimmt keine
+    (``slicer_keys.NOT_TAKEN_BY``). Gerechnet am Netz, das hinausgeht, mit
+    Raster und Bahn der Analyse, aus der der Rat kam
+    (:func:`app.core.slice.fine_layers.profile_for`, Bahn = halbe Mindestwand
+    wie ``_body_analysis``) — ohne den Körper noch einmal zu schneiden. Zwei Fälle
     lehnt der Slicer ab, und dort entfällt die Kurve mit einem Satz: ein Teil
     unter organischen Bäumen und eine Platte mit Reinigungsturm, der gleiche
     Schichten für alle Teile verlangt (``Print::validate``).
     """
+    from app.core.knowledge import profiles as profile_table
     from app.core.slice import fine_layers
 
     heights: dict[str, tuple[float, ...]] = {}
@@ -3003,15 +3016,19 @@ def _layer_heights(
                 )
             )
             continue
-        profile = fine_layers.profile_for(
+        wall, _angle = profile_table.analysis_limits(
+            profile_table.for_process(profile, own, effective=True), entry
+        )
+        curve = fine_layers.profile_for(
             exported[entry.id],
             own.layers.layer_height,
             own.layers.fine_layer_height,
             None if own.adhesion.kind == "raft" else own.layers.first_layer_height,
+            wall / 2.0,
             cancelled=cancelled,
         )
-        if profile:
-            heights[entry.id] = profile
+        if curve:
+            heights[entry.id] = curve
     return heights, findings
 
 
