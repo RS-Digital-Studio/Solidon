@@ -7703,7 +7703,7 @@ def test_subdividing_a_cone_rim_does_not_invent_measured_circle_points() -> None
 
 
 def test_a_flat_face_reports_its_axis_whichever_triangle_comes_first() -> None:
-    """Eine erkannte achsparallele Fläche meldet genau ihre Achse, gleich welches Dreieck vorn steht.
+    """Eine erkannte achsparallele Fläche meldet genau ihre Achse, gleich welches Dreieck vorn ist.
 
     ``trimesh`` normiert über den Kehrwert der Länge; an der Dichtung gibt
     das je nach Dreieck ``±0.9999999999999999``. Die Vernetzung eines
@@ -7741,7 +7741,7 @@ def test_a_flat_face_reports_its_axis_whichever_triangle_comes_first() -> None:
 
 
 def _forbid_trimesh_normals(monkeypatch: pytest.MonkeyPatch, module: Any, name: str) -> list[int]:
-    """Während ``module.name`` läuft, ist ``trimesh``s ``face_normals`` gesperrt; zählt die Aufrufe."""
+    """Sperrt trimeshs ``face_normals``, solange ``module.name`` läuft; zählt die Aufrufe."""
     original = trimesh.Trimesh.face_normals
     inside = [0]
     calls = [0]
