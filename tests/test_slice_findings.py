@@ -3569,6 +3569,96 @@ def test_the_need_stops_in_the_channel_question_too() -> None:
     assert advise.support_need(result).needed
 
 
+class _StopAfter:
+    """Ein Abbruch nach ``after`` Abfragen, der sich merkt, in welcher Funktion
+    er griff — so prüft ein Test, dass eine Rechnung unterwegs abbricht und
+    nicht erst, wenn sie fertig ist."""
+
+    def __init__(self, after: int) -> None:
+        import threading
+
+        self.after = after
+        self.asked = 0
+        self.stopped_in: str | None = None
+        self._lock = threading.Lock()
+
+    @property
+    def is_cancelled(self) -> bool:
+        return self.asked >= self.after
+
+    def raise_if_cancelled(self) -> None:
+        import sys
+
+        from app.core.errors import OperationCancelled
+
+        with self._lock:
+            if self.asked >= self.after:
+                if self.stopped_in is None:
+                    self.stopped_in = sys._getframe(1).f_code.co_name
+                raise OperationCancelled
+            self.asked += 1
+
+
+@pytest.mark.parametrize("after", [0, 1, 10, 40])
+def test_the_report_stops_on_the_way_down_to_the_channel_floor(after: int) -> None:
+    """Nachprüfung zu RM-627 (L2): Der Bericht bricht in der Kanalfrage ab,
+    schon im Abstieg der Säulen bis zum Tunnelboden, nicht erst in der
+    Kreisfrage danach — am Drachen kostet der Abstieg bis 18 s. Die Randfrage
+    ist gemerkt und fragt nicht; abgebrochen wird weder die Kanalfrage noch
+    eine Brückenweite gemerkt."""
+    from app.core.errors import OperationCancelled
+    from app.core.slice import analysis
+
+    result = slice_body(_tunnel_beside(None), 0.2)
+    ledges(result)
+    token = _StopAfter(after)
+
+    with pytest.raises(OperationCancelled):
+        advise.located_warnings(result, petg(), cancelled=token)
+    assert token.stopped_in == "descend", "im Abstieg, vor der Kreisfrage"
+    assert not any(layers is result.layers for layers, *_rest in analysis._ANSWERS)
+    assert not any(layers is result.layers for layers, _known in analysis._BESIDE)
+    codes = {finding.code for finding in advise.located_warnings(result, petg())}
+    assert "slice.long_bridge" in codes, "danach rechnet der Bericht vollständig"
+
+
+def test_the_report_stops_in_the_span_beside_a_ledge() -> None:
+    """Nachprüfung zu RM-627 (L2): An der Flankenwand mit Konsole und Steg misst
+    der Bericht jede spannende Schicht ohne den Rand (``span_beside``, an der
+    Waschschüssel 2,8 s je Schicht) und fragt den Abbruch davor, nicht erst in
+    der Kanalfrage danach. Eine abgebrochene Messung wird nicht gemerkt."""
+    from app.core.errors import OperationCancelled
+    from app.core.slice import analysis
+
+    face = 20.0 + 2.0 * _FLANK
+    result = slice_body(
+        _flanked_shelf(
+            brick(3.0, 3.0, 20.0, (-(face + 21.5), 0.0, 10.0)),
+            brick(23.0, 3.0, 1.0, (-(face + 11.5), 0.0, 20.5)),
+        ),
+        0.2,
+    )
+    (index,) = [
+        number
+        for number, layer in enumerate(result.layers)
+        if layer.bridge_width > SPAN_INTERESTING
+    ]
+    edges = ledges(result)
+    token = _StopAfter(0)
+
+    with pytest.raises(OperationCancelled):
+        advise.located_warnings(result, petg(), cancelled=token)
+    assert token.stopped_in == "_beside", "vor der Messung neben dem Rand"
+    assert not any(layers is result.layers for layers, _known in analysis._BESIDE)
+
+    with pytest.raises(OperationCancelled):
+        span_beside(result, index, edges, cancelled=_StopAfter(0))
+    assert not any(layers is result.layers for layers, _known in analysis._BESIDE), (
+        "eine abgebrochene Messung ist keine Weite von 0 mm"
+    )
+    assert span_beside(result, index, edges) == pytest.approx(20.0, abs=1.0)
+
+
 def test_the_ledge_blocker_covers_the_ledge_and_spares_the_arm() -> None:
     """Die Sperre unter Rändern deckt deren Überhangfläche, nicht die des Arms
     gleich daneben, der Stütze braucht — sonst nähme sie ihm, was er verlangt."""
