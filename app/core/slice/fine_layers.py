@@ -107,10 +107,12 @@ def stepped_area_worth(layer_height: float, line: float) -> float:
     Fläche, und ihr flacher Scheitel unter :func:`step_slope` ist
     ``R·(1 - cos Grenze)`` hoch. Zwei Stufen verlangen ``R = 2h / (1 - cos
     Grenze)`` — bei 0,2 mm Schicht 4,1 mm, also 26 mm² je mm. Wirksam ist
-    bei einer Kuppe die Mindestlänge eines Bereichs (ein Übergang,
-    :func:`fine_bands`): Fein wird sie bei 0,2 mm Schicht ab etwa R 9 mm, bei
-    0,28 mm ab R 8 — darunter ist ihr flacher Scheitel kürzer als ein
-    Übergang (Review RM-586).
+    bei einer Kuppe die Mindestlänge (:func:`fine_bands`): Die Schichten,
+    deren über einen Übergang gemittelte Schrägfläche die Schwelle hält,
+    müssen zusammen einen Übergang lang sein. Bei 0,2 mm Schicht schafft das
+    eine Kuppe ab R 9,6 mm immer, unter R 8,3 nie, dazwischen je nach Lage
+    des Schichtrasters zum Scheitel; bei 0,28 mm ab R 7,8 immer
+    (Nachprüfung RM-586).
     """
     if layer_height <= EPS_GEOM:
         return math.inf

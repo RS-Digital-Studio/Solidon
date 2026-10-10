@@ -756,11 +756,15 @@ schneller durch, als hinaus und wieder hinein zu wechseln. Der Zwischenstand
 hatte 25° fest und 20 mm²/mm, am Drachen gewählt; mit der Herleitung fällt dort
 die Flügelkrümmung bei 105 mm weg (Schwelle 20: fünf Bereiche, 37 mm; 25,9:
 vier, 30 mm — Schwanz und Füße 2–15, Knie 42–44, Schultern 70–78, Kopf 111–118).
-Wirksam ist an einer Kuppe die Mindestlänge, nicht die Fläche (Review RM-586,
-F8): Bei 0,2 mm Schicht bekommen Halbkugeln R 6 und R 8 keine Kurve, erst R 9; bei
-0,28 mm ab R 8. Die Kappe R 8 trägt 39 mm² in einem Übergang (Schwelle 25,9), ihr
-Bereich ist aber 0,8 mm lang. Augen, Knöpfe und Schuppen unter etwa 18 mm
-Durchmesser bleiben gleichmäßig.
+Wirksam ist an einer Kuppe die Mindestlänge, nicht die Fläche (Review RM-586, F8,
+und Nachprüfung N2): Die Schichten, deren über einen Übergang gemittelte
+Schrägfläche die Schwelle hält, müssen zusammen einen Übergang lang sein. Dieser
+Bereich reicht über den flachen Scheitel nach unten (R 9: 8,0–9,0 mm bei 0,874 mm
+Scheitel) und ist in ganzen Schichten gequantelt; die Grenze hängt deshalb an der
+Lage des Rasters zum Scheitel. Halbkugeln in 0,1-mm-Schritten, Bahn 0,42: bei
+0,2 mm Schicht Kurve bei R 8,3, keine bei 8,4–8,9, Kurve bei 9,0–9,4, keine bei
+R 9,5 (Bereich 0,8 mm), ab R 9,6 immer; bei 0,28 mm wechselnd zwischen R 6,9 und
+7,7, ab R 7,8 immer. Kleinere Kuppen (Augen, Knöpfe) bleiben gleichmäßig.
 
 Die Grenze wird ohne Winkelfunktion entschieden (Review RM-586, F7): `cos² Grenze =
 Bahn² / (Bahn² + h²)`, verglichen als `lift² · (Bahn² + h²) > Bahn² · |n|²`, die
