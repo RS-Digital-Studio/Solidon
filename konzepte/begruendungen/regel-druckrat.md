@@ -602,27 +602,49 @@ sobald es genug ist: am Besenhalter 0,16 s statt 2,1 s.
 
 **Je Teil, nicht für die Platte** (Entscheidung Robert, 09.10.2026). Die Werte
 gehören dem Teil mit der Brücke oder dem Überhang. Gemessen mit zwei gleichen
-Teilen auf einer Platte, nur das linke mit Wert, Rat kontrolliert, Aufteilung,
-Schreiber und Slicer echt, Kerne gepinnt (`FFFFF0FF`), getrennt an den
-Objektmarken der Druckdatei:
+Teilen auf einer Platte, nur das linke mit Wert, jeweils weg von der Grundlage
+des Herstellerprofils; Rat kontrolliert, Aufteilung, Schreiber und Slicer echt,
+Kerne gepinnt (`FFFFF0FF`), getrennt an den Objektmarken der Druckdatei, bei
+Cura an der Lage (Sonde `.claude/.state/drache-2026-10-08/bruecken_je_teil.py`).
+Brücke 36 mm frei unter einem Deck von 20 × 3 mm, Auskragung 3 mm an einer Säule,
+ABS-Trichter mit 50 Grad:
 
-| Programm | Brückenstütze aus (Stütze mm, mit / ohne Wert) | dicke Brücke und 70 % (Brückenförderung mm) | Zusatzwände (Brückenbahn mm) | Umkehr (Drehwechsel) |
-|---|---|---|---|---|
-| PrusaSlicer 2.9.6 | 0 / 4 804 | 5,27 / 3,83 | 996 / 1 254 | kennt es nicht |
-| OrcaSlicer 2.4.2 | 0 / 4 778 | 4,52 / 3,30 | 1 067 / 1 403 | 99 / 0 |
-| ElegooSlicer 1.5.3.5 | 0 / 5 113 | 2,20 / 3,57 | 1 007 / 1 303 | 99 / 0 |
-| Creality Print 7.3 | 0 / 4 775 | 5,16 / 4,21 | 1 139 / 1 399 | 98 / 0 |
-| Anycubic Slicer Next 2.0 | 0 / 7 585 | 5,15 / 3,89 | ohne Wirkung | 1 / 0 (dreht jede Schicht) |
-| Bambu Studio 02.08 | 0 / 5 090 | 5,34 / 3,63 | kennt es nicht | kennt es nicht |
-| SuperSlicer 2.5.59 | 5 578 / 5 578 | kennt es nicht | kennt es nicht | kennt es nicht |
-| CuraEngine 5.13 | kennt es nicht | kennt es nicht | kennt es nicht | kennt es nicht |
+| Programm (Drucker) | Brückenstütze aus (Stütze mm) | dicke Brücke (Förderung je mm Brückenbahn) | Fluss 0,7 (ebenso) | Zusatzwände (Brückenbahn mm) | Umkehr (Drehwechsel) |
+|---|---|---|---|---|---|
+| OrcaSlicer 2.4.2 (K1 Max) | 0 / 17 912 | 0,0461 / 0,0262 | 0,0204 / 0,0262 | 0 / 335 | 99 / 0 |
+| ElegooSlicer 1.5.3.5 (Neptune 4) | 0 / 18 984 | 0,0497 / 0,0282 | 0,0198 / 0,0282 | 0 / 296 | 99 / 0 |
+| Creality Print 7.3 (K1 Max) | 0 / 17 912 | 0,0455 / 0,0272 | 0,0210 / 0,0272 | 75 / 335 | 98 / 0 |
+| Anycubic Slicer Next 2.0 (Kobra 2) | 0 / 55 435 | 0,0463 / 0,0279 | 0,0215 / 0,0279 | nicht geschrieben (ohne Wirkung) | 1 / 0 (dreht jede Schicht) |
+| Bambu Studio 02.08 (A1) | 0 / 18 963 | 0,0515 / 0,0413 | 0,0283 / 0,0413 | kennt es nicht | kennt es nicht |
+| PrusaSlicer 2.9.6 (MK4S) | 0 / 22 358 | 0,0529 / 0,0443 | 0,0301 / 0,0443 | 996 / 1 254 | kennt es nicht |
+| SuperSlicer 2.5.59 (Mini) | nicht geschrieben, 9 748 / 9 748 | kennt es nicht | kennt es nicht | kennt es nicht | kennt es nicht |
+| CuraEngine 5.13 (Ender 3 V3 SE) | kennt es nicht, 20 349 / 20 586 | kennt es nicht | kennt es nicht | kennt es nicht | kennt es nicht |
 
-Mit dem Wert an beiden Teilen zeigen beide die Wirkung (Creality Print:
-Brückenstütze aus 0 / 0, Förderung 5,16 / 5,16). Ein Programm, das einen der
-Werte nimmt, nimmt ihn also je Objekt; plattenweit bleibt keiner. SuperSlicer
-stützt die Brücke mit `dont_support_bridges` 0 und 1 gleich, auch an beiden
-Teilen, und bekommt den Schlüssel nicht mehr. Was eine Familie gar nicht nimmt,
-gilt im Split auch nicht als „nur plattenweit“: Cura hätte sonst an jedem anderen
-Teil eine Übernahme gemeldet, die es nie druckt. Die Lagetrennung allein führte
-in die Irre: Creality Print ordnet die Teile entlang Y an, und eine Trennung in X
-mischte beide Teile.
+Brückentempo und Brückenlüfter sind an beiden Teilen gleich (etwa OrcaSlicer
+30 mm/s und 255, PrusaSlicer 50 mm/s und 255); sie gehen je Spule hinaus, nicht
+je Teil. Gegenprobe am Stand davor: Dort gingen die Werte auf die Platte, und
+beide Teile zeigten die Wirkung (OrcaSlicer Brückenstütze aus 0 / 0, dicke
+Brücke 0,0461 / 0,0461; ebenso PrusaSlicer und Bambu Studio). Ein Programm, das
+einen der Werte nimmt, nimmt ihn also je Objekt; plattenweit bleibt keiner.
+
+Über den echten Rat (zwei verschiedene Teile, übernommen, was der Rat beider
+vorschlägt, außer der Stützart): Ohne Stützen bekommt nur die lange Brücke mit
+Auskragung dicke Bahnen, 0,9 Fluss, wo der Hersteller mehr hat, und Zusatzwände;
+die kurze Brücke von 8 mm daneben behält die Platte (OrcaSlicer 0,0461 / 0,0262,
+ElegooSlicer 0,0447 / 0,0282, PrusaSlicer 0,0485 / 0,0468). Am ABS-Trichter neben
+einem Zylinder dreht nur der Trichter (OrcaSlicer, ElegooSlicer 99 / 0, Creality
+Print 98 / 0). Die Brückenstütze schlägt der Rat nur vor, wo das Herstellerprofil
+Brücken nicht stützt: am Kobra 2 in OrcaSlicer (`bridge_no_support = 1`) bekommt
+die lange Brücke sie, eine Brücke von 4 mm daneben nicht (Stütze 49 789 gegen
+867 mm; am Stand davor 8 393 mm ohne die Brückenstütze). Die Herstellerprofile der
+übrigen gemessenen Drucker und Solidons eigener Satz stützen Brücken ohnehin.
+
+SuperSlicer stützte die Brücke mit `dont_support_bridges` 0 und 1 gleich, auch an
+beiden Teilen, und bekommt den Schlüssel nicht mehr. Was eine Familie gar nicht
+nimmt, gilt im Split auch nicht als „nur plattenweit“: Cura hätte sonst an jedem
+anderen Teil eine Übernahme gemeldet, die es nie druckt. Die Lagetrennung allein
+führte in die Irre: Creality Print ordnet die Teile mal entlang Y, mal schräg an,
+und eine Trennung in X oder Y mischte beide Trichter. Getrennt wird an den
+Objektmarken: `; printing object` (Anycubic Slicer Next mit Anführungszeichen),
+`M486` bei PrusaSlicer, bei Bambu Studio die Kennungen aus `; model label id`
+in der Ladefolge.

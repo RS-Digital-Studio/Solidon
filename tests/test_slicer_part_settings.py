@@ -614,9 +614,11 @@ def test_file_export_without_program_only_promises_shared_object_capabilities(
 # geschrieben 0,4 gegen 0,2 mm und so weiter, gemessen je Programm in
 # ``konzepte/begruendungen/regel-druckrat.md``; Cura nimmt die Lücke nicht je Netz.
 # Brückenstütze, dicke Brücken, Brückenfluss, Zusatzwände und Umkehr (RM-587) belegt
-# dieselbe Bauart mit Brücke, Auskragung und ABS-Trichter in allen acht Programmen:
-# Wirkung nur am Teil mit dem Wert (Brückenstütze in OrcaSlicer 0 gegen 4 778 mm),
-# Messwerte ebenfalls in der Begründung; Cura und SuperSlicer nehmen keinen. Die
+# dieselbe Bauart mit Brücke, Auskragung und ABS-Trichter in allen acht Programmen
+# (``bruecken_je_teil.py``): Wirkung nur am Teil mit dem Wert (Brückenstütze in
+# OrcaSlicer 0 gegen 17 912 mm), Messwerte ebenfalls in der Begründung; Cura und
+# SuperSlicer nehmen keinen. Den Brückenfluss hält ``test_real_slicers.py`` im
+# echten Programm je Teil. Die
 # Menge wird absichtlich nicht aus PART_PATHS oder den Schlüsseltabellen
 # gebaut: ein neuer Pfad braucht einen eigenen Wirkungsnachweis.
 MEASURED_PART_PATHS = frozenset(
@@ -759,7 +761,7 @@ def test_bridges_and_overhangs_go_only_to_the_part_that_asks(
     """RM-587: Brückenstütze, dicke Brücken, Brückenfluss, Zusatzwände und Umkehr
     gehören dem Teil mit der Brücke oder dem Überhang. Gemessen in acht Programmen
     mit zwei Teilen, nur eines mit Wert: Wirkung nur dort (Brückenstütze in
-    OrcaSlicer 0 gegen 4 778 mm, PrusaSlicer 0 gegen 4 804). Die Platte behält die
+    OrcaSlicer 0 gegen 17 912 mm, PrusaSlicer 0 gegen 22 358). Die Platte behält die
     Grundlage, das zweite Teil bekommt keinen Objektwert und keinen Befund."""
     profile = profiles.make_profile("generic-220", "pla")
     settings = print_settings.resolve(profile)
