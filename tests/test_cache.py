@@ -4314,3 +4314,34 @@ def test_lists_tuples_and_numbers_keep_their_type_on_the_disk(tmp_path: Path) ->
     assert repr(stored.found) == repr({"hole_1": feature})
     assert (stored.left_out, stored.unreadable, stored.freeform) == (3, 1, True)
     assert str(stored.found["hole_1"].params["axis"][1]) == "-0.0"
+
+
+def test_a_moved_body_keeps_its_carried_measures_through_the_disk(tmp_path: Path) -> None:
+    """Gedrehte Normalen und übernommene Flächen reisen mit dem bewegten Netz (§15.1).
+
+    Die Erkennung liest sie (``features._detection_key``); ohne sie auf der Platte
+    erkannte ein wiedergeöffnetes Projekt aus frisch gerechneten Normalen, in der
+    letzten Stelle anders als in der Sitzung (an der Profilklemme andere
+    Objekthashes nach *Einlagen wechseln*).
+    """
+    import numpy as np
+
+    from app.core.geom.mesh import MeshCodec
+    from app.core.geom.transform import CARRIED_METRICS, apply
+    from app.core.perceive import features
+
+    mesh = _detection_corpus("plate_holes.stl")
+    _ = mesh.raw.face_normals, mesh.raw.area_faces, mesh.raw.facets
+    matrix = np.eye(4)
+    matrix[:3, 3] = (12.5, -3.25, 4.0)
+    moved = apply(mesh, matrix)
+    assert moved.raw._cache.cache.get(CARRIED_METRICS)
+    disk = DiskCache(codec=MeshCodec(), directory=tmp_path)
+    disk.put("moved", CachedResult(objects=(SceneObject(id="obj_1", name="Platte", mesh=moved),)))
+
+    restored = disk.get("moved")
+
+    assert restored is not None
+    back = restored.objects[0].mesh
+    assert features._detection_key(back) == features._detection_key(moved)
+    assert back.raw._cache.cache.get(CARRIED_METRICS) == moved.raw._cache.cache.get(CARRIED_METRICS)

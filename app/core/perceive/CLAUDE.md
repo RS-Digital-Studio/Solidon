@@ -8,8 +8,8 @@ aufgelöst (§15.7, Regel 21).
 Die Regeln: `.claude/rules/schichtanalyse.md` (Erkennung, Freiform,
 Formtoleranz, Verengung, Hohlraum, Muster, Panel), `kern.md` (Nummerierung,
 gemerkte und örtliche Fragen, Merker über die Körpergrenze), `operationen.md`
-(beide Kerne sagen dasselbe), `gruppen.md` (funktionale Gruppen). Ausführliches, Messwerte und Anlässe unter
-denselben Überschriften: `konzepte/begruendungen/karte-app-core-perceive.md`.
+(beide Kerne sagen dasselbe), `gruppen.md` (funktionale Gruppen). Messwerte und
+Anlässe: `konzepte/begruendungen/karte-app-core-perceive.md`.
 
 ## Die Karte
 
@@ -19,8 +19,8 @@ denselben Überschriften: `konzepte/begruendungen/karte-app-core-perceive.md`.
 | `refine.py` | Der Löser der Rundformen im Stapel (RM-209): `exhausted` sagt für viele Kegel- und Ringverfeinerungen zugleich, welcher Lauf sein Budget sicher ausschöpft — mit Abständen zu jedem Zweig, zu jedem Abbruch und einem Schattenlauf; die Blockzahl hält die kalibrierte Spitzenschätzung mit `BATCH_PEAK_FACTOR` innerhalb `BATCH_BYTES`; `_run` meldet nach jeder Solverrunde; `solve` ist SciPys `least_squares` auf diesem Weg, bitgleich nachgebaut, und rechnet jeden Lauf mit Ableitung (`features._refined_fit`); `_vector_norm` führt dessen reelle Vektornorm unmittelbar als Skalarprodukt und Wurzel aus, mit unveränderter Rechenfolge |
 | `helix.py` | Gewinde am eingelesenen Netz: Spektrum `_best_pitch` (beide Vorzeichen), Kantenleser `_measured_helix`; was eine Wendel verschluckt, sagt `features.without_phantoms_on` für beide Kerne. Bausteingewinde laufen nie hindurch (§24.1) |
 | `slots.py` | Langlöcher, topologisch: zwei Halbzylinder, zwei ebene Flanken (Gegenprobe `tests/test_slot_features.py`); `slots_from_stadiums`, `open_slots_instead_of_fillets`, `native_open_slot_measures`, Paarsuche `_PairPlan` |
-| `grouped.py` | Summen je Gruppe in einem Zug, Bit für Bit wie `sum` je Gruppe (P5) |
-| `parallel.py` | Arbeiter rechnen Runden von `_fitted` an einer Kopie vor; Ergebnis Bit für Bit (RM-637) |
+| `grouped.py` | Gruppensummen in einem Zug, Bit für Bit wie `sum` (P5) |
+| `parallel.py` | Arbeiter rechnen Runden von `_fitted` vor, Bit für Bit (RM-637) |
 | `patterns.py` | Muster (§25): Erkennung `find_patterns` und ausdrückliche Zusammenfassung `grouped_pattern` über dieselbe Zellenlesung `_read_cells`, Absagen `group_refusal`; `Frame`, Stopfen `plug_for`, Feld `field_outline` für `remove_feature`/`resize_feature` in `geom/prepare_ops.py`; `carrier_of` findet den Träger über Ebene oder Achse, nie über eine Kennung; `cylinder_facet_groups` ordnet die Mantelnormalen plattformgleich über die Winkelnaht, `cylinder_facet_lines` liest daraus die achsparallelen Facettengeraden — dieselben für Stopfen (`FacetPolygon` mit Ecken am Schnitt der Facetten, Stirnenden `Frame.ends`) und Quellausrichtung |
 | `relations.py` | Nachbarschaften: Hohlraumketten (unten), Rohrwand (`sleeve_at`, `thinnest_sleeve`), Dreieckseigentum (`cell_owner_table`, `CONTESTED`), Gleichartigkeit (`alike_for_actions`, `_same_surface_patch`), Gruppensätze (`group_evidence_texts`, `group_reason_texts` — das Panel liest sie von hier) |
 | `groups.py` | Funktionale Gruppen (Dateiaudit §7): Kammer, Tasche, Nut, Kanal, Anschluss, Gewinde mit Einlauf und Schulter, Bajonett und Rastung (auch runde Mulden), Scharnier, Steckaufnahme, Schrift — `functional_groups` (je Netz und Merkmalsliste gemerkt, geteilt), `chamber_region` für *Kammer ändern*, `reason_against_group` (mit `trough_walls`) als Absage für Fenster und Operation; für *Verschluss ändern* je Stellung (`stations`) `closure_flanks`, `closure_pairs`, `closure_stops` und die Absagen `reason_against_play`/`_turn`/`_closure_change`; ein Merkmal steht in höchstens einer Gruppe, Bausteinmerkmale in keiner |
@@ -85,13 +85,13 @@ Frage; der Aufrufer legt fest, welche Antwort ohne eindeutigen Beleg schützt.
   ein unbelegbarer Träger bleibt eine ausdrückliche Ablehnung.
 - **Erst der Merker.** Die Auswertung fragt vor jeder Erkennung
   (`scene.evaluate._with_features`): `detect` legt jede vollständige Erkennung
-  unter `_detection_key` ab (Netzabdruck samt mitgetragener Maße); `carry_detection` (starr bewegt, Beleg `moved_twin`;
-  ohne gemeldete Matrix nennt der Bewegungsvermerk `note_movement` aus
-  `geom.transform.apply` Eingang und Matrix, geglaubt über `moved_from`, auf
-  der Platte als `moved_from` im Eintrag),
+  unter `_detection_key` ab (Netzabdruck samt mitgetragener Maße), mit
+  `store` auch im Plattencache (RM-695); `carry_detection` (starr bewegt, Beleg
+  `moved_twin`, sonst der Vermerk `note_movement` aus `geom.transform.apply`,
+  geglaubt über `moved_from`),
   `carry_refined_detection` (feiner geteilt, `note_refinement`, Beleg
-  `refined_twin`; der Vermerk reist als `<n>.origin.npy` durch den
-  Plattencache) und `known_detection` (Live-Vorschau) antworten ohne Rechnung.
+  `refined_twin`, auf der Platte `<n>.origin.npy`) und `known_detection`
+  (Live-Vorschau) antworten ohne Rechnung.
 - **Vergebliche Löserläufe entfallen im Stapel**: Vor jeder Runde (ganze
   Flecken, Stücke, Mantelnachweis) legt `_screened_fits` Plan und Urteil
   aller Kegel- und Ringläufe in `_SCREENED` (`_screening`), dazu je Fleck

@@ -491,7 +491,10 @@ _REFUSALS_KEPT: Final = 256
 #:   älterer Eintrag gäbe Tupel als Listen zurück.
 #: - 58: Paket E auf dem Stand von welle3 (``fcac08701``: D, I, L3); trennt ihn
 #:   von den Ergebnissen der einzelnen Zweige.
-CACHE_FORMAT_VERSION: Final = 58
+#: - 59 (RM-695): Ein bewegtes Netz trägt seine mitgetragenen Maße auf der
+#:   Platte (``_carried_to_disk``). Ein älterer Eintrag gäbe es ohne sie zurück,
+#:   und die Erkennung läse andere letzte Stellen als in der Sitzung.
+CACHE_FORMAT_VERSION: Final = 59
 
 
 @dataclass(frozen=True, slots=True)
@@ -1300,6 +1303,131 @@ def _movement_to_disk(mesh: Mesh) -> list[dict[str, Any]] | None:
     ]
 
 
+#: Die Endung der mitgetragenen Maße eines bewegten Netzes neben seinem Netz.
+_CARRIED_SUFFIX: Final = ".carried.npz"
+
+
+def _carried_to_disk(folder: Path, position: int, mesh: Mesh) -> dict[str, Any] | None:
+    """Legt die Maße neben das Netz, die eine starre Bewegung vom Quellnetz mitträgt.
+
+    Gedrehte Normalen, übernommene Flächen und Facetten folgen nicht Bit für Bit
+    den Ecken (``geom.transform._carry_cache``), und die Erkennung liest sie
+    (``perceive.features._detection_key``). Ohne sie auf der Platte erkannte ein
+    wiedergeöffnetes Projekt an einem bewegten Körper aus frisch gerechneten
+    Normalen — in der letzten Stelle andere Flächenmitten, andere Objekthashes
+    als in der Sitzung (§15.1, an der Profilklemme nach *Einlagen wechseln*).
+    Ein Wert, den diese Ablage nicht kennt, lässt die Maße aus; dann rechnet die
+    Erkennung wie vor RM-695.
+    """
+    import io
+
+    import numpy as np
+
+    from app.core.geom.mesh import MeshData
+    from app.core.geom.transform import CARRIED_METRICS
+
+    if not isinstance(mesh, MeshData):
+        return None
+    cache = mesh.raw._cache
+    names = cache.cache.get(CARRIED_METRICS)
+    if not names:
+        return None
+    arrays: dict[str, np.ndarray] = {}
+    kinds: dict[str, str] = {}
+    for name in names:
+        value = cache.cache.get(name)
+        if isinstance(value, np.ndarray):
+            kinds[name] = "array"
+            arrays[f"a:{name}"] = value
+        elif type(value) is float:
+            kinds[name] = "float"
+            arrays[f"a:{name}"] = np.asarray(value, dtype=np.float64)
+        elif isinstance(value, np.floating):
+            kinds[name] = "numpy_float"
+            arrays[f"a:{name}"] = np.asarray(value)
+        elif isinstance(value, list) and all(isinstance(item, np.ndarray) for item in value):
+            kinds[name] = "list"
+            arrays[f"o:{name}"] = np.asarray([len(item) for item in value], dtype=np.int64)
+            arrays[f"s:{name}"] = np.asarray(
+                [item.shape[1:] for item in value] or [()], dtype=np.int64
+            ).reshape(len(value), -1)
+            arrays[f"d:{name}"] = (
+                np.concatenate([item.reshape(-1) for item in value])
+                if value
+                else np.zeros(0, dtype=np.float64)
+            )
+            arrays[f"t:{name}"] = np.asarray(
+                [item.dtype.str for item in value] or ["<f8"], dtype="<U8"
+            )
+        else:
+            return None
+    file = f"{position}{_CARRIED_SUFFIX}"
+    buffer = io.BytesIO()
+    np.savez(buffer, allow_pickle=False, **arrays)
+    (folder / file).write_bytes(buffer.getvalue())
+    return {"file": file, "names": list(names), "kinds": kinds}
+
+
+def _carried_from_disk(folder: Path, record: Any, mesh: Mesh) -> None:
+    """Legt gelesene mitgetragene Maße wieder an das Netz, samt ihrem Vermerk.
+
+    Geprüft wird die Form; ein beschädigter Eintrag wirft einen der Fehler aus
+    :data:`_DAMAGED_ENTRY` und wird neu gerechnet.
+    """
+    import io
+
+    import numpy as np
+
+    from app.core.geom.mesh import MeshData
+    from app.core.geom.transform import CARRIED_METRICS
+
+    if not isinstance(mesh, MeshData) or not isinstance(record, dict):
+        raise TypeError("carried")
+    file = str(record["file"])
+    names = [str(name) for name in record["names"]]
+    kinds = dict(record["kinds"])
+    if Path(file).name != file or not file.endswith(_CARRIED_SUFFIX):
+        raise ValueError("carried")
+    values: dict[str, Any] = {}
+    with np.load(io.BytesIO((folder / file).read_bytes()), allow_pickle=False) as data:
+        for name in names:
+            kind = kinds[name]
+            if kind == "array":
+                values[name] = np.array(data[f"a:{name}"])
+            elif kind == "float":
+                values[name] = float(data[f"a:{name}"])
+            elif kind == "numpy_float":
+                values[name] = data[f"a:{name}"][()]
+            elif kind == "list":
+                lengths = data[f"o:{name}"]
+                tails = data[f"s:{name}"]
+                types = data[f"t:{name}"]
+                flat = data[f"d:{name}"]
+                items = []
+                start = 0
+                for length, tail, dtype in zip(lengths, tails, types, strict=True):
+                    shape = (int(length), *(int(size) for size in tail))
+                    count = int(np.prod(shape))
+                    items.append(
+                        np.array(flat[start : start + count], dtype=np.dtype(str(dtype))).reshape(
+                            shape
+                        )
+                    )
+                    start += count
+                if start != len(flat):
+                    raise ValueError("carried")
+                values[name] = items
+            else:
+                raise ValueError("carried")
+    if len(np.asarray(values.get("face_normals", mesh.raw.faces))) != len(mesh.raw.faces):
+        raise ValueError("carried")
+    cache: Any = mesh.raw._cache
+    cache.verify()
+    cache.update(values)
+    cache.cache[CARRIED_METRICS] = tuple(names)
+    cache.id_set()
+
+
 def _movement_from_disk(record: Any, mesh: Mesh) -> None:
     """Legt einen gelesenen Bewegungsvermerk wieder an das Netz.
 
@@ -1559,6 +1687,8 @@ class DiskCache:
                     _refinement_from_disk(folder, entry["refined_from"], mesh)
                 if "moved_from" in entry:
                     _movement_from_disk(entry["moved_from"], mesh)
+                if "carried" in entry:
+                    _carried_from_disk(folder, entry["carried"], mesh)
                 _warm_figures(mesh)
                 objects_list.append(
                     SceneObject(
@@ -1684,6 +1814,9 @@ class DiskCache:
                 moved = _movement_to_disk(entry.mesh)
                 if moved is not None:
                     record["moved_from"] = moved
+                carried = _carried_to_disk(folder, position, entry.mesh)
+                if carried is not None:
+                    record["carried"] = carried
                 entries.append(record)
             payload: dict[str, Any] = {"format_version": CACHE_FORMAT_VERSION, "objects": entries}
             if result.findings:

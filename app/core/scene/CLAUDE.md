@@ -239,10 +239,10 @@ Merkmalen. Der Empfänger ordnet Callbackmeldungen der Auftragsrevision zu.
   (`load_detection`). **Nicht geprüft wird die Dreieckszahl**: Der Cache
   trägt die **rohe** Ausgabe; erst `_with_features` bindet, Vorbereitetes
   cacht er nie. `_warm_figures` fasst Kennzahlen im Arbeiter an. Exakte
-  Körper bleiben im Speicher, neu belegte Träger rechnen neu;
-  Teilungsvermerke liegen neben dem Netz (`_refinement_to_disk`),
-  Bewegungsvermerke im Eintrag (`moved_from`) — Zusagen, die erst die
-  Erkennung am Eingang belegt.
+  Körper bleiben im Speicher, neue Träger rechnen neu;
+  Teilungsvermerke (`_refinement_to_disk`) und mitgetragene Maße
+  (`_carried_to_disk`) neben dem Netz, Bewegungsvermerke im Eintrag; belegt
+  erst die Erkennung am Eingang.
 - **`object_hash(features=)`** bindet die veröffentlichten Merkmale
   (`feature_digest`: Nummern als `int64`, Zahlen über `float()`;
   `FeatureMemo`); gleiche reservierte Namen beweisen keine gleiche Bindung; der

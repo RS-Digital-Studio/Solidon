@@ -8990,7 +8990,7 @@ PATCH_PRINT_PARTS: Final = (
     "winkel",
 )
 
-#: Die Körperzahlen, die eine Frage liest und die der Aufrufer mitgibt (§5.2).
+#: Die Körperzahlen, die eine Frage liest und die der Aufrufer mitgibt (Konzept 5.2).
 BODY_NUMBERS: Final = ("dicht", "umlauf", "deckungsgleich", "diagonale")
 
 

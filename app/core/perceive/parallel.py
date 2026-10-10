@@ -42,6 +42,7 @@ from typing import Any, Final
 
 import numpy as np
 
+from app.core.geom.kernel_process import CANCEL_POLL_SECONDS
 from app.core.log import get_logger
 
 _log = get_logger(__name__)
@@ -75,11 +76,9 @@ WORKER_BASE_BYTES: Final = 300_000_000
 WORKER_MEMORY_SHARE: Final = 0.25
 
 #: Wie lange ein frischer Arbeiter bis zur Bereitschaft braucht, höchstens, in
-#: Sekunden; wer nicht antwortet, rechnet nicht mit.
-STARTUP_SECONDS: Final = 30.0
-
-#: Wie oft beim Warten nach dem Abbruch gefragt wird, in Sekunden.
-CANCEL_POLL_SECONDS: Final = 0.05
+#: Sekunden: Er lädt die Bibliotheken der Erkennung und erkennt einmal zur
+#: Probe (``features.warm_worker``). Wer nicht antwortet, rechnet nicht mit.
+READY_SECONDS: Final = 60.0
 
 #: Die Umgebung eines Arbeiters: ein BLAS-Faden, wie der Hilfsprozess des Kerns.
 WORKER_ENVIRONMENT: Final = {"OPENBLAS_NUM_THREADS": "1"}
@@ -201,6 +200,11 @@ class _Worker:
     @property
     def pid(self) -> int | None:
         return self.process.pid
+
+    def overdue(self) -> bool:
+        """Ob er nach :data:`READY_SECONDS` noch nicht bereit ist. Die Uhr entscheidet
+        nur, ob er mitrechnet — nie, was herauskommt (§15.1)."""
+        return not self.ready and time.monotonic() - self.started > READY_SECONDS
 
     def stop(self) -> None:
         with contextlib.suppress(OSError):
@@ -458,7 +462,7 @@ def run(
             )
             for worker in workers:
                 if worker.connection not in ready and worker.process.sentinel not in ready:
-                    if not worker.ready and time.monotonic() - worker.started > STARTUP_SECONDS:
+                    if worker.overdue():
                         _log.warning("perceive worker %s did not get ready", worker.pid)
                         lost.append(worker)
                         _drop(busy, worker, pending)
