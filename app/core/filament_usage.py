@@ -231,11 +231,12 @@ def _without_later_fields(
     nicht die Vorgabe der Dataclass ist: Der ElegooSlicer bringt
     ``cooling.minimum_speed`` 20 statt 10 mit. Es zählt nur, was abweichen
     soll: eigene Wahl und übernommener Vorschlag (``explicit``) oder ein Wert
-    der Spule, der vom Wert ohne die Spule abweicht — **dieselbe Auskunft wie
-    ``handover._for_the_slot``**, das danach entscheidet, was an den Slicer
-    geht. Ein Feld, das die Datei einer Spule aus 0.5.3 nicht kannte, folgt
-    dem Wert ohne Spule (``SlotOverride.inherited``, RM-707) und fällt so
-    heraus.
+    der Spule, der vom Wert ohne die Spule abweicht — **dieselbe Frage wie
+    ``handover._for_the_slot``**, ohne Slicer gerechnet: Mit einem eigenen
+    Filamentprofil der Spule kann die Übergabe anders antworten, der Abdruck
+    bleibt dafür auf jedem Rechner gleich. Ein Feld, das die Datei einer Spule
+    aus 0.5.3 nicht kannte, folgt dem Wert ohne Spule
+    (``SlotOverride.inherited``, RM-707) und fällt so heraus.
     """
     override = override_for(settings, slot)
     reference: PrintSettings | None = None

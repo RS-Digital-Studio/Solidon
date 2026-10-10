@@ -5,6 +5,9 @@ paths:
   - "app/core/knowledge/filaments.py"
   - "app/core/knowledge/print_fields.py"
   - "app/core/scene/serialise.py"
+  - "app/core/export/handover.py"
+  - "app/core/types.py"
+  - "app/ui/print_settings_dialog.py"
   - "app/ui/filament_usage.py"
 ---
 
@@ -25,13 +28,15 @@ nach einem Update bei jedem Kunden zugleich (RM-705).
   Dataclass-Vorgabe — das Herstellerprofil bringt seinen eigenen (Elegoo:
   `cooling.minimum_speed` 20 statt 10), und unter 0.5.3 nahm der Slicer ihn
   ebenso. `_without_later_fields` tut das für jedes Feld, ohne Liste.
-- **Die Spulenklausel ist die Auskunft von `handover._for_the_slot`**: dieselbe
-  Frage, derselbe Vergleich, damit Abdruck und Übergabe nie verschieden
-  beantworten, ob eine Spule abweicht.
+- **Die Spulenklausel stellt die Frage von `handover._for_the_slot`**, ohne
+  Slicer gerechnet: Mit einem eigenen Filamentprofil der Spule kann die
+  Übergabe anders antworten, der Abdruck bleibt aber auf jedem Rechner gleich.
 - **Ein Feld, das die Datei einer Spule nicht kennt, übersteuert sie nicht**
   (`SlotOverride.inherited`, RM-707): Es folgt dem Wert ohne Spule, wird nicht
   geschrieben und bleibt so über Speichern und Öffnen. Wer eine Spulengruppe
-  neu baut, trägt `inherited` mit oder nimmt einen gesetzten Pfad heraus.
+  neu baut oder anzeigt, geht über `handover.override_section`, trägt
+  `inherited` mit und behält den Rohwert geerbter Felder; ein gesetzter Pfad
+  fällt heraus (`with_slot_advice`).
 - **Ein neuer Kopfschlüssel in `print_settings_to_data`** braucht eine eigene
   Entscheidung in `prepare`; der Wächter hält bis dahin an.
 - **Altabdrücke sind Kandidaten, keine Gleichheit** (`legacy_fingerprints`,

@@ -135,3 +135,42 @@ def test_a_new_spool_carries_every_field() -> None:
     )
     assert shown.minimum_speed == 30.0
     assert handover.override_section(None, "cooling", settings.cooling) is settings.cooling
+
+
+def test_advice_for_an_inherited_field_belongs_to_the_spool(spool_053: Path) -> None:
+    """Ein übernommener Vorschlag je Spule für ein geerbtes Feld geht nicht verloren
+    (Review RM-707, L1) — der Druckrat schlägt etwa die Kühlung der Kontaktschicht vor."""
+    _project, _objects, settings, profile, slot = opened(spool_053, maker=False)
+    path = "cooling.support_interface_cooling"
+    override = handover.override_for(settings, slot)
+    assert override is not None and path in override.inherited
+    effective = handover.settings_for_slot(settings, profile, slot)
+    assert effective.cooling.support_interface_cooling is False
+    advised = handover.with_slot_advice(settings, slot, effective, path, True)
+    taken = handover.override_for(advised, slot)
+    assert taken is not None and path not in taken.inherited
+    assert "cooling.minimum_speed" in taken.inherited, "nur der Pfad des Vorschlags"
+    assert handover.settings_for_slot(advised, profile, slot).cooling.support_interface_cooling
+    written = handover._for_the_slot(frozenset(), advised, slot, profile)
+    assert written is not None and path in written
+
+
+def test_the_fan_curve_of_an_old_spool_comes_from_the_material() -> None:
+    """Fehlen Unterkante und Schwelle der Lüfterkurve, ergänzt der Leser sie bewusst aus
+    dem Material — sie sind gesetzt, nicht geerbt (Review RM-707, L6)."""
+    from app.core.scene.serialise import _override_from_data
+
+    stored = {
+        "name": "PETG Schwarz",
+        "colour": [0.0, 0.0, 0.0],
+        "material": None,
+        "material_type": "PETG",
+        "cooling": {"fan_speed": 0.4, "bridge_fan_speed": 0.8, "minimum_layer_time": 6.0},
+    }
+    override = _override_from_data(stored, "pla")
+    assert override is not None and override.cooling is not None
+    curve = print_settings.fan_curve("petg", 0.4)
+    assert override.cooling.minimum_fan_speed == pytest.approx(curve["minimum_fan_speed"])
+    assert override.cooling.fan_below_layer_time == pytest.approx(curve["fan_below_layer_time"])
+    assert not {"cooling.minimum_fan_speed", "cooling.fan_below_layer_time"} & override.inherited
+    assert {"cooling.disable_first_layers", "cooling.minimum_speed"} <= override.inherited

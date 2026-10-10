@@ -47437,7 +47437,9 @@ Feld, das die Spulengruppe einer älteren Datei nicht kannte, mit der Vorgabe de
 `handover._for_the_slot` schrieb es als Abweichung der Spule an den Slicer. Gemessen am echten
 ElegooSlicer (Würfel, CC2, PLA, Spule aus 0.5.3 mit Düse 215 °C und Lüfter 80 %): Der
 Konfigurationsblock des G-Codes trug `slow_down_min_speed = 10` statt der 20 des
-Herstellerprofils; ebenso `cooling.support_interface_cooling`. Entstanden mit `5f68e51d8` und
+Herstellerprofils. `cooling.support_interface_cooling` träfe es ebenso, sobald die Grundlage ihn
+einschaltet (Projektwahl, Vorschlag) — am gemessenen Profil steht er aus, vorher wie nachher
+`-1` (Review RM-707, L4). Entstanden mit `5f68e51d8` und
 `fafcd4841`, beide in keinem Tag — deshalb kein Changelog.
 
 **Behoben:** `SlotOverride.inherited` nennt die Felder einer gesetzten Spulengruppe, die die
@@ -47447,7 +47449,13 @@ Speichern und Öffnen erhalten — ohne Formatschritt, denn ein älterer Leser �
 Felder ohnehin. Ausnahme ist die Lüfterkurve, die der Leser bewusst aus dem Material ergänzt.
 Der Spulendialog zeigt dort den Projektwert und lässt das Feld geerbt, solange es unverändert
 bleibt; ein übernommener Vorschlag für die Spule nimmt seinen Pfad heraus. Die Spulenklausel
-des Abdrucks (RM-705) fragt jetzt wie `_for_the_slot` gegen den Wert ohne Spule.
+des Abdrucks (RM-705) fragt jetzt wie `_for_the_slot` gegen den Wert ohne Spule, ohne Slicer
+gerechnet. Nach dem Review: „Alte Filamentwerte übernehmen“ zeigt geerbte Felder ebenfalls als
+Projektwert und lässt sie geerbt (M1), ein Übernehmen ohne Änderung gibt dieselbe Spule zurück
+(L2), der Vorschlag je Spule geht über `handover.with_slot_advice` (L1). Offen für welle4:
+Der Dialog zeigt bei einer Spule anderen Materials oder mit eigenem Filamentprofil den
+Projektwert, gedruckt wird der Wert der Spule ohne Übersteuerung (L3); die Vorbelegung einer
+solchen Spule mit Projektwerten besteht schon in 0.5.3 (N1).
 
 **Nachweis:** `test_slot_override_inherited.py` mit `tests/data/projects/usage_spool_v46.p3d`,
 geschrieben von 0.5.3 — am Stand davor 5 von 7 rot, danach grün; der Abdruck der Buchung

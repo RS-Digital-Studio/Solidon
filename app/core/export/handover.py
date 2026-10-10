@@ -2939,6 +2939,33 @@ def with_slot_override(
     return replace(settings, slot_overrides=(*kept, identified))
 
 
+def with_slot_advice(
+    settings: PrintSettings,
+    slot: MaterialSlot,
+    effective: PrintSettings,
+    path: str,
+    value: object,
+) -> PrintSettings:
+    """Ein übernommener Vorschlag für eine Spule (§20): Er gehört ihr.
+
+    ``effective`` sind die Einstellungen, mit denen die Spule ohne den
+    Vorschlag fährt. Eine schon gesetzte Gruppe der Spule bleibt die
+    Grundlage; der Pfad des Vorschlags fällt aus ``inherited`` — sonst folgte
+    er weiter dem Wert ohne Spule, und der Vorschlag ginge still verloren
+    (RM-707, etwa ``cooling.support_interface_cooling`` bei PETG).
+    """
+    group = path.partition(".")[0]
+    previous = override_for(settings, slot) or SlotOverride()
+    base = replace(effective, **{group: getattr(previous, group) or getattr(effective, group)})
+    updated = with_path(base, path, value)
+    override = replace(
+        previous,
+        inherited=previous.inherited - {path},
+        **{group: getattr(updated, group)},
+    )
+    return with_slot_override(settings, slot, override)
+
+
 def settings_for_shared_slicer(
     settings: PrintSettings,
     profile: Profile,
