@@ -38,6 +38,7 @@ from app.core.perceive.groups import FunctionalGroup, GroupMeasure
 from app.core.registry import MENU_GROUPS as MENU_GROUPS
 from app.core.registry import REGISTRY
 from app.core.registry import group_title as group_title
+from app.core.registry.registry import FEATURE_TITLES
 from app.core.registry.surfaces import _CHOICE_NAMES as _CHOICE_NAMES
 from app.core.registry.surfaces import SIDE_NAMES
 from app.core.registry.surfaces import choice_label as _choice_label
@@ -2030,6 +2031,10 @@ def value_text(key: str, value: object) -> str:
     if key == "part_name":
         # Nutzernamen bleiben wörtlich, auch wenn sie wie Zahlen oder Auswahlwerte aussehen.
         return str(value)
+    if key == "kind" and isinstance(value, str) and value in FEATURE_TITLES:
+        # Die Art eines Merkmals heißt, wie Karte, Handbuch und Agent sie nennen
+        # (Review I, M3): Im Bericht stand „Art: hole“.
+        return str(FEATURE_TITLES[value])
     if key in ("solver", "attempted") and isinstance(value, str) and value in _METHOD_NAMES:
         return str(_METHOD_NAMES[value])
     if key in ("solver", "attempted") and isinstance(value, (list, tuple)):

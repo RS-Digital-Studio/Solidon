@@ -20,8 +20,15 @@ import numpy as np
 
 from app.core.deferred import trimesh
 from app.core.geom.mesh import MeshData, as_mesh_data
-from app.core.types import CancelToken, Mesh, SceneObject, Transform, Vec3
-from app.core.units import EPS_DISPLAY, EPS_GEOM, dot3, exact_cos_degrees, exact_sin_degrees
+from app.core.types import BoundingBox, CancelToken, Mesh, SceneObject, Transform, Vec3
+from app.core.units import (
+    EPS_DISPLAY,
+    EPS_GEOM,
+    PRINT_LIMIT,
+    dot3,
+    exact_cos_degrees,
+    exact_sin_degrees,
+)
 
 Axis = Literal["x", "y", "z"]
 Anchor = Literal["centre", "origin", "bed"]
@@ -201,6 +208,37 @@ def angles_after_turn(source: SceneObject, axis: Axis, angle: float) -> Vec3:
 
 def rotation(axis: Axis, degrees: float, about: Vec3 = (0.0, 0.0, 0.0)) -> np.ndarray:
     return rotation_about(AXIS_VECTORS[axis], about, degrees)
+
+
+def fitted_factor(bounds: BoundingBox, largest: float, fixed: Vec3) -> float:
+    """Der Faktor, der die längste Kante von ``bounds`` auf ``largest`` bringt —
+    oder genau eins, wenn er keinen Punkt um ``PRINT_LIMIT`` verschöbe.
+
+    **Die einzige Stelle, an der die Druckgrenze im Kern entscheidet** (§11.2):
+    Eine Rechnung, deren Ergebnis kein Drucker sieht, darf entfallen. Ein Punkt
+    ``p`` des Körpers wandert beim Skalieren um ``|f - 1| · |p - fixed|``, und
+    der weiteste liegt höchstens an einer Ecke der Hülle; gemessen wird also an
+    ihr, nicht an der Kante. An der Kante gemessen verschob die erste Fassung
+    einen Körper bei x = 200 um den Ursprung bis zum Zwanzigfachen der Grenze
+    (Review D, H1). Mit Faktor eins ist *Auf Maß bringen* eine starre Bewegung,
+    und die Auswertung trägt die erkannten Merkmale mit (RM-676: am erzeugten
+    Bett ließ das Ausdünnen 100,000222 mm stehen, und das Skalieren darauf
+    kostete eine volle Erkennung).
+
+    ``fixed`` ist der Punkt, der stehen bleibt — der Bezug, mit freier Stelle
+    die Mitte der Unterseite, weil die Stelle in x und y mittig legt und in z
+    aufsetzt. ``fit_to_size`` und ``generate.working_volume`` fragen beide hier.
+    """
+    current = max(bounds.size)
+    factor = largest / current
+    low, high = bounds.minimum, bounds.maximum
+    reach = max(
+        math.dist(fixed, (x, y, z))
+        for x in (low[0], high[0])
+        for y in (low[1], high[1])
+        for z in (low[2], high[2])
+    )
+    return 1.0 if abs(factor - 1.0) * reach < PRINT_LIMIT else factor
 
 
 def scaling(factors: Vec3, about: Vec3 = (0.0, 0.0, 0.0)) -> np.ndarray:

@@ -19,6 +19,7 @@ nicht getroffen hat.
 
 from __future__ import annotations
 
+import re
 from collections import Counter
 from collections.abc import Callable, Collection, Iterable, Mapping, Sequence
 from dataclasses import KW_ONLY, dataclass, replace
@@ -99,7 +100,7 @@ from app.core.knowledge import filaments, print_fields, print_settings, profiles
 from app.core.knowledge.print_fields import FIELDS, Field
 from app.core.log import get_logger
 from app.core.scene.cancel import CancelSignal
-from app.core.scene.fits import fit_kinds_for
+from app.core.scene.fits import allowances_for, fit_kinds_for
 from app.core.slice import advise, gcode
 from app.core.slice.analysis import slice_body
 from app.core.slice.estimate import PlateComparison, estimate, plate_comparison
@@ -111,6 +112,7 @@ from app.core.types import (
     Document,
     Finding,
     HandoverKind,
+    MaterialProfile,
     MaterialSlot,
     PrinterProfile,
     PrintSettings,
@@ -796,7 +798,8 @@ class FilamentOverrideDialog(QDialog):
             body = QWidget(section)
             form = QFormLayout(body)
             form.setContentsMargins(WIDE + TIGHT, 0, 0, NORMAL)
-            source = own_section or getattr(settings, group)
+            # Was die Spule nicht übersteuert, zeigt den Projektwert (RM-707).
+            source = handover.override_section(existing, group, getattr(settings, group))
             for field in (
                 entry for entry in FILAMENT_FIELDS if entry.path.partition(".")[0] == group
             ):
@@ -932,7 +935,9 @@ class FilamentOverrideDialog(QDialog):
         self.existing = self._legacy
         for group, box in self.groups.items():
             own = getattr(self._legacy, group)
-            source = own or getattr(self.settings, group)
+            # Was die alte Spule nicht übersteuerte, zeigt den Projektwert —
+            # derselbe Weg wie beim Öffnen des Dialogs (RM-707, Review M1).
+            source = handover.override_section(self._legacy, group, getattr(self.settings, group))
             for field in FILAMENT_FIELDS:
                 section, _, name = field.path.partition(".")
                 if section == group:
@@ -978,6 +983,7 @@ class FilamentOverrideDialog(QDialog):
     def override(self) -> SlotOverride | None:
         """Die vier Gruppen aus den Feldern, oder Projektwerte für alle."""
         values: dict[str, Any] = {}
+        inherited: set[str] = set()
         for group in FILAMENT_GROUPS:
             if not self.groups[group].isChecked():
                 continue
@@ -988,7 +994,24 @@ class FilamentOverrideDialog(QDialog):
                 for field in FILAMENT_FIELDS
                 if field.path.partition(".")[0] == group
             }
-            values[group] = replace(section, **changed)
+            # Ein Feld, das die Spule nicht übersteuerte und das unverändert
+            # den Projektwert zeigt, übersteuert sie weiter nicht (RM-707). Es
+            # behält seinen Rohwert: Ein Übernehmen ohne Änderung gibt dieselbe
+            # Spule zurück und ändert das Projekt nicht (Review RM-707, L2).
+            kept: set[str] = set()
+            if self.existing is not None and previous is not None:
+                current = getattr(self.settings, group)
+                for path in self.existing.inherited:
+                    owner, _dot, name = path.partition(".")
+                    if owner == group and (
+                        name not in changed
+                        or print_settings.same_value(changed[name], getattr(current, name))
+                    ):
+                        inherited.add(path)
+                        kept.add(name)
+            values[group] = replace(
+                section, **{name: value for name, value in changed.items() if name not in kept}
+            )
         if not values:
             return None
         return SlotOverride(
@@ -996,6 +1019,7 @@ class FilamentOverrideDialog(QDialog):
             colour=self.slot.colour,
             material=self.slot.material,
             material_type=self.slot.material_type,
+            inherited=frozenset(inherited),
             **values,
         )
 
@@ -1475,6 +1499,7 @@ class _AdviceWorker(Worker):
         part_fits: Mapping[str, tuple[str, ...]] | None = None,
         flavour: SlicerFlavour = "orca",
         declined: frozenset[str] = frozenset(),
+        part_allowances: Mapping[str, tuple[str, ...]] | None = None,
     ) -> None:
         super().__init__()
         self.objects = objects
@@ -1488,6 +1513,9 @@ class _AdviceWorker(Worker):
         self.part_fits = part_fits or {}
         """Die Passungen je Körper, im Hauptthread aus dem Dokument gelesen —
         der Export fragt sie je Teil (:func:`writer.part_advice`)."""
+        self.part_allowances = part_allowances or {}
+        """Was das Modell je Körper schon ausgleicht, ebenso gelesen
+        (``scene.fits.allowances_for``, RM-589)."""
         self.flavour = flavour
         """Die Familie, für die die Teile benannt werden; ohne Slicer die der
         gespeicherten 3MF."""
@@ -1649,6 +1677,7 @@ class _AdviceWorker(Worker):
                     whole_layers=body.plate in self.towers,
                     organic=self.organic,
                     declined=self.declined,
+                    allowances=self.part_allowances.get(body.id, ()),
                     trees=trees,
                 )
                 # Was das Programm unter den Bäumen dieses Körpers nicht druckt,
@@ -1794,6 +1823,7 @@ class _AdviceWorker(Worker):
                 accepted=chain,
                 whole_layers=body.plate in self.towers,
                 organic=self.organic,
+                allowances=self.part_allowances.get(body.id, ()),
             ):
                 if entry.path not in wanted:
                     continue
@@ -1871,6 +1901,7 @@ class _AdviceWorker(Worker):
                 accepted=chain,
                 whole_layers=body.plate in self.towers,
                 organic=self.organic,
+                allowances=self.part_allowances.get(body.id, ()),
             ):
                 # Beim Stützkontakt bekommt jedes Teil seinen Wert, ebenso die
                 # Stützart, wo sie je Teil geht (``separate``); die Zeile nennt
@@ -4177,21 +4208,34 @@ class PrintSettingsDialog(QDialog):
         wanted = flatten(term).strip()
         if not wanted:
             return []
-        hits = []
-        for field in FIELDS:
-            haystack = flatten(
-                " ".join(
-                    (
-                        str(field.title),
-                        str(field.note),
-                        group_title(field.group),
-                        *keys_for(field.path),
+        # **Wort für Wort** (RM-589): Die Slicer nennen dieselbe Einstellung
+        # je Programm etwas anders — „Compensación de Pata de elefante“ hier,
+        # „Compensación del pie de elefante“ dort. Ein Treffer braucht jedes
+        # Wort irgendwo in der Zeile, nicht den ganzen Ausdruck am Stück.
+        words = [word for word in re.split(r"[^0-9a-z]+", wanted) if word]
+        stacks = [
+            (
+                field.path,
+                flatten(
+                    " ".join(
+                        (
+                            str(field.title),
+                            str(field.note),
+                            str(field.search_words),
+                            group_title(field.group),
+                            *keys_for(field.path),
+                        )
                     )
-                )
+                ),
             )
-            if wanted in haystack:
-                hits.append(field.path)
-        return hits
+            for field in FIELDS
+        ]
+        # Steht der Ausdruck am Stück irgendwo, gilt nur das: Ein Titel findet
+        # seine Zeile und nicht jede, deren Satz dieselben Wörter streut.
+        whole = [path for path, haystack in stacks if wanted in haystack]
+        if whole or not words:
+            return whole
+        return [path for path, haystack in stacks if all(word in haystack for word in words)]
 
     def highlighted(self) -> str:
         """Welche Zeile gerade hervorgehoben ist — leer, wenn keine."""
@@ -6237,6 +6281,19 @@ class PrintSettingsDialog(QDialog):
             ]
         )
 
+    def _plate_material(self) -> MaterialProfile:
+        """Das Material, mit dem die gewählten Platten drucken — dieselbe Frage wie
+        der Export (``handover.slot_material``): die erste Spule samt gewähltem
+        Filamentprofil, ohne Spule das des Auftrags (RM-628)."""
+        slots = self._plate_slots()
+        # Ohne Szene kommt die alte Wahl als Liste, die kürzer sein kann.
+        chosen = self._profiles_for(slots)
+        bound = [
+            replace(slot, material=(chosen[index] if index < len(chosen) else "") or slot.material)
+            for index, slot in enumerate(slots)
+        ]
+        return handover.slot_material(self.session.profile, bound, self._setup_snapshot())
+
     def _profiles_for(self, slots: Sequence[MaterialSlot]) -> tuple[str, ...]:
         """Ordnet die global gespeicherten Profile den angefragten Spulen zu.
 
@@ -6697,10 +6754,18 @@ class PrintSettingsDialog(QDialog):
         # Flatpak dahintersteht, und kostete je Profilantwort 0,27 s (932 Aufrufe
         # an Roberts ElegooSlicer, 08.10.2026).
         name = _slicer_title(self._slicer_path) if self._slicer_path else ""
+        # Das Material nur für Cura, und einmal: Dort nennt der Satz am Abstand
+        # die Unterseite im Band der Spule, die druckt (RM-628).
+        material = self._plate_material() if flavour == "cura" else self.session.profile.material
         for path, editor in self._editors.items():
             ignored = flavour is not None and not slicer_keys.takes(flavour, path, program)
+            own_reason = (
+                slicer_keys.not_taken_reason(flavour, path) if flavour is not None else None
+            )
             reason = (
-                str(
+                str(own_reason)
+                if ignored and own_reason is not None
+                else str(
                     tr("{slicer} kennt diese Einstellung nicht — der Wert bleibt ohne Wirkung.")
                 ).replace("{slicer}", name)
                 if ignored
@@ -6709,10 +6774,17 @@ class PrintSettingsDialog(QDialog):
             # Mit den Einstellungen: Curas Lüfterhochlauf weicht erst ab zwei
             # Schichten ohne Lüfter ab, und nur dann steht ein Satz da. Ebenso
             # eine Wahl, die das Programm nicht kennt (RM-480). Unter Bäumen mit
-            # derselben Auskunft wie der Rat (RM-622).
+            # derselben Auskunft wie der Rat (RM-622), Curas Abstand unten in den
+            # Grenzen des Materials wie die Übergabe (RM-628).
             specific = (
                 slicer_keys.limitation(
-                    flavour, path, self.settings, program, self._organic, hollow=self._hollow_trees
+                    flavour,
+                    path,
+                    self.settings,
+                    program,
+                    self._organic,
+                    material=material,
+                    hollow=self._hollow_trees,
                 )
                 if flavour is not None
                 else None
@@ -7221,6 +7293,10 @@ class PrintSettingsDialog(QDialog):
         Zustandszeile; alles andere im Dialog bleibt bedienbar. Was dann
         gefunden wird, übernimmt :meth:`_slicers_found`.
         """
+        # Mit dem Stand der Suche verfällt auch der gemerkte Profilbestand
+        # (``slicer_profiles._holdings``, RM-670): Wer den Slicer eben neu
+        # eingerichtet hat, sieht seine Profile, ohne dass sich eine Datei im
+        # Bestand geändert haben muss.
         discover.forget_cache()
         self._start_slicer_search()
         self._refresh_advice()
@@ -7969,6 +8045,12 @@ class PrintSettingsDialog(QDialog):
         document = self.session.project.document
         return tuple((body.id, fit_kinds_for(document, {body.id})) for body in self._plate_bodies())
 
+    def _part_allowances(self) -> tuple[tuple[str, tuple[str, ...]], ...]:
+        """Was das Modell je Körper schon ausgleicht — wie der Export je Teil
+        (:func:`app.core.scene.fits.allowances_for`, RM-589). Im Hauptthread."""
+        document = self.session.project.document
+        return tuple((body.id, allowances_for(document, body)) for body in self._plate_bodies())
+
     def _bounds(self) -> BoundingBox | None:
         """Der Hüllquader über alles, was auf die Platte geht — daran hängt der
         Hinweis auf hohe, schmale Teile."""
@@ -8095,6 +8177,7 @@ class PrintSettingsDialog(QDialog):
             self.settings,
             self.session.profile,
             self._part_fits(),
+            self._part_allowances(),
             self._connector_diameters(),
             self.session.busy,
             self._slicer_path,
@@ -8196,6 +8279,7 @@ class PrintSettingsDialog(QDialog):
             # Ohne Slicer schreibt der Export die 3MF wie für die Orca-Familie.
             flavour=flavour or "orca",
             declined=self._declined_advice(),
+            part_allowances=dict(self._part_allowances()),
         )
         worker.analysis_context = analysis_context
         context = self._advice_request
@@ -8626,17 +8710,9 @@ class PrintSettingsDialog(QDialog):
                 or entry.effective is None
             ):
                 continue
-            group = entry.path.partition(".")[0]
-            previous = handover.override_for(self.settings, entry.slot) or SlotOverride()
-            effective = replace(
-                entry.effective,
-                **{
-                    group: getattr(previous, group) or getattr(entry.effective, group),
-                },
+            self.settings = handover.with_slot_advice(
+                self.settings, entry.slot, entry.effective, entry.path, entry.value
             )
-            updated = print_settings.with_path(effective, entry.path, entry.value)
-            override = replace(previous, **{group: getattr(updated, group)})
-            self.settings = handover.with_slot_override(self.settings, entry.slot, override)
         self._load_into_editors()
         self._refresh_advice()
         # **Der Knopf sagt, was er getan hat.** Die Felder änderten sich

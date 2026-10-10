@@ -59,6 +59,13 @@ def valid_patch(
 ) -> bool:
     """Nur vollständige Zahlenverträge und wirkliche, eindeutige Dreiecksnummern zulassen."""
     _check(check_cancelled)
+    return _valid_numbers(patch) and _valid_indices(
+        patch, face_count, allowed_indices, check_cancelled
+    )
+
+
+def _valid_numbers(patch: SurfacePatch) -> bool:
+    """Der Zahlenvertrag eines Teilträgers: Art, Quelle, Werte — ohne die Dreiecksnummern."""
     if patch.kind not in _KEYS or patch.source not in {"native", "facets", "fit"}:
         return False
     if set(patch.params) != _KEYS[patch.kind] or not patch.face_indices:
@@ -74,10 +81,20 @@ def valid_patch(
             return False
     if patch.kind == "cone" and float(cast(float, patch.params["half_angle"])) >= math.pi / 2.0:
         return False
-    if patch.kind == "torus" and float(cast(float, patch.params["ring_radius"])) <= float(
-        cast(float, patch.params["tube_radius"])
-    ):
-        return False
+    return not (
+        patch.kind == "torus"
+        and float(cast(float, patch.params["ring_radius"]))
+        <= float(cast(float, patch.params["tube_radius"]))
+    )
+
+
+def _valid_indices(
+    patch: SurfacePatch,
+    face_count: int | None,
+    allowed_indices: Collection[int] | None,
+    check_cancelled: Callable[[], None] | None,
+) -> bool:
+    """Wirkliche, eindeutige Dreiecksnummern innerhalb der Grenzen."""
     # **Die Dreiecksnummern werden blockweise als Feld geprüft**, nicht eine je
     # Schleifenrunde: An der Lochplatte mit 204 000 Dreiecken kostete die
     # Schleife über die 51 712 Nummern einer Deckfläche zwölf Millisekunden je
@@ -290,7 +307,11 @@ def transformed_patches(
                     math.tan(float(cast(float, params["half_angle"]))) * radial / axial
                 )
         moved = replace(patch, params=params)
-        if valid_patch(moved, check_cancelled=check_cancelled):
+        # Die Dreiecksnummern sind dieselben, eben geprüft; neu zu prüfen ist nur,
+        # was die Abbildung geändert hat (RM-636): Die Nummernprüfung sortierte
+        # je Teilträger alle Nummern ein zweites Mal, bei jedem Verschieben.
+        _check(check_cancelled)
+        if _valid_numbers(moved):
             result.append(moved)
     _check(check_cancelled)
     return tuple(result)
