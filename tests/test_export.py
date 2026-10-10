@@ -15,7 +15,7 @@ import pytest
 import trimesh
 
 from app.core.errors import FileWriteError, NeedsSolidError, ValidationError
-from app.core.export import handover, manufacturer, slicer_keys, threemf, writer
+from app.core.export import handover, manufacturer, slicer_keys, slicer_profiles, threemf, writer
 from app.core.export.handover import with_slot_profiles
 from app.core.export.slicer_keys import SlicerFlavour
 from app.core.export.writer import (
@@ -151,6 +151,92 @@ def test_every_plate_reuses_the_jobs_part_advice(
     assert len(calls) == len(objects), "die Plattenzahl vervielfacht den Rat nicht"
 
 
+def test_a_printer_created_in_the_slicer_is_known_to_the_next_export(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """RM-670: Der Profilbestand des Slicers wird gemerkt, nicht je Export gelesen.
+
+    Über den echten Exportweg (``write_assembly`` mit gefundenem Slicer): Der
+    zweite Export sagt dasselbe wie der erste, aus dem Merker. Legt der Kunde
+    den Drucker danach im Slicer an, weiß es der nächste Export — der Befund
+    wechselt von „kennt den Drucker nicht“ zu „kein Drucker eingestellt“.
+    """
+    import json
+    import os
+
+    from app.core.export import slicer_profiles
+
+    def write(path: Path, document: dict[str, object]) -> None:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(document), encoding="utf-8")
+
+    installed = tmp_path / "Orca" / "resources" / "profiles"
+    write(
+        installed / "Anderer" / "machine" / "Fremd.json",
+        {
+            "type": "machine",
+            "name": "Ganz anderes Gerät 0.4 nozzle",
+            "instantiation": "true",
+            "printer_model": "Ganz anderes Gerät",
+            "nozzle_diameter": ["0.4"],
+        },
+    )
+    executable = tmp_path / "Orca" / "orca-slicer.exe"
+    executable.write_bytes(b"")
+    user = tmp_path / "config" / "OrcaSlicer" / "user" / "4711"
+    (user / "machine").mkdir(parents=True)
+    monkeypatch.setattr(slicer_profiles, "user_roots", lambda _flavour, _executable: [user])
+    monkeypatch.setattr(slicer_profiles, "chosen_machine", lambda *_args: "")
+    # Ein Bestand, den gerade niemand ändert (``slicer_profiles.SETTLE_NS``).
+    for path in (*tmp_path.rglob("*"), tmp_path):
+        os.utime(path, (1_767_225_600.0, 1_767_225_600.0))
+    reads = []
+    original = slicer_profiles._read
+
+    def counted(*args: object, **kwargs: object) -> object:
+        reads.append(args[0])
+        return original(*args, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(slicer_profiles, "_read", counted)
+    profile = profiles.make_profile("centauri-carbon-2", "pla")
+    setup = handover.SlicerSetup(executable=executable, flavour="orca")
+
+    def export(name: str) -> list[tuple[str, str]]:
+        _written, findings = write_assembly(
+            [scene_object()],
+            tmp_path / name,
+            project_name="t",
+            profile=profile,
+            settings=print_settings.resolve(profile),
+            setup=setup,
+            for_slicer=False,
+        )
+        return [
+            (entry.code, source_text(entry.message))
+            for entry in findings
+            if entry.code.startswith("slicer.")
+        ]
+
+    first = export("eins")
+    assert "slicer.printer_unknown" in {code for code, _ in first}, first
+    count = len(reads)
+    assert export("zwei") == first, "aus dem Merker dieselben Befunde"
+    assert len(reads) == count, "der zweite Export liest den Bestand nicht neu"
+
+    write(
+        user / "machine" / "Centauri.json",
+        {
+            "name": "Mein Centauri Carbon 2 0.4 nozzle",
+            "from": "User",
+            "printer_model": "Elegoo Centauri Carbon 2",
+            "nozzle_diameter": ["0.4"],
+        },
+    )
+    codes = {code for code, _ in export("drei")}
+    assert "slicer.printer_unknown" not in codes
+    assert "slicer.machine_unset" in codes
+
+
 @pytest.mark.parametrize("checked", [None, []])
 def test_a_cancelled_file_export_stops_before_checking_or_writing(
     tmp_path: Path, profile: Profile, checked: list[Finding] | None
@@ -205,7 +291,7 @@ def test_file_worker_can_cancel_during_part_advice_without_a_window(
         node
         for node in worker.body
         if isinstance(node, ast.FunctionDef)
-        and node.name in {"work", "cancel", "_assembly", "_begin_write"}
+        and node.name in {"work", "cancel", "_assembly", "_assembly_in_one_read", "_begin_write"}
     ]
     isolated = ast.Module(
         body=[
@@ -226,6 +312,7 @@ def test_file_worker_can_cancel_during_part_advice_without_a_window(
         "manufacturer": manufacturer,
         "prepare_usage": lambda *_: (),
         "handover": handover,
+        "slicer_profiles": slicer_profiles,
         # Der Übergabebeleg (RM-090) ist Oberfläche; hier zählt nur der Abbruch.
         "handoff_receipt": lambda **_kwargs: None,
         # Seine Gegenprobe ebenso (``test_export_readback.py``).

@@ -180,6 +180,10 @@ wer danach die Szene fragte, bekam eine leere. Wer einen Arbeiter dazubaut,
 trägt ihn dort ein; sonst wartet die Schleife auf einen Lauf, den es noch gar
 nicht gibt.
 
+**Die Güte der feinen Rechnung legt der Start des Arbeiters fest**
+(`_EvaluationWorker.quality`), nie der Lauf selbst: Sonst nähme ein Arbeiter
+am Stand davor dem Nachlauf die bestellte Güte weg.
+
 ### Eine verspätete Antwort meldet nichts mehr
 
 **Einleseplan und Auswertung besitzen denselben Beschäftigtzustand.**
@@ -1208,6 +1212,18 @@ Drei Sätze, die über diesen Fall hinausgehen:
   und der Thread überlebte den Prozess (`QThread: Destroyed while thread is
   still running`, Exit 127; gemessen am 21.09.2026 an fünf Fällen in
   `test_operation_ui`, deren Test keine Ereignisrunde durchlief).
+
+* **Was nebenher rechnet, weicht dem Export** (RM-670). Der Export bestellt
+  die feine Rechnung; ihr Ergebnis löste die Schichtanalyse aus, und die
+  rechnete neben dem Schreiben — im Versionsvergleich 0.5.2 (Weg 4, W4-2)
+  17 bis 51 Prozent der Stichproben eines 3MF-Exports. Sie wartet jetzt und
+  folgt dem Export für denselben Stand; ein schon laufender Arbeiter wird
+  nicht abgebrochen, weil ein Neustart nach dem Export seine bisherige Arbeit
+  ein zweites Mal kostete. Das Vorauslesen des Slicerbestands nach dem Start
+  (`_warm_the_slicer`) wartet aus demselben Grund auf das Ende einer
+  Auswertung: Ein beim Start geöffnetes Modell teilt sich den Rechner sonst
+  mit 1 550 gelesenen Profildateien (RM-672). Es läuft im Daemon-Faden wie
+  die Prüfung von „Zuletzt geöffnet“, denn es liest Dateien.
 
 ### Ein Arbeiter ist nur nebenläufig, wenn er den GIL hergibt
 

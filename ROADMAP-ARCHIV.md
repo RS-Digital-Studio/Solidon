@@ -33,9 +33,12 @@ entfernt hat.
 |---|---|
 | 2026-10-10 | [RM-751: Ein freigegebenes Fenster startet keine Wandprüfung mehr (10.10.2026)](#rm-751-ein-freigegebenes-fenster-startet-keine-wandprüfung-mehr-10102026) |
 | 2026-10-10 | [RM-750: Ein wartender Klick behält seine Zusage, während die Analysekarte rechnet (10.10.2026)](#rm-750-ein-wartender-klick-behält-seine-zusage-während-die-analysekarte-rechnet-10102026) |
+| 2026-10-10 | [RM-670: Ein zweiter 3MF-Export liest den Slicerbestand nicht neu (10.10.2026)](#rm-670-ein-zweiter-3mf-export-liest-den-slicerbestand-nicht-neu-10102026) |
+| 2026-10-09 | [RM-670 (Teil): Der 3MF-Export liest den Slicerbestand nicht mehr je Export neu (09.10.2026)](#rm-670-teil-der-3mf-export-liest-den-slicerbestand-nicht-mehr-je-export-neu-09102026) |
 | 2026-10-09 | [RM-627: Ein Rand neben einem anderen Überhang ist keine lange Brücke (09.10.2026)](#rm-627-ein-rand-neben-einem-anderen-überhang-ist-keine-lange-brücke-09102026) |
 | 2026-10-09 | [RM-572: Der Prüfbericht nennt die Stelle, wo viele kleine Überhänge Stützen verlangen (09.10.2026)](#rm-572-der-prüfbericht-nennt-die-stelle-wo-viele-kleine-überhänge-stützen-verlangen-09102026) |
 | 2026-10-09 | [RM-584 (Teil 2): Unter flachen Decken Gitter oder Hybrid, und hohe Bäume bekommen zwei Wände (09.10.2026)](#rm-584-teil-2-unter-flachen-decken-gitter-oder-hybrid-und-hohe-bäume-bekommen-zwei-wände-09102026) |
+| 2026-10-09 | [RM-567: Weniger Arbeitsspeicher — Cachegrenze, BLAS-Faden, Renderer am echten Fenster (09.10.2026)](#rm-567-weniger-arbeitsspeicher--cachegrenze-blas-faden-renderer-am-echten-fenster-09102026) |
 | 2026-10-09 | [RM-624: Ein Slicertest hält Kontaktabstand und untere Trennschicht in sechs Programmen (09.10.2026)](#rm-624-ein-slicertest-hält-kontaktabstand-und-untere-trennschicht-in-sechs-programmen-09102026) |
 | 2026-10-09 | [RM-531 (Teil): Sieben Fenstertests außerhalb von Windows sind auf allen vier Plattformen grün (09.10.2026)](#rm-531-teil-sieben-fenstertests-außerhalb-von-windows-sind-auf-allen-vier-plattformen-grün-09102026) |
 | 2026-10-09 | [RM-635: Prozesstests zählen ihre Zeit ab dem Zustand, und der Abbau wartet auf das Ende des Prozesses (09.10.2026)](#rm-635-prozesstests-zählen-ihre-zeit-ab-dem-zustand-und-der-abbau-wartet-auf-das-ende-des-prozesses-09102026) |
@@ -27331,6 +27334,81 @@ zurück, die Übernahme aus dem Slicer überschreibt keine Handspule, Rücknahme
 sind rücknehmbar, das Lager sichert seinen letzten lesbaren Stand selbst,
 Datumsfelder haben einen Kalender.
 
+## RM-670: Ein zweiter 3MF-Export liest den Slicerbestand nicht neu (10.10.2026)
+
+<a id="rm-670-ein-zweiter-3mf-export-liest-den-slicerbestand-nicht-neu-10102026"></a>
+
+**Rest nach dem Teil vom 09.10.:** Je 3MF-Export entstand die Grundlage viermal (Datei, Befunde,
+Stützfuß, Projekteinstellungen; Cura zweimal), jedes Mal mit Namensindizes der Erbketten (am ElegooSlicer
+668 Dateien je Herstellerordner, 0,35 s), rekursiver Suche nach der Modelldatei (0,18 s) und bei Cura der
+Auflistung von Definitionen und Containern (rund 4 000 Dateien, 1,2 s). Der zweite Export lag am echten
+Bestand bei 0,42–0,73 s (Elegoo), 0,53–1,47 s (Orca) und 3,1–3,8 s (Cura mit eingerichtetem Drucker).
+
+**Behoben:** `slicer_profiles.once_per_read` rechnet im Lesedurchgang einmal, was allein aus Argumenten
+und gelesenem Bestand folgt — `manufacturer.base_settings` und `machine_model`. `_once_per_stock` hält
+Namensindizes, Modelldatei und Curas Auflistung (`_cura_installed`, `_cura_own_containers`) darüber hinaus
+unter der Signatur des Bestands und dem Stand der Programmsuche (`_derived`, `_root_owners`); gemerkt erst
+Beruhigtes (`SETTLE_NS` vor der Signatur). Gehalten wird nur, welches Profil wo liegt; Werte liest jeder
+Durchgang aus den Dateien.
+
+**Nachweis (10.10.2026, Roberts Slicer mit seinen Nutzerprofilen in einer Kopie von `%APPDATA%`, gepinnt,
+Rechner unter Fremdlast, CPU-Zeit des Prozesses):** Würfel, Figur aus Weg 4, `dose-mit-deckel.p3d` und
+`garden-hose-holder.3mf` an ElegooSlicer (Centauri Carbon 2), OrcaSlicer (P1S), PrusaSlicer (MK4S) und
+Cura 5.13 (Ender-3 V3 SE eingerichtet). Zweiter und dritter 3MF-Export Würfel 0,03–0,16 s, Figur
+0,06–0,20 s, Dose 0,25–0,41 s; der Halter 1,56–1,88 s bei 0,59–0,67 s STL — der Abstand ist der Schreiber der
+Geometrie, nicht der Bestand. Vor RM-670 (`a9e4d3f64`) Würfel 0,98–1,20 s (Elegoo), 2,70–3,12 (Orca), 5,3–5,5
+(Cura). Die 3MF ist in allen 16 Fällen byte-gleich zum Stand vor RM-670 und zu einem Lauf ohne jeden
+Merker, Würfel und Dose auch zum Stand vor diesem Schritt (`786ff615f`). Am Fenster (offscreen, Würfel, mit Vorwärmen und Auswertung) erster 3MF-Export
+0,12–0,24 s Wanduhr bei 0,06–0,08 s STL, die folgenden 0,05–0,19 s. Eine Änderung im Slicer — eigener Prozess
+geändert (Elegoo, Wände 2 → 4), neuer eigener Prozess (Orca, Prusa), Maschineneinstellung (Cura) — sieht der
+nächste Export sofort; die Datei gleicht dem ungemerkten Lesen. `test_real_slicers.py` 21 passed. Tests:
+`test_print_settings_ui.py` (`test_a_3mf_export_derives_the_foundation_once`,
+`test_the_remembered_stock_writes_the_file_a_fresh_read_writes`,
+`test_a_second_3mf_export_lists_no_stock_folder_again`, Leistung
+`test_a_second_3mf_export_of_a_large_stock_stays_under_half_a_second` je Familie: zweiter Export 0,03–0,09 s
+CPU), `test_slicer_profiles.py` (`test_inheritance_indexes_hold_across_passes_until_the_stock_changes`); jede
+mit Gegenprobe. Changelog: der Punkt vom 09.10. gilt.
+
+## RM-670 (Teil): Der 3MF-Export liest den Slicerbestand nicht mehr je Export neu (09.10.2026)
+
+<a id="rm-670-teil-der-3mf-export-liest-den-slicerbestand-nicht-mehr-je-export-neu-09102026"></a>
+
+**Befund (03.10.2026, Versionsvergleich 0.5.2, W2-1 und W4-2):** Seit v0.4.0 suchte jeder
+3MF-Export den Slicer und las rund 1 550 Profildateien neu; ein Quader dauerte 1,6 s statt
+0,36 s. Mit RM-623 kam ohne gemerkte Wahl die Vorwahl aus dem Bestand dazu.
+
+**Behoben:** Der Bestand je Slicer und Profilart bleibt gemerkt, solange seine Signatur
+gleich ist (`slicer_profiles._holdings`; eigene Profile Datei für Datei, die Installation
+an Programmdatei und oberster Ebene; gemerkt erst, was älter ist als `SETTLE_NS`), die
+PATH-Antwort der Programmsuche ebenso (`discover._from_path`). Das Hauptfenster wärmt den
+Bestand nach dem Start im Hintergrund vor (`_warm_the_slicer`), der Export wartet nicht auf
+eine laufende Auswertung, und Vorwahl, Stufe, Grundlage und Datei teilen einen
+Lesedurchgang (`_assembly`, `_FoundationWorker`).
+
+**Nach Review und Nachprüfung (09.10.2026):** Die Signatur zählt nur, was der Leser ansieht
+(`_READ_BELOW`: Artordner der Orca-Familie in jeder Schreibweise, Curas Ordner der ersten
+Ebene aus `_CURA_STOCK_FOLDERS`, Prusa über `_prusa_files` ohne `cache/` und ohne
+`PrusaSlicer.ini`) — Telemetrie, `cura.cfg` und Programmeinstellungen verwerfen den Merker
+nicht mehr. Die Vorwahl des Hauptfensters (`_ChosenSetup`) trägt Bestand und Signatur, auch
+leer; Grundlage und Export leiten nach einer Änderung neu her, das Fenster übernimmt die
+erneuerte Wahl (`_ExportWorker.renewed`, `_adopt_renewed_choice`). Jedes Profil liegt einmal
+im Merker (Ausschnitt eines Eintrags mit mehr Arten), ein zweiter Fragender wartet auf ein
+laufendes Lesen, alle Merker messen die Beruhigung vor dem Lesen, auch `_prusa_store`, und
+verfallen mit `discover.cache_generation()`; `find_programs` verwirft ein veraltetes Nein der
+Einzelsuche.
+
+**Nachweis (09.10.2026):** Am ElegooSlicer mit Roberts Einstellungen, Würfel, CPU-Zeit
+unter Fremdlast: zweiter Export im Fensterweg 0,41–0,53 s (ohne gemeinsamen Lesedurchgang
+1,7 s); nach einer Änderung im Slicer leitete vorher jeder Export neu her (0,72–1,13 s), mit
+übernommener Wahl 0,42–0,52 s. Gehalten nach Export, Grundlage, Druckdialog und
+Filamentauswahl 34 statt 72 MiB, die Filamentauswahl danach 0,19 statt 5,9 s. Tests
+`test_slicer_profiles.py` (Merker, neues, umbenanntes und gelöschtes Profil, Telemetrie, Cura
+und Prusa, Ausschnitt, Warten, Suchstand), `test_discover.py`, `test_export_background.py`,
+`test_print_settings_ui.py` (leere Wahl, erneuerte Wahl), `test_ui_export.py`
+(`test_the_3mf_export_reads_the_slicer_stock_in_one_pass` mit echtem Bestand: jede Datei
+einmal je Faden); jede Behebung mit Gegenprobe. Offen im Register: die Abnahme mit Orca,
+PrusaSlicer, Cura, Figur und Beispielprojekt am echten Fenster. Changelog: ja.
+
 ## RM-627: Ein Rand neben einem anderen Überhang ist keine lange Brücke (09.10.2026)
 
 <a id="rm-627-ein-rand-neben-einem-anderen-überhang-ist-keine-lange-brücke-09102026"></a>
@@ -46718,6 +46796,63 @@ mit Teil 0,28 schreibt 0,2 und druckt 0,20/0,20; Platte 0,44 mit Teil 0,28 schre
 druckt 0,20/0,20; Platte 0,28 mit Teil 0,2 druckt 0,20/0,20; Platte 0,24 mit Teil 0,44 (gleicher
 Rest) schreibt 0,44 und druckt 0,44/0,40 — jeweils wie Solidon sagt, das andere Teil wie seine
 Platte.
+
+## RM-567: Weniger Arbeitsspeicher — Cachegrenze, BLAS-Faden, Renderer am echten Fenster (09.10.2026)
+
+<a id="rm-567-weniger-arbeitsspeicher--cachegrenze-blas-faden-renderer-am-echten-fenster-09102026"></a>
+<a id="rm-567"></a>
+
+**RM-567 — Weniger Arbeitsspeicher: messen, wo er bleibt, und den Bedarf senken.**
+Robert, 08.10.2026: „analysieren, wie wir weniger Arbeitsspeicher verbrauchen“. Solidon soll
+auf acht Jahre alter Hardware laufen, viele Kunden haben 8 oder 16 GB. **Vorgehen:** Spitzen-
+und Dauerbelegung je Hauptweg (Bauplan §2.2) und an großen Korpusmodellen messen
+(Netzkern, exakter Kern, Merkmalserkennung, Schichtanalyse, Vorschau, Verlaufscache, Renderer),
+die größten Posten benennen, dann senken: doppelte Netzkopien, Caches ohne Grenze, Arbeiter,
+die ihre Ergebnisse halten. **Abnahme:** Ziel ist, dass die Hauptwege auf einem Rechner mit
+8 GB ohne Auslagern laufen, große Korpusmodelle mit 16 GB; die konkreten Grenzwerte setzt der
+Messbericht. Messbericht vorher und nachher mit Werkzeug und Rechner; je Senkung ein Test,
+der die Grenze hält; kein Rückschritt im Leistungsbudget (§31).
+
+**Teilstand 08.10.2026 (Paket L, Bericht `output/konsolidierung-2026-10-07/paket-l.md`):**
+Gemessen von außen je Prozess (Zusage und Arbeitssatz, alle 3 ms) an Riser, Eiffelturm,
+Spiderman, Murmelbrett und `chufang.3mf`. Der Ergebniscache hält höchstens RAM/8 (512 MB
+bis 4 GB), gezählt in Bytes samt trimesh-Cache und Schichtanalyse; ältere Einträge werden
+zuerst schlank (`MeshData.lean`), dann verdrängt (`scene/cache.py`, `core/memory.py`).
+Spiderman, acht Schritte im Fenster, 8 GB nachgestellt: 2,65 → 1,75 GB Arbeitssatz, Spitze
+4,05 → 3,10 GB. `import app`
+setzt einen BLAS-Faden: 1,5 GB Zusage weniger an 32 Kernen. Große Modelle: Murmelbrett mit
+Vollerkennung Spitze 3,5 GB Arbeitssatz, `chufang.3mf` (5,6 Mio.) 5,5 GB — unter 16 GB.
+**Review-Fixes 09.10.2026:** `trim` zählt einmal genau und zieht dann ab, was frei wird;
+jeder Merker zählt einzeln, ohne Stichprobe; die Merker der Zuordnung und der
+Zuordnungsschritte zählen in der Grenze und gehen vor einem Eintrag; exakte Körper zählen
+Tessellierung und Form und werden schlank; `physical_memory` nimmt die kleinste Grenze aus
+Rechner, cgroup, Windows-Job und Adressraum. Ein schlankes Netz behält Teile,
+Dreiecksflächen und die Schichtanalyse, die der Bericht nach dem Zurücknehmen fragt (RM-594
+und RM-593 im Archiv); Einträge und Schrittmerker zählen geteilte Merkmale einmal.
+Die Schichtanalyse hält ihre Konturen als Felder (RM-595, Archiv).
+**Renderer am echten Fenster (Paket L2, 09.10.2026, Bericht
+`output/konsolidierung-2026-10-07/paket-l2.md`):** Sonde `probe_window_real.py` über
+`build_application`, echte Plattform (Vulkan, RTX 4080, 2560 x 1440, zweiter Schirm), Treiber
+`memdrive_gpu.py` (Zusage und Arbeitssatz alle 3 ms, Grafikspeicher je Prozess über PDH alle
+100 ms), Riser, Eiffelturm und Spiderman, je Schritt öffnen, verschieben, zurück, Datei → Neu.
+Der Renderer selbst hält wenig: neun Bildtexturen (Farbe, Pick, Tiefe, Umgebungsverdeckung,
+zusammen rund 100 MB bei 2560 x 1440), die Netzpuffer der Anzeige 4–8 MB (Spiderman
+dezimiert); kein Puffer bleibt nach einem Wechsel lebend, die Zahl der wgpu-Objekte steht über
+alle Schritte. Leeres Fenster: Zusage 650 MB, dediziert 211 MB. Die einzige Spitze war ein
+zweiter Speicherblock von wgpu (256 MB dediziert und 256 MB Zusage, bleibend), am Riser beim
+Zurücknehmen auf den Ladestand. pygfx legte je gerichtetem Licht eine Schattentextur
+1024 x 1024 an, obwohl keines Schatten wirft (24 MB); seit `gfx_renderer.SHADOW_MAP_SIZE`
+ein Texel. In `test_render_contract.py` hält `test_no_light_casts_a_shadow_…` fest, dass kein
+Licht Schatten wirft, auch das des Achsenkreuzes, und
+`test_one_texel_shadow_maps_draw_the_same_image`, dass das Bild mit einem Texel dasselbe ist
+wie mit 1024 (Gegenprobe: mit Schattenwurf und -empfang unterscheiden sich die Bilder). Damit
+bleibt eine Sitzung mit einem Modell dieser Größe bei 273 MB dediziert (vorher 529 MB); kommt
+ein größeres Modell dazu, legt wgpu den Block dort an. Die Blockgröße steuert wgpu-native
+(keine Speicherhinweise in der C-Schnittstelle von wgpu 0.32); weiter unter
+[RM-698](ROADMAP.md#rm-698), Teil 2.
+Zwei Fensterläufe mit dem Spiderman brachen ohne Python-Spur ab, am Stand davor wie danach —
+[RM-694](ROADMAP.md#rm-694).
+
 ## RM-571: Ein Sims im offenen Becher neben einem gesperrten Kanal behält seine Stütze (09.10.2026)
 
 <a id="rm-571-ein-sims-im-offenen-becher-neben-einem-gesperrten-kanal-behält-seine-stütze-09102026"></a>

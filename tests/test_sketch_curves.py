@@ -1131,7 +1131,15 @@ def test_two_splines_join_with_matching_curvature() -> None:
 
 
 def test_a_line_and_an_arc_cannot_share_their_curvature_and_it_says_which() -> None:
-    """Widersprüchlich: Eine Gerade hat keine Krümmung, ein Bogen immer eine."""
+    """Widersprüchlich: Eine Gerade hat keine Krümmung, ein Bogen immer eine.
+
+    Gelöst wäre es nur im Unendlichen, und dorthin lief der Löser: nach
+    sechshundert Auswertungen ein Bogen mit 240 km Radius unter dem
+    Restfehler. Ob das als Widerspruch galt, entschied die letzte Stelle des
+    Rangs, und genannt wurde die Deckung statt des Übergangs. Seit RM-541
+    bleibt ein Teil, der weiter als ``FARTHEST_MOVE`` liefe, stehen, und die
+    Meldung nennt die beiden Bedingungen, die einander widersprechen.
+    """
     with pytest.raises(SketchConflictError) as caught:
         solve_sketch(
             _line_arc_joint(
@@ -1142,7 +1150,93 @@ def test_a_line_and_an_arc_cannot_share_their_curvature_and_it_says_which() -> N
             )
         )
 
-    assert 2 in (caught.value.first, caught.value.second)
+    assert {caught.value.first, caught.value.second} == {1, 2}
+
+
+@pytest.mark.parametrize("held", [(), (3,)])
+def test_a_part_gets_the_same_jacobian_dense_as_sparse(held: tuple[int, ...]) -> None:
+    """Kleine Teile bauen ihre Jacobimatrix gleich dicht (RM-541): Eintrag für
+    Eintrag dieselbe wie die dünne mit Spaltenwahl — an Linie, Bogen, Ellipse
+    und Spline samt Kurvenbedingungen, auch ohne die Spalten eines gehaltenen
+    Punkts."""
+    sketch = _spline_joint(
+        SketchConstraint("smooth", (5, 2, 7, 6)),
+        SketchConstraint("curvature", (5, 2, 7, 6)),
+        SketchConstraint("smooth", (2, 2, 1, 0)),
+    )
+    sketch = Sketch(
+        plane=sketch.plane,
+        elements=(
+            *sketch.elements,
+            SketchElement("ellipse", ((1.3, -0.7), (18.2, 6.1), (-2.9, 9.4))),
+            SketchElement("arc", ((30.0, 0.0), (40.0, 0.5), (29.0, 10.0))),
+        ),
+        constraints=sketch.constraints,
+    )
+    equations, anchors = solver._build_equations(sketch, {})
+    flat = anchors.reshape(-1) + 0.01 * np.sin(np.arange(anchors.size))
+    columns = np.asarray(
+        [
+            2 * point + axis
+            for point in range(anchors.shape[0])
+            if point not in held
+            for axis in (0, 1)
+        ]
+    )
+    where = {int(column): index for index, column in enumerate(columns)}
+
+    sparse = solver._jacobian(equations, flat)[:, columns].toarray()
+    dense = solver._dense_jacobian(equations, flat, where)
+
+    assert dense.shape == sparse.shape
+    assert np.array_equal(dense, sparse), "bitgleich"
+
+
+def test_a_curvature_that_cannot_hold_stops_early_in_a_long_chain(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Derselbe Widerspruch am Ende einer Kette aus zwanzig bemaßten Linien:
+    Der Löser hört auf, wenn der Rest nicht mehr fällt (RM-541).
+
+    Die Kette rechnet über ``lsmr``, und der Lauf kroch bis zur Vorgabe von
+    scipy, hundert Auswertungen je Unbekannte — an vierzig Linien 16 600
+    Auswertungen und 143 Sekunden im Qt-Hauptthread, von 0,0256 auf 0,0246
+    Rest. Gezählt wird die Arbeit; genannt wird die Krümmung.
+    """
+    count = 20
+    elements = [
+        SketchElement("line", ((i * 5.0, 0.2 * (i % 2)), (i * 5.0 + 5.0, 0.2 * ((i + 1) % 2))))
+        for i in range(count)
+    ]
+    end = (count * 5.0, 0.0)
+    elements.append(SketchElement("arc", ((end[0], 10.0), end, (end[0] + 10.0, 10.0))))
+    arc = 2 * count
+    line = 2 * (count - 1)
+    constraints = [
+        *(SketchConstraint("coincident", (2 * i + 1, 2 * i + 2)) for i in range(count - 1)),
+        *(SketchConstraint("distance", (2 * i, 2 * i + 1), "5") for i in range(count)),
+        SketchConstraint("coincident", (2 * count - 1, arc + 1)),
+        SketchConstraint("smooth", (2 * count - 1, line, arc + 1, arc)),
+        SketchConstraint("curvature", (2 * count - 1, line, arc + 1, arc)),
+        SketchConstraint("fixed", (0,)),
+    ]
+    sketch = Sketch(plane="plane:xy", elements=tuple(elements), constraints=tuple(constraints))
+    points = sum(len(element.points) for element in elements)
+    assert 2 * points > solver.EXACT_UP_TO, "die Kette rechnet über lsmr"
+    evaluations: list[int] = []
+    real = solver.least_squares
+
+    def counted(*args: object, **kwargs: object) -> object:
+        result = real(*args, **kwargs)  # type: ignore[arg-type]
+        evaluations.append(int(result.nfev))
+        return result
+
+    monkeypatch.setattr(solver, "least_squares", counted)
+    with pytest.raises(SketchConflictError) as caught:
+        solve_sketch(sketch)
+
+    assert sum(evaluations) <= 3 * solver.STALL_WINDOW, evaluations
+    assert len(constraints) - 2 in {caught.value.first, caught.value.second}, "die Krümmung"
 
 
 def test_curvature_belongs_to_the_end_of_a_spline() -> None:

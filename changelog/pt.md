@@ -56,7 +56,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Os modelos grandes carregam visivelmente mais depressa e precisam de menos memória, também com um histórico longo e em computadores com 8 GB.
 - Mesmo num histórico longo, um passo novo quase não demora mais a calcular do que o primeiro.
 - Desfazer e refazer são mais rápidos, e a memória que já não é precisa fica logo livre.
-- Resolver sobreposições e exportar em 3MF é bastante mais rápido.
+- Reparar e resolver sobreposições é até quatro vezes mais rápido em modelos grandes, e exportar em 3MF é bastante mais rápido.
 - A área de trabalho aparece mais depressa ao abrir ficheiros 3MF grandes.
 - Um modelo adicionado passa a ficar à vista, mesmo quando aparece ao lado de um modelo em que a vista estava ampliada.
 - No catálogo de blocos, *Gerir blocos* aparece aberto enquanto ainda não existir nenhum bloco próprio.
@@ -72,6 +72,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Só são oferecidos os slicers com que o Solidon trabalha, além de slicers de resina como o ChituBox e o Lychee. O Bambu Studio em AppImage passa a contar também.
 - O código de início e o volume de impressão vêm só da sua impressora, não de outro modelo da mesma série.
 - O diálogo de impressão atribui os perfis do slicer muito mais depressa, ao abrir e após cada mudança de slicer.
+- A exportação 3MF só volta a ler os perfis do slicer se algo mudou lá, e é bastante mais rápida.
 - O tempo de impressão estimado está mais perto do do slicer, muito mais perto em peças com suportes.
 - A verificação do espaço para suportes e skirt na mesa mede agora só sob as saliências. As peças junto ao rebordo já não recebem um aviso sem razão.
 - As sugestões aceites quase já não deixam sem suporte as saliências que precisam dele. *Manter os canais livres* só bloqueia o espaço de onde um suporte já não se conseguiria retirar.
@@ -129,7 +130,10 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Se houver um arredondamento junto a uma parede, *Aplicar o ângulo de saída* diz antes do cálculo que está a atrapalhar e indica *Remover característica* como saída.
 - Ao cortar uma parte de um corpo, desaparecem também chanfros, roscas e alojamentos de porcas dos blocos que lá estavam.
 - Em *Criar tampa* e *Criar tampa de rosca*, um campo vazio para a altura da abertura significa «Aresta superior», e 0 é a altura da mesa. Os projetos antigos mantêm a sua abertura.
-- Uma restrição de ângulo num esboço pequeno já não vira as linhas.
+- Um esboço resolve-se da mesma forma em qualquer computador e posição, também ao arrastar, e uma restrição de ângulo já não vira as linhas. Os projetos anteriores calculam-se como foram guardados.
+- Um esboço com muitas formas separadas resolve-se depressa, mesmo com centenas de retângulos ou círculos cotados.
+- Se *Curvatura contínua* não puder ser cumprida ao desenhar, o editor de esboços indica-o em segundos e não em minutos.
+- Se duas restrições se contradizem, o editor de esboços nomeia ambas em vez de reduzir uma linha ou um círculo a um ponto.
 - Um corpo levanta-se com três cliques: *Desenhar* na barra superior (Ctrl+Shift+E), depois canto, canto oposto, altura. Para fora une-se, para dentro recorta.
 - Ao levantar, as medidas podem ser escritas. Um duplo clique no passo abre as suas medidas, e em *Tipo* passa a sólido de revolução ou padrão de furos sem desenhar de novo.
 - No editor de esboços, *Concluído* leva de volta à vista e o clique seguinte põe a altura. Escape põe o contorno de lado, Ctrl+Z trá-lo de volta.

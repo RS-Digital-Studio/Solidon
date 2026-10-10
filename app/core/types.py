@@ -2876,17 +2876,29 @@ class SketchConstraint:
     value: str = ""
 
 
+#: Die Fassung des Skizzenlösers, mit der eine neue Skizze rechnet (RM-541).
+#:
+#: ``1`` ist der Löser bis Solidon 0.5: ein Lauf in Koordinaten über alle
+#: Punkte, dessen erster Schritt an der Entfernung vom Nullpunkt hing. ``2``
+#: rechnet je zusammenhängendem Teil in Verschiebungen gegen den Ausgang. Eine
+#: Skizze aus einer älteren Projektdatei trägt ``1`` (Migration 49 → 50) und
+#: rechnet wie gespeichert, bis jemand sie im Editor ändert.
+SKETCH_SOLVER: Final = 2
+
+
 @dataclass(frozen=True, slots=True)
 class Sketch:
     """Eine 2D-Skizze auf einer Ebene (§30.1).
 
     ``plane`` ist ``plane:xy``, ``plane:xz``, ``plane:yz`` oder
     ``feature:<object_id>:<feature_id>`` für eine erkannte planare Fläche.
-    Die ältere Schreibweise ``feature:<feature_id>`` bleibt lesbar."""
+    Die ältere Schreibweise ``feature:<feature_id>`` bleibt lesbar.
+    ``solver`` nennt die Fassung des Lösers (:data:`SKETCH_SOLVER`)."""
 
     plane: str
     elements: tuple[SketchElement, ...]
     constraints: tuple[SketchConstraint, ...] = ()
+    solver: int = SKETCH_SOLVER
 
 
 @dataclass(frozen=True, slots=True)
