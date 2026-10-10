@@ -1577,10 +1577,11 @@ def test_the_corner_numbers_are_part_of_the_reading_key() -> None:
 
     Derselbe Körper mit umnummerierten Ecken: Mit vollem Schlüssel liest der
     Zwilling selbst; ohne ``eckennummern`` bekäme er die Lesung des
-    Originals, und die ordnet ihre Punkte anders. ``umlauf`` und
-    ``deckungsgleich`` lassen sich so nicht belegen: Ein Fremdkörper mit
-    verdrehtem Umlauf oder eine deckungsgleiche Ecke im Inneren ändern nur den
-    Rechenweg der Lesung, nicht ihr Ergebnis (gemessen bei P5).
+    Originals, und die ordnet ihre Punkte anders. ``umlauf`` lässt sich nicht
+    belegen: Die Lesung wählt an ihm nur zwischen dem schnellen Weg über die
+    Bogenzahl und dem Einzelweg, und wo die beiden auseinandergehen könnten,
+    ändert sich der Ring im Abdruck schon (ein Fremdkörper mit verdrehtem
+    Umlauf liest gleich).
     """
     body, patch = _fillet_patch()
     vertices = np.array(body.vertices, dtype=np.float64)
@@ -1592,6 +1593,135 @@ def test_the_corner_numbers_are_part_of_the_reading_key() -> None:
     full, blind, own = _lent_reading(body, twin, patch, "eckennummern")
     assert full == own, "mit vollem Schlüssel liest der Zwilling selbst"
     assert blind != own, "ohne eckennummern gälte die Lesung des Originals"
+
+
+def test_coincident_corners_anywhere_are_part_of_the_reading_key() -> None:
+    """Gegenprobe für ``deckungsgleich``, den die Messbank nicht trifft (A1, Konzept §10).
+
+    Trägt ein Körper irgendwo deckungsgleiche Ecken, ordnet die Lesung ihre
+    Punkte nach den Koordinaten statt nach den Nummern (``vertex_rank``).
+    Nachgestellt mit zwei geschlossenen Tetraedern weit weg, die sich in einer
+    Ecke berühren: Fleck, Ring, Dichtheit und Umlauf bleiben, die Lesung
+    nicht; ohne ``deckungsgleich`` bekäme der Zwilling die des Originals.
+    """
+    body, patch = _fillet_patch()
+    start = len(body.vertices)
+    corners = [
+        [500.0, 0.0, 0.0],
+        [501.0, 0.0, 0.0],
+        [500.0, 1.0, 0.0],
+        [500.0, 0.0, 1.0],
+        [500.0, 0.0, 0.0],
+        [499.0, 0.0, 0.0],
+        [500.0, -1.0, 0.0],
+        [500.0, 0.0, -1.0],
+    ]
+    pair = [[0, 2, 1], [0, 1, 3], [0, 3, 2], [1, 2, 3], [4, 6, 5], [4, 5, 7], [4, 7, 6], [5, 6, 7]]
+    twin = trimesh.Trimesh(
+        np.vstack((np.asarray(body.vertices), corners)),
+        np.vstack((np.asarray(body.faces), start + np.asarray(pair, dtype=np.int64))),
+        process=False,
+    )
+    assert twin.is_watertight and twin.is_winding_consistent
+    assert features_module._coincident_vertices(twin)
+    assert not features_module._coincident_vertices(body)
+    full, blind, own = _lent_reading(body, twin, patch, "deckungsgleich")
+    assert full == own, "mit vollem Schlüssel liest der Zwilling selbst"
+    assert blind != own, "ohne deckungsgleich gälte die Lesung des Originals"
+
+
+def _lent_split(body: Any, twin: Any, patch: list[int], part: str) -> tuple[Any, Any, Any]:
+    """Tangentiale Trennung am Zwilling mit vollem Schlüssel, ohne ``part`` und frisch gerechnet."""
+    forget_cache()
+    features_module._tangential_pieces(body, MeshData(raw=body), patch)
+    full = features_module._tangential_pieces(twin, MeshData(raw=twin), patch)
+    forget_cache()
+    left_out = features_module._LEFT_OUT
+    left_out.add(part)
+    try:
+        features_module._tangential_pieces(body, MeshData(raw=body), patch)
+        blind = features_module._tangential_pieces(twin, MeshData(raw=twin), patch)
+    finally:
+        left_out.discard(part)
+    forget_cache()
+    own = features_module._tangential_pieces_read(twin, MeshData(raw=twin), patch, None)
+    return full, blind, own
+
+
+def test_the_origin_of_refined_triangles_is_part_of_the_split_key(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Gegenprobe für ``ursprung``, den die Messbank nicht trifft (A1, Konzept §10).
+
+    Nach *Kanten verfeinern* zählen die Stücke eines Dreiecks als eines
+    (``geom.mesh.refined_units``), und die Trennung misst ihre Stücke an
+    dieser Zahl. Ein Zwilling mit denselben Ecken, dessen Dreiecke je vier
+    einen Ursprung haben, trennt anders; ohne ``ursprung`` im Schlüssel bekäme
+    er die Stücke des Originals.
+    """
+    from app.core.geom.mesh import remember_refined_units
+
+    body, patch = _a_split_target(monkeypatch)
+    twin = _twin(body)
+    remember_refined_units(twin, np.arange(len(body.faces), dtype=np.int64) // 4)
+    full, blind, own = _lent_split(body, twin, patch, "ursprung")
+    assert full == own, "mit vollem Schlüssel trennt der Zwilling selbst"
+    assert blind != own, "ohne ursprung gälten die Stücke des Originals"
+
+
+def test_the_held_seam_angles_are_part_of_the_split_key(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Gegenprobe für ``winkel``, den die Messbank nicht trifft (A1, Konzept §10).
+
+    Die Trennung liest die Knickwinkel, wie der Körper sie hält — nach einer
+    starren Bewegung die mitgetragenen (``geom.transform._carry_cache``). Ein
+    Zwilling, der flache Nähte hält, trennt nichts; ohne ``winkel`` im
+    Schlüssel bekäme er die Stücke des Originals.
+    """
+    body, patch = _a_split_target(monkeypatch)
+    twin = _twin(body)
+    twin._cache.verify()
+    twin._cache["face_adjacency_angles"] = np.zeros(len(body.face_adjacency), dtype=np.float64)
+    twin._cache.id_set()
+    full, blind, own = _lent_split(body, twin, patch, "winkel")
+    assert full == own, "mit vollem Schlüssel trennt der Zwilling selbst"
+    assert blind != own, "ohne winkel gälten die Stücke des Originals"
+
+
+def test_the_state_of_the_round_is_part_of_the_classify_key(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Gegenprobe für ``runde``, den die Messbank nicht trifft (A1, Konzept §10).
+
+    ``classify`` fragt keinen Kegel, wo ein deckungsgleicher Fleck schon keinen
+    hatte (``no_cone_here``). Nachgestellt mit einer Kennzahl, die jeden Fleck
+    für deckungsgleich hält: Der Körper merkt Antworten ohne Kegellauf. Ein
+    Zwilling mit der echten Kennzahl rechnet sie mit vollem Schlüssel selbst
+    und erkennt wie frisch; ohne ``runde`` bekäme er die Antworten ohne Kegel.
+    """
+    from app.core.geom.mesh import read_mesh
+    from app.core.ingest.loader import normalise
+
+    path = Path(__file__).parent / "data" / "meshes" / "plate_chamfered_mouths.stl"
+    body = features_module._one_body(normalise(read_mesh(path.read_bytes(), ".stl"), "mm").mesh).raw
+
+    def twin() -> MeshData:
+        return MeshData(raw=trimesh.Trimesh(body.vertices.copy(), body.faces.copy(), process=False))
+
+    forget_cache()
+    own = detect(twin())
+    shipped = features_module._rigid_key
+    seen = {}
+    for left in (set(), {"runde"}):
+        forget_cache()
+        monkeypatch.setattr(features_module, "_rigid_key", lambda _body, _patch: ("alle",))
+        monkeypatch.setattr(features_module, "_LEFT_OUT", set(left))
+        detect(twin())
+        monkeypatch.setattr(features_module, "_rigid_key", shipped)
+        features_module._FEATURE_CACHE.clear()
+        seen[bool(left)] = detect(twin())
+        monkeypatch.setattr(features_module, "_LEFT_OUT", set())
+    assert seen[False] == own, "mit vollem Schlüssel erkennt der Zwilling wie frisch"
+    assert seen[True] != own, "ohne runde gälten die Antworten ohne Kegellauf"
 
 
 def test_a_patch_too_large_to_be_worth_it_is_read_without_memory(
