@@ -2645,8 +2645,8 @@ def _from_spans(result: SliceResult, cancelled: CancelToken | None = None) -> li
             code="slice.long_bridge",
             severity="warning",
             message=_(
-                "Über diesem Kanal spannt die Decke frei, ihre Bahnen hängen durch. Hier hilft "
-                "ein Übergang unter 45 Grad, eine Stütze käme nicht mehr heraus."
+                "Über diesem Kanal hängt die freie Decke durch. Ein Übergang unter 45 Grad hilft, "
+                "eine Stütze käme nicht mehr heraus."
             )
             if over_channel
             else _(

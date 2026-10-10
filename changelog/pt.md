@@ -58,7 +58,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Em modelos com milhares de características, mover e outros passos que não alteram a forma terminam até duas vezes mais depressa.
 - Ao reabrir um projeto, o relatório de verificação continua a indicar para que lugar livre foi um modelo inserido.
 - Desfazer e refazer são mais rápidos, e a memória que já não é precisa fica logo livre.
-- Resolver sobreposições e exportar em 3MF é bastante mais rápido.
+- Reparar e resolver sobreposições é até quatro vezes mais rápido em modelos grandes, e exportar em 3MF é bastante mais rápido.
 - A área de trabalho aparece mais depressa ao abrir ficheiros 3MF grandes.
 - Um modelo adicionado passa a ficar à vista, mesmo quando aparece ao lado de um modelo em que a vista estava ampliada.
 - No catálogo de blocos, *Gerir blocos* aparece aberto enquanto ainda não existir nenhum bloco próprio.
@@ -129,7 +129,10 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Se houver um arredondamento junto a uma parede, *Aplicar o ângulo de saída* diz antes do cálculo que está a atrapalhar e indica *Remover característica* como saída.
 - Ao cortar uma parte de um corpo, desaparecem também chanfros, roscas e alojamentos de porcas dos blocos que lá estavam.
 - Em *Criar tampa* e *Criar tampa de rosca*, um campo vazio para a altura da abertura significa «Aresta superior», e 0 é a altura da mesa. Os projetos antigos mantêm a sua abertura.
-- Uma restrição de ângulo num esboço pequeno já não vira as linhas.
+- Um esboço resolve-se da mesma forma em qualquer computador e posição, também ao arrastar, e uma restrição de ângulo já não vira as linhas. Os projetos anteriores calculam-se como foram guardados.
+- Um esboço com muitas formas separadas resolve-se depressa, mesmo com centenas de retângulos ou círculos cotados.
+- Se *Curvatura contínua* não puder ser cumprida ao desenhar, o editor de esboços indica-o em segundos e não em minutos.
+- Se duas restrições se contradizem, o editor de esboços nomeia ambas em vez de reduzir uma linha ou um círculo a um ponto.
 - Um corpo levanta-se com três cliques: *Desenhar* na barra superior (Ctrl+Shift+E), depois canto, canto oposto, altura. Para fora une-se, para dentro recorta.
 - Ao levantar, as medidas podem ser escritas. Um duplo clique no passo abre as suas medidas, e em *Tipo* passa a sólido de revolução ou padrão de furos sem desenhar de novo.
 - No editor de esboços, *Concluído* leva de volta à vista e o clique seguinte põe a altura. Escape põe o contorno de lado, Ctrl+Z trá-lo de volta.

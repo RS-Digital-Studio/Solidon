@@ -59,7 +59,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - En modelos con miles de características, mover y otros pasos que no cambian la forma terminan hasta el doble de rápido.
 - Al volver a abrir un proyecto, el informe de comprobación sigue indicando a qué hueco libre fue un modelo insertado.
 - Deshacer y rehacer son más rápidos, y la memoria que ya no se necesita se libera enseguida.
-- Resolver solapamientos y exportar a 3MF es bastante más rápido.
+- Reparar y resolver solapamientos es hasta cuatro veces más rápido en modelos grandes, y exportar a 3MF, bastante más rápido.
 - El área de trabajo aparece más rápido al abrir archivos 3MF grandes.
 - Un modelo añadido queda después a la vista, aunque se coloque junto a otro sobre el que se había hecho zoom.
 - En el catálogo de bloques, *Gestionar bloques* aparece abierto mientras aún no haya ningún bloque propio.
@@ -130,7 +130,10 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Si junto a una pared hay un redondeo, *Aplicar ángulo de desmoldeo* avisa antes de calcular de que estorba y propone *Quitar característica* como salida.
 - Al recortar una parte de un cuerpo, desaparecen también los chaflanes, roscas y alojamientos de tuerca de los bloques que había en ella.
 - En *Generar tapa* y *Generar tapa roscada*, un campo vacío para la altura de la abertura significa «Borde superior», y 0 es la altura de la cama. Los proyectos antiguos conservan su abertura.
-- Una restricción de ángulo en un dibujo pequeño ya no voltea las líneas.
+- Un boceto se resuelve igual en cualquier ordenador y posición, también al arrastrar, y una restricción de ángulo ya no voltea las líneas. Los proyectos anteriores se calculan como se guardaron.
+- Un boceto con muchas formas separadas se resuelve rápido, incluso con cientos de rectángulos o círculos acotados.
+- Si *Curvatura continua* no puede cumplirse al dibujar, el editor de bocetos lo indica en segundos y no en minutos.
+- Si dos restricciones se contradicen, el editor de bocetos nombra ambas en lugar de reducir una línea o un círculo a un punto.
 - Un cuerpo se levanta con tres clics: *Dibujar* en la barra superior (Ctrl+Mayús+E), luego esquina, esquina opuesta, altura. Hacia fuera se une, hacia dentro recorta.
 - Al levantar se pueden escribir las medidas. Un doble clic en el paso abre sus medidas, y en *Tipo* se convierte en un sólido de revolución o un patrón de orificios sin volver a dibujar.
 - Desde el editor de bocetos, *Terminado* vuelve a la vista y el siguiente clic pone la altura. Escape aparta el contorno, Ctrl+Z lo recupera.

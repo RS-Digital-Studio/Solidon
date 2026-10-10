@@ -53,8 +53,8 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-107 — Ubuntu-Workerabbruch mit aktuellem Testbestand zuordnen](#rm-107) | Plattformen, Pakete und Grafik | Der Arbeiter stirbt nach dem Overlay-Ziehtest, die Overlay-Datei allein ist grün; nächster Schritt: die Testfolge des abgestürzten Arbeiters nachstellen und halbieren |
 | [RM-187 — Dieselbe Geometrie auf jeder Plattform](#rm-187) | Plattformen, Pakete und Grafik | Paket A ist auf main: Bausteine, Muster, Skizzenbögen, Teilen und *Merkmal drehen* rechnen plattformgleich, der Wächter sieht durch den Merker der Erkennung; offen: Einpassungen in `perceive` (eigener Kern), Formen in `shapes.py` und Potenzen `**` im Kern (Liste am Punkt) |
 | [RM-468 — CPython 3.14.8 bringt Sicherheitskorrekturen in die ausgelieferte Laufzeit](#rm-468) | Plattformen, Pakete und Grafik | Pakete 0.5.2 und 0.5.3 mit 3.14.8 gebaut, die Stückliste des Windows-Pakets 0.5.3 nennt CPython 3.14.8 und OpenSSL 3.5.9; offen die drei Arbeitsplätze |
-| [RM-567 — Weniger Arbeitsspeicher: messen, wo er bleibt, und den Bedarf senken](#rm-567) | Plattformen, Pakete und Grafik | Cache-Bytegrenze, ein BLAS-Faden, Grenzen unter dem Rechner und Abräumen losgelassener Netze gebaut (Paket L, 08./09.10.); offen: Renderer am echten Fenster |
 | [RM-682 — Die mitgelieferten Schriften fehlen in Lizenzbeilage, Über-Dialog und SBOM](#rm-682) | Plattformen, Pakete und Grafik | Nachprüfung RM-471 09.10.: für DejaVu formal Regression gegenüber v0.5.1; Schriftsippen als eigene Komponenten aus einer Quelle |
+| [RM-694 — Am echten Fenster endeten zwei Läufe mit dem Spiderman ohne Python-Spur](#rm-694) | Plattformen, Pakete und Grafik | Unter Volllast auf dem i9 gesehen, alter und neuer Stand; auf ruhiger Maschine mit nativem Abbild nachstellen, bevor eine Ursache zugeordnet wird |
 | [RM-022 — Nachbau als Operationsfolge](#rm-022) | Geometrie, Erkennung und Druckvorbereitung | Profilkörper am Netz gebaut (05.10.), Besenhalter angenommen; offen der Korpuslauf über diesen Stand samt fünf Teilen über 600 s, die Fensterabnahme beim Release und die Wiederholung der berichtigten Zahlenanzeige am Fenster |
 | [RM-188 — CAD-Ausbau, Bedienung und Resin für 0.5.x](#rm-188) | Geometrie, Erkennung und Druckvorbereitung | Nächster Schritt P0.8: die vier Konzepte je Anforderung dem Code oder einem Paket zuordnen; daneben P4.1 unter RM-022, P8.1, P9.1 und Zeichnen Z3 (Z2 bis auf die Drehachse durch RM-559). Reste der gebauten Pakete und Fragen an Robert stehen am Punkt; Abschluss mit P5.3 |
 | [RM-191 — PrusaSlicer braucht für dieselbe Übergabe länger als die Orca-Familie](#rm-191) | Geometrie, Erkennung und Druckvorbereitung | In Arbeit: Claude (Worktree `F:/solidon-claude-c`). Nachgemessen am Gewürzregal (`56f70000`): Material innerhalb von 3 %, Zeit Prusa 1,93× Orca — behoben bis 1,19× (volle Füllung und Lückenfüllung für Prusa und Orca, Bahnbreite je Orca-Rolle, `machine_limits_usage = ignore`); der Rest ist die Bauweise des Slicers (Füllanker, Zusatzwände). Mit Herstellerbündel neu gemessen (06.10.): am MK4S ist PrusaSlicer schneller als Orca (218 gegen 345 min, Material gleich); langsamer bleibt PrusaSlicer ohne Bündel am CC2 (407 gegen 232 min, +20 % Material), weil Solidons Satz die Wandzahl nicht setzt (`perimeters = 3`, `extra_perimeters = 1`); nächster Schritt: im Prusa-Zweig für Drucker ohne Bündel Wandzahl und `extra_perimeters = 0` setzen, dann prusa:CC2 gegen elegoo:CC2 |
@@ -91,9 +91,9 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-527 — An der Kanalmündung entscheidet die Sperre gegen eine verlangte Stütze](#rm-527) | Geometrie, Erkennung und Druckvorbereitung | Entschieden (Robert, 06.10.): Mündung frei halten; Korpus gemessen (205 Körper, keine neuen Kanalstücke, kein geänderter Stützbedarf, keine neue Sperre); offen die Abnahme in Anycubic, Elegoo und Orca |
 | [RM-539 — Ein Baustein mit Trägeraufbau, auf der Innenseite gesetzt, baut nach außen ohne Befund](#rm-539) | Geometrie, Erkennung und Druckvorbereitung | Gefunden am Gehäuse-Beispiel (06.10.); offen der Befund beim Einsetzen und seine Handlung |
 | [RM-540 — Ein angeschnittenes erzeugtes Merkmal behält sein volles Maß, und die Schnittwege ordnen es verschieden zu](#rm-540) | Geometrie, Erkennung und Druckvorbereitung | Zwilling seit der Ausdehnungsregel (06.10.); ein Kriterium für alle Schnittwege festlegen |
-| [RM-541 — Der Skizzenlöser landet auf dem Intel-Mac im anderen Zweig einer Winkelbedingung](#rm-541) | Geometrie, Erkennung und Druckvorbereitung | Gefunden mit RM-531 (06.10.): 135° statt 45° unter macOS Intel; offen die Rechnung in Verschiebungen und ihre Wirkung auf unterbestimmte Skizzen |
+| [RM-541 — Der Skizzenlöser landet auf dem Intel-Mac im anderen Zweig einer Winkelbedingung](#rm-541) | Geometrie, Erkennung und Druckvorbereitung | Gebaut auf `paket/sk-skizzenloeser`, Review 1 und Nachprüfung behoben (10.10.); offen der Nachweis auf allen vier Plattformen mit dem Lauf beim Push nach main |
 | [RM-542 — Die fünf offenen Entscheidungen der Erstkonfiguration](#rm-542) | Geometrie, Erkennung und Druckvorbereitung | Gefunden beim Umräumen der Konzepte (RM-099, 06.10.): nur im Konzept geführt; offen der Abgleich mit RM-281 und Roberts Entscheidung |
-| [RM-568 — Merkmalerkennung und die übrigen langen Wege schneller machen](#rm-568) | Geometrie, Erkennung und Druckvorbereitung | Selbstschnittsuche, Zuordnung, Ringvereinfachung, 3MF und gemerkte Zuordnungsschritte gebaut (Paket L, 08./09.10.); offen: Kandidatensuche der Selbstschnitte, örtliche Neuerkennung nach Booleschen Operationen |
+| [RM-568 — Merkmalerkennung und die übrigen langen Wege schneller machen](#rm-568) | Geometrie, Erkennung und Druckvorbereitung | Selbstschnittsuche, Zuordnung, Ringvereinfachung, 3MF und gemerkte Zuordnungsschritte gebaut (Paket L, 08./09.10.); Kandidatensuche der Selbstschnitte (Paket L2, K-1 erfüllt); offen: Laden mechanischer Teile (K-3; mit druckgleich nach §11.2 sind Löserbudget und früheres Freiformurteil zulässig, die Verteilung auf mehrere Prozesse folgt als RM-637), Formen und Skelett, örtliche Neuerkennung (RM-592) |
 | [RM-670 — Jeder 3MF-Export sucht den Slicer und liest dessen Profilbündel neu](#rm-670) | Geometrie, Erkennung und Druckvorbereitung | In Arbeit: Claude (Worktree `F:/solidon-claude-e`). Regression seit v0.4.0: 3MF eines Quaders 0,36 → 1,6 s, weil jeder Export Slicer und Druckerliste neu liest |
 | [RM-671 — *Weich verschmelzen* liefert ein splittriges Netz, und *Dreiecke angleichen* hält die Kantenlänge nicht](#rm-671) | Geometrie, Erkennung und Druckvorbereitung | In Arbeit: Claude (Worktree `F:/solidon-claude-f`). Regression seit v0.4.4: Splitter unter 10° 2,9 → 11,8 %, nach dem Angleichen 30 % und doppelte Kantenlänge |
 | [RM-672 — Laden gleich nach dem Start dauert doppelt so lang, und unter Fremdlast hungert der Hilfsprozess das Laden aus](#rm-672) | Geometrie, Erkennung und Druckvorbereitung | Seit v0.5.1: sofortiges Öffnen 3,0 → 6–7 s; unter Fremdlast vor RM-380 gemessen 150 s statt 15 s, die Rechnung läuft weiter zurückgestellt |
@@ -107,6 +107,11 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-695 — Ein gespeichertes Projekt erkennt nach jedem Neustart alle Merkmale neu](#rm-695) | Geometrie, Erkennung und Druckvorbereitung | Nach Paket E: Erkennungsergebnis bitgleich im Plattencache ablegen (Format, `cache_version`) |
 | [RM-698 — Sparen, was der Druck nicht merkt: Speicher großer Modelle und ein gemeinsamer druckgleich-Vergleich](#rm-698) | Geometrie, Erkennung und Druckvorbereitung | Speicher am großen Modell messen; Vergleichshelfer für §11.2 bauen; Dreiecksindizes und einfach genau gehaltene Ecken mit Leitplanken prüfen |
 | [RM-699 — Ersteinrichtung nimmt Düsen bis 10 mm an, der Druckdialog bis 2 mm](#rm-699) | Geometrie, Erkennung und Druckvorbereitung | Obergrenze an einer Konstante festmachen und entscheiden, ob große Düsen (Granulat) dazugehören |
+| [RM-637 — Die Merkmalserkennung auf mehrere Prozesse verteilen, mit gleichem Ergebnis](#rm-637) | Geometrie, Erkennung und Druckvorbereitung | Entschieden (Robert, 09.10.): ja. Baut nach Paket E auf dessen Zweig; Laden mechanischer Teile bleibt sonst drei- bis fünfmal langsamer als v0.4.4 (Rest K-3) |
+| [RM-692 — Funktionale Gruppen werden nach jedem Verschieben neu gerechnet](#rm-692) | Geometrie, Erkennung und Druckvorbereitung | Gemessen in L3: Eiffelturm 3,6 s, Besteckkasten 2,8 s je Verschieben vor dem Bild; Merker in `perceive/features.py`, nach Paket E |
+| [RM-697 — Ein unverändertes Netz wird bei jedem Schritt neu auf die Platte geschrieben](#rm-697) | Geometrie, Erkennung und Druckvorbereitung | Gemessen in L3: jede Filamentzuweisung schreibt das gleiche Netz komprimiert neu (Spiderman 0,8 s); Formatfrage im Plattencache, nach Paket E |
+| [RM-752 — Bei jedem Übernehmen und Öffnen läuft eine volle Erkennung am Einheitswürfel](#rm-752) | Geometrie, Erkennung und Druckvorbereitung | Gemessen in D: 7–63 s CPU je Modell seit v0.5.1, findet nie ein Merkmal; `scene/evaluate.py` |
+| [RM-753 — Beim Skalieren wächst die Normale einer gerundeten Seite um 1/f](#rm-753) | Geometrie, Erkennung und Druckvorbereitung | Gefunden in D: `transformed_features` behandelt die Normale nicht als Einheitsvektor; `perceive/matching.py` |
 | [RM-070 — SpaceMouse auf macOS und Linux am echten Gerät abnehmen](#rm-070) | Bedienung und Darstellung | Die Rampe ist stetig und getestet, die Bildrate an 815 104 Dreiecken gemessen (`7ff34c67`: 16,7 → 8,7 ms im Median); offen bleiben Linux, die 3DxWare-Mausemulation, das Gerät selbst und die Rampe im Skizzenmodus (aus RM-183) |
 | [RM-204 — Ein Merkmalklick baut alle Handlungen des Fensters neu](#rm-204) | Bedienung und Darstellung | Abnahme am echten Fenster beim Release (RM-213) |
 | [RM-559 — Körper in der Szene mit drei Klicks aufziehen, als Körper oder als Ausschnitt](#rm-559) | Bedienung und Darstellung | Gebaut (Paket Z1, 08.10.): Werkzeug *Zeichnen*, Strg+Umschalt+E; offen die Abnahme am echten Fenster und die Nachzählung durch bedienlogik |
@@ -134,6 +139,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-687 — Ein wartendes Übernehmen im Merkmalfenster geht unter Last still verloren, obwohl die Statuszeile es zusagt](#rm-687) | Bedienung und Darstellung | Statuszeile sagt „Wird übernommen, sobald die Berechnung fertig ist.“, unter Last fällt der Klick still weg |
 | [RM-689 — Übernehmen ist frei, obwohl Text, Datei oder Bild fehlen; danach hält die Kette an](#rm-689) | Bedienung und Darstellung | Leerer Text oder fehlende Quelle: Übernehmen frei, angehaltener Schritt im Verlauf statt Sperre mit Grund |
 | [RM-658 — Ein Abschnitt, der sich selbst öffnet, merkt sich das als Wahl des Kunden](#rm-658) | Bedienung und Darstellung | Gefunden im Review von RM-680: `open_section` schreibt den Merker; ein Fix in `panels.open_section` deckt Katalog, Filamentangaben und Einstellungen |
+| [RM-696 — Der Prüfbericht des vorigen Stands rechnet neben der neuen Auswertung weiter](#rm-696) | Bedienung und Darstellung | Gemessen in L3: am Eiffelturm 37 s CPU in 19,8 s Wand beim Verschieben, beide teilen den GIL; ein neuer Stand sollte den alten Bericht abbrechen |
 | [RM-003 — Lizenzkette der Generatoren klären und TripoSG ersetzen](#rm-003) | KI und Generatoren | Weg 3 auf TRELLIS.2-4B und FLUX.2 [klein] 4B umgebaut, alte Einrichtung wird mit Ansage entfernt (Robert, 07.10.); offen die Kanzleifragen (DINOv3-Lizenz, Trainingsdaten, Apache-Hinweise), bis dahin nennt die Startseite den Prüfvorbehalt |
 | [RM-004 — Echte Text- und Bildgenerierung über alle Zielplattformen abnehmen](#rm-004) | KI und Generatoren | Windows mit TRELLIS.2 gefahren (07./08.10.): Text- und Bildweg bis zum Export; nach RM-550 sind 14 von 17 Läufen geschlossen und ohne Warnung, fünf davon nur eine Haut (seit RM-577 gemeldet), drei zerfallene meldet der Dialog vor dem Übernehmen; offen Linux und macOS |
 | [RM-251 — Mehrteilige Aufträge enden lokal am Schrittlimit](#rm-251) | KI und Generatoren | (a) 12 Schritte, (b) gebündelte Aufrufe und das lokale Zugbudget gebaut, Quote gehalten (27–28 von 39, 07.10.); offen: zehn mehrteilige Fälle enden weiter am Limit, nur jetzt an den 12 Schritten |
@@ -148,6 +154,8 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-467 — Bibliotheken alle drei Tage auf neue Versionen prüfen und aktualisieren](#rm-467) | Tests und Entwicklungswerkzeuge | Läufe 02.10. und 09.10. im Archiv, der nächste am 12.10.; Paketbeleg der Bauplattform unter RM-468 |
 | [RM-531 — Fenstertests und echte Slicer auch unter Linux und macOS in der CI](#rm-531) | Tests und Entwicklungswerkzeuge | Entschieden (Robert, 06.10.): Fenster- und Renderergruppe auf vier Plattformen am Tag, per Handstart und bei jedem Push auf main. 14 der 23 roten Fenstertests außerhalb von Windows behoben, auf allen vier grün (07.10.), der Intel-Kontrastfall danach (`58f768eb6`), Rendererfälle ohne Fenster seit RM-344 auf allen vier, die sieben übrigen Fälle grün in 37936316061, der Push nach main fährt Fenster- und Slicerauswahl selbst (Paket CI); offen die Abnahme am ersten main-Lauf |
 | [RM-688 — Der Test zu Curas Mindesttempo prüft das Mindesttempo nicht mehr](#rm-688) | Tests und Entwicklungswerkzeuge | Seit `9416f41ef` steht dort nur `assert motion is not None`; Attrappe und Vorgabe sind beide 10 |
+| [RM-693 — Der Versionsvergleich misst beim Laden gescheiterte Starts des Hilfsprozesses mit](#rm-693) | Tests und Entwicklungswerkzeuge | `messung.py` des Vergleichs 0.5.2 ohne `__main__`-Schutz; Sonden über einen Starter fahren, die Ladezahlen „aktuell“ von K-3 neu messen |
+| [RM-755 — Ein Texturklick während der Auswertung ist als Fenstertest flatterhaft](#rm-755) | Tests und Entwicklungswerkzeuge | Gefunden in SK: `test_operation_ui.py::test_a_texture_panel_click_while_the_scene_evaluates_changes_the_step_after_it` einzeln 1 von 2 rot; Ursache klären wie bei der Formsitzung (Zeitgeber beim Zustellen) |
 | [RM-002 — netcup-AVV und Freigabe der Rechtstexte belegen](#rm-002) | Veröffentlichung, Betrieb und Vertrieb | netcup-AVV belegen und zugehörige Rechtstexte fachlich abgleichen |
 | [RM-006 — Nächsten messbaren Schritt für die Sichtbarkeit festlegen](#rm-006) | Veröffentlichung, Betrieb und Vertrieb | Roberts Bestätigung des Plans bis 01.11. und die Montagsmessungen; der Punkt schließt, wenn Robert den Plan bestätigt |
 | [RM-008 — DMARC-Eintrag öffentlich prüfen und gegebenenfalls einrichten](#rm-008) | Veröffentlichung, Betrieb und Vertrieb | DMARC einrichten und legitimen Mailversand prüfen |
@@ -871,38 +879,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   **Abnahme:** Taglauf oder Vollstart mit allen Paketen grün, die Releaseakte nennt 3.14.8;
   `check_env` meldet auf jedem Arbeitsplatz 3.14.8.
 
-<a id="rm-567"></a>
-
-- [~] **RM-567 — Weniger Arbeitsspeicher: messen, wo er bleibt, und den Bedarf senken.**
-  Robert, 08.10.2026: „analysieren, wie wir weniger Arbeitsspeicher verbrauchen“. Solidon soll
-  auf acht Jahre alter Hardware laufen, viele Kunden haben 8 oder 16 GB. **Vorgehen:** Spitzen-
-  und Dauerbelegung je Hauptweg (Bauplan §2.2) und an großen Korpusmodellen messen
-  (Netzkern, exakter Kern, Merkmalserkennung, Schichtanalyse, Vorschau, Verlaufscache, Renderer),
-  die größten Posten benennen, dann senken: doppelte Netzkopien, Caches ohne Grenze, Arbeiter,
-  die ihre Ergebnisse halten. **Abnahme:** Ziel ist, dass die Hauptwege auf einem Rechner mit
-  8 GB ohne Auslagern laufen, große Korpusmodelle mit 16 GB; die konkreten Grenzwerte setzt der
-  Messbericht. Messbericht vorher und nachher mit Werkzeug und Rechner; je Senkung ein Test,
-  der die Grenze hält; kein Rückschritt im Leistungsbudget (§31).
-
-  **Teilstand 08.10.2026 (Paket L, Bericht `output/konsolidierung-2026-10-07/paket-l.md`):**
-  Gemessen von außen je Prozess (Zusage und Arbeitssatz, alle 3 ms) an Riser, Eiffelturm,
-  Spiderman, Murmelbrett und `chufang.3mf`. Der Ergebniscache hält höchstens RAM/8 (512 MB
-  bis 4 GB), gezählt in Bytes samt trimesh-Cache und Schichtanalyse; ältere Einträge werden
-  zuerst schlank (`MeshData.lean`), dann verdrängt (`scene/cache.py`, `core/memory.py`).
-  Spiderman, acht Schritte im Fenster, 8 GB nachgestellt: 2,65 → 1,75 GB Arbeitssatz, Spitze
-  4,05 → 3,10 GB. `import app`
-  setzt einen BLAS-Faden: 1,5 GB Zusage weniger an 32 Kernen. Große Modelle: Murmelbrett mit
-  Vollerkennung Spitze 3,5 GB Arbeitssatz, `chufang.3mf` (5,6 Mio.) 5,5 GB — unter 16 GB.
-  **Review-Fixes 09.10.2026:** `trim` zählt einmal genau und zieht dann ab, was frei wird;
-  jeder Merker zählt einzeln, ohne Stichprobe; die Merker der Zuordnung und der
-  Zuordnungsschritte zählen in der Grenze und gehen vor einem Eintrag; exakte Körper zählen
-  Tessellierung und Form und werden schlank; `physical_memory` nimmt die kleinste Grenze aus
-  Rechner, cgroup, Windows-Job und Adressraum. Ein schlankes Netz behält Teile,
-  Dreiecksflächen und die Schichtanalyse, die der Bericht nach dem Zurücknehmen fragt (RM-594
-  und RM-593 im Archiv); Einträge und Schrittmerker zählen geteilte Merkmale einmal.
-  Die Schichtanalyse hält ihre Konturen als Felder (RM-595, Archiv).
-  **Offen:** der Renderer am echten Fenster (offscreen nicht messbar).
-
 <a id="rm-682"></a>
 
 - [ ] **RM-682 — Die mitgelieferten Schriften fehlen in Lizenzbeilage, Über-Dialog und SBOM.**
@@ -923,6 +899,29 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   und Paket-SBOM je eine Komponente für die vier Sippen; Über-Dialog listet sie; eine fünfte Sippe
   ohne Eintrag macht einen Test rot. Bauplan §36, §37.
   Belege: `F:\solidon-review-reports\rm471\befunde.md` (B2), `rm471\bericht.md`.
+
+<a id="rm-694"></a>
+
+- [ ] **RM-694 — Am echten Fenster endeten zwei Läufe mit dem Spiderman ohne Python-Spur.**
+  Gefunden in Paket L2 (09.10.2026, RM-567) bei der Speichermessung am echten Fenster: Start wie
+  die Anwendung (`build_application`), Vulkan auf der RTX 4080, Fenster maximiert auf dem zweiten
+  Schirm (2560 x 1440), `faulthandler` an. Zwei Läufe mit `obj_1_spiderman.stl` (885 570
+  Dreiecke, in der Ansicht dezimiert) endeten ohne eine Zeile von Python: am Stand `a9e4d3f64`
+  beim zweiten Zurücknehmen mit `0xC0000005` (Zugriffsverletzung), am Stand mit den kleinen
+  Schattentexturen schon beim Öffnen mit `0xCFFFFFFF` (Spitze 5,4 GB Zusage). Beide liefen bei
+  2,5 GB freiem Arbeitsspeicher, 100 % Last und rund 130 fremden Python-Prozessen auf dem i9,
+  der zeitweise falsch rechnet (RM-272). Zugeordnet ist nichts — auch nicht den Schattentexturen,
+  denn der Stand davor brach ebenso ab.
+  **Nächster Schritt:** auf ruhiger Maschine nachstellen (anderer Rechner, oder der i9 mit den
+  Kernen auf `F0FF` gepinnt), je Stand zehn Läufe: öffnen, zweimal verschieben, zweimal zurück,
+  fünfmal hin und zurück, *Datei → Neu*. Dabei ein natives Abbild beim Absturz schreiben lassen
+  (Windows-Fehlerberichterstattung `LocalDumps` oder `procdump -e`), denn `faulthandler` sieht
+  nur Python.
+  **Abnahme:** zehn ungestörte Läufe je Stand ohne Abbruch — oder der Abbruch mit nativem Stapel
+  einer Komponente zugeordnet (wgpu und Vulkan-Treiber, Qt, NumPy) und als eigener Punkt mit Fix.
+  Belege: `output/konsolidierung-2026-10-07/paket-l2.md` (RM-567, „Beobachtung, nicht
+  zugeordnet“); die Sonde `paket-l2/probe_window_real.py` mit `run_main.py` und
+  `memdrive_gpu.py` liegt nur auf dem i9.
 
 ## Geometrie, Erkennung und Druckvorbereitung
 
@@ -3227,19 +3226,107 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
 
 <a id="rm-541"></a>
 
-- [ ] **RM-541 — Der Skizzenlöser landet auf dem Intel-Mac im anderen Zweig einer
-  Winkelbedingung.** `test_sketch_editor.py::test_the_angle_button_asks_for_its_degrees` setzt
-  45° und bekommt unter `macos-26-intel` 135°, unter Windows, Linux und macOS ARM 45° (Sonde
-  zu [RM-531](#rm-531), Lauf 37495714708). `least_squares` mit `method="trf"`
-  (`app/core/sketch/solver.py`) beginnt mit dem Vertrauensradius ‖x₀‖, und weil die
-  Unbekannten absolute Koordinaten sind, ist das in diesem Fall rund 13 mm: Der erste Schritt
-  reicht über beide Zweige, und welchen er trifft, entscheidet die Rechnung der Plattform.
-  Belegt ist der Radius, nicht die Rundung, die unter Intel kippt; an einem Intel-Rechner ist
-  nichts nachgerechnet. **Fix:** in Verschiebungen gegen den Ausgangsstand rechnen, damit der
-  erste Schritt am Zug hängt und nicht an der Lage des Ursprungs. Das ändert die Lösung
-  unterbestimmter Skizzen; deshalb vorher und nachher gegen die Skizzentests und die Budgets
-  aus §31 messen. **Abnahme:** der Test auf allen vier Plattformen grün, unterbestimmte Skizzen
-  bleiben am nächsten Stand zu ihrem Ausgang, die Laufzeit im Budget.
+- [~] **RM-541 — Der Skizzenlöser landet auf dem Intel-Mac im anderen Zweig einer
+  Winkelbedingung.** `test_sketch_editor.py::test_the_angle_button_asks_for_its_degrees` setzte
+  45° und bekam unter `macos-26-intel` 135° (Lauf 37495714708, damals noch über `lsmr`).
+  **Stand:** gebaut auf `paket/sk-skizzenloeser`, Review 1 und seine Nachprüfung behoben
+  (10.10.2026). **Offen:** der Nachweis auf allen vier Plattformen mit dem Lauf beim Push nach
+  main; bleibt der Intel-Mac rot, ist der Punkt nicht erledigt. **Abnahme:** der Test auf allen
+  vier Plattformen grün, unterbestimmte Skizzen bleiben am nächsten Stand zu ihrem Ausgang, die
+  Laufzeit im Budget.
+
+  **Ursache:** `least_squares` mit `method="trf"` beginnt mit dem Vertrauensradius ‖x₀‖ und misst
+  `xtol` an ‖x‖; die Unbekannten waren absolute Koordinaten. Der erste Schritt hing so an der
+  Entfernung der Zeichnung vom Nullpunkt — und, weil alles ein Lauf war, an jedem anderen Teil
+  der Zeichnung. Belegt ohne Intel-Rechner über Versätze, die die Rundung jeder Rechnung ändern
+  wie eine andere Maschine: Am Stand `78d39dec9` lag dieselbe Winkelskizze 1000 mm daneben bis zu
+  292 mm anders, neben vierzig freien Linien kippten 9 von 60 Paaren schon am Nullpunkt, und 69
+  von 300 versetzten Läufen endeten in einem Widerspruch, den es nicht gab. Daneben: `lsmr` bildet
+  bei einer einzelnen gespannten Bedingung einen Zweierraum aus Rauschen, im Zug genauso (zwei
+  Linien mit einer Bedingung standen nach zehn Mausschritten 1000 mm daneben 3,7 bis 38 mm
+  woanders, mit 0.5.3 bis 440 m), und eine Gerade mit gleicher Krümmung wie ein Bogen lief nach
+  sechshundert Auswertungen zu einem Bogen mit 240 km Radius.
+
+  **Umsetzung:** Gelöst wird je zusammenhängendem Teil (`_parts`, `_solve_part`) in
+  Verschiebungen ab null, um die Mitte der Zeichnung (`solve_sketch` um `_solve_here`; zurück rückt
+  nur, was sich bewegt hat). `x_scale` ist die Größe des Teils (`_part_size`: Streuung aller
+  Punkte, die er liest, gehaltene eingeschlossen, mindestens sein größter Längenrest), beim dichten
+  Lösen höchstens `DENSE_FIRST_STEP`. Ein kleiner Teil mit vollem Rang rechnet beim Lösen und im
+  Zug über `dogbox`, mit Doppelungen und ein großer Teil über TRF. Beim Lösen gilt eine Wegfolge
+  (`dogbox`, dichtes TRF, `lsmr`), deren erster Lauf zählt, der löst, ohne eine Linie mit
+  Richtungsbedingung oder einen Kreis unter `SHRUNK_BELOW` zu bringen; schrumpft es in jedem Weg,
+  rechnen sie noch einmal mit gehaltener Länge, sonst nennt die Meldung die Bedingungen am Element.
+  Ein Teil, der schon bis `_TOL` gilt, bleibt stehen; `_watchdog` hält einen Lauf an, der weiter
+  als `FARTHEST_MOVE` liefe oder dessen Rest sich in `STALL_WINDOW` Auswertungen nicht halbiert.
+  Die zweite Zugstufe beginnt am Stand vor dem Schritt, mit `DRAG_SLIDE_TRIES` = 100; kehren die
+  gezogenen Punkte ganz zurück, bleibt die Zeichnung stehen. Die Rangprüfung zerlegt getrennte
+  Blöcke einzeln (`_blockwise_rank`); das Paar einer Meldung ordnet sich nach dem Setzen, und ein
+  erfüllter Partner weicht dem mit den meisten gemeinsamen Zielpunkten. Die Fassung steht an der
+  Skizze (`Sketch.solver`, `types.SKETCH_SOLVER` = 2, Bauplan §9); Format 50 schreibt `"solver": 1` in jeden gespeicherten
+  Skizzentext, der über `_solve_in_coordinates` wie 0.5.0 bis 0.5.3 rechnet. Der Editor rechnet ab
+  der ersten Änderung mit der heutigen Fassung, von der Lage aus, die zu sehen war; das Binden von
+  Projektmaßen behält die Fassung. Die Fassung steht im Cache-Schlüssel, die Beispielprojekte
+  tragen Format 50.
+
+  **Review 1 (09./10.10.2026), behoben:** H-1 (Gelenk im Rundungsabstand folgte dem Zug nicht,
+  0,27 mm hinter dem Zeiger), M-1 (unerreichbare Züge biegsamer Formen je Ort bis 4,47 mm, in
+  eigener Sonde 8,8 mm anders), M-2 (erste Änderung an einer älteren Skizze bewegte Unberührtes
+  um 5,9 mm), G-1 (Binden stellte die Fassung still um), G-2 (dieser Punkt stand vor der Abnahme
+  im Archiv), G-4 (Ausnahme von „kein BLAS/LAPACK“ in `app/core/sketch/CLAUDE.md`). G-3: Die
+  Änderung von Bauplan §9 (`solver: int = 2`) hat der Koordinator Robert angesagt (09./10.10.,
+  Nachprüfung G-D). Dazu aus den ungeprüften Punkten: viele getrennte Teile (200 Kreise 2,8 s
+  statt 0,3 s, eingeführt mit diesem Punkt), die dichte Rangzerlegung (150 Rechtecke rund 10 s,
+  seit 0.5.0), ein Krümmungswiderspruch in einer langen Kette (16 600 Auswertungen, 143 s, seit
+  0.5.0) und ortsabhängige Paare in Widerspruchsmeldungen (drei von acht Fällen der Versatzsonde).
+
+  **Nachprüfung (10.10.2026), behoben:** H-A (eine Linie mit Richtungsbedingung schrumpfte über
+  `dogbox` auf Länge null, und ein Widerspruch hieß „gelöst“; in 0.5.3 auch an sieben von 1000
+  gewöhnlich gezeichneten Skizzen), M-C (lange gestreckte Ketten ab 17 Gliedern folgten dem
+  Zeiger jenseits der Reichweite auch in Mausschritten nicht; die vorgeschlagene Wiederholung ab
+  der ersten Stufe half nirgends und verdoppelte den Sprung, sie entfiel), G-A (scipy ≥ 1.16 für
+  `callback`), G-B (Wächter über 100 Zufallsskizzen und zwei feste Fälle für die Paarregeln statt
+  vier ausgesuchter Fälle, Begründung auf das Gemessene),
+  G-D (dieser Text), G-E (die BLAS/LAPACK-Ausnahme steht in `.claude/rules/kern.md`, Karte und
+  Begründung verweisen dorthin). Nebenbei die Kosten des Schrumpfwächters: `_spans` las je
+  Element alle Bedingungen (Umriss aus 2624 festen Kanten 1,2 s statt 10 ms), und jeder Teil
+  fragte alle Spannen (200 Kreise 1,1 s statt 0,13 s, 150 Rechtecke 2,2 s statt 0,23 s); beide
+  lesen jetzt ein Verzeichnis je Punkt, bitgleich über den Korpus.
+
+  **Nachweis** (betroffene Tests, keine CI auf dem Zweig): Wächter in `tests/test_sketch.py` —
+  `test_a_sketch_solves_alike_wherever_it_lies`, `test_a_drag_solves_alike_wherever_it_lies`,
+  `test_a_joint_follows_the_drag_even_a_rounding_apart`,
+  `test_a_line_a_rounding_long_takes_its_measure_wherever_it_lies`,
+  `test_a_drag_the_shape_cannot_follow_lands_alike_wherever_it_lies`,
+  `test_an_unsolvable_sketch_names_the_same_pair_wherever_it_lies`,
+  `test_what_the_solver_does_not_move_keeps_its_numbers`,
+  `test_many_separate_parts_solve_in_few_steps_each`,
+  `test_separate_rectangles_are_decomposed_one_by_one`,
+  `test_a_contradiction_does_not_hide_behind_a_shrunk_line`,
+  `test_a_healthy_sketch_drawn_far_from_its_solution_solves`,
+  `test_random_sketches_say_the_same_wherever_and_however_they_are_rounded`,
+  `test_a_contradiction_names_the_later_constraint_and_its_true_partner`,
+  `test_a_long_chain_follows_the_mouse_beyond_its_reach`, dazu
+  `test_sketch_curves.py::test_a_curvature_that_cannot_hold_stops_early_in_a_long_chain`,
+  `test_sketch_editor.py::test_the_first_change_to_an_older_sketch_moves_nothing_it_does_not_touch`
+  und `test_parameter_binding.py::test_binding_keeps_the_solver_of_an_older_drawing`; jeder am
+  Stand davor rot. Versatzsonde des Reviews (184 Fälle, Versätze bis 3,7·10⁶ mm): Lösen und Zug
+  0 Fälle über 10⁻⁹ mm (vorher 17 und 21, Zug bis 4,47 mm), 0 diskret anders (vorher 3).
+  739 mitgeschriebene Löser-Eingaben der Testsuite gegen den Stand vor Review 1: diskret gleich,
+  an drei Versätzen höchstens 1,8·10⁻¹⁰ mm, 1 386 statt 9 705 Auswertungen; 91 unterbestimmte
+  Lösungen landen anders, 46 näher und 45 weiter an der Zeichnung, höchstens 3,6 % mehr Bewegung.
+  §31-Kette im Wechsel unter Last: 8 Auswertungen, CPU-Median 120 ms gegen 114 ms vor RM-541.
+  Altdatei `tests/data/projects/sketch_solver_v49.p3d` rechnet wie mit 0.5.3 (2 656,656241 mm³).
+  Dieselben 739 Eingaben gegen den Stand vor der Nachprüfung: Lage bitgleich, diskret anders nur
+  gewollt (zwei Paare in Setzfolge, zwei vorher mit Linie auf einem Punkt „gelöste“ melden den
+  Widerspruch), 1 835 statt 1 386 Auswertungen — ein Widerspruch probiert jeden Weg.
+  Sonden der Nachprüfung am Ende: Nahsonde 1000 Skizzen, nichts entartet gelöst, und die sieben
+  neuen Absagen sind genau die, die 0.5.3 mit einem Element auf einem Punkt löste; Breitensonde
+  800 Skizzen, 605 gelöst und 195 unlösbar, keine Lage über `PRINT_LIMIT`, 4 nennen je Ort oder
+  Rauschen ein anderes Paar (vorher 19 von 173); Rauschsonde 382 Skizzen, Lösen und beide
+  Zugstufen unter verrauschtem scipy höchstens 1,7·10⁻⁹ mm auseinander, nie ein anderes Ergebnis.
+  Changelog: ja — Skizzen rechnen auf jedem Rechner gleich, auch beim Ziehen; viele getrennte
+  Formen lösen schnell; ein unerfüllbares *Krümmungsstetig* meldet sich nach Sekunden; zwei
+  widersprüchliche Bedingungen werden genannt, statt eine Linie auf einen Punkt zu ziehen.
 
 <a id="rm-542"></a>
 
@@ -3269,7 +3356,55 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   (`garden-hose-holder.3mf`) rund 11 s.
   Vermerk 09.10.2026 (Abgleich der Prüfberichte vom 03.10.): Der Versionsvergleich 0.5.2 nennt Wege, die seit v0.5.0 an der Erkennung hängen und Paket L nicht berührt hat. Formen und Skelett *Fertig* an einer Figur: Op `pose_armature` 0,40 s (v0.4.4) → 5,0 s, `sculpt_strokes` 0,39 → 3,1 s (≈ 14 800 Dreiecke), drei Viertel davon in `_refined_fit`/`refine.solve`, deren Kegel- und Torusergebnis an der Freiform danach verworfen wird, weil das Freiform-Urteil erst nach allen Einpassungen fällt (`app/core/perceive/features.py:1599`, `:8351`); Beispiel *Figur formen* öffnen 0,73 s (v0.3.5) → 1,74 s; Übernehmen eines erzeugten Stuhls 27–54 s (v0.3.5–v0.5.1) → 67–71 s, im Wechsel mit v0.5.1 das 1,8- bis 3,5-Fache; kleine Rückschritte bei Fenster öffnen, Aufsetzen, Speichern und Öffnen, dazu die Kernprüfung beim ersten exakten Körper (`app/core/registry/registry.py:187`, 0,9 s), die sich in den Programmstart vorziehen ließe. Hebel: die Freiformfrage vor der Feinanpassung beantworten und nach Formen und Stellen, die Lage und Topologie nicht ändern, die Merkmale des Vorgängers übernehmen statt den ganzen Körper neu zu erkennen, also nur die berührten Flecken neu einpassen. Belege: `F:\solidon-review-reports\regression-0.5.2\weg4\befunde.md` (W4-1, W4-5, W4-7), `F:\solidon-review-reports\regression-0.5.2\weg3\befunde.md` (Abschnitt 3).
   Vermerk 09.10.2026 (Versionsvergleich Kern 0.5.2, K-1): *Reparieren* ist eine **Regression gegenüber v0.5.1**, eingeführt mit `eae249d2d` (in v0.5.2): Die Schnittprüfung entscheidet je Kandidatenpaar mit Rundungsschranken je Koordinate und Kollinearitätsprüfung (`app/core/geom/intersections.py:690` `crossing_pairs`, `:171` `_point_on_line_with_rounding`, `:166` `_half_ulp`; Aufruf `app/core/geom/repair.py:5165` `_intersection_findings` → `:4313` `crossings_of`), am 03.10. bei 94 % der Reparaturzeit des GLB. Nachgemessen am 09.10. (`repair(..., inspect_intersections=True)` wie die Op, zwei Runden im Wechsel unter Fremdlast, CPU-Zeit des Prozesses in s): `image_00001_.glb` v0.5.1 12,1–16,2, origin/main `1c15e212e` 27,7–33,0, `origin/welle2` 8,1–10,6; `parametric-laptop-riser.stl` 15,7–19,2 / 30,6–36,6 / 17,2–24,2; Schraubendreherhalter 0,56–1,09 / 1,0–1,47 / 0,61–1,20. Auf main also weiter etwa das Doppelte von v0.5.1; Paket L (`c2304face`, Nachbarprüfung vor der genauen Prüfung) holt den GLB unter v0.5.1, den Laptop-Ständer auf etwa 10–15 % darüber. Abnahme dafür nach dem Zusammenführen: die drei Modelle und `dense_1m.stl` höchstens 25 % über v0.5.1 bei gleichen Befunden, `test_self_intersections.py` grün. Belege: `F:\solidon-review-reports\regression-0.5.2\kern\befunde.md` (K-1), Messung `F:\solidon-review-reports\abgleich\k1.txt`.
-  Vermerk 09.10.2026 (Versionsvergleich Kern 0.5.2, K-3): Laden mechanischer Teile ist eine **Regression gegenüber v0.4.4**: Besteckkasten (`Modern++Cutlery+Organizer…3mf`, 59 744 Dreiecke) bis bearbeitbar 3,45–3,51 s → 17,97–18,45 s, Laptop-Ständer 6,7–8,0 → 22,5–23,2 s, `dense_1m.stl` 6,6–6,7 → 20,0–20,1 s (am Stand `09d8e9485`, Fenster offscreen, ruhige Maschine). Die Erkennung allein am Besteckkasten 1,13–1,54 → 6,15–8,09 s, davon 6,2 s in 958 Feinanpassungen (`app/core/perceive/features.py:2630` `classify` → `:8351` `_refined_fit` → `app/core/perceive/refine.py:244` `solve`), eingeführt mit `851f913af` (v0.5.0); Gewinn: Maße auf zwei Stellen und Gewinde als Gewinde. Hebel: die Feinanpassung nur für Flecken, die nach der groben Einpassung als Merkmal bleiben. Am Stand origin/main nicht nachgemessen, die Stellen sind unverändert, Paket L ändert sie nicht. Abnahme dafür: Besteckkasten und Laptop-Ständer höchstens 25 % über v0.4.4 bei gleichen Merkmalen und Maßen wie heute, §31. Der zweite Anteil (Schalenfrage je Füllrunde über den Hilfsprozess) steht bei [RM-672](#rm-672). Beleg: `F:\solidon-review-reports\regression-0.5.2\kern\befunde.md` (K-3).
+  Vermerk 09.10.2026 (Paket L2, Bericht `output/konsolidierung-2026-10-07/paket-l2.md`): **K-1
+  erfüllt.** Planwahl ohne Ordnen der Einträge, Sweep über die Eintragsfolge, zweite
+  Ebenentrennung nur für Ungetrennte (`intersections.py`); dieselben Paare in derselben Folge
+  (Tests gegen den alten Sweep; Korpus 525 Körper bitgleich, fünf über 400 000 Dreiecken dort
+  nicht verglichen — das Review fuhr sie mit Reparaturbudget nach, gleich). Reparatur wie die Op, CPU im
+  Wechsel, Median v0.5.1 / vorher / jetzt: Laptop-Ständer 18,1 / 20,6 / 15,6 s, GLB 13,8 / 8,8 /
+  8,2 s, `dense_1m` 20,6 / 15,7 / 14,5 s, Schraubendreherhalter 1,03 / 1,17 / 1,08 s. **K-3
+  nicht erreicht:** Laden Besteckkasten v0.4.4 6,4–7,0 s CPU, jetzt 20–22 s, davon Erkennung
+  17–18,6 s ohne einen Posten über 35 % (Löser 5,5–6,0 s, davon 3,5 s in Läufen am Budget;
+  Stapel 3,8–4,4 s; tangentiale Trennung 4,2–4,5 s; Zylinder 1,5–2,0 s). Der Hebel aus dem
+  Befund setzt eine grobe Einpassung voraus, die über das Merkmal entscheidet — der Kegel hat
+  keine, und der lineare Vorfit lag bis zum 12- bzw. 27-Fachen der Toleranz neben dem Endmaß.
+  Bitgleich versucht: Löser ohne NumPy-Skalare (kein Gewinn, verworfen), Stapel auch für kleine
+  Gruppen (Erkennung 17,2 → 18,5 s, verworfen), Achsnachführung (in der Funktion −20 %, im
+  Review −10 % bei überlappenden Läufen; behalten). Die Messung des Versionsvergleichs lief ohne
+  Hauptmodulschutz: Der Hilfsprozess startete die Sonde noch einmal, und das Laden rechnete nach
+  zwei Fehlstarts im eigenen Prozess (RM-693); die Zahlen oben sind ohne diese Falle. Der
+  Laptop-Ständer lädt 33 s gegen 21 s (Wand), ein Viertel davon wartet in
+  `_shell_of_each_face` auf den Hilfsprozess (RM-672).
+  **K-3 unter „druckgleich“** (Bauplan §11.2, Entscheidung Robert 09.10.2026): Gleich bleiben
+  Merkmale mit Art und Kennung, Befunde und Fragen; Maße und Lagen dürfen gegen den Stand davor und
+  gegen v0.5.3 um höchstens `PRINT_LIMIT` (2,5 µm) abweichen, und örtliche und ganze Erkennung,
+  Plattformen und Cache bleiben untereinander bitgleich. Damit sind Hebel zulässig, die die
+  Bitregel ausschloss: das Löserbudget und ein Abbruch, sobald das Maß unter 2,5 µm feststeht; das
+  Freiformurteil vor der Feinanpassung, wenn Merkmale, Arten und Kennungen gleich bleiben. Robert
+  hat dazu die Verteilung der Erkennung auf mehrere Prozesse mit gleichen Ergebnissen beauftragt
+  (RM-637, nach RM-592). Abnahme: Besteckkasten und Laptop-Ständer höchstens 25 % über v0.4.4,
+  Merkmale mit Art und Kennung gleich, die größte Maßabweichung gegen den Stand davor und gegen
+  v0.5.3 im Nachweis.
+  Vermerk 10.10.2026 (Paket L2, Review 1): **Speicher der Selbstschnittsuche.** Die Blockschleife
+  hält Seitenfelder und Heimatscheibe nur noch für das Fenster vom ersten Eintrag bis zum letzten
+  Partner (im Mittel 1,0- bis 1,4-mal je Eintrag gelesen), `_keys` und `_entries` geben jedes
+  Zwischenfeld frei, sobald es nicht mehr gebraucht wird, und `_surface` rechnet die längste Kante
+  Kante für Kante — dieselben Rechnungen auf denselben Zahlen. Bitgleich über 446 Eingänge
+  (34,7 Mio. Dreiecke aus `tests/data` und `F:\3D Dateien`, roh und normalisiert, dazu
+  Grenzfälle; Paare samt Folge, Ebenengleichheit, Vollständigkeit und geprüfte Dreiecke mit
+  Reparaturbudget, mit 997 und ohne Budget, um aktive Dreiecke, `intersects`) und über alle zwölf
+  Beispielprojekte. Spitze der Suche mit Reparaturbudget (`tracemalloc` samt NumPy, MB) vor L2 /
+  mit L2 / jetzt: Laptop-Ständer 128 / 101 / 90, GLB 160 / 136 / 113, `chufang`-Körper 244 / 238 /
+  191, `dense_1m` 454 / 510 / 409, Mausoleumsdrache 746 / 798 / 622. Am Drachen lag die Spitze
+  beim Bilden der Einträge, wo L2 die ungeordneten Felder neben den geordneten hielt, an
+  `dense_1m` in den Seitenfeldern. `test_surface_and_entries_hold_no_spare_copy_at_their_peak`
+  hält höchstens acht Felder je Eintrag und 33 je Dreieck (L2: 11 und 37). Gleich schnell: im
+  selben Prozess eng im Wechsel, je vier Läufe, CPU-Median L2 → jetzt Laptop-Ständer 11,3 →
+  10,9 s, GLB 4,5 → 4,4 s, `chufang`-Körper 17,4 → 17,2 s, Würfel (250 000 Dreiecke) 28,0 →
+  28,0 s. Gegen v0.5.3 geht Reparieren wie die Op 1,4- bis 4,1-mal so schnell (neun Modelle),
+  das Auflösen von Überschneidungen 3,3- bis 4,6-mal (fünf Körper), mit gleichem Netz und
+  gleichen Befunden.
+  Vermerk 09.10.2026 (Versionsvergleich Kern 0.5.2, K-3): Laden mechanischer Teile ist eine **Regression gegenüber v0.4.4**: Besteckkasten (`Modern++Cutlery+Organizer…3mf`, 59 744 Dreiecke) bis bearbeitbar 3,45–3,51 s → 17,97–18,45 s, Laptop-Ständer 6,7–8,0 → 22,5–23,2 s, `dense_1m.stl` 6,6–6,7 → 20,0–20,1 s (am Stand `09d8e9485`, Fenster offscreen, ruhige Maschine). Die Erkennung allein am Besteckkasten 1,13–1,54 → 6,15–8,09 s, davon 6,2 s in 958 Feinanpassungen (`app/core/perceive/features.py:2630` `classify` → `:8351` `_refined_fit` → `app/core/perceive/refine.py:244` `solve`), eingeführt mit `851f913af` (v0.5.0); Gewinn: Maße auf zwei Stellen und Gewinde als Gewinde. Hebel: die Feinanpassung nur für Flecken, die nach der groben Einpassung als Merkmal bleiben. Am Stand origin/main nicht nachgemessen, die Stellen sind unverändert, Paket L ändert sie nicht. Abnahme dafür: Besteckkasten und Laptop-Ständer höchstens 25 % über v0.4.4 bei gleichen Merkmalen und Maßen wie heute, §31. Der zweite Anteil (Schalenfrage je Füllrunde über den Hilfsprozess) steht bei [RM-672](#rm-672). Beleg: `F:\solidon-review-reports\regression-0.5.2\kern\befunde.md` (K-3). Die Ladezeiten „aktuell“ dieser Tabelle enthalten je Probe zwei Fehlstarts des Hilfsprozesses ([RM-693](#rm-693)); über einen Starter gemessen steht der Besteckkasten bei 20–22 s (Vermerk Paket L2 oben).
 
 <a id="rm-670"></a>
 
@@ -3622,6 +3757,17 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   `a·n + b` laufen in int32 über. Abnahme: Spitze am großen Modell gemessen
   gesenkt, Ergebnisse druckgleich über Korpus und Beispielprojekte, alle
   Gleichheitsverträge aus §11.2 grün. Der 256-MB-Block von wgpu ist Teil (2).
+  Vermerk 10.10.2026 (Paket L2, RM-567, am echten Fenster mit Vulkan auf der RTX 4080): Beim
+  Zurücknehmen auf den Ladestand des Laptop-Ständers legt wgpu-native einen zweiten
+  Speicherblock an — dediziert 273 → 529 MB, Zusage 256 MB mehr, bleibend, in fünf von fünf
+  Läufen und ohne eine GPU-Anlage ab 4 MB in diesem Schritt. Mit den Schattentexturen von einem
+  Texel (RM-567) kommt er erst mit dem nächsten größeren Modell, am Ende einer langen Sitzung
+  steht er gleich. Blockgröße und Behalten steuert wgpu-native; die C-Schnittstelle von wgpu 0.32
+  reicht keine Speicherhinweise durch. Zu prüfen: ob eine neuere wgpu-Fassung `memory_hints`
+  durchreicht oder D3D12 unter Windows weniger hält — eine Entscheidung über den Renderer, die
+  Robert fällt. Schon gesenkt (Teil 2): die Spitze der Selbstschnittsuche an sehr großen Netzen,
+  am Mausoleumsdrachen 746 → 622 MB bei gleichem Ergebnis ([RM-568](#rm-568), Vermerk Review 1
+  von L2).
 
 <a id="rm-699"></a>
 
@@ -3633,6 +3779,55 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   Konstante für beide Felder, ein Wert über 2 mm wird entweder unterstützt
   (Granulatdüsen, mit Folgen für Schichthöhe und Linienbreite) oder in der
   Ersteinrichtung mit Grund abgelehnt; Test hält beide Felder gleich.
+
+<a id="rm-637"></a>
+
+- [ ] **RM-637 — Die Merkmalserkennung auf mehrere Prozesse verteilen, mit gleichem Ergebnis.**
+  Rest von K-3 (Paket L2): Das Laden mechanischer Teile bleibt drei- bis fünfmal langsamer als
+  v0.4.4, und bitgleich ist in einem Prozess nichts mehr zu holen. Robert hat am 09.10.2026 den
+  Weg „Erkennung der Flecken auf mehrere Prozesse verteilen“ freigegeben. Baut auf dem Stand von
+  Paket E (örtliche Erkennung, P5), dessen Schnittstellen dafür vorbereitet sind.
+  **Abnahme:** gleiche Merkmale, Arten und Kennungen wie im Einzelprozess über Korpus und
+  Beispielprojekte (Zwei-Wege-Vertrag, bitgleich, Bauplan §11.2), auf jeder Plattform; Ladezeit
+  mechanischer Teile im Wechsel gemessen; Abbruch und Fortschritt wie heute; Speicher je
+  Prozess begrenzt.
+
+<a id="rm-692"></a>
+
+- [ ] **RM-692 — Funktionale Gruppen werden nach jedem Verschieben neu gerechnet.**
+  Gemessen in Paket L3 (paket-l3.md): Vor dem Bild rechnet ein Verschieben die funktionalen
+  Gruppen neu, am Fenster am Eiffelturm 3,6 s, am Besteckkasten 2,8 s, obwohl sich nur die Lage
+  ändert. Der Merker sitzt in `perceive/features.py` (Gebiet E).
+  **Abnahme:** Bei einer starren Bewegung werden die Gruppen mitgeführt statt neu gerechnet,
+  druckgleich gegen den vollen Weg (Zwei-Wege-Vertrag: bitgleich), Zeit im Wechsel gemessen.
+
+<a id="rm-697"></a>
+
+- [ ] **RM-697 — Ein unverändertes Netz wird bei jedem Schritt neu auf die Platte geschrieben.**
+  Gemessen in Paket L3: Jede Filamentzuweisung schreibt das gleiche Netz komprimiert in den
+  Plattencache, am Spiderman 0,8 s. Formatfrage im Plattencache, gehört nach Paket E (Format,
+  `cache_version`).
+  **Abnahme:** gleiches Netz wird nicht erneut geschrieben (Inhaltsschlüssel), Auswertung mit und
+  ohne Cache gleich, Zeit im Wechsel gemessen.
+
+<a id="rm-752"></a>
+
+- [ ] **RM-752 — Bei jedem Übernehmen und Öffnen läuft eine volle Erkennung am Einheitswürfel.**
+  Gefunden in Paket D (paket-d.md, Welle 3): Beim Übernehmen eines erzeugten Modells und beim
+  Öffnen läuft eine volle Merkmalserkennung am 1,9-mm-Einheitswürfel, die nie ein Merkmal findet.
+  Kosten: Drache 7–11 s, Stuhl 15–18 s, Bett 48–63 s CPU, in allen Ständen seit v0.5.1.
+  `scene/evaluate.py`.
+  **Abnahme:** Die Erkennung läuft nur am Netz, an dem sie gebraucht wird; Merkmale, Befunde und
+  Kennungen danach gleich (druckgleich gegen den Stand davor), Erkennungen gezählt, Zeit gemessen;
+  Changelog als Behebung (Ursache in v0.5.1).
+
+<a id="rm-753"></a>
+
+- [ ] **RM-753 — Beim Skalieren wächst die Normale einer gerundeten Seite um 1/f.**
+  Gefunden in Paket D: `transformed_features` (`perceive/matching.py`) skaliert die Normale einer
+  gerundeten Seite wie einen Ort, sie ist danach kein Einheitsvektor mehr.
+  **Abnahme:** Test zuerst (Skalierung um 2 und 0,5, Normale bleibt Einheitsvektor, Zuordnung
+  unverändert), Gegenprobe am alten Stand rot.
 
 ## Bedienung und Darstellung
 
@@ -4924,6 +5119,15 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   **Abnahme:** Je Abschnitt: zuklappen, Selbstöffnung auslösen, Dialog schließen und neu öffnen →
   zu; nach einem Klick des Kunden auf die Kopfzeile bleibt dessen Zustand. Bauplan §2.5.
 
+<a id="rm-696"></a>
+
+- [ ] **RM-696 — Der Prüfbericht des vorigen Stands rechnet neben der neuen Auswertung weiter.**
+  Gemessen in Paket L3: Beim Verschieben am Eiffelturm teilen sich der Prüfbericht des vorigen
+  Stands und die neue Auswertung den GIL, 37 s CPU in 19,8 s Wand. `print_findings_flow` löst
+  einen alten Lauf erst ab, wenn ein neuer Stand fertig ist.
+  **Abnahme:** Ein neuer Auswertungsauftrag hält den Bericht des alten Stands an (oder er gibt den
+  GIL her), der Bericht des neuen Stands kommt gleich; Zeit bis zum Bild im Wechsel gemessen.
+
 ## KI und Generatoren
 
 <a id="rm-003"></a>
@@ -5463,6 +5667,41 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   `types.py:1260`; Gegenprobe mit ausgeschalteter Zuordnung in `slicer_keys.py:576` rot. Bauplan
   §35, §28.
   Belege: `F:\solidon-review-reports\commits-0910\befunde.md` (T-2).
+
+<a id="rm-693"></a>
+
+- [ ] **RM-693 — Der Versionsvergleich misst beim Laden gescheiterte Starts des Hilfsprozesses mit.**
+  Gefunden in Paket L2 (09.10.2026, RM-568 K-3). Das Messgerüst des Versionsvergleichs 0.5.2
+  (`F:\solidon-review-reports\regression-0.5.2\kern\messung.py`, aufgerufen von `laden_ab.sh`)
+  rechnet ohne `if __name__ == "__main__"`. Der Hilfsprozess des Netzkerns startet mit `spawn`,
+  lädt das Hauptmodul noch einmal und führt dabei die Sonde aus, statt sich zu melden; die
+  Anwendung gibt ihn auf und rechnet im eigenen Prozess weiter. In sechs der acht Ladeproben
+  „aktuell“ (`kern\proben\laden\aktuell-0[7-9]-*.json.log`, alle mit Modellen über
+  `kernel_process.OFFLOAD_ABOVE`) steht zweimal „kernel helper did not start“; die Ladezeiten
+  „aktuell“ der Tabelle K-3 in `befunde.md` enthalten diese zwei Fehlstarts. Unter Last kostete
+  das am Besteckkasten im Stichprobenprofil 28 von 50 s Wanduhr. Die Zahlen von Paket L2 in
+  RM-568 sind ohne diese Falle gemessen (Sonde über einen Starter, der sie unter eigenem Namen
+  lädt). Die Anwendung selbst ist nicht betroffen: Sie rechnet nur unter `__main__` und ruft im
+  Paket zuerst `freeze_support()` (`kern.md`).
+  **Fix:** jede Sonde des Vergleichs, die den Kern nebenläufig ruft oder ein Fenster lädt, rechnet
+  unter `__main__` oder startet über einen Starter (`runpy.run_path(sonde, run_name="sonde")`);
+  ein Lauf mit „kernel helper did not start“ im Protokoll gilt als ungültig und wird nicht
+  ausgewertet.
+  **Abnahme:** Ladezeiten Besteckkasten, Laptop-Ständer und `dense_1m.stl` gegen v0.4.4 ohne diese
+  Meldung neu gemessen; `befunde.md` (K-3) und der Vermerk zum Versionsvergleich in RM-568 tragen
+  die neuen Zahlen.
+  Belege: `F:\solidon-review-reports\regression-0.5.2\kern\befunde.md` (K-3),
+  `kern\proben\laden_ab_v0.4.4.txt`, `output/konsolidierung-2026-10-07/paket-l2.md` (Messweg).
+
+<a id="rm-755"></a>
+
+- [ ] **RM-755 — Ein Texturklick während der Auswertung ist als Fenstertest flatterhaft.**
+  Gefunden in Paket SK (paket-sk.md, Welle 3):
+  `test_operation_ui.py::test_a_texture_panel_click_while_the_scene_evaluates_changes_the_step_after_it`
+  ist einzeln 1 von 2 rot, ohne Skizzenweg. Vermutlich dieselbe Familie wie der macOS-Fehler der
+  Formsitzung (ein Zeitgeber stellt beim Zustellen einen zweiten Auftrag; `wait_for_sculpt_check`).
+  **Abnahme:** Ursache belegt, Test deterministisch (zwanzig Läufe einzeln und unter Last grün),
+  eine Gegenprobe stellt die Lage nach.
 
 ## Veröffentlichung, Betrieb und Vertrieb
 

@@ -37,6 +37,7 @@ entfernt hat.
 | 2026-10-09 | [RM-627: Ein Rand neben einem anderen Überhang ist keine lange Brücke (09.10.2026)](#rm-627-ein-rand-neben-einem-anderen-überhang-ist-keine-lange-brücke-09102026) |
 | 2026-10-09 | [RM-572: Der Prüfbericht nennt die Stelle, wo viele kleine Überhänge Stützen verlangen (09.10.2026)](#rm-572-der-prüfbericht-nennt-die-stelle-wo-viele-kleine-überhänge-stützen-verlangen-09102026) |
 | 2026-10-09 | [RM-584 (Teil 2): Unter flachen Decken Gitter oder Hybrid, und hohe Bäume bekommen zwei Wände (09.10.2026)](#rm-584-teil-2-unter-flachen-decken-gitter-oder-hybrid-und-hohe-bäume-bekommen-zwei-wände-09102026) |
+| 2026-10-09 | [RM-567: Weniger Arbeitsspeicher — Cachegrenze, BLAS-Faden, Renderer am echten Fenster (09.10.2026)](#rm-567-weniger-arbeitsspeicher--cachegrenze-blas-faden-renderer-am-echten-fenster-09102026) |
 | 2026-10-09 | [RM-624: Ein Slicertest hält Kontaktabstand und untere Trennschicht in sechs Programmen (09.10.2026)](#rm-624-ein-slicertest-hält-kontaktabstand-und-untere-trennschicht-in-sechs-programmen-09102026) |
 | 2026-10-09 | [RM-531 (Teil): Sieben Fenstertests außerhalb von Windows sind auf allen vier Plattformen grün (09.10.2026)](#rm-531-teil-sieben-fenstertests-außerhalb-von-windows-sind-auf-allen-vier-plattformen-grün-09102026) |
 | 2026-10-09 | [RM-635: Prozesstests zählen ihre Zeit ab dem Zustand, und der Abbau wartet auf das Ende des Prozesses (09.10.2026)](#rm-635-prozesstests-zählen-ihre-zeit-ab-dem-zustand-und-der-abbau-wartet-auf-das-ende-des-prozesses-09102026) |
@@ -46605,6 +46606,62 @@ sechs Sprachen „ab 0.5.0“ neben „Version 0.5.3“, wie im Repository. Chan
   Belege: `F:\solidon-review-reports\verif-09d8e9485.md` (Abschnitt 3).
 
 **Abschluss:** Der Abschnitt *Bausteine verwalten* beginnt offen, solange der eigene Bausteinordner nichts hält (`PartCatalog`, `_own_library_is_empty`). Gezählt werden gespeicherte Rezepte und hinzugefügte Bausteine, dieselbe Frage wie für Weitergabe, *Bearbeiten* und *Entfernen* (`_in_own_library`, vorher dreimal hergeleitet); ein mitgereister und ein `.py`-Baustein zählen nicht, `PartSpec.own` zählte anders. Danach gilt der Merker (`remember`, RM-491), und ein eigener Baustein klappt den Abschnitt wie bisher auf (RM-455; dass dieses Aufklappen gemerkt wird, steht in [RM-658](ROADMAP.md#rm-658)). Damit stehen *Auswahl als Baustein speichern …*, *Baustein aus Datei hinzufügen …* und beide Sperrgründe ohne Klick da, wie in 0.5.1 (Rückschritt seit `48ffcf145`, in 0.5.2 und 0.5.3). Weil der Weitergabegrund jetzt vorn steht, sagt er ohne eigenen Baustein „Speichern Sie zuerst einen eigenen Baustein, um ihn weiterzugeben.“ statt zum Wählen aufzufordern, das bei einem eingebauten in die nächste Absage führte. Die Hinweistests prüfen den Grund ohne vorheriges Aufklappen und stellen die Bibliothek ohne eigene Bausteine selbst her (`no_own_parts`); `test_the_closed_management_names_what_it_holds` prüft den zugeklappten Zustand nach einem Klick; neu `test_a_fresh_catalogue_shows_its_management_without_a_click` und `test_only_a_part_in_the_own_library_closes_the_management` (Rezept und hinzugefügt zu, mitgereist und `.py` offen). Gegenprobe über ein Plugin, je Mutation von acht Tests rot: immer zu 6, immer offen 2, Prädikat über `PartSpec.own` 2, alter Weitergabegrund 3; Katalogtests 52 grün, Handbuch-, Katalog-, Wortlaut- und Changelogtests 539 grün. Die Handbuchseiten *Eigene Bausteine* und *Bausteindateien austauschen* nennen Abschnitt und Knopf in allen sechs Sprachen, der eingefrorene Musterbestand trägt die neuen Seitenschlüssel; Changelog 0.6.0. Fenstersonde am echten Fenster, frischer Nutzerordner: 4 von 4, *Speichern*, *Hinzufügen* und beide Sperrgründe ohne Klick sichtbar, der Weitergabegrund schickt zum Speichern. Umgesetzt von Claude (Thread „Bedienung und KI“).
+
+## RM-567: Weniger Arbeitsspeicher — Cachegrenze, BLAS-Faden, Renderer am echten Fenster (09.10.2026)
+
+<a id="rm-567-weniger-arbeitsspeicher--cachegrenze-blas-faden-renderer-am-echten-fenster-09102026"></a>
+<a id="rm-567"></a>
+
+**RM-567 — Weniger Arbeitsspeicher: messen, wo er bleibt, und den Bedarf senken.**
+Robert, 08.10.2026: „analysieren, wie wir weniger Arbeitsspeicher verbrauchen“. Solidon soll
+auf acht Jahre alter Hardware laufen, viele Kunden haben 8 oder 16 GB. **Vorgehen:** Spitzen-
+und Dauerbelegung je Hauptweg (Bauplan §2.2) und an großen Korpusmodellen messen
+(Netzkern, exakter Kern, Merkmalserkennung, Schichtanalyse, Vorschau, Verlaufscache, Renderer),
+die größten Posten benennen, dann senken: doppelte Netzkopien, Caches ohne Grenze, Arbeiter,
+die ihre Ergebnisse halten. **Abnahme:** Ziel ist, dass die Hauptwege auf einem Rechner mit
+8 GB ohne Auslagern laufen, große Korpusmodelle mit 16 GB; die konkreten Grenzwerte setzt der
+Messbericht. Messbericht vorher und nachher mit Werkzeug und Rechner; je Senkung ein Test,
+der die Grenze hält; kein Rückschritt im Leistungsbudget (§31).
+
+**Teilstand 08.10.2026 (Paket L, Bericht `output/konsolidierung-2026-10-07/paket-l.md`):**
+Gemessen von außen je Prozess (Zusage und Arbeitssatz, alle 3 ms) an Riser, Eiffelturm,
+Spiderman, Murmelbrett und `chufang.3mf`. Der Ergebniscache hält höchstens RAM/8 (512 MB
+bis 4 GB), gezählt in Bytes samt trimesh-Cache und Schichtanalyse; ältere Einträge werden
+zuerst schlank (`MeshData.lean`), dann verdrängt (`scene/cache.py`, `core/memory.py`).
+Spiderman, acht Schritte im Fenster, 8 GB nachgestellt: 2,65 → 1,75 GB Arbeitssatz, Spitze
+4,05 → 3,10 GB. `import app`
+setzt einen BLAS-Faden: 1,5 GB Zusage weniger an 32 Kernen. Große Modelle: Murmelbrett mit
+Vollerkennung Spitze 3,5 GB Arbeitssatz, `chufang.3mf` (5,6 Mio.) 5,5 GB — unter 16 GB.
+**Review-Fixes 09.10.2026:** `trim` zählt einmal genau und zieht dann ab, was frei wird;
+jeder Merker zählt einzeln, ohne Stichprobe; die Merker der Zuordnung und der
+Zuordnungsschritte zählen in der Grenze und gehen vor einem Eintrag; exakte Körper zählen
+Tessellierung und Form und werden schlank; `physical_memory` nimmt die kleinste Grenze aus
+Rechner, cgroup, Windows-Job und Adressraum. Ein schlankes Netz behält Teile,
+Dreiecksflächen und die Schichtanalyse, die der Bericht nach dem Zurücknehmen fragt (RM-594
+und RM-593 im Archiv); Einträge und Schrittmerker zählen geteilte Merkmale einmal.
+Die Schichtanalyse hält ihre Konturen als Felder (RM-595, Archiv).
+**Renderer am echten Fenster (Paket L2, 09.10.2026, Bericht
+`output/konsolidierung-2026-10-07/paket-l2.md`):** Sonde `probe_window_real.py` über
+`build_application`, echte Plattform (Vulkan, RTX 4080, 2560 x 1440, zweiter Schirm), Treiber
+`memdrive_gpu.py` (Zusage und Arbeitssatz alle 3 ms, Grafikspeicher je Prozess über PDH alle
+100 ms), Riser, Eiffelturm und Spiderman, je Schritt öffnen, verschieben, zurück, Datei → Neu.
+Der Renderer selbst hält wenig: neun Bildtexturen (Farbe, Pick, Tiefe, Umgebungsverdeckung,
+zusammen rund 100 MB bei 2560 x 1440), die Netzpuffer der Anzeige 4–8 MB (Spiderman
+dezimiert); kein Puffer bleibt nach einem Wechsel lebend, die Zahl der wgpu-Objekte steht über
+alle Schritte. Leeres Fenster: Zusage 650 MB, dediziert 211 MB. Die einzige Spitze war ein
+zweiter Speicherblock von wgpu (256 MB dediziert und 256 MB Zusage, bleibend), am Riser beim
+Zurücknehmen auf den Ladestand. pygfx legte je gerichtetem Licht eine Schattentextur
+1024 x 1024 an, obwohl keines Schatten wirft (24 MB); seit `gfx_renderer.SHADOW_MAP_SIZE`
+ein Texel. In `test_render_contract.py` hält `test_no_light_casts_a_shadow_…` fest, dass kein
+Licht Schatten wirft, auch das des Achsenkreuzes, und
+`test_one_texel_shadow_maps_draw_the_same_image`, dass das Bild mit einem Texel dasselbe ist
+wie mit 1024 (Gegenprobe: mit Schattenwurf und -empfang unterscheiden sich die Bilder). Damit
+bleibt eine Sitzung mit einem Modell dieser Größe bei 273 MB dediziert (vorher 529 MB); kommt
+ein größeres Modell dazu, legt wgpu den Block dort an. Die Blockgröße steuert wgpu-native
+(keine Speicherhinweise in der C-Schnittstelle von wgpu 0.32); weiter unter
+[RM-698](ROADMAP.md#rm-698), Teil 2.
+Zwei Fensterläufe mit dem Spiderman brachen ohne Python-Spur ab, am Stand davor wie danach —
+[RM-694](ROADMAP.md#rm-694).
 
 ## RM-571: Ein Sims im offenen Becher neben einem gesperrten Kanal behält seine Stütze (09.10.2026)
 

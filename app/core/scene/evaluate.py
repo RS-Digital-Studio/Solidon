@@ -139,6 +139,7 @@ from app.core.scene.parameter_usage import ParameterUse, parameter_uses
 from app.core.sketch.serialize import sketch_parameter_references
 from app.core.types import (
     IDENTITY_FRAME,
+    SKETCH_SOLVER,
     AskFn,
     BaseParams,
     BoundingBox,
@@ -6572,6 +6573,11 @@ def _with_nested_context(
                 if carriers:
                     context[f"#{spec.name}"] = carriers
             continue
+        if spec.kind == "sketch" and isinstance(resolved.get(spec.name), str):
+            # Die Fassung des Lösers gehört zum Ergebnis (RM-541): Ein Text ohne
+            # Angabe rechnet mit der heutigen, und ein Plattencache aus einer
+            # älteren gab sonst das Ergebnis des alten Lösers zurück.
+            context[f"#{spec.name}.solver"] = SKETCH_SOLVER
         if spec.kind == "sketch" and objects is not None and hashes is not None:
             drawn = resolved.get(spec.name)
             if isinstance(drawn, str) and drawn:

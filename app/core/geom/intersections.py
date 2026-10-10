@@ -133,8 +133,17 @@ def _surface(vertices: np.ndarray, faces: np.ndarray) -> _Surface | None:
     triangles = vertices[faces]
     normal = np.cross(triangles[:, 1] - triangles[:, 0], triangles[:, 2] - triangles[:, 0])
     twice_area = np.linalg.norm(normal, axis=1)
-    edge_lengths = np.linalg.norm(np.roll(triangles, -1, axis=1) - triangles, axis=2)
-    longest = edge_lengths.max(axis=1)
+    # Die längste Kante Kante für Kante — dieselben Differenzen und Normen wie
+    # über ``np.roll`` des ganzen Feldes, ohne zwei Kopien aller Ecken zugleich
+    # (je 72 Byte je Dreieck): An sehr großen Netzen setzte das die Spitze
+    # dieses Abschnitts (RM-568).
+    longest = np.linalg.norm(triangles[:, 1] - triangles[:, 0], axis=1)
+    for corner in (1, 2):
+        np.maximum(
+            longest,
+            np.linalg.norm(triangles[:, (corner + 1) % 3] - triangles[:, corner], axis=1),
+            out=longest,
+        )
     altitude = np.divide(twice_area, longest, out=np.zeros_like(twice_area), where=longest > 0.0)
     kept = np.flatnonzero((longest > EPS_GEOM) & (altitude > EPS_GEOM))
     if len(kept) < 2:
@@ -261,8 +270,20 @@ ENTRY_WEIGHT: Final = 4.0
 _MAX_KEY: Final = 2.0**40
 
 
-def _entries(low: np.ndarray, high: np.ndarray, plan: _Plan) -> _Entries | None:
-    """Die Einträge eines Plans — ``None``, wenn sein Schlüssel zu groß würde."""
+def _keys(
+    low: np.ndarray, high: np.ndarray, plan: _Plan
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, float] | None:
+    """Je Eintrag eines Plans Dreieck, Scheibe, Anfang und Ende auf der Sweep-Achse.
+
+    Ungeordnet, in der Folge der Dreiecke und je Dreieck seiner Scheiben; das
+    Ende trägt schon ``EPS_GEOM``. ``None``, wenn der Schlüssel zu groß würde.
+
+    Die Felder je Eintrag sind die größten der Suche (am Mausoleumsdrachen 4,6
+    Millionen Einträge). Deshalb entsteht jedes ohne Zwischenfeld gleicher
+    Länge: die Scheibe als eine Wiederholung plus der Platz, Anfang und Ende
+    am Ort summiert — dieselben Ganzzahlen und dieselben Additionen in
+    derselben Folge wie ``slab * size + (low - base) + EPS_GEOM`` (RM-568).
+    """
     count = len(low)
     if plan.bins is None:
         triangle = np.arange(count)
@@ -275,21 +296,71 @@ def _entries(low: np.ndarray, high: np.ndarray, plan: _Plan) -> _Entries | None:
         last = np.floor((high[:, axis] + EPS_GEOM - origin) / plan.width).astype(np.int64)
         span = last - first + 1
         triangle = np.repeat(np.arange(count), span)
-        steps = np.arange(int(span.sum())) - np.repeat(np.cumsum(span) - span, span)
-        slab = np.repeat(first, span) + steps
+        # Die erste Scheibe des Dreiecks und dahinter je Eintrag eine mehr.
+        slab = np.repeat(first - (np.cumsum(span) - span), span)
+        slab += np.arange(len(slab))
+        del first, last, span
     axis = plan.axis
     base = float(low[:, axis].min())
     size = float(high[:, axis].max()) - base + 1.0
     if float(slab.max(initial=0) + 1) * size > _MAX_KEY:
         return None
-    key = slab * size + (low[triangle, axis] - base)
+    key = slab * size
+    key += low[triangle, axis] - base
+    end = slab * size
+    end += high[triangle, axis] - base
+    end += EPS_GEOM
+    return triangle, slab, key, end, origin
+
+
+def _entries(low: np.ndarray, high: np.ndarray, plan: _Plan) -> _Entries | None:
+    """Die Einträge eines Plans — ``None``, wenn sein Schlüssel zu groß würde.
+
+    Jedes Zwischenfeld geht, sobald es nicht mehr gebraucht wird, und die Zahl
+    der überdeckten Einträge entsteht am Ort: Gehalten blieben sonst die
+    ungeordneten Felder neben den geordneten, und am Mausoleumsdrachen lag die
+    Spitze der ganzen Suche hier (RM-568).
+    """
+    keys = _keys(low, high, plan)
+    if keys is None:
+        return None
+    triangle, slab, key, end, origin = keys
+    del keys
     order = np.argsort(key, kind="stable")
-    triangle, slab, key = triangle[order], slab[order], key[order]
-    reach = np.searchsorted(
-        key, slab * size + (high[triangle, axis] - base) + EPS_GEOM, side="right"
-    )
-    counts = np.maximum(reach - np.arange(len(key)) - 1, 0)
+    key = key[order]
+    end = end[order]
+    reach = np.searchsorted(key, end, side="right")
+    del key, end
+    triangle = triangle[order]
+    slab = slab[order]
+    del order
+    # ``max(reach - Platz - 1, 0)``, am Ort gerechnet.
+    counts = reach
+    counts -= np.arange(len(counts))
+    counts -= 1
+    np.maximum(counts, 0, out=counts)
     return _Entries(triangle=triangle, slab=slab, counts=counts, origin=origin)
+
+
+def _pair_count(low: np.ndarray, high: np.ndarray, plan: _Plan) -> tuple[int, int] | None:
+    """Wie viele Sweep-Paare und Einträge ein Plan bildet — die Paare als Summe
+    der ``counts`` von :func:`_entries`, ohne die Einträge zu ordnen.
+
+    Ein Eintrag überdeckt die Einträge hinter ihm bis zu seinem Ende, und sein
+    Ende liegt nie vor seinem Anfang (Rundung ist monoton, ``EPS_GEOM`` nicht
+    negativ): Das Ende findet in den geordneten Anfängen mindestens den Platz
+    hinter dem Eintrag selbst. Die Summe der ``counts`` ist darum die Summe
+    dieser Plätze weniger ``1 + 2 + … + n``, und die hängt nicht an der Folge.
+    Der Plan wählt so dieselbe Teilung; das stabile Ordnen der Einträge
+    kostete die Wahl am Laptop-Ständer zwei Drittel ihrer Zeit (RM-568).
+    """
+    keys = _keys(low, high, plan)
+    if keys is None:
+        return None
+    _triangle, _slab, key, end, _origin = keys
+    count = len(key)
+    reach = np.searchsorted(np.sort(key), end, side="right")
+    return int(reach.sum()) - count * (count + 1) // 2, count
 
 
 def _plan(low: np.ndarray, high: np.ndarray) -> _Plan:
@@ -317,12 +388,11 @@ def _plan(low: np.ndarray, high: np.ndarray) -> _Plan:
             plans.extend(_Plan(axis, bins, middle * factor) for factor in SLAB_FACTORS)
     best: tuple[float, _Plan] | None = None
     for plan in plans:
-        entries = _entries(sample_low, sample_high, plan)
-        if entries is None:
+        counted = _pair_count(sample_low, sample_high, plan)
+        if counted is None:
             continue
-        work = float(entries.counts.sum()) * stride * stride + (
-            ENTRY_WEIGHT * len(entries.triangle) * stride
-        )
+        pairs, entries = counted
+        work = float(pairs) * stride * stride + ENTRY_WEIGHT * entries * stride
         if best is None or work < best[0]:
             best = (work, plan)
     return best[1] if best is not None else _Plan(0)
@@ -430,22 +500,25 @@ def _separated(
     # Ohne gemeinsame Ecke zuerst die Ebenen; mit einer kann keine trennen.
     alone = np.flatnonzero(count == 0)
     if len(alone):
+        # Die Ebene des zweiten fragt nur, wen die des ersten nicht trennt —
+        # jede Zahl entsteht wie zuvor, nur für weniger Paare (RM-568).
         one, other = surface.triangles[first[alone]], surface.triangles[second[alone]]
-        one_normal, other_normal = surface.normal[first[alone]], surface.normal[second[alone]]
         other_side = (
-            _dot_rows(other - one[:, 0, None, :], one_normal)
+            _dot_rows(other - one[:, 0, None, :], surface.normal[first[alone]])
             / (surface.normal_length[first[alone], None])
         )
-        one_side = (
-            _dot_rows(one - other[:, 0, None, :], other_normal)
-            / (surface.normal_length[second[alone], None])
-        )
-        by_plane = (
-            np.all(other_side > margin, axis=1)
-            | np.all(other_side < -margin, axis=1)
-            | np.all(one_side > margin, axis=1)
-            | np.all(one_side < -margin, axis=1)
-        )
+        by_plane = np.all(other_side > margin, axis=1) | np.all(other_side < -margin, axis=1)
+        open_rows = np.flatnonzero(~by_plane)
+        if len(open_rows):
+            partner = second[alone[open_rows]]
+            one, other = one[open_rows], other[open_rows]
+            one_side = (
+                _dot_rows(one - other[:, 0, None, :], surface.normal[partner])
+                / (surface.normal_length[partner, None])
+            )
+            by_plane[open_rows] = np.all(one_side > margin, axis=1) | np.all(
+                one_side < -margin, axis=1
+            )
         result[alone[by_plane]] = True
         alone = alone[~by_plane]
     # Mit gemeinsamer Ecke: schräg zueinander die Nachbarprüfung der örtlichen
@@ -459,11 +532,12 @@ def _separated(
     touching = np.flatnonzero((count == 1) | (count == 2))
     charged = np.zeros(len(first), dtype=bool)
     if len(touching):
-        apart = _touching_apart(surface, first[touching], second[touching])
+        apart, tilt = _touching_apart_tilted(
+            surface, first[touching], second[touching], np.swapaxes(same[touching], 1, 2)
+        )
         result[touching[apart]] = True
         charged[touching[apart]] = True
-        direction = np.cross(surface.normal[first[touching]], surface.normal[second[touching]])
-        parallel = np.linalg.norm(direction, axis=1) <= (
+        parallel = tilt <= (
             0.5
             * EPS_GEOM
             * surface.normal_length[first[touching]]
@@ -561,7 +635,26 @@ def _candidates(
     counts = entries.counts
     total = np.cumsum(counts)
     overall = float(total[-1]) if len(total) else 0.0
-    positions = np.arange(len(counts))
+    # Plätze in 32 Bit, solange sie hineinpassen: Die Paarfelder sind die
+    # größten der Suche, und halb so breit liest und schreibt sie halb so viel.
+    places = np.int32 if len(counts) < 2**31 else np.int64
+    # **Je Block, was seine Paare fragen, in der Folge der Einträge**
+    # (RM-568): Die Grenzen der beiden übrigen Achsen und die Heimatscheibe
+    # liegen für die Einträge vom ersten des Blocks bis zum letzten Partner
+    # als zusammenhängende Felder da, und ein Paar liest sie über die Plätze
+    # seiner Einträge in diesem Fenster statt über die Dreiecksnummern aus den
+    # Hüllquadern. Der linke Eintrag eines Blocks wiederholt sich, also
+    # wiederholt er auch seine Werte, statt sie je Paar zu lesen. Jeder
+    # Vergleich bleibt derselbe Ausdruck auf denselben Zahlen. Die Heimat der
+    # gemeinsamen Hülle ist ``floor((max(a, b) - origin) / width)`` — das ist
+    # das Größere der Heimaten beider Dreiecke, denn Abziehen, Teilen durch
+    # eine positive Breite und Abrunden sind in Gleitkommarechnung monoton.
+    # Am Laptop-Ständer bildet der Sweep 51,6 Millionen Paare für 3,6 Millionen
+    # Kandidaten, und das Bilden kostete die Hälfte der Suche. Für die ganze
+    # Suche gehalten, kosteten die Felder 40 Byte je Eintrag und hoben an
+    # ``dense_1m.stl`` (2,5 Millionen Einträge) die Spitze der Suche über die
+    # von vorher, 509 statt 454 MB; je Fenster sind es meist wenige Megabyte.
+    order = entries.triangle
     counted = 0.0
     begin = 0
     while begin < len(counts):
@@ -573,26 +666,33 @@ def _candidates(
         before = int(total[begin - 1]) if begin else 0
         end = int(np.searchsorted(total, before + SWEEP_PAIRS, side="right"))
         end = min(max(end, begin + 1), len(counts))
-        block = positions[begin:end]
-        size = counts[begin:end]
+        start, size = begin, counts[begin:end]
         begin = end
         amount = int(size.sum())
         if not amount:
             continue
-        left = np.repeat(block, size)
-        steps = np.arange(amount) - np.repeat(np.cumsum(size) - size, size)
-        right = left + 1 + steps
-        first, second = entries.triangle[left], entries.triangle[right]
-        apart = np.zeros(len(first), dtype=bool)
+        # Plätze im Fenster: der Block vorn, dahinter die Partner bis zum letzten.
+        block = np.arange(end - start, dtype=places)
+        window = order[start : start + int((block + size).max()) + 1]
+        left: np.ndarray = np.repeat(block, size)
+        right: np.ndarray = np.arange(amount, dtype=places) + np.repeat(
+            block + 1 - (np.cumsum(size) - size).astype(places), size
+        )
+        apart = np.zeros(amount, dtype=bool)
         for dimension in others:
-            apart |= low[second, dimension] > high[first, dimension] + EPS_GEOM
-            apart |= low[first, dimension] > high[second, dimension] + EPS_GEOM
+            lows = low[window, dimension]
+            reaches = high[window, dimension] + EPS_GEOM
+            apart |= lows[right] > np.repeat(reaches[: end - start], size)
+            apart |= np.repeat(lows[: end - start], size) > reaches[right]
         if plan.bins is not None:
             # Nur die Scheibe der unteren Ecke der gemeinsamen Hülle zählt.
-            corner = np.maximum(low[first, plan.bins], low[second, plan.bins])
-            home = np.floor((corner - entries.origin) / plan.width).astype(np.int64)
-            apart |= home != entries.slab[left]
-        first, second, left = first[~apart], second[~apart], left[~apart]
+            home = np.floor((low[window, plan.bins] - entries.origin) / plan.width).astype(np.int64)
+            apart |= np.maximum(np.repeat(home[: end - start], size), home[right]) != np.repeat(
+                entries.slab[start:end], size
+            )
+        near = ~apart
+        left, right = left[near] + start, right[near] + start
+        first, second = order[left], order[right]
         open_pairs: np.ndarray | None = None
         cost: np.ndarray | None = None
         if separate:
@@ -1173,6 +1273,27 @@ def box_groups(
 def _touching_apart(surface: _Surface, first: np.ndarray, second: np.ndarray) -> np.ndarray:
     """Welche Paare beweisbar höchstens an ihren gemeinsamen Ecken anliegen.
 
+    Die Regel steht bei :func:`_touching_apart_tilted`.
+    """
+    apart, _tilt = _touching_apart_tilted(
+        surface,
+        first,
+        second,
+        surface.faces[first][:, :, None] == surface.faces[second][:, None, :],
+    )
+    return apart
+
+
+def _touching_apart_tilted(
+    surface: _Surface, first: np.ndarray, second: np.ndarray, same: np.ndarray
+) -> tuple[np.ndarray, np.ndarray]:
+    """:func:`_touching_apart` mit den gemeinsamen Ecken des Aufrufers, dazu je Paar
+    die Länge des Kreuzprodukts beider Normalen.
+
+    ``same[k, i, j]``: Ecke ``i`` des ersten trägt dieselbe Nummer wie Ecke
+    ``j`` des zweiten. :func:`_separated` hat beides schon gerechnet und fragt
+    es hier nicht ein zweites Mal (RM-568).
+
     Schräg zueinander gingen Nachbarn an die genaue Prüfung — an einer
     glatten Fläche sind das fast alle Kandidaten, und an einem Formschritt
     kostete das Sekunden (RM-419); seit RM-568 fragt auch :func:`_separated`
@@ -1201,12 +1322,12 @@ def _touching_apart(surface: _Surface, first: np.ndarray, second: np.ndarray) ->
     rechnet — elementweise, ohne ``einsum`` (RM-187).
     """
     one, other = surface.triangles[first], surface.triangles[second]
-    same = surface.faces[first][:, :, None] == surface.faces[second][:, None, :]
     one_normal, other_normal = surface.normal[first], surface.normal[second]
     one_length = surface.normal_length[first]
     other_length = surface.normal_length[second]
     direction = np.cross(one_normal, other_normal)
-    steep = np.linalg.norm(direction, axis=1) > EPS_GEOM * one_length * other_length
+    tilt = np.linalg.norm(direction, axis=1)
+    steep = tilt > EPS_GEOM * one_length * other_length
     margin = surface.margin
     one_side = _dot_rows(one - other[:, 0, None, :], other_normal) / other_length[:, None]
     other_side = _dot_rows(other - one[:, 0, None, :], one_normal) / one_length[:, None]
@@ -1233,7 +1354,7 @@ def _touching_apart(surface: _Surface, first: np.ndarray, second: np.ndarray) ->
             direction[saddle],
             margin,
         )
-    return np.asarray(beside & steep, dtype=bool)
+    return np.asarray(beside & steep, dtype=bool), tilt
 
 
 def _ray_from_the_corner(
