@@ -33,6 +33,7 @@ from app.core.geom.mesh import MeshData
 from app.core.knowledge import print_settings, profiles
 from app.core.slice.analysis import slice_body
 from app.core.types import Profile, SceneObject
+from app.core.units import format_length
 from tests.gcode_contact import support_contact
 from tests.helpers import set_test_license
 
@@ -1454,21 +1455,45 @@ _CONTACT_PROGRAMS = (
     "crealityprint",
     "anycubicslicernext",
     "prusaslicer",
+    "cura",
 )
 
+#: Abstand je Stützart und Schichthöhe, keiner ein Vielfaches der Schicht.
+_CONTACT_GAPS = {("grid", 0.2): 0.28, ("tree", 0.2): 0.44, ("grid", 0.28): 0.3}
 
-@pytest.mark.parametrize("style", ["grid", "tree"])
+
 @pytest.mark.parametrize(
-    ("program", "printer"),
+    ("program", "printer", "style", "layer"),
     [
-        pytest.param(program, PROGRAMS[program], marks=pytest.mark.slicer(program), id=program)
-        for program in _CONTACT_PROGRAMS
+        *(
+            pytest.param(
+                program,
+                PROGRAMS[program],
+                style,
+                0.2,
+                marks=pytest.mark.slicer(program),
+                id=f"{program}-{style}",
+            )
+            for program in _CONTACT_PROGRAMS
+            for style in ("grid", "tree")
+        ),
+        # Bei 0,28er Schichten liegt PETGs Band unter Curas Aufrunden (0,56):
+        # unten schreibt die Übergabe eine Schicht (RM-628).
+        pytest.param(
+            "cura",
+            PROGRAMS["cura"],
+            "grid",
+            0.28,
+            marks=pytest.mark.slicer("cura"),
+            id="cura-grid-0.28",
+        ),
     ],
 )
 def test_the_support_contact_arrives_as_solidon_says(
     program: str,
     printer: str,
     style: str,
+    layer: float,
     installed_slicer: Path,
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -1487,10 +1512,10 @@ def test_the_support_contact_arrives_as_solidon_says(
     Die gewählten Prozesse führen 0,2 mm Abstand (Anycubic 0,1) und zwei untere
     Trennschichten (PrusaSlicer 0, Anycubic „wie oben“). Unter Gitter 0,28 mm.
     Unter Bäumen 0,44 mm, 2,2 Schichten: Ob ein Programm rundet oder abschneidet,
-    es druckt 0,4. Cura steht nicht in der Liste: Es rundet auf (unter Gitter
-    unten 0,40, unter Bäumen 0,60), während ``rounds_to_whole_layers`` ganze
-    Schichten zur nächsten annimmt. Das richtet RM-628, und Cura kommt mit ihm
-    hierher.
+    es druckt 0,4. Cura rundet auf, unter Gitter nur unten, und dort schreibt
+    die Übergabe das Vielfache im Band selbst (RM-628): Gitter oben 0,28 und
+    unten 0,2, Baum 0,6; bei 0,28er Schichten 0,30 oben und 0,28 unten. Der
+    Feldsatz nennt den gedruckten Wert.
     """
     from app.core.slice import advise
     from app.ui.print_settings_dialog import _PlateJob, _prepare_plate
@@ -1504,8 +1529,7 @@ def test_the_support_contact_arrives_as_solidon_says(
     body = SceneObject("stufe", "Stufe", MeshData.of(trimesh.boolean.union(parts)))
     profile = profiles.make_profile(printer, "petg")
     settings = print_settings.resolve(profile)
-    layer = 0.2
-    gap = 0.44 if style == "tree" else 0.28
+    gap = _CONTACT_GAPS[style, layer]
     bottom_layers = 3
     for path, value in (
         ("layers.layer_height", layer),
@@ -1550,15 +1574,21 @@ def test_the_support_contact_arrives_as_solidon_says(
     )
 
     organic = handover.organic_styles(setup, profile)
-    # In ganzen Schichten: 0,44 mm werden gerundet wie abgeschnitten 0,4.
-    rounds = advise.rounds_to_whole_layers(setup.flavour, style=style, organic=organic)
-    printed = round(gap / layer) * layer if rounds else gap
+    # Was gedruckt ankommt, oben und unten (RM-628): organisch zur nächsten
+    # Schicht, Cura auf, unter Curas Gitter unten das Vielfache der Übergabe.
+    top, bottom = advise.printed_support_gaps(
+        gap, layer, setup.flavour, style, organic, profile.material
+    )
     # Ohne Zellen sagt ein Median nichts, und eine Zusicherung über eine leere
     # Menge bliebe grün (hier 57 bis 201 Zellen je Seite).
     assert measured.top_cells > 20, f"kaum Kontakt unter der Platte: {measured}"
     assert measured.bottom_cells > 20, f"kaum Stütze auf dem Sockel: {measured}"
-    assert measured.top_gap == pytest.approx(printed, abs=0.02), measured
-    assert measured.bottom_gap == pytest.approx(printed, abs=0.02), measured
+    assert measured.top_gap == pytest.approx(top, abs=0.02), measured
+    assert measured.bottom_gap == pytest.approx(bottom, abs=0.02), measured
+    if setup.flavour == "cura":
+        said = slicer_keys.limitation("cura", "support.z_gap", settings, material=profile.material)
+        shown = top if style == "tree" else bottom
+        assert said is not None and said.values == {"gap": format_length(shown)}, said
     skipped = handover.ignored_under_trees(style, organic, slicer_keys.program_of(setup.executable))
     if "support.bottom_interface_layers" in skipped:
         layers = 0

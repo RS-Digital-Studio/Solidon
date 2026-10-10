@@ -124,7 +124,23 @@ offenem Drucker. Übernommen wird auf Klick, nie von allein.
   Abstand aus Schichthöhe × `support_gap_factor`, begrenzt durch
   `support_gap_min`/`support_gap_max` des Materialprofils (Regel 7,
   `support_gap_target`; ohne Werte kein Rat), vorgeschlagen außerhalb
-  `SUPPORT_GAP_BAND`; wo der Slicer in ganzen Schichten rechnet — Cura, die
+  `SUPPORT_GAP_BAND`. **Wie jedes Programm einen Abstand zwischen zwei
+  Schichten druckt, oben und unten, sagt `gap_rounding` und `printed_gap`
+  allein** (RM-628): Cura rundet auf, unter Gitter nur unten — oben druckt es
+  dort den geschriebenen Wert genau, je Teil nur mit dem Rest der Platte
+  (`cura_part_gap`, sonst schreibt die Übergabe dem Teil den nächsten genau
+  druckbaren Wert im Band seiner Spule: ein Vielfaches oder ein Vielfaches plus
+  den Rest der Platte); unter Curas Bäumen ohne obere Trennschicht kommt eine
+  Schicht dazu (`up_and_one`, der Rat schlägt die Trennschicht vor, Konsole und
+  Fenster bekommen sie). Die übrigen runden zur nächsten, wo sie runden (unter
+  organischen Bäumen, neben einem Turm); unter organischen Bäumen entscheidet
+  den Halbfall das Programm (`HALF_LAYER_UNGUARDED`). **Unten unter
+  Curas Gitter schreibt die Übergabe das Vielfache selbst**
+  (`support_bottom_distance` aus `advise.cura_bottom_gap`, nicht gespiegelt):
+  aufgerundet läge der Fuß über `support_gap_max` in der Luft (PETG bei
+  0,28er Schichten 0,56). Ein Vielfaches wählt `whole_layer_gap` — das nächste,
+  im Materialband, wenn der Wert darin liegt. Wo der Slicer
+  oben in ganzen Schichten druckt — Cura unter Bäumen, die
   Orca-Familie neben einem Reinigungsturm (`writer.tower_plates`,
   `whole_layers`), jedes Programm unter organischen Bäumen mit der Art, mit
   der das Teil druckt (`printed_style`: der Vorschlag, außer der Kunde lehnt
@@ -132,8 +148,10 @@ offenem Drucker. Übernommen wird auf Klick, nie von allein.
   übernommen; `handover.organic_styles`, ohne Programm die Familie; Rat,
   Feldsatz und Export fragen dieselbe Auskunft) —, das Vielfache innerhalb der
   Materialgrenzen, auch statt eines Werts in `SUPPORT_GAP_BAND`, der zwischen
-  zwei Schichten liegt (`in_whole_layers`); einen eigenen solchen Wert nennt
-  der Export gerundet (`export.support_gap_rounded`). **Über Baumspitzen ohne
+  zwei Schichten liegt (`in_whole_layers`) — welches Vielfache, sagt das
+  Material, nicht die Rundungsart; einen eigenen solchen Wert nennt der Export
+  gerundet (`export.support_gap_rounded`), bei Cura der Feldsatz mit dem
+  gedruckten Wert (`slicer_keys.limitation`). **Über Baumspitzen ohne
   Trennschicht** (ab `TIP_ISLANDS` Inseln unter `TIP_ROOF_AREA`, `tip_islands`)
   gilt unter organischen und Curas Bäumen `support_tip_gap` des Materials in
   ganzen Schichten, mindestens `TIP_GAP_LAYERS`, auch über `support_gap_max`

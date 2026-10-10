@@ -29,7 +29,7 @@ from typing import Final
 from app.core import discover
 from app.core.export import squashfs
 from app.core.log import get_logger
-from app.core.paths import ensure_dir, user_cache_dir
+from app.core.paths import ensure_dir, read_text_shared, user_cache_dir
 
 _log = get_logger(__name__)
 
@@ -94,7 +94,7 @@ def _key(appimage: Path) -> Key | None:
 
 def _read_stamp(folder: Path) -> dict[str, object] | None:
     try:
-        stamp = json.loads((folder / STAMP).read_text(encoding="utf-8"))
+        stamp = json.loads(read_text_shared(folder / STAMP))
     except OSError, ValueError:
         return None
     return stamp if isinstance(stamp, dict) else None

@@ -62,6 +62,7 @@ from app.core.types import (
     CancelToken,
     Document,
     Finding,
+    MaterialProfile,
     MaterialSlot,
     Mesh,
     ObjectId,
@@ -75,7 +76,7 @@ from app.core.types import (
     Source,
     kind_of,
 )
-from app.core.units import EPS_DISPLAY, EPS_GEOM, format_length
+from app.core.units import EPS_DISPLAY, EPS_GEOM, format_length, is_close
 from app.i18n import TranslatableText, _, source_text
 
 if TYPE_CHECKING:
@@ -1540,8 +1541,18 @@ def _part_values(
         item for item in asked if not same_value(item.value, read_path(split.plate, item.path))
     ]
     program = slicer_keys.program_of(setup.executable) if setup is not None else ""
+    # Mit dem Material der Spule, die das Teil druckt (RM-628).
+    material = profile_table.for_object(profile, entry).material
     return replace(
-        _values_for(split, applied, unavailable, flavour, program=program, profile=profile),
+        _values_for(
+            split,
+            applied,
+            unavailable,
+            flavour,
+            program=program,
+            profile=profile,
+            material=material,
+        ),
         asked=asked,
     )
 
@@ -1555,13 +1566,15 @@ def _values_for(
     *,
     program: str = "",
     profile: Profile | None = None,
+    material: MaterialProfile | None = None,
 ) -> _PartValues:
     """Objektwerte und wirksame Einstellungen eines Teils aus seinem Rat.
 
     ``everywhere`` sind übernommene Vorschläge, die beim Export kein Teil für
     sich verlangt hat (:func:`_unserved`). Sie stehen an diesem Teil wie sein
     eigener Rat, tragen aber keinen Befund *dieses* Teils. ``program`` ist
-    die Marke des Slicers (``slicer_keys.program_of``, RM-480).
+    die Marke des Slicers (``slicer_keys.program_of``, RM-480), ``material``
+    das der Spule, die das Teil druckt (RM-628).
     """
     from app.core.export import handover
     from app.core.slice import advise
@@ -1577,6 +1590,7 @@ def _values_for(
                 profile=profile,
                 native=split.native,
                 brim_foot_offset=split.brim_foot_offset,
+                material=material,
             ),
             list(applied),
             list(unavailable),
@@ -1586,10 +1600,26 @@ def _values_for(
     # braucht, bekommt es je Netz als Grundlage zurück; was es braucht, mit dem
     # eigenen Wert, wo Cura den ganzen Pfad je Netz annimmt, sonst mit dem der
     # Platte. Die Rücknahme ist kein Rat an den Kunden und trägt keinen Grund.
+    plate = split.plate
+
+    def exact_on_the_plate(item: SettingAdvice) -> SettingAdvice:
+        # Oben druckt Cura je Teil nur genau, was zum Rest des Plattenwerts
+        # passt; sonst das Vielfache im Band der Spule, und der Befund nennt
+        # es (RM-628).
+        if item.path != "support.z_gap" or not isinstance(item.value, int | float):
+            return item
+        gap = advise.cura_part_gap(
+            float(item.value),
+            plate.support.z_gap,
+            plate.layers.layer_height,
+            plate.support.style,
+            material,
+        )
+        return item if is_close(gap, float(item.value)) else replace(item, value=round(gap, 4))
 
     def as_cura_takes_it(item: SettingAdvice) -> SettingAdvice:
         if handover.cura_takes_whole(item.path):
-            return item
+            return exact_on_the_plate(item)
         if item.path == "support.style":
             # Ein/aus geht je Netz. Ein eingeschaltetes Netz bekommt die
             # Stützart der Platte; „aus“ bleibt auch unter Bäumen aus.
@@ -1603,8 +1633,10 @@ def _values_for(
     own = []
     for item in applied:
         actual = as_cura_takes_it(item)
-        if same_value(item.value, actual.value) or (
-            item.path == "support.style" and item.value == "auto"
+        if (
+            same_value(item.value, actual.value)
+            or (item.path == "support.style" and item.value == "auto")
+            or item.path == "support.z_gap"
         ):
             own.append(actual)
         elif item not in missing:
@@ -1615,18 +1647,20 @@ def _values_for(
     carried = [as_cura_takes_it(item) for item in [*received, *everywhere]]
     needed = {item.path for item in carried}
     changes = carried + [
-        SettingAdvice(
-            path=path,
-            value=read_path(split.base, path),
-            was=read_path(split.plate, path),
-            reason="",
+        exact_on_the_plate(
+            SettingAdvice(
+                path=path,
+                value=read_path(split.base, path),
+                was=read_path(split.plate, path),
+                reason="",
+            )
         )
         for path in sorted(split.per_part - needed)
     ]
     keys = {
         key: value
         for key, value in handover.object_keys(
-            split.plate, changes, flavour, program=program, profile=profile
+            split.plate, changes, flavour, program=program, profile=profile, material=material
         ).items()
         if key in handover.CURA_PER_MESH
     }
@@ -2594,6 +2628,9 @@ def write_assembly(
         )
         everywhere = [item for item in everywhere if item.path not in served]
     if split is not None and everywhere:
+        from app.core.knowledge import profiles as profile_table
+
+        bodies = {entry.id: entry for entry in chosen}
         part_values = {
             key: _values_for(
                 split,
@@ -2603,6 +2640,7 @@ def write_assembly(
                 everywhere,
                 program=slicer_keys.program_of(setup.executable) if setup is not None else "",
                 profile=profile,
+                material=profile_table.for_object(profile, bodies.get(key)).material,
             )
             for key, values in part_values.items()
         }
@@ -2660,7 +2698,22 @@ def write_assembly(
         own = [part_values[entry.id].effective or settings for entry in chosen]
         from app.core.export import handover
 
-        findings += handover.setting_limitations(flavour, settings)
+        # Mit dem Material der ersten Spule, wie die Übergabe den einen Satz
+        # wählt (``handover.slot_material``, RM-628).
+        plate_slots = [
+            replace(slot, material=slot_profiles.get(threemf.slot_identity(slot)) or slot.material)
+            for slot in threemf.merge_slots(
+                [
+                    threemf.AssemblyPart(
+                        mesh=as_mesh_data(entry.mesh), slots=threemf.slots_for_object(entry)
+                    )
+                    for entry in chosen
+                ]
+            )
+        ]
+        findings += handover.setting_limitations(
+            flavour, settings, handover.slot_material(profile, plate_slots, setup)
+        )
         # Eine gehobene Baumspitze ist eine Abweichung vom Herstellerprofil, die
         # der Kunde erfährt — an der Platte und an jedem Teil, das stützt.
         findings += handover.plate_tree_findings(

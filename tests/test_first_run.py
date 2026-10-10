@@ -232,6 +232,10 @@ def test_the_official_comfy_desktop_name_is_found_in_a_program_folder(
     monkeypatch.setattr(tools.discover, "_from_flatpak", lambda _names: None)
     monkeypatch.setattr(tools.discover, "_from_appimage", lambda _names: None)
     monkeypatch.setattr(tools.discover, "_from_host", lambda _names: None)
+    # Ohne gemerkte Wahl: Ein früherer Test desselben Arbeiters
+    # (``test_discover.py::test_choices_survive_a_restart``) merkt ``comfy.exe``,
+    # und die gemerkte Wahl ginge der Suche vor (Kurzreview RM-628, N1).
+    monkeypatch.setattr(tools.discover, "_choices_path", lambda: tmp_path / "choices.json")
     tools.discover.forget_cache()
     comfyui = tools.by_id("comfyui")
     assert comfyui is not None

@@ -22,7 +22,7 @@ from __future__ import annotations
 import math
 from collections.abc import Collection, Sequence
 from dataclasses import dataclass, replace
-from typing import TYPE_CHECKING, Final
+from typing import TYPE_CHECKING, Final, Literal
 
 import numpy as np
 
@@ -1005,13 +1005,78 @@ ROOF_TIP_DIAMETER: Final = math.ceil(200.0 * math.sqrt(TIP_ROOF_AREA / math.pi))
 BOTTOM_INTERFACE_LAYERS: Final = 2
 
 
-#: Wo der Slicer den Stützabstand immer in ganzen Schichten rechnet (RM-583):
-#: CuraEngine (``support_top_distance`` je Schicht). Die Orca-Familie nur,
-#: solange die Stütze die Schichthöhe des Modells hat; die eigene Höhe schaltet
-#: die Übergabe dann ein (``slicer_keys.has_independent_support_layers``) — außer
-#: neben einem Reinigungsturm (``whole_layers``) und unter organischen Bäumen
-#: (``organic``), das sagt der Aufrufer (RM-622).
-WHOLE_LAYER_GAP_FLAVOURS: Final[frozenset[SlicerFlavour]] = frozenset({"cura"})
+#: Wie ein Slicer einen Stützabstand druckt, der zwischen zwei Schichten liegt
+#: (RM-628): genau, zur nächsten ganzen Schicht gerundet (``nearest_raw``: ohne
+#: Toleranz, der Halbfall je nach Gleitkomma), auf die nächste ganze Schicht
+#: aufgerundet, oder aufgerundet und eine Schicht dazu.
+GapRounding = Literal["exact", "nearest", "nearest_raw", "up", "up_and_one"]
+
+#: Programme, die den Abstand unter organischen Bäumen ohne Toleranz runden
+#: (RM-628, gemessen): 0,30 bei 0,2er Schichten sind in Gleitkomma
+#: 1,4999999999999998 Schichten, und Bambu Studio und Creality Print drucken 0,20,
+#: OrcaSlicer, ElegooSlicer, Anycubic Slicer Next und PrusaSlicer 0,40; 0,18 bei
+#: 0,12er (genau 1,5) drucken alle 0,24.
+HALF_LAYER_UNGUARDED: Final = frozenset({"bambustudio", "crealityprint"})
+
+
+def gap_rounding(
+    flavour: SlicerFlavour | None,
+    whole_layers: bool = False,
+    style: str = "",
+    organic: Collection[str] = (),
+    *,
+    below: bool = False,
+    roof: bool = True,
+    program: str = "",
+) -> GapRounding:
+    """Wie der Slicer den Stützabstand oben druckt, mit ``below`` unten (RM-628).
+
+    **CuraEngine rundet auf** (``round_up_divide``): unter seinen Bäumen oben
+    und unten (``TreeSupportSettings.h``), unter Gitter unten (``support.cpp``,
+    ``generateSupportAreasForMesh`` und ``generateSupportBottom``). Oben hält
+    es unter Gitter den Abstand genau, mit einer Bruchteillage der Stütze
+    (``support_fractional_roof``). Gemessen in Cura 5.13 an einer Platte über
+    einer Säule bei 0,2er Schichten: 0,28 und 0,44 mm druckten unter Gitter
+    oben genau und unten 0,4 und 0,6, unter Bäumen oben und unten 0,4 und 0,6.
+    **Ohne obere Trennschicht** (``roof``) baut Cura unter seinen Bäumen die
+    Spitzen als Ersatzdach (``TreeSupportTipGenerator.cpp``, ``use_fake_roof_``)
+    und druckt oben eine Schicht mehr: 0,20 → 0,40, 0,28 → 0,60, 0,44 → 0,80;
+    unten bleibt es beim Aufrunden.
+
+    **Die Orca-Familie und PrusaSlicer runden zur nächsten Schicht** (``round``)
+    unter organischen Bäumen (``organic``, :func:`handover.organic_styles`): Sie
+    liegen auf den Schichten des Modells, auch mit eigener Stützschichthöhe
+    (RM-622). Ebenso die Orca-Familie neben einem Reinigungsturm
+    (``whole_layers``). Den Halbfall unter Bäumen entscheidet das Programm
+    (``program``, :data:`HALF_LAYER_UNGUARDED`). Sonst gilt der Abstand dort
+    genau; die eigene Stützschichthöhe schaltet die Übergabe ein
+    (``slicer_keys.has_independent_support_layers``).
+    """
+    if flavour == "cura":
+        if style == "tree" and not below and not roof:
+            return "up_and_one"
+        return "up" if below or style == "tree" else "exact"
+    if style in organic and program in HALF_LAYER_UNGUARDED:
+        return "nearest_raw"
+    if whole_layers or style in organic:
+        return "nearest"
+    return "exact"
+
+
+def printed_gap(gap: float, layer: float, rounding: GapRounding) -> float:
+    """Der Abstand, den der Slicer aus ``gap`` druckt (RM-628), nach
+    :func:`gap_rounding`. Ein Vielfaches der Schichthöhe druckt jeder genau,
+    außer Cura unter Bäumen ohne obere Trennschicht (``up_and_one``)."""
+    if rounding == "exact" or layer <= 0.0 or gap <= 0.0:
+        return gap
+    steps = gap / layer
+    if rounding == "up":
+        return math.ceil(steps - EPS_GEOM) * layer
+    if rounding == "up_and_one":
+        return (math.ceil(steps - EPS_GEOM) + 1) * layer
+    if rounding == "nearest_raw":
+        return math.floor(steps + 0.5) * layer
+    return math.floor(steps + 0.5 + EPS_GEOM) * layer
 
 
 def rounds_to_whole_layers(
@@ -1020,12 +1085,12 @@ def rounds_to_whole_layers(
     style: str = "",
     organic: Collection[str] = (),
 ) -> bool:
-    """Rechnet der Slicer den Stützabstand hier in ganzen Schichten (RM-622)? Cura
-    immer; die Orca-Familie neben einem Reinigungsturm (``whole_layers``); jedes
-    Programm unter organischen Bäumen, also wenn ``style`` zu den Arten gehört,
-    die es so druckt (``organic``, :func:`handover.organic_styles`): Sie liegen
-    auf den Schichten des Modells, auch mit eigener Stützschichthöhe."""
-    return whole_layers or flavour in WHOLE_LAYER_GAP_FLAVOURS or style in organic
+    """Druckt der Slicer den Abstand **oben** hier in ganzen Schichten (RM-622,
+    RM-628)? Cura unter seinen Bäumen; die Orca-Familie neben einem
+    Reinigungsturm (``whole_layers``); jedes Programm unter organischen Bäumen,
+    also wenn ``style`` zu den Arten gehört, die es so druckt (``organic``).
+    Wie es rundet und wie unten, sagt :func:`gap_rounding`."""
+    return gap_rounding(flavour, whole_layers, style, organic) != "exact"
 
 
 #: Vorschläge, an deren Übernahme andere hängen: Wählt der Kunde einen davon ab,
@@ -1065,7 +1130,7 @@ def printed_style(
 
 def in_whole_layers(gap: float, layer: float) -> bool:
     """Misst dieser Abstand ganze Schichten? Sonst rundet ein Slicer, der in ganzen
-    Schichten rechnet, ihn selbst (RM-583, RM-622)."""
+    Schichten rechnet, ihn selbst (RM-583, RM-622), wie :func:`printed_gap` sagt."""
     return layer > 0.0 and is_close(gap / layer, round(gap / layer))
 
 
@@ -1082,21 +1147,27 @@ def support_gap_target(
     (RM-583): ein Vielfaches der Schichthöhe, begrenzt nach dem Materialprofil.
     Ohne Werte im Profil ``None``: unbekannt, der Abstand bleibt beim Hersteller.
 
-    Wo der Slicer in ganzen Schichten rechnet (Cura), ist es das Vielfache
-    innerhalb der Grenzen, das dem Ziel am nächsten liegt, mindestens eine
-    Schicht. Liegt keines darin, das kleinste über dem Minimum — oberhalb des
-    Maximums bleibt nur eine Schicht (PLA ab 0,28 mm). Die Orca-Familie rundet
-    nur ohne eigene Stützschichthöhe; die schaltet die Übergabe ein
-    (``handover.frees_support_layers``).
+    Wo der Slicer den Abstand oben in ganzen Schichten druckt
+    (:func:`rounds_to_whole_layers`), ist es das Vielfache innerhalb der
+    Grenzen, das dem Ziel am nächsten liegt, mindestens eine Schicht. Liegt
+    keines darin, das kleinste über dem Minimum — oberhalb des Maximums bleibt
+    nur eine Schicht (PLA ab 0,28 mm). Ein Vielfaches druckt jeder Slicer
+    genau, ob er rundet oder aufrundet; welches passt, sagt das Material, nicht
+    der Slicer (RM-628). Ausnahme: Cura unter seinen Bäumen ohne obere
+    Trennschicht legt eine Schicht dazu (:func:`gap_rounding`); dort rät
+    :func:`_support_contact` die Trennschicht, und mit ihr gilt dieser Wert.
 
-    **Neben einem Reinigungsturm rundet auch die Orca-Familie, unter
-    organischen Bäumen jedes Programm, das sie so druckt — die Orca-Familie wie
-    PrusaSlicer** (:func:`rounds_to_whole_layers`, RM-622): Die Stütze liegt
-    dann auf den Schichten des Modells, und der Abstand rundet auf die nächste
-    (am Turm ``SupportMaterial.cpp``, unter Bäumen der organische Generator,
-    bei Orca ``TreeSupport3D.cpp``; gemessen in sechs Programmen). PLA
-    bei 0,08er Schichten bekäme aus 0,10 mm eine Schicht, also 0,08 — unter dem
-    Minimum; in ganzen Schichten gerechnet sind es 0,16."""
+    **Wo das gilt** (:func:`gap_rounding`): Cura unter seinen Bäumen — unter
+    Gitter hält es den Abstand oben genau, dort gilt der Wert des Materials
+    (RM-628). Neben einem Reinigungsturm die Orca-Familie, unter organischen
+    Bäumen jedes Programm, das sie so druckt, die Orca-Familie wie PrusaSlicer
+    (RM-622): Die Stütze liegt dann auf den Schichten des Modells (am Turm
+    ``SupportMaterial.cpp``, unter Bäumen der organische Generator, bei Orca
+    ``TreeSupport3D.cpp``; gemessen in sechs Programmen). PLA bei 0,08er
+    Schichten bekäme aus 0,10 mm eine Schicht, also 0,08 — unter dem Minimum;
+    in ganzen Schichten gerechnet sind es 0,16. Ohne Turm und Baum druckt die
+    Orca-Familie den Abstand mit eigener Stützschichthöhe genau; die schaltet
+    die Übergabe ein (``handover.frees_support_layers``)."""
     factor, low, high = (
         material.support_gap_factor,
         material.support_gap_min,
@@ -1107,12 +1178,129 @@ def support_gap_target(
     target = min(max(layer * factor, low), high)
     if not rounds_to_whole_layers(flavour, whole_layers, style, organic):
         return target
+    return whole_layer_gap(target, layer, material)
+
+
+def whole_layer_gap(gap: float, layer: float, material: MaterialProfile | None = None) -> float:
+    """Das Vielfache der Schichthöhe, das ``gap`` am nächsten liegt, mindestens
+    eine Schicht; eine halbe rundet auf (RM-583, RM-628). So wählt Solidon, wo
+    ein Slicer den Abstand in ganzen Schichten druckt.
+
+    Liegt ``gap`` in den Grenzen des Materials (``support_gap_min`` bis
+    ``support_gap_max``), das nächste Vielfache darin; liegt keines darin, das
+    kleinste über dem Minimum — oberhalb des Maximums bleibt nur eine Schicht
+    (PLA ab 0,28 mm). PLA bei 0,08er Schichten bekommt aus 0,10 zwei Schichten,
+    nicht eine unter dem Minimum. Ein eigener Wert außerhalb der Grenzen bleibt
+    beim nächsten Vielfachen: Wer 0,7 mm Luft will, bekommt keine Schicht.
+    """
+    if layer <= 0.0:
+        return gap
+    # Eine halbe Schicht rundet auf, auch wenn die Division knapp darunter landet.
+    steps = max(1, math.floor(gap / layer + 0.5 + EPS_GEOM))
+    low = material.support_gap_min if material is not None else None
+    high = material.support_gap_max if material is not None else None
+    if low is None or high is None or not low - EPS_GEOM <= gap <= high + EPS_GEOM:
+        return steps * layer
     first = max(1, math.ceil(low / layer - EPS_GEOM))
     last = math.floor(high / layer + EPS_GEOM)
     if first > last:
         return first * layer
-    # Eine halbe Schicht rundet auf, auch wenn die Division knapp darunter landet.
-    return min(max(math.floor(target / layer + 0.5 + EPS_GEOM), first), last) * layer
+    return min(max(steps, first), last) * layer
+
+
+def cura_bottom_gap(
+    gap: float, layer: float, style: str, material: MaterialProfile | None = None
+) -> float:
+    """Was die Übergabe Cura als Abstand unten schreibt (``support_bottom_distance``,
+    RM-628).
+
+    Unten rundet Cura immer auf (:func:`gap_rounding`). Unter Gitter, wo oben
+    der Wert genau gilt, schreibt die Übergabe unten deshalb selbst das
+    Vielfache, das Solidon meint (:func:`whole_layer_gap`), und Cura druckt es
+    genau: PETG bei 0,2er Schichten oben 0,28 und unten 0,2 — aufgerundet waren
+    es 0,4, bei 0,28er Schichten aus 0,30 sogar 0,56, über dem Höchstwert 0,30,
+    über dem der Stützfuß in der Luft liegt. Unter Curas Bäumen rundet Cura oben
+    wie unten auf; dort bleibt unten der Wert von oben, ein Vielfaches druckt
+    Cura unten genau.
+    """
+    if gap_rounding("cura", style=style) != "exact" or in_whole_layers(gap, layer):
+        return gap
+    return whole_layer_gap(gap, layer, material)
+
+
+def _remainder(gap: float, layer: float) -> float:
+    """Was ``gap`` über ganze Schichten hinaus misst, null bei einem Vielfachen."""
+    return gap - math.floor(gap / layer + EPS_GEOM) * layer
+
+
+def cura_part_gap(
+    gap: float,
+    plate_gap: float,
+    layer: float,
+    style: str,
+    material: MaterialProfile | None = None,
+) -> float:
+    """Was die Übergabe einem Teil auf einer Cura-Platte als Abstand schreibt (RM-628).
+
+    Unter Gitter legt CuraEngine die Bruchteillage um den Rest des Abstands der
+    **Platte** tiefer (``support_top_distance % layer_height`` der Gruppe,
+    ``PathConfigStorage.cpp``); ob ein Netz sie bekommt, entscheidet sein eigener
+    Wert. Genau druckt ein Teil oben deshalb nur ein Vielfaches oder ein
+    Vielfaches plus den Rest der Platte — gemessen in Cura 5.13 bei 0,2er
+    Schichten: 0,28 auf einer Platte mit 0,2 druckte 0,20, auf einer mit 0,44
+    0,24; 0,48 auf einer mit 0,28 druckte 0,48. Passt der Wert zu keinem, schreibt
+    die Übergabe unter diesen genau druckbaren Werten den nächsten, im Band von
+    ``material``, dem Material der Spule des Teils, wenn der Wert darin liegt
+    (sonst :func:`whole_layer_gap`): PETG 0,28 auf der Platte mit 0,44 bekommt
+    0,24, nicht 0,20. Unter Bäumen gilt die Art der Platte, und Cura rundet
+    ohnehin auf (:func:`gap_rounding`).
+    """
+    if (
+        layer <= 0.0
+        or gap_rounding("cura", style=style) != "exact"
+        or in_whole_layers(gap, layer)
+        or is_close(_remainder(gap, layer), _remainder(plate_gap, layer))
+    ):
+        return gap
+    whole = whole_layer_gap(gap, layer, material)
+    rest = _remainder(plate_gap, layer)
+    if is_close(rest, 0.0):
+        return whole
+    near = round((gap - rest) / layer)
+    shifted = [steps * layer + rest for steps in (near - 1, near, near + 1) if steps >= 1]
+    low = material.support_gap_min if material is not None else None
+    high = material.support_gap_max if material is not None else None
+    if low is not None and high is not None and low - EPS_GEOM <= gap <= high + EPS_GEOM:
+        inside = [
+            value for value in (whole, *shifted) if low - EPS_GEOM <= value <= high + EPS_GEOM
+        ]
+        if not inside:
+            return whole
+        return min(inside, key=lambda value: (abs(value - gap), value))
+    return min((whole, *shifted), key=lambda value: (abs(value - gap), value))
+
+
+def printed_support_gaps(
+    gap: float,
+    layer: float,
+    flavour: SlicerFlavour | None,
+    style: str = "",
+    organic: Collection[str] = (),
+    material: MaterialProfile | None = None,
+    *,
+    whole_layers: bool = False,
+    roof: bool = True,
+    program: str = "",
+) -> tuple[float, float]:
+    """Der Abstand oben und unten, den der Slicer aus Solidons Übergabe des
+    Abstands ``gap`` druckt (RM-628): wie er rundet (:func:`gap_rounding`, mit
+    oberer Trennschicht ``roof`` und dem Programm ``program``) und, bei Cura, was
+    die Übergabe unten schreibt (:func:`cura_bottom_gap`). Feldsatz und
+    Slicertests fragen hier."""
+    above = gap_rounding(flavour, whole_layers, style, organic, roof=roof, program=program)
+    written = cura_bottom_gap(gap, layer, style, material) if flavour == "cura" else gap
+    below = gap_rounding(flavour, whole_layers, style, organic, below=True, program=program)
+    return printed_gap(gap, layer, above), printed_gap(written, layer, below)
 
 
 #: Ab wie vielen Inseln mit Baumspitze ohne Trennschicht (:attr:`SupportNeed.tips`)
@@ -1147,7 +1335,10 @@ def tip_gap(
     3,6 mm² — für eine Minute und 0,7 g. Gilt, wo der Slicer Baumspitzen setzt:
     unter organischen Bäumen (``organic``) und unter Curas Bäumen. In ganzen
     Schichten, mindestens :data:`TIP_GAP_LAYERS`, aus ``support_tip_gap`` des
-    Materials; ohne gemessenen Wert ``None``.
+    Materials; ohne gemessenen Wert ``None``. Ein Vielfaches druckt auch Cura
+    genau, das aufrundet — mit oberer Trennschicht; ohne sie legt es unter seinen
+    Bäumen eine Schicht dazu, und der Rat schlägt sie vor (:func:`gap_rounding`,
+    RM-628).
     """
     if material.support_tip_gap is None or layer <= 0.0 or need.tips < TIP_ISLANDS:
         return None
@@ -1176,9 +1367,12 @@ def _support_contact(
     rechnet (:func:`rounds_to_whole_layers`, mit der Art ``style``, mit der das
     Teil druckt, :func:`printed_style`), das Vielfache. Dort passt auch ein
     Abstand im Band nicht, der keine ganze Schicht ist: Der Slicer rundet ihn
-    selbst, Cura auf, die Orca-Familie zur
-    nächsten (0,2 mm sind bei 0,08er Schichten zweieinhalb). Unter einer großen
-    flachen Decke (ein Stück über ``OVERHANG_LAYER_WORTH_SUPPORT``) wird die
+    selbst, Cura auf, die Orca-Familie zur nächsten (:func:`printed_gap`;
+    0,2 mm sind bei 0,08er Schichten zweieinhalb). Unter Curas Gitter gilt
+    oben der Wert des Materials genau, nur unten rundet Cura auf (RM-628).
+    Unter Curas Bäumen ohne obere Trennschicht kommt sie dazu: Cura legt dort
+    eine Schicht Luft dazu, und der Abstand gilt erst mit ihr.
+    Unter einer großen flachen Decke (ein Stück über ``OVERHANG_LAYER_WORTH_SUPPORT``) wird die
     Trennschicht dicht, sonst locker. Material, das an sich selbst haftet
     (``support_interface_cooling`` im Profil), bekommt volle Kühlung an der
     Trennschicht.
@@ -1238,6 +1432,20 @@ def _support_contact(
         roofs = layers
         advice.append(
             _advice(settings, path="support.interface_layers", value=layers, reason=reason)
+        )
+    elif gap_rounding(flavour, style=style, roof=settings.support.interface_layers > 0) == (
+        "up_and_one"
+    ):
+        # Ohne obere Trennschicht legt Cura unter seinen Bäumen eine Schicht
+        # Luft dazu (RM-628): PETG bekäme aus 0,2 mm 0,4, über dem Höchstwert.
+        roofs = layers
+        advice.append(
+            _advice(
+                settings,
+                path="support.interface_layers",
+                value=layers,
+                reason=_("Ohne obere Trennschicht lässt Cura eine Schicht mehr Luft."),
+            )
         )
     # **Mit zwei Schichten Luft braucht jede Spitze ihre Trennschicht** (RM-704).
     # Am dritten Drachendruck (0,4 mm über Spitzen von 0,8 mm) hing die

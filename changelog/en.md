@@ -86,6 +86,9 @@ it into `website/version.json`.
 - Under tree supports and next to a prime tower, Solidon suggests the support gap in whole layers, the way the slicer prints it.
 - Under a large flat underside, Solidon suggests grid instead of tree supports, and hybrid where fine details need support too. For tall tree supports, Solidon suggests two walls.
 - If a suggestion in the print dialog applies to some parts only, its row and field also name the parts that get a different value with it.
+- With Cura and grid supports, the support gap follows the material: exact on top, in whole layers below. Where Cura rounds up, the field shows the printed value.
+- Under Cura's tree supports, Solidon suggests a top interface layer, because without one Cura leaves an extra layer of air.
+- With Cura, the support foot on sloped surfaces is now stepped when there is no bottom interface layer, and smooth with one, as Cura intends.
 - For PLA, Solidon suggests more clearance from tree supports beneath many fine tips. This leaves less residue from the tree tips there.
 - Long bridges get the support Solidon plans for them, in PrusaSlicer too. If a long bridge stays without support, Solidon suggests thick lines and slightly less flow.
 - Flat overhangs without support get extra walls suggested. For ABS, ASA and TPU the slicer can print steep overhangs in alternating directions on request, so they do not curl up.

@@ -86,6 +86,9 @@ scrive in `website/version.json`.
 - Con i supporti ad albero e accanto a una torre di spurgo, Solidon propone lo spazio del supporto in strati interi, come lo stampa lo slicer.
 - Sotto un'ampia superficie inferiore piana, Solidon propone la griglia invece degli alberi, e l'ibrido se servono anche dettagli fini. Per gli alberi alti, Solidon propone due pareti.
 - Se un suggerimento della finestra di stampa vale solo per alcuni pezzi, la riga e il campo nominano anche i pezzi che con esso ricevono un altro valore.
+- Con Cura e supporti a griglia, lo spazio del supporto segue il materiale: esatto sopra, in strati interi sotto. Dove Cura arrotonda per eccesso, il campo indica il valore stampato.
+- Sotto i supporti ad albero di Cura, Solidon propone uno strato di interfaccia superiore, perché senza di esso Cura lascia uno strato d'aria in più.
+- Con Cura, il piede del supporto sulle superfici inclinate è ora a gradini senza strato di interfaccia inferiore e liscio con esso, come previsto da Cura.
 - Per il PLA, Solidon propone più spazio tra le numerose punte sottili e i supporti ad albero sottostanti. In questo modo restano meno residui delle punte dei supporti.
 - I ponti lunghi ricevono il supporto previsto da Solidon, anche in PrusaSlicer. Se un ponte lungo resta senza supporto, Solidon propone linee spesse e un po' meno flusso.
 - Agli sbalzi piatti senza supporto Solidon propone pareti extra. Con ABS, ASA e TPU lo slicer stampa gli sbalzi ripidi in senso alternato, così non si arricciano.

@@ -111,6 +111,9 @@ Nutzen da und sonst nichts.
 - Unter Baumstützen und neben einem Reinigungsturm schlägt Solidon den Stützabstand in ganzen Schichten vor, so wie der Slicer ihn druckt.
 - Unter einer großen flachen Unterseite schlägt Solidon Gitter statt Bäumen vor, mit Hybrid, wo zugleich feine Details Stütze brauchen. Für hohe Baumstützen schlägt Solidon zwei Wände vor.
 - Gilt ein Vorschlag im Druckdialog nur einzelnen Teilen, nennen Zeile und Feld auch die Teile, die mit ihm einen anderen Wert bekommen.
+- Mit Cura und Gitterstützen folgt der Stützabstand dem Material: oben genau, unten in ganzen Schichten. Wo Cura aufrundet, nennt das Feld den gedruckten Wert.
+- Unter Curas Baumstützen schlägt Solidon eine obere Trennschicht vor, weil Cura ohne sie eine Schicht mehr Luft lässt.
+- Mit Cura steht der Stützfuß auf schrägen Flächen jetzt in Stufen, wenn unten keine Trennschicht liegt, und glatt mit ihr, wie Cura es vorsieht.
 - Bei PLA schlägt Solidon für viele feine Spitzen mehr Abstand zu den Baumstützen darunter vor. Dadurch bleiben dort weniger Reste der Baumspitzen.
 - Lange Brücken bekommen die Stütze, die Solidon vorsieht, auch in PrusaSlicer. Bleibt eine lange Brücke ohne Stütze, schlägt Solidon dicke Bahnen und etwas weniger Fluss vor.
 - Flache Überhänge ohne Stütze bekommen Zusatzwände vorgeschlagen. Bei ABS, ASA und TPU druckt der Slicer steile Überhänge auf Vorschlag in wechselnder Richtung, damit sie sich nicht aufrollen.

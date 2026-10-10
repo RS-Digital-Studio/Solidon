@@ -87,6 +87,9 @@ dans `website/version.json`.
 - Sous les supports arborescents et à côté d'une tour de purge, Solidon propose l'espace du support en couches entières, comme le slicer l'imprime.
 - Sous une grande face inférieure plane, Solidon propose une grille plutôt que des arbres, et l'hybride si des détails fins en ont besoin. Pour les arbres hauts, Solidon propose deux parois.
 - Si une suggestion de la boîte de dialogue d'impression ne vaut que pour certaines pièces, la ligne et le champ nomment aussi celles qui reçoivent avec elle une autre valeur.
+- Avec Cura et des supports en grille, l'espace du support suit le matériau : exact au-dessus, en couches entières au-dessous. Si Cura arrondit vers le haut, le champ indique la valeur imprimée.
+- Sous les supports arborescents de Cura, Solidon propose une couche d'interface supérieure, car sans elle Cura laisse une couche d'air de plus.
+- Avec Cura, le pied du support sur les surfaces inclinées est désormais en escalier sans couche d'interface inférieure, et lisse avec, comme le prévoit Cura.
 - Pour le PLA, Solidon propose davantage d'espace entre les nombreuses pointes fines et les supports arborescents en dessous. Cela laisse moins de résidus des pointes des supports.
 - Les longs ponts reçoivent le support prévu par Solidon, dans PrusaSlicer aussi. Si un long pont reste sans support, Solidon propose des lignes épaisses et un peu moins de débit.
 - Les surplombs plats sans support se voient proposer des parois supplémentaires. Avec l'ABS, l'ASA et le TPU, le slicer imprime les surplombs raides en sens alterné pour qu'ils ne se recourbent pas.

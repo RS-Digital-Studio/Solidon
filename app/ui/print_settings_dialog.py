@@ -112,6 +112,7 @@ from app.core.types import (
     Document,
     Finding,
     HandoverKind,
+    MaterialProfile,
     MaterialSlot,
     PrinterProfile,
     PrintSettings,
@@ -6280,6 +6281,19 @@ class PrintSettingsDialog(QDialog):
             ]
         )
 
+    def _plate_material(self) -> MaterialProfile:
+        """Das Material, mit dem die gewählten Platten drucken — dieselbe Frage wie
+        der Export (``handover.slot_material``): die erste Spule samt gewähltem
+        Filamentprofil, ohne Spule das des Auftrags (RM-628)."""
+        slots = self._plate_slots()
+        # Ohne Szene kommt die alte Wahl als Liste, die kürzer sein kann.
+        chosen = self._profiles_for(slots)
+        bound = [
+            replace(slot, material=(chosen[index] if index < len(chosen) else "") or slot.material)
+            for index, slot in enumerate(slots)
+        ]
+        return handover.slot_material(self.session.profile, bound, self._setup_snapshot())
+
     def _profiles_for(self, slots: Sequence[MaterialSlot]) -> tuple[str, ...]:
         """Ordnet die global gespeicherten Profile den angefragten Spulen zu.
 
@@ -6740,6 +6754,9 @@ class PrintSettingsDialog(QDialog):
         # Flatpak dahintersteht, und kostete je Profilantwort 0,27 s (932 Aufrufe
         # an Roberts ElegooSlicer, 08.10.2026).
         name = _slicer_title(self._slicer_path) if self._slicer_path else ""
+        # Das Material nur für Cura, und einmal: Dort nennt der Satz am Abstand
+        # die Unterseite im Band der Spule, die druckt (RM-628).
+        material = self._plate_material() if flavour == "cura" else self.session.profile.material
         for path, editor in self._editors.items():
             ignored = flavour is not None and not slicer_keys.takes(flavour, path, program)
             own_reason = (
@@ -6757,10 +6774,17 @@ class PrintSettingsDialog(QDialog):
             # Mit den Einstellungen: Curas Lüfterhochlauf weicht erst ab zwei
             # Schichten ohne Lüfter ab, und nur dann steht ein Satz da. Ebenso
             # eine Wahl, die das Programm nicht kennt (RM-480). Unter Bäumen mit
-            # derselben Auskunft wie der Rat (RM-622).
+            # derselben Auskunft wie der Rat (RM-622), Curas Abstand unten in den
+            # Grenzen des Materials wie die Übergabe (RM-628).
             specific = (
                 slicer_keys.limitation(
-                    flavour, path, self.settings, program, self._organic, hollow=self._hollow_trees
+                    flavour,
+                    path,
+                    self.settings,
+                    program,
+                    self._organic,
+                    material=material,
+                    hollow=self._hollow_trees,
                 )
                 if flavour is not None
                 else None

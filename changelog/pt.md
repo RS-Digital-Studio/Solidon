@@ -86,6 +86,9 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Com suportes em árvore e junto a uma torre de purga, o Solidon propõe a distância do suporte em camadas inteiras, tal como o slicer a imprime.
 - Sob uma face inferior grande e plana, o Solidon propõe grelha em vez de árvores, e híbrido se também houver detalhes finos. Para árvores altas, o Solidon propõe duas paredes.
 - Se uma sugestão do diálogo de impressão só vale para algumas peças, a linha e o campo nomeiam também as peças que recebem com ela outro valor.
+- Com o Cura e suportes em grelha, a distância do suporte segue o material: exata em cima, em camadas inteiras em baixo. Onde o Cura arredonda para cima, o campo mostra o valor impresso.
+- Sob os suportes em árvore do Cura, o Solidon propõe uma camada de separação superior, porque sem ela o Cura deixa uma camada de ar a mais.
+- Com o Cura, o pé do suporte em superfícies inclinadas fica agora em degraus sem camada de separação inferior, e liso com ela, como o Cura prevê.
 - Para PLA, o Solidon propõe mais espaço entre as muitas pontas finas e os suportes em árvore por baixo. Assim ficam menos resíduos das pontas dos suportes.
 - As pontes longas recebem o suporte que o Solidon prevê, também no PrusaSlicer. Se uma ponte longa ficar sem suporte, o Solidon propõe linhas grossas e um pouco menos de fluxo.
 - As saliências planas sem suporte recebem paredes extra como proposta. Com ABS, ASA e TPU o slicer imprime as saliências íngremes em sentido alternado para que não enrolem.

@@ -662,12 +662,54 @@ geschriebenen Abständen der Teile, die nicht unter organischen Bäumen drucken
 (`handover.support_gaps_by_style`), nicht nach den Zielen aller Spulen; unter
 Bäumen wirkte er nicht und wäre eine Abweichung vom Herstellerprofil ohne Grund.
 Steht er gegen den Herstellerprozess, sagt es ein Befund: Die Stütze liegt dann
-auch auf eigenen Höhen (0,47, 0,75, 1,02 mm statt nur auf denen des Modells). Cura
-rechnet immer in ganzen Schichten, deshalb rät Solidon dort das Vielfache
-innerhalb der Materialgrenzen — bei 0,08 mm Schicht für PLA zwei Schichten statt einer
-unter dem Minimum —, und die Cura-Grundlage trägt es auch: Solidons 0,2 war
-bei 0,28 und 0,12 mm Schicht keines, und jede Übergabe in Entwurf und Fein
-warnte, auch ohne Stützen. Über mehrere Körper führt der Druckdialog den
+auch auf eigenen Höhen (0,47, 0,75, 1,02 mm statt nur auf denen des Modells).
+
+**Cura rundet auf, unter Gitter nur unten** (RM-628). CuraEngine 5.13 zählt
+Abstandslagen mit `round_up_divide`: unter Bäumen oben und unten
+(`TreeSupportSettings.h:62–63`), unter Gitter unten (`support.cpp:1119`, `:1703`).
+Oben unter Gitter hält es den Abstand genau: Liegt er zwischen zwei Schichten,
+druckt es die oberste Stützlage als Bruchteillage tiefer
+(`support_fractional_roof`, `support.cpp:1757`, `PathConfigStorage.cpp:165`).
+Gemessen an der Platte über einer Säule (PETG, 0,2 mm Schicht,
+`tests/test_real_slicers.py`, damals mit dem gespiegelten Wert unten): Gitter
+mit 0,28 oben 0,28 und unten 0,4, Baum mit 0,44 oben und unten 0,6; die Sonde zu RM-624 maß dasselbe für 0,44 unter Gitter
+(oben 0,44, unten 0,6) und 0,28 unter Bäumen (0,4). Bis dahin nahm Solidon für
+Cura immer ganze Schichten zur nächsten an: PETG bekam unter Gitter eine Schicht
+(0,2) statt 0,28 vorgeschlagen, und der Feldsatz nannte eine Rundung, die Cura
+oben nicht macht. Jetzt rät Solidon unter Curas Gitter den Wert des Materials
+genau und unter Curas Bäumen das Vielfache innerhalb der Materialgrenzen — bei
+0,08 mm Schicht für PLA zwei Schichten statt einer unter dem Minimum. Welches
+Vielfache passt, sagt das Material, nicht die Rundungsart: Ein Vielfaches druckt
+jeder Slicer genau, und aufgerundet bekäme PETG bei 0,2 mm Schicht unter Bäumen
+0,4 über seinem Höchstwert 0,3, anders als in der Orca-Familie. Unten unter
+Gitter hätte Solidons eigener Rat den Fuß zu weit gehoben: PETG mit 0,28 bei
+0,2 mm Schicht druckte dort 0,4, mit 0,30 bei 0,28 mm Schicht 0,56 — fast das
+Doppelte von `support_gap_max`, über dem die erste Stützlage in der Luft liegt.
+Ein eigenes Feld für unten hat Solidon nicht; die Übergabe schreibt Cura deshalb
+`support_bottom_distance` selbst, das Vielfache, das Solidon meint
+(`advise.cura_bottom_gap`, `whole_layer_gap`: das nächste, im Materialband, wenn
+der Wert darin liegt), und Cura druckt es genau — gemessen bei 0,12, 0,2 und
+0,28 mm Schicht (Archiv RM-628). Unter Bäumen bleibt unten der Wert von oben:
+Dort rundet Cura beide Seiten gleich, und Solidons Rat ist schon ein Vielfaches.
+Der Feldsatz nennt, was Cura druckt: unter Bäumen den aufgerundeten Abstand,
+unter Gitter den unteren, wo die Stütze auf dem Modell stehen darf. Nachgemessen
+in Cura 5.13 (RM-628, Review): Je Teil gilt „oben genau“ nur mit dem Rest der
+Platte, denn CuraEngine legt die Bruchteillage um `support_top_distance %
+layer_height` der Platte tiefer — 0,28 an einem Teil druckte auf einer Platte mit
+0,2 oben 0,20, mit 0,44 0,24, und 0,48 auf einer Platte mit 0,28 genau 0,48;
+ein solches Teil bekommt den nächsten genau druckbaren Wert im Band seiner Spule,
+ein Vielfaches oder ein Vielfaches plus den Rest der Platte (`cura_part_gap`:
+0,28 auf 0,44 wird 0,24), und unten wählt ein Teil mit eigenem Wert ebenfalls im
+Band seiner Spule. Ein Teil ohne eigenen Wert druckt unten wie die Platte; mit
+Curas einem Filament (`unreachable_overrides`) ist das dort richtig. Unter Curas Bäumen ohne obere Trennschicht baut Cura die Spitzen
+als Ersatzdach und druckt oben eine Schicht mehr (0,20 → 0,40, 0,28 → 0,60);
+der Rat schlägt dort die Trennschicht vor. Den Halbfall unter organischen Bäumen
+(0,30 bei 0,2 mm Schicht) runden Bambu Studio und Creality Print ohne Toleranz
+auf 0,20, die übrigen auf 0,40. Die Cura-Grundlage trägt den
+Wert des Materials (ihre Art ist „keine“, Cura druckt dann Gitter); ohne Stützen
+sagt keine Übergabe etwas dazu, denn früher warnte jede in Entwurf und Fein
+(RM-583, Nachprüfung M2). Die Druckzeit hängt nicht am Abstand: `print_time`
+lässt die Säulen bis an die Decke reichen. Über mehrere Körper führt der Druckdialog den
 Stützkontakt getrennt zusammen und fragt ihn wie der Export gegen die
 Grundlage: Gegen die Übernahme gefragt, brachte jedes Übernehmen die
 Gegenzeile (Tisch 0,2, Kinn 0,5 und zurück; PLA 0,15, PETG 0,21 und zurück),

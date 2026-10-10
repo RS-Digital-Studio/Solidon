@@ -57,6 +57,7 @@ entfernt hat.
 | 2026-10-09 | [RM-635: Prozesstests zählen ihre Zeit ab dem Zustand, und der Abbau wartet auf das Ende des Prozesses (09.10.2026)](#rm-635-prozesstests-zählen-ihre-zeit-ab-dem-zustand-und-der-abbau-wartet-auf-das-ende-des-prozesses-09102026) |
 | 2026-10-09 | [RM-344: Die Release-CI fährt die Rendererfälle ohne Fenster auf allen vier Paketplattformen (09.10.2026)](#rm-344-die-release-ci-fährt-die-rendererfälle-ohne-fenster-auf-allen-vier-paketplattformen-09102026) |
 | 2026-10-09 | [RM-571: Ein Sims im offenen Becher neben einem gesperrten Kanal behält seine Stütze (09.10.2026)](#rm-571-ein-sims-im-offenen-becher-neben-einem-gesperrten-kanal-behält-seine-stütze-09102026) |
+| 2026-10-09 | [RM-628: Solidon rechnet mit Curas Aufrunden des Stützabstands (09.10.2026)](#rm-628-solidon-rechnet-mit-curas-aufrunden-des-stützabstands-09102026) |
 | 2026-10-09 | [RM-680: Bausteine verwalten steht ohne eigenen Baustein offen (09.10.2026)](#rm-680-bausteine-verwalten-steht-ohne-eigenen-baustein-offen-09102026) |
 | 2026-10-09 | [RM-650: Ein eingefügtes Modell kommt in den Ausschnitt (09.10.2026)](#rm-650-ein-eingefügtes-modell-kommt-in-den-ausschnitt-09102026) |
 | 2026-10-09 | [RM-584 (Teil): Über Baumspitzen rät Solidon zwei Schichten Luft (09.10.2026)](#rm-584-teil-über-baumspitzen-rät-solidon-zwei-schichten-luft-09102026) |
@@ -27635,15 +27636,16 @@ Bahnhöhe, ohne Nachbarschaft unten, ohne Nachbarschaft oben, `Skirt/Brim` als M
 die alte aus `c95d542ed` werden dort rot, jede an der Zusicherung ihres Falls. Linux und macOS (Anycubic 2.0.0.5 gegen 2.0.0.3, Laufzeit
 gegen das 120-Minuten-Limit) nimmt die Slicerauswahl beim Push auf main ab, denn die CI läuft
 nur dort (Entscheidung Robert). SuperSlicer fehlt: RM-622 hat es nicht gemessen. Cura
-fehlt, weil es aufrundet und Solidons Tabelle es nicht weiß; das richtet RM-628, und Cura
-kommt mit ihm in den Test. Cura 5.13 an derselben Platte (Sonde, nicht eingecheckt): unter
-Gitter oben genau der geschriebene Abstand (0,28 und 0,44 mm, mit einer Bruchteillage der
-Stütze), unten aufgerundet (0,4 und 0,6); unter Bäumen oben und unten aufgerundet (0,4 und
-0,6). Am Weg des Tests mit `support_contact` nachgemessen: Gitter 0,28 → oben 0,28, unten
-0,40; Baum 0,44 → oben und unten 0,60; je drei untere Lagen.
-`advise.WHOLE_LAYER_GAP_FLAVOURS` und `support_gap_target` nehmen für Cura dagegen ganze
-Schichten zum nächsten Vielfachen an — mit dem heutigen Sollwert wären alle vier
-Abstandszusicherungen rot. Changelog: nein (Test).
+fehlte zuerst, weil es aufrundet und Solidons Tabelle es nicht wusste. Cura 5.13 an derselben
+Platte: unter Gitter oben genau der geschriebene Abstand (0,28 und 0,44 mm, mit einer
+Bruchteillage der Stütze), unten aufgerundet (0,4 und 0,6); unter Bäumen oben und unten
+aufgerundet (0,4 und 0,6). Mit [RM-628](#rm-628) steht Cura in `_CONTACT_PROGRAMS`: Die
+Sollwerte oben und unten kommen für alle sieben Programme aus
+`advise.printed_support_gaps` (statt `round(gap / layer)` nach `rounds_to_whole_layers`),
+für Cura sichert der Test dazu den Feldsatz mit dem gedruckten Wert zu, und ein dritter
+Cura-Fall schneidet bei 0,28-mm-Schichten (Gitter 0,30 → oben 0,30, unten 0,28). Unter Gitter
+schreibt die Übergabe Cura unten das Vielfache im Band selbst: 0,28 → oben 0,28, unten 0,20;
+unter Bäumen 0,44 → oben und unten 0,60; je drei untere Lagen. Changelog: nein (Test).
 
 ## RM-027 entfällt mit dem privaten Index (09.09.2026)
 
@@ -46696,6 +46698,134 @@ sechs Sprachen „ab 0.5.0“ neben „Version 0.5.3“, wie im Repository. Chan
   Belege: `F:\solidon-review-reports\verif-09d8e9485.md` (Abschnitt 3).
 
 **Abschluss:** Der Abschnitt *Bausteine verwalten* beginnt offen, solange der eigene Bausteinordner nichts hält (`PartCatalog`, `_own_library_is_empty`). Gezählt werden gespeicherte Rezepte und hinzugefügte Bausteine, dieselbe Frage wie für Weitergabe, *Bearbeiten* und *Entfernen* (`_in_own_library`, vorher dreimal hergeleitet); ein mitgereister und ein `.py`-Baustein zählen nicht, `PartSpec.own` zählte anders. Danach gilt der Merker (`remember`, RM-491), und ein eigener Baustein klappt den Abschnitt wie bisher auf (RM-455; dass dieses Aufklappen gemerkt wird, steht in [RM-658](ROADMAP.md#rm-658)). Damit stehen *Auswahl als Baustein speichern …*, *Baustein aus Datei hinzufügen …* und beide Sperrgründe ohne Klick da, wie in 0.5.1 (Rückschritt seit `48ffcf145`, in 0.5.2 und 0.5.3). Weil der Weitergabegrund jetzt vorn steht, sagt er ohne eigenen Baustein „Speichern Sie zuerst einen eigenen Baustein, um ihn weiterzugeben.“ statt zum Wählen aufzufordern, das bei einem eingebauten in die nächste Absage führte. Die Hinweistests prüfen den Grund ohne vorheriges Aufklappen und stellen die Bibliothek ohne eigene Bausteine selbst her (`no_own_parts`); `test_the_closed_management_names_what_it_holds` prüft den zugeklappten Zustand nach einem Klick; neu `test_a_fresh_catalogue_shows_its_management_without_a_click` und `test_only_a_part_in_the_own_library_closes_the_management` (Rezept und hinzugefügt zu, mitgereist und `.py` offen). Gegenprobe über ein Plugin, je Mutation von acht Tests rot: immer zu 6, immer offen 2, Prädikat über `PartSpec.own` 2, alter Weitergabegrund 3; Katalogtests 52 grün, Handbuch-, Katalog-, Wortlaut- und Changelogtests 539 grün. Die Handbuchseiten *Eigene Bausteine* und *Bausteindateien austauschen* nennen Abschnitt und Knopf in allen sechs Sprachen, der eingefrorene Musterbestand trägt die neuen Seitenschlüssel; Changelog 0.6.0. Fenstersonde am echten Fenster, frischer Nutzerordner: 4 von 4, *Speichern*, *Hinzufügen* und beide Sperrgründe ohne Klick sichtbar, der Weitergabegrund schickt zum Speichern. Umgesetzt von Claude (Thread „Bedienung und KI“).
+
+## RM-628: Solidon rechnet mit Curas Aufrunden des Stützabstands (09.10.2026)
+
+<a id="rm-628-solidon-rechnet-mit-curas-aufrunden-des-stützabstands-09102026"></a>
+<a id="rm-628"></a>
+
+**Befund (09.10.2026, beim Beheben von RM-624):** Eine Sonde an Cura 5.13 (Platte über
+einer Säule, PETG, 0,2-mm-Schichten) druckte unter Gitter oben genau den geschriebenen
+Abstand (0,28 und 0,44 mm, mit einer Bruchteillage der Stütze) und unten aufgerundet (0,4
+und 0,6), unter Bäumen oben und unten aufgerundet (0,4 und 0,6); der Drachenbericht
+(`output/drache-2026-10-09/rueckstaende/bericht.md`, Abschnitt 5/6) las dasselbe aus
+`TreeSupportSettings.h:62`. `advise.WHOLE_LAYER_GAP_FLAVOURS`, `support_gap_target`,
+`rounds_to_whole_layers` und der Feldsatz „Cura rechnet … in ganzen Schichten“ nahmen
+dagegen für Cura immer ganze Schichten zur nächsten an. Folge: PETG bekam unter Curas Gitter
+eine Schicht (0,2) statt 0,28 vorgeschlagen, auch die Cura-Grundlage trug sie, und der Satz
+am Feld nannte eine Rundung, die Cura oben nicht macht, und verschwieg die, die es macht.
+
+**Quelltext (CuraEngine 5.13.0):** `round_up_divide` für die Abstandslagen unter Bäumen
+oben und unten (`include/TreeSupportSettings.h:62–63`) und unter Gitter unten
+(`src/support.cpp:1119` in `generateSupportAreasForMesh`, `:1703` in
+`generateSupportBottom`). Oben unter Gitter zieht `support.cpp:1011` ganze Lagen ab
+(`z_distance_top / layer_thickness + 1`), und liegt der Abstand zwischen zwei Schichten,
+druckt Cura die oberste Stützlage als Bruchteillage tiefer (`support_fractional_roof`,
+`support.cpp:1757`; `z_offset = -leftover_support_distance`,
+`src/settings/PathConfigStorage.cpp:165`; geschrieben bei `gcode_layer.z_ + z_offset`,
+`src/FffGcodeWriter.cpp:4000`).
+
+**Behoben:** Eine Auskunft für alle Programme, oben und unten: `advise.gap_rounding`
+(`exact`, `nearest`, `up`; Cura `up` unter Bäumen und immer unten, oben unter Gitter
+`exact`; die Orca-Familie und PrusaSlicer `nearest` unter organischen Bäumen, Orca auch neben
+dem Turm) und `advise.printed_gap`, der gedruckte Wert. `rounds_to_whole_layers` fragt sie
+für oben (Signatur unverändert), `WHOLE_LAYER_GAP_FLAVOURS` entfällt,
+`slicer_keys.support_gap_in_whole_layers` heißt `rounds_support_gap_up`. Unter Curas Gitter
+rät Solidon jetzt den Wert des Materials genau (PETG bei 0,2 mm 0,28, bei 0,12 mm 0,168),
+unter Curas Bäumen wie bisher das Vielfache innerhalb der Materialgrenzen — welches, sagt
+das Material, nicht die Rundungsart; ein Vielfaches druckt jeder Slicer genau, und
+„kleinstes Vielfaches ab Ziel“ hätte PETG bei 0,2 mm unter Bäumen 0,4 über dem Höchstwert
+0,3 gegeben, anders als in der Orca-Familie. Der Baumspitzenrat (`tip_gap`) liefert schon
+ganze Schichten und druckt in Cura so. Die Cura-Grundlage fragt mit ihrer Art (keine, also
+Gitter) und trägt den Wert des Materials; ohne Materialwerte (TPU) bleibt Solidons 0,2, statt
+auf die nächste Schicht gerundet zu werden.
+
+**Unten schreibt die Übergabe selbst** (Fertigstellung, 09.10.2026 abends): Mit dem genauen Wert oben
+hob Curas Aufrunden den Stützfuß unten über den Höchstwert des Materials — PETG bei 0,2 mm
+Schicht 0,4, bei 0,28 mm 0,56 statt höchstens 0,30; darüber liegt die erste Stützlage in der
+Luft. Solidon hat kein Feld für unten. `advise.cura_bottom_gap` sagt deshalb, was Cura als
+`support_bottom_distance` bekommt: unter Gitter das Vielfache, das Solidon meint
+(`advise.whole_layer_gap`: das nächste, im Materialband, wenn der Wert darin liegt; ein eigener
+Wert außerhalb bleibt beim nächsten), unter Bäumen den Wert von oben. `handover._for_supports`
+schreibt es, `slicer_keys.CURA_MIRRORED` spiegelt `support_z_distance` nur noch nach oben;
+je Teil geht es über dieselbe Ableitung (`object_keys`). `support_gap_target` wählt sein
+Vielfaches über dieselbe Funktion. Der Feldsatz nennt, was Cura druckt: „Unter Baumstützen
+rundet Cura den Stützabstand auf {gap} auf.“ und unter Gitter, wo die Stütze auf dem Modell
+stehen darf, „Cura druckt den Stützabstand oben genau, unten in ganzen Schichten zu {gap}.“
+(sechs Kataloge), mit den Materialgrenzen wie die Übergabe (`limitation(material=…)`,
+`setting_limitations`, Druckdialog). Die Druckzeit hängt nicht am Abstand
+(`print_time._support_columns` lässt die Säulen bis an die Decke reichen); dort war nichts zu
+ändern.
+
+**Nachweis (09.10.2026):** Test zuerst: `test_each_program_prints_the_gap_as_it_rounds`
+(Familie, Art, Seite als Tabelle, 24 Fälle), `test_under_curas_grid_the_gap_is_the_materials`,
+`test_cura_says_what_it_prints_of_the_gap` und
+`test_cura_gets_the_materials_gap_from_its_foundation`; am echten Programm
+`test_curas_support_gap_arrives_as_solidon_says` mit eigener kleiner Messung
+(`_cura_support_gaps`, je Millimeter Bahn ein Punkt im Ring zwischen Säule und Plattenrand,
+`;TYPE:`, `M82`/`M83`, `G92 E`; geprüft an `test_the_cura_gap_measure_reads_fractions_resets_and_the_ring`).
+Gemessen in Cura 5.13 (Ender-3 V3 SE, erste Lage 0,25 mm): Gitter mit 0,28 oben 0,28 und
+unten 0,40, Baum mit 0,44 oben und unten 0,60; je Seite 267 bis 482 Bahnpunkte. Gegenprobe
+mit dem alten Runden (`gap_rounding` für Cura `nearest`): 17 von 34 Fällen in Schnitt und
+Cura-Test rot, darunter beide Läufe am echten Programm, und 14 von 38 in den
+Druckeinstellungen. Betroffene Testdateien (Schnittbefunde, Druckeinstellungen, Export, Rat,
+Übersetzungen, Changelog, Roadmap, vier Cura-Dateien, Floß, Teilwerte, Schätzung,
+Sprachregeln, Karten, die zwei neuen Fälle aus `test_real_slicers.py`): siehe Commit.
+
+**Nachweis der Fertigstellung:** Test zuerst `test_a_whole_layer_gap_is_the_nearest_inside_the_material_band`
+(9 Fälle), `test_cura_gets_its_bottom_gap_in_whole_layers_under_grid` (7) und
+`test_cura_gets_the_bottom_gap_it_prints_as_meant` (6, Platte und je Teil); der Feldsatztest
+nennt den unteren Wert in ganzen Schichten. Gegenprobe über Plugins: `cura_bottom_gap` gibt den
+Wert von oben zurück — 11 von 57 Fällen rot; `CURA_MIRRORED` spiegelt wieder nach unten — 4 von
+6 rot. Der Cura-Slicertest läuft bei 0,2 mm Gitter 0,28, Baum 0,44, bei 0,28 mm Gitter 0,30 und
+bei 0,12 mm Baum 0,28, grün mit der Messprüfung (5 von 5). Sonde an Cura 5.13 (Ender-3 V3 SE,
+gepinnt), Platte über Säule, je Seite 100 bis 180 Zellen, zwei Messungen (Ring je Bahnmillimeter,
+Zellenmessung aus RM-624) gleich: Mit Solidons Rat druckte PETG unter Gitter bei 0,2 mm vorher
+(`d5ddfc217`) oben und unten 0,2, im Zwischenstand 0,28 und 0,40, jetzt 0,28 und 0,20; bei
+0,28 mm vorher 0,28 und 0,28, im Zwischenstand 0,30 und 0,56, jetzt 0,30 und 0,28; bei 0,12 mm
+vorher 0,12 und 0,12, jetzt 0,20 (im Band, kein Rat) und 0,24. Unter Bäumen und für PLA
+unverändert ganze Schichten, oben gleich unten. Feste Werte 0,28 und 0,44 bei 0,12, 0,2 und
+0,28 mm: oben unter Gitter genau, unter Bäumen aufgerundet (0,36/0,48, 0,40/0,60, 0,28/0,56),
+unten unter Gitter wie `cura_bottom_gap` (0,24, 0,48, 0,20, 0,40, 0,28, 0,56) und wie der
+Feldsatz. Stichprobe der übrigen Familien mit 0,24 mm bei 0,2 mm Schicht (PETG): Orca, Bambu,
+Elegoo, Creality, Anycubic und PrusaSlicer drucken unter Gitter oben und unten 0,24 (genau),
+unter organischen Bäumen oben und unten 0,20 (zur nächsten, nicht aufgerundet). Changelog
+0.6.0: ja, als Eigenschaft (Ursache `fafcd4841` liegt in keinem Tag).
+
+**Nacharbeit nach Review (10.10.2026):** Curas Fenster bekommt die Unterseite wie die Konsole
+(`cura_profile_beside` über `_cura_bottom_gap`), und Übergabe, Schreiber und Dialog fragen mit
+dem Material der Spule. Je Teil schreibt der Export oben nur einen Wert, der mit dem Rest der
+Platte genau druckt, sonst das Vielfache im Band der Spule (`advise.cura_part_gap`). Unter
+Curas Bäumen ohne obere Trennschicht rechnet Solidon mit einer Schicht mehr (`up_and_one`) und
+rät die Trennschicht. Den Halbfall unter organischen Bäumen rundet `nearest_raw` für Bambu
+Studio und Creality Print (`HALF_LAYER_UNGUARDED`). Der Gitter-Satz ist ein Hinweis ohne
+Handlung, der Feldsatz nennt den Abstand unten „mit {gap}, einem Vielfachen der Schichthöhe“.
+Die eigene Cura-Messung im Slicertest ist dem Kontakttest gewichen (RM-624, Cura dort mit
+Gitter, Baum und Gitter bei 0,28 mm). Gegenproben je Fund im Prozess: Schreiber ohne Material
+1 rot, Dialog ohne Material 1 rot (Fenster), Übergabe unten ohne Band 6, Fenster ohne
+Unterseite 5, Teilwert unverändert 7, Trennschicht übergangen 7, Spule übergangen 3, Programm
+übergangen 2, Gitter-Satz als Warnung 3, Grundlauf 987 grün. Nachprobe an Cura 5.13 (Ender-3
+V3 SE, PETG, 0,2 mm, zwei Teile, gepinnt), Werte je Teil aus `writer._values_for`: Platte 0,2
+mit Teil 0,28 schreibt 0,2 und druckt 0,20/0,20; Platte 0,44 mit Teil 0,28 schreibt 0,2 und
+druckt 0,20/0,20; Platte 0,28 mit Teil 0,2 druckt 0,20/0,20; Platte 0,24 mit Teil 0,44 (gleicher
+Rest) schreibt 0,44 und druckt 0,44/0,40 — jeweils wie Solidon sagt, das andere Teil wie seine
+Platte.
+
+**Nach der Nachprüfung (10.10.2026):** Die Trennschichten gehen auch ins Fensterprofil
+(`handover._cura_interface`, `_cura_window_choices`): Schalter als Werte, Höhen als Formel
+`=layer_height * N`, die obere ausdrücklich, je Extruderprofil; Cura liest einen Wert mit `=`
+als Formel (`UM/Settings/SettingInstance.py:172`). Vorher nahm das Fenster die Trennschicht der
+Maschine, und unter Bäumen ohne Werksvorgabe druckte PETG nach Solidons Rat 0,40 statt 0,20. Der
+Dialog fragt das Material der Platte wie der Export (`_plate_material` über
+`handover.slot_material`). `cura_part_gap` wählt unter allen genau druckbaren Werten
+(Vielfaches, Vielfaches plus Rest der Platte) den nächsten im Band: 0,28 auf einer Platte mit
+0,44 wird 0,24 statt 0,20. Exporttest für das Material je Teil durch `write_assembly`. Die
+Regel `dateiformat.md` sagt, dass Solidons eigene Wahl für Cura auch ins Fensterprofil gehört.
+Aus der Durchsicht: Im Fenster steht die Elternhöhe der Trennschicht nach der dickeren Seite
+(oben 0, unten 3 → `=layer_height * 3`; vorher zeigte Cura eine Warnung an 0 mm). Die
+Treppenstufe unter dem Stützfuß folgt der unteren Trennschicht wie Curas Formel
+(`0 if support_bottom_enable else 0.3`); seit `f934a4221` (v0.2.2) hing sie an der oberen.
+Gegenproben je 2 rot.
 
 ## RM-587: Lange Brücken und steile Überhänge drucken sauber (09.10.2026)
 
