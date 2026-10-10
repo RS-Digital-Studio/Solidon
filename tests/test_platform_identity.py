@@ -1701,6 +1701,65 @@ def test_a_way_through_the_kernel_does_not_hang_on_the_machine(way: str) -> None
     assert noisy == quiet, f"{way} hängt an einer plattformabhängigen Rechnung"
 
 
+#: Die Wege, die auf mehreren Fäden rechnen: Modul, Zahl der Fäden, Portionsgröße.
+_THREADED: dict[str, tuple[str, str, str]] = {
+    "blend_field": ("app.core.geom.blend", "PAIR_WORKERS", "PAIR_CHUNK"),
+    "blend_union": ("app.core.geom.blend", "PAIR_WORKERS", "PAIR_CHUNK"),
+    "remesh_uniform": ("app.core.geom.mesh_ops", "SHAPE_WORKERS", "SHAPE_CHUNK"),
+}
+
+
+class _Backwards:
+    """Ein Ausführer, der die Portionen von der letzten zur ersten rechnet.
+
+    Echte Fäden enden in einer Reihenfolge, die kein Lauf wiederholt; dieser
+    endet in der, die am weitesten von der gewohnten entfernt liegt.
+    """
+
+    def __init__(self, max_workers: int) -> None:
+        self.max_workers = max_workers
+
+    def __enter__(self) -> _Backwards:
+        return self
+
+    def __exit__(self, *_exc: object) -> None:
+        return None
+
+    def map(self, function: Callable[[Any], Any], items: Any) -> list[Any]:
+        listed = list(items)
+        done = {index: function(listed[index]) for index in reversed(range(len(listed)))}
+        return [done[index] for index in range(len(listed))]
+
+
+@pytest.mark.parametrize("way", sorted(_THREADED))
+def test_a_threaded_way_gives_the_same_bits_on_one_thread_and_on_many(
+    way: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Ein Faden, vier Fäden, rückwärts abgeschlossen — derselbe Fingerabdruck.
+
+    Das Abstandsfeld von *Weich verschmelzen* und die Formprüfung von
+    *Dreiecke angleichen* rechnen in Portionen auf mehreren Fäden (RM-671).
+    Zugesagt ist, dass jede Portion nur ihren eigenen Abschnitt schreibt und
+    Element für Element dasselbe rechnet; dann hängt das Ergebnis weder an der
+    Zahl der Fäden noch daran, welcher zuerst fertig wird. Die Portionen sind
+    hier klein und gehen nicht auf, damit es viele gibt und eine kurze am Ende.
+    """
+    import importlib
+
+    module_name, workers, chunk = _THREADED[way]
+    module = importlib.import_module(module_name)
+    monkeypatch.setattr(module, chunk, 97)
+    monkeypatch.setattr(module, workers, 1)
+    alone = _WAYS[way]()
+    monkeypatch.setattr(module, workers, 4)
+    shared = _WAYS[way]()
+    monkeypatch.setattr(module, "ThreadPoolExecutor", _Backwards)
+    backwards = _WAYS[way]()
+
+    assert shared == alone, f"{way} rechnet auf vier Fäden anders als auf einem"
+    assert backwards == alone, f"{way} hängt an der Reihenfolge, in der die Fäden enden"
+
+
 def _forget_what_the_perception_remembers() -> None:
     """Die prozessweiten Merker der Erkennung leeren — Merkmale und Nachmessungen."""
     from app.core.perceive.features import forget_cache

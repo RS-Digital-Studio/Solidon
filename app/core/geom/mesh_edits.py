@@ -26,10 +26,11 @@ Ebene erlaubt einen Schritt, der sonst die Form berührte.
 **In Runden unabhängiger Schritte.** Zwei Schritte derselben Runde teilen kein
 Dreieck, auch nicht die Nachbarn, deren Halbkanten sie umhängen; dann ist jede
 Prüfung einer Runde gültig, gleich in welcher Reihenfolge die Runde
-ausgeführt wird. Wer zuerst darf, entscheidet eine feste Rangfolge (Länge, dann
-Nummer der Halbkante) — dasselbe Netz gibt immer dasselbe Ergebnis. Die
-nächste Runde fragt nur dort neu, wo sich etwas geändert hat oder ein
-Kandidat warten musste.
+ausgeführt wird. Wer zuerst darf, entscheidet eine feste, über das Netz
+gestreute Rangfolge (:func:`_scattered`), und gewählt wird, bis kein freier
+Kandidat mehr übrig ist (:func:`_claimed`) — dasselbe Netz gibt immer dasselbe
+Ergebnis. Die nächste Runde fragt nur dort neu, wo sich etwas geändert hat
+oder ein Kandidat warten musste.
 
 **Plattformgleich** (``geom/CLAUDE.md``): Grundrechenarten, Wurzel und
 Kreuzprodukt, nichts aus BLAS.
@@ -40,7 +41,7 @@ Das Netz ist geschlossen und gleichsinnig gewickelt; was das nicht ist, gibt
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Final
 
 import numpy as np
@@ -53,6 +54,11 @@ from app.core.types import CancelToken
 #: hundert Dreiecke — bleibt die Ecke stehen: Ein Ring dieser Größe ist keine
 #: Nadel und kein überzähliger Punkt.
 RING_LIMIT: Final = 64
+
+#: Die Staffel der Ringbreiten in :func:`_collapsible` — reine Rechenordnung, am
+#: Ergebnis ändert sie nichts. Die meisten Ecken eines geteilten Netzes haben
+#: sechs Nachbarn, wenige an Fächern bis :data:`RING_LIMIT`.
+RING_BANDS: Final = (8, 16, 32, RING_LIMIT)
 
 #: Ab wann ein Viereck die andere Diagonale verdient: Summe der Kotangenten
 #: der beiden gegenüberliegenden Winkel unter minus diesem Wert (Delaunay).
@@ -68,6 +74,11 @@ EDIT_ROUNDS: Final = 64
 #: Teilen im Kern liegen die längsten Kanten beim Doppelten des Verlangten, und
 #: jeder Durchgang halbiert sie.
 SPLIT_PASSES: Final = 32
+
+#: Höchstzahl der Wahlgänge je Runde in :func:`_claimed` — eine Absicherung:
+#: Jeder Wahlgang nimmt mindestens den Kandidaten mit dem kleinsten Rang, und
+#: bei gestreuter Rangfolge ist nach wenigen keiner mehr frei.
+CLAIM_PASSES: Final = 32
 
 
 @dataclass
@@ -88,6 +99,11 @@ class Surface:
     alive: np.ndarray
     active: np.ndarray
     valence: np.ndarray
+    #: Arbeitsfelder von :func:`_claimed`, je Dreieck und Ecke ein Platz: einmal
+    #: angelegt und nach jedem Wahlgang nur dort zurückgesetzt, wo er schrieb —
+    #: sonst kostete jeder Wahlgang ein Feld über das ganze Netz.
+    best: np.ndarray = field(default_factory=lambda: np.zeros(0, dtype=np.int64), repr=False)
+    taken: np.ndarray = field(default_factory=lambda: np.zeros(0, dtype=bool), repr=False)
 
     def arrays(self) -> tuple[np.ndarray, np.ndarray]:
         """Ecken und Dreiecke ohne Gelöschtes, in der Reihenfolge von vorher."""
@@ -192,24 +208,49 @@ def _rings(surface: Surface, start: np.ndarray) -> tuple[np.ndarray, np.ndarray]
 def _claimed(
     surface: Surface, faces: np.ndarray, corners: np.ndarray, rank: np.ndarray
 ) -> np.ndarray:
-    """Welche Kandidaten ihre Dreiecke und Ecken für sich haben.
+    """Welche Kandidaten ihre Dreiecke und Ecken für sich haben — so viele wie frei sind.
 
     ``faces`` nennt je Kandidat die Dreiecke, die sein Schritt ändert oder
     deren Halbkanten er umhängt, ``corners`` die Ecken, die dabei einen
     Nachbarn verlieren (``-1`` ist leer); gewinnt, wer bei jedem davon den
     kleinsten Rang hat. Ohne die Ecken verlöre eine Ecke mit vier Nachbarn
     in einer Runde zwei und hinge danach an zwei Dreiecken.
+
+    **Gewählt wird nach**, bis kein Kandidat mehr frei ist: Wer einem Gewinner
+    nichts wegnimmt, tritt im nächsten Wahlgang gegen die Übrigen an. Ein
+    einziger Wahlgang nahm am Besenhalter aus ``F:\\3D Dateien`` je Runde 2 %
+    der gültigen Schritte; alle anderen warteten und wurden in der nächsten
+    Runde neu geprüft (RM-671).
     """
     groups = np.concatenate(
         (faces, np.where(corners >= 0, corners + len(surface.faces), -1)), axis=1
     )
-    big = np.iinfo(np.int64).max
-    best = np.full(len(surface.faces) + len(surface.vertices), big, dtype=np.int64)
     filled = groups >= 0
-    owners = np.broadcast_to(rank[:, None], groups.shape)
-    np.minimum.at(best, groups[filled], owners[filled])
-    lowest = np.where(filled, best[np.where(filled, groups, 0)], big)
-    return np.asarray(lowest.min(axis=1) == rank)
+    groups = np.where(filled, groups, 0)
+    width = len(surface.faces) + len(surface.vertices)
+    big = np.iinfo(np.int64).max
+    if len(surface.best) != width:
+        surface.best = np.full(width, big, dtype=np.int64)
+        surface.taken = np.zeros(width, dtype=bool)
+    best, taken = surface.best, surface.taken
+    won = np.zeros(len(rank), dtype=bool)
+    free = np.arange(len(rank), dtype=np.int64)
+    for _pass in range(CLAIM_PASSES):
+        if not len(free):
+            break
+        mine, filled_mine = groups[free], filled[free]
+        owners = np.broadcast_to(rank[free, None], mine.shape)
+        places = mine[filled_mine]
+        np.minimum.at(best, places, owners[filled_mine])
+        lowest = np.where(filled_mine, best[mine], big).min(axis=1)
+        best[places] = big
+        winners = lowest == rank[free]
+        won[free[winners]] = True
+        taken[mine[winners][filled_mine[winners]]] = True
+        # Wer etwas berührt, das ein Gewinner nimmt, wartet — die Gewinner selbst auch.
+        free = free[~(taken[mine] & filled_mine).any(axis=1)]
+    taken[groups[won][filled[won]]] = False
+    return won
 
 
 def _rank(*keys: np.ndarray) -> np.ndarray:
@@ -218,6 +259,48 @@ def _rank(*keys: np.ndarray) -> np.ndarray:
     rank = np.empty(len(order), dtype=np.int64)
     rank[order] = np.arange(len(order), dtype=np.int64)
     return rank
+
+
+def _scattered(numbers: np.ndarray) -> np.ndarray:
+    """Eine feste, über das Netz gestreute Reihenfolge der Nummern (``splitmix64``).
+
+    Nach Länge oder Nummer allein liegen Nachbarn in einem Streifen der Reihe
+    nach, und je Wahlgang gewinnt nur das eine Ende; gestreut gewinnt in jedem
+    Ausschnitt einer. Ganzzahlig, also auf jeder Plattform dieselbe Folge.
+    """
+    mixed = np.asarray(numbers, dtype=np.uint64) + np.uint64(0x9E3779B97F4A7C15)
+    mixed = (mixed ^ (mixed >> np.uint64(30))) * np.uint64(0xBF58476D1CE4E5B9)
+    mixed = (mixed ^ (mixed >> np.uint64(27))) * np.uint64(0x94D049BB133111EB)
+    return np.asarray(mixed ^ (mixed >> np.uint64(31)))
+
+
+def sharp_triangles(
+    first: np.ndarray, second: np.ndarray, third: np.ndarray, squared_cosine: float
+) -> np.ndarray:
+    """Ob ein Dreieck eine Ecke hat, deren Kosinus im Quadrat über ``squared_cosine`` liegt."""
+    return triangle_shapes(first, second, third, squared_cosine)[1]
+
+
+def triangle_shapes(
+    first: np.ndarray, second: np.ndarray, third: np.ndarray, squared_cosine: float
+) -> tuple[np.ndarray, np.ndarray]:
+    """Je Dreieck das Quadrat seiner längsten Seite und ob es spitz ist (:func:`sharp_triangles`).
+
+    Ohne Wurzel und ohne Winkelfunktion (``kern.md``): Eine Ecke ist spitz, wenn
+    das Skalarprodukt ihrer Seiten positiv ist und sein Quadrat über
+    ``squared_cosine`` mal dem Produkt der quadrierten Seitenlängen liegt. Die
+    Ecken kommen als drei Felder ``(k, 3)``.
+    """
+    sides = (second - first, third - second, first - third)
+    squared = [row_dots(side, side) for side in sides]
+    sharp = np.zeros(len(first), dtype=bool)
+    for corner in range(3):
+        out, back = sides[corner], sides[corner - 1]
+        lean = -row_dots(out, back)
+        sharp |= (lean > 0.0) & (
+            lean * lean > squared_cosine * squared[corner] * squared[corner - 1]
+        )
+    return np.maximum(np.maximum(squared[0], squared[1]), squared[2]), sharp
 
 
 def _lengths(points: np.ndarray, first: np.ndarray, second: np.ndarray) -> np.ndarray:
@@ -264,35 +347,44 @@ def _edges_once(surface: Surface, halves: np.ndarray) -> np.ndarray:
     return np.flatnonzero(seen)
 
 
-def _connected(surface: Surface, first: np.ndarray, second: np.ndarray) -> np.ndarray:
-    """Ob zwischen ``first[i]`` und ``second[i]`` schon eine Kante liegt — im ganzen Netz.
+def _near(faces: np.ndarray, alive: np.ndarray | None, wanted: np.ndarray) -> np.ndarray:
+    """Die lebenden Dreiecke mit einer Ecke der Dreiecke ``wanted`` — als Nummern.
 
-    Gefragt wird an allen lebenden Dreiecken, nicht nur an der Auswahl: Eine
-    Kante, die es außerhalb schon gibt, gäbe es nach dem Tausch zweimal. Eine
-    solche Kante liegt in einem Dreieck mit einer ersten **und** einer zweiten
-    Ecke; nur diese werden gelesen.
+    Ein Tausch fragt, ob es seine neue Kante schon gibt, auch außerhalb der
+    Auswahl (:func:`_joined`); eine Kante an einer Ecke der Auswahl liegt in
+    einem dieser Dreiecke. Getauscht wird nur in der Auswahl, ihre Ecken bleiben
+    dieselben, also gilt die Liste für alle Runden. Alle Dreiecke in jeder Runde
+    zu lesen kostete an einer CAD-Seitenablage aus ``F:\\3D Dateien`` (600 000
+    Dreiecke, 26 Runden) 0,55 s.
     """
-    return _joined(surface.faces, surface.alive, first, second)
+    marked = np.zeros(int(faces.max(initial=-1)) + 1, dtype=bool)
+    marked[faces[wanted].reshape(-1)] = True
+    touching = marked[faces[:, 0]] | marked[faces[:, 1]] | marked[faces[:, 2]]
+    if alive is not None:
+        touching &= alive
+    return np.flatnonzero(touching)
 
 
-def _joined(
-    faces: np.ndarray, alive: np.ndarray | None, first: np.ndarray, second: np.ndarray
-) -> np.ndarray:
-    """:func:`_connected` an Dreiecken als Feld; ``alive`` wählt die lebenden, ``None`` alle."""
+def _joined(faces: np.ndarray, first: np.ndarray, second: np.ndarray, width: int) -> np.ndarray:
+    """Ob zwischen ``first[i]`` und ``second[i]`` schon eine Kante in einem der ``faces`` liegt.
+
+    Eine solche Kante liegt in einem Dreieck mit einer ersten **und** einer
+    zweiten Ecke, und sie verbindet die beiden; nur solche Kanten werden
+    sortiert. ``width`` ist die Zahl der Ecken.
+    """
     if not len(first):
         return np.zeros(0, dtype=bool)
-    width = int(faces.max(initial=-1)) + 1
     starting = np.zeros(width, dtype=bool)
     starting[first] = True
     ending = np.zeros(width, dtype=bool)
     ending[second] = True
-    touching = starting[faces].any(axis=1) & ending[faces].any(axis=1)
-    if alive is not None:
-        touching &= alive
-    rows = np.flatnonzero(touching)
-    corners = faces[rows]
+    candidates = faces[starting[faces[:, 0]] | starting[faces[:, 1]] | starting[faces[:, 2]]]
+    ends_too = ending[candidates[:, 0]] | ending[candidates[:, 1]] | ending[candidates[:, 2]]
+    corners = candidates[ends_too]
     starts = corners.reshape(-1)
     ends = np.roll(corners, -1, axis=1).reshape(-1)
+    bridging = (starting[starts] & ending[ends]) | (starting[ends] & ending[starts])
+    starts, ends = starts[bridging], ends[bridging]
     known = np.sort(np.minimum(starts, ends) * width + np.maximum(starts, ends))
     wanted = np.minimum(first, second) * width + np.maximum(first, second)
     if not len(known):
@@ -307,6 +399,8 @@ def collapse_short(
     *,
     flat: float | None = None,
     longest: float | None = None,
+    sharp: float | None = None,
+    asked: np.ndarray | None = None,
     cancelled: CancelToken | None = None,
 ) -> int:
     """Legt Kanten unter ``shortest`` zusammen; zurück kommt, wie viele.
@@ -314,61 +408,163 @@ def collapse_short(
     Die Halbkante ``v → w`` fällt weg, ``v`` geht in ``w`` auf — mit ``w``s
     Koordinate, also ohne neue. Gültig ist ein Schritt, wenn
 
-    * beide Ringe geschlossen sind und ``v`` und ``w`` genau die zwei Ecken
-      gemeinsam haben, die ihren Dreiecken gegenüberliegen (sonst risse die
-      Oberfläche oder bekäme eine dritte Fläche an einer Kante),
+    * beide Ringe geschlossen sind, jeder um seine Ecke ganz herum, und ``v``
+      und ``w`` genau die zwei Ecken gemeinsam haben, die ihren Dreiecken
+      gegenüberliegen (sonst risse die Oberfläche oder bekäme eine dritte
+      Fläche an einer Kante),
     * diese beiden danach noch drei Nachbarn haben und ``w`` auch,
     * kein Dreieck um ``v`` dabei umklappt,
     * mit ``flat``: alle Dreiecke um ``v`` in einer Ebene liegen (Abstand
       jeder Nachbarecke zur Ebene höchstens ``flat``) — dann deckt der Fächer
       um ``w`` dieselbe Fläche, und die Form bleibt, wie sie war,
-    * mit ``longest``: keine neue Kante länger wird.
+    * mit ``longest``: keine neue Kante länger wird,
+    * mit ``sharp`` (Quadrat eines Kosinus, :func:`sharp_triangles`): danach
+      weniger spitze Dreiecke um ``v`` stehen als vorher — der Schritt räumt
+      eine Nadel weg, statt nur Punkte zu sparen.
+
+    ``asked`` nennt die Dreiecke, deren Kanten die erste Runde fragt; ohne sind
+    es alle aktiven. Geprüft wird vom Billigen zum Teuren: erst Länge, Wertigkeit
+    und — mit ``flat`` — die Lage der vierten Ecke, dann der Ring um ``v``, und
+    nur, wer das alles besteht, bekommt den Ring um ``w``.
     """
     done = 0
     pending = np.array(surface.active & surface.alive, copy=True)
+    if asked is not None:
+        pending &= np.asarray(asked, dtype=bool)
     for _round in range(EDIT_ROUNDS):
         if cancelled is not None:
             cancelled.raise_if_cancelled()
-        halves = _candidate_halves(surface, pending)
+        if sharp is None:
+            halves = _candidate_halves(surface, pending)
+        else:
+            halves = _needle_sides(surface, pending, sharp)
+        pending = np.zeros(len(surface.faces), dtype=bool)
         flat_faces = surface.faces.reshape(-1)
-        tails = flat_faces[halves]
-        heads = flat_faces[_next(halves)]
-        length = _lengths(surface.vertices, tails, heads)
-        short = length < shortest
-        if not short.any():
+        length = _lengths(surface.vertices, flat_faces[halves], flat_faces[_next(halves)])
+        h = halves[length < shortest]
+        if not len(h):
             break
-        h = halves[short]
         g = surface.partner[h]
-        v, w, length = tails[short], heads[short], length[short]
-        ring_v, closed_v = _rings(surface, h)
-        ring_w, closed_w = _rings(surface, g)
-        c = flat_faces[_next(_next(h))]
-        d = flat_faces[_next(_next(g))]
+        v, w = flat_faces[h], flat_faces[_next(h)]
+        c, d = flat_faces[_next(_next(h))], flat_faces[_next(_next(g))]
         valence = surface.valence
-        valid = closed_v & closed_w
-        valid &= (valence[c] >= 4) & (valence[d] >= 4) & (valence[v] + valence[w] >= 7)
-        valid &= _link_holds(surface, ring_v, ring_w)
-        valid &= _keeps_its_faces(surface, h, g, v, w, ring_v, flat, longest)
+        keep = (valence[v] <= RING_LIMIT) & (valence[w] <= RING_LIMIT)
+        keep &= (valence[c] >= 4) & (valence[d] >= 4) & (valence[v] + valence[w] >= 7)
+        if flat is not None:
+            keep &= _level_with(surface, h, d, g, flat)
+        h, g, v, w, c, d = (part[keep] for part in (h, g, v, w, c, d))
+        if not len(h):
+            break
+        rows, ring_v, ring_w = _collapsible(surface, h, g, v, w, c, d, flat, longest, sharp)
+        if not len(rows):
+            break
+        h, g, v, w, c, d = (part[rows] for part in (h, g, v, w, c, d))
         star = np.concatenate(
             (np.where(ring_v >= 0, ring_v // 3, -1), np.where(ring_w >= 0, ring_w // 3, -1)),
             axis=1,
         )
-        pending = np.zeros(len(surface.faces), dtype=bool)
-        if not valid.any():
-            break
-        idx = np.flatnonzero(valid)
-        rank = _rank(h[idx], length[idx])
-        corners = np.column_stack((v[idx], w[idx], c[idx], d[idx]))
-        won = _claimed(surface, star[idx], corners, rank)
-        chosen = idx[won]
-        waiting = star[idx[~won]]
-        pending[waiting[waiting >= 0]] = True
-        _apply_collapses(surface, h[chosen], g[chosen], ring_v[chosen], c[chosen], d[chosen])
-        touched = star[chosen]
+        length = _lengths(surface.vertices, v, w)
+        # Kürzere Viertel von ``shortest`` zuerst, darin gestreut.
+        quarter = np.minimum(np.floor(length * (4.0 / shortest)), 3.0)
+        won = _claimed(surface, star, np.column_stack((v, w, c, d)), _rank(_scattered(h), quarter))
+        # Wer verliert, wird mit seinen zwei Dreiecken neu gefragt; was ein Gewinner
+        # ändert, mit seinem ganzen Stern.
+        pending[h[~won] // 3] = True
+        pending[g[~won] // 3] = True
+        _apply_collapses(surface, h[won], g[won], ring_v[won], c[won], d[won])
+        touched = star[won]
         pending[touched[touched >= 0]] = True
         pending &= surface.alive
-        done += len(chosen)
+        done += int(won.sum())
     return done
+
+
+def _collapsible(
+    surface: Surface,
+    h: np.ndarray,
+    g: np.ndarray,
+    v: np.ndarray,
+    w: np.ndarray,
+    c: np.ndarray,
+    d: np.ndarray,
+    flat: float | None,
+    longest: float | None,
+    sharp: float | None,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Die Prüfungen am Ring (:func:`collapse_short`): wer besteht, und die Ringe um v und w.
+
+    Gestaffelt nach der Wertigkeit (:data:`RING_BANDS`): Ein Ringfeld ist so
+    breit wie der längste Ring darin, und eine Ecke mit sechzig Nachbarn machte
+    sonst jede Zeile sechzig breit — am Würfel aus dem Download-Korpus rechneten
+    120 000 Zeilen 58 Spalten, bei sechs Nachbarn im Mittel. Das Ergebnis hängt
+    an der Staffelung nicht: Jede Zeile wird für sich geprüft.
+    """
+    valence = surface.valence
+    bands = np.searchsorted(np.asarray(RING_BANDS), np.maximum(valence[v], valence[w]))
+    found: list[np.ndarray] = []
+    around_v: list[np.ndarray] = []
+    around_w: list[np.ndarray] = []
+    for band in np.unique(bands):
+        rows = np.flatnonzero(bands == band)
+        ring_v, closed_v = _rings(surface, h[rows])
+        keep = closed_v & ((ring_v >= 0).sum(axis=1) == valence[v[rows]])
+        keep &= _keeps_its_faces(
+            surface, h[rows], g[rows], v[rows], w[rows], ring_v, flat, longest, sharp
+        )
+        rows, ring_v = rows[keep], ring_v[keep]
+        ring_w, closed_w = _rings(surface, g[rows])
+        keep = closed_w & ((ring_w >= 0).sum(axis=1) == valence[w[rows]])
+        keep &= _link_holds(surface, ring_v, ring_w)
+        found.append(rows[keep])
+        around_v.append(ring_v[keep])
+        around_w.append(ring_w[keep])
+    return np.concatenate(found), _stacked(around_v), _stacked(around_w)
+
+
+def _stacked(rings: list[np.ndarray]) -> np.ndarray:
+    """Ringfelder verschiedener Breite untereinander, rechts mit ``-1`` aufgefüllt."""
+    width = max(ring.shape[1] for ring in rings)
+    return np.concatenate(
+        [np.pad(ring, ((0, 0), (0, width - ring.shape[1])), constant_values=-1) for ring in rings]
+    )
+
+
+def _needle_sides(surface: Surface, pending: np.ndarray, sharp: float) -> np.ndarray:
+    """Die kürzeste Seite jedes spitzen Dreiecks unter ``pending``, in beiden Richtungen.
+
+    Zusammengelegt verschwindet mit ihr die Nadel; jede andere Kante eines
+    spitzen Dreiecks ließe es stehen oder machte ein Nachbardreieck zur Nadel.
+    Gleich lange Seiten entscheidet ihr Platz im Dreieck, die erste zuerst.
+    """
+    faces = np.flatnonzero(pending & surface.alive & surface.active)
+    corners = surface.vertices[surface.faces[faces]]
+    needles = sharp_triangles(corners[:, 0], corners[:, 1], corners[:, 2], sharp)
+    faces, corners = faces[needles], corners[needles]
+    sides = np.roll(corners, -1, axis=1) - corners
+    squared = np.column_stack([row_dots(sides[:, k], sides[:, k]) for k in range(3)])
+    halves = 3 * faces + np.argmin(squared, axis=1)
+    twins = surface.partner[halves]
+    known = twins >= 0
+    halves, twins = halves[known], twins[known]
+    usable = surface.alive[twins // 3] & surface.active[twins // 3]
+    return np.unique(np.concatenate((halves[usable], twins[usable])))
+
+
+def _level_with(
+    surface: Surface, h: np.ndarray, d: np.ndarray, g: np.ndarray, flat: float
+) -> np.ndarray:
+    """Ob die Ecke ``d`` hinter der Kante in der Ebene des Dreiecks von ``h`` liegt.
+
+    Eine Vorprüfung für ``flat`` in :func:`collapse_short`, ohne Ring: ``d`` ist
+    ein Nachbar von ``v``, das Dreieck von ``g`` liegt im Ring um ``v``. Liegt
+    eines davon schief, scheitert die volle Prüfung in :func:`_keeps_its_faces`
+    ohnehin; dieselben Rechenschritte, also dieselbe Antwort.
+    """
+    normal = _unit_normals(surface, h // 3)
+    offset = surface.vertices[d] - surface.vertices[surface.faces.reshape(-1)[h]]
+    level = np.abs(row_dots(offset, normal)) <= flat
+    level &= row_dots(normal, normal) > 0.0
+    return np.asarray(level & (row_dots(_unit_normals(surface, g // 3), normal) > 0.0))
 
 
 def _link_holds(surface: Surface, ring_v: np.ndarray, ring_w: np.ndarray) -> np.ndarray:
@@ -380,6 +576,8 @@ def _link_holds(surface: Surface, ring_v: np.ndarray, ring_w: np.ndarray) -> np.
     """
     flat_faces = surface.faces.reshape(-1)
     rows = len(ring_v)
+    if not rows:
+        return np.zeros(0, dtype=bool)
     around_v = np.where(ring_v >= 0, flat_faces[_next(np.maximum(ring_v, 0))], -1)
     around_w = np.where(ring_w >= 0, flat_faces[_next(np.maximum(ring_w, 0))], -1)
     v = flat_faces[ring_v[:, 0]]
@@ -393,7 +591,7 @@ def _link_holds(surface: Surface, ring_v: np.ndarray, ring_w: np.ndarray) -> np.
     both = np.where(both >= 0, both, fill)
     both.sort(axis=1)
     twice = (both[:, 1:] == both[:, :-1]) & (both[:, 1:] >= 0)
-    return np.asarray(twice.sum(axis=1) == 2) if rows else np.zeros(0, dtype=bool)
+    return np.asarray(twice.sum(axis=1) == 2)
 
 
 def _keeps_its_faces(
@@ -405,6 +603,7 @@ def _keeps_its_faces(
     ring_v: np.ndarray,
     flat: float | None,
     longest: float | None,
+    sharp: float | None = None,
 ) -> np.ndarray:
     """Ob die Dreiecke um ``v`` den Schritt ``v → w`` überstehen (siehe :func:`collapse_short`)."""
     rows = len(h)
@@ -428,6 +627,20 @@ def _keeps_its_faces(
     if longest is not None:
         others = flat_faces[_next(ring_v[moving])]
         good &= _lengths(surface.vertices, w[owner], others) <= longest
+    if sharp is not None:
+        # Spitz vorher: jedes Dreieck des Rings, auch die zwei, die wegfallen;
+        # spitz danach: die verschobenen.
+        every = np.broadcast_to(np.arange(rows)[:, None], ring_v.shape)[filled]
+        old = surface.vertices[surface.faces[faces[filled]]]
+        was = np.bincount(
+            every, sharp_triangles(old[:, 0], old[:, 1], old[:, 2], sharp), minlength=rows
+        )
+        now = np.bincount(
+            owner, sharp_triangles(moved[:, 0], moved[:, 1], moved[:, 2], sharp), minlength=rows
+        )
+        fewer = now < was
+    else:
+        fewer = np.ones(rows, dtype=bool)
     if flat is not None:
         # Bezug ist das Dreieck der Kante selbst; ohne Fläche hat es keine Ebene.
         normal = _unit_normals(surface, h // 3)
@@ -449,7 +662,7 @@ def _keeps_its_faces(
         good_flat = np.ones(rows, dtype=bool)
     result = np.ones(rows, dtype=bool)
     np.logical_and.at(result, owner, good)
-    return np.asarray(result & good_flat)
+    return np.asarray(result & good_flat & fewer)
 
 
 def _apply_collapses(
@@ -496,20 +709,106 @@ def _flippable(
     verglichen, die Richtungen nur nach ihrem Vorzeichen; ein Dreieck ohne
     Fläche zeigt nirgendwohin und tauscht nicht.
     """
-    at_a, at_b, at_c, at_d = points[a], points[b], points[c], points[d]
-    first = np.cross(at_b - at_a, at_c - at_a)
-    second = np.cross(at_a - at_b, at_d - at_b)
-    tolerance = flat * flat
-    valid = c != d
-    beside = row_dots(at_d - at_a, first)
-    valid &= beside * beside <= tolerance * row_dots(first, first)
-    beside = row_dots(at_c - at_a, second)
-    valid &= beside * beside <= tolerance * row_dots(second, second)
-    valid &= row_dots(first, second) > 0.0
+    return _flippable_at(points[a], points[b], points[c], points[d], c != d, flat)
+
+
+def _flippable_at(
+    at_a: np.ndarray,
+    at_b: np.ndarray,
+    at_c: np.ndarray,
+    at_d: np.ndarray,
+    distinct: np.ndarray,
+    flat: float,
+) -> np.ndarray:
+    """:func:`_flippable` an schon gelesenen Ecken; ``distinct``: ob c und d verschieden sind."""
+    valid, first = _coplanar(at_a, at_b, at_c, at_d, flat)
+    valid &= distinct
     new_first = np.cross(at_a - at_c, at_d - at_c)
     new_second = np.cross(at_b - at_d, at_c - at_d)
     valid &= (row_dots(new_first, first) > 0.0) & (row_dots(new_second, first) > 0.0)
     return np.asarray(valid)
+
+
+def _coplanar(
+    at_a: np.ndarray, at_b: np.ndarray, at_c: np.ndarray, at_d: np.ndarray, flat: float
+) -> tuple[np.ndarray, np.ndarray]:
+    """Ob (a, b, c) und (b, a, d) auf ``flat`` genau in einer Ebene liegen und gleich herum zeigen.
+
+    Zurück kommt dazu die ungekürzte Normale des ersten Dreiecks. Ohne Fläche
+    zeigt ein Dreieck nirgendwohin und liegt in keiner Ebene.
+    """
+    first = np.cross(at_b - at_a, at_c - at_a)
+    second = np.cross(at_a - at_b, at_d - at_b)
+    tolerance = flat * flat
+    beside = row_dots(at_d - at_a, first)
+    level = beside * beside <= tolerance * row_dots(first, first)
+    beside = row_dots(at_c - at_a, second)
+    level &= beside * beside <= tolerance * row_dots(second, second)
+    level &= row_dots(first, second) > 0.0
+    return np.asarray(level), first
+
+
+def plane_measures(
+    vertices: np.ndarray, faces: np.ndarray, flat: float
+) -> tuple[np.ndarray, np.ndarray]:
+    """Je Dreieck zwei Maße seiner Ebene: ihre Breite und die mittlere Fläche ihrer Dreiecke.
+
+    Eine Ebene sind die Dreiecke, die über Kanten zusammenhängen und auf
+    ``flat`` genau in einer Ebene liegen — dieselbe Frage wie vor einem Tausch
+    (:func:`_coplanar`), nur mit der Normale jedes Dreiecks einmal gerechnet.
+    Ihre Breite ist zweimal ihre Fläche durch ihren Umfang: Ein Streifen der
+    Breite ``b`` hat die Breite ``b``, eine Kreisscheibe ihren Radius. Eine
+    Kante mit mehr oder weniger als zwei Dreiecken trennt.
+    """
+    from scipy.sparse import coo_matrix
+    from scipy.sparse.csgraph import connected_components
+
+    points = np.asarray(vertices, dtype=np.float64)
+    corners = np.asarray(faces, dtype=np.int64).reshape(-1, 3)
+    count = len(corners)
+    tails = corners.reshape(-1)
+    heads = np.roll(corners, -1, axis=1).reshape(-1)
+    opposite = np.roll(corners, -2, axis=1).reshape(-1)
+    width = len(points)
+    codes = np.minimum(tails, heads) * width + np.maximum(tails, heads)
+    order = np.argsort(codes, kind="stable")
+    ordered = codes[order]
+    starts = np.flatnonzero(np.concatenate(([True], ordered[1:] != ordered[:-1])))
+    sizes = np.diff(np.concatenate((starts, [len(ordered)])))
+    pairs = starts[sizes == 2]
+    one, other = order[pairs], order[pairs + 1]
+    a, c, d = tails[one], opposite[one], opposite[other]
+    first, second = one // 3, other // 3
+    normals = np.cross(
+        points[corners[:, 1]] - points[corners[:, 0]], points[corners[:, 2]] - points[corners[:, 0]]
+    )
+    squared = row_dots(normals, normals)
+    tolerance = flat * flat
+    inner = (tails[other] == heads[one]) & (heads[other] == a) & (c != d)
+    at_a, along_first, along_second = points[a], normals[first], normals[second]
+    beside = row_dots(points[d] - at_a, along_first)
+    inner &= beside * beside <= tolerance * squared[first]
+    beside = row_dots(points[c] - at_a, along_second)
+    inner &= beside * beside <= tolerance * squared[second]
+    inner &= row_dots(along_first, along_second) > 0.0
+    joined_one, joined_other = one[inner], other[inner]
+    graph = coo_matrix(
+        (np.ones(len(joined_one)), (joined_one // 3, joined_other // 3)), shape=(count, count)
+    )
+    _number, labels = connected_components(graph, directed=False)
+    outer = np.ones(3 * count, dtype=bool)
+    outer[joined_one] = False
+    outer[joined_other] = False
+    rim = np.flatnonzero(outer)
+    sides = points[heads[rim]] - points[tails[rim]]
+    area = np.bincount(labels, weights=np.sqrt(squared) / 2.0)
+    around = np.bincount(
+        labels[rim // 3], weights=np.sqrt(row_dots(sides, sides)), minlength=len(area)
+    )
+    breadth = np.full(len(area), np.inf)
+    np.divide(2.0 * area, around, out=breadth, where=around > 0.0)
+    mean = area / np.bincount(labels, minlength=len(area))
+    return np.asarray(breadth[labels]), np.asarray(mean[labels])
 
 
 def flip_long(
@@ -547,13 +846,13 @@ def flip_long(
     for _round in range(EDIT_ROUNDS):
         if cancelled is not None:
             cancelled.raise_if_cancelled()
-        heads = np.roll(corners[rows], -1, axis=1)
-        delta = points[heads] - points[corners[rows]]
+        picked = corners[rows]
+        delta = points[np.roll(picked, -1, axis=1)] - points[picked]
         row, side = np.nonzero(row_dots(delta, delta) > limit)
         if not len(row):
             break
         face = rows[row]
-        tail, head = corners[face, side], corners[face, (side + 1) % 3]
+        tail, head = picked[row, side], picked[row, (side + 1) % 3]
         codes = np.minimum(tail, head) * width + np.maximum(tail, head)
         order = np.argsort(codes, kind="stable")
         ordered = codes[order]
@@ -565,26 +864,39 @@ def flip_long(
         one, other = order[twin[alone]], order[twin[alone] + 1]
         f, g = face[one], face[other]
         a, b = tail[one], head[one]
-        c = corners[f, (side[one] + 2) % 3]
-        d = corners[g, (side[other] + 2) % 3]
-        across = points[c] - points[d]
-        span = points[b] - points[a]
+        c = picked[row[one], (side[one] + 2) % 3]
+        d = picked[row[other], (side[other] + 2) % 3]
+        at_a, at_b, at_c, at_d = points[a], points[b], points[c], points[d]
+        across = at_c - at_d
+        span = at_b - at_a
         reach = row_dots(across, across)
         length = row_dots(span, span)
         valid = (tail[other] == b) & (head[other] == a)
-        valid &= _flippable(points, a, b, c, d, flat)
         valid &= (valence[a] >= 4) & (valence[b] >= 4)
         valid &= (reach <= limit) & (reach < length)
+        valid &= _flippable_at(at_a, at_b, at_c, at_d, c != d, flat)
         idx = np.flatnonzero(valid)
         if len(idx):
-            idx = idx[~_joined(corners, None, c[idx], d[idx])]
+            idx = idx[~_joined(corners, c[idx], d[idx], width)]
         if not len(idx):
             break
         rank = _rank(codes[one][idx], -length[idx])
         best = np.full(len(corners), np.iinfo(np.int64).max, dtype=np.int64)
         np.minimum.at(best, f[idx], rank)
         np.minimum.at(best, g[idx], rank)
-        chosen = idx[(best[f[idx]] == rank) & (best[g[idx]] == rank)]
+        won = (best[f[idx]] == rank) & (best[g[idx]] == rank)
+        chosen, rank = idx[won], rank[won]
+        # Jeder Tausch nimmt a und b einen Nachbarn. Fiele eine Ecke dabei in einer
+        # Runde unter drei, tauscht an ihr nur der mit dem kleinsten Rang.
+        losing = np.bincount(np.concatenate((a[chosen], b[chosen])), minlength=width)
+        short = valence - losing < 3
+        if short.any():
+            first_rank = np.full(width, np.iinfo(np.int64).max, dtype=np.int64)
+            np.minimum.at(first_rank, a[chosen], rank)
+            np.minimum.at(first_rank, b[chosen], rank)
+            keep = ~short[a[chosen]] | (first_rank[a[chosen]] == rank)
+            keep &= ~short[b[chosen]] | (first_rank[b[chosen]] == rank)
+            chosen = chosen[keep]
         # Gefragt wird in der nächsten Runde nur, wo noch eine lange Seite stehen
         # kann: an einem ungetauschten Dreieck mit langer Seite, und an einem
         # getauschten, das eine lange Außenseite des Vierecks erbt.
@@ -613,6 +925,7 @@ def flip_in_planes(
     flat: float,
     *,
     longest: float | None = None,
+    asked: np.ndarray | None = None,
     cancelled: CancelToken | None = None,
 ) -> int:
     """Tauscht Diagonalen zweier Dreiecke in einer Ebene nach Delaunay; zurück kommt, wie viele.
@@ -620,9 +933,15 @@ def flip_in_planes(
     Getauscht wird, wo die Summe der gegenüberliegenden Winkel über 180 Grad
     liegt und das Viereck es formtreu erlaubt (:func:`_flippable`). Mit
     ``longest`` wird keine neue Kante länger.
+
+    ``asked`` nennt die Dreiecke, deren Kanten die erste Runde fragt; ohne sind
+    es alle aktiven. Zuerst gefragt wird Delaunay — daran scheitern die meisten.
     """
     done = 0
     pending = np.array(surface.active & surface.alive, copy=True)
+    if asked is not None:
+        pending &= np.asarray(asked, dtype=bool)
+    near = _near(surface.faces, surface.alive, surface.active & surface.alive)
     for _round in range(EDIT_ROUNDS):
         if cancelled is not None:
             cancelled.raise_if_cancelled()
@@ -631,22 +950,31 @@ def flip_in_planes(
         if not len(halves):
             break
         flat_faces = surface.faces.reshape(-1)
+        points = surface.vertices
         h = halves
         g = surface.partner[h]
         a = flat_faces[h]
         b = flat_faces[_next(h)]
         c = flat_faces[_next(_next(h))]
         d = flat_faces[_next(_next(g))]
-        points = surface.vertices
-        valid = _flippable(points, a, b, c, d, flat)
-        valid &= (surface.valence[a] >= 4) & (surface.valence[b] >= 4)
+        gain = _cotangents(points, a, b, c, d)
+        better = gain < -DELAUNAY_MARGIN
+        h, g, a, b, c, d, gain = (
+            h[better],
+            g[better],
+            a[better],
+            b[better],
+            c[better],
+            d[better],
+            gain[better],
+        )
+        valid = (surface.valence[a] >= 4) & (surface.valence[b] >= 4)
+        valid &= _flippable(points, a, b, c, d, flat)
         if longest is not None:
             valid &= _lengths(points, c, d) <= longest
-        gain = _cotangents(points, a, b, c, d)
-        valid &= gain < -DELAUNAY_MARGIN
         idx = np.flatnonzero(valid)
         if len(idx):
-            idx = idx[~_connected(surface, c[idx], d[idx])]
+            idx = idx[~_joined(surface.faces[near], c[idx], d[idx], len(surface.vertices))]
         if not len(idx):
             break
         groups = np.column_stack(
@@ -660,11 +988,12 @@ def flip_in_planes(
             )
         )
         groups = np.where(groups >= 0, groups, -1)
-        rank = _rank(h[idx], gain[idx])
+        rank = _rank(_scattered(h[idx]))
         won = _claimed(surface, groups, np.column_stack((a[idx], b[idx])), rank)
         chosen = idx[won]
-        waiting = groups[~won]
-        pending[waiting[waiting >= 0]] = True
+        # Wer verliert, wird mit seinen zwei Dreiecken neu gefragt; was ein Gewinner
+        # ändert oder umhängt, ganz.
+        pending[groups[~won][:, :2].reshape(-1)] = True
         _apply_flips(surface, h[chosen], g[chosen])
         touched = groups[won]
         pending[touched[touched >= 0]] = True

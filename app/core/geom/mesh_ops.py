@@ -49,7 +49,6 @@ from app.core.geom.mesh import (
     max_distance_to_surface,
     refined_units,
     remember_refined_units,
-    row_dots,
     signed_volume,
     stable_vertex_normals,
     unique_edges,
@@ -1452,7 +1451,7 @@ def uniform(
     allein lässt das Verhältnis zwischen längster und kürzester Kante, wie es
     war (Streuung 2,22 vorher wie nachher). Es macht das Netz feiner, nicht
     gleichmäßiger — und zahlt dafür 3 260 416 Dreiecke, weil es die winzigen
-    Bohrungsfacetten mitzerteilt. Hier sind es rund 27 000 für dieselbe
+    Bohrungsfacetten mitzerteilt. Hier sind es rund 28 600 für dieselbe
     Zielkantenlänge, keine Kante länger als sie.
 
     Der erste Schritt ist der, den ``remesh`` nicht hat: ``simplify`` räumt
@@ -1502,11 +1501,34 @@ EVEN_SHORTEST: Final = 0.6
 #: 15° sind es dort keine, und ein Splitter unter 10° wird immer gefragt.
 EVEN_SHARP_SQUARED_COSINE: Final = (2.0 + math.sqrt(3.0)) / 4.0
 
+#: Wie breit eine Ebene sein muss, als Anteil der verlangten Länge, damit das
+#: Angleichen in ihr tauscht und zusammenlegt: tan 15° / 2 = (2 - √3) / 2. Ein
+#: Dreieck ohne Ecke unter 15° ist über seiner längsten Seite mindestens
+#: tan 15° / 2 mal so hoch, wie diese lang ist; in einer schmaleren Ebene bleibt
+#: jedes Dreieck spitz, dessen längste Seite nahe der verlangten liegt, wie man
+#: es auch legt. An einem CAD-Besenhalter aus dem Download-Korpus liegen 60 %
+#: der geteilten Dreiecke in solchen Streifen, den Facetten seiner Zylinder,
+#: 0,01 bis 0,08 mm breit (RM-671).
+EVEN_NARROW: Final = (2.0 - math.sqrt(3.0)) / 2.0
+
+#: Wie groß die Dreiecke einer Ebene im Mittel mindestens sind, als Anteil des
+#: Quadrats der verlangten Kante, damit das Angleichen in ihr aufräumt: ein
+#: gleichseitiges Dreieck mit einem Drittel der verlangten Kante, √3 / 36.
+#: Feiner teilt das Angleichen selbst nicht — der Kern teilt eine Kante in
+#: Stücke über der halben Länge —, also kommt eine so feine Ebene aus der
+#: Vorlage oder aus deren Nadeln, und ohne Abweichung bleiben überflüssig feine
+#: Stellen, wie sie sind (``UniformParams.deviation``). Gemessen (RM-671): die
+#: Ebenen der Verschmelzungen und der Platte mit Bohrungen im Mittel nicht unter
+#: einem Achtzehntel des Quadrats, die Nadelfächer zweier CAD-Netze aus dem
+#: Download-Korpus unter einem Zweiundzwanzigstel; dort kostete das Aufräumen
+#: eine Minute und ließ vier von fünf Dreiecken spitz.
+EVEN_FINEST: Final = math.sqrt(3.0) / 36.0
+
 
 def _evened_in_planes(
     arrays: dict[str, np.ndarray], edge: float, cancelled: CancelToken | None
 ) -> dict[str, np.ndarray]:
-    """Nach dem Teilen im Kern: teilen und tauschen — beides ändert die Form nicht.
+    """Nach dem Teilen im Kern: tauschen, teilen, zusammenlegen — nichts davon ändert die Form.
 
     ``refine_to_length`` teilt jede Kante auf ``edge``, zieht im Inneren eines
     Dreiecks aber Kanten, die länger sein können: an der Kugel aus §31 bis zum
@@ -1516,19 +1538,23 @@ def _evened_in_planes(
     (:func:`~app.core.geom.mesh_edits.flip_long`); was dann noch zu lang ist,
     wird in der Mitte geteilt (:func:`~app.core.geom.mesh_edits.split_long`).
     Teilen statt Tauschen legte an der Kugel spitze Dreiecke an und verdreifachte
-    die Zeit. Zuletzt wird um spitze Dreiecke nach Delaunay getauscht, nur in
-    einer Ebene und ohne eine neue Kante über ``edge``; „in einer Ebene“ heißt
-    auf :data:`~app.core.units.EPS_GEOM` genau.
+    die Zeit.
+
+    Danach wird um spitze Dreiecke aufgeräumt, nur in einer Ebene („in einer
+    Ebene“ heißt auf :data:`~app.core.units.EPS_GEOM` genau) und ohne eine neue
+    Kante über ``edge``: nach Delaunay getauscht, die kürzeste Seite einer Nadel
+    zusammengelegt, wo das die spitzen Dreiecke um ``v`` weniger macht, und um
+    das Zusammengelegte noch einmal getauscht. **Nur in Ebenen, in denen es
+    sich lohnt** (:data:`EVEN_NARROW`, :data:`EVEN_FINEST`): In einem schmalen
+    Streifen bleibt jedes Dreieck spitz, und eine Ebene, die schon feiner ist
+    als verlangt, bleibt ohne Abweichung, wie sie ist.
 
     **Gearbeitet wird nur, wo etwas zu tun ist**: Gemessen wird einmal über das
-    Netz, danach nur an getauschten und neuen Dreiecken, und aktiv sind beim
-    letzten Tausch die spitzen samt ihren Nachbarn. Über das ganze Netz
-    gefragt, kostete an der Kugel das Tauschen allein 52 s für ein Netz, an dem
-    fast nichts zu tauschen war. Ein Netz, das die Halbkanten dort nicht tragen
-    (verzweigt oder falsch gewickelt), wird nicht nach Delaunay getauscht.
-
-    Zusammengelegt wird hier nichts: Ohne Abweichung bleiben auch die
-    überflüssig feinen Stellen (``UniformParams.deviation``).
+    Netz, danach nur an getauschten und neuen Dreiecken; aktiv sind die spitzen
+    samt ihren Nachbarn. Über das ganze Netz gefragt, kostete an der Kugel das
+    Tauschen allein 52 s für ein Netz, an dem fast nichts zu tauschen war. Ein
+    Netz, das die Halbkanten dort nicht tragen (verzweigt oder falsch
+    gewickelt), wird weder getauscht noch zusammengelegt.
     """
     vertices = np.asarray(arrays["vertices"], dtype=np.float64)
     faces = np.asarray(arrays["faces"], dtype=np.int64)
@@ -1540,7 +1566,6 @@ def _evened_in_planes(
         if flipped:
             # Getauscht wird nur zwischen langen Dreiecken; die übrigen behalten ihr Maß.
             _remeasured(vertices, faces, edge, long, sharp, long.copy())
-    faces = _delaunay_around_sharp(vertices, faces, edge, long, sharp, cancelled)
     if long.any():
         vertices, faces, origin = mesh_edits.split_long(
             vertices, faces, edge, suspects=long, cancelled=cancelled
@@ -1550,17 +1575,35 @@ def _evened_in_planes(
         long = np.zeros(len(faces), dtype=bool)
         sharp = np.where(fresh, False, sharp[np.maximum(origin, 0)])
         _remeasured(vertices, faces, edge, long, sharp, fresh)
-        faces = _delaunay_around_sharp(vertices, faces, edge, long, sharp, cancelled)
-    if sharp.any():
-        # Nadeln mit kurzer Kante löst kein Tausch, wenn die neue Diagonale zu
-        # lang wäre; in der Ebene zusammengelegt verschwinden sie formtreu.
-        surface = mesh_edits.surface_of(vertices, faces, mesh_edits.around(faces, sharp))
-        if surface is not None and mesh_edits.collapse_short(
-            surface, EVEN_SHORTEST * edge, flat=EPS_GEOM, longest=edge, cancelled=cancelled
-        ):
-            vertices, faces = surface.arrays()
-            long, sharp = _shapes(vertices, faces, edge)
-            faces = _delaunay_around_sharp(vertices, faces, edge, long, sharp, cancelled)
+    if not sharp.any():
+        return {"vertices": vertices, "faces": faces}
+    breadth, mean_area = mesh_edits.plane_measures(vertices, faces, EPS_GEOM)
+    wide = (breadth >= EVEN_NARROW * edge) & (mean_area >= EVEN_FINEST * edge * edge)
+    faces = _delaunay_around_sharp(vertices, faces, edge, long, sharp, wide, wide, cancelled)
+    wanted = sharp & wide
+    if not wanted.any():
+        return {"vertices": vertices, "faces": faces}
+    # Nadeln mit kurzer Kante löst kein Tausch, wenn die neue Diagonale zu
+    # lang wäre; in der Ebene zusammengelegt verschwinden sie formtreu.
+    surface = mesh_edits.surface_of(vertices, faces, mesh_edits.around(faces, wanted) & wide)
+    if surface is None:
+        return {"vertices": vertices, "faces": faces}
+    before = surface.faces.copy()
+    if mesh_edits.collapse_short(
+        surface,
+        EVEN_SHORTEST * edge,
+        flat=EPS_GEOM,
+        longest=edge,
+        sharp=EVEN_SHARP_SQUARED_COSINE,
+        asked=wanted,
+        cancelled=cancelled,
+    ):
+        kept = surface.alive
+        changed = (surface.faces != before).any(axis=1)[kept]
+        wide = wide[kept]
+        vertices, faces = surface.arrays()
+        long, sharp = _shapes(vertices, faces, edge)
+        faces = _delaunay_around_sharp(vertices, faces, edge, long, sharp, changed, wide, cancelled)
     return {"vertices": vertices, "faces": faces}
 
 
@@ -1586,20 +1629,26 @@ def _delaunay_around_sharp(
     edge: float,
     long: np.ndarray,
     sharp: np.ndarray,
+    asked: np.ndarray,
+    wide: np.ndarray,
     cancelled: CancelToken | None,
 ) -> np.ndarray:
     """Tauscht um spitze Dreiecke nach Delaunay, in der Ebene und ohne neue Kante über ``edge``.
 
-    Aktiv sind die spitzen samt allen, die eine Ecke mit ihnen teilen; nur
-    deren Maße ändern sich und werden in ``long`` und ``sharp`` nachgetragen.
-    Die Ecken bleiben dieselben.
+    Gefragt werden zuerst die spitzen unter ``asked`` — wer schon einmal
+    gefragt wurde und sich seitdem nicht geändert hat, hat keinen besseren
+    Tausch bekommen. Aktiv sind sie samt allen, die eine Ecke mit ihnen
+    teilen, soweit sie in einer breiten Ebene liegen (``wide``); nur deren
+    Maße ändern sich und werden in ``long`` und ``sharp`` nachgetragen. Die
+    Ecken bleiben dieselben.
     """
-    if not sharp.any():
+    wanted = sharp & asked & wide
+    if not wanted.any():
         return faces
-    active = mesh_edits.around(faces, sharp)
+    active = mesh_edits.around(faces, wanted) & wide
     surface = mesh_edits.surface_of(vertices, faces, active)
     if surface is None or not mesh_edits.flip_in_planes(
-        surface, EPS_GEOM, longest=edge, cancelled=cancelled
+        surface, EPS_GEOM, longest=edge, asked=wanted, cancelled=cancelled
     ):
         return faces
     flipped = np.asarray(surface.faces, dtype=np.int64)
@@ -1618,9 +1667,8 @@ SHAPE_WORKERS: Final = 4
 def _shapes(vertices: np.ndarray, faces: np.ndarray, edge: float) -> tuple[np.ndarray, np.ndarray]:
     """Je Dreieck, ob eine Seite über ``edge`` liegt und ob eine Ecke spitzer als 15° ist.
 
-    Ohne Wurzel: Eine Ecke ist spitz, wenn das Skalarprodukt ihrer Seiten
-    positiv ist und sein Quadrat über :data:`EVEN_SHARP_SQUARED_COSINE` mal
-    dem Produkt der quadrierten Seitenlängen liegt.
+    Ohne Wurzel und Winkelfunktion: :func:`~app.core.geom.mesh_edits.triangle_shapes`
+    mit :data:`EVEN_SHARP_SQUARED_COSINE`.
     """
     workers = max(1, min(SHAPE_WORKERS, os.cpu_count() or 1))
     if len(faces) <= SHAPE_CHUNK or workers < 2:
@@ -1641,21 +1689,13 @@ def _shapes_of(
     vertices: np.ndarray, faces: np.ndarray, edge: float
 ) -> tuple[np.ndarray, np.ndarray]:
     """:func:`_shapes` für eine Teilportion, auf einem Faden."""
-    first = vertices[faces[:, 0]]
-    second = vertices[faces[:, 1]]
-    third = vertices[faces[:, 2]]
-    sides = (second - first, third - second, first - third)
-    squared = [row_dots(side, side) for side in sides]
-    limit = edge * edge
-    long = (squared[0] > limit) | (squared[1] > limit) | (squared[2] > limit)
-    sharp = np.zeros(len(faces), dtype=bool)
-    for corner in range(3):
-        out, back = sides[corner], sides[corner - 1]
-        lean = -row_dots(out, back)
-        sharp |= (lean > 0.0) & (
-            lean * lean > EVEN_SHARP_SQUARED_COSINE * squared[corner] * squared[corner - 1]
-        )
-    return np.asarray(long), sharp
+    longest, sharp = mesh_edits.triangle_shapes(
+        vertices[faces[:, 0]],
+        vertices[faces[:, 1]],
+        vertices[faces[:, 2]],
+        EVEN_SHARP_SQUARED_COSINE,
+    )
+    return np.asarray(longest > edge * edge), sharp
 
 
 def subdivided(

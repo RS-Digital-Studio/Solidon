@@ -1116,10 +1116,15 @@ Eingängen und denselben Dichtheits- und Volumenprüfungen.
 geschlossenen Netz, ohne die Form zu ändern: keine neue Koordinate beim
 Zusammenlegen, getauscht nur in einer Ebene, geteilt in der Mitte einer Kante.
 *Weich verschmelzen* legt damit die Nadeln aus Marching Cubes zusammen,
-*Dreiecke angleichen* hält seine Kantenlänge und tauscht Splitter in der Ebene
+*Dreiecke angleichen* hält seine Kantenlänge und räumt Splitter in der Ebene
 weg. Gearbeitet wird nur an einer Auswahl (`around`, `suspects`): an der Kugel
 aus §31 kostete das Tauschen über das ganze Netz 52 s, an einer Auswahl unter
-einer Sekunde.
+einer Sekunde. Das Angleichen räumt nur in Ebenen auf, die breit genug und
+nicht schon feiner als verlangt sind (`plane_measures`): An CAD-Netzen mit
+Facettenstreifen und Nadelfächern kostete es dort eine Minute und ließ vier von
+fünf Dreiecken spitz. Je Runde wird gewählt, bis kein Schritt mehr frei ist, in
+einer über das Netz gestreuten Folge (`_claimed`, `_scattered`) — einmal nach
+Länge gewählt, gewann je Runde nur das Ende eines Streifens.
 
 `section.clip_triangles` begrenzt lose Markierungsdreiecke an denselben
 Halbräumen wie Körper. Es bleibt eine offene Anzeigefläche ohne zusätzliche

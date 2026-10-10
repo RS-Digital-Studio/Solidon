@@ -121,7 +121,7 @@ def test_uniform_remeshing_evens_out_more_than_splitting_does(
     trimesh 5 teilte selbst gleichmäßig und kam auf **0,555** (14.08.2026),
     der konforme Weg des exakten Kerns seit dem 25.09.2026 auf **0,445**. Der
     Vorsprung steht: ``remesh_uniform`` lag bei **0,410**, seit es in der
-    Ebene tauscht und zusammenlegt (RM-671) bei **0,342**.
+    Ebene tauscht und zusammenlegt (RM-671) bei **0,356**.
     """
     plate = corpus("plate_holes.stl")
     before = spread(plate)
@@ -156,8 +156,8 @@ def test_uniform_remeshing_costs_a_fraction_of_the_triangles(profile: Profile) -
     """Warum es eine eigene Operation ist und keine Zeile in ``remesh_mesh``.
 
     Für dieselbe Zielkantenlänge von 1,5 mm braucht ``remesh_mesh`` auf
-    ``plate_holes`` **47 092** Dreiecke, ``remesh_uniform`` **27 356** und mit
-    zugelassenen 0,2 mm Abweichung **24 384** (10.10.2026, RM-671).
+    ``plate_holes`` **47 092** Dreiecke, ``remesh_uniform`` **28 566** und mit
+    zugelassenen 0,2 mm Abweichung **24 952** (10.10.2026, RM-671).
 
     Hier stand erst Faktor **hundert** (3 260 416 gegen rund 30 000), unter
     trimesh 5 Faktor 5,2 (160 084). Bis RM-671 ließ ``remesh_uniform`` die
