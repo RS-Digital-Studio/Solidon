@@ -40,6 +40,14 @@ wieder heraus (Entscheidung Robert). Wo ein Nutzen bleibt, der ohne den
 Mechanismus auskommt — „die Meldung nennt den wirklichen Grund“ —, steht der
 Nutzen da und sonst nichts.
 
+## 0.6.1
+
+### Bedienung und System
+
+- Nach einer Bohrung oder einem versetzten Merkmal sind die Merkmale eines großen Teils rund ein Drittel schneller wieder erkannt.
+- Ein Modell, das Sie gleich nach dem Programmstart öffnen, ist bis zu ein Viertel schneller bearbeitbar.
+- Läuft nebenher ein Slicer, ein Spiel oder ein Rendering, kommen Rechnungen an großen Modellen in Sekunden statt in Minuten zurück.
+
 ## 0.6.0
 
 ### Bedienung und System
@@ -82,9 +90,6 @@ Nutzen da und sonst nichts.
 - Auch in einem langen Verlauf rechnet ein neuer Schritt kaum länger als der erste.
 - Rückgängig und Wiederholen gehen schneller, und nicht mehr gebrauchter Arbeitsspeicher wird gleich wieder frei.
 - Das Auflösen von Überschneidungen und der Export als 3MF gehen deutlich schneller.
-- Nach einer Bohrung oder einem versetzten Merkmal sind die Merkmale eines großen Teils rund ein Drittel schneller wieder erkannt.
-- Ein Modell, das Sie gleich nach dem Programmstart öffnen, ist bis zu ein Viertel schneller bearbeitbar.
-- Läuft nebenher ein Slicer, ein Spiel oder ein Rendering, kommen Rechnungen an großen Modellen in Sekunden statt in Minuten zurück.
 - Die Arbeitsfläche wird beim Öffnen großer 3MF-Dateien schneller angezeigt.
 - Ein eingefügtes Modell steht danach im Bild, auch wenn es neben einem herangezoomten Modell landet.
 - Im Bausteinkatalog steht *Bausteine verwalten* offen, solange es noch keinen eigenen Baustein gibt.

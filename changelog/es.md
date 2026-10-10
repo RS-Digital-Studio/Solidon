@@ -16,6 +16,14 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 `tools/make_download.py` toma el apartado de la versión actual y lo escribe en
 `website/version.json`.
 
+## 0.6.1
+
+### Manejo y sistema
+
+- Tras un taladro o una característica desplazada, las características de una pieza grande se reconocen alrededor de un tercio más rápido.
+- Un modelo que abre justo después de iniciar el programa se puede editar hasta una cuarta parte antes.
+- Con un slicer, un juego o un renderizado en marcha, los cálculos en modelos grandes terminan en segundos en lugar de minutos.
+
 ## 0.6.0
 
 ### Manejo y sistema
@@ -58,9 +66,6 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Incluso en un historial largo, un paso nuevo apenas tarda más en calcularse que el primero.
 - Deshacer y rehacer son más rápidos, y la memoria que ya no se necesita se libera enseguida.
 - Resolver solapamientos y exportar a 3MF es bastante más rápido.
-- Tras un taladro o una característica desplazada, las características de una pieza grande se reconocen alrededor de un tercio más rápido.
-- Un modelo que abre justo después de iniciar el programa se puede editar hasta una cuarta parte antes.
-- Con un slicer, un juego o un renderizado en marcha, los cálculos en modelos grandes terminan en segundos en lugar de minutos.
 - El área de trabajo aparece más rápido al abrir archivos 3MF grandes.
 - Un modelo añadido queda después a la vista, aunque se coloque junto a otro sobre el que se había hecho zoom.
 - En el catálogo de bloques, *Gestionar bloques* aparece abierto mientras aún no haya ningún bloque propio.

@@ -15,6 +15,14 @@ carry the same points in the same order (`tests/test_changelog.py`).
 `tools/make_download.py` takes the section for the current version and writes
 it into `website/version.json`.
 
+## 0.6.1
+
+### Operation and system
+
+- After a hole or a moved feature, the features of a large part are recognised about a third faster.
+- A model you open right after starting the program is ready to edit up to a quarter sooner.
+- With a slicer, a game or a render running alongside, calculations on large models finish in seconds instead of minutes.
+
 ## 0.6.0
 
 ### Operation and system
@@ -57,9 +65,6 @@ it into `website/version.json`.
 - Even in a long history, a new step takes hardly longer to calculate than the first.
 - Undo and redo are faster, and memory that is no longer needed is freed right away.
 - Resolving overlaps and exporting as 3MF are considerably faster.
-- After a hole or a moved feature, the features of a large part are recognised about a third faster.
-- A model you open right after starting the program is ready to edit up to a quarter sooner.
-- With a slicer, a game or a render running alongside, calculations on large models finish in seconds instead of minutes.
 - The workspace appears faster when opening large 3MF files.
 - An added model is in view afterwards, even when it lands next to a model you zoomed in on.
 - In the part catalogue, *Manage parts* is open as long as there is no part of your own yet.

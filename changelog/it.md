@@ -15,6 +15,14 @@ gli stessi punti nello stesso ordine (`tests/test_changelog.py`).
 `tools/make_download.py` ne prende la sezione della versione corrente e la
 scrive in `website/version.json`.
 
+## 0.6.1
+
+### Uso e sistema
+
+- Dopo un foro o una caratteristica spostata, le caratteristiche di un pezzo grande vengono riconosciute circa un terzo più velocemente.
+- Un modello aperto subito dopo l'avvio del programma è modificabile fino a un quarto prima.
+- Con uno slicer, un gioco o un rendering in esecuzione, i calcoli sui modelli grandi terminano in secondi anziché in minuti.
+
 ## 0.6.0
 
 ### Uso e sistema
@@ -57,9 +65,6 @@ scrive in `website/version.json`.
 - Anche in una cronologia lunga, un nuovo passaggio richiede appena più tempo del primo.
 - Annulla e ripristina sono più veloci, e la memoria non più necessaria si libera subito.
 - Risolvere le sovrapposizioni ed esportare in 3MF è molto più veloce.
-- Dopo un foro o una caratteristica spostata, le caratteristiche di un pezzo grande vengono riconosciute circa un terzo più velocemente.
-- Un modello aperto subito dopo l'avvio del programma è modificabile fino a un quarto prima.
-- Con uno slicer, un gioco o un rendering in esecuzione, i calcoli sui modelli grandi terminano in secondi anziché in minuti.
 - L'area di lavoro viene visualizzata più rapidamente quando si aprono file 3MF di grandi dimensioni.
 - Un modello aggiunto è poi visibile, anche se finisce accanto a un modello su cui la vista era ingrandita.
 - Nel catalogo dei blocchi, *Gestisci blocchi* è aperto finché non esiste ancora un blocco proprio.

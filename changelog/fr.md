@@ -16,6 +16,14 @@ portent les mêmes points dans le même ordre (`tests/test_changelog.py`).
 `tools/make_download.py` en tire la section de la version courante et l'écrit
 dans `website/version.json`.
 
+## 0.6.1
+
+### Utilisation et système
+
+- Après un perçage ou une caractéristique déplacée, les caractéristiques d'une grande pièce sont reconnues environ un tiers plus vite.
+- Un modèle ouvert juste après le démarrage du programme est modifiable jusqu'à un quart plus tôt.
+- Avec un slicer, un jeu ou un rendu en cours à côté, les calculs sur de grands modèles aboutissent en secondes au lieu de minutes.
+
 ## 0.6.0
 
 ### Utilisation et système
@@ -58,9 +66,6 @@ dans `website/version.json`.
 - Même dans un long historique, une nouvelle étape ne prend guère plus de temps à calculer que la première.
 - Annuler et rétablir vont plus vite, et la mémoire devenue inutile est libérée aussitôt.
 - Résoudre les recouvrements et exporter en 3MF va nettement plus vite.
-- Après un perçage ou une caractéristique déplacée, les caractéristiques d'une grande pièce sont reconnues environ un tiers plus vite.
-- Un modèle ouvert juste après le démarrage du programme est modifiable jusqu'à un quart plus tôt.
-- Avec un slicer, un jeu ou un rendu en cours à côté, les calculs sur de grands modèles aboutissent en secondes au lieu de minutes.
 - L'espace de travail s'affiche plus rapidement à l'ouverture de gros fichiers 3MF.
 - Un modèle ajouté est ensuite visible, même s'il se pose à côté d'un modèle sur lequel la vue était zoomée.
 - Dans le catalogue de blocs, *Gérer les blocs* est ouvert tant qu'il n'y a pas encore de bloc personnel.
