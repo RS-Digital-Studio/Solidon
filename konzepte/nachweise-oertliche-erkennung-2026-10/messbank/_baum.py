@@ -40,6 +40,15 @@ def setup(tree: str | Path) -> Path:
     where = Path(app.__file__).resolve()
     if root not in where.parents:
         raise SystemExit(f"app kommt nicht aus {root}: {where}")
+    if os.environ.get("MESSBANK_VORRANG") == "1" and os.name == "nt":
+        # Unter fremder Volllast einen ruhigen Rechner nachbilden: Die Messung
+        # bekommt ihre Kerne, die CPU-Zeit streut weniger (wie RM-496/RM-672).
+        import ctypes
+
+        kernel32 = ctypes.WinDLL("kernel32")
+        kernel32.GetCurrentProcess.restype = ctypes.c_void_p
+        kernel32.SetPriorityClass.argtypes = (ctypes.c_void_p, ctypes.c_uint32)
+        kernel32.SetPriorityClass(kernel32.GetCurrentProcess(), 0x00000080)
     return root
 
 

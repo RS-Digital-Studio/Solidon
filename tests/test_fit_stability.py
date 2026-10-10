@@ -1525,6 +1525,75 @@ def test_a_changed_ring_or_body_number_reads_the_patch_again() -> None:
     )
 
 
+def _fillet_patch() -> tuple[Any, list[int]]:
+    """Der gerundete Quader und eine seiner Verrundungen als Fleck."""
+    mesh = features_module._one_body(_rounded_box())
+    found = detect(mesh)
+    fillet = next(feature for feature in found.values() if feature.kind == "fillet")
+    return mesh.raw, sorted(fillet.face_indices)
+
+
+def _lent_reading(body: Any, twin: Any, patch: list[int], part: str) -> tuple[bytes, bytes, bytes]:
+    """Abdruck der Lesung am Zwilling mit vollem Schlüssel, ohne ``part`` und frisch gelesen."""
+    forget_cache()
+    features_module._support_handle(body, patch)
+    full = features_module._support_handle(twin, patch)
+    forget_cache()
+    left_out = features_module._LEFT_OUT
+    left_out.add(part)
+    try:
+        features_module._support_handle(body, patch)
+        blind = features_module._support_handle(twin, patch)
+    finally:
+        left_out.discard(part)
+    own = features_module._read_surface_support(twin, list(patch), None)
+    assert full is not None and blind is not None and own is not None
+    return full.digest, blind.digest, own.digest
+
+
+def test_carried_normals_are_part_of_the_reading_key() -> None:
+    """Gegenprobe für ``normalen``, den die Messbank nicht trifft (A1, Konzept §10).
+
+    Eine starre Bewegung trägt Normalen mit, die in der letzten Stelle von den
+    gerechneten abweichen (``geom.transform._carry_cache``). Nachgebildet an
+    einem Zwilling mit denselben Ecken, dessen Normalen im Fleck um eine
+    Einheit der letzten Stelle versetzt sind: Mit vollem Schlüssel liest er
+    selbst; ohne ``normalen`` bekäme er die Lesung des Originals.
+    """
+    body, patch = _fillet_patch()
+    twin = trimesh.Trimesh(np.array(body.vertices), np.array(body.faces), process=False)
+    normals = np.array(twin.face_normals, dtype=np.float64)
+    normals[patch] = np.nextafter(normals[patch], np.inf)
+    twin._cache.verify()
+    twin._cache["face_normals"] = normals
+    twin._cache.id_set()
+    full, blind, own = _lent_reading(body, twin, patch, "normalen")
+    assert full == own, "mit vollem Schlüssel liest der Zwilling selbst"
+    assert blind != own, "ohne normalen gälte die Lesung des Originals"
+
+
+def test_the_corner_numbers_are_part_of_the_reading_key() -> None:
+    """Gegenprobe für ``eckennummern``, den die Messbank nicht trifft (A1, Konzept §10).
+
+    Derselbe Körper mit umnummerierten Ecken: Mit vollem Schlüssel liest der
+    Zwilling selbst; ohne ``eckennummern`` bekäme er die Lesung des
+    Originals, und die ordnet ihre Punkte anders. ``umlauf`` und
+    ``deckungsgleich`` lassen sich so nicht belegen: Ein Fremdkörper mit
+    verdrehtem Umlauf oder eine deckungsgleiche Ecke im Inneren ändern nur den
+    Rechenweg der Lesung, nicht ihr Ergebnis (gemessen bei P5).
+    """
+    body, patch = _fillet_patch()
+    vertices = np.array(body.vertices, dtype=np.float64)
+    faces = np.array(body.faces, dtype=np.int64)
+    order = np.random.default_rng(592).permutation(len(vertices))
+    back = np.empty_like(order)
+    back[order] = np.arange(len(order))
+    twin = trimesh.Trimesh(vertices[order], back[faces], process=False)
+    full, blind, own = _lent_reading(body, twin, patch, "eckennummern")
+    assert full == own, "mit vollem Schlüssel liest der Zwilling selbst"
+    assert blind != own, "ohne eckennummern gälte die Lesung des Originals"
+
+
 def test_a_cancelled_question_leaves_nothing_in_the_memory(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

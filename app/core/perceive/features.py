@@ -8049,6 +8049,26 @@ def remembered(
     return value
 
 
+def _remembered_already(
+    name: str, body: trimesh.Trimesh, patch: Sequence[int], extra: Any = None
+) -> bool:
+    """Ob :func:`remembered` diese Frage an diesen Fleck schon beantwortet hat — ohne zu rechnen."""
+    with _MEMORY_LOCK:
+        memory = _MEMORIES.get(id(body))
+        if memory is None or memory.ref() is not body:
+            return False
+    owner = memory.lineage if name in SHARED_ANSWERS else None
+    key = (
+        memory.token if owner is None else owner.token,
+        _patch_digest(memory, patch),
+        extra,
+        ROUND_FIT_EVALUATIONS,
+    )
+    with _MEMORY_LOCK:
+        answers = _SUPPORT_CACHE.get(name)
+        return answers is not None and key in answers
+
+
 def _known_answer(name: str, body: trimesh.Trimesh) -> Any:
     """Die gemerkte Antwort auf eine Frage an den ganzen Körper — oder ``None``, ohne zu rechnen.
 
@@ -8528,7 +8548,14 @@ def _patch_prints(
     """
     if not _ACROSS_BODIES[0]:
         return
-    chosen = [patch for patch in patches if len(patch)]
+    # Was eine frühere Runde schon abgedrückt hat, nicht noch einmal (P5): Die
+    # Runden fragen dieselben ganzen Flecken mehrfach, und am Drachen kostete
+    # jeder Stapel kalt anderthalb Sekunden.
+    chosen = [
+        patch
+        for patch in patches
+        if len(patch) and not _remembered_already("patch_print", body, patch, seams)
+    ]
     if not chosen:
         return
     for patch, parts in zip(chosen, _patch_prints_parts(body, chosen, seams=seams), strict=True):
