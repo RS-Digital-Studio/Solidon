@@ -99,7 +99,8 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Um rebordo estreito que se sustenta sozinho já não conta como ponte longa, nem junto a outra saliência. O relatório já não avisa aí, e o Solidon não pede suportes por isso.
 - Sobre um canal, o relatório já não aconselha um suporte que depois não se conseguiria tirar. Indica o canal e uma transição abaixo de 45 graus.
 - Para PETG, o Solidon sugere *Arrefecimento total no suporte*. Assim solta-se mais facilmente da peça.
-- Em figuras, o Solidon propõe a costura atrás, sem linha à frente. Para uma face superior grande e plana propõe engomar e indica quanto tempo de impressão isso custa.
+- Em figuras, o Solidon propõe a costura atrás, sem linha à frente. Para uma face superior grande e plana propõe engomar.
+- O tempo de impressão estimado inclui agora o engomar.
 - Novas definições de impressão: *Camadas de separação inferiores*, *Paredes das árvores*, *Ponta da árvore* e *Engomar a face mais alta*.
 - Também novas: *Contrair a primeira camada* e *Alargar furos*. Ambas seguem o slicer se não escolher.
 - O campo *Distância acima* chama-se agora *Distância acima e abaixo* e vale para os dois lados do suporte.

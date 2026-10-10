@@ -124,7 +124,8 @@ Nutzen da und sonst nichts.
 - Ein schmaler Rand, der sich selbst trägt, gilt nicht mehr als lange Brücke, auch neben einem anderen Überhang. Der Prüfbericht warnt dort nicht mehr, und Solidon verlangt dafür keine Stützen.
 - Über einem Kanal rät der Prüfbericht nicht mehr zu einer Stütze, die dort nicht mehr herauskäme. Er nennt den Kanal und den Übergang unter 45 Grad.
 - Für PETG schlägt Solidon *Volle Kühlung an der Stütze* vor. Sie löst sich so leichter vom Teil.
-- An Figuren schlägt Solidon die Naht hinten vor, damit keine Linie über die Vorderseite läuft. Für eine große flache Oberseite schlägt es Bügeln vor und nennt, wie viel Druckzeit das kostet.
+- An Figuren schlägt Solidon die Naht hinten vor, damit keine Linie über die Vorderseite läuft. Für eine große flache Oberseite schlägt es Bügeln vor.
+- Die geschätzte Druckzeit rechnet das Bügeln jetzt mit.
 - Neu in den Druckeinstellungen: *Trennschichten unten*, *Wände der Bäume*, *Baumspitze* und *Oberste Fläche bügeln*.
 - Ebenfalls neu sind *Erste Schicht einziehen* und *Löcher weiten*. Beide folgen dem Slicer, solange Sie nichts wählen.
 - Das Feld *Abstand nach oben* heißt jetzt *Abstand oben und unten* und gilt für beide Seiten der Stütze.

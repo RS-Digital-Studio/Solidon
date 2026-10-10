@@ -99,7 +99,8 @@ it into `website/version.json`.
 - A narrow rim that holds up on its own no longer counts as a long bridge, even next to another overhang. The check report no longer warns there, and Solidon asks for no supports for it.
 - Over a channel, the check report no longer recommends a support that could not be removed from it. It names the channel and a transition below 45 degrees.
 - For PETG, Solidon suggests *Full cooling at the support*. It then comes off the part more easily.
-- On figures, Solidon suggests the seam at the back, so no line runs down the front. For a large flat top it suggests ironing and says how much print time that costs.
+- On figures, Solidon suggests the seam at the back, so no line runs down the front. For a large flat top it suggests ironing.
+- The estimated print time now includes ironing.
 - New in the print settings: *Interface layers below*, *Tree walls*, *Tree tip* and *Iron the topmost face*.
 - Also new are *Pull in first layer* and *Widen holes*. Both follow the slicer unless you set them.
 - The *Gap above* field is now called *Gap above and below* and applies to both sides of the support.

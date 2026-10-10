@@ -620,8 +620,9 @@ def test_file_export_without_program_only_promises_shared_object_capabilities(
 # keinen, SuperSlicer dicke Brücken und Fluss (Review RM-587, M3). Den Brückenfluss
 # hält ``test_real_slicers.py`` im echten Programm je Teil. Naht hinten und Bügeln
 # der obersten Fläche (RM-588) belegen zwei Kegelstümpfe, einer mit Objektwerten,
-# in denselben acht Programmen (``.claude/.state/naht-2026-10-09/naht_je_teil.py``):
-# Naht hinten und Bügelbahn nur in der obersten Schicht des einen, der andere ohne. Die
+# in denselben acht Programmen (Messwerte in der Begründung): Naht hinten und
+# Bügelbahn nur in der obersten Schicht des einen, der andere ohne; das Bügeln je
+# Teil hält ``test_real_slicers.py`` in sechs Programmen. Die
 # Menge wird absichtlich nicht aus PART_PATHS oder den Schlüsseltabellen
 # gebaut: ein neuer Pfad braucht einen eigenen Wirkungsnachweis. Lochausgleich
 # und Einzug der ersten Schicht (RM-589) belegt eine Platte mit zwei gleichen

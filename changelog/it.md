@@ -99,7 +99,8 @@ scrive in `website/version.json`.
 - Un bordo stretto che si regge da solo non conta più come ponte lungo, nemmeno accanto a un altro sbalzo. Il rapporto non avvisa più lì e Solidon non chiede supporti per questo.
 - Sopra un canale il rapporto non consiglia più un supporto che poi non si potrebbe togliere. Nomina il canale e un raccordo sotto i 45 gradi.
 - Per il PETG Solidon suggerisce *Raffreddamento pieno sul supporto*. Così si stacca più facilmente dal pezzo.
-- Sulle figure Solidon propone la cucitura dietro, senza linea davanti. Per una grande faccia superiore piana propone la stiratura e indica quanto tempo di stampa costa.
+- Sulle figure Solidon propone la cucitura dietro, senza linea davanti. Per una grande faccia superiore piana propone la stiratura.
+- Il tempo di stampa stimato ora include la stiratura.
 - Nuove impostazioni di stampa: *Strati di interfaccia inferiori*, *Pareti degli alberi*, *Punta dell'albero* e *Stira la faccia più alta*.
 - Nuovi anche *Restringi il primo strato* e *Allarga i fori*. Seguono lo slicer se non scegli.
 - Il campo *Spazio verso l'alto* ora si chiama *Spazio sopra e sotto* e vale per entrambi i lati del supporto.

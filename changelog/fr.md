@@ -100,7 +100,8 @@ dans `website/version.json`.
 - Un rebord étroit qui se porte seul ne compte plus comme un long pont, même à côté d'un autre surplomb. Le rapport n'avertit plus à cet endroit, et Solidon n'y demande plus de supports.
 - Au-dessus d'un canal, le rapport ne conseille plus un support qu'on ne pourrait plus retirer. Il nomme le canal et une transition sous 45 degrés.
 - Pour le PETG, Solidon propose *Refroidissement complet au support*. Il se détache ainsi plus facilement de la pièce.
-- Sur les figurines, Solidon propose la couture à l'arrière, sans ligne devant. Pour une grande face supérieure plane, il propose le repassage et indique le temps d'impression qu'il coûte.
+- Sur les figurines, Solidon propose la couture à l'arrière, sans ligne devant. Pour une grande face supérieure plane, il propose le repassage.
+- Le temps d'impression estimé tient désormais compte du repassage.
 - Nouveaux réglages : *Couches d'interface en bas*, *Parois des arbres*, *Pointe d'arbre* et *Repasser la face la plus haute*.
 - Également nouveaux : *Resserrer la première couche* et *Élargir les trous*. Ils suivent le slicer à défaut de votre choix.
 - Le champ *Espace au-dessus* s'appelle désormais *Espace dessus et dessous* et vaut pour les deux côtés du support.
