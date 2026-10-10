@@ -1150,14 +1150,6 @@ REFINE_MAX_TRIANGLES: Final = 600_000
 #: das √2-Fache ihrer mittleren Kante als längste.
 EVEN_LONGEST: Final = math.sqrt(2.0)
 
-#: Wie viel Luft die Kante des Angleichens unter :data:`REFINE_MAX_TRIANGLES`
-#: lässt. Die Zählung trifft das Netz nur auf etwa ein Zehntel: Der Kern teilt
-#: jede Kante in ganze Stücke, und am Quader 200 x 200 x 200 gab eine um ein
-#: halbes Prozent längere Kante neun Prozent mehr Dreiecke (583 404 → 636 168,
-#: Review F). Gemessen wird am Netz, nicht an der Zählung
-#: (``test_sculpt.py::test_refining_stays_within_its_triangle_budget``).
-REFINE_RESERVE: Final = 1.1
-
 
 def brush_radius_for(mesh: MeshData) -> float:
     """Der Pinselradius, mit dem eine Sitzung an diesem Körper beginnt (H8).
@@ -1197,6 +1189,33 @@ def refine_edge_for(
     return wanted if wanted / EVEN_LONGEST < current else 0.0
 
 
+def evened_for_brush(
+    source: MeshData,
+    edge: float,
+    deviation: float,
+    *,
+    cancelled: CancelToken | None = None,
+) -> tuple[float, MeshData]:
+    """*Dreiecke angleichen* für den Pinsel — die Grenze gilt dem Netz, nicht der Zählung.
+
+    Die Kante aus :func:`refine_edge_for` hält :data:`REFINE_MAX_TRIANGLES` in
+    der Zählung; der Kern teilt aber in ganzen Stücken, und am Quader
+    200 x 200 x 200 trug das Netz so bis 720 000 Dreiecke (Review-Fix F).
+    Liegt es darüber, wird einmal neu angeglichen, mit der Kante, die die
+    gezählte Dichte (Dreiecke wachsen mit dem Quadrat der Kante) unter die
+    Grenze bringt, mit derselben Luft wie jeder Vorschlag einer Kante
+    (``mesh_ops.ESTIMATE_RESERVE``). Zurück kommen die Kante, mit der
+    angeglichen ist — sie steht im Verlauf —, und das Netz.
+    """
+    from app.core.geom.mesh_ops import ESTIMATE_RESERVE, uniform
+
+    evened = uniform(source, edge, deviation, cancelled=cancelled)
+    if evened.triangle_count > REFINE_MAX_TRIANGLES:
+        edge *= math.sqrt(evened.triangle_count / REFINE_MAX_TRIANGLES * ESTIMATE_RESERVE)
+        evened = uniform(source, edge, deviation, cancelled=cancelled)
+    return edge, evened
+
+
 def _longest_within_budget(mesh: MeshData) -> float:
     """Die kürzeste längste Kante, bei der das Angleichen unter :data:`REFINE_MAX_TRIANGLES` bleibt.
 
@@ -1210,15 +1229,22 @@ def _longest_within_budget(mesh: MeshData) -> float:
     die eindeutigen Kanten kosteten an 1,3 Mio. Dreiecken 0,7 s im Fensterfaden.
     Die Schranke ``2A / (√3/4 · e²) + H / e + F`` gleich der Grenze gesetzt ist
     eine quadratische Gleichung in ``1 / e``. Ohne die Kanten lag ein Zylinder
-    mit Fächerdeckeln 7 % über der Grenze (Review F). Gleich gesetzt wird mit
-    der Grenze unter :data:`REFINE_RESERVE` Luft.
+    mit Fächerdeckeln 7 % über der Grenze (Review F).
+
+    Gleich gesetzt wird mit der Grenze unter der Luft, die jeder Vorschlag
+    einer Kante über einer Schätzung lässt (``mesh_ops.ESTIMATE_RESERVE``):
+    Der Kern teilt in ganzen Stücken, und am Quader 200 x 200 x 200 gab eine um
+    ein halbes Prozent längere Kante neun Prozent mehr Dreiecke. Gemessen wird
+    am Netz (``test_sculpt.py::test_refining_stays_within_its_triangle_budget``).
     """
+    from app.core.geom.mesh_ops import ESTIMATE_RESERVE
+
     corners = np.asarray(mesh.raw.triangles, dtype=np.float64)
     sides = np.roll(corners, -1, axis=1) - corners
     squared = sides * sides
     halves = float(np.sqrt(squared[..., 0] + squared[..., 1] + squared[..., 2]).sum())
     doubled = 2.0 * float(mesh.raw.area) / (math.sqrt(3.0) / 4.0)
-    room = REFINE_MAX_TRIANGLES / REFINE_RESERVE - mesh.triangle_count
+    room = REFINE_MAX_TRIANGLES / ESTIMATE_RESERVE - mesh.triangle_count
     if doubled <= 0.0 or room <= 0:
         return math.inf
     inverse = (math.sqrt(halves * halves + 4.0 * doubled * room) - halves) / (2.0 * doubled)

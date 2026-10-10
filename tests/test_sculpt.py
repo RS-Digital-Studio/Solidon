@@ -2014,29 +2014,40 @@ def test_refining_stays_within_its_triangle_budget(name: str) -> None:
     die Diagonalen, und die Formel für gleichseitige Dreiecke blieb grün, während
     das Netz beim kleinsten Pinsel das 1,87- bis 2,03-Fache der Grenze trug.
     """
-    from app.core.geom.sculpt import EVEN_LONGEST, REFINE_MAX_TRIANGLES, REFINE_TO_EDGE
+    from app.core.geom.sculpt import (
+        EVEN_LONGEST,
+        REFINE_MAX_TRIANGLES,
+        REFINE_TO_EDGE,
+        evened_for_brush,
+    )
 
     body = _sculpt_bodies()[name]
     radius = 0.5 if name == "big_box" else 1.0
     edge = refine_edge_for(body, radius, finest=0.05)
     assert edge > radius / REFINE_TO_EDGE * EVEN_LONGEST, "die Grenze greift, nicht der Pinsel"
 
-    evened = uniform(body, edge, 0.0)
+    used, evened = evened_for_brush(body, edge, 0.0)
 
     assert evened.triangle_count <= REFINE_MAX_TRIANGLES
     assert evened.triangle_count > REFINE_MAX_TRIANGLES / 2, "und verschenkt nicht die Hälfte"
+    assert float(edge_lengths(evened).max()) <= used * (1.0 + 1e-9), "mit der Kante im Verlauf"
+
+
+#: Die Regressionsschwelle aus Bauplan §31: ein Viertel mehr gilt als Rückschritt.
+SECTION_31_REGRESSION = 1.25
 
 
 def test_refining_for_a_brush_is_no_denser_than_before_the_edge_promise() -> None:
-    """Review F, H1: Ein Pinsel unterhalb der Grenze bekommt so viele Dreiecke wie bis v0.5.3.
+    """Review F, H1: Ein Pinsel unterhalb der Grenze bekommt etwa so viele Dreiecke wie bis v0.5.3.
 
     Bis RM-671 hielt *Dreiecke angleichen* die verlangte Kante als mittlere,
     Diagonalen blieben länger; seitdem ist sie die längste, und dieselbe Kante
     gab doppelt so viele Dreiecke (Platte 40 × 40 × 20 auf 1 mm: 15 644 → 30 052)
     — jeder Zug danach rechnete am doppelten Netz. Die Sitzung verlangt die
-    Kante deshalb um :data:`~app.core.geom.sculpt.EVEN_LONGEST` länger. Soll ist
-    die Zählung eines Durchgangs auf der mittleren Kante, die das Netz bis
-    v0.5.3 traf (0,96-fach am Quader, Review F).
+    Kante deshalb um :data:`~app.core.geom.sculpt.EVEN_LONGEST` länger; ohne
+    Tauschen in der Ebene (Review-Fix F) sind es 16 572. Soll ist die Zählung
+    eines Durchgangs auf der mittleren Kante, die das Netz bis v0.5.3 traf
+    (0,96-fach am Quader, Review F), mit der Regressionsschwelle aus §31.
     """
     from app.core.geom.mesh_ops import estimated_triangles
     from app.core.geom.sculpt import BRUSH_TO_EDGE, REFINE_TO_EDGE, median_edge
@@ -2047,7 +2058,8 @@ def test_refining_for_a_brush_is_no_denser_than_before_the_edge_promise() -> Non
 
     evened = uniform(plate, edge, 0.0)
 
-    assert evened.triangle_count <= estimated_triangles(plate, radius / REFINE_TO_EDGE)
+    before = estimated_triangles(plate, radius / REFINE_TO_EDGE)
+    assert evened.triangle_count <= SECTION_31_REGRESSION * before
     assert median_edge(evened) * BRUSH_TO_EDGE <= radius, "fein genug für den Pinsel"
     assert float(edge_lengths(evened).max()) <= edge * (1.0 + 1e-9)
 

@@ -13,7 +13,9 @@ Abweichung, und seit dem 25.09.2026 nur noch sie.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 import pytest
@@ -263,106 +265,119 @@ def test_the_ceiling_of_evening_holds_for_the_result_not_only_for_the_estimate(
     assert raised.value.suggestions
 
 
-def test_evening_a_cad_cylinder_does_not_tidy_strips_and_needle_fans(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Review F, M2: Am ersten angeschlossenen Stand hing das Angleichen an CAD-Netzen.
+def test_the_check_before_welding_says_what_merge_vertices_would_do() -> None:
+    """Paket F, Umbau: ``_as_mesh`` verschweißt nur, wenn ``merge_vertices`` etwas ändern würde.
 
-    Ein Zylinder aus 1 500 Abschnitten trägt, was ein CAD-Besenhalter trägt:
-    Mantelstreifen von 0,07 mm Breite und Deckel als Nadelfächer. Nach dem
-    Teilen auf 1 mm ist fast jedes Dreieck spitz, und in solchen Ebenen bleibt
-    es spitz, wie man es auch legt (``mesh_ops.EVEN_NARROW``,
-    ``EVEN_FINEST``). Aufgeräumt wurde trotzdem: 1 263 642 aktive Dreiecke an
-    ``surface_of``, 27 Runden Tauschen und alle 64 Runden Zusammenlegen, 202 s
-    unter Last statt 0,7 s. Gezählt wird die Arbeit, nicht die Zeit, damit der
-    Test unter Last nicht wackelt.
+    ``merge_vertices`` rundet die Ecken auf ``tol.merge``, legt gleich gerundete
+    zusammen und wirft unbenutzte weg; an einem Netz aus dem Kern ändert es
+    fast nie etwas und kostete am Quader 100 × 80 × 60 auf 0,5 mm doch 0,25 s.
+    Die Vorprüfung muss dieselbe Antwort geben: hier gegen ``merge_vertices``
+    selbst gehalten, an einem sauberen Netz, einer doppelten, einer bis auf
+    Rundung gleichen, einer knapp verschiedenen und einer unbenutzten Ecke.
     """
+    box = trimesh.creation.box(extents=(4.0, 3.0, 2.0))
+    vertices = np.asarray(box.vertices, dtype=np.float64)
+    faces = np.asarray(box.faces, dtype=np.int64)
+    doubled = np.concatenate((vertices, vertices[:1]))
+    redirected = faces.copy()
+    redirected[0, 0] = len(vertices)
+    cases = {
+        "sauber": (vertices, faces),
+        "doppelt": (doubled, redirected),
+        "gerundet gleich": (
+            np.concatenate((vertices, vertices[:1] + 1e-10)),
+            redirected,
+        ),
+        "knapp verschieden": (
+            np.concatenate((vertices, vertices[:1] + 1e-6)),
+            redirected,
+        ),
+        "unbenutzt": (doubled, faces),
+    }
+    expected = {}
+    for name, (points, corners) in cases.items():
+        body = trimesh.Trimesh(vertices=points, faces=corners, process=False)
+        merged = body.copy()
+        merged.merge_vertices()
+        expected[name] = len(merged.vertices) < len(body.vertices)
+        assert mesh_ops._needs_welding(points, corners) == expected[name], name
+    assert expected == {
+        "sauber": False,
+        "doppelt": True,
+        "gerundet gleich": True,
+        "knapp verschieden": False,
+        "unbenutzt": True,
+    }, "die Fälle decken beide Antworten ab"
+
+
+def _subdivided_plate(times: int) -> MeshData:
+    """``plate_holes`` ``times``-mal geviertelt — die CAD-Fächer, nur feiner, wie in §31."""
+    raw = corpus("plate_holes.stl").raw
+    for _step in range(times):
+        vertices, faces = trimesh.remesh.subdivide(raw.vertices, raw.faces)
+        raw = trimesh.Trimesh(vertices=vertices, faces=faces, process=False)
+    return MeshData.of(raw)
+
+
+#: Die Fälle des Arbeitstests: Körper und verlangte Kante.
+EVENING_WORK: dict[str, Callable[[], tuple[MeshData, float]]] = {
+    "cad_cylinder": lambda: (
+        MeshData.of(trimesh.creation.cylinder(radius=17.5, height=60.0, sections=1500)),
+        1.0,
+    ),
+    "subdivided_plate": lambda: (_subdivided_plate(2), 1.0),
+}
+
+
+@pytest.mark.parametrize("case", sorted(EVENING_WORK))
+def test_evening_measures_each_triangle_about_once_and_tidies_nothing(
+    case: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Review-Fix F: Die Arbeit des Angleichens ist ein Durchgang über das Netz — gezählt.
+
+    Bis dahin räumte das Angleichen nach dem Teilen in der Ebene auf. Am ersten
+    angeschlossenen Stand hing es an einem Zylinder aus 1 500 Abschnitten (wie
+    ein CAD-Besenhalter: Mantelstreifen, Nadelfächer im Deckel) mit 1 263 642
+    aktiven Dreiecken an ``surface_of``, 27 Runden Tauschen und allen 64 Runden
+    Zusammenlegen, 202 s; an ``plate_holes``, zweimal geviertelt, fragte es in
+    64 Runden 7,35 Mio. Halbkanten und tauschte 300 927-mal, 11,6 bis 14,8 s.
+    Jetzt teilt es nur, was zu lang ist: Der erste Durchgang misst jedes
+    Dreieck aus dem Kern, ein zweiter nur, was danach noch zu lang sein kann
+    (``mesh_edits.split_long``). Gezählt werden gemessene Dreiecke und
+    Durchgänge und ob irgendwo aufgeräumt wird — lastunabhängig.
+    """
+    import inspect
+
     from app.core.geom import mesh_edits
 
-    body = MeshData.of(trimesh.creation.cylinder(radius=17.5, height=60.0, sections=1500))
-    active: list[int] = []
-    original = mesh_edits.surface_of
+    body, edge = EVENING_WORK[case]()
+    measured: list[int] = []
+    tidied: list[int] = []
+    split, surface = mesh_edits.split_long, mesh_edits.surface_of
+    counts_itself = "measured" in inspect.signature(split).parameters
 
-    def counted(
+    def counted_split(*args: Any, **kwargs: Any) -> Any:
+        if counts_itself:
+            kwargs["measured"] = measured
+        return split(*args, **kwargs)
+
+    def counted_surface(
         vertices: np.ndarray, faces: np.ndarray, wanted: np.ndarray | None = None
     ) -> object:
-        active.append(len(faces) if wanted is None else int(np.count_nonzero(wanted)))
-        return original(vertices, faces, wanted)
+        tidied.append(len(faces) if wanted is None else int(np.count_nonzero(wanted)))
+        return surface(vertices, faces, wanted)
 
-    monkeypatch.setattr(mesh_edits, "surface_of", counted)
+    monkeypatch.setattr(mesh_edits, "split_long", counted_split)
+    monkeypatch.setattr(mesh_edits, "surface_of", counted_surface)
 
-    after = mesh_ops.uniform(body, 1.0, 0.0)
+    after = mesh_ops.uniform(body, edge, 0.0)
 
-    assert sum(active) <= after.triangle_count // 10, f"aufgeräumt an {sum(active)} Dreiecken"
-    assert float(mesh_ops.edge_lengths(after).max()) <= 1.0
+    assert not tidied, f"aufgeräumt an {sum(tidied)} Dreiecken"
+    assert counts_itself and 1 <= len(measured) <= 3, f"Durchgänge: {measured}"
+    assert sum(measured) <= after.triangle_count, f"gemessen {sum(measured)}"
+    assert float(mesh_ops.edge_lengths(after).max()) <= edge * (1.0 + 1e-9)
     assert after.volume == pytest.approx(body.volume, rel=1e-12)
     assert after.is_watertight
-
-
-def test_a_plane_for_tidying_up_is_what_a_flip_calls_one_plane() -> None:
-    """Review F, G1: ``plane_measures`` misst die Ebenen, die ``_coplanar`` Kante um Kante bildet.
-
-    Das Angleichen räumt nur in breiten Ebenen auf, und was eine Ebene ist,
-    fragte ``plane_measures`` neben ``_coplanar`` noch einmal selbst. Hier
-    entstehen die Ebenen aus den Antworten von ``_coplanar`` an jeder inneren
-    Kante eines Gitters, dessen Ecken teils knapp unter, teils über
-    ``EPS_GEOM`` angehoben sind; Breite (zweimal Fläche durch Rand) und
-    mittlere Fläche rechnet der Test selbst.
-    """
-    from scipy.sparse import coo_matrix
-    from scipy.sparse.csgraph import connected_components
-
-    from app.core.geom import mesh_edits
-
-    side = 8
-    rng = np.random.default_rng(671)
-    x, y = np.meshgrid(np.arange(side, dtype=float), np.arange(side, dtype=float), indexing="ij")
-    lift = rng.choice([0.0, 0.0, 0.4 * EPS_GEOM, 3.0 * EPS_GEOM, 0.3], size=x.shape)
-    vertices = np.column_stack((x.reshape(-1), y.reshape(-1), lift.reshape(-1)))
-    faces = []
-    for i in range(side - 1):
-        for j in range(side - 1):
-            a, b, c, d = i * side + j, (i + 1) * side + j, (i + 1) * side + j + 1, i * side + j + 1
-            faces += [(a, b, c), (a, c, d)]
-    faces_array = np.asarray(faces, dtype=np.int64)
-
-    halves: dict[tuple[int, int], list[tuple[int, int]]] = {}
-    for face, corners in enumerate(faces):
-        for k in range(3):
-            tail, head = corners[k], corners[(k + 1) % 3]
-            halves.setdefault((min(tail, head), max(tail, head)), []).append((face, k))
-    joined, rim = [], []
-    for pair in halves.values():
-        if len(pair) != 2:
-            rim += pair
-            continue
-        (one, k), (other, m) = pair
-        a, b, c = (faces[one][(k + step) % 3] for step in range(3))
-        d = faces[other][(m + 2) % 3]
-        level, _normal = mesh_edits._coplanar(
-            vertices[[a]], vertices[[b]], vertices[[c]], vertices[[d]], EPS_GEOM
-        )
-        if level[0]:
-            joined.append((one, other))
-        else:
-            rim += pair
-    assert joined and len(joined) < len(halves), "Ebenen und Knicke, sonst prüft es nichts"
-    first, second = (np.asarray(side_of, dtype=np.int64) for side_of in zip(*joined, strict=True))
-    graph = coo_matrix((np.ones(len(first)), (first, second)), shape=(len(faces), len(faces)))
-    _count, labels = connected_components(graph, directed=False)
-    corners = vertices[faces_array]
-    cross = np.cross(corners[:, 1] - corners[:, 0], corners[:, 2] - corners[:, 0])
-    area = np.sqrt((cross * cross).sum(axis=1)) / 2.0
-    around = np.zeros(len(faces))
-    for face, k in rim:
-        tail, head = faces[face][k], faces[face][(k + 1) % 3]
-        around[labels[face]] += float(np.linalg.norm(vertices[head] - vertices[tail]))
-    total = np.bincount(labels, weights=area)
-
-    breadth, mean = mesh_edits.plane_measures(vertices, faces_array, EPS_GEOM)
-
-    assert breadth == pytest.approx(2.0 * total[labels] / around[labels], rel=1e-12)
-    assert mean == pytest.approx(total[labels] / np.bincount(labels)[labels], rel=1e-12)
 
 
 @pytest.mark.parametrize("way", ["remesh_mesh", "refined"])

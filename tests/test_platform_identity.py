@@ -1749,7 +1749,6 @@ def test_a_way_through_the_kernel_does_not_hang_on_the_machine(way: str) -> None
 _THREADED: dict[str, tuple[str, str, str]] = {
     "blend_field": ("app.core.geom.blend", "PAIR_WORKERS", "PAIR_CHUNK"),
     "blend_union": ("app.core.geom.blend", "PAIR_WORKERS", "PAIR_CHUNK"),
-    "remesh_uniform": ("app.core.geom.mesh_ops", "SHAPE_WORKERS", "SHAPE_CHUNK"),
 }
 
 
@@ -1781,8 +1780,8 @@ def test_a_threaded_way_gives_the_same_bits_on_one_thread_and_on_many(
 ) -> None:
     """Ein Faden, vier Fäden, rückwärts abgeschlossen — derselbe Fingerabdruck.
 
-    Das Abstandsfeld von *Weich verschmelzen* und die Formprüfung von
-    *Dreiecke angleichen* rechnen in Portionen auf mehreren Fäden (RM-671).
+    Das Abstandsfeld von *Weich verschmelzen* rechnet in Portionen auf mehreren
+    Fäden (RM-671).
     Zugesagt ist, dass jede Portion nur ihren eigenen Abschnitt schreibt und
     Element für Element dasselbe rechnet; dann hängt das Ergebnis weder an der
     Zahl der Fäden noch daran, welcher zuerst fertig wird. Die Portionen sind
