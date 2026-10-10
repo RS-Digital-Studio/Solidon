@@ -182,7 +182,10 @@ Unter Windows sperrt ein gewöhnlich geöffneter Lesegriff die Datei gegen Lösc
 liest Curas Definitionen aus der Kopie im Nutzer-Cache; leerte der Kunde oder ein
 Aufräumprogramm den Cache in diesem Moment, scheiterte das Löschen mit WinError 32
 (Fenstertest `test_after_a_cleared_cache_a_new_search_brings_curas_printers_back`,
-unter Last zeitweise rot, 10.10.2026). `slicer_profiles` und `appimage` lesen ihre
-Dateien deshalb mit geteiltem Löschen: Die Datei verschwindet, der Lesende behält
-seinen Griff bis zum Ende. Belegt mit verlangsamtem Lesen: gewöhnliches Öffnen drei
+unter Last zeitweise rot, 10.10.2026). `slicer_profiles` (JSON, INI, Material-XML
+über `read_bytes_shared`) und `appimage` lesen ihre Dateien deshalb mit geteiltem
+Löschen: Die Datei verschwindet, der Lesende behält seinen Griff bis zum Ende.
+`kernel32` und der Prototyp von `CreateFileW` entstehen einmal je Prozess
+(`_shared_kernel`); je Aufruf angelegt kostete das die kalte Druckersuche 16 bis
+31 %. Belegt mit verlangsamtem Lesen: gewöhnliches Öffnen drei
 von drei Läufen rot, geteiltes drei von drei grün.

@@ -53,7 +53,7 @@ from app.core.export.slicer_keys import (
 )
 from app.core.knowledge import profiles as knowledge_profiles
 from app.core.log import get_logger
-from app.core.paths import read_text_shared
+from app.core.paths import read_bytes_shared, read_text_shared
 from app.core.types import CancelToken, PrinterProfile, QualityPreset
 from app.core.units import EPS_GEOM, MAX_FACET_SAG, circle_point, inscribed_ratio, is_zero
 from app.i18n import _
@@ -2749,10 +2749,18 @@ def _read_ini(path: Path) -> configparser.ConfigParser | None:
     """
     parsed = configparser.ConfigParser(interpolation=None)
     try:
-        parsed.read(path, encoding="utf-8")
-    except (OSError, configparser.Error, UnicodeDecodeError) as problem:
-        # ``UnicodeDecodeError`` dazu: Eine Datei in fremder Kodierung riss
-        # die Filamentsuche des Druckdialogs ab (Durchsicht 0.5.0).
+        # Ohne Löschsperre gelesen (``read_text_shared``). Wie ``read``:
+        # Eine Datei, die sich nicht öffnen lässt, gibt einen leeren Parser.
+        text = read_text_shared(path)
+        parsed.read_string(text, source=str(path))
+    except UnicodeDecodeError as problem:
+        # Eine Datei in fremder Kodierung riss die Filamentsuche des
+        # Druckdialogs ab (Durchsicht 0.5.0).
+        _log.debug("skipping Cura profile %s: %s", path.name, problem)
+        return None
+    except OSError:
+        return parsed
+    except configparser.Error as problem:
         _log.debug("skipping Cura profile %s: %s", path.name, problem)
         return None
     return parsed
@@ -2767,7 +2775,7 @@ def _read_cura_material(path: Path) -> SlicerProfile | None:
     und ein Farbname, der keine Farbe meint, bleibt weg.
     """
     try:
-        root = ET.parse(path).getroot()
+        root = ET.fromstring(read_bytes_shared(path))
     except (OSError, ET.ParseError) as problem:
         _log.debug("skipping Cura material %s: %s", path.name, problem)
         return None
@@ -3060,7 +3068,7 @@ _CURA_MATERIAL_KEYS: Final = {
 def _cura_material_values(path: Path) -> dict[str, Any]:
     """Die allgemeinen XML-Materialwerte, ohne fremde Maschinenvarianten zu übernehmen."""
     try:
-        root = ET.parse(path).getroot()
+        root = ET.fromstring(read_bytes_shared(path))
     except (OSError, ET.ParseError) as problem:
         _log.debug("skipping Cura material %s: %s", path.name, problem)
         return {}

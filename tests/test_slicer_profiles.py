@@ -5662,6 +5662,13 @@ def test_a_new_search_forgets_the_held_stock(
 
     base = tmp_path / "config"
     (base / "OrcaSlicer").mkdir(parents=True)
+    # Auch die Nutzerwurzeln gealtert: Den Sitzungsordner berühren unter ``-n 6``
+    # andere Tests desselben Arbeiters, und jünger als ``SETTLE_NS`` listete die
+    # Suche ihn neu (Kurzreview RM-628, N2).
+    for variable in ("APPDATA", "LOCALAPPDATA"):
+        root = tmp_path / variable.casefold()
+        root.mkdir()
+        monkeypatch.setenv(variable, str(root))
     _settle(tmp_path)
     sp.find_profiles(slicer, "orca", ("machine",))
     sp._program_folders(base, "orcaslicer")

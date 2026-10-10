@@ -7,6 +7,7 @@ die Lizenzliste kurz bleibt.
 
 from __future__ import annotations
 
+import functools
 import hashlib
 import importlib
 import os
@@ -260,18 +261,12 @@ def ensure_dir(path: Path) -> Path:
     return path
 
 
-def read_text_shared(path: Path, *, errors: str = "strict") -> str:
-    """Liest eine UTF-8-Textdatei, ohne ihr Löschen zu sperren.
+@functools.cache
+def _shared_kernel() -> Any:
+    """``kernel32`` mit den Prototypen für geteiltes Lesen, einmal je Prozess.
 
-    Unter Windows hält ``open`` die Datei für die Dauer des Lesens gegen
-    Löschen gesperrt (kein ``FILE_SHARE_DELETE``). Leert ein Aufräumprogramm
-    oder der Kunde den Cache, während ein Arbeiter Curas Definitionen aus der
-    Kopie liest, scheiterte das Löschen mit WinError 32. Mit geteiltem Löschen
-    verschwindet die Datei, und der Lesende behält seinen Griff bis zum Ende.
-    Anderswo genügt ``read_text``: Dort sperrt Lesen nie.
-    """
-    if os.name != "nt":
-        return path.read_text(encoding="utf-8", errors=errors)
+    Je Aufruf neu angelegt kostete das die kalte Druckersuche 16 bis 31 %:
+    Sie liest Tausende Profildateien (Kurzreview RM-628, M1)."""
     from ctypes import wintypes
 
     kernel32 = _windows_ctypes.WinDLL("kernel32", use_last_error=True)
@@ -285,22 +280,59 @@ def read_text_shared(path: Path, *, errors: str = "strict") -> str:
         wintypes.HANDLE,
     )
     kernel32.CreateFileW.restype = wintypes.HANDLE
-    generic_read = 0x80000000
-    share_all = 0x1 | 0x2 | 0x4  # lesen, schreiben, löschen
-    open_existing = 3
-    normal = 0x80
+    kernel32.CloseHandle.argtypes = (wintypes.HANDLE,)
+    kernel32.CloseHandle.restype = wintypes.BOOL
+    return kernel32
+
+
+_GENERIC_READ: Final = 0x80000000
+#: Lesen, Schreiben und Löschen bleiben anderen erlaubt.
+_SHARE_ALL: Final = 0x1 | 0x2 | 0x4
+_OPEN_EXISTING: Final = 3
+_NORMAL: Final = 0x80
+
+
+def _open_shared(path: Path) -> int:
+    """Ein Lesedeskriptor unter Windows, der das Löschen der Datei nicht sperrt."""
+    # Dasselbe Prüfereignis wie ``open``: Wer zählt, welche Dateien gelesen
+    # werden, sieht auch diese (``sys.addaudithook``).
+    sys.audit("open", str(path), "r", os.O_RDONLY)
+    kernel32 = _shared_kernel()
     handle = kernel32.CreateFileW(
-        str(path), generic_read, share_all, None, open_existing, normal, None
+        str(path), _GENERIC_READ, _SHARE_ALL, None, _OPEN_EXISTING, _NORMAL, None
     )
-    if handle in (None, wintypes.HANDLE(-1).value):
+    # ``INVALID_HANDLE_VALUE`` ist -1, als Zeiger gelesen.
+    if handle is None or handle == _windows_ctypes.c_void_p(-1).value:
         code = _windows_ctypes.get_last_error()
-        raise _windows_ctypes.WinError(code, f"{path}")
+        raise OSError(None, _windows_ctypes.FormatError(code).strip(), str(path), code)
     try:
-        descriptor = _windows_msvcrt.open_osfhandle(handle, os.O_RDONLY)
+        return int(_windows_msvcrt.open_osfhandle(handle, os.O_RDONLY))
     except OSError:
-        kernel32.CloseHandle(wintypes.HANDLE(handle))
+        kernel32.CloseHandle(handle)
         raise
-    with os.fdopen(descriptor, encoding="utf-8", errors=errors) as stream:
+
+
+def read_bytes_shared(path: Path) -> bytes:
+    """Liest eine Datei, ohne ihr Löschen zu sperren (:func:`read_text_shared`)."""
+    if os.name != "nt":
+        return path.read_bytes()
+    with os.fdopen(_open_shared(path), "rb") as stream:
+        return stream.read()
+
+
+def read_text_shared(path: Path, *, errors: str = "strict") -> str:
+    """Liest eine UTF-8-Textdatei, ohne ihr Löschen zu sperren.
+
+    Unter Windows hält ``open`` die Datei für die Dauer des Lesens gegen
+    Löschen gesperrt (kein ``FILE_SHARE_DELETE``). Leert ein Aufräumprogramm
+    oder der Kunde den Cache, während ein Arbeiter Curas Definitionen aus der
+    Kopie liest, scheiterte das Löschen mit WinError 32. Mit geteiltem Löschen
+    verschwindet die Datei, und der Lesende behält seinen Griff bis zum Ende.
+    Anderswo genügt ``read_text``: Dort sperrt Lesen nie.
+    """
+    if os.name != "nt":
+        return path.read_text(encoding="utf-8", errors=errors)
+    with os.fdopen(_open_shared(path), encoding="utf-8", errors=errors) as stream:
         return stream.read()
 
 

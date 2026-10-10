@@ -266,6 +266,89 @@ def test_a_definition_being_read_does_not_stop_the_cache_from_being_cleared(
     assert not (tmp_path / "cache").exists()
 
 
+@pytest.mark.skipif(os.name != "nt", reason="nur Windows liest über kernel32")
+def test_shared_reading_loads_kernel32_once(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """``kernel32`` und der Prototyp entstehen einmal, nicht je gelesene Datei: Je
+    Aufruf kostete das die kalte Druckersuche 16 bis 31 % (Kurzreview RM-628, M1)."""
+    import ctypes
+
+    from app.core import paths
+
+    made: list[str] = []
+    real = ctypes.WinDLL
+
+    def counted(name: str, *args: Any, **kwargs: Any) -> Any:
+        made.append(name)
+        return real(name, *args, **kwargs)
+
+    monkeypatch.setattr(ctypes, "WinDLL", counted)
+    paths._shared_kernel.cache_clear()
+    target = tmp_path / "a.json"
+    target.write_text("{}", encoding="utf-8")
+    try:
+        assert paths.read_text_shared(target) == "{}"
+        assert paths.read_bytes_shared(target) == b"{}"
+    finally:
+        paths._shared_kernel.cache_clear()
+
+    assert made == ["kernel32"]
+
+
+@pytest.mark.skipif(os.name != "nt", reason="nur Windows liest über kernel32")
+def test_a_missing_file_is_named_like_read_text_does(tmp_path: Path) -> None:
+    """Fehlt die Datei, sagt die Ausnahme welche, wie ``Path.read_text`` (L2)."""
+    from app.core import paths
+
+    missing = tmp_path / "fehlt.def.json"
+    with pytest.raises(FileNotFoundError) as caught:
+        paths.read_text_shared(missing)
+    assert caught.value.filename == str(missing)
+    assert caught.value.winerror == 2
+
+
+def test_curas_ini_and_material_files_are_read_without_a_lock(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """INI und Material-XML lesen über die geteilten Leser (Kurzreview L1), mit
+    derselben Bedeutung wie vorher: Eine fehlende INI gibt einen leeren Parser,
+    eine fremde Kodierung ``None``."""
+    read: list[str] = []
+    text, raw = sp.read_text_shared, sp.read_bytes_shared
+
+    def text_seen(path: Path, **kwargs: Any) -> str:
+        read.append(path.name)
+        return text(path, **kwargs)
+
+    def bytes_seen(path: Path) -> bytes:
+        read.append(path.name)
+        return raw(path)
+
+    monkeypatch.setattr(sp, "read_text_shared", text_seen)
+    monkeypatch.setattr(sp, "read_bytes_shared", bytes_seen)
+    ini = tmp_path / "solidon.inst.cfg"
+    ini.write_text("[general]\nname = 50 % Füllung\n", encoding="utf-8")
+    foreign = tmp_path / "fremd.inst.cfg"
+    foreign.write_bytes(b"[general]\nname = F\xfcllung\n")
+    material = tmp_path / "petg.xml.fdm_material"
+    material.write_text(
+        '<fdmmaterial xmlns="http://www.ultimaker.com/material"><metadata><name>'
+        "<brand>Acme</brand><material>PETG</material><color>Orange</color>"
+        "</name></metadata></fdmmaterial>",
+        encoding="utf-8",
+    )
+
+    parsed = sp._read_ini(ini)
+    assert parsed is not None and parsed["general"]["name"] == "50 % Füllung"
+    empty = sp._read_ini(tmp_path / "fehlt.inst.cfg")
+    assert empty is not None and not empty.sections()
+    assert sp._read_ini(foreign) is None
+    spool = sp._read_cura_material(material)
+    assert spool is not None and "PETG" in spool.name
+    assert read == [ini.name, "fehlt.inst.cfg", foreign.name, material.name]
+
+
 def test_the_window_thread_never_waits_for_the_profile_copy(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
