@@ -135,9 +135,15 @@ def wait_for_print_findings(window: MainWindow) -> None:
     """
     for _round in range(5):
         worker = window._print_findings.worker
-        if worker is not None and worker.isRunning():
-            assert worker.wait(60_000), "die Berichtsanalyse endet nicht"
+        if worker is None or not worker.isRunning():
+            QApplication.processEvents()
+            worker = window._print_findings.worker
+            if worker is None or not worker.isRunning():
+                return
+        assert worker.wait(60_000), "die Berichtsanalyse endet nicht"
         QApplication.processEvents()
+    worker = window._print_findings.worker
+    assert worker is None or not worker.isRunning(), "die Berichtsanalyse startet immer neu"
 
 
 def export_anyway(monkeypatch: pytest.MonkeyPatch) -> None:
