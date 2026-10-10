@@ -279,7 +279,7 @@ def advise(
     Hybrid unter einer großen flachen Decke und die Wände hoher Bäume fragen
     danach. ``plate_style`` ist die Stützart der Platte, wo sie feststeht: Bei
     Cura fragen Abstand, Spitzenluft und Baumwände mit ihr
-    (:func:`on_the_plate`, Nachtrag RM-584).
+    (:func:`contact_style`, Nachtrag RM-584).
 
     **Für einen Resin-Drucker bleibt die Liste leer.** Jede Regel hier spricht
     über Düse, Bahn, Bett, Lüfter oder Rückzug — für Resin nicht falsch
@@ -1156,6 +1156,21 @@ def on_the_plate(style: str, plate: str | None, flavour: SlicerFlavour | None) -
     return "tree" if plate == "tree" else "grid"
 
 
+def contact_style(style: str, wanted: str, plate: str | None, flavour: SlicerFlavour | None) -> str:
+    """Mit welcher Art ein Teil mit Stützbedarf Abstand, Spitzenluft und Baumwände
+    fragt: ``style`` ist :func:`printed_style` mit den Ablehnungen des Kunden,
+    ``wanted`` dieselbe Auskunft ohne sie, ``plate`` die Art der Platte.
+
+    Bei Cura druckt unter einer gestützten Platte jedes Netz, das Stützen will,
+    deren Art — auch wenn der Kunde die Zeile zur Art ablehnt: Mit übernommenem
+    Baum und abgelehntem „Baum → Gitter“ fragten die Stacheln mit „aus“ und
+    bekamen keine Spitzenluft, Cura druckte Bäume (Review des Nachtrags RM-584).
+    Sonst :func:`on_the_plate`."""
+    if flavour == "cura" and plate not in (None, "none") and wanted != "none":
+        return on_the_plate(wanted, plate, flavour)
+    return on_the_plate(style, plate, flavour)
+
+
 def in_whole_layers(gap: float, layer: float) -> bool:
     """Misst dieser Abstand ganze Schichten? Sonst rundet ein Slicer, der in ganzen
     Schichten rechnet, ihn selbst (RM-583, RM-622), wie :func:`printed_gap` sagt."""
@@ -1751,8 +1766,13 @@ def _from_geometry(
         # Gefragt mit der Stützart, mit der das Teil druckt: Schlägt der Rat
         # Bäume vor und übernimmt der Kunde sie, liegt die Stütze auf den
         # Schichten des Modells (RM-622). Bei Cura ist das die Art der Platte
-        # (:func:`on_the_plate`, Nachtrag RM-584).
-        printed = on_the_plate(printed_style(settings, advice, declined), plate_style, flavour)
+        # (:func:`contact_style`, Nachtrag RM-584).
+        printed = contact_style(
+            printed_style(settings, advice, declined),
+            printed_style(settings, advice),
+            plate_style,
+            flavour,
+        )
         advice += _support_contact(
             settings,
             profile,

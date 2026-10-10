@@ -2673,6 +2673,21 @@ def test_on_the_plate_is_the_style_cura_prints() -> None:
     assert advise.on_the_plate("tree", "grid", None) == "tree"
 
 
+def test_the_contact_follows_curas_plate_even_where_the_style_is_declined() -> None:
+    """Unter einer gestützten Cura-Platte druckt jedes Netz, das Stützen will, deren
+    Art, auch wenn der Kunde die Zeile zur Art ablehnt (Review des Nachtrags
+    RM-584); ohne Stützen auf der Platte und außerhalb von Cura gilt
+    ``on_the_plate``."""
+    assert advise.contact_style("none", "tree", "tree", "cura") == "tree"
+    assert advise.contact_style("none", "grid", "tree", "cura") == "tree"
+    assert advise.contact_style("none", "tree", "auto", "cura") == "grid"
+    assert advise.contact_style("none", "none", "tree", "cura") == "none", "will keine Stützen"
+    assert advise.contact_style("none", "tree", "none", "cura") == "none", "Platte ohne Stützen"
+    assert advise.contact_style("tree", "tree", "none", "cura") == "grid"
+    assert advise.contact_style("none", "tree", None, "cura") == "none"
+    assert advise.contact_style("none", "tree", "tree", "orca") == "none"
+
+
 def test_on_the_plate_names_the_trees_the_file_and_the_program_name() -> None:
     """Curas Baum steht an drei Stellen: in ``on_the_plate``, in der Auskunft
     ``handover.tree_styles`` (die ``_cura_prints_alike`` fragt) und in der

@@ -8599,6 +8599,52 @@ def test_cura_asks_again_only_where_the_plate_changes_the_print(
     assert len(calls) == asked, calls
 
 
+@pytest.mark.parametrize("earlier", ["tree", None])
+def test_a_declined_style_row_asks_the_contact_with_curas_plate(earlier: str | None) -> None:
+    """Hat der Kunde früher Bäume übernommen und lehnt er jetzt „Baum → Gitter“
+    ab, druckt Cura beide Netze mit Baum. Die Stacheln fragten den Kontakt mit
+    „aus“ und bekamen keine Spitzenluft (Review des Nachtrags RM-584).
+    Gegenprobe: Ohne übernommene Stützen druckt die Platte keine, und niemand
+    bekommt Luft über Bäumen."""
+    from app.core.types import SceneObject
+    from tests.helpers import brick, on_bed
+
+    profile = profiles.make_profile("centauri-carbon-2", "pla")
+    settings = print_settings.resolve(profile)
+    if earlier is not None:
+        settings = print_settings.with_accepted(settings, "support.style", earlier)
+    mushroom = on_bed(
+        brick(8.0, 8.0, 12.0, (0.0, 0.0, 6.0)), brick(40.0, 40.0, 2.0, (0.0, 0.0, 13.0))
+    )
+    bodies = (SceneObject(id="obj_pilz", name="Pilz", mesh=mushroom), _spiky("Stacheln", 70.0))
+    from app.ui.print_settings_dialog import _AdviceWorker
+
+    worker = _AdviceWorker(
+        bodies,
+        settings,
+        profile,
+        None,
+        {},
+        (),
+        (),
+        {},
+        flavour="cura",
+        declined=frozenset({"support.style"}),
+    )
+    got: list[list[Any]] = []
+    worker.done.connect(lambda entries, _results: got.append(entries))
+    worker.work()
+    rows = {entry.path: entry for entry in got[0]}
+
+    tip = "Feine Spitzen brauchen mehr Luft über den Baumstützen."
+    if earlier is None:
+        assert all(entry.reason != tip for entry in rows.values())
+        return
+    assert handover.values_for(settings, profile, "cura")["support_structure"] == "tree"
+    assert (rows["support.z_gap"].value, rows["support.z_gap"].reason) == (pytest.approx(0.4), tip)
+    assert getattr(rows["support.z_gap"], "parts", ()) == ("Stacheln",)
+
+
 @pytest.mark.parametrize("kind", ["auto", "skirt"])
 def test_without_a_slicer_the_dialog_advises_for_its_actual_export(
     tmp_path: Path, kind: str

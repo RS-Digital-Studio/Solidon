@@ -1503,11 +1503,12 @@ def _advice_identity(entry: SettingAdvice) -> object:
 @dataclass(slots=True)
 class _BodyRules:
     """Der Rat eines Körpers je Spule: was in die Platte geht, was ins Filament,
-    und mit welcher Stützart jede Spule druckt (:func:`advise.printed_style`)."""
+    und mit welcher Stützart jede Spule druckt, mit und ohne die Ablehnungen des
+    Kunden (:func:`advise.printed_style`, :func:`advise.contact_style`)."""
 
     own: list[tuple[PrintSettings, Sequence[SettingAdvice]]]
     filament: list[tuple[MaterialSlot, PrintSettings, Sequence[SettingAdvice]]]
-    printed: list[str]
+    printed: list[tuple[str, str]]
 
 
 class _AdviceWorker(Worker):
@@ -1670,7 +1671,7 @@ class _AdviceWorker(Worker):
                     plate_style=plate,
                 )
                 style = advise.printed_style(process.settings, entries, self.declined)
-                done.printed.append(style)
+                done.printed.append((style, advise.printed_style(process.settings, entries)))
                 # Was das Programm unter den Bäumen dieses Körpers nicht druckt,
                 # schlägt der Dialog nicht vor — je Körper wie der Export
                 # (``writer.part_advice``, RM-622).
@@ -1778,14 +1779,15 @@ class _AdviceWorker(Worker):
             # flachen Decke des Pilzes zu Gitter, fragen Abstand, Spitzenluft
             # und Baumwände mit Gitter, wie der Export (Nachtrag RM-584). Neu
             # gefragt wird nur ein Körper, den Cura damit anders druckt —
-            # „automatisch“ und Hybrid fragen unter Gitter wie Gitter.
+            # „automatisch“ und Hybrid fragen unter Gitter wie Gitter —, auch
+            # einer, dessen Art der Kunde abgelehnt hat (``contact_style``).
             plate_style = advise.printed_style(self.settings, plate_advice, self.declined)
             changed = False
             for index, measure in enumerate(measured):
                 if any(
-                    advise.on_the_plate(style, plate_style, self.flavour)
+                    advise.contact_style(style, wanted, plate_style, self.flavour)
                     != advise.on_the_plate(style, style, self.flavour)
-                    for style in ruled[index].printed
+                    for style, wanted in ruled[index].printed
                 ):
                     self.cancelled.raise_if_cancelled()
                     ruled[index] = rules(*measure, plate_style)
