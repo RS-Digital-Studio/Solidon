@@ -1122,6 +1122,65 @@ def test_the_report_keeps_its_analysis_after_undo_under_a_tight_bound(profile: P
     )
 
 
+def test_a_reopened_history_keeps_only_its_newest_step_whole(
+    profile: Profile, tmp_path: Path
+) -> None:
+    """Von der Platte geholt, gibt ein älterer Stand seine Ableitungen ab, sobald der nächste kommt.
+
+    Im Speicher teilt ein bewegtes Netz Kantentabellen und Nachbarschaften mit
+    seinem Quellnetz (``transform._carry_cache``); von der Platte gelesen
+    rechnet jeder Stand sie für sich (``_warm_figures``) und hielt sie: am
+    Spiderman rund 290 MB je Verschieben, nach vier Schritten 1,1 GB mehr als
+    derselbe Verlauf im Speicher (RM-698). Das Ergebnis bleibt dasselbe.
+    """
+    import numpy as np
+    import trimesh
+
+    from app.core.bootstrap import load_operations
+    from app.core.geom.mesh import RELEASABLE, MeshCodec, as_mesh_data
+    from app.core.scene import History, OperationDraft, evaluate
+    from app.core.scene.project import ProjectSources, new_project
+    from app.core.types import Source
+
+    load_operations()
+    project = new_project("centauri-carbon-2", "petg")
+    project.document.sources["src_1"] = Source(
+        id="src_1", kind="import", path="sources/ball.stl", sha256=""
+    )
+    body = trimesh.creation.icosphere(subdivisions=3, radius=20.0)
+    project.sources["src_1"] = trimesh.exchange.stl.export_stl(body)
+    history = History(project.document)
+    history.apply("Laden", [OperationDraft(op="load", params={"source": "src_1", "unit": "mm"})])
+    sources = ProjectSources(project)
+    warm = ResultCache(disk=DiskCache(codec=MeshCodec(), directory=tmp_path / "cache"))
+    target = next(
+        iter(evaluate(project.document, profile, sources=sources, cache=warm).scene.objects)
+    )
+    for _step in range(3):
+        history.apply(
+            "Verschieben",
+            [OperationDraft(op="translate_object", inputs=(target,), params={"dx": 2.0})],
+        )
+        computed = evaluate(project.document, profile, sources=sources, cache=warm)
+
+    cold = ResultCache(disk=DiskCache(codec=MeshCodec(), directory=tmp_path / "cache"))
+    read = evaluate(project.document, profile, sources=sources, cache=cold)
+
+    assert cold.statistics.disk_hits == 4, "Voraussetzung: jeder Stand kommt von der Platte"
+    shown = as_mesh_data(read.scene.objects[target].mesh)
+    entries = list(cold._entries.values())
+    held = [set(as_mesh_data(entry.objects[0].mesh).raw._cache.cache) for entry in entries]
+    assert all(not keys & RELEASABLE for keys in held[:-1]), [
+        sorted(keys & RELEASABLE) for keys in held[:-1]
+    ]
+    assert entries[-1].objects[0].mesh is read.scene.objects[target].mesh
+    assert held[-1] & RELEASABLE, "der gezeigte Stand bleibt warm"
+    expected = as_mesh_data(computed.scene.objects[target].mesh)
+    assert np.array_equal(shown.raw.vertices, expected.raw.vertices)
+    assert np.array_equal(shown.raw.faces, expected.raw.faces)
+    assert read.scene.objects[target].features == computed.scene.objects[target].features
+
+
 def test_secondary_material_calibration_and_role_are_part_of_the_hash(profile: Profile) -> None:
     """Eine geänderte Einlagenkalibrierung darf kein Ergebnis der alten Passung laden."""
     operation = Operation(id=1, op="material_pair")

@@ -498,6 +498,8 @@ class ResultCache:
         """Je Schlüssel die zuletzt gemessenen Bytes und woran die Messung hing
         (:func:`_held_signature`)."""
         self._disk = disk
+        self._last_disk_hit: str | None = None
+        """Der Schlüssel des letzten Plattentreffers (:meth:`_lean_earlier_disk_hit`)."""
         self._refusals: OrderedDict[str, AppError] = OrderedDict()
         """Das Urteil der vollen Kette über Schritte, an denen sie gescheitert ist (RM-534).
 
@@ -550,11 +552,46 @@ class ResultCache:
             if from_disk is not None:
                 with self._lock:
                     self.statistics.disk_hits += 1
+                    released = self._lean_earlier_disk_hit(key)
                     self._store(key, from_disk)
+                    self._last_disk_hit = key
+                if released:
+                    from app.core.memory import note_released
+
+                    note_released(released)
                 return from_disk
         with self._lock:
             self.statistics.misses += 1
         return None
+
+    def _lean_earlier_disk_hit(self, key: str) -> int:
+        """Nur mit gehaltenem Schloss — der vorige Plattentreffer gibt seine Ableitungen ab.
+
+        Eine Auswertung geht den Verlauf von vorn durch; kommt der nächste
+        Stand von der Platte, ist der vorige nur noch Eintrag. Im Speicher
+        teilte ein bewegtes Netz Kantentabellen und Nachbarschaften mit seinem
+        Quellnetz (``transform._carry_cache``), von der Platte gelesen hält
+        jeder Stand eigene (``_warm_figures``, die Erkennung am geladenen
+        Netz): am Spiderman rund 290 MB je Verschieben, beim Öffnen eines
+        Verlaufs mit vier Schritten 1,1 GB mehr als derselbe Verlauf im
+        Speicher (RM-698). Der jüngste Treffer bleibt ganz — er ist der
+        gezeigte, und Fenster und Prüfbericht lesen ihn gleich. Gibt die
+        Bytes zurück, die dabei losgelassen werden.
+        """
+        earlier = self._last_disk_hit
+        if earlier is None or earlier == key:
+            return 0
+        entry = self._entries.get(earlier)
+        if entry is None:
+            return 0
+        loose = [0]
+        held_by(entry, (), set(), loose)
+        leaner = _leaner(entry, ())
+        if leaner is entry:
+            return 0
+        self._entries[earlier] = leaner
+        self._held.pop(earlier, None)
+        return loose[0]
 
     def put(self, key: str, result: CachedResult, *, to_disk: bool = False) -> None:
         """Legt ein Ergebnis ab — im Speicher immer, auf der Platte auf Verlangen.
