@@ -50,11 +50,13 @@ scrive in `website/version.json`.
 - Dopo aver trascinato la maniglia di un'anteprima, nessun numero resta sopra la vista. Un numero digitato durante il trascinamento sposta l'anteprima, non il corpo scelto.
 - Dopo *Ripara e riprova* e percorsi simili, la cronologia non chiama più «eliminato» un passaggio che continua a calcolare. Se la catena si ferma di nuovo, il passaggio è segnato.
 - Il pulsante *Filamenti* sta ora nell'intestazione. Elenca i filamenti del progetto e porta al magazzino filamenti.
-- Un altro filamento si vede subito, anche su blocchi e corpi STEP, e Solidon non ricalcola nulla per questo. I corpi selezionati mostrano il colore del filamento sotto l'evidenziazione.
+- Un altro filamento cambia solo il colore, anche su blocchi e corpi STEP. La forma non viene ricalcolata. I corpi selezionati mostrano il colore del filamento sotto l'evidenziazione.
 - Nella linguetta *Selezione*, il campo del filamento assegna solo con un clic o Invio. Le frecce e la digitazione scorrono soltanto l'elenco, e la rotellina scorre la linguetta.
 - Nelle versioni tradotte, *Nuovo filamento* non scorre più di lato quando la finestra è più bassa del suo contenuto.
 - I modelli grandi si caricano molto più velocemente e richiedono meno memoria, anche con una cronologia lunga e su computer con 8 GB.
 - Anche in una cronologia lunga, un nuovo passaggio richiede appena più tempo del primo.
+- Sui modelli con migliaia di caratteristiche, lo spostamento e gli altri passaggi che non cambiano la forma finiscono fino a due volte più in fretta.
+- Dopo la riapertura di un progetto, il rapporto di verifica indica ancora in quale posto libero è finito un modello inserito.
 - Annulla e ripristina sono più veloci, e la memoria non più necessaria si libera subito.
 - Riparare e risolvere le sovrapposizioni è fino a quattro volte più veloce sui modelli grandi, ed esportare in 3MF è molto più veloce.
 - L'area di lavoro viene visualizzata più rapidamente quando si aprono file 3MF di grandi dimensioni.
@@ -72,6 +74,7 @@ scrive in `website/version.json`.
 - Vengono offerti solo gli slicer con cui Solidon lavora, più gli slicer per resina come ChituBox e Lychee. Ora vale anche Bambu Studio come AppImage.
 - Il codice di avvio e il volume di stampa vengono solo dalla tua stampante, non da un altro modello della stessa serie.
 - La finestra di stampa assegna i profili dello slicer molto più in fretta, all'apertura e dopo ogni cambio di slicer.
+- L’esportazione 3MF rilegge i profili dello slicer solo se lì è cambiato qualcosa, ed è molto più veloce.
 - Il tempo di stampa stimato è più vicino a quello dello slicer, molto più vicino per i pezzi con supporti.
 - Il controllo che supporti e skirt stiano sul piano ora misura solo sotto gli sbalzi. I pezzi vicini al bordo non ricevono più un avviso senza motivo.
 - I suggerimenti accettati non lasciano quasi più senza supporto gli sbalzi che ne hanno bisogno. *Tenere liberi i canali* blocca solo lo spazio da cui un supporto non si potrebbe più togliere.

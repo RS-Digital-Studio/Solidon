@@ -50,11 +50,13 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Depois de arrastar a pega de uma pré-visualização, nenhum número fica sobre a vista. Um número escrito durante o arrasto move a pré-visualização, não o corpo escolhido.
 - Depois de *Reparar e tentar de novo* e caminhos semelhantes, o histórico já não chama «eliminado» a um passo que continua a calcular. Se a cadeia voltar a parar, o passo fica marcado.
 - O botão *Filamentos* está agora no cabeçalho. Lista os filamentos do projeto e leva ao inventário de filamentos.
-- Outro filamento aparece de imediato, também em blocos e corpos STEP, e o Solidon não recalcula nada por isso. Os corpos selecionados mostram a cor do filamento sob o realce.
+- Outro filamento muda apenas a cor, também em blocos e corpos STEP. A forma não é recalculada. Os corpos selecionados mostram a cor do filamento sob o realce.
 - No separador *Seleção*, o campo de filamento só atribui com um clique ou Enter. As setas e a escrita apenas percorrem a lista, e a roda do rato desloca o separador.
 - Nas versões traduzidas, *Novo filamento* já não se desloca para o lado quando a janela é mais baixa do que o conteúdo.
 - Os modelos grandes carregam visivelmente mais depressa e precisam de menos memória, também com um histórico longo e em computadores com 8 GB.
 - Mesmo num histórico longo, um passo novo quase não demora mais a calcular do que o primeiro.
+- Em modelos com milhares de características, mover e outros passos que não alteram a forma terminam até duas vezes mais depressa.
+- Ao reabrir um projeto, o relatório de verificação continua a indicar para que lugar livre foi um modelo inserido.
 - Desfazer e refazer são mais rápidos, e a memória que já não é precisa fica logo livre.
 - Reparar e resolver sobreposições é até quatro vezes mais rápido em modelos grandes, e exportar em 3MF é bastante mais rápido.
 - A área de trabalho aparece mais depressa ao abrir ficheiros 3MF grandes.
@@ -72,6 +74,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Só são oferecidos os slicers com que o Solidon trabalha, além de slicers de resina como o ChituBox e o Lychee. O Bambu Studio em AppImage passa a contar também.
 - O código de início e o volume de impressão vêm só da sua impressora, não de outro modelo da mesma série.
 - O diálogo de impressão atribui os perfis do slicer muito mais depressa, ao abrir e após cada mudança de slicer.
+- A exportação 3MF só volta a ler os perfis do slicer se algo mudou lá, e é bastante mais rápida.
 - O tempo de impressão estimado está mais perto do do slicer, muito mais perto em peças com suportes.
 - A verificação do espaço para suportes e skirt na mesa mede agora só sob as saliências. As peças junto ao rebordo já não recebem um aviso sem razão.
 - As sugestões aceites quase já não deixam sem suporte as saliências que precisam dele. *Manter os canais livres* só bloqueia o espaço de onde um suporte já não se conseguiria retirar.

@@ -126,9 +126,10 @@ from app.core.errors import (
     UserError,
     ValidationError,
 )
-from app.core.export import handover, manufacturer, readback
+from app.core.export import handover, manufacturer, readback, slicer_profiles
 from app.core.export.handover import GCODE_SUFFIXES as _CORE_GCODE_SUFFIXES
 from app.core.export.handover import SliceOutcome, override_for, with_slot_override
+from app.core.export.slicer_keys import SlicerFlavour
 from app.core.export.writer import (
     ExportFormat,
     ExportPlan,
@@ -1471,6 +1472,57 @@ class _ChosenSetup:
 
     key: tuple[object, ...]
     setup: handover.SlicerSetup | None
+    signature: object = None
+    """Die Signatur des Profilbestands, aus dem die Wahl kam
+    (:func:`slicer_profiles.stock_signature`). Legt der Kunde im Slicer ein
+    Profil an oder benennt das gewählte um, passt sie nicht mehr, und Export
+    und Grundlage leiten die Wahl neu her (Review RM-670)."""
+    stock: tuple[Path, SlicerFlavour] | None = None
+    """Wessen Bestand gefragt wurde — auch, wenn die Wahl ``None`` ergab: Der
+    Slicer ist da und kennt den Drucker nicht. Legt der Kunde ihn dort an, wie
+    Solidon es ihm rät, muss der nächste Export das sehen (Review RM-670 N1).
+    ``None`` nur ohne Slicer, dessen Bestand Solidon liest; einen neu
+    gefundenen meldet der Stand der Programmsuche im Schlüssel."""
+
+    def current(self) -> bool:
+        """Gilt die Wahl noch für den Bestand, wie er jetzt ist?"""
+        if self.stock is None or self.signature is None:
+            return True
+        executable, flavour = self.stock
+        return slicer_profiles.stock_signature(flavour, executable) == self.signature
+
+
+def _stock_now() -> tuple[tuple[Path, SlicerFlavour] | None, object]:
+    """Der Slicer, dessen Bestand eine Wahl befragt, und dessen Signatur — vor
+    dem Lesen erhoben, damit eine Änderung währenddessen die Wahl verwirft.
+
+    Derselbe Slicer wie in :func:`remembered_setup`; im Lesedurchgang teilen
+    sich Merker und Wahl die Signatur, sie kostet dann nichts.
+    """
+    program = tools.slicer_program()
+    if program is None:
+        return None, None
+    setup = handover.detect(program)
+    if handover.only_opens(setup):
+        return None, None
+    return (
+        (setup.executable, setup.flavour),
+        slicer_profiles.stock_signature(setup.flavour, setup.executable),
+    )
+
+
+def _chosen_with_stock(
+    key: tuple[object, ...],
+    ui_settings: Any,
+    material: str,
+    printer: str,
+    cancelled: CancelSignal,
+) -> _ChosenSetup:
+    """Die Wahl aus :func:`remembered_setup` mit dem Stand des Bestands, aus dem
+    sie kam — für den Grundlagenarbeiter und den Export, der sie erneuert."""
+    stock, signature = _stock_now()
+    setup = remembered_setup(ui_settings, material, printer, cancelled=cancelled)
+    return _ChosenSetup(key, setup, signature, stock)
 
 
 def _without_stage(key: tuple[object, ...]) -> tuple[object, ...]:
@@ -1490,8 +1542,9 @@ class _FoundationWorker(Worker):
     Slicersuche im Druckdialog läuft aus demselben Grund seit dem 13.09.2026
     in ``_SlicerWorker``.
 
-    Ist die Einrichtung für diesen Schlüssel schon bekannt (``chosen``), wird
-    sie nicht neu hergeleitet: Ein Stufenwechsel kostet dann nur die Grundlage.
+    Ist die Einrichtung für diesen Schlüssel schon bekannt (``chosen``) und ihr
+    Bestand unverändert (:meth:`_ChosenSetup.current`), wird sie nicht neu
+    hergeleitet: Ein Stufenwechsel kostet dann nur die Grundlage.
     Abgelöst oder beim Schließen sagt das Fenster den Arbeiter ab
     (:meth:`cancel`); die Vorwahl hält zwischen ihren Schritten an, ein
     begonnenes Lesen des Bestands läuft zu Ende.
@@ -1521,17 +1574,24 @@ class _FoundationWorker(Worker):
         self.cancelled.cancel()
 
     def work(self) -> None:
+        # Ein Lesedurchgang für Vorwahl, Stufe und Grundlage (RM-670): Jeder
+        # Schritt öffnete sonst einen eigenen und las die Erbketten des
+        # Herstellers neu.
+        with slicer_profiles.single_read():
+            self._in_one_read()
+
+    def _in_one_read(self) -> None:
         chosen = self._chosen
-        if chosen is None:
+        # Eine Wahl aus einem Bestand, der sich seitdem geändert hat, gilt
+        # nicht mehr — auch nicht für einen Stufenwechsel (Review RM-670 N2).
+        if chosen is None or not chosen.current():
             try:
-                chosen = _ChosenSetup(
+                chosen = _chosen_with_stock(
                     _without_stage(self._key),
-                    remembered_setup(
-                        self._ui,
-                        self._profile.material.id,
-                        self._profile.printer.id,
-                        cancelled=self.cancelled,
-                    ),
+                    self._ui,
+                    self._profile.material.id,
+                    self._profile.printer.id,
+                    self.cancelled,
                 )
             except OperationCancelled:
                 return
@@ -1542,6 +1602,34 @@ class _FoundationWorker(Worker):
         self.done.emit(
             self._key, manufacturer.base_settings(self._profile, self._quality, setup), chosen
         )
+
+
+def _warm_the_slicer() -> None:
+    """Den Slicer suchen und seinen Druckerbestand lesen, bevor der erste Export fragt.
+
+    Jeder 3MF-Export fragt, ob der Slicer den Drucker kennt, und das hieß:
+    rund 1 550 Maschinenprofile der Orca-Familie lesen, eine bis drei Sekunden
+    (RM-670). Gemerkt wird der Bestand im Kern (``slicer_profiles._holdings``);
+    dieser Faden füllt den Merker, nachdem das Fenster steht und keine
+    Auswertung läuft (:meth:`MainWindow._warm_slicer`).
+
+    **Ein Daemon-Faden, nicht die Leine**, wie die Prüfung von „Zuletzt
+    geöffnet": Gelesen wird auch unter ``%APPDATA%``, das auf einem Netzlaufwerk
+    liegen kann, und ein ``QThread``, der beim Beenden darin hängt, reißt den
+    Prozess mit. Scheitert das Lesen, ist nichts versäumt — der Export liest
+    dann selbst.
+    """
+    try:
+        program = tools.slicer_program()
+        if program is None:
+            return
+        setup = handover.detect(program)
+        if handover.only_opens(setup):
+            return
+        slicer_profiles.find_profiles(setup.executable, setup.flavour, ("machine",))
+        slicer_profiles.known_printers(setup.flavour, setup.executable)
+    except Exception as error:  # ein Vorauslesen ist kein Absturzbericht wert, siehe oben
+        _log.info("slicer warmup failed: %s", error)
 
 
 class _DownloadWorker(Worker):
@@ -1647,6 +1735,10 @@ _BACKGROUND_PROGRESS: Final = frozenset({"generate"})
 #: selbst tut, sagte bisher nur eine Blase, ein Hinweis gar nichts.
 _WORKED_ALONGSIDE: Final = frozenset({"generate", "agent"})
 
+#: Wann nach dem Start der Slicerbestand gelesen wird (:meth:`MainWindow._warm_slicer`):
+#: nach dem Vorabimport der Geometriebibliotheken, der rund eine Sekunde dauert.
+SLICER_WARMUP_DELAY_MS: Final = 2000
+
 #: Wie lange eine Ansage neben einem solchen Lauf in der Zeile steht —
 #: so lange wie ihre Blase mindestens (``_ActionNotice.show_message``).
 SPOKEN_HOLD_MS: Final = 8000
@@ -1736,6 +1828,9 @@ class _ExportWorker(Worker):
         self._phase_lock = Lock()
         self._writing = False
         self.receipt: Finding | None = None
+        self.renewed: _ChosenSetup | None = None
+        """Die Wahl, die dieser Export neu hergeleitet hat, weil sich der Bestand
+        seit ``chosen`` geändert hatte (:meth:`_assembly_in_one_read`)."""
 
     def cancel(self) -> bool:
         """Nimmt einen Abbruch nur vor dem gemeinsam geschützten Schreibbeginn an."""
@@ -1872,17 +1967,44 @@ class _ExportWorker(Worker):
         Hauptfenster hat sie für denselben Drucker, dasselbe Material und
         dieselbe Profilwahl schon (``chosen``). Abbrechbar ist sie wie die
         Vorbereitung über ``cancelled``, zwischen ihren Schritten.
+
+        **Ein Lesedurchgang für den ganzen Export** (RM-670): Vorwahl, Stufe,
+        Grundlage und Datei öffneten je einen eigenen und lasen die Erbketten
+        des Herstellers jedes Mal neu. Am ElegooSlicer kostete der zweite Export
+        eines Würfels so 1,7 s statt 0,7 s (unter Fremdlast gemessen).
         """
-        setup = (
-            self._chosen.setup
-            if self._chosen is not None
-            else remembered_setup(
+        with slicer_profiles.single_read():
+            return self._assembly_in_one_read()
+
+    def _assembly_in_one_read(self) -> tuple[list[Path], list[Finding]]:
+        """Der Export aus :meth:`_assembly`, in dessen Lesedurchgang.
+
+        Hat sich der Bestand seit der Wahl des Hauptfensters geändert, leitet
+        er sie neu her und gibt sie als :attr:`renewed` zurück: Das Fenster
+        übernimmt sie, damit Zahlenzeile, Prüfbericht und der nächste Export
+        mit derselben Wahl rechnen wie diese Datei (Review RM-670 N2).
+        """
+        chosen = self._chosen
+        setup: handover.SlicerSetup | None
+        if chosen is not None and chosen.current():
+            setup = chosen.setup
+        elif chosen is not None:
+            renewed = _chosen_with_stock(
+                chosen.key,
+                self._ui_settings,
+                self._material,
+                self._profile.printer.id,
+                self.cancelled,
+            )
+            self.renewed = renewed
+            setup = renewed.setup
+        else:
+            setup = remembered_setup(
                 self._ui_settings,
                 self._material,
                 self._profile.printer.id,
                 cancelled=self.cancelled,
             )
-        )
         if setup is None:
             found = tools.slicer_program()
             if found is not None:
@@ -3054,6 +3176,10 @@ class MainWindow(QMainWindow):
         self._export_waiting: tuple[Path, ExportFormat, Any] | None = None
         """Ein Export, der auf das nächste aktuelle Ergebnis wartet — Ziel,
         Format und das Projekt, für das er gemeint war (RM-352)."""
+        self._print_findings_after_export: Any = None
+        """Das Ergebnis, dessen Druckbefunde bis nach dem Export warten (RM-670)."""
+        self._slicer_warm_wanted = False
+        """Der Slicerbestand soll gelesen werden, sobald die Auswertung ruht (RM-670)."""
         self._history_shown: tuple[int, int, str | None] | None = None
         """Der Verlaufsstand beim letzten Bild (:meth:`_history_mark`) — ob eine
         verlorene Merkmalswahl Folge einer Handlung des Kunden ist."""
@@ -10107,7 +10233,14 @@ class MainWindow(QMainWindow):
             return
         self._export_waiting = None
         self._set_progress_state("export", active=False, cancellable=False, cancel_enabled=False)
-        target, export_format, project = waiting
+        try:
+            self._write_when_current(*waiting)
+        finally:
+            # Schreibt der Export, folgen die Befunde ihm; sonst kommen sie jetzt.
+            self._print_findings_after_export_ended()
+
+    def _write_when_current(self, target: Path, export_format: ExportFormat, project: Any) -> None:
+        """Der wartende Export, sobald das Ergebnis da ist — oder der Grund, warum nicht."""
         if self._close_requested or project is not self.session.project:
             return
         if not self.session.fine_current:
@@ -10134,6 +10267,7 @@ class MainWindow(QMainWindow):
                 "export", active=False, cancellable=False, cancel_enabled=False
             )
             self.announce(tr("Export abgebrochen."))
+            self._print_findings_after_export_ended()
             return
         if self._close_requested:
             self._export_attempt = None
@@ -10405,7 +10539,30 @@ class MainWindow(QMainWindow):
             if isValid(self) and not self._close_requested:
                 self._progress_idle()
                 self._update_actions()
+                self._adopt_renewed_choice(worker)
+                self._print_findings_after_export_ended()
         self._hold_until_done(worker)
+
+    def _adopt_renewed_choice(self, worker: Any) -> None:
+        """Die Wahl übernehmen, die der Export neu hergeleitet hat (Review RM-670 N2).
+
+        Hat sich der Bestand im Slicer geändert, schreibt der Export mit der
+        neuen Wahl. Behielte das Fenster die alte, rechneten Zahlenzeile und
+        Prüfbericht mit einem anderen Prozess als die Datei, und jeder weitere
+        Export leitete neu her — am ElegooSlicer 0,5 bis 0,7 s CPU je Export.
+        Übernommen wird nur, was zum jetzigen Drucker, Material und zur
+        Profilwahl gehört; die Grundlage rechnet danach neu.
+
+        ``getattr``: Auch ein Arbeiter ohne Export-Rumpf endet hier.
+        """
+        renewed = getattr(worker, "renewed", None)
+        if not isinstance(renewed, _ChosenSetup):
+            return
+        if renewed.key != _without_stage(self._foundation_key(print_settings.DEFAULT_QUALITY)):
+            return
+        self._chosen_setup = renewed
+        quality = self.effective_print_settings().quality
+        self._start_foundation(self._foundation_key(quality), quality)
 
     def action_catalog(self) -> None:
         """§24.3: die Bibliothek, die man sehen kann. Einen Baustein zu wählen
@@ -25596,7 +25753,18 @@ class MainWindow(QMainWindow):
 
         Ob die Szene Passungen trägt, fragt das Dokument hier im Hauptthread,
         mit den gebauten: Nur dann gehört der Hinweis zur Kalibrierung dazu.
+
+        **Nicht neben einem Export** (RM-670): Die Schichtanalyse nähme dem
+        Schreiben den Rechner, und das feine Ergebnis, auf das ein Export
+        wartet, löste sie genau dann aus. Sie folgt dem Export
+        (:meth:`_print_findings_after_export_ended`).
         """
+        if self._exporting or self._export_waiting is not None:
+            self._print_findings.cancel()
+            self._print_findings_after_export = result
+            self._update_review_status()
+            return
+        self._print_findings_after_export = None
         fitted = bool(fit_checks.fit_kinds_for(self.session.project.document, result.scene.objects))
         self._print_findings.start(
             result,
@@ -25606,6 +25774,21 @@ class MainWindow(QMainWindow):
             missing_basis=missing_profile_basis(self.session.project.document),
         )
         self._update_review_status()
+
+    def _print_findings_after_export_ended(self) -> None:
+        """Die zurückgestellten Druckbefunde rechnen, sobald kein Export mehr läuft oder wartet."""
+        result = self._print_findings_after_export
+        if (
+            result is None
+            or self._exporting
+            or self._export_waiting is not None
+            or self._close_requested
+            or not isValid(self)
+        ):
+            return
+        self._print_findings_after_export = None
+        if self._is_current_result(result) and result is not self.session.picture:
+            self._start_print_findings(result, self.effective_print_settings())
 
     def _print_profile(self, settings: PrintSettings) -> Profile:
         """Das Profil der Druckbefunde: das des Projekts mit dem Raster und der
@@ -25875,6 +26058,8 @@ class MainWindow(QMainWindow):
             self._run_click_after_evaluation()
             self._resume_map_after_idle()
             self._export_when_current()
+            if self._slicer_warm_wanted:
+                self._warm_slicer()
 
     def _follow_the_run_in_the_report(self) -> None:
         """Der Bericht sagt, wenn seine Zeilen zum vorigen Stand gehören (RM-534).
@@ -27956,6 +28141,23 @@ class MainWindow(QMainWindow):
         # nichts.
         self._usage.start()
         self._announce_the_sale()
+        # Hinter dem Vorabimport (``app._ImportWarmup``), nicht neben ihm.
+        QTimer.singleShot(SLICER_WARMUP_DELAY_MS, self, self._warm_slicer)
+
+    def _warm_slicer(self) -> None:
+        """Slicer und Druckerbestand im Hintergrund lesen, sobald keine Auswertung läuft (RM-670).
+
+        Der erste 3MF-Export fände den Bestand sonst ungelesen und trüge die
+        Sekunden selbst. Rechnet gerade eine Auswertung — ein beim Start
+        geöffnetes Modell —, wartet das Lesen auf ihr Ende.
+        """
+        if self._close_requested or not isValid(self):
+            return
+        if self.session.busy:
+            self._slicer_warm_wanted = True
+            return
+        self._slicer_warm_wanted = False
+        threading.Thread(target=_warm_the_slicer, name="slicer-warmup", daemon=True).start()
 
     def _announce_the_sale(self) -> None:
         """Die letzte Demowoche sagt einmal je Sitzung, was danach kommt.
