@@ -158,13 +158,71 @@ def test_a_round_without_a_prepared_body_asks_no_worker(workers: Any) -> None:
     assert parallel.statistics().get("tasks", 0) == before
 
 
-def test_the_round_splits_by_weight_without_losing_a_patch() -> None:
-    """Zusammenhängende Teile, jeder Fleck genau einmal, höchstens so viele Teile wie verlangt."""
+def test_the_round_bins_by_weight_without_losing_a_patch() -> None:
+    """Jeder Fleck genau einmal, je Fächer in der Folge der Runde, höchstens so viele Fächer
+    wie verlangt — und der schwerste Fleck teilt sein Fach mit keinem zweiten großen."""
     weights = [5.0, 1.0, 1.0, 1.0, 4.0, 2.0, 2.0, 9.0]
     for parts in range(1, 10):
-        ranges = parallel.split(weights, parts)
-        assert len(ranges) <= parts
-        assert [index for part in ranges for index in part] == list(range(len(weights)))
+        filled = parallel.bins(weights, parts)
+        assert 0 < len(filled) <= parts
+        assert sorted(index for part in filled for index in part) == list(range(len(weights)))
+        assert all(part == sorted(part) for part in filled)
+    assert not any(7 in part and 0 in part for part in parallel.bins(weights, 2))
+    assert parallel.bins([], 3) == []
+    assert parallel.bins(weights, 0) == []
+
+
+def test_idle_workers_end_and_the_next_detection_starts_them_again(
+    workers: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Nach der Ruhezeit stehen keine Arbeiter mehr (ihr Speicher geht an das System zurück),
+    und die nächste Erkennung startet sie neu und erkennt Bit für Bit dasselbe (M4)."""
+    import time
+
+    mesh = _corpus("post_with_fillet.stl")
+    parallel.use_workers(False)
+    features.forget_cache()
+    alone = features.detect(_fresh(mesh))
+    parallel.use_workers(True, count=2)
+    monkeypatch.setattr(parallel, "IDLE_WORKER_SECONDS", 0.5)
+    features.forget_cache()
+    first = features.detect(_fresh(mesh))
+    started = parallel.statistics().get("started", 0)
+
+    deadline = time.monotonic() + 30.0
+    while parallel.statistics()["workers"] and time.monotonic() < deadline:
+        time.sleep(0.1)
+
+    assert parallel.statistics()["workers"] == 0, "die Arbeiter stehen nach der Ruhezeit noch"
+    tasks = parallel.statistics().get("tasks", 0)
+    features.forget_cache()
+    again = features.detect(_fresh(mesh))
+    assert repr(first) == repr(alone)
+    assert repr(again) == repr(alone)
+    assert parallel.statistics().get("started", 0) > started, "neu gestartet"
+    assert parallel.statistics().get("tasks", 0) > tasks, "die neuen Arbeiter haben gerechnet"
+
+
+def test_a_sequence_of_detections_keeps_its_workers(workers: Any) -> None:
+    """Innerhalb der Ruhezeit startet keine Erkennung ihre Arbeiter neu, gezählt statt gemessen."""
+    mesh = _corpus("post_with_fillet.stl")
+    before = parallel.statistics().get("started", 0)
+    tasks = parallel.statistics().get("tasks", 0)
+    starts = []
+    for _ in range(3):
+        features.forget_cache()
+        features.detect(_fresh(mesh))
+        assert parallel.statistics().get("tasks", 0) > tasks, "die Arbeiter haben gerechnet"
+        tasks = parallel.statistics().get("tasks", 0)
+        starts.append(parallel.statistics().get("started", 0) - before)
+
+    assert starts[0] > 0
+    assert starts == [starts[0]] * 3, "eine spätere Erkennung hat Arbeiter neu gestartet"
+    assert parallel.statistics()["workers"] == starts[0]
+    # Das Programmende (``app.ui.app._stop_perceive_workers``) räumt auch die Uhr ab.
+    assert parallel._POOL._timer is not None
+    assert parallel.shutdown() == starts[0]
+    assert parallel._POOL._timer is None
 
 
 def _asked_inside_detect(mesh: MeshData, weights: list[float]) -> dict[str, Any]:

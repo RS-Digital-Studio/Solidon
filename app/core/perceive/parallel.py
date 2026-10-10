@@ -16,8 +16,10 @@ wie der Hilfsprozess des Kerns (``kernel_process.HELPER_ENVIRONMENT``); die
 Erkennung ruft auf ihren Wegen kein BLAS, an dem eine Antwort hinge
 (``kern.md``, „Dieselbe Datei, dasselbe Teil“). Er prüft je Fleck, dass sein
 Abdruck dem des Aufrufers gleicht, und lässt sonst den Fleck aus. Nach jeder
-Aufgabe vergisst er Körper und Antworten: Sein Speicher wächst nicht über eine
-Aufgabe hinaus.
+Erkennung vergisst er Körper und Antworten: Sein Speicher wächst nicht über eine
+Erkennung hinaus. Zurück an das System gibt ihn erst das Ende des Prozesses —
+darum endet ein Arbeiter nach :data:`IDLE_WORKER_SECONDS` ohne Erkennung, und
+die nächste Runde startet ihn neu.
 
 Stirbt ein Arbeiter oder fehlt ihm Speicher, rechnet die Erkennung seine
 Flecken selbst — langsamer, mit demselben Ergebnis. Ein Abbruch beendet die
@@ -80,6 +82,17 @@ WORKER_MEMORY_SHARE: Final = 0.25
 #: Probe (``features.warm_worker``). Wer nicht antwortet, rechnet nicht mit.
 READY_SECONDS: Final = 60.0
 
+#: Nach wie vielen Sekunden ohne Erkennung die stehenden Arbeiter enden.
+#: Ein Arbeiter gibt den Speicher eines großen Körpers nicht an das System
+#: zurück (Ständer 0,23 GB, Eiffelturm 0,29 GB je Arbeiter, acht davon), bis
+#: er endet; ein Neustart kostet die nächste Runde rund 2 s Warten und acht
+#: Arbeiter zusammen 15 s Rechenzeit — so viel, wie sie an einem Ständer
+#: sparen. Drei Minuten tragen eine Folge von Schritten am selben Modell:
+#: Auswerten (13 bis 35 s an den Modellen, für die Arbeiter rechnen), Ergebnis
+#: ansehen, nächsten Schritt wählen. Wer länger pausiert, schneidet meist
+#: schon im Slicer, und der braucht den Speicher.
+IDLE_WORKER_SECONDS: Final = 180.0
+
 #: Die Umgebung eines Arbeiters: ein BLAS-Faden, wie der Hilfsprozess des Kerns.
 WORKER_ENVIRONMENT: Final = {"OPENBLAS_NUM_THREADS": "1"}
 
@@ -131,16 +144,6 @@ def worthwhile(triangles: int, patches: int) -> int:
         each = WORKER_BASE_BYTES + WORKER_BYTES_PER_TRIANGLE * triangles
         count = min(count, int(memory * WORKER_MEMORY_SHARE // each))
     return max(0, count)
-
-
-def warm_for(triangles: int) -> None:
-    """Arbeiter für einen Körper dieser Größe starten, bevor seine Flecken feststehen.
-
-    Ein frischer Arbeiter braucht eine bis zwei Sekunden, bis er bereitsteht —
-    so lange sucht die Erkennung noch Ebenen und Flecken. Wie viele Flecken
-    kommen, weiß sie da noch nicht; gestartet wird, was die Größe trägt.
-    """
-    warm(worthwhile(triangles, MOST_WORKERS * PATCHES_PER_TASK))
 
 
 @dataclass(frozen=True, slots=True)
@@ -218,38 +221,52 @@ class _Worker:
 
 
 class _Pool:
-    """Die Arbeiter dieses Prozesses; sie bleiben zwischen zwei Erkennungen stehen."""
+    """Die Arbeiter dieses Prozesses; sie bleiben zwischen zwei Erkennungen stehen,
+    bis :data:`IDLE_WORKER_SECONDS` lang keine sie gebraucht hat."""
 
     def __init__(self) -> None:
         self._lock = threading.Lock()
         self._workers: list[_Worker] = []
+        #: Wie viele Arbeiter gerade eine Runde hält (:meth:`take`).
+        self._out = 0
+        self._last_use = time.monotonic()
+        self._timer: threading.Timer | None = None
 
-    def start(self, count: int) -> None:
-        """So viele Arbeiter anlegen, dass ``count`` bereitstehen oder starten — ohne zu warten."""
+    def start(self, wanted: int) -> None:
+        """So viele Arbeiter anlegen, dass ``wanted`` bereitstehen oder starten — ohne zu warten."""
         with self._lock:
             self._workers = [worker for worker in self._workers if worker.process.is_alive()]
-            while len(self._workers) < count:
+            while len(self._workers) < wanted:
                 try:
                     self._workers.append(_Worker())
                 except OSError as problem:
                     _log.warning("perceive worker could not start: %s", problem)
-                    return
+                    break
+                count("started")
+            self._used()
 
-    def take(self, count: int) -> list[_Worker]:
-        """Bis zu ``count`` lebende Arbeiter für eine Runde; sie gehören dann dem Aufrufer."""
+    def take(self, wanted: int) -> list[_Worker]:
+        """Bis zu ``wanted`` lebende Arbeiter für eine Runde; sie gehören dann dem Aufrufer,
+        bis er sie mit :meth:`give_back` zurückgibt — auch die, die er beendet hat."""
         with self._lock:
             alive = [worker for worker in self._workers if worker.process.is_alive()]
-            taken, self._workers = alive[:count], alive[count:]
+            taken, self._workers = alive[:wanted], alive[wanted:]
+            self._out += len(taken)
+            self._used()
             return taken
 
-    def give_back(self, workers: Sequence[_Worker]) -> None:
+    def give_back(self, workers: Sequence[_Worker], *, taken: int) -> None:
+        """Die lebenden von ``taken`` genommenen Arbeitern zurück in den Vorrat."""
         with self._lock:
+            self._out -= taken
             self._workers.extend(worker for worker in workers if worker.process.is_alive())
+            self._used()
 
     def tell(self, message: tuple[Any, ...]) -> None:
         """Eine Nachricht ohne Antwort an jeden stehenden Arbeiter."""
         with self._lock:
             workers = list(self._workers)
+            self._used()
         for worker in workers:
             with contextlib.suppress(OSError):
                 worker.connection.send(message)
@@ -257,9 +274,47 @@ class _Pool:
     def shutdown(self) -> int:
         with self._lock:
             workers, self._workers = self._workers, []
+            if self._timer is not None:
+                self._timer.cancel()
+                self._timer = None
         for worker in workers:
             worker.stop()
         return len(workers)
+
+    def _used(self) -> None:
+        """Die Ruhezeit beginnt neu; die Uhr läuft, solange Arbeiter stehen. Unter dem Schloss."""
+        self._last_use = time.monotonic()
+        if self._timer is None and self._workers:
+            self._arm(IDLE_WORKER_SECONDS)
+
+    def _arm(self, seconds: float) -> None:
+        timer = threading.Timer(seconds, self._reap)
+        timer.daemon = True
+        timer.name = "solidon-perceive-idle"
+        self._timer = timer
+        timer.start()
+
+    def _reap(self) -> None:
+        """Beendet die stehenden Arbeiter, wenn die Ruhezeit um ist und keine Erkennung läuft.
+
+        Während einer Erkennung (ein Körper ist vorbereitet, eine Runde hält
+        Arbeiter) wartet die Uhr: Zwischen zwei Runden rechnet der Prozess
+        mitunter lange selbst, und die nächste Runde soll ihre Arbeiter finden.
+        """
+        with _PREPARED_LOCK:
+            detecting = _PREPARED[0] is not None
+        with self._lock:
+            self._timer = None
+            if not self._workers:
+                return
+            rest = IDLE_WORKER_SECONDS - (time.monotonic() - self._last_use)
+            if detecting or self._out or rest > 0:
+                self._arm(max(rest, CANCEL_POLL_SECONDS))
+                return
+            workers, self._workers = self._workers, []
+        for worker in workers:
+            worker.stop()
+        count("idle_stopped", len(workers))
 
     @property
     def size(self) -> int:
@@ -371,30 +426,6 @@ def bins(weights: Sequence[float], parts: int) -> list[list[int]]:
     return [sorted(part) for part in filled if part]
 
 
-def split(weights: Sequence[float], parts: int) -> list[range]:
-    """Die Flecken in höchstens ``parts`` zusammenhängende Teile gleichen Gewichts.
-
-    Zusammenhängend, weil die Flecken nach Größe geordnet kommen: Deckungsgleiche
-    Flecken stehen nebeneinander und landen meist bei demselben Arbeiter, der
-    den Zustand der Runde dann wie der eine Prozess fortschreibt.
-    """
-    if not weights or parts <= 0:
-        return []
-    total = float(sum(weights))
-    target = total / parts
-    ranges: list[range] = []
-    start = 0
-    running = 0.0
-    for index, weight in enumerate(weights):
-        running += weight
-        if running >= target * (len(ranges) + 1) and len(ranges) < parts - 1:
-            ranges.append(range(start, index + 1))
-            start = index + 1
-    if start < len(weights):
-        ranges.append(range(start, len(weights)))
-    return [part for part in ranges if len(part)]
-
-
 def run(
     arrays: Callable[[], Mapping[str, np.ndarray]],
     tasks: Sequence[Task],
@@ -419,6 +450,7 @@ def run(
     workers = _POOL.take(wanted)
     if not workers:
         return results
+    taken = len(workers)
     segment = None
     with _PREPARED_LOCK:
         prepared = _PREPARED[0]
@@ -429,7 +461,7 @@ def run(
             segment, layout = _pack(arrays())
         except (OSError, MemoryError) as problem:
             _log.warning("perceive workers get no body: %s", problem)
-            _POOL.give_back(workers)
+            _POOL.give_back(workers, taken=taken)
             return results
         name = segment.name if segment is not None else None
     pending = list(range(len(tasks)))
@@ -501,6 +533,7 @@ def run(
             worker.stop()
         for worker in lost:
             worker.stop()
+        _POOL.give_back((), taken=taken)
         raise
     finally:
         if segment is not None:
@@ -509,7 +542,7 @@ def run(
                 segment.unlink()
     for worker in lost:
         worker.stop()
-    _POOL.give_back(workers)
+    _POOL.give_back(workers, taken=taken)
     return results
 
 

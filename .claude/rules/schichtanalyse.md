@@ -249,6 +249,10 @@ Körper desselben Abdrucks (`_SPLIT_TARGETS`).
   rechnenden Prozess. Die Felder des Körpers (`_worker_arrays`)
   tragen alles, woraus ein Abdruck entsteht — ein neues mitgetragenes Maß
   kommt dorthin.
+- Stehende Arbeiter enden nach `IDLE_WORKER_SECONDS` ohne Erkennung, nie
+  während einer: Den Speicher eines großen Körpers gibt erst das Prozessende
+  zurück, und die Ruhezeit trägt eine Folge von Schritten am selben Modell
+  ohne Neustart.
 - Eine neue Runde für die Arbeiter ist eine Art in `answered_ahead` und bekommt
   in `tests/test_perceive_workers.py` den Gleichheitsfall samt weniger eigener
   Rechnungen.
