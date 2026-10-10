@@ -16,13 +16,6 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 `tools/make_download.py` toma el apartado de la versión actual y lo escribe en
 `website/version.json`.
 
-## 0.6.1
-
-### Imprimir y entregar al slicer
-
-- Donde cúpulas planas y formas pequeñas mostrarían escalones, Solidon sugiere capas finas solo allí. La sugerencia indica cuánto más dura la impresión.
-- Nuevo en los ajustes de impresión: *Capas finas* y *Grosor mínimo superior*, para que las caras superiores sobre capas finas queden cerradas.
-
 ## 0.6.0
 
 ### Manejo y sistema
@@ -117,6 +110,8 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - También con impresoras que PrusaSlicer o SuperSlicer no conocen, ambos calculan el tiempo de impresión con las aceleraciones entregadas, y el archivo indica el material de la bobina.
 - Incluso con el ordenador a plena carga, Solidon indica el motivo real al detener un slicer, en lugar de un tiempo agotado. Un archivo de impresión terminado se aprovecha.
 - El almacén de filamentos vuelve a reconocer un consumo descontado con Solidon 0.5.1 y pregunta antes de descontar otra vez la misma impresión.
+- Donde cúpulas planas y pendientes mostrarían escalones, Solidon sugiere capas finas solo allí. La sugerencia indica cuánto más tarda entonces la pieza.
+- Nuevo en los ajustes de impresión: *Capas finas* y *Grosor mínimo superior*, para que las caras superiores sobre capas finas queden cerradas.
 
 ### Roscas, taladros y piezas normalizadas
 

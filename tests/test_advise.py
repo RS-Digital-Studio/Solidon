@@ -2591,14 +2591,24 @@ def test_a_box_gets_no_fine_layers() -> None:
     "asked",
     [
         {"flavour": "cura"},
-        {"flavour": "orca", "whole_layers": True},
+        {"flavour": "orca", "whole_layers": True, "shared_layers": True},
+        {"flavour": "prusa", "shared_layers": True},
     ],
-    ids=["Cura", "Reinigungsturm"],
+    ids=["Cura", "Turm neben weiteren Teilen", "XL 2T neben weiteren Teilen"],
 )
 def test_no_fine_layers_where_the_slicer_cannot_follow(asked: dict[str, object]) -> None:
-    """Cura nimmt keine Höhenkurve, und ein Reinigungsturm verlangt dieselben
-    Schichten auf der ganzen Platte: dort kein Rat."""
+    """Cura nimmt keine Höhenkurve, und wo ein Reinigungsturm neben weiteren
+    Teilen steht, verlangt der Slicer dieselben Schichten für alle: dort kein
+    Rat."""
     assert _fine_advice(_dome(), **asked) == []
+
+
+def test_a_part_alone_beside_its_tower_gets_fine_layers() -> None:
+    """Ein bemalter Körper allein auf der Platte hat seinen Turm
+    (``whole_layers``), und die Slicer drucken seine Kurve trotzdem — sie
+    vergleichen nur zwischen mehreren Objekten (Review RM-586 F2)."""
+    paths = {entry.path for entry in _fine_advice(_dome(), flavour="orca", whole_layers=True)}
+    assert "layers.fine_layer_height" in paths
 
 
 def test_no_fine_layers_under_organic_trees() -> None:

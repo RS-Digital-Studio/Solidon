@@ -251,6 +251,7 @@ def advise(
     declined: Collection[str] = (),
     allowances: Collection[str] = (),
     trees: Collection[str] | None = None,
+    shared_layers: bool = False,
 ) -> list[SettingAdvice]:
     """Was an diesen Einstellungen für dieses Teil nicht passt (§29).
 
@@ -268,6 +269,8 @@ def advise(
     dieses Teils auf ganze Schichten rundet, weil dort ein Reinigungsturm steht;
     ``organic`` sind die Stützarten, die das Programm als organische Bäume auf
     den Schichten des Modells druckt (:func:`rounds_to_whole_layers`, RM-622).
+    ``shared_layers`` sagt, dass der Slicer allen Teilen dieser Platte dieselben
+    Schichten abverlangt (:func:`_fine_layers`, RM-586).
     ``declined`` sind Pfade, deren Vorschlag der Kunde nicht übernimmt — im
     Druckdialog abgewählt, im Export nicht übernommen: Abstand und untere
     Trennschicht fragen dann mit der eigenen Stützart (:func:`printed_style`).
@@ -292,7 +295,16 @@ def advise(
     advice += _from_material(settings, profile)
     if result is not None:
         advice += _from_geometry(
-            settings, profile, result, bounds, flavour, whole_layers, organic, declined, trees
+            settings,
+            profile,
+            result,
+            bounds,
+            flavour,
+            whole_layers,
+            organic,
+            declined,
+            trees,
+            shared_layers,
         )
     if fit_kinds:
         advice += _from_fits(settings, fit_kinds)
@@ -1496,6 +1508,7 @@ def _from_geometry(
     organic: Collection[str] = (),
     declined: Collection[str] = (),
     trees: Collection[str] | None = None,
+    shared_layers: bool = False,
 ) -> list[SettingAdvice]:
     """Der eigentliche Gewinn: das Teil bestimmt seine Einstellungen mit."""
     advice: list[SettingAdvice] = []
@@ -1769,7 +1782,7 @@ def _from_geometry(
         profile,
         result,
         flavour,
-        whole_layers,
+        shared_layers,
         printed_style(settings, advice, declined),
         organic,
     )
@@ -2014,7 +2027,7 @@ def _fine_layers(
     profile: Profile,
     result: SliceResult,
     flavour: SlicerFlavour | None,
-    whole_layers: bool,
+    shared_layers: bool,
     style: str,
     organic: Collection[str],
 ) -> list[SettingAdvice]:
@@ -2023,8 +2036,10 @@ def _fine_layers(
 
     Vorgeschlagen, wo die Schichtanalyse flache Schrägen mit sichtbaren Stufen
     findet (:func:`fine_layers.layer_bands`), mit dem Anteil, um den der Druck
-    länger dauert. Nicht neben einem Reinigungsturm (``whole_layers``): Er
-    verlangt auf der ganzen Platte dieselben Schichten. Und nicht unter
+    länger dauert. Nicht, wo der Slicer allen Teilen der Platte dieselben
+    Schichten abverlangt (``shared_layers``): Reinigungsturm und mehr als ein
+    Objekt (``handover.same_layers_required``); ein Körper allein behält die
+    feinen Schichten auch neben seinem Turm. Und nicht unter
     organischen Bäumen (``style`` in ``organic``): PrusaSlicer und die
     Orca-Familie lehnen dann den Schnitt ab (``Print::validate``, „Variable
     layer height is not supported with Organic supports“) — die Stütze geht
@@ -2039,7 +2054,7 @@ def _fine_layers(
     layer = settings.layers.layer_height
     if (
         flavour == "cura"
-        or whole_layers
+        or shared_layers
         or (style != "none" and style in organic)
         or not result.layers
     ):
@@ -2075,7 +2090,7 @@ def _fine_layers(
                 path="layers.fine_layer_height",
                 value=candidate,
                 reason=_(
-                    "Glattere Kuppen und Details, rund {share} % mehr Druckzeit.",
+                    "Glattere Kuppen: Dieses Teil druckt rund {share} % länger.",
                     share=max(1, round(100.0 * share)),
                 ),
             )
@@ -2500,6 +2515,7 @@ def for_part(
     declined: Collection[str] = (),
     allowances: Collection[str] = (),
     trees: Collection[str] | None = None,
+    shared_layers: bool = False,
 ) -> list[SettingAdvice]:
     """Was dieses eine Teil anders braucht als die Platte (§29).
 
@@ -2533,6 +2549,7 @@ def for_part(
                 declined=declined,
                 allowances=allowances,
                 trees=trees,
+                shared_layers=shared_layers,
             )
             if entry.path in PART_PATHS
         ]

@@ -387,7 +387,9 @@ Neptune-4-Profils druckten vier Orca-Programme gleichmäßig. Deshalb rechnet di
 mit `manufacturer.effective`. OrcaSlicer lehnt eine Kurve unter Bäumen mit `support_style`
 organisch oder Vorgabe ab, nimmt sie unter `tree_slim`, `tree_strong`, `tree_hybrid` an;
 mit Reinigungsturm verlangt sie dieselbe Kurve an allen Teilen („The prime tower is only
-supported if all objects have the same variable layer height.“). Gemessen am Drachen (feine
+supported if all objects have the same variable layer height.“), aber nur, wenn mehr als
+ein Objekt auf der Platte steht; PrusaSlicer ebenso, an jeder Maschine mit mehreren
+Werkzeugen und eingeschaltetem `wipe_tower` (`handover.same_layers_required`). Gemessen am Drachen (feine
 Schichten erzwungen, 650 → 817 Lagen): ElegooSlicer +29,7 %, Bambu Studio +22,2 %,
 OrcaSlicer +30,7 %, Anycubic Slicer Next +27,9 %, Creality Print +21,7 %, PrusaSlicer
 +22,3 % Druckzeit; Cura unverändert. Je Teil (Kuppe neben Klotz) in allen sieben lesenden

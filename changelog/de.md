@@ -40,13 +40,6 @@ wieder heraus (Entscheidung Robert). Wo ein Nutzen bleibt, der ohne den
 Mechanismus auskommt — „die Meldung nennt den wirklichen Grund“ —, steht der
 Nutzen da und sonst nichts.
 
-## 0.6.1
-
-### Drucken und Übergabe an den Slicer
-
-- Wo flache Kuppen und kleine Formen Stufen zeigen würden, schlägt Solidon feine Schichten nur dort vor. Der Vorschlag sagt, wie viel länger der Druck dauert.
-- Neu in den Druckeinstellungen: *Feine Schichten* und *Deckschichten mindestens*, damit Oberseiten über feinen Schichten dicht bleiben.
-
 ## 0.6.0
 
 ### Bedienung und System
@@ -141,6 +134,8 @@ Nutzen da und sonst nichts.
 - Auch bei Druckern, die PrusaSlicer oder SuperSlicer nicht selbst kennen, rechnen beide die Druckzeit mit den übergebenen Beschleunigungen, und die Datei nennt das Material der Spule.
 - Auch auf einem voll ausgelasteten Rechner nennt Solidon nach dem Anhalten eines Slicers den wirklichen Grund statt einer Zeitüberschreitung. Eine fertige Druckdatei wird übernommen.
 - Das Filamentlager erkennt eine Buchung aus Solidon 0.5.1 wieder als frühere Buchung und fragt nach, bevor es denselben Druck erneut abbucht.
+- Wo flache Kuppen und Schrägen Stufen zeigen würden, schlägt Solidon feine Schichten nur dort vor. Der Vorschlag sagt, wie viel länger das Teil dann druckt.
+- Neu in den Druckeinstellungen: *Feine Schichten* und *Deckschichten mindestens*, damit Oberseiten über feinen Schichten dicht bleiben.
 
 ### Gewinde, Bohrungen und Normteile
 

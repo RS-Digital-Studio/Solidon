@@ -15,13 +15,6 @@ gli stessi punti nello stesso ordine (`tests/test_changelog.py`).
 `tools/make_download.py` ne prende la sezione della versione corrente e la
 scrive in `website/version.json`.
 
-## 0.6.1
-
-### Stampare e passare allo slicer
-
-- Dove cupole piatte e forme piccole mostrerebbero gradini, Solidon suggerisce strati fini solo lì. Il suggerimento dice quanto dura in più la stampa.
-- Novità nelle impostazioni di stampa: *Strati fini* e *Spessore minimo superiore*, perché le superfici superiori sopra strati fini restino chiuse.
-
 ## 0.6.0
 
 ### Uso e sistema
@@ -116,6 +109,8 @@ scrive in `website/version.json`.
 - Anche con stampanti che PrusaSlicer o SuperSlicer non conoscono, entrambi stimano il tempo di stampa con le accelerazioni trasmesse, e il file indica il materiale della bobina.
 - Anche con il computer a pieno carico, Solidon indica il vero motivo dopo l'arresto di uno slicer, invece di un tempo scaduto. Un file di stampa finito viene usato.
 - Il magazzino filamenti riconosce di nuovo un consumo scaricato con Solidon 0.5.1 e chiede prima di scaricare di nuovo la stessa stampa.
+- Dove cupole piatte e pendenze mostrerebbero gradini, Solidon suggerisce strati fini solo lì. Il suggerimento dice quanto dura in più la stampa del pezzo.
+- Novità nelle impostazioni di stampa: *Strati fini* e *Spessore minimo superiore*, perché le superfici superiori sopra strati fini restino chiuse.
 
 ### Filettature, fori e componenti normalizzati
 

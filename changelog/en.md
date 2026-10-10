@@ -15,13 +15,6 @@ carry the same points in the same order (`tests/test_changelog.py`).
 `tools/make_download.py` takes the section for the current version and writes
 it into `website/version.json`.
 
-## 0.6.1
-
-### Printing and slicer handover
-
-- Where shallow domes and small shapes would show steps, Solidon suggests fine layers only there. The suggestion says how much longer the print takes.
-- New in the print settings: *Fine layers* and *Minimum top thickness*, so top surfaces over fine layers stay closed.
-
 ## 0.6.0
 
 ### Operation and system
@@ -116,6 +109,8 @@ it into `website/version.json`.
 - Even for printers that PrusaSlicer or SuperSlicer do not know themselves, both estimate the print time with the accelerations handed over, and the file names the material of the spool.
 - Even on a fully loaded computer, Solidon gives the real reason after stopping a slicer instead of a timeout. A finished print file is used.
 - The filament inventory again recognises a booking from Solidon 0.5.1 as an earlier booking and asks before deducting the same print again.
+- Where shallow domes and slopes would show steps, Solidon suggests fine layers only there. The suggestion says how much longer the part then takes to print.
+- New in the print settings: *Fine layers* and *Minimum top thickness*, so top surfaces over fine layers stay closed.
 
 ### Threads, holes and standard parts
 

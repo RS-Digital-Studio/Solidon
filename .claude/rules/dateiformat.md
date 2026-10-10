@@ -225,11 +225,11 @@ Konstanten in Formelgestalt (`_cura_literal`).
   PrusaSlicer als Bereich (Dreiecke hinter denen des Körpers, `SupportBlocker`
   in der Beilage, Modell mit `slic3rpe:Version3mf`), CuraEngine als eigenes
   Netz mit `anti_overhang_mesh=true` (`slicer_keys.takes_mesh_settings`),
-  Curas Fenster als Komponente neben ihrem Körper mit
-  `cura:anti_overhang_mesh`. Nur in die direkte Übergabe, nie in eine
+  Curas Fenster als Komponente mit `cura:anti_overhang_mesh`. Geprüft an der
+  Modellbahn, nicht an der Stütze; nur in die direkte Übergabe, nie in eine
   gespeicherte 3MF.
-- **Feine Schichten reisen als Höhenkurve je Teil** (`AS_HEIGHT_PROFILE`,
-  `writer._layer_heights`); nicht unter Bäumen, am Turm (Befund), für Cura.
+- **Feine Schichten reisen als Höhenkurve je Teil** (`writer._layer_heights`);
+  nicht unter organischen Bäumen, am Turm neben anderen Teilen, für Cura.
 - **CuraEngine bekommt kein 3MF, Curas Fenster schon** (`cura`): Für die
   Kommandozeile gibt `write_assembly` ein STL aller Teile der Platte, daneben
   je Teil ein Netz und eine Netzliste (`-s` nach `-l` gilt nur diesem Netz).

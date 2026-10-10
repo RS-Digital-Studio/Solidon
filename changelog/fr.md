@@ -16,13 +16,6 @@ portent les mêmes points dans le même ordre (`tests/test_changelog.py`).
 `tools/make_download.py` en tire la section de la version courante et l'écrit
 dans `website/version.json`.
 
-## 0.6.1
-
-### Imprimer et transmettre au slicer
-
-- Là où des dômes plats et de petites formes montreraient des marches, Solidon propose des couches fines, seulement là. La suggestion indique de combien l'impression s'allonge.
-- Nouveau dans les réglages d'impression : *Couches fines* et *Épaisseur minimale du dessus*, pour que les dessus sur des couches fines restent fermés.
-
 ## 0.6.0
 
 ### Utilisation et système
@@ -117,6 +110,8 @@ dans `website/version.json`.
 - Même pour des imprimantes inconnues de PrusaSlicer ou SuperSlicer, tous deux estiment la durée d'impression avec les accélérations transmises, et le fichier indique le matériau de la bobine.
 - Même sur un ordinateur entièrement chargé, Solidon indique la vraie raison après l'arrêt d'un slicer, au lieu d'un délai dépassé. Un fichier d'impression terminé est repris.
 - Le stock de filament reconnaît de nouveau une consommation décomptée avec Solidon 0.5.1 et demande avant de décompter à nouveau la même impression.
+- Là où des dômes plats et des pentes montreraient des marches, Solidon propose des couches fines, seulement là. La suggestion indique de combien l'impression de la pièce s'allonge.
+- Nouveau dans les réglages d'impression : *Couches fines* et *Épaisseur minimale du dessus*, pour que les dessus sur des couches fines restent fermés.
 
 ### Filetages, perçages et pièces normalisées
 

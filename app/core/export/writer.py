@@ -1307,6 +1307,7 @@ def part_advice(
     flavour: SlicerFlavour | None = None,
     accepted: Mapping[str, object] | None = None,
     whole_layers: bool = False,
+    shared_layers: bool = False,
     organic: Collection[str] = (),
     allowances: Sequence[str] = (),
 ) -> list[SettingAdvice]:
@@ -1366,6 +1367,7 @@ def part_advice(
         program,
         dict(accepted or {}),
         whole_layers,
+        shared_layers,
         tuple(sorted(organic)),
         tuple(allowances),
         None if trees is None else tuple(sorted(trees)),
@@ -1405,6 +1407,7 @@ def part_advice(
                     connectors=connectors,
                     flavour=flavour,
                     whole_layers=whole_layers,
+                    shared_layers=shared_layers,
                     organic=organic,
                     declined=declined,
                     allowances=allowances,
@@ -1479,6 +1482,7 @@ def _part_values(
     cancelled: CancelToken | None,
     whole_layers: bool = False,
     organic: Collection[str] = (),
+    shared_layers: bool = False,
 ) -> _PartValues:
     """Was dieses Teil anders braucht als die Platte (§29, Entscheidung G) — und warum.
 
@@ -1528,6 +1532,7 @@ def _part_values(
         flavour=flavour,
         accepted=split.accepted_per_part(),
         whole_layers=whole_layers,
+        shared_layers=shared_layers,
         organic=organic,
         allowances=allowances_for(document, entry) if document is not None else (),
     )
@@ -1714,6 +1719,7 @@ def _served_elsewhere(
     cancelled: CancelToken | None,
     towers: frozenset[int] = frozenset(),
     organic: Collection[str] = (),
+    shared: frozenset[int] = frozenset(),
 ) -> frozenset[str]:
     """Welche dieser Pfade ein Teil des Auftrags auf einer anderen Platte verlangt.
 
@@ -1746,6 +1752,7 @@ def _served_elsewhere(
                 cancelled,
                 whole_layers=entry.plate in towers,
                 organic=organic,
+                shared_layers=entry.plate in shared,
             )
             hit = {item.path for item in (*values.applied, *values.unavailable)} & open_paths
             served |= hit
@@ -2588,6 +2595,7 @@ def write_assembly(
     # Herstellerprozess mehrfach.
     with slicer_profiles.single_read():
         towers = tower_plates(every, setup) if split is not None else frozenset()
+        shared = shared_layer_plates(every, setup, profile) if split is not None else frozenset()
         organic = (
             handover.organic_styles(setup, profile, flavour=flavour)
             if split is not None
@@ -2606,6 +2614,7 @@ def write_assembly(
                 cancelled,
                 whole_layers=entry.plate in towers,
                 organic=organic,
+                shared_layers=entry.plate in shared,
             )
             for entry in chosen
         }
@@ -2631,6 +2640,7 @@ def write_assembly(
             cancelled,
             towers,
             organic,
+            shared,
         )
         everywhere = [item for item in everywhere if item.path not in served]
     if split is not None and everywhere:
@@ -2665,7 +2675,7 @@ def write_assembly(
     # Die Höhenkurven je Teil (RM-586) vor der Gegenprobe: Sie zählt die Lagen,
     # die der Slicer daraus legt.
     heights, height_findings = _layer_heights(
-        chosen, exported, part_values, profile, flavour, setup, towers, organic, cancelled
+        chosen, exported, part_values, profile, flavour, setup, shared, organic, cancelled
     )
     # Die Gegenprobe liest genau diese Vernetzung und diese endgültigen
     # Teilwerte, einschließlich der auf alle Teile verteilten Empfehlungen.
@@ -3035,7 +3045,7 @@ def _layer_heights(
     profile: Profile,
     flavour: SlicerFlavour,
     setup: SlicerSetup | None,
-    towers: Collection[int],
+    shared: Collection[int],
     organic: Collection[str],
     cancelled: CancelToken | None,
 ) -> tuple[dict[str, tuple[float, ...]], list[Finding]]:
@@ -3047,8 +3057,9 @@ def _layer_heights(
     (:func:`app.core.slice.fine_layers.profile_for`, Bahn = halbe Mindestwand
     wie ``_body_analysis``) — ohne den Körper noch einmal zu schneiden. Zwei Fälle
     lehnt der Slicer ab, und dort entfällt die Kurve mit einem Satz: ein Teil
-    unter organischen Bäumen und eine Platte mit Reinigungsturm, der gleiche
-    Schichten für alle Teile verlangt (``Print::validate``).
+    unter organischen Bäumen und eine Platte, auf der der Reinigungsturm allen
+    Objekten dieselben Schichten abverlangt (``shared``, :func:`shared_layer_plates`;
+    ``Print::validate``).
     """
     from app.core.export import manufacturer
     from app.core.knowledge import profiles as profile_table
@@ -3061,38 +3072,6 @@ def _layer_heights(
     for entry in chosen:
         own = part_values[entry.id].effective
         if own is None or own.layers.fine_layer_height <= EPS_GEOM:
-            continue
-        name = source_text(entry.name)
-        if own.support.style != "none" and own.support.style in organic:
-            findings.append(
-                Finding(
-                    code="export.fine_layers_trees",
-                    severity="warning",
-                    message=_(
-                        "„{name}“ stützt mit organischen Bäumen, und die druckt {slicer} nur mit "
-                        "gleichen Schichten. Mit Gitterstützen gelten die feinen Schichten.",
-                        name=name,
-                        slicer=setup.name if setup is not None else _("der Slicer"),
-                    ),
-                    values={"name": name},
-                    object_id=entry.id,
-                )
-            )
-            continue
-        if entry.plate in towers:
-            findings.append(
-                Finding(
-                    code="export.fine_layers_tower",
-                    severity="warning",
-                    message=_(
-                        "Neben „{name}“ steht ein Reinigungsturm, und der verlangt gleiche "
-                        "Schichten für alle Teile. Auf einer eigenen Platte gelten die feinen.",
-                        name=name,
-                    ),
-                    values={"name": name},
-                    object_id=entry.id,
-                )
-            )
             continue
         wall, _angle = profile_table.analysis_limits(
             profile_table.for_process(profile, own, effective=True), entry
@@ -3114,7 +3093,43 @@ def _layer_heights(
             wall / 2.0,
             cancelled=cancelled,
         )
-        if curve:
+        # Erst die Kurve, dann der Satz, warum sie entfällt: Ein Klotz neben der
+        # Kuppe hat keine, und über ihn gibt es nichts zu sagen.
+        if not curve:
+            continue
+        name = source_text(entry.name)
+        slicer = setup.name if setup is not None else _("der Slicer")
+        if own.support.style != "none" and own.support.style in organic:
+            findings.append(
+                Finding(
+                    code="export.fine_layers_trees",
+                    severity="warning",
+                    message=_(
+                        "„{name}“ stützt mit organischen Bäumen, und die druckt {slicer} nur mit "
+                        "gleichen Schichten. Mit Gitterstützen gelten die feinen Schichten.",
+                        name=name,
+                        slicer=slicer,
+                    ),
+                    values={"name": name},
+                    object_id=entry.id,
+                )
+            )
+        elif entry.plate in shared:
+            findings.append(
+                Finding(
+                    code="export.fine_layers_tower",
+                    severity="warning",
+                    message=_(
+                        "Mit Reinigungsturm verlangt {slicer} gleiche Schichten für alle Teile "
+                        "neben „{name}“. Auf einer eigenen Platte gelten die feinen.",
+                        name=name,
+                        slicer=slicer,
+                    ),
+                    values={"name": name},
+                    object_id=entry.id,
+                )
+            )
+        else:
             heights[entry.id] = curve
     return heights, findings
 
@@ -3131,12 +3146,41 @@ def tower_plates(bodies: Sequence[SceneObject], setup: SlicerSetup | None) -> fr
     """
     if setup is None:
         return frozenset()
+    plates = _assembly_plates(bodies)
+    return frozenset(plate for plate, cause in _tower_causes(plates, setup).items() if cause)
+
+
+def shared_layer_plates(
+    bodies: Sequence[SceneObject], setup: SlicerSetup | None, profile: Profile
+) -> frozenset[int]:
+    """Die Platten dieser Körper, auf denen der Slicer allen Teilen dieselben
+    Schichten abverlangt (:func:`handover.same_layers_required`): Turm und mehr
+    als ein Objekt. Dort bekommt kein Teil eine Höhenkurve und keines den Rat
+    zu feinen Schichten (RM-586); ein Körper allein auf seiner Platte behält
+    beides. Druckdialog und Export fragen hier, mit allen Körpern einer Platte.
+    """
+    if setup is None or setup.flavour not in ("orca", "prusa"):
+        return frozenset()
+    from app.core.export import handover, slicer_profiles
+
+    with slicer_profiles.single_read():
+        return frozenset(
+            plate
+            for plate, here in _assembly_plates(bodies).items()
+            if handover.same_layers_required(
+                setup, profile, filaments=len(threemf.merge_slots(here)), objects=len(here)
+            )
+        )
+
+
+def _assembly_plates(bodies: Sequence[SceneObject]) -> dict[int, list[threemf.AssemblyPart]]:
+    """Die Körper je Platte, mit ihren Spulen, für die Turmfragen."""
     plates: dict[int, list[threemf.AssemblyPart]] = {}
     for body in bodies:
         plates.setdefault(body.plate, []).append(
             threemf.AssemblyPart(mesh=as_mesh_data(body.mesh), slots=threemf.slots_for_object(body))
         )
-    return frozenset(plate for plate, cause in _tower_causes(plates, setup).items() if cause)
+    return plates
 
 
 def _plate_settings(
