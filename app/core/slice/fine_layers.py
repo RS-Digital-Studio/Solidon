@@ -35,7 +35,7 @@ from typing import TYPE_CHECKING, Final
 import numpy as np
 
 from app.core.types import CancelToken, LayerInfo, PrintSettings, SliceResult
-from app.core.units import EPS_GEOM
+from app.core.units import EPS_GEOM, exact_cos_degrees
 
 if TYPE_CHECKING:
     from app.core.geom.mesh import MeshData
@@ -66,6 +66,10 @@ NOZZLE_SHARE: Final = 0.25
 #: lohnt der Wechsel nicht — die Stufe „Fein“ druckt schon fein genug.
 WORTH_RATIO: Final = 0.75
 
+#: So viele Dreiecke rechnet :func:`_shallow_faces` auf einmal: Die Spalten
+#: eines Blocks belegen wenige Megabyte, gleich wie groß das Netz ist.
+_FACE_BLOCK: Final = 1 << 18
+
 #: Die Mindestdicke der Deckschichten, in mm (Recherche Nr. 10): Mit feinen
 #: Schichten und fester Lagenzahl werden Deckflächen dünn und bekommen Löcher
 #: oder Kissen. Cura führt 0,8 als Vorgabe, die Orca-Profile 0,6 bis 1,0.
@@ -74,13 +78,24 @@ TOP_SHELL_MINIMUM: Final = 0.8
 
 def step_slope(layer_height: float, line: float) -> float:
     """Ab welcher Neigung gegen die Waagerechte eine Schräge keine sichtbare
-    Stufe mehr legt, in Grad.
+    Stufe mehr legt, in Grad — für Anzeige und Prüfung.
 
     Die Stufe ist ``h / tan(Neigung)`` breit. Ist sie breiter als eine Bahn,
     liegt auf jeder Stufe eine eigene Deckbahn, und man sieht die Treppe; bei
-    0,2 mm Schicht und 0,42 mm Bahn unter 25,5°.
+    0,2 mm Schicht und 0,42 mm Bahn unter 25,5°. Entschieden wird ohne Winkel
+    (:func:`_step_cosine`): ``math.atan2`` und ``math.cos`` können je Maschine
+    in der letzten Stelle anders runden, und ein Keil 1:2 bei 0,2 mm Schicht und
+    0,4 mm Bahn liegt genau auf der Grenze.
     """
     return math.degrees(math.atan2(layer_height, max(line, EPS_GEOM)))
+
+
+def _step_cosine(layer_height: float, line: float) -> tuple[float, float]:
+    """Das Quadrat des Kosinus der Stufengrenze als Bruch ``(Zähler, Nenner)``:
+    ``Bahn² / (Bahn² + h²)``, denn ``tan Grenze = h / Bahn``. Nur Produkt und
+    Summe nach IEEE-754 — auf jeder Maschine dieselben Bits (``kern.md``)."""
+    across = max(line, EPS_GEOM)
+    return across * across, across * across + layer_height * layer_height
 
 
 def stepped_area_worth(layer_height: float, line: float) -> float:
@@ -91,12 +106,16 @@ def stepped_area_worth(layer_height: float, line: float) -> float:
     Stufen liegen: Eine Kugel vom Radius ``R`` hat je Millimeter Höhe ``2πR``
     Fläche, und ihr flacher Scheitel unter :func:`step_slope` ist
     ``R·(1 - cos Grenze)`` hoch. Zwei Stufen verlangen ``R = 2h / (1 - cos
-    Grenze)`` — bei 0,2 mm Schicht 4,1 mm, also 26 mm² je mm. Was darunter
-    bleibt, sind einzelne kleine Dreiecke, deren Stufe niemand sieht.
+    Grenze)`` — bei 0,2 mm Schicht 4,1 mm, also 26 mm² je mm. Wirksam ist
+    bei einer Kuppe die Mindestlänge eines Bereichs (ein Übergang,
+    :func:`fine_bands`): Fein wird sie bei 0,2 mm Schicht ab etwa R 9 mm, bei
+    0,28 mm ab R 8 — darunter ist ihr flacher Scheitel kürzer als ein
+    Übergang (Review RM-586).
     """
     if layer_height <= EPS_GEOM:
         return math.inf
-    rise = 1.0 - math.cos(math.radians(step_slope(layer_height, line)))
+    run, total = _step_cosine(layer_height, line)
+    rise = 1.0 - math.sqrt(run / total)
     return 2.0 * math.pi * STEPS_SEEN * layer_height / max(rise, EPS_GEOM)
 
 
@@ -145,12 +164,7 @@ def stepped_areas(
     raw = mesh.raw
     vertices = np.asarray(raw.vertices, dtype=np.float64)
     faces = np.asarray(raw.faces)
-    chosen, areas = _shallow_faces(
-        vertices,
-        faces,
-        math.cos(math.radians(step_slope(layer_height, line))),
-        math.cos(math.radians(FLAT_SLOPE)),
-    )
+    chosen, areas = _shallow_faces(vertices, faces, layer_height, line)
     if cancelled is not None:
         cancelled.raise_if_cancelled()
     if not len(chosen):
@@ -160,37 +174,51 @@ def stepped_areas(
 
 
 def _shallow_faces(
-    vertices: np.ndarray, faces: np.ndarray, steep: float, flat: float
+    vertices: np.ndarray, faces: np.ndarray, layer_height: float, line: float
 ) -> tuple[np.ndarray, np.ndarray]:
     """Die aufwärts weisenden Dreiecke, deren Normale mit der Senkrechten einen
-    Kosinus über ``steep`` und höchstens ``flat`` bildet, und ihre Flächen.
+    Kosinus über dem der Stufengrenze (:func:`_step_cosine`) und höchstens dem
+    von :data:`FLAT_SLOPE` bildet, und ihre Flächen.
 
     Ohne Normalen für das ganze Netz: Erst die z-Komponente des Kreuzprodukts
-    aus x und y aller Dreiecke, die übrigen nur für die aufwärts weisenden,
-    verglichen im Quadrat statt über eine Wurzel. Am §31-Körper 28 statt 72 ms
+    aus x und y, die übrigen nur für die aufwärts weisenden, verglichen im
+    Quadrat statt über eine Wurzel. Am §31-Körper 28 statt 72 ms
     (``stable_normals``) — der Schnitt selbst hat ein Budget von 300 ms. Nur
     elementweise Rechnung nach IEEE-754, kein BLAS: Die Auswahl ist auf jeder
-    Maschine dieselbe (RM-187), denn aus ihr wird eine Entscheidung.
+    Maschine dieselbe (RM-187), denn aus ihr wird eine Entscheidung. Gerechnet
+    in Blöcken von :data:`_FACE_BLOCK` Dreiecken, mit derselben Auswahl wie am
+    Stück: Am Drachen (2,95 Mio. Dreiecke) hielt die Rechnung am Stück die
+    Spalten aller Dreiecke zugleich.
     """
     x = np.ascontiguousarray(vertices[:, 0])
     y = np.ascontiguousarray(vertices[:, 1])
-    first, second, third = faces[:, 0], faces[:, 1], faces[:, 2]
-    ux = x[second] - x[first]
-    uy = y[second] - y[first]
-    wx = x[third] - x[first]
-    wy = y[third] - y[first]
-    rise = ux * wy - uy * wx
-    up = np.flatnonzero(rise > 0.0)
     z = np.ascontiguousarray(vertices[:, 2])
-    uz = z[second[up]] - z[first[up]]
-    wz = z[third[up]] - z[first[up]]
-    cross_x = uy[up] * wz - uz * wy[up]
-    cross_y = uz * wx[up] - ux[up] * wz
-    lift = rise[up]
-    squared = cross_x * cross_x + cross_y * cross_y + lift * lift
-    lifted = lift * lift
-    keep = (lifted > steep * steep * squared) & (lifted <= flat * flat * squared)
-    return up[keep], 0.5 * np.sqrt(squared[keep])
+    run, total = _step_cosine(layer_height, line)
+    flat = exact_cos_degrees(FLAT_SLOPE)
+    chosen: list[np.ndarray] = []
+    areas: list[np.ndarray] = []
+    for start in range(0, len(faces), _FACE_BLOCK):
+        block = faces[start : start + _FACE_BLOCK]
+        first, second, third = block[:, 0], block[:, 1], block[:, 2]
+        ux = x[second] - x[first]
+        uy = y[second] - y[first]
+        wx = x[third] - x[first]
+        wy = y[third] - y[first]
+        rise = ux * wy - uy * wx
+        up = np.flatnonzero(rise > 0.0)
+        uz = z[second[up]] - z[first[up]]
+        wz = z[third[up]] - z[first[up]]
+        cross_x = uy[up] * wz - uz * wy[up]
+        cross_y = uz * wx[up] - ux[up] * wz
+        lift = rise[up]
+        squared = cross_x * cross_x + cross_y * cross_y + lift * lift
+        lifted = lift * lift
+        keep = (lifted * total > run * squared) & (lifted <= flat * flat * squared)
+        chosen.append(up[keep] + start)
+        areas.append(0.5 * np.sqrt(squared[keep]))
+    if not chosen:
+        return np.zeros(0, dtype=np.intp), np.zeros(0)
+    return np.concatenate(chosen), np.concatenate(areas)
 
 
 def _spread(area: np.ndarray, heights: np.ndarray, edges: np.ndarray, count: int) -> np.ndarray:

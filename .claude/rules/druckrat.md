@@ -180,15 +180,21 @@ offenem Drucker. Übernommen wird auf Klick, nie von allein.
   `slice/fine_layers.py`): aufwärts weisende Schrägen, deren Stufe breiter
   als eine Bahn wird (`step_slope`), über einen ganzen Übergang so dicht wie
   auf der kleinsten Kuppe mit zwei Stufen (`stepped_area_worth`) — jede Grenze
-  aus Schicht und Bahn, keine Streuzahl. Halbe Schicht, nie unter einem Viertel
-  der Düse, nur wo sie ein Viertel dünner wird. Der Grund nennt den Zeitanteil
+  aus Schicht und Bahn, keine Streuzahl, entschieden ohne Winkelfunktion
+  (`_step_cosine`, `kern.md`). Wirksam ab Kuppen von etwa R 9 mm bei 0,2 mm
+  Schicht: Ein Bereich ist mindestens einen Übergang lang. Halbe Schicht, nie
+  unter einem Viertel der Düse, nur wo sie ein Viertel dünner wird. Der Grund
+  nennt den Zeitanteil des Teils
   (`extra_time`); mit schon gewählter feiner Höhe nur für Teile mit Bereichen.
   Nicht für Cura (seine Automatik folgt dem flachsten Dreieck jeder Höhe und
-  wird fast überall fein), nicht neben einem Reinigungsturm und nicht unter
+  wird fast überall fein), nicht, wo ein Reinigungsturm neben weiteren Teilen
+  steht (`shared_layers`, `writer.shared_layer_plates`; PrusaSlicer prüft an
+  jeder Maschine mit mehreren Werkzeugen, auch mit einer Spule), und nicht unter
   organischen Bäumen (`printed_style` in `organic`): Beides lehnen PrusaSlicer
-  und die Orca-Familie ab, und die Stütze geht vor; das Feld sagt es
-  (`slicer_keys.limitation`). Ließe die Lagenzahl die
-  Oberseite unter `TOP_SHELL_MINIMUM`, kommt `shell.top_thickness` dazu.
+  und die Orca-Familie ab, und die Stütze geht vor; ein Körper allein behält
+  die feinen Schichten neben seinem Turm. Das Feld sagt es
+  (`slicer_keys.limitation`). Ließe die Lagenzahl die Oberseite unter
+  `TOP_SHELL_MINIMUM`, kommt `shell.top_thickness` dazu.
   Übergabe: `dateiformat.md`.
 - **Was das Modell schon ausgleicht, gleicht der Slicer nicht noch einmal aus**
   (`_from_allowances`, RM-589): Legt ein Schritt des Körpers Spiel in eine

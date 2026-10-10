@@ -756,6 +756,19 @@ schneller durch, als hinaus und wieder hinein zu wechseln. Der Zwischenstand
 hatte 25° fest und 20 mm²/mm, am Drachen gewählt; mit der Herleitung fällt dort
 die Flügelkrümmung bei 105 mm weg (Schwelle 20: fünf Bereiche, 37 mm; 25,9:
 vier, 30 mm — Schwanz und Füße 2–15, Knie 42–44, Schultern 70–78, Kopf 111–118).
+Wirksam ist an einer Kuppe die Mindestlänge, nicht die Fläche (Review RM-586,
+F8): Bei 0,2 mm Schicht bekommen Halbkugeln R 6 und R 8 keine Kurve, erst R 9; bei
+0,28 mm ab R 8. Die Kappe R 8 trägt 39 mm² in einem Übergang (Schwelle 25,9), ihr
+Bereich ist aber 0,8 mm lang. Augen, Knöpfe und Schuppen unter etwa 18 mm
+Durchmesser bleiben gleichmäßig.
+
+Die Grenze wird ohne Winkelfunktion entschieden (Review RM-586, F7): `cos² Grenze =
+Bahn² / (Bahn² + h²)`, verglichen als `lift² · (Bahn² + h²) > Bahn² · |n|²`, die
+ebene Grenze über `units.exact_cos_degrees`. Mit `math.atan2`/`math.cos` lag ein
+Keil 1:2 bei 0,2/0,4 (und 1:3 bei 0,2/0,6) genau auf der Grenze, und ein ULP
+Rauschen entschied zwischen 670 mm² Schräge samt Kurve und nichts. Ohne Winkel
+liegt der genaue Gleichstand auf jeder Maschine außerhalb („breiter als eine
+Bahn“); Weg `fine_layers` in `test_platform_identity.py`.
 
 Der Zeitanteil bremst jede Schicht bis zur Mindestschichtzeit, nie unter das
 Mindesttempo: Die feinen Schichten liegen meist an kleinen Querschnitten. An der
@@ -763,6 +776,18 @@ Halbkugel R 20 nannte die Rechnung ohne Bremse 4 %, ElegooSlicer druckte ab
 Schicht 1 7 % länger, die Druckdatei ohne Beschleunigung 10 % (Kappenschichten
 3,3–3,9 s an 4 s Mindestzeit); mit Bremse nennt der Rat 12 %. Das Druckzeitmodell
 (`print_time`) träfe 8 %, kostet am Drachen aber 153 s — für den Rat zu teuer.
+
+Der Reinigungsturm sperrt nur neben weiteren Objekten (Review RM-586, F1/F2): OrcaSlicer,
+Bambu Studio und PrusaSlicer vergleichen Höhenkurven nur, wenn mehr als ein Objekt
+auf der Platte steht (`Print::validate`, `m_objects.size() > 1`). Eine bemalte
+Halbkugel allein (Bambu Studio P1S, ElegooSlicer CC2, zwei Spulen) druckt ihre
+Kurve neben dem Turm: 113 Lagen, 28 fein, Turm wie ohne Kurve. Neben einem Klotz
+derselben Platte entfällt die Kurve mit dem Befund, und beide rechnen. PrusaSlicer
+2.9.6 prüft schon, wenn der Prozess `wipe_tower` einschaltet und die Maschine mehr
+als ein Werkzeug hat: Am XL 2T und am MK4S MMU3 verweigerte er Kuppe und Klotz
+auch mit einer Spule („The Wipe tower is only supported if all objects have the
+same variable layer height“); mit der Sperre rechnet er sie (XL 2T 51,6 min mit
+zwei Spulen, 32,6 min mit einer; MMU3 18,4 min).
 
 Organische Bäume gehen vor: OrcaSlicer lehnt eine Höhenkurve unter
 `support_style` organisch oder Vorgabe ab, PrusaSlicer unter organischen Bäumen

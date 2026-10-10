@@ -2908,7 +2908,7 @@ def test_the_shallow_faces_are_those_of_the_stable_normals() -> None:
     steep = math.cos(math.radians(fine_layers.step_slope(FINE_LAYER, FINE_LINE)))
     flat = math.cos(math.radians(fine_layers.FLAT_SLOPE))
     chosen, areas = fine_layers._shallow_faces(
-        np.asarray(raw.vertices, dtype=np.float64), np.asarray(raw.faces), steep, flat
+        np.asarray(raw.vertices, dtype=np.float64), np.asarray(raw.faces), FINE_LAYER, FINE_LINE
     )
     normals, every = stable_normals(raw)
     expected = np.flatnonzero((normals[:, 2] > steep) & (normals[:, 2] <= flat))
