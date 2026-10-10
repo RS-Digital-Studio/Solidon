@@ -1402,20 +1402,15 @@ def enclosed_volume(body: trimesh.Trimesh) -> float:
     (:func:`python_values`) — ``fsum`` rundet genau einmal, die Zahl ist
     dieselbe.
     """
-    return triangles_volume(np.asarray(body.triangles, dtype=np.float64), near=False)
+    return triangles_volume(np.asarray(body.triangles, dtype=np.float64))
 
 
-def triangles_volume(triangles: np.ndarray, *, near: bool) -> float:
-    """Das Volumenintegral über Dreiecke ``(n, 3, 3)`` — ohne Netz drumherum.
+def triangles_volume(triangles: np.ndarray) -> float:
+    """:func:`enclosed_volume` an Dreiecken ``(n, 3, 3)``, bezogen auf den Ursprung.
 
-    ``near`` rechnet wie :func:`signed_volume` (bezogen auf die erste Ecke),
-    sonst wie :func:`enclosed_volume` (bezogen auf den Ursprung), bitgleich mit
-    beiden. Für den, der die Dreiecke eines Teils schon hat und dafür kein
-    Teilnetz bauen will (``prepare_ops._parts_in_order``).
+    Bezogen auf die erste Ecke — für ein Teil und jede Entscheidung — rechnet
+    :func:`signed_volume_of`.
     """
-    if near:
-        # Eine Formel, zwei Namen hießen zwei Wahrheiten (Merge welle3).
-        return signed_volume_of(triangles)
     if not len(triangles):
         return 0.0
     return math.fsum(python_values(triple_products(triangles))) / 6.0

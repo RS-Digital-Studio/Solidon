@@ -64,9 +64,9 @@ from app.core.geom.mesh import (
     row_dots,
     shift_body,
     signed_volume,
+    signed_volume_of,
     stable_arctan2,
     stable_normals,
-    triangles_volume,
     unique_edges,
 )
 from app.core.geom.ops import as_transform
@@ -21424,9 +21424,8 @@ def _parts_in_order(mesh: MeshData, *, as_saved: bool = False) -> list[_LoosePla
     (:func:`split_offer`).
 
     **Ein geschlossenes Teil wird an seinen Dreiecken gemessen**: kein eigenes
-    Netz, Volumen nahe am Teil (``mesh.triangles_volume``, wie
-    :func:`signed_volume`) und Mitte (dieselbe Hülle wie ``Trimesh.bounds``)
-    bitgleich aus seinen Ecken.
+    Netz, Volumen nahe am Teil (:func:`signed_volume_of`) und Mitte (dieselbe
+    Hülle wie ``Trimesh.bounds``) bitgleich aus seinen Ecken.
 
     **Ein offenes Teil behält die Zahl von vorher**: ``Trimesh.volume`` an seinem
     Teilnetz (Review I, G1). Ein offenes Volumen ist kein Maß, aber es ordnet
@@ -21453,7 +21452,7 @@ def _parts_in_order(mesh: MeshData, *, as_saved: bool = False) -> list[_LoosePla
             with np.errstate(divide="ignore", invalid="ignore"):
                 volume = abs(float(body.volume))
         else:
-            volume = abs(triangles_volume(triangles, near=True))
+            volume = abs(signed_volume_of(triangles))
         found.append(_LoosePlace(volume, indices, _where_it_sits(triangles.reshape(-1, 3)), shell))
     return _in_order(found)
 
