@@ -559,7 +559,9 @@ def _along(body: shapes.Form, axis: Vec3, centre: Vec3) -> shapes.Form:
     # 8: Ein unentscheidbarer Punkt auf der Achse fragt daneben nach, statt als
     # Luft zu gelten — an der Rastdrehscheibe verschmolz der Stift (N-4).
     # 9: Zoll- und Rohrgewinde, Links-, mehrgängige und kegelige Gewinde (RM-544).
-    cache_version="9",
+    # 10: Die Gewindegröße hängt nicht mehr an den gezeigten Reihen, und der Kegel
+    # nennt sein Nennmaß in der Bezugsebene (Review GEW, M2 und H1).
+    cache_version="10",
     doc=_(
         "Baut einen losen Stift, der in diese Bohrung passt, samt Senkkopf, Zylinderkopf oder "
         "Gewinde. Er ist um das Spiel aus dem Materialprofil kleiner. Am Klappdeckel mit Stift "
@@ -911,12 +913,18 @@ def _matched_pin(
             taper=zone.slope,
         )
         extra: dict[str, Any] = {"nominal": zone.nominal_at(halfway)}
+        if zone.slope:
+            # Das Nennmaß in der Bezugsebene (``types.thread_at_gauge``).
+            extra["gauge_nominal"] = zone.nominal
         if zone.values.get("size") != CUSTOM_SIZE:
             extra["size"] = zone.values.get("size")
         features[key] = dataclasses.replace(
             made,
             params={**made.params, **extra},
-            measure_sources={**made.measure_sources, "nominal": "parameter"},
+            measure_sources={
+                **made.measure_sources,
+                **dict.fromkeys((name for name in extra if name != "size"), "parameter"),
+            },
         )
     findings.insert(0, _made(cavity, zone, smooth, top - bottom))
     if zone is not None and zone.note is not None:

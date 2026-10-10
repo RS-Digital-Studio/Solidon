@@ -617,6 +617,77 @@ def test_a_pipe_thread_gets_a_pin_that_turns_in_loose(
     assert shared_volume(mesh.raw, as_mesh_data(carrier.mesh).raw) <= 1e-3, "er steckt lose"
 
 
+def test_a_long_tapered_thread_gets_a_pin_of_its_own_size(profile: Profile) -> None:
+    """Review GEW, H1: R 1/4 innen über 20 mm bekam keinen Stift („passt keine Größe R oder NPT“).
+
+    Die Mitte des Gewindes liegt dort 0,62 mm unter dem Nennmaß der Bezugsebene;
+    verglichen wird jetzt in der Bezugsebene, die das Merkmal nennt.
+    """
+    project = new_project("centauri-carbon-2", "petg")
+    History(project.document).apply(
+        "Quader",
+        [
+            OperationDraft(op="create_box", params={"width": 30.0, "depth": 30.0, "height": 30.0}),
+            OperationDraft(
+                op="drill_hole", inputs=("obj_1",), params={"diameter": 11.0, "z": 30.0}
+            ),
+            OperationDraft(
+                op="insert_printed_thread",
+                inputs=("obj_1",),
+                params={"size": "R1/4", "length": 20.0, "internal": True, "at_feature": "hole_1"},
+            ),
+        ],
+    )
+    carrier = _evaluated(project, profile)
+    result = run("pin_for_bore", carrier, profile, at_feature=_thread_of(carrier))
+    (thread,) = [entry for entry in result.outputs[1].features.values() if entry.kind == "thread"]
+    assert thread.params["size"] == "R1/4"
+    assert thread.params["gauge_nominal"] == pytest.approx(13.157)
+
+
+def test_the_pin_size_does_not_follow_the_shown_series(profile: Profile) -> None:
+    """Review GEW, M2: Die Auswertung des Stifts fragt, statt nach der Einstellung zu wählen.
+
+    Ein gemessenes Innengewinde Ø 4,95 × 0,8 passt zu M5 und #10-32 UNF. Mit „nur
+    metrisch“ wählte der Schritt still M5, mit „nur UNF“ #10-32 — derselbe Schritt
+    rechnete je nach Rechner einen anderen Stift (Regel 2). Jetzt fragt er in jeder
+    Einstellung (``ctx.ask``, hier mit der ersten Wahl beantwortet) und speichert die
+    Antwort in ``thread_size``.
+    """
+    from app.core.knowledge import standards
+
+    carrier = _threaded("mesh", profile)
+    name = _thread_of(carrier)
+    feature = carrier.features[name]
+    measured = dataclasses.replace(
+        feature,
+        provenance="native",
+        params={
+            key: value
+            for key, value in {
+                **feature.params,
+                "diameter": 4.95,
+                "pitch": 0.8,
+                "uncertainty": 0.01,
+            }.items()
+            if key not in ("nominal", "size")
+        },
+    )
+    carrier = dataclasses.replace(carrier, features={**carrier.features, name: measured})
+    before = standards.shown_thread_families()
+    try:
+        for shown in (("metric",), ("UNF",), standards.THREAD_FAMILIES):
+            standards.set_shown_thread_families(shown)
+            result = run("pin_for_bore", carrier, profile, at_feature=name)
+            assert result.answered == {"thread_size": "M5"}, shown
+            (thread,) = [
+                entry for entry in result.outputs[1].features.values() if entry.kind == "thread"
+            ]
+            assert thread.params["size"] == "M5", shown
+    finally:
+        standards.set_shown_thread_families(before)
+
+
 def _short_thread(profile: Profile, length: float) -> SceneObject:
     """Der Quader mit Ø 5 durch und einem gedruckten M6 von oben, ``length`` lang."""
     return _box(

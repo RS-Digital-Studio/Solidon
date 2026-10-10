@@ -743,16 +743,22 @@ def thread_sizes_near(
     tapered: bool = False,
     reach: tuple[float, float] | None = None,
     families: Sequence[str] | None = None,
+    half_length: float | None = None,
 ) -> tuple[str, ...]:
     """Alle Tabellengrößen, die ein Gewinde dieses Maßes meinen kann — aus jeder Reihe.
 
     Durchmesser und Steigung innerhalb von ``reach`` (Vorgabe
     :data:`THREAD_SIZE_REACH`). Ein kegeliges Gewinde trifft nur die kegeligen
-    Reihen und umgekehrt; sein gemessener Durchmesser gilt in der Mitte der
-    Gänge und darf deshalb um den Kegel über der Bezugslänge neben dem Nennmaß
-    liegen. Mehr als ein Treffer ist eine Mehrdeutigkeit, die der Aufrufer
-    erfragt (Regel 21): R 1/2 und NPT 1/2 haben beide 14 Gänge je Zoll.
-    ``families`` begrenzt auf die gezeigten Reihen.
+    Reihen und umgekehrt. **In welcher Ebene sein Durchmesser gilt, sagt der
+    Aufrufer** (Review GEW, H1): ohne ``half_length`` in der Bezugsebene
+    (``types.thread_at_gauge``), mit ihr in der Mitte einer Strecke dieser
+    halben Länge. Die Bezugsebene liegt dann innen an der Mündung, eine halbe
+    Länge von der Mitte, und außen die Bezugslänge ``gauge`` vor der Spitze,
+    also höchstens ``max(half_length, gauge)`` von ihr; um den Kegel über
+    diesem Weg darf der Durchmesser neben dem Nennmaß liegen. Mehr als ein
+    Treffer ist eine Mehrdeutigkeit, die der Aufrufer erfragt (Regel 21): R 1/2
+    und NPT 1/2 haben beide 14 Gänge je Zoll. ``families`` begrenzt auf die
+    gezeigten Reihen.
     """
     diameter_reach, pitch_reach = reach or THREAD_SIZE_REACH
     chosen = THREAD_FAMILIES if families is None else tuple(families)
@@ -761,7 +767,9 @@ def thread_sizes_near(
         entry = thread_size(size)
         if entry.tapered != tapered:
             continue
-        spread = diameter_reach + (2.0 * entry.gauge * PIPE_TAPER if tapered else 0.0)
+        spread = diameter_reach
+        if tapered and half_length is not None:
+            spread += 2.0 * PIPE_TAPER * max(half_length, entry.gauge)
         if abs(entry.nominal - diameter) <= spread and abs(entry.pitch - pitch) <= pitch_reach:
             found.append(size)
     return tuple(found)

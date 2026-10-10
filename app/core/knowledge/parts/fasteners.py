@@ -1812,11 +1812,11 @@ def thread_points(
     """Wie viele Ecken der Gang dieses Gewindes am Netz bekommt — mit dem Vorlauf.
 
     Stationen (Sehnen je Umlauf aus ``shapes.turn_segments`` mal Umläufe) mal
-    Punkte des Gangprofils: vier im flachen und im NPT-Profil, elf im
-    Whitworth-Profil mit seinen Bögen.
+    Punkte des Gangprofils: vier im flachen und im NPT-Profil, im Whitworth-Profil
+    mit seinen Bögen elf, ab 9,9 mm Steigung mehr (``shapes.whitworth_splits``).
     """
     segments = shapes.turn_segments(nominal / 2.0 + shapes.ridge_depth(pitch, profile))
-    corners = len(shapes.ridge_profile(1.0, 1.0, profile=profile))
+    corners = len(shapes.ridge_profile(1.0, pitch, profile=profile))
     return segments * math.ceil(length / pitch + 2.0) * corners
 
 
@@ -2078,7 +2078,9 @@ def _thread_feature(
     Eine Tabellengröße nennt sich dazu selbst (``size``, RM-544) — „G1/2“ ist
     am Maß allein nicht von einem eigenen Maß mit 14 Gängen je Zoll zu
     unterscheiden. Ein kegeliges Gewinde nennt sein Maß in der Mitte, wie der
-    exakte Leser (``brep.thread.thread_features``).
+    exakte Leser (``brep.thread.thread_features``), und dazu das Nennmaß der
+    Bezugsebene (``gauge_nominal``): Dort treffen sich die Hälften eines Paars,
+    und dort messen Passung und Gegenstück (``types.thread_at_gauge``).
     """
     nominal = dims.nominal + 2.0 * slope * (centre[2] - reference)
     identifier, feature = thread(
@@ -2093,6 +2095,8 @@ def _thread_feature(
         taper=slope,
     )
     extra: dict[str, Any] = {"nominal": nominal}
+    if slope:
+        extra["gauge_nominal"] = dims.nominal
     if dims.size:
         extra["size"] = dims.size
     if dims.profile != "flat":
@@ -2100,7 +2104,10 @@ def _thread_feature(
     return identifier, replace(
         feature,
         params={**feature.params, **extra},
-        measure_sources={**feature.measure_sources, "nominal": "parameter"},
+        measure_sources={
+            **feature.measure_sources,
+            **dict.fromkeys(("nominal", "gauge_nominal") if slope else ("nominal",), "parameter"),
+        },
     )
 
 

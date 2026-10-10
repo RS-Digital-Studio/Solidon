@@ -542,6 +542,34 @@ def thread_is_tapered(feature: Feature) -> bool:
     return isinstance(taper, int | float) and not isinstance(taper, bool) and taper != 0.0
 
 
+def thread_at_gauge(feature: Feature) -> tuple[float, float] | None:
+    """Gebautes Maß und Nennmaß eines kegeligen Gewindes in seiner Bezugsebene — oder ``None``.
+
+    **Die eine Stelle, die sagt, in welcher Ebene ein Kegelmaß gilt** (Review GEW,
+    H1). Ein kegeliges Gewinde nennt ``diameter`` und ``nominal`` in der Mitte
+    seiner Strecke, wie der exakte Leser; ein Paar trifft sich aber in der
+    Bezugsebene, und die Mitten zweier gefügter Hälften liegen auf
+    verschiedenen Höhen. Ein Gewinde aus der Bibliothek nennt deshalb auch
+    ``gauge_nominal``, das Nennmaß seiner Größe in der Bezugsebene; das gebaute
+    Maß dort liegt um dasselbe neben ``diameter`` wie das Nennmaß neben
+    ``nominal``, denn beide wachsen mit demselben Kegel. Ein gemessenes oder
+    geändertes Gewinde kennt seine Bezugsebene nicht und gibt ``None`` —
+    Passung und Gegenstück raten sie nicht.
+    """
+    if not thread_is_tapered(feature):
+        return None
+    numbers: list[float] = []
+    for name in ("diameter", "nominal", "gauge_nominal"):
+        value = feature.params.get(name)
+        if not isinstance(value, int | float) or isinstance(value, bool):
+            return None
+        if not math.isfinite(value):
+            return None
+        numbers.append(float(value))
+    diameter, nominal, gauge = numbers
+    return diameter + (gauge - nominal), gauge
+
+
 def is_a_cavity(feature: Feature) -> bool:
     """Ist dieses Merkmal ein Hohlraum oder Materie?
 

@@ -22,6 +22,7 @@ from app.core.geom.boolean import boolean
 from app.core.geom.mesh import MeshData, as_mesh_data
 from app.core.knowledge.parts.shapes import Form, ThreadProfile
 from app.core.types import BRepBody, Feature, FeatureId, MeasureSource, PartResult, Vec3
+from app.core.units import exact_atan_degrees
 
 if TYPE_CHECKING:
     from app.core.brep.kernel import Solid
@@ -434,7 +435,9 @@ def thread(
         params["starts"] = starts
         params["lead"] = starts * pitch
     if taper:
-        params["taper"] = math.degrees(math.atan(taper))
+        # Plattformgleich (`kern.md`): *Merkmal ändern* und der Stift lesen den
+        # Winkel als Kegel zurück (Review GEW, M1).
+        params["taper"] = exact_atan_degrees(taper)
     return identifier, Feature(
         id=identifier,
         kind="thread",

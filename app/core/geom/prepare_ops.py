@@ -19164,6 +19164,7 @@ def _resize_thread(
                 "turns",
                 "uncertainty",
                 "nominal",
+                "gauge_nominal",
                 "size",
                 *(() if thread.starts > 1 else ("starts",)),
             )

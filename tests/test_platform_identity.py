@@ -1299,12 +1299,31 @@ def _thread_ridge() -> str:
 
     Seine Ringe drehen über ``units.exact_cos``/``exact_sin`` (``27c7a29e9``);
     gefragt ist, ob der ganze Gang daran hängt — Teilung, Profil und Naht
-    eingeschlossen.
+    eingeschlossen. Dazu ein Whitworth- und ein NPT-Gang (RM-544) und ihre Umrisse
+    frisch gerechnet, ungeteilt und geteilt: Die Umrisse liegen sonst in einem Merker
+    und als Modulwert vor, und das Rauschen erreichte sie nie (Review GEW, M1 —
+    ``math.sin`` irrte unter Windows bei 58,75° um ein halbes ULP).
     """
+    from app.core.knowledge.parts import shapes
     from app.core.knowledge.parts.shapes import thread_body
 
+    outlines = (
+        shapes._whitworth_outline.__wrapped__(1),
+        shapes._whitworth_outline.__wrapped__(3),
+        shapes._npt_outline(),
+    )
     return "|".join(
-        _mesh_print(thread_body(8.0, 1.25, 6.0, internal=internal)) for internal in (False, True)
+        (
+            *(
+                _mesh_print(thread_body(8.0, 1.25, 6.0, internal=internal))
+                for internal in (False, True)
+            ),
+            *(
+                _mesh_print(thread_body(13.157, 25.4 / 19.0, 4.0, profile=profile))
+                for profile in ("whitworth", "npt")
+            ),
+            repr([point for outline in outlines for point in outline]),
+        )
     )
 
 

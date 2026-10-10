@@ -753,7 +753,8 @@ def _register_creator(spec: PartSpec, registry: Registry | None) -> None:
 #: Bausteine, deren Gewindemerkmal das gebaute Maß und das Nennmaß nennt statt
 #: nur das Nennmaß — die Geometrie blieb gleich, ein Ergebnis aus dem Cache
 #: trüge aber das alte Merkmal, und die Gewindepassung maß dort 0,00 mm. Seit
-#: RM-544 (Stand 3) nennt es dazu Größe, Profil, Drehsinn, Gangzahl und Kegel.
+#: RM-544 (Stand 3) nennt es dazu Größe, Profil, Drehsinn, Gangzahl und Kegel, seit
+#: Stand 4 am Kegel auch das Nennmaß der Bezugsebene (Review GEW, H1).
 PRINTED_THREADS: Final = frozenset(
     {"printed_thread", "printed_screw", "printed_nut", "threaded_rod"}
 )
@@ -764,7 +765,7 @@ def _result_version(spec: PartSpec) -> str:
     und des Gewindemerkmals (:data:`PRINTED_THREADS`)."""
     if spec.name in SPRING_ARMS:
         return f"{spec.version}:spring:2"
-    return f"{spec.version}:thread:3" if spec.name in PRINTED_THREADS else spec.version
+    return f"{spec.version}:thread:4" if spec.name in PRINTED_THREADS else spec.version
 
 
 def _title_for(spec: PartSpec) -> TranslatableText | str:

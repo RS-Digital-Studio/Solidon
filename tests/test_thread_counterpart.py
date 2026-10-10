@@ -214,11 +214,75 @@ def test_a_tapered_thread_takes_its_tapered_size_or_is_refused() -> None:
     assert thread_values_for(_generated(13.2, 25.4 / 19.0, **taper)) == {"size": "R1/4"}
 
 
+#: Normwerte von außen (Review GEW, H1), Außendurchmesser in der Bezugsebene und
+#: Bezugslänge vom kleinen Ende: R 1/4 nach ISO 7-1 — 13,157 mm, 6,0 mm;
+#: 1/2-14 NPT nach ASME B1.20.1 — E0 = 0,75843 Zoll, L1 = 0,320 Zoll, Gangtiefe
+#: 0,8 · P, also E0 + L1/16 + 0,8 · P in der Bezugsebene. Der Kegel ist 1:16 auf
+#: den Durchmesser.
+_PIPE_GAUGE = {
+    "R1/4": (13.157, 6.0),
+    "1/2-14 NPT": ((0.75843 + 0.320 / 16.0 + 0.8 / 14.0) * 25.4, 0.320 * 25.4),
+}
+
+
+@pytest.mark.parametrize("size", sorted(_PIPE_GAUGE))
+@pytest.mark.parametrize("internal", [True, False], ids=["innen", "aussen"])
+@pytest.mark.parametrize("length", [12.0, 30.0, 60.0])
+def test_a_printed_tapered_thread_finds_its_own_size_at_any_length(
+    size: str, internal: bool, length: float
+) -> None:
+    """Review GEW, H1: Das Merkmal nennt die Mitte, die Größe gilt in der Bezugsebene.
+
+    Ein gedrucktes R 1/4 innen ab 20 mm bekam kein Gegenstück („passt keine Größe
+    R oder NPT“), ein 1/2-14 NPT innen mit 30 mm eines in R 1/2 — 55° statt 60° —,
+    weil die Mitte mit dem Nennmaß der Bezugsebene verglichen wurde. Jetzt nennt
+    das Merkmal beide Ebenen, und jede Länge findet ihre eigene Größe.
+    """
+    from app.core.knowledge.parts import fasteners
+    from app.core.registry.params import validate
+    from app.core.types import thread_at_gauge
+
+    gauge_diameter, gauge_length = _PIPE_GAUGE[size]
+    params = validate(
+        fasteners.ThreadParams, {"size": size, "internal": internal, "length": length}
+    )
+    feature = fasteners.printed_thread(params).features["thread_1"]
+    # Innen liegt die Bezugsebene an der Mündung, eine halbe Länge über der Mitte;
+    # außen die Bezugslänge über dem kleinen Ende, also um sie minus die halbe
+    # Länge über der Mitte. Zur Mündung bzw. zum Fuß wird es weiter.
+    above_centre = length / 2.0 if internal else gauge_length - length / 2.0
+    assert float(feature.params["nominal"]) == pytest.approx(
+        gauge_diameter - above_centre / 16.0, abs=2e-3
+    )
+    gauge = thread_at_gauge(feature)
+    assert gauge is not None
+    assert gauge[1] == pytest.approx(gauge_diameter, abs=2e-3)
+    assert thread_values_for(feature) == {"size": size}
+
+
+def test_a_measured_tapered_thread_is_matched_anywhere_along_its_length() -> None:
+    """Ein gemessenes Kegelgewinde nennt nur seine Mitte; die Bezugsebene liegt auf der Strecke.
+
+    R 1/4 innen, 40 mm lang, Mitte 20 mm unter der Mündung: Ø 13,157 − 20/16 =
+    11,907. Der Vergleich lässt um den Kegel über der halben Länge Raum
+    (``standards.thread_sizes_near``), nicht nur über die Bezugslänge.
+    """
+    measured = _generated(
+        13.157 - 20.0 / 16.0,
+        25.4 / 19.0,
+        provenance="native",
+        taper=1.7899,
+        internal=True,
+        length=40.0,
+    )
+    assert thread_values_for(measured) == {"size": "R1/4"}
+
+
 def test_a_measured_thread_matching_two_series_asks_which_one() -> None:
     """Regel 21 (RM-544): R 1/2 und NPT 1/2 haben beide 14 Gänge je Zoll — gefragt wird.
 
     Die Rückfrage nennt beide Größen; mit der Antwort entsteht das Gegenstück. Wer
-    eine der Reihen ausblendet, wird nicht gefragt.
+    eine der Reihen ausblendet, wird im Ablauf der Oberfläche nicht gefragt.
     """
     from app.core.counterpart import AMBIGUOUS_THREAD
 
@@ -231,10 +295,14 @@ def test_a_measured_thread_matching_two_series_asks_which_one() -> None:
     assert thread_values_for(measured, "1/2-14 NPT") == {"size": "1/2-14 NPT"}
     draft = thread_counterpart_draft(measured, "obj_2", {}, "R1/2")
     assert draft.params["size"] == "R1/2" and draft.params["internal"] is True
+    assert thread_values_for(measured, families=("metric", "G", "R")) == {"size": "R1/2"}
+    # Die Einstellung der Oberfläche reicht nur ein Ablauf durch (Review GEW, M2):
+    # Ohne Argument sucht der Kern unter allen Reihen und fragt.
     before = standards.shown_thread_families()
     try:
         standards.set_shown_thread_families(("metric", "G", "R"))
-        assert thread_values_for(measured) == {"size": "R1/2"}
+        with pytest.raises(ValidationError):
+            thread_values_for(measured)
     finally:
         standards.set_shown_thread_families(before)
 
@@ -248,12 +316,7 @@ def test_a_measured_m2_is_also_a_number_two_unified_thread() -> None:
         thread_values_for(measured)
     assert caught.value.constraint == AMBIGUOUS_THREAD
     assert "M2" in caught.value.values["choices"]
-    before = standards.shown_thread_families()
-    try:
-        standards.set_shown_thread_families(("metric",))
-        assert thread_values_for(measured) == {"size": "M2"}
-    finally:
-        standards.set_shown_thread_families(before)
+    assert thread_values_for(measured, families=("metric",)) == {"size": "M2"}
 
 
 @pytest.mark.parametrize(
@@ -409,6 +472,92 @@ def test_a_printed_pair_fits_with_the_play_it_is_built_with(
     play = profile.material.clearance
     assert round_display(gap) == round_display(2.0 * play), "jede Hälfte trägt das Spiel einmal"
     assert round_display(target(checked.scene, applied.fit, profile)[0]) == round_display(gap)
+
+
+@pytest.mark.parametrize(
+    ("size", "length"), [("R1/4", 12.0), ("1/2-14 NPT", 12.0), ("1/2-14 NPT", 30.0)]
+)
+def test_a_printed_tapered_pair_fits_in_its_gauge_plane(
+    profile: Profile, size: str, length: float
+) -> None:
+    """Review GEW, H1: Ein frisches R/NPT-Paar aus *Gegenstück zum Gewinde* trägt keinen Befund.
+
+    Die Passung verglich die Mitten beider Hälften — im gefügten Paar liegen sie
+    auf verschiedenen Höhen, und R 1/4 × 12 mm meldete „enger als vorgesehen,
+    0,12 statt 0,50 mm“. Gemessen wird in der Bezugsebene: dort trägt jede Hälfte
+    das Spiel einmal. Ein Gewinde, dessen Bezugsebene nicht bekannt ist, wird nicht
+    geraten, sondern als nicht messbar gemeldet.
+    """
+    from app.core.scene.fits import check, resolve
+    from app.core.types import thread_at_gauge
+
+    document = new_project("centauri-carbon-2", "petg").document
+    cache = ResultCache()
+    plate = {"width": 40.0, "depth": 30.0, "height": length + 10.0}
+    History(document).apply(
+        "Zwei Platten",
+        [
+            OperationDraft(op="create_box", params=plate),
+            OperationDraft(op="create_box", params=plate),
+        ],
+    )
+    History(document).apply(
+        "Daneben", [OperationDraft(op="translate_object", inputs=("obj_2",), params={"dx": 60.0})]
+    )
+    top = length + 10.0
+    History(document).apply(
+        "Gewinde",
+        [
+            OperationDraft(
+                op="insert_printed_thread",
+                inputs=("obj_1",),
+                params={"size": size, "length": length, "internal": True, "z": top},
+            )
+        ],
+    )
+    result = evaluate(document, profile, cache=cache)
+    assert result.stopped_at is None
+    (thread,) = [
+        feature
+        for feature in result.scene.objects["obj_1"].features.values()
+        if feature.kind == "thread" and feature.provenance == "generated"
+    ]
+    applied = apply_thread_counterpart(document, thread, "obj_1", "obj_2", {"x": 60.0, "z": top})
+    assert document.ops[-1].params["size"] == size
+    result = evaluate(document, profile, cache=cache)
+    applied = attach_thread_fit(document, applied, thread, result.scene)
+    assert applied.fit is not None
+    checked = evaluate(document, profile, cache=cache)
+    assert checked.stopped_at is None
+    findings = check(checked.scene, profile, document=document)
+    assert not [entry for entry in findings if entry.code.startswith("fit.")], [
+        (entry.code, dict(entry.values)) for entry in findings
+    ]
+    halves = [resolve(checked.scene, ref) for ref in (applied.fit.a, applied.fit.b)]
+    gauges = {bool(half.params["internal"]): thread_at_gauge(half) for half in halves if half}
+    assert gauges[True] is not None and gauges[False] is not None
+    play = profile.material.clearance
+    assert gauges[True][0] - gauges[False][0] == pytest.approx(2.0 * play, abs=1e-6)
+
+    # Ohne Bezugsebene — gemessen oder geändert — kein Maß und kein falscher Befund.
+    hole_ref = applied.fit.a
+    hole = resolve(checked.scene, hole_ref)
+    assert hole is not None
+    unknown = dataclasses.replace(
+        hole, params={key: value for key, value in hole.params.items() if key != "gauge_nominal"}
+    )
+    holder = checked.scene.objects[hole_ref.object_id]
+    scene = dataclasses.replace(
+        checked.scene,
+        objects={
+            **checked.scene.objects,
+            hole_ref.object_id: dataclasses.replace(
+                holder, features={**holder.features, hole.id: unknown}
+            ),
+        },
+    )
+    codes = [entry.code for entry in check(scene, profile, document=document)]
+    assert "fit.not_measurable" in codes and "fit.violated" not in codes, codes
 
 
 def test_an_internal_thread_gets_a_bolt(profile: Profile) -> None:

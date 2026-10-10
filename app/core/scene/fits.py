@@ -49,6 +49,8 @@ from app.core.types import (
     SceneObject,
     Severity,
     kind_of,
+    thread_at_gauge,
+    thread_is_tapered,
     vec3_or_none,
 )
 from app.core.units import EPS_DISPLAY, EPS_GEOM, format_length
@@ -77,6 +79,23 @@ def resolve(scene: Scene, reference: FeatureRef) -> Feature | None:
 
 def diameter_of(feature: Feature) -> float | None:
     return _positive(feature, "diameter")
+
+
+def _gauge_diameter(feature: Feature) -> float | None:
+    """Das gebaute Maß eines Gewindes dort, wo sich die Hälften eines Paars treffen.
+
+    **Ein Kegel in seiner Bezugsebene, ein Zylinder überall** (Review GEW, H1):
+    Ein kegeliges Gewinde nennt sein Maß in der Mitte seiner Strecke, und im
+    gefügten Paar liegen die Mitten der zwei Hälften nicht auf einer Höhe —
+    verglichen, maß ein frisches R 1/4 mit 12 mm „0,12 statt 0,50 mm“. Wo die
+    Bezugsebene nicht bekannt ist (gemessen, geändert), gibt es kein Maß
+    (``types.thread_at_gauge``); ein zylindrisches Gewinde, etwa Rp unter R,
+    hat seins auf ganzer Länge.
+    """
+    if not thread_is_tapered(feature):
+        return diameter_of(feature)
+    gauge = thread_at_gauge(feature)
+    return None if gauge is None or gauge[0] <= EPS_GEOM else gauge[0]
 
 
 def _positive(feature: Feature, name: str) -> float | None:
@@ -886,8 +905,28 @@ def _check_pair(scene: Scene, fit: Fit, profile: Profile, cancelled: CancelToken
         ]
 
     hole, pin = _sort_by_kind(first, second)
-    hole_diameter = diameter_of(hole)
-    pin_diameter = diameter_of(pin)
+    if fit.kind == "thread" and (thread_is_tapered(hole) or thread_is_tapered(pin)):
+        hole_diameter, pin_diameter = _gauge_diameter(hole), _gauge_diameter(pin)
+        if hole_diameter is None or pin_diameter is None:
+            return [
+                Finding(
+                    code="fit.not_measurable",
+                    severity="warning",
+                    message=_(
+                        "Ein kegeliges Gewinde hat sein Maß in der Bezugsebene, und die ist an "
+                        "diesem Gewinde nicht bekannt. Geprüft werden kegelige Paare aus der "
+                        "Bibliothek."
+                    ),
+                    values={"fit": fit.name},
+                    object_id=fit.a.object_id,
+                    feature_ids=(fit.a.feature_id,),
+                    # Regel 17: Das Merkmal zeigt, welches Gewinde gemessen ist.
+                    suggestions=(SHOW_FEATURE,),
+                )
+            ]
+    else:
+        hole_diameter = diameter_of(hole)
+        pin_diameter = diameter_of(pin)
     if hole_diameter is None or pin_diameter is None:
         return [
             Finding(

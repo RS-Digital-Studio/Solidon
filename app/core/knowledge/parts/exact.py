@@ -30,7 +30,7 @@ from typing import TYPE_CHECKING, Any, Final
 
 from app.core.errors import CANCEL, CORRECT_INPUT, GeometryError
 from app.core.types import Finding, Point2, Vec3
-from app.core.units import EPS_GEOM
+from app.core.units import EPS_GEOM, exact_atan_degrees
 from app.i18n import _
 
 if TYPE_CHECKING:
@@ -287,7 +287,8 @@ def threaded(
         ridge,
         start=start,
         starts=starts,
-        taper=math.atan(taper),
+        # Der Winkel plattformgleich (`kern.md`, Review GEW M1).
+        taper=math.radians(exact_atan_degrees(taper)),
     )
     # Der Schnitt umfasst die weiteste Stelle über die ganze Länge des Körpers.
     reach = crest_radius + max(0.0, taper) * (turns + 1) * lead

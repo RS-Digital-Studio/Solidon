@@ -46,7 +46,14 @@ from app.core.sketch.profile import (
     spline_controls,
 )
 from app.core.types import CancelToken, PlaneFrame, Point2, Vec3
-from app.core.units import EPS_GEOM, THREAD_MIN_CORE_SHARE, is_close, is_zero
+from app.core.units import (
+    EPS_GEOM,
+    THREAD_MIN_CORE_SHARE,
+    exact_cos,
+    exact_sin,
+    is_close,
+    is_zero,
+)
 from app.i18n import _
 
 _log = get_logger(__name__)
@@ -1312,12 +1319,13 @@ def helical_thread(
             detail="the half angle of a tapered thread must lie within 45 degrees of the axis"
         )
     lead = starts * pitch
-    slope = math.tan(taper)
+    # Plattformgleich (`kern.md`): Kosinus und Sinus aus `units`, nicht aus `math`.
+    slope = exact_sin(taper) / exact_cos(taper)
     # Eine Trägerfläche je Profilpunkt — nach seinem Index, nicht nach dem
     # Radius: Ein Fließkommawert taugt nicht als Schlüssel (Regel 6). Ohne
     # Kegel ist der Parameter längs der Fläche die Höhe, mit Kegel die
     # Mantellinie ab der Höhe ``start``.
-    stretch = 1.0 / math.cos(taper)
+    stretch = 1.0 / exact_cos(taper)
     surfaces: list[Any]
     if taper:
         frame = gp_Ax3(gp_Pnt(0.0, 0.0, start), gp_Dir(0.0, 0.0, 1.0))

@@ -45,7 +45,7 @@ from app.core.errors import CANCEL, CHANGE_SELECTION, CORRECT_INPUT, ValidationE
 from app.core.geom.boolean import BOOLEAN_OVERLAP
 from app.core.geom.mesh import MeshData, as_mesh_data, ray_hit_distances
 from app.core.types import Feature, FeatureId, Finding, is_a_cavity
-from app.core.units import EPS_GEOM, MAX_FACET_SAG
+from app.core.units import EPS_GEOM, MAX_FACET_SAG, dot3, exact_tan_degrees
 from app.i18n import _
 
 #: Die zwei Formen des Stifts: passend zur Bohrung (mit Kopf und Gewinde, wo
@@ -660,8 +660,8 @@ def _taper_in_frame(
     wo das Nennmaß der Tabellengröße erreicht ist.
     """
     own = _unit(feature.params.get("axis", (0.0, 0.0, 1.0)))
-    sense = 1.0 if float(np.dot(own, axis)) >= 0.0 else -1.0
-    slope = sense * math.tan(math.radians(float(feature.params.get("taper", 0.0))))
+    sense = 1.0 if dot3(own, axis) >= 0.0 else -1.0
+    slope = sense * exact_tan_degrees(float(feature.params.get("taper", 0.0)))
     named = feature.params.get("nominal")
     measured = (
         float(named)

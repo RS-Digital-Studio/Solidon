@@ -1928,7 +1928,9 @@ def _transformed_features(
             # Sein Spiel ist mitgewachsen, es ist gebaut, wie es dasteht
             # (``fits._thread_wanted``).
             params.pop("nominal", None)
+            params.pop("gauge_nominal", None)
             sources.pop("nominal", None)
+            sources.pop("gauge_nominal", None)
         if uniform:
             for key in lengths:
                 if key in params:

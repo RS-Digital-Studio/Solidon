@@ -15,6 +15,7 @@ Kern und braucht seine Zeile.
 
 from __future__ import annotations
 
+import functools
 import math
 from collections.abc import Iterator, Sequence
 from contextlib import contextmanager
@@ -28,7 +29,15 @@ from app.core.errors import InternalError
 from app.core.geom import lathe, transform
 from app.core.geom.mesh import MeshData
 from app.core.types import Finding, Point2, Vec3
-from app.core.units import EPS_GEOM, MAX_FACET_SAG, exact_cos, exact_cos_sin_array
+from app.core.units import (
+    EPS_GEOM,
+    MAX_FACET_SAG,
+    exact_cos,
+    exact_cos_degrees,
+    exact_cos_sin_array,
+    exact_sin_degrees,
+    exact_tan_degrees,
+)
 
 if TYPE_CHECKING:
     from app.core.brep.kernel import Solid
@@ -134,13 +143,33 @@ RIDGE_END = 0.8
 ThreadProfile = Literal["flat", "whitworth", "npt"]
 THREAD_PROFILES: tuple[ThreadProfile, ...] = ("flat", "whitworth", "npt")
 
-#: Der halbe Flankenwinkel des Whitworth-Profils: 55° zwischen den Flanken.
-WHITWORTH_HALF_ANGLE = math.radians(27.5)
+#: Der halbe Flankenwinkel des Whitworth-Profils in Grad: 55° zwischen den Flanken.
+#: Gerechnet wird mit ``units.exact_*_degrees``, nicht mit ``math``: Der Umriss
+#: ist Geometrie und muss auf jeder Maschine derselbe sein (``kern.md``, Review
+#: GEW M1 — ``math.sin`` irrte unter Windows bei 58,75° um ein halbes ULP).
+WHITWORTH_HALF_ANGLE = 27.5
+
+#: Die Höhe des spitzen 55°-Dreiecks als Anteil der Steigung, H = P / (2 · tan 27,5°).
+_WHITWORTH_HEIGHT = 1.0 / (2.0 * exact_tan_degrees(WHITWORTH_HALF_ANGLE))
 
 #: Die Gangtiefe des Whitworth-Profils als Anteil der Steigung: zwei Drittel der
-#: Höhe des spitzen 55°-Dreiecks, H = P / (2 · tan 27,5°). ISO 228-1 nennt
-#: h = 0,640327 P; dieselbe Zahl kommt hier aus dem Winkel.
-WHITWORTH_DEPTH = 2.0 / 3.0 / (2.0 * math.tan(WHITWORTH_HALF_ANGLE))
+#: Höhe des spitzen 55°-Dreiecks. ISO 228-1 nennt h = 0,640327 P; dieselbe Zahl
+#: kommt hier aus dem Winkel.
+WHITWORTH_DEPTH = 2.0 / 3.0 * _WHITWORTH_HEIGHT
+
+#: Der Halbmesser von Kamm- und Grundbogen als Anteil der Steigung, r = 0,137329 P
+#: (ISO 228-1): tangential an die Flanken, H/6 vom Kamm des spitzen Dreiecks.
+_WHITWORTH_SINE = exact_sin_degrees(WHITWORTH_HALF_ANGLE)
+WHITWORTH_RADIUS = _WHITWORTH_HEIGHT / 6.0 * _WHITWORTH_SINE / (1.0 - _WHITWORTH_SINE)
+
+#: Die Bögen des Whitworth-Umrisses in Grad, je (Mitte axial, Mitte radial in
+#: Gangtiefen ab dem Fuß, erster Winkel, letzter Winkel, Sehnen): Grundbogen,
+#: Kammbogen, Grundbogen. Die längste Sehne überspannt 31,25°.
+_WHITWORTH_ARCS = (
+    (0.0, False, -80.0, -27.5, 2),
+    (0.5, True, 152.5, 27.5, 4),
+    (1.0, False, -152.5, -100.0, 2),
+)
 
 #: Die Gangtiefe des NPT-Profils als Anteil der Steigung (ASME B1.20.1: h = 0,8 P).
 NPT_DEPTH = 0.8
@@ -158,36 +187,49 @@ def ridge_depth(pitch: float, profile: ThreadProfile = "flat") -> float:
     return pitch * DEPTH_SHARE[profile]
 
 
-def _whitworth_outline() -> tuple[tuple[float, float], ...]:
+def whitworth_splits(pitch: float) -> int:
+    """In wie viele Teile jede Sehne der Whitworth-Bögen bei dieser Steigung zerfällt.
+
+    Eine Sehne weicht in ihrer Mitte um r · (1 - cos(halber Bogenwinkel)) vom
+    Bogen ab, bei der längsten (31,25°) um 0,0051 · P. Bis 9,8 mm Steigung —
+    jede G- und R-Größe — liegt das unter ``units.MAX_FACET_SAG``, und eine
+    Sehne bleibt eine; darüber, beim eigenen Maß in Whitworth-Form bis zur
+    gröbsten Steigung, wird jede so oft geteilt, wie die Regel verlangt, die
+    über die Sehnen jedes Bogens am Netz entscheidet (Review GEW, G1).
+    """
+    radius = WHITWORTH_RADIUS * pitch
+    longest = max(abs(last - first) / chords for _a, _c, first, last, chords in _WHITWORTH_ARCS)
+    splits = 1
+    while radius * (1.0 - exact_cos_degrees(longest / (2.0 * splits))) > MAX_FACET_SAG:
+        splits += 1
+    return splits
+
+
+@functools.lru_cache(maxsize=64)
+def _whitworth_outline(splits: int = 1) -> tuple[tuple[float, float], ...]:
     """Das gerundete 55°-Profil eines Gangs, axial und radial in Steigungen.
 
-    Kamm und Grund sind Kreisbögen mit r = 0,137329·P, tangential an die Flanken
-    (ISO 228-1), hier als Sehnen von höchstens gut dreißig Grad — das weicht um
-    weniger als ein Zweihundertstel der Steigung ab, bei G 1/2 unter zehn
-    Mikrometern. Der Gang beginnt und endet ein Stück neben der tiefsten Stelle
-    des Grundbogens, wo dieser weniger als 0,003 P über dem Grund liegt: Zwischen
-    zwei Umläufen bleibt so ein schmaler Grundstreifen (``helical_thread`` und
-    der Netzbau verlangen ihn), und der Gang setzt auf dem Kern auf.
+    Kamm und Grund sind Kreisbögen mit :data:`WHITWORTH_RADIUS`, tangential an
+    die Flanken (ISO 228-1), als Sehnen, deren jede ``splits`` Teile hat
+    (:func:`whitworth_splits`). Der Gang beginnt und endet ein Stück neben der
+    tiefsten Stelle des Grundbogens, wo dieser weniger als 0,003 P über dem
+    Grund liegt: Zwischen zwei Umläufen bleibt so ein schmaler Grundstreifen
+    (``helical_thread`` und der Netzbau verlangen ihn), und der Gang setzt auf
+    dem Kern auf. Winkel über ``units``, nie über ``math`` (``kern.md``).
     """
-    height = 1.0 / (2.0 * math.tan(WHITWORTH_HALF_ANGLE))
-    sine = math.sin(WHITWORTH_HALF_ANGLE)
-    radius = height / 6.0 * sine / (1.0 - sine)
-    depth = WHITWORTH_DEPTH
-
-    def arc(centre: tuple[float, float], degrees: Sequence[float]) -> list[tuple[float, float]]:
-        return [
-            (
-                centre[0] + radius * math.cos(math.radians(angle)),
-                centre[1] + radius * math.sin(math.radians(angle)),
+    radius = WHITWORTH_RADIUS
+    points: list[tuple[float, float]] = []
+    for axial, crest, first, last, chords in _WHITWORTH_ARCS:
+        rise = WHITWORTH_DEPTH - radius if crest else radius
+        count = chords * splits
+        for index in range(count + 1):
+            angle = first + (last - first) * index / count
+            points.append(
+                (
+                    axial + radius * exact_cos_degrees(angle),
+                    rise + radius * exact_sin_degrees(angle),
+                )
             )
-            for angle in degrees
-        ]
-
-    points = [
-        *arc((0.0, radius), (-80.0, -53.75, -27.5)),
-        *arc((0.5, depth - radius), (152.5, 121.25, 90.0, 58.75, 27.5)),
-        *arc((1.0, radius), (-152.5, -126.25, -100.0)),
-    ]
     start = points[0][0]
     shifted = [(axial - start, rise) for axial, rise in points]
     shifted[0] = (0.0, 0.0)
@@ -202,16 +244,21 @@ def _npt_outline() -> tuple[tuple[float, float], ...]:
     ``NPT_DEPTH``; Kamm und Grund sind gleich breite Flächen, zusammen das, was
     vom spitzen Dreieck (H = 0,866·P) über der Gangtiefe fehlt.
     """
-    flank = NPT_DEPTH * math.tan(math.radians(30.0))
+    flank = NPT_DEPTH * exact_tan_degrees(30.0)
     flat = (1.0 - 2.0 * flank) / 2.0
     return ((0.0, 0.0), (flank, NPT_DEPTH), (flank + flat, NPT_DEPTH), (2.0 * flank + flat, 0.0))
 
 
-#: Die Profile außer ``flat`` als Umriss in Steigungen (axial, radial), einmal gerechnet.
-_OUTLINES: dict[ThreadProfile, tuple[tuple[float, float], ...]] = {
-    "whitworth": _whitworth_outline(),
-    "npt": _npt_outline(),
-}
+#: Das NPT-Profil als Umriss in Steigungen (axial, radial), einmal gerechnet.
+_NPT_OUTLINE = _npt_outline()
+
+
+def _outline(profile: ThreadProfile, pitch: float) -> tuple[tuple[float, float], ...]:
+    """Der Umriss eines Profils außer ``flat`` bei dieser Steigung."""
+    if profile == "npt":
+        return _NPT_OUTLINE
+    return _whitworth_outline(whitworth_splits(pitch))
+
 
 #: Zusatztiefe einer Aufnahme über das hinaus, was in ihr steckt — damit zwei
 #: Hälften auf ihrer Naht schließen und nicht auf dem Ende des Verbinders.
@@ -564,7 +611,7 @@ def ridge_profile(
     ``flat``, vier Punkte: Fuß bei null, Kammbeginn bei ``RIDGE_START``, Kammende
     bei ``RIDGE_SHARE``, Fuß bei ``RIDGE_END`` — alles Anteile der Steigung, die
     Tiefe ``RIDGE_SHARE`` Steigungen. ``whitworth`` und ``npt`` folgen ihrem
-    Umriss (:data:`_OUTLINES`) mit der Tiefe aus :data:`DEPTH_SHARE`. Außen liegt
+    Umriss (:func:`_outline`) mit der Tiefe aus :data:`DEPTH_SHARE`. Außen liegt
     der Fuß eine Tiefe unter dem Durchmesser und der Kamm auf ihm; innen ist der
     Durchmesser die Bohrung, der Fuß liegt auf ihr und der Kamm eine Tiefe
     weiter außen. Der Netzweg (:func:`thread_body`) legt die Punkte je Ring an,
@@ -583,7 +630,7 @@ def ridge_profile(
             (root, pitch * RIDGE_END),
         )
     scale = depth / DEPTH_SHARE[profile]
-    return tuple((root + rise * scale, axial * pitch) for axial, rise in _OUTLINES[profile])
+    return tuple((root + rise * scale, axial * pitch) for axial, rise in _outline(profile, pitch))
 
 
 def turn_segments(radius: float) -> int:

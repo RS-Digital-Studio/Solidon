@@ -90,7 +90,7 @@ from numpy.typing import NDArray
 from app.core.deferred import trimesh
 from app.core.geom.mesh import MeshData
 from app.core.log import get_logger
-from app.core.units import EPS_GEOM, MAX_FACET_SAG, positive_axis
+from app.core.units import EPS_GEOM, MAX_FACET_SAG, dot3, positive_axis
 
 _log = get_logger(__name__)
 
@@ -377,12 +377,16 @@ def _same_screw(one: Helix, other: Helix) -> bool:
         return False
     if abs(one.crest_radius - other.crest_radius) > MAX_FACET_SAG:
         return False
+    # Elementweise statt über BLAS (``np.dot``, ``np.linalg.norm``): Die Antwort
+    # entscheidet, ob zwei Züge ein mehrgängiges Gewinde sind, und muss auf jeder
+    # Maschine dieselbe sein (``kern.md``, Review GEW M1).
     axis = np.asarray(one.axis, dtype=float)
-    if abs(float(np.dot(axis, np.asarray(other.axis, dtype=float)))) < 1.0 - 1e-4:
+    if abs(dot3(axis, np.asarray(other.axis, dtype=float))) < 1.0 - 1e-4:
         return False
     offset = np.asarray(other.centre, dtype=float) - np.asarray(one.centre, dtype=float)
-    along = float(np.dot(offset, axis))
-    if float(np.linalg.norm(offset - along * axis)) > MAX_FACET_SAG:
+    along = dot3(offset, axis)
+    across = offset - along * axis
+    if math.sqrt(dot3(across, across)) > MAX_FACET_SAG:
         return False
     return abs(along) < (one.length + other.length) / 2.0
 
