@@ -1512,6 +1512,13 @@ class SlotOverride:
     material: str | None = None
     material_type: str | None = None
 
+    inherited: frozenset[str] = frozenset()
+    """Punktpfade in den gesetzten Gruppen, die die Spule **nicht** übersteuert
+    (RM-707): Felder, die ihre Datei nicht kannte. Sie folgen dem Wert ohne
+    Spule (:func:`app.core.export.handover.override_section`), statt mit der
+    Vorgabe der Dataclass das Herstellerprofil zu überschreiben, und werden
+    nicht geschrieben — so bleibt es beim nächsten Öffnen dabei."""
+
     @property
     def empty(self) -> bool:
         """Ob dieser Slot überhaupt etwas übersteuert."""

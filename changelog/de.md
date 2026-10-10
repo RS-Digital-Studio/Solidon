@@ -125,7 +125,7 @@ Nutzen da und sonst nichts.
 - Unter Linux mit Flatpak meldet Solidon einen Absturz des Slicers jetzt als Absturz, statt nur zu sagen, dass keine Druckdatei entstand.
 - Auch bei Druckern, die PrusaSlicer oder SuperSlicer nicht selbst kennen, rechnen beide die Druckzeit mit den übergebenen Beschleunigungen, und die Datei nennt das Material der Spule.
 - Auch auf einem voll ausgelasteten Rechner nennt Solidon nach dem Anhalten eines Slicers den wirklichen Grund statt einer Zeitüberschreitung. Eine fertige Druckdatei wird übernommen.
-- Ein vor dem Update gebuchter Druck wird danach im Filamentlager wiedererkannt.
+- Das Filamentlager erkennt eine Buchung aus Solidon 0.5.1 wieder als frühere Buchung und fragt nach, bevor es denselben Druck erneut abbucht.
 
 ### Gewinde, Bohrungen und Normteile
 

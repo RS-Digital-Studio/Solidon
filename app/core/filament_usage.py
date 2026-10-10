@@ -125,8 +125,6 @@ _LEGACY_SHAPES: Final = (
     (("brim_gap", "raft_gap"), True),
 )
 
-_DEFAULTS: Final = PrintSettings()
-
 
 @dataclass(frozen=True, slots=True)
 class UsageLine:
@@ -224,7 +222,7 @@ def _material_properties(
 
 
 def _without_later_fields(
-    values: dict[str, Any], settings: PrintSettings, slot: MaterialSlot
+    values: dict[str, Any], settings: PrintSettings, slot: MaterialSlot, profile: Profile
 ) -> None:
     """Nimmt jedes Feld nach 0.5.3 aus dem Abdruck, das nur Grundlage ist (RM-705).
 
@@ -233,21 +231,36 @@ def _without_later_fields(
     nicht die Vorgabe der Dataclass ist: Der ElegooSlicer bringt
     ``cooling.minimum_speed`` 20 statt 10 mit. Es zählt nur, was abweichen
     soll: eigene Wahl und übernommener Vorschlag (``explicit``) oder ein Wert
-    der Spule abseits der Vorgabe. Eine Spule aus 0.5.3 liest das Feld mit der
-    Vorgabe ein (``serialise._group_from_data``) und behält so ihre Kennung.
+    der Spule, der vom Wert ohne die Spule abweicht — **dieselbe Auskunft wie
+    ``handover._for_the_slot``**, das danach entscheidet, was an den Slicer
+    geht. Ein Feld, das die Datei einer Spule aus 0.5.3 nicht kannte, folgt
+    dem Wert ohne Spule (``SlotOverride.inherited``, RM-707) und fällt so
+    heraus.
     """
     override = override_for(settings, slot)
+    reference: PrintSettings | None = None
+    if override is not None and not override.empty:
+        without = replace(
+            settings,
+            slot_overrides=tuple(one for one in settings.slot_overrides if one is not override),
+        )
+        reference = settings_for_slot(without, profile, slot)
     for group in print_settings.GROUPS:
         section = values.get(group)
         if not isinstance(section, dict):
             continue
         known = FINGERPRINT_FIELDS.get(group, frozenset())
-        own = getattr(override, group, None) if override is not None else None
         for name in [name for name in section if name not in known]:
-            if f"{group}.{name}" in settings.explicit:
+            path = f"{group}.{name}"
+            if path in settings.explicit:
                 continue
-            default = getattr(getattr(_DEFAULTS, group), name)
-            if own is not None and not print_settings.same_value(section[name], default):
+            if (
+                reference is not None
+                and getattr(override, group, None) is not None
+                and not print_settings.same_value(
+                    section[name], print_settings.read_path(reference, path)
+                )
+            ):
                 continue
             del section[name]
         if not section and group not in FINGERPRINT_FIELDS:
@@ -365,7 +378,7 @@ def prepare(
                 "accepted",
             ):
                 values.pop(field, None)
-            _without_later_fields(values, mine, slot)
+            _without_later_fields(values, settings, slot, profile)
             # Alle Kennungen teilen dieselben gebundenen Werte. Unbekannte
             # oder sicher abgeschaltete Rafts bleiben ohne Feld; Auto ist offen.
             if values["adhesion"].get("raft_gap") is None or (

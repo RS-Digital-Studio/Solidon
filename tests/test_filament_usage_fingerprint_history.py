@@ -14,7 +14,7 @@ Projekt mit Würfel und Spulenbindung, Lager mit der gebuchten Ausgabe.
 from __future__ import annotations
 
 import shutil
-from dataclasses import fields, replace
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
@@ -22,13 +22,13 @@ import pytest
 import trimesh
 
 from app.core import filament_usage as usage
-from app.core.export import handover
+from app.core.export import handover, manufacturer
 from app.core.geom.mesh import MeshData
 from app.core.knowledge import filaments, print_settings, profiles
 from app.core.scene import evaluate
 from app.core.scene.project import ProjectSources, load
 from app.core.scene.serialise import print_settings_to_data
-from app.core.types import CoolingSettings, PrintSettings, SceneObject, SlotOverride
+from app.core.types import PrintSettings, SceneObject, SlotOverride
 from app.ui import filament_usage as ui
 
 DATA = Path(__file__).parent / "data"
@@ -185,11 +185,21 @@ def test_every_later_field_at_its_base_keeps_the_fingerprint() -> None:
     paths = later_paths()
     assert len(paths) >= 6, paths
     _objects, settings, _profile = cube_job()
-    for path in paths:
-        changed = print_settings.with_path(
-            settings, path, other_value(print_settings.read_path(settings, path))
-        )
-        assert fingerprint(changed).fingerprint == CUBE_053, path
+    unchanged = fingerprint(settings).fingerprint
+    assert unchanged == CUBE_053
+    # Jedes Feld für sich gegen den unveränderten Abdruck, alle Abweichler auf
+    # einmal: Der erste Pfad ist nicht der schuldige (Review RM-705, L3).
+    leaking = [
+        path
+        for path in paths
+        if fingerprint(
+            print_settings.with_path(
+                settings, path, other_value(print_settings.read_path(settings, path))
+            )
+        ).fingerprint
+        != unchanged
+    ]
+    assert not leaking, f"als Grundlage im Abdruck: {leaking}"
 
 
 def test_every_later_field_counts_as_own_choice_and_accepted_advice() -> None:
@@ -203,47 +213,34 @@ def test_every_later_field_counts_as_own_choice_and_accepted_advice() -> None:
         assert fingerprint(chosen).fingerprint == fingerprint(accepted).fingerprint, path
 
 
-def test_a_later_field_in_a_slot_override_counts_off_its_default() -> None:
-    """Ein eigener Wert einer Spule zählt; eine Spule aus 0.5.3 trägt die Vorgabe."""
+def test_a_later_field_of_a_spool_counts_where_it_differs_from_the_value_without_it() -> None:
+    """Ein Wert der Spule zählt, wo er vom Wert ohne Spule abweicht — in jeder der
+    vier Spulengruppen, dieselbe Auskunft wie ``handover._for_the_slot``."""
     objects, settings, profile = cube_job()
     slot = usage.prepare(objects, settings, profile, "Probe")[0].lines[0].slot
-    later = [path for path in later_paths() if path.startswith("cooling.")]
+    groups = handover.SLOT_GROUPS
+    later = [path for path in later_paths() if path.partition(".")[0] in groups]
     assert later
-    from_053 = handover.with_slot_override(
-        settings,
-        slot,
-        SlotOverride(
-            name=slot.name,
-            colour=slot.colour,
-            material=slot.material,
-            material_type=slot.material_type,
-            cooling=replace(settings.cooling, **_defaults(later)),
-        ),
+    # Eine Spule mit allen vier Gruppen, vorbelegt mit den Werten ohne Spule.
+    plain = SlotOverride(
+        name=slot.name,
+        colour=slot.colour,
+        material=slot.material,
+        material_type=slot.material_type,
+        **{group: getattr(settings, group) for group in groups},
     )
-    base = fingerprint(from_053).fingerprint
-    assert base == CUBE_053
+    spooled = handover.with_slot_override(settings, slot, plain)
+    assert fingerprint(spooled).fingerprint == CUBE_053
     for path in later:
-        name = path.partition(".")[2]
-        override = handover.override_for(from_053, slot)
-        assert override is not None and override.cooling is not None
+        group, _dot, name = path.partition(".")
+        section = getattr(plain, group)
         own = replace(
-            override,
-            cooling=replace(
-                override.cooling, **{name: other_value(getattr(override.cooling, name))}
-            ),
+            plain, **{group: replace(section, **{name: other_value(getattr(section, name))})}
         )
-        mine = handover.with_slot_override(from_053, slot, own)
-        assert fingerprint(mine).fingerprint != base, path
-
-
-def _defaults(paths: list[str]) -> dict[str, object]:
-    template = CoolingSettings()
-    names = {path.partition(".")[2] for path in paths}
-    return {
-        entry.name: getattr(template, entry.name)
-        for entry in fields(template)
-        if entry.name in names
-    }
+        mine = handover.with_slot_override(settings, slot, own)
+        assert fingerprint(mine).fingerprint != CUBE_053, path
+        # Derselbe Wert wie ohne Spule ist keine Abweichung.
+        assert path not in (handover._for_the_slot(frozenset(), spooled, slot, profile) or ()), path
 
 
 def test_a_booking_written_by_053_is_found_after_the_update(tmp_path: Path) -> None:
@@ -257,7 +254,10 @@ def test_a_booking_written_by_053_is_found_after_the_update(tmp_path: Path) -> N
     profile = profiles.make_profile(project.document.printer, project.document.material)
     stored = project.document.print_settings
     assert stored is not None
-    settings = print_settings.on_base(stored, print_settings.resolve(profile, stored.quality))
+    # Der Weg der Anwendung (``MainWindow.effective_print_settings``), ohne Slicer.
+    settings = manufacturer.effective(
+        stored, manufacturer.base_settings(profile, stored.quality, None)
+    )
     objects = list(
         evaluate(project.document, profile, sources=ProjectSources(project)).scene.objects.values()
     )

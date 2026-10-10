@@ -2668,10 +2668,10 @@ def _resolve_slot(
     if override is not None and not override.empty:
         settings = replace(
             settings,
-            temperature=override.temperature or settings.temperature,
-            cooling=override.cooling or settings.cooling,
-            retraction=override.retraction or settings.retraction,
-            filament=override.filament or settings.filament,
+            **{
+                group: override_section(override, group, getattr(settings, group))
+                for group in SLOT_GROUPS
+            },
         )
     return _SlotResolution(
         settings=settings,
@@ -2844,6 +2844,31 @@ def override_for(settings: PrintSettings, slot: MaterialSlot) -> SlotOverride | 
         if entry is not None and entry.key == threemf.slot_identity(slot):
             return entry
     return None
+
+
+#: Die Gruppen, die eine Spule übersteuern darf (:class:).
+SLOT_GROUPS: Final = ("temperature", "cooling", "retraction", "filament")
+
+
+def override_section(override: SlotOverride | None, group: str, current: Any) -> Any:
+    """Was in dieser Gruppe für die Spule gilt: ihre Werte, wo sie übersteuert.
+
+    ``current`` ist die Gruppe ohne die Spule. Ohne eigene Gruppe gilt sie
+    ganz; mit eigener Gruppe gelten deren Werte, ausgenommen die Felder, die
+    die Spule nicht übersteuert (:attr:`SlotOverride.inherited`, RM-707) —
+    sie folgen ``current``, wie der Vergleich in :func:`_for_the_slot`.
+    """
+    own = getattr(override, group, None) if override is not None else None
+    if own is None:
+        return current
+    kept = {
+        path.partition(".")[2]
+        for path in override.inherited  # type: ignore[union-attr]
+        if path.partition(".")[0] == group
+    }
+    if not kept:
+        return own
+    return replace(own, **{name: getattr(current, name) for name in kept})
 
 
 def unbound_override_for(settings: PrintSettings, slot: MaterialSlot) -> SlotOverride | None:

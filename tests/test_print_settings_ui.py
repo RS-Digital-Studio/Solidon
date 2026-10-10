@@ -1647,6 +1647,45 @@ def test_filament_dialog_builds_one_groupwise_override(qt_app: QApplication) -> 
     assert dialog.override() is None, "ein sichtbarer Knopf nimmt alle eigenen Werte zurück"
 
 
+def test_a_spool_from_053_shows_and_keeps_the_project_value_in_later_fields(
+    qt_app: QApplication,
+) -> None:
+    """Was die Spule nicht übersteuert, zeigt der Dialog als Projektwert und lässt
+    es dabei; erst ein geänderter Wert gehört ihr (RM-707)."""
+    base = print_settings.resolve(profiles.make_profile("centauri-carbon-2", "pla"))
+    settings = print_settings.with_path(base, "cooling.minimum_speed", 20.0)
+    slot = MaterialSlot(index=1, name="PLA Weiß", colour=(1.0, 1.0, 1.0))
+    existing = SlotOverride(
+        name=slot.name,
+        colour=slot.colour,
+        cooling=replace(settings.cooling, fan_speed=0.8, minimum_speed=10.0),
+        inherited=frozenset({"cooling.minimum_speed"}),
+    )
+    dialog = FilamentOverrideDialog(slot, settings, existing)
+    try:
+        editor = dialog.editors["cooling.minimum_speed"]
+        assert isinstance(editor, BoundedSpin)
+        assert editor.value() == pytest.approx(20.0)
+        kept = dialog.override()
+        assert kept is not None and kept.cooling is not None
+        assert kept.cooling.fan_speed == pytest.approx(0.8)
+        assert "cooling.minimum_speed" in kept.inherited
+        assert handover.override_section(
+            kept, "cooling", settings.cooling
+        ).minimum_speed == pytest.approx(20.0)
+
+        editor.setValue(12.0)
+        own = dialog.override()
+        assert own is not None and "cooling.minimum_speed" not in own.inherited
+        assert handover.override_section(
+            own, "cooling", settings.cooling
+        ).minimum_speed == pytest.approx(12.0)
+    finally:
+        dialog.reject()
+        qt_app.processEvents()
+        dialog.deleteLater()
+
+
 def test_filament_override_refuses_a_number_until_it_is_corrected(
     qt_app: QApplication,
 ) -> None:

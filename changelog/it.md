@@ -100,7 +100,7 @@ scrive in `website/version.json`.
 - Su Linux con Flatpak, Solidon ora segnala un arresto anomalo dello slicer come tale, invece di dire solo che non è stato creato alcun file.
 - Anche con stampanti che PrusaSlicer o SuperSlicer non conoscono, entrambi stimano il tempo di stampa con le accelerazioni trasmesse, e il file indica il materiale della bobina.
 - Anche con il computer a pieno carico, Solidon indica il vero motivo dopo l'arresto di uno slicer, invece di un tempo scaduto. Un file di stampa finito viene usato.
-- Una stampa il cui consumo è stato scaricato prima dell'aggiornamento viene riconosciuta poi nel magazzino filamenti.
+- Il magazzino filamenti riconosce di nuovo un consumo scaricato con Solidon 0.5.1 e chiede prima di scaricare di nuovo la stessa stampa.
 
 ### Filettature, fori e componenti normalizzati
 
