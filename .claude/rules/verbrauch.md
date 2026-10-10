@@ -38,8 +38,11 @@ nach einem Update bei jedem Kunden zugleich (RM-705, RM-706).
 - **Die Einstellungen zählen mit dem, was dem Projekt gehört**
   (`_owned_settings`): Stufe, eigene Wahl und Vorschläge mit Wert, Wahl der
   Platte, eigene Spulenwerte ohne geerbte Felder. Die Grundlage des
-  Herstellers zählt nicht — ein Slicer-Update ist kein neuer Druck. Drucker
-  und Material zählen mit ihrer Kennung, nicht mit ihren Tabellenwerten.
+  Herstellers zählt nicht — ein Slicer-Update ist kein neuer Druck.
+- **Drucker und Material zählen wie im Cache-Schlüssel** (`profile_key` ohne
+  Prozesswerte, je Körper sein Material, dazu jedes Material eines
+  Schrittfelds): Eine Kalibrierung (§28.3) ändert Spiel und Lochzugabe und ist
+  ein anderer Druck. Grob mit Absicht — lieber kippt der Abdruck einmal zu oft.
 - **Plattformgleich**: Nur gespeicherte Angaben und Konstanten des Codes, kein
   aufgelöster Ausdruck, Pfade mit `/` getrennt. `PINNED_BOOKING` in
   `test_filament_usage_stored_inputs.py` hält die Bildung fest.

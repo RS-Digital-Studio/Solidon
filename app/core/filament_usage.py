@@ -376,16 +376,51 @@ def _owned_settings(settings: PrintSettings, slot: MaterialSlot) -> dict[str, ob
     }
 
 
-def _machine(profile: Profile) -> list[object]:
-    """Drucker, Düse und Material — ohne die Tabellenwerte, die ein Update ändert."""
-    printer = profile.printer
-    return [
-        printer.id,
-        printer.technology,
-        printer.nozzle_diameter,
-        printer.nozzles,
-        profile.material.id,
-    ]
+def _fixed_profile(profile: Profile) -> str:
+    """Drucker und Material, wie jeder Schritt sie liest (Review RM-706, S1).
+
+    Dieselben festen Werte wie im Cache-Schlüssel (``profile_key`` ohne
+    Prozesswerte): Spiel, Presssitz, Lochzugabe, Elefantenfuß, Schrumpf und die
+    Mechanikwerte gehen in jede Geometrie mit einem ``auto:<material>``-Maß ein,
+    und eine Kalibrierung (Bauplan §28.3) rechnet jedes Projekt danach neu — ein
+    anderer Druck. Bewusst grob wie der Schlüssel: Auch ein schlichter Quader
+    kippt mit, lieber einmal zu oft als zwei Drucke unter einem Namen. Die
+    Prozesswerte fehlen; ihre Grundlage benennt die Wahl des Prozesses.
+    """
+    return profile_key(profile, process=False)
+
+
+def _body_profile(profile: Profile, body: SceneObject) -> str:
+    """Das feste Profil, mit dem dieser Körper rechnet: das eigene Material des
+    Körpers oder seiner Spule, wo er eines hat (``profiles.for_object``)."""
+    try:
+        return _fixed_profile(profiles.for_object(profile, body))
+    except AppError:
+        # Ein Material, das dieser Rechner nicht kennt, rechnet hier nicht —
+        # sein Name steht trotzdem für sich.
+        return digest("unknown-material", body.material)
+
+
+def _step_materials(profile: Profile, document: Document) -> list[str]:
+    """Die festen Profile der Materialien, die ein Schritt benennt (Dichtung,
+    Klemme; ``OperationSpec.material_params``) — wie der Cache-Schlüssel sie liest."""
+    from app.core.registry import REGISTRY
+
+    keys: set[str] = set()
+    for operation in document.ops:
+        if operation.suppressed is not None or not REGISTRY.has(operation.op):
+            continue
+        for name in REGISTRY.get(operation.op).material_params:
+            chosen = operation.params.get(name)
+            if not isinstance(chosen, str) or not chosen:
+                continue
+            try:
+                material = profiles.material(chosen)
+            except AppError:
+                keys.add(digest("unknown-material", chosen))
+                continue
+            keys.add(_fixed_profile(Profile(printer=profile.printer, material=material)))
+    return sorted(keys)
 
 
 @dataclass(frozen=True, slots=True)
@@ -571,6 +606,7 @@ def prepare(
     """
     settings = bind_object_profiles(settings, objects)
     stored_bodies = inputs.bodies() if inputs is not None else None
+    step_materials = _step_materials(profile, inputs.document) if inputs is not None else []
     whole_job = [
         threemf.AssemblyPart(as_mesh_data(body.mesh), slots=threemf.slots_for_object(body))
         for body in objects
@@ -622,6 +658,7 @@ def prepare(
                     (
                         str(body.id),
                         stored_bodies.get(body.id) or digest("unstored", checksum.hexdigest()),
+                        _body_profile(profile, body),
                         assigned,
                     )
                 )
@@ -728,7 +765,8 @@ def prepare(
                 plate,
                 sorted(stored_geometry),
                 sorted(owned, key=digest),
-                _machine(profile),
+                _fixed_profile(profile),
+                step_materials,
             )
             former = (evaluated,)
         legacy_fingerprints = dict.fromkeys(

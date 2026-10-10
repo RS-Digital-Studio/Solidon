@@ -56,7 +56,7 @@ DATA = Path(__file__).parent / "data"
 #: Bildung fest: Ändert sie sich, findet Solidon keine Buchung mehr, die nach
 #: diesem Stand gebucht wurde. Wer sie ändern muss, führt den alten Abdruck als
 #: Vorabdruck mit (``verbrauch.md``).
-PINNED_BOOKING = "9759ad3f42418e8d5bd48bb8bfa854cd"
+PINNED_BOOKING = "2f746f7b6426e64a8f963ad95ab02fa3"
 #: Die Buchung im Lager von 0.5.3 (``test_filament_usage_fingerprint_history``).
 BOOKED_053 = "aa373e5e86b4471cf557a31589dc8383"
 
@@ -333,6 +333,78 @@ def test_the_settings_count_by_what_the_project_owns() -> None:
     # Eine Spulenbindung ist kein anderer Druck.
     bound = usage.with_spool(settings, slot, "spule-1")
     assert request_for(objects, bound, profile, inputs).fingerprint == reference
+
+
+#: Was eine Kalibrierung misst (Bauplan §28.3) und jede Geometrie mit einem
+#: ``auto:<material>``-Maß liest — Deckel, Passungen, Bausteine, Lochfelder.
+CALIBRATED = ("clearance", "press", "hole_compensation", "elephant_foot", "shrinkage")
+
+
+def _calibrated(material: Any, name: str) -> Any:
+    return replace(material, **{name: getattr(material, name) + 0.02})
+
+
+@pytest.mark.parametrize("name", CALIBRATED)
+def test_a_calibration_is_another_print(name: str) -> None:
+    """Review RM-706, S1: Der Deckel klemmt, kalibrieren, neu drucken — das sind zwei Drucke.
+
+    Gezählt wird grob wie im Cache-Schlüssel: jeder feste Wert des Materials, auch
+    am schlichten Quader. Lieber kippt der Abdruck einmal zu oft, als dass der
+    zweite Druck die Buchung des ersten bekommt. Ein Slicer-Update kippt ihn
+    weiter nicht (``test_the_settings_count_by_what_the_project_owns``).
+    """
+    objects, settings, profile, inputs = job(build())
+    reference = request_for(objects, settings, profile, inputs).fingerprint
+    calibrated = replace(profile, material=_calibrated(profile.material, name))
+    assert request_for(objects, settings, calibrated, inputs).fingerprint != reference
+
+
+def test_a_calibrated_own_material_of_a_body_is_another_print(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Ein Körper mit eigenem Material rechnet mit dessen Spiel (``profiles.for_object``),
+    nicht mit dem des Projekts; dessen Kalibrierung ist ein anderer Druck."""
+    from app.core.knowledge import profiles as known
+
+    objects, settings, profile, inputs = job(build())
+    own = [replace(body, material="petg") for body in objects]
+    reference = request_for(own, settings, profile, inputs).fingerprint
+    original = known.material
+    monkeypatch.setattr(
+        known,
+        "material",
+        lambda name: _calibrated(original(name), "clearance") if name == "petg" else original(name),
+    )
+    assert request_for(own, settings, profile, inputs).fingerprint != reference
+
+
+def test_a_calibrated_material_named_by_a_step_is_another_print(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Ein Schritt mit Materialfeld (Dichtung, Klemme) rechnet mit dem Spiel dieses Materials."""
+    from app.core.knowledge import profiles as known
+
+    project = build()
+    project.document.ops.append(
+        Operation(
+            id=50,
+            op="create_seal",
+            outputs=("obj_9",),
+            params={"body_material": "petg", "gasket_material": "tpu-95a"},
+        )
+    )
+    objects, settings, profile, _inputs = job(build())
+    inputs = usage.StoredInputs(project.document)
+    reference = request_for(objects, settings, profile, inputs).fingerprint
+    original = known.material
+    monkeypatch.setattr(
+        known,
+        "material",
+        lambda name: (
+            _calibrated(original(name), "clearance") if name == "tpu-95a" else original(name)
+        ),
+    )
+    assert request_for(objects, settings, profile, inputs).fingerprint != reference
 
 
 def test_the_former_fingerprint_is_the_one_of_rm705() -> None:
