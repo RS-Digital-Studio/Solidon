@@ -44,6 +44,7 @@ Nutzen da und sonst nichts.
 
 ### Bedienung und System
 
+- Die Demo läuft jetzt bis zum 30. November 2026. Solidon3D 1.0 ist für den 1. Dezember geplant, Ihre Projekte bleiben erhalten.
 - Am Mac braucht Solidon jetzt macOS 14 oder neuer. Jeder Mac ab 2018 kann es kostenlos installieren.
 - Auf Intel-Macs mit macOS 26 startet Solidon jetzt. Version 0.5.3 blieb dort beim Start hängen.
 - Am Mac bricht *Abbrechen* eine laufende Antwort des lokalen Modells sofort ab.
@@ -105,6 +106,8 @@ Nutzen da und sonst nichts.
 - Stützen lösen sich leichter und sauberer: Der Abstand folgt Material und Schichthöhe jedes Teils, auch bei mehreren Materialien auf einer Platte. Die Trennschicht folgt der Fläche darüber.
 - Steht eine Stütze auf dem Teil, schlägt Solidon auch darunter eine Trennschicht vor, damit ihr Fuß keine Spuren hinterlässt. Unter Baumstützen nur bei Slicern, die sie dort drucken.
 - Unter Baumstützen und neben einem Reinigungsturm schlägt Solidon den Stützabstand in ganzen Schichten vor, so wie der Slicer ihn druckt.
+- Unter einer großen flachen Unterseite schlägt Solidon Gitter statt Bäumen vor, mit Hybrid, wo zugleich feine Details Stütze brauchen. Für hohe Baumstützen schlägt Solidon zwei Wände vor.
+- Gilt ein Vorschlag im Druckdialog nur einzelnen Teilen, nennen Zeile und Feld auch die Teile, die mit ihm einen anderen Wert bekommen.
 - Bei PLA schlägt Solidon für viele feine Spitzen mehr Abstand zu den Baumstützen darunter vor. Dadurch bleiben dort weniger Reste der Baumspitzen.
 - Lange Brücken bekommen die Stütze, die Solidon vorsieht, auch in PrusaSlicer. Bleibt eine lange Brücke ohne Stütze, schlägt Solidon dicke Bahnen und etwas weniger Fluss vor.
 - Flache Überhänge ohne Stütze bekommen Zusatzwände vorgeschlagen. Bei ABS, ASA und TPU druckt der Slicer steile Überhänge auf Vorschlag in wechselnder Richtung, damit sie sich nicht aufrollen.
@@ -116,6 +119,7 @@ Nutzen da und sonst nichts.
 - Im Druckdialog bleiben Drucker, Filamente und Qualität auch bei vergrößerter Schrift ganz sichtbar. Lange Beschriftungen brechen dafür um.
 - Der Prüfbericht rechnet schneller und braucht weniger Arbeitsspeicher.
 - Unter Linux mit Flatpak meldet Solidon einen Absturz des Slicers jetzt als Absturz, statt nur zu sagen, dass keine Druckdatei entstand.
+- Auch auf einem voll ausgelasteten Rechner nennt Solidon nach dem Anhalten eines Slicers den wirklichen Grund statt einer Zeitüberschreitung. Eine fertige Druckdatei wird übernommen.
 
 ### Gewinde, Bohrungen und Normteile
 

@@ -123,6 +123,9 @@ class Motion:
     """Bahnanteil der Kontaktschichten unter dem Überhang, aus dem Abstand des Profils."""
     support_tree: bool = False
     """Stützt das Herstellerprofil mit Bäumen, wenn Solidon „automatisch“ übergibt?"""
+    support_hybrid: bool = False
+    """Kennt der Slicer Hybridstützen (die Orca-Familie, RM-584)? Sonst geht
+    ``hybrid`` als Gitter hinaus (``slicer_keys.NOT_OFFERED_BY_PROGRAM``)."""
     support_closing: float | None = None
     """Wie weit der Slicer benachbarte Stützflächen zusammenschließt, in mm
     (Prusa ``support_material_closing_radius``, Cura ``support_join_distance``,
@@ -468,6 +471,7 @@ def _columns_of(
         settings.support,
         settings.layers.line_width,
         motion.support_tree,
+        motion.support_hybrid,
         motion.support_closing,
     )
     with _COLUMNS_LOCK:
@@ -981,11 +985,16 @@ def _support_parts(
 
 
 def uses_tree_supports(settings: PrintSettings, motion: Motion) -> bool:
-    """Ob der Slicer mit diesen Werten Baumstützen setzt — gewählt oder als „automatisch“
-    seines Profils. Eine Antwort für Zeitmodell und Gegenprobe
-    (``estimate.time_comparison_blocked``)."""
+    """Ob der Slicer mit diesen Werten Baumstützen setzt — gewählt, als Hybrid,
+    wo er sie kennt (RM-584: Bäume an den Details, Gitter nur unter großen
+    flachen Decken), oder als „automatisch“ seines Profils. Eine Antwort für
+    Zeitmodell und Gegenprobe (``estimate.time_comparison_blocked``)."""
     style = settings.support.style
-    return style == "tree" or (style == "auto" and motion.support_tree)
+    return (
+        style == "tree"
+        or (style == "hybrid" and motion.support_hybrid)
+        or (style == "auto" and motion.support_tree)
+    )
 
 
 def _contact_density(settings: PrintSettings, motion: Motion) -> float:

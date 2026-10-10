@@ -20,6 +20,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 
 ### Manejo y sistema
 
+- La demo funciona ahora hasta el 30 de noviembre de 2026. Solidon3D 1.0 está prevista para el 1 de diciembre y sus proyectos se conservan.
 - En el Mac, Solidon necesita ahora macOS 14 o más reciente. Cualquier Mac desde 2018 puede instalarlo gratis.
 - Solidon ya arranca en los Mac con Intel y macOS 26. La versión 0.5.3 se quedaba colgada allí al iniciar.
 - En el Mac, *Cancelar* detiene al instante una respuesta en curso del modelo local.
@@ -81,6 +82,8 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Los soportes se quitan con más facilidad: el espacio sigue el material y la altura de capa de cada pieza, también con varios materiales en una placa. La separación sigue la superficie de encima.
 - Si un soporte se apoya en la pieza, Solidon sugiere también una capa de separación debajo para que su pie no deje marcas. Con soportes en árbol, solo en los slicers que la imprimen ahí.
 - Con soportes en árbol y junto a una torre de purga, Solidon propone el espacio del soporte en capas enteras, tal como lo imprime el slicer.
+- Bajo una cara inferior grande y plana, Solidon propone cuadrícula en lugar de árboles, e híbrido si también hay detalles finos. Para soportes de árbol altos, Solidon propone dos paredes.
+- Si una sugerencia del diálogo de impresión solo vale para algunas piezas, la fila y el campo nombran también las piezas que reciben con ella otro valor.
 - Para PLA, Solidon propone más espacio entre muchas puntas finas y los soportes en árbol situados debajo. Así quedan menos restos de las puntas de los soportes.
 - Los puentes largos reciben el soporte que Solidon prevé, también en PrusaSlicer. Si un puente largo queda sin soporte, Solidon propone líneas gruesas y algo menos de flujo.
 - Los voladizos planos sin soporte reciben paredes extra como propuesta. Con ABS, ASA y TPU el slicer puede imprimir voladizos pronunciados en sentido alterno para que no se levanten.
@@ -92,6 +95,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - En el diálogo de impresión, impresora, filamentos y calidad se ven enteros también con la letra ampliada. Las etiquetas largas pasan a la línea siguiente.
 - El informe de comprobación calcula más rápido y necesita menos memoria.
 - En Linux con Flatpak, Solidon indica ahora que el slicer se ha bloqueado, en lugar de decir solo que no se creó ningún archivo.
+- Incluso con el ordenador a plena carga, Solidon indica el motivo real al detener un slicer, en lugar de un tiempo agotado. Un archivo de impresión terminado se aprovecha.
 
 ### Roscas, taladros y piezas normalizadas
 

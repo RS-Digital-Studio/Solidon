@@ -362,6 +362,15 @@ def _count(text: str, _context: _Context) -> object:
     return int(number)
 
 
+def _tree_walls(text: str, _context: _Context) -> object:
+    """Die Wände der Baumstämme (RM-584): 0 heißt bei Orca „automatisch“, Bambu
+    schreibt -1 — beides eine Wand, wie der Baum sie ohne Angabe druckt."""
+    number = _float(text)
+    if number is None or not number.is_integer():
+        return Foreign(text)
+    return max(int(number), 1)
+
+
 def _fraction(text: str, _context: _Context) -> object:
     """„15%" als Anteil 0,15."""
     number = _float(text.rstrip("%").strip())
@@ -484,6 +493,7 @@ ORCA_PROCESS: Final[tuple[tuple[str, str, Reader], ...]] = (
     ("support.z_gap", "support_top_z_distance", _number),
     ("support.interface_layers", "support_interface_top_layers", _count),
     ("support.interface_spacing", "support_interface_spacing", _number),
+    ("support.tree_walls", "tree_support_wall_count", _tree_walls),
     ("adhesion.skirt_loops", "skirt_loops", _count),
     ("adhesion.skirt_distance", "skirt_distance", _number),
     ("adhesion.brim_width", "brim_width", _number),
@@ -535,6 +545,10 @@ PROGRAM_DEFAULTS: Final[Mapping[str, Mapping[str, str]]] = {
     "crealityprint": {
         "brim_type": "auto_brim",
         "precise_outer_wall": "0",
+        # Die Wände der Bäume unter Crealitys eigenem Namen
+        # (``slicer_keys.PROGRAM_KEYS``); kein Prozess nennt ihn, der
+        # Konfigurationsblock am K1 Max zeigt 0 (RM-584, 09.10.2026).
+        "tree_support_wall_count_tree": "0",
         "wall_generator": "arachne",
         "wall_sequence": "inner wall/outer wall",
     },
@@ -695,10 +709,17 @@ def _read_process(
     *,
     program_name: str = "",
 ) -> tuple[dict[str, object], dict[str, str]]:
-    """Die Prozesswerte in Solidons Pfaden, dazu, was sich nicht übersetzen ließ."""
+    """Die Prozesswerte in Solidons Pfaden, dazu, was sich nicht übersetzen ließ.
+
+    Gelesen wird der Schlüssel, den die Übergabe für dieses Programm schreibt
+    (``slicer_keys.native_key``): Creality Print druckt die Wände der Bäume aus
+    ``tree_support_wall_count_tree`` (RM-584), und gegen den gemeinsamen Namen
+    verglichen schlug der Rat vor, was schon galt, oder übersah eine Abweichung.
+    """
     read: dict[str, object] = {}
     foreign: dict[str, str] = {}
-    for path, key, reader in ORCA_PROCESS:
+    for path, common, reader in ORCA_PROCESS:
+        key = slicer_keys.native_key(common, program_name)
         text = _text(values.get(key))
         if text is None:
             text = defaults.get(key)
@@ -930,6 +951,20 @@ ORCA_SUPPORT_INTERFACE_SPEED: Final = 80.0
 ORCA_SUPPORT_CLOSING: Final = 2.0
 
 
+def auto_prints_trees(values: Mapping[str, Any], flavour: str) -> bool:
+    """Stützt dieser Herstellerprozess unter „automatisch“ mit Bäumen (RM-584)?
+
+    In der Orca-Familie heißt es ``support_type`` ``tree(…)``, ob organisch,
+    schlank, kräftig oder hybrid; bei PrusaSlicer ``support_material_style``
+    ``organic``. Die eine Auskunft für Zeitmodell (``Motion.support_tree``) und
+    Rat (``handover.tree_styles``)."""
+    if flavour == "orca":
+        return (_text(values.get("support_type")) or "").startswith("tree")
+    if flavour == "prusa":
+        return (_text(values.get("support_material_style")) or "") == "organic"
+    return False
+
+
 def _orca_support_motion(
     process: Mapping[str, Any], default: float | None, nozzle: float
 ) -> dict[str, Any]:
@@ -954,7 +989,10 @@ def _orca_support_motion(
         "support_interface_density": width / (width + spacing)
         if spacing is not None and spacing >= 0.0
         else None,
-        "support_tree": (_text(process.get("support_type")) or "").startswith("tree"),
+        "support_tree": auto_prints_trees(process, "orca"),
+        # Jedes Programm der Familie kennt ``tree_hybrid``; ein Wächter hält es
+        # gegen ``slicer_keys.NOT_OFFERED_BY_PROGRAM`` (RM-584).
+        "support_hybrid": True,
         # Fest in ``SupportMaterial.cpp`` (``support_closing_radius(2.0)``).
         "support_closing": ORCA_SUPPORT_CLOSING,
     }
@@ -1050,7 +1088,7 @@ def _prusa_support_motion(values: Mapping[str, Any], nozzle: float) -> dict[str,
         "support_interface_density": width / (width + spacing)
         if spacing is not None and spacing >= 0.0
         else None,
-        "support_tree": (_text(values.get("support_material_style")) or "") == "organic",
+        "support_tree": auto_prints_trees(values, "prusa"),
         "support_closing": _float(_text(values.get("support_material_closing_radius")) or ""),
     }
 
@@ -1136,7 +1174,8 @@ def _support_style(values: Mapping[str, Any]) -> str | None:
         return "none"
     kind = (_text(values.get("support_type")) or "").casefold()
     if kind.startswith("tree"):
-        return "tree"
+        style = (_text(values.get("support_style")) or "").casefold()
+        return "hybrid" if style == "tree_hybrid" else "tree"
     if kind.startswith("normal"):
         return "grid"
     return "auto"

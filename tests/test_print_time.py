@@ -1190,3 +1190,15 @@ def test_the_estimate_of_a_box_stays_where_the_installed_slicer_was_measured(
         f"{program}: Schätzung {estimated / 60:.1f} min gegen Druckdatei "
         f"{printed / 60:.1f} min, {deviation:+.1f} % statt {measured:+.1f} %"
     )
+
+
+@pytest.mark.parametrize(("hybrid", "tree"), [(True, True), (False, False)])
+def test_hybrid_supports_count_as_trees_where_the_slicer_knows_them(
+    hybrid: bool, tree: bool
+) -> None:
+    """Hybrid stützt in der Orca-Familie mit Bäumen und nur unter flachen Decken
+    mit Gitter; wer es nicht kennt, bekommt Gitter (RM-584)."""
+    settings = print_settings.with_path(
+        print_settings.resolve(profiles.make_profile()), "support.style", "hybrid"
+    )
+    assert print_time.uses_tree_supports(settings, _motion(support_hybrid=hybrid)) is tree
