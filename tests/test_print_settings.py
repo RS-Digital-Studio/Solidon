@@ -8474,18 +8474,25 @@ def test_a_tree_cura_prints_as_grid_asks_its_gap_with_grid(tmp_path: Path) -> No
     ), "allein druckt er Bäume, und die Spitzen bekommen Luft"
 
     bodies = (SceneObject(id="obj_pilz", name="Pilz", mesh=mushroom), spiky)
-    together = rows(bodies, settings)
+    # Die Platte steht auf 0,3 mm: Der Abstand kommt als Zeile aus dem Material
+    # (0,2) und geht je Teil in die Datei — dort fragt der Export jedes Teil
+    # selbst, mit der Art der Platte (Review des Nachtrags, M1).
+    wide = print_settings.with_path(settings, "support.z_gap", 0.3)
+    together = rows(bodies, wide)
     assert together["support.style"].value == "grid"
     assert all(entry.reason != tip for entry in together.values())
-    assert "support.tree_walls" not in together
-    accepted = settings
+    assert together["support.z_gap"].value == pytest.approx(0.2)
+    accepted = wide
     for entry in together.values():
         if getattr(entry, "slot", None) is None:
             accepted = print_settings.with_accepted(accepted, entry.path, entry.value)
-    assert handover.values_for(accepted, profile, "cura")["support_structure"] == "normal"
+    plate = handover.values_for(accepted, profile, "cura")
+    assert plate["support_structure"] == "normal"
+    assert float(plate["support_top_distance"]) == pytest.approx(0.2)
     worker = _AdviceWorker(bodies, accepted, profile, None, {}, (), (), {}, flavour="cura")
     worker.work()
-    assert not worker.accepted_others.get("support.z_gap")
+    assert "support.z_gap" in worker.accepted_parts, "der Abstand geht je Teil"
+    assert not worker.accepted_others.get("support.z_gap"), "kein Teil mit eigenem Abstand"
     written, _findings = write_assembly(
         list(bodies),
         tmp_path,
@@ -8494,15 +8501,14 @@ def test_a_tree_cura_prints_as_grid_asks_its_gap_with_grid(tmp_path: Path) -> No
         settings=accepted,
         flavour="cura",
     )
-    gaps = {
-        key: value
-        for mesh in handover.cura_meshes(written)
-        for key, value in mesh.settings.items()
-        if key in ("support_top_distance", "support_z_distance")
-    }
-    plate = handover.values_for(accepted, profile, "cura")
-    assert float(plate["support_top_distance"]) == pytest.approx(0.2)
-    assert all(float(value) == pytest.approx(0.2) for value in gaps.values()), gaps
+    parts = [mesh for mesh in handover.cura_meshes(written) if "-part-" in mesh.path.name]
+    assert len(parts) == 2, [mesh.path.name for mesh in handover.cura_meshes(written)]
+    for mesh in parts:
+        own = dict(mesh.settings)
+        top = own.get("support_top_distance", own.get("support_z_distance"))
+        bottom = own.get("support_bottom_distance", own.get("support_z_distance"))
+        for gap in (top, bottom):
+            assert gap is None or float(gap) == pytest.approx(0.2), (mesh.path.name, own)
     # Der Export fragt je Teil ebenso mit der Art der Platte, auch wo ein
     # anderes Teil den Abstand je Teil verlangt.
     from app.core.export.writer import part_advice
