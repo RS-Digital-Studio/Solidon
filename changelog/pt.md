@@ -89,7 +89,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - O relatório de verificação calcula mais depressa e precisa de menos memória.
 - No Linux com Flatpak, o Solidon indica agora que o slicer encerrou inesperadamente, em vez de dizer apenas que não foi criado nenhum ficheiro.
 - Novo nas definições de impressão: *Contrair a primeira camada* e *Alargar furos*. Enquanto não escolher nada, vale o valor do slicer.
-- Se uma peça já compensa no modelo, com um furo com compensação do material ou *Compensar o pé de elefante*, o Solidon sugere que o slicer não o faça de novo.
+- Se uma peça já compensa no modelo, com um furo com *Aplicar compensação do material* ou *Compensar o pé de elefante*, o Solidon sugere que o slicer não o faça de novo.
 
 ### Roscas, furos e peças normalizadas
 

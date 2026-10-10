@@ -114,7 +114,7 @@ Nutzen da und sonst nichts.
 - Der Prüfbericht rechnet schneller und braucht weniger Arbeitsspeicher.
 - Unter Linux mit Flatpak meldet Solidon einen Absturz des Slicers jetzt als Absturz, statt nur zu sagen, dass keine Druckdatei entstand.
 - Neu in den Druckeinstellungen: *Erste Schicht einziehen* und *Löcher weiten*. Solange Sie nichts wählen, gilt der Wert des Slicers.
-- Gleicht ein Teil schon im Modell aus, mit einer Bohrung samt Materialzugabe oder *Elefantenfuß ausgleichen*, schlägt Solidon vor, dass der Slicer es nicht noch einmal tut.
+- Gleicht ein Teil schon im Modell aus, mit einer Bohrung mit *Materialtoleranz berücksichtigen* oder *Elefantenfuß ausgleichen*, schlägt Solidon vor, dass der Slicer es nicht noch einmal tut.
 
 ### Gewinde, Bohrungen und Normteile
 

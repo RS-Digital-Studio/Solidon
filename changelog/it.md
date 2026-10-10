@@ -89,7 +89,7 @@ scrive in `website/version.json`.
 - Il rapporto di verifica calcola più velocemente e richiede meno memoria.
 - Su Linux con Flatpak, Solidon ora segnala un arresto anomalo dello slicer come tale, invece di dire solo che non è stato creato alcun file.
 - Nuove nelle impostazioni di stampa: *Restringi il primo strato* e *Allarga i fori*. Finché non sceglie nulla, vale il valore dello slicer.
-- Se un pezzo compensa già nel modello, con un foro con la tolleranza del materiale o *Compensa il piede d'elefante*, Solidon propone che lo slicer non lo faccia di nuovo.
+- Se un pezzo compensa già nel modello, con un foro con *Considera la tolleranza del materiale* o *Compensa il piede d'elefante*, Solidon propone che lo slicer non lo faccia di nuovo.
 
 ### Filettature, fori e componenti normalizzati
 

@@ -90,7 +90,7 @@ dans `website/version.json`.
 - Le rapport de contrôle calcule plus vite et demande moins de mémoire.
 - Sous Linux avec Flatpak, Solidon signale désormais un plantage du slicer comme tel, au lieu de dire seulement qu'aucun fichier n'a été créé.
 - Nouveau dans les réglages d'impression : *Resserrer la première couche* et *Élargir les trous*. Tant que vous ne choisissez rien, la valeur du slicer s'applique.
-- Si une pièce compense déjà dans le modèle, avec un trou percé avec la tolérance du matériau ou *Compenser le pied d'éléphant*, Solidon propose que le slicer ne le refasse pas.
+- Si une pièce compense déjà dans le modèle, avec un trou percé avec *Tenir compte de la tolérance du matériau* ou *Compenser le pied d'éléphant*, Solidon propose que le slicer ne le refasse pas.
 
 ### Filetages, perçages et pièces normalisées
 
