@@ -812,6 +812,8 @@ def test_chunk_metadata_cannot_restart_the_network_deadline(part: str) -> None:
         else b"X-Trailer: abcdefghijklmnopqrst\r\n\r\n"
     )
 
+    sent: list[int] = []
+
     def send() -> None:
         try:
             right.sendall(b"HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n" + prefix)
@@ -819,6 +821,7 @@ def test_chunk_metadata_cannot_restart_the_network_deadline(part: str) -> None:
                 if stop.wait(0.02):
                     break
                 right.sendall(bytes([value]))
+                sent.append(value)
         except OSError:
             pass
         finally:
@@ -828,14 +831,16 @@ def test_chunk_metadata_cannot_restart_the_network_deadline(part: str) -> None:
     writer.start()
     response = http.client.HTTPResponse(left)
     response.begin()
-    started = time.monotonic()
     try:
         with pytest.raises(ResponseDeadlineError):
             read_limited(response, limit=100, deadline=deadline_after(0.08))
-        elapsed = time.monotonic() - started
-        # Großzügig gegen Fremdlast; die Aussage bleibt: die Frist von 0,08 s
-        # zählt, nicht das Tempo des Senders.
-        assert elapsed < 1.0, "Metadaten haben die Gesamtfrist bis zum Zeilenende verlängert"
+        # Gezählt, nicht gemessen: Auf einem überlasteten Intel-Mac-Läufer
+        # standen beide Fäden fast zwei Sekunden, und eine Zeitgrenze riss,
+        # obwohl die Frist galt. Der Sender schickt ein Byte je 20 ms
+        # Laufzeit; verlängerte die Metadatenzeile die Frist, käme der Abbruch
+        # erst nach ihrem Zeilenende.
+        line_end = slow.index(b"\r\n") + 2
+        assert len(sent) < line_end, "Metadaten haben die Gesamtfrist bis zum Zeilenende verlängert"
     finally:
         stop.set()
         response.close()
