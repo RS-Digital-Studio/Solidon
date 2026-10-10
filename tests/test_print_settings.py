@@ -1271,7 +1271,9 @@ UNREACHABLE: dict[str, dict[str, str]] = {
         "adhesion.kind": "kennt keine Art, nur die Maße — ``ADHESION_KEYS`` nullt die anderen.",
         "support.block_channels": "reist als Stützsperre in der 3MF (``AS_GEOMETRY``).",
         "support.spare_ledges": "reist als Stützsperre in der 3MF (``AS_GEOMETRY``).",
+        "shell.overhang_reverse": "PrusaSlicer kennt keine Umkehr an Überhängen (2.9.6).",
         "support.tree_walls": "PrusaSlicer zählt keine Baumwände (``NOT_TAKEN_BY``, RM-584).",
+        "support.tip_diameter": "Trennschicht dort nicht geschnitten (``NOT_TAKEN_BY``, RM-704).",
     },
     "orca": {
         "adhesion.kind": "in ``brim_type`` enthalten, das die Tabelle schreibt.",
@@ -1281,6 +1283,7 @@ UNREACHABLE: dict[str, dict[str, str]] = {
     "cura": {
         "support.block_channels": "reist als eigenes Netz (``AS_GEOMETRY``).",
         "support.spare_ledges": "reist als eigenes Netz (``AS_GEOMETRY``).",
+        "support.tip_diameter": "Trennschicht dort nicht geschnitten (``NOT_TAKEN_BY``, RM-704).",
         "shell.wall_generator": "CuraEngine rechnet immer mit variabler Bahnbreite.",
         "shell.precise_outer_wall": "wie oben — es gibt keinen Schalter dafür.",
         "adhesion.kind": "in ``adhesion_type`` enthalten, das die Tabelle schreibt.",
@@ -1289,6 +1292,11 @@ UNREACHABLE: dict[str, dict[str, str]] = {
         "filament.colour": "wie oben",
         "filament.cost_per_kg": "wie oben",
         "filament.max_flow": "CuraEngine liest den Volumenstrom nicht; Solidon deckelt die Tempi.",
+        "shell.thick_bridges": "CuraEngine kennt keine dicken Brücken (RM-587).",
+        "shell.bridge_flow": "Curas Brückenfluss bezieht sich auf eigene Bahnen (60 %).",
+        "shell.overhang_walls": "CuraEngine kennt keine Zusatzwände an Überhängen.",
+        "shell.overhang_reverse": "CuraEngine kennt keine Umkehr an Überhängen.",
+        "support.bridges": "CuraEngine stützt Brücken immer, ohne Schalter.",
     },
 }
 
@@ -7296,6 +7304,14 @@ UNREACHED: Final[dict[tuple[str, str], str]] = {
         "PrusaSlicer zählt keine Baumwände: Seine organischen Äste bekommen ab einem "
         "Astquerschnitt eine zweite Wand, ein Maß, das beim Hersteller bleibt (RM-584)."
     ),
+    ("support.tip_diameter", "prusa"): (
+        "Die Spitze, ab der jede Baumspitze eine Trennschicht trägt, ist nur in der "
+        "Orca-Familie geschnitten; PrusaSlicers Spitze bleibt beim Hersteller (RM-704)."
+    ),
+    ("support.tip_diameter", "cura"): (
+        "Dasselbe für CuraEngine: ``support_tree_tip_diameter`` ist dort nicht "
+        "geschnitten und bleibt beim Hersteller (RM-704)."
+    ),
     ("shell.precise_outer_wall", "cura"): (
         "Dasselbe für CuraEngine — dort heißt der nächste Verwandte "
         "``outer_inset_first`` und meint die Reihenfolge, nicht das Maß."
@@ -7331,6 +7347,18 @@ UNREACHED: Final[dict[tuple[str, str], str]] = {
         "Trennschicht zu einem Drittel dicht wie bei Creality und Elegoo "
         "(``handover._for_supports``). Diese Messung setzt den Wert ohne Wahl."
     ),
+    ("shell.overhang_reverse", "prusa"): (
+        "PrusaSlicer 2.9.6 kennt keine Umkehr an Überhängen (``--help-fff``); nur die "
+        "Orca-Familie dreht die Wand dort je zweite Schicht (RM-587)."
+    ),
+    ("shell.thick_bridges", "cura"): "CuraEngine kennt keine dicken Brücken (RM-587).",
+    ("shell.bridge_flow", "cura"): (
+        "Curas Brückenfluss (``bridge_skin_material_flow``, 60 %) rechnet auf eigene Bahnen "
+        "und ist kein Anteil wie bei Orca und PrusaSlicer (RM-587)."
+    ),
+    ("shell.overhang_walls", "cura"): "CuraEngine kennt keine Zusatzwände an Überhängen.",
+    ("shell.overhang_reverse", "cura"): "CuraEngine kennt keine Umkehr an Überhängen.",
+    ("support.bridges", "cura"): "CuraEngine stützt Brücken immer, einen Schalter gibt es nicht.",
 }
 
 
@@ -7405,6 +7433,10 @@ def test_every_setting_reaches_every_slicer_or_stands_in_the_list() -> None:
             # Die Wände gehören den Baumstämmen (RM-584).
             start = _with_value(base, "support.style", "tree")
         changed = _with_value(start, field.path, value)
+        if field.path in slicer_keys.MAKER_OWNED:
+            # Loch- und Fußausgleich gehen nur als eigene Wahl hinaus (RM-589),
+            # und genau so setzt sie das Feld im Dialog.
+            changed = print_settings.with_choice(start, field.path, value)
         for flavour in ("prusa", "orca", "cura"):
             if handover.values_for(start, profile, flavour) == handover.values_for(
                 changed, profile, flavour
@@ -8434,6 +8466,7 @@ def test_without_a_slicer_the_dialog_advises_for_its_actual_export(
         _fits_in_play=lambda: (),
         _connector_diameters=lambda: (),
         _part_fits=dict,
+        _part_allowances=dict,
         _declined_advice=frozenset,
         _advice_ready=lambda _worker, _context, _analysis, entries, _results: received.extend(
             entries
@@ -8881,6 +8914,10 @@ def test_the_file_export_of_a_selection_asks_the_whole_job(
             cancelled=None,
             _begin_write=lambda: None,
         )
+        # Der Lesedurchgang (RM-670) ruft den Rest über die Instanz.
+        worker._assembly_in_one_read = lambda: main_window._ExportWorker._assembly_in_one_read(
+            worker  # type: ignore[arg-type]
+        )
         (written,), findings = main_window._ExportWorker._assembly(worker)  # type: ignore[arg-type]
         return _supported_parts(written, "orca"), {entry.code for entry in findings}
 
@@ -9322,6 +9359,52 @@ def test_the_support_gap_reaches_both_sides_and_curas_bottom_stands_alone() -> N
     assert float(distance) == pytest.approx(settings.layers.line_width + 0.2)
 
 
+@pytest.mark.parametrize(
+    ("material", "style", "layer", "gap", "bottom"),
+    [
+        ("petg", "grid", 0.2, 0.28, "0.2"),
+        ("petg", "auto", 0.2, 0.28, "0.2"),
+        ("petg", "grid", 0.28, 0.3, "0.28"),
+        ("petg", "grid", 0.12, 0.2, "0.24"),
+        ("petg", "grid", 0.2, 0.4, "0.4"),
+        ("petg", "tree", 0.2, 0.44, "0.44"),
+        # Wo das Band und das nächste Vielfache auseinandergehen (gemessen in
+        # Cura 5.13): PETG 0,30 bei 0,2 druckt unten 0,20, nicht 0,40; PLA 0,10
+        # bei 0,08 druckt 0,16, nicht 0,08 unter dem Mindestwert 0,10.
+        ("petg", "grid", 0.2, 0.3, "0.2"),
+        ("pla", "grid", 0.08, 0.1, "0.16"),
+    ],
+)
+def test_cura_gets_the_bottom_gap_it_prints_as_meant(
+    material: str, style: str, layer: float, gap: float, bottom: str
+) -> None:
+    """Unten rundet Cura auf, unter Gitter druckt es oben genau (RM-628). Die
+    Übergabe schreibt unten deshalb das Vielfache im Band des Materials selbst:
+    PETG mit 0,28 bei 0,2er Schichten druckte unten 0,4, bei 0,28er Schichten
+    aus 0,30 sogar 0,56 — über dem Höchstwert 0,30. Unter Bäumen rundet Cura
+    oben wie unten, dort bleibt unten der Wert von oben. Ebenso je Teil."""
+    profile = profiles.make_profile("centauri-carbon-2", material)
+    settings = print_settings.resolve(profile)
+    for path, value in (
+        ("layers.layer_height", layer),
+        ("support.style", style),
+        ("support.placement", "everywhere"),
+        ("support.z_gap", gap),
+    ):
+        settings = print_settings.with_choice(settings, path, value)
+
+    cura = handover.values_for(settings, profile, "cura")
+    assert cura["support_z_distance"] == cura["support_top_distance"] == f"{gap:g}"
+    assert cura["support_bottom_distance"] == bottom
+
+    # Die Platte mit drei ganzen Schichten, damit das Teil unten abweicht.
+    plate = print_settings.with_choice(settings, "support.z_gap", 3 * layer)
+    advice = [SettingAdvice(path="support.z_gap", value=gap, was=3 * layer, reason="")]
+    part = handover.object_keys(plate, advice, "cura", profile=profile)
+    assert part["support_top_distance"] == f"{gap:g}"
+    assert part["support_bottom_distance"] == bottom, part
+
+
 def test_a_spool_prints_the_material_of_its_chosen_profile(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -9439,42 +9522,146 @@ def test_freed_support_layers_are_said_where_the_maker_had_them_off(
     assert not handover.support_layers_findings(setup, free=False)
 
 
-def test_cura_says_that_it_counts_the_gap_in_whole_layers() -> None:
-    """Cura rechnet den Stützabstand in ganzen Schichten; ein Wert dazwischen
-    bekommt einen Satz am Feld und bei der Übergabe (RM-583, Review)."""
-    profile = profiles.make_profile("centauri-carbon-2", "pla")
-    base = print_settings.with_choice(print_settings.resolve(profile), "support.style", "grid")
-    between = print_settings.with_choice(base, "support.z_gap", 0.28)
-    whole = print_settings.with_choice(base, "support.z_gap", 0.4)
-    unsupported = print_settings.with_choice(between, "support.style", "none")
+_BELOW = "oben genau und unten mit {}, einem Vielfachen der Schichthöhe"
+_ROUNDED = "Baumstützen rundet Cura den Stützabstand auf {}"
+_NO_ROOF = "eine Schicht mehr Luft: Der Stützabstand wird {}"
+
+
+@pytest.mark.parametrize(
+    ("style", "placement", "gap", "roof", "said"),
+    [
+        ("grid", "everywhere", 0.28, 2, _BELOW.format("0,20 mm")),
+        ("grid", "everywhere", 0.34, 2, _BELOW.format("0,40 mm")),
+        # Im Band, nicht das nächste Vielfache (gemessen: PETG 0,30 → unten 0,20).
+        ("grid", "everywhere", 0.30, 2, _BELOW.format("0,20 mm")),
+        ("auto", "everywhere", 0.28, 2, _BELOW.format("0,20 mm")),
+        ("grid", "build_plate", 0.28, 2, None),
+        ("grid", "everywhere", 0.28, 0, _BELOW.format("0,20 mm")),
+        ("tree", "everywhere", 0.28, 2, _ROUNDED.format("0,40 mm")),
+        ("tree", "build_plate", 0.44, 2, _ROUNDED.format("0,60 mm")),
+        ("grid", "everywhere", 0.4, 2, None),
+        ("tree", "everywhere", 0.4, 2, None),
+        # Ohne obere Trennschicht eine Schicht mehr, auch bei einem Vielfachen
+        # (gemessen: 0,20 → 0,40, 0,28 → 0,60).
+        ("tree", "everywhere", 0.2, 0, _NO_ROOF.format("0,40 mm")),
+        ("tree", "everywhere", 0.28, 0, _NO_ROOF.format("0,60 mm")),
+        ("none", "everywhere", 0.28, 2, None),
+    ],
+)
+def test_cura_says_what_it_prints_of_the_gap(
+    style: str, placement: str, gap: float, roof: int, said: str | None
+) -> None:
+    """Cura rundet einen Stützabstand zwischen zwei Schichten auf, unter Gitter
+    nur unten (RM-628, gemessen in Cura 5.13 bei 0,12er, 0,2er und 0,28er
+    Schichten); unter Bäumen ohne obere Trennschicht legt es oben eine Schicht
+    dazu. Unter Gitter schreibt die Übergabe unten das Vielfache im Band des
+    Materials selbst (PETG: 0,28 und 0,30 werden 0,2, 0,34 wird 0,4). Der Satz am
+    Feld und bei der Übergabe nennt, was gedruckt wird; unten nur, wo die Stütze
+    auf dem Modell stehen darf, und ohne Stützen nichts (RM-583, Review)."""
+    profile = profiles.make_profile("centauri-carbon-2", "petg")
+    settings = print_settings.resolve(profile)
+    for path, value in (
+        ("layers.layer_height", 0.2),
+        ("support.style", style),
+        ("support.placement", placement),
+        ("support.z_gap", gap),
+        ("support.interface_layers", roof),
+    ):
+        settings = print_settings.with_choice(settings, path, value)
 
     assert "support.z_gap" in slicer_keys.LIMITED["cura"]
-    said = slicer_keys.limitation("cura", "support.z_gap", between)
-    assert said is not None and "Abstand oben und unten" in str(said), said
-    assert slicer_keys.limitation("cura", "support.z_gap", whole) is None
-    assert slicer_keys.limitation("orca", "support.z_gap", between) is None
-    assert slicer_keys.limitation("cura", "support.z_gap", unsupported) is None, (
-        "ohne Stützen druckt der Abstand nichts"
+    message = slicer_keys.limitation("cura", "support.z_gap", settings, material=profile.material)
+    if said is None:
+        assert message is None, message
+    else:
+        assert message is not None and said in message.translate("de"), message
+    assert slicer_keys.limitation("orca", "support.z_gap", settings) is None
+
+
+def test_curas_gap_sentence_arrives_at_the_handover() -> None:
+    """Der Satz am Feld kommt als Befund der Übergabe (RM-583, Review). Unter
+    Bäumen druckt Cura nicht, was das Feld sagt, und die Handlung öffnet das Feld.
+    Unter Gitter wählt die Übergabe den Abstand unten selbst im Band des
+    Materials (RM-628): Nichts geht verloren, und am Feld gibt es nichts zu
+    verbessern — ein Hinweis ohne Handlung, keine Warnung."""
+    profile = profiles.make_profile("centauri-carbon-2", "pla")
+
+    def said(style: str) -> Any:
+        base = print_settings.with_choice(print_settings.resolve(profile), "support.style", style)
+        between = print_settings.with_choice(base, "support.z_gap", 0.28)
+        return next(
+            entry
+            for entry in handover.setting_limitations("cura", between, profile.material)
+            if entry.values.get("path") == "support.z_gap"
+        )
+
+    tree = said("tree")
+    assert tree.severity == "warning"
+    assert [action.id for action in tree.suggestions] == ["open_print_settings"]
+    assert tree.values["field"] == "support.z_gap", "die Handlung öffnet das Feld"
+    grid = said("grid")
+    assert grid.severity == "info"
+    assert not grid.suggestions
+    assert "field" not in grid.values
+
+
+@pytest.mark.parametrize(("spool", "said"), [("PETG", "0,20 mm"), ("PLA", "0,40 mm")])
+def test_the_cura_export_says_the_bottom_gap_of_the_printing_spool(
+    tmp_path: Path, spool: str, said: str
+) -> None:
+    """Der Export nennt Curas Abstand unten im Band der Spule, die druckt (RM-628,
+    M3 und L1), gemessen in Cura 5.13: PETG mit 0,30 bei 0,2er Schichten druckt
+    unten 0,20 — im Band bis 0,30 —, nicht das nächste Vielfache 0,40. Für PLA
+    (bis 0,25) liegt 0,30 darüber, dort bleibt 0,40. Der Auftrag ist PLA; es
+    zählt die Spule."""
+    from app.core.export import writer
+    from app.core.geom.mesh import MeshData
+    from app.core.types import MaterialSlot, SceneObject
+    from tests.helpers import supported_table
+
+    profile = profiles.make_profile("centauri-carbon-2", "pla")
+    settings = print_settings.resolve(profile)
+    for path, value in (
+        ("layers.layer_height", 0.2),
+        ("support.style", "grid"),
+        ("support.placement", "everywhere"),
+        ("support.z_gap", 0.3),
+    ):
+        settings = print_settings.with_choice(settings, path, value)
+    body = SceneObject(
+        id="tisch",
+        name="Tisch",
+        mesh=MeshData(supported_table(0)),
+        material_slots=(MaterialSlot(index=0, name="Spule", material_type=spool),),
     )
-    finding = next(
-        entry
-        for entry in handover.setting_limitations("cura", between)
-        if entry.values.get("path") == "support.z_gap"
+    setup = handover.SlicerSetup(executable=Path("CuraEngine.exe"), flavour="cura")
+
+    _path, findings = writer.write_assembly(
+        [body],
+        tmp_path,
+        project_name="tisch",
+        profile=profile,
+        settings=settings,
+        flavour="cura",
+        setup=setup,
     )
-    assert [action.id for action in finding.suggestions] == ["open_print_settings"]
-    assert finding.values["field"] == "support.z_gap", "die Handlung öffnet das Feld"
+
+    [gap] = [entry for entry in findings if entry.values.get("path") == "support.z_gap"]
+    assert said in gap.message.translate("de"), gap.message.translate("de")
+    assert gap.severity == "info"
 
 
 @pytest.mark.parametrize("quality", ["draft", "standard", "fine", "strong"])
 @pytest.mark.parametrize("printer", ["sovol-sv06", "centauri-carbon-2"])
 @pytest.mark.parametrize("material", ["pla", "petg", "tpu-95a"])
-def test_cura_gets_a_gap_in_whole_layers_from_its_foundation(
+def test_cura_gets_the_materials_gap_from_its_foundation(
     quality: str, printer: str, material: str
 ) -> None:
-    """Cura rechnet den Stützabstand in ganzen Schichten. Solidons Vorgabe von
-    0,2 mm war bei 0,28 und 0,12 mm Schicht keine, und jede Übergabe in
-    Entwurf und Fein warnte, auch ohne Stützen (RM-583, Nachprüfung M2). Die
-    Grundlage trägt jetzt das Vielfache, das zum Material passt."""
+    """Die Grundlage für Cura trägt den Abstand des Materials, so wie Cura ihn
+    unter Gitter oben druckt: genau (RM-628) — PETG bei 0,2er Schichten 0,28,
+    nicht eine Schicht. Ohne Werte des Materials bleibt Solidons Vorgabe. Ohne
+    Stützen sagt keine Übergabe etwas dazu (RM-583, Nachprüfung M2); mit Gitter
+    nur, wenn Cura unten aufrundet."""
     from app.core.export import manufacturer
 
     profile = profiles.make_profile(printer, material)
@@ -9483,17 +9670,21 @@ def test_cura_gets_a_gap_in_whole_layers_from_its_foundation(
     supported = print_settings.with_choice(foundation, "support.style", "grid")
 
     layer = foundation.layers.layer_height
-    steps = foundation.support.z_gap / layer
-    assert steps >= 1.0 - 1e-9 and math.isclose(steps, round(steps), abs_tol=1e-6), (
-        foundation.support.z_gap,
-        layer,
-    )
-    for settings in (foundation, supported):
-        assert not [
+    target = advise.support_gap_target(layer, profile.material, "cura", style="grid")
+    expected = print_settings.resolve(profile, quality).support.z_gap if target is None else target
+    assert foundation.support.z_gap == pytest.approx(expected), (foundation.support.z_gap, layer)
+    if material == "petg" and math.isclose(layer, 0.2):
+        assert foundation.support.z_gap == pytest.approx(0.28)
+
+    def said(settings: Any) -> list[Any]:
+        return [
             entry
             for entry in handover.setting_limitations("cura", settings)
             if entry.values.get("path") == "support.z_gap"
         ]
+
+    assert not said(foundation)
+    assert bool(said(supported)) is not advise.in_whole_layers(foundation.support.z_gap, layer)
 
 
 _TOWER = {"enable_prime_tower": "1"}
@@ -10308,8 +10499,11 @@ def test_a_chosen_tree_over_a_hybrid_process_reaches_the_file(
 )
 def test_the_tree_walls_rest_under_a_grid(style: str, inactive: bool) -> None:
     """Unter Gitter druckt kein Baum, das Feld der Baumwände tut nichts (Review
-    RM-584, L3) — gefragt mit der Art, die das Programm druckt."""
-    assert ("support.tree_walls" in print_settings.inactive_paths(style, "skirt")) is inactive
+    RM-584, L3) — gefragt mit der Art, die das Programm druckt. Ebenso die Spitze
+    der Bäume (RM-704)."""
+    inactive_paths = print_settings.inactive_paths(style, "skirt")
+    assert ("support.tree_walls" in inactive_paths) is inactive
+    assert ("support.tip_diameter" in inactive_paths) is inactive
 
 
 def test_the_part_advice_memo_knows_the_tower() -> None:

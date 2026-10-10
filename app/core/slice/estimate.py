@@ -377,21 +377,24 @@ def plate_comparison(
     arranged_apart = separate_objects and not keep_arrangement and len(known) > 1
     seconds: float | None = None
     seconds_reason: TranslatableText | str = ""
-    # **Ein Profil, das keine Brücken stützt, entscheidet selbst, was gestützt
+    # **Wer keine Brücken stützt, lässt den Slicer entscheiden, was gestützt
     # wird.** Am Kobra 2 (``bridge_no_support = 1``) las OrcaSlicer die
     # Unterseite des Pilzhuts als Brücke und stützte nur ihren Rand: 39 m Bahn
     # statt rund 60 in den anderen Slicern, 4 144 statt 19 218 mm³ geschätzt
     # (04.10.2026). Welche Decke das ist, rechnet nur der Slicer; mit Stützen
     # bleiben Zeit und Stützmenge deshalb ungeprüft, statt falsch zu warnen.
-    skipped_bridges = (
-        motion is not None
-        and motion.support_skips_bridges
-        and any(settings.support.style != "none" for _entry, _mesh, settings in known)
+    # Gefragt wird der Wert, mit dem das Teil druckt (``support.bridges``, aus
+    # dem Herstellerprofil gelesen oder von Solidon geschrieben, RM-587): Stützt
+    # es Brücken, misst die Gegenprobe die Stütze darunter mit, und ein Slicer,
+    # der eine gestützte Brücke frei lässt, fällt als Abweichung auf.
+    skipped_bridges = any(
+        settings.support.style != "none" and not settings.support.bridges
+        for _entry, _mesh, settings in known
     )
     if skipped_bridges:
         seconds_reason = _(
-            "Das Herstellerprofil stützt keine Brücken, und welche Decke der Slicer "
-            "als Brücke liest, rechnet nur er."
+            "Brücken bleiben hier ohne Stütze, und welche Decke der Slicer als Brücke "
+            "liest, rechnet nur er."
         )
     elif motion is not None and same_grid:
         from app.core.slice.print_time import plate_seconds

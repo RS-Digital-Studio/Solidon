@@ -170,7 +170,8 @@ QApplication.instance().setStyleSheet(before)   # ins finally
 - `slicer("<programm>")` für Tests mit echtem, installiertem Slicer; das Programm
   liefert nur die Fixture `installed_slicer` (`test_slicer_selection.py` hält
   das). Fehlt es, überspringt sich der Fall; in `slicer-auswahl.yml`
-  (`SOLIDON_REQUIRE_SLICERS`) ist das rot, denn ein Skip belegt nichts.
+  (`SOLIDON_REQUIRE_SLICERS`) ist das rot, denn ein Skip belegt nichts. Ein
+  Programm ohne Rezept dort (SuperSlicer) trägt den Marker nur unter Windows.
 - `rendered` für Tests, deren Grün an einem **Erzeugerlauf** hängt (Handbuch,
   Referenz, Abbildungsstempel). CI und reguläres Tor fahren sie nicht
   (Entscheidung Robert): Eine neue Operation macht sie rot, und was dann fehlt,
@@ -206,6 +207,10 @@ reicht dafür selten. Sprache in `tests/`: `AGENTS.md`, „Sprachregelung“.
 - **Eine Arbeiterfrage im Test steht auf einer Freigabe** (`threading.Event`),
   wenn der Test prüft, was vor ihrer Antwort gilt: Auf einem schnellen Läufer
   ist sie sonst schon beantwortet, bevor die nächste Zeile läuft.
+- **Eine Zeile des Prüfberichts greift ein Test erst nach
+  `ui_helpers.wait_for_print_findings`** und liest ihren Befund vor jedem
+  Zustellen: Die Berichtsanalyse liefert nach `wait_for_idle` nach und baut die
+  Liste neu, auf einem langsamen Läufer ist die gehaltene Zeile dann gelöscht.
 
 ## Den Lauf messen, nicht einen Filter darüber
 

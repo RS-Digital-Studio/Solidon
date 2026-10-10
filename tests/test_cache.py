@@ -1081,7 +1081,11 @@ def test_the_report_keeps_its_analysis_after_undo_under_a_tight_bound(profile: P
     settings = print_settings.resolve(profile)
     probe = ResultCache()
     evaluate(project.document, profile, sources=sources, cache=probe)
-    budget = int(max(held_by(entry) for entry in probe._entries.values()) * 1.5)
+    # Die Grenze hält gerade den Ladestand. Mit dem Anderthalbfachen blieben
+    # alle neun Stände ganz, seit ein bewegtes Netz seine Dreiecke mit dem
+    # Quellnetz teilt (RM-698) — dann wurde nichts schlank, und die Frage
+    # stellte sich nicht.
+    budget = max(held_by(entry) for entry in probe._entries.values())
     cache = ResultCache(memory_budget=budget)
     loaded = evaluate(project.document, profile, sources=sources, cache=cache)
     target = next(iter(loaded.scene.objects))
@@ -1116,6 +1120,301 @@ def test_the_report_keeps_its_analysis_after_undo_under_a_tight_bound(profile: P
     assert remembered_analysis(mesh, settings, angle, wall) is not None, (
         "the shown state still has its analysis"
     )
+
+
+def _two_bodies_on_disk(profile: Profile, folder: Path) -> tuple[Any, Any, Any, str, str, Any]:
+    """Kugel geladen, Quader angelegt, Quader verschoben — warm in einen Plattencache.
+
+    Zurück: Projekt, Verlauf, Quellen, Kennung der Kugel und des Quaders und
+    der warme Speicher. Die Kugel stammt aus Schritt 1 und wird gezeigt,
+    während ihr Eintrag beim Öffnen schlank wird.
+    """
+    import trimesh
+
+    from app.core.bootstrap import load_operations
+    from app.core.geom.mesh import MeshCodec
+    from app.core.scene import History, OperationDraft, evaluate
+    from app.core.scene.project import ProjectSources, new_project
+    from app.core.types import Source
+
+    load_operations()
+    project = new_project("centauri-carbon-2", "petg")
+    project.document.sources["src_1"] = Source(
+        id="src_1", kind="import", path="sources/ball.stl", sha256=""
+    )
+    project.sources["src_1"] = trimesh.exchange.stl.export_stl(
+        trimesh.creation.icosphere(subdivisions=3, radius=20.0)
+    )
+    history = History(project.document)
+    history.apply("Laden", [OperationDraft(op="load", params={"source": "src_1", "unit": "mm"})])
+    history.apply(
+        "Quader",
+        [OperationDraft(op="create_box", params={"width": 10.0, "depth": 10.0, "height": 10.0})],
+    )
+    sources = ProjectSources(project)
+    warm = ResultCache(disk=DiskCache(codec=MeshCodec(), directory=folder))
+    first = evaluate(project.document, profile, sources=sources, cache=warm)
+    ball, box = list(first.scene.objects)
+    history.apply(
+        "Verschieben",
+        [OperationDraft(op="translate_object", inputs=(box,), params={"dx": 30.0})],
+    )
+    evaluate(project.document, profile, sources=sources, cache=warm)
+    return project, history, sources, ball, box, warm
+
+
+def test_a_body_painted_after_opening_stays_out_of_the_earlier_entry(
+    profile: Profile, tmp_path: Path
+) -> None:
+    """Öffnen und Färben im selben Lauf: der Ladeeintrag behält die Kugel ohne Filamente.
+
+    Ein bemaltes Netz trägt dieselben Ecken und Dreiecke wie das Original
+    (``attributes.with_slots`` ersetzt nur die Slots). Die Rückgabe am Ende
+    des Laufs legte es über gleiche Felder in den Eintrag von Schritt 1, und
+    Strg+Z bis dorthin zeigte die Filamente eines späteren Schritts
+    (Nachprüfung zu RM-698, N1). Zurück kommt nur gleicher Inhalt.
+    """
+    from app.core.geom.mesh import MeshCodec, as_mesh_data
+    from app.core.perceive.features import forget_cache
+    from app.core.scene import OperationDraft, evaluate
+
+    project, history, sources, ball, _box, _warm = _two_bodies_on_disk(profile, tmp_path / "c")
+    history.apply(
+        "Filament",
+        [OperationDraft(op="assign_slot", inputs=(ball,), params={"slot": 2, "name": "Blau"})],
+    )
+    forget_cache()
+    cold = ResultCache(disk=DiskCache(codec=MeshCodec(), directory=tmp_path / "c"))
+    opened = evaluate(project.document, profile, sources=sources, cache=cold)
+
+    assert cold.statistics.disk_hits >= 3, "Voraussetzung: die drei Schritte kommen von der Platte"
+    assert as_mesh_data(opened.scene.objects[ball].mesh).slots, "Voraussetzung: bemalt"
+    # Die Kugel ist das Netz mit 1280 Dreiecken; Einträge tragen die Kennung nicht immer.
+    painted = [
+        index
+        for index, entry in enumerate(cold._entries.values())
+        for body in entry.objects
+        if body.mesh.triangle_count == 1280 and as_mesh_data(body.mesh).slots
+    ]
+    assert painted == [len(cold._entries) - 1], painted
+
+
+def test_a_painted_body_under_a_freed_number_stays_out_of_the_entry(
+    profile: Profile, tmp_path: Path
+) -> None:
+    """Ein bemaltes Netz, das die Nummer des freigegebenen Originals erbt, kommt nicht zurück.
+
+    Die Rückgabe erkannte das Original an ``id`` und Feldern. Beim ``trim``
+    ist das Original oft schon frei, und Python vergibt die Nummer neu: ein
+    bemaltes Netz über demselben ``raw`` trägt dann beides (Nachprüfung zu
+    RM-698, N1, nach 300 bis 740 Zuweisungen). Nachgestellt mit ``get`` und
+    ``trim`` wie in der Auswertung.
+    """
+    import gc
+
+    from app.core.geom.mesh import MeshCodec, MeshData, as_mesh_data
+
+    _project, _history, _sources, _ball, _box, warm = _two_bodies_on_disk(profile, tmp_path / "c")
+    # Kennungen vergibt die Auswertung erst danach; die Kugel ist das Netz mit 1280 Dreiecken.
+    holds_ball = {
+        key
+        for key, entry in warm._entries.items()
+        if any(body.mesh.triangle_count == 1280 for body in entry.objects)
+    }
+    keys = sorted(warm._entries, key=lambda key: key not in holds_ball)
+    cold = ResultCache(disk=DiskCache(codec=MeshCodec(), directory=tmp_path / "c"))
+    loaded = cold.get(keys[0])
+    assert loaded is not None
+    original = next(body.mesh for body in loaded.objects if body.mesh.triangle_count == 1280)
+    raw, number = as_mesh_data(original).raw, id(original)
+    _ = raw.edges_sorted  # etwas Lösbares, damit die Abgabe greift
+    for key in keys[1:]:
+        assert cold.get(key) is not None
+    assert cold.statistics.disk_hits == len(keys), "Voraussetzung: alles von der Platte"
+    del loaded, original
+    gc.collect()
+
+    painted = None
+    slots = (2,) * len(raw.faces)
+    held_on: list[MeshData] = []  # gehalten, damit jede Zuweisung einen neuen Platz nimmt
+    for _attempt in range(200_000):
+        candidate = MeshData(raw=raw, slots=slots)
+        if id(candidate) == number:
+            painted = candidate
+            break
+        held_on.append(candidate)
+    del held_on
+    if painted is None:
+        pytest.skip("die Nummer des Originals kam nicht wieder")
+    cold.trim(keep=[painted])
+
+    held = next(
+        body.mesh for body in cold._entries[keys[0]].objects if body.mesh.triangle_count == 1280
+    )
+    assert held is not painted
+    assert not as_mesh_data(held).slots
+
+
+def test_a_halted_run_after_opening_still_returns_the_shown_body(
+    profile: Profile, tmp_path: Path
+) -> None:
+    """Hält der Lauf nach dem Öffnen an, kommt der gezeigte Körper trotzdem in seinen Eintrag.
+
+    Die Rückgabe lief nur im ``trim`` eines vollständigen Laufs; nach einem
+    Halt blieb die Kugel im Cache schlank, und nach Strg+Z war sie getauscht
+    und ihre Schichtanalyse weg (Nachprüfung zu RM-698, N2). Und ``clear``
+    vergisst die Merker der Abgabe.
+    """
+    from app.core.geom.mesh import MeshCodec, as_mesh_data
+    from app.core.knowledge import print_settings
+    from app.core.knowledge.profiles import analysis_limits
+    from app.core.perceive.features import forget_cache
+    from app.core.scene import OperationDraft, evaluate
+    from app.core.slice.findings import analysed, remembered_analysis
+
+    project, history, sources, ball, _box, _warm = _two_bodies_on_disk(profile, tmp_path / "c")
+    history.apply(
+        "Färben",
+        [
+            OperationDraft(
+                op="paint_slot", inputs=(ball,), params={"at_feature": "gibt_es_nicht", "slot": 1}
+            )
+        ],
+    )
+    forget_cache()
+    cold = ResultCache(disk=DiskCache(codec=MeshCodec(), directory=tmp_path / "c"))
+    stopped = evaluate(project.document, profile, sources=sources, cache=cold)
+    assert stopped.stopped_at is not None, "Voraussetzung: der letzte Schritt hält an"
+    shown = stopped.scene.objects[ball]
+    settings = print_settings.resolve(profile)
+    wall, angle = analysis_limits(profile, shown)
+    analysed(as_mesh_data(shown.mesh), settings, angle, wall)
+
+    history.undo()
+    again = evaluate(project.document, profile, sources=sources, cache=cold)
+
+    assert again.scene.objects[ball].mesh is shown.mesh
+    assert remembered_analysis(as_mesh_data(shown.mesh), settings, angle, wall) is not None
+    cold.clear()
+    assert cold._last_disk_hit is None and not cold._leaned
+
+
+def test_a_reopened_body_of_an_earlier_step_keeps_its_analysis(
+    profile: Profile, tmp_path: Path
+) -> None:
+    """Ein gezeigter Körper aus einem früheren Schritt bleibt nach dem Öffnen ganz (Review 1, M1).
+
+    Die Abgabe beim nächsten Plattentreffer machte auch den Eintrag schlank,
+    dessen Körper die Szene noch zeigt: Die nächste Auswertung holte die
+    schlanke Kopie aus dem Speicher, die Szene tauschte den Körper gegen sie,
+    und der Prüfbericht schnitt ihn neu — am Laptop-Riser 18,8 s CPU. Am Ende
+    des Laufs kommt das gezeigte Netz wieder in seinen Eintrag.
+    """
+    import trimesh
+
+    from app.core.bootstrap import load_operations
+    from app.core.geom.mesh import MeshCodec, as_mesh_data
+    from app.core.knowledge import print_settings
+    from app.core.knowledge.profiles import analysis_limits
+    from app.core.scene import History, OperationDraft, evaluate
+    from app.core.scene.project import ProjectSources, new_project
+    from app.core.slice.findings import analysed, remembered_analysis
+    from app.core.types import Source
+
+    load_operations()
+    project = new_project("centauri-carbon-2", "petg")
+    project.document.sources["src_1"] = Source(
+        id="src_1", kind="import", path="sources/ball.stl", sha256=""
+    )
+    project.sources["src_1"] = trimesh.exchange.stl.export_stl(
+        trimesh.creation.icosphere(subdivisions=3, radius=20.0)
+    )
+    history = History(project.document)
+    history.apply("Laden", [OperationDraft(op="load", params={"source": "src_1", "unit": "mm"})])
+    history.apply(
+        "Quader",
+        [OperationDraft(op="create_box", params={"width": 10.0, "depth": 10.0, "height": 10.0})],
+    )
+    sources = ProjectSources(project)
+    warm = ResultCache(disk=DiskCache(codec=MeshCodec(), directory=tmp_path / "cache"))
+    first = evaluate(project.document, profile, sources=sources, cache=warm)
+    ball, box = list(first.scene.objects)
+    move = OperationDraft(op="translate_object", inputs=(box,), params={"dx": 30.0})
+    history.apply("Verschieben", [move])
+    evaluate(project.document, profile, sources=sources, cache=warm)
+
+    cold = ResultCache(disk=DiskCache(codec=MeshCodec(), directory=tmp_path / "cache"))
+    opened = evaluate(project.document, profile, sources=sources, cache=cold)
+    assert cold.statistics.disk_hits >= 2, "Voraussetzung: die Stände kommen von der Platte"
+    shown = opened.scene.objects[ball]
+    settings = print_settings.resolve(profile)
+    wall, angle = analysis_limits(profile, shown)
+    analysed(as_mesh_data(shown.mesh), settings, angle, wall)
+
+    history.apply("Verschieben", [move])
+    after = evaluate(project.document, profile, sources=sources, cache=cold)
+
+    assert after.scene.objects[ball].mesh is shown.mesh
+    assert remembered_analysis(as_mesh_data(shown.mesh), settings, angle, wall) is not None
+
+
+def test_a_reopened_history_keeps_only_its_newest_step_whole(
+    profile: Profile, tmp_path: Path
+) -> None:
+    """Von der Platte geholt, gibt ein älterer Stand seine Ableitungen ab, sobald der nächste kommt.
+
+    Im Speicher teilt ein bewegtes Netz Kantentabellen und Nachbarschaften mit
+    seinem Quellnetz (``transform._carry_cache``); von der Platte gelesen
+    rechnet jeder Stand sie für sich (``_warm_figures``) und hielt sie: am
+    Spiderman rund 290 MB je Verschieben, nach vier Schritten 1,1 GB mehr als
+    derselbe Verlauf im Speicher (RM-698). Das Ergebnis bleibt dasselbe.
+    """
+    import numpy as np
+    import trimesh
+
+    from app.core.bootstrap import load_operations
+    from app.core.geom.mesh import RELEASABLE, MeshCodec, as_mesh_data
+    from app.core.scene import History, OperationDraft, evaluate
+    from app.core.scene.project import ProjectSources, new_project
+    from app.core.types import Source
+
+    load_operations()
+    project = new_project("centauri-carbon-2", "petg")
+    project.document.sources["src_1"] = Source(
+        id="src_1", kind="import", path="sources/ball.stl", sha256=""
+    )
+    body = trimesh.creation.icosphere(subdivisions=3, radius=20.0)
+    project.sources["src_1"] = trimesh.exchange.stl.export_stl(body)
+    history = History(project.document)
+    history.apply("Laden", [OperationDraft(op="load", params={"source": "src_1", "unit": "mm"})])
+    sources = ProjectSources(project)
+    warm = ResultCache(disk=DiskCache(codec=MeshCodec(), directory=tmp_path / "cache"))
+    target = next(
+        iter(evaluate(project.document, profile, sources=sources, cache=warm).scene.objects)
+    )
+    for _step in range(3):
+        history.apply(
+            "Verschieben",
+            [OperationDraft(op="translate_object", inputs=(target,), params={"dx": 2.0})],
+        )
+        computed = evaluate(project.document, profile, sources=sources, cache=warm)
+
+    cold = ResultCache(disk=DiskCache(codec=MeshCodec(), directory=tmp_path / "cache"))
+    read = evaluate(project.document, profile, sources=sources, cache=cold)
+
+    assert cold.statistics.disk_hits == 4, "Voraussetzung: jeder Stand kommt von der Platte"
+    shown = as_mesh_data(read.scene.objects[target].mesh)
+    entries = list(cold._entries.values())
+    held = [set(as_mesh_data(entry.objects[0].mesh).raw._cache.cache) for entry in entries]
+    assert all(not keys & RELEASABLE for keys in held[:-1]), [
+        sorted(keys & RELEASABLE) for keys in held[:-1]
+    ]
+    assert entries[-1].objects[0].mesh is read.scene.objects[target].mesh
+    assert held[-1] & RELEASABLE, "der gezeigte Stand bleibt warm"
+    expected = as_mesh_data(computed.scene.objects[target].mesh)
+    assert np.array_equal(shown.raw.vertices, expected.raw.vertices)
+    assert np.array_equal(shown.raw.faces, expected.raw.faces)
+    assert read.scene.objects[target].features == computed.scene.objects[target].features
 
 
 def test_secondary_material_calibration_and_role_are_part_of_the_hash(profile: Profile) -> None:
@@ -1197,6 +1496,7 @@ _PRINTER_FIELDS_NO_OPERATION_READS: dict[str, str] = {
 _MATERIAL_FIELDS_NO_OPERATION_READS: dict[str, str] = {
     "title": "nur Anzeige; die Kennung steht im Schlüssel",
     "calibrated": "Hinweis im Steckbrief und im Rat, keine Geometrie",
+    "measured": "nur der Druckrat (RM-589), keine Geometrie",
     "technology": "Materialwahl am Drucker, keine Geometrie",
     "support_gap_factor": "Druckrat und Slicerübergabe, keine Geometrie",
     "support_gap_min": "Druckrat und Slicerübergabe, keine Geometrie",
@@ -4031,6 +4331,64 @@ def test_affine_frame_keeps_scaling_reflection_and_an_unknown_origin(exact: bool
     assert np.asarray(moved.frame) == pytest.approx(matrix)
     assert np.linalg.det(np.asarray(moved.frame)[:3, :3]) == pytest.approx(-8.0)
     assert moved_object(dataclasses.replace(body, frame=None), matrix).frame is None
+
+
+def _counted_set(count: int, name: str = "face") -> dict[str, Any]:
+    """Ein Merkmalssatz mit großen und kleinen Behältern und einem geteilten Kleinteil."""
+    from app.core.types import Feature
+
+    shared_axis = (0.0, 0.0, 1.0)
+    found: dict[str, Any] = {}
+    for index in range(count):
+        found[f"{name}_{index}"] = Feature(
+            id=f"{name}_{index}",
+            kind="hole" if index % 2 else "face",
+            provenance="detected",
+            params={"centre": (float(index), 0.0, 0.0), "axis": shared_axis, "diameter": 4.0},
+            face_indices=tuple(range(index * 400, index * 400 + (300 if index % 3 else 7))),
+        )
+    return found
+
+
+@pytest.mark.parametrize("count", [3, 40, 600])
+def test_a_set_of_the_same_features_is_counted_like_a_fresh_walk(count: int) -> None:
+    """Derselbe Rest und dieselben Behälter wie ``held_parts``, ohne die Merkmale zu durchlaufen.
+
+    Ein Schritt, der die Merkmale durchreicht, gibt einen neuen Satz aus
+    denselben Merkmalsobjekten aus (RM-636); gezählt werden darf er wie neu.
+    """
+    from app.core import memory
+    from app.core.scene import cache as cache_module
+
+    first = _counted_set(count)
+    counted: dict[int, Any] = {}
+    cache_module._counted_features(first, counted)
+    second = dict(first)
+    turned = {name: first[name] for name in reversed(list(first))}
+    third = dict(first)
+    third[next(iter(third))] = dataclasses.replace(next(iter(third.values())), kind="slot")
+    walked: list[int] = []
+    real = memory.held_parts
+
+    def watched(*args: Any, **kwargs: Any) -> Any:
+        walked.append(1)
+        return real(*args, **kwargs)
+
+    for fresh in (second, turned, third, {**first, "extra_0": next(iter(first.values()))}):
+        expected = real(fresh)
+        walked.clear()
+        memory.held_parts = watched  # type: ignore[assignment]
+        try:
+            found = cache_module._counted_features(fresh, counted)
+        finally:
+            memory.held_parts = real  # type: ignore[assignment]
+        assert found[0] is fresh
+        assert found[1] == expected[0]
+        assert found[2].keys() == expected[1].keys()
+        for key, (holder, size) in found[2].items():
+            assert holder is expected[1][key][0] and size == expected[1][key][1]
+        if fresh is second and count >= 40:
+            assert not walked, "the same features are not walked again"
 
 
 @pytest.mark.parametrize(

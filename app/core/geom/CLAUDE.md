@@ -27,7 +27,7 @@ plattformabhängig ist, sagt `kern.md`. Die Werkzeuge:
 | Mitte einer Punktwolke | `units.exact_centre` |
 | Normalen und Flächen je Dreieck, Eckennormalen | `mesh.stable_normals`, `mesh.stable_areas` (einzelne Dreiecke), `mesh.stable_vertex_normals` |
 | Summen, deren Gleichstand eine Lage entscheidet | `mesh.IntegerGrid` |
-| Spatprodukte, eingeschlossenes Volumen mit Vorzeichen | `mesh.triple_products`, `mesh.signed_volume` (körpernah) |
+| Spatprodukte, Volumen mit Vorzeichen | `mesh.triple_products`, `signed_volume`, `signed_volume_of` (Teil) |
 | Nur eine Haut? | `mesh.shell_thickness`, `only_a_skin` |
 | Zufall (Stufe 3 der Kette) | `Generator.random` aus den Rohbits, nie `normal` |
 | Drehkörper, Kreispunkte | `lathe.cylinder`, `annulus`, `revolve`, `circle_points` |
@@ -117,12 +117,12 @@ Vertrag: `kern.md`; Startplätze, Stoppreste und Abbau: Begründungen,
 
 **Bewegen und Ausrichten** — `transform.py` (`moved_object` führt Körper,
 Merkmale und Teilträger gemeinsam; ein Teil einer nativen Fläche folgt nur
-belegt, sonst entfällt er, statt zu wachsen; `apply` vermerkt jede starre Bewegung ohne
-Spiegelung am Netz, `perceive.features.note_movement`) · `ops.py` („Transformation“,
+belegt, sonst entfällt er, statt zu wachsen; `apply` teilt die Dreiecke mit dem Quellnetz
+und vermerkt Drehen und Schieben, `perceive.features.note_movement`) · `ops.py` („Transformation“,
 `place_on_bed`, `place_group_on_bed` ohne vorberechneten Versatz;
 `repair_object` gibt einen heilen Eingang unverändert zurück) · `align.py` ·
-`orient.py` (Kandidatenlagen, Stützraum `Orientation.support`; Stapel auf bis
-zu `PROJECTION_WORKERS` Arbeitern, Folge und Bits eines Fadens)
+`orient.py` (Kandidatenlagen, Stützraum `Orientation.support`; bis zu
+`PROJECTION_WORKERS` Arbeiter, Bits wie ein Faden)
 
 **Körper erzeugen und formen** — `primitive_ops.py` (Netzzwillinge der
 exakten Grundkörper, `primitive_local_tool()` für Op und Vorschau) ·

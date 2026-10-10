@@ -51,12 +51,12 @@ Merkmalen. Der Empfänger ordnet Callbackmeldungen der Auftragsrevision zu.
 | `bundling.py` | Welche Züge zu einem Schritt verschmelzen (§15.5), **opt-in je Operation** |
 | `evaluate.py` | Die Auswertung (§15.1); `EvaluationResult.question_reference` trägt bei einer offenen Zuordnungsfrage den bisherigen Bezug mit Ansichtsdreiecken nur vorübergehend zur Ansicht; gemerkte Zuordnungsschritte (RM-593) |
 | `edge_binding.py` | Gewählte Kanten **vor** dem Verbrauchercache binden (§21.3) |
-| `cache.py` | Ergebnis-Cache über dem Operations-Hash, Speicher und Platte; Speicherebene in Bytes begrenzt samt Merkern, ältere Einträge schrumpfen vor dem Verdrängen (RM-567) |
+| `cache.py` | Ergebnis-Cache über dem Operations-Hash, Speicher und Platte; Speicher in Bytes begrenzt samt Merkern; ältere Einträge schrumpfen vor dem Verdrängen (RM-567), beim Öffnen sobald der nächste kommt (RM-698) |
 | `hashing.py` | `operation_hash()`, `object_hash()`, `profile_key()`, `feature_digest` |
 | `parameter_usage.py` | Direkte und abgeleitete Parameterverwendung je Operationsfeld (§13) |
 | `parameter_binding.py` | Feste Zahlen, die zu Projektmaßen passen, und ihre Bindung (`projektmasse.md`) |
 | `cancel.py` | Kooperativer Abbruch (§15.6, §2.8) |
-| `fits.py` | Passungen (§14) — Verletzungen erkannt, nie still gerechnet; `fit_kinds_for` sagt, welche Passungsarten Körper tragen (Druckdialog, Export je Teil) |
+| `fits.py` | Passungen (§14), nie still gerechnet; `fit_kinds_for`: Passungsarten, `allowances_for`: Ausgleich im Modell, je Körper (Druckdialog, Export je Teil) |
 | `orphans.py` | Verweise ohne Merkmal (§21.3): `question_for()`, `candidates_of()`, `lineage()` |
 | `placement.py` | Dialogvorbelegung und Oberflächenplatzierung am Originalnetz (§18.5); `seat_on_face`: ein Erzeuger auf gewählter Fläche, in ihrer Ebene über das Bett gehoben; `seat_of`: wo sitzt, was schon da ist; `prepare_tool()` liefert in `PlacementTool` den effektiven Werkzeugwinkel und die Kernachse für die Vorschau; Altwinkel, migrierte Richtungen und Nullnormalen: Begründungen, „Platzierung“ |
 | `ops.py` | Umbenennen, Löschen, Duplizieren, Muster |

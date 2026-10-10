@@ -20,8 +20,15 @@ import numpy as np
 
 from app.core.deferred import trimesh
 from app.core.geom.mesh import MeshData, as_mesh_data
-from app.core.types import CancelToken, Mesh, SceneObject, Transform, Vec3
-from app.core.units import EPS_DISPLAY, EPS_GEOM, dot3, exact_cos_degrees, exact_sin_degrees
+from app.core.types import BoundingBox, CancelToken, Mesh, SceneObject, Transform, Vec3
+from app.core.units import (
+    EPS_DISPLAY,
+    EPS_GEOM,
+    PRINT_LIMIT,
+    dot3,
+    exact_cos_degrees,
+    exact_sin_degrees,
+)
 
 Axis = Literal["x", "y", "z"]
 Anchor = Literal["centre", "origin", "bed"]
@@ -201,6 +208,37 @@ def angles_after_turn(source: SceneObject, axis: Axis, angle: float) -> Vec3:
 
 def rotation(axis: Axis, degrees: float, about: Vec3 = (0.0, 0.0, 0.0)) -> np.ndarray:
     return rotation_about(AXIS_VECTORS[axis], about, degrees)
+
+
+def fitted_factor(bounds: BoundingBox, largest: float, fixed: Vec3) -> float:
+    """Der Faktor, der die längste Kante von ``bounds`` auf ``largest`` bringt —
+    oder genau eins, wenn er keinen Punkt um ``PRINT_LIMIT`` verschöbe.
+
+    **Die einzige Stelle, an der die Druckgrenze im Kern entscheidet** (§11.2):
+    Eine Rechnung, deren Ergebnis kein Drucker sieht, darf entfallen. Ein Punkt
+    ``p`` des Körpers wandert beim Skalieren um ``|f - 1| · |p - fixed|``, und
+    der weiteste liegt höchstens an einer Ecke der Hülle; gemessen wird also an
+    ihr, nicht an der Kante. An der Kante gemessen verschob die erste Fassung
+    einen Körper bei x = 200 um den Ursprung bis zum Zwanzigfachen der Grenze
+    (Review D, H1). Mit Faktor eins ist *Auf Maß bringen* eine starre Bewegung,
+    und die Auswertung trägt die erkannten Merkmale mit (RM-676: am erzeugten
+    Bett ließ das Ausdünnen 100,000222 mm stehen, und das Skalieren darauf
+    kostete eine volle Erkennung).
+
+    ``fixed`` ist der Punkt, der stehen bleibt — der Bezug, mit freier Stelle
+    die Mitte der Unterseite, weil die Stelle in x und y mittig legt und in z
+    aufsetzt. ``fit_to_size`` und ``generate.working_volume`` fragen beide hier.
+    """
+    current = max(bounds.size)
+    factor = largest / current
+    low, high = bounds.minimum, bounds.maximum
+    reach = max(
+        math.dist(fixed, (x, y, z))
+        for x in (low[0], high[0])
+        for y in (low[1], high[1])
+        for z in (low[2], high[2])
+    )
+    return 1.0 if abs(factor - 1.0) * reach < PRINT_LIMIT else factor
 
 
 def scaling(factors: Vec3, about: Vec3 = (0.0, 0.0, 0.0)) -> np.ndarray:
@@ -387,7 +425,6 @@ _METRIC_IN_CACHE: tuple[str, ...] = (
     "facets",
     "facets_area",
     "facets_boundary",
-    "facets_normal",
     "area_faces",
     "area",
     "solidon_cavity_links",
@@ -431,6 +468,17 @@ def _carry_cache(source: trimesh.Trimesh, body: trimesh.Trimesh, matrix: np.ndar
         for name in ("face_normals", "vertex_normals"):
             if name in kept.cache:
                 carried[name] = turned(np.asarray(kept.cache[name], dtype=np.float64), cells)
+        # **Die Facettennormalen drehen mit, ihre Aufpunkte wandern mit**:
+        # ``trimesh`` legt beide in einem Zug ab (``facets_origin`` liest nur
+        # den Cache). Unverändert übernommen zeigten die Normalen nach einer
+        # Drehung in die alte Richtung, und ``facets_origin`` gab ``None``.
+        # Zeilenweise gerechnet sind es dieselben Bits wie frisch am bewegten
+        # Netz: die Normale des größten Dreiecks, die erste Ecke darin.
+        if "facets_normal" in kept.cache and "facets_origin" in kept.cache:
+            normals = np.asarray(kept.cache["facets_normal"], dtype=np.float64).reshape(-1, 3)
+            origins = np.asarray(kept.cache["facets_origin"], dtype=np.float64).reshape(-1, 3)
+            carried["facets_normal"] = turned(normals, cells)
+            carried["facets_origin"] = moved_points(origins, cells)
     if not carried:
         return
     target.verify()
@@ -438,6 +486,33 @@ def _carry_cache(source: trimesh.Trimesh, body: trimesh.Trimesh, matrix: np.ndar
     # Den Stempel auf den bewegten Stand setzen, sonst wirft die nächste
     # Prüfung alles weg, was eben übernommen wurde.
     target.id_set()
+
+
+def _copy_to_move(raw: trimesh.Trimesh) -> trimesh.Trimesh:
+    """``Trimesh.copy()`` für :func:`moved` — Ecken und Dreiecke geteilt statt kopiert.
+
+    :func:`moved` setzt die Ecken neu und bei einer Spiegelung auch die
+    Dreiecke; geschrieben wird in keines der beiden Felder. Die tiefe Kopie
+    von ``copy()`` hielt deshalb nur eine zweite Dreiecksliste: 24 Byte je
+    Dreieck und Bewegung, am Spiderman 21 MB je Verschieben, bei einem Muster
+    je Kopie. Ein Netz gilt als unveränderlich (``geom.mesh``); wer an seinen
+    Feldern etwas ändert, kopiert vorher (``repair.wind_consistently``,
+    ``turn_shells_outward``). Schreibgeschützt ist die geteilte Liste nicht:
+    ``fast_simplification`` (*Dreiecke verringern*) nimmt nur beschreibbare
+    Felder an, auch wenn es nicht hineinschreibt (Review 1 zu RM-698). Farben,
+    Attribute und Metadaten werden kopiert wie bei ``copy()``.
+    """
+    from copy import deepcopy
+
+    copied = trimesh.Trimesh()
+    copied._data.data = dict(raw._data.data)
+    if raw.visual is not None:
+        copied.visual = raw.visual.copy()
+    copied.vertex_attributes.update({k: deepcopy(v) for k, v in raw.vertex_attributes.items()})
+    copied.face_attributes.update({k: deepcopy(v) for k, v in raw.face_attributes.items()})
+    copied.metadata = deepcopy(raw.metadata)
+    copied._cache.verify()
+    return copied
 
 
 def apply(mesh: MeshData, matrix: np.ndarray) -> MeshData:
@@ -458,7 +533,7 @@ def apply(mesh: MeshData, matrix: np.ndarray) -> MeshData:
     """
     from app.core.perceive.features import note_movement
 
-    body = mesh.raw.copy()
+    body = _copy_to_move(mesh.raw)
     moved(body, matrix)
     _carry_cache(mesh.raw, body, matrix)
     result = replace(

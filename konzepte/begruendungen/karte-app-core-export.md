@@ -37,7 +37,7 @@ installiert ist, statt etwas mitzubringen.
 | `handover.py` | Übergabe an den Slicer (§29, §28.1); `prusa_values` schreibt für PrusaSlicer die Kette seines Bündels samt Abweichung, für Konsole und 3MF-Beilage; Profilvektoren anderer Semantik bleiben in gemischten 3MFs auch bei gleicher Länge vollständig |
 | `manufacturer.py` | **Die Grundlage aus dem Herstellerprofil**: `base_settings` liest Prozess, Filament und Maschine des gewählten Slicerprofils in Solidons Felder zurück (`ORCA_PROCESS`, dazu `slicer_profiles.FILAMENT_READBACK`), mit den eingebauten Vorgaben der vier Orca-Programme (`PROGRAM_DEFAULTS`, gemessen), der Druckplatte (`default_plate`, `PLATE_TEMPERATURES`) und dem Gemessenen (`Foundation.measured`); über dem Standardprozess die Werte der gewählten Stufe (`STAGE_PATHS`, `Foundation.staged`); die Platten, für die das Filament eine Betttemperatur nennt (`plate_temperatures`), ob der Drucker eine Plattenwahl hat (`offers_plates`); `written_paths` sagt, was die Übergabe davon schreibt, `findings`, was der Kunde über Platte und unlesbares Profil wissen muss. Für PrusaSlicer löst `prusa_chain` Drucker, Prozess und Filament des Bündels auf (`PrusaChain`), `PRUSA_PROCESS` und `PRUSA_PROGRAM_DEFAULTS` lesen sie zurück, samt Tempi in Prozent, erster Schicht, Stützwinkel „automatisch" und Rückzug am Filament |
 | `slicer_keys.py` | Wie eine Solidon-Einstellung in **jedem** Slicer heißt |
-| `slicer_profiles.py` | Die Profile finden, die ein installierter Slicer mitbringt; ein Durchgang liest jede Datei einmal (`ProfileDocuments`, geteilt von Auswahl, Namensindex und Erbkette). Den Prusa-Bestand hält `_prusa_store` über Aufrufe hinweg, solange keine Bündeldatei sich ändert; `identity` ist die Kennung eines Profils in einer Auswahl |
+| `slicer_profiles.py` | Die Profile finden, die ein installierter Slicer mitbringt; ein Durchgang liest jede Datei einmal (`ProfileDocuments`, geteilt von Auswahl, Namensindex und Erbkette). Den Prusa-Bestand hält `_prusa_store` über Aufrufe hinweg, solange keine Bündeldatei sich ändert, den der Orca-Familie und von Cura `_held` je Profilarten, solange die Signatur gleich bleibt (RM-670: jeder 3MF-Export las vorher rund 1 550 Maschinenprofile, eine bis drei Sekunden); `identity` ist die Kennung eines Profils in einer Auswahl. `match_filament` wählt die Filament-Vorgabe: Vorwahl der Maschine, Vorschlag des Modells (`suggested_filaments`, bei der Orca-Familie aus dem Modellprofil `machine_model`), dann Generic oder die Marke des Druckers (`brand_of` aus `filament_vendor`) vor jeder Fremdmarke, die schlichteste Ausführung, erst dann die Namenslänge. Die Signatur von `_held` (`_holding_signature`) nimmt eigene Profile und den `system`-Bestand Datei für Datei, soweit der Leser sie ansieht (`_READ_BELOW`), die Installation an Programmdatei und oberster Ebene; eine Frage nach weniger Arten bekommt den Ausschnitt eines Eintrags mit mehr, und wer denselben Bestand fragt, während ein anderer Faden ihn liest, wartet. `_prusa_printer_models` und `_program_folders` merken ebenso, jeder Merker verfällt mit `discover.cache_generation()`, `forget_holdings` leert alle für die Suite |
 | `prusa_conditions.py` | PrusaSlicers Verträglichkeitsbedingungen (`printer_model=~/…/ and nozzle_diameter[0]!=0.8`) mit eigenem Parser, ohne `eval` (Regel 10); `slicer_profiles` bindet damit Prusa-Prozesse und -Filamente an den Drucker (`_prusa_fits`) |
 
 Der SCAD-Ausgabeweg von CLI und Bausteinkatalog läuft über
@@ -81,13 +81,30 @@ Export.
 
 **Ohne Herstellerprofil bekommt jede Rolle Solidons Wert** (RM-191):
 PrusaSlicer schreibt Solidon
-volle Füllung und Lücken (`solid_infill_speed`, `gap_fill_speed`) und setzt
-`machine_limits_usage = ignore`, damit die Zeitschätzung nicht mit
-erfundenen 1 500 mm/s² rechnet; die Orca-Familie bekommt dieselben zwei
+volle Füllung und Lücken (`solid_infill_speed`, `gap_fill_speed`); die
+Orca-Familie bekommt dieselben zwei
 Geschwindigkeiten und die Bahnbreite für alle fünf Rollen. Bambu Studio sagt
 seine Absage nicht auf der Konsole, sondern in `result.json` neben der
 Druckdatei (`return_code`, `error_string`); `_result_reason` hängt sie an die
 Ausgabe, nur aus dem Lauf, der gerade war.
+
+**PrusaSlicer ohne Bündel schätzt, was die Datei fordert** (RM-191, 09.10.2026).
+`machine_limits_usage = ignore` half nicht, wie hier zuvor stand: Ohne
+Grenzen nimmt `GCodeProcessor` die eingebauten aus `MachineEnvelopeConfig`
+(1 500 mm/s²), und im Dialekt `reprap` liest er gar keine.
+`_prusa_time_estimate` schreibt `gcode_flavor = marlin` (dasselbe `M204 S`,
+Byte für Byte derselbe G-Code ohne Kommentare) und `time_estimate_only` mit
+der schnellsten angeforderten Beschleunigung und dem schnellsten Tempo als
+Grenze. `marlin2` wäre falsch: Es schreibt `M204 P` ohne `T`, und das
+übergeht Klipper. Dazu `PRUSA_WITHOUT_BUNDLE` — was Prusas Bestand in
+`[print:*common*]` für jeden Prozess setzt (`extra_perimeters = 0`,
+`solid_infill_below_area = 0`) — und die Materialart der ersten Spule statt
+der des Projekts, nach derselben Regel wie bei der Orca-Familie
+(`_spool_filament_type`). Gewürzregal am Centauri Carbon 2:
+407 → 292 min bei 153,7 g; ElegooSlicer mit denselben Wänden, Bodenschichten
+und Füllmuster 280 min und 160,6 g. Der Abstand zu Elegoos eigenem
+Standardprozess (232 min, 127,9 g) ist Solidons Tabelle: drei Wände und vier
+Bodenschichten gegen zwei und drei.
 
 ## Stützsperre und Cura
 

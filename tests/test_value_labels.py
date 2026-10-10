@@ -1866,3 +1866,32 @@ def test_first_layer_error_labels_the_exact_part_name(language, name):
         assert problem.values["part_name"] == name
     finally:
         set_language(previous)
+
+
+@pytest.mark.parametrize("language", ["de", "en", "es", "fr", "it", "pt"])
+def test_the_kind_of_a_feature_is_named_like_everywhere_else(qt_app: object, language: str) -> None:
+    """„Art: hole“ stand im Prüfbericht unter jeder Teile-Absage (Review I, M3).
+
+    Seit die Auswertung die Art einer Absage nicht mehr mit dem Fehlertitel
+    überschreibt, trägt der Wert ``kind`` den Bezeichner des Merkmals. Er heißt
+    jetzt, wie Karte, Handbuch und Agent ihn nennen (``FEATURE_TITLES``), in jeder
+    Sprache und für jede Art; ein anderer Wert bleibt, wie er ist.
+    """
+    from app.core.registry.registry import FEATURE_TITLES
+    from app.i18n import get_language, set_language, tr
+
+    previous = get_language()
+    set_language(language)
+    try:
+        for kind, title in FEATURE_TITLES.items():
+            assert value_text("kind", kind) == str(title), kind
+            assert value_line("kind", kind) == tr(
+                "{name}: {value}", name=value_label("kind"), value=str(title)
+            )
+        if language == "de":
+            assert value_line("kind", "hole") == "Art: Bohrung"
+        assert value_text("kind", "Die Eingabe war so nicht verwendbar.") == (
+            "Die Eingabe war so nicht verwendbar."
+        )
+    finally:
+        set_language(previous)

@@ -416,6 +416,13 @@ def test_a_technical_detail_stays_behind_the_readable_sentence(
     assert "Wand" in str(zeile.message), "ein übersetztes Detail sagt mehr als der Titel"
     assert zeile.values["kind"] == "Ein Wert liegt daneben."
 
+    # Nennt der Fehler selbst eine Art, bleibt sie (RM-638): Die Teile-Absage
+    # trägt die ihres Merkmals, und der Titel schrieb „hole“ über.
+    eigene = AppError(
+        _("Ein Wert liegt daneben."), detail=_("Die Wand ist zu dünn."), values={"kind": "hole"}
+    )
+    assert _finding_from(eigene, operation).values["kind"] == "hole"
+
 
 def test_error_places_and_outlines_remain_geometry_in_the_report() -> None:
     """Ein Fehlerort bleibt erreichbar; seine Kontur darf kein Anzeigetext werden."""
@@ -8720,3 +8727,40 @@ def test_a_step_leaves_the_memory_with_the_entry_it_came_from(profile: Profile) 
     cache.clear()
     assert not module._REMEMBERED_STEPS, "clearing the memory level forgets every step"
     assert module.remembered_bytes() == 0
+
+
+def test_the_remembered_movements_live_only_within_one_evaluation(
+    profile: Profile, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Operation und Zuordnung teilen die Bewegung; danach hält sie niemand (Review L3, G1).
+
+    Der Merker der Bewegungen lag sonst mit bis zu 41 MB am Eiffelturm
+    außerhalb der Bytegrenze des Ergebniscaches.
+    """
+    import importlib
+
+    from app.core.perceive import matching
+    from app.core.scene.project import ProjectSources
+
+    project = _moved_plate(2)
+    asked: list[int] = []
+    computed: list[int] = []
+    real_asked, real_computed = matching.transformed_features, matching._transformed_features
+    module = importlib.import_module("app.core.scene.evaluate")
+
+    def counted_asked(*args: Any, **kwargs: Any) -> Any:
+        before = len(computed)
+        answer = real_asked(*args, **kwargs)
+        asked.append(len(computed) - before)
+        return answer
+
+    def counted_computed(*args: Any, **kwargs: Any) -> Any:
+        computed.append(1)
+        return real_computed(*args, **kwargs)
+
+    monkeypatch.setattr(matching, "_transformed_features", counted_computed)
+    monkeypatch.setattr(module, "transformed_features", counted_asked)
+    evaluate(project.document, profile, sources=ProjectSources(project), cache=ResultCache())
+    assert asked, "Voraussetzung: die Zuordnung fragt die Bewegung"
+    assert asked == [0] * len(asked), "the assignment takes the operation's movement"
+    assert not matching._transformed_memory(), "nothing is held after the evaluation"

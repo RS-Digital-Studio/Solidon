@@ -42,15 +42,7 @@ USER_MATERIALS = "materials.toml"
 
 #: Was eine Kalibrierung setzen darf. Alles andere bleibt so, wie das
 #: mitgelieferte Profil es hat.
-FIELDS: tuple[str, ...] = (
-    "clearance",
-    "press",
-    "hole_compensation",
-    "elephant_foot",
-    "shrinkage",
-    "minimum_wall",
-    "overhang_angle",
-)
+FIELDS: tuple[str, ...] = profiles.CALIBRATION_FIELDS
 
 PROCESS_FIELDS = frozenset({"minimum_wall", "overhang_angle"})
 
@@ -157,6 +149,10 @@ def apply(
     }
     table = _read(target)
     entry.update(table.get(calibration.material, {}))
+    # Was gemessen ist, je Wert (RM-589): das bisher Gemessene — auch aus einer
+    # Datei, die es noch nicht nannte (``profiles._measured``) — und was jetzt
+    # dazukommt. Ein unberührter Startwert bleibt Startwert.
+    measured = set(shipped.measured or ())
     if measured_process and process is not None:
         printer = process.printer
         previous_process = Profile(printer, shipped)
@@ -165,6 +161,7 @@ def apply(
             # Überhangmessung dieses Materials und umgekehrt.
             for name in PROCESS_FIELDS:
                 entry.pop(name, None)
+            measured -= PROCESS_FIELDS
         entry.update(
             calibration_printer=printer.id,
             calibration_nozzle_diameter=printer.nozzle_diameter,
@@ -172,7 +169,10 @@ def apply(
             calibration_extrusion_width=printer.extrusion_width,
         )
     entry.update(calibration.as_table())
-    entry["calibrated"] = True
+    entry["measured"] = sorted(measured | set(calibration.as_table()))
+    # Kalibriert ist ein Material, an dem etwas gemessen ist; ein Speichern
+    # ohne eingetragenen Wert macht aus Startwerten keine Messung.
+    entry["calibrated"] = bool(entry["measured"])
     table[calibration.material] = entry
 
     scratch: Path | None = None
@@ -226,6 +226,8 @@ def _as_toml(table: dict[str, dict[str, Any]]) -> str:
 def _literal(value: Any) -> str:
     if isinstance(value, bool):
         return "true" if value else "false"
+    if isinstance(value, (list, tuple)):
+        return "[" + ", ".join(_literal(entry) for entry in value) + "]"
     if isinstance(value, str):
         # `json.dumps` erzeugt gültige TOML-Basic-Strings: ein
         # Anführungszeichen im Materialtitel — „PLA "matt"" — machte die

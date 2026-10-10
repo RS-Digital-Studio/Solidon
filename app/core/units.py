@@ -67,8 +67,10 @@ MAX_FACET_SAG: Final[float] = 0.05
 SMALLEST_NOZZLE: Final[float] = 0.1
 
 #: Wie weit Maße und Positionen nach einer Beschleunigung oder Ersparnis vom
-#: Stand davor abweichen dürfen: ein Vierzigstel der kleinsten Düse. Keine
-#: Toleranz, mit der der Kern rechnet, sondern der Maßstab der Nachweise.
+#: Stand davor abweichen dürfen: ein Vierzigstel der kleinsten Düse. Der
+#: Maßstab der Nachweise; im Kern nur die Schranke, unter der eine Rechnung
+#: entfallen darf, weil sie keinen Punkt weiter bewegte (§11.2,
+#: ``geom.transform.fitted_factor``) — nie eine Vergleichstoleranz.
 PRINT_LIMIT: Final[float] = SMALLEST_NOZZLE / 40
 
 #: Wie groß ein erzeugtes Gewinde werden darf, im Nenndurchmesser und in der
