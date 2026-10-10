@@ -95,14 +95,13 @@ it into `website/version.json`.
 - When many small overhangs need supports together, such as a chin with a sloped underside, the check report now names the spot.
 - A narrow rim that holds up on its own no longer counts as a long bridge, even next to another overhang. The check report no longer warns there, and Solidon asks for no supports for it.
 - Over a channel, the check report no longer recommends a support that could not be removed from it. It names the channel and a transition below 45 degrees.
-- For PETG, Solidon suggests full cooling at the support. It then comes off the part more easily.
-- New in the print settings: *Interface layers below*, *Interface gap* and *Full cooling at the support*.
+- For PETG, Solidon suggests *Full cooling at the support*. It then comes off the part more easily.
+- New in the print settings: *Interface layers below*, *Tree walls* and *Tree tip*, plus *Pull in first layer* and *Widen holes*, which follow the slicer unless you set them.
 - The *Gap above* field is now called *Gap above and below* and applies to both sides of the support.
 - If the slicer refuses filaments whose temperatures are too far apart on one plate, Solidon now names the reason and the way out instead of only saying that no print file was made.
 - In the print dialog, printer, filaments and quality stay fully visible even with enlarged text. Long labels wrap instead.
 - The report calculates faster and needs less memory.
 - On Linux with Flatpak, Solidon now reports a slicer crash as a crash instead of only saying that no print file was made.
-- New in the print settings: *Pull in first layer* and *Widen holes*. Unless you set them, the slicer's own value applies.
 - If a part already compensates in the model, with a hole drilled with *Apply material tolerance* or *Compensate the elephant foot*, Solidon suggests that the slicer does not do it again.
 - Even for printers that PrusaSlicer or SuperSlicer do not know themselves, both estimate the print time with the accelerations handed over, and the file names the material of the spool.
 - Even on a fully loaded computer, Solidon gives the real reason after stopping a slicer instead of a timeout. A finished print file is used.
