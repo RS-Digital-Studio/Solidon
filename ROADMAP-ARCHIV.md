@@ -46796,8 +46796,10 @@ RM-585, L1 zurückgenommen). N3 — der Kanal-Zwilling entschied je Decke nach F
 wird nur der kragende Scheitel samt letzter Spanne ausgespart. N5–N7 — Docstrings, eine
 Halt-Rechnung für Schließfrage und Scheitel (`_anchored`), `hanging` vor `arches` gesetzt.
 N4 — ob eine Decke sich schließt, hing am Schichtraster (Pultdecke 13° bei 0,2 mm/60° mit
-Stütze, 12° und 15° ohne): Der Spalt zur hohen Wand bis zur doppelten Zugabe gilt jetzt als
-Halt (`_anchored`), die nächste Schicht schließt ihn von beiden Seiten.
+Stütze, 12° und 15° ohne): An der obersten Schicht der Decke gilt der Spalt zur hohen Wand
+bis zur doppelten Zugabe als Halt (`_anchored`), die nächste Schicht schließt ihn von beiden
+Seiten. Für jede Schicht verdoppelt, verlor „Side kit rest 3“ am Centauri ihre Stütze
+(G-Code: Bahnen 10 mm frei); deshalb nur oben.
 
 **Nachweis der Nachprüfung (10.10.2026):** `test_a_cantilever_that_runs_free_along_a_deep_wall_keeps_its_supports`
 (Pultdecke 12° in 20 mm Wand bei 0,2 mm/45° und 60°, 15° bei 60°, Haut 15° bei 45° und 60°,

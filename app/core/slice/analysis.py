@@ -5026,18 +5026,21 @@ class _Ceilings:
         return [member for member in tops if self.shape(member).intersects(reach)]
 
     def _anchored(self, members: list[tuple[int, int]], own: Any, closing: float) -> Any | None:
-        """Wo diese Stücke Halt finden: das Material ihrer Schicht darunter bis
-        zur doppelten Zugabe (:meth:`_gap`, mit :data:`OVERHANG_MARGIN`), ohne den
-        eigenen Grundriss ``own``, um diese Reichweite aufgeweitet — ``None`` ohne
-        Halt.
+        """Wo diese Stücke Halt finden: das Material ihrer Schicht darunter in
+        Reichweite der Zugabe (:meth:`_gap`, mit :data:`OVERHANG_MARGIN`), für die
+        oberste Schicht der doppelten, ohne den eigenen Grundriss ``own``, um diese
+        Reichweite aufgeweitet — ``None`` ohne Halt.
 
-        **Die doppelte Zugabe** (Nachprüfung RM-585, N4): Bleibt zwischen dem
+        **Die doppelte Zugabe oben** (Nachprüfung RM-585, N4): Bleibt zwischen dem
         obersten Streifen und der hohen Wand ein Spalt bis zu zwei Zugaben, wächst
         die nächste Schicht von beiden Seiten darüber, ohne ein Überhangstück zu
         bilden — die Decke ist dort gehalten. Mit einer Zugabe hing es an der Lage
         des Schichtrasters, ob eine Decke sich schloss: Eine Pultdecke unter 13°
         brauchte bei 0,2 mm/60° Stützen, unter 12° und 15° nicht, und eine
-        Pultreihe von 11 bis 30° sprang bei jeder Einstellung mehrmals.
+        Pultreihe von 11 bis 30° sprang bei jeder Einstellung mehrmals. Nur oben:
+        Für jede Schicht verdoppelt, schlossen sich im Korpus Decken, die keine
+        sind — die Ablage „Side kit rest 3“ verlor ihre Stütze, im G-Code hängen
+        dort Bahnen 10 mm frei.
 
         Eine Rechnung für Schließfrage und Scheitel (:meth:`_closes`,
         :meth:`_crown_spans_short`; Nachprüfung RM-585, N6). Nur das Material in
@@ -5055,11 +5058,12 @@ class _Ceilings:
         Rauschen, kein Halt.
         """
         held: list[Any] = []
+        top = max((member[0] for member in members), default=0)
         for member in members:
             gap = self._gap(member)
             if not math.isfinite(gap):
                 continue
-            reach = 2.0 * gap + OVERHANG_MARGIN
+            reach = (2.0 if member[0] == top else 1.0) * gap + OVERHANG_MARGIN
             low_x, low_y, high_x, high_y = self.shape(member).bounds
             window = (
                 low_x - 2.0 * reach,

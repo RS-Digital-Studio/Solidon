@@ -646,11 +646,13 @@ Ob eine Decke sich schließt, hing am Schichtraster: Eine Pultdecke unter 13° b
 0,2 mm/60° Stützen, unter 12° und 15° nicht. Ihr oberster Streifen endete 0,58 mm vor der
 hohen Wand, mehr als eine Zugabe; die nächste Schicht wuchs von beiden Seiten über den Spalt,
 ohne ein Überhangstück zu bilden, und die Schließfrage fand den zweiten Halt nicht. Gehalten
-ist deshalb, was bis zur doppelten Zugabe neben dem Grundriss liegt (`_Ceilings._anchored`).
-Eine Pultreihe von 11 bis 30° in 8 und 20 mm tiefer Wand antwortet damit bei 0,08 bis
-0,28 mm und 45 bis 60° monoton; Prüfkörper und Eiffelturm behalten ihre Antwort, am Drachen
-gelten bei 45° 2 175 statt 1 827 Stücke als Kanal, die Sperre bleibt bei 61 Säulen und
-7 594 mm³, die Übergabe an den Centauri inhaltsgleich.
+ist deshalb an der obersten Schicht der Decke, was bis zur doppelten Zugabe neben ihr liegt
+(`_Ceilings._anchored`). Für jede Schicht verdoppelt, schlossen sich im Korpus Decken, die
+keine sind: Die Ablage „Side kit rest 3“ verlor am Centauri ihre Stütze, und im G-Code ohne
+Stütze hängen dort Bahnen 10 mm mit freiem Ende. Eine Pultreihe von 11 bis 30° in 8 und
+20 mm tiefer Wand antwortet bei 0,08 bis 0,28 mm und 45 bis 60° monoton; Prüfkörper und
+Eiffelturm behalten ihre Antwort, am Drachen gelten bei 45° 2 085 statt 1 827 Stücke als
+Kanal, die Sperre bleibt bei 61 Säulen und 7 594 mm³.
 
 Was sich an einer Seite trägt, misst die Brückenregel nicht: Ohne Richtung mit
 Halt an beiden Enden wäre die Brückenweite die Diagonale, praktisch die
