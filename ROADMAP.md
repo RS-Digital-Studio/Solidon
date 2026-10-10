@@ -3596,6 +3596,18 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   urteilt (`compare`), `tools/check_print_equal.py` vergleicht zwei Codestände über
   Beispielprojekte und Modelldateien; je Kriterium ein Gegenfall in
   `tests/test_print_equal.py`.
+  **Teil (2) läuft:** Ein bewegtes Netz teilt seine Dreiecke mit dem Quellnetz
+  (`3f06a7470`), und ein von der Platte geholter älterer Stand gibt seine
+  Ableitungen ab, sobald der nächste kommt (Spiderman, vier Verschieben aus dem
+  Plattencache: gehalten 1861 → 465 MB, Spitze 2366 → 1814 MB), und die
+  Vorprüfung zum Auflösen von Überschneidungen kopiert kein Teil mehr
+  (Normalisieren 1053 → 848 MB, Laden 1584 → 1443 MB). Offen: der wgpu-Block
+  (in wgpu-native 0.32 ohne Speicherhinweise). **Netzbits nur nach RM-706:**
+  Jeder Teil, der die Bits eines ausgewerteten Netzes ändert (float32 beim
+  Halten, andere Dreiecksfolge), kommt erst, wenn der Verbrauchsabdruck aus
+  den gespeicherten Eingängen entsteht, und mit Gegenprobe gegen einen alten
+  Abdruck. **Teil (3) als Entwurf:**
+  [`entwurf-schmale-netze-2026-10.md`](konzepte/entwurf-schmale-netze-2026-10.md).
 
 <a id="rm-699"></a>
 

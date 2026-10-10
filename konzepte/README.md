@@ -32,7 +32,7 @@ Volltextsuche zu erreichen, und die findet nur, wer die Wörter schon kennt.
 
 | Thema | Dokumente |
 |---|---|
-| **Konstruieren, Geometrie, Kerne** | `nachweise-bibliotheken-2026-10/` (Schriftzüge alt gegen neu, RM-471) · `konzept-vollwertiges-cad-2026-09` · `recherche-cad-paritaet-2026-09` · `durchsicht-cad-konzepte-2026-09` · `nachweise-cad-durchsicht-2026-09/` (Sonden und Herleitungen der CAD-Durchsicht) · `uebergabe-cad-2026-09-20` (Übergabe der CAD-Umsetzung) · `nachweise-cad-p2-7/` (Sonden zu P2.7) · `nachweise-cad-p2-5/` (Sonden zu P2.5) · `konzept-organische-modellierung-2026-08` |
+| **Konstruieren, Geometrie, Kerne** | `entwurf-schmale-netze-2026-10` (int32 und float32, RM-698) · `nachweise-bibliotheken-2026-10/` (Schriftzüge alt gegen neu, RM-471) · `konzept-vollwertiges-cad-2026-09` · `recherche-cad-paritaet-2026-09` · `durchsicht-cad-konzepte-2026-09` · `nachweise-cad-durchsicht-2026-09/` (Sonden und Herleitungen der CAD-Durchsicht) · `uebergabe-cad-2026-09-20` (Übergabe der CAD-Umsetzung) · `nachweise-cad-p2-7/` (Sonden zu P2.7) · `nachweise-cad-p2-5/` (Sonden zu P2.5) · `konzept-organische-modellierung-2026-08` |
 | **Handbuch und Hilfe** | `konzept-handbuch-2026-09` · `nachweise-handbuch-2026-09/` (Kundenblick, Findbarkeit, Aufnahmetechnik) |
 | **Bedienung und Gestaltung** | `konzept-verschiebbare-karten-2026-10` · `konzept-bedienung` · `konzept-3d-maus-2026-08` · `konzept-merkmalbedienung-2026-09` |
 | **Durchsichten der Oberfläche** | nur im Archiv |
@@ -71,6 +71,7 @@ heute aus, nicht nach Datum. Was nur noch erklärt, steht im [Archiv](#archiv).
 
 | Dokument | Stand | Thema | Wie es dasteht |
 |---|---|---|---|
+| [entwurf-schmale-netze-2026-10.md](entwurf-schmale-netze-2026-10.md) | **10.10.** | Netze schmal halten: int32-Dreiecke und float32-Ecken | **Entwurf ohne Code** zu [RM-698](../ROADMAP.md#rm-698), Teil 3: Messungen an vier Korpusmodellen, vier Varianten; empfohlen die Kantentabelle in int32 mit Überlaufwächter, Runden auf float32 nicht |
 | [recherche-slicer-einstellungen-2026-10.md](recherche-slicer-einstellungen-2026-10.md) | **08.10.** | Slicerwerte nach Modell: Stützen ohne Narben und ohne unerreichbare Stellen, häufige Nutzerprobleme, alle Stützschlüssel je Familie | **Datierte Recherche mit gemessenen Programmvorgaben.** Gebaut daraus RM-580 bis RM-582, offen RM-583 bis RM-589 im Register |
 | [konzept-verschiebbare-karten-2026-10.md](konzept-verschiebbare-karten-2026-10.md) | **06.10.** | Seitenkarten verschieben, einrasten, zurücklegen | **Umgesetzt** (Fragebogen S-20261006-5c132b, Entscheidung Robert); Soll-Ablauf des Agenten `bedienlogik` mit Abnahmekriterien; drei Abweichungen (Ortswörter bleiben, kurzer Reitername, beim Überdecken Stammlage) und das Offene (Abnahme 8, Fensterabnahme beim Release) oben vermerkt |
 | [nachweise-generatoren-2026-10/README.md](nachweise-generatoren-2026-10/README.md) | **06.10.** | Lizenzkette der gepinnten Generatoren und Ersatz für TripoSG | **Nachweise zu [RM-003](../ROADMAP.md#rm-003)**, an den gepinnten Revisionen abgerufen; Entscheidung Robert: TRELLIS.2-4B. Keine Rechtsauskunft — die Kanzleifragen stehen in beiden Dateien |
