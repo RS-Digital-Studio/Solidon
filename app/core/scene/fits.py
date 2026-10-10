@@ -309,7 +309,9 @@ FITTING_OPS: frozenset[str] = frozenset(
     {
         "create_lid",
         "screw_lid",
+        "create_container",
         "split_pinned",
+        "split_line",
         "insert_snap_fit",
         "insert_dowel",
         "insert_magnet_pocket",
@@ -341,16 +343,28 @@ def numbered_name(fits: Collection[Fit], key: str) -> str:
 def _producing(document: Document, object_ids: Collection[str]) -> tuple[set[str], set[int]]:
     """Die Körper und eingeschalteten Schritte, aus denen diese Körper entstanden sind.
 
-    Der Stapel wird rückwärts gegangen; jeder Schritt, der einen der Körper
-    erzeugt, bringt seine Eingänge dazu. Ausgeschaltete Schritte zählen nicht.
+    Rückwärts durch den Stapel, **je Körperkennung**: Gibt ein Schritt einen
+    gesuchten Körper aus, den er auch als Eingang hat, hat er ihn an Ort und
+    Stelle bearbeitet — weiter geht es mit dieser Kennung und mit dem, was der
+    Schritt in ihn aufnimmt (Eingänge, die er nicht wieder ausgibt, etwa beim
+    Vereinigen). Entsteht der Körper im Schritt neu (Teilen, Deckel,
+    Duplikat), zählen alle Eingänge. *Anordnen* und *Ausrichten* führen alle
+    Körper als Ein- und Ausgang; über alle Eingänge bekam jeder Körper die
+    Herkunft seiner Nachbarn (Review RM-589, N1). Ausgeschaltete Schritte
+    zählen nicht.
     """
     wanted = set(object_ids)
     relevant_operations: set[int] = set()
     for operation in reversed(document.ops):
         if operation.suppressed is not None:
             continue
-        if wanted.intersection(operation.outputs):
-            relevant_operations.add(operation.id)
+        made = wanted.intersection(operation.outputs)
+        if not made:
+            continue
+        relevant_operations.add(operation.id)
+        if made.issubset(operation.inputs):
+            wanted.update(set(operation.inputs).difference(operation.outputs))
+        else:
             wanted.update(operation.inputs)
     return wanted, relevant_operations
 
@@ -363,16 +377,19 @@ COMPENSATING_HOLE_OPS: frozenset[str] = frozenset(
     {"drill_hole", "drill_brep_hole", "resize_hole", "slot_hole", "field_cut"}
 )
 
-#: Die Formen, die *Lochfeld schneiden* um die Lochkorrektur weitet; ein
-#: Sechseck behält sein Eckmaß (``field_ops``).
-_COMPENSATED_FIELD_SHAPES: frozenset[str] = frozenset({"circle", "slot"})
+#: Passungsschritte außerhalb der Bausteine, die das Spiel aus dem Material in
+#: die Innenmerkmale legen, die sie selbst erzeugen: das Innengewinde der
+#: Kappe (*Drehdeckel erzeugen*, *Behälter mit Deckel*), die Bohrungen der
+#: Verbinder (*An Ebene teilen*, *An gezeichneter Linie teilen*), die
+#: Scharnierbohrung eines Deckels. Kragen und Hals tragen ihr Spiel außen und
+#: sind kein Innenmerkmal; *Schraube erstellen* fehlt deshalb.
+PLAY_HOLE_OPS: frozenset[str] = frozenset(
+    {"create_lid", "screw_lid", "split_pinned", "split_line", "create_container"}
+)
 
-#: Passungsschritte außerhalb der Bausteine, die ihr Spiel in eine Innenkontur
-#: legen — aber nur an einem ihrer zwei Ergebnisse (:func:`_play_outputs`):
-#: das Innengewinde der Kappe, die Bohrungen der Verbinder an einer Hälfte, die
-#: Augen eines Scharnierdeckels. Der Kragen des Deckels und der Hals tragen
-#: ihr Spiel außen, ebenso *Schraube erstellen*, das deshalb fehlt.
-PLAY_HOLE_OPS: frozenset[str] = frozenset({"create_lid", "screw_lid", "split_pinned"})
+#: *Gegenform einlassen* legt Taschen mit Spiel in den Einsatz, das erste
+#: Ergebnis; ein Achsmerkmal tragen sie nicht (:func:`_pocket_closes`).
+COUNTER_FORM_OP = "cut_counter_form"
 
 #: Der Schritt, der die ersten Schichten um den Elefantenfuß des Materials
 #: einzieht.
@@ -387,37 +404,123 @@ MODEL_ALLOWANCES: tuple[str, ...] = ("holes", "foot")
 def allowances_for(document: Document, body: SceneObject) -> tuple[str, ...]:
     """Welche Ausgleiche dieser Körper schon im Modell trägt (RM-589).
 
-    Dieselben Schritte wie :func:`fit_kinds_for`. Löcher zählen, wenn ein
-    Baustein sein Spiel in eine Innenkontur legt (abtragend mit Spiel oder
-    Übermaß, oder ``PartSpec.play_inside``), wenn ein Schritt aus
-    :data:`PLAY_HOLE_OPS` es an diesem Körper tut, oder wenn am Körper eine Bohrung steht, die
-    ein Schritt aus :data:`COMPENSATING_HOLE_OPS` mit Haken gebohrt hat. Eine
-    nur eingetragene Passung ändert die Geometrie nicht und zählt nicht. Der
-    Druckrat stellt dann den gleichen Ausgleich des Slicers auf null.
+    Die Herkunft je Körper wie bei :func:`fit_kinds_for`. Löcher zählen am
+    fertigen Körper: an einem Innenmerkmal — Bohrung, Innengewinde, Langloch —,
+    das der Slicer in einer Schicht als geschlossene Kontur sieht
+    (:func:`_closes_in_a_layer`; eine waagerechte Bohrung weitet sein
+    Lochausgleich nicht) und das ein Schritt mit Spiel oder Lochkorrektur aus
+    dem Material gemacht hat: mit Haken aus :data:`COMPENSATING_HOLE_OPS`, aus
+    :data:`PLAY_HOLE_OPS` oder ein Baustein mit Spiel innen
+    (:func:`_part_with_play_inside`). Dazu die Taschen von *Gegenform
+    einlassen* (:func:`_pocket_closes`). Eine nur eingetragene Passung ändert
+    die Geometrie nicht und zählt nicht. Der Druckrat stellt dann den gleichen
+    Ausgleich des Slicers auf null.
     """
-    ancestors, relevant = _producing(document, {body.id})
-    steps = {operation.id: operation for operation in document.ops if operation.id in relevant}
+    lineage, relevant = _producing(document, {body.id})
+    active = {operation.id: operation for operation in document.ops if operation.suppressed is None}
+    steps = [active[identifier] for identifier in sorted(relevant) if identifier in active]
     found: set[str] = set()
-    for operation in steps.values():
+    for operation in steps:
         if operation.op == FOOT_OP:
             found.add("foot")
-        elif operation.op in PLAY_HOLE_OPS:
-            if any(
-                index < len(operation.outputs) and operation.outputs[index] in ancestors
-                for index in _play_outputs(operation)
-            ):
-                found.add("holes")
-        elif _part_with_play_inside(operation):
+        elif operation.op == COUNTER_FORM_OP and _pocket_closes(operation, body, lineage):
             found.add("holes")
+    # Wer ein erzeugtes Merkmal ohne vermerkten Erzeuger gebaut hat: der
+    # Schritt, mit dem der Körper ohne Eingang entstand (*Behälter mit
+    # Deckel*, *… erstellen*). Ein erkanntes Langloch ohne Erzeuger stammt aus
+    # einem Lochfeld der Herkunft — das Feld benennt nur seine runden Löcher.
+    origins = tuple(operation for operation in steps if not operation.inputs)
+    fields = tuple(operation for operation in steps if operation.op == "field_cut")
     for feature in body.features.values():
-        creator = steps.get(feature.created_by) if feature.created_by is not None else None
-        if creator is not None and creator.op in COMPENSATING_HOLE_OPS:
-            values = _step_values(creator)
-            if values.get("compensate") is True and (
-                creator.op != "field_cut" or values.get("shape") in _COMPENSATED_FIELD_SHAPES
-            ):
-                found.add("holes")
+        if not _closes_in_a_layer(feature):
+            continue
+        if feature.created_by is not None:
+            creators: tuple[Operation, ...] = (
+                (active[feature.created_by],) if feature.created_by in active else ()
+            )
+        elif feature.provenance == "generated":
+            creators = origins
+        else:
+            creators = fields if feature.kind == "slot" else ()
+        if any(_puts_allowance_into(creator) for creator in creators):
+            found.add("holes")
+            break
     return tuple(entry for entry in MODEL_ALLOWANCES if entry in found)
+
+
+def _closes_in_a_layer(feature: Feature) -> bool:
+    """Sieht der Slicer dieses Innenmerkmal in einer Schicht als geschlossene Kontur?
+
+    Nur eine solche weitet sein Lochausgleich (OrcaSlicer
+    ``_shrink_contour_holes``: die Löcher jedes Schichtumrisses). Solidons
+    Schritte bohren senkrecht in eine Fläche, die Enden eines Lochs stehen
+    also quer zu seiner Achse. Ist es um ``θ`` gegen die Senkrechte geneigt,
+    schneidet eine Schicht die Wand um ein Loch der Länge ``L`` als Streifen
+    der Breite ``L/sin θ`` und das Loch vom Durchmesser ``d`` als Ellipse der
+    Länge ``d/cos θ``; geschlossen ist die Kontur, solange die Ellipse in den
+    Streifen passt: ``L·cos θ > d·sin θ``. Dann bekäme jede geschlossene
+    Schicht den Ausgleich ein zweites Mal. Senkrecht zählt jede Länge,
+    waagerecht keine; die Grenze folgt aus den Maßen, nicht aus einem Winkel
+    (am Schnitt belegt: ``test_a_tilted_hole_counts_while_a_layer_closes_around_it``).
+    Ein Langloch nimmt seine größere Weite. Die Achse ist die des fertigen
+    Körpers, nach Drehen und Ausrichten.
+    """
+    if feature.kind == "thread":
+        if feature.params.get("internal") is not True:
+            return False
+        length, across = _positive(feature, "length"), diameter_of(feature)
+    elif feature.kind == "hole":
+        length, across = _positive(feature, "depth"), diameter_of(feature)
+    elif feature.kind == "slot":
+        width, extent = diameter_of(feature), _positive(feature, "length")
+        length = _positive(feature, "depth")
+        across = max(width, extent) if width is not None and extent is not None else None
+    else:
+        return False
+    axis = vec3_or_none(feature.params.get("axis"))
+    if axis is None or length is None or across is None:
+        return False
+    norm = math.hypot(*axis)
+    if not math.isfinite(norm) or norm <= EPS_GEOM:
+        return False
+    upright = abs(axis[2]) / norm
+    tilt = math.hypot(axis[0], axis[1]) / norm
+    return length * upright > across * tilt
+
+
+def _pocket_closes(operation: Operation, body: SceneObject, lineage: Collection[str]) -> bool:
+    """Liegen die Taschen von *Gegenform einlassen* in diesem Körper senkrecht?
+
+    Der Einsatz ist das erste Ergebnis. Die Tasche läuft vom tiefsten Punkt
+    des Teils durch die Oberseite des Einsatzes; geschlossen ist ihr Umriss in
+    der Schicht nur, wenn sie senkrecht entnommen wird — seitlich entnommen
+    reicht sie in jeder Schicht bis an die Außenwand. Die Taschen tragen kein
+    Achsmerkmal; ihre Richtung ist die Entnahmerichtung im Raum des Schritts,
+    gedreht um das, was der Rahmen des Körpers seither sagt. Gerechnet wird
+    damit, dass der Einsatz beim Einlassen aufrecht stand, wie die Richtung Z
+    es vorsieht; wurde er vorher gekippt, zählt er nicht.
+    """
+    if not operation.outputs or operation.outputs[0] not in lineage:
+        return False
+    if _step_values(operation).get("axis") != "z" or body.frame is None:
+        return False
+    column = tuple(float(body.frame[row][2]) for row in range(3))
+    norm = math.hypot(*column)
+    if not math.isfinite(norm) or norm <= EPS_GEOM:
+        return False
+    return abs(column[2]) / norm >= math.cos(math.radians(EPS_ANGLE))
+
+
+def _puts_allowance_into(operation: Operation) -> bool:
+    """Legt dieser Schritt Spiel oder Lochkorrektur des Materials in seine Innenmerkmale?"""
+    if operation.op in COMPENSATING_HOLE_OPS:
+        from app.core.geom.field_ops import COMPENSATED_SHAPES
+
+        values = _step_values(operation)
+        return values.get("compensate") is True and (
+            operation.op != "field_cut" or values.get("shape") in COMPENSATED_SHAPES
+        )
+    return operation.op in PLAY_HOLE_OPS or _part_with_play_inside(operation)
 
 
 def _step_values(operation: Operation) -> dict[str, object]:
@@ -429,37 +532,13 @@ def _step_values(operation: Operation) -> dict[str, object]:
     return {entry.name: entry.default for entry in schema} | dict(operation.params)
 
 
-def _play_outputs(operation: Operation) -> tuple[int, ...]:
-    """Welche Ergebnisse eines Schritts aus :data:`PLAY_HOLE_OPS` ihr Spiel innen tragen.
-
-    *Drehdeckel erzeugen*: die Kappe (zweites Ergebnis), der Hals trägt
-    außen. *An Ebene teilen*: die Hälfte mit den Bohrungen, mit
-    ``pins_on_b`` die erste; ohne Stifte keine. *Deckel erzeugen*: Der Kragen
-    ist um das Spiel schmaler, also außen; mit Steckstift bekommen Gehäuse und
-    Deckel Augen mit Spiel (``lid_hinge.hinge_parts``), mit mitgedrucktem
-    Bolzen nur der Deckel die Bohrung darum.
-    """
-    values = _step_values(operation)
-    if operation.op == "screw_lid":
-        return (1,)
-    if operation.op == "split_pinned":
-        if not values.get("pins"):
-            return ()
-        return (0,) if values.get("pins_on_b") is True else (1,)
-    hinge = values.get("hinge")
-    if hinge == "loose_pin":
-        return (0, 1)
-    if hinge == "barrel":
-        return (1,)
-    return ()
-
-
 def _part_with_play_inside(operation: Operation) -> bool:
     """Legt dieser Bausteinschritt sein Spiel in eine Innenkontur?
 
     Abtragend (``parts.ops.cuts``, dieselbe Auskunft wie Operation und
     Vorschau) mit Spiel oder Übermaß aus dem Material, oder aufgesetzt mit
-    einer Bohrung, die das Spiel trägt (``PartSpec.play_inside``).
+    einer Bohrung, die das Spiel trägt (``PartSpec.play_inside``). Gezählt
+    wird nur an einem Innenmerkmal des Bausteins (:func:`allowances_for`).
     """
     from types import SimpleNamespace
 
@@ -478,9 +557,9 @@ def _part_with_play_inside(operation: Operation) -> bool:
 def fit_kinds_for(document: Document, object_ids: Collection[str]) -> tuple[str, ...]:
     """Welche Passungen diese Körper tragen — eingetragene und gebaute.
 
-    Die Körper und alles, woraus sie entstanden sind: Der Stapel wird rückwärts
-    gegangen, jeder Schritt, der einen der Körper erzeugt, bringt seine
-    Eingänge dazu. Eine eingetragene aktive Passung zählt mit ihrer Art
+    Die Körper und alles, woraus sie entstanden sind (:func:`_producing`, je
+    Körperkennung — nach *Anordnen* trägt kein Körper die Passung seines
+    Nachbarn). Eine eingetragene aktive Passung zählt mit ihrer Art
     (:func:`active_fits`). Ein passender, eingeschalteter Schritt ohne gebundene
     Passung zählt als Schiebesitz (:data:`FITTING_OPS`), etwa eine ältere
     Mutternfalle mit Spiel aus der Normteiltabelle. Ausgeschaltete Schritte

@@ -11,6 +11,7 @@ import math
 from dataclasses import replace
 from pathlib import Path
 
+import numpy as np
 import pytest
 import trimesh
 
@@ -1261,143 +1262,387 @@ def test_the_corpus_fit_knows_which_part_carries_its_allowance() -> None:
     assert allowances_for(resting, body) == ()
 
 
-def _bare_body(features=(), identifier="obj_1"):
-    """Ein Körper mit den genannten Merkmalen, ohne Auswertung — für die
-    Schritte, deren Auskunft am Schritt hängt."""
-    from app.core.types import SceneObject
+def _built(steps, printer: str = "anycubic-kobra-2"):
+    """Dokument und gerechnete Szene aus Schritten, wie im Druckdialog."""
+    from app.core.bootstrap import load_operations
+    from app.core.scene import History, OperationDraft, evaluate
+    from app.core.types import Document
 
-    raw = trimesh.creation.box((10.0, 10.0, 10.0))
-    return SceneObject(
-        identifier, "Körper", MeshData.of(raw), features={entry.id: entry for entry in features}
+    load_operations()
+    document = Document(format_version=1, app_version="0.0.1", printer=printer, material="petg")
+    history = History(document)
+    for op, inputs, params in steps:
+        history.apply(op, [OperationDraft(op=op, inputs=tuple(inputs), params=params)])
+    result = evaluate(document, profiles.make_profile(printer, "petg"))
+    assert result.stopped_at is None, result.stopped_at
+    return document, result.scene
+
+
+def _two_boxes(height: float = 10.0) -> list[tuple[str, tuple[str, ...], dict[str, object]]]:
+    return [
+        (
+            "create_box",
+            (),
+            {"width": 30.0, "depth": 30.0, "height": height, "x": x, "name": name},
+        )
+        for x, name in ((-30.0, "A"), (30.0, "B"))
+    ]
+
+
+@pytest.mark.parametrize("last", ["arrange_bed", "orient_for_print"])
+def test_a_neighbour_on_the_bed_keeps_its_own_allowance(last: str) -> None:
+    """Review RM-589 nach, N1: *Anordnen* und *Ausrichten* führen alle Körper
+    als Ein- und Ausgang. Über alle Eingänge bekam B den Fuß und die
+    Mutternfalle von A — und mit dem Rat druckte der OrcaSlicer B mit
+    Elefantenfuß, obwohl sein Modell nichts einzieht."""
+    from app.core.scene.fits import allowances_for, fit_kinds_for
+
+    document, scene = _built(
+        [
+            *_two_boxes(),
+            ("insert_nut_trap", ("obj_1",), {"x": -30.0, "y": 0.0, "z": 10.0}),
+            ("compensate_first_layer", ("obj_1",), {}),
+            (last, ("obj_1", "obj_2"), {}),
+        ]
     )
+
+    assert allowances_for(document, scene.objects["obj_1"]) == ("holes", "foot")
+    assert allowances_for(document, scene.objects["obj_2"]) == ()
+    assert fit_kinds_for(document, {"obj_1"}) == ("clearance",)
+    assert fit_kinds_for(document, {"obj_2"}) == ()
+
+
+def test_a_union_keeps_what_it_takes_in() -> None:
+    """Was ein Schritt in einen Körper aufnimmt, bleibt seine Herkunft: Nach dem
+    Vereinigen trägt A den Fuß des aufgenommenen B."""
+    from app.core.scene.fits import allowances_for
+
+    document, scene = _built(
+        [
+            *_two_boxes(),
+            ("compensate_first_layer", ("obj_2",), {}),
+            ("translate_object", ("obj_2",), {"dx": -50.0}),
+            ("union_objects", ("obj_1", "obj_2"), {}),
+        ]
+    )
+
+    assert allowances_for(document, scene.objects["obj_1"]) == ("foot",)
+
+
+@pytest.mark.parametrize(
+    ("example", "expected"),
+    [
+        # Die Bohrung der Kabeldurchführung liegt waagerecht in der Wand, der
+        # Deckel trägt keine (früher: beide ``holes`` über *Anordnen*).
+        ("dose-mit-deckel.p3d", {"Dose": (), "Deckel": ()}),
+        # Nur die Hälfte mit den Bohrungen; die Stifthälfte erbte sie über
+        # *Anordnen*.
+        ("aushoehlen-und-teilen.p3d", {"Klotz A · Stifte": (), "Klotz B · Löcher": ("holes",)}),
+    ],
+)
+def test_the_shipped_examples_count_only_the_part_that_carries_it(
+    example: str, expected: dict[str, tuple[str, ...]]
+) -> None:
+    from app.core.bootstrap import load_operations
+    from app.core.scene import evaluate
+    from app.core.scene.fits import allowances_for
+    from app.core.scene.project import load
+
+    load_operations()
+    path = Path(__file__).parents[1] / "app" / "examples" / example
+    document = load(path).document
+    profile = profiles.make_profile(
+        document.printer or "centauri-carbon-2", document.material or "petg"
+    )
+    scene = evaluate(document, profile).scene
+
+    seen = {str(body.name): allowances_for(document, body) for body in scene.objects.values()}
+    assert seen == expected
+
+
+BLOCK = ("create_box", (), {"width": 40.0, "depth": 40.0, "height": 20.0})
+SPLIT_BLOCK = ("create_box", (), {"width": 40.0, "depth": 30.0, "height": 30.0})
+INSERT = ("create_box", (), {"width": 80.0, "depth": 50.0, "height": 20.0})
+TOOL = ("create_box", (), {"width": 30.0, "depth": 12.0, "height": 10.0, "z": 12.0})
+TURNED = ("rotate_object", ("obj_1",), {"axis": "x", "angle": 90.0})
+
+
+@pytest.mark.parametrize(
+    ("steps", "expected"),
+    [
+        pytest.param(
+            [BLOCK, ("drill_hole", ("obj_1",), {"diameter": 6.0, "compensate": True})],
+            {"obj_1": ("holes",)},
+            id="senkrecht gebohrt",
+        ),
+        pytest.param(
+            [
+                BLOCK,
+                (
+                    "drill_hole",
+                    ("obj_1",),
+                    {
+                        "diameter": 6.0,
+                        "x": 0.0,
+                        "y": 0.0,
+                        "z": 10.0,
+                        "axis": "x",
+                        "compensate": True,
+                    },
+                ),
+            ],
+            {"obj_1": ()},
+            id="waagerecht gebohrt",
+        ),
+        pytest.param(
+            [BLOCK, ("drill_hole", ("obj_1",), {"diameter": 6.0, "compensate": True}), TURNED],
+            {"obj_1": ()},
+            id="gebohrt und gekippt",
+        ),
+        pytest.param(
+            [
+                BLOCK,
+                ("drill_hole", ("obj_1",), {"diameter": 6.0, "compensate": True}),
+                ("rotate_object", ("obj_1",), {"axis": "x", "angle": 180.0}),
+            ],
+            {"obj_1": ("holes",)},
+            id="gebohrt und gewendet",
+        ),
+        pytest.param(
+            [BLOCK, ("insert_hinge_eye", ("obj_1",), {"x": 0.0, "y": 0.0, "z": 20.0})],
+            {"obj_1": ()},
+            id="Scharnierauge",
+        ),
+        pytest.param(
+            [
+                SPLIT_BLOCK,
+                ("split_line", ("obj_1",), {"normal_z": 1.0, "position": 15.0, "pins": 2}),
+            ],
+            {"obj_2": (), "obj_3": ("holes",)},
+            id="an Linie geteilt",
+        ),
+        pytest.param(
+            [SPLIT_BLOCK, ("split_pinned", ("obj_1",), {"axis": "x", "position": 0.0, "pins": 2})],
+            {"obj_2": (), "obj_3": ()},
+            id="quer geteilt",
+        ),
+        pytest.param(
+            [("create_container", (), {})],
+            {"obj_1": (), "obj_2": ("holes",)},
+            id="Behälter mit Schraubdeckel",
+        ),
+        pytest.param(
+            [("create_container", (), {"lid": "hinged"})],
+            {"obj_1": (), "obj_2": ()},
+            id="Behälter mit Klappdeckel",
+        ),
+        pytest.param(
+            [INSERT, TOOL, ("cut_counter_form", ("obj_1", "obj_2"), {})],
+            {"obj_1": ("holes",), "obj_2": ()},
+            id="Gegenform",
+        ),
+        pytest.param(
+            [INSERT, TOOL, ("cut_counter_form", ("obj_1", "obj_2"), {"axis": "x"})],
+            {"obj_1": (), "obj_2": ()},
+            id="Gegenform seitlich",
+        ),
+        pytest.param(
+            [INSERT, TOOL, ("cut_counter_form", ("obj_1", "obj_2"), {}), TURNED],
+            {"obj_1": (), "obj_2": ()},
+            id="Gegenform gekippt",
+        ),
+    ],
+)
+def test_holes_count_where_the_slicer_sees_a_closed_contour(
+    steps: list[tuple[str, tuple[str, ...], dict[str, object]]],
+    expected: dict[str, tuple[str, ...]],
+) -> None:
+    """Review RM-589 nach, N2: Der Lochausgleich des Slicers weitet nur, was
+    in einer Schicht geschlossen ist. Eine waagerechte Bohrung behält im
+    OrcaSlicer bei 0 und 0,1 mm dieselben 6206 Bahnen; sie zu zählen nahm nur
+    den übrigen Löchern des Teils den Ausgleich. Gezählt wird in der Lage des
+    fertigen Körpers. *An gezeichneter Linie teilen*, der Schraubdeckel aus
+    *Behälter mit Deckel* und *Gegenform einlassen* legen Spiel in senkrechte
+    Innenkonturen und zählen."""
+    from app.core.scene.fits import allowances_for
+
+    document, scene = _built(steps)
+
+    seen = {
+        identifier: allowances_for(document, scene.objects[identifier]) for identifier in expected
+    }
+    assert seen == expected
+
+
+@pytest.mark.parametrize(
+    ("thickness", "tilt", "counts"),
+    [
+        (4.0, 0.0, True),
+        (4.0, 25.0, True),
+        (4.0, 45.0, False),
+        (4.0, 90.0, False),
+        (20.0, 70.0, True),
+        (20.0, 80.0, False),
+    ],
+)
+def test_a_tilted_hole_counts_while_a_layer_closes_around_it(
+    thickness: float, tilt: float, counts: bool
+) -> None:
+    """Die Grenze aus :func:`fits._closes_in_a_layer` gegen den Schnitt selbst:
+    eine Platte mit senkrecht gebohrtem Durchgang Ø 6, um ``tilt`` gekippt und
+    alle 0,02 mm geschnitten. Bei 4 mm Platte umschließt eine Schicht das Loch
+    bis ``atan(4/6) = 33,7°``, bei 20 mm bis 73,3°; ob eine Schicht ein Loch
+    umschließt, sagt der Schnitt, nicht die Formel."""
+    from shapely.geometry import Polygon
+
+    from app.core.scene.fits import _closes_in_a_layer
+    from app.core.types import Feature
+
+    diameter, width = 6.0, 60.0
+    angle = math.radians(tilt)
+    plate = trimesh.creation.box((width, width, thickness))
+    bore = trimesh.creation.cylinder(radius=diameter / 2.0, height=4.0 * thickness, sections=96)
+    drilled = trimesh.boolean.difference([plate, bore], engine="manifold")
+    drilled.apply_transform(trimesh.transformations.rotation_matrix(angle, (1.0, 0.0, 0.0)))
+    low, high = drilled.bounds[:, 2]
+    closed = False
+    for height in np.arange(low + 0.01, high, 0.02):
+        section = drilled.section(plane_origin=(0.0, 0.0, height), plane_normal=(0.0, 0.0, 1.0))
+        if section is None:
+            continue
+        loops = [Polygon(points) for points in section.to_2D()[0].discrete if len(points) > 3]
+        if any(outer is not inner and outer.contains(inner) for outer in loops for inner in loops):
+            closed = True
+            break
+    hole = Feature(
+        id="hole_1",
+        kind="hole",
+        provenance="generated",
+        params={
+            "diameter": diameter,
+            "depth": thickness,
+            "axis": (0.0, -math.sin(angle), math.cos(angle)),
+        },
+    )
+
+    assert closed is counts
+    assert _closes_in_a_layer(hole) is closed
 
 
 @pytest.mark.parametrize(
     ("op", "params", "expected"),
     [
-        # Abtragend mit Spiel aus dem Material: die Bohrung des Dübels, die
-        # Mutternfalle, die Aussparung der Rastnase, die Tasche des Steckers und
-        # des Fußes, das Innengewinde.
+        # Abtragend mit Spiel aus dem Material, die Öffnung senkrecht: die
+        # Bohrung des Dübels, die Mutternfalle, die Tasche des Fußes, das
+        # Innengewinde, die Magnettasche.
         ("insert_dowel", {"kind": "bore"}, ("holes",)),
         ("insert_nut_trap", {}, ("holes",)),
-        ("insert_latch", {"negative": True}, ("holes",)),
-        ("insert_snap_connector", {"kind": "bore"}, ("holes",)),
         ("insert_foot", {"kind": "pocket"}, ("holes",)),
         ("insert_printed_thread", {"internal": True}, ("holes",)),
-        # Aufgesetzt, aber mit einer Bohrung, die das Spiel trägt.
-        ("insert_printed_nut", {}, ("holes",)),
-        ("insert_hinge_eye", {}, ("holes",)),
-        ("insert_barrel_hinge", {}, ("holes",)),
-        ("insert_rod_connector", {}, ("holes",)),
         ("insert_magnet_pocket", {}, ("holes",)),
+        # Aufgesetzt, aber mit einer senkrechten Bohrung, die das Spiel trägt.
+        ("insert_printed_nut", {}, ("holes",)),
+        ("insert_rod_connector", {}, ("holes",)),
+        # Das Spiel in einer Bohrung, die waagerecht liegt (Scharnierauge,
+        # Bolzenscharnier), in einer offenen Rinne (Kabelclip) oder in einer
+        # Tasche ohne Achsmerkmal (Rastnasen-Aussparung, Schnappverbinder).
+        ("insert_hinge_eye", {}, ()),
+        ("insert_barrel_hinge", {}, ()),
+        ("insert_cable_clip", {}, ()),
+        ("insert_latch", {"negative": True}, ()),
+        ("insert_snap_connector", {"kind": "bore"}, ()),
         # Das Spiel außen oder gar keines: Stift, Rastnase, Gewindebolzen,
-        # Schnapphaken, Wärmeeinsatz, *Schraube erstellen*.
+        # Schnapphaken, Wärmeeinsatz.
         ("insert_dowel", {"kind": "pin"}, ()),
         ("insert_latch", {"negative": False}, ()),
         ("insert_printed_thread", {"internal": False}, ()),
         ("insert_snap_fit", {}, ()),
         ("insert_heatset_m4", {}, ()),
-        ("thread_exact", {}, ()),
         # Der Toleranz-Testkörper misst mit dem Ausgleich des Slicers (M1):
         # Bekäme er „Löcher weiten 0“, wäre die Kalibrierung eine andere.
-        ("create_fit_ladder", {}, ()),
         ("insert_fit_ladder", {}, ()),
     ],
 )
-def test_only_a_step_that_puts_play_into_a_hole_counts(
+def test_only_a_part_that_puts_play_into_an_upright_opening_counts(
     op: str, params: dict[str, object], expected: tuple[str, ...]
 ) -> None:
-    """Gezählt wird, was Spiel in eine Innenkontur legt (Review RM-589, M2)."""
-    from app.core.bootstrap import load_operations
+    """Review RM-589, M2 und nach N2: gezählt am Merkmal des fertigen Körpers."""
     from app.core.scene.fits import allowances_for
-    from app.core.types import Document, Operation
 
-    load_operations()
-    document = Document(
-        format_version=1,
-        app_version="0.0.1",
-        ops=(Operation(id=1, op=op, params=params, outputs=("obj_1",)),),
+    document, scene = _built(
+        [
+            ("create_box", (), {"width": 80.0, "depth": 80.0, "height": 30.0}),
+            (op, ("obj_1",), {"x": 0.0, "y": 0.0, "z": 30.0, **params}),
+        ]
     )
 
-    assert allowances_for(document, _bare_body()) == expected
+    assert allowances_for(document, scene.objects["obj_1"]) == expected
 
 
 @pytest.mark.parametrize(
-    ("op", "params", "first", "second"),
+    ("steps", "first", "second"),
     [
         # Der Hals trägt sein Spiel außen, die Kappe innen.
-        ("screw_lid", {}, (), ("holes",)),
+        (
+            [
+                ("create_cylinder", (), {"diameter": 50.0, "height": 30.0}),
+                ("hollow_object", ("obj_1",), {"wall": 2.0, "open_top": True}),
+                ("screw_lid", ("obj_1",), {}),
+            ],
+            (),
+            ("holes",),
+        ),
         # Die Bohrungen liegen an der Hälfte ohne Stifte.
-        ("split_pinned", {"pins": 2}, (), ("holes",)),
-        ("split_pinned", {"pins": 2, "pins_on_b": True}, ("holes",), ()),
-        ("split_pinned", {"pins": 0}, (), ()),
-        # Der Kragen ist um das Spiel schmaler; nur Scharnieraugen tragen es innen.
-        ("create_lid", {}, (), ()),
-        ("create_lid", {"hinge": "barrel"}, (), ("holes",)),
-        ("create_lid", {"hinge": "loose_pin"}, ("holes",), ("holes",)),
+        (
+            [SPLIT_BLOCK, ("split_pinned", ("obj_1",), {"axis": "z", "position": 15.0, "pins": 2})],
+            (),
+            ("holes",),
+        ),
+        (
+            [
+                SPLIT_BLOCK,
+                (
+                    "split_pinned",
+                    ("obj_1",),
+                    {"axis": "z", "position": 15.0, "pins": 2, "pins_on_b": True},
+                ),
+            ],
+            ("holes",),
+            (),
+        ),
+        (
+            [SPLIT_BLOCK, ("split_pinned", ("obj_1",), {"axis": "z", "position": 15.0, "pins": 0})],
+            (),
+            (),
+        ),
+        # Der Kragen ist um das Spiel schmaler; die Scharnieraugen tragen es
+        # innen, liegen aber waagerecht.
+        (
+            [
+                ("create_box", (), {"width": 60.0, "depth": 40.0, "height": 30.0}),
+                ("hollow_object", ("obj_1",), {"wall": 2.0, "open_top": True}),
+                ("create_lid", ("obj_1",), {"hinge": "loose_pin"}),
+            ],
+            (),
+            (),
+        ),
     ],
 )
 def test_a_step_with_two_results_counts_only_where_the_play_is_inside(
-    op: str, params: dict[str, object], first: tuple[str, ...], second: tuple[str, ...]
+    steps: list[tuple[str, tuple[str, ...], dict[str, object]]],
+    first: tuple[str, ...],
+    second: tuple[str, ...],
 ) -> None:
     """Review RM-589, M2: Deckel, Drehdeckel und Teilen bauen zwei Körper, und
     nur einer davon trägt das Spiel in einer Innenkontur. Der andere behält den
     Lochausgleich des Slicers für seine übrigen Löcher."""
-    from app.core.bootstrap import load_operations
     from app.core.scene.fits import allowances_for
-    from app.core.types import Document, Operation
 
-    load_operations()
-    document = Document(
-        format_version=1,
-        app_version="0.0.1",
-        ops=(Operation(id=1, op=op, params=params, outputs=("obj_1", "obj_2")),),
-    )
+    document, scene = _built(steps)
+    one, two = document.ops[-1].outputs
 
-    assert allowances_for(document, _bare_body(identifier="obj_1")) == first
-    assert allowances_for(document, _bare_body(identifier="obj_2")) == second
-
-
-@pytest.mark.parametrize("pins_on_b", [False, True])
-def test_the_split_half_with_the_bores_is_the_one_that_counts(pins_on_b: bool) -> None:
-    """Am gerechneten Körper: Die Hälfte, die die Bohrungen trägt, ist die
-    gezählte — die Reihenfolge der Ergebnisse in :func:`_play_outputs` stimmt
-    mit dem Schnitt überein."""
-    from app.core.bootstrap import load_operations
-    from app.core.scene import History, OperationDraft, evaluate
-    from app.core.scene.fits import allowances_for
-    from app.core.types import Document
-
-    load_operations()
-    profile = profiles.make_profile("centauri-carbon-2", "petg")
-    document = Document(format_version=1, app_version="0.0.1")
-    history = History(document)
-    history.apply(
-        "Block",
-        [OperationDraft(op="create_box", params={"width": 40.0, "depth": 30.0, "height": 30.0})],
-    )
-    history.apply(
-        "Teilen",
-        [
-            OperationDraft(
-                op="split_pinned",
-                inputs=("obj_1",),
-                params={"axis": "z", "position": 15.0, "pins": 2, "pins_on_b": pins_on_b},
-            )
-        ],
-    )
-    split = document.ops[-1]
-    scene = evaluate(document, profile).scene
-    seen = []
-    for output in split.outputs:
-        body = scene.objects[output]
-        bores = [
-            feature
-            for feature in body.features.values()
-            if feature.kind == "hole" and feature.created_by == split.id
-        ]
-        seen.append((bool(bores), allowances_for(document, body) == ("holes",)))
-    assert sorted(seen) == [(False, False), (True, True)], seen
+    assert allowances_for(document, scene.objects[one]) == first
+    assert allowances_for(document, scene.objects[two]) == second
 
 
 @pytest.mark.parametrize(
@@ -1408,32 +1653,80 @@ def test_the_split_half_with_the_bores_is_the_one_that_counts(pins_on_b: bool) -
         # Ein Sechseck behält sein Eckmaß, auch mit Haken (``field_ops``).
         ("hexagon", True, ()),
         ("circle", False, ()),
+        ("slot", False, ()),
     ],
 )
 def test_a_hole_field_counts_only_where_it_compensates(
     shape: str, compensate: bool, expected: tuple[str, ...]
 ) -> None:
-    """*Lochfeld schneiden* weitet nur runde Löcher und Langlöcher."""
+    """*Lochfeld schneiden* weitet nur runde Löcher und Langlöcher; das
+    Langloch benennt das Feld nicht, es zählt über die Herkunft."""
+    from app.core.scene.fits import allowances_for
+    from app.core.sketch import shapes
+    from app.core.sketch.serialize import sketch_to_text
+
+    params: dict[str, object] = {
+        "region_sketch": sketch_to_text(shapes.rectangle(26, 26)),
+        "diameter": 3.0,
+        "spacing": 6.0 if shape == "circle" else 12.0,
+        "through": True,
+        "shape": shape,
+        "compensate": compensate,
+    }
+    if shape == "slot":
+        params["slot_length"] = 6.0
+    document, scene = _built(
+        [
+            ("create_box", (), {"width": 30.0, "depth": 30.0, "height": 10.0}),
+            ("field_cut", ("obj_1",), params),
+        ]
+    )
+
+    assert allowances_for(document, scene.objects["obj_1"]) == expected
+
+
+@pytest.mark.parametrize(
+    ("op", "params", "expected"),
+    [
+        ("field_cut", {"shape": "circle", "compensate": True}, ("holes",)),
+        # Mit Haken, aber ein Sechseck behält sein Eckmaß.
+        ("field_cut", {"shape": "hexagon", "compensate": True}, ()),
+        ("insert_dowel", {"kind": "bore"}, ("holes",)),
+        # Ein Stift trägt sein Spiel außen; eine Bohrung, die er nennte,
+        # trüge keines.
+        ("insert_dowel", {"kind": "pin"}, ()),
+    ],
+)
+def test_the_step_behind_an_upright_opening_decides(
+    op: str, params: dict[str, object], expected: tuple[str, ...]
+) -> None:
+    """Dieselbe senkrechte Bohrung, je nach Schritt, der sie gemacht hat —
+    am Merkmal, ohne Auswertung."""
     from app.core.bootstrap import load_operations
     from app.core.scene.fits import allowances_for
-    from app.core.types import Document, Feature, Operation
+    from app.core.types import Document, Feature, Operation, SceneObject
 
     load_operations()
     document = Document(
         format_version=1,
         app_version="0.0.1",
-        ops=(
-            Operation(
-                id=1,
-                op="field_cut",
-                params={"shape": shape, "compensate": compensate},
-                outputs=("obj_1",),
-            ),
-        ),
+        ops=(Operation(id=1, op=op, params=params, outputs=("obj_1",)),),
     )
-    hole = Feature(id="pattern_1", kind="pattern", provenance="generated", params={}, created_by=1)
+    hole = Feature(
+        id="hole_1",
+        kind="hole",
+        provenance="generated",
+        params={"diameter": 6.0, "depth": 10.0, "axis": (0.0, 0.0, 1.0)},
+        created_by=1,
+    )
+    body = SceneObject(
+        "obj_1",
+        "Körper",
+        MeshData.of(trimesh.creation.box((10.0, 10.0, 10.0))),
+        features={hole.id: hole},
+    )
 
-    assert allowances_for(document, _bare_body((hole,))) == expected
+    assert allowances_for(document, body) == expected
 
 
 @pytest.mark.parametrize(

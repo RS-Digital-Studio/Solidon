@@ -593,6 +593,22 @@ Schnapphaken, ein Gewindebolzen, *Schraube erstellen* und der Wärmeeinsatz
 tragen kein Spiel innen; bis zum Review bekam die Schraube „Löcher weiten 0“,
 und der Haken des Drehdeckels nahm auch dem Hals den Lochausgleich.
 
+Nach der Nachprüfung (10.10.2026) wird **am Merkmal des fertigen Körpers**
+gezählt, nicht am Schritt. *Anordnen* und *Ausrichten* führen alle Körper als
+Ein- und Ausgang; über alle Eingänge bekam jeder Körper die Herkunft seiner
+Nachbarn, und mit dem Rat druckte der OrcaSlicer einen Körper ohne jeden
+Modellausgleich mit Elefantenfuß (Schicht 1 nur 0,080 statt 0,380 mm
+schmaler als die Mitte). Die Herkunft geht deshalb je Körperkennung, alle
+Eingänge nur, wo der Körper neu entsteht. Und der Lochausgleich des Slicers
+weitet nur geschlossene Konturen einer Schicht (OrcaSlicer
+`_shrink_contour_holes`): Eine waagerechte Bohrung hatte bei 0 und 0,1 mm
+dieselben 6206 Bahnen. Scharnieraugen, Bolzenscharnier, Rohrschelle und
+Kabelclip zählen deshalb nicht mehr, gekippte Bohrungen nur, solange eine
+Schicht sie umschließt; dazu kamen *An gezeichneter Linie teilen*, der
+Schraubdeckel aus *Behälter mit Deckel* und *Gegenform einlassen*. Eine
+Tasche ohne Achsmerkmal (Rastnasen-Aussparung, Schnappverbinder) zählt nicht —
+im Zweifel bleibt der Ausgleich des Herstellers.
+
 **Solidons eigener Satz schreibt beides nur auf Wahl** (Review S1). Wo kein
 Herstellerprozess darunter liegt — Cura, PrusaSlicer ohne Drucker im Bündel,
 die Orca-Familie ohne lesbaren Prozess, eine 3MF ohne Slicer —, gilt der Wert

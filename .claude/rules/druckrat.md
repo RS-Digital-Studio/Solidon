@@ -109,11 +109,15 @@ offenem Drucker. Übernommen wird auf Klick, nie von allein.
   Innenkontur (`scene.fits.allowances_for`, `"holes"`), heißt der Vorschlag
   *Löcher weiten* null; zieht *Elefantenfuß ausgleichen* seine ersten
   Schichten ein (`"foot"`), *Erste Schicht einziehen* null — je Teil, nur wo
-  der Slicer ausgleicht. Gefragt wird am Körper: ein Baustein über
-  `parts.ops.cuts` oder `PartSpec.play_inside`, eine gebohrte Bohrung am
-  Merkmal, das noch steht, Deckel, Drehdeckel und Teilen nur am Ergebnis mit
-  dem Spiel innen (`_play_outputs`). Eine nur eingetragene Passung ändert
-  keine Geometrie und zählt nicht, ein Stift, Haken oder Bolzen auch nicht.
+  der Slicer ausgleicht. Gefragt wird am fertigen Körper, Herkunft je
+  Körperkennung (`fits._producing`; über alle Eingänge erbte nach *Anordnen*
+  jeder Körper den Ausgleich seiner Nachbarn): ein Innenmerkmal, das der
+  Slicer in einer Schicht geschlossen sieht (`_closes_in_a_layer`,
+  `L·cos θ > d·sin θ` — eine waagerechte Bohrung weitet er nicht), gemacht von
+  einem Schritt mit Spiel oder Lochkorrektur (`_puts_allowance_into`); die
+  Taschen von *Gegenform einlassen* über Entnahmerichtung und Rahmen. Eine nur
+  eingetragene Passung ändert keine Geometrie und zählt nicht, ein Stift,
+  Haken oder Bolzen auch nicht.
   **Ein kalibriertes Material bekommt keinen Vorschlag**: Sein Prüfkörper ging
   durch den Slicer mit dessen Ausgleich, gemessen ist der Rest dahinter.
   Übergabe (eigener Satz nur auf Wahl, Brim am Fuß): `dateiformat.md`.
