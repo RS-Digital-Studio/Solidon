@@ -50,11 +50,13 @@ it into `website/version.json`.
 - After dragging the handle of a preview, no number stays above the view. A number typed during the drag moves the preview, not the selected body.
 - After *Repair and try again* and similar ways, the history no longer calls a step that keeps working “deleted”. If the chain stops again, that step is marked.
 - The *Filaments* button now sits in the header. It lists the project's filaments and leads to the filament inventory.
-- A different filament shows at once, on parts and STEP bodies too, and Solidon recomputes nothing for it. Selected bodies show their filament colour beneath the highlight.
+- A different filament only changes the colour, on parts and STEP bodies too. The shape is not recalculated for it. Selected bodies show their filament colour beneath the highlight.
 - In the *Selection* tab, the filament field assigns only on a click or Enter. Arrow keys and typing just browse, and the mouse wheel scrolls the tab.
 - In the translated versions, *New filament* no longer scrolls sideways when the window is shorter than its content.
 - Large models load noticeably faster and need less memory, even with a long history and on computers with 8 GB.
 - Even in a long history, a new step takes hardly longer to calculate than the first.
+- On models with thousands of features, moving and other steps that leave the shape unchanged finish up to twice as fast.
+- After reopening a project, the check report still says which free spot an inserted model went to.
 - Undo and redo are faster, and memory that is no longer needed is freed right away.
 - Repairing and resolving overlaps are up to four times as fast on large models, and exporting as 3MF is considerably faster.
 - The workspace appears faster when opening large 3MF files.
@@ -72,6 +74,7 @@ it into `website/version.json`.
 - Only slicers Solidon works with are offered, plus resin slicers such as ChituBox and Lychee. Bambu Studio as an AppImage now counts too.
 - Start code and build volume come only from exactly your printer, not from another model of the same series.
 - The print dialog matches the slicer's profiles much faster, when opening and after every slicer change.
+- A 3MF export only rereads the slicer's profiles when something changed there, which makes it considerably faster.
 - The estimated print time is closer to the slicer's, much closer for parts with supports.
 - Whether supports and skirt fit on the bed is now measured only under the overhangs. Parts near the edge no longer get a needless warning.
 - Accepted suggestions hardly leave any overhang that needs support without it. *Keep channels clear* now only blocks space a support could never be removed from.
@@ -133,7 +136,10 @@ it into `website/version.json`.
 - If a fillet sits next to a wall, *Apply draft angle* says before calculating that it is in the way and names *Remove feature* as the way out.
 - When you cut away part of a body, chamfers, threads and nut pockets of parts that lay inside it go too.
 - In *Create lid* and *Create screw lid*, an empty field for the opening height means “Top edge”, and 0 is the height of the bed. Older projects keep their opening.
-- An angle constraint in a small sketch no longer flips the lines over.
+- A sketch solves the same on every computer and in every position, also while dragging, and an angle constraint no longer flips the lines over. Older projects calculate as saved.
+- A sketch with many separate shapes solves quickly, even with hundreds of dimensioned rectangles or circles.
+- If *Curvature continuous* cannot be met while you draw, the sketch editor says so within seconds instead of minutes.
+- If two constraints contradict each other, the sketch editor names both instead of shrinking a line or circle to a point.
 - A body takes three clicks: *Draw* in the top toolbar (Ctrl+Shift+E), then corner, opposite corner, height. Outwards it joins on, inwards it cuts.
 - While pulling up, you can type the dimensions. A double-click on the step opens its dimensions, and under *Kind* it becomes a revolved body or a hole pattern without redrawing.
 - From the sketch editor, *Done* leads back into the view, and the next click sets the height. Escape lays the outline aside, Ctrl+Z brings it back.

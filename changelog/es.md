@@ -51,11 +51,13 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Tras arrastrar el tirador de una vista previa, ya no queda ningún número sobre la vista. Un número tecleado al arrastrar mueve la vista previa, no el cuerpo elegido.
 - Tras *Reparar y volver a intentarlo* y caminos parecidos, el historial ya no llama «eliminado» a un paso que sigue calculando. Si la cadena vuelve a parar, el paso queda marcado.
 - El botón *Filamentos* está ahora en la cabecera. Muestra los filamentos del proyecto y lleva al inventario de filamentos.
-- Otro filamento se ve al instante, también en bloques y cuerpos STEP, y Solidon no recalcula nada por ello. Los cuerpos seleccionados muestran su color de filamento bajo el resaltado.
+- Otro filamento solo cambia el color, también en bloques y cuerpos STEP. La forma no se recalcula por ello. Los cuerpos seleccionados muestran su color de filamento bajo el resaltado.
 - En la pestaña *Selección*, el campo de filamento solo asigna con un clic o Intro. Las flechas y la escritura solo recorren la lista, y la rueda del ratón desplaza la pestaña.
 - En las versiones traducidas, *Filamento nuevo* ya no se desplaza de lado cuando la ventana es más baja que su contenido.
 - Los modelos grandes se cargan notablemente más rápido y necesitan menos memoria, también con un historial largo y en equipos con 8 GB.
 - Incluso en un historial largo, un paso nuevo apenas tarda más en calcularse que el primero.
+- En modelos con miles de características, mover y otros pasos que no cambian la forma terminan hasta el doble de rápido.
+- Al volver a abrir un proyecto, el informe de comprobación sigue indicando a qué hueco libre fue un modelo insertado.
 - Deshacer y rehacer son más rápidos, y la memoria que ya no se necesita se libera enseguida.
 - Reparar y resolver solapamientos es hasta cuatro veces más rápido en modelos grandes, y exportar a 3MF, bastante más rápido.
 - El área de trabajo aparece más rápido al abrir archivos 3MF grandes.
@@ -73,6 +75,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Solo se ofrecen los slicers con los que trabaja Solidon, además de slicers de resina como ChituBox y Lychee. Bambu Studio como AppImage ahora también cuenta.
 - El código de inicio y el volumen de impresión vienen solo de su impresora, no de otro modelo de la misma serie.
 - El diálogo de impresión asigna los perfiles del slicer mucho más rápido, al abrirse y tras cada cambio de slicer.
+- La exportación 3MF solo vuelve a leer los perfiles del slicer si algo cambió allí, y es bastante más rápida.
 - El tiempo de impresión estimado se acerca más al del slicer, mucho más en piezas con soportes.
 - La comprobación de si los soportes y el skirt caben en la cama mide ahora solo bajo los voladizos. Las piezas cerca del borde ya no reciben un aviso sin motivo.
 - Las sugerencias aceptadas ya casi no dejan sin soporte voladizos que lo necesitan. *Mantener libres los canales* solo bloquea el espacio del que ya no se podría sacar un soporte.
@@ -134,7 +137,10 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Si junto a una pared hay un redondeo, *Aplicar ángulo de desmoldeo* avisa antes de calcular de que estorba y propone *Quitar característica* como salida.
 - Al recortar una parte de un cuerpo, desaparecen también los chaflanes, roscas y alojamientos de tuerca de los bloques que había en ella.
 - En *Generar tapa* y *Generar tapa roscada*, un campo vacío para la altura de la abertura significa «Borde superior», y 0 es la altura de la cama. Los proyectos antiguos conservan su abertura.
-- Una restricción de ángulo en un dibujo pequeño ya no voltea las líneas.
+- Un boceto se resuelve igual en cualquier ordenador y posición, también al arrastrar, y una restricción de ángulo ya no voltea las líneas. Los proyectos anteriores se calculan como se guardaron.
+- Un boceto con muchas formas separadas se resuelve rápido, incluso con cientos de rectángulos o círculos acotados.
+- Si *Curvatura continua* no puede cumplirse al dibujar, el editor de bocetos lo indica en segundos y no en minutos.
+- Si dos restricciones se contradicen, el editor de bocetos nombra ambas en lugar de reducir una línea o un círculo a un punto.
 - Un cuerpo se levanta con tres clics: *Dibujar* en la barra superior (Ctrl+Mayús+E), luego esquina, esquina opuesta, altura. Hacia fuera se une, hacia dentro recorta.
 - Al levantar se pueden escribir las medidas. Un doble clic en el paso abre sus medidas, y en *Tipo* se convierte en un sólido de revolución o un patrón de orificios sin volver a dibujar.
 - Desde el editor de bocetos, *Terminado* vuelve a la vista y el siguiente clic pone la altura. Escape aparta el contorno, Ctrl+Z lo recupera.

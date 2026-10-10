@@ -55,11 +55,11 @@ geht über `ctx.ask` (Regel 21).
 
 Regeln 6, 7 und 9 gelten wörtlich; die Griffe sind `units.is_close`/`is_zero`
 statt `==`, `auto:<material>` und `ctx.seed` mit `deterministic=False` — ohne
-beides ist eine randomisierte Prozedur falsch, auch wenn sie funktioniert.
+beides ist eine Zufallsprozedur falsch, auch wenn sie funktioniert.
 
 Text, den der Kern **fertig** ausliefert (eine Frage über `ctx.ask`), schreibt
 Zahlen wie die Oberfläche: `format_decimal` bzw. `decimal_separator()` und
-Längen in `app.i18n.display_unit()` — sonst liest der Kunde „177.80 mm“ in
+Längen in `app.i18n.display_unit()` — sonst steht „177.80 mm“ in
 einem deutschen Fenster in Zoll (`unit_question`).
 
 Eine Zahl als **Platzhalterwert** eines Satzes (`_("… unter {largest}", largest=…)`)
@@ -77,16 +77,13 @@ entscheidet, rechnet ohne Wege, deren letzte Stelle an der Plattform hängt:
   ohne Achse, `trimesh`s `apply_transform` und `apply_scale`), kein
   `np.einsum` (FMA auf ARM), kein LAPACK (`svd`, `eigh`, `eig`, `lstsq`,
   `solve`, `inv`, `det`) — auch nicht für das Vorzeichen eines Eigen- oder
-  Singulärvektors; ein Kreis aus `Point.buffer` oder eine Drehung aus
-  `shapely.affinity.rotate` nimmt die Winkelfunktionen der Plattform, und das
-  Rauschen sieht beides nicht;
+  Singulärvektors; kein `Point.buffer`, kein `shapely.affinity.rotate`;
 - `trimesh`s `apply_translation` rechnet exakt, sieht für das Rauschen aber
   wie ein Matrixprodukt aus — in Wegen unter dem Rauschtest `mesh.shift_body`;
 - keine Winkel- und Exponentialfunktion aus NumPy oder `math` (Winkel über
-  `units.exact_cos`/`exact_sin`, gebündelt mit denselben Bits über
-  `exact_cos_sin_array`, sonst `mesh.periodic_sin_cos`), keine Potenz `**` auf Gleitkommazahlen: Das `pow`
-  der Plattform rundet nicht immer korrekt, und das Rauschen sieht es nicht —
-  `x * x`, `math.sqrt`;
+  `units.exact_cos`/`exact_sin`, gebündelt bitgleich `exact_cos_sin_array`,
+  sonst `mesh.periodic_sin_cos`), keine Potenz `**` auf Gleitkommazahlen
+  (`x * x`, `math.sqrt`);
 - Zufall nur aus Rohbits (`Generator.random`, `integers`), nie `normal` oder
   andere Verteilungen über `exp`/`log`;
 - keine Summe, deren Folge an der Zahl der Arbeiter hängt: Schichten und
@@ -98,7 +95,10 @@ der jede Rechnung um ein ULP verrauscht und den BLAS-Kern tauscht; der
 Fingerabdruck darf sich nicht rühren. Anzeige, Berichtsmessung und exakt
 nachgeprüfte Vorauswahlen dürfen schnell rechnen — der Kommentar sagt, warum;
 ebenso ein sicheres Nein mit Abstand und Schattenlauf (`schichtanalyse.md`,
-„Ein Löserlauf entfällt nur mit dem Nein des Stapels“).
+„Ein Löserlauf entfällt nur mit dem Nein des Stapels“). **Ausnahme ist der
+Skizzenlöser**, auch für §11.2: Er rechnet über scipy mit BLAS und LAPACK,
+auch seine Wegwahl. Zugesagt sind je Ort und Rechner dieselbe Lösbarkeit und
+Lage bis `_TOL` (Wächter in `tests/test_sketch.py`).
 
 ## Eine Merkmalsnummer kommt aus dem Körper, nie aus der Reihenfolge
 

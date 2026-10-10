@@ -206,6 +206,10 @@ reicht dafür selten. Sprache in `tests/`: `AGENTS.md`, „Sprachregelung“.
 - **Eine Arbeiterfrage im Test steht auf einer Freigabe** (`threading.Event`),
   wenn der Test prüft, was vor ihrer Antwort gilt: Auf einem schnellen Läufer
   ist sie sonst schon beantwortet, bevor die nächste Zeile läuft.
+- **Eine Zeile des Prüfberichts greift ein Test erst nach
+  `ui_helpers.wait_for_print_findings`** und liest ihren Befund vor jedem
+  Zustellen: Die Berichtsanalyse liefert nach `wait_for_idle` nach und baut die
+  Liste neu, auf einem langsamen Läufer ist die gehaltene Zeile dann gelöscht.
 
 ## Den Lauf messen, nicht einen Filter darüber
 
