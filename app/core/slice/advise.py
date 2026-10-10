@@ -2549,15 +2549,18 @@ def _from_spans(result: SliceResult, cancelled: CancelToken | None = None) -> li
     Kein Vorschlag, sondern ein Befund: keine Einstellung macht aus einer
     27-mm-Brücke eine tragende Fläche. Was hilft, ist die Geometrie — ein
     Übergang unter 45 Grad statt einer waagerechten Schulter — oder eine
-    Stütze. Beides entscheidet der Nutzer, nicht die Regel.
+    Stütze; über einem Kanal nur der Übergang, denn eine Stütze käme dort
+    nicht mehr heraus. Was davon, entscheidet der Nutzer, nicht die Regel.
 
     Gemeldet wird die schlimmste Stelle mit ihrer Höhe, nicht jede einzelne:
     ein Bericht mit dreißig Zeilen derselben Sache wird nicht gelesen.
 
-    **Der Ort ist die freie Fläche, nicht die Achse.** Hier stand
+    **Der Ort ist die gemessene Brücke, nicht die Achse.** Hier stand
     ``(0, 0, z)``: die Höhe stimmte, der Klick flog aber zum Ursprung der
-    Szene, neben das Teil. Jetzt ist es die Mitte der größten freien Fläche
-    dieser Schicht über der darunter; ohne sie fliegt er zum Körper.
+    Szene, neben das Teil. Jetzt zeigt er dorthin, wo :func:`span_spot` die
+    längste Brücke gemessen hat, sonst auf die Mitte der größten freien Fläche
+    der Schicht, die ein übriges Stück berührt (:func:`_bridge_place`); ohne
+    sie fliegt er zum Körper.
     """
     spanning = [
         index for index, layer in enumerate(result.layers) if layer.bridge_width > SPAN_INTERESTING
