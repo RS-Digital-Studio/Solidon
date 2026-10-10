@@ -117,6 +117,7 @@ def _surface(
     mask: np.ndarray,
     kind: FeatureKind,
     *,
+    up: bool = True,
     exact: Solid | None = None,
 ) -> Feature:
     """Nur tatsächliche Dreiecke und ihre flächengewichteten Maße benennen.
@@ -124,6 +125,12 @@ def _surface(
     Am exakten Körper sind die Dreiecke die seiner Tessellierung, und eine
     ebene Fläche bekommt ihr Maß aus dem Integral des Kerns statt aus den
     Sehnen (``brep.canonical.horizontal_area``); die Quelle sagt es.
+
+    Die Normale einer ebenen Fläche ist die Achse, nach der sie gewählt wurde
+    (``up``), nicht die eines ihrer Dreiecke: ``trimesh`` normiert über den
+    Kehrwert der Länge, und je nach Dreieck kam ``-0.9999999999999999`` oder
+    ``-0.0`` heraus — auf macOS Intel, dessen Vernetzung die Dreiecke anders
+    ordnet, an einer anderen Stelle als anderswo.
     """
     from app.core.perceive.surfaces import planar_patch
 
@@ -135,15 +142,14 @@ def _surface(
     sources: dict[str, MeasureSource] = dict.fromkeys(values, "facets")
     surface = None
     if kind == "face":
-        normal = raw.face_normals[indices[0]]
-        direction = (float(normal[0]), float(normal[1]), float(normal[2]))
+        direction = (0.0, 0.0, 1.0 if up else -1.0)
         values["normal"] = direction
-        sources["normal"] = "facets"
+        sources["normal"] = "parameter"
         if exact is not None:
             from app.core.brep.canonical import horizontal_area
 
             height = float(raw.triangles_center[indices[0]][2])
-            values["area"] = horizontal_area(exact, height, up=direction[2] > 0.0)
+            values["area"] = horizontal_area(exact, height, up=up)
             sources["area"] = "native"
         surface = planar_patch(
             mesh,
@@ -184,7 +190,7 @@ def seal_features(body: Form, *, gasket: bool, rounded: bool = False) -> dict[st
     mantle = "gasket_walls" if gasket else "groove_walls"
     return {
         upper: _surface(mesh, upper, top, "face", exact=exact),
-        lower: _surface(mesh, lower, bottom, "face", exact=exact),
+        lower: _surface(mesh, lower, bottom, "face", up=False, exact=exact),
         mantle: _surface(mesh, mantle, side, "curved_face"),
     }
 
