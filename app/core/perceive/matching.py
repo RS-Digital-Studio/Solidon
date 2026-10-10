@@ -379,7 +379,7 @@ def _row_minima(
 
 #: Bis zu welcher Grenze :func:`_near_assignment` sucht; darüber spart die
 #: kleinere Suche zu wenig, und es gilt der volle Weg.
-NEAR_LIMIT: Final = 0.25
+NEAR_COST_LIMIT: Final = 0.25
 
 
 def _near_assignment(
@@ -424,7 +424,7 @@ def _near_assignment(
     signless = np.fromiter(("axis" in feature.params for feature in first), dtype=bool, count=count)
     largest = float(np.max(_vector_costs(one, two[order], signless)))
     limit = largest * (1.0 + AMBIGUITY_MARGIN) + AMBIGUITY_FLOOR
-    if not limit <= NEAR_LIMIT:
+    if not limit <= NEAR_COST_LIMIT:
         return None
     if check is not None:
         check()

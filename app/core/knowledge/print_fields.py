@@ -733,6 +733,20 @@ FIELDS: tuple[Field, ...] = (
         note=_("Wände der Baumstämme. Hohe Bäume stehen mit zweien stabil, kosten aber Material."),
     ),
     Field(
+        "support.tip_diameter",
+        _("Baumspitze"),
+        "support",
+        unit="mm",
+        minimum=0.1,
+        maximum=5.0,
+        step=0.05,
+        decimals=2,
+        note=_(
+            "Durchmesser der Spitzen organischer Bäume. Ab etwa 1,13 mm trägt jede Spitze eine "
+            "Trennschicht."
+        ),
+    ),
+    Field(
         "support.block_channels",
         _("Kanäle frei halten"),
         "support",

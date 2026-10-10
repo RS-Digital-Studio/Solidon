@@ -1418,6 +1418,12 @@ class SupportSettings:
     PrusaSlicer zählt keine Wände und nimmt das Feld nicht
     (``slicer_keys.NOT_TAKEN_BY``); seine Doppelwand ab einem Astquerschnitt
     bleibt beim Hersteller."""
+    tip_diameter: float = 0.8
+    """Durchmesser der Spitzen organischer Bäume in mm (RM-704). Unter
+    ``analysis.TIP_ROOF_AREA`` Querschnitt setzt die Orca-Familie keine
+    Trennschicht auf die Spitze; darüber trägt jede Spitze eine. Die Vorgabe
+    ist die der Familie und der meisten Herstellerprofile; einige führen 1 bis
+    2 mm."""
 
 
 @dataclass(frozen=True, slots=True)
