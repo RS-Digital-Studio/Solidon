@@ -44,11 +44,11 @@ Schicht, was jeder Slicer selbst rechnet, bevor er G-Code schreibt:
   Art aus dem Herstellerprofil (:class:`Motion`). Die Mindestschichtzeit bremst
   und zählt sie nicht — gemessen am Pilz in fünf Slicern (04.10.2026): mit
   Abbremsen bis 28 % zu wenig, ohne höchstens 14 %.
-- **Bügeln** als zweiter Zug über die Oberseite, Bahn neben Bahn im
-  Bügelabstand mit dem Bügeltempo des Profils: jede Oberseite oder nur die der
-  letzten Schicht (RM-588). Am Pilz kostete das in ElegooSlicer, PrusaSlicer
-  und Cura 31 bis 68 % der Druckzeit; ohne diese Zeile wich die Gegenprobe
-  um genau so viel ab.
+- **Bügeln** als zweiter Zug über die Oberseite samt Wänden, um eine halbe
+  Düse eingezogen, Bahn neben Bahn im Bügelabstand mit dem Bügeltempo des
+  Profils: jede Oberseite oder nur die der letzten Schicht (RM-588). Am Pilz
+  kostete das in acht Slicern 29 bis 68 % der Druckzeit; ohne diese Zeile wich
+  die Gegenprobe um genau so viel ab.
 
 Was sie nicht kennt: Haftungsränder, Lückenfüllung und ihre Anfahrten, die
 genaue Reihenfolge der Bahnen, die Gestalt eines Baums (seine Menge folgt
@@ -659,9 +659,6 @@ def _layers(
                     )
                 )
             else:
-                # Gebügelt wird die ganze Oberseite, auch wo sie unten als
-                # Brücke liegt.
-                surface = top
                 bridge = inside ^ unsupported
                 nozzle = motion.nozzle
                 if not bridge.is_empty():
@@ -697,11 +694,6 @@ def _layers(
                         0.0,
                     )
                 )
-                if iron_every or (iron_last and index == count - 1):
-                    # Ein zweiter Zug über die Oberseite, Bahn neben Bahn im
-                    # Bügelabstand, mit kaum Material: kein Volumenstrom bremst.
-                    gap = roles.ironing_gap
-                    parts.append((surface, gap, gap, 1.0, roles.ironing, roles.a_top, 0.0))
                 if motion.narrow_solid_loops and not internal.is_empty():
                     narrow = _narrow(internal, solid_gap)
                     if not narrow.is_empty():
@@ -724,6 +716,16 @@ def _layers(
             sparse_below = covered
         else:
             sparse_below = _EMPTY
+        if shell.top_layers > 0 and (iron_every or (iron_last and index == count - 1)):
+            # Ein zweiter Zug über die Oberseite, Bahn neben Bahn im
+            # Bügelabstand, mit kaum Material: kein Volumenstrom bremst. Gebügelt
+            # wird die ganze Oberseite samt Wänden und Brücken, um eine halbe
+            # Düse eingezogen (``Layer::make_ironing`` in PrusaSlicer und Orca):
+            # am Pilz 10 454 mm Bahn bei 0,15 mm Abstand auf 1 600 mm² oben.
+            upper = regions[index + 1] if index + 1 < count else _EMPTY
+            ironed = (region - upper) ^ _inset(region, -0.5 * motion.nozzle)
+            gap = roles.ironing_gap
+            parts.append((ironed, gap, gap, 1.0, roles.ironing, roles.a_top, 0.0))
         for area, line, gap, density, speed, accel, joined in parts:
             if density <= 0.0:
                 continue

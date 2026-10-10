@@ -685,12 +685,16 @@ def test_a_shell_thickness_adds_layers_where_the_count_falls_short() -> None:
 
 def test_ironing_the_topmost_surface_costs_one_more_pass_over_it() -> None:
     """RM-588: Gebügelt wird die Oberseite ein zweites Mal, Bahn neben Bahn im
-    Bügelabstand. Am Würfel liegt innerhalb der zwei Wände ``18²`` mm² oben;
-    bei 0,1 mm Abstand und 10 mm/s sind das genau 324 s mehr. Ohne Wert im
-    Profil gelten 0,1 mm und zwei Drittel des Oberflächentempos (Curas Formel)."""
+    Bügelabstand — die ganze Oberseite samt Wänden, um eine halbe Düse
+    eingezogen, wie PrusaSlicer und Orca (``Layer::make_ironing``). Am Würfel
+    sind das ``(20 − 0,4)²`` mm² oben; bei 0,1 mm Abstand und 10 mm/s genau
+    384,16 s mehr. Ohne Wert im Profil gelten 0,1 mm und zwei Drittel des
+    Oberflächentempos (Curas Formel)."""
     settings = _settings(shell__top_layers=1)
     result = _box(20.0, 20.0, 20.0)
-    plain = _seconds(result, settings, _motion())
+    motion = _motion()
+    plain = _seconds(result, settings, motion)
+    top = (20.0 - motion.nozzle) ** 2
 
     ironed = _seconds(
         result,
@@ -698,12 +702,13 @@ def test_ironing_the_topmost_surface_costs_one_more_pass_over_it() -> None:
         _motion(ironing_speed=10.0, ironing_spacing=0.1),
     )
     fallback = _seconds(
-        result, print_settings.with_path(settings, "shell.ironing_topmost", True), _motion()
+        result, print_settings.with_path(settings, "shell.ironing_topmost", True), motion
     )
 
-    assert ironed - plain == pytest.approx(324.0 / 0.1 / 10.0, rel=1e-3)
+    assert motion.nozzle == pytest.approx(0.4)
+    assert ironed - plain == pytest.approx(top / 0.1 / 10.0, rel=1e-3)
     assert fallback - plain == pytest.approx(
-        324.0 / print_time.IRONING_SPACING / (50.0 * print_time.IRONING_SHARE), rel=1e-3
+        top / print_time.IRONING_SPACING / (50.0 * print_time.IRONING_SHARE), rel=1e-3
     )
 
 
@@ -730,7 +735,7 @@ def test_every_top_surface_irons_the_step_below_the_topmost_too() -> None:
     topmost = seconds(ironing_topmost=True)
     every = seconds(ironing=True)
 
-    assert topmost - plain == pytest.approx(8.0**2 / 0.1 / 10.0, rel=1e-2)
+    assert topmost - plain == pytest.approx(9.6**2 / 0.1 / 10.0, rel=1e-2)
     assert every - topmost > 0.5 * (28.0**2 - 10.0**2) / 0.1 / 10.0
     assert seconds(ironing=True, ironing_topmost=True) == pytest.approx(every, rel=1e-9)
 
