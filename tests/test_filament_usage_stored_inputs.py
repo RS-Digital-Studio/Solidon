@@ -56,7 +56,7 @@ DATA = Path(__file__).parent / "data"
 #: Bildung fest: Ändert sie sich, findet Solidon keine Buchung mehr, die nach
 #: diesem Stand gebucht wurde. Wer sie ändern muss, führt den alten Abdruck als
 #: Vorabdruck mit (``verbrauch.md``).
-PINNED_BOOKING = "2f746f7b6426e64a8f963ad95ab02fa3"
+PINNED_BOOKING = "444f2d34555d2572adb8fe4fb0edc329"
 #: Die Buchung im Lager von 0.5.3 (``test_filament_usage_fingerprint_history``).
 BOOKED_053 = "aa373e5e86b4471cf557a31589dc8383"
 
@@ -405,6 +405,133 @@ def test_a_calibrated_material_named_by_a_step_is_another_print(
         ),
     )
     assert request_for(objects, settings, profile, inputs).fingerprint != reference
+
+
+def test_another_edge_answer_is_another_print() -> None:
+    """Review RM-706, M1: Dieselben Werte, die Antwort einmal rechte, einmal linke Kante.
+
+    Die Antwort steht in ``Operation.matches`` und wählt die Geometrie des
+    Verbrauchers (``scene.edge_binding``) — zwei Netze, also zwei Drucke.
+    """
+    from app.core.scene import History, evaluate
+    from tests import test_edge_binding as edge
+
+    def answered(pick: Any) -> tuple[Any, Any]:
+        body, kind = edge._body("mesh")
+        registry = edge._registry(body, kind)
+        document = edge._document(edge.COLLIDING_KEY)
+        chooser = edge._EdgeChooser(pick)
+        first = evaluate(
+            document,
+            edge._profile(),
+            registry=registry,
+            ask=chooser,
+            question_context=chooser.context,
+        )
+        assert first.complete, first.scene.report.findings
+        History(document).record_matches(first.matches)
+        return document, evaluate(document, edge._profile(), registry=registry)
+
+    right_document, right = answered(edge._right_box)
+    left_document, left = answered(edge._left_box)
+    assert right_document.ops[1].params == left_document.ops[1].params
+    profile = edge._profile()
+    settings = replace(print_settings.resolve(profile), inventory_project_id="rm706-kanten")
+    fingerprints = [
+        usage.prepare(
+            list(result.scene.objects.values()),
+            settings,
+            profile,
+            "Paar",
+            inputs=usage.StoredInputs(document, None, result.stopped_at),
+        )[0].fingerprint
+        for document, result in ((right_document, right), (left_document, left))
+    ]
+    assert fingerprints[0] != fingerprints[1]
+
+
+def _edge_answer(candidates: list[dict[str, Any]], chosen: int, scope: str) -> dict[str, Any]:
+    from app.core.perceive.match_records import edge_answer_key
+
+    key = "e:0.00,10.00,5.00:0.000,0.000,1.000"
+    return {
+        edge_answer_key("obj_1", "edge_keys", [key]): {
+            "object_id": "obj_1",
+            "field": "edge_keys",
+            "keys": [key],
+            "scope": scope,
+            "candidates": {key: candidates},
+            "decisions": {key: {"candidate": chosen}},
+        }
+    }
+
+
+def _edge(x: float) -> dict[str, Any]:
+    return {"middle": [x, 10.0, 5.0], "direction": [0.0, 0.0, 1.0], "extent": 0.0, "length": 10.0}
+
+
+def _with_answer(matches: dict[str, Any]) -> dict[str, str]:
+    project = build(
+        extra=(
+            OperationDraft(
+                op="fillet_edges",
+                params={"radius": 2.0, "edges": "named", "edge_keys": "e"},
+                inputs=("obj_1",),
+            ),
+        )
+    )
+    last = project.document.ops[-1]
+    project.document.ops[-1] = replace(last, matches=matches)
+    return usage.StoredInputs(project.document).bodies()
+
+
+def test_a_saved_answer_counts_as_its_decision_not_as_its_record() -> None:
+    """M1: Eine nach einer neuen Fassung (``scope``) wieder gestellte und gleich
+    beantwortete Frage behält den Abdruck — auch wenn die Kandidaten in anderer
+    Folge und um weniger als die Druckgrenze verschoben gespeichert sind. Eine
+    andere Wahl ändert ihn."""
+    shift = PRINT_LIMIT / 4
+    right = _with_answer(_edge_answer([_edge(-0.002), _edge(0.002)], 1, "fassung-1"))
+    again = _with_answer(
+        _edge_answer([_edge(0.002 + shift), _edge(-0.002 - shift)], 0, "fassung-2")
+    )
+    left = _with_answer(_edge_answer([_edge(-0.002), _edge(0.002)], 0, "fassung-1"))
+    unanswered = _with_answer({})
+    assert right == again
+    assert right != left
+    assert right != unanswered
+
+
+def test_a_feature_mapping_counts_with_its_decision() -> None:
+    """M1: Eine Merkmalszuordnung (§21.3) entscheidet, welches Merkmal ein späterer
+    Schritt greift; eine andere Zuordnung und ``not_carried`` sind andere Drucke."""
+    from app.core.perceive.match_records import group_key
+
+    def mapping(decision: dict[str, Any]) -> dict[str, Any]:
+        fingerprint = {
+            "kind": "hole",
+            "relative": [0.25, 0.5, 0.5],
+            "axis": [0.0, 0.0, 1.0],
+            "diameter": 5.0,
+            "directional": False,
+        }
+        other = {**fingerprint, "relative": [0.75, 0.5, 0.5]}
+        return {
+            group_key("obj_1", ["hole_1"]): {
+                "object_id": "obj_1",
+                "old_ids": ["hole_1"],
+                "candidates": [
+                    {"fingerprint": fingerprint, "claims": ["hole_1"]},
+                    {"fingerprint": other, "claims": ["hole_1"]},
+                ],
+                "decisions": {"hole_1": decision},
+            }
+        }
+
+    first = _with_answer(mapping({"candidate": 0}))
+    second = _with_answer(mapping({"candidate": 1}))
+    dropped = _with_answer(mapping({"not_carried": True}))
+    assert len({first["obj_1"], second["obj_1"], dropped["obj_1"]}) == 3
 
 
 def test_the_former_fingerprint_is_the_one_of_rm705() -> None:

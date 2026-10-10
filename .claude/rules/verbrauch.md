@@ -35,6 +35,9 @@ nach einem Update bei jedem Kunden zugleich (RM-705, RM-706).
 - **Liest ein Schritt neben seinen Eingängen**, gehört die Lesart in
   `_read_beside` wie in `evaluate._with_nested_context` — sonst tragen zwei
   verschiedene Drucke einen Abdruck.
+- **Gespeicherte Antworten zählen als Entscheidung** (`_answers`): Kanten- und
+  Merkmalsantworten mit dem Rang des gewählten Kandidaten nach Lage, ohne
+  `scope` und Rohkoordinaten — eine gleich beantwortete neue Frage bleibt.
 - **Die Einstellungen zählen mit dem, was dem Projekt gehört**
   (`_owned_settings`): Stufe, eigene Wahl und Vorschläge mit Wert, Wahl der
   Platte, eigene Spulenwerte ohne geerbte Felder. Die Grundlage des

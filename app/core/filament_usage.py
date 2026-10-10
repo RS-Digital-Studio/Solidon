@@ -199,9 +199,10 @@ def _stored_bodies(stored: StoredInputs) -> dict[ObjectId, str]:
     """Geht den Stapel wie die Auswertung durch, ohne ein Netz zu rechnen.
 
     Je Schritt gehen ein: Name, gespeicherte Werte, Startwert, die Abdrücke
-    seiner Eingänge, was er an ihnen vorbei liest (:func:`_read_beside`) und
-    die Fassung eines Bausteins. Nicht ein gehen, was nur ein Ergebnis
-    beschreibt — Rückfallstufe, Zuordnungsantworten, Übersetzungsvermerk —
+    seiner Eingänge, was er an ihnen vorbei liest (:func:`_read_beside`), die
+    Fassung eines Bausteins und die Entscheidungen seiner gespeicherten
+    Antworten (:func:`_answers`). Nicht ein gehen, was nur ein Ergebnis
+    beschreibt — Rückfallstufe, Übersetzungsvermerk —
     und keine Fassung einer Umsetzung (``cache_version``): Genau die steigt bei
     einer druckgleichen Beschleunigung. Ein Schritt, der nur benennt oder
     prüft (``unchanged_effect``), und ein unverändert durchgereichter Eingang
@@ -233,6 +234,7 @@ def _stored_bodies(stored: StoredInputs) -> dict[ObjectId, str]:
                 inputs,
                 _read_beside(spec, operation, live, stored),
                 _part_versions(operation),
+                _answers(operation.matches),
             )
         )
         for name in operation.inputs:
@@ -335,6 +337,96 @@ def _declared(parameters: Mapping[ParameterName, Parameter], names: set[str]) ->
         else:
             declared[name] = parameter.value
     return declared
+
+
+#: In welcher Folge die Felder eines gespeicherten Kandidaten ihn ordnen: die
+#: Lage zuerst. Zwei Kandidaten einer Frage liegen an verschiedenen Stellen,
+#: Richtung und Länge teilen sie oft bis aufs Bit.
+_EDGE_ORDER: Final = ("middle", "direction", "extent", "length")
+_FEATURE_ORDER: Final = ("relative", "axis", "diameter", "kind", "directional")
+
+
+def _answers(matches: Mapping[str, Any]) -> list[object]:
+    """Die gespeicherten Antworten eines Schritts als Entscheidung, nicht als
+    Datensatz (Review RM-706, M1).
+
+    Eine Kantenantwort wählt die Geometrie des Verbrauchers
+    (``scene.edge_binding``), eine Merkmalszuordnung das Merkmal, nach dem ein
+    späterer Schritt greift (§21.3) — eine andere Antwort ist ein anderer Druck.
+    Ein geht, was entschieden ist: Domäne, Körper, Feld und Schlüssel stehen im
+    Schlüssel des Datensatzes, dazu je Entscheidung der Rang des gewählten
+    Kandidaten in der Ordnung nach seiner Lage, oder ``not_carried``. Nicht ein
+    gehen ``scope`` (der Hash des Eingangs, er steigt mit ``cache_version``) und
+    die Rohkoordinaten: Eine neu gestellte und gleich beantwortete Frage behält
+    den Abdruck.
+    """
+    from app.core.perceive.match_records import (
+        EDGE_DOMAIN,
+        GROUP_DOMAIN,
+        NATIVE_DOMAIN,
+        RECOGNITION_DOMAIN,
+        domain_of,
+    )
+
+    answers: list[object] = []
+    for key in sorted(matches):
+        record = matches[key]
+        domain = domain_of(key)
+        decided: object
+        try:
+            if domain == EDGE_DOMAIN:
+                decided = {
+                    name: _rank(record["candidates"][name], choice["candidate"], _EDGE_ORDER)
+                    for name, choice in record["decisions"].items()
+                }
+            elif domain in (GROUP_DOMAIN, NATIVE_DOMAIN):
+                found = [candidate["fingerprint"] for candidate in record["candidates"]]
+                decided = {
+                    name: "not_carried"
+                    if choice.get("not_carried") is True
+                    else _rank(found, choice["candidate"], _FEATURE_ORDER)
+                    for name, choice in record["decisions"].items()
+                }
+            elif domain == RECOGNITION_DOMAIN:
+                decided = [record["allowed"], record.get("out_of_memory", False)]
+            else:
+                decided = _without_scope(record)
+        except KeyError, IndexError, TypeError, AttributeError, ValueError:
+            # Ein Datensatz fremder Form geht ganz ein — ohne seinen Scope.
+            decided = _without_scope(record)
+        answers.append([key, decided])
+    return answers
+
+
+def _without_scope(record: object) -> object:
+    if isinstance(record, Mapping):
+        return {name: value for name, value in record.items() if name != "scope"}
+    return record
+
+
+def _rank(candidates: Sequence[Any], chosen: int, order: Sequence[str]) -> int:
+    """Die Stelle des gewählten Kandidaten, wenn alle nach ihrer Lage geordnet sind."""
+    ranked = sorted(range(len(candidates)), key=lambda index: _place(candidates[index], order))
+    return ranked.index(chosen)
+
+
+def _place(candidate: Mapping[str, Any], order: Sequence[str]) -> tuple[tuple[int, Any], ...]:
+    """Die Felder eines Kandidaten als vergleichbare Folge, die genannten vorn."""
+    names = [*order, *sorted(name for name in candidate if name not in order)]
+    return _leaves([candidate.get(name) for name in names])
+
+
+def _leaves(value: object) -> tuple[tuple[int, Any], ...]:
+    """Flach und vergleichbar: Zahlen vor Texten, je mit eigener Marke."""
+    if isinstance(value, Mapping):
+        return tuple(leaf for name in sorted(value, key=str) for leaf in _leaves(value[name]))
+    if isinstance(value, list | tuple):
+        return tuple(leaf for entry in value for leaf in _leaves(entry))
+    if value is None or isinstance(value, bool):
+        return ((0, int(bool(value))),)
+    if isinstance(value, int | float):
+        return ((1, float(value)),)
+    return ((2, str(value)),)
 
 
 def _part_versions(operation: Operation) -> list[str]:
