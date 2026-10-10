@@ -14382,17 +14382,40 @@ class MainWindow(QMainWindow):
         self._hold_until_done(worker)
 
     def wait_for_sculpt_check(self, timeout_ms: int = 30_000) -> bool:
-        """Auf die laufende Wandprüfung warten und ihre Antwort zustellen.
+        """Auf die Antwort der Wandprüfung zum jüngsten Stand warten und sie zustellen.
 
         Für Tests und Prüfstände — die Oberfläche selbst wartet nie darauf.
         Gibt zurück, ob die Prüfung fertig ist.
+
+        Ein Zug stößt die Prüfung über ``_sculpt_check`` verzögert an. Feuerte
+        dieser Zeitgeber erst beim Zustellen, ersetzte seine Prüfung die
+        abgewartete, und die Leiste sagte weiter „wird geprüft“ — auf einer
+        langsamen Maschine (macOS-Läufer) regelmäßig. Deshalb erst die Vorschau,
+        dann die geschuldete Prüfung sofort, und so lange, bis keine mehr
+        aussteht.
         """
-        worker = self._sculpt_wall_worker
-        if worker is not None and worker.isRunning() and not worker.wait(timeout_ms):
-            return False
-        QApplication.sendPostedEvents()
-        QApplication.processEvents()
-        return True
+        from time import monotonic
+
+        deadline = monotonic() + timeout_ms / 1000
+        while True:
+            remaining = max(0, int((deadline - monotonic()) * 1000))
+            if self._sculpt_preview_worker is not None and not self.wait_for_sculpt_preview(
+                remaining
+            ):
+                return False
+            if self._sculpt_check.isActive():
+                self._sculpt_check.stop()
+                self._check_sculpted_walls()
+            worker = self._sculpt_wall_worker
+            remaining = max(0, int((deadline - monotonic()) * 1000))
+            if worker is not None and worker.isRunning() and not worker.wait(remaining):
+                return False
+            QApplication.sendPostedEvents()
+            QApplication.processEvents()
+            if not self._sculpt_check.isActive() and self._sculpt_preview_worker is None:
+                return True
+            if monotonic() >= deadline:
+                return False
 
     def _remember_discarded(self, target: str | None, text: str, panel: Any) -> None:
         """Die verworfene Zeichnung aufheben und den Rückweg ansagen.
