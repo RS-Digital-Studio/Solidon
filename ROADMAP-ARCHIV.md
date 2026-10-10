@@ -31,6 +31,7 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-10 | [RM-544: Gewinde nach G, R, UNC, UNF und NPT, links und mehrgängig (10.10.2026)](#rm-544-gewinde-nach-g-r-unc-unf-und-npt-links-und-mehrgängig-10102026) |
 | 2026-10-10 | [RM-751: Ein freigegebenes Fenster startet keine Wandprüfung mehr (10.10.2026)](#rm-751-ein-freigegebenes-fenster-startet-keine-wandprüfung-mehr-10102026) |
 | 2026-10-10 | [RM-750: Ein wartender Klick behält seine Zusage, während die Analysekarte rechnet (10.10.2026)](#rm-750-ein-wartender-klick-behält-seine-zusage-während-die-analysekarte-rechnet-10102026) |
 | 2026-10-09 | [RM-627: Ein Rand neben einem anderen Überhang ist keine lange Brücke (09.10.2026)](#rm-627-ein-rand-neben-einem-anderen-überhang-ist-keine-lange-brücke-09102026) |
@@ -46730,3 +46731,31 @@ Sonde endete der Prozess so viermal mit Exit 127). `release` hält `_sculpt_chec
 `_check_sculpted_walls` fängt nach dem Schließen nichts mehr an.
 **Nachweis:** `test_sculpt_session.py::test_a_released_window_starts_no_wall_check` am Stand
 davor rot, jetzt grün. Changelog: nein.
+
+## RM-544: Gewinde nach G, R, UNC, UNF und NPT, links und mehrgängig (10.10.2026)
+
+<a id="rm-544-gewinde-nach-g-r-unc-unf-und-npt-links-und-mehrgängig-10102026"></a>
+<a id="rm-544"></a>
+
+**RM-544 — Zoll- und Rohrgewinde: G/BSP, UNC und UNF in jedem Gewindeweg.** Anlass ist
+  derselbe Kundenvorschlag wie bei RM-532 (S-20261006-c66299, Innengewinde in einem Rohr); Rohre
+  tragen meist Whitworth-Rohrgewinde. Solidon kennt nur metrische Gewinde nach ISO 261/262 und
+  sagt bei links-, mehrgängigen und kegeligen ab. **Entschieden (Robert, 06.10.2026):** „alle“ —
+  neben metrisch in jedem Maß auch G (zylindrisches Rohrgewinde, ISO 228-1, 55°-Flanken, Gänge je
+  Zoll) sowie UNC und UNF (60°, Gänge je Zoll). **Umfang:** Tabelle der Nennmaße und Gänge je
+  Zoll mit Herkunft (`standards.toml`, Version erhöhen), das Flankenprofil als Parameter der
+  Gewindeform (55° gerundet / 60°), *Eigenes Maß* auch in Zoll (Gänge je Zoll statt Steigung),
+  dieselben Wege wie RM-532: Druckbares Gewinde, Bohrung mit Gewinde, Gegenstück
+  (`counterpart.thread_values_for`), *Schraube erstellen*, *Drehdeckel erzeugen*, Stift für
+  Bohrung (RM-536), Erkennung einer gemessenen Bohrung als Zoll- oder Rohrgewinde mit Rückfrage
+  bei Mehrdeutigkeit (Regel 21). **Einstellung (Robert, 06.10.2026):** In den Einstellungen
+  wählt der Kunde, welche Gewindearten in den Auswahllisten stehen (metrisch, G, UNC, UNF,
+  später die zweite Stufe), Vorgabe alle. Die Wahl ist Darstellung, kein Dokumentzustand: Ein
+  Schritt, der eine ausgeblendete Art trägt, zeigt und rechnet sie weiter, und die Erkennung
+  schlägt nur eingeblendete Arten vor. Zweite Stufe, weil „alle“ auch die heutigen Absagen meint:
+  kegelige Rohrgewinde (R nach ISO 7-1, NPT), Linksgewinde und mehrgängige Gewinde.
+  **Abnahme:** Paar G 1/2 innen und außen greift an beiden Kernen, Kernmaße gegen ISO 228-1,
+  UNC 1/4-20 gegen ASME B1.1; Bereichsnachweis, Tor, Texte in sechs Sprachen, Handbuchabsatz;
+  die zweite Stufe mit eigener Abnahme.
+
+**Abschluss:** Beide Stufen fertig (Zweig `paket/gew-zollgewinde`, Bericht `output/konsolidierung-2026-10-07/paket-gew.md`). Normteiltabelle 14 mit 146 Größen (G 24, R 15, UNC 33, UNF 23, NPT 24 bis 24 Zoll), gegen zweite Quellen in 540 Vergleichen geprüft; Gangprofile `flat`, `whitworth` (ISO 228-1) und `npt`; Gangzahl, Linksgang und Kegel 1:16 in jedem Gewindeweg: Druckbares Gewinde, Schraube, Mutter, Gewindebolzen, Gegenstück (Rückfrage, wo die Messung zwei Reihen nicht trennt), Stift für Bohrung, Drehdeckel, *Schraube erstellen*, *Merkmal ändern* und *Entfernen*; der Netzleser erkennt mehrgängige Gewinde; Einstellung der gezeigten Reihen. Abnahme: G 1/2 greift am Netz und exakt, Kernmaße gegen ISO 228-1, 1/4-20 UNC gegen ASME B1.1, R 1/2 und NPT 1/2 greifen in der Bezugsebene. Der Gang rechnet gebündelt, Bit für Bit wie zuvor (`units.exact_cos_sin_array`, Gang Ø 1000 × 0,25 × 50 von 6,0 auf 1,2 s CPU). Der Nachweis fand am Gewindebolzen drei Fehler (Schaft auf dem Kamm, 48 Sehnen an Schaft und Kuppen in jeder Größe, Spiegelschranke unter einem Mikrometer), behoben mit Bibliotheksversion 28. **Bereichsnachweis (10.10.2026, Stand mit welle3 `fca4b1279`):** 50 von 50 Bausteinen bestanden, 21 560 Ecken, kein Bruch; Gewinde 1 360, Schraube 1 360, Mutter 340, Bolzen 2 720 Ecken, jede auch in der gespiegelten Stellung; `--check` 50 von 50.

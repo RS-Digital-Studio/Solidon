@@ -176,7 +176,6 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-522 — Dem Linux-Kunden mit Orca als Flatpak die Behebung melden](#rm-522) | Kundenrückmeldungen | Text für 0.5.3 liegt in Roberts Ablage bereit, Behebung am ausgelieferten Paket belegt (RM-064); Robert schickt, dann Versand eintragen |
 | [RM-533 — Entf tut an der Auswahl still nichts](#rm-533) | Kundenrückmeldungen | Auf main mit `377069520` (Merge `f4960774a`): Entf im Reiter *Auswahl*, Felder behalten die Taste, bei Halt oder Sperre der Grund mit dem Titel aus `_removal_entry`; offen allein die Fensterabnahme beim Release (RM-213) |
 | [RM-538 — Rechtsklick mit Entfernen und Vereinigen, Entf an mehreren Körpern, Aushöhlen an der Fläche, verschiebbare Karten](#rm-538) | Kundenrückmeldungen | Auf main mit `377069520` (Merge `f4960774a`), drei Durchsichten; offen allein die Fensterabnahme beim Release (RM-213) |
-| [RM-544 — Zoll- und Rohrgewinde: G/BSP, UNC und UNF in jedem Gewindeweg](#rm-544) | Kundenrückmeldungen | Entschieden (Robert, 06.10.): alle Gewindearten samt Einstellung der Auswahllisten; baut auf RM-532 (jedes Maß) und RM-536 (Stift für Bohrung) auf |
 | [RM-072 — Zusagen an den Dental-Kunden zum Verkaufsstart erfüllen](#rm-072) | Kundenrückmeldungen | Kaufweg und belastbare 3D-Maus-Unterstützung zum zugesagten Anlass mitteilen |
 
 ## Filamentlager
@@ -6030,27 +6029,4 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   echten Fenster beim Release (RM-213): Rechtsklick an einem und an zwei Körpern, Entf an zwei
   Körpern mit einem Strg+Z zurück, *Aushöhlen* an einer Fläche, eine Karte schweben lassen und
   zurücklegen, in beiden Themen.
-
-<a id="rm-544"></a>
-
-- [ ] **RM-544 — Zoll- und Rohrgewinde: G/BSP, UNC und UNF in jedem Gewindeweg.** Anlass ist
-  derselbe Kundenvorschlag wie bei RM-532 (S-20261006-c66299, Innengewinde in einem Rohr); Rohre
-  tragen meist Whitworth-Rohrgewinde. Solidon kennt nur metrische Gewinde nach ISO 261/262 und
-  sagt bei links-, mehrgängigen und kegeligen ab. **Entschieden (Robert, 06.10.2026):** „alle“ —
-  neben metrisch in jedem Maß auch G (zylindrisches Rohrgewinde, ISO 228-1, 55°-Flanken, Gänge je
-  Zoll) sowie UNC und UNF (60°, Gänge je Zoll). **Umfang:** Tabelle der Nennmaße und Gänge je
-  Zoll mit Herkunft (`standards.toml`, Version erhöhen), das Flankenprofil als Parameter der
-  Gewindeform (55° gerundet / 60°), *Eigenes Maß* auch in Zoll (Gänge je Zoll statt Steigung),
-  dieselben Wege wie RM-532: Druckbares Gewinde, Bohrung mit Gewinde, Gegenstück
-  (`counterpart.thread_values_for`), *Schraube erstellen*, *Drehdeckel erzeugen*, Stift für
-  Bohrung (RM-536), Erkennung einer gemessenen Bohrung als Zoll- oder Rohrgewinde mit Rückfrage
-  bei Mehrdeutigkeit (Regel 21). **Einstellung (Robert, 06.10.2026):** In den Einstellungen
-  wählt der Kunde, welche Gewindearten in den Auswahllisten stehen (metrisch, G, UNC, UNF,
-  später die zweite Stufe), Vorgabe alle. Die Wahl ist Darstellung, kein Dokumentzustand: Ein
-  Schritt, der eine ausgeblendete Art trägt, zeigt und rechnet sie weiter, und die Erkennung
-  schlägt nur eingeblendete Arten vor. Zweite Stufe, weil „alle“ auch die heutigen Absagen meint:
-  kegelige Rohrgewinde (R nach ISO 7-1, NPT), Linksgewinde und mehrgängige Gewinde.
-  **Abnahme:** Paar G 1/2 innen und außen greift an beiden Kernen, Kernmaße gegen ISO 228-1,
-  UNC 1/4-20 gegen ASME B1.1; Bereichsnachweis, Tor, Texte in sechs Sprachen, Handbuchabsatz;
-  die zweite Stufe mit eigener Abnahme.
 
