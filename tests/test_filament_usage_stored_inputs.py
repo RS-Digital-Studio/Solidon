@@ -321,7 +321,9 @@ def test_every_reading_of_the_cache_key_reaches_the_fingerprint(
     kinds = tuple(evaluation.nested_references())
 
     def reads(text: str) -> frozenset[str]:
-        return frozenset({"probe"}) if text == "@probe" else frozenset()
+        # Kein @ im Text: Das Projektmaß liest nur der Sammler der Art, nicht
+        # die Suche nach Ausdrücken in den Werten.
+        return frozenset({"probe"}) if text == "probe-text" else frozenset()
 
     monkeypatch.setattr(
         evaluation, "nested_references", lambda *, strict=False: dict.fromkeys(kinds, reads)
@@ -342,9 +344,9 @@ def test_every_reading_of_the_cache_key_reaches_the_fingerprint(
         if entry.kind == "feature" or entry.targets_feature:
             return [feature]
         if entry.kind == "sketch":
-            return ["plane", "@probe"]
+            return ["plane", "probe-text"]
         if entry.kind in kinds:
-            return ["@probe"]
+            return ["probe-text"]
         if entry.reads_scene:
             return [True]
         return []
