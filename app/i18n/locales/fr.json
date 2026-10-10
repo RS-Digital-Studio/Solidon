@@ -620,6 +620,7 @@
   "Bauart": "Montage",
   "Bauform": "Forme",
   "Baum": "Arbre",
+  "Baumspitze": "Pointe d'arbre",
   "Bauraum": "Volume d'impression",
   "Bauraum B × T × H": "Volume d'impression L × P × H",
   "Bauraum und Düsendurchmesser müssen größer als null sein.": "Les dimensions du volume d'impression et le diamètre de la buse doivent être supérieurs à zéro.",
@@ -3116,6 +3117,7 @@
   "Durchmesser der Achse. Sie wird mitgedruckt und nicht eingesteckt.": "Diamètre de l'axe. Il est imprimé avec la pièce, pas inséré.",
   "Durchmesser der Aufweitung": "Diamètre de l'élargissement",
   "Durchmesser der Drehscheibe; die Führung ist um ihren Kragen größer.": "Diamètre du disque rotatif ; le guide est plus grand de sa collerette.",
+  "Durchmesser der Spitzen organischer Bäume. Ab etwa 1,13 mm trägt jede Spitze eine Trennschicht.": "Diamètre des pointes des arbres organiques. À partir d'environ 1,13 mm, chaque pointe porte une couche d'interface.",
   "Durchmesser der Streulöcher im Deckel.": "Diamètre des trous de saupoudrage dans le couvercle.",
   "Durchmesser der Unterseite. Null macht diese Seite zur Spitze.": "Diamètre du dessous. Zéro transforme ce côté en pointe.",
   "Durchmesser der mitgedruckten Scharnierachse.": "Diamètre de l'axe de charnière imprimé avec le récipient.",
@@ -5341,6 +5343,7 @@
   "Mit Senkkopf in einer Senkung, Zylinderkopf in einer Ansenkung und Außengewinde in einem Innengewinde.": "Avec une tête fraisée dans une fraisure, une tête cylindrique dans un lamage et un filetage extérieur dans un filetage intérieur.",
   "Mit Senkkopf schneidet derselbe Schritt jetzt eine 90-Grad-Senkung in die Bohrung und setzt den Kopf bündig hinein.": "Avec une tête fraisée, la même étape taille désormais une fraisure à 90° dans le perçage et y loge la tête à fleur.",
   "Mit Stift": "Avec goupille",
+  "Mit Trennschicht löst sich jede Baumspitze leichter.": "Avec une interface, chaque pointe d'arbre se détache mieux.",
   "Mit Verlauf": "Variable",
   "Mit Zugentlastung wächst hinter der Wand ein tragender Klemmblock, ohne sie bleibt die Bohrung gleich.": "Avec décharge de traction, un bloc de serrage porteur pousse derrière la paroi ; sans elle, le perçage ne change pas.",
   "Mit dem Pinsel über den Körper ziehen — Escape beendet die Sitzung.": "Passez le pinceau sur le corps — Échap termine la séance.",
@@ -8646,8 +8649,5 @@
   "„Öffnen an Fläche“ gilt nur ohne gewählte Öffnungen. Tragen Sie die Fläche unter „Öffnungen“ ein und leeren Sie dieses Feld.": "« Ouvrir sur la face » ne vaut que sans ouvertures choisies. Inscrivez la face sous « Ouvertures » et videz ce champ.",
   "„Übernehmen“ beginnt mit dem Modell ein neues Projekt.": "« Appliquer » commence un nouveau projet avec le modèle.",
   "… gekürzt. Der vollständige Bericht liegt als „bericht.txt“ im abgelegten Ordner — bitte als Anhang beifügen.": "… abrégé. Le rapport complet se trouve dans le dossier enregistré sous « bericht.txt » — merci de le joindre.",
-  "… und {count} weitere.": "… et {count} de plus.",
-  "Baumspitze": "Pointe d'arbre",
-  "Durchmesser der Spitzen organischer Bäume. Ab etwa 1,13 mm trägt jede Spitze eine Trennschicht.": "Diamètre des pointes des arbres organiques. À partir d'environ 1,13 mm, chaque pointe porte une couche d'interface.",
-  "Mit Trennschicht löst sich jede Baumspitze leichter.": "Avec une couche d'interface, chaque pointe d'arbre se détache plus facilement."
+  "… und {count} weitere.": "… et {count} de plus."
 }
