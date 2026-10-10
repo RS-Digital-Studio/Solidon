@@ -21,7 +21,7 @@ from __future__ import annotations
 import bisect
 import math
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from itertools import pairwise
 from typing import Any, Final
 
@@ -440,9 +440,11 @@ def bound_sketch(text: str, chosen: Mapping[tuple[int, str], str]) -> str:
                 added.append(
                     SketchConstraint("distance", (offsets[line], offsets[line] + 1), expression)
                 )
+    # ``replace`` statt Neubau: Die Fassung des Lösers bleibt an der Zeichnung
+    # (RM-541) — gebunden ist sie nicht im Editor geändert.
     return sketch_to_text(
-        Sketch(
-            plane=sketch.plane,
+        replace(
+            sketch,
             elements=(*sketch.elements, centre),
             constraints=(*sketch.constraints, *added),
         )

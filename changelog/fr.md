@@ -57,7 +57,7 @@ dans `website/version.json`.
 - Les grands modèles se chargent nettement plus vite et demandent moins de mémoire, même avec un long historique et sur des ordinateurs de 8 Go.
 - Même dans un long historique, une nouvelle étape ne prend guère plus de temps à calculer que la première.
 - Annuler et rétablir vont plus vite, et la mémoire devenue inutile est libérée aussitôt.
-- Résoudre les recouvrements et exporter en 3MF va nettement plus vite.
+- Réparer et résoudre les recouvrements va jusqu'à quatre fois plus vite sur les gros modèles, et l'export en 3MF nettement plus vite.
 - L'espace de travail s'affiche plus rapidement à l'ouverture de gros fichiers 3MF.
 - Un modèle ajouté est ensuite visible, même s'il se pose à côté d'un modèle sur lequel la vue était zoomée.
 - Dans le catalogue de blocs, *Gérer les blocs* est ouvert tant qu'il n'y a pas encore de bloc personnel.
@@ -128,7 +128,10 @@ dans `website/version.json`.
 - Si un congé borde une paroi, *Appliquer une dépouille* indique avant le calcul qu'il gêne et propose *Supprimer la caractéristique* comme issue.
 - Quand vous découpez une partie d'un corps, les chanfreins, filetages et logements d'écrou des blocs qui s'y trouvaient disparaissent aussi.
 - Dans *Créer un couvercle* et *Créer un couvercle vissé*, une hauteur d'ouverture vide signifie « Arête supérieure », et 0 est la hauteur du plateau. Les anciens projets gardent leur ouverture.
-- Une contrainte d'angle dans une petite esquisse ne renverse plus les lignes.
+- Une esquisse se résout à l'identique sur chaque ordinateur et partout, même en faisant glisser un point, et une contrainte d'angle ne renverse plus les lignes. Les anciens projets restent inchangés.
+- Une esquisse avec de nombreuses formes séparées se résout vite, même avec des centaines de rectangles ou de cercles cotés.
+- Si *Courbure continue* ne peut pas être respectée pendant que vous dessinez, l'éditeur d'esquisse le signale en quelques secondes au lieu de plusieurs minutes.
+- Si deux contraintes se contredisent, l'éditeur d'esquisse les nomme toutes les deux au lieu de réduire une ligne ou un cercle à un point.
 - Un corps se tire en trois clics : *Dessiner* dans la barre du haut (Ctrl+Maj+E), puis coin, coin opposé, hauteur. Vers l'extérieur il se joint, vers l'intérieur il découpe.
 - Pendant le tirage, les dimensions se saisissent au clavier. Un double-clic sur l'étape ouvre ses dimensions, et sous *Type* elle devient un corps de révolution ou un réseau de trous.
 - Depuis l'éditeur d'esquisse, *Terminé* ramène dans la vue, et le clic suivant pose la hauteur. Échap met le contour de côté, Ctrl+Z le rappelle.

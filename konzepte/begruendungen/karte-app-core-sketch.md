@@ -95,7 +95,7 @@ bleibt dadurch abbrechbar, bevor ein Ergebnis in Szene oder Cache erscheint.
   Operation zurück. Vorgegebene Grundformen erzeugen diesen Hinweis nicht.
 
 - **Bei gleich großem Rest nennt der Löser die später gesetzte Bedingung**
-  (`_worst_constraints`, Gleichstand relativ 10⁻⁹): Eine Kette aus drei
+  (`_worst_constraints`, Gleichstand bis `_TOL`): Eine Kette aus drei
   widersprüchlichen Bedingungen teilt den Fehler gleichmäßig, und die Meldung
   nannte sonst nie die, die eben dazukam.
 
@@ -148,11 +148,31 @@ bleibt dadurch abbrechbar, bevor ein Ergebnis in Szene oder Cache erscheint.
   0,2 mm bleiben unter 10⁻⁸ — die Maus zieht in Schritten, und so prüft es
   `tests/test_sketch_edit.py`.
 
-- **Der Zug ist begrenzt** (`DRAG_REACH_TRIES`, `DRAG_SLIDE_TRIES`). Die
-  zweite Stufe beginnt am Stand der ersten; findet auch sie keine Lage, bleibt
-  eine vorher widerspruchsfreie Zeichnung stehen. Ohne Grenze hielt ein Zug
-  über die Reichweite einer bemaßten Kette das Fenster je Mausereignis
-  Sekunden an.
+- **Der Zug ist begrenzt** (`DRAG_REACH_TRIES`, `DRAG_SLIDE_TRIES`). Findet
+  auch die zweite Stufe keine Lage, bleibt eine vorher widerspruchsfreie
+  Zeichnung stehen. Ohne Grenze hielt ein Zug über die Reichweite einer
+  bemaßten Kette das Fenster je Mausereignis Sekunden an. Kehren die
+  gezogenen Punkte ganz zurück, bleibt sie ebenso stehen (RM-541): Das
+  biegsame Vieleck der Grundformen, an der Ecke neben der festen gezogen,
+  stand sonst verbogen da, über `lsmr` um 0,26 mm, über `dogbox` um 10,7 mm.
+
+- **Die zweite Zugstufe beginnt am Stand vor dem Schritt** (RM-541, Review
+  M-1). Die erste sucht einen Zeiger, den es nicht gibt, und endet in einem
+  flachen Tal dort, wohin die Rundung sie trägt. Begann die zweite dort,
+  landeten Langloch und Fünfeck nach zehn Mausschritten je nach Ort bis
+  8,8 mm woanders, und ein Punkt sprang in einem Schritt von einem halben
+  Millimeter um 3,5 mm. Vom Stand davor ist der Weg an jedem Ort derselbe
+  (Versatzsonde des Reviews: 177 Züge, keiner über 10⁻⁹ mm). Kurze Ketten
+  rutschen so in vier Auswertungen. Eine lange Kette über `lsmr` steht
+  gestreckt singulär: Mit fünfzig Auswertungen folgte sie ab siebzehn
+  Gliedern dem Zeiger jenseits der Reichweite auch in Mausschritten nicht
+  mehr, wo 0.5.3 sie folgen ließ (Nachprüfung M-C). Mit hundert folgt sie bis
+  hundert Glieder auf Hundertstel Grad, rund hundert Auswertungen je
+  Mausereignis. Den Sprung über die Reichweite ließ auch 0.5.3 nicht folgen.
+  Der Vorschlag der Nachprüfung, die zweite Stufe danach einmal ab dem Ende
+  der ersten zu wiederholen, half in keinem gemessenen Fall (Ketten aus 17
+  bis 100 Gliedern, Mausschritte und Sprung) und verdoppelte die Arbeit des
+  Sprungs auf 225 Auswertungen; er entfiel.
 
 - **Feste Punkte kosten die Zerlegung nichts** (`_matrix_rank`). Eine Zeile
   mit genau einem Eintrag trägt eins zum Rang bei und nimmt ihre Spalte mit;
@@ -171,6 +191,162 @@ bleibt dadurch abbrechbar, bevor ein Ergebnis in Szene oder Cache erscheint.
   siebte Zeile über sechs Koordinaten und der Löser meldete „legt fest, was
   schon festliegt". Gilt sie dort nicht, bleibt sie, und der Widerspruch wird
   gemeldet.
+
+- **Je zusammenhängendem Teil, in Verschiebungen** (RM-541, 09.10.2026).
+  `least_squares` mit `method="trf"` beginnt mit dem Vertrauensradius ‖x₀‖
+  und misst `xtol` an ‖x‖. Mit Koordinaten als Unbekannten war das die
+  Entfernung der Zeichnung vom Nullpunkt: Ein Winkel 45° kam unter macOS Intel
+  als 135° an (Lauf 37495714708), am Windows-Stand verschob dieselbe Skizze
+  tausend Millimeter daneben ihre Punkte um bis zu 292 mm, und mit `lsmr`
+  endeten Läufe in einem Widerspruch, den es nicht gab. Der erste Ansatz —
+  Verschiebungen ab null, scipy beginnt dann mit einem Millimeter — kostete
+  die §31-Kette 16 statt 8 Auswertungen, ließ die zweite Zugstufe einer
+  Kette nicht mehr rutschen und warf Linien im Maßstab 1:100 um mehr als das
+  Fünffache ihrer Länge. Ein Radius aus der Streuung aller Punkte
+  (‖x₀ − Schwerpunkt‖) hielt Budget und Zug, machte aber jeden anderen Teil
+  der Zeichnung zum neuen Nullpunkt: Ein Winkelpaar neben einer bemaßten,
+  gelösten Kette aus zwanzig Linien kippte in 11 von 60 Fällen, weil `lsmr`
+  bei einer einzelnen gespannten Bedingung einen Zweierraum aus Rauschen
+  bildet. Deshalb: Punkte, die eine Gleichung verbindet, sind ein Teil
+  (`_parts`), jeder rechnet für sich (`_solve_part`), `lsmr` und der Zug mit
+  der Größe des Teils als `x_scale`, die dichte Rechnung höchstens mit
+  `DENSE_FIRST_STEP` — an zwei Splines mit gleicher Krümmung setzte die
+  Streuung den ersten Schritt so groß wie die Zeichnung, und sie trafen sich
+  mit entgegengesetzter Tangente. Ein Teil, der schon bis `_TOL` gilt, bleibt
+  ohne Lauf stehen: Mit der Genauigkeit 10⁻¹⁴ rechnete er sonst im
+  Rundungsrauschen bis zu 49 Auswertungen nach, zweihundert gelöste Kreise
+  dreitausend je Lösung.
+
+- **Die Größe des Teils** (`_part_size`, Review H-1) ist die Streuung aller
+  Punkte, die seine Gleichungen lesen, gehaltene eingeschlossen, mindestens
+  sein größter Längenrest. Nur über die freien Punkte gemessen war sie für
+  ein Gelenk aus zwei gedeckten Punkten das Rundungsrauschen der Deckung;
+  lagen beide ein ULP auseinander, hörte der Löser nach der ersten
+  Auswertung auf, und der gezogene Punkt blieb 0,27 mm hinter dem Zeiger.
+  Der frühere Rückfall „Streuung null, also eins" fing nur den bitgleichen
+  Fall. Richtungsreste (`_TURNING_KINDS`) zählen nicht als Länge: Ein Sinus
+  bis eins machte zwei Linien von einem Zehntelmillimeter zu einem Teil von
+  einem halben, und der erste Schritt sprang über die nächste Lösung.
+
+- **Im Zug rechnet ein kleiner Teil über `dogbox`** (RM-541). Im Zug steht
+  der gezogene Punkt fest, und oft bleibt genau eine gespannte Gleichung
+  übrig — zwei Linien mit *parallel*, *senkrecht*, *gleich lang* oder einem
+  Winkel. Über `lsmr` war der Schritt dann Rauschen: Nach zehn Mausschritten
+  standen die Linien tausend und hunderttausend Millimeter daneben 3,7 bis
+  38 mm woanders (mit dem Löser von 0.5.3 bis 440 m), jeder Schritt nach
+  allen 25 Auswertungen. Dichtes TRF hilft nicht: Hat ein Teil weniger
+  Gleichungen als Unbekannte, rechnet scipy jeden Schritt auf den Rand des
+  Vertrauensbereichs hoch, und ein Zugschritt am Rechteck brauchte alle 25
+  statt 2 Auswertungen. `dogbox` nimmt den kürzesten Gauß-Newton-Schritt
+  (`lstsq`), solange er in die Box aus der Streuung passt: höchstens
+  1,5·10⁻¹⁰ mm Unterschied an jedem Ort, zwei bis fünf Auswertungen je
+  Schritt, ein Zugschritt am Rechteck 1,9 statt 5,0 ms (unter Last, im
+  Wechsel gemessen). Die Zähigkeit gezogener Punkte formt dort nur die Box:
+  In gewichteten Veränderlichen fand die zweite Stufe an der gestreckten
+  Kette aus fünf Linien in fünfzig Auswertungen keine Lage, so in vier.
+
+- **Auch beim Lösen rechnet ein kleiner Teil über `dogbox`, wenn er am Start
+  vollen Rang hat** (RM-541, nach Review 1). Seit je Teil gerechnet wird,
+  lief jeder kleine Teil allein über dichtes TRF mit Schritten am Rand: ein
+  Kreis mit Durchmesser 57 Auswertungen, zweihundert getrennte Kreise
+  2,8 Sekunden statt der 100 ms aus §31; mit `dogbox` höchstens fünf je
+  Kreis. Über den Korpus diskret gleich, unterbestimmte Lösungen 46-mal
+  näher und 45-mal weiter an der Zeichnung, höchstens 3,6 % mehr Bewegung.
+  Mit doppelten Bedingungen bleibt TRF: Ihre Singulärwerte liegen im
+  Rundungsrauschen (3·10⁻¹⁷ bis 8·10⁻¹⁷), `lstsq` schneidet bei der
+  Maschinengenauigkeit ab, und ob es das Rauschen als Richtung nahm, war ein
+  Münzwurf je Ort — einmal rannte der Lauf davon und die Meldung nannte
+  einen Widerspruch statt der Doppelung. Eine Tikhonov-Zähigkeit μ·z
+  (μ = 10⁻⁹ bis 10⁻⁶) machte es schlechter: vier bis acht statt drei
+  ortsabhängige Meldungen der Versatzsonde.
+
+- **Ein Lauf ins Unendliche ist keine Lösung** (`FARTHEST_MOVE`). Eine Gerade
+  und ein Bogen mit gleicher Krümmung erfüllen das nur mit unendlichem
+  Radius; der Löser kroch dorthin, nach sechshundert Auswertungen lag der
+  Rest bei 240 km Radius unter `_TOL`, und ob das als Widerspruch galt,
+  entschied die letzte Stelle des Rangs. Was weiter als hundert Meter liefe,
+  bleibt stehen, und die Meldung nennt die zwei Bedingungen. Seit Review 1
+  hält `_watchdog` den Lauf schon an, wenn er die hundert Meter überschreitet
+  oder sein Rest sich in `STALL_WINDOW` Auswertungen nicht halbiert: Ein
+  Krümmungswiderspruch am Ende einer Kette aus vierzig Linien kroch sonst bis
+  zur Vorgabe von scipy, 16 600 Auswertungen und 143 Sekunden; jetzt 220.
+
+- **Gerechnet wird um die Mitte der Zeichnung** (`solve_sketch` um
+  `_solve_here`, RM-541). Die Ableitungen rechnen aus Differenzen von
+  Koordinaten; hunderttausend Millimeter neben dem Nullpunkt rauschen sie um
+  10⁻¹², und an doppelten Bedingungen trug das den Lauf davon. Zurück rückt
+  nur, was sich bewegt hat: Über die Mitte und zurück wurde aus 0,07
+  0,06999999999999999, und der Editor schriebe Ecken zurück, die niemand
+  bewegt hat. Die Fassung 1 rechnet ohne, sonst nicht wie gespeichert.
+
+- **Getrennte Blöcke werden einzeln zerlegt** (`_blockwise_rank`). Die
+  Zerlegung des Rests im Ganzen wuchs mit der dritten Potenz: hundertfünfzig
+  Rechtecke kosteten rund zehn Sekunden je Lösung, auch schon gelöst, seit
+  0.5.0. Gezählt wird mit der Schranke der ganzen Matrix; je Block eigene
+  Schranken zählten an zufälligen Matrizen in vier von sechs Fällen anders.
+
+- **Welche zwei eine Meldung nennt, hängt kaum noch am Abbruchpunkt**
+  (RM-541, Nachprüfung G-B). Ein Lauf auf einen Widerspruch endet in einem
+  flachen Tal, und dort liest das Paar die Reste ab. Gleich groß heißt
+  höchstens `_TOL` auseinander: Zwei Reste, die am wahren Minimum gleich
+  sind, lagen am Abbruch 4·10⁻⁸ auseinander, je nach Ort einmal so, einmal so
+  herum. Die Folge im Paar kommt aus dem Setzen, die später gesetzte vorn
+  (`_conflict_pair`). Ist der zweitgrößte Rest erfüllt, war er Rauschen
+  zwischen 10⁻⁸ und 10⁻⁴; Partner ist dann die Bedingung mit den meisten
+  gemeinsamen Zielpunkten. Beide Regeln tragen: In der Breitensonde wanderten
+  ohne die Folge 8, ohne den Partner 6, ohne beide 10 Paare statt 4
+  (`test_a_contradiction_names_the_later_constraint_and_its_true_partner`). Bei einer Doppelung nennt der Löser die am
+  stärksten am Nullraum beteiligten Bedingungen; nach der Nummer allein kam
+  ein Block mit Anteil um 10⁻⁹ ins Paar, je nach Ort über oder unter
+  `_NULL_SHARE`. **Was bleibt**, sind Widersprüche mit drei und mehr
+  Beteiligten, deren Tal je Ort woanders endet: In der Breitensonde der
+  Nachprüfung nannten 4 von 195 unlösbaren Zufallsskizzen an einem anderen
+  Ort oder unter anderem Rauschen ein anderes Paar (vor H-A 19 von 173), im
+  Wächter `test_random_sketches_say_the_same_wherever_and_however_they_are_rounded`
+  keine von 50 (vor H-A 3 von 44). Ob eine Skizze lösbar ist, hängt an
+  keinem Ort.
+
+- **Gelöst mit einer Linie oder einem Kreis auf einem Punkt ist nicht
+  gelöst** (`_spans`, `_shrunk`, `SHRUNK_BELOW`, Nachprüfung H-A). Eine
+  Richtung rechnet aus der Linie, und `_unit` klemmt deren Länge auf
+  `EPS_GEOM`: Ist die Linie null lang, gilt *waagerecht*, *parallel* oder
+  ein Winkel leer, und ein Widerspruch wie *waagerecht* neben 170° zu einer
+  Waagerechten verschwindet mit ihr. `dogbox` fand diese Lösung als
+  kürzesten Schritt, und die Meldung hieß „gelöst“; 0.5.3 meldete dort den
+  Widerspruch. Deshalb eine Wegfolge: `dogbox`, dichtes TRF, TRF über `lsmr`;
+  angenommen wird der erste Lauf, der löst, ohne dass eine Linie mit
+  Richtungsbedingung oder ein Kreis unter einen Mikrometer fällt. Die Grenze
+  ist das Tausendfache von `_TOL`, denn an einer Linie der Länge L hält eine
+  Richtung nur auf `_TOL`/L: An 2·10⁻⁶ mm erfüllte *waagerecht* eine um 22°
+  schräge Linie. Schrumpft ein Element in jedem Weg, rechnen die Wege noch
+  einmal mit seiner gezeichneten Länge gehalten — eine Symmetrieachse, die
+  jeder Weg auf null zog, weil das billiger war, als den gespiegelten Punkt
+  zu bewegen, findet so ihre Lösung an jedem Ort gleich. Schrumpft es auch
+  dann, nennt `_collapse_pair` die Bedingungen an diesem Element. Über die
+  Sonden der Nachprüfung: alle acht Fälle des Befunds gelöst oder an jedem
+  Ort gleich gemeldet, in der Nahsonde (1000 gewöhnlich gezeichnete
+  Skizzen) keine Absage einer Skizze, die 0.5.3 gesund und ortsfest löst,
+  und nichts mehr entartet gelöst. Die neuen Absagen gegenüber 0.5.3 — 7 in
+  der Nah-, 30 in der Breitensonde — waren dort entartete „Lösungen“, bis
+  auf eine, die 0.5.3 nur am Nullpunkt löste und an jedem anderen Ort ablehnte.
+
+- **Gespeicherte Skizzen rechnen wie gespeichert** (`Sketch.solver`,
+  Format 50). Bestimmte und schon gelöste Skizzen landen in beiden Fassungen
+  am selben Ort (über 742 Eingaben aus den Skizzentests höchstens 3·10⁻¹³ mm),
+  unterbestimmte nicht: Gespeichert sind die gezeichneten Punkte, und eine
+  schief gezeichnete Platte wäre nach dem Update 30 mm³ größer oder kleiner.
+  Die Migration 49 → 50 schreibt `"solver": 1` in jeden Skizzentext, der
+  rechnet über `_solve_in_coordinates` wie 0.5.0 bis 0.5.3 — nicht wie der
+  unveröffentlichte dichte Stand dazwischen, denn kein Kunde hat mit ihm
+  gerechnet. Der Editor zeigt eine ältere Skizze, wie sie rechnet, und
+  wechselt bei der ersten Änderung oder dem ersten Zug auf die heutige
+  Fassung; erst wer übernimmt, ändert den Schritt. Gewechselt wird von der
+  Lage aus, die zu sehen war (`_from_shown`, je unverändertem Element, Review
+  M-2): Ab den gezeichneten Punkten sprang ein Winkelpaar, das die alte
+  Fassung weit von seiner Zeichnung gelöst hatte, beim Setzen einer
+  Bedingung an einer anderen Linie um 5,9 mm. Das Binden von Projektmaßen
+  behält die Fassung, wie jeder andere Umschreiber (Review G-1). Die Fassung steht im
+  Cache-Schlüssel jeder Skizze (`evaluate._with_nested_context`).
 
 ## Formen, Ecken und Kurven
 

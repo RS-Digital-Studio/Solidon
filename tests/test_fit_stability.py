@@ -1300,3 +1300,108 @@ def test_the_circle_fit_reads_python_numbers_and_answers_bit_for_bit() -> None:
         found = features_module._fit_circle(points.copy())
         assert np.array_equal(found[0], expected[0])
         assert found[1] == expected[1]
+
+
+def _sharpened_axis_before(
+    points: np.ndarray, axis: np.ndarray
+) -> tuple[np.ndarray, np.ndarray, float, float] | None:
+    """Die Achsnachführung, wie sie bis zum 09.10.2026 je Einpassung den Schwerpunkt neu
+    rechnete und ``x*x``/``y*y`` zweimal bildete (RM-568) — die Vorgabe."""
+
+    def kasa(x: np.ndarray, y: np.ndarray) -> tuple[float, float, float] | None:
+        z = -(x * x + y * y)
+        sxx, sxy, syy = float((x * x).sum()), float((x * y).sum()), float((y * y).sum())
+        sx, sy, size = float(x.sum()), float(y.sum()), float(len(x))
+        bx, by, bz = float((x * z).sum()), float((y * z).sum()), float(z.sum())
+        determinant = features_module._determinant3
+        whole = determinant(((sxx, sxy, sx), (sxy, syy, sy), (sx, sy, size)))
+        if abs(whole) <= units.EPS_GEOM * units.EPS_GEOM:
+            return None
+        d = determinant(((bx, sxy, sx), (by, syy, sy), (bz, sy, size))) / whole
+        e = determinant(((sxx, bx, sx), (sxy, by, sy), (sx, bz, size))) / whole
+        f = determinant(((sxx, sxy, bx), (sxy, syy, by), (sx, sy, bz))) / whole
+        centre_x, centre_y = -d / 2.0, -e / 2.0
+        squared = centre_x * centre_x + centre_y * centre_y - f
+        return None if squared <= 0.0 else (centre_x, centre_y, math.sqrt(squared))
+
+    def across(direction: np.ndarray) -> tuple[np.ndarray, float, np.ndarray] | None:
+        first, second = features_module._across_pair(direction)
+        origin = points.mean(axis=0)
+        relative = points - origin
+        x = (relative * first).sum(axis=1)
+        y = (relative * second).sum(axis=1)
+        circle = kasa(x, y)
+        if circle is None:
+            return None
+        centre_x, centre_y, radius = circle
+        dx, dy = x - centre_x, y - centre_y
+        centre = origin + centre_x * first + centre_y * second
+        return centre, radius, np.abs(np.sqrt(dx * dx + dy * dy) - radius)
+
+    tilt = features_module._SHARPEN_TILT
+    current = np.asarray(axis, dtype=float)
+    current = current / math.sqrt(float((current * current).sum()))
+    offsets = points - points.mean(axis=0)
+    reach = math.sqrt(float((offsets * offsets).sum(axis=1).max()))
+    for _step in range(features_module._SHARPEN_STEPS):
+        base = across(current)
+        if base is None:
+            return None
+        first, second = features_module._across_pair(current)
+        columns = []
+        for direction in (first, second):
+            tilted = current + tilt * direction
+            tilted = tilted / math.sqrt(float((tilted * tilted).sum()))
+            moved = across(tilted)
+            if moved is None:
+                return None
+            columns.append((moved[2] - base[2]) / tilt)
+        one, two = columns
+        a11, a12, a22 = float((one * one).sum()), float((one * two).sum()), float((two * two).sum())
+        b1, b2 = -float((one * base[2]).sum()), -float((two * base[2]).sum())
+        determinant = a11 * a22 - a12 * a12
+        if determinant <= units.EPS_GEOM * units.EPS_GEOM * max(a11 * a22, units.EPS_GEOM):
+            break
+        u = (b1 * a22 - b2 * a12) / determinant
+        v = (a11 * b2 - a12 * b1) / determinant
+        current = current + u * first + v * second
+        current = current / math.sqrt(float((current * current).sum()))
+        if max(abs(u), abs(v)) * reach <= units.EPS_GEOM:
+            break
+    final = across(current)
+    if final is None:
+        return None
+    centre, radius, distances = final
+    return current, centre, radius, float(distances.max())
+
+
+def test_the_sharpened_axis_answers_bit_for_bit_like_before() -> None:
+    """Schwerpunkt und Quadrate einmal statt je Einpassung — dieselben Bits (RM-568).
+
+    An verrauschten Zylinderecken in schräger Lage, fern vom Ursprung, mit
+    wenigen und vielen Punkten und mit einem verkippten Start; dazu eine
+    Gerade, an der kein Kreis bestimmt ist.
+    """
+    source = np.random.default_rng(91020268)
+    cases = []
+    for count, noise, offset in ((6, 0.0, 0.0), (40, 1e-4, 0.0), (900, 2e-3, 3.0e4)):
+        angles = source.uniform(0.0, source.uniform(0.4, 2.0 * math.pi), count)
+        heights = source.uniform(-5.0, 5.0, count)
+        radius = source.uniform(0.5, 40.0)
+        local = np.column_stack((radius * np.cos(angles), radius * np.sin(angles), heights))
+        turn = trimesh.transformations.random_rotation_matrix(source.uniform(size=3))[:3, :3]
+        points = local @ turn.T + source.normal(scale=noise, size=local.shape) + offset
+        axis = turn[:, 2] + source.normal(scale=0.01, size=3)
+        cases.append((points, axis))
+    cases.append(
+        (np.column_stack((np.linspace(0.0, 1.0, 20), np.zeros(20), np.zeros(20))), (0.0, 0.0, 1.0))
+    )
+    for points, axis in cases:
+        expected = _sharpened_axis_before(points.copy(), np.asarray(axis, dtype=float))
+        found = features_module._sharpened_axis(points.copy(), np.asarray(axis, dtype=float))
+        if expected is None:
+            assert found is None
+            continue
+        assert found is not None
+        for got, want in zip(found, expected, strict=True):
+            assert np.asarray(got).tobytes() == np.asarray(want).tobytes()

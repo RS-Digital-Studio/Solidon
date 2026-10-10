@@ -26,7 +26,7 @@ from app.i18n import _
 _log = get_logger(__name__)
 
 #: Aktuelle Version von ``project.json``.
-FORMAT_VERSION: Final = 50
+FORMAT_VERSION: Final = 51
 
 #: Unter diesem Schlüssel steht während der Kette, mit welcher Version die Datei
 #: gespeichert wurde — für einen Schritt, der davon abhängt, ob das Projekt mit
@@ -1461,6 +1461,74 @@ def _keep_gestures_as_they_were(data: dict[str, Any]) -> dict[str, Any]:
     return data
 
 
+#: Die Schritte, die bis Format 49 eine gezeichnete Skizze lesen, mit ihren Feldern.
+#:
+#: Eine feste Liste und keine Abfrage des Registers: Eine Migration beschreibt
+#: die Dateien, die es gab, nicht die Operationen, die es heute gibt.
+_DRAWN_SKETCH_FIELDS: Final = {
+    "create_profile_clamp_liner": ("counter_sketch", "outer_sketch"),
+    "create_profile_clamp_set": ("counter_sketch",),
+    "create_profile_clamp_shell": ("seat_sketch",),
+    "create_seal": ("path_sketch",),
+    "create_seal_gasket": ("path_sketch",),
+    "field_cut": ("region_sketch", "exclusion_sketch"),
+    "insert_profile_clamp_liner": ("counter_sketch", "outer_sketch"),
+    "insert_profile_clamp_shell": ("seat_sketch",),
+    "insert_seal_gasket": ("path_sketch",),
+    "insert_seal_groove": ("path_sketch",),
+    "replace_profile_liners": ("counter_sketch",),
+    "sketch_extrude": ("sketch",),
+    "sketch_join": ("sketch",),
+    "sketch_loft": ("sketch", "top_sketch"),
+    "sketch_loft_cut": ("sketch", "top_sketch"),
+    "sketch_pocket": ("sketch",),
+    "sketch_revolve": ("sketch",),
+    "sketch_revolve_cut": ("sketch",),
+    "sketch_sweep": ("sketch", "path_sketch"),
+    "sketch_sweep_cut": ("sketch", "path_sketch"),
+}
+
+
+def _keep_sketch_solutions_as_they_were(data: dict[str, Any]) -> dict[str, Any]:
+    """49 → 50: Eine gezeichnete Skizze aus einer älteren Datei rechnet wie gespeichert.
+
+    Seit RM-541 rechnet der Skizzenlöser je zusammenhängendem Teil in
+    Verschiebungen gegen den Ausgang; bis dahin rechnete er in Koordinaten,
+    und sein erster Schritt hing an der Entfernung der Zeichnung vom Nullpunkt.
+    Eine bestimmte Skizze landet in beiden Fassungen am selben Ort, eine
+    unterbestimmte nicht: Gespeichert sind die gezeichneten Punkte, gelöst wird
+    beim Öffnen, und eine schief gezeichnete Platte wäre nach dem Update um
+    Zehntelmillimeter anders.
+
+    Jeder Skizzentext eines gespeicherten Schritts — auch in den Fassungen
+    ``before`` und ``after`` jeder Änderung — bekommt deshalb ``"solver": 1``
+    (``types.SKETCH_SOLVER``); ein Text mit eigener Angabe bleibt, wie er ist,
+    ein unlesbarer auch (die Operation meldet ihn selbst). Wer die Skizze im
+    Editor ändert, rechnet danach wie heute. Festgehalten an
+    ``tests/data/projects/sketch_solver_v49.p3d``, geschrieben vom Stand davor.
+    """
+    for operation in _saved_operations(data):
+        if not isinstance(operation, dict):
+            continue
+        fields = _DRAWN_SKETCH_FIELDS.get(str(operation.get("op")), ())
+        params = operation.get("params")
+        if not fields or not isinstance(params, dict):
+            continue
+        for name in fields:
+            text = params.get(name)
+            if not isinstance(text, str) or not text.strip():
+                continue
+            try:
+                payload = json.loads(text)
+            except json.JSONDecodeError, RecursionError:
+                continue
+            if not isinstance(payload, dict) or "solver" in payload:
+                continue
+            payload["solver"] = 1
+            params[name] = json.dumps(payload, ensure_ascii=False)
+    return data
+
+
 def _keep_split_splinters_as_they_were(data: dict[str, Any]) -> dict[str, Any]:
     """Vor RM-639: *In Einzelteile aufteilen* verwirft in älteren Dateien, was es damals verwarf.
 
@@ -1535,7 +1603,8 @@ MIGRATIONS: Final[tuple[Step, ...]] = (
     Step(from_version=46, to_version=47, apply=_empty_the_top_edge),
     Step(from_version=47, to_version=48, apply=_keep_bore_pins_plain),
     Step(from_version=48, to_version=49, apply=_keep_gestures_as_they_were),
-    Step(from_version=49, to_version=50, apply=_keep_split_splinters_as_they_were),
+    Step(from_version=49, to_version=50, apply=_keep_sketch_solutions_as_they_were),
+    Step(from_version=50, to_version=51, apply=_keep_split_splinters_as_they_were),
 )
 
 

@@ -56,7 +56,7 @@ it into `website/version.json`.
 - Large models load noticeably faster and need less memory, even with a long history and on computers with 8 GB.
 - Even in a long history, a new step takes hardly longer to calculate than the first.
 - Undo and redo are faster, and memory that is no longer needed is freed right away.
-- Resolving overlaps and exporting as 3MF are considerably faster.
+- Repairing and resolving overlaps are up to four times as fast on large models, and exporting as 3MF is considerably faster.
 - The workspace appears faster when opening large 3MF files.
 - An added model is in view afterwards, even when it lands next to a model you zoomed in on.
 - In the part catalogue, *Manage parts* is open as long as there is no part of your own yet.
@@ -127,7 +127,10 @@ it into `website/version.json`.
 - If a fillet sits next to a wall, *Apply draft angle* says before calculating that it is in the way and names *Remove feature* as the way out.
 - When you cut away part of a body, chamfers, threads and nut pockets of parts that lay inside it go too.
 - In *Create lid* and *Create screw lid*, an empty field for the opening height means “Top edge”, and 0 is the height of the bed. Older projects keep their opening.
-- An angle constraint in a small sketch no longer flips the lines over.
+- A sketch solves the same on every computer and in every position, also while dragging, and an angle constraint no longer flips the lines over. Older projects calculate as saved.
+- A sketch with many separate shapes solves quickly, even with hundreds of dimensioned rectangles or circles.
+- If *Curvature continuous* cannot be met while you draw, the sketch editor says so within seconds instead of minutes.
+- If two constraints contradict each other, the sketch editor names both instead of shrinking a line or circle to a point.
 - A body takes three clicks: *Draw* in the top toolbar (Ctrl+Shift+E), then corner, opposite corner, height. Outwards it joins on, inwards it cuts.
 - While pulling up, you can type the dimensions. A double-click on the step opens its dimensions, and under *Kind* it becomes a revolved body or a hole pattern without redrawing.
 - From the sketch editor, *Done* leads back into the view, and the next click sets the height. Escape lays the outline aside, Ctrl+Z brings it back.
