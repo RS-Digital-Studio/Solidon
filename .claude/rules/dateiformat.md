@@ -355,15 +355,15 @@ Herstellers, Solidon schreibt darüber nur die Abweichung.
   `support_material_auto = 1` bei eingeschalteten Stützen, der Rückzug auch
   als `filament_retract_*`, im Konsolenlauf `binary_gcode = 0` (die 3MF
   bleibt binär). Ohne Drucker des Bündels bleibt
-  Solidons voller Satz samt Maschine und `filament_type`, und
+  Solidons voller Satz samt Maschine, `filament_type` der ersten Spule und
+  Zeitschätzung (`_prusa_time_estimate`, `marlin`, nie `ignore`), und
   `slicer.printer_unknown` sagt, dass Bettvermessung und Spüllinie fehlen. Was
   keine der drei Ketten nennt, liest die Grundlage aus PrusaSlicers
-  eingebauten Vorgaben (`PRUSA_PROGRAM_DEFAULTS`, gemessen mit `--save`).
+  eingebauten Vorgaben (`PRUSA_PROGRAM_DEFAULTS`).
 - **Ein Prusa-Bündelabschnitt wird am Namen erkannt, nicht am Pfad**
-  (`slicer_profiles.identity`; `PrusaResearch.ini` trägt über neuntausend
-  Profile) — Auswahlen über Profile nehmen diese Kennung. Den gelesenen
-  Bestand hält `slicer_profiles._prusa_store`, geprüft an Größe und
-  Zeitstempel jeder Datei.
+  (`slicer_profiles.identity`) — Auswahlen über Profile nehmen diese
+  Kennung. Den gelesenen Bestand hält `slicer_profiles._prusa_store`, geprüft
+  an Größe und Zeitstempel jeder Datei.
 - **Bei PrusaSlicer erst der Hersteller, dann Liste und Bedingung**
   (`slicer_profiles._prusa_fits`, wie PrusaSlicers
   `is_compatible_with_printer`): Ein Systemprofil passt nur zum Drucker

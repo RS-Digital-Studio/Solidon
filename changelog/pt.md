@@ -97,6 +97,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - No diálogo de impressão, impressora, filamentos e qualidade ficam totalmente visíveis também com letra ampliada. As legendas longas passam para a linha seguinte.
 - O relatório de verificação calcula mais depressa e precisa de menos memória.
 - No Linux com Flatpak, o Solidon indica agora que o slicer encerrou inesperadamente, em vez de dizer apenas que não foi criado nenhum ficheiro.
+- Também com impressoras que o PrusaSlicer ou o SuperSlicer não conhecem, ambos calculam o tempo de impressão com as acelerações entregues, e o ficheiro indica o material da bobina.
 - Mesmo com o computador em plena carga, o Solidon indica o motivo real ao parar um slicer, em vez de um tempo esgotado. Um ficheiro de impressão terminado é aproveitado.
 
 ### Roscas, furos e peças normalizadas
@@ -106,7 +107,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Parafusos, porcas e anilhas existem segundo ISO de M1,6 a M64. Para outros tamanhos, *Medida própria* deriva as medidas dos tamanhos vizinhos e indica-o.
 - Com *Ajustado ao furo*, *Pino para furo* constrói a contrapeça: uma cabeça escareada à face para um escareamento, uma rosca externa do mesmo tamanho e passo para uma interna.
 - Numa rosca interna impressa, a seleção oferece diretamente *Pino para furo*.
-- Se num furo estiver uma peça separada, como um pino, as ações no furo dizem-no e oferecem *Dividir em peças soltas*. Até agora, o pino fundia-se em silêncio com a placa.
+- Se uma peça separada estiver numa cavidade como um furo, um furo oblongo, um escareamento ou uma rosca, mesmo justa ou muito saliente, as ações dizem-no. Até agora era fundida ou cortada.
 - Novo: o *Perno roscado*, uma barra roscada ou um perno sem cabeça, chanfrado nas duas pontas, com a mesma rosca imprimível do parafuso e da porca.
 - Também em furos de blocos como o furo de parafuso, a bucha de inserção a quente ou o alojamento de porca, *Pino para furo* cria o pino adequado, e avisa se o furo não está no corpo.
 - Colocado à mão numa face, o alojamento de porca corta a sua bolsa no material. Até agora a bolsa ficava por cima e só o furo do parafuso era furado.
@@ -114,7 +115,6 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Colocado por baixo, o alojamento de porca tem a bolsa sob a face e a ranhura desce até ela. Até agora a bolsa ficava meio por cima, com o parafuso na face.
 - Se o furo de um bloco não atravessa a peça, chama-se agora cego. Até agora chamava-se passante.
 - Se a parede for mais espessa do que o indicado em *Passa-cabos* ou *Espigão para mangueira*, o passo diz isso e abre a espessura de parede. Até agora a passagem acabava sem aviso no material.
-- Se houver uma peça separada num escareamento, num furo oblongo, numa sede, numa garganta ou numa rosca, as ações dizem-no. Até agora era cortada ou fundida.
 
 ### Blocos
 
@@ -150,6 +150,8 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Como lugar da cópia, *Duplicar característica* propõe uma largura e meia ao lado do original, com uma parede entre ambas e nunca ao longo do seu eixo.
 - Num escareamento, *Rodar característica* propõe o maior ângulo com que continua a sê-lo, e avisa quando uma rotação só repõe a característica sobre si própria.
 - Se uma ação atingisse uma peça separada junto à característica, ou uma característica colocada tocasse outro material só numa linha, o Solidon diz isso em vez de danificar o corpo.
+- Se uma peça separada atrapalha uma ação sobre uma característica, *Dividir em peças soltas e tentar de novo* separa-a e executa a ação. Ctrl+Z desfaz ambas.
+- Ao dividir em peças soltas ficam todas as peças imprimíveis, também pinos e anilhas junto a uma placa grande. Só caem pequenas superfícies abertas e migalhas que a impressora não reproduz.
 
 ### Gerar com IA
 

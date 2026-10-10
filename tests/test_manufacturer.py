@@ -3414,6 +3414,32 @@ def test_prusa_writes_flex_and_reports_its_missing_filament(
     )
 
 
+def test_prusas_chain_without_its_filament_names_the_material_of_the_spool(
+    prusa_bundle: Path,
+) -> None:
+    """Drucker und Prozess aus dem Bündel, das Filament nicht: Die erste Spule
+    fährt den Satz, und ihre Materialart geht mit (RM-191).
+
+    Ohne Filament des Bestands schreibt Solidon die Materialwerte selbst, und
+    zwar die der Spule. Darüber stand bis dahin die Art des Projekts: eine
+    PETG-Spule mit den Temperaturen von PETG, aber als ``filament_type = PLA``.
+    """
+    profile = _mk4s()
+    setup = replace(_prusa_setup(prusa_bundle), base_filament="")
+    settings = manufacturer.base_settings(profile, "standard", setup).settings
+    spool = MaterialSlot(index=0, name="PETG", material_type="PETG")
+
+    written, _expected = handover.prusa_values(settings, profile, setup, (spool,), console=True)
+
+    assert written["print_settings_id"] == "0.20mm SPEED @MK4S HF0.4", "der Weg über das Bündel"
+    assert "filament_settings_id" not in written
+    assert written["filament_type"] == "PETG"
+    petg = print_settings.resolve(profiles.make_profile("prusa-mk4s", "petg"))
+    assert written["temperature"] == f"{petg.temperature.nozzle:g}", "die Werte derselben Spule"
+    alone, _expected = handover.prusa_values(settings, profile, setup, console=True)
+    assert alone["filament_type"] == "PLA", "ohne Spule das Material des Projekts"
+
+
 def test_prusa_keeps_a_flexible_filaments_start_code(prusa_bundle: Path) -> None:
     """Die richtige Vorwahl übernimmt die eigene Startsequenz des Filaments."""
     from app.core.export import slicer_profiles

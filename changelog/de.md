@@ -122,6 +122,7 @@ Nutzen da und sonst nichts.
 - Im Druckdialog bleiben Drucker, Filamente und Qualität auch bei vergrößerter Schrift ganz sichtbar. Lange Beschriftungen brechen dafür um.
 - Der Prüfbericht rechnet schneller und braucht weniger Arbeitsspeicher.
 - Unter Linux mit Flatpak meldet Solidon einen Absturz des Slicers jetzt als Absturz, statt nur zu sagen, dass keine Druckdatei entstand.
+- Auch bei Druckern, die PrusaSlicer oder SuperSlicer nicht selbst kennen, rechnen beide die Druckzeit mit den übergebenen Beschleunigungen, und die Datei nennt das Material der Spule.
 - Auch auf einem voll ausgelasteten Rechner nennt Solidon nach dem Anhalten eines Slicers den wirklichen Grund statt einer Zeitüberschreitung. Eine fertige Druckdatei wird übernommen.
 
 ### Gewinde, Bohrungen und Normteile
@@ -131,7 +132,7 @@ Nutzen da und sonst nichts.
 - Schrauben, Muttern und Scheiben gibt es nach ISO von M1,6 bis M64. Für andere Größen leitet *Eigenes Maß* die Maße aus den Nachbargrößen ab und sagt das.
 - Mit *Passend zur Bohrung* baut *Stift für Bohrung* das Gegenstück: in eine Senkung einen bündigen Senkkopf, in ein Innengewinde ein Außengewinde gleicher Größe und Steigung.
 - An einem gedruckten Innengewinde bietet die Auswahl *Stift für Bohrung* direkt an.
-- Liegt in einer Bohrung ein getrenntes Teil wie ein Stift, sagen die Handlungen an der Bohrung das und bieten *In Einzelteile aufteilen* an. Bisher verschmolz der Stift still mit der Platte.
+- Steckt ein getrenntes Teil in einem Hohlraum wie Bohrung, Langloch, Senkung oder Gewinde, auch eng oder weit herausragend, sagen die Handlungen das. Bisher verschmolz es oder wurde abgeschnitten.
 - Neu ist der *Gewindebolzen*, eine Gewindestange oder Stiftschraube ohne Kopf, mit Fase an beiden Enden und demselben druckbaren Gewinde wie Schraube und Mutter.
 - Auch in Bohrungen von Bausteinen wie Schraubenloch, Einpressbuchse und Mutternfalle baut *Stift für Bohrung* den passenden Stift. Liegt die Bohrung nicht im Körper, sagt es das.
 - Von Hand auf eine Fläche gesetzt, schneidet die Mutternfalle ihre Tasche ins Material. Bisher stand die Tasche darüber, und nur das Schraubenloch wurde gebohrt.
@@ -139,7 +140,6 @@ Nutzen da und sonst nichts.
 - Von unten eingelegt liegt die Tasche der Mutternfalle unter der Fläche, ihr Schlitz führt hinab. Bisher saß sie halb darüber, die Schraube in der Fläche.
 - Reicht die Bohrung eines Bausteins nicht durch das Teil, heißt sie jetzt Sackloch. Bisher hieß sie Durchgang.
 - Ist die Wand dicker als bei *Kabeldurchführung* oder *Schlauchtülle* eingetragen, sagt der Schritt es und öffnet die Wandstärke. Bisher endete der Durchgang still im Material.
-- Liegt ein getrenntes Teil in einer Senkung, einem Langloch, einer Pfanne, einer Kehle oder einem Gewinde, sagen die Handlungen das. Bisher wurde es abgeschnitten oder verschmolz.
 
 ### Bausteine
 
@@ -175,6 +175,8 @@ Nutzen da und sonst nichts.
 - Als Stelle der Kopie schlägt *Merkmal verdoppeln* anderthalb Breiten neben dem Original vor, mit einer Wand dazwischen und nie entlang seiner Achse.
 - An einer Senkung schlägt *Merkmal drehen* den größten Winkel vor, unter dem sie eine bleibt, und sagt, wenn eine Drehung das Merkmal nur auf sich selbst legt.
 - Träfe eine Handlung ein getrenntes Teil neben dem Merkmal oder berührte ein gesetztes Merkmal anderes Material nur auf einer Linie, sagt Solidon das, statt den Körper zu beschädigen.
+- Steht einer Merkmalshandlung ein getrenntes Teil im Weg, trennt *In Einzelteile aufteilen und erneut versuchen* es ab und führt die Handlung aus. Strg+Z nimmt beides zurück.
+- Jedes druckbare Teil bleibt beim Aufteilen in Einzelteile erhalten, auch Stifte und Scheiben neben einer großen Platte. Wegfallen nur kleine offene Flächen und Krümel, die der Drucker nicht abbildet.
 
 ### Erzeugen mit KI
 

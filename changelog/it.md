@@ -97,6 +97,7 @@ scrive in `website/version.json`.
 - Nella finestra di stampa, stampante, filamenti e qualità restano del tutto visibili anche con il testo ingrandito. Le etichette lunghe vanno a capo.
 - Il rapporto di verifica calcola più velocemente e richiede meno memoria.
 - Su Linux con Flatpak, Solidon ora segnala un arresto anomalo dello slicer come tale, invece di dire solo che non è stato creato alcun file.
+- Anche con stampanti che PrusaSlicer o SuperSlicer non conoscono, entrambi stimano il tempo di stampa con le accelerazioni trasmesse, e il file indica il materiale della bobina.
 - Anche con il computer a pieno carico, Solidon indica il vero motivo dopo l'arresto di uno slicer, invece di un tempo scaduto. Un file di stampa finito viene usato.
 
 ### Filettature, fori e componenti normalizzati
@@ -106,7 +107,7 @@ scrive in `website/version.json`.
 - Viti, dadi e rondelle ci sono secondo ISO da M1,6 a M64. Per altre misure, *Misura personalizzata* ricava le dimensioni dalle misure vicine e lo dice.
 - Con *Adatto al foro*, *Perno per foro* costruisce la controparte: una testa svasata a filo per una svasatura, una filettatura esterna di pari misura e passo per una interna.
 - Su una filettatura interna stampata, la selezione offre direttamente *Perno per foro*.
-- Se in un foro c'è un pezzo separato come un perno, le azioni sul foro lo dicono e offrono *Dividi in pezzi distinti*. Finora il perno veniva fuso in silenzio con la piastra.
+- Se un pezzo separato sta in una cavità come un foro, un'asola, una svasatura o una filettatura, anche stretto o molto sporgente, le azioni lo dicono. Finora veniva fuso o tagliato.
 - Nuovo il *Perno filettato*: una barra filettata o un prigioniero senza testa, smussato a entrambe le estremità, con la stessa filettatura stampabile di vite e dado.
 - Anche nei fori dei blocchi come il foro per vite, l'inserto a caldo o la sede per dado, *Perno per foro* crea il perno adatto, e avvisa se il foro non è nel corpo.
 - Posizionata a mano su una faccia, la sede per dado scava la sua tasca nel materiale. Finora la tasca restava sopra e veniva forato solo il foro per la vite.
@@ -114,7 +115,6 @@ scrive in `website/version.json`.
 - Inserita da sotto, la sede per dado ha la tasca sotto la faccia e la fessura scende fino a essa. Finora la tasca stava per metà sopra, con la vite nella faccia.
 - Se il foro di un blocco non attraversa il pezzo, ora si chiama cieco. Finora si chiamava passante.
 - Se la parete è più spessa di quanto indicato per «Passacavo» o «Portagomma», il passaggio lo dice e apre lo spessore di parete. Finora il foro finiva in silenzio nel materiale.
-- Se in una svasatura, un'asola, una coppa, una gola o una filettatura c'è un pezzo separato, le azioni lo dicono. Finora veniva tagliato o fuso.
 
 ### Blocchi
 
@@ -150,6 +150,8 @@ scrive in `website/version.json`.
 - Come posto della copia, *Duplica caratteristica* propone una larghezza e mezza accanto all'originale, con una parete in mezzo e mai lungo il suo asse.
 - Su una svasatura, *Ruota caratteristica* propone l'angolo più grande con cui resta tale, e avvisa quando una rotazione rimette la caratteristica solo su sé stessa.
 - Se un'azione colpisse un pezzo separato accanto alla caratteristica, o una caratteristica posizionata toccasse altro materiale solo lungo una linea, Solidon lo dice invece di danneggiare il corpo.
+- Se un pezzo separato intralcia un'azione su una caratteristica, *Dividi in pezzi distinti e riprova* lo separa ed esegue l'azione. Ctrl+Z annulla entrambe.
+- Dividendo in pezzi distinti resta ogni pezzo stampabile, anche perni e rondelle accanto a una piastra grande. Cadono solo piccole superfici aperte e briciole che la stampante non riproduce.
 
 ### Generare con l'IA
 
