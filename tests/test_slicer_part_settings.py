@@ -608,7 +608,11 @@ def test_file_export_without_program_only_promises_shared_object_capabilities(
 
 # Die unabhängigen Messungen aus RM-317 und RM-318 umfassen 17 dieser Pfade;
 # ``support.spare_ledges`` belegt der Eiffelturm (RM-582: ElegooSlicer 869 → 216 m
-# Stütze, dieselbe Stützsperre wie die Kanäle). Die
+# Stütze, dieselbe Stützsperre wie die Kanäle). Den Stützkontakt (RM-583) belegt
+# eine Platte mit zwei gestützten Stufenkörpern, einer mit Objektwerten, in allen
+# acht Programmen (``.claude/.state/drache-2026-10-08/kontakt_je_teil.py``):
+# geschrieben 0,4 gegen 0,2 mm und so weiter, gemessen je Programm in
+# ``konzepte/begruendungen/regel-druckrat.md``; Cura nimmt die Lücke nicht je Netz. Die
 # Menge wird absichtlich nicht aus PART_PATHS oder den Schlüsseltabellen
 # gebaut: ein neuer Pfad braucht einen eigenen Wirkungsnachweis.
 MEASURED_PART_PATHS = frozenset(
@@ -628,9 +632,13 @@ MEASURED_PART_PATHS = frozenset(
         "speed.outer_wall",
         "speed.outer_wall_acceleration",
         "support.block_channels",
+        "support.bottom_interface_layers",
+        "support.interface_layers",
+        "support.interface_spacing",
         "support.placement",
         "support.spare_ledges",
         "support.style",
+        "support.z_gap",
     }
 )
 
@@ -669,6 +677,7 @@ MEASURED_PART_PATHS = frozenset(
                 "adhesion.kind",
                 "adhesion.brim_gap",
                 "layers.line_width",
+                "support.interface_spacing",
                 "support.placement",
                 "shell.precise_outer_wall",
                 "shell.wall_generator",

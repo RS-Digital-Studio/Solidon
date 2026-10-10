@@ -20,7 +20,7 @@ Werten aus dem G-Code wird es nie vermischt (Regel 14, §22.5).
 from __future__ import annotations
 
 import math
-from collections.abc import Sequence
+from collections.abc import Collection, Sequence
 from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, Final
 
@@ -37,13 +37,16 @@ from app.core.errors import (
 from app.core.knowledge import print_settings as settings_table
 from app.core.log import get_logger
 from app.core.slice.analysis import (
+    BRIDGE_FROM,
     OVERHANG_LAYER_WORTH_SUPPORT,
     OVERHANG_MARGIN,
     SPAN_INTERESTING,
     ModelSupport,
     _layer_shape,
+    channel_pieces,
     channel_space,
     island_layers,
+    kept_overhang,
     largest_overhang_patch,
     largest_sloped_patch,
     ledge_space,
@@ -54,8 +57,11 @@ from app.core.slice.analysis import (
     open_bridge_width,
     piece_area,
     smooth_outline_height,
+    span_beside,
+    span_spot,
     tapered_layers,
     thinnest_spot,
+    tip_islands,
     total_overhang,
     worth_support,
 )
@@ -63,6 +69,7 @@ from app.core.types import (
     BoundingBox,
     CancelToken,
     Finding,
+    MaterialProfile,
     PrintSettings,
     Profile,
     SceneObject,
@@ -120,6 +127,14 @@ TAPERED_LAYERS_SHARE = 0.2
 #: So viele Schichten mit Inseln machen aus Gitterstützen Baumstützen: viele
 #: verteilte Ansatzpunkte sind genau der Fall, für den Bäume gebaut wurden.
 TREE_FROM_ISLANDS = 8
+
+#: Ab welcher Höhe über dem Bett, in mm, Baumstämme zwei Wände brauchen (RM-584,
+#: Recherche Nr. 5): Mit einer brechen oder kippen hohe Bäume, und ein
+#: abgerissener Ast lässt den Überhang darüber in die Luft drucken.
+TALL_TREE_HEIGHT: Final = 100.0
+
+#: Zwei Wände je Baumstamm für hohe Bäume.
+TALL_TREE_WALLS: Final = 2
 
 #: Kleinste Schichtfläche in mm², unter der eine Schicht so schnell durch ist,
 #: dass die vorige noch weich liegt.
@@ -226,6 +241,10 @@ def advise(
     fit_kinds: Sequence[str] = (),
     connectors: Sequence[float] = (),
     flavour: SlicerFlavour | None = None,
+    whole_layers: bool = False,
+    organic: Collection[str] = (),
+    declined: Collection[str] = (),
+    trees: Collection[str] | None = None,
 ) -> list[SettingAdvice]:
     """Was an diesen Einstellungen für dieses Teil nicht passt (§29).
 
@@ -239,6 +258,18 @@ def advise(
     sagt, wie dick der Zapfen dabei ist — und nur die zweite Angabe lässt sich
     gegen die Bahnbreite rechnen.
 
+    ``whole_layers`` sagt, dass der Slicer den Stützabstand auf der Platte
+    dieses Teils auf ganze Schichten rundet, weil dort ein Reinigungsturm steht;
+    ``organic`` sind die Stützarten, die das Programm als organische Bäume auf
+    den Schichten des Modells druckt (:func:`rounds_to_whole_layers`, RM-622).
+    ``declined`` sind Pfade, deren Vorschlag der Kunde nicht übernimmt — im
+    Druckdialog abgewählt, im Export nicht übernommen: Abstand und untere
+    Trennschicht fragen dann mit der eigenen Stützart (:func:`printed_style`).
+    ``trees`` sind die Stützarten, die das Programm als Bäume druckt
+    (``handover.tree_styles``, RM-584), ``None`` ohne Programm: Gitter oder
+    Hybrid unter einer großen flachen Decke und die Wände hoher Bäume fragen
+    danach.
+
     **Für einen Resin-Drucker bleibt die Liste leer.** Jede Regel hier spricht
     über Düse, Bahn, Bett, Lüfter oder Rückzug — für Resin nicht falsch
     justiert, sondern gegenstandslos. Ein Bericht, in dem neun von zwanzig
@@ -251,7 +282,9 @@ def advise(
     advice += _from_machine(settings, profile)
     advice += _from_material(settings, profile)
     if result is not None:
-        advice += _from_geometry(settings, profile, result, bounds, flavour)
+        advice += _from_geometry(
+            settings, profile, result, bounds, flavour, whole_layers, organic, declined, trees
+        )
     if fit_kinds:
         advice += _from_fits(settings, fit_kinds)
     # Erst nach den Regeln oben, und gegen deren Stand gerechnet: Die
@@ -354,6 +387,9 @@ def _merged(settings: PrintSettings, advice: list[SettingAdvice]) -> list[Settin
 def combine(
     settings: PrintSettings,
     groups: Sequence[tuple[PrintSettings, Sequence[SettingAdvice]]],
+    *,
+    separate: Collection[str] = frozenset(),
+    trees: Collection[str] | None = None,
 ) -> list[SettingAdvice]:
     """Vereint Anforderungen mehrerer Körper an gemeinsame Einstellungen.
 
@@ -362,6 +398,20 @@ def combine(
     Würfel kann die schon eingeschalteten Stützen seines Nachbarn nicht
     abschalten. Filamentabhängige Werte werden nur innerhalb desselben
     Materialslots zusammengeführt; verschiedene Spulen behalten eigene Werte.
+
+    **Was je Teil geschrieben wird** (``separate``, im Druckdialog die
+    Kontaktpfade aus ``handover.asked_for_contact``), zählt nur, wo ein Körper
+    es verlangt: Die übrigen behalten ihren Wert, jedes Teil bekommt seinen
+    eigenen (RM-583). Gefragt wird dafür gegen die Grundlage, nicht gegen die
+    Übernahme. Innerhalb eines Teils mit mehreren Spulen gilt weiter der Wert,
+    der alle einschließt — der Dialog führt erst je Körper zusammen.
+
+    **Gitter und Baum zweier Körper werden Hybrid, wo die Stützart der Platte
+    gilt** (RM-584). Steht sie in ``separate`` (``handover.style_per_part``),
+    bekommt jedes Teil seine eigene, und Hybrid käme in keiner Datei an. Kennt
+    das Programm kein Hybrid (``trees`` ohne ``hybrid``, Cura), werden beide
+    Gitter, mit dem Grund der Decke (Nachprüfung RM-584, N3): Hybrid hatte der
+    Kunde nie gesehen, und der Ersatzsatz verdrängte den Grund.
     """
     candidates: dict[str, list[SettingAdvice]] = {}
     final = [apply(base, list(entries)) for base, entries in groups]
@@ -374,7 +424,18 @@ def combine(
         if path == "support.placement":
             relevant = [value for value in final if value.support.style != "none"] or final
         values = [settings_table.read_path(value, path) for value in relevant]
-        value = _combined_value(path, values)
+        # Was je Teil geschrieben wird, zählt nur, wo ein Körper es verlangt;
+        # die übrigen behalten ihren Wert ohnehin (RM-583).
+        # Die Stützart zählt jeden Körper, auch je Teil: Ein Würfel ohne Bedarf
+        # schaltet die Stützen des Kegels nicht ab. Getrennt heißt bei ihr nur,
+        # dass Gitter und Baum nicht Hybrid werden (RM-584).
+        requested = path in separate and path != "support.style"
+        value = _combined_value(
+            path,
+            [entry.value for entry in entries] if requested else values,
+            together=path not in separate,
+            hybrid=trees is None or "hybrid" in trees,
+        )
         was = settings_table.read_path(settings, path)
         if not _differs(value, was):
             continue
@@ -383,17 +444,32 @@ def combine(
     return merged
 
 
-def _combined_value(path: str, values: Sequence[object]) -> object:
-    """Nimmt je Einstellungsart die Anforderung, die alle Körper einschließt."""
+def _combined_value(
+    path: str, values: Sequence[object], *, together: bool = True, hybrid: bool = True
+) -> object:
+    """Nimmt je Einstellungsart die Anforderung, die alle Körper einschließt.
+
+    ``together`` heißt, der Wert gilt allen Körpern zugleich; nur dann werden
+    Gitter und Baum Hybrid, wo das Programm es kennt (``hybrid``), sonst Gitter."""
     ranks = {
         # ``auto`` steht über „aus" und unter jeder ausdrücklichen Art: Wo ein
         # Körper Bäume verlangt, schließt das den ein, der nur Stützen will.
-        "support.style": ("none", "auto", "grid", "tree"),
+        # Hybrid schließt Bäume und Gitter ein (RM-584).
+        "support.style": ("none", "auto", "grid", "tree", "hybrid"),
         "support.placement": ("build_plate", "everywhere"),
         # Der Auto-Brim des Slicers kann einen Brim legen, ein Skirt nie.
         "adhesion.kind": ("none", "skirt", "auto", "brim", "raft"),
         "shell.wall_generator": ("classic", "arachne"),
     }
+    if (
+        together
+        and path == "support.style"
+        and {"grid", "tree"} <= {str(value) for value in values}
+    ):
+        # Ein Körper mit flacher Decke und einer mit Details auf einer Platte:
+        # Hybrid gibt beiden, was sie verlangen (RM-584); ohne Hybrid trägt
+        # Gitter die Decke.
+        return "hybrid" if hybrid else "grid"
     if path in ranks:
         return max(values, key=lambda value: ranks[path].index(str(value)))
     if all(isinstance(value, bool) for value in values):
@@ -403,6 +479,9 @@ def _combined_value(path: str, values: Sequence[object]) -> object:
         if path.startswith(("speed.", "layers.")) or path in (
             "cooling.fan_speed",
             "cooling.minimum_speed",
+            # Die dichtere Trennschicht hält eine flache Decke auf der Platte;
+            # eine lockere ließe sie durchhängen (RM-583).
+            "support.interface_spacing",
         ):
             return min(numbers)
         return max(numbers)
@@ -792,9 +871,8 @@ class SupportNeed:
     piece: float = 0.0
     """Das größte einzelne Stück in mm², ohne Kanaldecken und Ränder — über
     ``OVERHANG_LAYER_WORTH_SUPPORT`` eine flache Decke."""
-    quiet_layers: frozenset[int] = frozenset()
-    """Schichten, deren Brücken nicht zählen: Ihr Überhang besteht ganz aus
-    Kanal- und Randstücken (:func:`_quiet_layers`)."""
+    tips: int = 0
+    """Inseln, deren Baumspitze keine Trennschicht bekommt (:func:`tip_islands`)."""
 
 
 def _largest_field(
@@ -841,9 +919,10 @@ def support_need(result: SliceResult, *, cancelled: CancelToken | None = None) -
     # weiter als ``LEDGE_REACH`` über sein Material ragt, trägt sich selbst. Die
     # Ränder der Plattformen verlangten sonst Stützen, und der ElegooSlicer
     # stellte 831 m Baum außen am Turm hoch. Gefragt vor der Kanalfrage, die
-    # dieselbe Antwort ohne Abbruch aus dem Merker liest.
+    # dieselbe Antwort aus dem Merker liest. Beide sind abbrechbar; die
+    # Kanalfrage kostete am Drachen (45°) 446 s CPU ohne Abbruch.
     edges = ledges(result, cancelled=cancelled) if asked else frozenset()
-    model = model_support(result) if asked else ModelSupport()
+    model = model_support(result, cancelled=cancelled) if asked else ModelSupport()
     quiet = model.channels | edges
     overhang = total_overhang(result, without=quiet)
     piece = largest_overhang_patch(result, without=quiet)
@@ -871,16 +950,268 @@ def support_need(result: SliceResult, *, cancelled: CancelToken | None = None) -
     # darin dieselbe Decke wie beim Deckel. Gefragt wird deshalb das größte
     # zusammenhängende Stück (:func:`largest_overhang_patch`); lange freie
     # Stege fängt die Brückenregel darunter weiter ab.
-    resting = _quiet_layers(result, quiet)
     return SupportNeed(
-        needed=_may_need_support(result, islands, overhang, patch, resting),
+        needed=_may_need_support(result, islands, overhang, patch, quiet, cancelled),
         islands=islands,
         model=model,
         overhang=overhang,
         patch=patch,
         piece=piece,
-        quiet_layers=resting,
+        tips=tip_islands(result),
     )
+
+
+#: Wie weit der Stützabstand vom Wert aus Material und Schichthöhe abweichen
+#: darf, bevor Solidon ihn vorschlägt, als Anteil (RM-583) — das Band der
+#: Recherche vom 08.10.2026: Prusa nimmt 0,17 bei 0,15er Schichten und 0,22 bei
+#: 0,2ern, beides hält ab, was es soll.
+SUPPORT_GAP_BAND: Final = (0.8, 1.25)
+
+#: Die Trennschicht unter großen flachen Decken: Lücke in mm und Lagen. Lockerer
+#: hängen die ersten Bahnen darüber durch (Recherche Nr. 3: 0,1 bis 0,2 mm,
+#: drei Lagen).
+DENSE_INTERFACE: Final = (0.2, 3)
+
+#: Unter kleinen und gewölbten Flächen — Schuppen, Kinn, Krallen: Dort sitzt
+#: eine dichte Trennschicht fest und reißt Material mit (Recherche Nr. 3: 0,4 bis
+#: 0,5 mm, zwei Lagen).
+OPEN_INTERFACE: Final = (0.5, 2)
+
+#: Untere Trennschichten, wo die Stütze auf dem Modell steht (Recherche Nr. 2).
+#: Ohne sie steht der rohe Stützfuß auf der Fläche und zeichnet sie; das Profil
+#: des MK4S führt 0.
+BOTTOM_INTERFACE_LAYERS: Final = 2
+
+
+#: Wo der Slicer den Stützabstand immer in ganzen Schichten rechnet (RM-583):
+#: CuraEngine (``support_top_distance`` je Schicht). Die Orca-Familie nur,
+#: solange die Stütze die Schichthöhe des Modells hat; die eigene Höhe schaltet
+#: die Übergabe dann ein (``slicer_keys.has_independent_support_layers``) — außer
+#: neben einem Reinigungsturm (``whole_layers``) und unter organischen Bäumen
+#: (``organic``), das sagt der Aufrufer (RM-622).
+WHOLE_LAYER_GAP_FLAVOURS: Final[frozenset[SlicerFlavour]] = frozenset({"cura"})
+
+
+def rounds_to_whole_layers(
+    flavour: SlicerFlavour | None,
+    whole_layers: bool = False,
+    style: str = "",
+    organic: Collection[str] = (),
+) -> bool:
+    """Rechnet der Slicer den Stützabstand hier in ganzen Schichten (RM-622)? Cura
+    immer; die Orca-Familie neben einem Reinigungsturm (``whole_layers``); jedes
+    Programm unter organischen Bäumen, also wenn ``style`` zu den Arten gehört,
+    die es so druckt (``organic``, :func:`handover.organic_styles`): Sie liegen
+    auf den Schichten des Modells, auch mit eigener Stützschichthöhe."""
+    return whole_layers or flavour in WHOLE_LAYER_GAP_FLAVOURS or style in organic
+
+
+#: Vorschläge, an deren Übernahme andere hängen (:func:`printed_style`): Wählt
+#: der Kunde einen davon ab, fragt der Druckdialog neu (RM-622).
+DECIDING_PATHS: Final = frozenset({"support.style"})
+
+
+def printed_style(
+    settings: PrintSettings, advice: Sequence[SettingAdvice], declined: Collection[str] = ()
+) -> str:
+    """Die Stützart, mit der ein Teil druckt (RM-622): die vorgeschlagene, solange
+    der Kunde sie nicht ablehnt (``declined``), sonst die eigene. Abstand und
+    untere Trennschicht hängen an ihr — unter organischen Bäumen rundet der
+    Slicer den Abstand, und manches Programm druckt dort keine untere
+    Trennschicht. Rat, Druckdialog und Export fragen hier, damit ein
+    abgelehnter Baum dem Gitter nicht Abstand und Trennschicht nimmt."""
+    if "support.style" in declined:
+        return settings.support.style
+    return next(
+        (str(entry.value) for entry in advice if entry.path == "support.style"),
+        settings.support.style,
+    )
+
+
+def in_whole_layers(gap: float, layer: float) -> bool:
+    """Misst dieser Abstand ganze Schichten? Sonst rundet ein Slicer, der in ganzen
+    Schichten rechnet, ihn selbst (RM-583, RM-622)."""
+    return layer > 0.0 and is_close(gap / layer, round(gap / layer))
+
+
+def support_gap_target(
+    layer: float,
+    material: MaterialProfile,
+    flavour: SlicerFlavour | None = None,
+    *,
+    whole_layers: bool = False,
+    style: str = "",
+    organic: Collection[str] = (),
+) -> float | None:
+    """Der Stützabstand, mit dem sich die Stütze von diesem Material sauber löst
+    (RM-583): ein Vielfaches der Schichthöhe, begrenzt nach dem Materialprofil.
+    Ohne Werte im Profil ``None``: unbekannt, der Abstand bleibt beim Hersteller.
+
+    Wo der Slicer in ganzen Schichten rechnet (Cura), ist es das Vielfache
+    innerhalb der Grenzen, das dem Ziel am nächsten liegt, mindestens eine
+    Schicht. Liegt keines darin, das kleinste über dem Minimum — oberhalb des
+    Maximums bleibt nur eine Schicht (PLA ab 0,28 mm). Die Orca-Familie rundet
+    nur ohne eigene Stützschichthöhe; die schaltet die Übergabe ein
+    (``handover.frees_support_layers``).
+
+    **Neben einem Reinigungsturm rundet auch die Orca-Familie, unter
+    organischen Bäumen jedes Programm, das sie so druckt — die Orca-Familie wie
+    PrusaSlicer** (:func:`rounds_to_whole_layers`, RM-622): Die Stütze liegt
+    dann auf den Schichten des Modells, und der Abstand rundet auf die nächste
+    (am Turm ``SupportMaterial.cpp``, unter Bäumen der organische Generator,
+    bei Orca ``TreeSupport3D.cpp``; gemessen in sechs Programmen). PLA
+    bei 0,08er Schichten bekäme aus 0,10 mm eine Schicht, also 0,08 — unter dem
+    Minimum; in ganzen Schichten gerechnet sind es 0,16."""
+    factor, low, high = (
+        material.support_gap_factor,
+        material.support_gap_min,
+        material.support_gap_max,
+    )
+    if factor is None or low is None or high is None or layer <= 0.0:
+        return None
+    target = min(max(layer * factor, low), high)
+    if not rounds_to_whole_layers(flavour, whole_layers, style, organic):
+        return target
+    first = max(1, math.ceil(low / layer - EPS_GEOM))
+    last = math.floor(high / layer + EPS_GEOM)
+    if first > last:
+        return first * layer
+    # Eine halbe Schicht rundet auf, auch wenn die Division knapp darunter landet.
+    return min(max(math.floor(target / layer + 0.5 + EPS_GEOM), first), last) * layer
+
+
+#: Ab wie vielen Inseln mit Baumspitze ohne Trennschicht (:attr:`SupportNeed.tips`)
+#: der Abstand über den Spitzen gilt (RM-584). Gesetzt an 165 Modellen aus Roberts
+#: Sammlung und ``tests/data/meshes``: Der Drache hat 199, danach folgen eine
+#: Baugruppe mit 49, ein Schachturm mit 34 und ein Küchenteil mit 21, alle übrigen
+#: unter 15. Gemessen ist die Wirkung nur am Drachen; die Schwelle liegt mit Abstand
+#: zu beiden Seiten, und Teile mit wenigen kleinen Inseln behalten die
+#: Trennschicht ihrer großen Decken.
+TIP_ISLANDS: Final = 100
+
+#: Wie viele Schichten Luft mindestens über einer Baumspitze ohne Trennschicht
+#: stehen (RM-584): Mit einer schweißt die Spitze an, gemessen am Drachen in
+#: ElegooSlicer, PrusaSlicer und Cura.
+TIP_GAP_LAYERS: Final = 2
+
+
+def tip_gap(
+    layer: float,
+    material: MaterialProfile,
+    need: SupportNeed,
+    flavour: SlicerFlavour | None,
+    style: str,
+    organic: Collection[str] = (),
+) -> float | None:
+    """Der Abstand oben über Baumspitzen ohne Trennschicht (RM-584), oder ``None``.
+
+    Unter Inseln unter 1 mm² baut der Slicer keine Trennschicht
+    (:func:`analysis.tip_islands`); die Spitze steht eine Schicht unter dem
+    Modell und schweißt an. Am Drachen (PLA, 0,2 mm) senkte 0,4 statt 0,2 die
+    Kontaktfläche am Kinn von 59,4 auf 6,9 mm², an den Kopfstacheln von 92,4 auf
+    3,6 mm² — für eine Minute und 0,7 g. Gilt, wo der Slicer Baumspitzen setzt:
+    unter organischen Bäumen (``organic``) und unter Curas Bäumen. In ganzen
+    Schichten, mindestens :data:`TIP_GAP_LAYERS`, aus ``support_tip_gap`` des
+    Materials; ohne gemessenen Wert ``None``.
+    """
+    if material.support_tip_gap is None or layer <= 0.0 or need.tips < TIP_ISLANDS:
+        return None
+    if style not in organic and not (flavour == "cura" and style == "tree"):
+        return None
+    layers = math.floor(material.support_tip_gap / layer + 0.5 + EPS_GEOM)
+    return max(TIP_GAP_LAYERS, layers) * layer
+
+
+def _support_contact(
+    settings: PrintSettings,
+    profile: Profile,
+    need: SupportNeed,
+    on_model: bool,
+    flavour: SlicerFlavour | None,
+    whole_layers: bool = False,
+    style: str = "",
+    organic: Collection[str] = (),
+) -> list[SettingAdvice]:
+    """Abstand und Trennschicht der Stütze nach Material, Schichthöhe und
+    Fläche (RM-583) — die häufigsten Ursachen für Narben und festsitzende Stützen
+    (``konzepte/recherche-slicer-einstellungen-2026-10.md``, Nr. 1, 2, 3, 7).
+
+    Der Abstand oben ist ein Vielfaches der Schichthöhe aus dem Materialprofil,
+    begrenzt nach unten und oben (Regel 7); wo der Slicer in ganzen Schichten
+    rechnet (:func:`rounds_to_whole_layers`, mit der Art ``style``, mit der das
+    Teil druckt, :func:`printed_style`), das Vielfache. Dort passt auch ein
+    Abstand im Band nicht, der keine ganze Schicht ist: Der Slicer rundet ihn
+    selbst, Cura auf, die Orca-Familie zur
+    nächsten (0,2 mm sind bei 0,08er Schichten zweieinhalb). Unter einer großen
+    flachen Decke (ein Stück über ``OVERHANG_LAYER_WORTH_SUPPORT``) wird die
+    Trennschicht dicht, sonst locker. Material, das an sich selbst haftet
+    (``support_interface_cooling`` im Profil), bekommt volle Kühlung an der
+    Trennschicht.
+    """
+    advice: list[SettingAdvice] = []
+    material = profile.material
+    layer = settings.layers.layer_height
+    style = style or settings.support.style
+    target = support_gap_target(
+        layer, material, flavour, whole_layers=whole_layers, style=style, organic=organic
+    )
+    reason = _("Passend zu Schicht und Material löst sich die Stütze sauber.")
+    tips = tip_gap(layer, material, need, flavour, style, organic)
+    if tips is not None and (target is None or tips > target):
+        target = tips
+        reason = _("Feine Spitzen brauchen mehr Luft über den Baumstützen.")
+    low, high = SUPPORT_GAP_BAND
+    gap = settings.support.z_gap
+    if target is not None and (
+        not low * target <= gap <= high * target
+        or (
+            rounds_to_whole_layers(flavour, whole_layers, style, organic)
+            and not in_whole_layers(gap, layer)
+        )
+    ):
+        advice.append(
+            _advice(settings, path="support.z_gap", value=round(target, 4), reason=reason)
+        )
+    if on_model and settings.support.bottom_interface_layers < BOTTOM_INTERFACE_LAYERS:
+        advice.append(
+            _advice(
+                settings,
+                path="support.bottom_interface_layers",
+                value=BOTTOM_INTERFACE_LAYERS,
+                reason=_("Eine Trennschicht unter dem Stützfuß schont das Teil."),
+            )
+        )
+    flat = need.piece > OVERHANG_LAYER_WORTH_SUPPORT
+    spacing, layers = DENSE_INTERFACE if flat else OPEN_INTERFACE
+    middle = (DENSE_INTERFACE[0] + OPEN_INTERFACE[0]) / 2.0
+    reason = (
+        _("Eine dichte Trennschicht hält große flache Decken.")
+        if flat
+        else _("Lockere Trennschichten lösen sich von Details leichter.")
+    )
+    current = settings.support.interface_spacing
+    if (current > middle) if flat else (current < middle):
+        advice.append(
+            _advice(settings, path="support.interface_spacing", value=spacing, reason=reason)
+        )
+    if (
+        (settings.support.interface_layers < layers)
+        if flat
+        else (settings.support.interface_layers > layers)
+    ):
+        advice.append(
+            _advice(settings, path="support.interface_layers", value=layers, reason=reason)
+        )
+    if material.support_interface_cooling and not settings.cooling.support_interface_cooling:
+        advice.append(
+            _advice(
+                settings,
+                path="cooling.support_interface_cooling",
+                value=True,
+                reason=_("Volle Kühlung löst die Stütze von diesem Material leichter."),
+            )
+        )
+    return advice
 
 
 def _from_geometry(
@@ -889,6 +1220,10 @@ def _from_geometry(
     result: SliceResult,
     bounds: BoundingBox | None,
     flavour: SlicerFlavour | None = None,
+    whole_layers: bool = False,
+    organic: Collection[str] = (),
+    declined: Collection[str] = (),
+    trees: Collection[str] | None = None,
 ) -> list[SettingAdvice]:
     """Der eigentliche Gewinn: das Teil bestimmt seine Einstellungen mit."""
     advice: list[SettingAdvice] = []
@@ -950,11 +1285,45 @@ def _from_geometry(
     # ``OVERHANG_LAYER_WORTH_SUPPORT`` auf einer Schicht; Schuppen, Kinn und
     # Flügel einer Figur zerfallen in kleine Stücke.
     branching = on_model and need.piece <= OVERHANG_LAYER_WORTH_SUPPORT
+    # **Unter einer großen flachen Decke keine Bäume** (RM-584, Recherche Nr. 4):
+    # Zwischen den Baumspitzen hängt die Unterseite durch. Dort trägt Gitter;
+    # setzen daneben kleine Stücke auf dem Modell auf
+    # (``ModelSupport.details_on_model``) oder beginnen viele Inseln in der
+    # Luft, Hybrid — Bäume für die Details, normale Stütze unter der Decke.
+    # Welche Arten das Programm als Bäume druckt, sagt ``trees``
+    # (``handover.tree_styles``): „Automatisch“ ist bei Elegoo und Bambu ein
+    # Baum, bei PrusaSlicer mit ``snug`` und bei Cura nicht — dort bleibt es;
+    # Hybrid kennen PrusaSlicer und Cura nicht, dort trägt Gitter allein. Ohne
+    # Programm bleibt der Rat vorsichtig und zählt „automatisch“ als Baum.
+    flat = need.piece > OVERHANG_LAYER_WORTH_SUPPORT
+    many_islands = len(islands) >= TREE_FROM_ISLANDS
+    printed_trees = frozenset({"tree", "hybrid"}) if trees is None else frozenset(trees)
+    auto_trees = trees is None or "auto" in trees
+    under_ceiling = (
+        "hybrid"
+        if "hybrid" in printed_trees and (model.details_on_model or many_islands)
+        else "grid"
+    )
+    # **Wo die Art der ganzen Platte gilt** (Cura: ``support_structure``, Stützen
+    # je Netz nur an oder aus), sagt die flache Decke ausdrücklich Gitter
+    # (Nachprüfung RM-584, N1): Ihr „automatisch“ hieße dort zwar ``normal``,
+    # aber neben einem Körper, der Bäume verlangt, gewann der Baum, und der Hut
+    # des Pilzes hing zwischen Baumspitzen durch.
+    plate_kind = flavour == "cura"
+    if flat:
+        wanted = under_ceiling if auto_trees or plate_kind else "auto"
+    else:
+        wanted = "tree" if many_islands or branching else "auto"
+    # Was gerade Bäume druckt und unter der Decke durchhinge — ein gewählter
+    # Hybrid nicht: Er legt dort schon Gitter.
+    over_trees = (settings.support.style == "tree" and "tree" in printed_trees) or (
+        settings.support.style == "auto" and auto_trees
+    )
     if needs_support and settings.support.style == "none":
         # **Stützen an, die Art des Slicers** — außer das Modell verlangt eine
         # (Entscheidung J, 27.09.2026). Hier stand ``grid``, und Elegoo wie
         # Bambu, deren Standardprozess Bäume stützt, bekamen Gitter.
-        style = "tree" if len(islands) >= TREE_FROM_ISLANDS or branching else "auto"
+        style = wanted
         advice.append(
             _advice(
                 settings,
@@ -966,13 +1335,48 @@ def _from_geometry(
                 severity="warning",
             )
         )
-    elif needs_support and branching and settings.support.style in ("auto", "grid"):
+    elif (
+        needs_support
+        and branching
+        and (
+            settings.support.style in ("auto", "grid")
+            # Ein Hybrid, den das Programm als Gitter druckt (N7).
+            or (settings.support.style == "hybrid" and "hybrid" not in printed_trees)
+        )
+    ):
         advice.append(
             _advice(
                 settings,
                 path="support.style",
                 value="tree",
                 reason=_("Bäume hinterlassen auf dem Modell weniger Spuren."),
+            )
+        )
+    elif needs_support and flat and over_trees:
+        # Über einem gewählten Gitter nicht: Es trägt die flache Decke.
+        advice.append(
+            _advice(
+                settings,
+                path="support.style",
+                value=under_ceiling,
+                reason=_("Große flache Decken hängen zwischen Baumspitzen durch.")
+                if under_ceiling == "grid"
+                else _("Bäume für Details, Gitter unter der großen flachen Decke."),
+            )
+        )
+    elif (
+        needs_support
+        and flat
+        and plate_kind
+        and settings.support.style == "auto"
+        and under_ceiling == "grid"
+    ):
+        advice.append(
+            _advice(
+                settings,
+                path="support.style",
+                value="grid",
+                reason=_("Gitter hält die flache Decke, auch neben Baumstützen."),
             )
         )
     elif not needs_support and settings.support.style != "none":
@@ -1048,6 +1452,38 @@ def _from_geometry(
                 reason=_("Diese Ränder tragen sich selbst, Stütze ließe Narben."),
             )
         )
+    if needs_support:
+        # Gefragt mit der Stützart, mit der das Teil druckt: Schlägt der Rat
+        # Bäume vor und übernimmt der Kunde sie, liegt die Stütze auf den
+        # Schichten des Modells (RM-622).
+        printed = printed_style(settings, advice, declined)
+        advice += _support_contact(
+            settings,
+            profile,
+            need,
+            on_model,
+            flavour,
+            whole_layers,
+            printed,
+            organic,
+        )
+        # Hohe Bäume brechen mit einer Wand (RM-584); gefragt mit derselben
+        # Stützart wie der Kontakt, und nur, wo das Programm sie als Baum druckt
+        # (``trees``): Hybrid ist bei PrusaSlicer und Cura Gitter, „automatisch“
+        # bei Elegoo ein Baum.
+        if (
+            printed in printed_trees
+            and settings.support.tree_walls < TALL_TREE_WALLS
+            and need.model.tallest_column >= TALL_TREE_HEIGHT
+        ):
+            advice.append(
+                _advice(
+                    settings,
+                    path="support.tree_walls",
+                    value=TALL_TREE_WALLS,
+                    reason=_("Zwei Wände halten hohe Bäume stabil."),
+                )
+            )
 
     # **Über „automatisch“ nur, wo der Slicer nichts rechnet** (Entscheidung J,
     # :func:`_unanchored`): Orcas Auto-Brim fragt Höhe und Grundfläche selbst
@@ -1464,15 +1900,28 @@ def _from_connectors(settings: PrintSettings, diameters: Sequence[float]) -> lis
 #: Was je Teil geschrieben wird, wenn sein Grund an der Geometrie hängt
 #: (Konzept Herstellerprofil, Entscheidung G): Stützen mit Art, Ort und
 #: Sperre, die Haftung, die Werte einer Passung, Wände und Füllung um
-#: Verbinder, Wandgenerator und Bahnbreite an schmalen Stellen. Temperatur,
-#: Kühlung, Rückzug und Volumenstrom bleiben plattenweit — sie hängen an der
-#: Spule, nicht am Teil.
+#: Verbinder, Wandgenerator und Bahnbreite an schmalen Stellen. Dazu der
+#: Stützkontakt: Abstand und Trennschichten hängen am Material der Spule, die
+#: das Teil druckt, und nur das gestützte Teil braucht sie (RM-583).
+#: Temperatur, Kühlung, Rückzug und Volumenstrom gehen je Spule hinaus
+#: (``print_settings_dialog.FILAMENT_GROUPS``), nicht je Teil.
+#:
+#: **Die Wände der Bäume fehlen, obwohl ihr Grund an der Geometrie hängt**
+#: (``support.tree_walls``, RM-584): Ob ein Programm die Wandzahl je Objekt
+#: liest, ist für keines gemessen, und eine Objektzahl, die der Slicer
+#: übergeht, ließe die hohen Bäume mit einer Wand stehen, während der Dialog
+#: zwei nennt. Plattenweit trifft der Wert jedes Teil sicher; ein niedriger Baum
+#: daneben trägt die zweite Wand für etwas Material mit.
 PART_PATHS: Final = frozenset(
     {
         "support.style",
         "support.placement",
         "support.block_channels",
         "support.spare_ledges",
+        "support.z_gap",
+        "support.interface_layers",
+        "support.bottom_interface_layers",
+        "support.interface_spacing",
         "adhesion.kind",
         "adhesion.brim_gap",
         "shell.precise_outer_wall",
@@ -1490,6 +1939,19 @@ PART_PATHS: Final = frozenset(
     }
 )
 
+#: Der Stützkontakt (RM-583): je Teil geschrieben, und der Rat geht je Körper
+#: in beide Richtungen — PLA will weniger Abstand als PETG, eine Figur eine
+#: lockere Trennschicht als eine flache Decke. Der Druckdialog führt diese Pfade
+#: deshalb getrennt zusammen (:func:`combine`, ``separate``).
+CONTACT_PATHS: Final = frozenset(
+    {
+        "support.z_gap",
+        "support.interface_layers",
+        "support.bottom_interface_layers",
+        "support.interface_spacing",
+    }
+)
+
 #: Was nur der Schnitt des Körpers sagen kann (:func:`_from_geometry` samt
 #: :func:`_calm_walls`). Der Export schneidet ein Teil eigens, wenn einer
 #: dieser Pfade je Teil geht (``writer._part_values``); fehlt hier ein Pfad,
@@ -1502,6 +1964,11 @@ SLICED_PATHS: Final = frozenset(
         "support.placement",
         "support.block_channels",
         "support.spare_ledges",
+        "support.tree_walls",
+        "support.z_gap",
+        "support.interface_layers",
+        "support.bottom_interface_layers",
+        "support.interface_spacing",
         "adhesion.kind",
         "adhesion.brim_gap",
         "shell.wall_generator",
@@ -1567,6 +2034,10 @@ def for_part(
     fit_kinds: Sequence[str] = (),
     connectors: Sequence[float] = (),
     flavour: SlicerFlavour | None = None,
+    whole_layers: bool = False,
+    organic: Collection[str] = (),
+    declined: Collection[str] = (),
+    trees: Collection[str] | None = None,
 ) -> list[SettingAdvice]:
     """Was dieses eine Teil anders braucht als die Platte (§29).
 
@@ -1595,6 +2066,10 @@ def for_part(
                 fit_kinds=fit_kinds,
                 connectors=connectors,
                 flavour=flavour,
+                whole_layers=whole_layers,
+                organic=organic,
+                declined=declined,
+                trees=trees,
             )
             if entry.path in PART_PATHS
         ]
@@ -1612,34 +2087,24 @@ def for_part(
     return _merged(settings, advice)
 
 
-def _quiet_layers(result: SliceResult, quiet: frozenset[tuple[int, int]]) -> frozenset[int]:
-    """Schichten, deren Überhang ganz aus Kanal- und Randstücken besteht — ihre
-    Brücken tragen sich selbst oder verlangen keine Stütze."""
-    return frozenset(
-        index
-        for index, layer in enumerate(result.layers)
-        if layer.overhangs
-        and all((index, number) in quiet for number in range(len(layer.overhangs)))
-    )
-
-
 def _may_need_support(
     result: SliceResult,
     islands: tuple[float, ...],
     overhang: float,
     patch: float,
-    quiet_layers: frozenset[int] = frozenset(),
+    quiet: frozenset[tuple[int, int]] = frozenset(),
+    cancelled: CancelToken | None = None,
 ) -> bool:
     """Die zwei Wege aus :func:`_from_geometry` zum Stützbedarf, dazu Inseln
-    und lange Brücken außerhalb der Schichten aus Kanal- und Randstücken
-    (:func:`_quiet_layers`)."""
+    und lange Brücken außerhalb der Kanal- und Randstücke ``quiet``
+    (:func:`span_beside`, RM-627)."""
     return (
         bool(islands)
         or worth_support(patch, overhang)
         or any(
-            layer.bridge_width > SPAN_INTERESTING
+            span_beside(result, index, quiet, cancelled=cancelled) > SPAN_INTERESTING
             for index, layer in enumerate(result.layers)
-            if index not in quiet_layers
+            if layer.bridge_width > SPAN_INTERESTING
         )
     )
 
@@ -2010,7 +2475,9 @@ def warnings_for(
     return findings
 
 
-def located_warnings(result: SliceResult, profile: Profile) -> list[Finding]:
+def located_warnings(
+    result: SliceResult, profile: Profile, *, cancelled: CancelToken | None = None
+) -> list[Finding]:
     """Die Befunde aus der Geometrie — jeder mit der Stelle, an der er sitzt.
 
     Eine Rechnung für zwei Wege: :func:`warnings_for` nimmt sie für den
@@ -2018,7 +2485,7 @@ def located_warnings(result: SliceResult, profile: Profile) -> list[Finding]:
     zusätzlich an ihren Körper für den Prüfbericht. Der Ort ist die Mitte der
     Fläche, die an der dünnsten Stelle bei der Öffnung verloren geht, bzw. die
     Mitte der freien Fläche über der längsten Brücke; ohne Ort fliegt der
-    Klick zum Körper.
+    Klick zum Körper. ``cancelled`` erreicht die Brückenfrage (:func:`_from_spans`).
     """
     findings: list[Finding] = []
     least = NARROW_LINE_SHARE * profile.printer.nozzle_diameter
@@ -2050,7 +2517,7 @@ def located_warnings(result: SliceResult, profile: Profile) -> list[Finding]:
                 suggestions=(OPEN_PRINT_SETTINGS,),
             )
         )
-    findings += _from_spans(result)
+    findings += _from_spans(result, cancelled)
     # **Ein Brim, der nicht aufs Bett passt, wird nicht vorgeschlagen — aber
     # gesagt** (:func:`_brim_where_it_fits`). Gefragt wie dort: kleine
     # Standfläche oder kleine Füße.
@@ -2076,21 +2543,24 @@ def located_warnings(result: SliceResult, profile: Profile) -> list[Finding]:
     return findings
 
 
-def _from_spans(result: SliceResult) -> list[Finding]:
+def _from_spans(result: SliceResult, cancelled: CancelToken | None = None) -> list[Finding]:
     """Decken, die quer durch die Luft spannen (§22.2).
 
     Kein Vorschlag, sondern ein Befund: keine Einstellung macht aus einer
     27-mm-Brücke eine tragende Fläche. Was hilft, ist die Geometrie — ein
     Übergang unter 45 Grad statt einer waagerechten Schulter — oder eine
-    Stütze. Beides entscheidet der Nutzer, nicht die Regel.
+    Stütze; über einem Kanal nur der Übergang, denn eine Stütze käme dort
+    nicht mehr heraus. Was davon, entscheidet der Nutzer, nicht die Regel.
 
     Gemeldet wird die schlimmste Stelle mit ihrer Höhe, nicht jede einzelne:
     ein Bericht mit dreißig Zeilen derselben Sache wird nicht gelesen.
 
-    **Der Ort ist die freie Fläche, nicht die Achse.** Hier stand
+    **Der Ort ist die gemessene Brücke, nicht die Achse.** Hier stand
     ``(0, 0, z)``: die Höhe stimmte, der Klick flog aber zum Ursprung der
-    Szene, neben das Teil. Jetzt ist es die Mitte der größten freien Fläche
-    dieser Schicht über der darunter; ohne sie fliegt er zum Körper.
+    Szene, neben das Teil. Jetzt zeigt er dorthin, wo :func:`span_spot` die
+    längste Brücke gemessen hat, sonst auf die Mitte der größten freien Fläche
+    der Schicht, die ein übriges Stück berührt (:func:`_bridge_place`); ohne
+    sie fliegt er zum Körper.
     """
     spanning = [
         index for index, layer in enumerate(result.layers) if layer.bridge_width > SPAN_INTERESTING
@@ -2098,42 +2568,93 @@ def _from_spans(result: SliceResult) -> list[Finding]:
     if not spanning:
         return []
     # **Ein Rand, der sich selbst trägt, spannt nicht** (:func:`ledges`), wie im
-    # Stützbedarf (:func:`_quiet_layers`) — sonst warnte der Bericht, wo der Rat
-    # keine Stütze verlangt. Eine Schulter um eine freie Öffnung ist kein Rand
-    # (``analysis._spans_an_opening``): Ihre Bahnen laufen quer über die
-    # Öffnung, und der Befund bleibt (Gewürzbehälter, Review vom 08.10.2026).
-    # Gefragt erst hier, und nur nach den Stücken der spannenden Schichten.
+    # Stützbedarf (:func:`_may_need_support`) — sonst warnte der Bericht, wo der
+    # Rat keine Stütze verlangt. Gemessen wird je Schicht ohne die Ränder
+    # (:func:`span_beside`, RM-627): Ein Kragen um eine Wand meldete sonst
+    # 46 mm, sobald ein Kinnstreifen auf derselben Schicht lag. Eine Schulter um
+    # eine freie Öffnung ist kein Rand (``analysis._spans_an_opening``): Ihre
+    # Bahnen laufen quer über die Öffnung, und der Befund bleibt
+    # (Gewürzbehälter, Review vom 08.10.2026). Gefragt erst hier, und nur nach
+    # den Stücken der spannenden Schichten.
     asked = frozenset(
         (index, number)
         for index in spanning
         for number in range(len(result.layers[index].overhangs))
     )
-    resting = _quiet_layers(result, ledges(result, asked))
-    spanning = [index for index in spanning if index not in resting]
+    edges = ledges(result, asked, cancelled=cancelled)
+    widths = {index: span_beside(result, index, edges, cancelled=cancelled) for index in spanning}
+    spanning = [index for index in spanning if widths[index] > SPAN_INTERESTING]
     if not spanning:
         return []
-    worst = max(spanning, key=lambda index: result.layers[index].bridge_width)
+    # **Über einem Kanal hilft keine Stütze** (Review zu RM-627). Der Rat
+    # verlangt dort bewusst keine (:func:`model_support`, die Waschschüssel) und
+    # schlägt die Kanalsperre vor; der Bericht riet trotzdem „oder eine Stütze“.
+    # Spannt eine Schicht auch ohne ihre Kanaldecken, ist das eine Brücke wie
+    # jede andere, gemessen und gezeigt ohne sie — dieselbe Frage wie im
+    # Stützbedarf. Sonst hängt nur die Decke über dem Kanal durch, und der
+    # Befund sagt das, ohne Stütze, an ihr.
+    #
+    # **Gefragt wird so wenig wie möglich**, denn die Kanalfrage kostet je Decke
+    # den Durchgang bis zum Bett, am Drachen (45°) 17 bis 96 s je Stück; die
+    # sieben Stücke seiner einen spannenden Schicht kosteten zusammen 143 s,
+    # sechs davon unter 0,3 mm². Nur Stücke, die weiter spannen können
+    # (:func:`_may_span`), und nur Schichten, deren Weite ohne Kanaldecken die
+    # beste bisher noch übertreffen kann — die Weite fällt dadurch nur. Ein
+    # ungefragtes Stück zählt als offen: Im Zweifel bleibt der Befund, wie er war.
+    channels: frozenset[tuple[int, int]] = frozenset()
+    best, worst = 0.0, None
+    for index in sorted(spanning, key=lambda index: (-widths[index], index)):
+        if widths[index] <= max(best, SPAN_INTERESTING):
+            break
+        found = channel_pieces(
+            result,
+            frozenset(
+                (index, number)
+                for number in range(len(result.layers[index].overhangs))
+                if (index, number) not in edges and _may_span(result, (index, number))
+            ),
+            cancelled=cancelled,
+        )
+        channels |= found
+        width = (
+            span_beside(result, index, edges | found, cancelled=cancelled)
+            if found
+            else widths[index]
+        )
+        if width > best:
+            best, worst = width, index
+    over_channel = worst is None or best <= SPAN_INTERESTING
+    if worst is None or best <= SPAN_INTERESTING:
+        worst = max(spanning, key=lambda index: (widths[index], -index))
+        best = widths[worst]
     layer = result.layers[worst]
     _log.info("%d layer(s) span more than %.0f mm", len(spanning), SPAN_INTERESTING)
-    location = None
-    if worst > 0:
-        free = _layer_shape(layer).difference(
-            _layer_shape(result.layers[worst - 1]).buffer(OVERHANG_MARGIN)
+    # Gezeigt wird die Decke über dem Kanal, sonst die Brücke ohne Kanaldecken.
+    measured = (
+        frozenset(
+            (worst, number)
+            for number in range(len(layer.overhangs))
+            if (worst, number) not in channels
         )
-        pieces = [part for part in getattr(free, "geoms", [free]) if part.area > 0.0]
-        if pieces:
-            anchor = max(pieces, key=lambda part: part.area).representative_point()
-            location = (float(anchor.x), float(anchor.y), float(layer.z))
+        if over_channel
+        else edges | channels
+    )
+    location = _bridge_place(result, worst, measured)
     return [
         Finding(
             code="slice.long_bridge",
             severity="warning",
             message=_(
+                "Über diesem Kanal spannt die Decke frei, ihre Bahnen hängen durch. Hier hilft "
+                "ein Übergang unter 45 Grad, eine Stütze käme nicht mehr heraus."
+            )
+            if over_channel
+            else _(
                 "Hier spannt eine Decke frei, ihre Bahnen hängen durch. Ein Übergang unter 45 "
                 "Grad oder eine Stütze hilft."
             ),
             values={
-                "span_mm": round(layer.bridge_width, 1),
+                "span_mm": round(best, 1),
                 "z_mm": round(layer.z, 2),
                 "layers": len(spanning),
             },
@@ -2142,6 +2663,54 @@ def _from_spans(result: SliceResult) -> list[Finding]:
             suggestions=(SHOW_SUPPORT_NEED,),
         )
     ]
+
+
+def _may_span(result: SliceResult, name: tuple[int, int]) -> bool:
+    """Kann über dem Stück ``name`` (Schicht, Stück) eine Brücke weiter als
+    :data:`SPAN_INTERESTING` liegen?
+
+    Jeder Kern, den :func:`span_beside` misst, liegt in einem Stück, und die
+    gemessene Fläche reicht höchstens ``bridge_from/2`` darüber hinaus; keine
+    Weite ist größer als die Diagonale ihrer Hüllbox. Ein Stück, dessen um
+    ``bridge_from`` erweiterte Hüllbox diagonal nicht weiter reicht, trägt
+    keine lange Brücke.
+    """
+    piece = result.layers[name[0]].overhangs[name[1]]
+    reach = BRIDGE_FROM if result.bridge_from is None else result.bridge_from
+    low = piece.outline.min(axis=0)
+    high = piece.outline.max(axis=0)
+    width, depth = (high - low) + 2.0 * reach
+    return math.hypot(width, depth) > SPAN_INTERESTING
+
+
+def _bridge_place(
+    result: SliceResult, index: int, quiet: frozenset[tuple[int, int]]
+) -> tuple[float, float, float] | None:
+    """Wo die Brückenwarnung der Schicht ``index`` hinzeigt, ohne die Stücke aus
+    ``quiet`` (:func:`_from_spans`).
+
+    An der Brücke, die gemessen wurde, nicht am Rand: Mit Stücken aus ``quiet``
+    auf der Schicht über ihrer Fläche (:func:`span_spot`) — eine Flanke
+    verbindet sonst Rand und Brücke zu einer freien Fläche —, sonst an der
+    größten freien Fläche der Schicht, die ein übriges Stück berührt.
+    """
+    layer = result.layers[index]
+    spot = span_spot(result, index, quiet)
+    if spot is not None:
+        return (spot[0], spot[1], float(layer.z))
+    if index == 0:
+        return None
+    free = _layer_shape(layer).difference(
+        _layer_shape(result.layers[index - 1]).buffer(OVERHANG_MARGIN)
+    )
+    pieces = [part for part in getattr(free, "geoms", [free]) if part.area > 0.0]
+    kept = kept_overhang(result, index, quiet)
+    if kept is not None:
+        pieces = [part for part in pieces if part.intersects(kept)]
+    if not pieces:
+        return None
+    anchor = max(pieces, key=lambda part: part.area).representative_point()
+    return (float(anchor.x), float(anchor.y), float(layer.z))
 
 
 def apply(settings: PrintSettings, advice: list[SettingAdvice]) -> PrintSettings:

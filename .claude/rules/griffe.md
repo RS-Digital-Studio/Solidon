@@ -69,6 +69,15 @@ sichtbar und tot.
   eines Bohrwerkzeugs kann weit unter der gewählten Fläche liegen; dort wäre
   der Griff von der bearbeiteten Stelle getrennt. Die Werkzeuggeometrie und
   ihre Matrix bleiben dabei unverändert.
+* **Der Griff an der Vorschau eines Erzeugers räumt seine Zahl selbst ab**
+  (`_end_preview_drag`): beim Loslassen und wenn der Dialog mitten im Zug
+  schließt. `_end_drag` passt dort nicht, es hängt den Griff der Auswahl an;
+  ohne Abräumen stand „Y 60,62 mm“ nach dem Einsetzen über der Ansicht (RM-558).
+  Der Vorschauzug ist gekennzeichnet (`_preview_dragging`): Eine getippte Zahl
+  geht mit der Eingabetaste über `previewDragged` an die Vorschau, nie an die
+  Auswahl, und beim Loslassen bleibt die Leiste stehen, solange getippt wird.
+  Esc und Enter setzen die Vorschau vorher auf ihre Lage vor dem Zug zurück
+  (`_put_the_preview_back`), sonst rechnet der neue Griff den Weg mit.
 * **Ein Zug am Griff lässt die Navigation in Ruhe**: Der Griff sieht die
   Zeigerereignisse vor dem Navigator und gibt frei, was er nicht braucht; kein
   Zugende baut den Navigator neu

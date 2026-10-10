@@ -187,11 +187,15 @@ def test_actual_row_refresh_matches_effective_raft_without_supports(monkeypatch,
         },
         _current_flavour=lambda: flavour,
         _foundation_for_current_setup=lambda: None,
+        _slicer_path="",
+        _trees=None,
         _labels={path: path for path in rows},
         _refusals={},
         _tab_forms={
             group: SimpleNamespace(setRowVisible=lambda row, visible: shown.update({row: visible}))
-            for group in ("support", "adhesion")
+            # Jedes Formular, in dem eine Detailzeile steht: Die volle Kühlung an
+            # der Stütze steht unter „Kühlung“ (RM-583).
+            for group in {fields[path].group for path in rows}
         },
         _queue_refit=lambda reason: None,
     )

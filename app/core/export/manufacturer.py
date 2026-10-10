@@ -362,6 +362,15 @@ def _count(text: str, _context: _Context) -> object:
     return int(number)
 
 
+def _tree_walls(text: str, _context: _Context) -> object:
+    """Die Wände der Baumstämme (RM-584): 0 heißt bei Orca „automatisch“, Bambu
+    schreibt -1 — beides eine Wand, wie der Baum sie ohne Angabe druckt."""
+    number = _float(text)
+    if number is None or not number.is_integer():
+        return Foreign(text)
+    return max(int(number), 1)
+
+
 def _fraction(text: str, _context: _Context) -> object:
     """„15%" als Anteil 0,15."""
     number = _float(text.rstrip("%").strip())
@@ -382,6 +391,19 @@ def _width(text: str, context: _Context) -> object:
     if number is None:
         return Foreign(text)
     return number if number > 0.0 else None
+
+
+def _bottom_layers(text: str | None, top: object) -> object:
+    """Untere Kontaktlagen; -1 heißt in der Orca-Familie und bei PrusaSlicer
+    „wie oben“ und wird zur oberen Zahl (RM-583)."""
+    if text is None:
+        return None
+    number = _float(text)
+    if number is None or not number.is_integer():
+        return Foreign(text)
+    if number < 0.0:
+        return top if isinstance(top, int) else None
+    return int(number)
 
 
 def _flag(text: str, _context: _Context) -> object:
@@ -450,6 +472,8 @@ ORCA_PROCESS: Final[tuple[tuple[str, str, Reader], ...]] = (
     ),
     ("support.z_gap", "support_top_z_distance", _number),
     ("support.interface_layers", "support_interface_top_layers", _count),
+    ("support.interface_spacing", "support_interface_spacing", _number),
+    ("support.tree_walls", "tree_support_wall_count", _tree_walls),
     ("adhesion.skirt_loops", "skirt_loops", _count),
     ("adhesion.skirt_distance", "skirt_distance", _number),
     ("adhesion.brim_width", "brim_width", _number),
@@ -501,6 +525,10 @@ PROGRAM_DEFAULTS: Final[Mapping[str, Mapping[str, str]]] = {
     "crealityprint": {
         "brim_type": "auto_brim",
         "precise_outer_wall": "0",
+        # Die Wände der Bäume unter Crealitys eigenem Namen
+        # (``slicer_keys.PROGRAM_KEYS``); kein Prozess nennt ihn, der
+        # Konfigurationsblock am K1 Max zeigt 0 (RM-584, 09.10.2026).
+        "tree_support_wall_count_tree": "0",
         "wall_generator": "arachne",
         "wall_sequence": "inner wall/outer wall",
     },
@@ -661,10 +689,17 @@ def _read_process(
     *,
     program_name: str = "",
 ) -> tuple[dict[str, object], dict[str, str]]:
-    """Die Prozesswerte in Solidons Pfaden, dazu, was sich nicht übersetzen ließ."""
+    """Die Prozesswerte in Solidons Pfaden, dazu, was sich nicht übersetzen ließ.
+
+    Gelesen wird der Schlüssel, den die Übergabe für dieses Programm schreibt
+    (``slicer_keys.native_key``): Creality Print druckt die Wände der Bäume aus
+    ``tree_support_wall_count_tree`` (RM-584), und gegen den gemeinsamen Namen
+    verglichen schlug der Rat vor, was schon galt, oder übersah eine Abweichung.
+    """
     read: dict[str, object] = {}
     foreign: dict[str, str] = {}
-    for path, key, reader in ORCA_PROCESS:
+    for path, common, reader in ORCA_PROCESS:
+        key = slicer_keys.native_key(common, program_name)
         text = _text(values.get(key))
         if text is None:
             text = defaults.get(key)
@@ -708,6 +743,15 @@ def _read_process(
     density = _support_density(values, read, context)
     if density is not None:
         read["support.density"] = density
+    bottom_text = _text(values.get("support_interface_bottom_layers"))
+    bottom = _bottom_layers(
+        bottom_text if bottom_text is not None else defaults.get("support_interface_bottom_layers"),
+        read.get("support.interface_layers"),
+    )
+    if isinstance(bottom, Foreign):
+        foreign["support.bottom_interface_layers"] = bottom.raw
+    elif bottom is not None:
+        read["support.bottom_interface_layers"] = bottom
     return read, foreign
 
 
@@ -887,6 +931,20 @@ ORCA_SUPPORT_INTERFACE_SPEED: Final = 80.0
 ORCA_SUPPORT_CLOSING: Final = 2.0
 
 
+def auto_prints_trees(values: Mapping[str, Any], flavour: str) -> bool:
+    """Stützt dieser Herstellerprozess unter „automatisch“ mit Bäumen (RM-584)?
+
+    In der Orca-Familie heißt es ``support_type`` ``tree(…)``, ob organisch,
+    schlank, kräftig oder hybrid; bei PrusaSlicer ``support_material_style``
+    ``organic``. Die eine Auskunft für Zeitmodell (``Motion.support_tree``) und
+    Rat (``handover.tree_styles``)."""
+    if flavour == "orca":
+        return (_text(values.get("support_type")) or "").startswith("tree")
+    if flavour == "prusa":
+        return (_text(values.get("support_material_style")) or "") == "organic"
+    return False
+
+
 def _orca_support_motion(
     process: Mapping[str, Any], default: float | None, nozzle: float
 ) -> dict[str, Any]:
@@ -911,7 +969,10 @@ def _orca_support_motion(
         "support_interface_density": width / (width + spacing)
         if spacing is not None and spacing >= 0.0
         else None,
-        "support_tree": (_text(process.get("support_type")) or "").startswith("tree"),
+        "support_tree": auto_prints_trees(process, "orca"),
+        # Jedes Programm der Familie kennt ``tree_hybrid``; ein Wächter hält es
+        # gegen ``slicer_keys.NOT_OFFERED_BY_PROGRAM`` (RM-584).
+        "support_hybrid": True,
         # Fest in ``SupportMaterial.cpp`` (``support_closing_radius(2.0)``).
         "support_closing": ORCA_SUPPORT_CLOSING,
         "support_skips_bridges": (_text(process.get("bridge_no_support")) or "0") in ("1", "true"),
@@ -1008,7 +1069,7 @@ def _prusa_support_motion(values: Mapping[str, Any], nozzle: float) -> dict[str,
         "support_interface_density": width / (width + spacing)
         if spacing is not None and spacing >= 0.0
         else None,
-        "support_tree": (_text(values.get("support_material_style")) or "") == "organic",
+        "support_tree": auto_prints_trees(values, "prusa"),
         "support_closing": _float(_text(values.get("support_material_closing_radius")) or ""),
         "support_skips_bridges": (_text(values.get("dont_support_bridges")) or "0")
         in ("1", "true"),
@@ -1030,17 +1091,14 @@ def cura_motion(setup: SlicerSetup, profile: Profile) -> Motion | None:
         return None
     jerk = _cura_number(chain.get("machine_max_jerk_xy"))
     limit = _cura_number(chain.get("machine_max_acceleration_x"))
-    interface = _cura_number(chain.get("support_interface_density"))
     return Motion(
         nozzle=profile.printer.nozzle_diameter,
         jerk=jerk if jerk is not None and jerk > 0.0 else None,
         acceleration_limit=limit if limit is not None and limit > 0.0 else None,
-        # Stütztempo und Beschleunigung folgen dem, was Solidon schreibt
-        # (``speed_print``, ``print_time._roles``); die Kontaktdichte steht in
-        # der Definition, in Prozent.
-        support_interface_density=interface / 100.0
-        if interface is not None and interface > 0.0
-        else None,
+        # Stütztempo, Beschleunigung und Kontaktdichte folgen dem, was Solidon
+        # schreibt (``speed_print``, ``print_time._roles``,
+        # ``slicer_keys.CURA_INTERFACE_LINES``), nicht der Definition.
+        support_interface_density=1.0 / slicer_keys.CURA_INTERFACE_LINES,
         support_closing=_cura_number(chain.get("support_join_distance")),
     )
 
@@ -1099,7 +1157,8 @@ def _support_style(values: Mapping[str, Any]) -> str | None:
         return "none"
     kind = (_text(values.get("support_type")) or "").casefold()
     if kind.startswith("tree"):
-        return "tree"
+        style = (_text(values.get("support_style")) or "").casefold()
+        return "hybrid" if style == "tree_hybrid" else "tree"
     if kind.startswith("normal"):
         return "grid"
     return "auto"
@@ -1297,7 +1356,9 @@ def _read_filament(
             continue
         if solidon in slicer_profiles._AS_FRACTION:
             number /= 100.0
-        read[solidon] = kind(number)
+        value = kind(number)
+        if value is not None:
+            read[solidon] = value
     refuses = False
     key = PLATE_TEMPERATURES.get(plate)
     if key is not None:
@@ -1381,6 +1442,7 @@ PRUSA_PROCESS: Final[tuple[tuple[str, str, Reader], ...]] = (
     ),
     ("support.z_gap", "support_material_contact_distance", _number),
     ("support.interface_layers", "support_material_interface_layers", _count),
+    ("support.interface_spacing", "support_material_interface_spacing", _number),
     ("adhesion.skirt_loops", "skirts", _count),
     ("adhesion.skirt_distance", "skirt_distance", _number),
     ("adhesion.brim_width", "brim_width", _number),
@@ -1456,8 +1518,10 @@ PRUSA_PROGRAM_DEFAULTS: Final[Mapping[str, str]] = {
     "support_material": "0",
     "support_material_auto": "1",
     "support_material_buildplate_only": "0",
+    "support_material_bottom_interface_layers": "-1",
     "support_material_contact_distance": "0.2",
     "support_material_interface_layers": "3",
+    "support_material_interface_spacing": "0",
     "support_material_spacing": "2.5",
     "support_material_style": "grid",
     "support_material_threshold": "0",
@@ -1622,6 +1686,13 @@ def _read_prusa(
     take("support.xy_gap", _prusa_support_gap(values, outer_width))
     take("support.density", _prusa_support_density(values, read, context))
     take("adhesion.kind", _prusa_adhesion(values))
+    take(
+        "support.bottom_interface_layers",
+        _bottom_layers(
+            _prusa_first(values.get("support_material_bottom_interface_layers")),
+            read.get("support.interface_layers"),
+        ),
+    )
     read.update(_prusa_retraction(values))
     read.update(_prusa_material(values))
     return read, foreign
@@ -1858,7 +1929,9 @@ def _prusa_material(values: Mapping[str, Any]) -> dict[str, object]:
             continue
         if solidon in slicer_profiles._AS_FRACTION:
             number /= 100.0
-        read[solidon] = kind(number)
+        value = kind(number)
+        if value is not None:
+            read[solidon] = value
     always = (_prusa_first(values.get("fan_always_on")) or "0").casefold()
     if always in ("0", "false") and "cooling.minimum_fan_speed" in read:
         read["cooling.minimum_fan_speed"] = 0.0
@@ -2238,6 +2311,12 @@ def _without_process(setup: SlicerSetup | None) -> str:
     return handover._profile_name(setup.machine_profile)
 
 
+def cura_interface_gap(stage: PrintSettings) -> float:
+    """Die Lücke, die Cura ohne Wahl druckt: drei Bahnbreiten der Stufe
+    Linienabstand, wie Creality und Elegoo in Cura (RM-583)."""
+    return (slicer_keys.CURA_INTERFACE_LINES - 1.0) * stage.layers.line_width
+
+
 def base_settings(
     profile: Profile, quality: QualityPreset, setup: SlicerSetup | None
 ) -> Foundation:
@@ -2249,6 +2328,23 @@ def base_settings(
     und die Übergabe schreibt sie dann vollständig.
     """
     fallback = cura_fan_curve(settings_table.resolve(profile, quality), profile, setup)
+    if setup is not None and setup.flavour == "cura":
+        from app.core.slice import advise
+
+        # Cura rechnet den Abstand in ganzen Schichten: Die Grundlage trägt das
+        # Vielfache, das zum Material passt, sonst das nächste (RM-583).
+        layer = fallback.layers.layer_height
+        gap = advise.support_gap_target(layer, profile.material, "cura")
+        if gap is None and layer > 0.0:
+            gap = max(1, round(fallback.support.z_gap / layer)) * layer
+        fallback = replace(
+            fallback,
+            support=replace(
+                fallback.support,
+                interface_spacing=cura_interface_gap(fallback),
+                z_gap=fallback.support.z_gap if gap is None else gap,
+            ),
+        )
     if setup is None or setup.flavour not in ("orca", "prusa") or not setup.base_process:
         return _table_foundation(
             profile,

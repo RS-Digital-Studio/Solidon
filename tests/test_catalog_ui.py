@@ -7,16 +7,18 @@ Kachel bekommt.
 
 from __future__ import annotations
 
+import re
 import time
 from collections.abc import Callable
 
+import numpy as np
 import pytest
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QApplication, QDialogButtonBox, QListView, QListWidgetItem
 
 from app.core.knowledge.parts import PARTS
 from app.ui.catalog import TILE_WIDTH, PartCatalog
-from app.ui.panels import open_section
+from tests.helpers import clean_recipe_globals
 
 
 def catalog_names(catalog: PartCatalog) -> set[str]:
@@ -57,6 +59,18 @@ def wait_until(ready: Callable[[], bool], what: str, timeout_ms: int = 5000) -> 
         if time.monotonic() > deadline:
             raise AssertionError(f"{what} kam in {timeout_ms} ms nicht zustande")
         application.processEvents()
+
+
+@pytest.fixture
+def no_own_parts(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Die Bibliothek nur mit mitgelieferten Bausteinen (RM-680).
+
+    Ob *Bausteine verwalten* offen beginnt und was der Weitergabeknopf ohne
+    Auswahl sagt, hängt am eigenen Bausteinordner. Ein Rezept, das ein anderer
+    Test im selben Arbeiter registriert ließ, darf das nicht entscheiden.
+    """
+    shipped = tuple(spec for spec in PARTS.all() if spec.source == "shipped")
+    monkeypatch.setattr(PARTS, "all", lambda: shipped)
 
 
 def test_the_catalogue_is_a_grid_not_a_list(qt_app: QApplication) -> None:
@@ -364,6 +378,7 @@ def test_a_failed_or_missing_range_check_is_written_on_the_entry(
     assert tr("an den Grenzen kam kein brauchbarer Körper heraus") in describe(donor)
 
 
+@pytest.mark.usefixtures("no_own_parts")
 def test_the_locked_save_button_shows_its_reason_beside_it(qt_app: QApplication) -> None:
     """„Sagt daneben, was ihm fehlt" — das Handbuch versprach es, der Grund
     stand aber nur im Tooltip, und die Detailspalte desselben Dialogs sagt
@@ -374,9 +389,8 @@ def test_the_locked_save_button_shows_its_reason_beside_it(qt_app: QApplication)
     """
     catalog = PartCatalog()
     try:
-        # Knopf und Grund stehen im Abschnitt *Bausteine verwalten*, der seit
-        # 48ffcf145 zugeklappt beginnt; wer den Knopf sucht, öffnet ihn.
-        open_section(catalog._management)
+        # Ohne eigenen Baustein beginnt *Bausteine verwalten* offen (RM-680):
+        # Der Grund steht da, ohne dass jemand die Kopfzeile öffnet.
         catalog.set_can_save(False, "Dafür muss zuerst etwas gerechnet sein.")
         assert catalog.save_hint.isVisibleTo(catalog), "der Grund steht sichtbar da"
         assert "gerechnet" in catalog.save_hint.text()
@@ -385,6 +399,75 @@ def test_the_locked_save_button_shows_its_reason_beside_it(qt_app: QApplication)
         catalog.set_can_save(True, "")
         assert not catalog.save_hint.isVisibleTo(catalog), "frei heißt: keine Zeile"
         assert catalog.save_part.isEnabled()
+    finally:
+        catalog.release()
+
+
+@pytest.mark.usefixtures("no_own_parts")
+def test_a_fresh_catalogue_shows_its_management_without_a_click(qt_app: QApplication) -> None:
+    """RM-680: Ohne eigenen Baustein begann *Bausteine verwalten* zugeklappt.
+
+    *Speichern*, *Hinzufügen* und beide Sperrgründe standen hinter einer
+    Kopfzeile, die niemand öffnet (Rückschritt gegenüber 0.5.1, seit
+    48ffcf145). Ohne eigenen Baustein beginnt der Abschnitt jetzt offen, und
+    der Weitergabeknopf schickt zum Speichern: „Wählen Sie einen Baustein"
+    führte zu einem eingebauten und damit in die nächste Absage.
+    """
+    from app.i18n import tr
+
+    catalog = PartCatalog()
+    try:
+        catalog.show()
+        QApplication.processEvents()
+        assert catalog.save_part.isVisibleTo(catalog), "Speichern steht ohne Klick da"
+        assert catalog.adopt_part.isVisibleTo(catalog), "Hinzufügen steht ohne Klick da"
+        catalog.set_can_save(False, "Dafür muss zuerst etwas gerechnet sein.")
+        assert catalog.save_hint.isVisibleTo(catalog)
+        assert catalog.share_hint.isVisibleTo(catalog)
+        assert catalog.share_hint.text() == tr(
+            "Speichern Sie zuerst einen eigenen Baustein, um ihn weiterzugeben."
+        )
+    finally:
+        catalog.release()
+
+
+@pytest.mark.parametrize(
+    ("source", "kept"),
+    [("recipe", True), ("imported", True), ("travelled", False), ("user", False)],
+)
+def test_only_a_part_in_the_own_library_closes_the_management(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch, source: str, kept: bool
+) -> None:
+    """RM-680: Zu beginnt *Bausteine verwalten* nur, wenn der eigene Ordner etwas hält.
+
+    Gezählt wird, was sich dort weitergeben, bearbeiten und entfernen lässt:
+    ein gespeichertes Rezept und ein hinzugefügter Baustein. Ein mitgereister
+    gehört der Projektdatei, ein ``.py``-Baustein hat keine Datei zum
+    Weitergeben — für beide ist *Speichern* der nächste Schritt.
+    ``PartSpec.own`` zählte anders (``user`` ja, ``imported`` nein); wer
+    darauf vereinfacht, fällt hier auf.
+    """
+    import dataclasses
+
+    from app.i18n import tr
+
+    shipped = tuple(spec for spec in PARTS.all() if spec.source == "shipped")
+    donor = next(spec for spec in shipped if "magnet" not in spec.name)
+    probe = dataclasses.replace(donor, name="eigen_probe_680", source=source)
+    monkeypatch.setattr(PARTS, "all", lambda: (*shipped, probe))
+    catalog = PartCatalog()
+    try:
+        catalog.show()
+        QApplication.processEvents()
+        assert catalog.save_part.isVisibleTo(catalog) is not kept, (
+            f"{source}: der Abschnitt beginnt {'zu' if kept else 'offen'}"
+        )
+        reason = (
+            tr("Wählen Sie einen Baustein, den Sie als Datei weitergeben möchten.")
+            if kept
+            else tr("Speichern Sie zuerst einen eigenen Baustein, um ihn weiterzugeben.")
+        )
+        assert catalog.share_part.toolTip() == reason, source
     finally:
         catalog.release()
 
@@ -435,7 +518,7 @@ def test_without_a_body_the_catalogue_shows_but_does_not_insert(qt_app: QApplica
 
 
 def test_a_part_that_needs_a_spot_says_so_before_the_click(qt_app: QApplication) -> None:
-    """Die meisten Bausteine brauchen eine Stelle (gezählt am 02.10.2026: 25 von 35).
+    """Ein Baustein, der nur an einem Körper wirkt, braucht eine Stelle (``standalone`` nicht).
 
     Der Katalog fragte nur, ob ein **Körper** gewählt ist, und ließ dann
     einsetzen; die Absage kam als Fehler danach — „Für diesen Baustein fehlt
@@ -460,7 +543,7 @@ def test_a_part_that_needs_a_spot_says_so_before_the_click(qt_app: QApplication)
                     return True
             return False
 
-        assert waehle("printed_screw"), "die Schraube steht im Katalog"
+        assert waehle("screw_hole"), "das Schraubenloch steht im Katalog"
         assert catalog._insert is not None
         assert catalog._insert.isEnabled(), "kein Riegel — die Position bleibt ein Weg"
         assert catalog.insert_hint.isVisibleTo(catalog), "aber der Hinweis steht da"
@@ -468,16 +551,22 @@ def test_a_part_that_needs_a_spot_says_so_before_the_click(qt_app: QApplication)
         assert "Fläche" in text and "Bohrung" in text, "er nennt beide Stellen"
         assert "Position" in text, "und den zweiten Weg, den es gibt"
 
+        # Eine Schraube ist für sich ein Teil (RM-562): ohne Stelle ein eigener Körper.
+        assert waehle("printed_screw")
+        assert catalog._insert.isEnabled()
+        assert "eigener Körper" in catalog.insert_hint.text()
+
         assert waehle("wall_ladder"), "die Wandstärkenleiter steht im Katalog"
         assert not catalog.insert_hint.isVisibleTo(catalog), (
             "ein frei stehender Prüfkörper braucht keine Stelle — die Sperre gilt je Baustein"
         )
 
-        catalog.set_feature_chosen(True)
-        assert waehle("printed_screw")
-        assert not catalog.insert_hint.isVisibleTo(catalog), (
-            "mit gewählter Stelle ist nichts zu sagen"
-        )
+        catalog.set_feature_chosen(True, ("hole",))
+        for name in ("screw_hole", "printed_screw"):
+            assert waehle(name)
+            assert not catalog.insert_hint.isVisibleTo(catalog), (
+                f"{name}: mit gewählter Stelle ist nichts zu sagen"
+            )
     finally:
         catalog.release()
 
@@ -574,6 +663,7 @@ def test_a_rendered_preview_replaces_the_placeholder(qt_app: QApplication) -> No
         katalog.release()
 
 
+@pytest.mark.usefixtures("no_own_parts")
 def test_part_file_export_stays_shut_and_says_why(qt_app: QApplication) -> None:
     """Der Datei-Export ist gesperrt, und er sagt jedes Mal, warum.
 
@@ -589,15 +679,14 @@ def test_part_file_export_stays_shut_and_says_why(qt_app: QApplication) -> None:
     verlangt mehr als eine Kodierung, und ein grau gewordener Knopf ist genau
     eine.
 
-    Zwei Lagen, zwei Sätze: ohne Auswahl fehlt der Baustein, mit einem
-    eingebauten fehlt die Datei. Ein Satz für beides wäre in einem der Fälle
-    unwahr.
+    Zwei Lagen, zwei Sätze: ohne Auswahl fehlt der Baustein (ohne eigenen
+    Baustein ein eigener, RM-680), mit einem eingebauten fehlt die Datei. Ein
+    Satz für beides wäre in einem der Fälle unwahr.
     """
     catalog = PartCatalog()
     try:
         catalog.show()
-        # Der Knopf steht im zugeklappten Abschnitt *Bausteine verwalten*.
-        open_section(catalog._management)
+        # Ohne eigenen Baustein beginnt *Bausteine verwalten* offen (RM-680).
         QApplication.processEvents()
         assert not catalog.share_part.isEnabled(), "ohne Auswahl gibt es keine Datei zu exportieren"
         leer = catalog.share_part.toolTip()
@@ -693,14 +782,12 @@ def test_local_part_file_way_runs_through_the_buttons(
     from app.core.knowledge.parts import recipe as recipe_module
     from app.core.knowledge.parts.part_file import PART_FILE_SUFFIX, PartFileIO
     from app.core.knowledge.parts.recipe import register, save
-    from app.core.registry import REGISTRY
     from app.ui.catalog import PartCatalog, detail
     from app.ui.main_window import MainWindow
     from app.ui.session import Session
     from app.ui.settings import UiSettings
 
     name = "probeklotz"
-    operation_name = f"insert_{name}"
     storage = tmp_path / "user-parts"
     monkeypatch.setattr(recipe_module, "user_parts_dir", lambda: storage)
 
@@ -783,8 +870,7 @@ def test_local_part_file_way_runs_through_the_buttons(
 
         # Der Import beginnt wie auf einem zweiten Rechner: kein Eintrag, keine
         # Operation und keine gleichnamige Datei im dortigen Rezeptordner.
-        PARTS.remove(name)
-        REGISTRY.remove(operation_name)
+        clean_recipe_globals(name)
         source.unlink()
         catalog.adopt_part.click()
         wait_until(lambda: PARTS.has(name), "der Importarbeiter ergänzte den Katalog nicht")
@@ -807,8 +893,7 @@ def test_local_part_file_way_runs_through_the_buttons(
         # werden daraus neu aufgebaut, anschließend geht derselbe Exportknopf.
         catalog.release()
         window.close()
-        PARTS.remove(name)
-        REGISTRY.remove(operation_name)
+        clean_recipe_globals(name)
         loaded = recipe_module.load_all()
         assert loaded.loaded == (name,)
         assert not loaded.findings
@@ -839,8 +924,7 @@ def test_local_part_file_way_runs_through_the_buttons(
         )
         after_restart.release()
     finally:
-        PARTS.remove(name)
-        REGISTRY.remove(operation_name)
+        clean_recipe_globals(name)
         if restarted is not None:
             restarted.close()
         window.close()
@@ -852,7 +936,6 @@ def test_open_path_routes_a_part_file_through_the_catalog_worker(
     """Startargument, Finder und Ablage nutzen denselben geprüften Importweg."""
     from app.core.knowledge.parts import recipe as recipe_module
     from app.core.knowledge.parts.part_file import PART_FILE_SUFFIX, PartFileIO
-    from app.core.registry import REGISTRY
     from app.ui.main_window import MainWindow
     from app.ui.session import Session
     from app.ui.settings import UiSettings
@@ -904,8 +987,7 @@ def test_open_path_routes_a_part_file_through_the_catalog_worker(
         )
         catalog.release()
     finally:
-        PARTS.remove(name)
-        REGISTRY.remove(f"insert_{name}")
+        clean_recipe_globals(name)
         window.close()
 
 
@@ -919,7 +1001,6 @@ def test_removing_a_used_local_part_is_immediate_exact_and_points_to_history(
 
     from app.core.knowledge.parts import recipe as recipe_module
     from app.core.knowledge.parts.recipe import register, save
-    from app.core.registry import REGISTRY
     from app.core.types import Operation, Transaction
     from app.ui.main_window import MainWindow
     from app.ui.session import Session
@@ -1016,8 +1097,7 @@ def test_removing_a_used_local_part_is_immediate_exact_and_points_to_history(
         assert len(catalogs) == 1
         assert not catalogs[0]._rendering, "der beendete Katalog muss seine Vorschaukette freigeben"
     finally:
-        PARTS.remove(name)
-        REGISTRY.remove(f"insert_{name}")
+        clean_recipe_globals(name)
         window.close()
 
 
@@ -1032,7 +1112,6 @@ def test_the_picker_keeps_historical_json_and_reads_it_in_the_worker(
 
     from app.core.knowledge.parts import recipe as recipe_module
     from app.core.knowledge.parts.part_file import PartFileIO
-    from app.core.registry import REGISTRY
     from app.ui.main_window import MainWindow
     from app.ui.session import Session
     from app.ui.settings import UiSettings
@@ -1075,8 +1154,7 @@ def test_the_picker_keeps_historical_json_and_reads_it_in_the_worker(
         assert "*.solidon-part" in file_filter and "*.json" in file_filter
         assert read_off_main == [True]
     finally:
-        PARTS.remove(name)
-        REGISTRY.remove(f"insert_{name}")
+        clean_recipe_globals(name)
         window.close()
 
 
@@ -1171,8 +1249,7 @@ def test_the_application_path_rejects_an_unreferenced_executable_payload(
         assert not recipe_module.recipes_dir().joinpath(f"{name}.json").exists()
         catalog.release()
     finally:
-        PARTS.remove(name)
-        REGISTRY.remove(operation_name)
+        clean_recipe_globals(name)
         window.close()
 
 
@@ -1251,8 +1328,7 @@ def test_a_name_collision_uses_the_free_name_from_the_error_action(
         catalog.release()
     finally:
         for part_name in filter(None, (name, suggested)):
-            PARTS.remove(part_name)
-            REGISTRY.remove(f"insert_{part_name}")
+            clean_recipe_globals(part_name)
         REGISTRY.remove(operation_name)
         window.close()
 
@@ -1267,7 +1343,6 @@ def test_an_unusable_part_file_action_opens_the_picker_again(
     from app.core.knowledge.parts import PARTS
     from app.core.knowledge.parts import recipe as recipe_module
     from app.core.knowledge.parts.part_file import PART_FILE_SUFFIX, PartFileIO
-    from app.core.registry import REGISTRY
     from app.ui.catalog import PartCatalog
     from app.ui.main_window import MainWindow
     from app.ui.session import Session
@@ -1315,8 +1390,7 @@ def test_an_unusable_part_file_action_opens_the_picker_again(
         assert picker_calls == 2
         catalog.release()
     finally:
-        PARTS.remove(name)
-        REGISTRY.remove(f"insert_{name}")
+        clean_recipe_globals(name)
         window.close()
 
 
@@ -1328,11 +1402,9 @@ def test_a_part_export_write_error_performs_the_chosen_action(
     from PySide6.QtWidgets import QFileDialog
 
     from app.core.errors import FileWriteError
-    from app.core.knowledge.parts import PARTS
     from app.core.knowledge.parts import recipe as recipe_module
     from app.core.knowledge.parts.part_file import PART_FILE_SUFFIX, PartFileIO
     from app.core.knowledge.parts.recipe import register, save
-    from app.core.registry import REGISTRY
     from app.i18n import tr
     from app.ui.catalog import PartCatalog
     from app.ui.main_window import MainWindow
@@ -1398,8 +1470,7 @@ def test_a_part_export_write_error_performs_the_chosen_action(
         assert picker_calls == (1 if action_id == "retry" else 2)
         catalog.release()
     finally:
-        PARTS.remove(name)
-        REGISTRY.remove(f"insert_{name}")
+        clean_recipe_globals(name)
         if source.exists():
             source.unlink()
         window.close()
@@ -1490,6 +1561,141 @@ def test_a_new_body_is_chosen_and_the_catalogue_takes_the_only_body(
         window.close()
 
 
+def test_a_standalone_part_becomes_its_own_body_and_attaches_only_at_a_chosen_face(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """RM-562: Eine Versteifungsrippe hing am gewählten Quader, statt ein eigenes Teil zu werden.
+
+    Kunden-E-Mail vom 07.10.2026: Kabelclip, Eckwinkel, Rippe, Standfuß und
+    Wandhalter ließen sich nur an einen Körper anfügen. Nach *Quader anlegen*
+    ist der Quader gewählt, aber keine Fläche — der Katalog sagt, dass die
+    Rippe ein eigener Körper wird, und legt sie so an; der Quader bleibt, wie
+    er war. Mit einer gewählten Fläche setzt sie sich dort an.
+    """
+    from app.core.geom.mesh import as_mesh_data
+    from app.core.registry import REGISTRY
+    from app.ui.main_window import MainWindow
+    from app.ui.session import Session
+    from app.ui.settings import UiSettings
+
+    window = MainWindow(Session(), UiSettings())
+    try:
+        monkeypatch.setattr(window, "_wire_preview", lambda *args, **kwargs: None)
+        monkeypatch.setattr(window, "_may_discard", lambda: True)
+        window.run_operation(REGISTRY.get(_shown_box()))
+        dialog = window._op_dialog
+        assert dialog is not None
+        dialog.accept()
+        assert window.session.wait_for_idle(60_000)
+        QApplication.processEvents()
+        (box,) = window.session.project.document.ops[-1].outputs
+        assert window.object_tree.selected_objects() == (box,)
+        assert window.object_tree.selected_feature() is None
+        result = window.session.last_result
+        assert result is not None
+        volume = as_mesh_data(result.scene.objects[box].mesh).volume
+
+        hints: list[str] = []
+
+        def choose_rib(catalog: PartCatalog) -> int:
+            catalog.show()
+            QApplication.processEvents()
+            _choose(catalog, "rib")
+            assert catalog._insert is not None and catalog._insert.isEnabled()
+            hints.append(
+                catalog.insert_hint.text() if catalog.insert_hint.isVisibleTo(catalog) else ""
+            )
+            return int(PartCatalog.DialogCode.Accepted)
+
+        monkeypatch.setattr(PartCatalog, "exec", choose_rib)
+        window.action_catalog()
+        assert hints and "eigener Körper" in hints[0], hints
+        dialog = window._op_dialog
+        assert dialog is not None and dialog.spec.name == "create_rib"
+        dialog.accept()
+        assert window.session.wait_for_idle(60_000)
+        QApplication.processEvents()
+
+        result = window.session.last_result
+        assert result is not None and result.complete
+        assert len(result.scene.objects) == 2, "die Rippe ist ein eigenes Teil"
+        assert as_mesh_data(result.scene.objects[box].mesh).volume == pytest.approx(volume)
+        (rib,) = window.session.project.document.ops[-1].outputs
+        assert as_mesh_data(result.scene.objects[rib].mesh).is_watertight
+        # **Neben dem Quader, nicht in ihm** (Review M1): Ohne Lage stand die
+        # Rippe im Ursprung, ganz im Quader — zwei Körper, von denen man einen
+        # nicht sah und die der Slicer verschmolz.
+        low_a, high_a = (
+            np.asarray(v) for v in as_mesh_data(result.scene.objects[box].mesh).raw.bounds
+        )
+        low_b, high_b = (
+            np.asarray(v) for v in as_mesh_data(result.scene.objects[rib].mesh).raw.bounds
+        )
+        assert np.any(high_a[:2] <= low_b[:2]) or np.any(high_b[:2] <= low_a[:2]), (
+            "die Hüllen trennen sich"
+        )
+        assert float(low_b[2]) == pytest.approx(0.0, abs=1e-6), "auf der Platte"
+
+        top = next(
+            name
+            for name, feature in result.scene.objects[box].features.items()
+            if tuple(feature.params.get("normal") or ()) == pytest.approx((0.0, 0.0, 1.0))
+        )
+        window.object_tree.select_feature(box, top)
+        assert window.object_tree.selected_feature() == top
+        hints.clear()
+        window.action_catalog()
+        assert hints == [""], "an der gewählten Fläche gibt es nichts zu erklären"
+        dialog = window._op_dialog
+        assert dialog is not None and dialog.spec.name == "insert_rib"
+        dialog.reject()
+
+        # Review M2: Zwei markierte Flächen sind zwei Stellen — eingesetzt an
+        # beiden in einem Schritt, nicht frei im Ursprung.
+        side = next(
+            name
+            for name, feature in result.scene.objects[box].features.items()
+            if tuple(feature.params.get("normal") or ()) == pytest.approx((1.0, 0.0, 0.0))
+        )
+        window.object_tree.select_features([(box, top), (box, side)])
+        assert window.object_tree.selected_feature() is None, "zwei Zeilen, keine eine"
+        hints.clear()
+        window.action_catalog()
+        assert hints == [""], hints
+        dialog = window._op_dialog
+        assert dialog is not None and dialog.spec.name == "insert_rib"
+        assert set(dialog.values()["at_features"]) == {top, side}
+        dialog.reject()
+    finally:
+        window.close()
+
+
+def test_a_standalone_part_names_the_place_that_fits_and_the_form_it_keeps(
+    qt_app: QApplication,
+) -> None:
+    """Review M3 und der Passstift: Der Satz sagt, warum der Baustein frei entsteht.
+
+    Eine Schraube an einer Fläche entsteht frei, weil sie an eine Bohrung
+    gehört — der Satz nennt die passende Art statt „Wählen Sie eine Stelle“,
+    obwohl eine gewählt ist. Und frei entsteht der Passstift nur als Stift.
+    """
+    catalog = PartCatalog()
+    try:
+        catalog.set_can_insert(True, "")
+        catalog.set_feature_chosen(True, ("face",))
+        _choose(catalog, "printed_screw")
+        text = catalog.insert_hint.text()
+        assert "Bohrung" in text and "eigener Körper" in text, text
+        catalog.set_feature_chosen(True, ("curved_face",))
+        _choose(catalog, "rib")
+        assert not catalog.insert_hint.isVisibleTo(catalog), "die gerundete Seite passt"
+        catalog.set_feature_chosen(False)
+        _choose(catalog, "dowel")
+        assert "„Stift“" in catalog.insert_hint.text(), catalog.insert_hint.text()
+    finally:
+        catalog.release()
+
+
 def test_the_empty_scene_offers_a_first_body_in_the_catalogue(
     qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -1576,6 +1782,109 @@ def _box_recipe(name: str):
     )
 
 
+def test_an_own_part_arises_as_its_own_body_from_the_catalogue(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """RM-574: Ein eigener Baustein entsteht im leeren Projekt und neben einem Körper.
+
+    Bis dahin ließ er sich nur einsetzen: In der leeren Szene war *Einsetzen*
+    gesperrt, und mit einem Körper hing er an diesem. Jetzt steht er wie die
+    eigenständigen mitgelieferten Bausteine für sich, auf einer freien Stelle.
+    """
+    from app.core.geom.mesh import as_mesh_data
+    from app.core.knowledge.parts.recipe import register
+    from app.ui.main_window import MainWindow
+    from app.ui.session import Session
+    from app.ui.settings import UiSettings
+
+    name = "rm574_katalog"
+    register(_box_recipe(name))
+    window = MainWindow(Session(), UiSettings())
+    try:
+        monkeypatch.setattr(window, "_wire_preview", lambda *args, **kwargs: None)
+        monkeypatch.setattr(window, "_may_discard", lambda: True)
+        seen: list[bool] = []
+
+        def choose(catalog: PartCatalog) -> int:
+            catalog.show()
+            QApplication.processEvents()
+            _choose(catalog, name)
+            seen.append(catalog._insert is not None and catalog._insert.isEnabled())
+            return int(PartCatalog.DialogCode.Accepted)
+
+        monkeypatch.setattr(PartCatalog, "exec", choose)
+
+        # Leeres Projekt: kein Körper, an den er hängen könnte.
+        window.action_catalog()
+        assert seen == [True], "Einsetzen ist in der leeren Szene frei"
+        dialog = window._op_dialog
+        assert dialog is not None and dialog.spec.name == f"create_{name}"
+        dialog.accept()
+        assert window.session.wait_for_idle(60_000)
+        QApplication.processEvents()
+        result = window.session.last_result
+        assert result is not None and result.complete and len(result.scene.objects) == 1
+        (first,) = result.scene.objects
+        volume = as_mesh_data(result.scene.objects[first].mesh).volume
+        assert volume == pytest.approx(40.0 * 30.0 * 12.0)
+
+        # Mit einem Körper, gewählt, ohne Fläche: ein zweiter, nicht an ihm.
+        # Den Umriss des Rezepts rechnet nicht der Hauptthread, bevor der
+        # Dialog aufgeht (Review N3); die echte Stelle kommt danach.
+        import threading
+
+        from app.core.knowledge.parts import ops as part_ops
+
+        built_on_main: list[bool] = []
+        original_tools = part_ops.placement_tools
+
+        def counted_tools(*args, **kwargs):
+            built_on_main.append(threading.current_thread() is threading.main_thread())
+            return original_tools(*args, **kwargs)
+
+        monkeypatch.setattr(part_ops, "placement_tools", counted_tools)
+        window.object_tree.select_object(first)
+        window.action_catalog()
+        dialog = window._op_dialog
+        assert dialog is not None and dialog.spec.name == f"create_{name}"
+        assert True not in built_on_main, "der Dialog wartete auf den Umriss des Rezepts"
+        assert window.wait_for_free_spot()
+        QApplication.processEvents()
+        assert built_on_main == [False], "der Arbeiter rechnete die echte Stelle"
+        expected = part_ops.free_spot_for(
+            name, tuple(result.scene.objects.values()), window.session.profile
+        )
+        values = dialog.values()
+        assert {field: values[field] for field in expected} == pytest.approx(expected)
+        dialog.accept()
+        assert window.session.wait_for_idle(60_000)
+        QApplication.processEvents()
+        result = window.session.last_result
+        assert result is not None and result.complete and len(result.scene.objects) == 2
+        assert as_mesh_data(result.scene.objects[first].mesh).volume == pytest.approx(volume)
+        (second,) = window.session.project.document.ops[-1].outputs
+        low_a, high_a = (
+            np.asarray(v) for v in as_mesh_data(result.scene.objects[first].mesh).raw.bounds
+        )
+        low_b, high_b = (
+            np.asarray(v) for v in as_mesh_data(result.scene.objects[second].mesh).raw.bounds
+        )
+        assert np.any(high_a[:2] <= low_b[:2]) or np.any(high_b[:2] <= low_a[:2]), (
+            "auf freier Stelle"
+        )
+        # Entfernen und Hinzufügen zählen auch die Erzeugerschritte (Review N2).
+        created = tuple(
+            entry.id
+            for entry in window.session.project.document.ops
+            if entry.op == f"create_{name}"
+        )
+        assert len(created) == 2
+        assert window._part_usage(name) == created
+    finally:
+        window.close()
+        clean_recipe_globals(name)
+
+
 def test_opening_a_part_for_editing_puts_its_steps_into_the_window(
     qt_app: QApplication, tmp_path, monkeypatch
 ) -> None:
@@ -1593,7 +1902,6 @@ def test_opening_a_part_for_editing_puts_its_steps_into_the_window(
     """
     from app.core.knowledge.parts import recipe as recipe_module
     from app.core.knowledge.parts.recipe import register
-    from app.core.registry import REGISTRY
     from app.ui.main_window import MainWindow
     from app.ui.session import Session
     from app.ui.settings import UiSettings
@@ -1639,8 +1947,7 @@ def test_opening_a_part_for_editing_puts_its_steps_into_the_window(
         assert window.session.draft_origin is None
         catalog.release()
     finally:
-        PARTS.remove(name)
-        REGISTRY.remove(f"insert_{name}")
+        clean_recipe_globals(name)
         window.close()
 
 
@@ -1733,13 +2040,28 @@ def test_every_locked_button_says_its_reason_to_a_screen_reader(qt_app: QApplica
 
         for knopf, wort in (
             (catalog.save_part, "gerechnet"),
-            (catalog.share_part, "weitergeben"),
+            # Den Grund der Weitergabe bestimmt der Katalog selbst neu, sobald er
+            # seine Einzelheiten zeigt; ohne eigenen Baustein heißt er „…, um
+            # ihn weiterzugeben" (RM-680). Beide Sätze nennen das Weitergeben —
+            # nicht bloß „weiter", das auch „Weitere Einstellungen" träfe.
+            (catalog.share_part, r"weiter(zu)?geben"),
             (catalog._insert, "Körper"),
         ):
             assert knopf is not None
             assert not knopf.isEnabled()
-            assert wort in knopf.accessibleDescription(), (
+            assert re.search(wort, knopf.accessibleDescription()), (
                 f"{knopf.objectName() or knopf.text()}: {knopf.accessibleDescription()!r}"
+            )
+        # Die Zusage des Docstrings: Der Bildschirmleser hört denselben Grund,
+        # der sichtbar danebensteht.
+        for knopf, hinweis in (
+            (catalog.save_part, catalog.save_hint),
+            (catalog.share_part, catalog.share_hint),
+        ):
+            assert hinweis.text(), f"{knopf.text()}: kein sichtbarer Grund"
+            assert knopf.accessibleDescription() == hinweis.text(), (
+                knopf.accessibleDescription(),
+                hinweis.text(),
             )
 
         catalog.set_can_save(True, "")
@@ -1893,27 +2215,32 @@ def test_the_catalog_scad_export_obeys_the_export_boundary(
         catalog.deleteLater()
 
 
+@pytest.mark.usefixtures("no_own_parts")
 def test_the_closed_management_names_what_it_holds(qt_app: QApplication) -> None:
     """„Bausteine verwalten" sagt zugeklappt, was dahinter steht (RM-491).
 
     Speichern, Weitergeben und Entfernen lagen hinter einer Überschrift, die
     nicht verriet, dass es sie gibt. Der Zustand bleibt für den nächsten
-    Katalog stehen.
+    Katalog stehen. Ohne eigenen Baustein beginnt der Abschnitt offen
+    (RM-680); zugeklappt wird er hier vom Kunden.
     """
     from PySide6.QtWidgets import QLabel, QToolButton
 
     catalog = PartCatalog()
     summary = catalog.management_section.findChild(QLabel, "sectionSummary")
     heading = catalog.management_section.findChild(QToolButton)
-    assert summary is not None and summary.isVisibleTo(catalog)
+    assert summary is not None and heading is not None
+    assert heading.isChecked(), "ohne eigenen Baustein offen (RM-680)"
+    heading.click()
+    assert summary.isVisibleTo(catalog), "zugeklappt nennt er, was dahinter steht"
     for word in ("speichern", "weitergeben", "entfernen"):
         assert word in summary.text(), (word, summary.text())
-    heading.click()
-    assert not summary.isVisibleTo(catalog)
     catalog.deleteLater()
 
     again = PartCatalog()
-    assert again.management_section.findChild(QToolButton).isChecked(), "offen verlassen, offen"
+    assert not again.management_section.findChild(QToolButton).isChecked(), (
+        "zugeklappt verlassen, zugeklappt"
+    )
     again.deleteLater()
 
 

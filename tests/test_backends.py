@@ -6,18 +6,21 @@ from __future__ import annotations
 
 import http.server
 import json
+import math
 import socket
+import sys
 import threading
 import time
 from collections.abc import Callable
 from contextlib import suppress
+from pathlib import Path
 from types import SimpleNamespace
-from typing import Any, ClassVar
+from typing import Any, ClassVar, Final
 
 import pytest
 
 from app.core import keyring_backend
-from app.core.backends import keys, llm
+from app.core.backends import keys, llm, machine
 from app.core.backends.llm import (
     AnthropicBackend,
     BackendAnswerUnreadable,
@@ -32,6 +35,7 @@ from app.core.backends.llm import (
     parse_parameter_count,
     takes_temperature,
 )
+from app.core.backends.machine import Machine
 from app.core.errors import AppError, ExternalToolError, InternalError
 from tests.helpers import LoopbackServer
 from tests.scripted_backend import ScriptedBackend
@@ -1744,6 +1748,360 @@ def test_the_local_model_expectation_separates_gpu_and_cpu_measurements() -> Non
     assert str(llm.local_model_expectation()).startswith(llm.DEFAULT_OLLAMA_MODEL), (
         "ohne Angabe gilt das eingestellte Modell"
     )
+
+
+# --- Apple Silicon und wenig Speicher (RM-564) --------------------------------------
+
+
+def _mac(memory_gb: float) -> Machine:
+    return Machine(apple_silicon=True, memory_gb=memory_gb)
+
+
+def _card(name: str, gigabytes: float) -> Machine:
+    return Machine(memory_gb=32.0, card_name=name, card_gb=gigabytes)
+
+
+@pytest.fixture
+def remote_ollama(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Ein Ollama auf einem anderen Rechner."""
+    monkeypatch.setattr(llm, "_configured_ollama_url", lambda: "http://192.0.2.7:11434")
+
+
+def test_the_graphics_get_a_share_of_the_mac_memory_or_the_card_less_the_desktop() -> None:
+    """Zwei Drittel bis 36 GB, darüber drei Viertel; eine Karte abzüglich dessen, was der
+    Desktop belegt — ohne beides keine Zahl."""
+    assert math.isclose(_mac(16.0).graphics_gb or 0.0, 16.0 * 2 / 3)
+    assert math.isclose(_mac(64.0).graphics_gb or 0.0, 48.0)
+    assert math.isclose(_card("RTX 4080", 16.0).graphics_gb or 0.0, 16.0 - machine.CARD_RESERVE_GB)
+    assert Machine(memory_gb=64.0).graphics_gb is None
+    assert Machine(apple_silicon=True, memory_gb=None).graphics_gb is None
+
+
+def test_a_machine_gets_the_best_model_that_runs_entirely_on_its_graphics() -> None:
+    """Auf einem M3 mit 16 GB lief qwen3:14b zur Hälfte auf dem Prozessor (RM-564)."""
+    assert llm.recommended_ollama_model(_mac(16.0)) == "qwen3.5:9b"
+    assert llm.recommended_ollama_model(_mac(24.0)) == "qwen3:14b"
+    assert llm.recommended_ollama_model(_mac(8.0)) is None
+    assert llm.recommended_ollama_model(_card("RTX 4080", 16.0)) == "qwen3:14b"
+    assert llm.recommended_ollama_model(_card("RTX 3070", 8.0)) is None
+    assert llm.recommended_ollama_model(Machine()) == llm.DEFAULT_OLLAMA_MODEL
+    assert {name for name, _size, _note in llm.OLLAMA_SUGGESTIONS} == set(llm.OLLAMA_MEMORY_GB), (
+        "jedes empfohlene Modell nennt seinen Speicher"
+    )
+
+
+@pytest.mark.parametrize(("memory", "expected"), [(16.0, "qwen3.5:9b"), (8.0, "qwen3.5:9b")])
+def test_the_chat_default_on_a_small_mac_is_never_the_largest_model(
+    monkeypatch: pytest.MonkeyPatch, memory: float, expected: str
+) -> None:
+    """Ohne eigene Wahl gilt das passende Modell, und passt keines, das kleinste —
+    auf einem 8-GB-Mac stand dort qwen3:14b (Review K, M3)."""
+    monkeypatch.setattr(machine, "this_machine", lambda: _mac(memory))
+    llm.remember_ollama_model("")
+
+    assert llm.configured_ollama_model() == expected
+    assert llm.default_ollama_model() == llm.smallest_recommended_model() or memory > 8.0
+
+    llm.remember_ollama_model("qwen3:14b")
+    try:
+        assert llm.configured_ollama_model() == "qwen3:14b", "eine eigene Wahl bleibt"
+    finally:
+        llm.remember_ollama_model("")
+
+
+def test_a_remote_ollama_is_not_judged_by_this_mac(
+    monkeypatch: pytest.MonkeyPatch, remote_ollama: None
+) -> None:
+    """Ein Mac, der das Ollama seines PCs nutzt, rechnet dort (Review K, M4)."""
+    from app.core.backends import needs
+
+    monkeypatch.setattr(machine, "this_machine", lambda: _mac(16.0))
+
+    assert llm.recommended_ollama_model() == llm.DEFAULT_OLLAMA_MODEL
+    assert llm.default_ollama_model() == llm.DEFAULT_OLLAMA_MODEL
+    assert needs.graphics_verdict("qwen3:14b") is None
+    said = needs.chat_needs("qwen3:14b") or ""
+    assert "anderen Rechner" in said and "Mac" not in said, said
+
+
+def test_the_sentence_says_whether_a_model_fits_this_machine_and_what_helps() -> None:
+    """Vor dem Holen, mit den Zahlen dieses Rechners, auf dem Mac als gerechnet."""
+    from app.core.backends import needs
+
+    zu_gross = needs.graphics_verdict("qwen3:14b", _mac(16.0)) or ""
+    assert "voraussichtlich zu groß" in zu_gross and "10,7 von 16 GB" in zu_gross, zu_gross
+    assert "gerechnet" in zu_gross and "qwen3.5:9b" in zu_gross
+
+    passt = needs.graphics_verdict("qwen3.5:9b", _mac(16.0)) or ""
+    assert "sollte" in passt and "nicht nachgemessen" in passt, passt
+
+    nichts = needs.graphics_verdict("qwen3.5:9b", _mac(8.0)) or ""
+    assert "Schlüssel" in nichts, nichts
+
+    karte = needs.graphics_verdict("qwen3:14b", _card("NVIDIA GeForce RTX 4080", 15.99)) or ""
+    assert karte == "Die Grafikkarte NVIDIA GeForce RTX 4080 hat 16 GB, das reicht.", karte
+    klein = needs.graphics_verdict("qwen3.5:9b", _card("RTX 3070", 8.0)) or ""
+    assert "reicht nicht ganz" in klein and "Schlüssel" in klein, klein
+
+    assert needs.graphics_verdict("qwen3:14b", Machine(memory_gb=16.0)) is None
+    assert needs.graphics_verdict("gibt-es-nicht:7b", _mac(16.0)) is None
+    for text in (zu_gross, passt, nichts, karte, klein):
+        assert "{" not in text
+
+
+def test_the_requirements_stand_before_fetching_with_every_part(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Grafikspeicher, Platz, ob eine Karte nötig ist, und ob dieser Rechner es hat
+    (Entscheidung Robert, 08.10.2026)."""
+    from app.core.backends import comfy_setup, needs
+
+    monkeypatch.setattr(needs, "ollama_models_folder", lambda: tmp_path)
+    monkeypatch.setattr(comfy_setup, "free_gigabytes", lambda _where: 500.0)
+
+    ohne_karte = needs.chat_needs("qwen3:14b", Machine(memory_gb=16.0)) or ""
+    assert "rund 13,6 GB Grafikspeicher" in ohne_karte, ohne_karte
+    assert "10,8 GB Platz" in ohne_karte, "Download und Luft aus einer Quelle"
+    assert "erkennt Solidon hier nicht" in ohne_karte and "Minuten" in ohne_karte
+    assert "Frei: 500,0 GB." in ohne_karte
+
+    mac = needs.chat_needs("qwen3:14b", _mac(16.0)) or ""
+    assert "gemeinsamen Speicher" in mac and "voraussichtlich zu groß" in mac, mac
+
+    monkeypatch.setattr(comfy_setup, "free_gigabytes", lambda _where: 4.0)
+    eng = needs.chat_needs("qwen3:14b", _card("RTX 4080", 16.0)) or ""
+    assert "Frei sind nur 4,0 GB" in eng and "kleineres Modell" in eng, eng
+    assert needs.chat_needs("gibt-es-nicht:7b", _mac(16.0)) is None, "ohne Messung kein Satz"
+
+
+def test_a_broken_off_download_does_not_count_as_loaded(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Ein installiertes Modell braucht nichts; ein abgebrochener Download zählt nicht
+    (Nachprüfung K, N5).
+
+    Sollwert aus Ollama, nicht aus diesem Code: ``server/download.go`` legt jede
+    ``…-partial``-Datei beim Start mit ``file.Truncate(b.Total)`` auf die volle
+    Größe des Teils an. Nach einer Sekunde Download hat sie also schon die
+    Größe des ganzen Modells, und wem sie gehört, steht erst im Manifest.
+    """
+    from app.core.backends import comfy_setup, needs
+
+    monkeypatch.setattr(needs, "ollama_models_folder", lambda: tmp_path)
+    headroom = comfy_setup.HEADROOM_GIGABYTES
+    monkeypatch.setattr(comfy_setup, "free_gigabytes", lambda _where: headroom + 0.005)
+    monkeypatch.setattr(llm, "known_model_suggestion", lambda _name: (0.006, "Satz"))
+    monkeypatch.setitem(llm.OLLAMA_MEMORY_GB, "klein:1b", 1.0)
+
+    full = (pytest.approx(headroom + 0.006), pytest.approx(headroom + 0.005))
+    assert needs.chat_disk_need("klein:1b") == full
+    assert needs.pull_space_problem("klein:1b") is not None, "1 MB zu wenig"
+
+    blobs = tmp_path / "blobs"
+    blobs.mkdir()
+    # So, wie Ollama sie anlegt: gleich in voller Größe, kaum etwas geladen.
+    (blobs / "sha256-abc-partial").write_bytes(bytes(6_000_000))
+    (blobs / "sha256-abc-partial-0").write_text('{"Completed": 1024}', encoding="utf-8")
+    assert needs.chat_disk_need("klein:1b") == full, "die vorbelegte Datei ist nicht geladen"
+    assert needs.pull_space_problem("klein:1b") is not None, "die Warnung bleibt"
+
+    manifest = tmp_path / "manifests" / "registry.ollama.ai" / "library" / "klein" / "1b"
+    manifest.parent.mkdir(parents=True)
+    manifest.write_text("{}", encoding="utf-8")
+    assert needs.chat_disk_need("klein:1b") == (0.0, None)
+    assert "liegt schon hier" in (needs.chat_needs("klein:1b", Machine()) or "")
+
+
+def test_ollama_keeps_its_models_where_ollama_says(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """``OLLAMA_MODELS``, die systemd-Unit des Linux-Dienstes, sonst ``~/.ollama`` —
+    und ``None``, wo nichts davon steht (Review K, M5)."""
+    from app.core.backends import needs
+
+    monkeypatch.setenv("OLLAMA_MODELS", str(tmp_path / "eigen"))
+    assert needs.ollama_models_folder() == tmp_path / "eigen"
+    monkeypatch.delenv("OLLAMA_MODELS")
+
+    unit = tmp_path / "ollama.service"
+    unit.write_text(
+        '[Service]\nEnvironment="OLLAMA_MODELS=/srv/modelle"\nUser=ollama\n', encoding="utf-8"
+    )
+    monkeypatch.setattr(needs, "_SYSTEMD_UNITS", (unit, tmp_path / "ollama.service.d"))
+    monkeypatch.setattr(needs.sys, "platform", "linux")
+    assert needs.ollama_models_folder() == Path("/srv/modelle")
+
+    monkeypatch.setattr(needs.sys, "platform", "win32")
+    monkeypatch.setattr(needs.Path, "home", classmethod(lambda _cls: tmp_path / "leer"))
+    assert needs.ollama_models_folder() is None, "kein Ollama-Ordner, kein geratener Ort"
+
+
+def test_the_generator_requirements_name_card_space_and_duration(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """*ComfyUI einrichten* nennt Karte, Platz und Dauer vor dem Laden (RM-564)."""
+    from app.core.backends import comfy_setup, needs
+
+    gut, fehlt = needs.generator_needs(True, False, 100.0, _card("RTX 4080", 15.99))
+    assert not fehlt and "eine Grafikkarte" in gut and "das reicht" in gut, gut
+    assert "RTX 4080" in gut and "Minuten" in gut and "Mac" not in gut
+
+    klein, fehlt = needs.generator_needs(True, False, 100.0, _card("RTX 3060", 12.0))
+    assert fehlt and "nicht geprüft" in klein, klein
+
+    ohne, fehlt = needs.generator_needs(True, True, 100.0, Machine())
+    assert fehlt and "GLB- oder STL-Datei" in ohne, ohne
+
+    eng, fehlt = needs.generator_needs(True, True, 10.0, _card("RTX 4080", 16.0))
+    assert fehlt and "nur das Modell für den Weg aus Bild" in eng, eng
+    einzeln, _ = needs.generator_needs(True, False, 5.0, _card("RTX 4080", 16.0))
+    assert "Schaffen Sie vorher Platz" in einzeln and "nur das Modell" not in einzeln, einzeln
+
+    mac, _ = needs.generator_needs(True, False, 100.0, _mac(16.0))
+    assert "gerechnet" in mac and "nicht gemessen" in mac, mac
+    assert str(comfy_setup.WARM_SECONDS_LOW) in needs.duration_text(mac_note=False)
+
+
+#: Die echte Auskunft — ``tests/conftest.py`` setzt für jeden Test einen
+#: neutralen Rechner ein; diese Tests prüfen den Weg dahinter.
+_REAL_THIS_MACHINE: Final = machine.this_machine
+
+
+def test_this_machine_reads_memory_without_a_card_program(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Der Arbeitsspeicher kommt vom System; ohne ``nvidia-smi`` gibt es keine Karte,
+    und der Rest bleibt (Review K, G7). ``run_limited`` scheitert hier (conftest)."""
+    monkeypatch.setattr(machine.shutil, "which", lambda _name: "nvidia-smi")
+    machine.detect.cache_clear()
+    try:
+        machine.probe_card()
+        found = _REAL_THIS_MACHINE()
+    finally:
+        machine.detect.cache_clear()
+    assert found.memory_gb is None or found.memory_gb > 1.0
+    assert found.card_gb is None and found.card_name == "" and found.card_asked
+    if sys.platform != "darwin":
+        assert not found.apple_silicon
+
+
+def _answering_card(monkeypatch: pytest.MonkeyPatch, asked: list[list[str]]) -> None:
+    """``nvidia-smi`` antwortet mit einer RTX 4080; jeder Aufruf wird notiert."""
+    import subprocess
+
+    def answer(command: list[str], **_kwargs: object) -> subprocess.CompletedProcess[bytes]:
+        asked.append(list(command))
+        return subprocess.CompletedProcess([], 0, b"NVIDIA GeForce RTX 4080, 16376\r\n", b"")
+
+    monkeypatch.setattr(machine, "run_limited", answer)
+    monkeypatch.setattr(machine, "_is_apple_silicon", lambda: False)
+    machine.detect.cache_clear()
+
+
+def _chat_needs_here(found: Machine) -> str:
+    from app.core.backends import needs
+
+    return needs.chat_needs("qwen3:14b", found) or ""
+
+
+def test_this_machine_reads_the_card_that_nvidia_smi_names(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Name und Speicher aus der ersten Zeile von ``nvidia-smi`` (RM-564) — erst
+    nach der Erhebung im Arbeiter. Vorher sagt die Auskunft über die Karte nichts
+    und startet keinen Prozess (Nachprüfung K, N2)."""
+    asked: list[list[str]] = []
+    _answering_card(monkeypatch, asked)
+    monkeypatch.setattr(machine.shutil, "which", lambda _name: "nvidia-smi")
+    try:
+        before = _REAL_THIS_MACHINE()
+        assert not asked, "die Auskunft selbst startet keinen Prozess"
+        assert not before.card_asked and before.card_gb is None
+        said = _chat_needs_here(before)
+        assert "NVIDIA-Karte" not in said, "vor der Erhebung kein „nicht erkannt“"
+
+        machine.probe_card()
+        machine.probe_card()
+        found = _REAL_THIS_MACHINE()
+    finally:
+        machine.detect.cache_clear()
+    assert len(asked) == 1, "einmal je Prozess"
+    assert found.card_name == "NVIDIA GeForce RTX 4080" and found.card_asked
+    assert math.isclose(found.card_gb or 0.0, 16376 / 1024)
+
+
+def test_in_its_flatpak_solidon_asks_the_host_for_the_card(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Im Sandkasten liegt kein ``nvidia-smi``; gefragt wird über ``flatpak-spawn
+    --host`` (Regel ``kern.md``, Nachprüfung K, N3)."""
+    from app.core import discover
+
+    asked: list[list[str]] = []
+    _answering_card(monkeypatch, asked)
+    monkeypatch.setattr(discover, "in_flatpak", lambda: True)
+    monkeypatch.setattr(machine.shutil, "which", lambda _name: None)
+    try:
+        machine.probe_card()
+        found = _REAL_THIS_MACHINE()
+    finally:
+        machine.detect.cache_clear()
+    assert asked and asked[0][:3] == ["flatpak-spawn", "--host", "nvidia-smi"], asked
+    assert found.card_name == "NVIDIA GeForce RTX 4080"
+
+
+def test_in_its_flatpak_the_models_folder_of_ollama_is_unknown(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Umgebung, Unit und Dienstordner wären die des Sandkastens; der Satz sagt
+    dann „Freier Platz unbekannt.“ statt eines falschen Laufwerks (Nachprüfung K, N3)."""
+    from app.core import discover
+    from app.core.backends import needs
+
+    monkeypatch.setenv("OLLAMA_MODELS", str(tmp_path))
+    assert needs.ollama_models_folder() == tmp_path
+    monkeypatch.setattr(discover, "in_flatpak", lambda: True)
+    assert needs.ollama_models_folder() is None
+    assert "Freier Platz unbekannt." in _chat_needs_here(Machine())
+
+
+def test_on_a_pc_the_chat_default_stays_what_it_was(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Die Karte bestimmt auf einem PC nur den Satz, nicht die Vorwahl
+    (Entscheidung Robert, Nachprüfung K, N4) — sonst fände ein Kunde, der
+    qwen3:14b geholt hat, nach dem Update ein nicht installiertes Modell vor."""
+    llm.remember_ollama_model("")
+    for found in (_card("RTX 3070", 8.0), _card("RTX 3060", 12.0), Machine()):
+        monkeypatch.setattr(machine, "this_machine", lambda found=found: found)
+        assert llm.default_ollama_model() == llm.DEFAULT_OLLAMA_MODEL == "qwen3:14b"
+        assert llm.configured_ollama_model() == "qwen3:14b"
+    monkeypatch.setattr(machine, "this_machine", lambda: _mac(16.0))
+    assert llm.default_ollama_model() == "qwen3.5:9b", "auf dem Mac die neue Vorwahl"
+
+
+def test_the_chat_notice_on_a_pc_with_a_card_does_not_contradict_it(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Mit erkannter Karte steht hinter ihrem Urteil kein Bedingungssatz und kein Rat
+    zur Grafikkarte (Nachprüfung K, N10); Abbruch und Probe bleiben."""
+    cases = ((_card("RTX 4080", 16.0), "das reicht."), (_card("RTX 3070", 8.0), "nicht ganz"))
+    for found, verdict in cases:
+        monkeypatch.setattr(machine, "this_machine", lambda found=found: found)
+        note = str(llm.local_model_expectation("qwen3:14b"))
+        assert verdict in note, note
+        assert "7,8" not in note and "geeignete Grafikkarte" not in note, note
+        assert "zehn Minuten" in note and "Werkzeuge prüfen" in note, note
+    monkeypatch.setattr(machine, "this_machine", lambda: Machine())
+    unknown = str(llm.local_model_expectation("qwen3:14b"))
+    assert "7,8" in unknown and "geeignete Grafikkarte" in unknown, "ohne Urteil der Rat"
+
+
+def test_the_chat_notice_on_a_mac_names_the_fit_without_pc_advice(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Der Hinweis an der Chatleiste: auf dem Mac ohne die 7,8 Token/s eines PCs und
+    ohne den Rat zur Grafikkarte (Review K, G3)."""
+    monkeypatch.setattr(machine, "this_machine", lambda: _mac(16.0))
+
+    note = str(llm.local_model_expectation("qwen3:14b"))
+
+    assert "voraussichtlich zu groß" in note and "qwen3.5:9b" in note, note
+    assert "7,8" not in note and "Grafikkarte" not in note, note
 
 
 # --- Die Adresse, die der Kunde einträgt (24.08.2026) ------------------------------

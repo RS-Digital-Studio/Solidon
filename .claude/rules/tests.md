@@ -16,22 +16,30 @@ denselben Überschriften in `konzepte/begruendungen/regel-tests.md`.
 
 ## Entwicklung und Release
 
-- **Je Schritt die betroffenen Tests, vor dem Commit das Entwicklungstor,
+- **Je Schritt die betroffenen Tests, vor jedem Merge oder Commit auf main das Entwicklungstor,
   Fenster, Renderer und Leistung lokal ausschließlich beim Release** — auch nicht als gezielte
   Teilmenge (`CLAUDE.md`, `/pruefen`). Ein grüner Entwicklungslauf ist kein
   Release-Nachweis.
-- **Vor dem Merge nach main und vor dem Release laufen die betroffenen Fenster-
-  und Slicertests auf Linux und macOS** (Entscheidung Robert; CI-09):
-  `tools/ci_selection.py` nennt sie zum Diff, `fenster-auswahl.yml` und
-  `slicer-auswahl.yml` fahren sie per Handstart auf dem Zweig, beide grün vor
-  dem Merge. Nur das Betroffene — macOS-Minuten kosten das Zehnfache.
-  Unterlagen und Kataloge lösen der Kosten wegen nichts aus, außer Markdown, das
-  die Anwendung liest.
+- **Der Push nach main fährt alle Prüfungen, ein Zweig keine** (Entscheidung
+  Robert; CI-09): Kern und Renderer auf allen vier Paketplattformen, dazu die
+  Fenster- und Slicertests, die `tools/ci_selection.py` zum Diff seit dem
+  letzten geprüften main-Lauf nennt (`build.yml`, Jobs `selection`,
+  `window-selection`, `slicer-selection`) — ein ersetzter, abgebrochener oder
+  abgelehnter Lauf fällt so nicht heraus. Ein Rot wird auf main vorwärts
+  behoben. Geprüft wird nur im öffentlichen Repository; privat lehnt GitHub
+  jeden Lauf nach Sekunden ab, das ist kein Befund. Fenster und Slicer nur
+  das Betroffene, denn das Konto hat fünf macOS-Plätze. Unterlagen und
+  Kataloge wählen keine Fenster- oder Slicertests, außer Markdown, das die
+  Anwendung liest; Unterlagen allein starten keinen Lauf.
 - **Neues bringt seinen Test für diese Auswahl mit** (Entscheidung Robert): eine
   neue oder geänderte Oberfläche ihren Fenstertest; eine Änderung an
   Slicerübergabe, Profilen, Druckerwahl, Druckzeit oder Slicererkennung ihren
   Slicertest mit echtem Programm. Sonst wählt die Auswahl nichts, und Linux
   und macOS sehen die Änderung erst beim Kunden.
+- **Ein Helfer, den nur eine Testdatei braucht, steht nicht in `helpers.py`**,
+  sondern bei ihr oder in einem eigenen Modul (`gcode_contact.py`): `helpers`
+  importieren über 170 Testdateien, und die Auswahl nähme für jede Änderung
+  daran Dutzende Fensterdateien auf Linux und macOS mit.
 - **Wer ein Widget baut, fordert `qt_app` an.** Getrennt wird je Test, nicht je
   Datei, über den Marker `windowed`, den `tests/conftest.py` jedem `qt_app`-Test
   gibt (wer ein Fenster im Unterprozess öffnet, setzt ihn selbst). Ohne die
@@ -154,8 +162,11 @@ QApplication.instance().setStyleSheet(before)   # ins finally
   mehr als ein Viertel schlechter ist ein Fehler. Ein Marker, den kein Lauf
   wählt oder abwählt, steuert nichts und wird nicht angelegt.
 - `rendering` für Tests mit echter Adapterabfrage, Rendereraufbau, Zeichnen,
-  GPU-Picks oder Bildrücklesen. Entwicklungstor und normale CI wählen sie ab;
-  die Releasegruppe (CI-Gruppe `windowed`) fährt sie einmal mit.
+  GPU-Picks oder Bildrücklesen. Entwicklungstor und Kernmatrix wählen sie ab;
+  am Tag läuft jeder Fall **ohne Fenster** auf jeder Paketplattform genau
+  einmal, dazu im Versionswächter (Aufteilung: Konzept CI-03, RM-344). Ein
+  Rendererfall mit Fenster läuft, wo die Fenstertests laufen — unter Windows.
+  Linux- und Mac-Pakete zeichnen über einen anderen Grafikweg als Windows.
 - `slicer("<programm>")` für Tests mit echtem, installiertem Slicer; das Programm
   liefert nur die Fixture `installed_slicer` (`test_slicer_selection.py` hält
   das). Fehlt es, überspringt sich der Fall; in `slicer-auswahl.yml`
@@ -188,6 +199,13 @@ reicht dafür selten. Sprache in `tests/`: `AGENTS.md`, „Sprachregelung“.
   bloße Anweisung, auch im Aufräumen: Ein ungeprüftes Warten ließ auf dem
   langsamen Intel-Läufer Tests auf halbem Stand weiterlaufen. Der Wächter steht
   in `test_toolchain.py`.
+- **Wer auf einen Arbeiterfaden wartet, wartet mit `processEvents()` und
+  `time.sleep`, nie mit `QTest.qWait`** (`ui_helpers.wait_until`): `qWait` hält
+  die GIL, und ein Faden mit vielen Dateiblicken (`shutil.which` über einen
+  langen PATH) kam auf dem Windows-Läufer in Sekunden nicht durch.
+- **Eine Arbeiterfrage im Test steht auf einer Freigabe** (`threading.Event`),
+  wenn der Test prüft, was vor ihrer Antwort gilt: Auf einem schnellen Läufer
+  ist sie sonst schon beantwortet, bevor die nächste Zeile läuft.
 
 ## Den Lauf messen, nicht einen Filter darüber
 
@@ -272,11 +290,12 @@ einzeln laufen grün. Deshalb:
   **ein Lauf, dessen Ausgabe nicht wächst, arbeitet nicht**; ein bis zwei
   Sekunden ohne CPU zwischen zwei Fensterdateien sind normal. Erst ohne
   CPU-Sekunde und ohne Byte über zwanzig Sekunden ist es ein Hänger.
-- **Ein BLAS-Faden je Testprozess**: Tor und `affected_tests.py --run` setzen
-  `OPENBLAS_NUM_THREADS=1`, wenn der Aufrufer nichts setzt; eigene Sonden und
-  Skripte starten ebenso. Sonst sagt jeder Prozess mit numpy und scipy je
-  Rechenkern einen Puffer zu, an 32 Kernen 1,5 GB, und Läufe nebeneinander
-  reißen die Zusagegrenze. Leistungsläufe bleiben ohne Vorgabe.
+- **Ein BLAS-Faden je Prozess**: `import app` setzt `OPENBLAS_NUM_THREADS=1`,
+  wenn niemand etwas setzt (RM-567), Tor und `affected_tests.py --run` ebenso
+  für Prozesse, die NumPy vor der Anwendung laden. Sonst sagt jeder Prozess
+  mit numpy und scipy je Rechenkern einen Puffer zu, an 32 Kernen 1,5 GB, und
+  Läufe nebeneinander reißen die Zusagegrenze. Leistungsläufe messen damit
+  denselben Stand wie der Kunde.
 - **Im Tor eine feste Arbeiterzahl, nie `-n auto`**: Parallelität zeigt
   Speicherhunger als Korrektheitsfehler, 32 Arbeiter sterben schon beim
   Verteilen, und eine Zahl, die an der Kernzahl hängt, ist eine stille
@@ -293,6 +312,12 @@ einzeln laufen grün. Deshalb:
   danach abbaut, hebt vorher die Klasse (wie `process.hurry_helper`); ist die
   Zusage die Freigabe (Speicher, Griffe, Ordner), wartet er danach auf den
   Abschluss.
+- **Eine Zeitgrenze im Test zählt ab dem Zustand, um den es geht** (RM-635):
+  Ein frischer Interpreter braucht unter Last Sekunden bis zu seiner ersten
+  Zeile, und eine Frist ab dem Start entschied dann den Fall. Ist die Frist das
+  Thema, läuft sie ab dem Ereignis (`test_process._clock_held_until`, Ordnung
+  von Ereignissen); schützt sie nur vor Hängern, hält ein Wächter an Stille an —
+  ohne Aufruf, Ausgabe oder Rechenzeit (`run_while_moving`, `in_a_worker`).
 - **Eine eben umbenannte Datei sperrt kurz**: Eine Meldung, die über
   `Path.replace` erscheint, liest der Wartende mit Wiederholung bis zu seiner
   Frist, nie mit einem einzelnen `read_text`.

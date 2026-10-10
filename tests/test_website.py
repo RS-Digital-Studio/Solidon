@@ -986,12 +986,12 @@ PUBLIC_WARNING_MARKERS = (
 )
 
 PLANNED_1_0_MARKERS = {
-    "index.html": "1. November 2026 geplant",
-    "en/index.html": "planned for 1 November 2026",
-    "es/index.html": "prevista para el 1 de noviembre de 2026",
-    "fr/index.html": "prévue pour le 1er novembre 2026",
-    "it/index.html": "prevista per il 1º novembre 2026",
-    "pt/index.html": "prevista para 1 de novembro de 2026",
+    "index.html": "1. Dezember 2026 geplant",
+    "en/index.html": "planned for 1 December 2026",
+    "es/index.html": "prevista para el 1 de diciembre de 2026",
+    "fr/index.html": "prévue pour le 1er décembre 2026",
+    "it/index.html": "prevista per il 1º dicembre 2026",
+    "pt/index.html": "prevista para 1 de dezembro de 2026",
 }
 
 RETIRED_MEDIA = (
@@ -1039,7 +1039,7 @@ def test_each_start_page_distinguishes_the_plan_from_an_offer(page: str, marker:
 
     **Seit dem 23.09.2026 stehen die Preise auf der Seite** (Entscheidung
     Robert: zwei Lizenzarten, Einstiegspreis bis Ende Januar). Angekündigt ist
-    damit, was ab dem 1. November gilt — verkauft wird vorher nichts. Die
+    damit, was ab dem Verkaufsstart gilt — verkauft wird vorher nichts. Die
     Seite sagt deshalb weiter „geplant", und sie zeichnet für Suchmaschinen
     kein ``Offer`` und keine Vorbestellung aus: Ein Rich Result mit Preis und
     „Jetzt kaufen" wäre eine Kaufmöglichkeit, die es noch nicht gibt.
@@ -1259,6 +1259,216 @@ def test_download_technical_notes_stay_collapsible(page: str) -> None:
     assert "data-release-show" in notes.group(1), (
         f"{page}: die Hinweise für Installation und Updates stehen wieder ungebremst im Einstieg"
     )
+
+
+#: Die erste Windows-Version mit Signatur und die erste notarisierte für den
+#: Mac. Ein Hinweis nennt nur sie, und nur mit „ab“ davor — „ab 0.5.0“ bleibt
+#: bei jeder späteren Version wahr. Ohne „ab“ oder mit einer anderen Nummer
+#: hieße er, die angebotene Version sei es nicht (RM-351).
+FIRST_SIGNED_WINDOWS = "0.5.0"
+FIRST_NOTARISED_MAC = "0.4.1"
+
+#: Das „ab“ der Sprache vor der Versionsnummer.
+SINCE_WORDS = {
+    "de": r"ab(?: Version)?",
+    "en": r"from(?: version)?",
+    "es": r"desde la(?: versión)?",
+    "fr": r"depuis la(?: version)?",
+    "it": r"dalla(?: versione)?",
+    "pt": r"a partir da(?: versão)?",
+}
+
+#: Eine vollständige Versionsnummer — „Windows 10“, „macOS 13“ und ein Datum
+#: wie 24.09.2026 sind keine.
+FULL_VERSION = re.compile(r"(?<![\d.])\d{1,3}\.\d{1,3}\.\d{1,3}(?!\d)")
+
+
+def _visible_text(fragment: str) -> str:
+    import html
+
+    return " ".join(html.unescape(re.sub(r"<[^>]+>", " ", fragment)).split())
+
+
+def _version_tuple(version: str) -> tuple[int, ...]:
+    return tuple(int(part) for part in version.split("."))
+
+
+def _since_problems(
+    place: str, text: str, language: str, allowed: tuple[str, ...], published: str
+) -> list[str]:
+    """Jede volle Versionsnummer an dieser Stelle ist eine erlaubte, mit „ab“ davor.
+
+    Und die erste erlaubte steht wirklich da — sonst wäre der Hinweis weg oder
+    umformuliert, und eine Prüfung über nichts bestünde.
+    """
+    since = re.compile(rf"(?i)(?:^|\s){SINCE_WORDS[language]}\s+$")
+    problems = []
+    seen = False
+    for match in FULL_VERSION.finditer(text):
+        version = match.group()
+        if version not in allowed:
+            problems.append(f"{place}: nennt {version}, erlaubt sind nur {allowed}")
+        elif not since.search(text[: match.start()]):
+            problems.append(
+                f"{place}: {version} steht ohne „ab“ davor — eine Aussage über eine Version"
+            )
+        elif version == allowed[0]:
+            seen = True
+        if _version_tuple(version) > _version_tuple(published):
+            problems.append(f"{place}: nennt {version}, veröffentlicht ist {published}")
+    if not seen:
+        problems.append(f"{place}: der Hinweis „ab {allowed[0]}“ fehlt — nichts geprüft")
+    return problems
+
+
+def _signature_hint_problems(markup: str, language: str, published: str) -> list[str]:
+    """Die Signatur- und Notarisierungshinweise an den Stellen, an denen sie stehen.
+
+    Gelesen wird die Stelle, nicht ein Wortfilter: der Windows-Reiter, der
+    macOS-Reiter, die Zeile „Betriebssystem“ der Systemvoraussetzungen und die
+    Mac-Antwort der häufigen Fragen — sichtbar und in der Auszeichnung für
+    Suchmaschinen (JSON-LD), die ``make_seo.py`` daraus schreibt.
+    """
+    problems = []
+    # Die Mac-Antwort ist die eine Frage, die arm64 nennt — in jeder Sprache.
+    answers = re.findall(r"<details>\s*<summary>.*?</summary>(.*?)</details>", markup, re.DOTALL)
+    faq = [_visible_text(body) for body in answers if "arm64" in body]
+    faq_ld = []
+    ld_blocks = re.findall(r'<script type="application/ld\+json">(.*?)</script>', markup, re.DOTALL)
+    for block in ld_blocks:
+        data = json.loads(block)
+        for question in (data.get("mainEntity") or []) if isinstance(data, dict) else []:
+            answer = question.get("acceptedAnswer") if isinstance(question, dict) else None
+            if isinstance(answer, dict) and "arm64" in str(answer.get("text", "")):
+                faq_ld.append(str(answer["text"]))
+    for place, texts in (("FAQ Mac", faq), ("FAQ Mac (JSON-LD)", faq_ld)):
+        if len(texts) != 1:
+            problems.append(f"{place}: {len(texts)} Treffer statt genau einem")
+            continue
+        problems += _since_problems(place, texts[0], language, (FIRST_NOTARISED_MAC,), published)
+    places = {
+        "Windows-Reiter": (
+            r'<div data-tab="Windows"[^>]*>(.*?)</div>',
+            (FIRST_SIGNED_WINDOWS,),
+        ),
+        "macOS-Reiter": (r'<div data-tab="macOS"[^>]*>(.*?)</div>', (FIRST_NOTARISED_MAC,)),
+        "Systemvoraussetzungen": (
+            r'<table class="req">\s*<tr><td>[^<]*</td><td>(.*?)</td></tr>',
+            (FIRST_SIGNED_WINDOWS, FIRST_NOTARISED_MAC),
+        ),
+    }
+    for place, (pattern, allowed) in places.items():
+        found = re.search(pattern, markup, re.DOTALL)
+        if found is None:
+            problems.append(f"{place}: nicht gefunden")
+            continue
+        text = _visible_text(found.group(1))
+        problems += _since_problems(place, text, language, allowed, published)
+    return problems
+
+
+def _published_version() -> str:
+    return str(json.loads((WEBSITE / "version.json").read_text(encoding="utf-8"))["version"])
+
+
+@pytest.mark.parametrize("page", START_PAGES)
+def test_the_signature_hints_name_only_the_first_signed_version(page: str) -> None:
+    """Die Hinweise sagen, seit wann signiert wird — nie eine andere Version (RM-351).
+
+    Er stand einmal als „Die Windows-Version 0.5.0 ist digital signiert“
+    direkt unter „Version 0.5.1“, und ein Kunde las daraus, die angebotene sei
+    es nicht. Der Satz ist von Hand geschrieben; nur dieser Wächter merkt,
+    wenn er wieder eine Nummer bekommt, die mit dem Angebot altert, das „ab“
+    verliert — oder eine über der veröffentlichten verspricht.
+    """
+    markup = (WEBSITE / page).read_text(encoding="utf-8")
+
+    assert not _signature_hint_problems(markup, _language_of(page), _published_version())
+
+
+@pytest.mark.parametrize(
+    ("page", "old", "new", "published", "expected"),
+    [
+        (
+            "index.html",
+            "Die Windows-Version ist ab 0.5.0 digital signiert.",
+            "Die Windows-Version 0.5.0 ist digital signiert.",
+            None,
+            "ohne „ab“",
+        ),
+        (
+            "en/index.html",
+            "The Windows version is digitally signed from 0.5.0 on.",
+            "The Windows version 0.5.0 is digitally signed.",
+            None,
+            "ohne „ab“",
+        ),
+        (
+            "index.html",
+            "Die Windows-Version ist ab 0.5.0 digital signiert.",
+            "Anwendung und Setup sind ab 0.5.3 digital signiert.",
+            None,
+            "nennt 0.5.3",
+        ),
+        (
+            "pt/index.html",
+            "A versão para Windows tem assinatura digital a partir da 0.5.0.",
+            "A versão para Windows está assinada digitalmente a partir da 0.5.3.",
+            None,
+            "nennt 0.5.3",
+        ),
+        ("index.html", "ab 0.5.0 digital", "ab 0.5.1 digital", None, "nennt 0.5.1"),
+        ("index.html", "Version 0.5.0 digital", "Version 9.9.9 digital", None, "nennt 9.9.9"),
+        ("es/index.html", "desde la 0.5.0", "desde la 0.5.0", "0.4.9", "veröffentlicht ist 0.4.9"),
+        (
+            "fr/index.html",
+            "est signée numériquement depuis la 0.5.0.",
+            "est signée numériquement.",
+            None,
+            "Windows-Reiter: der Hinweis",
+        ),
+        ("it/index.html", "Dalla versione 0.4.1", "La versione 0.4.1", None, "ohne „ab“"),
+        (
+            "index.html",
+            "deines Macs. Ab Version 0.4.1 sind die",
+            "deines Macs. Version 0.4.1 ist notarisiert, die",
+            None,
+            "FAQ Mac: 0.4.1 steht ohne",
+        ),
+        (
+            "index.html",
+            "0.4.1 sind die Pakete bei Apple",
+            "0.5.3 sind die Pakete bei Apple",
+            None,
+            "FAQ Mac (JSON-LD): nennt 0.5.3",
+        ),
+    ],
+    ids=[
+        "ausgangssatz-de",
+        "ausgangssatz-en",
+        "ohne-windows-mitalternd",
+        "pt-partizip",
+        "andere-version",
+        "zwilling-ueber-veroeffentlicht",
+        "vor-der-ersten",
+        "ohne-hinweis",
+        "mac-ohne-ab",
+        "faq-mac-ohne-ab",
+        "faq-mac-json-ld",
+    ],
+)
+def test_the_signature_guard_catches_a_manipulated_copy(
+    page: str, old: str, new: str, published: str | None, expected: str
+) -> None:
+    """Gegenprobe an veränderten Kopien der Startseiten, auch mit dem Satz, der RM-351 auslöste."""
+    markup = (WEBSITE / page).read_text(encoding="utf-8")
+    assert old in markup, f"die Vorlage für die Gegenprobe fehlt: {old}"
+
+    problems = _signature_hint_problems(
+        markup.replace(old, new), _language_of(page), published or _published_version()
+    )
+
+    assert any(expected in problem for problem in problems), problems
 
 
 @pytest.mark.parametrize("page", START_PAGES)
@@ -1850,7 +2060,8 @@ def test_the_pages_do_not_promise_a_date_that_is_about_to_pass(
 
     **Nicht zu verwechseln mit dem Wecker in ``test_activation.py``**
     (``test_the_shipped_deadline_has_not_passed``). Der fragt, ob die
-    ausgelieferte Demo noch läuft, und wird am **31.10.** rot — für die
+    ausgelieferte Demo noch läuft, und wird am Tag nach ``store.DEMO_UNTIL``
+    rot — für die
     Website ist das der Tag zu spät. Dieser hier fragt, ob noch Zeit bleibt,
     die Sätze zu ändern, und schlägt fünf Tage vorher an. Zwei Fragen, zwei
     Tests, dieselbe Quelle.

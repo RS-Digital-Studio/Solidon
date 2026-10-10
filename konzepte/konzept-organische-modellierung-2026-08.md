@@ -721,11 +721,23 @@ verbindet.
 `pose_armature` nach Entscheidung I. **Vollständig umgesetzt in P16.8**, Kern
 und Editor.
 
-Der Editor setzt die Knochen — zwei Klicks je Knochen, der nächste hängt am
-vorigen — und lässt die Stellung leer. **Das ist Absicht und keine Lücke:**
-Die Winkel sind drei Zahlen je Knochen und gehören in den Dialog, wo auch ein
-Projektparameter stehen darf. Wer sie mit der Maus zöge, hätte ein
-Animationsprogramm mit einem Bild statt eines Stapels mit einer Zahl.
+**Abgelöst durch RM-561 (Entwurf Zeichnen/Formen/Skelett, Robert 08.10.2026:
+„Ja alles machen“).** Bis dahin setzte der Editor die Knochen mit zwei Klicks
+je Knochen und ließ die Stellung leer; die Winkel standen nur im Dialog, „wer
+sie mit der Maus zöge, hätte ein Animationsprogramm“. Robert fand das zu
+kompliziert: Achse raten, drei Winkel tippen, ein Rumpfknochen als verborgene
+Voraussetzung.
+
+Jetzt ist der erste Klick ein Gelenk und jeder weitere ein Knochen (n + 1
+Klicks); Enter beendet die Kette, ein Klick auf ein Gelenk setzt dort fort.
+**Ziehen an einem Gelenk beugt den Knochen, der dort endet**, um seinen Kopf in
+der Bildebene, der Winkel steht am Zeiger und lässt sich tippen. Regel 2 hält:
+Die Geste sammelt sich in dasselbe `pose`-Feld (drei Winkel je Knochen, über
+`pose.bent` aus der gezogenen Drehung), das Ergebnis entsteht bei der
+Auswertung, und Zahlen samt Projektparameter bleiben im Schrittdialog.
+*Fertig* legt den Schritt ohne Dialog an. Was kein Knochen erreicht, bleibt
+stehen (`fixed_rest`, Format 49; ältere Stellungen behalten das Hängen am
+nächsten Knochen).
 
 Gewichte gerechnet, nicht gespeichert. Zwei Dinge, die beim Bauen Zeit
 gekostet haben und in keinem Lehrbuch nebeneinander stehen: Der Abstand geht
@@ -754,7 +766,11 @@ die erzwungene Etappe aus Entscheidung C verloren; die Auswertung hat eine
 feste Gewichtsfunktion. Kein *[Verwerfen]* daneben, anders als bei der Skizze:
 Eine Sitzung ohne Züge hinterlässt nichts, und eine mit Zügen ist eine
 Transaktion, die ein Undo zurücknimmt (Regel 19) — ein Knopf für das, was
-Strg+Z kann, wäre der neunte.
+Strg+Z kann, wäre der neunte. **Seit RM-561:** vier Werkzeugknöpfe (Auftragen,
+Abtragen, Glätten, Flachziehen), Radius aus der Körpergröße, Stärke als Stufe
+1 bis 10, *Spiegeln* als Schalter; *Neu ansetzen* entfiel (jede Geste ist eine
+Etappe), *Dreiecke jetzt angleichen* auch (die Sitzung gleicht selbst an, in
+derselben Transaktion).
 
 **Der Pinselring gehört in die Szene, nicht an den Zeiger.** Ein Zeiger hat
 feste Punktgröße und weiß nichts von der Kamera; er behauptete beim ersten

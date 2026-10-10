@@ -18,9 +18,12 @@ dabei **einzuhalten** ist; das Warum steht unter denselben Überschriften in
 
 Die CI-Prüfjobs folgen `konzepte/konzept-ci-testlaufzeiten-2026-09.md`. Der
 Paketbau wartet auf Qualität, jeden Teil der Kernmatrix auf jeder Plattform,
-die plattformübergreifenden Fensterverträge und jede Windows-Fenstergruppe;
-ein übersprungener, abgebrochener oder roter Pflichtjob ergibt keine
-Paketfreigabe. Signierung und Veröffentlichung behalten ihre eigenen Grenzen.
+die Fensterverträge unter Windows, Linux und Apple Silicon (außerhalb von
+Windows samt den Rendererfällen ohne Fenster) und jede Windows-Fenstergruppe;
+dieselbe Prüfung auf dem Intel-Mac hält statt des Pakets jede Releaseakte an,
+damit sie den Tag-Lauf nicht verlängert. Ein übersprungener, abgebrochener oder roter Pflichtjob
+ergibt keine Freigabe. Signierung und Veröffentlichung behalten ihre eigenen
+Grenzen.
 
 - Die Teilmatrix eines Jobs ist genau `0 … N−1` für das `N` in seinem Aufruf;
   wer Teile dazunimmt, ändert beides zusammen.
@@ -180,6 +183,10 @@ auf Roberts Rechner (`tools/sign_release.py`), in die CI kommt er nicht.
   Intel-Macs mit macOS 26 schon das `import ctypes` in PyInstallers Bootstrap
   in Apples libffi. Der Signierschritt liest Schlüssel und Wert zurück,
   `test_supply_chain.py` hält den Text (RM-104).
+- **Ein neuer Release-Schlüssel reist aus, bevor er unterschreibt**: ans Ende
+  von `updates.RELEASE_PUBLIC_KEYS`, die Versionsdatei dieser Version
+  unterschreibt noch der alte, Ablauf in `Signierung/README.md`. Eine
+  Installation kennt nur die Schlüssel ihrer Version und verwirft den Rest still.
 - Neue Actions nur mit vollständiger 40-stelliger Commit-ID.
 - Downloads im Workflow nur von einer unveränderlichen Veröffentlichung und
   nach Prüfsummenprüfung.

@@ -247,6 +247,7 @@ def test_every_thread_path_shares_the_same_limits() -> None:
     from app.core.brep.ops import ThreadParams as ExactThreadParams
     from app.core.geom.lid import ScrewLidParams
     from app.core.knowledge import standards
+    from app.core.knowledge.parts.fasteners import ThreadedRodParams
     from app.core.knowledge.parts.fasteners import ThreadParams as PartThreadParams
     from app.core.units import COARSEST_PITCH, FINEST_PITCH, LARGEST_THREAD, SMALLEST_THREAD
 
@@ -256,6 +257,9 @@ def test_every_thread_path_shares_the_same_limits() -> None:
 
     assert bounds(PartThreadParams, "diameter") == (SMALLEST_THREAD, LARGEST_THREAD)
     assert bounds(PartThreadParams, "pitch")[1] == COARSEST_PITCH
+    # Der Gewindebolzen teilt den Kern mit dem Baustein (Review G-f).
+    assert bounds(ThreadedRodParams, "diameter") == (SMALLEST_THREAD, LARGEST_THREAD)
+    assert bounds(ThreadedRodParams, "pitch")[1] == COARSEST_PITCH
     assert bounds(ExactThreadParams, "diameter") == (SMALLEST_THREAD, LARGEST_THREAD)
     assert bounds(ExactThreadParams, "pitch") == (FINEST_PITCH, COARSEST_PITCH)
     assert bounds(ScrewLidParams, "pitch")[1] == COARSEST_PITCH
@@ -263,6 +267,48 @@ def test_every_thread_path_shares_the_same_limits() -> None:
     # Unten begrenzt die kleinste Schraube der Tabelle (Review RM-532, K6).
     smallest = standards.screw(standards.screw_sizes()[0]).nominal
     assert smallest == SMALLEST_THREAD
+
+
+def test_a_threaded_rod_builds_at_its_shortest_length() -> None:
+    """Review G-a: Die Mindestlänge des Bolzens baute nie.
+
+    Die Prüfung zählte das durchgehende Gewinde je halbe Länge und verlangte
+    so 4 mm plus zwei Fasen. Gebaut wird es als **ein** Gewinde zwischen zwei
+    Kuppen, und so wird es jetzt geprüft.
+    """
+    from app.core.knowledge.parts.fasteners import ThreadedRodParams, threaded_rod
+
+    shortest = next(entry for entry in ThreadedRodParams.spec() if entry.name == "length")
+    rod = threaded_rod(ThreadedRodParams(size="M3", length=float(shortest.minimum)))
+    assert as_mesh_data(rod.mesh).is_watertight
+
+
+@pytest.mark.parametrize(
+    ("values", "field", "advice"),
+    [
+        ({"size": "M8", "length": 6.0, "chamfer": 3.0}, "chamfer", "kleinere Fase"),
+        ({"size": "M8", "length": 4.0, "chamfer": 1.5}, "length", "längeren Bolzen"),
+        ({"size": "M6", "length": 30.0, "thread_length": 2.5}, "thread_length", "Gewindelänge"),
+        ({"size": "M6", "length": 10.0, "thread_length": 6.0}, "thread_length", "Kürzen"),
+        ({"size": "M1.6", "play": 1.0}, "play", "weniger Spiel"),
+    ],
+)
+def test_a_refused_threaded_rod_points_at_the_field_that_helps(
+    values: dict[str, object], field: str, advice: str
+) -> None:
+    """Review G-a: Die Absage ging an die Gewindelänge, sonst an die Fase.
+
+    Auch wenn die Länge der Grund war, und bei automatischer Fase riet sie zu
+    einer kleineren — an einem Feld, das auf null steht.
+    """
+    from app.core.errors import ValidationError
+    from app.core.knowledge.parts.fasteners import ThreadedRodParams, threaded_rod
+
+    with pytest.raises(ValidationError) as caught:
+        threaded_rod(ThreadedRodParams(**values))  # type: ignore[arg-type]
+    assert caught.value.field == field
+    assert advice in str(caught.value.detail)
+    assert caught.value.suggestions
 
 
 def test_a_pitch_finer_than_the_finest_is_refused_with_a_way_out() -> None:

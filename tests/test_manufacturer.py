@@ -21,7 +21,7 @@ from typing import Any
 import pytest
 
 from app.core.errors import ValidationError
-from app.core.export import handover, manufacturer, slicer_keys
+from app.core.export import handover, manufacturer, slicer_keys, slicer_profiles
 from app.core.knowledge import print_settings, profiles
 from app.core.scene import serialise
 from app.core.scene.project import load
@@ -34,6 +34,7 @@ from app.core.types import (
     SettingAdvice,
     SlotOverride,
 )
+from tests.helpers import CC2_FINE_NOZZLE, CC2_HIGH_FLOW, CC2_MACHINE, cc2_stock
 
 
 def _write(path: Path, document: dict[str, object]) -> Path:
@@ -586,6 +587,244 @@ def _setup(executable: Path, **choices: str) -> handover.SlicerSetup:
 
 def _cc2() -> Profile:
     return profiles.make_profile("centauri-carbon-2", "pla")
+
+
+@pytest.fixture
+def doppelter_bestand(tmp_path: Path) -> Path:
+    """Je zwei Maschinen, Prozesse und Filamente (``tests.helpers.cc2_stock``)."""
+    return cc2_stock(tmp_path)
+
+
+def _count_reads(monkeypatch: pytest.MonkeyPatch, stock: Path) -> tuple[list[object], list[Path]]:
+    """Welche Arten :func:`slicer_profiles.find_profiles` liest und wie oft der
+    Bestand durchlaufen wird — die Kosten der Vorwahl (RM-623, M1)."""
+    reads: list[object] = []
+    walks: list[Path] = []
+    find = slicer_profiles.find_profiles
+    walk = Path.rglob
+    root = slicer_profiles.install_root(stock)
+
+    def counted(*args: Any, **kwargs: Any) -> Any:
+        reads.append(tuple(args[2]) if len(args) > 2 else kwargs.get("kinds"))
+        return find(*args, **kwargs)
+
+    def walked(self: Path, pattern: str, **kwargs: Any) -> Any:
+        if self == root:
+            walks.append(self)
+        return walk(self, pattern, **kwargs)
+
+    monkeypatch.setattr(slicer_profiles, "find_profiles", counted)
+    monkeypatch.setattr(Path, "rglob", walked)
+    return reads, walks
+
+
+def _names(chosen: handover.SlicerSetup | None) -> tuple[str, str, str] | None:
+    """Die Dateien von Maschine, Prozess und Filament einer Wahl."""
+    if chosen is None:
+        return None
+
+    def file(value: str) -> str:
+        return Path(value).name if value else ""
+
+    return file(chosen.machine_profile), file(chosen.base_process), file(chosen.base_filament)
+
+
+def test_without_a_choice_the_stock_names_machine_process_and_filament(
+    doppelter_bestand: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """RM-623: Ohne gemerkte Wahl kommt die Grundlage trotzdem vom Hersteller.
+
+    In Roberts Einstellungen waren Maschine und Prozess leer; die Übergabe
+    schrieb nur Solidons Werte, und der Slicer füllte den Rest mit seinen
+    Vorgaben statt mit Elegoos Prozess. Die Wahl ist dieselbe, die der Dialog
+    vorbelegt: zugeordnete Maschine (nicht die alphabetisch erste mit 0,2er
+    Düse), ihr Standardprozess (nicht „0.12mm Fine“), das Filament der
+    Materialart (nicht PETG).
+    """
+    reads, walks = _count_reads(monkeypatch, doppelter_bestand)
+
+    chosen = handover.standard_choice(handover.SlicerSetup(doppelter_bestand, "orca"), _cc2())
+
+    assert _names(chosen) == ("cc2.json", "standard.json", "pla.json")
+    assert reads == [("machine",), ("process", "filament")], "erst die Maschinen, dann der Rest"
+    assert len(walks) == 1, "ein Lesedurchgang"
+    assert print_settings.resolve(_cc2(), "standard").shell.wall_count == 3, (
+        "Tabelle und Prozess müssen sich unterscheiden, sonst prüft die Zeile darunter nichts"
+    )
+    foundation = manufacturer.base_settings(_cc2(), "standard", chosen)
+    assert foundation.settings.shell.wall_count == 2, (
+        "die Grundlage ist Elegoos Prozess (wall_loops 2), nicht Solidons Tabelle"
+    )
+
+
+def test_without_the_project_nozzle_there_is_no_standard_choice(
+    doppelter_bestand: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Die nächste Düse ist keine Grundlage: 0,8 mm gibt es im Bestand nicht.
+
+    Ohne passende Schwester wird auch kein Prozess einer anderen Düse gelesen.
+    """
+    profile = _cc2()
+    profile = replace(
+        profile, printer=replace(profile.printer, nozzle_diameter=0.8, extrusion_width=0.84)
+    )
+    monkeypatch.setattr(slicer_profiles, "chosen_machine", lambda *_args: "")
+    reads, walks = _count_reads(monkeypatch, doppelter_bestand)
+
+    chosen = handover.standard_choice(handover.SlicerSetup(doppelter_bestand, "orca"), profile)
+
+    assert chosen is None
+    assert reads == [("machine",)], "ohne passende Düse werden keine Prozesswerte übernommen"
+    assert len(walks) == 1
+
+
+def test_the_standard_choice_takes_the_machine_the_slicer_stands_on(
+    doppelter_bestand: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Steht der Slicer auf einer Maschine dieses Druckers, gilt sie vor der
+    Zuordnung — wie im Dialog. Auf der 0,2er Düse gilt deren 0,4er Schwester:
+    Die Grundlage ändert die Düse des Projekts nicht."""
+    setup = handover.SlicerSetup(doppelter_bestand, "orca")
+    reads, _walks = _count_reads(monkeypatch, doppelter_bestand)
+
+    monkeypatch.setattr(slicer_profiles, "chosen_machine", lambda *_args: CC2_HIGH_FLOW)
+    assert _names(handover.standard_choice(setup, _cc2())) == (
+        "cc2-hf.json",
+        "standard.json",
+        "pla.json",
+    )
+    assert len(reads) == 2, "die Düsenfrage bekommt die gelesenen Maschinen mit"
+    monkeypatch.setattr(slicer_profiles, "chosen_machine", lambda *_args: CC2_FINE_NOZZLE)
+    assert _names(handover.standard_choice(setup, _cc2())) == (
+        "cc2.json",
+        "standard.json",
+        "pla.json",
+    )
+
+
+def test_the_standard_choice_prefers_what_was_remembered_where_it_fits(
+    doppelter_bestand: Path,
+) -> None:
+    """Gemerkter Prozess, gemerktes Filament und Platte gehen vor, wie im Dialog
+    (M2 der Durchsicht RM-623); was nicht zur Maschine passt, gilt nicht."""
+    root = doppelter_bestand.parent / "resources" / "profiles" / "Elegoo"
+    setup = handover.SlicerSetup(
+        doppelter_bestand,
+        "orca",
+        base_process=str(root / "process" / "ECC2" / "fine.json"),
+        base_filament="Elegoo PETG @ECC2",
+        plate="Textured PEI Plate",
+    )
+
+    chosen = handover.standard_choice(setup, _cc2())
+
+    assert _names(chosen) == ("cc2.json", "fine.json", "petg.json")
+    assert chosen is not None and chosen.plate == "Textured PEI Plate"
+    foreign = replace(setup, base_process="0.20mm Standard @Prusa", base_filament="Kein Profil")
+    assert _names(handover.standard_choice(foreign, _cc2())) == (
+        "cc2.json",
+        "standard.json",
+        "pla.json",
+    )
+
+
+def test_a_material_without_a_profile_keeps_machine_and_process(doppelter_bestand: Path) -> None:
+    """Kein ABS im Bestand: Maschine und Prozess bleiben, das Filament ist leer
+    — nie ein Profil anderer Materialart (Regel 21)."""
+    chosen = handover.standard_choice(
+        handover.SlicerSetup(doppelter_bestand, "orca"),
+        profiles.make_profile("centauri-carbon-2", "abs"),
+    )
+
+    assert _names(chosen) == ("cc2.json", "standard.json", "")
+
+
+def test_the_standard_choice_takes_no_machine_of_another_printer(
+    bestand: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Die einzige Maschine des Bestands gehört dem Centauri; ein MK4-Projekt
+    bekommt sie nicht, und mit ihr nicht den Prozess eines fremden Druckers.
+    Gelesen sind dafür nur die Maschinen."""
+    setup = handover.SlicerSetup(bestand, "orca")
+    reads, _walks = _count_reads(monkeypatch, bestand)
+
+    assert handover.standard_choice(setup, profiles.make_profile("prusa-mk4s", "pla")) is None
+    assert reads == [("machine",)], "ein unbekannter Drucker endet nach den Maschinen"
+    assert handover.standard_choice(replace(setup, flavour="cura"), _cc2()) is None, (
+        "Cura hat keine Herstellergrundlage, die sich so wählen ließe"
+    )
+
+
+def test_a_single_unknown_machine_is_no_standard_choice(tmp_path: Path) -> None:
+    """L2 der Durchsicht RM-623: Die einzige Maschine „Mein Drucker“ gehört
+    keinem bekannten Drucker. Der Dialog zeigt sie, hier sähe sie niemand —
+    weder der Centauri noch der Resin-Drucker bekommt sie."""
+    root = tmp_path / "ElegooSlicer" / "resources" / "profiles" / "Eigen"
+    _write(
+        root / "machine" / "mein.json",
+        {
+            "type": "machine",
+            "name": "Mein Drucker",
+            "instantiation": "true",
+            "nozzle_diameter": ["0.4"],
+            "default_print_profile": "Mein Prozess",
+        },
+    )
+    _write(
+        root / "process" / "mein.json",
+        {
+            "type": "process",
+            "name": "Mein Prozess",
+            "instantiation": "true",
+            "compatible_printers": ["Mein Drucker"],
+        },
+    )
+    executable = tmp_path / "ElegooSlicer" / "elegoo-slicer.exe"
+    executable.write_bytes(b"")
+    setup = handover.SlicerSetup(executable, "orca")
+    resin = next(
+        identifier
+        for identifier, printer in profiles.printer_profiles().items()
+        if printer.is_resin
+    )
+
+    assert handover.standard_choice(setup, _cc2()) is None
+    assert handover.standard_choice(setup, profiles.make_profile(resin, "resin")) is None
+
+
+def test_a_broken_foreign_profile_costs_the_choice_not_the_export(
+    doppelter_bestand: Path,
+) -> None:
+    """L1 der Durchsicht RM-623: Ein passendes Filament mit fehlendem
+    ``include`` wirft beim Auflösen seiner Kette. Der Bestand ist eine Zugabe —
+    die Wahl fällt weg, der Export schreibt ohne sie."""
+    root = doppelter_bestand.parent / "resources" / "profiles" / "Elegoo"
+    _write(
+        root / "filament" / "ECC2" / "kaputt.json",
+        {
+            "type": "filament",
+            "name": "Elegoo PLA Kaputt @ECC2",
+            "instantiation": "true",
+            "include": ["Vorlage, die es nicht gibt"],
+            "compatible_printers": [CC2_MACHINE],
+        },
+    )
+
+    assert handover.standard_choice(handover.SlicerSetup(doppelter_bestand, "orca"), _cc2()) is None
+
+
+def test_prusaslicer_gets_the_standard_choice_of_its_bundle(prusa_bundle: Path) -> None:
+    """Dieselbe Vorwahl auf PrusaSlicers Bündel: Drucker, sein Standardprozess
+    (``default_print_profile``) und das PLA des Modells — Kennungen sind dort
+    die Abschnittsnamen."""
+    chosen = handover.standard_choice(handover.SlicerSetup(prusa_bundle, "prusa"), _mk4s())
+
+    assert chosen is not None
+    assert (chosen.machine_profile, chosen.base_process, chosen.base_filament) == (
+        "Original Prusa MK4S HF0.4 nozzle",
+        "0.20mm SPEED @MK4S HF0.4",
+        "Prusament PLA @MK4S HF0.4",
+    )
 
 
 @pytest.mark.parametrize(
@@ -3524,3 +3763,157 @@ def test_prusas_stage_takes_its_structural_process(prusa_bundle: Path) -> None:
     assert foundation.process == "0.20mm STRUCTURAL @MK4S HF0.4" and not foundation.staged
     assert foundation.settings.support.threshold_angle == pytest.approx(48.37, abs=0.01)
     assert manufacturer.for_stage(setup, _mk4s(), "fine") == setup
+
+
+@pytest.mark.parametrize(("bottom", "layers"), [("-1", 3), ("2", 2), ("0", 0)])
+def test_the_contact_layers_are_read_back_with_their_same_as_top(bottom: str, layers: int) -> None:
+    """Untere Kontaktlagen -1 heißen in der Orca-Familie „wie oben“ (Anycubic,
+    RM-583, Werte aus den Konfigurationsblöcken vom 08.10.2026)."""
+    values = {
+        "support_interface_top_layers": "3",
+        "support_interface_bottom_layers": bottom,
+        "support_interface_spacing": "0.2",
+    }
+    read, foreign = manufacturer._read_process(values, manufacturer._Context(nozzle=0.4), {})
+
+    assert read["support.interface_layers"] == 3
+    assert read["support.bottom_interface_layers"] == layers
+    assert read["support.interface_spacing"] == pytest.approx(0.2)
+    assert not foreign
+
+
+@pytest.mark.parametrize(("fan", "cooling"), [("-1", False), ("100", True)])
+def test_the_interface_fan_is_read_from_the_filament(fan: str, cooling: bool) -> None:
+    """Der Kontaktlüfter steht in der Orca-Familie am Filament: -1 heißt „wie die
+    übrige Schicht“, 100 volle Kühlung (RM-583)."""
+    read, _refuses = manufacturer._read_filament(
+        {"support_material_interface_fan_speed": [fan]}, {}, "", Path("filament.json")
+    )
+    assert read["cooling.support_interface_cooling"] is cooling
+
+
+def test_prusas_bottom_contact_layers_are_read_back() -> None:
+    """PrusaSlicer: -1 heißt „wie oben“ (Programmvorgabe), das MK4S-Profil führt 0;
+    die Lücke 0 ist eine geschlossene Trennschicht (``--help-fff``, 2.9.6)."""
+    context = manufacturer._Context(nozzle=0.4)
+    same = {
+        "support_material_interface_layers": "3",
+        "support_material_bottom_interface_layers": "-1",
+    }
+    none = {
+        "support_material_interface_layers": "3",
+        "support_material_bottom_interface_layers": "0",
+    }
+
+    assert manufacturer._read_prusa(same, context)[0]["support.bottom_interface_layers"] == 3
+    assert manufacturer._read_prusa(none, context)[0]["support.bottom_interface_layers"] == 0
+    spacing = {"support_material_interface_spacing": "0"}
+    assert manufacturer._read_prusa(spacing, context)[0]["support.interface_spacing"] == 0.0
+
+
+@pytest.mark.parametrize(
+    ("values", "style"),
+    [
+        (
+            {"enable_support": "1", "support_type": "tree(auto)", "support_style": "tree_hybrid"},
+            "hybrid",
+        ),
+        ({"enable_support": "1", "support_type": "tree(auto)", "support_style": "default"}, "tree"),
+        ({"enable_support": "1", "support_type": "normal(auto)"}, "grid"),
+    ],
+)
+def test_a_hybrid_process_is_read_back_as_hybrid(values: dict[str, str], style: str) -> None:
+    """Ein Herstellerprozess mit ``tree_hybrid`` ist Hybrid (RM-584), sonst Baum
+    oder Gitter wie bisher."""
+    read, _foreign = manufacturer._read_process(values, manufacturer._Context(nozzle=0.4), {})
+    assert read["support.style"] == style
+
+
+@pytest.mark.parametrize(("walls", "read_as"), [("2", 2), ("0", 1), ("-1", 1)])
+def test_the_tree_walls_are_read_back(walls: str, read_as: int) -> None:
+    """Orca 0 und Bambu -1 heißen „automatisch“ — eine Wand (RM-584)."""
+    read, foreign = manufacturer._read_process(
+        {"tree_support_wall_count": walls}, manufacturer._Context(nozzle=0.4), {}
+    )
+    assert read["support.tree_walls"] == read_as
+    assert not foreign
+
+
+@pytest.mark.parametrize(
+    ("program", "values", "read_as"),
+    [
+        ("crealityprint", {"tree_support_wall_count_tree": "2"}, 2),
+        # Den gemeinsamen Namen überliest Creality Print; ohne eigenen Schlüssel
+        # gilt seine Vorgabe 0, eine Wand.
+        ("crealityprint", {"tree_support_wall_count": "2"}, 1),
+        ("orcaslicer", {"tree_support_wall_count": "2", "tree_support_wall_count_tree": "1"}, 2),
+    ],
+)
+def test_the_foundation_reads_the_wall_key_the_program_prints(
+    program: str, values: dict[str, str], read_as: int
+) -> None:
+    """Creality Print druckt die Wände der Bäume aus ``tree_support_wall_count_tree``
+    (RM-584, Slicertest). Die Grundlage liest denselben Schlüssel, sonst schlüge
+    der Rat vor, was schon gilt, oder überginge eine Abweichung."""
+    read, _foreign = manufacturer._read_process(
+        values,
+        manufacturer._Context(nozzle=0.4),
+        manufacturer.PROGRAM_DEFAULTS.get(program, {}),
+        program_name=program,
+    )
+    assert read["support.tree_walls"] == read_as
+
+
+def test_prusas_double_wall_threshold_is_no_wall_count() -> None:
+    """PrusaSlicer legt Doppelwände ab einem Astquerschnitt, ein Maß und keine
+    Wandzahl (Review RM-584, M5): Die Grundlage liest daraus keine Baumwände,
+    und das Feld nimmt PrusaSlicer nicht entgegen."""
+    read, foreign = manufacturer._read_prusa(
+        {"support_tree_branch_diameter_double_wall": "3"}, manufacturer._Context(nozzle=0.4)
+    )
+    assert "support.tree_walls" not in read
+    assert "support.tree_walls" not in foreign
+
+
+def test_every_program_that_knows_hybrid_counts_it_as_trees() -> None:
+    """Das Zeitmodell rechnet Hybrid als Baum, wo der Slicer es kennt
+    (``Motion.support_hybrid``), die Übergabe ersetzt es sonst durch Gitter
+    (``slicer_keys.NOT_OFFERED_BY_PROGRAM``). Beide Stellen müssen dasselbe sagen
+    (Review RM-584, L4): je Familie ein Zeitmodell, je Programm der Ersatz."""
+    families = {
+        "orca": manufacturer._orca_support_motion({}, None, 0.4).get("support_hybrid", False),
+        "prusa": manufacturer._prusa_support_motion({}, 0.4).get("support_hybrid", False),
+        "cura": False,
+    }
+    programs = {
+        mark: flavour
+        for fragment, flavour in slicer_keys.FLAVOUR_BY_NAME
+        if (mark := slicer_keys.program_of(f"{fragment}.exe")) and flavour in families
+    }
+    assert {"orcaslicer", "prusaslicer", "cura"} <= programs.keys(), programs
+    for program, flavour in programs.items():
+        knows = slicer_keys.substitute("support.style", "hybrid", program) is None
+        assert knows is families[flavour], program
+
+
+@pytest.mark.parametrize(
+    ("values", "flavour", "trees"),
+    [
+        ({"support_type": "tree(auto)"}, "orca", True),
+        ({"support_type": "normal(auto)"}, "orca", False),
+        ({"support_material_style": "organic"}, "prusa", True),
+        ({"support_material_style": "snug"}, "prusa", False),
+    ],
+)
+def test_auto_prints_trees_where_the_process_says_so(
+    values: dict[str, str], flavour: str, trees: bool
+) -> None:
+    """„Automatisch“ ist ein Baum, wo der Herstellerprozess Bäume stützt — eine
+    Auskunft für Zeitmodell und Rat (RM-584)."""
+    assert manufacturer.auto_prints_trees(values, flavour) is trees
+    motion = (
+        manufacturer._orca_support_motion(values, None, 0.4)
+        if flavour == "orca"
+        else manufacturer._prusa_support_motion(values, 0.4)
+    )
+    assert motion["support_tree"] is trees

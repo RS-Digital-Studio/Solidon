@@ -546,6 +546,7 @@ def test_parts_loader_keeps_a_parallel_completed_group_when_the_next_group_fails
             "printed_screw",
             "printed_thread",
             "screw_hole",
+            "threaded_rod",
         }
         entered_fasteners = threading.Event()
         release_fasteners = threading.Event()
@@ -610,7 +611,7 @@ def test_parts_loader_keeps_a_parallel_completed_group_when_the_next_group_fails
         complete = loader.load()
         modules = {spec.fn.__module__ for spec in complete.all()}
 
-        assert len(complete.all()) == 49
+        assert len(complete.all()) == 50
         assert {
             spec.name for spec in complete.all() if spec.fn.__module__ == fasteners
         } == expected_fasteners

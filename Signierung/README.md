@@ -339,6 +339,44 @@ und Flathub würde ohnehin selbst signieren.
 
 ---
 
+## Versionsdatei — der Release-Schlüssel und sein Wechsel
+
+Die Versionsdatei unterschreibt ein eigener Ed25519-Schlüssel, unabhängig von
+Certum und Apple. Der private Teil liegt im Passwortmanager und auf Papier,
+nie im Repository und nie auf dem Server. Jede Installation prüft gegen die
+öffentlichen Schlüssel ihrer eigenen Version, `RELEASE_PUBLIC_KEYS` in
+`app/core/updates.py`, und verwirft still, was keiner davon bestätigt. Der
+erste, seit 0.1.4: `603ec2d86e9f1b5232ccec58153b863f00c1f91cbc647a8696ecf6dfd4bbee79`.
+
+**Schlüsselwechsel, Schritt für Schritt** (Werkzeug: `tools/sign_version.py`):
+
+1. `python tools/sign_version.py --new-keypair`. Den privaten Teil in den
+   Passwortmanager, den öffentlichen ans Ende von `RELEASE_PUBLIC_KEYS` (der
+   alte bleibt stehen), die ausgegebene Besitzprobe nach `KEY_PROOFS` in
+   `tests/release_signing.py` — sie fängt jeden Tippfehler beim Eintragen.
+   Gegenprobe: `--private <neu>` muss melden, die Vorgängerin der Version
+   kenne den Schlüssel nicht, und schreibt nichts. Meldet es stattdessen
+   „steht nicht in updates.RELEASE_PUBLIC_KEYS“, ist der öffentliche Teil
+   falsch eingetragen.
+2. Diese Version veröffentlichen und ihre Versionsdatei noch mit dem **alten**
+   Schlüssel unterschreiben. So sieht jede ältere Installation das Update und
+   bekommt mit ihm den neuen Schlüssel.
+3. Erst wenn die Installationen dort angekommen sind (Statistik von
+   `count.php`), mit dem neuen unterschreiben: `--private <neu> --after-switch`.
+   Was vor Schritt 2 installiert wurde, sieht ab hier kein Update mehr und
+   braucht den Download von der Website.
+4. In der nächsten Version den alten öffentlichen Schlüssel entfernen und den
+   alten privaten vernichten. Ist der alte verraten, folgen 3 und 4 ohne
+   Wartezeit.
+
+Das Werkzeug hält die Reihenfolge selbst: Es unterschreibt nur mit einem
+Schlüssel, den die vorige veröffentlichte Version laut ihrem Git-Tag schon
+kannte, und verlangt `--after-switch`, wenn der Schlüssel gegenüber der zuletzt
+veröffentlichten Versionsdatei wechselt. `--check` und `upload_website.py`
+halten eine Datei an, die die vorige Version nicht lesen könnte.
+
+---
+
 ## Wer baut wo
 
 Die CI baut weiter alle drei Plattformen, an dem Ablauf ändert sich nichts.

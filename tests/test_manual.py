@@ -159,14 +159,183 @@ def test_the_pdf_links_nowhere_outside_itself_but_the_website(language: str) -> 
     )
 
 
-def test_written_manual_covers_the_current_demo_and_visible_controls() -> None:
+#: Wie die Freischaltseite den Stichtag je Sprache schreibt: Format und Monate.
+_DEMO_DATE_FORMS: dict[str, tuple[str, list[str]]] = {
+    "de": (
+        "{day}. {month} {year}",
+        [
+            "Januar",
+            "Februar",
+            "März",
+            "April",
+            "Mai",
+            "Juni",
+            "Juli",
+            "August",
+            "September",
+            "Oktober",
+            "November",
+            "Dezember",
+        ],
+    ),
+    "en": (
+        "{day} {month} {year}",
+        [
+            "January",
+            "February",
+            "March",
+            "April",
+            "May",
+            "June",
+            "July",
+            "August",
+            "September",
+            "October",
+            "November",
+            "December",
+        ],
+    ),
+    "es": (
+        "{day} de {month} de {year}",
+        [
+            "enero",
+            "febrero",
+            "marzo",
+            "abril",
+            "mayo",
+            "junio",
+            "julio",
+            "agosto",
+            "septiembre",
+            "octubre",
+            "noviembre",
+            "diciembre",
+        ],
+    ),
+    "fr": (
+        "{day} {month} {year}",
+        [
+            "janvier",
+            "février",
+            "mars",
+            "avril",
+            "mai",
+            "juin",
+            "juillet",
+            "août",
+            "septembre",
+            "octobre",
+            "novembre",
+            "décembre",
+        ],
+    ),
+    "it": (
+        "{day} {month} {year}",
+        [
+            "gennaio",
+            "febbraio",
+            "marzo",
+            "aprile",
+            "maggio",
+            "giugno",
+            "luglio",
+            "agosto",
+            "settembre",
+            "ottobre",
+            "novembre",
+            "dicembre",
+        ],
+    ),
+    "pt": (
+        "{day} de {month} de {year}",
+        [
+            "janeiro",
+            "fevereiro",
+            "março",
+            "abril",
+            "maio",
+            "junho",
+            "julho",
+            "agosto",
+            "setembro",
+            "outubro",
+            "novembro",
+            "dezembro",
+        ],
+    ),
+}
+
+
+#: Wie der Monatserste geschrieben wird, wo er nicht bloß „1“ heißt.
+_FIRST_OF_MONTH: dict[str, str] = {"fr": "1er", "it": "1º"}
+
+
+@pytest.mark.parametrize("language", sorted(available_languages()))
+def test_the_activation_page_names_the_shipped_demo_end_in_every_language(
+    language: str, shipped_demo_until: object
+) -> None:
+    """Die Freischaltseite nennt den ausgelieferten Stichtag — in jeder Sprache.
+
+    Der Stichtag steht als Text in der deutschen Quelle und frei in jedem
+    Katalog, ein Zwilling von ``store.DEMO_UNTIL``. Gebunden war nur die
+    deutsche Quelle; eine Übersetzung mit dem alten Datum fiel nicht auf.
+    """
+    from datetime import date
+
+    from app.i18n import install_catalog, set_language
+    from app.i18n.catalog import read_catalog
+
+    assert language in _DEMO_DATE_FORMS, (
+        f"Für {language} fehlt die Datumsschreibweise in _DEMO_DATE_FORMS."
+    )
+    if language != "de":
+        install_catalog(language, read_catalog(language))
+    set_language(language)
+    try:
+        activation = next(str(p.body) for p in manual.pages() if p.key == "activation")
+    finally:
+        set_language("de")
+    if shipped_demo_until is None:
+        # Verkaufsversion: Ohne Stichtag darf die Seite keine befristete Demo
+        # und keine „spätere“ Verkaufsversion versprechen — spiegelbildlich zu
+        # den Demo-Sätzen in ``test_written_manual_covers_…``. Geprüft wird die
+        # deutsche Quelle; die Kataloge folgen ihrem Schlüssel
+        # (``test_translations.py``).
+        if language == "de":
+            promised = [
+                phrase
+                for phrase in (
+                    "befristete Demo",
+                    "startet diese Demo nicht mehr",
+                    "spätere Verkaufsversion",
+                )
+                if phrase in activation
+            ]
+            assert not promised, (
+                f"Die Fassung hat keinen Demo-Stichtag, die Freischaltseite sagt aber "
+                f"{promised} — Kapitel „activation“ in manual.py und die Kataloge nachziehen."
+            )
+        return
+    assert isinstance(shipped_demo_until, date)
+    form, months = _DEMO_DATE_FORMS[language]
+    day = shipped_demo_until
+    # Der Monatserste trägt im Französischen und Italienischen die Ordnungszahl.
+    day_text = _FIRST_OF_MONTH.get(language, "1") if day.day == 1 else str(day.day)
+    last_day = form.format(day=day_text, month=months[day.month - 1], year=day.year)
+    assert last_day in activation, (language, last_day, activation[:300])
+
+
+def test_written_manual_covers_the_current_demo_and_visible_controls(
+    shipped_demo_until: object,
+) -> None:
     """Die handgeschriebenen Kapitel nennen den ausgelieferten Zustand."""
     pages = {page.key: str(page.body) for page in manual.pages()}
 
-    activation = pages["activation"]
-    assert "30. Oktober 2026" in activation
-    assert "vollständig freigeschaltet" in activation
-    assert "startet diese Demo nicht mehr" in activation
+    if shipped_demo_until is not None:
+        # Der Stichtag selbst steht im Sprachtest darüber.
+        activation = pages["activation"]
+        assert "vollständig freigeschaltet" in activation
+        assert "startet diese Demo nicht mehr" in activation
 
     seeing = pages["looking"]
     for value in (
@@ -644,6 +813,25 @@ def test_f1_on_every_other_operation_finds_its_entry_in_the_reference() -> None:
     assert not lost, "\n".join(lost)
 
 
+def test_every_sign_in_the_feature_panel_opens_a_page_that_exists() -> None:
+    """RM-554: Jedes i im Merkmalfenster zeigt auf eine vorhandene Handbuchseite.
+
+    Ein i steht nur an Zeilen mit Feldern, und die tragen eine Operation; das
+    Ziel ist dasselbe wie F1 (:func:`manual.help_for`). Geprüft über jede
+    Operation im Register; eine unbekannte führt auf die Seite über die
+    Merkmale.
+    """
+    keys = {page.key for page in manual.pages()}
+    lost = []
+    for operation in (*(spec.name for spec in REGISTRY.all()), "unknown_operation"):
+        key, spot = manual.help_for_action(operation)
+        if key not in keys or (spot and spot[1:] not in dict(manual.reference_anchors(key))):
+            lost.append(f"{operation} → {key}{spot}")
+    assert not lost, "\n".join(lost)
+    assert manual.help_for_action("insert_nut_trap") == manual.help_for("insert_nut_trap")
+    assert manual.help_for_action("unknown_operation") == ("features", "")
+
+
 @pytest.mark.parametrize("language", available_languages())
 def test_reference_anchors_follow_the_headings_and_keep_duplicate_titles_distinct(
     language: str,
@@ -695,16 +883,16 @@ def test_the_reference_writes_numbers_the_way_the_language_does() -> None:
 
     german = manual.find(manual.reference_key("holes"))
     assert german is not None
-    assert "0,2 … 200" in str(german.body)
-    assert "0.2 … 200" not in str(german.body)
+    assert "0,2 … 1000" in str(german.body)
+    assert "0.2 … 1000" not in str(german.body)
 
     install_catalog("en", read_catalog("en"))
     set_language("en")
     try:
         english = manual.find(manual.reference_key("holes"))
         assert english is not None
-        assert "0.2 … 200" in str(english.body)
-        assert "0,2 … 200" not in str(english.body)
+        assert "0.2 … 1000" in str(english.body)
+        assert "0,2 … 1000" not in str(english.body)
     finally:
         set_language("de")
 

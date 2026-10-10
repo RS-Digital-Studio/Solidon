@@ -198,7 +198,13 @@ MEINT_DEN_SCHRITT: dict[str, str | dict[str, str] | None] = {
     "mesh.already_below_target": "triangles",
     "move_feature.unchanged": "x",
     "duplicate_feature.unchanged": "x",
-    "rotate_feature.unchanged": {"rotate_feature": "angle", "_rotate_torus": "axis"},
+    # RM-546: Um die eigene Achse gedreht meint der Befund die Achse, nach einer
+    # vollen Umdrehung den Winkel.
+    "rotate_feature.unchanged": {
+        "rotate_feature": "angle",
+        "_rotate_torus": "axis",
+        "_turned_onto_itself": frozenset({"axis", "angle"}),
+    },
     "resize_feature.unchanged": {
         "resize_feature": "diameter",
         "_resize_torus": "diameter",
@@ -214,6 +220,8 @@ MEINT_DEN_SCHRITT: dict[str, str | dict[str, str] | None] = {
     "parts.thread_thin_wall": frozenset({"diameter", "size"}),
     "parts.bore_widened": frozenset({"diameter", "size"}),
     "parts.countersink_derived": "countersink",
+    # RM-633: die Wand ist dicker, als der Baustein eingetragen hat.
+    "parts.wall_thicker": "wall",
 }
 
 #: Die Operationen, deren Dialog der Knopf öffnet — das Feld muss es an jeder
@@ -245,6 +253,7 @@ OHNE_OPERATION: frozenset[str] = frozenset(
         "parts.thread_thin_wall",
         "parts.bore_widened",
         "parts.countersink_derived",
+        "parts.wall_thicker",
     }
 )
 

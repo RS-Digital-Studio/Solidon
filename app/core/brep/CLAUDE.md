@@ -11,7 +11,7 @@ ist das ein Befund, kein zweiter Wahrheitsbegriff. Regeln:
 
 | Datei | Rolle |
 |---|---|
-| `kernel.py` | `Solid` und sein Weg ins Netz (ohne Dreiecke ohne Fläche, `_tessellated_body`), `available()`, `boolean_builder` (`SetRunParallel`, bitgleich), Merker je Körper (Volumen, Hüllquader, `is_closed`, `face_neighbours`), `nearest_distance`, `untrimmed_surface` |
+| `kernel.py` | `Solid` und sein Weg ins Netz (ohne Dreiecke ohne Fläche, `_tessellated_body`), `available()`, `boolean_builder` (`SetRunParallel`, bitgleich), Merker je Körper (Volumen, Hüllquader, `is_closed`, `face_neighbours`), `nearest_distance`, `untrimmed_surface`; `Solid.held_bytes`/`lean` für den Ergebniscache |
 | `profiles.py` | Vom Skizzenumriss zum Körper (§30.1): Gewinde, Formschräge, Bahn, Übergang, Querschnitte für Profilklemmen und Dichtnuten (`face_of`, `offset_face`, `face_boolean`, `prism`), `round_cord`, `shell_open_at`, `top_faces_of` |
 | `ops.py` | Die Operationen (§25, §10): `mesh_to_exact`, `brep_to_mesh`, `thread_exact`, `create_brep_box` …; `drill_brep_hole`, `shell_exact` versteckt, `prepare_ops.drill_hole` und `hollow_object` rufen sie |
 | `edit.py` | Einen Körper formen: Kanten, Bohrungen, Rundungen, Flächen, Lage; `fuse_solids` vereinigt berührende Volumenkörper mit nativer Flächenhistorie; `fillet_group` rundet eine belegte Gruppe und lässt je Kontur aus, was OpenCASCADE nicht baut (`GroupFillet`, Suche `_GroupSearch`, Kandidat `_group_candidate`, Ortung `_RoundsOf`); `fillet`/`chamfer` als exakte Hälfte von `geom/edge_ops.py` |
@@ -82,8 +82,9 @@ unveränderten Ergebnis (`HasSourceDeviation`).
   an jedem nativen Schritt lässt Eingabe und Cache stehen.
 - **Filamentslots** je nativer Fläche (`face_slots`) reisen über
   `_copied_faces`, auch in `to_mesh(deflection=)`; `with_triangle_slots` nimmt
-  nur widerspruchsfreie ganze Flächen und hält die Merkmalsdreiecke in ihrer
-  Folge. `carried_face_slots` folgt nur belegten Ersetzungen (`ModifiedShape`,
+  nur widerspruchsfreie ganze Flächen, kopiert die Form nicht und teilt Merker
+  und Dreiecke (`_recoloured`, RM-557: ein Filament rechnet nichts neu); eine
+  eigene Kopie für einen Arbeiter ist `detached`. `carried_face_slots` folgt nur belegten Ersetzungen (`ModifiedShape`,
   `ShapeBuild_ReShape`): erste Quelle, Abzugswerkzeuge färben nie, neue Flächen
   Slot null, Widerspruch wird abgewiesen; `keep_filament_boundaries` hält
   Slotgrenzen. Die Zuordnung entsteht beim Öffnen aus dem Verlauf.
@@ -108,7 +109,9 @@ unveränderten Ergebnis (`HasSourceDeviation`).
   auch an einer Eckrundung der Mittelpunkt ihrer Trägerkugel.
 - **Orientierung**: `TopAbs_REVERSED` dreht die Ebenennormale; Bohrung gegen
   Zapfen, Senkung gegen Kegel sagen Orientierung **und** `Position().Direct()`
-  zusammen. Unvollständige U-Spanne heißt `partial`.
+  zusammen. Unvollständige U-Spanne heißt `partial`; zusammengelegte Mäntel
+  sind ganz, sobald einer selbst die volle Umdrehung trägt
+  (`_cylinder_group_extent`).
 - **`SurfacePatch`** trägt echte Tessellierungsdreiecke; Langloch, Ring und
   Kammer bekommen nur ihre Teilflächen, native Belege verdrängen Netzfits,
   Reste bekommen keinen erfundenen Träger. `measure_sources` nennt jedes native
@@ -192,7 +195,9 @@ unveränderten Ergebnis (`HasSourceDeviation`).
   ihren eigenen Satz. **Im Aufruf ist die Nummer der Beleg**: `selected_edges`
   (`checked_edge_indices`, `_edges_for`) geht vor `keys`, ohne Rückfall; die
   Auswertung bindet über `native_edge_indices`, nie über `edges_of`.
-  `edge_points` gibt die Kante nach `DEFLECTION` als Punktfolge.
+  `edge_points` gibt die Kante nach `DEFLECTION` als Punktfolge;
+  `contour_keys` nennt, was eine Rundung an ihr tangential mitnimmt, ohne zu
+  bauen (die Linie im Bild, RM-579).
 - **`native_edges_of_segments` belegt je Strecke** (`native_edges_of_chains`
   fasst je Zug zusammen): Netzknoten und Dreiecksnachbarn führen über
   `face_sources` zu genau zwei nativen Flächen; mehrere gemeinsame Kanten

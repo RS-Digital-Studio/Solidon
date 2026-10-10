@@ -23,6 +23,7 @@ from __future__ import annotations
 import ast
 import errno
 import json
+import multiprocessing.process
 import os
 import subprocess
 import sys
@@ -65,8 +66,79 @@ def offloaded(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(kernel_process, "OFFLOAD_ABOVE", 0)
 
 
-def in_a_worker(work: Callable[[], Any], timeout: float = 120.0) -> Any:
-    """``work`` in einem Nebenfaden — wie die Arbeiter von Vorschau, Auswertung und Ansicht."""
+#: Ein Nebenfaden hängt, wenn so lange weder dieser Prozess noch ein Hilfsprozess
+#: rechnet. Eine feste Gesamtzeit war es nicht (RM-635): Der Hilfsprozess rechnet
+#: unter Windows eine Klasse tiefer (``kernel_jobs._yield_to_the_window``), und
+#: unter sechsfach überbuchten Kernen brauchte ``voxel`` 81 s statt 1,9 s.
+STALL_SECONDS = 60.0
+
+#: Gegen eine Rechnung, die nie endet und dabei rechnet.
+MOST_SECONDS = 1800.0
+
+#: Unter so viel eigener Rechenzeit ist es das Warten selbst, kein Fortschritt.
+OWN_NOISE_SECONDS = 0.05
+
+
+def _cpu_seconds(process: Any) -> float | None:
+    """Die Rechenzeit eines laufenden Prozesses (``multiprocessing.Process``), soweit lesbar.
+
+    Attrappen eines Hilfsprozesses rechnen nicht und bekommen ``None``.
+    """
+    if not isinstance(process, multiprocessing.process.BaseProcess) or process.pid is None:
+        return None
+    pid = process.pid
+    if os.name == "nt":
+        import ctypes
+
+        # Die Windows-Namen fehlen in den ctypes-Stubs anderer Plattformen.
+        windows: Any = ctypes
+        kernel32 = windows.WinDLL("kernel32")
+        times = [ctypes.c_uint64() for _ in range(4)]
+        kernel32.GetProcessTimes.argtypes = (ctypes.c_void_p, *[ctypes.c_void_p] * 4)
+        try:
+            handle = ctypes.c_void_p(int(process.sentinel))
+        except ValueError:  # schon geschlossen
+            return None
+        if not kernel32.GetProcessTimes(handle, *[ctypes.byref(value) for value in times]):
+            return None
+        return (times[2].value + times[3].value) / 1e7
+    stat = Path(f"/proc/{pid}/stat")
+    if stat.is_file():
+        with suppress(OSError, IndexError, ValueError):
+            fields = stat.read_text(encoding="ascii").rsplit(")", 1)[1].split()
+            return (int(fields[11]) + int(fields[12])) / os.sysconf("SC_CLK_TCK")
+        return None
+    shown = subprocess.run(
+        ["ps", "-o", "time=", "-p", str(pid)], capture_output=True, text=True, check=False
+    ).stdout.strip()
+    with suppress(ValueError):
+        return sum(float(part) * 60**rank for rank, part in enumerate(reversed(shown.split(":"))))
+    return None
+
+
+def _helper_cpu() -> dict[int, float]:
+    """Rechenzeit je laufendem Hilfsprozess des Kerns; Attrappen ohne Prozess zählen nicht."""
+    try:
+        helpers = list(kernel_process._POOL._helpers)
+    except RuntimeError:
+        return {}
+    found = {}
+    for helper in helpers:
+        process = getattr(helper, "process", None)
+        seconds = _cpu_seconds(process) if process is not None else None
+        if seconds is not None:
+            found[process.pid] = seconds
+    return found
+
+
+def in_a_worker(work: Callable[[], Any], stall: float = STALL_SECONDS) -> Any:
+    """``work`` in einem Nebenfaden — wie die Arbeiter von Vorschau, Auswertung und Ansicht.
+
+    Gewartet wird, solange gerechnet wird: in diesem Prozess oder in einem
+    Hilfsprozess des Kerns. Ein Hänger — beide Seiten warten aufeinander — hält
+    nach ``stall`` Sekunden ohne Rechenzeit an, eine Rechnung ohne Ende nach
+    :data:`MOST_SECONDS`.
+    """
     box: dict[str, Any] = {}
 
     def run() -> None:
@@ -77,11 +149,49 @@ def in_a_worker(work: Callable[[], Any], timeout: float = 120.0) -> Any:
 
     worker = threading.Thread(target=run, name="kernel-test")
     worker.start()
-    worker.join(timeout)
-    assert not worker.is_alive(), f"der Nebenfaden kam in {timeout} s nicht zurück"
+    begun = moved = time.monotonic()
+    own = time.process_time()
+    helpers: dict[int, float] = {}
+    while worker.is_alive():
+        worker.join(0.5)
+        now, spent, current = time.monotonic(), time.process_time(), _helper_cpu()
+        if spent - own >= OWN_NOISE_SECONDS or any(
+            seconds > helpers.get(pid, -1.0) for pid, seconds in current.items()
+        ):
+            moved, own = now, spent
+        helpers = current
+        assert now - moved < stall or not worker.is_alive(), (
+            f"der Nebenfaden kam nicht zurück, und {stall:.0f} s lang rechnete nichts"
+        )
+        assert now - begun < MOST_SECONDS, f"der Nebenfaden rechnete {MOST_SECONDS:.0f} s lang"
     if "error" in box:
         raise box["error"]
     return box["value"]
+
+
+def test_a_worker_that_waits_without_computing_is_stopped_as_hanging(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Die Wartelogik selbst: Wartet der Nebenfaden, ohne dass irgendwo gerechnet wird,
+    hält sie nach ``stall`` an; rechnet er ohne Ende, nach :data:`MOST_SECONDS`."""
+    release = threading.Event()
+    try:
+        with pytest.raises(AssertionError, match="rechnete nichts"):
+            in_a_worker(lambda: release.wait(60), stall=1.0)
+    finally:
+        release.set()
+    monkeypatch.setattr(sys.modules[__name__], "MOST_SECONDS", 1.0)
+    stop = threading.Event()
+
+    def spin() -> None:
+        while not stop.is_set():
+            sum(range(1000))
+
+    try:
+        with pytest.raises(AssertionError, match="rechnete"):
+            in_a_worker(spin)
+    finally:
+        stop.set()
 
 
 def welded(name: str) -> MeshData:
@@ -1125,6 +1235,67 @@ def test_a_helper_starts_with_one_blas_thread_and_ours_stay(
 
     assert mark.read_text(encoding="utf-8") == "1"
     assert os.environ.get("OPENBLAS_NUM_THREADS") == ours
+
+
+#: Was ein frischer Prozess nach ``import app``, ``numpy`` und ``scipy.linalg``
+#: an Zusage meldet — und was er ohne die Vorgabe meldete (RM-567).
+_BLAS_PROBE = textwrap.dedent(
+    """
+    import os, sys
+    before = "numpy" in sys.modules
+    import app
+    import numpy, scipy.linalg
+    private = -1
+    if sys.platform == "win32":
+        import ctypes
+        from ctypes import wintypes
+
+        class Counters(ctypes.Structure):
+            _fields_ = [("cb", wintypes.DWORD), ("faults", wintypes.DWORD)] + [
+                (name, ctypes.c_size_t)
+                for name in ("peak", "ws", "a", "b", "c", "d", "pf", "peak_pf", "private")
+            ]
+
+        counters = Counters()
+        counters.cb = ctypes.sizeof(Counters)
+        kernel = ctypes.WinDLL("kernel32")
+        kernel.GetCurrentProcess.restype = wintypes.HANDLE
+        psapi = ctypes.WinDLL("psapi")
+        psapi.GetProcessMemoryInfo.argtypes = [wintypes.HANDLE, ctypes.c_void_p, wintypes.DWORD]
+        psapi.GetProcessMemoryInfo(kernel.GetCurrentProcess(), ctypes.byref(counters), counters.cb)
+        private = counters.private // 2**20
+    print(before, os.environ.get("OPENBLAS_NUM_THREADS"), private)
+    """
+)
+
+
+@pytest.mark.parametrize("given", [None, "3"], ids=["ohne", "gesetzt"])
+def test_the_application_loads_blas_with_one_thread_unless_told_otherwise(
+    given: str | None,
+) -> None:
+    """``import app`` setzt einen BLAS-Faden, bevor NumPy lädt (RM-567).
+
+    Ohne die Vorgabe sagte OpenBLAS je Rechenkern einen Puffer zu, für
+    ``numpy`` und ``scipy`` je einmal: 1 522 MB nach dem Import an 32 Kernen,
+    mit einem Faden 44 MB (08.10.2026). Ein ausdrücklich gesetzter Wert bleibt.
+    """
+    environment = {key: value for key, value in os.environ.items() if key != "OPENBLAS_NUM_THREADS"}
+    if given is not None:
+        environment["OPENBLAS_NUM_THREADS"] = given
+    result = subprocess.run(
+        [sys.executable, "-c", _BLAS_PROBE],
+        capture_output=True,
+        text=True,
+        check=True,
+        cwd=Path(__file__).resolve().parents[1],
+        env=environment,
+        timeout=300,
+    )
+    before, threads, private = result.stdout.split()
+    assert before == "False", "numpy was loaded before the application could choose"
+    assert threads == (given or "1")
+    if given is None and sys.platform == "win32":
+        assert int(private) < 400, f"{private} MB committed after loading numpy and scipy"
 
 
 #: Was ``numpy`` über BLAS oder LAPACK rechnet. Mit der Zahl der Fäden ändert sich
@@ -2268,7 +2439,7 @@ def test_pool_late_stop_end_recovers_without_shutdown(
     with pytest.raises(kernel_process.KernelHelperStopError):
         kernel_process.run("late_stop_probe", {}, {}, weight=0)
     with pytest.raises(kernel_process.KernelHelperStopError):
-        in_a_worker(lambda: kernel_process.run("late_stop_probe", {}, {}, weight=1), timeout=10.0)
+        in_a_worker(lambda: kernel_process.run("late_stop_probe", {}, {}, weight=1), stall=10.0)
     assert calls == {"local": 0, "helper": 0}
     assert pool.take(None) is None
     assert len(made) == 1
@@ -2283,7 +2454,7 @@ def test_pool_late_stop_end_recovers_without_shutdown(
         assert pool.processes() == []
     elif entry == "worker":
         assert in_a_worker(
-            lambda: kernel_process.run("late_stop_probe", {}, {}, weight=1), timeout=10.0
+            lambda: kernel_process.run("late_stop_probe", {}, {}, weight=1), stall=10.0
         ) == ({}, {"executed": "helper"})
         assert calls == {"local": 0, "helper": 1}
         assert len(made) == 2 and pool.processes() == [made[-1]]
@@ -2449,7 +2620,7 @@ def test_pool_late_stop_end_releases_the_real_helper_once(
         monkeypatch.setattr(kernel_process, "_Helper", FreshHelper)
         if entry == "worker":
             outcome = in_a_worker(
-                lambda: kernel_process.run("late_release_probe", {}, {}, weight=1), timeout=10.0
+                lambda: kernel_process.run("late_release_probe", {}, {}, weight=1), stall=10.0
             )
             assert outcome == ({}, {"executed": "local" if expected_start else "helper"})
             assert helper_calls == int(not expected_start)
@@ -2543,7 +2714,7 @@ def test_pool_late_stop_end_keeps_a_permanent_disabling_cause(
         {"executed": "local"},
     )
     assert in_a_worker(
-        lambda: kernel_process.run("late_stop_probe", {}, {}, weight=1), timeout=10.0
+        lambda: kernel_process.run("late_stop_probe", {}, {}, weight=1), stall=10.0
     ) == ({}, {"executed": "local"})
     assert calls == {"local": 2, "helper": 0}
     assert pool.disabled and pool.processes() == []
@@ -2584,9 +2755,7 @@ def test_pool_retry_of_a_live_failed_stop_never_unlocks_the_kernel(
         with pytest.raises(kernel_process.KernelHelperStopError):
             kernel_process.run("late_stop_probe", {}, {}, weight=0)
         with pytest.raises(kernel_process.KernelHelperStopError):
-            in_a_worker(
-                lambda: kernel_process.run("late_stop_probe", {}, {}, weight=1), timeout=10.0
-            )
+            in_a_worker(lambda: kernel_process.run("late_stop_probe", {}, {}, weight=1), stall=10.0)
         assert calls == {"local": 0, "helper": 0}
         assert pool.take(None) is None
         release.set()
@@ -2758,9 +2927,7 @@ def test_pool_local_choice_checks_a_stop_error_from_the_path_decision(
     monkeypatch.setattr(kernel_process, "offloaded", choose_while_a_stop_fails)
     with pytest.raises(kernel_process.KernelHelperStopError):
         if worker_request:
-            in_a_worker(
-                lambda: kernel_process.run("late_stop_probe", {}, {}, weight=1), timeout=10.0
-            )
+            in_a_worker(lambda: kernel_process.run("late_stop_probe", {}, {}, weight=1), stall=10.0)
         else:
             kernel_process.run("late_stop_probe", {}, {}, weight=0)
     assert decisions == 1 and calls == {"local": 0, "helper": 0}
@@ -2784,7 +2951,7 @@ def test_pool_lasting_refusal_survives_a_failed_stop_on_public_run(
 
     monkeypatch.setattr(kernel_process, "_Helper", RefusingHelper)
     with pytest.raises(kernel_process.KernelHelperStopError):
-        in_a_worker(lambda: kernel_process.run("late_stop_probe", {}, {}, weight=1), timeout=10.0)
+        in_a_worker(lambda: kernel_process.run("late_stop_probe", {}, {}, weight=1), stall=10.0)
     assert len(made) == 1 and refusals == 1
     assert made[0].alive and pool.processes() == [made[0]] and pool.disabled
     assert calls == {"local": 0, "helper": 0}
@@ -2792,7 +2959,7 @@ def test_pool_lasting_refusal_survives_a_failed_stop_on_public_run(
 
     made[0].alive = False
     assert in_a_worker(
-        lambda: kernel_process.run("late_stop_probe", {}, {}, weight=1), timeout=10.0
+        lambda: kernel_process.run("late_stop_probe", {}, {}, weight=1), stall=10.0
     ) == ({}, {"executed": "local"})
     assert pool.disabled and pool.processes() == []
     assert pool.take(None) is None
@@ -2835,7 +3002,7 @@ def test_pool_ready_failures_survive_failed_stops_on_public_take(
         made[-1].alive = False
 
     assert in_a_worker(
-        lambda: kernel_process.run("late_stop_probe", {}, {}, weight=1), timeout=10.0
+        lambda: kernel_process.run("late_stop_probe", {}, {}, weight=1), stall=10.0
     ) == ({}, {"executed": "local"})
     assert pool.disabled and pool.processes() == []
     assert pool.take(None) is None
@@ -3024,7 +3191,7 @@ def test_public_run_distinguishes_enospc_from_memory_in_both_transfers(
     def run() -> Any:
         return in_a_worker(
             lambda: kernel_process.run("enospc_transfer_probe", source, {}, weight=1),
-            timeout=10.0,
+            stall=10.0,
         )
 
     helper_calls = int(stage == "helper-output")
@@ -3125,7 +3292,7 @@ def test_a_full_disk_pauses_the_helper_and_tells_the_step(monkeypatch: pytest.Mo
                 kernel_process.run("full_disk_probe", source, {}, weight=1),
                 kernel_process.take_notice(),
             ),
-            timeout=10.0,
+            stall=10.0,
         )
 
     try:

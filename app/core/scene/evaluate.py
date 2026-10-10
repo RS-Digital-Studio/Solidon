@@ -20,9 +20,12 @@ Drei Verhaltensweisen sind Absicht:
 from __future__ import annotations
 
 import dataclasses
+import hashlib
 import math
-from collections import Counter
-from collections.abc import Callable, Collection, Mapping, Sequence
+import sys
+import threading
+from collections import Counter, OrderedDict
+from collections.abc import Callable, Collection, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from functools import cache, partial
 from pathlib import PurePath
@@ -34,6 +37,7 @@ from app.core.errors import (
     CHANGE_SELECTION,
     CORRECT_INPUT,
     DECIMATE_MESH,
+    GENERATE_AGAIN,
     REACTIVATE_STEP,
     RESOLVE_INTERSECTIONS,
     SHOW_DETAILS,
@@ -178,6 +182,23 @@ from app.core.units import (
 from app.i18n import TranslatableText, _, format_decimal, source_text, tr
 
 _log = get_logger(__name__)
+
+#: Wie viele Bytes die gemerkten Zuordnungsschritte höchstens halten
+#: (:func:`_remembered_step`, RM-593). Eine Auswertung geht den ganzen Verlauf
+#: durch und ordnete nach jedem Schritt neu zu, auch aus dem Cache — bewegte
+#: Merkmale, Zuordnung, Teilhashes —, am Eiffelturm (4 878 Merkmale) gut eine
+#: Sekunde mehr je Schritt im Verlauf, bei jeder Auswertung. Dieselben
+#: Eingänge geben dieselbe Antwort. Gewogen wird, was ein Schritt über die
+#: Merkmale seines Eintrags hinaus hält — die bewegten teilen ihre
+#: Dreiecksnummern mit ihnen (Nachprüfung L, M-3): am Eiffelturm 12 MB je
+#: Schritt, am Laptop-Riser 1,6 MB. Die Hälfte der kleinsten Speicherebene
+#: (``scene.cache.MEMORY_FLOOR``) trägt so 21 Schritte am Eiffelturm. Gezählt
+#: wird in der Bytegrenze des Ergebniscaches (:func:`remembered_parts`).
+REMEMBERED_BYTES_KEPT: Final = 256 * 1024 * 1024
+
+#: Was ein mitgemerkter Teilhash eines Merkmals hält (``hashing.FeatureMemo``):
+#: Eintrag, Tupel und 32 Byte Hash nach ``sys.getsizeof``, aufgerundet.
+_DIGEST_BYTES: Final = 200
 
 #: Und darüber läuft die **Zuordnung** nicht — dieselbe Bremse, die andere
 #: Größe.
@@ -347,6 +368,7 @@ class _EvaluationChecks:
         "scene.placement": ("geometry", "printer"),
         "scene.coincident_bodies": ("geometry",),
         "scene.thin_walls": ("geometry", "printer", "material"),
+        "scene.thin_skins": ("geometry", "printer", "material"),
         "scene.form_deviation": ("geometry",),
     }
 
@@ -660,7 +682,14 @@ def _evaluate(
     names: dict[ObjectId, str] = {}
     # Teilhashes je Merkmalsobjekt, für diese Auswertung: Ein Merkmal, das
     # unverändert durch den Stapel reist, wird einmal gehasht, nicht je Schritt.
+    # Ein gemerkter Zuordnungsschritt bringt seine mit (RM-593).
     feature_memo: FeatureMemo = {}
+    step_ways = _step_ways()
+    step_generation = _next_generation()
+    remembered_now: dict[ObjectId, _RememberedStep] = {}
+    # Neu gemerkte Schritte; in den Merker kommen sie erst, wenn ihr Ergebnis
+    # in der Speicherebene liegt (:func:`_keep_steps`).
+    fresh_steps: list[tuple[bytes, _RememberedStep]] = []
     # Die Ladewahl je Körper zur Vollerkennung (§21.1): am Ladeschritt
     # entschieden, von jedem Folgeschritt desselben Körpers gelesen. Jede
     # Auswertung baut sie in Stapelreihenfolge neu auf — sie ist eine Folge
@@ -1344,65 +1373,132 @@ def _evaluate(
                 # Im Fang wie die Erkennung selbst: Der Beleg vergleicht jede
                 # Ecke, und ein Speicherfehler dabei ist ein Befund am Schritt.
                 motion, moved_source = _motion_of(placed, result.transform, inputs, index)
-                prepared_objects[object_id] = _with_features(
-                    placed,
-                    previous_features.get(object_id, {}),
-                    operation,
-                    # Auch hier der Wächter: Die Zuordnung fragt bei einem
-                    # mehrdeutigen Merkmal (§21.3), und diese Antwort steht
-                    # genauso wenig im Dokument wie die einer Operation.
-                    watched,
-                    findings,
-                    motion,
-                    previous_bounds.get(object_id),
-                    recorded,
-                    referenced_features.get(object_id, set()) | referenced_anywhere,
-                    spec.touches_features,
-                    token,
-                    step_progress.say,
-                    advance=step_progress.advance,
-                    question_context=announce_candidates,
-                    legacy_eligible=legacy_eligible,
-                    needed=_needed_after(
-                        all_references, positions, active_fit_names, position, object_id
-                    ),
-                    continuations=continuations[index] if continuations else (),
-                    # Die Fassung des Erzeugers, für die eine native Neuwahl
-                    # gilt: roher Schlüssel plus Ausgabeindex — nicht der
-                    # Objekthash danach, der die Wahl selbst enthielte.
-                    scope=f"{key}:{index}",
-                    # Der Eingang an derselben Stelle, wenn es einen gibt —
-                    # oder der, aus dem die Ausgabe belegt bewegt wurde
-                    # (:func:`_motion_of`): Bei einer Bewegung der Beleg, dass
-                    # die Ausgabe sein bewegter Zwilling ist. Ob er es ist,
-                    # prüft ``carry_detection`` am Netz, nicht am Index.
-                    source_mesh=moved_source,
-                    # Die alten Merkmale jeder Ausgabe stammen bei einem
-                    # einzigen Eingang aus ihm — auch die der zweiten Hälfte
-                    # nach *Teilen* (RM-217).
-                    origin_mesh=inputs[0].mesh if len(inputs) == 1 else None,
-                    origin_features=inputs[0].features if len(inputs) == 1 else None,
-                    texture_sources=(
-                        inputs[1:]
-                        if operation.op in {"union_objects", "intersect_objects"}
-                        else inputs
-                        if operation.op == "split_bodies"
-                        else ()
-                    ),
-                    detect_features=detect_features,
-                    recognition_of=recognition_of,
-                    on_recognition_answer=on_recognition_answer,
-                    decided=decided,
-                    announced_gone=frozenset(
-                        name
-                        for entry in result.findings
-                        if entry.code in REMOVAL_CODES
-                        and entry.object_id in (None, operation.outputs[index])
-                        for name in entry.feature_ids
-                    ),
-                    unrecognised=recognition_left_out,
-                    features_complete=spec.features_complete,
+                referenced_here = referenced_features.get(object_id, set()) | referenced_anywhere
+                needed_here = _needed_after(
+                    all_references, positions, active_fit_names, position, object_id
                 )
+                announced_here = frozenset(
+                    name
+                    for entry in result.findings
+                    if entry.code in REMOVAL_CODES
+                    and entry.object_id in (None, operation.outputs[index])
+                    for name in entry.feature_ids
+                )
+                # **Derselbe Schritt mit denselben Eingängen ordnet nicht
+                # noch einmal zu** (RM-593): Der Schlüssel des Ergebnisses
+                # nennt Operation und Eingänge samt ihrer Merkmale, hier kommt
+                # dazu, was die Zuordnung sonst liest.
+                step_key = _step_key(
+                    key,
+                    index,
+                    operation,
+                    placed,
+                    (
+                        motion,
+                        previous_bounds.get(object_id),
+                        referenced_here,
+                        needed_here,
+                        legacy_eligible,
+                        continuations[index] if continuations else (),
+                        detect_features,
+                        recognition_of.get(object_id),
+                        decided.get(object_id),
+                        announced_here,
+                        spec.touches_features,
+                        spec.features_complete,
+                    ),
+                )
+                remembered = _remembered_step(step_key, step_ways, step_generation, placed)
+                if remembered is not None:
+                    feature_memo.update(remembered.digests)
+                tracked = _TrackedAsk(watched)
+                findings_before = len(findings)
+                recognition_before = dict(recognition_of)
+                prepared_objects[object_id] = (
+                    _replayed_step(
+                        remembered, placed, findings, recognition_left_out, recognition_of
+                    )
+                    if remembered is not None
+                    else _with_features(
+                        placed,
+                        previous_features.get(object_id, {}),
+                        operation,
+                        # Auch hier der Wächter: Die Zuordnung fragt bei einem
+                        # mehrdeutigen Merkmal (§21.3), und diese Antwort steht
+                        # genauso wenig im Dokument wie die einer Operation.
+                        tracked,
+                        findings,
+                        motion,
+                        previous_bounds.get(object_id),
+                        recorded,
+                        referenced_here,
+                        spec.touches_features,
+                        token,
+                        step_progress.say,
+                        advance=step_progress.advance,
+                        question_context=tracked.announce(announce_candidates),
+                        legacy_eligible=legacy_eligible,
+                        needed=needed_here,
+                        continuations=continuations[index] if continuations else (),
+                        # Die Fassung des Erzeugers, für die eine native Neuwahl
+                        # gilt: roher Schlüssel plus Ausgabeindex — nicht der
+                        # Objekthash danach, der die Wahl selbst enthielte.
+                        scope=f"{key}:{index}",
+                        # Der Eingang an derselben Stelle, wenn es einen gibt —
+                        # oder der, aus dem die Ausgabe belegt bewegt wurde
+                        # (:func:`_motion_of`): Bei einer Bewegung der Beleg, dass
+                        # die Ausgabe sein bewegter Zwilling ist. Ob er es ist,
+                        # prüft ``carry_detection`` am Netz, nicht am Index.
+                        source_mesh=moved_source,
+                        # Die alten Merkmale jeder Ausgabe stammen bei einem
+                        # einzigen Eingang aus ihm — auch die der zweiten Hälfte
+                        # nach *Teilen* (RM-217).
+                        origin_mesh=inputs[0].mesh if len(inputs) == 1 else None,
+                        origin_features=inputs[0].features if len(inputs) == 1 else None,
+                        texture_sources=(
+                            inputs[1:]
+                            if operation.op in {"union_objects", "intersect_objects"}
+                            else inputs
+                            if operation.op == "split_bodies"
+                            else ()
+                        ),
+                        detect_features=detect_features,
+                        recognition_of=recognition_of,
+                        on_recognition_answer=tracked.announce(on_recognition_answer),
+                        decided=decided,
+                        announced_gone=announced_here,
+                        unrecognised=recognition_left_out,
+                        features_complete=spec.features_complete,
+                    )
+                )
+                if remembered is None and cache is not None:
+                    remembered = _remember_step(
+                        step_ways,
+                        step_generation,
+                        placed,
+                        prepared_objects[object_id],
+                        tuple(findings[findings_before:]),
+                        # Ohne Erkennung hängt die Antwort am Merker der
+                        # Erkennung (``features.forget_cache``): Ob ein Körper
+                        # erkannt oder ausgelassen wird, ist dann keine
+                        # Folge der Eingänge allein.
+                        quiet=detect_features
+                        and object_id not in recognition_left_out
+                        and not tracked.told
+                        and not recorded
+                        and _only_own_recognition(recognition_before, recognition_of, object_id),
+                        unrecognised=object_id in recognition_left_out,
+                        recognition=(
+                            (recognition_of.get(object_id),)
+                            if recognition_of.get(object_id)
+                            is not recognition_before.get(object_id)
+                            else None
+                        ),
+                    )
+                    if remembered is not None:
+                        fresh_steps.append((step_key, remembered))
+                if remembered is not None:
+                    remembered_now[object_id] = remembered
             except AppError as error:
                 # Die Zuordnung fragt, wenn sie mehrere Kandidaten sieht
                 # (§21.2) — und wo niemand antwortet, wirft ``ask``. Das stand
@@ -1474,6 +1570,12 @@ def _evaluate(
                 check_cancelled=token.raise_if_cancelled,
                 memo=feature_memo,
             )
+            if object_id in remembered_now:
+                _remember_digests(
+                    remembered_now.pop(object_id),
+                    prepared_objects[object_id].features,
+                    feature_memo,
+                )
             # Wächst nur, wird nie geleert: Genau darin liegt der Wert (siehe
             # ``EvaluationResult.object_names``).
             # Wörtlich festgehalten, nicht als Verweis: Der Name, den ein
@@ -1647,6 +1749,20 @@ def _evaluate(
         if walls:
             findings.extend(walls)
             scene = dataclasses.replace(scene, report=Report(tuple(findings)))
+    # Und eine Frage nur an erzeugte Körper (RM-577): Ist das Modell überhaupt
+    # mehr als eine Haut? TRELLIS.2 liefert manchmal eine offene Fläche, aus der
+    # ``RemeshMesh`` ein Band von 0,3 mm macht — geschlossen, ohne jeden Befund.
+    if stopped_at is None:
+        generated = _generated_objects(document) & objects.keys()
+        skins = checks.run(
+            "scene.thin_skins",
+            lambda: check_thin_skins(scene, generated),
+            applicable=bool(generated),
+        )
+        token.raise_if_cancelled()
+        if skins:
+            findings.extend(skins)
+            scene = dataclasses.replace(scene, report=Report(tuple(findings)))
     # Und die vierte: Liegen belegte Punkte neben der Form, die sie tragen?
     # Bis zum 21.09.2026 stand hier an jedem Körper mit belegten Flächen
     # derselbe Satz — „lässt sich in der Analysekarte prüfen" —, und damit
@@ -1709,6 +1825,15 @@ def _evaluate(
     if cache is not None and stopped_at is None:
         for key, result, to_disk in pending:
             cache.put(key, result, to_disk=to_disk)
+    if cache is not None:
+        cache.with_held_features(
+            lambda held, parts_of: _keep_steps(fresh_steps, step_generation, held, parts_of)
+        )
+    if cache is not None and stopped_at is None:
+        # Auch ohne neuen Eintrag: Ein Lauf aus lauter Treffern — Zurücknehmen —
+        # lässt die Netze älterer Stände wachsen (RM-567). Die Netze der
+        # fertigen Szene bleiben, wie sie sind.
+        cache.trim(keep=[body.mesh for body in scene.objects.values()])
     progress(1.0, "")
     return EvaluationResult(
         scene=scene,
@@ -1901,6 +2026,8 @@ SETTLED_BY: Final[dict[str, frozenset[str]]] = {
             "repair.self_intersections_unresolved",
             "repair.self_intersections_skipped",
             "repair.self_crossing",
+            # Geglättete Falten: danach kreuzt nichts mehr (RM-550).
+            "repair.folds_smoothed",
         }
     ),
     "repair.self_intersections_incomplete": frozenset({"repair.self_intersections"}),
@@ -4217,6 +4344,391 @@ def _textures_from_other_inputs(
     return textures
 
 
+@dataclass(frozen=True, slots=True)
+class _RememberedStep:
+    """Was :func:`_with_features` für einen Schritt geantwortet hat (RM-593)."""
+
+    ways: tuple[Any, ...]
+    """Die Rechenwege beim Merken (:func:`_step_ways`), verglichen je Objekt."""
+    changed: dict[str, Any]
+    """Die Felder der Ausgabe, die nicht vom Eingang kamen — das Netz nie."""
+    findings: tuple[Finding, ...]
+    unrecognised: bool
+    recognition: tuple[_BodyRecognition | None] | None
+    """Die Ladewahl, die der Schritt seinem Körper gegeben hat — der Ladeschritt
+    trägt sie ein —, ``None``, wenn er sie nicht angefasst hat."""
+    weight: int
+    """Bytes über die Merkmale seines Eintrags hinaus, für die Grenze des Merkers
+    (:data:`REMEMBERED_BYTES_KEPT`) — :attr:`rest` und die :attr:`parts`, die der
+    Eintrag nicht schon hält; gewogen in :func:`_keep_steps`."""
+    rest: int
+    """Was nur er hält, samt der Schätzung für die Teilhashes."""
+    parts: dict[int, tuple[object, int]]
+    """Seine großen Behälter (``memory.held_parts``), die er mit anderen Schritten
+    und Einträgen teilen kann — für die genaue Zählung der Speicherebene."""
+    source: dict[FeatureId, Feature]
+    """Die Merkmale, die die Operation selbst ausgab — dasselbe Objekt, solange ihr
+    Ergebnis aus dem Cache kommt. Rechnet sie neu, fragt der Schritt neu."""
+    digests: dict[int, tuple[Feature, bytes]] = field(default_factory=dict)
+    """Die Teilhashes seiner Merkmale (``hashing.FeatureMemo``), nach dem ersten Lauf."""
+    used: list[int] = field(default_factory=lambda: [0])
+    """In welcher Auswertung er zuletzt gebraucht wurde (:func:`_next_generation`)."""
+
+
+_REMEMBERED_STEPS: OrderedDict[bytes, _RememberedStep] = OrderedDict()
+_REMEMBERED_BYTES = 0
+_REMEMBERED_LOCK = threading.Lock()
+_GENERATION = 0
+
+#: Wo die Rechenwege eines gemerkten Schritts liegen: dieses Modul und die
+#: Erkennung. Ein Test, der dort eine Funktion ersetzt, bekommt keinen Schritt,
+#: der unter der alten entstand.
+_STEP_WAY_MODULES: Final = (
+    __name__,
+    "app.core.perceive.features",
+    "app.core.perceive.local",
+    "app.core.perceive.matching",
+    "app.core.perceive.match_decisions",
+    "app.core.perceive.match_records",
+    "app.core.perceive.surfaces",
+    "app.core.geom.transform",
+)
+
+
+def remembered_bytes() -> int:
+    """Was die gemerkten Zuordnungsschritte halten, in Bytes — für den Ergebniscache."""
+    with _REMEMBERED_LOCK:
+        return _REMEMBERED_BYTES
+
+
+def remembered_parts() -> list[tuple[int, dict[int, tuple[object, int]]]]:
+    """Je gemerktem Schritt sein Rest und seine Teile — für die genaue Zählung des Ergebniscaches.
+
+    Ein Schritt teilt die Dreiecksnummern seiner bewegten Merkmale mit dem
+    Eintrag, aus dem er kam, und mit dem Eintrag des nächsten Schritts; die
+    Speicherebene zählt jeden Teil einmal (``ResultCache._exact``,
+    Nachprüfung L, M-3).
+    """
+    with _REMEMBERED_LOCK:
+        return [(step.rest, step.parts) for step in _REMEMBERED_STEPS.values()]
+
+
+def forget_remembered_steps() -> None:
+    """Vergisst die gemerkten Zuordnungsschritte — für Tests und Messungen."""
+    global _REMEMBERED_BYTES
+    with _REMEMBERED_LOCK:
+        _REMEMBERED_STEPS.clear()
+        _REMEMBERED_BYTES = 0
+
+
+def release_remembered_steps(wanted: int) -> int:
+    """Gibt gemerkte Zuordnungsschritte frei, bis ``wanted`` Bytes frei sind; nennt, wie viele.
+
+    Für die Bytegrenze des Ergebniscaches (``ResultCache.trim``): Ein
+    vergessener Schritt kostet die nächste Auswertung seine Zuordnung — so
+    viel wie vor dem Merker —, ein verdrängter Eintrag sein ganzes Ergebnis.
+    Zuerst gehen die am längsten nicht gebrauchten.
+    """
+    global _REMEMBERED_BYTES
+    freed = 0
+    with _REMEMBERED_LOCK:
+        while _REMEMBERED_STEPS and freed < wanted:
+            _key, dropped = _REMEMBERED_STEPS.popitem(last=False)
+            _REMEMBERED_BYTES -= dropped.weight
+            freed += dropped.weight
+    return freed
+
+
+def _next_generation() -> int:
+    """Die Nummer dieser Auswertung, für die Verdrängung im Merker."""
+    global _GENERATION
+    with _REMEMBERED_LOCK:
+        _GENERATION += 1
+        return _GENERATION
+
+
+def _step_ways() -> tuple[Any, ...]:
+    """Jede Funktion, an der die Antwort eines gemerkten Schritts hängt — einmal je Auswertung."""
+    ways: list[Any] = []
+    for name in _STEP_WAY_MODULES:
+        module = sys.modules.get(name)
+        if module is not None:
+            ways.extend(value for value in vars(module).values() if callable(value))
+    return tuple(ways)
+
+
+def _stable(value: Any) -> Any:
+    """Eine vergleichbare Fassung für den Schlüssel: Felder als Bytes, Mengen geordnet.
+
+    ``repr`` eines NumPy-Felds rundet auf acht Stellen und kürzt lange Felder
+    — zwei Bewegungen, die sich in der zehnten Stelle unterscheiden, wären
+    derselbe Schlüssel.
+    """
+    if hasattr(value, "dtype") and hasattr(value, "tobytes"):
+        return ("array", str(value.dtype), getattr(value, "shape", ()), value.tobytes())
+    if dataclasses.is_dataclass(value) and not isinstance(value, type):
+        return (
+            type(value).__qualname__,
+            tuple(
+                (item.name, _stable(getattr(value, item.name)))
+                for item in dataclasses.fields(value)
+            ),
+        )
+    if isinstance(value, Mapping):
+        return ("map", tuple(sorted((repr(key), _stable(item)) for key, item in value.items())))
+    if isinstance(value, (set, frozenset)):
+        return ("set", tuple(sorted(repr(_stable(item)) for item in value)))
+    if isinstance(value, (list, tuple)):
+        return (type(value).__name__, tuple(_stable(item) for item in value))
+    return value
+
+
+def _step_key(
+    key: str, index: int, operation: Operation, placed: SceneObject, context: tuple[Any, ...]
+) -> bytes:
+    """Was die Zuordnung eines Schritts liest, außer den Eingängen — die nennt ``key``.
+
+    ``key`` ist der Schlüssel des Ergebnisses: Operation, Werte und die Hashes
+    der Eingänge samt ihrer Merkmale. Dazu der Schritt selbst (Kennung,
+    Ausgaben, festgehaltene Antworten), die Ausgabe ohne Netz und Merkmale —
+    beide folgen aus ``key`` — und ``context``: Bewegung, Hüllquader, Bezüge,
+    Ladewahl und was :func:`_with_features` sonst bekommt.
+    """
+    shown = tuple(
+        (item.name, _stable(getattr(placed, item.name)))
+        for item in dataclasses.fields(placed)
+        if item.name not in ("mesh", "features")
+    )
+    checksum = hashlib.blake2b(digest_size=24)
+    checksum.update(
+        repr((key, index, _stable(operation), shown, _stable(context))).encode(
+            "utf-8", "backslashreplace"
+        )
+    )
+    return checksum.digest()
+
+
+def _remembered_step(
+    key: bytes, ways: tuple[Any, ...], generation: int, placed: SceneObject
+) -> _RememberedStep | None:
+    """Der gemerkte Schritt unter ``key``, wenn er unter denselben Rechenwegen entstand.
+
+    Und nur aus demselben Ergebnis der Operation: Ihre Merkmale stehen nicht im
+    Schlüssel — sie folgen aus ihm, solange niemand die Operation ersetzt —,
+    verglichen wird deshalb ihr Objekt. Ein neu gerechnetes Ergebnis ordnet
+    neu zu; der Gewinn liegt bei den Treffern aus dem Ergebniscache.
+    """
+    with _REMEMBERED_LOCK:
+        known = _REMEMBERED_STEPS.get(key)
+        if known is not None:
+            _REMEMBERED_STEPS.move_to_end(key)
+            known.used[0] = generation
+    if known is None or known.source is not placed.features or len(known.ways) != len(ways):
+        return None
+    if any(held is not current for held, current in zip(known.ways, ways, strict=True)):
+        return None
+    return known
+
+
+def _copied_recognition(
+    recognition: tuple[_BodyRecognition | None] | None,
+) -> tuple[_BodyRecognition | None] | None:
+    """Eine eigene Kopie der Ladewahl für den Merker; spätere Schritte schreiben sie fort."""
+    if recognition is None or recognition[0] is None:
+        return recognition
+    return (dataclasses.replace(recognition[0]),)
+
+
+def _only_own_recognition(
+    before: Mapping[ObjectId, _BodyRecognition],
+    after: Mapping[ObjectId, _BodyRecognition],
+    own: ObjectId,
+) -> bool:
+    """Ob ein Schritt höchstens die Ladewahl seines eigenen Körpers geändert hat.
+
+    Die trägt der gemerkte Schritt mit (:func:`_replayed_step`); eine andere
+    hieße, er wirkte über seinen Körper hinaus, und er wird nicht gemerkt.
+    """
+    if set(before) - {own} != set(after) - {own}:
+        return False
+    return all(after[name] is state for name, state in before.items() if name != own)
+
+
+def _replayed_step(
+    known: _RememberedStep,
+    placed: SceneObject,
+    findings: list[Finding],
+    unrecognised: set[ObjectId] | None,
+    recognition_of: dict[ObjectId, _BodyRecognition],
+) -> SceneObject:
+    """Die gemerkte Antwort mit ihren Befunden und der Ladewahl, an der Ausgabe dieses Laufs.
+
+    Die Ladewahl als eigene Kopie: Ein späterer Schritt derselben Auswertung
+    darf sie fortschreiben (``declined_at``), ohne den Merker zu ändern.
+    """
+    findings.extend(known.findings)
+    if known.recognition is not None:
+        (state,) = known.recognition
+        if state is None:
+            recognition_of.pop(placed.id, None)
+        else:
+            recognition_of[placed.id] = dataclasses.replace(state)
+    if unrecognised is not None:
+        if known.unrecognised:
+            unrecognised.add(placed.id)
+        else:
+            unrecognised.discard(placed.id)
+    changed: dict[str, Any] = {name: _own_copy(value) for name, value in known.changed.items()}
+    return dataclasses.replace(placed, **changed) if changed else placed
+
+
+def _own_copy(value: Any) -> Any:
+    """Ein eigenes Wörterbuch oder eine eigene Liste je Lauf; alles andere ist unveränderlich."""
+    if isinstance(value, dict):
+        return dict(value)
+    if isinstance(value, list):
+        return list(value)
+    return value
+
+
+def _remember_step(
+    ways: tuple[Any, ...],
+    generation: int,
+    placed: SceneObject,
+    produced: SceneObject,
+    findings: tuple[Finding, ...],
+    *,
+    quiet: bool,
+    unrecognised: bool,
+    recognition: tuple[_BodyRecognition | None] | None,
+) -> _RememberedStep | None:
+    """Die Antwort eines Schritts, der nichts gefragt und nichts festgehalten hat, zum Merken.
+
+    Eine Frage, eine festgehaltene Antwort oder eine geänderte Ladewahl macht
+    den Schritt zu mehr als einer Funktion seiner Eingänge; er wird dann nicht
+    gemerkt (``quiet``). Ebenso, wenn die Ausgabe ein anderes Netz trägt.
+
+    Gezählt wird hier, was er hält, zerlegt in Rest und große Behälter
+    (``memory.held_parts``); was davon schon der Eintrag hält, aus dem er kam,
+    zieht :func:`_keep_steps` ab.
+    """
+    if not quiet or produced.mesh is not placed.mesh:
+        return None
+    from app.core.memory import held_parts
+
+    changed: dict[str, Any] = {}
+    for item in dataclasses.fields(produced):
+        value = getattr(produced, item.name)
+        if value is not getattr(placed, item.name):
+            changed[item.name] = _own_copy(value)
+    rest, parts = held_parts((changed, findings))
+    rest += _DIGEST_BYTES * len(produced.features)
+    return _RememberedStep(
+        ways,
+        changed,
+        findings,
+        unrecognised,
+        _copied_recognition(recognition),
+        rest + sum(size for _holder, size in parts.values()),
+        rest,
+        parts,
+        placed.features,
+        used=[generation],
+    )
+
+
+def _keep_steps(
+    fresh: Sequence[tuple[bytes, _RememberedStep]],
+    generation: int,
+    held: Collection[int],
+    parts_of: Callable[[object], Mapping[int, tuple[object, int]]],
+) -> None:
+    """Legt die neu gemerkten Schritte einer Auswertung in den Merker.
+
+    Nur, wessen Merkmale (``source``) ein Eintrag der Speicherebene hält —
+    ``held`` nennt deren Kennungen, gelesen unter dem Schloss des Caches
+    (``ResultCache.with_held_features``). Ein abgebrochener Lauf legt nichts
+    ab, und ein Schritt ohne Eintrag träfe nie wieder.
+
+    **Gewogen wird, was er über seinen Eintrag hinaus hält** (Nachprüfung L,
+    M-3): Die bewegten Merkmale teilen ihre Dreiecksnummern mit den
+    Merkmalen der Operation, und die hält der Eintrag — ``parts_of`` nennt
+    dessen große Behälter aus dem Merker des Caches, den die Grenze ohnehin
+    füllt. Je Schritt ganz gezählt, wog er am Eiffelturm 19 MB, über den
+    Eintrag hinaus 12 MB; am Laptop-Riser 12,3 statt 1,6 MB. Er geht, wenn
+    der Eintrag die Speicherebene verlässt (:func:`release_steps_of`).
+
+    **Verdrängt wird, was diese Auswertung nicht gebraucht hat** — Schritte
+    eines geänderten Verlaufs. Eine Auswertung geht den Verlauf von vorn
+    durch; wer dabei den ältesten Schritt verdrängte, holte ihn bei der
+    nächsten neu und verdrängte den zweiten, und keiner träfe mehr. Reicht,
+    was sie nicht gebraucht hat, nicht für den neuen Schritt, bleibt er
+    ungemerkt, und verdrängt wird nichts (Nachprüfung L, G-5).
+    """
+    global _REMEMBERED_BYTES
+    weighed = []
+    for key, step in fresh:
+        if id(step.source) not in held:
+            continue
+        shared = parts_of(step.source)
+        weight = step.rest + sum(
+            size for identity, (_holder, size) in step.parts.items() if identity not in shared
+        )
+        weighed.append((key, dataclasses.replace(step, weight=weight)))
+    with _REMEMBERED_LOCK:
+        for key, known in weighed:
+            if known.weight > REMEMBERED_BYTES_KEPT:
+                continue
+            replaced = _REMEMBERED_STEPS.pop(key, None)
+            if replaced is not None:
+                _REMEMBERED_BYTES -= replaced.weight
+            excess = _REMEMBERED_BYTES + known.weight - REMEMBERED_BYTES_KEPT
+            unused = 0
+            for step in _REMEMBERED_STEPS.values():
+                if unused >= excess or step.used[0] >= generation:
+                    break
+                unused += step.weight
+            if unused < excess:
+                continue
+            while _REMEMBERED_BYTES + known.weight > REMEMBERED_BYTES_KEPT:
+                _REMEMBERED_BYTES -= _REMEMBERED_STEPS.popitem(last=False)[1].weight
+            _REMEMBERED_STEPS[key] = known
+            _REMEMBERED_BYTES += known.weight
+
+
+def release_steps_of(sources: Collection[int]) -> int:
+    """Vergisst die Schritte, deren Merkmale ``sources`` nennt; gibt die Bytes zurück.
+
+    Für die Speicherebene, wenn ein Eintrag sie verlässt (Nachprüfung L, G-6):
+    Ein Schritt trifft nur am selben Merkmalsobjekt, und ohne den Eintrag
+    hielte er dessen Merkmale fest, die er nicht mitzählt.
+    """
+    global _REMEMBERED_BYTES
+    if not sources:
+        return 0
+    freed = 0
+    with _REMEMBERED_LOCK:
+        for key in [key for key, step in _REMEMBERED_STEPS.items() if id(step.source) in sources]:
+            freed += _REMEMBERED_STEPS.pop(key).weight
+        _REMEMBERED_BYTES -= freed
+    return freed
+
+
+def _remember_digests(
+    known: _RememberedStep,
+    features: Mapping[FeatureId, Feature],
+    memo: FeatureMemo,
+) -> None:
+    """Legt die Teilhashes der Merkmale eines gemerkten Schritts zu ihm (``object_hash``)."""
+    digests = {
+        id(feature): memo[id(feature)]
+        for feature in features.values()
+        if id(feature) in memo and memo[id(feature)][0] is feature
+    }
+    with _REMEMBERED_LOCK:
+        known.digests.update(digests)
+
+
 def _with_features(
     entry: SceneObject,
     previous: dict[str, Any],
@@ -5803,6 +6315,45 @@ class _WatchedAsk:
         return answer
 
 
+class _TrackedAsk(_WatchedAsk):
+    """Der Wächter eines Schritts, der sich merkt, ob die Erkennung gefragt hat (RM-593).
+
+    Eine Frage, ihre Ankündigung oder die Antwort zur Vollerkennung macht die
+    Zuordnung zu mehr als einer Funktion ihrer Eingänge — dann wird sie nicht
+    gemerkt (:func:`_remember_step`). Fragen gehen an den Wächter des
+    Schritts weiter, der sie zählt und sich merkt.
+    """
+
+    __slots__ = ("_watched", "told")
+
+    def __init__(self, watched: _WatchedAsk) -> None:
+        super().__init__(watched._ask)
+        self._watched = watched
+        self.told = False
+
+    def again(self) -> None:
+        self._watched.again()
+
+    def optional(self, question: str, choices: list[str]) -> str:
+        self.told = True
+        return self._watched.optional(question, choices)
+
+    def __call__(self, question: str, choices: list[str]) -> str:
+        self.told = True
+        return self._watched(question, choices)
+
+    def announce(self, callback: Any) -> Any:
+        """``callback`` so, dass ein Aufruf als Frage zählt; ``None`` bleibt ``None``."""
+        if callback is None:
+            return None
+
+        def told(*arguments: Any, **named: Any) -> Any:
+            self.told = True
+            return callback(*arguments, **named)
+
+        return told
+
+
 #: Der Befund, wenn eine Frage eines Schritts ohne Wahl geschlossen wurde
 #: (``QuestionDeclined``). *Eingabe korrigieren* öffnet den Schritt; beim
 #: Übernehmen rechnet die Auswertung ihn neu und fragt wieder.
@@ -6606,6 +7157,64 @@ def check_thin_walls(scene: Scene) -> list[Finding]:
                 location=None
                 if centre is None
                 else (float(centre[0]), float(centre[1]), float(centre[2])),
+            )
+        )
+    return findings
+
+
+def _generated_objects(document: Document) -> frozenset[ObjectId]:
+    """Die Körper, die ein Ladeschritt aus einer erzeugten Quelle (Weg 3) anlegt."""
+    found: set[ObjectId] = set()
+    for operation in document.ops:
+        if operation.op != "load":
+            continue
+        source = document.sources.get(str(operation.params.get("source", "")))
+        if source is not None and source.kind == "generated":
+            found.update(operation.outputs)
+    return frozenset(found)
+
+
+def check_thin_skins(scene: Scene, generated: Iterable[ObjectId]) -> list[Finding]:
+    """Ein erzeugter Körper, der im Mittel dünner ist als die dünnste Wand des Druckers (RM-577).
+
+    Gemessen wird die mittlere Dicke ``2·V/A`` der dicksten großen geschlossenen
+    Schale in echter Größe — dieselbe Herleitung wie im Dialog vor dem
+    Übernehmen (``geom.mesh.shell_thickness``, Nachprüfung K, N7). Eine Haut um
+    einen Hohlraum, wie sie TRELLIS.2 an fünf von 17 Läufen lieferte, liegt bei
+    0,26 bis 0,30 mm, ein voller Körper bei Millimetern. Die Grenze ist die des
+    Materials (``analysis_limits``, Regel 7) — für ein frisch erzeugtes Objekt
+    ohne eigenes Material dieselbe Mindestwand, die der Dialog nimmt. Ohne
+    Profil gibt es keine Aussage. Gefragt
+    wird nur an erzeugten Körpern: Ein konstruiertes dünnes Teil hat seine
+    Wand mit Absicht, und dort sagt es ``check_thin_walls``.
+    """
+    from app.core.geom.mesh import as_mesh_data, only_a_skin, shell_thickness
+
+    profile = scene.profile
+    if profile is None:
+        return []
+    findings: list[Finding] = []
+    for object_id in sorted(generated):
+        entry = scene.objects.get(object_id)
+        if entry is None:
+            continue
+        thickness = shell_thickness(as_mesh_data(entry.mesh))
+        least, _overhang = analysis_limits(profile, entry)
+        if thickness is None or not only_a_skin(thickness, least):
+            continue
+        findings.append(
+            Finding(
+                code="scene.thin_skin",
+                severity="warning",
+                message=_(
+                    "Das erzeugte Modell ist nur eine Haut von {thickness} mm, der Drucker druckt "
+                    "Wände erst ab {least} mm.",
+                    thickness=format_decimal(thickness, 1),
+                    least=format_decimal(least, 1),
+                ),
+                object_id=object_id,
+                values={"thickness_mm": round(thickness, 2), "least_mm": round(least, 2)},
+                suggestions=(GENERATE_AGAIN,),
             )
         )
     return findings

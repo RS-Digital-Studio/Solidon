@@ -794,3 +794,54 @@ def test_a_changed_part_says_what_moved_and_that_the_old_state_is_gone() -> None
         assert not part.earlier_available
     finding = next(f for f in part_check.check(document) if f.code == "parts.changed")
     assert "früherer Stand ist nicht mehr enthalten" in str(finding.message)
+
+
+# --- RM-632: das Schraubenloch der Mutternfalle ist vor dem Setzen zu sehen ----------
+
+
+@pytest.mark.parametrize("direction", ["side", "bottom"])
+def test_the_nut_trap_shows_its_screw_hole_in_the_preview_and_the_scad_file(
+    direction: str,
+) -> None:
+    """RM-632: Seit RM-631 bohrt der Schritt das Schraubenloch, und ohne Träger fehlte es.
+
+    Der Baustein baut es nur über seine Tasche, wo es nicht zu sehen ist:
+    Katalogbild und SCAD-Datei mit und ohne Schraubenloch waren gleich. Soll:
+    Mit Schraubenloch zeigt das Bild mehr, und die SCAD-Datei trägt die Bohrung
+    als Zylinder mit lesbarer Länge.
+    """
+    from app.core.knowledge import standards
+
+    spec = PARTS.get("nut_trap")
+    with_hole = spec.params(direction=direction)
+    without = spec.params(direction=direction, screw_hole=False)
+    assert preview.render(spec, with_hole).triangles > preview.render(spec, without).triangles
+    text = scad.to_scad(spec, with_hole)
+    clearance = standards.screw("M3").clearance
+    assert f"cylinder(d = {clearance:.4f}, h = through_length" in text
+    assert text.rstrip().endswith("nut_trap_through();")
+    assert "through_length" not in scad.to_scad(spec, without)
+
+
+def test_the_nut_trap_ghost_shows_its_screw_hole_into_the_material_only() -> None:
+    """RM-632: Der Platzierungsgeist zeigt das Schraubenloch unter der Tasche, nicht darüber.
+
+    Gesetzt an einer Fläche wird die Mutternfalle gespiegelt, die Tasche liegt
+    unter der Mündung. Das Schraubenloch reicht von dort tiefer, drei
+    Durchmesser weit; über die Fläche hinaus zeigt der Geist nichts, denn dort
+    bohrt der Schritt nie.
+    """
+    from app.core.knowledge import profiles, standards
+    from app.core.knowledge.parts.ops import placement_tools
+    from app.core.knowledge.parts.through import SHOWN_REACH
+
+    spec = PARTS.get("nut_trap")
+    profile = profiles.make_profile("centauri-carbon-2", "petg")
+    tool, _addition = placement_tools(spec, {"size": "M3", "slide": 0.0}, profile)
+    plain, _addition = placement_tools(
+        spec, {"size": "M3", "slide": 0.0, "screw_hole": False}, profile
+    )
+    clearance = standards.screw("M3").clearance
+    reach = float(plain.bounds.minimum[2]) - float(tool.bounds.minimum[2])
+    assert reach == pytest.approx(SHOWN_REACH * clearance, abs=0.05)
+    assert float(tool.bounds.maximum[2]) == pytest.approx(float(plain.bounds.maximum[2]))

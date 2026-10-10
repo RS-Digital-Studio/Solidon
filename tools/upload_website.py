@@ -1297,18 +1297,16 @@ def refuse_unsigned_version(files: list[Path]) -> None:
     """
     if not any(path.name == "version.json" for path in files):
         return
-    from app.core.updates import signature_ok
+    # Dieselbe Prüfung wie ``sign_version.py --check``: eine Unterschrift, die
+    # trägt, mit einem Schlüssel, den schon die vorige veröffentlichte Version
+    # kannte. Sonst verwürfen alle bisherigen Installationen die Datei still.
+    from tools.sign_version import version_file_problem
 
     data = json.loads((LOCAL_ROOT / "version.json").read_text(encoding="utf-8"))
-    if signature_ok(data):
+    problem = version_file_problem(data)
+    if problem is None:
         return
-    raise SystemExit(
-        "version.json trägt keine gültige Unterschrift und wird deshalb nicht "
-        "hochgeladen.\n"
-        "  Jede Installation prüft sie gegen updates.RELEASE_PUBLIC_KEY und "
-        "verwirft sie ohne — das Update erreicht dann niemanden.\n"
-        "  Zu tun: python tools/sign_version.py --private <datei>"
-    )
+    raise SystemExit(f"version.json wird nicht hochgeladen: {problem}")
 
 
 def main() -> int:

@@ -1170,3 +1170,238 @@ def test_a_shallow_cone_strip_is_found_wherever_it_lies(monkeypatch: pytest.Monk
         if fit is None or abs(fit.half_angle - 40.0) > 0.05:
             missed.append(name)
     assert missed == list(_PLACEMENTS), "ohne den Quadrikstart prüft der Test nichts"
+
+
+def _ring_reference(outline: np.ndarray, tolerance: float) -> np.ndarray:
+    """``_simplified_ring`` vor RM-568: je Schritt das Minimum über den Ring, Lücken in NumPy."""
+    count = len(outline)
+    if count <= 3:
+        return outline
+    before = np.roll(np.arange(count), 1)
+    after = np.roll(np.arange(count), -1)
+    kept = np.ones(count, dtype=bool)
+
+    def gap_cost(corner: int) -> float:
+        start, end = int(before[corner]), int(after[corner])
+        inside = (
+            np.arange(start + 1, end)
+            if start < end
+            else np.r_[np.arange(start + 1, count), np.arange(0, end)]
+        )
+        return float(
+            features_module._segment_distances(outline[inside], outline[start], outline[end]).max()
+        )
+
+    costs = features_module._segment_distances(outline, outline[before], outline[after])
+    remaining = count
+    while remaining > 3:
+        masked = np.where(kept, costs, np.inf)
+        lowest = float(masked.min())
+        if lowest > tolerance:
+            break
+        tied = np.flatnonzero(masked == lowest)
+        corner = int(tied[np.lexsort(outline[tied].T[::-1])[0]])
+        kept[corner] = False
+        remaining -= 1
+        start, end = int(before[corner]), int(after[corner])
+        after[start], before[end] = end, start
+        costs[start] = gap_cost(start)
+        costs[end] = gap_cost(end)
+    return np.asarray(outline[kept], dtype=float)
+
+
+def test_the_ring_simplification_keeps_every_corner_it_kept_before() -> None:
+    """Haufen und Python-Zahlen statt Minimum über den Ring — dieselben Ecken, Bit für Bit.
+
+    Am Eiffelturm kostete die alte Fassung 10,1 s der Erkennung (RM-568).
+    Geprüft an verrauschten Kreisen, an regelmäßigen Vielecken mit exakt
+    gleichen Kosten (Gleichstand über Lage und Nummer), an Ringen weit vom
+    Ursprung und bei Toleranzen von null bis über den Radius.
+    """
+    source = np.random.default_rng(81020261)
+    rings = []
+    for count in (4, 5, 7, 12, 40, 97, 300):
+        angles = np.sort(source.uniform(0.0, 2.0 * math.pi, count))
+        radius = 10.0 + source.normal(scale=0.003, size=count)
+        rings.append(np.column_stack((radius * np.cos(angles), radius * np.sin(angles))))
+        regular = np.linspace(0.0, 2.0 * math.pi, count, endpoint=False)
+        rings.append(np.column_stack((np.cos(regular), np.sin(regular))) * 3.0)
+        rings.append(rings[-2] + (1.0e5, -3.0e4))
+    for outline in rings:
+        for tolerance in (0.0, 1e-6, 1e-3, 0.01, 0.1, 1.0, 50.0):
+            expected = _ring_reference(outline.copy(), tolerance)
+            found = features_module._simplified_ring(outline.copy(), tolerance)
+            assert found.shape == expected.shape, (len(outline), tolerance)
+            assert np.array_equal(found, expected), (len(outline), tolerance)
+
+
+def _circle_reference(points: np.ndarray) -> tuple[np.ndarray, float]:
+    """``_fit_circle`` vor RM-568: ``math.hypot`` über NumPy-Skalare."""
+    from app.core import units
+
+    origin = np.array([units.exact_mean(points[:, index].tolist()) for index in range(2)])
+    local = points - origin
+    scale = float(np.abs(local).max())
+    if len(points) < 3 or scale <= 0.0:
+        return origin, 0.0
+    local /= scale
+    matrix = np.column_stack([local[:, 0], local[:, 1], np.ones(len(points))])
+    target = local[:, 0] * local[:, 0] + local[:, 1] * local[:, 1]
+    order = [0, 1, 2]
+    rank_limit = np.finfo(float).eps * max(matrix.shape) * math.sqrt(len(points))
+    for column in range(3):
+        norms = [math.hypot(*matrix[column:, index]) for index in range(column, 3)]
+        pivot = column + int(np.argmax(norms))
+        length = norms[pivot - column]
+        if length <= rank_limit:
+            return origin, 0.0
+        matrix[:, [column, pivot]] = matrix[:, [pivot, column]]
+        order[column], order[pivot] = order[pivot], order[column]
+        direction = matrix[column:, column].copy()
+        diagonal = -math.copysign(length, float(direction[0]))
+        direction[0] -= diagonal
+        direction /= math.hypot(*direction)
+        for remaining in range(column + 1, 3):
+            projection = 2.0 * math.fsum((direction * matrix[column:, remaining]).tolist())
+            matrix[column:, remaining] -= projection * direction
+        projection = 2.0 * math.fsum((direction * target[column:]).tolist())
+        target[column:] -= projection * direction
+        matrix[column, column] = diagonal
+        matrix[column + 1 :, column] = 0.0
+    solved = [0.0, 0.0, 0.0]
+    for row in (2, 1, 0):
+        rest = math.fsum(float(matrix[row, index]) * solved[index] for index in range(row + 1, 3))
+        solved[row] = (float(target[row]) - rest) / float(matrix[row, row])
+    solution = np.empty(3)
+    solution[order] = solved
+    centre = np.array([solution[0] / 2.0, solution[1] / 2.0])
+    radius = math.sqrt(max(float(solution[2] + centre[0] * centre[0] + centre[1] * centre[1]), 0.0))
+    return centre * scale + origin, radius * scale
+
+
+def test_the_circle_fit_reads_python_numbers_and_answers_bit_for_bit() -> None:
+    """``math.hypot`` über ``tolist`` statt über NumPy-Skalare — dasselbe Ergebnis (RM-568).
+
+    Am Spiderman 282 Kreisausgleiche mit Tausenden Punkten, 2,5 s; je Aufruf
+    2,7 → 1,9 ms bei 6 000 Punkten. Geprüft an Bögen, Vollkreisen, Rauschen,
+    fernem Ursprung und einem rangarmen Fall.
+    """
+    source = np.random.default_rng(81020263)
+    cases = []
+    for count in (3, 4, 17, 300, 6000):
+        angles = source.uniform(0.0, source.uniform(0.3, 2.0 * math.pi), count)
+        radius = source.uniform(0.5, 80.0)
+        points = np.column_stack((radius * np.cos(angles), radius * np.sin(angles)))
+        cases.append(points + source.normal(scale=1e-3, size=points.shape))
+        cases.append(points + np.array((2.0e5, -7.0e4)))
+    cases.append(np.column_stack((np.linspace(0.0, 1.0, 50), np.zeros(50))))
+    for points in cases:
+        expected = _circle_reference(points.copy())
+        found = features_module._fit_circle(points.copy())
+        assert np.array_equal(found[0], expected[0])
+        assert found[1] == expected[1]
+
+
+def _sharpened_axis_before(
+    points: np.ndarray, axis: np.ndarray
+) -> tuple[np.ndarray, np.ndarray, float, float] | None:
+    """Die Achsnachführung, wie sie bis zum 09.10.2026 je Einpassung den Schwerpunkt neu
+    rechnete und ``x*x``/``y*y`` zweimal bildete (RM-568) — die Vorgabe."""
+
+    def kasa(x: np.ndarray, y: np.ndarray) -> tuple[float, float, float] | None:
+        z = -(x * x + y * y)
+        sxx, sxy, syy = float((x * x).sum()), float((x * y).sum()), float((y * y).sum())
+        sx, sy, size = float(x.sum()), float(y.sum()), float(len(x))
+        bx, by, bz = float((x * z).sum()), float((y * z).sum()), float(z.sum())
+        determinant = features_module._determinant3
+        whole = determinant(((sxx, sxy, sx), (sxy, syy, sy), (sx, sy, size)))
+        if abs(whole) <= units.EPS_GEOM * units.EPS_GEOM:
+            return None
+        d = determinant(((bx, sxy, sx), (by, syy, sy), (bz, sy, size))) / whole
+        e = determinant(((sxx, bx, sx), (sxy, by, sy), (sx, bz, size))) / whole
+        f = determinant(((sxx, sxy, bx), (sxy, syy, by), (sx, sy, bz))) / whole
+        centre_x, centre_y = -d / 2.0, -e / 2.0
+        squared = centre_x * centre_x + centre_y * centre_y - f
+        return None if squared <= 0.0 else (centre_x, centre_y, math.sqrt(squared))
+
+    def across(direction: np.ndarray) -> tuple[np.ndarray, float, np.ndarray] | None:
+        first, second = features_module._across_pair(direction)
+        origin = points.mean(axis=0)
+        relative = points - origin
+        x = (relative * first).sum(axis=1)
+        y = (relative * second).sum(axis=1)
+        circle = kasa(x, y)
+        if circle is None:
+            return None
+        centre_x, centre_y, radius = circle
+        dx, dy = x - centre_x, y - centre_y
+        centre = origin + centre_x * first + centre_y * second
+        return centre, radius, np.abs(np.sqrt(dx * dx + dy * dy) - radius)
+
+    tilt = features_module._SHARPEN_TILT
+    current = np.asarray(axis, dtype=float)
+    current = current / math.sqrt(float((current * current).sum()))
+    offsets = points - points.mean(axis=0)
+    reach = math.sqrt(float((offsets * offsets).sum(axis=1).max()))
+    for _step in range(features_module._SHARPEN_STEPS):
+        base = across(current)
+        if base is None:
+            return None
+        first, second = features_module._across_pair(current)
+        columns = []
+        for direction in (first, second):
+            tilted = current + tilt * direction
+            tilted = tilted / math.sqrt(float((tilted * tilted).sum()))
+            moved = across(tilted)
+            if moved is None:
+                return None
+            columns.append((moved[2] - base[2]) / tilt)
+        one, two = columns
+        a11, a12, a22 = float((one * one).sum()), float((one * two).sum()), float((two * two).sum())
+        b1, b2 = -float((one * base[2]).sum()), -float((two * base[2]).sum())
+        determinant = a11 * a22 - a12 * a12
+        if determinant <= units.EPS_GEOM * units.EPS_GEOM * max(a11 * a22, units.EPS_GEOM):
+            break
+        u = (b1 * a22 - b2 * a12) / determinant
+        v = (a11 * b2 - a12 * b1) / determinant
+        current = current + u * first + v * second
+        current = current / math.sqrt(float((current * current).sum()))
+        if max(abs(u), abs(v)) * reach <= units.EPS_GEOM:
+            break
+    final = across(current)
+    if final is None:
+        return None
+    centre, radius, distances = final
+    return current, centre, radius, float(distances.max())
+
+
+def test_the_sharpened_axis_answers_bit_for_bit_like_before() -> None:
+    """Schwerpunkt und Quadrate einmal statt je Einpassung — dieselben Bits (RM-568).
+
+    An verrauschten Zylinderecken in schräger Lage, fern vom Ursprung, mit
+    wenigen und vielen Punkten und mit einem verkippten Start; dazu eine
+    Gerade, an der kein Kreis bestimmt ist.
+    """
+    source = np.random.default_rng(91020268)
+    cases = []
+    for count, noise, offset in ((6, 0.0, 0.0), (40, 1e-4, 0.0), (900, 2e-3, 3.0e4)):
+        angles = source.uniform(0.0, source.uniform(0.4, 2.0 * math.pi), count)
+        heights = source.uniform(-5.0, 5.0, count)
+        radius = source.uniform(0.5, 40.0)
+        local = np.column_stack((radius * np.cos(angles), radius * np.sin(angles), heights))
+        turn = trimesh.transformations.random_rotation_matrix(source.uniform(size=3))[:3, :3]
+        points = local @ turn.T + source.normal(scale=noise, size=local.shape) + offset
+        axis = turn[:, 2] + source.normal(scale=0.01, size=3)
+        cases.append((points, axis))
+    cases.append(
+        (np.column_stack((np.linspace(0.0, 1.0, 20), np.zeros(20), np.zeros(20))), (0.0, 0.0, 1.0))
+    )
+    for points, axis in cases:
+        expected = _sharpened_axis_before(points.copy(), np.asarray(axis, dtype=float))
+        found = features_module._sharpened_axis(points.copy(), np.asarray(axis, dtype=float))
+        if expected is None:
+            assert found is None
+            continue
+        assert found is not None
+        for got, want in zip(found, expected, strict=True):
+            assert np.asarray(got).tobytes() == np.asarray(want).tobytes()

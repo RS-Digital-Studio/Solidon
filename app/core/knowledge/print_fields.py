@@ -448,6 +448,16 @@ FIELDS: tuple[Field, ...] = (
             "sind kleine Spitzen zu schnell fertig und werden weich."
         ),
     ),
+    Field(
+        "cooling.support_interface_cooling",
+        _("Volle Kühlung an der Stütze"),
+        "cooling",
+        kind="bool",
+        note=_(
+            "Kühlt mit vollem Lüfter, wo Stütze und Teil sich berühren. Die Stütze löst sich "
+            "leichter, vor allem bei PETG."
+        ),
+    ),
     # --- Geschwindigkeit ---
     Field(
         "speed.outer_wall",
@@ -557,13 +567,13 @@ FIELDS: tuple[Field, ...] = (
         _("Stützen"),
         "support",
         kind="enum",
-        choices=("none", "auto", "grid", "tree"),
+        choices=("none", "auto", "grid", "tree", "hybrid"),
         front=True,
         choice_notes=(("auto", _("Stützen an. Welche Art, bestimmt das Profil Ihres Slicers.")),),
         note=_(
             "Ob und wie gestützt wird. Automatisch nimmt die Art aus dem Profil Ihres Slicers. "
-            "Baum braucht weniger Material und lässt sich leichter abnehmen, Gitter trägt "
-            "schwere Überhänge sicherer."
+            "Baum spart Material und löst sich leichter, Gitter trägt flache Decken. Hybrid "
+            "nimmt Bäume für Details, Gitter für Decken."
         ),
     ),
     Field(
@@ -593,7 +603,7 @@ FIELDS: tuple[Field, ...] = (
     ),
     Field(
         "support.z_gap",
-        _("Abstand nach oben"),
+        _("Abstand oben und unten"),
         "support",
         unit="mm",
         minimum=0.0,
@@ -601,8 +611,8 @@ FIELDS: tuple[Field, ...] = (
         step=0.05,
         decimals=2,
         note=_(
-            "Luft zwischen Stütze und Teil nach oben. Mehr heißt leichter abnehmen und rauere "
-            "Fläche darüber."
+            "Luft zwischen Stütze und Teil, oben wie unten. Mehr heißt leichter abnehmen und "
+            "rauere Fläche."
         ),
     ),
     Field(
@@ -642,6 +652,41 @@ FIELDS: tuple[Field, ...] = (
         note=_(
             "Dichte Schichten zwischen Stütze und Teil. Sie machen die gestützte Fläche glatter."
         ),
+    ),
+    Field(
+        "support.bottom_interface_layers",
+        _("Trennschichten unten"),
+        "support",
+        kind="int",
+        minimum=0,
+        maximum=10,
+        note=_(
+            "Dichte Schichten, wo die Stütze auf dem Teil steht. Ohne sie zeichnet ihr Fuß die "
+            "Fläche darunter."
+        ),
+    ),
+    Field(
+        "support.interface_spacing",
+        _("Lücke in der Trennschicht"),
+        "support",
+        unit="mm",
+        minimum=0.0,
+        maximum=2.0,
+        step=0.05,
+        decimals=2,
+        note=_(
+            "Abstand der Linien in der Trennschicht. Eng gibt glatte flache Unterseiten, weit "
+            "löst sich an kleinen und runden Flächen leichter."
+        ),
+    ),
+    Field(
+        "support.tree_walls",
+        _("Wände der Bäume"),
+        "support",
+        kind="int",
+        minimum=1,
+        maximum=2,
+        note=_("Wände der Baumstämme. Hohe Bäume stehen mit zweien stabil, kosten aber Material."),
     ),
     Field(
         "support.block_channels",

@@ -2,16 +2,143 @@
 
 from __future__ import annotations
 
+import contextlib
 import os
 import subprocess
 import sys
 import threading
 import time
+from collections.abc import Callable, Iterator
 from pathlib import Path
+from typing import Any
 
 import pytest
 
 from app.core import process
+
+#: Nur eine Hängergrenze, keine Zeitaussage: Wo ein Fall die Zeitgrenze von
+#: ``run_limited`` nicht selbst prüft, darf sie ihn nie entscheiden. Ein frischer
+#: Interpreter braucht ruhig 0,2 s bis zu seiner ersten Ausgabe, unter sechsfach
+#: überbuchten Kernen bis 13 s (RM-635); feste 3 bis 5 s rissen im vollen Tor
+#: neben anderen Sitzungen. Was ein Fall über Zeit sagt, misst er ab dem Zustand,
+#: um den es geht (:func:`_clock_held_until`, Ereignisse, Prozesskennungen).
+HANG_GUARD = 120.0
+
+#: So lange schläft ein Kind, das nicht von selbst fertig werden soll: länger als
+#: die Hängergrenze, und ein Fehler wird trotzdem nach Minuten rot.
+SLEEP = 2 * HANG_GUARD
+
+#: Wie schnell ein Lauf ab dem Ereignis reagiert — Ausgabegrenze, Elternende,
+#: ``linger``, Abbruch. Gezählt ab dem Ereignis selbst, nie ab dem Start: Der
+#: Interpreterstart des Kindes zählt nicht mit (RM-635). Der Prozesskern sieht
+#: alle ``PROCESS_POLL_SECONDS`` (0,05 s) nach; das harte Beenden dauerte unter
+#: Last bis 3,2 s. Ein Kern, der nur alle 20 s nachsieht, reißt die Frist.
+REACTION = 10.0
+
+
+def _stamp(path: Path) -> str:
+    """Python-Zeilen, mit denen ein Kind die Zeit eines Ereignisses ablegt.
+
+    ``time.monotonic`` ist auf allen drei Systemen eine Uhr für alle Prozesse.
+    """
+    return (
+        "import time\n"
+        "from pathlib import Path\n"
+        f"Path({str(path) + '.tmp'!r}).write_text(repr(time.monotonic()))\n"
+        f"__import__('os').replace({str(path) + '.tmp'!r}, {str(path)!r})\n"
+    )
+
+
+def _since(path: Path) -> float:
+    """Sekunden seit dem Ereignis, das ein Kind in ``path`` abgelegt hat."""
+    return time.monotonic() - float(path.read_text(encoding="utf-8"))
+
+
+def _noting_pid(path: Path) -> str:
+    """Python-Zeilen, mit denen ein Kind zuerst seine Kennung ablegt — ganz oder gar nicht."""
+    return (
+        "import os\n"
+        "from pathlib import Path\n"
+        f"Path({str(path) + '.tmp'!r}).write_text(str(os.getpid()))\n"
+        f"os.replace({str(path) + '.tmp'!r}, {str(path)!r})\n"
+    )
+
+
+def _waiting_for(path: Path) -> str:
+    """Python-Zeilen, die warten, bis ``path`` da ist (höchstens :data:`HANG_GUARD`)."""
+    return (
+        "import time\n"
+        "from pathlib import Path\n"
+        f"_until = time.monotonic() + {HANG_GUARD}\n"
+        f"while not Path({str(path)!r}).exists() and time.monotonic() < _until:\n"
+        "    time.sleep(0.01)\n"
+    )
+
+
+def _gone(pid: int, within: float = HANG_GUARD) -> bool:
+    """Ob der Prozess ``pid`` innerhalb von ``within`` Sekunden nicht mehr läuft.
+
+    Ein Zustand statt einer Marke nach fester Wartezeit: Ein überlebender
+    Nachkomme schreibt unter Last seine Marke womöglich erst nach der Prüfung.
+    """
+    until = time.monotonic() + within
+    if os.name == "nt":
+        import ctypes
+
+        # Die Windows-Namen fehlen in den ctypes-Stubs anderer Plattformen.
+        windows: Any = ctypes
+        kernel32 = windows.WinDLL("kernel32", use_last_error=True)
+        kernel32.OpenProcess.restype = ctypes.c_void_p
+        kernel32.OpenProcess.argtypes = (ctypes.c_uint32, ctypes.c_int, ctypes.c_uint32)
+        kernel32.WaitForSingleObject.argtypes = (ctypes.c_void_p, ctypes.c_uint32)
+        kernel32.WaitForSingleObject.restype = ctypes.c_uint32
+        kernel32.CloseHandle.argtypes = (ctypes.c_void_p,)
+        # SYNCHRONIZE | PROCESS_QUERY_LIMITED_INFORMATION; ohne Griff gibt es ihn nicht mehr.
+        handle = kernel32.OpenProcess(0x00100000 | 0x00001000, False, pid)
+        if not handle:
+            return True
+        try:
+            return kernel32.WaitForSingleObject(handle, int(within * 1000)) == 0
+        finally:
+            kernel32.CloseHandle(handle)
+    while time.monotonic() < until:
+        try:
+            os.kill(pid, 0)
+        except ProcessLookupError:
+            return True
+        state = subprocess.run(
+            ["ps", "-o", "stat=", "-p", str(pid)], capture_output=True, text=True, check=False
+        ).stdout.strip()
+        if not state or state.startswith("Z"):
+            return True
+        time.sleep(0.05)
+    return False
+
+
+@contextlib.contextmanager
+def _clock_held_until(ready: Callable[[], bool]) -> Iterator[None]:
+    """``time.monotonic`` steht, bis ``ready()`` wahr ist, und läuft dann von dort weiter.
+
+    So beginnt eine Zeitgrenze von ``run_limited`` mit dem Zustand, um den es im
+    Fall geht, und nicht mit dem Interpreterstart des Kindes — unter Last fiel
+    eine Grenze von 0,2 s sonst, bevor es den Zustand gab, und der Fall prüfte
+    nichts. Nach :data:`HANG_GUARD` läuft die Uhr in jedem Fall.
+    """
+    real = time.monotonic
+    begun = real()
+    since: list[float] = []
+
+    def clock() -> float:
+        now = real()
+        if not since:
+            if not ready() and now - begun < HANG_GUARD:
+                return begun
+            since.append(now)
+        return begun + (now - since[0])
+
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(time, "monotonic", clock)
+        yield
 
 
 def test_trusted_environment_drops_secrets_and_loader_changes() -> None:
@@ -78,6 +205,15 @@ def test_the_way_out_of_a_company_network_travels_without_its_credentials() -> N
         assert secret not in str(answer)
 
 
+def test_the_program_folder_travels_so_that_nvidia_smi_finds_its_library() -> None:
+    """Ohne ``PROGRAMFILES`` antwortet ``nvidia-smi`` mit „Failed to initialize
+    NVML“ (rc 255, gemessen an der RTX 4080), und jeder Windows-Rechner hätte für
+    Solidon keine Grafikkarte (RM-564, Nachprüfung K, N6)."""
+    answer = process.trusted_environment({"PROGRAMFILES": r"C:\Program Files"})
+
+    assert answer == {"PROGRAMFILES": r"C:\Program Files"}
+
+
 def test_bounded_environment_drops_gui_session_capabilities() -> None:
     source = {
         "PATH": "Programme",
@@ -137,7 +273,7 @@ def test_limited_process_gets_explicit_cwd_without_application_secrets(
     answer = process.run_limited(
         [sys.executable, "-c", script],
         cwd=tmp_path,
-        timeout=5.0,
+        timeout=HANG_GUARD,
         output_limit=4096,
     )
 
@@ -149,13 +285,12 @@ def test_limited_process_gets_explicit_cwd_without_application_secrets(
 def test_limited_process_stops_at_the_combined_output_limit(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    ready = tmp_path / "output-ready"
     finished = tmp_path / "normal-finish"
-    script = (
-        "import os, time; from pathlib import Path; "
-        f"Path({str(ready)!r}).write_text(str(time.monotonic())); "
-        "os.write(1, b'x' * 700); os.write(2, b'y' * 700); time.sleep(5); "
-        f"Path({str(finished)!r}).touch()"
+    writing = tmp_path / "schreibt"
+    script = _stamp(writing) + (
+        "import os\n"
+        f"os.write(1, b'x' * 700); os.write(2, b'y' * 700); time.sleep({SLEEP})\n"
+        f"Path({str(finished)!r}).touch()\n"
     )
     children: list[subprocess.Popen[bytes]] = []
     real_popen = subprocess.Popen
@@ -167,18 +302,17 @@ def test_limited_process_stops_at_the_combined_output_limit(
 
     monkeypatch.setattr(process.subprocess, "Popen", record_child)
 
+    # Gestoppt wird an der Grenze, während das Kind noch Minuten schliefe:
+    # Ohne Reaktion käme die Zeitgrenze (TimeoutExpired), ohne Abbruch sein Ende.
     with pytest.raises(process.ProcessOutputLimitExceeded):
         process.run_limited(
             [sys.executable, "-c", script],
             cwd=tmp_path,
-            timeout=4.0,
+            timeout=HANG_GUARD,
             output_limit=1024,
         )
 
-    # Der Windows-Prozessstart liegt vor der ersten Ausgabe.
-    # Begrenzt wird weiterhin die unveränderte Reaktionsfrist, ab dem Moment,
-    # in dem das Kind tatsächlich seine beiden Ausgabeströme füllt.
-    assert time.monotonic() - float(ready.read_text()) < 3.0
+    assert _since(writing) < REACTION, "die Grenze griff erst lange nach der Ausgabe"
     assert children[0].poll() is not None, "das Kind muss bereits beendet sein"
     assert not finished.exists(), "normal fertig werden und erst dann melden wäre zu spät"
 
@@ -187,23 +321,45 @@ def test_exact_output_limit_is_still_accepted(tmp_path: Path) -> None:
     answer = process.run_limited(
         [sys.executable, "-c", "import os; os.write(1, b'x' * 1024)"],
         cwd=tmp_path,
-        timeout=5.0,
+        timeout=HANG_GUARD,
         output_limit=1024,
     )
 
     assert len(answer.stdout) == 1024
 
 
-def test_timeout_stops_the_descendant_process_too(tmp_path: Path) -> None:
-    marker = tmp_path / "descendant-finished"
-    child = f"import time; from pathlib import Path; time.sleep(1); Path({str(marker)!r}).touch()"
-    parent = (
-        "import subprocess, sys, time; "
-        f"subprocess.Popen([sys.executable, '-c', {child!r}]); "
-        "time.sleep(30)"
-    )
+def _parent_of_a_sleeper(tmp_path: Path, *, flags: str = "", then: str = "") -> tuple[str, Path]:
+    """Ein Elternprozess, der einen langen Schläfer startet und wartet, bis er läuft.
 
-    with pytest.raises(subprocess.TimeoutExpired):
+    Der Nachkomme legt zuerst seine Kennung ab und schliefe dann :data:`SLEEP` Sekunden;
+    erst danach schriebe er seine Marke. Gibt Skript und Kennungsdatei zurück.
+    """
+    alive = tmp_path / "nachkomme-lebt"
+    marker = tmp_path / "entkommener-nachkomme"
+    child = (
+        _noting_pid(alive) + f"import time\ntime.sleep({SLEEP})\nPath({str(marker)!r}).touch()\n"
+    )
+    parent = (
+        "import subprocess, sys\n"
+        f"subprocess.Popen([sys.executable, '-c', {child!r}]{flags})\n" + _waiting_for(alive) + then
+    )
+    return parent, alive
+
+
+def _assert_the_sleeper_is_gone(alive: Path, why: str, since: Path | None = None) -> None:
+    """Der Nachkomme lief und läuft nicht mehr; seine Marke kam nie. Mit ``since``
+    ist er spätestens :data:`REACTION` nach diesem Ereignis weg."""
+    assert _gone(int(alive.read_text())), why
+    if since is not None:
+        assert _since(since) < REACTION, f"{why} — erst lange nach dem Elternende"
+    assert not (alive.parent / "entkommener-nachkomme").exists(), why
+
+
+def test_timeout_stops_the_descendant_process_too(tmp_path: Path) -> None:
+    parent, alive = _parent_of_a_sleeper(tmp_path, then=f"time.sleep({SLEEP})\n")
+
+    # Die 0,2 s laufen ab dem lebenden Nachkommen, nicht ab dem Start des Elternprozesses.
+    with _clock_held_until(alive.exists), pytest.raises(subprocess.TimeoutExpired):
         process.run_limited(
             [sys.executable, "-c", parent],
             cwd=tmp_path,
@@ -211,25 +367,24 @@ def test_timeout_stops_the_descendant_process_too(tmp_path: Path) -> None:
             output_limit=4096,
         )
 
-    time.sleep(1.3)
-    assert not marker.exists(), "ein Nachkomme darf den abgebrochenen Lauf nicht überleben"
+    _assert_the_sleeper_is_gone(alive, "ein Nachkomme darf den abgebrochenen Lauf nicht überleben")
 
 
 def test_a_successful_parent_must_not_leave_a_descendant_running(tmp_path: Path) -> None:
-    marker = tmp_path / "entkommener-nachkomme"
-    child = f"import time; from pathlib import Path; time.sleep(1); Path({str(marker)!r}).touch()"
-    parent = f"import subprocess, sys; subprocess.Popen([sys.executable, '-c', {child!r}])"
+    ending = tmp_path / "elternende"
+    parent, alive = _parent_of_a_sleeper(tmp_path, then=_stamp(ending))
 
     answer = process.run_limited(
         [sys.executable, "-c", parent],
         cwd=tmp_path,
-        timeout=5.0,
+        timeout=HANG_GUARD,
         output_limit=4096,
     )
 
     assert answer.returncode == 0
-    time.sleep(1.3)
-    assert not marker.exists(), "auch ein erfolgreicher Lauf darf keine Kinder zurücklassen"
+    _assert_the_sleeper_is_gone(
+        alive, "auch ein erfolgreicher Lauf darf keine Kinder zurücklassen", ending
+    )
 
 
 @pytest.mark.skipif(os.name != "nt", reason="Windows-Jobobjekt")
@@ -258,24 +413,23 @@ def test_a_windows_child_cannot_escape_into_a_detached_process_group(tmp_path: P
     Produktivweg, und der Befund vom 10.09. ist eine Beobachtung, die eine
     andere Terminal- oder Delegationslage getroffen haben kann.
     """
-    marker = tmp_path / "entkommener-windows-nachkomme"
-    child = f"import time; from pathlib import Path; time.sleep(1); Path({str(marker)!r}).touch()"
     flags = process.process_group_options(detached=True, no_window=True)["creationflags"]
-    parent = (
-        "import subprocess, sys; "
-        f"subprocess.Popen([sys.executable, '-c', {child!r}], creationflags={flags})"
+    ending = tmp_path / "elternende"
+    parent, alive = _parent_of_a_sleeper(
+        tmp_path, flags=f", creationflags={flags}", then=_stamp(ending)
     )
 
     answer = process.run_limited(
         [sys.executable, "-c", parent],
         cwd=tmp_path,
-        timeout=5.0,
+        timeout=HANG_GUARD,
         output_limit=4096,
     )
 
     assert answer.returncode == 0
-    time.sleep(1.3)
-    assert not marker.exists(), "das Jobobjekt muss auch losgelöste Gruppen schließen"
+    _assert_the_sleeper_is_gone(
+        alive, "das Jobobjekt muss auch losgelöste Gruppen schließen", ending
+    )
 
 
 def test_streaming_process_keeps_utf8_and_carriage_return_lines(tmp_path: Path) -> None:
@@ -289,7 +443,7 @@ def test_streaming_process_keeps_utf8_and_carriage_return_lines(tmp_path: Path) 
     answer = process.run_stream_limited(
         [sys.executable, "-c", script],
         cwd=tmp_path,
-        timeout=5.0,
+        timeout=HANG_GUARD,
         output_limit=4096,
         on_line=seen.append,
     )
@@ -298,39 +452,59 @@ def test_streaming_process_keeps_utf8_and_carriage_return_lines(tmp_path: Path) 
     assert seen == ["größer", "halb", "fertig"]
 
 
-def test_a_blocking_stream_callback_cannot_disable_the_total_timeout(tmp_path: Path) -> None:
-    release = threading.Event()
-    begun = time.monotonic()
+class _BlockingCallback:
+    """Ein Zeilenempfänger, der bei der ersten Zeile hängen bleibt, bis man ihn löst.
 
-    with pytest.raises(subprocess.TimeoutExpired):
+    ``entered`` sagt, dass er hängt, ``returned``, dass er zurückkam. Kehrt der
+    Lauf zurück, während er noch hängt, hat der Lauf nicht auf ihn gewartet —
+    eine Ordnung der Ereignisse statt einer Stoppuhr, die unter Last den
+    Interpreterstart mitmaß.
+    """
+
+    def __init__(self) -> None:
+        self.entered = threading.Event()
+        self.release = threading.Event()
+        self.returned = threading.Event()
+
+    def __call__(self, _line: str) -> None:
+        self.entered_at = time.monotonic()
+        self.entered.set()
+        self.release.wait(HANG_GUARD)
+        self.returned.set()
+
+
+_SLEEPER = [sys.executable, "-c", f"print('bereit', flush=True); import time; time.sleep({SLEEP})"]
+
+
+def test_a_blocking_stream_callback_cannot_disable_the_total_timeout(tmp_path: Path) -> None:
+    callback = _BlockingCallback()
+
+    # Die 0,2 s laufen ab dem hängenden Empfänger: Vorher gäbe es nichts zu umgehen.
+    with _clock_held_until(callback.entered.is_set), pytest.raises(subprocess.TimeoutExpired):
         process.run_stream_limited(
-            [sys.executable, "-c", "print('bereit', flush=True); import time; time.sleep(30)"],
-            cwd=tmp_path,
-            timeout=0.2,
-            output_limit=4096,
-            on_line=lambda _line: release.wait(30),
+            _SLEEPER, cwd=tmp_path, timeout=0.2, output_limit=4096, on_line=callback
         )
 
-    release.set()
-    assert time.monotonic() - begun < 3.0
+    assert callback.entered.is_set() and not callback.returned.is_set()
+    callback.release.set()
 
 
 def test_a_blocking_stream_callback_cannot_disable_cancellation(tmp_path: Path) -> None:
-    release = threading.Event()
-    begun = time.monotonic()
+    callback = _BlockingCallback()
 
     with pytest.raises(process.ProcessCancelled):
         process.run_stream_limited(
-            [sys.executable, "-c", "print('bereit', flush=True); import time; time.sleep(30)"],
+            _SLEEPER,
             cwd=tmp_path,
-            timeout=10.0,
+            timeout=HANG_GUARD,
             output_limit=4096,
-            on_line=lambda _line: release.wait(30),
-            cancelled=lambda: time.monotonic() - begun >= 0.2,
+            on_line=callback,
+            cancelled=callback.entered.is_set,
         )
 
-    release.set()
-    assert time.monotonic() - begun < 3.0
+    assert not callback.returned.is_set(), "der Abbruch wartete auf den Empfänger"
+    assert time.monotonic() - callback.entered_at < REACTION, "der Abbruch griff spät"
+    callback.release.set()
 
 
 def test_no_child_gets_a_memory_limit_from_us(tmp_path: Path) -> None:
@@ -350,7 +524,7 @@ def test_no_child_gets_a_memory_limit_from_us(tmp_path: Path) -> None:
     answer = process.run_limited(
         [sys.executable, "-c", script],
         cwd=tmp_path,
-        timeout=30.0,
+        timeout=HANG_GUARD,
         output_limit=4096,
     )
 
@@ -453,6 +627,54 @@ def test_a_group_that_outlives_its_parent_is_killed_after_the_grace(
     assert killed == [(4711, True)], "wer die Schonfrist übersteht, bekommt SIGKILL"
 
 
+class _SlowToDie:
+    """Ein Prozess, der erst ``dying`` Sekunden nach dem harten Ende weg ist — wie ein
+    Kind mit vielen rechnenden Fäden: ``TerminateProcess`` wirkt erst, wenn jeder Faden
+    eine Zeitscheibe bekommt. Vorher endet er nicht von selbst."""
+
+    pid = 4711
+
+    def __init__(self, dying: float) -> None:
+        self.dying = dying
+        self.killed_at: float | None = None
+        self.returncode: int | None = None
+
+    def kill(self) -> None:
+        self.killed_at = time.monotonic()
+
+    def wait(self, timeout: float | None = None) -> int:
+        if self.killed_at is not None:
+            remaining = self.killed_at + self.dying - time.monotonic()
+            if timeout is None or remaining <= timeout:
+                time.sleep(max(0.0, remaining))
+                self.returncode = -9
+                return -9
+        assert timeout is not None, "ohne Ende und ohne Frist wartete der Test ewig"
+        time.sleep(timeout)
+        raise subprocess.TimeoutExpired("kind", timeout)
+
+
+@pytest.mark.parametrize("system", ["nt", "posix"])
+def test_a_killed_process_that_takes_a_moment_to_die_is_waited_for(
+    monkeypatch: pytest.MonkeyPatch, system: str
+) -> None:
+    """Der Abbau wartet auf das Ende des hart beendeten Prozesses (RM-635).
+
+    Mit fester halber Sekunde danach warf er selbst ``TimeoutExpired`` — und der
+    Lauf meldete einen Zeitablauf statt seines Grundes (Abbruch, Zeitgrenze,
+    Ausgabegrenze). Ruhig brauchte ein Kind mit acht rechnenden Fäden im Median
+    0,53 s vom Beenden bis zum Ende, unter Last bis 3,2 s.
+    """
+    monkeypatch.setattr(process.os, "name", system)
+    monkeypatch.setattr(process, "_taskkill", lambda _pid, *, force: None)
+    monkeypatch.setattr(process, "_kill_process_group", lambda _pid, *, force: None)
+    child = _SlowToDie(dying=2 * process.PROCESS_STOP_SECONDS)
+
+    process.terminate_process_tree(child)  # type: ignore[arg-type]
+
+    assert child.killed_at is not None and child.returncode == -9
+
+
 def test_the_posix_teardown_waits_for_the_group_after_the_parent(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -481,37 +703,41 @@ def test_a_process_that_stays_after_its_result_is_ended(tmp_path: Path) -> None:
     Zeitlimit, nach dem der Kunde eine Absage über einer fertigen Datei las."""
     result = tmp_path / "result.json"
     ended = tmp_path / "von-selbst-fertig"
+    noted = tmp_path / "ergebnis-zeit"
     script = (
-        "import time; from pathlib import Path; "
-        f"Path({str(result)!r}).write_text('{{}}'); time.sleep(20); "
-        f"Path({str(ended)!r}).touch()"
+        _stamp(noted) + _noting_pid(result) + f"time.sleep({SLEEP})\nPath({str(ended)!r}).touch()\n"
     )
-    started = time.monotonic()
 
+    # Ohne ``linger`` endete der Lauf erst an der Zeitgrenze, mit TimeoutExpired;
+    # er kommt ohne zurück, lange bevor das Kind von selbst fertig würde.
     process.run_limited(
         [sys.executable, "-c", script],
         cwd=tmp_path,
-        timeout=25.0,
+        timeout=HANG_GUARD,
         output_limit=4096,
         finished=result.exists,
         linger=0.3,
     )
 
-    assert time.monotonic() - started < 15.0, "nicht bis zum Zeitlimit"
-    assert result.exists()
-    time.sleep(0.5)
+    assert _since(noted) < 0.3 + REACTION, "erst lange nach dem Ergebnis beendet"
+    assert _gone(int(result.read_text())), "beendet, nicht weiterlaufen gelassen"
     assert not ended.exists(), "beendet, nicht von selbst fertig geworden"
 
 
 def test_a_process_that_ends_on_its_own_keeps_its_return_code(tmp_path: Path) -> None:
-    """Wer von selbst endet, bleibt unberührt — auch mit ``finished``."""
+    """Wer von selbst endet, bleibt unberührt — auch mit ``finished``.
+
+    ``linger`` ist hier die Hängergrenze: Sie beginnt mit dem Start, und ein
+    Interpreter, der unter Last länger als sie bis zu seiner Zeile braucht, würde
+    beendet statt abgewartet.
+    """
     answer = process.run_limited(
         [sys.executable, "-c", "print('fertig')"],
         cwd=tmp_path,
-        timeout=10.0,
+        timeout=HANG_GUARD,
         output_limit=4096,
         finished=lambda: True,
-        linger=5.0,
+        linger=HANG_GUARD,
     )
 
     assert answer.returncode == 0

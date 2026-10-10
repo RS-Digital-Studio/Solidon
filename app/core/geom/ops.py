@@ -941,7 +941,8 @@ class RepairParams(BaseParams):
         title=_("Überschneidungen auflösen"),
         default=True,
         doc=_(
-            "Verschmilzt Teile, die ineinanderstecken. Was nicht sicher geht, bleibt unverändert."
+            "Verschmilzt Teile, die ineinanderstecken, und glättet kleine Falten der "
+            "Oberfläche. Was nicht sicher geht, bleibt unverändert."
         ),
     )
     small_components: bool = param(
@@ -993,7 +994,8 @@ class RepairParams(BaseParams):
     name="repair",
     # 4: Hüllen im Inneren auf Wunsch entfernen (RM-003).
     # 5: zwei Stücke, die sich an einer Kante berühren, bekommen je ihre Kante (RM-550).
-    cache_version="5",
+    # 6: auch mit der anderen Paarung, und kleine Falten werden neu geschlossen (RM-550).
+    cache_version="6",
     title=_("Reparieren"),
     category="repair",
     params=RepairParams,

@@ -155,11 +155,12 @@ def test_a_preview_refusal_stays_in_the_dialog_without_a_local_action(
 def test_the_sketch_menu_starts_drawing(
     empty_window: MainWindow, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """RM-395: Der Sammeleintrag führt wie die Palette direkt in die Zeichnung."""
+    """RM-395/RM-559: Der Sammeleintrag führt wie die Palette direkt ins Aufziehen."""
     drawn: list[str] = []
+    monkeypatch.setattr(empty_window, "start_drawing", lambda **_how: drawn.append("draw"))
     monkeypatch.setattr(empty_window, "start_sketch", drawn.append)
     empty_window._variant_actions["sketch_extrude"].trigger()
-    assert drawn == ["sketch_extrude"]
+    assert drawn == ["draw"]
     assert empty_window._op_dialog is None
 
 
@@ -182,11 +183,15 @@ def test_new_material_roles_start_with_the_project_material(
     dialog.reject()
 
 
-@pytest.mark.parametrize("shape", ["rectangle", "circle", "slot"])
+@pytest.mark.parametrize("shape", ["slot"])
 def test_reopening_a_drawing_changes_one_step_and_keeps_undo_and_saved_state(
     empty_window: MainWindow, tmp_path: Path, shape: str
 ) -> None:
-    """RM-375: Zeichnung bearbeiten, verwerfen, übernehmen und erneut öffnen."""
+    """RM-375: Zeichnung bearbeiten, verwerfen, übernehmen und erneut öffnen.
+
+    Ein freier Umriss öffnet den Editor; ein Rechteck oder Kreis öffnet seine
+    Maße (RM-559, E11 — ``tests/test_draw_ui.py``).
+    """
     from PySide6.QtTest import QTest
 
     sketch = shapes.circle(20.0) if shape == "circle" else getattr(shapes, shape)(20.0, 10.0)
@@ -2346,7 +2351,9 @@ def test_whole_face_texture_preview_matches_apply_and_edit(
     assert face is not None
     window._on_feature_picked(face.id)
     seen = []
-    monkeypatch.setattr(window, "_show_preview", seen.append)
+    monkeypatch.setattr(
+        window, "_show_preview", lambda difference, **_kwargs: seen.append(difference)
+    )
     # Erzwingt die Reduktionsschwelle am kleinen Korpus: Ganzfläche muss
     # trotzdem ohne vorgelagerte Änderung ihrer Flächendreiecke rechnen.
     monkeypatch.setattr(session_module, "COARSE_PREVIEW_ABOVE", 1)
@@ -2501,7 +2508,9 @@ def test_texture_panel_changes_existing_step_with_live_preview(
     }
     assert set(numeric) == {"pitch", "depth", "angle"}
     seen = []
-    monkeypatch.setattr(window, "_show_preview", seen.append)
+    monkeypatch.setattr(
+        window, "_show_preview", lambda difference, **_kwargs: seen.append(difference)
+    )
     numeric["depth"].spin.setValue(0.9)
     window._feature_preview.stop()
     window._preview_feature_change()
@@ -2565,11 +2574,11 @@ def test_a_texture_panel_click_while_the_scene_evaluates_changes_the_step_after_
     numeric = {
         field._entry.name: field for row in panel._built for field in row.findChildren(ValueField)
     }
-    monkeypatch.setattr(window, "_show_preview", lambda _difference: None)
+    monkeypatch.setattr(window, "_show_preview", lambda _difference, **_kwargs: None)
     numeric["depth"].spin.setValue(0.9)
     window._feature_preview.stop()
     window._preview_feature_change()
-    assert window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     gate = threading.Event()
     evaluate = Session.run_evaluation
 
@@ -4677,20 +4686,18 @@ def test_every_feature_kind_has_a_name_in_the_tree(qt_app: QApplication) -> None
     )
 
 
-def test_the_settings_dialog_leads_to_the_filament_section(window: MainWindow) -> None:
+def test_the_settings_dialog_leads_to_the_filament_list(window: MainWindow) -> None:
     """Der Weg vom Bericht zur Wahl — und er muss im Fenster ankommen.
 
     Die Kopfzeile der Druckeinstellungen berichtet, woraus sich das Material
-    ergibt; gewählt wird es am Filamentwähler in der linken Spalte. Der ist
-    einklappbar und im Regelfall zu, also genügt kein Aufleuchten: Der
-    Abschnitt geht auf, sonst zeigt der Rahmen auf eine Kopfzeile, unter der
-    nichts steht (dieselbe Zusage wie beim Tourschritt).
+    ergibt; welche Filamente das Projekt trägt, steht hinter *Filamente* in der
+    Kopfzeile des Fensters (RM-556). *Filamente …* öffnet genau diese Liste.
 
     **Und der Dialog kommt nicht zurück, sondern der Rückweg.** Bis zum
     Gesamtreview (05.09.2026, UI-18) trat der modale Dialog nur zurück und
-    stand danach wieder über dem Fenster — der Filamentwähler war dann sichtbar
+    stand danach wieder über dem Fenster — die Filamente waren dann sichtbar
     und nicht bedienbar. Jetzt schließt der Dialog mit seinen Werten, und die
-    Filamentkarte zeigt den Knopf zurück zu den Druckeinstellungen.
+    Liste zeigt den Knopf zurück zu den Druckeinstellungen.
     """
     from PySide6.QtWidgets import QDialog
 
@@ -4698,16 +4705,15 @@ def test_the_settings_dialog_leads_to_the_filament_section(window: MainWindow) -
 
     dialog = PrintSettingsDialog(window.session, window.settings, window)
     dialog.filamentsRequested.connect(lambda: window._show_filaments(dialog))
-    section = window.filaments.parentWidget()
-    assert section is not None
     assert window.filaments.return_to_print_button.isHidden(), "der Rückweg wartet auf den Hinweg"
 
     dialog.material_link.click()
 
-    assert not window.filaments.isHidden(), "der Abschnitt steht offen"
+    assert window.filament_popup.isVisible(), "die Liste steht offen"
     assert dialog.result() == QDialog.DialogCode.Accepted, "der Dialog ging mit seinen Werten zu"
     assert dialog.isHidden(), "und sperrt das Fenster nicht mehr"
     assert not window.filaments.return_to_print_button.isHidden(), "der Rückweg steht da"
+    window.filament_popup.hide()
     dialog.deleteLater()
 
 
@@ -4729,7 +4735,8 @@ def test_the_window_wires_the_filament_shortcut_itself(
     monkeypatch.setattr(module.PrintSettingsDialog, "exec", follow_material)
     window.action_print_settings()
     assert followed == [True]
-    assert not window.filaments.isHidden()
+    assert window.filament_popup.isVisible()
+    window.filament_popup.hide()
 
 
 def test_the_window_waits_for_the_search_of_a_closed_print_dialog(
@@ -7086,6 +7093,40 @@ def test_every_bool_row_in_the_register_is_a_row_checkbox(qt_app: QApplication) 
                     plain.append(f"{spec.name}.{name}")
         finally:
             dialog.deleteLater()
+    assert not plain, plain
+
+
+def test_every_position_field_of_every_operation_offers_fx(qt_app: QApplication) -> None:
+    """RM-555: X, Y und Z tragen im Dialog jeder Operation dasselbe Ausdrucksfeld.
+
+    Im Merkmalfenster stand an *Baustein verschieben* fx nur an den Achsen, die
+    schon einen Ausdruck trugen. Der Dialog ist die Vorlage dafür; hier steht
+    fest, dass er keine Achse auslässt (die Gegenseite im Merkmalfenster:
+    ``test_feature_panel.py``).
+    """
+    from app.core.registry.surfaces import PART_PLACEMENT_PARAMS
+    from app.ui.op_dialog import ValueField
+
+    plain: list[str] = []
+    checked = 0
+    for spec in REGISTRY.all():
+        axes = [
+            entry.name
+            for entry in spec.params.spec()
+            if entry.name in PART_PLACEMENT_PARAMS and entry.kind in ("float", "int")
+        ]
+        if not axes:
+            continue
+        dialog = OperationDialog(spec, {})
+        try:
+            for name in axes:
+                editor = dialog._editors.get(name)
+                checked += 1
+                if not isinstance(editor, ValueField) or editor.toggle.text() != "fx":
+                    plain.append(f"{spec.name}.{name}")
+        finally:
+            dialog.deleteLater()
+    assert checked > 100, "ohne Lagefelder prüft dieser Test nichts"
     assert not plain, plain
 
 

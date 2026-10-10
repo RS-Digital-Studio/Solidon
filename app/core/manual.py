@@ -369,19 +369,20 @@ INTRODUCTION: Final[tuple[Page, ...]] = (
             "Wo was steht, zeigt [Das Fenster auf einen Blick](manual:window-overview). "
             "Hier steht, was die Bereiche können.\n\n"
             "![](figure:window)\n\n"
-            "**Die Projektkopfzeile** nennt Projekt, Drucker und die verwendeten "
-            "Filamente. Ein Klick auf den Drucker wählt für dieses Projekt einen anderen. "
+            "**Die Projektkopfzeile** nennt Projekt und Drucker. Ein Klick auf den "
+            "Drucker wählt für dieses Projekt einen anderen. *Filamente* daneben zeigt die "
+            "Filamente des Projekts und führt ins Filamentlager. "
             "Hat das Projekt mehrere Platten, stellt der Plattenwähler daneben die "
             "Ansicht auf eine davon.\n\n"
-            "**Oben die Werkzeugleiste.** *Zeichnen* schwenkt die Ansicht senkrecht auf "
-            "die Zeichenebene, das Modell tritt durchscheinend zurück. *Formen* und "
+            "**Oben die Werkzeugleiste.** *Zeichnen* zieht mit drei Klicks einen Körper "
+            "auf, die Ansicht bleibt dabei stehen. *Formen* und "
             "*Skelett* brauchen einen gewählten Körper und sagen das schon vor dem Klick. "
             "Escape kommt aus jedem Werkzeug zurück.\n\n"
             "**Unter dem Modell die Werkzeugzeile:** *Schnitt*, *Messen*, *Bewegen*, "
             "*Analyse*, *Schichten*, *Explosion* und *Teilen*, der Reihe nach auf Alt+1 "
             "bis Alt+7. Nur *Bewegen* und *Teilen* ändern das Modell, jeweils als "
-            "Schritt im Verlauf; die anderen sehen nur hin.\n\n"
-            "**Links** stehen Objekte, Parameter, Verlauf und Filamente, jeder Abschnitt "
+            "Schritt im Verlauf. Die anderen sehen nur hin.\n\n"
+            "**Links** stehen Objekte, Parameter und Verlauf, jeder Abschnitt "
             "einklappbar. Unter jedem Körper im Objektbaum steht, was die Erkennung darin "
             "gefunden hat.\n\n"
             "**Die Maus in der Ansicht.** Links klicken wählt aus, links ziehen "
@@ -396,7 +397,7 @@ INTRODUCTION: Final[tuple[Page, ...]] = (
             "hinein.\n\n"
             "**Wer es anders gewohnt ist, stellt um.** Die Einstellungen bieten vier "
             "weitere Belegungen nach Cura, Bambu Studio, Orca und PrusaSlicer, CAD und "
-            "Blender; dort wählt die linke Taste wieder aus, und die Tastatur fliegt "
+            "Blender. Bei ihnen wählt die linke Taste wieder aus, und die Tastatur fliegt "
             "nicht. Eine 3D-Maus (SpaceMouse) fährt dieselbe Kamera: Schieben verschiebt "
             "das Teil, Drehen dreht es, Ziehen holt es näher, eine Gerätetaste passt "
             "alles ein. Geschwindigkeit und Richtung stehen in den Einstellungen, sobald "
@@ -404,7 +405,7 @@ INTRODUCTION: Final[tuple[Page, ...]] = (
             "reagiert](manual:spacemouse-access).\n\n"
             "**Rechts daneben drei Reiter:** *Auswahl*, *Prüfbericht* und *Chat*. Beim "
             "Zeichnen kommt einer für die Bedingungen dazu, in der Tour einer für ihre "
-            "Schritte. F9 blendet den ganzen Bereich aus; dann hat das Modell den Platz, "
+            "Schritte. F9 blendet den ganzen Bereich aus. Dann hat das Modell den Platz, "
             "und die Statusleiste zählt die offenen Befunde. Beide Karten lassen sich "
             "am Griff oben rechts verschieben, mit der Maus oder den Pfeiltasten. Ein "
             "Doppelklick auf den Griff oder *Ansicht → Karten an ihren Platz* legt sie "
@@ -417,14 +418,17 @@ INTRODUCTION: Final[tuple[Page, ...]] = (
             "Alle weiteren stehen in Gruppen "
             "darunter, und ein Suchfeld findet jede. Ohne Auswahl stehen dort die "
             "Handlungen für alle Körper, etwa *Druckoptimal ausrichten*. Der Knopf "
-            "*Bausteine* öffnet den Katalog. Was der Reiter an einem Merkmal zeigt, "
+            "*Bausteine* öffnet den Katalog. Das i neben einer Handlung sagt beim "
+            "Darüberfahren, was sie tut. Ein Klick darauf schlägt das Handbuch dort auf, "
+            "wo sie erklärt ist. "
+            "Was der Reiter an einem Merkmal zeigt, "
             "steht in [Was Solidon im Modell erkennt](manual:features).\n\n"
             "**Der Prüfbericht** springt bei einer neuen Meldung nicht nach vorn. Sein "
             "Reiter zählt Fehler (X) und Warnungen (!) und blinkt einige Sekunden, rot "
             "bei einem Fehler, gelb bei einer Warnung. Getönt bleibt er, bis Sie den "
             "Bericht angesehen haben. Gleiche Meldungen stehen in einer Zeile, ihre Zahl "
-            "in Klammern davor; ein Klick wählt alle betroffenen Teile, und eine Handlung "
-            "fragt, für welche davon sie gelten soll.\n\n"
+            "in Klammern davor. Ein Klick auf die Zeile wählt alle betroffenen Teile, "
+            "und eine Handlung fragt, für welche davon sie gelten soll.\n\n"
             "**Ein Menü für die Auswahl gibt es nicht.** Die Menüleiste behält, was ohne "
             "Auswahl geht. Tastenkürzel gelten weiter, und die Befehlspalette findet jede "
             "Handlung über ihren Namen, mit dem Kürzel daneben.\n\n"
@@ -575,10 +579,15 @@ INTRODUCTION: Final[tuple[Page, ...]] = (
             "zurück.\n\n**An einer Fläche** gilt keine der sechs Handlungen. Dort "
             "setzen die Bausteine an, und der Knopf *Bausteine* öffnet den "
             "Katalog.\n\n**Eine Kante ist das Dritte, was ein Klick treffen kann.** "
-            "Der erste Klick wählt den Körper, der zweite die Kante. Rechts stehen "
-            "dann *Verrunden*, *Fase anbringen* und *Wulst anlegen* mit je einem "
-            "Maß. Das geht auch an einem eingelesenen Modell; die Rundung besteht "
-            "dort aus geraden Stücken, die feiner sind, als eine Düse auflöst. Für "
+            "Der erste Klick wählt den Körper, der zweite die Kante, ein Klick auf "
+            "eine Ecke alle Kanten, die dort zusammenlaufen, und mit Strg oder "
+            "Umschalt kommen weitere Kanten dazu. Rechts stehen dann "
+            "*Verrunden*, *Fase anbringen* und *Wulst anlegen* mit je einem Maß, "
+            "und jede bearbeitet alle gewählten Kanten in einem Schritt. Das geht "
+            "auch an einem eingelesenen Modell; die Rundung besteht "
+            "dort aus geraden Stücken, die feiner sind, als eine Düse auflöst. An "
+            "einem exakten Körper zeigt die Linie auch jede Kante, die tangential "
+            "anschließt, denn *Verrunden* und *Fase anbringen* nehmen sie mit. Für "
             "alle senkrechten Kanten wählen Sie im Dialog die Gruppe statt jeder "
             "Kante einzeln. Auch *Fläche versetzen* und *Formschräge anstellen* "
             "arbeiten am eingelesenen Netz.\n\n**Zwei markierte Merkmale zeigen "
@@ -670,7 +679,8 @@ INTRODUCTION: Final[tuple[Page, ...]] = (
             "Filamentwechsel, ein Teil ohne eigenes Filament behält die Farbe des "
             "Körpers. *Filament entfernen* nimmt die Zuweisung für die gewählten Körper "
             "oder Flächen zurück.\n\n"
-            "**Das Filamentlager** öffnen Sie auf der Startseite oder über *Bearbeiten*. "
+            "**Das Filamentlager** öffnen Sie auf der Startseite, über *Bearbeiten* oder "
+            "unter *Filamente* in der Projektkopfzeile. "
             "Jede Spule führt ihren eigenen Restbestand, auch wenn zwei gleich heißen; "
             "ohne bekannte Menge steht dort *Unbekannt*. Die Schnellauswahl weist eine "
             "Spule direkt zu, an gewählten Flächen nur diesen. Änderungen im Lager "
@@ -681,15 +691,28 @@ INTRODUCTION: Final[tuple[Page, ...]] = (
     ),
     Page(
         key="sketch",
-        summary=_("Zeichnen mit Bedingungen: Linien, Bögen, Maße, und was danach daraus wird."),
+        summary=_("Körper mit drei Klicks aufziehen, und freie Umrisse mit Bedingungen."),
         title=_("Zeichnen"),
         body=_(
-            "Für den Umriss, den kein Grundkörper hergibt, etwa eine Grundplatte "
-            "mit einer Aussparung für ein Netzteil.\n\n**Angefangen wird oben in der "
-            "Werkzeugleiste.** *Zeichnen* schwenkt die Ansicht senkrecht auf die "
-            "Zeichenebene, gezeichnet wird im Modell. Was daraus wird, entscheiden "
-            "Sie am Ende. Escape kommt wieder "
-            "heraus.\n\n![](figure:sketch-mode)\n\n**Zuerst die Ebene.** *Draufsicht "
+            "Für einen Quader oder Zylinder an genau der Stelle, an der er sitzen "
+            "soll, und für den Umriss, den kein Grundkörper hergibt, etwa eine "
+            "Grundplatte mit einer Aussparung für ein Netzteil.\n\n**Ein Körper "
+            "entsteht mit drei Klicks.** *Zeichnen* oben in der Werkzeugleiste "
+            "(Strg+Umschalt+E) öffnet unten eine schmale Leiste, die Ansicht bleibt, "
+            "wie sie ist. Der erste Klick setzt den Anfang auf das Bett oder auf eine "
+            "ebene Fläche, die unter dem Zeiger aufleuchtet. Der zweite setzt die "
+            "Gegenecke, der dritte die Höhe. Zieht der dritte aus der Fläche heraus, "
+            "wächst der Körper an. Zieht er in den Körper hinein, wird ausgeschnitten, "
+            "und an der Gegenwand rastet *Durchgehend* ein. Statt zu klicken tippen "
+            "Sie: Breite, Tab, Tiefe, Eingabetaste, dann die Höhe. `R` und `C` "
+            "wechseln zwischen Rechteck und Kreis. Escape verwirft, was noch nicht "
+            "fertig ist. Strg+Z nimmt erst den letzten Klick zurück, danach den "
+            "ganzen Schritt.\n\n**Ein freier Umriss** beginnt mit *Freie Form …* in "
+            "der Leiste: Der nächste Klick wählt die Fläche und setzt den ersten "
+            "Punkt einer Linie. Im Skizzeneditor steht die Ebene senkrecht vor "
+            "Ihnen. *Fertig* bringt den Umriss zurück ins Bild, und es fehlt nur die "
+            "Höhe, wie beim Rechteck.\n\n![](figure:sketch-mode)\n\n**Die Ebene im "
+            "Editor.** *Draufsicht "
             "(XY)* liegt flach wie das Druckbett, *Vorderansicht (XZ)* und "
             "*Seitenansicht (YZ)* stehen, und die ebenen Flächen "
             "vorhandener Körper stehen mit in der Liste. Der Satz daneben sagt, "
@@ -762,18 +785,22 @@ INTRODUCTION: Final[tuple[Page, ...]] = (
             "mit.\n\n**Der Rand des Bauraums ist gestrichelt eingezeichnet.** Wer "
             "darüber hinauszeichnet, liest an der Linie: *die Skizze ragt darüber "
             "hinaus*. Bei kleinen Teilen liegt er außerhalb des "
-            "Bildes.\n\n![](figure:sketch-uses)\n\n**Zum Schluss sagen Sie, was daraus "
-            "wird.** *Hochziehen* und *Abtragen* stehen an der fertigen Kontur. "
-            "*Fertig* klappt alle Arten auf, jede mit einem Satz: hochziehen, als "
-            "Tasche einschneiden, ein Lochfeld schneiden, um die senkrechte Achse "
-            "drehen, entlang eines Bogens führen oder zwischen zwei Umrissen "
-            "aufspannen. Was nicht geht, sagt warum. *Verwerfen* verlässt den "
-            "Modus, und die Statuszeile nennt den Weg "
+            "Bildes.\n\n![](figure:sketch-uses)\n\n**Zum Schluss** führt *Fertig* "
+            "zurück in die Ansicht, und der nächste Klick setzt die Höhe, nach außen "
+            "oder nach innen. Drehen, entlang eines Bogens führen oder zwischen zwei "
+            "Umrissen aufspannen wählen Sie danach im Schritt unter *Art*. Bei einem "
+            "freien Umriss öffnet ein Doppelklick auf den Schritt zuerst den Editor, und "
+            "*Fertig* führt in den Schritt mit *Art*. *Verwerfen* "
+            "verlässt den Editor, und die Statuszeile nennt den Weg "
             "zurück.\n\n![](figure:sketch-result)\n\n**Die Zeichnung bleibt ein Wert "
-            "im Verlauf.** Ein Doppelklick auf den Schritt öffnet die Zeichnung "
-            "direkt wieder. Eine verschobene Linie rechnet die Operation neu, der "
-            "Rest des Projekts bleibt. Ein gezeichneter Kreis wird ein runder "
-            "Zylinder, kein Vieleck.\n\n**Eine vorhandene Zeichnung verwenden.** "
+            "im Verlauf.** Ein Doppelklick auf einen aufgezogenen Quader oder Zylinder "
+            "öffnet seine Maße vorn: *Breite*, *Tiefe* und *Höhe* am Quader, "
+            "*Durchmesser* und *Höhe* am Zylinder. An einer Tasche steht *Tiefe* statt "
+            "*Höhe*, und ihr Rechteck nennt *Breite* und *Länge*. *Umriss bearbeiten …* "
+            "führt von dort in den Editor. Ein freier Umriss öffnet den "
+            "Editor gleich. Eine verschobene Linie rechnet die Operation neu, der Rest des "
+            "Projekts bleibt. Ein gezeichneter Kreis wird ein runder Zylinder, kein "
+            "Vieleck.\n\n**Eine vorhandene Zeichnung verwenden.** "
             "Ziehen Sie eine SVG- oder DXF-Datei ins Fenster. Unter *Zeichnung "
             "hochziehen* wählen Sie die Konturen in der Liste oder im "
             "Vorschaubild, *Alle gültigen* markiert alle verwendbaren; Innenringe "
@@ -812,34 +839,40 @@ INTRODUCTION: Final[tuple[Page, ...]] = (
     ),
     Page(
         key="sculpting",
-        summary=_("Formen von Hand, und warum eine ganze Sitzung ein Schritt bleibt."),
+        summary=_("Formen und Beugen von Hand, und warum eine ganze Sitzung ein Schritt bleibt."),
         title=_("Formen"),
         body=_(
             "Manche Formen lassen sich nicht bemaßen. Ein Griff, der in der Hand liegen "
             "soll, eine Figur, ein gewachsener Übergang: Dafür gibt es den Pinsel.\n\n"
-            "**Drei Stufen, und die zweite wird gern übersprungen.** Erst eine grobe Form "
-            "aus Grundkörpern, weich verschmolzen (*Weich verschmelzen* rechts, sobald "
-            "die Körper gewählt sind). Dann *Dreiecke angleichen*, damit überall gleich "
-            "viele Eckpunkte sitzen. Dann *Formen*. Ohne die zweite Stufe folgt das Netz "
-            "dem Pinsel nicht, und die Leiste sagt es.\n\n"
+            "*Formen* steht oben in der Werkzeugleiste (Strg+Umschalt+F) und braucht "
+            "einen gewählten Körper. Der Pinsel greift anfangs ein Zwanzigstel der "
+            "Körpergröße. Radius und Stärke, eine Stufe von 1 bis 10, stellen Sie in der "
+            "Leiste nach. Ist das Netz für den Pinsel zu grob, gleicht die Sitzung die "
+            "Dreiecke beim ersten Zug selbst an und sagt es vorher.\n\n"
             "**Die ganze Sitzung ist ein Schritt im Verlauf**, nicht jeder Zug, denn eine "
-            "Figur hat Tausende. Während der Sitzung nimmt Strg+Z einen Zug zurück, "
-            "danach die ganze Sitzung.\n\n"
-            "**Sechs Werkzeuge.** *Auftragen* und *Abtragen* sind dasselbe mit "
-            "umgekehrtem Vorzeichen. *Glätten*, *Aufblasen* und *Flachziehen* brauchen je "
-            "einen Durchgang mehr, die Leiste zeigt wie viele. *Kneifen* zieht zur "
-            "Strichmitte und macht Kanten.\n\n"
-            "**Innerhalb einer Etappe ist die Reihenfolge egal:** Zwei Züge über dieselbe "
-            "Stelle addieren sich auf die Ausgangsfläche. Mit *Neu ansetzen* sitzt der "
-            "nächste Zug auf dem, was schon da ist. Greift ein Zug in eine Mulde, die ein "
-            "Zug davor gegraben hat, setzt er dort von selbst neu an und gräbt tiefer.\n\n"
-            "**Symmetrie lässt sich nachträglich ändern**, auch an einer fertigen "
-            "Sitzung. Gespiegelt wird an der Mitte des Körpers, wie er vor den Zügen "
-            "dasteht; beim Formen bleibt sie stehen. Ein Zug auf der Spiegelebene wirkt "
-            "einmal, nicht doppelt.\n\n"
+            "Figur hat Tausende. Hat die Sitzung angeglichen, gehört *Dreiecke angleichen* "
+            "zum selben Schritt. Während der Sitzung nimmt Strg+Z einen Zug zurück, "
+            "danach die ganze Sitzung. Escape beendet wie *Fertig*.\n\n"
+            "**Vier Werkzeuge.** *Auftragen* und *Abtragen* sind dasselbe mit "
+            "umgekehrtem Vorzeichen, *Glätten* gleicht Unebenheiten aus, *Flachziehen* "
+            "zieht die Fläche eben. Keines schießt über sein Ziel hinaus, auch nicht bei "
+            "Stärke 10.\n\n"
+            "**Jeder Zug setzt auf dem Ergebnis der vorigen auf.** Zehnmal über dieselbe "
+            "Stelle wird ein runder Hügel und keine Säule.\n\n"
+            "*Spiegeln* lässt jeden Zug links und rechts zugleich wirken, gespiegelt "
+            "dort, wo der Körper sich selbst trifft. Weitere Ebenen stehen unter *Diesen "
+            "Schritt ändern*, auch an einer fertigen Sitzung. Ein Zug auf der Spiegelebene "
+            "wirkt einmal, nicht doppelt.\n\n"
             "**Der Pinsel greift nur die Seite, die ihm zugewandt ist.** Die Unterseite "
             "einer dünnen Platte oder die Innenwand eines Hohlkörpers bleibt, wo sie "
             "ist.\n\n"
+            "*Skelett* (Strg+Umschalt+K) beugt einen Körper, statt ihn zu formen. Der "
+            "erste Klick setzt ein Gelenk, jeder weitere einen Knochen. Enter beendet die "
+            "Kette, ein Klick auf ein Gelenk setzt dort fort. Ziehen an einem Gelenk beugt "
+            "den Knochen, der dort endet, und am Zeiger steht der Winkel, den Sie auch "
+            "tippen können. Was kein Knochen erreicht, bleibt stehen. *Fertig* legt "
+            "Skelett und Stellung als einen Schritt ab. Die Winkel als Zahlen, auch als "
+            "Projektparameter, stehen unter *Diesen Schritt ändern*.\n\n"
             "**Wann nicht:** an einem Teil, das noch bemaßt wird, denn ein Zug sitzt an "
             "einer Stelle im Raum und verliert seine Fläche, wenn sich die Form darunter "
             "ändert. Für einen Übergang zwischen zwei Körpern ist *Weich verschmelzen* "
@@ -868,8 +901,9 @@ INTRODUCTION: Final[tuple[Page, ...]] = (
             "im Verlauf zu suchen. Was ein Baustein erzeugt hat, fasst der Objektbaum "
             "unter dessen Namen zusammen.\n\n"
             "**Mehrere Schritte wählen** Sie mit Strg oder Umschalt. Genau diese gehen in "
-            "einen eigenen Baustein ([Eigene Bausteine](manual:own-parts)); ohne Auswahl "
-            "gilt der ganze Verlauf.\n\n"
+            "einen eigenen Baustein ([Eigene Bausteine](manual:own-parts)); sonst nimmt er "
+            "den gewählten Körper mit seinen Schritten, ohne jede Auswahl den ganzen "
+            "Verlauf.\n\n"
             "**Löschen** steht im Kontextmenü der Liste und in der Leiste darunter und "
             "lässt sich zurücknehmen. Weil ein gelöschter Schritt die Schritte trifft, "
             "die auf ihm aufbauen, fragt Solidon hier als einzige Stelle im Verlauf nach "
@@ -971,11 +1005,25 @@ INTRODUCTION: Final[tuple[Page, ...]] = (
             "und einem Griff. "
             "Ziehen oder ein Klick auf eine andere Stelle setzt ihn um, die Maße lassen "
             "sich auch tippen. Erst *Übernehmen* fügt ihn ein, Escape geht zurück zu den "
-            "Werten. Ohne gewählten Körper bleibt *Einsetzen* gesperrt und sagt am Knopf, "
-            "warum; durchsehen lässt sich der Katalog trotzdem.\n\n"
+            "Werten. Ein Baustein, der an einen Körper gesetzt wird, bleibt ohne gewählten "
+            "Körper gesperrt und sagt am Knopf, warum; durchsehen lässt sich der Katalog "
+            "trotzdem.\n\n"
+            "**Was für sich ein Teil ist, entsteht auch ohne Körper.** Kabelclip, "
+            "Eckwinkel, Rippe, Standfuß, Wandhalter, Passstift, Gewindebolzen, die beiden "
+            "Scharniere, Schraube und Mutter legt *Einsetzen* ohne passende Stelle als eigenen "
+            "Körper auf eine freie Stelle der Druckplatte, die Schraube mit dem Kopf nach "
+            "unten. Die Schraube setzt sich in eine gewählte Bohrung, die übrigen außer dem "
+            "Gewindebolzen an eine gewählte Fläche, auch an eine gerundete Seite oder an "
+            "mehrere Flächen zugleich. "
+            "Ebenso entstehen Organizer-Wanne, -Rand und -Trennwand, Rohrschelle, "
+            "Profilklemmen, Bajonett, Stangenverbinder und Dichtung frei oder an einer "
+            "gewählten Fläche. Als eigener Körper gibt es nur die aufgesetzte Form. Für die "
+            "Tasche eines Fußes wählen Sie eine Fläche.\n\n"
             "**Die Maße kommen aus einer Tabelle.** Schlüsselweite der M4-Mutter, Sitz "
             "der Einpressbuchse, Breite des Filmscharniers sind nachgeschlagen, nicht "
-            "geschätzt.\n\n"
+            "geschätzt. Gewählt wird jede Normgröße der Tabelle, auch bei Wandhalter, "
+            "Rohrschelle, Profilklemmen und den Laschen der Halter. Wo eine große Schraube an "
+            "einem kleinen Teil keinen Platz hat, sagt der Dialog es und nennt, was hilft.\n\n"
             "**Mutternfalle**: die Tasche für eine Sechskantmutter, die beim Drucken "
             "eingelegt wird. Der häufigste Weg zu einem belastbaren Gewinde.\n\n"
             "![](figure:part-nut-trap)\n\n"
@@ -1011,12 +1059,16 @@ INTRODUCTION: Final[tuple[Page, ...]] = (
             "**Kabelclip**: ein Bügel, dessen Öffnung enger ist als das Kabel. Er führt, "
             "hält aber nicht gegen Zug; dafür gibt es die Durchführung.\n\n"
             "![](figure:part-cable-clip)\n\n"
-            "**Druckbares Gewinde**: ein Innengewinde oder ein Gewindebolzen für ein "
+            "**Druckbares Gewinde**: ein Innen- oder Außengewinde für ein "
             "gedrucktes Gegenstück, nicht für eine Metallschraube. Mit dem Haken bei "
             "Innengewinde schneidet es auf einer Fläche sein Loch selbst. Neben den "
             "M-Größen nimmt es unter *Eigenes Maß* jeden Durchmesser, etwa für ein Rohr. "
             "In eine vorhandene Bohrung setzt es das Gewinde, das passt, siehe [Ein "
             "Gewinde in eine Bohrung](manual:thread-a-hole).\n\n"
+            "**Gewindebolzen**: eine Gewindestange oder, mit einer Gewindelänge, eine "
+            "Stiftschraube mit glattem Schaft und Gewinde an beiden Enden. Kegelige Kuppen an "
+            "den Enden lassen die Mutter greifen. Das Profil ist dasselbe wie beim druckbaren "
+            "Gewinde und bei der gedruckten Mutter.\n\n"
             "Dazu kommen Schraubenloch, Magnettasche, Kabeldurchführung, Rippe, "
             "Schlüsselloch, Kugellager einsetzen, Schraube, Gedruckte Mutter, "
             "Nutfeder, Wandhalter, Schnappverbindung, Passstift und Passbohrung, "
@@ -1057,11 +1109,14 @@ INTRODUCTION: Final[tuple[Page, ...]] = (
             "bekommt einen Baustein mit genau einer Breite. Legen Sie die Werte vorher "
             "als Parameter an und binden Sie die Maße daran ([Parameter und "
             "Ausdrücke](manual:parameters)).\n\n"
-            "**Dann im Verlauf wählen, was mitgehen soll**, mit Strg oder Umschalt; ohne "
-            "Auswahl gilt der ganze Verlauf, der häufige Fall. Im Bausteinkatalog (*Datei "
-            "→ Bausteinkatalog …*, Strg+K) steht *Auswahl als Baustein speichern …*. Der "
-            "Knopf bleibt gesperrt, solange Parameter fehlen, und sagt, was fehlt. Der "
-            "Dialog nennt oben, welche Schritte er bekommen hat.\n\n"
+            "**Dann den Körper wählen** und im Bausteinkatalog (*Datei → Bausteinkatalog …*, "
+            "Strg+K) im Abschnitt *Bausteine verwalten* den Knopf *Auswahl als Baustein "
+            "speichern …* drücken. Mit ihm gehen die Schritte, aus denen er entstanden ist, "
+            "auch ein Werkzeug, das in ihm aufging. Andere Körper bleiben im Projekt. Wer "
+            "genauer schneiden will, wählt die Schritte im Verlauf mit Strg oder Umschalt, sie "
+            "gehen dann vor. Ohne jede Auswahl gilt der ganze Verlauf. Der Knopf bleibt "
+            "gesperrt, solange Parameter fehlen, und sagt, was fehlt. Der Dialog nennt oben, "
+            "was er bekommen hat.\n\n"
             "![](figure:own-part)\n\n"
             "**Der Dialog fragt fünf Dinge:** den Namen im Katalog, die Gruppe, eine "
             "Beschreibung, zu jedem Parameter, ob und wie er einstellbar ist "
@@ -1072,7 +1127,13 @@ INTRODUCTION: Final[tuple[Page, ...]] = (
             "**Beim Anlegen wird gerechnet:** Der Baustein entsteht einmal an jeder Ecke "
             "des angegebenen Bereichs, kleinste Breite mit größter Höhe und so fort. "
             "Kommt auch nur an einer Ecke kein brauchbarer Körper heraus, steht es am "
-            "Eintrag im Katalog, bevor Sie ihn einsetzen.\n\n"
+            "Eintrag im Katalog, bevor Sie ihn einsetzen. Vorher sagt der Dialog, wie viele "
+            "Kombinationen das sind und wie lange es etwa dauert. Mehr als 512 rechnet er "
+            "nicht, dann geben Sie weniger Maße frei.\n\n"
+            "**Eingesetzt wird er wie jeder andere Baustein:** an eine gewählte Fläche, "
+            "oder ohne passende Stelle als eigener Körper auf einer freien Stelle der "
+            "Druckplatte, auch in einem leeren Projekt. Heißt er wie eine Operation, etwa "
+            "„Box“, wählen Sie beim Speichern einen anderen Namen.\n\n"
             "**Er bleibt auf diesem Rechner** und steht markiert neben den "
             "mitgelieferten; nichts wird hochgeladen. Geben Sie ein Projekt weiter, das "
             "ihn benutzt, reist er als Rezept mit, als Liste von Schritten und Werten, "
@@ -1101,8 +1162,9 @@ INTRODUCTION: Final[tuple[Page, ...]] = (
             "und braucht weder Konto noch Netz. Die Datei endet auf `.solidon-part` und "
             "trägt das Solidon-Symbol.\n\n"
             "**Weitergeben:** Im Bausteinkatalog (*Datei → Bausteinkatalog …*, Strg+K) "
-            "einen eigenen Baustein wählen und *Baustein als Datei weitergeben …* "
-            "drücken. Die Datei trägt Autor und Lizenz. Mitgelieferte und eingelesene "
+            "einen eigenen Baustein wählen und im Abschnitt *Bausteine verwalten* den "
+            "Knopf *Baustein als Datei weitergeben …* drücken. Die Datei trägt Autor und "
+            "Lizenz. Mitgelieferte und eingelesene "
             "Bausteine behalten ihre Herkunft; neu speichern macht fremde Arbeit nicht zu "
             "Ihrer.\n\n"
             "**Die Lizenz steht im Klartext:** *Gemeinfrei — jeder darf alles, ohne "
@@ -1114,7 +1176,8 @@ INTRODUCTION: Final[tuple[Page, ...]] = (
             "Schritten und Werten und, wo nötig, eingebettete Modelldaten. Größe, Aufbau "
             "und Unversehrtheit prüft Solidon beim Weitergeben und beim Übernehmen "
             "gleich.\n\n"
-            "**Übernehmen:** Im Katalog *Baustein aus Datei hinzufügen …* wählen. Geht "
+            "**Übernehmen:** Im Katalog im Abschnitt *Bausteine verwalten* den Knopf "
+            "*Baustein aus Datei hinzufügen …* wählen. Geht "
             "die Datei durch, steht der Baustein im Katalog, und Sie benutzen ihn wie "
             "jeden anderen. Findet die Prüfung etwas, nennt sie das fehlende Feld, den "
             "unzulässigen Wert oder die unbekannte Operation. Heißt er wie einer Ihrer "
@@ -1542,9 +1605,9 @@ INTRODUCTION: Final[tuple[Page, ...]] = (
         title=_("Freischaltung"),
         body=_(
             "**Diese Version ist eine vollständige, befristete Demo.** Bis einschließlich "
-            "30. Oktober 2026 ist Solidon ohne Lizenzschlüssel vollständig "
+            "30. November 2026 ist Solidon ohne Lizenzschlüssel vollständig "
             "freigeschaltet, und die Statuszeile zählt die Tage. Danach startet diese "
-            "Demo nicht mehr; Ihre Projekte bleiben erhalten.\n\n"
+            "Demo nicht mehr. Ihre Projekte bleiben erhalten.\n\n"
             "**Die spätere Verkaufsversion hat zunächst keine Testphase.** Ohne "
             "Freischaltung bleibt dort alles Lesende offen, Modelle öffnen, ansehen, "
             "vermessen. Freischaltung brauchen Änderungen am Modell, der Export, die "
@@ -2082,7 +2145,7 @@ def models_text() -> str:
     eine Messung, ändert sich diese Seite mit — sonst stünde hier eine
     Empfehlung, die niemand mehr gibt.
     """
-    from app.core.backends import comfy_setup
+    from app.core.backends import comfy_setup, needs
     from app.core.backends.llm import (
         DEFAULT_OLLAMA_MODEL,
         OLLAMA_MIN_PARAMETERS,
@@ -2150,6 +2213,18 @@ def models_text() -> str:
                     "Größenordnung."
                 )
             ).format(n=decimal(OLLAMA_MIN_PARAMETERS, 0)),
+            "",
+            # RM-564: Auf Apple Silicon ist der Arbeitsspeicher der Grafikspeicher.
+            str(
+                _(
+                    "Vor dem Holen nennt *Bearbeiten → Chat einrichten* unter jedem Modell, was "
+                    "es braucht — Grafikspeicher, auf einem Mac mit Apple Silicon den Anteil des "
+                    "gemeinsamen Speichers, den macOS der Grafik lässt, und freien Platz —, und "
+                    "ob dieser Rechner das hat. Fehlt etwas, nennt der Satz ein kleineres Modell "
+                    "oder den eigenen Schlüssel. Für den Mac ist das aus der Messung auf einer "
+                    "RTX 4080 gerechnet und auf einem Mac nicht nachgemessen."
+                )
+            ),
             "",
             f"## {_('Für das Erzeugen: drei Modelle')}",
             "",
@@ -2242,11 +2317,23 @@ def models_text() -> str:
                 )
             ),
             "",
+            needs.duration_text(mac_note=True),
+            "",
             str(
                 _(
                     "Ohne passende Grafikkarte dauert beides ein Vielfaches. Was "
                     "abbricht, ist ein Fehler und keine Langsamkeit — dann steht der "
                     "Satz von ComfyUI im Dialog, samt dem Schritt, in dem es riss."
+                )
+            ),
+            "",
+            # RM-550: Ein zerfallenes Rohnetz hilft nur ein neuer Versuch.
+            str(
+                _(
+                    "Manche Versuche zerfallen schon beim Erzeugen, daraus macht keine "
+                    "Reparatur einen geschlossenen Körper. Der Dialog "
+                    "sagt das in der Zeile des Versuchs, und *Noch ein Versuch* erzeugt das "
+                    "Modell neu und anders."
                 )
             ),
         ]
@@ -2499,6 +2586,23 @@ def help_for(operation: str, registry: Registry | None = None) -> tuple[str, str
             return guide.key, ""
     spec = (registry or REGISTRY).get(operation)
     return reference_key(spec.category), f"#{operation_anchor(spec.name)}"
+
+
+#: Die Seite über das Merkmalfenster — für eine Handlung, deren Operation dieses
+#: Register nicht kennt.
+FEATURES_PAGE: Final = "features"
+
+
+def help_for_action(operation: str | None, registry: Registry | None = None) -> tuple[str, str]:
+    """Seite und Stelle hinter dem i einer Handlung im Merkmalfenster (RM-554).
+
+    Dieselbe Antwort wie F1 im Operationsdialog (:func:`help_for`). Ein i steht
+    nur an Zeilen mit Feldern, und die tragen immer eine Operation; kennt das
+    Register sie nicht, bleibt die Seite über das Merkmalfenster.
+    """
+    if operation and (registry or REGISTRY).has(operation):
+        return help_for(operation, registry)
+    return FEATURES_PAGE, ""
 
 
 def titled(page: Page, text: str) -> str:

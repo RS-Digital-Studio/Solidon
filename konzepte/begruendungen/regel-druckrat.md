@@ -85,6 +85,15 @@ Konstante: Tisch, Kasten mit Innenregal (74 mm), verschlossener Hohlkörper
 (54 mm) und weiter Tunnel (65 mm) behalten „überall". Wer die Grenze
 anfasst, misst beide Reihen nach und fährt die Schüssel im Slicer.
 
+Der Brückenbefund riet über einem Tunnel von 20 mm bis zum Review zu RM-627
+(09.10.2026) „oder eine Stütze“, wo der Rat keine verlangt. Er nennt jetzt den
+Kanal und den Übergang unter 45 Grad, und eine Brücke daneben misst und zeigt
+er ohne die Kanaldecke (Steg über 20 mm neben dem Tunnel: am Steg statt über
+dem Tunnel). Gefragt wird nur, was weiter als 15 mm spannen kann: Die
+Kanalfrage kostet am Drachen (45°) je Decke 17 bis 96 s, für die sieben Stücke
+seiner einen spannenden Schicht 143 s, sechs davon unter 0,3 mm²; mit der
+Auswahl 21 statt 3 s kalt, mit gemerktem Stützbedarf 0,9 statt 0,4 s.
+
 **Eine Insel ist nie eine Kanaldecke** (26.09.2026). Sie hat nichts unter
 sich, an dem eine Brücke ansetzen könnte; setzt sie auf dem Modell auf, heißt
 es „überall", gleich wie klein (`ModelSupport.island_on_model`). Die frühere
@@ -331,15 +340,85 @@ Tasche (Feld 12 bis 24 mm²) verliert dort bis zu 81 % seiner Unterseite
 11 mm², das sich selbst trägt; ausgespart, holte der ElegooSlicer es mit einem
 Ast quer durch den Kanal (1,4 m). Mit ihren Kanalstücken gefragt, galt jedes
 offene Stück dort als stützbedürftig, und gehalten hat es nur die Ausnahme im
-umschlossenen Raum (Review 3). **Im umschlossenen Raum wird nichts ausgespart**: Eine Stütze dort
-holt niemand heraus; eine schräge Fläche im Rohrbogen des Wasserkanals, die
-selbst Stütze bräuchte, holte der ElegooSlicer sonst ebenso (1,6 m). Enger
-gefasst kam der Ast wieder: „eng und umschlossen“ 0,7 m, denn der Rohrbogen ist
-weit; „zur Hälfte überdacht“ nahm der Schüssel den Sperrraum fast ganz
-(169 209 → 9 468 mm³), denn ihr Kanal liegt in einem oben offenen Hohlraum.
-Die Grenze davon: Das Innere eines oben offenen Bechers ist in jedem Schnitt
-ein Loch, und ein Sims darin neben einem gesperrten Kanal verliert Stütze
-(Review 2: 65 %) — RM-571. Der
+umschlossenen Raum (Review 3). **Im umschlossenen Raum wird nur ausgespart, was
+von oben erreichbar ist**: Eine Stütze in einer Kammer holt niemand heraus; eine
+schräge Fläche im Rohrbogen des Wasserkanals, die selbst Stütze bräuchte, holte
+der ElegooSlicer sonst ebenso (1,6 m). Enger gefasst kam der Ast wieder: „eng
+und umschlossen“ 0,7 m, denn der Rohrbogen ist weit. Umschlossen heißt aber ein
+Loch im Schnitt, und das ist auch das Innere jedes oben offenen Gefäßes: Ein
+Sims 14 × 14 mm in einem Becher von Ø 68 mm, 6 mm neben einem gesperrten
+Tunnel, lag zu 65 % im Sperrraum (Review 2, RM-571). Nach dem Loch gefragt,
+trennt nichts den Becher von der Schüssel: „zur Hälfte überdacht“ nahm ihr den
+Sperrraum fast ganz (169 209 → 9 468 mm³), denn ihr Kanal liegt im oben
+offenen Becken (0–14 % des Lochs überdacht).
+
+Gefragt wird deshalb die Säule, je Scheibe (`_open_above`, RM-571, 09.10.2026):
+Liegt im Saum von zwei Bahnbreiten um ihren Grundriss, mit ihr durch freien
+Raum der Scheibe verbunden, mindestens eine Bahn breit ein Schacht, über dem bis
+über das Teil hinaus kein Material liegt und der einen Kreis von `CHANNEL_WIDTH`
+fasst, bleibt sie frei. Der Saum hängt an der Säule, weil hinter einer dünnen
+Wand die Luft außerhalb des Teils liegt. Er ist rund, an jeder Ecke gleich weit:
+Mit Gehrung reichte er an einer spitzen Ecke bis zehn Bahnbreiten, und eine Nase,
+deren Spitze 3 mm vor einer Öffnung lag, machte einen Sims erreichbar, der ohne
+Nase gesperrt blieb (Review von RM-571). Die Weite des Schachts ist derselbe
+Kreis, an dem `_narrow` entscheidet, ob man an einen Raum herankommt; durch einen
+engeren Spalt holt niemand eine Stütze heraus. Zuerst genügte eine Bahn breit,
+und damit galt ein Becher mit Deckel und einem Schlitz ab 0,5 mm neben dem Sims
+als offen (4 statt 64 % des Simses im Sperrraum, Review). Unter einer Bahn kommt
+sicher nichts heraus, aber dass eine Bahn genügt, hatte niemand belegt. Die
+Bahnbreite bleibt als Mindestbreite, mit der Saum und Schacht sich berühren; der
+Sperrraum selbst verlangt mehr als zwei Bahnbreiten, eine Bahn samt Abstand.
+Der Schacht steht senkrecht, und das ist eine bekannte Grenze (Nachprüfung von
+RM-571): Ein schräges Loch der Weite 2R in einem Deckel der Dicke H zählt nur mit
+seiner senkrechten Durchsicht 2R / cos θ − H · tan θ. Ein Loch Ø 34 mm in einem
+Deckel von 20 mm, 20° geneigt, sieht senkrecht 28,9 mm; der Sims daneben liegt zu
+64 % im Sperrraum statt zu 4 % und druckt dort ohne Stütze, obwohl das Loch quer
+zu seiner Achse weit genug bliebe. Den Schacht entlang seiner Achse zu suchen
+hieße, den Himmel je Richtung neu zu schichten, für eine seltene Form.
+Ausgespart wird die ganze Säule, auch was von ihr unter einem Dach liegt: Ihr
+Stück braucht selbst Stütze. Am Wedge-Lock nahm eine Sperre über der Säule einer
+Brücke ihr die ganze Stütze (Cura 0,0 statt 2,0 m). Was ein Slicer unter einer
+zur Hälfte gesperrten Säule stellt, ist nicht gemessen, und dass man die Stütze
+an ihrem offenen Ende ganz herauszieht, ist eine Annahme. Eine L-förmige Säule
+aus dem offenen Becher in den Tunnel bleibt so im Tunnel frei; nur ausgespart,
+was nicht eng ist, läge dieser Teil ganz im Sperrraum (Test
+`test_a_reachable_column_is_spared_whole`). Ein
+Streifen vom offenen Becher 14 mm in den Tunnel, an dem das im Review auffiel,
+ist mit dem Schacht nicht mehr erreichbar: Die Tasche zwischen Block und
+Becherwand, aus der er kommt, ist 16 mm weit. Am Becher berührt der Sims den
+Schacht in allen elf Scheiben unter ihm und liegt bis auf die Naht an der
+Blockwand frei (2 %, die Bahnbreite, die sein Überhang an der Wand nicht
+mitzählt). An der Schüssel in Drucklage (50°, 55°, 60°) und in Dateilage (55°,
+60°) berührt keines der 4 bis 32 Überhangstücke im Sperrraum den Himmel — auch
+nicht die Stücke an der Mündung, die unter dem Dach des Ausgusses hängen —, und
+ihr Sperrraum bleibt gleich (Drucklage 186 704, 177 017 und 169 243 mm³,
+Dateilage 53 009 und 46 468 mm³). Im Slicer, Vorschläge übernommen, Stützbahn
+unter dem Sims vorher und nachher, in Klammern der Slicer ohne Sperre:
+ElegooSlicer CC2 2,41 → 6,06 m (6,07), OrcaSlicer Kobra 2 2,62 → 4,35 m (4,35),
+PrusaSlicer MK4S 1,95 → 4,64 m (4,67), Cura SV06 2,57 → 4,40 m (4,40); im
+Tunnel in allen vier 0,0 m (ohne Sperre 2,2 bis 6,6 m). Die Schüssel in
+Drucklage behält in allen vier ihren Sperrkörper (gleiches Volumen) und 0,0 m
+Stütze im Wasserkanal, ihre Stützbahn ist dieselbe wie vorher; über den Korpus
+`F:\3D Dateien` (243 Körper) ändert sich kein Vorschlag und kein
+Sperrvolumen. Der Himmel über dem Saum entsteht je Säule
+einmal von oben nach unten (`_sky_above`); je Scheibe von unten gefragt, kostete
+der Becher jede Schicht über dem Sims einmal je Scheibe. Gekostet hat die
+Frage am Becher 0,08 → 0,17 s für den Sperrraum (Median aus acht Läufen im
+Wechsel, Wandzeit); an Schüssel, Drache und Eiffelturm, wo keine ausgesparte
+Säule im Umschlossenen steht, nichts — gefragt werden nur Säulen, die den
+Sperrraum schneiden, und die Schüssel in Dateilage wird damit schneller
+(5,6 → 2,9 s). Der Schacht sucht seinen Himmel in einem Fenster, das 30 mm über
+den Saum hinausreicht; das kostet am Becher 0,23 → 0,58 s CPU-Zeit gegenüber
+dem Stand mit einer Bahn als Maß (Median aus acht Läufen im Wechsel, unter
+Fremdlast, die Wandzeit sagte dabei nichts). Ohne Vereinfachung des Himmels nach
+jeder Schicht waren es 1,1 s, denn jede Schicht schneidet die Becherwand an
+etwas anderen Punkten, und der Himmel wuchs auf 3 916 Ecken. Seit eine Schicht,
+die den Himmel nicht mehr schneidet, nur noch danach gefragt wird
+(`SKY_SKIP_INSET`, aus der Nachprüfung), kostet der Becher 0,64 → 0,28 s, also
+so viel wie vor dem Schacht; ein Becher als Kegelstumpf, dessen Wand jede
+Schicht neu schneidet, bleibt bei 0,42 → 0,45 s (CPU, Median im Wechsel, alle
+Scheiben gleich). Am Eiffelturm (8,6 → 8,7 s), an Schüssel und Drache fragt
+keine Säule nach dem Schacht, und der Sperrraum bleibt überall gleich. Der
 Zuschlag einer Bahnbreite kommt vor dem Aussparen; ein Loch, in dem keine Bahn
 samt Abstand Platz hat, schließt sich (ein Krümel von 0,33 mm² im Kanal,
 ausgespart mit Zuschlag: 1,5 m Stütze im OrcaSlicer). Vorgeschlagen wird die
@@ -369,9 +448,16 @@ Summe von 150 gefragt, blieb ein Feld von 134 mm² „keine Stützen“ (Review 
 davon auf dem Modell aufsetzt): Sonst verlangte der Rat am Kinn über der Brust
 Stützen und zugleich „nur vom Bett“, und das Kinn druckte weiter in die Luft.
 Der Gitterbecher bleibt ohne Stütze, und im Korpus (242 Körper) ändert sich
-außer der Sperre kein Vorschlag. Die Feldfrage über den ganzen Körper kostet am Drachen 8,2 s CPU;
-der Prüfbericht stellt sie deshalb nicht, und wo viele kleine Überhänge
-Stützen verlangen, nennt er noch keine Stelle (RM-572).
+außer der Sperre kein Vorschlag. Die Feldfrage über den ganzen Körper kostet am
+Drachen 8,2 s CPU. **Der Prüfbericht nennt die Stelle** (RM-572,
+`findings.small_overhang_findings`): Wo der Rat über die Fläche Stützen
+verlangt und kein Stück die Meldeschwelle erreicht, zeigt er die Schicht mit
+der meisten Überhangfläche an ihrem größten Stück. Er fragt dieselbe Antwort
+(`support_need`), aber nur, wo er auch eine andere Lage sucht — höchstens acht
+Körper, ab 1 cm³ Stützraum —, denn sie ist seine teuerste Frage. Nur der
+Flächenweg zählt: Inseln und lange Brücken haben eigene Zeilen, und
+Inselstücke, Kanaldecken und Ränder gehen weder in die Fläche noch in den Ort
+ein.
 
 **Das Mindesttempo bremst Spitzen, damit die Mindestzeit greift (08.10.2026,
 RM-580).** Am Drachen erreichten die obersten 12 mm in keinem Slicer die
@@ -402,6 +488,45 @@ Unterseite zwischen den Baumspitzen durch, und die Wikis von OrcaSlicer und
 Prusa raten dort zu Hybrid- oder normaler Stütze
 (`konzepte/recherche-slicer-einstellungen-2026-10.md`); flach heißt
 ein Stück über `OVERHANG_LAYER_WORTH_SUPPORT` auf einer Schicht.
+
+**Gitter unter der flachen Decke, Hybrid bei beidem (09.10.2026, RM-584).** Bis
+dahin blieb unter einer flachen Decke die Art des Herstellers — bei Elegoo und
+Bambu also Bäume, unter denen sie durchhängt. Gemessen an einer Tischplatte mit
+Kinn in allen sieben Programmen (`output/drache-2026-10-08/stil-rm584*`): Hybrid
+kommt in Elegoo, Orca, Bambu, Creality und Anycubic als `tree_hybrid` an und
+stützt die Decke mit Gitter, die Details mit Ästen (ElegooSlicer 71 300 mm
+Stützbahn gegen 146 364 mm unter reinen Bäumen). PrusaSlicer und Cura kennen kein
+Hybrid; dort schlägt der Rat unter einem gewählten Baum gleich Gitter vor.
+**„Automatisch“ bleibt, wo es keine Bäume heißt** (Durchsicht RM-584, M1): Bei
+PrusaSlicer stützt es mit dem Stil des Prozesses, am MK4S `snug`, den die
+Recherche (Nr. 4) für flache Decken neben `tree_hybrid` empfiehlt; Cura schreibt
+dafür `normal`, dieselbe Übergabe wie Gitter. Der Grund „Große flache Decken
+hängen zwischen Baumspitzen durch“ stand dort über einer Stütze ohne Spitzen.
+Hybrid verlangt kleine Stücke auf dem Modell neben der Decke: Am Tisch setzt
+nur die Platte selbst auf dem Sockel auf, und „Bäume für Details“ stand über
+einem Teil ohne Detail (L7). Gitter und Baum zweier Körper werden nur Hybrid,
+wo die Art der Platte gilt; die Orca-Familie schrieb sonst je Objekt Gitter und
+Baum, und die Zeile zeigte Hybrid (M3). **Zwei Wände für hohe Bäume** (Recherche
+Nr. 5): Ab 100 mm brechen Bäume mit einer Wand. Am ElegooSlicer an einem 120 mm
+hohen Turm mit Insel ergab Hybrid mit zwei Wänden 14 % mehr Stützmaterial; unter
+organischen Bäumen war der G-Code mit einer und zwei Wänden derselbe — dort
+schlägt Solidon die Wände nicht vor. Das gilt gefüllten Bäumen: Der Slicertest
+der Durchsicht fand am Neptune 4, dessen Prozess das Grundmuster `default` führt
+und Bäume hohl druckt, mit zwei Wänden 13 234 statt 12 211 Bewegungen, auch ohne
+eigene Stützschichthöhe; mit `rectilinear` war der G-Code derselbe
+(`handover.hollow_trees`). Den Abstand oben runden hohle Bäume wie organische:
+Am Neptune 4 druckten 0,28 mm bei 0,2 mm Schicht wie 0,2 mm, 0,4 mm anders.
+Creality Print liest die Wände als `tree_support_wall_count_tree`, mit Vorgabe 0,
+und die Grundlage liest denselben Schlüssel. Derselbe Test bestätigte OrcaSlicer und Anycubic
+Slicer Next; Bambu Studio (ohne die Schlüssel der organischen Äste) las die
+Wandzahl auch unter seinen Bäumen, Creality Print 7.2 überall, aber nur als
+`tree_support_wall_count_tree` — den gemeinsamen Namen überging es auch unter
+Hybrid. PrusaSlicer zählt keine
+Wände: Seine Doppelwand ab einem Astquerschnitt (`support_tree_branch_diameter_double_wall`,
+Vorgabe 3 mm) ist ein Maß, und eine geschriebene Wand schaltete sie ohne Bündel
+ab (M5). Die Säulenhöhe reicht bis zum Bett, wenn ein Teil der Säule es
+erreicht: Bis zur ersten Berührung gemessen, war eine Platte auf 150 mm über
+einem Turm von 120 mm 30 mm hoch (L1). Der Fuß hoher Bäume ist noch offen (RM-584).
 
 **Ränder tragen sich selbst (08.10.2026, RM-582).** Der Eiffelturm aus dem
 Korpus ist ohne Stützen gedacht („一体无支撑“). Der Rat verlangte Stützen wegen
@@ -437,9 +562,17 @@ breit zwei Bahnen sind, sagt der Schnitt (an der 0,4er Düse 0,84 mm): Eine
 Stufe von 1 mm ist dort schon eine Schulter. Gefragt wird
 geometrisch, nicht an der Brückenweite der Schicht: Der Stützschnitt der
 Übergabe misst keine Brücken, und die Sperre hätte die Schulter wieder als
-Rand gesperrt. Eine Schicht, deren Überhang nur aus Rändern besteht, spannt
-deshalb wirklich keine Brücke — eine einseitige Konsole misst ihre Diagonale —,
-und Rat und Bericht schweigen dort gleich. Weil der Slicer nach seinem Winkel jede flache Unterseite stützt,
+Rand gesperrt. Ein Rand spannt deshalb wirklich keine Brücke — eine
+einseitige Konsole misst ihre Diagonale —, und Rat und Bericht schweigen dort
+gleich, **je Stück, nicht je Schicht** (RM-627, 09.10.2026): Ein Kragen von
+2 mm um eine Wand, vom Kinn unterbrochen, meldete 46,2 mm, sobald ein
+Kinnstreifen von 4 mm² auf seiner Schicht lag, und an einer Wand mit U-Kragen
+schaltete ein Sporn von 8,5 mm² daneben die Stützen ein. Gemessen werden
+deshalb nur die Kerne der übrigen Stücke (`span_beside`), nicht die freien
+Flächen, die sie berühren: Eine Flanke zwischen etwa 14 und 45 Grad legt je
+Schicht ein Band frei, schmaler als die Zugabe des Überhangs, das Rand und
+Sporn zu einer freien Fläche verbindet — an einer Wand mit zwei solchen
+Flanken spannte die Schicht wieder 40,1 statt 6,2 mm (Review). Weil der Slicer nach seinem Winkel jede flache Unterseite stützt,
 sperrt `support.spare_ledges` die Überhangfläche der Ränder in der Übergabe,
 um eine Bahnbreite hinaus und ohne die Überhänge, die Stütze brauchen; Stämme
 anderer Stützen laufen durch eine Sperre hindurch. Am Eiffelturm stehen mit
@@ -448,3 +581,112 @@ statt 592, in PrusaSlicer 81 statt 367 und in Cura 104 statt 358 m (gegen
 „Stützen automatisch“); der Rest steht unter den Bögen unten. Im Korpus
 bekommen 45 von 242 Körpern den Vorschlag, und 7 brauchen keine Stützen mehr:
 Ihr einziger Überhang waren Ränder.
+
+**Der Stützkontakt folgt dem Material der Spule (09.10.2026, RM-583).** Narben
+und verschweißte Stützen kommen am häufigsten von einem Abstand, der nicht zu
+Schicht und Material passt, von fehlenden Trennschichten, wo die Stütze auf dem
+Modell steht, und von einer Trennschicht, die unter kleinen Flächen zu dicht
+sitzt (`konzepte/recherche-slicer-einstellungen-2026-10.md`, Nr. 1, 2, 3, 7):
+PLA etwa eine Schicht, PETG das 1,25- bis 1,5-Fache, darüber volle Kühlung.
+Ein Projektmaterial gibt es dafür nicht (Robert, 08.10.2026: „immer nach dem
+verwendeten Material“) — PLA und PETG auf einer Platte brauchen verschiedene
+Abstände, deshalb gehen Abstand und Trennschichten je Teil und der Lüfter je
+Spule. Gemessen an zwei gestützten Stufenkörpern auf einer Platte, einer mit
+Objektwerten (`.claude/.state/drache-2026-10-08/kontakt_je_teil.py`, Lagen je
+Höhe gezählt, Raster 2 mm, Bambus Übergangslage als Stütze): Der Abstand oben
+kommt in allen acht Programmen an, 0,4 mm gegen 0,2 am Bezug (Anycubic 0,1;
+SuperSlicer bei 0,15er Schichten 0,53 gegen 0,33). Die Trennschichten kommen
+wie geschrieben an, Prusa und Cura genau (geschrieben 5 oben und 0 unten gegen
+2 und 2). Die Orca-Familie zählt anders: oben eine Übergangslage mehr (Orca,
+Elegoo, Creality und Anycubic 6 gegen 3), unten die Kontaktlage dazu (Bezug 3
+statt 2; Bambu druckt sie bei null als gewöhnliche Stütze,
+`SupportCommon.cpp`). Das Herstellerprofil meint dieselbe Zählung, also gleicht
+Solidon nichts aus. Die weite Lücke legt je Ebene deutlich weniger Bahn (Orca
+1044 gegen 1617 mm, Prusa 944 gegen 2512); Cura nimmt sie nur für die ganze
+Platte, denn ihr Linienabstand gehört dem Stützextruder. Mit dem echten Rat
+bekommt das PLA-Teil 0,2 und das PETG-Teil 0,28 mm. **Die Orca-Familie rundet den Abstand
+auf ganze Schichten, wenn die Stütze die Schichthöhe des Modells hat**
+(`Slicing.cpp`), und Elegoos Prozesse für C2 und CC2 stellen es so ein: Aus
+0,28 wurden im ElegooSlicer 0,2. Setzt Solidon einen Abstand zwischen zwei
+Schichten, schaltet die Übergabe `independent_support_layer_height` ein; der
+ElegooSlicer druckt dann 0,28. Mit zwei Filamenten baut die Orca-Familie einen
+Reinigungsturm und schaltet die eigene Höhe selbst wieder ab
+(`PrintConfig.cpp`, `normalize_fdm_2`; „je Objekt“ mit mehreren Objekten baut
+keinen, glatter Zeitraffer immer einen) — Orca, Elegoo, Creality und Bambu
+druckten das PETG-Teil neben PLA mit 0,2, PrusaSlicer mit 0,28. Mit Turm legt
+die Orca-Familie die Stütze auf die Schichten des Modells und rundet zur
+nächsten (`SupportMaterial.cpp`); PLA bei 0,08 mm Schicht bekam so aus 0,10
+eine Schicht, 0,08, unter dem Minimum. Neben einem Turm rät Solidon deshalb
+wie bei Cura gleich ganze Schichten innerhalb der Materialgrenzen (RM-622, `writer.tower_plates`,
+Dialog und Export aus derselben Frage), und ein Wert im Band zwischen zwei
+Schichten bekommt dort wie bei Cura die ganze Schicht vorgeschlagen, weil der
+Slicer ihn nicht so druckt. Gemessen im ElegooSlicer mit PLA und PETG bei
+0,08 mm: vorher 0,08 am PLA- und 0,16 am PETG-Teil (geschrieben 0,10 und
+0,12), nachher an beiden 0,16 wie geschrieben, oben und unten. Für einen
+eigenen Wert zwischen zwei Schichten sagt der Export die Rundung, statt still
+zu runden, und dann nur das: Dass die eigene Höhe gilt, stimmt mit Turm nicht.
+
+**Unter Bäumen ebenso** (RM-622): Am PETG-Drachen kamen die geschriebenen 0,28 mm
+in keinem Programm an — alle Ebenen lagen auf dem 0,2-mm-Raster. Gegenprobe an zwei
+gestützten Körpern aus PETG (`output/drache-2026-10-08/kontakt-stil`): Mit Gitter
+druckten ElegooSlicer, OrcaSlicer, Bambu Studio, Creality Print, Anycubic Slicer
+Next und PrusaSlicer 0,28 mit eigenen Zwischenebenen, mit organischen Bäumen alle
+sechs 0,2 ohne eine. Bäume liegen auf den Schichten des Modells, auch mit
+`independent_support_layer_height`; Solidon rät unter ihnen ganze Schichten, auch
+unter „automatisch“, wenn der Herstellerprozess mit Bäumen stützt (Elegoo, Bambu),
+und sagt bei einem eigenen Wert die Rundung. Bambu Studio, Creality Print, Anycubic
+Slicer Next und PrusaSlicer druckten unter Bäumen auch keine untere Trennschicht
+(unter Gitter druckten sie untere Lagen, unter Bäumen keine); in diesen vier
+schlägt Solidon sie unter Bäumen nicht vor, ElegooSlicer und OrcaSlicer druckten
+zwei und bekommen sie. Organisch heißt der Generator `TreeSupport3D`,
+dessen Ebenen auf dem Raster des Modells liegen (`TreeSupportCommon.hpp:610` und
+`:289`, gleich in Orca, Bambu, Creality und Anycubic); `tree_hybrid`, `tree_slim`
+und `tree_strong` planen eigene Stützebenen (`TreeSupport.cpp:1756–1759`,
+`:3349–3408`). Deshalb fragt `handover.organic_styles` den Stil des
+Herstellerprozesses, und SuperSlicer, der statt Bäumen Gitter druckt, rundet nicht.
+Ohne gefundenes Programm gilt die Familie der Datei: „Baum“ ist organisch, denn alle
+sechs gemessenen Programme drucken ihn so, und eine ganze Schicht gilt unter jeder
+Stütze genau. Gefragt wird mit der Art, mit der das Teil druckt
+(`advise.printed_style`): Lehnt der Kunde den vorgeschlagenen Baum ab — im Dialog
+abgewählt, im Export nicht übernommen —, druckt das Teil das Gitter der Platte, und
+Abstand wie untere Trennschicht gelten ihm. Mit dem abgelehnten Baum gefragt, bekam
+das Kinn bei Bambu Studio weder 0,28 mm noch eine untere Trennschicht. Ebenso fragt
+der Dialog die Stützart gegen die Grundlage wie der Export, der einen übernommenen
+Baum nur dem Teil gibt, das ihn verlangt; sonst verschwanden die Zeilen des Tischs,
+sobald der Baum des Kinns übernommen war. Feldsatz und Rat lesen dieselbe Auskunft:
+Leitete das Feld „organisch“ selbst her, sagte es unter `tree_hybrid` „gerundet“
+neben einem Rat, der nicht rundete.
+
+Der Schalter `independent_support_layer_height` richtet sich nach den
+geschriebenen Abständen der Teile, die nicht unter organischen Bäumen drucken
+(`handover.support_gaps_by_style`), nicht nach den Zielen aller Spulen; unter
+Bäumen wirkte er nicht und wäre eine Abweichung vom Herstellerprofil ohne Grund.
+Steht er gegen den Herstellerprozess, sagt es ein Befund: Die Stütze liegt dann
+auch auf eigenen Höhen (0,47, 0,75, 1,02 mm statt nur auf denen des Modells). Cura
+rechnet immer in ganzen Schichten, deshalb rät Solidon dort das Vielfache
+innerhalb der Materialgrenzen — bei 0,08 mm Schicht für PLA zwei Schichten statt einer
+unter dem Minimum —, und die Cura-Grundlage trägt es auch: Solidons 0,2 war
+bei 0,28 und 0,12 mm Schicht keines, und jede Übergabe in Entwurf und Fein
+warnte, auch ohne Stützen. Über mehrere Körper führt der Druckdialog den
+Stützkontakt getrennt zusammen und fragt ihn wie der Export gegen die
+Grundlage: Gegen die Übernahme gefragt, brachte jedes Übernehmen die
+Gegenzeile (Tisch 0,2, Kinn 0,5 und zurück; PLA 0,15, PETG 0,21 und zurück),
+und nach dem größten Wert verschwand die Zeile des PLA-Teils ganz. Ein vor
+0.6.0 kalibriertes Material kennt die neuen Werte nicht und bekommt sie aus
+dem mitgelieferten Eintrag, wie die Druckeinstellungen je Eintrag. Für TPU nennt
+keine Quelle einen Abstand; ohne Werte bleibt er beim Hersteller.
+
+**Über Baumspitzen zwei Schichten** (RM-584): Roberts Drache (PLA, CC2, 0,2 mm)
+behielt an Kinn und Kopfstacheln Reste der Bäume. Jede der 64 Bartstacheln beginnt
+als Insel von im Median 0,07 mm²; unter 1 mm² baut der Slicer an der Spitze keine
+Trennschicht (`minimum_roof_area`, `TreeSupport3D.cpp:1151`), und die Spitze steht
+eine Schicht unter dem Modell. Zwei Schichten Abstand senkten die Kontaktfläche
+mit 0,2 mm Luft am Kinn von 59,4 auf 6,9 mm², an den Stacheln von 92,4 auf 3,6 mm²,
+für eine Minute und 0,7 g; PrusaSlicer und Cura gleich. XY-Abstand, Astabstand,
+Baumdichte, Trennschichtabstand und andere Baumarten halfen nicht; drei Schichten
+ließen die Bartspitzen durchhängen können. An großen Decken fällt dafür die
+Trennschicht weg — deshalb gilt der Abstand erst ab vielen solchen Inseln: An 165
+Modellen hat der Drache 199, danach eine Baugruppe 49 und ein Schachturm 34;
+die Schwelle steht bei 100.
+Gemessen ist nur PLA (`support_tip_gap`); ohne Wert bleibt der Abstand des
+Materials. Bericht: `output/drache-2026-10-09/rueckstaende/bericht.md`.

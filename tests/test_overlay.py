@@ -1390,9 +1390,14 @@ def test_a_floating_card_that_grows_keeps_its_top_and_scrolls(qt_app: QApplicati
         room = host.card_room()
         filler = left.findChild(QWidget, "filler")
         # So tief gelegt, dass die 450 Punkte hohe Karte unten gerade anschließt.
+        # Ohne Einrasten: Zehn Punkte über der Unterkante zieht ``dropped_place``
+        # sie sonst an den unteren Rand, und sie schwebte nicht mehr.
         spot = QRect(700, room - 460, left.width(), 450)
         host.set_places(
-            {"left": dropped_place(spot, host.width(), room), "right": CardPlace("right")}
+            {
+                "left": dropped_place(spot, host.width(), room, snap=0),
+                "right": CardPlace("right"),
+            }
         )
         qt_app.processEvents()
         top = left.geometry().top()
@@ -1667,7 +1672,7 @@ def test_up_and_down_at_a_docked_card_move_it_or_say_nothing(qt_app: QApplicatio
 def test_the_grip_moves_its_card_by_keyboard_and_returns_it_by_double_click(
     qt_app: QApplication,
 ) -> None:
-    """Pfeile schieben, die Eingabetaste nennt drei Plätze, Doppelklick legt zurück.
+    """Pfeile schieben, die Eingabetaste nennt die Plätze, Doppelklick legt zurück.
 
     Escape gehört während eines Zugs dem Griff, nicht dem Kürzel des Fensters
     (``CardGrip.event``): Ohne das brach Escape nichts ab, und die Karte
@@ -1694,7 +1699,15 @@ def test_the_grip_moves_its_card_by_keyboard_and_returns_it_by_double_click(
         before = grip.accessibleDescription()
 
         menu = grip.place_menu()
-        assert len(menu.actions()) == 3
+        # Beide Seitenränder, die zwei unteren Ecken, der untere Rand und der Rückweg.
+        assert [action.text() for action in menu.actions()] == [
+            "An den linken Rand",
+            "An den rechten Rand",
+            "Nach unten links",
+            "Nach unten rechts",
+            "An den unteren Rand",
+            "An ihren Platz",
+        ]
         menu.actions()[1].trigger()
         menu.deleteLater()
         assert host.places == {"left": CardPlace("right"), "right": CardPlace("left")}
@@ -2051,3 +2064,92 @@ def test_the_tour_frames_the_gap_between_swapped_cards(
         assert not area.intersects(card), (area, card)
     origin = window.overlay.mapToGlobal(window.overlay.rect().topLeft())
     assert area.left() > origin.x() + window.overlay.right.width(), "rechts neben der Auswahl"
+
+
+@pytest.mark.parametrize("size", [(1366, 768), (1920, 1080)], ids=["1366x768", "1920x1080"])
+def test_the_longest_step_of_every_tour_fits_its_card_or_rolls(
+    qt_app: QApplication, window: MainWindow, size: tuple[int, int]
+) -> None:
+    """RM-553: Die Tour-Karte ist so hoch wie ihr Inhalt, und keine Sprechblase liegt darüber.
+
+    Bei 2000 × 816 stand die Karte auf wenigen Zeilen: Der Rollbereich der
+    Schritte hatte sich den Wunsch der leeren Liste gemerkt, der aufgeklappte
+    Schritt rollte neben freiem Platz, und der Tooltip eines eingeklappten
+    lief als lange Zeile quer über Ansicht und Kartentext. Geprüft wird je
+    Tour der längste Schritt in jeder Sprache: ganz gelegt, im Bild oder
+    erreichbar über den Balken, die Karte im Fenster, keine Zeile mit Tooltip.
+    """
+    from PySide6.QtCore import QPoint
+    from PySide6.QtWidgets import QScrollArea
+
+    from app.core import examples
+    from app.core.tour import TOURS
+    from app.i18n import set_language
+    from app.i18n.catalog import available_languages, install_language
+
+    window.resize(*size)
+    qt_app.processEvents()
+    tour_panel = window.tour
+    window.right.setTabVisible(window.right.indexOf(tour_panel), True)
+    window.right.setCurrentWidget(tour_panel)
+    languages = available_languages()
+    assert len(languages) >= 6
+    for language in languages:
+        install_language(language)
+        set_language(language)
+        for tour in TOURS:
+            example = next(entry for entry in examples.EXAMPLES if entry.id == tour.example_id)
+            # Wie beim Öffnen eines Beispiels: mit dem Satz zum Reiter vor einem
+            # Berichtsschritt, und gemessen wird der längste Text, wie er dasteht.
+            tour_panel.set_tab_names(window._tour_tab_names())
+            tour_panel.start(example, tour)
+            longest = max(
+                range(len(tour.steps)), key=lambda at: len(tour_panel._rows[at][1].full_text())
+            )
+            window.right.setCurrentWidget(tour_panel)
+            for _ in range(8):
+                qt_app.processEvents()
+            # Erst gelegt, dann weitergeschaltet — wie *Weiter*: Der Fehler
+            # stand im Wachsen danach, nicht im ersten Bild.
+            tour_panel._current = longest
+            tour_panel._update_marks()
+            # Ein Schritt über den Prüfbericht holt dessen Reiter nicht mehr nach
+            # vorn (RM-573); die Tour bleibt, gemessen wird sie.
+            assert window.right.currentWidget() is tour_panel
+            for _ in range(8):
+                qt_app.processEvents()
+            where = f"{language}, {tour.example_id}, Schritt {longest + 1}"
+            text = tour_panel._rows[longest][1]
+            assert text.wordWrap(), where
+            for label in (tour_panel.title, tour_panel.intro, text):
+                assert label.height() >= label.heightForWidth(label.width()), (
+                    f"{where}: „{label.text()[:40]}“ ist abgeschnitten"
+                )
+            scroll = tour_panel.findChild(QScrollArea)
+            assert scroll is not None
+            row = tour_panel._row_hosts[longest]
+            top = row.mapTo(scroll.viewport(), QPoint(0, 0)).y()
+            shown = top >= 0 and top + row.height() <= scroll.viewport().height()
+            rolls = scroll.verticalScrollBar().maximum() > 0
+            assert shown or (rolls and row.height() > scroll.viewport().height()), (
+                f"{where}: Zeile bei {top}, {row.height()} hoch, Ausschnitt "
+                f"{scroll.viewport().height()}"
+            )
+            card = window.right_column.geometry()
+            room = window.overlay.card_room()
+            assert card.y() + card.height() <= room, f"{where}: Karte über der Werkzeugzeile"
+            # Gerollt wird erst, wenn die Karte nicht mehr wachsen kann.
+            assert not rolls or card.y() + card.height() >= room - 2, (
+                f"{where}: rollt bei {card.height()} Punkten Karte, Platz bis {room}"
+            )
+            if not rolls:
+                assert scroll.height() >= scroll.widget().heightForWidth(
+                    scroll.viewport().width()
+                ), f"{where}: Rollbereich kürzer als die Schritte, ohne Balken"
+            bubbles = [
+                widget.objectName() or type(widget).__name__
+                for widget in (tour_panel, *tour_panel.findChildren(QWidget))
+                if widget.toolTip()
+            ]
+            assert not bubbles, f"{where}: Sprechblase über der Karte an {bubbles}"
+    tour_panel.stop()

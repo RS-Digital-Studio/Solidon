@@ -130,7 +130,9 @@ from tools import matrix_gcode  # noqa: E402
 
 assert Path(matrix_gcode.__file__).resolve().parent == HERE, matrix_gcode.__file__
 
-MATERIAL = "pla"
+#: Das Material der Messung; ``GESAMT_MATERIAL=petg`` misst mit PETG (RM-583:
+#: Stützabstand und Kontaktkühlung hängen am Material).
+MATERIAL = os.environ.get("GESAMT_MATERIAL", "pla")
 SLICE_TIMEOUT = float(os.environ.get("GESAMT_ZEITLIMIT", str(45 * 60)))
 FILAMENT_GROUPS = ("temperature", "cooling", "retraction", "filament")
 
@@ -224,6 +226,23 @@ def load(model: Path) -> tuple[list[Any], list[str]]:
     findings = sorted(
         {f"{f.severity}:{f.code}" for f in result.scene.report.findings if f.severity != "info"}
     )
+    if os.environ.get("GESAMT_MATERIAL"):
+        # **Wie ein Kunde, der die Spule wechselt**: Die Datei bringt ihre Spulen
+        # mit (Roberts Drache: PLA). Gemessen wird das gewählte Material, also
+        # bekommt jede Spule dessen Art und das Filament des Herstellers dazu
+        # (RM-583; vorher maß ein PETG-Lauf die PLA-Spule der Datei).
+        kind = slicer_keys.filament_type(MATERIAL)
+        objects = [
+            replace(
+                entry,
+                material=MATERIAL,
+                material_slots=tuple(
+                    replace(slot, material=None, material_type=kind)
+                    for slot in entry.material_slots
+                ),
+            )
+            for entry in objects
+        ]
     LOADED["turned"] = turned
     LOADED["project"] = project
     LOADED["sources"] = sources
@@ -354,24 +373,32 @@ def prepared(slicer: str, profile: Any) -> tuple[Any, dict[str, Any]]:
     on_bundle = setup.flavour == "prusa"
     if setup.flavour != "orca" and not on_bundle:
         return setup, info
-    machine, process = slicer_profiles.match(
-        found_profiles(exe, setup.flavour, ("machine", "process")), profile.printer
-    )
-    if machine is None:
+    # Die Vorwahl selbst, wie Dialog, Export und Hauptfenster ohne gemerkte
+    # Maschine (``handover.standard_choice``, RM-623) — keine eigene Herleitung.
+    chosen = handover.standard_choice(setup, profile)
+    if chosen is None:
         if on_bundle:
             # Wie der Dialog: ohne Drucker im Bündel Solidons eigener Satz.
             return setup, {**info, "note": "kein Herstellerprofil für diesen Drucker"}
         return None, {**info, "skip": "kein Herstellerprofil für diesen Drucker"}
+    found = found_profiles(exe, setup.flavour, ("machine", "process", "filament"))
+    machine, process, filament = (
+        next(
+            (
+                entry
+                for entry in found
+                if entry.kind == kind and slicer_profiles.identity(entry) == wanted
+            ),
+            None,
+        )
+        for kind, wanted in (
+            ("machine", chosen.machine_profile),
+            ("process", chosen.base_process),
+            ("filament", chosen.base_filament),
+        )
+    )
     roots = slicer_profiles.profile_roots(setup.flavour, exe)
-    filament = slicer_profiles.match_filament(
-        found_profiles(exe, setup.flavour, ("filament",)), machine, "PLA", roots
-    )
-    setup = replace(
-        setup,
-        machine_profile=machine.name,
-        base_process=process.name if process else "",
-        base_filament=slicer_profiles.identity(filament) if filament else "",
-    )
+    setup = chosen
     # Die Stufe wählt den Prozess des Herstellers (Entscheidung I), wie im
     # Grundlagen- und Exportarbeiter des Hauptfensters; an „Standard“ bleibt
     # es der Standardprozess, die Kette unten liest dann denselben.
@@ -663,17 +690,24 @@ def support_ways(results: dict) -> dict[str, Any]:
     from app.core.slice.analysis import (
         SPAN_INTERESTING,
         largest_overhang_patch,
+        ledges,
+        span_beside,
         total_overhang,
     )
 
     ways: dict[str, Any] = {}
     for body_id, (angle, wall, result) in results.items():
         need = advise.support_need(result)
-        bridges = [
-            round(layer.bridge_width, 1)
+        # Die Brücken, die der Stützbedarf zählt: je Schicht ohne Kanaldecken und
+        # Ränder (``span_beside``, RM-627). Die Randfrage nur, wo etwas spannt.
+        spanning = [
+            index
             for index, layer in enumerate(result.layers)
-            if layer.bridge_width > SPAN_INTERESTING and index not in need.quiet_layers
+            if layer.bridge_width > SPAN_INTERESTING
         ]
+        quiet = need.model.channels | ledges(result) if spanning else frozenset()
+        widths = (span_beside(result, index, quiet) for index in spanning)
+        bridges = [round(width, 1) for width in widths if width > SPAN_INTERESTING]
         ways[str(body_id)] = {
             "needed": need.needed,
             "angle": angle,

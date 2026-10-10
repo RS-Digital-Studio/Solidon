@@ -51,6 +51,7 @@ from app.core.types import (
 )
 from app.core.units import MAX_FACET_SAG, format_length
 from app.i18n import source_text
+from tests.helpers import object_values
 
 MESHES = Path(__file__).parent / "data" / "meshes"
 
@@ -220,7 +221,7 @@ def test_file_worker_can_cancel_during_part_advice_without_a_window(
         "OperationCancelled": OperationCancelled,
         "write_assembly": write_assembly,
         "check_before_export": check_before_export,
-        "remembered_setup": lambda *_: None,
+        "remembered_setup": lambda *_, **__: None,
         "tools": SimpleNamespace(SLICERS=(), slicer_program=lambda: None),
         "manufacturer": manufacturer,
         "prepare_usage": lambda *_: (),
@@ -263,6 +264,7 @@ def test_file_worker_can_cancel_during_part_advice_without_a_window(
         _document=None,
         _checked=[],
         _evaluated=(),
+        _chosen=None,
         cancelled=CancelSignal(),
         _phase_lock=Lock(),
         _writing=False,
@@ -2611,6 +2613,21 @@ def test_every_flavour_answers_every_property() -> None:
         # die Orca-Familie selbst; ein Tempodeckel als Vorschlag ändert dort
         # nichts am Druck (Gesamtprüfung, 27.09.2026). Cura liest den Wert nicht.
         "caps_volumetric_speed": {"prusa": True, "orca": True, "cura": False, "other": False},
+        # CuraEngine rechnet den Stützabstand in ganzen Schichten (RM-583).
+        "support_gap_in_whole_layers": {
+            "prusa": False,
+            "orca": False,
+            "cura": True,
+            "other": False,
+        },
+        # Eine eigene Stützschichthöhe, damit ein Abstand zwischen zwei Schichten
+        # gilt: nur die Orca-Familie (``independent_support_layer_height``).
+        "has_independent_support_layers": {
+            "prusa": False,
+            "orca": True,
+            "cura": False,
+            "other": False,
+        },
     }
     flavours = set(get_args(SlicerFlavour))
     assert len(flavours) >= 4, f"zu wenige Familien gefunden: {flavours}"
@@ -3039,18 +3056,6 @@ def test_a_typed_name_still_loses_what_no_disc_can_hold(tmp_path: Path, profile:
     assert write_plan(leer, tmp_path)[0].stem == "projekt", "ein leerer Rest bekommt den Rückfall"
 
 
-def _object_values(written: Path, member: str) -> dict[str, dict[str, str]]:
-    """Die Objektwerte einer Baugruppe je Objektname — aus
-    ``model_settings.config`` (Orca-Familie) oder ``Slic3r_PE_model.config``
-    (PrusaSlicer)."""
-    config = ET.fromstring(zipfile.ZipFile(written).read(member))
-    values: dict[str, dict[str, str]] = {}
-    for node in config.iter("object"):
-        own = {meta.get("key", ""): meta.get("value", "") for meta in node.findall("metadata")}
-        values[own.pop("name", node.get("id", ""))] = own
-    return values
-
-
 def _plate_value(written: Path, flavour: SlicerFlavour, key: str) -> object:
     """Ein Wert der Platte, wie die Baugruppe ihn trägt."""
     archive = zipfile.ZipFile(written)
@@ -3098,7 +3103,7 @@ def test_an_accepted_brim_goes_only_to_the_part_that_needs_it(
     treffer = [finding for finding in findings if finding.code == "export.part_setting"]
     assert [finding.object_id for finding in treffer] == ["obj_1"], "nur der Turm"
     assert _plate_value(written, "orca", "brim_type") == "no_brim", "die Platte bleibt"
-    values = _object_values(written, "Metadata/model_settings.config")
+    values = object_values(written, "Metadata/model_settings.config")
     assert values["Turm"]["brim_type"] == "outer_only"
     assert "brim_type" not in values["Platte"]
 
@@ -3138,7 +3143,7 @@ def test_an_accepted_suggestion_no_part_asks_for_goes_to_every_part(
     )
 
     assert _plate_value(written, "orca", "enable_support") in ("0", ["0"]), "die Platte bleibt"
-    values = _object_values(written, "Metadata/model_settings.config")
+    values = object_values(written, "Metadata/model_settings.config")
     assert values["Klotz"]["enable_support"] == "1"
     assert values["Platte"]["enable_support"] == "1"
     said = [
@@ -3164,7 +3169,7 @@ def test_an_accepted_width_below_display_precision_is_still_exported(
         _two_blocks(), tmp_path, project_name="Bahnbreite", profile=profile, settings=settings
     )
 
-    values = _object_values(written, "Metadata/model_settings.config")
+    values = object_values(written, "Metadata/model_settings.config")
     assert all(float(item["line_width"]) == pytest.approx(width) for item in values.values())
     assert any(
         finding.code == "export.part_setting_all"
@@ -3218,7 +3223,7 @@ def test_calm_walls_of_a_slender_rod_go_only_to_the_rod(tmp_path: Path, profile:
         if finding.code == "export.part_setting"
     }
     assert treffer == {("obj_1", path) for path in calm}, treffer
-    values = _object_values(written, "Metadata/model_settings.config")
+    values = object_values(written, "Metadata/model_settings.config")
     for key in ("outer_wall_speed", "inner_wall_speed", "default_acceleration"):
         assert key in values["Stange"], (key, values["Stange"])
         assert key not in values["Block"], (key, values["Block"])
@@ -3498,7 +3503,7 @@ def test_supports_go_only_to_the_part_whose_geometry_needs_them(
     )
 
     assert _plate_value(written, flavour, key) in ("0", ["0"]), "die Platte stützt nicht"
-    values = _object_values(written, member)
+    values = object_values(written, member)
     assert values["Pilz"][key] == "1"
     assert key not in values["Klotz"]
     if flavour == "prusa":
@@ -3518,10 +3523,10 @@ def test_cura_takes_supports_back_where_a_part_does_not_need_them(
     """CuraEngine nimmt ob gestützt wird je Netz an (``support_enable``), die
     Stützart aber nur für die Platte (``support_structure``, Cura 5.13). Die
     Übernahme bleibt deshalb auf der Platte, und der Klotz bekommt sie je Netz
-    zurückgenommen; der Pilz verlangt automatische Stützen und erhält die
-    Stützart der Platte. Je Netz steht nur, was Cura dort liest."""
+    zurückgenommen; der Pilz verlangt unter seinem flachen Hut Gitter (RM-584)
+    und erhält es. Je Netz steht nur, was Cura dort liest."""
     settings = print_settings.with_accepted(
-        print_settings.resolve(profile, "standard"), "support.style", "tree"
+        print_settings.resolve(profile, "standard"), "support.style", "grid"
     )
 
     written, findings = write_assembly(
@@ -3540,7 +3545,7 @@ def test_cura_takes_supports_back_where_a_part_does_not_need_them(
     }
     treffer = [finding for finding in findings if finding.code == "export.part_setting"]
     assert [(finding.object_id, finding.values["value"]) for finding in treffer] == [
-        ("obj_1", "tree")
+        ("obj_1", "grid")
     ]
 
 
@@ -3574,7 +3579,7 @@ def test_the_scarf_seam_goes_to_the_round_part_only(tmp_path: Path, profile: Pro
 
     orca, findings = written("orca")
     assert _plate_value(orca, "orca", "seam_slope_type") == "none", "die Platte bleibt"
-    values = _object_values(orca, "Metadata/model_settings.config")
+    values = object_values(orca, "Metadata/model_settings.config")
     assert values["Rohr"]["seam_slope_type"] == "external"
     assert values["Rohr"]["seam_slope_min_length"] == "20"
     assert "seam_slope_type" not in values["Klotz"]
@@ -3582,7 +3587,7 @@ def test_the_scarf_seam_goes_to_the_round_part_only(tmp_path: Path, profile: Pro
     assert said == ["obj_1"], "einmal, für das Rohr"
 
     prusa, _findings = written("prusa")
-    parts = _object_values(prusa, "Metadata/Slic3r_PE_model.config")
+    parts = object_values(prusa, "Metadata/Slic3r_PE_model.config")
     assert parts["Rohr"]["scarf_seam_placement"] == "contours"
     assert "scarf_seam_placement" not in parts["Klotz"]
 
@@ -3740,7 +3745,7 @@ def test_a_part_gets_what_its_second_spool_asks_for(tmp_path: Path, profile: Pro
         objects, tmp_path, project_name="Deckel", profile=profile, settings=settings
     )
 
-    values = _object_values(written, "Metadata/model_settings.config")
+    values = object_values(written, "Metadata/model_settings.config")
     assert float(values["Griff"]["outer_wall_speed"]) == pytest.approx(advise.FLEXIBLE_MAX_SPEED)
     assert "outer_wall_speed" not in values["Deckel"]
     treffer = [finding for finding in findings if finding.code == "export.part_setting"]
@@ -3834,7 +3839,7 @@ def test_a_native_flow_limit_does_not_spread_fitting_speed_to_the_plain_block(
             else "Metadata/Slic3r_PE_model.config"
         )
         key = "outer_wall_speed" if flavour == "orca" else "external_perimeter_speed"
-        values = _object_values(written, member)
+        values = object_values(written, member)
         assert float(values["Passungsteil"][key]) == pytest.approx(30.0)
         assert key not in values["Klotz"]
 
@@ -3895,7 +3900,7 @@ def test_a_rule_behind_an_accepted_part_value_is_asked_with_it(
     )
 
     assert _plate_value(written, "orca", "wall_generator") == "classic", "die Platte bleibt"
-    values = _object_values(written, "Metadata/model_settings.config")
+    values = object_values(written, "Metadata/model_settings.config")
     assert values["Becher"]["wall_generator"] == "arachne"
     assert values["Becher"]["wall_sequence"] == "outer wall/inner wall"
     assert "wall_sequence" not in values["Pilz"], "der Pilz braucht Stützen"
@@ -5818,3 +5823,26 @@ def test_cura_gets_parts_without_a_blocker_when_none_is_taken(
         ("t-part-1.stl", {})
     ]
     assert "export.support_blocker" not in {finding.code for finding in findings}
+
+
+@pytest.mark.parametrize("block", [262_144, 97], ids=["ein-block", "viele-bloecke"])
+def test_the_binary_stl_is_byte_for_byte_what_trimesh_writes(
+    block: int, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Blockweise in einen Puffer statt über trimesh — dieselben Bytes (RM-567).
+
+    trimesh baute das gepackte Feld und kopierte es danach zweimal.
+    """
+    import numpy as np
+    import trimesh as _trimesh
+
+    from app.core.geom import mesh as mesh_module
+
+    monkeypatch.setattr(mesh_module, "_STL_BLOCK", block)
+    for body in (
+        _trimesh.creation.icosphere(subdivisions=3, radius=7.25),
+        _trimesh.creation.box(extents=(1.0e-3, 2.5, 4.0e4)),
+        _trimesh.Trimesh(vertices=np.zeros((0, 3)), faces=np.zeros((0, 3), dtype=int)),
+    ):
+        expected = _trimesh.exchange.stl.export_stl(body)
+        assert mesh_module.MeshData.of(body).to_stl() == expected

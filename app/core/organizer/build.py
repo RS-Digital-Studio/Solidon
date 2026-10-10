@@ -59,9 +59,17 @@ def _patch(
         np.abs(raw.triangles_center[:, axis] - position) <= EPS_GEOM
     )
     clip = box(region.x, region.y, region.x + region.width, region.y + region.depth)
+    # Leere Schnitte fallen vorher weg: Sie tragen keine Fläche bei, und ihre
+    # Hülle aus NaN setzte beim Sammeln in ``unary_union`` auf Intel-Macs das
+    # Ungültig-Flag (``RuntimeWarning: invalid value encountered in
+    # create_collection``). Am Standard-Organizer waren es 3550 von 4022.
     patches = [
-        Polygon(triangle[:, across]).intersection(clip) for triangle in raw.triangles[candidates]
+        piece
+        for triangle in raw.triangles[candidates]
+        if not (piece := Polygon(triangle[:, across]).intersection(clip)).is_empty
     ]
+    if not patches:
+        return None
     patch = unary_union(patches)
     if patch.area <= EPS_GEOM**2:
         return None

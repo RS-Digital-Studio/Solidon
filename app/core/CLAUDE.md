@@ -30,8 +30,8 @@ laden für jede Datei hier; diese Karte sagt, **was wo liegt**. Das Warum:
 
 | Datei | Rolle |
 |---|---|
-| `types.py` | Die Verträge (§9): `Mesh`, `Scene`, `SceneObject`, `OpContext`, `OpResult`, `Feature`, `Profile` — Signaturen stehen fest, bevor ein Modul entsteht. Die zwei Fragen, die an einem Merkmal nur einmal beantwortet werden: `is_a_cavity` und `thread_is_left_handed` (links heißt gesetzt, nativ gelesen oder an den Kanten gemessen; die Schätzung `fit` sperrt nicht) |
-| `units.py` | Millimeter, doppelte Genauigkeit, die drei benannten Toleranzen (§11); `is_close`/`is_zero` statt `==`; Winkelfunktionen, die auf jeder Maschine dieselbe Zahl geben (`circle_point`, `inscribed_ratio`, `exact_cos`/`exact_sin`, über `decimal`); `format_length_bound` formatiert Schranken gerichtet (untere nach unten, obere nach oben); die gemeinsamen Gewindegrenzen `SMALLEST_THREAD`, `LARGEST_THREAD`, `FINEST_PITCH`, `COARSEST_PITCH`, `THREAD_MIN_CORE_SHARE` |
+| `types.py` | Die Verträge (§9): `Mesh`, `Scene`, `SceneObject`, `OpContext`, `OpResult`, `Feature`, `Profile`, `SliceContour` (Konturen der Schichtanalyse als Felder) — Signaturen stehen fest, bevor ein Modul entsteht. Die zwei Fragen, die an einem Merkmal nur einmal beantwortet werden: `is_a_cavity` und `thread_is_left_handed` (links heißt gesetzt, nativ gelesen oder an den Kanten gemessen; die Schätzung `fit` sperrt nicht) |
+| `units.py` | Millimeter, doppelte Genauigkeit, die drei benannten Toleranzen (§11); `is_close`/`is_zero` statt `==`; Winkelfunktionen, die auf jeder Maschine dieselbe Zahl geben (`circle_point`, `inscribed_ratio`, `exact_cos`/`exact_sin`, über `decimal`); `format_length_bound` formatiert Schranken gerichtet (untere nach unten, obere nach oben); die gemeinsamen Gewindegrenzen `SMALLEST_THREAD`, `LARGEST_THREAD`, `FINEST_PITCH`, `COARSEST_PITCH`, `THREAD_MIN_CORE_SHARE`; die kleinste Düse `SMALLEST_NOZZLE` und die Druckgrenze `PRINT_LIMIT` (§11.2) |
 | `errors.py` | Die Ausnahmen-Hierarchie (§33.1); jede trägt mindestens eine `Action` |
 | `action_effects.py` | Was jede angebotene Handlung außer ihrem Zweck verändert (`SIDE_EFFECTS`, `side_effect`; Befundkarte des Produktkompasses, Abschnitt 4.3); jede `Action`-Kennung des Kerns steht dort (`tests/test_action_effects.py`) |
 | `expressions.py` | Parameterausdrücke über den **eigenen** Auswerter (§13, §32) — kein `eval` |
@@ -67,6 +67,7 @@ laden für jede Datei hier; diese Karte sagt, **was wo liegt**. Das Warum:
 | `process.py` · `http.py` · `json_boundary.py` | Sichere Grenze für externe Prozesse (§32; `run_limited` beendet einen Prozess, der nach seinem gemeldeten Ergebnis nicht endet: `finished`, `linger`; `bind_helper` bindet die Hilfsprozesse des Netzkerns an diesen Prozess) · für kleine HTTP-Transporte (`apply_header_deadline`) · für JSON aus fremden Vertrauensräumen |
 | `network.py` | CA-Satz für macOS und Pakete ohne nutzbaren Vertrauensspeicher (Flatpak) |
 | `keyring_backend.py` | Backend-Suche des System-Schlüsselbunds, einmal je Prozess im eigenen Faden; geteilt von `backends.keys` und `activation.device`, damit keins das andere importiert |
+| `memory.py` | Was der Prozess an Arbeitsspeicher bekommt (`physical_memory`: Rechner, cgroup, Windows-Job, Adressraum) und was ein Wert davon hält (`held_bytes`: NumPy-Puffer einmal, jede Folge ganz; `held_parts`: Rest und teilbare große Behälter, damit Einträge und Schrittmerker Geteiltes einmal zählen) — für die Grenze des Ergebniscaches (RM-567); `note_released` meldet dem Sammler im Fenster, was in Ringen wartet (RM-594) |
 
 - **Absturz**: `faulthandler` hält einen eigenen rohen Deskriptor bis zum
   Prozessende. Haupt- und Nebenfadenfehler nehmen mit der CLI denselben
@@ -92,7 +93,7 @@ laden für jede Datei hier; diese Karte sagt, **was wo liegt**. Das Warum:
 **Abläufe, die mehrere Operationen bündeln** — `lid_flow.py` (Deckel
 erzeugen; mit Stift folgt `pin_for_bore` an der Scharnierbohrung, `lid_drafts`
 für Vorschau und Übernehmen, die Scharnierpassung aus `hinge_fits_for_lid`) · `split.py` (Auto Split) · `generate.py` (Weg 3: Text oder Bild zu
-einem Körper) · `counterpart.py` (beide Hälften einer Verbindung). Ein Ablauf
+einem Körper; `fell_apart` und `skin_thickness` erkennen ein zerfallenes Rohnetz und eine dünne Haut) · `counterpart.py` (beide Hälften einer Verbindung). Ein Ablauf
 statt einer Op, weil eine Op ihre Szene nur liest (Regel 3) und die
 Auswertung rein ist (§15.1): Die Schritte gehen in **eine** Transaktion, was
 kein Schritt ist, reist als `DocumentChange` mit (§15.5).

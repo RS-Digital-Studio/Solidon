@@ -1221,6 +1221,15 @@ def _cylinder_group_extent(
         )
         low = min(low, *ends)
         high = max(high, *ends)
+        if surface.turn >= math.tau - EPS_GEOM:
+            # **Ein Mantel, der selbst die volle Umdrehung trägt, ist ganz** —
+            # dieselbe Frage wie an einer einzelnen Fläche. Seine Punkte kämen
+            # eine Facette unter der Umdrehung an: Die Bohrung durch zwei
+            # berührende Platten, je Platte ein ganzer Mantel, hieß mit
+            # 351,4 Grad angeschnitten, und jede Kettenhandlung an ihrer
+            # Senkung sagte am exakten Körper ab (RM-548, Review G).
+            arcs.append((0.0, math.tau))
+            continue
 
         corners = vertices[np.unique(triangles[list(solid.triangles_of_face(index))].ravel())]
         relative = corners - origin

@@ -840,6 +840,34 @@ def test_the_support_reaches_the_whole_overhang_not_only_beyond_the_angle() -> N
     assert volume == pytest.approx(1000.0, rel=0.05)
 
 
+def test_a_chosen_interface_gap_sets_the_contact_density() -> None:
+    """Druckzeit und Stützmenge rechnen mit der Lücke, die Solidon schreibt
+    (RM-583, Review): Elegoos Prozess sagt 0,5 mm, eine dichte Trennschicht
+    0,2 mm legt mehr Material. Ohne Wahl gilt die Dichte des Herstellers."""
+    stem = trimesh.creation.box(extents=(10.0, 10.0, 10.0))
+    stem.apply_translation((0.0, 0.0, 5.0))
+    cap = trimesh.creation.box(extents=(30.0, 30.0, 2.0))
+    cap.apply_translation((0.0, 0.0, 11.0))
+    result = slice_body(
+        MeshData.of(trimesh.boolean.union([stem, cap])),
+        0.2,
+        first_layer_height=0.2,
+        support_volume=False,
+    )
+    settings = _supported(support__interface_layers=3)
+    width = settings.layers.line_width
+    motion = _motion(support_interface_density=width / (width + 0.5))
+    dense = print_settings.with_accepted(settings, "support.interface_spacing", 0.2)
+
+    makers = print_time.support_material(result, settings, motion)
+    chosen = print_time.support_material(result, dense, motion)
+
+    assert chosen > makers * 1.02, "die dichte Trennschicht legt mehr Material"
+    assert print_time.support_material(
+        result, print_settings.with_path(settings, "support.interface_spacing", 0.2), motion
+    ) == pytest.approx(makers), "ein Wert ohne Wahl bleibt beim Hersteller"
+
+
 def test_the_plate_comparison_takes_its_support_from_the_columns_of_the_time() -> None:
     """Mit :class:`Motion` rechnet die Gegenprobe die Stützmenge aus denselben
     Säulen wie die Druckzeit (:func:`print_time.support_material`), nicht aus
@@ -1151,3 +1179,15 @@ def test_the_estimate_of_a_box_stays_where_the_installed_slicer_was_measured(
         f"{program}: Schätzung {estimated / 60:.1f} min gegen Druckdatei "
         f"{printed / 60:.1f} min, {deviation:+.1f} % statt {measured:+.1f} %"
     )
+
+
+@pytest.mark.parametrize(("hybrid", "tree"), [(True, True), (False, False)])
+def test_hybrid_supports_count_as_trees_where_the_slicer_knows_them(
+    hybrid: bool, tree: bool
+) -> None:
+    """Hybrid stützt in der Orca-Familie mit Bäumen und nur unter flachen Decken
+    mit Gitter; wer es nicht kennt, bekommt Gitter (RM-584)."""
+    settings = print_settings.with_path(
+        print_settings.resolve(profiles.make_profile()), "support.style", "hybrid"
+    )
+    assert print_time.uses_tree_supports(settings, _motion(support_hybrid=hybrid)) is tree

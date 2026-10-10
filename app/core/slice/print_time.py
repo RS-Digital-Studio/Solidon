@@ -123,6 +123,9 @@ class Motion:
     """Bahnanteil der Kontaktschichten unter dem Überhang, aus dem Abstand des Profils."""
     support_tree: bool = False
     """Stützt das Herstellerprofil mit Bäumen, wenn Solidon „automatisch“ übergibt?"""
+    support_hybrid: bool = False
+    """Kennt der Slicer Hybridstützen (die Orca-Familie, RM-584)? Sonst geht
+    ``hybrid`` als Gitter hinaus (``slicer_keys.NOT_OFFERED_BY_PROGRAM``)."""
     support_closing: float | None = None
     """Wie weit der Slicer benachbarte Stützflächen zusammenschließt, in mm
     (Prusa ``support_material_closing_radius``, Cura ``support_join_distance``,
@@ -472,6 +475,7 @@ def _columns_of(
         settings.support,
         settings.layers.line_width,
         motion.support_tree,
+        motion.support_hybrid,
         motion.support_closing,
     )
     with _COLUMNS_LOCK:
@@ -985,11 +989,25 @@ def _support_parts(
 
 
 def uses_tree_supports(settings: PrintSettings, motion: Motion) -> bool:
-    """Ob der Slicer mit diesen Werten Baumstützen setzt — gewählt oder als „automatisch“
-    seines Profils. Eine Antwort für Zeitmodell und Gegenprobe
-    (``estimate.time_comparison_blocked``)."""
+    """Ob der Slicer mit diesen Werten Baumstützen setzt — gewählt, als Hybrid,
+    wo er sie kennt (RM-584: Bäume an den Details, Gitter nur unter großen
+    flachen Decken), oder als „automatisch“ seines Profils. Eine Antwort für
+    Zeitmodell und Gegenprobe (``estimate.time_comparison_blocked``)."""
     style = settings.support.style
-    return style == "tree" or (style == "auto" and motion.support_tree)
+    return (
+        style == "tree"
+        or (style == "hybrid" and motion.support_hybrid)
+        or (style == "auto" and motion.support_tree)
+    )
+
+
+def _contact_density(settings: PrintSettings, motion: Motion) -> float:
+    """Wie dicht die Trennschicht liegt: aus der Lücke, die Solidon schreibt, wo
+    sie gewählt oder übernommen ist (RM-583), sonst die des Herstellerprozesses."""
+    width = settings.layers.line_width
+    if "support.interface_spacing" in settings.chosen | settings.accepted and width > 0.0:
+        return width / (width + max(settings.support.interface_spacing, 0.0))
+    return motion.support_interface_density or 1.0
 
 
 def _support_lines(
@@ -1010,7 +1028,7 @@ def _support_lines(
     body, contact = _support_parts(supports, index, settings)
     tree = uses_tree_supports(settings, motion)
     density = max(settings.support.density, 0.0)
-    contact_density = motion.support_interface_density or 1.0
+    contact_density = _contact_density(settings, motion)
     for area, share, speed, joined in (
         (body, density, roles.support, not tree),
         (contact, contact_density, roles.support_interface, False),
@@ -1061,7 +1079,7 @@ def support_material(
     _material, columns = _columns_of(result, settings, motion, cancelled)
     width = settings.layers.line_width
     density = max(settings.support.density, 0.0)
-    contact_density = motion.support_interface_density or 1.0
+    contact_density = _contact_density(settings, motion)
     tree = uses_tree_supports(settings, motion)
     total = 0.0
     for index, column in enumerate(columns):

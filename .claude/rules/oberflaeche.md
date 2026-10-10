@@ -14,10 +14,9 @@ Zwillinge, Kürzel), `ansicht.md`, `griffe.md`, `kamera.md`, `wartezeit.md`,
 `zeichenflaeche.md`, `uebersetzung.md`, `druckerwahl.md`. Warum:
 `konzepte/begruendungen/regel-oberflaeche.md`.
 
-**Die Grenzen gelten für jeden**, auch wo `grenzen.md` nicht lädt: neun Menüs,
-zwölf Zeilen je Menü, acht Umschalter, vier Felder vorn, ein Menüeintrag je
-Operation. Wer eine Zahl erhöht, begründet es im Commit
-(`tests/test_interface_limits.py`).
+**Die Oberflächengrenzen aus `AGENTS.md` gelten für jeden**, auch wo
+`grenzen.md` nicht lädt, dazu ein Menüeintrag je Operation. Wer eine Zahl
+erhöht, begründet es im Commit (`tests/test_interface_limits.py`).
 
 ## Das Versprechen
 
@@ -46,8 +45,7 @@ aus `app/i18n/locales/` zieht nach (Regel 20).
 Feste Titel stehen im vollständigen `tr()`-Satz; dynamische Namen und Werte
 werden als Platzhalter übergeben (`tr("{name}: {value}", ...)`). So bestimmt
 der Katalog auch die Abstände vor Satzzeichen, ohne Namen, Pfade oder Zahlen
-zu verändern. `tests/test_translations.py` prüft direkte Zusammensetzungen
-im Quelltext und die Ausgaben gemeinsamer Beschriftungshelfer.
+zu verändern.
 
 **Auswahlwerte sind Schlüssel, keine Beschriftungen:** Der Name von `raised`,
 `flat`, `linear` steht in `_CHOICE_NAMES` (`app/ui/labels.py`);
@@ -70,17 +68,16 @@ auf das unverständliche Wort (`_editor` und `_label`; im Operationsdialog
 beide Hälften den *Grund* statt des Satzes. Dazu `accessibleDescription`
 (Regel 18); ein eigener Tooltip bleibt, der Satz kommt dahinter. **Einen
 `statusTip` tragen nur Menüaktionen** (Entscheidung Robert, RM-509): An Feldern
-und Knöpfen wiederholte er den Tooltip; `test_status_tips_stand_only_at_menu_actions`.
+und Knöpfen wiederholte er den Tooltip.
 
 **Auswahlwerte tragen je einen Satz** aus `_CHOICE_NOTES` — was der Wert
 bewirkt und kostet. `explain_choices(box)` hängt ihn als ToolTipRole **und**
 AccessibleDescriptionRole an, gelesen am rohen Schlüssel im `itemData`; nach
 jeder Neubefüllung erneut aufrufen, `clear()` nimmt die Rollen mit. Ein
-Schlüssel bedeutet überall dasselbe (`grid`: Füllung und Stützmuster);
-`test_every_named_choice_also_says_what_it_does` hält Namen und Sätze
-deckungsgleich, Selbstnamen stehen in keiner der beiden Tabellen. Die offene
-Combo-Liste zeigt ToolTipRole von sich aus — anders als `QMenu` braucht sie
-keinen Schalter.
+Schlüssel bedeutet überall dasselbe (`grid`: Füllung und Stützmuster); Namen
+und Sätze sind deckungsgleich, Selbstnamen stehen in keiner der beiden
+Tabellen. Die offene Combo-Liste zeigt ToolTipRole von sich aus — anders als
+`QMenu` braucht sie keinen Schalter.
 
 **Ein Bild statt eines Worts, wo ein Wort nichts zeigt:** Texturmuster tragen
 ihre Kachel aus `figures.texture_tile`, erkannt an den Werten des Feldes.
@@ -101,10 +98,8 @@ Abziehen (nicht boolesch), jede Kante sichtbar (nicht Facetten), ohne Zufall
 (nicht deterministisch). Begründet bleiben *Slot* im 3MF-Weg und *Rasterweite* hinter der Klappe.
 *Bahnbreite* heißt dieselbe Druckgröße in Einstellungen, Befunden,
 Wandstärkenleiter und Handbuch; die Übersetzungen verwenden den Namen des
-Feldes (englisch *Line width*).
-`test_wording::test_no_customer_text_uses_a_designer_word` hält die Wortliste
-für Quelle und Englisch, `test_a_quoted_control_is_named_as_the_control_says`,
-dass ein zitierter Knopf in jeder Sprache so heißt wie der Knopf.
+Feldes (englisch *Line width*). Ein zitierter Knopf heißt in jeder Sprache wie
+der Knopf; die Wortliste hält `test_wording`.
 Eine Druckeinstellung in einem Befund heißt, wie das Feld des Druckdialogs,
 mit dem Wert, wie er dort steht (`print_settings_dialog.setting_title`,
 `shown_value`) — nie Punktpfad oder `True`; ein Befund je Teil trägt dessen
@@ -172,12 +167,9 @@ Oberfläche, Handbuch, Website, Changelog, Update-Fenster, Mails. Übersetzen:
 *Hinaus:* Der Kern schreibt mit Punkt; wer **anzeigt**, schickt die Zahl durch
 `localised` (`app/ui/labels.py`) und setzt kein Komma fest ein. `localised`
 tauscht **jeden** Punkt — um Pfade, Adressen und Versionsnummern nimmt man
-`localised_value`. Zwei Wächter von zwei Seiten:
-`test_no_number_reaches_the_user_past_the_localisation` liest den Quelltext
-(f-Strings mit Formatangabe; `"%.2f" %`, `.format()` und ein nacktes
-`f"{wert}"` sieht er nicht), `test_no_visible_text_writes_a_decimal_point` jeden
-sichtbaren Text und Tooltip des gebauten deutschen Fensters (Pfade, Adressen und
-Versionsnummern lässt er durch).
+`localised_value`. Der Quelltextwächter sieht `"%.2f" %`, `.format()` und ein
+nacktes `f"{wert}"` nicht; die fängt erst der Fenstertest über jeden
+sichtbaren Text.
 
 **Die Einheit gehört in den Wert**, nicht in Satz, Beschriftung oder
 Katalogtext: Länge, Volumen und Fläche folgen der Umschaltung (§19.3) über
@@ -234,15 +226,9 @@ Einstellmöglichkeit.**
 **Was gerade nichts tut, steht nicht da — ein Feld ohne Wirkung steht nicht
 da** (Entscheidung Robert): Es verschwindet samt Beschriftung, solange seine
 Bedingung nicht gilt, und kommt mit ihr wieder — im Operationsdialog, im
-Merkmalfenster und überall, wo Felder einer Wahl folgen. Was vorn steht und wie
-`depends_on` deklariert, gezeigt und geprüft wird: `vorderseite.md`.
-
-Ein abgelehnter fx-Ausdruck in einem verborgenen bedingten Feld hält den
-Operationsdialog an, weil `values()` ihn weiterhin an den Kern reicht. Eine
-verborgene abgelehnte Zahl hält ihn nicht an: `ValueField.value()` liefert
-weiter den letzten gültigen Wert. Der Hinweis führt über verborgene Steuerfelder
-bis zur sichtbaren Wahl, ohne diese selbst zu ändern, und wird nach jeder
-Änderung der Abhängigkeiten neu berechnet.
+Merkmalfenster und überall, wo Felder einer Wahl folgen. Was vorn steht, wie
+`depends_on` deklariert, gezeigt und geprüft wird und was ein verborgenes
+abgelehntes Feld anhält: `vorderseite.md`.
 
 ## Was eine Vorschau nicht zeigen kann, sagt sie
 
@@ -308,8 +294,7 @@ einem Drehfeld gemessen).
 sonst hängt die Entstehung der Typen an der Importreihenfolge, und darin lag
 ein Riss beim Abbau (`0xc0000374` im `gc.collect`). `app/ui/__init__.py` setzt
 sie, `app.py` lädt das Paket als **ersten** Import, `tests/conftest.py` vor
-jeder Testdatei; `test_the_interface_loads_qt_types_before_the_first_window`
-hält alle drei. **Bei einem Riss dieser Gestalt zuerst die Importe
+jeder Testdatei. **Bei einem Riss dieser Gestalt zuerst die Importe
 verdächtigen, dann den Code** — die Reichweite ist der Prozess.
 
 ## Die Tabulatortaste geht denselben Weg wie das Auge
@@ -318,9 +303,9 @@ Die Fokuskette folgt der Reihenfolge, in der Widgets **entstanden** sind, nicht
 dem Layout. Wer ein Element später umhängt, zieht sie mit
 `QWidget.setTabOrder` von hinten nach (`FeaturePanel._settle_tab_order`;
 unsichtbare und gesperrte übergeht Qt). Geprüft wird gegen das Layout, nicht
-gegen Bildpunkte (`test_the_tab_key_goes_down_the_panel_like_the_eye`). **Nie
-in Python über `nextInFocusChain` laufen:** PySide hängt das Ergebnis an das
-befragte Widget, der Bereiniger löscht dann echte mit (`CardGrip`).
+gegen Bildpunkte. **Nie in Python über `nextInFocusChain` laufen:** PySide
+hängt das Ergebnis an das befragte Widget, der Bereiniger löscht dann echte
+mit (`CardGrip`).
 
 ## Ein Rad über einem Feld ohne Fokus rollt die Seite
 
@@ -341,15 +326,10 @@ Parameter mit Vorgabe — PySide reicht `checked` hinein.
 Ruhe- und Fokusrahmen jedes Eingabefelds sind gleich breit (zwei Punkte); der
 Fokus wechselt auf `accent_line` und wird gestrichelt (`style.py`), denn Regel
 18 verlangt die zweite Kodierung; ein breiterer Fokusrahmen schnitte im
-Aufklappmenü einen halben Eintrag ab (Herleitung: Begründung).
-`tests/test_style.py`:
-`test_an_open_combo_box_shows_every_entry_it_has` (am Fenster, mit Fokus, samt
-Gegenprobe) und `test_the_focus_ring_never_changes_the_size_of_a_field`.
+Aufklappmenü einen halben Eintrag ab. Wächter: `tests/test_style.py`.
 
 **Der Ruherahmen behält die volle Linienfarbe** — er ist die einzige Kante des
 Feldes, gedämpft fiel er unter WCAG 1.4.11.
-`test_a_field_keeps_the_edge_that_is_its_only_one` prüft gegen die Linienfarbe
-des Themas.
 
 ## Eine Auswahl fällt nie still auf etwas Größeres
 
@@ -365,8 +345,7 @@ den Wiederwahlen, nur ohne eigene Handlung seit dem letzten aktuellen Bild.
   ohne eigene Farbe zeigt in der Ansicht eine Ersatzfarbe aus
   `theme.slot_colour` (Slot 0, das unbemalte Teil: `None`), nicht die
   Körperfarbe — im Dokument steht sie nicht. Die Ersatzpalette ist eine
-  **Grauleiter**, von der Auswahlfarbe sicher zu unterscheiden
-  (`test_no_fallback_colour_can_be_mistaken_for_the_selection`); echte Farben
+  **Grauleiter**, von der Auswahlfarbe sicher zu unterscheiden; echte Farben
   kommen vom Kunden (Farbwähler, Filamentkatalog). Die Pinselleiste zeigt
   Farbfeld **und** Name, „neu“ für einen fehlenden Slot.
 - **Ein Hauptknopf entsteht über `style.make_primary()`** (Akzentfarbe **und**
@@ -412,7 +391,7 @@ auch Funktionen ohne Widget; ein übergebenes Argument hat Vorrang.
 
 Oberflächentests laufen offscreen (`tests/conftest.py`); eine neue Ansicht ohne
 Test in `tests/test_ui.py` oder einer spezielleren Datei ist unfertig. Ein
-Widget im Test braucht `qt_app` (`tests.md`; Warum: Begründung).
+Widget im Test braucht `qt_app` (`tests.md`).
 
 **Ein modaler Dialog auf einem Startweg hält die ganze Suite an** —
 `QDialog.exec()` wartet offscreen auf einen Klick, den es nie gibt, und die
