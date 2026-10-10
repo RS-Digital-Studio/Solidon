@@ -325,6 +325,169 @@ def test_the_corrected_brim_gap_reaches_only_the_rods_unless_it_is_a_choice(
     assert project["elefant_foot_compensation"] == "0.15"
 
 
+def test_a_part_that_compensates_itself_keeps_its_brim_at_the_foot(
+    bestand: Path, tmp_path: Path
+) -> None:
+    """RM-589: Die gebohrte und eingezogene Platte bekommt Lochausgleich und
+    Fußkorrektur null als Objektwert, die andere behält 0,1 und 0,15 mm des
+    Herstellers. Weil die Orca-Familie den Brim vom unkorrigierten Umriss misst
+    (RM-318), trägt die erste Platte dazu ihren eigenen Abstand: am Fuß bleibt
+    er 0,25 mm wie bei der zweiten — und kein Befund nennt ihn gesenkt."""
+    from xml.etree import ElementTree as ET
+
+    from app.core.export.writer import write_assembly
+    from app.core.scene import History, OperationDraft, evaluate
+    from app.core.scene.fits import allowances_for
+    from app.core.slice import advise
+    from app.core.types import Document
+
+    native = bestand.parent / "resources/profiles/Elegoo/process/ECC2/standard.json"
+    data = json.loads(native.read_text(encoding="utf-8"))
+    data.update(brim_object_gap="0.1", elefant_foot_compensation="0.15", xy_hole_compensation="0.1")
+    _write(native, data)
+    setup, profile = _setup(bestand), _cc2()
+    document = Document(format_version=1, app_version="0.0.1")
+    history = History(document)
+    for x in (-30.0, 30.0):
+        history.apply(
+            "Platte",
+            [
+                OperationDraft(
+                    op="create_box", params={"width": 40.0, "depth": 40.0, "height": 8.0, "x": x}
+                )
+            ],
+        )
+    history.apply(
+        "Bohrung",
+        [
+            OperationDraft(
+                op="drill_hole",
+                inputs=("obj_1",),
+                params={"diameter": 6.0, "x": -30.0, "y": 0.0, "z": 4.0, "axis": "z"},
+            )
+        ],
+    )
+    history.apply(
+        "Fuß", [OperationDraft(op="compensate_first_layer", inputs=("obj_1",), params={})]
+    )
+    scene = evaluate(document, profile).scene
+    base = manufacturer.base_settings(profile, "standard", setup).settings
+    assert base.layers.elephant_foot == pytest.approx(0.15)
+    assert base.shell.hole_offset == pytest.approx(0.1)
+    base = print_settings.with_choice(base, "adhesion.kind", "brim")
+    offered = [
+        entry
+        for entry in advise.advise(
+            base, profile, allowances=allowances_for(document, scene.objects["obj_1"])
+        )
+        if entry.path in {"shell.hole_offset", "layers.elephant_foot"}
+    ]
+    assert len(offered) == 2
+    path, findings = write_assembly(
+        list(scene.objects.values()),
+        tmp_path,
+        project_name="Ausgleich",
+        profile=profile,
+        settings=advise.apply(base, offered),
+        setup=setup,
+        flavour="orca",
+        document=document,
+    )
+    with zipfile.ZipFile(path) as archive:
+        config = ET.fromstring(archive.read("Metadata/model_settings.config"))
+        project = json.loads(archive.read("Metadata/project_settings.config"))
+    keys = [
+        {item.get("key"): item.get("value") for item in obj.findall("metadata")}
+        for obj in config.iter("object")
+    ]
+    assert project["elefant_foot_compensation"] == "0.15"
+    assert project["xy_hole_compensation"] == "0.1"
+    assert keys[0]["elefant_foot_compensation"] == "0"
+    assert keys[0]["xy_hole_compensation"] == "0"
+    assert float(keys[0]["brim_object_gap"]) == pytest.approx(0.25)
+    assert not {"elefant_foot_compensation", "xy_hole_compensation", "brim_object_gap"} & set(
+        keys[1]
+    )
+    assert not [item for item in findings if item.code == "export.brim_foot_lowered"]
+
+
+def test_superslicer_gets_foot_and_holes_under_its_own_names() -> None:
+    """Review RM-589, L5: SuperSlicer liest den Einzug als
+    ``first_layer_size_compensation`` und den Lochausgleich als
+    ``hole_size_compensation``, beide als Materialzugabe — negativ heißt
+    eingezogen bzw. weiter (gemessen an zwei Bohrplatten, 2.5.59.13).
+    PrusaSlicer behält ``elefant_foot_compensation`` und bekommt keinen
+    Lochausgleich, den es nicht kennt."""
+    profile = profiles.make_profile("prusa-mini", "petg")
+    settings = print_settings.resolve(profile)
+    settings = print_settings.with_choice(settings, "layers.elephant_foot", 0.15)
+    settings = print_settings.with_choice(settings, "shell.hole_offset", 0.1)
+    native = handover.as_mapping(settings, "prusa", program="superslicer")
+    written = slicer_keys.for_program(native, "prusa", "superslicer")
+    prusaslicer = slicer_keys.for_program(
+        handover.as_mapping(settings, "prusa", program="prusaslicer"), "prusa", "prusaslicer"
+    )
+
+    assert written["first_layer_size_compensation"] == "-0.15"
+    assert written["hole_size_compensation"] == "-0.1"
+    assert "elefant_foot_compensation" not in written
+    assert prusaslicer["elefant_foot_compensation"] == "0.15"
+    assert "hole_size_compensation" not in prusaslicer
+    assert not slicer_keys.takes("prusa", "shell.hole_offset", program="prusaslicer")
+    assert slicer_keys.takes("prusa", "shell.hole_offset", program="superslicer")
+
+
+def test_a_prusa_file_without_a_program_widens_holes_in_superslicers_sign() -> None:
+    """Eine 3MF der Prusa-Familie ohne Programm (Dateiexport) liest unter den
+    beiden nur SuperSlicer mit ``hole_size_compensation``; PrusaSlicer übergeht
+    den Schlüssel. Mit Solidons Vorzeichen geschrieben, machte SuperSlicer
+    ein gewähltes „Löcher weiten 0,1“ zu einem um 0,2 mm engeren Loch."""
+    profile = profiles.make_profile("prusa-mk4s", "petg")
+    settings = print_settings.with_choice(print_settings.resolve(profile), "shell.hole_offset", 0.1)
+
+    assert handover.as_mapping(settings, "prusa")["hole_size_compensation"] == "-0.1"
+    assert (
+        handover.as_mapping(settings, "prusa", program="superslicer")["hole_size_compensation"]
+        == "-0.1"
+    )
+
+
+def test_superslicers_compensation_is_read_back_with_its_sign() -> None:
+    """Die Bündel von SuperSlicer setzen −0,05 bis −0,3 mm Einzug und −0,03
+    bis −0,05 mm Lochausgleich; Solidon liest daraus Einzug und Weitung."""
+    context = manufacturer._Context(nozzle=0.4)
+    read, _foreign = manufacturer._read_prusa(
+        {"first_layer_size_compensation": "-0.2", "hole_size_compensation": "-0.05"}, context
+    )
+
+    assert read["layers.elephant_foot"] == pytest.approx(0.2)
+    assert read["shell.hole_offset"] == pytest.approx(0.05)
+    defaults = manufacturer.prusa_defaults("superslicer")
+    assert "elefant_foot_compensation" not in defaults
+    assert defaults["first_layer_size_compensation"] == "0"
+
+
+@pytest.mark.parametrize("program", sorted(manufacturer.PROGRAM_DEFAULTS))
+def test_a_process_without_foot_and_holes_reads_the_programs_zero(program: str) -> None:
+    """Review RM-589, L1: 19 MK3S-Prozesse in OrcaSlicer und ElegooSlicer und 21
+    in Creality Print nennen ``elefant_foot_compensation`` nicht, 27 bzw. 556
+    ``xy_hole_compensation`` nicht. Das Programm druckt dann mit seiner Vorgabe
+    null (Konfigurationsblock eines Laufs ohne Prozess); die Grundlage liest
+    dieselbe Null als Wert des Profils, damit der Dialog zeigt, was gedruckt
+    wird, und kein „→ 0“ anbietet, das nichts ändert."""
+    context = manufacturer._Context(nozzle=0.4)
+    read, foreign = manufacturer._read_process(
+        {"layer_height": "0.2"},
+        context,
+        manufacturer.PROGRAM_DEFAULTS[program],
+        program_name=program,
+    )
+
+    assert read["layers.elephant_foot"] == pytest.approx(0.0)
+    assert read["shell.hole_offset"] == pytest.approx(0.0)
+    assert not {"layers.elephant_foot", "shell.hole_offset"} & set(foreign)
+
+
 def test_a_choice_and_an_accepted_suggestion_are_told_apart() -> None:
     """Eine eigene Wahl und ein übernommener Vorschlag werden getrennt geführt
     — die Wahl gilt der Platte, der Vorschlag soll dem Körper gelten, der ihn
@@ -3162,6 +3325,7 @@ first_layer_height = 0.2
 extrusion_width = 0.45
 first_layer_extrusion_width = 0.5
 external_perimeter_extrusion_width = 0.45
+elefant_foot_compensation = 0.2
 perimeters = 2
 top_solid_layers = 5
 bottom_solid_layers = 3
@@ -3256,6 +3420,8 @@ def test_prusas_bundle_is_read_back_like_the_orca_family(prusa_bundle: Path) -> 
     assert foundation.has_profile and not foundation.has_plates
     assert manufacturer.findings(foundation) == [], "keine Platte zu nennen"
     assert (base.shell.wall_count, base.shell.bottom_layers) == (2, 3)
+    assert base.layers.elephant_foot == pytest.approx(0.2), "der Einzug des MK4S (RM-589)"
+    assert "layers.elephant_foot" in foundation.from_profile
     assert base.speed.first_layer == pytest.approx(100.0), "der Boden der ersten Schicht"
     assert base.speed.outer_wall == pytest.approx(200.0), "80 % der Wände"
     assert base.speed.top_surface == pytest.approx(100.0), "40 % der vollen Füllung"
@@ -3863,6 +4029,26 @@ def test_the_tree_walls_are_read_back(walls: str, read_as: int) -> None:
     )
     assert read["support.tree_walls"] == read_as
     assert not foreign
+
+
+@pytest.mark.parametrize(("tip", "read_as"), [("1.2", 1.2), ("0.8", 0.8)])
+def test_the_tip_is_read_back(tip: str, read_as: float) -> None:
+    """Die Spitze organischer Bäume kommt aus dem Herstellerprofil (RM-704): Wer
+    schon 1,2 mm führt, bekommt keinen Rat."""
+    read, foreign = manufacturer._read_process(
+        {"tree_support_tip_diameter": tip}, manufacturer._Context(nozzle=0.4), {}
+    )
+    assert read["support.tip_diameter"] == pytest.approx(read_as)
+    assert not foreign
+
+
+def test_a_tip_of_nothing_stays_foreign() -> None:
+    """Null ist keine Spitze; der Wert bleibt fremd und geht unverändert zurück."""
+    read, foreign = manufacturer._read_process(
+        {"tree_support_tip_diameter": "0"}, manufacturer._Context(nozzle=0.4), {}
+    )
+    assert "support.tip_diameter" not in read
+    assert foreign == {"support.tip_diameter": "0"}
 
 
 @pytest.mark.parametrize(

@@ -89,6 +89,7 @@ it into `website/version.json`.
 - With Cura and grid supports, the support gap follows the material: exact on top, in whole layers below. Where Cura rounds up, the field shows the printed value.
 - Under Cura's tree supports, Solidon suggests a top interface layer, because without one Cura leaves an extra layer of air.
 - For PLA, Solidon suggests more clearance from tree supports beneath many fine tips. This leaves less residue from the tree tips there.
+- Where Solidon suggests more clearance above tree supports, it also suggests a wider *Tree tip*. Every tip then carries an interface layer, and less support sticks to undersides.
 - When many small overhangs need supports together, such as a chin with a sloped underside, the check report now names the spot.
 - A narrow rim that holds up on its own no longer counts as a long bridge, even next to another overhang. The check report no longer warns there, and Solidon asks for no supports for it.
 - Over a channel, the check report no longer recommends a support that could not be removed from it. It names the channel and a transition below 45 degrees.
@@ -99,6 +100,8 @@ it into `website/version.json`.
 - In the print dialog, printer, filaments and quality stay fully visible even with enlarged text. Long labels wrap instead.
 - The report calculates faster and needs less memory.
 - On Linux with Flatpak, Solidon now reports a slicer crash as a crash instead of only saying that no print file was made.
+- New in the print settings: *Pull in first layer* and *Widen holes*. Unless you set them, the slicer's own value applies.
+- If a part already compensates in the model, with a hole drilled with *Apply material tolerance* or *Compensate the elephant foot*, Solidon suggests that the slicer does not do it again.
 - Even for printers that PrusaSlicer or SuperSlicer do not know themselves, both estimate the print time with the accelerations handed over, and the file names the material of the spool.
 - Even on a fully loaded computer, Solidon gives the real reason after stopping a slicer instead of a timeout. A finished print file is used.
 

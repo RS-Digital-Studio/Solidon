@@ -90,6 +90,7 @@ dans `website/version.json`.
 - Avec Cura et des supports en grille, l'espace du support suit le matériau : exact au-dessus, en couches entières au-dessous. Si Cura arrondit vers le haut, le champ indique la valeur imprimée.
 - Sous les supports arborescents de Cura, Solidon propose une couche d'interface supérieure, car sans elle Cura laisse une couche d'air de plus.
 - Pour le PLA, Solidon propose davantage d'espace entre les nombreuses pointes fines et les supports arborescents en dessous. Cela laisse moins de résidus des pointes des supports.
+- Où Solidon propose plus d'espace sur les supports arborescents, il propose aussi une *Pointe d'arbre* plus large. Chaque pointe porte une couche d'interface, et les dessous gardent moins de support.
 - Si de nombreux petits surplombs ont besoin ensemble de supports, comme un menton à face inférieure inclinée, le rapport indique désormais l'endroit.
 - Un rebord étroit qui se porte seul ne compte plus comme un long pont, même à côté d'un autre surplomb. Le rapport n'avertit plus à cet endroit, et Solidon n'y demande plus de supports.
 - Au-dessus d'un canal, le rapport ne conseille plus un support qu'on ne pourrait plus retirer. Il nomme le canal et une transition sous 45 degrés.
@@ -100,6 +101,8 @@ dans `website/version.json`.
 - Dans la boîte de dialogue d'impression, imprimante, filaments et qualité restent entièrement visibles, même avec un texte agrandi. Les libellés longs passent à la ligne.
 - Le rapport de contrôle calcule plus vite et demande moins de mémoire.
 - Sous Linux avec Flatpak, Solidon signale désormais un plantage du slicer comme tel, au lieu de dire seulement qu'aucun fichier n'a été créé.
+- Nouveau dans les réglages d'impression : *Resserrer la première couche* et *Élargir les trous*. Tant que vous ne choisissez rien, la valeur du slicer s'applique.
+- Si une pièce compense déjà dans le modèle, avec un trou percé avec *Tenir compte de la tolérance du matériau* ou *Compenser le pied d'éléphant*, Solidon propose que le slicer ne le refasse pas.
 - Même pour des imprimantes inconnues de PrusaSlicer ou SuperSlicer, tous deux estiment la durée d'impression avec les accélérations transmises, et le fichier indique le matériau de la bobine.
 - Même sur un ordinateur entièrement chargé, Solidon indique la vraie raison après l'arrêt d'un slicer, au lieu d'un délai dépassé. Un fichier d'impression terminé est repris.
 

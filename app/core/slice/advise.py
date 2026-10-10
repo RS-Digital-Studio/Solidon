@@ -41,6 +41,7 @@ from app.core.slice.analysis import (
     OVERHANG_LAYER_WORTH_SUPPORT,
     OVERHANG_MARGIN,
     SPAN_INTERESTING,
+    TIP_ROOF_AREA,
     ModelSupport,
     _layer_shape,
     channel_pieces,
@@ -77,7 +78,7 @@ from app.core.types import (
     Severity,
     SliceResult,
 )
-from app.core.units import EPS_GEOM, format_length, is_close, is_zero
+from app.core.units import EPS_GEOM, format_length, is_close, is_greater, is_zero
 from app.i18n import TranslatableText, _
 
 if TYPE_CHECKING:
@@ -244,6 +245,7 @@ def advise(
     whole_layers: bool = False,
     organic: Collection[str] = (),
     declined: Collection[str] = (),
+    allowances: Collection[str] = (),
     trees: Collection[str] | None = None,
 ) -> list[SettingAdvice]:
     """Was an diesen Einstellungen für dieses Teil nicht passt (§29).
@@ -265,6 +267,9 @@ def advise(
     ``declined`` sind Pfade, deren Vorschlag der Kunde nicht übernimmt — im
     Druckdialog abgewählt, im Export nicht übernommen: Abstand und untere
     Trennschicht fragen dann mit der eigenen Stützart (:func:`printed_style`).
+    ``allowances`` sagt, was das Modell schon selbst ausgleicht
+    (``scene.fits.allowances_for``): Dort stellt :func:`_from_allowances` den
+    Ausgleich des Slicers auf null.
     ``trees`` sind die Stützarten, die das Programm als Bäume druckt
     (``handover.tree_styles``, RM-584), ``None`` ohne Programm: Gitter oder
     Hybrid unter einer großen flachen Decke und die Wände hoher Bäume fragen
@@ -287,6 +292,7 @@ def advise(
         )
     if fit_kinds:
         advice += _from_fits(settings, fit_kinds)
+    advice += _from_allowances(settings, profile, allowances)
     # Erst nach den Regeln oben, und gegen deren Stand gerechnet: Die
     # Wandzahl hängt an der Bahnbreite, und genau die senkt die Regel über die
     # dünnste Stelle. Vorher gerechnet stand im Bericht eine Wandzahl, die zu
@@ -977,6 +983,13 @@ DENSE_INTERFACE: Final = (0.2, 3)
 #: 0,5 mm, zwei Lagen).
 OPEN_INTERFACE: Final = (0.5, 2)
 
+#: Die kleinste Spitze organischer Bäume, die eine Trennschicht trägt (RM-704):
+#: Ihr Querschnitt übersteigt :data:`analysis.TIP_ROOF_AREA`, dann erzwingt die
+#: Orca-Familie die Trennschicht an jeder Spitze (``force_tip_to_roof``,
+#: ``TreeSupport3D.cpp:1286``). Auf Hundertstel aufgerundet, wie das Feld zeigt:
+#: 1,13 mm.
+ROOF_TIP_DIAMETER: Final = math.ceil(200.0 * math.sqrt(TIP_ROOF_AREA / math.pi)) / 100.0
+
 #: Untere Trennschichten, wo die Stütze auf dem Modell steht (Recherche Nr. 2).
 #: Ohne sie steht der rohe Stützfuß auf der Fläche und zeichnet sie; das Profil
 #: des MK4S führt 0.
@@ -1388,11 +1401,13 @@ def _support_contact(
         advice.append(
             _advice(settings, path="support.interface_spacing", value=spacing, reason=reason)
         )
+    roofs = settings.support.interface_layers
     if (
         (settings.support.interface_layers < layers)
         if flat
         else (settings.support.interface_layers > layers)
     ):
+        roofs = layers
         advice.append(
             _advice(settings, path="support.interface_layers", value=layers, reason=reason)
         )
@@ -1401,12 +1416,34 @@ def _support_contact(
     ):
         # Ohne obere Trennschicht legt Cura unter seinen Bäumen eine Schicht
         # Luft dazu (RM-628): PETG bekäme aus 0,2 mm 0,4, über dem Höchstwert.
+        roofs = layers
         advice.append(
             _advice(
                 settings,
                 path="support.interface_layers",
                 value=layers,
                 reason=_("Ohne obere Trennschicht lässt Cura eine Schicht mehr Luft."),
+            )
+        )
+    # **Mit zwei Schichten Luft braucht jede Spitze ihre Trennschicht** (RM-704).
+    # Am dritten Drachendruck (0,4 mm über Spitzen von 0,8 mm) hing die
+    # Kieferunterseite faserig durch: Nur 2 bis 5 % trugen eine Trennschicht, der
+    # Rest lag 0,4 mm über einzelnen Spitzen. Mit 1,2 mm trugen 25 %, und der
+    # Kontakt an Kinn und Kopfstacheln sank weiter (ElegooSlicer, 10.10.2026).
+    # Nur wo der Abstand über den Spitzen gilt und die Orca-Familie schneidet;
+    # PrusaSlicer und Cura sind nicht gemessen (``slicer_keys.NOT_TAKEN_BY``).
+    if (
+        tips is not None
+        and flavour == "orca"
+        and roofs > 0
+        and settings.support.tip_diameter < ROOF_TIP_DIAMETER - EPS_GEOM
+    ):
+        advice.append(
+            _advice(
+                settings,
+                path="support.tip_diameter",
+                value=ROOF_TIP_DIAMETER,
+                reason=_("Mit Trennschicht löst sich jede Baumspitze leichter."),
             )
         )
     if material.support_interface_cooling and not settings.cooling.support_interface_cooling:
@@ -1985,6 +2022,66 @@ def _from_fits(settings: PrintSettings, kinds: Sequence[str]) -> list[SettingAdv
     return advice
 
 
+#: Die Materialwerte hinter den Löchern eines Modells (RM-589): Spiel der
+#: gebauten Passungen und Lochkorrektur der gebohrten Löcher.
+HOLE_FIELDS: frozenset[str] = frozenset({"clearance", "hole_compensation"})
+
+
+def _from_allowances(
+    settings: PrintSettings, profile: Profile, allowances: Collection[str]
+) -> list[SettingAdvice]:
+    """Was das Modell schon ausgleicht, gleicht der Slicer nicht noch einmal aus (RM-589).
+
+    Eine Bohrung mit Materialzugabe ist um die Lochkorrektur des Materials
+    weiter, eine gebaute Passung trägt ihr Spiel; der Lochausgleich des
+    Slicers käme je Seite noch einmal dazu — am Kobra 2 mit 0,02 mm, am
+    Ender-3 V3 KE mit 0,025 mm aus dem Herstellerprofil. *Elefantenfuß
+    ausgleichen* zieht die ersten Schichten um den Wert des Materials ein; der
+    Einzug des Slicers käme in der ersten Schicht dazu: am Centauri Carbon 2
+    0,3 statt 0,2 mm je Seite, am MK4S 0,4 statt 0,2 mm (gemessen im G-Code,
+    09.10.2026). Vorgeschlagen wird null, nur wo der Slicer ausgleicht.
+
+    **Nicht für einen gemessenen Wert.** Der Prüfkörper der Kalibrierung geht
+    durch denselben Slicer mit dessen Ausgleich; gemessen und eingetragen ist
+    deshalb, was nach dem Slicer fehlt. Modell und Slicer treffen das Maß dann
+    nur zusammen, und null nähme den Teil des Slicers weg. Das gilt je Wert
+    (``MaterialProfile.measured``): Wer nur das Spiel misst, behält beim Fuß
+    den Startwert, der den ganzen Fuß meint, und bekommt dort den Vorschlag.
+    Die Löcher des Modells tragen Spiel oder Lochkorrektur; ihr Vorschlag
+    entfällt erst, wenn beide gemessen sind — ein falsch fehlender Vorschlag
+    gleicht still doppelt aus, ein falsch stehender wartet auf einen Klick.
+    """
+    advice: list[SettingAdvice] = []
+    measured = set(profile.material.measured or ())
+    if (
+        "holes" in allowances
+        and not measured >= HOLE_FIELDS
+        and not is_zero(settings.shell.hole_offset)
+    ):
+        advice.append(
+            _advice(
+                settings,
+                path="shell.hole_offset",
+                value=0.0,
+                reason=_("Das Spiel der Bohrungen steht schon im Modell."),
+            )
+        )
+    if (
+        "foot" in allowances
+        and "elephant_foot" not in measured
+        and is_greater(settings.layers.elephant_foot, 0.0)
+    ):
+        advice.append(
+            _advice(
+                settings,
+                path="layers.elephant_foot",
+                value=0.0,
+                reason=_("Das Modell zieht den Fuß schon selbst ein."),
+            )
+        )
+    return advice
+
+
 def solid_core(diameter: float, settings: PrintSettings) -> float:
     """Wie viel eines runden Querschnitts beim Drucken **nicht** massiv wird.
 
@@ -2143,6 +2240,9 @@ PART_PATHS: Final = frozenset(
         "infill.density",
         "shell.wall_generator",
         "layers.line_width",
+        # Was das Modell schon ausgleicht, gilt nur dem Teil, das es trägt (RM-589).
+        "shell.hole_offset",
+        "layers.elephant_foot",
     }
 )
 
@@ -2244,6 +2344,7 @@ def for_part(
     whole_layers: bool = False,
     organic: Collection[str] = (),
     declined: Collection[str] = (),
+    allowances: Collection[str] = (),
     trees: Collection[str] | None = None,
 ) -> list[SettingAdvice]:
     """Was dieses eine Teil anders braucht als die Platte (§29).
@@ -2276,6 +2377,7 @@ def for_part(
                 whole_layers=whole_layers,
                 organic=organic,
                 declined=declined,
+                allowances=allowances,
                 trees=trees,
             )
             if entry.path in PART_PATHS

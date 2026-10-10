@@ -89,6 +89,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Com o Cura e suportes em grelha, a distância do suporte segue o material: exata em cima, em camadas inteiras em baixo. Onde o Cura arredonda para cima, o campo mostra o valor impresso.
 - Sob os suportes em árvore do Cura, o Solidon propõe uma camada de separação superior, porque sem ela o Cura deixa uma camada de ar a mais.
 - Para PLA, o Solidon propõe mais espaço entre as muitas pontas finas e os suportes em árvore por baixo. Assim ficam menos resíduos das pontas dos suportes.
+- Onde o Solidon propõe mais espaço sobre os suportes em árvore, propõe também uma *Ponta da árvore* mais larga. Cada ponta leva uma camada de separação e fica menos suporte preso às faces inferiores.
 - Se muitas saliências pequenas precisam de suportes juntas, como um queixo com a face inferior inclinada, o relatório indica agora o local.
 - Um rebordo estreito que se sustenta sozinho já não conta como ponte longa, nem junto a outra saliência. O relatório já não avisa aí, e o Solidon não pede suportes por isso.
 - Sobre um canal, o relatório já não aconselha um suporte que depois não se conseguiria tirar. Indica o canal e uma transição abaixo de 45 graus.
@@ -99,6 +100,8 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - No diálogo de impressão, impressora, filamentos e qualidade ficam totalmente visíveis também com letra ampliada. As legendas longas passam para a linha seguinte.
 - O relatório de verificação calcula mais depressa e precisa de menos memória.
 - No Linux com Flatpak, o Solidon indica agora que o slicer encerrou inesperadamente, em vez de dizer apenas que não foi criado nenhum ficheiro.
+- Novo nas definições de impressão: *Contrair a primeira camada* e *Alargar furos*. Enquanto não escolher nada, vale o valor do slicer.
+- Se uma peça já compensa no modelo, com um furo com *Aplicar compensação do material* ou *Compensar o pé de elefante*, o Solidon sugere que o slicer não o faça de novo.
 - Também com impressoras que o PrusaSlicer ou o SuperSlicer não conhecem, ambos calculam o tempo de impressão com as acelerações entregues, e o ficheiro indica o material da bobina.
 - Mesmo com o computador em plena carga, o Solidon indica o motivo real ao parar um slicer, em vez de um tempo esgotado. Um ficheiro de impressão terminado é aproveitado.
 

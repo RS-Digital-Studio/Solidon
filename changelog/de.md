@@ -114,6 +114,7 @@ Nutzen da und sonst nichts.
 - Mit Cura und Gitterstützen folgt der Stützabstand dem Material: oben genau, unten in ganzen Schichten. Wo Cura aufrundet, nennt das Feld den gedruckten Wert.
 - Unter Curas Baumstützen schlägt Solidon eine obere Trennschicht vor, weil Cura ohne sie eine Schicht mehr Luft lässt.
 - Bei PLA schlägt Solidon für viele feine Spitzen mehr Abstand zu den Baumstützen darunter vor. Dadurch bleiben dort weniger Reste der Baumspitzen.
+- Wo Solidon mehr Abstand über Baumstützen vorschlägt, schlägt es auch eine breitere *Baumspitze* vor. Dann sitzt auf jeder Spitze eine Trennschicht, und an Unterseiten bleibt weniger Stütze hängen.
 - Verlangen viele kleine Überhänge zusammen Stützen, etwa an einem Kinn mit schräger Unterseite, nennt der Prüfbericht jetzt die Stelle.
 - Ein schmaler Rand, der sich selbst trägt, gilt nicht mehr als lange Brücke, auch neben einem anderen Überhang. Der Prüfbericht warnt dort nicht mehr, und Solidon verlangt dafür keine Stützen.
 - Über einem Kanal rät der Prüfbericht nicht mehr zu einer Stütze, die dort nicht mehr herauskäme. Er nennt den Kanal und den Übergang unter 45 Grad.
@@ -124,6 +125,8 @@ Nutzen da und sonst nichts.
 - Im Druckdialog bleiben Drucker, Filamente und Qualität auch bei vergrößerter Schrift ganz sichtbar. Lange Beschriftungen brechen dafür um.
 - Der Prüfbericht rechnet schneller und braucht weniger Arbeitsspeicher.
 - Unter Linux mit Flatpak meldet Solidon einen Absturz des Slicers jetzt als Absturz, statt nur zu sagen, dass keine Druckdatei entstand.
+- Neu in den Druckeinstellungen: *Erste Schicht einziehen* und *Löcher weiten*. Solange Sie nichts wählen, gilt der Wert des Slicers.
+- Gleicht ein Teil schon im Modell aus, mit einer Bohrung mit *Materialtoleranz berücksichtigen* oder *Elefantenfuß ausgleichen*, schlägt Solidon vor, dass der Slicer es nicht noch einmal tut.
 - Auch bei Druckern, die PrusaSlicer oder SuperSlicer nicht selbst kennen, rechnen beide die Druckzeit mit den übergebenen Beschleunigungen, und die Datei nennt das Material der Spule.
 - Auch auf einem voll ausgelasteten Rechner nennt Solidon nach dem Anhalten eines Slicers den wirklichen Grund statt einer Zeitüberschreitung. Eine fertige Druckdatei wird übernommen.
 

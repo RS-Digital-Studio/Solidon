@@ -27,6 +27,7 @@ from app.core.slice.analysis import (
     OVERHANG_LAYER_WORTH_SUPPORT,
     OVERHANG_WORTH_SUPPORT,
     SPAN_INTERESTING,
+    TIP_ROOF_AREA,
     WIDTH_INTERESTING,
     channel_space,
     largest_sloped_patch,
@@ -2579,6 +2580,115 @@ def test_tips_need_many_islands_trees_and_a_measured_material(case: str) -> None
         assert advise.tip_gap(0.2, material, more, flavour, style, organic) == pytest.approx(0.4), (
             "die Gegenprobe: eine Insel mehr, und der Abstand gilt"
         )
+
+
+def test_the_roof_tip_is_the_smallest_with_a_roof() -> None:
+    """Die Spitze, ab der die Orca-Familie jede Spitze mit Trennschicht deckt
+    (RM-704): Ihr Querschnitt liegt über ``minimum_roof_area`` (1 mm²), eine
+    Hundertstel weniger darunter — 1,13 mm."""
+    tip = advise.ROOF_TIP_DIAMETER
+    assert math.pi * (tip / 2.0) ** 2 > TIP_ROOF_AREA
+    assert math.pi * ((tip - 0.01) / 2.0) ** 2 <= TIP_ROOF_AREA
+    assert tip == pytest.approx(1.13)
+
+
+def test_the_tip_field_names_the_roof_tip() -> None:
+    """Der Hinweis am Feld *Baumspitze* nennt die Spitze, ab der jede eine
+    Trennschicht trägt (RM-704) — dieselbe Zahl wie ``ROOF_TIP_DIAMETER``, in der
+    Quelle und in jedem Katalog."""
+    import json
+
+    from app.core.knowledge.print_fields import FIELDS
+    from app.i18n import TranslatableText
+    from app.i18n.catalog import available_languages, catalog_path
+
+    note = next(field.note for field in FIELDS if field.path == "support.tip_diameter")
+    assert isinstance(note, TranslatableText)
+    number = f"{advise.ROOF_TIP_DIAMETER:.2f}"
+    assert number.replace(".", ",") in note.msgid
+    for language in available_languages():
+        if language == "de":
+            continue
+        text = json.loads(catalog_path(language).read_text(encoding="utf-8"))[note.msgid]
+        assert number in text or number.replace(".", ",") in text, language
+
+
+@pytest.mark.parametrize(
+    ("case", "proposed"),
+    [
+        ("orca", True),
+        ("prusa", False),
+        ("cura", False),
+        ("few", False),
+        ("no roof", False),
+        ("wide tip", False),
+    ],
+)
+def test_tips_with_air_above_carry_a_roof(case: str, proposed: bool) -> None:
+    """Roberts dritter Drache (RM-704): Mit 0,4 mm über Spitzen von 0,8 mm hing
+    die Kieferunterseite faserig durch; 2 bis 5 % trugen eine Trennschicht. Mit
+    1,2 mm trug ein Viertel eine, und der Kontakt an Kinn und Kopfstacheln sank
+    weiter (ElegooSlicer). Wo der Abstand über den Spitzen gilt und die
+    Orca-Familie schneidet, schlägt Solidon die kleinste Spitze mit Trennschicht
+    vor. Gegenproben: PrusaSlicer und Cura (nicht gemessen), wenige Inseln, keine
+    Trennschicht und eine Spitze, die schon trägt."""
+    pins = advise.TIP_ISLANDS - 1 if case == "few" else advise.TIP_ISLANDS
+    values: dict[str, object] = {
+        "layers.layer_height": 0.2,
+        "support.style": "tree",
+        "support.z_gap": 0.2,
+    }
+    if case == "no roof":
+        values["support.interface_layers"] = 0
+    if case == "wide tip":
+        values["support.tip_diameter"] = 1.2
+    flavour = case if case in ("prusa", "cura") else "orca"
+    found = _support_advice(
+        bearded_table(pins),
+        profiles.make_profile("centauri-carbon-2", "pla"),
+        values,
+        flavour=flavour,
+        paths=("support.tip_diameter",),
+        organic=frozenset() if flavour == "cura" else frozenset({"tree"}),
+    )
+    assert found == (
+        {"support.tip_diameter": pytest.approx(advise.ROOF_TIP_DIAMETER)} if proposed else {}
+    )
+
+
+def test_proposed_roofs_bring_the_roof_tip_along() -> None:
+    """Druckt der Kunde ohne Trennschicht, und der Rat schlägt unter einer flachen
+    Decke selbst Lagen vor, kommt mit ihnen die Spitze (RM-704, Review L1): Eine
+    Platte von 40 mm auf einer Säule, darunter der Bart, die Baumart vom Kunden
+    behalten."""
+    places = [
+        (x, y)
+        for x in (-18.0, -15.0, -12.0, -9.0, -6.5, 6.5, 9.0, 12.0, 15.0, 18.0)
+        for y in (-18.0, -15.0, -12.0, -9.0, -6.5, 6.5, 9.0, 12.0, 15.0, 18.0)
+    ][: advise.TIP_ISLANDS]
+    body = on_bed(
+        brick(10.0, 10.0, 25.0, (0.0, 0.0, 12.5)),
+        brick(40.0, 40.0, 5.0, (0.0, 0.0, 27.5)),
+        *(brick(0.6, 0.6, 4.2, (x, y, 23.1)) for x, y in places),
+    )
+    found = _support_advice(
+        body,
+        profiles.make_profile("centauri-carbon-2", "pla"),
+        {
+            "layers.layer_height": 0.2,
+            "support.style": "tree",
+            "support.z_gap": 0.2,
+            "support.interface_layers": 0,
+        },
+        flavour="orca",
+        paths=("support.interface_layers", "support.tip_diameter"),
+        organic=frozenset({"tree"}),
+        declined=frozenset({"support.style"}),
+    )
+    assert found == {
+        "support.interface_layers": advise.DENSE_INTERFACE[1],
+        "support.tip_diameter": pytest.approx(advise.ROOF_TIP_DIAMETER),
+    }
 
 
 def test_proposed_trees_bring_whole_layers_along() -> None:
