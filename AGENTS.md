@@ -179,8 +179,10 @@ Dialoge.
 - **Fenster, Renderer und Leistung lokal nur beim Release**; der Push nach main
   löst im öffentlichen Repository alle Prüfungen selbst aus — Kern und
   Renderer auf allen vier Plattformen, dazu die betroffenen Fenster- und
-  Slicertests (`/liefern`). Auf Zweigen läuft keine CI (Entscheidung Robert).
-  Ein grüner Entwicklungslauf ersetzt sie nicht.
+  Slicertests (`/liefern`); ein Push nur aus Unterlagen startet keinen Lauf
+  (Pfadfilter CI-09 in `build.yml`), dann prüft allein das Tor davor. Auf
+  Zweigen läuft keine CI (Entscheidung Robert). Ein grüner Entwicklungslauf
+  ersetzt sie nicht.
 - **Bilder und Handbuch nur beim Release — und nur, was sich geändert hat**
   (Weg in `/erzeugen`).
 - **Die CI-Aufteilung hat einen geprüften Vertrag**
