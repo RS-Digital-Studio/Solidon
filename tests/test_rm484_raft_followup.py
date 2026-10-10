@@ -22,6 +22,8 @@ def test_zero_layers_search_points_to_layer_count(monkeypatch, flavour):
         _editors={"adhesion.kind": "raft", "support.style": "none"},
         _current_flavour=lambda: flavour,
         _foundation_for_current_setup=lambda: None,
+        _slicer_path="",
+        _trees=None,
     )
     monkeypatch.setattr(dialog, "_setting_editor_value", lambda editor, field: editor)
     host._inactive_paths = lambda: dialog.PrintSettingsDialog._inactive_paths(host)
