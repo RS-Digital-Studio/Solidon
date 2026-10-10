@@ -8429,6 +8429,7 @@
   "{object}: übersprungen — das Netz ist zu groß für den Zug, die Analysekarte im Fenster kann es.": "{object}: omitido — la malla es demasiado grande para esta vuelta, pero el mapa de análisis de la ventana sí puede.",
   "{openings} große Öffnungen bleiben offen.": "{openings} aberturas grandes quedan abiertas.",
   "{parts} Teile liegen ganz in einem anderen. Slicer drucken sie je nach Einstellung hohl oder voll.": "{parts} piezas están completamente dentro de otra. Según su configuración, los slicers las imprimen huecas o macizas.",
+  "{parts} bekommen {value}.": "{parts} reciben {value}.",
   "{part} bekommt {value}.": "{part} recibe {value}.",
   "{part} mit {value}": "{part} con {value}",
   "{path}, dort unter {group}: {title}": "{path}, luego en {group}: {title}",
