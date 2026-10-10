@@ -5059,6 +5059,16 @@ def _channel_space(
             return skies[number][start]
 
     def slab_of(chunk: list[int]) -> tuple[float, float, ShapelyPolygon] | None:
+        # Eine Scheibe ohne umschlossenen Raum fragt GEOS mit leeren Flächen,
+        # deren Hülle aus NaN besteht; auf Intel-Macs setzt das das
+        # Ungültig-Flag, und NumPy meldete es beim nächsten Shapely-Aufruf als
+        # ``RuntimeWarning: invalid value encountered in create_collection``
+        # (CI, macOS Intel). Über das Ergebnis sagt es nichts. Im Faden selbst
+        # gesetzt: ``np.errstate`` gilt je Faden, die Arbeiter erben es nicht.
+        with np.errstate(invalid="ignore"):
+            return slab(chunk)
+
+    def slab(chunk: list[int]) -> tuple[float, float, ShapelyPolygon] | None:
         z_low, z_high = heights[chunk[0]], heights[chunk[-1]]
         active = (lows <= z_high) & (highs >= z_low)
         if not active.any():

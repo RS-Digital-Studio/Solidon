@@ -1075,6 +1075,32 @@ def test_the_channel_space_stays_inside_the_tunnel() -> None:
     assert 28.0 < top <= 28.0 + 0.5 + 1.0
 
 
+def test_the_channel_space_holds_when_geos_raises_the_invalid_flag(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Auf Intel-Macs setzt GEOS an leeren Flächen (Hülle aus NaN) das
+    Ungültig-Flag, und NumPy meldete es als ``RuntimeWarning`` des nächsten
+    Shapely-Aufrufs: Unter ``-W error`` fiel die Kanalsperre aus, mit ihr Rat
+    und Export (CI macOS Intel auf main ``e734a0b44``). Die Attrappe setzt das
+    Flag auf jeder Plattform, in jeder Scheibe — der Tunnel liegt über
+    ``PARALLEL_FROM`` Schichten, gefragt wird also in den Arbeitsfäden."""
+    import numpy as np
+
+    from app.core.slice import analysis
+
+    original = analysis._enclosed
+
+    def flagged(material: ShapelyPolygon) -> BaseGeometry:
+        np.float64(0.0) / np.float64(0.0)  # das Ungültig-Flag, wie GEOS es setzt
+        return original(material)
+
+    monkeypatch.setattr(analysis, "_enclosed", flagged)
+    result = slice_body(tunnel_block(20.0), 0.5)
+
+    assert len(result.layers) >= analysis.PARALLEL_FROM
+    assert channel_space(result, model_support(result), LINE)
+
+
 def test_the_channel_space_leaves_a_column_on_the_model_free() -> None:
     """Die Sperre hält Stützen aus dem Kanal fern, nicht von einer Decke, die sie braucht.
 
