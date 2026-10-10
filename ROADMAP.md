@@ -57,7 +57,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-694 — Am echten Fenster endeten zwei Läufe mit dem Spiderman ohne Python-Spur](#rm-694) | Plattformen, Pakete und Grafik | Unter Volllast auf dem i9 gesehen, alter und neuer Stand; auf ruhiger Maschine mit nativem Abbild nachstellen, bevor eine Ursache zugeordnet wird |
 | [RM-022 — Nachbau als Operationsfolge](#rm-022) | Geometrie, Erkennung und Druckvorbereitung | Profilkörper am Netz gebaut (05.10.), Besenhalter angenommen; offen der Korpuslauf über diesen Stand samt fünf Teilen über 600 s, die Fensterabnahme beim Release und die Wiederholung der berichtigten Zahlenanzeige am Fenster |
 | [RM-188 — CAD-Ausbau, Bedienung und Resin für 0.5.x](#rm-188) | Geometrie, Erkennung und Druckvorbereitung | Nächster Schritt P0.8: die vier Konzepte je Anforderung dem Code oder einem Paket zuordnen; daneben P4.1 unter RM-022, P8.1, P9.1 und Zeichnen Z3 (Z2 bis auf die Drehachse durch RM-559). Reste der gebauten Pakete und Fragen an Robert stehen am Punkt; Abschluss mit P5.3 |
-| [RM-191 — PrusaSlicer braucht für dieselbe Übergabe länger als die Orca-Familie](#rm-191) | Geometrie, Erkennung und Druckvorbereitung | In Arbeit: Claude (Worktree `F:/solidon-claude-c`). Nachgemessen am Gewürzregal (`56f70000`): Material innerhalb von 3 %, Zeit Prusa 1,93× Orca — behoben bis 1,19× (volle Füllung und Lückenfüllung für Prusa und Orca, Bahnbreite je Orca-Rolle, `machine_limits_usage = ignore`); der Rest ist die Bauweise des Slicers (Füllanker, Zusatzwände). Mit Herstellerbündel neu gemessen (06.10.): am MK4S ist PrusaSlicer schneller als Orca (218 gegen 345 min, Material gleich); langsamer bleibt PrusaSlicer ohne Bündel am CC2 (407 gegen 232 min, +20 % Material), weil Solidons Satz die Wandzahl nicht setzt (`perimeters = 3`, `extra_perimeters = 1`); nächster Schritt: im Prusa-Zweig für Drucker ohne Bündel Wandzahl und `extra_perimeters = 0` setzen, dann prusa:CC2 gegen elegoo:CC2 |
+| [RM-191 — PrusaSlicer braucht für dieselbe Übergabe länger als die Orca-Familie](#rm-191) | Geometrie, Erkennung und Druckvorbereitung | Restentscheidung offen. Gelöst (09.10., Claude): PrusaSlicer ohne Bündel schätzte mit 1500 mm/s² (`ignore` und Dialekt `reprap`), jetzt `marlin` mit den angeforderten Werten als Grenze, dazu `extra_perimeters`/`solid_infill_below_area = 0` und die Materialart der Spule; Gewürzregal am CC2 407 → 292 min, gegen ElegooSlicer mit denselben Wänden 280 min (+4,5 %, Material −4,2 %), SuperSlicer 527 → 381 min. Offen: Solidons Tabelle druckt „Standard“ mit drei Wänden und vier Bodenschichten, die Standardprozesse von Elegoo, Bambu, Creality und Prusa (MK4S) mit zwei und drei (232 gegen 292 min, 128 gegen 154 g) — Entscheidung, ob die Tabelle dem Standardprozess des Druckers folgt |
 | [RM-209 — Die Rundform-Einpassung an Gittermodellen](#rm-209) | Geometrie, Erkennung und Druckvorbereitung | Stapelumbau (0.5.1) und bitgleiche Vektornorm im Löser gebaut; Kumiko-Schale 18,6–20,2 s unter Last, §31 (unter 5 s) nicht erreicht; offen: Aufbereitung großer Flecken und Fits beschleunigen, danach ruhige Vergleichsläufe |
 | [RM-132 — Freiformerkennung am Ein-Sekunden-Ziel messen](#rm-132) | Geometrie, Erkennung und Druckvorbereitung | Ziel neu gefasst (Bauplan §31, Robert 06.10.: mechanisch unter 1 s, organisch unter 2 s am Referenzrechner); offen die Messung am neuen Ziel |
 | [RM-166 — Ergebnisnetze aus Mesh-Ops an einer STL überstehen keinen Weld](#rm-166) | Geometrie, Erkennung und Druckvorbereitung | Die Werkzeuge und der Eckanschluss rechnen plattformgleich (`9bc3d354e`, Ecke in `test_platform_identity._WAYS`); Marke `xfail(linux)` gefallen (acht Linux-Läufe in Folge grün, 06.10.); offen allein das Beispielarchiv der Werkstattfilme mit der nächsten Filmrunde |
@@ -73,7 +73,6 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-626 — Eine Kanalsäule endet an ihrer höchsten Auflage, und eine Insel im umschlossenen Kanalraum verliert ihre Säule](#rm-626) | Geometrie, Erkennung und Druckvorbereitung | Gefunden im Review von RM-571 (09.10.), mit Sonden belegt; nächster Schritt: Inseln behalten ihre Säule (Test an der Kammer), Schätzung messen, Kammer mit Insel in den vier Slicern |
 | [RM-218 — Am exakten Körper heißen Bohrungen nach ihrer Lage, und der Verlauf lässt sich dort nicht umbauen](#rm-218) | Geometrie, Erkennung und Druckvorbereitung | Code und Tor mit `d907d6036` in v0.5.2; offen allein die Fensterabnahme beim Release (RM-213) |
 | [RM-230 — Variable Verrundung und Formschräge: fünf Grenzen, die der Kunde merkt](#rm-230) | Geometrie, Erkennung und Druckvorbereitung | Grenzen 1 bis 3 gebaut oder benannt (06.10.: Mischecke exakt geprüft, Ring-Anfang und Zwischenstellen in den Feldhilfen); Tray: beide Kerne nennen die Fußrundung vor der Rechnung, aber der Weg über *Merkmal entfernen* trägt dort nicht; offen: Fußrundung als Kette entfernen, Netzschräge 2,3× langsamer, Fase am Fuß, B-Spline-Ecke und zweites Anstellen am Netz mit Kernen uneins |
-| [RM-253 — Am Laptop-Ständer tragen Kippen und Verdoppeln einer Bohrung falsch ab](#rm-253) | Geometrie, Erkennung und Druckvorbereitung | In Arbeit: Claude (Worktree `F:/solidon-claude-b`). 14 von 28 Bohrungen tragen ein fremdes Teil und sagen das jetzt mit Weg, statt es still zu verschmelzen (RM-413, 06.10.); offen an den freien `hole_1`/`hole_2`/`hole_4`: Verdoppeln ohne Wirkung, −127 mm³ bzw. +1,4–1,9 mm³ beim Versetzen und Kippen — gegen einen Sollwert ohne Boolesche an der kaputten Schale messen |
 | [RM-247 — Die Waschschüssel ließ sich nach Solidons Übergabe nicht drucken](#rm-247) | Geometrie, Erkennung und Druckvorbereitung | Kanaldecken, Gitter als Gitter, Leerfahrt und Tempo vom Drucker, Kanalsperre je Slicerfamilie, Brim auf Füßen — gebaut und im ElegooSlicer und PrusaSlicer belegt; offen: Probedruck am Centauri |
 | [RM-281 — Die Übergabe auf dem Herstellerprofil: Stufen C bis F](#rm-281) | Geometrie, Erkennung und Druckvorbereitung | Paket 3 und Reste D abgenommen, Stützvorschlag für Brücken über dem Modell und Absturz der Schichtanalyse behoben, Matrixwerkzeug auf Dialogcode umgestellt (04.10.); Zeitschätzung rechnet mit dem, was der Slicer aus dem Profil macht, Stützmenge aus den Säulen der Zeit (07.10., Seitenablage Orca-Familie −18 → −3 bis −12 %, Stützmenge Prusa/Cura 0,94 bis 1,14 der Druckdatei); offen die Gesamtabnahme jedes Modell × jeder Slicer und die Zeitreste: Creality Prints Mindestschichtzeit über Bogensehnen, Auto-Brim, Lückenfüllung, Curas Leerfahrt, Prusa-Stützen auf eigenen Schichthöhen, Baumstützen, Rechenzeit am Reiniger — bis Curas Leerfahrt und die Baumstützen gebaut sind, prüft die Zeitgegenprobe dort mit Grund nicht (`estimate.time_comparison_blocked`, Review P2 Rest Z1), danach die Sperren wieder lösen |
 | [RM-259 — Eine Mündungsrundung in einer gekrümmten Fläche reist nicht mit ihrer Senkbohrung](#rm-259) | Geometrie, Erkennung und Druckvorbereitung | In einer ebenen Fläche gebaut (`202d5133a`: Versetzen ±0,000 mm³, Entfernen genau die Platte, beide Kerne); gekrümmt offen: am Netz die Senkung hinter einer Rollkugelrundung erkennen und eine Fläche aus mehreren Grundformen über die Öffnung fortsetzen, am exakten Kern den Prototyp `m19_exakt_band.py` samt Bandkennung übernehmen. Abnahme neu gegen den Sollwert −2,97 / +0,29 / −4,56 mm³ an gs-100 |
@@ -100,7 +99,6 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-684 — *Druckoptimal ausrichten* kippt ein Teil, das in keiner stehenden Lage passt, schräg ohne Auflage](#rm-684) | Geometrie, Erkennung und Druckvorbereitung | Regression gegenüber v0.3.5: zu großes Teil kippt schräg, Stützraum 5 552 → 421 532 mm³ statt Hinweis zum Teilen |
 | [RM-685 — *Druckoptimal ausrichten* behält eine stehende Lage mit dem Satz „braucht keine Stütze“, während die Schichtanalyse Stützraum zählt](#rm-685) | Geometrie, Erkennung und Druckvorbereitung | Regression gegenüber v0.5.0 im Stützraum (gewollt seit v0.5.1): Satz und Kennzahl widersprechen sich |
 | [RM-690 — Angeboten, aber mit den Vorgaben nicht ausführbar: Textur, Merkmal drehen, Formschräge, Einzelteile, Drehkörper](#rm-690) | Geometrie, Erkennung und Druckvorbereitung | Fünf Handlungen halten mit ihren eigenen Vorgaben an oder werden an Stellen angeboten, wo sie nicht gelten |
-| [RM-691 — Stift am Schlüsselloch der Halter hat je Kern eine andere Form](#rm-691) | Geometrie, Erkennung und Druckvorbereitung | Ringhalter und Ablage: am Netz glatt, exakt mit Kopf; Hohlraumkette angleichen und beide Kerne geometrisch gegenprüfen |
 | [RM-636 — Jeder Anwendungsfall schnell: Verschieben, Filament, Normalisieren, Auswahlkarte](#rm-636) | Geometrie, Erkennung und Druckvorbereitung | In Arbeit: Paket L3 (Worktree `F:/sl-l3`). Zuordnung, Buchführung und Normalisieren gebaut (10.10.); offen: Gruppen nach dem Verschieben, Prüfbericht neben der Auswertung, Hauptfaden beim Szenenaufbau, Fensterabnahme |
 | [RM-695 — Ein gespeichertes Projekt erkennt nach jedem Neustart alle Merkmale neu](#rm-695) | Geometrie, Erkennung und Druckvorbereitung | Nach Paket E: Erkennungsergebnis bitgleich im Plattencache ablegen (Format, `cache_version`) |
 | [RM-698 — Sparen, was der Druck nicht merkt: Speicher großer Modelle und ein gemeinsamer druckgleich-Vergleich](#rm-698) | Geometrie, Erkennung und Druckvorbereitung | Speicher am großen Modell messen; Vergleichshelfer für §11.2 bauen; Dreiecksindizes und einfach genau gehaltene Ecken mit Leitplanken prüfen |
@@ -1885,6 +1883,37 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   `extra_perimeters = 0` aus der Familie des Druckers setzen, dann prusa:CC2 gegen elegoo:CC2
   neu schneiden.
 
+  **Nachgemessen und behoben (09.10.2026, Claude)**, Gewürzregal, Matrixwerkzeug und
+  Zerlegung Schlüssel für Schlüssel in PrusaSlicer 2.9 (Sonden im Bericht des Laufs). Die
+  Ursache vom 06.10. war falsch zugeordnet: Solidon schreibt die Wandzahl (`perimeters = 3`
+  ist Solidons Stufe „Standard“), und `extra_perimeters = 1` ändert an dieser Platte nichts.
+  Zwei Dinge trugen den Unterschied. **Die Zeitschätzung:** Mit `machine_limits_usage =
+  ignore` nimmt PrusaSlicers `GCodeProcessor` die eingebauten Grenzen (1500 mm/s²), und im
+  Dialekt `reprap` liest er gar keine — die Datei forderte 10 000. Jetzt `gcode_flavor =
+  marlin` (dasselbe `M204 S`, Byte für Byte derselbe G-Code ohne Kommentare) und
+  `time_estimate_only` mit der schnellsten angeforderten Beschleunigung und dem schnellsten
+  Tempo als Grenze; in die Druckdatei gehen keine Grenzen. **Solidons Tabelle:** drei Wände
+  und vier Bodenschichten gegen zwei und drei in Elegoos Standardprozess. Dazu
+  `extra_perimeters` und `solid_infill_below_area` auf null wie in Prusas
+  `[print:*common*]`, und `filament_type` von der Spule (PETG ging als PLA hinaus).
+
+  | Lauf (Standard, ohne Vorschläge) | vorher | nachher |
+  |---|---|---|
+  | prusa : CC2 (ohne Bündel) | 407,2 min, 153,9 g | 292,1 min, 153,7 g |
+  | superslicer : CC2 | 527,0 min, 142,5 g | 380,8 min, 142,5 g |
+  | prusa : Bambu P1S / Creality K1 | 407,2 / 408,0 min | 292,1 / 293,0 min |
+  | elegoo : CC2 mit Bündel | 231,9 min, 127,9 g | unverändert |
+  | elegoo : CC2, Wände/Boden/Muster wie Solidons Tabelle | — | 279,6 min, 160,6 g |
+
+  **Abnahme für dieselbe Platte erreicht:** PrusaSlicer gegen ElegooSlicer mit Solidons
+  Wänden +4,5 % Zeit, −4,2 % Material; mit zwei Wänden in beiden 230,7 gegen 231,9 min. Der
+  Rest bei SuperSlicer (381 min) ist seine Bauweise: ohne Z-Hub 331 min, bei PrusaSlicer
+  kostet derselbe Hub 8 min. Offen ist allein die Tabelle: „Standard“ druckt mit drei Wänden
+  und vier Bodenschichten, die Standardprozesse von Elegoo (CC2), Bambu (P1S), Creality (K1)
+  und Prusas „0.20mm SPEED“ am MK4S mit zwei Wänden und drei Bodenschichten. Ob Solidons
+  Tabelle für Drucker ohne Herstellerprofil dem Standardprozess des Druckers folgt wie
+  schon bei den Tempi (`printers.toml`), wirkt auch auf Cura und ist eine Entscheidung.
+
 <a id="rm-193"></a>
 
 - [~] **RM-193 — Die Erkennung an einer glatten Generator-Freiform kostet Minuten für null
@@ -2283,110 +2312,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
     kleineren Winkel, obwohl er schon kleiner ist, und baut 3° → 5° nur auf die Facetten genau.
     Festgehalten in `test_the_mesh_twin_still_refuses_a_smaller_second_draft`. Zu bauen: Der
     Netzzwilling stellt eine schon angestellte gerundete Ecke wie der exakte Kern absolut an.
-
-<a id="rm-253"></a>
-
-- [~] **RM-253 — Am Laptop-Ständer tragen Kippen und Verdoppeln einer Bohrung falsch ab.**
-  Gefunden beim Abschluss von RM-246 (26.09.2026) an
-  `F:\3D Dateien\parametric-laptop-riser.stl`, das seitdem geschlossen aus
-  dem Import kommt (21 Teile, `repair.part_inside`) und genau rechnet. Die
-  Sonde der meldenden Sitzung (`.claude/.state/rm-246-laptop-staender-2026-09-25/probe_real.py`,
-  `PROBE_TREE=<baum> python probe_real.py "<datei>" 15`) zeigt an 18 Ketten
-  mit Senkung und sechs einzelnen Durchgängen drei Dinge, die nicht zum
-  Werkzeug passen: *Merkmal drehen* von `hole_11`+`cone_51` um 15° um x trägt
-  1 444,47 mm³ vor den alten Mündungen ab (`hole_1`+`cone_5`: 19,59 mm³, die
-  übrigen null); *Merkmal verdoppeln* 6,3 bis 11,1 mm daneben lässt an jeder
-  geprüften Bohrung das Volumen stehen (`boolean.without_effect`, an
-  `hole_11` dazu `duplicate_feature.no_longer_through`); *Merkmal versetzen*
-  um 1,5 mm meldet an `hole_1`, `hole_3` und `hole_11`
-  `move_feature.no_longer_through`. Zu klären, ob das an den 21
-  ineinandersteckenden Teilen liegt (eine Bohrung durch mehrere Teile, eine
-  Kopie im Hohlraum eines anderen) oder an den Handlungen. Abnahme: Kippen
-  trägt vor den Mündungen nur ab, was das gekippte Werkzeug überstreicht;
-  eine Kopie im Material trägt ab oder sagt, warum nicht; „nicht mehr
-  durchgehend" nur, wo die versetzte Bohrung wirklich endet.
-
-  **Durchsicht v0.5.1 (27.09.2026, bohrung):** Es liegt an den Teilen. Die 21 Teile
-  lassen sich nicht vereinigen: Teil 10 (9 166 Dreiecke) kreuzt sich 1 121-mal selbst,
-  `resolve_self_intersections` lehnt deshalb ab, und eine erzwungene Vereinigung aller
-  Teile gab 136 Teile mit 605 verbleibenden Eigenkreuzungen. Gebaut ist die Auskunft:
-  `boolean.parts_not_united` sagt, dass Teile ineinanderstecken und sich nicht
-  vereinigen ließen, weil sich eine Oberfläche selbst kreuzt, mit *Stelle zeigen*
-  (`ae178de8c`, Test `test_boolean.py::test_parts_that_cannot_be_united_say_so`).
-  Nachgemessen am neuen Stand (`konzepte/nachweise-release-0.5.1/sonden/bohrung/rm253_focus_out.txt`):
-  `hole_11`+`cone_51` um 15° gekippt trägt 32,6 mm³ jenseits der oberen alten Kappe
-  ab, Verdoppeln bleibt ohne Wirkung (jetzt mit Satz), Versetzen meldet weiter
-  `no_longer_through`. Am selben Modell (massbild): 13 von 28 Bohrungen gelten als „In
-  dieser Bohrung steht Material“ (`prepare_ops.hole_is_clear`), und ein Langloch aus
-  *Bohrung 2* (Ø 3,33, 43 mm durch mehrere Wände) wird schon ohne Versatz nicht wieder
-  erkannt — vermutlich dieselbe Ursache, eine Bohrung durch mehrere ineinandersteckende
-  Teile; nicht geprüft. Weg: die Eigenkreuzung innerhalb einer Schale auflösen, dann
-  vereinigen und die drei Handlungen neu messen.
-
-  **Sicherheitskorrektur 01.10.2026:** Scheitert die notwendige Vorvereinigung, hält
-  `boolean()` jetzt mit einem Handlungstext vor jeder Solverstufe an. Zuvor rechnete die
-  Kette mit den unveränderten, ineinanderliegenden Teilen weiter und konnte ein falsches
-  Ergebnis liefern. Die Zuordnungsliste `object_ids` trägt den betroffenen Op-Eingang in
-  den Prüfbericht; die Regression prüft auch, dass *Stellen zeigen* bei einer mehrteiligen
-  Vereinigung am fehlerhaften und nicht am ersten Körper landet. Der Test nutzt eine
-  geschlossene Schale, die sich selbst kreuzt, und einen zweiten überlappenden Körper.
-
-  Am Originalmodell `F:\3D Dateien\parametric-laptop-riser.stl` (8,67 MB) wurde der
-  vollständige Import- und Auswertungsweg erneut geprüft. *Merkmal versetzen* für
-  `hole_11` um 1,5 mm quer zur Achse hält mit `GeometryError`, `object_id=obj_1` und den
-  Handlungen `show_locations` und `cancel` an; es gibt kein unzuverlässiges Ergebnis aus.
-  Der Lauf belegt auch den Kettenzweig, der `_closed_at` umgeht. Eine Regression mit einer
-  erkannten Senkbohrung prüft die Objektkennung an genau dieser Verschlussvereinigung. Der
-  Detailtext empfiehlt die Reparatur im CAD- oder Netzprogramm. Das löst die Eigenkreuzung
-  nicht und führt die ursprünglichen Abnahmeschritte Kippen, Versetzen und Verdoppeln noch
-  nicht erfolgreich aus. RM-253 bleibt daher teilweise offen.
-
-  Die anschließende Diagnose am unveränderten Original bestätigt in der geschlossenen
-  9 166-Dreieck-Schale 1 243 Schnittpaare an 631 Flächen; darunter liegt ein echter
-  Schnitt schon in der STL. Blenders exakter Boolean machte die Kopie nicht wasserdicht.
-  Der 0,2-mm-Voxelremesh schloss sie zwar, verschob die Außenfläche aber bis 0,083878 mm
-  und die Höhe um 0,143410 mm; damit liegt er über `MAX_FACET_SAG = 0,05 mm`. Auch die
-  Kreuzungsfreiheit ließ sich wegen des Zeitlimits nicht belegen. Beide Reparaturkandidaten
-  sind verworfen. `hole_11` und `cone_51` werden lokal noch mit ihren ursprünglichen
-  Maßen erkannt, liegen aber in anderen, unveränderten Schalen. Es wurde weder die Kopie
-  weiterbearbeitet noch am Original eine neue Bearbeitung ausgeführt; die angefragte
-  Reparatur samt Kippen/Versetzen/Verdoppeln ist weiterhin nicht abgenommen.
-
-  **Gezielte Verifikation:** `test_boolean.py`, `test_profile_clamps.py` und
-  `test_finding_actions.py`, `test_errors.py`, `test_translations.py` und
-  `test_language_rules.py`: 1 051 Tests bestanden. Ruff und Formatprüfung der geänderten
-  Booleschen Geometriedatei und ihrer Regressionstests sind grün. Das unabhängige
-  Nachreview bestätigte die bedingte Handlung nach einem behobenen P2-Hinweis; das
-  vollständige Entwicklungstor und die Geometriereparatur stehen weiter aus. Der gezielte
-  Mypy-Aufruf meldete drei Unreachable-Befunde in der parallel geänderten
-  `app/core/perceive/refine.py`; für diesen Stand liegt daher kein grüner Mypy-Nachweis vor.
-  Nachprüfung (Review 02.10., Arbeitsbaum ungesichert): Sicherheitskorrektur unvollständig. `union_objects` und `subtract_objects` halten mit dem richtigen Objekt; `drill_hole` hält ohne `object_id`, auch im Prüfbericht, und ein selbstkreuzender Körper als Werkzeug rechnet weiter still. Belege `verif-E.md`, `sonden\v_e\`.
-  Nachprüfung am Stand `3fd3b1ace` (nach `eab5f4f47`): unvollständig. `drill_hole` hält weiter mit `object_id=None` und `correct_input`/`cancel`, auch im Prüfbericht; ein kaputter Körper als Werkzeug rechnet still (`subtract_objects [gut, kaputt]` → 118,5 mm³ ohne Befund, `boolean.py:412–414`); erfüllt ist nur der Fall mit dem kaputten Körper als erstem Eingang. Der neue generelle Halt kehrt die hier dokumentierte Entscheidung um (RM-382). Belege `review-3fd3b1ace.md`, Sonden `r_rm253_*.txt`.
-
-  **Die beiden Nachprüfungen sind durch [RM-382](ROADMAP-ARCHIV.md#rm-382) erledigt
-  (`6d395169c`, v0.5.2):** `drill_hole` reicht `object_ids` durch, ein Schritt abseits der
-  selbstkreuzenden Schale rechnet mit Warnung, am Treffer hält er mit Kennung, und ein kaputter
-  Szenenkörper als Werkzeug hält (`test_a_crossing_scene_tool_stops_a_difference_with_its_own_id`).
-  **Am Original weiter (Sonde am 06.10.2026, Kopie mit abgefangener Messboolescher):**
-  `hole_1` mit `cone_5` gekippt meldet `rotate_feature.no_longer_through` und `bore.over_the_edge`;
-  `hole_1`/`hole_3` versetzt `move_feature.no_longer_through`; Verdoppeln bleibt an allen vier
-  Bohrungen ohne Wirkung (`boolean.without_effect`, `duplicate_feature.feature_lost`);
-  `hole_2`/`hole_4` gekippt nehmen um 53 bzw. 104 mm³ **zu**; `hole_11` hält am Treffer der
-  kaputten Schale. Die Abtragsmessung „vor den Mündungen“ scheitert, weil die Messdifferenz der
-  Sonde selbst die kaputte Schale trifft — die ursprüngliche Abnahme ist so weder erfüllt noch
-  messbar; die Sonde braucht eine Messung ohne Differenz gegen die kaputte Schale.
-
-  **Stand 06.10.2026 (Claude, mit RM-413):** In 14 der 28 Bohrungen steht ein fremdes Teil;
-  dort sagen Menü und jede Merkmalshandlung jetzt „In dieser Bohrung liegt ein getrenntes Teil“
-  mit *In Einzelteile aufteilen*. Vorher rechneten die Handlungen dort: `hole_3` trägt seinen
-  Mantel auf zwei Platten mit einem Zapfen darin, *Merkmal versetzen* verschmolz die Platten, der
-  Zapfen verschwand im Stopfen, −531 mm³ und zwei Teile weniger ohne Befund. `hole_11` hält am
-  Treffer der kaputten Schale. **Offen** an den freien Bohrungen: Verdoppeln 8 mm quer bleibt ohne
-  Wirkung (`boolean.without_effect`, `feature_lost`), `hole_1` verliert beim Versetzen um 1,5 mm
-  und Kippen um 15° je rund 127 mm³ mit `no_longer_through`, `hole_2`/`hole_4` nehmen 1,4–1,9 mm³
-  zu. Ob das richtig ist, sagt erst ein Sollwert ohne Boolesche gegen die kaputte Schale (je Teil
-  Volumen und Dicke entlang der Achse). Sonden `m2_laptop_bohrungen.py`, `m3_hole3.py` unter
-  `F:\solidon-review-reports\claude-2026-10-06\geometrie\rm253\`.
 
 <a id="rm-247"></a>
 
@@ -3640,19 +3565,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   9,7 von 11,5 s) und die Erkennung am ganzen Körper nach jeder Booleschen Operation (Riser,
   Ø-6-Zylinder abziehen: 11,6 s; eine örtliche Neuerkennung wäre eine Architekturfrage an
   §21.2) bleiben hier offen.
-
-<a id="rm-691"></a>
-- [ ] **RM-691 — Stift am Schlüsselloch der Halter hat je Kern eine andere Form.**
-  Nachprüfung von Paket G, N-4 (09.10.2026): Auf einem Quader 40 × 40 × 12 mm
-  `holder_ring` oder `holder_shelf` bei z = 12 setzen, dann *Stift für Bohrung*
-  an `holder_ring_bore_1/2` beziehungsweise `holder_shelf_bore_1/2` aufrufen.
-  Bei PETG entsteht am Netz ein glatter Stift mit 67,19 mm³, exakt ein Stift
-  mit Kopf mit 90,82 mm³. Beide stehen lose und innerhalb der Trägerhülle;
-  die Kopfform ist verschieden. Der Unterschied besteht schon vor Paket G.
-  Offen: Die gelesene Hohlraumkette beider Kerne vergleichen und den Kopf aus
-  derselben Geometrie ableiten. Abnahme: beide Kerne liefern dieselbe Form
-  bis zur Vernetzungsabweichung, ohne gemeinsames Volumen mit dem Träger und
-  mit dem halben Profilspiel; Regression über beide Halter und beide Bohrungen.
 
 <a id="rm-636"></a>
 - [~] **RM-636 — Jeder Anwendungsfall schnell: Verschieben, Filament, Normalisieren, Auswahlkarte.**

@@ -1355,6 +1355,67 @@ berühren, sperrten vorher den Zug (Review `e3dff1907`, F10). Wer über eine
 Kette fremder Teile am Träger hängt, berührt ihn mit dem letzten Glied und
 sperrt weiter.
 
+**Ein Dreieck zählt mit dem Stück, das zwischen den Mündungen liegt, nicht
+mit seiner Mitte** (`_reaching_in`, RM-253, 09.10.2026). Am Laptop-Ständer
+stecken in vier Plattenbohrungen Ø 5,33 zwei geschlitzte Hülsen von 43 mm, jede
+durch zwei; jedes ihrer Manteldreiecke läuft über die ganze Länge, und alle
+Mitten lagen 9 bis 23 mm vor der Bohrungsmitte, hinter den Mündungen bei
+±4,93 mm. Ebenso stecken
+Schraubenschäfte mit Streifen von 8 mm in Scheiben von 0,9 mm. Neun von 28
+Bohrungen galten so als frei: *Versetzen* und *Drehen* rechneten durch die
+Hülse (−127 mm³, „geht nicht mehr durch“, um y gedreht 84 statt 22 Teile),
+*Bohrung ändern* auf ein kleineres Maß nahm Material weg, und das Kippen von
+`hole_11` schnitt die Schraube. Gemessen wird jetzt das Stück zwischen den
+Grenzen, quer zur Achse projiziert, an seinem kleinsten Achsabstand — das fängt
+auch den Querstift, dessen Mitten neben der Bohrung liegen. Grenze ist die
+eigene Wand, mit derselben Rechnung gemessen: Ein grobes Vieleck liegt mit
+seinen Seitenmitten innerhalb des Radius, und die Wand einer Querbohrung endet
+auf der Bohrungswand (Gegenfall `test_a_coarse_bore_with_a_cross_bore_stays_free`,
+gegen den Radius gemessen rot). Beschnitten wird, weil ein Keil, der mit einer
+Kante in der Platte steckt, die Achse erst über ihr überdeckt
+(`test_a_wedge_over_the_mouth_leaves_the_bore_free`); gefragt wird auch, ob die
+Achse durch das Stück geht, weil ein Blech die Bohrung mit einem einzigen
+Dreieck queren kann, dessen Mitte und Kanten daneben liegen
+(`test_a_sheet_whose_one_triangle_covers_the_axis_stands_in_the_bore`).
+Die Dreiecksmitten bleiben die erste Frage; die zweite fügt nur hinzu.
+
+**An jedem Hohlraum, je Art von ihrem Kern** (RM-660, 09.10.2026). Paket G hatte
+die Teilefrage auf jeden Hohlraum ausgeweitet (`_inside_and_radial`), dort aber
+über Dreiecksmitten: Ein Stift Ø 4 über 40 mm im Langloch einer 10-mm-Platte, ein
+Blech quer durch eine Senkung, ein Kern über 45 mm im gedruckten Innengewinde,
+ein Stab quer durch eine Kugelpfanne und ein Draht tangential durch eine Kehle
+galten als frei, an beiden Kernen, und der Stift in einer fremden Bohrung fragte
+nur die Mitten im Hüllquader der Bohrung. Jetzt misst jede Art das Stück jedes
+Dreiecks von ihrem Kern (`_core_of`): das Langloch von seiner Mittellinie, der
+Kegel von der Achse auf seiner Einheitswand (eine Zentralprojektion, sie erhält
+Geraden), die Pfanne von ihrer Mitte, die Kehle von den Sehnen ihres
+Mittelkreises (je Sektor, höchstens ein Viertel des Saums innerhalb des Kreises),
+das Innengewinde von der Achse am Kern; am Stift entscheidet der Quader jedes
+Dreiecks, nicht seine Mitte (`_sticks_read`). **Eigenes Material fragt so nur die
+Bohrung:** An 24 Kehlen des Laptop-Ständers reichten Streifen des eigenen Teils
+bis 0,955 des Halbmessers in die Röhre (abgetastet bestätigt), und eine so
+gefüllte Kehle hätte ein fremdes Teil darin nicht mehr genannt —
+`filled_bore_reason` sagt dann „gefüllt“. An jedem anderen Hohlraum und am Stift
+fragt das Stück nur fremde Teile (`_foreign_triangles`). Am Laptop-Ständer (26
+Teile, 541 Merkmale) sind danach 226 statt 118 Merkmale mit Grund gesperrt: Teile,
+die mit langen Streifen in den Kehlrundungen und Senkungen anderer liegen (an
+`fillet_113`, r = 1,6, Streifen von Teil 0 bei 1,15 bis 1,46 mm von der Achse,
+abgetastet gleich); der erste Klick der Karte braucht dort bis 0,1 s mehr.
+
+**Ein fremdes Teil misst sich gegen den Radius, nicht gegen den Saum** (RM-661,
+09.10.2026). Der Saum aus `_CLEARANCE_MARGIN` (2 % des Radius unter der eigenen
+Wand) fängt Rundung an der Wand des eigenen Teils. Ein getrennter Stift Ø 5,9 oder
+Ø 5,98 in einer Bohrung Ø 6, die Enden an den Mündungen oder dahinter, lag mit
+seinem ganzen Mantel in diesem Saum und galt an beiden Kernen als Wand — die
+Handlungen verschmolzen ihn still. Für Stücke fremder Teile gilt deshalb der
+Radius selbst bis auf die Verschweißweite des Körpers, und nicht die gemessene
+Wand: Bei gleicher Vernetzung liegt der Mantel eines Stifts Ø 6 ohne Spiel genau
+auf ihr (Wand und Stift 2,99161 mm von der Achse, gegen die Wand gemessen frei).
+Zwischen dem Lot auf die Facetten und dem Radius liegt an einem fremden Teil nur
+Luft der Bohrung oder Material des Trägers, in das es eindringt; ein Querstift,
+der in seiner Querbohrung auf dem Kreis der Bohrung endet, bleibt draußen
+(`test_a_cross_pin_ending_at_the_bore_wall_leaves_the_bore_free`).
+
 **Und was für eine runde Bohrung an ihrer Mitte gefragt wird, wird an einem
 Langloch an beiden Enden gefragt** (`prepare.slot_ends`). Die Mitte steckt tief
 im Material, während ein Ende schon über die Kante ragt; wer nur sie fragt,
