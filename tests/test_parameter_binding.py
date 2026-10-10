@@ -267,6 +267,20 @@ def test_a_bound_rectangle_keeps_its_corners_and_follows_its_dimensions() -> Non
     assert max(abs(point[0]) for point in inner) == pytest.approx(87.0)
 
 
+def test_binding_keeps_the_solver_of_an_older_drawing() -> None:
+    """Eine Zeichnung aus einer älteren Datei rechnet nach dem Binden wie vorher
+    mit ihrer Fassung des Lösers (RM-541, Review G-1).
+
+    Alle anderen Umschreiber eines Skizzentexts behalten die Fassung; das
+    Binden baute die Skizze neu und stellte sie still auf die heutige um —
+    ohne dass jemand die Zeichnung im Editor geändert hätte."""
+    from dataclasses import replace
+
+    older = replace(sketch_from_text(rectangle_ring((90.0, 60.0), (87.0, 57.0))), solver=1)
+    text = bound_sketch(sketch_to_text(older), {(0, "width"): "@a"})
+    assert sketch_from_text(text).solver == 1
+
+
 def test_drawings_with_dimensions_or_off_the_origin_are_left_alone(document: Document) -> None:
     """Wer schon gemaßt hat oder außermittig zeichnet, bekommt keinen Vorschlag."""
     corners = ((0.0, 0.0), (180.0, 0.0), (180.0, 120.0), (0.0, 120.0))

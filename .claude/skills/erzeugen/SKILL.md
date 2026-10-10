@@ -112,18 +112,25 @@ Release-Bilder und gehören nicht in den Uploadpfad.
 7. **Kein zweites Tor vor dem Tag.** Nach Versionssprung und Erzeugern nur die
    betroffenen Wächter (`test_changelog`, `test_toolchain`, `test_website`,
    `test_wording`, `test_manual`, `test_guides`, `test_asset_packaging` — jeweils
-   samt `rendered`), committen, taggen — die CI fährt die Suiten am Tag auf allen
-   Plattformen. `test_asset_packaging` fährt die Rechteprüfung, mit der jeder
-   Paketbau beginnt: Eine neue Erzeugerdatei im Anwendungsbaum, die sie nicht
-   kennt, hält sonst erst den Tag-Lauf an.
+   samt `rendered`), committen, den Lauf auf `main` abwarten (Schritt 8),
+   taggen — die CI fährt die Suiten am Tag auf allen Plattformen.
+   `test_asset_packaging` fährt die Rechteprüfung, mit der jeder Paketbau
+   beginnt: Eine neue Erzeugerdatei im Anwendungsbaum, die sie nicht kennt,
+   hält sonst erst den Tag-Lauf an.
 8. **CI-Bau:** `.github/workflows/build.yml` bestimmt Trigger, Plattformen und
    die getrennten Signier- und Prüfjobs. Vor Tag oder Handstart Commit und
    Versionsstand feststellen; kein fest eingetragenes Beispiel-Tag. Laufkennung
    und Commit gehören zum Nachweis, `gh run watch <lauf-id> --exit-status`
-   liefert den Abschluss. Gehen Commit und Tag zusammen hinaus, laufen zwei
-   Bauten über denselben Commit; der auf `main` lässt sich abbrechen. Der Job
-   „Neueste Versionen“ hält den Lauf nicht an (`continue-on-error`); sein
-   Ergebnis lesen und ein Rot als Punkt ins Register von `ROADMAP.md`.
+   liefert den Abschluss. Der Lauf zum Releasestand auf `main` ist vor dem
+   Tag grün: Nur er fährt die Fenster- und Slicerauswahl (CI-09), der Tag-Lauf
+   nicht. Gehen Commit und Tag doch zusammen hinaus, **muss** der Lauf auf
+   `main` abgebrochen werden, sonst nimmt er dem Tag-Lauf die macOS-Plätze;
+   seine Auswahl holt der nächste main-Lauf nach, und der Nachweis nennt sie
+   als nach dem Release gefahren. Solange der Tag-Lauf prüft, geht nichts
+   nach main: Er belegt alle fünf macOS-Plätze des Kontos (Konzept
+   CI-Testlaufzeiten §3). Der Job „Neueste Versionen“ hält den Lauf nicht an
+   (`continue-on-error`); sein Ergebnis lesen und ein Rot als Punkt ins
+   Register von `ROADMAP.md`.
    **Bis der signierte Installer gebaut ist, geht nichts anderes auf `main`**:
    `windows-signed-installer.yml` läuft am Kopf von `main` und nimmt außer
    `sign_release.INSTALLER_ORCHESTRATION_FILES` keinen geänderten Pfad an.

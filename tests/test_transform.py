@@ -329,6 +329,340 @@ def test_fit_to_size_reaches_the_given_edge(profile: Profile) -> None:
     assert bodies[0].plate == 0
 
 
+def _fitted_cube(profile: Profile, largest: float, monkeypatch: pytest.MonkeyPatch):
+    """Würfel laden, auf ``largest`` bringen und legen; dazu die Zahl der vollen
+    Merkmalserkennungen in dieser Auswertung."""
+    import importlib
+
+    from app.core.perceive import features
+
+    evaluation = importlib.import_module("app.core.scene.evaluate")
+
+    full: list[int] = []
+    original = evaluation.detect
+
+    def counted(mesh, *args, **kwargs):
+        if features.known_detection(mesh) is None:
+            full.append(int(mesh.triangle_count))
+        return original(mesh, *args, **kwargs)
+
+    monkeypatch.setattr(evaluation, "detect", counted)
+    features.forget_cache()
+    project = new_project("centauri-carbon-2", "pla")
+    project.document.sources["src_1"] = Source(
+        id="src_1", kind="import", path="sources/cube_clean.stl", sha256=""
+    )
+    project.sources["src_1"] = (MESHES / "cube_clean.stl").read_bytes()
+    history = History(project.document)
+    history.apply("Laden", [OperationDraft(op="load", params={"source": "src_1", "unit": "mm"})])
+    history.apply(
+        "Auf Maß",
+        [
+            OperationDraft(
+                op="fit_to_size",
+                inputs=("obj_1",),
+                outputs=("obj_1",),
+                params={"largest": largest, "free_spot": True},
+            )
+        ],
+    )
+    result = evaluate(project.document, profile, sources=ProjectSources(project))
+    return result, full
+
+
+def test_fit_to_size_within_the_print_limit_only_moves(
+    profile: Profile, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """RM-676: Ein Maßschritt, der keinen Punkt um die Druckgrenze verschöbe, legt
+    nur — eine starre Bewegung, die Merkmale reisen mit.
+
+    Am erzeugten Bett (1 229 570 Dreiecke) hinterließ das Ausdünnen eine Kante von
+    100,000222 mm; der letzte Schritt der Erzeugung skalierte darauf um den Faktor
+    1 - 2,2·10⁻⁶, galt nicht als Bewegung, und die Erkennung lief am vollen Netz
+    ein weiteres Mal, 30 s CPU für 0,2 µm, die kein Drucker sieht.
+    """
+    from app.core.units import PRINT_LIMIT
+
+    # Mit freier Stelle bleibt die Mitte der Unterseite stehen; die weiteste Ecke
+    # des 20-mm-Würfels liegt 24,5 mm davon: 0,5 · PRINT_LIMIT an der Kante
+    # verschiebt sie um 0,61 · PRINT_LIMIT.
+    result, full = _fitted_cube(profile, 20.0 + PRINT_LIMIT / 2.0, monkeypatch)
+
+    body = result.scene.objects["obj_1"]
+    assert max(body.mesh.bounds.size) == pytest.approx(20.0, abs=1e-12), "das Maß bleibt"
+    assert body.mesh.bounds.minimum[2] == pytest.approx(0.0, abs=1e-12), "und steht auf dem Bett"
+    assert len(full) == 1, f"nur der Ladeschritt wird erkannt, nicht die Bewegung: {full}"
+    assert any(f.code == "transform.fitted" for f in result.scene.report.findings)
+
+
+def test_fit_to_size_beyond_the_print_limit_scales(
+    profile: Profile, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Gegenstück: 0,9 · PRINT_LIMIT an der Kante verschiebt die weiteste Ecke um
+    1,1 · PRINT_LIMIT — das wird auf das Maß gebracht und neu erkannt."""
+    from app.core.units import PRINT_LIMIT
+
+    largest = 20.0 + 0.9 * PRINT_LIMIT
+    result, full = _fitted_cube(profile, largest, monkeypatch)
+
+    assert max(result.scene.objects["obj_1"].mesh.bounds.size) == pytest.approx(largest, abs=1e-12)
+    assert len(full) == 2, full
+
+
+def _fit_alone(profile: Profile, entry, **params):
+    from app.core.geom import ops
+    from app.core.scene.cancel import NeverCancelled
+    from app.core.types import OpContext, Scene
+
+    spec = REGISTRY.get("fit_to_size")
+    return ops.fit_to_size(
+        OpContext(
+            scene=Scene(objects={entry.id: entry}),
+            inputs=[entry],
+            params=spec.params(**params),
+            profile=profile,
+            quality="fine",
+            seed=None,
+            progress=lambda fraction, text: None,
+            ask=lambda question, choices: choices[0],
+            cancelled=NeverCancelled(),
+        )
+    )
+
+
+@pytest.mark.parametrize(
+    ("place", "about", "free_spot", "shift", "moves_only"),
+    [
+        # Die Verschiebung der weitesten Ecke, in Vielfachen der Druckgrenze.
+        ("mitte", "centre", False, 0.5, True),
+        ("mitte", "centre", False, 1.1, False),
+        ("mitte", "bed", False, 0.5, True),
+        ("mitte", "bed", False, 1.1, False),
+        ("mitte", "centre", True, 0.5, True),
+        ("mitte", "centre", True, 1.1, False),
+        # Weit draußen um den Ursprung: An der Kante fehlen nur 0,05 · PRINT_LIMIT,
+        # aber die Ecken liegen 205 mm vom Punkt, der stehen bleibt.
+        ("draussen", "origin", False, 0.5, True),
+        ("draussen", "origin", False, 1.1, False),
+    ],
+)
+def test_fit_to_size_leaves_out_only_what_moves_no_point_by_the_print_limit(
+    place: str, about: str, free_spot: bool, shift: float, moves_only: bool, profile: Profile
+) -> None:
+    """Bauplan §11.2: *Auf Maß bringen* darf das Skalieren nur auslassen, wenn
+    es keinen Punkt um mehr als ``PRINT_LIMIT`` verschöbe — gemessen an der
+    Ausdehnung um den Punkt, der stehen bleibt (Bezug, mit freier Stelle die
+    Mitte der Unterseite), nicht an der Kante. An der Kante gemessen verschob die
+    erste Fassung einen Körper bei x = 200 um den Ursprung bis zum
+    Zwanzigfachen (Review D, H1).
+    """
+    import math
+
+    import numpy as np
+
+    from app.core.geom.transform import apply, is_rigid, scaling, translation
+    from app.core.types import SceneObject
+    from app.core.units import PRINT_LIMIT
+
+    body = cube()
+    if place == "draussen":
+        body = apply(apply(body, scaling((0.5, 0.5, 0.5))), translation((200.0, 0.0, 0.0)))
+    entry = SceneObject(id="obj_1", name="Würfel", mesh=body)
+    low = np.asarray(body.bounds.minimum, dtype=float)
+    high = np.asarray(body.bounds.maximum, dtype=float)
+    centre = (low + high) / 2.0
+    fixed = (
+        np.array([centre[0], centre[1], low[2]])
+        if free_spot or about == "bed"
+        else np.zeros(3)
+        if about == "origin"
+        else centre
+    )
+    reach = max(
+        math.dist(fixed, (x, y, z))
+        for x in (low[0], high[0])
+        for y in (low[1], high[1])
+        for z in (low[2], high[2])
+    )
+    current = float(max(high - low))
+    largest = current * (1.0 + shift * PRINT_LIMIT / reach)
+
+    result = _fit_alone(profile, entry, largest=largest, about=about, free_spot=free_spot)
+
+    out = result.outputs[0].mesh
+    assert result.transform is not None
+    assert is_rigid(result.transform) is moves_only
+    if not moves_only:
+        assert max(out.bounds.size) == pytest.approx(largest, abs=1e-12)
+        return
+    # Die Zusage selbst: Das ausgelassene Skalieren hätte keinen Punkt um die
+    # Druckgrenze verschoben.
+    source = np.asarray(body.raw.vertices, dtype=float)
+    placed = np.asarray(out.raw.vertices, dtype=float)
+    landed = fixed + (placed[0] - source[0])
+    would = landed + (largest / current) * (source - fixed)
+    assert float(np.max(np.linalg.norm(placed - would, axis=1))) < PRINT_LIMIT
+
+
+def test_fit_to_size_far_from_its_fixed_point_scales_a_small_edge_change(
+    profile: Profile,
+) -> None:
+    """Die Kante allein sagt nichts: 0,5 · PRINT_LIMIT an einem 10-mm-Würfel bei
+    x = 200, skaliert um den Ursprung, verschöbe ihn um das Zehnfache der Grenze
+    — also wird skaliert (Review D, Sonde s02)."""
+    from app.core.geom.transform import apply, is_rigid, scaling, translation
+    from app.core.types import SceneObject
+    from app.core.units import PRINT_LIMIT
+
+    body = apply(apply(cube(), scaling((0.5, 0.5, 0.5))), translation((200.0, 0.0, 0.0)))
+    entry = SceneObject(id="obj_1", name="Würfel", mesh=body)
+    largest = 10.0 + 0.5 * PRINT_LIMIT
+
+    result = _fit_alone(profile, entry, largest=largest, about="origin")
+
+    assert result.transform is not None and not is_rigid(result.transform)
+    assert max(result.outputs[0].mesh.bounds.size) == pytest.approx(largest, abs=1e-12)
+
+
+def test_a_later_fit_to_size_settles_the_earlier_one(profile: Profile) -> None:
+    """RM-676: Nur der letzte *Auf Maß bringen* eines Körpers bietet *Größe ändern* an.
+
+    Ein späterer Schritt desselben Körpers bringt ihn ohnehin auf sein eigenes
+    Maß; das Maß des früheren zu ändern bewegte am Ende nichts außer der Rechnung
+    dazwischen. Weg 3 legt zwei davon an (Arbeitsgröße vor der Reparatur,
+    Kundenmaß danach), und im Bericht steht nur der zweite.
+    """
+    project = new_project("centauri-carbon-2", "pla")
+    project.document.sources["src_1"] = Source(
+        id="src_1", kind="import", path="sources/cube_clean.stl", sha256=""
+    )
+    project.sources["src_1"] = (MESHES / "cube_clean.stl").read_bytes()
+    history = History(project.document)
+    history.apply("Laden", [OperationDraft(op="load", params={"source": "src_1", "unit": "mm"})])
+    for largest in (80.0, 50.0):
+        history.apply(
+            "Auf Maß",
+            [
+                OperationDraft(
+                    op="fit_to_size",
+                    inputs=("obj_1",),
+                    outputs=("obj_1",),
+                    params={"largest": largest},
+                )
+            ],
+        )
+    later = project.document.ops[-1].id
+
+    result = evaluate(project.document, profile, sources=ProjectSources(project))
+
+    said = [f for f in result.scene.report.findings if f.code == "transform.fitted"]
+    assert [(f.op_id, f.values["to_mm"]) for f in said] == [(later, 50.0)], (
+        "der frühere Befund führte *Größe ändern* in einen Schritt ohne Wirkung aufs Maß"
+    )
+    assert max(result.scene.objects["obj_1"].mesh.bounds.size) == pytest.approx(50.0, abs=1e-6)
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        "cube_clean.stl",
+        "generated_figure.stl",
+        "post_with_fillet.stl",
+        "broken_open.stl",
+        # Eine Ecke, die kein Dreieck nennt, 500 mm daneben: ``trimesh`` lässt sie
+        # aus der Hülle, und die Hülle der freien Stelle muss es auch.
+        "lose Ecke",
+    ],
+)
+def test_fit_to_size_lays_a_mesh_down_moving_it_once(
+    name: str, profile: Profile, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """RM-676: *Auf Maß bringen* mit freier Stelle bewegt ein Netz einmal.
+
+    Die freie Stelle braucht nur die Hülle am neuen Maß. Vorher wurde dafür das
+    ganze Netz samt Merkmalen bewegt und danach ein zweites Mal mit der
+    Verschiebung — am erzeugten Drachen 0,42 s und 70 MiB Spitze je Rechnung.
+    Das Ergebnis bleibt Bit für Bit das der zwei Bewegungen.
+    """
+    import dataclasses
+
+    import numpy as np
+
+    from app.core.geom import ops
+    from app.core.geom.prepare import placed_at_free_spot
+    from app.core.geom.transform import (
+        anchor_point,
+        composed,
+        moved_object,
+        scaling,
+        translation,
+    )
+    from app.core.scene.cancel import NeverCancelled
+    from app.core.types import OpContext, Scene, SceneObject
+
+    if name == "lose Ecke":
+        import trimesh
+
+        from app.core.geom.mesh import MeshData
+
+        solid = cube().raw
+        mesh = MeshData(
+            raw=trimesh.Trimesh(
+                vertices=np.vstack([np.asarray(solid.vertices), [[500.0, 0.0, 0.0]]]),
+                faces=np.asarray(solid.faces),
+                process=False,
+            )
+        )
+    else:
+        mesh = normalise(read_mesh((MESHES / name).read_bytes(), name[-4:]), "mm").mesh
+    beside = SceneObject(id="obj_2", name="Daneben", mesh=cube())
+    entry = SceneObject(id="obj_1", name="Teil", mesh=mesh)
+    scene = Scene(objects={entry.id: entry, beside.id: beside})
+    spec = REGISTRY.get("fit_to_size")
+    context = OpContext(
+        scene=scene,
+        inputs=[entry],
+        params=spec.params(largest=137.0, free_spot=True),
+        profile=profile,
+        quality="fine",
+        seed=None,
+        progress=lambda fraction, text: None,
+        ask=lambda question, choices: choices[0],
+        cancelled=NeverCancelled(),
+    )
+    moves: list[object] = []
+
+    def counted(source, matrix, **kwargs):
+        moves.append(source)
+        return moved_object(source, matrix, **kwargs)
+
+    monkeypatch.setattr(ops, "moved_object", counted)
+
+    result = ops.fit_to_size(context)
+
+    assert len(moves) == 1, "ein Netz wird für die freie Stelle nicht vorab bewegt"
+    factor = 137.0 / max(mesh.bounds.size)
+    centre = anchor_point(mesh, "centre")
+    first = moved_object(entry, scaling((factor,) * 3, centre))
+    spot = placed_at_free_spot(
+        first.mesh.bounds,
+        profile,
+        scene,
+        spot=(None, None, 1),
+        ignore={entry.id},
+        objects=[first],
+    )
+    expected = dataclasses.replace(
+        moved_object(entry, composed(translation(spot.offset), scaling((factor,) * 3, centre))),
+        plate=spot.plate,
+    )
+    body = result.outputs[0]
+    assert np.array_equal(body.mesh.raw.vertices, expected.mesh.raw.vertices)
+    assert np.array_equal(body.mesh.raw.faces, expected.mesh.raw.faces)
+    assert body.plate == expected.plate
+    assert result.answered == spot.answered
+
+
 def test_fit_to_size_refuses_a_body_without_extent() -> None:
     """Ein Maß braucht etwas, worauf es sich bezieht — sonst teilt die
     Rechnung durch null.

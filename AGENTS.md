@@ -176,9 +176,13 @@ Dialoge.
   Commit direkt auf main, den `post-commit` sofort pusht (Entscheidung
   Robert). Ein Schritt, der
   seine Tests rot lässt, wird nicht auf den nächsten gestapelt.
-- **Fenster, Renderer und Leistung lokal nur beim Release**; die CI läuft nur
-  beim Push nach main, auf Zweigen nie (Entscheidung Robert, `/liefern`). Ein
-  grüner Entwicklungslauf ersetzt sie nicht.
+- **Fenster, Renderer und Leistung lokal nur beim Release**; der Push nach main
+  löst im öffentlichen Repository alle Prüfungen selbst aus — Kern und
+  Renderer auf allen vier Plattformen, dazu die betroffenen Fenster- und
+  Slicertests (`/liefern`); ein Push nur aus Unterlagen startet keinen Lauf
+  (Pfadfilter CI-09 in `build.yml`), dann prüft allein das Tor davor. Auf
+  Zweigen läuft keine CI (Entscheidung Robert). Ein grüner Entwicklungslauf
+  ersetzt sie nicht.
 - **Bilder und Handbuch nur beim Release — und nur, was sich geändert hat**
   (Weg in `/erzeugen`).
 - **Die CI-Aufteilung hat einen geprüften Vertrag**

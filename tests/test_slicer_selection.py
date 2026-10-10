@@ -12,12 +12,13 @@ Fixture ``installed_slicer`` geht.
 from __future__ import annotations
 
 import ast
+import shlex
 import textwrap
 from pathlib import Path, PurePosixPath
 
 import pytest
 
-from tools import ci_selection
+from tools import affected_tests, ci_selection
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -79,10 +80,17 @@ def test_markdown_the_application_reads_is_named_where_the_selection_looks() -> 
                 named.add(PurePosixPath(node.value).name)
     assert named, "Voraussetzung: die Anwendung liest Markdown beim Namen"
     assert named == ci_selection.READ_BY_THE_APPLICATION
+    # Ein Graph und eine Sammlung für alle Dateien — beides kostet je Aufruf
+    # Minuten; welche Datei welchen Fenstertest wählt, sagt der Graph.
+    graph = affected_tests.ImportGraph(ROOT)
+    windows, _slicers = ci_selection.select([ROOT / name for name in named], graph=graph)
+    chosen = {shlex.split(selection)[0] for selection in windows}
     for name in named:
         assert (ROOT / name).is_file(), name
-        windows, _slicers = ci_selection.select([ROOT / name])
-        assert windows, f"{name}: eine Änderung wählt keinen Fenstertest"
+        assert not ci_selection.is_documentation(name), name
+        files, _reasons = affected_tests.affected([ROOT / name], graph)
+        reached = {path.relative_to(ROOT).as_posix() for path in files}
+        assert reached & chosen, f"{name}: eine Änderung wählt keinen Fenstertest"
 
 
 def test_documents_and_catalogues_select_neither_windows_nor_slicers() -> None:
@@ -138,12 +146,14 @@ def _unmarked_machine_searches(source: str, name: str) -> list[str]:
     for node in ast.walk(tree):
         if not isinstance(node, ast.FunctionDef):
             continue
-        text = ast.get_source_segment(source, node) or ""
         parameters = {argument.arg for argument in node.args.args}
-        decorators = " ".join(ast.unparse(decorator) for decorator in node.decorator_list)
-        if "installed_slicer" in parameters and "mark.slicer" not in decorators:
+        if "installed_slicer" in parameters and "mark.slicer" not in " ".join(
+            ast.unparse(decorator) for decorator in node.decorator_list
+        ):
             found.append(f"{name}:{node.lineno} {node.name}: installed_slicer ohne mark.slicer")
-        isolated = "isolated_search" in parameters or "_install_roots" in text
+        # Quelltext nur, wo eine echte Suche ihn braucht: ``get_source_segment``
+        # zerlegt je Aufruf die ganze Datei, über alle Funktionen quadratisch.
+        isolated: bool | None = None
         for inner in ast.walk(node):
             if not isinstance(inner, ast.Call):
                 continue
@@ -151,14 +161,20 @@ def _unmarked_machine_searches(source: str, name: str) -> list[str]:
             if (
                 isinstance(called, ast.Attribute)
                 and called.attr in _REAL_SEARCH
-                and not isolated
                 and _asks_for_a_slicer(inner)
             ):
-                found.append(f"{name}:{inner.lineno} {node.name}: {called.attr} ohne Isolation")
-            if isinstance(called, ast.Attribute) and called.attr in _READS:
+                if isolated is None:
+                    text = ast.get_source_segment(source, node) or ""
+                    isolated = "isolated_search" in parameters or "_install_roots" in text
+                if not isolated:
+                    found.append(f"{name}:{inner.lineno} {node.name}: {called.attr} ohne Isolation")
+            if (
+                isinstance(called, ast.Attribute)
+                and called.attr in _READS
+                and _is_install_root(called.value)
+            ):
                 receiver = ast.unparse(called.value)
-                if _is_install_root(called.value):
-                    found.append(f"{name}:{inner.lineno} {node.name}: liest {receiver}")
+                found.append(f"{name}:{inner.lineno} {node.name}: liest {receiver}")
         for loop in ast.walk(node):
             if isinstance(loop, ast.For) and any(
                 _is_install_root(part) for part in ast.walk(loop.iter)
@@ -246,3 +262,72 @@ def test_only_installed_slicer_asks_the_machine_for_a_slicer() -> None:
         found += _unmarked_machine_searches(path.read_text(encoding="utf-8"), path.name)
 
     assert not found, "Slicer an installed_slicer vorbei gesucht:\n" + "\n".join(found)
+
+
+# --- Die Basis der Auswahl beim Push nach main (CI-09, N-1 der Nachprüfung) ---------------
+
+
+def _run(number: int, sha: str, *, status: str = "completed") -> dict[str, object]:
+    return {
+        "id": number,
+        "head_sha": sha,
+        "head_branch": "main",
+        "event": "push",
+        "status": status,
+    }
+
+
+def _jobs(
+    window: str = "success", slicer: str = "skipped", chose: str = "success"
+) -> list[dict[str, object]]:
+    """Die Jobs eines main-Laufs, wie die API sie nennt; gerufene als ``<Name> / <Job>``."""
+    jobs: list[dict[str, object]] = [
+        {"name": "Stil und Format", "status": "completed", "conclusion": "success"},
+        {"name": ci_selection.SELECTION_JOB, "status": "completed", "conclusion": chose},
+    ]
+    window_name, slicer_name = ci_selection.SELECTION_RUNS
+    for part in range(2):
+        jobs.append(
+            {
+                "name": f"{window_name} / Fensterauswahl (macos-latest, Teil {part})",
+                "status": "completed" if window != "in_progress" else "in_progress",
+                "conclusion": None if window == "in_progress" else window,
+            }
+        )
+    jobs.append({"name": slicer_name, "status": "completed", "conclusion": slicer})
+    return jobs
+
+
+def test_the_selection_base_is_the_last_main_run_that_finished_its_selection() -> None:
+    """Ein ersetzter Lauf (keine Jobs), ein abgebrochener, ein noch laufender und der
+    eigene Lauf zählen nicht; ein roter, der seine Auswahl gefahren hat, schon."""
+    runs = [
+        _run(9, "eigener", status="in_progress"),
+        _run(8, "ersetzt"),
+        _run(7, "abgebrochen"),
+        _run(6, "laeuft-noch", status="in_progress"),
+        _run(5, "rot-aber-gefahren"),
+        _run(4, "aelter"),
+    ]
+    jobs = {
+        8: [],
+        7: _jobs(window="cancelled"),
+        6: _jobs(window="in_progress"),
+        5: _jobs(window="failure"),
+        4: _jobs(),
+    }
+    assert ci_selection.checked_base(runs, lambda run: jobs.get(int(str(run)), []), "9") == (
+        "rot-aber-gefahren"
+    )
+    assert ci_selection.checked_base(runs[:4], lambda run: jobs.get(int(str(run)), [])) is None
+    # Eine gescheiterte Auswahl hat nichts gewählt; ein Lauf von einem anderen Zweig zählt nicht.
+    assert not ci_selection.checked_run(_jobs(chose="failure"))
+    other = [{**_run(3, "zweig"), "head_branch": "paket/x"}]
+    assert ci_selection.checked_base(other, lambda _run: _jobs()) is None
+
+
+def test_the_selection_job_names_are_those_of_the_workflow() -> None:
+    """Die Namen, an denen die Basis einen fertigen Lauf erkennt, stehen so in build.yml."""
+    workflow = (ROOT / ".github" / "workflows" / "build.yml").read_text(encoding="utf-8")
+    for name in (ci_selection.SELECTION_JOB, *ci_selection.SELECTION_RUNS):
+        assert f"\n    name: {name}\n" in workflow, name

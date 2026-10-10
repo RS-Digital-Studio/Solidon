@@ -117,7 +117,10 @@ Ein Baustein sagt nur, **was** er ist; den Kern wählt der Aufrufer
   `bausteine.md`.
 - **Material**: `profiles.for_object` gibt beim Einsetzen das Material des
   Ziels, auch für `build_with_profile`; `grip_from_profile` kennzeichnet
-  Übermaß, eine konstruktive Verengung misst gegen ihr Maß (Kabelclip).
+  Übermaß, eine konstruktive Verengung misst gegen ihr Maß (Kabelclip);
+  `play_inside` sagt, dass ein aufgesetzter Baustein sein Spiel in ein
+  Innenmerkmal legt — der Druckrat zählt es dort (`scene.fits.allowances_for`,
+  Wächter `test_parts.py`).
   Unmögliches wird mit Vorschlag abgewiesen, Messwinkel nie still gekappt;
   Innen- und Außengewinde teilen den Flankenverlauf samt Spiel. Die
   Federwarnung nimmt `snap_arm_length` wie der Aufbau; eine Filmscharnierfolie

@@ -1471,6 +1471,80 @@ def test_enabling_intersection_repair_leaves_a_clean_cavity_alone() -> None:
     np.testing.assert_array_equal(result.mesh.raw.faces, body.raw.faces)
 
 
+def _crossing_cubes_with_a_cavity() -> trimesh.Trimesh:
+    """Zwei ineinandersteckende Würfel, im ersten ein Hohlraum (verkehrt gewickelte Schale)."""
+    first = trimesh.creation.box(extents=(20.0, 20.0, 20.0))
+    second = trimesh.creation.box(
+        extents=(20.0, 20.0, 20.0), transform=trimesh.transformations.translation_matrix((10, 0, 0))
+    )
+    cavity = trimesh.creation.box(
+        extents=(4.0, 4.0, 4.0), transform=trimesh.transformations.translation_matrix((-6, 0, 0))
+    )
+    cavity.invert()
+    return trimesh.util.concatenate([first, second, cavity])
+
+
+def test_the_bounds_of_each_shell_come_from_all_its_triangles_however_they_are_ordered() -> None:
+    """Die Hüllquader je Schale an verschränkten Dreiecken (Review L3, M3).
+
+    Im Korpus liegen die Dreiecke einer Schale oft in mehreren Läufen; ohne
+    Sortierung vor dem Sammeln käme der Hüllquader einer Schale nur aus ihrem
+    letzten Lauf, und das Sieb in ``containers_of`` verlöre Behälter.
+    """
+    from app.core.geom.repair import _Shells
+
+    boxes = [
+        trimesh.creation.box(
+            extents=size, transform=trimesh.transformations.translation_matrix(place)
+        )
+        for size, place in (
+            ((20.0, 20.0, 20.0), (0.0, 0.0, 0.0)),
+            ((6.0, 4.0, 2.0), (30.0, -5.0, 1.0)),
+            ((3.0, 9.0, 5.0), (-25.0, 12.0, -4.0)),
+        )
+    ]
+    joined = trimesh.util.concatenate(boxes)
+    order = np.random.default_rng(6363).permutation(len(joined.faces))
+    body = trimesh.Trimesh(joined.vertices, np.asarray(joined.faces)[order], process=False)
+    shells = _Shells(body)
+    assert len(shells.components) == 3
+    labels = np.empty(len(body.faces), dtype=np.int64)
+    for index, members in enumerate(shells.components):
+        labels[members] = index
+    assert np.count_nonzero(np.diff(labels)) > 6, "Voraussetzung: die Schalen liegen verstreut"
+    triangles = np.asarray(body.triangles)
+    for index, members in enumerate(shells.components):
+        np.testing.assert_array_equal(shells.low[index], triangles[members].min(axis=(0, 1)))
+        np.testing.assert_array_equal(shells.high[index], triangles[members].max(axis=(0, 1)))
+
+
+def test_crossing_parts_with_a_cavity_are_not_offered_for_resolving() -> None:
+    """Angebot und Auflösen fragen dieselbe Volumenfrage je Teil (Review L3, M2).
+
+    Ein Hohlraum ist kein Materialstück, das die Vereinigung aufnehmen könnte:
+    *Überschneidungen auflösen* wird nicht angeboten, nur *In Einzelteile
+    aufteilen*, und das Auflösen selbst lässt den Körper, wie er ist.
+    """
+    from app.core.errors import RESOLVE_INTERSECTIONS, SPLIT_BODIES
+    from app.core.geom.repair import (
+        _intersections_resolvable,
+        parts_can_be_merged,
+        resolve_self_intersections,
+    )
+    from app.core.ingest.loader import normalise
+
+    body = MeshData.of(_crossing_cubes_with_a_cavity())
+    assert body.raw.is_watertight and body.raw.is_winding_consistent, "Voraussetzung"
+    assert _intersections_resolvable(body) == "cavity"
+    assert not parts_can_be_merged(body)
+    assert resolve_self_intersections(body)[1] is False
+    findings = normalise(body, "mm").findings
+    several = next(entry for entry in findings if entry.code == "ingest.multiple_components")
+    assert several.location is not None, "the parts were found crossing"
+    assert list(several.suggestions) == [SPLIT_BODIES]
+    assert RESOLVE_INTERSECTIONS not in several.suggestions
+
+
 def test_intersection_repair_keeps_ambiguous_cavity_shells_and_names_the_limit() -> None:
     """Innenschalen sind kein Materialstück, das separat vereinigt werden darf."""
     crossing, _ = merge_vertices(raw("broken_selfint.stl"))
