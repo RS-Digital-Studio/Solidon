@@ -4582,18 +4582,32 @@ def _intersections_resolvable(mesh: MeshData, crossings: Crossings | None = None
         and _crossing_shape(mesh, crossings) == "self"
     ):
         return "self"
-    # **Jedes Teil eines dichten, einheitlich gerichteten Netzes ist es auch**
-    # (RM-636): Teile hängen über Kanten zusammen, also liegen beide Dreiecke
-    # jeder Kante im selben Teil. Zu fragen bleibt je Teil nur das Vorzeichen
-    # seines Volumens — an seinen Dreiecken in derselben Folge und auf dieselbe
-    # erste Ecke bezogen wie am ausgeschnittenen Teil (``_has_volume``), ohne es
-    # auszuschneiden. Am Spiderman kosteten Ausschneiden und die zweite
-    # Dichtheitsfrage je Teil 1,5 s je Import.
-    triangles = np.asarray(mesh.raw.triangles, dtype=np.float64)
-    for faces in face_components(mesh.raw):
-        if not signed_volume_of(triangles[np.asarray(faces, dtype=np.int64)]) > 0.0:
-            return "cavity"
+    if not _every_part_has_volume(mesh):
+        return "cavity"
     return None
+
+
+def _every_part_has_volume(mesh: MeshData) -> bool:
+    """Ob jedes Teil eines dichten, einheitlich gerichteten Netzes positives Volumen hat.
+
+    Die eine Frage für das Angebot (:func:`_intersections_resolvable`) und das
+    Auflösen (:func:`resolve_self_intersections`): Zwei Herleitungen derselben
+    Antwort böten sonst einen Knopf an, der nichts tut, oder versteckten einen,
+    der trüge (Review L3, M2). **Jedes Teil eines dichten, einheitlich
+    gerichteten Netzes ist es auch** (RM-636): Teile hängen über Kanten
+    zusammen, also liegen beide Dreiecke jeder Kante im selben Teil. Zu fragen
+    bleibt je Teil nur das Vorzeichen seines Volumens — an seinen Dreiecken in
+    derselben Folge und auf dieselbe erste Ecke bezogen wie am ausgeschnittenen
+    Teil (``_has_volume``), ohne es auszuschneiden. Am Spiderman kosteten
+    Ausschneiden und die zweite Dichtheitsfrage je Teil 1,5 s je Import.
+    Voraussetzung, vom Aufrufer geprüft: das ganze Netz ist dicht und
+    einheitlich gerichtet.
+    """
+    triangles = np.asarray(mesh.raw.triangles, dtype=np.float64)
+    return all(
+        signed_volume_of(triangles[np.asarray(faces, dtype=np.int64)]) > 0.0
+        for faces in face_components(mesh.raw)
+    )
 
 
 def _has_volume(mesh: MeshData) -> bool:
@@ -4876,12 +4890,13 @@ def resolve_self_intersections(
     crossings = crossings_of(mesh, cancelled, budget=budget)
     if not len(crossings.first) or _crossing_shape(mesh, crossings) == "self":
         return mesh, False
+    # ``_has_volume(mesh)`` oben belegt die Voraussetzung: dicht und einheitlich.
+    if not _every_part_has_volume(mesh):
+        return mesh, False
     pieces = [
         MeshData.of(cast(trimesh.Trimesh, mesh.raw.submesh([faces], append=True, repair=False)))
         for faces in face_components(mesh.raw)
     ]
-    if not all(_has_volume(piece) for piece in pieces):
-        return mesh, False
     operands = pieces if len(pieces) > 1 else [mesh, mesh]
     try:
         rebuilt = boolean("union", operands, stages=("direct",), cancelled=cancelled).mesh

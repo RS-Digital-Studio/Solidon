@@ -505,6 +505,10 @@ def test_near_identical_sets_give_the_full_answer_bit_for_bit(monkeypatch, seed)
     assert list(found.ambiguous.items()) == list(expected.ambiguous.items())
     assert found.orphaned == expected.orphaned and found.fresh == expected.fresh
     assert engaged, "Voraussetzung: der Zuordner fragt den Nahweg"
+    if seed % 5 == 0:
+        # Ohne Zwillinge trägt das Zertifikat: Der Nahweg antwortet selbst
+        # (Review L3, M1) — nicht nur gefragt, auch genommen.
+        assert any(engaged), "without twins the near way answers"
 
 
 def test_the_near_way_carries_the_identity_and_the_small_moves():
@@ -542,3 +546,50 @@ def test_identical_twins_leave_the_near_way_for_the_full_one(monkeypatch):
     two = matching._vectors(list(new.values()), (0, 0, 0), 1.0, None)
     assert matching._near_assignment(list(old.values()), list(new.values()), one, two, None) is None
     assert match(old, new, (0, 0, 0), 1.0) == _full_path_only(monkeypatch, old, new)
+
+
+def _taken_and_answer(monkeypatch, old, new):
+    """Die Antwort mit Nahweg und ob er sie gab."""
+    taken = []
+    real = matching._near_assignment
+
+    def watched(*args, **kwargs):
+        answer = real(*args, **kwargs)
+        taken.append(answer is not None)
+        return answer
+
+    with monkeypatch.context() as patched:
+        patched.setattr(matching, "_near_assignment", watched)
+        matching.forget_matches()
+        found = match(old, new, (0.0, 0.0, 0.0), 1.0)
+    return any(taken), found
+
+
+def test_the_near_search_keeps_its_rounding_reserve(monkeypatch):
+    """Ein Rivale knapp über ``T·L``, der in Gleitkomma doch bis ``L`` kostet (Review L3, M1).
+
+    Ohne die Reserve aus ``_query_radius`` fände die kleine Suche ihn nicht, und a, b würden
+    still zugeordnet, wo der volle Weg fragt.
+    """
+    s = float.fromhex("0x1.693a61ba258d5p-9")
+    d = float.fromhex("0x1.e7e95a4372182p-8")
+    old = {"a": hole("a", 0.0), "b": hole("b", -d - s / 4.0)}
+    new = {"a": hole("a", s), "b": hole("b", -d)}
+    expected = _full_path_only(monkeypatch, old, new)
+    taken, found = _taken_and_answer(monkeypatch, old, new)
+    assert taken, "the near way answers this case"
+    assert found == expected
+    assert dict(found.ambiguous) == {"a": ("a", "b"), "b": ("b",)}
+    assert not found.mapping
+
+
+@pytest.mark.parametrize("spacing", [0.008, 0.01, 0.012])
+def test_the_near_way_answers_with_the_partners_it_found(monkeypatch, spacing):
+    """Vertauschte Kennungen in der Nähe: Partner sind die gefundenen, nicht die vorläufigen."""
+    old = {"a": hole("a", 0.0), "b": hole("b", spacing), "c": hole("c", 0.3)}
+    new = {"a": hole("a", spacing), "b": hole("b", 0.0), "c": hole("c", 0.3)}
+    expected = _full_path_only(monkeypatch, old, new)
+    taken, found = _taken_and_answer(monkeypatch, old, new)
+    assert taken, "the near way answers this case"
+    assert found == expected
+    assert found.mapping == {"a": "b", "b": "a", "c": "c"}
