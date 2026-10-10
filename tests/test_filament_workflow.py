@@ -1153,6 +1153,18 @@ def test_plate_outputs_name_the_print_by_its_stored_inputs(qt_app, tmp_path, mon
         return prepare(*args, **kwargs)
 
     monkeypatch.setattr(printing, "prepare_usage", watched)
+    # Ein Gang über den Stapel je Auftrag, nicht je Platte (Review RM-706, L5):
+    # Eine verknüpfte Quelle wird dabei jedes Mal ganz gelesen und gehasht.
+    from app.core import filament_usage as usage_module
+
+    walks = []
+    walk = usage_module._stored_bodies
+
+    def counted(stored):
+        walks.append(stored)
+        return walk(stored)
+
+    monkeypatch.setattr(usage_module, "_stored_bodies", counted)
     worker = (
         printing._OpenInSlicerWorker(job)
         if mode == "open"
@@ -1165,3 +1177,4 @@ def test_plate_outputs_name_the_print_by_its_stored_inputs(qt_app, tmp_path, mon
     assert all(one.former_fingerprints for one in offered)
     # Die Grundlage des Slicerlaufs benennt den Druck mit (Review RM-706, M2).
     assert named and all(base is job.setup for base in named)
+    assert len(walks) == 1, "ein Gang über den Stapel für alle Platten"

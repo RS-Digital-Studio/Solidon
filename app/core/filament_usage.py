@@ -172,6 +172,8 @@ class StoredInputs:
     document: Document
     sources: SourceAccess | None = None
     stopped_at: OpId | None = None
+    known: Mapping[ObjectId, str] | None = None
+    """Schon gerechnete Abdrücke je Körper (:meth:`settled`)."""
 
     @classmethod
     def snapshot(
@@ -193,7 +195,17 @@ class StoredInputs:
 
     def bodies(self) -> dict[ObjectId, str]:
         """Je Körper des Endstands ein Abdruck seiner gespeicherten Eingänge."""
+        if self.known is not None:
+            return dict(self.known)
         return _stored_bodies(self)
+
+    def settled(self) -> StoredInputs:
+        """Derselbe Stand mit gerechneten Abdrücken — für einen Arbeiter, der je
+        Platte bucht: Ein Gang über den Stapel liest jede verknüpfte Quelle ganz
+        (Review RM-706, L5). Nur für einen festen Stand (:meth:`snapshot`)."""
+        if self.known is not None:
+            return self
+        return replace(self, known=self.bodies())
 
 
 def _stored_bodies(stored: StoredInputs) -> dict[ObjectId, str]:

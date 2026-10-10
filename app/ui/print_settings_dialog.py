@@ -2255,6 +2255,8 @@ class _OpenInSlicerWorker(Worker):
             return
         findings = self._receipt_findings
         opened = 0
+        # Ein Gang über den Stapel für alle Platten (Review RM-706, L5).
+        inputs = self._job.inputs.settled() if self._job.inputs is not None else None
         for plate in self._job.plates:
             if self._was_cancelled():
                 self._report_receipt(
@@ -2272,7 +2274,7 @@ class _OpenInSlicerWorker(Worker):
                     self._job.profile,
                     self._job.name,
                     slots_by_plate={plate: run.slots},
-                    inputs=self._job.inputs,
+                    inputs=inputs,
                     base=self._job.setup,
                 )
                 if self._was_cancelled():
