@@ -40,12 +40,6 @@ wieder heraus (Entscheidung Robert). Wo ein Nutzen bleibt, der ohne den
 Mechanismus auskommt — „die Meldung nennt den wirklichen Grund“ —, steht der
 Nutzen da und sonst nichts.
 
-## 0.6.1
-
-### Bedienung und System
-
-- Ein gespeichertes Projekt mit vielen Schritten an einem großen Modell öffnet mit deutlich weniger Arbeitsspeicher.
-
 ## 0.6.0
 
 ### Bedienung und System
@@ -85,6 +79,7 @@ Nutzen da und sonst nichts.
 - Im Reiter *Auswahl* weist das Filamentfeld erst mit Klick oder Enter zu. Pfeiltasten und Tippen blättern nur, und das Mausrad rollt den Reiter.
 - In den übersetzten Fassungen rollt *Neues Filament* nicht mehr seitwärts, wenn das Fenster kürzer ist als sein Inhalt.
 - Große Modelle laden spürbar schneller und brauchen weniger Arbeitsspeicher, auch mit langem Verlauf und auf Rechnern mit 8 GB.
+- Ein gespeichertes Projekt mit vielen Schritten an einem großen Modell öffnet mit deutlich weniger Arbeitsspeicher.
 - Auch in einem langen Verlauf rechnet ein neuer Schritt kaum länger als der erste.
 - An Modellen mit Tausenden Merkmalen sind Verschieben und andere Schritte, die die Form nicht ändern, bis zu doppelt so schnell fertig.
 - Nach dem Wiederöffnen eines Projekts nennt der Prüfbericht weiter, an welche freie Stelle ein eingefügtes Modell kam.

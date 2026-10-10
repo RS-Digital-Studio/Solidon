@@ -15,12 +15,6 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 `tools/make_download.py` retira daqui a secção da versão atual e escreve-a em
 `website/version.json`.
 
-## 0.6.1
-
-### Utilização e sistema
-
-- Um projeto guardado com muitos passos num modelo grande abre com muito menos memória.
-
 ## 0.6.0
 
 ### Utilização e sistema
@@ -60,6 +54,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - No separador *Seleção*, o campo de filamento só atribui com um clique ou Enter. As setas e a escrita apenas percorrem a lista, e a roda do rato desloca o separador.
 - Nas versões traduzidas, *Novo filamento* já não se desloca para o lado quando a janela é mais baixa do que o conteúdo.
 - Os modelos grandes carregam visivelmente mais depressa e precisam de menos memória, também com um histórico longo e em computadores com 8 GB.
+- Um projeto guardado com muitos passos num modelo grande abre com muito menos memória.
 - Mesmo num histórico longo, um passo novo quase não demora mais a calcular do que o primeiro.
 - Em modelos com milhares de características, mover e outros passos que não alteram a forma terminam até duas vezes mais depressa.
 - Ao reabrir um projeto, o relatório de verificação continua a indicar para que lugar livre foi um modelo inserido.

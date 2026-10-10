@@ -15,12 +15,6 @@ carry the same points in the same order (`tests/test_changelog.py`).
 `tools/make_download.py` takes the section for the current version and writes
 it into `website/version.json`.
 
-## 0.6.1
-
-### Operation and system
-
-- A saved project with many steps on a large model opens with much less memory.
-
 ## 0.6.0
 
 ### Operation and system
@@ -60,6 +54,7 @@ it into `website/version.json`.
 - In the *Selection* tab, the filament field assigns only on a click or Enter. Arrow keys and typing just browse, and the mouse wheel scrolls the tab.
 - In the translated versions, *New filament* no longer scrolls sideways when the window is shorter than its content.
 - Large models load noticeably faster and need less memory, even with a long history and on computers with 8 GB.
+- A saved project with many steps on a large model opens with much less memory.
 - Even in a long history, a new step takes hardly longer to calculate than the first.
 - On models with thousands of features, moving and other steps that leave the shape unchanged finish up to twice as fast.
 - After reopening a project, the check report still says which free spot an inserted model went to.

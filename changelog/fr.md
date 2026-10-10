@@ -16,12 +16,6 @@ portent les mêmes points dans le même ordre (`tests/test_changelog.py`).
 `tools/make_download.py` en tire la section de la version courante et l'écrit
 dans `website/version.json`.
 
-## 0.6.1
-
-### Utilisation et système
-
-- Un projet enregistré avec de nombreuses étapes sur un grand modèle s’ouvre avec beaucoup moins de mémoire.
-
 ## 0.6.0
 
 ### Utilisation et système
@@ -61,6 +55,7 @@ dans `website/version.json`.
 - Dans l'onglet *Sélection*, le champ du filament n'attribue qu'au clic ou avec Entrée. Les flèches et la saisie ne font que parcourir la liste, et la molette fait défiler l'onglet.
 - Dans les versions traduites, *Nouveau filament* ne défile plus de côté quand la fenêtre est moins haute que son contenu.
 - Les grands modèles se chargent nettement plus vite et demandent moins de mémoire, même avec un long historique et sur des ordinateurs de 8 Go.
+- Un projet enregistré avec de nombreuses étapes sur un grand modèle s’ouvre avec beaucoup moins de mémoire.
 - Même dans un long historique, une nouvelle étape ne prend guère plus de temps à calculer que la première.
 - Sur les modèles à plusieurs milliers de caractéristiques, le déplacement et les autres étapes qui ne changent pas la forme se terminent jusqu'à deux fois plus vite.
 - Après la réouverture d'un projet, le rapport de contrôle indique toujours à quel emplacement libre un modèle inséré a été placé.
