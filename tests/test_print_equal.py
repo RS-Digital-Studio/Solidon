@@ -556,10 +556,19 @@ def test_an_exact_zero_is_called_so(cube_shot: ResultShot) -> None:
 
 
 def test_the_tool_shoots_the_reopened_state_through_a_disk_cache(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """``shoot --cache`` nimmt den Stand nach dem Wiederöffnen auf, und er gleicht dem frischen."""
+    """``shoot --cache`` nimmt den Stand nach dem Wiederöffnen auf, und er gleicht dem frischen.
+
+    Die zweite Runde bildet einen Neustart nach: Der Merker der Erkennung ist
+    vor jeder Runde leer (Nachprüfung zu RM-698, N3).
+    """
+    from app.core.perceive import features
     from tools import check_print_equal
+
+    forgotten: list[int] = []
+    forget = features.forget_cache
+    monkeypatch.setattr(features, "forget_cache", lambda: (forgotten.append(1), forget())[1])
 
     model = str(Path(__file__).parent / "data" / "meshes" / "plate_holes.stl")
     fresh = check_print_equal.main(["shoot", str(tmp_path / "frisch"), "--model", model])
@@ -572,5 +581,6 @@ def test_the_tool_shoots_the_reopened_state_through_a_disk_cache(
 
     out = capsys.readouterr().out
     assert (fresh, reopened, compared) == (0, 0, 0)
+    assert len(forgotten) == 3, "eine Runde frisch, zwei mit Plattencache"
     assert "Plattentreffer 1 " in out, out
     assert "Größte Abweichung: genau 0 µm" in out

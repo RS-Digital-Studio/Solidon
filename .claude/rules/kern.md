@@ -131,7 +131,8 @@ In `app/ui` wird keine Geometrie gerechnet; die Ansicht fragt den Kern.
 
 - **`scipy.spatial.ConvexHull`** legt je Aufruf eine Temporärdatei an. Ebene
   Hüllen über GEOS (`MultiPoint(punkte).convex_hull`; für die
-  Schattenprojektion `geom.mesh.planar_outline`, wie `hull_planes`).
+  Schattenprojektion `geom.mesh.planar_outline`, wie `hull_planes`); Fallen
+  bei entartetem Eingang: `regel-kern.md`.
   `geom/mesh.py` und `geom/orient.py` fragen einmal je Körper und behalten
   Qhull.
 - **Kein `np.unique(…, axis=0)` an Kanten oder Ecken in einer Schleife** — es

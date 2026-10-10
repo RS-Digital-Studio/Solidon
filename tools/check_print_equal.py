@@ -14,8 +14,9 @@ Modelldatei (``--model``, eingelesen wie *Öffnen* in Millimetern) im Baum
 Abbild ab. ``--quick`` lässt Selbstdurchdringung, STL-Runde und Rundreise weg
 (für Netze mit Millionen Dreiecken); das Urteil nennt sie dann ungeprüft.
 ``--cache`` nimmt den Stand nach dem Wiederöffnen auf: einmal in einen
-Plattencache auswerten, dann mit frischem Speicher über demselben Ordner —
-der Weg, den ein gespeichertes Projekt beim Öffnen nimmt.
+Plattencache auswerten, dann mit frischem Speicher und leerem Merker der
+Erkennung über demselben Ordner — der Weg, den ein gespeichertes Projekt beim
+Öffnen nach einem Neustart nimmt.
 Die Nutzerverzeichnisse liegen für den Lauf in einem Temp-Ordner (§38).
 
 ``compare`` hält gleichnamige Abbilder zweier Ordner gegeneinander, schreibt
@@ -105,6 +106,7 @@ def shoot(arguments: argparse.Namespace, folder: str) -> int:
     helper = _helper()
     from app.core.bootstrap import load_operations
     from app.core.geom.mesh import MeshCodec
+    from app.core.perceive.features import forget_cache
     from app.core.scene import evaluate
     from app.core.scene.cache import DiskCache, ResultCache
     from app.core.scene.project import ProjectSources
@@ -137,6 +139,9 @@ def shoot(arguments: argparse.Namespace, folder: str) -> int:
                 ResultCache(disk=DiskCache(codec=MeshCodec(), directory=disk)) for _ in range(2)
             ]
         for cache in rounds:
+            # Wie nach einem Neustart: Der Merker der Erkennung lebt im Prozess,
+            # nicht auf der Platte (Nachprüfung zu RM-698, N3).
+            forget_cache()
             questions = helper.QuestionLog()
             result = evaluate(
                 project.document,

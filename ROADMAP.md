@@ -3754,8 +3754,7 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
 <a id="rm-758"></a>
 
 - [ ] **RM-758 — Der Plattencache friert übersetzbare Befundwerte ein.**
-  Gefunden im Review 1 zu RM-698 (Sonde `review-sparen-sonden/sonden/probe_cache_equal.py`,
-  Ausgabe `equal_vergleich.txt`): `serialise.finding_to_data` schreibt `values` mit
+  Gefunden im Review 1 zu RM-698: `serialise.finding_to_data` schreibt `values` mit
   `str(value)`, `scene/cache.py` (`_finding_to_cache`) übernimmt das. Im Beispiel
   *passung-nach-materialwechsel* trägt `prepare.material` im Wert `object` frisch einen
   `TranslatableText` („Deckel“), nach dem Wiederöffnen die Zeichenkette. Nach einem
