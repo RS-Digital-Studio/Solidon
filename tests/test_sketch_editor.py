@@ -2844,13 +2844,24 @@ def test_a_click_with_a_trembling_hand_moves_nothing(qt_app: QApplication) -> No
     die Form danach ein Zehntelmillimeter daneben — eine Änderung, die niemand
     gewollt und niemand bemerkt hat, bis das Maß nicht mehr stimmt. Die Zahl
     kommt von Qt, es ist dieselbe, die ein Ziehen überall sonst auslöst.
+
+    **Das Rechteck ist bemaßt, aber nicht fest**, sonst bewegte es auch ein
+    Zug über die Schwelle nicht. Mit festem Eckpunkt sah der Test die Bewegung
+    bis RM-541 nur im Rundungsrest, den der Zug an den zurückgekehrten Punkten
+    hinterließ; seither bleibt ein Zug, der nichts bewegen kann, bitgleich.
     """
     from PySide6.QtCore import QPointF
     from PySide6.QtWidgets import QApplication as App
 
     canvas = SketchCanvas()
     canvas.resize(600, 600)
-    canvas.insert_shape(shapes.rectangle(40.0, 20.0))
+    measured = shapes.rectangle(40.0, 20.0)
+    canvas.insert_shape(
+        replace(
+            measured,
+            constraints=tuple(entry for entry in measured.constraints if entry.kind != "fixed"),
+        )
+    )
     canvas._select(("line", (0,)), False)
     before = canvas.points()
 
@@ -7180,6 +7191,87 @@ def test_the_angle_button_asks_for_its_degrees(
         assert math.isclose(abs(_turn_between(*solved.elements)), 45.0, abs_tol=1e-6)
     finally:
         panel.deleteLater()
+
+
+def test_an_older_sketch_solves_as_saved_until_it_is_changed(qt_app: QApplication) -> None:
+    """Eine Skizze aus einer älteren Datei (``"solver": 1``) rechnet im Editor wie
+    gespeichert; die erste Änderung stellt sie auf den heutigen Löser (RM-541).
+
+    Öffnen allein ändert nichts — der Text bleibt derselbe, und der Schritt
+    gilt nicht als geändert. Ein Zug ist eine Änderung wie jede andere.
+    """
+    import json
+
+    from app.core.sketch.serialize import sketch_to_text
+    from app.core.types import SKETCH_SOLVER, Sketch, SketchConstraint, SketchElement
+
+    older = Sketch(
+        plane="plane:xy",
+        elements=(
+            SketchElement("line", ((0.0, 0.0), (10.0, 0.0))),
+            SketchElement("line", ((0.0, 0.0), (8.0, 3.0))),
+        ),
+        constraints=(SketchConstraint("angle", (0, 1, 2, 3), "45"),),
+        solver=1,
+    )
+    text = sketch_to_text(older)
+    for change in ("constraint", "drag"):
+        panel = SketchPanel(text, {})
+        try:
+            canvas = panel.canvas
+            assert canvas.sketch.solver == 1
+            assert panel.sketch_text() == text, "Öffnen allein ändert den Schritt nicht"
+            if change == "constraint":
+                canvas.add_constraint("horizontal", (0, 1))
+            else:
+                canvas.move_point(3, 7.0, 4.0)
+            assert canvas.sketch.solver == SKETCH_SOLVER, change
+            assert "solver" not in json.loads(panel.sketch_text()), change
+        finally:
+            panel.deleteLater()
+
+
+def test_the_first_change_to_an_older_sketch_moves_nothing_it_does_not_touch(
+    qt_app: QApplication,
+) -> None:
+    """Die erste Änderung stellt eine ältere Skizze auf den heutigen Löser —
+    von der Lage aus, die bis dahin zu sehen war (RM-541, Review M-2).
+
+    Gelöst wurde ab den gezeichneten Punkten: Ein Winkelpaar, das die alte
+    Fassung weit weg von seiner Zeichnung gelöst hatte, sprang beim Setzen
+    einer Bedingung an einer ganz anderen Linie um 5,9 mm. Zurück geht es
+    über Strg+Z auf den gespeicherten Stand.
+    """
+    from app.core.types import SKETCH_SOLVER, Sketch, SketchConstraint, SketchElement
+
+    older = Sketch(
+        plane="plane:xy",
+        elements=(
+            SketchElement("line", ((0.0, 0.0), (10.0, 0.0))),
+            SketchElement("line", ((0.0, 0.0), (8.0, 3.0))),
+            SketchElement("line", ((20.0, 5.0), (30.0, 9.0))),
+        ),
+        constraints=(SketchConstraint("angle", (0, 1, 2, 3), "45"),),
+        solver=1,
+    )
+    canvas = SketchCanvas()
+    canvas.set_sketch(older)
+    shown = canvas.points()
+    assert max(abs(x) + abs(y) for x, y in shown[:4]) > 4.0, "die alte Fassung hat bewegt"
+
+    canvas.add_constraint("horizontal", (4, 5))
+
+    assert canvas.sketch.solver == SKETCH_SOLVER
+    now = canvas.points()
+    # Die alte Fassung hörte bei ihrer Toleranz auf, die heutige rechnet den
+    # Rest nach: Nanometer, kein sichtbarer Sprung.
+    for before, after in zip(shown[:4], now[:4], strict=True):
+        assert after == pytest.approx(before, abs=1e-6), "das Winkelpaar bleibt, wo es war"
+    assert now[4][1] == pytest.approx(now[5][1], abs=1e-9), "die Bedingung gilt"
+
+    canvas.undo()
+    assert canvas.sketch == older, "Strg+Z holt den gespeicherten Stand"
+    assert canvas.points() == pytest.approx(shown)
 
 
 def test_an_angle_shows_its_degrees_on_a_card(qt_app: QApplication) -> None:

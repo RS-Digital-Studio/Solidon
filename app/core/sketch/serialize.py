@@ -22,6 +22,7 @@ from typing import Any
 from app.core.errors import ValidationError
 from app.core.expressions import evaluate, references
 from app.core.types import (
+    SKETCH_SOLVER,
     Point2,
     Sketch,
     SketchConstraint,
@@ -89,6 +90,9 @@ def sketch_to_text(sketch: Sketch) -> str:
             }
             for constraint in sketch.constraints
         ],
+        # Nur eine ältere Fassung des Lösers steht im Text (RM-541): Eine neue
+        # Skizze schreibt denselben Text wie vor diesem Feld.
+        **({"solver": sketch.solver} if sketch.solver != SKETCH_SOLVER else {}),
     }
     return json.dumps(payload, ensure_ascii=False)
 
@@ -153,7 +157,16 @@ def sketch_from_text(text: str) -> Sketch:
             SketchConstraint(kind=constraint_kind, targets=tuple(targets), value=value)
         )
 
-    return Sketch(plane=plane, elements=tuple(elements), constraints=tuple(constraints))
+    # Ohne Angabe rechnet der heutige Löser; eine ältere Projektdatei bekommt
+    # ihre Fassung von der Migration 49 → 50 (RM-541). Eine neuere, die dieses
+    # Programm nicht kennt, ist keine, die es rechnen kann.
+    solver = payload.get("solver", SKETCH_SOLVER)
+    if isinstance(solver, bool) or not isinstance(solver, int) or not 1 <= solver <= SKETCH_SOLVER:
+        raise _damaged(_("Die Skizze hat nicht den erwarteten Aufbau."), field="solver")
+
+    return Sketch(
+        plane=plane, elements=tuple(elements), constraints=tuple(constraints), solver=solver
+    )
 
 
 def sketch_parameter_references(text: str, *, strict: bool = False) -> frozenset[str]:

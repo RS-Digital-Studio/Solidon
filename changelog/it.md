@@ -56,7 +56,7 @@ scrive in `website/version.json`.
 - I modelli grandi si caricano molto più velocemente e richiedono meno memoria, anche con una cronologia lunga e su computer con 8 GB.
 - Anche in una cronologia lunga, un nuovo passaggio richiede appena più tempo del primo.
 - Annulla e ripristina sono più veloci, e la memoria non più necessaria si libera subito.
-- Risolvere le sovrapposizioni ed esportare in 3MF è molto più veloce.
+- Riparare e risolvere le sovrapposizioni è fino a quattro volte più veloce sui modelli grandi, ed esportare in 3MF è molto più veloce.
 - L'area di lavoro viene visualizzata più rapidamente quando si aprono file 3MF di grandi dimensioni.
 - Un modello aggiunto è poi visibile, anche se finisce accanto a un modello su cui la vista era ingrandita.
 - Nel catalogo dei blocchi, *Gestisci blocchi* è aperto finché non esiste ancora un blocco proprio.
@@ -128,7 +128,10 @@ scrive in `website/version.json`.
 - Se accanto a una parete c'è un raccordo, *Applica l'angolo di sformo* dice prima del calcolo che è d'intralcio e indica *Rimuovi caratteristica* come via d'uscita.
 - Quando tagli via una parte di un corpo, spariscono anche smussi, filettature e sedi per dadi dei blocchi che vi si trovavano.
 - In *Crea coperchio* e *Crea coperchio a vite*, un campo vuoto per l'altezza dell'apertura significa «Bordo superiore», e 0 è l'altezza del piano. I progetti più vecchi mantengono la loro apertura.
-- Un vincolo d'angolo in uno schizzo piccolo non ribalta più le linee.
+- Uno schizzo si risolve allo stesso modo su ogni computer e in ogni posizione, anche trascinando, e un vincolo d'angolo non ribalta più le linee. I progetti precedenti si calcolano come salvati.
+- Uno schizzo con molte forme separate si risolve rapidamente, anche con centinaia di rettangoli o cerchi quotati.
+- Se *Curvatura continua* non si può rispettare mentre disegni, l'editor di schizzi lo segnala in pochi secondi invece che in minuti.
+- Se due vincoli si contraddicono, l'editor di schizzi li nomina entrambi invece di ridurre una linea o un cerchio a un punto.
 - Un corpo si tira su con tre clic: *Disegna* nella barra in alto (Ctrl+Maiusc+E), poi angolo, angolo opposto, altezza. Verso l'esterno si unisce, verso l'interno ritaglia.
 - Mentre si tira su, le misure si possono digitare. Un doppio clic sul passaggio apre le sue misure, e alla voce *Tipo* diventa un solido di rivoluzione o un campo di fori.
 - Dall'editor di schizzi, *Fatto* riporta nella vista e il clic successivo mette l'altezza. Esc mette da parte il contorno, Ctrl+Z lo riporta.
