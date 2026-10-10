@@ -3290,6 +3290,40 @@ def test_the_fitted_finding_of_a_generation_changes_its_size(
     assert max(back.mesh.bounds.size) == pytest.approx(100.0, abs=1e-3)
 
 
+def test_the_working_size_step_says_which_step_sets_the_size(
+    qt_app: QApplication, window: Any, generator: ScriptedMeshBackend
+) -> None:
+    """Review D, M1: Wer im Verlauf den ersten *Auf Maß bringen* einer Erzeugung
+    öffnet, liest, dass ein späterer Schritt das Maß setzt — sonst ändert er die
+    Arbeitsgröße, wartet auf die Reparatur und sieht kein anderes Maß."""
+    session = window.session
+    session.add_generated(generator.text_to_mesh("eine kleine Figur", seed=3))
+    assert session.wait_for_idle()
+    ops = session.project.document.ops
+    working, customer = (entry.id for entry in ops if entry.op == "fit_to_size")
+    number = [entry.id for entry in ops].index(customer) + 1
+
+    window.edit_operation(working)
+    qt_app.processEvents()
+    dialog = window._op_dialog
+    assert dialog is not None
+    try:
+        assert dialog._note.isVisibleTo(dialog), "der Satz steht im Dialog"
+        assert f"Schritt {number}" in dialog._note.text(), dialog._note.text()
+    finally:
+        dialog.reject()
+    qt_app.processEvents()
+
+    window.edit_operation(customer)
+    qt_app.processEvents()
+    dialog = window._op_dialog
+    assert dialog is not None
+    try:
+        assert not dialog._note.isVisibleTo(dialog), "der letzte setzt das Maß selbst"
+    finally:
+        dialog.reject()
+
+
 def _change_the_size_at_the_finding(qt_app: QApplication, window: Any, session: Any) -> None:
     """Im Bericht den Befund „Auf Maß gebracht“ wählen, *Größe ändern* klicken,
     150 mm eintragen und übernehmen — der Weg des Kunden."""

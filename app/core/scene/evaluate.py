@@ -1989,6 +1989,10 @@ SOURCE_KINDS: Final = frozenset({"source", "image"})
 #: beschreiben einen Zustand, den es nicht mehr gibt. Als Hinweis wären sie
 #: nicht milder, sondern falsch. Was übrig bleibt, ist der Satz des Schritts,
 #: der es behoben hat — und der erzählt die ganze Geschichte.
+#:
+#: Daneben streicht ein späterer Befund derselben Art einen **überholten**:
+#: Angeboten wird nur der letzte Maßschritt eines Körpers (``transform.fitted``,
+#: im Verlauf :func:`size_set_by`).
 SETTLED_BY: Final[dict[str, frozenset[str]]] = {
     "ingest.not_watertight": frozenset({"repair.holes_filled"}),
     "ingest.small_components": frozenset({"repair.components_removed"}),
@@ -2031,13 +2035,37 @@ SETTLED_BY: Final[dict[str, frozenset[str]]] = {
         }
     ),
     "repair.self_intersections_incomplete": frozenset({"repair.self_intersections"}),
-    # **Das Maß sagt der letzte *Auf Maß bringen* eines Körpers** (RM-676). Ein
-    # späterer bringt ihn ohnehin auf seine eigene Kante; *Größe ändern* am
-    # früheren änderte am Ende nichts außer der Rechnung dazwischen. Weg 3
-    # legt zwei an — Arbeitsgröße vor der Reparatur, Kundenmaß dahinter
-    # (``generate.into_project``) —, und angeboten wird nur der zweite.
+    # **Überholt, nicht behoben: Das Maß setzt der letzte *Auf Maß bringen*
+    # eines Körpers** (RM-676). Der frühere Satz ist nicht falsch geworden, aber
+    # *Größe ändern* gehört an den Schritt, der das Maß am Ende bestimmt; der
+    # frühere wirkt nur auf die Schritte dazwischen (:func:`size_set_by` sagt es
+    # im Dialog). Weg 3 legt zwei an — Arbeitsgröße vor der Reparatur,
+    # Kundenmaß dahinter (``generate.into_project``).
     "transform.fitted": frozenset({"transform.fitted"}),
 }
+
+
+def size_set_by(operations: Sequence[Operation], op_id: OpId) -> OpId | None:
+    """Der letzte spätere *Auf Maß bringen* desselben Körpers, wenn es ihn gibt.
+
+    Die Regel des Eintrags ``transform.fitted`` in :data:`SETTLED_BY` für den
+    Verlauf: Der Bericht bietet *Größe ändern* nur am letzten Maßschritt an,
+    der Verlauf zeigt aber jeden, und zwei gleich benannte Schritte ließen den
+    Kunden raten, welcher das Maß setzt (Review D, M1). Der Dialog des
+    früheren nennt den späteren. ``None``, wenn ``op_id`` kein
+    *Auf Maß bringen* ist oder selbst das Maß setzt.
+    """
+    position = next((i for i, entry in enumerate(operations) if entry.id == op_id), None)
+    if position is None or operations[position].op != "fit_to_size":
+        return None
+    own = operations[position]
+    body = set(own.outputs or own.inputs)
+    later = [
+        entry.id
+        for entry in operations[position + 1 :]
+        if entry.op == "fit_to_size" and body & set(entry.outputs or entry.inputs)
+    ]
+    return later[-1] if later else None
 
 #: Wie :data:`SETTLED_BY`, aber nur für die Fassung eines Befunds, die diese
 #: Handlung anbietet.

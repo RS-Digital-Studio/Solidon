@@ -1018,6 +1018,35 @@ def test_changing_the_size_of_a_generated_model_reruns_only_the_size(
     assert project.document.ops[-1].op == "fit_to_size"
 
 
+def test_the_working_size_step_names_the_step_that_sets_the_size(
+    project: Project, profile: Profile
+) -> None:
+    """Review D, M1: Zwei gleich benannte *Auf Maß bringen* stehen im Verlauf. Der
+    Bericht bietet *Größe ändern* nur am letzten an (``SETTLED_BY``), und dieselbe
+    Auskunft kennt der Verlauf: Der frühere nennt den späteren, der letzte keinen.
+    Zwei Wege zu derselben Antwort — hier gegeneinander gehalten.
+    """
+    from app.core.scene.evaluate import size_set_by
+
+    from_text(project, backend(), "eine kleine Figur", seed=7)
+    ops = project.document.ops
+    sizing = [entry.id for entry in ops if entry.op == "fit_to_size"]
+    assert len(sizing) == 2, [entry.op for entry in ops]
+
+    result = evaluated(project, profile)
+    offered = [
+        entry.op_id
+        for entry in result.scene.report.findings
+        if entry.code == "transform.fitted"
+        and any(action.id == "change_step" for action in entry.suggestions)
+    ]
+
+    assert size_set_by(ops, sizing[0]) == sizing[1]
+    assert size_set_by(ops, sizing[1]) is None
+    assert offered == [step for step in sizing if size_set_by(ops, step) is None]
+    assert size_set_by(ops, ops[0].id) is None, "nur ein Maßschritt wird überholt"
+
+
 #: Was ``generated_chain_before_rm676_v49.p3d`` am Stand vor RM-676 (welle2
 #: ``a9e4d3f64``) beim Schreiben ergab: Der Krümel bestimmte das Maß vor der
 #: Reparatur, übrig blieb ein Körper mit 39,84 mm Kante, gelegt um die Mitte
