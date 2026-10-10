@@ -30,6 +30,7 @@ from app.core.backends.mesh import CancelledFn, GeneratedMesh, MeshBackend
 from app.core.errors import AppError
 from app.core.geom.mesh import MeshData, edge_table, shell_thickness
 from app.core.geom.repair import branching_edge_count, separate_touching_sheets
+from app.core.geom.transform import fitted_factor
 from app.core.log import get_logger
 from app.core.scene.history import History, OperationDraft
 from app.core.scene.project import Project, checksum, embedded_source_path, next_source_id
@@ -87,8 +88,10 @@ def working_volume(body: Mesh) -> float:
     zwei Kubikmillimeter — hielte der Kunde für einen Krümel, der zwei
     Schritte später hundert Millimeter misst. Gerechnet wird wie in
     ``fit_to_size``: dieselbe Konstante, dasselbe Maß, die längste Kante des
-    achsparallelen Hüllquaders. Das Drehen der glTF-Achsen beim Laden
-    vertauscht nur Achsen und ändert diese Kante nicht; die Reparaturkette
+    achsparallelen Hüllquaders, derselbe Faktor um die Mitte
+    (``transform.fitted_factor``, auch dort, wo er eins bleibt). Das Drehen
+    der glTF-Achsen beim Laden vertauscht nur Achsen und ändert diese Kante
+    nicht; die Reparaturkette
     danach kann das Volumen noch um ihre Korrekturen verschieben.
     ``tests/test_way_three.py`` hält beide Rechnungen an derselben Antwort.
 
@@ -98,7 +101,7 @@ def working_volume(body: Mesh) -> float:
     longest = max(body.bounds.size)
     if longest <= EPS_GEOM:
         return body.volume
-    factor = WORKING_SIZE_MM / longest
+    factor = fitted_factor(body.bounds, WORKING_SIZE_MM, body.bounds.centre)
     return body.volume * factor * factor * factor
 
 

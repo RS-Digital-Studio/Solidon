@@ -414,6 +414,9 @@ def test_a_modelled_cavity_stays_unless_asked() -> None:
         ((1.0, 2.0, 0.5), 50.0 * 100.0 * 25.0),
         # Die längste Kante liegt auf einer anderen Achse: dasselbe Maß.
         ((0.5, 1.0, 4.0), 12.5 * 25.0 * 100.0),
+        # Schon auf Arbeitsgröße bis auf weniger, als ein Punkt sich bewegen
+        # dürfte: Faktor eins wie in ``fit_to_size`` (``fitted_factor``).
+        ((100.0 + 1e-7, 50.0, 50.0), (100.0 + 1e-7) * 50.0 * 50.0),
     ],
 )
 def test_the_volume_at_working_size_is_that_of_the_body_on_its_largest_edge(

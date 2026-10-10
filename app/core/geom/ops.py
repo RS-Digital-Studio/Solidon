@@ -46,6 +46,7 @@ from app.core.geom.transform import (
     absolute_rotation,
     anchor_point,
     composed,
+    fitted_factor,
     moved_object,
     moved_points,
     pattern_centre,
@@ -70,7 +71,7 @@ from app.core.types import (
     Transform,
     Vec3,
 )
-from app.core.units import DEGREE_UNIT, EPS_GEOM, PRINT_LIMIT
+from app.core.units import DEGREE_UNIT, EPS_GEOM
 from app.i18n import _
 
 _AXES = tuple(AXIS_VECTORS)
@@ -783,7 +784,7 @@ class FitToSizeParams(BaseParams):
 
 @register_op(
     name="fit_to_size",
-    cache_version="6",
+    cache_version="7",
     title=_("Auf Maß bringen"),
     category="transform",
     params=FitToSizeParams,
@@ -801,6 +802,10 @@ def fit_to_size(ctx: OpContext) -> OpResult:
     einen Einheitswürfel. Was ankommt, misst ein bis zwei Millimeter, und der
     Weg zurück führt über einen Faktor von hundertvierzig — eine Zahl, die
     niemand im Kopf hat und die ``scale_object`` obendrein ablehnte.
+
+    Die längste Kante trifft das Maß bis auf das, was kein Drucker sieht:
+    Verschöbe das Skalieren keinen Punkt um ``PRINT_LIMIT``, legt der Schritt
+    nur (``transform.fitted_factor``, Bauplan §11.2).
     """
     params = cast(FitToSizeParams, ctx.params)
     source = ctx.inputs[0]
@@ -812,13 +817,12 @@ def fit_to_size(ctx: OpContext) -> OpResult:
             detail=_("Ein Maß lässt sich nur auf etwas beziehen, das eine Größe hat."),
             suggestions=(Action(id="check_input", label=_("Eingangsobjekt prüfen.")),),
         )
-    # **Was der Drucker nicht sieht, wird nicht skaliert** (RM-676). Fehlt der
-    # längsten Kante weniger als die Druckgrenze zum Maß, bleibt der Faktor
-    # eins: Der Schritt legt nur und ist eine starre Bewegung, deren Merkmale
-    # mitreisen. Am erzeugten Bett ließ das Ausdünnen 100,000222 mm stehen,
-    # und der Faktor 1 - 2,2·10⁻⁶ kostete eine volle Erkennung am ganzen Netz.
-    factor = 1.0 if abs(params.largest - current) < PRINT_LIMIT else params.largest / current
     pivot = anchor_point(body, cast(Anchor, params.about))
+    # **Was der Drucker nicht sieht, wird nicht skaliert** (§11.2, RM-676):
+    # Verschöbe das Skalieren keinen Punkt um die Druckgrenze, legt der Schritt
+    # nur. Stehen bleibt der Bezug, mit freier Stelle die Mitte der Unterseite.
+    bottom = (body.bounds.centre[0], body.bounds.centre[1], body.bounds.minimum[2])
+    factor = fitted_factor(body.bounds, params.largest, bottom if params.free_spot else pivot)
     matrix = scaling((factor, factor, factor), pivot)
     placed: list[Finding] = []
     answered: dict[str, Any] = {}

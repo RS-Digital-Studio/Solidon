@@ -373,36 +373,53 @@ def _fitted_cube(profile: Profile, largest: float, monkeypatch: pytest.MonkeyPat
 def test_fit_to_size_within_the_print_limit_only_moves(
     profile: Profile, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """RM-676: Ein Maßschritt, der die längste Kante um weniger als die
-    Druckgrenze verschöbe, legt nur — eine starre Bewegung, die Merkmale reisen mit.
+    """RM-676: Ein Maßschritt, der keinen Punkt um die Druckgrenze verschöbe, legt
+    nur — eine starre Bewegung, die Merkmale reisen mit.
 
     Am erzeugten Bett (1 229 570 Dreiecke) hinterließ das Ausdünnen eine Kante von
     100,000222 mm; der letzte Schritt der Erzeugung skalierte darauf um den Faktor
     1 - 2,2·10⁻⁶, galt nicht als Bewegung, und die Erkennung lief am vollen Netz
-    ein weiteres Mal, 29 s CPU für 0,2 µm, die kein Drucker sieht.
+    ein weiteres Mal, 30 s CPU für 0,2 µm, die kein Drucker sieht.
     """
-    from app.core.geom.transform import is_rigid
     from app.core.units import PRINT_LIMIT
 
+    # Mit freier Stelle bleibt die Mitte der Unterseite stehen; die weiteste Ecke
+    # des 20-mm-Würfels liegt 24,5 mm davon: 0,5 · PRINT_LIMIT an der Kante
+    # verschiebt sie um 0,61 · PRINT_LIMIT.
     result, full = _fitted_cube(profile, 20.0 + PRINT_LIMIT / 2.0, monkeypatch)
 
     body = result.scene.objects["obj_1"]
-    assert max(body.mesh.bounds.size) == pytest.approx(20.0, abs=1e-9), "das Maß bleibt"
-    assert body.mesh.bounds.minimum[2] == pytest.approx(0.0, abs=1e-9), "und steht auf dem Bett"
+    assert max(body.mesh.bounds.size) == pytest.approx(20.0, abs=1e-12), "das Maß bleibt"
+    assert body.mesh.bounds.minimum[2] == pytest.approx(0.0, abs=1e-12), "und steht auf dem Bett"
     assert len(full) == 1, f"nur der Ladeschritt wird erkannt, nicht die Bewegung: {full}"
     assert any(f.code == "transform.fitted" for f in result.scene.report.findings)
 
+
+def test_fit_to_size_beyond_the_print_limit_scales(
+    profile: Profile, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Gegenstück: 0,9 · PRINT_LIMIT an der Kante verschiebt die weiteste Ecke um
+    1,1 · PRINT_LIMIT — das wird auf das Maß gebracht und neu erkannt."""
+    from app.core.units import PRINT_LIMIT
+
+    largest = 20.0 + 0.9 * PRINT_LIMIT
+    result, full = _fitted_cube(profile, largest, monkeypatch)
+
+    assert max(result.scene.objects["obj_1"].mesh.bounds.size) == pytest.approx(largest, abs=1e-12)
+    assert len(full) == 2, full
+
+
+def _fit_alone(profile: Profile, entry, **params):
     from app.core.geom import ops
     from app.core.scene.cancel import NeverCancelled
-    from app.core.types import OpContext, Scene, SceneObject
+    from app.core.types import OpContext, Scene
 
-    entry = SceneObject(id="obj_1", name="Würfel", mesh=cube())
     spec = REGISTRY.get("fit_to_size")
-    moved = ops.fit_to_size(
+    return ops.fit_to_size(
         OpContext(
             scene=Scene(objects={entry.id: entry}),
             inputs=[entry],
-            params=spec.params(largest=20.0 - PRINT_LIMIT / 2.0),
+            params=spec.params(**params),
             profile=profile,
             quality="fine",
             seed=None,
@@ -411,20 +428,100 @@ def test_fit_to_size_within_the_print_limit_only_moves(
             cancelled=NeverCancelled(),
         )
     )
-    assert moved.transform is not None and is_rigid(moved.transform)
 
 
-def test_fit_to_size_beyond_the_print_limit_scales(
-    profile: Profile, monkeypatch: pytest.MonkeyPatch
+@pytest.mark.parametrize(
+    ("place", "about", "free_spot", "shift", "moves_only"),
+    [
+        # Die Verschiebung der weitesten Ecke, in Vielfachen der Druckgrenze.
+        ("mitte", "centre", False, 0.5, True),
+        ("mitte", "centre", False, 1.1, False),
+        ("mitte", "bed", False, 0.5, True),
+        ("mitte", "bed", False, 1.1, False),
+        ("mitte", "centre", True, 0.5, True),
+        ("mitte", "centre", True, 1.1, False),
+        # Weit draußen um den Ursprung: An der Kante fehlen nur 0,05 · PRINT_LIMIT,
+        # aber die Ecken liegen 205 mm vom Punkt, der stehen bleibt.
+        ("draussen", "origin", False, 0.5, True),
+        ("draussen", "origin", False, 1.1, False),
+    ],
+)
+def test_fit_to_size_leaves_out_only_what_moves_no_point_by_the_print_limit(
+    place: str, about: str, free_spot: bool, shift: float, moves_only: bool, profile: Profile
 ) -> None:
-    """Gegenstück: Was die Druckgrenze überschreitet, wird auf das Maß gebracht."""
+    """Bauplan §11.2: *Auf Maß bringen* darf das Skalieren nur auslassen, wenn
+    es keinen Punkt um mehr als ``PRINT_LIMIT`` verschöbe — gemessen an der
+    Ausdehnung um den Punkt, der stehen bleibt (Bezug, mit freier Stelle die
+    Mitte der Unterseite), nicht an der Kante. An der Kante gemessen verschob die
+    erste Fassung einen Körper bei x = 200 um den Ursprung bis zum
+    Zwanzigfachen (Review D, H1).
+    """
+    import math
+
+    import numpy as np
+
+    from app.core.geom.transform import apply, is_rigid, scaling, translation
+    from app.core.types import SceneObject
     from app.core.units import PRINT_LIMIT
 
-    largest = 20.0 + 2.0 * PRINT_LIMIT
-    result, full = _fitted_cube(profile, largest, monkeypatch)
+    body = cube()
+    if place == "draussen":
+        body = apply(apply(body, scaling((0.5, 0.5, 0.5))), translation((200.0, 0.0, 0.0)))
+    entry = SceneObject(id="obj_1", name="Würfel", mesh=body)
+    low = np.asarray(body.bounds.minimum, dtype=float)
+    high = np.asarray(body.bounds.maximum, dtype=float)
+    centre = (low + high) / 2.0
+    fixed = (
+        np.array([centre[0], centre[1], low[2]])
+        if free_spot or about == "bed"
+        else np.zeros(3)
+        if about == "origin"
+        else centre
+    )
+    reach = max(
+        math.dist(fixed, (x, y, z))
+        for x in (low[0], high[0])
+        for y in (low[1], high[1])
+        for z in (low[2], high[2])
+    )
+    current = float(max(high - low))
+    largest = current * (1.0 + shift * PRINT_LIMIT / reach)
 
-    assert max(result.scene.objects["obj_1"].mesh.bounds.size) == pytest.approx(largest, abs=1e-9)
-    assert len(full) == 2, full
+    result = _fit_alone(profile, entry, largest=largest, about=about, free_spot=free_spot)
+
+    out = result.outputs[0].mesh
+    assert result.transform is not None
+    assert is_rigid(result.transform) is moves_only
+    if not moves_only:
+        assert max(out.bounds.size) == pytest.approx(largest, abs=1e-12)
+        return
+    # Die Zusage selbst: Das ausgelassene Skalieren hätte keinen Punkt um die
+    # Druckgrenze verschoben.
+    source = np.asarray(body.raw.vertices, dtype=float)
+    placed = np.asarray(out.raw.vertices, dtype=float)
+    landed = fixed + (placed[0] - source[0])
+    would = landed + (largest / current) * (source - fixed)
+    assert float(np.max(np.linalg.norm(placed - would, axis=1))) < PRINT_LIMIT
+
+
+def test_fit_to_size_far_from_its_fixed_point_scales_a_small_edge_change(
+    profile: Profile,
+) -> None:
+    """Die Kante allein sagt nichts: 0,5 · PRINT_LIMIT an einem 10-mm-Würfel bei
+    x = 200, skaliert um den Ursprung, verschöbe ihn um das Zehnfache der Grenze
+    — also wird skaliert (Review D, Sonde s02)."""
+    from app.core.geom.transform import apply, is_rigid, scaling, translation
+    from app.core.types import SceneObject
+    from app.core.units import PRINT_LIMIT
+
+    body = apply(apply(cube(), scaling((0.5, 0.5, 0.5))), translation((200.0, 0.0, 0.0)))
+    entry = SceneObject(id="obj_1", name="Würfel", mesh=body)
+    largest = 10.0 + 0.5 * PRINT_LIMIT
+
+    result = _fit_alone(profile, entry, largest=largest, about="origin")
+
+    assert result.transform is not None and not is_rigid(result.transform)
+    assert max(result.outputs[0].mesh.bounds.size) == pytest.approx(largest, abs=1e-12)
 
 
 def test_a_later_fit_to_size_settles_the_earlier_one(profile: Profile) -> None:
