@@ -1288,3 +1288,108 @@ def test_absolute_quarter_turn_uses_the_selected_reference(profile, reference):
         (px - (cy - py), py + (cx - px), cz)
     )
     assert result.scene.objects["obj_1"].mesh.bounds.size == pytest.approx((30, 20, 10))
+
+
+def test_a_turned_body_knows_its_facets_as_if_computed_fresh() -> None:
+    """Facettennormalen drehen mit, ihre Aufpunkte wandern mit (RM-698).
+
+    ``_carry_cache`` übernahm ``facets_normal`` unverändert: Nach einer
+    Drehung zeigten die Normalen in die alte Richtung, und ``facets_origin``
+    — von ``trimesh`` im selben Zug abgelegt — fehlte, sodass es ``None``
+    gab. Sollwert ist dieselbe Frage frisch am bewegten Netz, Bit für Bit.
+    """
+    import numpy as np
+    import trimesh
+
+    from app.core.geom.mesh import MeshData
+    from app.core.geom.transform import composed, rotation_about
+
+    source = normalise(read_mesh((MESHES / "plate_holes.stl").read_bytes(), ".stl"), "mm").mesh
+    assert len(source.raw.facets_normal) > 0
+    turn = composed(
+        rotation_about((1.0, 0.0, 0.0), (0.0, 0.0, 0.0), 90.0),
+        rotation_about((0.0, 0.0, 1.0), (3.0, -2.0, 1.0), 33.0),
+    )
+
+    result = apply(source, turn)
+    fresh = trimesh.Trimesh(
+        vertices=np.array(result.raw.vertices), faces=np.array(result.raw.faces), process=False
+    )
+    fresh.face_normals = np.array(result.raw.face_normals)
+
+    assert np.array_equal(result.raw.facets_normal, fresh.facets_normal)
+    assert np.array_equal(result.raw.facets_origin, fresh.facets_origin)
+    assert not np.array_equal(result.raw.facets_normal, source.raw.facets_normal)
+    assert isinstance(MeshData.of(result.raw), MeshData)
+
+
+def test_a_moved_body_shares_its_triangles_with_the_source() -> None:
+    """Bewegen kopiert die Dreiecksliste nicht mehr (RM-698): 24 Byte je Dreieck und Schritt.
+
+    Die Ecken sind neu, die Dreiecke dieselben — außer bei einer Spiegelung,
+    die den Umlaufsinn dreht. Das Quellnetz bleibt in jedem Fall, wie es war,
+    und das bewegte Netz gleicht Bit für Bit dem aus der tiefen Kopie.
+    """
+    import numpy as np
+
+    from app.core.geom.transform import moved, rotation_about
+
+    source = normalise(read_mesh((MESHES / "plate_holes.stl").read_bytes(), ".stl"), "mm").mesh
+    vertices = np.array(source.raw.vertices)
+    faces = np.array(source.raw.faces)
+    turn = rotation_about((0.0, 1.0, 0.0), (5.0, 0.0, 0.0), 30.0)
+    mirror = np.diag((-1.0, 1.0, 1.0, 1.0))
+
+    turned = apply(source, turn)
+    mirrored = apply(source, mirror)
+    for matrix, result in ((turn, turned), (mirror, mirrored)):
+        deep = source.raw.copy()
+        moved(deep, matrix)
+        assert np.array_equal(result.raw.vertices, deep.vertices)
+        assert np.array_equal(result.raw.faces, deep.faces)
+
+    assert np.shares_memory(turned.raw.faces, source.raw.faces)
+    assert not np.shares_memory(turned.raw.vertices, source.raw.vertices)
+    assert not np.shares_memory(mirrored.raw.faces, source.raw.faces)
+    assert np.array_equal(source.raw.vertices, vertices)
+    assert np.array_equal(source.raw.faces, faces)
+
+
+def test_a_turned_thread_is_still_a_thread() -> None:
+    """Die Wendelsuche liest Facettennormalen; nach einer Drehung müssen es die neuen sein.
+
+    Am Korpusgewinde, erkannt, dann um X und Z gedreht und am bewegten Netz
+    noch einmal erkannt: Mit den alten Normalen aus dem getragenen Cache fand
+    die Erkennung zwei Zapfen und zwei Rundflächen statt des Gewindes. Sollwert
+    ist die Erkennung am selben Netz ohne getragenen Cache.
+    """
+    import numpy as np
+    import trimesh
+
+    from app.core.geom.mesh import MeshData
+    from app.core.geom.transform import composed, rotation_about
+    from app.core.perceive.features import detect, forget_cache
+
+    with np.load(MESHES / "recognition_short_thread.npz") as data:
+        source = MeshData.of(
+            trimesh.Trimesh(vertices=data["vertices"], faces=data["faces"], process=False)
+        )
+    detect(source)
+    turn = composed(
+        rotation_about((1.0, 0.0, 0.0), (0.0, 0.0, 0.0), 90.0),
+        rotation_about((0.0, 0.0, 1.0), (0.0, 0.0, 0.0), 37.0),
+    )
+    moved = apply(source, turn)
+    fresh = MeshData.of(
+        trimesh.Trimesh(
+            vertices=np.array(moved.raw.vertices), faces=np.array(moved.raw.faces), process=False
+        )
+    )
+
+    forget_cache()
+    carried = sorted((str(f.kind), str(f.id)) for f in detect(moved).values())
+    forget_cache()
+    computed = sorted((str(f.kind), str(f.id)) for f in detect(fresh).values())
+
+    assert ("thread", "thread_1") in computed
+    assert carried == computed

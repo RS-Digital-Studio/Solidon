@@ -1081,7 +1081,11 @@ def test_the_report_keeps_its_analysis_after_undo_under_a_tight_bound(profile: P
     settings = print_settings.resolve(profile)
     probe = ResultCache()
     evaluate(project.document, profile, sources=sources, cache=probe)
-    budget = int(max(held_by(entry) for entry in probe._entries.values()) * 1.5)
+    # Die Grenze hält gerade den Ladestand. Mit dem Anderthalbfachen blieben
+    # alle neun Stände ganz, seit ein bewegtes Netz seine Dreiecke mit dem
+    # Quellnetz teilt (RM-698) — dann wurde nichts schlank, und die Frage
+    # stellte sich nicht.
+    budget = max(held_by(entry) for entry in probe._entries.values())
     cache = ResultCache(memory_budget=budget)
     loaded = evaluate(project.document, profile, sources=sources, cache=cache)
     target = next(iter(loaded.scene.objects))

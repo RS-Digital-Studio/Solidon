@@ -111,7 +111,13 @@ def shoot(arguments: argparse.Namespace, folder: str) -> int:
             (path.stem, lambda path=path: _example(path))
             for path in sorted((tree / "app" / "examples").glob("*.p3d"))
         ]
-    cases += [(Path(name).stem, lambda path=Path(name): _model(path)) for name in arguments.model]
+    cases += [
+        (
+            Path(name).stem,
+            lambda path=Path(name): (_example if path.suffix == ".p3d" else _model)(path),
+        )
+        for name in arguments.model
+    ]
     out = Path(arguments.out)
     out.mkdir(parents=True, exist_ok=True)
     options: dict[str, Any] = (
