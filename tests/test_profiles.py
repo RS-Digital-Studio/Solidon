@@ -439,6 +439,81 @@ def test_an_own_printer_travels_with_the_project_to_another_computer(
     assert profiles.carried_findings(own.id, "petg") == ()
 
 
+def _own_calibrated_material(measured: list[str] | None) -> dict[str, object]:
+    """Ein eigenes PETG als Tabelle, kalibriert — mit oder ohne ``measured``."""
+    shipped = profiles._read_table(profiles._DATA_DIR / "materials.toml")["petg"]
+    table: dict[str, object] = {
+        **shipped,
+        "title": "Werkstatt-PETG",
+        "clearance": float(shipped["clearance"]) + 0.05,
+        "calibrated": True,
+    }
+    table.pop("measured", None)
+    if measured is not None:
+        table["measured"] = measured
+    return table
+
+
+@pytest.mark.parametrize("measured", [None, ["clearance"]])
+def test_a_carried_calibration_keeps_what_was_measured(two_computers, measured) -> None:
+    """Schlussprüfung RM-589, S3: Ein eigenes Material reist mit seiner Liste
+    gemessener Werte. Eine ältere Projektdatei nennt sie nicht; ohne
+    mitgelieferten Startwert gilt dann jeder eingetragene Wert als gemessen,
+    wie vor RM-589 — der Druckrat schlägt dafür nichts vor."""
+    two_computers("zweiter")
+    table = _own_calibrated_material(measured)
+
+    profiles.carry({"materials": {"werkstatt-petg": table}})
+
+    expected = (
+        tuple(sorted(name for name in profiles.CALIBRATION_FIELDS if name in table))
+        if measured is None
+        else ("clearance",)
+    )
+    assert "elephant_foot" in table and "clearance" in table
+    assert profiles.material("werkstatt-petg").measured == expected
+
+
+def test_an_own_calibrated_material_travels_with_what_was_measured(
+    tmp_path: Path, two_computers
+) -> None:
+    """Gespeichert trägt das Projekt ``measured`` des eigenen Materials, und
+    auf dem zweiten Rechner misst es dasselbe: Nur der Spielwert ist gemessen,
+    der Fuß bleibt beim Druckrat."""
+    from app.core.bootstrap import load_operations
+    from app.core.knowledge import calibration
+    from app.core.scene import History, OperationDraft
+    from app.core.scene.project import load, new_project, project_data, save
+
+    folder = two_computers("erster")
+    folder.mkdir(parents=True, exist_ok=True)
+    (folder / "materials.toml").write_text(
+        calibration._as_toml({"werkstatt-petg": _own_calibrated_material(["clearance"])}),
+        encoding="utf-8",
+    )
+    profiles.reload()
+    assert profiles.material("werkstatt-petg").measured == ("clearance",)
+    load_operations()
+    project = new_project("centauri-carbon-2", "werkstatt-petg")
+    History(project.document).apply(
+        "Quader",
+        [OperationDraft(op="create_box", params={"width": 30.0, "depth": 20.0, "height": 8.0})],
+    )
+    path = save(project, tmp_path / "werkstatt.p3d")
+    carried = project_data(path)["carried_profiles"]["materials"]
+    assert carried["werkstatt-petg"]["measured"] == ["clearance"]
+
+    two_computers("zweiter")
+    opened = load(path)
+    profiles.carry(opened.document.carried_profiles)
+
+    assert profiles.material("werkstatt-petg").measured == ("clearance",)
+    again = save(opened, tmp_path / "weitergegeben.p3d")
+    assert project_data(again)["carried_profiles"]["materials"]["werkstatt-petg"]["measured"] == [
+        "clearance"
+    ]
+
+
 def test_a_project_whose_printer_is_nowhere_still_opens(two_computers) -> None:
     """Ohne Beschreibung rechnet das Projekt mit dem Standarddrucker — und sagt es."""
     from app.core.errors import CHOOSE_PRINTER

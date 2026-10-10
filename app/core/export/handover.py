@@ -997,6 +997,8 @@ def as_mapping(
     for entry in slicer_keys.TABLES[flavour]:
         if paths is not None and entry.path not in paths:
             continue
+        if entry.path in slicer_keys.MAKER_OWNED and entry.path not in settings.explicit:
+            continue
         if entry.path == "adhesion.raft_gap" and not raft_gap_active(
             settings, flavour, also=native_adhesion_kinds
         ):
@@ -1355,16 +1357,27 @@ def object_keys(
             written.update(
                 organic_tree_fitted({**native, **written}, profile.printer.nozzle_diameter)
             )
+    foot = brim_foot_offset
+    if (
+        flavour == "orca"
+        and foot is not None
+        and not is_zero(foot)
+        and "elefant_foot_compensation" in written
+    ):
+        # Die Orca-Familie misst den Brim vom unkorrigierten Umriss (RM-318).
+        # Zieht dieses Teil die erste Schicht nicht mehr ein, weil sein Modell
+        # es tut (RM-589), bleibt der Abstand am Fuß nur mit eigenem Wert.
+        foot = float(written["elefant_foot_compensation"])
+        if "brim" in print_settings.adhesion_kinds(applied.adhesion.kind):
+            written["brim_object_gap"] = ""
     if flavour == "orca" and "brim_object_gap" in written:
         requested = any(entry.path == "adhesion.brim_gap" for entry in advice)
         if "brim" not in print_settings.adhesion_kinds(applied.adhesion.kind) or (
-            brim_foot_offset is None and not requested
+            foot is None and not requested
         ):
             written.pop("brim_object_gap")
         else:
-            written.update(
-                manufacturer.part_brim_gap(applied.adhesion.brim_gap, brim_foot_offset, program)
-            )
+            written.update(manufacturer.part_brim_gap(applied.adhesion.brim_gap, foot, program))
     return _with_automatic_prusa_support(written) if flavour == "prusa" else written
 
 
@@ -1520,6 +1533,9 @@ CURA_PER_MESH: Final = frozenset(
         "speed_wall_0",
         "acceleration_wall_0",
         "scarf_joint_seam_length",
+        # Was das Modell schon ausgleicht, gleicht das Netz nicht noch einmal aus (RM-589).
+        "hole_xy_offset",
+        "xy_offset_layer_0",
     }
 )
 
@@ -1801,7 +1817,9 @@ def _applied(settings: PrintSettings, advice: Sequence[SettingAdvice]) -> PrintS
     changed = settings
     for entry in advice:
         changed = with_path(changed, entry.path, entry.value)
-    return changed
+    # Der Rat dieses Teils ist für das Teil übernommen; so schreibt
+    # :func:`as_mapping` auch, was es sonst dem Slicer lässt (RM-589).
+    return replace(changed, accepted=changed.accepted | {entry.path for entry in advice})
 
 
 def _only_chosen_adhesion(

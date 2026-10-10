@@ -658,6 +658,7 @@ def _clip_closed(params: CableClipParams) -> TranslatableText | None:
 
 @register_part(
     name="cable_clip",
+    play_inside=True,
     standalone=True,
     grip_from_profile=False,
     title=_("Kabelclip"),
