@@ -57,6 +57,7 @@ from app.core.perceive.surfaces import clipped_patches, planar_patch
 from app.core.types import Feature, FeatureId, MeasureSource, SurfacePatch, Vec3, is_a_cavity
 from app.core.units import (
     EPS_GEOM,
+    RING_AXIS_TOWARD,
     TANGENT_TO_THE_ARC,
     UPRIGHT_TO_AXIS,
     positive_axis,
@@ -2812,12 +2813,12 @@ def _round(
         return hashlib.blake2b(
             _patch_print(body, patch)
             + _body_numbers(
-                diagonale=diagonal,
-                dicht=closed,
-                umlauf=consistent,
-                deckungsgleich=_coincident_vertices(body),
+                diagonal=diagonal,
+                closed=closed,
+                consistent=consistent,
+                coincident=_coincident_vertices(body),
             )
-            + _exact_bytes(("runde" in _LEFT_OUT or known_shape, _classify_settings())),
+            + _exact_bytes(("round" in _LEFT_OUT or known_shape, _classify_settings())),
             digest_size=16,
         ).digest()
 
@@ -2870,7 +2871,7 @@ def _round(
                 parallel.count("used")
         if known is not _UNKNOWN:
             answer, cylinders, kegel, balls, rings, added, asked = known
-            if "rueckfrage" in _LEFT_OUT or all(
+            if "hull_query" in _LEFT_OUT or all(
                 _cylinder_fits(mesh, axis, radius) == fits for axis, radius, fits in asked
             ):
                 found.extend((fit, patch) for fit in cylinders)
@@ -8962,9 +8963,9 @@ def _support_handle(
     key = hashlib.blake2b(
         _patch_print(body, patch)
         + _body_numbers(
-            dicht=bool(body.is_watertight),
-            umlauf=bool(body.is_winding_consistent),
-            deckungsgleich=_coincident_vertices(body),
+            closed=bool(body.is_watertight),
+            consistent=bool(body.is_winding_consistent),
+            coincident=_coincident_vertices(body),
         ),
         digest_size=16,
     ).digest()
@@ -8981,17 +8982,17 @@ def _support_handle(
 #: Die Teile des Fleckabdrucks (Konzept §5.2), je mit seinem Namen. Die
 #: Messbank lässt für ihre Gegenprobe einen davon weg (``folge.py --weglassen``).
 PATCH_PRINT_PARTS: Final = (
-    "ecken",
-    "eckennummern",
+    "corners",
+    "corner_numbers",
     "ring",
-    "ursprung",
-    "normalen",
-    "flaechen",
-    "winkel",
+    "origin",
+    "normals",
+    "areas",
+    "angles",
 )
 
 #: Die Körperzahlen, die eine Frage liest und die der Aufrufer mitgibt (Konzept 5.2).
-BODY_NUMBERS: Final = ("dicht", "umlauf", "deckungsgleich", "diagonale")
+BODY_NUMBERS: Final = ("closed", "consistent", "coincident", "diagonal")
 
 
 def _body_numbers(**numbers: Any) -> bytes:
@@ -9033,20 +9034,20 @@ def _patch_print_parts(
 ) -> list[tuple[str, bytes]]:
     """Was eine Frage an einen Fleck vom Körper liest, als Bytes ohne Arithmetik.
 
-    1. ``ecken``: die Ecken seiner Dreiecke in Fleckfolge und Eckenfolge;
-    2. ``eckennummern``: welche Ecken dieselben sind, nummeriert in der Folge
+    1. ``corners``: die Ecken seiner Dreiecke in Fleckfolge und Eckenfolge;
+    2. ``corner_numbers``: welche Ecken dieselben sind, nummeriert in der Folge
        ihrer Nummern im Körper (``np.unique``, wie die Lesung sie ordnet) —
        darüber auch, welche Kanten zwei Dreiecke teilen und in welcher Folge
        die Kanten des Flecks stehen (``face_adjacency`` ordnet nach Ecken);
     3. ``ring``: je Dreieck seine Kantennachbarn — die Lage im Fleck, sonst
        „außen“; eine Kante ohne Nachbarn (offen oder mit drei Dreiecken) trägt
        keinen;
-    4. ``ursprung``: welche Dreiecke vor *Kanten verfeinern* eines waren;
-    5. ``normalen`` und ``flaechen``: Normale und Inhalt jedes Dreiecks, wie der
+    4. ``origin``: welche Dreiecke vor *Kanten verfeinern* eines waren;
+    5. ``normals`` und ``areas``: Normale und Inhalt jedes Dreiecks, wie der
        Körper sie hält — eine starre Bewegung trägt beide vom Quellnetz mit
        (``geom.transform._carry_cache``), sie folgen dann nicht Bit für Bit
        den Ecken;
-    6. mit ``seams``: ``winkel``, der Knickwinkel jeder Naht zu einem Nachbarn
+    6. mit ``seams``: ``angles``, der Knickwinkel jeder Naht zu einem Nachbarn
        im Fleck, in der Folge des Rings — ebenso mitgetragen.
 
     Nicht darin steht die Folge der Dreiecksnummern: Lesung und Trennung lesen
@@ -9176,22 +9177,22 @@ def _patch_prints_parts(
     for number in range(len(patches)):
         low, high = int(starts[number]), int(starts[number + 1])
         parts = [
-            ("ecken", np.ascontiguousarray(corners[low:high]).tobytes()),
-            ("eckennummern", np.ascontiguousarray(local[3 * low : 3 * high]).tobytes()),
+            ("corners", np.ascontiguousarray(corners[low:high]).tobytes()),
+            ("corner_numbers", np.ascontiguousarray(local[3 * low : 3 * high]).tobytes()),
         ]
         if ring_rows is not None and high > low:
             width = int(widths[number])
             parts.append(("ring", np.ascontiguousarray(ring_rows[low:high, :width]).tobytes()))
             if angle_rows is not None:
                 parts.append(
-                    ("winkel", np.ascontiguousarray(angle_rows[low:high, :width]).tobytes())
+                    ("angles", np.ascontiguousarray(angle_rows[low:high, :width]).tobytes())
                 )
         else:
             parts.append(("ring", b""))
-        parts.append(("normalen", np.ascontiguousarray(normals[low:high]).tobytes()))
-        parts.append(("flaechen", np.ascontiguousarray(areas[low:high]).tobytes()))
+        parts.append(("normals", np.ascontiguousarray(normals[low:high]).tobytes()))
+        parts.append(("areas", np.ascontiguousarray(areas[low:high]).tobytes()))
         if pattern is not None:
-            parts.append(("ursprung", np.ascontiguousarray(pattern[low:high]).tobytes()))
+            parts.append(("origin", np.ascontiguousarray(pattern[low:high]).tobytes()))
         result.append([(name, data) for name, data in parts if name not in _LEFT_OUT])
     return result
 
@@ -10567,10 +10568,9 @@ def _torus_from_plan(
     )
 
 
-#: Wohin eine Ringachse zeigt (:func:`_ring_axis`): (1, √2, √3). Auf dieser
-#: Richtung steht keine Achse mit rationalen Anteilen senkrecht, also keine,
-#: die eine Konstruktion meint — achsparallel, diagonal, in kleinen Verhältnissen.
-_RING_AXIS_TOWARD: Final = (1.0, math.sqrt(2.0), math.sqrt(3.0))
+#: Wohin eine Ringachse zeigt (:func:`_ring_axis`), dieselbe Richtung wie am
+#: exakten Kern (``units.ring_axis``).
+_RING_AXIS_TOWARD: Final = RING_AXIS_TOWARD
 
 
 def _ring_axis(axis: np.ndarray) -> np.ndarray:
@@ -12384,7 +12384,7 @@ def _tangential_pieces(
     diagonal = math.sqrt(float((extents * extents).sum()))
     key = hashlib.blake2b(
         _patch_print(body, patch, seams=True)
-        + _body_numbers(diagonale=diagonal)
+        + _body_numbers(diagonal=diagonal)
         + _exact_bytes(_tangential_settings()),
         digest_size=16,
     ).digest()
@@ -12398,7 +12398,7 @@ def _tangential_pieces(
             parallel.count("used")
     if known is not _UNKNOWN:
         places, asked = known
-        if "rueckfrage" in _LEFT_OUT or all(
+        if "hull_query" in _LEFT_OUT or all(
             _cylinder_fits(mesh, axis, radius) == answer for axis, radius, answer in asked
         ):
             return [given[place].tolist() for place in places]
