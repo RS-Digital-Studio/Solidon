@@ -83,6 +83,13 @@ PRUSA_CONFIG_PATH = "Metadata/Slic3r_PE.config"
 #: Prusas eigene Objektwerte; die Orca-Beilage wird dort nicht gelesen.
 PRUSA_MODEL_CONFIG_PATH = "Metadata/Slic3r_PE_model.config"
 
+#: Wo PrusaSlicer und die Orca-Familie die Höhenkurve eines Objekts lesen
+#: (RM-586): dieselbe Schreibweise, zwei Namen (``3mf.cpp`` und ``bbs_3mf.cpp``,
+#: ``_extract_layer_heights_profile_config_from_archive``). Je Objekt eine Zeile
+#: ``object_id=<Nummer ab eins>|z;h;z;h…``; jedes Programm liest nur seine.
+PRUSA_LAYER_HEIGHTS_PATH = "Metadata/Slic3r_PE_layer_heights_profile.txt"
+ORCA_LAYER_HEIGHTS_PATH = "Metadata/layer_heights_profile.txt"
+
 #: Die erste Zeile jener Beilage. PrusaSlicer überspringt sie — bei ihm steht
 #: dort seine eigene Kennung —, und was ohne sie an erster Stelle stünde, wäre
 #: verloren, ohne dass es jemand merkt.
@@ -148,6 +155,10 @@ class AssemblyPart:
     „Stützen überall" legte ohne ihn 22,9 m Stütze in den Wasserkanal, mit
     ihm 0,3 m.
     """
+    layer_heights: tuple[float, ...] = ()
+    """Die Höhenkurve dieses Teils, ``z0, h0, z1, h1, …`` über seiner Unterkante
+    (RM-586, :func:`app.core.slice.fine_layers.height_profile`). Leer heißt
+    gleichmäßige Schichten."""
 
 
 SlotKey = tuple[TranslatableText | str, tuple[float, float, float] | None, str | None, str | None]
@@ -391,6 +402,10 @@ def write_assembly(
             container.writestr(
                 PRUSA_MODEL_CONFIG_PATH, _prusa_settings_xml(parts, materials, blocker_as_part)
             )
+            heights = _layer_heights_text(parts)
+            if heights:
+                container.writestr(PRUSA_LAYER_HEIGHTS_PATH, heights)
+                container.writestr(ORCA_LAYER_HEIGHTS_PATH, heights)
         if project_settings:
             container.writestr(
                 PROJECT_SETTINGS_PATH,
@@ -413,6 +428,22 @@ def write_assembly(
         "yes" if project_settings or prusa_config else "no",
     )
     return buffer.getvalue()
+
+
+def _layer_heights_text(parts: Sequence[AssemblyPart]) -> str:
+    """Die Höhenkurven der Teile in der Schreibweise beider Familien (RM-586).
+
+    Die Nummer ist die Stelle des Objekts in der Datei, ab eins — jedes Teil
+    ist ein Objekt im Build, in der Folge der Teile. Sechs Nachkommastellen wie
+    der Slicer selbst (``%f``): Die Orca-Familie verwirft eine Kurve, deren
+    erste Schicht nicht genau die ihrer Einstellung ist.
+    """
+    lines = [
+        f"object_id={number}|" + ";".join(f"{value:f}" for value in part.layer_heights)
+        for number, part in enumerate(parts, start=1)
+        if len(part.layer_heights) >= 6 and len(part.layer_heights) % 2 == 0
+    ]
+    return "\n".join(lines) + "\n" if lines else ""
 
 
 def _prusa_settings_xml(

@@ -88,6 +88,7 @@ from app.core.export.writer import (
     arrangement_holds,
     part_advice,
     prepare_slicer_meshes,
+    shared_layer_plates,
     slicer_rim,
     tower_plates,
     write_assembly,
@@ -1374,6 +1375,7 @@ def _prepare_plate(job: _PlateJob, plate: int) -> PlateRun:
 
     def remember_comparison(
         parts: Sequence[tuple[SceneObject, MeshData, PrintSettings | None]],
+        heights: Mapping[str, tuple[float, ...]],
     ) -> None:
         nonlocal comparison
         # Die Zeitgegenprobe rechnet mit dem, was das Herstellerprofil über
@@ -1387,6 +1389,7 @@ def _prepare_plate(job: _PlateJob, plate: int) -> PlateRun:
             separate_objects=slicer_keys.reads_assembly_file(job.setup.flavour),
             cancelled=job.cancelled,
             motion=motion,
+            heights=heights,
         )
 
     written, findings = write_assembly(
@@ -1544,6 +1547,9 @@ class _AdviceWorker(Worker):
         self.towers: frozenset[int] = frozenset()
         """Die Platten mit Reinigungsturm (:func:`writer.tower_plates`), je Lauf
         einmal gefragt."""
+        self.shared: frozenset[int] = frozenset()
+        """Die Platten, deren Teile dieselben Schichten drucken müssen
+        (:func:`writer.shared_layer_plates`), je Lauf einmal gefragt."""
         self.organic: frozenset[str] = frozenset()
         """Die Stützarten, die das Programm als organische Bäume druckt
         (:func:`handover.organic_styles`), je Lauf einmal gefragt."""
@@ -1598,6 +1604,9 @@ class _AdviceWorker(Worker):
         # Slicer den Stützabstand; der Rat rechnet dort in ganzen Schichten, wie
         # im Export (RM-622).
         self.towers = tower_plates(self.objects, self.setup)
+        # Wo der Turm allen Teilen dieselben Schichten abverlangt, kein Rat zu
+        # feinen Schichten (RM-586).
+        self.shared = shared_layer_plates(self.objects, self.setup, self.profile)
         self.organic = handover.organic_styles(self.setup, self.profile, flavour=self.flavour)
         # Hohle Bäume bestehen aus ihren Wänden, dort wirkt die Wandzahl (RM-584).
         self.hollow = handover.hollow_trees(self.setup)
@@ -1682,6 +1691,7 @@ class _AdviceWorker(Worker):
                     declined=self.declined,
                     allowances=self.part_allowances.get(body.id, ()),
                     trees=trees,
+                    shared_layers=body.plate in self.shared,
                 )
                 # Was das Programm unter den Bäumen dieses Körpers nicht druckt,
                 # schlägt der Dialog nicht vor — je Körper wie der Export
@@ -1825,6 +1835,7 @@ class _AdviceWorker(Worker):
                 flavour=self.flavour,
                 accepted=chain,
                 whole_layers=body.plate in self.towers,
+                shared_layers=body.plate in self.shared,
                 organic=self.organic,
                 allowances=self.part_allowances.get(body.id, ()),
             ):
@@ -1903,6 +1914,7 @@ class _AdviceWorker(Worker):
                 flavour=self.flavour,
                 accepted=chain,
                 whole_layers=body.plate in self.towers,
+                shared_layers=body.plate in self.shared,
                 organic=self.organic,
                 allowances=self.part_allowances.get(body.id, ()),
             ):

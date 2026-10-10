@@ -733,6 +733,71 @@ die Schwelle steht bei 100.
 Gemessen ist nur PLA (`support_tip_gap`); ohne Wert bleibt der Abstand des
 Materials. Bericht: `output/drache-2026-10-09/rueckstaende/bericht.md`.
 
+## Feine Schichten, wo das Modell feine Formen hat (RM-586)
+
+Aus der Regel verschoben, mit Herleitung. Auf einer Schräge der Neigung α legt
+jede Schicht eine Stufe der Breite `h / tan α`. Ist sie breiter als eine Bahn,
+druckt der Slicer auf jeder Stufe eine eigene Deckbahn, und man sieht die
+Treppe; darunter deckt die Außenwand sie zu. Daraus die Grenze
+`step_slope = atan(h / Bahn)`: 25,5° bei 0,2/0,42, 31,9° bei 0,28/0,45, 16° bei
+0,12. Die Bahn ist die halbe Brückenbreite, mit der die Analyse schneidet
+(`bridge_from`, zwei Bahnen) — sie steht ohnehin in jedem Merkerschlüssel, und
+die Übergabe rechnet mit derselben (`wall/2` aus `analysis_limits`).
+
+Wie viel Schräge eine Höhe tragen muss: so viel wie die kleinste Kuppe, auf der
+zwei Stufen liegen (eine allein ist eine Kante). Eine Kugel vom Radius R hat je
+Millimeter Höhe 2πR Fläche, ihr flacher Scheitel ist `R·(1 − cos Grenze)` hoch;
+zwei Stufen verlangen `R = 2h / (1 − cos Grenze)`, bei 0,2 mm Schicht 4,12 mm,
+also 25,9 mm² je mm. Gemittelt wird über einen Übergang (fünf normale
+Schichten, wie die Glättung von PrusaSlicer und der Orca-Familie,
+`HeightProfileSmoothingParams.radius`): Kürzer als ein Übergang lohnt kein
+Bereich seine zwei Übergänge, und eine Lücke unter zwei Übergängen druckt sich
+schneller durch, als hinaus und wieder hinein zu wechseln. Der Zwischenstand
+hatte 25° fest und 20 mm²/mm, am Drachen gewählt; mit der Herleitung fällt dort
+die Flügelkrümmung bei 105 mm weg (Schwelle 20: fünf Bereiche, 37 mm; 25,9:
+vier, 30 mm — Schwanz und Füße 2–15, Knie 42–44, Schultern 70–78, Kopf 111–118).
+Wirksam ist an einer Kuppe die Mindestlänge, nicht die Fläche (Review RM-586, F8,
+und Nachprüfung N2): Die Schichten, deren über einen Übergang gemittelte
+Schrägfläche die Schwelle hält, müssen zusammen einen Übergang lang sein. Dieser
+Bereich reicht über den flachen Scheitel nach unten (R 9: 8,0–9,0 mm bei 0,874 mm
+Scheitel) und ist in ganzen Schichten gequantelt; die Grenze hängt deshalb an der
+Lage des Rasters zum Scheitel. Halbkugeln in 0,1-mm-Schritten, Bahn 0,42: bei
+0,2 mm Schicht Kurve bei R 8,3, keine bei 8,4–8,9, Kurve bei 9,0–9,4, keine bei
+R 9,5 (Bereich 0,8 mm), ab R 9,6 immer; bei 0,28 mm wechselnd zwischen R 6,9 und
+7,7, ab R 7,8 immer. Kleinere Kuppen (Augen, Knöpfe) bleiben gleichmäßig.
+
+Die Grenze wird ohne Winkelfunktion entschieden (Review RM-586, F7): `cos² Grenze =
+Bahn² / (Bahn² + h²)`, verglichen als `lift² · (Bahn² + h²) > Bahn² · |n|²`, die
+ebene Grenze über `units.exact_cos_degrees`. Mit `math.atan2`/`math.cos` lag ein
+Keil 1:2 bei 0,2/0,4 (und 1:3 bei 0,2/0,6) genau auf der Grenze, und ein ULP
+Rauschen entschied zwischen 670 mm² Schräge samt Kurve und nichts. Ohne Winkel
+liegt der genaue Gleichstand auf jeder Maschine außerhalb („breiter als eine
+Bahn“); Weg `fine_layers` in `test_platform_identity.py`.
+
+Der Zeitanteil bremst jede Schicht bis zur Mindestschichtzeit, nie unter das
+Mindesttempo: Die feinen Schichten liegen meist an kleinen Querschnitten. An der
+Halbkugel R 20 nannte die Rechnung ohne Bremse 4 %, ElegooSlicer druckte ab
+Schicht 1 7 % länger, die Druckdatei ohne Beschleunigung 10 % (Kappenschichten
+3,3–3,9 s an 4 s Mindestzeit); mit Bremse nennt der Rat 12 %. Das Druckzeitmodell
+(`print_time`) träfe 8 %, kostet am Drachen aber 153 s — für den Rat zu teuer.
+
+Der Reinigungsturm sperrt nur neben weiteren Objekten (Review RM-586, F1/F2): OrcaSlicer,
+Bambu Studio und PrusaSlicer vergleichen Höhenkurven nur, wenn mehr als ein Objekt
+auf der Platte steht (`Print::validate`, `m_objects.size() > 1`). Eine bemalte
+Halbkugel allein (Bambu Studio P1S, ElegooSlicer CC2, zwei Spulen) druckt ihre
+Kurve neben dem Turm: 113 Lagen, 28 fein, Turm wie ohne Kurve. Neben einem Klotz
+derselben Platte entfällt die Kurve mit dem Befund, und beide rechnen. PrusaSlicer
+2.9.6 prüft schon, wenn der Prozess `wipe_tower` einschaltet und die Maschine mehr
+als ein Werkzeug hat: Am XL 2T und am MK4S MMU3 verweigerte er Kuppe und Klotz
+auch mit einer Spule („The Wipe tower is only supported if all objects have the
+same variable layer height“); mit der Sperre rechnet er sie (XL 2T 51,6 min mit
+zwei Spulen, 32,6 min mit einer; MMU3 18,4 min).
+
+Organische Bäume gehen vor: OrcaSlicer lehnt eine Höhenkurve unter
+`support_style` organisch oder Vorgabe ab, PrusaSlicer unter organischen Bäumen
+(„Variable layer height is not supported with Organic supports.“,
+`Print::validate`). Am Drachen rät Solidon Bäume, also dort keine feinen
+Schichten; das Feld nennt den Grund (`slicer_keys.limitation`).
 **Und jede Spitze mit Trennschicht** (RM-704): Der dritte Drache (0,4 mm oben,
 volle Elegoo-Grundlage) hatte saubere Kopfstacheln, aber eine faserige,
 durchhängende Kieferunterseite. Gemessen im G-Code (ElegooSlicer, Unterseite
