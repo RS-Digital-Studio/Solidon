@@ -2673,6 +2673,28 @@ def test_on_the_plate_is_the_style_cura_prints() -> None:
     assert advise.on_the_plate("tree", "grid", None) == "tree"
 
 
+def test_on_the_plate_names_the_trees_the_file_and_the_program_name() -> None:
+    """Curas Baum steht an drei Stellen: in ``on_the_plate``, in der Auskunft
+    ``handover.tree_styles`` (die ``_cura_prints_alike`` fragt) und in der
+    Übersetzung der Datei (``support_structure``). Für jede Stützart des Felds
+    sagen alle drei dasselbe (Review des Nachtrags RM-584, L2)."""
+    from app.core.export import handover
+    from app.core.knowledge import print_fields
+
+    field = print_fields.field_of("support.style")
+    assert field is not None
+    profile = profiles.make_profile("centauri-carbon-2", "pla")
+    trees = handover.tree_styles(None, profile, "", flavour="cura")
+    assert trees is not None
+    for style in field.choices:
+        if style == "none":
+            continue
+        settings = print_settings.with_path(print_settings.resolve(profile), "support.style", style)
+        written = handover.values_for(settings, profile, "cura")["support_structure"]
+        printed = advise.on_the_plate("grid", style, "cura")
+        assert (printed == "tree") == (style in trees) == (written == "tree"), style
+
+
 def test_the_roof_tip_is_the_smallest_with_a_roof() -> None:
     """Die Spitze, ab der die Orca-Familie jede Spitze mit Trennschicht deckt
     (RM-704): Ihr Querschnitt liegt über ``minimum_roof_area`` (1 mm²), eine
