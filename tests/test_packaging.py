@@ -3176,7 +3176,9 @@ def _assert_frozen_end_route(state: _FrozenEndCase, report: dict[str, Any]) -> N
     """Die vorangegangene Rechnung und beide Paketphasen müssen wirklich erreicht sein."""
     assert len(state.children) == 2
     assert state.package_entries == [state.executable, state.executable]
-    assert state.transported_jobs == ["boolean"]
+    # Jede Phase wärmt ihren Hilfsprozess mit der Rechnung ``warm`` vor (RM-672).
+    assert [job for job in state.transported_jobs if job != "warm"] == ["boolean"]
+    assert state.transported_jobs.count("warm") == 2
     assert state.geometry_calls == 2, (
         "Sollwert und simulierter Transport werden getrennt gerechnet."
     )
