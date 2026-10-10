@@ -508,7 +508,7 @@ def test_near_identical_sets_give_the_full_answer_bit_for_bit(monkeypatch, seed)
     if seed % 5 == 0:
         # Ohne Zwillinge trägt das Zertifikat: Der Nahweg antwortet selbst
         # (Review L3, M1) — nicht nur gefragt, auch genommen.
-        assert any(engaged), "without twins the near way answers"
+        assert any(engaged), "ohne Zwillinge antwortet der Nahweg"
 
 
 def test_the_near_way_carries_the_identity_and_the_small_moves():
@@ -577,7 +577,7 @@ def test_the_near_search_keeps_its_rounding_reserve(monkeypatch):
     new = {"a": hole("a", s), "b": hole("b", -d)}
     expected = _full_path_only(monkeypatch, old, new)
     taken, found = _taken_and_answer(monkeypatch, old, new)
-    assert taken, "the near way answers this case"
+    assert taken, "diesen Fall beantwortet der Nahweg"
     assert found == expected
     assert dict(found.ambiguous) == {"a": ("a", "b"), "b": ("b",)}
     assert not found.mapping
@@ -590,6 +590,6 @@ def test_the_near_way_answers_with_the_partners_it_found(monkeypatch, spacing):
     new = {"a": hole("a", spacing), "b": hole("b", 0.0), "c": hole("c", 0.3)}
     expected = _full_path_only(monkeypatch, old, new)
     taken, found = _taken_and_answer(monkeypatch, old, new)
-    assert taken, "the near way answers this case"
+    assert taken, "diesen Fall beantwortet der Nahweg"
     assert found == expected
     assert found.mapping == {"a": "b", "b": "a", "c": "c"}

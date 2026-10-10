@@ -201,22 +201,40 @@ def test_the_spot_stands_in_the_step_and_its_key_reads_the_scene_no_longer(
     assert not reads_scene(spec.params, step.params), "danach liest er nicht mehr"
 
 
-@pytest.mark.parametrize("still", [False, True], ids=["moved", "in-the-middle"])
+@pytest.mark.parametrize("case", ["moved", "in-the-middle", "plates"])
 def test_the_spot_finding_is_the_same_with_and_without_the_cache(
-    profile: Profile, still: bool
+    profile: Profile, case: str
 ) -> None:
     """Mit und ohne Cache derselbe Bericht über die freie Stelle (RM-754, §15.1).
 
     Nach der ersten Auswertung steht die Stelle im Schritt. Eine Auswertung
     ohne Cache — das Wiederöffnen — rechnete den Schritt mit ihr und verlor den
     Satz „Das Modell kam an die freie Stelle …“, der in der Sitzung stand.
-    Ein Modell, das nicht wanderte, bekommt in beiden Wegen keinen.
+    Ein Modell, das nicht wanderte, bekommt in beiden Wegen keinen. Eine
+    zweite Datei mit mehreren Platten behält in beiden Wegen den Satz „Die
+    Platten der Datei kommen hinter die vorhandenen …“.
     """
     from app.core.scene.cache import ResultCache
 
     project = new_project("centauri-carbon-2", "petg")
     history = History(project.document)
-    if still:
+    still = case == "in-the-middle"
+    expected = {"moved": ["arrange.free_spot"], "in-the-middle": [], "plates": []}[case]
+    if case == "plates":
+        from app.core.export import threemf
+        from tests.test_threemf_assembly import plated_container
+
+        stride = 256.0 * (1.0 + threemf.SLICER_PLATE_GAP)
+        payload = plated_container({"1": (1, 128.0, 128.0), "2": (2, stride + 60.0, 200.0)})
+        for key in ("src_1", "src_2"):
+            project.document.sources[key] = Source(
+                id=key, kind="import", path=f"sources/{key}.3mf", sha256=""
+            )
+            project.sources[key] = payload
+            chosen = import_plan(key, f"{key}.3mf", payload, "auto", first_model=key == "src_1")
+            history.apply(chosen.title, [chosen.draft])
+        expected = ["arrange.plates_behind"]
+    elif still:
         body = trimesh.creation.box(extents=(20.0, 20.0, 20.0))
         body.apply_translation((0.0, 0.0, 10.0))
         project.document.sources["src_1"] = Source(
@@ -246,7 +264,7 @@ def test_the_spot_finding_is_the_same_with_and_without_the_cache(
     assert spot_findings(warm) == spot_findings(first)
     assert spot_findings(cold) == spot_findings(warm)
     codes = [code for code, _message, _values in spot_findings(cold)]
-    assert codes == ([] if still else ["arrange.free_spot"])
+    assert codes == expected
 
 
 def _box(x: float, y: float, z: float) -> bytes:
