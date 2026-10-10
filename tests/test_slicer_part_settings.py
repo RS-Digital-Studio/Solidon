@@ -614,8 +614,9 @@ def test_file_export_without_program_only_promises_shared_object_capabilities(
 # geschrieben 0,4 gegen 0,2 mm und so weiter, gemessen je Programm in
 # ``konzepte/begruendungen/regel-druckrat.md``; Cura nimmt die Lücke nicht je Netz.
 # Feine Schichten und Deckschichtdicke (RM-586) belegt eine Kuppe neben einem
-# Klotz (``scratchpad/rm586/slicer_fein.py``, Archiv RM-586): die Kuppe oben mit
-# 0,1 mm, der Klotz gleichmäßig, in allen sieben Programmen, die die Kurve lesen;
+# Klotz (``.claude/.state/drache-2026-10-08/slicer_fein.py``, Modell ``paar``,
+# Archiv RM-586): die Kuppe oben mit 0,1 mm, der Klotz gleichmäßig, in allen
+# sieben Programmen, die die Kurve lesen;
 # die Mindestdicke 0,8 bzw. 1,2 mm je Teil hebt die dünne Füllung um 0,1 bis 0,2 mm,
 # außer in SuperSlicer, der sie in Lagen der normalen Schicht zählt.
 # Brückenstütze, dicke Brücken, Brückenfluss, Zusatzwände und Umkehr (RM-587) belegt

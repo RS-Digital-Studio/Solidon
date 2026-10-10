@@ -1933,12 +1933,11 @@ def test_fine_layers_arrive_where_solidon_says(
     assert steps and all(step == pytest.approx(0.2, abs=0.011) for step in steps), middle
     # Die Gegenprobe zählt die Lagen der Kurve, keine Warnung „weicht ab“.
     assert run.comparison is not None and run.comparison.model_layer_count
-    # Bambu Studio markiert seine Lagen anders; dort zählt der G-Code-Leser
-    # keine Modelllagen, und es gibt auch keine Warnung zu vermeiden.
+    # Bambu Studio markiert seine Lagen anders, und der G-Code-Leser zählt dort
+    # keine Modelllagen; dann zählen die Höhen, in denen gefördert wird — die
+    # Halbkugel steht ohne Stütze und ohne Turm.
     counted = outcome.metrics.model_layer_count
+    if counted is None:
+        counted = len(levels)
     expected = run.comparison.model_layer_count
-    if program == "bambustudio":
-        assert counted is None
-    else:
-        assert counted is not None
-        assert abs(counted - expected) <= DEVIATION_LIMIT * expected, (counted, expected)
+    assert abs(counted - expected) <= DEVIATION_LIMIT * expected, (counted, expected)
