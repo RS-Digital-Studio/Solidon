@@ -47518,7 +47518,12 @@ in jede Richtung und kroch an einer leicht überhängenden Wand unter ein Dach (
 2,9° → 10 mm seitwärts); ein schräger Schlitz zählte mit seiner waagerechten Weite (45° 22 mm
 offen); die Ausweichweite war die Startregel statt des Stützwinkels des Druckers. Die ersten
 beiden öffneten, was vor RM-629 zu war; beide sind wieder zu, und die Ausweichweite folgt dem
-Profil.
+Profil. **Nachprüfung (11.10.2026), behoben:** Ein Y oder gegenläufige Schlitze (Äste 22–28 mm
+um 45°) blieben offen, weil der gemeinsame Schwerpunkt zweier Löcher nicht wanderte — jetzt je
+Loch ein Weg (`_split_by_hole`); ein Schlitz schräg zu seiner schmalen Seite war bis 29 mm offen
+— Richtung und Neigung jetzt aus derselben Schätzung. Dabei schließen sicher: Wendel r 5 Ø 31
+bei 0,5 mm und r 8 Ø 34 (Ganghöhe 40), wie vor RM-629. Tests: Y 22/28 zu, 31 offen; Schlitz
+schräg 29 zu, 31 offen. `SliceResult.overhang_angle` steht in Bauplan §9.
 
 **Nachweis (10.10.2026):** Becher mit Deckel, Sims im Sperrraum vorher → nachher: Loch Ø 34 mm
 um 10°, 20°, 30°, 40°, −30° 64 → 4 %, Ø 30,2 mm um 20° 64 → 4 %, Ø 28 mm 64 → 64 %; Zickzack

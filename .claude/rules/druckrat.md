@@ -105,8 +105,9 @@ offenem Drucker. Übernommen wird auf Klick, nie von allein.
   nur so weit aus, wie eine Wand ihn schiebt, je Schicht höchstens um den
   Stützwinkel des Schnitts (`SliceResult.overhang_angle`), sonst schöbe er
   sich unter einem Dach hervor; wer geschoben wird, braucht Platz für die
-  Ellipse seines schrägen Wegs (`_oval_centres`), sonst zählte ein schräger
-  Schlitz mit seiner waagerechten statt seiner Weite quer zur Achse. Der
+  Ellipse seines schrägen Wegs (`_oval_centres`), je Loch mit eigener Neigung
+  (`_split_by_hole`), sonst zählte ein schräger Schlitz oder Ast mit seiner
+  waagerechten statt seiner Weite quer zur Achse. Der
   Kreis folgt der hinteren Wand, nicht der Achse: Scharfe Knicke, Lippen und
   enge Wendeln bleiben zu wie vor RM-629 (Grenzen in der Begründung). Ohne
   gesperrten Raum kein Vorschlag. Familien: `dateiformat.md`.

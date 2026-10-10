@@ -404,10 +404,19 @@ zwei Schätzungen: der Schub der Wand über 5 mm (`SHAFT_SLOPE_SPAN`) und das
 Wandern der Mitte des Lochs über 1 mm (`SHAFT_SLOPE_TURN`). Nur mit dem Schub
 blieben ein Knick in die Senkrechte (dort schiebt die Wand die Kreise noch
 schräg zur Achse) und ein schräger Kegel (seine hintere Wand steht steiler als
-die Achse) zu. Ein Schlitz zählt so ab 30 mm quer zur Achse, gleich wie
-geneigt. Grenzen, alle wie vor RM-629 zu, nie neu offen: Die Ellipse ist
-gerade, eine Wendel mit gekrümmtem Schnitt und ein enger Kegel können
-zubleiben. An der Unterkante eines Dachs weicht ein Kreis einmal um einen
+die Achse) zu. Richtung und Neigung kommen aus derselben Schätzung: Mit der
+Richtung der Mitte und der Neigung des Schubs war ein Schlitz, schräg zu seiner
+schmalen Seite geneigt, bis 29 mm offen. Und je Loch geht ein eigener Weg
+(`_split_by_hole`): Lagen die Mitten eines Wegs in zwei verschieden wandernden
+Löchern, einem Y oder gegenläufigen Schlitzen, wanderte ihr gemeinsamer
+Schwerpunkt nicht, und Äste von 22 bis 28 mm um 45° öffneten den geschlossenen
+Becher (Nachprüfung RM-629; im ElegooSlicer 21 m Stütze mehr in einem Gefäß, aus
+dem sie nicht herauskommt). Gemessen zählt ein Schlitz um 45° damit ab 30 mm
+quer zur Achse, quer oder schräg (30°, 45°, 60°) zu seiner schmalen Seite
+geneigt, ebenso jeder Ast eines Y. Grenzen, alle wie vor RM-629 zu, in den
+gemessenen Fällen nichts neu offen: Die Ellipse ist gerade, eine Wendel mit
+gekrümmtem Schnitt (Ganghöhe 40: r 5 Ø 31, r 8 Ø 34) und ein enger Kegel
+können zubleiben. An der Unterkante eines Dachs weicht ein Kreis einmal um einen
 Schritt aus; am Becher steht die Säule unter zwei Kanten (Sims und Deckel), und
 eine weite Öffnung ist bei 0,5 mm Schichthöhe bis 0,9 mm neben dem Sims
 erreichbar, bei 0,2 mm bis 0,5 mm, senkrecht gefragt bis 0,3 mm. Und weil nur

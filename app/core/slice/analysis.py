@@ -2072,10 +2072,14 @@ def _shafts_pass(
     Ellipse seines schrägen Wegs (:func:`_oval_centres`), in Schubrichtung
     ``R / cos θ`` weit, quer dazu ``R``; seine eigene Mitte liegt an der
     hinteren Wand bis ``R / cos θ - R`` hinter ihrer. θ ist die flachere von
-    zwei Schätzungen (:func:`_shaft_step`). So zählt ein Schlitz ab 30 mm quer
-    zur Achse, gleich wie geneigt, ein Loch Ø 34 mm bis 44°. Die Ellipse ist
-    gerade: Eine Wendel, deren Schnitt sich krümmt, und ein enger schräger
-    Kegel können zubleiben, obwohl ein Kreis entlang der Achse hindurchpasst.
+    zwei Schätzungen (:func:`_shaft_step`), Richtung und Neigung aus derselben;
+    je Loch geht ein eigener Weg (:func:`_split_by_hole`). Gemessen zählt so ein
+    Schlitz um 45° ab 30 mm quer zur Achse, quer oder schräg (30°, 45°, 60°) zu
+    seiner schmalen Seite geneigt, ebenso jeder Ast eines Y und gegenläufige
+    Schlitze; ein Loch Ø 34 mm bis 44°. Die Ellipse ist gerade: Eine Wendel,
+    deren Schnitt sich krümmt (r 5 Ø 31, r 8 Ø 34 bei Ganghöhe 40), und ein
+    enger schräger Kegel können zubleiben, obwohl ein Kreis entlang der Achse
+    hindurchpasst.
 
     **Ausweichen nur, wo eine Wand schiebt, und nur so steil, wie sie ohne
     Stütze druckt.** Ein Kreis, der frei nach oben steigen kann, wandert nicht:
