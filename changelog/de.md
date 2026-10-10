@@ -40,6 +40,12 @@ wieder heraus (Entscheidung Robert). Wo ein Nutzen bleibt, der ohne den
 Mechanismus auskommt — „die Meldung nennt den wirklichen Grund“ —, steht der
 Nutzen da und sonst nichts.
 
+## 0.6.1
+
+### Gewinde, Bohrungen und Normteile
+
+- Auch nach dem Drehen eines Körpers erkennt Solidon seine Gewinde als Gewinde.
+
 ## 0.6.0
 
 ### Bedienung und System

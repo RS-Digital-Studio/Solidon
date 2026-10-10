@@ -16,6 +16,12 @@ portent les mêmes points dans le même ordre (`tests/test_changelog.py`).
 `tools/make_download.py` en tire la section de la version courante et l'écrit
 dans `website/version.json`.
 
+## 0.6.1
+
+### Filetages, perçages et pièces normalisées
+
+- Solidon reconnaît les filetages d’un corps comme filetages, même après l’avoir tourné.
+
 ## 0.6.0
 
 ### Utilisation et système

@@ -15,6 +15,12 @@ gli stessi punti nello stesso ordine (`tests/test_changelog.py`).
 `tools/make_download.py` ne prende la sezione della versione corrente e la
 scrive in `website/version.json`.
 
+## 0.6.1
+
+### Filettature, fori e componenti normalizzati
+
+- Solidon riconosce le filettature di un corpo come filettature anche dopo averlo ruotato.
+
 ## 0.6.0
 
 ### Uso e sistema

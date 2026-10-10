@@ -16,6 +16,12 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 `tools/make_download.py` toma el apartado de la versión actual y lo escribe en
 `website/version.json`.
 
+## 0.6.1
+
+### Roscas, taladros y piezas normalizadas
+
+- Solidon reconoce las roscas de un cuerpo como roscas también después de girarlo.
+
 ## 0.6.0
 
 ### Manejo y sistema

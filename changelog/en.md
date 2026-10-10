@@ -15,6 +15,12 @@ carry the same points in the same order (`tests/test_changelog.py`).
 `tools/make_download.py` takes the section for the current version and writes
 it into `website/version.json`.
 
+## 0.6.1
+
+### Threads, holes and standard parts
+
+- Solidon recognises the threads of a body as threads even after the body has been rotated.
+
 ## 0.6.0
 
 ### Operation and system
