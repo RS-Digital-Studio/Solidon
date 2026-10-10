@@ -1460,6 +1460,28 @@ def _few_names(names: Sequence[str]) -> str:
     return f"{', '.join(names[: SHOWN_PART_NAMES - 1])} {rest}"
 
 
+def _part_note(
+    parts: Sequence[str],
+    values: Mapping[str, Sequence[str]],
+    rest: str,
+    names: Callable[[Sequence[str]], str],
+) -> str:
+    """Der Hinweis am Feld zu einem Vorschlag je Teil: erst wer ihn bekommt,
+    dann je Wert, wer mit ihm seinen eigenen bekommt, zuletzt der Wert der
+    übrigen — leer, wo keines übrig bleibt. ``names`` kürzt die Namen oder
+    nennt jeden."""
+    said = [str(tr("Nur für {parts}.", parts=names(parts)))]
+    for value, group in values.items():
+        said.append(
+            str(tr("{part} bekommt {value}.", part=group[0], value=value))
+            if len(group) == 1
+            else str(tr("{parts} bekommen {value}.", parts=names(group), value=value))
+        )
+    if rest:
+        said.append(str(tr("Die übrigen Teile drucken mit {value}.")).replace("{value}", rest))
+    return " ".join(said)
+
+
 def _cura_prints_alike(first: object, second: object, trees: Collection[str]) -> bool:
     """Ob Cura zwei Stützarten gleich druckt (Nachprüfung RM-584, N1).
 
@@ -7562,16 +7584,17 @@ class PrintSettingsDialog(QDialog):
                 label.hide()
                 continue
             if not parts:
-                text = str(tr("Gilt allen Teilen: Keines verlangt diesen Vorschlag für sich."))
+                text = full = str(
+                    tr("Gilt allen Teilen: Keines verlangt diesen Vorschlag für sich.")
+                )
             elif len(parts) >= len(self._plate_bodies()):
                 label.hide()
                 continue
             else:
                 others = self._accepted_others.get(path, ())
-                own_values = " ".join(
-                    str(tr("{part} bekommt {value}.", part=name, value=self._shown(path, value)))
-                    for name, value in others
-                )
+                values: dict[str, list[str]] = {}
+                for name, value in others:
+                    values.setdefault(self._shown(path, value), []).append(name)
                 own = print_settings.plate_choice(self.settings, path)
                 rest = (
                     str(tr("{value} (Ihre Einstellung)")).replace(
@@ -7582,19 +7605,15 @@ class PrintSettingsDialog(QDialog):
                     .replace("{value}", self._shown(path, print_settings.read_path(base, path)))
                     .replace("{source}", source)
                 )
-                # Erst wer den Vorschlag bekommt, dann wer mit ihm seinen eigenen
-                # Wert bekommt, zuletzt der Rest — und den nur, wo einer bleibt.
-                said = [str(tr("Nur für {parts}.", parts=", ".join(parts)))]
-                if own_values:
-                    said.append(own_values)
-                if len(parts) + len(others) < len(self._plate_bodies()):
-                    said.append(
-                        str(tr("Die übrigen Teile drucken mit {value}.")).replace("{value}", rest)
-                    )
-                text = " ".join(said)
+                if len(parts) + len(others) >= len(self._plate_bodies()):
+                    rest = ""
+                # Das Feld kürzt die Namen wie die Zeile des Rats (Nachprüfung
+                # RM-584, L1), Tooltip und Bildschirmleser nennen jedes Teil.
+                text = _part_note(parts, values, rest, _few_names)
+                full = _part_note(parts, values, rest, ", ".join)
             label.setText(text)
-            label.setToolTip(text)
-            label.setAccessibleDescription(text)
+            label.setToolTip(full)
+            label.setAccessibleDescription(full)
             label.show()
 
     def _mark_foreign(self) -> None:

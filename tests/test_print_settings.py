@@ -8649,16 +8649,18 @@ class _Note:
 
     def __init__(self) -> None:
         self.text = ""
+        self.tip = ""
+        self.described = ""
         self.visible = False
 
     def setText(self, text: str) -> None:  # noqa: N802 - Qt-Name
         self.text = text
 
-    def setToolTip(self, _text: str) -> None:  # noqa: N802 - Qt-Name
-        pass
+    def setToolTip(self, text: str) -> None:  # noqa: N802 - Qt-Name
+        self.tip = text
 
-    def setAccessibleDescription(self, _text: str) -> None:  # noqa: N802 - Qt-Name
-        pass
+    def setAccessibleDescription(self, text: str) -> None:  # noqa: N802 - Qt-Name
+        self.described = text
 
     def show(self) -> None:
         self.visible = True
@@ -8705,6 +8707,52 @@ def test_the_field_names_the_parts_that_print_their_own_value_with_it(
 
     assert note.visible
     assert note.text == expected
+
+
+def test_the_field_names_many_parts_once_per_value_like_the_row() -> None:
+    """Fünf Teile mit Gitter standen im Feld als fünf Sätze „Pilz bekommt
+    Gitter. Hut bekommt Gitter. …“, die Zeile fasste sie zu „Pilz, Hut und 2
+    weitere mit Gitter“ zusammen (Nachprüfung RM-584, L1). Das Feld nennt jeden
+    Wert einmal und kürzt die Namen wie die Zeile; Tooltip und Bildschirmleser
+    nennen jedes Teil."""
+    from app.ui.print_settings_dialog import PrintSettingsDialog
+
+    names = {"grid": "Gitter", "tree": "Baum", "none": "Aus", "auto": "Automatisch"}
+    base = print_settings.with_path(
+        print_settings.resolve(profiles.make_profile()), "support.style", "none"
+    )
+    bodies = ["Figur", "Löwe", "Greif", "Adler", "Pilz", "Hut", "Dach", "Schirm", "Tor", "Würfel"]
+    note = _Note()
+    host = SimpleNamespace(
+        _part_notes={"support.style": note},
+        _accepted_parts={"support.style": ("Figur", "Löwe", "Greif", "Adler")},
+        _accepted_others={
+            "support.style": (
+                ("Pilz", "grid"),
+                ("Hut", "grid"),
+                ("Dach", "auto"),
+                ("Schirm", "grid"),
+                ("Tor", "grid"),
+            )
+        },
+        settings=print_settings.with_accepted(base, "support.style", "tree"),
+        _plate_bodies=lambda: bodies,
+        _shown=lambda _path, value: names[str(value)],
+    )
+
+    PrintSettingsDialog._mark_parts(host, base, "dem Herstellerprofil")  # type: ignore[arg-type]
+
+    assert note.visible
+    assert note.text == (
+        "Nur für Figur, Löwe und 2 weitere. Pilz, Hut und 2 weitere bekommen Gitter. "
+        "Dach bekommt Automatisch. Die übrigen Teile drucken mit Aus aus dem Herstellerprofil."
+    )
+    full = (
+        "Nur für Figur, Löwe, Greif, Adler. Pilz, Hut, Schirm, Tor bekommen Gitter. "
+        "Dach bekommt Automatisch. Die übrigen Teile drucken mit Aus aus dem Herstellerprofil."
+    )
+    assert note.tip == full
+    assert note.described == full
 
 
 @pytest.mark.parametrize(
