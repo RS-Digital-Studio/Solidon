@@ -1544,12 +1544,153 @@ def test_only_what_rests_on_the_model_counts_as_its_field() -> None:
     assert placement == ["build_plate"], "die Stützen erreichen das Kinn vom Bett"
 
 
+def _tower_with_island(height: float) -> MeshData:
+    """Eine Säule mit einer Insel daneben, die auf ``height - 5`` mm über dem Bett
+    hängt: Ihr Baum reicht vom Bett so hoch, wie sie hängt."""
+    return on_bed(
+        brick(10.0, 10.0, height, (0.0, 0.0, height / 2.0)),
+        brick(6.0, 6.0, 4.0, (20.0, 0.0, height - 3.0)),
+    )
+
+
+@pytest.mark.parametrize(
+    ("height", "style", "walls"),
+    [
+        (120.0, "tree", [2]),
+        (40.0, "tree", []),
+        # Das Paar um die Schwelle (Review RM-584, L2): 95 mm Säule unter
+        # ``TALL_TREE_HEIGHT``, 105 mm darüber.
+        (100.0, "tree", []),
+        (110.0, "tree", [2]),
+        (120.0, "hybrid", [2]),
+        # Unter Gitter druckt kein Baum.
+        (120.0, "grid", []),
+    ],
+)
+def test_tall_trees_get_two_walls(height: float, style: str, walls: list[int]) -> None:
+    """Ab 100 mm Stützhöhe brechen Bäume mit einer Wand oder kippen; zwei tragen
+    sie (RM-584, Recherche Nr. 5): auf 115 mm zwei Wände, auf 35 mm eine, um die
+    Schwelle 95 gegen 105 mm. Unter Gitter keine."""
+    settings = print_settings.with_path(print_settings.resolve(petg()), "support.style", style)
+    result = slice_body(_tower_with_island(height), 0.5)
+    tallest = advise.support_need(result).model.tallest_column
+    assert tallest == pytest.approx(height - 5.0, abs=1.0)
+    entries = advise.advise(settings, petg(), result)
+    assert [entry.value for entry in entries if entry.path == "support.tree_walls"] == walls
+
+
+def test_declined_trees_leave_the_walls_alone() -> None:
+    """Lehnt der Kunde den vorgeschlagenen Baum ab, druckt das Teil seine eigene
+    Art — unter Gitter keine Wände (``printed_style``, Review RM-584, L2)."""
+    settings = print_settings.with_path(print_settings.resolve(petg()), "support.style", "grid")
+    result = slice_body(chin_and_tall_tower(), 0.5)
+    offered = advise.advise(settings, petg(), result)
+    assert ("support.style", "tree") in [(entry.path, entry.value) for entry in offered]
+    assert "support.tree_walls" in [entry.path for entry in offered], "unter dem Baum zwei"
+    declined = advise.advise(settings, petg(), result, declined={"support.style"})
+    assert "support.tree_walls" not in [entry.path for entry in declined]
+
+
+def chin_and_tall_tower() -> MeshData:
+    """Ein Kinn auf der Brust, das Bäume verlangt, neben einer Insel auf 115 mm."""
+    return on_bed(
+        brick(40.0, 10.0, 60.0, (0.0, 20.0, 30.0)),
+        brick(30.0, 30.0, 24.0, (15.0, 0.0, 12.0)),
+        chin(44.0),
+        brick(10.0, 10.0, 120.0, (60.0, 0.0, 60.0)),
+        brick(6.0, 6.0, 4.0, (80.0, 0.0, 117.0)),
+    )
+
+
+@pytest.mark.parametrize(
+    ("trees", "walls"),
+    [
+        # Elegoo: „automatisch“ ist ein Baum, Hybrid kennt es.
+        (frozenset({"auto", "tree", "hybrid"}), [2]),
+        # PrusaSlicer mit ``snug`` und Cura: „automatisch“ ist kein Baum.
+        (frozenset({"tree"}), []),
+    ],
+)
+def test_the_walls_ask_the_style_the_program_prints(trees: frozenset[str], walls: list) -> None:
+    """Der Wandvorschlag fragt die Art, die das Programm druckt (Review RM-584,
+    M4): unter „automatisch“, wo es Bäume heißt, und nicht unter Hybrid, das
+    PrusaSlicer und Cura als Gitter drucken."""
+    result = slice_body(_tower_with_island(120.0), 0.5)
+    for style, expected in (("auto", walls), ("hybrid", walls), ("tree", [2])):
+        settings = print_settings.with_path(print_settings.resolve(petg()), "support.style", style)
+        entries = advise.advise(settings, petg(), result, trees=trees)
+        found = [entry.value for entry in entries if entry.path == "support.tree_walls"]
+        assert found == expected, style
+
+
+def test_the_tallest_column_reaches_down_past_a_lower_tower() -> None:
+    """Eine Platte auf 150 mm, die zum Teil auf einem Turm von 120 mm aufsetzt,
+    steht mit dem Rest auf dem Bett: Ihr Stamm ist 150 mm hoch, nicht 30
+    (Review RM-584, L1). Und ein Rand, der sich selbst trägt, zählt nicht."""
+    tower = on_bed(
+        brick(10.0, 10.0, 150.0, (0.0, 0.0, 75.0)),
+        brick(40.0, 40.0, 2.0, (0.0, 0.0, 151.0)),
+        brick(6.0, 6.0, 120.0, (16.0, 16.0, 60.0)),
+    )
+    tallest = advise.support_need(slice_body(tower, 0.5)).model.tallest_column
+    assert tallest == pytest.approx(150.0, abs=1.0)
+    # Gegenprobe: Eine Säule, die ganz auf dem Turm landet, misst bis dorthin.
+    landed = on_bed(
+        brick(24.0, 24.0, 120.0, (0.0, 0.0, 60.0)),
+        brick(10.0, 10.0, 30.0, (0.0, 0.0, 135.0)),
+        brick(20.0, 20.0, 2.0, (0.0, 0.0, 151.0)),
+    )
+    tallest = advise.support_need(slice_body(landed, 0.5)).model.tallest_column
+    assert tallest == pytest.approx(30.0, abs=1.0)
+    # Ein schmaler Rand oben an einem hohen Turm trägt sich selbst.
+    rim = on_bed(
+        brick(10.0, 10.0, 120.0, (0.0, 0.0, 60.0)),
+        brick(11.0, 11.0, 1.0, (0.0, 0.0, 120.5)),
+        brick(6.0, 6.0, 4.0, (20.0, 0.0, 28.0)),
+    )
+    tallest = advise.support_need(slice_body(rim, 0.5)).model.tallest_column
+    assert tallest == pytest.approx(26.0, abs=1.0)
+
+
+def test_the_tall_tree_walls_fit_into_their_field() -> None:
+    """Der Vorschlag geht in ein Feld; liegt er außerhalb, ist er übernehmbar und
+    nicht anzeigbar (Review RM-584, L4; wie ``MOST_WALLS_WORTH_SUGGESTING``)."""
+    from app.core.knowledge import print_fields
+
+    field = print_fields.field_of("support.tree_walls")
+    assert field is not None
+    assert field.minimum <= advise.TALL_TREE_WALLS <= field.maximum
+
+
+def test_a_flat_ceiling_and_details_on_one_plate_combine_to_hybrid() -> None:
+    """Verlangt ein Körper Gitter unter seiner flachen Decke und ein anderer Bäume
+    an seinen Details, gibt Hybrid beiden, was sie brauchen (RM-584)."""
+    settings = print_settings.resolve(petg())
+    grid = SettingAdvice(path="support.style", value="grid", was="none", reason="Decke")
+    tree = SettingAdvice(path="support.style", value="tree", was="none", reason="Details")
+    combined = advise.combine(settings, [(settings, [grid]), (settings, [tree])])
+    assert [entry.value for entry in combined if entry.path == "support.style"] == ["hybrid"]
+    # Geht die Stützart je Teil, bekommt jedes seine; Hybrid käme in keiner
+    # Datei an (Review RM-584, M3).
+    apart = advise.combine(
+        settings, [(settings, [grid]), (settings, [tree])], separate={"support.style"}
+    )
+    assert [entry.value for entry in apart if entry.path == "support.style"] == ["tree"]
+    # Kennt das Programm kein Hybrid (Cura), trägt Gitter die Decke, mit ihrem
+    # Grund (Nachprüfung RM-584, N3).
+    plain = advise.combine(
+        settings, [(settings, [grid]), (settings, [tree])], trees=frozenset({"tree"})
+    )
+    assert [(e.value, e.reason) for e in plain if e.path == "support.style"] == [("grid", "Decke")]
+
+
 def test_trees_where_small_overhangs_rest_on_the_model_not_under_a_flat_ceiling() -> None:
     """Wo Stützen auf dem Modell ansetzen, hinterlässt ein Gitter mit jeder Säule
     eine Narbe; ein Baum setzt mit wenigen Füßen auf (Drache, 08.10.2026: 212 bis
     324 mm² Auflage der Herstellergitter, 4 bis 66 mm² mit Bäumen). Unter einer
     großen flachen Decke hängt die Unterseite zwischen den Baumspitzen durch —
-    dort bleibt die Art des Herstellers (Recherche vom 08.10.2026)."""
+    dort trägt Gitter, und wo Stützen auch auf dem Modell ansetzen, Hybrid:
+    Bäume für die Details, Gitter unter der Decke (RM-584, Recherche Nr. 4)."""
 
     def style(body: MeshData) -> object:
         entries = advise.advise(print_settings.resolve(petg()), petg(), slice_body(body, 0.2))
@@ -1557,7 +1698,13 @@ def test_trees_where_small_overhangs_rest_on_the_model_not_under_a_flat_ceiling(
 
     figure = chin_over_chest()
     assert style(figure) == "tree", "das Kinn setzt in Streifen auf der Brust auf"
-    assert style(column_table()) == "auto", "die Tischplatte ist eine flache Decke"
+    # Auf dem Modell setzt nur die flache Decke selbst auf, kein Detail daneben:
+    # Gitter trägt allein (Review RM-584, L7).
+    assert style(column_table()) == "grid", "die Tischplatte ist eine flache Decke auf dem Sockel"
+    mushroom = on_bed(
+        brick(8.0, 8.0, 12.0, (0.0, 0.0, 6.0)), brick(40.0, 40.0, 2.0, (0.0, 0.0, 13.0))
+    )
+    assert style(mushroom) == "grid", "der Hut des Pilzes ist eine flache Decke über dem Bett"
     # Auch wenn die flache Decke über dem Bett hängt und nur das Kinn auf dem
     # Modell aufsetzt: Gefragt ist die Deckenform am Körper (Review vom 08.10.2026).
     with_arm = on_bed(
@@ -1568,7 +1715,7 @@ def test_trees_where_small_overhangs_rest_on_the_model_not_under_a_flat_ceiling(
         brick(28.0, 30.0, 3.0, (54.0, 0.0, 40.0)),
         brick(4.0, 30.0, 40.0, (38.0, 0.0, 20.0)),
     )
-    assert style(with_arm) == "auto", "der flache Arm über dem Bett bleibt beim Hersteller"
+    assert style(with_arm) == "hybrid", "Arm über dem Bett und Kinn auf dem Modell"
 
     def changed(body: MeshData, before: str) -> list[object]:
         settings = print_settings.with_path(print_settings.resolve(petg()), "support.style", before)
@@ -1577,6 +1724,112 @@ def test_trees_where_small_overhangs_rest_on_the_model_not_under_a_flat_ceiling(
 
     assert changed(figure, "grid") == ["tree"], "auch über einem gewählten Gitter"
     assert changed(column_table(), "grid") == [], "die flache Decke behält ihr Gitter"
+    assert changed(column_table(), "tree") == ["grid"], "Bäume allein: die Decke hinge durch"
+    assert changed(with_arm, "tree") == ["hybrid"], "Arm und Kinn: Bäume an die Details"
+    assert changed(mushroom, "tree") == ["grid"], "unter dem Hut keine Baumspitzen"
+    assert changed(mushroom, "auto") == ["grid"], "ohne Programm zählt „automatisch“ als Baum"
+    assert changed(figure, "hybrid") == [], "Hybrid stützt die Details schon mit Bäumen"
+    # Ein gewählter Hybrid legt unter die Decke schon Gitter (Review RM-584, L6).
+    assert changed(mushroom, "hybrid") == [], "Hybrid trägt den Hut mit Gitter"
+    assert changed(column_table(), "hybrid") == []
+
+
+@pytest.mark.parametrize(
+    ("trees", "flavour", "over_auto", "from_none"),
+    [
+        # Ohne Programm vorsichtig: „automatisch“ kann ein Baum sein.
+        (None, "orca", ["grid"], "grid"),
+        # ElegooSlicer, Bambu Studio: „automatisch“ stützt mit Bäumen.
+        (frozenset({"auto", "tree", "hybrid"}), "orca", ["grid"], "grid"),
+        # PrusaSlicer mit ``snug``: „automatisch“ ist normale Stütze und
+        # bleibt, die Art geht je Teil.
+        (frozenset({"tree"}), "prusa", [], "auto"),
+        # Cura (``normal``): Die Art gilt der ganzen Platte, die flache Decke
+        # sagt ausdrücklich Gitter (Nachprüfung RM-584, N1).
+        (frozenset({"tree"}), "cura", ["grid"], "grid"),
+    ],
+)
+def test_grid_over_automatic_only_where_automatic_means_trees(
+    trees: frozenset[str] | None, flavour: str, over_auto: list[str], from_none: str
+) -> None:
+    """Unter PrusaSlicer stand für den Pilz „Gitter statt automatisch“ mit dem
+    Grund, große flache Decken hingen zwischen Baumspitzen durch — dort heißt
+    „automatisch“ ``snug``, bei Cura ``normal`` (Review RM-584, M1). Gitter über
+    „automatisch“ nur, wo es Bäume heißt; sonst bleibt „automatisch“."""
+    mushroom = on_bed(
+        brick(8.0, 8.0, 12.0, (0.0, 0.0, 6.0)), brick(40.0, 40.0, 2.0, (0.0, 0.0, 13.0))
+    )
+    result = slice_body(mushroom, 0.2)
+
+    def proposed(before: str) -> list[object]:
+        settings = print_settings.with_path(print_settings.resolve(petg()), "support.style", before)
+        entries = advise.advise(settings, petg(), result, trees=trees, flavour=flavour)  # type: ignore[arg-type]
+        return [entry.value for entry in entries if entry.path == "support.style"]
+
+    assert proposed("auto") == over_auto
+    assert proposed("none") == [from_none]
+    # Ein gewählter Baum hängt überall durch, wo das Programm ihn als Baum druckt.
+    assert proposed("tree") == ["grid"]
+
+
+def test_trees_over_a_hybrid_the_program_prints_as_grid() -> None:
+    """Ein „Hybrid“ aus einem Elegoo-Projekt druckt unter PrusaSlicer und Cura
+    Gitter; die Figur bekommt dort Bäume vorgeschlagen wie unter Gitter
+    (Nachprüfung RM-584, N7). Wo das Programm Hybrid kennt, stützt es die
+    Details schon mit Bäumen."""
+    settings = print_settings.with_path(print_settings.resolve(petg()), "support.style", "hybrid")
+    result = slice_body(chin_over_chest(), 0.2)
+
+    def proposed(trees: frozenset[str]) -> list[object]:
+        entries = advise.advise(settings, petg(), result, trees=trees)
+        return [entry.value for entry in entries if entry.path == "support.style"]
+
+    assert proposed(frozenset({"tree"})) == ["tree"]
+    assert proposed(frozenset({"auto", "tree", "hybrid"})) == []
+
+
+def test_a_lifted_body_measures_its_columns_from_its_own_floor() -> None:
+    """Ein Körper über dem Bett (Deckel auf der Dose, Teil auf der Grundplatte)
+    misst seine Säulen vom eigenen Boden, wie ``bed_columns``: Der Turm mit Insel
+    bekam um 70 mm angehoben 105 mm statt 35 mm und zwei Wände (Nachprüfung
+    RM-584, N4)."""
+    from app.core.geom.transform import apply, translation
+
+    settings = print_settings.with_path(print_settings.resolve(petg()), "support.style", "tree")
+    heights = []
+    for lift in (0.0, 70.0):
+        body = apply(_tower_with_island(40.0), translation((0.0, 0.0, lift)))
+        result = slice_body(body, 0.5)
+        heights.append(advise.support_need(result).model.tallest_column)
+        walls = [
+            e.value
+            for e in advise.advise(settings, petg(), result)
+            if e.path == "support.tree_walls"
+        ]
+        assert walls == [], lift
+    assert heights[0] == pytest.approx(35.0, abs=1.0)
+    assert heights[1] == pytest.approx(heights[0], abs=0.01)
+
+
+def test_hybrid_only_where_the_program_knows_it() -> None:
+    """PrusaSlicer und Cura kennen keine Hybridstütze; unter ihrem Baum mit
+    Details daneben trägt dort Gitter die Decke (Review RM-584, M1, M2)."""
+    with_arm = on_bed(
+        brick(80.0, 60.0, 4.0, (0.0, 0.0, 2.0)),
+        brick(40.0, 10.0, 60.0, (0.0, 20.0, 34.0)),
+        brick(60.0, 30.0, 20.0, (0.0, 0.0, 14.0)),
+        chin(44.0),
+        brick(28.0, 30.0, 3.0, (54.0, 0.0, 40.0)),
+        brick(4.0, 30.0, 40.0, (38.0, 0.0, 20.0)),
+    )
+    result = slice_body(with_arm, 0.2)
+    settings = print_settings.with_path(print_settings.resolve(petg()), "support.style", "tree")
+    for trees, expected in (
+        (frozenset({"auto", "tree", "hybrid"}), "hybrid"),
+        (frozenset({"tree"}), "grid"),
+    ):
+        entries = advise.advise(settings, petg(), result, trees=trees)
+        assert [entry.value for entry in entries if entry.path == "support.style"] == [expected]
 
 
 def _support_advice(
@@ -1594,6 +1847,7 @@ def _support_advice(
     ),
     whole_layers: bool = False,
     organic: frozenset[str] = frozenset(),
+    declined: frozenset[str] = frozenset(),
 ) -> dict[str, object]:
     """Die Vorschläge zu Abstand und Trennschicht für einen Körper (RM-583)."""
     settings = print_settings.resolve(profile)
@@ -1606,6 +1860,7 @@ def _support_advice(
         flavour=flavour,  # type: ignore[arg-type]
         whole_layers=whole_layers,
         organic=organic,
+        declined=declined,
     )
     return {entry.path: entry.value for entry in entries if entry.path in paths}
 
@@ -1751,6 +2006,9 @@ def test_under_organic_trees_the_gap_comes_in_whole_layers(
         flavour="orca",
         paths=("support.z_gap",),
         organic=frozenset(organic),
+        # Gefragt mit der Art, mit der der Kunde druckt: Unter der flachen
+        # Tischplatte schlüge der Rat sonst Hybrid vor (RM-584).
+        declined=frozenset({"support.style"}),
     ) == {"support.z_gap": pytest.approx(gap)}
 
 
