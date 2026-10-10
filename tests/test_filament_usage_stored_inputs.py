@@ -624,6 +624,34 @@ def test_an_old_booking_is_kept_under_its_own_fingerprint(tmp_path: Path) -> Non
     assert again == previous
 
 
+def test_a_creator_with_stray_inputs_keeps_them_like_the_evaluation() -> None:
+    """Review RM-706, L1: Ein Erzeuger mit Eingängen (Dateien vor dem 07.09.2026)
+    verbraucht sie nicht — die Auswertung lässt den genannten Körper stehen
+    (``evaluate._without_stray_inputs``), also auch der Abdruck. Sonst fiel er auf
+    seine Netzbits zurück und kippte mit jeder druckgleichen Änderung."""
+    from app.core.types import Document
+
+    document = Document(
+        format_version=51,
+        app_version="0.5.3",
+        ops=[
+            Operation(id=1, op="create_box", outputs=("obj_1",), params={"width": 20.0}),
+            Operation(
+                id=2, op="create_box", inputs=("obj_1",), outputs=("obj_2",), params={"width": 30.0}
+            ),
+        ],
+    )
+    profile = profiles.make_profile("centauri-carbon-2", "pla")
+    result = evaluate(document, profile)
+    inputs = usage.StoredInputs(document, None, result.stopped_at)
+    assert set(inputs.bodies()) == set(result.scene.objects) == {"obj_1", "obj_2"}
+    settings = replace(print_settings.resolve(profile), inventory_project_id="rm706-streu")
+    objects = list(result.scene.objects.values())
+    before = request_for(objects, settings, profile, inputs)
+    after = request_for(_changed(objects, _shifted), settings, profile, inputs)
+    assert after.fingerprint == before.fingerprint
+
+
 def test_the_stored_inputs_read_no_mesh() -> None:
     """Die Eingänge kommen aus dem Dokument; ein Schritt, den es hier nicht gibt,
     hält wie die Auswertung an."""

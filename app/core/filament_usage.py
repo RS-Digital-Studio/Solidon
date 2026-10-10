@@ -210,6 +210,7 @@ def _stored_bodies(stored: StoredInputs) -> dict[ObjectId, str]:
     (``leaves_inputs_unchanged``) behalten den Abdruck ihres Körpers.
     """
     from app.core.registry import REGISTRY
+    from app.core.scene.evaluate import _without_stray_inputs
 
     document = stored.document
     live: dict[ObjectId, str] = {}
@@ -222,6 +223,9 @@ def _stored_bodies(stored: StoredInputs) -> dict[ObjectId, str]:
             # Die Auswertung hält hier an (``evaluate.unknown_operation``).
             break
         spec = REGISTRY.get(operation.op)
+        # Ein Erzeuger mit Eingängen aus einer alten Datei verliert sie, wie in
+        # der Auswertung — dieselbe Funktion, kein Nachbau (Review RM-706, L1).
+        operation, _stray = _without_stray_inputs(operation, spec)
         inputs = [live.get(name) or digest("absent", name) for name in operation.inputs]
         carried = dict(zip(operation.inputs, inputs, strict=True))
         step = (
