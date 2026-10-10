@@ -87,6 +87,10 @@ scrive in `website/version.json`.
 - Sotto un'ampia superficie inferiore piana, Solidon propone la griglia invece degli alberi, e l'ibrido se servono anche dettagli fini. Per gli alberi alti, Solidon propone due pareti.
 - Se un suggerimento della finestra di stampa vale solo per alcuni pezzi, la riga e il campo nominano anche i pezzi che con esso ricevono un altro valore.
 - Per il PLA, Solidon propone più spazio tra le numerose punte sottili e i supporti ad albero sottostanti. In questo modo restano meno residui delle punte dei supporti.
+- I ponti lunghi ricevono il supporto previsto da Solidon, anche in PrusaSlicer. Se un ponte lungo resta senza supporto, Solidon propone linee spesse e un po' meno flusso.
+- Agli sbalzi piatti senza supporto Solidon propone pareti extra. Con ABS, ASA e TPU lo slicer stampa gli sbalzi ripidi in senso alternato, così non si arricciano.
+- Le impostazioni dei ponti, le pareti extra e il senso alternato valgono solo per il pezzo che ne ha bisogno. Gli altri pezzi dello stesso piatto si stampano come prima.
+- Senza profilo del produttore, PrusaSlicer e SuperSlicer stampano ora i ponti sottili. Dove un ponte ha bisogno di linee spesse e meno flusso, Solidon le propone per quel pezzo.
 - Dove Solidon propone più spazio sopra i supporti ad albero, propone anche una *Punta dell'albero* più larga. Ogni punta ha uno strato di interfaccia e sulle parti inferiori resta meno supporto.
 - Se molti piccoli sbalzi richiedono insieme supporti, come un mento con la parte inferiore inclinata, il rapporto indica ora il punto.
 - Un bordo stretto che si regge da solo non conta più come ponte lungo, nemmeno accanto a un altro sbalzo. Il rapporto non avvisa più lì e Solidon non chiede supporti per questo.

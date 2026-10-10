@@ -88,6 +88,10 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Bajo una cara inferior grande y plana, Solidon propone cuadrícula en lugar de árboles, e híbrido si también hay detalles finos. Para soportes de árbol altos, Solidon propone dos paredes.
 - Si una sugerencia del diálogo de impresión solo vale para algunas piezas, la fila y el campo nombran también las piezas que reciben con ella otro valor.
 - Para PLA, Solidon propone más espacio entre muchas puntas finas y los soportes en árbol situados debajo. Así quedan menos restos de las puntas de los soportes.
+- Los puentes largos reciben el soporte que Solidon prevé, también en PrusaSlicer. Si un puente largo queda sin soporte, Solidon propone líneas gruesas y algo menos de flujo.
+- Los voladizos planos sin soporte reciben paredes extra como propuesta. Con ABS, ASA y TPU el slicer puede imprimir voladizos pronunciados en sentido alterno para que no se levanten.
+- Los ajustes de puente, las paredes extra y el sentido alterno solo se aplican a la pieza que los necesita. Las demás piezas de la misma placa se imprimen igual.
+- Sin perfil del fabricante, PrusaSlicer y SuperSlicer imprimen ahora los puentes finos. Donde un puente necesita líneas gruesas y menos flujo, Solidon las propone para esa pieza.
 - Donde Solidon propone más espacio sobre soportes en árbol, propone también una *Punta del árbol* más ancha. Cada punta lleva capa de separación y queda menos soporte en las caras inferiores.
 - Si muchos voladizos pequeños necesitan soportes juntos, como una barbilla con la cara inferior inclinada, el informe indica ahora el lugar.
 - Un borde estrecho que se sostiene solo ya no cuenta como puente largo, tampoco junto a otro voladizo. El informe ya no avisa ahí, y Solidon no pide soportes por ello.

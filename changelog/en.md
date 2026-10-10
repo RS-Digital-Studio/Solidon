@@ -87,6 +87,10 @@ it into `website/version.json`.
 - Under a large flat underside, Solidon suggests grid instead of tree supports, and hybrid where fine details need support too. For tall tree supports, Solidon suggests two walls.
 - If a suggestion in the print dialog applies to some parts only, its row and field also name the parts that get a different value with it.
 - For PLA, Solidon suggests more clearance from tree supports beneath many fine tips. This leaves less residue from the tree tips there.
+- Long bridges get the support Solidon plans for them, in PrusaSlicer too. If a long bridge stays without support, Solidon suggests thick lines and slightly less flow.
+- Flat overhangs without support get extra walls suggested. For ABS, ASA and TPU the slicer can print steep overhangs in alternating directions on request, so they do not curl up.
+- Bridge settings, extra walls and the alternating direction apply only to the part that needs them. The other parts on the same plate print as before.
+- Without a manufacturer profile, PrusaSlicer and SuperSlicer now print bridges thin. Where a bridge needs thick lines and less flow, Solidon suggests them for that part.
 - Where Solidon suggests more clearance above tree supports, it also suggests a wider *Tree tip*. Every tip then carries an interface layer, and less support sticks to undersides.
 - When many small overhangs need supports together, such as a chin with a sloped underside, the check report now names the spot.
 - A narrow rim that holds up on its own no longer counts as a long bridge, even next to another overhang. The check report no longer warns there, and Solidon asks for no supports for it.

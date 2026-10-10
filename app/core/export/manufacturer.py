@@ -385,6 +385,21 @@ def _fraction(text: str, _context: _Context) -> object:
     return number / 100.0
 
 
+def _ratio(text: str, _context: _Context) -> object:
+    """Ein Faktor über null, als Zahl oder in Prozent — SuperSlicers Bündel
+    schreiben den Brückenfluss als „100%“, PrusaSlicer und Orca als 1 (RM-587)."""
+    percent = text.endswith("%")
+    number = _float(text.rstrip("%").strip())
+    if number is None or number <= 0.0:
+        return Foreign(text)
+    return number / 100.0 if percent else number
+
+
+#: Brückenstütze aus dem Schalter, der sie abschaltet (Orca ``bridge_no_support``,
+#: Prusa ``dont_support_bridges``, RM-587).
+_BRIDGES_SUPPORTED: Final = {"0": True, "1": False, "false": True, "true": False}
+
+
 def _width(text: str, context: _Context) -> object:
     """Eine Bahnbreite in Millimetern oder in Prozent der Düse; null heißt
     „wie die allgemeine" und ist keine eigene Angabe."""
@@ -462,6 +477,11 @@ ORCA_PROCESS: Final[tuple[tuple[str, str, Reader], ...]] = (
     ),
     ("shell.precise_outer_wall", "precise_outer_wall", _flag),
     ("shell.ironing", "ironing_type", _choice({"no ironing": False, "top": True})),
+    ("shell.thick_bridges", "thick_bridges", _flag),
+    ("shell.bridge_flow", "bridge_flow", _ratio),
+    ("shell.overhang_walls", "extra_perimeters_on_overhangs", _flag),
+    ("shell.overhang_reverse", "overhang_reverse", _flag),
+    ("support.bridges", "bridge_no_support", _choice(_BRIDGES_SUPPORTED)),
     ("infill.density", "sparse_infill_density", _fraction),
     ("infill.pattern", "sparse_infill_pattern", _choice(_ORCA_INFILL_BACK)),
     ("infill.angle", "infill_direction", _number),
@@ -996,7 +1016,6 @@ def _orca_support_motion(
         "support_hybrid": True,
         # Fest in ``SupportMaterial.cpp`` (``support_closing_radius(2.0)``).
         "support_closing": ORCA_SUPPORT_CLOSING,
-        "support_skips_bridges": (_text(process.get("bridge_no_support")) or "0") in ("1", "true"),
     }
 
 
@@ -1092,8 +1111,6 @@ def _prusa_support_motion(values: Mapping[str, Any], nozzle: float) -> dict[str,
         else None,
         "support_tree": auto_prints_trees(values, "prusa"),
         "support_closing": _float(_text(values.get("support_material_closing_radius")) or ""),
-        "support_skips_bridges": (_text(values.get("dont_support_bridges")) or "0")
-        in ("1", "true"),
     }
 
 
@@ -1449,6 +1466,10 @@ PRUSA_PROCESS: Final[tuple[tuple[str, str, Reader], ...]] = (
         _choice({"classic": "classic", "arachne": "arachne"}),
     ),
     ("shell.ironing", "ironing", _flag),
+    ("shell.thick_bridges", "thick_bridges", _flag),
+    ("shell.bridge_flow", "bridge_flow_ratio", _ratio),
+    ("shell.overhang_walls", "extra_perimeters_on_overhangs", _flag),
+    ("support.bridges", "dont_support_bridges", _choice(_BRIDGES_SUPPORTED)),
     ("infill.density", "fill_density", _fraction),
     ("infill.pattern", "fill_pattern", _choice(_PRUSA_INFILL_BACK)),
     ("infill.angle", "fill_angle", _number),
@@ -1485,12 +1506,14 @@ PRUSA_PROGRAM_DEFAULTS: Final[Mapping[str, str]] = {
     "bed_temperature": "0",
     "bottom_solid_layers": "3",
     "bridge_fan_speed": "100",
+    "bridge_flow_ratio": "1",
     "bridge_speed": "60",
     "brim_type": "outer_only",
     "brim_width": "0",
     "chamber_temperature": "0",
     "default_acceleration": "0",
     "disable_fan_first_layers": "3",
+    "dont_support_bridges": "1",
     # Gemessen mit ``--save`` aus einem leeren ``--datadir`` (2.9.6, 09.10.2026).
     "elefant_foot_compensation": "0",
     # Nicht aus ``--save``, sondern aus dem Konfigurationsblock der Seitenablage
@@ -1500,6 +1523,7 @@ PRUSA_PROGRAM_DEFAULTS: Final[Mapping[str, str]] = {
     "external_perimeter_extrusion_width": "0",
     "external_perimeter_speed": "50%",
     "external_perimeters_first": "0",
+    "extra_perimeters_on_overhangs": "0",
     "extrusion_multiplier": "1",
     "extrusion_width": "0",
     "fan_always_on": "0",
@@ -1551,6 +1575,7 @@ PRUSA_PROGRAM_DEFAULTS: Final[Mapping[str, str]] = {
     "support_material_threshold": "0",
     "support_material_xy_spacing": "50%",
     "temperature": "200",
+    "thick_bridges": "1",
     "top_solid_infill_speed": "15",
     "top_solid_layers": "3",
     "travel_speed": "130",

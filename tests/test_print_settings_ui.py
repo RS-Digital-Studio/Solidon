@@ -3303,6 +3303,19 @@ def test_slicer_hints_preserve_the_colour_last_chosen_in_the_dialog(
         assert editor.accessibleDescription() == own_description
 
 
+def test_the_cura_bridge_flow_field_says_cura_has_its_own(dialog: PrintSettingsDialog) -> None:
+    """Review RM-587, L3: Cura hat einen Brückenfluss, nur für seine eigenen
+    Brückenbahnen. Das ausgegraute Feld sagt das; dicke Brücken kennt Cura nicht."""
+    dialog._slicer_path = Path("CuraEngine.exe")
+    dialog._mark_fields_this_slicer_ignores()
+
+    flow = dialog._editors["shell.bridge_flow"]
+    assert not flow.isEnabled()
+    assert "eigenen Brückenfluss" in flow.toolTip()
+    thick = dialog._editors["shell.thick_bridges"]
+    assert "kennt diese Einstellung nicht" in thick.toolTip()
+
+
 @pytest.mark.parametrize(
     ("slicer", "ignored"), [("superslicer.exe", True), ("PrusaSlicer.exe", False)]
 )
@@ -12855,6 +12868,66 @@ def test_declining_the_tree_asks_the_advice_again(
     assert len(asked) == 1
     assert dialog._declined_advice() == frozenset({"support.style"})
     assert asked[0] != before, "die Abwahl gehört zum Auftrag des Arbeiters"
+
+
+@pytest.mark.parametrize(
+    "key",
+    ["support.bridges", "support.spare_ledges", "support.placement", "support.block_channels"],
+)
+def test_declining_the_bridge_support_asks_the_advice_again(
+    dialog: PrintSettingsDialog, qt_app: QApplication, monkeypatch: pytest.MonkeyPatch, key: str
+) -> None:
+    """Review RM-587, M4: Ohne Brückenstütze oder freie Ränder druckt die Brücke frei,
+    und erst dann schlägt der Rat dicke Bahnen und weniger Fluss vor. Die Abwahl kam
+    beim Arbeiter nie an — der Dialog gab nur die Stützart weiter."""
+    asked: list[object] = []
+    monkeypatch.setattr(dialog, "_refresh_advice", lambda: asked.append(dialog._advice_context()))
+    item = QTreeWidgetItem(["", ""])
+    item.setData(0, Qt.ItemDataRole.UserRole, key)
+    item.setCheckState(0, Qt.CheckState.Unchecked)
+
+    dialog._advice_checked(item, 0)
+    QCoreApplication.processEvents()
+
+    assert len(asked) == 1
+    assert dialog._declined_advice() == frozenset({key})
+
+
+def test_a_declined_bridge_support_gives_the_bridge_thick_lines_in_the_dialog(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Review RM-587, M4, Dialogweg: Am Kobra 2 stützt OrcaSlicers Herstellerprofil
+    Brücken nicht. Der Rat schlägt die Brückenstütze vor; wählt der Kunde sie ab,
+    fragt der Arbeiter mit der Abwahl und bietet für die freie 36-mm-Brücke dicke
+    Bahnen und 0,9 Fluss an."""
+    monkeypatch.setattr(handover, "_native_process", lambda _setup: {})
+    profile = profiles.make_profile("anycubic-kobra-2", "pla")
+    settings = print_settings.with_choice(
+        print_settings.resolve(profile, "standard"), "support.bridges", False
+    )
+    raw = trimesh.load(
+        Path(__file__).parent / "data" / "meshes" / "bridge_two_end_supports.ply", force="mesh"
+    )
+    raw.apply_translation((0.0, 0.0, -raw.bounds[0][2]))
+    objects = (SceneObject(id="obj_1", name="Brücke", mesh=MeshData.of(raw)),)
+    setup = handover.SlicerSetup(executable=Path("orca-slicer.exe"), flavour="orca")
+
+    def rows(declined: frozenset[str]) -> dict[str, object]:
+        found: list[list[SettingAdvice]] = []
+        worker = print_dialog._AdviceWorker(
+            objects, settings, profile, setup, {}, (), (), {}, flavour="orca", declined=declined
+        )
+        worker.done.connect(lambda entries, _measured: found.append(entries))
+        worker.work()
+        assert found, "der Arbeiter liefert"
+        return {entry.path: entry.value for entry in found[-1]}
+
+    offered = rows(frozenset())
+    assert offered.get("support.bridges") is True
+    assert "shell.thick_bridges" not in offered
+    free = rows(frozenset({"support.bridges"}))
+    assert free.get("shell.thick_bridges") is True
+    assert free.get("shell.bridge_flow") == pytest.approx(0.9)
 
 
 @pytest.mark.parametrize(("organic", "said"), [(frozenset({"tree"}), True), (frozenset(), False)])

@@ -2541,6 +2541,14 @@ def _supported_span(shape: ShapelyPolygon, supported: ShapelyPolygon) -> float:
     Winkel ist dieselbe Menge in einem Durchlauf da; je Bündel bleibt wie
     zuvor die Kante, die in der Kontur zuerst kommt.
     """
+    span = _anchored_span(shape, supported)
+    return _across(shape) if span is None else span
+
+
+def _anchored_span(shape: ShapelyPolygon, supported: ShapelyPolygon) -> float | None:
+    """Die kürzeste Bahnenrichtung, deren Bahnen über ``shape`` an beiden Enden in
+    ``supported`` Halt haben — oder ``None``, wenn keine Richtung das schafft
+    (:func:`_supported_span`). Höchstens die Diagonale der Hüllbox."""
     anchored = supported.buffer(EPS_GEOM)
     if anchored.covers(shape.boundary):
         return spanning_width(shape)
@@ -2553,7 +2561,7 @@ def _supported_span(shape: ShapelyPolygon, supported: ShapelyPolygon) -> float:
     lengths = np.linalg.norm(edges, axis=1)
     units = edges[lengths > EPS_GEOM] / lengths[lengths > EPS_GEOM, None]
     if not len(units):
-        return _across(shape)
+        return None
     # Kante und Normale, in Konturreihenfolge: erst die Kante, dann ihre Normale.
     candidates = np.empty((2 * len(units), 2), dtype=float)
     candidates[0::2] = units
@@ -2588,7 +2596,7 @@ def _supported_span(shape: ShapelyPolygon, supported: ShapelyPolygon) -> float:
     ]
     heads = np.concatenate([ring[:-1] for ring in rings])
     tails = np.concatenate([ring[1:] for ring in rings])
-    best = _across(shape)
+    best: float | None = None
     for direction in directions:
         normal = np.array([-direction[1], direction[0]])
         levels = np.unique(band_corners @ normal)
@@ -2614,7 +2622,7 @@ def _supported_span(shape: ShapelyPolygon, supported: ShapelyPolygon) -> float:
             ):
                 break
         else:
-            best = min(best, float(lengths.max()))
+            best = min(best if best is not None else _across(shape), float(lengths.max()))
     return best
 
 
@@ -3287,6 +3295,184 @@ def total_overhang(
     for index, number in without:
         total -= piece_area(result.layers[index].overhangs[number])
     return max(total, 0.0)
+
+
+#: Ab welchem Anteil der Bahnbreite die Orca-Familie eine Wand umkehrt: Die
+#: Außenbahn muss so weit über die Schicht darunter hinausragen
+#: (``overhang_reverse_threshold``, im Prozess des K1 Max
+#: ``fdm_process_creality_common.json`` 50 %). Bei 0,2 mm Schicht und 0,42 mm
+#: Bahn erst ab 46,4 Grad (Nachprüfung RM-587, N2).
+REVERSE_THRESHOLD_SHARE: Final = 0.5
+
+
+def steep_reach(
+    result: SliceResult, enough: float | None = None, *, line_width: float | None = None
+) -> float:
+    """Wie weit die längste steile Wand über die 45-Grad-Linie hinauswandert, in mm
+    (RM-587, Review M2).
+
+    Steil heißt: steiler als die Startregel (45 Grad,
+    :data:`OVERHANG_ANGLE_FACTOR`) und flacher als der Winkel, mit dem geschnitten
+    wurde — dort stützt der Slicer nicht, und schrumpfendes Material rollt sich auf.
+    Je Schicht das **Band**: die Fläche jenseits der 45-Grad-Zugabe über der Schicht
+    darunter, ohne die Überhangstücke jenseits der Stützgrenze und den Streifen
+    neben ihnen. Der Überhang gehört der Stütze, und der Streifen ist der Rand
+    einer flachen Decke, keine Wand: Am Kasten mit Deckel waren das am K1 Max
+    14,9 mm² in einer Schicht. Breit ist der Streifen um die Zugabe der
+    Stützgrenze weniger die 45-Grad-Zugabe; die Zugabe der Grenze steht in der
+    Schicht selbst, als Abstand der Überhangstücke zur Schicht darunter
+    (:func:`_measure_batch`). Nur der Streifen fällt heraus, nicht das ganze
+    zusammenhängende Band: Die Flanken eines um 65 Grad geneigten Zylinders
+    blieben sonst ungezählt, weil seine Unterseite überhängt (Nachprüfung
+    RM-587, N3). Die mittlere Breite des Bands ist das Doppelte seiner Fläche
+    durch seinen Umfang — an einem Ring genau seine Breite, Schichthöhe ·
+    (tan Winkel - 1).
+
+    Gezählt wird je Wand: Die Breiten folgen sich über die Schichten, solange das
+    Band einer Schicht höchstens eine Schichthöhe neben dem der Schicht darunter
+    liegt; eine Schicht ohne Band beginnt neu. Die Summe ist die Höhe der Wand mal
+    (tan Winkel - 1) — wie weit sie über eine 45-Grad-Wand hinauswandert. Ein
+    Trichter von 20 mm Höhe (99 Schichtschritte zu 0,2 mm) trägt bei 50 Grad
+    19,8 · 0,192 = 3,80 mm, bei 58 Grad 11,89 mm, bei 40 Grad nichts. Eine Rundung
+    mit Radius r an der Unterkante bringt 0,048 · r: Ihr Stück zwischen 45 und 60
+    Grad ist 0,159 · r hoch und 0,207 · r breit. Mit ``line_width`` zählt eine
+    Schicht nur, wenn ihr Band breiter ist als
+    :data:`REVERSE_THRESHOLD_SHARE` · Bahnbreite - Schichthöhe — erst dann ragt
+    die Außenbahn so weit hinaus, dass der Slicer umkehrt; sonst beginnt die Wand
+    neu. Ein Trichter mit 46 Grad wandert über 60 mm Höhe 2,1 mm hinaus, kehrt in
+    Orca aber nie um (Nachprüfung RM-587, N2). Ein Schnitt mit einer Grenze unter
+    45 Grad hat kein Band und gibt null; senkrechte Wände tragen nichts, ihr
+    Vernetzungsrauschen bleibt in der Zugabe einer Schichthöhe.
+
+    ``enough`` beendet die Messung, sobald eine Wand darüber liegt — der Rat fragt
+    nur, ob es eine so weite gibt. Gerechnet blockweise (:data:`BATCH_LAYERS`),
+    als Fläche ohne Vereinigung (die Konturen einer Schicht sind getrennt) und
+    nach Douglas-Peucker um :data:`WIDTH_SIMPLIFY` vereinfacht wie
+    :func:`_width_outline`; wird eine Schicht dabei ungültig, bleibt sie, wie sie
+    ist. Am Besenhalter mit 1,7 Millionen Punkten kostete das Band so 0,38 s
+    Rechenzeit statt 2,06 s mit vereinigten, unvereinfachten Konturen.
+    """
+    layers = result.layers
+    best = run = 0.0
+    previous: Any = None
+    for start in range(1, len(layers), BATCH_LAYERS):
+        stop = min(start + BATCH_LAYERS, len(layers))
+        exact = np.asarray([_disjoint_shape(layer) for layer in layers[start - 1 : stop]])
+        shapes = shapely.simplify(exact, WIDTH_SIMPLIFY, preserve_topology=False)
+        broken = ~shapely.is_valid(shapes) | shapely.is_empty(shapes)
+        shapes[broken] = exact[broken]
+        steps = np.asarray(
+            [max(layers[index].z - layers[index - 1].z, 0.0) for index in range(start, stop)]
+        )
+        below = shapely.buffer(shapes[:-1], steps * OVERHANG_ANGLE_FACTOR, quad_segs=16)
+        ceilings = np.asarray(
+            [_overhang_shape(layer) for layer in layers[start:stop]], dtype=object
+        )
+        free = shapely.difference(shapes[1:], below)
+        # Nur Schichten mit Überhang haben einen Streifen; die übrigen kosteten
+        # am Drachen sonst ein Drittel der Messung.
+        hanging = ~shapely.is_empty(ceilings)
+        if hanging.any():
+            reach = shapely.distance(ceilings[hanging], exact[:-1][hanging])
+            grow = np.maximum(reach - steps[hanging], 0.0) + OVERHANG_MARGIN
+            strips = shapely.buffer(ceilings[hanging], grow, join_style="mitre")
+            free[hanging] = shapely.difference(free[hanging], strips)
+        parts, owner = shapely.get_parts(free, return_index=True)
+        sized = shapely.area(parts) > 0.0
+        parts, owner = parts[sized], owner[sized]
+        count = stop - start
+        area = np.bincount(owner, weights=shapely.area(parts), minlength=count)
+        length = np.bincount(owner, weights=shapely.length(parts), minlength=count)
+        width = np.divide(2.0 * area, length, out=np.zeros(count), where=length > 0.0)
+        counted = width > 0.0
+        if line_width is not None:
+            counted &= width > REVERSE_THRESHOLD_SHARE * line_width - steps
+        bands = np.full(count, None, dtype=object)
+        if len(owner):
+            # ``get_parts`` liefert die Teile nach Schichten geordnet.
+            cuts = np.flatnonzero(np.diff(owner)) + 1
+            for position, group in zip(owner[np.r_[0, cuts]], np.split(parts, cuts), strict=True):
+                if counted[position]:
+                    bands[position] = shapely.multipolygons(group)
+        for position in range(count):
+            band = bands[position]
+            if band is None:
+                run = 0.0
+            elif previous is not None and shapely.dwithin(
+                band, previous, steps[position] + OVERHANG_MARGIN
+            ):
+                run += float(width[position])
+            else:
+                run = float(width[position])
+            previous = band
+            best = max(best, run)
+        if enough is not None and best > enough:
+            break
+    return best
+
+
+def _overhang_shape(layer: LayerInfo) -> ShapelyPolygon | MultiPolygon:
+    """Die Überhangstücke einer Schicht als eine Fläche, ohne sie zu vereinigen —
+    sie sind getrennte Teile derselben Differenz."""
+    parts = [ShapelyPolygon(piece.outline, piece.holes) for piece in layer.overhangs]
+    if not parts:
+        return ShapelyPolygon()
+    return parts[0] if len(parts) == 1 else MultiPolygon(parts)
+
+
+def _disjoint_shape(layer: LayerInfo) -> ShapelyPolygon | MultiPolygon:
+    """Die Konturen einer Schicht als eine Fläche, ohne sie zu vereinigen: Sie
+    stammen aus den Teilen einer gültigen Fläche (:func:`_to_polygons`) und
+    berühren sich nicht."""
+    parts = [ShapelyPolygon(contour.outline, contour.holes) for contour in layer.contours]
+    if not parts:
+        return ShapelyPolygon()
+    return parts[0] if len(parts) == 1 else MultiPolygon(parts)
+
+
+def cantilevers(
+    result: SliceResult, pieces: Sequence[tuple[int, int]], gap: float
+) -> frozenset[tuple[int, int]]:
+    """Welche dieser Überhangstücke (Schicht, Stück) nur an **einer** Seite an der
+    Schicht darunter hängen (RM-587).
+
+    Eine Auskragung, ein Rand oder ein Pilzhut grenzen an einem zusammenhängenden
+    Stück Umriss an den getragenen Rest ihrer Schicht; eine Brücke an zwei Enden.
+    Gefragt wird der Rest der eigenen Schicht und nicht die Schicht darunter: Das
+    Stück beginnt erst jenseits der Zugabe des Stützwinkels und berührt sie nie.
+    Gezählt werden die Berührungen, die weiter als ``gap`` auseinanderliegen —
+    eine Bahnbreite, damit eine vom Vernetzungsrauschen zerrissene Kante eine
+    bleibt. Eine Insel grenzt an nichts und ist keine Auskragung. Gemessen in
+    PrusaSlicer 2.9.6: Die Zusatzwände an Überhängen ersetzen unter einer
+    3-mm-Auskragung die Brückenbahnen und lassen eine beidseitig gelagerte
+    36-mm-Brücke unverändert.
+
+    **Und eine zusammenhängende Berührung hängt nur, wenn keine Bahnenrichtung
+    über das Stück an beiden Enden Halt hat** (:func:`_anchored_span`, Review
+    RM-587, M1 und N1). Der Deckel eines geschlossenen Kastens berührt seine
+    Schicht an einer einzigen Linie, dem ganzen Außenring; eine Decke auf drei
+    Seiten (Kasten, vorn offen) an einem U. Beide spannt der Slicer von Wand zu
+    Wand, und PrusaSlicer 2.9.6 legt sie mit und ohne Zusatzwände gleich
+    (U-Decke Brückenbahn 3 588,7 mm in beiden). Eine Decke auf zwei
+    Nachbarseiten (L) hat keine solche Richtung und bekommt die Zusatzwände
+    (Brückenbahn 3 590,6 → 1 795,3 mm); der Pilzhut berührt den Rest an seinem
+    Innenring, seine Bahnen enden außen in der Luft — beide bleiben einseitig.
+    """
+    found: set[tuple[int, int]] = set()
+    shapes: dict[int, Any] = {}
+    for index, number in pieces:
+        if index not in shapes:
+            shapes[index] = _layer_shape(result.layers[index])
+        piece = result.layers[index].overhangs[number]
+        outline = ShapelyPolygon(piece.outline, piece.holes)
+        rest = shapes[index].difference(outline).buffer(OVERHANG_MARGIN)
+        contact = outline.boundary.intersection(rest)
+        if contact.is_empty:
+            continue
+        joined = contact.buffer(gap / 2.0)
+        if len(getattr(joined, "geoms", [joined])) == 1 and _anchored_span(outline, rest) is None:
+            found.add((index, number))
+    return frozenset(found)
 
 
 def worst_overhang(result: SliceResult) -> float:

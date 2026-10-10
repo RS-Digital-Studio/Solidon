@@ -1386,7 +1386,9 @@ def part_advice(
     # Eine Stützart, die der Kunde nicht übernommen hat, bekommt kein Teil:
     # Abstand und Trennschicht fragen dann mit der Art der Platte (RM-622).
     # Übernommen bekommt jedes Teil seinen eigenen Vorschlag (``applied``).
-    declined = frozenset({"support.style"}) - frozenset(accepted or {})
+    # Ebenso Brückenstütze und freie Ränder: Ohne sie druckt die Brücke frei,
+    # und dicke Bahnen gehören an das Teil (Review RM-587, M4).
+    declined = advise.DECIDING_PATHS - frozenset(accepted or {})
 
     def asked(current: PrintSettings) -> list[SettingAdvice]:
         groups = [

@@ -38,12 +38,14 @@ from app.core.knowledge import print_settings as settings_table
 from app.core.log import get_logger
 from app.core.slice.analysis import (
     BRIDGE_FROM,
+    OVERHANG_LAYER_MINIMUM,
     OVERHANG_LAYER_WORTH_SUPPORT,
     OVERHANG_MARGIN,
     SPAN_INTERESTING,
     TIP_ROOF_AREA,
     ModelSupport,
     _layer_shape,
+    cantilevers,
     channel_pieces,
     channel_space,
     island_layers,
@@ -60,6 +62,7 @@ from app.core.slice.analysis import (
     smooth_outline_height,
     span_beside,
     span_spot,
+    steep_reach,
     tapered_layers,
     thinnest_spot,
     tip_islands,
@@ -488,6 +491,9 @@ def _combined_value(
             # Die dichtere Trennschicht hält eine flache Decke auf der Platte;
             # eine lockere ließe sie durchhängen (RM-583).
             "support.interface_spacing",
+            # Weniger Fluss braucht nur die freie Brücke; ein Körper ohne Brücke
+            # merkt ihn nicht (RM-587).
+            "shell.bridge_flow",
         ):
             return min(numbers)
         return max(numbers)
@@ -879,6 +885,8 @@ class SupportNeed:
     ``OVERHANG_LAYER_WORTH_SUPPORT`` eine flache Decke."""
     tips: int = 0
     """Inseln, deren Baumspitze keine Trennschicht bekommt (:func:`tip_islands`)."""
+    ledges: frozenset[tuple[int, int]] = frozenset()
+    """Stücke (Schicht, Stück), die sich als Rand selbst tragen (:func:`ledges`)."""
 
 
 def _largest_field(
@@ -964,6 +972,7 @@ def support_need(result: SliceResult, *, cancelled: CancelToken | None = None) -
         patch=patch,
         piece=piece,
         tips=tip_islands(result),
+        ledges=edges,
     )
 
 
@@ -1019,9 +1028,22 @@ def rounds_to_whole_layers(
     return whole_layers or flavour in WHOLE_LAYER_GAP_FLAVOURS or style in organic
 
 
-#: Vorschläge, an deren Übernahme andere hängen (:func:`printed_style`): Wählt
-#: der Kunde einen davon ab, fragt der Druckdialog neu (RM-622).
-DECIDING_PATHS: Final = frozenset({"support.style"})
+#: Vorschläge, an deren Übernahme andere hängen: Wählt der Kunde einen davon ab,
+#: fragt der Druckdialog neu, und der Export fragt jedes Teil ohne ihn. An der
+#: Stützart hängen Abstand und Trennschicht (:func:`printed_style`, RM-622), an
+#: Brückenstütze und freien Rändern dicke Bahnen, Brückenfluss und Zusatzwände
+#: (:func:`_bridges_and_overhangs`, Review RM-587, M4) — abgewählt druckt die
+#: Brücke frei. Und an Stützort und Kanalsperre, ob eine Kanaldecke frei druckt
+#: (:func:`_channels_kept_free`, Nachprüfung RM-587, N4).
+DECIDING_PATHS: Final = frozenset(
+    {
+        "support.style",
+        "support.bridges",
+        "support.spare_ledges",
+        "support.placement",
+        "support.block_channels",
+    }
+)
 
 
 def printed_style(
@@ -1520,6 +1542,10 @@ def _from_geometry(
                     reason=_("Zwei Wände halten hohe Bäume stabil."),
                 )
             )
+    # **Und was frei druckt, soll halten** (RM-587): Brücken unter Stütze, wo die
+    # Stütze sie verlangt, dicke Bahnen über langen freien Brücken, Zusatzwände
+    # unter flachen Überhängen ohne Stütze und die Umkehr an steilen Wänden.
+    advice += _bridges_and_overhangs(settings, profile, result, need, advice, declined, flavour)
 
     # **Über „automatisch“ nur, wo der Slicer nichts rechnet** (Entscheidung J,
     # :func:`_unanchored`): Orcas Auto-Brim fragt Höhe und Grundfläche selbst
@@ -1998,7 +2024,9 @@ def _from_connectors(settings: PrintSettings, diameters: Sequence[float]) -> lis
 #: Sperre, die Haftung, die Werte einer Passung, Wände und Füllung um
 #: Verbinder, Wandgenerator und Bahnbreite an schmalen Stellen. Dazu der
 #: Stützkontakt: Abstand und Trennschichten hängen am Material der Spule, die
-#: das Teil druckt, und nur das gestützte Teil braucht sie (RM-583).
+#: das Teil druckt, und nur das gestützte Teil braucht sie (RM-583). Und was
+#: frei druckt (RM-587): Brückenstütze, dicke Brücken, Brückenfluss,
+#: Zusatzwände und Umkehr gehören dem Teil mit der Brücke oder dem Überhang.
 #: Temperatur, Kühlung, Rückzug und Volumenstrom gehen je Spule hinaus
 #: (``print_settings_dialog.FILAMENT_GROUPS``), nicht je Teil.
 #:
@@ -2010,6 +2038,11 @@ def _from_connectors(settings: PrintSettings, diameters: Sequence[float]) -> lis
 #: daneben trägt die zweite Wand für etwas Material mit.
 PART_PATHS: Final = frozenset(
     {
+        "support.bridges",
+        "shell.thick_bridges",
+        "shell.bridge_flow",
+        "shell.overhang_walls",
+        "shell.overhang_reverse",
         "support.style",
         "support.placement",
         "support.block_channels",
@@ -2082,6 +2115,11 @@ SLICED_PATHS: Final = frozenset(
         "speed.bridge",
         "cooling.minimum_layer_time",
         "cooling.minimum_speed",
+        "support.bridges",
+        "shell.thick_bridges",
+        "shell.bridge_flow",
+        "shell.overhang_walls",
+        "shell.overhang_reverse",
     }
 )
 
@@ -2186,6 +2224,221 @@ def for_part(
                 settings, profile, result, reason, narrower=False, flavour=flavour
             )
     return _merged(settings, advice)
+
+
+#: Der Brückenfluss über langen freien Brücken (RM-587): die Mitte des Bands
+#: 0,85 bis 0,95 der Recherche vom 08.10.2026 (Nr. 11), der Wert von Creality
+#: und Anycubic in der Orca-Familie.
+BRIDGE_FLOW: Final = 0.9
+
+#: Bis zu welchem Brückenfluss der Wert des Herstellers bleibt: das obere Ende
+#: desselben Bands. Prusas Bündel für den SV06 trägt 0,95 und braucht nichts.
+BRIDGE_FLOW_ENOUGH: Final = 0.95
+
+#: Materialien, die sich an steilen Überhängen aufrollen: schrumpfende und weiche
+#: (Recherche Nr. 12). Für sie lohnt die Umkehr der Wandrichtung.
+CURLING_MATERIALS: Final = WARPING_MATERIALS | FLEXIBLE_MATERIALS
+
+#: Die Familien, die die Umkehr an Überhängen führen: nur die Orca-Familie;
+#: PrusaSlicer 2.9.6 und Cura kennen sie nicht. Dieselbe Aussage steht in
+#: ``slicer_keys.NOT_TAKEN_BY``; ``test_advise.py`` hält beide gleich.
+REVERSING_FLAVOURS: Final[frozenset[SlicerFlavour]] = frozenset({"orca"})
+
+
+def _bridges_and_overhangs(
+    settings: PrintSettings,
+    profile: Profile,
+    result: SliceResult,
+    need: SupportNeed,
+    advice: Sequence[SettingAdvice],
+    declined: Collection[str],
+    flavour: SlicerFlavour | None,
+) -> list[SettingAdvice]:
+    """Lange Brücken und Überhänge, die ohne Stütze sauber drucken sollen (RM-587).
+
+    **Brücken stützen**, wo eine lange Brücke Stütze verlangt
+    (:func:`_may_need_support`) und das Teil mit Stützen druckt: PrusaSlicer
+    spannt sie ohne eigenen Wert frei, auch mit „überall“ (G-Code-Gegenprüfung
+    N1, 36-mm-Brücke ohne Stütze). **Dicke Brücken und weniger Fluss**, wo eine
+    Brücke über :data:`SPAN_INTERESTING` frei druckt — ohne Stützen, ohne
+    Brückenstütze, oder als Kanaldecke, die Solidon freihält
+    (:func:`_channels_kept_free`); ein Rand spannt nicht und zählt nicht
+    (``long_spans``). Über
+    einer Stütze trägt die dünne Brücke und sieht besser aus.
+
+    **Zusatzwände** unter flachen Überhängen ohne Stütze, die breiter sind als die
+    Wände (gemessen in PrusaSlicer und OrcaSlicer: zwischen 45 Grad und der
+    Stützgrenze ändert der Schalter nichts, unter einer Auskragung ersetzt er die
+    losen Brückenbahnen). **Die Umkehr** an steilen Wänden zwischen 45 Grad und
+    der Stützgrenze für Material, das sich aufrollt — nur in der Orca-Familie,
+    die anderen kennen sie nicht. Steil ist eine Wand, die über ihre Höhe weiter
+    als eine Bahnbreite über die 45-Grad-Linie hinauswandert
+    (:func:`steep_reach`): Erst dann liegt ihre Außenbahn neben der Bahn, die eine
+    45-Grad-Wand dort legte; darunter ist sie eine Kante, eine Rundung von 2 mm
+    bringt 0,1 mm.
+    """
+    found: list[SettingAdvice] = []
+    style = printed_style(settings, advice, declined)
+    supported = style != "none"
+    # Ein Rand spannt nicht (:func:`_from_spans`): Seine Weite ist die Länge der
+    # Kante, über die er hängt, und über ihm ist keine Brücke zu tragen. Gemessen
+    # wird die Brücke ohne die Ränder (:func:`span_beside`, RM-627), auch neben
+    # einem anderen Überhang derselben Schicht.
+    long_spans = [
+        index
+        for index, layer in enumerate(result.layers)
+        if layer.bridge_width > SPAN_INTERESTING
+        and span_beside(result, index, need.ledges) > SPAN_INTERESTING
+    ]
+    # Laut ist eine Brücke auch ohne die Kanaldecken. Eine Kanaldecke spannt frei,
+    # auch wenn das Teil Stützen hat — wenn Solidon den Kanal freihält.
+    channels = (
+        need.model.channels if _channels_kept_free(settings, advice, declined) else frozenset()
+    )
+    quiet = channels | need.ledges
+    loud = frozenset(
+        index for index in long_spans if span_beside(result, index, quiet) > SPAN_INTERESTING
+    )
+    held = settings.support.bridges
+    if supported and not held and need.needed:
+        # Welche Decke der Slicer als Brücke liest, rechnet nur er: Am Kobra 2
+        # stützte OrcaSlicer vom Pilzhut nur den Rand (``estimate``), an der
+        # 36-mm-Brücke alles. Wo Solidon Stütze verlangt, gilt sie deshalb auch
+        # unter Brücken.
+        spans = bool(loud)
+        found.append(
+            _advice(
+                settings,
+                path="support.bridges",
+                value=True,
+                reason=_("Die lange Brücke hängt ohne Stütze durch.")
+                if spans
+                else _("Sonst lässt der Slicer Decken frei, die Stütze brauchen."),
+            )
+        )
+        held = "support.bridges" not in declined
+    free = [index for index in long_spans if not (supported and held) or index not in loud]
+    if free and not settings.shell.thick_bridges:
+        found.append(
+            _advice(
+                settings,
+                path="shell.thick_bridges",
+                value=True,
+                reason=_("Dicke Bahnen tragen über die lange freie Brücke."),
+            )
+        )
+    if free and settings.shell.bridge_flow > BRIDGE_FLOW_ENOUGH + EPS_GEOM:
+        found.append(
+            _advice(
+                settings,
+                path="shell.bridge_flow",
+                value=BRIDGE_FLOW,
+                reason=_("Mit etwas weniger Material hängt die Brücke weniger durch."),
+            )
+        )
+    if not settings.shell.overhang_walls and _free_flat_overhang(
+        settings, result, need, advice, declined, supported
+    ):
+        found.append(
+            _advice(
+                settings,
+                path="shell.overhang_walls",
+                value=True,
+                reason=_("Zusatzwände halten den Überhang ohne Stütze."),
+            )
+        )
+    if (
+        profile.material.id in CURLING_MATERIALS
+        and (flavour is None or flavour in REVERSING_FLAVOURS)
+        and not settings.shell.overhang_reverse
+        and steep_reach(
+            result, enough=settings.layers.line_width, line_width=settings.layers.line_width
+        )
+        > settings.layers.line_width
+    ):
+        found.append(
+            _advice(
+                settings,
+                path="shell.overhang_reverse",
+                value=True,
+                reason=_("Wechselnd gedruckt rollen sich steile Wände nicht auf."),
+            )
+        )
+    return found
+
+
+def _channels_kept_free(
+    settings: PrintSettings, advice: Sequence[SettingAdvice], declined: Collection[str]
+) -> bool:
+    """Hält etwas die Kanäle frei — Stützen nur vom Bett oder die Kanalsperre,
+    gesetzt oder vorgeschlagen und nicht abgewählt (Nachprüfung RM-587, N4)?
+
+    Sonst stützt der Slicer die Kanaldecke: OrcaSlicer am mini-pot mit Stützen
+    „überall“ legte direkt unter ihr Trennschicht (198,5 bis 76,7 mm Bahn je
+    Schicht), und über einer Stütze trägt die dünne Brücke."""
+    wanted: tuple[tuple[str, object], ...] = (
+        ("support.placement", "build_plate"),
+        ("support.block_channels", True),
+    )
+    return any(
+        settings_table.read_path(settings, path) == value
+        or (
+            path not in declined
+            and any(entry.path == path and entry.value == value for entry in advice)
+        )
+        for path, value in wanted
+    )
+
+
+def _free_flat_overhang(
+    settings: PrintSettings,
+    result: SliceResult,
+    need: SupportNeed,
+    advice: Sequence[SettingAdvice],
+    declined: Collection[str],
+    supported: bool,
+) -> bool:
+    """Druckt ein flacher Überhang frei, der breiter ist als die Wände (RM-587)?
+
+    Frei heißt: ohne Stützen jedes Stück, mit Stützen die Ränder, die Solidon
+    freihält (``support.spare_ledges``, gesetzt oder vorgeschlagen). Breit heißt
+    im Mittel breiter als alle Wandbahnen zusammen, geschätzt als doppelte Fläche
+    durch Umfang; schmaler liegt der Überhang ganz unter den Wänden, und die
+    Zusatzwände haben nichts zu verankern. Ein Stück unter
+    :data:`OVERHANG_LAYER_MINIMUM` ist eine Kante, kein Überhang. **Und nur, was
+    an einer Seite hängt** (:func:`cantilevers`): Eine an beiden Enden gelagerte
+    Brücke legt der Slicer mit und ohne Zusatzwände gleich.
+    """
+    spared = settings.support.spare_ledges or (
+        "support.spare_ledges" not in declined
+        and any(entry.path == "support.spare_ledges" for entry in advice)
+    )
+    if supported and not (spared and need.ledges):
+        return False
+    walls = settings.shell.wall_count * settings.layers.line_width
+    wide: list[tuple[int, int]] = []
+    for index, layer in enumerate(result.layers):
+        for number, piece in enumerate(layer.overhangs):
+            if supported and (index, number) not in need.ledges:
+                continue
+            area = piece_area(piece)
+            if area < OVERHANG_LAYER_MINIMUM:
+                continue
+            perimeter = _ring_length(piece.outline) + sum(
+                _ring_length(hole) for hole in piece.holes
+            )
+            if perimeter > 0.0 and 2.0 * area / perimeter > walls:
+                wide.append((index, number))
+    return bool(wide) and bool(cantilevers(result, wide, settings.layers.line_width))
+
+
+def _ring_length(ring: object) -> float:
+    """Der Umfang eines geschlossenen Rings in mm."""
+    points = np.asarray(ring, dtype=float)
+    if len(points) < 2:
+        return 0.0
+    closed = np.vstack((points, points[:1]))
+    return float(np.hypot(*np.diff(closed[:, :2], axis=0).T).sum())
 
 
 def _may_need_support(

@@ -88,6 +88,10 @@ dans `website/version.json`.
 - Sous une grande face inférieure plane, Solidon propose une grille plutôt que des arbres, et l'hybride si des détails fins en ont besoin. Pour les arbres hauts, Solidon propose deux parois.
 - Si une suggestion de la boîte de dialogue d'impression ne vaut que pour certaines pièces, la ligne et le champ nomment aussi celles qui reçoivent avec elle une autre valeur.
 - Pour le PLA, Solidon propose davantage d'espace entre les nombreuses pointes fines et les supports arborescents en dessous. Cela laisse moins de résidus des pointes des supports.
+- Les longs ponts reçoivent le support prévu par Solidon, dans PrusaSlicer aussi. Si un long pont reste sans support, Solidon propose des lignes épaisses et un peu moins de débit.
+- Les surplombs plats sans support se voient proposer des parois supplémentaires. Avec l'ABS, l'ASA et le TPU, le slicer imprime les surplombs raides en sens alterné pour qu'ils ne se recourbent pas.
+- Les réglages de pont, les parois supplémentaires et le sens alterné ne valent que pour la pièce qui en a besoin. Les autres pièces du plateau s'impriment comme avant.
+- Sans profil du fabricant, PrusaSlicer et SuperSlicer impriment désormais les ponts fins. Là où un pont a besoin de lignes épaisses et de moins de débit, Solidon les propose pour cette pièce.
 - Où Solidon propose plus d'espace sur les supports arborescents, il propose aussi une *Pointe d'arbre* plus large. Chaque pointe porte une couche d'interface, et les dessous gardent moins de support.
 - Si de nombreux petits surplombs ont besoin ensemble de supports, comme un menton à face inférieure inclinée, le rapport indique désormais l'endroit.
 - Un rebord étroit qui se porte seul ne compte plus comme un long pont, même à côté d'un autre surplomb. Le rapport n'avertit plus à cet endroit, et Solidon n'y demande plus de supports.

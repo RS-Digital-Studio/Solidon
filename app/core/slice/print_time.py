@@ -130,10 +130,6 @@ class Motion:
     """Wie weit der Slicer benachbarte Stützflächen zusammenschließt, in mm
     (Prusa ``support_material_closing_radius``, Cura ``support_join_distance``,
     Orca fest 2 mm in ``SupportMaterial.cpp``); Bäume schließen nicht."""
-    support_skips_bridges: bool = False
-    """Stützt das Profil keine Brücken (Orca ``bridge_no_support``, Prusa
-    ``dont_support_bridges``)? Welche Decke der Slicer als Brücke liest, rechnet
-    nur er; die Gegenprobe mit Stützen ist dann unvollständig."""
     outer_wall_width: float | None = None
     """Bahnbreiten je Rolle aus dem Profil, in mm (Orca ``outer_wall_line_width``
     und Geschwister, Prusa ``external_perimeter_extrusion_width`` und

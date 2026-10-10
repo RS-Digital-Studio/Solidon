@@ -68,7 +68,6 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-704 — Kinn und Bein am dritten Drachendruck](#rm-704) | Geometrie, Erkennung und Druckvorbereitung | Trennschicht auf jeder Baumspitze gebaut (Archiv, RM-704 Teil); offen: Kinn, Kopf und Vorderbeine an Druck 4 prüfen, Wände an schlanken Gliedern (nach welle4), die Spitze in PrusaSlicer und Cura |
 | [RM-585 — Bögen, die sich zwischen ihren Beinen schließen, tragen sich selbst](#rm-585) | Geometrie, Erkennung und Druckvorbereitung | Schließfrage für weite Bögen, Brückenregel für die letzte Spanne |
 | [RM-586 — Feine Schichten, wo das Modell feine Formen hat](#rm-586) | Geometrie, Erkennung und Druckvorbereitung | Variable Schichthöhe über die 3MF, Deckschichten mindestens 0,8 mm |
-| [RM-587 — Lange Brücken und steile Überhänge drucken sauber](#rm-587) | Geometrie, Erkennung und Druckvorbereitung | Dicke Brücke und Fluss über langen Brücken, Zusatzwände an steilen Überhängen |
 | [RM-588 — Die Naht liegt hinten, und große Oberseiten werden gebügelt](#rm-588) | Geometrie, Erkennung und Druckvorbereitung | Naht hinten bei Figuren, Bügeln der obersten Fläche |
 | [RM-626 — Eine Kanalsäule endet an ihrer höchsten Auflage, und eine Insel im umschlossenen Kanalraum verliert ihre Säule](#rm-626) | Geometrie, Erkennung und Druckvorbereitung | Gefunden im Review von RM-571 (09.10.), mit Sonden belegt; nächster Schritt: Inseln behalten ihre Säule (Test an der Kammer), Schätzung messen, Kammer mit Insel in den vier Slicern |
 | [RM-628 — Solidon rechnet mit Curas Aufrunden des Stützabstands](#rm-628) | Geometrie, Erkennung und Druckvorbereitung | In Arbeit: Claude (Zweig `einstellungen/cura-rundung-rm628`). Cura druckt unter Gitter oben 0,28 / unten 0,40, unter Bäumen 0,60 / 0,60 (geschrieben 0,28 bzw. 0,44), Solidon rät PETG unter Gitter 0,2; danach Cura in den Kontakttest von RM-624 |
@@ -971,15 +970,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   `adaptive_layer_height_enabled`; bei feinen Schichten werden Deckschichten unter 0,8 mm
   dünn (Recherche Nr. 9, 10). Abnahme: am Drachen feine Schichten nur an Kuppen und
   Schuppen, Druckzeit genannt, in allen Familien gemessen.
-
-<a id="rm-587"></a>
-
-- [ ] **RM-587 — Lange Brücken und steile Überhänge drucken sauber.**
-  Solidon meldet Brücken ab 15 mm und setzt nur Tempo und Lüfter. Dicke Brücken,
-  Brückenfluss und Zusatzwände an Überhängen zwischen 45° und der Stützgrenze bleiben beim
-  Hersteller, meist aus (Recherche Nr. 11, 12). Abnahme: Vorschläge mit Grund, an einer
-  Brücke und einem Überhang im Slicer gemessen.
-  Vermerk 09.10.2026 (G-Code-Gegenprüfung vom 03.10., N1): PrusaSlicer 2.9.6 mit Solidons eigenem Satz (`generic-220`, jeder Drucker ohne Bündelprofil) stützt eine 36-mm-Brücke bei „Stützen überall“ nicht (0 mm³), weil Solidon `dont_support_bridges` nicht schreibt und die Programmvorgabe 1 bleibt; SuperSlicer, Cura, die Orca-Familie und PrusaSlicer mit Bündel stützen sie, die Schichtanalyse rechnet 901 mm³. Am Stand origin/main liest Solidon den Wert nur aus Herstellerprofilen (`app/core/export/manufacturer.py:917`, `:1013`). Die Brückenstütze als Folge von „Stützen überall/nur vom Bett“ in die Stütztabelle jeder Familie (`dont_support_bridges`, `bridge_no_support`) aufnehmen und die Stützgegenprobe unter Brücken mitmessen. Beleg: `F:\solidon-review-reports\gcode\schluss.md`, `gcode\befunde.md`.
 
 <a id="rm-588"></a>
 

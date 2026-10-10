@@ -31,6 +31,7 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-09 | [RM-587: Lange Brücken und steile Überhänge drucken sauber (09.10.2026)](#rm-587-lange-brücken-und-steile-überhänge-drucken-sauber-09102026) |
 | 2026-10-10 | [RM-707: Spulenwerte aus 0.5.3 überschreiben das Herstellerprofil nicht mehr (10.10.2026)](#rm-707-spulenwerte-aus-053-überschreiben-das-herstellerprofil-nicht-mehr-10102026) |
 | 2026-10-10 | [RM-705: Ein vor dem Update gebuchter Druck wird danach wiedererkannt (10.10.2026)](#rm-705-ein-vor-dem-update-gebuchter-druck-wird-danach-wiedererkannt-10102026) |
 | 2026-10-10 | [RM-704 (Teil): Mit zwei Schichten Luft trägt jede Baumspitze eine Trennschicht (10.10.2026)](#rm-704-teil-mit-zwei-schichten-luft-trägt-jede-baumspitze-eine-trennschicht-10102026) |
@@ -46694,6 +46695,118 @@ sechs Sprachen „ab 0.5.0“ neben „Version 0.5.3“, wie im Repository. Chan
   Belege: `F:\solidon-review-reports\verif-09d8e9485.md` (Abschnitt 3).
 
 **Abschluss:** Der Abschnitt *Bausteine verwalten* beginnt offen, solange der eigene Bausteinordner nichts hält (`PartCatalog`, `_own_library_is_empty`). Gezählt werden gespeicherte Rezepte und hinzugefügte Bausteine, dieselbe Frage wie für Weitergabe, *Bearbeiten* und *Entfernen* (`_in_own_library`, vorher dreimal hergeleitet); ein mitgereister und ein `.py`-Baustein zählen nicht, `PartSpec.own` zählte anders. Danach gilt der Merker (`remember`, RM-491), und ein eigener Baustein klappt den Abschnitt wie bisher auf (RM-455; dass dieses Aufklappen gemerkt wird, steht in [RM-658](ROADMAP.md#rm-658)). Damit stehen *Auswahl als Baustein speichern …*, *Baustein aus Datei hinzufügen …* und beide Sperrgründe ohne Klick da, wie in 0.5.1 (Rückschritt seit `48ffcf145`, in 0.5.2 und 0.5.3). Weil der Weitergabegrund jetzt vorn steht, sagt er ohne eigenen Baustein „Speichern Sie zuerst einen eigenen Baustein, um ihn weiterzugeben.“ statt zum Wählen aufzufordern, das bei einem eingebauten in die nächste Absage führte. Die Hinweistests prüfen den Grund ohne vorheriges Aufklappen und stellen die Bibliothek ohne eigene Bausteine selbst her (`no_own_parts`); `test_the_closed_management_names_what_it_holds` prüft den zugeklappten Zustand nach einem Klick; neu `test_a_fresh_catalogue_shows_its_management_without_a_click` und `test_only_a_part_in_the_own_library_closes_the_management` (Rezept und hinzugefügt zu, mitgereist und `.py` offen). Gegenprobe über ein Plugin, je Mutation von acht Tests rot: immer zu 6, immer offen 2, Prädikat über `PartSpec.own` 2, alter Weitergabegrund 3; Katalogtests 52 grün, Handbuch-, Katalog-, Wortlaut- und Changelogtests 539 grün. Die Handbuchseiten *Eigene Bausteine* und *Bausteindateien austauschen* nennen Abschnitt und Knopf in allen sechs Sprachen, der eingefrorene Musterbestand trägt die neuen Seitenschlüssel; Changelog 0.6.0. Fenstersonde am echten Fenster, frischer Nutzerordner: 4 von 4, *Speichern*, *Hinzufügen* und beide Sperrgründe ohne Klick sichtbar, der Weitergabegrund schickt zum Speichern. Umgesetzt von Claude (Thread „Bedienung und KI“).
+
+## RM-587: Lange Brücken und steile Überhänge drucken sauber (09.10.2026)
+
+<a id="rm-587-lange-brücken-und-steile-überhänge-drucken-sauber-09102026"></a>
+<a id="rm-587"></a>
+
+**RM-587 — Lange Brücken und steile Überhänge drucken sauber.**
+  Solidon meldete Brücken ab 15 mm und setzte nur Tempo und Lüfter. Dicke Brücken, Brückenfluss
+  und Zusatzwände an Überhängen zwischen 45° und der Stützgrenze blieben beim Hersteller, meist
+  aus (Recherche Nr. 11, 12). Dazu N1 der G-Code-Gegenprüfung vom 03.10.: PrusaSlicer 2.9.6 mit
+  Solidons eigenem Satz stützte die 36-mm-Brücke trotz „Stützen überall“ nicht (0 mm³, die
+  Schichtanalyse rechnete 901 mm³), weil Solidon `dont_support_bridges` nicht schrieb.
+  Belege: `F:\solidon-review-reports\gcode\schluss.md`, `befunde.md`.
+
+**Abschluss:** Fünf neue Felder mit Rat aus der Geometrie (`advise._bridges_and_overhangs`):
+*Brücken stützen* (`support.bridges`, Prusa `dont_support_bridges`, Orca `bridge_no_support`),
+vorgeschlagen, wo das Teil Stütze verlangt und mit Stützen druckt; *Dicke Brücken* und *Fluss bei
+Brücken* (0,9 über 0,95) über Brücken über 15 mm, die frei drucken; *Zusatzwände ohne Stütze*
+unter flachen, einseitig hängenden Stücken ohne Stütze, breiter als die Wände
+(`analysis.cantilevers`); *Wandrichtung wechseln* (`overhang_reverse`, nur Orca-Familie) für
+ABS, ASA und TPU an steilen Wänden zwischen 45 Grad und der Stützgrenze
+(`analysis.steep_overhang`). Rücklesung aus Orca- und Prusa-Ketten samt Programmvorgaben von
+PrusaSlicer (`--save`), Übergabe je Programm gemessen: Cura und SuperSlicer keiner der fünf
+(SuperSlicer: Fluss in Prozent, zwei Schlüssel unbekannt, die Brückenstütze ohne Wirkung), Bambu Studio ohne Zusatzwände und
+Umkehr, Anycubic Slicer Next ohne Zusatzwände (angenommen, ohne Wirkung). Die Gegenprobe fragt die
+Brückenstütze am wirksamen Wert des Teils statt am Herstellerprozess (`Motion.support_skips_bridges`
+entfällt). Gemessen über den Druckdialogweg: N1 vorher 0 mm Stützbahn, jetzt 4 317 mm, abgewählt 0;
+Pilz an OrcaSlicers Kobra 2 14 480 → 45 837 mm; dicke Brücken und 0,9 kommen in allen sechs
+Programmen an, Brückenbahn in der Orca-Familie 126 → 63 mm, PrusaSlicer 4,5 → 6,6 mm Filament;
+Zusatzwände ersetzen unter einer 3-mm-Auskragung die Brückenbahn (PrusaSlicer 1 254 → 996 mm,
+OrcaSlicer 335 → 0, ElegooSlicer 296 → 0, Creality Print 335 → 75); die Umkehr dreht die Außenwand
+eines ABS-Trichters mit 50 Grad in jeder zweiten Schicht (OrcaSlicer, ElegooSlicer, Creality Print
+50 von 50). Abweichung von der Recherche: Zusatzwände wirken im Band 45 Grad bis Stützgrenze
+nicht (Trichter 40 bis 80 Grad bitgleich), dort schlägt Solidon die Umkehr vor. Tests in
+`test_advise.py` (Brücke, Pilz, Rand, Trichter, Band von Hand gerechnet, Auskragung gegen Brücke),
+`test_manufacturer.py`, `test_print_time.py`, `test_print_settings.py`, Slicertest
+`test_real_slicers.py` (PrusaSlicer, OrcaSlicer, ElegooSlicer, 3 von 3 grün); Messwerte und Begründung in
+`konzepte/begruendungen/regel-druckrat.md`. Umgesetzt von Claude (Worktree `F:/sl-bruecken`).
+
+**Je Teil (Entscheidung Robert, 09.10.2026):** Die fünf Werte stehen in `advise.PART_PATHS` und
+gehen als Objektwert an das Teil, dessen Rat sie verlangt; die Platte behält die Grundlage.
+Wirkungsnachweis mit zwei gleichen Teilen, nur das linke mit Wert, in allen acht Programmen
+(Kerne gepinnt, getrennt an den Objektmarken, Sonde `.claude/.state/drache-2026-10-08/bruecken_je_teil.py`),
+je links / rechts: Brückenstütze aus, Stütze in mm: OrcaSlicer 0 / 17 912, ElegooSlicer 0 / 18 984,
+Bambu Studio 0 / 18 963, Creality Print 0 / 17 912, Anycubic Slicer Next 0 / 55 435, PrusaSlicer
+0 / 22 358. Dicke Brücke, Förderung je mm Brückenbahn: 0,0461 / 0,0262, 0,0497 / 0,0282,
+0,0515 / 0,0413, 0,0455 / 0,0272, 0,0463 / 0,0279, 0,0529 / 0,0443. Fluss 0,7: 0,0204 / 0,0262,
+0,0198 / 0,0282, 0,0283 / 0,0413, 0,0210 / 0,0272, 0,0215 / 0,0279, 0,0301 / 0,0443. Zusatzwände,
+Brückenbahn in mm: OrcaSlicer 0 / 335, ElegooSlicer 0 / 296, Creality Print 75 / 335, PrusaSlicer
+996 / 1 254. Umkehr, Drehwechsel der Außenwand: OrcaSlicer und ElegooSlicer 99 / 0, Creality Print
+98 / 0, Anycubic Slicer Next 1 / 0 (dreht jede Schicht). Brückentempo und -lüfter an beiden Teilen
+gleich (je Spule). Gegenprobe am Stand davor (`badc464f9`): Werte auf der Platte, Wirkung an beiden
+Teilen (OrcaSlicer Brückenstütze aus 0 / 0, dicke Brücke 0,0461 / 0,0461, ebenso PrusaSlicer und
+Bambu Studio). Über den echten Rat mit zwei verschiedenen Teilen: Ohne Stützen bekommt nur die
+36-mm-Brücke mit Auskragung dicke Bahnen, 0,9 Fluss und Zusatzwände, die 8-mm-Brücke daneben nichts;
+am ABS-Trichter neben einem Zylinder dreht nur der Trichter; am Kobra 2 in OrcaSlicer
+(`bridge_no_support = 1`) bekommt nur die lange Brücke die Brückenstütze (49 789 gegen 867 mm
+Stütze, am Stand davor 8 393). Nicht geschrieben wird, was ein Programm nicht kennt oder nicht
+umsetzt: Cura und SuperSlicer keinen der fünf (SuperSlicer stützte mit `dont_support_bridges` 0 und
+1 gleich), Bambu Studio weder Zusatzwände noch Umkehr, Anycubic Slicer Next keine Zusatzwände; der
+Rat bietet sie dort nicht an, und das Feld sagt, dass der Slicer es nicht kennt. Was eine Familie
+gar nicht nimmt, zählt im Split nicht mehr als „nur plattenweit“ (sonst meldete Cura an jedem
+anderen Teil eine Übernahme, die es nie druckt). Wächter: `test_slicer_part_settings.py`
+(`MEASURED_PART_PATHS` samt Fehlstellen je Programm, Objektwerte nur am verlangenden Teil in
+PrusaSlicer und OrcaSlicer, Split ohne Scheinübernahme; am Stand davor 11 rot) und der Slicertest
+`test_the_bridge_flow_of_one_part_stays_with_that_part` in sechs Programmen (6 von 6 grün, am Stand
+davor rot). Umgesetzt von Claude (Worktree `F:/sl-bruecken-teil`).
+
+**Nachprüfung (Review RM-587 vom 10.10.2026, vier mittlere, drei leichte Befunde):**
+*M1:* `cantilevers` zählte eine Decke, die ringsum auf einem geschlossenen Wandring liegt (Kasten
+mit Deckel, umgedrehter Becher), als einseitig hängend und schlug Zusatzwände ohne Wirkung vor
+(PrusaSlicer legt den Deckel mit und ohne gleich, 3 575,0 / 2 825,0 mm). Eine Berührung, die den
+Außenring bis auf eine Bahnbreite ganz umläuft, zählt nicht mehr; Pilz (Innenring) und Auskragung
+bleiben einseitig. *M2:* Das Band zählte am Rand jeder flachen Decke einen Streifen mit und las die
+Kantengrenze 10 mm² als Summe über den Körper; ein ABS-Gehäuse mit Deckel bekam die Umkehr.
+`analysis.steep_reach` verfolgt das Band je Wand über die Schichten, ohne Stücke am Überhang
+jenseits der Stützgrenze, und misst, wie weit die Wand über die 45-Grad-Linie hinauswandert; die
+Umkehr kommt ab einer Bahnbreite (Trichter 50 Grad 3,80 mm wie von Hand, Rundung 2 mm 0,1 mm, Kasten
+und Becher 0; Besenhalter und Schraubendreherhalter verlieren die Umkehr, Okarina, Baum und Drache
+behalten sie). *M3:* SuperSlicer 2.5.59.13 stürzte an einer 3MF der Prusa-Familie ohne gewähltes
+Programm und an einer PrusaSlicer-Datei ab (Schrägnaht und `extra_perimeters_on_overhangs`, zwei
+fremde Schlüssel, RM-459). Eine Datei ohne bekanntes Programm lässt weg, was ein Programm der
+Familie gar nicht kennt (`slicer_keys.UNKNOWN_TO_PROGRAM`, `unknown_in_file`), und Solidons voller
+Prusa-Satz schreibt Schrägnaht „nowhere“ und Zusatzwände 0 nicht mehr (`QUIET_AT_DEFAULT`, beides
+PrusaSlicers eigener Wert). `thick_bridges` und `bridge_flow_ratio` nimmt SuperSlicer als alte
+Namen (mit einem Fantasieschlüssel daneben kein Absturz; 0,7 je Objekt fördert 0,0236 gegen
+0,0336 mm je mm) und bekommt beide jetzt je Teil; Slicertest
+`test_superslicer_opens_the_family_file_and_takes_the_bridge_flow_of_one_part` (am alten Stand
+0xC0000005). Die Suite sucht Slicer jetzt auch unter `%LOCALAPPDATA%\Programs` (SuperSlicer liegt
+dort). *M4:* „Brückenstütze abgewählt“ erreichte den Rat nie: `advise.DECIDING_PATHS` nennt jetzt
+auch `support.bridges` und `support.spare_ledges`, der Dialog fragt nach der Abwahl neu, der Export
+fragt jedes Teil ohne die nicht übernommenen. *L1:* Tests für dicke Bahnen über einer Kanaldecke
+bei Stützen und für den kleineren Brückenfluss zweier Körper. *L2:* Die Umkehr fragt
+`advise.REVERSING_FLAVOURS`, ein Wächter hält die Menge gleich mit `slicer_keys.NOT_TAKEN_BY`.
+*L3:* Cura-Feld *Fluss bei Brücken* sagt, dass Cura eigene Brückenbahnen mit eigenem Fluss legt
+(`slicer_keys.not_taken_reason`); PrusaSlicer und SuperSlicer drucken Brücken ohne
+Herstellerprofil jetzt dünn (Changelog). **Abhängigkeit von RM-701:** Die falsche Brückenweite
+am Rohr mit Flanke und Sporn (39,3 mm, RM-701 H5) zieht jetzt dicke Bahnen, 0,9 Fluss und am
+Kobra 2 die Brückenstütze nach sich; behoben wird das mit RM-701. Gegenproben je Befund am alten
+Stand oder per Mutation rot. Umgesetzt von Claude (Worktree `F:/sl-bruecken`, Kürzel rm587b).
+
+**Zweite Nachprüfung (10.10.2026, ein mittlerer, vier leichte Befunde):** *N1:* Eine Decke auf
+drei Seiten (Kasten, vorn offen) galt als einseitig; PrusaSlicer legt sie mit und ohne
+Zusatzwände gleich (3 588,7 mm). Einseitig ist ein Stück nur, wenn keine Bahnenrichtung über ihm
+an beiden Enden Halt hat (`analysis._anchored_span`); Decke auf zwei Nachbarseiten, Pilz und
+Auskragung behalten die Zusatzwände. *N2:* Eine Schicht zählt für die Umkehr erst, wenn ihr Band
+breiter ist als `REVERSE_THRESHOLD_SHARE` · Bahnbreite − Schichthöhe (Orcas
+`overhang_reverse_threshold` 50 %): Trichter 46 Grad, 60 mm hoch, ohne, 47 und 50 Grad mit.
+*N3:* Nur der Streifen neben einem Überhang fällt aus dem Band, nicht das ganze Stück; die
+Flanken eines um 65 Grad geneigten Zylinders bekommen die Umkehr. *N4:* Eine Kanaldecke gilt nur
+als frei, solange „nur vom Bett“ oder die Kanalsperre den Kanal freihält; beide stehen in
+`DECIDING_PATHS`. *N5:* Rattest für die Grenze bei einer Bahnbreite. Gegenproben je Befund rot.
 
 ## RM-567: Weniger Arbeitsspeicher — Cachegrenze, BLAS-Faden, Renderer am echten Fenster (09.10.2026)
 

@@ -112,6 +112,10 @@ Nutzen da und sonst nichts.
 - Unter einer großen flachen Unterseite schlägt Solidon Gitter statt Bäumen vor, mit Hybrid, wo zugleich feine Details Stütze brauchen. Für hohe Baumstützen schlägt Solidon zwei Wände vor.
 - Gilt ein Vorschlag im Druckdialog nur einzelnen Teilen, nennen Zeile und Feld auch die Teile, die mit ihm einen anderen Wert bekommen.
 - Bei PLA schlägt Solidon für viele feine Spitzen mehr Abstand zu den Baumstützen darunter vor. Dadurch bleiben dort weniger Reste der Baumspitzen.
+- Lange Brücken bekommen die Stütze, die Solidon vorsieht, auch in PrusaSlicer. Bleibt eine lange Brücke ohne Stütze, schlägt Solidon dicke Bahnen und etwas weniger Fluss vor.
+- Flache Überhänge ohne Stütze bekommen Zusatzwände vorgeschlagen. Bei ABS, ASA und TPU druckt der Slicer steile Überhänge auf Vorschlag in wechselnder Richtung, damit sie sich nicht aufrollen.
+- Brückenwerte, Zusatzwände und die wechselnde Richtung gelten nur für das Teil, das sie braucht. Die anderen Teile derselben Platte drucken unverändert.
+- Ohne Herstellerprofil drucken PrusaSlicer und SuperSlicer Brücken jetzt dünn. Wo eine Brücke dicke Bahnen und weniger Fluss braucht, schlägt Solidon sie für dieses Teil vor.
 - Wo Solidon mehr Abstand über Baumstützen vorschlägt, schlägt es auch eine breitere *Baumspitze* vor. Dann sitzt auf jeder Spitze eine Trennschicht, und an Unterseiten bleibt weniger Stütze hängen.
 - Verlangen viele kleine Überhänge zusammen Stützen, etwa an einem Kinn mit schräger Unterseite, nennt der Prüfbericht jetzt die Stelle.
 - Ein schmaler Rand, der sich selbst trägt, gilt nicht mehr als lange Brücke, auch neben einem anderen Überhang. Der Prüfbericht warnt dort nicht mehr, und Solidon verlangt dafür keine Stützen.

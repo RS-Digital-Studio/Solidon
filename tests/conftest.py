@@ -77,6 +77,11 @@ _remove_stale_isolated()
 # nicht zu führen.
 from app.core.paths import PROFILE_VARIABLES
 
+#: Wo dieser Rechner Programme je Nutzer installiert (``%LOCALAPPDATA%\Programs``),
+#: gesichert, bevor die Zeilen darunter den Ordner umbiegen: Dort sucht die
+#: Anwendung einen Slicer (``discover._install_roots``), und SuperSlicer liegt dort.
+_REAL_LOCAL_APPDATA = os.environ.get("LOCALAPPDATA")
+
 for _variable in PROFILE_VARIABLES:
     os.environ[_variable] = _ISOLATED
 
@@ -659,11 +664,19 @@ def installed_slicer(request: pytest.FixtureRequest) -> Path:
         )
     wanted = str(marker.args[0])
     discover.forget_cache()
-    found = [
-        program
-        for program in discover.unpatched_find_programs("slicer", tools.SLICERS)
-        if discover.program_mark(program.name) == wanted
-    ]
+    isolated = os.environ.get("LOCALAPPDATA")
+    if _REAL_LOCAL_APPDATA:
+        os.environ["LOCALAPPDATA"] = _REAL_LOCAL_APPDATA
+    try:
+        found = [
+            program
+            for program in discover.unpatched_find_programs("slicer", tools.SLICERS)
+            if discover.program_mark(program.name) == wanted
+        ]
+    finally:
+        if isolated is not None:
+            os.environ["LOCALAPPDATA"] = isolated
+        discover.forget_cache()
     if found:
         return Path(found[0])
     message = f"{wanted} ist auf dieser Maschine nicht installiert"

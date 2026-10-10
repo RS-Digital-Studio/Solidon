@@ -612,7 +612,13 @@ def test_file_export_without_program_only_promises_shared_object_capabilities(
 # eine Platte mit zwei gestützten Stufenkörpern, einer mit Objektwerten, in allen
 # acht Programmen (``.claude/.state/drache-2026-10-08/kontakt_je_teil.py``):
 # geschrieben 0,4 gegen 0,2 mm und so weiter, gemessen je Programm in
-# ``konzepte/begruendungen/regel-druckrat.md``; Cura nimmt die Lücke nicht je Netz. Die
+# ``konzepte/begruendungen/regel-druckrat.md``; Cura nimmt die Lücke nicht je Netz.
+# Brückenstütze, dicke Brücken, Brückenfluss, Zusatzwände und Umkehr (RM-587) belegt
+# dieselbe Bauart mit Brücke, Auskragung und ABS-Trichter in allen acht Programmen
+# (``bruecken_je_teil.py``): Wirkung nur am Teil mit dem Wert (Brückenstütze in
+# OrcaSlicer 0 gegen 17 912 mm), Messwerte ebenfalls in der Begründung; Cura nimmt
+# keinen, SuperSlicer dicke Brücken und Fluss (Review RM-587, M3). Den Brückenfluss
+# hält ``test_real_slicers.py`` im echten Programm je Teil. Die
 # Menge wird absichtlich nicht aus PART_PATHS oder den Schlüsseltabellen
 # gebaut: ein neuer Pfad braucht einen eigenen Wirkungsnachweis. Lochausgleich
 # und Einzug der ersten Schicht (RM-589) belegt eine Platte mit zwei gleichen
@@ -645,6 +651,11 @@ MEASURED_PART_PATHS = frozenset(
         "support.spare_ledges",
         "support.style",
         "support.z_gap",
+        "support.bridges",
+        "shell.thick_bridges",
+        "shell.bridge_flow",
+        "shell.overhang_walls",
+        "shell.overhang_reverse",
     }
 )
 
@@ -655,14 +666,24 @@ MEASURED_PART_PATHS = frozenset(
         ("orcaslicer", "orca", set()),
         ("elegooslicer", "orca", set()),
         ("crealityprint", "orca", set()),
-        ("anycubicslicernext", "orca", set()),
-        ("bambustudio", "orca", {"speed.acceleration", "speed.outer_wall_acceleration"}),
+        ("anycubicslicernext", "orca", {"shell.overhang_walls"}),
+        (
+            "bambustudio",
+            "orca",
+            {
+                "speed.acceleration",
+                "speed.outer_wall_acceleration",
+                "shell.overhang_walls",
+                "shell.overhang_reverse",
+            },
+        ),
         (
             "prusaslicer",
             "prusa",
             {
                 "shell.hole_offset",
                 "shell.precise_outer_wall",
+                "shell.overhang_reverse",
                 "speed.acceleration",
                 "speed.outer_wall_acceleration",
             },
@@ -675,6 +696,9 @@ MEASURED_PART_PATHS = frozenset(
                 "shell.scarf_seam",
                 "speed.acceleration",
                 "speed.outer_wall_acceleration",
+                "shell.overhang_walls",
+                "shell.overhang_reverse",
+                "support.bridges",
             },
         ),
         (
@@ -688,6 +712,11 @@ MEASURED_PART_PATHS = frozenset(
                 "support.placement",
                 "shell.precise_outer_wall",
                 "shell.wall_generator",
+                "shell.thick_bridges",
+                "shell.bridge_flow",
+                "shell.overhang_walls",
+                "shell.overhang_reverse",
+                "support.bridges",
             },
         ),
     ],
@@ -697,3 +726,255 @@ def test_every_measured_part_path_matches_the_program_capability(program, flavou
 
     assert advise.PART_PATHS == MEASURED_PART_PATHS
     assert handover._part_paths(flavour, program) == MEASURED_PART_PATHS - absent
+
+
+#: Die Werte aus RM-587, je weit weg von Solidons Satz, und ihre Schlüssel.
+BRIDGE_VALUES = {
+    "support.bridges": False,
+    "shell.thick_bridges": True,
+    "shell.bridge_flow": 0.7,
+    "shell.overhang_walls": True,
+    "shell.overhang_reverse": True,
+}
+BRIDGE_KEYS = {
+    "prusa": {
+        "dont_support_bridges": "1",
+        "thick_bridges": "1",
+        "bridge_flow_ratio": "0.7",
+        "extra_perimeters_on_overhangs": "1",
+    },
+    "orca": {
+        "bridge_no_support": "1",
+        "thick_bridges": "1",
+        "bridge_flow": "0.7",
+        "extra_perimeters_on_overhangs": "1",
+        "overhang_reverse": "1",
+    },
+}
+
+
+@pytest.mark.parametrize(
+    ("executable", "flavour", "name"),
+    [
+        ("prusa-slicer-console.exe", "prusa", "Metadata/Slic3r_PE_model.config"),
+        ("orca-slicer.exe", "orca", "Metadata/model_settings.config"),
+    ],
+)
+def test_bridges_and_overhangs_go_only_to_the_part_that_asks(
+    tmp_path, monkeypatch, executable, flavour, name
+):
+    """RM-587: Brückenstütze, dicke Brücken, Brückenfluss, Zusatzwände und Umkehr
+    gehören dem Teil mit der Brücke oder dem Überhang. Gemessen in acht Programmen
+    mit zwei Teilen, nur eines mit Wert: Wirkung nur dort (Brückenstütze in
+    OrcaSlicer 0 gegen 17 912 mm, PrusaSlicer 0 gegen 22 358). Die Platte behält die
+    Grundlage, das zweite Teil bekommt keinen Objektwert und keinen Befund."""
+    profile = profiles.make_profile("generic-220", "pla")
+    settings = print_settings.resolve(profile)
+    for path, value in BRIDGE_VALUES.items():
+        settings = print_settings.with_accepted(settings, path, value)
+    setup = handover.SlicerSetup(Path(executable), flavour)
+    split = handover.split_for_parts(settings, profile, setup, flavour)
+    taken = {path for path in BRIDGE_VALUES if path in split.per_part}
+    assert not split.unavailable & BRIDGE_VALUES.keys()
+    assert taken == set(BRIDGE_VALUES) - (
+        {"shell.overhang_reverse"} if flavour == "prusa" else set()
+    )
+    for path in taken:
+        assert print_settings.read_path(split.plate, path) == print_settings.read_path(
+            print_settings.resolve(profile), path
+        ), f"{path}: die Platte behält die Grundlage"
+    objects = [
+        SceneObject(
+            id=f"part-{index}",
+            name=f"Part {index}",
+            mesh=MeshData.of(trimesh.creation.box(extents=(20.0, 20.0, 6.0))),
+        )
+        for index in range(2)
+    ]
+
+    def requested(entry, _mesh, base, *_args, **_kwargs):
+        if entry.id != "part-0":
+            return []
+        return [_advice(path, value, base) for path, value in BRIDGE_VALUES.items()]
+
+    monkeypatch.setattr(writer, "part_advice", requested)
+    path, findings = writer.write_assembly(
+        objects,
+        tmp_path,
+        project_name="Bruecken",
+        profile=profile,
+        settings=settings,
+        flavour=flavour,
+        setup=setup,
+    )
+    assert not [entry for entry in findings if entry.code == "export.part_setting_unavailable"]
+    with zipfile.ZipFile(path) as archive:
+        root = ET.fromstring(archive.read(name))
+    per_object = {
+        values.get("name"): values
+        for values in (
+            {item.get("key"): item.get("value") for item in element.iter("metadata")}
+            for element in root.iter("object")
+        )
+    }
+    wanted = BRIDGE_KEYS[flavour]
+    assert {key: per_object["Part 0"].get(key) for key in wanted} == wanted
+    assert not set(per_object["Part 1"]) & set(wanted), "das zweite Teil bekommt nichts"
+
+
+def test_thick_bridges_reach_the_bridge_when_its_support_stays_declined(tmp_path, monkeypatch):
+    """Review RM-587, M4, Exportweg: Am Kobra 2 schlägt der Rat die Brückenstütze vor;
+    übernimmt der Kunde sie nicht, aber dicke Brücken und 0,9 Fluss, fragt der
+    Export jedes Teil ohne Brückenstütze. Die Brücke bekommt beide Werte je Teil,
+    der Würfel daneben nichts. Vorher fragte der Export mit Brückenstütze, die
+    Brücke verlangte nichts, und die Werte fielen auf die ganze Platte."""
+    from app.core.slice import advise
+    from tests.helpers import object_values
+
+    monkeypatch.setattr(handover, "_native_process", lambda _setup: {})
+    profile = profiles.make_profile("anycubic-kobra-2", "pla")
+    settings = print_settings.with_choice(print_settings.resolve(profile), "support.bridges", False)
+    bridge = trimesh.load(
+        Path(__file__).parent / "data" / "meshes" / "bridge_two_end_supports.ply", force="mesh"
+    )
+    bridge.apply_translation((-bridge.bounds[0][0] + 5.0, 0.0, -bridge.bounds[0][2]))
+    cube = trimesh.creation.box(extents=(20.0, 20.0, 20.0))
+    cube.apply_translation((-40.0, 0.0, 10.0))
+    objects = [
+        SceneObject(id="bruecke", name="Bruecke", mesh=MeshData.of(bridge)),
+        SceneObject(id="wuerfel", name="Wuerfel", mesh=MeshData.of(cube)),
+    ]
+    setup = handover.SlicerSetup(Path("orca-slicer.exe"), "orca")
+    settings = print_settings.with_accepted(settings, "support.style", "grid")
+    settings = print_settings.with_accepted(settings, "shell.thick_bridges", True)
+    settings = print_settings.with_accepted(settings, "shell.bridge_flow", advise.BRIDGE_FLOW)
+
+    path, _findings = writer.write_assembly(
+        objects,
+        tmp_path,
+        project_name="Bruecke",
+        profile=profile,
+        settings=settings,
+        flavour="orca",
+        setup=setup,
+    )
+
+    written = object_values(path, "Metadata/model_settings.config")
+    assert written["Bruecke"].get("thick_bridges") == "1"
+    assert float(written["Bruecke"]["bridge_flow"]) == pytest.approx(advise.BRIDGE_FLOW)
+    assert "thick_bridges" not in written["Wuerfel"]
+
+
+#: Was SuperSlicer 2.5.59.13 nicht kennt; ab zwei davon, Platte und Objekte
+#: zusammen, stürzt sein 3MF-Leser ab (RM-459, Review RM-587 M3).
+SUPERSLICER_UNKNOWN = ("scarf_seam_", "extra_perimeters_on_overhangs")
+
+
+def _prusa_file(tmp_path, monkeypatch, setup, *, scarf=False):
+    """Zwei Kästen in einer 3MF der Prusa-Familie, wie *Exportieren* sie schreibt;
+    das erste Teil verlangt die Brückenwerte. Zurück: Plattenschlüssel und
+    Objektwerte je Teil."""
+    profile = profiles.make_profile("prusa-mini", "pla")
+    settings = print_settings.resolve(profile)
+    if scarf:
+        settings = print_settings.with_choice(settings, "shell.scarf_seam", True)
+    for path, value in BRIDGE_VALUES.items():
+        settings = print_settings.with_accepted(settings, path, value)
+    objects = [
+        SceneObject(
+            id=f"part-{index}",
+            name=f"Part {index}",
+            mesh=MeshData.of(trimesh.creation.box(extents=(20.0, 20.0, 6.0))),
+        )
+        for index in range(2)
+    ]
+
+    def requested(entry, _mesh, base, *_args, **_kwargs):
+        if entry.id != "part-0":
+            return []
+        return [_advice(path, value, base) for path, value in BRIDGE_VALUES.items()]
+
+    monkeypatch.setattr(writer, "part_advice", requested)
+    path, _findings = writer.write_assembly(
+        objects,
+        tmp_path,
+        project_name="Bruecken",
+        profile=profile,
+        settings=settings,
+        flavour="prusa",
+        setup=setup,
+        for_slicer=False,
+    )
+    with zipfile.ZipFile(path) as archive:
+        plate = archive.read("Metadata/Slic3r_PE.config").decode("utf-8")
+        root = ET.fromstring(archive.read("Metadata/Slic3r_PE_model.config"))
+    keys = {
+        line[2:].split(" = ", 1)[0]: line.split(" = ", 1)[1]
+        for line in plate.splitlines()
+        if line.startswith("; ") and " = " in line
+    }
+    per_object = {
+        values.get("name"): values
+        for values in (
+            {item.get("key"): item.get("value") for item in element.iter("metadata")}
+            for element in root.iter("object")
+        )
+    }
+    return keys, per_object
+
+
+def _superslicer_unknown(keys) -> list[str]:
+    return sorted(key for key in keys if key.startswith(SUPERSLICER_UNKNOWN))
+
+
+def test_a_file_without_a_program_carries_nothing_a_relative_does_not_know(tmp_path, monkeypatch):
+    """Review RM-587, M3: Ein Dateiexport der Prusa-Familie kennt das Programm nicht,
+    das ihn öffnet. Er trug Schrägnaht und Zusatzwände auf der Platte, und SuperSlicer
+    stürzte an der Datei ab (0xC0000005). Ohne Programm fällt weg, was ein Programm
+    der Familie nicht kennt — auf der Platte und je Teil; dicke Brücken und Fluss
+    kennen beide und gehen je Teil weiter."""
+    keys, per_object = _prusa_file(tmp_path, monkeypatch, None, scarf=True)
+
+    assert _superslicer_unknown(keys) == []
+    assert _superslicer_unknown(per_object["Part 0"]) == []
+    assert per_object["Part 0"].get("thick_bridges") == "1"
+    assert per_object["Part 0"].get("bridge_flow_ratio") == "0.7"
+
+
+def test_a_prusaslicer_file_leaves_out_what_equals_the_program_default(tmp_path, monkeypatch):
+    """Review RM-587, M3: Solidons vollständiger Satz für PrusaSlicer schrieb Schrägnaht
+    „nowhere“ und Zusatzwände 0 auf die Platte — PrusaSlicers eigene Werte, und für
+    SuperSlicer zwei fremde Schlüssel. Ohne sie bleibt der Druck in PrusaSlicer gleich,
+    und SuperSlicer öffnet die Datei; das Teil mit Zusatzwänden trägt seinen Wert."""
+    setup = handover.SlicerSetup(Path("prusa-slicer-console.exe"), "prusa")
+    keys, per_object = _prusa_file(tmp_path, monkeypatch, setup)
+
+    assert _superslicer_unknown(keys) == []
+    assert per_object["Part 0"].get("extra_perimeters_on_overhangs") == "1"
+
+
+@pytest.mark.parametrize(
+    ("executable", "flavour", "silent"),
+    [
+        ("CuraEngine.exe", "cura", set(BRIDGE_VALUES)),
+        (
+            "SuperSlicer.exe",
+            "prusa",
+            {"support.bridges", "shell.overhang_walls", "shell.overhang_reverse"},
+        ),
+        ("bambu-studio.exe", "orca", {"shell.overhang_walls", "shell.overhang_reverse"}),
+    ],
+)
+def test_a_setting_the_program_does_not_take_is_not_plate_wide_either(executable, flavour, silent):
+    """Was ein Programm gar nicht nimmt, ist kein Wert „nur für die ganze Platte“:
+    Sonst meldete der Export an jedem anderen Teil eine Übernahme, die Cura nie
+    druckt (RM-587). Gegenprobe: Was es nimmt, geht je Teil."""
+    profile = profiles.make_profile("generic-220", "pla")
+    settings = print_settings.resolve(profile)
+    for path, value in BRIDGE_VALUES.items():
+        settings = print_settings.with_accepted(settings, path, value)
+    split = handover.split_for_parts(
+        settings, profile, handover.SlicerSetup(Path(executable), flavour), flavour
+    )
+    assert not split.unavailable & BRIDGE_VALUES.keys()
+    assert split.per_part & BRIDGE_VALUES.keys() == set(BRIDGE_VALUES) - silent

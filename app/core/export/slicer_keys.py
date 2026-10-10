@@ -282,6 +282,12 @@ PRUSA: Final[tuple[Row, ...]] = (
     # Sache Kompensation der Bahnbreite und ist immer an. Kein Eintrag ist
     # hier richtiger als eine Zuordnung auf etwas Ähnliches.
     ("shell.ironing", "ironing", _flag),
+    # Brücken und flache Überhänge ohne Stütze (RM-587). PrusaSlicer legt Brücken
+    # ohne eigenen Wert dick (``thick_bridges = 1``); die Umkehr an Überhängen
+    # kennt es nicht.
+    ("shell.thick_bridges", "thick_bridges", _flag),
+    ("shell.bridge_flow", "bridge_flow_ratio", _number),
+    ("shell.overhang_walls", "extra_perimeters_on_overhangs", _flag),
     ("speed.bridge", "bridge_speed", _number),
     ("speed.acceleration", "default_acceleration", _number),
     ("speed.outer_wall_acceleration", "external_perimeter_acceleration", _number),
@@ -333,6 +339,9 @@ PRUSA: Final[tuple[Row, ...]] = (
     # Bäume schweigt die Zeile: Dort gilt das Muster des Herstellers.
     ("support.style", "support_material_pattern", _only(_CROSS_PATTERN)),
     ("support.placement", "support_material_buildplate_only", _mapped({"build_plate": "1"}, "0")),
+    # Ohne eigenen Wert spannt PrusaSlicer Brücken frei (``dont_support_bridges = 1``),
+    # auch mit „Stützen überall“ (RM-587, G-Code-Gegenprüfung N1).
+    ("support.bridges", "dont_support_bridges", _mapped({"True": "0"}, "1")),
     ("support.threshold_angle", "support_material_threshold", _angle_from_horizontal),
     ("support.z_gap", "support_material_contact_distance", _number),
     # Unten derselbe Abstand wie oben: Wo die Stütze auf dem Modell steht,
@@ -450,6 +459,12 @@ ORCA: Final[tuple[Row, ...]] = (
     # Orca kennt vier Stufen des Bügelns; Solidon entscheidet nur, **ob** —
     # wie stark und mit welchem Abstand weiß der Slicer besser.
     ("shell.ironing", "ironing_type", _mapped({"True": "top"}, "no ironing")),
+    # Brücken und Überhänge (RM-587); ``thick_internal_bridges`` bleibt beim
+    # Hersteller, der Rat meint die Brücke an der Außenseite.
+    ("shell.thick_bridges", "thick_bridges", _flag),
+    ("shell.bridge_flow", "bridge_flow", _number),
+    ("shell.overhang_walls", "extra_perimeters_on_overhangs", _flag),
+    ("shell.overhang_reverse", "overhang_reverse", _flag),
     ("speed.bridge", "bridge_speed", _number),
     ("speed.acceleration", "default_acceleration", _number),
     ("speed.outer_wall_acceleration", "outer_wall_acceleration", _number),
@@ -503,6 +518,8 @@ ORCA: Final[tuple[Row, ...]] = (
     # die flachen Decken.
     ("support.style", "support_base_pattern", _only(_CROSS_PATTERN)),
     ("support.placement", "support_on_build_plate_only", _mapped({"build_plate": "1"}, "0")),
+    # Manche Herstellerprofile spannen Brücken frei (Kobra 2: ``bridge_no_support = 1``).
+    ("support.bridges", "bridge_no_support", _mapped({"True": "0"}, "1")),
     ("support.threshold_angle", "support_threshold_angle", _angle_from_horizontal),
     ("support.z_gap", "support_top_z_distance", _number),
     # Unten derselbe Abstand wie oben (RM-583), siehe PrusaSlicer.
@@ -1132,6 +1149,7 @@ def flavour_of(name: str) -> SlicerFlavour | None:
 #:
 #: ``tests/test_print_settings_ui.py`` hält die Liste gegen diese Messung.
 NOT_TAKEN_BY: Final[dict[SlicerFlavour, frozenset[str]]] = {
+    # Die Umkehr an Überhängen führt PrusaSlicer nicht (``--help-fff`` von 2.9.6).
     # PrusaSlicer zählt keine Baumwände (RM-584): Seine organischen Äste legen
     # ab einem Astquerschnitt eine zweite Wand
     # (``support_tree_branch_diameter_double_wall``, Vorgabe 3 mm), ein Maß und
@@ -1143,13 +1161,29 @@ NOT_TAKEN_BY: Final[dict[SlicerFlavour, frozenset[str]]] = {
     # PrusaSlicer und Cura führen eigene Schlüssel
     # (``support_tree_tip_diameter``), die Wirkung auf die Trennschicht ist
     # dort nicht geschnitten; ihre Spitze bleibt beim Hersteller.
-    "prusa": frozenset({"shell.precise_outer_wall", "support.tree_walls", "support.tip_diameter"}),
+    "prusa": frozenset(
+        {
+            "shell.precise_outer_wall",
+            "shell.overhang_reverse",
+            "support.tree_walls",
+            "support.tip_diameter",
+        }
+    ),
     "orca": frozenset(),
     "cura": frozenset(
         {
             "support.tip_diameter",
             "shell.wall_generator",
             "shell.precise_outer_wall",
+            # Dicke Brücken, Zusatzwände und Umkehr an Überhängen kennt CuraEngine
+            # nicht, Brücken stützt es immer. Seinen Brückenfluss (60 %) rechnet es
+            # auf eigene Bahnen (``bridge_skin_material_flow``), nicht auf
+            # Solidons Anteil (RM-587).
+            "shell.thick_bridges",
+            "shell.bridge_flow",
+            "shell.overhang_walls",
+            "shell.overhang_reverse",
+            "support.bridges",
             "retraction.wipe",
             "filament.density",
             "filament.cost_per_kg",
@@ -1203,22 +1237,51 @@ LIMITED: Final[dict[SlicerFlavour, frozenset[str]]] = {
 }
 
 
-#: Was ein **Programm** seiner Familie nicht kennt — Schlüssel der
+#: Was ein **Programm** seiner Familie gar nicht kennt: Sein 3MF-Leser stürzt
+#: ab zwei unbekannten Schlüsseln mit 0xC0000005 ab (RM-459, gemessen je
+#: Schlüssel der Beilage), Platte und Objekte zusammengezählt. SuperSlicer
+#: 2.5.59.13 kennt die Schrägnaht aus PrusaSlicer 2.9 nicht und
+#: ``extra_perimeters_on_overhangs`` nicht (dort ``extra_perimeters_overhangs``);
+#: Schrägnaht und Zusatzwände zusammen brachten ihn zum Absturz (Review RM-587,
+#: M3). Eine Datei ohne bekanntes Programm lässt weg, was irgendein Programm
+#: ihrer Familie nicht kennt (:func:`unknown_in_file`).
+UNKNOWN_TO_PROGRAM: Final[dict[str, frozenset[str]]] = {
+    "superslicer": frozenset({"shell.scarf_seam", "shell.overhang_walls"}),
+}
+
+#: Was ein **Programm** seiner Familie nicht nimmt — Schlüssel der
 #: Programmmarke (``discover.program_mark``). Gleiche Familie heißt nicht
-#: gleicher Stand: SuperSlicer 2.5.59.13 kennt die Schrägnaht aus PrusaSlicer
-#: 2.9 nicht, und sein 3MF-Leser stürzt ab zwei unbekannten Schlüsseln mit
-#: 0xC0000005 ab (RM-459, gemessen je Schlüssel der Beilage).
+#: gleicher Stand: Was es gar nicht kennt, steht in :data:`UNKNOWN_TO_PROGRAM`.
 NOT_TAKEN_BY_PROGRAM: Final[dict[str, frozenset[str]]] = {
     # Die Baumwände kennt die ganze Familie nicht (:data:`NOT_TAKEN_BY`).
-    "superslicer": frozenset({"shell.scarf_seam"}),
+    # ``thick_bridges`` und ``bridge_flow_ratio`` nimmt SuperSlicer 2.5.59.13 als
+    # alte Namen und setzt sie beim Laden um: ``thick_bridges = 0`` wird
+    # ``bridge_type = flow``, ``bridge_flow_ratio = 0.9`` steht im G-Code als 90 %
+    # und fördert 0,0465 statt 0,0517 mm je mm Brückenbahn, je Objekt wie auf der
+    # Platte (Review RM-587, M3). ``dont_support_bridges`` nimmt er an und stützt
+    # die 36-mm-Brücke trotzdem: 5 578 mm Stütze mit 0 und mit 1, an einem Teil und
+    # an beiden (RM-587).
+    "superslicer": UNKNOWN_TO_PROGRAM["superslicer"] | {"support.bridges"},
     # Den Kontaktlüfter und einen Ausgleich nur für Löcher führt nur
     # SuperSlicer (``--help-fff`` von 2.9.6; RM-589).
     "prusaslicer": frozenset({"cooling.support_interface_cooling", "shell.hole_offset"}),
     # Bambu Studio führt ``support_material_interface_fan_speed`` nicht; sein
-    # Konfigurationsblock nennt den Schlüssel nicht (P1S, 08.10.2026). Die
-    # Spitze organischer Äste (``tree_support_tip_diameter``) kennt es auch
+    # Konfigurationsblock nennt den Schlüssel nicht (P1S, 08.10.2026). Ebenso
+    # fehlen ``extra_perimeters_on_overhangs`` und ``overhang_reverse`` (RM-587).
+    # Die Spitze organischer Äste (``tree_support_tip_diameter``) kennt es auch
     # nicht, seine Bäume entstehen anders (RM-704).
-    "bambustudio": frozenset({"cooling.support_interface_cooling", "support.tip_diameter"}),
+    "bambustudio": frozenset(
+        {
+            "cooling.support_interface_cooling",
+            "shell.overhang_walls",
+            "shell.overhang_reverse",
+            "support.tip_diameter",
+        }
+    ),
+    # Anycubic Slicer Next 2.0.0.3 nimmt ``extra_perimeters_on_overhangs`` an und
+    # druckt dieselben Bahnen: unter einer 3-mm-Auskragung 333 mm Brücke mit und
+    # ohne, OrcaSlicer, ElegooSlicer und Creality Print ersetzen sie (RM-587).
+    "anycubicslicernext": frozenset({"shell.overhang_walls"}),
     # Creality Print 7.2 führt ``tree_support_tip_diameter``, druckt mit 0,8 und
     # 1,13 mm aber dieselben Bahnarten und keine Trennschicht unter
     # Kegelspitzen (``test_a_roof_tip_puts_an_interface_on_every_tip``, RM-704).
@@ -1701,7 +1764,7 @@ def for_program(values: Mapping[str, str], flavour: SlicerFlavour, program: str)
     stehen. Ein Abkömmling stürzt an einem fremden Schlüssel ab, statt ihn zu
     übergehen — die Beilage einer Schrägnaht genügte bei SuperSlicer.
     """
-    dropped = NOT_TAKEN_BY_PROGRAM.get(program, frozenset())
+    dropped = NOT_TAKEN_BY_PROGRAM.get(program, frozenset()) | unknown_in_file(flavour, program)
     unknown = {entry.key for entry in TABLES[flavour] if entry.path in dropped}
     kept = {key: value for key, value in values.items() if key not in unknown}
     # Was noch unter dem Namen der Familie steht, bekommt den des Programms
@@ -1716,6 +1779,35 @@ def for_program(values: Mapping[str, str], flavour: SlicerFlavour, program: str)
         for key in new:
             kept.setdefault(key, value)
     return kept
+
+
+def unknown_in_file(flavour: SlicerFlavour, program: str) -> frozenset[str]:
+    """Was eine Datei ohne bekanntes Programm dieser Familie nicht tragen darf.
+
+    Ein Dateiexport kennt das Programm nicht, das ihn öffnen wird: Er lässt weg,
+    was irgendein Programm der Familie gar nicht kennt (:data:`UNKNOWN_TO_PROGRAM`)
+    — auf der Platte wie je Teil. Mit bekanntem Programm gilt dessen eigene Liste
+    (:data:`NOT_TAKEN_BY_PROGRAM`), und dies gibt nichts.
+    """
+    if program and flavour_of(program) == flavour:
+        return frozenset()
+    return frozenset(
+        path
+        for name, paths in UNKNOWN_TO_PROGRAM.items()
+        if flavour_of(name) == flavour
+        for path in paths
+    )
+
+
+#: Was der vollständige Satz ohne Herstellerkette nur schreibt, wenn es vom
+#: eingebauten Wert des Programms abweicht — derselbe Wert ohne Schlüssel, und
+#: ein Verwandter, der den Schlüssel nicht kennt, öffnet die Datei weiter
+#: (:data:`UNKNOWN_TO_PROGRAM`): Eine PrusaSlicer-Datei trug sonst Schrägnaht und
+#: Zusatzwände mit ihrem Wert „aus“, und SuperSlicer stürzte an ihr ab (Review
+#: RM-587, M3). Die Werte nennt ``prusa-slicer-console --help-fff`` von 2.9.6.
+QUIET_AT_DEFAULT: Final[dict[SlicerFlavour, dict[str, str]]] = {
+    "prusa": {"scarf_seam_placement": "nowhere", "extra_perimeters_on_overhangs": "0"},
+}
 
 
 #: Die Trennschicht zu einem Drittel dicht, wie Creality und Elegoo in Cura
@@ -1762,6 +1854,20 @@ def caps_volumetric_speed(flavour: SlicerFlavour) -> bool:
     from app.core.knowledge.print_settings import caps_volumetric_speed as caps_flow
 
     return caps_flow(flavour)
+
+
+def not_taken_reason(flavour: SlicerFlavour, path: str) -> TranslatableText | None:
+    """Warum ein Feld ohne Wirkung bleibt, wo „kennt diese Einstellung nicht“ nicht
+    stimmt — für das ausgegraute Feld, nicht als Befund jeder Übergabe.
+
+    Cura hat einen Brückenfluss (``bridge_skin_material_flow``), aber nur für
+    seine eigenen Brückenbahnen; Solidons Anteil kommt dort nicht an (Review
+    RM-587, L3)."""
+    if flavour == "cura" and path == "shell.bridge_flow":
+        return _(
+            "Cura legt Brücken mit seinem eigenen Brückenfluss — dieser Wert bleibt ohne Wirkung."
+        )
+    return None
 
 
 def limitation(
