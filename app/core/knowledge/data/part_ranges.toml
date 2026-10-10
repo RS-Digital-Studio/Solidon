@@ -132,7 +132,7 @@ date = "2026-10-10"
 [[parts]]
 name = "heatset_m4"
 version = "17"
-fingerprint = "9d680d68efd33f89e24fc1f622a8c60dd43e43e93db32d2370f722b09cfa59b0"
+fingerprint = "7d11924f3515566cd6b1969692d8e59369f044da032716d8e9e222b18f936f70"
 corners = 64
 checked = 64
 excluded = 0
@@ -264,7 +264,7 @@ date = "2026-10-10"
 [[parts]]
 name = "nut_trap"
 version = "26"
-fingerprint = "26d551697ee4324dfa9ed8e88ec8c259c9896ff488fbeb5c497edfeb4d95ebf3"
+fingerprint = "52ebe8099aa548fb6547d5bac805a644598295a682b01e63349f02236970025c"
 corners = 464
 checked = 464
 excluded = 120
@@ -352,7 +352,7 @@ date = "2026-10-10"
 [[parts]]
 name = "printed_nut"
 version = "24"
-fingerprint = "b88593b663dbf760954c4f805819f28d429bfbc30a6d3fb20b37531335c93a8f"
+fingerprint = "379c15260d68f9646271f808b11ced46bf53f92a04b469c9c4c360254fb49d45"
 corners = 340
 checked = 340
 excluded = 22
@@ -363,7 +363,7 @@ date = "2026-10-10"
 [[parts]]
 name = "printed_screw"
 version = "24"
-fingerprint = "9e7583fd2877834884d0aeddbc92f7f760c0b715a48ee78798bf47e6a8ab022f"
+fingerprint = "1e23d335206cdae6f583c8f9edc8d949bf35da122866e4cb6a177df07d6ea0bb"
 corners = 1360
 checked = 1360
 excluded = 52
@@ -374,7 +374,7 @@ date = "2026-10-10"
 [[parts]]
 name = "printed_thread"
 version = "24"
-fingerprint = "562c2fea6546e66afd51acde47246948a32ea89affe28ae8ff85700e571972fc"
+fingerprint = "835e49dbf46cfadc635bd4f77be4dc7cc7a87f470c4f729db3fad7943d93bd51"
 corners = 1360
 checked = 1360
 excluded = 64
@@ -473,7 +473,7 @@ date = "2026-10-10"
 [[parts]]
 name = "screw_hole"
 version = "15"
-fingerprint = "9226dc1d3298866a2b7d117b0920fc1c378dd9fd6ec288a529cfc311f001e1ba"
+fingerprint = "61eae21ebeb7f813bb4cca862fae3147d203cfeb05a6113e81ba1250f48c15ee"
 corners = 464
 checked = 464
 excluded = 0
@@ -528,7 +528,7 @@ date = "2026-10-10"
 [[parts]]
 name = "threaded_rod"
 version = "28"
-fingerprint = "dc9afed165cf2a627840e1d26163828037ef3ab0690ef0acef0e5e36c58f9c50"
+fingerprint = "b16f19d353d5532ba5d35a98ecafd5ec5d727fba5d7a86c38c47dde3532eceac"
 corners = 2720
 checked = 2720
 excluded = 1583
