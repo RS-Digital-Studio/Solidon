@@ -433,10 +433,11 @@ def _rank(candidates: Sequence[Any], chosen: int, order: Sequence[str]) -> int:
     Kanten.
     """
     places = [_place(candidate, order) for candidate in candidates]
-    ranked = sorted(
-        range(len(candidates)),
-        key=cmp_to_key(lambda first, second: _compare(places[first], places[second])),
-    )
+
+    def by_place(first: int, second: int) -> int:
+        return _compare(places[first], places[second])
+
+    ranked = sorted(range(len(candidates)), key=cmp_to_key(by_place))
     return ranked.index(chosen)
 
 
