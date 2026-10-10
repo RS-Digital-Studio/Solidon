@@ -86,6 +86,7 @@ Nutzen da und sonst nichts.
 - Rückgängig und Wiederholen gehen schneller, und nicht mehr gebrauchter Arbeitsspeicher wird gleich wieder frei.
 - Reparieren und das Auflösen von Überschneidungen gehen an großen Modellen bis zu viermal so schnell, der Export als 3MF deutlich schneller.
 - Die Arbeitsfläche wird beim Öffnen großer 3MF-Dateien schneller angezeigt.
+- Die Anzeige *Das Modell wird angezeigt …* verschwindet, sobald die Ansicht fertig ist, und bleibt nicht mehr über dem Modell stehen.
 - Ein eingefügtes Modell steht danach im Bild, auch wenn es neben einem herangezoomten Modell landet.
 - Im Bausteinkatalog steht *Bausteine verwalten* offen, solange es noch keinen eigenen Baustein gibt.
 
@@ -199,6 +200,8 @@ Nutzen da und sonst nichts.
 - Dünne Wände, etwa an einer Vase, kommen geschlossen und mit Dicke an.
 - Der Assistent antwortet in der Sprache, in der Sie schreiben.
 - Mit lokalem Modell hat der Assistent so viel Raum wie mit einem gehosteten und schafft Aufträge mit bis zu zwölf Schritten.
+- Brechen Sie einen Vorschlag des Assistenten ab, bestätigt die Statuszeile das, statt einen Programmfehler zu melden.
+- Öffnen Sie während eines Vorschlags ein anderes Projekt, verwirft Solidon den Vorschlag und legt Ihre Anfrage zurück in den Chat.
 - Erzeugte Modelle kommen öfter geschlossen an. Wo sich Flächen nur berühren, trennt Solidon sie, und kleine Falten der Oberfläche glättet es, statt eine Selbstkreuzung zu melden.
 - Ist ein Versuch schon beim Erzeugen zerfallen, sagt der Dialog es vor dem Übernehmen und bietet *Noch ein Versuch* an.
 - Ist ein erzeugtes Modell nur eine dünne Haut um einen Hohlraum, sagt es der Dialog vor dem Übernehmen und der Prüfbericht danach, jeweils mit dem Weg zu einem neuen Versuch.

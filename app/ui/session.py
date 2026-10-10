@@ -46,6 +46,7 @@ from app.core.errors import (
     CANCEL,
     CANCEL_SPLIT,
     CHOOSE_ANOTHER_FILE,
+    OPEN_SETTINGS,
     RETRY,
     SHOW_HISTORY,
     STOP_INSERTING,
@@ -822,35 +823,87 @@ class ProposalPreview:
     difference: SceneDifference | None = None
 
 
+AGENT_STOPPED: Final = "stopped"
+"""Der Nutzer hat den Agentenzug angehalten (``Session.agentCancelled``)."""
+AGENT_PROJECT_CHANGED: Final = "project"
+"""Ein anderes Projekt wurde geöffnet — der Zug galt dem vorigen."""
+AGENT_INTERRUPTED: Final = "interrupted"
+"""Ohne Zutun des Nutzers angehalten, etwa an einer Frage, die nicht mehr gilt."""
+
+
+def agent_stop_sentence(reason: str) -> str:
+    """Was die Statuszeile nach einem Zug ohne Vorschlag sagt (§2.7, Regel 17).
+
+    Ein Abbruch ist kein Fehler: Wer selbst angehalten hat, bekommt eine
+    Quittung. Kam der Abbruch von woanders, steht die Anfrage wieder im Chat,
+    und *Senden* ist die Handlung, die jetzt geht.
+    """
+    if reason == AGENT_STOPPED:
+        return str(tr("Vorschlag abgebrochen. Am Modell hat sich nichts geändert."))
+    if reason == AGENT_PROJECT_CHANGED:
+        return str(
+            tr(
+                "Der Vorschlag galt dem vorigen Projekt und wurde verworfen. "
+                "Die Anfrage steht wieder im Chat, Senden fragt neu."
+            )
+        )
+    return str(
+        tr("Der Vorschlag wurde unterbrochen. Die Anfrage steht wieder im Chat, Senden fragt neu.")
+    )
+
+
+def _no_chat_access() -> AppError:
+    """Ohne Modell kein Zug — mit dem Weg zum Zugang, nicht nur *Abbrechen* (Regel 17)."""
+    return AppError(
+        tr("Für den Chat fehlt der Zugang zu einem Sprachmodell."),
+        suggestions=(OPEN_SETTINGS, CANCEL),
+    )
+
+
 class _AgentWorker(Worker):
     """Ein Zug des Agenten, abseits des GUI-Threads (§26.5)."""
 
     finishedWith = Signal(object)
     failedWith = Signal(object)
+    cancelledWith = Signal(str)
+    """Der Zug hat aufgehört, ohne zu scheitern — trägt die Anfrage."""
 
     def __init__(
-        self, session: Session, request: str, backend: LLMBackend, snapshot: _Snapshot
+        self,
+        session: Session,
+        request: str,
+        backend: LLMBackend,
+        snapshot: _Snapshot,
+        generation: int = 0,
     ) -> None:
         super().__init__()
         self._session = session
-        self._request = request
+        self.request = request
         self._backend = backend
         self._snapshot = snapshot
+        self.generation = generation
+        """Der Projektstempel beim Senden (``Session._project_generation``)."""
+        self.stop_reason = ""
+        """Wer den Zug angehalten hat — der erste Grund gilt (:meth:`Session.cancel_agent`)."""
 
     def work(self) -> None:
         session = self._session
         try:
-            preview = session.run_proposal(self._request, self._backend, snapshot=self._snapshot)
+            preview = session.run_proposal(self.request, self._backend, snapshot=self._snapshot)
         except OperationCancelled:
-            self.failedWith.emit(AppError(tr("Der Vorschlag wurde abgebrochen.")))
+            # **Ein Abbruch ist kein Fehler.** Hier stand ein nacktes
+            # ``AppError`` ohne ausführbaren Vorschlag; der Fehlerdialog fiel
+            # damit auf *Fehlerbericht erstellen* zurück, und ein Kunde schickte
+            # sein eigenes *Abbrechen* als Programmfehler (S-20261010-e5014c).
+            self.cancelledWith.emit(self.request)
         except AppError as error:
             self.failedWith.emit(error)
         else:
             self.finishedWith.emit(preview)
 
     def release_finished_references(self) -> None:
-        """Sitzung und Anfrage nach dem zugestellten Agentenzug lösen."""
-        del self._session, self._request, self._backend, self._snapshot
+        """Sitzung und Stand nach dem zugestellten Agentenzug lösen."""
+        del self._session, self._backend, self._snapshot
         super().release_finished_references()
 
 
@@ -1707,6 +1760,9 @@ class Session(QObject):
     Emittiert aus dem Arbeiter-Thread; Qt stellt das als queued Signal im
     Hauptthread zu, wie bei ``progressChanged`` auch."""
     agentBusyChanged = Signal(bool)
+    agentCancelled = Signal(str, str)
+    """Ein Agentenzug endete ohne Vorschlag und ohne Fehler — Grund
+    (``AGENT_STOPPED`` …) und Anfrage. Kein ``failed``: Ein Abbruch ist keiner."""
     splitBusyChanged = Signal(bool)
     """Die Trennebenensuche läuft oder ist fertig (§2.8)."""
     splitProgressChanged = Signal(float, str)
@@ -2405,6 +2461,10 @@ class Session(QObject):
         # Und ein anderer Stempel: Was ein Arbeiter für das vorige Dokument
         # noch meldet, gilt diesem nicht (UI-01).
         self._project_generation += 1
+        # Auch ein laufender Agentenzug: Er rechnet auf dem vorigen Dokument,
+        # und sein Vorschlag gälte sonst diesem (``_on_agent_proposal``).
+        if self._agent is not None:
+            self.cancel_agent(AGENT_PROJECT_CHANGED)
         self._recognition_answers.clear()
         # Ein anderes Projekt ist eine neue Entscheidung, auch über den Speicher.
         forget_out_of_memory()
@@ -5566,9 +5626,16 @@ class Session(QObject):
             self._plan.cancel.cancel()
         self.questionInvalidated.emit()
 
-    def cancel_agent(self) -> None:
-        """Hält nur den laufenden Agentenzug an."""
+    def cancel_agent(self, reason: str = AGENT_STOPPED) -> None:
+        """Hält nur den laufenden Agentenzug an.
 
+        ``reason`` sagt dem Fenster, ob das eine Quittung ist oder eine
+        Auskunft mit Handlung (:func:`agent_stop_sentence`); der erste Grund
+        eines Zuges gilt.
+        """
+        agent = self._agent
+        if agent is not None and not agent.stop_reason:
+            agent.stop_reason = reason
         self.agent_cancel.cancel()
 
     # --- der Agent (§26) --------------------------------------------------------
@@ -5612,7 +5679,7 @@ class Session(QObject):
         """
         backend = backend if backend is not None else self.agent_backend
         if backend is None:
-            self.failed.emit(AppError(tr("Für den Chat fehlt der Zugang zu einem Sprachmodell.")))
+            self.failed.emit(_no_chat_access())
             return
         if self._agent is not None and self._agent.isRunning():
             return
@@ -5633,9 +5700,12 @@ class Session(QObject):
                 _log.warning("scene views failed, proposing without images", exc_info=True)
         self.agent_cancel.reset()
         self.agentBusyChanged.emit(True)
-        worker = _AgentWorker(self, request, backend, _Snapshot.of(self))
+        worker = _AgentWorker(
+            self, request, backend, _Snapshot.of(self), generation=self._project_generation
+        )
         worker.finishedWith.connect(partial(self._on_agent_proposal, finished=worker))
         worker.failedWith.connect(partial(self._on_agent_failed, finished=worker))
+        worker.cancelledWith.connect(partial(self._on_agent_cancelled, finished=worker))
         worker.crashed.connect(
             lambda detail, done=worker: self._on_agent_failed(
                 InternalError(detail=detail), finished=done
@@ -5660,7 +5730,7 @@ class Session(QObject):
         """
         backend = backend if backend is not None else self.agent_backend
         if backend is None:  # pragma: no cover - vor dem Start des Arbeiters abgesichert
-            raise AppError(tr("Für den Chat fehlt der Zugang zu einem Sprachmodell."))
+            raise _no_chat_access()
         snapshot = snapshot if snapshot is not None else _Snapshot.of(self)
 
         agent = AgentSession(
@@ -6713,18 +6783,23 @@ class Session(QObject):
             _log.info("evaluation failed after being superseded: %s", error)
             return
         _log.warning("evaluation failed: %s", error)
+        self._forget_rejected_backend()
+        if finished is not None:
+            self._withdraw_batch_import()
+        self.failed.emit(error)
+
+    def _forget_rejected_backend(self) -> None:
+        """Ein abgelehnter Zugang wird verworfen, damit der nächste Zug neu wählt.
+
+        Die Gegenseite hat ihn abgelehnt (``llm.reject``) — sonst schickte der
+        Chat bis zum Neustart denselben Schlüssel und meldete jedes Mal
+        denselben Fehler.
+        """
         if self._backend is not None and not self._backend.available:
-            # Die Gegenseite hat den Zugang abgelehnt (``llm.reject``). Das
-            # gemerkte Backend wird verworfen, damit der nächste Zug neu
-            # wählt — sonst schickte der Chat bis zum Neustart denselben
-            # abgelehnten Schlüssel und meldete jedes Mal denselben Fehler.
             _log.info("backend %s is no longer available, choosing again", self._backend.id)
             self._backend = None
             self._backend_probed = False
             self.backendChanged.emit()
-        if finished is not None:
-            self._withdraw_batch_import()
-        self.failed.emit(error)
 
     def _on_cancelled(self, finished: _EvaluationWorker | None = None) -> None:
         """Der Lauf hat aufgehört — und das erfuhr bisher nur die Logdatei.
@@ -6747,8 +6822,15 @@ class Session(QObject):
         self.proposalReady.emit(preview)
 
     def _on_agent_proposal(self, preview: Any, finished: _AgentWorker) -> None:
-        """Nur der aktuelle Agentenzug darf seinen Vorschlag zeigen."""
+        """Nur der aktuelle Agentenzug darf seinen Vorschlag zeigen.
+
+        Und nur dem Projekt, auf dem er rechnete: Wurde er fertig, bevor der
+        Abbruch des Projektwechsels griff, gälte er sonst dem neuen Dokument.
+        """
         if finished is not self._agent:
+            return
+        if finished.generation != self._project_generation:
+            self._on_agent_cancelled(finished.request, finished)
             return
         self._on_proposal(preview)
 
@@ -6756,7 +6838,24 @@ class Session(QObject):
         """Nur der aktuelle Agentenzug darf einen Fehler melden."""
         if finished is not self._agent:
             return
+        if finished.generation != self._project_generation:
+            # Der Fehler gilt einem Dokument, das nicht mehr offen ist. Ein
+            # abgelehnter Zugang bleibt trotzdem verworfen.
+            _log.info("agent turn failed after the project changed: %s", error)
+            self._forget_rejected_backend()
+            self._on_agent_cancelled(finished.request, finished)
+            return
         self._on_failed(error)
+
+    def _on_agent_cancelled(self, request: str, finished: _AgentWorker) -> None:
+        """Ein Zug ohne Vorschlag und ohne Fehler — gemeldet mit seinem Grund."""
+        if finished is not self._agent:
+            return
+        reason = finished.stop_reason or AGENT_INTERRUPTED
+        if reason != AGENT_STOPPED and finished.generation != self._project_generation:
+            reason = AGENT_PROJECT_CHANGED
+        _log.info("agent turn ended without a proposal: %s", reason)
+        self.agentCancelled.emit(reason, request)
 
     def _on_agent_done(self, finished: _AgentWorker | None = None) -> None:
         if finished is not None and finished is not self._agent:

@@ -61,6 +61,7 @@ it into `website/version.json`.
 - Undo and redo are faster, and memory that is no longer needed is freed right away.
 - Repairing and resolving overlaps are up to four times as fast on large models, and exporting as 3MF is considerably faster.
 - The workspace appears faster when opening large 3MF files.
+- The notice *Displaying the model …* disappears as soon as the view is ready and no longer stays over the model.
 - An added model is in view afterwards, even when it lands next to a model you zoomed in on.
 - In the part catalogue, *Manage parts* is open as long as there is no part of your own yet.
 
@@ -174,6 +175,8 @@ it into `website/version.json`.
 - Thin walls, for example on a vase, arrive closed and with thickness.
 - The assistant replies in the language you write in.
 - With a local model the assistant has as much room as with a hosted one and handles tasks of up to twelve steps.
+- If you cancel a proposal from the assistant, the status bar confirms it instead of reporting a program error.
+- If you open another project while a proposal is running, Solidon discards the proposal and puts your request back in the chat.
 - Generated models arrive closed more often. Where faces only touch, Solidon separates them, and it smooths small folds in the surface instead of reporting a self-intersection.
 - If an attempt already fell apart while generating, the dialog says so before you take it and offers *One more attempt*.
 - If a generated model is only a thin skin around a cavity, the dialog says so before you take it and the report afterwards, each with the way to a new attempt.

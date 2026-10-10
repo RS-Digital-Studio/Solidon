@@ -7,6 +7,7 @@ Entscheidung, und hält sich das Ganze heraus, wenn es kein Modell gibt.
 
 from __future__ import annotations
 
+import threading
 from pathlib import Path
 
 import pytest
@@ -1483,6 +1484,173 @@ def qt_app_process(window: MainWindow) -> None:
         if window._proposal is not None:
             return
         time.sleep(0.01)
+
+
+# --- ein Zug ohne Vorschlag (Kundenbericht S-20261010-e5014c) ---------------------
+
+
+def test_a_cancelled_turn_leaves_the_worker_as_no_error() -> None:
+    """Ein Abbruch kommt als ``cancelledWith`` heraus, nie als ``failedWith``.
+
+    Ein nacktes ``AppError`` daraus fiel im Fehlerdialog auf *Fehlerbericht
+    erstellen* zurück — der Kunde schickte sein eigenes *Abbrechen* als
+    Programmfehler.
+    """
+    from types import SimpleNamespace
+    from typing import Any, cast
+
+    from app.core.errors import OperationCancelled
+    from app.ui.session import _AgentWorker
+
+    def stopped(*_args: object, **_kwargs: object) -> object:
+        raise OperationCancelled
+
+    worker = _AgentWorker(
+        cast(Any, SimpleNamespace(run_proposal=stopped)),
+        "eine Bohrung",
+        cast(Any, None),
+        cast(Any, None),
+    )
+    failed: list[object] = []
+    cancelled: list[str] = []
+    worker.failedWith.connect(failed.append)
+    worker.cancelledWith.connect(cancelled.append)
+
+    worker.work()
+
+    assert not failed, failed
+    assert cancelled == ["eine Bohrung"]
+
+
+def test_a_proposal_for_the_previous_project_is_not_shown() -> None:
+    """Fertig vor dem Abbruch des Projektwechsels heißt nicht gültig.
+
+    Der Zug rechnete auf dem vorigen Dokument; ohne Stempelvergleich zeigte
+    das Fenster seinen Vorschlag über dem neuen und übernähme ihn dort.
+    """
+    from types import SimpleNamespace
+    from typing import Any, cast
+
+    from app.core.agent.proposal import Proposal
+    from app.ui.session import AGENT_PROJECT_CHANGED
+
+    session = Session()
+    worker = SimpleNamespace(generation=session._project_generation, stop_reason="", request="x")
+    session._agent = cast(Any, worker)
+    session.start_new()
+    assert worker.stop_reason == AGENT_PROJECT_CHANGED, "der Projektwechsel hält den Zug an"
+    shown: list[object] = []
+    ended: list[tuple[str, str]] = []
+    session.proposalReady.connect(shown.append)
+    session.agentCancelled.connect(lambda reason, request: ended.append((reason, request)))
+
+    session._on_agent_proposal(
+        ProposalPreview(proposal=Proposal(request="x")), finished=cast(Any, worker)
+    )
+
+    assert not shown, "der Vorschlag galt dem vorigen Projekt"
+    assert ended == [(AGENT_PROJECT_CHANGED, "x")]
+    session._agent = None
+
+
+def test_only_a_stop_from_elsewhere_hands_the_request_back() -> None:
+    """Die Quittung nach eigenem *Abbrechen* verspricht nichts; die übrigen nennen *Senden*."""
+    from app.i18n import tr
+    from app.ui.session import (
+        AGENT_INTERRUPTED,
+        AGENT_PROJECT_CHANGED,
+        AGENT_STOPPED,
+        agent_stop_sentence,
+    )
+
+    send = str(tr("Senden"))
+    assert send not in agent_stop_sentence(AGENT_STOPPED)
+    for reason in (AGENT_PROJECT_CHANGED, AGENT_INTERRUPTED):
+        assert send in agent_stop_sentence(reason), reason
+    assert agent_stop_sentence(AGENT_PROJECT_CHANGED) != agent_stop_sentence(AGENT_INTERRUPTED)
+
+
+def _turn_waiting_for_cancel(window: MainWindow) -> threading.Event:
+    """Ein Modell, das rechnet, bis der Zug angehalten ist — wie Ollama im
+    Kundenbericht, das achteinhalb Minuten rechnete.
+
+    Wie ``llm._ollama_request`` endet die Anfrage mit ``OperationCancelled``;
+    das Ereignis meldet, dass gefragt wurde.
+    """
+    import time
+
+    from app.core.errors import OperationCancelled
+
+    started = threading.Event()
+
+    def waiting(_messages: object) -> Reply:
+        started.set()
+        deadline = time.monotonic() + 30.0
+        while time.monotonic() < deadline:
+            if window.session.agent_cancel.is_cancelled:
+                raise OperationCancelled
+            time.sleep(0.01)
+        return Reply(text="zu spät")
+
+    window.session.set_agent_backend(ScriptedBackend(answers=[waiting]))
+    return started
+
+
+def test_stopping_the_turn_shows_no_error_and_no_report(
+    window: MainWindow, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """*Abbrechen* am Agenten ist eine Handlung des Nutzers, kein Programmfehler.
+
+    Nachgestellt aus S-20261010-e5014c: Der Zug wartet auf das Modell, der
+    Nutzer bricht ab. Bis 0.5.3 stand danach „Das hat so nicht funktioniert“
+    mit *Fehlerbericht erstellen* als Hauptknopf.
+    """
+    from app.ui.session import AGENT_STOPPED, agent_stop_sentence
+
+    shown: list[object] = []
+    reported: list[object] = []
+    monkeypatch.setattr(
+        "app.ui.main_window.show_error", lambda error, *args, **kwargs: shown.append(error)
+    )
+    monkeypatch.setattr(window, "report_error", lambda error, *args: reported.append(error))
+    started = _turn_waiting_for_cancel(window)
+
+    window.chat.input.setPlainText("Bohr ein Loch")
+    window.chat._send()
+    assert started.wait(30), "der Zug fragt das Modell"
+    assert window._progress_owner == "agent"
+    window.cancel_button.click()
+    assert window.session.wait_for_idle(60_000)
+    QApplication.processEvents()
+
+    assert not shown and not reported, (shown, reported)
+    assert window._announcement == agent_stop_sentence(AGENT_STOPPED)
+    assert not window.chat.busy
+
+
+def test_a_new_project_stops_the_turn_and_hands_the_request_back(
+    window: MainWindow, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Ein Projektwechsel ist kein Fehler und kein stilles Verschwinden der Anfrage."""
+    from app.ui.session import AGENT_PROJECT_CHANGED, agent_stop_sentence
+
+    shown: list[object] = []
+    monkeypatch.setattr(
+        "app.ui.main_window.show_error", lambda error, *args, **kwargs: shown.append(error)
+    )
+    started = _turn_waiting_for_cancel(window)
+
+    window.chat.input.setPlainText("Bohr ein Loch")
+    window.chat._send()
+    assert started.wait(30), "der Zug fragt das Modell"
+    window.session.start_new()
+    assert window.session.wait_for_idle(60_000)
+    QApplication.processEvents()
+
+    assert not shown, shown
+    assert window._proposal is None
+    assert window.chat.input.toPlainText() == "Bohr ein Loch"
+    assert window._announcement == agent_stop_sentence(AGENT_PROJECT_CHANGED)
 
 
 # --- ein Bild als Eingabe (Konzept P15 §7 Etappe 8, E8) -------------------------

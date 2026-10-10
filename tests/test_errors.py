@@ -911,3 +911,38 @@ def test_no_internal_error_speaks_to_the_customer() -> None:
         "ein InternalError mit übersetztem Text ist ein Bedienfall in der falschen "
         f"Klasse: {offenders}"
     )
+
+
+def test_no_window_turns_a_cancel_into_an_error() -> None:
+    """Ein Abbruch ist kein Fehler — auch nicht auf dem Weg ins Fenster.
+
+    ``_AgentWorker`` machte aus ``OperationCancelled`` ein nacktes ``AppError``.
+    Dessen einziger Vorschlag ist ``CANCEL``, und den löst das Fenster nicht
+    ein: ``offered_actions`` fiel auf *Fehlerbericht erstellen* zurück, und ein
+    Kunde schickte sein eigenes *Abbrechen* als Programmfehler
+    (S-20261010-e5014c). Die Klassenprüfung oben sah es nicht, denn formal trug
+    der Fehler einen Vorschlag.
+    """
+    quelle = Path(errors.__file__).resolve().parents[1] / "ui"
+    fehlerklassen = {"AppError", "InternalError", "UserError", "ValidationError"}
+    offenders: list[str] = []
+    geprueft = 0
+    for datei in sorted(quelle.rglob("*.py")):
+        baum = ast.parse(datei.read_text(encoding="utf-8"))
+        for knoten in ast.walk(baum):
+            if not isinstance(knoten, ast.ExceptHandler) or knoten.type is None:
+                continue
+            gefangen = knoten.type.elts if isinstance(knoten.type, ast.Tuple) else [knoten.type]
+            namen = {getattr(art, "id", None) or getattr(art, "attr", None) for art in gefangen}
+            if "OperationCancelled" not in namen:
+                continue
+            geprueft += 1
+            for innen in (teil for zeile in knoten.body for teil in ast.walk(zeile)):
+                if not isinstance(innen, ast.Call):
+                    continue
+                name = getattr(innen.func, "id", None) or getattr(innen.func, "attr", None)
+                if name in fehlerklassen:
+                    offenders.append(f"{datei.relative_to(quelle)}:{innen.lineno}")
+
+    assert geprueft > 20, f"nur {geprueft} Abbruchzweige gefunden — die Suche greift nicht mehr"
+    assert not offenders, f"ein Abbruch wird hier zum Fehler: {offenders}"

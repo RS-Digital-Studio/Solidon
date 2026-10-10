@@ -89,7 +89,11 @@ Stapelabzug, keine Adresse aus dem Code: `spoken_values` lässt `field` und
 Feld (`NewFilamentDialog.focus_field`). Titel und Detail in zwei Zeilen
 (`problem_text`), nie „Titel.: Detail“. Wer im Satz eine Handlung nennt,
 bietet genau sie an („Laden Sie den Stand neu“ → `RELOAD`), und jeder
-Vorschlag ist ausführbar.
+Vorschlag ist ausführbar. **Ein Abbruch ist kein Fehler:** Kein
+`except OperationCancelled` baut ein `AppError` (`test_errors`), denn mit nur
+*Abbrechen* fällt der Dialog auf *Fehlerbericht erstellen* zurück. Wer selbst
+abbrach, bekommt eine Quittung, sonst Grund und Handlung
+(`Session.agentCancelled`).
 
 **Kein Wort, das nur ein Konstrukteur kennt, wo ein Neuling liest** — das Wort
 aus seinem Slicer: Richtung (nicht Normale), Außenseiten angleichen, geschlossen
