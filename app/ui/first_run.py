@@ -73,6 +73,7 @@ from app.core.export.handover import detect
 from app.core.knowledge import print_settings, profiles
 from app.core.log import get_logger
 from app.core.types import PrinterProfile, PrintTechnology
+from app.core.units import SMALLEST_NOZZLE
 from app.i18n import _, format_decimal, language_name, set_language, tr
 from app.i18n.catalog import available_languages, install_language
 from app.ui.dialogs import show_error
@@ -478,7 +479,7 @@ class FirstRunDialog(QDialog):
         dimensions.addStretch(1)
         custom_form.addRow(tr("Bauraum B × T × H"), volume)
         self.printer_nozzle = NumberSpin(self.custom_printer)
-        self.printer_nozzle.setRange(0.05, 10)
+        self.printer_nozzle.setRange(SMALLEST_NOZZLE, 10)
         self.printer_nozzle.setDecimals(2)
         self.printer_nozzle.setSingleStep(0.1)
         self.printer_nozzle.setSuffix(" " + tr("mm"))

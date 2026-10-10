@@ -26,7 +26,9 @@ einmal; Gewichte und gebeugte Haut rechnet `_ArmatureSkinWorker`. Die letzte
 gültige Fläche bleibt sichtbar, ein Klick trifft sie. Neues Werkzeug,
 Symmetrie, Abbruch und Projektwechsel entwerten die Antwort über Nummer und
 Arbeiteridentität. Die Wand-/Überhangprüfung liest eine Kopie der gezeigten
-Fläche. Prüfstände warten über `wait_for_sculpt_preview`/`…_armature_skin`.
+Fläche. Prüfstände warten über `wait_for_sculpt_preview`/`…_armature_skin`;
+`wait_for_sculpt_check` stellt erst die Vorschau, dann eine noch geschuldete
+Prüfung und wartet auf die Antwort zum jüngsten Stand.
 
 Was geschieht, während gerechnet wird (§2.8); die allgemeinen Regeln aus
 `oberflaeche.md` gelten zusätzlich. Messreihen, Anlässe, Nachweise,
