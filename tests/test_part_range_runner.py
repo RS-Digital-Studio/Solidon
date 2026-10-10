@@ -188,3 +188,25 @@ def test_a_large_part_runs_in_windows_and_counts_them_together() -> None:
     assert runner._merged([piece(6, []), piece(3, [])])["passed"] is False, "eine Ecke fehlt"
     broken = runner._merged([piece(6, []), piece(4, [({}, "nicht geschlossen")])])
     assert broken["passed"] is False and len(broken["failures"]) == 1
+
+
+def test_a_profile_root_removed_from_outside_ends_neither_the_run_nor_a_worker(
+    tmp_path: Path, isolated_environment: dict[str, str | None]
+) -> None:
+    """Ein Aufräumer im Temp-Verzeichnis nahm einem Lauf nach vier Stunden das Elternprofil.
+
+    Jeder Arbeiter legte sein Profil darin an und starb mit ``FileNotFoundError``,
+    der Lauf mit ihm (Bereichsnachweis RM-544, 10.10.2026). Der Arbeiter legt das
+    Elternverzeichnis neu an, und das Aufräumen des Laufs übersteht einen schon
+    verschwundenen Ordner.
+    """
+    import shutil
+
+    with runner._isolate() as root:
+        shutil.rmtree(root)
+        with runner._isolate(root) as worker:
+            assert worker.is_dir() and worker.parent == root
+            assert {os.environ[variable] for variable in VARIABLES} == {str(worker)}
+        shutil.rmtree(root)
+    assert not root.exists()
+    assert {variable: os.environ.get(variable) for variable in VARIABLES} == isolated_environment

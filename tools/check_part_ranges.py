@@ -65,12 +65,22 @@ def _this_tree() -> None:
 
 @contextmanager
 def _isolate(parent: Path | None = None) -> Iterator[Path]:
-    """Eigene Profile vor dem Import setzen und nach Erfolg oder Fehler wieder entfernen (§38)."""
+    """Eigene Profile vor dem Import setzen und nach Erfolg oder Fehler wieder entfernen (§38).
+
+    **Ein Aufräumer im Temp-Verzeichnis beendet keinen Lauf** (RM-544, 10.10.2026):
+    Nach vier Stunden war das Elternprofil fort, jeder neue Arbeiter starb mit
+    ``FileNotFoundError`` und der Lauf mit ihm. Der Arbeiter legt es neu an, und
+    das Aufräumen übersteht einen schon verschwundenen Ordner.
+    """
     _this_tree()
     from app.core.paths import PROFILE_VARIABLES
 
     before = {variable: os.environ.get(variable) for variable in PROFILE_VARIABLES}
-    with tempfile.TemporaryDirectory(prefix="solidon-part-ranges-", dir=parent) as isolated:
+    if parent is not None:
+        parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(
+        prefix="solidon-part-ranges-", dir=parent, ignore_cleanup_errors=True
+    ) as isolated:
         try:
             for variable in PROFILE_VARIABLES:
                 os.environ[variable] = isolated
