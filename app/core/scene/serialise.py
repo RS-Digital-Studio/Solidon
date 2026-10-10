@@ -836,7 +836,13 @@ def _override_to_data(override: SlotOverride | None) -> dict[str, Any] | None:
     for group in _OVERRIDE_GROUPS:
         section = getattr(override, group)
         if section is not None:
-            data[group] = {entry.name: getattr(section, entry.name) for entry in fields(section)}
+            # Was die Spule nicht übersteuert, steht nicht da (RM-707): Beim
+            # nächsten Öffnen folgt es wieder dem Wert ohne Spule.
+            data[group] = {
+                entry.name: getattr(section, entry.name)
+                for entry in fields(section)
+                if f"{group}.{entry.name}" not in override.inherited
+            }
     return data
 
 
@@ -855,11 +861,21 @@ def _override_from_data(data: Any, material: str = "") -> SlotOverride | None:
     material_type = data.get("material_type")
     own = profiles.material_id_for_type(material_type) if isinstance(material_type, str) else ""
     groups: dict[str, Any] = {}
+    inherited: set[str] = set()
     for group, klass in _OVERRIDE_GROUPS.items():
         stored = data.get(group)
         if not isinstance(stored, dict):
             continue
         groups[group] = _group_from_data(group, klass, stored, own or material)
+        # **Ein Feld, das die Datei nicht kennt, übersteuert die Spule nicht**
+        # (RM-707): Eine Spule aus 0.5.3 trüge sonst die Vorgabe der Dataclass
+        # als eigenen Wert und überschriebe das Herstellerprofil — Elegoos 20
+        # mm/s Mindesttempo mit 10. Ausnahme ist die Lüfterkurve, die
+        # ``_group_from_data`` bewusst aus dem Material ergänzt.
+        missing = {entry.name for entry in fields(klass)} - stored.keys()
+        if group == "cooling":
+            missing -= {"minimum_fan_speed", "fan_below_layer_time"}
+        inherited |= {f"{group}.{name}" for name in missing}
     if not groups:
         return None
     from app.core.scene.cache import _name_from_data
@@ -872,6 +888,7 @@ def _override_from_data(data: Any, material: str = "") -> SlotOverride | None:
         colour=tuple(float(one) for one in colour)  # type: ignore[arg-type]
         if isinstance(colour, (list, tuple)) and len(colour) == 3
         else None,
+        inherited=frozenset(inherited),
         **groups,
     )
 

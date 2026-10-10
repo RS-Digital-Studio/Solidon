@@ -797,7 +797,8 @@ class FilamentOverrideDialog(QDialog):
             body = QWidget(section)
             form = QFormLayout(body)
             form.setContentsMargins(WIDE + TIGHT, 0, 0, NORMAL)
-            source = own_section or getattr(settings, group)
+            # Was die Spule nicht übersteuert, zeigt den Projektwert (RM-707).
+            source = handover.override_section(existing, group, getattr(settings, group))
             for field in (
                 entry for entry in FILAMENT_FIELDS if entry.path.partition(".")[0] == group
             ):
@@ -933,7 +934,9 @@ class FilamentOverrideDialog(QDialog):
         self.existing = self._legacy
         for group, box in self.groups.items():
             own = getattr(self._legacy, group)
-            source = own or getattr(self.settings, group)
+            # Was die alte Spule nicht übersteuerte, zeigt den Projektwert —
+            # derselbe Weg wie beim Öffnen des Dialogs (RM-707, Review M1).
+            source = handover.override_section(self._legacy, group, getattr(self.settings, group))
             for field in FILAMENT_FIELDS:
                 section, _, name = field.path.partition(".")
                 if section == group:
@@ -979,6 +982,7 @@ class FilamentOverrideDialog(QDialog):
     def override(self) -> SlotOverride | None:
         """Die vier Gruppen aus den Feldern, oder Projektwerte für alle."""
         values: dict[str, Any] = {}
+        inherited: set[str] = set()
         for group in FILAMENT_GROUPS:
             if not self.groups[group].isChecked():
                 continue
@@ -989,7 +993,24 @@ class FilamentOverrideDialog(QDialog):
                 for field in FILAMENT_FIELDS
                 if field.path.partition(".")[0] == group
             }
-            values[group] = replace(section, **changed)
+            # Ein Feld, das die Spule nicht übersteuerte und das unverändert
+            # den Projektwert zeigt, übersteuert sie weiter nicht (RM-707). Es
+            # behält seinen Rohwert: Ein Übernehmen ohne Änderung gibt dieselbe
+            # Spule zurück und ändert das Projekt nicht (Review RM-707, L2).
+            kept: set[str] = set()
+            if self.existing is not None and previous is not None:
+                current = getattr(self.settings, group)
+                for path in self.existing.inherited:
+                    owner, _dot, name = path.partition(".")
+                    if owner == group and (
+                        name not in changed
+                        or print_settings.same_value(changed[name], getattr(current, name))
+                    ):
+                        inherited.add(path)
+                        kept.add(name)
+            values[group] = replace(
+                section, **{name: value for name, value in changed.items() if name not in kept}
+            )
         if not values:
             return None
         return SlotOverride(
@@ -997,6 +1018,7 @@ class FilamentOverrideDialog(QDialog):
             colour=self.slot.colour,
             material=self.slot.material,
             material_type=self.slot.material_type,
+            inherited=frozenset(inherited),
             **values,
         )
 
@@ -8659,17 +8681,9 @@ class PrintSettingsDialog(QDialog):
                 or entry.effective is None
             ):
                 continue
-            group = entry.path.partition(".")[0]
-            previous = handover.override_for(self.settings, entry.slot) or SlotOverride()
-            effective = replace(
-                entry.effective,
-                **{
-                    group: getattr(previous, group) or getattr(entry.effective, group),
-                },
+            self.settings = handover.with_slot_advice(
+                self.settings, entry.slot, entry.effective, entry.path, entry.value
             )
-            updated = print_settings.with_path(effective, entry.path, entry.value)
-            override = replace(previous, **{group: getattr(updated, group)})
-            self.settings = handover.with_slot_override(self.settings, entry.slot, override)
         self._load_into_editors()
         self._refresh_advice()
         # **Der Knopf sagt, was er getan hat.** Die Felder änderten sich

@@ -1647,6 +1647,126 @@ def test_filament_dialog_builds_one_groupwise_override(qt_app: QApplication) -> 
     assert dialog.override() is None, "ein sichtbarer Knopf nimmt alle eigenen Werte zurück"
 
 
+def test_confirming_an_unchanged_053_spool_returns_the_same_spool(
+    qt_app: QApplication,
+) -> None:
+    """Übernehmen ohne Änderung ändert das Projekt nicht (Review RM-707, L2)."""
+    from app.core.scene.serialise import _override_from_data
+
+    base = print_settings.resolve(profiles.make_profile("centauri-carbon-2", "pla"))
+    settings = print_settings.with_path(base, "cooling.minimum_speed", 20.0)
+    slot = MaterialSlot(index=1, name="PLA Weiß", colour=(1.0, 1.0, 1.0))
+    stored = {
+        "name": "PLA Weiß",
+        "colour": [1.0, 1.0, 1.0],
+        "material": None,
+        "material_type": None,
+        "cooling": {
+            "fan_speed": 0.5,
+            "minimum_fan_speed": 0.5,
+            "fan_below_layer_time": 30.0,
+            "bridge_fan_speed": 1.0,
+            "disable_first_layers": 1,
+            "minimum_layer_time": 8.0,
+        },
+    }
+    existing = _override_from_data(stored, "pla")
+    assert existing is not None and "cooling.minimum_speed" in existing.inherited
+    dialog = FilamentOverrideDialog(slot, settings, existing)
+    try:
+        assert dialog.override() == existing
+    finally:
+        dialog.reject()
+        qt_app.processEvents()
+        dialog.deleteLater()
+
+
+def test_taking_the_values_of_an_old_spool_keeps_the_project_value_in_later_fields(
+    qt_app: QApplication,
+) -> None:
+    """„Alte Filamentwerte übernehmen“ zeigt dort den Projektwert und lässt das Feld
+    geerbt — sonst übersteuerte die Spule mit der Vorgabe der Dataclass (Review RM-707, M1)."""
+    from app.core.scene.serialise import _override_from_data
+
+    base = print_settings.resolve(profiles.make_profile("centauri-carbon-2", "pla"))
+    settings = print_settings.with_path(base, "cooling.minimum_speed", 20.0)
+    # Eine Spule aus Format 19: ohne Materialkennung, die Kühlgruppe mit vier Feldern.
+    stored = {
+        "name": "PLA Weiß",
+        "colour": [1.0, 1.0, 1.0],
+        "material": None,
+        "material_type": None,
+        "cooling": {
+            "fan_speed": 0.8,
+            "bridge_fan_speed": 1.0,
+            "disable_first_layers": 1,
+            "minimum_layer_time": 8.0,
+        },
+    }
+    legacy = _override_from_data(stored, "pla")
+    assert legacy is not None
+    settings = replace(settings, slot_overrides=(legacy,))
+    slot = MaterialSlot(index=1, name="PLA Weiß", colour=(1.0, 1.0, 1.0), material_type="PLA")
+    assert handover.override_for(settings, slot) is None
+    dialog = FilamentOverrideDialog(slot, settings, None)
+    try:
+        dialog._take_legacy_values()
+        editor = dialog.editors["cooling.minimum_speed"]
+        assert isinstance(editor, BoundedSpin)
+        assert editor.value() == pytest.approx(20.0)
+        taken = dialog.override()
+        assert taken is not None and "cooling.minimum_speed" in taken.inherited
+        updated = handover.with_slot_override(settings, slot, taken)
+        profile = profiles.make_profile("centauri-carbon-2", "pla")
+        mine = handover.settings_for_slot(updated, profile, slot)
+        assert mine.cooling.minimum_speed == pytest.approx(20.0)
+        own = handover._for_the_slot(frozenset(), updated, slot, profile)
+        assert own is not None and "cooling.minimum_speed" not in own
+    finally:
+        dialog.reject()
+        qt_app.processEvents()
+        dialog.deleteLater()
+
+
+def test_a_spool_from_053_shows_and_keeps_the_project_value_in_later_fields(
+    qt_app: QApplication,
+) -> None:
+    """Was die Spule nicht übersteuert, zeigt der Dialog als Projektwert und lässt
+    es dabei; erst ein geänderter Wert gehört ihr (RM-707)."""
+    base = print_settings.resolve(profiles.make_profile("centauri-carbon-2", "pla"))
+    settings = print_settings.with_path(base, "cooling.minimum_speed", 20.0)
+    slot = MaterialSlot(index=1, name="PLA Weiß", colour=(1.0, 1.0, 1.0))
+    existing = SlotOverride(
+        name=slot.name,
+        colour=slot.colour,
+        cooling=replace(settings.cooling, fan_speed=0.8, minimum_speed=10.0),
+        inherited=frozenset({"cooling.minimum_speed"}),
+    )
+    dialog = FilamentOverrideDialog(slot, settings, existing)
+    try:
+        editor = dialog.editors["cooling.minimum_speed"]
+        assert isinstance(editor, BoundedSpin)
+        assert editor.value() == pytest.approx(20.0)
+        kept = dialog.override()
+        assert kept is not None and kept.cooling is not None
+        assert kept.cooling.fan_speed == pytest.approx(0.8)
+        assert "cooling.minimum_speed" in kept.inherited
+        assert handover.override_section(
+            kept, "cooling", settings.cooling
+        ).minimum_speed == pytest.approx(20.0)
+
+        editor.setValue(12.0)
+        own = dialog.override()
+        assert own is not None and "cooling.minimum_speed" not in own.inherited
+        assert handover.override_section(
+            own, "cooling", settings.cooling
+        ).minimum_speed == pytest.approx(12.0)
+    finally:
+        dialog.reject()
+        qt_app.processEvents()
+        dialog.deleteLater()
+
+
 def test_filament_override_refuses_a_number_until_it_is_corrected(
     qt_app: QApplication,
 ) -> None:
