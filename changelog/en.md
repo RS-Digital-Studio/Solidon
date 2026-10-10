@@ -109,6 +109,7 @@ it into `website/version.json`.
 - Even for printers that PrusaSlicer or SuperSlicer do not know themselves, both estimate the print time with the accelerations handed over, and the file names the material of the spool.
 - Even on a fully loaded computer, Solidon gives the real reason after stopping a slicer instead of a timeout. A finished print file is used.
 - The filament inventory again recognises a booking from Solidon 0.5.1 as an earlier booking and asks before deducting the same print again.
+- A booking in the filament inventory stays with its print, even when a later update calculates faster or the manufacturer profile in the slicer changes. Until now the print then counted as new.
 
 ### Threads, holes and standard parts
 

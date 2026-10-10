@@ -140,8 +140,8 @@ from app.core.export.writer import (
     write_assembly,
     write_plan,
 )
+from app.core.filament_usage import StoredInputs, with_spool
 from app.core.filament_usage import prepare as prepare_usage
-from app.core.filament_usage import with_spool
 from app.core.geom.measure import bounding_box_of, volume_of
 from app.core.geom.mesh import MeshData, as_mesh_data
 from app.core.geom.pose import armature_to_text
@@ -1801,10 +1801,13 @@ class _ExportWorker(Worker):
         checked: list[Finding] | None = None,
         evaluated: Sequence[Finding] = (),
         chosen: _ChosenSetup | None = None,
+        inputs: StoredInputs | None = None,
     ) -> None:
         super().__init__()
         self._objects = objects
         self._target = target
+        self._inputs = inputs
+        """Die gespeicherten Eingänge der Körper für den Abdruck der Buchung (RM-706)."""
         self._chosen = chosen
         """Die Einrichtung, mit der das Hauptfenster schon rechnet — dann wird
         sie nicht neu hergeleitet (:class:`_ChosenSetup`)."""
@@ -1867,6 +1870,7 @@ class _ExportWorker(Worker):
             checked=list(findings),
             evaluated=self._evaluated,
             chosen=self._chosen,
+            inputs=self._inputs,
         )
 
     def work(self) -> None:
@@ -1893,7 +1897,11 @@ class _ExportWorker(Worker):
                 self._inventory_settings = self._profiles_for_selection(self._inventory_settings)
             usage = (
                 prepare_usage(
-                    self._objects, self._inventory_settings, self._profile, self._project_name
+                    self._objects,
+                    self._inventory_settings,
+                    self._profile,
+                    self._project_name,
+                    inputs=self._inputs,
                 )
                 if self._format == "3mf" and self._inventory_settings is not None
                 else ()
@@ -10179,6 +10187,13 @@ class MainWindow(QMainWindow):
             # Dieselbe Slicerwahl wie die Zahlenzeile, ohne den Bestand ein
             # zweites Mal zu lesen (RM-623).
             chosen=self._chosen_setup_now(),
+            # Der Abdruck der Buchung liest das Gespeicherte, nicht die Netze (RM-706).
+            inputs=StoredInputs.snapshot(
+                self.session.project,
+                base_dir=self.session.base_dir,
+                stopped_at=result.stopped_at,
+                document=document,
+            ),
         )
         self._run_export(worker)
 

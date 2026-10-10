@@ -175,6 +175,40 @@ So kann eine konkurrierende Buchung zwischen Vorschlag und Schreiben keinen
 zusätzlichen Abzug auslösen. Weder Journalformat noch gespeicherte
 Vorgangskennungen ändern sich dafür.
 
+## Verbrauchsabdruck aus gespeicherten Eingängen (RM-706)
+
+Bis RM-706 hieß ein gebuchter Druck nach den Bits seiner ausgewerteten Netze
+und nach den wirksamen Einstellungen. Beides ändert sich, ohne dass der Kunde
+etwas tut: Druckgleich (Bauplan §11.2) erlaubt Beschleunigungen, die Punkte
+innerhalb der Druckgrenze verschieben, Dreiecke umsortieren oder Netze in
+float32 halten (RM-698), und die Grundlage der Einstellungen folgt dem
+Herstellerprofil und Solidons eigenen Regeln (Cura `z_gap`, RM-583). Jede
+solche Änderung hätte eine Buchung unauffindbar gemacht — im Modus *Ohne
+Rückfrage buchen* mit einem zweiten Abzug.
+
+Der Abdruck liest deshalb, was das Projekt gespeichert hat. Ein Körper heißt
+nach der Kette seiner Schritte: Name, gespeicherte Werte, Startwert, die
+Prüfsumme jeder Quelle, die gelesenen Projektmaße als Ausdruck und die
+Fassung jedes Bausteins (`StoredInputs.bodies`). Die Fassung einer Umsetzung
+fehlt mit Absicht — sie steigt genau bei den Beschleunigungen, die nichts am
+Druck ändern sollen; eine Maßänderung eines Bausteins trägt dagegen einen
+`PartChange` und benennt einen anderen Druck. Ein Schritt, der andere Körper
+liest, nimmt alle lebenden mit: Welcher ein Merkmal trägt, entscheidet erst
+die Auswertung, und ein Abdruck, der einmal zu oft kippt, kostet eine
+Rückfrage, einer, der zwei Drucke zusammenwirft, eine falsche Buchung.
+
+Die Einstellungen zählen mit dem, was dem Projekt gehört — Stufe, eigene Wahl,
+Vorschläge, Wahl der Platte, eigene Spulenwerte (Review RM-705, N3). Die
+eingefrorene Feldmenge von RM-705 braucht der neue Abdruck nicht: Ein später
+dazugekommenes Feld zählt dort nur, wenn jemand es wählt.
+
+Der bisherige Abdruck reist als **Vorabdruck** mit (`former_fingerprints`).
+Er ist kein Kandidat wie die Altabdrücke, sondern belegte Gleichheit: So hieß
+der Druck von 0.5.2 bis 0.6.0. Als Kandidat hätte *Ohne Rückfrage buchen* bei
+jeder Buchung aus 0.6.0 angehalten. Ein solcher Vorgang behält beim Nachbuchen
+seinen Abdruck, weil `filaments.book` für dieselbe Vorgangskennung keinen
+anderen annimmt; neue Vorgänge bekommen den neuen.
+
 ## `paths.read_text_shared`: Lesen ohne Löschsperre
 
 Unter Windows sperrt ein gewöhnlich geöffneter Lesegriff die Datei gegen Löschen

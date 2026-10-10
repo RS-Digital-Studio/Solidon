@@ -9,12 +9,18 @@ from __future__ import annotations
 import hashlib
 import math
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass, replace
+from contextlib import suppress
+from copy import deepcopy
+from dataclasses import dataclass, fields, replace
+from pathlib import Path, PurePosixPath
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Any, Final, Literal
 
+from app.core import expressions
+from app.core.errors import AppError
 from app.core.export import threemf
 from app.core.export.handover import (
+    SLOT_GROUPS,
     bind_object_profiles,
     configured_slots,
     override_for,
@@ -26,11 +32,25 @@ from app.core.scene.hashing import digest, profile_key
 from app.core.scene.serialise import print_settings_to_data
 from app.core.slice.estimate import estimate
 from app.core.slice.gcode import GcodeMetrics
-from app.core.types import MaterialSlot, PrintSettings, Profile, SceneObject, SpoolBinding
+from app.core.types import (
+    Document,
+    MaterialSlot,
+    ObjectId,
+    Operation,
+    OpId,
+    Parameter,
+    ParameterName,
+    PrintSettings,
+    Profile,
+    SceneObject,
+    SourceAccess,
+    SpoolBinding,
+)
 from app.i18n import _, source_text
 
 if TYPE_CHECKING:
     from app.core.knowledge.filaments import BookingPosition, CatalogueFilament
+    from app.core.scene.project import Project
 
 UsageSource = Literal["internal", "gcode", "manual"]
 
@@ -125,6 +145,248 @@ _LEGACY_SHAPES: Final = (
     (("brim_gap", "raft_gap"), True),
 )
 
+#: Die Bildung des Abdrucks aus gespeicherten Eingängen (RM-706). Sie steht
+#: vorn im Abdruck, damit er nie einem über ausgewertete Netze gleicht. Wer die
+#: Bildung ändert, ändert jeden Abdruck und führt den alten als Vorabdruck mit
+#: (Regel ``verbrauch.md``).
+STORED_INPUTS: Final = "stored-inputs-1"
+
+
+@dataclass(frozen=True, slots=True)
+class StoredInputs:
+    """Was ein Projekt gespeichert hat, aus dem seine Körper entstehen (RM-706).
+
+    Der Abdruck einer Buchung benennt einen Körper über seine Eingänge statt
+    über die Bits seines ausgewerteten Netzes: Druckgleich (Bauplan §11.2)
+    darf Punkte innerhalb der Druckgrenze verschieben, Dreiecke umsortieren
+    und Netze schmaler halten, und jede solche Beschleunigung machte sonst aus
+    einem gebuchten Druck einen neuen.
+
+    ``sources`` liefert die Inhaltsprüfsumme einer Quelle auch vor dem ersten
+    Speichern (``ProjectSources.identity``); ohne sie gilt die gespeicherte.
+    ``stopped_at`` ist der Halt der Auswertung, aus der die Körper stammen —
+    was danach steht, hat nicht gerechnet.
+    """
+
+    document: Document
+    sources: SourceAccess | None = None
+    stopped_at: OpId | None = None
+
+    @classmethod
+    def snapshot(
+        cls,
+        project: Project,
+        *,
+        base_dir: Path | None = None,
+        stopped_at: OpId | None = None,
+        document: Document | None = None,
+    ) -> StoredInputs:
+        """Ein fester Stand für einen Arbeiter: Das Fenster rechnet weiter, die
+        Ausgabe liest das Dokument und die Quellen von jetzt. ``document`` ist
+        eine schon gezogene Kopie, sonst wird eine gezogen."""
+        from app.core.scene import project as container
+
+        held = document if document is not None else deepcopy(project.document)
+        copy = container.Project(document=held, sources=dict(project.sources))
+        return cls(held, container.ProjectSources(copy, base_dir=base_dir), stopped_at)
+
+    def bodies(self) -> dict[ObjectId, str]:
+        """Je Körper des Endstands ein Abdruck seiner gespeicherten Eingänge."""
+        return _stored_bodies(self)
+
+
+def _stored_bodies(stored: StoredInputs) -> dict[ObjectId, str]:
+    """Geht den Stapel wie die Auswertung durch, ohne ein Netz zu rechnen.
+
+    Je Schritt gehen ein: Name, gespeicherte Werte, Startwert, die Abdrücke
+    seiner Eingänge, was er an ihnen vorbei liest (:func:`_read_beside`) und
+    die Fassung eines Bausteins. Nicht ein gehen, was nur ein Ergebnis
+    beschreibt — Rückfallstufe, Zuordnungsantworten, Übersetzungsvermerk —
+    und keine Fassung einer Umsetzung (``cache_version``): Genau die steigt bei
+    einer druckgleichen Beschleunigung. Ein Schritt, der nur benennt oder
+    prüft (``unchanged_effect``), und ein unverändert durchgereichter Eingang
+    (``leaves_inputs_unchanged``) behalten den Abdruck ihres Körpers.
+    """
+    from app.core.registry import REGISTRY
+
+    document = stored.document
+    live: dict[ObjectId, str] = {}
+    for operation in sorted(document.ops, key=lambda entry: entry.id):
+        if operation.id == stored.stopped_at:
+            break
+        if operation.suppressed is not None:
+            continue
+        if not REGISTRY.has(operation.op):
+            # Die Auswertung hält hier an (``evaluate.unknown_operation``).
+            break
+        spec = REGISTRY.get(operation.op)
+        inputs = [live.get(name) or digest("absent", name) for name in operation.inputs]
+        carried = dict(zip(operation.inputs, inputs, strict=True))
+        step = (
+            ""
+            if spec.unchanged_effect
+            else digest(
+                STORED_INPUTS,
+                operation.op,
+                dict(operation.params),
+                operation.seed,
+                inputs,
+                _read_beside(spec, operation, live, stored),
+                _part_versions(operation),
+            )
+        )
+        for name in operation.inputs:
+            if name not in operation.outputs:
+                live.pop(name, None)
+        for index, name in enumerate(operation.outputs):
+            if name in carried and (spec.unchanged_effect or spec.leaves_inputs_unchanged):
+                live[name] = carried[name]
+            elif spec.unchanged_effect:
+                live[name] = inputs[index] if index < len(inputs) else digest("absent", name)
+            else:
+                live[name] = digest(step, index)
+    return live
+
+
+def _read_beside(
+    spec: Any, operation: Operation, live: Mapping[ObjectId, str], stored: StoredInputs
+) -> dict[str, Any]:
+    """Was ein Schritt außer seinen Eingängen liest — dieselben Lesarten wie
+    ``evaluate._with_nested_context``, aus dem Dokument statt aus Netzen.
+
+    Quellen gehen mit Inhaltsprüfsumme und Dateiname ein, Projektmaße mit ihrer
+    gespeicherten Angabe samt allem, was ihr Ausdruck liest. Liest ein Schritt
+    andere Körper — die Szene, ein benanntes Merkmal, die Ebene einer Skizze —,
+    gehen **alle** lebenden Körper ein: Welcher Körper ein Merkmal trägt, sagt
+    erst die Auswertung, und lieber kippt ein Abdruck einmal zu oft als dass
+    zwei verschiedene Drucke denselben tragen.
+    """
+    from app.core.registry.params import reads_scene
+    from app.core.scene.evaluate import SOURCE_KINDS, nested_references
+    from app.core.scene.orphans import feature_ref_of_sketch
+
+    params = operation.params
+    context: dict[str, Any] = {}
+    reads_bodies = spec.reads_other_bodies or reads_scene(spec.params, params)
+    names: set[str] = set()
+    # Ein unlesbarer Ausdruck hält die Auswertung an; sein Text steht oben.
+    with suppress(AppError):
+        names |= expressions.used_parameters(params.values())
+    collectors = nested_references()
+    for entry in spec.params.spec():
+        value = params.get(entry.name)
+        if entry.kind in SOURCE_KINDS:
+            if isinstance(value, str) and value:
+                context[f"#{entry.name}"] = _source_identity(stored, value)
+            continue
+        if value and (entry.kind in ("feature", "features") or entry.targets_feature):
+            reads_bodies = True
+        if entry.kind == "sketch" and isinstance(value, str) and value:
+            reads_bodies = reads_bodies or feature_ref_of_sketch(value) is not None
+        collect = collectors.get(entry.kind)
+        if collect is not None and isinstance(value, str) and value:
+            names |= collect(value)
+    if reads_bodies:
+        context["#scene"] = sorted(live.items())
+    if names:
+        context["@"] = _declared(stored.document.parameters, names)
+    return context
+
+
+def _source_identity(stored: StoredInputs, source_id: str) -> list[str]:
+    """Inhaltsprüfsumme und Dateiname einer Quelle, wie der Cache-Schlüssel sie liest."""
+    source = stored.document.sources.get(source_id)
+    identity = ""
+    if stored.sources is not None:
+        try:
+            identity = stored.sources.identity(source_id)
+        except AppError:
+            # Eine verknüpfte Quelle, die gerade fehlt, behält ihren
+            # gespeicherten Abdruck (``scene/CLAUDE.md``, „Verknüpfte Quellen“).
+            identity = ""
+    if not identity and source is not None:
+        identity = source.sha256
+    # Getrennt wird auf jeder Plattform gleich: Ein Pfad aus einer Windows-Datei
+    # gäbe unter Linux sonst einen anderen Namen und einen anderen Abdruck.
+    name = PurePosixPath(source.path.replace("\\", "/")).name if source is not None else ""
+    return [identity, name]
+
+
+def _declared(parameters: Mapping[ParameterName, Parameter], names: set[str]) -> dict[str, object]:
+    """Die gelesenen Projektmaße, wie gespeichert: Ausdruck oder Zahl, samt Kette.
+
+    Nicht der aufgelöste Wert — der Ausdruck selbst ist die Eingabe, und so
+    hängt der Abdruck an keiner Rechnung, die auf einer Plattform anders runden
+    könnte.
+    """
+    declared: dict[str, object] = {}
+    waiting = sorted(names)
+    while waiting:
+        name = waiting.pop()
+        if name in declared:
+            continue
+        parameter = parameters.get(name)
+        if parameter is None:
+            declared[name] = None
+        elif parameter.expression:
+            declared[name] = ["=", parameter.expression]
+            with suppress(AppError):
+                waiting.extend(sorted(expressions.references(parameter.expression)))
+        else:
+            declared[name] = parameter.value
+    return declared
+
+
+def _part_versions(operation: Operation) -> list[str]:
+    """Die Fassung des Bausteins, den ein Schritt setzt: Maßänderungen tragen
+    eine neue (``PartChange``), eigene Bausteine den Abdruck ihrer Datei."""
+    from app.core.knowledge.parts.registry import PARTS, used_parts
+
+    return [PARTS.get(name).version for name in used_parts([operation]) if PARTS.has(name)]
+
+
+def _owned_settings(settings: PrintSettings, slot: MaterialSlot) -> dict[str, object]:
+    """Was an den Einstellungen dieser Spule dem Projekt gehört (Review RM-705, N3).
+
+    Stufe, eigene Wahl und übernommene Vorschläge (``explicit`` — woher ein
+    Wert kommt, ändert den Druck nicht, H10), die Wahl der Platte und die
+    eigenen Werte der Spule ohne ihre geerbten Felder (RM-707). Die Grundlage
+    fehlt: Ein Update des Slicers oder eine neue Grundlage in Solidon
+    (Cura, RM-583) benennt keinen anderen Druck.
+    """
+    override = override_for(settings, slot)
+    spool: dict[str, dict[str, object]] = {}
+    if override is not None:
+        for group in SLOT_GROUPS:
+            section = getattr(override, group)
+            if section is None:
+                continue
+            spool[group] = {
+                entry.name: getattr(section, entry.name)
+                for entry in fields(section)
+                if f"{group}.{entry.name}" not in override.inherited
+            }
+    return {
+        "quality": settings.quality,
+        "explicit": [
+            [path, print_settings.read_path(settings, path)] for path in sorted(settings.explicit)
+        ],
+        "plate_choices": list(settings.plate_choices),
+        "spool": spool,
+    }
+
+
+def _machine(profile: Profile) -> list[object]:
+    """Drucker, Düse und Material — ohne die Tabellenwerte, die ein Update ändert."""
+    printer = profile.printer
+    return [
+        printer.id,
+        printer.technology,
+        printer.nozzle_diameter,
+        printer.nozzles,
+        profile.material.id,
+    ]
+
 
 @dataclass(frozen=True, slots=True)
 class UsageLine:
@@ -149,6 +411,17 @@ class UsageRequest:
     lines: tuple[UsageLine, ...]
     legacy_fingerprints: tuple[str, ...] = ()
     """Mögliche Altkennungen vor Brim-/Raftfeldern (bis 0.5.1); niemals belegte Gleichheiten."""
+    former_fingerprints: tuple[str, ...] = ()
+    """Derselbe Druck nach der Bildung vor RM-706, über die ausgewerteten Netze.
+
+    Anders als ``legacy_fingerprints`` eine **belegte Gleichheit**: So hieß
+    dieser Druck von 0.5.2 bis 0.6.0, solange seine Netzbits gleich sind. Eine
+    Buchung darunter ist derselbe Druck und behält ihren Abdruck."""
+
+    @property
+    def identities(self) -> tuple[str, ...]:
+        """Jeder Abdruck, unter dem dieser Druck schon gebucht sein kann."""
+        return (self.fingerprint, *self.former_fingerprints)
 
 
 def costs_for(
@@ -275,8 +548,17 @@ def prepare(
     project_name: str,
     *,
     slots_by_plate: Mapping[int, Sequence[MaterialSlot]] | None = None,
+    inputs: StoredInputs | None = None,
 ) -> tuple[UsageRequest, ...]:
     """Liest die tatsächlich ausgegebenen Körper, nie eine spätere Auswahl.
+
+    **Der Abdruck** kommt aus ``inputs``, den gespeicherten Eingängen des
+    Projekts (RM-706): je Körper :meth:`StoredInputs.bodies`, dazu was an den
+    Einstellungen dem Projekt gehört (:func:`_owned_settings`). Der Abdruck
+    über die ausgewerteten Netze und die wirksamen Einstellungen (RM-705)
+    steht dann in ``former_fingerprints``. Ohne ``inputs`` ist er selbst der
+    Abdruck — nur für Mengen ohne Buchung und für Prüfungen ohne Projekt; wer
+    bucht, gibt die Eingänge mit.
 
     Ein Mehrmaterialkörper hat keine aus Oberflächen ableitbare Volumenaufteilung.
     Seine Einzelmengen bleiben unbekannt, bis G-Code oder Nutzereingaben vorliegen.
@@ -288,6 +570,7 @@ def prepare(
     behalten ihre Werkzeugnummer. Alte Profilplätze werden vorher gebunden.
     """
     settings = bind_object_profiles(settings, objects)
+    stored_bodies = inputs.bodies() if inputs is not None else None
     whole_job = [
         threemf.AssemblyPart(as_mesh_data(body.mesh), slots=threemf.slots_for_object(body))
         for body in objects
@@ -315,6 +598,7 @@ def prepare(
         }
         active_keys: set[threemf.SlotKey] = set()
         geometry = []
+        stored_geometry = []
         for body in bodies:
             mesh = as_mesh_data(body.mesh)
             checksum = hashlib.sha256(mesh.raw.vertices.tobytes())
@@ -331,6 +615,16 @@ def prepare(
                 (slot.index, identities[threemf.slot_identity(slot)]) for slot in active
             )
             geometry.append((str(body.id), checksum.hexdigest(), mesh.slots, assigned))
+            if stored_bodies is not None:
+                # Die Flächenbelegung steckt in den Schritten; ``mesh.slots``
+                # folgt der Dreiecksreihenfolge und bleibt deshalb draußen.
+                stored_geometry.append(
+                    (
+                        str(body.id),
+                        stored_bodies.get(body.id) or digest("unstored", checksum.hexdigest()),
+                        assigned,
+                    )
+                )
             keys = {threemf.slot_identity(slot) for slot in active}
             active_keys.update(keys)
             if len(keys) != 1:
@@ -351,6 +645,7 @@ def prepare(
                 )
         lines = []
         effective = []
+        owned = []
         legacy_effective: list[list[object]] = [[] for _shape in _LEGACY_SHAPES]
         for original in slots:
             key = threemf.slot_identity(original)
@@ -406,6 +701,7 @@ def prepare(
             if brim_gap is not None and abs(brim_gap) <= 0.0:
                 values["adhesion"].pop("brim_gap")
             effective.append((identities[key], values))
+            owned.append((identities[key], _owned_settings(settings, slot)))
             lines.append(
                 UsageLine(
                     slot=slot,
@@ -415,13 +711,26 @@ def prepare(
                     diameter=diameter,
                 )
             )
-        fingerprint = digest(
+        evaluated = digest(
             settings.inventory_project_id,
             plate,
             sorted(geometry),
             sorted(effective, key=digest),
             profile_key(profile),
         )
+        former: tuple[str, ...] = ()
+        if stored_bodies is None:
+            fingerprint = evaluated
+        else:
+            fingerprint = digest(
+                STORED_INPUTS,
+                settings.inventory_project_id,
+                plate,
+                sorted(stored_geometry),
+                sorted(owned, key=digest),
+                _machine(profile),
+            )
+            former = (evaluated,)
         legacy_fingerprints = dict.fromkeys(
             digest(
                 settings.inventory_project_id,
@@ -438,7 +747,12 @@ def prepare(
                 project_name,
                 plate,
                 tuple(lines),
-                tuple(key for key in legacy_fingerprints if key and key != fingerprint),
+                tuple(
+                    key
+                    for key in legacy_fingerprints
+                    if key and key != fingerprint and key not in former
+                ),
+                former,
             )
         )
     return tuple(requests)

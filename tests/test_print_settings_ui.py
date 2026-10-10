@@ -1000,7 +1000,8 @@ def test_plate_job_keeps_a_real_dialog_choice_for_persistence_and_handover(
     session = SimpleNamespace(
         profile=profile,
         last_result=None,
-        project=SimpleNamespace(document=document),
+        project=SimpleNamespace(document=document, sources={}),
+        base_dir=None,
         set_print_settings=lambda settings: writes.append(settings),
     )
     dialog = SimpleNamespace(

@@ -92,7 +92,7 @@ from app.core.export.writer import (
     tower_plates,
     write_assembly,
 )
-from app.core.filament_usage import UsageRequest, from_gcode
+from app.core.filament_usage import StoredInputs, UsageRequest, from_gcode
 from app.core.filament_usage import prepare as prepare_usage
 from app.core.geom.attributes import used_slots
 from app.core.geom.mesh import MeshData, as_mesh_data
@@ -1171,6 +1171,9 @@ class _PlateJob:
     #: Arbeiter selbst.
     for_window: bool = False
     with_comparison: bool = False
+    #: Die gespeicherten Eingänge der Körper, für den Abdruck der Buchung
+    #: (RM-706): ein fester Stand, das Fenster rechnet weiter.
+    inputs: StoredInputs | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -2152,6 +2155,7 @@ class _PrepareAndSliceWorker(_SliceWorker):
                 self._job.profile,
                 self._job.name,
                 slots_by_plate={run.plate: run.slots for run in runs},
+                inputs=self._job.inputs,
             )
         }
         super().work()
@@ -2267,6 +2271,7 @@ class _OpenInSlicerWorker(Worker):
                     self._job.profile,
                     self._job.name,
                     slots_by_plate={plate: run.slots},
+                    inputs=self._job.inputs,
                 )
                 if self._was_cancelled():
                     self._report_receipt(
@@ -2331,6 +2336,7 @@ class _OpenInSlicerWorker(Worker):
                 self._job.profile,
                 self._job.name,
                 slots_by_plate=run.slots_by_plate,
+                inputs=self._job.inputs,
             )
             if self._was_cancelled():
                 self._report_receipt(
@@ -9087,6 +9093,15 @@ class PrintSettingsDialog(QDialog):
             with_settings=with_settings,
             scene=None if self.session.last_result is None else self.session.last_result.scene,
             document=self.session.project.document,
+            inputs=StoredInputs.snapshot(
+                self.session.project,
+                base_dir=self.session.base_dir,
+                stopped_at=(
+                    None
+                    if self.session.last_result is None
+                    else self.session.last_result.stopped_at
+                ),
+            ),
         )
 
     def _plate_run(

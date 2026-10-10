@@ -1038,3 +1038,100 @@ def test_a_filament_made_while_assigning_survives_save_undo_and_another_machine(
     finally:
         monkeypatch.setattr(window, "_may_discard", lambda: True)
         window.release()
+
+
+def test_the_export_names_the_print_by_its_stored_inputs(qt_app, tmp_path, monkeypatch):
+    """Anschluss (RM-706): Das Fenster gibt dem Abdruck die gespeicherten Eingänge mit.
+
+    Nicht „der Kern kann es“, sondern der Export tut es: Ohne die Eingänge
+    hieße der Druck nach den Bits seiner Netze, und jede druckgleiche
+    Beschleunigung machte aus einer Buchung eine neue.
+    """
+    from app.core.filament_usage import StoredInputs
+    from app.core.scene.history import OperationDraft
+    from app.ui.session import Session
+
+    session = Session()
+    assert session.apply("Würfel", [OperationDraft("create_box", params={})])
+    assert session.wait_for_idle()
+    window = main_window.MainWindow(session, UiSettings())
+    workers = []
+    monkeypatch.setattr(window, "_run_export", workers.append)
+    try:
+        window._start_export(tmp_path / "wuerfel.3mf", "3mf")
+        for _attempt in range(200):
+            if workers:
+                break
+            session.wait_for_idle(100)
+            QApplication.processEvents()
+        assert workers, "der Export kam nicht zum Schreiben"
+        worker = workers[0]
+        inputs = worker._inputs
+        assert inputs is not None
+        assert inputs.document is not session.project.document, "ein fester Stand"
+        assert inputs.bodies() == StoredInputs(session.project.document).bodies()
+        assert set(inputs.bodies()) == set(session.last_result.scene.objects)
+        monkeypatch.setattr(worker, "_assembly", lambda: ([tmp_path / "wuerfel.3mf"], []))
+        offered = []
+        worker.usageReady.connect(offered.append)
+        worker.work()
+        assert offered and offered[0].former_fingerprints, "Abdruck aus den Eingängen"
+        assert worker.after_check([])._inputs is inputs
+    finally:
+        monkeypatch.setattr(window, "_may_discard", lambda: True)
+        window.close()
+
+
+@pytest.mark.parametrize("mode", ["open", "slice"])
+def test_plate_outputs_name_the_print_by_its_stored_inputs(qt_app, tmp_path, monkeypatch, mode):
+    """Anschluss (RM-706): Auch die Übergabe an den Slicer bucht mit den Eingängen."""
+    from app.core.filament_usage import StoredInputs
+    from app.core.scene.project import new_project
+
+    profile = profiles.make_profile()
+    objects = (body("first", 0), body("second", 1))
+    program, flavour = (
+        (tmp_path / "prusa-slicer.exe", "prusa")
+        if mode == "open"
+        else (tmp_path / "orca-slicer.exe", "orca")
+    )
+    job = printing._PlateJob(
+        objects,
+        (0, 1),
+        tmp_path,
+        "Projekt",
+        handover.SlicerSetup(program, flavour),
+        print_settings.resolve(profile),
+        profile,
+        {},
+        inputs=StoredInputs(new_project().document),
+    )
+    monkeypatch.setattr(
+        printing,
+        "_prepare_plate",
+        lambda _job, plate: printing.PlateRun(
+            plate, tmp_path / f"{plate}.3mf", slots=tuple(objects[plate].material_slots)
+        ),
+    )
+    monkeypatch.setattr(
+        handover,
+        "open_in_slicer",
+        lambda path, *_args, **_kwargs: handover.SliceOutcome(path, GcodeMetrics()),
+    )
+    monkeypatch.setattr(
+        handover,
+        "slice_model",
+        lambda path, *_args, **_kwargs: handover.SliceOutcome(
+            path, GcodeMetrics(filament_grams_by_tool=(42.0,))
+        ),
+    )
+    worker = (
+        printing._OpenInSlicerWorker(job)
+        if mode == "open"
+        else printing._PrepareAndSliceWorker(job)
+    )
+    offered = []
+    worker.usageReady.connect(offered.append)
+    worker.work()
+    assert [one.plate for one in offered] == [0, 1]
+    assert all(one.former_fingerprints for one in offered)
