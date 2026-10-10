@@ -2973,6 +2973,7 @@ def _layer_heights(
     unter organischen Bäumen und eine Platte mit Reinigungsturm, der gleiche
     Schichten für alle Teile verlangt (``Print::validate``).
     """
+    from app.core.export import manufacturer
     from app.core.knowledge import profiles as profile_table
     from app.core.slice import fine_layers
 
@@ -3019,11 +3020,20 @@ def _layer_heights(
         wall, _angle = profile_table.analysis_limits(
             profile_table.for_process(profile, own, effective=True), entry
         )
+        # Raster wie gedruckt: Auf einem Herstellerprofil schreibt die Übergabe
+        # nur die Abweichung, und was nicht abweicht, nimmt der Slicer aus dem
+        # Profil. Stand in der Kurve eine andere erste Schicht als dort, verwarf
+        # die Orca-Familie sie still (0,25 gegen 0,2 am Neptune 4, RM-586).
+        printed = (
+            manufacturer.effective(own, manufacturer.base_settings(profile, own.quality, setup))
+            if setup is not None and setup.flavour in ("orca", "prusa")
+            else own
+        )
         curve = fine_layers.profile_for(
             exported[entry.id],
-            own.layers.layer_height,
-            own.layers.fine_layer_height,
-            None if own.adhesion.kind == "raft" else own.layers.first_layer_height,
+            printed.layers.layer_height,
+            printed.layers.fine_layer_height,
+            None if printed.adhesion.kind == "raft" else printed.layers.first_layer_height,
             wall / 2.0,
             cancelled=cancelled,
         )
