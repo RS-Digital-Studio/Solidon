@@ -2285,12 +2285,18 @@ def _shaft_step(
                 way.middles.append((z, *middle))
             way.middles = [entry for entry in way.middles if entry[0] > z - SHAFT_SLOPE_TURN]
             rise = min(math.hypot(sum_x, sum_y) / SHAFT_SLOPE_SPAN, slope)
+            axis_x, axis_y = sum_x, sum_y
             if len(way.middles) > 1:
                 first, last = way.middles[0], way.middles[-1]
-                axis_x, axis_y = last[1] - first[1], last[2] - first[2]
-                rise = min(rise, math.hypot(axis_x, axis_y) / (last[0] - first[0]))
-            else:
-                axis_x, axis_y = sum_x, sum_y
+                mid_x, mid_y = last[1] - first[1], last[2] - first[2]
+                along = math.hypot(mid_x, mid_y) / (last[0] - first[0])
+                # Richtung und Neigung aus derselben Schätzung: Ist ein Schlitz
+                # schräg zu seiner schmalen Seite geneigt, schiebt die Wand
+                # flacher, als die Mitte wandert, und eine Ellipse entlang der
+                # Mitte war quer zur Wand zu schmal (29 mm offen, Nachprüfung
+                # RM-629, Fund B).
+                if along < rise:
+                    rise, axis_x, axis_y = along, mid_x, mid_y
             lean = math.cos(math.atan(rise))
             back = radius * (1.0 / lean - 1.0)
             if back > WIDTH_SIMPLIFY:

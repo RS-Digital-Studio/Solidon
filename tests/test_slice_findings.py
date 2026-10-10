@@ -1582,6 +1582,60 @@ def test_each_branch_of_a_forked_shaft_counts_with_its_width_across_the_axis(
 
 
 @pytest.mark.parametrize(
+    ("width", "layer", "open_"), [(29.0, 0.5, False), (29.0, 0.2, False), (31.0, 0.5, True)]
+)
+def test_a_slit_tilted_aslant_to_its_narrow_side_counts_with_its_width_across_the_axis(
+    width: float, layer: float, open_: bool
+) -> None:
+    """Ein Schlitz mit runden Enden, quer zur Achse ``width`` weit und 60 mm
+    lang, um 45° in x geneigt; seine schmale Seite liegt 45° gegen die
+    Neigungsrichtung. Die Wand schiebt dann flacher, als die Mitte wandert;
+    kam die Neigung aus dem Schub und die Richtung aus der Mitte, war die
+    Ellipse quer zur Wand zu schmal, und 29 mm waren offen (Nachprüfung
+    RM-629, Fund B). Synthetisch: eine Platte von z = 10 bis 30."""
+    from app.core.slice.analysis import _open_above, _shafts_pass, _sky_above, _sky_window
+
+    tilt, turn = math.radians(45.0), math.radians(45.0)
+    # Schmale Achse u, lange Achse v, Achse a — erst um ``turn`` gedreht,
+    # dann um die y-Achse geneigt.
+    narrow = np.array([math.cos(turn), math.sin(turn), 0.0])
+    long_ = np.array([-math.sin(turn), math.cos(turn), 0.0])
+    lean = np.array(
+        [
+            [math.cos(tilt), 0.0, math.sin(tilt)],
+            [0.0, 1.0, 0.0],
+            [-math.sin(tilt), 0.0, math.cos(tilt)],
+        ]
+    )
+    narrow, long_, axis = lean @ narrow, lean @ long_, lean @ np.array([0.0, 0.0, 1.0])
+    half, straight = width / 2.0, 30.0 - width / 2.0
+    ends = [
+        (half * math.cos(t), (straight if t < math.pi else -straight) + half * math.sin(t))
+        for t in (math.pi * k / 64 for k in range(129))
+    ]
+    profile = np.array(ends)
+    heights = [layer / 2.0 + layer * index for index in range(math.ceil(42.0 / layer))]
+    start = next(index for index, z in enumerate(heights) if z > 2.0)
+    plate = box(-150.0, -150.0, 150.0, 150.0)
+
+    def shade_at(index: int) -> BaseGeometry:
+        z = heights[index]
+        if not 10.0 <= z <= 30.0:
+            return ShapelyPolygon()
+        centre = np.array([0.0, 0.0, 10.0]) + (z - 10.0) / axis[2] * axis
+        points = centre + profile[:, :1] * narrow + profile[:, 1:] * long_
+        flat = points + ((z - points[:, 2]) / axis[2])[:, None] * axis
+        return plate.difference(ShapelyPolygon(flat[:, :2]))
+
+    column = box(-2.0, -2.0, 2.0, 2.0)
+    sky = _sky_above(_sky_window(column, LINE), [start], shade_at, len(heights))[start]
+
+    assert not _open_above(column, ShapelyPolygon(), sky, LINE), "senkrecht kein Schacht"
+    found = _shafts_pass(column, {start: ShapelyPolygon()}, shade_at, heights, LINE)
+    assert found == {start: open_}
+
+
+@pytest.mark.parametrize(
     ("lean", "gap", "open_"),
     [(0.0, 2.0, False), (0.57, 2.0, False), (2.9, 2.0, False), (0.0, 0.3, True), (2.9, 0.3, True)],
 )
