@@ -19,6 +19,7 @@ nicht getroffen hat.
 
 from __future__ import annotations
 
+import re
 from collections import Counter
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import KW_ONLY, dataclass, replace
@@ -4085,21 +4086,34 @@ class PrintSettingsDialog(QDialog):
         wanted = flatten(term).strip()
         if not wanted:
             return []
-        hits = []
-        for field in FIELDS:
-            haystack = flatten(
-                " ".join(
-                    (
-                        str(field.title),
-                        str(field.note),
-                        group_title(field.group),
-                        *keys_for(field.path),
+        # **Wort für Wort** (RM-589): Die Slicer nennen dieselbe Einstellung
+        # je Programm etwas anders — „Compensación de Pata de elefante“ hier,
+        # „Compensación del pie de elefante“ dort. Ein Treffer braucht jedes
+        # Wort irgendwo in der Zeile, nicht den ganzen Ausdruck am Stück.
+        words = [word for word in re.split(r"[^0-9a-z]+", wanted) if word]
+        stacks = [
+            (
+                field.path,
+                flatten(
+                    " ".join(
+                        (
+                            str(field.title),
+                            str(field.note),
+                            str(field.search_words),
+                            group_title(field.group),
+                            *keys_for(field.path),
+                        )
                     )
-                )
+                ),
             )
-            if wanted in haystack:
-                hits.append(field.path)
-        return hits
+            for field in FIELDS
+        ]
+        # Steht der Ausdruck am Stück irgendwo, gilt nur das: Ein Titel findet
+        # seine Zeile und nicht jede, deren Satz dieselben Wörter streut.
+        whole = [path for path, haystack in stacks if wanted in haystack]
+        if whole or not words:
+            return whole
+        return [path for path, haystack in stacks if all(word in haystack for word in words)]
 
     def highlighted(self) -> str:
         """Welche Zeile gerade hervorgehoben ist — leer, wenn keine."""

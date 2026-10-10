@@ -62,6 +62,12 @@ class Field:
     Alle sechsundfünfzig tragen einen: Ein Dialog, in dem die Hälfte der Felder
     einen Tooltip hat, lehrt niemanden, dass es Tooltips gibt (Konsistenz vor
     Vollständigkeit). ``tests/test_print_settings_ui.py`` hält das fest."""
+    search_words: str | TranslatableText = ""
+    """Weitere Wörter, unter denen die Suche des Dialogs die Zeile findet — nicht
+    angezeigt. Je Sprache, wie die übersetzten Slicer die Einstellung nennen:
+    „Elefantenfußkompensation“ im deutschen OrcaSlicer, „Compensazione zampa
+    d'elefante“ im italienischen (RM-589). Die englischen Schlüssel kommen aus
+    ``slicer_keys.keys_for``; der Satz unter ``note`` bliebe sonst kein Tooltip."""
 
 
 # **Eine Tabelle für Auswahlwerte, nicht zwei.** Hier stand eine eigene neben
@@ -156,6 +162,10 @@ FIELDS: tuple[Field, ...] = (
             "Wie weit der Slicer die erste Schicht je Seite einzieht, gegen den Elefantenfuß "
             "(Elephant foot compensation). Zieht das Modell den Fuß schon ein, schlägt Solidon "
             "für dieses Teil null vor."
+        ),
+        search_words=_(
+            "Elefantenfußkompensation, Elephant foot compensation, Horizontale Erweiterung "
+            "erste Schicht, Initial Layer Horizontal Expansion"
         ),
     ),
     # --- Wände ---
@@ -259,6 +269,10 @@ FIELDS: tuple[Field, ...] = (
             "Wie weit der Slicer Löcher je Seite weitet, seine Lochkorrektur oder sein "
             "Lochausgleich (hole compensation). Trägt das Modell sein Spiel schon, schlägt Solidon "
             "für dieses Teil null vor."
+        ),
+        search_words=_(
+            "X-Y-Loch-Kompensation, X-Y hole compensation, Horizontalloch-Erweiterung, Hole "
+            "Horizontal Expansion"
         ),
     ),
     Field(

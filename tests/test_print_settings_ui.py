@@ -7726,31 +7726,109 @@ def test_the_search_finds_a_setting_by_its_words(qt_app: QApplication, session: 
     assert dialog.search_hits("gibtesnicht") == []
 
 
-@pytest.mark.parametrize("language", ["de", "en", "es", "fr", "it", "pt"])
+#: Wie die Slicer Einzug und Lochausgleich je Sprache nennen — gelesen aus den
+#: Katalogen von OrcaSlicer, Bambu Studio, PrusaSlicer und ElegooSlicer und aus
+#: Curas ``fdmprinter.def.json.po`` (Nachprüfung RM-589, N5).
+SLICER_WORDS: dict[str, dict[str, list[str]]] = {
+    "de": {
+        "layers.elephant_foot": [
+            "Elefantenfußkompensation",
+            "Horizontale Erweiterung erste Schicht",
+            "Elefantenfuß",
+        ],
+        "shell.hole_offset": [
+            "X-Y-Loch-Kompensation",
+            "Horizontalloch-Erweiterung",
+            "Lochkorrektur",
+            "Lochausgleich",
+        ],
+    },
+    "en": {
+        "layers.elephant_foot": [
+            "Elephant foot compensation",
+            "Initial Layer Horizontal Expansion",
+            "first_layer_size_compensation",
+        ],
+        "shell.hole_offset": ["X-Y hole compensation", "Hole Horizontal Expansion"],
+    },
+    "es": {
+        "layers.elephant_foot": [
+            "Compensación de Pata de elefante",
+            "Compensación del pie de elefante",
+            "Compensación del pata de elefante",
+            "Expansión horizontal de la capa inicial",
+        ],
+        "shell.hole_offset": [
+            "Compensación en X-Y de huecos",
+            "Compensación de huecos X-Y",
+            "Expansión horizontal de orificios",
+        ],
+    },
+    "fr": {
+        "layers.elephant_foot": [
+            "Compensation de l'effet patte d'éléphant",
+            "Expansion horizontale de la couche initiale",
+        ],
+        "shell.hole_offset": ["Compensation de trou X-Y", "Expansion horizontale des trous"],
+    },
+    "it": {
+        "layers.elephant_foot": [
+            "Compensazione zampa d'elefante",
+            "Espansione orizzontale dello strato iniziale",
+        ],
+        "shell.hole_offset": [
+            "Compensazione fori X-Y",
+            "Compensazione foro X-Y",
+            "Espansione orizzontale dei fori",
+        ],
+    },
+    "pt": {
+        "layers.elephant_foot": [
+            "Compensação de pé de elefante",
+            "Compensação do pé de elefante",
+            "Compensação do pé do elefante",
+            "Expansão Horizontal da Camada Inicial",
+        ],
+        "shell.hole_offset": [
+            "Compensação de furos XY",
+            "Compensação de furo X",
+            "Compensação XY de furos",
+            "Expansão Horizontal do Furo",
+        ],
+    },
+}
+
+
+@pytest.mark.parametrize("language", sorted(SLICER_WORDS))
 def test_the_search_finds_foot_and_holes_by_the_slicers_words(
     qt_app: QApplication, session: Session, language: str
 ) -> None:
-    """Review RM-589, L3: Jeder Slicer nennt die Einstellung „Elephant foot
-    compensation“, der Kalibrierdialog „Lochkorrektur“. Die Zeilen heißen
-    „Erste Schicht einziehen“ und „Löcher weiten“ und waren unter keinem der
-    Wörter zu finden, mit denen ein Kunde sucht."""
+    """Review RM-589, L3 und nach N5: Jeder Slicer nennt die Einstellung in
+    seiner Sprache anders, der Kalibrierdialog „Lochkorrektur“. Die Zeilen
+    heißen „Erste Schicht einziehen“ und „Löcher weiten“ und waren unter
+    keinem der Wörter der übersetzten Slicer zu finden. Gesucht wird Wort für
+    Wort; die englischen Wörter gelten in jeder Sprache."""
+    from app.core.export.slicer_keys import keys_for
     from app.i18n import get_language, set_language
+    from app.i18n.catalog import install_language
 
     dialog = PrintSettingsDialog(session, UiSettings())
     before = get_language()
-    terms = {
-        "layers.elephant_foot": ["Elephant foot compensation", "elephant foot"],
-        "shell.hole_offset": ["hole compensation"],
-    }
-    if language == "de":
-        terms["layers.elephant_foot"].append("Elefantenfuß")
-        terms["shell.hole_offset"] += ["Lochkorrektur", "Lochausgleich"]
+    terms = {path: list(words) for path, words in SLICER_WORDS[language].items()}
+    terms["layers.elephant_foot"] += ["Elephant foot compensation", "elephant foot"]
+    terms["shell.hole_offset"].append("hole compensation")
     try:
+        install_language(language)
         set_language(language)
         for path, words in terms.items():
             for word in words:
                 assert path in dialog.search_hits(word), (language, word)
+        assert dialog.search_hits("Compensazione gibtesnicht") == []
+        # SuperSlicer nennt den Einzug unter eigenem Namen (``PROGRAM_KEYS``).
+        assert "first_layer_size_compensation" in keys_for("layers.elephant_foot")
+        assert "hole_size_compensation" in keys_for("shell.hole_offset")
     finally:
+        install_language(before)
         set_language(before)
         dialog.deleteLater()
 

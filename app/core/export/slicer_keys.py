@@ -1035,6 +1035,15 @@ def keys_for(path: str) -> tuple[str, ...]:
     # Was als Geometrie reist, hat keinen Wertschlüssel, aber einen Namen im
     # Slicer (:data:`GEOMETRY_KEYS`).
     seen += [key for key in GEOMETRY_KEYS.get(path, ()) if key not in seen]
+    # Ein Programm, das den Schlüssel seiner Familie anders nennt
+    # (:data:`PROGRAM_KEYS`, SuperSlicers ``first_layer_size_compensation``),
+    # zählt mit seinem eigenen Namen.
+    seen += [
+        native
+        for renamed in PROGRAM_KEYS.values()
+        for key, native in renamed.items()
+        if key in seen and native not in seen
+    ]
     return tuple(seen)
 
 
