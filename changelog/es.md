@@ -55,6 +55,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - En la pestaña *Selección*, el campo de filamento solo asigna con un clic o Intro. Las flechas y la escritura solo recorren la lista, y la rueda del ratón desplaza la pestaña.
 - En las versiones traducidas, *Filamento nuevo* ya no se desplaza de lado cuando la ventana es más baja que su contenido.
 - Los modelos grandes se cargan notablemente más rápido y necesitan menos memoria, también con un historial largo y en equipos con 8 GB.
+- Un proyecto guardado con muchos pasos sobre un modelo grande se abre con mucha menos memoria.
 - Incluso en un historial largo, un paso nuevo apenas tarda más en calcularse que el primero.
 - En modelos con miles de características, mover y otros pasos que no cambian la forma terminan hasta el doble de rápido.
 - Al volver a abrir un proyecto, el informe de comprobación sigue indicando a qué hueco libre fue un modelo insertado.
