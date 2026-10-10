@@ -31,6 +31,7 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-10 | [RM-588: Figuren tragen die Naht hinten, und große Oberseiten werden gebügelt (10.10.2026)](#rm-588-figuren-tragen-die-naht-hinten-und-große-oberseiten-werden-gebügelt-10102026) |
 | 2026-10-10 | [RM-586: Feine Schichten, wo das Modell feine Formen hat (10.10.2026)](#rm-586-feine-schichten-wo-das-modell-feine-formen-hat-10102026) |
 | 2026-10-09 | [RM-587: Lange Brücken und steile Überhänge drucken sauber (09.10.2026)](#rm-587-lange-brücken-und-steile-überhänge-drucken-sauber-09102026) |
 | 2026-10-10 | [RM-706: Der Abdruck einer Buchung hängt an den gespeicherten Eingängen (10.10.2026)](#rm-706-der-abdruck-einer-buchung-hängt-an-den-gespeicherten-eingängen-10102026) |
@@ -47853,3 +47854,43 @@ Schicht ab R 9,6 immer, unter R 8,3 nie; Changelog „flache Kuppen und Schräge
 „cuadrícula“. **Nachprüfung (`review_rm586_nach.md`):** N1 it nennt die Zeit, N2 die
 gemessene Grenze, N3 Test über mehrere Blöcke, N4 Unterlagen, N5 Test des Druckdialogs.
 Bericht: `.claude/.state/drache-2026-10-08/berichte-2026-10-10/rm586b.md`.
+
+## RM-588: Figuren tragen die Naht hinten, und große Oberseiten werden gebügelt (10.10.2026)
+
+<a id="rm-588-figuren-tragen-die-naht-hinten-und-große-oberseiten-werden-gebügelt-10102026"></a>
+<a id="rm-588"></a>
+
+**RM-588 — Die Naht liegt hinten, und große Oberseiten werden gebügelt.**
+  Die Naht wählte der Hersteller, gebügelt wurde nur bei einer bündigen Passung. Eine Figur
+  zeigt die Naht als Linie auf der Schauseite, eine große flache Oberseite ihre Bahnen
+  (Recherche Nr. 14, 15). Abnahme: Vorschläge mit Grund in allen Familien.
+
+**Abschluss:** Zwei Regeln im Rat, beide je Teil (`advise.PART_PATHS`). *Naht hinten*
+(`shell.seam_position = rear`, Grund „Die Naht zöge sonst eine Linie über die Schauseite.“)
+für Körper ab 10 mm Höhe, deren Außenkontur zu mindestens 70 % frei geformt ist
+(`analysis.free_form_share`, je Schnitt gemerkt), wo der Slicer die Naht selbst sucht. Neues
+Feld *Oberste Fläche bügeln* (`shell.ironing_topmost`, Grund „Bügeln glättet die große
+Oberseite und kostet Druckzeit.“) für eine letzte Schicht ab 400 mm² und der Hälfte des
+größten Querschnitts, nicht neben einer bündigen Passung. Übergabe: Orca-Familie
+`seam_position = back`, `ironing_type = topmost`; PrusaSlicer und SuperSlicer `rear`,
+`ironing = 1` mit `ironing_type = topmost`; Cura `z_seam_type = back`,
+`ironing_enabled` mit `ironing_only_highest_layer`; „jede Oberseite“ schließt die oberste
+ein (`handover._ironing_in_order`). Rücklesen aus den Herstellerketten samt Bügeltempo und
+-abstand (`Motion`), Druckzeit mit Bügelzug über die ganze Oberseite, um eine halbe Düse
+eingezogen.
+
+Belegt mit Herstellerprofil, Standard, PLA, Kerne gepinnt, in allen acht Programmen
+(ElegooSlicer, OrcaSlicer, Bambu Studio, Creality Print, Anycubic Slicer Next, PrusaSlicer,
+SuperSlicer, Cura). Je Teil: zwei Kegelstümpfe, nur einer mit Rat — dort Naht in 100 % der
+Schichten hinten und Bügelbahn nur in der obersten Schicht, am anderen keine. Figuren, Anteil
+der Außenschleifen mit Naht im hintersten Fünftel, Profil → Rat: Spider-Man 32–43 % → 90–99 % in den Programmen der Orca-Familie und
+bei Prusa, in Cura 62 → 77 %, vorn je 14–41 % → 0–3 %; Drache in ElegooSlicer 21 → 89 %,
+PrusaSlicer 2 → 100 % (vorher 76 % vorn), Cura 59 → 93 %. Bügeln am
+Pilz: der Slicer bügelt nur die oberste Schicht; Bügelzeit +29 bis +68 % der Druckzeit je
+Programm, Solidons Schätzung trifft sie auf 0 bis 1 %; am Besenhalter mit schmaler Oberseite (+4 bis +16 %) auf 0,99 bis 1,04. Der Befund
+unterwegs (Schätzung bügelte nur innerhalb der Wände, am Besenhalter 0,62 der Bügelzeit) ist
+behoben. Tests in `test_advise.py`, `test_print_time.py`, `test_print_settings.py`,
+`test_manufacturer.py`, `test_slicer_part_settings.py`, Slicertest
+`test_ironing_the_topmost_face_stays_with_that_part` (6 von 6 grün); der RM-587-Test der
+Wandrichtung liest jetzt Orcas Bögen mit. Messwerte und Begründung in
+`konzepte/begruendungen/regel-druckrat.md`. Umgesetzt von Claude (Worktree `F:/sl-naht`).

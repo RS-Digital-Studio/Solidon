@@ -1055,3 +1055,66 @@ und `hole_size_compensation`, beide als Materialzugabe mit umgekehrtem
 Vorzeichen (`slicer_keys.PROGRAM_KEYS`, `PROGRAM_NEGATED`); seine Bündel
 setzen −0,05 bis −0,3 mm Einzug und −0,03 bis −0,05 mm Lochausgleich, die die
 Grundlage zurückliest. PrusaSlicer kennt keinen Lochausgleich.
+
+**Naht hinten an Figuren, oberste Fläche bügeln (10.10.2026, RM-588).** Die
+Herstellerprofile lassen den Slicer die Naht suchen („aligned“, „nearest“): an
+einer Ecke, die sich in jeder Schicht wiederfindet. Eine Figur hat keine; die
+Naht springt, und ein Siebtel bis drei Viertel der Schleifen beginnt vorn
+(Recherche Nr. 14). Gemessen je geschlossener Außenschleife im G-Code: wo in
+ihrer eigenen Tiefe die Naht liegt, „hinten“ im hintersten Fünftel, „vorn“ im
+vordersten; Herstellerprofil, Standard, PLA, Rat übernommen wie im Dialog.
+
+| Programm | Spider-Man hinten / vorn: Profil → Rat | Drache hinten / vorn: Profil → Rat |
+|---|---|---|
+| ElegooSlicer | 32 / 39 % → 90 / 2 % | 21 / 31 % → 89 / 0 % |
+| OrcaSlicer | 40 / 36 % → 90 / 2 % | — |
+| Bambu Studio | 43 / 34 % → 93 / 0 % | — |
+| Creality Print | 37 / 39 % → 90 / 0 % | — |
+| Anycubic Slicer Next | 37 / 30 % → 93 / 3 % | — |
+| PrusaSlicer | 37 / 41 % → 99 / 0 % | 2 / 76 % → 100 / 0 % |
+| SuperSlicer | 37 / 34 % → 90 / 0 % | — |
+| Cura | 62 / 14 % → 77 / 1 % | 59 / 14 % → 93 / 0 % |
+
+Spider-Man ist die Voronoi-Figur aus `F:\3D Dateien` (10 cm, 886 000 Dreiecke),
+der Drache Roberts `Drache.p3d` (2,95 Mio.). Cura sucht die Naht schon im
+Profil oft hinten. Die Naht hinten ändert die Druckzeit um höchstens 0,9 %.
+
+Figur heißt: mindestens `FIGURE_SHARE` der Außenkontur frei geformt
+(`analysis.free_form_share`) — gebogen, ohne Gerade ab 5 mm, in einer Schicht,
+die sich gegen die darunter ändert. Über `F:\3D Dateien` liegen darüber die
+Figuren (0,989–0,999), Bäume, Minigolfbahnen und der Siebhalter, alle ohne Kante
+für die Naht; darunter Kästen, Trays, Halter und Würfel (0,01–0,48). Einzige
+Ausnahme mit Kanten ist die Kumiko-Schale (0,78), ein Gitter aus Stegen unter
+5 mm. Gemerkt je Schnitt, denn der Dialog fragt bei jedem Feld: am Drachen
+0,5 s CPU-Zeit beim ersten Fragen, danach nichts.
+
+Bügeln lohnt, wo man die Bahnen sieht: auf einer großen flachen Oberseite
+(Recherche Nr. 15). Solidon rät nur die oberste Fläche, die letzte Schicht, ab
+400 mm² und der Hälfte des größten Querschnitts — sonst ist oben ein Griff oder
+eine Kante (Kasten mit Knauf, Becher, Figur: nichts). Die übrigen Oberseiten
+liegen im Teil, ihr Bügeln kostete Zeit, die niemand sieht. Neben einer
+bündigen Passung bleibt es bei „jede Oberseite“, die die oberste einschließt.
+Angekommen in allen acht Programmen als Objektwert, nur am Teil mit Rat
+(Kegelstümpfe, `test_ironing_the_topmost_face_stays_with_that_part` in sechs).
+
+Die Druckzeit bügelt die ganze Oberseite samt Wänden, um eine halbe Düse
+eingezogen, wie `Layer::make_ironing` in PrusaSlicer und Orca — am Pilz
+10 454 mm Bahn bei 0,15 mm Abstand (ElegooSlicer) auf 1 600 − 0,2 · 160 mm².
+Nur innerhalb der Wände gerechnet fehlten am schmalen Besenhalter 38 bis 57 %
+der Bügelzeit. Bügelzeit = Datei mit minus ohne Rat, gegen Solidons Schätzung mit
+minus ohne:
+
+| Programm | Pilz: Slicer / Solidon | Besenhalter: Slicer / Solidon |
+|---|---|---|
+| ElegooSlicer | +350 s (+40 %) / +352 s | +294 s (+7 %) / +305 s |
+| OrcaSlicer | +352 s (+40 %) / +352 s | +300 s (+7 %) / +305 s |
+| Bambu Studio | +347 s (+40 %) / +352 s | +295 s (+9 %) / +305 s |
+| Creality Print | +348 s (+30 %) / +350 s | +289 s (+9 %) / +296 s |
+| Anycubic Slicer Next | +1 044 s (+65 %) / +1 048 s | +864 s (+13 %) / +873 s |
+| PrusaSlicer | +1 044 s (+68 %) / +1 049 s | +864 s (+16 %) / +878 s |
+| SuperSlicer | +789 s (+29 %) / +790 s | +683 s (+5 %) / +675 s |
+| Cura | +794 s (+31 %) / +798 s | +701 s (+4 %) / +719 s |
+
+Alle acht bügeln nur die oberste Schicht. Der Pilz ist `mushroom.stl` aus
+`F:\3D Dateien` (Oberseite 40 × 40 mm), der Besenhalter
+`broomholdervcd_d35mm.stl` (schmale Oberseite, 1 456 mm²).
