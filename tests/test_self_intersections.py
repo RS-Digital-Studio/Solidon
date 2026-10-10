@@ -871,7 +871,36 @@ def test_the_plan_is_chosen_as_with_ordered_entries() -> None:
     assert intersections._plan(surface.low, surface.high) == _plan_before(surface.low, surface.high)
 
 
-def test_surface_and_entries_hold_no_spare_copy_at_their_peak() -> None:
+def test_slivers_fall_by_the_height_over_their_longest_edge_wherever_it_lies() -> None:
+    """Ein Splitter fällt aus der Suche, wenn seine Höhe über der längsten Kante
+    unter ``EPS_GEOM`` liegt — gleich, welche der drei Kanten die längste ist.
+
+    ``_surface`` rechnet die längste Kante Kante für Kante (RM-568); fehlte eine,
+    hielte es eine Nadel über dieser Kante für doppelt so hoch, und ein Splitter,
+    der fallen muss, käme in die Suche. Drei Nadeln von 2 mm, deren lange Kante
+    je an einer anderen Stelle liegt (``t1 − t0``, ``t2 − t1``, ``t0 − t2``),
+    jede einmal 0,6 und einmal 1,4 ``EPS_GEOM`` hoch: Die niedrigen fallen, die
+    hohen bleiben.
+    """
+    length = 2.0
+    needles = []
+    for low_height in (True, False):
+        height = (0.6 if low_height else 1.4) * EPS_GEOM
+        base = [[0.0, 0.0, 0.0], [length, 0.0, 0.0], [0.5 * length, height, 0.0]]
+        for long_edge in range(3):
+            # Die Ecken so umgestellt, dass die Grundlinie die Kante long_edge ist.
+            corners = [base[(corner - long_edge) % 3] for corner in range(3)]
+            needles.append(np.asarray(corners) + np.array([10.0 * len(needles), 0.0, 0.0]))
+    triangles = np.asarray(needles)
+    surface = intersections._surface(triangles.reshape(-1, 3), np.arange(18).reshape(-1, 3))
+
+    assert surface is not None
+    assert surface.kept.tolist() == [3, 4, 5], "die niedrigen fallen, die hohen bleiben"
+
+
+def test_surface_and_entries_hold_no_spare_copy_at_their_peak(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """Die Spitze der Suche wächst nicht mit Kopien, die keiner mehr braucht (RM-568).
 
     An sehr großen Netzen setzen ``_surface`` und ``_entries`` die Spitze der
@@ -886,8 +915,16 @@ def test_surface_and_entries_hold_no_spare_copy_at_their_peak() -> None:
     werden 23 — Ecken, Hülle, Normale, Fläche, Ecknummern und Nummer —, und
     solange die behaltenen entstehen, liegen Normale, Fläche, längste Kante und
     Höhe aller Dreiecke daneben: 29). Der Stand davor brauchte 11 je Eintrag
-    und 37 je Dreieck. Die Felder Spielraum fangen fremde Anlagen anderer
-    Fäden während der Messung ab.
+    und 37 je Dreieck.
+
+    Dazu die Blockschleife allein, mit den fertigen Einträgen und kleinen
+    Blöcken (``SWEEP_PAIRS`` 20 000, über hundert Blöcke): Sie hält je Block nur
+    die Seitenfelder des Fensters bis zum letzten Partner, über den Einträgen
+    höchstens drei Felder je Eintrag (gemessen 1,7 — die Summen der Paare und die
+    Felder eines Blocks). Für die ganze Suche gehalten wie mit L2 waren es 7,5,
+    mit einem Fenster bis zum Ende 6,2; an ``dense_1m`` setzten diese Felder die
+    Spitze. Die Felder Spielraum fangen fremde Anlagen anderer Fäden während der
+    Messung ab.
     """
     import tracemalloc
 
@@ -907,14 +944,25 @@ def test_surface_and_entries_hold_no_spare_copy_at_their_peak() -> None:
         tracemalloc.reset_peak()
         entries = intersections._entries(surface.low, surface.high, plan)
         _held, entries_peak = tracemalloc.get_traced_memory()
+        assert entries is not None
+        monkeypatch.setattr(intersections, "_entries", lambda _low, _high, _plan: entries)
+        monkeypatch.setattr(intersections, "SWEEP_PAIRS", 20_000)
+        before_loop, _ = tracemalloc.get_traced_memory()
+        tracemalloc.reset_peak()
+        blocks = sum(
+            1 for _block in intersections._candidates(surface, None, intersections._Search(), plan)
+        )
+        _held, loop_peak = tracemalloc.get_traced_memory()
     finally:
         if not tracing:
             tracemalloc.stop()
-    assert entries is not None and plan.bins is not None, "Voraussetzung: in Scheiben gesucht"
+    assert plan.bins is not None, "Voraussetzung: in Scheiben gesucht"
     count = len(entries.triangle)
     assert count > 1.5 * len(faces), "Voraussetzung: Dreiecke liegen in mehreren Scheiben"
+    assert blocks > 100, f"Voraussetzung: viele kleine Blöcke ({blocks})"
     assert (entries_peak - base) / count <= 8 * 8, (entries_peak - base) / count
     assert (surface_peak - start) / len(faces) <= 33 * 8, (surface_peak - start) / len(faces)
+    assert (loop_peak - before_loop) / count <= 3 * 8, (loop_peak - before_loop) / count
 
 
 def test_a_long_helix_is_searched_in_slabs() -> None:
