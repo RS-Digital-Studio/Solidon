@@ -1772,17 +1772,19 @@ class _AdviceWorker(Worker):
             measured.append((body, mesh, processes, result))
             ruled.append(rules(body, mesh, processes, result, None))
         plate_advice = assembled()
-        if self.flavour == "cura" and ruled:
+        if self.flavour == "cura" and ruled and self.rules_wanted:
             # **Cura druckt unter jedem gestützten Teil die Art der Platte**
             # (``support_structure``): Wird der Baum des Drachen neben der
             # flachen Decke des Pilzes zu Gitter, fragen Abstand, Spitzenluft
             # und Baumwände mit Gitter, wie der Export (Nachtrag RM-584). Neu
-            # gefragt wird nur ein Körper, dessen Art sich damit ändert.
+            # gefragt wird nur ein Körper, den Cura damit anders druckt —
+            # „automatisch“ und Hybrid fragen unter Gitter wie Gitter.
             plate_style = advise.printed_style(self.settings, plate_advice, self.declined)
             changed = False
             for index, measure in enumerate(measured):
                 if any(
-                    advise.on_the_plate(style, plate_style, self.flavour) != style
+                    advise.on_the_plate(style, plate_style, self.flavour)
+                    != advise.on_the_plate(style, style, self.flavour)
                     for style in ruled[index].printed
                 ):
                     self.cancelled.raise_if_cancelled()

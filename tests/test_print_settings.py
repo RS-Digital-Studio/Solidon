@@ -8541,6 +8541,64 @@ def test_a_tree_cura_prints_as_grid_asks_its_gap_with_grid(tmp_path: Path) -> No
     assert part_gap(None) == [pytest.approx(0.4)], "ohne Platte fragt er mit seinem Baum"
 
 
+@pytest.mark.parametrize(
+    ("case", "asked"),
+    [
+        # Der Stachelbaum wird neben dem Pilz zu Gitter: einmal neu gefragt.
+        ("tree to grid", 1),
+        # „Automatisch“ druckt Cura wie Gitter: nichts neu zu fragen.
+        ("auto", 0),
+        # Ist der Rat überholt (``measure_only``), fragt niemand mehr neu.
+        ("overtaken", 0),
+    ],
+)
+def test_cura_asks_again_only_where_the_plate_changes_the_print(
+    monkeypatch: pytest.MonkeyPatch, case: str, asked: int
+) -> None:
+    """Die Neufrage mit der Art der Platte kostet am Drachen 3,5 s CPU; sie läuft
+    nur für Körper, die Cura damit anders druckt, und nicht mehr, wenn der Auftrag
+    schon überholt ist (Review des Nachtrags RM-584, L4)."""
+    import sys
+
+    from app.core.types import SceneObject
+    from app.ui.print_settings_dialog import _AdviceWorker
+    from tests.helpers import brick, on_bed
+
+    calls: list[object] = []
+    original = advise.advise
+
+    def counted(*args: Any, **kwargs: Any) -> Any:
+        # Nur die Regeln des Arbeiters; Zeile und Feld fragen je Teil über den Export.
+        if kwargs.get("plate_style") is not None and sys._getframe(1).f_code.co_name == "rules":
+            calls.append(kwargs["plate_style"])
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(advise, "advise", counted)
+    profile = profiles.make_profile("centauri-carbon-2", "pla")
+    settings = print_settings.resolve(profile)
+    declined: frozenset[str] = frozenset()
+    if case == "auto":
+        settings = print_settings.with_path(settings, "support.style", "auto")
+        declined = frozenset({"support.style"})
+    mushroom = on_bed(
+        brick(8.0, 8.0, 12.0, (0.0, 0.0, 6.0)), brick(40.0, 40.0, 2.0, (0.0, 0.0, 13.0))
+    )
+    bodies = (
+        SceneObject(id="obj_pilz", name="Pilz", mesh=mushroom),
+        _spiky("Stacheln", 70.0),
+        _standing_box("Klotz", (10.0, 10.0, 10.0)),
+    )
+    worker = _AdviceWorker(
+        bodies, settings, profile, None, {}, (), (), {}, flavour="cura", declined=declined
+    )
+    if case == "overtaken":
+        # Vor dem dritten Körper ändert der Dialog den Auftrag.
+        worker.progressed.connect(lambda index, _total, _name: index == 3 and worker.measure_only())
+    worker.work()
+
+    assert len(calls) == asked, calls
+
+
 @pytest.mark.parametrize("kind", ["auto", "skirt"])
 def test_without_a_slicer_the_dialog_advises_for_its_actual_export(
     tmp_path: Path, kind: str
