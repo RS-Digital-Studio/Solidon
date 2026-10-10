@@ -201,8 +201,8 @@ offenem Drucker. Übernommen wird auf Klick, nie von allein.
   frei (ohne Stützen, ohne Brückenstütze, als Kanaldecke), dicke Bahnen und
   `BRIDGE_FLOW` über `BRIDGE_FLOW_ENOUGH`; ein Rand spannt nicht, seine Weite
   ist die Kantenlänge. **Zusatzwände nur unter flachen Stücken ohne Stütze, die
-  an einer Seite hängen** (`analysis.cantilevers`; eine Decke, die ringsum auf
-  ihrem Außenring liegt, hängt nicht) und breiter sind als die
+  an einer Seite hängen** (`analysis.cantilevers`; hat eine Bahnenrichtung über
+  das Stück an beiden Enden Halt — Ring, U —, hängt es nicht) und breiter sind als die
   Wände — zwischen 45 Grad und der Stützgrenze, an beidseitig gelagerten
   Brücken und unter Deckeln ändert der Schalter in PrusaSlicer und OrcaSlicer
   nichts. **Steile Wände dort** bekommen bei `CURLING_MATERIALS` die Umkehr,

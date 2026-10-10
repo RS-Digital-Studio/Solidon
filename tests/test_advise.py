@@ -2795,6 +2795,46 @@ def test_a_ceiling_resting_on_a_closed_ring_is_no_cantilever(build) -> None:
     assert _advice_on(_shelf(3.0)).get("shell.overhang_walls") is True
 
 
+def _three_sided_lid() -> trimesh.Trimesh:
+    """Ein Kasten 30 × 30 × 14 mm mit Deckel, vorn offen: Die Decke liegt links, hinten
+    und rechts auf."""
+    shell = trimesh.creation.box((30.0, 30.0, 14.0))
+    shell.apply_translation((0.0, 0.0, 7.0))
+    cavity = trimesh.creation.box((26.0, 29.0, 10.0))
+    cavity.apply_translation((0.0, -1.5, 7.0))
+    return trimesh.boolean.difference([shell, cavity])
+
+
+def _corner_lid() -> trimesh.Trimesh:
+    """Boden, zwei Wände über Eck (links, hinten) und ein Deckel 30 × 30 mm: Die Decke
+    liegt an zwei Nachbarseiten auf."""
+    parts = []
+    for extents, centre in (
+        ((30.0, 30.0, 2.0), (0.0, 0.0, 1.0)),
+        ((2.0, 30.0, 12.0), (-14.0, 0.0, 6.0)),
+        ((30.0, 2.0, 12.0), (0.0, 14.0, 6.0)),
+        ((30.0, 30.0, 2.0), (0.0, 0.0, 13.0)),
+    ):
+        part = trimesh.creation.box(extents)
+        part.apply_translation(centre)
+        parts.append(part)
+    return trimesh.boolean.union(parts)
+
+
+def test_a_ceiling_on_three_sides_is_no_cantilever_but_one_on_two_is() -> None:
+    """Review RM-587, N1: Liegt eine Decke links, hinten und rechts auf, berührt sie ihre
+    Schicht an einem U — einer Linie —, und der Slicer spannt sie von Wand zu Wand.
+    PrusaSlicer 2.9.6 legt sie mit und ohne Zusatzwände gleich (Brückenbahn
+    3 588,7 mm). Auf zwei Nachbarseiten hat keine Bahnenrichtung an beiden Enden Halt,
+    und die Zusatzwände ersetzen die halbe Brückenbahn (3 590,6 → 1 795,3 mm)."""
+    free = frozenset({"support.style"})
+    assert "shell.overhang_walls" not in _advice_on(_three_sided_lid(), declined=free)
+    assert "shell.overhang_walls" not in _advice_on(_three_sided_lid())
+    assert _advice_on(_corner_lid(), declined=free).get("shell.overhang_walls") is True
+    assert _advice_on(_mushroom(), declined=free).get("shell.overhang_walls") is True
+    assert _advice_on(_shelf(3.0)).get("shell.overhang_walls") is True
+
+
 @pytest.mark.parametrize(
     "build",
     [_lid_box, _cup_upside_down, lambda: _rounded_bottom(2.0)],

@@ -2541,6 +2541,14 @@ def _supported_span(shape: ShapelyPolygon, supported: ShapelyPolygon) -> float:
     Winkel ist dieselbe Menge in einem Durchlauf da; je Bündel bleibt wie
     zuvor die Kante, die in der Kontur zuerst kommt.
     """
+    span = _anchored_span(shape, supported)
+    return _across(shape) if span is None else span
+
+
+def _anchored_span(shape: ShapelyPolygon, supported: ShapelyPolygon) -> float | None:
+    """Die kürzeste Bahnenrichtung, deren Bahnen über ``shape`` an beiden Enden in
+    ``supported`` Halt haben — oder ``None``, wenn keine Richtung das schafft
+    (:func:`_supported_span`). Höchstens die Diagonale der Hüllbox."""
     anchored = supported.buffer(EPS_GEOM)
     if anchored.covers(shape.boundary):
         return spanning_width(shape)
@@ -2553,7 +2561,7 @@ def _supported_span(shape: ShapelyPolygon, supported: ShapelyPolygon) -> float:
     lengths = np.linalg.norm(edges, axis=1)
     units = edges[lengths > EPS_GEOM] / lengths[lengths > EPS_GEOM, None]
     if not len(units):
-        return _across(shape)
+        return None
     # Kante und Normale, in Konturreihenfolge: erst die Kante, dann ihre Normale.
     candidates = np.empty((2 * len(units), 2), dtype=float)
     candidates[0::2] = units
@@ -2588,7 +2596,7 @@ def _supported_span(shape: ShapelyPolygon, supported: ShapelyPolygon) -> float:
     ]
     heads = np.concatenate([ring[:-1] for ring in rings])
     tails = np.concatenate([ring[1:] for ring in rings])
-    best = _across(shape)
+    best: float | None = None
     for direction in directions:
         normal = np.array([-direction[1], direction[0]])
         levels = np.unique(band_corners @ normal)
@@ -2614,7 +2622,7 @@ def _supported_span(shape: ShapelyPolygon, supported: ShapelyPolygon) -> float:
             ):
                 break
         else:
-            best = min(best, float(lengths.max()))
+            best = min(best if best is not None else _across(shape), float(lengths.max()))
     return best
 
 
@@ -3405,12 +3413,16 @@ def cantilevers(
     3-mm-Auskragung die Brückenbahnen und lassen eine beidseitig gelagerte
     36-mm-Brücke unverändert.
 
-    **Eine Decke, die ringsum aufliegt, hängt an keiner Seite** (Review RM-587,
-    M1): Der Deckel eines geschlossenen Kastens berührt seine Schicht an einer
-    einzigen Linie, dem ganzen Außenring; PrusaSlicer legt ihn mit und ohne
-    Zusatzwände gleich. Bleibt vom Außenring frei, was kürzer ist als ``gap``,
-    zählt er als umlaufend. Der Pilzhut berührt den Rest an seinem Innenring und
-    hängt nach außen — er bleibt einseitig.
+    **Und eine zusammenhängende Berührung hängt nur, wenn keine Bahnenrichtung
+    über das Stück an beiden Enden Halt hat** (:func:`_anchored_span`, Review
+    RM-587, M1 und N1). Der Deckel eines geschlossenen Kastens berührt seine
+    Schicht an einer einzigen Linie, dem ganzen Außenring; eine Decke auf drei
+    Seiten (Kasten, vorn offen) an einem U. Beide spannt der Slicer von Wand zu
+    Wand, und PrusaSlicer 2.9.6 legt sie mit und ohne Zusatzwände gleich
+    (U-Decke Brückenbahn 3 588,7 mm in beiden). Eine Decke auf zwei
+    Nachbarseiten (L) hat keine solche Richtung und bekommt die Zusatzwände
+    (Brückenbahn 3 590,6 → 1 795,3 mm); der Pilzhut berührt den Rest an seinem
+    Innenring, seine Bahnen enden außen in der Luft — beide bleiben einseitig.
     """
     found: set[tuple[int, int]] = set()
     shapes: dict[int, Any] = {}
@@ -3423,10 +3435,8 @@ def cantilevers(
         contact = outline.boundary.intersection(rest)
         if contact.is_empty:
             continue
-        if outline.exterior.difference(rest).length < gap:
-            continue
         joined = contact.buffer(gap / 2.0)
-        if len(getattr(joined, "geoms", [joined])) == 1:
+        if len(getattr(joined, "geoms", [joined])) == 1 and _anchored_span(outline, rest) is None:
             found.add((index, number))
     return frozenset(found)
 
