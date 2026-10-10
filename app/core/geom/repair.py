@@ -48,6 +48,7 @@ from app.core.geom.mesh import (
     remember_refined_units,
     signed_volume,
     stable_areas,
+    triangles_volume,
     triple_products,
     unique_edges,
     without_faces,
@@ -4569,11 +4570,15 @@ def _intersections_resolvable(mesh: MeshData, crossings: Crossings | None = None
         and _crossing_shape(mesh, crossings) == "self"
     ):
         return "self"
+    # **Je Teil nur das Volumen, ohne Kopie** (RM-698): Ist der Körper dicht
+    # und einheitlich gewickelt, ist es jedes Teil — die zwei Dreiecke an einer
+    # Kante sind Nachbarn und damit im selben Teil (``face_components``). Je
+    # Teil ein eigenes Netz zu bauen, rechnete Dichtheit und Wicklung noch
+    # einmal: am Spiderman 449 MB Spitze beim Einlesen. Das Volumen kommt aus
+    # denselben Dreiecken in derselben Folge wie an der Kopie, Bit für Bit.
+    triangles = np.asarray(mesh.raw.triangles, dtype=np.float64)
     for faces in face_components(mesh.raw):
-        piece = MeshData.of(
-            cast(trimesh.Trimesh, mesh.raw.submesh([faces], append=True, repair=False))
-        )
-        if not _has_volume(piece):
+        if triangles_volume(triangles[faces]) <= 0.0:
             return "cavity"
     return None
 

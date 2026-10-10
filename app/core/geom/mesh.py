@@ -1419,7 +1419,11 @@ def signed_volume(body: trimesh.Trimesh) -> float:
     Boolesches Ergebnis gilt und ob eine Füllung Dicke hat, fragen dieselbe
     Rechnung.
     """
-    triangles = np.asarray(body.triangles, dtype=np.float64)
+    return triangles_volume(np.asarray(body.triangles, dtype=np.float64))
+
+
+def triangles_volume(triangles: np.ndarray) -> float:
+    """:func:`signed_volume` an Dreiecken ``(n, 3, 3)``, etwa an einem Teil ohne Kopie."""
     if not len(triangles):
         return 0.0
     return math.fsum(triple_products(triangles - triangles[0, 0]).tolist()) / 6.0
