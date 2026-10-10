@@ -4204,6 +4204,26 @@ def test_a_detection_comes_back_from_the_disk_bit_for_bit(
     ) == sides
 
 
+def test_detections_spread_over_the_folders_by_their_print(tmp_path: Path) -> None:
+    """Abgelegte Erkennungen liegen nach den ersten Zeichen ihres Abdrucks verteilt (G3).
+
+    Mit ``detection-`` vorn landete jede im selben Unterordner ``de/``.
+    """
+    from app.core.perceive.features import StoredDetection
+
+    disk = DiskCache(codec=FakeCodec(), directory=tmp_path)
+    keys = [bytes([first]) + b"\x00" * 15 for first in (0x12, 0xAB, 0xF0)]
+    for key in keys:
+        disk.save_detection(key, StoredDetection({}, 0, 0, False))
+
+    assert sorted(path.parent.parent.name for path in tmp_path.rglob("detection.json")) == [
+        "12",
+        "ab",
+        "f0",
+    ]
+    assert all(disk.load_detection(key) is not None for key in keys)
+
+
 def test_a_detection_of_another_format_is_dropped_and_recognised_again(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

@@ -996,8 +996,12 @@ _DETECTION_FILE: Final = "detection.json"
 
 
 def _detection_name(key: bytes) -> str:
-    """Der Eintragsname einer Erkennung — neben den Operationsschlüsseln, nie gleich einem."""
-    return f"detection-{key.hex()}"
+    """Der Eintragsname einer Erkennung — neben den Operationsschlüsseln, nie gleich einem.
+
+    Der Abdruck vorn: ``DiskCache._folder`` legt nach den ersten zwei Zeichen
+    ab, und mit ``detection-`` vorn lag jede Erkennung im selben Unterordner.
+    """
+    return f"{key.hex()}-detection"
 
 
 def _exact_to_data(value: object) -> Any:

@@ -744,7 +744,7 @@ def _remembered_features_stay_out_of_it() -> None:
     # zeigen soll, fände sie schon fertig vor.
     from app.core.paths import results_cache_dir
 
-    for stored in results_cache_dir().glob("*/detection-*"):
+    for stored in results_cache_dir().glob("*/*-detection"):
         shutil.rmtree(stored, ignore_errors=True)
 
 
