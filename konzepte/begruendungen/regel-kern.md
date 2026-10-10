@@ -25,6 +25,27 @@ stammt:
 > Startschichten, und dieselbe Naht kostete auf vier Kernen eine andere
 > letzte Stelle als auf acht (RM-266, `analysis._above_material_shared`).
 
+Warum `Point.buffer` und `shapely.affinity.rotate` auf der Liste stehen: Ein
+Kreis aus `Point.buffer` und eine Drehung aus `shapely.affinity.rotate` nehmen
+die Winkelfunktionen der Plattform, und der Rauschtest sieht beides nicht.
+Warum keine Potenz `**`: Das `pow` der Plattform rundet nicht immer korrekt,
+und auch das sieht das Rauschen nicht.
+
+Warum der Skizzenlöser ausgenommen ist (RM-541): `least_squares` rechnet in
+scipy über SVD, `lstsq` und `lsmr`, und ein eigener Löser ohne BLAS wäre ein
+zweites Projekt. Gleich heißt dort deshalb nicht bitgleich, sondern dieselbe
+Lösbarkeit und dieselbe Lage bis `_TOL`, an jedem Ort und unter
+Rundungsrauschen. Das Paar, das eine Meldung nennt, ist meist, aber nicht
+immer dasselbe: In der Breitensonde der Nachprüfung wechselte es an 4 von 195
+unlösbaren Zufallsskizzen mit Ort oder Rauschen (Begründung der Skizzenkarte,
+„Welche zwei eine Meldung nennt“). Bauplan §11.2 verweist für die Plattform
+auf diese Regel; die Ausnahme gilt deshalb auch dort. Die Ortswächter in
+`tests/test_sketch.py` ändern über Versätze die Rundung jeder Rechnung; die
+Nachprüfung des Pakets verrauschte zusätzlich scipy selbst. Wo die Wegwahl
+eine Rangfrage über LAPACK ist (`dogbox` nur bei vollem Rang), liegt die
+Schranke von `matrix_rank` weit über dem Rauschen; was sie allein nicht trug,
+fängt die Wegfolge in `_solve_part` (Review H-A).
+
 ## Eine Merkmalsnummer kommt aus dem Körper, nie aus der Reihenfolge
 
 Warum keine eigene Sortierung nach der gerundeten Mitte:

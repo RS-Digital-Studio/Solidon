@@ -12,12 +12,13 @@ Fixture ``installed_slicer`` geht.
 from __future__ import annotations
 
 import ast
+import shlex
 import textwrap
 from pathlib import Path, PurePosixPath
 
 import pytest
 
-from tools import ci_selection
+from tools import affected_tests, ci_selection
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -79,10 +80,17 @@ def test_markdown_the_application_reads_is_named_where_the_selection_looks() -> 
                 named.add(PurePosixPath(node.value).name)
     assert named, "Voraussetzung: die Anwendung liest Markdown beim Namen"
     assert named == ci_selection.READ_BY_THE_APPLICATION
+    # Ein Graph und eine Sammlung für alle Dateien — beides kostet je Aufruf
+    # Minuten; welche Datei welchen Fenstertest wählt, sagt der Graph.
+    graph = affected_tests.ImportGraph(ROOT)
+    windows, _slicers = ci_selection.select([ROOT / name for name in named], graph=graph)
+    chosen = {shlex.split(selection)[0] for selection in windows}
     for name in named:
         assert (ROOT / name).is_file(), name
-        windows, _slicers = ci_selection.select([ROOT / name])
-        assert windows, f"{name}: eine Änderung wählt keinen Fenstertest"
+        assert not ci_selection.is_documentation(name), name
+        files, _reasons = affected_tests.affected([ROOT / name], graph)
+        reached = {path.relative_to(ROOT).as_posix() for path in files}
+        assert reached & chosen, f"{name}: eine Änderung wählt keinen Fenstertest"
 
 
 def test_documents_and_catalogues_select_neither_windows_nor_slicers() -> None:
@@ -138,12 +146,14 @@ def _unmarked_machine_searches(source: str, name: str) -> list[str]:
     for node in ast.walk(tree):
         if not isinstance(node, ast.FunctionDef):
             continue
-        text = ast.get_source_segment(source, node) or ""
         parameters = {argument.arg for argument in node.args.args}
-        decorators = " ".join(ast.unparse(decorator) for decorator in node.decorator_list)
-        if "installed_slicer" in parameters and "mark.slicer" not in decorators:
+        if "installed_slicer" in parameters and "mark.slicer" not in " ".join(
+            ast.unparse(decorator) for decorator in node.decorator_list
+        ):
             found.append(f"{name}:{node.lineno} {node.name}: installed_slicer ohne mark.slicer")
-        isolated = "isolated_search" in parameters or "_install_roots" in text
+        # Quelltext nur, wo eine echte Suche ihn braucht: ``get_source_segment``
+        # zerlegt je Aufruf die ganze Datei, über alle Funktionen quadratisch.
+        isolated: bool | None = None
         for inner in ast.walk(node):
             if not isinstance(inner, ast.Call):
                 continue
@@ -151,14 +161,20 @@ def _unmarked_machine_searches(source: str, name: str) -> list[str]:
             if (
                 isinstance(called, ast.Attribute)
                 and called.attr in _REAL_SEARCH
-                and not isolated
                 and _asks_for_a_slicer(inner)
             ):
-                found.append(f"{name}:{inner.lineno} {node.name}: {called.attr} ohne Isolation")
-            if isinstance(called, ast.Attribute) and called.attr in _READS:
+                if isolated is None:
+                    text = ast.get_source_segment(source, node) or ""
+                    isolated = "isolated_search" in parameters or "_install_roots" in text
+                if not isolated:
+                    found.append(f"{name}:{inner.lineno} {node.name}: {called.attr} ohne Isolation")
+            if (
+                isinstance(called, ast.Attribute)
+                and called.attr in _READS
+                and _is_install_root(called.value)
+            ):
                 receiver = ast.unparse(called.value)
-                if _is_install_root(called.value):
-                    found.append(f"{name}:{inner.lineno} {node.name}: liest {receiver}")
+                found.append(f"{name}:{inner.lineno} {node.name}: liest {receiver}")
         for loop in ast.walk(node):
             if isinstance(loop, ast.For) and any(
                 _is_install_root(part) for part in ast.walk(loop.iter)

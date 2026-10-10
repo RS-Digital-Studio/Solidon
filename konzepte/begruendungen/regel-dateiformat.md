@@ -450,6 +450,20 @@ Solidons Abweichung als „geändert“; Prusas Vorgabe stützt nur an gemalten
 Verstärkern, daher `support_material_auto = 1`; ohne `filament_retract_*`
 überstimmt das Filament den Rückzug.
 
+Warum der Bündelabschnitt am Namen erkannt wird: `PrusaResearch.ini` trägt
+über neuntausend Profile in einer Datei. `PRUSA_PROGRAM_DEFAULTS` ist mit
+`--save` gemessen.
+
+**PrusaSlicer ohne Bündel (RM-191, 09.10.2026).** Die Zeitschätzung braucht
+den Dialekt `marlin` und Grenzen aus den angeforderten Werten: Mit `ignore`
+nimmt `GCodeProcessor` die eingebauten 1500 mm/s², im Dialekt `reprap` liest
+er gar keine. `marlin` schreibt wie `reprap` `M204 S` (Gewürzregal: derselbe
+G-Code ohne Kommentare); `marlin2` schriebe `M204 P` ohne `T`, das Klipper
+übergeht. Messung und Zerlegung stehen in `ROADMAP.md` unter RM-191.
+
+Fuß- und Lochausgleich bleiben beim Hersteller, solange niemand wählt oder den
+Rat übernimmt (RM-589, `slicer_keys.MAKER_OWNED`; Begründung in `regel-druckrat.md`).
+
 **Die Lüfterkurve bleibt beim Hersteller (RM-228, Konsolidierung 03.10.2026).**
 Orca und PrusaSlicer lesen sie aus dem Filamentprofil des Herstellers und
 schreiben sie nur auf eigene Wahl; Hilfs-, Kammer-, Überhang- und Bügellüfter
@@ -524,6 +538,21 @@ CuraEngine die Extruderzüge unter Windows nicht.
 Die Maschine steht nicht in `values_for`, weil sie Installation und fertige
 Werte braucht.
 
+Warum Solidons eigene Wahl auch ins Fensterprofil gehört (RM-628): Das
+`.curaprofile` trug nur die Einstellungsseite (`as_mapping`), und was Solidon
+für Cura selbst wählt, entstand nur im abgeleiteten Teil der Konsole. Curas
+Fenster rechnete dann mit Formel und Vorgabe der aktiven Maschine: den Abstand
+unten aufgerundet wie oben (PETG mit 0,28 bei 0,2 mm Schicht 0,40 statt 0,20,
+bei 0,28 mm aus 0,30 sogar 0,56), die Trennschichten nach der Maschine
+(`creality_base` schaltet sie ein, Sovol, Elegoo, Prusa, Flashforge und Voron
+lassen sie aus) — unter Curas Bäumen ohne obere Trennschicht druckte PETG dort
+0,40 statt der geratenen 0,20, über dem Höchstwert. `_cura_window_choices`
+schreibt beides ins Fensterprofil und je Extruderprofil; die Höhen der
+Trennschichten als Formel über die Schichthöhe (`=layer_height * N`, wie Curas
+eigene Qualitätsprofile), damit sie einer in Cura geänderten Schichthöhe
+folgen, die obere ausdrücklich, weil manche Qualitätsprofile
+`support_roof_height` selbst setzen.
+
 ## Der Startcode kommt vom Hersteller, die Platzhalter füllt Solidon
 
 Eigene oder übernommene Beschleunigungen oberhalb der Maschinengrenze werden
@@ -542,8 +571,11 @@ Formeln bleiben unbekannt. Der Standardwert `machine_acceleration` braucht
 denselben Deckel: Cura schreibt ihn vor dem Endcode nochmals mit `M204`.
 
 Warum Unfüllbares anhält: Wörtlich bräche ein Klipper-Makro am Drucker ab.
-Warum die zwei Schalter auf `false` stehen: Sonst stünde Curas `M190`/`M109`
-vor dem Startcode, der die Temperatur selbst setzt.
+Die zwei Schalter `material_bed_temp_prepend`/`material_print_temp_prepend`
+stehen auf `false`, wenn der Startcode selbst eine Temperatur setzt
+(Platzhalter auf `material_bed_temperature…` oder eine Düsentemperatur,
+Kommentare ausgenommen), wie Curas `StartSliceJob`: Sonst stünde Curas
+`M190`/`M109` vor dem Startcode, der die Temperatur selbst setzt.
 
 Die Entscheidung Roberts vom 26.08.2026 lautete: „Der Anfahrcode bleibt der
 des Herstellers". Warum Solidon füllt: „gemessen:
@@ -641,7 +673,9 @@ mehr (Gesamtprüfung, 27.09.2026).
 > selbst ein Herstellerprofil, das es richtig gelesen hatte.
 
 Zum Schalter eines Anteils: „Ohne `reduce_fan_stop_start_freq` schaltete der
-ElegooSlicer den Lüfter bei jeder PLA-Schicht über 60 s ganz ab."
+ElegooSlicer den Lüfter bei jeder PLA-Schicht über 60 s ganz ab." Curas
+Kontaktlüfter steht neben dem Lüfter der Stütze, weil er die Haut über der
+Stütze kühlt, zum selben Zweck (aus der Regel hierher verschoben).
 
 Warum der alte eine Wert das obere Ende bleibt: „(Entscheidung der
 Durchsicht, 23.09.2026: Der Mindestwert war nie eine Wahl des Kunden, sondern
@@ -651,6 +685,11 @@ mit alten Zeilennummern; er steht jetzt im zweiten Absatz dieses Abschnitts
 der Regel.
 
 ## Wie eine Zuordnung geprüft wird
+
+Einen falschen Schlüsselnamen meldet kein Slicer; deshalb vergleicht Solidon
+selbst (aus der Regel hierher verschoben). Warum ein Prusa-Bündelabschnitt am
+Namen erkannt wird, steht unter „Auf dem Herstellerprofil wird nur die
+Abweichung geschrieben“.
 
 > `verify()` vergleicht sie gegen das Geschriebene: 53 von 53 beim einen, 56
 > von 56 beim anderen. […] **CuraEngine schreibt dort nichts** — null von 47.

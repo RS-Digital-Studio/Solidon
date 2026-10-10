@@ -818,6 +818,7 @@ def _clamp_reason(params: PipeClampParams) -> TranslatableText | None:
 
 @register_part(
     name="pipe_clamp",
+    play_inside=True,
     title=_("Rohrschelle"),
     group="mounting",
     params=PipeClampParams,

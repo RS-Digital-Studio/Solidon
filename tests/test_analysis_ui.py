@@ -27,7 +27,7 @@ from app.ui.main_window import MainWindow
 from app.ui.session import Session
 from app.ui.settings import UiSettings
 from tests.render_fakes import RecordingItem, RecordingRenderer
-from tests.ui_helpers import on_the_bore_wall
+from tests.ui_helpers import on_the_bore_wall, wait_for_print_findings
 
 MESHES = Path(__file__).parent / "data" / "meshes"
 
@@ -7817,16 +7817,6 @@ def test_the_roof_of_a_part_carries_the_grip_in_the_view(window: MainWindow) -> 
 # --- die Schichtanalyse im Prüfbericht (§22.2) ------------------------------------
 
 
-def _wait_for_print_findings(window: MainWindow) -> None:
-    """Die Berichtsanalyse läuft im Arbeiter nach der Auswertung; der Test
-    wartet wie das Fenster, bis sie ihre Zeilen geliefert hat."""
-    worker = window._print_findings.worker
-    if worker is not None:
-        worker.wait(60_000)
-    for _round in range(5):
-        QApplication.processEvents()
-
-
 def test_an_island_reaches_the_report_with_place_and_actions(qt_app: QApplication) -> None:
     """Der Inselturm: eine Kontur, die in der Luft beginnt. Nach der
     Auswertung steht sie im Prüfbericht — mit Körper, Ort, Stützbedarf und
@@ -7835,7 +7825,7 @@ def test_an_island_reaches_the_report_with_place_and_actions(qt_app: QApplicatio
     try:
         window.open_path(MESHES / "island_tower.stl")
         assert window.session.wait_for_idle(60_000)
-        _wait_for_print_findings(window)
+        wait_for_print_findings(window)
 
         islands = [
             finding
@@ -7859,7 +7849,7 @@ def test_a_stale_result_does_not_add_its_findings(qt_app: QApplication) -> None:
     try:
         window.open_path(MESHES / "island_tower.stl")
         assert window.session.wait_for_idle(60_000)
-        _wait_for_print_findings(window)
+        wait_for_print_findings(window)
         shown = list(window.report._findings)
         stale = object()
 

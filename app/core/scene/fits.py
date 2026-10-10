@@ -15,6 +15,7 @@ from __future__ import annotations
 import math
 from collections.abc import Collection
 from dataclasses import dataclass, replace
+from typing import cast
 
 import numpy as np
 
@@ -34,6 +35,7 @@ from app.core.perceive.features import EPS_ANGLE
 from app.core.scene.cancel import NeverCancelled
 from app.core.types import (
     AUTO_TOLERANCE_PREFIX,
+    BaseParams,
     CancelToken,
     Document,
     Feature,
@@ -41,6 +43,7 @@ from app.core.types import (
     Finding,
     Fit,
     FitKind,
+    Operation,
     Profile,
     Scene,
     SceneObject,
@@ -306,7 +309,9 @@ FITTING_OPS: frozenset[str] = frozenset(
     {
         "create_lid",
         "screw_lid",
+        "create_container",
         "split_pinned",
+        "split_line",
         "insert_snap_fit",
         "insert_dowel",
         "insert_magnet_pocket",
@@ -335,12 +340,372 @@ def numbered_name(fits: Collection[Fit], key: str) -> str:
     return f"{key}_{number}"
 
 
+def _producing(document: Document, object_ids: Collection[str]) -> tuple[set[str], set[int]]:
+    """Die Körper und eingeschalteten Schritte, aus denen diese Körper entstanden sind.
+
+    Rückwärts durch den Stapel, **je Körperkennung**: Gibt ein Schritt einen
+    gesuchten Körper aus, den er auch als Eingang hat, hat er ihn an Ort und
+    Stelle bearbeitet — weiter geht es mit dieser Kennung und mit dem, was der
+    Schritt in ihn aufnimmt (Eingänge, die er nicht wieder ausgibt, etwa beim
+    Vereinigen). Entsteht der Körper im Schritt neu (Teilen, Deckel,
+    Duplikat), zählen alle Eingänge. *Anordnen* und *Ausrichten* führen alle
+    Körper als Ein- und Ausgang; über alle Eingänge bekam jeder Körper die
+    Herkunft seiner Nachbarn (Review RM-589, N1). Ausgeschaltete Schritte
+    zählen nicht.
+    """
+    wanted = set(object_ids)
+    relevant_operations: set[int] = set()
+    for operation in reversed(document.ops):
+        if operation.suppressed is not None:
+            continue
+        made = wanted.intersection(operation.outputs)
+        if not made:
+            continue
+        relevant_operations.add(operation.id)
+        if made.issubset(operation.inputs):
+            wanted.update(set(operation.inputs).difference(operation.outputs))
+        else:
+            wanted.update(operation.inputs)
+    return wanted, relevant_operations
+
+
+#: Schritte, die ein Loch um die Lochkorrektur des Materials weiten, wenn ihr
+#: Haken *Materialtoleranz berücksichtigen* steht (``compensate``). Gefragt
+#: wird am Merkmal des fertigen Körpers: Ein gestopftes Loch ist fort, und ein
+#: ohne Haken nachgebohrtes nennt seinen letzten Schritt.
+COMPENSATING_HOLE_OPS: frozenset[str] = frozenset(
+    {"drill_hole", "drill_brep_hole", "resize_hole", "slot_hole", "field_cut"}
+)
+
+#: Passungsschritte außerhalb der Bausteine, die das Spiel aus dem Material in
+#: die Innenmerkmale legen, die sie selbst erzeugen: das Innengewinde der
+#: Kappe (*Drehdeckel erzeugen*, *Behälter mit Deckel*), die Bohrungen der
+#: Verbinder (*An Ebene teilen*, *An gezeichneter Linie teilen*), die
+#: Scharnierbohrung eines Deckels. Kragen und Hals tragen ihr Spiel außen und
+#: sind kein Innenmerkmal; *Schraube erstellen* fehlt deshalb.
+PLAY_HOLE_OPS: frozenset[str] = frozenset(
+    {"create_lid", "screw_lid", "split_pinned", "split_line", "create_container"}
+)
+
+#: *Gegenform einlassen* legt Taschen mit Spiel in den Einsatz, das erste
+#: Ergebnis; ein Achsmerkmal tragen sie nicht (:func:`_pocket_closes`).
+COUNTER_FORM_OP = "cut_counter_form"
+
+#: Der Schritt, der die ersten Schichten um den Elefantenfuß des Materials
+#: einzieht.
+FOOT_OP = "compensate_first_layer"
+
+#: Schritte, deren neue Körper reine Kopien ihres Eingangs sind; das
+#: eingezogene Band einer Kopie liegt, wo es beim Original liegt. *Stift für
+#: Bohrung* und *Behältereinsatz erzeugen* geben ihren Eingang ebenfalls
+#: unverändert zurück, bauen daneben aber etwas Neues.
+COPY_OPS: frozenset[str] = frozenset({"duplicate_object", "pattern"})
+
+#: Was das Modell eines Körpers schon selbst ausgleicht (RM-589): ``"holes"``
+#: — seine Löcher tragen Spiel oder Lochkorrektur aus dem Materialprofil —,
+#: ``"foot"`` — seine ersten Schichten sind um den Elefantenfuß eingezogen.
+MODEL_ALLOWANCES: tuple[str, ...] = ("holes", "foot")
+
+
+def allowances_for(document: Document, body: SceneObject) -> tuple[str, ...]:
+    """Welche Ausgleiche dieser Körper schon im Modell trägt (RM-589).
+
+    Die Herkunft je Körper wie bei :func:`fit_kinds_for`. Löcher zählen am
+    fertigen Körper: an einem Innenmerkmal — Bohrung, Innengewinde, Langloch —,
+    das der Slicer in einer Schicht als geschlossene Kontur sieht
+    (:func:`_closes_in_a_layer`; eine waagerechte Bohrung weitet sein
+    Lochausgleich nicht) und das ein Schritt mit Spiel oder Lochkorrektur aus
+    dem Material gemacht hat: mit Haken aus :data:`COMPENSATING_HOLE_OPS`, aus
+    :data:`PLAY_HOLE_OPS` oder ein Baustein mit Spiel innen
+    (:func:`_part_with_play_inside`). Dazu die Taschen von *Gegenform
+    einlassen* (:func:`_pocket_closes`). Eine nur eingetragene Passung ändert
+    die Geometrie nicht und zählt nicht. Der Fuß zählt, wo das eingezogene
+    Band am Bett liegt (:func:`_foot_on_the_bed`). Der Druckrat stellt dann den
+    gleichen Ausgleich des Slicers auf null.
+    """
+    lineage, relevant = _producing(document, {body.id})
+    active = {operation.id: operation for operation in document.ops if operation.suppressed is None}
+    steps = [active[identifier] for identifier in sorted(relevant) if identifier in active]
+    found: set[str] = set()
+    if _foot_on_the_bed(document, body):
+        found.add("foot")
+    for operation in steps:
+        if operation.op == COUNTER_FORM_OP and _pocket_closes(operation, body, lineage):
+            found.add("holes")
+    # Wer ein erzeugtes Merkmal ohne vermerkten Erzeuger gebaut hat: der
+    # Schritt, mit dem der Körper ohne Eingang entstand (*Behälter mit
+    # Deckel*, *… erstellen*). Ein erkanntes Langloch ohne Erzeuger stammt aus
+    # einem Lochfeld der Herkunft — das Feld benennt nur seine runden Löcher.
+    origins = tuple(operation for operation in steps if not operation.inputs)
+    fields = tuple(operation for operation in steps if operation.op == "field_cut")
+    for feature in body.features.values():
+        if feature.kind not in ("hole", "thread", "slot"):
+            continue
+        if feature.created_by is not None:
+            creators: tuple[Operation, ...] = (
+                (active[feature.created_by],) if feature.created_by in active else ()
+            )
+        elif feature.provenance == "generated":
+            creators = origins
+        else:
+            creators = fields if feature.kind == "slot" else ()
+        # Erst der billige Blick auf den Erzeuger, dann die Mündungen am Netz.
+        if any(_puts_allowance_into(creator) for creator in creators) and _closes_in_a_layer(
+            feature, body
+        ):
+            found.add("holes")
+            break
+    return tuple(entry for entry in MODEL_ALLOWANCES if entry in found)
+
+
+def _closes_in_a_layer(feature: Feature, body: SceneObject | None = None) -> bool:
+    """Sieht der Slicer dieses Innenmerkmal in einer Schicht als geschlossene Kontur?
+
+    Nur eine solche weitet sein Lochausgleich (OrcaSlicer
+    ``_shrink_contour_holes``: die Löcher jedes Schichtumrisses). Hat der
+    Mantel eines Lochs oder Langlochs am Körper zwei Ränder, entscheiden deren
+    Höhen (:func:`_closes_between_mouths`) — auch bei einer senkrecht
+    gebohrten, schrägen Mündung in einer gekippten Platte. Sonst gilt die
+    Annahme, dass die Enden quer zur Achse stehen. Ist es um ``θ`` gegen die
+    Senkrechte geneigt,
+    schneidet eine Schicht die Wand um ein Loch der Länge ``L`` als Streifen
+    der Breite ``L/sin θ`` und das Loch vom Durchmesser ``d`` als Ellipse der
+    Länge ``d/cos θ``; geschlossen ist die Kontur, solange die Ellipse in den
+    Streifen passt: ``L·cos θ > d·sin θ``. Dann bekäme jede geschlossene
+    Schicht den Ausgleich ein zweites Mal. Senkrecht zählt jede Länge,
+    waagerecht keine; die Grenze folgt aus den Maßen, nicht aus einem Winkel
+    (am Schnitt belegt: ``test_a_tilted_hole_counts_while_a_layer_closes_around_it``).
+    Ein Langloch nimmt seine größere Weite. Die Achse ist die des fertigen
+    Körpers, nach Drehen und Ausrichten.
+    """
+    if feature.kind == "thread":
+        if feature.params.get("internal") is not True:
+            return False
+        length, across = _positive(feature, "length"), diameter_of(feature)
+    elif feature.kind == "hole":
+        length, across = _positive(feature, "depth"), diameter_of(feature)
+    elif feature.kind == "slot":
+        width, extent = diameter_of(feature), _positive(feature, "length")
+        length = _positive(feature, "depth")
+        across = max(width, extent) if width is not None and extent is not None else None
+    else:
+        return False
+    axis = vec3_or_none(feature.params.get("axis"))
+    if axis is None or length is None or across is None:
+        return False
+    norm = math.hypot(*axis)
+    if not math.isfinite(norm) or norm <= EPS_GEOM:
+        return False
+    if body is not None and feature.kind in ("hole", "slot"):
+        between = _closes_between_mouths(body, feature)
+        if between is not None:
+            return between
+    upright = abs(axis[2]) / norm
+    tilt = math.hypot(axis[0], axis[1]) / norm
+    return length * upright > across * tilt
+
+
+def _closes_between_mouths(body: SceneObject, feature: Feature) -> bool | None:
+    """Liegt das Loch in einer waagerechten Schicht ganz zwischen seinen Mündungen?
+
+    Die Mündungen sind die zwei Randringe des Lochmantels in der verschweißten
+    Topologie (dieselben wie bei *Bohrung ändern*, am exakten Körper an seinem
+    Netz-Zwilling), schräg oder quer zur Achse, flach oder nicht. Eine Schicht
+    auf Höhe ``h`` schneidet den Mantel als geschlossene Kurve, wenn sie keinen
+    der beiden Ringe trifft und zwischen ihnen liegt: über jedem Punkt des
+    unteren Rings und unter jedem des oberen. Geschlossen ist die Kontur also,
+    wenn der tiefste Punkt des oberen Rings über dem höchsten des unteren
+    liegt. Für Enden quer zur Achse ist das ``L·cos θ > d·sin θ``; eine
+    senkrecht in eine gekippte Platte gebohrte Mündung liegt schräg, und eine
+    Bohrung, deren Boden die untere Plattenfläche gerade noch anschneidet, hat
+    einen geknickten Ring — beide misst der Ring selbst. Ein Sackloch rechnet
+    seinen Boden wie eine Mündung und zählt so eher zu wenig. ``None``, wo der
+    Mantel nicht genau zwei Ränder hat.
+    """
+    from app.core.geom.mesh import as_mesh_data
+    from app.core.geom.prepare_ops import _welded
+    from app.core.perceive.relations import boundary_rings
+
+    if not feature.face_indices:
+        return None
+    mesh = as_mesh_data(body.mesh)
+    if int(max(feature.face_indices)) >= len(mesh.raw.faces):
+        return None
+    welded = _welded(mesh)
+    rings = boundary_rings(welded, feature)
+    if rings is None or len(rings) != 2:
+        return None
+    heights = np.asarray(welded.vertices, dtype=np.float64)[:, 2]
+    spans = [heights[sorted({vertex for edge in ring for vertex in edge})] for ring in rings]
+    lower, upper = sorted(spans, key=lambda span: float(span.mean()))
+    return float(upper.min()) - float(lower.max()) > EPS_GEOM
+
+
+def _pocket_closes(operation: Operation, body: SceneObject, lineage: Collection[str]) -> bool:
+    """Liegen die Taschen von *Gegenform einlassen* in diesem Körper senkrecht?
+
+    Der Einsatz ist das erste Ergebnis. Die Tasche läuft vom tiefsten Punkt
+    des Teils durch die Oberseite des Einsatzes; geschlossen ist ihr Umriss in
+    der Schicht nur, wenn sie senkrecht entnommen wird — seitlich entnommen
+    reicht sie in jeder Schicht bis an die Außenwand. Die Taschen tragen kein
+    Achsmerkmal; ihre Richtung ist die Entnahmerichtung im Raum des Schritts,
+    gedreht um das, was der Rahmen des Körpers seither sagt. Gerechnet wird
+    damit, dass der Einsatz beim Einlassen aufrecht stand, wie die Richtung Z
+    es vorsieht; wurde er vorher gekippt, zählt er nicht.
+    """
+    if not operation.outputs or operation.outputs[0] not in lineage:
+        return False
+    if _step_values(operation).get("axis") != "z":
+        return False
+    up = _frame_up(body)
+    return up is not None and abs(up) >= math.cos(math.radians(EPS_ANGLE))
+
+
+def _frame_up(body: SceneObject) -> float | None:
+    """Wie weit die Z-Achse des Rahmens nach oben zeigt, als Kosinus mit
+    Vorzeichen — ``None`` ohne bekannten Rahmen."""
+    if body.frame is None:
+        return None
+    column = tuple(float(body.frame[row][2]) for row in range(3))
+    norm = math.hypot(*column)
+    if not math.isfinite(norm) or norm <= EPS_GEOM:
+        return None
+    return column[2] / norm
+
+
+def _foot_on_the_bed(document: Document, body: SceneObject) -> bool:
+    """Liegt das Band, das *Elefantenfuß ausgleichen* eingezogen hat, am Bett?
+
+    Der Schritt zieht ein, was beim Einziehen unten lag. Gezählt wird er nur
+    auf der eigenen Linie des Körpers — Schritte, die ihn an Ort und Stelle
+    bearbeiten, mit dem, was sie in ihn aufnehmen (*Vereinigen*), und reine
+    Kopien (:data:`COPY_OPS`). Baut ein Schritt den Körper aus einem anderen
+    neu (die Hälften eines Teilens, der Deckel), liegt das Band nicht unten
+    oder fehlt ganz. Dazu muss die Z-Achse des Rahmens nach oben zeigen, mit
+    Vorzeichen: Gekippt liegt das Band an einer Seite, gewendet oben. Und am
+    fertigen Körper muss das Band unten noch eingezogen sein
+    (:func:`_band_drawn_in`): *Abschneiden* oder *Abziehen* nehmen es an Ort
+    und Stelle weg, und wer vor dem Einziehen kippt und danach zurückdreht,
+    hat es an einer Seite oder oben, obwohl der Rahmen wieder aufrecht steht.
+    Im Zweifel behält der Slicer seinen Ausgleich: Doppelt eingezogen wird die
+    erste Schicht etwas schmaler, ohne Einzug druckt sie den Wulst
+    (Schlussprüfung RM-589, S1; Kontrolle, K1).
+    """
+    up = _frame_up(body)
+    if up is None or up < math.cos(math.radians(EPS_ANGLE)):
+        return False
+    wanted = {body.id}
+    for operation in reversed(document.ops):
+        if operation.suppressed is not None:
+            continue
+        made = wanted.intersection(operation.outputs)
+        if not made:
+            continue
+        in_place = made.intersection(operation.inputs)
+        if in_place and operation.op == FOOT_OP:
+            return _band_drawn_in(document, body, operation)
+        if in_place:
+            wanted.update(set(operation.inputs).difference(operation.outputs))
+        if made.difference(in_place) and operation.op in COPY_OPS:
+            wanted.update(operation.inputs)
+    return False
+
+
+def _band_drawn_in(document: Document, body: SceneObject, operation: Operation) -> bool:
+    """Ist der Körper am Bett noch so eingezogen, wie dieser Fußschritt es tat?
+
+    Zwei Schnitte am fertigen Körper: in der Mitte des Bands (Unterseite plus
+    halbe Höhe ``h`` des Schritts) und eine halbe Höhe über dem Band. Der
+    untere muss im oberen liegen, rundum um den halben Betrag ``a`` eingezogen
+    — derselbe Schnitt, mit dem der Schritt das Band baut
+    (``geom.prepare.compensate_elephant_foot``). Der Betrag kommt aus dem
+    Schritt oder, ohne eigenen, aus dem Material des Körpers oder Projekts.
+    Nennt das Dokument keines, rechnete der Schritt mit dem Material des
+    Profils, das hier fehlt; dann genügt ein Einzug um ``EPS_DISPLAY`` — ein
+    fehlendes Band unterscheidet auch das. Ein Körper, der über dem Band
+    breiter wird, besteht die Probe auch ohne Band; dort entscheiden Linie und
+    Rahmen.
+    """
+    from app.core.geom.mesh import as_mesh_data
+    from app.core.knowledge.profiles import material
+    from app.core.slice.analysis import cross_section
+
+    values = _step_values(operation)
+    height, given = values.get("height"), values.get("amount")
+    if not isinstance(height, (int, float)) or not height > EPS_GEOM:
+        return False
+    amount = float(given) if isinstance(given, (int, float)) else 0.0
+    named = body.material or document.material
+    if not amount > EPS_GEOM and named:
+        try:
+            amount = material(named).elephant_foot
+        except AppError:
+            return False
+    elif not amount > EPS_GEOM:
+        amount = 2.0 * EPS_DISPLAY
+    if not amount > EPS_GEOM:
+        return False
+    mesh = as_mesh_data(body.mesh)
+    bottom = float(mesh.bounds.minimum[2])
+    band = cross_section(mesh, bottom + height / 2.0)
+    above = cross_section(mesh, bottom + 1.5 * height)
+    if band is None or above is None or band.is_empty or above.is_empty:
+        return False
+    # Was übersteht, darf nur Rundungsrest der Schnitte sein — ein Streifen von
+    # EPS_GEOM Breite entlang des Umrisses; ein fehlendes Band steht um a/2 über.
+    outside = band.difference(above.buffer(-amount / 2.0))
+    return bool(outside.area <= EPS_GEOM * band.length)
+
+
+def _puts_allowance_into(operation: Operation) -> bool:
+    """Legt dieser Schritt Spiel oder Lochkorrektur des Materials in seine Innenmerkmale?"""
+    if operation.op in COMPENSATING_HOLE_OPS:
+        from app.core.geom.field_ops import COMPENSATED_SHAPES
+
+        values = _step_values(operation)
+        return values.get("compensate") is True and (
+            operation.op != "field_cut" or values.get("shape") in COMPENSATED_SHAPES
+        )
+    return operation.op in PLAY_HOLE_OPS or _part_with_play_inside(operation)
+
+
+def _step_values(operation: Operation) -> dict[str, object]:
+    """Die Parameter eines Schritts samt Vorgaben; ohne Registereintrag (der
+    exakte Kern fehlt) nur, was im Schritt steht."""
+    from app.core.registry import REGISTRY
+
+    schema = REGISTRY.get(operation.op).params.fields() if REGISTRY.has(operation.op) else ()
+    return {entry.name: entry.default for entry in schema} | dict(operation.params)
+
+
+def _part_with_play_inside(operation: Operation) -> bool:
+    """Legt dieser Bausteinschritt sein Spiel in eine Innenkontur?
+
+    Abtragend (``parts.ops.cuts``, dieselbe Auskunft wie Operation und
+    Vorschau) mit Spiel oder Übermaß aus dem Material, oder aufgesetzt mit
+    einer Bohrung, die das Spiel trägt (``PartSpec.play_inside``). Gezählt
+    wird nur an einem Innenmerkmal des Bausteins (:func:`allowances_for`).
+    """
+    from types import SimpleNamespace
+
+    from app.core.knowledge.parts import ops as part_ops
+
+    spec = part_ops.part_of(operation.op)
+    if spec is None:
+        return False
+    fields = {entry.name for entry in spec.params.spec()}
+    if not fields & {part_ops.PLAY_FIELD, part_ops.GRIP_FIELD}:
+        return False
+    values = cast(BaseParams, SimpleNamespace(**_step_values(operation)))
+    return spec.play_inside or part_ops.cuts(spec, values)
+
+
 def fit_kinds_for(document: Document, object_ids: Collection[str]) -> tuple[str, ...]:
     """Welche Passungen diese Körper tragen — eingetragene und gebaute.
 
-    Die Körper und alles, woraus sie entstanden sind: Der Stapel wird rückwärts
-    gegangen, jeder Schritt, der einen der Körper erzeugt, bringt seine
-    Eingänge dazu. Eine eingetragene aktive Passung zählt mit ihrer Art
+    Die Körper und alles, woraus sie entstanden sind (:func:`_producing`, je
+    Körperkennung — nach *Anordnen* trägt kein Körper die Passung seines
+    Nachbarn). Eine eingetragene aktive Passung zählt mit ihrer Art
     (:func:`active_fits`). Ein passender, eingeschalteter Schritt ohne gebundene
     Passung zählt als Schiebesitz (:data:`FITTING_OPS`), etwa eine ältere
     Mutternfalle mit Spiel aus der Normteiltabelle. Ausgeschaltete Schritte
@@ -350,14 +715,7 @@ def fit_kinds_for(document: Document, object_ids: Collection[str]) -> tuple[str,
     verlangt eine Einstellung mehr als ein Schiebesitz. Der Druckdialog fragt
     für die Körper der Platte, der Export je Teil (Entscheidung G).
     """
-    wanted = set(object_ids)
-    relevant_operations: set[int] = set()
-    for operation in reversed(document.ops):
-        if operation.suppressed is not None:
-            continue
-        if wanted.intersection(operation.outputs):
-            relevant_operations.add(operation.id)
-            wanted.update(operation.inputs)
+    wanted, relevant_operations = _producing(document, object_ids)
     kinds: list[str] = [
         entry.kind
         for entry in active_fits(document)

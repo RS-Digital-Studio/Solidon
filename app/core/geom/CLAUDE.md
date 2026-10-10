@@ -27,7 +27,7 @@ plattformabhängig ist, sagt `kern.md`. Die Werkzeuge:
 | Mitte einer Punktwolke | `units.exact_centre` |
 | Normalen und Flächen je Dreieck, Eckennormalen | `mesh.stable_normals`, `mesh.stable_areas` (einzelne Dreiecke), `mesh.stable_vertex_normals` |
 | Summen, deren Gleichstand eine Lage entscheidet | `mesh.IntegerGrid` |
-| Spatprodukte, eingeschlossenes Volumen mit Vorzeichen | `mesh.triple_products`, `mesh.signed_volume` (körpernah) |
+| Spatprodukte, Volumen mit Vorzeichen | `mesh.triple_products`, `signed_volume`, `signed_volume_of` (Teil) |
 | Nur eine Haut? | `mesh.shell_thickness`, `only_a_skin` |
 | Zufall (Stufe 3 der Kette) | `Generator.random` aus den Rohbits, nie `normal` |
 | Drehkörper, Kreispunkte | `lathe.cylinder`, `annulus`, `revolve`, `circle_points` |

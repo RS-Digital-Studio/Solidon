@@ -2559,6 +2559,14 @@ def _supported_span(shape: ShapelyPolygon, supported: ShapelyPolygon) -> float:
     Winkel ist dieselbe Menge in einem Durchlauf da; je Bündel bleibt wie
     zuvor die Kante, die in der Kontur zuerst kommt.
     """
+    span = _anchored_span(shape, supported)
+    return _across(shape) if span is None else span
+
+
+def _anchored_span(shape: ShapelyPolygon, supported: ShapelyPolygon) -> float | None:
+    """Die kürzeste Bahnenrichtung, deren Bahnen über ``shape`` an beiden Enden in
+    ``supported`` Halt haben — oder ``None``, wenn keine Richtung das schafft
+    (:func:`_supported_span`). Höchstens die Diagonale der Hüllbox."""
     anchored = supported.buffer(EPS_GEOM)
     if anchored.covers(shape.boundary):
         return spanning_width(shape)
@@ -2571,7 +2579,7 @@ def _supported_span(shape: ShapelyPolygon, supported: ShapelyPolygon) -> float:
     lengths = np.linalg.norm(edges, axis=1)
     units = edges[lengths > EPS_GEOM] / lengths[lengths > EPS_GEOM, None]
     if not len(units):
-        return _across(shape)
+        return None
     # Kante und Normale, in Konturreihenfolge: erst die Kante, dann ihre Normale.
     candidates = np.empty((2 * len(units), 2), dtype=float)
     candidates[0::2] = units
@@ -2606,7 +2614,7 @@ def _supported_span(shape: ShapelyPolygon, supported: ShapelyPolygon) -> float:
     ]
     heads = np.concatenate([ring[:-1] for ring in rings])
     tails = np.concatenate([ring[1:] for ring in rings])
-    best = _across(shape)
+    best: float | None = None
     for direction in directions:
         normal = np.array([-direction[1], direction[0]])
         levels = np.unique(band_corners @ normal)
@@ -2632,7 +2640,7 @@ def _supported_span(shape: ShapelyPolygon, supported: ShapelyPolygon) -> float:
             ):
                 break
         else:
-            best = min(best, float(lengths.max()))
+            best = min(best if best is not None else _across(shape), float(lengths.max()))
     return best
 
 
@@ -2714,11 +2722,36 @@ def _bridge_width(
     shape: ShapelyPolygon,
     previous: ShapelyPolygon | None,
     bridge_from: float = BRIDGE_FROM,
-    touching: ShapelyPolygon | None = None,
+    touching: ShapelyPolygon | MultiPolygon | None = None,
 ) -> float:
     """Die längste freie Spannweite dieser Schicht — was überbrückt werden
-    muss (§22.2). Mit ``touching`` nur die freien Flächen, die es berühren
-    (:func:`open_bridge_width`).
+    muss (§22.2); gemessen in :func:`_widest_bridge`."""
+    return _widest_bridge(shape, previous, bridge_from, touching)[0]
+
+
+def _widest_bridge(
+    shape: ShapelyPolygon,
+    previous: ShapelyPolygon | None,
+    bridge_from: float = BRIDGE_FROM,
+    touching: ShapelyPolygon | MultiPolygon | None = None,
+    *,
+    whole: float | None = None,
+) -> tuple[float, ShapelyPolygon | None]:
+    """Die längste freie Spannweite dieser Schicht und die Fläche, über der sie
+    liegt (§22.2). Mit ``touching`` nur, was es berührt (:func:`open_bridge_width`,
+    :func:`span_beside`): die freien Flächen und darin die Kerne, die breiter als
+    zwei Bahnen sind. Nimmt ``touching`` nichts weg, gilt ``whole`` — die Weite
+    der ganzen Schicht, schon gemessen — ohne Fläche.
+
+    **Je Kern, nicht nur je freier Fläche** (Review zu RM-627). Eine Flanke
+    zwischen etwa 14 und 45 Grad legt je Schicht ein Band frei, schmaler als die
+    Zugabe des Überhangs und damit kein Überhangstück, aber breiter als die der
+    Brücke. Es verbindet alles an der Wand zu einer freien Fläche: An einer Wand
+    mit zwei solchen Flanken maß die Konsole, ein Rand, mit, sobald an der
+    Nachbarflanke ein Sporn von 9 mm² hing, und die Schicht spannte 40 statt
+    6 mm. Ein Kern liegt dagegen ganz in einem Überhangstück — jeder Punkt ist
+    mindestens ``bridge_from/2`` von der freien Kante entfernt, das Band ist
+    schmaler als zwei Bahnen und trägt keinen.
 
     Zwei Fragen, in dieser Reihenfolge. Erst: ist die ungestützte Fläche
     überhaupt breiter als zwei Bahnen? Ein Kegel unter 45 Grad legt je Schicht
@@ -2750,22 +2783,27 @@ def _bridge_width(
     Seite die einzige getragene Richtung (:func:`_supported_span`).
     """
     if previous is None or previous.is_empty:
-        return 0.0
+        return 0.0, None
     supported = previous.buffer(OVERHANG_MARGIN)
     free = shape.difference(supported)
+    # Ob ``touching`` etwas wegnimmt — sonst gilt ``whole``.
+    dropped = False
     if touching is not None:
-        free = unary_union([part for part in _areas_of(free) if part.intersects(touching)])
+        areas = _areas_of(free)
+        near = [part for part in areas if part.intersects(touching)]
+        dropped = len(near) < len(areas)
+        free = unary_union(near)
     # Brücken werden gegen die Schicht selbst gemessen, nicht gegen die
     # 45-Grad-Zugabe: was durch freie Luft spannt, ist eine Brücke, egal in
     # welchem Winkel.
     if free.is_empty:
-        return 0.0
+        return 0.0, None
     # Eine einzelne Erosion statt einer Suche: gefragt ist nicht, wie breit die
     # Fläche ist, sondern ob sie über der Grenze liegt.
     if _eroded(free, bridge_from / 2.0).is_empty:
-        return 0.0
+        return 0.0, None
 
-    widest = 0.0
+    measured: list[tuple[list[ShapelyPolygon], bool]] = []
     for part in getattr(free, "geoms", [free]):
         if part.is_empty or not hasattr(part, "exterior"):
             continue
@@ -2789,14 +2827,27 @@ def _bridge_width(
             core = _eroded(part, half)
             if core.is_empty:
                 continue
+            if touching is not None:
+                cores = _areas_of(core)
+                kept = [piece for piece in cores if piece.intersects(touching)]
+                dropped = dropped or len(kept) < len(cores)
+                if not kept:
+                    continue
+                core = unary_union(kept)
             spans = _areas_of(core.buffer(half, quad_segs=1, join_style="mitre").intersection(part))
+        measured.append((spans, bool(holes)))
+    if whole is not None and not dropped:
+        return whole, None
+
+    widest, where = 0.0, None
+    for spans, around in measured:
         for span in spans:
-            if not span.is_empty:
-                widest = max(
-                    widest,
-                    spanning_width(span) if holes else _supported_span(span, supported),
-                )
-    return float(widest)
+            if span.is_empty:
+                continue
+            width = spanning_width(span) if around else _supported_span(span, supported)
+            if width > widest:
+                widest, where = width, span
+    return float(widest), where
 
 
 def _to_polygons(shape: ShapelyPolygon) -> tuple[SliceContour, ...]:
@@ -3264,6 +3315,184 @@ def total_overhang(
     return max(total, 0.0)
 
 
+#: Ab welchem Anteil der Bahnbreite die Orca-Familie eine Wand umkehrt: Die
+#: Außenbahn muss so weit über die Schicht darunter hinausragen
+#: (``overhang_reverse_threshold``, im Prozess des K1 Max
+#: ``fdm_process_creality_common.json`` 50 %). Bei 0,2 mm Schicht und 0,42 mm
+#: Bahn erst ab 46,4 Grad (Nachprüfung RM-587, N2).
+REVERSE_THRESHOLD_SHARE: Final = 0.5
+
+
+def steep_reach(
+    result: SliceResult, enough: float | None = None, *, line_width: float | None = None
+) -> float:
+    """Wie weit die längste steile Wand über die 45-Grad-Linie hinauswandert, in mm
+    (RM-587, Review M2).
+
+    Steil heißt: steiler als die Startregel (45 Grad,
+    :data:`OVERHANG_ANGLE_FACTOR`) und flacher als der Winkel, mit dem geschnitten
+    wurde — dort stützt der Slicer nicht, und schrumpfendes Material rollt sich auf.
+    Je Schicht das **Band**: die Fläche jenseits der 45-Grad-Zugabe über der Schicht
+    darunter, ohne die Überhangstücke jenseits der Stützgrenze und den Streifen
+    neben ihnen. Der Überhang gehört der Stütze, und der Streifen ist der Rand
+    einer flachen Decke, keine Wand: Am Kasten mit Deckel waren das am K1 Max
+    14,9 mm² in einer Schicht. Breit ist der Streifen um die Zugabe der
+    Stützgrenze weniger die 45-Grad-Zugabe; die Zugabe der Grenze steht in der
+    Schicht selbst, als Abstand der Überhangstücke zur Schicht darunter
+    (:func:`_measure_batch`). Nur der Streifen fällt heraus, nicht das ganze
+    zusammenhängende Band: Die Flanken eines um 65 Grad geneigten Zylinders
+    blieben sonst ungezählt, weil seine Unterseite überhängt (Nachprüfung
+    RM-587, N3). Die mittlere Breite des Bands ist das Doppelte seiner Fläche
+    durch seinen Umfang — an einem Ring genau seine Breite, Schichthöhe ·
+    (tan Winkel - 1).
+
+    Gezählt wird je Wand: Die Breiten folgen sich über die Schichten, solange das
+    Band einer Schicht höchstens eine Schichthöhe neben dem der Schicht darunter
+    liegt; eine Schicht ohne Band beginnt neu. Die Summe ist die Höhe der Wand mal
+    (tan Winkel - 1) — wie weit sie über eine 45-Grad-Wand hinauswandert. Ein
+    Trichter von 20 mm Höhe (99 Schichtschritte zu 0,2 mm) trägt bei 50 Grad
+    19,8 · 0,192 = 3,80 mm, bei 58 Grad 11,89 mm, bei 40 Grad nichts. Eine Rundung
+    mit Radius r an der Unterkante bringt 0,048 · r: Ihr Stück zwischen 45 und 60
+    Grad ist 0,159 · r hoch und 0,207 · r breit. Mit ``line_width`` zählt eine
+    Schicht nur, wenn ihr Band breiter ist als
+    :data:`REVERSE_THRESHOLD_SHARE` · Bahnbreite - Schichthöhe — erst dann ragt
+    die Außenbahn so weit hinaus, dass der Slicer umkehrt; sonst beginnt die Wand
+    neu. Ein Trichter mit 46 Grad wandert über 60 mm Höhe 2,1 mm hinaus, kehrt in
+    Orca aber nie um (Nachprüfung RM-587, N2). Ein Schnitt mit einer Grenze unter
+    45 Grad hat kein Band und gibt null; senkrechte Wände tragen nichts, ihr
+    Vernetzungsrauschen bleibt in der Zugabe einer Schichthöhe.
+
+    ``enough`` beendet die Messung, sobald eine Wand darüber liegt — der Rat fragt
+    nur, ob es eine so weite gibt. Gerechnet blockweise (:data:`BATCH_LAYERS`),
+    als Fläche ohne Vereinigung (die Konturen einer Schicht sind getrennt) und
+    nach Douglas-Peucker um :data:`WIDTH_SIMPLIFY` vereinfacht wie
+    :func:`_width_outline`; wird eine Schicht dabei ungültig, bleibt sie, wie sie
+    ist. Am Besenhalter mit 1,7 Millionen Punkten kostete das Band so 0,38 s
+    Rechenzeit statt 2,06 s mit vereinigten, unvereinfachten Konturen.
+    """
+    layers = result.layers
+    best = run = 0.0
+    previous: Any = None
+    for start in range(1, len(layers), BATCH_LAYERS):
+        stop = min(start + BATCH_LAYERS, len(layers))
+        exact = np.asarray([_disjoint_shape(layer) for layer in layers[start - 1 : stop]])
+        shapes = shapely.simplify(exact, WIDTH_SIMPLIFY, preserve_topology=False)
+        broken = ~shapely.is_valid(shapes) | shapely.is_empty(shapes)
+        shapes[broken] = exact[broken]
+        steps = np.asarray(
+            [max(layers[index].z - layers[index - 1].z, 0.0) for index in range(start, stop)]
+        )
+        below = shapely.buffer(shapes[:-1], steps * OVERHANG_ANGLE_FACTOR, quad_segs=16)
+        ceilings = np.asarray(
+            [_overhang_shape(layer) for layer in layers[start:stop]], dtype=object
+        )
+        free = shapely.difference(shapes[1:], below)
+        # Nur Schichten mit Überhang haben einen Streifen; die übrigen kosteten
+        # am Drachen sonst ein Drittel der Messung.
+        hanging = ~shapely.is_empty(ceilings)
+        if hanging.any():
+            reach = shapely.distance(ceilings[hanging], exact[:-1][hanging])
+            grow = np.maximum(reach - steps[hanging], 0.0) + OVERHANG_MARGIN
+            strips = shapely.buffer(ceilings[hanging], grow, join_style="mitre")
+            free[hanging] = shapely.difference(free[hanging], strips)
+        parts, owner = shapely.get_parts(free, return_index=True)
+        sized = shapely.area(parts) > 0.0
+        parts, owner = parts[sized], owner[sized]
+        count = stop - start
+        area = np.bincount(owner, weights=shapely.area(parts), minlength=count)
+        length = np.bincount(owner, weights=shapely.length(parts), minlength=count)
+        width = np.divide(2.0 * area, length, out=np.zeros(count), where=length > 0.0)
+        counted = width > 0.0
+        if line_width is not None:
+            counted &= width > REVERSE_THRESHOLD_SHARE * line_width - steps
+        bands = np.full(count, None, dtype=object)
+        if len(owner):
+            # ``get_parts`` liefert die Teile nach Schichten geordnet.
+            cuts = np.flatnonzero(np.diff(owner)) + 1
+            for position, group in zip(owner[np.r_[0, cuts]], np.split(parts, cuts), strict=True):
+                if counted[position]:
+                    bands[position] = shapely.multipolygons(group)
+        for position in range(count):
+            band = bands[position]
+            if band is None:
+                run = 0.0
+            elif previous is not None and shapely.dwithin(
+                band, previous, steps[position] + OVERHANG_MARGIN
+            ):
+                run += float(width[position])
+            else:
+                run = float(width[position])
+            previous = band
+            best = max(best, run)
+        if enough is not None and best > enough:
+            break
+    return best
+
+
+def _overhang_shape(layer: LayerInfo) -> ShapelyPolygon | MultiPolygon:
+    """Die Überhangstücke einer Schicht als eine Fläche, ohne sie zu vereinigen —
+    sie sind getrennte Teile derselben Differenz."""
+    parts = [ShapelyPolygon(piece.outline, piece.holes) for piece in layer.overhangs]
+    if not parts:
+        return ShapelyPolygon()
+    return parts[0] if len(parts) == 1 else MultiPolygon(parts)
+
+
+def _disjoint_shape(layer: LayerInfo) -> ShapelyPolygon | MultiPolygon:
+    """Die Konturen einer Schicht als eine Fläche, ohne sie zu vereinigen: Sie
+    stammen aus den Teilen einer gültigen Fläche (:func:`_to_polygons`) und
+    berühren sich nicht."""
+    parts = [ShapelyPolygon(contour.outline, contour.holes) for contour in layer.contours]
+    if not parts:
+        return ShapelyPolygon()
+    return parts[0] if len(parts) == 1 else MultiPolygon(parts)
+
+
+def cantilevers(
+    result: SliceResult, pieces: Sequence[tuple[int, int]], gap: float
+) -> frozenset[tuple[int, int]]:
+    """Welche dieser Überhangstücke (Schicht, Stück) nur an **einer** Seite an der
+    Schicht darunter hängen (RM-587).
+
+    Eine Auskragung, ein Rand oder ein Pilzhut grenzen an einem zusammenhängenden
+    Stück Umriss an den getragenen Rest ihrer Schicht; eine Brücke an zwei Enden.
+    Gefragt wird der Rest der eigenen Schicht und nicht die Schicht darunter: Das
+    Stück beginnt erst jenseits der Zugabe des Stützwinkels und berührt sie nie.
+    Gezählt werden die Berührungen, die weiter als ``gap`` auseinanderliegen —
+    eine Bahnbreite, damit eine vom Vernetzungsrauschen zerrissene Kante eine
+    bleibt. Eine Insel grenzt an nichts und ist keine Auskragung. Gemessen in
+    PrusaSlicer 2.9.6: Die Zusatzwände an Überhängen ersetzen unter einer
+    3-mm-Auskragung die Brückenbahnen und lassen eine beidseitig gelagerte
+    36-mm-Brücke unverändert.
+
+    **Und eine zusammenhängende Berührung hängt nur, wenn keine Bahnenrichtung
+    über das Stück an beiden Enden Halt hat** (:func:`_anchored_span`, Review
+    RM-587, M1 und N1). Der Deckel eines geschlossenen Kastens berührt seine
+    Schicht an einer einzigen Linie, dem ganzen Außenring; eine Decke auf drei
+    Seiten (Kasten, vorn offen) an einem U. Beide spannt der Slicer von Wand zu
+    Wand, und PrusaSlicer 2.9.6 legt sie mit und ohne Zusatzwände gleich
+    (U-Decke Brückenbahn 3 588,7 mm in beiden). Eine Decke auf zwei
+    Nachbarseiten (L) hat keine solche Richtung und bekommt die Zusatzwände
+    (Brückenbahn 3 590,6 → 1 795,3 mm); der Pilzhut berührt den Rest an seinem
+    Innenring, seine Bahnen enden außen in der Luft — beide bleiben einseitig.
+    """
+    found: set[tuple[int, int]] = set()
+    shapes: dict[int, Any] = {}
+    for index, number in pieces:
+        if index not in shapes:
+            shapes[index] = _layer_shape(result.layers[index])
+        piece = result.layers[index].overhangs[number]
+        outline = ShapelyPolygon(piece.outline, piece.holes)
+        rest = shapes[index].difference(outline).buffer(OVERHANG_MARGIN)
+        contact = outline.boundary.intersection(rest)
+        if contact.is_empty:
+            continue
+        joined = contact.buffer(gap / 2.0)
+        if len(getattr(joined, "geoms", [joined])) == 1 and _anchored_span(outline, rest) is None:
+            found.add((index, number))
+    return frozenset(found)
+
+
 def worst_overhang(result: SliceResult) -> float:
     """Die größte Überhangfläche, die auf **einer** Schicht anfängt.
 
@@ -3481,6 +3710,15 @@ class ModelSupport:
     bed_columns: tuple[tuple[SliceContour, float, float], ...] = ()
     """Ebenso die Stücke, deren Säule das Bett erreicht: Grundriss, Höhe der
     untersten Schicht, Höhe des Stücks."""
+    tallest_column: float = 0.0
+    """Die längste Stützsäule in mm: vom Stück bis zum Bett, wenn ein Teil der
+    Säule es erreicht, sonst bis dorthin, wo sie zuletzt auf dem Modell aufsetzt;
+    ohne Ränder und Kanaldecken (RM-584: ab 100 mm brauchen Bäume zwei Wände)."""
+    details_on_model: bool = False
+    """Setzen **kleine** Stücke auf dem Modell auf, so viele, dass sie Stütze
+    brauchen — außerhalb von Decken mit einem Stück über
+    ``OVERHANG_LAYER_WORTH_SUPPORT``? Dann gibt Hybrid ihnen Bäume (RM-584);
+    setzt nur eine große flache Decke auf, trägt Gitter allein."""
 
 
 def overhang_outline(result: SliceResult) -> ShapelyPolygon | MultiPolygon | None:
@@ -3554,6 +3792,123 @@ def open_bridge_width(
     )
 
 
+def kept_overhang(
+    result: SliceResult, index: int, quiet: frozenset[tuple[int, int]]
+) -> ShapelyPolygon | MultiPolygon | None:
+    """Die Überhangstücke der Schicht ``index`` ohne die aus ``quiet``, vereinigt
+    — ``None``, wenn keines davon in ``quiet`` steht (RM-627)."""
+    layer = result.layers[index]
+    if not any((index, number) in quiet for number in range(len(layer.overhangs))):
+        return None
+    kept = [
+        ShapelyPolygon(piece.outline, piece.holes)
+        for number, piece in enumerate(layer.overhangs)
+        if (index, number) not in quiet
+    ]
+    joined = unary_union(kept) if kept else ShapelyPolygon()
+    return joined if isinstance(joined, ShapelyPolygon | MultiPolygon) else ShapelyPolygon()
+
+
+def span_beside(
+    result: SliceResult,
+    index: int,
+    quiet: frozenset[tuple[int, int]],
+    *,
+    cancelled: CancelToken | None = None,
+) -> float:
+    """Die längste Brücke der Schicht ``index``, ohne die Stücke aus ``quiet`` —
+    Kanaldecken und Ränder, die sich selbst tragen (RM-627).
+
+    ``LayerInfo.bridge_width`` gilt der ganzen Schicht. Ein Kragen von 2 mm um
+    eine Wand, auf einer Seite vom Kinn unterbrochen, hat keine beidseitig
+    getragene Richtung, und seine Schicht meldete eine Brücke von 46 mm. Er ist
+    ein Rand (:func:`ledges`); stand er allein auf seiner Schicht, schwieg der
+    Bericht, mit einem Kinnstreifen von 4 mm² daneben warnte er, und der Rat
+    verlangte Stützen über den Brückenweg. Gemessen wird deshalb nur die freie
+    Fläche, die ein Stück außerhalb von ``quiet`` berührt, und darin nur deren
+    Kerne (:func:`_widest_bridge`), wie bei :func:`open_bridge_width`. Steht
+    kein Stück der Schicht in ``quiet``, gilt ihre Zahl unverändert.
+
+    **Gemerkt je Schnitt** (Identität des Schichttupels), je Schicht und
+    Auswahl ihrer Stücke aus ``quiet``, wie :func:`ledges`: Der Prüfbericht
+    läuft nach jeder Auswertung, und an der Waschschüssel kostete eine einzige
+    Schicht 2,8 s. Nimmt die Auswahl nichts weg, gilt die Zahl der Schicht ohne
+    neue Messung (:func:`_widest_bridge`). ``cancelled`` wird vor jeder
+    Messung gefragt.
+    """
+    return _beside(result, index, quiet, cancelled)[0]
+
+
+def span_spot(
+    result: SliceResult, index: int, quiet: frozenset[tuple[int, int]]
+) -> tuple[float, float] | None:
+    """Wo :func:`span_beside` die längste Brücke gemessen hat, in der Aufsicht —
+    ``None``, wenn die Schicht als Ganzes zählt; dann gilt der Ort der Schicht."""
+    return _beside(result, index, quiet, None)[1]
+
+
+def _beside(
+    result: SliceResult,
+    index: int,
+    quiet: frozenset[tuple[int, int]],
+    cancelled: CancelToken | None,
+) -> tuple[float, tuple[float, float] | None]:
+    """:func:`span_beside` und :func:`span_spot` aus einer gemerkten Messung."""
+    layer = result.layers[index]
+    mine = frozenset(number for number in range(len(layer.overhangs)) if (index, number) in quiet)
+    if not mine or index == 0:
+        return layer.bridge_width, None
+    with _ANSWERS_LOCK:
+        for number, (layers, found) in enumerate(_BESIDE):
+            if layers is result.layers and (index, mine) in found:
+                _recent(_BESIDE, number)
+                return found[(index, mine)]
+    if cancelled is not None:
+        cancelled.raise_if_cancelled()
+    answer = _measured_beside(result, index, quiet)
+    with _ANSWERS_LOCK:
+        known = next((found for layers, found in _BESIDE if layers is result.layers), None)
+        if known is None:
+            known = {}
+            _BESIDE.append((result.layers, known))
+            _keep_recent(_BESIDE)
+        known[(index, mine)] = answer
+    return answer
+
+
+#: Gemessene Brücken neben Rändern und Kanaldecken (:func:`span_beside`): je
+#: Schnitt (Schicht, Auswahl ihrer Stücke) → (Weite, Ort).
+_BESIDE: list[
+    tuple[
+        tuple[LayerInfo, ...],
+        dict[tuple[int, frozenset[int]], tuple[float, tuple[float, float] | None]],
+    ]
+] = []
+
+
+def _measured_beside(
+    result: SliceResult, index: int, quiet: frozenset[tuple[int, int]]
+) -> tuple[float, tuple[float, float] | None]:
+    """:func:`span_beside`, ungemerkt."""
+    layer = result.layers[index]
+    kept = kept_overhang(result, index, quiet)
+    if kept is None:
+        return layer.bridge_width, None
+    if kept.is_empty:
+        return 0.0, None
+    width, where = _widest_bridge(
+        _material(layer),
+        _material(result.layers[index - 1]),
+        BRIDGE_FROM if result.bridge_from is None else result.bridge_from,
+        touching=kept,
+        whole=layer.bridge_width,
+    )
+    if where is None:
+        return width, None
+    spot = where.representative_point()
+    return width, (float(spot.x), float(spot.y))
+
+
 def model_support(
     result: SliceResult,
     channel_width: float = CHANNEL_WIDTH,
@@ -3594,30 +3949,95 @@ def model_support(
     Sie hängt nur an den Schichten, nicht an den Einstellungen — der
     Druckdialog stellte sie trotzdem bei jedem geänderten Feld und nach jeder
     nachgereichten Profilliste neu, an der Waschschüssel je 3,9 s. Gemerkt
-    wird am Schichttupel selbst (Identität, nicht Gleichheit), für die letzten
-    :data:`_ANSWERS_KEPT` Fragen. Die Stückauswahl (``only``) gehört zum
+    wird am Schichttupel selbst (Identität, nicht Gleichheit), für so viele
+    Schnitte, wie :func:`keep_answers` sagt. Die Stückauswahl (``only``) gehört zum
     Schlüssel, damit auch der Prüfbericht seine Kanalfrage nur einmal stellt.
-    ``cancelled`` erreicht die Randfrage darin (:func:`ledges`).
+    ``cancelled`` wird je Schicht des Durchgangs, je Kreisfrage und je Decke
+    gefragt und erreicht die Randfrage darin (:func:`ledges`); eine
+    abgebrochene Antwort wird nicht gemerkt.
     """
     with _ANSWERS_LOCK:
-        for layers, width, selected, answer in _ANSWERS:
+        for number, (layers, width, selected, answer) in enumerate(_ANSWERS):
             if layers is result.layers and is_close(width, channel_width) and selected == only:
+                _recent(_ANSWERS, number)
                 return answer
     answer = _model_support(result, channel_width, only, cancelled)
     with _ANSWERS_LOCK:
         _ANSWERS.append((result.layers, channel_width, only, answer))
-        del _ANSWERS[:-_ANSWERS_KEPT]
+        _keep_recent(_ANSWERS)
     return answer
 
 
-#: Wie viele beantwortete Kanalfragen :func:`model_support` behält — die
-#: jüngsten, meist die Körper des offenen Druckdialogs. Ihre Schichttupel
-#: bleiben dafür am Leben, und damit bleibt ihre Identität eindeutig.
+def channel_pieces(
+    result: SliceResult,
+    only: frozenset[tuple[int, int]],
+    *,
+    cancelled: CancelToken | None = None,
+) -> frozenset[tuple[int, int]]:
+    """Welche der Stücke ``only`` Kanaldecken sind (:func:`model_support`).
+
+    Jedes Stück bekommt in der engen Frage dieselbe Antwort wie im ganzen
+    Durchgang; ist der gemerkt — der Prüfbericht fragt den Stützbedarf vor
+    den Befunden —, kommt die Antwort ohne neuen Durchgang daraus.
+    """
+    with _ANSWERS_LOCK:
+        for number, (layers, width, selected, answer) in enumerate(_ANSWERS):
+            if layers is result.layers and is_close(width, CHANNEL_WIDTH) and selected is None:
+                _recent(_ANSWERS, number)
+                return answer.channels & only
+    return model_support(result, only=only, cancelled=cancelled).channels
+
+
+#: Wie viele Schnitte die Merker über die Körper der Szene hinaus behalten
+#: (:func:`keep_answers`), und wie viele Antworten je Schnitt — enge Fragen,
+#: Linienbreiten. Ihre Schichttupel bleiben dafür am Leben, und damit bleibt
+#: ihre Identität eindeutig.
 _ANSWERS_KEPT: Final = 4
 _ANSWERS: list[
     tuple[tuple[LayerInfo, ...], float, frozenset[tuple[int, int]] | None, ModelSupport]
 ] = []
 _ANSWERS_LOCK = threading.Lock()
+#: Wie viele Schnitte die Merker gerade behalten (:func:`keep_answers`).
+_CUTS_KEPT = [_ANSWERS_KEPT]
+
+
+def keep_answers(bodies: int) -> None:
+    """Die Merker behalten die Antworten für ``bodies`` Körper und
+    :data:`_ANSWERS_KEPT` Schnitte darüber hinaus — den Druckdialog mit eigenem
+    Raster, die Lagensuche (Nachprüfung zu RM-627).
+
+    Der Prüfbericht fragt nach jeder Auswertung jeden Körper, über acht Körpern
+    die enge Kanalfrage und die Brücke ohne Kanaldecken selbst
+    (``findings.print_findings``). Mit vier Plätzen verdrängte jeder weitere
+    Körper den ersten, und jeder Bericht zahlte dessen Fragen neu, am Drachen
+    45° rund 18 s. Gezählt werden Schnitte, nicht Fragen; was gefragt wird,
+    rückt nach hinten, und verdrängt wird der am längsten nicht gefragte
+    Schnitt — der eines geänderten Körpers, nicht einer der Szene. Die Schichten
+    eines Körpers der Szene hält ohnehin der Cache seines Netzes.
+    """
+    _CUTS_KEPT[0] = max(bodies, 0) + _ANSWERS_KEPT
+
+
+def _recent(entries: list[Any], number: int) -> None:
+    """Rückt den Eintrag ``number`` eines Merkers ans Ende: zuletzt gefragt,
+    zuletzt verdrängt. Unter dem Schloss des Merkers."""
+    entries.append(entries.pop(number))
+
+
+def _keep_recent(entries: list[Any]) -> None:
+    """Kürzt einen Merker auf die zuletzt gefragten Schnitte (:func:`keep_answers`)
+    und je Schnitt auf die letzten :data:`_ANSWERS_KEPT` Antworten. Vorn in jedem
+    Eintrag steht sein Schichttupel. Unter dem Schloss des Merkers."""
+    answers: dict[int, int] = {}
+    kept: list[Any] = []
+    for entry in reversed(entries):
+        cut = id(entry[0])
+        if cut not in answers and len(answers) >= _CUTS_KEPT[0]:
+            continue
+        answers[cut] = answers.get(cut, 0) + 1
+        if answers[cut] <= _ANSWERS_KEPT:
+            kept.append(entry)
+    entries[:] = kept[::-1]
 
 
 #: Wie weit eine Decke in der Aufsicht über das Material ragen darf, an dem sie
@@ -3651,23 +4071,27 @@ def ledges(
     ``only`` fragt nur die Decken dieser Stücke, wie bei :func:`model_support`:
     Über alle Stücke des Eiffelturms kostet die Frage 7,5 s, der Prüfbericht
     braucht sie für eine Handvoll. Für die gefragten Stücke sagt die Antwort
-    dasselbe wie die volle Frage. Gemerkt wird nur die volle Antwort, wie die
-    Kanalfrage, und sie dient auch jeder engeren Frage; eine enge ist billig
-    und verdrängte sonst volle Antworten anderer Körper aus dem Merker.
+    dasselbe wie die volle Frage. Gemerkt wie die Kanalfrage, mit der Auswahl
+    im Schlüssel; die volle Antwort dient auch jeder engeren Frage. Die enge
+    Frage des Berichts kostet am Drachen (45°) 2,7 s je Bericht; seit der
+    Merker Schnitte zählt (:func:`keep_answers`), verdrängt sie keine Antwort
+    eines anderen Körpers mehr. Abgebrochen wird nichts gemerkt.
     """
     with _ANSWERS_LOCK:
-        for layers, answer in _LEDGES:
-            if layers is result.layers:
+        for number, (layers, selected, answer) in enumerate(_LEDGES):
+            if layers is result.layers and (selected is None or selected == only):
+                _recent(_LEDGES, number)
                 return answer
     answer = _ledges(result, only, cancelled)
-    if only is None:
-        with _ANSWERS_LOCK:
-            _LEDGES.append((result.layers, answer))
-            del _LEDGES[:-_ANSWERS_KEPT]
+    with _ANSWERS_LOCK:
+        _LEDGES.append((result.layers, only, answer))
+        _keep_recent(_LEDGES)
     return answer
 
 
-_LEDGES: list[tuple[tuple[LayerInfo, ...], frozenset[tuple[int, int]]]] = []
+_LEDGES: list[
+    tuple[tuple[LayerInfo, ...], frozenset[tuple[int, int]] | None, frozenset[tuple[int, int]]]
+] = []
 
 
 def _ledges(
@@ -3735,13 +4159,14 @@ def ledge_space(
     noch einmal.
     """
     with _ANSWERS_LOCK:
-        for layers, width, known in _LEDGE_SPACES:
+        for number, (layers, width, known) in enumerate(_LEDGE_SPACES):
             if layers is result.layers and abs(width - line_width) <= EPS_GEOM:
+                _recent(_LEDGE_SPACES, number)
                 return list(known)
     slabs = _ledge_space(result, line_width)
     with _ANSWERS_LOCK:
         _LEDGE_SPACES.append((result.layers, line_width, tuple(slabs)))
-        del _LEDGE_SPACES[:-_ANSWERS_KEPT]
+        _keep_recent(_LEDGE_SPACES)
     return slabs
 
 
@@ -4196,10 +4621,15 @@ def _model_support(
     groups = min(_workers(SUPPORT_WORKERS), len(starting)) if len(layers) >= PARALLEL_FROM else 1
     member = {index: number % groups for number, index in enumerate(starting)}
 
-    def descend(group: int) -> dict[int, tuple[int, float]]:
+    def descend(group: int) -> tuple[dict[int, tuple[int, float]], dict[int, int], set[int]]:
         pending: list[tuple[int, manifold3d.CrossSection]] = []
         landed: dict[int, tuple[int, float]] = {}
+        # Wo eine Säule zuletzt aufsetzt, und welche das Bett erreichen: die
+        # Höhe ihres Stamms (``ModelSupport.tallest_column``, RM-584).
+        lowest: dict[int, int] = {}
         for index in range(top, 0, -1):
+            if cancelled is not None:
+                cancelled.raise_if_cancelled()
             if member.get(index) == group:
                 pending.extend((owner, _material_cross(pieces[owner])) for owner in starts[index])
             if not pending:
@@ -4220,10 +4650,11 @@ def _model_support(
                 if lost > EPS_GEOM:
                     low, before = landed.get(owner, (index - 1, 0.0))
                     landed[owner] = (low, before + lost)
+                    lowest[owner] = index - 1
                 if not remaining.is_empty():
                     kept.append((owner, remaining))
             pending = kept
-        return landed
+        return landed, lowest, {owner for owner, _column in pending}
 
     if groups == 1:
         shares = [descend(0)]
@@ -4235,11 +4666,39 @@ def _model_support(
     # In der Folge der Stücke, nicht der Arbeiter: Jedes Stück gehört genau
     # einer Gruppe, und die Summen darunter hängen dann nicht daran, wer
     # zuerst fertig war.
-    landed = {owner: share[owner] for share in shares for owner in share}
+    landed = {owner: share[0][owner] for share in shares for owner in share[0]}
     landed = {owner: landed[owner] for owner in sorted(landed)}
+    lowest = {owner: share[1][owner] for share in shares for owner in share[1]}
+    on_bed = {owner for share in shares for owner in share[2]}
+
+    def tallest(quiet: Callable[[int], bool]) -> float:
+        """Der höchste Stamm unter einem Stück, das Stütze braucht (RM-584): bis
+        zum Bett, wenn ein Teil der Säule es erreicht, sonst bis dorthin, wo sie
+        zuletzt aufsetzt. Bis zur ersten Berührung gemessen, war eine Platte auf
+        150 mm, die zum Teil auf einem Turm von 120 mm aufsetzt, 30 mm hoch.
+        Ränder und Kanaldecken tragen sich selbst (``quiet``) und zählen nicht.
+        Das Bett ist die unterste Schicht des Körpers wie bei ``bed_columns``,
+        nicht der Nullpunkt: Ein angehobener Körper (ein Deckel auf der Dose)
+        bekam sonst seine Lage dazu (Nachprüfung RM-584, N4)."""
+        bed = float(layers[0].z)
+        return max(
+            (
+                float(layers[names[owner][0]].z)
+                - (
+                    float(layers[lowest[owner]].z)
+                    if owner in lowest and owner not in on_bed
+                    else bed
+                )
+                for owner in range(len(names))
+                if (only is None or names[owner] in only) and not quiet(owner)
+            ),
+            default=0.0,
+        )
 
     if not landed:
-        return ModelSupport()
+        # Ohne Auflage auf dem Modell gibt es keine Kanaldecke, aber Ränder.
+        edges = ledges(result, only, cancelled=cancelled)
+        return ModelSupport(tallest_column=tallest(lambda owner: names[owner] in edges))
     islands: set[int] = set()
     channels: set[int] = set()
     places: dict[int, Any] = {}
@@ -4265,6 +4724,8 @@ def _model_support(
     # Eine Frage je Schicht, nicht je Säule (:func:`_in_channels`), und die
     # Schichten nebeneinander: Jede fragt nur ihre eigene Fläche.
     def answer(under: int) -> list[bool]:
+        if cancelled is not None:
+            cancelled.raise_if_cancelled()
         return _in_channels(
             material_at(under)[0], [places[owner] for owner in asked[under]], channel_width
         )
@@ -4297,6 +4758,8 @@ def _model_support(
     for owner in sorted(channels):
         if owner in settled:
             continue
+        if cancelled is not None:
+            cancelled.raise_if_cancelled()
         ceiling = sorted(owner_of[name] for name in ceilings.of(names[owner]))
         settled.update(ceiling)
         inside = math.fsum(areas[member] for member in ceiling if member in channels)
@@ -4347,29 +4810,61 @@ def _model_support(
     edges = ledges(result, only, cancelled=cancelled)
     bearing = {owner for owner in landed if owner not in channels and names[owner] not in edges}
     resting_ledges = any(names[owner] in edges for owner in landed if owner not in channels)
-    outside = [area for owner, (_low, area) in landed.items() if owner in bearing]
-    open_patch = max(outside, default=0.0)
-    open_area = math.fsum(outside)
     island_on_model = bool(islands)
-    # **Und als Feld** (RM-570, Review 3): Ein Kinn mit schräger Unterseite
-    # über der Brust zerfällt in Streifen unter 10 mm². Je Stück gefragt,
-    # verlangte der Rat Stützen und zugleich „nur vom Bett“, und das Kinn
-    # druckte weiter in die Luft. Gezählt wird, was auf dem Modell aufsetzt;
-    # gefragt nur, wo ein Feld die Antwort ändern kann.
-    open_field = 0.0
-    if not worth_support(open_patch, open_area) and open_area > OVERHANG_LAYER_WORTH_SUPPORT:
-        resting = {names[owner]: area for owner, (_low, area) in landed.items() if owner in bearing}
-        seen: set[tuple[int, int]] = set()
-        for name in sorted(resting):
-            if name in seen:
-                continue
-            group = ceilings.of(name)
-            seen |= group
-            members = sorted(group & resting.keys())
-            field = _field([ceilings.shape(member) for member in members])
-            open_field = max(
-                open_field, min(field, math.fsum(resting[member] for member in members))
+
+    def resting_on(owners: set[int]) -> tuple[float, float, float]:
+        """Was von diesen Stücken auf dem Modell aufsetzt: das größte Stück, die
+        Summe und die größte Decke als Feld.
+
+        **Als Feld** (RM-570, Review 3): Ein Kinn mit schräger Unterseite über
+        der Brust zerfällt in Streifen unter 10 mm². Je Stück gefragt, verlangte
+        der Rat Stützen und zugleich „nur vom Bett“, und das Kinn druckte weiter
+        in die Luft. Gefragt nur, wo ein Feld die Antwort ändern kann."""
+        outside = [area for owner, (_low, area) in landed.items() if owner in owners]
+        patch = max(outside, default=0.0)
+        total = math.fsum(outside)
+        widest = 0.0
+        if not worth_support(patch, total) and total > OVERHANG_LAYER_WORTH_SUPPORT:
+            resting = {
+                names[owner]: area for owner, (_low, area) in landed.items() if owner in owners
+            }
+            seen: set[tuple[int, int]] = set()
+            for name in sorted(resting):
+                if name in seen:
+                    continue
+                if cancelled is not None:
+                    cancelled.raise_if_cancelled()
+                group = ceilings.of(name)
+                seen |= group
+                members = sorted(group & resting.keys())
+                field = _field([ceilings.shape(member) for member in members])
+                widest = max(widest, min(field, math.fsum(resting[member] for member in members)))
+        return patch, total, widest
+
+    open_patch, open_area, open_field = resting_on(bearing)
+    # **Kleine Stücke auf dem Modell** (RM-584): Hybrid gibt Bäume an die
+    # Details und Gitter unter die große flache Decke. Setzt nur die flache
+    # Decke selbst auf dem Modell auf — die Platte des Tischs auf ihrem Sockel
+    # —, trägt Gitter allein; gefragt wird deshalb, was außerhalb von Decken
+    # mit einem Stück über ``OVERHANG_LAYER_WORTH_SUPPORT`` aufsetzt, mit
+    # denselben zwei Wegen wie der Stützbedarf.
+    flat_ceilings: dict[frozenset[tuple[int, int]], bool] = {}
+
+    def in_flat_ceiling(owner: int) -> bool:
+        group = ceilings.of(names[owner])
+        if group not in flat_ceilings:
+            flat_ceilings[group] = any(
+                areas[owner_of[member]] > OVERHANG_LAYER_WORTH_SUPPORT
+                for member in group
+                if member in owner_of
             )
+        return flat_ceilings[group]
+
+    small = {owner for owner in bearing if not in_flat_ceiling(owner)}
+    detail_patch, detail_area, detail_field = resting_on(small) if small else (0.0, 0.0, 0.0)
+    details_on_model = any(not in_flat_ceiling(owner) for owner in islands) or worth_support(
+        max(detail_patch, detail_field), detail_area
+    )
 
     chosen = frozenset(names[owner] for owner in channels)
     columns = tuple(
@@ -4404,6 +4899,8 @@ def _model_support(
             return True
         group = ceilings.of(name)
         if group not in worth_of:
+            if cancelled is not None:
+                cancelled.raise_if_cancelled()
             shapes = [ceilings.shape(member) for member in sorted(group - in_channel)]
             worth_of[group] = worth_support(
                 _field(shapes), math.fsum(shape.area for shape in shapes)
@@ -4412,6 +4909,8 @@ def _model_support(
 
     spared = set() if not columns else {owner for owner in range(len(names)) if needs_own(owner)}
     return ModelSupport(
+        tallest_column=tallest(lambda owner: names[owner] in in_channel or names[owner] in edges),
+        details_on_model=details_on_model,
         open_patch=open_patch,
         open_area=open_area,
         open_field=open_field,
@@ -4491,13 +4990,14 @@ def channel_space(
     einmal — am Drachen bei 130 % je 2,0 s (Review vom 08.10.2026).
     """
     with _SPACES_LOCK:
-        for layers, asked, width, known in _SPACES:
+        for number, (layers, asked, width, known) in enumerate(_SPACES):
             if layers is result.layers and asked is model and abs(width - line_width) <= EPS_GEOM:
+                _recent(_SPACES, number)
                 return list(known)
     slabs = _channel_space(result, model, line_width)
     with _SPACES_LOCK:
         _SPACES.append((result.layers, model, line_width, tuple(slabs)))
-        del _SPACES[:-_ANSWERS_KEPT]
+        _keep_recent(_SPACES)
     return slabs
 
 

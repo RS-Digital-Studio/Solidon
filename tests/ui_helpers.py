@@ -125,6 +125,27 @@ def wait_for_export(window: MainWindow) -> None:
         QApplication.processEvents()
 
 
+def wait_for_print_findings(window: MainWindow) -> None:
+    """Die Berichtsanalyse läuft im Arbeiter nach der Auswertung; der Test
+    wartet wie das Fenster, bis sie ihre Zeilen geliefert hat.
+
+    ``wait_for_idle`` sieht sie nicht. Kam ihre Antwort erst später, baute sie
+    die Liste des Prüfberichts neu, während der Test eine Zeile hielt — auf dem
+    macOS-Läufer riss so ein ``QListWidgetItem`` unter dem Test weg.
+    """
+    for _round in range(5):
+        worker = window._print_findings.worker
+        if worker is None or not worker.isRunning():
+            QApplication.processEvents()
+            worker = window._print_findings.worker
+            if worker is None or not worker.isRunning():
+                return
+        assert worker.wait(60_000), "die Berichtsanalyse endet nicht"
+        QApplication.processEvents()
+    worker = window._print_findings.worker
+    assert worker is None or not worker.isRunning(), "die Berichtsanalyse startet immer neu"
+
+
 def export_anyway(monkeypatch: pytest.MonkeyPatch) -> None:
     """Die Frage vor dem Schreiben bejahen (§29, RM-140).
 

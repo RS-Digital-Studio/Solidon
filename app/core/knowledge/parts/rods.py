@@ -160,6 +160,7 @@ def _turn_of(direction: Vec3) -> float:
 
 @register_part(
     name="rod_connector",
+    play_inside=True,
     title=_("Steckhülse und Stangenverbinder"),
     group="structure",
     params=RodConnectorParams,

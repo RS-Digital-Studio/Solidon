@@ -3997,6 +3997,14 @@ def test_a_cavity_without_a_body_is_closed_from_its_dimensions(
     assert left < 0.5, f"im Schlauch der Bohrung steht Material: {left:.3f} mm³"
 
 
+#: Merkmalsfelder, auf die keine Absage mit ``field="at_feature"`` zeigt: Die
+#: Operation wirft keine, und ihr eigener Befund nennt das Feld selbst
+#: (``values["field"]``, ``tests/test_finding_ways.py``). *Merkmal beisammen
+#: halten* an *In Einzelteile aufteilen* (Nachprüfung I, N2) — ``at_feature``
+#: hieße im Kern „das Merkmal, an dem die Handlung rechnet“.
+_OWN_FIELD: frozenset[str] = frozenset({"split_bodies.carry_feature"})
+
+
 def test_every_op_that_refuses_a_feature_carries_the_field_it_points_at() -> None:
     """Der Vorschlag öffnet den Schritt an einem Feld — das muss es geben.
 
@@ -4059,7 +4067,7 @@ def test_every_op_that_refuses_a_feature_carries_the_field_it_points_at() -> Non
             if field.metadata["param"]["kind"] != "feature":
                 continue
             mit_merkmal.append(spec.name)
-            if field.name != "at_feature":
+            if field.name != "at_feature" and f"{spec.name}.{field.name}" not in _OWN_FIELD:
                 falsch_benannt.append(f"{spec.name}.{field.name}")
 
     assert len(mit_merkmal) >= 10, (
@@ -5202,6 +5210,253 @@ def test_split_bodies_with_too_few_parts_offers_the_measured_count(profile: Prof
 
     assert fehler.value.values["found"] == "2"
     assert fehler.value.suggestions[0] is RECOUNT_AND_RETRY
+
+
+def _loose_parts_corpus() -> SceneObject:
+    """``plate_with_loose_parts.stl`` ohne Löcherschließen — die offenen Splitter bleiben offen."""
+    data = (MESHES / "plate_with_loose_parts.stl").read_bytes()
+    mesh = normalise(read_mesh(data, ".stl"), "mm", mend=False).mesh
+    assert mesh.component_count == 11, "die Vorbedingung: neun Teile und zwei Splitter"
+    return SceneObject(id="obj_1", name="Ständer", mesh=mesh)
+
+
+def _split_volumes(result) -> list[float]:
+    return sorted(
+        (round(abs(float(as_mesh_data(part.mesh).volume)), 3) for part in result.outputs),
+        reverse=True,
+    )
+
+
+def test_split_bodies_keeps_every_printable_part_and_drops_only_splinters(
+    profile: Profile,
+) -> None:
+    """Ein Splitter ist, was der Drucker nicht hinterlässt oder eine kleine offene Fläche (RM-639).
+
+    Am Laptop-Ständer warf *In Einzelteile aufteilen* 13 von 22 echten Teilen
+    weg: Stifte, Scheiben und Schraubenköpfe lagen unter einem Prozent der
+    größten Platte. Der Korpus hat dieselbe Lage — Platte 75 774 mm³, vier Stifte
+    in ihren Bohrungen, zwei Scheiben und ein Klotz zwischen 0,3 und 0,7 Prozent
+    davon —, dazu einen Kasten ohne Deckel (125 mm² Fläche, ein Teil wie beim
+    Laden, Review I M1) und zwei echte Splitter: ein loses Dreieck und einen
+    Würfel 0,2 mm unter dem kleinsten druckbaren Volumen. Neun Teile bleiben, der
+    Kasten mit geschlossenem Deckel wie bisher, die zwei Splitter fallen;
+    *Splitter behalten* gibt alle elf. Ein Drucker mit feinerer Auflösung behält
+    den Würfel, und ein einzelner Splitter heißt in der Einzahl.
+    """
+    from app.core.errors import ValidationError
+
+    entry = _loose_parts_corpus()
+    crumb = 0.2 * 0.2 * 0.2
+    assert crumb < profile.smallest_printable_volume, "Vorbedingung: der Würfel ist ein Splitter"
+
+    result = _run_op("split_bodies", entry, profile, count=9)
+
+    closed = [part for part in result.outputs if as_mesh_data(part.mesh).is_watertight]
+    assert sorted(
+        (round(abs(float(as_mesh_data(part.mesh).volume)), 3) for part in closed), reverse=True
+    ) == [75773.5, 500.0, 394.711, 394.711, 394.711, 394.711, 225.549, 225.549]
+    (tray,) = [part for part in result.outputs if part not in closed]
+    assert float(as_mesh_data(tray.mesh).raw.area) == pytest.approx(125.0), "der Kasten"
+    befunde = {finding.code: finding for finding in result.findings}
+    assert befunde["split_bodies.tiny"].values["count"] == "2"
+    assert str(befunde["split_bodies.tiny"].message).startswith("2 Splitter wurden verworfen")
+    assert "split_bodies.surplus" not in befunde
+
+    with pytest.raises(ValidationError) as fehler:
+        _run_op("split_bodies", entry, profile, count=10)
+    assert fehler.value.values["found"] == "9", "die Splitter zählen nicht als Teile"
+
+    alle = _run_op("split_bodies", entry, profile, count=11, keep_tiny=True)
+    assert len(alle.outputs) == 11
+    assert "split_bodies.tiny" not in {finding.code for finding in alle.findings}
+
+    fein = profiles.make_profile("generic-resin-130", "resin")
+    assert fein.smallest_printable_volume < crumb, "Vorbedingung: das Harz belichtet den Würfel"
+    feiner = _run_op("split_bodies", entry, fein, count=10)
+    smallest = min(abs(float(as_mesh_data(part.mesh).volume)) for part in feiner.outputs)
+    assert smallest == pytest.approx(crumb, abs=1e-3)
+    einer = {finding.code: finding for finding in feiner.findings}["split_bodies.tiny"]
+    assert einer.values["count"] == "1"
+    assert str(einer.message).startswith("Ein Splitter wurde verworfen"), "Einzahl (Review I, G4)"
+
+
+def _open_tube(radius: float, height: float, shift: tuple[float, float, float]) -> trimesh.Trimesh:
+    """Ein Rohr ohne Deckel: nur der Mantel eines Zylinders."""
+    tube = trimesh.creation.cylinder(radius=radius, height=height, sections=64)
+    tube.update_faces(np.abs(tube.face_normals[:, 2]) < 0.5)
+    tube.remove_unreferenced_vertices()
+    tube.apply_translation(shift)
+    return tube
+
+
+def test_split_bodies_keeps_a_large_open_shell_beside_a_closed_part(profile: Profile) -> None:
+    """Eine große offene Schale ist ein Teil, kein Splitter (Review I, M1).
+
+    Ein Rohr Ø 40 × 40 ohne Deckel neben zwei Würfeln 20 mm, so geladen mit
+    *Offen lassen*: Die Regel „offen heißt Splitter, sobald ein anderes Teil
+    geschlossen ist“ warf das Rohr — das größte Teil — weg und sagte bei zwei
+    Teilen „besteht aus einem Stück“. Splitter heißt klein, wie beim Laden
+    (``repair.open_splinters``).
+    """
+    from app.core.geom.mesh import MeshData
+
+    first = trimesh.creation.box(extents=(20.0, 20.0, 20.0))
+    first.apply_translation((60.0, 0.0, 10.0))
+    second = trimesh.creation.box(extents=(20.0, 20.0, 20.0))
+    second.apply_translation((100.0, 0.0, 10.0))
+    tube = _open_tube(20.0, 40.0, (0.0, 0.0, 20.0))
+    entry = SceneObject(
+        id="obj_1", name="Rohr", mesh=MeshData.of(trimesh.util.concatenate([tube, first, second]))
+    )
+
+    result = _run_op("split_bodies", entry, profile, count=3)
+
+    assert len(result.outputs) == 3
+    assert "split_bodies.tiny" not in {finding.code for finding in result.findings}
+    assert any(not as_mesh_data(part.mesh).is_watertight for part in result.outputs), (
+        "das Rohr ist dabei"
+    )
+
+
+def test_split_bodies_keeps_open_sheets_when_no_part_is_closed(profile: Profile) -> None:
+    """Besteht der Körper nur aus großen offenen Flächen, sind sie die Teile (RM-639)."""
+    from app.core.geom.mesh import MeshData
+
+    blaetter = []
+    for shift in (0.0, 40.0):
+        sheet = trimesh.creation.box(extents=(20.0, 20.0, 2.0))
+        sheet.update_faces(sheet.face_normals[:, 2] > 0.5)
+        sheet.remove_unreferenced_vertices()
+        sheet.apply_translation((shift, 0.0, 0.0))
+        blaetter.append(sheet)
+    entry = SceneObject(
+        id="obj_1", name="Blätter", mesh=MeshData.of(trimesh.util.concatenate(blaetter))
+    )
+
+    result = _run_op("split_bodies", entry, profile, count=2)
+
+    assert len(result.outputs) == 2
+    assert "split_bodies.tiny" not in {finding.code for finding in result.findings}
+
+
+def _plate_and_small_cube() -> list[trimesh.Trimesh]:
+    """Platte 100 × 60 × 10 und ein Würfel 1 mm daneben: 1 mm³ ist druckbar, 6 mm² klein."""
+    plate = trimesh.creation.box(extents=(100.0, 60.0, 10.0))
+    cube = trimesh.creation.box(extents=(1.0, 1.0, 1.0))
+    cube.apply_translation((80.0, 0.0, 0.0))
+    return [plate, cube]
+
+
+def test_split_bodies_reads_an_unwelded_stl_by_where_its_corners_are(profile: Profile) -> None:
+    """Ungeschweißt (*Verschweißen* aus) teilt kein Dreieck eine Eckennummer (Review I, G2).
+
+    Offen zählt nach dem Ort der Ecken (``vertex_rank``). Nach der Nummer wäre
+    jedes Teil offen, und der Würfel 1 mm — geschlossen druckbar — fiele als
+    kleine offene Fläche weg.
+    """
+    from app.core.geom.mesh import MeshData
+
+    joined = trimesh.util.concatenate(_plate_and_small_cube())
+    corners = np.asarray(joined.triangles, dtype=np.float64).reshape(-1, 3)
+    loose = trimesh.Trimesh(
+        vertices=corners, faces=np.arange(len(corners)).reshape(-1, 3), process=False
+    )
+    entry = SceneObject(id="obj_1", name="Lose", mesh=MeshData.of(loose))
+    assert entry.mesh.component_count == 2, "Vorbedingung: zwei Teile nach dem Ort"
+
+    result = _run_op("split_bodies", entry, profile, count=2)
+
+    assert _split_volumes(result) == [60000.0, 1.0]
+
+
+def test_split_bodies_drops_a_degenerate_triangle_and_keeps_its_cube(profile: Profile) -> None:
+    """Ein entartetes Dreieck am Würfel ist ein Splitter, der Würfel ein Teil (Review I, G2).
+
+    Zwei seiner Ecken liegen am selben Ort. ``face_components`` stellt es als
+    eigenes Teil ohne Fläche und Volumen hin — darum braucht die Frage nach der
+    offenen Kante keine Ausnahme für solche Kanten: Offen oder geschlossen, es
+    fällt weg, und der Würfel daneben bleibt geschlossen.
+    """
+    from app.core.geom.mesh import MeshData
+
+    plate, cube = _plate_and_small_cube()
+    corner = int(cube.faces[0][0])
+    vertices = np.vstack([cube.vertices, cube.vertices[corner]])
+    faces = np.vstack([cube.faces, [[corner, len(vertices) - 1, int(cube.faces[0][1])]]])
+    spoiled = trimesh.Trimesh(vertices=vertices, faces=faces, process=False)
+    entry = SceneObject(
+        id="obj_1", name="Entartet", mesh=MeshData.of(trimesh.util.concatenate([plate, spoiled]))
+    )
+    assert entry.mesh.component_count == 3, "Vorbedingung: das Dreieck steht für sich"
+
+    result = _run_op("split_bodies", entry, profile, count=2)
+
+    assert _split_volumes(result) == [60000.0, 1.0]
+    tiny = {finding.code: finding for finding in result.findings}["split_bodies.tiny"]
+    assert tiny.values["count"] == "1"
+
+
+@pytest.mark.parametrize("side", [(2, -1.0), (0, -1.0)], ids=["unten", "links"])
+def test_split_bodies_orders_a_part_with_a_small_gap_like_before(
+    profile: Profile, side: tuple[int, float]
+) -> None:
+    """Ein offenes Teil behält die Zahl, nach der es bisher geordnet wurde (Review I, G1).
+
+    Platte und zwei gleiche Klötze, dem linken fehlt unten oder links ein Dreieck.
+    Gleich groß ordnet die Lage: links vor rechts. An den rohen Dreiecken nahe
+    gemessen war der linke kleiner und tauschte mit *Splitter behalten* den Platz
+    — die Kennungen ``obj_2`` und ``obj_3`` wechselten das Teil.
+    """
+    from app.core.geom.mesh import MeshData
+
+    axis, sign = side
+    plate = trimesh.creation.box(extents=(100.0, 100.0, 10.0))
+    plate.apply_translation((0.0, 0.0, 5.0))
+    left = trimesh.creation.box(extents=(10.0, 10.0, 10.0))
+    left.apply_translation((-80.0, 0.0, 5.0))
+    right = trimesh.creation.box(extents=(10.0, 10.0, 10.0))
+    right.apply_translation((80.0, 0.0, 5.0))
+    keep = np.ones(len(left.faces), dtype=bool)
+    keep[np.flatnonzero(left.face_normals[:, axis] * sign > 0.5)[0]] = False
+    left.update_faces(keep)
+    entry = SceneObject(
+        id="obj_1",
+        name="Klötze",
+        mesh=MeshData.of(trimesh.util.concatenate([plate, left, right])),
+    )
+
+    result = _run_op("split_bodies", entry, profile, count=3, keep_tiny=True)
+
+    centres = [float(as_mesh_data(part.mesh).raw.bounds.mean(axis=0)[0]) for part in result.outputs]
+    assert centres == pytest.approx([0.0, -80.0, 80.0])
+
+
+def test_older_split_steps_measure_like_before_also_at_open_parts(profile: Profile) -> None:
+    """Der Altmarker misst wie damals, auch an offenen Teilen (Review I, G2).
+
+    Ein offenes Rohr Ø 10 × 10 neben einem Klotz 40 mm: ``Trimesh.volume`` an
+    seinem Teilnetz lag über einem Prozent des Klotzes, nahe am Teil gemessen
+    darunter. Projekte vor RM-639 behielten es.
+    """
+    import warnings
+
+    from app.core.geom.mesh import MeshData, signed_volume
+
+    block = trimesh.creation.box(extents=(40.0, 40.0, 40.0))
+    tube = _open_tube(5.0, 10.0, (300.0, 300.0, 300.0))
+    (part,) = tube.submesh([np.arange(len(tube.faces))], only_watertight=False, append=False)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        saved = abs(float(part.volume))
+    assert saved >= 0.01 * 64000.0, "Vorbedingung: damals ein Teil"
+    assert abs(signed_volume(part)) < 0.01 * 64000.0, "Vorbedingung: nahe gemessen keins"
+    entry = SceneObject(
+        id="obj_1", name="Rohr", mesh=MeshData.of(trimesh.util.concatenate([block, tube]))
+    )
+
+    result = _run_op("split_bodies", entry, profile, count=2, legacy_tiny_share=True)
+
+    assert len(result.outputs) == 2
 
 
 def _u_profile(

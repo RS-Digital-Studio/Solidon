@@ -310,9 +310,9 @@ def test_whether_a_bore_is_clear_is_answered_once_per_body_and_bore(
     calls: list[str] = []
     read = prepare_ops._hole_is_clear_read
 
-    def counted(mesh, feature, radius, depth):
+    def counted(mesh, feature, radius, depth, **kwargs):
         calls.append(feature.id)
-        return read(mesh, feature, radius, depth)
+        return read(mesh, feature, radius, depth, **kwargs)
 
     monkeypatch.setattr(prepare_ops, "_hole_is_clear_read", counted)
     assert prepare_ops.hole_is_clear(plate, bores[0]) is True

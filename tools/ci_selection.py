@@ -111,13 +111,18 @@ def _relative(path: Path, root: Path) -> str:
     return (path.relative_to(root) if path.is_absolute() else path).as_posix()
 
 
-def select(changed: Iterable[Path], root: Path = ROOT) -> tuple[list[str], list[str]]:
-    """Fensterauswahlen und Slicerauswahlen zu diesen geänderten Dateien."""
+def select(
+    changed: Iterable[Path], root: Path = ROOT, graph: affected_tests.ImportGraph | None = None
+) -> tuple[list[str], list[str]]:
+    """Fensterauswahlen und Slicerauswahlen zu diesen geänderten Dateien.
+
+    ``graph`` spart den Aufbau des Importgraphen, wenn der Aufrufer ihn schon hat.
+    """
     root = root.resolve()
     relevant = [path for path in changed if not is_documentation(_relative(path, root))]
     if not relevant:
         return [], []
-    files, _reasons = affected_tests.affected(relevant, affected_tests.ImportGraph(root))
+    files, _reasons = affected_tests.affected(relevant, graph or affected_tests.ImportGraph(root))
     if not files:
         return [], []
     ordered = sorted(files)

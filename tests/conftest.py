@@ -77,11 +77,17 @@ _remove_stale_isolated()
 # nicht zu führen.
 from app.core.paths import PROFILE_VARIABLES
 
+#: Wo dieser Rechner Programme je Nutzer installiert (``%LOCALAPPDATA%\Programs``),
+#: gesichert, bevor die Zeilen darunter den Ordner umbiegen: Dort sucht die
+#: Anwendung einen Slicer (``discover._install_roots``), und SuperSlicer liegt dort.
+_REAL_LOCAL_APPDATA = os.environ.get("LOCALAPPDATA")
+
 for _variable in PROFILE_VARIABLES:
     os.environ[_variable] = _ISOLATED
 
 from app.core import discover
 from app.core.activation import store as activation_store
+from app.core.export import slicer_profiles
 from app.core.knowledge import profiles
 from app.core.perceive import features, local, matching
 from app.core.types import Document, Profile
@@ -658,11 +664,19 @@ def installed_slicer(request: pytest.FixtureRequest) -> Path:
         )
     wanted = str(marker.args[0])
     discover.forget_cache()
-    found = [
-        program
-        for program in discover.unpatched_find_programs("slicer", tools.SLICERS)
-        if discover.program_mark(program.name) == wanted
-    ]
+    isolated = os.environ.get("LOCALAPPDATA")
+    if _REAL_LOCAL_APPDATA:
+        os.environ["LOCALAPPDATA"] = _REAL_LOCAL_APPDATA
+    try:
+        found = [
+            program
+            for program in discover.unpatched_find_programs("slicer", tools.SLICERS)
+            if discover.program_mark(program.name) == wanted
+        ]
+    finally:
+        if isolated is not None:
+            os.environ["LOCALAPPDATA"] = isolated
+        discover.forget_cache()
     if found:
         return Path(found[0])
     message = f"{wanted} ist auf dieser Maschine nicht installiert"
@@ -690,16 +704,24 @@ def _remembered_features_stay_out_of_it() -> None:
     oben (§38).
 
     Dasselbe gilt für die gemerkten örtlichen Nachmessungen
-    (``local.forget_known``), Zuordnungen (``matching.forget_matches``) und
+    (``local.forget_known``), Zuordnungen (``matching.forget_matches``),
+    Bewegungen (``matching.forget_transformed``) und
     Zuordnungsschritte der Auswertung (``evaluate.forget_remembered_steps``):
     Ein Test, der die Suche zählt oder abklemmt, bekäme sonst das Ergebnis
-    eines Vorgängers mit denselben Merkmalen.
+    eines Vorgängers mit denselben Merkmalen —
+    und für den gemerkten Profilbestand der Slicer
+    (``slicer_profiles.forget_holdings``, RM-670): Seine Signatur sieht die
+    Installation nur an ihrer obersten Ebene an, und ein Test, der einen
+    Profilbaum hinter einem gleichen Programmpfad baut, erbte sonst den
+    Bestand seines Vorgängers.
     """
     import importlib
 
     features.forget_cache()
     local.forget_known()
+    slicer_profiles.forget_holdings()
     matching.forget_matches()
+    matching.forget_transformed()
     # Über das Modul: ``app.core.scene.evaluate`` ist im Paket die Funktion.
     importlib.import_module("app.core.scene.evaluate").forget_remembered_steps()
 

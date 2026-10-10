@@ -222,7 +222,9 @@ class LoadParams(BaseParams):
     # Netze und Befunde aus derselben Datei (``repair`` 5).
     # 8: Eine Berührkante, die die erste Paarung nicht trennt, trennt die
     # andere (``repair`` 6, RM-550).
-    cache_version="8",
+    # 9: Mit festgehaltener Stelle steht der Satz zur freien Stelle wieder im
+    # Ergebnis (RM-754); ein alter Eintrag hätte ihn nicht.
+    cache_version="9",
     # Heißt wie der Knopf in Werkzeugleiste und Datei-Menü — zwei Namen für
     # dieselbe Handlung ließen den Kunden einen Unterschied suchen.
     title=_("Modell einfügen"),

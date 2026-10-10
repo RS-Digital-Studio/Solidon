@@ -67,7 +67,9 @@ Berichte schon. Ein Agent, der abbricht, hinterlässt so seinen Stand.
     als System-Python); eigene Prozesse nur per PID beenden; lange Läufe
     abgekoppelt starten.
   - Auf dem Paketzweig nur betroffene Tests, ruff, format, mypy; kein volles
-    Tor, keine CI (`.agents/skills/pruefen/SKILL.md`, `.agents/skills/liefern/SKILL.md`).
+    Tor, keine CI (`.agents/skills/pruefen/SKILL.md`, `.agents/skills/liefern/SKILL.md`). Die Auswahl trifft
+    `tools/affected_tests.py`, nie die Hand: Sie nimmt die Baumleser mit
+    (`test_shared_constants`, Sprachregeln), die eine Handliste vergisst.
   - Neue Funde nennt der Agent als „neuer Punkt“; die Nummer vergibt der
     Koordinator aus seinem Bereich.
   - Unter Volllast zählen statt messen (Aufrufe, Erkennungen), Zeiten nur im

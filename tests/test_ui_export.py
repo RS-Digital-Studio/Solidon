@@ -672,6 +672,72 @@ def test_a_single_body_3mf_carries_the_settings_too(
     assert values.get("layer_height"), "die Auflösung aus Stufe, Material und Drucker gilt"
 
 
+def test_the_3mf_export_reads_the_slicer_stock_in_one_pass(
+    window: MainWindow, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """RM-670: Vorwahl, Stufe, Grundlage und Datei eines Exports teilen einen
+    Lesedurchgang. Jeder Schritt öffnete sonst einen eigenen und las die
+    Erbketten des Herstellers neu; am ElegooSlicer kostete der zweite Export
+    eines Würfels so 1,7 s statt 0,7 s.
+
+    Mit einem Slicer, dessen Bestand den Drucker kennt — ohne ihn läse der
+    Export nichts, und der Test sagte nichts (Review RM-670 L7). Gezählt wird
+    jedes echte Lesen einer Profildatei je Faden: höchstens einmal."""
+    import os
+    from collections import Counter
+
+    from PySide6.QtWidgets import QFileDialog
+
+    from app.core import tools
+    from app.core.export import slicer_profiles
+    from tests.helpers import cc2_stock
+
+    executable = cc2_stock(tmp_path / "programme")
+    # Ein Bestand, den gerade niemand ändert: sonst merkt ihn die Suche nicht
+    # (``slicer_profiles.SETTLE_NS``), und der Export läse ihn noch einmal.
+    past = 1_767_225_600.0
+    for path in (tmp_path / "programme").rglob("*"):
+        os.utime(path, (past, past))
+    monkeypatch.setattr(tools, "slicer_program", lambda: executable)
+    loads: Counter[tuple[int, Path]] = Counter()
+    original_load = slicer_profiles._load
+
+    def counted(path: Path, documents: Any = None) -> Any:
+        shared = slicer_profiles._pass_documents(documents)
+        if shared is None or path not in shared:
+            loads[(threading.get_ident(), path)] += 1
+        return original_load(path, documents)
+
+    monkeypatch.setattr(slicer_profiles, "_load", counted)
+    writers: list[int] = []
+    original_write = main_window_module.write_assembly
+
+    def write(*args: Any, **kwargs: Any) -> Any:
+        writers.append(threading.get_ident())
+        return original_write(*args, **kwargs)
+
+    monkeypatch.setattr(main_window_module, "write_assembly", write)
+    window.open_path(MESHES / "cube_clean.stl")
+    assert window.session.wait_for_idle(60_000)
+    assert window.session.change_scene_profile("centauri-carbon-2", "pla")
+    assert window.session.wait_for_idle(60_000)
+    target = tmp_path / "einzel.3mf"
+    monkeypatch.setattr(
+        QFileDialog,
+        "getSaveFileName",
+        staticmethod(lambda *args, **kwargs: (str(target), "3MF (*.3mf)")),
+    )
+    window.object_tree.tree.clearSelection()
+    window.action_export()
+    wait_for_export(window)
+
+    assert target.exists() and writers
+    exported = {path: count for (thread, path), count in loads.items() if thread == writers[0]}
+    assert exported, "der Export liest die Erbketten des Herstellers"
+    twice = {path.name: count for path, count in exported.items() if count > 1}
+    assert not twice, f"im Export mehrfach gelesen: {twice}"
+
+
 def test_the_export_leaves_the_window_usable(
     window: MainWindow, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -1700,3 +1766,39 @@ def test_the_export_folder_stays_with_the_machine(
     window.action_export()
 
     assert asked[0][0].startswith(str(folder)), f"der Dialog beginnt dort: {asked[0][0]}"
+
+
+def test_a_remembered_choice_expires_with_its_slicer_stock(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Review RM-670 M2: Die Vorwahl aus dem Bestand hielt über alle Exporte,
+    ohne Signatur. Ein im Slicer neu angelegtes oder umbenanntes Profil
+    erreichte die Datei nie. Jetzt trägt sie die Signatur ihres Bestands."""
+    from pathlib import Path as PathType
+
+    from app.core.export import handover, slicer_profiles
+    from app.ui.main_window import _ChosenSetup
+
+    program = PathType("elegoo-slicer.exe")
+    setup = handover.SlicerSetup(program, "orca", machine_profile="CC2")
+    stock = {"now": ("vorher",)}
+    asked: list[tuple[object, ...]] = []
+
+    def signature(*args: object) -> tuple[str]:
+        asked.append(args)
+        return stock["now"]
+
+    monkeypatch.setattr(slicer_profiles, "stock_signature", signature)
+    chosen = _ChosenSetup(("schluessel",), setup, ("vorher",), (program, "orca"))
+    empty = _ChosenSetup(("schluessel",), None, ("vorher",), (program, "orca"))
+
+    assert chosen.current() and empty.current()
+    assert asked[0] == ("orca", program), "gefragt wird der Bestand der Wahl"
+    stock["now"] = ("nachher",)
+    assert not chosen.current(), "ein geänderter Bestand verlangt eine neue Wahl"
+    assert not empty.current(), (
+        "auch eine leere: Der Slicer kannte den Drucker nicht, jetzt vielleicht (Review N1)"
+    )
+    assert _ChosenSetup(("schluessel",), None).current(), (
+        "ohne Slicer, dessen Bestand Solidon liest, gibt es nichts zu vergleichen"
+    )
