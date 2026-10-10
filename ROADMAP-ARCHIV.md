@@ -31,6 +31,7 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-10 | [RM-671: Weich verschmelzen gibt ein gleichmäßiges Netz in der Hülle der Eingänge, und Dreiecke angleichen hält seine Kantenlänge (10.10.2026)](#rm-671-weich-verschmelzen-gibt-ein-gleichmäßiges-netz-in-der-hülle-der-eingänge-und-dreiecke-angleichen-hält-seine-kantenlänge-10102026) |
 | 2026-10-10 | [RM-751: Ein freigegebenes Fenster startet keine Wandprüfung mehr (10.10.2026)](#rm-751-ein-freigegebenes-fenster-startet-keine-wandprüfung-mehr-10102026) |
 | 2026-10-10 | [RM-750: Ein wartender Klick behält seine Zusage, während die Analysekarte rechnet (10.10.2026)](#rm-750-ein-wartender-klick-behält-seine-zusage-während-die-analysekarte-rechnet-10102026) |
 | 2026-10-09 | [RM-627: Ein Rand neben einem anderen Überhang ist keine lange Brücke (09.10.2026)](#rm-627-ein-rand-neben-einem-anderen-überhang-ist-keine-lange-brücke-09102026) |
@@ -46730,3 +46731,49 @@ Sonde endete der Prozess so viermal mit Exit 127). `release` hält `_sculpt_chec
 `_check_sculpted_walls` fängt nach dem Schließen nichts mehr an.
 **Nachweis:** `test_sculpt_session.py::test_a_released_window_starts_no_wall_check` am Stand
 davor rot, jetzt grün. Changelog: nein.
+
+## RM-671: Weich verschmelzen gibt ein gleichmäßiges Netz in der Hülle der Eingänge, und Dreiecke angleichen hält seine Kantenlänge (10.10.2026)
+
+<a id="rm-671-weich-verschmelzen-gibt-ein-gleichmäßiges-netz-in-der-hülle-der-eingänge-und-dreiecke-angleichen-hält-seine-kantenlänge-10102026"></a>
+<a id="rm-671"></a>
+
+**RM-671 — *Weich verschmelzen* lieferte ein splittriges Netz, und *Dreiecke angleichen* hielt
+die Kantenlänge nicht** (Versionsvergleich 0.5.2, Weg 4, W4-3; dazu F5 der Funktionsliste 0.5.2).
+
+**Ursache, gegen das Register korrigiert.** Das Register nannte den Sprung des Ebenenabstands
+(`2006fc7d1`) als Quelle der Splitter. Mit dem exakten Feld bleiben es an Kugel auf Zylinder
+dieselben 11,81 %: Die Splitter sind zu 98 % Nadeln, die Marching Cubes legt, wo die Fläche dicht
+an einem Rasterpunkt vorbeiläuft (kürzeste Kante im Median 0,07 Raster). Bis v0.4.2 gab es sie
+kaum, weil das Feld zum nächsten Stützpunkt maß und nahe der Fläche nie null wurde (0,014 statt
+0,245 % der Rasterpunkte unter 0,05 mm; das alte Feld nachgebaut: 2,89 %), um den Preis welliger
+Wände. Der Ebenenabstand lag dafür neben Kanten bis 1,9 mm daneben und rechnete über
+`np.einsum` (Plattformregel). Das Angleichen faltete mit `simplify(0)` ebene Flächen zu Fächern
+ohne Längengrenze, und `refine_to_length` ließ deren innere Kanten bis zum Doppelten stehen. F5:
+Die weiche Mischung hebt das Feld, wo beide gleich sind, um bis zu ein Viertel des Übergangs; an
+bündigen Flächen wuchs das Ergebnis über die Eingänge hinaus, mit dem Ebenenfehler bis 1,69 mm
+unter das Bett.
+
+**Behoben.** `blend.distance_field` misst zum nächsten Punkt auf dem Dreieck, das Vorzeichen aus
+Pseudonormalen, ohne `einsum`; das Feld endet an der Hülle beider Eingänge (Entscheidung
+Koordinator, alle Seiten), Werte nahe null gelten als knapp außen (`CLEAR_OF_ZERO`), die Ecken
+stehen in doppelter Genauigkeit (`_in_double`, `skimage` gibt `float32`), und Nadeln unter 0,2
+Raster werden zusammengelegt (`NEEDLE`). `mesh_ops.uniform` vereinfacht ohne Abweichung nicht
+mehr, tauscht zu lange Kanten in der Ebene (`mesh_edits.flip_long`), teilt den Rest
+(`split_long`) und tauscht und legt um spitze Dreiecke in der Ebene zusammen. Neues Modul
+`app/core/geom/mesh_edits.py`; `cache_version` 6 und 2.
+
+**Messung** (fein, Splitter = Winkel unter 10°, vorher → nachher): Kugel auf Zylinder 11,81 →
+1,33 % nach dem Verschmelzen, 30,59 → 0,84 % nach dem Angleichen auf 1,2 mm, längste Kante
+2,389 → 1,199 mm; *Figur formen* 6,27 → 0,38 % und 17,78 → 0,26 %, 3,102 → 1,499 mm (verlangt
+1,5); zwei kreuzende Zylinder 10,85 → 0,58 % und 28,26 → 0,39 %, 2,664 → 1,200 mm; zwei Quader auf
+dem Bett z −1,69 bis 11,44 → 0 bis 10 mm, 16 575,6 → 14 341,5 mm³ (Vereinigung 14 400).
+Angleichen ohne Abweichung lässt Volumen und Fläche gleich, auch an den Splitternetzen aus W4-3
+(11,81 → 7,67 % und 7,18 → 4,29 %). `plate_holes` auf 1,5 mm: 58,9 → 2,3 % Splitter, längste Kante
+2,784 → 1,500 mm. Druckgleich: Alle Beispielprojekte außer *Figur formen*, das beide Schritte
+enthält, sind in Volumen, Fläche, Hülle, Dreiecken, Merkmalen und Befunden bitgleich.
+
+**Nachweis:** `test_blend.py` (exakter Abstand gegen `mesh.on_surface`, die drei Abnahmefälle,
+zwei Quader auf dem Bett), `test_subdivision.py` (die Splitternetze
+`meshes/blend_splinters_*.npz`), `test_platform_identity.py` (`blend_field`, `blend_union`,
+`remesh_uniform`); die neuen Fälle am Stand davor rot, jetzt grün. Changelog: ja, 0.6.1 (die
+Ursache `2006fc7d1` steckt in v0.4.4 bis v0.5.3).

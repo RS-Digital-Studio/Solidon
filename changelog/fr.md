@@ -16,6 +16,13 @@ portent les mêmes points dans le même ordre (`tests/test_changelog.py`).
 `tools/make_download.py` en tire la section de la version courante et l'écrit
 dans `website/version.json`.
 
+## 0.6.1
+
+### Sculpter
+
+- Avec « Fusionner en douceur », le maillage est régulier, sans éclats fins, et reste dans le contour des corps. Une pièce posée sur le plateau d'impression ne passe plus en dessous.
+- Avec « Uniformiser les triangles », aucune arête ne dépasse la longueur demandée et il ne reste plus d'éclats fins sur les surfaces planes. La forme ne change pas.
+
 ## 0.6.0
 
 ### Utilisation et système

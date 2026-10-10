@@ -15,6 +15,13 @@ carry the same points in the same order (`tests/test_changelog.py`).
 `tools/make_download.py` takes the section for the current version and writes
 it into `website/version.json`.
 
+## 0.6.1
+
+### Sculpting
+
+- With *Blend together*, the mesh comes out even, without thin slivers, and stays within the outline of the bodies. A part on the print bed no longer reaches below it.
+- With *Even out the triangles*, no edge is longer than the length you set, and flat areas keep no thin slivers. The shape does not change.
+
 ## 0.6.0
 
 ### Operation and system

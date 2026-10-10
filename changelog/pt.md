@@ -15,6 +15,13 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 `tools/make_download.py` retira daqui a secção da versão atual e escreve-a em
 `website/version.json`.
 
+## 0.6.1
+
+### Modelar
+
+- Com «Fundir suavemente» a malha fica uniforme, sem lascas finas, e dentro do contorno dos corpos. Uma peça na mesa de impressão já não passa para baixo dela.
+- Com «Uniformizar os triângulos» nenhuma aresta passa do comprimento definido e nas superfícies planas não ficam lascas finas. A forma não muda.
+
 ## 0.6.0
 
 ### Utilização e sistema

@@ -40,6 +40,13 @@ wieder heraus (Entscheidung Robert). Wo ein Nutzen bleibt, der ohne den
 Mechanismus auskommt — „die Meldung nennt den wirklichen Grund“ —, steht der
 Nutzen da und sonst nichts.
 
+## 0.6.1
+
+### Formen
+
+- Mit *Weich verschmelzen* entsteht ein gleichmäßiges Netz ohne schmale Splitter, das in den Umrissen der Körper bleibt. Ein Teil auf dem Druckbett reicht nicht mehr darunter.
+- Mit *Dreiecke angleichen* ist keine Kante länger als verlangt, und auf ebenen Flächen bleiben keine schmalen Splitter stehen. Die Form ändert sich dabei nicht.
+
 ## 0.6.0
 
 ### Bedienung und System

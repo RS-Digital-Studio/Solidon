@@ -95,7 +95,6 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-542 — Die fünf offenen Entscheidungen der Erstkonfiguration](#rm-542) | Geometrie, Erkennung und Druckvorbereitung | Gefunden beim Umräumen der Konzepte (RM-099, 06.10.): nur im Konzept geführt; offen der Abgleich mit RM-281 und Roberts Entscheidung |
 | [RM-568 — Merkmalerkennung und die übrigen langen Wege schneller machen](#rm-568) | Geometrie, Erkennung und Druckvorbereitung | Selbstschnittsuche, Zuordnung, Ringvereinfachung, 3MF und gemerkte Zuordnungsschritte gebaut (Paket L, 08./09.10.); Kandidatensuche der Selbstschnitte (Paket L2, K-1 erfüllt); offen: Laden mechanischer Teile (K-3; mit druckgleich nach §11.2 sind Löserbudget und früheres Freiformurteil zulässig, die Verteilung auf mehrere Prozesse folgt als RM-637), Formen und Skelett, örtliche Neuerkennung (RM-592) |
 | [RM-670 — Jeder 3MF-Export sucht den Slicer und liest dessen Profilbündel neu](#rm-670) | Geometrie, Erkennung und Druckvorbereitung | In Arbeit: Claude (Worktree `F:/solidon-claude-e`). Regression seit v0.4.0: 3MF eines Quaders 0,36 → 1,6 s, weil jeder Export Slicer und Druckerliste neu liest |
-| [RM-671 — *Weich verschmelzen* liefert ein splittriges Netz, und *Dreiecke angleichen* hält die Kantenlänge nicht](#rm-671) | Geometrie, Erkennung und Druckvorbereitung | In Arbeit: Claude (Worktree `F:/solidon-claude-f`). Regression seit v0.4.4: Splitter unter 10° 2,9 → 11,8 %, nach dem Angleichen 30 % und doppelte Kantenlänge |
 | [RM-672 — Laden gleich nach dem Start dauert doppelt so lang, und unter Fremdlast hungert der Hilfsprozess das Laden aus](#rm-672) | Geometrie, Erkennung und Druckvorbereitung | Seit v0.5.1: sofortiges Öffnen 3,0 → 6–7 s; unter Fremdlast vor RM-380 gemessen 150 s statt 15 s, die Rechnung läuft weiter zurückgestellt |
 | [RM-673 — Eine Bohrung mit neuer Richtung: die Kerne schneiden verschieden, der exakte warnt falsch, und das Verdoppeln hat keinen Test](#rm-673) | Geometrie, Erkennung und Druckvorbereitung | Netz dreht starr und meldet `no_longer_through`, exakt bohrt durch und meldet `mouth_covered` |
 | [RM-675 — SVG-Zeichnungen: gerundete Rechtecke mischen ihre Ringe, die Verschachtelung weicht ab, ein roher Fehler, und die Lage ist gespiegelt](#rm-675) | Geometrie, Erkennung und Druckvorbereitung | Regression seit `71b7ba0a8`: `<rect rx>` bildet ungültige Ringe; dazu deckungsgleiche Ringe, roher `ValueError` und spiegelverkehrte Schrift |
@@ -3345,38 +3344,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   neu angelegtes Druckerprofil kennt der nächste Export. Bauplan §29, §31.
   Belege: `F:\solidon-review-reports\regression-0.5.2\weg2\befunde.md` (W2-1),
   `F:\solidon-review-reports\regression-0.5.2\weg4\befunde.md` (W4-2).
-
-<a id="rm-671"></a>
-
-- [ ] **RM-671 — *Weich verschmelzen* liefert ein splittriges Netz, und *Dreiecke angleichen* hält die Kantenlänge nicht.**
-  Versionsvergleich 0.5.2 (03.10.2026), Weg 4 (W4-3). **Regression gegenüber v0.4.2**, eingeführt
-  mit `2006fc7d1` („Weich verschmelzen maß zum nächsten Punkt statt zur nächsten Ebene“).
-  Verschmelzung Kugel auf Zylinder (je ≈ 7 628 Dreiecke): Anteil mit Mindestwinkel unter 10°
-  2,9 % (v0.1.1–v0.4.2) → 12,3 % (v0.4.4) → 11,8 % (v0.5.1, `09d8e9485`); Beispiel *Figur formen*
-  3,9 % → 7,2 %. Danach *Dreiecke angleichen* 1,2 mm: 2,2 % → 30,6 %, längste Kante 1,20 → 2,39 mm,
-  doppelt so lang wie verlangt. Exportierte Figur 10 296 → 14 746 Dreiecke, Median-Mindestwinkel
-  35,5° → 21,6°. `uniform` selbst ist in allen Ständen gleich, anders ist sein Eingang: Das Feld
-  misst zur Ebene des nächsten Oberflächenpunkts und springt an gewölbten Übergängen, wo der
-  nächste Punkt die Seite wechselt; Marching Cubes macht daraus Splitter, und das Angleichen mit
-  Abweichung 0 teilt nur. Seit v0.5.x zeigt das Fenster die feine Verschmelzung, der Kunde arbeitet
-  direkt darauf (Pinsel wirkt ungleichmäßig, Folgeschritte langsamer). Das Feld ist am Stand
-  origin/main unverändert: `blend.py` änderte sich seit 02.10. nur in Texten und im
-  Entwurfsbudget des Fensters (`b3c6c7a96`), nicht in `distance_field`.
-  **Stellen:** `app/core/geom/blend.py:143` (`distance_field`), `:210–211` (Feld `-outward`,
-  Ebenenabstand), `:343` (`marching_cubes`), `:414` (`blend_union`), `app/core/geom/mesh_ops.py:1443`
-  (`uniform`: bei Abweichung 0 kein Zusammenlegen, kein Kantentausch).
-  **Fix (allgemein):** Abstand zum nächsten Punkt auf dem Dreieck statt zu seiner Ebene (an ebenen
-  Wänden ebenso exakt, an Kanten stetig). Im Angleichen bei Abweichung 0 nur formtreue Schritte:
-  Kanten tauschen, wo beide Dreiecke in einer Ebene liegen, und nur innerhalb einer Ebene
-  zusammenlegen; die Obergrenze der Kantenlänge hält das Teilen ein.
-  **Abnahme:** Geometrietest an Kugel auf Zylinder, Beispiel *Figur formen* und zwei sich kreuzenden
-  Zylindern: Anteil unter 10° nach `blend_union` höchstens 3 % wie v0.4.2, nach `remesh_uniform`
-  unter 5 % bei längster Kante höchstens 1,1 × verlangt; bei Abweichung 0 bleiben Volumen und
-  Fläche unverändert (Zusage in `app/core/geom/mesh_ops.py:2013–2022` und `:1458–1459`); die ebene
-  Wand aus dem Anlass von `2006fc7d1` bleibt exakt. Bauplan §25, §31, P16.
-  Belege: `F:\solidon-review-reports\regression-0.5.2\weg4\befunde.md` (W4-3), Netze in
-  `weg4\netze\`, Sonde `weg4\sonde_uniform.py`.
-  Vermerk 09.10.2026 (Funktionsliste 0.5.2, F5, so schon in v0.5.1): *Weich verschmelzen* zweier Quader auf dem Bett meldet „Ein Objekt steckt unter dem Druckbett.“ (`arrange.below_bed`), weil das Raster unter z = 0 rundet. Mit dem Umbau des Felds das Ergebnis auf die Unterkante der Eingänge setzen oder den Befund für Überstand unter einer Rastergröße nicht melden; Abnahme an zwei Quadern, Kugel auf Zylinder und dem Beispiel *Figur formen*. Beleg: `F:\solidon-review-reports\funktionsliste\befunde.md` (F5).
 
 <a id="rm-672"></a>
 

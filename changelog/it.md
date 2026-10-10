@@ -15,6 +15,13 @@ gli stessi punti nello stesso ordine (`tests/test_changelog.py`).
 `tools/make_download.py` ne prende la sezione della versione corrente e la
 scrive in `website/version.json`.
 
+## 0.6.1
+
+### Modellare
+
+- Con «Fondi dolcemente» la mesh è uniforme, senza schegge sottili, e resta entro il contorno dei corpi. Un pezzo sul piano di stampa non scende più al di sotto.
+- Con «Uniforma i triangoli» nessuno spigolo supera la lunghezza impostata e sulle superfici piane non restano schegge sottili. La forma non cambia.
+
 ## 0.6.0
 
 ### Uso e sistema

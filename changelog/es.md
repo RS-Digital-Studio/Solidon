@@ -16,6 +16,13 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 `tools/make_download.py` toma el apartado de la versión actual y lo escribe en
 `website/version.json`.
 
+## 0.6.1
+
+### Modelar
+
+- Con «Fusionar suavemente» la malla sale uniforme, sin astillas finas, y se queda dentro del contorno de los cuerpos. Una pieza sobre la placa de impresión ya no queda por debajo.
+- Con «Igualar los triángulos» ninguna arista supera la longitud indicada y en las superficies planas no quedan astillas finas. La forma no cambia.
+
 ## 0.6.0
 
 ### Manejo y sistema
