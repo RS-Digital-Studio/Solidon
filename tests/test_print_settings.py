@@ -8478,6 +8478,351 @@ def test_grid_and_tree_become_hybrid_only_where_the_style_is_the_plates(
     assert "support_style" not in values["Pilz"] and "support_style" not in values["Figur"]
 
 
+def _spiky(name: str, shift: float) -> Any:
+    """Ein Sockel mit hundert Stacheln, die auf zehn Höhen frei in der Luft
+    beginnen: Er will Bäume, und jede Spitze steht ohne Trennschicht — die
+    Kopfstacheln des Drachen im Kleinen (RM-584)."""
+    from app.core.geom.transform import apply, translation
+    from app.core.types import SceneObject
+    from tests.helpers import brick, on_bed
+
+    pins = [
+        brick(0.6, 0.6, 3.0, (-13.5 + 3.0 * (i % 10), -13.5 + 3.0 * (i // 10), 12.0 + (i % 10)))
+        for i in range(advise.TIP_ISLANDS)
+    ]
+    body = on_bed(brick(4.0, 4.0, 2.0, (0.0, 0.0, 1.0)), *pins)
+    return SceneObject(id=f"obj_{name}", name=name, mesh=apply(body, translation((shift, 0, 0))))
+
+
+def test_a_tree_cura_prints_as_grid_asks_its_gap_with_grid(tmp_path: Path) -> None:
+    """Bei Cura gilt die Stützart der Platte (Nachtrag RM-584): Neben dem Pilz
+    mit seiner flachen Decke wird der Baum des Stachelkörpers zu Gitter. Er
+    fragte Abstand und Spitzenluft trotzdem mit seinem Baum, die Zeile sagte
+    „Abstand oben → 0,4: Feine Spitzen brauchen mehr Luft über den
+    Baumstützen“, und die Datei bekam 0,4 über Gitter. Gegenprobe: allein
+    druckt er Bäume und bekommt die Luft."""
+    from app.core.export.writer import write_assembly
+    from app.core.types import SceneObject
+    from app.ui.print_settings_dialog import _AdviceWorker
+    from tests.helpers import brick, on_bed
+
+    profile = profiles.make_profile("centauri-carbon-2", "pla")
+    settings = print_settings.resolve(profile)
+    mushroom = on_bed(
+        brick(8.0, 8.0, 12.0, (0.0, 0.0, 6.0)), brick(40.0, 40.0, 2.0, (0.0, 0.0, 13.0))
+    )
+    spiky = _spiky("Stacheln", 70.0)
+    tip = "Feine Spitzen brauchen mehr Luft über den Baumstützen."
+
+    def rows(bodies: tuple[Any, ...], current: Any) -> dict[str, Any]:
+        return {entry.path: entry for entry in _advice_of(bodies, current, profile, "cura")}
+
+    alone = rows((spiky,), settings)
+    assert alone["support.style"].value == "tree"
+    assert (alone["support.z_gap"].value, alone["support.z_gap"].reason) == (
+        pytest.approx(0.4),
+        tip,
+    ), "allein druckt er Bäume, und die Spitzen bekommen Luft"
+
+    bodies = (SceneObject(id="obj_pilz", name="Pilz", mesh=mushroom), spiky)
+    # Die Platte steht auf 0,3 mm: Der Abstand kommt als Zeile aus dem Material
+    # (0,2) und geht je Teil in die Datei — dort fragt der Export jedes Teil
+    # selbst, mit der Art der Platte (Review des Nachtrags, M1).
+    wide = print_settings.with_path(settings, "support.z_gap", 0.3)
+    together = rows(bodies, wide)
+    assert together["support.style"].value == "grid"
+    assert all(entry.reason != tip for entry in together.values())
+    assert together["support.z_gap"].value == pytest.approx(0.2)
+    accepted = wide
+    for entry in together.values():
+        if getattr(entry, "slot", None) is None:
+            accepted = print_settings.with_accepted(accepted, entry.path, entry.value)
+    plate = handover.values_for(accepted, profile, "cura")
+    assert plate["support_structure"] == "normal"
+    assert float(plate["support_top_distance"]) == pytest.approx(0.2)
+    worker = _AdviceWorker(bodies, accepted, profile, None, {}, (), (), {}, flavour="cura")
+    worker.work()
+    assert "support.z_gap" in worker.accepted_parts, "der Abstand geht je Teil"
+    assert not worker.accepted_others.get("support.z_gap"), "kein Teil mit eigenem Abstand"
+    written, _findings = write_assembly(
+        list(bodies),
+        tmp_path,
+        project_name="Platte",
+        profile=profile,
+        settings=accepted,
+        flavour="cura",
+    )
+    parts = [mesh for mesh in handover.cura_meshes(written) if "-part-" in mesh.path.name]
+    assert len(parts) == 2, [mesh.path.name for mesh in handover.cura_meshes(written)]
+    for mesh in parts:
+        own = dict(mesh.settings)
+        top = own.get("support_top_distance", own.get("support_z_distance"))
+        bottom = own.get("support_bottom_distance", own.get("support_z_distance"))
+        for gap in (top, bottom):
+            assert gap is None or float(gap) == pytest.approx(0.2), (mesh.path.name, own)
+    # Der Export fragt je Teil ebenso mit der Art der Platte, auch wo ein
+    # anderes Teil den Abstand je Teil verlangt.
+    from app.core.export.writer import part_advice
+    from app.core.geom.mesh import as_mesh_data
+    from app.core.slice.analysis import slice_body
+
+    mesh = as_mesh_data(spiky.mesh)
+    result = slice_body(mesh, 0.2)
+
+    def part_gap(plate_style: str | None) -> list[object]:
+        return [
+            entry.value
+            for entry in part_advice(
+                spiky,
+                mesh,
+                settings,
+                profile,
+                None,
+                {},
+                result=result,
+                fit_kinds=(),
+                flavour="cura",
+                accepted={"support.style": "grid"},
+                plate_style=plate_style,
+            )
+            if entry.path == "support.z_gap"
+        ]
+
+    assert part_gap("grid") == []
+    assert part_gap(None) == [pytest.approx(0.4)], "ohne Platte fragt er mit seinem Baum"
+
+
+@pytest.mark.parametrize(
+    ("case", "asked"),
+    [
+        # Der Stachelbaum wird neben dem Pilz zu Gitter: einmal neu gefragt.
+        ("tree to grid", 1),
+        # „Automatisch“ druckt Cura wie Gitter: nichts neu zu fragen.
+        ("auto", 0),
+        # Gitter übernommen, „Gitter → Baum“ abgelehnt: Die Art der Platte steht
+        # vorher fest, gefragt wird gleich mit ihr (Durchsicht der Fixe, N1).
+        ("grid kept", 0),
+        # Nichts abgelehnt: Ein Kragarm druckt „automatisch“, die Platte Gitter.
+        # Cura druckt beides gleich, ohne Baum — keine Neufrage (Durchsicht 2, L5).
+        ("auto beside grid", 0),
+        # Ist der Rat überholt (``measure_only``), fragt niemand mehr neu.
+        ("overtaken", 0),
+    ],
+)
+def test_cura_asks_again_only_where_the_plate_changes_the_print(
+    monkeypatch: pytest.MonkeyPatch, case: str, asked: int
+) -> None:
+    """Die Neufrage mit der Art der Platte kostet am Drachen 3,5 s CPU; sie läuft
+    nur für Körper, die Cura damit anders druckt, und nicht mehr, wenn der Auftrag
+    schon überholt ist (Review des Nachtrags RM-584, L4)."""
+    import sys
+
+    from app.core.types import SceneObject
+    from app.ui.print_settings_dialog import _AdviceWorker
+    from tests.helpers import brick, on_bed
+
+    calls: list[object] = []
+    original = advise.advise
+
+    def counted(*args: Any, **kwargs: Any) -> Any:
+        # Nur die Regeln des Arbeiters; Zeile und Feld fragen je Teil über den Export.
+        if sys._getframe(1).f_code.co_name == "rules":
+            calls.append(kwargs["plate_style"])
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(advise, "advise", counted)
+    profile = profiles.make_profile("centauri-carbon-2", "pla")
+    settings = print_settings.resolve(profile)
+    declined: frozenset[str] = frozenset()
+    if case == "auto":
+        settings = print_settings.with_path(settings, "support.style", "auto")
+        declined = frozenset({"support.style"})
+    if case == "grid kept":
+        settings = print_settings.with_accepted(settings, "support.style", "grid")
+        declined = frozenset({"support.style"})
+    mushroom = on_bed(
+        brick(8.0, 8.0, 12.0, (0.0, 0.0, 6.0)), brick(40.0, 40.0, 2.0, (0.0, 0.0, 13.0))
+    )
+    from app.core.slice.analysis import slice_body
+
+    second = _spiky("Stacheln", 70.0)
+    if case == "auto beside grid":
+        settings = print_settings.with_path(settings, "support.style", "auto")
+        arm = on_bed(
+            brick(4.0, 4.0, 12.0, (70.0, 0.0, 6.0)), brick(20.0, 4.0, 2.0, (80.0, 0.0, 13.0))
+        )
+        second = SceneObject(id="obj_arm", name="Kragarm", mesh=arm)
+        own = advise.advise(
+            settings, profile, slice_body(arm, 0.2), flavour="cura", trees=frozenset({"tree"})
+        )
+        assert advise.printed_style(settings, own) == "auto", "der Kragarm druckt „automatisch“"
+        assert any(entry.path.startswith("support.") for entry in own), "und braucht Stütze"
+    bodies = (
+        SceneObject(id="obj_pilz", name="Pilz", mesh=mushroom),
+        second,
+        _standing_box("Klotz", (10.0, 10.0, 10.0)),
+    )
+    worker = _AdviceWorker(
+        bodies, settings, profile, None, {}, (), (), {}, flavour="cura", declined=declined
+    )
+    if case == "overtaken":
+        # Vor dem dritten Körper ändert der Dialog den Auftrag.
+        worker.progressed.connect(lambda index, _total, _name: index == 3 and worker.measure_only())
+    worker.work()
+
+    # Je Körper einmal, dazu die Neufragen; überholt nur die zwei vor dem Halt.
+    first = 2 if case == "overtaken" else len(bodies)
+    assert len(calls) == first + asked, calls
+
+
+@pytest.mark.parametrize("earlier", ["grid", None])
+def test_a_part_keeps_its_contact_where_its_style_was_accepted_before(
+    tmp_path: Path, earlier: str | None
+) -> None:
+    """Orca-Familie: Der Kunde hat „Aus → Gitter“ übernommen und lehnt jetzt
+    „Gitter → Baum · Stacheln, Pilz mit Gitter“ ab. Die Datei stützt den Pilz
+    weiter mit seinem Gitter; seine Zeilen zur dichten Trennschicht fielen weg,
+    und die Datei schrieb sie nicht mehr (Durchsicht 2 zum Nachtrag RM-584, M2).
+    Gegenprobe: Ohne früher übernommene Stützen druckt die Platte keine."""
+    from app.core.export.writer import write_assembly
+    from app.core.types import SceneObject
+    from app.ui.print_settings_dialog import _AdviceWorker
+    from tests.helpers import brick, on_bed
+
+    profile = profiles.make_profile("centauri-carbon-2", "pla")
+    settings = print_settings.resolve(profile)
+    if earlier is not None:
+        settings = print_settings.with_accepted(settings, "support.style", earlier)
+    mushroom = on_bed(
+        brick(8.0, 8.0, 12.0, (0.0, 0.0, 6.0)), brick(40.0, 40.0, 2.0, (0.0, 0.0, 13.0))
+    )
+    bodies = (SceneObject(id="obj_pilz", name="Pilz", mesh=mushroom), _spiky("Stacheln", 70.0))
+    worker = _AdviceWorker(
+        bodies,
+        settings,
+        profile,
+        None,
+        {},
+        (),
+        (),
+        {},
+        flavour="orca",
+        declined=frozenset({"support.style"}),
+    )
+    got: list[list[Any]] = []
+    worker.done.connect(lambda entries, _results: got.append(entries))
+    worker.work()
+    rows = {entry.path: entry for entry in got[0]}
+
+    dense = {"support.interface_spacing", "support.interface_layers"}
+    if earlier is None:
+        assert not dense & rows.keys()
+        return
+    assert dense <= rows.keys(), sorted(rows)
+    accepted = settings
+    for path in dense:
+        accepted = print_settings.with_accepted(accepted, path, rows[path].value)
+    written, _findings = write_assembly(
+        list(bodies),
+        tmp_path,
+        project_name="Platte",
+        profile=profile,
+        settings=accepted,
+        flavour="orca",
+    )
+    values = object_values(written, "Metadata/model_settings.config")
+    assert values["Pilz"].get("support_type") == "normal(auto)"
+    assert values["Pilz"].get("support_interface_top_layers") == str(
+        rows["support.interface_layers"].value
+    )
+
+
+@pytest.mark.parametrize("flavour", ["cura", "orca"])
+@pytest.mark.parametrize("declined", [True, False])
+def test_without_supports_on_the_plate_no_contact_rows(flavour: str, declined: bool) -> None:
+    """Lehnt der Kunde „Aus → Gitter“ ab, druckt die Platte ohne Stützen; die
+    Zeilen zu Trennschicht und Abstand änderten nichts und standen trotzdem da
+    (Durchsicht der Fixe zum Nachtrag RM-584). Gegenprobe: übernommen kommen sie."""
+    from app.core.types import SceneObject
+    from tests.helpers import brick, on_bed
+
+    profile = profiles.make_profile("centauri-carbon-2", "pla")
+    settings = print_settings.resolve(profile)
+    assert settings.support.style == "none"
+    mushroom = on_bed(
+        brick(8.0, 8.0, 12.0, (0.0, 0.0, 6.0)), brick(40.0, 40.0, 2.0, (0.0, 0.0, 13.0))
+    )
+    bodies = (SceneObject(id="obj_pilz", name="Pilz", mesh=mushroom),)
+    from app.ui.print_settings_dialog import _AdviceWorker
+
+    worker = _AdviceWorker(
+        bodies,
+        settings,
+        profile,
+        None,
+        {},
+        (),
+        (),
+        {},
+        flavour=flavour,  # type: ignore[arg-type]
+        declined=frozenset({"support.style"}) if declined else frozenset(),
+    )
+    got: list[list[Any]] = []
+    worker.done.connect(lambda entries, _results: got.append(entries))
+    worker.work()
+    paths = {entry.path for entry in got[0]}
+
+    assert "support.style" in paths
+    contact = {"support.interface_spacing", "support.interface_layers"}
+    assert (contact & paths) == (set() if declined else contact), paths
+
+
+@pytest.mark.parametrize("earlier", ["tree", None])
+def test_a_declined_style_row_asks_the_contact_with_curas_plate(earlier: str | None) -> None:
+    """Hat der Kunde früher Bäume übernommen und lehnt er jetzt „Baum → Gitter“
+    ab, druckt Cura beide Netze mit Baum. Die Stacheln fragten den Kontakt mit
+    „aus“ und bekamen keine Spitzenluft (Review des Nachtrags RM-584).
+    Gegenprobe: Ohne übernommene Stützen druckt die Platte keine, und niemand
+    bekommt Luft über Bäumen."""
+    from app.core.types import SceneObject
+    from tests.helpers import brick, on_bed
+
+    profile = profiles.make_profile("centauri-carbon-2", "pla")
+    settings = print_settings.resolve(profile)
+    if earlier is not None:
+        settings = print_settings.with_accepted(settings, "support.style", earlier)
+    mushroom = on_bed(
+        brick(8.0, 8.0, 12.0, (0.0, 0.0, 6.0)), brick(40.0, 40.0, 2.0, (0.0, 0.0, 13.0))
+    )
+    bodies = (SceneObject(id="obj_pilz", name="Pilz", mesh=mushroom), _spiky("Stacheln", 70.0))
+    from app.ui.print_settings_dialog import _AdviceWorker
+
+    worker = _AdviceWorker(
+        bodies,
+        settings,
+        profile,
+        None,
+        {},
+        (),
+        (),
+        {},
+        flavour="cura",
+        declined=frozenset({"support.style"}),
+    )
+    got: list[list[Any]] = []
+    worker.done.connect(lambda entries, _results: got.append(entries))
+    worker.work()
+    rows = {entry.path: entry for entry in got[0]}
+
+    tip = "Feine Spitzen brauchen mehr Luft über den Baumstützen."
+    if earlier is None:
+        assert all(entry.reason != tip for entry in rows.values())
+        return
+    assert handover.values_for(settings, profile, "cura")["support_structure"] == "tree"
+    assert (rows["support.z_gap"].value, rows["support.z_gap"].reason) == (pytest.approx(0.4), tip)
+    assert getattr(rows["support.z_gap"], "parts", ()) == ("Stacheln",)
+
+
 @pytest.mark.parametrize("kind", ["auto", "skirt"])
 def test_without_a_slicer_the_dialog_advises_for_its_actual_export(
     tmp_path: Path, kind: str
@@ -8700,16 +9045,18 @@ class _Note:
 
     def __init__(self) -> None:
         self.text = ""
+        self.tip = ""
+        self.described = ""
         self.visible = False
 
     def setText(self, text: str) -> None:  # noqa: N802 - Qt-Name
         self.text = text
 
-    def setToolTip(self, _text: str) -> None:  # noqa: N802 - Qt-Name
-        pass
+    def setToolTip(self, text: str) -> None:  # noqa: N802 - Qt-Name
+        self.tip = text
 
-    def setAccessibleDescription(self, _text: str) -> None:  # noqa: N802 - Qt-Name
-        pass
+    def setAccessibleDescription(self, text: str) -> None:  # noqa: N802 - Qt-Name
+        self.described = text
 
     def show(self) -> None:
         self.visible = True
@@ -8756,6 +9103,52 @@ def test_the_field_names_the_parts_that_print_their_own_value_with_it(
 
     assert note.visible
     assert note.text == expected
+
+
+def test_the_field_names_many_parts_once_per_value_like_the_row() -> None:
+    """Fünf Teile mit Gitter standen im Feld als fünf Sätze „Pilz bekommt
+    Gitter. Hut bekommt Gitter. …“, die Zeile fasste sie zu „Pilz, Hut und 2
+    weitere mit Gitter“ zusammen (Nachprüfung RM-584, L1). Das Feld nennt jeden
+    Wert einmal und kürzt die Namen wie die Zeile; Tooltip und Bildschirmleser
+    nennen jedes Teil."""
+    from app.ui.print_settings_dialog import PrintSettingsDialog
+
+    names = {"grid": "Gitter", "tree": "Baum", "none": "Aus", "auto": "Automatisch"}
+    base = print_settings.with_path(
+        print_settings.resolve(profiles.make_profile()), "support.style", "none"
+    )
+    bodies = ["Figur", "Löwe", "Greif", "Adler", "Pilz", "Hut", "Dach", "Schirm", "Tor", "Würfel"]
+    note = _Note()
+    host = SimpleNamespace(
+        _part_notes={"support.style": note},
+        _accepted_parts={"support.style": ("Figur", "Löwe", "Greif", "Adler")},
+        _accepted_others={
+            "support.style": (
+                ("Pilz", "grid"),
+                ("Hut", "grid"),
+                ("Dach", "auto"),
+                ("Schirm", "grid"),
+                ("Tor", "grid"),
+            )
+        },
+        settings=print_settings.with_accepted(base, "support.style", "tree"),
+        _plate_bodies=lambda: bodies,
+        _shown=lambda _path, value: names[str(value)],
+    )
+
+    PrintSettingsDialog._mark_parts(host, base, "dem Herstellerprofil")  # type: ignore[arg-type]
+
+    assert note.visible
+    assert note.text == (
+        "Nur für Figur, Löwe und 2 weitere. Pilz, Hut und 2 weitere bekommen Gitter. "
+        "Dach bekommt Automatisch. Die übrigen Teile drucken mit Aus aus dem Herstellerprofil."
+    )
+    full = (
+        "Nur für Figur, Löwe, Greif, Adler. Pilz, Hut, Schirm, Tor bekommen Gitter. "
+        "Dach bekommt Automatisch. Die übrigen Teile drucken mit Aus aus dem Herstellerprofil."
+    )
+    assert note.tip == full
+    assert note.described == full
 
 
 @pytest.mark.parametrize(

@@ -277,6 +277,7 @@ def advise(
     declined: Collection[str] = (),
     allowances: Collection[str] = (),
     trees: Collection[str] | None = None,
+    plate_style: str | None = None,
     shared_layers: bool = False,
 ) -> list[SettingAdvice]:
     """Was an diesen Einstellungen für dieses Teil nicht passt (§29).
@@ -306,7 +307,9 @@ def advise(
     ``trees`` sind die Stützarten, die das Programm als Bäume druckt
     (``handover.tree_styles``, RM-584), ``None`` ohne Programm: Gitter oder
     Hybrid unter einer großen flachen Decke und die Wände hoher Bäume fragen
-    danach.
+    danach. ``plate_style`` ist die Stützart der Platte, wo sie feststeht: Bei
+    Cura fragen Abstand, Spitzenluft und Baumwände mit ihr
+    (:func:`contact_style`, Nachtrag RM-584).
 
     **Für einen Resin-Drucker bleibt die Liste leer.** Jede Regel hier spricht
     über Düse, Bahn, Bett, Lüfter oder Rückzug — für Resin nicht falsch
@@ -330,6 +333,7 @@ def advise(
             organic,
             declined,
             trees,
+            plate_style,
             shared_layers,
         )
     if fit_kinds:
@@ -1174,6 +1178,37 @@ def printed_style(
     )
 
 
+def on_the_plate(style: str, plate: str | None, flavour: SlicerFlavour | None) -> str:
+    """Die Stützart, mit der ein Teil druckt, wo die Art der Platte gilt.
+
+    Cura schaltet Stützen je Netz nur an oder aus; die Art
+    (``support_structure``) gilt der ganzen Platte, ``tree`` als Baum, jede
+    andere als ``normal``, also Gitter. Ein Teil, dessen Baum neben einer
+    flachen Decke zu Gitter wird, fragte Abstand, Spitzenluft und Baumwände
+    sonst mit seinem Baum (Nachtrag RM-584): Am Drachen neben dem Pilz stand
+    „Abstand oben 0,4 — feine Spitzen“, und Cura druckte 0,4 über Gitter.
+    ``plate`` ist die Art der Platte, ``None``, wo sie nicht feststeht; anderswo
+    und ohne Stützen bleibt ``style``."""
+    if flavour != "cura" or plate is None or style == "none":
+        return style
+    return "tree" if plate == "tree" else "grid"
+
+
+def contact_style(style: str, wanted: str, plate: str | None, flavour: SlicerFlavour | None) -> str:
+    """Mit welcher Art ein Teil mit Stützbedarf Abstand, Spitzenluft und Baumwände
+    fragt: ``style`` ist :func:`printed_style` mit den Ablehnungen des Kunden,
+    ``wanted`` dieselbe Auskunft ohne sie, ``plate`` die Art der Platte.
+
+    Bei Cura druckt unter einer gestützten Platte jedes Netz, das Stützen will,
+    deren Art — auch wenn der Kunde die Zeile zur Art ablehnt: Mit übernommenem
+    Baum und abgelehntem „Baum → Gitter“ fragten die Stacheln mit „aus“ und
+    bekamen keine Spitzenluft, Cura druckte Bäume (Review des Nachtrags RM-584).
+    Sonst :func:`on_the_plate`."""
+    if flavour == "cura" and plate not in (None, "none") and wanted != "none":
+        return on_the_plate(wanted, plate, flavour)
+    return on_the_plate(style, plate, flavour)
+
+
 def in_whole_layers(gap: float, layer: float) -> bool:
     """Misst dieser Abstand ganze Schichten? Sonst rundet ein Slicer, der in ganzen
     Schichten rechnet, ihn selbst (RM-583, RM-622), wie :func:`printed_gap` sagt."""
@@ -1536,6 +1571,7 @@ def _from_geometry(
     organic: Collection[str] = (),
     declined: Collection[str] = (),
     trees: Collection[str] | None = None,
+    plate_style: str | None = None,
     shared_layers: bool = False,
 ) -> list[SettingAdvice]:
     """Der eigentliche Gewinn: das Teil bestimmt seine Einstellungen mit."""
@@ -1768,18 +1804,28 @@ def _from_geometry(
     if needs_support:
         # Gefragt mit der Stützart, mit der das Teil druckt: Schlägt der Rat
         # Bäume vor und übernimmt der Kunde sie, liegt die Stütze auf den
-        # Schichten des Modells (RM-622).
-        printed = printed_style(settings, advice, declined)
-        advice += _support_contact(
-            settings,
-            profile,
-            need,
-            on_model,
+        # Schichten des Modells (RM-622). Bei Cura ist das die Art der Platte
+        # (:func:`contact_style`, Nachtrag RM-584).
+        printed = contact_style(
+            printed_style(settings, advice, declined),
+            printed_style(settings, advice),
+            plate_style,
             flavour,
-            whole_layers,
-            printed,
-            organic,
         )
+        # Druckt das Teil ohne Stütze — die Zeile zur Art abgelehnt, die Platte
+        # aus —, ändern Abstand und Trennschicht nichts (Review des Nachtrags
+        # RM-584): Nach abgelehntem „Aus → Gitter“ standen sie trotzdem da.
+        if printed != "none":
+            advice += _support_contact(
+                settings,
+                profile,
+                need,
+                on_model,
+                flavour,
+                whole_layers,
+                printed,
+                organic,
+            )
         # Hohe Bäume brechen mit einer Wand (RM-584); gefragt mit derselben
         # Stützart wie der Kontakt, und nur, wo das Programm sie als Baum druckt
         # (``trees``): Hybrid ist bei PrusaSlicer und Cura Gitter, „automatisch“
@@ -2600,6 +2646,7 @@ def for_part(
     declined: Collection[str] = (),
     allowances: Collection[str] = (),
     trees: Collection[str] | None = None,
+    plate_style: str | None = None,
     shared_layers: bool = False,
 ) -> list[SettingAdvice]:
     """Was dieses eine Teil anders braucht als die Platte (§29).
@@ -2634,6 +2681,7 @@ def for_part(
                 declined=declined,
                 allowances=allowances,
                 trees=trees,
+                plate_style=plate_style,
                 shared_layers=shared_layers,
             )
             if entry.path in PART_PATHS
