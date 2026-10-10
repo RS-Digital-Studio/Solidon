@@ -116,6 +116,7 @@ Nutzen da und sonst nichts.
 - Flache Überhänge ohne Stütze bekommen Zusatzwände vorgeschlagen. Bei ABS, ASA und TPU druckt der Slicer steile Überhänge auf Vorschlag in wechselnder Richtung, damit sie sich nicht aufrollen.
 - Brückenwerte, Zusatzwände und die wechselnde Richtung gelten nur für das Teil, das sie braucht. Die anderen Teile derselben Platte drucken unverändert.
 - Ohne Herstellerprofil drucken PrusaSlicer und SuperSlicer Brücken jetzt dünn. Wo eine Brücke dicke Bahnen und weniger Fluss braucht, schlägt Solidon sie für dieses Teil vor.
+- Wo Solidon mehr Abstand über Baumstützen vorschlägt, schlägt es auch eine breitere *Baumspitze* vor. Dann sitzt auf jeder Spitze eine Trennschicht, und an Unterseiten bleibt weniger Stütze hängen.
 - Verlangen viele kleine Überhänge zusammen Stützen, etwa an einem Kinn mit schräger Unterseite, nennt der Prüfbericht jetzt die Stelle.
 - Ein schmaler Rand, der sich selbst trägt, gilt nicht mehr als lange Brücke, auch neben einem anderen Überhang. Der Prüfbericht warnt dort nicht mehr, und Solidon verlangt dafür keine Stützen.
 - Über einem Kanal rät der Prüfbericht nicht mehr zu einer Stütze, die dort nicht mehr herauskäme. Er nennt den Kanal und den Übergang unter 45 Grad.

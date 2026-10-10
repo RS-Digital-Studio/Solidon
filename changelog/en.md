@@ -91,6 +91,7 @@ it into `website/version.json`.
 - Flat overhangs without support get extra walls suggested. For ABS, ASA and TPU the slicer can print steep overhangs in alternating directions on request, so they do not curl up.
 - Bridge settings, extra walls and the alternating direction apply only to the part that needs them. The other parts on the same plate print as before.
 - Without a manufacturer profile, PrusaSlicer and SuperSlicer now print bridges thin. Where a bridge needs thick lines and less flow, Solidon suggests them for that part.
+- Where Solidon suggests more clearance above tree supports, it also suggests a wider *Tree tip*. Every tip then carries an interface layer, and less support sticks to undersides.
 - When many small overhangs need supports together, such as a chin with a sloped underside, the check report now names the spot.
 - A narrow rim that holds up on its own no longer counts as a long bridge, even next to another overhang. The check report no longer warns there, and Solidon asks for no supports for it.
 - Over a channel, the check report no longer recommends a support that could not be removed from it. It names the channel and a transition below 45 degrees.

@@ -494,6 +494,7 @@ ORCA_PROCESS: Final[tuple[tuple[str, str, Reader], ...]] = (
     ("support.interface_layers", "support_interface_top_layers", _count),
     ("support.interface_spacing", "support_interface_spacing", _number),
     ("support.tree_walls", "tree_support_wall_count", _tree_walls),
+    ("support.tip_diameter", "tree_support_tip_diameter", _positive),
     ("adhesion.skirt_loops", "skirt_loops", _count),
     ("adhesion.skirt_distance", "skirt_distance", _number),
     ("adhesion.brim_width", "brim_width", _number),

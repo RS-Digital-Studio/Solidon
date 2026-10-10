@@ -92,6 +92,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Los voladizos planos sin soporte reciben paredes extra como propuesta. Con ABS, ASA y TPU el slicer puede imprimir voladizos pronunciados en sentido alterno para que no se levanten.
 - Los ajustes de puente, las paredes extra y el sentido alterno solo se aplican a la pieza que los necesita. Las demás piezas de la misma placa se imprimen igual.
 - Sin perfil del fabricante, PrusaSlicer y SuperSlicer imprimen ahora los puentes finos. Donde un puente necesita líneas gruesas y menos flujo, Solidon las propone para esa pieza.
+- Donde Solidon propone más espacio sobre soportes en árbol, propone también una *Punta del árbol* más ancha. Cada punta lleva capa de separación y queda menos soporte en las caras inferiores.
 - Si muchos voladizos pequeños necesitan soportes juntos, como una barbilla con la cara inferior inclinada, el informe indica ahora el lugar.
 - Un borde estrecho que se sostiene solo ya no cuenta como puente largo, tampoco junto a otro voladizo. El informe ya no avisa ahí, y Solidon no pide soportes por ello.
 - Sobre un canal, el informe ya no aconseja un soporte que luego no se podría sacar. Nombra el canal y una transición de menos de 45 grados.

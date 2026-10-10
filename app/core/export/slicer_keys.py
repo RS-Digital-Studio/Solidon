@@ -520,6 +520,10 @@ ORCA: Final[tuple[Row, ...]] = (
     ("support.interface_spacing", "support_bottom_interface_spacing", _number),
     # Gilt nur Bäumen; 0 heißt beim Programm „automatisch“, Bambu -1 (RM-584).
     ("support.tree_walls", "tree_support_wall_count", _integer),
+    # Ab ``analysis.TIP_ROOF_AREA`` Querschnitt trägt jede Spitze eine
+    # Trennschicht (``TreeSupport3D.cpp:1286``, RM-704); eine Spitze unter der
+    # Stützbahn hebt die Übergabe ohnehin (``handover.organic_tree_fitted``).
+    ("support.tip_diameter", "tree_support_tip_diameter", _number),
     # -1 heißt „wie die übrige Schicht“, die Vorgabe aller gemessenen Profile.
     # Ein Filamentwert in der Orca-Familie (Filamentprofile der Hersteller).
     (
@@ -1121,12 +1125,24 @@ NOT_TAKEN_BY: Final[dict[SlicerFlavour, frozenset[str]]] = {
     # (``support_tree_branch_diameter_double_wall``, Vorgabe 3 mm), ein Maß und
     # keine Wandzahl. Geschrieben schaltete eine Wand die Doppelwand ab, die
     # PrusaSlicer ohne Bündel legt; das Maß bleibt beim Hersteller.
+    #
+    # Die Baumspitze (RM-704) ist nur in der Orca-Familie gemessen: Dort
+    # erzwingt eine Spitze über ``analysis.TIP_ROOF_AREA`` die Trennschicht.
+    # PrusaSlicer und Cura führen eigene Schlüssel
+    # (``support_tree_tip_diameter``), die Wirkung auf die Trennschicht ist
+    # dort nicht geschnitten; ihre Spitze bleibt beim Hersteller.
     "prusa": frozenset(
-        {"shell.precise_outer_wall", "shell.overhang_reverse", "support.tree_walls"}
+        {
+            "shell.precise_outer_wall",
+            "shell.overhang_reverse",
+            "support.tree_walls",
+            "support.tip_diameter",
+        }
     ),
     "orca": frozenset(),
     "cura": frozenset(
         {
+            "support.tip_diameter",
             "shell.wall_generator",
             "shell.precise_outer_wall",
             # Dicke Brücken, Zusatzwände und Umkehr an Überhängen kennt CuraEngine
@@ -1213,17 +1229,24 @@ NOT_TAKEN_BY_PROGRAM: Final[dict[str, frozenset[str]]] = {
     # Bambu Studio führt ``support_material_interface_fan_speed`` nicht; sein
     # Konfigurationsblock nennt den Schlüssel nicht (P1S, 08.10.2026). Ebenso
     # fehlen ``extra_perimeters_on_overhangs`` und ``overhang_reverse`` (RM-587).
+    # Die Spitze organischer Äste (``tree_support_tip_diameter``) kennt es auch
+    # nicht, seine Bäume entstehen anders (RM-704).
     "bambustudio": frozenset(
         {
             "cooling.support_interface_cooling",
             "shell.overhang_walls",
             "shell.overhang_reverse",
+            "support.tip_diameter",
         }
     ),
     # Anycubic Slicer Next 2.0.0.3 nimmt ``extra_perimeters_on_overhangs`` an und
     # druckt dieselben Bahnen: unter einer 3-mm-Auskragung 333 mm Brücke mit und
     # ohne, OrcaSlicer, ElegooSlicer und Creality Print ersetzen sie (RM-587).
     "anycubicslicernext": frozenset({"shell.overhang_walls"}),
+    # Creality Print 7.2 führt ``tree_support_tip_diameter``, druckt mit 0,8 und
+    # 1,13 mm aber dieselben Bahnarten und keine Trennschicht unter
+    # Kegelspitzen (``test_a_roof_tip_puts_an_interface_on_every_tip``, RM-704).
+    "crealityprint": frozenset({"support.tip_diameter"}),
 }
 
 #: Was ein Programm unter Baumstützen nicht druckt (RM-622): Bambu Studio,

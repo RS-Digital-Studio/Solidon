@@ -91,6 +91,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - As saliências planas sem suporte recebem paredes extra como proposta. Com ABS, ASA e TPU o slicer imprime as saliências íngremes em sentido alternado para que não enrolem.
 - As definições de ponte, as paredes extra e o sentido alternado valem só para a peça que precisa delas. As outras peças da mesma placa imprimem como antes.
 - Sem perfil do fabricante, o PrusaSlicer e o SuperSlicer imprimem agora as pontes finas. Onde uma ponte precisa de linhas grossas e menos fluxo, o Solidon propõe-nas para essa peça.
+- Onde o Solidon propõe mais espaço sobre os suportes em árvore, propõe também uma *Ponta da árvore* mais larga. Cada ponta leva uma camada de separação e fica menos suporte preso às faces inferiores.
 - Se muitas saliências pequenas precisam de suportes juntas, como um queixo com a face inferior inclinada, o relatório indica agora o local.
 - Um rebordo estreito que se sustenta sozinho já não conta como ponte longa, nem junto a outra saliência. O relatório já não avisa aí, e o Solidon não pede suportes por isso.
 - Sobre um canal, o relatório já não aconselha um suporte que depois não se conseguiria tirar. Indica o canal e uma transição abaixo de 45 graus.

@@ -1273,6 +1273,7 @@ UNREACHABLE: dict[str, dict[str, str]] = {
         "support.spare_ledges": "reist als Stützsperre in der 3MF (``AS_GEOMETRY``).",
         "shell.overhang_reverse": "PrusaSlicer kennt keine Umkehr an Überhängen (2.9.6).",
         "support.tree_walls": "PrusaSlicer zählt keine Baumwände (``NOT_TAKEN_BY``, RM-584).",
+        "support.tip_diameter": "Trennschicht dort nicht geschnitten (``NOT_TAKEN_BY``, RM-704).",
     },
     "orca": {
         "adhesion.kind": "in ``brim_type`` enthalten, das die Tabelle schreibt.",
@@ -1282,6 +1283,7 @@ UNREACHABLE: dict[str, dict[str, str]] = {
     "cura": {
         "support.block_channels": "reist als eigenes Netz (``AS_GEOMETRY``).",
         "support.spare_ledges": "reist als eigenes Netz (``AS_GEOMETRY``).",
+        "support.tip_diameter": "Trennschicht dort nicht geschnitten (``NOT_TAKEN_BY``, RM-704).",
         "shell.wall_generator": "CuraEngine rechnet immer mit variabler Bahnbreite.",
         "shell.precise_outer_wall": "wie oben — es gibt keinen Schalter dafür.",
         "adhesion.kind": "in ``adhesion_type`` enthalten, das die Tabelle schreibt.",
@@ -7302,6 +7304,14 @@ UNREACHED: Final[dict[tuple[str, str], str]] = {
         "PrusaSlicer zählt keine Baumwände: Seine organischen Äste bekommen ab einem "
         "Astquerschnitt eine zweite Wand, ein Maß, das beim Hersteller bleibt (RM-584)."
     ),
+    ("support.tip_diameter", "prusa"): (
+        "Die Spitze, ab der jede Baumspitze eine Trennschicht trägt, ist nur in der "
+        "Orca-Familie geschnitten; PrusaSlicers Spitze bleibt beim Hersteller (RM-704)."
+    ),
+    ("support.tip_diameter", "cura"): (
+        "Dasselbe für CuraEngine: ``support_tree_tip_diameter`` ist dort nicht "
+        "geschnitten und bleibt beim Hersteller (RM-704)."
+    ),
     ("shell.precise_outer_wall", "cura"): (
         "Dasselbe für CuraEngine — dort heißt der nächste Verwandte "
         "``outer_inset_first`` und meint die Reihenfolge, nicht das Maß."
@@ -10330,8 +10340,11 @@ def test_a_chosen_tree_over_a_hybrid_process_reaches_the_file(
 )
 def test_the_tree_walls_rest_under_a_grid(style: str, inactive: bool) -> None:
     """Unter Gitter druckt kein Baum, das Feld der Baumwände tut nichts (Review
-    RM-584, L3) — gefragt mit der Art, die das Programm druckt."""
-    assert ("support.tree_walls" in print_settings.inactive_paths(style, "skirt")) is inactive
+    RM-584, L3) — gefragt mit der Art, die das Programm druckt. Ebenso die Spitze
+    der Bäume (RM-704)."""
+    inactive_paths = print_settings.inactive_paths(style, "skirt")
+    assert ("support.tree_walls" in inactive_paths) is inactive
+    assert ("support.tip_diameter" in inactive_paths) is inactive
 
 
 def test_the_part_advice_memo_knows_the_tower() -> None:

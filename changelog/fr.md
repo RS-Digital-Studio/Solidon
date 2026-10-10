@@ -92,6 +92,7 @@ dans `website/version.json`.
 - Les surplombs plats sans support se voient proposer des parois supplémentaires. Avec l'ABS, l'ASA et le TPU, le slicer imprime les surplombs raides en sens alterné pour qu'ils ne se recourbent pas.
 - Les réglages de pont, les parois supplémentaires et le sens alterné ne valent que pour la pièce qui en a besoin. Les autres pièces du plateau s'impriment comme avant.
 - Sans profil du fabricant, PrusaSlicer et SuperSlicer impriment désormais les ponts fins. Là où un pont a besoin de lignes épaisses et de moins de débit, Solidon les propose pour cette pièce.
+- Où Solidon propose plus d'espace sur les supports arborescents, il propose aussi une *Pointe d'arbre* plus large. Chaque pointe porte une couche d'interface, et les dessous gardent moins de support.
 - Si de nombreux petits surplombs ont besoin ensemble de supports, comme un menton à face inférieure inclinée, le rapport indique désormais l'endroit.
 - Un rebord étroit qui se porte seul ne compte plus comme un long pont, même à côté d'un autre surplomb. Le rapport n'avertit plus à cet endroit, et Solidon n'y demande plus de supports.
 - Au-dessus d'un canal, le rapport ne conseille plus un support qu'on ne pourrait plus retirer. Il nomme le canal et une transition sous 45 degrés.
