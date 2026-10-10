@@ -106,6 +106,7 @@ dans `website/version.json`.
 - Si une pièce compense déjà dans le modèle, avec un trou percé avec *Tenir compte de la tolérance du matériau* ou *Compenser le pied d'éléphant*, Solidon propose que le slicer ne le refasse pas.
 - Même pour des imprimantes inconnues de PrusaSlicer ou SuperSlicer, tous deux estiment la durée d'impression avec les accélérations transmises, et le fichier indique le matériau de la bobine.
 - Même sur un ordinateur entièrement chargé, Solidon indique la vraie raison après l'arrêt d'un slicer, au lieu d'un délai dépassé. Un fichier d'impression terminé est repris.
+- Le stock de filament reconnaît de nouveau une consommation décomptée avec Solidon 0.5.1 et demande avant de décompter à nouveau la même impression.
 
 ### Filetages, perçages et pièces normalisées
 

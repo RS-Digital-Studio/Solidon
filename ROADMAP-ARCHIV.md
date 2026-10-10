@@ -31,6 +31,8 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-10 | [RM-707: Spulenwerte aus 0.5.3 überschreiben das Herstellerprofil nicht mehr (10.10.2026)](#rm-707-spulenwerte-aus-053-überschreiben-das-herstellerprofil-nicht-mehr-10102026) |
+| 2026-10-10 | [RM-705: Ein vor dem Update gebuchter Druck wird danach wiedererkannt (10.10.2026)](#rm-705-ein-vor-dem-update-gebuchter-druck-wird-danach-wiedererkannt-10102026) |
 | 2026-10-10 | [RM-704 (Teil): Mit zwei Schichten Luft trägt jede Baumspitze eine Trennschicht (10.10.2026)](#rm-704-teil-mit-zwei-schichten-luft-trägt-jede-baumspitze-eine-trennschicht-10102026) |
 | 2026-10-10 | [RM-754: Mit und ohne Cache derselbe Satz zur freien Stelle (10.10.2026)](#rm-754-mit-und-ohne-cache-derselbe-satz-zur-freien-stelle-10102026) |
 | 2026-10-10 | [RM-676: *Größe ändern* an einem erzeugten Modell rechnet nur das Maß (10.10.2026)](#rm-676-größe-ändern-an-einem-erzeugten-modell-rechnet-nur-das-maß-10102026) |
@@ -47494,3 +47496,101 @@ festgehaltener Stelle gibt `placed_at_free_spot` denselben Befund unter derselbe
 **Nachweis:** `test_free_spot_kept.py::test_the_spot_finding_is_the_same_with_and_without_the_cache`
 (verschoben und mittig) am Stand davor rot, jetzt grün; *weg3* warm gegen kalt jetzt gleich
 (vorher fehlte kalt genau dieser Befund). Changelog 0.6.0: ja, als Behebung.
+
+## RM-705: Ein vor dem Update gebuchter Druck wird danach wiedererkannt (10.10.2026)
+
+<a id="rm-705-ein-vor-dem-update-gebuchter-druck-wird-danach-wiedererkannt-10102026"></a>
+<a id="rm-705"></a>
+
+**RM-705 — Der Abdruck der Verbrauchsbuchung änderte sich mit jedem neuen Einstellungsfeld.**
+Gefunden im Review von RM-704 (`reviews-2026-10-10/review_rm704.md`, „Format, Cache und ältere
+Stände“): `filament_usage.prepare` bildet den Abdruck über alle Werte von
+`print_settings_to_data`. Seit 0.5.3 kamen sechs Felder dazu (`support.spare_ledges`,
+`bottom_interface_layers`, `interface_spacing`, `tree_walls`, `cooling.minimum_speed`,
+`support_interface_cooling`; RM-704 bringt `support.tip_diameter`). Derselbe Würfel mit
+denselben Einstellungen ergab unter 0.5.3 und welle3 verschiedene Abdrücke, keiner stand unter
+den Altabdrücken des anderen — nach dem Update auf 0.6.0 hätte jeder Kunde die Wiedererkennung
+seiner Buchungen verloren. Dieser Bruch liegt in keinem Tag (die Felder kamen nach `v0.5.3`)
+und steht deshalb nicht im Changelog. Dort steht, was wirklich neu ist: Buchungen aus 0.5.1
+erscheinen wieder als frühere Buchung zur Prüfung, auch bei *Ohne Rückfrage buchen*. Diesen
+Bruch brachte `51c19d2f0` (`plate_choices` im Abdruck, in `v0.5.2` und `v0.5.3`) — eine
+Behebung (Review RM-705, M1).
+
+**Gemessen an Codekopien der Tags** (`git archive`, Sonden in der Sitzung „Einstellungen nach
+dem Modell“): Die übrigen Werte sind zwischen 0.5.3 und dem Zweig in Wert und Typ gleich, auch
+mit Grundlage aus dem ElegooSlicer. Dort steht aber `cooling.minimum_speed` auf 20 statt der 10
+der Dataclass — eine Regel „neues Feld nur abseits der Dataclass-Vorgabe“ hätte jeden
+Elegoo-Kunden weiter verloren.
+
+**Behoben:** `FINGERPRINT_FIELDS` friert die Felder von 0.5.3 ein. Ein späteres Feld zählt nur,
+wo es vom Herstellerprofil abweichen soll: eigene Wahl oder übernommener Vorschlag, oder ein
+Wert einer Spule, der vom Wert ohne Spule abweicht — dieselbe Auskunft wie
+`handover._for_the_slot` (nach RM-707; zuerst gegen die Vorgabe der Dataclass, Review L2).
+Dazu ein Altabdruck in der Gestalt von 0.5.1 (ohne Brim-, Raftabstand und leere Wahl der
+Platte): Eine Buchung aus 0.5.1 kommt als frühere Buchung zur Prüfung, die 0.5.3 nicht kannte.
+Regel: `.claude/rules/verbrauch.md`.
+
+**Nachweis:** `test_filament_usage_fingerprint_history.py` — Sollwerte aus der Kopie von 0.5.3
+(`158d8f5d…` für den Würfel, `aa373e5e…` für die Buchung) und 0.5.1 (`3cae285a…`, `c62cddf4…`);
+Projekt und Lager in `tests/data` schrieb 0.5.3 selbst. Am Stand `083dab2f6` 7 von 8 rot, danach
+grün. Der Wächter zählt jedes Feld über `all_paths()` und erfasst `support.tip_diameter` nach
+dem Merge von RM-704 ohne Zutun; vier Mutationen der Regel (Wahl, Spule, Altgestalt, ganzer
+Filter) machen ihn rot. Am Kundenweg (Projekt öffnen, Grundlage darunter, neu ansehen) erkennt
+der Zweig Buchungen aus 0.5.2 und 0.5.3 genau, aus 0.5.1 als frühere Buchung, aus 0.5.0 nicht:
+Dort weichen die Tempi der Stufe und der Profilschlüssel ab (`resolve(legacy=True)`), das ist
+kein billiger Altabdruck. Über fünf Drucker, PLA und PETG, Tabelle, ElegooSlicer und
+OrcaSlicer, mit und ohne eigene Wahl gleicht jeder Abdruck dem von 0.5.3. Der Wächter meldet
+alle Felder, die als Grundlage durchrutschen, auf einmal (L3); der Spulentest läuft über alle
+vier Spulengruppen (L1); der Kundenweg rechnet wie die Anwendung über
+`manufacturer.effective` (L4).
+
+**Grenzen** (Review RM-705, M2, gemessen an den zwölf Beispielprojekten aus `v0.5.3`): Der
+Abdruck kippt weiter, wo sich der Druck wirklich oder in seinen Bits ändert.
+- Netzbits: 11 von 12 Beispielen behalten ihren Abdruck, 19 von 21 Körpern sind bitgleich. Die
+  Ausnahme ist `gehaeuse-mit-bausteinen` (Bausteinänderungen, `LIBRARY_VERSION` 23 → 27,
+  Mutternfalle `PartChange` 25 und 26). Ebenso jede druckgleiche Beschleunigung, die Bits
+  verschiebt; Paket D trifft die Beispiele aus 0.5.3 nicht. Umbau auf gespeicherte Eingänge:
+  RM-706.
+- Solidons eigene neue Grundlage eines eingefrorenen Felds: Cura rechnet seit RM-583
+  (`fafcd4841`) `support.z_gap` in ganzen Schichten — Cura 2 von 4 Fällen verschieden (Generic
+  220, Fein 0,2 → 0,12 mm, Entwurf 0,2 → 0,28 mm); K1 auf Standard gleich.
+- Ein Slicer-Update, das einen Wert eines eingefrorenen Felds ändert, wie schon unter 0.5.3.
+
+## RM-707: Spulenwerte aus 0.5.3 überschreiben das Herstellerprofil nicht mehr (10.10.2026)
+
+<a id="rm-707-spulenwerte-aus-053-überschreiben-das-herstellerprofil-nicht-mehr-10102026"></a>
+<a id="rm-707"></a>
+
+**RM-707 — Spulenwerte aus 0.5.3 änderten nach dem Update still den Druck.** Gefunden im Review
+von RM-705 (`reviews-2026-10-10/review_rm705.md`, N1): `serialise._group_from_data` füllte ein
+Feld, das die Spulengruppe einer älteren Datei nicht kannte, mit der Vorgabe der Dataclass, und
+`handover._for_the_slot` schrieb es als Abweichung der Spule an den Slicer. Gemessen am echten
+ElegooSlicer (Würfel, CC2, PLA, Spule aus 0.5.3 mit Düse 215 °C und Lüfter 80 %): Der
+Konfigurationsblock des G-Codes trug `slow_down_min_speed = 10` statt der 20 des
+Herstellerprofils. `cooling.support_interface_cooling` träfe es ebenso, sobald die Grundlage ihn
+einschaltet (Projektwahl, Vorschlag) — am gemessenen Profil steht er aus, vorher wie nachher
+`-1` (Review RM-707, L4). Entstanden mit `5f68e51d8` und
+`fafcd4841`, beide in keinem Tag — deshalb kein Changelog.
+
+**Behoben:** `SlotOverride.inherited` nennt die Felder einer gesetzten Spulengruppe, die die
+Datei nicht kannte. Sie folgen dem Wert ohne Spule (`handover.override_section`, der einzige
+Ort, an dem eine Spule ihre Gruppen anlegt), werden nicht geschrieben und bleiben so über
+Speichern und Öffnen erhalten — ohne Formatschritt, denn ein älterer Leser übergeht fehlende
+Felder ohnehin. Ausnahme ist die Lüfterkurve, die der Leser bewusst aus dem Material ergänzt.
+Der Spulendialog zeigt dort den Projektwert und lässt das Feld geerbt, solange es unverändert
+bleibt; ein übernommener Vorschlag für die Spule nimmt seinen Pfad heraus. Die Spulenklausel
+des Abdrucks (RM-705) fragt jetzt wie `_for_the_slot` gegen den Wert ohne Spule, ohne Slicer
+gerechnet. Nach dem Review: „Alte Filamentwerte übernehmen“ zeigt geerbte Felder ebenfalls als
+Projektwert und lässt sie geerbt (M1), ein Übernehmen ohne Änderung gibt dieselbe Spule zurück
+(L2), der Vorschlag je Spule geht über `handover.with_slot_advice` (L1). Offen für welle4:
+Der Dialog zeigt bei einer Spule anderen Materials oder mit eigenem Filamentprofil den
+Projektwert, gedruckt wird der Wert der Spule ohne Übersteuerung (L3); die Vorbelegung einer
+solchen Spule mit Projektwerten besteht schon in 0.5.3 (N1).
+
+**Nachweis:** `test_slot_override_inherited.py` mit `tests/data/projects/usage_spool_v46.p3d`,
+geschrieben von 0.5.3 — am Stand davor 5 von 7 rot, danach grün; der Abdruck der Buchung
+(`613fd553…` aus der Kopie von 0.5.3) bleibt mit Tabelle und mit Herstellergrundlage gleich.
+Fenstertest `test_print_settings_ui.py::test_a_spool_from_053_shows_and_keeps_the_project_value_in_later_fields`.
+Am echten ElegooSlicer 1.5.3.5 danach `slow_down_min_speed = 20`, die Spule weicht nur noch in
+Düse, erster Schicht, Lüfter und Mindestschichtzeit ab (die Mindestschichtzeit trägt die Spule
+aus 0.5.3 als eigenen Wert, ein Feld von 0.5.3).

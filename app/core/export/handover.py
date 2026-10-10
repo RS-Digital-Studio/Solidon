@@ -2768,10 +2768,10 @@ def _resolve_slot(
     if override is not None and not override.empty:
         settings = replace(
             settings,
-            temperature=override.temperature or settings.temperature,
-            cooling=override.cooling or settings.cooling,
-            retraction=override.retraction or settings.retraction,
-            filament=override.filament or settings.filament,
+            **{
+                group: override_section(override, group, getattr(settings, group))
+                for group in SLOT_GROUPS
+            },
         )
     return _SlotResolution(
         settings=settings,
@@ -2946,6 +2946,31 @@ def override_for(settings: PrintSettings, slot: MaterialSlot) -> SlotOverride | 
     return None
 
 
+#: Die Gruppen, die eine Spule übersteuern darf (:class:).
+SLOT_GROUPS: Final = ("temperature", "cooling", "retraction", "filament")
+
+
+def override_section(override: SlotOverride | None, group: str, current: Any) -> Any:
+    """Was in dieser Gruppe für die Spule gilt: ihre Werte, wo sie übersteuert.
+
+    ``current`` ist die Gruppe ohne die Spule. Ohne eigene Gruppe gilt sie
+    ganz; mit eigener Gruppe gelten deren Werte, ausgenommen die Felder, die
+    die Spule nicht übersteuert (:attr:`SlotOverride.inherited`, RM-707) —
+    sie folgen ``current``, wie der Vergleich in :func:`_for_the_slot`.
+    """
+    own = getattr(override, group, None) if override is not None else None
+    if own is None:
+        return current
+    kept = {
+        path.partition(".")[2]
+        for path in override.inherited  # type: ignore[union-attr]
+        if path.partition(".")[0] == group
+    }
+    if not kept:
+        return own
+    return replace(own, **{name: getattr(current, name) for name in kept})
+
+
 def unbound_override_for(settings: PrintSettings, slot: MaterialSlot) -> SlotOverride | None:
     """Alte Werte zum ausdrücklichen Übernehmen im Dialog, niemals zum Drucken."""
     for entry in settings.slot_overrides:
@@ -2994,6 +3019,33 @@ def with_slot_override(
         material_type=slot.material_type,
     )
     return replace(settings, slot_overrides=(*kept, identified))
+
+
+def with_slot_advice(
+    settings: PrintSettings,
+    slot: MaterialSlot,
+    effective: PrintSettings,
+    path: str,
+    value: object,
+) -> PrintSettings:
+    """Ein übernommener Vorschlag für eine Spule (§20): Er gehört ihr.
+
+    ``effective`` sind die Einstellungen, mit denen die Spule ohne den
+    Vorschlag fährt. Eine schon gesetzte Gruppe der Spule bleibt die
+    Grundlage; der Pfad des Vorschlags fällt aus ``inherited`` — sonst folgte
+    er weiter dem Wert ohne Spule, und der Vorschlag ginge still verloren
+    (RM-707, etwa ``cooling.support_interface_cooling`` bei PETG).
+    """
+    group = path.partition(".")[0]
+    previous = override_for(settings, slot) or SlotOverride()
+    base = replace(effective, **{group: getattr(previous, group) or getattr(effective, group)})
+    updated = with_path(base, path, value)
+    override = replace(
+        previous,
+        inherited=previous.inherited - {path},
+        **{group: getattr(updated, group)},
+    )
+    return with_slot_override(settings, slot, override)
 
 
 def settings_for_shared_slicer(

@@ -130,6 +130,7 @@ Nutzen da und sonst nichts.
 - Gleicht ein Teil schon im Modell aus, mit einer Bohrung mit *Materialtoleranz berücksichtigen* oder *Elefantenfuß ausgleichen*, schlägt Solidon vor, dass der Slicer es nicht noch einmal tut.
 - Auch bei Druckern, die PrusaSlicer oder SuperSlicer nicht selbst kennen, rechnen beide die Druckzeit mit den übergebenen Beschleunigungen, und die Datei nennt das Material der Spule.
 - Auch auf einem voll ausgelasteten Rechner nennt Solidon nach dem Anhalten eines Slicers den wirklichen Grund statt einer Zeitüberschreitung. Eine fertige Druckdatei wird übernommen.
+- Das Filamentlager erkennt eine Buchung aus Solidon 0.5.1 wieder als frühere Buchung und fragt nach, bevor es denselben Druck erneut abbucht.
 
 ### Gewinde, Bohrungen und Normteile
 
