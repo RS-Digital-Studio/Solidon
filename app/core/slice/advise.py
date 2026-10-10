@@ -56,7 +56,7 @@ from app.core.slice.analysis import (
     open_bridge_width,
     piece_area,
     smooth_outline_height,
-    steep_overhang,
+    steep_reach,
     tapered_layers,
     thinnest_spot,
     tip_islands,
@@ -2148,8 +2148,12 @@ def _bridges_and_overhangs(
     Wände (gemessen in PrusaSlicer und OrcaSlicer: zwischen 45 Grad und der
     Stützgrenze ändert der Schalter nichts, unter einer Auskragung ersetzt er die
     losen Brückenbahnen). **Die Umkehr** an steilen Wänden zwischen 45 Grad und
-    der Stützgrenze (:func:`steep_overhang`) für Material, das sich aufrollt —
-    nur in der Orca-Familie, die anderen kennen sie nicht.
+    der Stützgrenze für Material, das sich aufrollt — nur in der Orca-Familie,
+    die anderen kennen sie nicht. Steil ist eine Wand, die über ihre Höhe weiter
+    als eine Bahnbreite über die 45-Grad-Linie hinauswandert
+    (:func:`steep_reach`): Erst dann liegt ihre Außenbahn neben der Bahn, die eine
+    45-Grad-Wand dort legte; darunter ist sie eine Kante, eine Rundung von 2 mm
+    bringt 0,1 mm.
     """
     found: list[SettingAdvice] = []
     style = printed_style(settings, advice, declined)
@@ -2217,7 +2221,7 @@ def _bridges_and_overhangs(
         profile.material.id in CURLING_MATERIALS
         and flavour not in ("prusa", "cura")
         and not settings.shell.overhang_reverse
-        and steep_overhang(result, enough=OVERHANG_LAYER_MINIMUM) > OVERHANG_LAYER_MINIMUM
+        and steep_reach(result, enough=settings.layers.line_width) > settings.layers.line_width
     ):
         found.append(
             _advice(

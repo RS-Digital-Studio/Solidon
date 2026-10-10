@@ -3246,30 +3246,43 @@ def total_overhang(
     return max(total, 0.0)
 
 
-def steep_overhang(result: SliceResult, enough: float | None = None) -> float:
-    """Die Fläche in mm², die über ihre Schicht hinausragt, ohne dass der Slicer
-    sie stützt: steiler als die Startregel (45 Grad, :data:`OVERHANG_ANGLE_FACTOR`)
-    und flacher als der Winkel, mit dem geschnitten wurde (RM-587).
+def steep_reach(result: SliceResult, enough: float | None = None) -> float:
+    """Wie weit die längste steile Wand über die 45-Grad-Linie hinauswandert, in mm
+    (RM-587, Review M2).
 
-    Je Schicht die Fläche jenseits der 45-Grad-Zugabe über der Schicht darunter,
-    abzüglich des Überhangs jenseits der Stützgrenze (``overhang_area``): Der
-    gehört der Stütze. Ein Schnitt mit einer Grenze unter 45 Grad hat kein Band
-    und gibt null. Ein Trichter von 20 mm Höhe aus Ø 12 mm trägt bei 50 Grad
-    431 mm² (gerechnet 432), bei 58 Grad 1656 (1659), bei 40 Grad nichts;
-    senkrechte Wände tragen nichts, ihr Vernetzungsrauschen bleibt in der Zugabe
-    einer Schichthöhe.
+    Steil heißt: steiler als die Startregel (45 Grad,
+    :data:`OVERHANG_ANGLE_FACTOR`) und flacher als der Winkel, mit dem geschnitten
+    wurde — dort stützt der Slicer nicht, und schrumpfendes Material rollt sich auf.
+    Je Schicht das **Band**: die Fläche jenseits der 45-Grad-Zugabe über der Schicht
+    darunter, ohne die Stücke, die an einen Überhang jenseits der Stützgrenze
+    grenzen. Der gehört der Stütze, und der Streifen neben ihm ist der Rand einer
+    flachen Decke, keine Wand: Am Kasten mit Deckel waren das am K1 Max 14,9 mm² in
+    einer Schicht. Die mittlere Breite des Bands ist das Doppelte seiner Fläche
+    durch seinen Umfang — an einem Ring genau seine Breite, Schichthöhe ·
+    (tan Winkel - 1).
 
-    ``enough`` beendet die Messung, sobald die Summe darüber liegt — der Rat
-    fragt nur, ob es so viel gibt. Gerechnet blockweise (:data:`BATCH_LAYERS`),
+    Gezählt wird je Wand: Die Breiten folgen sich über die Schichten, solange das
+    Band einer Schicht höchstens eine Schichthöhe neben dem der Schicht darunter
+    liegt; eine Schicht ohne Band beginnt neu. Die Summe ist die Höhe der Wand mal
+    (tan Winkel - 1) — wie weit sie über eine 45-Grad-Wand hinauswandert. Ein
+    Trichter von 20 mm Höhe (99 Schichtschritte zu 0,2 mm) trägt bei 50 Grad
+    19,8 · 0,192 = 3,80 mm, bei 58 Grad 11,89 mm, bei 40 Grad nichts. Eine Rundung
+    mit Radius r an der Unterkante bringt 0,048 · r: Ihr Stück zwischen 45 und 60
+    Grad ist 0,159 · r hoch und 0,207 · r breit. Ein Schnitt mit einer Grenze unter
+    45 Grad hat kein Band und gibt null; senkrechte Wände tragen nichts, ihr
+    Vernetzungsrauschen bleibt in der Zugabe einer Schichthöhe.
+
+    ``enough`` beendet die Messung, sobald eine Wand darüber liegt — der Rat fragt
+    nur, ob es eine so weite gibt. Gerechnet blockweise (:data:`BATCH_LAYERS`),
     als Fläche ohne Vereinigung (die Konturen einer Schicht sind getrennt) und
     nach Douglas-Peucker um :data:`WIDTH_SIMPLIFY` vereinfacht wie
     :func:`_width_outline`; wird eine Schicht dabei ungültig, bleibt sie, wie sie
-    ist. Am Besenhalter mit 1,7 Millionen Punkten kostete das 0,38 s Rechenzeit
-    statt 2,06 s mit vereinigten, unvereinfachten Konturen, bei 20,7 statt
-    20,9 mm².
+    ist. Am Besenhalter mit 1,7 Millionen Punkten kostete das Band so 0,38 s
+    Rechenzeit statt 2,06 s mit vereinigten, unvereinfachten Konturen.
     """
     layers = result.layers
-    total = 0.0
+    best = run = 0.0
+    previous: Any = None
     for start in range(1, len(layers), BATCH_LAYERS):
         stop = min(start + BATCH_LAYERS, len(layers))
         exact = np.asarray([_disjoint_shape(layer) for layer in layers[start - 1 : stop]])
@@ -3280,12 +3293,46 @@ def steep_overhang(result: SliceResult, enough: float | None = None) -> float:
             [max(layers[index].z - layers[index - 1].z, 0.0) for index in range(start, stop)]
         )
         below = shapely.buffer(shapes[:-1], steps * OVERHANG_ANGLE_FACTOR, quad_segs=16)
-        free = shapely.area(shapely.difference(shapes[1:], below))
-        beyond = np.asarray([layer.overhang_area for layer in layers[start:stop]])
-        total += float(np.maximum(free - beyond, 0.0).sum())
-        if enough is not None and total > enough:
+        parts, owner = shapely.get_parts(shapely.difference(shapes[1:], below), return_index=True)
+        ceilings = np.asarray(
+            [_overhang_shape(layer) for layer in layers[start:stop]], dtype=object
+        )
+        kept = ~shapely.intersects(parts, ceilings[owner])
+        parts, owner = parts[kept], owner[kept]
+        count = stop - start
+        area = np.bincount(owner, weights=shapely.area(parts), minlength=count)
+        length = np.bincount(owner, weights=shapely.length(parts), minlength=count)
+        width = np.divide(2.0 * area, length, out=np.zeros(count), where=length > 0.0)
+        bands = np.full(count, None, dtype=object)
+        if len(owner):
+            # ``get_parts`` liefert die Teile nach Schichten geordnet.
+            cuts = np.flatnonzero(np.diff(owner)) + 1
+            for position, group in zip(owner[np.r_[0, cuts]], np.split(parts, cuts), strict=True):
+                bands[position] = shapely.multipolygons(group)
+        for position in range(count):
+            band = bands[position]
+            if band is None:
+                run = 0.0
+            elif previous is not None and shapely.dwithin(
+                band, previous, steps[position] + OVERHANG_MARGIN
+            ):
+                run += float(width[position])
+            else:
+                run = float(width[position])
+            previous = band
+            best = max(best, run)
+        if enough is not None and best > enough:
             break
-    return total
+    return best
+
+
+def _overhang_shape(layer: LayerInfo) -> ShapelyPolygon | MultiPolygon:
+    """Die Überhangstücke einer Schicht als eine Fläche, ohne sie zu vereinigen —
+    sie sind getrennte Teile derselben Differenz."""
+    parts = [ShapelyPolygon(piece.outline, piece.holes) for piece in layer.overhangs]
+    if not parts:
+        return ShapelyPolygon()
+    return parts[0] if len(parts) == 1 else MultiPolygon(parts)
 
 
 def _disjoint_shape(layer: LayerInfo) -> ShapelyPolygon | MultiPolygon:
@@ -3314,6 +3361,13 @@ def cantilevers(
     PrusaSlicer 2.9.6: Die Zusatzwände an Überhängen ersetzen unter einer
     3-mm-Auskragung die Brückenbahnen und lassen eine beidseitig gelagerte
     36-mm-Brücke unverändert.
+
+    **Eine Decke, die ringsum aufliegt, hängt an keiner Seite** (Review RM-587,
+    M1): Der Deckel eines geschlossenen Kastens berührt seine Schicht an einer
+    einzigen Linie, dem ganzen Außenring; PrusaSlicer legt ihn mit und ohne
+    Zusatzwände gleich. Bleibt vom Außenring frei, was kürzer ist als ``gap``,
+    zählt er als umlaufend. Der Pilzhut berührt den Rest an seinem Innenring und
+    hängt nach außen — er bleibt einseitig.
     """
     found: set[tuple[int, int]] = set()
     shapes: dict[int, Any] = {}
@@ -3325,6 +3379,8 @@ def cantilevers(
         rest = shapes[index].difference(outline).buffer(OVERHANG_MARGIN)
         contact = outline.boundary.intersection(rest)
         if contact.is_empty:
+            continue
+        if outline.exterior.difference(rest).length < gap:
             continue
         joined = contact.buffer(gap / 2.0)
         if len(getattr(joined, "geoms", [joined])) == 1:

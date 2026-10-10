@@ -703,11 +703,24 @@ Wände selbst wirkt Orcas Umkehr: Am ABS-Trichter mit 50 Grad dreht die Außenwa
 in OrcaSlicer, ElegooSlicer und Creality Print in jeder zweiten Schicht (50 von
 50), Anycubic Slicer Next dreht jede Schicht um; ohne den Schalter nie. Die
 Recherche nennt sie für schrumpfende und weiche Materialien, und nur dort wird
-sie vorgeschlagen. Das Band zählt `analysis.steep_overhang` — an Trichtern auf
-ein Prozent wie von Hand gerechnet (50 Grad: 431 gegen 432 mm²), am Korpus
-zwischen 0 (Behälter) und 1 976 mm² (Kumiko-Organizer); unter zehn ist es eine
-Kante. Gerechnet an vereinfachten, nicht vereinigten Konturen und abgebrochen,
-sobald es genug ist: am Besenhalter 0,16 s statt 2,1 s.
+sie vorgeschlagen.
+
+Steil ist eine Wand, die über ihre Höhe weiter als eine Bahnbreite über die
+45-Grad-Linie hinauswandert (`analysis.steep_reach`): je Schicht die mittlere
+Breite des Bands zwischen 45 Grad und der Stützgrenze, über die Schichten
+summiert, solange das Band an derselben Wand weiterläuft. Ein Trichter von 20 mm
+Höhe kommt so bei 50 Grad auf 19,8 · (tan 50° − 1) = 3,80 mm, eine Rundung mit
+Radius r an der Unterkante auf 0,048 · r — bei 2 mm also 0,1 mm, eine Kante.
+Zuerst zählte die Fläche des Bands über den ganzen Körper gegen 10 mm², die
+Kantengrenze je Stück und Schicht; dabei kam der Streifen am Rand jeder flachen
+Decke mit (Kasten mit Deckel am K1 Max 14,9 mm² in einer Schicht), und ein
+ABS-Gehäuse mit Deckel bekam die Umkehr ohne steile Wand (Review RM-587, M2).
+Jetzt zählt kein Bandstück, das an einen Überhang jenseits der Stützgrenze
+grenzt. Gemessen am K1 Max mit ABS: Behälter und Kästen 0 bis 0,006 mm,
+Besenhalter 0,12 und Schraubendreherhalter 0,11 (vorher 20,7 und 19,1 mm², beide
+mit Umkehr, jetzt ohne), Okarina 5,5 und Drache 8,2 mm (weiter mit). Gerechnet an
+vereinfachten, nicht vereinigten Konturen und abgebrochen, sobald es genug ist:
+am Drachen 0,11 s statt 2,06 s für die ganze Messung.
 
 **Je Teil, nicht für die Platte** (Entscheidung Robert, 09.10.2026). Die Werte
 gehören dem Teil mit der Brücke oder dem Überhang. Gemessen mit zwei gleichen

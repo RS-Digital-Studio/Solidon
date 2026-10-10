@@ -1563,19 +1563,65 @@ def test_a_long_bridge_under_supports_has_the_slicer_support_bridges() -> None:
     assert "support.bridges" not in _advice_on(raw.copy(), support__bridges=True)
 
 
+def _mushroom() -> trimesh.Trimesh:
+    """Ein Stiel 10 × 10 × 10 mm unter einem Hut 30 × 30 × 2 mm."""
+    stem = trimesh.creation.box((10.0, 10.0, 10.0))
+    stem.apply_translation((0.0, 0.0, 5.0))
+    cap = trimesh.creation.box((30.0, 30.0, 2.0))
+    cap.apply_translation((0.0, 0.0, 11.0))
+    return trimesh.boolean.union([stem, cap])
+
+
+def _lid_box() -> trimesh.Trimesh:
+    """Ein geschlossener Kasten 30 × 30 × 14 mm mit 2 mm Wand und Boden: Der Deckel
+    liegt ringsum auf den Wänden, über einem Hohlraum von 26 mm."""
+    shell = trimesh.creation.box((30.0, 30.0, 14.0))
+    shell.apply_translation((0.0, 0.0, 7.0))
+    cavity = trimesh.creation.box((26.0, 26.0, 10.0))
+    cavity.apply_translation((0.0, 0.0, 7.0))
+    return trimesh.boolean.difference([shell, cavity])
+
+
+def _cup_upside_down() -> trimesh.Trimesh:
+    """Ein umgedrehter Becher Ø 30 mm, 16 mm hoch, 2 mm Wand: unten offen, oben ein
+    Deckel auf einem geschlossenen Ring."""
+    outside = trimesh.creation.cylinder(radius=15.0, height=16.0, sections=96)
+    outside.apply_translation((0.0, 0.0, 8.0))
+    inside = trimesh.creation.cylinder(radius=13.0, height=14.01, sections=96)
+    inside.apply_translation((0.0, 0.0, 6.995))
+    return trimesh.boolean.difference([outside, inside])
+
+
+def _rounded_bottom(radius: float) -> trimesh.Trimesh:
+    """Ein Kasten 40 × 40 × 20 mm, dessen Unterkante ringsum mit ``radius`` gerundet ist."""
+    inner = 40.0 - 2.0 * radius
+    core = trimesh.creation.box((inner, inner, 20.0))
+    core.apply_translation((0.0, 0.0, 10.0))
+    upper = trimesh.creation.box((40.0, 40.0, 20.0 - radius))
+    upper.apply_translation((0.0, 0.0, radius + (20.0 - radius) / 2.0))
+    pieces = [core, upper]
+    for axis in ((0.0, 1.0, 0.0), (1.0, 0.0, 0.0)):
+        for sign in (-1.0, 1.0):
+            rod = trimesh.creation.cylinder(radius=radius, height=inner, sections=64)
+            rod.apply_transform(trimesh.transformations.rotation_matrix(math.pi / 2.0, axis))
+            offset = sign * (20.0 - radius)
+            rod.apply_translation((0.0, offset, radius) if axis[1] else (offset, 0.0, radius))
+            pieces.append(rod)
+    for x in (-1.0, 1.0):
+        for y in (-1.0, 1.0):
+            ball = trimesh.creation.icosphere(subdivisions=3, radius=radius)
+            ball.apply_translation((x * (20.0 - radius), y * (20.0 - radius), radius))
+            pieces.append(ball)
+    return trimesh.boolean.union(pieces)
+
+
 def test_a_mushroom_cap_under_supports_has_the_slicer_support_bridges_too() -> None:
     """Welche Decke der Slicer als Brücke liest, rechnet nur er: Am Kobra 2 stützte
     OrcaSlicer vom Pilzhut nur den Rand (``bridge_no_support = 1``). Der Hut ist
     keine lange Brücke, verlangt aber Stütze — also gilt sie auch unter Brücken.
     Ein Würfel ohne Stützbedarf bekommt nichts."""
-    stem = trimesh.creation.box((10.0, 10.0, 10.0))
-    stem.apply_translation((0.0, 0.0, 5.0))
-    cap = trimesh.creation.box((30.0, 30.0, 2.0))
-    cap.apply_translation((0.0, 0.0, 11.0))
-    mushroom = trimesh.boolean.union([stem, cap])
-
     assert (
-        _advice_on(mushroom, "anycubic-kobra-2", support__bridges=False).get("support.bridges")
+        _advice_on(_mushroom(), "anycubic-kobra-2", support__bridges=False).get("support.bridges")
         is True
     )
     cube = trimesh.creation.box((20.0, 20.0, 20.0))
@@ -1626,32 +1672,74 @@ def test_steep_walls_of_curling_material_alternate_in_the_orca_family() -> None:
     assert "shell.overhang_reverse" not in prusa
 
 
-@pytest.mark.parametrize(("angle", "expected"), [(40.0, 0.0), (50.0, 432.0), (58.0, 1659.0)])
-def test_the_steep_band_matches_the_funnel_by_hand(angle: float, expected: float) -> None:
+@pytest.mark.parametrize(("angle", "expected"), [(40.0, 0.0), (50.0, 3.797), (58.0, 11.886)])
+def test_the_steep_reach_matches_the_funnel_by_hand(angle: float, expected: float) -> None:
     """Je Schicht wächst der Trichter um 0,2 · tan(Winkel); jenseits der 45-Grad-Zugabe
-    (0,2 mm) bleibt ein Ring 0,2 · (tan − 1) breit. Summiert über 100 Schichten bei
-    Radien von 6 bis 6 + 20 · tan: 2π · Breite · Σr (K1 Max, Grenze 60 Grad)."""
-    from app.core.slice.analysis import steep_overhang
+    (0,2 mm) bleibt ein Ring 0,2 · (tan − 1) breit. Über 99 Schichtschritte summiert
+    wandert die Wand 19,8 · (tan − 1) über die 45-Grad-Linie hinaus (K1 Max, Grenze
+    60 Grad)."""
+    from app.core.slice.analysis import steep_reach
 
     _mesh, result = _sliced(_funnel(angle), profiles.make_profile("creality-k1-max", "pla"))
 
-    assert steep_overhang(result) == pytest.approx(expected, rel=0.02, abs=1.0)
+    assert steep_reach(result) == pytest.approx(expected, rel=0.02, abs=0.01)
     if expected:
-        partial = steep_overhang(result, enough=10.0)
-        assert 10.0 < partial < expected, "die Messung hört auf, sobald es genug ist"
+        partial = steep_reach(result, enough=1.0)
+        assert 1.0 < partial < expected, "die Messung hört auf, sobald es genug ist"
 
 
-def test_a_box_and_a_limit_below_the_band_have_no_steep_band() -> None:
-    """Senkrechte Wände tragen nichts, und eine Grenze von 45 Grad lässt kein Band —
-    bis auf den Rest der Vereinfachung um ein Hundertstel Millimeter (0,25 mm² am
-    Trichter), weit unter einer Kante."""
-    from app.core.slice.analysis import steep_overhang
+def test_a_box_a_ceiling_and_a_limit_below_the_band_have_no_steep_wall() -> None:
+    """Senkrechte Wände tragen nichts, und eine Grenze von 45 Grad lässt kein Band.
+    Der Rand einer flachen Decke grenzt an ihren Überhang und zählt nicht (Review
+    RM-587, M2). Eine Rundung von 2 mm an der Unterkante wandert 0,048 · 2 ≈ 0,1 mm
+    über die 45-Grad-Linie hinaus — eine Kante, weit unter einer Bahnbreite."""
+    from app.core.slice.analysis import steep_reach
 
+    profile = profiles.make_profile("creality-k1-max", "pla")
     box = trimesh.creation.box((40.0, 40.0, 30.0))
-    _mesh, result = _sliced(box, profiles.make_profile("creality-k1-max", "pla"))
-    assert steep_overhang(result) == 0.0
+    _mesh, result = _sliced(box, profile)
+    assert steep_reach(result) == 0.0
     _mesh, flat = _sliced(_funnel(58.0), profiles.make_profile("generic-220", "pla"))
-    assert steep_overhang(flat) < 1.0 < advise.OVERHANG_LAYER_MINIMUM
+    assert steep_reach(flat) == 0.0
+    for build in (_lid_box, _cup_upside_down):
+        _mesh, ceiling = _sliced(build(), profile)
+        assert steep_reach(ceiling) == 0.0, build.__name__
+    _mesh, rounded = _sliced(_rounded_bottom(2.0), profile)
+    assert steep_reach(rounded) < 0.2
+
+
+def _flared_post(x: float, start: float, flare: float, angle: float = 55.0) -> trimesh.Trimesh:
+    """Ein Pfosten Ø 8 mm, 10 mm hoch, der sich ab ``start`` über ``flare`` mm Höhe
+    mit ``angle`` gegen die Senkrechte nach außen weitet."""
+    import numpy as np
+
+    wide = 4.0 + flare * math.tan(math.radians(angle))
+    line = np.asarray(
+        [(0.0, 0.0), (4.0, 0.0), (4.0, start), (wide, start + flare), (wide, 10.0), (0.0, 10.0)]
+    )
+    post = trimesh.creation.revolve(line, sections=96)
+    if post.volume < 0:
+        post.invert()
+    post.apply_translation((x, 0.0, 0.0))
+    return post
+
+
+def test_the_steep_reach_follows_one_wall_upwards() -> None:
+    """Zwei kurze Weitungen an zwei Pfosten, die eine über der anderen, sind zwei
+    Kanten und keine Wand: Jede wandert für sich weniger als eine Bahnbreite hinaus,
+    und zusammen zählen sie nicht. Dieselbe Weitung über 2 mm Höhe an einem Pfosten ist eine
+    Wand, 2 · (tan 55° − 1) ≈ 0,86 mm, im Schichtraster etwas weniger."""
+    from app.core.slice.analysis import steep_reach
+
+    profile = profiles.make_profile("creality-k1-max", "pla")
+    width = print_settings.resolve(profile).layers.line_width
+    lower, upper = _flared_post(-10.0, 5.0, 0.6), _flared_post(10.0, 5.6, 0.6)
+    alone = [steep_reach(_sliced(post.copy(), profile)[1]) for post in (lower, upper)]
+    assert min(alone) > 0.0 and max(alone) < width
+    _mesh, two = _sliced(trimesh.util.concatenate([lower, upper]), profile)
+    assert steep_reach(two) == pytest.approx(max(alone), abs=0.01)
+    _mesh, one = _sliced(_flared_post(0.0, 5.0, 2.0), profile)
+    assert width < steep_reach(one) < 0.86
 
 
 def test_a_cantilever_hangs_from_one_side_and_a_bridge_from_two() -> None:
@@ -1669,3 +1757,49 @@ def test_a_cantilever_hangs_from_one_side_and_a_bridge_from_two() -> None:
         ]
         assert pieces, "die Vorbedingung: ein Überhang"
         assert bool(cantilevers(result, pieces, 0.42)) is hangs
+
+
+@pytest.mark.parametrize("build", [_lid_box, _cup_upside_down], ids=["lid", "cup"])
+def test_a_ceiling_resting_on_a_closed_ring_is_no_cantilever(build) -> None:
+    """Review RM-587, M1: Der Deckel eines geschlossenen Kastens und eines umgedrehten
+    Bechers berührt den Rest seiner Schicht an **einer** Linie — dem ganzen Außenring.
+    Er liegt ringsum auf und hängt an keiner Seite; PrusaSlicer 2.9.6 legt ihn mit und
+    ohne Zusatzwände gleich (Brückenbahn 3 575,0 / 2 825,0 mm). Der Pilzhut berührt
+    dagegen seinen Innenring und hängt nach außen, die Auskragung an einem Stück ihres
+    Außenrings — beide behalten die Zusatzwände."""
+    from app.core.slice.analysis import cantilevers
+
+    profile = profiles.make_profile("creality-k1-max", "pla")
+    _mesh, result = _sliced(build(), profile)
+    pieces = [
+        (index, number)
+        for index, layer in enumerate(result.layers)
+        for number in range(len(layer.overhangs))
+        if index > 0 and layer.overhang_area > advise.OVERHANG_LAYER_MINIMUM
+    ]
+    assert pieces, "die Vorbedingung: eine Decke"
+    assert not cantilevers(result, pieces, 0.42)
+
+    free = frozenset({"support.style"})
+    assert "shell.overhang_walls" not in _advice_on(build(), declined=free)
+    assert "shell.overhang_walls" not in _advice_on(build())
+    assert _advice_on(_mushroom(), declined=free).get("shell.overhang_walls") is True
+    assert _advice_on(_shelf(3.0)).get("shell.overhang_walls") is True
+
+
+@pytest.mark.parametrize(
+    "build",
+    [_lid_box, _cup_upside_down, lambda: _rounded_bottom(2.0)],
+    ids=["lid", "cup", "rounded-edge"],
+)
+@pytest.mark.parametrize("printer", ["creality-k1-max", "anycubic-kobra-2", "prusa-mk4s"])
+def test_a_flat_ceiling_or_a_rounded_edge_is_no_steep_wall(build, printer: str) -> None:
+    """Review RM-587, M2: Am Rand jeder flachen Decke liegt ein Streifen zwischen der
+    45-Grad-Zugabe und der Stützgrenze; am Kasten mit Deckel sind das am K1 Max 14,9 mm²
+    in einer Schicht, und das ABS-Gehäuse bekam „Wandrichtung wechseln“, ohne eine
+    steile Wand zu haben. Eine Rundung von 2 mm an der Unterkante ist eine Kante.
+    Der Trichter mit 50 Grad bekommt die Umkehr weiter."""
+    free = frozenset({"support.style"})
+    assert "shell.overhang_reverse" not in _advice_on(build(), printer, "abs", declined=free)
+    assert "shell.overhang_reverse" not in _advice_on(build(), printer, "abs")
+    assert _advice_on(_funnel(50.0), printer, "abs").get("shell.overhang_reverse") is True
