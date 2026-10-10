@@ -657,6 +657,7 @@ class SliceResult:
     first_layer_area: float
     source: MetricSource = "internal"
     bridge_from: float | None = None  # ab welcher Breite eine freie Fläche Brücke ist, mm
+    overhang_angle: float | None = None  # Stützwinkel des Schnitts, Grad von der Senkrechten
 
 
 @dataclass(frozen=True, slots=True)
