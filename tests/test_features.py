@@ -7741,3 +7741,39 @@ def test_subdividing_a_cone_rim_does_not_invent_measured_circle_points() -> None
     measured = support.points[features_module._circular_rim_points(support)]
     assert len(measured) == len(expected)
     assert {tuple(point) for point in measured} == {tuple(point) for point in expected}
+
+
+def test_a_flat_face_reports_its_axis_whichever_triangle_comes_first() -> None:
+    """Die Normale einer erkannten ebenen Fläche hängt nicht an ihrem ersten Dreieck.
+
+    ``trimesh`` normiert über den Kehrwert der Länge; an der Dichtung gibt
+    das je nach Dreieck ``±0.9999999999999999``. Die Vernetzung eines
+    exakten Körpers ordnet ihre Dreiecke auf macOS Intel anders als
+    anderswo, die Normale kam dort mit anderen Bits heraus.
+    """
+    from app.core.knowledge.parts import seals
+    from app.core.sketch import shapes as sketch_shapes
+    from app.core.sketch.serialize import sketch_to_text
+
+    path = sketch_to_text(sketch_shapes.rectangle(20.0, 12.0))
+    raw = seals.seal_gasket(seals.GasketParams(path_sketch=path, width=2.6, height=2.4)).mesh.raw
+    uneven = [
+        index
+        for index, normal in enumerate(np.asarray(raw.face_normals))
+        if abs(normal[2]) not in (0.0, 1.0) and abs(normal[0]) == 0.0 and abs(normal[1]) == 0.0
+    ]
+    # Ohne ein solches Dreieck prüfte der Test nichts.
+    assert uneven
+    for first in uneven:
+        order = [first, *(index for index in range(len(raw.faces)) if index != first)]
+        body = trimesh.Trimesh(raw.vertices, raw.faces[order], process=False)
+        sign = 1.0 if raw.face_normals[first][2] > 0.0 else -1.0
+        found = [
+            feature
+            for feature in detect(MeshData.of(body)).values()
+            if feature.kind == "face" and 0 in feature.face_indices
+        ]
+        assert len(found) == 1
+        normal = found[0].params["normal"]
+        assert normal == (0.0, 0.0, sign)
+        assert all(math.copysign(1.0, value) == 1.0 for value in normal[:2])

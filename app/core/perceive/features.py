@@ -44,6 +44,7 @@ from app.core.geom.mesh import (
     refined_units_key,
     remember_refined_units,
     row_dots,
+    stable_normals,
     triple_products,
     unique_edges,
 )
@@ -14590,9 +14591,14 @@ def _face_candidates(body: trimesh.Trimesh, entries: FaceEntries) -> list[Featur
     entstehen die Flächen in zwei Schritten: erst alle, billig, dann die, die
     bleiben, fertig (:func:`_finished_faces`); :func:`detect` ruft beide.
     """
+    # Elementweise normiert (``stable_normals``), nicht über ``trimesh``s
+    # Kehrwert: Dessen erstes Dreieck einer waagrechten Fläche gab je nach
+    # Dreieck ``±0.9999999999999999`` oder ``-0.0``. ``+ 0.0`` tilgt die
+    # negative Null.
+    stable = stable_normals(body)[0]
     features: list[Feature] = []
     for number, (facet, area, centre) in enumerate(entries, start=1):
-        normal = body.face_normals[facet[0]]
+        normal = stable[facet[0]] + 0.0
         features.append(
             Feature(
                 id=f"face_{number}",
@@ -14807,7 +14813,12 @@ def _face_roles(
     # oder ein zweiter Körper belegt dagegen keine Innenlage.
     import shapely
 
-    normals = np.asarray([body.face_normals[facet[0]] for facet, _a, _c in entries], dtype=float)
+    # Dieselbe Normale wie das Merkmal (:func:`_face_candidates`): Die Suche
+    # unten findet die Fläche über ihre gerundete Normale, und aus trimeshs
+    # Kehrwert konnte die Rundung auf die andere Seite fallen als aus
+    # ``stable_normals``.
+    stable = stable_normals(body)[0]
+    normals = stable[np.fromiter((facet[0] for facet, _a, _c in entries), dtype=np.int64)] + 0.0
     centres = np.asarray([centre for _f, _a, centre in entries], dtype=float)
     shell = _shell_of_each_face(body)
     entry_shells = np.asarray([shell[int(facet[0])] for facet, _a, _c in entries])
@@ -15175,12 +15186,13 @@ def detect_curved_faces(
     # Stabilität wie bei den ebenen Flächen (:func:`_largest_first`).
     entries = _largest_first(body, entries)
 
+    unit_normals = stable_normals(body)[0]
     features: list[Feature] = []
     for number, (patch, area) in enumerate(entries, start=1):
         if check_cancelled is not None:
             check_cancelled()
         weights = areas[patch]
-        normals = np.asarray(body.face_normals, dtype=float)[patch]
+        normals = unit_normals[patch]
         mean = (normals * weights[:, None]).sum(axis=0) / max(float(weights.sum()), EPS_GEOM)
         # Koplanare Diagonalen im Mantel haben keine Krümmungsrichtung.
         # Mitgezählt stimmten sie an einer hohlen Rundwand genau halb gegen

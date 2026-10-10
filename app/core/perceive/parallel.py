@@ -89,8 +89,8 @@ READY_SECONDS: Final = 60.0
 #: wie die Arbeiter am Ständer sparen — und acht Arbeiter zusammen 15 s
 #: Rechenzeit (gemessen unter Fremdlast). Drei Minuten tragen eine Folge von
 #: Schritten am selben Modell: Auswerten (13 bis 35 s an den Modellen, für die
-#: Arbeiter rechnen), Ergebnis ansehen, nächsten Schritt wählen. Wer länger pausiert, schneidet meist
-#: schon im Slicer, und der braucht den Speicher.
+#: Arbeiter rechnen), Ergebnis ansehen, nächsten Schritt wählen. Wer länger
+#: pausiert, schneidet meist schon im Slicer, und der braucht den Speicher.
 IDLE_WORKER_SECONDS: Final = 180.0
 
 #: Die Umgebung eines Arbeiters: ein BLAS-Faden, wie der Hilfsprozess des Kerns.

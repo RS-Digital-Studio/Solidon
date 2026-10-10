@@ -559,7 +559,12 @@ _REFUSALS_KEPT: Final = 256
 #:   Netz trägt seine Facettennormalen gedreht und die Aufpunkte mitbewegt, und
 #:   beide reisen mit den mitgetragenen Maßen auf die Platte. Ein Eintrag von 59
 #:   trüge die Normalen in der alten Richtung.
-CACHE_FORMAT_VERSION: Final = 60
+#: - 61 (Intel-Mac, ``7768d8e33``, dort als 55 eingetragen): Ebene Dicht- und
+#:   erkannte Flächen nennen ihre Normale ohne ``trimesh``s Kehrwert
+#:   (``stable_normals``), waagrechte genau als Achse; die Innenlage sucht
+#:   unter derselben Normale. Gespeicherte Erkennungen trügen
+#:   ``±0.9999999999999999`` je nach erstem Dreieck.
+CACHE_FORMAT_VERSION: Final = 61
 
 
 @dataclass(frozen=True, slots=True)
