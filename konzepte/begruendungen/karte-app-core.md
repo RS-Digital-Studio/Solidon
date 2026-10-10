@@ -202,6 +202,14 @@ Vorschläge, Wahl der Platte, eigene Spulenwerte (Review RM-705, N3). Die
 eingefrorene Feldmenge von RM-705 braucht der neue Abdruck nicht: Ein später
 dazugekommenes Feld zählt dort nur, wenn jemand es wählt.
 
+Was außerhalb der Schritte die Geometrie bestimmt, zählt mit (Review RM-706):
+Drucker und Material mit den festen Werten des Cache-Schlüssels, denn eine
+Kalibrierung ändert Spiel und Lochzugabe jedes `auto:`-Maßes; gespeicherte
+Kanten- und Merkmalsantworten als Entscheidung, nicht als Datensatz, damit eine
+gleich beantwortete neue Frage bleibt; die Wahl der Grundlage im Slicer, denn
+ein eigener Prozess ändert Schichthöhe und Wände bei gleicher Stufe. Ihr
+Inhalt zählt weiter nicht — ein Slicer-Update ist kein neuer Druck.
+
 Der bisherige Abdruck reist als **Vorabdruck** mit (`former_fingerprints`).
 Er ist kein Kandidat wie die Altabdrücke, sondern belegte Gleichheit: So hieß
 der Druck von 0.5.2 bis 0.6.0. Als Kandidat hätte *Ohne Rückfrage buchen* bei

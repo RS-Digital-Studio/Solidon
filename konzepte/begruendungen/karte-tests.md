@@ -63,7 +63,7 @@ abgewiesene und wiederholte Anfragen bleiben außerhalb dieses Zählers.
 
 `test_filament_inventory.py` prüft Migration und atomare Mehrspulenbuchungen
 einschließlich echter Prozesskonkurrenz. `test_filament_usage.py` verbindet
-Projektbindung, Ausgabeumfang und werkzeugweise Mengen. `test_filament_usage_fingerprint_history.py` hält den Abdruck einer Buchung über Updates fest: Sollwerte aus der Codekopie von 0.5.3, Projekt und Lager von 0.5.3 selbst geschrieben, jedes spätere Einstellungsfeld gezählt (RM-705). `test_filament_usage_stored_inputs.py` schickt druckgleiche Änderungen am Ergebnis (umsortiert, verschoben, float32) am Abdruck vorbei und ändert ihn mit jeder Eingabe; der Vorabdruck kippt dabei als Gegenprobe (RM-706). Die getrennten
+Projektbindung, Ausgabeumfang und werkzeugweise Mengen. `test_filament_usage_fingerprint_history.py` hält den Abdruck einer Buchung über Updates fest: Sollwerte aus der Codekopie von 0.5.3, Projekt und Lager von 0.5.3 selbst geschrieben, jedes spätere Einstellungsfeld gezählt (RM-705). `test_filament_usage_stored_inputs.py` schickt druckgleiche Änderungen am Ergebnis (umsortiert, verschoben, float32) am Abdruck vorbei und ändert ihn mit jeder Eingabe, Kalibrierung, Antwort und Wahl der Grundlage; der Vorabdruck kippt dabei als Gegenprobe, und ein Wächter hält die Lesarten gleich denen des Cache-Schlüssels (RM-706). Die getrennten
 Fensterdateien `test_filament_inventory_ui.py`, `test_filament_assignment.py`,
 `test_filament_usage_ui.py` und `test_filament_workflow.py` decken Regal,
 Zuweisung, Buchungsdialog und erfolgreiche beziehungsweise abgebrochene
