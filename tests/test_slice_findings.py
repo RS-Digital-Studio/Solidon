@@ -2582,6 +2582,71 @@ def test_tips_need_many_islands_trees_and_a_measured_material(case: str) -> None
         )
 
 
+@pytest.mark.parametrize(
+    ("flavour", "plate", "gap", "walls"),
+    [
+        # Cura druckt jede Art außer Baum als ``normal``: Unter Gitter gilt der
+        # Abstand des Materials genau, ohne Spitzenluft und ohne Baumwände.
+        ("cura", "grid", None, []),
+        ("cura", "auto", None, []),
+        # Gegenproben: Baum auf der Platte, die Platte unbekannt, und die
+        # Orca-Familie, in der die Art je Teil geht.
+        ("cura", "tree", 0.4, [2]),
+        ("cura", None, 0.4, [2]),
+        ("orca", "grid", 0.4, [2]),
+    ],
+)
+def test_under_curas_plate_grid_a_tree_asks_no_tip_air_and_no_walls(
+    flavour: str, plate: str | None, gap: float | None, walls: list[int]
+) -> None:
+    """Bei Cura gilt die Stützart der Platte jedem gestützten Teil (Nachtrag
+    RM-584): Neben der flachen Decke des Pilzes wird der Baum des Drachen zu
+    Gitter, und er fragte Abstand und Baumwände trotzdem mit seinem Baum —
+    „Abstand oben 0,4: Feine Spitzen brauchen mehr Luft über den Baumstützen“,
+    und Cura druckte 0,4 über Gitter. Gefragt wird mit der Art der Platte."""
+    profile = profiles.make_profile("centauri-carbon-2", "pla")
+    organic = frozenset() if flavour == "cura" else frozenset({"tree"})
+    trees = frozenset({"tree"}) if flavour == "cura" else None
+    settings = print_settings.resolve(profile)
+    for path, value in (
+        ("layers.layer_height", 0.2),
+        ("support.style", "tree"),
+        ("support.z_gap", 0.2),
+    ):
+        settings = print_settings.with_path(settings, path, value)
+
+    def asked(body: MeshData, path: str) -> list[object]:
+        entries = advise.advise(
+            settings,
+            profile,
+            slice_body(body, 0.2),
+            flavour=flavour,  # type: ignore[arg-type]
+            organic=organic,
+            declined=_KEEP_STYLE,
+            trees=trees,
+            plate_style=plate,
+        )
+        return [entry.value for entry in entries if entry.path == path]
+
+    tips = asked(bearded_table(advise.TIP_ISLANDS), "support.z_gap")
+    assert tips == ([] if gap is None else [pytest.approx(gap)])
+    assert asked(_tower_with_island(120.0), "support.tree_walls") == walls
+
+
+def test_on_the_plate_is_the_style_cura_prints() -> None:
+    """Dieselbe Übersetzung wie die Datei (``writer._values_for``): ``tree`` als
+    Baum, jede andere Art als Gitter, „aus“ bleibt aus; anderswo und ohne
+    bekannte Platte die eigene Art."""
+    assert advise.on_the_plate("tree", "grid", "cura") == "grid"
+    assert advise.on_the_plate("tree", "hybrid", "cura") == "grid"
+    assert advise.on_the_plate("grid", "tree", "cura") == "tree"
+    assert advise.on_the_plate("tree", "none", "cura") == "grid"
+    assert advise.on_the_plate("none", "tree", "cura") == "none"
+    assert advise.on_the_plate("tree", None, "cura") == "tree"
+    assert advise.on_the_plate("tree", "grid", "orca") == "tree"
+    assert advise.on_the_plate("tree", "grid", None) == "tree"
+
+
 def test_the_roof_tip_is_the_smallest_with_a_roof() -> None:
     """Die Spitze, ab der die Orca-Familie jede Spitze mit Trennschicht deckt
     (RM-704): Ihr Querschnitt liegt über ``minimum_roof_area`` (1 mm²), eine

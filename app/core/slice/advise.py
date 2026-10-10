@@ -250,6 +250,7 @@ def advise(
     declined: Collection[str] = (),
     allowances: Collection[str] = (),
     trees: Collection[str] | None = None,
+    plate_style: str | None = None,
 ) -> list[SettingAdvice]:
     """Was an diesen Einstellungen für dieses Teil nicht passt (§29).
 
@@ -276,7 +277,9 @@ def advise(
     ``trees`` sind die Stützarten, die das Programm als Bäume druckt
     (``handover.tree_styles``, RM-584), ``None`` ohne Programm: Gitter oder
     Hybrid unter einer großen flachen Decke und die Wände hoher Bäume fragen
-    danach.
+    danach. ``plate_style`` ist die Stützart der Platte, wo sie feststeht: Bei
+    Cura fragen Abstand, Spitzenluft und Baumwände mit ihr
+    (:func:`on_the_plate`, Nachtrag RM-584).
 
     **Für einen Resin-Drucker bleibt die Liste leer.** Jede Regel hier spricht
     über Düse, Bahn, Bett, Lüfter oder Rückzug — für Resin nicht falsch
@@ -291,7 +294,16 @@ def advise(
     advice += _from_material(settings, profile)
     if result is not None:
         advice += _from_geometry(
-            settings, profile, result, bounds, flavour, whole_layers, organic, declined, trees
+            settings,
+            profile,
+            result,
+            bounds,
+            flavour,
+            whole_layers,
+            organic,
+            declined,
+            trees,
+            plate_style,
         )
     if fit_kinds:
         advice += _from_fits(settings, fit_kinds)
@@ -1128,6 +1140,22 @@ def printed_style(
     )
 
 
+def on_the_plate(style: str, plate: str | None, flavour: SlicerFlavour | None) -> str:
+    """Die Stützart, mit der ein Teil druckt, wo die Art der Platte gilt.
+
+    Cura schaltet Stützen je Netz nur an oder aus; die Art
+    (``support_structure``) gilt der ganzen Platte, ``tree`` als Baum, jede
+    andere als ``normal``, also Gitter. Ein Teil, dessen Baum neben einer
+    flachen Decke zu Gitter wird, fragte Abstand, Spitzenluft und Baumwände
+    sonst mit seinem Baum (Nachtrag RM-584): Am Drachen neben dem Pilz stand
+    „Abstand oben 0,4 — feine Spitzen“, und Cura druckte 0,4 über Gitter.
+    ``plate`` ist die Art der Platte, ``None``, wo sie nicht feststeht; anderswo
+    und ohne Stützen bleibt ``style``."""
+    if flavour != "cura" or plate is None or style == "none":
+        return style
+    return "tree" if plate == "tree" else "grid"
+
+
 def in_whole_layers(gap: float, layer: float) -> bool:
     """Misst dieser Abstand ganze Schichten? Sonst rundet ein Slicer, der in ganzen
     Schichten rechnet, ihn selbst (RM-583, RM-622), wie :func:`printed_gap` sagt."""
@@ -1490,6 +1518,7 @@ def _from_geometry(
     organic: Collection[str] = (),
     declined: Collection[str] = (),
     trees: Collection[str] | None = None,
+    plate_style: str | None = None,
 ) -> list[SettingAdvice]:
     """Der eigentliche Gewinn: das Teil bestimmt seine Einstellungen mit."""
     advice: list[SettingAdvice] = []
@@ -1721,8 +1750,9 @@ def _from_geometry(
     if needs_support:
         # Gefragt mit der Stützart, mit der das Teil druckt: Schlägt der Rat
         # Bäume vor und übernimmt der Kunde sie, liegt die Stütze auf den
-        # Schichten des Modells (RM-622).
-        printed = printed_style(settings, advice, declined)
+        # Schichten des Modells (RM-622). Bei Cura ist das die Art der Platte
+        # (:func:`on_the_plate`, Nachtrag RM-584).
+        printed = on_the_plate(printed_style(settings, advice, declined), plate_style, flavour)
         advice += _support_contact(
             settings,
             profile,
@@ -2384,6 +2414,7 @@ def for_part(
     declined: Collection[str] = (),
     allowances: Collection[str] = (),
     trees: Collection[str] | None = None,
+    plate_style: str | None = None,
 ) -> list[SettingAdvice]:
     """Was dieses eine Teil anders braucht als die Platte (§29).
 
@@ -2417,6 +2448,7 @@ def for_part(
                 declined=declined,
                 allowances=allowances,
                 trees=trees,
+                plate_style=plate_style,
             )
             if entry.path in PART_PATHS
         ]

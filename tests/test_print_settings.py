@@ -8427,6 +8427,114 @@ def test_grid_and_tree_become_hybrid_only_where_the_style_is_the_plates(
     assert "support_style" not in values["Pilz"] and "support_style" not in values["Figur"]
 
 
+def _spiky(name: str, shift: float) -> Any:
+    """Ein Sockel mit hundert Stacheln, die auf zehn Höhen frei in der Luft
+    beginnen: Er will Bäume, und jede Spitze steht ohne Trennschicht — die
+    Kopfstacheln des Drachen im Kleinen (RM-584)."""
+    from app.core.geom.transform import apply, translation
+    from app.core.types import SceneObject
+    from tests.helpers import brick, on_bed
+
+    pins = [
+        brick(0.6, 0.6, 3.0, (-13.5 + 3.0 * (i % 10), -13.5 + 3.0 * (i // 10), 12.0 + (i % 10)))
+        for i in range(advise.TIP_ISLANDS)
+    ]
+    body = on_bed(brick(4.0, 4.0, 2.0, (0.0, 0.0, 1.0)), *pins)
+    return SceneObject(id=f"obj_{name}", name=name, mesh=apply(body, translation((shift, 0, 0))))
+
+
+def test_a_tree_cura_prints_as_grid_asks_its_gap_with_grid(tmp_path: Path) -> None:
+    """Bei Cura gilt die Stützart der Platte (Nachtrag RM-584): Neben dem Pilz
+    mit seiner flachen Decke wird der Baum des Stachelkörpers zu Gitter. Er
+    fragte Abstand und Spitzenluft trotzdem mit seinem Baum, die Zeile sagte
+    „Abstand oben → 0,4: Feine Spitzen brauchen mehr Luft über den
+    Baumstützen“, und die Datei bekam 0,4 über Gitter. Gegenprobe: allein
+    druckt er Bäume und bekommt die Luft."""
+    from app.core.export.writer import write_assembly
+    from app.core.types import SceneObject
+    from app.ui.print_settings_dialog import _AdviceWorker
+    from tests.helpers import brick, on_bed
+
+    profile = profiles.make_profile("centauri-carbon-2", "pla")
+    settings = print_settings.resolve(profile)
+    mushroom = on_bed(
+        brick(8.0, 8.0, 12.0, (0.0, 0.0, 6.0)), brick(40.0, 40.0, 2.0, (0.0, 0.0, 13.0))
+    )
+    spiky = _spiky("Stacheln", 70.0)
+    tip = "Feine Spitzen brauchen mehr Luft über den Baumstützen."
+
+    def rows(bodies: tuple[Any, ...], current: Any) -> dict[str, Any]:
+        return {entry.path: entry for entry in _advice_of(bodies, current, profile, "cura")}
+
+    alone = rows((spiky,), settings)
+    assert alone["support.style"].value == "tree"
+    assert (alone["support.z_gap"].value, alone["support.z_gap"].reason) == (
+        pytest.approx(0.4),
+        tip,
+    ), "allein druckt er Bäume, und die Spitzen bekommen Luft"
+
+    bodies = (SceneObject(id="obj_pilz", name="Pilz", mesh=mushroom), spiky)
+    together = rows(bodies, settings)
+    assert together["support.style"].value == "grid"
+    assert all(entry.reason != tip for entry in together.values())
+    assert "support.tree_walls" not in together
+    accepted = settings
+    for entry in together.values():
+        if getattr(entry, "slot", None) is None:
+            accepted = print_settings.with_accepted(accepted, entry.path, entry.value)
+    assert handover.values_for(accepted, profile, "cura")["support_structure"] == "normal"
+    worker = _AdviceWorker(bodies, accepted, profile, None, {}, (), (), {}, flavour="cura")
+    worker.work()
+    assert not worker.accepted_others.get("support.z_gap")
+    written, _findings = write_assembly(
+        list(bodies),
+        tmp_path,
+        project_name="Platte",
+        profile=profile,
+        settings=accepted,
+        flavour="cura",
+    )
+    gaps = {
+        key: value
+        for mesh in handover.cura_meshes(written)
+        for key, value in mesh.settings.items()
+        if key in ("support_top_distance", "support_z_distance")
+    }
+    plate = handover.values_for(accepted, profile, "cura")
+    assert float(plate["support_top_distance"]) == pytest.approx(0.2)
+    assert all(float(value) == pytest.approx(0.2) for value in gaps.values()), gaps
+    # Der Export fragt je Teil ebenso mit der Art der Platte, auch wo ein
+    # anderes Teil den Abstand je Teil verlangt.
+    from app.core.export.writer import part_advice
+    from app.core.geom.mesh import as_mesh_data
+    from app.core.slice.analysis import slice_body
+
+    mesh = as_mesh_data(spiky.mesh)
+    result = slice_body(mesh, 0.2)
+
+    def part_gap(plate_style: str | None) -> list[object]:
+        return [
+            entry.value
+            for entry in part_advice(
+                spiky,
+                mesh,
+                settings,
+                profile,
+                None,
+                {},
+                result=result,
+                fit_kinds=(),
+                flavour="cura",
+                accepted={"support.style": "grid"},
+                plate_style=plate_style,
+            )
+            if entry.path == "support.z_gap"
+        ]
+
+    assert part_gap("grid") == []
+    assert part_gap(None) == [pytest.approx(0.4)], "ohne Platte fragt er mit seinem Baum"
+
+
 @pytest.mark.parametrize("kind", ["auto", "skirt"])
 def test_without_a_slicer_the_dialog_advises_for_its_actual_export(
     tmp_path: Path, kind: str

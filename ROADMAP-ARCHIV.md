@@ -27586,6 +27586,15 @@ Turm: Hybrid mit zwei Wänden 14 % mehr Stützmaterial, organisch derselbe G-Cod
 `support_structure=normal` statt `tree` und trägt den Hut auf senkrechten Säulen gleicher
 Dichte statt auf Ästen; ElegooSlicer gibt dem Pilz `normal(auto)` und der Figur
 `tree(auto)`, wie die Zeile „Stützen · Figur, Pilz mit Gitter“ sagt.
+
+**Nachtrag (10.10.2026):** Bei Cura fragten Abstand, Spitzenluft und Baumwände eines Körpers
+mit seinem Baum, auch wo die Platte Gitter druckt: Drache neben Pilz bekam „Abstand oben
+0,4: Feine Spitzen …“ und „Wände der Bäume 2“, Cura `support_structure=normal` mit
+`support_top_distance=0.4`. Jetzt fragen Druckdialog und Export mit der Art der Platte
+(`advise.on_the_plate`, `plate_style`); echter Cura-Lauf am Drachen neben dem Pilz:
+`normal`, 0,2 mm, keine Wandzeile. Das Feld fasst Teile mit gleichem Wert zusammen wie die
+Zeile („Pilz, Hut und 2 weitere bekommen Gitter.“). Tests in `test_slice_findings.py` und
+`test_print_settings.py`; Bericht `.claude/.state/drache-2026-10-08/berichte-2026-10-10/rm584n.md`.
 Offen im Register: der Fuß hoher Bäume.
 Changelog: ja.
 

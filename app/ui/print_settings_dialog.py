@@ -1500,6 +1500,16 @@ def _advice_identity(entry: SettingAdvice) -> object:
     return entry.path
 
 
+@dataclass(slots=True)
+class _BodyRules:
+    """Der Rat eines Körpers je Spule: was in die Platte geht, was ins Filament,
+    und mit welcher Stützart jede Spule druckt (:func:`advise.printed_style`)."""
+
+    own: list[tuple[PrintSettings, Sequence[SettingAdvice]]]
+    filament: list[tuple[MaterialSlot, PrintSettings, Sequence[SettingAdvice]]]
+    printed: list[str]
+
+
 class _AdviceWorker(Worker):
     """Analysiert genau den Druckauftrag und seine Filamente außerhalb von Qt."""
 
@@ -1602,11 +1612,13 @@ class _AdviceWorker(Worker):
     def _calculate(self) -> None:
         """Erst messen, dann die Regeln je Körper und tatsächlicher Spule anwenden."""
         results: dict[str, tuple[float, float, SliceResult]] = {}
-        common: list[tuple[PrintSettings, Sequence[SettingAdvice]]] = []
         materials: dict[
             threemf.SlotKey,
             tuple[MaterialSlot, list[tuple[PrintSettings, Sequence[SettingAdvice]]]],
         ] = {}
+        measured: list[tuple[SceneObject, MeshData, tuple[handover.SlotProcess, ...], SliceResult]]
+        measured = []
+        ruled: list[_BodyRules] = []
         # Der Stützkontakt geht je Teil und wird gegen die Grundlage gefragt,
         # wie im Export; gegen die Übernahme gefragt, kam jede Zeile mit ihrer
         # Gegenzeile wieder (RM-583).
@@ -1629,6 +1641,79 @@ class _AdviceWorker(Worker):
         # Baum werden nur dort Hybrid, wo sie der Platte gilt (RM-584).
         if handover.style_per_part(self.flavour, program):
             separate = separate | {"support.style"}
+
+        def rules(
+            body: SceneObject,
+            mesh: MeshData,
+            processes: Sequence[handover.SlotProcess],
+            result: SliceResult,
+            plate: str | None,
+        ) -> _BodyRules:
+            # Erst über die Spulen dieses Körpers: Ein Teil bekommt einen Wert,
+            # der alle seine Spulen einschließt (wie ``writer.part_advice``).
+            # ``plate`` ist die Stützart der Platte, wo sie feststeht.
+            done = _BodyRules([], [], [])
+            for process in processes:
+                entries = advise.advise(
+                    process.settings,
+                    process.profile,
+                    result,
+                    bounds=mesh.bounds,
+                    fit_kinds=self.fit_kinds,
+                    connectors=self.connectors,
+                    flavour=self.flavour,
+                    whole_layers=body.plate in self.towers,
+                    organic=self.organic,
+                    declined=self.declined,
+                    allowances=self.part_allowances.get(body.id, ()),
+                    trees=trees,
+                    plate_style=plate,
+                )
+                style = advise.printed_style(process.settings, entries, self.declined)
+                done.printed.append(style)
+                # Was das Programm unter den Bäumen dieses Körpers nicht druckt,
+                # schlägt der Dialog nicht vor — je Körper wie der Export
+                # (``writer.part_advice``, RM-622).
+                under_trees = handover.ignored_under_trees(
+                    style, self.organic, program, hollow=self.hollow
+                )
+                entries = [entry for entry in entries if entry.path not in under_trees]
+                done.own.append(
+                    (
+                        process.settings,
+                        [
+                            entry
+                            for entry in entries
+                            if entry.path.partition(".")[0] not in FILAMENT_GROUPS
+                        ],
+                    )
+                )
+                done.filament.append(
+                    (
+                        process.slot,
+                        process.settings,
+                        [
+                            entry
+                            for entry in entries
+                            if entry.path.partition(".")[0] in FILAMENT_GROUPS
+                        ],
+                    )
+                )
+            return done
+
+        def assembled() -> list[SettingAdvice]:
+            # Die Platte aus den Körpern, die Filamentwerte je Spule.
+            common: list[tuple[PrintSettings, Sequence[SettingAdvice]]] = []
+            materials.clear()
+            for done in ruled:
+                if done.own:
+                    common.append((asking, advise.combine(asking, done.own, trees=trees)))
+                for slot, settings, entries in done.filament:
+                    materials.setdefault(threemf.slot_identity(slot), (slot, []))[1].append(
+                        (settings, entries)
+                    )
+            return advise.combine(self.settings, common, separate=separate, trees=trees)
+
         for index, body in enumerate(self.objects):
             self.cancelled.raise_if_cancelled()
             self.progressed.emit(index + 1, len(self.objects), str(body.name))
@@ -1684,60 +1769,27 @@ class _AdviceWorker(Worker):
             results[body.id] = (angle, wall, result)
             if not self.rules_wanted:
                 continue
-            # Erst über die Spulen dieses Körpers: Ein Teil bekommt einen Wert,
-            # der alle seine Spulen einschließt (wie ``writer.part_advice``).
-            own: list[tuple[PrintSettings, Sequence[SettingAdvice]]] = []
-            for process in processes:
-                entries = advise.advise(
-                    process.settings,
-                    process.profile,
-                    result,
-                    bounds=mesh.bounds,
-                    fit_kinds=self.fit_kinds,
-                    connectors=self.connectors,
-                    flavour=self.flavour,
-                    whole_layers=body.plate in self.towers,
-                    organic=self.organic,
-                    declined=self.declined,
-                    allowances=self.part_allowances.get(body.id, ()),
-                    trees=trees,
-                )
-                # Was das Programm unter den Bäumen dieses Körpers nicht druckt,
-                # schlägt der Dialog nicht vor — je Körper wie der Export
-                # (``writer.part_advice``, RM-622).
-                under_trees = handover.ignored_under_trees(
-                    advise.printed_style(process.settings, entries, self.declined),
-                    self.organic,
-                    program,
-                    hollow=self.hollow,
-                )
-                entries = [entry for entry in entries if entry.path not in under_trees]
-                own.append(
-                    (
-                        process.settings,
-                        [
-                            entry
-                            for entry in entries
-                            if entry.path.partition(".")[0] not in FILAMENT_GROUPS
-                        ],
-                    )
-                )
-                key = threemf.slot_identity(process.slot)
-                if key not in materials:
-                    materials[key] = (process.slot, [])
-                materials[key][1].append(
-                    (
-                        process.settings,
-                        [
-                            entry
-                            for entry in entries
-                            if entry.path.partition(".")[0] in FILAMENT_GROUPS
-                        ],
-                    )
-                )
-            if own:
-                common.append((asking, advise.combine(asking, own, trees=trees)))
-        plate_advice = advise.combine(self.settings, common, separate=separate, trees=trees)
+            measured.append((body, mesh, processes, result))
+            ruled.append(rules(body, mesh, processes, result, None))
+        plate_advice = assembled()
+        if self.flavour == "cura" and ruled:
+            # **Cura druckt unter jedem gestützten Teil die Art der Platte**
+            # (``support_structure``): Wird der Baum des Drachen neben der
+            # flachen Decke des Pilzes zu Gitter, fragen Abstand, Spitzenluft
+            # und Baumwände mit Gitter, wie der Export (Nachtrag RM-584). Neu
+            # gefragt wird nur ein Körper, dessen Art sich damit ändert.
+            plate_style = advise.printed_style(self.settings, plate_advice, self.declined)
+            changed = False
+            for index, measure in enumerate(measured):
+                if any(
+                    advise.on_the_plate(style, plate_style, self.flavour) != style
+                    for style in ruled[index].printed
+                ):
+                    self.cancelled.raise_if_cancelled()
+                    ruled[index] = rules(*measure, plate_style)
+                    changed = True
+            if changed:
+                plate_advice = assembled()
         if self.flavour == "cura" and trees is not None:
             # Was Cura gleich druckt, ist kein Vorschlag: „Automatisch → Gitter“
             # unter der flachen Decke hielt nur den Baum eines anderen Körpers
@@ -1846,6 +1898,7 @@ class _AdviceWorker(Worker):
                 whole_layers=body.plate in self.towers,
                 organic=self.organic,
                 allowances=self.part_allowances.get(body.id, ()),
+                plate_style=split.plate.support.style,
             ):
                 if entry.path not in wanted:
                     continue
@@ -1924,6 +1977,7 @@ class _AdviceWorker(Worker):
                 whole_layers=body.plate in self.towers,
                 organic=self.organic,
                 allowances=self.part_allowances.get(body.id, ()),
+                plate_style=split.plate.support.style,
             ):
                 # Beim Stützkontakt bekommt jedes Teil seinen Wert, ebenso die
                 # Stützart, wo sie je Teil geht (``separate``); die Zeile nennt
