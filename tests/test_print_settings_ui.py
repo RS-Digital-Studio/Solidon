@@ -10406,20 +10406,13 @@ def test_the_remembered_stock_writes_the_file_a_fresh_read_writes(
     Ändert sich danach der Bestand, ändert sich die Grundlage, und bei Orca und
     Prusa auch die Datei — sonst verglich der Test nichts. Curas Datei trägt
     beim Export keine Profilwerte; dort zählt die Grundlage."""
-    import contextlib
     import zipfile
-
-    from app.core.export import slicer_profiles
 
     profile, setup = _family_stock(flavour, tmp_path / "programme", monkeypatch)
     monkeypatch.setattr(
         zipfile, "time", SimpleNamespace(time=lambda: 1_767_225_600.0, localtime=time.localtime)
     )
-    with monkeypatch.context() as unremembered:
-        unremembered.setattr(slicer_profiles, "SETTLE_NS", 10**30)
-        unremembered.setattr(slicer_profiles, "single_read", contextlib.nullcontext)
-        fresh = _family_export(profile, setup, tmp_path / "frisch" / "modell.3mf", monkeypatch)
-    slicer_profiles.forget_holdings()
+    fresh = _fresh_export(profile, setup, tmp_path / "frisch" / "modell.3mf", monkeypatch)
 
     first = _family_export(profile, setup, tmp_path / "erster" / "modell.3mf", monkeypatch)
     second = _family_export(profile, setup, tmp_path / "zweiter" / "modell.3mf", monkeypatch)
@@ -10432,6 +10425,182 @@ def test_the_remembered_stock_writes_the_file_a_fresh_read_writes(
     changed = _family_export(profile, setup, tmp_path / "geaendert" / "modell.3mf", monkeypatch)
     assert changed[1] != fresh[1], "der nächste Export sieht den geänderten Bestand"
     assert (changed[0] != fresh[0]) == (flavour != "cura"), "die Datei trägt die Änderung"
+
+
+def _orca_account(
+    folder: Path, monkeypatch: pytest.MonkeyPatch
+) -> tuple[Profile, handover.SlicerSetup, Path]:
+    """Der Orca-Bestand aus :func:`_family_stock` mit dem Kontoordner, in dem
+    der Slicer selbst angelegte Profile ablegt, und der Modelldatei in der
+    Installation: Die Wahl ist eine eigene Maschine und ein eigener Prozess,
+    der über eine eigene Zwischenstufe vom Hersteller erbt. Zurück kommt der
+    Kontoordner dazu."""
+    from app.core.export import slicer_profiles
+    from tests.helpers import CC2_MACHINE
+
+    user = folder / "config" / "ElegooSlicer" / "user" / "4711"
+
+    def write(path: Path, document: dict[str, object]) -> None:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(document), encoding="utf-8")
+
+    def grow(_flavour: str, executable: Path) -> None:
+        write(
+            executable.parent / _INSTALLED_MODEL,
+            {
+                "type": "machine_model",
+                "name": "Elegoo Centauri Carbon 2",
+                "default_bed_type": "Textured PEI Plate",
+            },
+        )
+        write(
+            user / "machine" / "mein.json",
+            {
+                "type": "machine",
+                "name": "Mein CC2",
+                "from": "User",
+                "inherits": CC2_MACHINE,
+                "printer_model": "Elegoo Centauri Carbon 2",
+                "nozzle_diameter": ["0.4"],
+            },
+        )
+        write(
+            user / "process" / "zwischen.json",
+            {
+                "type": "process",
+                "name": "Zwischen",
+                "from": "User",
+                "inherits": "0.20mm Standard @CC2",
+                "sparse_infill_density": "25%",
+            },
+        )
+        write(
+            user / "process" / "mein.json",
+            {"type": "process", "name": "Mein Prozess", "from": "User", "inherits": "Zwischen"},
+        )
+
+    profile, setup = _family_stock("orca", folder, monkeypatch, grow=grow)
+    monkeypatch.setattr(slicer_profiles, "user_roots", lambda *_args: [user])
+    return (
+        profile,
+        replace(setup, machine_profile="Mein CC2", base_process="Mein Prozess"),
+        user,
+    )
+
+
+#: Die Modelldatei in der Installation, von der Programmdatei aus.
+_INSTALLED_MODEL = "resources/profiles/Elegoo/machine/Elegoo Centauri Carbon 2.json"
+
+
+def _own_base_named_like_the_vendors(_executable: Path, user: Path) -> None:
+    """Der Kunde legt einen eigenen Prozess mit dem Namen der Herstellerbasis
+    an — die Zwischenstufe erbt jetzt von ihm."""
+    (user / "process" / "basis.json").write_text(
+        json.dumps(
+            {
+                "type": "process",
+                "name": "0.20mm Standard @CC2",
+                "from": "User",
+                "inherits": "fdm_process_common",
+                "wall_loops": "5",
+            }
+        ),
+        encoding="utf-8",
+    )
+
+
+def _own_stage_renamed(_executable: Path, user: Path) -> None:
+    """Der Kunde benennt die Zwischenstufe im Slicer um; die Datei bleibt."""
+    stage = user / "process" / "zwischen.json"
+    document = json.loads(stage.read_text(encoding="utf-8"))
+    stage.write_text(json.dumps({**document, "name": "Zwischen B"}), encoding="utf-8")
+
+
+def _installed_model_replaced(executable: Path, _user: Path) -> None:
+    """Die Modelldatei der Installation nennt eine andere Platte, ohne dass
+    die Programmdatei neu ist."""
+    model = executable.parent / _INSTALLED_MODEL
+    document = json.loads(model.read_text(encoding="utf-8"))
+    model.write_text(
+        json.dumps({**document, "default_bed_type": "High Temp Plate"}), encoding="utf-8"
+    )
+
+
+def _installed_model_moved(executable: Path, _user: Path) -> None:
+    """Die Modelldatei der Installation zieht in einen Unterordner und nennt
+    eine andere Platte; am alten Ort liegt das Modell eines anderen Druckers."""
+    model = executable.parent / _INSTALLED_MODEL
+    document = json.loads(model.read_text(encoding="utf-8"))
+    moved = model.parent / "ECC2" / model.name
+    moved.write_text(
+        json.dumps({**document, "default_bed_type": "Textured Cool Plate"}), encoding="utf-8"
+    )
+    model.write_text(json.dumps({**document, "name": "Elegoo Centauri"}), encoding="utf-8")
+
+
+@pytest.mark.parametrize(
+    "change",
+    [
+        _own_base_named_like_the_vendors,
+        _own_stage_renamed,
+        _installed_model_replaced,
+        _installed_model_moved,
+    ],
+)
+def test_the_remembered_stock_follows_a_change_without_a_new_program(
+    change: Any, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Review RM-670 L1 und L2: Was der Kunde im Kontoordner seines Slicers
+    anlegt oder umbenennt, ändert die Signatur des Bestands, nicht die
+    Programmdatei; der Export danach schreibt dieselbe Datei wie einer, der
+    ohne jeden Merker liest. Die Modelldatei hält nur ihren Ort — ihre Werte
+    liest jeder Durchgang, auch wenn sie sich in der Installation ohne neue
+    Fassung ändert."""
+    import zipfile
+
+    from app.core.export import slicer_profiles
+
+    profile, setup, user = _orca_account(tmp_path / "programme", monkeypatch)
+    monkeypatch.setattr(
+        zipfile, "time", SimpleNamespace(time=lambda: 1_767_225_600.0, localtime=time.localtime)
+    )
+    before = _fresh_export(profile, setup, tmp_path / "vorher" / "modell.3mf", monkeypatch)
+    _family_export(profile, setup, tmp_path / "erster" / "modell.3mf", monkeypatch)
+    held = _family_export(profile, setup, tmp_path / "zweiter" / "modell.3mf", monkeypatch)
+    assert held == before, "der gemerkte Bestand schreibt die frisch gelesene Datei"
+    assert slicer_profiles._derived, "der Merker hält — sonst prüfte der Test nichts"
+    program = setup.executable.stat()
+
+    change(setup.executable, user)
+    remembered = _family_export(profile, setup, tmp_path / "danach" / "modell.3mf", monkeypatch)
+    fresh = _fresh_export(profile, setup, tmp_path / "frisch" / "modell.3mf", monkeypatch)
+
+    assert setup.executable.stat().st_mtime_ns == program.st_mtime_ns, "Programmdatei unberührt"
+    assert fresh[0] != before[0], "die Änderung ändert die Datei — sonst verglich der Test nichts"
+    assert remembered[0] == fresh[0], "der nächste Export schreibt die frisch gelesene Datei"
+    assert remembered[1:] == fresh[1:], "Grundlage und Befunde"
+
+
+def _fresh_export(
+    profile: Profile,
+    setup: handover.SlicerSetup,
+    target: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> tuple[bytes, Any, list[Finding]]:
+    """:func:`_family_export` ohne jeden Merker: nichts beruhigt sich
+    (:data:`slicer_profiles.SETTLE_NS`), kein Lesedurchgang, und was vorher
+    gemerkt war, ist vorher und nachher vergessen."""
+    import contextlib
+
+    from app.core.export import slicer_profiles
+
+    slicer_profiles.forget_holdings()
+    with monkeypatch.context() as unremembered:
+        unremembered.setattr(slicer_profiles, "SETTLE_NS", 10**30)
+        unremembered.setattr(slicer_profiles, "single_read", contextlib.nullcontext)
+        fresh = _family_export(profile, setup, target, monkeypatch)
+    slicer_profiles.forget_holdings()
+    return fresh
 
 
 @pytest.mark.parametrize(

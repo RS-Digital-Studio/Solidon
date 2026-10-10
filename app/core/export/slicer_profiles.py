@@ -120,9 +120,9 @@ def single_read() -> Iterator[None]:
     gemerkten Bestands (:func:`_holding_signature`) erhebt ein Durchgang
     einmal je Slicer; was aus dem gelesenen Bestand folgt — die Modelldatei
     einer Maschine, die Grundlage eines Exports —, rechnet er einmal
-    (:func:`once_per_read`). Namensindizes und Modelldatei der Orca-Familie
-    halten darüber hinaus, solange die Signatur gleich bleibt
-    (:func:`_once_per_stock`).
+    (:func:`once_per_read`). Namensindizes der Erbketten, der Ort der
+    Modelldatei und Curas Auflistung der Definitionen und Container halten
+    darüber hinaus, solange die Signatur gleich bleibt (:func:`_once_per_stock`).
     """
     if getattr(_SINGLE_READ, "documents", None) is not None:
         yield
@@ -165,10 +165,11 @@ def once_per_read[T](key: object, compute: Callable[[], T]) -> T:
 
 
 #: **Was aus dem Bestand eines Slicers folgt und über den Durchgang hinaus
-#: hält** — Namensindizes der Erbketten und Modelldateien
-#: (:func:`_once_per_stock`), je Programm mit Signatur und Stand der
-#: Programmsuche. Sie belegen dasselbe wie :data:`_holdings`: welche Profile
-#: es wo gibt, nicht ihre Werte — die liest jeder Durchgang aus den Dateien.
+#: hält** — Namensindizes der Erbketten, der Ort der Modelldateien und Curas
+#: Auflistung der Definitionen und Container (:func:`_once_per_stock`), je
+#: Programm mit Signatur und Stand der Programmsuche. Sie belegen dasselbe wie
+#: :data:`_holdings`: welche Profile es wo gibt, nicht ihre Werte — die liest
+#: jeder Durchgang aus den Dateien.
 #: Ohne sie baute jeder 3MF-Export am ElegooSlicer die Namensindizes neu (668
 #: Dateien je Herstellerordner) und suchte die Modelldatei rekursiv über alle
 #: Hersteller: rund 0,35 s CPU je Export (RM-670).
@@ -4830,53 +4831,69 @@ def machine_model(
     **Im Lesedurchgang einmal je Maschine** (:func:`single_read`): Die Suche
     im Bestand läuft rekursiv über alle Herstellerordner, und ein 3MF-Export
     fragte viermal — je Grundlage für Datei, Befunde, Stützfuß und Platte. Am
-    ElegooSlicer war das rund die Hälfte seiner Rechenzeit (RM-670).
+    ElegooSlicer war das rund die Hälfte seiner Rechenzeit (RM-670). Wo die
+    Datei liegt, hält darüber hinaus, solange der Bestand gleich bleibt
+    (:func:`_once_per_stock`); gelesen wird sie in jedem Durchgang.
     """
     if not model_name:
         return {}
-    return _once_per_stock(
-        machine_file,
-        ("machine_model", machine_file, model_name, tuple(roots)),
-        lambda: _machine_model_in(machine_file, model_name, tuple(roots)),
-    )
+    key = (machine_file, model_name, tuple(roots))
+    return once_per_read(("machine_model", *key), lambda: _machine_model_read(*key))
 
 
-def _machine_model_in(
+def _machine_model_read(
     machine_file: Path, model_name: str, roots: tuple[Path, ...]
 ) -> dict[str, Any]:
-    """:func:`machine_model` ohne den Lesedurchgang."""
+    """:func:`machine_model` aus dem gehaltenen Ort. Trägt die Datei dort das
+    Modell nicht mehr, wird frisch gesucht."""
+    found = _once_per_stock(
+        machine_file,
+        ("machine_model_at", machine_file, model_name, roots),
+        lambda: _machine_model_in(machine_file, model_name, roots),
+    )
+    if found is None:
+        return {}
+    model = _model_document(found, model_name)
+    if model is None:
+        found = _machine_model_in(machine_file, model_name, roots)
+        model = None if found is None else _model_document(found, model_name)
+    return model or {}
+
+
+def _machine_model_in(machine_file: Path, model_name: str, roots: tuple[Path, ...]) -> Path | None:
+    """Wo die Modelldatei liegt — :func:`machine_model` ohne Merker."""
     beside = _machine_model_beside(machine_file, model_name)
-    if beside:
+    if beside is not None:
         return beside
     for folder in roots:
         for candidate in sorted(folder.glob("*/machine/**/*.json")):
-            if candidate.stem != model_name:
-                continue
-            loaded = _load(candidate)
-            if (
-                loaded is not None
-                and loaded.get("type") == "machine_model"
-                and loaded.get("name") == model_name
-            ):
-                return loaded
-    return {}
+            if candidate.stem == model_name and _model_document(candidate, model_name) is not None:
+                return candidate
+    return None
 
 
-def _machine_model_beside(machine_file: Path, model_name: str) -> dict[str, Any]:
+def _machine_model_beside(machine_file: Path, model_name: str) -> Path | None:
     """Die Modelldatei im Maschinenordner neben dem Profil."""
     for parent in machine_file.parents:
         if parent.name.casefold() != "machine":
             continue
         for candidate in sorted(parent.glob("*.json")):
-            loaded = _load(candidate)
-            if (
-                loaded is not None
-                and loaded.get("type") == "machine_model"
-                and loaded.get("name") == model_name
-            ):
-                return loaded
+            if _model_document(candidate, model_name) is not None:
+                return candidate
         break
-    return {}
+    return None
+
+
+def _model_document(path: Path, model_name: str) -> dict[str, Any] | None:
+    """Der Inhalt von ``path``, wenn sie die Modelldatei zu ``model_name`` ist."""
+    loaded = _load(path)
+    if (
+        loaded is not None
+        and loaded.get("type") == "machine_model"
+        and loaded.get("name") == model_name
+    ):
+        return loaded
+    return None
 
 
 def _vendor_of(path: Path, kind: str) -> str:

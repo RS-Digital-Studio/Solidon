@@ -15,6 +15,7 @@ import json
 import sys
 import threading
 import time
+from collections.abc import Callable
 from dataclasses import replace
 from pathlib import Path
 from typing import Any
@@ -5713,15 +5714,10 @@ def test_a_kind_folder_counts_in_any_spelling(
     assert sp.stock_signature("orca", slicer) != before
 
 
-def test_inheritance_indexes_hold_across_passes_until_the_stock_changes(
-    own_profiles: Path, slicer: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """RM-670: Jeder 3MF-Export baute die Namensindizes der Erbketten neu — am
-    ElegooSlicer 668 Dateien je Herstellerordner, dreimal je Export. Sie
-    halten jetzt über den Lesedurchgang hinaus, solange die Signatur des
-    Bestands gleich ist. Legt der Kunde im Slicer ein eigenes Profil mit dem
-    Namen der Basis an, erbt sein Profil von diesem, nicht mehr vom
-    Hersteller — der gehaltene Index darf das nicht verdecken."""
+def _inheriting_process(own_profiles: Path, slicer: Path, tmp_path: Path) -> Callable[[], object]:
+    """Ein eigener Prozess, der vom Hersteller erbt, im beruhigten Bestand;
+    zurück kommt ein Lesedurchgang, der seine Wände auflöst — wie ein Export
+    über die Namensindizes, die ``_once_per_stock`` hält."""
     own = own_profiles / "process"
     own.mkdir()
     _write(
@@ -5734,13 +5730,28 @@ def test_inheritance_indexes_hold_across_passes_until_the_stock_changes(
         },
     )
     _settle(tmp_path)
-    built = _counting(monkeypatch, "_names_in")
     roots = sp.profile_roots("orca", slicer)
 
     def walls() -> object:
         with sp.single_read():
             sp.stock_signature("orca", slicer)
             return sp.resolve_values(own / "mein.json", roots=roots).get("wall_loops")
+
+    return walls
+
+
+def test_inheritance_indexes_hold_across_passes_until_the_stock_changes(
+    own_profiles: Path, slicer: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """RM-670: Jeder 3MF-Export baute die Namensindizes der Erbketten neu — am
+    ElegooSlicer 668 Dateien je Herstellerordner, dreimal je Export. Sie
+    halten jetzt über den Lesedurchgang hinaus, solange die Signatur des
+    Bestands gleich ist. Legt der Kunde im Slicer ein eigenes Profil mit dem
+    Namen der Basis an, erbt sein Profil von diesem, nicht mehr vom
+    Hersteller — der gehaltene Index darf das nicht verdecken."""
+    walls = _inheriting_process(own_profiles, slicer, tmp_path)
+    own = own_profiles / "process"
+    built = _counting(monkeypatch, "_names_in")
 
     assert walls() is None, "der Herstellerprozess nennt keine Wände"
     first = len(built)
@@ -5760,3 +5771,72 @@ def test_inheritance_indexes_hold_across_passes_until_the_stock_changes(
     )
 
     assert walls() == "5", "die neue eigene Basis gilt beim nächsten Durchgang"
+
+
+def test_inheritance_indexes_are_held_only_once_the_stock_settled(
+    own_profiles: Path, slicer: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Review RM-670 L1: Wie :func:`sp._held` hält ``_once_per_stock`` erst
+    einen Bestand, dessen jüngste Änderung älter ist als :data:`sp.SETTLE_NS`
+    — zwei Änderungen im selben Takt der Dateisystemuhr tragen denselben
+    Stempel, und ein Index aus dem Zwischenstand verdeckte die zweite."""
+    walls = _inheriting_process(own_profiles, slicer, tmp_path)
+    built = _counting(monkeypatch, "_names_in")
+    newest = max(entry[1] for entry in sp.stock_signature("orca", slicer))
+
+    monkeypatch.setattr(sp.time, "time_ns", lambda: newest + sp.SETTLE_NS - 1)
+    walls()
+    count = len(built)
+    assert count, "der Durchgang baut die Indizes"
+    walls()
+    assert len(built) == 2 * count, "unberuhigt nicht gehalten"
+
+    monkeypatch.setattr(sp.time, "time_ns", lambda: newest + sp.SETTLE_NS)
+    walls()
+    walls()
+    assert len(built) == 3 * count, "beruhigt gehalten"
+
+
+def test_held_inheritance_indexes_take_the_settle_time_before_the_read(
+    own_profiles: Path, slicer: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Review RM-670 L1, der Zwilling zu
+    :func:`test_the_settle_time_is_taken_before_the_read`: Gemessen wird an
+    der Uhr der Signatur. Dauert das Bauen eines Index über die Schwelle, sähe
+    die Uhr danach einen Bestand als beruhigt, der beim Erheben der Signatur
+    eben erst geändert war."""
+    walls = _inheriting_process(own_profiles, slicer, tmp_path)
+    newest = max(entry[1] for entry in sp.stock_signature("orca", slicer))
+    clock = {"now": newest + sp.SETTLE_NS - 1}
+    monkeypatch.setattr(sp.time, "time_ns", lambda: clock["now"])
+    original = sp._names_in
+
+    def slow(*args: Any, **kwargs: Any) -> Any:
+        clock["now"] += sp.SETTLE_NS  # das Bauen dauert über die Schwelle
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(sp, "_names_in", slow)
+    assert walls() is None
+
+    assert not sp._derived, "gemessen vor dem Bauen, nicht danach"
+
+
+def test_a_new_search_forgets_the_held_inheritance_indexes(
+    own_profiles: Path, slicer: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Review RM-670 L1, der Zwilling zu
+    :func:`test_a_new_search_forgets_the_held_stock`: Übersieht die Signatur
+    eine Änderung in der Installation, hilft eine neue Programmsuche
+    (``discover.forget_cache``) auch den gehaltenen Namensindizes."""
+    from app.core import discover
+
+    walls = _inheriting_process(own_profiles, slicer, tmp_path)
+    walls()
+    built = _counting(monkeypatch, "_names_in")
+    walls()
+    assert not built, "gehalten"
+
+    discover.forget_cache()
+    walls()
+
+    assert built, "nach der neuen Suche neu gebaut"
