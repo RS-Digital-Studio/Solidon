@@ -229,13 +229,17 @@ DRAG_REACH_TRIES: Final = 25
 #: gewöhnlichen Zeichnungen gemessen zwei bis fünf Auswertungen — ein
 #: festes Vieleck, ein bemaßtes Langloch, ein Lochkreis, ein verrundetes
 #: Rechteck, eine Kette aus fünf oder zehn Linien über ihre Reichweite
-#: (RM-541). Nur eine lange, bis zum Anschlag gestreckte Kette über ``lsmr``
-#: bräuchte 120 bis 200, weil sie dort singulär steht; sie bleibt beim
-#: Sprung stehen und rückt in Mausschritten nach. Findet die Stufe in dieser Zahl
-#: keine Lage, bleibt die Zeichnung, wo sie war: Ein Zug, der nicht folgt,
-#: ist eine Auskunft (die Zeile sagt, was hält); ein Zug, der das Fenster für
-#: Sekunden anhält, ist keine.
-DRAG_SLIDE_TRIES: Final = 50
+#: (RM-541). Eine lange, bis zum Anschlag gestreckte Kette über ``lsmr`` steht
+#: dort singulär und braucht in Mausschritten rund achtzig: Mit fünfzig folgte
+#: sie ab siebzehn Gliedern dem Zeiger jenseits der Reichweite nicht mehr
+#: (Review M-C); mit hundert folgt sie bis hundert Glieder auf Hundertstel
+#: Grad. Eine Wiederholung ab dem Ende der ersten Stufe half dabei in keinem
+#: gemessenen Fall und verdoppelte den Sprung über die Reichweite, den auch
+#: 0.5.3 nicht folgen ließ. Findet die Stufe in dieser Zahl keine Lage,
+#: bleibt die Zeichnung, wo sie war: Ein Zug, der nicht folgt, ist eine
+#: Auskunft (die Zeile sagt, was hält); ein Zug, der das Fenster für Sekunden
+#: anhält, ist keine.
+DRAG_SLIDE_TRIES: Final = 100
 
 #: So groß darf die **dichte** Jacobimatrix werden, die die Rangprüfung nach
 #: dem Lösen braucht (Zeilen mal 2 Punkte mal 8 Byte). 256 MiB sind rund 4000
@@ -1731,6 +1735,100 @@ def _watchdog() -> Callable[[Any], None]:
     return watch
 
 
+#: Bedingungen, die an einer Linie der Länge null leer gelten: Ihre Richtung
+#: ist dort null (``_unit`` klemmt die Länge auf ``EPS_GEOM``), und ein
+#: Widerspruch verschwindet mit der Linie (:func:`_spans`).
+_EMPTY_WHEN_SHRUNK: Final[frozenset[str]] = frozenset(
+    {
+        "horizontal",
+        "vertical",
+        "parallel",
+        "perpendicular",
+        "angle",
+        "tangent",
+        "symmetric",
+        "on_curve",
+        "smooth",
+        "curvature",
+        "equal",
+    }
+)
+
+
+@dataclass(frozen=True, slots=True)
+class _Span:
+    """Zwei Punkte, die nicht zusammenfallen dürfen — eine Linie mit einer
+    Richtungsbedingung, Mitte und Rand eines Kreises oder Bogens — und die
+    Bedingungen, die an ihnen hängen (Indizes in ``sketch.constraints``)."""
+
+    tail: int
+    head: int
+    constraints: tuple[int, ...]
+
+
+def _spans(sketch: Sketch) -> list[_Span]:
+    """Was beim Lösen nicht auf einen Punkt schrumpfen darf (Review H-A).
+
+    Die Bedingungen je Punkt stehen vorab in einem Verzeichnis: Ein Umriss
+    aus Tausenden fester Kanten fragte sonst jede Bedingung je Element."""
+    at_point: dict[int, list[int]] = {}
+    for index, constraint in enumerate(sketch.constraints):
+        for target in dict.fromkeys(constraint.targets):
+            at_point.setdefault(target, []).append(index)
+    spans: list[_Span] = []
+    offset = 0
+    for element in sketch.elements:
+        tail, head = offset, offset + 1
+        offset += len(element.points)
+        if element.kind not in ("line", "circle", "arc"):
+            continue
+        touching = tuple(sorted({*at_point.get(tail, ()), *at_point.get(head, ())}))
+        rounded = element.kind in ("circle", "arc") and bool(touching)
+        directed = element.kind == "line" and any(
+            sketch.constraints[index].kind in _EMPTY_WHEN_SHRUNK for index in touching
+        )
+        if rounded or directed:
+            spans.append(_Span(tail, head, touching))
+    return spans
+
+
+def _collapse_pair(sketch: Sketch, span: _Span) -> tuple[int, int]:
+    """Das Paar, das ein geschrumpftes Element nennt: Bedingungen, die an
+    einer Linie der Länge null leer gelten, zuerst, je die später gesetzte
+    vorn (wie :func:`_worst_constraints`). *Waagerecht* neben einem Winkel von
+    170° zu einer Waagerechten nennt so genau diese beiden."""
+    ranked = sorted(
+        span.constraints,
+        key=lambda index: (sketch.constraints[index].kind not in _EMPTY_WHEN_SHRUNK, -index),
+    )
+    first, second = ranked[0], ranked[1] if len(ranked) > 1 else ranked[0]
+    return max(first, second), min(first, second)
+
+
+#: Wie kurz eine beobachtete Spanne (:func:`_spans`) werden darf, bevor eine
+#: Lösung als geschrumpft gilt, in Millimetern: das Tausendfache von
+#: ``_TOL``. Eine Richtung hält an einer Linie der Länge L nur auf ``_TOL``/L
+#: genau — an 2·10⁻⁶ mm erfüllte *waagerecht* eine um 22° schräge Linie bis
+#: ``_TOL``. Ab einem Mikrometer ist die Richtung auf 10⁻³ rad gehalten.
+SHRUNK_BELOW: Final[float] = 1000.0 * _TOL
+
+
+def _shrunk(spans: Sequence[_Span], before: np.ndarray, after: np.ndarray) -> _Span | None:
+    """Die erste Spanne, die von wenigstens :data:`SHRUNK_BELOW` darunter fiel.
+
+    Ohne Wurzel und ohne ``hypot``: Die Antwort wählt den Weg."""
+    limit = SHRUNK_BELOW * SHRUNK_BELOW
+    for span in spans:
+        for points, small in ((before, False), (after, True)):
+            dx = float(points[2 * span.head] - points[2 * span.tail])
+            dy = float(points[2 * span.head + 1] - points[2 * span.tail + 1])
+            if (dx * dx + dy * dy < limit) != small:
+                break
+        else:
+            return span
+    return None
+
+
 def _solve_part(
     part: _Part,
     solution: np.ndarray,
@@ -1738,6 +1836,8 @@ def _solve_part(
     *,
     dragging: bool,
     tries: int | None,
+    spans: Sequence[_Span] = (),
+    collapsed: list[_Span] | None = None,
 ) -> None:
     """Löst einen Teil und schreibt seine Koordinaten in ``solution``.
 
@@ -1787,8 +1887,15 @@ def _solve_part(
     stehen**: Gelöst heißt bis ``_TOL``, und die Prüfung danach misst
     dasselbe. Mit der Genauigkeit von 10⁻¹⁴ rechnete ein schon gelöster Teil
     sonst im Rundungsrauschen nach, bis zu 49 Auswertungen — bei zweihundert
-    gelösten Kreisen dreitausend je Lösung. Ein Lauf weiter als
-    :data:`FARTHEST_MOVE` bleibt auch stehen.
+    gelösten Kreisen dreitausend je Lösung.
+
+    **Beim Lösen gilt eine Wegfolge** (Kommentar unten, Review H-A): Ein Lauf,
+    der weiter als :data:`FARTHEST_MOVE` liefe, nicht löst oder ein Element
+    schrumpfen lässt (``spans``, die des Teils), gibt den nächsten Weg frei. Schrumpft auf
+    jedem Weg etwas, auch mit der Spanne auf ihrer Länge gehalten, bleibt der
+    Teil, wo er war, und die Spanne landet in ``collapsed``. Im Zug rechnet
+    ein Weg, und ein Lauf weiter als :data:`FARTHEST_MOVE` lässt den Teil
+    stehen.
     """
     columns = part.columns
     origin = solution[columns].copy()
@@ -1802,19 +1909,10 @@ def _solve_part(
         full[columns] = origin + z
         return full
 
-    def residuals(z: np.ndarray) -> np.ndarray:
-        return _residuals_at(part.equations, placed(z))
-
-    def jacobian(z: np.ndarray) -> csr_matrix:
-        return _jacobian(part.equations, placed(z))[:, columns]
-
     # Kleine Teile bekommen ihre Matrix gleich dicht: Aufbau und Spaltenwahl
     # über ``scipy.sparse`` kosteten bei zweihundert getrennten Kreisen mehr
     # als die Rechnung selbst — dieselben Einträge, nur ohne Umweg.
     where = {int(column): index for index, column in enumerate(columns)}
-
-    def dense_jacobian(z: np.ndarray) -> np.ndarray:
-        return _dense_jacobian(part.equations, placed(z), where)
 
     # ``lsmr`` statt der dichten SVD je Iteration: bei 200 Bedingungen der
     # Unterschied zwischen 700 ms und dem Budget aus §31 — nachgemessen.
@@ -1833,36 +1931,118 @@ def _solve_part(
     # Zeilenzahlfache über der von ``lstsq``, das Rauschen weit darunter.
     boxed = False
     if dense:
-        opening = dense_jacobian(np.zeros(columns.size))
+        opening = _dense_jacobian(part.equations, placed(np.zeros(columns.size)), where)
         boxed = int(np.linalg.matrix_rank(opening)) == min(opening.shape)
     reach = _part_size(part, solution, weight, rest)
     first = min(reach, DENSE_FIRST_STEP) if dense and not dragging else reach
-    precise = dense and not dragging
-    result = least_squares(
-        residuals,
-        np.zeros(columns.size),
-        jac=dense_jacobian if dense else jacobian,
-        method="dogbox" if boxed else "trf",
-        tr_solver="exact" if dense else "lsmr",
-        x_scale=scale * first,
-        # Ohne Grenze läuft LSMR hier bis zur kleineren Matrixkante. Bei der
-        # langen, dünn besetzten Kette des §31-Korpus sind das 300 innere
-        # Schritte je Versuch und 105 ms insgesamt. Mit 150 Schritten braucht
-        # der äußere Löser acht statt achtzehn Versuche, hält denselben Rest
-        # weit unter ``_TOL`` und löst die 200 Bedingungen in 42 ms. Die
-        # Grenze ist keine Genauigkeitsschranke: TRF setzt mit dem verbleibenden
-        # Rest weiter an, statt eine unfertige Antwort zurückzugeben.
-        tr_options={} if dense else {"maxiter": 150},
-        xtol=1e-14 if precise else 1e-10,
-        ftol=1e-14 if precise else 1e-10,
-        gtol=1e-14 if precise else 1e-10,
-        max_nfev=tries,
-        callback=_watchdog(),
-    )
-    moved = np.asarray(result.x, dtype=float)
-    if float(np.max(np.abs(moved))) > FARTHEST_MOVE:
+
+    def run(way: str, equations: Sequence[_Equation]) -> np.ndarray:
+        """Ein Lauf auf einem Weg über diese Gleichungen, als Verschiebung."""
+        thick = way in ("box", "trust")
+        precise = thick and not dragging
+        found = least_squares(
+            lambda z: _residuals_at(equations, placed(z)),
+            np.zeros(columns.size),
+            jac=(
+                (lambda z: _dense_jacobian(equations, placed(z), where))
+                if thick
+                else (lambda z: _jacobian(equations, placed(z))[:, columns])
+            ),
+            method="dogbox" if way == "box" else "trf",
+            tr_solver="exact" if thick else "lsmr",
+            x_scale=scale * (first if thick else reach),
+            # Ohne Grenze läuft LSMR hier bis zur kleineren Matrixkante. Bei der
+            # langen, dünn besetzten Kette des §31-Korpus sind das 300 innere
+            # Schritte je Versuch und 105 ms insgesamt. Mit 150 Schritten braucht
+            # der äußere Löser acht statt achtzehn Versuche, hält denselben Rest
+            # weit unter ``_TOL`` und löst die 200 Bedingungen in 42 ms. Die
+            # Grenze ist keine Genauigkeitsschranke: TRF setzt mit dem verbleibenden
+            # Rest weiter an, statt eine unfertige Antwort zurückzugeben.
+            tr_options={} if thick else {"maxiter": 150},
+            xtol=1e-14 if precise else 1e-10,
+            ftol=1e-14 if precise else 1e-10,
+            gtol=1e-14 if precise else 1e-10,
+            max_nfev=tries,
+            callback=_watchdog(),
+        )
+        return np.asarray(found.x, dtype=float)
+
+    primary = ("box" if boxed else "trust") if dense else "sparse"
+    if dragging:
+        # Im Zug ein Weg: Die Stufen und ihre Grenzen sind darauf abgestimmt.
+        moved = run(primary, part.equations)
+        if float(np.max(np.abs(moved))) <= FARTHEST_MOVE:
+            solution[columns] = origin + moved
         return
-    solution[columns] = origin + moved
+    # **Beim Lösen eine Wegfolge** (Review H-A): Angenommen wird der erste
+    # Lauf, der löst, ohne dass eine Linie mit Richtungsbedingung oder ein
+    # Kreis auf einen Punkt schrumpft (:func:`_spans`, :data:`SHRUNK_BELOW`).
+    # Dort gilt jede Richtung leer, und ein Widerspruch — *waagerecht* neben
+    # einem Winkel von 170° zu einer Waagerechten — kam als „gelöst“ samt
+    # Umriss heraus; umgekehrt endete eine gesunde Skizze mit geschrumpfter
+    # Achse als Doppelung. Kein Weg trägt allein: Je eine gesunde Skizze
+    # lösten nur TRF dicht oder nur ``lsmr``.
+    ways = (["box"] if boxed else []) + (["trust", "sparse"] if dense else ["sparse"])
+    shrank: list[_Span] = []
+    fallback: np.ndarray | None = None
+
+    def accepted(moved: np.ndarray) -> bool:
+        """Ob der Lauf löst und nichts schrumpfen ließ — merkt sich, was schrumpfte."""
+        nonlocal fallback
+        if float(np.max(np.abs(moved))) > FARTHEST_MOVE:
+            return False
+        candidate = solution.copy()
+        candidate[columns] = origin + moved
+        collapse = _shrunk(spans, solution, candidate)
+        if collapse is not None:
+            if collapse not in shrank:
+                shrank.append(collapse)
+            return False
+        if float(np.max(np.abs(_residuals_at(part.equations, candidate)))) <= _TOL:
+            return True
+        if fallback is None:
+            fallback = moved
+        return False
+
+    for way in ways:
+        moved = run(way, part.equations)
+        if accepted(moved):
+            solution[columns] = origin + moved
+            return
+    if shrank:
+        # **Was schrumpfte, bleibt so lang, wie es gezeichnet war**, und die
+        # Wege laufen noch einmal: Gibt es eine Lösung, in der nichts
+        # verschwindet, landet sie dort, wo das Element seine Länge behält —
+        # eine Symmetrieachse, die jeder Weg auf null zog, weil das billiger
+        # war, als den gespiegelten Punkt zu bewegen. Bleibt es ein
+        # Widerspruch, bleibt es einer.
+        held = tuple(part.equations) + tuple(
+            _Equation(
+                None,
+                1,
+                *_distance_equation(
+                    span.tail,
+                    span.head,
+                    _span(solution.reshape(-1, 2), span.tail, span.head),
+                ),
+            )
+            for span in shrank
+        )
+        for way in ways:
+            moved = run(way, held)
+            if accepted(moved):
+                solution[columns] = origin + moved
+                return
+    if fallback is not None:
+        # Kein Weg löst: Am ersten Lauf, der ohne zu schrumpfen endet, nennt
+        # die Prüfung danach den Widerspruch — auch wenn ein anderer Weg
+        # schrumpfte. Ob einer schrumpft, hängt an der Rundung, und die
+        # Meldung kam sonst je Ort aus zwei Quellen (Nachprüfung G-B).
+        solution[columns] = origin + fallback
+    elif shrank and collapsed is not None:
+        # Jeder Weg schrumpft: Der Teil bleibt, wo er war, und die
+        # Bedingungen am geschrumpften Element sind der Widerspruch.
+        collapsed.append(shrank[0])
 
 
 def _solve(
@@ -1872,6 +2052,8 @@ def _solve(
     pinned: Sequence[int] = (),
     stiff: bool = False,
     tries: int | None = None,
+    spans: Sequence[_Span] = (),
+    collapsed: list[_Span] | None = None,
 ) -> tuple[np.ndarray, np.ndarray, Any]:
     """Ein Lauf des Lösers: Koordinaten, Residuen, Jacobimatrix an der Lösung.
 
@@ -1893,6 +2075,9 @@ def _solve(
     sie (:data:`DRAG_REACH_TRIES`, :data:`DRAG_SLIDE_TRIES`). Das gewöhnliche
     Lösen bleibt unbegrenzt: Dort ist die Lösung, was gefragt ist, und nicht
     die Antwort auf die nächste Mausbewegung.
+
+    ``spans`` nennt, was beim Lösen nicht schrumpfen darf; schrumpft es auf
+    jedem Weg, landet die Spanne in ``collapsed`` (:func:`_solve_part`).
     """
     flat = start.reshape(-1)
     if not equations:
@@ -1910,8 +2095,24 @@ def _solve(
         for point in pinned:
             weight[2 * point : 2 * point + 2] = DRAG_STIFFNESS
     solution = np.asarray(flat, dtype=float).copy()
+    # Die Spannen je Punkt, einmal: Je Teil alle zu fragen kostete bei
+    # zweihundert getrennten Kreisen eine Sekunde je Lösung.
+    at_point: dict[int, list[int]] = {}
+    for index, span in enumerate(spans):
+        for point in (span.tail, span.head):
+            at_point.setdefault(point, []).append(index)
     for part in _parts(equations, flat, held):
-        _solve_part(part, solution, weight, dragging=bool(pinned), tries=tries)
+        points = (int(column) // 2 for column in part.columns[::2])
+        near = {index for point in points for index in at_point.get(point, ())}
+        _solve_part(
+            part,
+            solution,
+            weight,
+            dragging=bool(pinned),
+            tries=tries,
+            spans=[spans[index] for index in sorted(near)],
+            collapsed=collapsed,
+        )
     return solution, _residuals_at(equations, solution), _jacobian(equations, solution)
 
 
@@ -1922,6 +2123,8 @@ def _solve_in_coordinates(
     pinned: Sequence[int] = (),
     stiff: bool = False,
     tries: int | None = None,
+    spans: Sequence[_Span] = (),
+    collapsed: list[_Span] | None = None,
 ) -> tuple[np.ndarray, np.ndarray, Any]:
     """Der Löser bis Solidon 0.5 — für Skizzen mit ``solver == 1`` (RM-541).
 
@@ -1929,7 +2132,7 @@ def _solve_in_coordinates(
     rechneten 0.5.0 bis 0.5.3 jede Skizze, und eine Skizze aus einer solchen
     Projektdatei rechnet hier wie gespeichert. Neues rechnet :func:`_solve`;
     diese Fassung wird nicht verbessert, sonst rechnete sie nicht mehr wie
-    gespeichert.
+    gespeichert — ``spans`` und ``collapsed`` nimmt sie an und lässt sie liegen.
     """
     flat = start.reshape(-1)
     held = np.zeros(flat.size, dtype=bool)
@@ -2026,17 +2229,45 @@ def _worst_constraints(
 
 
 def _conflict_pair(
-    equations: Sequence[_Equation], blocks: Sequence[range], residuals: np.ndarray
+    constraints: Sequence[SketchConstraint],
+    equations: Sequence[_Equation],
+    blocks: Sequence[range],
+    residuals: np.ndarray,
 ) -> tuple[int, int]:
-    """Das Paar mit den größten Restfehlern.
+    """Das Paar mit den größten Restfehlern, die später gesetzte vorn.
 
     Bei mehr als zwei Beteiligten ist das kein vollständiges Bild, aber der
     ehrliche Einstieg: die beiden Bedingungen, an denen der Löser am
-    weitesten scheitert, sind die, die man zuerst ansieht."""
+    weitesten scheitert, sind die, die man zuerst ansieht.
+
+    **Die Folge kommt aus dem Setzen, nicht aus den Resten** (Nachprüfung
+    G-B): Ein Lauf auf einen Widerspruch hört in einem flachen Tal auf, und
+    zwei Reste, die am wahren Minimum gleich sind, lagen dort je Ort einmal
+    so, einmal so herum. **Ist der zweitgrößte Rest erfüllt** (bis ``_TOL``),
+    war er Rauschen zwischen 10⁻⁸ und 10⁻⁴; Partner ist dann die Bedingung,
+    die mit der ersten die meisten Zielpunkte teilt — *senkrecht* neben
+    *parallel* auf denselben zwei Linien —, bei Gleichstand die später
+    gesetzte."""
     ranked = _worst_constraints(equations, blocks, residuals)
-    first = ranked[0] if ranked else 0
-    second = ranked[1] if len(ranked) > 1 else first
-    return first, second
+    if not ranked:
+        return 0, 0
+    first = ranked[0]
+    worst: dict[int, float] = {}
+    for equation, block in zip(equations, blocks, strict=True):
+        if equation.constraint is not None:
+            peak = max((abs(float(residuals[row])) for row in block), default=0.0)
+            worst[equation.constraint] = max(worst.get(equation.constraint, 0.0), peak)
+    if len(ranked) > 1 and worst[ranked[1]] > _TOL:
+        second = ranked[1]
+    else:
+        shared = set(constraints[first].targets)
+        others = [index for index in worst if index != first]
+        second = (
+            max(others, key=lambda index: (len(shared & set(constraints[index].targets)), index))
+            if others
+            else first
+        )
+    return max(first, second), min(first, second)
 
 
 #: Ab wann ein Anteil des linken Nullraums an einer Bedingung als null gilt.
@@ -2321,9 +2552,29 @@ def _solve_here(
         raise _too_large(sketch, anchors)
     # Eine Skizze aus einer älteren Projektdatei rechnet wie gespeichert (RM-541).
     solve = _solve if sketch.solver >= SKETCH_SOLVER else _solve_in_coordinates
+    collapsed: list[_Span] = []
     solution, residuals, jacobian = solve(
-        equations, begin, pinned=pinned, tries=DRAG_REACH_TRIES if pinned else None
+        equations,
+        begin,
+        pinned=pinned,
+        tries=DRAG_REACH_TRIES if pinned else None,
+        spans=() if pinned else _spans(sketch),
+        collapsed=collapsed,
     )
+    if collapsed:
+        # **Gelöst nur mit einer Linie oder einem Kreis auf einem Punkt** ist
+        # nicht gelöst (Review H-A): Genannt werden die Bedingungen an dem
+        # Element, das geschrumpft wäre — Richtungsbedingungen zuerst, die
+        # später gesetzte vorn. 0.5.3 meldete hier den Widerspruch auch.
+        first, second = _collapse_pair(sketch, collapsed[0])
+        raise SketchConflictError(
+            first,
+            second,
+            values={
+                "first_kind": sketch.constraints[first].kind,
+                "second_kind": sketch.constraints[second].kind,
+            },
+        )
     max_residual = float(np.max(np.abs(residuals))) if residuals.size else 0.0
     if pinned and max_residual > _TOL:
         # Der Zeigerort ist mit den Bedingungen nicht zu haben — zweite Stufe:
@@ -2387,7 +2638,7 @@ def _solve_here(
     # eine implizite Gleichung dazustellt, die das bricht, merkt es hier und
     # nicht als „Im Programm ist ein unerwarteter Fehler aufgetreten".
     if max_residual > _TOL:
-        first, second = _conflict_pair(equations, blocks, residuals)
+        first, second = _conflict_pair(sketch.constraints, equations, blocks, residuals)
         assert max(first, second) < len(sketch.constraints), "conflict without a bearing constraint"
         raise SketchConflictError(
             first,

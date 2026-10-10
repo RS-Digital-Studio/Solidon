@@ -95,7 +95,7 @@ bleibt dadurch abbrechbar, bevor ein Ergebnis in Szene oder Cache erscheint.
   Operation zurück. Vorgegebene Grundformen erzeugen diesen Hinweis nicht.
 
 - **Bei gleich großem Rest nennt der Löser die später gesetzte Bedingung**
-  (`_worst_constraints`, Gleichstand relativ 10⁻⁹): Eine Kette aus drei
+  (`_worst_constraints`, Gleichstand bis `_TOL`): Eine Kette aus drei
   widersprüchlichen Bedingungen teilt den Fehler gleichmäßig, und die Meldung
   nannte sonst nie die, die eben dazukam.
 
@@ -163,10 +163,16 @@ bleibt dadurch abbrechbar, bevor ein Ergebnis in Szene oder Cache erscheint.
   8,8 mm woanders, und ein Punkt sprang in einem Schritt von einem halben
   Millimeter um 3,5 mm. Vom Stand davor ist der Weg an jedem Ort derselbe
   (Versatzsonde des Reviews: 177 Züge, keiner über 10⁻⁹ mm). Kurze Ketten
-  rutschen so in vier Auswertungen; eine lange Kette über `lsmr` bräuchte
-  gestreckt 120 bis 200 und bleibt beim Sprung stehen — die aus zwanzig
-  Linien rutschte vorher nur, weil der erste Radius zufällig passte, die aus
-  dreißig schon damals nicht.
+  rutschen so in vier Auswertungen. Eine lange Kette über `lsmr` steht
+  gestreckt singulär: Mit fünfzig Auswertungen folgte sie ab siebzehn
+  Gliedern dem Zeiger jenseits der Reichweite auch in Mausschritten nicht
+  mehr, wo 0.5.3 sie folgen ließ (Nachprüfung M-C). Mit hundert folgt sie bis
+  hundert Glieder auf Hundertstel Grad, rund hundert Auswertungen je
+  Mausereignis. Den Sprung über die Reichweite ließ auch 0.5.3 nicht folgen.
+  Der Vorschlag der Nachprüfung, die zweite Stufe danach einmal ab dem Ende
+  der ersten zu wiederholen, half in keinem gemessenen Fall (Ketten aus 17
+  bis 100 Gliedern, Mausschritte und Sprung) und verdoppelte die Arbeit des
+  Sprungs auf 225 Auswertungen; er entfiel.
 
 - **Feste Punkte kosten die Zerlegung nichts** (`_matrix_rank`). Eine Zeile
   mit genau einem Eintrag trägt eins zum Rang bei und nimmt ihre Spalte mit;
@@ -279,13 +285,50 @@ bleibt dadurch abbrechbar, bevor ein Ergebnis in Szene oder Cache erscheint.
   0.5.0. Gezählt wird mit der Schranke der ganzen Matrix; je Block eigene
   Schranken zählten an zufälligen Matrizen in vier von sechs Fällen anders.
 
-- **Welche zwei eine Meldung nennt, hängt nicht am Abbruchpunkt** (RM-541).
-  Gleich groß heißt beim Widerspruch höchstens `_TOL` auseinander: Zwei
-  Reste, die am wahren Minimum gleich sind, lagen am Abbruch 4·10⁻⁸
-  auseinander, je nach Ort einmal so, einmal so herum. Bei einer Doppelung nennt
-  der Löser die am stärksten am Nullraum beteiligten Bedingungen; nach der
-  Nummer allein kam ein Block mit Anteil um 10⁻⁹ ins Paar, je nach Ort über
-  oder unter `_NULL_SHARE`.
+- **Welche zwei eine Meldung nennt, hängt kaum noch am Abbruchpunkt**
+  (RM-541, Nachprüfung G-B). Ein Lauf auf einen Widerspruch endet in einem
+  flachen Tal, und dort liest das Paar die Reste ab. Gleich groß heißt
+  höchstens `_TOL` auseinander: Zwei Reste, die am wahren Minimum gleich
+  sind, lagen am Abbruch 4·10⁻⁸ auseinander, je nach Ort einmal so, einmal so
+  herum. Die Folge im Paar kommt aus dem Setzen, die später gesetzte vorn
+  (`_conflict_pair`). Ist der zweitgrößte Rest erfüllt, war er Rauschen
+  zwischen 10⁻⁸ und 10⁻⁴; Partner ist dann die Bedingung mit den meisten
+  gemeinsamen Zielpunkten. Beide Regeln tragen: In der Breitensonde wanderten
+  ohne die Folge 8, ohne den Partner 6, ohne beide 10 Paare statt 4
+  (`test_a_contradiction_names_the_later_constraint_and_its_true_partner`). Bei einer Doppelung nennt der Löser die am
+  stärksten am Nullraum beteiligten Bedingungen; nach der Nummer allein kam
+  ein Block mit Anteil um 10⁻⁹ ins Paar, je nach Ort über oder unter
+  `_NULL_SHARE`. **Was bleibt**, sind Widersprüche mit drei und mehr
+  Beteiligten, deren Tal je Ort woanders endet: In der Breitensonde der
+  Nachprüfung nannten 4 von 195 unlösbaren Zufallsskizzen an einem anderen
+  Ort oder unter anderem Rauschen ein anderes Paar (vor H-A 19 von 173), im
+  Wächter `test_random_sketches_say_the_same_wherever_and_however_they_are_rounded`
+  keine von 50 (vor H-A 3 von 44). Ob eine Skizze lösbar ist, hängt an
+  keinem Ort.
+
+- **Gelöst mit einer Linie oder einem Kreis auf einem Punkt ist nicht
+  gelöst** (`_spans`, `_shrunk`, `SHRUNK_BELOW`, Nachprüfung H-A). Eine
+  Richtung rechnet aus der Linie, und `_unit` klemmt deren Länge auf
+  `EPS_GEOM`: Ist die Linie null lang, gilt *waagerecht*, *parallel* oder
+  ein Winkel leer, und ein Widerspruch wie *waagerecht* neben 170° zu einer
+  Waagerechten verschwindet mit ihr. `dogbox` fand diese Lösung als
+  kürzesten Schritt, und die Meldung hieß „gelöst“; 0.5.3 meldete dort den
+  Widerspruch. Deshalb eine Wegfolge: `dogbox`, dichtes TRF, TRF über `lsmr`;
+  angenommen wird der erste Lauf, der löst, ohne dass eine Linie mit
+  Richtungsbedingung oder ein Kreis unter einen Mikrometer fällt. Die Grenze
+  ist das Tausendfache von `_TOL`, denn an einer Linie der Länge L hält eine
+  Richtung nur auf `_TOL`/L: An 2·10⁻⁶ mm erfüllte *waagerecht* eine um 22°
+  schräge Linie. Schrumpft ein Element in jedem Weg, rechnen die Wege noch
+  einmal mit seiner gezeichneten Länge gehalten — eine Symmetrieachse, die
+  jeder Weg auf null zog, weil das billiger war, als den gespiegelten Punkt
+  zu bewegen, findet so ihre Lösung an jedem Ort gleich. Schrumpft es auch
+  dann, nennt `_collapse_pair` die Bedingungen an diesem Element. Über die
+  Sonden der Nachprüfung: alle acht Fälle des Befunds gelöst oder an jedem
+  Ort gleich gemeldet, in der Nahsonde (1000 gewöhnlich gezeichnete
+  Skizzen) keine Absage einer Skizze, die 0.5.3 gesund und ortsfest löst,
+  und nichts mehr entartet gelöst. Die neuen Absagen gegenüber 0.5.3 — 7 in
+  der Nah-, 30 in der Breitensonde — waren dort entartete „Lösungen“, bis
+  auf eine, die 0.5.3 nur am Nullpunkt löste und an jedem anderen Ort ablehnte.
 
 - **Gespeicherte Skizzen rechnen wie gespeichert** (`Sketch.solver`,
   Format 50). Bestimmte und schon gelöste Skizzen landen in beiden Fassungen

@@ -80,7 +80,7 @@ reichen `ctx.cancelled` an `brep.features.features_of` weiter.
   Docstring, `DRAG_STIFFNESS` ein Zwanzigstel wie in SolveSpace. Begrenzt über
   `DRAG_REACH_TRIES`/`DRAG_SLIDE_TRIES`; findet keine Stufe eine Lage oder
   kehren die gezogenen Punkte ganz zurück, bleibt die Zeichnung stehen. Die
-  zweite Stufe beginnt am Stand vor dem Schritt, nie am Ende der ersten: Das
+  zweite Stufe beginnt immer am Stand vor dem Schritt: Das Ende der ersten
   liegt in einem flachen Tal, wohin die Rundung es trägt. Geprüft wird in
   Schritten wie die Maus (`tests/test_sketch_edit.py`).
 - **Gelöst wird je zusammenhängendem Teil, in Verschiebungen** (RM-541,
@@ -91,21 +91,25 @@ reichen `ctx.cancelled` an `brep.features.features_of` weiter.
   Schritt weder am Nullpunkt noch an anderen Teilen; ein Teil, der schon bis
   `_TOL` gilt, bleibt, einer, der weiter als `FARTHEST_MOVE` liefe oder
   dessen Rest sich in `STALL_WINDOW` Auswertungen nicht halbiert, auch
-  (`_watchdog`). Ein kleiner Teil mit vollem Rang rechnet beim Lösen wie im
-  Zug über `dogbox` (kürzester Gauß-Newton-Schritt), nie über `lsmr` und nie
-  über dichtes TRF, das bei Unterbestimmtheit jeden Schritt auf den Rand
-  setzt; `DRAG_STIFFNESS` ist dort die Box. Mit Doppelungen bleibt er bei
-  TRF: `lstsq` nähme deren Rauschsingulärwerte für Richtungen.
+  (`_watchdog`). Ein kleiner Teil mit vollem Rang rechnet zuerst über
+  `dogbox` (kürzester Gauß-Newton-Schritt; mit Doppelungen nicht, `lstsq`
+  nähme deren Rauschsingulärwerte für Richtungen), im Zug nur so;
+  `DRAG_STIFFNESS` ist dort die Box.
+- **Beim Lösen eine Wegfolge mit Schrumpfwächter** (`_spans`, `_shrunk`,
+  `SHRUNK_BELOW`): `dogbox` → TRF dicht → TRF über `lsmr`; angenommen wird
+  der erste Lauf, der löst, ohne dass eine Linie mit Richtungsbedingung oder
+  ein Kreis unter einen Mikrometer fällt — dort gilt jede Richtung leer, und
+  ein Widerspruch hieß „gelöst“. Was schrumpfte, rechnet ein zweiter
+  Durchgang auf seiner Länge gehalten; schrumpft es auch dann, nennt
+  `_collapse_pair` den Widerspruch an diesem Element.
 - **Gerechnet wird um die Mitte der Zeichnung** (`solve_sketch` um
   `_solve_here`): Die Ableitungen rechnen aus Koordinatendifferenzen, und
   weit vom Nullpunkt rauschen sie. Zurück rückt nur, was sich bewegt hat;
   Unbewegtes behält seine Zahl bitgleich. Die Fassung 1 rechnet ohne.
-- **Der Löser rechnet über scipy mit BLAS und LAPACK** (SVD, `lstsq`,
-  `lsmr`) — die Ausnahme von „kein BLAS" in `.claude/rules/kern.md`.
-  Zugesagt ist dieselbe Lage bis `_TOL` an jedem Ort, gehalten von den
-  Ortswächtern in `tests/test_sketch.py` (`…_alike_wherever_it_lies`), die
-  jede Rundung über Versätze ändern; nur die Größe des Teils rechnet ohne
-  BLAS, weil sie den Weg wählt.
+- **Der Löser rechnet über scipy mit BLAS und LAPACK** — die Ausnahme steht
+  in `.claude/rules/kern.md` („Dieselbe Datei, dasselbe Teil“). Die Größe
+  des Teils (`_part_size`) und der Schrumpfwächter rechnen ohne; die
+  Wegwahl (`matrix_rank`, Annahme eines Laufs) nicht.
 - **Die Fassung des Lösers steht an der Skizze** (`Sketch.solver`,
   `types.SKETCH_SOLVER`): `1` rechnet über `_solve_in_coordinates` wie bis
   0.5 (Migration 49 → 50), der Editor ab der ersten Änderung mit der

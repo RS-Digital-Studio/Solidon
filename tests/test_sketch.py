@@ -4,6 +4,7 @@ Zahl, Konflikte mit benanntem Paar, Maße über die Parametergrammatik."""
 from __future__ import annotations
 
 import math
+import random
 from dataclasses import replace
 from itertools import pairwise
 
@@ -668,24 +669,6 @@ _UNSOLVABLE = {
             ("fixed", (0,), ""),
         ],
     ),
-    "noise_share": (
-        [
-            ((0.0, 0.0), (13.038228155485973, 3.686622409038357)),
-            ((12.62008476354232, 3.0470259437952434), (20.581209906600456, 9.82646094252833)),
-            ((20.74987795624194, 10.533310436169577), (28.76492657814943, 18.631618499728635)),
-            ((27.64625695139281, 17.227911992561413), (42.46359282804533, 16.87148338794381)),
-            ((43.257980091700865, 15.591185998675329), (55.37646756450006, 19.219615026275473)),
-        ],
-        [
-            *(("coincident", (2 * i + 1, 2 * i + 2), "") for i in range(4)),
-            ("perpendicular", (8, 9, 6, 7), ""),
-            ("angle", (2, 3, 8, 9), "103.0"),
-            ("angle", (4, 5, 0, 1), "54.0"),
-            ("vertical", (6, 7), ""),
-            ("parallel", (0, 1, 6, 7), ""),
-            ("fixed", (0,), ""),
-        ],
-    ),
     "tie": (
         [
             ((0.0, 0.0), (13.262088307196882, -4.550809131545043)),
@@ -756,14 +739,14 @@ def test_an_unsolvable_sketch_names_the_same_pair_wherever_it_lies(case: str) ->
     """Widerspruch oder Doppelung: an jedem Ort dieselbe Meldung mit demselben
     Paar (RM-541; Lagegleichheit heißt diskret gleich).
 
-    Vier Fälle, vier Ursachen. Zwei Reste, die am wahren Minimum gleich sind,
-    lagen am Abbruchpunkt 4·10⁻⁸ auseinander, je nach Ort einmal so, einmal so
-    herum (``tie``). Bei der Doppelung kam ein Block mit Nullraumanteil um
-    10⁻⁹ ins Paar, je nach Ort über oder unter der Schranke (``noise_share``).
-    An einer redundanten Zeichnung nahm ``dogbox`` Singulärwerte im
+    Zwei Reste, die am wahren Minimum gleich sind, lagen am Abbruchpunkt
+    4·10⁻⁸ auseinander, je nach Ort einmal so, einmal so herum (``tie``). An
+    einer redundanten Zeichnung nahm ``dogbox`` Singulärwerte im
     Rundungsrauschen für Richtungen und rannte davon, und hunderttausend
     Millimeter neben dem Nullpunkt war das Rauschen der Ableitungen 10⁻¹²
-    (``doubled``, ``two_lengths``).
+    (``doubled``, ``two_lengths``). Ein vierter Fall stand hier als Doppelung
+    mit Rauschanteil im Paar; er ist lösbar, und 0.5.3 löst ihn — er steht
+    jetzt unter den gesunden Skizzen (Review H-A, ``zufall_14``).
     """
     lines, rules = _UNSOLVABLE[case]
     sketch = Sketch(
@@ -777,6 +760,657 @@ def test_an_unsolvable_sketch_names_the_same_pair_wherever_it_lies(case: str) ->
             solve_sketch(_placed(sketch, [(x + dx, y + dy) for x, y in edit.flat_points(sketch)]))
         said.add((str(caught.value.title), caught.value.first, caught.value.second))
     assert len(said) == 1, said
+
+
+def _random_sketch(rng: random.Random) -> Sketch:
+    """Eine Zufallsskizze aus Linien und Kreisen mit gemischten Bedingungen —
+    wie die Breitensonde der Nachprüfung zu RM-541, ohne Bögen."""
+    elements: list[SketchElement] = []
+    for _ in range(rng.randint(2, 5)):
+        cx, cy = rng.uniform(-30, 30), rng.uniform(-30, 30)
+        if rng.random() < 0.6:
+            tip = (cx + rng.uniform(4, 20), cy + rng.uniform(-8, 8))
+            elements.append(SketchElement("line", ((cx, cy), tip)))
+        else:
+            rim = (cx + rng.uniform(2, 9), cy + rng.uniform(-0.5, 0.5))
+            elements.append(SketchElement("circle", ((cx, cy), rim)))
+    lines = [2 * i for i, element in enumerate(elements) if element.kind == "line"]
+    rounds = [2 * i for i, element in enumerate(elements) if element.kind == "circle"]
+    points = 2 * len(elements)
+    rules: list[SketchConstraint] = []
+    for _ in range(rng.randint(2, 7)):
+        kind = rng.choice(
+            ["coincident", "distance", "horizontal", "vertical", "parallel", "perpendicular",
+             "equal", "angle", "tangent", "midpoint", "diameter", "symmetric"]
+        )  # fmt: skip
+        if kind == "coincident":
+            a, b = rng.randrange(points), rng.randrange(points)
+            if a != b:
+                rules.append(SketchConstraint(kind, (a, b)))
+        elif kind == "distance" and lines:
+            line = rng.choice(lines)
+            rules.append(
+                SketchConstraint(kind, (line, line + 1), repr(round(rng.uniform(5, 20), 2)))
+            )
+        elif kind in ("horizontal", "vertical") and lines:
+            line = rng.choice(lines)
+            rules.append(SketchConstraint(kind, (line, line + 1)))
+        elif kind in ("parallel", "perpendicular", "equal", "angle") and len(lines) >= 2:
+            a, b = rng.sample(lines, 2)
+            value = repr(float(rng.randint(15, 165))) if kind == "angle" else ""
+            rules.append(SketchConstraint(kind, (a, a + 1, b, b + 1), value))
+        elif kind == "tangent" and lines and rounds:
+            line, round_ = rng.choice(lines), rng.choice(rounds)
+            rules.append(SketchConstraint(kind, (line, line + 1, round_, round_ + 1)))
+        elif kind == "midpoint" and lines:
+            line, point = rng.choice(lines), rng.randrange(points)
+            if point not in (line, line + 1):
+                rules.append(SketchConstraint(kind, (point, line, line + 1)))
+        elif kind == "diameter" and rounds:
+            round_ = rng.choice(rounds)
+            rules.append(
+                SketchConstraint(kind, (round_, round_ + 1), repr(round(rng.uniform(4, 16), 2)))
+            )
+        elif kind == "symmetric" and lines:
+            line = rng.choice(lines)
+            p, q = rng.randrange(points), rng.randrange(points)
+            if len({p, q, line, line + 1}) == 4:
+                rules.append(SketchConstraint(kind, (p, q, line, line + 1)))
+    rules.append(SketchConstraint("fixed", (0,)))
+    return Sketch(plane="plane:xy", elements=tuple(elements), constraints=tuple(rules))
+
+
+def test_random_sketches_say_the_same_wherever_and_however_they_are_rounded() -> None:
+    """Über eine Zufallsmenge: Ob eine Skizze lösbar ist, ändert weder der Ort
+    noch das Rauschen eines anderen Rechners — und was eine unlösbare meldet,
+    höchstens in so vielen Fällen, wie gemessen (RM-541, Nachprüfung G-B).
+    Gelöst heißt dabei nie: eine Linie mit Richtungsbedingung oder ein Kreis
+    auf einem Punkt (Review H-A).
+
+    Die Meldung nennt das Paar an den Resten eines Laufs auf einen
+    Widerspruch, und der endet in einem flachen Tal. Die Folge im Paar kommt
+    deshalb aus dem Setzen, ein erfüllter Partner wird durch den mit den
+    meisten gemeinsamen Zielpunkten ersetzt, und ob ein Weg ein Element
+    schrumpfen lässt, entscheidet nicht mehr die Quelle der Meldung. Was
+    bleibt, steht in der Begründung der Skizzenkarte; die Schranke hier ist
+    die Messung, kein Wunsch.
+    """
+    from app.core.sketch.solver import SHRUNK_BELOW
+    from tests.test_platform_identity import platform_noise
+
+    def said(sketch: Sketch) -> str:
+        try:
+            solved = solve_sketch(sketch)
+        except SketchConflictError as error:
+            return f"{error.title} {error.first} {error.second}"
+        starts = edit.offsets_of(sketch)
+        shrunk = [
+            index
+            for index, element in enumerate(solved.elements)
+            if math.dist(*element.points[:2]) < SHRUNK_BELOW
+            and (element.kind == "circle" or _directed(sketch, starts[index]))
+        ]
+        return f"gelöst, geschrumpft {shrunk}" if shrunk else "gelöst"
+
+    rng = random.Random(7541)
+    unsolvable = 0
+    wandering: list[str] = []
+    for index in range(100):
+        sketch = _random_sketch(rng)
+        home = said(sketch)
+        others = [
+            said(_placed(sketch, [(x + dx, y + dy) for x, y in edit.flat_points(sketch)]))
+            for dx, dy in ((12.3, 45.6), (1000.1, -0.7))
+        ]
+        for pattern in (0, 1):
+            with platform_noise(pattern):
+                others.append(said(sketch))
+        assert "geschrumpft" not in home, (index, home)
+        assert all((other == "gelöst") == (home == "gelöst") for other in others), (
+            index,
+            home,
+            others,
+        )
+        if home != "gelöst":
+            unsolvable += 1
+            if any(other != home for other in others):
+                wandering.append(f"{index}: {home} | {others}")
+    assert unsolvable >= 40, "die Menge prüft zu wenig Unlösbares"
+    assert len(wandering) * _WANDERING_SHARE <= unsolvable, wandering
+
+
+#: Höchstens jede so vielte unlösbare Skizze darf je Ort oder Rauschen einen
+#: anderen Partner nennen. Gemessen: hier keine von 50, in der Breitensonde
+#: der Nachprüfung 4 von 195 (2 %); vor Review H-A waren es hier 3 von 44.
+#: Die Schranke lässt einem anderen Rechner zwei Fälle.
+_WANDERING_SHARE = 20
+
+#: Bedingungen, deren Richtung an einer Linie der Länge null leer gilt — aus
+#: dem, was :func:`_random_sketch` setzt, unabhängig vom Löser aufgezählt.
+_DIRECTED = frozenset(
+    {
+        "horizontal",
+        "vertical",
+        "parallel",
+        "perpendicular",
+        "equal",
+        "angle",
+        "tangent",
+        "symmetric",
+    }
+)
+
+
+def _directed(sketch: Sketch, tail: int) -> bool:
+    """Trägt die Linie ab Punkt ``tail`` eine Richtungsbedingung?"""
+    return any(
+        constraint.kind in _DIRECTED and {tail, tail + 1} & set(constraint.targets)
+        for constraint in sketch.constraints
+    )
+
+
+#: Gezeichnete Skizzen aus der Nah- und Breitensonde der Nachprüfung zu
+#: RM-541 (Startwerte 1541, 2541, 541, 7541): verdeckte Widersprüche und
+#: gesunde Skizzen, die weit von ihrer Lösung gezeichnet sind.
+_HIDDEN_CONTRADICTIONS = {
+    "gross_17": (
+        [
+            (
+                "line",
+                (
+                    (0.2769653161776989, -0.033188102882082515),
+                    (17.80366998602637, -4.745685728719326),
+                ),
+            ),
+            (
+                "line",
+                ((17.506970088380818, -5.040962604921895), (42.40577268841871, -6.963586610510137)),
+            ),
+            (
+                "line",
+                ((42.325470076958304, -7.056274341812847), (42.376853173186, -0.8043468061751797)),
+            ),
+            (
+                "line",
+                (
+                    (42.35001073204633, -0.9019402293171869),
+                    (35.74178030219399, -0.6320788532402484),
+                ),
+            ),
+            ("line", ((35.58094665710971, -0.8736354513765043), (0.0, 0.0))),
+        ],
+        [
+            ("coincident", (1, 2), ""),
+            ("coincident", (3, 4), ""),
+            ("coincident", (5, 6), ""),
+            ("coincident", (7, 8), ""),
+            ("coincident", (9, 0), ""),
+            ("horizontal", (2, 3), ""),
+            ("vertical", (4, 5), ""),
+            ("horizontal", (6, 7), ""),
+            ("distance", (8, 9), "36.0"),
+            ("angle", (2, 3, 0, 1), "170.0"),
+            ("horizontal", (0, 1), ""),
+            ("fixed", (0,), ""),
+        ],
+    ),
+    "gross_48": (
+        [
+            (
+                "line",
+                (
+                    (0.11833932733172586, 0.11913394372708958),
+                    (-1.1237988648267838, 10.910539792101602),
+                ),
+            ),
+            (
+                "line",
+                (
+                    (-1.0003842853971991, 10.826276382331407),
+                    (-20.07536788467962, 15.238088657174657),
+                ),
+            ),
+            (
+                "line",
+                (
+                    (-19.856819540049013, 15.084030611616758),
+                    (-19.763980654095253, 34.589913045170206),
+                ),
+            ),
+            (
+                "line",
+                ((-20.043149342504158, 34.65419038468188), (-38.98328361884417, 40.34734524277671)),
+            ),
+            (
+                "line",
+                ((-38.87151520732539, 40.1419953386811), (-43.263066954471796, 14.224532909549243)),
+            ),
+            (
+                "circle",
+                (
+                    (-45.80431841490346, 27.985923748752896),
+                    (-41.05312874652748, 27.985923748752896),
+                ),
+            ),
+        ],
+        [
+            ("coincident", (1, 2), ""),
+            ("coincident", (3, 4), ""),
+            ("coincident", (5, 6), ""),
+            ("coincident", (7, 8), ""),
+            ("vertical", (0, 1), ""),
+            ("distance", (2, 3), "20.0"),
+            ("vertical", (4, 5), ""),
+            ("distance", (8, 9), "26.0"),
+            ("angle", (0, 1, 6, 7), "65.0"),
+            ("angle", (2, 3, 0, 1), "110.0"),
+            ("tangent", (8, 9, 10, 11), ""),
+            ("horizontal", (6, 7), ""),
+            ("fixed", (0,), ""),
+        ],
+    ),
+    "nah_108": (
+        [
+            (
+                "line",
+                (
+                    (-0.23090393305917575, 0.23746339438242353),
+                    (-7.118709581448391, -0.41524622325675153),
+                ),
+            ),
+            (
+                "line",
+                (
+                    (-7.000641374847483, -0.2631228044829941),
+                    (-6.5205683961069685, 9.084506625910624),
+                ),
+            ),
+            (
+                "line",
+                ((-6.619058597219485, 9.231063407574954), (1.1412831937353705, 33.99356504739975)),
+            ),
+            (
+                "line",
+                (
+                    (0.8609262323290301, 34.20285764364691),
+                    (-10.501032143549137, 38.231306408157884),
+                ),
+            ),
+            (
+                "line",
+                ((-10.361316026362157, 38.1244840416892), (-37.92180336622332, 38.402833744630215)),
+            ),
+            ("line", ((-37.79689332645539, 38.35389628737731), (0.0, 0.0))),
+        ],
+        [
+            ("coincident", (1, 2), ""),
+            ("coincident", (3, 4), ""),
+            ("coincident", (5, 6), ""),
+            ("coincident", (7, 8), ""),
+            ("coincident", (9, 10), ""),
+            ("coincident", (11, 0), ""),
+            ("horizontal", (0, 1), ""),
+            ("vertical", (2, 3), ""),
+            ("distance", (2, 3), "9.0"),
+            ("horizontal", (8, 9), ""),
+            ("distance", (10, 11), "54.0"),
+            ("angle", (0, 1, 10, 11), "130.0"),
+            ("angle", (2, 3, 10, 11), "50.0"),
+            ("angle", (6, 7, 8, 9), "20.0"),
+            ("fixed", (0,), ""),
+        ],
+    ),
+    "zufall_76": (
+        [
+            ("line", ((0.0, 0.0), (10.464148542261844, -7.471285297880894))),
+            (
+                "line",
+                ((10.791557358439597, -6.883787042713742), (25.2864210378375, 0.6259861680749528)),
+            ),
+            (
+                "line",
+                (
+                    (24.484759248351214, 0.06123161232460883),
+                    (36.620288835113215, -5.038929228211795),
+                ),
+            ),
+            (
+                "line",
+                ((36.690248325708545, -4.533627067909887), (49.23345830478776, 0.8335017234553337)),
+            ),
+        ],
+        [
+            ("coincident", (1, 2), ""),
+            ("coincident", (3, 4), ""),
+            ("coincident", (5, 6), ""),
+            ("angle", (0, 1, 4, 5), "68.0"),
+            ("distance", (0, 1), "13.775"),
+            ("horizontal", (4, 5), ""),
+            ("vertical", (0, 1), ""),
+            ("fixed", (0,), ""),
+        ],
+    ),
+}
+
+_HEALTHY_FAR_FROM_SOLVED = {
+    "zufall_14": (
+        [
+            ("line", ((0.0, 0.0), (13.038228155485973, 3.686622409038357))),
+            (
+                "line",
+                ((12.62008476354232, 3.0470259437952434), (20.581209906600456, 9.82646094252833)),
+            ),
+            (
+                "line",
+                ((20.74987795624194, 10.533310436169577), (28.76492657814943, 18.631618499728635)),
+            ),
+            (
+                "line",
+                ((27.64625695139281, 17.227911992561413), (42.46359282804533, 16.87148338794381)),
+            ),
+            (
+                "line",
+                ((43.257980091700865, 15.591185998675329), (55.37646756450006, 19.219615026275473)),
+            ),
+        ],
+        [
+            ("coincident", (1, 2), ""),
+            ("coincident", (3, 4), ""),
+            ("coincident", (5, 6), ""),
+            ("coincident", (7, 8), ""),
+            ("perpendicular", (8, 9, 6, 7), ""),
+            ("angle", (2, 3, 8, 9), "103.0"),
+            ("angle", (4, 5, 0, 1), "54.0"),
+            ("vertical", (6, 7), ""),
+            ("parallel", (0, 1, 6, 7), ""),
+            ("fixed", (0,), ""),
+        ],
+    ),
+    "gemischt_49": (
+        [
+            (
+                "arc",
+                (
+                    (-4.322454540260516, 22.946870775382706),
+                    (0.2470105598903114, 27.363594643867735),
+                    (-10.501112085988346, 21.459708388633256),
+                ),
+            ),
+            (
+                "line",
+                (
+                    (-24.338860682064883, -9.239092338675402),
+                    (-17.338289057894613, -2.0009469702504603),
+                ),
+            ),
+            (
+                "circle",
+                (
+                    (9.566989225048374, -22.755080872612297),
+                    (15.498059927420368, -22.884928209777534),
+                ),
+            ),
+        ],
+        [
+            ("horizontal", (3, 4), ""),
+            ("symmetric", (6, 0, 3, 4), ""),
+            ("fixed", (0,), ""),
+        ],
+    ),
+    "gemischt_205": (
+        [
+            (
+                "line",
+                (
+                    (10.434693650467239, -17.995286350306902),
+                    (28.551284181954816, -22.34374780570176),
+                ),
+            ),
+            (
+                "arc",
+                (
+                    (-4.6956461536060985, -25.74871794450464),
+                    (-1.556070402669513, -18.74649629064203),
+                    (-10.920976472837062, -21.26170263339245),
+                ),
+            ),
+        ],
+        [
+            ("tangent", (0, 1, 2, 3), ""),
+            ("vertical", (0, 1), ""),
+            ("fixed", (0,), ""),
+        ],
+    ),
+    "gemischt_301": (
+        [
+            (
+                "arc",
+                (
+                    (15.818403580212262, 11.01733052486911),
+                    (21.664882742264783, 12.669591478280518),
+                    (10.782040386089442, 14.415319728408068),
+                ),
+            ),
+            (
+                "line",
+                (
+                    (19.617687806248966, -27.07408524622863),
+                    (29.374637901251738, -19.98524494447522),
+                ),
+            ),
+            (
+                "circle",
+                (
+                    (-21.468158497220262, -1.765161226362654),
+                    (-16.659331354696366, -1.8362347446118998),
+                ),
+            ),
+            (
+                "arc",
+                (
+                    (15.60385951232358, 16.101903236967367),
+                    (23.68622872580986, 19.987696621936283),
+                    (6.65555730773473, 15.508632650194944),
+                ),
+            ),
+        ],
+        [
+            ("diameter", (7, 8), "5.87"),
+            ("coincident", (5, 2), ""),
+            ("symmetric", (8, 0, 3, 4), ""),
+            ("horizontal", (3, 4), ""),
+            ("fixed", (0,), ""),
+        ],
+    ),
+}
+
+
+def _from_literal(
+    elements: list[tuple[str, tuple[tuple[float, float], ...]]],
+    rules: list[tuple[str, tuple[int, ...], str]],
+) -> Sketch:
+    return Sketch(
+        plane="plane:xy",
+        elements=tuple(SketchElement(kind, points) for kind, points in elements),
+        constraints=tuple(SketchConstraint(kind, targets, value) for kind, targets, value in rules),
+    )
+
+
+_FAR_PLACES = (*_PLACES, (-7.77, 3.33), (1e6, -1e6))
+
+
+@pytest.mark.parametrize("case", sorted(_HIDDEN_CONTRADICTIONS))
+def test_a_contradiction_does_not_hide_behind_a_shrunk_line(case: str) -> None:
+    """Ein Widerspruch wird gemeldet, nicht mit einer Linie der Länge null
+    „gelöst“ — an jedem Ort mit demselben Paar (RM-541, Review H-A).
+
+    ``gross_17``: zwei Linien *waagerecht*, dazwischen ein Winkel von 170°.
+    An einer Linie ohne Länge gilt jede Richtung leer; der dichte Weg zog die
+    erste dorthin, meldete „gelöst, Rest null“, und aus der Zeichnung wurde
+    ein Umriss. 0.5.3 meldete den Widerspruch. In ``zufall_76`` schrumpfte
+    die Linie nur auf 2·10⁻⁶ mm — dort erfüllt *waagerecht* bis ``_TOL``
+    auch eine um 22° schräge Linie —, und wohin, hing je Ort um bis 15,8 mm
+    an der Rundung. Gefunden mit der Nah- und Breitensonde der Nachprüfung.
+    """
+    sketch = _from_literal(*_HIDDEN_CONTRADICTIONS[case])
+    said: set[tuple[int, int]] = set()
+    for dx, dy in _FAR_PLACES:
+        with pytest.raises(SketchConflictError) as caught:
+            solve_sketch(_placed(sketch, [(x + dx, y + dy) for x, y in edit.flat_points(sketch)]))
+        said.add((caught.value.first, caught.value.second))
+    assert len(said) == 1, said
+    if case == "gross_17":
+        assert set(next(iter(said))) == {9, 10}, "waagerecht gegen den Winkel"
+
+
+@pytest.mark.parametrize("case", sorted(_HEALTHY_FAR_FROM_SOLVED))
+def test_a_healthy_sketch_drawn_far_from_its_solution_solves(case: str) -> None:
+    """Eine gesunde Skizze, die 0.5.3 löst, löst auch hier — an jedem Ort
+    gleich, und kein Element liegt danach auf einem Punkt (RM-541, Review H-A).
+
+    Weit von der Lösung gezeichnet zog der dichte Weg eine Achse oder eine
+    Richtungslinie auf null, und die Rangprüfung meldete eine Doppelung oder
+    einen Widerspruch. Kein Weg trägt allein: ``zufall_14`` löst TRF dicht,
+    ``gemischt_205`` und ``gemischt_301`` löst ``lsmr``, ``gemischt_49`` (eine
+    Symmetrieachse, die jeder Weg schrumpfen ließ) erst mit der Achse auf
+    ihrer gezeichneten Länge.
+    """
+    from app.core.sketch.solver import SHRUNK_BELOW
+    from app.core.units import EPS_GEOM
+
+    sketch = _from_literal(*_HEALTHY_FAR_FROM_SOLVED[case])
+    home: list[tuple[float, float]] = []
+    for dx, dy in _FAR_PLACES:
+        solved = solve_sketch(
+            _placed(sketch, [(x + dx, y + dy) for x, y in edit.flat_points(sketch)])
+        )
+        for element in solved.elements:
+            assert math.dist(*element.points[:2]) > SHRUNK_BELOW, (dx, dy, element.kind)
+        back = [(x - dx, y - dy) for x, y in _flat(solved)]
+        if not home:
+            home = back
+        gap = max(math.dist(a, b) for a, b in zip(back, home, strict=True))
+        assert gap <= EPS_GEOM, ((dx, dy), gap)
+
+
+#: Zwei Widersprüche aus der Breitensonde der Nachprüfung zu RM-541
+#: (Startwert 7541) und das Paar, das ein Mensch nennt — die zuletzt gesetzte
+#: Bedingung vorn. ``gemischt_282``: eine Linie *waagerecht* und dreimal
+#: *senkrecht*; ``gemischt_294``: zwei Linien gleich lang, im Winkel von 96°
+#: und *parallel*.
+_PAIR_RULES = {
+    "gemischt_282": (
+        [
+            (
+                "arc",
+                (
+                    (-18.264723443767274, -19.966994406082122),
+                    (-17.560597558779875, -12.135356483081955),
+                    (-24.403761919346657, -24.880501546021947),
+                ),
+            ),
+            (
+                "circle",
+                (
+                    (-29.742696847820575, -23.012407579931256),
+                    (-25.088125403847734, -23.33727267457289),
+                ),
+            ),
+            (
+                "line",
+                (
+                    (-18.84833541389357, 4.887680967343762),
+                    (-1.6217651125400288, -1.7071029624300031),
+                ),
+            ),
+            (
+                "arc",
+                (
+                    (25.920504053936426, 21.545932316202645),
+                    (24.74991861446949, 25.466646752514286),
+                    (22.17635486594806, 23.196271317826426),
+                ),
+            ),
+        ],
+        [
+            ("horizontal", (5, 6), ""),
+            ("vertical", (5, 6), ""),
+            ("vertical", (5, 6), ""),
+            ("vertical", (5, 6), ""),
+            ("fixed", (0,), ""),
+        ],
+        (3, 0),
+    ),
+    "gemischt_294": (
+        [
+            (
+                "line",
+                ((2.785294079116703, 15.25433330805975), (20.987919322361034, 16.712307550003167)),
+            ),
+            (
+                "arc",
+                (
+                    (-4.437472490871627, 7.5141977680853955),
+                    (0.3569647979553583, 8.687926675356444),
+                    (-6.71854210458402, 3.136870971779647),
+                ),
+            ),
+            (
+                "line",
+                (
+                    (-16.774294634647163, 22.48610766217903),
+                    (-5.422926152454027, 16.327689380632215),
+                ),
+            ),
+            (
+                "line",
+                (
+                    (-6.737835650611526, -2.1904518256429704),
+                    (11.441655070042533, -6.9026557464776435),
+                ),
+            ),
+        ],
+        [
+            ("equal", (5, 6, 0, 1), ""),
+            ("angle", (5, 6, 0, 1), "96.0"),
+            ("parallel", (0, 1, 5, 6), ""),
+            ("coincident", (8, 7), ""),
+            ("coincident", (5, 2), ""),
+            ("fixed", (0,), ""),
+        ],
+        (2, 1),
+    ),
+}
+
+
+@pytest.mark.parametrize("case", sorted(_PAIR_RULES))
+def test_a_contradiction_names_the_later_constraint_and_its_true_partner(case: str) -> None:
+    """Das Paar einer Meldung ist an jedem Ort und unter dem Rauschen eines
+    anderen Rechners dasselbe — die später gesetzte Bedingung vorn, und ein
+    erfüllter Rest ist kein Partner (RM-541, Nachprüfung G-B).
+
+    Ein Lauf auf einen Widerspruch endet in einem flachen Tal, und dort lag
+    die Folge der Reste je Ort mal so, mal so herum (``gemischt_294``: der
+    Winkel vor *parallel* an drei von neun Stellen). Die zweitgrößte von vier
+    Achsenbedingungen war erfüllt bis auf Rauschen und kam je nach Ort als
+    Partner ins Paar — einmal die Fixierung eines Bogens, die mit der Linie
+    nichts zu tun hat (``gemischt_282``). In der Breitensonde wanderten ohne
+    die Folge 8, ohne den Partner 6 und ohne beide 10 von 195 Paaren statt 4.
+    """
+    from tests.test_platform_identity import platform_noise
+
+    elements, rules, pair = _PAIR_RULES[case]
+    sketch = _from_literal(elements, rules)
+    said: list[tuple[int, int]] = []
+    for dx, dy in _FAR_PLACES:
+        with pytest.raises(SketchConflictError) as caught:
+            solve_sketch(_placed(sketch, [(x + dx, y + dy) for x, y in edit.flat_points(sketch)]))
+        said.append((caught.value.first, caught.value.second))
+    for pattern in (0, 1):
+        with platform_noise(pattern), pytest.raises(SketchConflictError) as caught:
+            solve_sketch(sketch)
+        said.append((caught.value.first, caught.value.second))
+    assert set(said) == {pair}, said
 
 
 def _wobbled(sketch: Sketch, amount: float) -> Sketch:
@@ -1396,11 +2030,22 @@ def test_a_sketch_without_area_is_a_user_error_not_a_crash() -> None:
             SketchConstraint(kind="vertical", targets=(0, 1)),
         ),
     )
-    solved = solve_sketch(degenerate)
-    assert solved.free_dof == 2, "der Solver loest das, und das ist richtig"
+    # Seit RM-541 (Review H-A) löst der Solver das nicht mehr auf eine Linie
+    # der Länge null, sondern nennt den Widerspruch: An einer Linie ohne
+    # Länge gilt jede Richtung leer, und 0.5.3 meldete daraus „gelöst“.
+    with pytest.raises(SketchConflictError) as conflict:
+        solve_sketch(degenerate)
+    assert {conflict.value.first, conflict.value.second} == {0, 1}
 
+    # Die Profilprüfung bleibt für jeden anderen Weg zu einem Umriss ohne
+    # Fläche — hier eine Linie, die so gezeichnet wurde.
+    collapsed = SolvedSketch(
+        elements=(SketchElement(kind="line", points=((5.0, 0.0), (5.0, 0.0))),),
+        free_dof=4,
+        max_residual=0.0,
+    )
     with pytest.raises(GeometryError) as caught:
-        profile_of(solved)
+        profile_of(collapsed)
     assert caught.value.suggestions, "ein Fehler ohne Ausweg ist fehlgeschlagen mit mehr Worten"
 
 
@@ -1421,21 +2066,17 @@ def test_a_degenerate_loop_beside_a_good_one_is_dropped() -> None:
     from app.core.sketch import shapes
     from app.core.sketch.profile import _outline, regions_of
     from app.core.sketch.solver import solve_sketch
-    from app.core.types import SketchConstraint, SketchElement
+    from app.core.types import SketchElement
     from app.core.units import ring_area
 
     rectangle = shapes.rectangle(40.0, 30.0)
-    points = sum(len(element.points) for element in rectangle.elements)
+    # Die Linie liegt gezeichnet auf einem Punkt: *Waagerecht* und *senkrecht*
+    # zugleich nennt der Solver seit RM-541 als Widerspruch (Review H-A).
     mixed = dataclasses.replace(
         rectangle,
         elements=(
             *rectangle.elements,
-            SketchElement(kind="line", points=((60.0, 0.0), (70.0, 0.0))),
-        ),
-        constraints=(
-            *rectangle.constraints,
-            SketchConstraint(kind="horizontal", targets=(points, points + 1)),
-            SketchConstraint(kind="vertical", targets=(points, points + 1)),
+            SketchElement(kind="line", points=((60.0, 0.0), (60.0, 0.0))),
         ),
     )
 
@@ -2620,14 +3261,12 @@ def test_a_drag_beyond_reach_stays_bounded_and_lands_alike_wherever_it_lies(
     Arbeit: Sie ist auf jeder Maschine dieselbe. Und die Zeichnung wird kein
     Widerspruch.
 
-    Eine lange Kette rechnet über ``lsmr`` und steht gestreckt singulär: Ihre
-    zweite Stufe fände erst nach 120 bis 200 Auswertungen eine Lage, und nach
-    :data:`DRAG_SLIDE_TRIES` bleibt sie stehen (RM-541, Review M-1). Am
-    Stand davor rutschte die Kette aus zwanzig Linien in dreizehn, weil die
-    zweite Stufe am lageabhängigen Ende der ersten begann — die aus dreißig
-    schon dort nicht mehr. Zugesagt ist, was an jedem Ort gilt: begrenzte
-    Arbeit, kein Widerspruch, nie weiter vom Zeiger und an jedem Ort dieselbe
-    Lage; die kurze Kette darunter rutscht.
+    Eine lange Kette rechnet über ``lsmr`` und steht gestreckt singulär; im
+    Sprung so weit über ihre Reichweite findet die zweite Stufe in
+    :data:`DRAG_SLIDE_TRIES` keine Lage — wie 0.5.3 (RM-541, Reviews M-1 und
+    M-C). Zugesagt ist, was an jedem Ort gilt: begrenzte Arbeit — erste und
+    zweite Stufe —, kein Widerspruch, nie weiter vom Zeiger und an jedem Ort
+    dieselbe Lage; in Mausschritten folgt sie (unten).
     """
     from app.core.sketch import solver
     from app.core.units import EPS_GEOM
@@ -2647,11 +3286,48 @@ def test_a_drag_beyond_reach_stays_bounded_and_lands_alike_wherever_it_lies(
         points = _flat(solved)
         landed = points[end]
 
-        assert sum(evaluations) <= solver.DRAG_REACH_TRIES + solver.DRAG_SLIDE_TRIES, evaluations
+        bound = solver.DRAG_REACH_TRIES + solver.DRAG_SLIDE_TRIES
+        assert sum(evaluations) <= bound, evaluations
         assert solved.max_residual <= 1e-6
         assert points[0] == pytest.approx(start[0], abs=1e-6), "der feste Anfang bleibt"
         assert math.dist(start[0], landed) <= 10.0 * count + 1e-6, "weiter als die Kette reicht nie"
         assert math.dist(landed, target) <= math.dist(start[end], target) + 1e-9, "nie weiter weg"
+        back = [(x - dx, y - dy) for x, y in points]
+        if not home:
+            home = back
+        gap = max(math.dist(a, b) for a, b in zip(back, home, strict=True))
+        assert gap <= EPS_GEOM, ((dx, dy), gap)
+
+
+@pytest.mark.parametrize("count", [17, 20])
+def test_a_long_chain_follows_the_mouse_beyond_its_reach(count: int) -> None:
+    """Das Ende einer langen gestreckten Kette, mit der Maus seitlich jenseits
+    ihrer Reichweite geführt, läuft auf seinem Kreis zum Zeiger hin — an
+    jedem Ort gleich (RM-541, Review M-C).
+
+    Seit die zweite Stufe am Stand vor dem Schritt beginnt (M-1), fand sie
+    an einer Kette über ``lsmr`` (ab siebzehn Gliedern) in fünfzig
+    Auswertungen keine Lage, und die Kette rührte sich nicht, wo 0.5.3 sie
+    folgen ließ. Mit hundert folgt sie bis auf Hundertstel Grad.
+    """
+    from app.core.units import EPS_GEOM
+
+    home: list[tuple[float, float]] = []
+    for dx, dy in ((0.0, 0.0), (1000.0, 0.0)):
+        drawn = _chain(count)
+        sketch = _placed(drawn, [(x + dx, y + dy) for x, y in edit.flat_points(drawn)])
+        points = _flat(solve_sketch(sketch))
+        anchor = points[0]
+        reach = math.dist(anchor, points[-1])
+        end = len(points) - 1
+        target = anchor
+        for step in range(1, 11):
+            target = (anchor[0] + reach + 2.0, anchor[1] + 0.5 * step)
+            solved = solve_sketch(_placed(sketch, points), dragged={end: target}, start=points)
+            points = _flat(solved)
+        wanted = math.atan2(target[1] - anchor[1], target[0] - anchor[0])
+        reached = math.atan2(points[end][1] - anchor[1], points[end][0] - anchor[0])
+        assert reached >= 0.95 * wanted, (count, math.degrees(reached), math.degrees(wanted))
         back = [(x - dx, y - dy) for x, y in points]
         if not home:
             home = back

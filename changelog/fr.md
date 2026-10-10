@@ -128,6 +128,7 @@ dans `website/version.json`.
 - Une esquisse se résout à l'identique sur chaque ordinateur et partout, même en faisant glisser un point, et une contrainte d'angle ne renverse plus les lignes. Les anciens projets restent inchangés.
 - Une esquisse avec de nombreuses formes séparées se résout vite, même avec des centaines de rectangles ou de cercles cotés.
 - Si *Courbure continue* ne peut pas être respectée pendant que vous dessinez, l'éditeur d'esquisse le signale en quelques secondes au lieu de plusieurs minutes.
+- Si deux contraintes se contredisent, l'éditeur d'esquisse les nomme toutes les deux au lieu de réduire une ligne ou un cercle à un point.
 - Un corps se tire en trois clics : *Dessiner* dans la barre du haut (Ctrl+Maj+E), puis coin, coin opposé, hauteur. Vers l'extérieur il se joint, vers l'intérieur il découpe.
 - Pendant le tirage, les dimensions se saisissent au clavier. Un double-clic sur l'étape ouvre ses dimensions, et sous *Type* elle devient un corps de révolution ou un réseau de trous.
 - Depuis l'éditeur d'esquisse, *Terminé* ramène dans la vue, et le clic suivant pose la hauteur. Échap met le contour de côté, Ctrl+Z le rappelle.

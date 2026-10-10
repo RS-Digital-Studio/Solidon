@@ -127,6 +127,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Um esboço resolve-se da mesma forma em qualquer computador e posição, também ao arrastar, e uma restrição de ângulo já não vira as linhas. Os projetos anteriores calculam-se como foram guardados.
 - Um esboço com muitas formas separadas resolve-se depressa, mesmo com centenas de retângulos ou círculos cotados.
 - Se *Curvatura contínua* não puder ser cumprida ao desenhar, o editor de esboços indica-o em segundos e não em minutos.
+- Se duas restrições se contradizem, o editor de esboços nomeia ambas em vez de reduzir uma linha ou um círculo a um ponto.
 - Um corpo levanta-se com três cliques: *Desenhar* na barra superior (Ctrl+Shift+E), depois canto, canto oposto, altura. Para fora une-se, para dentro recorta.
 - Ao levantar, as medidas podem ser escritas. Um duplo clique no passo abre as suas medidas, e em *Tipo* passa a sólido de revolução ou padrão de furos sem desenhar de novo.
 - No editor de esboços, *Concluído* leva de volta à vista e o clique seguinte põe a altura. Escape põe o contorno de lado, Ctrl+Z trá-lo de volta.
