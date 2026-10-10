@@ -692,14 +692,6 @@ jobs:
         # auch CPython, Bootloader und jede wirklich mitgereiste native Datei.
         run: pyinstaller packaging/solidon3d.spec --noconfirm
 
-      - name: Abwicklungsinformation im Paket prüfen (Intel-Mac)
-        # Der Kundennutzen von RM-768 hängt daran, dass PyInstaller die
-        # korrigierten Bibliotheken einpackt; kein späterer Schritt löst eine
-        # OCC-Ausnahme aus. Liest jede Kopie der OCC-Bibliotheken unter `dist`
-        # und wird rot, sobald eine noch einen falschen Eintrag trägt.
-        if: runner.os == 'macOS' && runner.arch == 'X64'
-        run: python tools/fix_unwind_info.py --check --root dist
-
       - name: Hilfsprozess im Paket starten
         # Im Paket startet der Hilfsprozess des Kerns (RM-212) die Anwendung
         # selbst noch einmal, und ihr Einstieg gibt an `freeze_support` ab. Ob
@@ -730,6 +722,14 @@ jobs:
           else
             python tools/check_frozen_start.py dist ${{ matrix.os == 'macos-26-intel' && '--offscreen' || '' }}
           fi
+
+      - name: Abwicklungsinformation im Paket prüfen (Intel-Mac)
+        # Der Kundennutzen von RM-768 hängt daran, dass PyInstaller die
+        # korrigierten Bibliotheken einpackt; kein späterer Schritt löst eine
+        # OCC-Ausnahme aus. Liest jede Kopie der OCC-Bibliotheken unter `dist`
+        # und wird rot, sobald eine noch einen falschen Eintrag trägt.
+        if: runner.os == 'macOS' && runner.arch == 'X64'
+        run: python tools/fix_unwind_info.py --check --root dist
 
       - name: Laufzeit-Stückliste gegen CycloneDX 1.6 prüfen
         # Das JSON Schema ist die Referenzimplementierung von CycloneDX. Der
