@@ -4662,7 +4662,12 @@ class MainWindow(QMainWindow):
             # **Die Zusage steht vor dem Lauftext, vom Klick an** (§2.8). Als
             # Hinweis lag sie nur in ``_hint``, und den zeigt die Zeile allein
             # neben Erzeugung und Agent: Der Klick sah weiter verschluckt aus.
-            running = status.text if (status.immediate or self._waiting) else ""
+            # Neben einem Lauf, an dem weitergearbeitet wird, folgt der Zusage
+            # wie dort der Hinweis oder die Ansage, nicht der Lauftext.
+            if status_owner in _WORKED_ALONGSIDE:
+                running = self._hint or (self._announcement if self._spoken.isActive() else "")
+            else:
+                running = status.text if (status.immediate or self._waiting) else ""
             self.status_message.setText(
                 "  ·  ".join(
                     part
@@ -28925,8 +28930,10 @@ class MainWindow(QMainWindow):
         self._click_after_evaluation = None
         self._cancel_sculpt_preview()
         # Die Wandprüfung eines letzten Zugs startete sonst nach dem Freigeben
-        # noch einen Arbeiter, den niemand mehr abwartet (RM-751).
+        # noch einen Arbeiter, den niemand mehr abwartet, und die wartende
+        # Übergabe einer Vorschau bestellte noch eine Rechnung (RM-751).
         self._sculpt_check.stop()
+        self._sculpt_display.stop()
         self._cancel_sculpt_check()
         if self._rebuild_dialog is not None:
             self._rebuild_dialog.reject()

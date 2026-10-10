@@ -46530,8 +46530,9 @@ steht in `_PROGRESS_PRIORITY` vor der Auswertung, und `_render_progress_state` z
 nur, wenn die Auswertung die Zeile trug; der Klick sah verschluckt aus. Jetzt steht die Zusage,
 solange ein Klick wartet und die Auswertung läuft, gleich welcher Lauf die Zeile trägt.
 **Nachweis:** `test_sculpt_session.py::test_a_waiting_click_keeps_its_promise_while_the_map_is_computed`
-am Stand davor rot, jetzt grün; die Formsitzungsdatei 96 grün. Changelog: nein (Zustandszeile
-während eines Wartens, kein Kundenergebnis).
+am Stand davor rot, jetzt grün; die Formsitzungsdatei 96 grün. Neben Erzeugung und Agent folgt
+der Zusage wie dort der Hinweis oder die Ansage. Changelog: nein (die Zusage kam mit `4c5a52e12`
+am 08.10.2026 und steckt in keinem Tag).
 
 ## RM-751: Ein freigegebenes Fenster startet keine Wandprüfung mehr (10.10.2026)
 
@@ -46540,7 +46541,8 @@ während eines Wartens, kein Kundenergebnis).
 
 **RM-751 — Nach `MainWindow.release` startete der Zeitgeber eines letzten Zugs noch eine
 Wandprüfung, deren Arbeiter niemand mehr abwartete.** Gefunden im selben Review (M-3; in der
-Sonde endete der Prozess so viermal mit Exit 127). `release` hält `_sculpt_check` an und gibt die
-laufende Prüfung auf, `_check_sculpted_walls` fängt nach dem Schließen nichts mehr an.
+Sonde endete der Prozess so viermal mit Exit 127). `release` hält `_sculpt_check` und die wartende
+Übergabe der Vorschau (`_sculpt_display`) an und gibt die laufende Prüfung auf,
+`_check_sculpted_walls` fängt nach dem Schließen nichts mehr an.
 **Nachweis:** `test_sculpt_session.py::test_a_released_window_starts_no_wall_check` am Stand
 davor rot, jetzt grün. Changelog: nein.

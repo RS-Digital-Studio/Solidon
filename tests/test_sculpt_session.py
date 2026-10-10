@@ -276,6 +276,27 @@ def test_a_waiting_click_keeps_its_promise_while_the_map_is_computed(
         assert window.wait_for_sculpt_check()
 
 
+def test_beside_the_agent_the_promise_keeps_the_hint(window: MainWindow) -> None:
+    """Neben einem Lauf, an dem weitergearbeitet wird, folgt der Zusage der
+    Hinweis wie sonst dort, nicht der Lauftext des Agenten (wartezeit.md)."""
+    from app.i18n import tr
+
+    window._set_progress_state("evaluation", active=True)
+    window._set_progress_state("agent", active=True, text="Der Agent arbeitet …")
+    window._hint = "Ein Hinweis"
+    window._click_after_evaluation = object()  # type: ignore[assignment]
+    try:
+        window._render_progress_state()
+        assert window.status_message.text() == "  ·  ".join(
+            (tr("Wird übernommen, sobald die Berechnung fertig ist."), "Ein Hinweis")
+        )
+    finally:
+        window._click_after_evaluation = None
+        window._hint = ""
+        window._set_progress_state("agent", active=False)
+        window._set_progress_state("evaluation", active=False)
+
+
 def test_a_released_window_starts_no_wall_check(window: MainWindow) -> None:
     """RM-751: Nach dem Freigeben startete die Wandprüfung des letzten Zugs
     noch einen Arbeiter, den niemand mehr abwartet."""
@@ -287,6 +308,7 @@ def test_a_released_window_starts_no_wall_check(window: MainWindow) -> None:
     window.release()
 
     assert not window._sculpt_check.isActive()
+    assert not window._sculpt_display.isActive()
     window._check_sculpted_walls()
     assert window._sculpt_wall_worker is None
 
