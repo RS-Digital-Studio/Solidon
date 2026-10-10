@@ -349,6 +349,7 @@ def slice_body(
             first_layer_area=0.0,
             source="internal",
             bridge_from=span,
+            overhang_angle=angle,
         )
 
     layers: list[LayerInfo] = []
@@ -416,6 +417,7 @@ def slice_body(
             ),
             source="internal",
             bridge_from=span,
+            overhang_angle=angle,
         )
 
     for z, shape, metrics, contours in zip(
@@ -458,6 +460,7 @@ def slice_body(
         ),
         source="internal",
         bridge_from=span,
+        overhang_angle=angle,
     )
 
 
@@ -2042,8 +2045,13 @@ def _shafts_pass(
     Saum der Säule (:func:`_seam_reach`) mindestens eine Bahn breit berühren.
     Je Schicht darüber bleibt jeder Kreis, der frei ist, wo er ist; wen das
     Material der Schicht trifft, der weicht so weit aus, wie die Wand ihn
-    schiebt, höchstens um :data:`SHAFT_DRIFT` Schichthöhen. Offen ist der
+    schiebt, höchstens um ``slope`` Schichthöhen. Offen ist der
     Schacht, wenn über der obersten Schicht ein Kreis übrig ist.
+
+    ``slope`` ist der Tangens des Stützwinkels, mit dem geschnitten wurde
+    (``SliceResult.overhang_angle``), ohne ihn :data:`SHAFT_DRIFT`: Eine Wand,
+    die der Drucker ohne Stütze druckt, trägt sich auch im Schacht, und
+    dieselbe Grenze schneidet die Säulen, deren Weg hier gefragt wird.
 
     **Weit wie ein Kanal quer zur Achse:** Ein Loch Ø 34 mm in einem Deckel von
     20 mm, um 20° geneigt, sieht senkrecht nur 28,9 mm; nach der senkrechten
@@ -2065,13 +2073,21 @@ def _shafts_pass(
     Sonst schöbe er sich unter einem Dach schräg hervor, und eine Säule mitten
     unter dem Sims des Bechers wäre erreichbar (Test
     ``test_open_sky_is_asked_at_each_slab``). Eine Wand, die flacher
-    überhängt als :data:`SHAFT_DRIFT`, ist selbst ein Dach. Nur an seiner
-    Unterkante weicht ein Kreis einmal um einen Schritt aus: Eine weite Öffnung
-    im Deckel des Bechers 0,5 mm neben dem Sims macht ihn bei 0,5 mm Schichthöhe
-    erreichbar (senkrecht gefragt erst 0,3 mm), 1 mm daneben nicht. Ebenso
-    folgt ein Kreis der Wand, die ihn schiebt, nicht der Achse: Eine
-    waagerechte Lippe mitten im schrägen Schacht, die ihn auf 31 mm verengt,
-    schließt ihn, denn die Kreise liegen an seiner hinteren Wand.
+    überhängt als ``slope``, ist selbst ein Dach. Nur an seiner
+    Unterkante weicht ein Kreis einmal um einen Schritt aus, Schichthöhe mal
+    ``slope``: Eine weite Öffnung im Deckel des Bechers, dessen
+    Säule unter zwei Dachkanten steht (Sims und Deckel), macht ihn bei 0,5 mm
+    Schichthöhe bis 0,9 mm neben dem Sims erreichbar, bei 0,2 mm bis 0,5 mm
+    (senkrecht gefragt 0,3 mm).
+
+    **Der Kreis folgt der hinteren Wand, nicht der Achse.** Weil nur getroffene
+    Kreise ausweichen, liegen sie in einem schrägen Schacht bald an der Wand,
+    die schiebt. Eine Fortsetzung, deren freie Mitten mehr als einen Schritt
+    von dieser Wand liegen, schließt den Schacht, obwohl ein Kreis entlang der
+    Achse hindurchpasst: ein scharfer Knick ohne Rundung (20° Ø 34 → 32 mm,
+    30° und 40° schon Ø 34 → 34 mm), eine waagerechte Lippe mitten im Schacht
+    (Ø 34 mm um 20°: offen ab 33,5 mm bei 0,5 mm Schichthöhe, ab 33,9 mm bei
+    0,2 mm), eine enge Wendel. Vor RM-629 war jeder dieser Fälle ebenso zu.
 
     **Alle Scheiben einer Säule in einem Zug:** Jede Schicht wird einmal
     aufgeweitet, und ein Weg, der einen schon laufenden trifft, geht in ihm auf
@@ -3745,11 +3761,12 @@ CHANNEL_POLYGON_GAP: Final = (
 )
 
 #: Wie weit der Kreis eines Schachts je Schicht zur Seite ausweichen darf, in
-#: Schichthöhen (:func:`_shafts_pass`): so weit, wie eine Wand ohne Stütze
-#: überhängt. Ein schräger Schacht bis zu dieser Neigung hat Wände, die sich
-#: selbst tragen; eine flachere Wand ist ein Dach, und unter einem Dach ist eine
-#: Säule nicht erreichbar. Die Startregel und nicht die Grenze des Druckers,
-#: denn der Sperrraum hängt nur an den Schichten (:func:`channel_space`).
+#: Schichthöhen, wenn der Schnitt seinen Stützwinkel nicht nennt
+#: (:func:`_shafts_pass`): so weit, wie eine Wand ohne Stütze überhängt. Ein
+#: schräger Schacht bis zu dieser Neigung hat Wände, die sich selbst tragen;
+#: eine flachere Wand ist ein Dach, und unter einem Dach ist eine Säule nicht
+#: erreichbar. Sonst gilt der Winkel des Schnitts (``SliceResult.overhang_angle``),
+#: der wirksame des Druckers (Review RM-629, Fund 2).
 SHAFT_DRIFT: Final = OVERHANG_ANGLE_FACTOR
 
 #: Die Bogenauflösung dieses Ausweichens, in Segmenten je Viertelkreis. Der
@@ -4885,6 +4902,9 @@ def _channel_space(
         return []
     layers = result.layers
     heights = [layer.z for layer in layers]
+    # So steil darf ein Schacht ausweichen: der Stützwinkel, mit dem geschnitten
+    # wurde (:func:`_shafts_pass`).
+    slope = None if result.overhang_angle is None else math.tan(math.radians(result.overhang_angle))
     # Der Schritt einer gewöhnlichen Schicht; die erste ist dicker.
     step = heights[-1] - heights[-2] if len(heights) > 1 else CHANNEL_SLAB
     stride = max(1, round(CHANNEL_SLAB / max(step, EPS_GEOM)))
@@ -4956,7 +4976,9 @@ def _channel_space(
                     chunk[-1] + 1: unary_union([shade_at(index) for index in chunk])
                     for chunk in crossed_by(number)
                 }
-                passages[number] = _shafts_pass(column, materials, shade_at, heights, line_width)
+                passages[number] = _shafts_pass(
+                    column, materials, shade_at, heights, line_width, slope
+                )
             return passages[number][start]
 
     def slab_of(chunk: list[int]) -> tuple[float, float, ShapelyPolygon] | None:

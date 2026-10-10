@@ -2772,6 +2772,11 @@ class SliceResult:
     mit denen geschnitten wurde. Auch ein Schnitt ohne Brückenweiten
     (``detail="support"``) trägt sie, denn die Randfrage braucht sie dort, wo die
     Übergabe ihre Sperre baut. ``None`` bei einem Ergebnis aus Kennzahlen."""
+    overhang_angle: float | None = None
+    """Mit welchem Stützwinkel geschnitten wurde, in Grad von der Senkrechten —
+    der wirksame des Druckers, nicht die Startregel. So steil darf ein Schacht
+    der Kanalsperre ausweichen (RM-629). ``None`` bei einem Ergebnis aus
+    Kennzahlen."""
 
 
 # --- Skizzen (§30.1) -----------------------------------------------------------

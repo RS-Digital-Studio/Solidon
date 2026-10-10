@@ -1198,7 +1198,9 @@ def shaft_lid(
     z = 60 bis zum letzten Punkt von ``path`` hoch, durchbohrt von einem runden
     Schacht entlang ``path`` (Punkte x, z in der Ebene y = 0), je Strecke mit
     ihrem Durchmesser, an den Knicken mit einer Kugel gerundet. Unten und oben
-    reicht er über den Deckel hinaus. ``keep`` bleibt im Schacht stehen."""
+    reicht er um seinen Durchmesser über den Deckel hinaus — bis 63° weit genug,
+    dass sein Ende den Deckel nicht anschneidet; mit 10 mm ließ es ab 40° oben
+    vorn eine Lippe stehen. ``keep`` bleibt im Schacht stehen."""
     top = path[-1][1]
     lid = trimesh.creation.cylinder(radius=radius, height=top - 60.0, sections=96)
     lid.apply_translation((0.0, 0.0, (60.0 + top) / 2.0))
@@ -1208,8 +1210,8 @@ def shaft_lid(
         zip(points[:-1], points[1:], diameters, strict=True)
     ):
         axis = (end - start) / np.linalg.norm(end - start)
-        low = start - 10.0 * axis if number == 0 else start
-        high = end + 10.0 * axis if number == len(diameters) - 1 else end
+        low = start - diameter * axis if number == 0 else start
+        high = end + diameter * axis if number == len(diameters) - 1 else end
         cuts.append(
             trimesh.creation.cylinder(radius=diameter / 2.0, sections=128, segment=[low, high])
         )
@@ -1224,14 +1226,41 @@ def shaft_lid(
 
 
 def tilted_shaft(
-    tilt: float, diameter: float = 34.0, keep: trimesh.Trimesh | None = None
+    tilt: float,
+    diameter: float = 34.0,
+    keep: trimesh.Trimesh | None = None,
+    height: float = 20.0,
+    radius: float = 40.0,
 ) -> trimesh.Trimesh:
-    """Ein Deckel von 20 mm mit einem Loch, um ``tilt`` Grad geneigt — positiv
-    nach oben zum Sims hin. Unten reicht es 2 mm über die Kante des Simses;
-    senkrecht schaut man nur ``d / cos θ - 20 · tan θ`` weit hindurch."""
+    """Ein Deckel von ``height`` mm und ``radius`` mm mit einem Loch, um ``tilt``
+    Grad geneigt — positiv nach oben zum Sims hin. Unten reicht es 2 mm über die
+    Kante des Simses; senkrecht schaut man nur ``d / cos θ - H · tan θ`` weit
+    hindurch."""
     theta = math.radians(tilt)
     start = 2.0 - diameter / 2.0 / math.cos(theta)
-    return shaft_lid([(start, 60.0), (start + 20.0 * math.tan(theta), 80.0)], [diameter], keep=keep)
+    path = [(start, 60.0), (start + height * math.tan(theta), 60.0 + height)]
+    return shaft_lid(path, [diameter], keep=keep, radius=radius)
+
+
+@pytest.mark.parametrize(
+    ("tilt", "angle", "open_"),
+    [(44.0, None, True), (50.0, None, False), (44.0, 40.0, False), (50.0, 55.0, True)],
+)
+def test_a_shaft_steeper_than_the_support_angle_keeps_the_cup_closed(
+    tilt: float, angle: float | None, open_: bool
+) -> None:
+    """Ein Kreis weicht je Schicht höchstens so steil aus, wie der Drucker ohne
+    Stütze überhängt — mit dem Stützwinkel, mit dem geschnitten wurde, nicht
+    mit der Startregel (Review RM-629, Funde 2 und 4). Ein Deckel von 60 mm
+    mit einem Loch Ø 34 mm: senkrecht schaut man nirgends hindurch. Bei 45°
+    ist es um 44° offen und um 50° zu; ein Drucker, der nur 40° ohne Stütze
+    schafft, sperrt schon 44°, einer mit 55° öffnet 50°. Offen liegen 4 bis
+    5 % des Simses im Sperrraum (mit 55° etwas mehr Saum), zu über 60 %."""
+    body = cup_with_a_ledge(tilted_shaft(tilt, height=60.0, radius=75.0))
+    result = slice_body(body, 0.5, overhang_angle=angle)
+
+    share = ledge_share_of(result)
+    assert share < 0.1 if open_ else share > 0.5
 
 
 @pytest.mark.parametrize("tilt", [20.0, 30.0, 40.0, -30.0])
