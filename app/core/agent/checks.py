@@ -194,6 +194,34 @@ def _compare(
     return findings
 
 
+def _way_out(finding: Finding) -> str:
+    """Der Weg aus einer Teile-Absage, so konkret wie der Knopf im Fenster (Review I).
+
+    Das Fenster setzt *In Einzelteile aufteilen* mit Stückzahl, Splittern und
+    beisammen gehaltenem Merkmal vor den Schritt (``prepare_ops.split_offer``).
+    Ohne diese Zahlen musste das Modell sie raten — und eine Zerlegung ohne
+    ``carry_feature`` legt überzählige Teile nach Nähe zusammen.
+    """
+    values = finding.values
+    if not {"count", "part_index", "feature"} <= set(values) or not any(
+        action.id == "split_and_retry" for action in finding.suggestions
+    ):
+        return ""
+    try:
+        number = int(str(values["part_index"])) + 1
+    except ValueError:
+        return ""
+    return " " + str(
+        _(
+            "Ausweg: split_bodies mit count {count}, keep_tiny und carry_feature {feature}. "
+            "Danach denselben Schritt am Teil Nummer {number} der Zerlegung.",
+            count=str(values["count"]),
+            feature=str(values["feature"]),
+            number=number,
+        )
+    )
+
+
 def as_lines(findings: list[Finding], *, include_severity: bool = False) -> str:
     """Die Befunde als das Werkzeugergebnis, das das Modell liest.
 
@@ -227,7 +255,7 @@ def as_lines(findings: list[Finding], *, include_severity: bool = False) -> str:
     for finding in findings:
         prefix = f"{finding.severity}: " if include_severity else ""
         if finding.code not in ("perceive.orphaned", "perceive.mended"):
-            lines.append(f"{prefix}{finding.code}: {finding.message}")
+            lines.append(f"{prefix}{finding.code}: {finding.message}{_way_out(finding)}")
             continue
 
         identity = key(finding)

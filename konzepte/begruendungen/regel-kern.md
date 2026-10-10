@@ -25,6 +25,27 @@ stammt:
 > Startschichten, und dieselbe Naht kostete auf vier Kernen eine andere
 > letzte Stelle als auf acht (RM-266, `analysis._above_material_shared`).
 
+Warum `Point.buffer` und `shapely.affinity.rotate` auf der Liste stehen: Ein
+Kreis aus `Point.buffer` und eine Drehung aus `shapely.affinity.rotate` nehmen
+die Winkelfunktionen der Plattform, und der Rauschtest sieht beides nicht.
+Warum keine Potenz `**`: Das `pow` der Plattform rundet nicht immer korrekt,
+und auch das sieht das Rauschen nicht.
+
+Warum der Skizzenlöser ausgenommen ist (RM-541): `least_squares` rechnet in
+scipy über SVD, `lstsq` und `lsmr`, und ein eigener Löser ohne BLAS wäre ein
+zweites Projekt. Gleich heißt dort deshalb nicht bitgleich, sondern dieselbe
+Lösbarkeit und dieselbe Lage bis `_TOL`, an jedem Ort und unter
+Rundungsrauschen. Das Paar, das eine Meldung nennt, ist meist, aber nicht
+immer dasselbe: In der Breitensonde der Nachprüfung wechselte es an 4 von 195
+unlösbaren Zufallsskizzen mit Ort oder Rauschen (Begründung der Skizzenkarte,
+„Welche zwei eine Meldung nennt“). Bauplan §11.2 verweist für die Plattform
+auf diese Regel; die Ausnahme gilt deshalb auch dort. Die Ortswächter in
+`tests/test_sketch.py` ändern über Versätze die Rundung jeder Rechnung; die
+Nachprüfung des Pakets verrauschte zusätzlich scipy selbst. Wo die Wegwahl
+eine Rangfrage über LAPACK ist (`dogbox` nur bei vollem Rang), liegt die
+Schranke von `matrix_rank` weit über dem Rauschen; was sie allein nicht trug,
+fängt die Wegfolge in `_solve_part` (Review H-A).
+
 ## Eine Merkmalsnummer kommt aus dem Körper, nie aus der Reihenfolge
 
 Warum keine eigene Sortierung nach der gerundeten Mitte:
@@ -76,6 +97,10 @@ Tasche aus `_slotted_pocket`).
 > Für eine ebene Hülle nimmt der Kern deshalb GEOS:
 > `MultiPoint(punkte).convex_hull`. Gemessen an 73 Flecken des Korpus: gleiche
 > Umrisse, gleiche Radien, gleiche Rundungsfehler, 1439,6 ms gegen 3,8 ms.
+>
+> Worauf man dabei achtet: GEOS gibt bei entartetem Eingang Strecke oder Punkt
+> statt `QhullError`, sein Ring läuft andersherum, und eine Ausgleichsrechnung
+> danach summiert anders.
 
 ### `np.unique(…, axis=0)`
 
@@ -226,6 +251,18 @@ Ungeschnittenes in der Darstellung ihres Eingangs zurücklegen muss:
 > schon gab.
 
 ## Auswertung
+
+**Felder eines Netzes nie an Ort und Stelle schreiben** (RM-698). `transform.apply`
+kopierte mit `Trimesh.copy()` auch die Dreiecksliste, obwohl eine Bewegung nur
+die Ecken neu setzt: 24 Byte je Dreieck und Bewegung, am Spiderman 21 MB je
+Verschieben. Seitdem teilt ein bewegtes Netz seine Dreiecke mit dem Quellnetz,
+und ein schlanker Cacheeintrag (`MeshData.lean`) teilt Ecken und Dreiecke mit
+dem Netz, das die Szene zeigt. Wer an diesen Feldern etwas ändert, ändert alle
+Netze, die sie teilen; die Reparatur kopiert deshalb vorher
+(`repair.wind_consistently`, `turn_shells_outward`). Statisch und mit
+schreibgeschützter Liste über 26 Testdateien geprüft (Review 1 zu RM-698).
+Als dauernder Wächter taugt der Schreibschutz nicht: `fast_simplification`
+(*Dreiecke verringern*) nimmt nur beschreibbare Felder an, auch ohne hineinzuschreiben.
 
 **Ein Befund über mehrere Körper nennt sie alle.** Fund N1 bei der Behebung
 des Reviews zu `bbd41ff2d`: Zwei sich überschneidende Quader, *Überschneidungen

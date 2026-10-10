@@ -42,6 +42,7 @@ from app.core.geom.mesh import (
     python_values,
     refined_units,
     refined_units_key,
+    stable_normals,
     triple_products,
     unique_edges,
 )
@@ -11407,7 +11408,10 @@ def _tangential_cylinders(
                 break
             front = around[accept(around)]
             taken.append(front)
-        return [int(triangle) for triangle in np.sort(np.concatenate(taken))]
+        # ``tolist`` gibt dieselben Python-Zahlen wie ``int`` je Eintrag, ohne
+        # die Schleife über ein ganzes Band (RM-568).
+        found: list[int] = np.sort(np.concatenate(taken)).tolist()
+        return found
 
     def upright_to(axis: np.ndarray) -> Callable[[np.ndarray], np.ndarray]:
         """Ob die Normale bis :data:`FLAT_ANGLE` quer zur Achse steht."""
@@ -11543,9 +11547,10 @@ def _band_seed(
     so weit von der Mitte der Keimnaht liegt wie deren eigene Ecken.
     """
     chosen = np.asarray(band, dtype=np.intp)
-    weighted = normals[chosen] * areas[chosen][:, None]
+    own_normals = normals[chosen]
+    weighted = own_normals * areas[chosen][:, None]
     moment = [
-        [float((weighted[:, row] * normals[chosen][:, column]).sum()) for column in range(3)]
+        [float((weighted[:, row] * own_normals[:, column]).sum()) for column in range(3)]
         for row in range(3)
     ]
     _values, vectors = units.symmetric_eigen3(moment)
@@ -11559,7 +11564,8 @@ def _band_seed(
     reach = _SEED_REACH * math.sqrt(float((offset * offset).sum(axis=1).max()))
     gap = flat - middle
     distance = np.sqrt((gap * gap).sum(axis=2)).max(axis=1)
-    return [int(triangle) for triangle in chosen[distance <= reach]], axis
+    seed: list[int] = chosen[distance <= reach].tolist()
+    return seed, axis
 
 
 def _seed_circle(
@@ -11624,10 +11630,14 @@ def _sharpened_axis(
     """
     current = np.asarray(axis, dtype=float)
     current = current / math.sqrt(float((current * current).sum()))
-    offsets = points - points.mean(axis=0)
+    # Schwerpunkt und Lage zu ihm hängen nicht an der Achse: einmal gerechnet,
+    # dieselben Zahlen für jede der bis zu drei Einpassungen je Schritt (RM-568).
+    origin = points.mean(axis=0)
+    offsets = points - origin
+    centred = (origin, offsets)
     reach = math.sqrt(float((offsets * offsets).sum(axis=1).max()))
     for _step in range(_SHARPEN_STEPS):
-        base = _circle_across(points, current)
+        base = _circle_across(points, current, centred)
         if base is None:
             return None
         first, second = _across_pair(current)
@@ -11635,7 +11645,7 @@ def _sharpened_axis(
         for direction in (first, second):
             tilted = current + _SHARPEN_TILT * direction
             tilted = tilted / math.sqrt(float((tilted * tilted).sum()))
-            moved = _circle_across(points, tilted)
+            moved = _circle_across(points, tilted, centred)
             if moved is None:
                 return None
             columns.append((moved[2] - base[2]) / _SHARPEN_TILT)
@@ -11654,7 +11664,7 @@ def _sharpened_axis(
         current = current / math.sqrt(float((current * current).sum()))
         if max(abs(u), abs(v)) * reach <= EPS_GEOM:
             break
-    final = _circle_across(points, current)
+    final = _circle_across(points, current, centred)
     if final is None:
         return None
     centre, radius, distances = final
@@ -11675,16 +11685,19 @@ def _across_pair(axis: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
 
 
 def _circle_across(
-    points: np.ndarray, axis: np.ndarray
+    points: np.ndarray,
+    axis: np.ndarray,
+    centred: tuple[np.ndarray, np.ndarray] | None = None,
 ) -> tuple[np.ndarray, float, np.ndarray] | None:
     """Der Kreis der quer zur Achse projizierten Punkte: Mitte, Radius, Abstände.
 
     Eingepasst von :func:`_kasa_circle`. Die Mitte liegt in der Ebene durch
-    den Schwerpunkt der Punkte; ``None`` ohne bestimmten Kreis.
+    den Schwerpunkt der Punkte; ``None`` ohne bestimmten Kreis. ``centred``
+    sind Schwerpunkt und Punkte relativ zu ihm, wenn der Aufrufer sie schon
+    hat (:func:`_sharpened_axis`).
     """
     first, second = _across_pair(axis)
-    origin = points.mean(axis=0)
-    relative = points - origin
+    origin, relative = centred if centred is not None else _centred(points)
     x = (relative * first).sum(axis=1)
     y = (relative * second).sum(axis=1)
     circle = _kasa_circle(x, y)
@@ -11696,6 +11709,12 @@ def _circle_across(
     return centre, radius, np.abs(np.sqrt(dx * dx + dy * dy) - radius)
 
 
+def _centred(points: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """Schwerpunkt der Punkte und die Punkte relativ zu ihm."""
+    origin = points.mean(axis=0)
+    return origin, points - origin
+
+
 def _kasa_circle(x: np.ndarray, y: np.ndarray) -> tuple[float, float, float] | None:
     """Der Kreis durch ebene Punkte, linear eingepasst: Mitte x, Mitte y, Radius.
 
@@ -11703,8 +11722,9 @@ def _kasa_circle(x: np.ndarray, y: np.ndarray) -> tuple[float, float, float] | N
     gelöst mit der Cramerschen Regel — nur Grundrechenarten, kein LAPACK.
     ``None`` ohne bestimmten Kreis.
     """
-    z = -(x * x + y * y)
-    sxx, sxy, syy = float((x * x).sum()), float((x * y).sum()), float((y * y).sum())
+    xx, yy = x * x, y * y
+    z = -(xx + yy)
+    sxx, sxy, syy = float(xx.sum()), float((x * y).sum()), float(yy.sum())
     sx, sy, size = float(x.sum()), float(y.sum()), float(len(x))
     bx, by, bz = float((x * z).sum()), float((y * z).sum()), float(z.sum())
     whole = _determinant3(((sxx, sxy, sx), (sxy, syy, sy), (sx, sy, size)))
@@ -13136,9 +13156,14 @@ def _face_candidates(body: trimesh.Trimesh, entries: FaceEntries) -> list[Featur
     entstehen die Flächen in zwei Schritten: erst alle, billig, dann die, die
     bleiben, fertig (:func:`_finished_faces`); :func:`detect` ruft beide.
     """
+    # Elementweise normiert (``stable_normals``), nicht über ``trimesh``s
+    # Kehrwert: Dessen erstes Dreieck einer waagrechten Fläche gab je nach
+    # Dreieck ``±0.9999999999999999`` oder ``-0.0``. ``+ 0.0`` tilgt die
+    # negative Null.
+    stable = stable_normals(body)[0]
     features: list[Feature] = []
     for number, (facet, area, centre) in enumerate(entries, start=1):
-        normal = body.face_normals[facet[0]]
+        normal = stable[facet[0]] + 0.0
         features.append(
             Feature(
                 id=f"face_{number}",
@@ -13599,12 +13624,13 @@ def detect_curved_faces(
     # Stabilität wie bei den ebenen Flächen (:func:`_largest_first`).
     entries = _largest_first(body, entries)
 
+    unit_normals = stable_normals(body)[0]
     features: list[Feature] = []
     for number, (patch, area) in enumerate(entries, start=1):
         if check_cancelled is not None:
             check_cancelled()
         weights = areas[patch]
-        normals = np.asarray(body.face_normals, dtype=float)[patch]
+        normals = unit_normals[patch]
         mean = (normals * weights[:, None]).sum(axis=0) / max(float(weights.sum()), EPS_GEOM)
         # Koplanare Diagonalen im Mantel haben keine Krümmungsrichtung.
         # Mitgezählt stimmten sie an einer hohlen Rundwand genau halb gegen

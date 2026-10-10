@@ -3209,3 +3209,32 @@ def test_a_local_turn_reaches_its_twelve_steps_before_its_token_budget(
 
     assert proposal.steps == 12, proposal.stopped
     assert proposal.stopped == "steps"
+
+
+def test_the_model_reads_the_way_out_of_a_part_refusal() -> None:
+    """Der Agent bekommt Stückzahl, Merkmal und Teil der Teile-Absage (Review I).
+
+    Das Fenster setzt die Zerlegung mit diesen Werten vor den Schritt; das Modell
+    las bisher nur Code und Satz und musste Stückzahl und Teil raten. Ohne den
+    Knopf (eine andere Absage mit Stückzahl) bleibt die Zeile, wie sie war.
+    """
+    from app.core.errors import CANCEL, SPLIT_AND_RETRY
+
+    refusal = Finding(
+        code="op.move_feature.ValidationError",
+        severity="error",
+        message="In dieser Bohrung liegt ein getrenntes Teil.",
+        values={"feature": "hole_2", "count": "22", "part_index": "15"},
+        suggestions=(SPLIT_AND_RETRY, CANCEL),
+    )
+    line = checks.as_lines([refusal])
+    assert "count 22" in line and "carry_feature hole_2" in line and "Nummer 16" in line
+
+    plain = Finding(
+        code="op.move_feature.ValidationError",
+        severity="error",
+        message="Anders.",
+        values={"feature": "hole_2", "count": "22", "part_index": "15"},
+        suggestions=(CANCEL,),
+    )
+    assert checks.as_lines([plain]) == "op.move_feature.ValidationError: Anders."

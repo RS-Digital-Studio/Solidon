@@ -1039,7 +1039,7 @@ def test_each_start_page_distinguishes_the_plan_from_an_offer(page: str, marker:
 
     **Seit dem 23.09.2026 stehen die Preise auf der Seite** (Entscheidung
     Robert: zwei Lizenzarten, Einstiegspreis bis Ende Januar). Angekündigt ist
-    damit, was ab dem 1. November gilt — verkauft wird vorher nichts. Die
+    damit, was ab dem Verkaufsstart gilt — verkauft wird vorher nichts. Die
     Seite sagt deshalb weiter „geplant", und sie zeichnet für Suchmaschinen
     kein ``Offer`` und keine Vorbestellung aus: Ein Rich Result mit Preis und
     „Jetzt kaufen" wäre eine Kaufmöglichkeit, die es noch nicht gibt.
@@ -2060,7 +2060,8 @@ def test_the_pages_do_not_promise_a_date_that_is_about_to_pass(
 
     **Nicht zu verwechseln mit dem Wecker in ``test_activation.py``**
     (``test_the_shipped_deadline_has_not_passed``). Der fragt, ob die
-    ausgelieferte Demo noch läuft, und wird am **31.10.** rot — für die
+    ausgelieferte Demo noch läuft, und wird am Tag nach ``store.DEMO_UNTIL``
+    rot — für die
     Website ist das der Tag zu spät. Dieser hier fragt, ob noch Zeit bleibt,
     die Sätze zu ändern, und schlägt fünf Tage vorher an. Zwei Fragen, zwei
     Tests, dieselbe Quelle.

@@ -48,7 +48,9 @@ Ohne Dateiliste zählt jede Änderung gegen HEAD, auch fremde.
 Meldet es „das ist die Suite" (`i18n`, `types.py`, `errors.py`, `log.py`),
 gleich das Tor fahren.
 
-**Vor dem Commit** das Entwicklungstor, zusammengefasst in `/pruefen`:
+**Vor jedem Stand, der nach main geht** (Merge oder Commit direkt auf main),
+das Entwicklungstor (auf Paket- und Fixzweigen
+genügen die betroffenen Tests, ruff, format, mypy), zusammengefasst in `/pruefen`:
 
 ```
 bash .claude/scripts/suite-getrennt.sh
@@ -164,8 +166,8 @@ Feldliste steht deshalb als Tabelle, nicht als Codeblock.
 Kleine Schritte, Test zuerst bei Geometrie, kein Revert, nie stillschweigend
 raten — das steht in `AGENTS.md`. Dazu:
 
-- **Nach jedem abgeschlossenen Punkt committen und pushen**, sobald Tor und
-  Review grün sind — in logischen Einheiten, nur die eigenen Pfade, mit
+- **Nach jedem abgeschlossenen Punkt committen und pushen**, sobald die
+  Prüfung des Stands und vor main das Review grün sind — in logischen Einheiten, nur die eigenen Pfade, mit
   `Co-Authored-By`, ohne Rückfrage, per Merge (Entscheidung Robert).
 - **Vor jedem Push nach main ein Review, bei Kundenwirkung samt Changelog**
   (`solidon3d-review`, Entscheidung Robert), auch für Unterlagen und

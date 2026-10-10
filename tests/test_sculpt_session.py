@@ -228,10 +228,96 @@ def test_a_finish_waiting_for_the_evaluation_does_not_take_a_later_stroke(
 
     assert window.sculpting(), "die Sitzung bleibt offen"
     assert len(window.session.project.document.ops) == before, "nichts geschrieben"
-    assert window.status_message.text() == tr(
+    said = tr(
         "Nicht übernommen, weil sich die Werte geändert haben. "
         "Klicken Sie erneut, um den neuen Stand zu übernehmen."
     )
+    assert window._announcement == said
+    # Die Wandprüfung des Zugs legt ihren Fortschritt über die Statuszeile und
+    # gibt die Ansage danach wieder frei (``announce``); auf macOS lief sie
+    # zur Zeit der Abfrage noch. Erst wenn sie fertig ist, zählt die Zeile.
+    assert window.wait_for_sculpt_check()
+    QApplication.processEvents()
+    assert window.status_message.text() == said
+
+
+def test_a_waiting_click_keeps_its_promise_while_the_map_is_computed(
+    window: MainWindow, exact_body: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """RM-750: Die Analysekarte steht vor der Auswertung in der Statuszeile.
+    Lief sie, während *Fertig* auf die Auswertung wartete, verschwand die
+    Zusage, und der Klick sah verschluckt aus."""
+    import threading
+
+    from app.i18n import tr
+
+    window.start_sculpt(exact_body)
+    window.sculpt_bar.radius.set_value_mm(6.0)
+    window._on_sculpt((10.0, 10.0, 20.0))
+    assert window.wait_for_sculpt_preview(60_000)
+    assert window.session.wait_for_idle(30_000)
+    gate = threading.Event()
+    evaluate = Session.run_evaluation
+
+    def held(self: Session, *args: object, **kwargs: object) -> object:
+        gate.wait(15)
+        return evaluate(self, *args, **kwargs)
+
+    monkeypatch.setattr(Session, "run_evaluation", held)
+    monkeypatch.setattr(window.viewport, "is_difference_applied", lambda _difference: True)
+    monkeypatch.setattr(window.viewport, "is_scene_applied", lambda _result: True)
+    try:
+        window.session.evaluate_async()
+        assert window.session.busy, "die Lage: die Sitzung rechnet"
+        window.sculpt_bar.done.click()
+        assert window._click_after_evaluation is not None, "der Klick wartet"
+        window._check_sculpted_walls()
+        assert window._progress_states["map"].active, "die Lage: die Karte rechnet"
+
+        assert window.status_message.text().startswith(
+            tr("Wird übernommen, sobald die Berechnung fertig ist.")
+        )
+    finally:
+        gate.set()
+        assert window.session.wait_for_idle(30_000)
+        assert window.wait_for_sculpt_check()
+
+
+def test_beside_the_agent_the_promise_keeps_the_hint(window: MainWindow) -> None:
+    """Neben einem Lauf, an dem weitergearbeitet wird, folgt der Zusage der
+    Hinweis wie sonst dort, nicht der Lauftext des Agenten (wartezeit.md)."""
+    from app.i18n import tr
+
+    window._set_progress_state("evaluation", active=True)
+    window._set_progress_state("agent", active=True, text="Der Agent arbeitet …")
+    window._hint = "Ein Hinweis"
+    window._click_after_evaluation = object()  # type: ignore[assignment]
+    try:
+        window._render_progress_state()
+        assert window.status_message.text() == "  ·  ".join(
+            (tr("Wird übernommen, sobald die Berechnung fertig ist."), "Ein Hinweis")
+        )
+    finally:
+        window._click_after_evaluation = None
+        window._hint = ""
+        window._set_progress_state("agent", active=False)
+        window._set_progress_state("evaluation", active=False)
+
+
+def test_a_released_window_starts_no_wall_check(window: MainWindow) -> None:
+    """RM-751: Nach dem Freigeben startete die Wandprüfung des letzten Zugs
+    noch einen Arbeiter, den niemand mehr abwartet."""
+    object_id = with_a_body(window)
+    window.start_sculpt(object_id)
+    window._on_sculpt((0.0, 0.0, 82.0))
+    assert window._sculpt_check.isActive(), "die Lage: eine Prüfung steht aus"
+
+    window.release()
+
+    assert not window._sculpt_check.isActive()
+    assert not window._sculpt_display.isActive()
+    window._check_sculpted_walls()
+    assert window._sculpt_wall_worker is None
 
 
 def test_a_finish_during_an_evaluation_closes_the_session_after_it(
@@ -760,6 +846,26 @@ def test_a_solid_body_leaves_the_warning_empty(window: MainWindow) -> None:
     assert window.wait_for_sculpt_check()
 
     assert not window.sculpt_bar.warning.text()
+
+
+def test_a_check_still_owed_by_the_timer_is_waited_for(window: MainWindow) -> None:
+    """Feuert der Zeitgeber eines Zugs erst beim Zustellen, ersetzt seine
+    Prüfung die abgewartete — auf den macOS-Läufern fehlte so der Befund in
+    der Leiste, und die Statuszeile trug noch den Fortschritt der Karte. Der
+    Prüfstand wartet deshalb auf die Antwort zum jüngsten Stand."""
+    object_id = with_a_body(window)
+    window.start_sculpt(object_id)
+    window._on_sculpt((0.0, 0.0, 82.0))
+    assert window.wait_for_sculpt_preview(60_000)
+    window._check_sculpted_walls()
+    window._sculpt_check.setInterval(0)
+    window._sculpt_check.start()  # die Lage des langsamen Läufers: fällig beim Zustellen
+
+    assert window.wait_for_sculpt_check()
+
+    assert not window._sculpt_check.isActive(), "keine Prüfung steht mehr aus"
+    assert window._sculpt_wall_worker is None, "die letzte Antwort ist zugestellt"
+    assert not window.sculpt_bar.warning.text(), "ein voller Körper warnt nicht"
 
 
 def test_the_wall_check_waits_for_the_hand_to_rest(window: MainWindow) -> None:
@@ -1585,10 +1691,8 @@ def test_a_sculpt_preview_outside_the_printer_is_reported(
     window._on_sculpt(point)
     window._check_sculpted_walls()
     assert window.wait_for_sculpt_check()
-    assert any(
-        word in window.sculpt_bar.analysis.note.text()
-        for word in ("Bauraum", "Druckfläche", "Bett")
-    )
+    note = window.sculpt_bar.analysis.note.text()
+    assert any(word in note for word in ("Bauraum", "Druckfläche", "Bett")), note
 
 
 def test_a_new_sculpt_session_does_not_inherit_the_last_note(window: MainWindow) -> None:

@@ -31,11 +31,11 @@ from typing import TYPE_CHECKING, Final, Literal, NamedTuple
 
 from app.core.knowledge import print_fields
 from app.core.knowledge.print_settings import SCARF_LENGTH
-from app.core.units import format_length
+from app.core.units import format_length, is_close
 from app.i18n import TranslatableText, _
 
 if TYPE_CHECKING:
-    from app.core.types import PrintSettings, SettingAdvice
+    from app.core.types import MaterialProfile, PrintSettings, SettingAdvice
 
 SlicerFlavour = Literal["prusa", "orca", "cura", "other"]
 """Die Familie eines Slicers — und ``other`` für jedes Programm, dessen
@@ -96,6 +96,11 @@ def _number(value: object) -> str:
 def _optional_number(value: object) -> str:
     """Eine unbekannte Vorgabe bleibt beim Slicer; die Zahl null bleibt eine Zahl."""
     return "" if value is None else _number(value)
+
+
+def _negated(value: object) -> str:
+    """Ein Einzug als Ausdehnung: Cura zählt die erste Schicht nach außen."""
+    return f"{-float(value) + 0.0:g}"  # type: ignore[arg-type]
 
 
 def _integer(value: object) -> str:
@@ -233,10 +238,16 @@ _PRUSA_INFILL: Final = {
     "triangles": "triangles",
 }
 
+#: Das Kreuzmuster für normale Stütze — bei Gitter und unter Hybrid (siehe
+#: ``support_material_pattern``).
+_CROSS_PATTERN: Final = {"grid": "rectilinear-grid", "hybrid": "rectilinear-grid"}
+
 #: Nur die ausdrücklichen Arten. ``auto`` und ``none`` schweigen: Dann gilt
 #: der Stil des Prusa-Profils (``snug``), und ausgeschaltete Stützen haben
 #: keinen Stil, den jemand gewählt hätte (Entscheidung J, 27.09.2026).
-_PRUSA_SUPPORT_STYLE: Final = {"grid": "grid", "tree": "organic"}
+#: PrusaSlicer kennt keine Hybridstütze; sie geht als Gitter hinaus, wie der Rat
+#: sie dort anbietet (:data:`NOT_OFFERED_BY_PROGRAM`, RM-584).
+_PRUSA_SUPPORT_STYLE: Final = {"grid": "grid", "tree": "organic", "hybrid": "grid"}
 
 PRUSA: Final[tuple[Row, ...]] = (
     ("layers.layer_height", "layer_height", _number),
@@ -249,6 +260,14 @@ PRUSA: Final[tuple[Row, ...]] = (
     ("layers.line_width", "top_infill_extrusion_width", _number),
     ("layers.line_width", "support_material_extrusion_width", _number),
     ("layers.first_layer_line_width", "first_layer_extrusion_width", _number),
+    # Einzug der ersten Schicht je Seite (RM-589); SuperSlicer liest ihn unter
+    # eigenem Namen mit umgekehrtem Vorzeichen (:data:`PROGRAM_KEYS`). Einen
+    # Ausgleich nur für Löcher kennt nur SuperSlicer, als Materialzugabe:
+    # negativ weitet. In seinem Vorzeichen geschrieben, auch in eine 3MF ohne
+    # Programm, die PrusaSlicer liest und dabei den Schlüssel übergeht.
+    # ``xy_size_compensation`` verschiebt jede Kontur und ist eine andere Sache.
+    ("layers.elephant_foot", "elefant_foot_compensation", _number),
+    ("shell.hole_offset", "hole_size_compensation", _negated),
     ("shell.wall_count", "perimeters", _integer),
     ("shell.top_layers", "top_solid_layers", _integer),
     ("shell.bottom_layers", "bottom_solid_layers", _integer),
@@ -263,6 +282,12 @@ PRUSA: Final[tuple[Row, ...]] = (
     # Sache Kompensation der Bahnbreite und ist immer an. Kein Eintrag ist
     # hier richtiger als eine Zuordnung auf etwas Ähnliches.
     ("shell.ironing", "ironing", _flag),
+    # Brücken und flache Überhänge ohne Stütze (RM-587). PrusaSlicer legt Brücken
+    # ohne eigenen Wert dick (``thick_bridges = 1``); die Umkehr an Überhängen
+    # kennt es nicht.
+    ("shell.thick_bridges", "thick_bridges", _flag),
+    ("shell.bridge_flow", "bridge_flow_ratio", _number),
+    ("shell.overhang_walls", "extra_perimeters_on_overhangs", _flag),
     ("speed.bridge", "bridge_speed", _number),
     ("speed.acceleration", "default_acceleration", _number),
     ("speed.outer_wall_acceleration", "external_perimeter_acceleration", _number),
@@ -312,8 +337,11 @@ PRUSA: Final[tuple[Row, ...]] = (
     # Einzellinien im Abstand von 2,8 mm, und im Druck verschoben sie sich.
     # ``rectilinear-grid`` wechselt die Richtung je Schicht und steht. Für
     # Bäume schweigt die Zeile: Dort gilt das Muster des Herstellers.
-    ("support.style", "support_material_pattern", _only({"grid": "rectilinear-grid"})),
+    ("support.style", "support_material_pattern", _only(_CROSS_PATTERN)),
     ("support.placement", "support_material_buildplate_only", _mapped({"build_plate": "1"}, "0")),
+    # Ohne eigenen Wert spannt PrusaSlicer Brücken frei (``dont_support_bridges = 1``),
+    # auch mit „Stützen überall“ (RM-587, G-Code-Gegenprüfung N1).
+    ("support.bridges", "dont_support_bridges", _mapped({"True": "0"}, "1")),
     ("support.threshold_angle", "support_material_threshold", _angle_from_horizontal),
     ("support.z_gap", "support_material_contact_distance", _number),
     # Unten derselbe Abstand wie oben: Wo die Stütze auf dem Modell steht,
@@ -327,6 +355,7 @@ PRUSA: Final[tuple[Row, ...]] = (
         _integer,
     ),
     ("support.interface_spacing", "support_material_interface_spacing", _number),
+    # Die Wände der Bäume fehlen: PrusaSlicer zählt keine (:data:`NOT_TAKEN_BY`).
     # Den Kontaktlüfter kennt SuperSlicer, PrusaSlicer nicht (RM-583).
     (
         "cooling.support_interface_cooling",
@@ -373,6 +402,7 @@ _ORCA_INFILL: Final = {
 _ORCA_SUPPORT_TYPE: Final = {
     "grid": "normal(auto)",
     "tree": "tree(auto)",
+    "hybrid": "tree(auto)",
 }
 
 _ORCA_SEAM: Final = {
@@ -397,6 +427,9 @@ ORCA: Final[tuple[Row, ...]] = (
     ("layers.line_width", "internal_solid_infill_line_width", _number),
     ("layers.line_width", "top_surface_line_width", _number),
     ("layers.first_layer_line_width", "initial_layer_line_width", _number),
+    # Beide je Seite, beide Objektwerte (``PrintObjectConfig``, RM-589).
+    ("layers.elephant_foot", "elefant_foot_compensation", _number),
+    ("shell.hole_offset", "xy_hole_compensation", _number),
     ("shell.wall_count", "wall_loops", _integer),
     ("shell.top_layers", "top_shell_layers", _integer),
     ("shell.bottom_layers", "bottom_shell_layers", _integer),
@@ -426,6 +459,12 @@ ORCA: Final[tuple[Row, ...]] = (
     # Orca kennt vier Stufen des Bügelns; Solidon entscheidet nur, **ob** —
     # wie stark und mit welchem Abstand weiß der Slicer besser.
     ("shell.ironing", "ironing_type", _mapped({"True": "top"}, "no ironing")),
+    # Brücken und Überhänge (RM-587); ``thick_internal_bridges`` bleibt beim
+    # Hersteller, der Rat meint die Brücke an der Außenseite.
+    ("shell.thick_bridges", "thick_bridges", _flag),
+    ("shell.bridge_flow", "bridge_flow", _number),
+    ("shell.overhang_walls", "extra_perimeters_on_overhangs", _flag),
+    ("shell.overhang_reverse", "overhang_reverse", _flag),
     ("speed.bridge", "bridge_speed", _number),
     ("speed.acceleration", "default_acceleration", _number),
     ("speed.outer_wall_acceleration", "outer_wall_acceleration", _number),
@@ -472,9 +511,15 @@ ORCA: Final[tuple[Row, ...]] = (
     # wirkungslos — der Slicer meldet nichts, er stützt bloß nicht.
     ("support.style", "enable_support", _support_on),
     ("support.style", "support_type", _only(_ORCA_SUPPORT_TYPE)),
-    # Dasselbe Kreuzmuster wie bei PrusaSlicer, siehe dort.
-    ("support.style", "support_base_pattern", _only({"grid": "rectilinear-grid"})),
+    # Bäume für die Details, normale Stütze unter großen flachen Decken (RM-584);
+    # die übrigen Arten lassen den Stil des Herstellers.
+    ("support.style", "support_style", _only({"hybrid": "tree_hybrid"})),
+    # Dasselbe Kreuzmuster wie bei PrusaSlicer, siehe dort; Hybrid legt es unter
+    # die flachen Decken.
+    ("support.style", "support_base_pattern", _only(_CROSS_PATTERN)),
     ("support.placement", "support_on_build_plate_only", _mapped({"build_plate": "1"}, "0")),
+    # Manche Herstellerprofile spannen Brücken frei (Kobra 2: ``bridge_no_support = 1``).
+    ("support.bridges", "bridge_no_support", _mapped({"True": "0"}, "1")),
     ("support.threshold_angle", "support_threshold_angle", _angle_from_horizontal),
     ("support.z_gap", "support_top_z_distance", _number),
     # Unten derselbe Abstand wie oben (RM-583), siehe PrusaSlicer.
@@ -489,6 +534,12 @@ ORCA: Final[tuple[Row, ...]] = (
     # Die untere Trennschicht hat eine eigene Lücke; alle fünf Programme der
     # Familie führen sie (Konfigurationsblöcke vom 08.10.2026).
     ("support.interface_spacing", "support_bottom_interface_spacing", _number),
+    # Gilt nur Bäumen; 0 heißt beim Programm „automatisch“, Bambu -1 (RM-584).
+    ("support.tree_walls", "tree_support_wall_count", _integer),
+    # Ab ``analysis.TIP_ROOF_AREA`` Querschnitt trägt jede Spitze eine
+    # Trennschicht (``TreeSupport3D.cpp:1286``, RM-704); eine Spitze unter der
+    # Stützbahn hebt die Übergabe ohnehin (``handover.organic_tree_fitted``).
+    ("support.tip_diameter", "tree_support_tip_diameter", _number),
     # -1 heißt „wie die übrige Schicht“, die Vorgabe aller gemessenen Profile.
     # Ein Filamentwert in der Orca-Familie (Filamentprofile der Hersteller).
     (
@@ -562,6 +613,11 @@ CURA: Final[tuple[Row, ...]] = (
     ("layers.first_layer_height", "layer_height_0", _number),
     ("layers.line_width", "line_width", _number),
     ("layers.first_layer_line_width", "initial_layer_line_width_factor", _number),
+    # Curas Gegenstück zum Elefantenfuß ist die Ausdehnung der ersten Schicht,
+    # negativ gezählt; ``hole_xy_offset`` weitet Löcher je Seite (RM-589).
+    # Beide nimmt CuraEngine je Netz an.
+    ("layers.elephant_foot", "xy_offset_layer_0", _negated),
+    ("shell.hole_offset", "hole_xy_offset", _number),
     ("shell.wall_count", "wall_line_count", _integer),
     ("shell.top_layers", "top_layers", _integer),
     ("shell.bottom_layers", "bottom_layers", _integer),
@@ -821,7 +877,9 @@ CURA_MIRRORED: Final[dict[str, tuple[str, ...]]] = {
     "speed_wall_0": ("speed_wall_0_flooring", "speed_wall_0_roofing"),
     "speed_wall_x": ("speed_wall_x_flooring", "speed_wall_x_roofing"),
     "support_angle": ("seam_overhang_angle",),
-    "support_z_distance": ("support_bottom_distance", "support_top_distance"),
+    # Unten nicht: Dort rundet Cura auf, und ``handover._for_supports`` schreibt
+    # das Vielfache, das Solidon meint (RM-628, ``advise.cura_bottom_gap``).
+    "support_z_distance": ("support_top_distance",),
     "machine_height": ("gantry_height",),
     "min_wall_line_width": (
         "min_bead_width",
@@ -1014,6 +1072,15 @@ def keys_for(path: str) -> tuple[str, ...]:
     # Was als Geometrie reist, hat keinen Wertschlüssel, aber einen Namen im
     # Slicer (:data:`GEOMETRY_KEYS`).
     seen += [key for key in GEOMETRY_KEYS.get(path, ()) if key not in seen]
+    # Ein Programm, das den Schlüssel seiner Familie anders nennt
+    # (:data:`PROGRAM_KEYS`, SuperSlicers ``first_layer_size_compensation``),
+    # zählt mit seinem eigenen Namen.
+    seen += [
+        native
+        for renamed in PROGRAM_KEYS.values()
+        for key, native in renamed.items()
+        if key in seen and native not in seen
+    ]
     return tuple(seen)
 
 
@@ -1084,12 +1151,41 @@ def flavour_of(name: str) -> SlicerFlavour | None:
 #:
 #: ``tests/test_print_settings_ui.py`` hält die Liste gegen diese Messung.
 NOT_TAKEN_BY: Final[dict[SlicerFlavour, frozenset[str]]] = {
-    "prusa": frozenset({"shell.precise_outer_wall"}),
+    # Die Umkehr an Überhängen führt PrusaSlicer nicht (``--help-fff`` von 2.9.6).
+    # PrusaSlicer zählt keine Baumwände (RM-584): Seine organischen Äste legen
+    # ab einem Astquerschnitt eine zweite Wand
+    # (``support_tree_branch_diameter_double_wall``, Vorgabe 3 mm), ein Maß und
+    # keine Wandzahl. Geschrieben schaltete eine Wand die Doppelwand ab, die
+    # PrusaSlicer ohne Bündel legt; das Maß bleibt beim Hersteller.
+    #
+    # Die Baumspitze (RM-704) ist nur in der Orca-Familie gemessen: Dort
+    # erzwingt eine Spitze über ``analysis.TIP_ROOF_AREA`` die Trennschicht.
+    # PrusaSlicer und Cura führen eigene Schlüssel
+    # (``support_tree_tip_diameter``), die Wirkung auf die Trennschicht ist
+    # dort nicht geschnitten; ihre Spitze bleibt beim Hersteller.
+    "prusa": frozenset(
+        {
+            "shell.precise_outer_wall",
+            "shell.overhang_reverse",
+            "support.tree_walls",
+            "support.tip_diameter",
+        }
+    ),
     "orca": frozenset(),
     "cura": frozenset(
         {
+            "support.tip_diameter",
             "shell.wall_generator",
             "shell.precise_outer_wall",
+            # Dicke Brücken, Zusatzwände und Umkehr an Überhängen kennt CuraEngine
+            # nicht, Brücken stützt es immer. Seinen Brückenfluss (60 %) rechnet es
+            # auf eigene Bahnen (``bridge_skin_material_flow``), nicht auf
+            # Solidons Anteil (RM-587).
+            "shell.thick_bridges",
+            "shell.bridge_flow",
+            "shell.overhang_walls",
+            "shell.overhang_reverse",
+            "support.bridges",
             "retraction.wipe",
             "filament.density",
             "filament.cost_per_kg",
@@ -1100,6 +1196,14 @@ NOT_TAKEN_BY: Final[dict[SlicerFlavour, frozenset[str]]] = {
     ),
     "other": frozenset(),
 }
+
+#: Was nur als eigene Wahl oder übernommener Vorschlag hinausgeht, auch dort,
+#: wo Solidon den ganzen Satz schreibt (RM-589). Loch- und Fußausgleich
+#: gehören der Maschine: Curas Druckerdefinitionen und Qualitätsstufen setzen
+#: sie für 75 Drucker und 70 Profile, und eine Kalibrierung misst, was nach
+#: ihnen fehlt. Ein Wert aus Solidons Tabelle überschriebe beides; so bleibt
+#: es beim Wert des Slicers, wie bei Curas Lüfterkurve (RM-228).
+MAKER_OWNED: Final[frozenset[str]] = frozenset({"layers.elephant_foot", "shell.hole_offset"})
 
 #: Einstellungen, die nicht als Wert reisen, sondern als **Geometrie**
 #: (``writer.write_assembly``) — die Messung über ``values_for`` sieht sie
@@ -1135,18 +1239,55 @@ LIMITED: Final[dict[SlicerFlavour, frozenset[str]]] = {
 }
 
 
-#: Was ein **Programm** seiner Familie nicht kennt — Schlüssel der
+#: Was ein **Programm** seiner Familie gar nicht kennt: Sein 3MF-Leser stürzt
+#: ab zwei unbekannten Schlüsseln mit 0xC0000005 ab (RM-459, gemessen je
+#: Schlüssel der Beilage), Platte und Objekte zusammengezählt. SuperSlicer
+#: 2.5.59.13 kennt die Schrägnaht aus PrusaSlicer 2.9 nicht und
+#: ``extra_perimeters_on_overhangs`` nicht (dort ``extra_perimeters_overhangs``);
+#: Schrägnaht und Zusatzwände zusammen brachten ihn zum Absturz (Review RM-587,
+#: M3). Eine Datei ohne bekanntes Programm lässt weg, was irgendein Programm
+#: ihrer Familie nicht kennt (:func:`unknown_in_file`).
+UNKNOWN_TO_PROGRAM: Final[dict[str, frozenset[str]]] = {
+    "superslicer": frozenset({"shell.scarf_seam", "shell.overhang_walls"}),
+}
+
+#: Was ein **Programm** seiner Familie nicht nimmt — Schlüssel der
 #: Programmmarke (``discover.program_mark``). Gleiche Familie heißt nicht
-#: gleicher Stand: SuperSlicer 2.5.59.13 kennt die Schrägnaht aus PrusaSlicer
-#: 2.9 nicht, und sein 3MF-Leser stürzt ab zwei unbekannten Schlüsseln mit
-#: 0xC0000005 ab (RM-459, gemessen je Schlüssel der Beilage).
+#: gleicher Stand: Was es gar nicht kennt, steht in :data:`UNKNOWN_TO_PROGRAM`.
 NOT_TAKEN_BY_PROGRAM: Final[dict[str, frozenset[str]]] = {
-    "superslicer": frozenset({"shell.scarf_seam"}),
-    # Den Kontaktlüfter führt nur SuperSlicer (``--help-fff`` von 2.9.6).
-    "prusaslicer": frozenset({"cooling.support_interface_cooling"}),
+    # Die Baumwände kennt die ganze Familie nicht (:data:`NOT_TAKEN_BY`).
+    # ``thick_bridges`` und ``bridge_flow_ratio`` nimmt SuperSlicer 2.5.59.13 als
+    # alte Namen und setzt sie beim Laden um: ``thick_bridges = 0`` wird
+    # ``bridge_type = flow``, ``bridge_flow_ratio = 0.9`` steht im G-Code als 90 %
+    # und fördert 0,0465 statt 0,0517 mm je mm Brückenbahn, je Objekt wie auf der
+    # Platte (Review RM-587, M3). ``dont_support_bridges`` nimmt er an und stützt
+    # die 36-mm-Brücke trotzdem: 5 578 mm Stütze mit 0 und mit 1, an einem Teil und
+    # an beiden (RM-587).
+    "superslicer": UNKNOWN_TO_PROGRAM["superslicer"] | {"support.bridges"},
+    # Den Kontaktlüfter und einen Ausgleich nur für Löcher führt nur
+    # SuperSlicer (``--help-fff`` von 2.9.6; RM-589).
+    "prusaslicer": frozenset({"cooling.support_interface_cooling", "shell.hole_offset"}),
     # Bambu Studio führt ``support_material_interface_fan_speed`` nicht; sein
-    # Konfigurationsblock nennt den Schlüssel nicht (P1S, 08.10.2026).
-    "bambustudio": frozenset({"cooling.support_interface_cooling"}),
+    # Konfigurationsblock nennt den Schlüssel nicht (P1S, 08.10.2026). Ebenso
+    # fehlen ``extra_perimeters_on_overhangs`` und ``overhang_reverse`` (RM-587).
+    # Die Spitze organischer Äste (``tree_support_tip_diameter``) kennt es auch
+    # nicht, seine Bäume entstehen anders (RM-704).
+    "bambustudio": frozenset(
+        {
+            "cooling.support_interface_cooling",
+            "shell.overhang_walls",
+            "shell.overhang_reverse",
+            "support.tip_diameter",
+        }
+    ),
+    # Anycubic Slicer Next 2.0.0.3 nimmt ``extra_perimeters_on_overhangs`` an und
+    # druckt dieselben Bahnen: unter einer 3-mm-Auskragung 333 mm Brücke mit und
+    # ohne, OrcaSlicer, ElegooSlicer und Creality Print ersetzen sie (RM-587).
+    "anycubicslicernext": frozenset({"shell.overhang_walls"}),
+    # Creality Print 7.2 führt ``tree_support_tip_diameter``, druckt mit 0,8 und
+    # 1,13 mm aber dieselben Bahnarten und keine Trennschicht unter
+    # Kegelspitzen (``test_a_roof_tip_puts_an_interface_on_every_tip``, RM-704).
+    "crealityprint": frozenset({"support.tip_diameter"}),
 }
 
 #: Was ein Programm unter Baumstützen nicht druckt (RM-622): Bambu Studio,
@@ -1155,9 +1296,40 @@ NOT_TAKEN_BY_PROGRAM: Final[dict[str, frozenset[str]]] = {
 #: zwei gestützten Körpern aus PETG (09.10.2026): unter Gitter mit unteren
 #: Lagen, unter organischen Bäumen ohne; ElegooSlicer und OrcaSlicer drucken sie
 #: auch dort.
+#:
+#: **Und die Wandzahl der Bäume liest die Orca-Familie unter organischen Bäumen
+#: nicht** (RM-584): ``tree_support_wall_count`` gilt für ``tree_hybrid``,
+#: ``tree_slim`` und ``tree_strong``. Gemessen am ElegooSlicer an einem 120 mm
+#: hohen Turm mit Insel: organisch mit einer und zwei Wänden derselbe G-Code,
+#: Hybrid mit zwei Wänden 14 % mehr Stützmaterial. Das gilt gefüllten Bäumen;
+#: hohle (``support_base_pattern`` ``default``) bestehen aus ihren Wänden, und
+#: die Wandzahl wirkt (``handover.hollow_trees``). PrusaSlicer zählt keine
+#: Baumwände (:data:`NOT_TAKEN_BY`). Der Slicertest
+#: (``test_tree_walls_change_the_print_only_where_the_program_reads_them``,
+#: 09.10.2026, Drucker aus ``PROGRAMS``) bestätigt OrcaSlicer und Anycubic Slicer
+#: Next. **Bambu Studio und Creality Print lesen die Wandzahl auch unter ihren
+#: Bäumen**: Bambu führt die Schlüssel der organischen Äste nicht
+#: (``tree_support_branch_diameter_organic``), seine Bäume entstehen anders.
+#: Creality Print 7.2 liest sie als ``tree_support_wall_count_tree``
+#: (:data:`PROGRAM_KEYS`), unter Hybrid wie unter Bäumen; den gemeinsamen Namen
+#: überging es auch unter Hybrid.
+_NO_BOTTOM_INTERFACE_UNDER_TREES: Final = (
+    "bambustudio",
+    "crealityprint",
+    "anycubicslicernext",
+    "prusaslicer",
+)
+_NO_WALLS_UNDER_TREES: Final = ("elegooslicer", "orcaslicer", "anycubicslicernext")
 IGNORED_UNDER_TREES_BY_PROGRAM: Final[dict[str, frozenset[str]]] = {
-    program: frozenset({"support.bottom_interface_layers"})
-    for program in ("bambustudio", "crealityprint", "anycubicslicernext", "prusaslicer")
+    program: frozenset(
+        (
+            {"support.bottom_interface_layers"}
+            if program in _NO_BOTTOM_INTERFACE_UNDER_TREES
+            else set()
+        )
+        | ({"support.tree_walls"} if program in _NO_WALLS_UNDER_TREES else set())
+    )
+    for program in (*_NO_BOTTOM_INTERFACE_UNDER_TREES, *_NO_WALLS_UNDER_TREES)
 }
 
 
@@ -1213,9 +1385,23 @@ PROGRAM_ALIASES: Final[dict[str, dict[str, tuple[str, ...]]]] = {
 }
 
 
-#: Bambu behält den Plural; die übrige Orca-Familie führt den Singular.
+#: Bambu behält den Plural; die übrige Orca-Familie führt den Singular. Creality
+#: Print liest die Wände der Bäume unter eigenem Namen (RM-584, Slicertest).
+#: SuperSlicer 2.5 nennt den Einzug der ersten Schicht
+#: ``first_layer_size_compensation`` und zählt ihn als Ausdehnung, negativ
+#: (:data:`PROGRAM_NEGATED`); seine Profile setzen -0,05 bis -0,3 (RM-589).
 PROGRAM_KEYS: Final[dict[str, dict[str, str]]] = {
     "bambustudio": {"chamber_temperature": "chamber_temperatures"},
+    "crealityprint": {"tree_support_wall_count": "tree_support_wall_count_tree"},
+    "superslicer": {"elefant_foot_compensation": "first_layer_size_compensation"},
+}
+
+#: Schlüssel der Familie, deren Wert das Programm mit umgekehrtem Vorzeichen
+#: liest. Den Lochausgleich schreibt die Prusa-Zeile schon in SuperSlicers
+#: Vorzeichen (``hole_size_compensation``: positiv wird das Loch enger,
+#: gemessen an zwei Bohrplatten, 2.5.59.13, 09.10.2026, RM-589).
+PROGRAM_NEGATED: Final[dict[str, frozenset[str]]] = {
+    "superslicer": frozenset({"elefant_foot_compensation"}),
 }
 
 
@@ -1478,6 +1664,11 @@ class Substitute(NamedTuple):
     reason: TranslatableText
 
 
+#: Hybridstützen kennt nur die Orca-Familie (``tree_hybrid``, RM-584); die
+#: übrigen bekommen Gitter, das die flache Decke trägt.
+_NO_HYBRID: Final = Substitute("grid", _("Dieser Slicer kennt kein Hybrid und stützt mit Gitter."))
+
+
 #: Wahlen in Solidon, die ein **Programm** nicht kennt, mit dem, was es
 #: stattdessen bekommt. Der Druckdialog bietet sie dort nicht an, der Rat
 #: schlägt den Ersatz vor, und eine schon getroffene Wahl geht als Ersatz
@@ -1491,8 +1682,11 @@ NOT_OFFERED_BY_PROGRAM: Final[dict[str, dict[str, dict[object, Substitute]]]] = 
             "tree": Substitute(
                 "grid", _("SuperSlicer kennt keine Baumstützen und stützt mit Gitter.")
             ),
+            "hybrid": _NO_HYBRID,
         },
     },
+    "prusaslicer": {"support.style": {"hybrid": _NO_HYBRID}},
+    "cura": {"support.style": {"hybrid": _NO_HYBRID}},
 }
 
 
@@ -1507,6 +1701,12 @@ def offered(advice: Sequence[SettingAdvice], program: str) -> list[SettingAdvice
     Ein Vorschlag auf eine Wahl aus :data:`NOT_OFFERED_BY_PROGRAM` wird zu
     ihrem Ersatz — SuperSlicer bekommt statt der Baumstütze Gitter angeboten
     (RM-480). Ist der Ersatz schon eingestellt, bleibt nichts vorzuschlagen.
+
+    **Schaltet der Vorschlag Stützen erst ein, bleibt sein Grund** (RM-584):
+    „Ohne Stützen druckt dieses Teil in die Luft.“ gilt dem Ersatz genauso,
+    und der Satz über die fehlende Art verdrängte die Warnung. Wechselt er nur
+    die Art, gilt sein Grund der Art, die das Programm nicht kennt — dann
+    steht der Ersatzsatz da.
     """
     shown: list[SettingAdvice] = []
     for entry in advice:
@@ -1514,7 +1714,8 @@ def offered(advice: Sequence[SettingAdvice], program: str) -> list[SettingAdvice
         if replaced is None:
             shown.append(entry)
         elif replaced.value != entry.was:
-            shown.append(replace(entry, value=replaced.value, reason=replaced.reason))
+            reason = entry.reason if entry.was == "none" else replaced.reason
+            shown.append(replace(entry, value=replaced.value, reason=reason))
     return shown
 
 
@@ -1522,8 +1723,11 @@ def program_value(key: str, value: str, program: str) -> str:
     """Ein geschriebener Aufzählungswert in der Sprache dieses Programms.
 
     Die Übersetzung steht in :data:`PROGRAM_VALUES`; ohne Eintrag bleibt der
-    Wert der Familie.
+    Wert der Familie. Ein Schlüssel aus :data:`PROGRAM_NEGATED` kehrt sein
+    Vorzeichen um.
     """
+    if key in PROGRAM_NEGATED.get(program, frozenset()):
+        return f"{-float(value) + 0.0:g}"
     return PROGRAM_VALUES.get(program, {}).get(key, {}).get(value, value)
 
 
@@ -1562,9 +1766,14 @@ def for_program(values: Mapping[str, str], flavour: SlicerFlavour, program: str)
     stehen. Ein Abkömmling stürzt an einem fremden Schlüssel ab, statt ihn zu
     übergehen — die Beilage einer Schrägnaht genügte bei SuperSlicer.
     """
-    dropped = NOT_TAKEN_BY_PROGRAM.get(program, frozenset())
+    dropped = NOT_TAKEN_BY_PROGRAM.get(program, frozenset()) | unknown_in_file(flavour, program)
     unknown = {entry.key for entry in TABLES[flavour] if entry.path in dropped}
     kept = {key: value for key, value in values.items() if key not in unknown}
+    # Was noch unter dem Namen der Familie steht, bekommt den des Programms
+    # (:func:`native_key`). Den Wert in dessen Sprache schreibt schon
+    # :func:`app.core.export.handover.as_mapping` (:func:`program_value`).
+    for key in [key for key in kept if native_key(key, program) != key]:
+        kept.setdefault(native_key(key, program), kept.pop(key))
     for old, new in PROGRAM_ALIASES.get(program, {}).items():
         if old not in kept:
             continue
@@ -1574,6 +1783,35 @@ def for_program(values: Mapping[str, str], flavour: SlicerFlavour, program: str)
     return kept
 
 
+def unknown_in_file(flavour: SlicerFlavour, program: str) -> frozenset[str]:
+    """Was eine Datei ohne bekanntes Programm dieser Familie nicht tragen darf.
+
+    Ein Dateiexport kennt das Programm nicht, das ihn öffnen wird: Er lässt weg,
+    was irgendein Programm der Familie gar nicht kennt (:data:`UNKNOWN_TO_PROGRAM`)
+    — auf der Platte wie je Teil. Mit bekanntem Programm gilt dessen eigene Liste
+    (:data:`NOT_TAKEN_BY_PROGRAM`), und dies gibt nichts.
+    """
+    if program and flavour_of(program) == flavour:
+        return frozenset()
+    return frozenset(
+        path
+        for name, paths in UNKNOWN_TO_PROGRAM.items()
+        if flavour_of(name) == flavour
+        for path in paths
+    )
+
+
+#: Was der vollständige Satz ohne Herstellerkette nur schreibt, wenn es vom
+#: eingebauten Wert des Programms abweicht — derselbe Wert ohne Schlüssel, und
+#: ein Verwandter, der den Schlüssel nicht kennt, öffnet die Datei weiter
+#: (:data:`UNKNOWN_TO_PROGRAM`): Eine PrusaSlicer-Datei trug sonst Schrägnaht und
+#: Zusatzwände mit ihrem Wert „aus“, und SuperSlicer stürzte an ihr ab (Review
+#: RM-587, M3). Die Werte nennt ``prusa-slicer-console --help-fff`` von 2.9.6.
+QUIET_AT_DEFAULT: Final[dict[SlicerFlavour, dict[str, str]]] = {
+    "prusa": {"scarf_seam_placement": "nowhere", "extra_perimeters_on_overhangs": "0"},
+}
+
+
 #: Die Trennschicht zu einem Drittel dicht, wie Creality und Elegoo in Cura
 #: (``support_interface_density`` 33,3 %): Linienabstand drei Bahnbreiten.
 #: Ohne gewählte Lücke schreibt die Übergabe ihn, die Grundlage zeigt die
@@ -1581,15 +1819,16 @@ def for_program(values: Mapping[str, str], flavour: SlicerFlavour, program: str)
 CURA_INTERFACE_LINES: Final = 3.0
 
 
-def support_gap_in_whole_layers(flavour: SlicerFlavour | None) -> bool:
-    """Rechnet dieser Slicer den Stützabstand immer in ganzen Schichten (RM-583)?
+def rounds_support_gap_up(flavour: SlicerFlavour | None) -> bool:
+    """Rundet dieser Slicer einen Stützabstand zwischen zwei Schichten auf
+    (RM-628)? CuraEngine unten immer, unter seinen Bäumen auch oben.
 
-    Die Menge steht beim Rat (:data:`advise.WHOLE_LAYER_GAP_FLAVOURS`), wie
-    der Auto-Brim: Der Rat fragt sie, und ``slice`` importiert ``export`` nicht.
+    Die Auskunft steht beim Rat (:func:`advise.gap_rounding`), wie der
+    Auto-Brim: Der Rat fragt sie, und ``slice`` importiert ``export`` nicht.
     """
     from app.core.slice import advise
 
-    return advise.rounds_to_whole_layers(flavour)
+    return advise.gap_rounding(flavour, below=True) == "up"
 
 
 def has_independent_support_layers(flavour: SlicerFlavour | None) -> bool:
@@ -1598,8 +1837,8 @@ def has_independent_support_layers(flavour: SlicerFlavour | None) -> bool:
 
     Nur die Orca-Familie: Ohne den Schalter rundet sie auf ganze Schichten
     (``Slicing.cpp``). PrusaSlicer legt die Kontaktschicht unter Gitter ohnehin
-    in den gewünschten Abstand, Cura rechnet in Schichten
-    (:func:`support_gap_in_whole_layers`). Unter organischen Bäumen rundet jedes
+    in den gewünschten Abstand, Cura oben mit einer Bruchteillage und unten
+    aufgerundet (:func:`rounds_support_gap_up`). Unter organischen Bäumen rundet jedes
     Programm, auch mit eigener Höhe (``handover.organic_styles``, RM-622).
     """
     return flavour == "orca"
@@ -1620,12 +1859,29 @@ def caps_volumetric_speed(flavour: SlicerFlavour) -> bool:
     return caps_flow(flavour)
 
 
+def not_taken_reason(flavour: SlicerFlavour, path: str) -> TranslatableText | None:
+    """Warum ein Feld ohne Wirkung bleibt, wo „kennt diese Einstellung nicht“ nicht
+    stimmt — für das ausgegraute Feld, nicht als Befund jeder Übergabe.
+
+    Cura hat einen Brückenfluss (``bridge_skin_material_flow``), aber nur für
+    seine eigenen Brückenbahnen; Solidons Anteil kommt dort nicht an (Review
+    RM-587, L3)."""
+    if flavour == "cura" and path == "shell.bridge_flow":
+        return _(
+            "Cura legt Brücken mit seinem eigenen Brückenfluss — dieser Wert bleibt ohne Wirkung."
+        )
+    return None
+
+
 def limitation(
     flavour: SlicerFlavour,
     path: str,
     settings: PrintSettings | None = None,
     program: str = "",
     organic: Collection[str] = (),
+    *,
+    material: MaterialProfile | None = None,
+    hollow: bool = False,
 ) -> TranslatableText | None:
     """Eine abweichende Bedeutung, die ein gleich benannter Wert verdecken würde.
 
@@ -1642,13 +1898,20 @@ def limitation(
 
     Unter organischen Bäumen gilt die Auskunft, mit der auch der Rat fragt
     (``organic``, ``handover.organic_styles``, RM-622): Feld und Vorschlag
-    daneben sagen dasselbe.
+    daneben sagen dasselbe, auch über hohle Bäume (``hollow``). Curas Abstand
+    unten unter Gitter wählt die Übergabe in den Grenzen von ``material``
+    (RM-628); der Satz nennt denselben.
     """
     if settings is not None and program:
         group, name = path.split(".", 1)
         replaced = substitute(path, getattr(getattr(settings, group), name), program)
         if replaced is not None:
             return replaced.reason
+    # PrusaSlicer verdoppelt die Wand dicker Äste nach einem Maß (RM-584,
+    # :data:`NOT_TAKEN_BY`); SuperSlicer kennt keine Bäume und bleibt beim
+    # allgemeinen Satz.
+    if flavour == "prusa" and path == "support.tree_walls" and program != "superslicer":
+        return _("PrusaSlicer zählt keine Baumwände und gibt dicken Ästen selbst zwei.")
     if flavour == "cura" and path == "cooling.disable_first_layers":
         if settings is None or settings.cooling.disable_first_layers < 2:
             return None
@@ -1657,21 +1920,43 @@ def limitation(
             "schrittweise hoch.",
             layer=settings.cooling.disable_first_layers + 1,
         )
-    # Ein Stützabstand zwischen zwei Schichten wird in Cura eine ganze (RM-583).
-    if support_gap_in_whole_layers(flavour) and path == "support.z_gap":
+    # Ein Stützabstand zwischen zwei Schichten wird in Cura aufgerundet, unter
+    # Gitter nur unten, und dort schreibt die Übergabe ganze Schichten; unter
+    # Bäumen ohne obere Trennschicht kommt eine Schicht dazu (RM-628). Der Satz
+    # nennt, was gedruckt wird.
+    if rounds_support_gap_up(flavour) and path == "support.z_gap":
         from app.core.slice import advise
 
         layer = settings.layers.layer_height if settings is not None else 0.0
         # Ohne Stützen druckt der Abstand nichts; ein Satz dazu wäre Lärm.
         if settings is None or layer <= 0.0 or settings.support.style == "none":
             return None
-        if advise.in_whole_layers(settings.support.z_gap, layer):
+        gap, style = settings.support.z_gap, settings.support.style
+        roof = settings.support.interface_layers > 0
+        top, bottom = advise.printed_support_gaps(
+            gap, layer, flavour, style, material=material, roof=roof
+        )
+        # Oben rundet Cura nur unter seinen Bäumen, dann wie unten.
+        if advise.gap_rounding(flavour, style=style) != "exact":
+            if is_close(top, gap):
+                return None
+            if not roof:
+                return _(
+                    "Ohne obere Trennschicht lässt Cura unter Baumstützen eine Schicht mehr "
+                    "Luft: Der Stützabstand wird {gap}.",
+                    gap=format_length(top),
+                )
+            return _(
+                "Unter Baumstützen rundet Cura den Stützabstand auf {gap} auf.",
+                gap=format_length(top),
+            )
+        # Unten zählt der Abstand nur, wo die Stütze auf dem Modell stehen darf.
+        if advise.in_whole_layers(gap, layer) or settings.support.placement == "build_plate":
             return None
-        field = print_fields.field_of(path)
         return _(
-            "Cura rechnet „{setting}“ in ganzen Schichten zu {layer}.",
-            setting=field.title if field is not None else path,
-            layer=format_length(layer),
+            "Cura druckt den Stützabstand oben genau und unten mit {gap}, einem Vielfachen "
+            "der Schichthöhe.",
+            gap=format_length(bottom),
         )
     # Unter organischen Bäumen liegt die Stütze auf den Schichten des Modells
     # (RM-622): welche Art das ist, sagt ``organic``, eine Quelle für Feld und Rat.
@@ -1689,6 +1974,12 @@ def limitation(
             layer=format_length(layer),
         )
     if trees and path in IGNORED_UNDER_TREES_BY_PROGRAM.get(program, frozenset()):
+        if path == "support.tree_walls":
+            # Hohle Bäume bestehen aus ihren Wänden (``hollow``,
+            # ``handover.hollow_trees``, RM-584).
+            if hollow:
+                return None
+            return _("Unter organischen Bäumen liest dieses Programm die Wandzahl nicht.")
         return _("Unter Baumstützen druckt dieses Programm keine untere Trennschicht.")
     return None
 

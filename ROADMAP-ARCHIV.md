@@ -32,7 +32,33 @@ entfernt hat.
 | Datum | Abschnitt |
 |---|---|
 | 2026-10-10 | [RM-629: Ein schräger Schacht über einer Säule zählt, wenn der Kanalkreis Schicht für Schicht hindurchpasst (10.10.2026)](#rm-629-ein-schräger-schacht-über-einer-säule-zählt-wenn-der-kanalkreis-schicht-für-schicht-hindurchpasst-10102026) |
+| 2026-10-09 | [RM-587: Lange Brücken und steile Überhänge drucken sauber (09.10.2026)](#rm-587-lange-brücken-und-steile-überhänge-drucken-sauber-09102026) |
+| 2026-10-10 | [RM-707: Spulenwerte aus 0.5.3 überschreiben das Herstellerprofil nicht mehr (10.10.2026)](#rm-707-spulenwerte-aus-053-überschreiben-das-herstellerprofil-nicht-mehr-10102026) |
+| 2026-10-10 | [RM-705: Ein vor dem Update gebuchter Druck wird danach wiedererkannt (10.10.2026)](#rm-705-ein-vor-dem-update-gebuchter-druck-wird-danach-wiedererkannt-10102026) |
+| 2026-10-10 | [RM-704 (Teil): Mit zwei Schichten Luft trägt jede Baumspitze eine Trennschicht (10.10.2026)](#rm-704-teil-mit-zwei-schichten-luft-trägt-jede-baumspitze-eine-trennschicht-10102026) |
+| 2026-10-10 | [RM-754: Mit und ohne Cache derselbe Satz zur freien Stelle (10.10.2026)](#rm-754-mit-und-ohne-cache-derselbe-satz-zur-freien-stelle-10102026) |
+| 2026-10-10 | [RM-676: *Größe ändern* an einem erzeugten Modell rechnet nur das Maß (10.10.2026)](#rm-676-größe-ändern-an-einem-erzeugten-modell-rechnet-nur-das-maß-10102026) |
+| 2026-10-09 | [RM-638: In Einzelteile aufteilen hilft an jeder Teile-Absage (09.10.2026)](#rm-638-in-einzelteile-aufteilen-hilft-an-jeder-teile-absage-09102026) |
+| 2026-10-09 | [RM-639: In Einzelteile aufteilen behält jedes druckbare Teil (09.10.2026)](#rm-639-in-einzelteile-aufteilen-behält-jedes-druckbare-teil-09102026) |
+| 2026-10-09 | [RM-253: Am Laptop-Ständer rechnet keine Bohrungshandlung mehr durch ein fremdes Teil (09.10.2026)](#rm-253-am-laptop-ständer-rechnet-keine-bohrungshandlung-mehr-durch-ein-fremdes-teil-09102026) |
+| 2026-10-09 | [RM-660: Ein langes Teil steht in jedem Hohlraum mit dem Stück, das darin liegt (09.10.2026)](#rm-660-ein-langes-teil-steht-in-jedem-hohlraum-mit-dem-stück-das-darin-liegt-09102026) |
+| 2026-10-09 | [RM-661: Ein eng sitzender Stift ist ein getrenntes Teil in seiner Bohrung (09.10.2026)](#rm-661-ein-eng-sitzender-stift-ist-ein-getrenntes-teil-in-seiner-bohrung-09102026) |
+| 2026-10-09 | [RM-691: Der Stift an den Löchern der Halter ist an beiden Kernen derselbe (09.10.2026)](#rm-691-der-stift-an-den-löchern-der-halter-ist-an-beiden-kernen-derselbe-09102026) |
+| 2026-10-10 | [RM-751: Ein freigegebenes Fenster startet keine Wandprüfung mehr (10.10.2026)](#rm-751-ein-freigegebenes-fenster-startet-keine-wandprüfung-mehr-10102026) |
+| 2026-10-10 | [RM-750: Ein wartender Klick behält seine Zusage, während die Analysekarte rechnet (10.10.2026)](#rm-750-ein-wartender-klick-behält-seine-zusage-während-die-analysekarte-rechnet-10102026) |
+| 2026-10-09 | [RM-589: Was das Modell schon ausgleicht, gleicht der Slicer nicht noch einmal aus (09.10.2026)](#rm-589-was-das-modell-schon-ausgleicht-gleicht-der-slicer-nicht-noch-einmal-aus-09102026) |
+| 2026-10-10 | [RM-670: Ein zweiter 3MF-Export liest den Slicerbestand nicht neu (10.10.2026)](#rm-670-ein-zweiter-3mf-export-liest-den-slicerbestand-nicht-neu-10102026) |
+| 2026-10-09 | [RM-670 (Teil): Der 3MF-Export liest den Slicerbestand nicht mehr je Export neu (09.10.2026)](#rm-670-teil-der-3mf-export-liest-den-slicerbestand-nicht-mehr-je-export-neu-09102026) |
+| 2026-10-09 | [RM-627: Ein Rand neben einem anderen Überhang ist keine lange Brücke (09.10.2026)](#rm-627-ein-rand-neben-einem-anderen-überhang-ist-keine-lange-brücke-09102026) |
+| 2026-10-09 | [RM-572: Der Prüfbericht nennt die Stelle, wo viele kleine Überhänge Stützen verlangen (09.10.2026)](#rm-572-der-prüfbericht-nennt-die-stelle-wo-viele-kleine-überhänge-stützen-verlangen-09102026) |
+| 2026-10-09 | [RM-584 (Teil 2): Unter flachen Decken Gitter oder Hybrid, und hohe Bäume bekommen zwei Wände (09.10.2026)](#rm-584-teil-2-unter-flachen-decken-gitter-oder-hybrid-und-hohe-bäume-bekommen-zwei-wände-09102026) |
+| 2026-10-09 | [RM-567: Weniger Arbeitsspeicher — Cachegrenze, BLAS-Faden, Renderer am echten Fenster (09.10.2026)](#rm-567-weniger-arbeitsspeicher--cachegrenze-blas-faden-renderer-am-echten-fenster-09102026) |
+| 2026-10-09 | [RM-624: Ein Slicertest hält Kontaktabstand und untere Trennschicht in sechs Programmen (09.10.2026)](#rm-624-ein-slicertest-hält-kontaktabstand-und-untere-trennschicht-in-sechs-programmen-09102026) |
+| 2026-10-09 | [RM-531 (Teil): Sieben Fenstertests außerhalb von Windows sind auf allen vier Plattformen grün (09.10.2026)](#rm-531-teil-sieben-fenstertests-außerhalb-von-windows-sind-auf-allen-vier-plattformen-grün-09102026) |
+| 2026-10-09 | [RM-635: Prozesstests zählen ihre Zeit ab dem Zustand, und der Abbau wartet auf das Ende des Prozesses (09.10.2026)](#rm-635-prozesstests-zählen-ihre-zeit-ab-dem-zustand-und-der-abbau-wartet-auf-das-ende-des-prozesses-09102026) |
+| 2026-10-09 | [RM-344: Die Release-CI fährt die Rendererfälle ohne Fenster auf allen vier Paketplattformen (09.10.2026)](#rm-344-die-release-ci-fährt-die-rendererfälle-ohne-fenster-auf-allen-vier-paketplattformen-09102026) |
 | 2026-10-09 | [RM-571: Ein Sims im offenen Becher neben einem gesperrten Kanal behält seine Stütze (09.10.2026)](#rm-571-ein-sims-im-offenen-becher-neben-einem-gesperrten-kanal-behält-seine-stütze-09102026) |
+| 2026-10-09 | [RM-628: Solidon rechnet mit Curas Aufrunden des Stützabstands (09.10.2026)](#rm-628-solidon-rechnet-mit-curas-aufrunden-des-stützabstands-09102026) |
 | 2026-10-09 | [RM-680: Bausteine verwalten steht ohne eigenen Baustein offen (09.10.2026)](#rm-680-bausteine-verwalten-steht-ohne-eigenen-baustein-offen-09102026) |
 | 2026-10-09 | [RM-650: Ein eingefügtes Modell kommt in den Ausschnitt (09.10.2026)](#rm-650-ein-eingefügtes-modell-kommt-in-den-ausschnitt-09102026) |
 | 2026-10-09 | [RM-584 (Teil): Über Baumspitzen rät Solidon zwei Schichten Luft (09.10.2026)](#rm-584-teil-über-baumspitzen-rät-solidon-zwei-schichten-luft-09102026) |
@@ -27322,6 +27348,306 @@ zurück, die Übernahme aus dem Slicer überschreibt keine Handspule, Rücknahme
 sind rücknehmbar, das Lager sichert seinen letzten lesbaren Stand selbst,
 Datumsfelder haben einen Kalender.
 
+## RM-670: Ein zweiter 3MF-Export liest den Slicerbestand nicht neu (10.10.2026)
+
+<a id="rm-670-ein-zweiter-3mf-export-liest-den-slicerbestand-nicht-neu-10102026"></a>
+
+**Rest nach dem Teil vom 09.10.:** Je 3MF-Export entstand die Grundlage viermal (Datei, Befunde,
+Stützfuß, Projekteinstellungen; Cura zweimal), jedes Mal mit Namensindizes der Erbketten (am ElegooSlicer
+668 Dateien je Herstellerordner, 0,35 s), rekursiver Suche nach der Modelldatei (0,18 s) und bei Cura der
+Auflistung von Definitionen und Containern (rund 4 000 Dateien, 1,2 s). Der zweite Export lag am echten
+Bestand bei 0,42–0,73 s (Elegoo), 0,53–1,47 s (Orca) und 3,1–3,8 s (Cura mit eingerichtetem Drucker).
+
+**Behoben:** `slicer_profiles.once_per_read` rechnet im Lesedurchgang einmal, was allein aus Argumenten
+und gelesenem Bestand folgt — `manufacturer.base_settings` und `machine_model`. `_once_per_stock` hält
+Namensindizes, Modelldatei und Curas Auflistung (`_cura_installed`, `_cura_own_containers`) darüber hinaus
+unter der Signatur des Bestands und dem Stand der Programmsuche (`_derived`, `_root_owners`); gemerkt erst
+Beruhigtes (`SETTLE_NS` vor der Signatur). Gehalten wird nur, welches Profil wo liegt; Werte liest jeder
+Durchgang aus den Dateien.
+
+**Nachweis (10.10.2026, Roberts Slicer mit seinen Nutzerprofilen in einer Kopie von `%APPDATA%`, gepinnt,
+Rechner unter Fremdlast, CPU-Zeit des Prozesses):** Würfel, Figur aus Weg 4, `dose-mit-deckel.p3d` und
+`garden-hose-holder.3mf` an ElegooSlicer (Centauri Carbon 2), OrcaSlicer (P1S), PrusaSlicer (MK4S) und
+Cura 5.13 (Ender-3 V3 SE eingerichtet). Zweiter und dritter 3MF-Export Würfel 0,03–0,16 s, Figur
+0,06–0,20 s, Dose 0,25–0,41 s; der Halter 1,56–1,88 s bei 0,59–0,67 s STL — der Abstand ist der Schreiber der
+Geometrie, nicht der Bestand. Vor RM-670 (`a9e4d3f64`) Würfel 0,98–1,20 s (Elegoo), 2,70–3,12 (Orca), 5,3–5,5
+(Cura). Die 3MF ist in allen 16 Fällen byte-gleich zum Stand vor RM-670 und zu einem Lauf ohne jeden
+Merker, Würfel und Dose auch zum Stand vor diesem Schritt (`786ff615f`). Am Fenster (offscreen, Würfel, mit Vorwärmen und Auswertung) erster 3MF-Export
+0,12–0,24 s Wanduhr bei 0,06–0,08 s STL, die folgenden 0,05–0,19 s. Eine Änderung im Slicer — eigener Prozess
+geändert (Elegoo, Wände 2 → 4), neuer eigener Prozess (Orca, Prusa), Maschineneinstellung (Cura) — sieht der
+nächste Export sofort; die Datei gleicht dem ungemerkten Lesen. `test_real_slicers.py` 21 passed. Tests:
+`test_print_settings_ui.py` (`test_a_3mf_export_derives_the_foundation_once`,
+`test_the_remembered_stock_writes_the_file_a_fresh_read_writes`,
+`test_a_second_3mf_export_lists_no_stock_folder_again`, Leistung
+`test_a_second_3mf_export_of_a_large_stock_stays_under_half_a_second` je Familie: zweiter Export 0,03–0,09 s
+CPU), `test_slicer_profiles.py` (`test_inheritance_indexes_hold_across_passes_until_the_stock_changes`); jede
+mit Gegenprobe. Changelog: der Punkt vom 09.10. gilt.
+
+## RM-670 (Teil): Der 3MF-Export liest den Slicerbestand nicht mehr je Export neu (09.10.2026)
+
+<a id="rm-670-teil-der-3mf-export-liest-den-slicerbestand-nicht-mehr-je-export-neu-09102026"></a>
+
+**Befund (03.10.2026, Versionsvergleich 0.5.2, W2-1 und W4-2):** Seit v0.4.0 suchte jeder
+3MF-Export den Slicer und las rund 1 550 Profildateien neu; ein Quader dauerte 1,6 s statt
+0,36 s. Mit RM-623 kam ohne gemerkte Wahl die Vorwahl aus dem Bestand dazu.
+
+**Behoben:** Der Bestand je Slicer und Profilart bleibt gemerkt, solange seine Signatur
+gleich ist (`slicer_profiles._holdings`; eigene Profile Datei für Datei, die Installation
+an Programmdatei und oberster Ebene; gemerkt erst, was älter ist als `SETTLE_NS`), die
+PATH-Antwort der Programmsuche ebenso (`discover._from_path`). Das Hauptfenster wärmt den
+Bestand nach dem Start im Hintergrund vor (`_warm_the_slicer`), der Export wartet nicht auf
+eine laufende Auswertung, und Vorwahl, Stufe, Grundlage und Datei teilen einen
+Lesedurchgang (`_assembly`, `_FoundationWorker`).
+
+**Nach Review und Nachprüfung (09.10.2026):** Die Signatur zählt nur, was der Leser ansieht
+(`_READ_BELOW`: Artordner der Orca-Familie in jeder Schreibweise, Curas Ordner der ersten
+Ebene aus `_CURA_STOCK_FOLDERS`, Prusa über `_prusa_files` ohne `cache/` und ohne
+`PrusaSlicer.ini`) — Telemetrie, `cura.cfg` und Programmeinstellungen verwerfen den Merker
+nicht mehr. Die Vorwahl des Hauptfensters (`_ChosenSetup`) trägt Bestand und Signatur, auch
+leer; Grundlage und Export leiten nach einer Änderung neu her, das Fenster übernimmt die
+erneuerte Wahl (`_ExportWorker.renewed`, `_adopt_renewed_choice`). Jedes Profil liegt einmal
+im Merker (Ausschnitt eines Eintrags mit mehr Arten), ein zweiter Fragender wartet auf ein
+laufendes Lesen, alle Merker messen die Beruhigung vor dem Lesen, auch `_prusa_store`, und
+verfallen mit `discover.cache_generation()`; `find_programs` verwirft ein veraltetes Nein der
+Einzelsuche.
+
+**Nachweis (09.10.2026):** Am ElegooSlicer mit Roberts Einstellungen, Würfel, CPU-Zeit
+unter Fremdlast: zweiter Export im Fensterweg 0,41–0,53 s (ohne gemeinsamen Lesedurchgang
+1,7 s); nach einer Änderung im Slicer leitete vorher jeder Export neu her (0,72–1,13 s), mit
+übernommener Wahl 0,42–0,52 s. Gehalten nach Export, Grundlage, Druckdialog und
+Filamentauswahl 34 statt 72 MiB, die Filamentauswahl danach 0,19 statt 5,9 s. Tests
+`test_slicer_profiles.py` (Merker, neues, umbenanntes und gelöschtes Profil, Telemetrie, Cura
+und Prusa, Ausschnitt, Warten, Suchstand), `test_discover.py`, `test_export_background.py`,
+`test_print_settings_ui.py` (leere Wahl, erneuerte Wahl), `test_ui_export.py`
+(`test_the_3mf_export_reads_the_slicer_stock_in_one_pass` mit echtem Bestand: jede Datei
+einmal je Faden); jede Behebung mit Gegenprobe. Offen im Register als
+[RM-759](ROADMAP.md#rm-759): die Abnahme mit Orca, PrusaSlicer, Cura, Figur und
+Beispielprojekt am echten Fenster. Changelog: ja.
+
+## RM-627: Ein Rand neben einem anderen Überhang ist keine lange Brücke (09.10.2026)
+
+<a id="rm-627-ein-rand-neben-einem-anderen-überhang-ist-keine-lange-brücke-09102026"></a>
+<a id="rm-627"></a>
+
+**RM-627 — Ein Rand, der sich selbst trägt, zählt als lange Brücke, sobald auf seiner Schicht
+ein anderer Überhang liegt.**
+  Gefunden bei RM-572 (09.10.2026): Kinn über der Brust mit einem Kragen von 2 mm um die Rückwand
+  auf Kinnhöhe. Der Kragen ist ein Rand (`ledges`), vom Kinn auf einer Seite unterbrochen und
+  damit ohne beidseitig getragene Richtung; seine Schicht trägt `bridge_width` 46,2 mm. Rat und
+  Bericht nahmen Ränder nur schichtweise aus (`advise._quiet_layers`: Schichten, deren Stücke
+  alle Ränder oder Kanaldecken sind). Mit einem Kinnstreifen von 4,1 mm² (eigene Spannweite 0)
+  daneben zählte die ganze Schicht: Der Bericht meldete „Hier spannt eine Decke frei“ mit
+  46,2 mm am Kragen, und der Rat verlangte Stützen über den Brückenweg. An einer Wand mit
+  U-förmigem Kragen und einem Sporn von 8,5 mm² an einer Säule daneben (Spannweite 6,1 mm)
+  schaltete allein das Stützen ein — ohne den Sporn nicht.
+  **Stellen:** `advise._may_need_support`, `advise._from_spans`.
+  **Fix:** Die Brückenweite einer Schicht ohne Ränder und Kanaldecken messen, an der freien
+  Fläche, die ein übriges Stück berührt, wie `open_bridge_width`; der Ort der Warnung liegt an
+  dieser Fläche.
+  **Abnahme:** Konsole an einer Wand mit Sporn auf derselben Schicht ohne Stützbedarf und ohne
+  Warnung; eine echte Brücke neben der Konsole bleibt gemeldet, mit ihrer Weite und an ihrem Ort.
+
+**Abschluss:** `analysis.span_beside` misst die längste Brücke einer Schicht ohne die Stücke aus
+`quiet`, an der freien Fläche, die ein übriges Stück berührt (`kept_overhang`, wie bei
+`open_bridge_width`); steht kein Stück der Schicht darin, gilt `bridge_width` unverändert, eine
+Schicht nur aus Rändern spannt 0. `_may_need_support` fragt damit die Kanaldecken und Ränder aus
+`support_need`, `_from_spans` die Ränder; Weite und Ort der Warnung kommen aus derselben Fläche.
+`_quiet_layers` und `SupportNeed.quiet_layers` entfallen; ihr letzter Leser,
+`tools/matrix_unit.support_ways` (Tabelle „Stützbedarf gegen das Urteil des Slicers“), warf danach
+`AttributeError` und zählt die Brücken jetzt mit `span_beside` wie der Stützbedarf (Review). Kinn mit
+Kragen: keine lange Brücke mehr, der Befund über kleine Überhänge bleibt (z 44,55, 119,3 mm²), der
+Rat unverändert (Stützen über den Flächenweg). Wand mit U-Kragen und Sporn: kein Stützbedarf,
+kein Stützvorschlag; Kragen allein wie vorher. Tests
+`test_a_shelf_stays_a_ledge_beside_another_small_overhang` und
+`test_a_real_bridge_beside_a_shelf_is_still_reported_at_the_bridge` (Steg 20 mm, Ort am Steg);
+Gegenproben: Schichtweite statt `span_beside` lässt beide und
+`test_a_shelf_on_one_wall_is_a_ledge_and_no_bridge` rot werden, der Ort ohne die Flächenwahl den
+Brückentest. Kein Slicerlauf: Die Übergabe ändert sich nur, wo der Rat bisher allein wegen eines
+Rands Stützen einschaltete, und kehrt dort zum Herstellerprofil ohne Stützen zurück; dass Ränder
+ohne Stütze drucken, belegt [RM-582](#rm-582). Changelog: ja.
+
+**Review (09.10.2026 nachts), behoben:**
+- *Flanke:* Eine Flanke zwischen etwa 14° und 45° legt je Schicht ein Band frei (über der
+  Brückenzugabe, unter der des Überhangs), das Rand und Sporn zu einer freien Fläche verband; die
+  Konsole maß mit (Wand mit zwei Flanken unter 30°, Sporn 9 mm²: 40,1 statt 6,2 mm, Stützen und
+  Warnung). `analysis._widest_bridge` misst mit `touching` nur die Kerne, die ein übriges Stück
+  berühren (ein Kern liegt ganz in einem Überhangstück); gilt auch für `open_bridge_width`. Der Ort
+  der Warnung liegt an der gemessenen Brücke (`span_spot`).
+- *Kosten:* `span_beside` maß jede Schicht mit Rand bei jedem Bericht neu (Waschschüssel 2,8 s für
+  eine Schicht). Gemerkt je Schnitt, Schicht und Auswahl; nimmt die Auswahl nichts weg, gilt
+  `bridge_width` ohne Messung. Warm Waschschüssel 0,00 statt 2,1–3,3 s, Drache 0,00 statt 0,5 s.
+  `cancelled` reicht bis `span_beside`, und `support_need` gibt ihn der Kanalfrage, die ihn je
+  Schicht, Kreisfrage und Decke fragt (Drache 45°: 446 s ohne Abbruch).
+- *Matrix:* siehe oben, `support_ways`.
+- *Kanaldecke:* Der Bericht riet über einem Tunnel von 20 mm seit v0.5.3 „oder eine Stütze“, wo
+  der Rat keine verlangt. `_from_spans` fragt die Kanaldecken der spannenden Schichten
+  (`channel_pieces`, aus der gemerkten vollen Antwort, sonst eng und nur für Stücke, die weiter als
+  15 mm spannen können, `_may_span`): Spannt die Schicht ohne sie weiter, ist es eine Brücke,
+  gemessen und gezeigt ohne die Kanaldecke (Steg über 20 mm neben dem Tunnel: am Steg); sonst nennt
+  der Befund den Kanal und den Übergang unter 45°, ohne Stütze. Kalt am Drachen 45° 21 statt 3 s
+  (alle Stücke gefragt: 136 s), mit gemerktem Stützbedarf 0,9 statt 0,4 s. Kalt heißt: mehr als
+  acht Körper, ohne Bedarfsfrage. Dort hielt der Merker vier Antworten, jeder weitere Körper mit
+  spannender Schicht verdrängte den Drachen, und jeder Bericht nach einer Auswertung zahlte alles
+  neu (Drache und acht Wedge-Locks: 45° 19,8–20,1 s, 60° 6,8–7,1 s CPU je Bericht), dazu die nie
+  gemerkte enge Randfrage (2,7 s). Behoben (Nachprüfung, L1): Der Merker zählt Schnitte statt
+  Antworten, hält einen je Körper der Szene und vier darüber (`keep_answers` aus
+  `print_findings`), je Schnitt vier Antworten, und verdrängt den am längsten nicht gefragten; die
+  enge Randfrage wird mitgemerkt. Zweiter Bericht 0,0–0,1 s, Befunde gleich; die Antworten selbst
+  belegen 0,03–0,04 MiB, ein Schnitt des Drachen, den der Merker nach einer Änderung noch hält,
+  37–43 MiB.
+- *Beleg im Korpus:* Die Abschlussmessung „An Eiffelturm, Becher, Waschschüssel und Datei-Schnitt
+  ändert sich nichts“ lief auf drei Schnitten mit `detail="support"`, die keine Brückenweite tragen.
+  Nachgeholt mit vollem Schnitt (C2/PLA) über 22 Dateien aus `F:\3D Dateien` und dem
+  Drachenarbeitsplatz, 41 Körper, 7 mit spannender Schicht, 3 davon gemischt: Stützbedarf und
+  Brückenweite an keinem geändert. Der Ort der Warnung wandert am Arbeitsplattenreiniger (23,1 mm,
+  z 0,35) vom Rand (73,6; 51,3) an die gemessene Brücke (0,0; −56,2), am Drachen (15,4 mm) von
+  (41,2; 15,2) nach (39,4; 21,4). Den Kanaltext bekommt die Minigolfbahn `obj_1_Birleştir` (25,1 mm,
+  z 6,35, kein Stützbedarf, die Schicht ganz Kanaldecke) — dort stand bisher „oder eine Stütze
+  hilft“. Der Rat ändert sich auch, wo eine Kanaldecke neben einem kurzen Steg
+  liegt (Tunnel 20 mm, Steg über 12 mm vom Bett: vorher Stützen, jetzt keine — folgerichtig zur
+  Kanalregel); ein Slicerlauf zeigte dort nur den Slicer ohne Stützen.
+
+## RM-572: Der Prüfbericht nennt die Stelle, wo viele kleine Überhänge Stützen verlangen (09.10.2026)
+
+<a id="rm-572-der-prüfbericht-nennt-die-stelle-wo-viele-kleine-überhänge-stützen-verlangen-09102026"></a>
+<a id="rm-572"></a>
+
+**Befund (08.10.2026, Review 3):** Der Überhangbefund meldete nur ein einzelnes Stück über
+100 mm². Verlangte der Rat Stützen über die Summe vieler Streifen oder eine schräge
+Unterseite als Feld (RM-570), schwieg der Bericht — am Kinn mit 18° (Streifen bis 6,4 mm²,
+zusammen 189 mm²) und am Drachen (größtes Stück 23,7 mm², zusammen 1 492 mm²).
+
+**Behoben:** `findings.small_overhang_findings` meldet „Viele kleine Überhänge hängen frei
+und brauchen zusammen Stützen.“ an der Schicht mit der meisten Überhangfläche, an ihrem
+größten Stück, mit *Druckoptimal ausrichten* und *Stützbedarf zeigen*. Gefragt wird nur der
+Flächenweg des Rats (`worth_support(need.patch, need.overhang)`), nicht `need.needed`, und
+Inselstücke, Kanaldecken und Ränder (`ledges`) zählen weder in der Fläche noch beim Ort;
+ohne sie muss der Weg weiter tragen und die Fläche über 100 mm² liegen. Ohne Stützbedarf
+nach dem Rat — der Gitterbecher — kein Befund. Die Antwort des Rats (`advise.support_need`)
+holt `body_findings` nur unter der Bedingung der Lagensuche (höchstens acht Körper,
+Stützraum ab 1 000 mm³) und teilt sie mit ihr.
+
+**Review (09.10.2026, `review_rm572_rm624.md`):** Der erste Stand fragte `need.needed` und
+zählte Inselflächen: Ein Sockel mit schwebendem 12- oder 20-mm-Würfel bekam neben der Insel
+„viele kleine Überhänge“ mit 144 bzw. 400 mm² an derselben Stelle, zwei 20-mm-Brücken von
+je 58 mm² (zusammen 115,8, kein Flächenweg) neben `slice.long_bridge` ebenso. Er stellte
+die Bedarfsfrage außerdem ohne Lagensuche: Von 17 kleinen Modellen eines neu
+(`carcassonne-4x4-grid`, +0,45 s, kein Befund), bei mehr als acht Körpern ein Schachsatz
+mit 3,7–7,0 s je Figur, fünf Figuren 23,9 s, kein Befund. Beides ist behoben, und
+der Ort meidet jetzt auch selbsttragende Ränder.
+
+**Nachweis (09.10.2026):** Profil Centauri Carbon 2/PETG über `print_findings`: Kinn
+(Stützraum 2 739 mm³) Befund bei z 44,55 an der Unterseite, 119,3 mm²; Kiefer (8 889 mm³)
+bei z 47,35, 200,1 mm²; Würfel 12 und 20 mm nur Insel; zwei Brücken nur lange Brücke.
+Drache (`obj3.stl`, 2 948 698 Dreiecke, generic-220/PLA): Stützraum 34 178 mm³, Bedarfsfrage
+wie vorher mit der Lagensuche; Befund unverändert bei z 102,75 (x −4,8, y −4,8), Fläche ohne
+Inselstücke 630,6 statt 663,3 mm². Der Befund selbst kostet dort 0,09 s CPU (vorher 0,06);
+die Feldfrage ohne Inselstücke neu zu stellen kostete 5,4 s, das Feld des Rats gilt weiter,
+wo es eine Decke ist. Tests in `test_print_findings.py`
+(Kinn mit Ort im Grundriss und auf der Unterseite, Kragen von 2 mm auf Kinnhöhe, Würfel,
+Brücken, keine Bedarfsfrage ohne Lagensuche), `test_many_small_overhangs_get_a_finding_with_a_place`
+(Kinn und Kiefer, Ort auf der Unterseite an seiner Höhe),
+`test_a_lattice_of_small_self_supporting_pieces_gets_no_supports` (Gitterbecher). Changelog: ja.
+
+## RM-584 (Teil 2): Unter flachen Decken Gitter oder Hybrid, und hohe Bäume bekommen zwei Wände (09.10.2026)
+
+<a id="rm-584-teil-2-unter-flachen-decken-gitter-oder-hybrid-und-hohe-bäume-bekommen-zwei-wände-09102026"></a>
+
+**Befund (09.10.2026):** Unter einer großen flachen Decke blieb die Art des Herstellers,
+bei Elegoo und Bambu also Bäume, unter denen die Decke zwischen den Spitzen durchhängt;
+hohe Bäume brechen mit einer Wand (Recherche Nr. 4, 5).
+
+**Behoben:** Der Rat schlägt unter einem flachen Stück Gitter vor statt Bäumen —
+über „automatisch“ nur, wo es beim Programm Bäume heißt (`handover.tree_styles`), bei
+Cura, wo die Art der ganzen Platte gilt, ausdrücklich —, und Hybrid (`tree_hybrid`), wo
+das Programm es kennt und daneben kleine Stücke auf dem Modell aufsetzen
+(`details_on_model`) oder viele Inseln beginnen; PrusaSlicer und Cura bekommen Gitter.
+Gitter und Baum zweier Körper ergeben Hybrid nur, wo die Art der Platte gilt
+(`style_per_part`), ohne Hybrid Gitter; bei Orca und Prusa nennen Zeile und Feld die Teile
+mit eigenem Wert. Bei Cura gewinnt die flache Decke gegen den Baum eines anderen Körpers,
+ein Wechsel der Art nennt keine Teile, und was Cura gleich druckt („automatisch“ und
+Gitter), schlägt der Dialog nicht vor. Neues Feld *Wände der Bäume* (`support.tree_walls`, Orca
+`tree_support_wall_count`, Creality `tree_support_wall_count_tree`, Cura
+`support_wall_count`; PrusaSlicer nimmt es nicht); ab 100 mm Säulenhöhe vom Boden des
+Körpers (`ModelSupport.tallest_column`) zwei, gefragt mit `printed_style` gegen
+`trees`. ElegooSlicer, OrcaSlicer und Anycubic lesen die Wandzahl unter gefüllten
+organischen Bäumen nicht, unter hohlen schon (`hollow_trees`); der Druckdialog filtert
+den Rat dort (`IGNORED_UNDER_TREES_BY_PROGRAM`, Hinweis am Feld). Durchsicht und
+Nachprüfung: `.claude/.state/drache-2026-10-08/reviews-2026-10-09/review_rm584_teil2*.md`.
+
+**Nachweis (09.10.2026):** Stil je Deckenform in sieben Programmen
+(`output/drache-2026-10-08/stil-rm584*`); Wandzahl am ElegooSlicer an einem 120 mm hohen
+Turm: Hybrid mit zwei Wänden 14 % mehr Stützmaterial, organisch derselbe G-Code. Tests in
+`test_slice_findings.py` (Deckenform, hohe Bäume, Hybrid aus zwei Körpern),
+`test_print_settings.py` (Übergabe je Familie, Filter unter Bäumen, Feldhinweis),
+`test_manufacturer.py`, `test_print_time.py`; Slicertests in `test_real_slicers.py`
+(Wandzahl je Orca-Programm, Hybrid je Objekt, Abstand unter hohlen Bäumen). Messskript
+`.claude/.state/drache-2026-10-08/stil_je_decke.py`. Pilz und Figur auf einer Platte
+(Nachprüfung N1, N2; `slicer_stil.py`, `hut_bander.py` daneben): Cura bekommt
+`support_structure=normal` statt `tree` und trägt den Hut auf senkrechten Säulen gleicher
+Dichte statt auf Ästen; ElegooSlicer gibt dem Pilz `normal(auto)` und der Figur
+`tree(auto)`, wie die Zeile „Stützen · Figur, Pilz mit Gitter“ sagt.
+Offen im Register: der Fuß hoher Bäume.
+Changelog: ja.
+
+## RM-624: Ein Slicertest hält Kontaktabstand und untere Trennschicht in sechs Programmen (09.10.2026)
+
+<a id="rm-624-ein-slicertest-hält-kontaktabstand-und-untere-trennschicht-in-sechs-programmen-09102026"></a>
+<a id="rm-624"></a>
+
+**Befund (09.10.2026, Nachprüfung von RM-622):** Was RM-622 über die Programme sagt —
+organische Bäume runden den Abstand auf die Schichten des Modells, vier Programme drucken
+unter Bäumen keine untere Trennschicht — war mit einer örtlichen Sonde gemessen, und kein
+Test hielt es. Die Messleser kannten `G92 E…` nicht: Unter absoluten Extrusionswerten galt
+nach einem Rücksetzen jede Bahn als Leerfahrt.
+
+**Behoben:** `tests/gcode_contact.support_contact` misst Abstand und Trennschichten im
+G-Code (Raster `CONTACT_CELL`, Kontakt bis `CONTACT_AIR`). Ein eigenes Modul, das nur
+`test_real_slicers.py` importiert: In `tests/helpers.py` wählte `tools/ci_selection.py` für
+jede Änderung daran 39 Fensterdateien und drei Slicerdateien, jetzt nur
+`test_real_slicers.py`. Die Messung zählt Extrusion relativ, absolut und mit `G92` wie der
+Drucker und Bögen (`G2`/`G3`) entlang ihrer Bahn mit nachgeführter Position — Bambu Studio
+und PrusaSlicer schreiben in Baumdrucken zehntausende davon. Die Unterseite rechnet mit der
+Höhe der eigenen Stützbahn (`;HEIGHT:`, Bambu `; LAYER_HEIGHT:`, ohne Angabe der Schritt im
+eigenen Stapel), nicht mit allen Stützebenen des Drucks zusammen. Eine Zelle, in der jenseits
+des Kontakts Modell steht, ist Nachbarschaft, kein Kontakt: Mit eigener Stützschichthöhe
+wechseln sich dort Wand- und Stützebenen ab und maßen −0,24 bis 0,13 mm. `inset` nimmt nur
+Zellen im Inneren der Aufsicht aller Modellbahnen; PrusaSlicers `Skirt/Brim` zählt nicht
+dazu. `test_the_support_contact_arrives_as_solidon_says` schneidet eine Platte über einer
+Säule (PETG, 0,2-mm-Schichten) in ElegooSlicer, OrcaSlicer, Bambu Studio, Creality Print,
+Anycubic Slicer Next und PrusaSlicer mit Gitter und Baum, mit Werten fern jedes
+Herstellerprozesses (dort 0,2 mm Abstand, Anycubic 0,1, untere Trennschichten 2, PrusaSlicer
+0): unter Gitter 0,28 mm und drei untere Trennschichten, unter Bäumen 0,44 mm, das sind 2,2
+Schichten und gerundet wie abgeschnitten 0,4. Zugesichert werden oben und unten der Abstand
+(±0,02 mm), mehr als 20 Zellen je Seite und die genaue Zahl unterer Trennschichten nach
+`advise.rounds_to_whole_layers` und `handover.ignored_under_trees`.
+
+**Nachweis (09.10.2026):** zwölf Fälle an den echten Programmen unter Windows grün (12
+passed, Exit 0). Gemessen: unter Gitter oben und unten 0,28 mm, untere Trennschichten in der
+Orca-Familie vier (die geschriebenen drei und ihre Kontaktlage), in PrusaSlicer drei; unter
+Bäumen oben und unten 0,4 mm, unten drei Lagen in ElegooSlicer und OrcaSlicer, keine in den
+übrigen vier; 57 bis 201 Zellen je Seite. Die frühere Begründung, die Unterseite unter Gitter
+sei nicht messbar, war ein Messfehler (Stapel verschiedener Stellen vermischt); an den
+RM-622-G-Codes misst die Unterseite jetzt bei 4 und 6 mm Rand gleich 0,28 mm.
+Synthetische Gegenproben in `test_real_slicers.py`: `G92`, Bögen, Bahnhöhe mit und ohne
+Angabe (die unterste Stützlage mit eigener Höhe wie in den echten G-Codes), Nachbarschaft
+oben und unten, Rand und `Skirt/Brim` als Ring außen um das Dach. Jede der sieben
+verstümmelten Fassungen der Messung (ohne `G92`, ohne Bögen, Bogen als Sehne, ohne
+Bahnhöhe, ohne Nachbarschaft unten, ohne Nachbarschaft oben, `Skirt/Brim` als Modell) und
+die alte aus `c95d542ed` werden dort rot, jede an der Zusicherung ihres Falls. Linux und macOS (Anycubic 2.0.0.5 gegen 2.0.0.3, Laufzeit
+gegen das 120-Minuten-Limit) nimmt die Slicerauswahl beim Push auf main ab, denn die CI läuft
+nur dort (Entscheidung Robert). SuperSlicer fehlt: RM-622 hat es nicht gemessen. Cura
+fehlte zuerst, weil es aufrundet und Solidons Tabelle es nicht wusste. Cura 5.13 an derselben
+Platte: unter Gitter oben genau der geschriebene Abstand (0,28 und 0,44 mm, mit einer
+Bruchteillage der Stütze), unten aufgerundet (0,4 und 0,6); unter Bäumen oben und unten
+aufgerundet (0,4 und 0,6). Mit [RM-628](#rm-628) steht Cura in `_CONTACT_PROGRAMS`: Die
+Sollwerte oben und unten kommen für alle sieben Programme aus
+`advise.printed_support_gaps` (statt `round(gap / layer)` nach `rounds_to_whole_layers`),
+für Cura sichert der Test dazu den Feldsatz mit dem gedruckten Wert zu, und ein dritter
+Cura-Fall schneidet bei 0,28-mm-Schichten (Gitter 0,30 → oben 0,30, unten 0,28). Unter Gitter
+schreibt die Übergabe Cura unten das Vielfache im Band selbst: 0,28 → oben 0,28, unten 0,20;
+unter Bäumen 0,44 → oben und unten 0,60; je drei untere Lagen. Changelog: nein (Test).
+
 ## RM-027 entfällt mit dem privaten Index (09.09.2026)
 
 **RM-027 — Gewöhnlichen Commit aus veraltetem gemeinsamem Index absichern**
@@ -32799,7 +33125,7 @@ früher geschlossene hat die Durchsicht an ihren Rändern nachgezogen.
   findet solche Familien, `boolean._nested_united` vereinigt sie wie gedruckt und prüft
   es am Volumen; ein Teil frei in einem Hohlraum bleibt eines. Lehnt das Auflösen ab,
   weil sich eine Schale selbst kreuzt, sagt es `boolean.parts_not_united` mit *Stelle
-  zeigen* (Laptop-Ständer, [RM-253](ROADMAP.md#rm-253)). `ae178de8c`, Tests
+  zeigen* (Laptop-Ständer, [RM-253](#rm-253)). `ae178de8c`, Tests
   `test_boolean.py::test_a_part_inside_the_material_of_another_is_united_first_and_it_says_so`,
   `::test_a_part_in_a_hollow_stays_a_part`, `::test_parts_that_cannot_be_united_say_so`.
 - **RM-249** (Kante innerhalb der Hülle, [Abschluss](#rm-249)): Die Kantenprüfung nannte
@@ -33088,7 +33414,7 @@ der Runde stehen als RM-273 bis RM-280 in `ROADMAP.md`.
   `tests/test_autosplit.py::test_a_seam_without_room_for_a_connector_is_judged_once` und
   `::test_the_seam_search_cuts_without_filaments`. `1d8dd68aa`. Was am Laptop-Ständer
   bleibt, ist nicht mehr die Stützschätzung: 8,3 s einmalige Eigenkreuzungssuche der
-  großen Hälfte (eine Schale kreuzt sich 1 121-mal selbst, [RM-253](ROADMAP.md#rm-253))
+  großen Hälfte (eine Schale kreuzt sich 1 121-mal selbst, [RM-253](#rm-253))
   und 7,7 s Schnitte über den GEOS-Weg, der den Interpreter-Lock hält. Naht- und
   Stiftlagen über BLAS (REST-TEILEN-06) stehen bei [RM-187](ROADMAP.md#rm-187).
 
@@ -42796,7 +43122,7 @@ Schritt mit der Warnung `boolean.parts_not_united`. Tests in `tests/test_boolean
 `test_a_crossing_scene_tool_stops_a_difference_with_its_own_id`. Am echten Laptop-Ständer am
 06.10.: `hole_1` bis `hole_4` rechnen mit `boolean.parts_not_united`, `hole_11` hält mit dem
 Satz zur sich selbst kreuzenden Oberfläche. Dass §17.2 den Halt nennt, steht mit Ansage bei
-[RM-385](#rm-385); die übrigen Fehlbilder am Original bei [RM-253](ROADMAP.md#rm-253).
+[RM-385](#rm-385); die übrigen Fehlbilder am Original bei [RM-253](#rm-253).
 
 ## RM-383: Viele getrennte Teile halten keine Boolesche mehr an (06.10.2026)
 
@@ -43929,7 +44255,7 @@ Streifen in der Aufsicht vereinigt, ohne Kanalstücke, nur wo sie im Mittel brei
 als `OVERHANG_MARGIN`. Dieselbe Feldfrage entscheidet den Stützort
 (`ModelSupport.open_field`: sonst „nur vom Bett“ am Kinn über der Brust) und welche
 Überhänge die Kanalsperre ausspart (RM-566). Wo viele kleine Überhänge Stützen
-verlangen, nennt der Prüfbericht noch keine Stelle: [RM-572](ROADMAP.md#rm-572).
+verlangen, nannte der Prüfbericht noch keine Stelle: [RM-572](#rm-572).
 
 **Nachweis (08.10.2026):** `tests/test_advise.py::test_a_sloped_underside_is_one_field`
 (Kinn, Feld unter der Summe 150, Feld unter 100, Rauschen einer Wand),
@@ -45496,6 +45822,135 @@ und die Spalten unverändert. Mit 150 % Schrift reichen die Felder bis 527 px st
 Changelog: ja, unter *Drucken und Übergabe an den Slicer* — mit vergrößerter Schrift hatte
 `v0.5.3` den Fehler.
 
+## RM-531 (Teil): Sieben Fenstertests außerhalb von Windows sind auf allen vier Plattformen grün (09.10.2026)
+
+<a id="rm-531-teil-sieben-fenstertests-außerhalb-von-windows-sind-auf-allen-vier-plattformen-grün-09102026"></a>
+
+**Befund (07.10.2026, Sonde 37495714708):** Nach den ersten Plattformfixes blieben sieben
+Testfunktionen außerhalb von Windows rot (U Linux, A macOS ARM, I macOS Intel):
+`test_widget_lifetime[KeyDialog]` (UAI, einer von zehn überlebt),
+`test_a_button_wraps_its_label_instead_of_cutting_it` (UAI, der Knopf bricht nicht um),
+`test_no_element_of_the_bar_is_squeezed` (UAI, Felder 356/364 statt 398/404 px bei 1600 px),
+`test_a_long_setup_failure_stays_in_the_scroll_area` (UAI, kein Rollbalken bei 200 Zeilen),
+`test_the_sketch_area_fits_a_laptop_screen` (AI, 977 statt höchstens 900 px),
+`test_the_left_column_shares_its_height_with_all_four` (AI, inzwischen `…_with_all_three`) und
+`test_chat_setup_follows_late_status_text…` (AI, Schlüsseldialog 105 statt 120 px).
+
+**Stand:** In der Fensterauswahl 37936316061 (welle2 `a9e4d3f64`, 121 Fensterdateien) liefen alle
+sieben auf Windows, Linux, macOS ARM und dem Intel-Mac grün. `test_widget_lifetime.py` (70
+Fälle), `test_selection_operations.py` (35), `test_transform_ui.py` (35), `test_generate_ui.py`
+(104) und `test_dialog_layout.py` (4) endeten je Plattform mit Exit 0; in `test_sketch_editor.py`
+(1 von 289) und `test_ui.py` (1 von 706, Intel-Mac 5) war je nur ein welle2-Fall rot (Escape im
+Skizzenmodus, Messausdruck; Intel dazu Organizer), keiner der sieben, behoben in `6e200fc31`.
+Die Fenstergruppe sammelt in diesen sieben Dateien 1 243 Fälle, dieselbe Zahl wie die Summe der
+Dateiergebnisse im Protokoll; die sieben stehen darin. Welcher der Plattformfixes zwischen dem
+07. und 09.10. welchen Fall behob, ist nicht einzeln zugeordnet. Changelog: nein.
+
+## RM-635: Prozesstests zählen ihre Zeit ab dem Zustand, und der Abbau wartet auf das Ende des Prozesses (09.10.2026)
+
+<a id="rm-635-prozesstests-zählen-ihre-zeit-ab-dem-zustand-und-der-abbau-wartet-auf-das-ende-des-prozesses-09102026"></a>
+<a id="rm-635"></a>
+
+**Befund (Pakete CI und SK, 09.10.2026):** Im vollen Entwicklungstor wurden sechs Fälle aus
+`tests/test_process.py` (Grenzen 3 bis 5 s) und
+`test_suite_script.py::test_a_portion_that_swallows_tests_is_halved_until_it_runs` (60 s) rot,
+einzeln grün; wiederholt auch `test_kernel_process.py::test_a_job_gives_the_same_bytes_in_the_helper_as_here[voxel]`
+(120 s) und `test_cura_machine.py::test_every_way_out_of_a_mount_closes_its_pipes[point]`.
+
+**Ursache, mit Lastgegenprobe:** Mit 192 rechnenden Prozessen auf 32 Threads braucht ein frischer
+Interpreter bis zu seiner ersten Ausgabe im Mittel 5,5 s statt 0,07 s (über `run_limited` 10,9 s
+statt 0,19 s, Höchstwert 13,3 s), und unter genau dieser Last werden dieselben sechs Fälle aus
+`test_process.py` rot. Die festen Grenzen zählten den Interpreterstart des Kindes mit. Der
+Halbierungstest braucht ruhig 0,87 s und riss dort die 60 s: Git-Bash bildet jeden Teilprozess über
+eine nachgebaute `fork` nach. `voxel` brauchte 81 s statt 1,9 s, weil der Hilfsprozess
+absichtlich eine Klasse tiefer rechnet. Eine abgesenkte Klasse des pytest-Arbeiters ist es nicht:
+Eine Prioritätssonde über `test_kernel_process.py` und `test_kernel_process_lifecycle.py` fand
+keinen Test, der sie zurücklässt. Der Cura-Fall `[point]` hatte dieselbe Ursache (erste Zeile in
+1 s) und war in `90467cefb` schon behoben; unter Last zeigte er eine zweite im Produktcode:
+`process.terminate_process_tree` wartete nach dem harten Beenden fest 0,5 s und warf dann selbst
+`TimeoutExpired`. Ein beendetes Kind mit acht rechnenden Fäden braucht schon ruhig im Median
+0,53 s bis zu seinem Ende, unter Last bis 3,2 s; der Lauf meldete dann einen Zeitablauf statt
+seines Grundes (Abbruch, Zeitgrenze, Ausgabegrenze, oder ein Ergebnis, nach dem der Slicer nicht
+endete). Seit `df8fae688`, also in jeder veröffentlichten Version seit 0.3.0.
+
+**Behoben:** `PROCESS_KILL_SECONDS` (30 s) ist die Grenze für das Ende eines hart beendeten
+Prozesses und für `taskkill`, die Schonfrist davor bleibt 0,5 s; Test zuerst
+(`test_a_killed_process_that_takes_a_moment_to_die_is_waited_for`, beide Zweige, am alten Stand
+rot). In `test_process.py` zählt eine Zeitgrenze, die das Thema ist, ab dem Ereignis
+(`_clock_held_until`: die 0,2 s ab dem lebenden Nachkommen oder dem hängenden Empfänger),
+Nachkommen werden über ihre Prozesskennung als beendet nachgewiesen statt über eine Marke nach
+fester Wartezeit, ein blockierender Empfänger über die Ordnung der Ereignisse; reine
+Hängergrenzen sind `HANG_GUARD` und entscheiden keinen Fall. Wo die Reaktion selbst das Thema
+ist (Ausgabegrenze, Elternende, Abbruch, `linger`), gilt `REACTION` = 10 s ab dem Ereignis — nach
+der Nachprüfung (N-3): Ein Prozesskern, der nur alle 20 s hinsah, blieb ohne sie grün und ist
+jetzt in fünf Fällen rot. `test_suite_script.py` wartet,
+solange Aufrufe, Ausgabe oder Dateien im Arbeitsordner dazukommen (`run_while_moving`, Stille
+120 s, höchstens 500 Aufrufe, Gesamtgrenze 30 min gegen Ausgabe ohne Ende — N-4, Selbsttest am
+alten Stand rot), `test_kernel_process.in_a_worker`, solange dieser Prozess oder ein
+Hilfsprozess Rechenzeit bekommt (Stille 60 s, höchstens 30 min). Dasselbe Muster
+hatten `test_print_settings.py::test_a_slicer_that_says_too_much_is_not_an_error_code` (auch im
+Tor von Paket E rot) und `test_a_slicer_with_endless_output_is_stopped`: 4 s ab dem Start als
+bloße Hängergrenze, jetzt 120 s bei einem Kind, das 240 s schliefe. Regel in
+`.claude/rules/tests.md` („Fremdlast macht auch funktionale Tests rot“).
+
+**Nachweis:** Unter derselben Last, unter der vorher sechs Fälle rot waren: `test_process.py` und
+die fünf Cura-Einhängefälle 29 von 29 grün; in einem zweiten Lauf unter noch schwererer Last
+(Interpreterstart bis 16,6 s) alle Fälle aus `test_process.py`, die 13 Bitgleichheitsfälle
+(`voxel` 64 bis 101 s) und die Cura-Fälle grün, der Halbierungstest grün nach 295 s. Sechs
+Mutationen am Prozesskern (Zeitgrenze ohne Baum, Erfolg ohne Nachkommen, Ausgabegrenze erst am
+Ende, Empfänger im Faden der Uhr, ohne `linger`, `linger` sofort) machen je ihren Fall rot; die
+Wartelogiken selbst haben Gegenproben (stiller Hänger, Aufrufschleife, Rechnung ohne Ende).
+Changelog: ja, unter *Drucken und Übergabe an den Slicer*.
+
+## RM-344: Die Release-CI fährt die Rendererfälle ohne Fenster auf allen vier Paketplattformen (09.10.2026)
+
+<a id="rm-344-die-release-ci-fährt-die-rendererfälle-ohne-fenster-auf-allen-vier-paketplattformen-09102026"></a>
+<a id="rm-344"></a>
+
+**Befund (Review seit 0.5.1, E-M1, Commit `6f0be89df`):** Kernmatrix und Versionswächter wählten
+`rendering` ab; von den Rendererfällen ohne Fenster (113 am 09.10.2026) liefen nur die drei aus
+`test_render_factory.py` außerhalb von Windows, die übrigen 110 nur in der Windows-Fenstergruppe.
+Der Vulkan-Wächter prüfte feste Jobnamen, darunter drei ohne Bildtest, und ließ sich von einem
+Kommentar erfüllen. Entschieden (Robert, 06.10.2026): die Rendererfälle auch unter Linux und macOS.
+
+**Behoben:** CI-Gruppe `rendering` in `tools/run_suite_isolated.py` (Rendererfälle ohne Fenster,
+alle Dateien außer den zwei Vertragsdateien, je Datei ein Prozess); mehrere `--ci-group` in einem
+Aufruf teilen sich eine Sammlung, eine rote Gruppe hält die andere nicht an. `window-contracts`
+fährt unter Linux und auf Apple Silicon Verträge und Rendererfälle in einem Aufruf. Der Intel-Mac
+fährt denselben Schritt im eigenen Job `window-contracts-intel`, auf den das Paket nicht wartet:
+Das Intel-Paket ist der längste Paketjob (11,7 min im Lauf 37530876754), eine Prüfzelle davor
+verlängerte den Tag-Lauf um jede Minute Wartezeit auf einen der fünf macOS-Plätze. Stattdessen
+hält er die Releaseakten von Linux, Windows und macOS an, und `sign_release.verify_ci_run` nimmt
+keinen Lauf an, in dem er rot ist. Der Versionswächter `latest` fährt beide Gruppen unter Linux,
+auch nach einem roten Stil-, Typ- oder Kernschritt, und nicht bei `tests_only`. Ein Rendererfall
+mit Fenster (`test_held_frames_arrive_as_one_after_the_release`) läuft weiter nur unter Windows,
+wo die Fenstergruppe läuft ([RM-531](ROADMAP.md#rm-531)). Konzept CI-03 bis CI-05 und §3,
+`.claude/rules/tests.md`, `auslieferung.md`, `/erzeugen` (keine Fenster- oder Slicerauswahl
+während eines Tag-Laufs), Karten und README nachgezogen.
+
+**Nachweis:** `test_every_rendering_case_runs_on_every_platform_in_a_release_job` leitet aus
+Workflow und Markerwahl ab, dass jeder Rendererfall ohne Fenster auf jeder Paketplattform in einem
+Pflichtjob läuft — worauf das Paket wartet oder was jede Releaseakte anhält. Der Sollwert
+„Rendererfall“ steht als Wert im Test, die Markerauswahl kommt aus pytests öffentlicher
+Sammlung, eine Schrittbedingung außerhalb einer Positivliste, `continue-on-error` am Schritt und
+`--plan-only` machen ihn rot. Zehn Gegenproben (Markerwahl zurückgedreht, nur Linux, Intel-Mac auf
+dem falschen Läufer, Intel-Prüfung ohne Wirkung auf die Linux- oder die Mac-Akte, Versionswächter
+ohne Renderer, `if: runner.os == 'Windows'`, `if: false`, `--plan-only`, `continue-on-error`) und
+eine in die andere Richtung; die drei Schrittmutationen und eine um `gizmo` verengte Gruppe
+blieben am vorigen Wächter grün. `test_ci_runner.py` hält den Marker der Gruppe als Wert und den
+Gleichlauf zwischen Sammlung und `pytest -m` je Gruppe. Der Vulkan-Wächter liest die zeichnenden
+Linux-Jobs aus ihren Aufrufen und die Pakete aus den apt-Zeilen, die xcb-Prüfung verlangt die
+vier Linux-Jobs mit `xvfb-run`. Die Simulation läuft je Paar aus Läufersystem und Skript einmal:
+die Wächterfamilie 20 Fälle in 6,9 s statt 20 in 10,9 s am ruhigen Rechner, Zeitgrenze wieder
+60 s. Rendererprobe auf dem Wegwerfzweig `wegwerf/renderer-probe`, Lauf 37894162728, alle grün,
+0 übersprungen außer den drei nativen Fällen von `test_render_factory` auf dem Intel-Mac
+(gewollt): Linux 6:40 min (Renderer 110 Fälle in 54 s), macOS ARM 8:15 min (91 s), Intel-Mac
+11:10 min (74 s), Windows unverändert 9:08 min, `latest` 5:48 min. Nach den Review-Funden, vor
+der Vorgabe ohne CI auf Zweigen: zweite Rendererprobe 37942642659 (window-contracts auf drei
+Läufern, `window-contracts-intel`, `latest`) grün, Slicerauswahl 37942574165 auf drei Läufern
+grün; die Fensterauswahl 37942569808 war nur in Fällen rot, die auf welle2 a9e4d3f64 genauso
+rot sind (Lauf 37936316061). Changelog: nein.
+
 ## RM-593 und RM-594: Auswertung wächst nicht mehr je Schritt, losgelassene Netze werden frei (09.10.2026)
 
 <a id="rm-593-und-rm-594-auswertung-wächst-nicht-mehr-je-schritt-losgelassene-netze-werden-frei-09102026"></a>
@@ -46245,6 +46700,755 @@ sechs Sprachen „ab 0.5.0“ neben „Version 0.5.3“, wie im Repository. Chan
 
 **Abschluss:** Der Abschnitt *Bausteine verwalten* beginnt offen, solange der eigene Bausteinordner nichts hält (`PartCatalog`, `_own_library_is_empty`). Gezählt werden gespeicherte Rezepte und hinzugefügte Bausteine, dieselbe Frage wie für Weitergabe, *Bearbeiten* und *Entfernen* (`_in_own_library`, vorher dreimal hergeleitet); ein mitgereister und ein `.py`-Baustein zählen nicht, `PartSpec.own` zählte anders. Danach gilt der Merker (`remember`, RM-491), und ein eigener Baustein klappt den Abschnitt wie bisher auf (RM-455; dass dieses Aufklappen gemerkt wird, steht in [RM-658](ROADMAP.md#rm-658)). Damit stehen *Auswahl als Baustein speichern …*, *Baustein aus Datei hinzufügen …* und beide Sperrgründe ohne Klick da, wie in 0.5.1 (Rückschritt seit `48ffcf145`, in 0.5.2 und 0.5.3). Weil der Weitergabegrund jetzt vorn steht, sagt er ohne eigenen Baustein „Speichern Sie zuerst einen eigenen Baustein, um ihn weiterzugeben.“ statt zum Wählen aufzufordern, das bei einem eingebauten in die nächste Absage führte. Die Hinweistests prüfen den Grund ohne vorheriges Aufklappen und stellen die Bibliothek ohne eigene Bausteine selbst her (`no_own_parts`); `test_the_closed_management_names_what_it_holds` prüft den zugeklappten Zustand nach einem Klick; neu `test_a_fresh_catalogue_shows_its_management_without_a_click` und `test_only_a_part_in_the_own_library_closes_the_management` (Rezept und hinzugefügt zu, mitgereist und `.py` offen). Gegenprobe über ein Plugin, je Mutation von acht Tests rot: immer zu 6, immer offen 2, Prädikat über `PartSpec.own` 2, alter Weitergabegrund 3; Katalogtests 52 grün, Handbuch-, Katalog-, Wortlaut- und Changelogtests 539 grün. Die Handbuchseiten *Eigene Bausteine* und *Bausteindateien austauschen* nennen Abschnitt und Knopf in allen sechs Sprachen, der eingefrorene Musterbestand trägt die neuen Seitenschlüssel; Changelog 0.6.0. Fenstersonde am echten Fenster, frischer Nutzerordner: 4 von 4, *Speichern*, *Hinzufügen* und beide Sperrgründe ohne Klick sichtbar, der Weitergabegrund schickt zum Speichern. Umgesetzt von Claude (Thread „Bedienung und KI“).
 
+## RM-628: Solidon rechnet mit Curas Aufrunden des Stützabstands (09.10.2026)
+
+<a id="rm-628-solidon-rechnet-mit-curas-aufrunden-des-stützabstands-09102026"></a>
+<a id="rm-628"></a>
+
+**Befund (09.10.2026, beim Beheben von RM-624):** Eine Sonde an Cura 5.13 (Platte über
+einer Säule, PETG, 0,2-mm-Schichten) druckte unter Gitter oben genau den geschriebenen
+Abstand (0,28 und 0,44 mm, mit einer Bruchteillage der Stütze) und unten aufgerundet (0,4
+und 0,6), unter Bäumen oben und unten aufgerundet (0,4 und 0,6); der Drachenbericht
+(`output/drache-2026-10-09/rueckstaende/bericht.md`, Abschnitt 5/6) las dasselbe aus
+`TreeSupportSettings.h:62`. `advise.WHOLE_LAYER_GAP_FLAVOURS`, `support_gap_target`,
+`rounds_to_whole_layers` und der Feldsatz „Cura rechnet … in ganzen Schichten“ nahmen
+dagegen für Cura immer ganze Schichten zur nächsten an. Folge: PETG bekam unter Curas Gitter
+eine Schicht (0,2) statt 0,28 vorgeschlagen, auch die Cura-Grundlage trug sie, und der Satz
+am Feld nannte eine Rundung, die Cura oben nicht macht, und verschwieg die, die es macht.
+
+**Quelltext (CuraEngine 5.13.0):** `round_up_divide` für die Abstandslagen unter Bäumen
+oben und unten (`include/TreeSupportSettings.h:62–63`) und unter Gitter unten
+(`src/support.cpp:1119` in `generateSupportAreasForMesh`, `:1703` in
+`generateSupportBottom`). Oben unter Gitter zieht `support.cpp:1011` ganze Lagen ab
+(`z_distance_top / layer_thickness + 1`), und liegt der Abstand zwischen zwei Schichten,
+druckt Cura die oberste Stützlage als Bruchteillage tiefer (`support_fractional_roof`,
+`support.cpp:1757`; `z_offset = -leftover_support_distance`,
+`src/settings/PathConfigStorage.cpp:165`; geschrieben bei `gcode_layer.z_ + z_offset`,
+`src/FffGcodeWriter.cpp:4000`).
+
+**Behoben:** Eine Auskunft für alle Programme, oben und unten: `advise.gap_rounding`
+(`exact`, `nearest`, `up`; Cura `up` unter Bäumen und immer unten, oben unter Gitter
+`exact`; die Orca-Familie und PrusaSlicer `nearest` unter organischen Bäumen, Orca auch neben
+dem Turm) und `advise.printed_gap`, der gedruckte Wert. `rounds_to_whole_layers` fragt sie
+für oben (Signatur unverändert), `WHOLE_LAYER_GAP_FLAVOURS` entfällt,
+`slicer_keys.support_gap_in_whole_layers` heißt `rounds_support_gap_up`. Unter Curas Gitter
+rät Solidon jetzt den Wert des Materials genau (PETG bei 0,2 mm 0,28, bei 0,12 mm 0,168),
+unter Curas Bäumen wie bisher das Vielfache innerhalb der Materialgrenzen — welches, sagt
+das Material, nicht die Rundungsart; ein Vielfaches druckt jeder Slicer genau, und
+„kleinstes Vielfaches ab Ziel“ hätte PETG bei 0,2 mm unter Bäumen 0,4 über dem Höchstwert
+0,3 gegeben, anders als in der Orca-Familie. Der Baumspitzenrat (`tip_gap`) liefert schon
+ganze Schichten und druckt in Cura so. Die Cura-Grundlage fragt mit ihrer Art (keine, also
+Gitter) und trägt den Wert des Materials; ohne Materialwerte (TPU) bleibt Solidons 0,2, statt
+auf die nächste Schicht gerundet zu werden.
+
+**Unten schreibt die Übergabe selbst** (Fertigstellung, 09.10.2026 abends): Mit dem genauen Wert oben
+hob Curas Aufrunden den Stützfuß unten über den Höchstwert des Materials — PETG bei 0,2 mm
+Schicht 0,4, bei 0,28 mm 0,56 statt höchstens 0,30; darüber liegt die erste Stützlage in der
+Luft. Solidon hat kein Feld für unten. `advise.cura_bottom_gap` sagt deshalb, was Cura als
+`support_bottom_distance` bekommt: unter Gitter das Vielfache, das Solidon meint
+(`advise.whole_layer_gap`: das nächste, im Materialband, wenn der Wert darin liegt; ein eigener
+Wert außerhalb bleibt beim nächsten), unter Bäumen den Wert von oben. `handover._for_supports`
+schreibt es, `slicer_keys.CURA_MIRRORED` spiegelt `support_z_distance` nur noch nach oben;
+je Teil geht es über dieselbe Ableitung (`object_keys`). `support_gap_target` wählt sein
+Vielfaches über dieselbe Funktion. Der Feldsatz nennt, was Cura druckt: „Unter Baumstützen
+rundet Cura den Stützabstand auf {gap} auf.“ und unter Gitter, wo die Stütze auf dem Modell
+stehen darf, „Cura druckt den Stützabstand oben genau, unten in ganzen Schichten zu {gap}.“
+(sechs Kataloge), mit den Materialgrenzen wie die Übergabe (`limitation(material=…)`,
+`setting_limitations`, Druckdialog). Die Druckzeit hängt nicht am Abstand
+(`print_time._support_columns` lässt die Säulen bis an die Decke reichen); dort war nichts zu
+ändern.
+
+**Nachweis (09.10.2026):** Test zuerst: `test_each_program_prints_the_gap_as_it_rounds`
+(Familie, Art, Seite als Tabelle, 24 Fälle), `test_under_curas_grid_the_gap_is_the_materials`,
+`test_cura_says_what_it_prints_of_the_gap` und
+`test_cura_gets_the_materials_gap_from_its_foundation`; am echten Programm
+`test_curas_support_gap_arrives_as_solidon_says` mit eigener kleiner Messung
+(`_cura_support_gaps`, je Millimeter Bahn ein Punkt im Ring zwischen Säule und Plattenrand,
+`;TYPE:`, `M82`/`M83`, `G92 E`; geprüft an `test_the_cura_gap_measure_reads_fractions_resets_and_the_ring`).
+Gemessen in Cura 5.13 (Ender-3 V3 SE, erste Lage 0,25 mm): Gitter mit 0,28 oben 0,28 und
+unten 0,40, Baum mit 0,44 oben und unten 0,60; je Seite 267 bis 482 Bahnpunkte. Gegenprobe
+mit dem alten Runden (`gap_rounding` für Cura `nearest`): 17 von 34 Fällen in Schnitt und
+Cura-Test rot, darunter beide Läufe am echten Programm, und 14 von 38 in den
+Druckeinstellungen. Betroffene Testdateien (Schnittbefunde, Druckeinstellungen, Export, Rat,
+Übersetzungen, Changelog, Roadmap, vier Cura-Dateien, Floß, Teilwerte, Schätzung,
+Sprachregeln, Karten, die zwei neuen Fälle aus `test_real_slicers.py`): siehe Commit.
+
+**Nachweis der Fertigstellung:** Test zuerst `test_a_whole_layer_gap_is_the_nearest_inside_the_material_band`
+(9 Fälle), `test_cura_gets_its_bottom_gap_in_whole_layers_under_grid` (7) und
+`test_cura_gets_the_bottom_gap_it_prints_as_meant` (6, Platte und je Teil); der Feldsatztest
+nennt den unteren Wert in ganzen Schichten. Gegenprobe über Plugins: `cura_bottom_gap` gibt den
+Wert von oben zurück — 11 von 57 Fällen rot; `CURA_MIRRORED` spiegelt wieder nach unten — 4 von
+6 rot. Der Cura-Slicertest läuft bei 0,2 mm Gitter 0,28, Baum 0,44, bei 0,28 mm Gitter 0,30 und
+bei 0,12 mm Baum 0,28, grün mit der Messprüfung (5 von 5). Sonde an Cura 5.13 (Ender-3 V3 SE,
+gepinnt), Platte über Säule, je Seite 100 bis 180 Zellen, zwei Messungen (Ring je Bahnmillimeter,
+Zellenmessung aus RM-624) gleich: Mit Solidons Rat druckte PETG unter Gitter bei 0,2 mm vorher
+(`d5ddfc217`) oben und unten 0,2, im Zwischenstand 0,28 und 0,40, jetzt 0,28 und 0,20; bei
+0,28 mm vorher 0,28 und 0,28, im Zwischenstand 0,30 und 0,56, jetzt 0,30 und 0,28; bei 0,12 mm
+vorher 0,12 und 0,12, jetzt 0,20 (im Band, kein Rat) und 0,24. Unter Bäumen und für PLA
+unverändert ganze Schichten, oben gleich unten. Feste Werte 0,28 und 0,44 bei 0,12, 0,2 und
+0,28 mm: oben unter Gitter genau, unter Bäumen aufgerundet (0,36/0,48, 0,40/0,60, 0,28/0,56),
+unten unter Gitter wie `cura_bottom_gap` (0,24, 0,48, 0,20, 0,40, 0,28, 0,56) und wie der
+Feldsatz. Stichprobe der übrigen Familien mit 0,24 mm bei 0,2 mm Schicht (PETG): Orca, Bambu,
+Elegoo, Creality, Anycubic und PrusaSlicer drucken unter Gitter oben und unten 0,24 (genau),
+unter organischen Bäumen oben und unten 0,20 (zur nächsten, nicht aufgerundet). Changelog
+0.6.0: ja, als Eigenschaft (Ursache `fafcd4841` liegt in keinem Tag).
+
+**Nacharbeit nach Review (10.10.2026):** Curas Fenster bekommt die Unterseite wie die Konsole
+(`cura_profile_beside` über `_cura_bottom_gap`), und Übergabe, Schreiber und Dialog fragen mit
+dem Material der Spule. Je Teil schreibt der Export oben nur einen Wert, der mit dem Rest der
+Platte genau druckt, sonst das Vielfache im Band der Spule (`advise.cura_part_gap`). Unter
+Curas Bäumen ohne obere Trennschicht rechnet Solidon mit einer Schicht mehr (`up_and_one`) und
+rät die Trennschicht. Den Halbfall unter organischen Bäumen rundet `nearest_raw` für Bambu
+Studio und Creality Print (`HALF_LAYER_UNGUARDED`). Der Gitter-Satz ist ein Hinweis ohne
+Handlung, der Feldsatz nennt den Abstand unten „mit {gap}, einem Vielfachen der Schichthöhe“.
+Die eigene Cura-Messung im Slicertest ist dem Kontakttest gewichen (RM-624, Cura dort mit
+Gitter, Baum und Gitter bei 0,28 mm). Gegenproben je Fund im Prozess: Schreiber ohne Material
+1 rot, Dialog ohne Material 1 rot (Fenster), Übergabe unten ohne Band 6, Fenster ohne
+Unterseite 5, Teilwert unverändert 7, Trennschicht übergangen 7, Spule übergangen 3, Programm
+übergangen 2, Gitter-Satz als Warnung 3, Grundlauf 987 grün. Nachprobe an Cura 5.13 (Ender-3
+V3 SE, PETG, 0,2 mm, zwei Teile, gepinnt), Werte je Teil aus `writer._values_for`: Platte 0,2
+mit Teil 0,28 schreibt 0,2 und druckt 0,20/0,20; Platte 0,44 mit Teil 0,28 schreibt 0,2 und
+druckt 0,20/0,20; Platte 0,28 mit Teil 0,2 druckt 0,20/0,20; Platte 0,24 mit Teil 0,44 (gleicher
+Rest) schreibt 0,44 und druckt 0,44/0,40 — jeweils wie Solidon sagt, das andere Teil wie seine
+Platte.
+
+**Nach der Nachprüfung (10.10.2026):** Die Trennschichten gehen auch ins Fensterprofil
+(`handover._cura_interface`, `_cura_window_choices`): Schalter als Werte, Höhen als Formel
+`=layer_height * N`, die obere ausdrücklich, je Extruderprofil; Cura liest einen Wert mit `=`
+als Formel (`UM/Settings/SettingInstance.py:172`). Vorher nahm das Fenster die Trennschicht der
+Maschine, und unter Bäumen ohne Werksvorgabe druckte PETG nach Solidons Rat 0,40 statt 0,20. Der
+Dialog fragt das Material der Platte wie der Export (`_plate_material` über
+`handover.slot_material`). `cura_part_gap` wählt unter allen genau druckbaren Werten
+(Vielfaches, Vielfaches plus Rest der Platte) den nächsten im Band: 0,28 auf einer Platte mit
+0,44 wird 0,24 statt 0,20. Exporttest für das Material je Teil durch `write_assembly`. Die
+Regel `dateiformat.md` sagt, dass Solidons eigene Wahl für Cura auch ins Fensterprofil gehört.
+Aus der Durchsicht: Im Fenster steht die Elternhöhe der Trennschicht nach der dickeren Seite
+(oben 0, unten 3 → `=layer_height * 3`; vorher zeigte Cura eine Warnung an 0 mm). Die
+Treppenstufe unter dem Stützfuß folgt der unteren Trennschicht wie Curas Formel
+(`0 if support_bottom_enable else 0.3`); seit `f934a4221` (v0.2.2) hing sie an der oberen.
+Gegenproben je 2 rot.
+
+## RM-587: Lange Brücken und steile Überhänge drucken sauber (09.10.2026)
+
+<a id="rm-587-lange-brücken-und-steile-überhänge-drucken-sauber-09102026"></a>
+<a id="rm-587"></a>
+
+**RM-587 — Lange Brücken und steile Überhänge drucken sauber.**
+  Solidon meldete Brücken ab 15 mm und setzte nur Tempo und Lüfter. Dicke Brücken, Brückenfluss
+  und Zusatzwände an Überhängen zwischen 45° und der Stützgrenze blieben beim Hersteller, meist
+  aus (Recherche Nr. 11, 12). Dazu N1 der G-Code-Gegenprüfung vom 03.10.: PrusaSlicer 2.9.6 mit
+  Solidons eigenem Satz stützte die 36-mm-Brücke trotz „Stützen überall“ nicht (0 mm³, die
+  Schichtanalyse rechnete 901 mm³), weil Solidon `dont_support_bridges` nicht schrieb.
+  Belege: `F:\solidon-review-reports\gcode\schluss.md`, `befunde.md`.
+
+**Abschluss:** Fünf neue Felder mit Rat aus der Geometrie (`advise._bridges_and_overhangs`):
+*Brücken stützen* (`support.bridges`, Prusa `dont_support_bridges`, Orca `bridge_no_support`),
+vorgeschlagen, wo das Teil Stütze verlangt und mit Stützen druckt; *Dicke Brücken* und *Fluss bei
+Brücken* (0,9 über 0,95) über Brücken über 15 mm, die frei drucken; *Zusatzwände ohne Stütze*
+unter flachen, einseitig hängenden Stücken ohne Stütze, breiter als die Wände
+(`analysis.cantilevers`); *Wandrichtung wechseln* (`overhang_reverse`, nur Orca-Familie) für
+ABS, ASA und TPU an steilen Wänden zwischen 45 Grad und der Stützgrenze
+(`analysis.steep_overhang`). Rücklesung aus Orca- und Prusa-Ketten samt Programmvorgaben von
+PrusaSlicer (`--save`), Übergabe je Programm gemessen: Cura und SuperSlicer keiner der fünf
+(SuperSlicer: Fluss in Prozent, zwei Schlüssel unbekannt, die Brückenstütze ohne Wirkung), Bambu Studio ohne Zusatzwände und
+Umkehr, Anycubic Slicer Next ohne Zusatzwände (angenommen, ohne Wirkung). Die Gegenprobe fragt die
+Brückenstütze am wirksamen Wert des Teils statt am Herstellerprozess (`Motion.support_skips_bridges`
+entfällt). Gemessen über den Druckdialogweg: N1 vorher 0 mm Stützbahn, jetzt 4 317 mm, abgewählt 0;
+Pilz an OrcaSlicers Kobra 2 14 480 → 45 837 mm; dicke Brücken und 0,9 kommen in allen sechs
+Programmen an, Brückenbahn in der Orca-Familie 126 → 63 mm, PrusaSlicer 4,5 → 6,6 mm Filament;
+Zusatzwände ersetzen unter einer 3-mm-Auskragung die Brückenbahn (PrusaSlicer 1 254 → 996 mm,
+OrcaSlicer 335 → 0, ElegooSlicer 296 → 0, Creality Print 335 → 75); die Umkehr dreht die Außenwand
+eines ABS-Trichters mit 50 Grad in jeder zweiten Schicht (OrcaSlicer, ElegooSlicer, Creality Print
+50 von 50). Abweichung von der Recherche: Zusatzwände wirken im Band 45 Grad bis Stützgrenze
+nicht (Trichter 40 bis 80 Grad bitgleich), dort schlägt Solidon die Umkehr vor. Tests in
+`test_advise.py` (Brücke, Pilz, Rand, Trichter, Band von Hand gerechnet, Auskragung gegen Brücke),
+`test_manufacturer.py`, `test_print_time.py`, `test_print_settings.py`, Slicertest
+`test_real_slicers.py` (PrusaSlicer, OrcaSlicer, ElegooSlicer, 3 von 3 grün); Messwerte und Begründung in
+`konzepte/begruendungen/regel-druckrat.md`. Umgesetzt von Claude (Worktree `F:/sl-bruecken`).
+
+**Je Teil (Entscheidung Robert, 09.10.2026):** Die fünf Werte stehen in `advise.PART_PATHS` und
+gehen als Objektwert an das Teil, dessen Rat sie verlangt; die Platte behält die Grundlage.
+Wirkungsnachweis mit zwei gleichen Teilen, nur das linke mit Wert, in allen acht Programmen
+(Kerne gepinnt, getrennt an den Objektmarken, Sonde `.claude/.state/drache-2026-10-08/bruecken_je_teil.py`),
+je links / rechts: Brückenstütze aus, Stütze in mm: OrcaSlicer 0 / 17 912, ElegooSlicer 0 / 18 984,
+Bambu Studio 0 / 18 963, Creality Print 0 / 17 912, Anycubic Slicer Next 0 / 55 435, PrusaSlicer
+0 / 22 358. Dicke Brücke, Förderung je mm Brückenbahn: 0,0461 / 0,0262, 0,0497 / 0,0282,
+0,0515 / 0,0413, 0,0455 / 0,0272, 0,0463 / 0,0279, 0,0529 / 0,0443. Fluss 0,7: 0,0204 / 0,0262,
+0,0198 / 0,0282, 0,0283 / 0,0413, 0,0210 / 0,0272, 0,0215 / 0,0279, 0,0301 / 0,0443. Zusatzwände,
+Brückenbahn in mm: OrcaSlicer 0 / 335, ElegooSlicer 0 / 296, Creality Print 75 / 335, PrusaSlicer
+996 / 1 254. Umkehr, Drehwechsel der Außenwand: OrcaSlicer und ElegooSlicer 99 / 0, Creality Print
+98 / 0, Anycubic Slicer Next 1 / 0 (dreht jede Schicht). Brückentempo und -lüfter an beiden Teilen
+gleich (je Spule). Gegenprobe am Stand davor (`badc464f9`): Werte auf der Platte, Wirkung an beiden
+Teilen (OrcaSlicer Brückenstütze aus 0 / 0, dicke Brücke 0,0461 / 0,0461, ebenso PrusaSlicer und
+Bambu Studio). Über den echten Rat mit zwei verschiedenen Teilen: Ohne Stützen bekommt nur die
+36-mm-Brücke mit Auskragung dicke Bahnen, 0,9 Fluss und Zusatzwände, die 8-mm-Brücke daneben nichts;
+am ABS-Trichter neben einem Zylinder dreht nur der Trichter; am Kobra 2 in OrcaSlicer
+(`bridge_no_support = 1`) bekommt nur die lange Brücke die Brückenstütze (49 789 gegen 867 mm
+Stütze, am Stand davor 8 393). Nicht geschrieben wird, was ein Programm nicht kennt oder nicht
+umsetzt: Cura und SuperSlicer keinen der fünf (SuperSlicer stützte mit `dont_support_bridges` 0 und
+1 gleich), Bambu Studio weder Zusatzwände noch Umkehr, Anycubic Slicer Next keine Zusatzwände; der
+Rat bietet sie dort nicht an, und das Feld sagt, dass der Slicer es nicht kennt. Was eine Familie
+gar nicht nimmt, zählt im Split nicht mehr als „nur plattenweit“ (sonst meldete Cura an jedem
+anderen Teil eine Übernahme, die es nie druckt). Wächter: `test_slicer_part_settings.py`
+(`MEASURED_PART_PATHS` samt Fehlstellen je Programm, Objektwerte nur am verlangenden Teil in
+PrusaSlicer und OrcaSlicer, Split ohne Scheinübernahme; am Stand davor 11 rot) und der Slicertest
+`test_the_bridge_flow_of_one_part_stays_with_that_part` in sechs Programmen (6 von 6 grün, am Stand
+davor rot). Umgesetzt von Claude (Worktree `F:/sl-bruecken-teil`).
+
+**Nachprüfung (Review RM-587 vom 10.10.2026, vier mittlere, drei leichte Befunde):**
+*M1:* `cantilevers` zählte eine Decke, die ringsum auf einem geschlossenen Wandring liegt (Kasten
+mit Deckel, umgedrehter Becher), als einseitig hängend und schlug Zusatzwände ohne Wirkung vor
+(PrusaSlicer legt den Deckel mit und ohne gleich, 3 575,0 / 2 825,0 mm). Eine Berührung, die den
+Außenring bis auf eine Bahnbreite ganz umläuft, zählt nicht mehr; Pilz (Innenring) und Auskragung
+bleiben einseitig. *M2:* Das Band zählte am Rand jeder flachen Decke einen Streifen mit und las die
+Kantengrenze 10 mm² als Summe über den Körper; ein ABS-Gehäuse mit Deckel bekam die Umkehr.
+`analysis.steep_reach` verfolgt das Band je Wand über die Schichten, ohne Stücke am Überhang
+jenseits der Stützgrenze, und misst, wie weit die Wand über die 45-Grad-Linie hinauswandert; die
+Umkehr kommt ab einer Bahnbreite (Trichter 50 Grad 3,80 mm wie von Hand, Rundung 2 mm 0,1 mm, Kasten
+und Becher 0; Besenhalter und Schraubendreherhalter verlieren die Umkehr, Okarina, Baum und Drache
+behalten sie). *M3:* SuperSlicer 2.5.59.13 stürzte an einer 3MF der Prusa-Familie ohne gewähltes
+Programm und an einer PrusaSlicer-Datei ab (Schrägnaht und `extra_perimeters_on_overhangs`, zwei
+fremde Schlüssel, RM-459). Eine Datei ohne bekanntes Programm lässt weg, was ein Programm der
+Familie gar nicht kennt (`slicer_keys.UNKNOWN_TO_PROGRAM`, `unknown_in_file`), und Solidons voller
+Prusa-Satz schreibt Schrägnaht „nowhere“ und Zusatzwände 0 nicht mehr (`QUIET_AT_DEFAULT`, beides
+PrusaSlicers eigener Wert). `thick_bridges` und `bridge_flow_ratio` nimmt SuperSlicer als alte
+Namen (mit einem Fantasieschlüssel daneben kein Absturz; 0,7 je Objekt fördert 0,0236 gegen
+0,0336 mm je mm) und bekommt beide jetzt je Teil; Slicertest
+`test_superslicer_opens_the_family_file_and_takes_the_bridge_flow_of_one_part` (am alten Stand
+0xC0000005). Die Suite sucht Slicer jetzt auch unter `%LOCALAPPDATA%\Programs` (SuperSlicer liegt
+dort). *M4:* „Brückenstütze abgewählt“ erreichte den Rat nie: `advise.DECIDING_PATHS` nennt jetzt
+auch `support.bridges` und `support.spare_ledges`, der Dialog fragt nach der Abwahl neu, der Export
+fragt jedes Teil ohne die nicht übernommenen. *L1:* Tests für dicke Bahnen über einer Kanaldecke
+bei Stützen und für den kleineren Brückenfluss zweier Körper. *L2:* Die Umkehr fragt
+`advise.REVERSING_FLAVOURS`, ein Wächter hält die Menge gleich mit `slicer_keys.NOT_TAKEN_BY`.
+*L3:* Cura-Feld *Fluss bei Brücken* sagt, dass Cura eigene Brückenbahnen mit eigenem Fluss legt
+(`slicer_keys.not_taken_reason`); PrusaSlicer und SuperSlicer drucken Brücken ohne
+Herstellerprofil jetzt dünn (Changelog). **Abhängigkeit von RM-701:** Die falsche Brückenweite
+am Rohr mit Flanke und Sporn (39,3 mm, RM-701 H5) zieht jetzt dicke Bahnen, 0,9 Fluss und am
+Kobra 2 die Brückenstütze nach sich; behoben wird das mit RM-701. Gegenproben je Befund am alten
+Stand oder per Mutation rot. Umgesetzt von Claude (Worktree `F:/sl-bruecken`, Kürzel rm587b).
+
+**Zweite Nachprüfung (10.10.2026, ein mittlerer, vier leichte Befunde):** *N1:* Eine Decke auf
+drei Seiten (Kasten, vorn offen) galt als einseitig; PrusaSlicer legt sie mit und ohne
+Zusatzwände gleich (3 588,7 mm). Einseitig ist ein Stück nur, wenn keine Bahnenrichtung über ihm
+an beiden Enden Halt hat (`analysis._anchored_span`); Decke auf zwei Nachbarseiten, Pilz und
+Auskragung behalten die Zusatzwände. *N2:* Eine Schicht zählt für die Umkehr erst, wenn ihr Band
+breiter ist als `REVERSE_THRESHOLD_SHARE` · Bahnbreite − Schichthöhe (Orcas
+`overhang_reverse_threshold` 50 %): Trichter 46 Grad, 60 mm hoch, ohne, 47 und 50 Grad mit.
+*N3:* Nur der Streifen neben einem Überhang fällt aus dem Band, nicht das ganze Stück; die
+Flanken eines um 65 Grad geneigten Zylinders bekommen die Umkehr. *N4:* Eine Kanaldecke gilt nur
+als frei, solange „nur vom Bett“ oder die Kanalsperre den Kanal freihält; beide stehen in
+`DECIDING_PATHS`. *N5:* Rattest für die Grenze bei einer Bahnbreite. Gegenproben je Befund rot.
+
+## RM-567: Weniger Arbeitsspeicher — Cachegrenze, BLAS-Faden, Renderer am echten Fenster (09.10.2026)
+
+<a id="rm-567-weniger-arbeitsspeicher--cachegrenze-blas-faden-renderer-am-echten-fenster-09102026"></a>
+<a id="rm-567"></a>
+
+**RM-567 — Weniger Arbeitsspeicher: messen, wo er bleibt, und den Bedarf senken.**
+Robert, 08.10.2026: „analysieren, wie wir weniger Arbeitsspeicher verbrauchen“. Solidon soll
+auf acht Jahre alter Hardware laufen, viele Kunden haben 8 oder 16 GB. **Vorgehen:** Spitzen-
+und Dauerbelegung je Hauptweg (Bauplan §2.2) und an großen Korpusmodellen messen
+(Netzkern, exakter Kern, Merkmalserkennung, Schichtanalyse, Vorschau, Verlaufscache, Renderer),
+die größten Posten benennen, dann senken: doppelte Netzkopien, Caches ohne Grenze, Arbeiter,
+die ihre Ergebnisse halten. **Abnahme:** Ziel ist, dass die Hauptwege auf einem Rechner mit
+8 GB ohne Auslagern laufen, große Korpusmodelle mit 16 GB; die konkreten Grenzwerte setzt der
+Messbericht. Messbericht vorher und nachher mit Werkzeug und Rechner; je Senkung ein Test,
+der die Grenze hält; kein Rückschritt im Leistungsbudget (§31).
+
+**Teilstand 08.10.2026 (Paket L, Bericht `output/konsolidierung-2026-10-07/paket-l.md`):**
+Gemessen von außen je Prozess (Zusage und Arbeitssatz, alle 3 ms) an Riser, Eiffelturm,
+Spiderman, Murmelbrett und `chufang.3mf`. Der Ergebniscache hält höchstens RAM/8 (512 MB
+bis 4 GB), gezählt in Bytes samt trimesh-Cache und Schichtanalyse; ältere Einträge werden
+zuerst schlank (`MeshData.lean`), dann verdrängt (`scene/cache.py`, `core/memory.py`).
+Spiderman, acht Schritte im Fenster, 8 GB nachgestellt: 2,65 → 1,75 GB Arbeitssatz, Spitze
+4,05 → 3,10 GB. `import app`
+setzt einen BLAS-Faden: 1,5 GB Zusage weniger an 32 Kernen. Große Modelle: Murmelbrett mit
+Vollerkennung Spitze 3,5 GB Arbeitssatz, `chufang.3mf` (5,6 Mio.) 5,5 GB — unter 16 GB.
+**Review-Fixes 09.10.2026:** `trim` zählt einmal genau und zieht dann ab, was frei wird;
+jeder Merker zählt einzeln, ohne Stichprobe; die Merker der Zuordnung und der
+Zuordnungsschritte zählen in der Grenze und gehen vor einem Eintrag; exakte Körper zählen
+Tessellierung und Form und werden schlank; `physical_memory` nimmt die kleinste Grenze aus
+Rechner, cgroup, Windows-Job und Adressraum. Ein schlankes Netz behält Teile,
+Dreiecksflächen und die Schichtanalyse, die der Bericht nach dem Zurücknehmen fragt (RM-594
+und RM-593 im Archiv); Einträge und Schrittmerker zählen geteilte Merkmale einmal.
+Die Schichtanalyse hält ihre Konturen als Felder (RM-595, Archiv).
+**Renderer am echten Fenster (Paket L2, 09.10.2026, Bericht
+`output/konsolidierung-2026-10-07/paket-l2.md`):** Sonde `probe_window_real.py` über
+`build_application`, echte Plattform (Vulkan, RTX 4080, 2560 x 1440, zweiter Schirm), Treiber
+`memdrive_gpu.py` (Zusage und Arbeitssatz alle 3 ms, Grafikspeicher je Prozess über PDH alle
+100 ms), Riser, Eiffelturm und Spiderman, je Schritt öffnen, verschieben, zurück, Datei → Neu.
+Der Renderer selbst hält wenig: neun Bildtexturen (Farbe, Pick, Tiefe, Umgebungsverdeckung,
+zusammen rund 100 MB bei 2560 x 1440), die Netzpuffer der Anzeige 4–8 MB (Spiderman
+dezimiert); kein Puffer bleibt nach einem Wechsel lebend, die Zahl der wgpu-Objekte steht über
+alle Schritte. Leeres Fenster: Zusage 650 MB, dediziert 211 MB. Die einzige Spitze war ein
+zweiter Speicherblock von wgpu (256 MB dediziert und 256 MB Zusage, bleibend), am Riser beim
+Zurücknehmen auf den Ladestand. pygfx legte je gerichtetem Licht eine Schattentextur
+1024 x 1024 an, obwohl keines Schatten wirft (24 MB); seit `gfx_renderer.SHADOW_MAP_SIZE`
+ein Texel. In `test_render_contract.py` hält `test_no_light_casts_a_shadow_…` fest, dass kein
+Licht Schatten wirft, auch das des Achsenkreuzes, und
+`test_one_texel_shadow_maps_draw_the_same_image`, dass das Bild mit einem Texel dasselbe ist
+wie mit 1024 (Gegenprobe: mit Schattenwurf und -empfang unterscheiden sich die Bilder). Damit
+bleibt eine Sitzung mit einem Modell dieser Größe bei 273 MB dediziert (vorher 529 MB); kommt
+ein größeres Modell dazu, legt wgpu den Block dort an. Die Blockgröße steuert wgpu-native
+(keine Speicherhinweise in der C-Schnittstelle von wgpu 0.32); weiter unter
+[RM-698](ROADMAP.md#rm-698), Teil 2.
+Zwei Fensterläufe mit dem Spiderman brachen ohne Python-Spur ab, am Stand davor wie danach —
+[RM-694](ROADMAP.md#rm-694).
+## RM-253: Am Laptop-Ständer rechnet keine Bohrungshandlung mehr durch ein fremdes Teil (09.10.2026)
+
+<a id="rm-253-am-laptop-ständer-rechnet-keine-bohrungshandlung-mehr-durch-ein-fremdes-teil-09102026"></a>
+<a id="rm-253"></a>
+
+**RM-253 — Am Laptop-Ständer tragen Kippen und Verdoppeln einer Bohrung falsch ab.**
+  Gefunden beim Abschluss von RM-246 (26.09.2026) an
+  `F:\3D Dateien\parametric-laptop-riser.stl`, das seitdem geschlossen aus
+  dem Import kommt (21 Teile, `repair.part_inside`) und genau rechnet. Die
+  Sonde der meldenden Sitzung (`.claude/.state/rm-246-laptop-staender-2026-09-25/probe_real.py`,
+  `PROBE_TREE=<baum> python probe_real.py "<datei>" 15`) zeigt an 18 Ketten
+  mit Senkung und sechs einzelnen Durchgängen drei Dinge, die nicht zum
+  Werkzeug passen: *Merkmal drehen* von `hole_11`+`cone_51` um 15° um x trägt
+  1 444,47 mm³ vor den alten Mündungen ab (`hole_1`+`cone_5`: 19,59 mm³, die
+  übrigen null); *Merkmal verdoppeln* 6,3 bis 11,1 mm daneben lässt an jeder
+  geprüften Bohrung das Volumen stehen (`boolean.without_effect`, an
+  `hole_11` dazu `duplicate_feature.no_longer_through`); *Merkmal versetzen*
+  um 1,5 mm meldet an `hole_1`, `hole_3` und `hole_11`
+  `move_feature.no_longer_through`. Zu klären, ob das an den 21
+  ineinandersteckenden Teilen liegt (eine Bohrung durch mehrere Teile, eine
+  Kopie im Hohlraum eines anderen) oder an den Handlungen. Abnahme: Kippen
+  trägt vor den Mündungen nur ab, was das gekippte Werkzeug überstreicht;
+  eine Kopie im Material trägt ab oder sagt, warum nicht; „nicht mehr
+  durchgehend" nur, wo die versetzte Bohrung wirklich endet.
+
+  **Durchsicht v0.5.1 (27.09.2026, bohrung):** Es liegt an den Teilen. Die 21 Teile
+  lassen sich nicht vereinigen: Teil 10 (9 166 Dreiecke) kreuzt sich 1 121-mal selbst,
+  `resolve_self_intersections` lehnt deshalb ab, und eine erzwungene Vereinigung aller
+  Teile gab 136 Teile mit 605 verbleibenden Eigenkreuzungen. Gebaut ist die Auskunft:
+  `boolean.parts_not_united` sagt, dass Teile ineinanderstecken und sich nicht
+  vereinigen ließen, weil sich eine Oberfläche selbst kreuzt, mit *Stelle zeigen*
+  (`ae178de8c`, Test `test_boolean.py::test_parts_that_cannot_be_united_say_so`).
+  Nachgemessen am neuen Stand (`konzepte/nachweise-release-0.5.1/sonden/bohrung/rm253_focus_out.txt`):
+  `hole_11`+`cone_51` um 15° gekippt trägt 32,6 mm³ jenseits der oberen alten Kappe
+  ab, Verdoppeln bleibt ohne Wirkung (jetzt mit Satz), Versetzen meldet weiter
+  `no_longer_through`. Am selben Modell (massbild): 13 von 28 Bohrungen gelten als „In
+  dieser Bohrung steht Material“ (`prepare_ops.hole_is_clear`), und ein Langloch aus
+  *Bohrung 2* (Ø 3,33, 43 mm durch mehrere Wände) wird schon ohne Versatz nicht wieder
+  erkannt — vermutlich dieselbe Ursache, eine Bohrung durch mehrere ineinandersteckende
+  Teile; nicht geprüft. Weg: die Eigenkreuzung innerhalb einer Schale auflösen, dann
+  vereinigen und die drei Handlungen neu messen.
+
+  **Sicherheitskorrektur 01.10.2026:** Scheitert die notwendige Vorvereinigung, hält
+  `boolean()` jetzt mit einem Handlungstext vor jeder Solverstufe an. Zuvor rechnete die
+  Kette mit den unveränderten, ineinanderliegenden Teilen weiter und konnte ein falsches
+  Ergebnis liefern. Die Zuordnungsliste `object_ids` trägt den betroffenen Op-Eingang in
+  den Prüfbericht; die Regression prüft auch, dass *Stellen zeigen* bei einer mehrteiligen
+  Vereinigung am fehlerhaften und nicht am ersten Körper landet. Der Test nutzt eine
+  geschlossene Schale, die sich selbst kreuzt, und einen zweiten überlappenden Körper.
+
+  Am Originalmodell `F:\3D Dateien\parametric-laptop-riser.stl` (8,67 MB) wurde der
+  vollständige Import- und Auswertungsweg erneut geprüft. *Merkmal versetzen* für
+  `hole_11` um 1,5 mm quer zur Achse hält mit `GeometryError`, `object_id=obj_1` und den
+  Handlungen `show_locations` und `cancel` an; es gibt kein unzuverlässiges Ergebnis aus.
+  Der Lauf belegt auch den Kettenzweig, der `_closed_at` umgeht. Eine Regression mit einer
+  erkannten Senkbohrung prüft die Objektkennung an genau dieser Verschlussvereinigung. Der
+  Detailtext empfiehlt die Reparatur im CAD- oder Netzprogramm. Das löst die Eigenkreuzung
+  nicht und führt die ursprünglichen Abnahmeschritte Kippen, Versetzen und Verdoppeln noch
+  nicht erfolgreich aus. RM-253 bleibt daher teilweise offen.
+
+  Die anschließende Diagnose am unveränderten Original bestätigt in der geschlossenen
+  9 166-Dreieck-Schale 1 243 Schnittpaare an 631 Flächen; darunter liegt ein echter
+  Schnitt schon in der STL. Blenders exakter Boolean machte die Kopie nicht wasserdicht.
+  Der 0,2-mm-Voxelremesh schloss sie zwar, verschob die Außenfläche aber bis 0,083878 mm
+  und die Höhe um 0,143410 mm; damit liegt er über `MAX_FACET_SAG = 0,05 mm`. Auch die
+  Kreuzungsfreiheit ließ sich wegen des Zeitlimits nicht belegen. Beide Reparaturkandidaten
+  sind verworfen. `hole_11` und `cone_51` werden lokal noch mit ihren ursprünglichen
+  Maßen erkannt, liegen aber in anderen, unveränderten Schalen. Es wurde weder die Kopie
+  weiterbearbeitet noch am Original eine neue Bearbeitung ausgeführt; die angefragte
+  Reparatur samt Kippen/Versetzen/Verdoppeln ist weiterhin nicht abgenommen.
+
+  **Gezielte Verifikation:** `test_boolean.py`, `test_profile_clamps.py` und
+  `test_finding_actions.py`, `test_errors.py`, `test_translations.py` und
+  `test_language_rules.py`: 1 051 Tests bestanden. Ruff und Formatprüfung der geänderten
+  Booleschen Geometriedatei und ihrer Regressionstests sind grün. Das unabhängige
+  Nachreview bestätigte die bedingte Handlung nach einem behobenen P2-Hinweis; das
+  vollständige Entwicklungstor und die Geometriereparatur stehen weiter aus. Der gezielte
+  Mypy-Aufruf meldete drei Unreachable-Befunde in der parallel geänderten
+  `app/core/perceive/refine.py`; für diesen Stand liegt daher kein grüner Mypy-Nachweis vor.
+  Nachprüfung (Review 02.10., Arbeitsbaum ungesichert): Sicherheitskorrektur unvollständig. `union_objects` und `subtract_objects` halten mit dem richtigen Objekt; `drill_hole` hält ohne `object_id`, auch im Prüfbericht, und ein selbstkreuzender Körper als Werkzeug rechnet weiter still. Belege `verif-E.md`, `sonden\v_e\`.
+  Nachprüfung am Stand `3fd3b1ace` (nach `eab5f4f47`): unvollständig. `drill_hole` hält weiter mit `object_id=None` und `correct_input`/`cancel`, auch im Prüfbericht; ein kaputter Körper als Werkzeug rechnet still (`subtract_objects [gut, kaputt]` → 118,5 mm³ ohne Befund, `boolean.py:412–414`); erfüllt ist nur der Fall mit dem kaputten Körper als erstem Eingang. Der neue generelle Halt kehrt die hier dokumentierte Entscheidung um (RM-382). Belege `review-3fd3b1ace.md`, Sonden `r_rm253_*.txt`.
+
+  **Die beiden Nachprüfungen sind durch [RM-382](ROADMAP-ARCHIV.md#rm-382) erledigt
+  (`6d395169c`, v0.5.2):** `drill_hole` reicht `object_ids` durch, ein Schritt abseits der
+  selbstkreuzenden Schale rechnet mit Warnung, am Treffer hält er mit Kennung, und ein kaputter
+  Szenenkörper als Werkzeug hält (`test_a_crossing_scene_tool_stops_a_difference_with_its_own_id`).
+  **Am Original weiter (Sonde am 06.10.2026, Kopie mit abgefangener Messboolescher):**
+  `hole_1` mit `cone_5` gekippt meldet `rotate_feature.no_longer_through` und `bore.over_the_edge`;
+  `hole_1`/`hole_3` versetzt `move_feature.no_longer_through`; Verdoppeln bleibt an allen vier
+  Bohrungen ohne Wirkung (`boolean.without_effect`, `duplicate_feature.feature_lost`);
+  `hole_2`/`hole_4` gekippt nehmen um 53 bzw. 104 mm³ **zu**; `hole_11` hält am Treffer der
+  kaputten Schale. Die Abtragsmessung „vor den Mündungen“ scheitert, weil die Messdifferenz der
+  Sonde selbst die kaputte Schale trifft — die ursprüngliche Abnahme ist so weder erfüllt noch
+  messbar; die Sonde braucht eine Messung ohne Differenz gegen die kaputte Schale.
+
+  **Stand 06.10.2026 (Claude, mit RM-413):** In 14 der 28 Bohrungen steht ein fremdes Teil;
+  dort sagen Menü und jede Merkmalshandlung jetzt „In dieser Bohrung liegt ein getrenntes Teil“
+  mit *In Einzelteile aufteilen*. Vorher rechneten die Handlungen dort: `hole_3` trägt seinen
+  Mantel auf zwei Platten mit einem Zapfen darin, *Merkmal versetzen* verschmolz die Platten, der
+  Zapfen verschwand im Stopfen, −531 mm³ und zwei Teile weniger ohne Befund. `hole_11` hält am
+  Treffer der kaputten Schale. **Offen** an den freien Bohrungen: Verdoppeln 8 mm quer bleibt ohne
+  Wirkung (`boolean.without_effect`, `feature_lost`), `hole_1` verliert beim Versetzen um 1,5 mm
+  und Kippen um 15° je rund 127 mm³ mit `no_longer_through`, `hole_2`/`hole_4` nehmen 1,4–1,9 mm³
+  zu. Ob das richtig ist, sagt erst ein Sollwert ohne Boolesche gegen die kaputte Schale (je Teil
+  Volumen und Dicke entlang der Achse). Sonden `m2_laptop_bohrungen.py`, `m3_hole3.py` unter
+  `F:\solidon-review-reports\claude-2026-10-06\geometrie\rm253\`.
+
+  **Stand 09.10.2026 (Claude, `_reaching_in`):** Neun der 14 freien Bohrungen trugen doch ein
+  fremdes Teil, dessen Manteldreiecke über die ganze Länge laufen und ihre Mitten hinter den
+  Mündungen haben: zwei geschlitzte Hülsen von 43 mm, jede durch zwei der vier
+  Plattenbohrungen Ø 5,33 (`hole_1`/`hole_12`, `hole_17`/`hole_28`), Schrauben in den Scheiben
+  von 0,9 mm (`hole_7`, `hole_11`, `hole_19`, `hole_23`) und ein Teil von 10 mm in `hole_16`
+  (Ø 10,47). Die Teilefrage misst jetzt das Stück jedes Dreiecks zwischen den
+  Mündungen; an allen neun sagen Menü und Handlungen „getrenntes Teil“ mit *In Einzelteile
+  aufteilen*, `hole_1` verliert keine 127 mm³ mehr, `hole_11` hält nicht mehr an der kaputten
+  Schale. Frei bleiben `hole_2`, `hole_4`, `hole_13`, `hole_24` und `hole_26`. **Offen** an
+  `hole_2`/`hole_4`: Verdoppeln 8 mm quer ohne Wirkung, Versetzen und Kippen nehmen 1,4–1,9 mm³
+  zu — Sollwert wie oben.
+
+**Abschluss (Paket I, Zweig `claude/integration`):** Am integrierten Stand — Lauf B
+(`_reaching_in`) mit Paket G (`_inside_and_radial`) zusammengeführt (`8de94fe8b`), dazu
+[RM-660](#rm-660) (`62ae9a9d4`) und [RM-661](#rm-661) (`b6f905568`) — rechnet an keiner der 28
+Bohrungen eine Handlung mehr durch ein fremdes Teil. Über den Kundenweg geladen (Projekt, Quelle,
+`load`, Auswertung: 22 Teile, 541 Merkmale) sagen 24 Bohrungen „In dieser Bohrung liegt ein
+getrenntes Teil“ mit *In Einzelteile aufteilen* (welle2 davor: 14). Frei sind `hole_2`, `hole_4`,
+`hole_24` und `hole_26` (Ø 3,33 mm, 43,07 mm lang, je in einem eigenen Teil von 537 mm³). Drehen
+um die eigene Achse ändert dort nichts (ΔV 0 mm³, `rotate_feature.unchanged`); Kippen um 15° um y,
+Versetzen um 1,5 mm und Verdoppeln 8 mm quer sagen ab — an `hole_2`/`hole_4` „Diese Handlung
+träfe ein getrenntes Teil daneben“, an `hole_24`/`hole_26` am Teil, dessen Oberfläche sich selbst
+kreuzt. Unabhängig nachgemessen (manifold3d: Zylinder mit dem Radius der Bohrung über ihre
+Spanne, gemeinsames Volumen mit jedem fremden Teil als eigenem Körper): an der alten Lage 0 mm³,
+versetzt 16,0–32,9 mm³, gekippt 42,9–75,2 mm³, verdoppelt 165,7–301,8 mm³ je getroffenem Teil —
+jede Absage stimmt. Auf dem Weg, den die Absage nennt — *In Einzelteile aufteilen* mit *Splitter
+behalten*, 22 Objekte —, rechnen die Handlungen am abgetrennten Teil (das in einer Bohrung Ø 5,33
+eines anderen steckt) gegen einen Sollwert aus manifold3d, (Teil ∪ alter Zylinder) − neuer
+Zylinder: Versetzen um 1,5 mm und Kippen um 15° tragen außerhalb des Werkzeugs nichts ab
+(Zuwenig 0,000 mm³) und lassen 0,72–1,07 mm³ mehr stehen (0,2 % des Teils), in Häuten von
+höchstens 0,011 mm: Der Stopfen greift um die Zugabe `FEATURE_OVERLAP` (0,01 mm am Radius) über
+die alte Wand, wo das Teil dort offen ist, dazu die Facetten des neuen Werkzeugs. Beide sagen
+`bore.over_the_edge`, weil die Bohrung die 1-mm-Wand durchbricht; Verdoppeln 8 mm in die
+Luft bleibt ohne Wirkung und sagt es (`boolean.without_effect`, `duplicate_feature.feature_lost`).
+Ohne *Splitter behalten* verwirft die Zerlegung diese Teile als Splitter unter 1 % des größten.
+Damit gilt die Abnahme: Kippen trägt nur ab, was sein Werkzeug überstreicht, eine Kopie trägt ab
+oder sagt, warum nicht, und „nicht mehr durchgehend“ meldet keine Bohrung mehr. Die offene Messung
+gegen einen Sollwert ist am getrennten Teil gemacht, wo keine kaputte Schale im Weg steht; die
++1,4–1,9 mm³ am ungeteilten Körper gibt es nicht mehr, weil die Handlungen dort absagen. **Zurückgenommen:** Lauf B nannte `hole_13` frei; darin liegt
+eine Scheibe Ø 21,43 mm in Ø 21,53 mm (Spiel 0,053 mm), die `hole_is_clear` seit RM-661 sieht —
+die Handlungen sagten dort über die Teilefrage schon am Merge-Stand ab. Sonden `p253_hole2.py`,
+`p253_daneben.py`, `p253_teile.py`, `p253_geteilt2.py` und `p253_rest.py`, Bericht
+`output/konsolidierung-2026-10-07/paket-i.md`.
+
+## RM-660: Ein langes Teil steht in jedem Hohlraum mit dem Stück, das darin liegt (09.10.2026)
+
+<a id="rm-660-ein-langes-teil-steht-in-jedem-hohlraum-mit-dem-stück-das-darin-liegt-09102026"></a>
+<a id="rm-660"></a>
+
+**RM-660 — Die Teilefrage an Langloch, Senkung, Pfanne, Kehle und Gewinde sieht lange Dreiecke
+  nicht.** Gefunden mit RM-253 (09.10.2026, Claude): `hole_is_clear` misst auf main seit dem
+  Commit „Ein Teil, dessen lange Dreiecke durch eine Bohrung laufen, steht darin“ jedes Dreieck an
+  seinem Stück zwischen den Mündungen (`prepare_ops._reaching_in`), nicht mehr nur an seiner Mitte.
+  Paket G (`paket/g-geometrie`, RM-545, Review G F1) hat dieselbe Frage auf alle Hohlräume
+  erweitert (`_inside_and_radial`), dort aber weiter über Dreiecksmitten: Ein Langloch Ø 6 × 12 in
+  einer 10-mm-Platte mit einem getrennten Stift Ø 4 über 0 … 40 mm gilt dort als frei, über
+  0 … 15 mm nicht, an beiden Kernen; die runde Bohrung mit demselben Stift ebenso — die Handlungen
+  sagen dort erst nachträglich mit anderem Satz ab („träfe ein getrenntes Teil daneben“), und das
+  Menü bietet ihre Zeilen an. **Zusammenführen:** Der Commit `9f5e74214` (Zweig `claude/lauf-b`,
+  RM-253) ändert `_inside_the_bore`, das Paket G durch `_inside_and_radial` ersetzt — der Konflikt
+  dort ist erwartet; je Handlung bei `cache_version` den höheren der beiden Werte plus eins
+  nehmen. Die Changelog-Punkte zu getrennten Teilen in Hohlräumen — Bohrung (RM-413), lange
+  Dreiecke (RM-253), übrige Hohlräume (Paket G) — werden dabei einer. **Weg:** beim
+  Zusammenführen von Paket G `_reaching_in` in
+  `_inside_and_radial` übernehmen, je Art mit ihrem Abstand (Achsstück am Langloch, Kegelwand je
+  Höhe an der Senkung, Mitte bzw. Mittelkreis an Pfanne und Kehle, Kern am Innengewinde) und der
+  Grenze der eigenen Wand. **Abnahme:** je Art ein Fall mit langem Stift, am Stand davor rot;
+  die Fälle zu RM-253 in `tests/test_slot_features.py`, von
+  `test_a_long_pin_in_the_bore_is_seen_beyond_its_mouths` bis
+  `test_pulling_a_slot_shortens_a_long_pin_only_inside_the_old_bore`, bleiben grün.
+
+**Abschluss (Paket I, `62ae9a9d4`):** `_inside_and_radial` misst an jedem Hohlraum das Stück jedes
+Dreiecks zwischen den Grenzen des Hohlraums und dessen kleinsten Abstand vom Kern seiner Art
+(`_Core`): Achse an Bohrung und Innengewinde, Mittellinie am Langloch, Kegelwand je Höhe an der
+Senkung (projektiv auf den Einheitskegel abgebildet, so bleiben Geraden Geraden), Mittelpunkt an
+der Pfanne, Mittelkreis an der Kehle (Sehnen über `units.circle_point`, Vorauswahl der Sektoren).
+Eigenes Material zählt nur an der Bohrung über das ganze Netz; an den übrigen Hohlräumen und in
+Teilmengen zählen nur Dreiecke fremder Teile (`_foreign_triangles`). Neun `cache_version` je um
+eins erhöht; der Changelog fasst die Punkte zu getrennten Teilen in Hohlräumen in sechs Sprachen
+zu einem. Test zuerst: `test_a_long_part_through_any_cavity_says_so_at_every_row` — Langloch,
+Senkung, Innengewinde, Pfanne, Kehle, Stift in fremder Bohrung und in fremdem Langloch, je Kern
+und Handlung, 62 Fälle — war am Stand davor (`8de94fe8b`) vollständig rot und ist grün; der
+Gegenfall `test_a_slot_with_a_long_pin_still_pulls_and_keeps_the_pin_outside` (*Zum Langloch
+ziehen* bleibt frei, der Stift unverändert) ist an beiden Ständen grün. Die Fälle von RM-253
+bleiben grün (Fokus 2 930 bestanden; der eine rote Fall war eine Attrappe in
+`test_feature_moves_keep_shape.py` ohne die neuen Schlüsselwörter, nach der Anpassung grün).
+Laptop-Ständer über den Kundenweg: Merkmale mit Teilegrund 118 → 226 — 100 Senkungen und Kehlen
+von Teilen, die im Hohlraum eines anderen liegen, und acht Kehlen mit einem Teil darin; an
+`fillet_113` (r 1,6 mm) laufen die fremden Streifen 1,15–1,46 mm vom Mittelkreis, eine dichte
+Abtastung misst dasselbe. Erste Antwort der Karte, im Wechsel mit dem Stand davor je zweimal
+gemessen: `fillet_124` 0,10–0,12 → 0,16–0,20 s, `torus_1` 0,05–0,06 → 0,15 s, die übrigen
+gleich. **Zurückgenommen:** Der erste Entwurf fragte eigenes Material an jeder Art; am Ständer
+bekamen 24 Kehlen eigene Streifen bei 0,955–0,976 r, die ein fremdes Teil verdeckt hätten.
+
+## RM-661: Ein eng sitzender Stift ist ein getrenntes Teil in seiner Bohrung (09.10.2026)
+
+<a id="rm-661-ein-eng-sitzender-stift-ist-ein-getrenntes-teil-in-seiner-bohrung-09102026"></a>
+<a id="rm-661"></a>
+
+**RM-661 — Ein eng sitzender Stift gilt in seiner Bohrung als frei.**
+  Gefunden im Review von RM-253 (09.10.2026, Fund F8, Bericht im Scratchpad der Sitzung
+  `review-b.md`): Ein getrennter Stift Ø 5,9 in einer Bohrung Ø 6, dessen Enden an oder hinter den
+  Mündungen sitzen, gilt an beiden Kernen als frei — sein Spiel liegt unter 2 % des Radius, und
+  `hole_is_clear` lässt diesen Saum als eigene Wand gelten (`_CLEARANCE_MARGIN`). Die Handlungen
+  verschmelzen dann den Stift still, wie RM-413 und RM-253 es verhindern sollen; vor RM-253
+  genauso. **Weg:** die Grenze der eigenen Wand aus der Wand selbst messen statt mit einem Saum
+  um den Radius, oder den Saum an der Vernetzung der Bohrung bemessen; am Korpus prüfen, dass
+  keine freie Bohrung kippt. **Abnahme:** Stift Ø 5,9 und Ø 5,98 in Ø 6 an beiden Kernen als
+  getrenntes Teil erkannt, Menü und Handlungen sagen ab; die freien Bohrungen am Laptop-Ständer
+  und am Korpus bleiben frei.
+
+**Abschluss (Paket I, `b6f905568`):** Ein Stück eines fremden Teils misst sich gegen den Radius des
+Hohlraums abzüglich der Schweißtoleranz des Körpers (`units.weld_tolerance` seiner Diagonale),
+eigenes Material weiter gegen den Saum `_CLEARANCE_MARGIN` unter der gemessenen Wand. An der
+Netzbohrung Ø 6 liegt die Wand (Facetten) 2,99161 mm von der Achse, die Stifte Ø 5,9, 5,98 und 6,0
+bei 2,94175, 2,98164 und 2,99161 mm; die alte Grenze 0,98 × Wand = 2,93178 mm ließ alle drei als
+Wand gelten, die neue liegt bei 2,99995 mm. Neun `cache_version` erneut je um eins erhöht. Test zuerst: `test_a_tight_pin_in_its_bore_is_a_separate_part`
+(die drei Stifte in Ø 6, Enden an den Mündungen und 5 mm darüber, je Kern: 12 Fälle) war am Stand
+RM-660 rot und ist grün; die Gegenfälle `test_a_pin_resting_on_the_mouth_or_above_it_leaves_the_bore_free`
+(Luft über der Mündung) und `test_a_cross_pin_ending_at_the_bore_wall_leaves_the_bore_free`
+(Querstift bis an die Wand, beide Seiten) sind an beiden Ständen grün; Fokus 1 001 bestanden,
+4 übersprungen. Korpus über den Kundenweg, alle 41 mehrteiligen Modelle aus `F:\3D Dateien`,
+RM-660 gegen RM-661: Genau drei Hohlräume wechseln, alle am Laptop-Ständer und alle zu Recht —
+`hole_13` mit einer Scheibe Ø 21,43 in Ø 21,53 mm (Spiel 0,053 mm), `cone_49` und `cone_132` mit
+Schraubenköpfen (Spiel 0,069 mm). Ihr Teilegrund stand schon vorher; Karte und Handlungen ändern
+sich nicht, und keine andere freie Bohrung kippt. **Zurückgenommen:** Der erste Entwurf maß ein
+fremdes Stück gegen die Wand minus Toleranz und übersah den Stift ohne Spiel, dessen Facetten auf
+der Wand liegen.
+
+## RM-691: Der Stift an den Löchern der Halter ist an beiden Kernen derselbe (09.10.2026)
+
+<a id="rm-691-der-stift-an-den-löchern-der-halter-ist-an-beiden-kernen-derselbe-09102026"></a>
+<a id="rm-691"></a>
+
+**RM-691 — Stift am Schlüsselloch der Halter hat je Kern eine andere Form.**
+  Nachprüfung von Paket G, N-4 (09.10.2026): Auf einem Quader 40 × 40 × 12 mm
+  `holder_ring` oder `holder_shelf` bei z = 12 setzen, dann *Stift für Bohrung*
+  an `holder_ring_bore_1/2` beziehungsweise `holder_shelf_bore_1/2` aufrufen.
+  Bei PETG entsteht am Netz ein glatter Stift mit 67,19 mm³, exakt ein Stift
+  mit Kopf mit 90,82 mm³. Beide stehen lose und innerhalb der Trägerhülle;
+  die Kopfform ist verschieden. Der Unterschied besteht schon vor Paket G.
+  Offen: Die gelesene Hohlraumkette beider Kerne vergleichen und den Kopf aus
+  derselben Geometrie ableiten. Abnahme: beide Kerne liefern dieselbe Form
+  bis zur Vernetzungsabweichung, ohne gemeinsames Volumen mit dem Träger und
+  mit dem halben Profilspiel; Regression über beide Halter und beide Bohrungen.
+
+**Abschluss (Paket I, `4f16673fd`):** Am Kundenweg unterscheiden sich die Kerne nicht. Halter
+gesetzt, ausgewertet, dann *Stift für Bohrung* (PETG, `holder_ring` und `holder_shelf` bei
+z = 12): An den Schraublöchern des Ringhalters entsteht an beiden Kernen der Stift mit Senkkopf,
+91,189 mm³ am Netz gegen 90,819 mm³ exakt (0,4 %, Vernetzung), Hülle gleich bis 0,01 mm; an den
+Schlüssellöchern beider Halter 54,956 gegen 54,908 mm³; gemeinsames Volumen mit dem Träger 0 mm³.
+Die Schraublöcher der Ablage prüft der Test unten auf dieselbe Weise. Halter und
+Stift in einer Kette, in einer oder in zwei Transaktionen frisch ausgewertet, geben dieselben
+Werte. Die 67,19 mm³ der Nachprüfung kamen aus dem Aufruf von *Stift für Bohrung* direkt auf dem
+Ergebnis der Bausteinoperation, ohne Auswertung dazwischen: Am Netz gibt `insert_holder_*` nur
+seine erklärten Merkmale zurück, die Senkung (`cone`) erkennt erst die Auswertung, und ohne sie
+wird der Stift glatt; der exakte Kern liest die Flächen gleich mit. Festgehalten in
+`test_bore_pin.py::test_a_holder_bore_gets_the_same_pin_on_both_kernels` (beide Halter, Schraub-
+und Schlüsselloch, je Loch 1 und 2): Hülle beider Kerne auf die Facettenhöhe gleich, Rauminhalt
+auf 1 %, lose im Träger mit dem halben Spiel, am Schraubloch Senkwinkel 90° und Kopf = Senkung der
+Normteiltabelle − Spiel · √2. Gegenprobe: Ohne die erkannten Merkmale am Netz, wie beim direkten
+Aufruf, werden die vier Schraubfälle rot, die Schlüssellöcher bleiben grün. Kein Code geändert,
+kein Changelog. **Zurückgenommen:** Die Nachprüfung N-4 von Paket G nannte die Kopfform je Kern
+verschieden; das gilt nur für den Aufruf ohne Auswertung, den keine Bedienung nimmt.
+
+## RM-638: In Einzelteile aufteilen hilft an jeder Teile-Absage (09.10.2026)
+
+<a id="rm-638-in-einzelteile-aufteilen-hilft-an-jeder-teile-absage-09102026"></a>
+<a id="rm-638"></a>
+
+**RM-638 — *In Einzelteile aufteilen* an einer Teile-Absage tut nichts.**
+  Gefunden beim Abschluss von RM-253 (Paket I, 09.10.2026): Die fünf Absagen mit `SPLIT_BODIES`
+  in `prepare_ops` (`_refuse_if_another_part_changed`, `_refuse_like_the_card`,
+  `_refuse_another_part_in_the_bore`, `filled_bore_refusal`, `_slot_in_separate_carrier`) trugen
+  keine Stückzahl in `values`; `MainWindow._split_into_bodies_after_error` kehrte ohne
+  `values["components"]` still zurück. Dazu hält die angehaltene Kette jeden neuen Schritt an
+  (`Session.halt_in_the_way`). Nebenbei überschrieb `evaluate._finding_from` den Wert `kind` der
+  Absage mit dem Fehlertitel. **Abnahme:** Fenstersonde (Platte mit Stift als STL, *Merkmal
+  versetzen*): nach dem Klick zwei Objekte, der Schritt läuft am richtigen Teil, ein Strg+Z nimmt
+  alles zurück.
+
+**Abschluss (Paket I, `e4f58fac3`):** Jede der fünf Absagen trägt `components` und, wo die Flächen des
+Merkmals auf genau einem Teil liegen, `part_index` — dessen Stelle in der Reihenfolge der Zerlegung
+(`prepare_ops.split_offer`, dieselbe Ordnung wie `split_bodies`). Hält die Kette am Schritt der
+Absage, setzt der Knopf die Zerlegung mit *Splitter behalten* davor und den Schritt an das Teil mit
+dem Merkmal (`History.split_and_retry(..., keep_tiny=True, part_index=..., feature=...)`), alte und
+neue Fassung in einer Transaktion; sonst bleibt die Zerlegung als nächster Schritt. Ein neues Teil
+vergibt seine Merkmalsnamen frisch — am Ständer hieß `hole_2` auf seinem Teil `hole_1`, und der
+Schritt hielt erneut. Deshalb gibt die Zerlegung das eine Merkmal mit seinen Dreiecken im Teil aus
+(internes `carry_feature`, nur von diesem Weg gesetzt), und die Zuordnung gibt ihm seinen Namen
+zurück. `_finding_from` setzt den Titel nur noch, wo der Fehler keine eigene Art nennt. Test
+zuerst: `test_splitting_at_a_part_refusal_moves_the_feature_on_its_own_part` (Fenster, Platte
+allein und mit gebohrtem größerem Klotz daneben) war am Stand davor an beiden Fällen rot — zuerst
+an der Art, mit behobener Art an „Kette hält weiter an“ —, ist grün; die Mutationen „`part_index`
+unbeachtet“ und „Merkmal nicht mitgegeben“ machen den Fall mit Klotz rot. Kerntests:
+`test_every_bore_op_names_the_separate_pin` (48 Fälle) prüft Stückzahl und Teil,
+`test_a_bore_through_two_plates_with_a_pin_names_the_pin`, dass eine Bohrung auf zwei Platten
+kein Teil nennt, `test_splitting_carries_the_refused_feature_onto_its_part` die Dreiecke des
+mitgegebenen Merkmals, `test_split_and_retry_moves_the_halted_step_to_the_part_of_its_feature`
+den Verlauf, `test_a_technical_detail_stays_behind_the_readable_sentence` die eigene Art.
+Fenstersonde am Laptop-Ständer (offscreen, STL, *Merkmal versetzen* `hole_2` um 1,5 mm quer):
+Halt an Schritt 2 mit `components` 22 und `part_index` 15, ein Klick gibt 22 Objekte, der Schritt
+rechnet an `obj_16` (537 mm³), `hole_2` steht auf der Sollmitte, Befund `bore.over_the_edge` wie
+in RM-253 (1-mm-Wand); ein Strg+Z stellt `load`, `move_feature` und ein Objekt wieder her.
+
+**Nachtrag Review I (10.10.2026):** Der Knopf heißt jetzt, was er tut — *In Einzelteile
+aufteilen und erneut versuchen* (`SPLIT_AND_RETRY`, ein Handler für Ausrichten und Teile-Absage,
+G6). Liegt der Mantel eines Merkmals auf mehreren Teilen (Bohrung durch zwei Platten mit Stift),
+bleiben seine Träger ein Objekt (`carry_feature`, jetzt sichtbar als *Merkmal beisammen halten*),
+nur das fremde Teil geht ab, und der Schritt versetzt die ganze Bohrung; bis dahin hielt die Kette
+nach dem Klick erneut an (M2, `test_the_part_refusal_way_ends_with_the_feature_moved_on_its_parts`).
+Gewinde ohne Flächen zählen mit den Wänden ihres Gangs. Die Art im Prüfbericht heißt wie in Karte
+und Handbuch („Art: Bohrung“, M3); der Agent liest Stückzahl, Merkmal und Teil der Absage
+(`checks.as_lines`); *Anzahl* reicht bis 1000 statt 64 (der Bohrmaschinenhalter hat 69 Teile),
+darüber bietet die Absage keinen Knopf an.
+
+## RM-639: In Einzelteile aufteilen behält jedes druckbare Teil (09.10.2026)
+
+<a id="rm-639-in-einzelteile-aufteilen-behält-jedes-druckbare-teil-09102026"></a>
+<a id="rm-639"></a>
+
+**RM-639 — *In Einzelteile aufteilen* verwirft am Ständer 13 von 22 echten Teilen als Splitter.**
+  Ohne *Splitter behalten* fiel weg, was unter 1 % des größten Teils lag (82 281 mm³): Stifte,
+  Scheiben, Schraubenköpfe zwischen 212 und 614 mm³. Entscheidung Robert: Splitter nach druckbarer
+  Größe aus dem Profil bzw. offener Schale bemessen, nicht relativ zum größten Teil. **Abnahme:**
+  am Ständer bleiben alle 22 Teile, echte Splitter fallen weiter weg; Geometrietest gegen den
+  Korpus.
+
+**Abschluss (Paket I, `e4f58fac3`):** Ein Splitter ist eine offene Schale, solange ein anderes Teil
+geschlossen ist, oder ein geschlossenes Teil unter `Profile.smallest_printable_volume`
+(`prepare_ops._splinters`, `_open_shells` über die Ecken nach ihrem Ort). Am Ständer bleiben alle
+22 Teile (vorher 9), mit Stückzahl 9 gehen die 13 übrigen mit Warnung an ihre Nachbarn.
+Korpus `plate_with_loose_parts.stl`: Platte, vier Stifte, zwei Scheiben, Klotz bleiben, loses
+Dreieck, Kasten ohne Deckel und Würfel 0,2 mm fallen; ein Harzdrucker behält den Würfel
+(`test_split_bodies_keeps_every_printable_part_and_drops_only_splinters`, am Stand davor rot);
+zwei offene Blätter allein bleiben zwei Teile. `split_bodies` `cache_version` 2; Format 50 mit
+Migration 49 → 50: gespeicherte Schritte bekommen `legacy_tiny_share` und rechnen wie damals
+(`split_splinters_v49.p3d`, `test_v49_split_bodies_drops_what_it_dropped_then`). Gebündelt:
+Volumen und Lage je Teil an den Dreiecken (`mesh.triangles_volume`), ein Netz nur für behaltene
+Teile; an Ständer und Korpus bitgleich zum Stand davor, Ständer CPU-Median 0,30 → 0,22 s, Spitze
+(tracemalloc) 32,0 → 12,6 MB. `Trimesh.volume` teilte an einem losen flachen Dreieck durch null.
+
+**Nachtrag Review I (10.10.2026):** Eine offene Schale ist nur Splitter, wenn sie auch klein
+ist — dieselbe Frage wie beim Laden (`repair.open_splinters`, M1): Ein Rohr ohne Deckel neben
+einem Würfel fiel sonst als größtes Teil weg. Offene Teile behalten das Maß, nach dem sie bis
+dahin geordnet wurden (`Trimesh.volume` am Teilnetz), damit die Kennungen nicht wechseln (G1);
+ältere Projekte rechnen mit genau der alten Zählung (`_parts_as_saved`). Tests für Ecken nach
+Ort, das entartete Dreieck, die Träger der Mitnahme und das alte Integral (G2); Texte ohne
+Formatnummer (G3), Einzahl „Ein Splitter wurde verworfen“ (G4).
+
+## RM-589: Was das Modell schon ausgleicht, gleicht der Slicer nicht noch einmal aus (09.10.2026)
+
+<a id="rm-589-was-das-modell-schon-ausgleicht-gleicht-der-slicer-nicht-noch-einmal-aus-09102026"></a>
+<a id="rm-589"></a>
+
+**RM-589 — Bohrungen und Stifte passen ohne Nacharbeit.** Ausgleich für Bohrungen,
+Polyholes und Elefantenfuß bleiben beim Hersteller; die Passungen rechnet Solidon über das
+Spiel im Materialprofil (Recherche Nr. 13). Offen war, wie beides zusammenwirkt, ohne doppelt
+auszugleichen. Abnahme: ein Passungsteil aus dem Korpus im Slicer gemessen, mit und ohne
+Ausgleich.
+
+**Befund (09.10.2026, `assembly_fit.p3d`, PETG, Außenwandbahnen im G-Code):** Solidon schrieb
+keinen Loch- oder Fußausgleich, es galt der des Herstellers. Wo das Modell ihn schon trug,
+glich der Slicer ein zweites Mal aus: *Elefantenfuß ausgleichen* plus Einzug des Herstellers
+gab in der ersten Schicht 0,3 statt 0,2 mm je Seite am Centauri Carbon 2 (ElegooSlicer,
+0,1), 0,4 statt 0,2 am MK4S (PrusaSlicer, 0,2), 0,275 am Kobra 2 (Anycubic Slicer Next,
+0,075); eine Bohrung mit Materialzugabe wurde zusätzlich je Seite um 0,02 mm (Kobra 2) und
+0,025 mm (Ender-3 V3 KE, beide OrcaSlicer) geweitet. Polyholes führt kein Herstellerprofil;
+CuraEngine mit den sieben Druckerdefinitionen der Solidon-Drucker glich weder Fuß noch Loch
+aus (75 andere der 706 Definitionen in Cura 5.13 setzen einen der beiden Werte). Eingelesene
+Löcher ohne Zugabe bekamen den Ausgleich des Herstellers allein, dort war nichts doppelt.
+
+**Behoben:** Zwei neue Druckeinstellungen, *Erste Schicht einziehen* (`layers.elephant_foot`:
+Orca und Prusa `elefant_foot_compensation`, SuperSlicer `first_layer_size_compensation`
+negativ, Cura `xy_offset_layer_0` negativ) und *Löcher weiten* (`shell.hole_offset`: Orca
+`xy_hole_compensation`, SuperSlicer `hole_size_compensation` negativ, Cura `hole_xy_offset`;
+PrusaSlicer kennt keinen), zurückgelesen aus dem Herstellerprofil. Ohne eigene Wahl schreibt
+kein Satz einen der beiden, auch Solidons eigener nicht (`slicer_keys.MAKER_OWNED`); es gilt
+der Wert des Slicers. `scene.fits.allowances_for` sagt je Körper, was sein Modell schon
+ausgleicht: Löcher, wo ein Schritt Spiel in eine Innenkontur legt (Bausteine über
+`parts.ops.cuts` oder `PartSpec.play_inside`, gebohrte Löcher mit Haken am Merkmal, das noch
+steht, von Deckel, Drehdeckel und Teilen nur das Ergebnis mit dem Spiel innen), den Fuß aus
+*Elefantenfuß ausgleichen*. Der Druckrat (`advise._from_allowances`) schlägt dort null vor, je
+Teil (`PART_PATHS`, Cura je Netz), nicht bei kalibriertem Material; die Orca-Familie bekommt
+dazu den Brim-Abstand des Teils, damit der Brim am Fuß bleibt. Druckdialog und Export fragen
+dieselbe Auskunft.
+
+**Review (`review_rm589.md`) behoben:** S1 Solidons eigener Satz schrieb Einzug und
+Lochausgleich ungefragt (Cura zog ein Teil mit *Elefantenfuß ausgleichen* doppelt ein, Curas
+Fenster überschrieb Maschinenwerte): nur noch auf Wahl, der Rat je Teil gilt als übernommen.
+M1 kalibriertes Material ohne Vorschlag, denn sein Prüfkörper ging durch den Ausgleich des
+Slicers. M2 Schraube, Haken und Wärmeeinsatz zählen nicht mehr, Fußtasche, Mutter und
+Stangenverbinder zählen, Deckel und Teilen nur am richtigen Ergebnis (gegen `e8c785abd` 16
+von 24 Fällen falsch; Scharniere, Rastnase und Stecker nach der Nachprüfung nicht mehr). M3 Fenstertest über den Dialogweg. L1
+Programmvorgaben null für die fünf Programme der Orca-Familie, gemessen. L3 Suche unter den
+Wörtern der Slicer in sechs Sprachen. L5 SuperSlicer bekommt beides unter eigenem Namen; eine
+Prusa-3MF ohne Programm schreibt den Lochausgleich in seinem Vorzeichen (neuer Fund).
+
+**Nachprüfung (`review_rm589_nach.md`) behoben:** N1 Nach *Anordnen* und *Ausrichten*
+bekam jeder Körper den Ausgleich seiner Nachbarn — am OrcaSlicer druckte ein Körper ohne
+Modellausgleich mit dem Rat Elefantenfuß (Schicht 1 nur 0,080 statt 0,380 mm eingezogen);
+die Herkunft geht jetzt je Körperkennung, auch für die Passungsarten, und B behält seinen
+Einzug. N2 gezählt wird am Innenmerkmal des fertigen Körpers, das der Slicer in einer Schicht
+geschlossen sieht (`L·cos θ > d·sin θ`, am Schnitt belegt): waagerechte Bohrungen,
+Scharnieraugen, Bolzenscharnier und Kabelclip nicht mehr — eine senkrechte Bohrung daneben
+behält am Kobra 2 den Ausgleich des Herstellers (Bahn 6,439 statt 6,399 mm) —, dazu
+*An gezeichneter Linie teilen*, der Schraubdeckel aus *Behälter mit Deckel* und *Gegenform
+einlassen*. N3 gemessen ist je Wert (`MaterialProfile.measured`): Wer nur das Spiel
+kalibriert, bekommt beim Fuß weiter den Vorschlag. N5 die Suche kennt die Wörter der
+übersetzten Slicer und SuperSlicers `first_layer_size_compensation`. N4, N6–N10 Format-Tor,
+Docstrings, eine Quelle der Lochfeldformen, `play_inside` mit Wächter und Karte,
+Unterlagen, Changelog-Wort.
+
+**Schlussprüfung (`review_rm589_schluss.md`) behoben:** S1 Der Fuß zählte an der Herkunft:
+Ein Turm, den *Ausrichten* hinlegte, ein gewendeter, die obere Hälfte eines waagerechten
+Schnitts und ein Deckel bekamen „Erste Schicht einziehen → 0“ und druckten mit Elefantenfuß.
+Er zählt jetzt nur, wo das eingezogene Band am Bett liegt (`fits._foot_on_the_bed`: Rahmen-Z
+mit Vorzeichen nach oben, Schritt auf der eigenen Linie oder einer reinen Kopie, `COPY_OPS`);
+am OrcaSlicer behält der liegende Turm den Einzug des Slicers (Schicht 1 0,380 mm schmaler als
+die Mitte), der stehende zieht nur im Modell ein (0,480, Objektwert 0). S2 Eine senkrecht
+durch eine gekippte dünne Platte gebohrte Öffnung zählt nicht mehr: Hat der Lochmantel zwei
+Ränder, entscheidet, ob der tiefste Punkt des oberen über dem höchsten des unteren liegt
+(`_closes_between_mouths`, gegen den Schnitt belegt, auch bei geknicktem Rand). S3 Test für
+`measured` im Projektweg (`carry`, Speichern und Öffnen auf einem zweiten Rechner).
+Kontrolle (`review_rm589_kontrolle.md`), K1: Nach *Abschneiden* oder *Abziehen* unten und
+nach Kippen, Einziehen und Zurückdrehen zählte der Fuß weiter; jetzt bestätigen zwei
+Schnitte am fertigen Körper, dass das Band unten noch eingezogen ist (`_band_drawn_in`).
+Ein Vereinigen, bei dem nur ein Teil eingezogen war, zählt deshalb nicht mehr.
+
+**Gemessen nachher:** Mit dem Rat übernommen dieselben Teile ohne doppelten Ausgleich: CC2
+39,10 statt 38,90 mm Bahnbreite in Schicht 1, MK4S 39,10 statt 38,70, Kobra 2 in Anycubic
+Slicer Next 39,10, Cura 39,14; Loch am Kobra 2 6,635 statt 6,675, am KE 6,636 statt 6,686 mm.
+`test_a_part_that_compensates_itself_is_not_compensated_again` (`slicer`-Marker): zwei gleiche
+Bohrplatten, die Platte des Slicers mit 0,1 mm Lochausgleich und 0,15 mm Einzug, die
+ausgleichende mit Objektwert null — in OrcaSlicer, PrusaSlicer, Cura, Bambu Studio,
+ElegooSlicer, Creality Print und Anycubic Slicer Next Loch 0,199 bis 0,208 mm und Einzug
+0,300 mm Unterschied (PrusaSlicer ohne Lochausgleich: 0,000), sieben grün. Nach dem Review
+dieselben Bohrplatten in allen acht Programmen samt SuperSlicer (MINI), je ohne Klick, mit
+Rat, mit Wahl und mit Solidons eigenem Satz: Ohne Herstellerprozess und bei Cura schreibt
+die Übergabe keinen der beiden Werte, die Programme drucken mit ihrer Vorgabe null
+(Konfigurationsblock), Cura zieht A nur um den Modelleinzug ein (39,14 gegen B 39,54 mm);
+mit Rat zieht A nirgends doppelt ein (Orca-Familie und PrusaSlicer 39,10, SuperSlicer 39,18
+wie B), mit Wahl Loch 0,198 bis 0,208 und Einzug 0,300 mm Unterschied in allen acht.
+Begründung:
+`konzepte/begruendungen/regel-druckrat.md`, Regel: `.claude/rules/druckrat.md`. Umgesetzt von
+Claude (Worktree `F:/sl-loecher`).
+
 ## RM-571: Ein Sims im offenen Becher neben einem gesperrten Kanal behält seine Stütze (09.10.2026)
 
 <a id="rm-571-ein-sims-im-offenen-becher-neben-einem-gesperrten-kanal-behält-seine-stütze-09102026"></a>
@@ -46344,3 +47548,224 @@ Drache im Druckrat (`sonde_rat.py`, CC2) gleich. Nach dem Review: alle Becherfä
 0,36 → 0,42 s, am Zickzack 0,50 → 0,88 s. Changelog: nein (die Sperre im umschlossenen Raum kam
 mit RM-566/RM-571 im selben 0.6.0-Zyklus, `git tag --contains` leer; der 0.6.0-Punkt zu *Kanäle
 frei halten* beschreibt die Eigenschaft).
+
+## RM-676: *Größe ändern* an einem erzeugten Modell rechnet nur das Maß (10.10.2026)
+
+<a id="rm-676-größe-ändern-an-einem-erzeugten-modell-rechnet-nur-das-maß-10102026"></a>
+<a id="rm-676"></a>
+
+**RM-676 — *Größe ändern* an einem erzeugten Modell rechnet die ganze Erzeugungskette neu.**
+  Versionsvergleich 0.5.2 (03.10.2026), Weg 3 (Abschnitt 2). **Regression gegenüber v0.5.1** in der
+  Zeit bis zum Ergebnis; der Weg selbst ist besser (3 statt 5 Klicks, das Modell steht danach auf
+  dem Bett). Erzeugter Stuhl, 325 244 Dreiecke, *Größe ändern* am Befund auf 400 mm: v0.5.1 18–22 s
+  (angehängtes Skalieren), v0.3.5 und v0.4.1 7–8 s, `09d8e9485` 67–79 s, im Wechsel bis 139 s — so
+  lange wie das Übernehmen selbst. *Größe ändern* ändert Schritt 2 der Kette (`fit_to_size` vor
+  `repair`), danach laufen Reparatur, Aufsetzen und zweimal die Merkmalserkennung am vollen Netz
+  neu. Die Reihenfolge „erst Größe, dann Reparatur“ ist begründet (Verschweißtoleranz am
+  Einheitswürfel) und bleibt; teuer ist, dass eine reine Maßänderung die vom Maßstab unabhängige
+  Arbeit wiederholt. Am Stand origin/main unverändert (Kette `load, fit_to_size, repair,
+  place_on_bed`).
+  **Stellen:** `app/core/generate.py:302` (`fit_to_size` vor `repair`), `:339` (Kette),
+  `app/core/geom/ops.py:766` (`fit_to_size`), `app/ui/main_window.py:25524` (*Größe ändern* öffnet
+  den Schritt).
+  **Fix (allgemein):** Die Erzeugungskette normiert auf die Arbeitsgröße, repariert dort und trägt
+  das Kundenmaß als eigenen, billigen Schritt dahinter; oder eine reine Maßänderung skaliert die
+  gemerkten Ergebnisse der Folgeschritte mit, statt sie neu zu rechnen.
+  **Abnahme:** Stuhl und zwei weitere erzeugte Modelle (eines über dem Dreieckslimit mit
+  `decimate_mesh`): *Größe ändern* höchstens so lange wie das angehängte Skalieren in v0.5.1, Volumen
+  und Befunde gleich einer frischen Rechnung im neuen Maß, ein Rückgängig-Schritt, alte Projekte
+  rechnen wie gespeichert. Bauplan §17.1, §31.
+  Belege: `F:\solidon-review-reports\regression-0.5.2\weg3\befunde.md` (Abschnitt 2).
+
+**Abschluss:** Kette `load, fit_to_size (Arbeitsgröße), repair, [decimate_mesh], fit_to_size (Kundenmaß, freie Stelle)`; *Größe ändern* ändert nur den letzten Schritt (`d9c567d92`); der Dialog des früheren Maßschritts nennt den, der das Maß setzt (`evaluate.size_set_by`). Ein Maßschritt, dessen Skalieren keinen Punkt um `PRINT_LIMIT` verschöbe, legt nur und trägt die Merkmale mit (`transform.fitted_factor`, gemessen an der weitesten Hüllecke vom Punkt, der stehen bleibt; Bauplan §11.2): Am Bett ließ das Ausdünnen 100,000222 mm stehen (0,22 µm an der Kante, 0,19 µm an der weitesten Ecke), und ohne ihn lief beim Übernehmen eine Erkennung mehr als vorher. Nachweis nach §11.2: Korpus und Beispielprojekte haben drei `fit_to_size`-Schritte (Eingang 28,4 / 50,2 / 3,0 mm gegen 100 mm), keiner liegt in der Schranke, Abweichung 0; beim Übernehmen sind Drache, Stuhl und Bett gleich dem Stand vor dem Paket (Volumen, Maße, Lage). Die freie Stelle bewegt das Netz nur noch einmal (`473ef2f36`, Spitze −16 %). Der „Stuhl“ der Regressionsmessung oben (325 244 Dreiecke) heißt hier Drache; Stuhl ist das Netz mit 660 530. Gezählt mit Sonde je Weg, v0.5.1 / vorher (`a9e4d3f64`) / nachher: volle Erkennungen bei *Größe ändern* Drache 1/1/1, Stuhl 1/1/1, Bett 1/2/1, Reparatur 1/1/0; beim Übernehmen und Öffnen gleich viele wie vorher (2, 2, 3). Job-CPU unter Volllast, zwei Läufe im Wechsel: *Größe ändern* Drache 37–39 / 29–32 / 24–26 s, Stuhl 51–72 / 62–67 / 28–44 s, Bett 99–143 / 230–248 / 44–69 s; Strg+Z danach vorher 17–138 s, nachher unter 3 s. Merkmale bei gleichmäßiger Skalierung mitzutragen ist geprüft und verworfen: 47 von 339 Paaren aus Korpus, Beispielprojekten und den drei Modellen sind diskret ungleich, bei jedem Faktor von 0,5 bis 4 (Bericht Paket D, Welle 3).
+
+## RM-750: Ein wartender Klick behält seine Zusage, während die Analysekarte rechnet (10.10.2026)
+
+<a id="rm-750-ein-wartender-klick-behält-seine-zusage-während-die-analysekarte-rechnet-10102026"></a>
+<a id="rm-750"></a>
+
+**RM-750 — Wartete *Fertig* einer Formsitzung auf die Auswertung, verschwand „Wird übernommen,
+sobald die Berechnung fertig ist.“, sobald die Wandprüfung des Zugs ihre Analysekarte rechnete.**
+Gefunden im Review des macOS-Fixes `fix/sculpt-macos` (`review-fix-sculpt.md`, M-2): Die Karte
+steht in `_PROGRESS_PRIORITY` vor der Auswertung, und `_render_progress_state` zeigte die Zusage
+nur, wenn die Auswertung die Zeile trug; der Klick sah verschluckt aus. Jetzt steht die Zusage,
+solange ein Klick wartet und die Auswertung läuft, gleich welcher Lauf die Zeile trägt.
+**Nachweis:** `test_sculpt_session.py::test_a_waiting_click_keeps_its_promise_while_the_map_is_computed`
+am Stand davor rot, jetzt grün; die Formsitzungsdatei 96 grün. Neben Erzeugung und Agent folgt
+der Zusage wie dort der Hinweis oder die Ansage. Changelog: nein (die Zusage kam mit `4c5a52e12`
+am 08.10.2026 und steckt in keinem Tag).
+
+## RM-751: Ein freigegebenes Fenster startet keine Wandprüfung mehr (10.10.2026)
+
+<a id="rm-751-ein-freigegebenes-fenster-startet-keine-wandprüfung-mehr-10102026"></a>
+<a id="rm-751"></a>
+
+**RM-751 — Nach `MainWindow.release` startete der Zeitgeber eines letzten Zugs noch eine
+Wandprüfung, deren Arbeiter niemand mehr abwartete.** Gefunden im selben Review (M-3; in der
+Sonde endete der Prozess so viermal mit Exit 127). `release` hält `_sculpt_check` und die wartende
+Übergabe der Vorschau (`_sculpt_display`) an und gibt die laufende Prüfung auf,
+`_check_sculpted_walls` fängt nach dem Schließen nichts mehr an.
+**Nachweis:** `test_sculpt_session.py::test_a_released_window_starts_no_wall_check` am Stand
+davor rot, jetzt grün. Changelog: nein.
+
+## RM-704 (Teil): Mit zwei Schichten Luft trägt jede Baumspitze eine Trennschicht (10.10.2026)
+
+<a id="rm-704-teil-mit-zwei-schichten-luft-trägt-jede-baumspitze-eine-trennschicht-10102026"></a>
+
+**Befund (10.10.2026):** Roberts dritter Drache (Centauri Carbon 2, PLA, volle
+Elegoo-Grundlage, 0,4 mm über Baumspitzen nach RM-584) hatte saubere Kopfstacheln, aber eine
+faserige, durchhängende Kieferunterseite; ein Vorderbein brach beim Abnehmen der Stütze. Im
+G-Code (ElegooSlicer, Unterseite x 106–137, y 92–118, z 84–99) trugen gegen den zweiten Druck
+(0,2 mm) die flachen Teile 22 statt 54 %, die schrägen Ränder 26 statt 34 %, und was trug, stand
+0,4 statt 0,2 mm darunter auf nackten Spitzen (Trennschicht 2–5 %). Astabstand, Astwinkel,
+XY-Abstand, Wände, Trennschichtlagen und -abstand und der untere Abstand änderten am Kinn nichts;
+0,2 oben stellte den zweiten Druck her und mit ihm den Kontakt an den Stacheln (94 mm²).
+
+**Behoben:** Wo der Abstand über den Spitzen gilt, Trennschichten gedruckt werden und die
+Orca-Familie schneidet, schlägt der Rat die kleinste Spitze vor, deren Querschnitt
+`minimum_roof_area` übersteigt (`advise.ROOF_TIP_DIAMETER`, 1,13 mm aus `TIP_ROOF_AREA`); dann
+erzwingt das Programm die Trennschicht an jeder Spitze (`force_tip_to_roof`). Neues Feld
+*Baumspitze* (`support.tip_diameter`, `tree_support_tip_diameter`), aus dem Herstellerprofil
+gelesen, unter Gitter inaktiv. Bambu Studio kennt den Schlüssel nicht, Creality Print 7.2 liest
+ihn ohne Wirkung (`NOT_TAKEN_BY_PROGRAM`); PrusaSlicer und Cura sind nicht geschnitten
+(`NOT_TAKEN_BY`).
+
+**Nachweis (10.10.2026):** Matrix am Drachen auf Übergabe 3 (21 Varianten, Bericht
+`.claude/.state/drache-2026-10-08/berichte-2026-10-10/drache3.md`, Werkzeuge
+`output/drache-2026-10-10/matrix/`): Spitze 1,13 mm trägt ein Viertel der Kieferunterseite mit
+Trennschicht, Kontakt Kinn 7,0 → 4,0 mm², Stacheln 3,2 → 1,9 mm², +4 min 54 s, +0,03 g; 1,2 und
+1,4 mm gleich. Kundenweg (`tools/matrix_unit.py`, elegoo:centauri-carbon-2): Der Rat schlägt
+1,13 mm vor, und die Druckdatei trägt sie. Tests: `test_slice_findings.py`
+(`test_the_roof_tip_is_the_smallest_with_a_roof`, `test_tips_with_air_above_carry_a_roof` mit
+Gegenproben, `test_the_tip_field_names_the_roof_tip`), `test_print_settings.py`
+(Begründungslisten, Feld unter Gitter inaktiv), `test_manufacturer.py` (Spitze aus dem
+Herstellerprofil), Slicertest
+`test_real_slicers.py::test_a_roof_tip_puts_an_interface_under_every_cone` (Kegelspitzen:
+OrcaSlicer, ElegooSlicer, Anycubic mit Trennschicht unter jedem Kegel; Bambu druckt dieselbe
+Stütze, Creality andere Äste, aber dieselbe Trennschicht; Stifte gleichen Querschnitts zeigten
+es nicht). **Kosten:** Getragen ist die flache Kieferunterseite kaum mehr (25 statt 22 %, im
+zweiten Druck 54 %); was trägt, liegt auf Trennschicht. Auf dem Modell stehen 49 statt 31
+Stützfüße (14,3 statt 8,5 mm²), neue am Kopf auf 105–112 mm, an Hals und Brust und drei sehr
+kleine an den Vorderbeinen auf etwa 21 mm (Durchsicht `reviews-2026-10-10/review_rm704.md`).
+Offen im Register: Kinn, Kopf und Vorderbeine an Druck 4, Wände an schlanken Gliedern, Prusa
+und Cura.
+Changelog: ja.
+
+## RM-754: Mit und ohne Cache derselbe Satz zur freien Stelle (10.10.2026)
+
+<a id="rm-754-mit-und-ohne-cache-derselbe-satz-zur-freien-stelle-10102026"></a>
+<a id="rm-754"></a>
+
+**RM-754 — Eine Auswertung ohne Cache verlor den Befund `arrange.free_spot`.** Gefunden im
+Review L3 (10.10.2026) am Beispielprojekt *weg3*: Nach der ersten Auswertung steht die freie
+Stelle im Ladeschritt (`spot_x`, `spot_y`, `spot_plate`, Entscheidung Robert, `bc901772c`).
+Mit dem Cache kam das Ergebnis des ersten Laufs samt Satz „Das Modell kam an die freie
+Stelle …“, ohne Cache — nach dem Wiederöffnen — rechnete `prepare.placed_at_free_spot` mit der
+festgehaltenen Stelle und gab keinen Befund; 17 von 18 Schritten verschieden, gegen den
+Vertrag „Auswertung mit = ohne Cache“ (§15.1, §11.2). Seit v0.5.1 im Code
+(`git tag --contains bc901772c`), in v0.5.3 enthalten. **Behoben (Paket L3):** Mit
+festgehaltener Stelle gibt `placed_at_free_spot` denselben Befund unter derselben Bedingung
+(Platte hinter der ersten oder Verschiebung; bei einer Datei mit mehreren Platten
+`arrange.plates_behind`), beide Sätze aus einer Quelle (`_came_to_free_spot`,
+`_plates_behind`); `cache_version` von `load` 9, `load_step` 4, `fit_to_size` 6.
+**Nachweis:** `test_free_spot_kept.py::test_the_spot_finding_is_the_same_with_and_without_the_cache`
+(verschoben und mittig) am Stand davor rot, jetzt grün; *weg3* warm gegen kalt jetzt gleich
+(vorher fehlte kalt genau dieser Befund). Changelog 0.6.0: ja, als Behebung.
+
+## RM-705: Ein vor dem Update gebuchter Druck wird danach wiedererkannt (10.10.2026)
+
+<a id="rm-705-ein-vor-dem-update-gebuchter-druck-wird-danach-wiedererkannt-10102026"></a>
+<a id="rm-705"></a>
+
+**RM-705 — Der Abdruck der Verbrauchsbuchung änderte sich mit jedem neuen Einstellungsfeld.**
+Gefunden im Review von RM-704 (`reviews-2026-10-10/review_rm704.md`, „Format, Cache und ältere
+Stände“): `filament_usage.prepare` bildet den Abdruck über alle Werte von
+`print_settings_to_data`. Seit 0.5.3 kamen sechs Felder dazu (`support.spare_ledges`,
+`bottom_interface_layers`, `interface_spacing`, `tree_walls`, `cooling.minimum_speed`,
+`support_interface_cooling`; RM-704 bringt `support.tip_diameter`). Derselbe Würfel mit
+denselben Einstellungen ergab unter 0.5.3 und welle3 verschiedene Abdrücke, keiner stand unter
+den Altabdrücken des anderen — nach dem Update auf 0.6.0 hätte jeder Kunde die Wiedererkennung
+seiner Buchungen verloren. Dieser Bruch liegt in keinem Tag (die Felder kamen nach `v0.5.3`)
+und steht deshalb nicht im Changelog. Dort steht, was wirklich neu ist: Buchungen aus 0.5.1
+erscheinen wieder als frühere Buchung zur Prüfung, auch bei *Ohne Rückfrage buchen*. Diesen
+Bruch brachte `51c19d2f0` (`plate_choices` im Abdruck, in `v0.5.2` und `v0.5.3`) — eine
+Behebung (Review RM-705, M1).
+
+**Gemessen an Codekopien der Tags** (`git archive`, Sonden in der Sitzung „Einstellungen nach
+dem Modell“): Die übrigen Werte sind zwischen 0.5.3 und dem Zweig in Wert und Typ gleich, auch
+mit Grundlage aus dem ElegooSlicer. Dort steht aber `cooling.minimum_speed` auf 20 statt der 10
+der Dataclass — eine Regel „neues Feld nur abseits der Dataclass-Vorgabe“ hätte jeden
+Elegoo-Kunden weiter verloren.
+
+**Behoben:** `FINGERPRINT_FIELDS` friert die Felder von 0.5.3 ein. Ein späteres Feld zählt nur,
+wo es vom Herstellerprofil abweichen soll: eigene Wahl oder übernommener Vorschlag, oder ein
+Wert einer Spule, der vom Wert ohne Spule abweicht — dieselbe Auskunft wie
+`handover._for_the_slot` (nach RM-707; zuerst gegen die Vorgabe der Dataclass, Review L2).
+Dazu ein Altabdruck in der Gestalt von 0.5.1 (ohne Brim-, Raftabstand und leere Wahl der
+Platte): Eine Buchung aus 0.5.1 kommt als frühere Buchung zur Prüfung, die 0.5.3 nicht kannte.
+Regel: `.claude/rules/verbrauch.md`.
+
+**Nachweis:** `test_filament_usage_fingerprint_history.py` — Sollwerte aus der Kopie von 0.5.3
+(`158d8f5d…` für den Würfel, `aa373e5e…` für die Buchung) und 0.5.1 (`3cae285a…`, `c62cddf4…`);
+Projekt und Lager in `tests/data` schrieb 0.5.3 selbst. Am Stand `083dab2f6` 7 von 8 rot, danach
+grün. Der Wächter zählt jedes Feld über `all_paths()` und erfasst `support.tip_diameter` nach
+dem Merge von RM-704 ohne Zutun; vier Mutationen der Regel (Wahl, Spule, Altgestalt, ganzer
+Filter) machen ihn rot. Am Kundenweg (Projekt öffnen, Grundlage darunter, neu ansehen) erkennt
+der Zweig Buchungen aus 0.5.2 und 0.5.3 genau, aus 0.5.1 als frühere Buchung, aus 0.5.0 nicht:
+Dort weichen die Tempi der Stufe und der Profilschlüssel ab (`resolve(legacy=True)`), das ist
+kein billiger Altabdruck. Über fünf Drucker, PLA und PETG, Tabelle, ElegooSlicer und
+OrcaSlicer, mit und ohne eigene Wahl gleicht jeder Abdruck dem von 0.5.3. Der Wächter meldet
+alle Felder, die als Grundlage durchrutschen, auf einmal (L3); der Spulentest läuft über alle
+vier Spulengruppen (L1); der Kundenweg rechnet wie die Anwendung über
+`manufacturer.effective` (L4).
+
+**Grenzen** (Review RM-705, M2, gemessen an den zwölf Beispielprojekten aus `v0.5.3`): Der
+Abdruck kippt weiter, wo sich der Druck wirklich oder in seinen Bits ändert.
+- Netzbits: 11 von 12 Beispielen behalten ihren Abdruck, 19 von 21 Körpern sind bitgleich. Die
+  Ausnahme ist `gehaeuse-mit-bausteinen` (Bausteinänderungen, `LIBRARY_VERSION` 23 → 27,
+  Mutternfalle `PartChange` 25 und 26). Ebenso jede druckgleiche Beschleunigung, die Bits
+  verschiebt; Paket D trifft die Beispiele aus 0.5.3 nicht. Umbau auf gespeicherte Eingänge:
+  RM-706.
+- Solidons eigene neue Grundlage eines eingefrorenen Felds: Cura rechnet seit RM-583
+  (`fafcd4841`) `support.z_gap` in ganzen Schichten — Cura 2 von 4 Fällen verschieden (Generic
+  220, Fein 0,2 → 0,12 mm, Entwurf 0,2 → 0,28 mm); K1 auf Standard gleich.
+- Ein Slicer-Update, das einen Wert eines eingefrorenen Felds ändert, wie schon unter 0.5.3.
+
+## RM-707: Spulenwerte aus 0.5.3 überschreiben das Herstellerprofil nicht mehr (10.10.2026)
+
+<a id="rm-707-spulenwerte-aus-053-überschreiben-das-herstellerprofil-nicht-mehr-10102026"></a>
+<a id="rm-707"></a>
+
+**RM-707 — Spulenwerte aus 0.5.3 änderten nach dem Update still den Druck.** Gefunden im Review
+von RM-705 (`reviews-2026-10-10/review_rm705.md`, N1): `serialise._group_from_data` füllte ein
+Feld, das die Spulengruppe einer älteren Datei nicht kannte, mit der Vorgabe der Dataclass, und
+`handover._for_the_slot` schrieb es als Abweichung der Spule an den Slicer. Gemessen am echten
+ElegooSlicer (Würfel, CC2, PLA, Spule aus 0.5.3 mit Düse 215 °C und Lüfter 80 %): Der
+Konfigurationsblock des G-Codes trug `slow_down_min_speed = 10` statt der 20 des
+Herstellerprofils. `cooling.support_interface_cooling` träfe es ebenso, sobald die Grundlage ihn
+einschaltet (Projektwahl, Vorschlag) — am gemessenen Profil steht er aus, vorher wie nachher
+`-1` (Review RM-707, L4). Entstanden mit `5f68e51d8` und
+`fafcd4841`, beide in keinem Tag — deshalb kein Changelog.
+
+**Behoben:** `SlotOverride.inherited` nennt die Felder einer gesetzten Spulengruppe, die die
+Datei nicht kannte. Sie folgen dem Wert ohne Spule (`handover.override_section`, der einzige
+Ort, an dem eine Spule ihre Gruppen anlegt), werden nicht geschrieben und bleiben so über
+Speichern und Öffnen erhalten — ohne Formatschritt, denn ein älterer Leser übergeht fehlende
+Felder ohnehin. Ausnahme ist die Lüfterkurve, die der Leser bewusst aus dem Material ergänzt.
+Der Spulendialog zeigt dort den Projektwert und lässt das Feld geerbt, solange es unverändert
+bleibt; ein übernommener Vorschlag für die Spule nimmt seinen Pfad heraus. Die Spulenklausel
+des Abdrucks (RM-705) fragt jetzt wie `_for_the_slot` gegen den Wert ohne Spule, ohne Slicer
+gerechnet. Nach dem Review: „Alte Filamentwerte übernehmen“ zeigt geerbte Felder ebenfalls als
+Projektwert und lässt sie geerbt (M1), ein Übernehmen ohne Änderung gibt dieselbe Spule zurück
+(L2), der Vorschlag je Spule geht über `handover.with_slot_advice` (L1). Offen für welle4:
+Der Dialog zeigt bei einer Spule anderen Materials oder mit eigenem Filamentprofil den
+Projektwert, gedruckt wird der Wert der Spule ohne Übersteuerung (L3); die Vorbelegung einer
+solchen Spule mit Projektwerten besteht schon in 0.5.3 (N1).
+
+**Nachweis:** `test_slot_override_inherited.py` mit `tests/data/projects/usage_spool_v46.p3d`,
+geschrieben von 0.5.3 — am Stand davor 5 von 7 rot, danach grün; der Abdruck der Buchung
+(`613fd553…` aus der Kopie von 0.5.3) bleibt mit Tabelle und mit Herstellergrundlage gleich.
+Fenstertest `test_print_settings_ui.py::test_a_spool_from_053_shows_and_keeps_the_project_value_in_later_fields`.
+Am echten ElegooSlicer 1.5.3.5 danach `slow_down_min_speed = 20`, die Spule weicht nur noch in
+Düse, erster Schicht, Lüfter und Mindestschichtzeit ab (die Mindestschichtzeit trägt die Spule
+aus 0.5.3 als eigenen Wert, ein Feld von 0.5.3).

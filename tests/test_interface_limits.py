@@ -1384,7 +1384,7 @@ def test_the_shortcut_list_knows_every_key_the_window_holds(window: MainWindow) 
     in der Kürzelübersicht".
 
     Dieser Test ist die Bremse gegen das Wiederauftreten: Er vergleicht mit den
-    ``QShortcut``-Kindern des Fensters und wird rot, sobald einer dazukommt, den
+    Tasten des Fensters (``QShortcut`` und Aktionen) und wird rot, sobald einer dazukommt, den
     :data:`WINDOW_KEYS` nicht nennt.
     """
     from PySide6.QtGui import QKeySequence, QShortcut
@@ -1397,8 +1397,14 @@ def test_the_shortcut_list_knows_every_key_the_window_holds(window: MainWindow) 
     listed = entries(window.menuBar(), window)
     named = {key for _group, _title, key in listed}
 
+    # Fenstertasten sind ``QShortcut``-Kinder oder Aktionen am Fenster selbst:
+    # Seit Reiter in eigene Fenster wandern, hängen Esc, Zoom, Strg+Tab und
+    # die Werkzeugtasten als Aktionen am Fenster, damit die herausgezogenen
+    # Fenster dieselben Aktionen teilen. Nur ``QShortcut`` zu lesen, fand keine.
     owned = {
         native(item.key()) for item in window.findChildren(QShortcut) if not item.key().isEmpty()
+    } | {
+        native(action.shortcut()) for action in window.actions() if not action.shortcut().isEmpty()
     }
     assert owned, "ohne Fenstertasten prüft dieser Test nichts"
     assert owned <= named, f"die Übersicht kennt diese Tasten des Fensters nicht: {owned - named}"

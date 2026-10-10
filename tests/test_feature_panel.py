@@ -4692,8 +4692,11 @@ def test_original_bore_fields_keep_expressions_through_depth_and_hidden_position
         assert changed["diameter"] == "=@bore"
         assert changed["depth"] == pytest.approx(4.0)
         diameter = editors["diameter"]
+        # Über die Grenze des Feldes selbst, nicht über eine Zahl daneben: Mit
+        # Bohrungen bis zu einem Meter lag ``=@bore*100`` (600 mm) wieder darin.
+        largest = next(f.maximum for f in action.fields if f.name == "diameter")
         diameter.toggle.setChecked(True)
-        diameter.text.setText("=@bore*100")
+        diameter.text.setText(f"=@bore*{math.ceil(float(largest) / 6.0) + 1}")
         refusal = diameter.refusal()
         assert refusal and "Obergrenze" in refusal
         assert refused_feature_field(editors) == (refusal, diameter.text)

@@ -64,8 +64,8 @@ Merkmal, Befehlspalette, Agent, Kommandozeile.
 ## Abschluss
 
 Geometrie-Nachweise nach `/geometry-review`, auch am echten Modell. Die
-betroffenen Tests über `/pruefen` mit den Dateipfaden; das Entwicklungstor vor
-dem Commit. Melden: Name, Kategorie, Parameter vorn und hinten, welche Tests
+betroffenen Tests über `/pruefen` mit den Dateipfaden, dazu ruff, format, mypy;
+das Entwicklungstor vor jedem Stand, der nach main geht. Melden: Name, Kategorie, Parameter vorn und hinten, welche Tests
 sie decken, beide Kerne, und was die Oberfläche braucht (Auswahlfenster am
 Merkmal, Kürzel, Katalogeintrag). Fehlt die Op im Bauplan-Katalog, das sagen —
 den Bauplan ändert nur eine Ansage von Robert.

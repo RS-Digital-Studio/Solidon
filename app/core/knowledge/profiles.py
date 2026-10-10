@@ -43,6 +43,7 @@ from app.core.types import (
     SceneObject,
     Tolerance,
 )
+from app.core.units import is_zero
 from app.i18n import _, sort_key
 
 _log = get_logger(__name__)
@@ -307,8 +308,55 @@ def _optional_float(table: Mapping[str, Any], key: str) -> float | None:
     return float(table[key]) if key in table else None
 
 
+#: Was eine Kalibrierung messen und ins Materialprofil schreiben darf (§28.3).
+CALIBRATION_FIELDS: tuple[str, ...] = (
+    "clearance",
+    "press",
+    "hole_compensation",
+    "elephant_foot",
+    "shrinkage",
+    "minimum_wall",
+    "overhang_angle",
+)
+
+
+def _measured(table: Mapping[str, Any], start: Mapping[str, Any] | None) -> tuple[str, ...] | None:
+    """Die gemessenen Werte eines Eintrags (``MaterialProfile.measured``).
+
+    Seit RM-589 schreibt die Kalibrierung sie als ``measured``. Eine ältere
+    kalibrierte Datei nennt sie nicht; ihr Dialog schrieb jeden Wert, auch
+    den unberührten Startwert. Gemessen heißt dort, was vom mitgelieferten
+    Startwert ``start`` abweicht — ein Wert gleich dem Startwert ist für den
+    Druckrat dasselbe wie der Startwert. Ohne mitgelieferten Eintrag (ein
+    eigenes Material) gilt jeder eingetragene Wert als gemessen.
+    """
+    names = table.get("measured")
+    if isinstance(names, (list, tuple)):
+        chosen = tuple(sorted({str(name) for name in names} & set(CALIBRATION_FIELDS)))
+        return chosen or None
+    if not table.get("calibrated", False):
+        return None
+    found = tuple(
+        name
+        for name in sorted(CALIBRATION_FIELDS)
+        if name in table
+        and (start is None or name not in start or not _same_value(table[name], start[name]))
+    )
+    return found or None
+
+
+def _same_value(first: Any, second: Any) -> bool:
+    try:
+        return is_zero(float(first) - float(second))
+    except TypeError, ValueError:
+        return bool(first == second)
+
+
 def _material_from_table(
-    identifier: str, table: Mapping[str, Any], source: Path
+    identifier: str,
+    table: Mapping[str, Any],
+    source: Path,
+    start: Mapping[str, Any] | None = None,
 ) -> MaterialProfile:
     try:
         return MaterialProfile(
@@ -320,6 +368,7 @@ def _material_from_table(
             elephant_foot=float(table["elephant_foot"]),
             shrinkage=float(table.get("shrinkage", 0.0)),
             calibrated=bool(table.get("calibrated", False)),
+            measured=_measured(table, start),
             # Mechanik ohne Vorgabe: Ein fremdes Profil, das sie nicht führt,
             # bekommt 0 und damit „unbekannt". Ein geratener E-Modul stünde
             # sonst hinter jeder Federrechnung, ohne dass es jemand sähe.
@@ -374,7 +423,9 @@ def _load_materials() -> dict[str, MaterialProfile]:
             # Kalibrierung von vor 0.6.0 kennt den Stützabstand nicht und
             # bekommt ihn aus dem mitgelieferten Eintrag (RM-583).
             merged = {**shipped.get(identifier, {}), **table}
-            profiles[identifier] = _material_from_table(identifier, merged, own)
+            profiles[identifier] = _material_from_table(
+                identifier, merged, own, start=shipped.get(identifier)
+            )
     for identifier, entry in _carried_materials.items():
         profiles.setdefault(identifier, entry)
     return _by_title(profiles)

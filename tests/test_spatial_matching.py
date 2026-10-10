@@ -422,3 +422,174 @@ def test_nonfinite_normalised_position_names_the_feature_and_offers_a_way_out():
     with pytest.raises(InternalError) as caught:
         match(new, old, (0, 0, 0), 1.0)
     assert caught.value.values["features"] == ["old"], "auch auf der neuen Seite"
+
+
+def _full_path_only(monkeypatch, old, new, centre=(0, 0, 0), diagonal=1.0, old_centre=None):
+    """Dieselbe Frage ohne den Nahweg — der Vergleich für :func:`matching._near_assignment`."""
+    with monkeypatch.context() as patched:
+        patched.setattr(matching, "_near_assignment", lambda *args, **kwargs: None)
+        matching.forget_matches()
+        return match(old, new, centre, diagonal, old_centre)
+
+
+def _near_cloud(random, count, spread, shift, flips, renamed, shuffled, twins):
+    """Alte und neue Merkmale fast an derselben Stelle — mit Zwillingen und Nachbarn."""
+    kinds = ("hole", "face", "sphere")
+    # Jede Stelle des Rasters einmal: Zwillinge entstehen nur, wo sie gewollt sind.
+    cells = random.choice(13**3, size=count, replace=False)
+    old = {}
+    for index in range(count):
+        kind = kinds[index % 3]
+        centre = (np.asarray(np.unravel_index(cells[index], (13, 13, 13))) - 6) * spread
+        if twins and index % 7 == 0 and index:
+            centre = np.asarray(old[f"old_{index - 1}"].params["centre"]) + random.choice(
+                [0.0, 1e-9, 0.001, 0.0039, 0.004, 0.0041]
+            )
+        params = {"centre": tuple(float(value) for value in centre)}
+        if kind == "hole":
+            params |= {"axis": (0.0, 0.0, 1.0), "diameter": float(random.choice([4.0, 4.1]))}
+        elif kind == "face":
+            params |= {"normal": (0.0, 1.0, 0.0), "area": float(random.choice([9.0, 9.2]))}
+        else:
+            params |= {"diameter": 6.0}
+        old[f"old_{index}"] = Feature(f"old_{index}", kind, "detected", params)
+    new = {}
+    for name, feature in old.items():
+        moved = np.asarray(feature.params["centre"]) + shift * random.standard_normal(3)
+        params = {**feature.params, "centre": tuple(float(value) for value in moved)}
+        if flips and "axis" in params and random.random() < 0.5:
+            params["axis"] = (0.0, 0.0, -1.0)
+        target = f"new_{name}" if renamed else name
+        new[target] = replace(feature, id=target, params=params)
+    if shuffled:
+        names = list(new)
+        random.shuffle(names)
+        new = {name: new[name] for name in names}
+    return old, new
+
+
+@pytest.mark.parametrize("seed", range(24))
+def test_near_identical_sets_give_the_full_answer_bit_for_bit(monkeypatch, seed):
+    """Der Nahweg antwortet wie der volle Weg — Zuordnung, Waisen, Mehrdeutige, Neue (RM-636).
+
+    Gemischt: drei Arten, Zwillinge auf und knapp neben der Grenze der
+    Mehrdeutigkeit, gekippte richtungslose Achsen, kleine Verschiebungen,
+    neue Namen und vertauschte Reihenfolge.
+    """
+    random = np.random.default_rng(6362026 + seed)
+    old, new = _near_cloud(
+        random,
+        count=int(random.integers(20, 160)),
+        spread=float(random.choice([0.002, 0.01, 0.05])),
+        shift=float(random.choice([0.0, 1e-15, 1e-6, 1e-4, 1e-3])),
+        flips=bool(seed % 2),
+        renamed=bool(seed % 3 == 0),
+        shuffled=bool(seed % 4 == 1),
+        twins=bool(seed % 5 != 0),
+    )
+    centre = (0.0, 0.0, 0.0) if seed % 2 else (3.0, -1.0, 2.0)
+    engaged = []
+    real = matching._near_assignment
+
+    def watched(*args, **kwargs):
+        answer = real(*args, **kwargs)
+        engaged.append(answer is not None)
+        return answer
+
+    expected = _full_path_only(monkeypatch, old, new, centre, 1.0)
+    monkeypatch.setattr(matching, "_near_assignment", watched)
+    matching.forget_matches()
+    found = match(old, new, centre, 1.0)
+    assert found == expected
+    assert found.mapping == expected.mapping and list(found.mapping) == list(expected.mapping)
+    assert list(found.ambiguous.items()) == list(expected.ambiguous.items())
+    assert found.orphaned == expected.orphaned and found.fresh == expected.fresh
+    assert engaged, "Voraussetzung: der Zuordner fragt den Nahweg"
+    if seed % 5 == 0:
+        # Ohne Zwillinge trägt das Zertifikat: Der Nahweg antwortet selbst
+        # (Review L3, M1) — nicht nur gefragt, auch genommen.
+        assert any(engaged), "ohne Zwillinge antwortet der Nahweg"
+
+
+def test_the_near_way_carries_the_identity_and_the_small_moves():
+    """Ohne Zwillinge nimmt der Nahweg gleiche und leicht verschobene Mengen ganz an."""
+    random = np.random.default_rng(6360)
+    taken = []
+    real = matching._near_assignment
+    for shift in (0.0, 1e-12, 1e-5):
+        old, new = _near_cloud(random, 120, 0.05, shift, False, False, True, False)
+        one = matching._vectors(list(old.values()), (0, 0, 0), 1.0, None)
+        two = matching._vectors(list(new.values()), (0, 0, 0), 1.0, None)
+        taken.append(real(list(old.values()), list(new.values()), one, two, None) is not None)
+        assert match(old, new, (0, 0, 0), 1.0).mapping == {name: name for name in old}
+    assert taken == [True, True, True]
+
+
+@pytest.mark.parametrize("steps", range(-3, 4))
+def test_a_rival_on_the_ambiguity_boundary_keeps_the_full_answer(monkeypatch, steps):
+    """Ein Nachbar genau an der Grenze der Mehrdeutigkeit, ulp für ulp verschoben."""
+    distance = 0.05 * 0.08
+    for _ in range(abs(steps)):
+        distance = float(np.nextafter(distance, np.inf if steps > 0 else -np.inf))
+    old = {"a": hole("a"), "b": hole("b", distance), "c": hole("c", 0.5)}
+    new = {"a": hole("a"), "b": hole("b", distance), "c": hole("c", 0.5)}
+    expected = _full_path_only(monkeypatch, old, new)
+    matching.forget_matches()
+    assert match(old, new, (0, 0, 0), 1.0) == expected
+
+
+def test_identical_twins_leave_the_near_way_for_the_full_one(monkeypatch):
+    """Zwei deckungsgleiche Merkmale tragen kein Zertifikat — der volle Weg entscheidet."""
+    old = {"a": hole("a"), "b": hole("b"), "c": hole("c", 0.3)}
+    new = {"a": hole("a"), "b": hole("b"), "c": hole("c", 0.3)}
+    one = matching._vectors(list(old.values()), (0, 0, 0), 1.0, None)
+    two = matching._vectors(list(new.values()), (0, 0, 0), 1.0, None)
+    assert matching._near_assignment(list(old.values()), list(new.values()), one, two, None) is None
+    assert match(old, new, (0, 0, 0), 1.0) == _full_path_only(monkeypatch, old, new)
+
+
+def _taken_and_answer(monkeypatch, old, new):
+    """Die Antwort mit Nahweg und ob er sie gab."""
+    taken = []
+    real = matching._near_assignment
+
+    def watched(*args, **kwargs):
+        answer = real(*args, **kwargs)
+        taken.append(answer is not None)
+        return answer
+
+    with monkeypatch.context() as patched:
+        patched.setattr(matching, "_near_assignment", watched)
+        matching.forget_matches()
+        found = match(old, new, (0.0, 0.0, 0.0), 1.0)
+    return any(taken), found
+
+
+def test_the_near_search_keeps_its_rounding_reserve(monkeypatch):
+    """Ein Rivale knapp über ``T·L``, der in Gleitkomma doch bis ``L`` kostet (Review L3, M1).
+
+    Ohne die Reserve aus ``_query_radius`` fände die kleine Suche ihn nicht, und a, b würden
+    still zugeordnet, wo der volle Weg fragt.
+    """
+    s = float.fromhex("0x1.693a61ba258d5p-9")
+    d = float.fromhex("0x1.e7e95a4372182p-8")
+    old = {"a": hole("a", 0.0), "b": hole("b", -d - s / 4.0)}
+    new = {"a": hole("a", s), "b": hole("b", -d)}
+    expected = _full_path_only(monkeypatch, old, new)
+    taken, found = _taken_and_answer(monkeypatch, old, new)
+    assert taken, "diesen Fall beantwortet der Nahweg"
+    assert found == expected
+    assert dict(found.ambiguous) == {"a": ("a", "b"), "b": ("b",)}
+    assert not found.mapping
+
+
+@pytest.mark.parametrize("spacing", [0.008, 0.01, 0.012])
+def test_the_near_way_answers_with_the_partners_it_found(monkeypatch, spacing):
+    """Vertauschte Kennungen in der Nähe: Partner sind die gefundenen, nicht die vorläufigen."""
+    old = {"a": hole("a", 0.0), "b": hole("b", spacing), "c": hole("c", 0.3)}
+    new = {"a": hole("a", spacing), "b": hole("b", 0.0), "c": hole("c", 0.3)}
+    expected = _full_path_only(monkeypatch, old, new)
+    taken, found = _taken_and_answer(monkeypatch, old, new)
+    assert taken, "diesen Fall beantwortet der Nahweg"
+    assert found == expected
+    assert found.mapping == {"a": "b", "b": "a", "c": "c"}

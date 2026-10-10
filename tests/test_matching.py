@@ -3188,3 +3188,38 @@ def test_the_matching_memory_is_bounded_by_identifiers_and_counted_in_bytes(
     assert matching.matched_bytes() == sum(held_bytes(answer) for answer in answers)
     matching.forget_matches()
     assert matching.matched_bytes() == 0
+
+
+def test_the_same_movement_of_the_same_features_is_computed_once(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Operation und Zuordnung bewegen dieselben Merkmale gleich — einmal gerechnet (RM-636)."""
+    from app.core.perceive import matching
+
+    matching.forget_transformed()
+    features = _six_bores(0.0)
+    moved = translation((5.0, -2.0, 1.0))
+    calls: list[int] = []
+    real = matching._transformed_features
+
+    def counted(*args: Any, **kwargs: Any) -> Any:
+        calls.append(1)
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(matching, "_transformed_features", counted)
+    first = matching.transformed_features(features, moved)
+    again = matching.transformed_features(dict(features), moved)
+    assert len(calls) == 1, "the same features under the same names and matrix"
+    assert again.candidates == first.candidates and again.exact == first.exact
+    assert again.candidates is not first.candidates, "every caller gets its own dictionary"
+    fresh = real(features, moved)
+    assert again.candidates == fresh.candidates and again.exact == fresh.exact
+    matching.transformed_features({**features, "hole_0": replace(features["hole_0"])}, moved)
+    matching.transformed_features(features, translation((5.0, -2.0, 1.5)))
+    assert len(calls) == 3, "another feature object or another matrix asks anew"
+    void = Feature(
+        "void_1", "void", "detected", {"centre": (0.0, 0.0, 0.0), "size": (1.0, 1.0, 1.0)}
+    )
+    matching.transformed_features({"void_1": void}, moved)
+    matching.transformed_features({"void_1": void}, moved)
+    assert len(calls) == 5, "a void reads the mesh and is never remembered"

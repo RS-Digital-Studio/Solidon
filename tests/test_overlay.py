@@ -1390,9 +1390,14 @@ def test_a_floating_card_that_grows_keeps_its_top_and_scrolls(qt_app: QApplicati
         room = host.card_room()
         filler = left.findChild(QWidget, "filler")
         # So tief gelegt, dass die 450 Punkte hohe Karte unten gerade anschließt.
+        # Ohne Einrasten: Zehn Punkte über der Unterkante zieht ``dropped_place``
+        # sie sonst an den unteren Rand, und sie schwebte nicht mehr.
         spot = QRect(700, room - 460, left.width(), 450)
         host.set_places(
-            {"left": dropped_place(spot, host.width(), room), "right": CardPlace("right")}
+            {
+                "left": dropped_place(spot, host.width(), room, snap=0),
+                "right": CardPlace("right"),
+            }
         )
         qt_app.processEvents()
         top = left.geometry().top()
@@ -1667,7 +1672,7 @@ def test_up_and_down_at_a_docked_card_move_it_or_say_nothing(qt_app: QApplicatio
 def test_the_grip_moves_its_card_by_keyboard_and_returns_it_by_double_click(
     qt_app: QApplication,
 ) -> None:
-    """Pfeile schieben, die Eingabetaste nennt drei Plätze, Doppelklick legt zurück.
+    """Pfeile schieben, die Eingabetaste nennt die Plätze, Doppelklick legt zurück.
 
     Escape gehört während eines Zugs dem Griff, nicht dem Kürzel des Fensters
     (``CardGrip.event``): Ohne das brach Escape nichts ab, und die Karte
@@ -1694,7 +1699,15 @@ def test_the_grip_moves_its_card_by_keyboard_and_returns_it_by_double_click(
         before = grip.accessibleDescription()
 
         menu = grip.place_menu()
-        assert len(menu.actions()) == 3
+        # Beide Seitenränder, die zwei unteren Ecken, der untere Rand und der Rückweg.
+        assert [action.text() for action in menu.actions()] == [
+            "An den linken Rand",
+            "An den rechten Rand",
+            "Nach unten links",
+            "Nach unten rechts",
+            "An den unteren Rand",
+            "An ihren Platz",
+        ]
         menu.actions()[1].trigger()
         menu.deleteLater()
         assert host.places == {"left": CardPlace("right"), "right": CardPlace("left")}

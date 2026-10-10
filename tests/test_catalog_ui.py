@@ -7,6 +7,7 @@ Kachel bekommt.
 
 from __future__ import annotations
 
+import re
 import time
 from collections.abc import Callable
 
@@ -2039,13 +2040,28 @@ def test_every_locked_button_says_its_reason_to_a_screen_reader(qt_app: QApplica
 
         for knopf, wort in (
             (catalog.save_part, "gerechnet"),
-            (catalog.share_part, "weitergeben"),
+            # Den Grund der Weitergabe bestimmt der Katalog selbst neu, sobald er
+            # seine Einzelheiten zeigt; ohne eigenen Baustein heißt er „…, um
+            # ihn weiterzugeben" (RM-680). Beide Sätze nennen das Weitergeben —
+            # nicht bloß „weiter", das auch „Weitere Einstellungen" träfe.
+            (catalog.share_part, r"weiter(zu)?geben"),
             (catalog._insert, "Körper"),
         ):
             assert knopf is not None
             assert not knopf.isEnabled()
-            assert wort in knopf.accessibleDescription(), (
+            assert re.search(wort, knopf.accessibleDescription()), (
                 f"{knopf.objectName() or knopf.text()}: {knopf.accessibleDescription()!r}"
+            )
+        # Die Zusage des Docstrings: Der Bildschirmleser hört denselben Grund,
+        # der sichtbar danebensteht.
+        for knopf, hinweis in (
+            (catalog.save_part, catalog.save_hint),
+            (catalog.share_part, catalog.share_hint),
+        ):
+            assert hinweis.text(), f"{knopf.text()}: kein sichtbarer Grund"
+            assert knopf.accessibleDescription() == hinweis.text(), (
+                knopf.accessibleDescription(),
+                hinweis.text(),
             )
 
         catalog.set_can_save(True, "")

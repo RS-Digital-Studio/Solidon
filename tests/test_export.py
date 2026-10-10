@@ -15,7 +15,7 @@ import pytest
 import trimesh
 
 from app.core.errors import FileWriteError, NeedsSolidError, ValidationError
-from app.core.export import handover, manufacturer, slicer_keys, threemf, writer
+from app.core.export import handover, manufacturer, slicer_keys, slicer_profiles, threemf, writer
 from app.core.export.handover import with_slot_profiles
 from app.core.export.slicer_keys import SlicerFlavour
 from app.core.export.writer import (
@@ -151,6 +151,92 @@ def test_every_plate_reuses_the_jobs_part_advice(
     assert len(calls) == len(objects), "die Plattenzahl vervielfacht den Rat nicht"
 
 
+def test_a_printer_created_in_the_slicer_is_known_to_the_next_export(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """RM-670: Der Profilbestand des Slicers wird gemerkt, nicht je Export gelesen.
+
+    Über den echten Exportweg (``write_assembly`` mit gefundenem Slicer): Der
+    zweite Export sagt dasselbe wie der erste, aus dem Merker. Legt der Kunde
+    den Drucker danach im Slicer an, weiß es der nächste Export — der Befund
+    wechselt von „kennt den Drucker nicht“ zu „kein Drucker eingestellt“.
+    """
+    import json
+    import os
+
+    from app.core.export import slicer_profiles
+
+    def write(path: Path, document: dict[str, object]) -> None:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(document), encoding="utf-8")
+
+    installed = tmp_path / "Orca" / "resources" / "profiles"
+    write(
+        installed / "Anderer" / "machine" / "Fremd.json",
+        {
+            "type": "machine",
+            "name": "Ganz anderes Gerät 0.4 nozzle",
+            "instantiation": "true",
+            "printer_model": "Ganz anderes Gerät",
+            "nozzle_diameter": ["0.4"],
+        },
+    )
+    executable = tmp_path / "Orca" / "orca-slicer.exe"
+    executable.write_bytes(b"")
+    user = tmp_path / "config" / "OrcaSlicer" / "user" / "4711"
+    (user / "machine").mkdir(parents=True)
+    monkeypatch.setattr(slicer_profiles, "user_roots", lambda _flavour, _executable: [user])
+    monkeypatch.setattr(slicer_profiles, "chosen_machine", lambda *_args: "")
+    # Ein Bestand, den gerade niemand ändert (``slicer_profiles.SETTLE_NS``).
+    for path in (*tmp_path.rglob("*"), tmp_path):
+        os.utime(path, (1_767_225_600.0, 1_767_225_600.0))
+    reads = []
+    original = slicer_profiles._read
+
+    def counted(*args: object, **kwargs: object) -> object:
+        reads.append(args[0])
+        return original(*args, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(slicer_profiles, "_read", counted)
+    profile = profiles.make_profile("centauri-carbon-2", "pla")
+    setup = handover.SlicerSetup(executable=executable, flavour="orca")
+
+    def export(name: str) -> list[tuple[str, str]]:
+        _written, findings = write_assembly(
+            [scene_object()],
+            tmp_path / name,
+            project_name="t",
+            profile=profile,
+            settings=print_settings.resolve(profile),
+            setup=setup,
+            for_slicer=False,
+        )
+        return [
+            (entry.code, source_text(entry.message))
+            for entry in findings
+            if entry.code.startswith("slicer.")
+        ]
+
+    first = export("eins")
+    assert "slicer.printer_unknown" in {code for code, _ in first}, first
+    count = len(reads)
+    assert export("zwei") == first, "aus dem Merker dieselben Befunde"
+    assert len(reads) == count, "der zweite Export liest den Bestand nicht neu"
+
+    write(
+        user / "machine" / "Centauri.json",
+        {
+            "name": "Mein Centauri Carbon 2 0.4 nozzle",
+            "from": "User",
+            "printer_model": "Elegoo Centauri Carbon 2",
+            "nozzle_diameter": ["0.4"],
+        },
+    )
+    codes = {code for code, _ in export("drei")}
+    assert "slicer.printer_unknown" not in codes
+    assert "slicer.machine_unset" in codes
+
+
 @pytest.mark.parametrize("checked", [None, []])
 def test_a_cancelled_file_export_stops_before_checking_or_writing(
     tmp_path: Path, profile: Profile, checked: list[Finding] | None
@@ -205,7 +291,7 @@ def test_file_worker_can_cancel_during_part_advice_without_a_window(
         node
         for node in worker.body
         if isinstance(node, ast.FunctionDef)
-        and node.name in {"work", "cancel", "_assembly", "_begin_write"}
+        and node.name in {"work", "cancel", "_assembly", "_assembly_in_one_read", "_begin_write"}
     ]
     isolated = ast.Module(
         body=[
@@ -226,6 +312,7 @@ def test_file_worker_can_cancel_during_part_advice_without_a_window(
         "manufacturer": manufacturer,
         "prepare_usage": lambda *_: (),
         "handover": handover,
+        "slicer_profiles": slicer_profiles,
         # Der Übergabebeleg (RM-090) ist Oberfläche; hier zählt nur der Abbruch.
         "handoff_receipt": lambda **_kwargs: None,
         # Seine Gegenprobe ebenso (``test_export_readback.py``).
@@ -2613,8 +2700,9 @@ def test_every_flavour_answers_every_property() -> None:
         # die Orca-Familie selbst; ein Tempodeckel als Vorschlag ändert dort
         # nichts am Druck (Gesamtprüfung, 27.09.2026). Cura liest den Wert nicht.
         "caps_volumetric_speed": {"prusa": True, "orca": True, "cura": False, "other": False},
-        # CuraEngine rechnet den Stützabstand in ganzen Schichten (RM-583).
-        "support_gap_in_whole_layers": {
+        # CuraEngine rundet einen Stützabstand zwischen zwei Schichten auf, unten
+        # immer, unter Bäumen auch oben (RM-628).
+        "rounds_support_gap_up": {
             "prusa": False,
             "orca": False,
             "cura": True,
@@ -3319,7 +3407,7 @@ def test_every_path_the_cut_decides_makes_the_export_cut_the_part() -> None:
         return "." in text
 
     found: set[str] = set()
-    for rule in (advise._from_geometry, advise._calm_walls):
+    for rule in (advise._from_geometry, advise._calm_walls, advise._bridges_and_overhangs):
         tree = ast.parse(textwrap.dedent(inspect.getsource(rule)))
         found |= {
             node.value
@@ -3523,10 +3611,10 @@ def test_cura_takes_supports_back_where_a_part_does_not_need_them(
     """CuraEngine nimmt ob gestützt wird je Netz an (``support_enable``), die
     Stützart aber nur für die Platte (``support_structure``, Cura 5.13). Die
     Übernahme bleibt deshalb auf der Platte, und der Klotz bekommt sie je Netz
-    zurückgenommen; der Pilz verlangt automatische Stützen und erhält die
-    Stützart der Platte. Je Netz steht nur, was Cura dort liest."""
+    zurückgenommen; der Pilz verlangt unter seinem flachen Hut Gitter (RM-584)
+    und erhält es. Je Netz steht nur, was Cura dort liest."""
     settings = print_settings.with_accepted(
-        print_settings.resolve(profile, "standard"), "support.style", "tree"
+        print_settings.resolve(profile, "standard"), "support.style", "grid"
     )
 
     written, findings = write_assembly(
@@ -3545,7 +3633,7 @@ def test_cura_takes_supports_back_where_a_part_does_not_need_them(
     }
     treffer = [finding for finding in findings if finding.code == "export.part_setting"]
     assert [(finding.object_id, finding.values["value"]) for finding in treffer] == [
-        ("obj_1", "tree")
+        ("obj_1", "grid")
     ]
 
 
@@ -3554,7 +3642,8 @@ def test_the_scarf_seam_goes_to_the_round_part_only(tmp_path: Path, profile: Pro
     keine Ecke, in der die Naht verschwindet, der Klotz daneben vier. Die
     Platte bleibt ohne, das Rohr bekommt sie als Objektwert bei der
     Orca-Familie und PrusaSlicer, und bei Cura nimmt das Netz des Klotzes sie
-    zurück."""
+    zurück. Eine Datei der Prusa-Familie ohne Programm trägt sie nicht: SuperSlicer
+    kennt sie nicht und stürzt ab zwei fremden Schlüsseln ab (Review RM-587, M3)."""
     tube = trimesh.creation.cylinder(radius=12.5, height=40.0, sections=128)
     tube.apply_translation((0.0, 0.0, 20.0))
     block = trimesh.creation.box(extents=(25.0, 25.0, 40.0))
@@ -3567,14 +3656,17 @@ def test_the_scarf_seam_goes_to_the_round_part_only(tmp_path: Path, profile: Pro
         print_settings.resolve(profile, "standard"), "shell.scarf_seam", True
     )
 
-    def written(flavour: SlicerFlavour) -> tuple[Path, list[Finding]]:
+    def written(
+        flavour: SlicerFlavour, setup: handover.SlicerSetup | None = None
+    ) -> tuple[Path, list[Finding]]:
         return write_assembly(
             objects,
-            tmp_path / flavour,
+            tmp_path / f"{flavour}-{setup is not None}",
             project_name="Rohre",
             profile=profile,
             settings=settings,
             flavour=flavour,
+            setup=setup,
         )
 
     orca, findings = written("orca")
@@ -3586,10 +3678,13 @@ def test_the_scarf_seam_goes_to_the_round_part_only(tmp_path: Path, profile: Pro
     said = [finding.object_id for finding in findings if finding.code == "export.part_setting"]
     assert said == ["obj_1"], "einmal, für das Rohr"
 
-    prusa, _findings = written("prusa")
+    prusa, _findings = written("prusa", handover.SlicerSetup(Path("PrusaSlicer.exe"), "prusa"))
     parts = object_values(prusa, "Metadata/Slic3r_PE_model.config")
     assert parts["Rohr"]["scarf_seam_placement"] == "contours"
     assert "scarf_seam_placement" not in parts["Klotz"]
+    unnamed, _findings = written("prusa")
+    parts = object_values(unnamed, "Metadata/Slic3r_PE_model.config")
+    assert "scarf_seam_placement" not in parts["Rohr"], "eine Datei ohne Programm trägt sie nicht"
 
     cura, _findings = written("cura")
     meshes = {mesh.path.name: dict(mesh.settings) for mesh in handover.cura_meshes(cura)}
@@ -3688,14 +3783,23 @@ def test_every_key_solidon_writes_for_superslicer_is_one_its_reader_knows() -> N
     """Wächter zu RM-459: jede Zeile der Prusa-Tabelle, die SuperSlicer nach
     :func:`slicer_keys.for_program` bekommt, gegen den gemessenen Bestand seines
     3MF-Lesers (``tests/data/superslicer_3mf_keys.json``). Eine neue Zeile, die
-    er nicht kennt, macht den Test rot, bevor ein Kunde den Absturz sieht."""
+    er nicht kennt, macht den Test rot, bevor ein Kunde den Absturz sieht.
+
+    Dazu jeder Schlüssel, den der Satz ohne Drucker des Bündels neben der
+    Tabelle schreibt — Maschine, Zeitschätzung, ``PRUSA_WITHOUT_BUNDLE`` —,
+    denn auch der reist in der Beilage (RM-191)."""
     measured = json.loads(
         (Path(__file__).parent / "data" / "superslicer_3mf_keys.json").read_text(encoding="utf-8")
+    )
+    unbundled = profiles.make_profile("centauri-carbon-2", "pla")
+    without_bundle, _expected = handover.prusa_values(
+        print_settings.resolve(unbundled), unbundled, None, console=False
     )
     written = dict.fromkeys(
         {entry.key for entry in slicer_keys.TABLES["prusa"]}
         | {key for keys in slicer_keys.ADHESION_KEYS["prusa"].values() for key in keys}
-        | {"external_fill_pattern"},
+        | {"external_fill_pattern"}
+        | set(without_bundle),
         "1",
     )
 
@@ -4864,15 +4968,14 @@ def test_creality_print_7_3_arranges_a_plate_whose_arrangement_does_not_hold(
 # --- RM-191: jede Rolle bekommt Solidons Werte (Durchsicht 0.5.0) ---------------
 
 
-def test_prusa_gets_the_infill_speed_for_solid_infill_and_no_guessed_machine_limits(
+def test_prusa_gets_the_infill_speed_for_solid_infill_and_gap_fill(
     tmp_path: Path, profile: Profile
 ) -> None:
     """PrusaSlicer fuhr die volle Füllung mit seinen eingebauten 20 mm/s.
 
     Gemessen am Gewürzregal (RM-191): 48 532 s gegen 23 655 s bei Orca für
     dieselbe Platte; danach 31 387 s gegen 26 471 s, Material innerhalb von
-    drei Prozent. Dazu schätzte Prusa mit seinen 1500 mm/s² statt mit den
-    angeforderten 8000 (``machine_limits_usage``).
+    drei Prozent.
     """
     settings = print_settings.resolve(profile)
     setup = handover.SlicerSetup(tmp_path / "prusa-slicer-console.exe", "prusa")
@@ -4881,7 +4984,86 @@ def test_prusa_gets_the_infill_speed_for_solid_infill_and_no_guessed_machine_lim
 
     assert written["solid_infill_speed"] == f"{settings.speed.infill:g}"
     assert written["gap_fill_speed"] == f"{settings.speed.inner_wall:g}"
-    assert written["machine_limits_usage"] == "ignore"
+
+
+def test_prusa_without_a_bundle_estimates_with_the_accelerations_the_file_requests(
+    tmp_path: Path, profile: Profile
+) -> None:
+    """PrusaSlicer schätzte ohne Bündel mit 1500 mm/s², gleich was die Datei verlangt.
+
+    Mit ``machine_limits_usage = ignore`` nimmt seine Zeitrechnung die
+    eingebauten Grenzen (``MachineEnvelopeConfig``, 1500 mm/s²), und mit
+    ``gcode_flavor = reprap`` liest sie gar keine. Gewürzregal am Centauri
+    Carbon 2 (RM-191, 09.10.2026): 334 min geschätzt bei zwei Wänden, 231 min
+    mit ``marlin`` und den angeforderten Beschleunigungen als Grenze — bei
+    Byte für Byte demselben G-Code ohne Kommentare. Grenzen gehen dabei keine
+    in die Druckdatei (``time_estimate_only``).
+
+    Die Grenze ist die schnellste Anforderung, gleich an welchem Schlüssel sie
+    steht. Deshalb hier die Außenwand schneller als die Grundbeschleunigung
+    und die Füllung schneller als die Leerfahrt: Eine Grenze aus nur einem
+    Schlüssel bremste die übrigen in der Schätzung.
+    """
+    base = print_settings.resolve(profile)
+    fastest = base.speed.acceleration + 2000.0
+    quickest = base.speed.travel + 100.0
+    settings = print_settings.with_choice(base, "speed.outer_wall_acceleration", fastest)
+    settings = print_settings.with_choice(settings, "speed.infill", quickest)
+    setup = handover.SlicerSetup(tmp_path / "prusa-slicer-console.exe", "prusa")
+
+    written = handover.write_config(settings, profile, setup, tmp_path).written
+
+    assert written["gcode_flavor"] == "marlin", "M204 S, und die Zeitrechnung liest es"
+    assert written["machine_limits_usage"] == "time_estimate_only"
+    for axis in ("extruding", "travel", "x", "y"):
+        assert written[f"machine_max_acceleration_{axis}"] == f"{fastest:g},{fastest:g}"
+    assert written["machine_max_feedrate_x"] == f"{quickest:g},{quickest:g}"
+    assert written["machine_max_feedrate_y"] == f"{quickest:g},{quickest:g}"
+
+
+def test_prusa_without_a_bundle_prints_solidons_walls_and_no_more(
+    tmp_path: Path, profile: Profile
+) -> None:
+    """Die Wandzahl ist Solidons — PrusaSlicer legt ohne Bündel keine dazu.
+
+    Seine eingebauten Vorgaben setzen ``extra_perimeters = 1`` und
+    ``solid_infill_below_area = 70``; Prusas eigener Bestand setzt in
+    ``[print:*common*]`` beide auf null, für jeden Prozess. Die Orca-Familie
+    kennt keine zusätzlichen Wände, und dieselbe Wandzahl soll in beiden
+    dieselben Wände ergeben (RM-191).
+    """
+    settings = print_settings.resolve(profile)
+    setup = handover.SlicerSetup(tmp_path / "prusa-slicer-console.exe", "prusa")
+
+    written = handover.write_config(settings, profile, setup, tmp_path).written
+
+    assert written["perimeters"] == str(settings.shell.wall_count)
+    assert written["extra_perimeters"] == "0"
+    assert written["solid_infill_below_area"] == "0"
+
+
+def test_prusa_without_a_bundle_names_the_material_of_the_spool_it_prints(
+    tmp_path: Path,
+) -> None:
+    """Die Spule fährt den Satz, und ihre Materialart geht mit.
+
+    Am Gewürzregal (RM-191) kam eine PETG-Spule mit 240 °C und der Dichte von
+    PETG hinaus, aber als ``filament_type = PLA`` — die Art des Projekts statt
+    der der Spule. Die Orca-Familie nimmt sie schon von der Spule.
+    """
+    profile = profiles.make_profile("centauri-carbon-2", "pla")
+    settings = print_settings.resolve(profile)
+    setup = handover.SlicerSetup(tmp_path / "prusa-slicer-console.exe", "prusa")
+    spool = MaterialSlot(index=0, name="PETG", material_type="PETG")
+
+    written, expected = handover.prusa_values(settings, profile, setup, (spool,), console=True)
+
+    assert written["filament_type"] == "PETG"
+    assert expected["filament_type"] == "PETG"
+    petg = print_settings.resolve(profiles.make_profile("centauri-carbon-2", "petg"))
+    assert written["temperature"] == f"{petg.temperature.nozzle:g}", "die Werte derselben Spule"
+    alone, _expected = handover.prusa_values(settings, profile, setup, console=True)
+    assert alone["filament_type"] == "PLA", "ohne Spule das Material des Projekts"
 
 
 def test_the_orca_family_gets_solidons_speed_and_width_for_every_role(profile: Profile) -> None:

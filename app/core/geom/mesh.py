@@ -1402,7 +1402,15 @@ def enclosed_volume(body: trimesh.Trimesh) -> float:
     (:func:`python_values`) — ``fsum`` rundet genau einmal, die Zahl ist
     dieselbe.
     """
-    triangles = np.asarray(body.triangles, dtype=np.float64)
+    return triangles_volume(np.asarray(body.triangles, dtype=np.float64))
+
+
+def triangles_volume(triangles: np.ndarray) -> float:
+    """:func:`enclosed_volume` an Dreiecken ``(n, 3, 3)``, bezogen auf den Ursprung.
+
+    Bezogen auf die erste Ecke — für ein Teil und jede Entscheidung — rechnet
+    :func:`signed_volume_of`.
+    """
     if not len(triangles):
         return 0.0
     return math.fsum(python_values(triple_products(triangles))) / 6.0
@@ -1419,7 +1427,11 @@ def signed_volume(body: trimesh.Trimesh) -> float:
     Boolesches Ergebnis gilt und ob eine Füllung Dicke hat, fragen dieselbe
     Rechnung.
     """
-    triangles = np.asarray(body.triangles, dtype=np.float64)
+    return signed_volume_of(np.asarray(body.triangles, dtype=np.float64))
+
+
+def signed_volume_of(triangles: np.ndarray) -> float:
+    """:func:`signed_volume` an Dreiecken ``(n, 3, 3)`` — für ein Teil, ohne es auszuschneiden."""
     if not len(triangles):
         return 0.0
     return math.fsum(triple_products(triangles - triangles[0, 0]).tolist()) / 6.0
