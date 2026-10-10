@@ -1423,6 +1423,62 @@ def test_curas_window_gets_the_bottom_gap_of_the_console(
     assert float(window["support_z_distance"]) == pytest.approx(gap)
 
 
+_CURA_INTERFACE: tuple[str, ...] = (
+    "support_interface_enable",
+    "support_roof_enable",
+    "support_bottom_enable",
+    "support_interface_height",
+    "support_bottom_height",
+)
+
+
+def _window_number(value: str, layer: float) -> str:
+    """Ein Wert des Fensterprofils, wie Cura ihn rechnet: ``=layer_height * N``
+    wird zu Millimetern, ``True``/``False`` zur Schreibweise der Konsole."""
+    if value.startswith("=layer_height * "):
+        return f"{int(value.removeprefix('=layer_height * ')) * layer:g}"
+    return {"True": "true", "False": "false"}.get(value, value)
+
+
+@pytest.mark.parametrize("bottom", [0, 3])
+@pytest.mark.parametrize("roof", [0, 2])
+def test_curas_window_switches_the_interface_like_the_console(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, roof: int, bottom: int
+) -> None:
+    """Das Fensterprofil schaltet die Trennschichten wie die Konsole (RM-628, M-a).
+
+    Ohne sie nahm Curas Fenster die Vorgabe der Maschine — Creality an, Sovol,
+    Elegoo, Prusa und Voron aus —, und wer Solidons Rat „obere Trennschicht“
+    unter Bäumen übernahm, bekam dort 0,40 statt 0,20. Die Höhen stehen als
+    Formel über die Schichthöhe, auch je Extruderprofil."""
+    profile = profiles.make_profile("creality-k1-max", "petg")
+    settings = print_settings.resolve(profile)
+    for path, value in (
+        ("layers.layer_height", 0.2),
+        ("support.style", "tree"),
+        ("support.z_gap", 0.2),
+        ("support.interface_layers", roof),
+        ("support.bottom_interface_layers", bottom),
+    ):
+        settings = print_settings.with_choice(settings, path, value)
+    slots = (
+        MaterialSlot(index=0, name="Gehäuse", material_type="PETG"),
+        MaterialSlot(index=1, name="Deckel", material_type="PETG"),
+    )
+    console = handover.values_for(settings, profile, "cura")
+
+    for chosen in ((), slots):
+        place = tmp_path / f"fenster{len(chosen)}"
+        place.mkdir()
+        window = _cura_window_values(place, monkeypatch, settings, profile, chosen)
+        for name, values in window.items():
+            for key in _CURA_INTERFACE:
+                assert _window_number(values[key], 0.2) == console[key], (name, key, values[key])
+            assert values["support_roof_height"] == values["support_interface_height"], name
+            assert values["support_roof_height"] == f"=layer_height * {roof}", name
+    assert console["support_roof_enable"] == ("true" if roof else "false")
+
+
 def test_each_extruder_profile_gets_the_bottom_gap_of_its_spool(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

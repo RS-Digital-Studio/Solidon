@@ -2002,6 +2002,42 @@ def _cura_bottom_gap(
     return written
 
 
+def _cura_interface(settings: PrintSettings, *, window: bool = False) -> dict[str, str]:
+    """Curas Trennschichten oben und unten, Solidons eigene Wahl (RM-628, M-a).
+
+    Ohne den Schalter entsteht gar keine Schnittstelle, und ohne die Höhe
+    wurden aus zwei Schichten zwei Millimeter — das Zehnfache bei 0,2ern. Unten
+    eigene Lagen (RM-583): Wo die Stütze auf dem Modell steht, zeichnet ihr
+    roher Fuß die Fläche darunter.
+
+    Die Konsole rechnet keine Formeln und bekommt Millimeter. Das Fenster
+    (``window``) bekommt dieselben Schalter auf seine Einstellungsseite
+    (:func:`cura_profile_beside`), die Höhen als Formel über die Schichthöhe,
+    damit sie einer in Cura geänderten Schichthöhe folgen, und die obere Höhe
+    ausdrücklich, weil manche Qualitätsprofile sie selbst setzen. Ohne das
+    nahm das Fenster die Trennschicht der Maschine: Creality schaltet sie ein,
+    Sovol, Elegoo, Prusa und Voron lassen sie aus — unter Curas Bäumen ohne
+    obere Trennschicht druckte PETG dann 0,40 statt der geratenen 0,20.
+    """
+    layers = settings.support.interface_layers
+    bottom = settings.support.bottom_interface_layers
+    height = settings.layers.layer_height
+
+    def tall(count: int) -> str:
+        return f"=layer_height * {count}" if window else f"{count * height:g}"
+
+    chosen = {
+        "support_interface_height": tall(layers),
+        "support_bottom_height": tall(bottom),
+        "support_roof_enable": "true" if layers > 0 else "false",
+        "support_bottom_enable": "true" if bottom > 0 else "false",
+        "support_interface_enable": "true" if layers > 0 or bottom > 0 else "false",
+    }
+    if window:
+        chosen["support_roof_height"] = tall(layers)
+    return chosen
+
+
 def _cura_computed(written: dict[str, str], settings: PrintSettings, profile: Profile) -> None:
     """Die gerechneten Ableitungen — je Zeile die Formel aus der Definition.
 
@@ -2117,18 +2153,8 @@ def _for_supports(written: dict[str, str], settings: PrintSettings, profile: Pro
     # Krümel unter 2 mm² bekommen keine eigene Stütze (Creality in Cura).
     written["minimum_support_area"] = f"{_MINIMUM_SUPPORT_AREA:g}"
 
-    # Ohne den Schalter entsteht gar keine Schnittstelle, und ohne die Höhe
-    # wurden aus zwei Schichten zwei Millimeter — das Zehnfache bei 0,2ern.
+    written.update(_cura_interface(settings))
     layers = settings.support.interface_layers
-    # Unten eigene Lagen (RM-583): Wo die Stütze auf dem Modell steht,
-    # zeichnet ihr roher Fuß die Fläche darunter.
-    bottom = settings.support.bottom_interface_layers
-    height = settings.layers.layer_height
-    written["support_interface_height"] = f"{layers * height:g}"
-    written["support_bottom_height"] = f"{bottom * height:g}"
-    written["support_roof_enable"] = "true" if layers > 0 else "false"
-    written["support_bottom_enable"] = "true" if bottom > 0 else "false"
-    written["support_interface_enable"] = "true" if layers > 0 or bottom > 0 else "false"
     written["support_bottom_stair_step_height"] = "0" if layers > 0 else f"{_STAIR_STEP:g}"
     written["support_tree_top_rate"] = "30" if layers > 0 else "10"
     written["support_tree_rest_preference"] = (
@@ -7902,6 +7928,18 @@ def _without_curas_own_fan_curve(
     return {key: value for key, value in values.items() if key not in dropped}
 
 
+def _cura_window_choices(
+    written: dict[str, str], settings: PrintSettings, material: MaterialProfile
+) -> dict[str, str]:
+    """Was Solidon für Curas Fenster selbst wählt und die Einstellungsseite nicht
+    trägt (RM-628): den Abstand unten (:func:`_cura_bottom_gap`) und die
+    Trennschichten (:func:`_cura_interface`). Ohne sie rechnet das Fenster mit
+    den Formeln und Vorgaben der aktiven Maschine."""
+    _cura_bottom_gap(written, settings, material)
+    written.update(_cura_interface(settings, window=True))
+    return written
+
+
 def cura_profile_beside(
     model: Path,
     settings: PrintSettings,
@@ -7923,8 +7961,9 @@ def cura_profile_beside(
     ``CuraContainerRegistry.importProfile`` in Cura 5.13).
 
     Was hineingeht, ist die **Einstellungsseite** (:func:`as_mapping`) samt
-    dem Abstand unten, den Solidon selbst wählt (:func:`_cura_bottom_gap`, je
-    Extruderprofil mit dem Material seiner Spule) —
+    dem, was Solidon für Cura selbst wählt (:func:`_cura_window_choices`: der
+    Abstand unten, je Extruderprofil mit dem Material seiner Spule, und die
+    Trennschichten) —
     nicht die Maschine und nicht das Abgeleitete: Das Fenster rechnet seine
     Formeln selbst, und ein festgeschriebener Linienabstand bliebe stehen,
     wenn der Kunde danach in Cura die Füllung ändert. Wahrheitswerte schreibt
@@ -8006,11 +8045,9 @@ def cura_profile_beside(
             lines.append(f"{key} = {value}")
         return "\n".join(lines) + "\n"
 
-    # Den Abstand unten wählt Solidon selbst (RM-628); ohne ihn rechnete das
-    # Fenster unten wie oben und rundete auf.
     resolved = settings_for_handover(settings, profile, "cura", slots, setup)
     shared = _cura_accelerations(
-        _cura_bottom_gap(
+        _cura_window_choices(
             as_mapping(resolved, "cura"), resolved, slot_material(profile, slots, setup)
         ),
         resolved,
@@ -8023,7 +8060,9 @@ def cura_profile_beside(
             resolved = settings_for_slot(settings, profile, slot, setup)
             mine = slot_material(profile, (slot,), setup)
             own = _cura_accelerations(
-                _cura_bottom_gap(as_mapping(resolved, "cura"), resolved, mine), resolved, profile
+                _cura_window_choices(as_mapping(resolved, "cura"), resolved, mine),
+                resolved,
+                profile,
             )
             _without_line_break(own, setup.name)
             entries.append((f"solidon_extruder_{position}", container(own, position)))

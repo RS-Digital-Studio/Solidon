@@ -696,9 +696,12 @@ unter Gitter den unteren, wo die Stütze auf dem Modell stehen darf. Nachgemesse
 in Cura 5.13 (RM-628, Review): Je Teil gilt „oben genau“ nur mit dem Rest der
 Platte, denn CuraEngine legt die Bruchteillage um `support_top_distance %
 layer_height` der Platte tiefer — 0,28 an einem Teil druckte auf einer Platte mit
-0,2 oben 0,20, mit 0,44 0,24; ein solches Teil bekommt das Vielfache im Band
-seiner Spule (`cura_part_gap`), und unten wählt jedes Teil ebenfalls im Band
-seiner Spule. Unter Curas Bäumen ohne obere Trennschicht baut Cura die Spitzen
+0,2 oben 0,20, mit 0,44 0,24, und 0,48 auf einer Platte mit 0,28 genau 0,48;
+ein solches Teil bekommt den nächsten genau druckbaren Wert im Band seiner Spule,
+ein Vielfaches oder ein Vielfaches plus den Rest der Platte (`cura_part_gap`:
+0,28 auf 0,44 wird 0,24), und unten wählt ein Teil mit eigenem Wert ebenfalls im
+Band seiner Spule. Ein Teil ohne eigenen Wert druckt unten wie die Platte; mit
+Curas einem Filament (`unreachable_overrides`) ist das dort richtig. Unter Curas Bäumen ohne obere Trennschicht baut Cura die Spitzen
 als Ersatzdach und druckt oben eine Schicht mehr (0,20 → 0,40, 0,28 → 0,60);
 der Rat schlägt dort die Trennschicht vor. Den Halbfall unter organischen Bäumen
 (0,30 bei 0,2 mm Schicht) runden Bambu Studio und Creality Print ohne Toleranz

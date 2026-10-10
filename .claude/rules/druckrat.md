@@ -128,11 +128,13 @@ offenem Drucker. Übernommen wird auf Klick, nie von allein.
   Schichten druckt, oben und unten, sagt `gap_rounding` und `printed_gap`
   allein** (RM-628): Cura rundet auf, unter Gitter nur unten — oben druckt es
   dort den geschriebenen Wert genau, je Teil nur mit dem Rest der Platte
-  (`cura_part_gap`, sonst schreibt die Übergabe dem Teil das Vielfache im Band
-  seiner Spule); unter Curas Bäumen ohne obere Trennschicht kommt eine Schicht
-  dazu (`up_and_one`, der Rat schlägt die Trennschicht vor). Die übrigen runden
-  zur nächsten, wo sie runden (unter organischen Bäumen, neben einem Turm); den
-  Halbfall entscheidet dort das Programm (`HALF_LAYER_UNGUARDED`). **Unten unter
+  (`cura_part_gap`, sonst schreibt die Übergabe dem Teil den nächsten genau
+  druckbaren Wert im Band seiner Spule: ein Vielfaches oder ein Vielfaches plus
+  den Rest der Platte); unter Curas Bäumen ohne obere Trennschicht kommt eine
+  Schicht dazu (`up_and_one`, der Rat schlägt die Trennschicht vor, Konsole und
+  Fenster bekommen sie). Die übrigen runden zur nächsten, wo sie runden (unter
+  organischen Bäumen, neben einem Turm); unter organischen Bäumen entscheidet
+  den Halbfall das Programm (`HALF_LAYER_UNGUARDED`). **Unten unter
   Curas Gitter schreibt die Übergabe das Vielfache selbst**
   (`support_bottom_distance` aus `advise.cura_bottom_gap`, nicht gespiegelt):
   aufgerundet läge der Fuß über `support_gap_max` in der Luft (PETG bei

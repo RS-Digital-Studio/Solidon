@@ -517,6 +517,21 @@ CuraEngine die Extruderzüge unter Windows nicht.
 Die Maschine steht nicht in `values_for`, weil sie Installation und fertige
 Werte braucht.
 
+Warum Solidons eigene Wahl auch ins Fensterprofil gehört (RM-628): Das
+`.curaprofile` trug nur die Einstellungsseite (`as_mapping`), und was Solidon
+für Cura selbst wählt, entstand nur im abgeleiteten Teil der Konsole. Curas
+Fenster rechnete dann mit Formel und Vorgabe der aktiven Maschine: den Abstand
+unten aufgerundet wie oben (PETG mit 0,28 bei 0,2 mm Schicht 0,40 statt 0,20,
+bei 0,28 mm aus 0,30 sogar 0,56), die Trennschichten nach der Maschine
+(`creality_base` schaltet sie ein, Sovol, Elegoo, Prusa, Flashforge und Voron
+lassen sie aus) — unter Curas Bäumen ohne obere Trennschicht druckte PETG dort
+0,40 statt der geratenen 0,20, über dem Höchstwert. `_cura_window_choices`
+schreibt beides ins Fensterprofil und je Extruderprofil; die Höhen der
+Trennschichten als Formel über die Schichthöhe (`=layer_height * N`, wie Curas
+eigene Qualitätsprofile), damit sie einer in Cura geänderten Schichthöhe
+folgen, die obere ausdrücklich, weil manche Qualitätsprofile
+`support_roof_height` selbst setzen.
+
 ## Der Startcode kommt vom Hersteller, die Platzhalter füllt Solidon
 
 Eigene oder übernommene Beschleunigungen oberhalb der Maschinengrenze werden
@@ -535,8 +550,11 @@ Formeln bleiben unbekannt. Der Standardwert `machine_acceleration` braucht
 denselben Deckel: Cura schreibt ihn vor dem Endcode nochmals mit `M204`.
 
 Warum Unfüllbares anhält: Wörtlich bräche ein Klipper-Makro am Drucker ab.
-Warum die zwei Schalter auf `false` stehen: Sonst stünde Curas `M190`/`M109`
-vor dem Startcode, der die Temperatur selbst setzt.
+Die zwei Schalter `material_bed_temp_prepend`/`material_print_temp_prepend`
+stehen auf `false`, wenn der Startcode selbst eine Temperatur setzt
+(Platzhalter auf `material_bed_temperature…` oder eine Düsentemperatur,
+Kommentare ausgenommen), wie Curas `StartSliceJob`: Sonst stünde Curas
+`M190`/`M109` vor dem Startcode, der die Temperatur selbst setzt.
 
 Die Entscheidung Roberts vom 26.08.2026 lautete: „Der Anfahrcode bleibt der
 des Herstellers". Warum Solidon füllt: „gemessen:

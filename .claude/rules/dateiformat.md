@@ -414,7 +414,8 @@ Eine neue Cura-Zuordnung prüft, was am Schlüssel hängt: Kopien in
 mit Begründung in `CURA_UNTOUCHED`; `tests/test_print_settings.py` lässt
 nichts dazwischen zu. **Wo Curas Werksprofile anders setzen als `fdmprinter`,
 gilt das Werksprofil** — als Konstante mit Herkunft in `handover`, nie als
-Meinung ohne Beleg.
+Meinung ohne Beleg. **Was Solidon für Cura selbst wählt, geht auch ins
+Fensterprofil** (`_cura_window_choices`), sonst gilt dort die Maschine.
 
 ## Der Startcode kommt vom Hersteller, die Platzhalter füllt Solidon
 
@@ -431,10 +432,9 @@ Platzhalter, deshalb `handover._filled`:
   Name, `{if …}`, Werte, die erst das Fenster nach dem Schneiden kennt
   (`{print_time}`).
 
-Setzt der Startcode selbst eine Temperatur (Platzhalter auf
-`material_bed_temperature…` oder eine Düsentemperatur, Kommentare
-ausgenommen), stehen `material_bed_temp_prepend`/`material_print_temp_prepend`
-auf `false`, wie Curas `StartSliceJob`. Ohne Definition: `fdmprinter` und der Befund
+Setzt der Startcode selbst eine Temperatur, stehen
+`material_bed_temp_prepend`/`material_print_temp_prepend` auf `false`.
+Ohne Definition: `fdmprinter` und der Befund
 `slicer.cura_printer_unknown`, kein stiller Rückfall.
 
 ## Das Cura-Profil gehört dem Drucker, der in Cura aktiv ist

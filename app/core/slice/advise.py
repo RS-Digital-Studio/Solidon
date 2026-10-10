@@ -1210,12 +1210,15 @@ def cura_part_gap(
     Unter Gitter legt CuraEngine die Bruchteillage um den Rest des Abstands der
     **Platte** tiefer (``support_top_distance % layer_height`` der Gruppe,
     ``PathConfigStorage.cpp``); ob ein Netz sie bekommt, entscheidet sein eigener
-    Wert. Genau druckt ein Teil oben deshalb nur ein Vielfaches oder einen Wert
-    mit dem Rest der Platte — gemessen in Cura 5.13 bei 0,2er Schichten: 0,28 auf
-    einer Platte mit 0,2 druckte 0,20, auf einer mit 0,44 0,24. Sonst schreibt die
-    Übergabe das Vielfache im Band von ``material``, dem Material der Spule des
-    Teils (:func:`whole_layer_gap`), und das druckt Cura genau. Unter Bäumen gilt
-    die Art der Platte, und Cura rundet ohnehin auf (:func:`gap_rounding`).
+    Wert. Genau druckt ein Teil oben deshalb nur ein Vielfaches oder ein
+    Vielfaches plus den Rest der Platte — gemessen in Cura 5.13 bei 0,2er
+    Schichten: 0,28 auf einer Platte mit 0,2 druckte 0,20, auf einer mit 0,44
+    0,24; 0,48 auf einer mit 0,28 druckte 0,48. Passt der Wert zu keinem, schreibt
+    die Übergabe unter diesen genau druckbaren Werten den nächsten, im Band von
+    ``material``, dem Material der Spule des Teils, wenn der Wert darin liegt
+    (sonst :func:`whole_layer_gap`): PETG 0,28 auf der Platte mit 0,44 bekommt
+    0,24, nicht 0,20. Unter Bäumen gilt die Art der Platte, und Cura rundet
+    ohnehin auf (:func:`gap_rounding`).
     """
     if (
         layer <= 0.0
@@ -1224,7 +1227,22 @@ def cura_part_gap(
         or is_close(_remainder(gap, layer), _remainder(plate_gap, layer))
     ):
         return gap
-    return whole_layer_gap(gap, layer, material)
+    whole = whole_layer_gap(gap, layer, material)
+    rest = _remainder(plate_gap, layer)
+    if is_close(rest, 0.0):
+        return whole
+    near = round((gap - rest) / layer)
+    shifted = [steps * layer + rest for steps in (near - 1, near, near + 1) if steps >= 1]
+    low = material.support_gap_min if material is not None else None
+    high = material.support_gap_max if material is not None else None
+    if low is not None and high is not None and low - EPS_GEOM <= gap <= high + EPS_GEOM:
+        inside = [
+            value for value in (whole, *shifted) if low - EPS_GEOM <= value <= high + EPS_GEOM
+        ]
+        if not inside:
+            return whole
+        return min(inside, key=lambda value: (abs(value - gap), value))
+    return min((whole, *shifted), key=lambda value: (abs(value - gap), value))
 
 
 def printed_support_gaps(

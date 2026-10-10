@@ -2253,14 +2253,18 @@ def test_curas_trees_without_a_roof_get_one_advised() -> None:
     [
         # Gemessen in Cura 5.13, zwei Teile auf einer Platte (0,2er Schichten):
         # 0,28 auf 0,2 druckte 0,20, auf 0,44 0,24; 0,2 auf 0,28 genau 0,20.
+        # Geschrieben wird der nächste genau druckbare Wert im Band: auf 0,44
+        # (Rest 0,04) 0,24 statt 0,20, auf 0,28 (Rest 0,08) aus 0,30 0,28.
         (0.28, 0.20, 0.20),
-        (0.28, 0.44, 0.20),
+        (0.28, 0.44, 0.24),
+        (0.30, 0.28, 0.28),
         (0.20, 0.28, 0.20),
         # Derselbe Rest wie die Platte druckt genau.
         (0.24, 0.44, 0.24),
         (0.28, 0.48, 0.28),
-        # Außerhalb des Bands bleibt das nächste Vielfache.
+        # Außerhalb des Bands der nächste genau druckbare Wert.
         (0.70, 0.20, 0.80),
+        (0.70, 0.44, 0.64),
     ],
 )
 def test_a_part_on_a_cura_plate_gets_a_gap_that_prints_exactly(
@@ -2268,8 +2272,8 @@ def test_a_part_on_a_cura_plate_gets_a_gap_that_prints_exactly(
 ) -> None:
     """Je Teil legt CuraEngine die Bruchteillage oben um den Rest des Abstands der
     Platte tiefer (RM-628, ``PathConfigStorage.cpp``). Genau druckt ein Teil
-    deshalb nur ein Vielfaches oder einen Wert mit dem Rest der Platte; sonst
-    bekommt es das Vielfache im Band seines Materials (PETG). Unter Bäumen gilt
+    deshalb nur ein Vielfaches oder ein Vielfaches plus den Rest der Platte; sonst
+    bekommt es den nächsten davon im Band seines Materials (PETG). Unter Bäumen gilt
     die Art der Platte, und dort rundet Cura ohnehin auf."""
     petg = profiles.make_profile("centauri-carbon-2", "petg").material
     assert advise.cura_part_gap(gap, plate, 0.2, "grid", petg) == pytest.approx(written)

@@ -46804,6 +46804,17 @@ druckt 0,20/0,20; Platte 0,28 mit Teil 0,2 druckt 0,20/0,20; Platte 0,24 mit Tei
 Rest) schreibt 0,44 und druckt 0,44/0,40 — jeweils wie Solidon sagt, das andere Teil wie seine
 Platte.
 
+**Nach der Nachprüfung (10.10.2026):** Die Trennschichten gehen auch ins Fensterprofil
+(`handover._cura_interface`, `_cura_window_choices`): Schalter als Werte, Höhen als Formel
+`=layer_height * N`, die obere ausdrücklich, je Extruderprofil; Cura liest einen Wert mit `=`
+als Formel (`UM/Settings/SettingInstance.py:172`). Vorher nahm das Fenster die Trennschicht der
+Maschine, und unter Bäumen ohne Werksvorgabe druckte PETG nach Solidons Rat 0,40 statt 0,20. Der
+Dialog fragt das Material der Platte wie der Export (`_plate_material` über
+`handover.slot_material`). `cura_part_gap` wählt unter allen genau druckbaren Werten
+(Vielfaches, Vielfaches plus Rest der Platte) den nächsten im Band: 0,28 auf einer Platte mit
+0,44 wird 0,24 statt 0,20. Exporttest für das Material je Teil durch `write_assembly`. Die
+Regel `dateiformat.md` sagt, dass Solidons eigene Wahl für Cura auch ins Fensterprofil gehört.
+
 ## RM-567: Weniger Arbeitsspeicher — Cachegrenze, BLAS-Faden, Renderer am echten Fenster (09.10.2026)
 
 <a id="rm-567-weniger-arbeitsspeicher--cachegrenze-blas-faden-renderer-am-echten-fenster-09102026"></a>
