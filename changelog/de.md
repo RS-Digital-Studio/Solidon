@@ -108,6 +108,7 @@ Nutzen da und sonst nichts.
 - Bei PLA schlägt Solidon für viele feine Spitzen mehr Abstand zu den Baumstützen darunter vor. Dadurch bleiben dort weniger Reste der Baumspitzen.
 - Lange Brücken bekommen die Stütze, die Solidon vorsieht, auch in PrusaSlicer. Bleibt eine lange Brücke ohne Stütze, schlägt Solidon dicke Bahnen und etwas weniger Fluss vor.
 - Flache Überhänge ohne Stütze bekommen Zusatzwände vorgeschlagen. Bei ABS, ASA und TPU druckt der Slicer steile Überhänge auf Vorschlag in wechselnder Richtung, damit sie sich nicht aufrollen.
+- Brückenwerte, Zusatzwände und die wechselnde Richtung gelten nur für das Teil, das sie braucht. Die anderen Teile derselben Platte drucken unverändert.
 - Für PETG schlägt Solidon volle Kühlung an der Stütze vor. Sie löst sich so leichter vom Teil.
 - Neu in den Druckeinstellungen: *Trennschichten unten*, *Lücke in der Trennschicht* und *Volle Kühlung an der Stütze*.
 - Das Feld *Abstand nach oben* heißt jetzt *Abstand oben und unten* und gilt für beide Seiten der Stütze.

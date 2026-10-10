@@ -1688,9 +1688,13 @@ def split_for_parts(
     from app.core.slice import advise
 
     # Was das Programm nicht kennt, geht an kein Teil (RM-459); auf der
-    # Platte nimmt es :func:`prusa_values` heraus.
+    # Platte nimmt es :func:`prusa_values` heraus. Was die Familie gar nicht
+    # nimmt, ist auch nicht „nur plattenweit“: Cura bekam die dicke Brücke
+    # sonst als Übernahme der Platte gemeldet, die es nie druckt (RM-587).
     program = slicer_keys.program_of(setup.executable) if setup is not None else ""
-    unknown = slicer_keys.NOT_TAKEN_BY_PROGRAM.get(program, frozenset())
+    unknown = slicer_keys.NOT_TAKEN_BY_PROGRAM.get(program, frozenset()) | (
+        slicer_keys.NOT_TAKEN_BY[flavour] if flavour != "other" else frozenset()
+    )
     wanted = frozenset(settings.accepted) & advise.PART_PATHS - unknown
     if not wanted:
         return PartSplit(settings, settings)

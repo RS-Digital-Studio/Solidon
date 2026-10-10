@@ -83,6 +83,7 @@ scrive in `website/version.json`.
 - Per il PLA, Solidon propone più spazio tra le numerose punte sottili e i supporti ad albero sottostanti. In questo modo restano meno residui delle punte dei supporti.
 - I ponti lunghi ricevono il supporto previsto da Solidon, anche in PrusaSlicer. Se un ponte lungo resta senza supporto, Solidon propone linee spesse e un po' meno flusso.
 - Agli sbalzi piatti senza supporto Solidon propone pareti extra. Con ABS, ASA e TPU lo slicer stampa gli sbalzi ripidi in senso alternato, così non si arricciano.
+- Le impostazioni dei ponti, le pareti extra e il senso alternato valgono solo per il pezzo che ne ha bisogno. Gli altri pezzi dello stesso piatto si stampano come prima.
 - Per il PETG Solidon suggerisce il raffreddamento pieno sul supporto. Così si stacca più facilmente dal pezzo.
 - Nuovo nelle impostazioni di stampa: *Strati di interfaccia inferiori*, *Spazio nell'interfaccia* e *Raffreddamento pieno sul supporto*.
 - Il campo *Spazio verso l'alto* ora si chiama *Spazio sopra e sotto* e vale per entrambi i lati del supporto.

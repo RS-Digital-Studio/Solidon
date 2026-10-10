@@ -153,12 +153,14 @@ def _advised_gcode(
     *,
     vendor: bool = True,
     declined: frozenset[str] = frozenset(),
+    without: frozenset[str] = frozenset(),
 ) -> tuple[str, list[str]]:
     """Den Rat übernehmen wie *Vorschläge übernehmen* und die Platte schneiden.
 
     Gibt die Druckdatei und die übernommenen Pfade zurück. ``vendor=False``
     schneidet mit Solidons eigenem Satz (kein Herstellerprofil), ``declined``
-    sind abgelehnte Vorschläge (RM-587)."""
+    sind abgelehnte Vorschläge (RM-587), ``without`` Pfade, die für den
+    Vergleich nicht übernommen werden."""
     from app.core.slice import advise
     from app.ui.print_settings_dialog import _PlateJob, _prepare_plate
 
@@ -185,7 +187,7 @@ def _advised_gcode(
         )
         if item.path not in declined
     ]
-    settings = advise.apply(settings, entries)
+    settings = advise.apply(settings, [item for item in entries if item.path not in without])
     folder = tmp_path / "platte"
     folder.mkdir(parents=True)
     job = _PlateJob(
@@ -235,14 +237,50 @@ def _support_moves(text: str) -> int:
     return count
 
 
+#: Die Pfade aus RM-587. Sie gehen je Teil und stehen deshalb nicht im
+#: Konfigurationsblock, der die Platte zeigt; gemessen wird ihre Wirkung.
+RM587_PATHS = frozenset(
+    {
+        "support.bridges",
+        "shell.thick_bridges",
+        "shell.bridge_flow",
+        "shell.overhang_walls",
+        "shell.overhang_reverse",
+    }
+)
+
+
+def _bridge_lines(text: str) -> tuple[float, float]:
+    """Länge und Förderung der äußeren Brückenbahnen (Prusa ``Bridge infill``,
+    Orca-Familie ``Bridge``), in mm."""
+    length = feed = 0.0
+    inside = False
+    x = y = 0.0
+    for line in text.splitlines():
+        if line.startswith((";TYPE:", "; TYPE:")):
+            inside = line.split(":", 1)[1].strip() in ("Bridge", "Bridge infill")
+            continue
+        if not line.startswith(("G1 ", "G0 ")):
+            continue
+        words = {word[0]: word[1:] for word in line.split(";")[0].split()[1:]}
+        nx = float(words["X"]) if "X" in words else x
+        ny = float(words["Y"]) if "Y" in words else y
+        if inside and "E" in words and float(words["E"]) > 0.0:
+            length += ((nx - x) ** 2 + (ny - y) ** 2) ** 0.5
+            feed += float(words["E"])
+        x, y = nx, ny
+    return length, feed
+
+
 @pytest.mark.slicer("prusaslicer")
 def test_prusaslicer_supports_a_long_bridge_and_thickens_a_free_one(
     installed_slicer: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """N1 der G-Code-Gegenprüfung: Mit Solidons eigenem Satz blieb die 36-mm-Brücke
     in PrusaSlicer trotz Stützen frei (``dont_support_bridges = 1``, 0 mm Stütze).
-    Jetzt stützt sie. Lehnt der Kunde die Stützen ab, kommen dicke Brücken und
-    90 % Fluss an (RM-587)."""
+    Jetzt stützt sie. Lehnt der Kunde die Stützen ab, legt das Teil seine Brücke
+    dick und mit 90 % Fluss — als Objektwert, gemessen gegen denselben Lauf ohne
+    die Übernahme (RM-587)."""
     set_test_license(monkeypatch, active=True)
     raw = trimesh.load(BRIDGE, force="mesh")
 
@@ -259,9 +297,19 @@ def test_prusaslicer_supports_a_long_bridge_and_thickens_a_free_one(
         "prusa-mk4s",
         declined=frozenset({"support.style"}),
     )
+    plain, _taken = _advised_gcode(
+        installed_slicer,
+        tmp_path / "ohne",
+        raw.copy(),
+        "prusa-mk4s",
+        declined=frozenset({"support.style"}),
+        without=RM587_PATHS,
+    )
     assert {"shell.thick_bridges", "shell.bridge_flow"} <= set(taken)
-    assert _config(free, "thick_bridges") == "1"
-    assert float(_config(free, "bridge_flow_ratio")) == pytest.approx(0.9)
+    length, feed = _bridge_lines(free)
+    plain_length, plain_feed = _bridge_lines(plain)
+    assert length > 0.0 and plain_length > 0.0
+    assert feed / length > 1.15 * plain_feed / plain_length, "dicke Brücke fördert mehr je mm"
 
 
 @pytest.mark.parametrize(
@@ -274,38 +322,207 @@ def test_prusaslicer_supports_a_long_bridge_and_thickens_a_free_one(
 def test_the_orca_family_takes_bridges_rims_and_alternating_walls(
     program: str, installed_slicer: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """RM-587 in der Orca-Familie: Die freie 36-mm-Brücke bekommt dicke Bahnen und
-    90 % Fluss, ein 3-mm-Rand ohne Stütze Zusatzwände, und ein ABS-Trichter mit 50
-    Grad dreht seine Außenwand in jeder zweiten Schicht."""
+    """RM-587 in der Orca-Familie, je gegen denselben Lauf ohne die Übernahme: Die
+    freie 36-mm-Brücke wird dick, ein 3-mm-Rand ohne Stütze verliert seine lose
+    Brückenbahn an Zusatzwände, und ein ABS-Trichter mit 50 Grad dreht seine
+    Außenwand in jeder zweiten Schicht."""
     set_test_license(monkeypatch, active=True)
     printer = PROGRAMS[program]
+    declined = frozenset({"support.style"})
 
-    bridge, _taken = _advised_gcode(
-        installed_slicer,
-        tmp_path / "bruecke",
-        trimesh.load(BRIDGE, force="mesh"),
-        printer,
-        declined=frozenset({"support.style"}),
-    )
-    assert _config(bridge, "thick_bridges") == "1"
-    assert float(_config(bridge, "bridge_flow")) == pytest.approx(0.9)
+    def both(name: str, body: trimesh.Trimesh, material: str = "pla") -> tuple[str, str, list[str]]:
+        advised, taken = _advised_gcode(
+            installed_slicer, tmp_path / name, body.copy(), printer, material, declined=declined
+        )
+        plain, _taken = _advised_gcode(
+            installed_slicer,
+            tmp_path / f"{name}-ohne",
+            body.copy(),
+            printer,
+            material,
+            declined=declined,
+            without=RM587_PATHS,
+        )
+        return advised, plain, taken
+
+    bridge, plain, taken = both("bruecke", trimesh.load(BRIDGE, force="mesh"))
+    assert "shell.thick_bridges" in taken
+    length, feed = _bridge_lines(bridge)
+    plain_length, plain_feed = _bridge_lines(plain)
+    assert feed / length > 1.15 * plain_feed / plain_length, "dicke Brücke fördert mehr je mm"
 
     post = trimesh.creation.box((20.0, 20.0, 20.0))
     post.apply_translation((0.0, 0.0, 10.0))
     slab = trimesh.creation.box((26.0, 20.0, 3.0))
     slab.apply_translation((0.0, 0.0, 21.5))
-    rim, _taken = _advised_gcode(
-        installed_slicer, tmp_path / "rand", trimesh.boolean.union([post, slab]), printer
-    )
-    assert _config(rim, "extra_perimeters_on_overhangs") == "1"
+    rim, plain, taken = both("rand", trimesh.boolean.union([post, slab]))
+    assert "shell.overhang_walls" in taken
+    assert _bridge_lines(rim)[0] < 0.5 * _bridge_lines(plain)[0], "Zusatzwände statt Brücke"
 
-    funnel, taken = _advised_gcode(
-        installed_slicer, tmp_path / "trichter", _funnel(50.0), printer, "abs"
-    )
+    funnel, plain, taken = both("trichter", _funnel(50.0), "abs")
     assert "shell.overhang_reverse" in taken
-    assert _config(funnel, "overhang_reverse") == "1"
     turns = _outer_wall_turns(funnel)
     assert len(turns) > 40 and len(set(turns)) == 2, "die Außenwand wechselt die Richtung"
+    assert len(set(_outer_wall_turns(plain))) == 1, "ohne die Übernahme in einer Richtung"
+
+
+def _two_pillar_bridge(x: float) -> trimesh.Trimesh:
+    """Zwei Säulen 6 × 20 × 12 mm, darüber ein Deck von 3 mm, 36 mm frei gespannt."""
+    parts = []
+    for extents, centre in (
+        ((6.0, 20.0, 12.0), (x - 21.0, 0.0, 6.0)),
+        ((6.0, 20.0, 12.0), (x + 21.0, 0.0, 6.0)),
+        ((48.0, 20.0, 3.0), (x, 0.0, 13.5)),
+    ):
+        box = trimesh.creation.box(extents=extents)
+        box.apply_translation(centre)
+        parts.append(box)
+    return trimesh.boolean.union(parts, engine="manifold")
+
+
+#: Wo ein Körper in der Druckdatei beginnt: der Name in der Orca-Familie (bei
+#: Anycubic Slicer Next in Anführungszeichen), die Nummer bei PrusaSlicer
+#: (``M486``), die Kennung in Ladefolge bei Bambu Studio.
+_ORCA_OBJECT = re.compile(r'^; printing object "?(\w+)')
+_PRUSA_NAME = re.compile(r"^M486 A(\w+)")
+_PRUSA_OBJECT = re.compile(r"^M486 S(-?\d+)")
+_BAMBU_IDS = re.compile(r"^; model label id: ([\d,]+)")
+_BAMBU_OBJECT = re.compile(r"^; start printing object, unique label id: (\d+)")
+
+
+def _bridge_lines_per_object(text: str, names: tuple[str, ...]) -> dict[str, tuple[float, float]]:
+    """Länge und Förderung der äußeren Brückenbahnen je Körper, in mm.
+
+    Bambu Studio nennt keine Namen, sondern Kennungen in der Ladefolge der Körper;
+    die erste gehört dem ersten Körper der Platte."""
+    found = {name: [0.0, 0.0] for name in names}
+    numbers: dict[str, str] = {}
+    label: str | None = None
+    pending: str | None = None
+    inside = False
+    x = y = 0.0
+    for line in text.splitlines():
+        if line.startswith((";TYPE:", "; TYPE:", "; FEATURE:")):
+            inside = line.split(":", 1)[1].strip() in ("Bridge", "Bridge infill")
+            continue
+        orca = _ORCA_OBJECT.match(line)
+        prusa = _PRUSA_OBJECT.match(line)
+        prusa_name = _PRUSA_NAME.match(line)
+        bambu_ids = _BAMBU_IDS.match(line)
+        bambu = _BAMBU_OBJECT.match(line)
+        if orca:
+            label = orca.group(1) if orca.group(1) in found else None
+        elif line.startswith("; stop printing object"):
+            label = None
+        elif bambu_ids:
+            numbers = dict(zip(bambu_ids.group(1).split(","), names, strict=False))
+        elif bambu:
+            label = numbers.get(bambu.group(1))
+        elif prusa_name and pending is not None:
+            numbers[pending] = prusa_name.group(1)
+        elif prusa:
+            pending = prusa.group(1)
+            label = numbers.get(pending)
+        if not line.startswith(("G1 ", "G0 ")):
+            continue
+        words = {word[0]: word[1:] for word in line.split(";")[0].split()[1:]}
+        nx = float(words["X"]) if "X" in words else x
+        ny = float(words["Y"]) if "Y" in words else y
+        if inside and label is not None and "E" in words and float(words["E"]) > 0.0:
+            found[label][0] += ((nx - x) ** 2 + (ny - y) ** 2) ** 0.5
+            found[label][1] += float(words["E"])
+        x, y = nx, ny
+    return {name: (length, feed) for name, (length, feed) in found.items()}
+
+
+@pytest.mark.parametrize(
+    "program",
+    [
+        pytest.param(program, marks=pytest.mark.slicer(program), id=program)
+        for program in (
+            "prusaslicer",
+            "orcaslicer",
+            "elegooslicer",
+            "crealityprint",
+            "anycubicslicernext",
+            "bambustudio",
+        )
+    ],
+)
+def test_the_bridge_flow_of_one_part_stays_with_that_part(
+    program: str, installed_slicer: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Die Brückenwerte gehören dem Teil mit der Brücke (RM-587, Entscheidung Robert):
+    Zwei gleiche Brücken auf einer Platte, nur die linke verlangt 70 % Fluss. Das
+    Programm liest ihn als Objektwert und legt nur ihre Brücke dünner; die rechte
+    behält den Fluss der Platte. Gemessen in acht Programmen mit allen fünf Werten
+    (``konzepte/begruendungen/regel-druckrat.md``); Cura und SuperSlicer nehmen
+    keinen und fehlen hier."""
+    from app.core.export import writer
+    from app.core.types import PrintSettings, SettingAdvice
+    from app.ui.print_settings_dialog import _PlateJob, _prepare_plate
+    from tests.helpers import object_values
+
+    set_test_license(monkeypatch, active=True)
+    profile = profiles.make_profile(PROGRAMS[program], "pla")
+    settings = print_settings.with_choice(print_settings.resolve(profile), "support.style", "none")
+    settings = print_settings.with_accepted(settings, "shell.bridge_flow", 0.7)
+    setup = _preselected(handover.detect(installed_slicer), profile)
+
+    def asks(
+        entry: SceneObject, _mesh: object, base: PrintSettings, *_args: object, **_kwargs: object
+    ) -> list[SettingAdvice]:
+        if entry.id != "links":
+            return []
+        was = print_settings.read_path(base, "shell.bridge_flow")
+        return [SettingAdvice("shell.bridge_flow", 0.7, was, "Probe")]
+
+    monkeypatch.setattr(writer, "part_advice", asks)
+    objects = tuple(
+        SceneObject(name, name, MeshData.of(_two_pillar_bridge(x)))
+        for name, x in (("links", -34.0), ("rechts", 34.0))
+    )
+    folder = tmp_path / "platte"
+    folder.mkdir()
+    job = _PlateJob(
+        objects=objects,
+        plates=(0,),
+        folder=folder,
+        name="bruecken",
+        setup=setup,
+        settings=settings,
+        profile=profile,
+        slot_profiles={},
+    )
+    run = _prepare_plate(job, 0)
+    member, key = (
+        ("Metadata/Slic3r_PE_model.config", "bridge_flow_ratio")
+        if setup.flavour == "prusa"
+        else ("Metadata/model_settings.config", "bridge_flow")
+    )
+    written = object_values(run.model, member)
+    assert float(written["links"][key]) == pytest.approx(0.7)
+    assert key not in written["rechts"], "das rechte Teil bekommt keinen Brückenfluss"
+    outcome = handover.slice_model(
+        [run.model],
+        settings,
+        profile,
+        setup,
+        output_dir=folder,
+        timeout=900,
+        keep_arrangement=run.keep_arrangement,
+        slots=run.slots,
+        model_height=run.model_height,
+        model_meshes=run.meshes,
+        expected_tools=run.used_tools,
+    )
+    text = outcome.gcode_path.read_text(encoding="utf-8", errors="replace")
+    lines = _bridge_lines_per_object(text, ("links", "rechts"))
+    (left, left_feed), (right, right_feed) = lines["links"], lines["rechts"]
+    assert left > 0.0 and right > 0.0, f"{program}: Brückenbahnen je Körper {lines}"
+    assert left_feed / left < 0.85 * right_feed / right, (
+        f"{program}: links {left_feed / left:.4f}, rechts {right_feed / right:.4f} mm je mm"
+    )
 
 
 def _funnel(angle: float, bottom: float = 6.0, height: float = 20.0) -> trimesh.Trimesh:

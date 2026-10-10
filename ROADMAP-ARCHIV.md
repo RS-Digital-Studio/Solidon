@@ -46265,8 +46265,8 @@ unter flachen, einseitig hängenden Stücken ohne Stütze, breiter als die Wänd
 (`analysis.cantilevers`); *Wandrichtung wechseln* (`overhang_reverse`, nur Orca-Familie) für
 ABS, ASA und TPU an steilen Wänden zwischen 45 Grad und der Stützgrenze
 (`analysis.steep_overhang`). Rücklesung aus Orca- und Prusa-Ketten samt Programmvorgaben von
-PrusaSlicer (`--save`), Übergabe je Programm gemessen: Cura keiner der fünf, SuperSlicer nur die
-Brückenstütze (Fluss dort in Prozent, zwei Schlüssel unbekannt), Bambu Studio ohne Zusatzwände und
+PrusaSlicer (`--save`), Übergabe je Programm gemessen: Cura und SuperSlicer keiner der fünf
+(SuperSlicer: Fluss in Prozent, zwei Schlüssel unbekannt, die Brückenstütze ohne Wirkung), Bambu Studio ohne Zusatzwände und
 Umkehr, Anycubic Slicer Next ohne Zusatzwände (angenommen, ohne Wirkung). Die Gegenprobe fragt die
 Brückenstütze am wirksamen Wert des Teils statt am Herstellerprozess (`Motion.support_skips_bridges`
 entfällt). Gemessen über den Druckdialogweg: N1 vorher 0 mm Stützbahn, jetzt 4 317 mm, abgewählt 0;
@@ -46281,3 +46281,32 @@ nicht (Trichter 40 bis 80 Grad bitgleich), dort schlägt Solidon die Umkehr vor.
 `test_manufacturer.py`, `test_print_time.py`, `test_print_settings.py`, Slicertest
 `test_real_slicers.py` (PrusaSlicer, OrcaSlicer, ElegooSlicer, 3 von 3 grün); Messwerte und Begründung in
 `konzepte/begruendungen/regel-druckrat.md`. Umgesetzt von Claude (Worktree `F:/sl-bruecken`).
+
+**Je Teil (Entscheidung Robert, 09.10.2026):** Die fünf Werte stehen in `advise.PART_PATHS` und
+gehen als Objektwert an das Teil, dessen Rat sie verlangt; die Platte behält die Grundlage.
+Wirkungsnachweis mit zwei gleichen Teilen, nur das linke mit Wert, in allen acht Programmen
+(Kerne gepinnt, getrennt an den Objektmarken, Sonde `.claude/.state/drache-2026-10-08/bruecken_je_teil.py`),
+je links / rechts: Brückenstütze aus, Stütze in mm: OrcaSlicer 0 / 17 912, ElegooSlicer 0 / 18 984,
+Bambu Studio 0 / 18 963, Creality Print 0 / 17 912, Anycubic Slicer Next 0 / 55 435, PrusaSlicer
+0 / 22 358. Dicke Brücke, Förderung je mm Brückenbahn: 0,0461 / 0,0262, 0,0497 / 0,0282,
+0,0515 / 0,0413, 0,0455 / 0,0272, 0,0463 / 0,0279, 0,0529 / 0,0443. Fluss 0,7: 0,0204 / 0,0262,
+0,0198 / 0,0282, 0,0283 / 0,0413, 0,0210 / 0,0272, 0,0215 / 0,0279, 0,0301 / 0,0443. Zusatzwände,
+Brückenbahn in mm: OrcaSlicer 0 / 335, ElegooSlicer 0 / 296, Creality Print 75 / 335, PrusaSlicer
+996 / 1 254. Umkehr, Drehwechsel der Außenwand: OrcaSlicer und ElegooSlicer 99 / 0, Creality Print
+98 / 0, Anycubic Slicer Next 1 / 0 (dreht jede Schicht). Brückentempo und -lüfter an beiden Teilen
+gleich (je Spule). Gegenprobe am Stand davor (`badc464f9`): Werte auf der Platte, Wirkung an beiden
+Teilen (OrcaSlicer Brückenstütze aus 0 / 0, dicke Brücke 0,0461 / 0,0461, ebenso PrusaSlicer und
+Bambu Studio). Über den echten Rat mit zwei verschiedenen Teilen: Ohne Stützen bekommt nur die
+36-mm-Brücke mit Auskragung dicke Bahnen, 0,9 Fluss und Zusatzwände, die 8-mm-Brücke daneben nichts;
+am ABS-Trichter neben einem Zylinder dreht nur der Trichter; am Kobra 2 in OrcaSlicer
+(`bridge_no_support = 1`) bekommt nur die lange Brücke die Brückenstütze (49 789 gegen 867 mm
+Stütze, am Stand davor 8 393). Nicht geschrieben wird, was ein Programm nicht kennt oder nicht
+umsetzt: Cura und SuperSlicer keinen der fünf (SuperSlicer stützte mit `dont_support_bridges` 0 und
+1 gleich), Bambu Studio weder Zusatzwände noch Umkehr, Anycubic Slicer Next keine Zusatzwände; der
+Rat bietet sie dort nicht an, und das Feld sagt, dass der Slicer es nicht kennt. Was eine Familie
+gar nicht nimmt, zählt im Split nicht mehr als „nur plattenweit“ (sonst meldete Cura an jedem
+anderen Teil eine Übernahme, die es nie druckt). Wächter: `test_slicer_part_settings.py`
+(`MEASURED_PART_PATHS` samt Fehlstellen je Programm, Objektwerte nur am verlangenden Teil in
+PrusaSlicer und OrcaSlicer, Split ohne Scheinübernahme; am Stand davor 11 rot) und der Slicertest
+`test_the_bridge_flow_of_one_part_stays_with_that_part` in sechs Programmen (6 von 6 grün, am Stand
+davor rot). Umgesetzt von Claude (Worktree `F:/sl-bruecken-teil`).

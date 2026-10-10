@@ -3873,8 +3873,9 @@ def test_bridge_and_overhang_keys_go_only_where_the_program_has_them() -> None:
     Konfigurationsblöcken und mit ``--save``): Cura keinen der fünf Werte,
     PrusaSlicer keine Umkehr, Bambu Studio weder Zusatzwände noch Umkehr,
     Anycubic Slicer Next keine Zusatzwände (angenommen, aber ohne Wirkung), und
-    SuperSlicer, dessen 3MF-Leser an zwei fremden Schlüsseln abstürzt, nur die
-    Brückenstütze."""
+    SuperSlicer keinen: Zwei Schlüssel kennt sein 3MF-Leser nicht und stürzt an
+    zwei fremden ab, den Fluss liest er in Prozent, und die Brückenstütze ändert
+    dort nichts."""
     paths = (
         "support.bridges",
         "shell.thick_bridges",
@@ -3897,7 +3898,7 @@ def test_bridge_and_overhang_keys_go_only_where_the_program_has_them() -> None:
     }
     assert taken[("cura", "cura")] == set()
     assert taken[("prusa", "prusaslicer")] == set(paths) - {"shell.overhang_reverse"}
-    assert taken[("prusa", "superslicer")] == {"support.bridges"}
+    assert taken[("prusa", "superslicer")] == set()
     assert taken[("orca", "bambustudio")] == {
         "support.bridges",
         "shell.thick_bridges",

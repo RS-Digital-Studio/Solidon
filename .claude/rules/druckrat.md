@@ -122,9 +122,11 @@ offenem Drucker. Übernommen wird auf Klick, nie von allein.
   Wände — zwischen 45 Grad und der Stützgrenze und an beidseitig gelagerten
   Brücken ändert der Schalter in PrusaSlicer und OrcaSlicer nichts. **Steile
   Wände dort** (`analysis.steep_overhang`) bekommen bei `CURLING_MATERIALS`
-  die Umkehr, nur in der Orca-Familie. Was ein Programm nicht kennt, steht in
-  `slicer_keys.NOT_TAKEN_BY*` (Cura keinen der fünf Werte, SuperSlicer nur die
-  Brückenstütze, sein Fluss ist ein Prozentwert).
+  die Umkehr, nur in der Orca-Familie. Alle fünf gehen **je Teil**
+  (`PART_PATHS`): Jedes Programm, das einen nimmt, wendet ihn je Objekt an
+  (zwei Teile, nur eines mit Wert, in acht Programmen gemessen). Was ein
+  Programm nicht kennt oder nicht umsetzt, steht in `slicer_keys.NOT_TAKEN_BY*`
+  (Cura und SuperSlicer keinen der fünf).
 - **Eine runde Außenwand bekommt die Schrägnaht vorgeschlagen**: glatte
   Umrisse (kein Knick über `analysis.SMOOTH_TURN_DEGREES`, gemessen über Arme
   der Düsenbreite wie im Slicer, ab `advise.SCARF_MIN_LOOP` Umfang) über
