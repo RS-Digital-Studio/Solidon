@@ -8877,6 +8877,9 @@ def test_the_list_of_ignored_settings_matches_what_the_slicers_take() -> None:
         # oder, bei Cura, als eigenes Netz neben den Teilen (Stufe D).
         if slicer_keys.reads_assembly_file(flavour) or slicer_keys.takes_mesh_settings(flavour):
             measured -= slicer_keys.AS_GEOMETRY
+        # Die feinen Schichten reisen dort als Höhenkurve je Objekt (RM-586).
+        if slicer_keys.reads_assembly_file(flavour):
+            measured -= slicer_keys.AS_HEIGHT_PROFILE
         assert measured == slicer_keys.NOT_TAKEN_BY[flavour], (
             f"{flavour}: gemessen {sorted(measured)}, "
             f"eingetragen {sorted(slicer_keys.NOT_TAKEN_BY[flavour])}"
@@ -11731,7 +11734,7 @@ def test_plate_preparation_compares_the_final_writer_snapshot(
     passed = []
 
     def write(objects, folder, *, comparison, **_kwargs):
-        comparison(((body, body.mesh, effective),))
+        comparison(((body, body.mesh, effective),), {})
         return folder / "actual.3mf", []
 
     def compare(plate, parts, actual_profile, **kwargs):
