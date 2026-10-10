@@ -13788,9 +13788,12 @@ def _without_notches(
     übergebenen Flecken; wer nur einen Fleck kennt (:func:`planar_facet`),
     reicht die Dreiecke aller Flecken als Maske herein.
     """
-    taken: set[int] = (
-        set() if belongs is not None else {index for patch in patches for index in patch}
-    )
+    # Belegt als Maske, nicht als Menge (P5, RM-592): Die Menge aller
+    # Dreiecke aller Flecken entstand je Aufruf neu — am Eiffelturm elfmal über
+    # 313 000 Dreiecke.
+    taken = np.zeros(len(body.faces), dtype=bool)
+    if belongs is None and patches:
+        taken[np.fromiter(itertools.chain.from_iterable(patches), dtype=np.int64)] = True
     healed: list[list[int]] = []
     for patch in patches:
         # **Nur Flecken, die überhaupt eingepasst werden** (Leistung, gemessen
@@ -13812,13 +13815,13 @@ def _without_notches(
         candidates = sorted(
             face
             for face in _candidates_at(body, patch, rim.frayed)
-            if face not in taken and (belongs is None or not belongs[face])
+            if not taken[face] and (belongs is None or not belongs[face])
         )
         closing = _closing_set(body, rim, candidates)
         if closing is None:
             healed.append(patch)
             continue
-        taken.update(closing)
+        taken[list(closing)] = True
         healed.append([*patch, *closing])
     return healed
 
