@@ -573,6 +573,41 @@ def test_an_own_process_in_the_slicer_is_another_print() -> None:
     ].fingerprint == named(draft)
 
 
+@pytest.mark.parametrize("version", ["7.3", "8.0"])
+def test_the_chosen_base_counts_by_name_not_by_path(version: str) -> None:
+    """Nachprüfung RM-706, N1: Die Orca-Familie kennt ein Profil am Pfad seiner Datei,
+    und Creality Print legt Installation und Nutzerdaten in Ordnern mit Fassungsnummer
+    ab. Dieselbe Wahl nach einem Update ist derselbe Druck; ein anderer Name nicht."""
+    objects, settings, profile, inputs = job(build())
+
+    def setup(root: str, process: str = "0.20mm Standard @Creality K1 (0.4 nozzle)") -> Any:
+        profiles_dir = f"C:\\Program Files\\Creality\\Creality Print {root}\\resources\\profiles"
+        return handover.SlicerSetup(
+            Path(f"C:/Program Files/Creality/Creality Print {root}/CrealityPrint.exe"),
+            "orca",
+            f"{profiles_dir}\\Creality\\machine\\Creality K1 (0.4 nozzle).json",
+            f"C:\\Users\\kunde\\AppData\\Roaming\\Creality\\Creality Print\\{root}\\user\\42"
+            f"\\process\\{process}.json",
+        )
+
+    def named(base: Any) -> str:
+        return usage.prepare(objects, settings, profile, "Probe", inputs=inputs, base=base)[
+            0
+        ].fingerprint
+
+    before = named(setup("7.2"))
+    assert named(setup(version)) == before
+    linux = handover.SlicerSetup(
+        Path("/opt/creality/CrealityPrint"),
+        "orca",
+        "/home/kunde/.config/Creality/machine/Creality K1 (0.4 nozzle).json",
+        "/home/kunde/.config/Creality/user/42/process/"
+        "0.20mm Standard @Creality K1 (0.4 nozzle).json",
+    )
+    assert named(linux) == before
+    assert named(setup(version, "0.12mm Fine @Creality K1 (0.4 nozzle)")) != before
+
+
 def test_another_edge_answer_is_another_print() -> None:
     """Review RM-706, M1: Dieselben Werte, die Antwort einmal rechte, einmal linke Kante.
 

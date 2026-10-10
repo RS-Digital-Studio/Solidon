@@ -512,11 +512,35 @@ def _base_choice(base: SlicerSetup | None) -> list[str] | None:
     Ein eigener Prozess lässt die Stufe stehen und ändert Schichthöhe, Wände und
     Tempo; Maschine und Slicerart ebenso. Ihre Namen gehören zum Druck, ihre
     Werte nicht: Ein Slicer-Update unter denselben Namen benennt keinen anderen
-    Druck. Wo der Slicer liegt, zählt nicht.
+    Druck. Wo der Slicer liegt, zählt nicht (:func:`_profile_name`).
     """
     if base is None:
         return None
-    return [base.flavour, base.machine_profile, base.base_process]
+    return [base.flavour, _profile_name(base.machine_profile), _profile_name(base.base_process)]
+
+
+#: Was an einem Profildateinamen Endung ist, nicht Name — die längeren zuerst.
+_PROFILE_SUFFIXES: Final = (".def.json", ".inst.cfg", ".json", ".ini", ".cfg")
+
+
+def _profile_name(choice: str) -> str:
+    """Der Name eines gewählten Profils, nie sein Pfad (Nachprüfung RM-706, N1; Regel 12).
+
+    Die Orca-Familie kennt ein Profil am Pfad seiner Datei
+    (``slicer_profiles.identity``), und Creality Print legt Installation und
+    Nutzerdaten in Ordnern mit Fassungsnummer ab: Am Pfad gezählt, machte jedes
+    Update jeden gebuchten Druck neu, ebenso ein anderer Rechner. Der Dateiname
+    ist dort der Profilname. Prusa-Abschnitte und Cura-Instanzen tragen schon
+    einen Namen und bleiben, wie sie sind.
+    """
+    if "/" not in choice and "\\" not in choice:
+        return choice
+    name = PurePosixPath(choice.replace("\\", "/")).name
+    lowered = name.lower()
+    for suffix in _PROFILE_SUFFIXES:
+        if lowered.endswith(suffix):
+            return name[: -len(suffix)]
+    return name
 
 
 def _fixed_profile(profile: Profile) -> str:
