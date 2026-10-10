@@ -543,3 +543,34 @@ def test_the_tool_compares_two_folders_and_fails_on_a_difference(
 
     assert (same, other) == (0, 1)
     assert "NICHT druckgleich" in capsys.readouterr().out
+
+
+def test_an_exact_zero_is_called_so(cube_shot: ResultShot) -> None:
+    """Null ist null: „0,0000 µm“ trennte sie nicht von einer Abweichung unter 0,05 nm."""
+    same = print_equal.compare(cube_shot, cube_shot)
+    tiny = print_equal.micrometres(1e-9)
+
+    assert same.largest == 0.0
+    assert "genau 0 µm" in same.report()
+    assert tiny == "0.0000 µm"
+
+
+def test_the_tool_shoots_the_reopened_state_through_a_disk_cache(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """``shoot --cache`` nimmt den Stand nach dem Wiederöffnen auf, und er gleicht dem frischen."""
+    from tools import check_print_equal
+
+    model = str(Path(__file__).parent / "data" / "meshes" / "plate_holes.stl")
+    fresh = check_print_equal.main(["shoot", str(tmp_path / "frisch"), "--model", model])
+    reopened = check_print_equal.main(
+        ["shoot", str(tmp_path / "offen"), "--model", model, "--cache"]
+    )
+    compared = check_print_equal.main(
+        ["compare", str(tmp_path / "frisch"), str(tmp_path / "offen")]
+    )
+
+    out = capsys.readouterr().out
+    assert (fresh, reopened, compared) == (0, 0, 0)
+    assert "Plattentreffer 1 " in out, out
+    assert "Größte Abweichung: genau 0 µm" in out

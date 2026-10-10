@@ -669,7 +669,7 @@ class Verdict:
     def report(self) -> str:
         lines = [
             ("druckgleich" if self.print_equal else "NICHT druckgleich")
-            + f": größte Abweichung {self.largest * 1000:.4f} µm"
+            + f": größte Abweichung {micrometres(self.largest)}"
             + (f" ({self.where})" if self.where else "")
             + f", Grenze {self.limit * 1000:.2f} µm"
         ]
@@ -679,6 +679,11 @@ class Verdict:
         over = sorted((entry for entry in self.deviations if entry[0] > self.limit), reverse=True)
         lines += [f"  über der Grenze: {gap * 1000:.4f} µm {where}" for gap, where in over[:20]]
         return "\n".join(lines)
+
+
+def micrometres(gap_mm: float) -> str:
+    """Eine Abweichung in µm; genau null heißt so, statt in „0,0000 µm“ zu verschwinden."""
+    return "genau 0 µm" if gap_mm == 0.0 else f"{gap_mm * 1000:.4f} µm"
 
 
 def surface_gap(

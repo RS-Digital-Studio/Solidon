@@ -13,6 +13,9 @@ Modelldatei (``--model``, eingelesen wie *Öffnen* in Millimetern) im Baum
 ``--tree`` aus — Vorgabe ist der Baum dieses Werkzeugs — und legt je Fall ein
 Abbild ab. ``--quick`` lässt Selbstdurchdringung, STL-Runde und Rundreise weg
 (für Netze mit Millionen Dreiecken); das Urteil nennt sie dann ungeprüft.
+``--cache`` nimmt den Stand nach dem Wiederöffnen auf: einmal in einen
+Plattencache auswerten, dann mit frischem Speicher über demselben Ordner —
+der Weg, den ein gespeichertes Projekt beim Öffnen nimmt.
 Die Nutzerverzeichnisse liegen für den Lauf in einem Temp-Ordner (§38).
 
 ``compare`` hält gleichnamige Abbilder zweier Ordner gegeneinander, schreibt
@@ -101,7 +104,9 @@ def shoot(arguments: argparse.Namespace, folder: str) -> int:
     _isolated(folder)
     helper = _helper()
     from app.core.bootstrap import load_operations
+    from app.core.geom.mesh import MeshCodec
     from app.core.scene import evaluate
+    from app.core.scene.cache import DiskCache, ResultCache
     from app.core.scene.project import ProjectSources
 
     load_operations()
@@ -125,15 +130,24 @@ def shoot(arguments: argparse.Namespace, folder: str) -> int:
     )
     for name, opened in cases:
         project = opened()
-        questions = helper.QuestionLog()
-        result = evaluate(
-            project.document,
-            _profile(project),
-            sources=ProjectSources(project),
-            ask=questions,
-        )
+        rounds: list[Any] = [None]
+        if arguments.cache:
+            disk = Path(folder) / "cache" / name
+            rounds = [
+                ResultCache(disk=DiskCache(codec=MeshCodec(), directory=disk)) for _ in range(2)
+            ]
+        for cache in rounds:
+            questions = helper.QuestionLog()
+            result = evaluate(
+                project.document,
+                _profile(project),
+                sources=ProjectSources(project),
+                ask=questions,
+                cache=cache,
+            )
         target = helper.save(helper.shot(result, questions=questions, **options), out / name)
-        print(f"{name}: {len(result.scene.objects)} Körper → {target}", flush=True)
+        hits = f", Plattentreffer {rounds[-1].statistics.disk_hits}" if arguments.cache else ""
+        print(f"{name}: {len(result.scene.objects)} Körper{hits} → {target}", flush=True)
     return 0
 
 
@@ -154,7 +168,7 @@ def compare(arguments: argparse.Namespace, folder: str) -> int:
             largest, where = verdict.largest, f"{name} {verdict.where}"
         if not verdict.print_equal:
             failed.append(name)
-    print(f"Größte Abweichung: {largest * 1000:.4f} µm ({where})")
+    print(f"Größte Abweichung: {helper.micrometres(largest)} ({where})")
     if missing:
         print(f"Nur auf einer Seite: {missing}")
     print(f"Nicht druckgleich: {failed}" if failed else "Alle Fälle druckgleich.")
@@ -170,6 +184,7 @@ def main(argv: list[str] | None = None) -> int:
     shooting.add_argument("--examples", action="store_true")
     shooting.add_argument("--model", action="append", default=[])
     shooting.add_argument("--quick", action="store_true")
+    shooting.add_argument("--cache", action="store_true")
     shooting.set_defaults(handler=shoot)
     comparing = commands.add_parser("compare")
     comparing.add_argument("before")
